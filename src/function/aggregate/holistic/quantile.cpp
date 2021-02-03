@@ -34,8 +34,10 @@ struct QuantileBindData : public FunctionData {
 	float quantile;
 };
 
-template <class T> struct QuantileOperation {
-	template <class STATE> static void Initialize(STATE *state) {
+template <class T>
+struct QuantileOperation {
+	template <class STATE>
+	static void Initialize(STATE *state) {
 		state->v = nullptr;
 		state->len = 0;
 		state->pos = 0;
@@ -60,7 +62,6 @@ template <class T> struct QuantileOperation {
 		}
 	}
 
-
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE *state, FunctionData *bind_data_, INPUT_TYPE *data, nullmask_t &nullmask, idx_t idx) {
 		if (nullmask[idx]) {
@@ -74,7 +75,8 @@ template <class T> struct QuantileOperation {
 		((T *)state->v)[state->pos++] = data[idx];
 	}
 
-	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
+	template <class STATE, class OP>
+	static void Combine(STATE source, STATE *target) {
 		if (source.pos == 0) {
 			return;
 		}
@@ -99,7 +101,8 @@ template <class T> struct QuantileOperation {
 		target[idx] = v_t[offset];
 	}
 
-	template <class STATE> static void Destroy(STATE *state) {
+	template <class STATE>
+	static void Destroy(STATE *state) {
 		if (state->v) {
 			free(state->v);
 			state->v = nullptr;
@@ -181,7 +184,6 @@ unique_ptr<FunctionData> bind_quantile_decimal(ClientContext &context, Aggregate
 	return bind_data;
 }
 
-
 AggregateFunction GetMedianAggregate(PhysicalType type) {
 	auto fun = GetQuantileAggregateFunction(type);
 	fun.bind = bind_median;
@@ -209,9 +211,8 @@ void QuantileFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(median);
 
 	AggregateFunctionSet quantile("quantile");
-	quantile.AddFunction(AggregateFunction({LogicalType::DECIMAL, LogicalType::FLOAT},
-	                                       LogicalType::DECIMAL, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
-	                                       bind_quantile_decimal));
+	quantile.AddFunction(AggregateFunction({LogicalType::DECIMAL, LogicalType::FLOAT}, LogicalType::DECIMAL, nullptr,
+	                                       nullptr, nullptr, nullptr, nullptr, nullptr, bind_quantile_decimal));
 
 	quantile.AddFunction(GetQuantileAggregate(PhysicalType::INT16));
 	quantile.AddFunction(GetQuantileAggregate(PhysicalType::INT32));

@@ -24,7 +24,7 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref, idx_t d
 			} else {
 				// we cannot! we need to bind this as a coalesce between all the relevant columns
 				auto coalesce = make_unique<OperatorExpression>(ExpressionType::OPERATOR_COALESCE);
-				for(auto &entry : using_binding->bindings) {
+				for (auto &entry : using_binding->bindings) {
 					coalesce->children.push_back(make_unique<ColumnRefExpression>(colref.column_name, entry));
 				}
 				return BindExpression(*coalesce, depth);

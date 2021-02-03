@@ -12,7 +12,8 @@ namespace duckdb {
 using JoinNode = JoinOrderOptimizer::JoinNode;
 
 //! Returns true if A and B are disjoint, false otherwise
-template <class T> static bool Disjoint(unordered_set<T> &a, unordered_set<T> &b) {
+template <class T>
+static bool Disjoint(unordered_set<T> &a, unordered_set<T> &b) {
 	for (auto &entry : a) {
 		if (b.find(entry) != b.end()) {
 			return false;

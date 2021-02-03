@@ -38,7 +38,8 @@ uint8_t LowerFun::ASCIIToLowerMap[] = {
     220, 221, 222, 223, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238, 239, 240, 241,
     242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254};
 
-template <bool IS_UPPER> static string_t strcase_ascii(Vector &result, const char *input_data, idx_t input_length) {
+template <bool IS_UPPER>
+static string_t strcase_ascii(Vector &result, const char *input_data, idx_t input_length) {
 	idx_t output_length = input_length;
 	auto result_str = StringVector::EmptyString(result, output_length);
 	auto result_data = result_str.GetDataWriteable();
@@ -50,7 +51,8 @@ template <bool IS_UPPER> static string_t strcase_ascii(Vector &result, const cha
 	return result_str;
 }
 
-template <bool IS_UPPER> static idx_t GetResultLength(const char *input_data, idx_t input_length) {
+template <bool IS_UPPER>
+static idx_t GetResultLength(const char *input_data, idx_t input_length) {
 	idx_t output_length = 0;
 	for (idx_t i = 0; i < input_length;) {
 		if (input_data[i] & 0x80) {
@@ -71,7 +73,8 @@ template <bool IS_UPPER> static idx_t GetResultLength(const char *input_data, id
 	return output_length;
 }
 
-template <bool IS_UPPER> static void CaseConvert(const char *input_data, idx_t input_length, char *result_data) {
+template <bool IS_UPPER>
+static void CaseConvert(const char *input_data, idx_t input_length, char *result_data) {
 	for (idx_t i = 0; i < input_length;) {
 		if (input_data[i] & 0x80) {
 			// non-ascii character
@@ -101,7 +104,8 @@ void LowerFun::LowerCase(const char *input_data, idx_t input_length, char *resul
 	CaseConvert<false>(input_data, input_length, result_data);
 }
 
-template <bool IS_UPPER> static string_t strcase_unicode(Vector &result, const char *input_data, idx_t input_length) {
+template <bool IS_UPPER>
+static string_t strcase_unicode(Vector &result, const char *input_data, idx_t input_length) {
 	// first figure out the output length
 	idx_t output_length = GetResultLength<IS_UPPER>(input_data, input_length);
 	auto result_str = StringVector::EmptyString(result, output_length);
@@ -112,7 +116,8 @@ template <bool IS_UPPER> static string_t strcase_unicode(Vector &result, const c
 	return result_str;
 }
 
-template <bool IS_UPPER> static void caseconvert_function(DataChunk &args, ExpressionState &state, Vector &result) {
+template <bool IS_UPPER>
+static void caseconvert_function(DataChunk &args, ExpressionState &state, Vector &result) {
 	UnaryExecutor::Execute<string_t, string_t, true>(args.data[0], result, args.size(), [&](string_t input) {
 		auto input_data = input.GetDataUnsafe();
 		auto input_length = input.GetSize();

@@ -27,7 +27,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownInnerJoin(unique_ptr<Logical
 		D_ASSERT(op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN);
 		auto &comp_join = (LogicalComparisonJoin &)join;
 		// turn the conditions into filters
-		for (auto & i : comp_join.conditions) {
+		for (auto &i : comp_join.conditions) {
 			auto condition = JoinCondition::CreateExpression(move(i));
 			if (AddFilter(move(condition)) == FilterResult::UNSATISFIABLE) {
 				// filter statically evaluates to false, strip tree

@@ -549,7 +549,8 @@ void NumericSegment::RollbackUpdate(UpdateInfo *info) {
 //===--------------------------------------------------------------------===//
 // Append
 //===--------------------------------------------------------------------===//
-template <class T> static inline void update_numeric_statistics_internal(T new_value, T &min, T &max) {
+template <class T>
+static inline void update_numeric_statistics_internal(T new_value, T &min, T &max) {
 	if (LessThan::Operation(new_value, min)) {
 		min = new_value;
 	}
@@ -558,64 +559,77 @@ template <class T> static inline void update_numeric_statistics_internal(T new_v
 	}
 }
 
-template <class T> static inline void update_numeric_statistics(SegmentStatistics &stats, T new_value);
+template <class T>
+static inline void update_numeric_statistics(SegmentStatistics &stats, T new_value);
 
-template <> inline void update_numeric_statistics<int8_t>(SegmentStatistics &stats, int8_t new_value) {
+template <>
+inline void update_numeric_statistics<int8_t>(SegmentStatistics &stats, int8_t new_value) {
 	auto &nstats = (NumericStatistics &)*stats.statistics;
 	update_numeric_statistics_internal<int8_t>(new_value, nstats.min.value_.tinyint, nstats.max.value_.tinyint);
 }
 
-template <> inline void update_numeric_statistics<int16_t>(SegmentStatistics &stats, int16_t new_value) {
+template <>
+inline void update_numeric_statistics<int16_t>(SegmentStatistics &stats, int16_t new_value) {
 	auto &nstats = (NumericStatistics &)*stats.statistics;
 	update_numeric_statistics_internal<int16_t>(new_value, nstats.min.value_.smallint, nstats.max.value_.smallint);
 }
 
-template <> inline void update_numeric_statistics<int32_t>(SegmentStatistics &stats, int32_t new_value) {
+template <>
+inline void update_numeric_statistics<int32_t>(SegmentStatistics &stats, int32_t new_value) {
 	auto &nstats = (NumericStatistics &)*stats.statistics;
 	update_numeric_statistics_internal<int32_t>(new_value, nstats.min.value_.integer, nstats.max.value_.integer);
 }
 
-template <> inline void update_numeric_statistics<int64_t>(SegmentStatistics &stats, int64_t new_value) {
+template <>
+inline void update_numeric_statistics<int64_t>(SegmentStatistics &stats, int64_t new_value) {
 	auto &nstats = (NumericStatistics &)*stats.statistics;
 	update_numeric_statistics_internal<int64_t>(new_value, nstats.min.value_.bigint, nstats.max.value_.bigint);
 }
 
-template <> inline void update_numeric_statistics<uint8_t>(SegmentStatistics &stats, uint8_t new_value) {
+template <>
+inline void update_numeric_statistics<uint8_t>(SegmentStatistics &stats, uint8_t new_value) {
 	auto &nstats = (NumericStatistics &)*stats.statistics;
 	update_numeric_statistics_internal<uint8_t>(new_value, nstats.min.value_.utinyint, nstats.max.value_.utinyint);
 }
 
-template <> inline void update_numeric_statistics<uint16_t>(SegmentStatistics &stats, uint16_t new_value) {
+template <>
+inline void update_numeric_statistics<uint16_t>(SegmentStatistics &stats, uint16_t new_value) {
 	auto &nstats = (NumericStatistics &)*stats.statistics;
 	update_numeric_statistics_internal<uint16_t>(new_value, nstats.min.value_.usmallint, nstats.max.value_.usmallint);
 }
 
-template <> inline void update_numeric_statistics<uint32_t>(SegmentStatistics &stats, uint32_t new_value) {
+template <>
+inline void update_numeric_statistics<uint32_t>(SegmentStatistics &stats, uint32_t new_value) {
 	auto &nstats = (NumericStatistics &)*stats.statistics;
 	update_numeric_statistics_internal<uint32_t>(new_value, nstats.min.value_.uinteger, nstats.max.value_.uinteger);
 }
 
-template <> inline void update_numeric_statistics<uint64_t>(SegmentStatistics &stats, uint64_t new_value) {
+template <>
+inline void update_numeric_statistics<uint64_t>(SegmentStatistics &stats, uint64_t new_value) {
 	auto &nstats = (NumericStatistics &)*stats.statistics;
 	update_numeric_statistics_internal<uint64_t>(new_value, nstats.min.value_.ubigint, nstats.max.value_.ubigint);
 }
 
-template <> inline void update_numeric_statistics<hugeint_t>(SegmentStatistics &stats, hugeint_t new_value) {
+template <>
+inline void update_numeric_statistics<hugeint_t>(SegmentStatistics &stats, hugeint_t new_value) {
 	auto &nstats = (NumericStatistics &)*stats.statistics;
 	update_numeric_statistics_internal<hugeint_t>(new_value, nstats.min.value_.hugeint, nstats.max.value_.hugeint);
 }
 
-template <> inline void update_numeric_statistics<float>(SegmentStatistics &stats, float new_value) {
+template <>
+inline void update_numeric_statistics<float>(SegmentStatistics &stats, float new_value) {
 	auto &nstats = (NumericStatistics &)*stats.statistics;
 	update_numeric_statistics_internal<float>(new_value, nstats.min.value_.float_, nstats.max.value_.float_);
 }
 
-template <> inline void update_numeric_statistics<double>(SegmentStatistics &stats, double new_value) {
+template <>
+inline void update_numeric_statistics<double>(SegmentStatistics &stats, double new_value) {
 	auto &nstats = (NumericStatistics &)*stats.statistics;
 	update_numeric_statistics_internal<double>(new_value, nstats.min.value_.double_, nstats.max.value_.double_);
 }
 
-template <> void update_numeric_statistics<interval_t>(SegmentStatistics &stats, interval_t new_value) {
+template <>
+void update_numeric_statistics<interval_t>(SegmentStatistics &stats, interval_t new_value) {
 }
 
 template <class T>
@@ -964,7 +978,8 @@ static NumericSegment::update_info_append_function_t GetUpdateInfoAppendFunction
 //===--------------------------------------------------------------------===//
 // Rollback Update
 //===--------------------------------------------------------------------===//
-template <class T> static void rollback_update(UpdateInfo *info, data_ptr_t base) {
+template <class T>
+static void rollback_update(UpdateInfo *info, data_ptr_t base) {
 	auto &nullmask = *((nullmask_t *)base);
 	auto info_data = (T *)info->tuple_data;
 	auto base_data = (T *)(base + sizeof(nullmask_t));

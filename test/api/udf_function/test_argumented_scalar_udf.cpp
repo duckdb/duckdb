@@ -19,7 +19,7 @@ TEST_CASE("UDF functions with arguments", "[udf_function][.]") {
 	const vector<LogicalTypeId> all_sql_types = {
 	    LogicalTypeId::BOOLEAN, LogicalTypeId::TINYINT, LogicalTypeId::SMALLINT, LogicalTypeId::DATE,
 	    LogicalTypeId::TIME,    LogicalTypeId::INTEGER, LogicalTypeId::BIGINT,   LogicalTypeId::TIMESTAMP,
-	    LogicalTypeId::FLOAT,   LogicalTypeId::DOUBLE,  LogicalTypeId::DECIMAL,  LogicalTypeId::VARCHAR };
+	    LogicalTypeId::FLOAT,   LogicalTypeId::DOUBLE,  LogicalTypeId::DECIMAL,  LogicalTypeId::VARCHAR};
 
 	// Creating the tables
 	for (LogicalType sql_type : all_sql_types) {

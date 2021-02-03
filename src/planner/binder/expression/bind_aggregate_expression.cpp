@@ -40,7 +40,7 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 				auto &bound_expr = (BoundExpression &)*aggr.children[i];
 				ExtractCorrelatedExpressions(binder, *bound_expr.expr);
 			}
-			if (aggr.filter){
+			if (aggr.filter) {
 				bool success = aggregate_binder.BindCorrelatedColumns(aggr.filter);
 				// if there is still an error after this, we could not successfully bind the aggregate
 				if (!success) {
@@ -54,7 +54,7 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 			return BindResult(error);
 		}
 	}
-    if (!filter_error.empty()){
+	if (!filter_error.empty()) {
 		return BindResult(filter_error);
 	}
 

@@ -10,7 +10,8 @@
 
 namespace duckdb {
 
-template <class T> static void templated_gather_loop(Vector &source, Vector &dest, idx_t count) {
+template <class T>
+static void templated_gather_loop(Vector &source, Vector &dest, idx_t count) {
 	auto addresses = FlatVector::GetData<uintptr_t>(source);
 	auto data = FlatVector::GetData<T>(dest);
 	auto &nullmask = FlatVector::Nullmask(dest);

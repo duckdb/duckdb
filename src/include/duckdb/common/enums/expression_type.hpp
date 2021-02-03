@@ -110,7 +110,6 @@ enum class ExpressionType : uint8_t {
 	OPERATOR_NULLIF = 151,
 	OPERATOR_COALESCE = 152,
 
-
 	// -----------------------------
 	// Subquery IN/EXISTS
 	// -----------------------------

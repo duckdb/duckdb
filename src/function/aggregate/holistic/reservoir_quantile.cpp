@@ -20,21 +20,21 @@ struct reservoir_quantile_state_t {
 	BaseReservoirSampling *r_samp;
 };
 
-
-
-template <class STATE, class T> void ReplaceElement(T &input, STATE *state) {
+template <class STATE, class T>
+void ReplaceElement(T &input, STATE *state) {
 	((T *)state->v)[state->r_samp->min_entry] = input;
 	state->r_samp->ReplaceElement();
 }
 
-template <class STATE, class T> void FillReservoir(STATE *state, idx_t sample_size, T element) {
+template <class STATE, class T>
+void FillReservoir(STATE *state, idx_t sample_size, T element) {
 	if (state->pos < sample_size) {
 		((T *)state->v)[state->pos++] = element;
-		state->r_samp->InitializeReservoir(state->pos,state->len);
+		state->r_samp->InitializeReservoir(state->pos, state->len);
 	} else {
 		D_ASSERT(state->r_samp->next_index >= state->r_samp->current_count);
 		if (state->r_samp->next_index == state->r_samp->current_count) {
-			ReplaceElement<STATE,T>(element, state);
+			ReplaceElement<STATE, T>(element, state);
 		}
 	}
 }
@@ -56,8 +56,10 @@ struct ReservoirQuantileBindData : public FunctionData {
 	int32_t sample_size;
 };
 
-template <class T> struct ReservoirQuantileOperation {
-	template <class STATE> static void Initialize(STATE *state) {
+template <class T>
+struct ReservoirQuantileOperation {
+	template <class STATE>
+	static void Initialize(STATE *state) {
 		state->v = nullptr;
 		state->len = 0;
 		state->pos = 0;
@@ -94,10 +96,11 @@ template <class T> struct ReservoirQuantileOperation {
 			resize_state(state, bind_data->sample_size);
 		}
 		D_ASSERT(state->v);
-		FillReservoir<STATE,T>(state, bind_data->sample_size, data[idx]);
+		FillReservoir<STATE, T>(state, bind_data->sample_size, data[idx]);
 	}
 
-	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
+	template <class STATE, class OP>
+	static void Combine(STATE source, STATE *target) {
 		if (source.pos == 0) {
 			return;
 		}
@@ -105,7 +108,7 @@ template <class T> struct ReservoirQuantileOperation {
 			resize_state(target, source.len);
 		}
 		for (idx_t src_idx = 0; src_idx < source.pos; src_idx++) {
-			FillReservoir<STATE,T>(target, target->len, ((T *)source.v)[src_idx]);
+			FillReservoir<STATE, T>(target, target->len, ((T *)source.v)[src_idx]);
 		}
 	}
 
@@ -125,7 +128,8 @@ template <class T> struct ReservoirQuantileOperation {
 		target[idx] = v_t[offset];
 	}
 
-	template <class STATE> static void Destroy(STATE *state) {
+	template <class STATE>
+	static void Destroy(STATE *state) {
 		if (state->v) {
 			free(state->v);
 			state->v = nullptr;

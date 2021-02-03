@@ -16,7 +16,7 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundFunctionExp
 		result->AddChild(child.get());
 	}
 	result->Finalize();
-    if (result->types.size() > 0) {
+	if (result->types.size() > 0) {
 		result->arguments.InitializeEmpty(result->types);
 	}
 	return move(result);
@@ -24,7 +24,7 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundFunctionExp
 
 void ExpressionExecutor::Execute(BoundFunctionExpression &expr, ExpressionState *state, const SelectionVector *sel,
                                  idx_t count, Vector &result) {
-	auto &fstate = (FunctionExpressionState &) *state;
+	auto &fstate = (FunctionExpressionState &)*state;
 	auto &arguments = fstate.arguments;
 	if (state->types.size() > 0) {
 		arguments.Reference(state->intermediate_chunk);

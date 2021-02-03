@@ -1,4 +1,4 @@
-# name: test/sql/cte/test_cte_overflow
+# name: test/sql/cte/test_cte_overflow.test
 # description: Ensure no stack overflow for CTE names that match existing tables
 # group: [cte]
 

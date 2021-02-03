@@ -31,8 +31,8 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 	if (!statement.aggregates.empty() || !statement.groups.empty()) {
 		if (!statement.groups.empty()) {
 			// visit the groups
-			for (auto & group : statement.groups) {
-					PlanSubqueries(&group, &root);
+			for (auto &group : statement.groups) {
+				PlanSubqueries(&group, &root);
 			}
 		}
 		// now visit all aggregate expressions

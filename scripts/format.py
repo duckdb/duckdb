@@ -20,6 +20,7 @@ ignored_files = ['tpch_constants.hpp', 'tpcds_constants.hpp', '_generated', 'tpc
 ignored_directories = ['.eggs', '__pycache__', 'icu', 'dbgen']
 format_all = False
 check_only = True
+confirm = True
 
 def print_usage():
     print("Usage: python scripts/format.py [revision|--all] [--check|--fix]")
@@ -43,6 +44,10 @@ if len(sys.argv) > 2:
             check_only = True
         elif arg == '--fix':
             check_only = False
+        elif arg == '--noconfirm':
+            confirm = False
+        elif arg == '--confirm':
+            confirm = True
         else:
             print_usage()
 
@@ -107,11 +112,12 @@ elif not format_all:
 else:
     print("Formatting all files")
 
-# if confirm:
-#     result = input("Continue with changes (y/n)?\n")
-#     if result != 'y':
-#         print("Aborting.")
-#         exit(0)
+if confirm and not check_only:
+    print("The files listed above will be reformatted.")
+    result = input("Continue with changes (y/n)?\n")
+    if result != 'y':
+        print("Aborting.")
+        exit(0)
 
 format_commands = {
     '.cpp': cpp_format_command,
@@ -197,17 +203,16 @@ def get_formatted_text(f, full_path, directory, ext):
     proc = subprocess.Popen(proc_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     new_text = proc.stdout.read().decode('utf8')
     stderr = proc.stderr.read().decode('utf8')
-    # if proc.returncode != 0:
-    #     print(os.getcwd())
-    #     print("Failed to format file " + full_path)
-    #     print(' '.join(proc_command))
-    #     print(stderr)
-    #     exit(1)
+    if len(stderr) > 0:
+        print(os.getcwd())
+        print("Failed to format file " + full_path)
+        print(' '.join(proc_command))
+        print(stderr)
+        exit(1)
     return new_text
 
 def format_file(f, full_path, directory, ext):
     global difference_files
-    print(full_path)
     f = open_utf8(full_path, 'r')
     old_lines = f.read().split('\n')
     f.close()
@@ -229,9 +234,11 @@ def format_file(f, full_path, directory, ext):
             print(total_diff)
             difference_files.append(full_path)
     else:
-        f = open_utf8(full_path, 'w+')
+        tmpfile = full_path + ".tmp"
+        f = open_utf8(tmpfile, 'w+')
         f.write(new_text)
         f.close()
+        os.rename(tmpfile, full_path)
 
 def format_directory(directory):
     files = os.listdir(directory)

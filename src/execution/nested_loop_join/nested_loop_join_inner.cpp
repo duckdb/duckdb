@@ -97,16 +97,16 @@ static idx_t nested_loop_join_inner_operator(Vector &left, Vector &right, idx_t 
 		                                               current_match_count);
 	case PhysicalType::UINT8:
 		return NLTYPE::template Operation<uint8_t, OP>(left, right, left_size, right_size, lpos, rpos, lvector, rvector,
-		                                              current_match_count);
+		                                               current_match_count);
 	case PhysicalType::UINT16:
-		return NLTYPE::template Operation<uint16_t, OP>(left, right, left_size, right_size, lpos, rpos, lvector, rvector,
-		                                               current_match_count);
+		return NLTYPE::template Operation<uint16_t, OP>(left, right, left_size, right_size, lpos, rpos, lvector,
+		                                                rvector, current_match_count);
 	case PhysicalType::UINT32:
-		return NLTYPE::template Operation<uint32_t, OP>(left, right, left_size, right_size, lpos, rpos, lvector, rvector,
-		                                               current_match_count);
+		return NLTYPE::template Operation<uint32_t, OP>(left, right, left_size, right_size, lpos, rpos, lvector,
+		                                                rvector, current_match_count);
 	case PhysicalType::UINT64:
-		return NLTYPE::template Operation<uint64_t, OP>(left, right, left_size, right_size, lpos, rpos, lvector, rvector,
-		                                               current_match_count);
+		return NLTYPE::template Operation<uint64_t, OP>(left, right, left_size, right_size, lpos, rpos, lvector,
+		                                                rvector, current_match_count);
 	case PhysicalType::INT128:
 		return NLTYPE::template Operation<hugeint_t, OP>(left, right, left_size, right_size, lpos, rpos, lvector,
 		                                                 rvector, current_match_count);

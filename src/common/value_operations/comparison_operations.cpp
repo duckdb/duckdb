@@ -8,7 +8,8 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Comparison Operations
 //===--------------------------------------------------------------------===//
-template <class OP> static bool templated_boolean_operation(const Value &left, const Value &right) {
+template <class OP>
+static bool templated_boolean_operation(const Value &left, const Value &right) {
 	auto left_type = left.type(), right_type = right.type();
 	if (left_type != right_type) {
 		try {

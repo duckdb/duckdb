@@ -13,7 +13,8 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // AND/OR
 //===--------------------------------------------------------------------===//
-template <class OP> static void templated_boolean_nullmask(Vector &left, Vector &right, Vector &result, idx_t count) {
+template <class OP>
+static void templated_boolean_nullmask(Vector &left, Vector &right, Vector &result, idx_t count) {
 	D_ASSERT(left.type.id() == LogicalTypeId::BOOLEAN && right.type.id() == LogicalTypeId::BOOLEAN &&
 	         result.type.id() == LogicalTypeId::BOOLEAN);
 
@@ -161,7 +162,8 @@ void VectorOperations::Or(Vector &left, Vector &right, Vector &result, idx_t cou
 }
 
 struct NotOperator {
-	template <class TA, class TR> static inline TR Operation(TA left) {
+	template <class TA, class TR>
+	static inline TR Operation(TA left) {
 		return !left;
 	}
 };

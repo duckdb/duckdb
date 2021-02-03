@@ -87,7 +87,8 @@ public:
 
 	string ExceptionTypeToString(ExceptionType type);
 
-	template <typename... Args> static string ConstructMessage(string msg, Args... params) {
+	template <typename... Args>
+	static string ConstructMessage(string msg, Args... params) {
 		vector<ExceptionFormatValue> values;
 		return ConstructMessageRecursive(msg, values, params...);
 	}

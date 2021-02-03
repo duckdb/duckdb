@@ -157,7 +157,8 @@ struct ConstantVector {
 		D_ASSERT(vector.vector_type == VectorType::CONSTANT_VECTOR || vector.vector_type == VectorType::FLAT_VECTOR);
 		return vector.data;
 	}
-	template <class T> static inline T *GetData(Vector &vector) {
+	template <class T>
+	static inline T *GetData(Vector &vector) {
 		return (T *)ConstantVector::GetData(vector);
 	}
 	static inline bool IsNull(const Vector &vector) {
@@ -192,14 +193,16 @@ struct FlatVector {
 	static inline data_ptr_t GetData(Vector &vector) {
 		return ConstantVector::GetData(vector);
 	}
-	template <class T> static inline T *GetData(Vector &vector) {
+	template <class T>
+	static inline T *GetData(Vector &vector) {
 		return ConstantVector::GetData<T>(vector);
 	}
 	static inline void SetData(Vector &vector, data_ptr_t data) {
 		D_ASSERT(vector.vector_type == VectorType::FLAT_VECTOR);
 		vector.data = data;
 	}
-	template <class T> static inline T GetValue(Vector &vector, idx_t idx) {
+	template <class T>
+	static inline T GetValue(Vector &vector, idx_t idx) {
 		D_ASSERT(vector.vector_type == VectorType::FLAT_VECTOR);
 		return FlatVector::GetData<T>(vector)[idx];
 	}

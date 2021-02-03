@@ -8,37 +8,37 @@
 
 namespace duckdb {
 
-unique_ptr<TableFilterSet> find_column_index(vector<TableFilter>& table_filters,vector<column_t>& column_ids){
+unique_ptr<TableFilterSet> find_column_index(vector<TableFilter> &table_filters, vector<column_t> &column_ids) {
 	// create the table filter map
-		auto table_filter_set = make_unique<TableFilterSet>();
-		for (auto &tableFilter : table_filters) {
-			// find the relative column index from the absolute column index into the table
-			idx_t column_index = INVALID_INDEX;
-			for (idx_t i = 0; i < column_ids.size(); i++) {
-				if (tableFilter.column_index == column_ids[i]) {
-					column_index = i;
-					break;
-				}
-			}
-			if (column_index == INVALID_INDEX) {
-				throw InternalException("Could not find column index for table filter");
-			}
-			tableFilter.column_index = column_index;
-			auto filter = table_filter_set->filters.find(column_index);
-			if (filter != table_filter_set->filters.end()) {
-				filter->second.push_back(tableFilter);
-			} else {
-				table_filter_set->filters.insert(make_pair(column_index, vector<TableFilter>{tableFilter}));
+	auto table_filter_set = make_unique<TableFilterSet>();
+	for (auto &tableFilter : table_filters) {
+		// find the relative column index from the absolute column index into the table
+		idx_t column_index = INVALID_INDEX;
+		for (idx_t i = 0; i < column_ids.size(); i++) {
+			if (tableFilter.column_index == column_ids[i]) {
+				column_index = i;
+				break;
 			}
 		}
-	    return table_filter_set;
+		if (column_index == INVALID_INDEX) {
+			throw InternalException("Could not find column index for table filter");
+		}
+		tableFilter.column_index = column_index;
+		auto filter = table_filter_set->filters.find(column_index);
+		if (filter != table_filter_set->filters.end()) {
+			filter->second.push_back(tableFilter);
+		} else {
+			table_filter_set->filters.insert(make_pair(column_index, vector<TableFilter> {tableFilter}));
+		}
+	}
+	return table_filter_set;
 }
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 	D_ASSERT(op.children.empty());
 
-	unique_ptr<TableFilterSet> table_filters ;
+	unique_ptr<TableFilterSet> table_filters;
 	if (!op.table_filters.empty()) {
-        table_filters = find_column_index(op.table_filters,op.column_ids);
+		table_filters = find_column_index(op.table_filters, op.column_ids);
 	}
 
 	if (op.function.dependency) {

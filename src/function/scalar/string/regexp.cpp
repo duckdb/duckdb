@@ -82,7 +82,8 @@ struct RegexFullMatch {
 	}
 };
 
-template <class OP> static void regexp_matches_function(DataChunk &args, ExpressionState &state, Vector &result) {
+template <class OP>
+static void regexp_matches_function(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &strings = args.data[0];
 	auto &patterns = args.data[1];
 

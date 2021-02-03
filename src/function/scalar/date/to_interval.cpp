@@ -5,11 +5,13 @@
 namespace duckdb {
 
 struct ToYearsOperator {
-	template <class TA, class TR> static inline TR Operation(TA input) {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
 		interval_t result;
 		result.days = 0;
 		result.micros = 0;
-		if (!TryMultiplyOperator::Operation<int32_t, int32_t, int32_t>(input, Interval::MONTHS_PER_YEAR, result.months)) {
+		if (!TryMultiplyOperator::Operation<int32_t, int32_t, int32_t>(input, Interval::MONTHS_PER_YEAR,
+		                                                               result.months)) {
 			throw OutOfRangeException("Interval value %d years out of range", input);
 		}
 		return result;
@@ -17,7 +19,8 @@ struct ToYearsOperator {
 };
 
 struct ToMonthsOperator {
-	template <class TA, class TR> static inline TR Operation(TA input) {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
 		interval_t result;
 		result.months = input;
 		result.days = 0;
@@ -27,7 +30,8 @@ struct ToMonthsOperator {
 };
 
 struct ToDaysOperator {
-	template <class TA, class TR> static inline TR Operation(TA input) {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
 		interval_t result;
 		result.months = 0;
 		result.days = input;
@@ -37,11 +41,13 @@ struct ToDaysOperator {
 };
 
 struct ToHoursOperator {
-	template <class TA, class TR> static inline TR Operation(TA input) {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
 		interval_t result;
 		result.months = 0;
 		result.days = 0;
-		if (!TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(input, Interval::MICROS_PER_HOUR, result.micros)) {
+		if (!TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(input, Interval::MICROS_PER_HOUR,
+		                                                               result.micros)) {
 			throw OutOfRangeException("Interval value %d hours out of range", input);
 		}
 		return result;
@@ -49,11 +55,13 @@ struct ToHoursOperator {
 };
 
 struct ToMinutesOperator {
-	template <class TA, class TR> static inline TR Operation(TA input) {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
 		interval_t result;
 		result.months = 0;
 		result.days = 0;
-		if (!TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(input, Interval::MICROS_PER_MINUTE, result.micros)) {
+		if (!TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(input, Interval::MICROS_PER_MINUTE,
+		                                                               result.micros)) {
 			throw OutOfRangeException("Interval value %d minutes out of range", input);
 		}
 		return result;
@@ -61,11 +69,13 @@ struct ToMinutesOperator {
 };
 
 struct ToSecondsOperator {
-	template <class TA, class TR> static inline TR Operation(TA input) {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
 		interval_t result;
 		result.months = 0;
 		result.days = 0;
-		if (!TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(input, Interval::MICROS_PER_SEC, result.micros)) {
+		if (!TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(input, Interval::MICROS_PER_SEC,
+		                                                               result.micros)) {
 			throw OutOfRangeException("Interval value %d seconds out of range", input);
 		}
 		return result;
@@ -73,11 +83,13 @@ struct ToSecondsOperator {
 };
 
 struct ToMilliSecondsOperator {
-	template <class TA, class TR> static inline TR Operation(TA input) {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
 		interval_t result;
 		result.months = 0;
 		result.days = 0;
-		if (!TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(input, Interval::MICROS_PER_MSEC, result.micros)) {
+		if (!TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(input, Interval::MICROS_PER_MSEC,
+		                                                               result.micros)) {
 			throw OutOfRangeException("Interval value %d seconds out of range", input);
 		}
 		return result;
@@ -85,7 +97,8 @@ struct ToMilliSecondsOperator {
 };
 
 struct ToMicroSecondsOperator {
-	template <class TA, class TR> static inline TR Operation(TA input) {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
 		interval_t result;
 		result.months = 0;
 		result.days = 0;
@@ -96,14 +109,22 @@ struct ToMicroSecondsOperator {
 
 void ToIntervalFun::RegisterFunction(BuiltinFunctions &set) {
 	// register the individual operators
-	set.AddFunction(ScalarFunction("to_years", { LogicalType::INTEGER }, LogicalType::INTERVAL, ScalarFunction::UnaryFunction<int32_t, interval_t, ToYearsOperator, true>));
-	set.AddFunction(ScalarFunction("to_months", { LogicalType::INTEGER }, LogicalType::INTERVAL, ScalarFunction::UnaryFunction<int32_t, interval_t, ToMonthsOperator, true>));
-	set.AddFunction(ScalarFunction("to_days", { LogicalType::INTEGER }, LogicalType::INTERVAL, ScalarFunction::UnaryFunction<int32_t, interval_t, ToDaysOperator, true>));
-	set.AddFunction(ScalarFunction("to_hours", { LogicalType::BIGINT }, LogicalType::INTERVAL, ScalarFunction::UnaryFunction<int64_t, interval_t, ToHoursOperator, true>));
-	set.AddFunction(ScalarFunction("to_minutes", { LogicalType::BIGINT }, LogicalType::INTERVAL, ScalarFunction::UnaryFunction<int64_t, interval_t, ToMinutesOperator, true>));
-	set.AddFunction(ScalarFunction("to_seconds", { LogicalType::BIGINT }, LogicalType::INTERVAL, ScalarFunction::UnaryFunction<int64_t, interval_t, ToSecondsOperator, true>));
-	set.AddFunction(ScalarFunction("to_milliseconds", { LogicalType::BIGINT }, LogicalType::INTERVAL, ScalarFunction::UnaryFunction<int64_t, interval_t, ToMilliSecondsOperator, true>));
-	set.AddFunction(ScalarFunction("to_microseconds", { LogicalType::BIGINT }, LogicalType::INTERVAL, ScalarFunction::UnaryFunction<int64_t, interval_t, ToMicroSecondsOperator, true>));
+	set.AddFunction(ScalarFunction("to_years", {LogicalType::INTEGER}, LogicalType::INTERVAL,
+	                               ScalarFunction::UnaryFunction<int32_t, interval_t, ToYearsOperator, true>));
+	set.AddFunction(ScalarFunction("to_months", {LogicalType::INTEGER}, LogicalType::INTERVAL,
+	                               ScalarFunction::UnaryFunction<int32_t, interval_t, ToMonthsOperator, true>));
+	set.AddFunction(ScalarFunction("to_days", {LogicalType::INTEGER}, LogicalType::INTERVAL,
+	                               ScalarFunction::UnaryFunction<int32_t, interval_t, ToDaysOperator, true>));
+	set.AddFunction(ScalarFunction("to_hours", {LogicalType::BIGINT}, LogicalType::INTERVAL,
+	                               ScalarFunction::UnaryFunction<int64_t, interval_t, ToHoursOperator, true>));
+	set.AddFunction(ScalarFunction("to_minutes", {LogicalType::BIGINT}, LogicalType::INTERVAL,
+	                               ScalarFunction::UnaryFunction<int64_t, interval_t, ToMinutesOperator, true>));
+	set.AddFunction(ScalarFunction("to_seconds", {LogicalType::BIGINT}, LogicalType::INTERVAL,
+	                               ScalarFunction::UnaryFunction<int64_t, interval_t, ToSecondsOperator, true>));
+	set.AddFunction(ScalarFunction("to_milliseconds", {LogicalType::BIGINT}, LogicalType::INTERVAL,
+	                               ScalarFunction::UnaryFunction<int64_t, interval_t, ToMilliSecondsOperator, true>));
+	set.AddFunction(ScalarFunction("to_microseconds", {LogicalType::BIGINT}, LogicalType::INTERVAL,
+	                               ScalarFunction::UnaryFunction<int64_t, interval_t, ToMicroSecondsOperator, true>));
 }
 
-}
+} // namespace duckdb

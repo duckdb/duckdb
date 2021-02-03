@@ -14,7 +14,7 @@ namespace duckdb {
 
 class NotNullConstraint : public Constraint {
 public:
-	NotNullConstraint(column_t index) : Constraint(ConstraintType::NOT_NULL), index(index){};
+	NotNullConstraint(column_t index) : Constraint(ConstraintType::NOT_NULL), index(index) {};
 	virtual ~NotNullConstraint() {
 	}
 

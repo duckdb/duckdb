@@ -10,45 +10,45 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // String Conversion
 //===--------------------------------------------------------------------===//
-hugeint_t Hugeint::PowersOfTen[]{hugeint_t(1),
-                                 hugeint_t(10),
-                                 hugeint_t(100),
-                                 hugeint_t(1000),
-                                 hugeint_t(10000),
-                                 hugeint_t(100000),
-                                 hugeint_t(1000000),
-                                 hugeint_t(10000000),
-                                 hugeint_t(100000000),
-                                 hugeint_t(1000000000),
-                                 hugeint_t(10000000000),
-                                 hugeint_t(100000000000),
-                                 hugeint_t(1000000000000),
-                                 hugeint_t(10000000000000),
-                                 hugeint_t(100000000000000),
-                                 hugeint_t(1000000000000000),
-                                 hugeint_t(10000000000000000),
-                                 hugeint_t(100000000000000000),
-                                 hugeint_t(1000000000000000000),
-                                 hugeint_t(1000000000000000000) * hugeint_t(10),
-                                 hugeint_t(1000000000000000000) * hugeint_t(100),
-                                 hugeint_t(1000000000000000000) * hugeint_t(1000),
-                                 hugeint_t(1000000000000000000) * hugeint_t(10000),
-                                 hugeint_t(1000000000000000000) * hugeint_t(100000),
-                                 hugeint_t(1000000000000000000) * hugeint_t(1000000),
-                                 hugeint_t(1000000000000000000) * hugeint_t(10000000),
-                                 hugeint_t(1000000000000000000) * hugeint_t(100000000),
-                                 hugeint_t(1000000000000000000) * hugeint_t(1000000000),
-                                 hugeint_t(1000000000000000000) * hugeint_t(10000000000),
-                                 hugeint_t(1000000000000000000) * hugeint_t(100000000000),
-                                 hugeint_t(1000000000000000000) * hugeint_t(1000000000000),
-                                 hugeint_t(1000000000000000000) * hugeint_t(10000000000000),
-                                 hugeint_t(1000000000000000000) * hugeint_t(100000000000000),
-                                 hugeint_t(1000000000000000000) * hugeint_t(1000000000000000),
-                                 hugeint_t(1000000000000000000) * hugeint_t(10000000000000000),
-                                 hugeint_t(1000000000000000000) * hugeint_t(100000000000000000),
-                                 hugeint_t(1000000000000000000) * hugeint_t(1000000000000000000),
-                                 hugeint_t(1000000000000000000) * hugeint_t(1000000000000000000) * hugeint_t(10),
-                                 hugeint_t(1000000000000000000) * hugeint_t(1000000000000000000) * hugeint_t(100)};
+hugeint_t Hugeint::PowersOfTen[] {hugeint_t(1),
+                                  hugeint_t(10),
+                                  hugeint_t(100),
+                                  hugeint_t(1000),
+                                  hugeint_t(10000),
+                                  hugeint_t(100000),
+                                  hugeint_t(1000000),
+                                  hugeint_t(10000000),
+                                  hugeint_t(100000000),
+                                  hugeint_t(1000000000),
+                                  hugeint_t(10000000000),
+                                  hugeint_t(100000000000),
+                                  hugeint_t(1000000000000),
+                                  hugeint_t(10000000000000),
+                                  hugeint_t(100000000000000),
+                                  hugeint_t(1000000000000000),
+                                  hugeint_t(10000000000000000),
+                                  hugeint_t(100000000000000000),
+                                  hugeint_t(1000000000000000000),
+                                  hugeint_t(1000000000000000000) * hugeint_t(10),
+                                  hugeint_t(1000000000000000000) * hugeint_t(100),
+                                  hugeint_t(1000000000000000000) * hugeint_t(1000),
+                                  hugeint_t(1000000000000000000) * hugeint_t(10000),
+                                  hugeint_t(1000000000000000000) * hugeint_t(100000),
+                                  hugeint_t(1000000000000000000) * hugeint_t(1000000),
+                                  hugeint_t(1000000000000000000) * hugeint_t(10000000),
+                                  hugeint_t(1000000000000000000) * hugeint_t(100000000),
+                                  hugeint_t(1000000000000000000) * hugeint_t(1000000000),
+                                  hugeint_t(1000000000000000000) * hugeint_t(10000000000),
+                                  hugeint_t(1000000000000000000) * hugeint_t(100000000000),
+                                  hugeint_t(1000000000000000000) * hugeint_t(1000000000000),
+                                  hugeint_t(1000000000000000000) * hugeint_t(10000000000000),
+                                  hugeint_t(1000000000000000000) * hugeint_t(100000000000000),
+                                  hugeint_t(1000000000000000000) * hugeint_t(1000000000000000),
+                                  hugeint_t(1000000000000000000) * hugeint_t(10000000000000000),
+                                  hugeint_t(1000000000000000000) * hugeint_t(100000000000000000),
+                                  hugeint_t(1000000000000000000) * hugeint_t(1000000000000000000),
+                                  hugeint_t(1000000000000000000) * hugeint_t(1000000000000000000) * hugeint_t(10),
+                                  hugeint_t(1000000000000000000) * hugeint_t(1000000000000000000) * hugeint_t(100)};
 
 static uint8_t positive_hugeint_highest_bit(hugeint_t bits) {
 	uint8_t out = 0;
@@ -374,7 +374,8 @@ hugeint_t Hugeint::Subtract(hugeint_t lhs, hugeint_t rhs) {
 //===--------------------------------------------------------------------===//
 // Hugeint Cast/Conversion
 //===--------------------------------------------------------------------===//
-template <class DST> bool hugeint_try_cast_integer(hugeint_t input, DST &result) {
+template <class DST>
+bool hugeint_try_cast_integer(hugeint_t input, DST &result) {
 	switch (input.upper) {
 	case 0:
 		// positive number: check if the positive number is in range
@@ -396,51 +397,62 @@ template <class DST> bool hugeint_try_cast_integer(hugeint_t input, DST &result)
 	return false;
 }
 
-template <> bool Hugeint::TryCast(hugeint_t input, int8_t &result) {
+template <>
+bool Hugeint::TryCast(hugeint_t input, int8_t &result) {
 	return hugeint_try_cast_integer<int8_t>(input, result);
 }
 
-template <> bool Hugeint::TryCast(hugeint_t input, int16_t &result) {
+template <>
+bool Hugeint::TryCast(hugeint_t input, int16_t &result) {
 	return hugeint_try_cast_integer<int16_t>(input, result);
 }
 
-template <> bool Hugeint::TryCast(hugeint_t input, int32_t &result) {
+template <>
+bool Hugeint::TryCast(hugeint_t input, int32_t &result) {
 	return hugeint_try_cast_integer<int32_t>(input, result);
 }
 
-template <> bool Hugeint::TryCast(hugeint_t input, int64_t &result) {
+template <>
+bool Hugeint::TryCast(hugeint_t input, int64_t &result) {
 	return hugeint_try_cast_integer<int64_t>(input, result);
 }
 
-template <> bool Hugeint::TryCast(hugeint_t input, uint8_t &result) {
+template <>
+bool Hugeint::TryCast(hugeint_t input, uint8_t &result) {
 	return hugeint_try_cast_integer<uint8_t>(input, result);
 }
 
-template <> bool Hugeint::TryCast(hugeint_t input, uint16_t &result) {
+template <>
+bool Hugeint::TryCast(hugeint_t input, uint16_t &result) {
 	return hugeint_try_cast_integer<uint16_t>(input, result);
 }
 
-template <> bool Hugeint::TryCast(hugeint_t input, uint32_t &result) {
+template <>
+bool Hugeint::TryCast(hugeint_t input, uint32_t &result) {
 	return hugeint_try_cast_integer<uint32_t>(input, result);
 }
 
-template <> bool Hugeint::TryCast(hugeint_t input, uint64_t &result) {
+template <>
+bool Hugeint::TryCast(hugeint_t input, uint64_t &result) {
 	return hugeint_try_cast_integer<uint64_t>(input, result);
 }
 
-template <> bool Hugeint::TryCast(hugeint_t input, hugeint_t &result) {
+template <>
+bool Hugeint::TryCast(hugeint_t input, hugeint_t &result) {
 	result = input;
 	return true;
 }
 
-template <> bool Hugeint::TryCast(hugeint_t input, float &result) {
+template <>
+bool Hugeint::TryCast(hugeint_t input, float &result) {
 	double dbl_result;
 	Hugeint::TryCast(input, dbl_result);
 	result = (float)dbl_result;
 	return true;
 }
 
-template <> bool Hugeint::TryCast(hugeint_t input, double &result) {
+template <>
+bool Hugeint::TryCast(hugeint_t input, double &result) {
 	switch (input.upper) {
 	case -1:
 		// special case for upper = -1 to avoid rounding issues in small negative numbers
@@ -453,46 +465,57 @@ template <> bool Hugeint::TryCast(hugeint_t input, double &result) {
 	return true;
 }
 
-template <class DST> hugeint_t hugeint_convert_integer(DST input) {
+template <class DST>
+hugeint_t hugeint_convert_integer(DST input) {
 	hugeint_t result;
 	result.lower = (uint64_t)input;
 	result.upper = (input < 0) * -1;
 	return result;
 }
 
-template <> hugeint_t Hugeint::Convert(int8_t value) {
+template <>
+hugeint_t Hugeint::Convert(int8_t value) {
 	return hugeint_convert_integer<int8_t>(value);
 }
 
-template <> hugeint_t Hugeint::Convert(int16_t value) {
+template <>
+hugeint_t Hugeint::Convert(int16_t value) {
 	return hugeint_convert_integer<int16_t>(value);
 }
 
-template <> hugeint_t Hugeint::Convert(int32_t value) {
+template <>
+hugeint_t Hugeint::Convert(int32_t value) {
 	return hugeint_convert_integer<int32_t>(value);
 }
 
-template <> hugeint_t Hugeint::Convert(int64_t value) {
+template <>
+hugeint_t Hugeint::Convert(int64_t value) {
 	return hugeint_convert_integer<int64_t>(value);
 }
-template <> hugeint_t Hugeint::Convert(uint8_t value){
+template <>
+hugeint_t Hugeint::Convert(uint8_t value) {
 	return hugeint_convert_integer<uint8_t>(value);
 }
-template <> hugeint_t Hugeint::Convert(uint16_t value){
+template <>
+hugeint_t Hugeint::Convert(uint16_t value) {
 	return hugeint_convert_integer<uint16_t>(value);
 }
-template <> hugeint_t Hugeint::Convert(uint32_t value){
+template <>
+hugeint_t Hugeint::Convert(uint32_t value) {
 	return hugeint_convert_integer<uint32_t>(value);
 }
-template <> hugeint_t Hugeint::Convert(uint64_t value){
+template <>
+hugeint_t Hugeint::Convert(uint64_t value) {
 	return hugeint_convert_integer<uint64_t>(value);
 }
 
-template <> hugeint_t Hugeint::Convert(float value) {
+template <>
+hugeint_t Hugeint::Convert(float value) {
 	return Hugeint::Convert<double>(value);
 }
 
-template <> hugeint_t Hugeint::Convert(double value) {
+template <>
+hugeint_t Hugeint::Convert(double value) {
 	if (value <= -170141183460469231731687303715884105728.0 || value >= 170141183460469231731687303715884105727.0) {
 		throw OutOfRangeException("Double out of range of HUGEINT");
 	}

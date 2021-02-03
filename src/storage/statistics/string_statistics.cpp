@@ -127,7 +127,7 @@ bool StringStatistics::CheckZonemap(ExpressionType comparison_type, string const
 
 static idx_t GetValidMinMaxSubstring(data_ptr_t data) {
 	idx_t len = 0;
-	for(idx_t i = 0; i < StringStatistics::MAX_STRING_MINMAX_SIZE; i++) {
+	for (idx_t i = 0; i < StringStatistics::MAX_STRING_MINMAX_SIZE; i++) {
 		if (data[i] == '\0') {
 			return i;
 		}
@@ -179,11 +179,11 @@ void StringStatistics::Verify(Vector &vector, idx_t count) {
 				throw InternalException("Invalid unicode detected in vector: %s", vector.ToString(count));
 			}
 		}
-		if (string_value_comparison((const_data_ptr_t) data, MinValue<idx_t>(len, MAX_STRING_MINMAX_SIZE), min) < 0) {
+		if (string_value_comparison((const_data_ptr_t)data, MinValue<idx_t>(len, MAX_STRING_MINMAX_SIZE), min) < 0) {
 			throw InternalException("Statistics mismatch: value is smaller than min.\nStatistics: %s\nVector: %s",
 			                        ToString(), vector.ToString(count));
 		}
-		if (string_value_comparison((const_data_ptr_t) data, MinValue<idx_t>(len, MAX_STRING_MINMAX_SIZE), max) > 0) {
+		if (string_value_comparison((const_data_ptr_t)data, MinValue<idx_t>(len, MAX_STRING_MINMAX_SIZE), max) > 0) {
 			throw InternalException("Statistics mismatch: value is bigger than max.\nStatistics: %s\nVector: %s",
 			                        ToString(), vector.ToString(count));
 		}

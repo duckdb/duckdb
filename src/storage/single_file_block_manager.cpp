@@ -53,12 +53,14 @@ DatabaseHeader DatabaseHeader::Deserialize(Deserializer &source) {
 	return header;
 }
 
-template <class T> void SerializeHeaderStructure(T header, data_ptr_t ptr) {
+template <class T>
+void SerializeHeaderStructure(T header, data_ptr_t ptr) {
 	BufferedSerializer ser(ptr, Storage::FILE_HEADER_SIZE);
 	header.Serialize(ser);
 }
 
-template <class T> T DeserializeHeaderStructure(data_ptr_t ptr) {
+template <class T>
+T DeserializeHeaderStructure(data_ptr_t ptr) {
 	BufferedDeserializer source(ptr, Storage::FILE_HEADER_SIZE);
 	return T::Deserialize(source);
 }

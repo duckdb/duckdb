@@ -8,20 +8,24 @@
 
 namespace duckdb {
 
-template <class T> struct sum_state_t {
+template <class T>
+struct sum_state_t {
 	T value;
 	bool isset;
 };
 
 struct SumSetOperation {
-	template <class STATE> static void Initialize(STATE *state) {
+	template <class STATE>
+	static void Initialize(STATE *state) {
 		state->isset = false;
 	}
-	template <class STATE> static void Combine(STATE source, STATE *target) {
+	template <class STATE>
+	static void Combine(STATE source, STATE *target) {
 		target->isset = source.isset || target->isset;
 		target->value += source.value;
 	}
-	template <class STATE> static void AddValues(STATE *state, idx_t count) {
+	template <class STATE>
+	static void AddValues(STATE *state, idx_t count) {
 		state->isset = true;
 	}
 };

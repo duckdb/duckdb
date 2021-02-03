@@ -64,7 +64,8 @@ string NumericStatistics::ToString() {
 	                          has_null ? "true" : "false", min.ToString(), max.ToString());
 }
 
-template <class T> void NumericStatistics::TemplatedVerify(Vector &vector, idx_t count) {
+template <class T>
+void NumericStatistics::TemplatedVerify(Vector &vector, idx_t count) {
 	VectorData vdata;
 	vector.Orrify(count, vdata);
 

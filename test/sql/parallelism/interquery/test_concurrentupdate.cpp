@@ -74,7 +74,8 @@ TEST_CASE("Concurrent update", "[interquery][.]") {
 	// initialize the database
 	con.Query("CREATE TABLE accounts(id INTEGER, money INTEGER)");
 	for (size_t i = 0; i < CONCURRENT_UPDATE_TOTAL_ACCOUNTS; i++) {
-		con.Query("INSERT INTO accounts VALUES (" + to_string(i) + ", " + to_string(CONCURRENT_UPDATE_MONEY_PER_ACCOUNT) + ");");
+		con.Query("INSERT INTO accounts VALUES (" + to_string(i) + ", " +
+		          to_string(CONCURRENT_UPDATE_MONEY_PER_ACCOUNT) + ");");
 	}
 
 	bool read_correct;
@@ -171,7 +172,8 @@ TEST_CASE("Multiple concurrent updaters", "[interquery][.]") {
 	// initialize the database
 	con.Query("CREATE TABLE accounts(id INTEGER, money INTEGER)");
 	for (size_t i = 0; i < CONCURRENT_UPDATE_TOTAL_ACCOUNTS; i++) {
-		con.Query("INSERT INTO accounts VALUES (" + to_string(i) + ", " + to_string(CONCURRENT_UPDATE_MONEY_PER_ACCOUNT) + ");");
+		con.Query("INSERT INTO accounts VALUES (" + to_string(i) + ", " +
+		          to_string(CONCURRENT_UPDATE_MONEY_PER_ACCOUNT) + ");");
 	}
 
 	bool correct[CONCURRENT_UPDATE_TOTAL_ACCOUNTS];
