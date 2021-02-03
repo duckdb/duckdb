@@ -14,6 +14,7 @@ void BuiltinFunctions::RegisterSQLiteFunctions() {
 	PragmaCollations::RegisterFunction(*this);
 	PragmaTableInfo::RegisterFunction(*this);
 	SQLiteMaster::RegisterFunction(*this);
+	PragmaDatabaseSize::RegisterFunction(*this);
 	PragmaDatabaseList::RegisterFunction(*this);
 
 	// CreateViewInfo info;

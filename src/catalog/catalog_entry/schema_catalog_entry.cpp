@@ -204,6 +204,11 @@ void SchemaCatalogEntry::Scan(ClientContext &context, CatalogType type, std::fun
 	set.Scan(context, callback);
 }
 
+void SchemaCatalogEntry::Scan(CatalogType type, std::function<void(CatalogEntry *)> callback) {
+	auto &set = GetCatalogSet(type);
+	set.Scan(callback);
+}
+
 void SchemaCatalogEntry::Serialize(Serializer &serializer) {
 	serializer.WriteString(name);
 }

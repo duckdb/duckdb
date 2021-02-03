@@ -53,7 +53,7 @@ typedef union core_YYSTYPE {
  * the ASCII characters plus these:
  *	%token <str>	IDENT FCONST SCONST BCONST XCONST Op
  *	%token <ival>	ICONST PARAM
- *	%token			TYPECAST DOT_DOT COLON_EQUALS EQUALS_GREATER
+ *	%token			TYPECAST DOT_DOT COLON_EQUALS EQUALS_GREATER LAMBDA_ARROW
  *	%token			LESS_EQUALS GREATER_EQUALS NOT_EQUALS
  * The above token definitions *must* be the first ones declared in any
  * bison parser built atop this scanner, so that they will have consistent

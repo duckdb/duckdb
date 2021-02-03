@@ -42,6 +42,9 @@ public:
 	//! Append a column segment to the tree
 	void AppendSegment(unique_ptr<SegmentBase> segment);
 
+	//! Replace this tree with another tree, taking over its nodes in-place
+	void Replace(SegmentTree &other);
+
 	//! Get the segment index of the column segment for the given row (does not lock the segment tree!)
 	idx_t GetSegmentIndex(idx_t row_number);
 };

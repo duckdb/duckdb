@@ -40,7 +40,7 @@ void ExpressionExecutor::Execute(DataChunk *input, DataChunk &result) {
 	SetChunk(input);
 
 	D_ASSERT(expressions.size() == result.ColumnCount());
-	D_ASSERT(expressions.size() > 0);
+	D_ASSERT(!expressions.empty());
 	for (idx_t i = 0; i < expressions.size(); i++) {
 		ExecuteExpression(i, result.data[i]);
 	}

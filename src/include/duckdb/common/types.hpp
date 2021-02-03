@@ -242,7 +242,10 @@ enum class LogicalTypeId : uint8_t {
 	VARCHAR = 22,
 	BLOB = 24,
 	INTERVAL = 25,
-
+	UTINYINT = 26,
+	USMALLINT = 27,
+	UINTEGER = 28,
+	UBIGINT = 29,
 	HUGEINT = 50,
 	POINTER = 51,
 	HASH = 52,
@@ -320,9 +323,13 @@ public:
 	static const LogicalType SQLNULL;
 	static const LogicalType BOOLEAN;
 	static const LogicalType TINYINT;
+	static const LogicalType UTINYINT;
 	static const LogicalType SMALLINT;
+	static const LogicalType USMALLINT;
 	static const LogicalType INTEGER;
+	static const LogicalType UINTEGER;
 	static const LogicalType BIGINT;
+	static const LogicalType UBIGINT;
 	static const LogicalType FLOAT;
 	static const LogicalType DOUBLE;
 	static const LogicalType DECIMAL;
@@ -364,6 +371,14 @@ template <class T> PhysicalType GetTypeId() {
 		return PhysicalType::INT32;
 	} else if (std::is_same<T, int64_t>()) {
 		return PhysicalType::INT64;
+	} else if (std::is_same<T, uint8_t>()) {
+		return PhysicalType::UINT8;
+	} else if (std::is_same<T, uint16_t>()) {
+		return PhysicalType::UINT16;
+	} else if (std::is_same<T, uint32_t>()) {
+		return PhysicalType::UINT32;
+	} else if (std::is_same<T, uint64_t>()) {
+		return PhysicalType::UINT64;
 	} else if (std::is_same<T, hugeint_t>()) {
 		return PhysicalType::INT128;
 	} else if (std::is_same<T, uint64_t>()) {

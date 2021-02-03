@@ -109,6 +109,7 @@ private:
 	unique_ptr<ExecuteStatement> TransformExecute(duckdb_libpgquery::PGNode *node);
 	unique_ptr<CallStatement> TransformCall(duckdb_libpgquery::PGNode *node);
 	unique_ptr<DropStatement> TransformDeallocate(duckdb_libpgquery::PGNode *node);
+	unique_ptr<SQLStatement> TransformCheckpoint(duckdb_libpgquery::PGNode *node);
 
 	//===--------------------------------------------------------------------===//
 	// Query Node Transform
@@ -139,6 +140,8 @@ private:
 	unique_ptr<ParsedExpression> TransformFuncCall(duckdb_libpgquery::PGFuncCall *root);
 	//! Transform a Postgres boolean expression into an Expression
 	unique_ptr<ParsedExpression> TransformInterval(duckdb_libpgquery::PGIntervalConstant *root);
+	//! Transform a Postgres lambda node [e.g. (x, y) -> x + y] into a lambda expression
+	unique_ptr<ParsedExpression> TransformLambda(duckdb_libpgquery::PGLambdaFunction *node);
 
 	//! Transform a Postgres constant value into an Expression
 	unique_ptr<ParsedExpression> TransformConstant(duckdb_libpgquery::PGAConst *c);
@@ -171,7 +174,7 @@ private:
 	// Helpers
 	//===--------------------------------------------------------------------===//
 	string TransformAlias(duckdb_libpgquery::PGAlias *root, vector<string> &column_name_alias);
-	void TransformCTE(duckdb_libpgquery::PGWithClause *de_with_clause, SelectStatement &select);
+	void TransformCTE(duckdb_libpgquery::PGWithClause *de_with_clause, QueryNode &select);
 	unique_ptr<SelectStatement> TransformRecursiveCTE(duckdb_libpgquery::PGCommonTableExpr *node,
 	                                                  CommonTableExpressionInfo &info);
 	// Operator String to ExpressionType (e.g. + => OPERATOR_ADD)

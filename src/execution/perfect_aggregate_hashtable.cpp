@@ -1,4 +1,6 @@
 #include "duckdb/execution/perfect_aggregate_hashtable.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/aggregate_hashtable.hpp"
 
 namespace duckdb {
 
@@ -110,15 +112,17 @@ void PerfectAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) 
 
 	// after finding the group location we update the aggregates
 	idx_t payload_idx = 0;
-	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
-		auto &aggr = aggregates[aggr_idx];
-		auto input_count = (idx_t)aggr.child_count;
-		aggr.function.update(input_count == 0 ? nullptr : &payload.data[payload_idx], input_count, addresses,
-		                     payload.size());
-
+	for (auto &aggregate : aggregates) {
+		auto input_count = (idx_t)aggregate.child_count;
+		if (aggregate.filter) {
+            GroupedAggregateHashTable::UpdateAggregate(aggregate,payload,addresses,input_count,payload_idx);
+		} else {
+			aggregate.function.update(input_count == 0 ? nullptr : &payload.data[payload_idx], nullptr,input_count, addresses,
+			                          payload.size());
+		}
 		// move to the next aggregate
 		payload_idx += input_count;
-		VectorOperations::AddInPlace(addresses, aggr.payload_size, payload.size());
+		VectorOperations::AddInPlace(addresses, aggregate.payload_size, payload.size());
 	}
 }
 

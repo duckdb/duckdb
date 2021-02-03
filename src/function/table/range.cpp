@@ -62,7 +62,7 @@ struct RangeFunctionState : public FunctionOperatorData {
 
 static unique_ptr<FunctionOperatorData> range_function_init(ClientContext &context, const FunctionData *bind_data,
                                                             vector<column_t> &column_ids,
-                                                            TableFilterCollection* filters) {
+                                                            TableFilterCollection *filters) {
 	return make_unique<RangeFunctionState>();
 }
 
@@ -117,6 +117,7 @@ void RangeTableFunction::RegisterFunction(BuiltinFunctions &set) {
 }
 
 void BuiltinFunctions::RegisterTableFunctions() {
+	CheckpointFunction::RegisterFunction(*this);
 	GlobTableFunction::RegisterFunction(*this);
 	RangeTableFunction::RegisterFunction(*this);
 	RepeatTableFunction::RegisterFunction(*this);

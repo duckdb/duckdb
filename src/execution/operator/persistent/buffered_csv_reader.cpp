@@ -165,8 +165,17 @@ unique_ptr<std::istream> BufferedCSVReader::OpenCSV(ClientContext &context, Buff
 		throw IOException("File \"%s\" not found", options.file_path.c_str());
 	}
 	unique_ptr<std::istream> result;
-	// decide based on the extension which stream to use
-	if (StringUtil::EndsWith(StringUtil::Lower(options.file_path), ".gz")) {
+
+	gzip_compressed = false;
+	if (options.compression == "infer") {
+		if (StringUtil::EndsWith(StringUtil::Lower(options.file_path), ".gz")) {
+			gzip_compressed = true;
+		}
+	} else if (options.compression == "gzip") {
+		gzip_compressed = true;
+	}
+
+	if (gzip_compressed) {
 		result = make_unique<GzipStream>(options.file_path);
 		plain_file_source = false;
 	} else {
@@ -217,7 +226,7 @@ void BufferedCSVReader::ResetBuffer() {
 }
 
 void BufferedCSVReader::ResetStream() {
-	if (!plain_file_source && StringUtil::EndsWith(StringUtil::Lower(options.file_path), ".gz")) {
+	if (!plain_file_source && gzip_compressed) {
 		// seeking to the beginning appears to not be supported in all compiler/os-scenarios,
 		// so we have to create a new stream source here for now
 		source = make_unique<GzipStream>(options.file_path);
@@ -796,7 +805,8 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 					chunk->Reference(parse_chunk);
 					cached_chunks.push(move(chunk));
 				} else {
-					while (!cached_chunks.empty()) cached_chunks.pop();
+					while (!cached_chunks.empty())
+						cached_chunks.pop();
 				}
 			}
 		}
@@ -1427,12 +1437,12 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 				}
 
 				if (options.auto_detect) {
-					throw InvalidInputException(
-					    "%s in column %s, between line %llu and %llu. Parser "
-					    "options: %s. Consider either increasing the sample size "
-						"(SAMPLE_SIZE=X [X rows] or SAMPLE_SIZE=-1 [all rows]), "
-					    "or skipping column conversion (ALL_VARCHAR=1)",
-					    e.what(), col_name, linenr - parse_chunk.size() + 1, linenr, options.toString());
+					throw InvalidInputException("%s in column %s, between line %llu and %llu. Parser "
+					                            "options: %s. Consider either increasing the sample size "
+					                            "(SAMPLE_SIZE=X [X rows] or SAMPLE_SIZE=-1 [all rows]), "
+					                            "or skipping column conversion (ALL_VARCHAR=1)",
+					                            e.what(), col_name, linenr - parse_chunk.size() + 1, linenr,
+					                            options.toString());
 				} else {
 					throw InvalidInputException("%s between line %llu and %llu in column %s. Parser options: %s ",
 					                            e.what(), linenr - parse_chunk.size(), linenr, col_name,

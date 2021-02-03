@@ -1,0 +1,71 @@
+# name: test/sql/storage/many_checkpoints.test
+# description: Test many checkpoints
+# group: [storage]
+
+# load the DB from disk
+load __TEST_DIR__/many_checkpoints.db
+
+statement ok
+CREATE TABLE test (a INTEGER PRIMARY KEY, b INTEGER, c VARCHAR);
+
+statement ok
+CHECKPOINT
+
+statement ok
+DROP TABLE test;
+
+statement ok
+CHECKPOINT
+
+statement ok
+CREATE TABLE test (a INTEGER PRIMARY KEY, b INTEGER, c VARCHAR);
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT COUNT(*) FROM test
+----
+0
+
+statement ok
+INSERT INTO test VALUES (11, 22, 'hello'), (13, 22, 'world'), (12, 21, 'test'), (10, NULL, NULL);
+
+query I
+SELECT COUNT(*) FROM test
+----
+4
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT COUNT(*) FROM test
+----
+4
+
+statement error
+INSERT INTO test VALUES (11, 22, 'hello');
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT COUNT(*) FROM test
+----
+4
+
+restart
+
+query I
+SELECT COUNT(*) FROM test
+----
+4
+
+query III
+SELECT * FROM test ORDER BY 1, 2, 3
+----
+10	NULL	NULL
+11	22	hello
+12	21	test
+13	22	world

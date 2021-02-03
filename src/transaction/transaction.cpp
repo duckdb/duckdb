@@ -6,10 +6,12 @@
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 
 #include "duckdb/transaction/append_info.hpp"
 #include "duckdb/transaction/delete_info.hpp"
 #include "duckdb/transaction/update_info.hpp"
+#include "duckdb/main/config.hpp"
 
 #include <cstring>
 
@@ -66,18 +68,46 @@ UpdateInfo *Transaction::CreateUpdateInfo(idx_t type_size, idx_t entries) {
 	return update_info;
 }
 
-string Transaction::Commit(WriteAheadLog *log, transaction_t commit_id) noexcept {
+bool Transaction::ChangesMade() {
+	return undo_buffer.ChangesMade() || storage.ChangesMade();
+}
+
+bool Transaction::AutomaticCheckpoint(DatabaseInstance &db) {
+	auto &config = DBConfig::GetConfig(db);
+	auto &storage_manager = StorageManager::GetStorageManager(db);
+	auto log = storage_manager.GetWriteAheadLog();
+	if (!log) {
+		return false;
+	}
+
+	auto initial_size = log->GetWALSize();
+	idx_t expected_wal_size = initial_size + storage.EstimatedSize() + undo_buffer.EstimatedSize();
+	return expected_wal_size > config.checkpoint_wal_size;
+}
+
+string Transaction::Commit(DatabaseInstance &db, transaction_t commit_id, bool checkpoint) noexcept {
 	this->commit_id = commit_id;
+	auto &storage_manager = StorageManager::GetStorageManager(db);
+	auto log = storage_manager.GetWriteAheadLog();
 
 	UndoBuffer::IteratorState iterator_state;
 	LocalStorage::CommitState commit_state;
-	int64_t initial_wal_size;
+	idx_t initial_wal_size = 0;
+	idx_t initial_written = 0;
 	if (log) {
-		initial_wal_size = log->GetWALSize();
+		auto initial_size = log->GetWALSize();
+		initial_written = log->GetTotalWritten();
+		initial_wal_size = initial_size < 0 ? 0 : idx_t(initial_size);
+	} else {
+		D_ASSERT(!checkpoint);
 	}
-	bool changes_made = undo_buffer.ChangesMade() || storage.ChangesMade() || sequence_usage.size() > 0;
 	try {
-		// commit the undo buffer
+		if (checkpoint) {
+			// check if we are checkpointing after this commit
+			// if we are checkpointing, we don't need to write anything to the WAL
+			// this saves us a lot of unnecessary writes to disk in the case of large commits
+			log->skip_writing = true;
+		}
 		storage.Commit(commit_state, *this, log, commit_id);
 		undo_buffer.Commit(iterator_state, log, commit_id);
 		if (log) {
@@ -85,18 +115,25 @@ string Transaction::Commit(WriteAheadLog *log, transaction_t commit_id) noexcept
 			for (auto &entry : sequence_usage) {
 				log->WriteSequenceValue(entry.first, entry.second);
 			}
-			// flush the WAL
-			if (changes_made) {
+			// flush the WAL if any changes were made
+			if (log->GetTotalWritten() > initial_written) {
+				D_ASSERT(!checkpoint);
+				D_ASSERT(!log->skip_writing);
 				log->Flush();
 			}
+			log->skip_writing = false;
 		}
 		return string();
 	} catch (std::exception &ex) {
 		undo_buffer.RevertCommit(iterator_state, transaction_id);
-		if (log && changes_made) {
-			// remove any entries written into the WAL by truncating it
-			log->Truncate(initial_wal_size);
+		if (log) {
+			log->skip_writing = false;
+			if (log->GetTotalWritten() > initial_written) {
+				// remove any entries written into the WAL by truncating it
+				log->Truncate(initial_wal_size);
+			}
 		}
+		D_ASSERT(!log || !log->skip_writing);
 		return ex.what();
 	}
 }

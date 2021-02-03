@@ -247,7 +247,8 @@ struct StringVector {
 	static string_t EmptyString(Vector &vector, idx_t len);
 	//! Adds a reference to a handle that stores strings of this vector
 	static void AddHandle(Vector &vector, unique_ptr<BufferHandle> handle);
-
+	//! Adds a reference to an unspecified vector buffer that stores strings of this vector
+	static void AddBuffer(Vector &vector, unique_ptr<VectorBuffer> buffer);
 	//! Add a reference from this vector to the string heap of the provided vector
 	static void AddHeapReference(Vector &vector, Vector &other);
 };

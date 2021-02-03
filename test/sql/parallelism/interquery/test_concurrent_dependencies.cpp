@@ -4,13 +4,15 @@
 #include <algorithm>
 #include <mutex>
 #include <thread>
+#include <atomic>
 
 using namespace duckdb;
 using namespace std;
 
 #define CONCURRENT_DEPENDENCIES_REPETITIONS 100
 #define CONCURRENT_DEPENDENCIES_THREAD_COUNT 10
-volatile bool finished = false;
+
+atomic<bool> finished;
 
 static void RunQueryUntilSuccess(Connection &con, string query) {
 	while (true) {

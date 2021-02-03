@@ -29,6 +29,12 @@ SELECT COUNT(*) FROM parquet_scan('test/sql/copy/parquet/data/userdata1.parquet'
 ----
 801
 
+query IIIII
+SELECT registration_dttm, id, first_name, birthdate, salary FROM parquet_scan('test/sql/copy/parquet/data/userdata1.parquet') where id = 42
+----
+2016-02-03 04:33:04	42	Todd	12/19/1999	284728.990000
+
+
 query I
 SELECT COUNT(*) FROM parquet_scan('test/sql/copy/parquet/data/userdata1.parquet') where id = 42
 ----
@@ -38,6 +44,25 @@ query I
 SELECT COUNT(*) FROM parquet_scan('test/sql/copy/parquet/data/userdata1.parquet') where salary < 1000
 ----
 0
+
+query I
+SELECT COUNT(*) FROM parquet_scan('test/sql/copy/parquet/data/userdata1.parquet') where salary < 1000
+----
+0
+
+query II
+SELECT first_name, gender FROM parquet_scan('test/sql/copy/parquet/data/userdata1.parquet') where first_name = 'Mark' and gender <> ''
+----
+Mark	Male
+Mark	Male
+Mark	Male
+Mark	Male
+Mark	Male
+Mark	Male
+Mark	Male
+Mark	Male
+Mark	Male
+Mark	Male
 
 query I
 SELECT COUNT(*) FROM parquet_scan('test/sql/copy/parquet/data/userdata1.parquet') where gender = 'Male' and first_name = 'Mark'
@@ -58,7 +83,6 @@ Alvarez
 Alvarez
 Arnold
 Arnold
-
 
 
 query I

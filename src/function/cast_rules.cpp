@@ -78,6 +78,67 @@ static int64_t ImplicitCastBigint(LogicalType to) {
 	}
 }
 
+static int64_t ImplicitCastUTinyint(LogicalType to) {
+	switch (to.id()) {
+	case LogicalTypeId::USMALLINT:
+		case LogicalTypeId::UINTEGER:
+	    case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::SMALLINT:
+	case LogicalTypeId::INTEGER:
+	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::FLOAT:
+	case LogicalTypeId::DOUBLE:
+	case LogicalTypeId::DECIMAL:
+		return TargetTypeCost(to);
+	default:
+		return -1;
+	}
+}
+
+static int64_t ImplicitCastUSmallint(LogicalType to) {
+	switch (to.id()) {
+		case LogicalTypeId::UINTEGER:
+	    case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::INTEGER:
+	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::FLOAT:
+	case LogicalTypeId::DOUBLE:
+	case LogicalTypeId::DECIMAL:
+		return TargetTypeCost(to);
+	default:
+		return -1;
+	}
+}
+
+static int64_t ImplicitCastUInteger(LogicalType to) {
+	switch (to.id()) {
+
+	    case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::FLOAT:
+	case LogicalTypeId::DOUBLE:
+	case LogicalTypeId::DECIMAL:
+		return TargetTypeCost(to);
+	default:
+		return -1;
+	}
+}
+
+static int64_t ImplicitCastUBigint(LogicalType to) {
+	switch (to.id()) {
+	case LogicalTypeId::FLOAT:
+	case LogicalTypeId::DOUBLE:
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::DECIMAL:
+		return TargetTypeCost(to);
+	default:
+		return -1;
+	}
+}
+
 static int64_t ImplicitCastFloat(LogicalType to) {
 	switch (to.id()) {
 	case LogicalTypeId::DOUBLE:
@@ -150,6 +211,14 @@ int64_t CastRules::ImplicitCast(LogicalType from, LogicalType to) {
 		return ImplicitCastInteger(to);
 	case LogicalTypeId::BIGINT:
 		return ImplicitCastBigint(to);
+	case LogicalTypeId::UTINYINT:
+		return ImplicitCastUTinyint(to);
+	case LogicalTypeId::USMALLINT:
+		return ImplicitCastUSmallint(to);
+	case LogicalTypeId::UINTEGER:
+		return ImplicitCastUInteger(to);
+	case LogicalTypeId::UBIGINT:
+		return ImplicitCastUBigint(to);
 	case LogicalTypeId::HUGEINT:
 		return ImplicitCastHugeint(to);
 	case LogicalTypeId::FLOAT:

@@ -113,6 +113,27 @@ template <> unique_ptr<data_t[]> Key::CreateData(int64_t value, bool is_little_e
 	return data;
 }
 
+template <> unique_ptr<data_t[]> Key::CreateData(uint8_t value, bool is_little_endian){
+	auto data = unique_ptr<data_t[]>(new data_t[sizeof(value)]);
+	reinterpret_cast<uint8_t *>(data.get())[0] = value;
+	return data;
+}
+template <> unique_ptr<data_t[]> Key::CreateData(uint16_t value, bool is_little_endian){
+	auto data = unique_ptr<data_t[]>(new data_t[sizeof(value)]);
+	reinterpret_cast<uint16_t *>(data.get())[0] = is_little_endian ? BSWAP16(value) : value;
+	return data;
+}
+template <> unique_ptr<data_t[]> Key::CreateData(uint32_t value, bool is_little_endian){
+	auto data = unique_ptr<data_t[]>(new data_t[sizeof(value)]);
+	reinterpret_cast<uint32_t *>(data.get())[0] = is_little_endian ? BSWAP32(value) : value;
+	return data;
+}
+template <> unique_ptr<data_t[]> Key::CreateData(uint64_t value, bool is_little_endian){
+	auto data = unique_ptr<data_t[]>(new data_t[sizeof(value)]);
+	reinterpret_cast<uint64_t *>(data.get())[0] = is_little_endian ? BSWAP64(value) : value;
+	return data;
+}
+
 template <> unique_ptr<data_t[]> Key::CreateData(float value, bool is_little_endian) {
 	uint32_t converted_value = EncodeFloat(value);
 	auto data = unique_ptr<data_t[]>(new data_t[sizeof(converted_value)]);

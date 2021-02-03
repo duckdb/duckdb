@@ -284,6 +284,18 @@ CatalogEntry *CatalogSet::GetEntryForTransaction(ClientContext &context, Catalog
 	return current;
 }
 
+CatalogEntry *CatalogSet::GetCommittedEntry(CatalogEntry *current) {
+	while (current->child) {
+		if (current->timestamp < TRANSACTION_ID_START) {
+			// this entry is committed: use it
+			break;
+		}
+		current = current->child.get();
+		D_ASSERT(current);
+	}
+	return current;
+}
+
 string CatalogSet::SimilarEntry(ClientContext &context, const string &name) {
 	lock_guard<mutex> lock(catalog_lock);
 

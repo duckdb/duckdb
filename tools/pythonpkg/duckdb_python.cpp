@@ -338,6 +338,18 @@ RawArrayWrapper::RawArrayWrapper(LogicalType type) : data(nullptr), type(type), 
 	case LogicalTypeId::BOOLEAN:
 		type_width = sizeof(bool);
 		break;
+	case LogicalTypeId::UTINYINT:
+		type_width = sizeof(uint8_t);
+		break;
+	case LogicalTypeId::USMALLINT:
+		type_width = sizeof(uint16_t);
+		break;
+	case LogicalTypeId::UINTEGER:
+		type_width = sizeof(uint32_t);
+		break;
+	case LogicalTypeId::UBIGINT:
+		type_width = sizeof(uint64_t);
+		break;
 	case LogicalTypeId::TINYINT:
 		type_width = sizeof(int8_t);
 		break;
@@ -399,6 +411,18 @@ void RawArrayWrapper::Initialize(idx_t capacity) {
 		break;
 	case LogicalTypeId::BIGINT:
 		dtype = "int64";
+		break;
+	case LogicalTypeId::UTINYINT:
+		dtype = "uint8";
+		break;
+	case LogicalTypeId::USMALLINT:
+		dtype = "uint16";
+		break;
+	case LogicalTypeId::UINTEGER:
+		dtype = "uint32";
+		break;
+	case LogicalTypeId::UBIGINT:
+		dtype = "uint64";
 		break;
 	case LogicalTypeId::FLOAT:
 		dtype = "float32";
@@ -472,6 +496,18 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 		break;
 	case LogicalTypeId::BIGINT:
 		may_have_null = ConvertColumnRegular<int64_t>(current_offset, dataptr, maskptr, idata, count);
+		break;
+	case LogicalTypeId::UTINYINT:
+		may_have_null = ConvertColumnRegular<uint8_t>(current_offset, dataptr, maskptr, idata, count);
+		break;
+	case LogicalTypeId::USMALLINT:
+		may_have_null = ConvertColumnRegular<uint16_t>(current_offset, dataptr, maskptr, idata, count);
+		break;
+	case LogicalTypeId::UINTEGER:
+		may_have_null = ConvertColumnRegular<uint32_t>(current_offset, dataptr, maskptr, idata, count);
+		break;
+	case LogicalTypeId::UBIGINT:
+		may_have_null = ConvertColumnRegular<uint64_t>(current_offset, dataptr, maskptr, idata, count);
 		break;
 	case LogicalTypeId::HUGEINT:
 		may_have_null = ConvertColumn<hugeint_t, double, duckdb_py_convert::IntegralConvert>(current_offset, dataptr,
@@ -584,7 +620,7 @@ std::string generate() {
 }
 } // namespace random_string
 
-enum class PandasType : uint8_t { BOOLEAN, TINYINT, SMALLINT, INTEGER, BIGINT, FLOAT, DOUBLE, TIMESTAMP, VARCHAR };
+enum class PandasType : uint8_t { BOOLEAN, TINYINT, SMALLINT, INTEGER, BIGINT, UTINYINT, USMALLINT, UINTEGER, UBIGINT, FLOAT, DOUBLE, TIMESTAMP, VARCHAR };
 
 struct NumPyArrayWrapper {
 	NumPyArrayWrapper(py::array numpy_array) : numpy_array(move(numpy_array)) {
@@ -639,7 +675,19 @@ struct PandasScanFunction : public TableFunction {
 		if (col_type == "bool") {
 			duckdb_col_type = LogicalType::BOOLEAN;
 			pandas_type = PandasType::BOOLEAN;
-		} else if (col_type == "int8" || col_type == "Int8") {
+		} else if (col_type == "uint8" || col_type == "Uint8") {
+			duckdb_col_type = LogicalType::UTINYINT;
+			pandas_type = PandasType::UTINYINT;
+		} else if (col_type == "uint16" || col_type == "Uint16") {
+			duckdb_col_type = LogicalType::USMALLINT;
+			pandas_type = PandasType::USMALLINT;
+		} else if (col_type == "uint32" || col_type == "Uint32") {
+			duckdb_col_type = LogicalType::UINTEGER;
+			pandas_type = PandasType::UINTEGER;
+		} else if (col_type == "uint64" || col_type == "Uint64") {
+			duckdb_col_type = LogicalType::UBIGINT;
+			pandas_type = PandasType::UBIGINT;
+		}else if (col_type == "int8" || col_type == "Int8") {
 			duckdb_col_type = LogicalType::TINYINT;
 			pandas_type = PandasType::TINYINT;
 		} else if (col_type == "int16" || col_type == "Int16") {
@@ -838,6 +886,18 @@ struct PandasScanFunction : public TableFunction {
 		case PandasType::BOOLEAN:
 			scan_pandas_column<bool>(numpy_col, count, offset, out);
 			break;
+		case PandasType::UTINYINT:
+			scan_pandas_numeric<uint8_t>(bind_data, count, offset, out);
+			break;
+		case PandasType::USMALLINT:
+			scan_pandas_numeric<uint16_t>(bind_data, count, offset, out);
+			break;
+		case PandasType::UINTEGER:
+			scan_pandas_numeric<uint32_t>(bind_data, count, offset, out);
+			break;
+		case PandasType::UBIGINT:
+			scan_pandas_numeric<uint64_t>(bind_data, count, offset, out);
+			break;
 		case PandasType::TINYINT:
 			scan_pandas_numeric<int8_t>(bind_data, count, offset, out);
 			break;
@@ -1035,6 +1095,18 @@ public:
 				break;
 			case LogicalTypeId::BIGINT:
 				res[col_idx] = val.GetValue<int64_t>();
+				break;
+			case LogicalTypeId::UTINYINT:
+				res[col_idx] = val.GetValue<uint8_t>();
+				break;
+			case LogicalTypeId::USMALLINT:
+				res[col_idx] = val.GetValue<uint16_t>();
+				break;
+			case LogicalTypeId::UINTEGER:
+				res[col_idx] = val.GetValue<uint32_t>();
+				break;
+			case LogicalTypeId::UBIGINT:
+				res[col_idx] = val.GetValue<uint64_t>();
 				break;
 			case LogicalTypeId::HUGEINT: {
 				auto hugeint_str = val.GetValue<string>();
@@ -1528,8 +1600,9 @@ struct DuckDBPyConnection {
 		CreateTableFunctionInfo info(scan_fun);
 
 		auto &context = *res->connection->context;
+		auto &catalog = Catalog::GetCatalog(context);
 		context.transaction.BeginTransaction();
-		context.catalog.CreateTableFunction(context, &info);
+		catalog.CreateTableFunction(context, &info);
 		context.transaction.Commit();
 
 		return res;

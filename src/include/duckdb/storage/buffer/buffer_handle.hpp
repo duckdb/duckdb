@@ -12,15 +12,13 @@
 
 namespace duckdb {
 class BlockHandle;
-class BufferManager;
 class FileBuffer;
 
 class BufferHandle {
 public:
-	BufferHandle(BufferManager &manager, shared_ptr<BlockHandle> handle, FileBuffer *node);
+	BufferHandle(shared_ptr<BlockHandle> handle, FileBuffer *node);
 	~BufferHandle();
 
-	BufferManager &manager;
 	//! The block handle
 	shared_ptr<BlockHandle> handle;
 	//! The managed buffer node

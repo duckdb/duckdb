@@ -23,6 +23,14 @@ template <class OP> static AggregateFunction GetBitfieldUnaryAggregate(LogicalTy
 		return AggregateFunction::UnaryAggregate<bit_state_t<uint64_t>, int64_t, int64_t, OP>(type, type);
 	case LogicalTypeId::HUGEINT:
 		return AggregateFunction::UnaryAggregate<bit_state_t<hugeint_t>, hugeint_t, hugeint_t, OP>(type, type);
+	case LogicalTypeId::UTINYINT:
+		return AggregateFunction::UnaryAggregate<bit_state_t<uint8_t>, uint8_t, uint8_t, OP>(type, type);
+	case LogicalTypeId::USMALLINT:
+		return AggregateFunction::UnaryAggregate<bit_state_t<uint16_t>, uint16_t, uint16_t, OP>(type, type);
+	case LogicalTypeId::UINTEGER:
+		return AggregateFunction::UnaryAggregate<bit_state_t<uint32_t>, uint32_t, uint32_t, OP>(type, type);
+	case LogicalTypeId::UBIGINT:
+		return AggregateFunction::UnaryAggregate<bit_state_t<uint64_t>, uint64_t, uint64_t, OP>(type, type);
 	default:
 		throw NotImplementedException("Unimplemented bitfield type for unary aggregate");
 	}
@@ -35,7 +43,7 @@ struct BitAndOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
+	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
 		if (!state->is_set) {
 			state->is_set = true;
 			state->value = input[idx];
@@ -45,9 +53,9 @@ struct BitAndOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
+	static void ConstantOperation(STATE *state,  FunctionData *bind_data,INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
 		//  count is irrelevant
-		Operation<INPUT_TYPE, STATE, OP>(state, input, nullmask, 0);
+		Operation<INPUT_TYPE, STATE, OP>(state,bind_data, input, nullmask, 0);
 	}
 
 	template <class T, class STATE>
@@ -92,7 +100,7 @@ struct BitOrOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
+	static void Operation(STATE *state,  FunctionData *bind_data,INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
 		if (!state->is_set) {
 			state->is_set = true;
 			state->value = input[idx];
@@ -102,9 +110,9 @@ struct BitOrOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
+	static void ConstantOperation(STATE *state,  FunctionData *bind_data,INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
 		//  count is irrelevant
-		Operation<INPUT_TYPE, STATE, OP>(state, input, nullmask, 0);
+		Operation<INPUT_TYPE, STATE, OP>(state, bind_data, input, nullmask, 0);
 	}
 
 	template <class T, class STATE>
@@ -149,7 +157,7 @@ struct BitXorOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
+	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
 		if (!state->is_set) {
 			state->is_set = true;
 			state->value = input[idx];
@@ -159,9 +167,9 @@ struct BitXorOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
+	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
 		//  count is irrelevant
-		Operation<INPUT_TYPE, STATE, OP>(state, input, nullmask, 0);
+		Operation<INPUT_TYPE, STATE, OP>(state,bind_data, input, nullmask, 0);
 	}
 
 	template <class T, class STATE>

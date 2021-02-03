@@ -32,6 +32,18 @@ void VectorOperations::Gather::Set(Vector &source, Vector &dest, idx_t count) {
 
 	dest.vector_type = VectorType::FLAT_VECTOR;
 	switch (dest.type.InternalType()) {
+	case PhysicalType::UINT8:
+		templated_gather_loop<uint8_t>(source, dest, count);
+		break;
+	case PhysicalType::UINT16:
+		templated_gather_loop<uint16_t>(source, dest, count);
+		break;
+	case PhysicalType::UINT32:
+		templated_gather_loop<uint32_t>(source, dest, count);
+		break;
+	case PhysicalType::UINT64:
+		templated_gather_loop<uint64_t>(source, dest, count);
+		break;
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 		templated_gather_loop<int8_t>(source, dest, count);

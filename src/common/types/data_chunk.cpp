@@ -258,6 +258,10 @@ void DataChunk::ToArrowArray(ArrowArray *out_array) {
 			case LogicalTypeId::SMALLINT:
 			case LogicalTypeId::INTEGER:
 			case LogicalTypeId::BIGINT:
+			case LogicalTypeId::UTINYINT:
+			case LogicalTypeId::USMALLINT:
+			case LogicalTypeId::UINTEGER:
+			case LogicalTypeId::UBIGINT:
 			case LogicalTypeId::FLOAT:
 			case LogicalTypeId::DOUBLE:
 			case LogicalTypeId::HUGEINT:

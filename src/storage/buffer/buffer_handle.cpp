@@ -3,12 +3,12 @@
 
 namespace duckdb {
 
-BufferHandle::BufferHandle(BufferManager &manager, shared_ptr<BlockHandle> handle, FileBuffer *node)
-    : manager(manager), handle(move(handle)), node(node) {
+BufferHandle::BufferHandle(shared_ptr<BlockHandle> handle, FileBuffer *node) : handle(move(handle)), node(node) {
 }
 
 BufferHandle::~BufferHandle() {
-	manager.Unpin(handle);
+	auto &buffer_manager = BufferManager::GetBufferManager(handle->db);
+	buffer_manager.Unpin(handle);
 }
 
 data_ptr_t BufferHandle::Ptr() {

@@ -28,6 +28,14 @@ template <class OP> static AggregateFunction GetUnaryAggregate(LogicalType type)
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::BIGINT:
 		return AggregateFunction::UnaryAggregate<min_max_state_t<int64_t>, int64_t, int64_t, OP>(type, type);
+	case LogicalTypeId::UTINYINT:
+		return AggregateFunction::UnaryAggregate<min_max_state_t<uint8_t>, uint8_t, uint8_t, OP>(type, type);
+	case LogicalTypeId::USMALLINT:
+		return AggregateFunction::UnaryAggregate<min_max_state_t<uint16_t>, uint16_t, uint16_t, OP>(type, type);
+	case LogicalTypeId::UINTEGER:
+		return AggregateFunction::UnaryAggregate<min_max_state_t<uint32_t>, uint32_t, uint32_t, OP>(type, type);
+	case LogicalTypeId::UBIGINT:
+		return AggregateFunction::UnaryAggregate<min_max_state_t<uint64_t>, uint64_t, uint64_t, OP>(type, type);
 	case LogicalTypeId::HUGEINT:
 		return AggregateFunction::UnaryAggregate<min_max_state_t<hugeint_t>, hugeint_t, hugeint_t, OP>(type, type);
 	case LogicalTypeId::FLOAT:
@@ -47,7 +55,7 @@ struct MinMaxBase {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
+	static void ConstantOperation(STATE *state,FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
 		D_ASSERT(!nullmask[0]);
 		if (!state->isset) {
 			OP::template Assign<INPUT_TYPE, STATE>(state, input[0]);
@@ -58,7 +66,7 @@ struct MinMaxBase {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
+	static void Operation(STATE *state,FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
 		if (!state->isset) {
 			OP::template Assign<INPUT_TYPE, STATE>(state, input[idx]);
 			state->isset = true;

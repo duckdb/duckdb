@@ -1848,6 +1848,7 @@ typedef struct PGCreateTableAsStmt {
  */
 typedef struct PGCheckPointStmt {
 	PGNodeTag type;
+	bool force;
 } PGCheckPointStmt;
 
 /* ----------------------
@@ -1956,5 +1957,17 @@ typedef struct PGSampleOptions {
 	int seed;                 /* seed, or NULL for default; */
 	int location;             /* token location, or -1 if unknown */
 } PGSampleOptions;
+
+
+/* ----------------------
+ *		Lambda Function
+ * ----------------------
+ */
+typedef struct PGLambdaFunction {
+	PGNodeTag type;
+	PGList *parameters;          /* list of input parameters */
+	PGNode *function;            /* lambda expression */
+	int location;                /* token location, or -1 if unknown */
+} PGLambdaFunction;
 
 }

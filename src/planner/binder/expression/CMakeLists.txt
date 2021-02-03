@@ -10,6 +10,7 @@ add_library_unity(
   bind_conjunction_expression.cpp
   bind_constant_expression.cpp
   bind_function_expression.cpp
+  bind_lambda.cpp
   bind_macro_expression.cpp
   bind_operator_expression.cpp
   bind_parameter_expression.cpp
