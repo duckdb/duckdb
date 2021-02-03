@@ -1,0 +1,58 @@
+# name: test/sql/storage/wal/wal_drop_table.test
+# description: Test serialization of NOT NULL constraint
+# group: [wal]
+
+# load the DB from disk
+load __TEST_DIR__/test_drop_table.db
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+# create a schema and table and insert values
+statement ok
+CREATE SCHEMA test;
+
+statement ok
+CREATE TABLE test.test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test.test VALUES (11, 22), (13, 22);
+
+# drop the schema/table
+statement ok
+DROP TABLE test.test
+
+statement ok
+DROP SCHEMA test
+
+# now create then again
+statement ok
+CREATE SCHEMA test;
+
+statement ok
+CREATE TABLE test.test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test.test VALUES (11, 22), (13, 22);
+
+# restart the database
+restart
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+# after reload the table and schema are there: we can drop them again
+statement ok
+DROP TABLE test.test
+
+statement ok
+DROP SCHEMA test
+
+restart
+
+# after another reload they are still gone: create them again
+statement ok
+CREATE SCHEMA test;
+
+statement ok
+CREATE TABLE test.test (a INTEGER, b INTEGER);

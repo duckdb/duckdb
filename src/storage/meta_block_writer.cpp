@@ -4,8 +4,9 @@
 
 namespace duckdb {
 
-MetaBlockWriter::MetaBlockWriter(BlockManager &manager) : manager(manager) {
-	block = manager.CreateBlock();
+MetaBlockWriter::MetaBlockWriter(DatabaseInstance &db) : db(db) {
+	auto &block_manager = BlockManager::GetBlockManager(db);
+	block = block_manager.CreateBlock();
 	offset = sizeof(block_id_t);
 }
 
@@ -15,7 +16,9 @@ MetaBlockWriter::~MetaBlockWriter() {
 
 void MetaBlockWriter::Flush() {
 	if (offset > sizeof(block_id_t)) {
-		manager.Write(*block);
+		auto &block_manager = BlockManager::GetBlockManager(db);
+		written_blocks.push_back(block->id);
+		block_manager.Write(*block);
 		offset = sizeof(block_id_t);
 	}
 }
@@ -33,7 +36,8 @@ void MetaBlockWriter::WriteData(const_data_ptr_t buffer, idx_t write_size) {
 			write_size -= copy_amount;
 		}
 		// now we need to get a new block id
-		block_id_t new_block_id = manager.GetFreeBlockId();
+		auto &block_manager = BlockManager::GetBlockManager(db);
+		block_id_t new_block_id = block_manager.GetFreeBlockId();
 		// write the block id of the new block to the start of the current block
 		Store<block_id_t>(new_block_id, block->buffer);
 		// first flush the old block

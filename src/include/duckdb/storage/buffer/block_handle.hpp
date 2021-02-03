@@ -15,6 +15,7 @@
 namespace duckdb {
 class BufferHandle;
 class BufferManager;
+class DatabaseInstance;
 class FileBuffer;
 
 enum class BlockState : uint8_t { BLOCK_UNLOADED = 0, BLOCK_LOADED = 1 };
@@ -25,12 +26,12 @@ class BlockHandle {
 	friend class BufferManager;
 
 public:
-	BlockHandle(BufferManager &manager, block_id_t block_id);
-	BlockHandle(BufferManager &manager, block_id_t block_id, unique_ptr<FileBuffer> buffer, bool can_destroy,
+	BlockHandle(DatabaseInstance &db, block_id_t block_id);
+	BlockHandle(DatabaseInstance &db, block_id_t block_id, unique_ptr<FileBuffer> buffer, bool can_destroy,
 	            idx_t alloc_size);
 	~BlockHandle();
 
-	BufferManager &manager;
+	DatabaseInstance &db;
 
 public:
 	block_id_t BlockId() {

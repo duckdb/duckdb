@@ -50,6 +50,8 @@ public:
 	virtual void InitializeScan(ColumnScanState &state) = 0;
 	//! Scan one vector from this segment
 	virtual void Scan(Transaction &transaction, ColumnScanState &state, idx_t vector_index, Vector &result) = 0;
+	//! Scan one vector of committed data from this segment
+	virtual void ScanCommitted(ColumnScanState &state, idx_t vector_index, Vector &result) = 0;
 	//! Scan the next vector from the column and apply a selection vector to filter the data
 	virtual void FilterScan(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
 	                        idx_t &approved_tuple_count) = 0;

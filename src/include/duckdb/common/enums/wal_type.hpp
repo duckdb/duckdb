@@ -44,6 +44,7 @@ enum class WALType : uint8_t {
 	// -----------------------------
 	// Flush
 	// -----------------------------
+	CHECKPOINT = 99,
 	WAL_FLUSH = 100
 };
 }

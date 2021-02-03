@@ -1,0 +1,105 @@
+# name: test/sql/storage/test_store_tpch_complex.test_slow
+# description: Test storing TPC-H with several complex operations
+# group: [storage]
+
+require tpch
+
+# load the DB from disk
+load __TEST_DIR__/tpch_store.db
+
+statement ok
+PRAGMA force_checkpoint;
+
+statement ok
+CALL dbgen(sf=0.01);
+
+query I
+select count(*) from lineitem;
+----
+60175
+
+# restart and checkpoint a few times
+loop i 0 3
+
+restart
+
+statement ok
+PRAGMA force_checkpoint;
+
+query I
+select count(*) from lineitem;
+----
+60175
+
+statement ok
+CHECKPOINT
+
+query I
+select count(*) from lineitem;
+----
+60175
+
+endloop
+
+restart
+
+statement ok
+PRAGMA force_checkpoint;
+
+# now add a column
+statement ok
+alter table lineitem add column l_new integer;
+
+statement ok
+update lineitem set l_new=l_quantity * l_discount;
+
+query I
+select l_new from lineitem limit 10;
+----
+0
+3
+0
+2
+2
+2
+0
+2
+4
+1
+
+statement ok
+CHECKPOINT
+
+query I
+select l_new from lineitem limit 10;
+----
+0
+3
+0
+2
+2
+2
+0
+2
+4
+1
+
+restart
+
+query I
+select l_new from lineitem limit 10;
+----
+0
+3
+0
+2
+2
+2
+0
+2
+4
+1
+
+
+
+

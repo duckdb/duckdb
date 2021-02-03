@@ -861,7 +861,7 @@ struct DataFrameScanFunction : public TableFunction {
 
 	static unique_ptr<FunctionOperatorData> dataframe_scan_init(ClientContext &context, const FunctionData *bind_data,
 	                                                            vector<column_t> &column_ids,
-	                                                            TableFilterCollection* filters) {
+	                                                            TableFilterCollection *filters) {
 		return make_unique<DataFrameScanState>();
 	}
 
@@ -976,8 +976,8 @@ SEXP duckdb_startup_R(SEXP dbdirsexp, SEXP readonlysexp) {
 	DuckDB *dbaddr;
 	try {
 		dbaddr = new DuckDB(dbdir, &config);
-	} catch (...) {
-		Rf_error("duckdb_startup_R: Failed to open database");
+	} catch (exception &e) {
+		Rf_error("duckdb_startup_R: Failed to open database: %s", e.what());
 	}
 	ExtensionHelper::LoadAllExtensions(*dbaddr);
 
@@ -985,8 +985,9 @@ SEXP duckdb_startup_R(SEXP dbdirsexp, SEXP readonlysexp) {
 	CreateTableFunctionInfo info(scan_fun);
 	Connection conn(*dbaddr);
 	auto &context = *conn.context;
+	auto &catalog = Catalog::GetCatalog(context);
 	context.transaction.BeginTransaction();
-	context.catalog.CreateTableFunction(context, &info);
+	catalog.CreateTableFunction(context, &info);
 	context.transaction.Commit();
 
 	RProtector r;

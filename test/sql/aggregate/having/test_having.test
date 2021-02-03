@@ -22,8 +22,10 @@ SELECT b, SUM(a) FROM test GROUP BY b HAVING SUM(a) < 20 ORDER BY b;
 
 # HAVING with condition on ALIAS
 # CONTROVERSIAL: this DOES work in SQLite, but not in PostgreSQL
-statement error
+query II
 SELECT b, SUM(a) AS sum FROM test GROUP BY b HAVING sum < 20 ORDER BY b;
+----
+21	12
 
 # HAVING without alias
 query IR

@@ -15,6 +15,8 @@
 #include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
+class DatabaseInstance;
+class TableDataWriter;
 class PersistentSegment;
 class Transaction;
 
@@ -22,13 +24,13 @@ struct DataTableInfo;
 
 class ColumnData {
 public:
-	ColumnData(BufferManager &manager, DataTableInfo &table_info, LogicalType type, idx_t column_idx);
+	ColumnData(DatabaseInstance &db, DataTableInfo &table_info, LogicalType type, idx_t column_idx);
 
 	DataTableInfo &table_info;
 	//! The type of the column
 	LogicalType type;
-	//! The buffer manager
-	BufferManager &manager;
+	//! The database
+	DatabaseInstance &db;
 	//! The column index of the column
 	idx_t column_idx;
 	//! The segments holding the data of the column

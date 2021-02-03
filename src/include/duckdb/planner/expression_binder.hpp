@@ -13,6 +13,7 @@
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/tokens.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/common/unordered_map.hpp"
 
 namespace duckdb {
 
@@ -58,7 +59,7 @@ public:
 	string Bind(unique_ptr<ParsedExpression> *expr, idx_t depth, bool root_expression = false);
 
 	// Bind table names to ColumnRefExpressions
-	static void BindTableNames(Binder &binder, ParsedExpression &expr);
+	static void BindTableNames(Binder &binder, ParsedExpression &expr, unordered_map<string, idx_t> *alias_map = nullptr);
 	static unique_ptr<Expression> PushCollation(ClientContext &context, unique_ptr<Expression> source, string collation,
 	                                            bool equality_only = false);
 	static void TestCollation(ClientContext &context, string collation);
@@ -69,6 +70,8 @@ public:
 	//! be added. Defaults to INVALID.
 	LogicalType target_type;
 
+	void BindChild(unique_ptr<ParsedExpression> &expr, idx_t depth, string &error);
+	static void ExtractCorrelatedExpressions(Binder &binder, Expression &expr);
 protected:
 	virtual BindResult BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth,
 	                                  bool root_expression = false);
@@ -87,11 +90,7 @@ protected:
 	BindResult BindExpression(StarExpression &expr, idx_t depth);
 	BindResult BindExpression(SubqueryExpression &expr, idx_t depth);
 
-	void BindChild(unique_ptr<ParsedExpression> &expr, idx_t depth, string &error);
-
 protected:
-	static void ExtractCorrelatedExpressions(Binder &binder, Expression &expr);
-
 	virtual BindResult BindFunction(FunctionExpression &expr, ScalarFunctionCatalogEntry *function, idx_t depth);
 	virtual BindResult BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry *function, idx_t depth);
 	virtual BindResult BindUnnest(FunctionExpression &expr, idx_t depth);

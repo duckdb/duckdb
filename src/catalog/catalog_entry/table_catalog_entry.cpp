@@ -63,7 +63,7 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 	}
 	if (!storage) {
 		// create the physical storage
-		storage = make_shared<DataTable>(catalog->storage, schema->name, name, GetTypes(), move(info->data));
+		storage = make_shared<DataTable>(catalog->db, schema->name, name, GetTypes(), move(info->data));
 
 		// create the unique indexes for the UNIQUE and PRIMARY KEY constraints
 		for (idx_t i = 0; i < bound_constraints.size(); i++) {
@@ -539,6 +539,43 @@ unique_ptr<CatalogEntry> TableCatalogEntry::Copy(ClientContext &context) {
 
 void TableCatalogEntry::SetAsRoot() {
 	storage->SetAsRoot();
+}
+
+void TableCatalogEntry::CommitAlter(AlterInfo &info) {
+	D_ASSERT(info.type == AlterType::ALTER_TABLE);
+	auto &alter_table = (AlterTableInfo &)info;
+	string column_name;
+	switch (alter_table.alter_table_type) {
+	case AlterTableType::REMOVE_COLUMN: {
+		auto &remove_info = (RemoveColumnInfo &)alter_table;
+		column_name = remove_info.removed_column;
+		break;
+	}
+	case AlterTableType::ALTER_COLUMN_TYPE: {
+		auto &change_info = (ChangeColumnTypeInfo &)alter_table;
+		column_name = change_info.column_name;
+		break;
+	}
+	default:
+		break;
+	}
+	if (column_name.empty()) {
+		return;
+	}
+	idx_t removed_index = INVALID_INDEX;
+	for (idx_t i = 0; i < columns.size(); i++) {
+		if (columns[i].name == column_name) {
+			D_ASSERT(removed_index == INVALID_INDEX);
+			removed_index = i;
+			continue;
+		}
+	}
+	D_ASSERT(removed_index != INVALID_INDEX);
+	storage->CommitDropColumn(removed_index);
+}
+
+void TableCatalogEntry::CommitDrop() {
+	storage->CommitDropTable();
 }
 
 } // namespace duckdb

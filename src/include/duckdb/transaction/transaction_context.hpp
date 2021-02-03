@@ -13,6 +13,7 @@
 
 namespace duckdb {
 
+class ClientContext;
 class Transaction;
 class TransactionManager;
 
@@ -20,9 +21,8 @@ class TransactionManager;
 //! current transaction
 class TransactionContext {
 public:
-	TransactionContext(TransactionManager &transaction_manager)
-	    : transaction_manager(transaction_manager), auto_commit(true),
-	      current_transaction(nullptr) {
+	TransactionContext(TransactionManager &transaction_manager, ClientContext &context)
+	    : transaction_manager(transaction_manager), context(context), auto_commit(true), current_transaction(nullptr) {
 	}
 	~TransactionContext();
 
@@ -39,6 +39,7 @@ public:
 	void BeginTransaction();
 	void Commit();
 	void Rollback();
+	void ClearTransaction();
 
 	void SetAutoCommit(bool value);
 	bool IsAutoCommit() {
@@ -47,6 +48,7 @@ public:
 
 private:
 	TransactionManager &transaction_manager;
+	ClientContext &context;
 	bool auto_commit;
 
 	Transaction *current_transaction;
