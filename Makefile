@@ -130,8 +130,11 @@ amaldebug:
 test_compile: # test compilation of individual cpp files
 	python scripts/amalgamation.py --compile
 
-format:
-	python3 scripts/format.py
+format-check:
+	python3 scripts/format.py --all --check
+
+format-fix:
+	python3 scripts/format.py --all --fix
 
 third_party/sqllogictest:
 	git clone --depth=1 https://github.com/cwida/sqllogictest.git third_party/sqllogictest
