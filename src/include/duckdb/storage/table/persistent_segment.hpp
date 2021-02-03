@@ -10,18 +10,18 @@
 
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/block.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/uncompressed_segment.hpp"
 
 namespace duckdb {
+class DatabaseInstance;
 
 class PersistentSegment : public ColumnSegment {
 public:
-	PersistentSegment(BufferManager &manager, block_id_t id, idx_t offset, LogicalType type, idx_t start, idx_t count,
+	PersistentSegment(DatabaseInstance &db, block_id_t id, idx_t offset, LogicalType type, idx_t start, idx_t count,
 	                  unique_ptr<BaseStatistics> statistics);
 
-	//! The buffer manager
-	BufferManager &manager;
+	//! The storage manager
+	DatabaseInstance &db;
 	//! The block id that this segment relates to
 	block_id_t block_id;
 	//! The offset into the block
@@ -30,10 +30,14 @@ public:
 	unique_ptr<UncompressedSegment> data;
 
 public:
+	bool HasChanges();
+
 	void InitializeScan(ColumnScanState &state) override;
-	//! Scan one vector from this transient segment
+	//! Scan one vector from this persistent segment
 	void Scan(Transaction &transaction, ColumnScanState &state, idx_t vector_index, Vector &result) override;
-	//! Scan one vector from this transient segment, throwing an exception if there are any outstanding updates
+	//! Scan one vector of committed data from this persistent segment
+	void ScanCommitted(ColumnScanState &state, idx_t vector_index, Vector &result) override;
+	//! Scan one vector from this persistent segment, throwing an exception if there are any outstanding updates
 	void IndexScan(ColumnScanState &state, Vector &result) override;
 	//! Scan the next vector from the column and apply a selection vector to filter the data
 	void FilterScan(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,

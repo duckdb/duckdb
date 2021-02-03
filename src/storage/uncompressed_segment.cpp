@@ -8,11 +8,12 @@
 #include "duckdb/transaction/update_info.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
+#include "duckdb/transaction/transaction.hpp"
 
 namespace duckdb {
 
-UncompressedSegment::UncompressedSegment(BufferManager &manager, PhysicalType type, idx_t row_start)
-    : manager(manager), type(type), max_vector_count(0), tuple_count(0), row_start(row_start), versions(nullptr) {
+UncompressedSegment::UncompressedSegment(DatabaseInstance &db, PhysicalType type, idx_t row_start)
+    : db(db), type(type), max_vector_count(0), tuple_count(0), row_start(row_start), versions(nullptr) {
 }
 
 UncompressedSegment::~UncompressedSegment() {
@@ -215,7 +216,7 @@ static void filterSelectionType(T *vec, T *predicate, SelectionVector &sel, idx_
 	sel.Initialize(new_sel);
 }
 
-void UncompressedSegment::filterSelection(SelectionVector &sel, Vector &result, const TableFilter& filter,
+void UncompressedSegment::filterSelection(SelectionVector &sel, Vector &result, const TableFilter &filter,
                                           idx_t &approved_tuple_count, nullmask_t &nullmask) {
 	// the inplace loops take the result as the last parameter
 	switch (result.type.InternalType()) {
@@ -224,7 +225,7 @@ void UncompressedSegment::filterSelection(SelectionVector &sel, Vector &result, 
 		auto predicate_vector = Vector(filter.constant.value_.utinyint);
 		auto predicate = FlatVector::GetData<uint8_t>(predicate_vector);
 		filterSelectionType<uint8_t>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type,
-		                            nullmask);
+		                             nullmask);
 		break;
 	}
 	case PhysicalType::UINT16: {
@@ -232,7 +233,7 @@ void UncompressedSegment::filterSelection(SelectionVector &sel, Vector &result, 
 		auto predicate_vector = Vector(filter.constant.value_.usmallint);
 		auto predicate = FlatVector::GetData<uint16_t>(predicate_vector);
 		filterSelectionType<uint16_t>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type,
-		                             nullmask);
+		                              nullmask);
 		break;
 	}
 	case PhysicalType::UINT32: {
@@ -240,7 +241,7 @@ void UncompressedSegment::filterSelection(SelectionVector &sel, Vector &result, 
 		auto predicate_vector = Vector(filter.constant.value_.uinteger);
 		auto predicate = FlatVector::GetData<uint32_t>(predicate_vector);
 		filterSelectionType<uint32_t>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type,
-		                             nullmask);
+		                              nullmask);
 		break;
 	}
 	case PhysicalType::UINT64: {
@@ -248,7 +249,7 @@ void UncompressedSegment::filterSelection(SelectionVector &sel, Vector &result, 
 		auto predicate_vector = Vector(filter.constant.value_.ubigint);
 		auto predicate = FlatVector::GetData<uint64_t>(predicate_vector);
 		filterSelectionType<uint64_t>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type,
-		                             nullmask);
+		                              nullmask);
 		break;
 	}
 	case PhysicalType::INT8: {
@@ -310,8 +311,7 @@ void UncompressedSegment::filterSelection(SelectionVector &sel, Vector &result, 
 		auto result_flat = FlatVector::GetData<bool>(result);
 		auto predicate_vector = Vector(filter.constant.value_.boolean);
 		auto predicate = FlatVector::GetData<bool>(predicate_vector);
-		filterSelectionType<bool>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type,
-		                              nullmask);
+		filterSelectionType<bool>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type, nullmask);
 		break;
 	}
 	default:
@@ -326,7 +326,8 @@ void UncompressedSegment::Select(Transaction &transaction, Vector &result, vecto
 		Scan(transaction, state, state.vector_index, result, false);
 		auto vector_index = state.vector_index;
 		// pin the buffer for this segment
-		auto handle = manager.Pin(block);
+		auto &buffer_manager = BufferManager::GetBufferManager(db);
+		auto handle = buffer_manager.Pin(block);
 		auto data = handle->node->buffer;
 		auto offset = vector_index * vector_size;
 		auto source_nullmask = (nullmask_t *)(data + offset);
@@ -352,7 +353,22 @@ void UncompressedSegment::Scan(Transaction &transaction, ColumnScanState &state,
 	FetchBaseData(state, vector_index, result);
 	if (versions && versions[vector_index]) {
 		// if there are any versions, check if we need to overwrite the data with the versioned data
-		FetchUpdateData(state, transaction, versions[vector_index], result);
+		FetchUpdateData(state, transaction.start_time, transaction.transaction_id, versions[vector_index], result);
+	}
+}
+
+void UncompressedSegment::ScanCommitted(ColumnScanState &state, idx_t vector_index, Vector &result) {
+	// first fetch the data from the base table
+	FetchBaseData(state, vector_index, result);
+	if (versions && versions[vector_index]) {
+		// if there are any versions, check if we need to overwrite the data with the versioned data
+		// we want to fetch all COMMITTED data
+		// to do that, we set the start time to the highest possible start time (TRANSACTION_ID_START - 1)
+		// and set the transaction id to the highest possible transaction id (INVALID_INDEX)
+		// this way we know we will fetch all committed data, and none of the uncommitted data
+		transaction_t start_time = TRANSACTION_ID_START - 1;
+		transaction_t transaction_id = INVALID_INDEX;
+		FetchUpdateData(state, start_time, transaction_id, versions[vector_index], result);
 	}
 }
 
@@ -404,17 +420,24 @@ void UncompressedSegment::CleanupUpdate(UpdateInfo *info) {
 //===--------------------------------------------------------------------===//
 void UncompressedSegment::ToTemporary() {
 	auto write_lock = lock.GetExclusiveLock();
+	ToTemporaryInternal();
+}
 
+void UncompressedSegment::ToTemporaryInternal() {
 	if (block->BlockId() >= MAXIMUM_BLOCK) {
 		// conversion has already been performed by a different thread
 		return;
 	}
+	auto &block_manager = BlockManager::GetBlockManager(db);
+	block_manager.MarkBlockAsModified(block->BlockId());
+
 	// pin the current block
-	auto current = manager.Pin(block);
+	auto &buffer_manager = BufferManager::GetBufferManager(db);
+	auto current = buffer_manager.Pin(block);
 
 	// now allocate a new block from the buffer manager
-	auto new_block = manager.RegisterMemory(Storage::BLOCK_ALLOC_SIZE, false);
-	auto handle = manager.Pin(new_block);
+	auto new_block = buffer_manager.RegisterMemory(Storage::BLOCK_ALLOC_SIZE, false);
+	auto handle = buffer_manager.Pin(new_block);
 	// now copy the data over and switch to using the new block id
 	memcpy(handle->node->buffer, current->node->buffer, Storage::BLOCK_SIZE);
 	this->block = move(new_block);

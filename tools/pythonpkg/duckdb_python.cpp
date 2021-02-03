@@ -1600,8 +1600,9 @@ struct DuckDBPyConnection {
 		CreateTableFunctionInfo info(scan_fun);
 
 		auto &context = *res->connection->context;
+		auto &catalog = Catalog::GetCatalog(context);
 		context.transaction.BeginTransaction();
-		context.catalog.CreateTableFunction(context, &info);
+		catalog.CreateTableFunction(context, &info);
 		context.transaction.Commit();
 
 		return res;

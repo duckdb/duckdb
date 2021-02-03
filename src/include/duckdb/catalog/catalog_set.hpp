@@ -76,6 +76,19 @@ public:
 		}
 	}
 
+	//! Scan the catalog set, invoking the callback method for every committed entry
+	template <class T> void Scan(T &&callback) {
+		// lock the catalog set
+		std::lock_guard<std::mutex> lock(catalog_lock);
+		for (auto &kv : entries) {
+			auto entry = kv.second.get();
+			entry = GetCommittedEntry(entry);
+			if (!entry->deleted) {
+				callback(entry);
+			}
+		}
+	}
+
 	static bool HasConflict(ClientContext &context, transaction_t timestamp);
 	static bool UseTimestamp(ClientContext &context, transaction_t timestamp);
 
@@ -89,6 +102,7 @@ public:
 private:
 	//! Given a root entry, gets the entry valid for this transaction
 	CatalogEntry *GetEntryForTransaction(ClientContext &context, CatalogEntry *current);
+	CatalogEntry *GetCommittedEntry(CatalogEntry *current);
 	bool GetEntryInternal(ClientContext &context, const string &name, idx_t &entry_index, CatalogEntry *&entry);
 	bool GetEntryInternal(ClientContext &context, idx_t entry_index, CatalogEntry *&entry);
 	//! Drops an entry from the catalog set; must hold the catalog_lock to safely call this

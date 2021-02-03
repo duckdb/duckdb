@@ -137,6 +137,16 @@ bool UndoBuffer::ChangesMade() {
 	return head->maximum_size > 0;
 }
 
+idx_t UndoBuffer::EstimatedSize() {
+	idx_t estimated_size = 0;
+	auto node = head.get();
+	while (node) {
+		estimated_size += node->current_position;
+		node = node->next.get();
+	}
+	return estimated_size;
+}
+
 void UndoBuffer::Cleanup() {
 	// garbage collect everything in the Undo Chunk
 	// this should only happen if

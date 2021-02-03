@@ -18,7 +18,6 @@
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/parsed_data/drop_info.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
-#include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
 
@@ -26,8 +25,8 @@
 
 namespace duckdb {
 
-Catalog::Catalog(StorageManager &storage)
-    : storage(storage), schemas(make_unique<CatalogSet>(*this, make_unique<DefaultSchemaGenerator>(*this))),
+Catalog::Catalog(DatabaseInstance &db)
+    : db(db), schemas(make_unique<CatalogSet>(*this, make_unique<DefaultSchemaGenerator>(*this))),
       dependency_manager(make_unique<DependencyManager>(*this)) {
 	catalog_version = 0;
 }
@@ -35,7 +34,7 @@ Catalog::~Catalog() {
 }
 
 Catalog &Catalog::GetCatalog(ClientContext &context) {
-	return context.catalog;
+	return context.db->GetCatalog();
 }
 
 CatalogEntry *Catalog::CreateTable(ClientContext &context, BoundCreateTableInfo *info) {
