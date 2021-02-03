@@ -70,6 +70,8 @@ public:
 	//! be added. Defaults to INVALID.
 	LogicalType target_type;
 
+	void BindChild(unique_ptr<ParsedExpression> &expr, idx_t depth, string &error);
+	static void ExtractCorrelatedExpressions(Binder &binder, Expression &expr);
 protected:
 	virtual BindResult BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth,
 	                                  bool root_expression = false);
@@ -88,11 +90,7 @@ protected:
 	BindResult BindExpression(StarExpression &expr, idx_t depth);
 	BindResult BindExpression(SubqueryExpression &expr, idx_t depth);
 
-	void BindChild(unique_ptr<ParsedExpression> &expr, idx_t depth, string &error);
-
 protected:
-	static void ExtractCorrelatedExpressions(Binder &binder, Expression &expr);
-
 	virtual BindResult BindFunction(FunctionExpression &expr, ScalarFunctionCatalogEntry *function, idx_t depth);
 	virtual BindResult BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry *function, idx_t depth);
 	virtual BindResult BindUnnest(FunctionExpression &expr, idx_t depth);
