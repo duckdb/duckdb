@@ -21,6 +21,7 @@ ignored_directories = ['.eggs', '__pycache__', 'icu', 'dbgen']
 format_all = False
 check_only = True
 confirm = True
+silent = False
 
 def print_usage():
     print("Usage: python scripts/format.py [revision|--all] [--check|--fix]")
@@ -48,6 +49,8 @@ if len(sys.argv) > 2:
             confirm = False
         elif arg == '--confirm':
             confirm = True
+        elif arg == '--silent':
+            silent = True
         else:
             print_usage()
 
@@ -77,6 +80,10 @@ def can_format_file(full_path):
     return False
 
 
+action = "Formatting"
+if check_only:
+    action = "Checking"
+
 def get_changed_files(revision):
     proc = subprocess.Popen(
         ['git', 'diff', '--name-only', revision], stdout=subprocess.PIPE)
@@ -89,10 +96,10 @@ def get_changed_files(revision):
     return changed_files
 
 if os.path.isfile(revision):
-    print("Formatting individual file: " + revision)
+    print(action + " individual file: " + revision)
     changed_files = [revision]
 elif os.path.isdir(revision):
-    print("Formatting files in directory: " + revision)
+    print(action + " files in directory: " + revision)
     changed_files = [os.path.join(revision, x) for x in os.listdir(revision)]
 
     print("Changeset:")
@@ -100,7 +107,7 @@ elif os.path.isdir(revision):
         print(fname)
 elif not format_all:
     os.system("git fetch origin master:master")
-    print("Formatting since branch or revision: " + revision)
+    print(action + " since branch or revision: " + revision)
     changed_files = get_changed_files(revision)
     if len(changed_files) == 0:
         print("No changed files found!")
@@ -110,7 +117,7 @@ elif not format_all:
     for fname in changed_files:
         print(fname)
 else:
-    print("Formatting all files")
+    print(action + " all files")
 
 if confirm and not check_only:
     print("The files listed above will be reformatted.")
@@ -248,7 +255,8 @@ def format_directory(directory):
         if os.path.isdir(full_path):
             if f in ignored_directories:
                 continue
-            print(full_path)
+            if not silent:
+                print(full_path)
             format_directory(full_path)
         elif can_format_file(full_path):
             format_file(f, full_path, directory, '.' +
@@ -280,7 +288,7 @@ if check_only:
         print("Failed format-check: differences were found in the following files:")
         for fname in difference_files:
             print("- " + fname)
-        print("Run make format-fix to fix these differences automatically")
+        print('Run "make format-fix" to fix these differences automatically')
         exit(1)
     else:
         print("Passed format-check")

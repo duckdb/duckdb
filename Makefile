@@ -133,6 +133,9 @@ test_compile: # test compilation of individual cpp files
 format-check:
 	python3 scripts/format.py --all --check
 
+format-check-silent:
+	python3 scripts/format.py --all --check --silent
+
 format-fix:
 	python3 scripts/format.py --all --fix
 

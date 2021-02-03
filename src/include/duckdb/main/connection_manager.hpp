@@ -23,7 +23,7 @@ public:
 	}
 
 	void AddConnection(ClientContext &context) {
-			lock_guard<mutex> lock(connections_lock);
+		lock_guard<mutex> lock(connections_lock);
 		connections.push_back(weak_ptr<ClientContext>(context.shared_from_this()));
 	}
 

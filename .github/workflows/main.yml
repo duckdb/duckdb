@@ -54,7 +54,7 @@ jobs:
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-format && sudo pip3 install cmake-format
 
     - name: Format Check
-      run: make format-check
+      run: make format-check-silent
 
   win-release-64:
     name: Windows (64 Bit)
