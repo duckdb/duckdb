@@ -51,7 +51,7 @@ jobs:
         fetch-depth: 0
 
     - name: Install
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-format cmake-format
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-format && sudo pip3 install cmake-format
 
     - name: Format Check
       run: make format-check
