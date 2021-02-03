@@ -20,7 +20,8 @@ PhysicalOrder::PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode>
 //===--------------------------------------------------------------------===//
 class OrderGlobalState : public GlobalOperatorState {
 public:
-	OrderGlobalState(PhysicalOrder &_op, BufferManager &buffer_manager) : op(_op), sorting(buffer_manager), payload(buffer_manager) {
+	OrderGlobalState(PhysicalOrder &_op, BufferManager &buffer_manager)
+	    : op(_op), sorting(buffer_manager), payload(buffer_manager) {
 	}
 	// TODO: old
 	//! The lock for updating the global aggregate state
@@ -33,8 +34,8 @@ public:
 	RowChunk sorting;
 	//! Sizes of the sorting columns
 	vector<idx_t> sorting_sizes;
-    //! To execute the expressions that are sorted
-    ExpressionExecutor executor;
+	//! To execute the expressions that are sorted
+	ExpressionExecutor executor;
 	//! Payload in row format
 	RowChunk payload;
 };
@@ -52,23 +53,23 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 	auto &sorting = state->sorting;
 	sorting.nullmask_size = (orders.size() + 7) / 8;
 	sorting.entry_size += sorting.nullmask_size;
-    for (idx_t i = 0; i < orders.size(); i++) {
-        state->sorting_sizes.push_back(GetTypeIdSize(orders[i].expression->return_type.InternalType()));
+	for (idx_t i = 0; i < orders.size(); i++) {
+		state->sorting_sizes.push_back(GetTypeIdSize(orders[i].expression->return_type.InternalType()));
 		sorting.entry_size += GetTypeIdSize(orders[i].expression->return_type.InternalType());
-        state->executor.AddExpression(*orders[i].expression);
+		state->executor.AddExpression(*orders[i].expression);
 	}
-    sorting.block_capacity =
-        MaxValue<idx_t>(STANDARD_VECTOR_SIZE, (Storage::BLOCK_ALLOC_SIZE / sorting.entry_size) + 1);
+	sorting.block_capacity =
+	    MaxValue<idx_t>(STANDARD_VECTOR_SIZE, (Storage::BLOCK_ALLOC_SIZE / sorting.entry_size) + 1);
 
 	// payload columns
 	auto &payload = state->payload;
 	payload.nullmask_size = (types.size() + 7) / 8;
 	payload.entry_size += payload.nullmask_size;
-    for (auto type : types) {
-        payload.entry_size += GetTypeIdSize(type.InternalType());
-    }
-    payload.block_capacity =
-        MaxValue<idx_t>(STANDARD_VECTOR_SIZE, (Storage::BLOCK_ALLOC_SIZE / payload.entry_size) + 1);
+	for (auto type : types) {
+		payload.entry_size += GetTypeIdSize(type.InternalType());
+	}
+	payload.block_capacity =
+	    MaxValue<idx_t>(STANDARD_VECTOR_SIZE, (Storage::BLOCK_ALLOC_SIZE / payload.entry_size) + 1);
 
 	return state;
 }
@@ -84,11 +85,11 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &state, 
 	// execute expressions that are sorted
 	vector<LogicalType> sort_types;
 	for (auto &order : orders) {
-        sort_types.push_back(order.expression->return_type);
+		sort_types.push_back(order.expression->return_type);
 	}
-    DataChunk sort;
+	DataChunk sort;
 	sort.Initialize(sort_types);
-    gstate.executor.Execute(input, sort);
+	gstate.executor.Execute(input, sort);
 
 	// TODO: think about how we can prevent locking
 	lock_guard<mutex> glock(gstate.lock);
@@ -100,16 +101,16 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &state, 
 
 	// sorting columns
 	gstate.sorting.Build(sort.size(), key_locations, nullmask_locations);
-    for (idx_t i = 0; i < sort.data.size(); i++) {
-        gstate.sorting.SerializeVector(sort.data[i], sort.size(), *sel_ptr, sort.size(), i, key_locations,
-                                       nullmask_locations);
-    }
+	for (idx_t i = 0; i < sort.data.size(); i++) {
+		gstate.sorting.SerializeVector(sort.data[i], sort.size(), *sel_ptr, sort.size(), i, key_locations,
+		                               nullmask_locations);
+	}
 
 	// payload columns
 	gstate.payload.Build(input.size(), key_locations, nullmask_locations);
 	for (idx_t i = 0; i < input.data.size(); i++) {
 		gstate.payload.SerializeVector(input.data[i], input.size(), *sel_ptr, input.size(), i, key_locations,
-		                                 nullmask_locations);
+		                               nullmask_locations);
 	}
 }
 
@@ -146,10 +147,10 @@ public:
 		// now re-order payload data
 		handle = buffer_manager.Pin(payl.block);
 		dataptr = handle->node->buffer;
-        for (idx_t i = 0; i < payl.count; i++) {
-            key_locations[i] = dataptr;
-            dataptr += state.payload.entry_size;
-        }
+		for (idx_t i = 0; i < payl.count; i++) {
+			key_locations[i] = dataptr;
+			dataptr += state.payload.entry_size;
+		}
 		ReOrder(state.payload, key_locations, idxs.get());
 
 		// finish task
@@ -161,20 +162,21 @@ private:
 	void Sort(data_ptr_t key_locations[], idx_t idxs[]) {
 		// create reference so it can be used in the lambda function
 		auto *state_ptr = &state;
-		std::sort(idxs, idxs + sort.count,
-		          [key_locations, state_ptr](const idx_t &l_i, const idx_t &r_i) { return CompareTuple(l_i, r_i, key_locations, state_ptr) <= 0; });
+		std::sort(idxs, idxs + sort.count, [key_locations, state_ptr](const idx_t &l_i, const idx_t &r_i) {
+			return CompareTuple(l_i, r_i, key_locations, state_ptr) <= 0;
+		});
 	}
 
 	static int CompareTuple(const idx_t &l_i, const idx_t &r_i, data_ptr_t key_locations[], OrderGlobalState *state) {
-        data_ptr_t l_nullmask = key_locations[l_i];
-        data_ptr_t r_nullmask = key_locations[r_i];
+		data_ptr_t l_nullmask = key_locations[l_i];
+		data_ptr_t r_nullmask = key_locations[r_i];
 		data_ptr_t lhs = key_locations[l_i] + state->sorting.nullmask_size;
-        data_ptr_t rhs = key_locations[r_i] + state->sorting.nullmask_size;
+		data_ptr_t rhs = key_locations[r_i] + state->sorting.nullmask_size;
 		for (idx_t i = 0; i < state->op.orders.size(); i++) {
 			auto comp_res = CompareValue(l_nullmask, r_nullmask, lhs, rhs, i, state);
 			if (comp_res == 0) {
-                lhs += state->sorting_sizes[i];
-                rhs += state->sorting_sizes[i];
+				lhs += state->sorting_sizes[i];
+				rhs += state->sorting_sizes[i];
 				continue;
 			}
 			return comp_res < 0 ? (state->op.orders[i].type == OrderType::ASCENDING ? -1 : 1)
@@ -183,7 +185,8 @@ private:
 		return 0;
 	}
 
-	static int32_t CompareValue(data_ptr_t &l_nullmask, data_ptr_t &r_nullmask, data_ptr_t &lhs, data_ptr_t &rhs, const idx_t &sort_idx, OrderGlobalState *state) {
+	static int32_t CompareValue(data_ptr_t &l_nullmask, data_ptr_t &r_nullmask, data_ptr_t &lhs, data_ptr_t &rhs,
+	                            const idx_t &sort_idx, OrderGlobalState *state) {
 		bool left_null = *l_nullmask & (1 << sort_idx);
 		bool right_null = *r_nullmask & (1 << sort_idx);
 
@@ -199,28 +202,28 @@ private:
 	}
 
 	void ReOrder(RowChunk &chunk, data_ptr_t key_locations[], idx_t idxs[]) {
-        // reference to old block
-        auto &old_block = chunk.blocks[block_idx];
+		// reference to old block
+		auto &old_block = chunk.blocks[block_idx];
 
-        // initialize new block with same size as old block
-        RowDataBlock new_block;
-        new_block.count = old_block.count;
-        new_block.capacity = old_block.capacity;
-        new_block.block = buffer_manager.RegisterMemory(chunk.block_capacity * chunk.entry_size, false);
+		// initialize new block with same size as old block
+		RowDataBlock new_block;
+		new_block.count = old_block.count;
+		new_block.capacity = old_block.capacity;
+		new_block.block = buffer_manager.RegisterMemory(chunk.block_capacity * chunk.entry_size, false);
 
-        // pin the new block
-        auto new_buffer_handle = buffer_manager.Pin(new_block.block);
-        auto dataptr = new_buffer_handle->node->buffer;
+		// pin the new block
+		auto new_buffer_handle = buffer_manager.Pin(new_block.block);
+		auto dataptr = new_buffer_handle->node->buffer;
 
-        // copy data in correct order and unpin the new block when done
-        for (idx_t i = 0; i < old_block.count; i++) {
-            memcpy(dataptr, key_locations[idxs[i]], chunk.entry_size);
-            dataptr += chunk.entry_size;
-        }
+		// copy data in correct order and unpin the new block when done
+		for (idx_t i = 0; i < old_block.count; i++) {
+			memcpy(dataptr, key_locations[idxs[i]], chunk.entry_size);
+			dataptr += chunk.entry_size;
+		}
 
-        // replace old block with new block, and unregister the old block
-        chunk.blocks[block_idx] = new_block;
-        buffer_manager.UnregisterBlock(old_block.block->BlockId(), true);
+		// replace old block with new block, and unregister the old block
+		chunk.blocks[block_idx] = new_block;
+		buffer_manager.UnregisterBlock(old_block.block->BlockId(), true);
 	}
 
 	Pipeline &parent;
@@ -229,7 +232,7 @@ private:
 
 	idx_t block_idx;
 	RowDataBlock sort;
-    RowDataBlock payl;
+	RowDataBlock payl;
 };
 
 class PhysicalOrderMergeTask : public Task {
