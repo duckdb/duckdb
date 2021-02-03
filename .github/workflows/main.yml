@@ -593,7 +593,7 @@ jobs:
     - name: Test
       run: |
         cp build/reldebug/tools/jdbc/duckdb_jdbc.jar sqlancer/target/lib/duckdb_jdbc-*.jar
-        java -Dduckdb.database.file=/tmp/lancer_duckdb_db -jar sqlancer/target/sqlancer-*.jar --num-threads 2 --random-seed 0 --timeout-seconds 600 duckdb
+        java -Dduckdb.database.file=/tmp/lancer_duckdb_db -jar sqlancer/target/sqlancer-*.jar --num-threads 1 --random-seed 0 --timeout-seconds 600 duckdb
 
 
   jdbc:
