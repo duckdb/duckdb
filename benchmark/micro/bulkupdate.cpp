@@ -7,7 +7,7 @@
 using namespace duckdb;
 
 #define GROUP_ROW_COUNT 1000000
-#define GROUP_COUNT 5
+#define GROUP_COUNT     5
 
 DUCKDB_BENCHMARK(BulkUpdate, "[bulkupdate]")
 int64_t sum = 0;

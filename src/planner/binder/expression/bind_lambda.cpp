@@ -20,4 +20,4 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth)
 	return BindResult("FIXME: bind lambda function");
 }
 
-}
+} // namespace duckdb

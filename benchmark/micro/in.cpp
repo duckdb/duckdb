@@ -7,7 +7,7 @@
 using namespace duckdb;
 
 #define IN_LIST_ROW_COUNT 1000000
-#define STRING_LENGTH 4
+#define STRING_LENGTH     4
 
 #define IN_QUERY_BODY(INCOUNT, NOT_IN)                                                                                 \
 	static constexpr const char *chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";                                                 \

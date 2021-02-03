@@ -1,4 +1,4 @@
-# name: test/sql/storage/catalog/test_check_constraints.test
+# name: test/sql/storage/catalog/test_check_constraint.test
 # description: Test serialization of CHECK constraint
 # group: [catalog]
 

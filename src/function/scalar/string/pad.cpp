@@ -116,7 +116,8 @@ struct RpadOperator {
 	}
 };
 
-template <class Op> static void pad_function(DataChunk &args, ExpressionState &state, Vector &result) {
+template <class Op>
+static void pad_function(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &str_vector = args.data[0];
 	auto &len_vector = args.data[1];
 	auto &pad_vector = args.data[2];

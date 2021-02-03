@@ -91,7 +91,8 @@ public:
 private:
 	LocalTableStorage *GetStorage(DataTable *table);
 
-	template <class T> bool ScanTableStorage(DataTable &table, LocalTableStorage &storage, T &&fun);
+	template <class T>
+	bool ScanTableStorage(DataTable &table, LocalTableStorage &storage, T &&fun);
 
 private:
 	Transaction &transaction;

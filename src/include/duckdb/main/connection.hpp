@@ -70,7 +70,8 @@ public:
 	//! MaterializedQueryResult.
 	DUCKDB_API unique_ptr<MaterializedQueryResult> Query(unique_ptr<SQLStatement> statement);
 	// prepared statements
-	template <typename... Args> unique_ptr<QueryResult> Query(string query, Args... args) {
+	template <typename... Args>
+	unique_ptr<QueryResult> Query(string query, Args... args) {
 		vector<Value> values;
 		return QueryParamsRecursive(query, values, args...);
 	}
@@ -116,7 +117,8 @@ public:
 	DUCKDB_API void SetAutoCommit(bool auto_commit);
 	DUCKDB_API bool IsAutoCommit();
 
-	template <typename TR, typename... Args> void CreateScalarFunction(string name, TR (*udf_func)(Args...)) {
+	template <typename TR, typename... Args>
+	void CreateScalarFunction(string name, TR (*udf_func)(Args...)) {
 		scalar_function_t function = UDFWrapper::CreateScalarFunction<TR, Args...>(name, udf_func);
 		UDFWrapper::RegisterFunction<TR, Args...>(name, function, *context);
 	}
@@ -139,7 +141,8 @@ public:
 
 	//------------------------------------- Aggreate Functions ----------------------------------------//
 
-	template <typename UDF_OP, typename STATE, typename TR, typename TA> void CreateAggregateFunction(string name) {
+	template <typename UDF_OP, typename STATE, typename TR, typename TA>
+	void CreateAggregateFunction(string name) {
 		AggregateFunction function = UDFWrapper::CreateAggregateFunction<UDF_OP, STATE, TR, TA>(name);
 		UDFWrapper::RegisterAggrFunction(function, *context);
 	}

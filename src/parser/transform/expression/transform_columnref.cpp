@@ -38,8 +38,8 @@ unique_ptr<ParsedExpression> Transformer::TransformColumnRef(PGColumnRef *root) 
 				throw NotImplementedException("ColumnRef not implemented!");
 			}
 		} else {
-                    throw NotImplementedException("ColumnRef not implemented!");   
-                }
+			throw NotImplementedException("ColumnRef not implemented!");
+		}
 	}
 	case T_PGAStar: {
 		return make_unique<StarExpression>();

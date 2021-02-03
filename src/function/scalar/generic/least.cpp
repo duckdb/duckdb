@@ -3,8 +3,10 @@
 
 namespace duckdb {
 
-template <class OP> struct LeastOperator {
-	template <class T> static T Operation(T left, T right) {
+template <class OP>
+struct LeastOperator {
+	template <class T>
+	static T Operation(T left, T right) {
 		return OP::Operation(left, right) ? left : right;
 	}
 };
@@ -92,7 +94,8 @@ static void least_greatest_impl(DataChunk &args, ExpressionState &state, Vector 
 	result.vector_type = result_type;
 }
 
-template <class OP> static void register_least_greatest(BuiltinFunctions &set, string fun_name) {
+template <class OP>
+static void register_least_greatest(BuiltinFunctions &set, string fun_name) {
 	ScalarFunctionSet fun_set(fun_name);
 	fun_set.AddFunction(ScalarFunction({LogicalType::DATE}, LogicalType::DATE, least_greatest_impl<date_t, OP>, false,
 	                                   nullptr, nullptr, nullptr, LogicalType::DATE));

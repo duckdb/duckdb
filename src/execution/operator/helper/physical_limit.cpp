@@ -17,7 +17,7 @@ public:
 
 uint64_t get_delimiter(DataChunk &input, Expression *expr, uint64_t original_value) {
 	DataChunk limit_chunk;
-	vector<LogicalType> types{expr->return_type};
+	vector<LogicalType> types {expr->return_type};
 	limit_chunk.Initialize(types);
 	ExpressionExecutor limit_executor(expr);
 	auto input_size = input.size();
@@ -25,7 +25,7 @@ uint64_t get_delimiter(DataChunk &input, Expression *expr, uint64_t original_val
 	limit_executor.Execute(input, limit_chunk);
 	input.SetCardinality(input_size);
 	auto limit_value = limit_chunk.GetValue(0, 0);
-	if(limit_value.is_null){
+	if (limit_value.is_null) {
 		return original_value;
 	}
 	return limit_value.value_.ubigint;
@@ -43,11 +43,11 @@ void PhysicalLimit::GetChunkInternal(ExecutionContext &context, DataChunk &chunk
 	do {
 		children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
 		if (limit_expression) {
-			limit = get_delimiter(state->child_chunk, limit_expression.get(),limit);
+			limit = get_delimiter(state->child_chunk, limit_expression.get(), limit);
 			limit_expression.reset();
 		}
 		if (offset_expression) {
-			offset = get_delimiter(state->child_chunk, offset_expression.get(),offset);
+			offset = get_delimiter(state->child_chunk, offset_expression.get(), offset);
 			offset_expression.reset();
 		}
 		max_element = limit + offset;

@@ -64,7 +64,8 @@ public:
 	void Undo(CatalogEntry *entry);
 
 	//! Scan the catalog set, invoking the callback method for every entry
-	template <class T> void Scan(ClientContext &context, T &&callback) {
+	template <class T>
+	void Scan(ClientContext &context, T &&callback) {
 		// lock the catalog set
 		std::lock_guard<std::mutex> lock(catalog_lock);
 		for (auto &kv : entries) {
@@ -77,7 +78,8 @@ public:
 	}
 
 	//! Scan the catalog set, invoking the callback method for every committed entry
-	template <class T> void Scan(T &&callback) {
+	template <class T>
+	void Scan(T &&callback) {
 		// lock the catalog set
 		std::lock_guard<std::mutex> lock(catalog_lock);
 		for (auto &kv : entries) {

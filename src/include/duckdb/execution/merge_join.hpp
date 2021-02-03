@@ -54,18 +54,22 @@ struct ChunkMergeInfo : public MergeInfo {
 
 struct MergeJoinComplex {
 	struct LessThan {
-		template <class T> static idx_t Operation(ScalarMergeInfo &l, ScalarMergeInfo &r);
+		template <class T>
+		static idx_t Operation(ScalarMergeInfo &l, ScalarMergeInfo &r);
 	};
 	struct LessThanEquals {
-		template <class T> static idx_t Operation(ScalarMergeInfo &l, ScalarMergeInfo &r);
+		template <class T>
+		static idx_t Operation(ScalarMergeInfo &l, ScalarMergeInfo &r);
 	};
 	struct GreaterThan {
-		template <class T> static idx_t Operation(ScalarMergeInfo &l, ScalarMergeInfo &r) {
+		template <class T>
+		static idx_t Operation(ScalarMergeInfo &l, ScalarMergeInfo &r) {
 			return LessThan::Operation<T>(r, l);
 		}
 	};
 	struct GreaterThanEquals {
-		template <class T> static idx_t Operation(ScalarMergeInfo &l, ScalarMergeInfo &r) {
+		template <class T>
+		static idx_t Operation(ScalarMergeInfo &l, ScalarMergeInfo &r) {
 			return LessThanEquals::Operation<T>(r, l);
 		}
 	};
@@ -75,16 +79,20 @@ struct MergeJoinComplex {
 
 struct MergeJoinSimple {
 	struct LessThan {
-		template <class T> static idx_t Operation(ScalarMergeInfo &l, ChunkMergeInfo &r);
+		template <class T>
+		static idx_t Operation(ScalarMergeInfo &l, ChunkMergeInfo &r);
 	};
 	struct LessThanEquals {
-		template <class T> static idx_t Operation(ScalarMergeInfo &l, ChunkMergeInfo &r);
+		template <class T>
+		static idx_t Operation(ScalarMergeInfo &l, ChunkMergeInfo &r);
 	};
 	struct GreaterThan {
-		template <class T> static idx_t Operation(ScalarMergeInfo &l, ChunkMergeInfo &r);
+		template <class T>
+		static idx_t Operation(ScalarMergeInfo &l, ChunkMergeInfo &r);
 	};
 	struct GreaterThanEquals {
-		template <class T> static idx_t Operation(ScalarMergeInfo &l, ChunkMergeInfo &r);
+		template <class T>
+		static idx_t Operation(ScalarMergeInfo &l, ChunkMergeInfo &r);
 	};
 
 	static idx_t Perform(MergeInfo &l, MergeInfo &r, ExpressionType comparison);
@@ -94,11 +102,11 @@ struct MergeJoinSimple {
 	template idx_t MJCLASS::OPNAME::Operation<int8_t>(L & l, R & r);                                                   \
 	template idx_t MJCLASS::OPNAME::Operation<int16_t>(L & l, R & r);                                                  \
 	template idx_t MJCLASS::OPNAME::Operation<int32_t>(L & l, R & r);                                                  \
-	template idx_t MJCLASS::OPNAME::Operation<int64_t>(L & l, R & r);                                                     \
-	template idx_t MJCLASS::OPNAME::Operation<uint8_t>(L & l, R & r);                                                   \
-	template idx_t MJCLASS::OPNAME::Operation<uint16_t>(L & l, R & r);                                                  \
-	template idx_t MJCLASS::OPNAME::Operation<uint32_t>(L & l, R & r);                                                  \
-	template idx_t MJCLASS::OPNAME::Operation<uint64_t>(L & l, R & r);                                                    \
+	template idx_t MJCLASS::OPNAME::Operation<int64_t>(L & l, R & r);                                                  \
+	template idx_t MJCLASS::OPNAME::Operation<uint8_t>(L & l, R & r);                                                  \
+	template idx_t MJCLASS::OPNAME::Operation<uint16_t>(L & l, R & r);                                                 \
+	template idx_t MJCLASS::OPNAME::Operation<uint32_t>(L & l, R & r);                                                 \
+	template idx_t MJCLASS::OPNAME::Operation<uint64_t>(L & l, R & r);                                                 \
 	template idx_t MJCLASS::OPNAME::Operation<hugeint_t>(L & l, R & r);                                                \
 	template idx_t MJCLASS::OPNAME::Operation<float>(L & l, R & r);                                                    \
 	template idx_t MJCLASS::OPNAME::Operation<double>(L & l, R & r);                                                   \

@@ -1,4 +1,4 @@
-# name: test/sql/order/test_order_same_value.test
+# name: test/sql/order/test_order_same_value.test_slow
 # description: Test ordering the same value several times
 # group: [order]
 

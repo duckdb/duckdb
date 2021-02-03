@@ -10,11 +10,13 @@ struct list_agg_state_t {
 };
 
 struct ListFunction {
-	template <class STATE> static void Initialize(STATE *state) {
+	template <class STATE>
+	static void Initialize(STATE *state) {
 		state->cc = nullptr;
 	}
 
-	template <class STATE> static void Destroy(STATE *state) {
+	template <class STATE>
+	static void Destroy(STATE *state) {
 		if (state->cc) {
 			delete state->cc;
 		}
@@ -24,7 +26,7 @@ struct ListFunction {
 	}
 };
 
-static void list_update(Vector inputs[],FunctionData *,  idx_t input_count, Vector &state_vector, idx_t count) {
+static void list_update(Vector inputs[], FunctionData *, idx_t input_count, Vector &state_vector, idx_t count) {
 	D_ASSERT(input_count == 1);
 
 	auto &input = inputs[0];

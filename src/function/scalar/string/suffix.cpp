@@ -8,7 +8,8 @@ namespace duckdb {
 static bool suffix(const string_t &str, const string_t &suffix);
 
 struct SuffixOperator {
-	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
+	template <class TA, class TB, class TR>
+	static inline TR Operation(TA left, TB right) {
 		return suffix(left, right);
 	}
 };

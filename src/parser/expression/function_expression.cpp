@@ -8,17 +8,19 @@
 
 namespace duckdb {
 
-FunctionExpression::FunctionExpression(string schema, const string& function_name,
-                                       vector<unique_ptr<ParsedExpression>> &children,unique_ptr<ParsedExpression> filter, bool distinct, bool is_operator)
+FunctionExpression::FunctionExpression(string schema, const string &function_name,
+                                       vector<unique_ptr<ParsedExpression>> &children,
+                                       unique_ptr<ParsedExpression> filter, bool distinct, bool is_operator)
     : ParsedExpression(ExpressionType::FUNCTION, ExpressionClass::FUNCTION), schema(std::move(schema)),
-      function_name(StringUtil::Lower(function_name)), is_operator(is_operator), distinct(distinct), filter(move(filter)) {
+      function_name(StringUtil::Lower(function_name)), is_operator(is_operator), distinct(distinct),
+      filter(move(filter)) {
 	for (auto &child : children) {
 		this->children.push_back(move(child));
 	}
 }
 
-FunctionExpression::FunctionExpression(const string& function_name, vector<unique_ptr<ParsedExpression>> &children,
-                                       unique_ptr<ParsedExpression> filter,bool distinct, bool is_operator)
+FunctionExpression::FunctionExpression(const string &function_name, vector<unique_ptr<ParsedExpression>> &children,
+                                       unique_ptr<ParsedExpression> filter, bool distinct, bool is_operator)
     : FunctionExpression(INVALID_SCHEMA, function_name, children, move(filter), distinct, is_operator) {
 }
 
@@ -50,7 +52,7 @@ bool FunctionExpression::Equals(const FunctionExpression *a, const FunctionExpre
 			return false;
 		}
 	}
-	if (!BaseExpression::Equals(a->filter.get(),b->filter.get())){
+	if (!BaseExpression::Equals(a->filter.get(), b->filter.get())) {
 		return false;
 	}
 	return true;
@@ -70,10 +72,10 @@ unique_ptr<ParsedExpression> FunctionExpression::Copy() const {
 	for (auto &child : children) {
 		copy_children.push_back(child->Copy());
 	}
-	if (filter){
+	if (filter) {
 		filter_copy = filter->Copy();
 	}
-	auto copy = make_unique<FunctionExpression>(function_name, copy_children,move(filter_copy), distinct, is_operator);
+	auto copy = make_unique<FunctionExpression>(function_name, copy_children, move(filter_copy), distinct, is_operator);
 	copy->schema = schema;
 	copy->CopyProperties(*this);
 	return move(copy);

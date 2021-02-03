@@ -73,7 +73,7 @@ string PragmaHandler::HandlePragma(SQLStatement *statement) { // PragmaInfo &inf
 		QueryErrorContext error_context(statement, statement->stmt_location);
 		Binder::BindNamedParameters(bound_function.named_parameters, info.named_parameters, error_context,
 		                            bound_function.name);
-		FunctionParameters parameters{info.parameters, info.named_parameters};
+		FunctionParameters parameters {info.parameters, info.named_parameters};
 		return bound_function.query(context, parameters);
 	}
 	return string();

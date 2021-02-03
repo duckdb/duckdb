@@ -344,7 +344,8 @@ unique_ptr<RenderTreeNode> TreeRenderer::CreateRenderNode(string name, string ex
 	return result;
 }
 
-template <class T> static void GetTreeWidthHeight(const T &op, idx_t &width, idx_t &height) {
+template <class T>
+static void GetTreeWidthHeight(const T &op, idx_t &width, idx_t &height) {
 	if (op.children.size() == 0) {
 		width = 1;
 		height = 1;
@@ -362,7 +363,8 @@ template <class T> static void GetTreeWidthHeight(const T &op, idx_t &width, idx
 	height++;
 }
 
-template <class T> idx_t TreeRenderer::CreateRenderTreeRecursive(RenderTree &result, const T &op, idx_t x, idx_t y) {
+template <class T>
+idx_t TreeRenderer::CreateRenderTreeRecursive(RenderTree &result, const T &op, idx_t x, idx_t y) {
 	auto node = TreeRenderer::CreateNode(op);
 	result.SetNode(x, y, move(node));
 
@@ -377,7 +379,8 @@ template <class T> idx_t TreeRenderer::CreateRenderTreeRecursive(RenderTree &res
 	return width;
 }
 
-template <class T> unique_ptr<RenderTree> TreeRenderer::CreateRenderTree(const T &op) {
+template <class T>
+unique_ptr<RenderTree> TreeRenderer::CreateRenderTree(const T &op) {
 	idx_t width, height;
 	GetTreeWidthHeight<T>(op, width, height);
 

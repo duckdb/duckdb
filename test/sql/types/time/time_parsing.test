@@ -1,6 +1,6 @@
 # name: test/sql/types/time/time_parsing.test
 # description: Test time parsing
-# group: [date]
+# group: [time]
 
 statement ok
 PRAGMA enable_verification

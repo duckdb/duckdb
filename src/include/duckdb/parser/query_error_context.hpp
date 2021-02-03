@@ -36,7 +36,8 @@ public:
 		return FormatErrorRecursive(msg, values, params...);
 	}
 
-	template <typename... Args> string FormatError(string msg, Args... params) {
+	template <typename... Args>
+	string FormatError(string msg, Args... params) {
 		vector<ExceptionFormatValue> values;
 		return FormatErrorRecursive(msg, values, params...);
 	}

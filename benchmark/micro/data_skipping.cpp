@@ -7,7 +7,7 @@
 using namespace duckdb;
 
 #define RANGE_QUERY_ROW_COUNT pow(10, 7)
-#define SUM_RESULT 100
+#define SUM_RESULT            100
 
 DUCKDB_BENCHMARK(DataSkipping, "[micro]")
 virtual void Load(DuckDBBenchmarkState *state) {

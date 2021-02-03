@@ -143,7 +143,8 @@ private:
 		return CreateUnaryFunction<TR, Args...>(name, udf_func);
 	}
 
-	template <typename TR, typename TA> static scalar_function_t CreateUnaryFunction(string name, TR (*udf_func)(TA)) {
+	template <typename TR, typename TA>
+	static scalar_function_t CreateUnaryFunction(string name, TR (*udf_func)(TA)) {
 		scalar_function_t udf_function = [=](DataChunk &input, ExpressionState &state, Vector &result) -> void {
 			UnaryExecutor::Execute<TA, TR>(input.data[0], result, input.size(), udf_func);
 		};
@@ -179,7 +180,8 @@ private:
 		return udf_function;
 	}
 
-	template <typename T> static LogicalType GetArgumentType() {
+	template <typename T>
+	static LogicalType GetArgumentType() {
 		if (std::is_same<T, bool>()) {
 			return LogicalType::BOOLEAN;
 		} else if (std::is_same<T, int8_t>()) {
@@ -208,7 +210,8 @@ private:
 		GetArgumentTypesRecursive<TB, Args...>(arguments);
 	}
 
-	template <typename TA> static void GetArgumentTypesRecursive(vector<LogicalType> &arguments) {
+	template <typename TA>
+	static void GetArgumentTypesRecursive(vector<LogicalType> &arguments) {
 		arguments.push_back(GetArgumentType<TA>());
 	}
 
@@ -300,7 +303,8 @@ private:
 		return udf_function;
 	}
 
-	template <typename T> static bool TypesMatch(LogicalType sql_type) {
+	template <typename T>
+	static bool TypesMatch(LogicalType sql_type) {
 		switch (sql_type.id()) {
 		case LogicalTypeId::BOOLEAN:
 			return std::is_same<T, bool>();

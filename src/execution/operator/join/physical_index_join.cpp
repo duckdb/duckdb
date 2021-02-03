@@ -53,7 +53,7 @@ PhysicalIndexJoin::PhysicalIndexJoin(LogicalOperator &op, unique_ptr<PhysicalOpe
 	for (auto &index_id : index->column_ids) {
 		index_ids.insert(index_id);
 	}
-	for (size_t column_id = 0; column_id < column_ids.size(); column_id++) {
+	for (idx_t column_id = 0; column_id < column_ids.size(); column_id++) {
 		auto it = index_ids.find(column_ids[column_id]);
 		if (it == index_ids.end()) {
 			fetch_ids.push_back(column_ids[column_id]);
@@ -71,7 +71,7 @@ void PhysicalIndexJoin::Output(ExecutionContext &context, DataChunk &chunk, Phys
 	idx_t rhs_column_idx = 0;
 	SelectionVector sel;
 	sel.Initialize(STANDARD_VECTOR_SIZE);
-	size_t output_sel_idx{};
+	idx_t output_sel_idx = 0;
 	vector<row_t> fetch_rows;
 	auto state = reinterpret_cast<PhysicalIndexJoinOperatorState *>(state_);
 	while (output_sel_idx < STANDARD_VECTOR_SIZE && state->lhs_idx < state->child_chunk.size()) {
@@ -135,7 +135,7 @@ void PhysicalIndexJoin::GetRHSMatches(ExecutionContext &context, PhysicalOperato
 				//! Nothing to materialize
 				art.SearchEqualJoinNoFetch(equal_value, state->result_sizes[i]);
 			} else {
-				art.SearchEqual((ARTIndexScanState *)index_state.get(), (size_t)-1, state->rhs_rows[i]);
+				art.SearchEqual((ARTIndexScanState *)index_state.get(), (idx_t)-1, state->rhs_rows[i]);
 				state->result_sizes[i] = state->rhs_rows[i].size();
 			}
 		} else {

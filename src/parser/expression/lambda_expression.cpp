@@ -5,8 +5,9 @@
 
 namespace duckdb {
 
-LambdaExpression::LambdaExpression(vector<string> parameters, unique_ptr<ParsedExpression> expression) :
-	ParsedExpression(ExpressionType::LAMBDA, ExpressionClass::LAMBDA), parameters(move(parameters)), expression(move(expression)) {
+LambdaExpression::LambdaExpression(vector<string> parameters, unique_ptr<ParsedExpression> expression)
+    : ParsedExpression(ExpressionType::LAMBDA, ExpressionClass::LAMBDA), parameters(move(parameters)),
+      expression(move(expression)) {
 }
 
 string LambdaExpression::ToString() const {
@@ -14,7 +15,7 @@ string LambdaExpression::ToString() const {
 	if (parameters.size() == 1) {
 		parameter_str = parameters[0];
 	} else {
-		for(auto &parameter : parameters) {
+		for (auto &parameter : parameters) {
 			if (!parameter_str.empty()) {
 				parameter_str += ", ";
 			}
@@ -37,7 +38,7 @@ bool LambdaExpression::Equals(const LambdaExpression *a, const LambdaExpression 
 
 hash_t LambdaExpression::Hash() const {
 	hash_t result = ParsedExpression::Hash();
-	for(auto &parameter : parameters) {
+	for (auto &parameter : parameters) {
 		result = CombineHash(result, duckdb::Hash<const char *>(parameter.c_str()));
 	}
 	result = CombineHash(result, expression->Hash());
@@ -51,7 +52,7 @@ unique_ptr<ParsedExpression> LambdaExpression::Copy() const {
 void LambdaExpression::Serialize(Serializer &serializer) {
 	ParsedExpression::Serialize(serializer);
 	serializer.Write<uint32_t>(parameters.size());
-	for(auto &parameter : parameters) {
+	for (auto &parameter : parameters) {
 		serializer.WriteString(parameter);
 	}
 	expression->Serialize(serializer);
@@ -61,7 +62,7 @@ unique_ptr<ParsedExpression> LambdaExpression::Deserialize(ExpressionType type, 
 	auto parameter_count = source.Read<uint32_t>();
 	vector<string> parameters;
 	parameters.reserve(parameter_count);
-	for(size_t i = 0; i < parameter_count; i++) {
+	for (size_t i = 0; i < parameter_count; i++) {
 		parameters.push_back(source.Read<string>());
 	}
 	auto expression = ParsedExpression::Deserialize(source);
@@ -69,4 +70,4 @@ unique_ptr<ParsedExpression> LambdaExpression::Deserialize(ExpressionType type, 
 	return make_unique<LambdaExpression>(move(parameters), move(expression));
 }
 
-}
+} // namespace duckdb

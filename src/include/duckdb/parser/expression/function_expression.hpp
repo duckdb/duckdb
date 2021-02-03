@@ -15,10 +15,10 @@ namespace duckdb {
 //! Represents a function call
 class FunctionExpression : public ParsedExpression {
 public:
-	FunctionExpression(string schema_name, const string& function_name, vector<unique_ptr<ParsedExpression>> &children,
-	                   unique_ptr<ParsedExpression> filter = nullptr,bool distinct = false, bool is_operator = false);
-	FunctionExpression(const string& function_name, vector<unique_ptr<ParsedExpression>> &children,
-	                   unique_ptr<ParsedExpression> filter = nullptr,bool distinct = false,bool is_operator = false);
+	FunctionExpression(string schema_name, const string &function_name, vector<unique_ptr<ParsedExpression>> &children,
+	                   unique_ptr<ParsedExpression> filter = nullptr, bool distinct = false, bool is_operator = false);
+	FunctionExpression(const string &function_name, vector<unique_ptr<ParsedExpression>> &children,
+	                   unique_ptr<ParsedExpression> filter = nullptr, bool distinct = false, bool is_operator = false);
 
 	//! Schema of the function
 	string schema;
@@ -28,10 +28,11 @@ public:
 	bool is_operator;
 	//! List of arguments to the function
 	vector<unique_ptr<ParsedExpression>> children;
-//! Whether or not the aggregate function is distinct, only used for aggregates
+	//! Whether or not the aggregate function is distinct, only used for aggregates
 	bool distinct;
 	//! Expression representing a filter, only used for aggregates
-    unique_ptr<ParsedExpression> filter;
+	unique_ptr<ParsedExpression> filter;
+
 public:
 	string ToString() const override;
 

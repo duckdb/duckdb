@@ -4,7 +4,8 @@
 
 namespace duckdb {
 
-template <class MJ, class L_ARG, class R_ARG> static idx_t merge_join(L_ARG &l, R_ARG &r) {
+template <class MJ, class L_ARG, class R_ARG>
+static idx_t merge_join(L_ARG &l, R_ARG &r) {
 	switch (l.type.InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:

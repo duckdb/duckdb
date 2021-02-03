@@ -211,7 +211,8 @@ private:
 	Catalog &catalog;
 
 private:
-	template <class T> void Register() {
+	template <class T>
+	void Register() {
 		T::RegisterFunction(*this);
 	}
 

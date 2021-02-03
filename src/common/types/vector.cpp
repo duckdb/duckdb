@@ -462,7 +462,8 @@ void Vector::Print() {
 	Printer::Print(ToString());
 }
 
-template <class T> static void flatten_constant_vector_loop(data_ptr_t data, data_ptr_t old_data, idx_t count) {
+template <class T>
+static void flatten_constant_vector_loop(data_ptr_t data, data_ptr_t old_data, idx_t count) {
 	auto constant = Load<T>(old_data);
 	auto output = (T *)data;
 	for (idx_t i = 0; i < count; i++) {

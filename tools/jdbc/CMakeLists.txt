@@ -38,7 +38,8 @@ add_library(duckdb_java SHARED src/jni/duckdb_java.cpp)
 target_compile_options(duckdb_java PRIVATE -fexceptions)
 target_link_libraries(duckdb_java duckdb-native duckdb_static parquet_extension)
 if(OS_NAME STREQUAL "linux")
-  target_link_libraries(duckdb_java -static-libgcc -static-libstdc++) # static link to libstdc++ to target more linux distro
+  target_link_libraries(duckdb_java -static-libgcc -static-libstdc++
+  )# static link to libstdc++ to target more linux distro
 endif()
 string(JOIN "_" LIB_SUFFIX ".so" ${OS_NAME} ${JVM_BITNESS})
 set_target_properties(duckdb_java PROPERTIES SUFFIX ${LIB_SUFFIX})

@@ -157,7 +157,8 @@ void CommitState::WriteUpdate(UpdateInfo *info) {
 	log->WriteUpdate(*update_chunk, info->column_data->column_idx);
 }
 
-template <bool HAS_LOG> void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
+template <bool HAS_LOG>
+void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 	switch (type) {
 	case UndoFlags::CATALOG_ENTRY: {
 		// set the commit timestamp of the catalog entry to the given id

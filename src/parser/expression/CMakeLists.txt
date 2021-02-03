@@ -1,21 +1,22 @@
-add_library_unity(duckdb_expression
-                  OBJECT
-                  case_expression.cpp
-                  cast_expression.cpp
-                  collate_expression.cpp
-                  conjunction_expression.cpp
-                  columnref_expression.cpp
-                  comparison_expression.cpp
-                  constant_expression.cpp
-                  default_expression.cpp
-                  function_expression.cpp
-                  lambda_expression.cpp
-                  operator_expression.cpp
-                  parameter_expression.cpp
-                  star_expression.cpp
-                  subquery_expression.cpp
-                  table_star_expression.cpp
-                  window_expression.cpp)
+add_library_unity(
+  duckdb_expression
+  OBJECT
+  case_expression.cpp
+  cast_expression.cpp
+  collate_expression.cpp
+  conjunction_expression.cpp
+  columnref_expression.cpp
+  comparison_expression.cpp
+  constant_expression.cpp
+  default_expression.cpp
+  function_expression.cpp
+  lambda_expression.cpp
+  operator_expression.cpp
+  parameter_expression.cpp
+  star_expression.cpp
+  subquery_expression.cpp
+  table_star_expression.cpp
+  window_expression.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_expression>
     PARENT_SCOPE)

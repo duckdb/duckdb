@@ -22,7 +22,8 @@ public:
 	static constexpr const int32_t MONTHS_PER_YEAR = 12;
 	static constexpr const int32_t MONTHS_PER_QUARTER = 3;
 	static constexpr const int32_t DAYS_PER_WEEK = 7;
-	static constexpr const int64_t DAYS_PER_MONTH = 30; // only used for interval comparison/ordering purposes, in which case a month counts as 30 days
+	static constexpr const int64_t DAYS_PER_MONTH =
+	    30; // only used for interval comparison/ordering purposes, in which case a month counts as 30 days
 	static constexpr const int64_t MSECS_PER_SEC = 1000;
 	static constexpr const int32_t SECS_PER_MINUTE = 60;
 	static constexpr const int32_t MINS_PER_HOUR = 60;

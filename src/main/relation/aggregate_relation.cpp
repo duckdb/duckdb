@@ -7,7 +7,8 @@ namespace duckdb {
 
 AggregateRelation::AggregateRelation(shared_ptr<Relation> child_p,
                                      vector<unique_ptr<ParsedExpression>> parsed_expressions)
-    : Relation(child_p->context, RelationType::AGGREGATE_RELATION), expressions(move(parsed_expressions)), child(move(child_p)) {
+    : Relation(child_p->context, RelationType::AGGREGATE_RELATION), expressions(move(parsed_expressions)),
+      child(move(child_p)) {
 	// bind the expressions
 	context.TryBindRelation(*this, this->columns);
 }

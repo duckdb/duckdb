@@ -55,7 +55,8 @@ struct ConcatWSFun {
 
 struct LengthFun {
 	static void RegisterFunction(BuiltinFunctions &set);
-	template <class TA, class TR> static inline TR Length(TA input) {
+	template <class TA, class TR>
+	static inline TR Length(TA input) {
 		auto input_data = input.GetDataUnsafe();
 		auto input_length = input.GetSize();
 		for (idx_t i = 0; i < input_length; i++) {
@@ -150,7 +151,8 @@ struct ContainsFun {
 	static ScalarFunction GetFunction();
 	static void RegisterFunction(BuiltinFunctions &set);
 	static idx_t Find(const string_t &haystack, const string_t &needle);
-	static idx_t Find(const unsigned char *haystack, idx_t haystack_size, const unsigned char *needle, idx_t needle_size);
+	static idx_t Find(const unsigned char *haystack, idx_t haystack_size, const unsigned char *needle,
+	                  idx_t needle_size);
 };
 
 struct UnicodeFun {

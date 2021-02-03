@@ -35,7 +35,8 @@ public:
 	unique_ptr<DataChunk> update_chunk;
 
 public:
-	template <bool HAS_LOG> void CommitEntry(UndoFlags type, data_ptr_t data);
+	template <bool HAS_LOG>
+	void CommitEntry(UndoFlags type, data_ptr_t data);
 	void RevertCommit(UndoFlags type, data_ptr_t data);
 
 private:

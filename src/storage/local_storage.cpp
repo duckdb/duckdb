@@ -309,7 +309,8 @@ void LocalStorage::Update(DataTable *table, Vector &row_ids, vector<column_t> &c
 	}
 }
 
-template <class T> bool LocalStorage::ScanTableStorage(DataTable &table, LocalTableStorage &storage, T &&fun) {
+template <class T>
+bool LocalStorage::ScanTableStorage(DataTable &table, LocalTableStorage &storage, T &&fun) {
 	vector<column_t> column_ids;
 	for (idx_t i = 0; i < table.types.size(); i++) {
 		column_ids.push_back(i);

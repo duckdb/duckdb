@@ -18,7 +18,7 @@ const int Blob::HEX_MAP[256] = {
     -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
 
 idx_t Blob::GetStringSize(string_t blob) {
-	auto data = (const_data_ptr_t) blob.GetDataUnsafe();
+	auto data = (const_data_ptr_t)blob.GetDataUnsafe();
 	auto len = blob.GetSize();
 	idx_t str_len = 0;
 	for (idx_t i = 0; i < len; i++) {
@@ -34,7 +34,7 @@ idx_t Blob::GetStringSize(string_t blob) {
 }
 
 void Blob::ToString(string_t blob, char *output) {
-	auto data = (const_data_ptr_t) blob.GetDataUnsafe();
+	auto data = (const_data_ptr_t)blob.GetDataUnsafe();
 	auto len = blob.GetSize();
 	idx_t str_idx = 0;
 	for (idx_t i = 0; i < len; i++) {
@@ -64,7 +64,7 @@ string Blob::ToString(string_t blob) {
 }
 
 idx_t Blob::GetBlobSize(string_t str) {
-	auto data = (const_data_ptr_t) str.GetDataUnsafe();
+	auto data = (const_data_ptr_t)str.GetDataUnsafe();
 	auto len = str.GetSize();
 	idx_t str_len = 0;
 	for (idx_t i = 0; i < len; i++) {
@@ -73,10 +73,9 @@ idx_t Blob::GetBlobSize(string_t str) {
 				throw ConversionException("Invalid hex escape code encountered in string -> blob conversion: "
 				                          "unterminated escape code at end of blob");
 			}
-			if (data[i + 1] != 'x' || Blob::HEX_MAP[data[i + 2]] < 0 ||
-			    Blob::HEX_MAP[data[i + 3]] < 0) {
+			if (data[i + 1] != 'x' || Blob::HEX_MAP[data[i + 2]] < 0 || Blob::HEX_MAP[data[i + 3]] < 0) {
 				throw ConversionException("Invalid hex escape code encountered in string -> blob conversion: %s",
-				                          string((char*) data + i, 4));
+				                          string((char *)data + i, 4));
 			}
 			str_len++;
 			i += 3;
@@ -91,7 +90,7 @@ idx_t Blob::GetBlobSize(string_t str) {
 }
 
 void Blob::ToBlob(string_t str, data_ptr_t output) {
-	auto data = (const_data_ptr_t) str.GetDataUnsafe();
+	auto data = (const_data_ptr_t)str.GetDataUnsafe();
 	auto len = str.GetSize();
 	idx_t blob_idx = 0;
 	for (idx_t i = 0; i < len; i++) {
@@ -128,7 +127,7 @@ idx_t Blob::ToBase64Size(string_t blob) {
 }
 
 void Blob::ToBase64(string_t blob, char *output) {
-	auto input_data = (const_data_ptr_t) blob.GetDataUnsafe();
+	auto input_data = (const_data_ptr_t)blob.GetDataUnsafe();
 	auto input_size = blob.GetSize();
 	idx_t out_idx = 0;
 	idx_t i;
@@ -196,7 +195,8 @@ idx_t Blob::FromBase64Size(string_t str) {
 	return base_size;
 }
 
-template <bool ALLOW_PADDING> uint32_t DecodeBase64Bytes(const string_t &str, const_data_ptr_t input_data, idx_t base_idx) {
+template <bool ALLOW_PADDING>
+uint32_t DecodeBase64Bytes(const string_t &str, const_data_ptr_t input_data, idx_t base_idx) {
 	int decoded_bytes[4];
 	for (idx_t decode_idx = 0; decode_idx < 4; decode_idx++) {
 		if (ALLOW_PADDING && decode_idx >= 2 && input_data[base_idx + decode_idx] == Blob::BASE64_PADDING) {
@@ -217,7 +217,7 @@ template <bool ALLOW_PADDING> uint32_t DecodeBase64Bytes(const string_t &str, co
 
 void Blob::FromBase64(string_t str, data_ptr_t output, idx_t output_size) {
 	D_ASSERT(output_size == FromBase64Size(str));
-	auto input_data = (const_data_ptr_t) str.GetDataUnsafe();
+	auto input_data = (const_data_ptr_t)str.GetDataUnsafe();
 	auto input_size = str.GetSize();
 	if (input_size == 0) {
 		return;
