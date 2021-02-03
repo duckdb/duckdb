@@ -13,6 +13,7 @@
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/tokens.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/common/unordered_map.hpp"
 
 namespace duckdb {
 
@@ -58,7 +59,7 @@ public:
 	string Bind(unique_ptr<ParsedExpression> *expr, idx_t depth, bool root_expression = false);
 
 	// Bind table names to ColumnRefExpressions
-	static void BindTableNames(Binder &binder, ParsedExpression &expr);
+	static void BindTableNames(Binder &binder, ParsedExpression &expr, unordered_map<string, idx_t> *alias_map = nullptr);
 	static unique_ptr<Expression> PushCollation(ClientContext &context, unique_ptr<Expression> source, string collation,
 	                                            bool equality_only = false);
 	static void TestCollation(ClientContext &context, string collation);
