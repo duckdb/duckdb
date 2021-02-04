@@ -1241,10 +1241,9 @@ public:
 					conversion.Append(*chunk);
 				}
 				materialized.collection.Reset();
-			}
-			else{
+			} else {
 				conversion.Append(*(materialized.collection.Chunks()[materialized.cur_chunk++]));
-				if (materialized.collection.Count() == materialized.cur_chunk){
+				if (materialized.collection.Count() == materialized.cur_chunk) {
 					materialized.collection.Reset();
 				}
 			}

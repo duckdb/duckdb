@@ -10,8 +10,8 @@ if(BUILD_REST)
   add_subdirectory(rest)
 endif()
 
-#Just to make CLion aware of the python package for development purposes
-if (BUILD_PYTHON_PKG)
+# Just to make CLion aware of the python package for development purposes
+if(BUILD_PYTHON_PKG)
   add_subdirectory(pythonpkg)
 endif()
 # just to make CLion happier add_subdirectory(nodejs)
