@@ -58,7 +58,6 @@ void Node4::insert(ART &art, unique_ptr<Node> &node, uint8_t keyByte, unique_ptr
 		while((pos < node->count) && (n->key[pos] < keyByte)) {
 			pos++;
 		}
-}
 		if (n->child[pos] != nullptr) {
 			for (idx_t i = n->count; i > pos; i--) {
 				n->key[i] = n->key[i - 1];

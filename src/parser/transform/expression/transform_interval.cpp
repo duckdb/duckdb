@@ -6,9 +6,7 @@
 
 namespace duckdb {
 
-using namespace duckdb_libpgquery;
-
-unique_ptr<ParsedExpression> Transformer::TransformInterval(PGIntervalConstant *node) {
+unique_ptr<ParsedExpression> Transformer::TransformInterval(duckdb_libpgquery::PGIntervalConstant *node) {
 	// handle post-fix notation of INTERVAL
 
 	// three scenarios
@@ -17,13 +15,13 @@ unique_ptr<ParsedExpression> Transformer::TransformInterval(PGIntervalConstant *
 	// interval int year
 	unique_ptr<ParsedExpression> expr;
 	switch (node->val_type) {
-	case T_PGAExpr:
+	case duckdb_libpgquery::T_PGAExpr:
 		expr = TransformExpression(node->eval);
 		break;
-	case T_PGString:
+	case duckdb_libpgquery::T_PGString:
 		expr = make_unique<ConstantExpression>(Value(node->sval));
 		break;
-	case T_PGInteger:
+	case duckdb_libpgquery::T_PGInteger:
 		expr = make_unique<ConstantExpression>(Value(node->ival));
 		break;
 	default:
@@ -34,7 +32,7 @@ unique_ptr<ParsedExpression> Transformer::TransformInterval(PGIntervalConstant *
 		return make_unique<CastExpression>(LogicalType::INTERVAL, move(expr));
 	}
 
-	int mask = ((PGAConst *)node->typmods->head->data.ptr_value)->val.val.ival;
+	int mask = ((duckdb_libpgquery::PGAConst *)node->typmods->head->data.ptr_value)->val.val.ival;
 	// these seemingly random constants are from datetime.hpp
 	// they are copied here to avoid having to include this header
 	// the bitshift is from the function INTERVAL_MASK in the parser

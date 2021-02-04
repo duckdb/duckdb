@@ -299,8 +299,6 @@ template <>
 float Value::GetValue() const;
 template <>
 double Value::GetValue() const;
-template <>
-uintptr_t Value::GetValue() const;
 
 template <>
 int8_t &Value::GetValueUnsafe();

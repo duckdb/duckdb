@@ -64,6 +64,8 @@ typedef struct pg_varlena bytea;
 
 typedef int PGMemoryContext;
 
+namespace duckdb_libpgquery {
+
 typedef enum PGPostgresParserErrors {
 	PG_ERRCODE_SYNTAX_ERROR,
 	PG_ERRCODE_FEATURE_NOT_SUPPORTED,
@@ -92,3 +94,5 @@ typedef enum PGPostgresAttributIdentityTypes {
 	PG_ATTRIBUTE_IDENTITY_ALWAYS,
 	ATTRIBUTE_IDENTITY_BY_DEFAULT
 } PGPostgresAttributIdentityTypes;
+
+}

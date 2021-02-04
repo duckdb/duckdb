@@ -1,4 +1,4 @@
-# name: test/sql/function/numeric/test_pg_math.test
+# name: test/sql/function/numeric/tesduckdb_libpgquery::T_PG_math.test
 # description: Function test cases from PG docs
 # group: [numeric]
 

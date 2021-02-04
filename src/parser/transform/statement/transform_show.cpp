@@ -3,12 +3,10 @@
 
 namespace duckdb {
 
-using namespace duckdb_libpgquery;
-
-unique_ptr<PragmaStatement> Transformer::TransformShow(PGNode *node) {
+unique_ptr<PragmaStatement> Transformer::TransformShow(duckdb_libpgquery::PGNode *node) {
 	// we transform SHOW x into PRAGMA SHOW('x')
 
-	auto stmt = reinterpret_cast<PGVariableShowStmt *>(node);
+	auto stmt = reinterpret_cast<duckdb_libpgquery::PGVariableShowStmt *>(node);
 
 	auto result = make_unique<PragmaStatement>();
 	auto &info = *result->info;

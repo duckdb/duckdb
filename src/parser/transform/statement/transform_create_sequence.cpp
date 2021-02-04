@@ -5,10 +5,8 @@
 
 namespace duckdb {
 
-using namespace duckdb_libpgquery;
-
-unique_ptr<CreateStatement> Transformer::TransformCreateSequence(PGNode *node) {
-	auto stmt = reinterpret_cast<PGCreateSeqStmt *>(node);
+unique_ptr<CreateStatement> Transformer::TransformCreateSequence(duckdb_libpgquery::PGNode *node) {
+	auto stmt = reinterpret_cast<duckdb_libpgquery::PGCreateSeqStmt *>(node);
 
 	auto result = make_unique<CreateStatement>();
 	auto info = make_unique<CreateSequenceInfo>();
@@ -18,20 +16,20 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSequence(PGNode *node) {
 	info->name = qname.name;
 
 	if (stmt->options) {
-		PGListCell *cell = nullptr;
+		duckdb_libpgquery::PGListCell *cell = nullptr;
 		for_each_cell(cell, stmt->options->head) {
-			auto *def_elem = reinterpret_cast<PGDefElem *>(cell->data.ptr_value);
+			auto *def_elem = reinterpret_cast<duckdb_libpgquery::PGDefElem *>(cell->data.ptr_value);
 			string opt_name = string(def_elem->defname);
 
-			auto val = (PGValue *)def_elem->arg;
-			if (def_elem->defaction == PG_DEFELEM_UNSPEC && !val) { // e.g. NO MINVALUE
+			auto val = (duckdb_libpgquery::PGValue *)def_elem->arg;
+			if (def_elem->defaction == duckdb_libpgquery::PG_DEFELEM_UNSPEC && !val) { // e.g. NO MINVALUE
 				continue;
 			}
 			D_ASSERT(val);
 			int64_t opt_value;
-			if (val->type == T_PGInteger) {
+			if (val->type == duckdb_libpgquery::T_PGInteger) {
 				opt_value = val->val.ival;
-			} else if (val->type == T_PGFloat) {
+			} else if (val->type == duckdb_libpgquery::T_PGFloat) {
 				if (!TryCast::Operation<string_t, int64_t>(string_t(val->val.str), opt_value, true)) {
 					throw ParserException("Expected an integer argument for option %s", opt_name);
 				}

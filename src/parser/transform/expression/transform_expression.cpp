@@ -4,9 +4,7 @@
 
 namespace duckdb {
 
-using namespace duckdb_libpgquery;
-
-unique_ptr<ParsedExpression> Transformer::TransformResTarget(PGResTarget *root) {
+unique_ptr<ParsedExpression> Transformer::TransformResTarget(duckdb_libpgquery::PGResTarget *root) {
 	if (!root) {
 		return nullptr;
 	}
@@ -20,70 +18,70 @@ unique_ptr<ParsedExpression> Transformer::TransformResTarget(PGResTarget *root) 
 	return expr;
 }
 
-unique_ptr<ParsedExpression> Transformer::TransformNamedArg(PGNamedArgExpr *root) {
+unique_ptr<ParsedExpression> Transformer::TransformNamedArg(duckdb_libpgquery::PGNamedArgExpr *root) {
 	if (!root) {
 		return nullptr;
 	}
-	auto expr = TransformExpression((PGNode *)root->arg);
+	auto expr = TransformExpression((duckdb_libpgquery::PGNode *)root->arg);
 	if (root->name) {
 		expr->alias = string(root->name);
 	}
 	return expr;
 }
 
-unique_ptr<ParsedExpression> Transformer::TransformExpression(PGNode *node) {
+unique_ptr<ParsedExpression> Transformer::TransformExpression(duckdb_libpgquery::PGNode *node) {
 	if (!node) {
 		return nullptr;
 	}
 
 	switch (node->type) {
-	case T_PGColumnRef:
-		return TransformColumnRef(reinterpret_cast<PGColumnRef *>(node));
-	case T_PGAConst:
-		return TransformConstant(reinterpret_cast<PGAConst *>(node));
-	case T_PGAExpr:
-		return TransformAExpr(reinterpret_cast<PGAExpr *>(node));
-	case T_PGFuncCall:
-		return TransformFuncCall(reinterpret_cast<PGFuncCall *>(node));
-	case T_PGBoolExpr:
-		return TransformBoolExpr(reinterpret_cast<PGBoolExpr *>(node));
-	case T_PGTypeCast:
-		return TransformTypeCast(reinterpret_cast<PGTypeCast *>(node));
-	case T_PGCaseExpr:
-		return TransformCase(reinterpret_cast<PGCaseExpr *>(node));
-	case T_PGSubLink:
-		return TransformSubquery(reinterpret_cast<PGSubLink *>(node));
-	case T_PGCoalesceExpr:
-		return TransformCoalesce(reinterpret_cast<PGAExpr *>(node));
-	case T_PGNullTest:
-		return TransformNullTest(reinterpret_cast<PGNullTest *>(node));
-	case T_PGResTarget:
-		return TransformResTarget(reinterpret_cast<PGResTarget *>(node));
-	case T_PGParamRef:
-		return TransformParamRef(reinterpret_cast<PGParamRef *>(node));
-	case T_PGNamedArgExpr:
-		return TransformNamedArg(reinterpret_cast<PGNamedArgExpr *>(node));
-	case T_PGSQLValueFunction:
-		return TransformSQLValueFunction(reinterpret_cast<PGSQLValueFunction *>(node));
-	case T_PGSetToDefault:
+	case duckdb_libpgquery::T_PGColumnRef:
+		return TransformColumnRef(reinterpret_cast<duckdb_libpgquery::PGColumnRef *>(node));
+	case duckdb_libpgquery::T_PGAConst:
+		return TransformConstant(reinterpret_cast<duckdb_libpgquery::PGAConst *>(node));
+	case duckdb_libpgquery::T_PGAExpr:
+		return TransformAExpr(reinterpret_cast<duckdb_libpgquery::PGAExpr *>(node));
+	case duckdb_libpgquery::T_PGFuncCall:
+		return TransformFuncCall(reinterpret_cast<duckdb_libpgquery::PGFuncCall *>(node));
+	case duckdb_libpgquery::T_PGBoolExpr:
+		return TransformBoolExpr(reinterpret_cast<duckdb_libpgquery::PGBoolExpr *>(node));
+	case duckdb_libpgquery::T_PGTypeCast:
+		return TransformTypeCast(reinterpret_cast<duckdb_libpgquery::PGTypeCast *>(node));
+	case duckdb_libpgquery::T_PGCaseExpr:
+		return TransformCase(reinterpret_cast<duckdb_libpgquery::PGCaseExpr *>(node));
+	case duckdb_libpgquery::T_PGSubLink:
+		return TransformSubquery(reinterpret_cast<duckdb_libpgquery::PGSubLink *>(node));
+	case duckdb_libpgquery::T_PGCoalesceExpr:
+		return TransformCoalesce(reinterpret_cast<duckdb_libpgquery::PGAExpr *>(node));
+	case duckdb_libpgquery::T_PGNullTest:
+		return TransformNullTest(reinterpret_cast<duckdb_libpgquery::PGNullTest *>(node));
+	case duckdb_libpgquery::T_PGResTarget:
+		return TransformResTarget(reinterpret_cast<duckdb_libpgquery::PGResTarget *>(node));
+	case duckdb_libpgquery::T_PGParamRef:
+		return TransformParamRef(reinterpret_cast<duckdb_libpgquery::PGParamRef *>(node));
+	case duckdb_libpgquery::T_PGNamedArgExpr:
+		return TransformNamedArg(reinterpret_cast<duckdb_libpgquery::PGNamedArgExpr *>(node));
+	case duckdb_libpgquery::T_PGSQLValueFunction:
+		return TransformSQLValueFunction(reinterpret_cast<duckdb_libpgquery::PGSQLValueFunction *>(node));
+	case duckdb_libpgquery::T_PGSetToDefault:
 		return make_unique<DefaultExpression>();
-	case T_PGCollateClause:
-		return TransformCollateExpr(reinterpret_cast<PGCollateClause *>(node));
-	case T_PGIntervalConstant:
-		return TransformInterval(reinterpret_cast<PGIntervalConstant *>(node));
-	case T_PGLambdaFunction:
-		return TransformLambda(reinterpret_cast<PGLambdaFunction *>(node));
+	case duckdb_libpgquery::T_PGCollateClause:
+		return TransformCollateExpr(reinterpret_cast<duckdb_libpgquery::PGCollateClause *>(node));
+	case duckdb_libpgquery::T_PGIntervalConstant:
+		return TransformInterval(reinterpret_cast<duckdb_libpgquery::PGIntervalConstant *>(node));
+	case duckdb_libpgquery::T_PGLambdaFunction:
+		return TransformLambda(reinterpret_cast<duckdb_libpgquery::PGLambdaFunction *>(node));
 	default:
 		throw NotImplementedException("Expr of type %d not implemented\n", (int)node->type);
 	}
 }
 
-bool Transformer::TransformExpressionList(PGList *list, vector<unique_ptr<ParsedExpression>> &result) {
+bool Transformer::TransformExpressionList(duckdb_libpgquery::PGList *list, vector<unique_ptr<ParsedExpression>> &result) {
 	if (!list) {
 		return false;
 	}
 	for (auto node = list->head; node != nullptr; node = node->next) {
-		auto target = reinterpret_cast<PGNode *>(node->data.ptr_value);
+		auto target = reinterpret_cast<duckdb_libpgquery::PGNode *>(node->data.ptr_value);
 		if (!target) {
 			return false;
 		}

@@ -8,21 +8,19 @@
 
 namespace duckdb {
 
-using namespace duckdb_libpgquery;
-
-unique_ptr<QueryNode> Transformer::TransformSelectNode(PGSelectStmt *stmt) {
+unique_ptr<QueryNode> Transformer::TransformSelectNode(duckdb_libpgquery::PGSelectStmt *stmt) {
 	unique_ptr<QueryNode> node;
 
 	switch (stmt->op) {
-	case PG_SETOP_NONE: {
+	case duckdb_libpgquery::PG_SETOP_NONE: {
 		node = make_unique<SelectNode>();
 		auto result = (SelectNode *)node.get();
 		if (stmt->withClause) {
-			TransformCTE(reinterpret_cast<PGWithClause *>(stmt->withClause), *node);
+			TransformCTE(reinterpret_cast<duckdb_libpgquery::PGWithClause *>(stmt->withClause), *node);
 		}
 		if (stmt->windowClause) {
 			for (auto window_ele = stmt->windowClause->head; window_ele != nullptr; window_ele = window_ele->next) {
-				auto window_def = reinterpret_cast<PGWindowDef *>(window_ele->data.ptr_value);
+				auto window_def = reinterpret_cast<duckdb_libpgquery::PGWindowDef *>(window_ele->data.ptr_value);
 				D_ASSERT(window_def);
 				D_ASSERT(window_def->name);
 				auto window_name = StringUtil::Lower(string(window_def->name));
@@ -39,7 +37,7 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(PGSelectStmt *stmt) {
 		if (stmt->distinctClause != nullptr) {
 			auto modifier = make_unique<DistinctModifier>();
 			// checks distinct on clause
-			auto target = reinterpret_cast<PGNode *>(stmt->distinctClause->head->data.ptr_value);
+			auto target = reinterpret_cast<duckdb_libpgquery::PGNode *>(stmt->distinctClause->head->data.ptr_value);
 			if (target) {
 				//  add the columns defined in the ON clause to the select list
 				if (!TransformExpressionList(stmt->distinctClause, modifier->distinct_on_targets)) {
@@ -76,13 +74,13 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(PGSelectStmt *stmt) {
 		result->sample = TransformSampleOptions(stmt->sampleOptions);
 		break;
 	}
-	case PG_SETOP_UNION:
-	case PG_SETOP_EXCEPT:
-	case PG_SETOP_INTERSECT: {
+	case duckdb_libpgquery::PG_SETOP_UNION:
+	case duckdb_libpgquery::PG_SETOP_EXCEPT:
+	case duckdb_libpgquery::PG_SETOP_INTERSECT: {
 		node = make_unique<SetOperationNode>();
 		auto result = (SetOperationNode *)node.get();
 		if (stmt->withClause) {
-			TransformCTE(reinterpret_cast<PGWithClause *>(stmt->withClause), *node);
+			TransformCTE(reinterpret_cast<duckdb_libpgquery::PGWithClause *>(stmt->withClause), *node);
 		}
 		result->left = TransformSelectNode(stmt->larg);
 		result->right = TransformSelectNode(stmt->rarg);
@@ -92,14 +90,14 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(PGSelectStmt *stmt) {
 
 		bool select_distinct = true;
 		switch (stmt->op) {
-		case PG_SETOP_UNION:
+		case duckdb_libpgquery::PG_SETOP_UNION:
 			select_distinct = !stmt->all;
 			result->setop_type = SetOperationType::UNION;
 			break;
-		case PG_SETOP_EXCEPT:
+		case duckdb_libpgquery::PG_SETOP_EXCEPT:
 			result->setop_type = SetOperationType::EXCEPT;
 			break;
-		case PG_SETOP_INTERSECT:
+		case duckdb_libpgquery::PG_SETOP_INTERSECT:
 			result->setop_type = SetOperationType::INTERSECT;
 			break;
 		default:

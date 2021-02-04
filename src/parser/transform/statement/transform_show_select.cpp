@@ -4,12 +4,10 @@
 
 namespace duckdb {
 
-using namespace duckdb_libpgquery;
-
-unique_ptr<ShowStatement> Transformer::TransformShowSelect(PGNode *node) {
+unique_ptr<ShowStatement> Transformer::TransformShowSelect(duckdb_libpgquery::PGNode *node) {
 	// we capture the select statement of SHOW
-	auto stmt = reinterpret_cast<PGVariableShowSelectStmt *>(node);
-	auto select_stmt = reinterpret_cast<PGSelectStmt *>(stmt->stmt);
+	auto stmt = reinterpret_cast<duckdb_libpgquery::PGVariableShowSelectStmt *>(node);
+	auto select_stmt = reinterpret_cast<duckdb_libpgquery::PGSelectStmt *>(stmt->stmt);
 
 	auto result = make_unique<ShowStatement>();
 	auto &info = *result->info;

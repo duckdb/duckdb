@@ -3,10 +3,8 @@
 
 namespace duckdb {
 
-using namespace duckdb_libpgquery;
-
-unique_ptr<AlterStatement> Transformer::TransformRename(PGNode *node) {
-	auto stmt = reinterpret_cast<PGRenameStmt *>(node);
+unique_ptr<AlterStatement> Transformer::TransformRename(duckdb_libpgquery::PGNode *node) {
+	auto stmt = reinterpret_cast<duckdb_libpgquery::PGRenameStmt *>(node);
 	D_ASSERT(stmt);
 	D_ASSERT(stmt->relation);
 
@@ -14,7 +12,7 @@ unique_ptr<AlterStatement> Transformer::TransformRename(PGNode *node) {
 
 	// first we check the type of ALTER
 	switch (stmt->renameType) {
-	case PG_OBJECT_COLUMN: {
+	case duckdb_libpgquery::PG_OBJECT_COLUMN: {
 		// change column name
 
 		// get the table and schema
@@ -33,7 +31,7 @@ unique_ptr<AlterStatement> Transformer::TransformRename(PGNode *node) {
 		info = make_unique<RenameColumnInfo>(schema, table, old_name, new_name);
 		break;
 	}
-	case PG_OBJECT_TABLE: {
+	case duckdb_libpgquery::PG_OBJECT_TABLE: {
 		// change table name
 
 		// get the table and schema
@@ -51,7 +49,7 @@ unique_ptr<AlterStatement> Transformer::TransformRename(PGNode *node) {
 		break;
 	}
 
-	case PG_OBJECT_VIEW: {
+	case duckdb_libpgquery::PG_OBJECT_VIEW: {
 		// change view name
 
 		// get the view and schema
@@ -68,7 +66,7 @@ unique_ptr<AlterStatement> Transformer::TransformRename(PGNode *node) {
 		info = make_unique<RenameViewInfo>(schema, view, new_name);
 		break;
 	}
-	case PG_OBJECT_DATABASE:
+	case duckdb_libpgquery::PG_OBJECT_DATABASE:
 	default:
 		throw NotImplementedException("Schema element not supported yet!");
 	}

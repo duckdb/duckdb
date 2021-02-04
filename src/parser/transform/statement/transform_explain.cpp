@@ -3,10 +3,8 @@
 
 namespace duckdb {
 
-using namespace duckdb_libpgquery;
-
-unique_ptr<ExplainStatement> Transformer::TransformExplain(PGNode *node) {
-	PGExplainStmt *stmt = reinterpret_cast<PGExplainStmt *>(node);
+unique_ptr<ExplainStatement> Transformer::TransformExplain(duckdb_libpgquery::PGNode *node) {
+	auto stmt = reinterpret_cast<duckdb_libpgquery::PGExplainStmt *>(node);
 	D_ASSERT(stmt);
 	return make_unique<ExplainStatement>(TransformStatement(stmt->query));
 }

@@ -5,8 +5,6 @@
 
 namespace duckdb {
 
-using namespace duckdb_libpgquery;
-
 static string ExtractColumnFromLambda(ParsedExpression &expr) {
 	if (expr.type != ExpressionType::COLUMN_REF) {
 		throw ParserException("Lambda parameter must be a column name");

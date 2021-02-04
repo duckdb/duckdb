@@ -603,11 +603,6 @@ template <>
 double Value::GetValue() const {
 	return GetValueInternal<double>();
 }
-template <>
-uintptr_t Value::GetValue() const {
-	D_ASSERT(type() == LogicalType::POINTER);
-	return value_.pointer;
-}
 Value Value::Numeric(LogicalType type, int64_t value) {
 	switch (type.id()) {
 	case LogicalTypeId::TINYINT:

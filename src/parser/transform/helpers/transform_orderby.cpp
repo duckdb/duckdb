@@ -4,34 +4,32 @@
 
 namespace duckdb {
 
-using namespace duckdb_libpgquery;
-
-bool Transformer::TransformOrderBy(PGList *order, vector<OrderByNode> &result) {
+bool Transformer::TransformOrderBy(duckdb_libpgquery::PGList *order, vector<OrderByNode> &result) {
 	if (!order) {
 		return false;
 	}
 
 	for (auto node = order->head; node != nullptr; node = node->next) {
-		auto temp = reinterpret_cast<PGNode *>(node->data.ptr_value);
-		if (temp->type == T_PGSortBy) {
+		auto temp = reinterpret_cast<duckdb_libpgquery::PGNode *>(node->data.ptr_value);
+		if (temp->type == duckdb_libpgquery::T_PGSortBy) {
 			OrderType type;
 			OrderByNullType null_order;
-			auto sort = reinterpret_cast<PGSortBy *>(temp);
+			auto sort = reinterpret_cast<duckdb_libpgquery::PGSortBy *>(temp);
 			auto target = sort->node;
-			if (sort->sortby_dir == PG_SORTBY_DEFAULT) {
+			if (sort->sortby_dir == duckdb_libpgquery::PG_SORTBY_DEFAULT) {
 				type = OrderType::ORDER_DEFAULT;
-			} else if (sort->sortby_dir == PG_SORTBY_ASC) {
+			} else if (sort->sortby_dir == duckdb_libpgquery::PG_SORTBY_ASC) {
 				type = OrderType::ASCENDING;
-			} else if (sort->sortby_dir == PG_SORTBY_DESC) {
+			} else if (sort->sortby_dir == duckdb_libpgquery::PG_SORTBY_DESC) {
 				type = OrderType::DESCENDING;
 			} else {
 				throw NotImplementedException("Unimplemented order by type");
 			}
-			if (sort->sortby_nulls == PG_SORTBY_NULLS_DEFAULT) {
+			if (sort->sortby_nulls == duckdb_libpgquery::PG_SORTBY_NULLS_DEFAULT) {
 				null_order = OrderByNullType::ORDER_DEFAULT;
-			} else if (sort->sortby_nulls == PG_SORTBY_NULLS_FIRST) {
+			} else if (sort->sortby_nulls == duckdb_libpgquery::PG_SORTBY_NULLS_FIRST) {
 				null_order = OrderByNullType::NULLS_FIRST;
-			} else if (sort->sortby_nulls == PG_SORTBY_NULLS_LAST) {
+			} else if (sort->sortby_nulls == duckdb_libpgquery::PG_SORTBY_NULLS_LAST) {
 				null_order = OrderByNullType::NULLS_LAST;
 			} else {
 				throw NotImplementedException("Unimplemented order by type");
