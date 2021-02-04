@@ -24,6 +24,8 @@ public:
 	DUCKDB_API MaterializedQueryResult(string error);
 
 	ChunkCollection collection;
+	//! In case we are streaming the data we keep track of the current chunk
+	idx_t cur_chunk = 0;
 
 public:
 	//! Fetches a DataChunk from the query result.
