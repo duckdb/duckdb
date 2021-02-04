@@ -26,6 +26,28 @@
 
 namespace duckdb {
 
+Value::Value(LogicalType type) : type_(type), is_null(true) {
+}
+
+Value::Value(int32_t val) : type_(LogicalType::INTEGER), is_null(false) {
+	value_.integer = val;
+}
+
+Value::Value(int64_t val) : type_(LogicalType::BIGINT), is_null(false) {
+	value_.bigint = val;
+}
+
+Value::Value(float val) : type_(LogicalType::FLOAT), is_null(false) {
+	value_.float_ = val;
+}
+
+Value::Value(double val) : type_(LogicalType::DOUBLE), is_null(false) {
+	value_.double_ = val;
+}
+
+Value::Value(const char *val) : Value(val ? string(val) : string()) {
+}
+
 Value::Value(string_t val) : Value(string(val.GetDataUnsafe(), val.GetSize())) {
 }
 

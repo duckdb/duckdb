@@ -57,11 +57,12 @@ void Node16::insert(ART &art, unique_ptr<Node> &node, uint8_t keyByte, unique_pt
 
 	if (n->count < 16) {
 		// Insert element
-		unsigned pos;
-		for (pos = 0; (pos < node->count) && (n->key[pos] < keyByte); pos++)
-			;
+		idx_t pos = 0;
+		while(pos < node->count && n->key[pos] < keyByte) {
+			pos++;
+		}
 		if (n->child[pos] != nullptr) {
-			for (unsigned i = n->count; i > pos; i--) {
+			for (idx_t i = n->count; i > pos; i--) {
 				n->key[i] = n->key[i - 1];
 				n->child[i] = move(n->child[i - 1]);
 			}
@@ -72,7 +73,7 @@ void Node16::insert(ART &art, unique_ptr<Node> &node, uint8_t keyByte, unique_pt
 	} else {
 		// Grow to Node48
 		auto newNode = make_unique<Node48>(art, n->prefix_length);
-		for (unsigned i = 0; i < node->count; i++) {
+		for (idx_t i = 0; i < node->count; i++) {
 			newNode->childIndex[n->key[i]] = i;
 			newNode->child[i] = move(n->child[i]);
 		}

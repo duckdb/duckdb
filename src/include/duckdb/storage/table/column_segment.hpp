@@ -35,7 +35,7 @@ public:
 	ColumnSegment(LogicalType type, ColumnSegmentType segment_type, idx_t start, idx_t count,
 	              unique_ptr<BaseStatistics> statistics);
 
-	virtual ~ColumnSegment() = default;
+	~ColumnSegment() override = default;
 
 	//! The type stored in the column
 	LogicalType type;

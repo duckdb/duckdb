@@ -21,7 +21,7 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(PGSelectStmt *stmt) {
 			TransformCTE(reinterpret_cast<PGWithClause *>(stmt->withClause), *node);
 		}
 		if (stmt->windowClause) {
-			for (auto window_ele = stmt->windowClause->head; window_ele != NULL; window_ele = window_ele->next) {
+			for (auto window_ele = stmt->windowClause->head; window_ele != nullptr; window_ele = window_ele->next) {
 				auto window_def = reinterpret_cast<PGWindowDef *>(window_ele->data.ptr_value);
 				D_ASSERT(window_def);
 				D_ASSERT(window_def->name);

@@ -3,8 +3,6 @@
 
 namespace duckdb {
 
-using namespace duckdb;
-
 string LogicalDistinct::ParamsToString() const {
 	string result = LogicalOperator::ParamsToString();
 	if (distinct_targets.size() > 0) {

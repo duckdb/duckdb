@@ -270,7 +270,7 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 
 class RecursiveSubqueryPlanner : public LogicalOperatorVisitor {
 public:
-	RecursiveSubqueryPlanner(Binder &binder) : binder(binder) {
+	explicit RecursiveSubqueryPlanner(Binder &binder) : binder(binder) {
 	}
 	void VisitOperator(LogicalOperator &op) override {
 		if (op.children.size() > 0) {

@@ -52,8 +52,9 @@ public:
 			if (input[offset] == delim[0] && offset + delim_size <= size) {
 				idx_t i;
 				for (i = 1; i < delim_size; i++) {
-					if (input[offset + i] != delim[i])
+					if (input[offset + i] != delim[i]) {
 						break;
+					}
 				}
 				// delimiter found: skip start over delimiter
 				if (i == delim_size) {
@@ -92,8 +93,9 @@ public:
 			if (utf8proc_codepoint(&input[offset], cp_sz) == delim_cps[0] && offset + delim_size <= size) {
 				idx_t delim_offset = cp_sz;
 				for (idx_t i = 1; i < delim_cps.size(); i++) {
-					if (utf8proc_codepoint(&input[offset + delim_offset], cp_sz) != delim_cps[i])
+					if (utf8proc_codepoint(&input[offset + delim_offset], cp_sz) != delim_cps[i]) {
 						break;
+					}
 					delim_offset += cp_sz;
 				}
 				// delimiter found: skip start over delimiter
@@ -123,10 +125,11 @@ public:
 			offset = match.data() - input;
 			// special case: 0 length match
 			if (match.size() == 0 && start < size) {
-				if (ascii_only)
+				if (ascii_only) {
 					offset++;
-				else
+				} else {
 					offset = utf8proc_next_grapheme(input, size, offset);
+				}
 				start = offset;
 			} else {
 				start = offset + match.size();
@@ -252,8 +255,9 @@ static void string_split_executor(DataChunk &args, ExpressionState &state, Vecto
 
 	D_ASSERT(list_child->Count() == total_len);
 	if (args.data[0].vector_type == VectorType::CONSTANT_VECTOR &&
-	    args.data[1].vector_type == VectorType::CONSTANT_VECTOR)
+	    args.data[1].vector_type == VectorType::CONSTANT_VECTOR) {
 		result.vector_type = VectorType::CONSTANT_VECTOR;
+	}
 	ListVector::SetEntry(result, move(list_child));
 }
 

@@ -66,7 +66,7 @@ static bool StartsWithNumericDate(string &separator, const string_t &value) {
 	}
 
 	//	second literal must match first
-	if (((field3 - literal2) != (field2 - literal1)) || strncmp(literal1, literal2, (field2 - literal1))) {
+	if (((field3 - literal2) != (field2 - literal1)) || strncmp(literal1, literal2, (field2 - literal1)) != 0) {
 		return false;
 	}
 
@@ -578,8 +578,9 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 							for (const auto &t : format_template_candidates[sql_type.id()]) {
 								const auto format_string = GenerateDateFormat(separator, t);
 								// don't parse ISO 8601
-								if (format_string.find("%Y-%m-%d") == string::npos)
+								if (format_string.find("%Y-%m-%d") == string::npos) {
 									type_format_candidates.emplace_back(format_string);
+								}
 							}
 
 							//	initialise the first candidate
@@ -805,8 +806,9 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 					chunk->Reference(parse_chunk);
 					cached_chunks.push(move(chunk));
 				} else {
-					while (!cached_chunks.empty())
+					while (!cached_chunks.empty()) {
 						cached_chunks.pop();
+					}
 				}
 			}
 		}

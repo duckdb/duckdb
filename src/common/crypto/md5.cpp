@@ -155,8 +155,9 @@ void MD5Context::MD5Update(const_data_ptr_t input, idx_t len) {
 	/* Update bitcount */
 
 	t = bits[0];
-	if ((bits[0] = t + ((uint32_t)len << 3)) < t)
+	if ((bits[0] = t + ((uint32_t)len << 3)) < t) {
 		bits[1]++; /* Carry from low to high */
+	}
 	bits[1] += len >> 29;
 
 	t = (t >> 3) & 0x3f; /* Bytes already in shsInfo->data */

@@ -90,7 +90,7 @@ public:
 
 class HashAggregateLocalState : public LocalSinkState {
 public:
-	HashAggregateLocalState(PhysicalHashAggregate &_op) : op(_op), is_empty(true) {
+	explicit HashAggregateLocalState(PhysicalHashAggregate &_op) : op(_op), is_empty(true) {
 		group_chunk.InitializeEmpty(op.group_types);
 		if (!op.payload_types.empty()) {
 			aggregate_input_chunk.InitializeEmpty(op.payload_types);
@@ -272,7 +272,7 @@ public:
 		gstate.finalized_hts[radix]->Finalize();
 	}
 
-	void Execute() {
+	void Execute() override {
 		FinalizeHT(state, radix);
 		lock_guard<mutex> glock(state.lock);
 		parent.finished_tasks++;

@@ -40,7 +40,7 @@ void Transformer::TransformCopyOptions(CopyInfo &info, PGList *options) {
 		switch (def_elem->arg->type) {
 		case T_PGList: {
 			auto column_list = (PGList *)(def_elem->arg);
-			for (auto c = column_list->head; c != NULL; c = lnext(c)) {
+			for (auto c = column_list->head; c != nullptr; c = lnext(c)) {
 				auto target = (PGResTarget *)(c->data.ptr_value);
 				info.options[def_elem->defname].push_back(Value(target->name));
 			}

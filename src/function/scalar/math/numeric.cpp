@@ -155,12 +155,13 @@ void BitCountFun::RegisterFunction(BuiltinFunctions &set) {
 struct SignOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA left) {
-		if (left == TA(0))
+		if (left == TA(0)) {
 			return 0;
-		else if (left > TA(0))
+		} else if (left > TA(0)) {
 			return 1;
-		else
+		} else {
 			return -1;
+		}
 	}
 };
 

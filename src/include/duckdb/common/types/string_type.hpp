@@ -48,10 +48,9 @@ public:
 			value.pointer.ptr = (char *)data;
 		}
 	}
-	// NOLINT: Allow implicit conversion from `const char*`
-	string_t(const char *data) : string_t(data, strlen(data)) {
+	string_t(const char *data) : string_t(data, strlen(data)) { // NOLINT: Allow implicit conversion from `const char*`
 	}
-	string_t(const string &value) : string_t(value.c_str(), value.size()) {
+	string_t(const string &value) : string_t(value.c_str(), value.size()) { // NOLINT: Allow implicit conversion from `const char*`
 	}
 
 	bool IsInlined() const {

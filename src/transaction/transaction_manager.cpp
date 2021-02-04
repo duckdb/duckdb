@@ -14,7 +14,7 @@
 namespace duckdb {
 
 struct CheckpointLock {
-	CheckpointLock(TransactionManager &manager) : manager(manager), is_locked(false) {
+	explicit CheckpointLock(TransactionManager &manager) : manager(manager), is_locked(false) {
 	}
 	~CheckpointLock() {
 		Unlock();

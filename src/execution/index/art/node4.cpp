@@ -54,11 +54,13 @@ void Node4::insert(ART &art, unique_ptr<Node> &node, uint8_t keyByte, unique_ptr
 	// Insert leaf into inner node
 	if (node->count < 4) {
 		// Insert element
-		unsigned pos;
-		for (pos = 0; (pos < node->count) && (n->key[pos] < keyByte); pos++)
-			;
+		idx_t pos = 0;
+		while((pos < node->count) && (n->key[pos] < keyByte)) {
+			pos++;
+		}
+}
 		if (n->child[pos] != nullptr) {
-			for (unsigned i = n->count; i > pos; i--) {
+			for (idx_t i = n->count; i > pos; i--) {
 				n->key[i] = n->key[i - 1];
 				n->child[i] = move(n->child[i - 1]);
 			}
@@ -71,7 +73,7 @@ void Node4::insert(ART &art, unique_ptr<Node> &node, uint8_t keyByte, unique_ptr
 		auto newNode = make_unique<Node16>(art, n->prefix_length);
 		newNode->count = 4;
 		CopyPrefix(art, node.get(), newNode.get());
-		for (unsigned i = 0; i < 4; i++) {
+		for (idx_t i = 0; i < 4; i++) {
 			newNode->key[i] = n->key[i];
 			newNode->child[i] = move(n->child[i]);
 		}

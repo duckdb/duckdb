@@ -30,8 +30,7 @@ public:
 
 public:
 	hugeint_t() = default;
-	// NOLINT: Allow implicit conversion from `int64_t`
-	hugeint_t(int64_t value);
+	hugeint_t(int64_t value); // NOLINT: Allow implicit conversion from `int64_t`
 	hugeint_t(const hugeint_t &rhs) = default;
 	hugeint_t(hugeint_t &&rhs) = default;
 	hugeint_t &operator=(const hugeint_t &rhs) = default;
@@ -260,8 +259,7 @@ enum class LogicalTypeId : uint8_t {
 
 struct LogicalType {
 	LogicalType();
-	// NOLINT: Allow implicit conversion from `LogicalTypeId`
-	LogicalType(LogicalTypeId id);
+	LogicalType(LogicalTypeId id); // NOLINT: Allow implicit conversion from `LogicalTypeId`
 	LogicalType(LogicalTypeId id, string collation);
 	LogicalType(LogicalTypeId id, uint8_t width, uint8_t scale);
 	LogicalType(LogicalTypeId id, child_list_t<LogicalType> child_types);

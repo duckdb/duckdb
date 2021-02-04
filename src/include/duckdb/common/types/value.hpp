@@ -25,37 +25,21 @@ class Value {
 
 public:
 	//! Create an empty NULL value of the specified type
-	explicit Value(LogicalType type = LogicalType::SQLNULL) : type_(type), is_null(true) {
-	}
+	explicit Value(LogicalType type = LogicalType::SQLNULL);
 	//! Create an INTEGER value
-	// NOLINT: Allow implicit conversion from `int32_t`
-	Value(int32_t val) : type_(LogicalType::INTEGER), is_null(false) {
-		value_.integer = val;
-	}
+	Value(int32_t val);	// NOLINT: Allow implicit conversion from `int32_t`
 	//! Create a BIGINT value
-	// NOLINT: Allow implicit conversion from `int64_t`
-	Value(int64_t val) : type_(LogicalType::BIGINT), is_null(false) {
-		value_.bigint = val;
-	}
+	Value(int64_t val); // NOLINT: Allow implicit conversion from `int64_t`
 	//! Create a FLOAT value
-	// NOLINT: Allow implicit conversion from `float`
-	Value(float val) : type_(LogicalType::FLOAT), is_null(false) {
-		value_.float_ = val;
-	}
+	Value(float val); // NOLINT: Allow implicit conversion from `float`
 	//! Create a DOUBLE value
-	// NOLINT: Allow implicit conversion from `double`
-	Value(double val) : type_(LogicalType::DOUBLE), is_null(false) {
-		value_.double_ = val;
-	}
+	Value(double val); // NOLINT: Allow implicit conversion from `double`
 	//! Create a VARCHAR value
-	// NOLINT: Allow implicit conversion from `const char *`
-	Value(const char *val) : Value(val ? string(val) : string()) {
-	}
-	// NOLINT: Allow implicit conversion from `string_t`
-	Value(string_t val);
+	Value(const char *val); // NOLINT: Allow implicit conversion from `const char *`
 	//! Create a VARCHAR value
-	// NOLINT: Allow implicit conversion from `string`
-	Value(string val);
+	Value(string_t val); // NOLINT: Allow implicit conversion from `string_t`
+	//! Create a VARCHAR value
+	Value(string val); // NOLINT: Allow implicit conversion from `string`
 
 	LogicalType type() const {
 		return type_;

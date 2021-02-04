@@ -287,7 +287,7 @@ static void _quicksort_inplace(ChunkCollection *sort_by, vector<OrderType> &desc
 	std::swap(result[middle], result[left]);
 	bool all_equal = true;
 	while (i <= j) {
-		if (result)
+		if (result) {
 			while (i <= j) {
 				int cmp = compare_tuple(sort_by, desc, null_order, result[i], pivot);
 				if (cmp < 0) {
@@ -298,6 +298,7 @@ static void _quicksort_inplace(ChunkCollection *sort_by, vector<OrderType> &desc
 				}
 				i++;
 			}
+		}
 
 		while (i <= j && compare_tuple(sort_by, desc, null_order, result[j], pivot) > 0) {
 			j--;
@@ -559,8 +560,9 @@ static void _heap_create(ChunkCollection *input, vector<OrderType> &desc, vector
 void ChunkCollection::Heap(vector<OrderType> &desc, vector<OrderByNullType> &null_order, idx_t heap[],
                            idx_t heap_size) {
 	D_ASSERT(heap);
-	if (count == 0)
+	if (count == 0) {
 		return;
+	}
 
 	_heap_create(this, desc, null_order, heap, heap_size);
 

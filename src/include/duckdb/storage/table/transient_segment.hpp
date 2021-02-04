@@ -20,7 +20,7 @@ class PersistentSegment;
 class TransientSegment : public ColumnSegment {
 public:
 	TransientSegment(DatabaseInstance &db, LogicalType type, idx_t start);
-	TransientSegment(PersistentSegment &segment);
+	explicit TransientSegment(PersistentSegment &segment);
 
 	//! The storage manager
 	DatabaseInstance &db;

@@ -78,13 +78,13 @@ public:
 			}
 			return true;
 		} else {
-			if (policy == Policy::UNORDERED && matchers.size() != entries.size()) {
-				// unordered policy, count does not match: no match
-				return false;
-			} else if (policy == Policy::SOME && matchers.size() > entries.size()) {
-				// some policy, every matcher has to match a unique entry
-				// this is not possible if there are more matchers than entries
-				return false;
+			if (matchers.size() != entries.size()) {
+				if (policy == Policy::UNORDERED || policy == Policy::SOME) {
+					// [1] unordered policy, count does not match: no match
+					// [2] some policy, every matcher has to match a unique entry
+					// this is not possible if there are more matchers than entries
+					return false;
+				}
 			}
 			// now perform the actual matching
 			// every matcher has to match a UNIQUE entry

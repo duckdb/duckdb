@@ -43,8 +43,9 @@ bool StringUtil::StartsWith(string str, string prefix) {
 }
 
 bool StringUtil::EndsWith(const string &str, const string &suffix) {
-	if (suffix.size() > str.size())
+	if (suffix.size() > str.size()) {
 		return false;
+	}
 	return equal(suffix.rbegin(), suffix.rend(), str.rbegin());
 }
 
@@ -65,7 +66,7 @@ vector<string> StringUtil::Split(const string &str, char delimiter) {
 	string temp;
 	while (getline(ss, temp, delimiter)) {
 		lines.push_back(temp);
-	} // WHILE
+	}
 	return (lines);
 }
 
@@ -75,15 +76,17 @@ string StringUtil::Join(const vector<string> &input, const string &separator) {
 
 string StringUtil::Prefix(const string &str, const string &prefix) {
 	vector<string> lines = StringUtil::Split(str, '\n');
-	if (lines.empty())
+	if (lines.empty()) {
 		return ("");
+	}
 
 	std::ostringstream os;
 	for (idx_t i = 0, cnt = lines.size(); i < cnt; i++) {
-		if (i > 0)
+		if (i > 0) {
 			os << std::endl;
+		}
 		os << prefix << lines[i];
-	} // FOR
+	}
 	return (os.str());
 }
 
@@ -143,9 +146,9 @@ vector<string> StringUtil::Split(const string &input, const string &split) {
 }
 
 string StringUtil::Replace(string source, const string &from, const string &to) {
-	if (from.empty())
+	if (from.empty()) {
 		return source;
-	;
+	}
 	idx_t start_pos = 0;
 	while ((start_pos = source.find(from, start_pos)) != string::npos) {
 		source.replace(start_pos, from.length(), to);

@@ -37,8 +37,7 @@ public:
 	enum join_value : uint8_t { NONE, LEFT, RIGHT, BOTH };
 
 	JoinSide() = default;
-	// NOLINT: Allow implicit conversion from `join_value`
-	constexpr JoinSide(join_value val) : value(val) {
+	constexpr JoinSide(join_value val) : value(val) { // NOLINT: Allow implicit conversion from `join_value`
 	}
 
 	bool operator==(JoinSide a) const {

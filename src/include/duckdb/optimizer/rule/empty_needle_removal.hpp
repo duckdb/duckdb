@@ -16,7 +16,7 @@ namespace duckdb {
 //(e.g.: PREFIX('xyz', '') is TRUE, PREFIX(NULL, '') is NULL, so rewrite PREFIX(x, '') to (CASE WHEN x IS NOT NULL THEN)
 class EmptyNeedleRemovalRule : public Rule {
 public:
-	EmptyNeedleRemovalRule(ExpressionRewriter &rewriter);
+	explicit EmptyNeedleRemovalRule(ExpressionRewriter &rewriter);
 
 	unique_ptr<Expression> Apply(LogicalOperator &op, vector<Expression *> &bindings, bool &changes_made) override;
 };

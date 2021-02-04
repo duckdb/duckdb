@@ -109,7 +109,7 @@ void PhysicalJoin::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &left
 //===--------------------------------------------------------------------===//
 class NestedLoopJoinLocalState : public LocalSinkState {
 public:
-	NestedLoopJoinLocalState(vector<JoinCondition> &conditions) {
+	explicit NestedLoopJoinLocalState(vector<JoinCondition> &conditions) {
 		vector<LogicalType> condition_types;
 		for (auto &cond : conditions) {
 			rhs_executor.AddExpression(*cond.right);

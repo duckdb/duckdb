@@ -30,8 +30,9 @@ static bool prefix(const string_t &str, const string_t &pattern) {
 		const char *str_pref = str.GetPrefix();
 		const char *patt_pref = pattern.GetPrefix();
 		for (idx_t i = 0; i < patt_length; ++i) {
-			if (str_pref[i] != patt_pref[i])
+			if (str_pref[i] != patt_pref[i]) {
 				return false;
+			}
 		}
 		return true;
 	} else {
