@@ -18,8 +18,8 @@ namespace duckdb {
 
 class WriteOverflowStringsToDisk : public OverflowStringWriter {
 public:
-	WriteOverflowStringsToDisk(DatabaseInstance &db);
-	~WriteOverflowStringsToDisk();
+	explicit WriteOverflowStringsToDisk(DatabaseInstance &db);
+	~WriteOverflowStringsToDisk() override;
 
 	//! The checkpoint manager
 	DatabaseInstance &db;

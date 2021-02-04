@@ -65,7 +65,7 @@ bool templated_like_operator(const char *sdata, idx_t slen, const char *pdata, i
 }
 
 struct LikeSegment {
-	LikeSegment(string pattern) : pattern(move(pattern)) {
+	explicit LikeSegment(string pattern) : pattern(move(pattern)) {
 	}
 
 	string pattern;

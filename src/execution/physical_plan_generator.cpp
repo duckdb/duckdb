@@ -9,7 +9,7 @@ namespace duckdb {
 
 class DependencyExtractor : public LogicalOperatorVisitor {
 public:
-	DependencyExtractor(unordered_set<CatalogEntry *> &dependencies) : dependencies(dependencies) {
+	explicit DependencyExtractor(unordered_set<CatalogEntry *> &dependencies) : dependencies(dependencies) {
 	}
 
 protected:

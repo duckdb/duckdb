@@ -51,9 +51,9 @@ class Vector {
 public:
 	Vector();
 	//! Create a vector of size one holding the passed on value
-	Vector(Value value);
+	explicit Vector(Value value);
 	//! Create an empty standard vector with a type, equivalent to calling Vector(type, true, false)
-	Vector(LogicalType type);
+	explicit Vector(LogicalType type);
 	//! Create a non-owning vector that references the specified data
 	Vector(LogicalType type, data_ptr_t dataptr);
 	//! Create an owning vector that holds at most STANDARD_VECTOR_SIZE entries.

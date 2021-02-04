@@ -6,7 +6,7 @@
 namespace duckdb {
 
 struct ConstantOrNullBindData : public FunctionData {
-	ConstantOrNullBindData(Value val) : value(val) {
+	explicit ConstantOrNullBindData(Value val) : value(val) {
 	}
 
 	Value value;

@@ -24,7 +24,7 @@ public:
 
 class WindowLocalState : public LocalSinkState {
 public:
-	WindowLocalState(PhysicalWindow &_op) : op(_op) {
+	explicit WindowLocalState(PhysicalWindow &_op) : op(_op) {
 	}
 
 	PhysicalWindow &op;

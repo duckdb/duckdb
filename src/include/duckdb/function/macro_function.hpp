@@ -19,7 +19,7 @@ class MacroCatalogEntry;
 
 class MacroFunction {
 public:
-	MacroFunction(unique_ptr<ParsedExpression> expression);
+	explicit MacroFunction(unique_ptr<ParsedExpression> expression);
 
 	//! Check whether the supplied arguments are valid
 	static string ValidateArguments(MacroCatalogEntry &macro_func, FunctionExpression &function_expr,

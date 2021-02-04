@@ -30,7 +30,7 @@ class Executor {
 	friend class PipelineTask;
 
 public:
-	Executor(ClientContext &context);
+	explicit Executor(ClientContext &context);
 	~Executor();
 
 	ClientContext &context;

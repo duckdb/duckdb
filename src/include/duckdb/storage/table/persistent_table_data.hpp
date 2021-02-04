@@ -18,7 +18,7 @@ class PersistentSegment;
 
 class PersistentTableData {
 public:
-	PersistentTableData(idx_t column_count);
+	explicit PersistentTableData(idx_t column_count);
 	~PersistentTableData();
 
 	vector<unique_ptr<BaseStatistics>> column_stats;

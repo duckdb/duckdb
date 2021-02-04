@@ -16,7 +16,7 @@ namespace duckdb {
 
 struct SchedulerThread {
 #ifndef DUCKDB_NO_THREADS
-	SchedulerThread(unique_ptr<thread> thread_p) : thread_(move(thread_p)) {
+	explicit SchedulerThread(unique_ptr<thread> thread_p) : thread_(move(thread_p)) {
 	}
 
 	unique_ptr<thread> thread_;
@@ -36,7 +36,7 @@ struct ConcurrentQueue {
 };
 
 struct QueueProducerToken {
-	QueueProducerToken(ConcurrentQueue &queue) : queue_token(queue.q) {
+	explicit QueueProducerToken(ConcurrentQueue &queue) : queue_token(queue.q) {
 	}
 
 	moodycamel::ProducerToken queue_token;

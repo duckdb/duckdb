@@ -13,7 +13,7 @@ void Transformer::TransformCTE(PGWithClause *de_with_clause, QueryNode &select) 
 	D_ASSERT(de_with_clause);
 
 	D_ASSERT(de_with_clause->ctes);
-	for (auto cte_ele = de_with_clause->ctes->head; cte_ele != NULL; cte_ele = cte_ele->next) {
+	for (auto cte_ele = de_with_clause->ctes->head; cte_ele != nullptr; cte_ele = cte_ele->next) {
 		auto info = make_unique<CommonTableExpressionInfo>();
 
 		auto cte = reinterpret_cast<PGCommonTableExpr *>(cte_ele->data.ptr_value);

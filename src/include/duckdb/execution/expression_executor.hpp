@@ -19,9 +19,9 @@ namespace duckdb {
 class ExpressionExecutor {
 public:
 	ExpressionExecutor();
-	ExpressionExecutor(Expression *expression);
-	ExpressionExecutor(Expression &expression);
-	ExpressionExecutor(vector<unique_ptr<Expression>> &expressions);
+	explicit ExpressionExecutor(Expression *expression);
+	explicit ExpressionExecutor(Expression &expression);
+	explicit ExpressionExecutor(vector<unique_ptr<Expression>> &expressions);
 
 	//! Add an expression to the set of to-be-executed expressions of the executor
 	void AddExpression(Expression &expr);

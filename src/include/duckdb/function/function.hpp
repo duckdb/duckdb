@@ -69,7 +69,7 @@ struct FunctionParameters {
 //! Function is the base class used for any type of function (scalar, aggregate or simple function)
 class Function {
 public:
-	Function(string name) : name(name) {
+	explicit Function(string name) : name(name) {
 	}
 	virtual ~Function() {
 	}
@@ -113,7 +113,7 @@ public:
 	SimpleFunction(string name, vector<LogicalType> arguments, LogicalType varargs = LogicalType::INVALID)
 	    : Function(name), arguments(move(arguments)), varargs(varargs) {
 	}
-	virtual ~SimpleFunction() {
+	~SimpleFunction() override {
 	}
 
 	//! The set of arguments of the function
@@ -137,14 +137,14 @@ public:
 	SimpleNamedParameterFunction(string name, vector<LogicalType> arguments, LogicalType varargs = LogicalType::INVALID)
 	    : SimpleFunction(name, move(arguments), varargs) {
 	}
-	virtual ~SimpleNamedParameterFunction() {
+	~SimpleNamedParameterFunction() override {
 	}
 
 	//! The named parameters of the function
 	unordered_map<string, LogicalType> named_parameters;
 
 public:
-	virtual string ToString() {
+	string ToString() override {
 		return Function::CallToString(name, arguments, named_parameters);
 	}
 
@@ -164,7 +164,7 @@ public:
 	    : SimpleFunction(move(name), move(arguments), move(varargs)), return_type(return_type),
 	      has_side_effects(has_side_effects) {
 	}
-	virtual ~BaseScalarFunction() {
+	~BaseScalarFunction() override {
 	}
 
 	//! Return type of the function

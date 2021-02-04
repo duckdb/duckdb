@@ -17,7 +17,7 @@ unique_ptr<UpdateStatement> Transformer::TransformUpdate(PGNode *node) {
 	}
 
 	auto root = stmt->targetList;
-	for (auto cell = root->head; cell != NULL; cell = cell->next) {
+	for (auto cell = root->head; cell != nullptr; cell = cell->next) {
 		auto target = (PGResTarget *)(cell->data.ptr_value);
 		result->columns.push_back(target->name);
 		result->expressions.push_back(TransformExpression(target->val));

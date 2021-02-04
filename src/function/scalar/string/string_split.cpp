@@ -15,7 +15,7 @@ namespace duckdb {
 
 struct StringSplitIterator {
 public:
-	StringSplitIterator(const size_t size) : size(size) {
+	explicit StringSplitIterator(const size_t size) : size(size) {
 	}
 	virtual ~StringSplitIterator() {
 	}

@@ -12,7 +12,7 @@ namespace duckdb {
 struct CurrentBindData : public FunctionData {
 	ClientContext &context;
 
-	CurrentBindData(ClientContext &context) : context(context) {
+	explicit CurrentBindData(ClientContext &context) : context(context) {
 	}
 
 	unique_ptr<FunctionData> Copy() override {

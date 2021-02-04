@@ -33,7 +33,7 @@ PhysicalDelimJoin::PhysicalDelimJoin(vector<LogicalType> types, unique_ptr<Physi
 
 class DelimJoinGlobalState : public GlobalOperatorState {
 public:
-	DelimJoinGlobalState(PhysicalDelimJoin *delim_join) {
+	explicit DelimJoinGlobalState(PhysicalDelimJoin *delim_join) {
 		D_ASSERT(delim_join->delim_scans.size() > 0);
 		// for any duplicate eliminated scans in the RHS, point them to the duplicate eliminated chunk that we create
 		// here

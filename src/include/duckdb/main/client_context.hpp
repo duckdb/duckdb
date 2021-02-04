@@ -38,7 +38,7 @@ class ClientContext : public std::enable_shared_from_this<ClientContext> {
 	friend class TransactionManager;
 
 public:
-	DUCKDB_API ClientContext(shared_ptr<DatabaseInstance> db);
+	DUCKDB_API explicit ClientContext(shared_ptr<DatabaseInstance> db);
 	DUCKDB_API ~ClientContext();
 
 	//! Query profiler

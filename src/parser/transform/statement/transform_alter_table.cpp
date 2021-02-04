@@ -18,7 +18,7 @@ unique_ptr<AlterStatement> Transformer::TransformAlter(PGNode *node) {
 	auto qname = TransformQualifiedName(stmt->relation);
 
 	// first we check the type of ALTER
-	for (auto c = stmt->cmds->head; c != NULL; c = c->next) {
+	for (auto c = stmt->cmds->head; c != nullptr; c = c->next) {
 		auto command = reinterpret_cast<PGAlterTableCmd *>(lfirst(c));
 		// TODO: Include more options for command->subtype
 		switch (command->subtype) {

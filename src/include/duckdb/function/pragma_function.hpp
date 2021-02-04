@@ -45,7 +45,7 @@ public:
 	static PragmaFunction PragmaAssignment(string name, pragma_query_t query, LogicalType type);
 	static PragmaFunction PragmaAssignment(string name, pragma_function_t function, LogicalType type);
 
-	string ToString();
+	string ToString() override;
 
 public:
 	PragmaType type;

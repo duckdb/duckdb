@@ -30,7 +30,7 @@ enum class FilterPropagateResult : uint8_t {
 
 class StatisticsPropagator {
 public:
-	StatisticsPropagator(ClientContext &context);
+	explicit StatisticsPropagator(ClientContext &context);
 
 	unique_ptr<NodeStatistics> PropagateStatistics(unique_ptr<LogicalOperator> &node_ptr);
 

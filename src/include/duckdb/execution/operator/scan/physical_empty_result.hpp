@@ -14,7 +14,7 @@ namespace duckdb {
 
 class PhysicalEmptyResult : public PhysicalOperator {
 public:
-	PhysicalEmptyResult(vector<LogicalType> types) : PhysicalOperator(PhysicalOperatorType::EMPTY_RESULT, move(types)) {
+	explicit PhysicalEmptyResult(vector<LogicalType> types) : PhysicalOperator(PhysicalOperatorType::EMPTY_RESULT, move(types)) {
 	}
 
 public:

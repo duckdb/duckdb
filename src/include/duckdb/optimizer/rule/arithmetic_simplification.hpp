@@ -16,7 +16,7 @@ namespace duckdb {
 // 0 => 0)
 class ArithmeticSimplificationRule : public Rule {
 public:
-	ArithmeticSimplificationRule(ExpressionRewriter &rewriter);
+	explicit ArithmeticSimplificationRule(ExpressionRewriter &rewriter);
 
 	unique_ptr<Expression> Apply(LogicalOperator &op, vector<Expression *> &bindings, bool &changes_made) override;
 };

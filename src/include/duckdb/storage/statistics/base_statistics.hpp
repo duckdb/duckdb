@@ -20,7 +20,7 @@ class Vector;
 
 class BaseStatistics {
 public:
-	BaseStatistics(LogicalType type) : type(type), has_null(false) {
+	explicit BaseStatistics(LogicalType type) : type(type), has_null(false) {
 	}
 	virtual ~BaseStatistics() {
 	}

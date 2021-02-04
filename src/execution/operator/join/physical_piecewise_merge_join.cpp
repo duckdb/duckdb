@@ -28,7 +28,7 @@ PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(LogicalOperator &op, uniq
 //===--------------------------------------------------------------------===//
 class MergeJoinLocalState : public LocalSinkState {
 public:
-	MergeJoinLocalState(vector<JoinCondition> &conditions) {
+	explicit MergeJoinLocalState(vector<JoinCondition> &conditions) {
 		vector<LogicalType> condition_types;
 		for (auto &cond : conditions) {
 			rhs_executor.AddExpression(*cond.right);

@@ -15,7 +15,7 @@
 namespace duckdb {
 
 struct PragmaTableFunctionData : public TableFunctionData {
-	PragmaTableFunctionData(CatalogEntry *entry_) : entry(entry_) {
+	explicit PragmaTableFunctionData(CatalogEntry *entry_) : entry(entry_) {
 	}
 
 	CatalogEntry *entry;

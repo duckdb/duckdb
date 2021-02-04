@@ -29,7 +29,7 @@ struct CommonTableExpressionInfo;
 //! parser representation into the DuckDB representation
 class Transformer {
 public:
-	Transformer(Transformer *parent = nullptr) : parent(parent) {
+	explicit Transformer(Transformer *parent = nullptr) : parent(parent) {
 	}
 
 	//! Transforms a Postgres parse tree into a set of SQL Statements

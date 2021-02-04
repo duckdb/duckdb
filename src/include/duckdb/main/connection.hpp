@@ -32,8 +32,8 @@ typedef void (*warning_callback)(std::string);
 //! be used to query the database.
 class Connection {
 public:
-	DUCKDB_API Connection(DuckDB &database);
-	DUCKDB_API Connection(DatabaseInstance &database);
+	DUCKDB_API explicit Connection(DuckDB &database);
+	DUCKDB_API explicit Connection(DatabaseInstance &database);
 
 	shared_ptr<ClientContext> context;
 	warning_callback warning_cb;

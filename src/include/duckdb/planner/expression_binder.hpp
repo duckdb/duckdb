@@ -30,9 +30,9 @@ class SimpleFunction;
 struct MacroBinding;
 
 struct BindResult {
-	BindResult(string error) : error(error) {
+	explicit BindResult(string error) : error(error) {
 	}
-	BindResult(unique_ptr<Expression> expr) : expression(move(expr)) {
+	explicit BindResult(unique_ptr<Expression> expr) : expression(move(expr)) {
 	}
 
 	bool HasError() {

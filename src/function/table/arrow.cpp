@@ -47,7 +47,7 @@ struct ArrowScanFunctionData : public TableFunctionData {
 		}
 	}
 
-	~ArrowScanFunctionData() {
+	~ArrowScanFunctionData() override {
 		ReleaseSchema();
 		ReleaseArray();
 	}

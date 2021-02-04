@@ -13,7 +13,7 @@ string Transformer::TransformCollation(PGCollateClause *collate) {
 		return string();
 	}
 	string collation;
-	for (auto c = collate->collname->head; c != NULL; c = lnext(c)) {
+	for (auto c = collate->collname->head; c != nullptr; c = lnext(c)) {
 		auto pgvalue = (PGValue *)c->data.ptr_value;
 		if (pgvalue->type != T_PGString) {
 			throw ParserException("Expected a string as collation type!");
@@ -78,7 +78,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(PGNode *node) {
 		throw ParserException("Table must have at least one column!");
 	}
 
-	for (auto c = stmt->tableElts->head; c != NULL; c = lnext(c)) {
+	for (auto c = stmt->tableElts->head; c != nullptr; c = lnext(c)) {
 		auto node = reinterpret_cast<PGNode *>(c->data.ptr_value);
 		switch (node->type) {
 		case T_PGColumnDef: {

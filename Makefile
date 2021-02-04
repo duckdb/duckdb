@@ -126,6 +126,17 @@ amaldebug:
 	cmake $(GENERATOR) $(FORCE_COLOR) ${STATIC_LIBCPP} ${EXTENSIONS} -DAMALGAMATION_BUILD=1 -DCMAKE_BUILD_TYPE=Debug ../.. && \
 	cmake --build .
 
+tidy-check:
+	mkdir -p build/tidy && \
+	cd build/tidy && \
+	cmake -DCLANG_TIDY=1 -DDISABLE_UNITY=1 -DBUILD_SHELL=0 -DCMAKE_EXPORT_COMPILE_COMMANDS=ON ../.. && \
+	python3 ../../scripts/run-clang-tidy.py
+
+tidy-fix:
+	mkdir -p build/tidy && \
+	cd build/tidy && \
+	cmake -DCLANG_TIDY=1 -DDISABLE_UNITY=1 -DBUILD_SHELL=0 -DCMAKE_EXPORT_COMPILE_COMMANDS=ON ../.. && \
+	python3 ../../scripts/run-clang-tidy.py -fix
 
 test_compile: # test compilation of individual cpp files
 	python scripts/amalgamation.py --compile

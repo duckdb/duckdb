@@ -548,7 +548,7 @@ string StrTimeFormat::ParseFormatSpecifier(string format_string, StrTimeFormat &
 }
 
 struct StrfTimeBindData : public FunctionData {
-	StrfTimeBindData(StrfTimeFormat format) : format(move(format)) {
+	explicit StrfTimeBindData(StrfTimeFormat format) : format(move(format)) {
 	}
 
 	StrfTimeFormat format;
@@ -963,7 +963,7 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 }
 
 struct StrpTimeBindData : public FunctionData {
-	StrpTimeBindData(StrpTimeFormat format) : format(move(format)) {
+	explicit StrpTimeBindData(StrpTimeFormat format) : format(move(format)) {
 	}
 
 	StrpTimeFormat format;

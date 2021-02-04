@@ -367,7 +367,7 @@ struct DateToStringCast {
 		}
 		// optionally add BC to the end of the date
 		if (add_bc) {
-			memcpy(ptr, " (BC)", 5);
+			strcpy(ptr, " (BC)");
 		}
 	}
 };
@@ -527,7 +527,7 @@ struct IntervalToStringCast {
 			}
 		} else if (length == 0) {
 			// empty interval: default to 00:00:00
-			memcpy(buffer, "00:00:00", 8);
+			strcpy(buffer, "00:00:00");
 			return 8;
 		}
 		return length;

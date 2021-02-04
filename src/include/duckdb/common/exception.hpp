@@ -77,7 +77,7 @@ enum class ExceptionType {
 
 class Exception : public std::exception {
 public:
-	Exception(string message);
+	explicit Exception(string message);
 	Exception(ExceptionType exception_type, string message);
 
 	ExceptionType type;
@@ -118,109 +118,109 @@ public:
 
 class CatalogException : public StandardException {
 public:
-	CatalogException(string msg);
+	explicit CatalogException(string msg);
 
 	template <typename... Args>
-	CatalogException(string msg, Args... params) : CatalogException(ConstructMessage(msg, params...)) {
+	explicit CatalogException(string msg, Args... params) : CatalogException(ConstructMessage(msg, params...)) {
 	}
 };
 
 class ParserException : public StandardException {
 public:
-	ParserException(string msg);
+	explicit ParserException(string msg);
 
 	template <typename... Args>
-	ParserException(string msg, Args... params) : ParserException(ConstructMessage(msg, params...)) {
+	explicit ParserException(string msg, Args... params) : ParserException(ConstructMessage(msg, params...)) {
 	}
 };
 
 class BinderException : public StandardException {
 public:
-	BinderException(string msg);
+	explicit BinderException(string msg);
 
 	template <typename... Args>
-	BinderException(string msg, Args... params) : BinderException(ConstructMessage(msg, params...)) {
+	explicit BinderException(string msg, Args... params) : BinderException(ConstructMessage(msg, params...)) {
 	}
 };
 
 class ConversionException : public Exception {
 public:
-	ConversionException(string msg);
+	explicit ConversionException(string msg);
 
 	template <typename... Args>
-	ConversionException(string msg, Args... params) : ConversionException(ConstructMessage(msg, params...)) {
+	explicit ConversionException(string msg, Args... params) : ConversionException(ConstructMessage(msg, params...)) {
 	}
 };
 
 class TransactionException : public Exception {
 public:
-	TransactionException(string msg);
+	explicit TransactionException(string msg);
 
 	template <typename... Args>
-	TransactionException(string msg, Args... params) : TransactionException(ConstructMessage(msg, params...)) {
+	explicit TransactionException(string msg, Args... params) : TransactionException(ConstructMessage(msg, params...)) {
 	}
 };
 
 class NotImplementedException : public Exception {
 public:
-	NotImplementedException(string msg);
+	explicit NotImplementedException(string msg);
 
 	template <typename... Args>
-	NotImplementedException(string msg, Args... params) : NotImplementedException(ConstructMessage(msg, params...)) {
+	explicit NotImplementedException(string msg, Args... params) : NotImplementedException(ConstructMessage(msg, params...)) {
 	}
 };
 
 class OutOfRangeException : public Exception {
 public:
-	OutOfRangeException(string msg);
+	explicit OutOfRangeException(string msg);
 
 	template <typename... Args>
-	OutOfRangeException(string msg, Args... params) : OutOfRangeException(ConstructMessage(msg, params...)) {
+	explicit OutOfRangeException(string msg, Args... params) : OutOfRangeException(ConstructMessage(msg, params...)) {
 	}
 };
 
 class SyntaxException : public Exception {
 public:
-	SyntaxException(string msg);
+	explicit SyntaxException(string msg);
 
 	template <typename... Args>
-	SyntaxException(string msg, Args... params) : SyntaxException(ConstructMessage(msg, params...)) {
+	explicit SyntaxException(string msg, Args... params) : SyntaxException(ConstructMessage(msg, params...)) {
 	}
 };
 
 class ConstraintException : public Exception {
 public:
-	ConstraintException(string msg);
+	explicit ConstraintException(string msg);
 
 	template <typename... Args>
-	ConstraintException(string msg, Args... params) : ConstraintException(ConstructMessage(msg, params...)) {
+	explicit ConstraintException(string msg, Args... params) : ConstraintException(ConstructMessage(msg, params...)) {
 	}
 };
 
 class IOException : public Exception {
 public:
-	IOException(string msg);
+	explicit IOException(string msg);
 
 	template <typename... Args>
-	IOException(string msg, Args... params) : IOException(ConstructMessage(msg, params...)) {
+	explicit IOException(string msg, Args... params) : IOException(ConstructMessage(msg, params...)) {
 	}
 };
 
 class SerializationException : public Exception {
 public:
-	SerializationException(string msg);
+	explicit SerializationException(string msg);
 
 	template <typename... Args>
-	SerializationException(string msg, Args... params) : SerializationException(ConstructMessage(msg, params...)) {
+	explicit SerializationException(string msg, Args... params) : SerializationException(ConstructMessage(msg, params...)) {
 	}
 };
 
 class SequenceException : public Exception {
 public:
-	SequenceException(string msg);
+	explicit SequenceException(string msg);
 
 	template <typename... Args>
-	SequenceException(string msg, Args... params) : SequenceException(ConstructMessage(msg, params...)) {
+	explicit SequenceException(string msg, Args... params) : SequenceException(ConstructMessage(msg, params...)) {
 	}
 };
 
@@ -231,28 +231,28 @@ public:
 
 class FatalException : public Exception {
 public:
-	FatalException(string msg);
+	explicit FatalException(string msg);
 
 	template <typename... Args>
-	FatalException(string msg, Args... params) : FatalException(ConstructMessage(msg, params...)) {
+	explicit FatalException(string msg, Args... params) : FatalException(ConstructMessage(msg, params...)) {
 	}
 };
 
 class InternalException : public Exception {
 public:
-	InternalException(string msg);
+	explicit InternalException(string msg);
 
 	template <typename... Args>
-	InternalException(string msg, Args... params) : InternalException(ConstructMessage(msg, params...)) {
+	explicit InternalException(string msg, Args... params) : InternalException(ConstructMessage(msg, params...)) {
 	}
 };
 
 class InvalidInputException : public Exception {
 public:
-	InvalidInputException(string msg);
+	explicit InvalidInputException(string msg);
 
 	template <typename... Args>
-	InvalidInputException(string msg, Args... params) : InvalidInputException(ConstructMessage(msg, params...)) {
+	explicit InvalidInputException(string msg, Args... params) : InvalidInputException(ConstructMessage(msg, params...)) {
 	}
 };
 

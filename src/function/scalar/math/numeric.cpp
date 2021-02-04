@@ -380,7 +380,7 @@ struct RoundDecimalOperator {
 };
 
 struct RoundPrecisionFunctionData : public FunctionData {
-	RoundPrecisionFunctionData(int32_t target_scale) : target_scale(target_scale) {
+	explicit RoundPrecisionFunctionData(int32_t target_scale) : target_scale(target_scale) {
 	}
 
 	int32_t target_scale;

@@ -16,7 +16,7 @@ namespace duckdb {
 
 class PipelineTask : public Task {
 public:
-	PipelineTask(Pipeline *pipeline_) : pipeline(pipeline_) {
+	explicit PipelineTask(Pipeline *pipeline_) : pipeline(pipeline_) {
 	}
 
 	TaskContext task;

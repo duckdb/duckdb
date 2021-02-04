@@ -14,7 +14,7 @@ struct avg_state_t {
 };
 
 struct AverageDecimalBindData : public FunctionData {
-	AverageDecimalBindData(double scale) : scale(scale) {
+	explicit AverageDecimalBindData(double scale) : scale(scale) {
 	}
 
 	double scale;

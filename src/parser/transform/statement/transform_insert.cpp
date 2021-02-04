@@ -8,7 +8,7 @@ using namespace duckdb_libpgquery;
 
 unique_ptr<TableRef> Transformer::TransformValuesList(PGList *list) {
 	auto result = make_unique<ExpressionListRef>();
-	for (auto value_list = list->head; value_list != NULL; value_list = value_list->next) {
+	for (auto value_list = list->head; value_list != nullptr; value_list = value_list->next) {
 		auto target = (PGList *)(value_list->data.ptr_value);
 
 		vector<unique_ptr<ParsedExpression>> insert_values;
@@ -34,7 +34,7 @@ unique_ptr<InsertStatement> Transformer::TransformInsert(PGNode *node) {
 
 	// first check if there are any columns specified
 	if (stmt->cols) {
-		for (auto c = stmt->cols->head; c != NULL; c = lnext(c)) {
+		for (auto c = stmt->cols->head; c != nullptr; c = lnext(c)) {
 			auto target = (PGResTarget *)(c->data.ptr_value);
 			result->columns.push_back(string(target->name));
 		}

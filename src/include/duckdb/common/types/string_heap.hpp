@@ -48,7 +48,7 @@ public:
 
 private:
 	struct StringChunk {
-		StringChunk(idx_t size) : current_position(0), maximum_size(size) {
+		explicit StringChunk(idx_t size) : current_position(0), maximum_size(size) {
 			data = unique_ptr<char[]>(new char[maximum_size]);
 		}
 		~StringChunk() {

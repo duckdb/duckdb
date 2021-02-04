@@ -64,7 +64,7 @@ void StringSegment::ExpandStringSegment(data_ptr_t baseptr) {
 		for (idx_t i = 0; i < max_vector_count - 1; i++) {
 			new_string_updates[i] = move(string_updates[i]);
 		}
-		new_string_updates[max_vector_count - 1] = 0;
+		new_string_updates[max_vector_count - 1] = nullptr;
 		string_updates = move(new_string_updates);
 	}
 }

@@ -30,7 +30,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateView(PGNode *node) {
 	info->query = TransformSelect(stmt->query, false);
 
 	if (stmt->aliases && stmt->aliases->length > 0) {
-		for (auto c = stmt->aliases->head; c != NULL; c = lnext(c)) {
+		for (auto c = stmt->aliases->head; c != nullptr; c = lnext(c)) {
 			auto node = reinterpret_cast<PGNode *>(c->data.ptr_value);
 			switch (node->type) {
 			case T_PGString: {

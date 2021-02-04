@@ -24,7 +24,7 @@ namespace duckdb {
 //! logical query tree
 class LogicalOperator {
 public:
-	LogicalOperator(LogicalOperatorType type) : type(type) {
+	explicit LogicalOperator(LogicalOperatorType type) : type(type) {
 	}
 	LogicalOperator(LogicalOperatorType type, vector<unique_ptr<Expression>> expressions)
 	    : type(type), expressions(move(expressions)) {

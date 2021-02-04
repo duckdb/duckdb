@@ -19,7 +19,7 @@ extern const uint64_t VERSION_NUMBER;
 
 using block_id_t = int64_t;
 
-#define INVALID_BLOCK -1
+#define INVALID_BLOCK (-1)
 
 // maximum block id, 2^62
 #define MAXIMUM_BLOCK 4611686018427388000LL

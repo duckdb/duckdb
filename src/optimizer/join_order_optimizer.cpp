@@ -414,9 +414,13 @@ void JoinOrderOptimizer::SolveJoinOrderApproximately() {
 					}
 				}
 			}
+			if (!smallest_plans[0] || !smallest_plans[1]) {
+				throw InternalException("Internal error in join order optimizer");
+			}
 			D_ASSERT(smallest_plans[0] && smallest_plans[1]);
 			D_ASSERT(smallest_index[0] != smallest_index[1]);
-			auto left = smallest_plans[0]->set, right = smallest_plans[1]->set;
+			auto left = smallest_plans[0]->set;
+			auto right = smallest_plans[1]->set;
 			// create a cross product edge (i.e. edge with empty filter) between these two sets in the query graph
 			query_graph.CreateEdge(left, right, nullptr);
 			// now emit the pair and continue with the algorithm

@@ -18,7 +18,7 @@ namespace duckdb {
 //! LogicalComparisonJoin represents a join that involves comparisons between the LHS and RHS
 class LogicalComparisonJoin : public LogicalJoin {
 public:
-	LogicalComparisonJoin(JoinType type,
+	explicit LogicalComparisonJoin(JoinType type,
 	                      LogicalOperatorType logical_type = LogicalOperatorType::LOGICAL_COMPARISON_JOIN);
 
 	//! The conditions of the join

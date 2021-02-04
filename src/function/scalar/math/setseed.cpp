@@ -12,7 +12,7 @@ struct SetseedBindData : public FunctionData {
 	//! The client context for the function call
 	ClientContext &context;
 
-	SetseedBindData(ClientContext &context) : context(context) {
+	explicit SetseedBindData(ClientContext &context) : context(context) {
 	}
 
 	unique_ptr<FunctionData> Copy() override {

@@ -8,7 +8,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 class SampleGlobalOperatorState : public GlobalOperatorState {
 public:
-	SampleGlobalOperatorState(SampleOptions &options) {
+	explicit SampleGlobalOperatorState(SampleOptions &options) {
 		if (options.is_percentage) {
 			auto percentage = options.sample_size.GetValue<double>();
 			if (percentage == 0) {

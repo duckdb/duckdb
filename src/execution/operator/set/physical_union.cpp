@@ -4,7 +4,7 @@ namespace duckdb {
 
 class PhysicalUnionOperatorState : public PhysicalOperatorState {
 public:
-	PhysicalUnionOperatorState(PhysicalOperator &op) : PhysicalOperatorState(op, nullptr), top_done(false) {
+	explicit PhysicalUnionOperatorState(PhysicalOperator &op) : PhysicalOperatorState(op, nullptr), top_done(false) {
 	}
 	unique_ptr<PhysicalOperatorState> top_state;
 	unique_ptr<PhysicalOperatorState> bottom_state;

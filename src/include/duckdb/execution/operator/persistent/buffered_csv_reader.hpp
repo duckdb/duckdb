@@ -33,7 +33,7 @@ struct StrpTimeFormat;
  */
 struct TextSearchShiftArray {
 	TextSearchShiftArray();
-	TextSearchShiftArray(string search_term);
+	explicit TextSearchShiftArray(string search_term);
 
 	inline bool Match(uint8_t &position, uint8_t byte_value) {
 		if (position >= length) {

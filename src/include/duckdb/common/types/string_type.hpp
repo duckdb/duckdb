@@ -23,7 +23,7 @@ public:
 	static constexpr idx_t INLINE_LENGTH = 12;
 
 	string_t() = default;
-	string_t(uint32_t len) {
+	explicit string_t(uint32_t len) {
 		value.inlined.length = len;
 	}
 	string_t(const char *data, uint32_t len) {
@@ -48,9 +48,9 @@ public:
 			value.pointer.ptr = (char *)data;
 		}
 	}
-	string_t(const char *data) : string_t(data, strlen(data)) {
+	explicit string_t(const char *data) : string_t(data, strlen(data)) {
 	}
-	string_t(const string &value) : string_t(value.c_str(), value.size()) {
+	explicit string_t(const string &value) : string_t(value.c_str(), value.size()) {
 	}
 
 	bool IsInlined() const {

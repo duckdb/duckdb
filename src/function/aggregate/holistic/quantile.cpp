@@ -19,7 +19,7 @@ struct quantile_state_t {
 };
 
 struct QuantileBindData : public FunctionData {
-	QuantileBindData(float quantile_) : quantile(quantile_) {
+	explicit QuantileBindData(float quantile_) : quantile(quantile_) {
 	}
 
 	unique_ptr<FunctionData> Copy() override {

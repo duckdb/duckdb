@@ -18,7 +18,7 @@ struct TableAppendState;
 
 class LocalTableStorage {
 public:
-	LocalTableStorage(DataTable &table);
+	explicit LocalTableStorage(DataTable &table);
 	~LocalTableStorage();
 
 	DataTable &table;
@@ -48,7 +48,7 @@ public:
 	};
 
 public:
-	LocalStorage(Transaction &transaction) : transaction(transaction) {
+	explicit LocalStorage(Transaction &transaction) : transaction(transaction) {
 	}
 
 	//! Initialize a scan of the local storage

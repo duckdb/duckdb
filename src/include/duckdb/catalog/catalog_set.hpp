@@ -26,7 +26,7 @@ class ClientContext;
 typedef unordered_map<CatalogSet *, std::unique_lock<std::mutex>> set_lock_map_t;
 
 struct MappingValue {
-	MappingValue(idx_t index_) : index(index_), timestamp(0), deleted(false), parent(nullptr) {
+	explicit MappingValue(idx_t index_) : index(index_), timestamp(0), deleted(false), parent(nullptr) {
 	}
 
 	idx_t index;
@@ -41,7 +41,7 @@ class CatalogSet {
 	friend class DependencyManager;
 
 public:
-	CatalogSet(Catalog &catalog, unique_ptr<DefaultGenerator> defaults = nullptr);
+	explicit CatalogSet(Catalog &catalog, unique_ptr<DefaultGenerator> defaults = nullptr);
 
 	//! Create an entry in the catalog set. Returns whether or not it was
 	//! successful.

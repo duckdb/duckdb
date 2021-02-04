@@ -28,43 +28,43 @@ public:
 	explicit Value(LogicalType type = LogicalType::SQLNULL) : type_(type), is_null(true) {
 	}
 	//! Create a UTINYINT value
-	Value(uint8_t val) : type_(LogicalType::UTINYINT), is_null(false) {
+	explicit Value(uint8_t val) : type_(LogicalType::UTINYINT), is_null(false) {
 		value_.utinyint = val;
 	}
 	//! Create a USMALLINT value
-	Value(uint16_t val) : type_(LogicalType::USMALLINT), is_null(false) {
+	explicit Value(uint16_t val) : type_(LogicalType::USMALLINT), is_null(false) {
 		value_.usmallint = val;
 	}
 	//! Create a UINTEGER value
-	Value(uint32_t val) : type_(LogicalType::UINTEGER), is_null(false) {
+	explicit Value(uint32_t val) : type_(LogicalType::UINTEGER), is_null(false) {
 		value_.uinteger = val;
 	}
 	//! Create a UBIGINT value
-	Value(uint64_t val) : type_(LogicalType::UBIGINT), is_null(false) {
+	explicit Value(uint64_t val) : type_(LogicalType::UBIGINT), is_null(false) {
 		value_.ubigint = val;
 	}
 	//! Create an INTEGER value
-	Value(int32_t val) : type_(LogicalType::INTEGER), is_null(false) {
+	explicit Value(int32_t val) : type_(LogicalType::INTEGER), is_null(false) {
 		value_.integer = val;
 	}
 	//! Create a BIGINT value
-	Value(int64_t val) : type_(LogicalType::BIGINT), is_null(false) {
+	explicit Value(int64_t val) : type_(LogicalType::BIGINT), is_null(false) {
 		value_.bigint = val;
 	}
 	//! Create a FLOAT value
-	Value(float val) : type_(LogicalType::FLOAT), is_null(false) {
+	explicit Value(float val) : type_(LogicalType::FLOAT), is_null(false) {
 		value_.float_ = val;
 	}
 	//! Create a DOUBLE value
-	Value(double val) : type_(LogicalType::DOUBLE), is_null(false) {
+	explicit Value(double val) : type_(LogicalType::DOUBLE), is_null(false) {
 		value_.double_ = val;
 	}
 	//! Create a VARCHAR value
-	Value(const char *val) : Value(val ? string(val) : string()) {
+	explicit Value(const char *val) : Value(val ? string(val) : string()) {
 	}
-	Value(string_t val);
+	explicit Value(string_t val);
 	//! Create a VARCHAR value
-	Value(string val);
+	explicit Value(string val);
 
 	LogicalType type() const {
 		return type_;

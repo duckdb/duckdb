@@ -67,7 +67,7 @@ private:
 };
 
 struct CentroidList {
-	CentroidList(const std::vector<Centroid> &s) : iter(s.cbegin()), end(s.cend()) {
+	explicit CentroidList(const std::vector<Centroid> &s) : iter(s.cbegin()), end(s.cend()) {
 	}
 	std::vector<Centroid>::const_iterator iter;
 	std::vector<Centroid>::const_iterator end;

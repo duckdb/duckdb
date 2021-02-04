@@ -117,7 +117,7 @@ public:
 
 protected:
 	string FormatStrpTimeError(string input, idx_t position);
-	void AddFormatSpecifier(string preceding_literal, StrTimeSpecifier specifier);
+	void AddFormatSpecifier(string preceding_literal, StrTimeSpecifier specifier) override;
 	int NumericSpecifierWidth(StrTimeSpecifier specifier);
 	int32_t TryParseCollection(const char *data, idx_t &pos, idx_t size, string_t collection[], idx_t collection_count);
 };

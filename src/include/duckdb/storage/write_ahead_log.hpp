@@ -36,7 +36,7 @@ class TransactionManager;
 //! server crashes or is shut down.
 class WriteAheadLog {
 public:
-	WriteAheadLog(DatabaseInstance &database);
+	explicit WriteAheadLog(DatabaseInstance &database);
 
 	//! Whether or not the WAL has been initialized
 	bool initialized;

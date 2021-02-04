@@ -15,7 +15,7 @@ namespace duckdb {
 class CatalogEntry;
 
 struct Dependency {
-	Dependency(CatalogEntry *entry, bool requires_cascade = true) : entry(entry), requires_cascade(requires_cascade) {
+	explicit Dependency(CatalogEntry *entry, bool requires_cascade = true) : entry(entry), requires_cascade(requires_cascade) {
 	}
 
 	//! The catalog entry this depends on

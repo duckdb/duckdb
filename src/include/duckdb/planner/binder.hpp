@@ -37,7 +37,7 @@ struct CorrelatedColumnInfo {
 	string name;
 	idx_t depth;
 
-	CorrelatedColumnInfo(BoundColumnRefExpression &expr)
+	explicit CorrelatedColumnInfo(BoundColumnRefExpression &expr)
 	    : binding(expr.binding), type(expr.return_type), name(expr.GetName()), depth(expr.depth) {
 	}
 
@@ -57,7 +57,7 @@ class Binder {
 	friend class RecursiveSubqueryPlanner;
 
 public:
-	Binder(ClientContext &context, Binder *parent = nullptr, bool inherit_ctes = true);
+	explicit Binder(ClientContext &context, Binder *parent = nullptr, bool inherit_ctes = true);
 
 	//! The client context
 	ClientContext &context;

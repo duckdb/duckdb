@@ -34,9 +34,9 @@ enum class VectorBufferType : uint8_t {
 //! The VectorBuffer is a class used by the vector to hold its data
 class VectorBuffer {
 public:
-	VectorBuffer(VectorBufferType type) : type(type) {
+	explicit VectorBuffer(VectorBufferType type) : type(type) {
 	}
-	VectorBuffer(idx_t data_size);
+	explicit VectorBuffer(idx_t data_size);
 	virtual ~VectorBuffer() {
 	}
 
@@ -57,12 +57,12 @@ protected:
 //! The DictionaryBuffer holds a selection vector
 class DictionaryBuffer : public VectorBuffer {
 public:
-	DictionaryBuffer(const SelectionVector &sel) : VectorBuffer(VectorBufferType::DICTIONARY_BUFFER), sel_vector(sel) {
+	explicit DictionaryBuffer(const SelectionVector &sel) : VectorBuffer(VectorBufferType::DICTIONARY_BUFFER), sel_vector(sel) {
 	}
-	DictionaryBuffer(buffer_ptr<SelectionData> data)
+	explicit DictionaryBuffer(buffer_ptr<SelectionData> data)
 	    : VectorBuffer(VectorBufferType::DICTIONARY_BUFFER), sel_vector(move(data)) {
 	}
-	DictionaryBuffer(idx_t count = STANDARD_VECTOR_SIZE)
+	explicit DictionaryBuffer(idx_t count = STANDARD_VECTOR_SIZE)
 	    : VectorBuffer(VectorBufferType::DICTIONARY_BUFFER), sel_vector(count) {
 	}
 
@@ -107,7 +107,7 @@ private:
 class VectorStructBuffer : public VectorBuffer {
 public:
 	VectorStructBuffer();
-	~VectorStructBuffer();
+	~VectorStructBuffer() override;
 
 public:
 	child_list_t<unique_ptr<Vector>> &GetChildren() {
@@ -126,7 +126,7 @@ class VectorListBuffer : public VectorBuffer {
 public:
 	VectorListBuffer();
 
-	~VectorListBuffer();
+	~VectorListBuffer() override;
 
 public:
 	ChunkCollection &GetChild() {
@@ -142,8 +142,8 @@ private:
 //! The ManagedVectorBuffer holds a buffer handle
 class ManagedVectorBuffer : public VectorBuffer {
 public:
-	ManagedVectorBuffer(unique_ptr<BufferHandle> handle);
-	~ManagedVectorBuffer();
+	explicit ManagedVectorBuffer(unique_ptr<BufferHandle> handle);
+	~ManagedVectorBuffer() override;
 
 private:
 	unique_ptr<BufferHandle> handle;
