@@ -40,6 +40,23 @@ static Value transform_statistics_plain(const_data_ptr_t input) {
 	return Value::CreateValue<T>(Load<T>(input));
 }
 
+static Value transform_statistics_float(const_data_ptr_t input) {
+	auto val = Load<float>(input);
+	if (!Value::FloatIsValid(val)) {
+		return Value(LogicalType::FLOAT);
+	}
+	return Value::CreateValue<float>(val);
+}
+
+static Value transform_statistics_double(const_data_ptr_t input) {
+	auto val = Load<double>(input);
+	if (!Value::DoubleIsValid(val)) {
+		return Value(LogicalType::DOUBLE);
+	}
+	return Value::CreateValue<double>(val);
+}
+
+
 static Value transform_statistics_timestamp_ms(const_data_ptr_t input) {
 	return Value::TIMESTAMP(parquet_timestamp_ms_to_timestamp(Load<int64_t>(input)));
 }
@@ -87,11 +104,11 @@ unique_ptr<BaseStatistics> parquet_transform_column_statistics(const SchemaEleme
 		break;
 
 	case LogicalTypeId::FLOAT:
-		row_group_stats = templated_get_numeric_stats<transform_statistics_plain<float>>(type, parquet_stats);
+		row_group_stats = templated_get_numeric_stats<transform_statistics_float>(type, parquet_stats);
 		break;
 
 	case LogicalTypeId::DOUBLE:
-		row_group_stats = templated_get_numeric_stats<transform_statistics_plain<double>>(type, parquet_stats);
+		row_group_stats = templated_get_numeric_stats<transform_statistics_double>(type, parquet_stats);
 		break;
 
 		// here we go, our favorite type

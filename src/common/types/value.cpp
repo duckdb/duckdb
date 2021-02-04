@@ -38,10 +38,16 @@ Value::Value(int64_t val) : type_(LogicalType::BIGINT), is_null(false) {
 }
 
 Value::Value(float val) : type_(LogicalType::FLOAT), is_null(false) {
+	if (!Value::FloatIsValid(val)) {
+		throw OutOfRangeException("Invalid float value %f", val);
+	}
 	value_.float_ = val;
 }
 
 Value::Value(double val) : type_(LogicalType::DOUBLE), is_null(false) {
+	if (!Value::DoubleIsValid(val)) {
+		throw OutOfRangeException("Invalid double value %f", val);
+	}
 	value_.double_ = val;
 }
 
