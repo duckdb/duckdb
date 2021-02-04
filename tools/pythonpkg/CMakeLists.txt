@@ -1,8 +1,7 @@
 include_directories(src)
 
 find_package(PythonLibs REQUIRED)
-
-include_directories(.eggs/pybind11-2.6.1-py3.6.egg/pybind11/include/)
+FIND_PACKAGE( pybind11 REQUIRED )
 include_directories(../../)
 
 add_library(python_duckdb duckdb_python.cpp)

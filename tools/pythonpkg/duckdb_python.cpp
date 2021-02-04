@@ -1242,10 +1242,7 @@ public:
 				}
 				materialized.collection.Reset();
 			} else {
-				conversion.Append(*(materialized.collection.Chunks()[materialized.cur_chunk++]));
-				if (materialized.collection.Count() == materialized.cur_chunk) {
-					materialized.collection.Reset();
-				}
+				conversion.Append(*materialized.Fetch());
 			}
 		} else {
 			if (!stream) {
