@@ -99,7 +99,7 @@ def get_tidy_invocation(f, clang_tidy_binary, checks, tmpdir, build_path,
       start.append('-extra-arg-before=%s' % arg)
   start.append('-p=' + build_path)
   if quiet:
-      start.append('-quiet')
+      start.append('--quiet')
   if config:
       start.append('-config=' + config)
   start.append(f)
@@ -166,11 +166,11 @@ def run_tidy(args, tmpdir, build_path, queue, lock, failed_files):
     output, err = proc.communicate()
     if proc.returncode != 0:
       failed_files.append(name)
-    with lock:
-      sys.stdout.write(' '.join(invocation) + '\n' + output.decode('utf-8'))
-      if len(err) > 0:
-        sys.stdout.flush()
-        sys.stderr.write(err.decode('utf-8'))
+      with lock:
+        sys.stdout.write(' '.join(invocation) + '\n' + output.decode('utf-8'))
+        if len(err) > 0:
+          sys.stdout.flush()
+          sys.stderr.write(err.decode('utf-8'))
     queue.task_done()
 
 

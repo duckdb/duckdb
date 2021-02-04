@@ -130,7 +130,7 @@ tidy-check:
 	mkdir -p build/tidy && \
 	cd build/tidy && \
 	cmake -DCLANG_TIDY=1 -DDISABLE_UNITY=1 -DBUILD_SHELL=0 -DCMAKE_EXPORT_COMPILE_COMMANDS=ON ../.. && \
-	python3 ../../scripts/run-clang-tidy.py
+	python3 ../../scripts/run-clang-tidy.py -quiet
 
 tidy-fix:
 	mkdir -p build/tidy && \
