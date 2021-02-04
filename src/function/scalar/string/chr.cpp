@@ -10,7 +10,7 @@ struct chrOperator {
 		char c[5] = {'\0', '\0', '\0', '\0', '\0'};
 		int utf8_bytes = 4;
 		Utf8Proc::CodepointToUtf8(input, utf8_bytes, &c[0]);
-		return &c[0];
+		return string_t(&c[0]);
 	}
 };
 

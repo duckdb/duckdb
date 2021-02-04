@@ -222,7 +222,7 @@ void UncompressedSegment::filterSelection(SelectionVector &sel, Vector &result, 
 	switch (result.type.InternalType()) {
 	case PhysicalType::UINT8: {
 		auto result_flat = FlatVector::GetData<uint8_t>(result);
-		auto predicate_vector = Vector(filter.constant.value_.utinyint);
+		Vector predicate_vector(filter.constant);
 		auto predicate = FlatVector::GetData<uint8_t>(predicate_vector);
 		filterSelectionType<uint8_t>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type,
 		                             nullmask);
@@ -230,7 +230,7 @@ void UncompressedSegment::filterSelection(SelectionVector &sel, Vector &result, 
 	}
 	case PhysicalType::UINT16: {
 		auto result_flat = FlatVector::GetData<uint16_t>(result);
-		auto predicate_vector = Vector(filter.constant.value_.usmallint);
+		Vector predicate_vector(filter.constant);
 		auto predicate = FlatVector::GetData<uint16_t>(predicate_vector);
 		filterSelectionType<uint16_t>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type,
 		                              nullmask);
@@ -238,7 +238,7 @@ void UncompressedSegment::filterSelection(SelectionVector &sel, Vector &result, 
 	}
 	case PhysicalType::UINT32: {
 		auto result_flat = FlatVector::GetData<uint32_t>(result);
-		auto predicate_vector = Vector(filter.constant.value_.uinteger);
+		Vector predicate_vector(filter.constant);
 		auto predicate = FlatVector::GetData<uint32_t>(predicate_vector);
 		filterSelectionType<uint32_t>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type,
 		                              nullmask);
@@ -246,7 +246,7 @@ void UncompressedSegment::filterSelection(SelectionVector &sel, Vector &result, 
 	}
 	case PhysicalType::UINT64: {
 		auto result_flat = FlatVector::GetData<uint64_t>(result);
-		auto predicate_vector = Vector(filter.constant.value_.ubigint);
+		Vector predicate_vector(filter.constant);
 		auto predicate = FlatVector::GetData<uint64_t>(predicate_vector);
 		filterSelectionType<uint64_t>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type,
 		                              nullmask);
@@ -254,7 +254,7 @@ void UncompressedSegment::filterSelection(SelectionVector &sel, Vector &result, 
 	}
 	case PhysicalType::INT8: {
 		auto result_flat = FlatVector::GetData<int8_t>(result);
-		auto predicate_vector = Vector(filter.constant.value_.tinyint);
+		Vector predicate_vector(filter.constant);
 		auto predicate = FlatVector::GetData<int8_t>(predicate_vector);
 		filterSelectionType<int8_t>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type,
 		                            nullmask);
@@ -262,7 +262,7 @@ void UncompressedSegment::filterSelection(SelectionVector &sel, Vector &result, 
 	}
 	case PhysicalType::INT16: {
 		auto result_flat = FlatVector::GetData<int16_t>(result);
-		auto predicate_vector = Vector(filter.constant.value_.smallint);
+		Vector predicate_vector(filter.constant);
 		auto predicate = FlatVector::GetData<int16_t>(predicate_vector);
 		filterSelectionType<int16_t>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type,
 		                             nullmask);
@@ -270,7 +270,7 @@ void UncompressedSegment::filterSelection(SelectionVector &sel, Vector &result, 
 	}
 	case PhysicalType::INT32: {
 		auto result_flat = FlatVector::GetData<int32_t>(result);
-		auto predicate_vector = Vector(filter.constant.value_.integer);
+		Vector predicate_vector(filter.constant);
 		auto predicate = FlatVector::GetData<int32_t>(predicate_vector);
 		filterSelectionType<int32_t>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type,
 		                             nullmask);
@@ -278,7 +278,7 @@ void UncompressedSegment::filterSelection(SelectionVector &sel, Vector &result, 
 	}
 	case PhysicalType::INT64: {
 		auto result_flat = FlatVector::GetData<int64_t>(result);
-		auto predicate_vector = Vector(filter.constant.value_.bigint);
+		Vector predicate_vector(filter.constant);
 		auto predicate = FlatVector::GetData<int64_t>(predicate_vector);
 		filterSelectionType<int64_t>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type,
 		                             nullmask);
@@ -286,14 +286,14 @@ void UncompressedSegment::filterSelection(SelectionVector &sel, Vector &result, 
 	}
 	case PhysicalType::FLOAT: {
 		auto result_flat = FlatVector::GetData<float>(result);
-		auto predicate_vector = Vector(filter.constant.value_.float_);
+		Vector predicate_vector(filter.constant);
 		auto predicate = FlatVector::GetData<float>(predicate_vector);
 		filterSelectionType<float>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type, nullmask);
 		break;
 	}
 	case PhysicalType::DOUBLE: {
 		auto result_flat = FlatVector::GetData<double>(result);
-		auto predicate_vector = Vector(filter.constant.value_.double_);
+		Vector predicate_vector(filter.constant);
 		auto predicate = FlatVector::GetData<double>(predicate_vector);
 		filterSelectionType<double>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type,
 		                            nullmask);
@@ -301,7 +301,7 @@ void UncompressedSegment::filterSelection(SelectionVector &sel, Vector &result, 
 	}
 	case PhysicalType::VARCHAR: {
 		auto result_flat = FlatVector::GetData<string_t>(result);
-		auto predicate_vector = Vector(filter.constant.str_value);
+		Vector predicate_vector(filter.constant.str_value);
 		auto predicate = FlatVector::GetData<string_t>(predicate_vector);
 		filterSelectionType<string_t>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type,
 		                              nullmask);
@@ -309,7 +309,7 @@ void UncompressedSegment::filterSelection(SelectionVector &sel, Vector &result, 
 	}
 	case PhysicalType::BOOL: {
 		auto result_flat = FlatVector::GetData<bool>(result);
-		auto predicate_vector = Vector(filter.constant.value_.boolean);
+		Vector predicate_vector(filter.constant);
 		auto predicate = FlatVector::GetData<bool>(predicate_vector);
 		filterSelectionType<bool>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type, nullmask);
 		break;

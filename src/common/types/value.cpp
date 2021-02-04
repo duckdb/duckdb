@@ -427,6 +427,26 @@ Value Value::CreateValue(int64_t value) {
 }
 
 template <>
+Value Value::CreateValue(uint8_t value) {
+	return Value::UTINYINT(value);
+}
+
+template <>
+Value Value::CreateValue(uint16_t value) {
+	return Value::USMALLINT(value);
+}
+
+template <>
+Value Value::CreateValue(uint32_t value) {
+	return Value::UINTEGER(value);
+}
+
+template <>
+Value Value::CreateValue(uint64_t value) {
+	return Value::UBIGINT(value);
+}
+
+template <>
 Value Value::CreateValue(hugeint_t value) {
 	return Value::HUGEINT(value);
 }
@@ -482,6 +502,14 @@ T Value::GetValueInternal() const {
 		return Cast::Operation<int64_t, T>(value_.bigint);
 	case LogicalTypeId::HUGEINT:
 		return Cast::Operation<hugeint_t, T>(value_.hugeint);
+	case LogicalTypeId::UTINYINT:
+		return Cast::Operation<uint8_t, T>(value_.utinyint);
+	case LogicalTypeId::USMALLINT:
+		return Cast::Operation<uint16_t, T>(value_.usmallint);
+	case LogicalTypeId::UINTEGER:
+		return Cast::Operation<uint32_t, T>(value_.uinteger);
+	case LogicalTypeId::UBIGINT:
+		return Cast::Operation<uint64_t, T>(value_.ubigint);
 	case LogicalTypeId::FLOAT:
 		return Cast::Operation<float, T>(value_.float_);
 	case LogicalTypeId::DOUBLE:
@@ -524,6 +552,22 @@ int64_t Value::GetValue() const {
 template <>
 hugeint_t Value::GetValue() const {
 	return GetValueInternal<hugeint_t>();
+}
+template <>
+uint8_t Value::GetValue() const {
+	return GetValueInternal<uint8_t>();
+}
+template <>
+uint16_t Value::GetValue() const {
+	return GetValueInternal<uint16_t>();
+}
+template <>
+uint32_t Value::GetValue() const {
+	return GetValueInternal<uint32_t>();
+}
+template <>
+uint64_t Value::GetValue() const {
+	return GetValueInternal<uint64_t>();
 }
 template <>
 string Value::GetValue() const {
@@ -611,6 +655,30 @@ template <>
 hugeint_t &Value::GetValueUnsafe() {
 	D_ASSERT(type_.InternalType() == PhysicalType::INT128);
 	return value_.hugeint;
+}
+
+template <>
+uint8_t &Value::GetValueUnsafe() {
+	D_ASSERT(type_.InternalType() == PhysicalType::UINT8);
+	return value_.utinyint;
+}
+
+template <>
+uint16_t &Value::GetValueUnsafe() {
+	D_ASSERT(type_.InternalType() == PhysicalType::UINT16);
+	return value_.usmallint;
+}
+
+template <>
+uint32_t &Value::GetValueUnsafe() {
+	D_ASSERT(type_.InternalType() == PhysicalType::UINT32);
+	return value_.uinteger;
+}
+
+template <>
+uint64_t &Value::GetValueUnsafe() {
+	D_ASSERT(type_.InternalType() == PhysicalType::UINT64);
+	return value_.ubigint;
 }
 
 template <>

@@ -37,7 +37,7 @@ static unique_ptr<BaseStatistics> templated_get_numeric_stats(const LogicalType 
 
 template <class T>
 static Value transform_statistics_plain(const_data_ptr_t input) {
-	return Value(Load<T>(input));
+	return Value::CreateValue<T>(Load<T>(input));
 }
 
 static Value transform_statistics_timestamp_ms(const_data_ptr_t input) {

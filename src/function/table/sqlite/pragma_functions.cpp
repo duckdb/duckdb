@@ -73,7 +73,7 @@ void AddFunction(BaseScalarFunction &f, idx_t &count, DataChunk &output, bool is
 	DataChunk chunk;
 	chunk.Initialize(types);
 	for (idx_t i = 0; i < f.arguments.size(); i++) {
-		chunk.data[0].SetValue(chunk.size(), f.arguments[i].ToString());
+		chunk.data[0].SetValue(chunk.size(), Value(f.arguments[i].ToString()));
 		chunk.SetCardinality(chunk.size() + 1);
 		if (chunk.size() == STANDARD_VECTOR_SIZE) {
 			cc.Append(chunk);

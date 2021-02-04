@@ -32,16 +32,13 @@ public:
 	bool null_values_are_equal = false;
 };
 
-// enum class JoinSide : uint8_t {
-// 	NONE, LEFT, RIGHT, BOTH
-// };
-
 class JoinSide {
 public:
 	enum join_value : uint8_t { NONE, LEFT, RIGHT, BOTH };
 
 	JoinSide() = default;
-	constexpr explicit JoinSide(join_value val) : value(val) {
+	// NOLINT: Allow implicit conversion from `join_value`
+	constexpr JoinSide(join_value val) : value(val) {
 	}
 
 	bool operator==(JoinSide a) const {

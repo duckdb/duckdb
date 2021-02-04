@@ -27,44 +27,35 @@ public:
 	//! Create an empty NULL value of the specified type
 	explicit Value(LogicalType type = LogicalType::SQLNULL) : type_(type), is_null(true) {
 	}
-	//! Create a UTINYINT value
-	explicit Value(uint8_t val) : type_(LogicalType::UTINYINT), is_null(false) {
-		value_.utinyint = val;
-	}
-	//! Create a USMALLINT value
-	explicit Value(uint16_t val) : type_(LogicalType::USMALLINT), is_null(false) {
-		value_.usmallint = val;
-	}
-	//! Create a UINTEGER value
-	explicit Value(uint32_t val) : type_(LogicalType::UINTEGER), is_null(false) {
-		value_.uinteger = val;
-	}
-	//! Create a UBIGINT value
-	explicit Value(uint64_t val) : type_(LogicalType::UBIGINT), is_null(false) {
-		value_.ubigint = val;
-	}
 	//! Create an INTEGER value
-	explicit Value(int32_t val) : type_(LogicalType::INTEGER), is_null(false) {
+	// NOLINT: Allow implicit conversion from `int32_t`
+	Value(int32_t val) : type_(LogicalType::INTEGER), is_null(false) {
 		value_.integer = val;
 	}
 	//! Create a BIGINT value
-	explicit Value(int64_t val) : type_(LogicalType::BIGINT), is_null(false) {
+	// NOLINT: Allow implicit conversion from `int64_t`
+	Value(int64_t val) : type_(LogicalType::BIGINT), is_null(false) {
 		value_.bigint = val;
 	}
 	//! Create a FLOAT value
-	explicit Value(float val) : type_(LogicalType::FLOAT), is_null(false) {
+	// NOLINT: Allow implicit conversion from `float`
+	Value(float val) : type_(LogicalType::FLOAT), is_null(false) {
 		value_.float_ = val;
 	}
 	//! Create a DOUBLE value
-	explicit Value(double val) : type_(LogicalType::DOUBLE), is_null(false) {
+	// NOLINT: Allow implicit conversion from `double`
+	Value(double val) : type_(LogicalType::DOUBLE), is_null(false) {
 		value_.double_ = val;
 	}
 	//! Create a VARCHAR value
-	explicit Value(const char *val) : Value(val ? string(val) : string()) {
+	// NOLINT: Allow implicit conversion from `const char *`
+	Value(const char *val) : Value(val ? string(val) : string()) {
 	}
-	explicit Value(string_t val);
+	// NOLINT: Allow implicit conversion from `string_t`
+	Value(string_t val);
 	//! Create a VARCHAR value
-	explicit Value(string val);
+	// NOLINT: Allow implicit conversion from `string`
+	Value(string val);
 
 	LogicalType type() const {
 		return type_;
@@ -268,6 +259,14 @@ private:
 template <>
 Value DUCKDB_API Value::CreateValue(bool value);
 template <>
+Value DUCKDB_API Value::CreateValue(uint8_t value);
+template <>
+Value DUCKDB_API Value::CreateValue(uint16_t value);
+template <>
+Value DUCKDB_API Value::CreateValue(uint32_t value);
+template <>
+Value DUCKDB_API Value::CreateValue(uint64_t value);
+template <>
 Value DUCKDB_API Value::CreateValue(int8_t value);
 template <>
 Value DUCKDB_API Value::CreateValue(int16_t value);
@@ -292,6 +291,14 @@ Value DUCKDB_API Value::CreateValue(Value value);
 
 template <>
 bool Value::GetValue() const;
+template <>
+uint8_t Value::GetValue() const;
+template <>
+uint16_t Value::GetValue() const;
+template <>
+uint32_t Value::GetValue() const;
+template <>
+uint64_t Value::GetValue() const;
 template <>
 int8_t Value::GetValue() const;
 template <>
@@ -321,6 +328,14 @@ template <>
 int64_t &Value::GetValueUnsafe();
 template <>
 hugeint_t &Value::GetValueUnsafe();
+template <>
+uint8_t &Value::GetValueUnsafe();
+template <>
+uint16_t &Value::GetValueUnsafe();
+template <>
+uint32_t &Value::GetValueUnsafe();
+template <>
+uint64_t &Value::GetValueUnsafe();
 template <>
 string &Value::GetValueUnsafe();
 template <>

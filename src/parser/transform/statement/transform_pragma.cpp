@@ -23,7 +23,7 @@ unique_ptr<PragmaStatement> Transformer::TransformPragma(PGNode *node) {
 
 			if (expr->type == ExpressionType::COMPARE_EQUAL) {
 				auto &comp = (ComparisonExpression &)*expr;
-				info.named_parameters[comp.left->ToString()] = comp.right->ToString();
+				info.named_parameters[comp.left->ToString()] = Value(comp.right->ToString());
 			} else if (node->type == T_PGAConst) {
 				auto constant = TransformConstant((PGAConst *)node);
 				info.parameters.push_back(((ConstantExpression &)*constant).value);

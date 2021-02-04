@@ -277,7 +277,7 @@ idx_t ParseMemoryLimit(string arg) {
 	string number = arg.substr(num_start, idx - num_start);
 
 	// try to parse the number
-	double limit = Cast::Operation<string_t, double>(number.c_str());
+	double limit = Cast::Operation<string_t, double>(string_t(number));
 
 	// now parse the memory limit unit (e.g. bytes, gb, etc)
 	while (StringUtil::CharacterIsSpace(arg[idx])) {

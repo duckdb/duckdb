@@ -348,9 +348,9 @@ void BufferedCSVReader::SetDateFormat(const string &format_specifier, const Logi
 bool BufferedCSVReader::TryCastValue(Value value, LogicalType sql_type) {
 	try {
 		if (options.has_format[LogicalTypeId::DATE] && sql_type.id() == LogicalTypeId::DATE) {
-			options.date_format[LogicalTypeId::DATE].ParseDate(value.str_value);
+			options.date_format[LogicalTypeId::DATE].ParseDate(string_t(value.str_value));
 		} else if (options.has_format[LogicalTypeId::TIMESTAMP] && sql_type.id() == LogicalTypeId::TIMESTAMP) {
-			options.date_format[LogicalTypeId::TIMESTAMP].ParseTimestamp(value.str_value);
+			options.date_format[LogicalTypeId::TIMESTAMP].ParseTimestamp(string_t(value.str_value));
 		} else {
 			value.CastAs(sql_type, true);
 		}
