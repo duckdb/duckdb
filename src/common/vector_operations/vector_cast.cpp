@@ -7,7 +7,8 @@
 
 namespace duckdb {
 
-template <class SRC, class OP> static void string_cast(Vector &source, Vector &result, idx_t count) {
+template <class SRC, class OP>
+static void string_cast(Vector &source, Vector &result, idx_t count) {
 	D_ASSERT(result.type.InternalType() == PhysicalType::VARCHAR);
 	UnaryExecutor::Execute<SRC, string_t, true>(source, result, count,
 	                                            [&](SRC input) { return OP::template Operation<SRC>(input, result); });
@@ -32,7 +33,8 @@ static void null_cast(Vector &source, Vector &result, idx_t count) {
 	}
 }
 
-template <class T> static void to_decimal_cast(Vector &source, Vector &result, idx_t count) {
+template <class T>
+static void to_decimal_cast(Vector &source, Vector &result, idx_t count) {
 	switch (result.type.InternalType()) {
 	case PhysicalType::INT16:
 		UnaryExecutor::Execute<T, int16_t, true>(source, result, count, [&](T input) {
@@ -59,7 +61,8 @@ template <class T> static void to_decimal_cast(Vector &source, Vector &result, i
 	}
 }
 
-template <class T> static void from_decimal_cast(Vector &source, Vector &result, idx_t count) {
+template <class T>
+static void from_decimal_cast(Vector &source, Vector &result, idx_t count) {
 	switch (source.type.InternalType()) {
 	case PhysicalType::INT16:
 		UnaryExecutor::Execute<int16_t, T, true>(source, result, count, [&](int16_t input) {
@@ -275,7 +278,8 @@ static void decimal_cast_switch(Vector &source, Vector &result, idx_t count) {
 	}
 }
 
-template <class SRC> static void numeric_cast_switch(Vector &source, Vector &result, idx_t count) {
+template <class SRC>
+static void numeric_cast_switch(Vector &source, Vector &result, idx_t count) {
 	// now switch on the result type
 	switch (result.type.id()) {
 	case LogicalTypeId::BOOLEAN:
@@ -333,7 +337,8 @@ template <class SRC> static void numeric_cast_switch(Vector &source, Vector &res
 	}
 }
 
-template <class OP> static void string_cast_numeric_switch(Vector &source, Vector &result, idx_t count) {
+template <class OP>
+static void string_cast_numeric_switch(Vector &source, Vector &result, idx_t count) {
 	// now switch on the result type
 	switch (result.type.id()) {
 	case LogicalTypeId::BOOLEAN:

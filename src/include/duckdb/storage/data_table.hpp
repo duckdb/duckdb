@@ -30,6 +30,7 @@ class StorageManager;
 class TableCatalogEntry;
 class Transaction;
 class WriteAheadLog;
+class TableDataWriter;
 
 struct DataTableInfo {
 	DataTableInfo(string schema, string table) : cardinality(0), schema(move(schema)), table(move(table)) {
@@ -59,7 +60,7 @@ struct ParallelTableScanState {
 class DataTable {
 public:
 	//! Constructs a new data table from an (optional) set of persistent segments
-	DataTable(StorageManager &storage, string schema, string table, vector<LogicalType> types,
+	DataTable(DatabaseInstance &db, string schema, string table, vector<LogicalType> types,
 	          unique_ptr<PersistentTableData> data = nullptr);
 	//! Constructs a DataTable as a delta on an existing data table with a newly added column
 	DataTable(ClientContext &context, DataTable &parent, ColumnDefinition &new_column, Expression *default_value);
@@ -72,8 +73,8 @@ public:
 	shared_ptr<DataTableInfo> info;
 	//! Types managed by data table
 	vector<LogicalType> types;
-	//! A reference to the base storage manager
-	StorageManager &storage;
+	//! A reference to the database instance
+	DatabaseInstance &db;
 
 public:
 	void InitializeScan(TableScanState &state, const vector<column_t> &column_ids,
@@ -138,6 +139,12 @@ public:
 	}
 
 	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id);
+
+	//! Checkpoint the table to the specified table data writer
+	void Checkpoint(TableDataWriter &writer);
+	void CheckpointDeletes(TableDataWriter &writer);
+	void CommitDropTable();
+	void CommitDropColumn(idx_t index);
 
 private:
 	//! Verify constraints with a chunk from the Append containing all columns of the table

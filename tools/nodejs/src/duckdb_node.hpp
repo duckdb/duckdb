@@ -26,7 +26,8 @@ struct Task {
 		object.Unref();
 	};
 
-	template <class T> T &Get() {
+	template <class T>
+	T &Get() {
 		return (T &)object;
 	}
 
@@ -141,7 +142,8 @@ public:
 	static Napi::Value CreateError(Napi::Env env, std::string msg);
 	static bool OtherIsInt(Napi::Number source);
 
-	template <class T> static T *NewUnwrap(std::vector<napi_value> args) {
+	template <class T>
+	static T *NewUnwrap(std::vector<napi_value> args) {
 		auto obj = T::constructor.New(args);
 		return Napi::ObjectWrap<T>::Unwrap(obj);
 	}

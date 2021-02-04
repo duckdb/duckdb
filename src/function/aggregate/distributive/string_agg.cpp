@@ -13,7 +13,8 @@ struct string_agg_state_t {
 };
 
 struct StringAggBaseFunction {
-	template <class STATE> static void Initialize(STATE *state) {
+	template <class STATE>
+	static void Initialize(STATE *state) {
 		state->dataptr = nullptr;
 		state->alloc_size = 0;
 		state->size = 0;
@@ -28,7 +29,8 @@ struct StringAggBaseFunction {
 		}
 	}
 
-	template <class STATE> static void Destroy(STATE *state) {
+	template <class STATE>
+	static void Destroy(STATE *state) {
 		if (state->dataptr) {
 			delete[] state->dataptr;
 		}
@@ -79,26 +81,29 @@ struct StringAggBaseFunction {
 
 struct StringAggFunction : public StringAggBaseFunction {
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, A_TYPE *str_data, B_TYPE *sep_data, nullmask_t &str_nullmask,
-	                      nullmask_t &sep_nullmask, idx_t str_idx, idx_t sep_idx) {
+	static void Operation(STATE *state, FunctionData *bind_data, A_TYPE *str_data, B_TYPE *sep_data,
+	                      nullmask_t &str_nullmask, nullmask_t &sep_nullmask, idx_t str_idx, idx_t sep_idx) {
 		PerformOperation(state, str_data[str_idx], sep_data[sep_idx]);
 	}
 };
 
 struct StringAggSingleFunction : public StringAggBaseFunction {
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, INPUT_TYPE *str_data, nullmask_t &str_nullmask, idx_t str_idx) {
+	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *str_data, nullmask_t &str_nullmask,
+	                      idx_t str_idx) {
 		PerformOperation(state, str_data[str_idx]);
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
+	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask,
+	                              idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
-			Operation<INPUT_TYPE, STATE, OP>(state, input, nullmask, 0);
+			Operation<INPUT_TYPE, STATE, OP>(state, bind_data, input, nullmask, 0);
 		}
 	}
 
-	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
+	template <class STATE, class OP>
+	static void Combine(STATE source, STATE *target) {
 		if (source.dataptr == nullptr) {
 			// source is not set: skip combining
 			return;

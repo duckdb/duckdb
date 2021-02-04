@@ -11,13 +11,42 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/random_engine.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
+#include "pcg_random.hpp"
+
 #include <queue>
 
 namespace duckdb {
 
+class BaseReservoirSampling {
+public:
+	explicit BaseReservoirSampling(int64_t seed);
+	BaseReservoirSampling();
+
+	void InitializeReservoir(idx_t cur_size, idx_t sample_size);
+
+	void SetNextEntry();
+
+	void ReplaceElement();
+
+	//! These are only for pcg generator
+	unique_ptr<pcg32> rng;
+	unique_ptr<std::uniform_real_distribution<double>> uniform_dist;
+
+	//! Priority queue of [random element, index] for each of the elements in the sample
+	std::priority_queue<std::pair<double, idx_t>> reservoir_weights;
+	//! The next element to sample
+	idx_t next_index;
+	//! The reservoir threshold of the current min entry
+	double min_threshold;
+	//! The reservoir index of the current min entry
+	idx_t min_entry;
+	//! The current count towards next index (i.e. we will replace an entry in next_index - current_count tuples)
+	idx_t current_count;
+};
+
 class BlockingSample {
 public:
-	BlockingSample(int64_t seed) : random(seed) {
+	BlockingSample(int64_t seed) : random(seed), reservoirSampling(seed) {
 	}
 	virtual ~BlockingSample() {
 	}
@@ -32,6 +61,8 @@ public:
 protected:
 	//! The random generator
 	RandomEngine random;
+	//! The reservoir sampling
+	BaseReservoirSampling reservoirSampling;
 };
 
 //! The reservoir sample class maintains a streaming sample of fixed size "sample_count"
@@ -44,13 +75,10 @@ public:
 	void AddToReservoir(DataChunk &input) override;
 
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
-	// sample is completely built.
+	//! sample is completely built.
 	unique_ptr<DataChunk> GetChunk() override;
 
 private:
-	//! Sets the next index to insert into the reservoir based on the reservoir weights
-	void SetNextEntry();
-
 	//! Replace a single element of the input
 	void ReplaceElement(DataChunk &input, idx_t index_in_chunk);
 
@@ -62,19 +90,9 @@ private:
 	idx_t sample_count;
 	//! The current reservoir
 	ChunkCollection reservoir;
-	//! Priority queue of [random element, index] for each of the elements in the sample
-	std::priority_queue<std::pair<double, idx_t>> reservoir_weights;
-	//! The next element to sample
-	idx_t next_index;
-	//! The reservoir threshold of the current min entry
-	double min_threshold;
-	//! The reservoir index of the current min entry
-	idx_t min_entry;
-	//! The current count towards next index (i.e. we will replace an entry in next_index - current_count tuples)
-	idx_t current_count;
 };
 
-//! The reservoir sample percentage class maintains a streaming sample of variable size
+//! The reservoir sample sample_size class maintains a streaming sample of variable size
 class ReservoirSamplePercentage : public BlockingSample {
 	constexpr static idx_t RESERVOIR_THRESHOLD = 100000;
 
@@ -85,14 +103,14 @@ public:
 	void AddToReservoir(DataChunk &input) override;
 
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
-	// sample is completely built.
+	//! sample is completely built.
 	unique_ptr<DataChunk> GetChunk() override;
 
 private:
 	void Finalize();
 
 private:
-	//! The percentage to sample
+	//! The sample_size to sample
 	double sample_percentage;
 	//! The fixed sample size of the sub-reservoirs
 	idx_t reservoir_sample_size;

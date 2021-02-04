@@ -3,7 +3,8 @@
 
 namespace duckdb {
 
-template <class OP> static scalar_function_t GetScalarIntegerUnaryFunction(LogicalType type) {
+template <class OP>
+static scalar_function_t GetScalarIntegerUnaryFunction(LogicalType type) {
 	scalar_function_t function;
 	switch (type.id()) {
 	case LogicalTypeId::TINYINT:
@@ -39,7 +40,8 @@ template <class OP> static scalar_function_t GetScalarIntegerUnaryFunction(Logic
 	return function;
 }
 
-template <class OP> static scalar_function_t GetScalarIntegerBinaryFunction(LogicalType type) {
+template <class OP>
+static scalar_function_t GetScalarIntegerBinaryFunction(LogicalType type) {
 	scalar_function_t function;
 	switch (type.id()) {
 	case LogicalTypeId::TINYINT:
@@ -79,7 +81,8 @@ template <class OP> static scalar_function_t GetScalarIntegerBinaryFunction(Logi
 // & [bitwise_and]
 //===--------------------------------------------------------------------===//
 struct BitwiseANDOperator {
-	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
+	template <class TA, class TB, class TR>
+	static inline TR Operation(TA left, TB right) {
 		return left & right;
 	}
 };
@@ -97,7 +100,8 @@ void BitwiseAndFun::RegisterFunction(BuiltinFunctions &set) {
 // | [bitwise_or]
 //===--------------------------------------------------------------------===//
 struct BitwiseOROperator {
-	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
+	template <class TA, class TB, class TR>
+	static inline TR Operation(TA left, TB right) {
 		return left | right;
 	}
 };
@@ -115,7 +119,8 @@ void BitwiseOrFun::RegisterFunction(BuiltinFunctions &set) {
 // # [bitwise_xor]
 //===--------------------------------------------------------------------===//
 struct BitwiseXOROperator {
-	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
+	template <class TA, class TB, class TR>
+	static inline TR Operation(TA left, TB right) {
 		return left ^ right;
 	}
 };
@@ -132,12 +137,14 @@ void BitwiseXorFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 // << [bitwise_left_shift]
 //===--------------------------------------------------------------------===//
-template <class T> bool ShiftInRange(T shift) {
+template <class T>
+bool ShiftInRange(T shift) {
 	return shift >= 0 && shift < (T)(sizeof(T) * 8);
 }
 
 struct BitwiseShiftLeftOperator {
-	template <class TA, class TB, class TR> static inline TR Operation(TA input, TB shift) {
+	template <class TA, class TB, class TR>
+	static inline TR Operation(TA input, TB shift) {
 		return ShiftInRange(shift) ? input << shift : 0;
 	}
 };
@@ -155,7 +162,8 @@ void LeftShiftFun::RegisterFunction(BuiltinFunctions &set) {
 // >> [bitwise_right_shift]
 //===--------------------------------------------------------------------===//
 struct BitwiseShiftRightOperator {
-	template <class TA, class TB, class TR> static inline TR Operation(TA input, TB shift) {
+	template <class TA, class TB, class TR>
+	static inline TR Operation(TA input, TB shift) {
 		return ShiftInRange(shift) ? input >> shift : 0;
 	}
 };
@@ -173,7 +181,8 @@ void RightShiftFun::RegisterFunction(BuiltinFunctions &set) {
 // ~ [bitwise_not]
 //===--------------------------------------------------------------------===//
 struct BitwiseNotOperator {
-	template <class TA, class TR> static inline TR Operation(TA input) {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
 		return ~input;
 	}
 };

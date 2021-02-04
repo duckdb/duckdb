@@ -5,7 +5,7 @@ namespace duckdb {
 RadixPartitionInfo::RadixPartitionInfo(idx_t _n_partitions_upper_bound)
     : n_partitions(1), radix_bits(0), radix_mask(0) {
 	while (n_partitions <= _n_partitions_upper_bound / 2) {
-        n_partitions *= 2;
+		n_partitions *= 2;
 		if (n_partitions >= 256) {
 			break;
 		}

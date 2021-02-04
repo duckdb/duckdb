@@ -12,6 +12,7 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 
 namespace duckdb {
 
@@ -152,7 +153,8 @@ private:
 	ResizeableBuffer dummy_repeat;
 };
 
-template <class VALUE_TYPE> struct TemplatedParquetValueConversion {
+template <class VALUE_TYPE>
+struct TemplatedParquetValueConversion {
 	static VALUE_TYPE DictRead(ByteBuffer &dict, uint32_t &offset, ColumnReader &reader) {
 		D_ASSERT(offset < dict.len / sizeof(VALUE_TYPE));
 		return ((VALUE_TYPE *)dict.ptr)[offset];
@@ -167,12 +169,13 @@ template <class VALUE_TYPE> struct TemplatedParquetValueConversion {
 	}
 };
 
-template <class VALUE_TYPE, class VALUE_CONVERSION> class TemplatedColumnReader : public ColumnReader {
+template <class VALUE_TYPE, class VALUE_CONVERSION>
+class TemplatedColumnReader : public ColumnReader {
 
 public:
 	TemplatedColumnReader(LogicalType type_p, const SchemaElement &schema_p, idx_t schema_idx_p, idx_t max_define_p,
 	                      idx_t max_repeat_p)
-	    : ColumnReader(type_p, schema_p, schema_idx_p, max_define_p, max_repeat_p){};
+	    : ColumnReader(type_p, schema_p, schema_idx_p, max_define_p, max_repeat_p) {};
 
 	void Dictionary(shared_ptr<ByteBuffer> data, idx_t num_entries) override {
 		dict = move(data);
@@ -239,7 +242,7 @@ public:
 	StringColumnReader(LogicalType type_p, const SchemaElement &schema_p, idx_t schema_idx_p, idx_t max_define_p,
 	                   idx_t max_repeat_p)
 	    : TemplatedColumnReader<string_t, StringParquetValueConversion>(type_p, schema_p, schema_idx_p, max_define_p,
-	                                                                    max_repeat_p){};
+	                                                                    max_repeat_p) {};
 
 	void Dictionary(shared_ptr<ByteBuffer> dictionary_data, idx_t num_entries) override;
 
@@ -249,6 +252,61 @@ public:
 protected:
 	void DictReference(Vector &result) override;
 	void PlainReference(shared_ptr<ByteBuffer> plain_data, Vector &result) override;
+};
+
+template <class DUCKDB_PHYSICAL_TYPE>
+struct DecimalParquetValueConversion {
+
+	static DUCKDB_PHYSICAL_TYPE DictRead(ByteBuffer &dict, uint32_t &offset, ColumnReader &reader) {
+		auto dict_ptr = (DUCKDB_PHYSICAL_TYPE *)dict.ptr;
+		return dict_ptr[offset];
+	}
+
+	static DUCKDB_PHYSICAL_TYPE PlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
+		DUCKDB_PHYSICAL_TYPE res = 0;
+		auto byte_len = (idx_t)reader.Schema().type_length; /* sure, type length needs to be a signed int */
+		D_ASSERT(byte_len <= sizeof(DUCKDB_PHYSICAL_TYPE));
+		plain_data.available(byte_len);
+		auto res_ptr = (uint8_t *)&res;
+
+		// numbers are stored as two's complement so some muckery is required
+		bool positive = (*plain_data.ptr & 0x80) == 0;
+
+		for (idx_t i = 0; i < byte_len; i++) {
+			auto byte = *(plain_data.ptr + (byte_len - i - 1));
+			res_ptr[i] = positive ? byte : byte ^ 0xFF;
+		}
+		plain_data.inc(byte_len);
+		if (!positive) {
+			res += 1;
+			return -res;
+		}
+		return res;
+	}
+
+	static void PlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
+		plain_data.inc(reader.Schema().type_length);
+	}
+};
+
+template <class DUCKDB_PHYSICAL_TYPE>
+class DecimalColumnReader
+    : public TemplatedColumnReader<DUCKDB_PHYSICAL_TYPE, DecimalParquetValueConversion<DUCKDB_PHYSICAL_TYPE>> {
+
+public:
+	DecimalColumnReader(LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p, idx_t max_define_p,
+	                    idx_t max_repeat_p)
+	    : TemplatedColumnReader<DUCKDB_PHYSICAL_TYPE, DecimalParquetValueConversion<DUCKDB_PHYSICAL_TYPE>>(
+	          type_p, schema_p, file_idx_p, max_define_p, max_repeat_p) {};
+
+protected:
+	void Dictionary(shared_ptr<ByteBuffer> dictionary_data, idx_t num_entries) {
+		this->dict = make_shared<ResizeableBuffer>(num_entries * sizeof(DUCKDB_PHYSICAL_TYPE));
+		auto dict_ptr = (DUCKDB_PHYSICAL_TYPE *)this->dict->ptr;
+		for (idx_t i = 0; i < num_entries; i++) {
+			dict_ptr[i] = DecimalParquetValueConversion<DUCKDB_PHYSICAL_TYPE>::PlainRead(*dictionary_data, *this);
+		}
+	}
 };
 
 template <class PARQUET_PHYSICAL_TYPE, class DUCKDB_PHYSICAL_TYPE,
@@ -278,7 +336,7 @@ public:
 	                     idx_t max_repeat_p)
 	    : TemplatedColumnReader<DUCKDB_PHYSICAL_TYPE,
 	                            CallbackParquetValueConversion<PARQUET_PHYSICAL_TYPE, DUCKDB_PHYSICAL_TYPE, FUNC>>(
-	          type_p, schema_p, file_idx_p, max_define_p, max_repeat_p){};
+	          type_p, schema_p, file_idx_p, max_define_p, max_repeat_p) {};
 
 protected:
 	void Dictionary(shared_ptr<ByteBuffer> dictionary_data, idx_t num_entries) {
@@ -298,7 +356,7 @@ public:
 	                    idx_t max_repeat_p)
 	    : TemplatedColumnReader<bool, BooleanParquetValueConversion>(type_p, schema_p, schema_idx_p, max_define_p,
 	                                                                 max_repeat_p),
-	      byte_pos(0){};
+	      byte_pos(0) {};
 
 	uint8_t byte_pos;
 };

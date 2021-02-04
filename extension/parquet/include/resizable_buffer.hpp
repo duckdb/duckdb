@@ -18,8 +18,8 @@ public:
 	char *ptr = nullptr;
 	uint64_t len = 0;
 
-	ByteBuffer(){};
-	ByteBuffer(char *ptr, uint64_t len) : ptr(ptr), len(len){};
+	ByteBuffer() {};
+	ByteBuffer(char *ptr, uint64_t len) : ptr(ptr), len(len) {};
 
 	void inc(uint64_t increment) {
 		available(increment);
@@ -27,13 +27,15 @@ public:
 		ptr += increment;
 	}
 
-	template <class T> T read() {
+	template <class T>
+	T read() {
 		T val = get<T>();
 		inc(sizeof(T));
 		return val;
 	}
 
-	template <class T> T get() {
+	template <class T>
+	T get() {
 		available(sizeof(T));
 		T val = Load<T>((data_ptr_t)ptr);
 		return val;

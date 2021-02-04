@@ -10,10 +10,12 @@
 #include "duckdb/main/relation/view_relation.hpp"
 #include "duckdb/execution/operator/persistent/buffered_csv_reader.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/main/connection_manager.hpp"
 
 namespace duckdb {
 
 Connection::Connection(DatabaseInstance &database) : context(make_shared<ClientContext>(database.shared_from_this())) {
+	ConnectionManager::Get(database).AddConnection(*context);
 #ifdef DEBUG
 	EnableProfiling();
 #endif

@@ -17,7 +17,8 @@
 namespace duckdb {
 
 struct DefaultNullCheckOperator {
-	template <class LEFT_TYPE, class RIGHT_TYPE> static inline bool Operation(LEFT_TYPE left, RIGHT_TYPE right) {
+	template <class LEFT_TYPE, class RIGHT_TYPE>
+	static inline bool Operation(LEFT_TYPE left, RIGHT_TYPE right) {
 		return false;
 	}
 };

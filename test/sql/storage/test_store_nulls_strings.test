@@ -12,6 +12,9 @@ CREATE TABLE test (a INTEGER, b STRING);
 statement ok
 INSERT INTO test VALUES (NULL, 'hello'), (13, 'abcdefgh'), (12, NULL)
 
+statement ok
+CHECKPOINT
+
 restart
 
 query II

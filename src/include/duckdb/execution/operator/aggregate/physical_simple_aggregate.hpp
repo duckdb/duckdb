@@ -23,7 +23,6 @@ public:
 	//! parallelized.
 	bool all_combinable;
 
-
 public:
 	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) override;
 	void Combine(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate) override;

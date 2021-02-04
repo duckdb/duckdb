@@ -50,7 +50,8 @@ void ExpressionExecutor::Execute(BoundCaseExpression &expr, ExpressionState *sta
 	}
 }
 
-template <class T> void fill_loop(Vector &vector, Vector &result, SelectionVector &sel, sel_t count) {
+template <class T>
+void fill_loop(Vector &vector, Vector &result, SelectionVector &sel, sel_t count) {
 	auto res = FlatVector::GetData<T>(result);
 	auto &result_nullmask = FlatVector::Nullmask(result);
 	if (vector.vector_type == VectorType::CONSTANT_VECTOR) {

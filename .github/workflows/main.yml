@@ -12,7 +12,6 @@ env:
   NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
 
 jobs:
-
   linux-debug:
     name: Linux Debug
     runs-on: ubuntu-20.04
@@ -37,6 +36,25 @@ jobs:
     - name: Test
       run: make unit
 
+  format-check:
+    name: Format Check
+    runs-on: ubuntu-20.04
+
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Install
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-format && sudo pip3 install cmake-format
+
+    - name: Format Check
+      run: make format-check-silent
 
   win-release-64:
     name: Windows (64 Bit)
@@ -551,9 +569,9 @@ jobs:
     - name: Install
       run: |
         sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-        git clone https://github.com/sqlancer/sqlancer.git
+        git clone https://github.com/hannesmuehleisen/sqlancer
         cd sqlancer
-        git checkout v1.0.1
+        git checkout persistent
         mvn package -q -DskipTests
 
     - name: Build
@@ -563,6 +581,37 @@ jobs:
       run: |
         cp build/reldebug/tools/jdbc/duckdb_jdbc.jar sqlancer/target/lib/duckdb_jdbc-*.jar
         java -jar sqlancer/target/sqlancer-*.jar --num-threads 2 --random-seed 0 --timeout-seconds 600 duckdb
+
+
+  sqlancer_persistent:
+    name: SQLancer (Persistent)
+    runs-on: ubuntu-20.04
+    needs: linux-debug
+
+    env:
+      BUILD_JDBC: 1
+      GEN: ninja
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Install
+      run: |
+        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+        git clone https://github.com/hannesmuehleisen/sqlancer
+        cd sqlancer
+        git checkout persistent
+        mvn package -q -DskipTests
+
+    - name: Build
+      run: make reldebug
+
+    - name: Test
+      run: |
+        cp build/reldebug/tools/jdbc/duckdb_jdbc.jar sqlancer/target/lib/duckdb_jdbc-*.jar
+        java -Dduckdb.database.file=/tmp/lancer_duckdb_db -jar sqlancer/target/sqlancer-*.jar --num-threads 1 --random-seed 0 --timeout-seconds 600 duckdb
 
 
   jdbc:

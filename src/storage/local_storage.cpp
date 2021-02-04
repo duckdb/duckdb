@@ -30,6 +30,18 @@ void LocalTableStorage::InitializeScan(LocalScanState &state, TableFilterSet *ta
 	state.table_filters = table_filters;
 }
 
+idx_t LocalTableStorage::EstimatedSize() {
+	idx_t appended_rows = collection.Count() - deleted_rows;
+	if (appended_rows == 0) {
+		return 0;
+	}
+	idx_t row_size = 0;
+	for (auto &type : collection.Types()) {
+		row_size += GetTypeIdSize(type.InternalType());
+	}
+	return appended_rows * row_size;
+}
+
 LocalScanState::~LocalScanState() {
 	SetStorage(nullptr);
 }
@@ -189,6 +201,14 @@ LocalTableStorage *LocalStorage::GetStorage(DataTable *table) {
 	return entry->second.get();
 }
 
+idx_t LocalStorage::EstimatedSize() {
+	idx_t estimated_size = 0;
+	for (auto &storage : table_storage) {
+		estimated_size += storage.second->EstimatedSize();
+	}
+	return estimated_size;
+}
+
 static idx_t GetChunk(Vector &row_ids) {
 	auto ids = FlatVector::GetData<row_t>(row_ids);
 	auto first_id = ids[0] - MAX_ROW_ID;
@@ -289,7 +309,8 @@ void LocalStorage::Update(DataTable *table, Vector &row_ids, vector<column_t> &c
 	}
 }
 
-template <class T> bool LocalStorage::ScanTableStorage(DataTable &table, LocalTableStorage &storage, T &&fun) {
+template <class T>
+bool LocalStorage::ScanTableStorage(DataTable &table, LocalTableStorage &storage, T &&fun) {
 	vector<column_t> column_ids;
 	for (idx_t i = 0; i < table.types.size(); i++) {
 		column_ids.push_back(i);

@@ -5,25 +5,32 @@
 
 namespace duckdb {
 
-template <> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(PhysicalType value) {
+template <>
+ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(PhysicalType value) {
 	return ExceptionFormatValue(TypeIdToString(value));
 }
-template <> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(LogicalType value) {
+template <>
+ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(LogicalType value) {
 	return ExceptionFormatValue(value.ToString());
 }
-template <> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(float value) {
+template <>
+ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(float value) {
 	return ExceptionFormatValue(double(value));
 }
-template <> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(double value) {
+template <>
+ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(double value) {
 	return ExceptionFormatValue(double(value));
 }
-template <> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(string value) {
+template <>
+ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(string value) {
 	return ExceptionFormatValue(string(value));
 }
-template <> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const char *value) {
+template <>
+ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const char *value) {
 	return ExceptionFormatValue(string(value));
 }
-template <> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(char *value) {
+template <>
+ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(char *value) {
 	return ExceptionFormatValue(string(value));
 }
 

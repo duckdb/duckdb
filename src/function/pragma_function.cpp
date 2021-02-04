@@ -30,12 +30,12 @@ PragmaFunction PragmaFunction::PragmaStatement(string name, pragma_function_t fu
 }
 
 PragmaFunction PragmaFunction::PragmaAssignment(string name, pragma_query_t query, LogicalType type) {
-	vector<LogicalType> types{move(type)};
+	vector<LogicalType> types {move(type)};
 	return PragmaFunction(name, PragmaType::PRAGMA_ASSIGNMENT, query, nullptr, types, LogicalType::INVALID);
 }
 
 PragmaFunction PragmaFunction::PragmaAssignment(string name, pragma_function_t function, LogicalType type) {
-	vector<LogicalType> types{move(type)};
+	vector<LogicalType> types {move(type)};
 	return PragmaFunction(name, PragmaType::PRAGMA_ASSIGNMENT, nullptr, function, types, LogicalType::INVALID);
 }
 

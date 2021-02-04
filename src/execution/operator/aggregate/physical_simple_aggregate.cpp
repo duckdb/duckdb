@@ -10,7 +10,7 @@ namespace duckdb {
 PhysicalSimpleAggregate::PhysicalSimpleAggregate(vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
                                                  bool all_combinable)
     : PhysicalSink(PhysicalOperatorType::SIMPLE_AGGREGATE, move(types)), aggregates(move(expressions)),
-      all_combinable(all_combinable){
+      all_combinable(all_combinable) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -72,7 +72,7 @@ public:
 			auto &aggr = (BoundAggregateExpression &)*aggregate;
 			// initialize the payload chunk
 			if (!aggr.children.empty()) {
-				for (auto & child : aggr.children) {
+				for (auto &child : aggr.children) {
 					payload_types.push_back(child->return_type);
 					child_executor.AddExpression(*child);
 				}
@@ -121,14 +121,14 @@ void PhysicalSimpleAggregate::Sink(ExecutionContext &context, GlobalOperatorStat
 		idx_t payload_cnt = 0;
 		// resolve the filter (if any)
 		if (aggregate.filter) {
-			ExpressionExecutor filter_execution (aggregate.filter.get());
+			ExpressionExecutor filter_execution(aggregate.filter.get());
 			SelectionVector true_sel(STANDARD_VECTOR_SIZE);
-			auto count = filter_execution.SelectExpression(input,true_sel);
+			auto count = filter_execution.SelectExpression(input, true_sel);
 			auto input_types = input.GetTypes();
 			filtered_input.Initialize(input_types);
 			filtered_input.Slice(input, true_sel, count);
 			sink.child_executor.SetChunk(filtered_input);
-	        payload_chunk.SetCardinality(count);
+			payload_chunk.SetCardinality(count);
 		}
 		// resolve the child expressions of the aggregate (if any)
 		if (!aggregate.children.empty()) {
@@ -140,8 +140,9 @@ void PhysicalSimpleAggregate::Sink(ExecutionContext &context, GlobalOperatorStat
 		}
 
 		// perform the actual aggregation
-		aggregate.function.simple_update(payload_cnt == 0 ? nullptr : &payload_chunk.data[payload_idx], payload_cnt,
-		                                 sink.state.aggregates[aggr_idx].get(), payload_chunk.size());
+		aggregate.function.simple_update(payload_cnt == 0 ? nullptr : &payload_chunk.data[payload_idx],
+		                                 aggregate.bind_info.get(), payload_cnt, sink.state.aggregates[aggr_idx].get(),
+		                                 payload_chunk.size());
 		payload_idx += payload_cnt;
 	}
 }
@@ -200,8 +201,8 @@ string PhysicalSimpleAggregate::ParamsToString() const {
 			result += "\n";
 		}
 		result += aggregates[i]->GetName();
-		if (aggregate.filter){
-			result += " Filter: "+aggregate.filter->GetName();
+		if (aggregate.filter) {
+			result += " Filter: " + aggregate.filter->GetName();
 		}
 	}
 	return result;

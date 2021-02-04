@@ -69,7 +69,8 @@ void duckdb_disconnect(duckdb_connection *connection) {
 	}
 }
 
-template <class T> void WriteData(duckdb_result *out, ChunkCollection &source, idx_t col) {
+template <class T>
+void WriteData(duckdb_result *out, ChunkCollection &source, idx_t col) {
 	idx_t row = 0;
 	auto target = (T *)out->columns[col].data;
 	for (auto &chunk : source.Chunks()) {
@@ -489,7 +490,8 @@ idx_t GetCTypeSize(duckdb_type type) {
 	}
 }
 
-template <class T> T UnsafeFetch(duckdb_result *result, idx_t col, idx_t row) {
+template <class T>
+T UnsafeFetch(duckdb_result *result, idx_t col, idx_t row) {
 	D_ASSERT(row < result->row_count);
 	return ((T *)result->columns[col].data)[row];
 }

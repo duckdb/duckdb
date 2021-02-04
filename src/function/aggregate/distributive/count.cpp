@@ -6,11 +6,13 @@
 namespace duckdb {
 
 struct BaseCountFunction {
-	template <class STATE> static void Initialize(STATE *state) {
+	template <class STATE>
+	static void Initialize(STATE *state) {
 		*state = 0;
 	}
 
-	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
+	template <class STATE, class OP>
+	static void Combine(STATE source, STATE *target) {
 		*target += source;
 	}
 
@@ -21,23 +23,26 @@ struct BaseCountFunction {
 };
 
 struct CountStarFunction : public BaseCountFunction {
-	template <class STATE, class OP> static void Operation(STATE *state, idx_t idx) {
+	template <class STATE, class OP>
+	static void Operation(STATE *state, FunctionData *bind_data, idx_t idx) {
 		*state += 1;
 	}
 
-	template <class STATE, class OP> static void ConstantOperation(STATE *state, idx_t count) {
+	template <class STATE, class OP>
+	static void ConstantOperation(STATE *state, FunctionData *bind_data, idx_t count) {
 		*state += count;
 	}
 };
 
 struct CountFunction : public BaseCountFunction {
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
+	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
 		*state += 1;
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
+	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask,
+	                              idx_t count) {
 		*state += count;
 	}
 

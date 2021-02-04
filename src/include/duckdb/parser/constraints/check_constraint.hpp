@@ -19,7 +19,7 @@ namespace duckdb {
 class CheckConstraint : public Constraint {
 public:
 	CheckConstraint(unique_ptr<ParsedExpression> expression)
-	    : Constraint(ConstraintType::CHECK), expression(move(expression)){};
+	    : Constraint(ConstraintType::CHECK), expression(move(expression)) {};
 
 	unique_ptr<ParsedExpression> expression;
 

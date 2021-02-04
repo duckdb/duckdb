@@ -545,16 +545,16 @@ static idx_t GatherSwitch(VectorData &data, PhysicalType type, Vector &pointers,
 	switch (type) {
 	case PhysicalType::UINT8:
 		return TemplatedGather<NO_MATCH_SEL, uint8_t, OP>(data, pointers, current_sel, count, offset, match_sel,
-		                                                 no_match_sel, no_match_count);
+		                                                  no_match_sel, no_match_count);
 	case PhysicalType::UINT16:
 		return TemplatedGather<NO_MATCH_SEL, uint16_t, OP>(data, pointers, current_sel, count, offset, match_sel,
-		                                                  no_match_sel, no_match_count);
+		                                                   no_match_sel, no_match_count);
 	case PhysicalType::UINT32:
 		return TemplatedGather<NO_MATCH_SEL, uint32_t, OP>(data, pointers, current_sel, count, offset, match_sel,
-		                                                  no_match_sel, no_match_count);
+		                                                   no_match_sel, no_match_count);
 	case PhysicalType::UINT64:
 		return TemplatedGather<NO_MATCH_SEL, uint64_t, OP>(data, pointers, current_sel, count, offset, match_sel,
-		                                                  no_match_sel, no_match_count);
+		                                                   no_match_sel, no_match_count);
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 		return TemplatedGather<NO_MATCH_SEL, int8_t, OP>(data, pointers, current_sel, count, offset, match_sel,
@@ -824,7 +824,8 @@ void ScanStructure::ScanKeyMatches(DataChunk &keys) {
 	}
 }
 
-template <bool MATCH> void ScanStructure::NextSemiOrAntiJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
+template <bool MATCH>
+void ScanStructure::NextSemiOrAntiJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
 	D_ASSERT(left.ColumnCount() == result.ColumnCount());
 	D_ASSERT(keys.size() == left.size());
 	// create the selection vector from the matches that were found

@@ -5,13 +5,14 @@
 namespace duckdb {
 
 struct asciiOperator {
-	template <class TA, class TR> static inline TR Operation(const TA &input) {
+	template <class TA, class TR>
+	static inline TR Operation(const TA &input) {
 		auto str = input.GetDataUnsafe();
-		if (Utf8Proc::Analyze(str,input.GetSize()) == UnicodeType::ASCII){
+		if (Utf8Proc::Analyze(str, input.GetSize()) == UnicodeType::ASCII) {
 			return str[0];
 		}
 		int utf8_bytes = 4;
-		return Utf8Proc::UTF8ToCodepoint(str,utf8_bytes);
+		return Utf8Proc::UTF8ToCodepoint(str, utf8_bytes);
 	}
 };
 

@@ -113,7 +113,8 @@ public:
 	}
 
 public:
-	template <class OP> static scalar_function_t GetScalarUnaryFunction(LogicalType type) {
+	template <class OP>
+	static scalar_function_t GetScalarUnaryFunction(LogicalType type) {
 		scalar_function_t function;
 		switch (type.id()) {
 		case LogicalTypeId::TINYINT:
@@ -155,7 +156,8 @@ public:
 		return function;
 	}
 
-	template <class TR, class OP> static scalar_function_t GetScalarUnaryFunctionFixedReturn(LogicalType type) {
+	template <class TR, class OP>
+	static scalar_function_t GetScalarUnaryFunctionFixedReturn(LogicalType type) {
 		scalar_function_t function;
 		switch (type.id()) {
 		case LogicalTypeId::TINYINT:

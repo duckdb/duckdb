@@ -30,7 +30,7 @@ unique_ptr<Expression> InClauseSimplificationRule::Apply(LogicalOperator &op, ve
 	}
 	vector<unique_ptr<BoundConstantExpression>> cast_list;
 	//! First check if we can cast all children
-	for (size_t i = 1; i < expr->children.size();i++){
+	for (size_t i = 1; i < expr->children.size(); i++) {
 		if (expr->children[i]->expression_class != ExpressionClass::BOUND_CONSTANT) {
 			return nullptr;
 		}
@@ -38,18 +38,17 @@ unique_ptr<Expression> InClauseSimplificationRule::Apply(LogicalOperator &op, ve
 		auto constant_value = ExpressionExecutor::EvaluateScalar(*expr->children[i]);
 		auto new_constant = constant_value.TryCastAs(target_type);
 		if (!new_constant) {
-		    return nullptr;
-		}
-		else{
-		    auto new_constant_expr = make_unique<BoundConstantExpression>(constant_value);
+			return nullptr;
+		} else {
+			auto new_constant_expr = make_unique<BoundConstantExpression>(constant_value);
 			cast_list.push_back(move(new_constant_expr));
 		}
 	}
 	//! We can cast, so we move the new constant
 	for (size_t i = 1; i < expr->children.size(); i++) {
-		expr->children[i] = move(cast_list[i-1]);
+		expr->children[i] = move(cast_list[i - 1]);
 
-//		expr->children[i] = move(new_constant_expr);
+		//		expr->children[i] = move(new_constant_expr);
 	}
 	//! We can cast the full list, so we move the column
 	expr->children[0] = move(cast_expression->child);

@@ -1,12 +1,13 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/common/to_string.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 
 #include "duckdb/common/exception.hpp"
 #include "concurrentqueue.h"
 
 namespace duckdb {
 
-BlockHandle::BlockHandle(BufferManager &manager_p, block_id_t block_id_p) : manager(manager_p) {
+BlockHandle::BlockHandle(DatabaseInstance &db, block_id_t block_id_p) : db(db) {
 	block_id = block_id_p;
 	readers = 0;
 	buffer = nullptr;
@@ -16,9 +17,9 @@ BlockHandle::BlockHandle(BufferManager &manager_p, block_id_t block_id_p) : mana
 	memory_usage = Storage::BLOCK_ALLOC_SIZE;
 }
 
-BlockHandle::BlockHandle(BufferManager &manager_p, block_id_t block_id_p, unique_ptr<FileBuffer> buffer_p,
+BlockHandle::BlockHandle(DatabaseInstance &db, block_id_t block_id_p, unique_ptr<FileBuffer> buffer_p,
                          bool can_destroy_p, idx_t alloc_size)
-    : manager(manager_p) {
+    : db(db) {
 	D_ASSERT(alloc_size >= Storage::BLOCK_SIZE);
 	block_id = block_id_p;
 	readers = 0;
@@ -30,38 +31,42 @@ BlockHandle::BlockHandle(BufferManager &manager_p, block_id_t block_id_p, unique
 }
 
 BlockHandle::~BlockHandle() {
+	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	// no references remain to this block: erase
 	if (state == BlockState::BLOCK_LOADED) {
 		// the block is still loaded in memory: erase it
 		buffer.reset();
-		manager.current_memory -= memory_usage;
+		buffer_manager.current_memory -= memory_usage;
 	}
-	manager.UnregisterBlock(block_id, can_destroy);
+	buffer_manager.UnregisterBlock(block_id, can_destroy);
 }
 
 unique_ptr<BufferHandle> BlockHandle::Load(shared_ptr<BlockHandle> &handle) {
 	if (handle->state == BlockState::BLOCK_LOADED) {
 		// already loaded
 		D_ASSERT(handle->buffer);
-		return make_unique<BufferHandle>(handle->manager, handle, handle->buffer.get());
+		return make_unique<BufferHandle>(handle, handle->buffer.get());
 	}
 	handle->state = BlockState::BLOCK_LOADED;
+
+	auto &buffer_manager = BufferManager::GetBufferManager(handle->db);
+	auto &block_manager = BlockManager::GetBlockManager(handle->db);
 	if (handle->block_id < MAXIMUM_BLOCK) {
 		// FIXME: currently we still require a lock for reading blocks from disk
 		// this is mainly down to the block manager only having a single pointer into the file
 		// this is relatively easy to fix later on
-		lock_guard<mutex> buffer_lock(handle->manager.manager_lock);
+		lock_guard<mutex> buffer_lock(buffer_manager.manager_lock);
 		auto block = make_unique<Block>(handle->block_id);
-		handle->manager.manager.Read(*block);
+		block_manager.Read(*block);
 		handle->buffer = move(block);
 	} else {
 		if (handle->can_destroy) {
 			return nullptr;
 		} else {
-			handle->buffer = handle->manager.ReadTemporaryBuffer(handle->block_id);
+			handle->buffer = buffer_manager.ReadTemporaryBuffer(handle->block_id);
 		}
 	}
-	return make_unique<BufferHandle>(handle->manager, handle, handle->buffer.get());
+	return make_unique<BufferHandle>(handle, handle->buffer.get());
 }
 
 void BlockHandle::Unload() {
@@ -72,12 +77,14 @@ void BlockHandle::Unload() {
 	D_ASSERT(CanUnload());
 	D_ASSERT(memory_usage >= Storage::BLOCK_SIZE);
 	state = BlockState::BLOCK_UNLOADED;
+
+	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	if (block_id >= MAXIMUM_BLOCK && !can_destroy) {
 		// temporary block that cannot be destroyed: write to temporary file
-		manager.WriteTemporaryBuffer((ManagedBuffer &)*buffer);
+		buffer_manager.WriteTemporaryBuffer((ManagedBuffer &)*buffer);
 	}
 	buffer.reset();
-	manager.current_memory -= memory_usage;
+	buffer_manager.current_memory -= memory_usage;
 }
 
 bool BlockHandle::CanUnload() {
@@ -89,7 +96,8 @@ bool BlockHandle::CanUnload() {
 		// there are active readers
 		return false;
 	}
-	if (block_id >= MAXIMUM_BLOCK && !can_destroy && manager.temp_directory.empty()) {
+	auto &buffer_manager = BufferManager::GetBufferManager(db);
+	if (block_id >= MAXIMUM_BLOCK && !can_destroy && buffer_manager.temp_directory.empty()) {
 		// in order to unload this block we need to write it to a temporary buffer
 		// however, no temporary directory is specified!
 		// hence we cannot unload the block
@@ -122,15 +130,17 @@ struct EvictionQueue {
 	eviction_queue_t q;
 };
 
-BufferManager::BufferManager(FileSystem &fs, BlockManager &manager, string tmp, idx_t maximum_memory)
-    : fs(fs), manager(manager), current_memory(0), maximum_memory(maximum_memory), temp_directory(move(tmp)),
+BufferManager::BufferManager(DatabaseInstance &db, string tmp, idx_t maximum_memory)
+    : db(db), current_memory(0), maximum_memory(maximum_memory), temp_directory(move(tmp)),
       queue(make_unique<EvictionQueue>()), temporary_id(MAXIMUM_BLOCK) {
+	auto &fs = FileSystem::GetFileSystem(db);
 	if (!temp_directory.empty()) {
 		fs.CreateDirectory(temp_directory);
 	}
 }
 
 BufferManager::~BufferManager() {
+	auto &fs = FileSystem::GetFileSystem(db);
 	if (!temp_directory.empty()) {
 		fs.RemoveDirectory(temp_directory);
 	}
@@ -149,7 +159,7 @@ shared_ptr<BlockHandle> BufferManager::RegisterBlock(block_id_t block_id) {
 		}
 	}
 	// create a new block pointer for this block
-	auto result = make_shared<BlockHandle>(*this, block_id);
+	auto result = make_shared<BlockHandle>(db, block_id);
 	// register the block pointer in the set of blocks as a weak pointer
 	blocks[block_id] = weak_ptr<BlockHandle>(result);
 	return result;
@@ -164,10 +174,10 @@ shared_ptr<BlockHandle> BufferManager::RegisterMemory(idx_t alloc_size, bool can
 
 	// allocate the buffer
 	auto temp_id = ++temporary_id;
-	auto buffer = make_unique<ManagedBuffer>(*this, alloc_size, can_destroy, temp_id);
+	auto buffer = make_unique<ManagedBuffer>(db, alloc_size, can_destroy, temp_id);
 
 	// create a new block pointer for this block
-	return make_shared<BlockHandle>(*this, temp_id, move(buffer), can_destroy, alloc_size);
+	return make_shared<BlockHandle>(db, temp_id, move(buffer), can_destroy, alloc_size);
 }
 
 unique_ptr<BufferHandle> BufferManager::Allocate(idx_t alloc_size) {
@@ -271,6 +281,7 @@ void BufferManager::SetLimit(idx_t limit) {
 }
 
 string BufferManager::GetTemporaryPath(block_id_t id) {
+	auto &fs = FileSystem::GetFileSystem(db);
 	return fs.JoinPath(temp_directory, to_string(id) + ".block");
 }
 
@@ -280,6 +291,7 @@ void BufferManager::WriteTemporaryBuffer(ManagedBuffer &buffer) {
 	// get the path to write to
 	auto path = GetTemporaryPath(buffer.id);
 	// create the file and write the size followed by the buffer contents
+	auto &fs = FileSystem::GetFileSystem(db);
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
 	handle->Write(&buffer.size, sizeof(idx_t), 0);
 	buffer.Write(*handle, sizeof(idx_t));
@@ -293,16 +305,18 @@ unique_ptr<FileBuffer> BufferManager::ReadTemporaryBuffer(block_id_t id) {
 	idx_t alloc_size;
 	// open the temporary file and read the size
 	auto path = GetTemporaryPath(id);
+	auto &fs = FileSystem::GetFileSystem(db);
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ);
 	handle->Read(&alloc_size, sizeof(idx_t), 0);
 
 	// now allocate a buffer of this size and read the data into that buffer
-	auto buffer = make_unique<ManagedBuffer>(*this, alloc_size + Storage::BLOCK_HEADER_SIZE, false, id);
+	auto buffer = make_unique<ManagedBuffer>(db, alloc_size + Storage::BLOCK_HEADER_SIZE, false, id);
 	buffer->Read(*handle, sizeof(idx_t));
 	return move(buffer);
 }
 
 void BufferManager::DeleteTemporaryFile(block_id_t id) {
+	auto &fs = FileSystem::GetFileSystem(db);
 	auto path = GetTemporaryPath(id);
 	if (fs.FileExists(path)) {
 		fs.RemoveFile(path);

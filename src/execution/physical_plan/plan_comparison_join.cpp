@@ -96,7 +96,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 
 	unique_ptr<PhysicalOperator> plan;
 	if (has_equality) {
-		Index *left_index{}, *right_index{};
+		Index *left_index {}, *right_index {};
 		TransformIndexJoin(context, op, &left_index, &right_index, left.get(), right.get());
 		if (left_index && (context.force_index_join || rhs_cardinality < 0.01 * lhs_cardinality)) {
 			auto &tbl_scan = (PhysicalTableScan &)*left;

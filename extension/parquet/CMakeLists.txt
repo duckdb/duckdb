@@ -2,8 +2,9 @@ cmake_minimum_required(VERSION 2.8.12)
 
 project(ParquetExtension)
 
-include_directories(include ../../third_party/parquet ../../third_party/snappy
-                    ../../third_party/miniz ../../third_party/thrift ../../third_party/zstd)
+include_directories(
+  include ../../third_party/parquet ../../third_party/snappy
+  ../../third_party/miniz ../../third_party/thrift ../../third_party/zstd)
 
 add_library(
   parquet_extension STATIC
@@ -40,4 +41,4 @@ add_library(
   parquet_timestamp.cpp
   parquet_writer.cpp
   parquet_statistics.cpp
- column_reader.cpp)
+  column_reader.cpp)

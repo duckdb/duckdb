@@ -129,7 +129,8 @@ static void _write_plain(Vector &col, idx_t length, nullmask_t &nullmask, Serial
 	}
 }
 
-ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_, vector<LogicalType> types_, vector<string> names_, CompressionCodec::type codec)
+ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_, vector<LogicalType> types_, vector<string> names_,
+                             CompressionCodec::type codec)
     : file_name(file_name_), sql_types(move(types_)), column_names(move(names_)), codec(codec) {
 	// initialize the file writer
 	writer = make_unique<BufferedFileWriter>(fs, file_name.c_str(),
@@ -316,7 +317,7 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 		size_t compressed_size;
 		data_ptr_t compressed_data;
 		unique_ptr<data_t[]> compressed_buf;
-		switch(codec) {
+		switch (codec) {
 		case CompressionCodec::UNCOMPRESSED:
 			compressed_size = temp_writer.blob.size;
 			compressed_data = temp_writer.blob.data.get();
@@ -325,7 +326,7 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 			compressed_size = snappy::MaxCompressedLength(temp_writer.blob.size);
 			compressed_buf = unique_ptr<data_t[]>(new data_t[compressed_size]);
 			snappy::RawCompress((const char *)temp_writer.blob.data.get(), temp_writer.blob.size,
-								(char *)compressed_buf.get(), &compressed_size);
+			                    (char *)compressed_buf.get(), &compressed_size);
 			compressed_data = compressed_buf.get();
 			break;
 		}
@@ -333,8 +334,8 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 			MiniZStream s;
 			compressed_size = s.MaxCompressedLength(temp_writer.blob.size);
 			compressed_buf = unique_ptr<data_t[]>(new data_t[compressed_size]);
-			s.Compress((const char *)temp_writer.blob.data.get(), temp_writer.blob.size,
-								(char *)compressed_buf.get(), &compressed_size);
+			s.Compress((const char *)temp_writer.blob.data.get(), temp_writer.blob.size, (char *)compressed_buf.get(),
+			           &compressed_size);
 			compressed_data = compressed_buf.get();
 			break;
 		}
@@ -342,7 +343,8 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 			compressed_size = duckdb_zstd::ZSTD_compressBound(temp_writer.blob.size);
 			compressed_buf = unique_ptr<data_t[]>(new data_t[compressed_size]);
 			compressed_size = duckdb_zstd::ZSTD_compress((void *)compressed_buf.get(), compressed_size,
-			               (const void *)temp_writer.blob.data.get(), temp_writer.blob.size, ZSTD_CLEVEL_DEFAULT);
+			                                             (const void *)temp_writer.blob.data.get(),
+			                                             temp_writer.blob.size, ZSTD_CLEVEL_DEFAULT);
 			compressed_data = compressed_buf.get();
 			break;
 		}

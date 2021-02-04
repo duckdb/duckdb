@@ -746,8 +746,8 @@ typedef uint8_t u8;
 ** Token types used by the sqlite3_complete() routine.  See the header
 ** comments on that procedure for additional information.
 */
-#define tkSEMI 0
-#define tkWS 1
+#define tkSEMI  0
+#define tkWS    1
 #define tkOTHER 2
 
 const unsigned char sqlite3CtypeMap[256] = {

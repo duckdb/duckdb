@@ -45,7 +45,7 @@ public:
 	virtual void RunBenchmark(DuckDBBenchmarkState *state) {
 	}
 	//! This function gets called after the GetQuery() method
-	virtual void Cleanup(DuckDBBenchmarkState *state){};
+	virtual void Cleanup(DuckDBBenchmarkState *state) {};
 	//! Verify a result
 	virtual string VerifyResult(QueryResult *result) = 0;
 	//! Whether or not the benchmark is performed on an in-memory database

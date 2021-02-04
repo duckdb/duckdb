@@ -77,10 +77,13 @@ public:
 
 struct string_t;
 
-template <class T> using child_list_t = std::vector<std::pair<std::string, T>>;
-template <class T> using buffer_ptr = std::shared_ptr<T>;
+template <class T>
+using child_list_t = std::vector<std::pair<std::string, T>>;
+template <class T>
+using buffer_ptr = std::shared_ptr<T>;
 
-template <class T, typename... Args> buffer_ptr<T> make_buffer(Args &&...args) {
+template <class T, typename... Args>
+buffer_ptr<T> make_buffer(Args &&... args) {
 	return std::make_shared<T>(std::forward<Args>(args)...);
 }
 
@@ -360,7 +363,8 @@ string LogicalTypeIdToString(LogicalTypeId type);
 LogicalType TransformStringToLogicalType(string str);
 
 //! Returns the PhysicalType for the given type
-template <class T> PhysicalType GetTypeId() {
+template <class T>
+PhysicalType GetTypeId() {
 	if (std::is_same<T, bool>()) {
 		return PhysicalType::BOOL;
 	} else if (std::is_same<T, int8_t>()) {
@@ -398,7 +402,8 @@ template <class T> PhysicalType GetTypeId() {
 	}
 }
 
-template <class T> bool IsValidType() {
+template <class T>
+bool IsValidType() {
 	return GetTypeId<T>() != PhysicalType::INVALID;
 }
 
@@ -413,7 +418,8 @@ bool TypeIsIntegral(PhysicalType type);
 bool TypeIsNumeric(PhysicalType type);
 bool TypeIsInteger(PhysicalType type);
 
-template <class T> bool IsIntegerType() {
+template <class T>
+bool IsIntegerType() {
 	return TypeIsIntegral(GetTypeId<T>());
 }
 

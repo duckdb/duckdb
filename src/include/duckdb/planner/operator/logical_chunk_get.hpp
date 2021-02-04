@@ -17,7 +17,8 @@ namespace duckdb {
 class LogicalChunkGet : public LogicalOperator {
 public:
 	LogicalChunkGet(idx_t table_index, vector<LogicalType> types, unique_ptr<ChunkCollection> collection)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_CHUNK_GET), table_index(table_index), collection(move(collection)) {
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_CHUNK_GET), table_index(table_index),
+	      collection(move(collection)) {
 		D_ASSERT(types.size() > 0);
 		chunk_types = types;
 	}

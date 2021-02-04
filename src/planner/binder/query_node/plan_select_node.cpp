@@ -1,8 +1,10 @@
 #include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/operator/list.hpp"
-#include "duckdb/planner/query_node/bound_select_node.hpp"
-#include "duckdb/planner/operator/logical_expression_get.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/operator/list.hpp"
+#include "duckdb/planner/operator/logical_expression_get.hpp"
+#include "duckdb/planner/operator/logical_limit.hpp"
+#include "duckdb/planner/query_node/bound_select_node.hpp"
 
 namespace duckdb {
 
@@ -31,8 +33,8 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 	if (!statement.aggregates.empty() || !statement.groups.empty()) {
 		if (!statement.groups.empty()) {
 			// visit the groups
-			for (auto & group : statement.groups) {
-					PlanSubqueries(&group, &root);
+			for (auto &group : statement.groups) {
+				PlanSubqueries(&group, &root);
 			}
 		}
 		// now visit all aggregate expressions
@@ -82,6 +84,26 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 
 	for (auto &expr : statement.select_list) {
 		PlanSubqueries(&expr, &root);
+	}
+
+	for (size_t i = 0; i < statement.modifiers.size(); i++) {
+		auto &modifier = statement.modifiers[i];
+		if (modifier->type != ResultModifierType::LIMIT_MODIFIER) {
+			continue;
+		}
+		auto &limit_modifier = (BoundLimitModifier &)*modifier;
+		if (limit_modifier.limit || limit_modifier.offset) {
+			PlanSubqueries(&limit_modifier.limit, &root);
+			PlanSubqueries(&limit_modifier.offset, &root);
+			auto limit = make_unique<LogicalLimit>(limit_modifier.limit_val, limit_modifier.offset_val,
+			                                       move(limit_modifier.limit), move(limit_modifier.offset));
+			limit->AddChild(move(root));
+			root = move(limit);
+			// Delete from modifiers
+			std::swap(statement.modifiers[i], statement.modifiers.back());
+			statement.modifiers.erase(statement.modifiers.end() - 1);
+			i--;
+		}
 	}
 
 	// create the projection

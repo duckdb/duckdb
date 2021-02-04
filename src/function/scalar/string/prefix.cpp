@@ -8,7 +8,8 @@ namespace duckdb {
 static bool prefix(const string_t &str, const string_t &pattern);
 
 struct PrefixOperator {
-	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
+	template <class TA, class TB, class TR>
+	static inline TR Operation(TA left, TB right) {
 		return prefix(left, right);
 	}
 };

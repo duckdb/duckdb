@@ -381,7 +381,8 @@ unique_ptr<BoundAggregateExpression> AggregateFunction::BindAggregateFunction(Cl
 	// check if we need to add casts to the children
 	bound_function.CastToFunctionArguments(children);
 
-	return make_unique<BoundAggregateExpression>(bound_function, move(children),move(filter),  move(bind_info),is_distinct);
+	return make_unique<BoundAggregateExpression>(bound_function, move(children), move(filter), move(bind_info),
+	                                             is_distinct);
 }
 
 } // namespace duckdb

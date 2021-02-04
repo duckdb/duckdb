@@ -15,14 +15,16 @@ struct stddev_state_t {
 // Streaming approximate standard deviation using Welford's
 // method, DOI: 10.2307/1266577
 struct STDDevBaseOperation {
-	template <class STATE> static void Initialize(STATE *state) {
+	template <class STATE>
+	static void Initialize(STATE *state) {
 		state->count = 0;
 		state->mean = 0;
 		state->dsquared = 0;
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, INPUT_TYPE *input_data, nullmask_t &nullmask, idx_t idx) {
+	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input_data, nullmask_t &nullmask,
+	                      idx_t idx) {
 		// update running mean and d^2
 		state->count++;
 		const double input = input_data[idx];
@@ -36,13 +38,15 @@ struct STDDevBaseOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, INPUT_TYPE *input_data, nullmask_t &nullmask, idx_t count) {
+	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input_data, nullmask_t &nullmask,
+	                              idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
-			Operation<INPUT_TYPE, STATE, OP>(state, input_data, nullmask, 0);
+			Operation<INPUT_TYPE, STATE, OP>(state, bind_data, input_data, nullmask, 0);
 		}
 	}
 
-	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
+	template <class STATE, class OP>
+	static void Combine(STATE source, STATE *target) {
 		if (target->count == 0) {
 			*target = source;
 		} else if (source.count > 0) {

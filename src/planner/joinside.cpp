@@ -74,7 +74,7 @@ JoinSide JoinSide::GetJoinSide(Expression &expression, unordered_set<idx_t> &lef
 	return join_side;
 }
 
-JoinSide JoinSide::GetJoinSide(const unordered_set<idx_t>& bindings, unordered_set<idx_t> &left_bindings,
+JoinSide JoinSide::GetJoinSide(const unordered_set<idx_t> &bindings, unordered_set<idx_t> &left_bindings,
                                unordered_set<idx_t> &right_bindings) {
 	JoinSide side = JoinSide::NONE;
 	for (auto binding : bindings) {

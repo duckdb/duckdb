@@ -1,14 +1,15 @@
 #include "duckdb/execution/aggregate_hashtable.hpp"
 
-#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/types/null_value.hpp"
-#include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/common/vector_operations/unary_executor.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/algorithm.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 #include <cmath>
@@ -87,7 +88,8 @@ GroupedAggregateHashTable::~GroupedAggregateHashTable() {
 	Destroy();
 }
 
-template <class FUNC> void GroupedAggregateHashTable::PayloadApply(FUNC fun) {
+template <class FUNC>
+void GroupedAggregateHashTable::PayloadApply(FUNC fun) {
 	if (entries == 0) {
 		return;
 	}
@@ -142,7 +144,8 @@ void GroupedAggregateHashTable::Destroy() {
 	CallDestructors(state_vector, count);
 }
 
-template <class T> void GroupedAggregateHashTable::VerifyInternal() {
+template <class T>
+void GroupedAggregateHashTable::VerifyInternal() {
 	auto hashes_ptr = (T *)hashes_hdl_ptr;
 	D_ASSERT(payload_hds.size() == payload_hds_ptrs.size());
 	idx_t count = 0;
@@ -192,7 +195,8 @@ void GroupedAggregateHashTable::Verify() {
 #endif
 }
 
-template <class T> void GroupedAggregateHashTable::Resize(idx_t size) {
+template <class T>
+void GroupedAggregateHashTable::Resize(idx_t size) {
 	Verify();
 
 	D_ASSERT(!is_finalized);
@@ -260,7 +264,7 @@ void GroupedAggregateHashTable::UpdateAggregate(AggregateObject &aggr, DataChunk
 	Vector filtered_addresses;
 	filtered_addresses.Slice(distinct_addresses, true_sel, count);
 	filtered_addresses.Normalify(count);
-	aggr.function.update(input_count == 0 ? nullptr : &filtered_payload.data[payload_idx], input_count,
+	aggr.function.update(input_count == 0 ? nullptr : &filtered_payload.data[payload_idx], nullptr, input_count,
 	                     filtered_addresses, filtered_payload.size());
 }
 
@@ -291,7 +295,6 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 		// for any entries for which a group was found, update the aggregate
 		auto &aggr = aggregates[aggr_idx];
 		auto input_count = (idx_t)aggr.child_count;
-
 		if (aggr.distinct) {
 			// construct chunk for secondary hash table probing
 			vector<LogicalType> probe_types(group_types);
@@ -337,15 +340,15 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 					}
 					distinct_addresses.Verify(new_group_count);
 
-					aggr.function.update(input_count == 0 ? nullptr : &payload.data[payload_idx], input_count,
+					aggr.function.update(input_count == 0 ? nullptr : &payload.data[payload_idx], nullptr, input_count,
 					                     distinct_addresses, new_group_count);
 				}
 			}
 		} else if (aggr.filter) {
 			UpdateAggregate(aggr, payload, addresses, input_count, payload_idx);
 		} else {
-			aggr.function.update(input_count == 0 ? nullptr : &payload.data[payload_idx], input_count, addresses,
-			                     payload.size());
+			aggr.function.update(input_count == 0 ? nullptr : &payload.data[payload_idx], nullptr, input_count,
+			                     addresses, payload.size());
 		}
 
 		// move to the next aggregate
