@@ -122,3 +122,18 @@ select a.a, a.a IS DISTINCT FROM NULL AS "Is Not Distinct From" FROM (VALUES (1)
 1	True
 2	True
 NULL	False
+
+# More types (all numeric types, strings, dates, times, timestamps, interval)
+
+# Use on a bigger table (~10K elements)
+statement ok
+create table big_tbl (a integer)
+# Use with filter (e.g. SELECT x IS NOT DISTINCT FROM y FROM tbl WHERE z%2=0, where the expression filters like 50% of the rows)
+
+# Use in DEFAULT expression of a table
+
+# Use in DEFAULT expression of a table and store that table on disk (storage test)
+
+# Use with rowid column (non-flat and non-constant vector)
+
+# Use in subqueries with correlated expressions
