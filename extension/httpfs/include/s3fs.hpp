@@ -32,8 +32,7 @@ public:
 
 class S3FileSystem : public FileSystem {
 public:
-	S3FileSystem(std::string region_p, std::string access_key_id_p, std::string secret_access_key_p)
-	    : region(region_p), access_key_id(access_key_id_p), secret_access_key(secret_access_key_p) {
+	S3FileSystem() {
 	}
 	std::unique_ptr<FileHandle> OpenFile(const char *path, uint8_t flags,
 	                                     FileLockType lock = FileLockType::NO_LOCK) override;

@@ -75,6 +75,8 @@ public:
 	//! The random generator used by random(). Its seed value can be set by setseed().
 	std::mt19937 random_engine;
 
+	unordered_map<std::string, Value> set_variables;
+
 public:
 	DUCKDB_API Transaction &ActiveTransaction() {
 		return transaction.ActiveTransaction();

@@ -156,6 +156,7 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	case StatementType::EXPORT_STATEMENT:
 	case StatementType::PRAGMA_STATEMENT:
 	case StatementType::SHOW_STATEMENT:
+	case StatementType::SET_STATEMENT:
 		CreatePlan(*statement);
 		break;
 	case StatementType::EXECUTE_STATEMENT:

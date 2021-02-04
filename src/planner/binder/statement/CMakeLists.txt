@@ -13,6 +13,7 @@ add_library_unity(
   bind_pragma.cpp
   bind_relation.cpp
   bind_select.cpp
+  bind_set.cpp
   bind_simple.cpp
   bind_update.cpp
   bind_vacuum.cpp

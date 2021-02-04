@@ -92,7 +92,8 @@ enum class LogicalOperatorType : uint8_t {
 	LOGICAL_PREPARE = 175,
 	LOGICAL_EXECUTE = 176,
 	LOGICAL_EXPORT = 177,
-	LOGICAL_VACUUM = 178
+	LOGICAL_VACUUM = 178,
+	LOGICAL_SET = 179
 };
 
 string LogicalOperatorToString(LogicalOperatorType type);

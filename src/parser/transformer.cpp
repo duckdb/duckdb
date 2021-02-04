@@ -87,6 +87,8 @@ unique_ptr<SQLStatement> Transformer::TransformStatement(PGNode *stmt) {
 		return TransformShowSelect(stmt);
 	case T_PGCallStmt:
 		return TransformCall(stmt);
+	case T_PGVariableSetStmt:
+		return TransformSet(stmt);
 	default:
 		throw NotImplementedException(NodetypeToString(stmt->type));
 	}

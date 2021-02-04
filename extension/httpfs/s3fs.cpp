@@ -163,6 +163,9 @@ void S3FileHandle::IntializeMetadata() {
 	// get length using HEAD
 	auto &sfs = (S3FileSystem &)file_system;
 	auto res = s3_get(path, sfs.region, "HEAD", sfs.access_key_id, sfs.secret_access_key);
+	if (res->status != 200) {
+		throw std::runtime_error("Unable to connect " + res->body);
+	}
 	length = std::atoll(res->get_header_value("Content-Length").c_str());
 
 	struct tm tm;

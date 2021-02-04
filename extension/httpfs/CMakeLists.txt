@@ -8,7 +8,7 @@ include_directories(include ../.. ../../third_party/httplib ../../third_party/pi
 
 add_library(
   httpfs_extension STATIC
- s3fs.cpp crypto.cpp)
+ s3fs.cpp crypto.cpp httpfs-extension.cpp)
 
 
 add_executable(test_s3_parquet_read test.cpp)
