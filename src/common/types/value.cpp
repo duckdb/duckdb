@@ -584,14 +584,6 @@ uint16_t Value::GetValue() const {
 	return GetValueInternal<uint16_t>();
 }
 template <>
-uint32_t Value::GetValue() const {
-	return GetValueInternal<uint32_t>();
-}
-template <>
-uint64_t Value::GetValue() const {
-	return GetValueInternal<uint64_t>();
-}
-template <>
 string Value::GetValue() const {
 	return ToString();
 }
@@ -603,6 +595,12 @@ template <>
 double Value::GetValue() const {
 	return GetValueInternal<double>();
 }
+template <>
+uintptr_t Value::GetValue() const {
+	D_ASSERT(type() == LogicalType::POINTER);
+	return value_.pointer;
+}
+
 Value Value::Numeric(LogicalType type, int64_t value) {
 	switch (type.id()) {
 	case LogicalTypeId::TINYINT:

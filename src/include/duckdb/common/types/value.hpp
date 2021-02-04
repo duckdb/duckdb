@@ -276,14 +276,6 @@ Value DUCKDB_API Value::CreateValue(Value value);
 template <>
 bool Value::GetValue() const;
 template <>
-uint8_t Value::GetValue() const;
-template <>
-uint16_t Value::GetValue() const;
-template <>
-uint32_t Value::GetValue() const;
-template <>
-uint64_t Value::GetValue() const;
-template <>
 int8_t Value::GetValue() const;
 template <>
 int16_t Value::GetValue() const;
@@ -292,6 +284,10 @@ int32_t Value::GetValue() const;
 template <>
 int64_t Value::GetValue() const;
 template <>
+uint8_t Value::GetValue() const;
+template <>
+uint16_t Value::GetValue() const;
+template <>
 hugeint_t Value::GetValue() const;
 template <>
 string Value::GetValue() const;
@@ -299,6 +295,8 @@ template <>
 float Value::GetValue() const;
 template <>
 double Value::GetValue() const;
+template <>
+uintptr_t Value::GetValue() const;
 
 template <>
 int8_t &Value::GetValueUnsafe();
