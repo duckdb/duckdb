@@ -66,9 +66,17 @@ struct VectorOperations {
 	// result = A <= B
 	static void LessThanEquals(Vector &A, Vector &B, Vector &result, idx_t count);
 	// result = A != B with nulls being equal
-    static void DistinctFrom(Vector &left, Vector &right, Vector &result, idx_t count);
+	static void DistinctFrom(Vector &left, Vector &right, Vector &result, idx_t count);
 	// result = A == B with nulls being equal
 	static void NotDistinctFrom(Vector &left, Vector &right, Vector &result, idx_t count);
+
+	// result = A != B with nulls being equal
+	static idx_t SelectDistinctFrom(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+	                                SelectionVector *true_sel, SelectionVector *false_sel);
+	// result = A == B with nulls being equal
+	static idx_t SelectNotDistinctFrom(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+	                                   SelectionVector *true_sel, SelectionVector *false_sel);
+
 	//===--------------------------------------------------------------------===//
 	// Scatter methods
 	//===--------------------------------------------------------------------===//

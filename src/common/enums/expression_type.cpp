@@ -176,6 +176,8 @@ ExpressionType NegateComparisionExpression(ExpressionType type) {
 ExpressionType FlipComparisionExpression(ExpressionType type) {
 	ExpressionType flipped_type = ExpressionType::INVALID;
 	switch (type) {
+	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+	case ExpressionType::COMPARE_DISTINCT_FROM:
 	case ExpressionType::COMPARE_NOTEQUAL:
 	case ExpressionType::COMPARE_EQUAL:
 		flipped_type = type;

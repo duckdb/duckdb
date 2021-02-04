@@ -124,16 +124,154 @@ select a.a, a.a IS DISTINCT FROM NULL AS "Is Not Distinct From" FROM (VALUES (1)
 NULL	False
 
 # More types (all numeric types, strings, dates, times, timestamps, interval)
+statement ok
+CREATE TABLE test_types(a tinyint, b smallint, c integer, d bigint, e double, f real, g varchar);
+
+statement ok
+INSERT INTO test_types values (NULL,NULL,NULL,NULL,NULL,NULL,NULL),(1,1,1,1,1,1,'1'),(10,10,10,10,10,10,'10')
+
+query I
+select count(*) FROM test_types where a IS DISTINCT FROM NULL
+----
+2
+
+query I
+select count(*) FROM test_types where b IS DISTINCT FROM NULL
+----
+2
+
+query I
+select count(*) FROM test_types where c IS DISTINCT FROM NULL
+----
+2
+
+query I
+select count(*) FROM test_types where d IS DISTINCT FROM NULL
+----
+2
+
+query I
+select count(*) FROM test_types where e IS DISTINCT FROM NULL
+----
+2
+
+query I
+select count(*) FROM test_types where f IS DISTINCT FROM NULL
+----
+2
+
+query I
+select count(*) FROM test_types where g IS DISTINCT FROM NULL
+----
+2
+
+query I
+select count(*) FROM test_types where a IS NOT DISTINCT FROM NULL
+----
+1
+
+query I
+select count(*) FROM test_types where b IS NOT DISTINCT FROM NULL
+----
+1
+
+query I
+select count(*) FROM test_types where c IS NOT DISTINCT FROM NULL
+----
+1
+
+query I
+select count(*) FROM test_types where d IS NOT DISTINCT FROM NULL
+----
+1
+
+query I
+select count(*) FROM test_types where e IS NOT DISTINCT FROM NULL
+----
+1
+
+query I
+select count(*) FROM test_types where f IS NOT DISTINCT FROM NULL
+----
+1
+
+query I
+select count(*) FROM test_types where g IS NOT DISTINCT FROM NULL
+----
+1
+
+query T
+SELECT INTERVAL '30' DAY is distinct from NULL
+----
+True
+
+query T
+SELECT INTERVAL '30' DAY is not distinct from NULL
+----
+False
 
 # Use on a bigger table (~10K elements)
 statement ok
-create table big_tbl (a integer)
+CREATE table big as select range a from range(10000);
+
+statement ok
+insert into big values (NULL)
+
+query I
+select count(*) from big  inner join tbl_2 on (a IS NOT DISTINCT FROM tbl_2.b)
+----
+3
+
 # Use with filter (e.g. SELECT x IS NOT DISTINCT FROM y FROM tbl WHERE z%2=0, where the expression filters like 50% of the rows)
+query I
+select count(*) from big  inner join tbl_2 on (a IS NOT DISTINCT FROM tbl_2.b) where a >1  and a < 5000
+----
+1
+
+
+# Use with rowid column (non-flat and non-constant vector)
+query I
+select count(*) from big inner join tbl_2 on (big.rowid IS NOT DISTINCT FROM tbl_2.b)
+----
+2
+
+# Use in subqueries with correlated expressions
+query II
+SELECT a, (select count(*) from tbl_1 where tbl_1.a is distinct from t.b) from tbl_1 as t
+----
+1	2
+2	3
+NULL	2
 
 # Use in DEFAULT expression of a table
+load __TEST_DIR__/not_distinct_test.db
+
+statement ok
+CREATE SEQUENCE seq;
+
+statement ok
+CREATE TABLE test_default (a BOOL DEFAULT nextval('seq') is not distinct from nextval('seq'), b INTEGER);
+
+statement ok
+INSERT INTO test_default (b) VALUES (2), (4), (6);
+
+
+query II
+select * from test_default;
+----
+False	2
+False	4
+False	6
 
 # Use in DEFAULT expression of a table and store that table on disk (storage test)
 
-# Use with rowid column (non-flat and non-constant vector)
+restart
 
-# Use in subqueries with correlated expressions
+
+query II
+select * from test_default;
+----
+False	2
+False	4
+False	6
+
