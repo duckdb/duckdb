@@ -327,7 +327,7 @@ public:
 	void Initialize(idx_t capacity);
 	void Resize(idx_t new_capacity);
 	void Append(idx_t current_offset, Vector &input, idx_t count);
-	py::object ToArray(idx_t count);
+	py::object ToArray(idx_t count) const;
 };
 
 class NumpyResultConversion {
@@ -568,7 +568,7 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 	mask->count += count;
 }
 
-py::object ArrayWrapper::ToArray(idx_t count) {
+py::object ArrayWrapper::ToArray(idx_t count) const {
 	D_ASSERT(data->array && mask->array);
 	data->Resize(data->count);
 	if (!requires_mask) {
@@ -588,19 +588,19 @@ NumpyResultConversion::NumpyResultConversion(vector<LogicalType> &types, idx_t i
     : count(0), capacity(0) {
 	owned_data.reserve(types.size());
 	for (auto &type : types) {
-		owned_data.push_back(ArrayWrapper(type));
+		owned_data.emplace_back(type);
 	}
 	Resize(initial_capacity);
 }
 
 void NumpyResultConversion::Resize(idx_t new_capacity) {
 	if (capacity == 0) {
-		for (idx_t col_idx = 0; col_idx < owned_data.size(); col_idx++) {
-			owned_data[col_idx].Initialize(new_capacity);
+		for (auto &data : owned_data) {
+			data.Initialize(new_capacity);
 		}
 	} else {
-		for (idx_t col_idx = 0; col_idx < owned_data.size(); col_idx++) {
-			owned_data[col_idx].Resize(new_capacity);
+		for (auto &data : owned_data) {
+			data.Resize(new_capacity);
 		}
 	}
 	capacity = new_capacity;
@@ -614,9 +614,9 @@ void NumpyResultConversion::Append(DataChunk &chunk) {
 		owned_data[col_idx].Append(count, chunk.data[col_idx], chunk.size());
 	}
 	count += chunk.size();
-	for (idx_t col_idx = 0; col_idx < owned_data.size(); col_idx++) {
-		D_ASSERT(owned_data[col_idx].data->count == count);
-		D_ASSERT(owned_data[col_idx].mask->count == count);
+	for (auto &data : owned_data) {
+		D_ASSERT(data.data->count == count);
+		D_ASSERT(data.mask->count == count);
 	}
 }
 
@@ -1220,7 +1220,7 @@ public:
 		return res;
 	}
 
-	py::dict fetchnumpy() {
+	py::dict fetchnumpy(bool stream = false) {
 		if (!result) {
 			throw runtime_error("result closed");
 		}
@@ -1236,17 +1236,26 @@ public:
 		NumpyResultConversion conversion(result->types, initial_capacity);
 		if (result->type == QueryResultType::MATERIALIZED_RESULT) {
 			auto &materialized = (MaterializedQueryResult &)*result;
-			for (auto &chunk : materialized.collection.Chunks()) {
-				conversion.Append(*chunk);
-			}
-			materialized.collection.Reset();
-		} else {
-			while (true) {
-				auto chunk = result->FetchRaw();
-				if (!chunk || chunk->size() == 0) {
-					// finished
-					break;
+			if (!stream) {
+				for (auto &chunk : materialized.collection.Chunks()) {
+					conversion.Append(*chunk);
 				}
+				materialized.collection.Reset();
+			} else {
+				conversion.Append(*materialized.Fetch());
+			}
+		} else {
+			if (!stream) {
+				while (true) {
+					auto chunk = result->FetchRaw();
+					if (!chunk || chunk->size() == 0) {
+						// finished
+						break;
+					}
+					conversion.Append(*chunk);
+				}
+			} else {
+				auto chunk = result->FetchRaw();
 				conversion.Append(*chunk);
 			}
 		}
@@ -1261,6 +1270,10 @@ public:
 
 	py::object fetchdf() {
 		return py::module::import("pandas").attr("DataFrame").attr("from_dict")(fetchnumpy());
+	}
+
+	py::object fetchdfchunk() {
+		return py::module::import("pandas").attr("DataFrame").attr("from_dict")(fetchnumpy(true));
 	}
 
 	py::object fetch_arrow_table() {
@@ -1619,6 +1632,14 @@ struct DuckDBPyConnection {
 		}
 		return result->fetchdf();
 	}
+
+	py::object fetchdfchunk() const {
+		if (!result) {
+			throw runtime_error("no open result set");
+		}
+		return result->fetchdfchunk();
+	}
+
 	py::object fetcharrow() {
 		if (!result) {
 			throw runtime_error("no open result set");
@@ -1994,6 +2015,9 @@ PYBIND11_MODULE(duckdb, m) {
 	        .def("fetchnumpy", &DuckDBPyConnection::fetchnumpy,
 	             "Fetch a result as list of NumPy arrays following execute")
 	        .def("fetchdf", &DuckDBPyConnection::fetchdf, "Fetch a result as Data.Frame following execute()")
+	        .def("fetch_df", &DuckDBPyConnection::fetchdf, "Fetch a result as Data.Frame following execute()")
+	        .def("fetch_df_chunk", &DuckDBPyConnection::fetchdfchunk,
+	             "Fetch a chunk of the result as Data.Frame following execute()")
 	        .def("df", &DuckDBPyConnection::fetchdf, "Fetch a result as Data.Frame following execute()")
 	        .def("fetch_arrow_table", &DuckDBPyConnection::fetcharrow,
 	             "Fetch a result as Arrow table following execute()")
@@ -2034,6 +2058,7 @@ PYBIND11_MODULE(duckdb, m) {
 	    .def("fetchnumpy", &DuckDBPyResult::fetchnumpy)
 	    .def("fetchdf", &DuckDBPyResult::fetchdf)
 	    .def("fetch_df", &DuckDBPyResult::fetchdf)
+	    .def("fetch_df_chunk", &DuckDBPyResult::fetchdfchunk)
 	    .def("fetch_arrow_table", &DuckDBPyResult::fetch_arrow_table)
 	    .def("arrow", &DuckDBPyResult::fetch_arrow_table)
 	    .def("df", &DuckDBPyResult::fetchdf);
