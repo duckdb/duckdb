@@ -22,7 +22,7 @@ struct StructExtractBindData : public FunctionData {
 	}
 };
 
-static void struct_extract_fun(DataChunk &args, ExpressionState &state, Vector &result) {
+static void StructExtractFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (StructExtractBindData &)*func_expr.bind_info;
 
@@ -56,7 +56,7 @@ static void struct_extract_fun(DataChunk &args, ExpressionState &state, Vector &
 	result.Verify(args.size());
 }
 
-static unique_ptr<FunctionData> struct_extract_bind(ClientContext &context, ScalarFunction &bound_function,
+static unique_ptr<FunctionData> StructExtractBind(ClientContext &context, ScalarFunction &bound_function,
                                                     vector<unique_ptr<Expression>> &arguments) {
 	auto &struct_children = arguments[0]->return_type.child_types();
 	if (struct_children.size() < 1) {
@@ -101,7 +101,7 @@ static unique_ptr<FunctionData> struct_extract_bind(ClientContext &context, Scal
 void StructExtractFun::RegisterFunction(BuiltinFunctions &set) {
 	// the arguments and return types are actually set in the binder function
 	ScalarFunction fun("struct_extract", {LogicalType::STRUCT, LogicalType::VARCHAR}, LogicalType::ANY,
-	                   struct_extract_fun, false, struct_extract_bind);
+	                   StructExtractFunction, false, StructExtractBind);
 	set.AddFunction(fun);
 }
 

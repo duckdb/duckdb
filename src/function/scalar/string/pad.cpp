@@ -10,7 +10,7 @@
 
 namespace duckdb {
 
-static pair<idx_t, idx_t> count_chars(const idx_t len, const char *data, const idx_t size) {
+static pair<idx_t, idx_t> PadCountChars(const idx_t len, const char *data, const idx_t size) {
 	//  Count how much of str will fit in the output
 	auto str = reinterpret_cast<const utf8proc_uint8_t *>(data);
 	idx_t nbytes = 0;
@@ -25,7 +25,7 @@ static pair<idx_t, idx_t> count_chars(const idx_t len, const char *data, const i
 	return pair<idx_t, idx_t>(nbytes, nchars);
 }
 
-static bool insert_padding(const idx_t len, const string_t &pad, vector<char> &result) {
+static bool InsertPadding(const idx_t len, const string_t &pad, vector<char> &result) {
 	//  Copy the padding until the output is long enough
 	const auto data = pad.GetDataUnsafe();
 	const auto size = pad.GetSize();
@@ -58,7 +58,7 @@ static bool insert_padding(const idx_t len, const string_t &pad, vector<char> &r
 	return true;
 }
 
-static string_t lpad(const string_t &str, const int32_t len, const string_t &pad, vector<char> &result) {
+static string_t LeftPadFunction(const string_t &str, const int32_t len, const string_t &pad, vector<char> &result) {
 	//  Reuse the buffer
 	result.clear();
 
@@ -67,10 +67,10 @@ static string_t lpad(const string_t &str, const int32_t len, const string_t &pad
 	const auto size_str = str.GetSize();
 
 	//  Count how much of str will fit in the output
-	const auto written = count_chars(len, data_str, size_str);
+	const auto written = PadCountChars(len, data_str, size_str);
 
 	//  Left pad by the number of characters still needed
-	if (!insert_padding(len - written.second, pad, result)) {
+	if (!InsertPadding(len - written.second, pad, result)) {
 		throw Exception("Insufficient padding in LPAD.");
 	}
 
@@ -80,14 +80,14 @@ static string_t lpad(const string_t &str, const int32_t len, const string_t &pad
 	return string_t(result.data(), result.size());
 }
 
-struct LpadOperator {
+struct LeftPadOperator {
 	static inline string_t Operation(const string_t &str, const int32_t len, const string_t &pad,
 	                                 vector<char> &result) {
-		return lpad(str, len, pad, result);
+		return LeftPadFunction(str, len, pad, result);
 	}
 };
 
-static string_t rpad(const string_t &str, const int32_t len, const string_t &pad, vector<char> &result) {
+static string_t RightPadFunction(const string_t &str, const int32_t len, const string_t &pad, vector<char> &result) {
 	//  Reuse the buffer
 	result.clear();
 
@@ -96,23 +96,23 @@ static string_t rpad(const string_t &str, const int32_t len, const string_t &pad
 	const auto size_str = str.GetSize();
 
 	//  Count how much of str will fit in the output
-	const auto written = count_chars(len, data_str, size_str);
+	const auto written = PadCountChars(len, data_str, size_str);
 
 	//  Append as much of the original string as fits
 	result.insert(result.end(), data_str, data_str + written.first);
 
 	//  Right pad by the number of characters still needed
-	if (!insert_padding(len - written.second, pad, result)) {
+	if (!InsertPadding(len - written.second, pad, result)) {
 		throw Exception("Insufficient padding in RPAD.");
 	};
 
 	return string_t(result.data(), result.size());
 }
 
-struct RpadOperator {
+struct RightPadOperator {
 	static inline string_t Operation(const string_t &str, const int32_t len, const string_t &pad,
 	                                 vector<char> &result) {
-		return rpad(str, len, pad, result);
+		return RightPadFunction(str, len, pad, result);
 	}
 };
 
@@ -135,7 +135,7 @@ void LpadFun::RegisterFunction(BuiltinFunctions &set) {
 	                               {LogicalType::VARCHAR, LogicalType::INTEGER, // argument list
 	                                LogicalType::VARCHAR},
 	                               LogicalType::VARCHAR,         // return type
-	                               pad_function<LpadOperator>)); // pointer to function implementation
+	                               pad_function<LeftPadOperator>)); // pointer to function implementation
 }
 
 void RpadFun::RegisterFunction(BuiltinFunctions &set) {
@@ -143,7 +143,7 @@ void RpadFun::RegisterFunction(BuiltinFunctions &set) {
 	                               {LogicalType::VARCHAR, LogicalType::INTEGER, // argument list
 	                                LogicalType::VARCHAR},
 	                               LogicalType::VARCHAR,         // return type
-	                               pad_function<RpadOperator>)); // pointer to function implementation
+	                               pad_function<RightPadOperator>)); // pointer to function implementation
 }
 
 } // namespace duckdb

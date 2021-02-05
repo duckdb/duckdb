@@ -155,9 +155,9 @@ static void pragma_table_info_view(PragmaTableOperatorData &data, ViewCatalogEnt
 	data.offset = next;
 }
 
-static void pragma_table_info(ClientContext &context, const FunctionData *bind_data_,
+static void pragma_table_info(ClientContext &context, const FunctionData *bind_data_p,
                               FunctionOperatorData *operator_state, DataChunk &output) {
-	auto &bind_data = (PragmaTableFunctionData &)*bind_data_;
+	auto &bind_data = (PragmaTableFunctionData &)*bind_data_p;
 	auto &state = (PragmaTableOperatorData &)*operator_state;
 	switch (bind_data.entry->type) {
 	case CatalogType::TABLE_ENTRY:

@@ -53,7 +53,7 @@ struct ArrowScanFunctionData : public TableFunctionData {
 	}
 };
 
-static unique_ptr<FunctionData> arrow_scan_bind(ClientContext &context, vector<Value> &inputs,
+static unique_ptr<FunctionData> ArrowScanBind(ClientContext &context, vector<Value> &inputs,
                                                 unordered_map<string, Value> &named_parameters,
                                                 vector<LogicalType> &return_types, vector<string> &names) {
 
@@ -144,7 +144,7 @@ static unique_ptr<FunctionOperatorData> arrow_scan_init(ClientContext &context, 
 	return make_unique<FunctionOperatorData>();
 }
 
-static void arrow_scan_function(ClientContext &context, const FunctionData *bind_data,
+static void ArrowScanFunction(ClientContext &context, const FunctionData *bind_data,
                                 FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &data = (ArrowScanFunctionData &)*bind_data;
 	if (!data.stream->release) {
@@ -281,7 +281,7 @@ static void arrow_scan_function(ClientContext &context, const FunctionData *bind
 void ArrowTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunctionSet arrow("arrow_scan");
 
-	arrow.AddFunction(TableFunction({LogicalType::POINTER}, arrow_scan_function, arrow_scan_bind, arrow_scan_init));
+	arrow.AddFunction(TableFunction({LogicalType::POINTER}, ArrowScanFunction, ArrowScanBind, arrow_scan_init));
 	set.AddFunction(arrow);
 }
 

@@ -20,7 +20,7 @@ struct SetseedBindData : public FunctionData {
 	}
 };
 
-static void setseed_function(DataChunk &args, ExpressionState &state, Vector &result) {
+static void SetSeedFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (SetseedBindData &)*func_expr.bind_info;
 	auto &input = args.data[0];
@@ -41,14 +41,14 @@ static void setseed_function(DataChunk &args, ExpressionState &state, Vector &re
 	ConstantVector::SetNull(result, true);
 }
 
-unique_ptr<FunctionData> setseed_bind(ClientContext &context, ScalarFunction &bound_function,
+unique_ptr<FunctionData> SetSeedBind(ClientContext &context, ScalarFunction &bound_function,
                                       vector<unique_ptr<Expression>> &arguments) {
 	return make_unique<SetseedBindData>(context);
 }
 
 void SetseedFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(
-	    ScalarFunction("setseed", {LogicalType::DOUBLE}, LogicalType::SQLNULL, setseed_function, true, setseed_bind));
+	    ScalarFunction("setseed", {LogicalType::DOUBLE}, LogicalType::SQLNULL, SetSeedFunction, true, SetSeedBind));
 }
 
 } // namespace duckdb

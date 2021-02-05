@@ -157,7 +157,7 @@ char *StrfTimeFormat::Write2(char *target, uint8_t value) {
 	if (value >= 10) {
 		return WritePadded2(target, value);
 	} else {
-		*target = '0' + value;
+		*target = char(uint8_t('0') + value);
 		return target + 1;
 	}
 }
@@ -174,7 +174,7 @@ char *StrfTimeFormat::WritePadded2(char *target, int32_t value) {
 char *StrfTimeFormat::WritePadded3(char *target, uint32_t value) {
 	if (value >= 100) {
 		WritePadded2(target + 1, value % 100);
-		*target = '0' + value / 100;
+		*target = char(uint8_t('0') + value / 100);
 		return target + 3;
 	} else {
 		*target = '0';
@@ -223,7 +223,7 @@ char *StrfTimeFormat::WriteDateSpecifier(StrTimeSpecifier specifier, date_t date
 	}
 	case StrTimeSpecifier::WEEKDAY_DECIMAL: {
 		date_t dow = Date::ExtractISODayOfTheWeek(date);
-		*target = '0' + (dow % 7);
+		*target = char('0' + uint8_t(dow % 7));
 		target++;
 		break;
 	}
@@ -524,6 +524,7 @@ string StrTimeFormat::ParseFormatSpecifier(string format_string, StrTimeFormat &
 					D_ASSERT(error.empty());
 					// add the previous literal to the first literal of the subformat
 					locale_format.literals[0] = move(current_literal) + locale_format.literals[0];
+					current_literal = "";
 					// now push the subformat into the current format specifier
 					for (idx_t i = 0; i < locale_format.specifiers.size(); i++) {
 						format.AddFormatSpecifier(move(locale_format.literals[i]), locale_format.specifiers[i]);
@@ -536,6 +537,7 @@ string StrTimeFormat::ParseFormatSpecifier(string format_string, StrTimeFormat &
 				}
 			}
 			format.AddFormatSpecifier(move(current_literal), specifier);
+			current_literal = "";
 			pos = i + 1;
 		}
 	}
@@ -558,7 +560,7 @@ struct StrfTimeBindData : public FunctionData {
 	}
 };
 
-static unique_ptr<FunctionData> strftime_bind_function(ClientContext &context, ScalarFunction &bound_function,
+static unique_ptr<FunctionData> StrfTimeBindFunction(ClientContext &context, ScalarFunction &bound_function,
                                                        vector<unique_ptr<Expression>> &arguments) {
 	if (!arguments[1]->IsScalar()) {
 		throw InvalidInputException("strftime format must be a constant");
@@ -575,7 +577,7 @@ static unique_ptr<FunctionData> strftime_bind_function(ClientContext &context, S
 	return make_unique<StrfTimeBindData>(format);
 }
 
-static void strftime_function_date(DataChunk &args, ExpressionState &state, Vector &result) {
+static void StrfTimeFunctionDate(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (StrfTimeBindData &)*func_expr.bind_info;
 
@@ -595,7 +597,7 @@ static void strftime_function_date(DataChunk &args, ExpressionState &state, Vect
 	});
 }
 
-static void strftime_function_timestamp(DataChunk &args, ExpressionState &state, Vector &result) {
+static void StrfTimeFunctionTimestamp(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (StrfTimeBindData &)*func_expr.bind_info;
 
@@ -621,10 +623,10 @@ void StrfTimeFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet strftime("strftime");
 
 	strftime.AddFunction(ScalarFunction({LogicalType::DATE, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                                    strftime_function_date, false, strftime_bind_function));
+	                                    StrfTimeFunctionDate, false, StrfTimeBindFunction));
 
 	strftime.AddFunction(ScalarFunction({LogicalType::TIMESTAMP, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                                    strftime_function_timestamp, false, strftime_bind_function));
+	                                    StrfTimeFunctionTimestamp, false, StrfTimeBindFunction));
 
 	set.AddFunction(strftime);
 }
@@ -792,9 +794,9 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 					return false;
 				}
 				if (number >= 69) {
-					result_data[0] = 1900 + number;
+					result_data[0] = int32_t(1900 + number);
 				} else {
-					result_data[0] = 2000 + number;
+					result_data[0] = int32_t(2000 + number);
 				}
 				break;
 			case StrTimeSpecifier::YEAR_DECIMAL:
@@ -848,7 +850,7 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 					return false;
 				}
 				// milliseconds
-				result_data[6] = number * 1000;
+				result_data[6] = int32_t(number * 1000);
 				break;
 			case StrTimeSpecifier::MILLISECOND_PADDED:
 				if (number >= 1000ULL) {
@@ -872,8 +874,8 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 					error_position = pos;
 					return false;
 				}
-				char pa_char = std::tolower(data[pos]);
-				char m_char = std::tolower(data[pos + 1]);
+				char pa_char = char(std::tolower(data[pos]));
+				char m_char = char(std::tolower(data[pos + 1]));
 				if (m_char != 'm') {
 					error_message = "Expected AM/PM";
 					error_position = pos;
@@ -973,7 +975,7 @@ struct StrpTimeBindData : public FunctionData {
 	}
 };
 
-static unique_ptr<FunctionData> strptime_bind_function(ClientContext &context, ScalarFunction &bound_function,
+static unique_ptr<FunctionData> StrpTimeBindFunction(ClientContext &context, ScalarFunction &bound_function,
                                                        vector<unique_ptr<Expression>> &arguments) {
 	if (!arguments[1]->IsScalar()) {
 		throw InvalidInputException("strftime format must be a constant");
@@ -1020,7 +1022,7 @@ timestamp_t StrpTimeFormat::ParseTimestamp(string_t input) {
 	return Timestamp::FromDatetime(date, time);
 }
 
-static void strptime_function(DataChunk &args, ExpressionState &state, Vector &result) {
+static void StrpTimeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (StrpTimeBindData &)*func_expr.bind_info;
 
@@ -1037,7 +1039,7 @@ void StrpTimeFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet strptime("strptime");
 
 	strptime.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::TIMESTAMP,
-	                                    strptime_function, false, strptime_bind_function));
+	                                    StrpTimeFunction, false, StrpTimeBindFunction));
 
 	set.AddFunction(strptime);
 }

@@ -10,13 +10,13 @@
 
 namespace duckdb {
 
-string_t substring_empty_string(Vector &result) {
+string_t SubstringEmptyString(Vector &result) {
 	auto result_string = StringVector::EmptyString(result, 0);
 	result_string.Finalize();
 	return result_string;
 }
 
-string_t substring_slice(Vector &result, const char *input_data, int64_t offset, int64_t length) {
+string_t SubstringSlice(Vector &result, const char *input_data, int64_t offset, int64_t length) {
 	auto result_string = StringVector::EmptyString(result, length);
 	auto result_data = result_string.GetDataWriteable();
 	memcpy(result_data, input_data + offset, length);
@@ -64,9 +64,9 @@ string_t substring_ascii_only(Vector &result, string_t input, int64_t offset, in
 
 	int64_t start, end;
 	if (!substring_start_end(input_size, offset, length, start, end)) {
-		return substring_empty_string(result);
+		return SubstringEmptyString(result);
 	}
-	return substring_slice(result, input_data, start, end - start);
+	return SubstringSlice(result, input_data, start, end - start);
 }
 
 string_t SubstringFun::substring_scalar_function(Vector &result, string_t input, int32_t offset, int32_t length) {
@@ -77,7 +77,7 @@ string_t SubstringFun::substring_scalar_function(Vector &result, string_t input,
 	// first get the start and end as if this was an ascii string
 	int64_t start, end;
 	if (!substring_start_end(input_size, offset, length, start, end)) {
-		return substring_empty_string(result);
+		return SubstringEmptyString(result);
 	}
 
 	// now check if all the characters between 0 and end are ascii characters
@@ -93,7 +93,7 @@ string_t SubstringFun::substring_scalar_function(Vector &result, string_t input,
 	}
 	if (is_ascii) {
 		// all characters are ascii, we can just slice the substring
-		return substring_slice(result, input_data, start, end - start);
+		return SubstringSlice(result, input_data, start, end - start);
 	}
 	// if the characters are not ascii, we need to scan grapheme clusters
 	// first figure out which direction we need to scan
@@ -124,13 +124,13 @@ string_t SubstringFun::substring_scalar_function(Vector &result, string_t input,
 		return true;
 	});
 	if (start_pos == INVALID_INDEX) {
-		return substring_empty_string(result);
+		return SubstringEmptyString(result);
 	}
 	// after we have found these, we can slice the substring
-	return substring_slice(result, input_data, start_pos, end_pos - start_pos);
+	return SubstringSlice(result, input_data, start_pos, end_pos - start_pos);
 }
 
-static void substring_function(DataChunk &args, ExpressionState &state, Vector &result) {
+static void SubstringFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &input_vector = args.data[0];
 	auto &offset_vector = args.data[1];
 	if (args.ColumnCount() == 3) {
@@ -169,7 +169,7 @@ static void substring_function_ascii(DataChunk &args, ExpressionState &state, Ve
 	}
 }
 
-static unique_ptr<BaseStatistics> substring_propagate_stats(ClientContext &context, BoundFunctionExpression &expr,
+static unique_ptr<BaseStatistics> SubstringPropagateStats(ClientContext &context, BoundFunctionExpression &expr,
                                                             FunctionData *bind_data,
                                                             vector<unique_ptr<BaseStatistics>> &child_stats) {
 	// can only propagate stats if the children have stats
@@ -187,10 +187,10 @@ static unique_ptr<BaseStatistics> substring_propagate_stats(ClientContext &conte
 void SubstringFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet substr("substring");
 	substr.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::INTEGER, LogicalType::INTEGER},
-	                                  LogicalType::VARCHAR, substring_function, false, nullptr, nullptr,
-	                                  substring_propagate_stats));
+	                                  LogicalType::VARCHAR, SubstringFunction, false, nullptr, nullptr,
+	                                  SubstringPropagateStats));
 	substr.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::INTEGER}, LogicalType::VARCHAR,
-	                                  substring_function, false, nullptr, nullptr, substring_propagate_stats));
+	                                  SubstringFunction, false, nullptr, nullptr, SubstringPropagateStats));
 	set.AddFunction(substr);
 	substr.name = "substr";
 	set.AddFunction(substr);

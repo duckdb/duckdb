@@ -4,7 +4,7 @@
 
 namespace duckdb {
 
-struct chrOperator {
+struct ChrOperator {
 	template <class TA, class TR>
 	static inline TR Operation(const TA &input) {
 		char c[5] = {'\0', '\0', '\0', '\0', '\0'};
@@ -16,7 +16,7 @@ struct chrOperator {
 
 void CHR::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunction chr("chr", {LogicalType::INTEGER}, LogicalType::VARCHAR,
-	                   ScalarFunction::UnaryFunction<int32_t, string_t, chrOperator, true>);
+	                   ScalarFunction::UnaryFunction<int32_t, string_t, ChrOperator, true>);
 	set.AddFunction(chr);
 }
 

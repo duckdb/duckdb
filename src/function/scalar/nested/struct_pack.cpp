@@ -6,7 +6,7 @@
 
 namespace duckdb {
 
-static void struct_pack_fun(DataChunk &args, ExpressionState &state, Vector &result) {
+static void StructPackFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (VariableReturnBindData &)*func_expr.bind_info;
 
@@ -60,7 +60,7 @@ static unique_ptr<FunctionData> struct_pack_bind(ClientContext &context, ScalarF
 
 void StructPackFun::RegisterFunction(BuiltinFunctions &set) {
 	// the arguments and return types are actually set in the binder function
-	ScalarFunction fun("struct_pack", {}, LogicalType::STRUCT, struct_pack_fun, false, struct_pack_bind);
+	ScalarFunction fun("struct_pack", {}, LogicalType::STRUCT, StructPackFunction, false, struct_pack_bind);
 	fun.varargs = LogicalType::ANY;
 	set.AddFunction(fun);
 	fun.name = "row";

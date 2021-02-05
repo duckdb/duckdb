@@ -157,7 +157,7 @@ static vector<bool> ParseColumnList(vector<Value> &set, vector<string> &names) {
 	return result;
 }
 
-static unique_ptr<FunctionData> write_csv_bind(ClientContext &context, CopyInfo &info, vector<string> &names,
+static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyInfo &info, vector<string> &names,
                                                vector<LogicalType> &sql_types) {
 	auto bind_data = make_unique<WriteCSVData>(info.file_path, sql_types, names);
 
@@ -185,7 +185,7 @@ static unique_ptr<FunctionData> write_csv_bind(ClientContext &context, CopyInfo 
 	return move(bind_data);
 }
 
-static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, CopyInfo &info, vector<string> &expected_names,
+static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &info, vector<string> &expected_names,
                                               vector<LogicalType> &expected_types) {
 	auto bind_data = make_unique<ReadCSVData>();
 	bind_data->sql_types = expected_types;
@@ -417,7 +417,7 @@ struct GlobalWriteCSVData : public GlobalFunctionData {
 	unique_ptr<FileHandle> handle;
 };
 
-static unique_ptr<LocalFunctionData> write_csv_initialize_local(ClientContext &context, FunctionData &bind_data) {
+static unique_ptr<LocalFunctionData> WriteCSVInitializeLocal(ClientContext &context, FunctionData &bind_data) {
 	auto &csv_data = (WriteCSVData &)bind_data;
 	auto local_data = make_unique<LocalReadCSVData>();
 
@@ -429,7 +429,7 @@ static unique_ptr<LocalFunctionData> write_csv_initialize_local(ClientContext &c
 	return move(local_data);
 }
 
-static unique_ptr<GlobalFunctionData> write_csv_initialize_global(ClientContext &context, FunctionData &bind_data) {
+static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &context, FunctionData &bind_data) {
 	auto &csv_data = (WriteCSVData &)bind_data;
 	auto &options = csv_data.options;
 	auto global_data = make_unique<GlobalWriteCSVData>(FileSystem::GetFileSystem(context), csv_data.files[0]);
@@ -450,7 +450,7 @@ static unique_ptr<GlobalFunctionData> write_csv_initialize_global(ClientContext 
 	return move(global_data);
 }
 
-static void write_csv_sink(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
+static void WriteCSVSink(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
                            LocalFunctionData &lstate, DataChunk &input) {
 	auto &csv_data = (WriteCSVData &)bind_data;
 	auto &options = csv_data.options;
@@ -508,7 +508,7 @@ static void write_csv_sink(ClientContext &context, FunctionData &bind_data, Glob
 //===--------------------------------------------------------------------===//
 // Combine
 //===--------------------------------------------------------------------===//
-static void write_csv_combine(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
+static void WriteCSVCombine(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
                               LocalFunctionData &lstate) {
 	auto &local_data = (LocalReadCSVData &)lstate;
 	auto &global_state = (GlobalWriteCSVData &)gstate;
@@ -522,13 +522,13 @@ static void write_csv_combine(ClientContext &context, FunctionData &bind_data, G
 
 void CSVCopyFunction::RegisterFunction(BuiltinFunctions &set) {
 	CopyFunction info("csv");
-	info.copy_to_bind = write_csv_bind;
-	info.copy_to_initialize_local = write_csv_initialize_local;
-	info.copy_to_initialize_global = write_csv_initialize_global;
-	info.copy_to_sink = write_csv_sink;
-	info.copy_to_combine = write_csv_combine;
+	info.copy_to_bind = WriteCSVBind;
+	info.copy_to_initialize_local = WriteCSVInitializeLocal;
+	info.copy_to_initialize_global = WriteCSVInitializeGlobal;
+	info.copy_to_sink = WriteCSVSink;
+	info.copy_to_combine = WriteCSVCombine;
 
-	info.copy_from_bind = read_csv_bind;
+	info.copy_from_bind = ReadCSVBind;
 	info.copy_from_function = ReadCSVTableFunction::GetFunction();
 
 	info.extension = "csv";

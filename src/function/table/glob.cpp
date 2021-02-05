@@ -9,7 +9,7 @@ struct GlobFunctionBindData : public TableFunctionData {
 	vector<string> files;
 };
 
-static unique_ptr<FunctionData> glob_function_bind(ClientContext &context, vector<Value> &inputs,
+static unique_ptr<FunctionData> GlobFunctionBind(ClientContext &context, vector<Value> &inputs,
                                                    unordered_map<string, Value> &named_parameters,
                                                    vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_unique<GlobFunctionBindData>();
@@ -27,15 +27,15 @@ struct GlobFunctionState : public FunctionOperatorData {
 	idx_t current_idx;
 };
 
-static unique_ptr<FunctionOperatorData> glob_function_init(ClientContext &context, const FunctionData *bind_data,
+static unique_ptr<FunctionOperatorData> GlobFunctionInit(ClientContext &context, const FunctionData *bind_data,
                                                            vector<column_t> &column_ids,
                                                            TableFilterCollection *filters) {
 	return make_unique<GlobFunctionState>();
 }
 
-static void glob_function(ClientContext &context, const FunctionData *bind_data_, FunctionOperatorData *state_,
+static void GlobFunction(ClientContext &context, const FunctionData *bind_data_p, FunctionOperatorData *state_,
                           DataChunk &output) {
-	auto &bind_data = (GlobFunctionBindData &)*bind_data_;
+	auto &bind_data = (GlobFunctionBindData &)*bind_data_p;
 	auto &state = (GlobFunctionState &)*state_;
 
 	idx_t count = 0;
@@ -49,7 +49,7 @@ static void glob_function(ClientContext &context, const FunctionData *bind_data_
 
 void GlobTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunctionSet glob("glob");
-	glob.AddFunction(TableFunction({LogicalType::VARCHAR}, glob_function, glob_function_bind, glob_function_init));
+	glob.AddFunction(TableFunction({LogicalType::VARCHAR}, GlobFunction, GlobFunctionBind, GlobFunctionInit));
 	set.AddFunction(glob);
 }
 

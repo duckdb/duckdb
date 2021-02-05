@@ -58,7 +58,7 @@ DatePartSpecifier GetDatePartSpecifier(string specifier) {
 }
 
 template <class T>
-static void year_operator(DataChunk &args, ExpressionState &state, Vector &result) {
+static void YearOperator(DataChunk &args, ExpressionState &state, Vector &result) {
 	int32_t last_year = 0;
 	UnaryExecutor::Execute<T, int64_t>(args.data[0], result, args.size(),
 	                                   [&](T input) { return Date::ExtractYear(input, &last_year); });
@@ -449,7 +449,7 @@ int64_t HoursOperator::Operation(timestamp_t input) {
 }
 
 template <class T>
-static int64_t extract_element(DatePartSpecifier type, T element) {
+static int64_t ExtractElement(DatePartSpecifier type, T element) {
 	switch (type) {
 	case DatePartSpecifier::YEAR:
 		return YearOperator::Operation<T, int64_t>(element);
@@ -493,7 +493,7 @@ static int64_t extract_element(DatePartSpecifier type, T element) {
 struct DatePartOperator {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA specifier, TB date) {
-		return extract_element<TB>(GetDatePartSpecifier(specifier.GetString()), date);
+		return ExtractElement<TB>(GetDatePartSpecifier(specifier.GetString()), date);
 	}
 };
 
@@ -548,7 +548,7 @@ struct DayNameOperator {
 
 void DatePartFun::RegisterFunction(BuiltinFunctions &set) {
 	// register the individual operators
-	AddGenericDatePartOperator(set, "year", year_operator<date_t>, year_operator<timestamp_t>,
+	AddGenericDatePartOperator(set, "year", YearOperator<date_t>, YearOperator<timestamp_t>,
 	                           YearOperator::PropagateStatistics<date_t>,
 	                           YearOperator::PropagateStatistics<timestamp_t>);
 	AddDatePartOperator<MonthOperator>(set, "month");

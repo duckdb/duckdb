@@ -807,10 +807,10 @@ struct PandasScanFunction : public TableFunction {
 		return make_unique<PandasScanFunctionData>(df, row_count, move(pandas_bind_data), return_types);
 	}
 
-	static unique_ptr<FunctionOperatorData> pandas_scan_init(ClientContext &context, const FunctionData *bind_data_,
+	static unique_ptr<FunctionOperatorData> pandas_scan_init(ClientContext &context, const FunctionData *bind_data_p,
 	                                                         vector<column_t> &column_ids,
 	                                                         TableFilterCollection *filters) {
-		auto &bind_data = (const PandasScanFunctionData &)*bind_data_;
+		auto &bind_data = (const PandasScanFunctionData &)*bind_data_p;
 		auto result = make_unique<PandasScanState>(0, bind_data.row_count);
 		result->column_ids = column_ids;
 		return result;
@@ -818,30 +818,30 @@ struct PandasScanFunction : public TableFunction {
 
 	static constexpr idx_t PANDAS_PARTITION_COUNT = 50 * STANDARD_VECTOR_SIZE;
 
-	static idx_t pandas_scan_max_threads(ClientContext &context, const FunctionData *bind_data_) {
-		auto &bind_data = (const PandasScanFunctionData &)*bind_data_;
+	static idx_t pandas_scan_max_threads(ClientContext &context, const FunctionData *bind_data_p) {
+		auto &bind_data = (const PandasScanFunctionData &)*bind_data_p;
 		return bind_data.row_count / PANDAS_PARTITION_COUNT + 1;
 	}
 
 	static unique_ptr<ParallelState> pandas_scan_init_parallel_state(ClientContext &context,
-	                                                                 const FunctionData *bind_data_) {
+	                                                                 const FunctionData *bind_data_p) {
 		return make_unique<ParallelPandasScanState>();
 	}
 
 	static unique_ptr<FunctionOperatorData>
-	pandas_scan_parallel_init(ClientContext &context, const FunctionData *bind_data_, ParallelState *state,
+	pandas_scan_parallel_init(ClientContext &context, const FunctionData *bind_data_p, ParallelState *state,
 	                          vector<column_t> &column_ids, TableFilterCollection *filters) {
 		auto result = make_unique<PandasScanState>(0, 0);
 		result->column_ids = column_ids;
-		if (!pandas_scan_parallel_state_next(context, bind_data_, result.get(), state)) {
+		if (!pandas_scan_parallel_state_next(context, bind_data_p, result.get(), state)) {
 			return nullptr;
 		}
 		return move(result);
 	}
 
-	static bool pandas_scan_parallel_state_next(ClientContext &context, const FunctionData *bind_data_,
+	static bool pandas_scan_parallel_state_next(ClientContext &context, const FunctionData *bind_data_p,
 	                                            FunctionOperatorData *operator_state, ParallelState *parallel_state_) {
-		auto &bind_data = (const PandasScanFunctionData &)*bind_data_;
+		auto &bind_data = (const PandasScanFunctionData &)*bind_data_p;
 		auto &parallel_state = (ParallelPandasScanState &)*parallel_state_;
 		auto &state = (PandasScanState &)*operator_state;
 

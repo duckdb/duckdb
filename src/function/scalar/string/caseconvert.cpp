@@ -39,7 +39,7 @@ uint8_t LowerFun::ASCIIToLowerMap[] = {
     242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254};
 
 template <bool IS_UPPER>
-static string_t strcase_ascii(Vector &result, const char *input_data, idx_t input_length) {
+static string_t ASCIICaseConvert(Vector &result, const char *input_data, idx_t input_length) {
 	idx_t output_length = input_length;
 	auto result_str = StringVector::EmptyString(result, output_length);
 	auto result_data = result_str.GetDataWriteable();
@@ -105,7 +105,7 @@ void LowerFun::LowerCase(const char *input_data, idx_t input_length, char *resul
 }
 
 template <bool IS_UPPER>
-static string_t strcase_unicode(Vector &result, const char *input_data, idx_t input_length) {
+static string_t UnicodeCaseConvert(Vector &result, const char *input_data, idx_t input_length) {
 	// first figure out the output length
 	idx_t output_length = GetResultLength<IS_UPPER>(input_data, input_length);
 	auto result_str = StringVector::EmptyString(result, output_length);
@@ -117,11 +117,11 @@ static string_t strcase_unicode(Vector &result, const char *input_data, idx_t in
 }
 
 template <bool IS_UPPER>
-static void caseconvert_function(DataChunk &args, ExpressionState &state, Vector &result) {
+static void CaseConvertFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	UnaryExecutor::Execute<string_t, string_t, true>(args.data[0], result, args.size(), [&](string_t input) {
 		auto input_data = input.GetDataUnsafe();
 		auto input_length = input.GetSize();
-		return strcase_unicode<IS_UPPER>(result, input_data, input_length);
+		return UnicodeCaseConvert<IS_UPPER>(result, input_data, input_length);
 	});
 }
 
@@ -130,7 +130,7 @@ static void caseconvert_function_ascii(DataChunk &args, ExpressionState &state, 
 	UnaryExecutor::Execute<string_t, string_t, true>(args.data[0], result, args.size(), [&](string_t input) {
 		auto input_data = input.GetDataUnsafe();
 		auto input_length = input.GetSize();
-		return strcase_ascii<IS_UPPER>(result, input_data, input_length);
+		return ASCIICaseConvert<IS_UPPER>(result, input_data, input_length);
 	});
 }
 
@@ -151,7 +151,7 @@ static unique_ptr<BaseStatistics> caseconvert_propagate_stats(ClientContext &con
 }
 
 ScalarFunction LowerFun::GetFunction() {
-	return ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, caseconvert_function<false>, false, nullptr,
+	return ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, CaseConvertFunction<false>, false, nullptr,
 	                      nullptr, caseconvert_propagate_stats<false>);
 }
 
@@ -161,7 +161,7 @@ void LowerFun::RegisterFunction(BuiltinFunctions &set) {
 
 void UpperFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction({"upper", "ucase"},
-	                ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, caseconvert_function<true>, false,
+	                ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, CaseConvertFunction<true>, false,
 	                               nullptr, nullptr, caseconvert_propagate_stats<true>));
 }
 

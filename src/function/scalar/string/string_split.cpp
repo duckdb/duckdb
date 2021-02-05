@@ -145,7 +145,7 @@ protected:
 	const bool ascii_only;
 };
 
-void string_split(const char *input, StringSplitIterator &iter, ChunkCollection &result) {
+void StringSplitFunction(const char *input, StringSplitIterator &iter, ChunkCollection &result) {
 	DataChunk append_chunk;
 	vector<LogicalType> types = {LogicalType::VARCHAR};
 	append_chunk.Initialize(types);
@@ -181,7 +181,7 @@ void string_split(const char *input, StringSplitIterator &iter, ChunkCollection 
 	result.Verify();
 }
 
-unique_ptr<ChunkCollection> string_split(string_t input, string_t delim, const bool regex) {
+unique_ptr<ChunkCollection> StringSplitFunction(string_t input, string_t delim, const bool regex) {
 	const char *input_data = input.GetDataUnsafe();
 	size_t input_size = input.GetSize();
 	const char *delim_data = delim.GetDataUnsafe();
@@ -204,7 +204,7 @@ unique_ptr<ChunkCollection> string_split(string_t input, string_t delim, const b
 	} else {
 		iter = make_unique_base<StringSplitIterator, UnicodeStringSplitIterator>(input_size, delim_data, delim_size);
 	}
-	string_split(input_data, *iter, *output);
+	StringSplitFunction(input_data, *iter, *output);
 
 	return output;
 }
@@ -245,7 +245,7 @@ static void string_split_executor(DataChunk &args, ExpressionState &state, Vecto
 			split_input->Append(append_chunk);
 		} else {
 			string_t delim = delims[delim_data.sel->get_index(i)];
-			split_input = string_split(input, delim, regex);
+			split_input = StringSplitFunction(input, delim, regex);
 		}
 		list_struct_data[i].length = split_input->Count();
 		list_struct_data[i].offset = total_len;

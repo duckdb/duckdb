@@ -9,7 +9,7 @@
 
 namespace duckdb {
 
-static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Value> &inputs,
+static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, vector<Value> &inputs,
                                               unordered_map<string, Value> &named_parameters,
                                               vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_unique<ReadCSVData>();
@@ -140,9 +140,9 @@ struct ReadCSVOperatorData : public FunctionOperatorData {
 	idx_t file_index;
 };
 
-static unique_ptr<FunctionOperatorData> read_csv_init(ClientContext &context, const FunctionData *bind_data_,
+static unique_ptr<FunctionOperatorData> ReadCSVInit(ClientContext &context, const FunctionData *bind_data_p,
                                                       vector<column_t> &column_ids, TableFilterCollection *filters) {
-	auto &bind_data = (ReadCSVData &)*bind_data_;
+	auto &bind_data = (ReadCSVData &)*bind_data_p;
 	auto result = make_unique<ReadCSVOperatorData>();
 	if (bind_data.initial_reader) {
 		result->csv_reader = move(bind_data.initial_reader);
@@ -154,16 +154,16 @@ static unique_ptr<FunctionOperatorData> read_csv_init(ClientContext &context, co
 	return move(result);
 }
 
-static unique_ptr<FunctionData> read_csv_auto_bind(ClientContext &context, vector<Value> &inputs,
+static unique_ptr<FunctionData> ReadCSVAutoBind(ClientContext &context, vector<Value> &inputs,
                                                    unordered_map<string, Value> &named_parameters,
                                                    vector<LogicalType> &return_types, vector<string> &names) {
 	named_parameters["auto_detect"] = Value::BOOLEAN(true);
-	return read_csv_bind(context, inputs, named_parameters, return_types, names);
+	return ReadCSVBind(context, inputs, named_parameters, return_types, names);
 }
 
-static void read_csv_function(ClientContext &context, const FunctionData *bind_data_,
+static void read_csv_function(ClientContext &context, const FunctionData *bind_data_p,
                               FunctionOperatorData *operator_state, DataChunk &output) {
-	auto &bind_data = (ReadCSVData &)*bind_data_;
+	auto &bind_data = (ReadCSVData &)*bind_data_p;
 	auto &data = (ReadCSVOperatorData &)*operator_state;
 	do {
 		data.csv_reader->ParseCSV(output);
@@ -204,7 +204,7 @@ static void add_named_parameters(TableFunction &table_function) {
 }
 
 TableFunction ReadCSVTableFunction::GetFunction() {
-	TableFunction read_csv("read_csv", {LogicalType::VARCHAR}, read_csv_function, read_csv_bind, read_csv_init);
+	TableFunction read_csv("read_csv", {LogicalType::VARCHAR}, read_csv_function, ReadCSVBind, ReadCSVInit);
 	add_named_parameters(read_csv);
 	return read_csv;
 }
@@ -212,8 +212,8 @@ TableFunction ReadCSVTableFunction::GetFunction() {
 void ReadCSVTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ReadCSVTableFunction::GetFunction());
 
-	TableFunction read_csv_auto("read_csv_auto", {LogicalType::VARCHAR}, read_csv_function, read_csv_auto_bind,
-	                            read_csv_init);
+	TableFunction read_csv_auto("read_csv_auto", {LogicalType::VARCHAR}, read_csv_function, ReadCSVAutoBind,
+	                            ReadCSVInit);
 	add_named_parameters(read_csv_auto);
 	set.AddFunction(read_csv_auto);
 }

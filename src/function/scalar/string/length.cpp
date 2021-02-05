@@ -32,7 +32,7 @@ struct BitLenOperator {
 	}
 };
 
-static unique_ptr<BaseStatistics> length_propagate_stats(ClientContext &context, BoundFunctionExpression &expr,
+static unique_ptr<BaseStatistics> LengthPropagateStats(ClientContext &context, BoundFunctionExpression &expr,
                                                          FunctionData *bind_data,
                                                          vector<unique_ptr<BaseStatistics>> &child_stats) {
 	D_ASSERT(child_stats.size() == 1);
@@ -51,7 +51,7 @@ void LengthFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction({"length", "len"},
 	                ScalarFunction({LogicalType::VARCHAR}, LogicalType::BIGINT,
 	                               ScalarFunction::UnaryFunction<string_t, int64_t, StringLengthOperator, true>, false,
-	                               nullptr, nullptr, length_propagate_stats));
+	                               nullptr, nullptr, LengthPropagateStats));
 	set.AddFunction(ScalarFunction("strlen", {LogicalType::VARCHAR}, LogicalType::BIGINT,
 	                               ScalarFunction::UnaryFunction<string_t, int64_t, StrLenOperator, true>));
 	set.AddFunction(ScalarFunction("bit_length", {LogicalType::VARCHAR}, LogicalType::BIGINT,

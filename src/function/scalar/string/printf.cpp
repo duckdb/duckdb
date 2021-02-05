@@ -22,7 +22,7 @@ struct FMTFormat {
 	}
 };
 
-unique_ptr<FunctionData> bind_printf_function(ClientContext &context, ScalarFunction &bound_function,
+unique_ptr<FunctionData> BindPrintfFunction(ClientContext &context, ScalarFunction &bound_function,
                                               vector<unique_ptr<Expression>> &arguments) {
 	for (idx_t i = 1; i < arguments.size(); i++) {
 		switch (arguments[i]->return_type.id()) {
@@ -150,14 +150,14 @@ void PrintfFun::RegisterFunction(BuiltinFunctions &set) {
 	// duckdb_fmt::printf_context, duckdb_fmt::vsprintf
 	ScalarFunction printf_fun =
 	    ScalarFunction("printf", {LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                   printf_function<FMTPrintf, duckdb_fmt::printf_context>, false, bind_printf_function);
+	                   printf_function<FMTPrintf, duckdb_fmt::printf_context>, false, BindPrintfFunction);
 	printf_fun.varargs = LogicalType::ANY;
 	set.AddFunction(printf_fun);
 
 	// duckdb_fmt::format_context, duckdb_fmt::vformat
 	ScalarFunction format_fun =
 	    ScalarFunction("format", {LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                   printf_function<FMTFormat, duckdb_fmt::format_context>, false, bind_printf_function);
+	                   printf_function<FMTFormat, duckdb_fmt::format_context>, false, BindPrintfFunction);
 	format_fun.varargs = LogicalType::ANY;
 	set.AddFunction(format_fun);
 }

@@ -87,8 +87,8 @@ struct ReservoirQuantileOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, FunctionData *bind_data_, INPUT_TYPE *data, nullmask_t &nullmask, idx_t idx) {
-		auto bind_data = (ReservoirQuantileBindData *)bind_data_;
+	static void Operation(STATE *state, FunctionData *bind_data_p, INPUT_TYPE *data, nullmask_t &nullmask, idx_t idx) {
+		auto bind_data = (ReservoirQuantileBindData *)bind_data_p;
 		D_ASSERT(bind_data);
 		if (nullmask[idx]) {
 			return;
@@ -114,15 +114,15 @@ struct ReservoirQuantileOperation {
 	}
 
 	template <class TARGET_TYPE, class STATE>
-	static void Finalize(Vector &result, FunctionData *bind_data_, STATE *state, TARGET_TYPE *target,
+	static void Finalize(Vector &result, FunctionData *bind_data_p, STATE *state, TARGET_TYPE *target,
 	                     nullmask_t &nullmask, idx_t idx) {
 		if (state->pos == 0) {
 			nullmask[idx] = true;
 			return;
 		}
 		D_ASSERT(state->v);
-		D_ASSERT(bind_data_);
-		auto bind_data = (ReservoirQuantileBindData *)bind_data_;
+		D_ASSERT(bind_data_p);
+		auto bind_data = (ReservoirQuantileBindData *)bind_data_p;
 		auto v_t = (T *)state->v;
 		auto offset = (idx_t)((double)(state->pos - 1) * bind_data->quantile);
 		std::nth_element(v_t, v_t + offset, v_t + state->pos);

@@ -8,7 +8,7 @@
 
 namespace duckdb {
 
-static void list_value_fun(DataChunk &args, ExpressionState &state, Vector &result) {
+static void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	//	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	//	auto &info = (VariableReturnBindData &)*func_expr.bind_info;
 
@@ -45,7 +45,7 @@ static void list_value_fun(DataChunk &args, ExpressionState &state, Vector &resu
 	result.Verify(args.size());
 }
 
-static unique_ptr<FunctionData> list_value_bind(ClientContext &context, ScalarFunction &bound_function,
+static unique_ptr<FunctionData> ListValueBind(ClientContext &context, ScalarFunction &bound_function,
                                                 vector<unique_ptr<Expression>> &arguments) {
 	// collect names and deconflict, construct return type
 	child_list_t<LogicalType> child_types;
@@ -62,7 +62,7 @@ static unique_ptr<FunctionData> list_value_bind(ClientContext &context, ScalarFu
 
 void ListValueFun::RegisterFunction(BuiltinFunctions &set) {
 	// the arguments and return types are actually set in the binder function
-	ScalarFunction fun("list_value", {}, LogicalType::LIST, list_value_fun, false, list_value_bind);
+	ScalarFunction fun("list_value", {}, LogicalType::LIST, ListValueFunction, false, ListValueBind);
 	fun.varargs = LogicalType::ANY;
 	set.AddFunction(fun);
 }

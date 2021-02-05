@@ -37,7 +37,7 @@ struct InstrAsciiOperator {
 	}
 };
 
-static unique_ptr<BaseStatistics> instr_propagate_stats(ClientContext &context, BoundFunctionExpression &expr,
+static unique_ptr<BaseStatistics> InStrPropagateStats(ClientContext &context, BoundFunctionExpression &expr,
                                                         FunctionData *bind_data,
                                                         vector<unique_ptr<BaseStatistics>> &child_stats) {
 	D_ASSERT(child_stats.size() == 2);
@@ -58,7 +58,7 @@ void InstrFun::RegisterFunction(BuiltinFunctions &set) {
 	                     {LogicalType::VARCHAR, LogicalType::VARCHAR}, // argument list
 	                     LogicalType::BIGINT,                          // return type
 	                     ScalarFunction::BinaryFunction<string_t, string_t, int64_t, InstrOperator, true>, false,
-	                     nullptr, nullptr, instr_propagate_stats);
+	                     nullptr, nullptr, InStrPropagateStats);
 	set.AddFunction(instr);
 	instr.name = "strpos";
 	set.AddFunction(instr);

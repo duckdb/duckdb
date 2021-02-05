@@ -5,7 +5,7 @@
 
 namespace duckdb {
 
-static unique_ptr<FunctionData> checkpoint_bind(ClientContext &context, vector<Value> &inputs,
+static unique_ptr<FunctionData> CheckpointBind(ClientContext &context, vector<Value> &inputs,
                                                 unordered_map<string, Value> &named_parameters,
                                                 vector<LogicalType> &return_types, vector<string> &names) {
 	return_types.push_back(LogicalType::BOOLEAN);
@@ -14,16 +14,16 @@ static unique_ptr<FunctionData> checkpoint_bind(ClientContext &context, vector<V
 }
 
 template <bool FORCE>
-static void checkpoint_function(ClientContext &context, const FunctionData *bind_data_,
+static void TemplatedCheckpointFunction(ClientContext &context, const FunctionData *bind_data_p,
                                 FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &transaction_manager = TransactionManager::Get(context);
 	transaction_manager.Checkpoint(context, FORCE);
 }
 
 void CheckpointFunction::RegisterFunction(BuiltinFunctions &set) {
-	TableFunction checkpoint("checkpoint", {}, checkpoint_function<false>, checkpoint_bind);
+	TableFunction checkpoint("checkpoint", {}, TemplatedCheckpointFunction<false>, CheckpointBind);
 	set.AddFunction(checkpoint);
-	TableFunction force_checkpoint("force_checkpoint", {}, checkpoint_function<true>, checkpoint_bind);
+	TableFunction force_checkpoint("force_checkpoint", {}, TemplatedCheckpointFunction<true>, CheckpointBind);
 	set.AddFunction(force_checkpoint);
 }
 
