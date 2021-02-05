@@ -1,0 +1,22 @@
+# name: test/sql/aggregate/aggregates/test_approximate_distinct_count.test
+# description: Test approx_count_distinct operator
+# group: [aggregates]
+
+statement error
+select approx_count_distinct(*)
+
+statement ok
+select approx_count_distinct(1)
+
+statement ok
+select approx_count_distinct(NULL)
+
+
+# test counts on a set of values
+statement ok
+create  table t as select range a, mod(range,10) b from range(2000);
+
+statement ok
+SELECT COUNT( a),approx_count_distinct(a),approx_count_distinct(b) from t
+
+

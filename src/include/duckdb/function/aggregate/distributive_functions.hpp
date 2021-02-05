@@ -38,6 +38,12 @@ struct CountFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+
+struct ApproxCountDistinctFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+
 struct FirstFun {
 	static AggregateFunction GetFunction(LogicalType type);
 

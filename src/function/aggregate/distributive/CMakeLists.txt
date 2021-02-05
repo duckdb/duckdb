@@ -1,6 +1,7 @@
 add_library_unity(
   duckdb_aggr_distr
   OBJECT
+        approx_count.cpp
   bitagg.cpp
   count.cpp
   first.cpp
