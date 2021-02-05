@@ -3,15 +3,11 @@
 #include "httplib.hpp"
 #include "duckdb.hpp"
 
-#include <map>
-
 using namespace duckdb;
 
-static std::map<std::string, std::string> create_s3_get_header(std::string url, std::string host, std::string region,
-                                                               std::string service, std::string method,
-                                                               std::string access_key_id, std::string secret_access_key,
-                                                               std::string date_now = "",
-                                                               std::string datetime_now = "") {
+static HeaderMap create_s3_get_header(std::string url, std::string host, std::string region, std::string service,
+                                      std::string method, std::string access_key_id, std::string secret_access_key,
+                                      std::string date_now = "", std::string datetime_now = "") {
 	// this is the sha256 of the empty string, its useful since we have no payload for GET requests
 	auto empty_payload_hash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
@@ -26,7 +22,7 @@ static std::map<std::string, std::string> create_s3_get_header(std::string url, 
 		strftime((char *)datetime_now.c_str(), datetime_now.size(), "%Y%m%dT%H%M%SZ", tmp);
 	}
 
-	std::map<std::string, std::string> res;
+	HeaderMap res;
 	res["Host"] = host;
 	res["x-amz-date"] = datetime_now;
 	res["x-amz-content-sha256"] = empty_payload_hash;
@@ -60,128 +56,42 @@ static std::map<std::string, std::string> create_s3_get_header(std::string url, 
 	return res;
 }
 
-static httplib::Result s3_get(std::string s3_url, std::string region, std::string method, std::string access_key_id,
-                              std::string secret_access_key, idx_t file_offset = 0, char *buffer_out = nullptr,
-                              idx_t buffer_len = 0) {
+unique_ptr<ResponseWrapper> S3FileSystem::Request(FileHandle &handle, string url, string method, HeaderMap header_map,
+                                                  idx_t file_offset, char *buffer_out, idx_t buffer_len) {
 	// some URI parsing woo
-	if (s3_url.rfind("s3://", 0) != 0) {
+	if (url.rfind("s3://", 0) != 0) {
 		throw std::runtime_error("URL needs to start with s3://");
 	}
-	auto slash_pos = s3_url.find('/', 5);
+	auto slash_pos = url.find('/', 5);
 	if (slash_pos == std::string::npos) {
 		throw std::runtime_error("URL needs to contain a '/' after the host");
 	}
-	auto bucket = s3_url.substr(5, slash_pos - 5);
+	auto bucket = url.substr(5, slash_pos - 5);
 	if (bucket.empty()) {
 		throw std::runtime_error("URL needs to contain a bucket name");
 	}
-	auto path = s3_url.substr(slash_pos);
+	auto path = url.substr(slash_pos);
 	if (path.empty()) {
 		throw std::runtime_error("URL needs to contain a bucket name");
 	}
 	auto host = bucket + ".s3.amazonaws.com";
+	auto http_host = "http://" + host;
 	// actual request
-	httplib::Client cli(std::string("http://" + host).c_str());
-	auto auth_headers = create_s3_get_header(path, host, region, "s3", method, access_key_id, secret_access_key);
-	httplib::Headers headers;
-	for (auto &entry : auth_headers) {
-		headers.insert(entry);
-	}
 
-	if (method == "HEAD") {
-		return cli.Head(path.c_str(), headers);
-	}
-	std::string range_expr =
-	    "bytes=" + std::to_string(file_offset) + "-" + std::to_string(file_offset + buffer_len - 1);
-	// printf("%s(%llu, %llu)\n", method.c_str(), file_offset, buffer_len);
-
-	// send the Range header to read only subset of file
-	headers.insert(std::pair<std::string, std::string>("Range", range_expr));
-
-	idx_t out_offset = 0;
-	return cli.Get(
-	    path.c_str(), headers,
-	    [&](const httplib::Response &response) {
-		    if (response.status >= 300) {
-			    throw std::runtime_error("HTTP error");
-		    }
-		    auto content_length = std::stol(response.get_header_value("Content-Length", 0));
-		    if (content_length != buffer_len) {
-			    throw std::runtime_error("offset error");
-		    }
-		    return true; // return 'false' if you want to cancel the request.
-	    },
-	    [&](const char *data, size_t data_length) {
-		    memcpy(buffer_out + out_offset, data, data_length);
-		    out_offset += data_length;
-		    return true; // return 'false' if you want to cancel the request.
-	    });
+	return HTTPFileSystem::Request(handle, http_host + path, method, CreateAuthHeaders(host, path, method), file_offset,
+	                               buffer_out, buffer_len);
 }
 
-S3FileHandle::S3FileHandle(FileSystem &fs, std::string path)
-    : FileHandle(fs, path), length(0), buffer_available(0), buffer_idx(0), file_offset(0) {
-	auto &sfs = (S3FileSystem &)fs;
+HeaderMap S3FileSystem::CreateAuthHeaders(string host, string path, string method) {
+	auto region = database_instance.config.set_variables["s3_region"].str_value;
+	auto access_key_id = database_instance.config.set_variables["s3_access_key_id"].str_value;
+	auto secret_access_key = database_instance.config.set_variables["s3_secret_access_key"].str_value;
 
-	region = sfs.database_instance.config.set_variables["s3_region"].str_value;
-	access_key_id = sfs.database_instance.config.set_variables["s3_access_key_id"].str_value;
-	secret_access_key = sfs.database_instance.config.set_variables["s3_secret_access_key"].str_value;
-
-	IntializeMetadata();
-	buffer = std::unique_ptr<data_t[]>(new data_t[BUFFER_LEN]);
+	return create_s3_get_header(path, host, region, "s3", method, access_key_id, secret_access_key);
 }
 
 std::unique_ptr<FileHandle> S3FileSystem::OpenFile(const char *path, uint8_t flags, FileLockType lock) {
-	return duckdb::make_unique<S3FileHandle>(*this, path);
-}
-
-void S3FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
-	auto &sfh = (S3FileHandle &)handle;
-	idx_t to_read = nr_bytes;
-	idx_t buffer_offset = 0;
-	if (location + nr_bytes > sfh.length) {
-		throw std::runtime_error("out of file");
-	}
-
-	// TODO we need to check if location is within the cached buffer and update or invalidate
-	// for now just invalidate
-	if (location != sfh.file_offset) {
-		sfh.buffer_available = 0;
-		sfh.buffer_idx = 0;
-		sfh.file_offset = location;
-	}
-
-	while (to_read > 0) {
-		auto buffer_read_len = MinValue<idx_t>(sfh.buffer_available, to_read);
-		memcpy((char *)buffer + buffer_offset, sfh.buffer.get() + sfh.buffer_idx, buffer_read_len);
-
-		buffer_offset += buffer_read_len;
-		to_read -= buffer_read_len;
-
-		sfh.buffer_idx += buffer_read_len;
-		sfh.buffer_available -= buffer_read_len;
-		sfh.file_offset += buffer_read_len;
-
-		if (to_read > 0 && sfh.buffer_available == 0) {
-			auto new_buffer_available = MinValue<idx_t>(sfh.BUFFER_LEN, sfh.length - sfh.file_offset);
-			auto res = s3_get(sfh.path, sfh.region, "GET", sfh.access_key_id, sfh.secret_access_key, sfh.file_offset,
-			                  (char *)sfh.buffer.get(), new_buffer_available);
-			sfh.buffer_available = new_buffer_available;
-			sfh.buffer_idx = 0;
-		}
-	}
-}
-
-void S3FileHandle::IntializeMetadata() {
-	// get length using HEAD
-	auto res = s3_get(path, region, "HEAD", access_key_id, secret_access_key);
-	if (res->status != 200) {
-		throw std::runtime_error("Unable to connect " + res->body);
-	}
-	length = std::atoll(res->get_header_value("Content-Length").c_str());
-
-	struct tm tm;
-	strptime(res->get_header_value("Last-Modified").c_str(), "%a, %d %h %Y %T %Z", &tm);
-	last_modified = std::mktime(&tm);
+	return duckdb::make_unique<HTTPFileHandle>(*this, path);
 }
 
 // this computes the signature from https://czak.pl/2015/09/15/s3-rest-api-with-curl.html
