@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/parser/sql_statement.hpp"
+#include "duckdb/common/types/value.hpp"
 
 namespace duckdb {
 
