@@ -2,9 +2,9 @@
 
 namespace duckdb {
 
-RadixPartitionInfo::RadixPartitionInfo(idx_t _n_partitions_upper_bound)
+RadixPartitionInfo::RadixPartitionInfo(idx_t n_partitions_upper_bound)
     : n_partitions(1), radix_bits(0), radix_mask(0) {
-	while (n_partitions <= _n_partitions_upper_bound / 2) {
+	while (n_partitions <= n_partitions_upper_bound / 2) {
 		n_partitions *= 2;
 		if (n_partitions >= 256) {
 			break;
@@ -30,11 +30,11 @@ RadixPartitionInfo::RadixPartitionInfo(idx_t _n_partitions_upper_bound)
 	radix_mask <<= RADIX_SHIFT;
 }
 
-PartitionableHashTable::PartitionableHashTable(BufferManager &_buffer_manager, RadixPartitionInfo &_partition_info,
-                                               vector<LogicalType> _group_types, vector<LogicalType> _payload_types,
-                                               vector<BoundAggregateExpression *> _bindings)
-    : buffer_manager(_buffer_manager), group_types(_group_types), payload_types(_payload_types), bindings(_bindings),
-      is_partitioned(false), partition_info(_partition_info) {
+PartitionableHashTable::PartitionableHashTable(BufferManager &buffer_manager_p, RadixPartitionInfo &partition_info_p,
+                                               vector<LogicalType> group_types_p, vector<LogicalType> payload_types_p,
+                                               vector<BoundAggregateExpression *> bindings_p)
+    : buffer_manager(buffer_manager_p), group_types(group_types_p), payload_types(payload_types_p), bindings(bindings_p),
+      is_partitioned(false), partition_info(partition_info_p) {
 
 	sel_vectors.resize(partition_info.n_partitions);
 	sel_vector_sizes.resize(partition_info.n_partitions);

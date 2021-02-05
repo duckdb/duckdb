@@ -25,7 +25,7 @@ string_t SubstringSlice(Vector &result, const char *input_data, int64_t offset, 
 }
 
 // compute start and end characters from the given input size and offset/length
-bool substring_start_end(int64_t input_size, int64_t offset, int64_t length, int64_t &start, int64_t &end) {
+bool SubstringStartEnd(int64_t input_size, int64_t offset, int64_t length, int64_t &start, int64_t &end) {
 	if (length == 0) {
 		return false;
 	}
@@ -58,12 +58,12 @@ bool substring_start_end(int64_t input_size, int64_t offset, int64_t length, int
 	return true;
 }
 
-string_t substring_ascii_only(Vector &result, string_t input, int64_t offset, int64_t length) {
+string_t SubstringASCII(Vector &result, string_t input, int64_t offset, int64_t length) {
 	auto input_data = input.GetDataUnsafe();
 	auto input_size = input.GetSize();
 
 	int64_t start, end;
-	if (!substring_start_end(input_size, offset, length, start, end)) {
+	if (!SubstringStartEnd(input_size, offset, length, start, end)) {
 		return SubstringEmptyString(result);
 	}
 	return SubstringSlice(result, input_data, start, end - start);
@@ -76,7 +76,7 @@ string_t SubstringFun::substring_scalar_function(Vector &result, string_t input,
 	// we don't know yet if the substring is ascii, but we assume it is (for now)
 	// first get the start and end as if this was an ascii string
 	int64_t start, end;
-	if (!substring_start_end(input_size, offset, length, start, end)) {
+	if (!SubstringStartEnd(input_size, offset, length, start, end)) {
 		return SubstringEmptyString(result);
 	}
 
@@ -97,7 +97,7 @@ string_t SubstringFun::substring_scalar_function(Vector &result, string_t input,
 	}
 	// if the characters are not ascii, we need to scan grapheme clusters
 	// first figure out which direction we need to scan
-	// offset = 0 case is taken care of in substring_start_end
+	// offset = 0 case is taken care of in SubstringStartEnd
 	if (offset < 0) {
 		// negative offset, this case is more difficult
 		// we first need to count the number of characters in the string
@@ -107,7 +107,7 @@ string_t SubstringFun::substring_scalar_function(Vector &result, string_t input,
 			return true;
 		});
 		// now call substring start and end again, but with the number of unicode characters this time
-		substring_start_end(num_characters, offset, length, start, end);
+		SubstringStartEnd(num_characters, offset, length, start, end);
 	}
 
 	// now scan the graphemes of the string to find the positions of the start and end characters
@@ -159,12 +159,12 @@ static void substring_function_ascii(DataChunk &args, ExpressionState &state, Ve
 		TernaryExecutor::Execute<string_t, int32_t, int32_t, string_t>(
 		    input_vector, offset_vector, length_vector, result, args.size(),
 		    [&](string_t input_string, int32_t offset, int32_t length) {
-			    return substring_ascii_only(result, input_string, offset, length);
+			    return SubstringASCII(result, input_string, offset, length);
 		    });
 	} else {
 		BinaryExecutor::Execute<string_t, int32_t, string_t, true>(
 		    input_vector, offset_vector, result, args.size(), [&](string_t input_string, int32_t offset) {
-			    return substring_ascii_only(result, input_string, offset, NumericLimits<int32_t>::Maximum());
+			    return SubstringASCII(result, input_string, offset, NumericLimits<int32_t>::Maximum());
 		    });
 	}
 }

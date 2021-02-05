@@ -36,8 +36,8 @@ PhysicalRecursiveCTE::~PhysicalRecursiveCTE() {
 
 // first exhaust non recursive term, then exhaust recursive term iteratively until no (new) rows are generated.
 void PhysicalRecursiveCTE::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
-                                            PhysicalOperatorState *state_) {
-	auto state = reinterpret_cast<PhysicalRecursiveCTEState *>(state_);
+                                            PhysicalOperatorState *state_p) {
+	auto state = reinterpret_cast<PhysicalRecursiveCTEState *>(state_p);
 
 	if (!state->ht) {
 		state->ht = make_unique<GroupedAggregateHashTable>(BufferManager::GetBufferManager(context.client), types,
@@ -137,8 +137,8 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 	}
 }
 
-idx_t PhysicalRecursiveCTE::ProbeHT(DataChunk &chunk, PhysicalOperatorState *state_) {
-	auto state = reinterpret_cast<PhysicalRecursiveCTEState *>(state_);
+idx_t PhysicalRecursiveCTE::ProbeHT(DataChunk &chunk, PhysicalOperatorState *state_p) {
+	auto state = reinterpret_cast<PhysicalRecursiveCTEState *>(state_p);
 
 	Vector dummy_addresses(LogicalType::POINTER);
 

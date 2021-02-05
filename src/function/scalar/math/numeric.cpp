@@ -190,13 +190,13 @@ struct CeilOperator {
 };
 
 template <class T, class POWERS_OF_TEN, class OP>
-static void generic_round_function_decimal(DataChunk &input, ExpressionState &state, Vector &result) {
+static void GenericRoundFunctionDecimal(DataChunk &input, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	OP::template Operation<T, POWERS_OF_TEN>(input, func_expr.children[0]->return_type.scale(), result);
 }
 
 template <class OP>
-unique_ptr<FunctionData> bind_generic_round_function_decimal(ClientContext &context, ScalarFunction &bound_function,
+unique_ptr<FunctionData> BindGenericRoundFunctionDecimal(ClientContext &context, ScalarFunction &bound_function,
                                                              vector<unique_ptr<Expression>> &arguments) {
 	// ceil essentially removes the scale
 	auto decimal_type = arguments[0]->return_type;
@@ -205,16 +205,16 @@ unique_ptr<FunctionData> bind_generic_round_function_decimal(ClientContext &cont
 	} else {
 		switch (decimal_type.InternalType()) {
 		case PhysicalType::INT16:
-			bound_function.function = generic_round_function_decimal<int16_t, NumericHelper, OP>;
+			bound_function.function = GenericRoundFunctionDecimal<int16_t, NumericHelper, OP>;
 			break;
 		case PhysicalType::INT32:
-			bound_function.function = generic_round_function_decimal<int32_t, NumericHelper, OP>;
+			bound_function.function = GenericRoundFunctionDecimal<int32_t, NumericHelper, OP>;
 			break;
 		case PhysicalType::INT64:
-			bound_function.function = generic_round_function_decimal<int64_t, NumericHelper, OP>;
+			bound_function.function = GenericRoundFunctionDecimal<int64_t, NumericHelper, OP>;
 			break;
 		default:
-			bound_function.function = generic_round_function_decimal<hugeint_t, Hugeint, OP>;
+			bound_function.function = GenericRoundFunctionDecimal<hugeint_t, Hugeint, OP>;
 			break;
 		}
 	}
@@ -256,7 +256,7 @@ void CeilFun::RegisterFunction(BuiltinFunctions &set) {
 			func = ScalarFunction::UnaryFunction<double, double, CeilOperator>;
 			break;
 		case LogicalTypeId::DECIMAL:
-			bind_func = bind_generic_round_function_decimal<CeilDecimalOperator>;
+			bind_func = BindGenericRoundFunctionDecimal<CeilDecimalOperator>;
 			break;
 		default:
 			throw NotImplementedException("Unimplemented numeric type for function \"ceil\"");
@@ -312,7 +312,7 @@ void FloorFun::RegisterFunction(BuiltinFunctions &set) {
 			func = ScalarFunction::UnaryFunction<double, double, FloorOperator>;
 			break;
 		case LogicalTypeId::DECIMAL:
-			bind_func = bind_generic_round_function_decimal<FloorDecimalOperator>;
+			bind_func = BindGenericRoundFunctionDecimal<FloorDecimalOperator>;
 			break;
 		default:
 			throw NotImplementedException("Unimplemented numeric type for function \"floor\"");
@@ -514,7 +514,7 @@ void RoundFun::RegisterFunction(BuiltinFunctions &set) {
 			round_prec_func = ScalarFunction::BinaryFunction<double, int32_t, double, RoundOperatorPrecision>;
 			break;
 		case LogicalTypeId::DECIMAL:
-			bind_func = bind_generic_round_function_decimal<RoundDecimalOperator>;
+			bind_func = BindGenericRoundFunctionDecimal<RoundDecimalOperator>;
 			bind_prec_func = BindDecimalRoundPrecision;
 			break;
 		default:

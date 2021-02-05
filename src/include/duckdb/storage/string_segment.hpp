@@ -86,7 +86,7 @@ protected:
 	            idx_t count, idx_t vector_index, idx_t vector_offset, UpdateInfo *node) override;
 
 	void Select(ColumnScanState &state, Vector &result, SelectionVector &sel, idx_t &approved_tuple_count,
-	            vector<TableFilter> &tableFilter) override;
+	            vector<TableFilter> &table_filter) override;
 
 	void FetchBaseData(ColumnScanState &state, idx_t vector_index, Vector &result) override;
 	void FetchUpdateData(ColumnScanState &state, transaction_t start_time, transaction_t transaction_id,

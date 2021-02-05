@@ -9,12 +9,12 @@ namespace duckdb {
 // Comparison Operations
 //===--------------------------------------------------------------------===//
 template <class OP>
-static bool templated_boolean_operation(const Value &left, const Value &right) {
+static bool TemplatedBooleanOperation(const Value &left, const Value &right) {
 	auto left_type = left.type(), right_type = right.type();
 	if (left_type != right_type) {
 		try {
 			LogicalType comparison_type = BoundComparisonExpression::BindComparison(left_type, right_type);
-			return templated_boolean_operation<OP>(left.CastAs(comparison_type), right.CastAs(comparison_type));
+			return TemplatedBooleanOperation<OP>(left.CastAs(comparison_type), right.CastAs(comparison_type));
 		} catch (...) {
 			return false;
 		}
@@ -76,7 +76,7 @@ bool ValueOperations::Equals(const Value &left, const Value &right) {
 	if (left.is_null != right.is_null) {
 		return false;
 	}
-	return templated_boolean_operation<duckdb::Equals>(left, right);
+	return TemplatedBooleanOperation<duckdb::Equals>(left, right);
 }
 
 bool ValueOperations::NotEquals(const Value &left, const Value &right) {
@@ -91,7 +91,7 @@ bool ValueOperations::GreaterThan(const Value &left, const Value &right) {
 	} else if (left.is_null) {
 		return false;
 	}
-	return templated_boolean_operation<duckdb::GreaterThan>(left, right);
+	return TemplatedBooleanOperation<duckdb::GreaterThan>(left, right);
 }
 
 bool ValueOperations::GreaterThanEquals(const Value &left, const Value &right) {
@@ -102,7 +102,7 @@ bool ValueOperations::GreaterThanEquals(const Value &left, const Value &right) {
 	} else if (left.is_null) {
 		return false;
 	}
-	return templated_boolean_operation<duckdb::GreaterThanEquals>(left, right);
+	return TemplatedBooleanOperation<duckdb::GreaterThanEquals>(left, right);
 }
 
 bool ValueOperations::LessThan(const Value &left, const Value &right) {

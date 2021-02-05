@@ -1,4 +1,4 @@
-Checks:          '-*,clang-diagnostic-*,bugprone-*,google-explicit-constructor,google-build-using-namespace,google-runtime-int,misc-definitions-in-headers,modernize-use-nullptr,modernize-use-override,-bugprone-macro-parentheses,readability-braces-around-statements,-bugprone-branch-clone,readability-identifier-naming,hicpp-exception-baseclass,misc-throw-by-value-catch-by-reference,-bugprone-signed-char-misuse'
+Checks:          '-*,clang-diagnostic-*,bugprone-*,google-explicit-constructor,google-build-using-namespace,google-runtime-int,misc-definitions-in-headers,modernize-use-nullptr,modernize-use-override,-bugprone-macro-parentheses,readability-braces-around-statements,-bugprone-branch-clone,readability-identifier-naming,hicpp-exception-baseclass,misc-throw-by-value-catch-by-reference,-bugprone-signed-char-misuse,-bugprone-misplaced-widening-cast,-bugprone-sizeof-expression'
 WarningsAsErrors: '*'
 HeaderFilterRegex: '.*^(re2.h)'
 AnalyzeTemporaryDtors: false
@@ -10,6 +10,16 @@ CheckOptions:
     value:           CamelCase
   - key:             readability-identifier-naming.EnumConstantCase
     value:           UPPER_CASE
+  - key:             readability-identifier-naming.StaticConstantCase
+    value:           UPPER_CASE
+  - key:             readability-identifier-naming.TemplateTemplateParameterCase
+    value:           UPPER_CASE
+  - key:             readability-identifier-naming.TypeTemplateParameterCase
+    value:           UPPER_CASE
+  - key:             readability-identifier-naming.TypedefCase
+    value:           lower_case
+  - key:             readability-identifier-naming.TypedefSuffix
+    value:           _t
   - key:             readability-identifier-naming.FunctionCase
     value:           CamelCase
   - key:             readability-identifier-naming.MemberCase

@@ -142,7 +142,7 @@ void UncompressedSegment::Fetch(ColumnScanState &state, idx_t vector_index, Vect
 // Filter
 //===--------------------------------------------------------------------===//
 template <class T, class OP, bool HAS_NULL>
-static idx_t filter_selection_loop(T *vec, T *predicate, SelectionVector &sel, idx_t approved_tuple_count,
+static idx_t TemplatedFilterSelection(T *vec, T *predicate, SelectionVector &sel, idx_t approved_tuple_count,
                                    nullmask_t &nullmask, SelectionVector &result_sel) {
 	idx_t result_count = 0;
 	for (idx_t i = 0; i < approved_tuple_count; i++) {
@@ -155,7 +155,7 @@ static idx_t filter_selection_loop(T *vec, T *predicate, SelectionVector &sel, i
 }
 
 template <class T>
-static void filterSelectionType(T *vec, T *predicate, SelectionVector &sel, idx_t &approved_tuple_count,
+static void FilterSelectionSwitch(T *vec, T *predicate, SelectionVector &sel, idx_t &approved_tuple_count,
                                 ExpressionType comparison_type, nullmask_t &nullmask) {
 	SelectionVector new_sel(approved_tuple_count);
 	// the inplace loops take the result as the last parameter
@@ -163,49 +163,49 @@ static void filterSelectionType(T *vec, T *predicate, SelectionVector &sel, idx_
 	case ExpressionType::COMPARE_EQUAL: {
 		if (!nullmask.any()) {
 			approved_tuple_count =
-			    filter_selection_loop<T, Equals, false>(vec, predicate, sel, approved_tuple_count, nullmask, new_sel);
+			    TemplatedFilterSelection<T, Equals, false>(vec, predicate, sel, approved_tuple_count, nullmask, new_sel);
 		} else {
 			approved_tuple_count =
-			    filter_selection_loop<T, Equals, true>(vec, predicate, sel, approved_tuple_count, nullmask, new_sel);
+			    TemplatedFilterSelection<T, Equals, true>(vec, predicate, sel, approved_tuple_count, nullmask, new_sel);
 		}
 		break;
 	}
 	case ExpressionType::COMPARE_LESSTHAN: {
 		if (!nullmask.any()) {
 			approved_tuple_count =
-			    filter_selection_loop<T, LessThan, false>(vec, predicate, sel, approved_tuple_count, nullmask, new_sel);
+			    TemplatedFilterSelection<T, LessThan, false>(vec, predicate, sel, approved_tuple_count, nullmask, new_sel);
 		} else {
 			approved_tuple_count =
-			    filter_selection_loop<T, LessThan, true>(vec, predicate, sel, approved_tuple_count, nullmask, new_sel);
+			    TemplatedFilterSelection<T, LessThan, true>(vec, predicate, sel, approved_tuple_count, nullmask, new_sel);
 		}
 		break;
 	}
 	case ExpressionType::COMPARE_GREATERTHAN: {
 		if (!nullmask.any()) {
-			approved_tuple_count = filter_selection_loop<T, GreaterThan, false>(
+			approved_tuple_count = TemplatedFilterSelection<T, GreaterThan, false>(
 			    vec, predicate, sel, approved_tuple_count, nullmask, new_sel);
 		} else {
-			approved_tuple_count = filter_selection_loop<T, GreaterThan, true>(vec, predicate, sel,
+			approved_tuple_count = TemplatedFilterSelection<T, GreaterThan, true>(vec, predicate, sel,
 			                                                                   approved_tuple_count, nullmask, new_sel);
 		}
 		break;
 	}
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO: {
 		if (!nullmask.any()) {
-			approved_tuple_count = filter_selection_loop<T, LessThanEquals, false>(
+			approved_tuple_count = TemplatedFilterSelection<T, LessThanEquals, false>(
 			    vec, predicate, sel, approved_tuple_count, nullmask, new_sel);
 		} else {
-			approved_tuple_count = filter_selection_loop<T, LessThanEquals, true>(
+			approved_tuple_count = TemplatedFilterSelection<T, LessThanEquals, true>(
 			    vec, predicate, sel, approved_tuple_count, nullmask, new_sel);
 		}
 		break;
 	}
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO: {
 		if (!nullmask.any()) {
-			approved_tuple_count = filter_selection_loop<T, GreaterThanEquals, false>(
+			approved_tuple_count = TemplatedFilterSelection<T, GreaterThanEquals, false>(
 			    vec, predicate, sel, approved_tuple_count, nullmask, new_sel);
 		} else {
-			approved_tuple_count = filter_selection_loop<T, GreaterThanEquals, true>(
+			approved_tuple_count = TemplatedFilterSelection<T, GreaterThanEquals, true>(
 			    vec, predicate, sel, approved_tuple_count, nullmask, new_sel);
 		}
 		break;
@@ -216,7 +216,7 @@ static void filterSelectionType(T *vec, T *predicate, SelectionVector &sel, idx_
 	sel.Initialize(new_sel);
 }
 
-void UncompressedSegment::filterSelection(SelectionVector &sel, Vector &result, const TableFilter &filter,
+void UncompressedSegment::FilterSelection(SelectionVector &sel, Vector &result, const TableFilter &filter,
                                           idx_t &approved_tuple_count, nullmask_t &nullmask) {
 	// the inplace loops take the result as the last parameter
 	switch (result.type.InternalType()) {
@@ -224,7 +224,7 @@ void UncompressedSegment::filterSelection(SelectionVector &sel, Vector &result, 
 		auto result_flat = FlatVector::GetData<uint8_t>(result);
 		Vector predicate_vector(filter.constant);
 		auto predicate = FlatVector::GetData<uint8_t>(predicate_vector);
-		filterSelectionType<uint8_t>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type,
+		FilterSelectionSwitch<uint8_t>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type,
 		                             nullmask);
 		break;
 	}
@@ -232,7 +232,7 @@ void UncompressedSegment::filterSelection(SelectionVector &sel, Vector &result, 
 		auto result_flat = FlatVector::GetData<uint16_t>(result);
 		Vector predicate_vector(filter.constant);
 		auto predicate = FlatVector::GetData<uint16_t>(predicate_vector);
-		filterSelectionType<uint16_t>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type,
+		FilterSelectionSwitch<uint16_t>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type,
 		                              nullmask);
 		break;
 	}
@@ -240,7 +240,7 @@ void UncompressedSegment::filterSelection(SelectionVector &sel, Vector &result, 
 		auto result_flat = FlatVector::GetData<uint32_t>(result);
 		Vector predicate_vector(filter.constant);
 		auto predicate = FlatVector::GetData<uint32_t>(predicate_vector);
-		filterSelectionType<uint32_t>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type,
+		FilterSelectionSwitch<uint32_t>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type,
 		                              nullmask);
 		break;
 	}
@@ -248,7 +248,7 @@ void UncompressedSegment::filterSelection(SelectionVector &sel, Vector &result, 
 		auto result_flat = FlatVector::GetData<uint64_t>(result);
 		Vector predicate_vector(filter.constant);
 		auto predicate = FlatVector::GetData<uint64_t>(predicate_vector);
-		filterSelectionType<uint64_t>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type,
+		FilterSelectionSwitch<uint64_t>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type,
 		                              nullmask);
 		break;
 	}
@@ -256,7 +256,7 @@ void UncompressedSegment::filterSelection(SelectionVector &sel, Vector &result, 
 		auto result_flat = FlatVector::GetData<int8_t>(result);
 		Vector predicate_vector(filter.constant);
 		auto predicate = FlatVector::GetData<int8_t>(predicate_vector);
-		filterSelectionType<int8_t>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type,
+		FilterSelectionSwitch<int8_t>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type,
 		                            nullmask);
 		break;
 	}
@@ -264,7 +264,7 @@ void UncompressedSegment::filterSelection(SelectionVector &sel, Vector &result, 
 		auto result_flat = FlatVector::GetData<int16_t>(result);
 		Vector predicate_vector(filter.constant);
 		auto predicate = FlatVector::GetData<int16_t>(predicate_vector);
-		filterSelectionType<int16_t>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type,
+		FilterSelectionSwitch<int16_t>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type,
 		                             nullmask);
 		break;
 	}
@@ -272,7 +272,7 @@ void UncompressedSegment::filterSelection(SelectionVector &sel, Vector &result, 
 		auto result_flat = FlatVector::GetData<int32_t>(result);
 		Vector predicate_vector(filter.constant);
 		auto predicate = FlatVector::GetData<int32_t>(predicate_vector);
-		filterSelectionType<int32_t>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type,
+		FilterSelectionSwitch<int32_t>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type,
 		                             nullmask);
 		break;
 	}
@@ -280,7 +280,7 @@ void UncompressedSegment::filterSelection(SelectionVector &sel, Vector &result, 
 		auto result_flat = FlatVector::GetData<int64_t>(result);
 		Vector predicate_vector(filter.constant);
 		auto predicate = FlatVector::GetData<int64_t>(predicate_vector);
-		filterSelectionType<int64_t>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type,
+		FilterSelectionSwitch<int64_t>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type,
 		                             nullmask);
 		break;
 	}
@@ -288,14 +288,14 @@ void UncompressedSegment::filterSelection(SelectionVector &sel, Vector &result, 
 		auto result_flat = FlatVector::GetData<float>(result);
 		Vector predicate_vector(filter.constant);
 		auto predicate = FlatVector::GetData<float>(predicate_vector);
-		filterSelectionType<float>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type, nullmask);
+		FilterSelectionSwitch<float>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type, nullmask);
 		break;
 	}
 	case PhysicalType::DOUBLE: {
 		auto result_flat = FlatVector::GetData<double>(result);
 		Vector predicate_vector(filter.constant);
 		auto predicate = FlatVector::GetData<double>(predicate_vector);
-		filterSelectionType<double>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type,
+		FilterSelectionSwitch<double>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type,
 		                            nullmask);
 		break;
 	}
@@ -303,7 +303,7 @@ void UncompressedSegment::filterSelection(SelectionVector &sel, Vector &result, 
 		auto result_flat = FlatVector::GetData<string_t>(result);
 		Vector predicate_vector(filter.constant.str_value);
 		auto predicate = FlatVector::GetData<string_t>(predicate_vector);
-		filterSelectionType<string_t>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type,
+		FilterSelectionSwitch<string_t>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type,
 		                              nullmask);
 		break;
 	}
@@ -311,7 +311,7 @@ void UncompressedSegment::filterSelection(SelectionVector &sel, Vector &result, 
 		auto result_flat = FlatVector::GetData<bool>(result);
 		Vector predicate_vector(filter.constant);
 		auto predicate = FlatVector::GetData<bool>(predicate_vector);
-		filterSelectionType<bool>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type, nullmask);
+		FilterSelectionSwitch<bool>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type, nullmask);
 		break;
 	}
 	default:
@@ -332,7 +332,7 @@ void UncompressedSegment::Select(Transaction &transaction, Vector &result, vecto
 		auto offset = vector_index * vector_size;
 		auto source_nullmask = (nullmask_t *)(data + offset);
 		for (auto &table_filter : tableFilters) {
-			filterSelection(sel, result, table_filter, approved_tuple_count, *source_nullmask);
+			FilterSelection(sel, result, table_filter, approved_tuple_count, *source_nullmask);
 		}
 	} else {
 		//! Select the data from the base table

@@ -167,13 +167,13 @@ public:
 	}
 
 	static unique_ptr<FunctionOperatorData>
-	parquet_scan_parallel_init(ClientContext &context, const FunctionData *bind_data_p, ParallelState *parallel_state_,
+	parquet_scan_parallel_init(ClientContext &context, const FunctionData *bind_data_p, ParallelState *parallel_state_p,
 	                           vector<column_t> &column_ids, TableFilterCollection *filters) {
 		auto result = make_unique<ParquetReadOperatorData>();
 		result->column_ids = column_ids;
 		result->is_parallel = true;
 		result->table_filters = filters->table_filters;
-		if (!parquet_parallel_state_next(context, bind_data_p, result.get(), parallel_state_)) {
+		if (!parquet_parallel_state_next(context, bind_data_p, result.get(), parallel_state_p)) {
 			return nullptr;
 		}
 		return move(result);
@@ -229,10 +229,10 @@ public:
 	}
 
 	static bool parquet_parallel_state_next(ClientContext &context, const FunctionData *bind_data_p,
-	                                        FunctionOperatorData *state_, ParallelState *parallel_state_) {
+	                                        FunctionOperatorData *state_p, ParallelState *parallel_state_p) {
 		auto &bind_data = (ParquetReadBindData &)*bind_data_p;
-		auto &parallel_state = (ParquetReadParallelState &)*parallel_state_;
-		auto &scan_data = (ParquetReadOperatorData &)*state_;
+		auto &parallel_state = (ParquetReadParallelState &)*parallel_state_p;
+		auto &scan_data = (ParquetReadOperatorData &)*state_p;
 
 		lock_guard<mutex> parallel_lock(parallel_state.lock);
 		if (parallel_state.row_group_index < parallel_state.current_reader->NumRowGroups()) {

@@ -153,7 +153,7 @@ unique_ptr<FunctionData> BindMedian(ClientContext &context, AggregateFunction &f
 	return make_unique<QuantileBindData>(0.5);
 }
 
-unique_ptr<FunctionData> bind_median_decimal(ClientContext &context, AggregateFunction &function,
+unique_ptr<FunctionData> BindMedianDecimal(ClientContext &context, AggregateFunction &function,
                                              vector<unique_ptr<Expression>> &arguments) {
 	auto bind_data = BindMedian(context, function, arguments);
 
@@ -201,7 +201,7 @@ AggregateFunction GetQuantileAggregate(PhysicalType type) {
 void QuantileFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet median("median");
 	median.AddFunction(AggregateFunction({LogicalType::DECIMAL}, LogicalType::DECIMAL, nullptr, nullptr, nullptr,
-	                                     nullptr, nullptr, nullptr, bind_median_decimal));
+	                                     nullptr, nullptr, nullptr, BindMedianDecimal));
 	median.AddFunction(GetMedianAggregate(PhysicalType::INT16));
 	median.AddFunction(GetMedianAggregate(PhysicalType::INT32));
 	median.AddFunction(GetMedianAggregate(PhysicalType::INT64));

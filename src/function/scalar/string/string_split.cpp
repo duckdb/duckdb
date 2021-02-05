@@ -145,7 +145,7 @@ protected:
 	const bool ascii_only;
 };
 
-void StringSplitFunction(const char *input, StringSplitIterator &iter, ChunkCollection &result) {
+void BaseStringSplitFunction(const char *input, StringSplitIterator &iter, ChunkCollection &result) {
 	DataChunk append_chunk;
 	vector<LogicalType> types = {LogicalType::VARCHAR};
 	append_chunk.Initialize(types);
@@ -181,7 +181,7 @@ void StringSplitFunction(const char *input, StringSplitIterator &iter, ChunkColl
 	result.Verify();
 }
 
-unique_ptr<ChunkCollection> StringSplitFunction(string_t input, string_t delim, const bool regex) {
+unique_ptr<ChunkCollection> BaseStringSplitFunction(string_t input, string_t delim, const bool regex) {
 	const char *input_data = input.GetDataUnsafe();
 	size_t input_size = input.GetSize();
 	const char *delim_data = delim.GetDataUnsafe();
@@ -204,12 +204,12 @@ unique_ptr<ChunkCollection> StringSplitFunction(string_t input, string_t delim, 
 	} else {
 		iter = make_unique_base<StringSplitIterator, UnicodeStringSplitIterator>(input_size, delim_data, delim_size);
 	}
-	StringSplitFunction(input_data, *iter, *output);
+	BaseStringSplitFunction(input_data, *iter, *output);
 
 	return output;
 }
 
-static void string_split_executor(DataChunk &args, ExpressionState &state, Vector &result, const bool regex) {
+static void StringSplitExecutor(DataChunk &args, ExpressionState &state, Vector &result, const bool regex) {
 	VectorData input_data;
 	args.data[0].Orrify(args.size(), input_data);
 	auto inputs = (string_t *)input_data.data;
@@ -245,7 +245,7 @@ static void string_split_executor(DataChunk &args, ExpressionState &state, Vecto
 			split_input->Append(append_chunk);
 		} else {
 			string_t delim = delims[delim_data.sel->get_index(i)];
-			split_input = StringSplitFunction(input, delim, regex);
+			split_input = BaseStringSplitFunction(input, delim, regex);
 		}
 		list_struct_data[i].length = split_input->Count();
 		list_struct_data[i].offset = total_len;
@@ -261,12 +261,12 @@ static void string_split_executor(DataChunk &args, ExpressionState &state, Vecto
 	ListVector::SetEntry(result, move(list_child));
 }
 
-static void string_split_function(DataChunk &args, ExpressionState &state, Vector &result) {
-	string_split_executor(args, state, result, false);
+static void StringSplitFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	StringSplitExecutor(args, state, result, false);
 }
 
-static void string_split_regex_function(DataChunk &args, ExpressionState &state, Vector &result) {
-	string_split_executor(args, state, result, true);
+static void StringSplitRegexFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	StringSplitExecutor(args, state, result, true);
 }
 
 void StringSplitFun::RegisterFunction(BuiltinFunctions &set) {
@@ -276,10 +276,10 @@ void StringSplitFun::RegisterFunction(BuiltinFunctions &set) {
 
 	set.AddFunction(
 	    {"string_split", "str_split", "string_to_array"},
-	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, varchar_list_type, string_split_function));
+	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, varchar_list_type, StringSplitFunction));
 	set.AddFunction(
 	    {"string_split_regex", "str_split_regex", "regexp_split_to_array"},
-	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, varchar_list_type, string_split_regex_function));
+	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, varchar_list_type, StringSplitRegexFunction));
 }
 
 } // namespace duckdb

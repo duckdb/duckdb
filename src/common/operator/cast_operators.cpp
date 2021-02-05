@@ -579,7 +579,7 @@ float Cast::Operation(double input) {
 // Cast String -> Numeric
 //===--------------------------------------------------------------------===//
 template <class T>
-static T try_cast_string(string_t input) {
+static T TryCastString(string_t input) {
 	T result;
 	if (!TryCast::Operation<string_t, T>(input, result)) {
 		throw ConversionException("Could not convert string '%s' to %s", input.GetString(),
@@ -589,7 +589,7 @@ static T try_cast_string(string_t input) {
 }
 
 template <class T>
-static T try_strict_cast_string(string_t input) {
+static T TryStrictCastString(string_t input) {
 	T result;
 	if (!TryCast::Operation<string_t, T>(input, result, true)) {
 		throw ConversionException("Could not convert string '%s' to %s", input.GetString(),
@@ -942,93 +942,93 @@ bool TryCast::Operation(string_t input, double &result, bool strict) {
 
 template <>
 bool Cast::Operation(string_t input) {
-	return try_cast_string<bool>(input);
+	return TryCastString<bool>(input);
 }
 template <>
 int8_t Cast::Operation(string_t input) {
-	return try_cast_string<int8_t>(input);
+	return TryCastString<int8_t>(input);
 }
 template <>
 int16_t Cast::Operation(string_t input) {
-	return try_cast_string<int16_t>(input);
+	return TryCastString<int16_t>(input);
 }
 template <>
 int32_t Cast::Operation(string_t input) {
-	return try_cast_string<int32_t>(input);
+	return TryCastString<int32_t>(input);
 }
 template <>
 int64_t Cast::Operation(string_t input) {
-	return try_cast_string<int64_t>(input);
+	return TryCastString<int64_t>(input);
 }
 template <>
 uint8_t Cast::Operation(string_t input) {
-	return try_cast_string<uint8_t>(input);
+	return TryCastString<uint8_t>(input);
 }
 template <>
 uint16_t Cast::Operation(string_t input) {
-	return try_cast_string<uint16_t>(input);
+	return TryCastString<uint16_t>(input);
 }
 template <>
 uint32_t Cast::Operation(string_t input) {
-	return try_cast_string<uint32_t>(input);
+	return TryCastString<uint32_t>(input);
 }
 template <>
 uint64_t Cast::Operation(string_t input) {
-	return try_cast_string<uint64_t>(input);
+	return TryCastString<uint64_t>(input);
 }
 
 template <>
 float Cast::Operation(string_t input) {
-	return try_cast_string<float>(input);
+	return TryCastString<float>(input);
 }
 template <>
 double Cast::Operation(string_t input) {
-	return try_cast_string<double>(input);
+	return TryCastString<double>(input);
 }
 
 template <>
 bool StrictCast::Operation(string_t input) {
-	return try_strict_cast_string<bool>(input);
+	return TryStrictCastString<bool>(input);
 }
 template <>
 int8_t StrictCast::Operation(string_t input) {
-	return try_strict_cast_string<int8_t>(input);
+	return TryStrictCastString<int8_t>(input);
 }
 template <>
 int16_t StrictCast::Operation(string_t input) {
-	return try_strict_cast_string<int16_t>(input);
+	return TryStrictCastString<int16_t>(input);
 }
 template <>
 int32_t StrictCast::Operation(string_t input) {
-	return try_strict_cast_string<int32_t>(input);
+	return TryStrictCastString<int32_t>(input);
 }
 template <>
 int64_t StrictCast::Operation(string_t input) {
-	return try_strict_cast_string<int64_t>(input);
+	return TryStrictCastString<int64_t>(input);
 }
 template <>
 uint8_t StrictCast::Operation(string_t input) {
-	return try_strict_cast_string<uint8_t>(input);
+	return TryStrictCastString<uint8_t>(input);
 }
 template <>
 uint16_t StrictCast::Operation(string_t input) {
-	return try_strict_cast_string<uint16_t>(input);
+	return TryStrictCastString<uint16_t>(input);
 }
 template <>
 uint32_t StrictCast::Operation(string_t input) {
-	return try_strict_cast_string<uint32_t>(input);
+	return TryStrictCastString<uint32_t>(input);
 }
 template <>
 uint64_t StrictCast::Operation(string_t input) {
-	return try_strict_cast_string<uint64_t>(input);
+	return TryStrictCastString<uint64_t>(input);
 }
 template <>
 float StrictCast::Operation(string_t input) {
-	return try_strict_cast_string<float>(input);
+	return TryStrictCastString<float>(input);
 }
 template <>
 double StrictCast::Operation(string_t input) {
-	return try_strict_cast_string<double>(input);
+	return TryStrictCastString<double>(input);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1319,12 +1319,12 @@ bool TryCast::Operation(string_t input, interval_t &result, bool strict) {
 
 template <>
 interval_t StrictCast::Operation(string_t input) {
-	return try_strict_cast_string<interval_t>(input);
+	return TryStrictCastString<interval_t>(input);
 }
 
 template <>
 interval_t Cast::Operation(string_t input) {
-	return try_cast_string<interval_t>(input);
+	return TryCastString<interval_t>(input);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1433,12 +1433,12 @@ bool TryCast::Operation(string_t input, hugeint_t &result, bool strict) {
 
 template <>
 hugeint_t Cast::Operation(string_t input) {
-	return try_cast_string<hugeint_t>(input);
+	return TryCastString<hugeint_t>(input);
 }
 
 template <>
 hugeint_t StrictCast::Operation(string_t input) {
-	return try_strict_cast_string<hugeint_t>(input);
+	return TryStrictCastString<hugeint_t>(input);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1622,7 +1622,7 @@ bool Cast::Operation(hugeint_t input) {
 }
 
 template <class T>
-static T hugeint_cast_to_numeric(hugeint_t input) {
+static T HugeintCastToNumeric(hugeint_t input) {
 	T result;
 	if (!TryCast::Operation<hugeint_t, T>(input, result)) {
 		throw ValueOutOfRangeException(input, PhysicalType::INT128, GetTypeId<T>());
@@ -1632,49 +1632,49 @@ static T hugeint_cast_to_numeric(hugeint_t input) {
 
 template <>
 int8_t Cast::Operation(hugeint_t input) {
-	return hugeint_cast_to_numeric<int8_t>(input);
+	return HugeintCastToNumeric<int8_t>(input);
 }
 
 template <>
 int16_t Cast::Operation(hugeint_t input) {
-	return hugeint_cast_to_numeric<int16_t>(input);
+	return HugeintCastToNumeric<int16_t>(input);
 }
 
 template <>
 int32_t Cast::Operation(hugeint_t input) {
-	return hugeint_cast_to_numeric<int32_t>(input);
+	return HugeintCastToNumeric<int32_t>(input);
 }
 
 template <>
 int64_t Cast::Operation(hugeint_t input) {
-	return hugeint_cast_to_numeric<int64_t>(input);
+	return HugeintCastToNumeric<int64_t>(input);
 }
 
 template <>
 uint8_t Cast::Operation(hugeint_t input) {
-	return hugeint_cast_to_numeric<uint8_t>(input);
+	return HugeintCastToNumeric<uint8_t>(input);
 }
 template <>
 uint16_t Cast::Operation(hugeint_t input) {
-	return hugeint_cast_to_numeric<uint16_t>(input);
+	return HugeintCastToNumeric<uint16_t>(input);
 }
 template <>
 uint32_t Cast::Operation(hugeint_t input) {
-	return hugeint_cast_to_numeric<uint32_t>(input);
+	return HugeintCastToNumeric<uint32_t>(input);
 }
 template <>
 uint64_t Cast::Operation(hugeint_t input) {
-	return hugeint_cast_to_numeric<uint64_t>(input);
+	return HugeintCastToNumeric<uint64_t>(input);
 }
 
 template <>
 float Cast::Operation(hugeint_t input) {
-	return hugeint_cast_to_numeric<float>(input);
+	return HugeintCastToNumeric<float>(input);
 }
 
 template <>
 double Cast::Operation(hugeint_t input) {
-	return hugeint_cast_to_numeric<double>(input);
+	return HugeintCastToNumeric<double>(input);
 }
 
 template <>
@@ -1755,7 +1755,7 @@ struct DecimalCastOperation {
 };
 
 template <class T>
-T decimal_string_cast(string_t input, uint8_t width, uint8_t scale) {
+T DecimalStringCast(string_t input, uint8_t width, uint8_t scale) {
 	DecimalCastData<T> state;
 	state.result = 0;
 	state.width = width;
@@ -1772,22 +1772,22 @@ T decimal_string_cast(string_t input, uint8_t width, uint8_t scale) {
 
 template <>
 int16_t CastToDecimal::Operation(string_t input, uint8_t width, uint8_t scale) {
-	return decimal_string_cast<int16_t>(input, width, scale);
+	return DecimalStringCast<int16_t>(input, width, scale);
 }
 
 template <>
 int32_t CastToDecimal::Operation(string_t input, uint8_t width, uint8_t scale) {
-	return decimal_string_cast<int32_t>(input, width, scale);
+	return DecimalStringCast<int32_t>(input, width, scale);
 }
 
 template <>
 int64_t CastToDecimal::Operation(string_t input, uint8_t width, uint8_t scale) {
-	return decimal_string_cast<int64_t>(input, width, scale);
+	return DecimalStringCast<int64_t>(input, width, scale);
 }
 
 template <>
 hugeint_t CastToDecimal::Operation(string_t input, uint8_t width, uint8_t scale) {
-	return decimal_string_cast<hugeint_t>(input, width, scale);
+	return DecimalStringCast<hugeint_t>(input, width, scale);
 }
 
 template <>

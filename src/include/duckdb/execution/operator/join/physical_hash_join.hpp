@@ -44,7 +44,7 @@ public:
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 
 private:
-	void ProbeHashTable(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_);
+	void ProbeHashTable(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p);
 };
 
 } // namespace duckdb

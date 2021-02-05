@@ -5,7 +5,7 @@
 namespace duckdb {
 
 template <class MJ, class L_ARG, class R_ARG>
-static idx_t merge_join(L_ARG &l, R_ARG &r) {
+static idx_t MergeJoinSwitch(L_ARG &l, R_ARG &r) {
 	switch (l.type.InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
@@ -40,16 +40,16 @@ static idx_t merge_join(L_ARG &l, R_ARG &r) {
 }
 
 template <class T, class L_ARG, class R_ARG>
-static idx_t perform_merge_join(L_ARG &l, R_ARG &r, ExpressionType comparison_type) {
+static idx_t MergeJoinComparisonSwitch(L_ARG &l, R_ARG &r, ExpressionType comparison_type) {
 	switch (comparison_type) {
 	case ExpressionType::COMPARE_LESSTHAN:
-		return merge_join<typename T::LessThan, L_ARG, R_ARG>(l, r);
+		return MergeJoinSwitch<typename T::LessThan, L_ARG, R_ARG>(l, r);
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		return merge_join<typename T::LessThanEquals, L_ARG, R_ARG>(l, r);
+		return MergeJoinSwitch<typename T::LessThanEquals, L_ARG, R_ARG>(l, r);
 	case ExpressionType::COMPARE_GREATERTHAN:
-		return merge_join<typename T::GreaterThan, L_ARG, R_ARG>(l, r);
+		return MergeJoinSwitch<typename T::GreaterThan, L_ARG, R_ARG>(l, r);
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		return merge_join<typename T::GreaterThanEquals, L_ARG, R_ARG>(l, r);
+		return MergeJoinSwitch<typename T::GreaterThanEquals, L_ARG, R_ARG>(l, r);
 	default:
 		throw NotImplementedException("Unimplemented comparison type for merge join!");
 	}
@@ -63,7 +63,7 @@ idx_t MergeJoinComplex::Perform(MergeInfo &l, MergeInfo &r, ExpressionType compa
 	if (left.order.count == 0 || right.order.count == 0) {
 		return 0;
 	}
-	return perform_merge_join<MergeJoinComplex, ScalarMergeInfo, ScalarMergeInfo>(left, right, comparison_type);
+	return MergeJoinComparisonSwitch<MergeJoinComplex, ScalarMergeInfo, ScalarMergeInfo>(left, right, comparison_type);
 }
 
 idx_t MergeJoinSimple::Perform(MergeInfo &l, MergeInfo &r, ExpressionType comparison_type) {
@@ -74,7 +74,7 @@ idx_t MergeJoinSimple::Perform(MergeInfo &l, MergeInfo &r, ExpressionType compar
 	if (left.order.count == 0 || right.data_chunks.Count() == 0) {
 		return 0;
 	}
-	return perform_merge_join<MergeJoinSimple, ScalarMergeInfo, ChunkMergeInfo>(left, right, comparison_type);
+	return MergeJoinComparisonSwitch<MergeJoinSimple, ScalarMergeInfo, ChunkMergeInfo>(left, right, comparison_type);
 }
 
 } // namespace duckdb

@@ -66,10 +66,10 @@ static unique_ptr<FunctionOperatorData> RangeFunctionInit(ClientContext &context
 	return make_unique<RangeFunctionState>();
 }
 
-static void RangeFunction(ClientContext &context, const FunctionData *bind_data_p, FunctionOperatorData *state_,
+static void RangeFunction(ClientContext &context, const FunctionData *bind_data_p, FunctionOperatorData *state_p,
                            DataChunk &output) {
 	auto &bind_data = (RangeFunctionBindData &)*bind_data_p;
-	auto &state = (RangeFunctionState &)*state_;
+	auto &state = (RangeFunctionState &)*state_p;
 
 	auto increment = bind_data.increment;
 	auto end = bind_data.end;

@@ -21,10 +21,6 @@
 
 namespace duckdb {
 
-static char is_newline(char c) {
-	return c == '\n' || c == '\r';
-}
-
 static string GetLineNumberStr(idx_t linenr, bool linenr_estimated) {
 	string estimated = (linenr_estimated ? string(" (estimated)") : string(""));
 	return to_string(linenr + 1) + estimated;
@@ -859,7 +855,7 @@ value_start:
 				// found a delimiter, add the value
 				offset = options.delimiter.size() - 1;
 				goto add_value;
-			} else if (is_newline(buffer[position])) {
+			} else if (StringUtil::CharacterIsNewline(buffer[position])) {
 				// found a newline, add the row
 				goto add_row;
 			}
@@ -886,7 +882,7 @@ normal:
 			if (delimiter_pos == options.delimiter.size()) {
 				offset = options.delimiter.size() - 1;
 				goto add_value;
-			} else if (is_newline(buffer[position])) {
+			} else if (StringUtil::CharacterIsNewline(buffer[position])) {
 				goto add_row;
 			}
 		}
@@ -959,7 +955,7 @@ unquote:
 		offset = options.quote.size();
 		goto final_state;
 	}
-	if (is_newline(buffer[position])) {
+	if (StringUtil::CharacterIsNewline(buffer[position])) {
 		// quote followed by newline, add row
 		offset = options.quote.size();
 		goto add_row;
@@ -1085,7 +1081,7 @@ normal:
 			if (buffer[position] == options.delimiter[0]) {
 				// delimiter: end the value and add it to the chunk
 				goto add_value;
-			} else if (is_newline(buffer[position])) {
+			} else if (StringUtil::CharacterIsNewline(buffer[position])) {
 				// newline: add row
 				goto add_row;
 			}
@@ -1164,7 +1160,7 @@ unquote:
 		// delimiter, add value
 		offset = 1;
 		goto add_value;
-	} else if (is_newline(buffer[position])) {
+	} else if (StringUtil::CharacterIsNewline(buffer[position])) {
 		offset = 1;
 		goto add_row;
 	} else {

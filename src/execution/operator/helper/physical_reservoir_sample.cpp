@@ -51,7 +51,7 @@ void PhysicalReservoirSample::Sink(ExecutionContext &context, GlobalOperatorStat
 // GetChunkInternal
 //===--------------------------------------------------------------------===//
 void PhysicalReservoirSample::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
-                                               PhysicalOperatorState *state_) {
+                                               PhysicalOperatorState *state_p) {
 	auto &sink = (SampleGlobalOperatorState &)*this->sink_state;
 	if (!sink.sample) {
 		return;

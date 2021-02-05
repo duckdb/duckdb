@@ -383,7 +383,7 @@ void GroupedAggregateHashTable::FetchAggregates(DataChunk &groups, DataChunk &re
 }
 
 template <class T>
-static void templated_scatter(VectorData &gdata, Vector &addresses, const SelectionVector &sel, idx_t count,
+static void TemplatedScatter(VectorData &gdata, Vector &addresses, const SelectionVector &sel, idx_t count,
                               idx_t type_size) {
 	auto data = (T *)gdata.data;
 	auto pointers = FlatVector::GetData<uintptr_t>(addresses);
@@ -423,40 +423,40 @@ void GroupedAggregateHashTable::ScatterGroups(DataChunk &groups, unique_ptr<Vect
 		switch (data.type.InternalType()) {
 		case PhysicalType::BOOL:
 		case PhysicalType::INT8:
-			templated_scatter<int8_t>(gdata, addresses, sel, count, type_size);
+			TemplatedScatter<int8_t>(gdata, addresses, sel, count, type_size);
 			break;
 		case PhysicalType::INT16:
-			templated_scatter<int16_t>(gdata, addresses, sel, count, type_size);
+			TemplatedScatter<int16_t>(gdata, addresses, sel, count, type_size);
 			break;
 		case PhysicalType::INT32:
-			templated_scatter<int32_t>(gdata, addresses, sel, count, type_size);
+			TemplatedScatter<int32_t>(gdata, addresses, sel, count, type_size);
 			break;
 		case PhysicalType::INT64:
-			templated_scatter<int64_t>(gdata, addresses, sel, count, type_size);
+			TemplatedScatter<int64_t>(gdata, addresses, sel, count, type_size);
 			break;
 		case PhysicalType::UINT8:
-			templated_scatter<uint8_t>(gdata, addresses, sel, count, type_size);
+			TemplatedScatter<uint8_t>(gdata, addresses, sel, count, type_size);
 			break;
 		case PhysicalType::UINT16:
-			templated_scatter<uint16_t>(gdata, addresses, sel, count, type_size);
+			TemplatedScatter<uint16_t>(gdata, addresses, sel, count, type_size);
 			break;
 		case PhysicalType::UINT32:
-			templated_scatter<uint32_t>(gdata, addresses, sel, count, type_size);
+			TemplatedScatter<uint32_t>(gdata, addresses, sel, count, type_size);
 			break;
 		case PhysicalType::UINT64:
-			templated_scatter<uint64_t>(gdata, addresses, sel, count, type_size);
+			TemplatedScatter<uint64_t>(gdata, addresses, sel, count, type_size);
 			break;
 		case PhysicalType::INT128:
-			templated_scatter<hugeint_t>(gdata, addresses, sel, count, type_size);
+			TemplatedScatter<hugeint_t>(gdata, addresses, sel, count, type_size);
 			break;
 		case PhysicalType::FLOAT:
-			templated_scatter<float>(gdata, addresses, sel, count, type_size);
+			TemplatedScatter<float>(gdata, addresses, sel, count, type_size);
 			break;
 		case PhysicalType::DOUBLE:
-			templated_scatter<double>(gdata, addresses, sel, count, type_size);
+			TemplatedScatter<double>(gdata, addresses, sel, count, type_size);
 			break;
 		case PhysicalType::INTERVAL:
-			templated_scatter<interval_t>(gdata, addresses, sel, count, type_size);
+			TemplatedScatter<interval_t>(gdata, addresses, sel, count, type_size);
 			break;
 		case PhysicalType::VARCHAR: {
 			auto string_data = (string_t *)gdata.data;
@@ -487,7 +487,7 @@ void GroupedAggregateHashTable::ScatterGroups(DataChunk &groups, unique_ptr<Vect
 }
 
 template <class T>
-static void templated_compare_groups(VectorData &gdata, Vector &addresses, SelectionVector &sel, idx_t &count,
+static void TemplatedCompareGroups(VectorData &gdata, Vector &addresses, SelectionVector &sel, idx_t &count,
                                      idx_t type_size, SelectionVector &no_match, idx_t &no_match_count) {
 	auto data = (T *)gdata.data;
 	auto pointers = FlatVector::GetData<uintptr_t>(addresses);
@@ -541,43 +541,43 @@ static void CompareGroups(DataChunk &groups, unique_ptr<VectorData[]> &group_dat
 		switch (data.type.InternalType()) {
 		case PhysicalType::BOOL:
 		case PhysicalType::INT8:
-			templated_compare_groups<int8_t>(gdata, addresses, sel, count, type_size, no_match, no_match_count);
+			TemplatedCompareGroups<int8_t>(gdata, addresses, sel, count, type_size, no_match, no_match_count);
 			break;
 		case PhysicalType::INT16:
-			templated_compare_groups<int16_t>(gdata, addresses, sel, count, type_size, no_match, no_match_count);
+			TemplatedCompareGroups<int16_t>(gdata, addresses, sel, count, type_size, no_match, no_match_count);
 			break;
 		case PhysicalType::INT32:
-			templated_compare_groups<int32_t>(gdata, addresses, sel, count, type_size, no_match, no_match_count);
+			TemplatedCompareGroups<int32_t>(gdata, addresses, sel, count, type_size, no_match, no_match_count);
 			break;
 		case PhysicalType::INT64:
-			templated_compare_groups<int64_t>(gdata, addresses, sel, count, type_size, no_match, no_match_count);
+			TemplatedCompareGroups<int64_t>(gdata, addresses, sel, count, type_size, no_match, no_match_count);
 			break;
 		case PhysicalType::UINT8:
-			templated_compare_groups<uint8_t>(gdata, addresses, sel, count, type_size, no_match, no_match_count);
+			TemplatedCompareGroups<uint8_t>(gdata, addresses, sel, count, type_size, no_match, no_match_count);
 			break;
 		case PhysicalType::UINT16:
-			templated_compare_groups<uint16_t>(gdata, addresses, sel, count, type_size, no_match, no_match_count);
+			TemplatedCompareGroups<uint16_t>(gdata, addresses, sel, count, type_size, no_match, no_match_count);
 			break;
 		case PhysicalType::UINT32:
-			templated_compare_groups<uint32_t>(gdata, addresses, sel, count, type_size, no_match, no_match_count);
+			TemplatedCompareGroups<uint32_t>(gdata, addresses, sel, count, type_size, no_match, no_match_count);
 			break;
 		case PhysicalType::UINT64:
-			templated_compare_groups<uint64_t>(gdata, addresses, sel, count, type_size, no_match, no_match_count);
+			TemplatedCompareGroups<uint64_t>(gdata, addresses, sel, count, type_size, no_match, no_match_count);
 			break;
 		case PhysicalType::INT128:
-			templated_compare_groups<hugeint_t>(gdata, addresses, sel, count, type_size, no_match, no_match_count);
+			TemplatedCompareGroups<hugeint_t>(gdata, addresses, sel, count, type_size, no_match, no_match_count);
 			break;
 		case PhysicalType::FLOAT:
-			templated_compare_groups<float>(gdata, addresses, sel, count, type_size, no_match, no_match_count);
+			TemplatedCompareGroups<float>(gdata, addresses, sel, count, type_size, no_match, no_match_count);
 			break;
 		case PhysicalType::DOUBLE:
-			templated_compare_groups<double>(gdata, addresses, sel, count, type_size, no_match, no_match_count);
+			TemplatedCompareGroups<double>(gdata, addresses, sel, count, type_size, no_match, no_match_count);
 			break;
 		case PhysicalType::INTERVAL:
-			templated_compare_groups<interval_t>(gdata, addresses, sel, count, type_size, no_match, no_match_count);
+			TemplatedCompareGroups<interval_t>(gdata, addresses, sel, count, type_size, no_match, no_match_count);
 			break;
 		case PhysicalType::VARCHAR:
-			templated_compare_groups<string_t>(gdata, addresses, sel, count, type_size, no_match, no_match_count);
+			TemplatedCompareGroups<string_t>(gdata, addresses, sel, count, type_size, no_match, no_match_count);
 			break;
 		default:
 			throw Exception("Unsupported type for group vector");

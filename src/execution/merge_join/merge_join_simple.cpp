@@ -6,7 +6,7 @@
 namespace duckdb {
 
 template <class T, class OP>
-static idx_t merge_join_simple_gt(ScalarMergeInfo &l, ChunkMergeInfo &r) {
+static idx_t MergeJoinSimpleGreaterThan(ScalarMergeInfo &l, ChunkMergeInfo &r) {
 	auto ldata = (T *)l.order.vdata.data;
 	auto &lorder = l.order.order;
 	l.pos = l.order.count;
@@ -41,12 +41,12 @@ static idx_t merge_join_simple_gt(ScalarMergeInfo &l, ChunkMergeInfo &r) {
 }
 template <class T>
 idx_t MergeJoinSimple::GreaterThan::Operation(ScalarMergeInfo &l, ChunkMergeInfo &r) {
-	return merge_join_simple_gt<T, duckdb::GreaterThan>(l, r);
+	return MergeJoinSimpleGreaterThan<T, duckdb::GreaterThan>(l, r);
 }
 
 template <class T>
 idx_t MergeJoinSimple::GreaterThanEquals::Operation(ScalarMergeInfo &l, ChunkMergeInfo &r) {
-	return merge_join_simple_gt<T, duckdb::GreaterThanEquals>(l, r);
+	return MergeJoinSimpleGreaterThan<T, duckdb::GreaterThanEquals>(l, r);
 }
 
 template <class T, class OP>

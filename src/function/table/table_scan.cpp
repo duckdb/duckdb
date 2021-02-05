@@ -21,7 +21,7 @@ namespace duckdb {
 // Table Scan
 //===--------------------------------------------------------------------===//
 bool TableScanParallelStateNext(ClientContext &context, const FunctionData *bind_data,
-                                    FunctionOperatorData *operator_state, ParallelState *parallel_state_);
+                                    FunctionOperatorData *operator_state, ParallelState *parallel_state_p);
 
 struct TableScanOperatorData : public FunctionOperatorData {
 	//! The current position in the scan
@@ -90,9 +90,9 @@ unique_ptr<ParallelState> TableScanInitParallelState(ClientContext &context, con
 }
 
 bool TableScanParallelStateNext(ClientContext &context, const FunctionData *bind_data_p,
-                                    FunctionOperatorData *operator_state, ParallelState *parallel_state_) {
+                                    FunctionOperatorData *operator_state, ParallelState *parallel_state_p) {
 	auto &bind_data = (const TableScanBindData &)*bind_data_p;
-	auto &parallel_state = (ParallelTableFunctionScanState &)*parallel_state_;
+	auto &parallel_state = (ParallelTableFunctionScanState &)*parallel_state_p;
 	auto &state = (TableScanOperatorData &)*operator_state;
 
 	lock_guard<mutex> parallel_lock(parallel_state.lock);
@@ -124,7 +124,7 @@ struct IndexScanOperatorData : public FunctionOperatorData {
 	bool finished;
 };
 
-static unique_ptr<FunctionOperatorData> index_scan_init(ClientContext &context, const FunctionData *bind_data_p,
+static unique_ptr<FunctionOperatorData> IndexScanInit(ClientContext &context, const FunctionData *bind_data_p,
                                                         vector<column_t> &column_ids, TableFilterCollection *filters) {
 	auto result = make_unique<IndexScanOperatorData>();
 	auto &transaction = Transaction::GetTransaction(context);
@@ -141,7 +141,7 @@ static unique_ptr<FunctionOperatorData> index_scan_init(ClientContext &context, 
 	return move(result);
 }
 
-static void index_scan_function(ClientContext &context, const FunctionData *bind_data_p,
+static void IndexScanFunction(ClientContext &context, const FunctionData *bind_data_p,
                                 FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &bind_data = (const TableScanBindData &)*bind_data_p;
 	auto &state = (IndexScanOperatorData &)*operator_state;
@@ -296,8 +296,8 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 			if (index->Scan(transaction, storage, *index_state, STANDARD_VECTOR_SIZE, bind_data.result_ids)) {
 				// use an index scan!
 				bind_data.is_index_scan = true;
-				get.function.init = index_scan_init;
-				get.function.function = index_scan_function;
+				get.function.init = IndexScanInit;
+				get.function.function = IndexScanFunction;
 				get.function.max_threads = nullptr;
 				get.function.init_parallel_state = nullptr;
 				get.function.parallel_state_next = nullptr;

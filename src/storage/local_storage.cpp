@@ -141,7 +141,7 @@ void LocalStorage::Scan(LocalScanState &state, const vector<column_t> &column_id
 				//! We have filters to apply here
 				for (auto &column_filter : column_filters->second) {
 					nullmask_t nullmask = FlatVector::Nullmask(result.data[i]);
-					UncompressedSegment::filterSelection(sel, result.data[i], column_filter, approved_tuple_count,
+					UncompressedSegment::FilterSelection(sel, result.data[i], column_filter, approved_tuple_count,
 					                                     nullmask);
 				}
 				count = approved_tuple_count;

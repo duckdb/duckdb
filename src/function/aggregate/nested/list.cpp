@@ -70,7 +70,7 @@ static void ListCombineFunction(Vector &state, Vector &combined, idx_t count) {
 	}
 }
 
-static void list_finalize(Vector &state_vector, FunctionData *, Vector &result, idx_t count) {
+static void ListFinalize(Vector &state_vector, FunctionData *, Vector &result, idx_t count) {
 	VectorData sdata;
 	state_vector.Orrify(count, sdata);
 	auto states = (ListAggState **)sdata.data;
@@ -123,7 +123,7 @@ unique_ptr<FunctionData> ListBindFunction(ClientContext &context, AggregateFunct
 void ListFun::RegisterFunction(BuiltinFunctions &set) {
 	auto agg = AggregateFunction(
 	    "list", {LogicalType::ANY}, LogicalType::LIST, AggregateFunction::StateSize<ListAggState>,
-	    AggregateFunction::StateInitialize<ListAggState, ListFunction>, ListUpdateFunction, ListCombineFunction, list_finalize,
+	    AggregateFunction::StateInitialize<ListAggState, ListFunction>, ListUpdateFunction, ListCombineFunction, ListFinalize,
 	    nullptr, ListBindFunction, AggregateFunction::StateDestroy<ListAggState, ListFunction>);
 	set.AddFunction(agg);
 	agg.name = "array_agg";

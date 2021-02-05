@@ -463,7 +463,7 @@ void Vector::Print() {
 }
 
 template <class T>
-static void flatten_constant_vector_loop(data_ptr_t data, data_ptr_t old_data, idx_t count) {
+static void TemplatedFlattenConstantVector(data_ptr_t data, data_ptr_t old_data, idx_t count) {
 	auto constant = Load<T>(old_data);
 	auto output = (T *)data;
 	for (idx_t i = 0; i < count; i++) {
@@ -501,52 +501,52 @@ void Vector::Normalify(idx_t count) {
 		switch (type.InternalType()) {
 		case PhysicalType::BOOL:
 		case PhysicalType::INT8:
-			flatten_constant_vector_loop<int8_t>(data, old_data, count);
+			TemplatedFlattenConstantVector<int8_t>(data, old_data, count);
 			break;
 		case PhysicalType::INT16:
-			flatten_constant_vector_loop<int16_t>(data, old_data, count);
+			TemplatedFlattenConstantVector<int16_t>(data, old_data, count);
 			break;
 		case PhysicalType::INT32:
-			flatten_constant_vector_loop<int32_t>(data, old_data, count);
+			TemplatedFlattenConstantVector<int32_t>(data, old_data, count);
 			break;
 		case PhysicalType::INT64:
-			flatten_constant_vector_loop<int64_t>(data, old_data, count);
+			TemplatedFlattenConstantVector<int64_t>(data, old_data, count);
 			break;
 		case PhysicalType::UINT8:
-			flatten_constant_vector_loop<uint8_t>(data, old_data, count);
+			TemplatedFlattenConstantVector<uint8_t>(data, old_data, count);
 			break;
 		case PhysicalType::UINT16:
-			flatten_constant_vector_loop<uint16_t>(data, old_data, count);
+			TemplatedFlattenConstantVector<uint16_t>(data, old_data, count);
 			break;
 		case PhysicalType::UINT32:
-			flatten_constant_vector_loop<uint32_t>(data, old_data, count);
+			TemplatedFlattenConstantVector<uint32_t>(data, old_data, count);
 			break;
 		case PhysicalType::UINT64:
-			flatten_constant_vector_loop<uint64_t>(data, old_data, count);
+			TemplatedFlattenConstantVector<uint64_t>(data, old_data, count);
 			break;
 		case PhysicalType::INT128:
-			flatten_constant_vector_loop<hugeint_t>(data, old_data, count);
+			TemplatedFlattenConstantVector<hugeint_t>(data, old_data, count);
 			break;
 		case PhysicalType::FLOAT:
-			flatten_constant_vector_loop<float>(data, old_data, count);
+			TemplatedFlattenConstantVector<float>(data, old_data, count);
 			break;
 		case PhysicalType::DOUBLE:
-			flatten_constant_vector_loop<double>(data, old_data, count);
+			TemplatedFlattenConstantVector<double>(data, old_data, count);
 			break;
 		case PhysicalType::HASH:
-			flatten_constant_vector_loop<hash_t>(data, old_data, count);
+			TemplatedFlattenConstantVector<hash_t>(data, old_data, count);
 			break;
 		case PhysicalType::POINTER:
-			flatten_constant_vector_loop<uintptr_t>(data, old_data, count);
+			TemplatedFlattenConstantVector<uintptr_t>(data, old_data, count);
 			break;
 		case PhysicalType::INTERVAL:
-			flatten_constant_vector_loop<interval_t>(data, old_data, count);
+			TemplatedFlattenConstantVector<interval_t>(data, old_data, count);
 			break;
 		case PhysicalType::VARCHAR:
-			flatten_constant_vector_loop<string_t>(data, old_data, count);
+			TemplatedFlattenConstantVector<string_t>(data, old_data, count);
 			break;
 		case PhysicalType::LIST: {
-			flatten_constant_vector_loop<list_entry_t>(data, old_data, count);
+			TemplatedFlattenConstantVector<list_entry_t>(data, old_data, count);
 			break;
 		}
 		case PhysicalType::STRUCT: {

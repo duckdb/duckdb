@@ -237,13 +237,13 @@ void MD5Context::Finish(data_ptr_t out_digest) {
 }
 
 void MD5Context::DigestToBase16(const_data_ptr_t digest, char *zbuf) {
-	static char const zencode[] = "0123456789abcdef";
+	static char const HEX_CODES[] = "0123456789abcdef";
 	int i, j;
 
 	for (j = i = 0; i < 16; i++) {
 		int a = digest[i];
-		zbuf[j++] = zencode[(a >> 4) & 0xf];
-		zbuf[j++] = zencode[a & 0xf];
+		zbuf[j++] = HEX_CODES[(a >> 4) & 0xf];
+		zbuf[j++] = HEX_CODES[a & 0xf];
 	}
 }
 

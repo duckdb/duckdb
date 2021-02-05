@@ -15,7 +15,7 @@
 namespace duckdb {
 
 struct PragmaTableFunctionData : public TableFunctionData {
-	explicit PragmaTableFunctionData(CatalogEntry *entry_) : entry(entry_) {
+	explicit PragmaTableFunctionData(CatalogEntry *entry_p) : entry(entry_p) {
 	}
 
 	CatalogEntry *entry;
@@ -61,7 +61,7 @@ unique_ptr<FunctionOperatorData> PragmaTableInfoInit(ClientContext &context, con
 	return make_unique<PragmaTableOperatorData>();
 }
 
-static void check_constraints(TableCatalogEntry *table, idx_t oid, bool &out_not_null, bool &out_pk) {
+static void CheckConstraints(TableCatalogEntry *table, idx_t oid, bool &out_not_null, bool &out_pk) {
 	out_not_null = false;
 	out_pk = false;
 	// check all constraints
@@ -103,7 +103,7 @@ static void PragmaTableInfoTable(PragmaTableOperatorData &data, TableCatalogEntr
 		auto index = i - data.offset;
 		auto &column = table->columns[i];
 		D_ASSERT(column.oid < (idx_t)NumericLimits<int32_t>::Maximum());
-		check_constraints(table, column.oid, not_null, pk);
+		CheckConstraints(table, column.oid, not_null, pk);
 
 		// return values:
 		// "cid", PhysicalType::INT32

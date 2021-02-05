@@ -13,7 +13,7 @@ namespace duckdb {
 
 class WindowGlobalState : public GlobalOperatorState {
 public:
-	WindowGlobalState(PhysicalWindow &_op, ClientContext &context) : op(_op) {
+	WindowGlobalState(PhysicalWindow &op_p, ClientContext &context) : op(op_p) {
 	}
 
 	PhysicalWindow &op;
@@ -24,7 +24,7 @@ public:
 
 class WindowLocalState : public LocalSinkState {
 public:
-	explicit WindowLocalState(PhysicalWindow &_op) : op(_op) {
+	explicit WindowLocalState(PhysicalWindow &op_p) : op(op_p) {
 	}
 
 	PhysicalWindow &op;
@@ -487,8 +487,8 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 	}
 }
 
-void PhysicalWindow::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
-	auto state = reinterpret_cast<PhysicalWindowOperatorState *>(state_);
+void PhysicalWindow::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
+	auto state = reinterpret_cast<PhysicalWindowOperatorState *>(state_p);
 
 	auto &gstate = (WindowGlobalState &)*sink_state;
 
@@ -523,21 +523,21 @@ unique_ptr<PhysicalOperatorState> PhysicalWindow::GetOperatorState() {
 	return make_unique<PhysicalWindowOperatorState>(*this, children[0].get());
 }
 
-void PhysicalWindow::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_,
+void PhysicalWindow::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_p,
                           DataChunk &input) {
-	auto &lstate = (WindowLocalState &)lstate_;
+	auto &lstate = (WindowLocalState &)lstate_p;
 	lstate.chunks.Append(input);
 }
 
-void PhysicalWindow::Combine(ExecutionContext &context, GlobalOperatorState &gstate_, LocalSinkState &lstate_) {
-	auto &gstate = (WindowGlobalState &)gstate_;
-	auto &lstate = (WindowLocalState &)lstate_;
+void PhysicalWindow::Combine(ExecutionContext &context, GlobalOperatorState &gstate_p, LocalSinkState &lstate_p) {
+	auto &gstate = (WindowGlobalState &)gstate_p;
+	auto &lstate = (WindowLocalState &)lstate_p;
 	lock_guard<mutex> glock(gstate.lock);
 	gstate.chunks.Merge(lstate.chunks);
 }
 
-void PhysicalWindow::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> gstate_) {
-	this->sink_state = move(gstate_);
+void PhysicalWindow::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> gstate_p) {
+	this->sink_state = move(gstate_p);
 	auto &gstate = (WindowGlobalState &)*this->sink_state;
 
 	ChunkCollection &big_data = gstate.chunks;

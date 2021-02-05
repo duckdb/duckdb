@@ -114,7 +114,7 @@ void Select(SelectionVector &sel, Vector &result, unsigned char *source, nullmas
 }
 
 template <class OP>
-static void templated_select_operation(SelectionVector &sel, Vector &result, PhysicalType type, unsigned char *source,
+static void TemplatedSelectOperation(SelectionVector &sel, Vector &result, PhysicalType type, unsigned char *source,
                                        nullmask_t *source_mask, Value &constant, idx_t &approved_tuple_count) {
 	// the inplace loops take the result as the last parameter
 	switch (type) {
@@ -243,7 +243,7 @@ static void templated_select_operation_between(SelectionVector &sel, Vector &res
 }
 
 void NumericSegment::Select(ColumnScanState &state, Vector &result, SelectionVector &sel, idx_t &approved_tuple_count,
-                            vector<TableFilter> &tableFilter) {
+                            vector<TableFilter> &table_filter) {
 	auto vector_index = state.vector_index;
 	D_ASSERT(vector_index < max_vector_count);
 	D_ASSERT(vector_index * STANDARD_VECTOR_SIZE <= tuple_count);
@@ -256,31 +256,31 @@ void NumericSegment::Select(ColumnScanState &state, Vector &result, SelectionVec
 	auto source_nullmask = (nullmask_t *)(data + offset);
 	auto source_data = data + offset + sizeof(nullmask_t);
 
-	if (tableFilter.size() == 1) {
-		switch (tableFilter[0].comparison_type) {
+	if (table_filter.size() == 1) {
+		switch (table_filter[0].comparison_type) {
 		case ExpressionType::COMPARE_EQUAL: {
-			templated_select_operation<Equals>(sel, result, state.current->type.InternalType(), source_data,
-			                                   source_nullmask, tableFilter[0].constant, approved_tuple_count);
+			TemplatedSelectOperation<Equals>(sel, result, state.current->type.InternalType(), source_data,
+			                                   source_nullmask, table_filter[0].constant, approved_tuple_count);
 			break;
 		}
 		case ExpressionType::COMPARE_LESSTHAN: {
-			templated_select_operation<LessThan>(sel, result, state.current->type.InternalType(), source_data,
-			                                     source_nullmask, tableFilter[0].constant, approved_tuple_count);
+			TemplatedSelectOperation<LessThan>(sel, result, state.current->type.InternalType(), source_data,
+			                                     source_nullmask, table_filter[0].constant, approved_tuple_count);
 			break;
 		}
 		case ExpressionType::COMPARE_GREATERTHAN: {
-			templated_select_operation<GreaterThan>(sel, result, state.current->type.InternalType(), source_data,
-			                                        source_nullmask, tableFilter[0].constant, approved_tuple_count);
+			TemplatedSelectOperation<GreaterThan>(sel, result, state.current->type.InternalType(), source_data,
+			                                        source_nullmask, table_filter[0].constant, approved_tuple_count);
 			break;
 		}
 		case ExpressionType::COMPARE_LESSTHANOREQUALTO: {
-			templated_select_operation<LessThanEquals>(sel, result, state.current->type.InternalType(), source_data,
-			                                           source_nullmask, tableFilter[0].constant, approved_tuple_count);
+			TemplatedSelectOperation<LessThanEquals>(sel, result, state.current->type.InternalType(), source_data,
+			                                           source_nullmask, table_filter[0].constant, approved_tuple_count);
 			break;
 		}
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO: {
-			templated_select_operation<GreaterThanEquals>(sel, result, state.current->type.InternalType(), source_data,
-			                                              source_nullmask, tableFilter[0].constant,
+			TemplatedSelectOperation<GreaterThanEquals>(sel, result, state.current->type.InternalType(), source_data,
+			                                              source_nullmask, table_filter[0].constant,
 			                                              approved_tuple_count);
 			break;
 		}
@@ -288,30 +288,30 @@ void NumericSegment::Select(ColumnScanState &state, Vector &result, SelectionVec
 			throw NotImplementedException("Unknown comparison type for filter pushed down to table!");
 		}
 	} else {
-		D_ASSERT(tableFilter[0].comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
-		         tableFilter[0].comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO);
-		D_ASSERT(tableFilter[1].comparison_type == ExpressionType::COMPARE_LESSTHAN ||
-		         tableFilter[1].comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO);
+		D_ASSERT(table_filter[0].comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
+		         table_filter[0].comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO);
+		D_ASSERT(table_filter[1].comparison_type == ExpressionType::COMPARE_LESSTHAN ||
+		         table_filter[1].comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO);
 
-		if (tableFilter[0].comparison_type == ExpressionType::COMPARE_GREATERTHAN) {
-			if (tableFilter[1].comparison_type == ExpressionType::COMPARE_LESSTHAN) {
+		if (table_filter[0].comparison_type == ExpressionType::COMPARE_GREATERTHAN) {
+			if (table_filter[1].comparison_type == ExpressionType::COMPARE_LESSTHAN) {
 				templated_select_operation_between<GreaterThan, LessThan>(
 				    sel, result, state.current->type.InternalType(), source_data, source_nullmask,
-				    tableFilter[0].constant, tableFilter[1].constant, approved_tuple_count);
+				    table_filter[0].constant, table_filter[1].constant, approved_tuple_count);
 			} else {
 				templated_select_operation_between<GreaterThan, LessThanEquals>(
 				    sel, result, state.current->type.InternalType(), source_data, source_nullmask,
-				    tableFilter[0].constant, tableFilter[1].constant, approved_tuple_count);
+				    table_filter[0].constant, table_filter[1].constant, approved_tuple_count);
 			}
 		} else {
-			if (tableFilter[1].comparison_type == ExpressionType::COMPARE_LESSTHAN) {
+			if (table_filter[1].comparison_type == ExpressionType::COMPARE_LESSTHAN) {
 				templated_select_operation_between<GreaterThanEquals, LessThan>(
 				    sel, result, state.current->type.InternalType(), source_data, source_nullmask,
-				    tableFilter[0].constant, tableFilter[1].constant, approved_tuple_count);
+				    table_filter[0].constant, table_filter[1].constant, approved_tuple_count);
 			} else {
 				templated_select_operation_between<GreaterThanEquals, LessThanEquals>(
 				    sel, result, state.current->type.InternalType(), source_data, source_nullmask,
-				    tableFilter[0].constant, tableFilter[1].constant, approved_tuple_count);
+				    table_filter[0].constant, table_filter[1].constant, approved_tuple_count);
 			}
 		}
 	}
@@ -352,7 +352,7 @@ void NumericSegment::FetchUpdateData(ColumnScanState &state, transaction_t start
 }
 
 template <class T>
-static void templated_assignment(SelectionVector &sel, data_ptr_t source, data_ptr_t result,
+static void TemplatedAssignment(SelectionVector &sel, data_ptr_t source, data_ptr_t result,
                                  nullmask_t &source_nullmask, nullmask_t &result_nullmask, idx_t approved_tuple_count) {
 	if (source_nullmask.any()) {
 		for (size_t i = 0; i < approved_tuple_count; i++) {
@@ -389,62 +389,62 @@ void NumericSegment::FilterFetchBaseData(ColumnScanState &state, Vector &result,
 	switch (type) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8: {
-		templated_assignment<int8_t>(sel, source_data, result_data, *source_nullmask, result_nullmask,
+		TemplatedAssignment<int8_t>(sel, source_data, result_data, *source_nullmask, result_nullmask,
 		                             approved_tuple_count);
 		break;
 	}
 	case PhysicalType::INT16: {
-		templated_assignment<int16_t>(sel, source_data, result_data, *source_nullmask, result_nullmask,
+		TemplatedAssignment<int16_t>(sel, source_data, result_data, *source_nullmask, result_nullmask,
 		                              approved_tuple_count);
 		break;
 	}
 	case PhysicalType::INT32: {
-		templated_assignment<int32_t>(sel, source_data, result_data, *source_nullmask, result_nullmask,
+		TemplatedAssignment<int32_t>(sel, source_data, result_data, *source_nullmask, result_nullmask,
 		                              approved_tuple_count);
 		break;
 	}
 	case PhysicalType::INT64: {
-		templated_assignment<int64_t>(sel, source_data, result_data, *source_nullmask, result_nullmask,
+		TemplatedAssignment<int64_t>(sel, source_data, result_data, *source_nullmask, result_nullmask,
 		                              approved_tuple_count);
 		break;
 	}
 	case PhysicalType::UINT8: {
-		templated_assignment<uint8_t>(sel, source_data, result_data, *source_nullmask, result_nullmask,
+		TemplatedAssignment<uint8_t>(sel, source_data, result_data, *source_nullmask, result_nullmask,
 		                              approved_tuple_count);
 		break;
 	}
 	case PhysicalType::UINT16: {
-		templated_assignment<uint16_t>(sel, source_data, result_data, *source_nullmask, result_nullmask,
+		TemplatedAssignment<uint16_t>(sel, source_data, result_data, *source_nullmask, result_nullmask,
 		                               approved_tuple_count);
 		break;
 	}
 	case PhysicalType::UINT32: {
-		templated_assignment<uint32_t>(sel, source_data, result_data, *source_nullmask, result_nullmask,
+		TemplatedAssignment<uint32_t>(sel, source_data, result_data, *source_nullmask, result_nullmask,
 		                               approved_tuple_count);
 		break;
 	}
 	case PhysicalType::UINT64: {
-		templated_assignment<uint64_t>(sel, source_data, result_data, *source_nullmask, result_nullmask,
+		TemplatedAssignment<uint64_t>(sel, source_data, result_data, *source_nullmask, result_nullmask,
 		                               approved_tuple_count);
 		break;
 	}
 	case PhysicalType::INT128: {
-		templated_assignment<hugeint_t>(sel, source_data, result_data, *source_nullmask, result_nullmask,
+		TemplatedAssignment<hugeint_t>(sel, source_data, result_data, *source_nullmask, result_nullmask,
 		                                approved_tuple_count);
 		break;
 	}
 	case PhysicalType::FLOAT: {
-		templated_assignment<float>(sel, source_data, result_data, *source_nullmask, result_nullmask,
+		TemplatedAssignment<float>(sel, source_data, result_data, *source_nullmask, result_nullmask,
 		                            approved_tuple_count);
 		break;
 	}
 	case PhysicalType::DOUBLE: {
-		templated_assignment<double>(sel, source_data, result_data, *source_nullmask, result_nullmask,
+		TemplatedAssignment<double>(sel, source_data, result_data, *source_nullmask, result_nullmask,
 		                             approved_tuple_count);
 		break;
 	}
 	case PhysicalType::INTERVAL: {
-		templated_assignment<interval_t>(sel, source_data, result_data, *source_nullmask, result_nullmask,
+		TemplatedAssignment<interval_t>(sel, source_data, result_data, *source_nullmask, result_nullmask,
 		                                 approved_tuple_count);
 		break;
 	}
@@ -633,7 +633,7 @@ void update_numeric_statistics<interval_t>(SegmentStatistics &stats, interval_t 
 }
 
 template <class T>
-static void append_loop(SegmentStatistics &stats, data_ptr_t target, idx_t target_offset, Vector &source, idx_t offset,
+static void AppendLoop(SegmentStatistics &stats, data_ptr_t target, idx_t target_offset, Vector &source, idx_t offset,
                         idx_t count) {
 	auto &nullmask = *((nullmask_t *)target);
 
@@ -669,29 +669,29 @@ static NumericSegment::append_function_t GetAppendFunction(PhysicalType type) {
 	switch (type) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
-		return append_loop<int8_t>;
+		return AppendLoop<int8_t>;
 	case PhysicalType::INT16:
-		return append_loop<int16_t>;
+		return AppendLoop<int16_t>;
 	case PhysicalType::INT32:
-		return append_loop<int32_t>;
+		return AppendLoop<int32_t>;
 	case PhysicalType::INT64:
-		return append_loop<int64_t>;
+		return AppendLoop<int64_t>;
 	case PhysicalType::UINT8:
-		return append_loop<uint8_t>;
+		return AppendLoop<uint8_t>;
 	case PhysicalType::UINT16:
-		return append_loop<uint16_t>;
+		return AppendLoop<uint16_t>;
 	case PhysicalType::UINT32:
-		return append_loop<uint32_t>;
+		return AppendLoop<uint32_t>;
 	case PhysicalType::UINT64:
-		return append_loop<uint64_t>;
+		return AppendLoop<uint64_t>;
 	case PhysicalType::INT128:
-		return append_loop<hugeint_t>;
+		return AppendLoop<hugeint_t>;
 	case PhysicalType::FLOAT:
-		return append_loop<float>;
+		return AppendLoop<float>;
 	case PhysicalType::DOUBLE:
-		return append_loop<double>;
+		return AppendLoop<double>;
 	case PhysicalType::INTERVAL:
-		return append_loop<interval_t>;
+		return AppendLoop<interval_t>;
 	default:
 		throw NotImplementedException("Unimplemented type for uncompressed segment");
 	}
@@ -735,7 +735,7 @@ static void update_loop_no_null(T *__restrict undo_data, T *__restrict base_data
 }
 
 template <class T>
-static void update_loop(SegmentStatistics &stats, UpdateInfo *info, data_ptr_t base, Vector &update) {
+static void UpdateLoop(SegmentStatistics &stats, UpdateInfo *info, data_ptr_t base, Vector &update) {
 	auto update_data = FlatVector::GetData<T>(update);
 	auto &update_nullmask = FlatVector::Nullmask(update);
 	auto nullmask = (nullmask_t *)base;
@@ -754,29 +754,29 @@ static NumericSegment::update_function_t GetUpdateFunction(PhysicalType type) {
 	switch (type) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
-		return update_loop<int8_t>;
+		return UpdateLoop<int8_t>;
 	case PhysicalType::INT16:
-		return update_loop<int16_t>;
+		return UpdateLoop<int16_t>;
 	case PhysicalType::INT32:
-		return update_loop<int32_t>;
+		return UpdateLoop<int32_t>;
 	case PhysicalType::INT64:
-		return update_loop<int64_t>;
+		return UpdateLoop<int64_t>;
 	case PhysicalType::UINT8:
-		return update_loop<uint8_t>;
+		return UpdateLoop<uint8_t>;
 	case PhysicalType::UINT16:
-		return update_loop<uint16_t>;
+		return UpdateLoop<uint16_t>;
 	case PhysicalType::UINT32:
-		return update_loop<uint32_t>;
+		return UpdateLoop<uint32_t>;
 	case PhysicalType::UINT64:
-		return update_loop<uint64_t>;
+		return UpdateLoop<uint64_t>;
 	case PhysicalType::INT128:
-		return update_loop<hugeint_t>;
+		return UpdateLoop<hugeint_t>;
 	case PhysicalType::FLOAT:
-		return update_loop<float>;
+		return UpdateLoop<float>;
 	case PhysicalType::DOUBLE:
-		return update_loop<double>;
+		return UpdateLoop<double>;
 	case PhysicalType::INTERVAL:
-		return update_loop<interval_t>;
+		return UpdateLoop<interval_t>;
 	default:
 		throw NotImplementedException("Unimplemented type for uncompressed segment");
 	}
@@ -786,7 +786,7 @@ static NumericSegment::update_function_t GetUpdateFunction(PhysicalType type) {
 // Merge Update
 //===--------------------------------------------------------------------===//
 template <class T>
-static void merge_update_loop(SegmentStatistics &stats, UpdateInfo *node, data_ptr_t base, Vector &update, row_t *ids,
+static void MergeUpdateLoop(SegmentStatistics &stats, UpdateInfo *node, data_ptr_t base, Vector &update, row_t *ids,
                               idx_t count, idx_t vector_offset) {
 	auto &base_nullmask = *((nullmask_t *)base);
 	auto base_data = (T *)(base + sizeof(nullmask_t));
@@ -839,29 +839,29 @@ static NumericSegment::merge_update_function_t GetMergeUpdateFunction(PhysicalTy
 	switch (type) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
-		return merge_update_loop<int8_t>;
+		return MergeUpdateLoop<int8_t>;
 	case PhysicalType::INT16:
-		return merge_update_loop<int16_t>;
+		return MergeUpdateLoop<int16_t>;
 	case PhysicalType::INT32:
-		return merge_update_loop<int32_t>;
+		return MergeUpdateLoop<int32_t>;
 	case PhysicalType::INT64:
-		return merge_update_loop<int64_t>;
+		return MergeUpdateLoop<int64_t>;
 	case PhysicalType::UINT8:
-		return merge_update_loop<uint8_t>;
+		return MergeUpdateLoop<uint8_t>;
 	case PhysicalType::UINT16:
-		return merge_update_loop<uint16_t>;
+		return MergeUpdateLoop<uint16_t>;
 	case PhysicalType::UINT32:
-		return merge_update_loop<uint32_t>;
+		return MergeUpdateLoop<uint32_t>;
 	case PhysicalType::UINT64:
-		return merge_update_loop<uint64_t>;
+		return MergeUpdateLoop<uint64_t>;
 	case PhysicalType::INT128:
-		return merge_update_loop<hugeint_t>;
+		return MergeUpdateLoop<hugeint_t>;
 	case PhysicalType::FLOAT:
-		return merge_update_loop<float>;
+		return MergeUpdateLoop<float>;
 	case PhysicalType::DOUBLE:
-		return merge_update_loop<double>;
+		return MergeUpdateLoop<double>;
 	case PhysicalType::INTERVAL:
-		return merge_update_loop<interval_t>;
+		return MergeUpdateLoop<interval_t>;
 	default:
 		throw NotImplementedException("Unimplemented type for uncompressed segment");
 	}
@@ -871,7 +871,7 @@ static NumericSegment::merge_update_function_t GetMergeUpdateFunction(PhysicalTy
 // Update Fetch
 //===--------------------------------------------------------------------===//
 template <class T>
-static void update_info_fetch(transaction_t start_time, transaction_t transaction_id, UpdateInfo *info,
+static void UpdateInfoFetch(transaction_t start_time, transaction_t transaction_id, UpdateInfo *info,
                               Vector &result) {
 	auto result_data = FlatVector::GetData<T>(result);
 	auto &result_mask = FlatVector::Nullmask(result);
@@ -888,29 +888,29 @@ static NumericSegment::update_info_fetch_function_t GetUpdateInfoFetchFunction(P
 	switch (type) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
-		return update_info_fetch<int8_t>;
+		return UpdateInfoFetch<int8_t>;
 	case PhysicalType::INT16:
-		return update_info_fetch<int16_t>;
+		return UpdateInfoFetch<int16_t>;
 	case PhysicalType::INT32:
-		return update_info_fetch<int32_t>;
+		return UpdateInfoFetch<int32_t>;
 	case PhysicalType::INT64:
-		return update_info_fetch<int64_t>;
+		return UpdateInfoFetch<int64_t>;
 	case PhysicalType::UINT8:
-		return update_info_fetch<uint8_t>;
+		return UpdateInfoFetch<uint8_t>;
 	case PhysicalType::UINT16:
-		return update_info_fetch<uint16_t>;
+		return UpdateInfoFetch<uint16_t>;
 	case PhysicalType::UINT32:
-		return update_info_fetch<uint32_t>;
+		return UpdateInfoFetch<uint32_t>;
 	case PhysicalType::UINT64:
-		return update_info_fetch<uint64_t>;
+		return UpdateInfoFetch<uint64_t>;
 	case PhysicalType::INT128:
-		return update_info_fetch<hugeint_t>;
+		return UpdateInfoFetch<hugeint_t>;
 	case PhysicalType::FLOAT:
-		return update_info_fetch<float>;
+		return UpdateInfoFetch<float>;
 	case PhysicalType::DOUBLE:
-		return update_info_fetch<double>;
+		return UpdateInfoFetch<double>;
 	case PhysicalType::INTERVAL:
-		return update_info_fetch<interval_t>;
+		return UpdateInfoFetch<interval_t>;
 	default:
 		throw NotImplementedException("Unimplemented type for uncompressed segment");
 	}
@@ -920,7 +920,7 @@ static NumericSegment::update_info_fetch_function_t GetUpdateInfoFetchFunction(P
 // Update Append
 //===--------------------------------------------------------------------===//
 template <class T>
-static void update_info_append(Transaction &transaction, UpdateInfo *info, idx_t row_id, Vector &result,
+static void UpdateInfoAppend(Transaction &transaction, UpdateInfo *info, idx_t row_id, Vector &result,
                                idx_t result_idx) {
 	auto result_data = FlatVector::GetData<T>(result);
 	auto &result_mask = FlatVector::Nullmask(result);
@@ -947,29 +947,29 @@ static NumericSegment::update_info_append_function_t GetUpdateInfoAppendFunction
 	switch (type) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
-		return update_info_append<int8_t>;
+		return UpdateInfoAppend<int8_t>;
 	case PhysicalType::INT16:
-		return update_info_append<int16_t>;
+		return UpdateInfoAppend<int16_t>;
 	case PhysicalType::INT32:
-		return update_info_append<int32_t>;
+		return UpdateInfoAppend<int32_t>;
 	case PhysicalType::INT64:
-		return update_info_append<int64_t>;
+		return UpdateInfoAppend<int64_t>;
 	case PhysicalType::UINT8:
-		return update_info_append<uint8_t>;
+		return UpdateInfoAppend<uint8_t>;
 	case PhysicalType::UINT16:
-		return update_info_append<uint16_t>;
+		return UpdateInfoAppend<uint16_t>;
 	case PhysicalType::UINT32:
-		return update_info_append<uint32_t>;
+		return UpdateInfoAppend<uint32_t>;
 	case PhysicalType::UINT64:
-		return update_info_append<uint64_t>;
+		return UpdateInfoAppend<uint64_t>;
 	case PhysicalType::INT128:
-		return update_info_append<hugeint_t>;
+		return UpdateInfoAppend<hugeint_t>;
 	case PhysicalType::FLOAT:
-		return update_info_append<float>;
+		return UpdateInfoAppend<float>;
 	case PhysicalType::DOUBLE:
-		return update_info_append<double>;
+		return UpdateInfoAppend<double>;
 	case PhysicalType::INTERVAL:
-		return update_info_append<interval_t>;
+		return UpdateInfoAppend<interval_t>;
 	default:
 		throw NotImplementedException("Unimplemented type for uncompressed segment");
 	}
@@ -979,7 +979,7 @@ static NumericSegment::update_info_append_function_t GetUpdateInfoAppendFunction
 // Rollback Update
 //===--------------------------------------------------------------------===//
 template <class T>
-static void rollback_update(UpdateInfo *info, data_ptr_t base) {
+static void RollbackUpdate(UpdateInfo *info, data_ptr_t base) {
 	auto &nullmask = *((nullmask_t *)base);
 	auto info_data = (T *)info->tuple_data;
 	auto base_data = (T *)(base + sizeof(nullmask_t));
@@ -994,29 +994,29 @@ static NumericSegment::rollback_update_function_t GetRollbackUpdateFunction(Phys
 	switch (type) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
-		return rollback_update<int8_t>;
+		return RollbackUpdate<int8_t>;
 	case PhysicalType::INT16:
-		return rollback_update<int16_t>;
+		return RollbackUpdate<int16_t>;
 	case PhysicalType::INT32:
-		return rollback_update<int32_t>;
+		return RollbackUpdate<int32_t>;
 	case PhysicalType::INT64:
-		return rollback_update<int64_t>;
+		return RollbackUpdate<int64_t>;
 	case PhysicalType::UINT8:
-		return rollback_update<uint8_t>;
+		return RollbackUpdate<uint8_t>;
 	case PhysicalType::UINT16:
-		return rollback_update<uint16_t>;
+		return RollbackUpdate<uint16_t>;
 	case PhysicalType::UINT32:
-		return rollback_update<uint32_t>;
+		return RollbackUpdate<uint32_t>;
 	case PhysicalType::UINT64:
-		return rollback_update<uint64_t>;
+		return RollbackUpdate<uint64_t>;
 	case PhysicalType::INT128:
-		return rollback_update<hugeint_t>;
+		return RollbackUpdate<hugeint_t>;
 	case PhysicalType::FLOAT:
-		return rollback_update<float>;
+		return RollbackUpdate<float>;
 	case PhysicalType::DOUBLE:
-		return rollback_update<double>;
+		return RollbackUpdate<double>;
 	case PhysicalType::INTERVAL:
-		return rollback_update<interval_t>;
+		return RollbackUpdate<interval_t>;
 	default:
 		throw NotImplementedException("Unimplemented type for uncompressed segment");
 	}

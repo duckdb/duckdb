@@ -69,8 +69,8 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 //===--------------------------------------------------------------------===//
 class HashAggregateGlobalState : public GlobalOperatorState {
 public:
-	HashAggregateGlobalState(PhysicalHashAggregate &_op, ClientContext &context)
-	    : op(_op), is_empty(true), lossy_total_groups(0),
+	HashAggregateGlobalState(PhysicalHashAggregate &op_p, ClientContext &context)
+	    : op(op_p), is_empty(true), lossy_total_groups(0),
 	      partition_info((idx_t)TaskScheduler::GetScheduler(context).NumberOfThreads()) {
 	}
 
@@ -90,7 +90,7 @@ public:
 
 class HashAggregateLocalState : public LocalSinkState {
 public:
-	explicit HashAggregateLocalState(PhysicalHashAggregate &_op) : op(_op), is_empty(true) {
+	explicit HashAggregateLocalState(PhysicalHashAggregate &op_p) : op(op_p), is_empty(true) {
 		group_chunk.InitializeEmpty(op.group_types);
 		if (!op.payload_types.empty()) {
 			aggregate_input_chunk.InitializeEmpty(op.payload_types);
@@ -258,8 +258,8 @@ void PhysicalHashAggregate::Combine(ExecutionContext &context, GlobalOperatorSta
 // folds them into the global ht finally.
 class PhysicalHashAggregateFinalizeTask : public Task {
 public:
-	PhysicalHashAggregateFinalizeTask(Pipeline &parent_, HashAggregateGlobalState &state_, idx_t radix_)
-	    : parent(parent_), state(state_), radix(radix_) {
+	PhysicalHashAggregateFinalizeTask(Pipeline &parent_p, HashAggregateGlobalState &state_p, idx_t radix_p)
+	    : parent(parent_p), state(state_p), radix(radix_p) {
 	}
 	static void FinalizeHT(HashAggregateGlobalState &gstate, idx_t radix) {
 		D_ASSERT(gstate.finalized_hts[radix]);
@@ -366,9 +366,9 @@ void PhysicalHashAggregate::FinalizeInternal(ClientContext &context, unique_ptr<
 }
 
 void PhysicalHashAggregate::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
-                                             PhysicalOperatorState *state_) {
+                                             PhysicalOperatorState *state_p) {
 	auto &gstate = (HashAggregateGlobalState &)*sink_state;
-	auto &state = (PhysicalHashAggregateState &)*state_;
+	auto &state = (PhysicalHashAggregateState &)*state_p;
 
 	state.scan_chunk.Reset();
 

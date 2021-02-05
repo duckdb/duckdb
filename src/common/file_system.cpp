@@ -236,7 +236,7 @@ void FileSystem::CreateDirectory(const string &directory) {
 	}
 }
 
-int remove_directory_recursively(const char *path) {
+int RemoveDirectoryRecursive(const char *path) {
 	DIR *d = opendir(path);
 	idx_t path_len = (idx_t)strlen(path);
 	int r = -1;
@@ -259,7 +259,7 @@ int remove_directory_recursively(const char *path) {
 				snprintf(buf, len, "%s/%s", path, p->d_name);
 				if (!stat(buf, &statbuf)) {
 					if (S_ISDIR(statbuf.st_mode)) {
-						r2 = remove_directory_recursively(buf);
+						r2 = RemoveDirectoryRecursive(buf);
 					} else {
 						r2 = unlink(buf);
 					}
@@ -277,7 +277,7 @@ int remove_directory_recursively(const char *path) {
 }
 
 void FileSystem::RemoveDirectory(const string &directory) {
-	remove_directory_recursively(directory.c_str());
+	RemoveDirectoryRecursive(directory.c_str());
 }
 
 void FileSystem::RemoveFile(const string &filename) {

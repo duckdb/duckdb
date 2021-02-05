@@ -52,7 +52,7 @@ void ExpressionExecutor::Execute(BoundComparisonExpression &expr, ExpressionStat
 }
 
 template <class OP>
-static idx_t templated_select_operation(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+static idx_t TemplatedSelectOperation(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
                                         SelectionVector *true_sel, SelectionVector *false_sel) {
 	// the inplace loops take the result as the last parameter
 	switch (left.type.InternalType()) {
@@ -102,17 +102,17 @@ idx_t ExpressionExecutor::Select(BoundComparisonExpression &expr, ExpressionStat
 
 	switch (expr.type) {
 	case ExpressionType::COMPARE_EQUAL:
-		return templated_select_operation<duckdb::Equals>(left, right, sel, count, true_sel, false_sel);
+		return TemplatedSelectOperation<duckdb::Equals>(left, right, sel, count, true_sel, false_sel);
 	case ExpressionType::COMPARE_NOTEQUAL:
-		return templated_select_operation<duckdb::NotEquals>(left, right, sel, count, true_sel, false_sel);
+		return TemplatedSelectOperation<duckdb::NotEquals>(left, right, sel, count, true_sel, false_sel);
 	case ExpressionType::COMPARE_LESSTHAN:
-		return templated_select_operation<duckdb::LessThan>(left, right, sel, count, true_sel, false_sel);
+		return TemplatedSelectOperation<duckdb::LessThan>(left, right, sel, count, true_sel, false_sel);
 	case ExpressionType::COMPARE_GREATERTHAN:
-		return templated_select_operation<duckdb::GreaterThan>(left, right, sel, count, true_sel, false_sel);
+		return TemplatedSelectOperation<duckdb::GreaterThan>(left, right, sel, count, true_sel, false_sel);
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		return templated_select_operation<duckdb::LessThanEquals>(left, right, sel, count, true_sel, false_sel);
+		return TemplatedSelectOperation<duckdb::LessThanEquals>(left, right, sel, count, true_sel, false_sel);
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		return templated_select_operation<duckdb::GreaterThanEquals>(left, right, sel, count, true_sel, false_sel);
+		return TemplatedSelectOperation<duckdb::GreaterThanEquals>(left, right, sel, count, true_sel, false_sel);
 	case ExpressionType::COMPARE_DISTINCT_FROM:
 		throw NotImplementedException("Unimplemented compare: COMPARE_DISTINCT_FROM");
 	default:

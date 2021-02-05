@@ -100,7 +100,7 @@ void StringSegment::read_string(string_t *result_data, Vector &result, data_ptr_
 }
 
 void StringSegment::Select(ColumnScanState &state, Vector &result, SelectionVector &sel, idx_t &approved_tuple_count,
-                           vector<TableFilter> &tableFilter) {
+                           vector<TableFilter> &table_filter) {
 	auto vector_index = state.vector_index;
 	D_ASSERT(vector_index < max_vector_count);
 	D_ASSERT(vector_index * STANDARD_VECTOR_SIZE <= tuple_count);
@@ -112,30 +112,30 @@ void StringSegment::Select(ColumnScanState &state, Vector &result, SelectionVect
 	auto base_data = (int32_t *)(base + sizeof(nullmask_t));
 	auto base_nullmask = (nullmask_t *)base;
 
-	if (tableFilter.size() == 1) {
-		switch (tableFilter[0].comparison_type) {
+	if (table_filter.size() == 1) {
+		switch (table_filter[0].comparison_type) {
 		case ExpressionType::COMPARE_EQUAL: {
-			Select_String<Equals>(result, baseptr, base_data, sel, tableFilter[0].constant.str_value,
+			Select_String<Equals>(result, baseptr, base_data, sel, table_filter[0].constant.str_value,
 			                      approved_tuple_count, base_nullmask, vector_index);
 			break;
 		}
 		case ExpressionType::COMPARE_LESSTHAN: {
-			Select_String<LessThan>(result, baseptr, base_data, sel, tableFilter[0].constant.str_value,
+			Select_String<LessThan>(result, baseptr, base_data, sel, table_filter[0].constant.str_value,
 			                        approved_tuple_count, base_nullmask, vector_index);
 			break;
 		}
 		case ExpressionType::COMPARE_GREATERTHAN: {
-			Select_String<GreaterThan>(result, baseptr, base_data, sel, tableFilter[0].constant.str_value,
+			Select_String<GreaterThan>(result, baseptr, base_data, sel, table_filter[0].constant.str_value,
 			                           approved_tuple_count, base_nullmask, vector_index);
 			break;
 		}
 		case ExpressionType::COMPARE_LESSTHANOREQUALTO: {
-			Select_String<LessThanEquals>(result, baseptr, base_data, sel, tableFilter[0].constant.str_value,
+			Select_String<LessThanEquals>(result, baseptr, base_data, sel, table_filter[0].constant.str_value,
 			                              approved_tuple_count, base_nullmask, vector_index);
 			break;
 		}
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO: {
-			Select_String<GreaterThanEquals>(result, baseptr, base_data, sel, tableFilter[0].constant.str_value,
+			Select_String<GreaterThanEquals>(result, baseptr, base_data, sel, table_filter[0].constant.str_value,
 			                                 approved_tuple_count, base_nullmask, vector_index);
 
 			break;
@@ -144,10 +144,10 @@ void StringSegment::Select(ColumnScanState &state, Vector &result, SelectionVect
 			throw NotImplementedException("Unknown comparison type for filter pushed down to table!");
 		}
 	} else {
-		bool isFirstGreater = tableFilter[0].comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
-		                      tableFilter[0].comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO;
-		auto less = isFirstGreater ? tableFilter[1] : tableFilter[0];
-		auto greater = isFirstGreater ? tableFilter[0] : tableFilter[1];
+		bool is_first_greater = table_filter[0].comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
+		                      table_filter[0].comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO;
+		auto less = is_first_greater ? table_filter[1] : table_filter[0];
+		auto greater = is_first_greater ? table_filter[0] : table_filter[1];
 		if (greater.comparison_type == ExpressionType::COMPARE_GREATERTHAN) {
 			if (less.comparison_type == ExpressionType::COMPARE_LESSTHAN) {
 				Select_String_Between<GreaterThan, LessThan>(result, baseptr, base_data, sel,
@@ -461,7 +461,7 @@ idx_t StringSegment::RemainingSpace(BufferHandle &handle) {
 	return Storage::BLOCK_SIZE - used_space;
 }
 
-static inline void update_string_stats(SegmentStatistics &stats, const string_t &new_value) {
+static inline void UpdateStringStats(SegmentStatistics &stats, const string_t &new_value) {
 	auto &sstats = (StringStatistics &)*stats.statistics;
 	sstats.Update(new_value);
 }
@@ -491,7 +491,7 @@ void StringSegment::AppendData(BufferHandle &handle, SegmentStatistics &stats, d
 			idx_t string_length = sdata[source_idx].GetSize();
 			idx_t total_length = string_length + sizeof(uint16_t);
 
-			update_string_stats(stats, sdata[source_idx]);
+			UpdateStringStats(stats, sdata[source_idx]);
 
 			// determine whether or not the string needs to be stored in an overflow block
 			// we never place small strings in the overflow blocks: the pointer would take more space than the
@@ -668,7 +668,7 @@ string_update_info_t StringSegment::CreateStringUpdate(SegmentStatistics &stats,
 		info->ids[i] = ids[i] - vector_offset;
 		// copy the string into the block
 		if (!update_nullmask[i]) {
-			update_string_stats(stats, strings[i]);
+			UpdateStringStats(stats, strings[i]);
 			WriteString(strings[i], info->block_ids[i], info->offsets[i]);
 		} else {
 			stats.statistics->has_null = true;
@@ -690,7 +690,7 @@ string_update_info_t StringSegment::MergeStringUpdate(SegmentStatistics &stats, 
 	//! Check if we need to update the segment's nullmask
 	for (idx_t i = 0; i < update_count; i++) {
 		if (!update_nullmask[i]) {
-			update_string_stats(stats, strings[i]);
+			UpdateStringStats(stats, strings[i]);
 		}
 	}
 	auto pick_new = [&](idx_t id, idx_t idx, idx_t count) {

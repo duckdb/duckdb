@@ -116,8 +116,8 @@ struct RightPadOperator {
 	}
 };
 
-template <class Op>
-static void pad_function(DataChunk &args, ExpressionState &state, Vector &result) {
+template <class OP>
+static void PadFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &str_vector = args.data[0];
 	auto &len_vector = args.data[1];
 	auto &pad_vector = args.data[2];
@@ -126,7 +126,7 @@ static void pad_function(DataChunk &args, ExpressionState &state, Vector &result
 	TernaryExecutor::Execute<string_t, int32_t, string_t, string_t>(
 	    str_vector, len_vector, pad_vector, result, args.size(), [&](string_t str, int32_t len, string_t pad) {
 		    len = MaxValue<int32_t>(len, 0);
-		    return StringVector::AddString(result, Op::Operation(str, len, pad, buffer));
+		    return StringVector::AddString(result, OP::Operation(str, len, pad, buffer));
 	    });
 }
 
@@ -135,7 +135,7 @@ void LpadFun::RegisterFunction(BuiltinFunctions &set) {
 	                               {LogicalType::VARCHAR, LogicalType::INTEGER, // argument list
 	                                LogicalType::VARCHAR},
 	                               LogicalType::VARCHAR,         // return type
-	                               pad_function<LeftPadOperator>)); // pointer to function implementation
+	                               PadFunction<LeftPadOperator>)); // pointer to function implementation
 }
 
 void RpadFun::RegisterFunction(BuiltinFunctions &set) {
@@ -143,7 +143,7 @@ void RpadFun::RegisterFunction(BuiltinFunctions &set) {
 	                               {LogicalType::VARCHAR, LogicalType::INTEGER, // argument list
 	                                LogicalType::VARCHAR},
 	                               LogicalType::VARCHAR,         // return type
-	                               pad_function<RightPadOperator>)); // pointer to function implementation
+	                               PadFunction<RightPadOperator>)); // pointer to function implementation
 }
 
 } // namespace duckdb

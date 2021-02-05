@@ -184,7 +184,7 @@ AggregateFunction FirstFun::GetFunction(LogicalType type) {
 	}
 }
 
-unique_ptr<FunctionData> bind_decimal_first(ClientContext &context, AggregateFunction &function,
+unique_ptr<FunctionData> BindDecimalFirst(ClientContext &context, AggregateFunction &function,
                                             vector<unique_ptr<Expression>> &arguments) {
 	auto decimal_type = arguments[0]->return_type;
 	function = FirstFun::GetFunction(decimal_type);
@@ -196,7 +196,7 @@ void FirstFun::RegisterFunction(BuiltinFunctions &set) {
 	for (auto type : LogicalType::ALL_TYPES) {
 		if (type.id() == LogicalTypeId::DECIMAL) {
 			first.AddFunction(AggregateFunction({type}, type, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
-			                                    bind_decimal_first));
+			                                    BindDecimalFirst));
 		} else {
 			first.AddFunction(FirstFun::GetFunction(type));
 		}

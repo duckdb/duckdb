@@ -104,7 +104,7 @@ void JoinHashTable::Hash(DataChunk &keys, const SelectionVector &sel, idx_t coun
 	}
 }
 template <class T>
-static void templated_serialize_vdata(VectorData &vdata, const SelectionVector &sel, idx_t count,
+static void TemplatedSerializeVData(VectorData &vdata, const SelectionVector &sel, idx_t count,
                                       data_ptr_t key_locations[]) {
 	auto source = (T *)vdata.data;
 	if (vdata.nullmask->any()) {
@@ -129,7 +129,7 @@ static void templated_serialize_vdata(VectorData &vdata, const SelectionVector &
 	}
 }
 
-static void initialize_outer_join(idx_t count, data_ptr_t key_locations[]) {
+static void InitializeOuterJoin(idx_t count, data_ptr_t key_locations[]) {
 	for (idx_t i = 0; i < count; i++) {
 		auto target = (bool *)key_locations[i];
 		*target = false;
@@ -142,43 +142,43 @@ void JoinHashTable::SerializeVectorData(VectorData &vdata, PhysicalType type, co
 	switch (type) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
-		templated_serialize_vdata<int8_t>(vdata, sel, count, key_locations);
+		TemplatedSerializeVData<int8_t>(vdata, sel, count, key_locations);
 		break;
 	case PhysicalType::INT16:
-		templated_serialize_vdata<int16_t>(vdata, sel, count, key_locations);
+		TemplatedSerializeVData<int16_t>(vdata, sel, count, key_locations);
 		break;
 	case PhysicalType::INT32:
-		templated_serialize_vdata<int32_t>(vdata, sel, count, key_locations);
+		TemplatedSerializeVData<int32_t>(vdata, sel, count, key_locations);
 		break;
 	case PhysicalType::INT64:
-		templated_serialize_vdata<int64_t>(vdata, sel, count, key_locations);
+		TemplatedSerializeVData<int64_t>(vdata, sel, count, key_locations);
 		break;
 	case PhysicalType::UINT8:
-		templated_serialize_vdata<uint8_t>(vdata, sel, count, key_locations);
+		TemplatedSerializeVData<uint8_t>(vdata, sel, count, key_locations);
 		break;
 	case PhysicalType::UINT16:
-		templated_serialize_vdata<uint16_t>(vdata, sel, count, key_locations);
+		TemplatedSerializeVData<uint16_t>(vdata, sel, count, key_locations);
 		break;
 	case PhysicalType::UINT32:
-		templated_serialize_vdata<uint32_t>(vdata, sel, count, key_locations);
+		TemplatedSerializeVData<uint32_t>(vdata, sel, count, key_locations);
 		break;
 	case PhysicalType::UINT64:
-		templated_serialize_vdata<uint64_t>(vdata, sel, count, key_locations);
+		TemplatedSerializeVData<uint64_t>(vdata, sel, count, key_locations);
 		break;
 	case PhysicalType::INT128:
-		templated_serialize_vdata<hugeint_t>(vdata, sel, count, key_locations);
+		TemplatedSerializeVData<hugeint_t>(vdata, sel, count, key_locations);
 		break;
 	case PhysicalType::FLOAT:
-		templated_serialize_vdata<float>(vdata, sel, count, key_locations);
+		TemplatedSerializeVData<float>(vdata, sel, count, key_locations);
 		break;
 	case PhysicalType::DOUBLE:
-		templated_serialize_vdata<double>(vdata, sel, count, key_locations);
+		TemplatedSerializeVData<double>(vdata, sel, count, key_locations);
 		break;
 	case PhysicalType::HASH:
-		templated_serialize_vdata<hash_t>(vdata, sel, count, key_locations);
+		TemplatedSerializeVData<hash_t>(vdata, sel, count, key_locations);
 		break;
 	case PhysicalType::INTERVAL:
-		templated_serialize_vdata<interval_t>(vdata, sel, count, key_locations);
+		TemplatedSerializeVData<interval_t>(vdata, sel, count, key_locations);
 		break;
 	case PhysicalType::VARCHAR: {
 		StringHeap local_heap;
@@ -359,7 +359,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	}
 	if (IsRightOuterJoin(join_type)) {
 		// for FULL/RIGHT OUTER joins initialize the "found" boolean to false
-		initialize_outer_join(added_count, key_locations);
+		InitializeOuterJoin(added_count, key_locations);
 	}
 	SerializeVector(hash_values, payload.size(), *current_sel, added_count, key_locations);
 }

@@ -974,14 +974,14 @@ void Value::Serialize(Serializer &serializer) {
 }
 
 Value Value::Deserialize(Deserializer &source) {
-	auto type_ = LogicalType::Deserialize(source);
+	auto type = LogicalType::Deserialize(source);
 	auto is_null = source.Read<bool>();
-	Value new_value = Value(type_);
+	Value new_value = Value(type);
 	if (is_null) {
 		return new_value;
 	}
 	new_value.is_null = false;
-	switch (type_.InternalType()) {
+	switch (type.InternalType()) {
 	case PhysicalType::BOOL:
 		new_value.value_.boolean = source.Read<int8_t>();
 		break;

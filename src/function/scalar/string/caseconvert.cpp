@@ -126,7 +126,7 @@ static void CaseConvertFunction(DataChunk &args, ExpressionState &state, Vector 
 }
 
 template <bool IS_UPPER>
-static void caseconvert_function_ascii(DataChunk &args, ExpressionState &state, Vector &result) {
+static void CaseConvertFunctionASCII(DataChunk &args, ExpressionState &state, Vector &result) {
 	UnaryExecutor::Execute<string_t, string_t, true>(args.data[0], result, args.size(), [&](string_t input) {
 		auto input_data = input.GetDataUnsafe();
 		auto input_length = input.GetSize();
@@ -135,7 +135,7 @@ static void caseconvert_function_ascii(DataChunk &args, ExpressionState &state, 
 }
 
 template <bool IS_UPPER>
-static unique_ptr<BaseStatistics> caseconvert_propagate_stats(ClientContext &context, BoundFunctionExpression &expr,
+static unique_ptr<BaseStatistics> CaseConvertPropagateStats(ClientContext &context, BoundFunctionExpression &expr,
                                                               FunctionData *bind_data,
                                                               vector<unique_ptr<BaseStatistics>> &child_stats) {
 	D_ASSERT(child_stats.size() == 1);
@@ -145,14 +145,14 @@ static unique_ptr<BaseStatistics> caseconvert_propagate_stats(ClientContext &con
 	}
 	auto &sstats = (StringStatistics &)*child_stats[0];
 	if (!sstats.has_unicode) {
-		expr.function.function = caseconvert_function_ascii<IS_UPPER>;
+		expr.function.function = CaseConvertFunctionASCII<IS_UPPER>;
 	}
 	return nullptr;
 }
 
 ScalarFunction LowerFun::GetFunction() {
 	return ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, CaseConvertFunction<false>, false, nullptr,
-	                      nullptr, caseconvert_propagate_stats<false>);
+	                      nullptr, CaseConvertPropagateStats<false>);
 }
 
 void LowerFun::RegisterFunction(BuiltinFunctions &set) {
@@ -162,7 +162,7 @@ void LowerFun::RegisterFunction(BuiltinFunctions &set) {
 void UpperFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction({"upper", "ucase"},
 	                ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, CaseConvertFunction<true>, false,
-	                               nullptr, nullptr, caseconvert_propagate_stats<true>));
+	                               nullptr, nullptr, CaseConvertPropagateStats<true>));
 }
 
 } // namespace duckdb

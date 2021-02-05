@@ -180,7 +180,7 @@ struct LevenshteinArray {
 		dist = unique_ptr<idx_t[]>(new idx_t[len1 * len2]);
 	}
 
-	idx_t &score(idx_t i, idx_t j) {
+	idx_t &Score(idx_t i, idx_t j) {
 		return dist[GetIndex(i, j)];
 	}
 
@@ -204,12 +204,12 @@ idx_t StringUtil::LevenshteinDistance(const string &s1, const string &s2) {
 		return len1;
 	}
 	LevenshteinArray array(len1 + 1, len2 + 1);
-	array.score(0, 0) = 0;
+	array.Score(0, 0) = 0;
 	for (idx_t i = 0; i <= len1; i++) {
-		array.score(i, 0) = i;
+		array.Score(i, 0) = i;
 	}
 	for (idx_t j = 0; j <= len2; j++) {
-		array.score(0, j) = j;
+		array.Score(0, j) = j;
 	}
 	for (idx_t i = 1; i <= len1; i++) {
 		for (idx_t j = 1; j <= len2; j++) {
@@ -217,15 +217,15 @@ idx_t StringUtil::LevenshteinDistance(const string &s1, const string &s2) {
 			//                      d[i][j - 1] + 1,
 			//                      d[i - 1][j - 1] + (s1[i - 1] == s2[j - 1] ? 0 : 1) });
 			int equal = s1[i - 1] == s2[j - 1] ? 0 : 1;
-			idx_t adjacent_score1 = array.score(i - 1, j) + 1;
-			idx_t adjacent_score2 = array.score(i, j - 1) + 1;
-			idx_t adjacent_score3 = array.score(i - 1, j - 1) + equal;
+			idx_t adjacent_score1 = array.Score(i - 1, j) + 1;
+			idx_t adjacent_score2 = array.Score(i, j - 1) + 1;
+			idx_t adjacent_score3 = array.Score(i - 1, j - 1) + equal;
 
 			idx_t t = MinValue<idx_t>(adjacent_score1, adjacent_score2);
-			array.score(i, j) = MinValue<idx_t>(t, adjacent_score3);
+			array.Score(i, j) = MinValue<idx_t>(t, adjacent_score3);
 		}
 	}
-	return array.score(len1, len2);
+	return array.Score(len1, len2);
 }
 
 vector<string> StringUtil::TopNLevenshtein(vector<string> strings, const string &target, idx_t n, idx_t threshold) {

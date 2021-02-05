@@ -8,7 +8,9 @@
 
 namespace duckdb {
 
-using namespace std::chrono;
+using std::chrono::duration;
+using std::chrono::duration_cast;
+using std::chrono::high_resolution_clock;
 
 struct ConjunctionState : public ExpressionState {
 	ConjunctionState(Expression &expr, ExpressionExecutorState &root) : ExpressionState(expr, root) {
@@ -55,9 +57,9 @@ void ExpressionExecutor::Execute(BoundConjunctionExpression &expr, ExpressionSta
 	}
 }
 
-idx_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionState *state_, const SelectionVector *sel,
+idx_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionState *state_p, const SelectionVector *sel,
                                  idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
-	auto state = (ConjunctionState *)state_;
+	auto state = (ConjunctionState *)state_p;
 
 	if (expr.type == ExpressionType::CONJUNCTION_AND) {
 		// get runtime statistics

@@ -134,7 +134,7 @@ static unique_ptr<FunctionData> ArrowScanBind(ClientContext &context, vector<Val
 	return move(res);
 }
 
-static unique_ptr<FunctionOperatorData> arrow_scan_init(ClientContext &context, const FunctionData *bind_data,
+static unique_ptr<FunctionOperatorData> ArrowScanInit(ClientContext &context, const FunctionData *bind_data,
                                                         vector<column_t> &column_ids, TableFilterCollection *filters) {
 	auto &data = (ArrowScanFunctionData &)*bind_data;
 	if (data.is_consumed) {
@@ -281,7 +281,7 @@ static void ArrowScanFunction(ClientContext &context, const FunctionData *bind_d
 void ArrowTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunctionSet arrow("arrow_scan");
 
-	arrow.AddFunction(TableFunction({LogicalType::POINTER}, ArrowScanFunction, ArrowScanBind, arrow_scan_init));
+	arrow.AddFunction(TableFunction({LogicalType::POINTER}, ArrowScanFunction, ArrowScanBind, ArrowScanInit));
 	set.AddFunction(arrow);
 }
 

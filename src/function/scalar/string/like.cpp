@@ -421,14 +421,14 @@ struct GlobOperator {
 };
 
 // This can be moved to the scalar_function class
-template <typename Func>
+template <typename FUNC>
 static void LikeEscapeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &str = args.data[0];
 	auto &pattern = args.data[1];
 	auto &escape = args.data[2];
 
 	TernaryExecutor::Execute<string_t, string_t, string_t, bool>(
-	    str, pattern, escape, result, args.size(), Func::template Operation<string_t, string_t, string_t>);
+	    str, pattern, escape, result, args.size(), FUNC::template Operation<string_t, string_t, string_t>);
 }
 
 template <class ASCII_OP>

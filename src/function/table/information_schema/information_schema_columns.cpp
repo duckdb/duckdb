@@ -175,7 +175,7 @@ unique_ptr<ColumnHelper> ColumnHelper::Create(CatalogEntry *entry) {
 	case CatalogType::VIEW_ENTRY:
 		return make_unique<ViewColumnHelper>((ViewCatalogEntry *)entry);
 	default:
-		throw new NotImplementedException("Unsupported catalog type for information_schema_columns");
+		throw NotImplementedException("Unsupported catalog type for information_schema_columns");
 	}
 }
 

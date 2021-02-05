@@ -50,7 +50,7 @@ unique_ptr<FunctionOperatorData> PragmaDatabaseSizeInit(ClientContext &context, 
 	return make_unique<PragmaDatabaseSizeData>();
 }
 
-static string bytes_to_human_readable_string(idx_t bytes) {
+static string BytesToHumanReadableString(idx_t bytes) {
 	string db_size;
 	auto kilobytes = bytes / 1000;
 	auto megabytes = kilobytes / 1000;
@@ -90,12 +90,12 @@ void PragmaDatabaseSizeFunction(ClientContext &context, const FunctionData *bind
 		auto used_blocks = total_blocks - free_blocks;
 		auto bytes = (total_blocks * block_size);
 		auto wal_size = storage.GetWriteAheadLog()->GetWALSize();
-		output.data[0].SetValue(0, Value(bytes_to_human_readable_string(bytes)));
+		output.data[0].SetValue(0, Value(BytesToHumanReadableString(bytes)));
 		output.data[1].SetValue(0, Value::BIGINT(block_size));
 		output.data[2].SetValue(0, Value::BIGINT(total_blocks));
 		output.data[3].SetValue(0, Value::BIGINT(used_blocks));
 		output.data[4].SetValue(0, Value::BIGINT(free_blocks));
-		output.data[5].SetValue(0, Value(bytes_to_human_readable_string(wal_size)));
+		output.data[5].SetValue(0, Value(BytesToHumanReadableString(wal_size)));
 	} else {
 		output.data[0].SetValue(0, Value());
 		output.data[1].SetValue(0, Value());
@@ -104,10 +104,10 @@ void PragmaDatabaseSizeFunction(ClientContext &context, const FunctionData *bind
 		output.data[4].SetValue(0, Value());
 		output.data[5].SetValue(0, Value());
 	}
-	output.data[6].SetValue(0, Value(bytes_to_human_readable_string(buffer_manager.GetUsedMemory())));
+	output.data[6].SetValue(0, Value(BytesToHumanReadableString(buffer_manager.GetUsedMemory())));
 	auto max_memory = buffer_manager.GetMaxMemory();
 	output.data[7].SetValue(0, max_memory == (idx_t)-1 ? Value("Unlimited")
-	                                                   : Value(bytes_to_human_readable_string(max_memory)));
+	                                                   : Value(BytesToHumanReadableString(max_memory)));
 
 	data.finished = true;
 }

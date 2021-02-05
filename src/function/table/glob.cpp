@@ -33,10 +33,10 @@ static unique_ptr<FunctionOperatorData> GlobFunctionInit(ClientContext &context,
 	return make_unique<GlobFunctionState>();
 }
 
-static void GlobFunction(ClientContext &context, const FunctionData *bind_data_p, FunctionOperatorData *state_,
+static void GlobFunction(ClientContext &context, const FunctionData *bind_data_p, FunctionOperatorData *state_p,
                           DataChunk &output) {
 	auto &bind_data = (GlobFunctionBindData &)*bind_data_p;
-	auto &state = (GlobFunctionState &)*state_;
+	auto &state = (GlobFunctionState &)*state_p;
 
 	idx_t count = 0;
 	idx_t next_idx = MinValue<idx_t>(state.current_idx + STANDARD_VECTOR_SIZE, bind_data.files.size());

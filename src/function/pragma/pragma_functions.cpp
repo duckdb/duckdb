@@ -138,7 +138,7 @@ static void PragmaDisableCheckpointOnShutdown(ClientContext &context, FunctionPa
 	DBConfig::GetConfig(context).checkpoint_on_shutdown = false;
 }
 
-static void pragma_log_query_path(ClientContext &context, FunctionParameters parameters) {
+static void PragmaLogQueryPath(ClientContext &context, FunctionParameters parameters) {
 	auto str_val = parameters.values[0].ToString();
 	if (str_val.empty()) {
 		// empty path: clean up query writer
@@ -148,7 +148,7 @@ static void pragma_log_query_path(ClientContext &context, FunctionParameters par
 	}
 }
 
-static void pragma_explain_output(ClientContext &context, FunctionParameters parameters) {
+static void PragmaExplainOutput(ClientContext &context, FunctionParameters parameters) {
 	string val = StringUtil::Lower(parameters.values[0].ToString());
 	if (val == "all") {
 		context.explain_output_type = ExplainOutputType::ALL;
@@ -162,11 +162,11 @@ static void pragma_explain_output(ClientContext &context, FunctionParameters par
 	}
 }
 
-static void pragma_enable_optimizer(ClientContext &context, FunctionParameters parameters) {
+static void PragmaEnableOptimizer(ClientContext &context, FunctionParameters parameters) {
 	context.enable_optimizer = true;
 }
 
-static void pragma_disable_optimizer(ClientContext &context, FunctionParameters parameters) {
+static void PragmaDisableOptimizer(ClientContext &context, FunctionParameters parameters) {
 	context.enable_optimizer = false;
 }
 
@@ -231,11 +231,11 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_object_cache", PragmaEnableObjectCache));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_object_cache", PragmaDisableObjectCache));
 
-	set.AddFunction(PragmaFunction::PragmaStatement("enable_optimizer", pragma_enable_optimizer));
-	set.AddFunction(PragmaFunction::PragmaStatement("disable_optimizer", pragma_disable_optimizer));
+	set.AddFunction(PragmaFunction::PragmaStatement("enable_optimizer", PragmaEnableOptimizer));
+	set.AddFunction(PragmaFunction::PragmaStatement("disable_optimizer", PragmaDisableOptimizer));
 
-	set.AddFunction(PragmaFunction::PragmaAssignment("log_query_path", pragma_log_query_path, LogicalType::VARCHAR));
-	set.AddFunction(PragmaFunction::PragmaAssignment("explain_output", pragma_explain_output, LogicalType::VARCHAR));
+	set.AddFunction(PragmaFunction::PragmaAssignment("log_query_path", PragmaLogQueryPath, LogicalType::VARCHAR));
+	set.AddFunction(PragmaFunction::PragmaAssignment("explain_output", PragmaExplainOutput, LogicalType::VARCHAR));
 
 	set.AddFunction(PragmaFunction::PragmaStatement("force_index_join", PragmaEnableForceIndexJoin));
 	set.AddFunction(PragmaFunction::PragmaStatement("force_checkpoint", PragmaForceCheckpoint));

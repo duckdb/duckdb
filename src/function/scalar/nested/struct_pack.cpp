@@ -29,7 +29,7 @@ static void StructPackFunction(DataChunk &args, ExpressionState &state, Vector &
 	result.Verify(args.size());
 }
 
-static unique_ptr<FunctionData> struct_pack_bind(ClientContext &context, ScalarFunction &bound_function,
+static unique_ptr<FunctionData> StructPackBind(ClientContext &context, ScalarFunction &bound_function,
                                                  vector<unique_ptr<Expression>> &arguments) {
 	unordered_set<string> name_collision_set;
 
@@ -60,7 +60,7 @@ static unique_ptr<FunctionData> struct_pack_bind(ClientContext &context, ScalarF
 
 void StructPackFun::RegisterFunction(BuiltinFunctions &set) {
 	// the arguments and return types are actually set in the binder function
-	ScalarFunction fun("struct_pack", {}, LogicalType::STRUCT, StructPackFunction, false, struct_pack_bind);
+	ScalarFunction fun("struct_pack", {}, LogicalType::STRUCT, StructPackFunction, false, StructPackBind);
 	fun.varargs = LogicalType::ANY;
 	set.AddFunction(fun);
 	fun.name = "row";

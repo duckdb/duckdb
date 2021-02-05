@@ -282,7 +282,7 @@ void AddFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 // - [subtract]
 //===--------------------------------------------------------------------===//
-unique_ptr<FunctionData> decimal_negate_bind(ClientContext &context, ScalarFunction &bound_function,
+unique_ptr<FunctionData> DecimalNegateBind(ClientContext &context, ScalarFunction &bound_function,
                                              vector<unique_ptr<Expression>> &arguments) {
 	auto decimal_type = arguments[0]->return_type;
 	if (decimal_type.width() <= Decimal::MAX_WIDTH_INT16) {
@@ -310,7 +310,7 @@ struct NegatePropagateStatistics {
 	}
 };
 
-static unique_ptr<BaseStatistics> negate_bind_statistics(ClientContext &context, BoundFunctionExpression &expr,
+static unique_ptr<BaseStatistics> NegateBindStatistics(ClientContext &context, BoundFunctionExpression &expr,
                                                          FunctionData *bind_data,
                                                          vector<unique_ptr<BaseStatistics>> &child_stats) {
 	D_ASSERT(child_stats.size() == 1);
@@ -388,11 +388,11 @@ void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
 	for (auto &type : LogicalType::NUMERIC) {
 		if (type.id() == LogicalTypeId::DECIMAL) {
 			functions.AddFunction(
-			    ScalarFunction({type}, type, nullptr, false, decimal_negate_bind, nullptr, negate_bind_statistics));
+			    ScalarFunction({type}, type, nullptr, false, DecimalNegateBind, nullptr, NegateBindStatistics));
 		} else {
 			functions.AddFunction(ScalarFunction({type}, type,
 			                                     ScalarFunction::GetScalarUnaryFunction<NegateOperator>(type), false,
-			                                     nullptr, nullptr, negate_bind_statistics));
+			                                     nullptr, nullptr, NegateBindStatistics));
 		}
 	}
 	set.AddFunction(functions);
