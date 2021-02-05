@@ -9,7 +9,7 @@ static unique_ptr<FunctionData> CheckpointBind(ClientContext &context, vector<Va
                                                 unordered_map<string, Value> &named_parameters,
                                                 vector<LogicalType> &return_types, vector<string> &names) {
 	return_types.push_back(LogicalType::BOOLEAN);
-	names.push_back("Success");
+	names.emplace_back("Success");
 	return nullptr;
 }
 

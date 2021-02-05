@@ -145,7 +145,7 @@ struct LikeMatcher : public FunctionData {
 			if (ch == escape || ch == '%' || ch == '_') {
 				// special character, push a constant pattern
 				if (i > last_non_pattern) {
-					segments.push_back(LikeSegment(like_pattern.substr(last_non_pattern, i - last_non_pattern)));
+					segments.emplace_back(like_pattern.substr(last_non_pattern, i - last_non_pattern));
 				}
 				last_non_pattern = i + 1;
 				if (ch == escape || ch == '_') {
@@ -164,8 +164,7 @@ struct LikeMatcher : public FunctionData {
 			}
 		}
 		if (last_non_pattern < like_pattern.size()) {
-			segments.push_back(
-			    LikeSegment(like_pattern.substr(last_non_pattern, like_pattern.size() - last_non_pattern)));
+			segments.emplace_back(like_pattern.substr(last_non_pattern, like_pattern.size() - last_non_pattern));
 		}
 		if (segments.empty()) {
 			return nullptr;

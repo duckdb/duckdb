@@ -157,7 +157,7 @@ shared_ptr<Relation> Connection::ReadCSV(string csv_file) {
 	BufferedCSVReader reader(*context, options);
 	vector<ColumnDefinition> column_list;
 	for (idx_t i = 0; i < reader.sql_types.size(); i++) {
-		column_list.push_back(ColumnDefinition(reader.col_names[i], reader.sql_types[i]));
+		column_list.emplace_back(reader.col_names[i], reader.sql_types[i]);
 	}
 	return make_shared<ReadCSVRelation>(*context, csv_file, move(column_list), true);
 }

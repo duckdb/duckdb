@@ -128,7 +128,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, vector<Value
 	}
 	if (result->include_file_name) {
 		return_types.push_back(LogicalType::VARCHAR);
-		names.push_back("filename");
+		names.emplace_back("filename");
 	}
 	return move(result);
 }

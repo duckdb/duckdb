@@ -22,19 +22,19 @@ struct SQLiteMasterData : public FunctionOperatorData {
 static unique_ptr<FunctionData> SQLiteMasterBind(ClientContext &context, vector<Value> &inputs,
                                                    unordered_map<string, Value> &named_parameters,
                                                    vector<LogicalType> &return_types, vector<string> &names) {
-	names.push_back("type");
+	names.emplace_back("type");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("name");
+	names.emplace_back("name");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("tbl_name");
+	names.emplace_back("tbl_name");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("rootpage");
+	names.emplace_back("rootpage");
 	return_types.push_back(LogicalType::INTEGER);
 
-	names.push_back("sql");
+	names.emplace_back("sql");
 	return_types.push_back(LogicalType::VARCHAR);
 
 	return nullptr;

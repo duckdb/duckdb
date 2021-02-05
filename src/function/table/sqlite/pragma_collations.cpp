@@ -18,7 +18,7 @@ struct PragmaCollateData : public FunctionOperatorData {
 static unique_ptr<FunctionData> PragmaCollateBind(ClientContext &context, vector<Value> &inputs,
                                                     unordered_map<string, Value> &named_parameters,
                                                     vector<LogicalType> &return_types, vector<string> &names) {
-	names.push_back("collname");
+	names.emplace_back("collname");
 	return_types.push_back(LogicalType::VARCHAR);
 
 	return nullptr;

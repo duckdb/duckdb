@@ -12,9 +12,9 @@ struct PragmaVersionData : public FunctionOperatorData {
 static unique_ptr<FunctionData> PragmaVersionBind(ClientContext &context, vector<Value> &inputs,
                                                     unordered_map<string, Value> &named_parameters,
                                                     vector<LogicalType> &return_types, vector<string> &names) {
-	names.push_back("library_version");
+	names.emplace_back("library_version");
 	return_types.push_back(LogicalType::VARCHAR);
-	names.push_back("source_id");
+	names.emplace_back("source_id");
 	return_types.push_back(LogicalType::VARCHAR);
 	return nullptr;
 }

@@ -75,7 +75,7 @@ unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(Transaction &transac
 // Insert
 //===--------------------------------------------------------------------===//
 template <class T>
-static void GenerateKeys(Vector &input, idx_t count, vector<unique_ptr<Key>> &keys, bool is_little_endian) {
+static void TemplatedGenerateKeys(Vector &input, idx_t count, vector<unique_ptr<Key>> &keys, bool is_little_endian) {
 	VectorData idata;
 	input.Orrify(count, idata);
 
@@ -119,40 +119,40 @@ void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
 	// generate keys for the first input column
 	switch (input.data[0].type.InternalType()) {
 	case PhysicalType::BOOL:
-		GenerateKeys<bool>(input.data[0], input.size(), keys, is_little_endian);
+		TemplatedGenerateKeys<bool>(input.data[0], input.size(), keys, is_little_endian);
 		break;
 	case PhysicalType::INT8:
-		GenerateKeys<int8_t>(input.data[0], input.size(), keys, is_little_endian);
+		TemplatedGenerateKeys<int8_t>(input.data[0], input.size(), keys, is_little_endian);
 		break;
 	case PhysicalType::INT16:
-		GenerateKeys<int16_t>(input.data[0], input.size(), keys, is_little_endian);
+		TemplatedGenerateKeys<int16_t>(input.data[0], input.size(), keys, is_little_endian);
 		break;
 	case PhysicalType::INT32:
-		GenerateKeys<int32_t>(input.data[0], input.size(), keys, is_little_endian);
+		TemplatedGenerateKeys<int32_t>(input.data[0], input.size(), keys, is_little_endian);
 		break;
 	case PhysicalType::INT64:
-		GenerateKeys<int64_t>(input.data[0], input.size(), keys, is_little_endian);
+		TemplatedGenerateKeys<int64_t>(input.data[0], input.size(), keys, is_little_endian);
 		break;
 	case PhysicalType::UINT8:
-		GenerateKeys<uint8_t>(input.data[0], input.size(), keys, is_little_endian);
+		TemplatedGenerateKeys<uint8_t>(input.data[0], input.size(), keys, is_little_endian);
 		break;
 	case PhysicalType::UINT16:
-		GenerateKeys<uint16_t>(input.data[0], input.size(), keys, is_little_endian);
+		TemplatedGenerateKeys<uint16_t>(input.data[0], input.size(), keys, is_little_endian);
 		break;
 	case PhysicalType::UINT32:
-		GenerateKeys<uint32_t>(input.data[0], input.size(), keys, is_little_endian);
+		TemplatedGenerateKeys<uint32_t>(input.data[0], input.size(), keys, is_little_endian);
 		break;
 	case PhysicalType::UINT64:
-		GenerateKeys<uint64_t>(input.data[0], input.size(), keys, is_little_endian);
+		TemplatedGenerateKeys<uint64_t>(input.data[0], input.size(), keys, is_little_endian);
 		break;
 	case PhysicalType::FLOAT:
-		GenerateKeys<float>(input.data[0], input.size(), keys, is_little_endian);
+		TemplatedGenerateKeys<float>(input.data[0], input.size(), keys, is_little_endian);
 		break;
 	case PhysicalType::DOUBLE:
-		GenerateKeys<double>(input.data[0], input.size(), keys, is_little_endian);
+		TemplatedGenerateKeys<double>(input.data[0], input.size(), keys, is_little_endian);
 		break;
 	case PhysicalType::VARCHAR:
-		GenerateKeys<string_t>(input.data[0], input.size(), keys, is_little_endian);
+		TemplatedGenerateKeys<string_t>(input.data[0], input.size(), keys, is_little_endian);
 		break;
 	default:
 		throw InvalidTypeException(input.data[0].type, "Invalid type for index");

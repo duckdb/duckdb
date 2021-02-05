@@ -70,7 +70,7 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(duckdb_libpgquery::PGNode *
 		for (auto n = stmt->attlist->head; n != nullptr; n = n->next) {
 			auto target = reinterpret_cast<duckdb_libpgquery::PGResTarget *>(n->data.ptr_value);
 			if (target->name) {
-				info.select_list.push_back(string(target->name));
+				info.select_list.emplace_back(target->name);
 			}
 		}
 	}

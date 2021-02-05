@@ -26,7 +26,7 @@ unique_ptr<PragmaStatement> Transformer::TransformPragma(duckdb_libpgquery::PGNo
 				auto constant = TransformConstant((duckdb_libpgquery::PGAConst *)node);
 				info.parameters.push_back(((ConstantExpression &)*constant).value);
 			} else {
-				info.parameters.push_back(Value(expr->ToString()));
+				info.parameters.emplace_back(expr->ToString());
 			}
 		}
 	}

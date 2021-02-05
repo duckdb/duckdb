@@ -14,13 +14,13 @@ struct PragmaDatabaseListData : public FunctionOperatorData {
 static unique_ptr<FunctionData> PragmaDatabaseListBind(ClientContext &context, vector<Value> &inputs,
                                                           unordered_map<string, Value> &named_parameters,
                                                           vector<LogicalType> &return_types, vector<string> &names) {
-	names.push_back("seq");
+	names.emplace_back("seq");
 	return_types.push_back(LogicalType::INTEGER);
 
-	names.push_back("name");
+	names.emplace_back("name");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("file");
+	names.emplace_back("file");
 	return_types.push_back(LogicalType::VARCHAR);
 
 	return nullptr;

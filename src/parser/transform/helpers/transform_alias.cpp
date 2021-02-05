@@ -8,7 +8,7 @@ string Transformer::TransformAlias(duckdb_libpgquery::PGAlias *root, vector<stri
 	}
 	if (root->colnames) {
 		for (auto node = root->colnames->head; node != nullptr; node = node->next) {
-			column_name_alias.push_back(reinterpret_cast<duckdb_libpgquery::PGValue *>(node->data.ptr_value)->val.str);
+			column_name_alias.emplace_back(reinterpret_cast<duckdb_libpgquery::PGValue *>(node->data.ptr_value)->val.str);
 		}
 	}
 	return root->aliasname;

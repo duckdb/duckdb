@@ -17,7 +17,7 @@ unique_ptr<PragmaStatement> Transformer::TransformShow(duckdb_libpgquery::PGNode
 	} else {
 		// show one specific table
 		info.name = "show";
-		info.parameters.push_back(Value(stmt->name));
+		info.parameters.emplace_back(stmt->name);
 	}
 
 	return result;

@@ -21,25 +21,25 @@ struct PragmaFunctionsData : public FunctionOperatorData {
 static unique_ptr<FunctionData> PragmaFunctionsBind(ClientContext &context, vector<Value> &inputs,
                                                       unordered_map<string, Value> &named_parameters,
                                                       vector<LogicalType> &return_types, vector<string> &names) {
-	names.push_back("name");
+	names.emplace_back("name");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("type");
+	names.emplace_back("type");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("parameters");
+	names.emplace_back("parameters");
 	child_list_t<LogicalType> child_types;
 	child_types.push_back(std::make_pair("", LogicalType::VARCHAR));
 	LogicalType param_types(LogicalTypeId::LIST, move(child_types));
 	return_types.push_back(move(param_types));
 
-	names.push_back("varargs");
+	names.emplace_back("varargs");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("return_type");
+	names.emplace_back("return_type");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("side_effects");
+	names.emplace_back("side_effects");
 	return_types.push_back(LogicalType::BOOLEAN);
 
 	return nullptr;

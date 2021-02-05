@@ -20,40 +20,40 @@ static unique_ptr<FunctionData> InformationSchemaTablesBind(ClientContext &conte
                                                                unordered_map<string, Value> &named_parameters,
                                                                vector<LogicalType> &return_types,
                                                                vector<string> &names) {
-	names.push_back("table_catalog");
+	names.emplace_back("table_catalog");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("table_schema");
+	names.emplace_back("table_schema");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("table_name");
+	names.emplace_back("table_name");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("table_type");
+	names.emplace_back("table_type");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("self_referencing_column_name");
+	names.emplace_back("self_referencing_column_name");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("reference_generation");
+	names.emplace_back("reference_generation");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("user_defined_type_catalog");
+	names.emplace_back("user_defined_type_catalog");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("user_defined_type_schema");
+	names.emplace_back("user_defined_type_schema");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("user_defined_type_name");
+	names.emplace_back("user_defined_type_name");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("is_insertable_into");
+	names.emplace_back("is_insertable_into");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("is_typed");
+	names.emplace_back("is_typed");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("commit_action");
+	names.emplace_back("commit_action");
 	return_types.push_back(LogicalType::VARCHAR);
 
 	return nullptr;

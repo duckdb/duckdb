@@ -119,7 +119,7 @@ bool OrderModifier::Equals(const ResultModifier *other_p) const {
 unique_ptr<ResultModifier> OrderModifier::Copy() {
 	auto copy = make_unique<OrderModifier>();
 	for (auto &order : orders) {
-		copy->orders.push_back(OrderByNode(order.type, order.null_order, order.expression->Copy()));
+		copy->orders.emplace_back(order.type, order.null_order, order.expression->Copy());
 	}
 	return move(copy);
 }

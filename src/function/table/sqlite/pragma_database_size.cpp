@@ -17,28 +17,28 @@ struct PragmaDatabaseSizeData : public FunctionOperatorData {
 static unique_ptr<FunctionData> PragmaDatabaseSizeBind(ClientContext &context, vector<Value> &inputs,
                                                           unordered_map<string, Value> &named_parameters,
                                                           vector<LogicalType> &return_types, vector<string> &names) {
-	names.push_back("database_size");
+	names.emplace_back("database_size");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("block_size");
+	names.emplace_back("block_size");
 	return_types.push_back(LogicalType::BIGINT);
 
-	names.push_back("total_blocks");
+	names.emplace_back("total_blocks");
 	return_types.push_back(LogicalType::BIGINT);
 
-	names.push_back("used_blocks");
+	names.emplace_back("used_blocks");
 	return_types.push_back(LogicalType::BIGINT);
 
-	names.push_back("free_blocks");
+	names.emplace_back("free_blocks");
 	return_types.push_back(LogicalType::BIGINT);
 
-	names.push_back("wal_size");
+	names.emplace_back("wal_size");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("memory_usage");
+	names.emplace_back("memory_usage");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("memory_limit");
+	names.emplace_back("memory_limit");
 	return_types.push_back(LogicalType::VARCHAR);
 
 	return nullptr;

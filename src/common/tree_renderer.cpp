@@ -97,7 +97,7 @@ string AdjustTextForRendering(string source, idx_t max_render_width) {
 		idx_t char_render_width = utf8proc_render_width(source.c_str(), source.size(), cpos);
 		cpos = utf8proc_next_grapheme_cluster(source.c_str(), source.size(), cpos);
 		render_width += char_render_width;
-		render_widths.push_back(make_pair(cpos, render_width));
+		render_widths.emplace_back(cpos, render_width);
 		if (render_width > max_render_width) {
 			break;
 		}

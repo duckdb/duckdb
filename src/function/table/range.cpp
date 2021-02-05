@@ -46,9 +46,9 @@ static unique_ptr<FunctionData> RangeFunctionBind(ClientContext &context, vector
 		} else {
 			result->end = result->end + 1;
 		}
-		names.push_back("generate_series");
+		names.emplace_back("generate_series");
 	} else {
-		names.push_back("range");
+		names.emplace_back("range");
 	}
 	return move(result);
 }

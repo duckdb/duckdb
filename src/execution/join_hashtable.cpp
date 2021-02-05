@@ -219,7 +219,7 @@ idx_t JoinHashTable::AppendToBlock(HTDataBlock &block, BufferHandle &handle, vec
                                    idx_t remaining) {
 	idx_t append_count = MinValue<idx_t>(remaining, block.capacity - block.count);
 	auto dataptr = handle.node->buffer + block.count * entry_size;
-	append_entries.push_back(BlockAppendEntry(dataptr, append_count));
+	append_entries.emplace_back(dataptr, append_count);
 	block.count += append_count;
 	return append_count;
 }

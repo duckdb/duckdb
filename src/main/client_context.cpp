@@ -704,7 +704,7 @@ unique_ptr<TableDescription> ClientContext::TableInfo(const string &schema_name,
 		result->schema = schema_name;
 		result->table = table_name;
 		for (auto &column : table->columns) {
-			result->columns.push_back(ColumnDefinition(column.name, column.type));
+			result->columns.emplace_back(column.name, column.type);
 		}
 	});
 	return result;
@@ -734,7 +734,7 @@ void ClientContext::TryBindRelation(Relation &relation, vector<ColumnDefinition>
 		auto result = relation.Bind(binder);
 		D_ASSERT(result.names.size() == result.types.size());
 		for (idx_t i = 0; i < result.names.size(); i++) {
-			result_columns.push_back(ColumnDefinition(result.names[i], result.types[i]));
+			result_columns.emplace_back(result.names[i], result.types[i]);
 		}
 	});
 }

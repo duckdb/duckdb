@@ -33,7 +33,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateView(duckdb_libpgquery::
 			switch (node->type) {
 			case duckdb_libpgquery::T_PGString: {
 				auto val = (duckdb_libpgquery::PGValue *)node;
-				info->aliases.push_back(string(val->val.str));
+				info->aliases.emplace_back(val->val.str);
 				break;
 			}
 			default:

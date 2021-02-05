@@ -24,43 +24,43 @@ static unique_ptr<FunctionData> InformationSchemaColumnsBind(ClientContext &cont
                                                                 unordered_map<string, Value> &named_parameters,
                                                                 vector<LogicalType> &return_types,
                                                                 vector<string> &names) {
-	names.push_back("table_catalog");
+	names.emplace_back("table_catalog");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("table_schema");
+	names.emplace_back("table_schema");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("table_name");
+	names.emplace_back("table_name");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("column_name");
+	names.emplace_back("column_name");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("ordinal_position");
+	names.emplace_back("ordinal_position");
 	return_types.push_back(LogicalType::INTEGER);
 
-	names.push_back("column_default");
+	names.emplace_back("column_default");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("is_nullable"); // YES/NO
+	names.emplace_back("is_nullable"); // YES/NO
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("data_type");
+	names.emplace_back("data_type");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("character_maximum_length");
+	names.emplace_back("character_maximum_length");
 	return_types.push_back(LogicalType::INTEGER);
 
-	names.push_back("character_octet_length");
+	names.emplace_back("character_octet_length");
 	return_types.push_back(LogicalType::INTEGER);
 
-	names.push_back("numeric_precision");
+	names.emplace_back("numeric_precision");
 	return_types.push_back(LogicalType::INTEGER);
 
-	names.push_back("numeric_scale");
+	names.emplace_back("numeric_scale");
 	return_types.push_back(LogicalType::INTEGER);
 
-	names.push_back("datetime_precision");
+	names.emplace_back("datetime_precision");
 	return_types.push_back(LogicalType::INTEGER);
 
 	return nullptr;

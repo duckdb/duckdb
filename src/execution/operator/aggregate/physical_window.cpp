@@ -208,7 +208,7 @@ static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, ChunkCollection
 			bounds.peer_end = BinarySearchRightmost(input, row_cur, row_idx, bounds.partition_end, sort_col_count) + 1;
 		}
 	} else {
-		bounds.is_same_partition = 0;
+		bounds.is_same_partition = false;
 		bounds.is_peer = true;
 		bounds.partition_end = input_size;
 		bounds.peer_end = bounds.partition_end;

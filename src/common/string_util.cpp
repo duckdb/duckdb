@@ -231,7 +231,7 @@ idx_t StringUtil::LevenshteinDistance(const string &s1, const string &s2) {
 vector<string> StringUtil::TopNLevenshtein(vector<string> strings, const string &target, idx_t n, idx_t threshold) {
 	vector<pair<string, idx_t>> scores;
 	for (auto &str : strings) {
-		scores.push_back(make_pair(str, LevenshteinDistance(str, target)));
+		scores.emplace_back(str, LevenshteinDistance(str, target));
 	}
 	return TopNStrings(scores, n, threshold);
 }

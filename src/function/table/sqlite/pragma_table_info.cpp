@@ -30,22 +30,22 @@ struct PragmaTableOperatorData : public FunctionOperatorData {
 static unique_ptr<FunctionData> PragmaTableInfoBind(ClientContext &context, vector<Value> &inputs,
                                                        unordered_map<string, Value> &named_parameters,
                                                        vector<LogicalType> &return_types, vector<string> &names) {
-	names.push_back("cid");
+	names.emplace_back("cid");
 	return_types.push_back(LogicalType::INTEGER);
 
-	names.push_back("name");
+	names.emplace_back("name");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("type");
+	names.emplace_back("type");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("notnull");
+	names.emplace_back("notnull");
 	return_types.push_back(LogicalType::BOOLEAN);
 
-	names.push_back("dflt_value");
+	names.emplace_back("dflt_value");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("pk");
+	names.emplace_back("pk");
 	return_types.push_back(LogicalType::BOOLEAN);
 
 	auto qname = QualifiedName::Parse(inputs[0].GetValue<string>());

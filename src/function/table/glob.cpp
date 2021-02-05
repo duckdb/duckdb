@@ -16,7 +16,7 @@ static unique_ptr<FunctionData> GlobFunctionBind(ClientContext &context, vector<
 	auto &fs = FileSystem::GetFileSystem(context);
 	result->files = fs.Glob(inputs[0].str_value);
 	return_types.push_back(LogicalType::VARCHAR);
-	names.push_back("file");
+	names.emplace_back("file");
 	return move(result);
 }
 

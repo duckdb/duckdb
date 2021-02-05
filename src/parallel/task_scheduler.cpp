@@ -16,10 +16,10 @@ namespace duckdb {
 
 struct SchedulerThread {
 #ifndef DUCKDB_NO_THREADS
-	explicit SchedulerThread(unique_ptr<thread> thread_p) : thread_(move(thread_p)) {
+	explicit SchedulerThread(unique_ptr<thread> thread_p) : internal_thread(move(thread_p)) {
 	}
 
-	unique_ptr<thread> thread_;
+	unique_ptr<thread> internal_thread;
 #endif
 };
 
@@ -98,7 +98,7 @@ TaskScheduler::TaskScheduler() : queue(make_unique<ConcurrentQueue>()) {
 
 TaskScheduler::~TaskScheduler() {
 #ifndef DUCKDB_NO_THREADS
-	SetThreads(1);
+	SetThreadsInternal(1);
 #endif
 }
 
@@ -183,7 +183,7 @@ void TaskScheduler::SetThreadsInternal(int32_t n) {
 		}
 		// now join the threads to ensure they are fully stopped before erasing them
 		for (idx_t i = new_thread_count; i < threads.size(); i++) {
-			threads[i]->thread_->join();
+			threads[i]->internal_thread->join();
 		}
 		// erase the threads/markers
 		threads.resize(new_thread_count);

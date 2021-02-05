@@ -34,7 +34,7 @@ unique_ptr<InsertStatement> Transformer::TransformInsert(duckdb_libpgquery::PGNo
 	if (stmt->cols) {
 		for (auto c = stmt->cols->head; c != nullptr; c = lnext(c)) {
 			auto target = (duckdb_libpgquery::PGResTarget *)(c->data.ptr_value);
-			result->columns.push_back(string(target->name));
+			result->columns.emplace_back(target->name);
 		}
 	}
 	result->select_statement = TransformSelect(stmt->selectStmt, false);
