@@ -1,0 +1,15 @@
+# name: test/sql/aggregate/aggregates/test_corr.test
+# description: Test CORR operator
+# group: [aggregates]
+
+statement ok
+create table aggr(k int, v decimal(10,2), v2 decimal(10, 2));
+
+statement ok
+insert into aggr values(1, 10, null),(2, 10, 11), (2, 20, 22), (2, 25, null), (2, 30, 35);
+
+query II
+select k, covar_pop(v, v2) from aggr group by k;
+----
+1	NULL
+2	80.0

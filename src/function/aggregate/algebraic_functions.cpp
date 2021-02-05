@@ -13,6 +13,8 @@ void BuiltinFunctions::RegisterAlgebraicAggregates() {
 	Register<StdDevPopFun>();
 	Register<VarPopFun>();
 	Register<VarSampFun>();
+
+	Register<Corr>();
 }
 
 } // namespace duckdb
