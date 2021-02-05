@@ -15,7 +15,7 @@ struct PragmaCollateData : public FunctionOperatorData {
 	idx_t offset;
 };
 
-static unique_ptr<FunctionData> pragma_collate_bind(ClientContext &context, vector<Value> &inputs,
+static unique_ptr<FunctionData> PragmaCollateBind(ClientContext &context, vector<Value> &inputs,
                                                     unordered_map<string, Value> &named_parameters,
                                                     vector<LogicalType> &return_types, vector<string> &names) {
 	names.push_back("collname");
@@ -24,7 +24,7 @@ static unique_ptr<FunctionData> pragma_collate_bind(ClientContext &context, vect
 	return nullptr;
 }
 
-unique_ptr<FunctionOperatorData> pragma_collate_init(ClientContext &context, const FunctionData *bind_data,
+unique_ptr<FunctionOperatorData> PragmaCollateInit(ClientContext &context, const FunctionData *bind_data,
                                                      vector<column_t> &column_ids, TableFilterCollection *filters) {
 	auto result = make_unique<PragmaCollateData>();
 
@@ -37,7 +37,7 @@ unique_ptr<FunctionOperatorData> pragma_collate_init(ClientContext &context, con
 	return move(result);
 }
 
-static void pragma_collate(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
+static void PragmaCollateFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
                            DataChunk &output) {
 	auto &data = (PragmaCollateData &)*operator_state;
 	if (data.offset >= data.entries.size()) {
@@ -55,7 +55,7 @@ static void pragma_collate(ClientContext &context, const FunctionData *bind_data
 }
 
 void PragmaCollations::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("pragma_collations", {}, pragma_collate, pragma_collate_bind, pragma_collate_init));
+	set.AddFunction(TableFunction("pragma_collations", {}, PragmaCollateFunction, PragmaCollateBind, PragmaCollateInit));
 }
 
 } // namespace duckdb

@@ -54,7 +54,7 @@ namespace duckdb {
 
  */
 
-static idx_t consume_string(fstream &input) {
+static idx_t GZipConsumeString(fstream &input) {
 	idx_t size = 1; // terminator
 	while (input.get() != '\0') {
 		size++;
@@ -62,18 +62,18 @@ static idx_t consume_string(fstream &input) {
 	return size;
 }
 
-static const uint8_t GZIP_COMPRESSION_DEFLATE = 0x08;
+static constexpr const uint8_t GZIP_COMPRESSION_DEFLATE = 0x08;
 
-static const uint8_t GZIP_FLAG_ASCII = 0x1;
-static const uint8_t GZIP_FLAG_MULTIPART = 0x2;
-static const uint8_t GZIP_FLAG_EXTRA = 0x4;
-static const uint8_t GZIP_FLAG_NAME = 0x8;
-static const uint8_t GZIP_FLAG_COMMENT = 0x10;
-static const uint8_t GZIP_FLAG_ENCRYPT = 0x20;
+static constexpr const uint8_t GZIP_FLAG_ASCII = 0x1;
+static constexpr const uint8_t GZIP_FLAG_MULTIPART = 0x2;
+static constexpr const uint8_t GZIP_FLAG_EXTRA = 0x4;
+static constexpr const uint8_t GZIP_FLAG_NAME = 0x8;
+static constexpr const uint8_t GZIP_FLAG_COMMENT = 0x10;
+static constexpr const uint8_t GZIP_FLAG_ENCRYPT = 0x20;
 
-static const uint8_t GZIP_HEADER_MINSIZE = 10;
+static constexpr const uint8_t GZIP_HEADER_MINSIZE = 10;
 
-static const unsigned char GZIP_FLAG_UNSUPPORTED =
+static constexpr const unsigned char GZIP_FLAG_UNSUPPORTED =
     GZIP_FLAG_ASCII | GZIP_FLAG_MULTIPART | GZIP_FLAG_EXTRA | GZIP_FLAG_COMMENT | GZIP_FLAG_ENCRYPT;
 
 void GzipStreamBuf::initialize() {
@@ -110,7 +110,7 @@ void GzipStreamBuf::initialize() {
 
 	if (gzip_hdr[3] & GZIP_FLAG_NAME) {
 		input.seekg(data_start, input.beg);
-		data_start += consume_string(input);
+		data_start += GZipConsumeString(input);
 	}
 	input.seekg(data_start, input.beg);
 	// stream is now set to beginning of payload data

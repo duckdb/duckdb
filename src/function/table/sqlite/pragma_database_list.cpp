@@ -11,7 +11,7 @@ struct PragmaDatabaseListData : public FunctionOperatorData {
 	bool finished;
 };
 
-static unique_ptr<FunctionData> pragma_database_list_bind(ClientContext &context, vector<Value> &inputs,
+static unique_ptr<FunctionData> PragmaDatabaseListBind(ClientContext &context, vector<Value> &inputs,
                                                           unordered_map<string, Value> &named_parameters,
                                                           vector<LogicalType> &return_types, vector<string> &names) {
 	names.push_back("seq");
@@ -26,13 +26,13 @@ static unique_ptr<FunctionData> pragma_database_list_bind(ClientContext &context
 	return nullptr;
 }
 
-unique_ptr<FunctionOperatorData> pragma_database_list_init(ClientContext &context, const FunctionData *bind_data,
+unique_ptr<FunctionOperatorData> PragmaDatabaseListInit(ClientContext &context, const FunctionData *bind_data,
                                                            vector<column_t> &column_ids,
                                                            TableFilterCollection *filters) {
 	return make_unique<PragmaDatabaseListData>();
 }
 
-void pragma_database_list(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
+void PragmaDatabaseListFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
                           DataChunk &output) {
 	auto &data = (PragmaDatabaseListData &)*operator_state;
 	if (data.finished) {
@@ -48,8 +48,8 @@ void pragma_database_list(ClientContext &context, const FunctionData *bind_data,
 }
 
 void PragmaDatabaseList::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("pragma_database_list", {}, pragma_database_list, pragma_database_list_bind,
-	                              pragma_database_list_init));
+	set.AddFunction(TableFunction("pragma_database_list", {}, PragmaDatabaseListFunction, PragmaDatabaseListBind,
+	                              PragmaDatabaseListInit));
 }
 
 } // namespace duckdb

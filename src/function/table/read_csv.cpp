@@ -161,7 +161,7 @@ static unique_ptr<FunctionData> ReadCSVAutoBind(ClientContext &context, vector<V
 	return ReadCSVBind(context, inputs, named_parameters, return_types, names);
 }
 
-static void read_csv_function(ClientContext &context, const FunctionData *bind_data_p,
+static void ReadCSVFunction(ClientContext &context, const FunctionData *bind_data_p,
                               FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &bind_data = (ReadCSVData &)*bind_data_p;
 	auto &data = (ReadCSVOperatorData &)*operator_state;
@@ -184,7 +184,7 @@ static void read_csv_function(ClientContext &context, const FunctionData *bind_d
 	}
 }
 
-static void add_named_parameters(TableFunction &table_function) {
+static void ReadCSVAddNamedParameters(TableFunction &table_function) {
 	table_function.named_parameters["sep"] = LogicalType::VARCHAR;
 	table_function.named_parameters["delim"] = LogicalType::VARCHAR;
 	table_function.named_parameters["quote"] = LogicalType::VARCHAR;
@@ -204,17 +204,17 @@ static void add_named_parameters(TableFunction &table_function) {
 }
 
 TableFunction ReadCSVTableFunction::GetFunction() {
-	TableFunction read_csv("read_csv", {LogicalType::VARCHAR}, read_csv_function, ReadCSVBind, ReadCSVInit);
-	add_named_parameters(read_csv);
+	TableFunction read_csv("read_csv", {LogicalType::VARCHAR}, ReadCSVFunction, ReadCSVBind, ReadCSVInit);
+	ReadCSVAddNamedParameters(read_csv);
 	return read_csv;
 }
 
 void ReadCSVTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ReadCSVTableFunction::GetFunction());
 
-	TableFunction read_csv_auto("read_csv_auto", {LogicalType::VARCHAR}, read_csv_function, ReadCSVAutoBind,
+	TableFunction read_csv_auto("read_csv_auto", {LogicalType::VARCHAR}, ReadCSVFunction, ReadCSVAutoBind,
 	                            ReadCSVInit);
-	add_named_parameters(read_csv_auto);
+	ReadCSVAddNamedParameters(read_csv_auto);
 	set.AddFunction(read_csv_auto);
 }
 

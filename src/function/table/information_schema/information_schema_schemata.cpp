@@ -15,7 +15,7 @@ struct InformationSchemaSchemataData : public FunctionOperatorData {
 	idx_t offset;
 };
 
-static unique_ptr<FunctionData> information_schema_schemata_bind(ClientContext &context, vector<Value> &inputs,
+static unique_ptr<FunctionData> InformationSchemaSchemataBind(ClientContext &context, vector<Value> &inputs,
                                                                  unordered_map<string, Value> &named_parameters,
                                                                  vector<LogicalType> &return_types,
                                                                  vector<string> &names) {
@@ -43,7 +43,7 @@ static unique_ptr<FunctionData> information_schema_schemata_bind(ClientContext &
 	return nullptr;
 }
 
-unique_ptr<FunctionOperatorData> information_schema_schemata_init(ClientContext &context, const FunctionData *bind_data,
+unique_ptr<FunctionOperatorData> InformationSchemaSchemataInit(ClientContext &context, const FunctionData *bind_data,
                                                                   vector<column_t> &column_ids,
                                                                   TableFilterCollection *filters) {
 	auto result = make_unique<InformationSchemaSchemataData>();
@@ -57,7 +57,7 @@ unique_ptr<FunctionOperatorData> information_schema_schemata_init(ClientContext 
 	return move(result);
 }
 
-void information_schema_schemata(ClientContext &context, const FunctionData *bind_data,
+void InformationSchemaSchemataFunction(ClientContext &context, const FunctionData *bind_data,
                                  FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &data = (InformationSchemaSchemataData &)*operator_state;
 	if (data.offset >= data.entries.size()) {
@@ -91,8 +91,8 @@ void information_schema_schemata(ClientContext &context, const FunctionData *bin
 }
 
 void InformationSchemaSchemata::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("information_schema_schemata", {}, information_schema_schemata,
-	                              information_schema_schemata_bind, information_schema_schemata_init));
+	set.AddFunction(TableFunction("information_schema_schemata", {}, InformationSchemaSchemataFunction,
+	                              InformationSchemaSchemataBind, InformationSchemaSchemataInit));
 }
 
 } // namespace duckdb

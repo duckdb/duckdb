@@ -27,7 +27,7 @@ struct PragmaTableOperatorData : public FunctionOperatorData {
 	idx_t offset;
 };
 
-static unique_ptr<FunctionData> pragma_table_info_bind(ClientContext &context, vector<Value> &inputs,
+static unique_ptr<FunctionData> PragmaTableInfoBind(ClientContext &context, vector<Value> &inputs,
                                                        unordered_map<string, Value> &named_parameters,
                                                        vector<LogicalType> &return_types, vector<string> &names) {
 	names.push_back("cid");
@@ -56,7 +56,7 @@ static unique_ptr<FunctionData> pragma_table_info_bind(ClientContext &context, v
 	return make_unique<PragmaTableFunctionData>(entry);
 }
 
-unique_ptr<FunctionOperatorData> pragma_table_info_init(ClientContext &context, const FunctionData *bind_data,
+unique_ptr<FunctionOperatorData> PragmaTableInfoInit(ClientContext &context, const FunctionData *bind_data,
                                                         vector<column_t> &column_ids, TableFilterCollection *filters) {
 	return make_unique<PragmaTableOperatorData>();
 }
@@ -88,7 +88,7 @@ static void check_constraints(TableCatalogEntry *table, idx_t oid, bool &out_not
 	}
 }
 
-static void pragma_table_info_table(PragmaTableOperatorData &data, TableCatalogEntry *table, DataChunk &output) {
+static void PragmaTableInfoTable(PragmaTableOperatorData &data, TableCatalogEntry *table, DataChunk &output) {
 	if (data.offset >= table->columns.size()) {
 		// finished returning values
 		return;
@@ -123,7 +123,7 @@ static void pragma_table_info_table(PragmaTableOperatorData &data, TableCatalogE
 	data.offset = next;
 }
 
-static void pragma_table_info_view(PragmaTableOperatorData &data, ViewCatalogEntry *view, DataChunk &output) {
+static void PragmaTableInfoView(PragmaTableOperatorData &data, ViewCatalogEntry *view, DataChunk &output) {
 	if (data.offset >= view->types.size()) {
 		// finished returning values
 		return;
@@ -155,16 +155,16 @@ static void pragma_table_info_view(PragmaTableOperatorData &data, ViewCatalogEnt
 	data.offset = next;
 }
 
-static void pragma_table_info(ClientContext &context, const FunctionData *bind_data_p,
+static void PragmaTableInfoFunction(ClientContext &context, const FunctionData *bind_data_p,
                               FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &bind_data = (PragmaTableFunctionData &)*bind_data_p;
 	auto &state = (PragmaTableOperatorData &)*operator_state;
 	switch (bind_data.entry->type) {
 	case CatalogType::TABLE_ENTRY:
-		pragma_table_info_table(state, (TableCatalogEntry *)bind_data.entry, output);
+		PragmaTableInfoTable(state, (TableCatalogEntry *)bind_data.entry, output);
 		break;
 	case CatalogType::VIEW_ENTRY:
-		pragma_table_info_view(state, (ViewCatalogEntry *)bind_data.entry, output);
+		PragmaTableInfoView(state, (ViewCatalogEntry *)bind_data.entry, output);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented catalog type for pragma_table_info");
@@ -172,8 +172,8 @@ static void pragma_table_info(ClientContext &context, const FunctionData *bind_d
 }
 
 void PragmaTableInfo::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("pragma_table_info", {LogicalType::VARCHAR}, pragma_table_info,
-	                              pragma_table_info_bind, pragma_table_info_init));
+	set.AddFunction(TableFunction("pragma_table_info", {LogicalType::VARCHAR}, PragmaTableInfoFunction,
+	                              PragmaTableInfoBind, PragmaTableInfoInit));
 }
 
 } // namespace duckdb

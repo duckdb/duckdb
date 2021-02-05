@@ -92,19 +92,19 @@ string StringUtil::Prefix(const string &str, const string &prefix) {
 
 // http://ubuntuforums.org/showpost.php?p=10215516&postcount=5
 string StringUtil::FormatSize(idx_t bytes) {
-	double BASE = 1024;
-	double KB = BASE;
-	double MB = KB * BASE;
-	double GB = MB * BASE;
+	double multiplier = 1024;
+	double kilobytes = multiplier;
+	double megabytes = multiplier * kilobytes;
+	double gigabytes = multiplier * megabytes;
 
 	std::ostringstream os;
 
-	if (bytes >= GB) {
-		os << std::fixed << std::setprecision(2) << (bytes / GB) << " GB";
-	} else if (bytes >= MB) {
-		os << std::fixed << std::setprecision(2) << (bytes / MB) << " MB";
-	} else if (bytes >= KB) {
-		os << std::fixed << std::setprecision(2) << (bytes / KB) << " KB";
+	if (bytes >= gigabytes) {
+		os << std::fixed << std::setprecision(2) << (bytes / gigabytes) << " GB";
+	} else if (bytes >= megabytes) {
+		os << std::fixed << std::setprecision(2) << (bytes / megabytes) << " MB";
+	} else if (bytes >= kilobytes) {
+		os << std::fixed << std::setprecision(2) << (bytes / kilobytes) << " KB";
 	} else {
 		os << to_string(bytes) + " bytes";
 	}
@@ -181,14 +181,14 @@ struct LevenshteinArray {
 	}
 
 	idx_t &score(idx_t i, idx_t j) {
-		return dist[get_index(i, j)];
+		return dist[GetIndex(i, j)];
 	}
 
 private:
 	idx_t len1;
 	unique_ptr<idx_t[]> dist;
 
-	idx_t get_index(idx_t i, idx_t j) {
+	idx_t GetIndex(idx_t i, idx_t j) {
 		return j * len1 + i;
 	}
 };

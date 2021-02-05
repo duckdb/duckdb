@@ -1,4 +1,4 @@
-Checks:          '-*,clang-diagnostic-*,bugprone-*,google-explicit-constructor,google-build-using-namespace,google-runtime-int,misc-definitions-in-headers,modernize-use-nullptr,modernize-use-override,-bugprone-macro-parentheses,readability-braces-around-statements,-bugprone-branch-clone,readability-identifier-naming,hicpp-exception-baseclass,misc-throw-by-value-catch-by-reference,cppcoreguidelines-narrowing-conversions'
+Checks:          '-*,clang-diagnostic-*,bugprone-*,google-explicit-constructor,google-build-using-namespace,google-runtime-int,misc-definitions-in-headers,modernize-use-nullptr,modernize-use-override,-bugprone-macro-parentheses,readability-braces-around-statements,-bugprone-branch-clone,readability-identifier-naming,hicpp-exception-baseclass,misc-throw-by-value-catch-by-reference,-bugprone-signed-char-misuse'
 WarningsAsErrors: '*'
 HeaderFilterRegex: '.*^(re2.h)'
 AnalyzeTemporaryDtors: false

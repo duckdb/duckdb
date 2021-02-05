@@ -18,7 +18,7 @@ struct PragmaFunctionsData : public FunctionOperatorData {
 	idx_t offset_in_entry;
 };
 
-static unique_ptr<FunctionData> pragma_functions_bind(ClientContext &context, vector<Value> &inputs,
+static unique_ptr<FunctionData> PragmaFunctionsBind(ClientContext &context, vector<Value> &inputs,
                                                       unordered_map<string, Value> &named_parameters,
                                                       vector<LogicalType> &return_types, vector<string> &names) {
 	names.push_back("name");
@@ -45,7 +45,7 @@ static unique_ptr<FunctionData> pragma_functions_bind(ClientContext &context, ve
 	return nullptr;
 }
 
-unique_ptr<FunctionOperatorData> pragma_functions_init(ClientContext &context, const FunctionData *bind_data,
+unique_ptr<FunctionOperatorData> PragmaFunctionsInit(ClientContext &context, const FunctionData *bind_data,
                                                        vector<column_t> &column_ids, TableFilterCollection *filters) {
 	auto result = make_unique<PragmaFunctionsData>();
 
@@ -90,7 +90,7 @@ void AddFunction(BaseScalarFunction &f, idx_t &count, DataChunk &output, bool is
 	count++;
 }
 
-static void pragma_functions(ClientContext &context, const FunctionData *bind_data,
+static void PragmaFunctionsFunction(ClientContext &context, const FunctionData *bind_data,
                              FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &data = (PragmaFunctionsData &)*operator_state;
 	if (data.offset >= data.entries.size()) {
@@ -131,7 +131,7 @@ static void pragma_functions(ClientContext &context, const FunctionData *bind_da
 
 void PragmaFunctionPragma::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(
-	    TableFunction("pragma_functions", {}, pragma_functions, pragma_functions_bind, pragma_functions_init));
+	    TableFunction("pragma_functions", {}, PragmaFunctionsFunction, PragmaFunctionsBind, PragmaFunctionsInit));
 }
 
 } // namespace duckdb

@@ -14,7 +14,7 @@ struct PragmaDatabaseSizeData : public FunctionOperatorData {
 	bool finished;
 };
 
-static unique_ptr<FunctionData> pragma_database_size_bind(ClientContext &context, vector<Value> &inputs,
+static unique_ptr<FunctionData> PragmaDatabaseSizeBind(ClientContext &context, vector<Value> &inputs,
                                                           unordered_map<string, Value> &named_parameters,
                                                           vector<LogicalType> &return_types, vector<string> &names) {
 	names.push_back("database_size");
@@ -44,7 +44,7 @@ static unique_ptr<FunctionData> pragma_database_size_bind(ClientContext &context
 	return nullptr;
 }
 
-unique_ptr<FunctionOperatorData> pragma_database_size_init(ClientContext &context, const FunctionData *bind_data,
+unique_ptr<FunctionOperatorData> PragmaDatabaseSizeInit(ClientContext &context, const FunctionData *bind_data,
                                                            vector<column_t> &column_ids,
                                                            TableFilterCollection *filters) {
 	return make_unique<PragmaDatabaseSizeData>();
@@ -72,7 +72,7 @@ static string bytes_to_human_readable_string(idx_t bytes) {
 	}
 }
 
-void pragma_database_size(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
+void PragmaDatabaseSizeFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
                           DataChunk &output) {
 	auto &data = (PragmaDatabaseSizeData &)*operator_state;
 	if (data.finished) {
@@ -113,8 +113,8 @@ void pragma_database_size(ClientContext &context, const FunctionData *bind_data,
 }
 
 void PragmaDatabaseSize::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("pragma_database_size", {}, pragma_database_size, pragma_database_size_bind,
-	                              pragma_database_size_init));
+	set.AddFunction(TableFunction("pragma_database_size", {}, PragmaDatabaseSizeFunction, PragmaDatabaseSizeBind,
+	                              PragmaDatabaseSizeInit));
 }
 
 } // namespace duckdb

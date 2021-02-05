@@ -19,7 +19,7 @@ struct SQLiteMasterData : public FunctionOperatorData {
 	idx_t offset;
 };
 
-static unique_ptr<FunctionData> sqlite_master_bind(ClientContext &context, vector<Value> &inputs,
+static unique_ptr<FunctionData> SQLiteMasterBind(ClientContext &context, vector<Value> &inputs,
                                                    unordered_map<string, Value> &named_parameters,
                                                    vector<LogicalType> &return_types, vector<string> &names) {
 	names.push_back("type");
@@ -40,7 +40,7 @@ static unique_ptr<FunctionData> sqlite_master_bind(ClientContext &context, vecto
 	return nullptr;
 }
 
-unique_ptr<FunctionOperatorData> sqlite_master_init(ClientContext &context, const FunctionData *bind_data,
+unique_ptr<FunctionOperatorData> SQLiteMasterInit(ClientContext &context, const FunctionData *bind_data,
                                                     vector<column_t> &column_ids, TableFilterCollection *filters) {
 	auto result = make_unique<SQLiteMasterData>();
 
@@ -54,7 +54,7 @@ unique_ptr<FunctionOperatorData> sqlite_master_init(ClientContext &context, cons
 	return move(result);
 }
 
-void sqlite_master(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
+void SQLiteMasterFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
                    DataChunk &output) {
 	auto &data = (SQLiteMasterData &)*operator_state;
 	if (data.offset >= data.entries.size()) {
@@ -112,7 +112,7 @@ void sqlite_master(ClientContext &context, const FunctionData *bind_data, Functi
 }
 
 void SQLiteMaster::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("sqlite_master", {}, sqlite_master, sqlite_master_bind, sqlite_master_init));
+	set.AddFunction(TableFunction("sqlite_master", {}, SQLiteMasterFunction, SQLiteMasterBind, SQLiteMasterInit));
 }
 
 } // namespace duckdb

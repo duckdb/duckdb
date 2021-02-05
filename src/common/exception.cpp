@@ -92,43 +92,43 @@ string Exception::ExceptionTypeToString(ExceptionType type) {
 	}
 }
 
-CastException::CastException(const PhysicalType origType, const PhysicalType newType)
+CastException::CastException(const PhysicalType orig_type, const PhysicalType new_type)
     : Exception(ExceptionType::CONVERSION,
-                "Type " + TypeIdToString(origType) + " can't be cast as " + TypeIdToString(newType)) {
+                "Type " + TypeIdToString(orig_type) + " can't be cast as " + TypeIdToString(new_type)) {
 }
 
-CastException::CastException(const LogicalType origType, const LogicalType newType)
-    : Exception(ExceptionType::CONVERSION, "Type " + origType.ToString() + " can't be cast as " + newType.ToString()) {
+CastException::CastException(const LogicalType orig_type, const LogicalType new_type)
+    : Exception(ExceptionType::CONVERSION, "Type " + orig_type.ToString() + " can't be cast as " + new_type.ToString()) {
 }
 
-ValueOutOfRangeException::ValueOutOfRangeException(const int64_t value, const PhysicalType origType,
-                                                   const PhysicalType newType)
-    : Exception(ExceptionType::CONVERSION, "Type " + TypeIdToString(origType) + " with value " +
+ValueOutOfRangeException::ValueOutOfRangeException(const int64_t value, const PhysicalType orig_type,
+                                                   const PhysicalType new_type)
+    : Exception(ExceptionType::CONVERSION, "Type " + TypeIdToString(orig_type) + " with value " +
                                                to_string((intmax_t)value) +
                                                " can't be cast because the value is out of range "
                                                "for the destination type " +
-                                               TypeIdToString(newType)) {
+                                               TypeIdToString(new_type)) {
 }
 
-ValueOutOfRangeException::ValueOutOfRangeException(const double value, const PhysicalType origType,
-                                                   const PhysicalType newType)
-    : Exception(ExceptionType::CONVERSION, "Type " + TypeIdToString(origType) + " with value " + to_string(value) +
+ValueOutOfRangeException::ValueOutOfRangeException(const double value, const PhysicalType orig_type,
+                                                   const PhysicalType new_type)
+    : Exception(ExceptionType::CONVERSION, "Type " + TypeIdToString(orig_type) + " with value " + to_string(value) +
                                                " can't be cast because the value is out of range "
                                                "for the destination type " +
-                                               TypeIdToString(newType)) {
+                                               TypeIdToString(new_type)) {
 }
 
-ValueOutOfRangeException::ValueOutOfRangeException(const hugeint_t value, const PhysicalType origType,
-                                                   const PhysicalType newType)
-    : Exception(ExceptionType::CONVERSION, "Type " + TypeIdToString(origType) + " with value " + value.ToString() +
+ValueOutOfRangeException::ValueOutOfRangeException(const hugeint_t value, const PhysicalType orig_type,
+                                                   const PhysicalType new_type)
+    : Exception(ExceptionType::CONVERSION, "Type " + TypeIdToString(orig_type) + " with value " + value.ToString() +
                                                " can't be cast because the value is out of range "
                                                "for the destination type " +
-                                               TypeIdToString(newType)) {
+                                               TypeIdToString(new_type)) {
 }
 
-ValueOutOfRangeException::ValueOutOfRangeException(const PhysicalType varType, const idx_t length)
+ValueOutOfRangeException::ValueOutOfRangeException(const PhysicalType var_type, const idx_t length)
     : Exception(ExceptionType::OUT_OF_RANGE,
-                "The value is too long to fit into type " + TypeIdToString(varType) + "(" + to_string(length) + ")") {
+                "The value is too long to fit into type " + TypeIdToString(var_type) + "(" + to_string(length) + ")") {
 }
 
 ConversionException::ConversionException(string msg) : Exception(ExceptionType::CONVERSION, msg) {

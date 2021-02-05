@@ -20,7 +20,7 @@ struct InformationSchemaColumnsData : public FunctionOperatorData {
 	idx_t column_offset;
 };
 
-static unique_ptr<FunctionData> information_schema_columns_bind(ClientContext &context, vector<Value> &inputs,
+static unique_ptr<FunctionData> InformationSchemaColumnsBind(ClientContext &context, vector<Value> &inputs,
                                                                 unordered_map<string, Value> &named_parameters,
                                                                 vector<LogicalType> &return_types,
                                                                 vector<string> &names) {
@@ -66,7 +66,7 @@ static unique_ptr<FunctionData> information_schema_columns_bind(ClientContext &c
 	return nullptr;
 }
 
-unique_ptr<FunctionOperatorData> information_schema_columns_init(ClientContext &context, const FunctionData *bind_data,
+unique_ptr<FunctionOperatorData> InformationSchemaColumnsInit(ClientContext &context, const FunctionData *bind_data,
                                                                  vector<column_t> &column_ids,
                                                                  TableFilterCollection *filters) {
 	auto result = make_unique<InformationSchemaColumnsData>();
@@ -275,7 +275,7 @@ void ColumnHelper::WriteColumns(idx_t start_index, idx_t start_col, idx_t end_co
 
 } // anonymous namespace
 
-void information_schema_columns(ClientContext &context, const FunctionData *bind_data,
+void InformationSchemaColumnsFunction(ClientContext &context, const FunctionData *bind_data,
                                 FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &data = (InformationSchemaColumnsData &)*operator_state;
 	if (data.offset >= data.entries.size()) {
@@ -318,8 +318,8 @@ void information_schema_columns(ClientContext &context, const FunctionData *bind
 }
 
 void InformationSchemaColumns::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("information_schema_columns", {}, information_schema_columns,
-	                              information_schema_columns_bind, information_schema_columns_init));
+	set.AddFunction(TableFunction("information_schema_columns", {}, InformationSchemaColumnsFunction,
+	                              InformationSchemaColumnsBind, InformationSchemaColumnsInit));
 }
 
 } // namespace duckdb
