@@ -2,15 +2,11 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/execution/adaptive_filter.hpp"
+#include "duckdb/common/chrono.hpp"
 
-#include <chrono>
 #include <random>
 
 namespace duckdb {
-
-using std::chrono::duration;
-using std::chrono::duration_cast;
-using std::chrono::high_resolution_clock;
 
 struct ConjunctionState : public ExpressionState {
 	ConjunctionState(Expression &expr, ExpressionExecutorState &root) : ExpressionState(expr, root) {

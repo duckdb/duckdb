@@ -33,19 +33,19 @@ uint32_t Node::PrefixMismatch(ART &art, Node *node, Key &key, uint64_t depth) {
 	return pos;
 }
 
-void Node::InsertLeaf(ART &art, unique_ptr<Node> &node, uint8_t key, unique_ptr<Node> &newNode) {
+void Node::InsertLeaf(ART &art, unique_ptr<Node> &node, uint8_t key, unique_ptr<Node> &new_node) {
 	switch (node->type) {
 	case NodeType::N4:
-		Node4::insert(art, node, key, newNode);
+		Node4::insert(art, node, key, new_node);
 		break;
 	case NodeType::N16:
-		Node16::insert(art, node, key, newNode);
+		Node16::insert(art, node, key, new_node);
 		break;
 	case NodeType::N48:
-		Node48::insert(art, node, key, newNode);
+		Node48::insert(art, node, key, new_node);
 		break;
 	case NodeType::N256:
-		Node256::insert(art, node, key, newNode);
+		Node256::insert(art, node, key, new_node);
 		break;
 	default:
 		D_ASSERT(0);

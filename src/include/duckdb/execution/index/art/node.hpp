@@ -58,7 +58,7 @@ public:
 	//! Compare the key with the prefix of the node, return the number matching bytes
 	static uint32_t PrefixMismatch(ART &art, Node *node, Key &key, uint64_t depth);
 	//! Insert leaf into inner node
-	static void InsertLeaf(ART &art, unique_ptr<Node> &node, uint8_t key, unique_ptr<Node> &newNode);
+	static void InsertLeaf(ART &art, unique_ptr<Node> &node, uint8_t key, unique_ptr<Node> &new_node);
 	//! Erase entry from node
 	static void Erase(ART &art, unique_ptr<Node> &node, idx_t pos);
 

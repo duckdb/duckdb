@@ -840,9 +840,9 @@ struct PandasScanFunction : public TableFunction {
 	}
 
 	static bool pandas_scan_parallel_state_next(ClientContext &context, const FunctionData *bind_data_p,
-	                                            FunctionOperatorData *operator_state, ParallelState *parallel_state_) {
+	                                            FunctionOperatorData *operator_state, ParallelState *parallel_state_p) {
 		auto &bind_data = (const PandasScanFunctionData &)*bind_data_p;
-		auto &parallel_state = (ParallelPandasScanState &)*parallel_state_;
+		auto &parallel_state = (ParallelPandasScanState &)*parallel_state_p;
 		auto &state = (PandasScanState &)*operator_state;
 
 		lock_guard<mutex> parallel_lock(parallel_state.lock);

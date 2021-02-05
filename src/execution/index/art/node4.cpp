@@ -69,14 +69,14 @@ void Node4::insert(ART &art, unique_ptr<Node> &node, uint8_t keyByte, unique_ptr
 		n->count++;
 	} else {
 		// Grow to Node16
-		auto newNode = make_unique<Node16>(art, n->prefix_length);
-		newNode->count = 4;
-		CopyPrefix(art, node.get(), newNode.get());
+		auto new_node = make_unique<Node16>(art, n->prefix_length);
+		new_node->count = 4;
+		CopyPrefix(art, node.get(), new_node.get());
 		for (idx_t i = 0; i < 4; i++) {
-			newNode->key[i] = n->key[i];
-			newNode->child[i] = move(n->child[i]);
+			new_node->key[i] = n->key[i];
+			new_node->child[i] = move(n->child[i]);
 		}
-		node = move(newNode);
+		node = move(new_node);
 		Node16::insert(art, node, keyByte, child);
 	}
 }

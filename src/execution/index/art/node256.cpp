@@ -64,16 +64,16 @@ void Node256::erase(ART &art, unique_ptr<Node> &node, int pos) {
 	n->child[pos].reset();
 	n->count--;
 	if (node->count <= 36) {
-		auto newNode = make_unique<Node48>(art, n->prefix_length);
-		CopyPrefix(art, n, newNode.get());
+		auto new_node = make_unique<Node48>(art, n->prefix_length);
+		CopyPrefix(art, n, new_node.get());
 		for (idx_t i = 0; i < 256; i++) {
 			if (n->child[i]) {
-				newNode->childIndex[i] = newNode->count;
-				newNode->child[newNode->count] = move(n->child[i]);
-				newNode->count++;
+				new_node->childIndex[i] = new_node->count;
+				new_node->child[new_node->count] = move(n->child[i]);
+				new_node->count++;
 			}
 		}
-		node = move(newNode);
+		node = move(new_node);
 	}
 }
 

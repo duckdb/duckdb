@@ -156,7 +156,7 @@ void QueryProfiler::Initialize(PhysicalOperator *root_op) {
 	}
 }
 
-OperatorProfiler::OperatorProfiler(bool enabled_) : enabled(enabled_) {
+OperatorProfiler::OperatorProfiler(bool enabled_p) : enabled(enabled_p) {
 	execution_stack = std::stack<PhysicalOperator *>();
 }
 

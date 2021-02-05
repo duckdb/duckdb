@@ -93,7 +93,6 @@ void TableDataWriter::CheckpointColumn(ColumnData &col_data, idx_t col_idx) {
 
 	auto owned_segment = move(col_data.data.root_node);
 	auto segment = (ColumnSegment *)owned_segment.get();
-	DataPointer pointer;
 	while (segment) {
 		if (segment->segment_type == ColumnSegmentType::PERSISTENT) {
 			auto &persistent = (PersistentSegment &)*segment;
@@ -108,6 +107,7 @@ void TableDataWriter::CheckpointColumn(ColumnData &col_data, idx_t col_idx) {
 				}
 
 				// set up the data pointer directly using the data from the persistent segment
+				DataPointer pointer;
 				pointer.block_id = persistent.block_id;
 				pointer.offset = 0;
 				pointer.row_start = segment->start;

@@ -84,7 +84,7 @@ void Select(SelectionVector &sel, Vector &result, unsigned char *source, nullmas
 
 template <class T, class OPL, class OPR>
 void Select(SelectionVector &sel, Vector &result, unsigned char *source, nullmask_t *source_nullmask,
-            const T constantLeft, const T constantRight, idx_t &approved_tuple_count) {
+            const T constant_left, const T constant_right, idx_t &approved_tuple_count) {
 	result.vector_type = VectorType::FLAT_VECTOR;
 	auto result_data = FlatVector::GetData(result);
 	SelectionVector new_sel(approved_tuple_count);
@@ -93,8 +93,8 @@ void Select(SelectionVector &sel, Vector &result, unsigned char *source, nullmas
 		for (idx_t i = 0; i < approved_tuple_count; i++) {
 			idx_t src_idx = sel.get_index(i);
 			bool comparison_result = !(*source_nullmask)[src_idx] &&
-			                         OPL::Operation(((T *)source)[src_idx], constantLeft) &&
-			                         OPR::Operation(((T *)source)[src_idx], constantRight);
+			                         OPL::Operation(((T *)source)[src_idx], constant_left) &&
+			                         OPR::Operation(((T *)source)[src_idx], constant_right);
 			((T *)result_data)[src_idx] = ((T *)source)[src_idx];
 			new_sel.set_index(result_count, src_idx);
 			result_count += comparison_result;
@@ -102,8 +102,8 @@ void Select(SelectionVector &sel, Vector &result, unsigned char *source, nullmas
 	} else {
 		for (idx_t i = 0; i < approved_tuple_count; i++) {
 			idx_t src_idx = sel.get_index(i);
-			bool comparison_result = OPL::Operation(((T *)source)[src_idx], constantLeft) &&
-			                         OPR::Operation(((T *)source)[src_idx], constantRight);
+			bool comparison_result = OPL::Operation(((T *)source)[src_idx], constant_left) &&
+			                         OPR::Operation(((T *)source)[src_idx], constant_right);
 			((T *)result_data)[src_idx] = ((T *)source)[src_idx];
 			new_sel.set_index(result_count, src_idx);
 			result_count += comparison_result;
@@ -173,68 +173,68 @@ static void TemplatedSelectOperation(SelectionVector &sel, Vector &result, Physi
 
 template <class OPL, class OPR>
 static void templated_select_operation_between(SelectionVector &sel, Vector &result, PhysicalType type,
-                                               unsigned char *source, nullmask_t *source_mask, Value &constantLeft,
-                                               Value &constantRight, idx_t &approved_tuple_count) {
+                                               unsigned char *source, nullmask_t *source_mask, Value &constant_left,
+                                               Value &constant_right, idx_t &approved_tuple_count) {
 	// the inplace loops take the result as the last parameter
 	switch (type) {
 	case PhysicalType::UINT8: {
-		Select<uint8_t, OPL, OPR>(sel, result, source, source_mask, constantLeft.value_.utinyint,
-		                          constantRight.value_.utinyint, approved_tuple_count);
+		Select<uint8_t, OPL, OPR>(sel, result, source, source_mask, constant_left.value_.utinyint,
+		                          constant_right.value_.utinyint, approved_tuple_count);
 		break;
 	}
 	case PhysicalType::UINT16: {
-		Select<uint16_t, OPL, OPR>(sel, result, source, source_mask, constantLeft.value_.usmallint,
-		                           constantRight.value_.usmallint, approved_tuple_count);
+		Select<uint16_t, OPL, OPR>(sel, result, source, source_mask, constant_left.value_.usmallint,
+		                           constant_right.value_.usmallint, approved_tuple_count);
 		break;
 	}
 	case PhysicalType::UINT32: {
-		Select<uint32_t, OPL, OPR>(sel, result, source, source_mask, constantLeft.value_.uinteger,
-		                           constantRight.value_.uinteger, approved_tuple_count);
+		Select<uint32_t, OPL, OPR>(sel, result, source, source_mask, constant_left.value_.uinteger,
+		                           constant_right.value_.uinteger, approved_tuple_count);
 		break;
 	}
 	case PhysicalType::UINT64: {
-		Select<uint64_t, OPL, OPR>(sel, result, source, source_mask, constantLeft.value_.ubigint,
-		                           constantRight.value_.ubigint, approved_tuple_count);
+		Select<uint64_t, OPL, OPR>(sel, result, source, source_mask, constant_left.value_.ubigint,
+		                           constant_right.value_.ubigint, approved_tuple_count);
 		break;
 	}
 	case PhysicalType::INT8: {
-		Select<int8_t, OPL, OPR>(sel, result, source, source_mask, constantLeft.value_.tinyint,
-		                         constantRight.value_.tinyint, approved_tuple_count);
+		Select<int8_t, OPL, OPR>(sel, result, source, source_mask, constant_left.value_.tinyint,
+		                         constant_right.value_.tinyint, approved_tuple_count);
 		break;
 	}
 	case PhysicalType::INT16: {
-		Select<int16_t, OPL, OPR>(sel, result, source, source_mask, constantLeft.value_.smallint,
-		                          constantRight.value_.smallint, approved_tuple_count);
+		Select<int16_t, OPL, OPR>(sel, result, source, source_mask, constant_left.value_.smallint,
+		                          constant_right.value_.smallint, approved_tuple_count);
 		break;
 	}
 	case PhysicalType::INT32: {
-		Select<int32_t, OPL, OPR>(sel, result, source, source_mask, constantLeft.value_.integer,
-		                          constantRight.value_.integer, approved_tuple_count);
+		Select<int32_t, OPL, OPR>(sel, result, source, source_mask, constant_left.value_.integer,
+		                          constant_right.value_.integer, approved_tuple_count);
 		break;
 	}
 	case PhysicalType::INT64: {
-		Select<int64_t, OPL, OPR>(sel, result, source, source_mask, constantLeft.value_.bigint,
-		                          constantRight.value_.bigint, approved_tuple_count);
+		Select<int64_t, OPL, OPR>(sel, result, source, source_mask, constant_left.value_.bigint,
+		                          constant_right.value_.bigint, approved_tuple_count);
 		break;
 	}
 	case PhysicalType::INT128: {
-		Select<hugeint_t, OPL, OPR>(sel, result, source, source_mask, constantLeft.value_.hugeint,
-		                            constantRight.value_.hugeint, approved_tuple_count);
+		Select<hugeint_t, OPL, OPR>(sel, result, source, source_mask, constant_left.value_.hugeint,
+		                            constant_right.value_.hugeint, approved_tuple_count);
 		break;
 	}
 	case PhysicalType::FLOAT: {
-		Select<float, OPL, OPR>(sel, result, source, source_mask, constantLeft.value_.float_,
-		                        constantRight.value_.float_, approved_tuple_count);
+		Select<float, OPL, OPR>(sel, result, source, source_mask, constant_left.value_.float_,
+		                        constant_right.value_.float_, approved_tuple_count);
 		break;
 	}
 	case PhysicalType::DOUBLE: {
-		Select<double, OPL, OPR>(sel, result, source, source_mask, constantLeft.value_.double_,
-		                         constantRight.value_.double_, approved_tuple_count);
+		Select<double, OPL, OPR>(sel, result, source, source_mask, constant_left.value_.double_,
+		                         constant_right.value_.double_, approved_tuple_count);
 		break;
 	}
 	case PhysicalType::BOOL: {
-		Select<bool, OPL, OPR>(sel, result, source, source_mask, constantLeft.value_.boolean,
-		                       constantRight.value_.boolean, approved_tuple_count);
+		Select<bool, OPL, OPR>(sel, result, source, source_mask, constant_left.value_.boolean,
+		                       constant_right.value_.boolean, approved_tuple_count);
 		break;
 	}
 	default:

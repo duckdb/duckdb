@@ -129,9 +129,9 @@ static void _write_plain(Vector &col, idx_t length, nullmask_t &nullmask, Serial
 	}
 }
 
-ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_, vector<LogicalType> types_, vector<string> names_,
+ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_, vector<LogicalType> types_p, vector<string> names_p,
                              CompressionCodec::type codec)
-    : file_name(file_name_), sql_types(move(types_)), column_names(move(names_)), codec(codec) {
+    : file_name(file_name_), sql_types(move(types_p)), column_names(move(names_p)), codec(codec) {
 	// initialize the file writer
 	writer = make_unique<BufferedFileWriter>(fs, file_name.c_str(),
 	                                         FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);

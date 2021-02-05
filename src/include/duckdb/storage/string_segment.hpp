@@ -169,7 +169,7 @@ private:
 
 	template <class OPL, class OPR>
 	void Select_String_Between(Vector &result, data_ptr_t baseptr, int32_t *dict_offset, SelectionVector &sel,
-	                           string constantLeft, string constantRight, idx_t &approved_tuple_count,
+	                           string constant_left, string constant_right, idx_t &approved_tuple_count,
 	                           nullmask_t *source_nullmask, size_t vector_index) {
 		result.vector_type = VectorType::FLAT_VECTOR;
 		auto result_data = FlatVector::GetData<string_t>(result);
@@ -180,8 +180,8 @@ private:
 			for (idx_t i = 0; i < approved_tuple_count; i++) {
 				idx_t src_idx = sel.get_index(i);
 				read_string(result_data, result, baseptr, dict_offset, src_idx, src_idx, update_idx, vector_index);
-				if (!(*source_nullmask)[src_idx] && OPL::Operation(result_data[src_idx].GetString(), constantLeft) &&
-				    OPR::Operation(result_data[src_idx].GetString(), constantRight)) {
+				if (!(*source_nullmask)[src_idx] && OPL::Operation(result_data[src_idx].GetString(), constant_left) &&
+				    OPR::Operation(result_data[src_idx].GetString(), constant_right)) {
 					new_sel.set_index(result_count++, src_idx);
 				}
 			}
@@ -189,8 +189,8 @@ private:
 			for (idx_t i = 0; i < approved_tuple_count; i++) {
 				idx_t src_idx = sel.get_index(i);
 				read_string(result_data, result, baseptr, dict_offset, src_idx, src_idx, update_idx, vector_index);
-				if (OPL::Operation(result_data[src_idx].GetString(), constantLeft) &&
-				    OPR::Operation(result_data[src_idx].GetString(), constantRight)) {
+				if (OPL::Operation(result_data[src_idx].GetString(), constant_left) &&
+				    OPR::Operation(result_data[src_idx].GetString(), constant_right)) {
 					new_sel.set_index(result_count++, src_idx);
 				}
 			}

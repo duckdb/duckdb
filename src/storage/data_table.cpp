@@ -20,9 +20,9 @@ namespace duckdb {
 
 using namespace std::chrono;
 
-DataTable::DataTable(DatabaseInstance &db, string schema, string table, vector<LogicalType> types_,
+DataTable::DataTable(DatabaseInstance &db, string schema, string table, vector<LogicalType> types_p,
                      unique_ptr<PersistentTableData> data)
-    : info(make_shared<DataTableInfo>(schema, table)), types(types_), db(db), total_rows(0), is_root(true) {
+    : info(make_shared<DataTableInfo>(schema, table)), types(types_p), db(db), total_rows(0), is_root(true) {
 	// set up the segment trees for the column segments
 	for (idx_t i = 0; i < types.size(); i++) {
 		auto column_data = make_shared<ColumnData>(db, *info, types[i], i);
@@ -310,23 +310,23 @@ bool DataTable::CheckZonemap(TableScanState &state, TableFilterSet *table_filter
 	}
 	for (auto &table_filter : table_filters->filters) {
 		for (auto &predicate_constant : table_filter.second) {
-			bool readSegment = true;
+			bool read_segment = true;
 
 			if (!state.column_scans[predicate_constant.column_index].segment_checked) {
 				state.column_scans[predicate_constant.column_index].segment_checked = true;
 				if (!state.column_scans[predicate_constant.column_index].current) {
 					return true;
 				}
-				readSegment =
+				read_segment =
 				    state.column_scans[predicate_constant.column_index].current->stats.CheckZonemap(predicate_constant);
 			}
-			if (!readSegment) {
+			if (!read_segment) {
 				//! We can skip this partition
-				idx_t vectorsToSkip =
+				idx_t vectors_to_skip =
 				    ceil((double)(state.column_scans[predicate_constant.column_index].current->count +
 				                  state.column_scans[predicate_constant.column_index].current->start - current_row) /
 				         STANDARD_VECTOR_SIZE);
-				for (idx_t i = 0; i < vectorsToSkip; ++i) {
+				for (idx_t i = 0; i < vectors_to_skip; ++i) {
 					state.NextVector();
 					current_row += STANDARD_VECTOR_SIZE;
 				}

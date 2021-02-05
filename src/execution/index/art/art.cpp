@@ -105,11 +105,11 @@ static void concatenate_keys(Vector &input, idx_t count, vector<unique_ptr<Key>>
 			// concatenate the keys
 			auto old_key = move(keys[i]);
 			auto new_key = Key::CreateKey<T>(input_data[idx], is_little_endian);
-			auto keyLen = old_key->len + new_key->len;
-			auto compound_data = unique_ptr<data_t[]>(new data_t[keyLen]);
+			auto key_len = old_key->len + new_key->len;
+			auto compound_data = unique_ptr<data_t[]>(new data_t[key_len]);
 			memcpy(compound_data.get(), old_key->data.get(), old_key->len);
 			memcpy(compound_data.get() + old_key->len, new_key->data.get(), new_key->len);
-			keys[i] = make_unique<Key>(move(compound_data), keyLen);
+			keys[i] = make_unique<Key>(move(compound_data), key_len);
 		}
 	}
 }
@@ -298,46 +298,46 @@ bool ART::Insert(unique_ptr<Node> &node, unique_ptr<Key> value, unsigned depth, 
 		// Replace leaf with Node4 and store both leaves in it
 		auto leaf = static_cast<Leaf *>(node.get());
 
-		Key &existingKey = *leaf->value;
-		uint32_t newPrefixLength = 0;
+		Key &existing_key = *leaf->value;
+		uint32_t new_prefix_length = 0;
 		// Leaf node is already there, update row_id vector
-		if (depth + newPrefixLength == existingKey.len && existingKey.len == key.len) {
+		if (depth + new_prefix_length == existing_key.len && existing_key.len == key.len) {
 			return InsertToLeaf(*leaf, row_id);
 		}
-		while (existingKey[depth + newPrefixLength] == key[depth + newPrefixLength]) {
-			newPrefixLength++;
+		while (existing_key[depth + new_prefix_length] == key[depth + new_prefix_length]) {
+			new_prefix_length++;
 			// Leaf node is already there, update row_id vector
-			if (depth + newPrefixLength == existingKey.len && existingKey.len == key.len) {
+			if (depth + new_prefix_length == existing_key.len && existing_key.len == key.len) {
 				return InsertToLeaf(*leaf, row_id);
 			}
 		}
 
-		unique_ptr<Node> newNode = make_unique<Node4>(*this, newPrefixLength);
-		newNode->prefix_length = newPrefixLength;
-		memcpy(newNode->prefix.get(), &key[depth], newPrefixLength);
-		Node4::insert(*this, newNode, existingKey[depth + newPrefixLength], node);
+		unique_ptr<Node> new_node = make_unique<Node4>(*this, new_prefix_length);
+		new_node->prefix_length = new_prefix_length;
+		memcpy(new_node->prefix.get(), &key[depth], new_prefix_length);
+		Node4::insert(*this, new_node, existing_key[depth + new_prefix_length], node);
 		unique_ptr<Node> leaf_node = make_unique<Leaf>(*this, move(value), row_id);
-		Node4::insert(*this, newNode, key[depth + newPrefixLength], leaf_node);
-		node = move(newNode);
+		Node4::insert(*this, new_node, key[depth + new_prefix_length], leaf_node);
+		node = move(new_node);
 		return true;
 	}
 
 	// Handle prefix of inner node
 	if (node->prefix_length) {
-		uint32_t mismatchPos = Node::PrefixMismatch(*this, node.get(), key, depth);
-		if (mismatchPos != node->prefix_length) {
+		uint32_t mismatch_pos = Node::PrefixMismatch(*this, node.get(), key, depth);
+		if (mismatch_pos != node->prefix_length) {
 			// Prefix differs, create new node
-			unique_ptr<Node> newNode = make_unique<Node4>(*this, mismatchPos);
-			newNode->prefix_length = mismatchPos;
-			memcpy(newNode->prefix.get(), node->prefix.get(), mismatchPos);
+			unique_ptr<Node> new_node = make_unique<Node4>(*this, mismatch_pos);
+			new_node->prefix_length = mismatch_pos;
+			memcpy(new_node->prefix.get(), node->prefix.get(), mismatch_pos);
 			// Break up prefix
 			auto node_ptr = node.get();
-			Node4::insert(*this, newNode, node->prefix[mismatchPos], node);
-			node_ptr->prefix_length -= (mismatchPos + 1);
-			memmove(node_ptr->prefix.get(), node_ptr->prefix.get() + mismatchPos + 1, node_ptr->prefix_length);
+			Node4::insert(*this, new_node, node->prefix[mismatch_pos], node);
+			node_ptr->prefix_length -= (mismatch_pos + 1);
+			memmove(node_ptr->prefix.get(), node_ptr->prefix.get() + mismatch_pos + 1, node_ptr->prefix_length);
 			unique_ptr<Node> leaf_node = make_unique<Leaf>(*this, move(value), row_id);
-			Node4::insert(*this, newNode, key[depth + mismatchPos], leaf_node);
-			node = move(newNode);
+			Node4::insert(*this, new_node, key[depth + mismatch_pos], leaf_node);
+			node = move(new_node);
 			return true;
 		}
 		depth += node->prefix_length;
@@ -349,8 +349,8 @@ bool ART::Insert(unique_ptr<Node> &node, unique_ptr<Key> value, unsigned depth, 
 		auto child = node->GetChild(pos);
 		return Insert(*child, move(value), depth + 1, row_id);
 	}
-	unique_ptr<Node> newNode = make_unique<Leaf>(*this, move(value), row_id);
-	Node::InsertLeaf(*this, node, key[depth], newNode);
+	unique_ptr<Node> new_node = make_unique<Leaf>(*this, move(value), row_id);
+	Node::InsertLeaf(*this, node, key[depth], new_node);
 	return true;
 }
 
@@ -651,9 +651,9 @@ bool ART::Bound(unique_ptr<Node> &n, Key &key, Iterator &it, bool inclusive) {
 			}
 			return false;
 		}
-		uint32_t mismatchPos = Node::PrefixMismatch(*this, node, key, depth);
-		if (mismatchPos != node->prefix_length) {
-			if (node->prefix[mismatchPos] < key[depth + mismatchPos]) {
+		uint32_t mismatch_pos = Node::PrefixMismatch(*this, node, key, depth);
+		if (mismatch_pos != node->prefix_length) {
+			if (node->prefix[mismatch_pos] < key[depth + mismatch_pos]) {
 				// Less
 				it.depth--;
 				return IteratorNext(it);

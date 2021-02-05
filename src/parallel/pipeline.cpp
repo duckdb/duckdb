@@ -16,7 +16,7 @@ namespace duckdb {
 
 class PipelineTask : public Task {
 public:
-	explicit PipelineTask(Pipeline *pipeline_) : pipeline(pipeline_) {
+	explicit PipelineTask(Pipeline *pipeline_p) : pipeline(pipeline_p) {
 	}
 
 	TaskContext task;
@@ -29,8 +29,8 @@ public:
 	}
 };
 
-Pipeline::Pipeline(Executor &executor_, ProducerToken &token_)
-    : executor(executor_), token(token_), finished_tasks(0), total_tasks(0), finished_dependencies(0), finished(false),
+Pipeline::Pipeline(Executor &executor_p, ProducerToken &token_p)
+    : executor(executor_p), token(token_p), finished_tasks(0), total_tasks(0), finished_dependencies(0), finished(false),
       recursive_cte(nullptr) {
 }
 

@@ -96,7 +96,7 @@ struct DuckDBArrowSchemaHolder {
 	unique_ptr<ArrowSchema *[]> children; // just space for the *pointers* to children, not the children themselves
 };
 
-static void release_duckdb_arrow_schema(ArrowSchema *schema) {
+static void ReleaseDuckDBArrowSchema(ArrowSchema *schema) {
 	if (!schema || !schema->release) {
 		return;
 	}
@@ -112,7 +112,7 @@ void QueryResult::ToArrowSchema(ArrowSchema *out_schema) {
 
 	root_holder->children = unique_ptr<ArrowSchema *[]>(new ArrowSchema *[ColumnCount()]);
 	out_schema->private_data = root_holder;
-	out_schema->release = release_duckdb_arrow_schema;
+	out_schema->release = ReleaseDuckDBArrowSchema;
 
 	out_schema->children = root_holder->children.get();
 
@@ -127,7 +127,7 @@ void QueryResult::ToArrowSchema(ArrowSchema *out_schema) {
 		auto holder = new DuckDBArrowSchemaHolder();
 		auto &child = holder->schema;
 		child.private_data = holder;
-		child.release = release_duckdb_arrow_schema;
+		child.release = ReleaseDuckDBArrowSchema;
 		child.flags = ARROW_FLAG_NULLABLE;
 
 		child.name = names[col_idx].c_str();

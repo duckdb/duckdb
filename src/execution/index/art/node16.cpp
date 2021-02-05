@@ -72,14 +72,14 @@ void Node16::insert(ART &art, unique_ptr<Node> &node, uint8_t keyByte, unique_pt
 		n->count++;
 	} else {
 		// Grow to Node48
-		auto newNode = make_unique<Node48>(art, n->prefix_length);
+		auto new_node = make_unique<Node48>(art, n->prefix_length);
 		for (idx_t i = 0; i < node->count; i++) {
-			newNode->childIndex[n->key[i]] = i;
-			newNode->child[i] = move(n->child[i]);
+			new_node->childIndex[n->key[i]] = i;
+			new_node->child[i] = move(n->child[i]);
 		}
-		CopyPrefix(art, n, newNode.get());
-		newNode->count = node->count;
-		node = move(newNode);
+		CopyPrefix(art, n, new_node.get());
+		new_node->count = node->count;
+		node = move(new_node);
 
 		Node48::insert(art, node, keyByte, child);
 	}
@@ -97,13 +97,13 @@ void Node16::erase(ART &art, unique_ptr<Node> &node, int pos) {
 	}
 	if (node->count <= 3) {
 		// Shrink node
-		auto newNode = make_unique<Node4>(art, n->prefix_length);
+		auto new_node = make_unique<Node4>(art, n->prefix_length);
 		for (unsigned i = 0; i < n->count; i++) {
-			newNode->key[newNode->count] = n->key[i];
-			newNode->child[newNode->count++] = move(n->child[i]);
+			new_node->key[new_node->count] = n->key[i];
+			new_node->child[new_node->count++] = move(n->child[i]);
 		}
-		CopyPrefix(art, n, newNode.get());
-		node = move(newNode);
+		CopyPrefix(art, n, new_node.get());
+		node = move(new_node);
 	}
 }
 
