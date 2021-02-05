@@ -175,7 +175,8 @@ void PhysicalOrder::Combine(ExecutionContext &context, GlobalOperatorState &stat
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//
-template <class TYPE> static int8_t templated_compare_value(data_ptr_t &l_val, data_ptr_t &r_val) {
+template <class TYPE>
+static int8_t templated_compare_value(data_ptr_t &l_val, data_ptr_t &r_val) {
 	auto left_val = Load<TYPE>(l_val);
 	auto right_val = Load<TYPE>(r_val);
 	if (Equals::Operation<TYPE>(left_val, right_val)) {
