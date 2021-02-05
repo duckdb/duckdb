@@ -9,8 +9,3 @@ include_directories(include ../.. ../../third_party/httplib ../../third_party/pi
 add_library(
   httpfs_extension STATIC
  s3fs.cpp httpfs.cpp crypto.cpp httpfs-extension.cpp)
-
-add_executable(test_s3_parquet_read test.cpp)
-target_link_libraries(test_s3_parquet_read duckdb_static httpfs_extension ${LINK_EXTRA})
-
-link_extension_libraries(test_s3_parquet_read)

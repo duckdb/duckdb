@@ -1,6 +1,5 @@
 #include "s3fs.hpp"
 #include "crypto.hpp"
-#include "httplib.hpp"
 #include "duckdb.hpp"
 
 using namespace duckdb;
@@ -75,7 +74,7 @@ unique_ptr<ResponseWrapper> S3FileSystem::Request(FileHandle &handle, string url
 		throw std::runtime_error("URL needs to contain a bucket name");
 	}
 	auto host = bucket + ".s3.amazonaws.com";
-	auto http_host = "http://" + host;
+	auto http_host = "https://" + host;
 	// actual request
 
 	return HTTPFileSystem::Request(handle, http_host + path, method, CreateAuthHeaders(host, path, method), file_offset,

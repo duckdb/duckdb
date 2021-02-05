@@ -71,6 +71,19 @@ public:
 		return sfh.last_modified;
 	}
 
+	bool FileExists(const string &filename) override {
+		try {
+			auto handle = OpenFile(filename.c_str(), FileFlags::FILE_FLAGS_READ);
+			auto &sfh = (HTTPFileHandle &)handle;
+			if (sfh.length == 0) {
+				throw std::runtime_error("not there this file");
+			}
+			return true;
+		} catch (...) {
+			return false;
+		};
+	}
+
 	static void Verify();
 };
 

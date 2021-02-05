@@ -1,5 +1,5 @@
 #include "httpfs.hpp"
-//#define CPPHTTPLIB_OPENSSL_SUPPORT
+#define CPPHTTPLIB_OPENSSL_SUPPORT
 #include "httplib.hpp"
 
 #include <map>
@@ -8,30 +8,33 @@ using namespace duckdb;
 
 unique_ptr<ResponseWrapper> HTTPFileSystem::Request(FileHandle &handle, string url, string method, HeaderMap header_map,
                                                     idx_t file_offset, char *buffer_out, idx_t buffer_len) {
-	httplib::Headers headers;
+	auto headers = make_unique<httplib::Headers>();
 	for (auto &entry : header_map) {
-		headers.insert(entry);
+		headers->insert(entry);
 	}
-	if (url.rfind("http://", 0) != 0) {
-		throw std::runtime_error("URL needs to start with http://");
+	if (url.rfind("http://", 0) != 0 && url.rfind("https://", 0) != 0) {
+		throw std::runtime_error("URL needs to start with http:// or https://");
 	}
-	auto slash_pos = url.find('/', 7);
+	auto slash_pos = url.find('/', 8);
 	if (slash_pos == std::string::npos) {
 		throw std::runtime_error("URL needs to contain a '/' after the host");
 	}
-	auto host = url.substr(7, slash_pos - 7);
-	if (host.empty()) {
-		throw std::runtime_error("URL needs to contain a host name");
-	}
+	auto proto_host_port = url.substr(0, slash_pos);
+
 	auto path = url.substr(slash_pos);
 	if (path.empty()) {
 		throw std::runtime_error("URL needs to contain a bucket name");
 	}
 
-	httplib::Client cli(host.c_str());
+	httplib::Client cli(proto_host_port.c_str());
+	cli.set_follow_location(true);
+	cli.enable_server_certificate_verification(false);
 
 	if (method == "HEAD") {
-		auto res = cli.Head(path.c_str(), headers);
+		auto res = cli.Head(path.c_str(), *headers);
+		if (res.error() != httplib::Error::Success) {
+			throw std::runtime_error("HTTP HEAD error on '" + url + "' " + std::to_string(res.error()));
+		}
 		return make_unique<ResponseWrapper>(res.value());
 	}
 	std::string range_expr =
@@ -39,27 +42,32 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::Request(FileHandle &handle, string u
 	// printf("%s(%llu, %llu)\n", method.c_str(), file_offset, buffer_len);
 
 	// send the Range header to read only subset of file
-	headers.insert(std::pair<std::string, std::string>("Range", range_expr));
+	headers->insert(std::pair<std::string, std::string>("Range", range_expr));
 
 	idx_t out_offset = 0;
 	auto res = cli.Get(
-	    path.c_str(), headers,
+	    path.c_str(), *headers,
 	    [&](const httplib::Response &response) {
-		    if (response.status >= 300) {
+		    if (response.status >= 400) {
 			    throw std::runtime_error("HTTP error");
 		    }
-		    auto content_length = std::stol(response.get_header_value("Content-Length", 0));
-		    if (content_length != buffer_len) {
-			    throw std::runtime_error("offset error");
+		    if (response.status < 300) { // done redirectering
+			    out_offset = 0;
+			    auto content_length = std::stol(response.get_header_value("Content-Length", 0));
+			    if (content_length != buffer_len) {
+				    throw std::runtime_error("offset error");
+			    }
 		    }
-		    return true; // return 'false' if you want to cancel the request.
+		    return true;
 	    },
 	    [&](const char *data, size_t data_length) {
 		    memcpy(buffer_out + out_offset, data, data_length);
 		    out_offset += data_length;
-		    return true; // return 'false' if you want to cancel the request.
+		    return true;
 	    });
-
+	if (res.error() != httplib::Error::Success) {
+		throw std::runtime_error("HTTP GET error on '" + url + "' " + std::to_string(res.error()));
+	}
 	return make_unique<ResponseWrapper>(res.value());
 }
 
