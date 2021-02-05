@@ -7,9 +7,9 @@
 
 namespace duckdb{
 struct corr_state_t {
-	covar_state_t cov_pop;  //  n
-	stddev_state_t dev_pop_x;     //  M1
-	stddev_state_t dev_pop_y; //  M2
+	covar_state_t cov_pop;
+	stddev_state_t dev_pop_x;
+	stddev_state_t dev_pop_y;
 };
 
 //Returns the correlation coefficient for non-null pairs in a group.

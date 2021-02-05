@@ -18,6 +18,11 @@ void BuiltinFunctions::RegisterDistributiveAggregates() {
 	Register<SumFun>();
 	Register<StringAggFun>();
 	Register<ApproxCountDistinctFun>();
+	Register<ProductFun>();
+	Register<BoolOrFun>();
+	Register<BoolAndFun>();
+	Register<RegrAvgxFun>();
+	Register<RegrAvgyFun>();
 }
 
 } // namespace duckdb

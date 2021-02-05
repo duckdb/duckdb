@@ -1,0 +1,34 @@
+# name: test/sql/aggregate/aggregates/test_bool.test
+# description: Test Bool operator
+# group: [aggregates]
+
+statement ok
+create table t (d date)
+
+statement ok
+insert into t values (CURRENT_DATE-1),(CURRENT_DATE+1)
+
+query II
+select bool_or(d > CURRENT_DATE) AS or_result,
+       bool_and(d > CURRENT_DATE) AS and_result
+from t;
+----
+1	0
+
+statement error
+select bool_or(0)
+
+statement error
+select bool_and(0)
+
+statement error
+select bool_or()
+
+statement error
+select bool_and()
+
+statement error
+select bool_or(*)
+
+statement error
+select bool_and(*)

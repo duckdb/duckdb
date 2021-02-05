@@ -1,0 +1,27 @@
+# name: test/sql/aggregate/aggregates/test_product.test
+# description: Test Product operator
+# group: [aggregates]
+
+statement error
+select product()
+
+query I
+select product(1)
+----
+1
+
+statement error
+select product(*)
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (1), (2),(4), (NULL)
+
+query I
+SELECT product(i)  FROM integers
+----
+8
+
+

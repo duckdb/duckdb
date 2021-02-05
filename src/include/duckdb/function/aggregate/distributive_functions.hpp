@@ -38,6 +38,35 @@ struct CountFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct BoolAndFun {
+	static AggregateFunction GetFunction();
+
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct BoolOrFun {
+	static AggregateFunction GetFunction();
+
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+
+struct RegrAvgxFun {
+
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct RegrAvgyFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+
+struct ProductFun {
+	static AggregateFunction GetFunction();
+
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 
 struct ApproxCountDistinctFun {
 	static void RegisterFunction(BuiltinFunctions &set);
