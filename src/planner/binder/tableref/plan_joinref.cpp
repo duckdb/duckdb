@@ -49,7 +49,7 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, uni
 	vector<JoinCondition> conditions;
 	vector<unique_ptr<Expression>> arbitrary_expressions;
 	// first check if we can create
-	for (auto & expr : expressions) {
+	for (auto &expr : expressions) {
 		auto total_side = JoinSide::GetJoinSide(*expr, left_bindings, right_bindings);
 		if (total_side != JoinSide::BOTH) {
 			// join condition does not reference both sides, add it as filter under the join
@@ -67,7 +67,8 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, uni
 				continue;
 			}
 		} else if ((expr->type >= ExpressionType::COMPARE_EQUAL &&
-		           expr->type <= ExpressionType::COMPARE_GREATERTHANOREQUALTO) || expr->type == ExpressionType::COMPARE_DISTINCT_FROM ||
+		            expr->type <= ExpressionType::COMPARE_GREATERTHANOREQUALTO) ||
+		           expr->type == ExpressionType::COMPARE_DISTINCT_FROM ||
 		           expr->type == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 			// comparison, check if we can create a comparison JoinCondition
 			if (CreateJoinCondition(*expr, left_bindings, right_bindings, conditions)) {
@@ -169,7 +170,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 
 		auto filter = make_unique<LogicalFilter>(move(ref.condition));
 		// visit the expressions in the filter
-		for (auto & expression : filter->expressions) {
+		for (auto &expression : filter->expressions) {
 			PlanSubqueries(&expression, &root);
 		}
 		filter->AddChild(move(root));

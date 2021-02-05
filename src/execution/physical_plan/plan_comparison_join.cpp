@@ -84,7 +84,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 		if (cond.comparison == ExpressionType::COMPARE_EQUAL) {
 			has_equality = true;
 		}
-		if (cond.comparison == ExpressionType::COMPARE_NOTEQUAL || cond.comparison == ExpressionType::COMPARE_DISTINCT_FROM) {
+		if (cond.comparison == ExpressionType::COMPARE_NOTEQUAL ||
+		    cond.comparison == ExpressionType::COMPARE_DISTINCT_FROM) {
 			has_inequality = true;
 		}
 		if (cond.null_values_are_equal) {

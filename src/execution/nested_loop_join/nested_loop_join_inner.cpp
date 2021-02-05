@@ -43,8 +43,9 @@ struct InitialNestedLoopJoin {
 	}
 
 	template <class T, class OP>
-	static idx_t DistinctOperation(Vector &left, Vector &right, idx_t left_size, idx_t right_size, idx_t &lpos, idx_t &rpos,
-	                       SelectionVector &lvector, SelectionVector &rvector, idx_t current_match_count) {
+	static idx_t DistinctOperation(Vector &left, Vector &right, idx_t left_size, idx_t right_size, idx_t &lpos,
+	                               idx_t &rpos, SelectionVector &lvector, SelectionVector &rvector,
+	                               idx_t current_match_count) {
 		// initialize phase of nested loop join
 		// fill lvector and rvector with matches from the base vectors
 		VectorData left_data, right_data;
@@ -62,7 +63,8 @@ struct InitialNestedLoopJoin {
 					return result_count;
 				}
 				idx_t left_position = left_data.sel->get_index(lpos);
-				if (OP::Operation(ldata[left_position], rdata[right_position],(*left_data.nullmask)[left_position],(*right_data.nullmask)[right_position])) {
+				if (OP::Operation(ldata[left_position], rdata[right_position], (*left_data.nullmask)[left_position],
+				                  (*right_data.nullmask)[right_position])) {
 					// emit tuple
 					lvector.set_index(result_count, lpos);
 					rvector.set_index(result_count, rpos);
@@ -109,8 +111,9 @@ struct RefineNestedLoopJoin {
 	}
 
 	template <class T, class OP>
-	static idx_t DistinctOperation(Vector &left, Vector &right, idx_t left_size, idx_t right_size, idx_t &lpos, idx_t &rpos,
-	                       SelectionVector &lvector, SelectionVector &rvector, idx_t current_match_count) {
+	static idx_t DistinctOperation(Vector &left, Vector &right, idx_t left_size, idx_t right_size, idx_t &lpos,
+	                               idx_t &rpos, SelectionVector &lvector, SelectionVector &rvector,
+	                               idx_t current_match_count) {
 		VectorData left_data, right_data;
 		left.Orrify(left_size, left_data);
 		right.Orrify(right_size, right_data);
@@ -128,7 +131,8 @@ struct RefineNestedLoopJoin {
 			auto left_idx = left_data.sel->get_index(lidx);
 			auto right_idx = right_data.sel->get_index(ridx);
 			// null values should be filtered out before
-			if (OP::Operation(ldata[left_idx], rdata[right_idx],(*left_data.nullmask)[left_idx] ,(*right_data.nullmask)[right_idx])) {
+			if (OP::Operation(ldata[left_idx], rdata[right_idx], (*left_data.nullmask)[left_idx],
+			                  (*right_data.nullmask)[right_idx])) {
 				lvector.set_index(result_count, lidx);
 				rvector.set_index(result_count, ridx);
 				result_count++;
@@ -190,43 +194,43 @@ static idx_t nested_loop_join_inner_operator(Vector &left, Vector &right, idx_t 
 
 template <class NLTYPE, class OP>
 static idx_t distinct_nested_loop_join_inner_operator(Vector &left, Vector &right, idx_t left_size, idx_t right_size,
-                                             idx_t &lpos, idx_t &rpos, SelectionVector &lvector,
-                                             SelectionVector &rvector, idx_t current_match_count) {
+                                                      idx_t &lpos, idx_t &rpos, SelectionVector &lvector,
+                                                      SelectionVector &rvector, idx_t current_match_count) {
 	switch (left.type.InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
-		return NLTYPE::template DistinctOperation<int8_t, OP>(left, right, left_size, right_size, lpos, rpos, lvector, rvector,
-		                                              current_match_count);
+		return NLTYPE::template DistinctOperation<int8_t, OP>(left, right, left_size, right_size, lpos, rpos, lvector,
+		                                                      rvector, current_match_count);
 	case PhysicalType::INT16:
-		return NLTYPE::template DistinctOperation<int16_t, OP>(left, right, left_size, right_size, lpos, rpos, lvector, rvector,
-		                                               current_match_count);
+		return NLTYPE::template DistinctOperation<int16_t, OP>(left, right, left_size, right_size, lpos, rpos, lvector,
+		                                                       rvector, current_match_count);
 	case PhysicalType::INT32:
-		return NLTYPE::template DistinctOperation<int32_t, OP>(left, right, left_size, right_size, lpos, rpos, lvector, rvector,
-		                                               current_match_count);
+		return NLTYPE::template DistinctOperation<int32_t, OP>(left, right, left_size, right_size, lpos, rpos, lvector,
+		                                                       rvector, current_match_count);
 	case PhysicalType::INT64:
-		return NLTYPE::template DistinctOperation<int64_t, OP>(left, right, left_size, right_size, lpos, rpos, lvector, rvector,
-		                                               current_match_count);
+		return NLTYPE::template DistinctOperation<int64_t, OP>(left, right, left_size, right_size, lpos, rpos, lvector,
+		                                                       rvector, current_match_count);
 	case PhysicalType::UINT8:
-		return NLTYPE::template DistinctOperation<uint8_t, OP>(left, right, left_size, right_size, lpos, rpos, lvector, rvector,
-		                                              current_match_count);
+		return NLTYPE::template DistinctOperation<uint8_t, OP>(left, right, left_size, right_size, lpos, rpos, lvector,
+		                                                       rvector, current_match_count);
 	case PhysicalType::UINT16:
-		return NLTYPE::template DistinctOperation<uint16_t, OP>(left, right, left_size, right_size, lpos, rpos, lvector, rvector,
-		                                               current_match_count);
+		return NLTYPE::template DistinctOperation<uint16_t, OP>(left, right, left_size, right_size, lpos, rpos, lvector,
+		                                                        rvector, current_match_count);
 	case PhysicalType::UINT32:
-		return NLTYPE::template DistinctOperation<uint32_t, OP>(left, right, left_size, right_size, lpos, rpos, lvector, rvector,
-		                                               current_match_count);
+		return NLTYPE::template DistinctOperation<uint32_t, OP>(left, right, left_size, right_size, lpos, rpos, lvector,
+		                                                        rvector, current_match_count);
 	case PhysicalType::UINT64:
-		return NLTYPE::template DistinctOperation<uint64_t, OP>(left, right, left_size, right_size, lpos, rpos, lvector, rvector,
-		                                               current_match_count);
+		return NLTYPE::template DistinctOperation<uint64_t, OP>(left, right, left_size, right_size, lpos, rpos, lvector,
+		                                                        rvector, current_match_count);
 	case PhysicalType::INT128:
-		return NLTYPE::template DistinctOperation<hugeint_t, OP>(left, right, left_size, right_size, lpos, rpos, lvector,
-		                                                 rvector, current_match_count);
+		return NLTYPE::template DistinctOperation<hugeint_t, OP>(left, right, left_size, right_size, lpos, rpos,
+		                                                         lvector, rvector, current_match_count);
 	case PhysicalType::FLOAT:
-		return NLTYPE::template DistinctOperation<float, OP>(left, right, left_size, right_size, lpos, rpos, lvector, rvector,
-		                                             current_match_count);
+		return NLTYPE::template DistinctOperation<float, OP>(left, right, left_size, right_size, lpos, rpos, lvector,
+		                                                     rvector, current_match_count);
 	case PhysicalType::DOUBLE:
-		return NLTYPE::template DistinctOperation<double, OP>(left, right, left_size, right_size, lpos, rpos, lvector, rvector,
-		                                              current_match_count);
+		return NLTYPE::template DistinctOperation<double, OP>(left, right, left_size, right_size, lpos, rpos, lvector,
+		                                                      rvector, current_match_count);
 	default:
 		throw NotImplementedException("Unimplemented type for join!");
 	}
@@ -257,8 +261,8 @@ idx_t nested_loop_join_inner(Vector &left, Vector &right, idx_t left_size, idx_t
 		return nested_loop_join_inner_operator<NLTYPE, duckdb::GreaterThanEquals>(
 		    left, right, left_size, right_size, lpos, rpos, lvector, rvector, current_match_count);
 	case ExpressionType::COMPARE_DISTINCT_FROM:
-		return distinct_nested_loop_join_inner_operator<NLTYPE, duckdb::DistinctFrom>(left, right, left_size, right_size, lpos,
-		                                                                  rpos, lvector, rvector, current_match_count);
+		return distinct_nested_loop_join_inner_operator<NLTYPE, duckdb::DistinctFrom>(
+		    left, right, left_size, right_size, lpos, rpos, lvector, rvector, current_match_count);
 	default:
 		throw NotImplementedException("Unimplemented comparison type for join!");
 	}

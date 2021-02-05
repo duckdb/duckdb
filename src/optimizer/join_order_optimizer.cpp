@@ -122,7 +122,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		// e.g. suppose we have (left LEFT OUTER JOIN right WHERE right IS NOT NULL), the join can generate
 		// new NULL values in the right side, so pushing this condition through the join leads to incorrect results
 		// for this reason, we just start a new JoinOptimizer pass in each of the children of the join
-		for (auto & child : op->children) {
+		for (auto &child : op->children) {
 			JoinOrderOptimizer optimizer(context);
 			child = optimizer.Optimize(move(child));
 		}
@@ -517,11 +517,10 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 				bool invert = !JoinRelationSet::IsSubset(left.first, f->left_set);
 				cond.left = !invert ? move(comparison.left) : move(comparison.right);
 				cond.right = !invert ? move(comparison.right) : move(comparison.left);
-				if (condition->type == ExpressionType::COMPARE_NOT_DISTINCT_FROM){
+				if (condition->type == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 					cond.comparison = ExpressionType::COMPARE_EQUAL;
 					cond.null_values_are_equal = true;
-				}
-				else{
+				} else {
 					cond.comparison = condition->type;
 				}
 				if (invert) {
@@ -546,7 +545,7 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 	// check if we should do a pushdown on this node
 	// basically, any remaining filter that is a subset of the current relation will no longer be used in joins
 	// hence we should push it here
-	for (auto & filter_info : filter_infos) {
+	for (auto &filter_info : filter_infos) {
 		// check if the filter has already been extracted
 		auto info = filter_info.get();
 		if (filters[info->filter_index]) {
@@ -625,13 +624,13 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::RewritePlan(unique_ptr<LogicalOp
 
 	// first we will extract all relations from the main plan
 	vector<unique_ptr<LogicalOperator>> extracted_relations;
-	for (auto & relation : relations) {
+	for (auto &relation : relations) {
 		extracted_relations.push_back(ExtractJoinRelation(*relation));
 	}
 	// now we generate the actual joins
 	auto join_tree = GenerateJoins(extracted_relations, node);
 	// perform the final pushdown of remaining filters
-	for (auto & filter : filters) {
+	for (auto &filter : filters) {
 		// check if the filter has already been extracted
 		if (filter) {
 			// if not we need to push it
@@ -664,8 +663,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::RewritePlan(unique_ptr<LogicalOp
 // https://db.in.tum.de/teaching/ws1415/queryopt/chapter3.pdf?lang=de
 // FIXME: incorporate cardinality estimation into the plans, possibly by pushing samples?
 unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOperator> plan) {
-	D_ASSERT(filters.empty() &&
-	         relations.empty()); // assert that the JoinOrderOptimizer has not been used before
+	D_ASSERT(filters.empty() && relations.empty()); // assert that the JoinOrderOptimizer has not been used before
 	LogicalOperator *op = plan.get();
 	// now we optimize the current plan
 	// we skip past until we find the first projection, we do this because the HAVING clause inserts a Filter AFTER the
@@ -699,7 +697,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 			}
 			join.conditions.clear();
 		} else {
-			for (auto & expression : op->expressions) {
+			for (auto &expression : op->expressions) {
 				if (filter_set.find(expression.get()) == filter_set.end()) {
 					filter_set.insert(expression.get());
 					filters.push_back(move(expression));

@@ -25,7 +25,8 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 	// use an ExpressionExecutor to execute the expression
 	D_ASSERT(constant_expr->IsFoldable());
 	auto constant_value = ExpressionExecutor::EvaluateScalar(*constant_expr);
-	if (constant_value.is_null && !(expr->type == ExpressionType::COMPARE_NOT_DISTINCT_FROM ||expr->type == ExpressionType::COMPARE_DISTINCT_FROM )) {
+	if (constant_value.is_null && !(expr->type == ExpressionType::COMPARE_NOT_DISTINCT_FROM ||
+	                                expr->type == ExpressionType::COMPARE_DISTINCT_FROM)) {
 		// comparison with constant NULL, return NULL
 		return make_unique<BoundConstantExpression>(Value(LogicalType::BOOLEAN));
 	}

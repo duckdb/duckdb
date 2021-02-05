@@ -100,7 +100,7 @@ void FilterPushdown::GenerateFilters() {
 
 unique_ptr<LogicalOperator> FilterPushdown::FinishPushdown(unique_ptr<LogicalOperator> op) {
 	// unhandled type, first perform filter pushdown in its children
-	for (auto & child : op->children) {
+	for (auto &child : op->children) {
 		FilterPushdown pushdown(optimizer);
 		child = pushdown.Rewrite(move(child));
 	}

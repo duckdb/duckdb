@@ -1,4 +1,5 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
 
 using namespace duckdb;
 
@@ -333,7 +334,8 @@ template <class T, class OP, bool IGNORE_NULL = false>
 static inline void TemplatedDistinctExecute(Vector &left, Vector &right, Vector &result, idx_t count) {
 	DistinctExecute<T, T, bool, OP, IGNORE_NULL>(left, right, result, count);
 }
-template <class OP> static void ExecuteDistinct(Vector &left, Vector &right, Vector &result, idx_t count) {
+template <class OP>
+static void ExecuteDistinct(Vector &left, Vector &right, Vector &result, idx_t count) {
 	D_ASSERT(left.type == right.type && result.type == LogicalType::BOOLEAN);
 	// the inplace loops take the result as the last parameter
 	switch (left.type.InternalType()) {
