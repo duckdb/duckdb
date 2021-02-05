@@ -6,7 +6,7 @@
 
 namespace duckdb {
 
-struct stddev_state_t {
+struct StddevState {
 	uint64_t count;  //  n
 	double mean;     //  M1
 	double dsquared; //  M2
@@ -123,32 +123,32 @@ struct STDDevPopOperation : public STDDevBaseOperation {
 
 void StdDevSampFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet stddev_samp("stddev_samp");
-	stddev_samp.AddFunction(AggregateFunction::UnaryAggregate<stddev_state_t, double, double, STDDevSampOperation>(
+	stddev_samp.AddFunction(AggregateFunction::UnaryAggregate<StddevState, double, double, STDDevSampOperation>(
 	    LogicalType::DOUBLE, LogicalType::DOUBLE));
 	set.AddFunction(stddev_samp);
 	AggregateFunctionSet stddev("stddev");
-	stddev.AddFunction(AggregateFunction::UnaryAggregate<stddev_state_t, double, double, STDDevSampOperation>(
+	stddev.AddFunction(AggregateFunction::UnaryAggregate<StddevState, double, double, STDDevSampOperation>(
 	    LogicalType::DOUBLE, LogicalType::DOUBLE));
 	set.AddFunction(stddev);
 }
 
 void StdDevPopFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet stddev_pop("stddev_pop");
-	stddev_pop.AddFunction(AggregateFunction::UnaryAggregate<stddev_state_t, double, double, STDDevPopOperation>(
+	stddev_pop.AddFunction(AggregateFunction::UnaryAggregate<StddevState, double, double, STDDevPopOperation>(
 	    LogicalType::DOUBLE, LogicalType::DOUBLE));
 	set.AddFunction(stddev_pop);
 }
 
 void VarPopFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet var_pop("var_pop");
-	var_pop.AddFunction(AggregateFunction::UnaryAggregate<stddev_state_t, double, double, VarPopOperation>(
+	var_pop.AddFunction(AggregateFunction::UnaryAggregate<StddevState, double, double, VarPopOperation>(
 	    LogicalType::DOUBLE, LogicalType::DOUBLE));
 	set.AddFunction(var_pop);
 }
 
 void VarSampFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet var_samp("var_samp");
-	var_samp.AddFunction(AggregateFunction::UnaryAggregate<stddev_state_t, double, double, VarSampOperation>(
+	var_samp.AddFunction(AggregateFunction::UnaryAggregate<StddevState, double, double, VarSampOperation>(
 	    LogicalType::DOUBLE, LogicalType::DOUBLE));
 	set.AddFunction(var_samp);
 }

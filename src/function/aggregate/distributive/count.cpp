@@ -60,7 +60,7 @@ AggregateFunction CountStarFun::GetFunction() {
 	return AggregateFunction::NullaryAggregate<int64_t, int64_t, CountStarFunction>(LogicalType::BIGINT);
 }
 
-unique_ptr<BaseStatistics> count_propagate_stats(ClientContext &context, BoundAggregateExpression &expr,
+unique_ptr<BaseStatistics> CountPropagateStats(ClientContext &context, BoundAggregateExpression &expr,
                                                  FunctionData *bind_data,
                                                  vector<unique_ptr<BaseStatistics>> &child_stats,
                                                  NodeStatistics *node_stats) {
@@ -75,7 +75,7 @@ unique_ptr<BaseStatistics> count_propagate_stats(ClientContext &context, BoundAg
 
 void CountFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunction count_function = CountFun::GetFunction();
-	count_function.statistics = count_propagate_stats;
+	count_function.statistics = CountPropagateStats;
 	AggregateFunctionSet count("count");
 	count.AddFunction(count_function);
 	// the count function can also be called without arguments

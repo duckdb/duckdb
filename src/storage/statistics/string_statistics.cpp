@@ -90,8 +90,8 @@ void StringStatistics::Update(const string_t &value) {
 	}
 }
 
-void StringStatistics::Merge(const BaseStatistics &other_) {
-	auto &other = (const StringStatistics &)other_;
+void StringStatistics::Merge(const BaseStatistics &other_p) {
+	auto &other = (const StringStatistics &)other_p;
 	if (string_value_comparison(other.min, MAX_STRING_MINMAX_SIZE, min) < 0) {
 		memcpy(min, other.min, MAX_STRING_MINMAX_SIZE);
 	}

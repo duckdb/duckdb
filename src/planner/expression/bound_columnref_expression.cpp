@@ -26,11 +26,11 @@ hash_t BoundColumnRefExpression::Hash() const {
 	return CombineHash(result, duckdb::Hash<uint64_t>(depth));
 }
 
-bool BoundColumnRefExpression::Equals(const BaseExpression *other_) const {
-	if (!Expression::Equals(other_)) {
+bool BoundColumnRefExpression::Equals(const BaseExpression *other_p) const {
+	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto other = (BoundColumnRefExpression *)other_;
+	auto other = (BoundColumnRefExpression *)other_p;
 	return other->binding == binding && other->depth == depth;
 }
 

@@ -14,11 +14,11 @@ string BoundWindowExpression::ToString() const {
 	return "WINDOW";
 }
 
-bool BoundWindowExpression::Equals(const BaseExpression *other_) const {
-	if (!Expression::Equals(other_)) {
+bool BoundWindowExpression::Equals(const BaseExpression *other_p) const {
+	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto other = (BoundWindowExpression *)other_;
+	auto other = (BoundWindowExpression *)other_p;
 
 	if (start != other->start || end != other->end) {
 		return false;

@@ -47,9 +47,9 @@ BindResult Binding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	return BindResult(make_unique<BoundColumnRefExpression>(colref.GetName(), sql_type, binding, depth));
 }
 
-TableBinding::TableBinding(const string &alias, vector<LogicalType> types_, vector<string> names_, LogicalGet &get,
+TableBinding::TableBinding(const string &alias, vector<LogicalType> types_p, vector<string> names_p, LogicalGet &get,
                            idx_t index, bool add_row_id)
-    : Binding(alias, move(types_), move(names_), index), get(get) {
+    : Binding(alias, move(types_p), move(names_p), index), get(get) {
 	if (add_row_id) {
 		if (name_map.find("rowid") == name_map.end()) {
 			name_map["rowid"] = COLUMN_IDENTIFIER_ROW_ID;
@@ -96,8 +96,8 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	return BindResult(make_unique<BoundColumnRefExpression>(colref.GetName(), col_type, binding, depth));
 }
 
-MacroBinding::MacroBinding(vector<LogicalType> types_, vector<string> names_, string macro_name_)
-    : Binding("0_macro_parameters", move(types_), move(names_), -1), macro_name(macro_name_) {
+MacroBinding::MacroBinding(vector<LogicalType> types_p, vector<string> names_p, string macro_name_p)
+    : Binding("0_macro_parameters", move(types_p), move(names_p), -1), macro_name(macro_name_p) {
 }
 
 BindResult MacroBinding::Bind(ColumnRefExpression &colref, idx_t depth) {

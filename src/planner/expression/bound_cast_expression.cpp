@@ -46,11 +46,11 @@ string BoundCastExpression::ToString() const {
 	return "CAST[" + return_type.ToString() + "](" + child->GetName() + ")";
 }
 
-bool BoundCastExpression::Equals(const BaseExpression *other_) const {
-	if (!Expression::Equals(other_)) {
+bool BoundCastExpression::Equals(const BaseExpression *other_p) const {
+	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto other = (BoundCastExpression *)other_;
+	auto other = (BoundCastExpression *)other_p;
 	if (!Expression::Equals(child.get(), other->child.get())) {
 		return false;
 	}

@@ -7,7 +7,7 @@
 namespace duckdb {
 
 template <class T>
-struct bit_state_t {
+struct BitState {
 	bool is_set;
 	T value;
 };
@@ -16,23 +16,23 @@ template <class OP>
 static AggregateFunction GetBitfieldUnaryAggregate(LogicalType type) {
 	switch (type.id()) {
 	case LogicalTypeId::TINYINT:
-		return AggregateFunction::UnaryAggregate<bit_state_t<uint8_t>, int8_t, int8_t, OP>(type, type);
+		return AggregateFunction::UnaryAggregate<BitState<uint8_t>, int8_t, int8_t, OP>(type, type);
 	case LogicalTypeId::SMALLINT:
-		return AggregateFunction::UnaryAggregate<bit_state_t<uint16_t>, int16_t, int16_t, OP>(type, type);
+		return AggregateFunction::UnaryAggregate<BitState<uint16_t>, int16_t, int16_t, OP>(type, type);
 	case LogicalTypeId::INTEGER:
-		return AggregateFunction::UnaryAggregate<bit_state_t<uint32_t>, int32_t, int32_t, OP>(type, type);
+		return AggregateFunction::UnaryAggregate<BitState<uint32_t>, int32_t, int32_t, OP>(type, type);
 	case LogicalTypeId::BIGINT:
-		return AggregateFunction::UnaryAggregate<bit_state_t<uint64_t>, int64_t, int64_t, OP>(type, type);
+		return AggregateFunction::UnaryAggregate<BitState<uint64_t>, int64_t, int64_t, OP>(type, type);
 	case LogicalTypeId::HUGEINT:
-		return AggregateFunction::UnaryAggregate<bit_state_t<hugeint_t>, hugeint_t, hugeint_t, OP>(type, type);
+		return AggregateFunction::UnaryAggregate<BitState<hugeint_t>, hugeint_t, hugeint_t, OP>(type, type);
 	case LogicalTypeId::UTINYINT:
-		return AggregateFunction::UnaryAggregate<bit_state_t<uint8_t>, uint8_t, uint8_t, OP>(type, type);
+		return AggregateFunction::UnaryAggregate<BitState<uint8_t>, uint8_t, uint8_t, OP>(type, type);
 	case LogicalTypeId::USMALLINT:
-		return AggregateFunction::UnaryAggregate<bit_state_t<uint16_t>, uint16_t, uint16_t, OP>(type, type);
+		return AggregateFunction::UnaryAggregate<BitState<uint16_t>, uint16_t, uint16_t, OP>(type, type);
 	case LogicalTypeId::UINTEGER:
-		return AggregateFunction::UnaryAggregate<bit_state_t<uint32_t>, uint32_t, uint32_t, OP>(type, type);
+		return AggregateFunction::UnaryAggregate<BitState<uint32_t>, uint32_t, uint32_t, OP>(type, type);
 	case LogicalTypeId::UBIGINT:
-		return AggregateFunction::UnaryAggregate<bit_state_t<uint64_t>, uint64_t, uint64_t, OP>(type, type);
+		return AggregateFunction::UnaryAggregate<BitState<uint64_t>, uint64_t, uint64_t, OP>(type, type);
 	default:
 		throw NotImplementedException("Unimplemented bitfield type for unary aggregate");
 	}

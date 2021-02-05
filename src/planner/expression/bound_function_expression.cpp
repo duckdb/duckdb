@@ -35,11 +35,11 @@ hash_t BoundFunctionExpression::Hash() const {
 	return CombineHash(result, function.Hash());
 }
 
-bool BoundFunctionExpression::Equals(const BaseExpression *other_) const {
-	if (!Expression::Equals(other_)) {
+bool BoundFunctionExpression::Equals(const BaseExpression *other_p) const {
+	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto other = (BoundFunctionExpression *)other_;
+	auto other = (BoundFunctionExpression *)other_p;
 	if (other->function != function) {
 		return false;
 	}

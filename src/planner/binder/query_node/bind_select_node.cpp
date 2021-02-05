@@ -38,7 +38,7 @@ unique_ptr<Expression> Binder::BindOrderExpression(OrderBinder &order_binder, un
 	return bound_expr;
 }
 
-unique_ptr<Expression> bind_delimiter(ClientContext &context, unique_ptr<ParsedExpression> delimiter,
+unique_ptr<Expression> BindDelimiter(ClientContext &context, unique_ptr<ParsedExpression> delimiter,
                                       int64_t &delimiter_value) {
 	Binder new_binder(context);
 	ExpressionBinder expr_binder(new_binder, context);
@@ -56,10 +56,10 @@ unique_ptr<Expression> bind_delimiter(ClientContext &context, unique_ptr<ParsedE
 unique_ptr<BoundResultModifier> Binder::BindLimit(LimitModifier &limit_mod) {
 	auto result = make_unique<BoundLimitModifier>();
 	if (limit_mod.limit) {
-		result->limit = bind_delimiter(context, move(limit_mod.limit), result->limit_val);
+		result->limit = BindDelimiter(context, move(limit_mod.limit), result->limit_val);
 	}
 	if (limit_mod.offset) {
-		result->offset = bind_delimiter(context, move(limit_mod.offset), result->offset_val);
+		result->offset = BindDelimiter(context, move(limit_mod.offset), result->offset_val);
 	}
 	return move(result);
 }
@@ -85,14 +85,14 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 			auto &order = (OrderModifier &)*mod;
 			auto bound_order = make_unique<BoundOrderModifier>();
 			auto &config = DBConfig::GetConfig(context);
-			for (auto &order_ : order.orders) {
-				auto order_expression = BindOrderExpression(order_binder, move(order_.expression));
+			for (auto &order_node : order.orders) {
+				auto order_expression = BindOrderExpression(order_binder, move(order_node.expression));
 				if (!order_expression) {
 					continue;
 				}
-				auto type = order_.type == OrderType::ORDER_DEFAULT ? config.default_order_type : order_.type;
+				auto type = order_node.type == OrderType::ORDER_DEFAULT ? config.default_order_type : order_node.type;
 				auto null_order =
-				    order_.null_order == OrderByNullType::ORDER_DEFAULT ? config.default_null_order : order_.null_order;
+				    order_node.null_order == OrderByNullType::ORDER_DEFAULT ? config.default_null_order : order_node.null_order;
 				bound_order->orders.emplace_back(type, null_order, move(order_expression));
 			}
 			if (!bound_order->orders.empty()) {
@@ -147,8 +147,8 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<LogicalType>
 		}
 		case ResultModifierType::ORDER_MODIFIER: {
 			auto &order = (BoundOrderModifier &)*bound_mod;
-			for (auto &order_ : order.orders) {
-				auto &expr = order_.expression;
+			for (auto &order_node : order.orders) {
+				auto &expr = order_node.expression;
 				D_ASSERT(expr->type == ExpressionType::BOUND_COLUMN_REF);
 				auto &bound_colref = (BoundColumnRefExpression &)*expr;
 				if (bound_colref.binding.column_index == INVALID_INDEX) {
@@ -158,8 +158,8 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<LogicalType>
 				auto sql_type = sql_types[bound_colref.binding.column_index];
 				bound_colref.return_type = sql_types[bound_colref.binding.column_index];
 				if (sql_type.id() == LogicalTypeId::VARCHAR) {
-					order_.expression =
-					    ExpressionBinder::PushCollation(context, move(order_.expression), sql_type.collation());
+					order_node.expression =
+					    ExpressionBinder::PushCollation(context, move(order_node.expression), sql_type.collation());
 				}
 			}
 			break;

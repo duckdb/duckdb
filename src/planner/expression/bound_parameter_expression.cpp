@@ -24,11 +24,11 @@ string BoundParameterExpression::ToString() const {
 	return to_string(parameter_nr);
 }
 
-bool BoundParameterExpression::Equals(const BaseExpression *other_) const {
-	if (!Expression::Equals(other_)) {
+bool BoundParameterExpression::Equals(const BaseExpression *other_p) const {
+	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto other = (BoundParameterExpression *)other_;
+	auto other = (BoundParameterExpression *)other_p;
 	return parameter_nr == other->parameter_nr;
 }
 

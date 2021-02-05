@@ -4,11 +4,11 @@
 
 namespace duckdb {
 
-bool ExpressionListRef::Equals(const TableRef *other_) const {
-	if (!TableRef::Equals(other_)) {
+bool ExpressionListRef::Equals(const TableRef *other_p) const {
+	if (!TableRef::Equals(other_p)) {
 		return false;
 	}
-	auto other = (ExpressionListRef *)other_;
+	auto other = (ExpressionListRef *)other_p;
 	if (values.size() != other->values.size()) {
 		return false;
 	}

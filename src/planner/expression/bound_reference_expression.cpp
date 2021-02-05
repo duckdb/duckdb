@@ -18,11 +18,11 @@ string BoundReferenceExpression::ToString() const {
 	return "#" + to_string(index);
 }
 
-bool BoundReferenceExpression::Equals(const BaseExpression *other_) const {
-	if (!Expression::Equals(other_)) {
+bool BoundReferenceExpression::Equals(const BaseExpression *other_p) const {
+	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto other = (BoundReferenceExpression *)other_;
+	auto other = (BoundReferenceExpression *)other_p;
 	return other->index == index;
 }
 

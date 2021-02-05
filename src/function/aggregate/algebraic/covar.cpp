@@ -8,7 +8,7 @@
 
 namespace duckdb {
 
-struct covar_state_t {
+struct CovarState {
 	uint64_t count;
 	double meanx;
 	double meany;
@@ -38,11 +38,11 @@ struct CovarOperation {
 		const double dy = (y - state->meany);
 		const double meany = state->meany + dy / n;
 
-		const double C = state->co_moment + dx * (y - meany);
+		const double new_co_moment = state->co_moment + dx * (y - meany);
 
 		state->meanx = meanx;
 		state->meany = meany;
-		state->co_moment = C;
+		state->co_moment = new_co_moment;
 	}
 
 	template <class STATE, class OP>
@@ -94,7 +94,7 @@ struct CovarSampOperation : public CovarOperation {
 
 void CovarPopFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet covar_pop("covar_pop");
-	covar_pop.AddFunction(AggregateFunction::BinaryAggregate<covar_state_t, double, double, double, CovarPopOperation>(
+	covar_pop.AddFunction(AggregateFunction::BinaryAggregate<CovarState, double, double, double, CovarPopOperation>(
 	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE));
 	set.AddFunction(covar_pop);
 }
@@ -102,7 +102,7 @@ void CovarPopFun::RegisterFunction(BuiltinFunctions &set) {
 void CovarSampFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet covar_samp("covar_samp");
 	covar_samp.AddFunction(
-	    AggregateFunction::BinaryAggregate<covar_state_t, double, double, double, CovarSampOperation>(
+	    AggregateFunction::BinaryAggregate<CovarState, double, double, double, CovarSampOperation>(
 	        LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE));
 	set.AddFunction(covar_samp);
 }

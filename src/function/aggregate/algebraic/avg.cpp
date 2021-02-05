@@ -8,7 +8,7 @@
 namespace duckdb {
 
 template <class T>
-struct avg_state_t {
+struct AvgState {
 	T value;
 	uint64_t count;
 };
@@ -106,29 +106,29 @@ struct NumericAverageOperation : public BaseSumOperation<AverageSetOperation, Re
 AggregateFunction GetAverageAggregate(PhysicalType type) {
 	switch (type) {
 	case PhysicalType::INT16:
-		return AggregateFunction::UnaryAggregate<avg_state_t<int64_t>, int16_t, double, IntegerAverageOperation>(
+		return AggregateFunction::UnaryAggregate<AvgState<int64_t>, int16_t, double, IntegerAverageOperation>(
 		    LogicalType::SMALLINT, LogicalType::DOUBLE);
 	case PhysicalType::INT32: {
 		auto function =
-		    AggregateFunction::UnaryAggregate<avg_state_t<hugeint_t>, int32_t, double, IntegerAverageOperationHugeint>(
+		    AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, int32_t, double, IntegerAverageOperationHugeint>(
 		        LogicalType::INTEGER, LogicalType::DOUBLE);
 		return function;
 	}
 	case PhysicalType::INT64: {
 		auto function =
-		    AggregateFunction::UnaryAggregate<avg_state_t<hugeint_t>, int64_t, double, IntegerAverageOperationHugeint>(
+		    AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, int64_t, double, IntegerAverageOperationHugeint>(
 		        LogicalType::BIGINT, LogicalType::DOUBLE);
 		return function;
 	}
 	case PhysicalType::INT128:
-		return AggregateFunction::UnaryAggregate<avg_state_t<hugeint_t>, hugeint_t, double, HugeintAverageOperation>(
+		return AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, hugeint_t, double, HugeintAverageOperation>(
 		    LogicalType::HUGEINT, LogicalType::DOUBLE);
 	default:
 		throw NotImplementedException("Unimplemented average aggregate");
 	}
 }
 
-unique_ptr<FunctionData> bind_decimal_avg(ClientContext &context, AggregateFunction &function,
+unique_ptr<FunctionData> BindDecimalAvg(ClientContext &context, AggregateFunction &function,
                                           vector<unique_ptr<Expression>> &arguments) {
 	auto decimal_type = arguments[0]->return_type;
 	function = GetAverageAggregate(decimal_type.InternalType());
@@ -141,12 +141,12 @@ unique_ptr<FunctionData> bind_decimal_avg(ClientContext &context, AggregateFunct
 void AvgFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet avg("avg");
 	avg.AddFunction(AggregateFunction({LogicalType::DECIMAL}, LogicalType::DECIMAL, nullptr, nullptr, nullptr, nullptr,
-	                                  nullptr, nullptr, bind_decimal_avg));
+	                                  nullptr, nullptr, BindDecimalAvg));
 	avg.AddFunction(GetAverageAggregate(PhysicalType::INT16));
 	avg.AddFunction(GetAverageAggregate(PhysicalType::INT32));
 	avg.AddFunction(GetAverageAggregate(PhysicalType::INT64));
 	avg.AddFunction(GetAverageAggregate(PhysicalType::INT128));
-	avg.AddFunction(AggregateFunction::UnaryAggregate<avg_state_t<double>, double, double, NumericAverageOperation>(
+	avg.AddFunction(AggregateFunction::UnaryAggregate<AvgState<double>, double, double, NumericAverageOperation>(
 	    LogicalType::DOUBLE, LogicalType::DOUBLE));
 	set.AddFunction(avg);
 }

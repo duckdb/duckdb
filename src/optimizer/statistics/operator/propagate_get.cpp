@@ -21,14 +21,14 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet 
 	}
 	// push table filters into the statistics
 	for (idx_t i = 0; i < get.table_filters.size(); i++) {
-		auto &tableFilter = get.table_filters[i];
+		auto &table_filter = get.table_filters[i];
 		idx_t column_index;
 		for (column_index = 0; column_index < get.column_ids.size(); column_index++) {
-			if (get.column_ids[column_index] == tableFilter.column_index) {
+			if (get.column_ids[column_index] == table_filter.column_index) {
 				break;
 			}
 		}
-		D_ASSERT(get.column_ids[column_index] == tableFilter.column_index);
+		D_ASSERT(get.column_ids[column_index] == table_filter.column_index);
 		// find the stats
 		ColumnBinding stats_binding(get.table_index, column_index);
 		auto entry = statistics_map.find(stats_binding);
@@ -36,11 +36,11 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet 
 			// no stats for this entry
 			continue;
 		}
-		auto constant_stats = StatisticsFromValue(tableFilter.constant);
+		auto constant_stats = StatisticsFromValue(table_filter.constant);
 		if (!constant_stats) {
 			continue;
 		}
-		auto propagate_result = PropagateComparison(*entry->second, *constant_stats, tableFilter.comparison_type);
+		auto propagate_result = PropagateComparison(*entry->second, *constant_stats, table_filter.comparison_type);
 		switch (propagate_result) {
 		case FilterPropagateResult::FILTER_ALWAYS_TRUE:
 			// filter is always true; it is useless to execute it
@@ -55,7 +55,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet 
 			return make_unique<NodeStatistics>(0, 0);
 		default:
 			// general case: filter can be true or false, update this columns' statistics
-			UpdateFilterStatistics(*entry->second, tableFilter.comparison_type, tableFilter.constant);
+			UpdateFilterStatistics(*entry->second, table_filter.comparison_type, table_filter.constant);
 			break;
 		}
 	}

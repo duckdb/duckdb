@@ -4,9 +4,9 @@
 
 namespace duckdb {
 
-static unique_ptr<BaseStatistics> StatisticsOperationsNumericNumericCast(const BaseStatistics *input_,
+static unique_ptr<BaseStatistics> StatisticsOperationsNumericNumericCast(const BaseStatistics *input_p,
                                                                          LogicalType target) {
-	auto &input = (NumericStatistics &)*input_;
+	auto &input = (NumericStatistics &)*input_p;
 
 	Value min = input.min, max = input.max;
 	if (!min.TryCastAs(target) || !max.TryCastAs(target)) {

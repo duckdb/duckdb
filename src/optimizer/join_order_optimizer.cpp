@@ -369,20 +369,20 @@ void JoinOrderOptimizer::SolveJoinOrderApproximately() {
 	// at this point, we exited the dynamic programming but did not compute the final join order because it took too
 	// long instead, we use a greedy heuristic to obtain a join ordering now we use Greedy Operator Ordering to
 	// construct the result tree first we start out with all the base relations (the to-be-joined relations)
-	vector<JoinRelationSet *> T;
+	vector<JoinRelationSet *> join_relations; // T in the paper
 	for (idx_t i = 0; i < relations.size(); i++) {
-		T.push_back(set_manager.GetJoinRelation(i));
+		join_relations.push_back(set_manager.GetJoinRelation(i));
 	}
-	while (T.size() > 1) {
+	while (join_relations.size() > 1) {
 		// now in every step of the algorithm, we greedily pick the join between the to-be-joined relations that has the
 		// smallest cost. This is O(r^2) per step, and every step will reduce the total amount of relations to-be-joined
 		// by 1, so the total cost is O(r^3) in the amount of relations
 		idx_t best_left = 0, best_right = 0;
 		JoinNode *best_connection = nullptr;
-		for (idx_t i = 0; i < T.size(); i++) {
-			auto left = T[i];
-			for (idx_t j = i + 1; j < T.size(); j++) {
-				auto right = T[j];
+		for (idx_t i = 0; i < join_relations.size(); i++) {
+			auto left = join_relations[i];
+			for (idx_t j = i + 1; j < join_relations.size(); j++) {
+				auto right = join_relations[j];
 				// check if we can connect these two relations
 				auto connection = query_graph.GetConnection(left, right);
 				if (connection) {
@@ -402,9 +402,9 @@ void JoinOrderOptimizer::SolveJoinOrderApproximately() {
 			// we have to add a cross product; we add it between the two smallest relations
 			JoinNode *smallest_plans[2] = {nullptr};
 			idx_t smallest_index[2];
-			for (idx_t i = 0; i < T.size(); i++) {
+			for (idx_t i = 0; i < join_relations.size(); i++) {
 				// get the plan for this relation
-				auto current_plan = plans[T[i]].get();
+				auto current_plan = plans[join_relations[i]].get();
 				// check if the cardinality is smaller than the smallest two found so far
 				for (idx_t j = 0; j < 2; j++) {
 					if (!smallest_plans[j] || smallest_plans[j]->cardinality > current_plan->cardinality) {
@@ -441,9 +441,9 @@ void JoinOrderOptimizer::SolveJoinOrderApproximately() {
 		// important to erase the biggest element first
 		// if we erase the smallest element first the index of the biggest element changes
 		D_ASSERT(best_right > best_left);
-		T.erase(T.begin() + best_right);
-		T.erase(T.begin() + best_left);
-		T.push_back(best_connection->set);
+		join_relations.erase(join_relations.begin() + best_right);
+		join_relations.erase(join_relations.begin() + best_left);
+		join_relations.push_back(best_connection->set);
 	}
 }
 

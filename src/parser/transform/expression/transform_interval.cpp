@@ -32,18 +32,18 @@ unique_ptr<ParsedExpression> Transformer::TransformInterval(duckdb_libpgquery::P
 		return make_unique<CastExpression>(LogicalType::INTERVAL, move(expr));
 	}
 
-	int mask = ((duckdb_libpgquery::PGAConst *)node->typmods->head->data.ptr_value)->val.val.ival;
+	int32_t mask = ((duckdb_libpgquery::PGAConst *)node->typmods->head->data.ptr_value)->val.val.ival;
 	// these seemingly random constants are from datetime.hpp
 	// they are copied here to avoid having to include this header
 	// the bitshift is from the function INTERVAL_MASK in the parser
-	constexpr int MONTH_MASK = 1 << 1;
-	constexpr int YEAR_MASK = 1 << 2;
-	constexpr int DAY_MASK = 1 << 3;
-	constexpr int HOUR_MASK = 1 << 10;
-	constexpr int MINUTE_MASK = 1 << 11;
-	constexpr int SECOND_MASK = 1 << 12;
-	constexpr int MILLISECOND_MASK = 1 << 13;
-	constexpr int MICROSECOND_MASK = 1 << 14;
+	constexpr int32_t month_mask = 1 << 1;
+	constexpr int32_t year_mask = 1 << 2;
+	constexpr int32_t day_mask = 1 << 3;
+	constexpr int32_t hour_mask = 1 << 10;
+	constexpr int32_t minute_mask = 1 << 11;
+	constexpr int32_t second_mask = 1 << 12;
+	constexpr int32_t millisecond_mask = 1 << 13;
+	constexpr int32_t microsecond_mask = 1 << 14;
 
 	// we need to check certain combinations
 	// because certain interval masks (e.g. INTERVAL '10' HOURS TO DAYS) set multiple bits
@@ -52,56 +52,56 @@ unique_ptr<ParsedExpression> Transformer::TransformInterval(duckdb_libpgquery::P
 
 	string fname;
 	LogicalType target_type;
-	if (mask & YEAR_MASK && mask & MONTH_MASK) {
+	if (mask & year_mask && mask & month_mask) {
 		// DAY TO HOUR
 		throw ParserException("YEAR TO MONTH is not supported");
-	} else if (mask & DAY_MASK && mask & HOUR_MASK) {
+	} else if (mask & day_mask && mask & hour_mask) {
 		// DAY TO HOUR
 		throw ParserException("DAY TO HOUR is not supported");
-	} else if (mask & DAY_MASK && mask & MINUTE_MASK) {
+	} else if (mask & day_mask && mask & minute_mask) {
 		// DAY TO MINUTE
 		throw ParserException("DAY TO MINUTE is not supported");
-	} else if (mask & DAY_MASK && mask & SECOND_MASK) {
+	} else if (mask & day_mask && mask & second_mask) {
 		// DAY TO SECOND
 		throw ParserException("DAY TO SECOND is not supported");
-	} else if (mask & HOUR_MASK && mask & MINUTE_MASK) {
+	} else if (mask & hour_mask && mask & minute_mask) {
 		// DAY TO SECOND
 		throw ParserException("HOUR TO MINUTE is not supported");
-	} else if (mask & HOUR_MASK && mask & SECOND_MASK) {
+	} else if (mask & hour_mask && mask & second_mask) {
 		// DAY TO SECOND
 		throw ParserException("HOUR TO SECOND is not supported");
-	} else if (mask & MINUTE_MASK && mask & SECOND_MASK) {
+	} else if (mask & minute_mask && mask & second_mask) {
 		// DAY TO SECOND
 		throw ParserException("MINUTE TO SECOND is not supported");
-	} else if (mask & YEAR_MASK) {
+	} else if (mask & year_mask) {
 		// YEAR
 		fname = "to_years";
 		target_type = LogicalType::INTEGER;
-	} else if (mask & MONTH_MASK) {
+	} else if (mask & month_mask) {
 		// MONTH
 		fname = "to_months";
 		target_type = LogicalType::INTEGER;
-	} else if (mask & DAY_MASK) {
+	} else if (mask & day_mask) {
 		// DAY
 		fname = "to_days";
 		target_type = LogicalType::INTEGER;
-	} else if (mask & HOUR_MASK) {
+	} else if (mask & hour_mask) {
 		// HOUR
 		fname = "to_hours";
 		target_type = LogicalType::BIGINT;
-	} else if (mask & MINUTE_MASK) {
+	} else if (mask & minute_mask) {
 		// MINUTE
 		fname = "to_minutes";
 		target_type = LogicalType::BIGINT;
-	} else if (mask & SECOND_MASK) {
+	} else if (mask & second_mask) {
 		// SECOND
 		fname = "to_seconds";
 		target_type = LogicalType::BIGINT;
-	} else if (mask & MILLISECOND_MASK) {
+	} else if (mask & millisecond_mask) {
 		// MILLISECOND
 		fname = "to_milliseconds";
 		target_type = LogicalType::BIGINT;
-	} else if (mask & MICROSECOND_MASK) {
+	} else if (mask & microsecond_mask) {
 		// SECOND
 		fname = "to_microseconds";
 		target_type = LogicalType::BIGINT;

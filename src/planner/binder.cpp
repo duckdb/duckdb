@@ -11,17 +11,17 @@
 
 namespace duckdb {
 
-Binder::Binder(ClientContext &context, Binder *parent_, bool inherit_ctes_)
-    : context(context), read_only(true), requires_valid_transaction(true), allow_stream_result(false), parent(parent_),
-      bound_tables(0), inherit_ctes(inherit_ctes_) {
-	if (parent_) {
+Binder::Binder(ClientContext &context, Binder *parent_p, bool inherit_ctes_p)
+    : context(context), read_only(true), requires_valid_transaction(true), allow_stream_result(false), parent(parent_p),
+      bound_tables(0), inherit_ctes(inherit_ctes_p) {
+	if (parent) {
 		// We have to inherit macro parameter bindings from the parent binder, if there is a parent.
-		macro_binding = parent_->macro_binding;
-		if (inherit_ctes_) {
+		macro_binding = parent->macro_binding;
+		if (inherit_ctes) {
 			// We have to inherit CTE bindings from the parent bind_context, if there is a parent.
-			bind_context.SetCTEBindings(parent_->bind_context.GetCTEBindings());
-			bind_context.cte_references = parent_->bind_context.cte_references;
-			parameters = parent_->parameters;
+			bind_context.SetCTEBindings(parent->bind_context.GetCTEBindings());
+			bind_context.cte_references = parent->bind_context.cte_references;
+			parameters = parent->parameters;
 		}
 	}
 }
