@@ -1,4 +1,5 @@
 #include "duckdb/function/scalar/generic_functions.hpp"
+#include "duckdb/main/database.hpp"
 #include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
@@ -36,10 +37,11 @@ unique_ptr<FunctionData> current_setting_bind(ClientContext &context, ScalarFunc
 		throw Exception("Key name for struct_extract needs to be neither NULL nor empty");
 	}
 
-	if (context.set_variables.find(key_val.str_value) == context.set_variables.end()) {
+	auto &config_map = context.db->config.set_variables;
+	if (config_map.find(key_val.str_value) == config_map.end()) {
 		throw InvalidInputException("Variable '%s' was not SET in this context", key_val.str_value);
 	}
-	Value val = context.set_variables[key_val.str_value];
+	Value val = config_map[key_val.str_value];
 	bound_function.return_type = val.type();
 	return make_unique<CurrentSettingBindData>(val);
 }

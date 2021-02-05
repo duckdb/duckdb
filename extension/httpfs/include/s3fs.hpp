@@ -1,16 +1,14 @@
 #pragma once
 
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 
 class S3FileHandle : public FileHandle {
 public:
-	S3FileHandle(FileSystem &fs, std::string path)
-	    : FileHandle(fs, path), length(0), buffer_available(0), buffer_idx(0), file_offset(0) {
-		IntializeMetadata();
-		buffer = std::unique_ptr<data_t[]>(new data_t[BUFFER_LEN]);
-	}
+	S3FileHandle(FileSystem &fs, std::string path);
 
 protected:
 	void Close() override {
@@ -28,11 +26,15 @@ public:
 	idx_t buffer_available;
 	idx_t buffer_idx;
 	idx_t file_offset;
+
+	std::string region;
+	std::string access_key_id;
+	std::string secret_access_key;
 };
 
 class S3FileSystem : public FileSystem {
 public:
-	S3FileSystem() {
+	S3FileSystem(DatabaseInstance &instance_p) : database_instance(instance_p) {
 	}
 	std::unique_ptr<FileHandle> OpenFile(const char *path, uint8_t flags,
 	                                     FileLockType lock = FileLockType::NO_LOCK) override;
@@ -60,9 +62,7 @@ public:
 	static void Verify();
 
 public:
-	std::string region;
-	std::string access_key_id;
-	std::string secret_access_key;
+	DatabaseInstance &database_instance;
 };
 
 } // namespace duckdb

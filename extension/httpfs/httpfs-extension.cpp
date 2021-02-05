@@ -7,7 +7,7 @@ namespace duckdb {
 void HTTPFsExtension::Load(DuckDB &db) {
 	S3FileSystem::Verify(); // run some tests to see if all the hashes work out
 
-	db.instance->GetFileSystem().RegisterProtocolHandler("s3://", make_unique<S3FileSystem>());
+	db.instance->GetFileSystem().RegisterProtocolHandler("s3://", make_unique<S3FileSystem>(*db.instance));
 }
 
 } // namespace duckdb

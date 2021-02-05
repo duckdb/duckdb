@@ -130,6 +130,7 @@ public:
 	//! Returns the system-available memory in bytes
 	virtual idx_t GetAvailableMemory();
 
+	//! registers a sub-file system to handle certain file name prefixes, e.g. http:// etc.
 	virtual void RegisterProtocolHandler(string protocol, unique_ptr<FileSystem> protocol_fs) {
 		throw NotImplementedException("Can't register a protocol handler on a non-virtual file system");
 	}

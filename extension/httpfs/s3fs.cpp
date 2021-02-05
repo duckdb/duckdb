@@ -118,6 +118,18 @@ static httplib::Result s3_get(std::string s3_url, std::string region, std::strin
 	    });
 }
 
+S3FileHandle::S3FileHandle(FileSystem &fs, std::string path)
+    : FileHandle(fs, path), length(0), buffer_available(0), buffer_idx(0), file_offset(0) {
+	auto &sfs = (S3FileSystem &)fs;
+
+	region = sfs.database_instance.config.set_variables["s3_region"].str_value;
+	access_key_id = sfs.database_instance.config.set_variables["s3_access_key_id"].str_value;
+	secret_access_key = sfs.database_instance.config.set_variables["s3_secret_access_key"].str_value;
+
+	IntializeMetadata();
+	buffer = std::unique_ptr<data_t[]>(new data_t[BUFFER_LEN]);
+}
+
 std::unique_ptr<FileHandle> S3FileSystem::OpenFile(const char *path, uint8_t flags, FileLockType lock) {
 	return duckdb::make_unique<S3FileHandle>(*this, path);
 }
@@ -151,7 +163,7 @@ void S3FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_
 
 		if (to_read > 0 && sfh.buffer_available == 0) {
 			auto new_buffer_available = MinValue<idx_t>(sfh.BUFFER_LEN, sfh.length - sfh.file_offset);
-			auto res = s3_get(sfh.path, region, "GET", access_key_id, secret_access_key, sfh.file_offset,
+			auto res = s3_get(sfh.path, sfh.region, "GET", sfh.access_key_id, sfh.secret_access_key, sfh.file_offset,
 			                  (char *)sfh.buffer.get(), new_buffer_available);
 			sfh.buffer_available = new_buffer_available;
 			sfh.buffer_idx = 0;
@@ -161,8 +173,7 @@ void S3FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_
 
 void S3FileHandle::IntializeMetadata() {
 	// get length using HEAD
-	auto &sfs = (S3FileSystem &)file_system;
-	auto res = s3_get(path, sfs.region, "HEAD", sfs.access_key_id, sfs.secret_access_key);
+	auto res = s3_get(path, region, "HEAD", access_key_id, secret_access_key);
 	if (res->status != 200) {
 		throw std::runtime_error("Unable to connect " + res->body);
 	}

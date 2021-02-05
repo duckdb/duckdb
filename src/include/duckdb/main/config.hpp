@@ -12,6 +12,7 @@
 #include "duckdb/common/enums/order_type.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/winapi.hpp"
+#include "duckdb/common/types/value.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -51,6 +52,8 @@ public:
 	bool enable_copy = true;
 	//! Wether or not object cache is used
 	bool object_cache_enable = false;
+	//! Database configuration variables as controlled by SET
+	unordered_map<std::string, Value> set_variables;
 
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);
