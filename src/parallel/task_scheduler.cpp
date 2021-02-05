@@ -148,13 +148,21 @@ int32_t TaskScheduler::NumberOfThreads() {
 }
 
 void TaskScheduler::SetThreads(int32_t n) {
+#ifndef DUCKDB_NO_THREADS
 	if (n < 1) {
 		throw SyntaxException("Must have at least 1 thread!");
 	}
+	SetThreadsInternal(n);
+#else
+	throw NotImplementedException("DuckDB was compiled without threads! Setting threads is not allowed.");
+#endif
+}
+
+void TaskScheduler::SetThreadsInternal(int32_t n) {
+#ifdef DUCKDB_NO_THREADS
 	if (threads.size() == idx_t(n - 1)) {
 		return;
 	}
-#ifndef DUCKDB_NO_THREADS
 	idx_t new_thread_count = n - 1;
 	if (threads.size() < new_thread_count) {
 		// we are increasing the number of threads: launch them and run tasks on them
@@ -181,8 +189,6 @@ void TaskScheduler::SetThreads(int32_t n) {
 		threads.resize(new_thread_count);
 		markers.resize(new_thread_count);
 	}
-#else
-	throw NotImplementedException("DuckDB was compiled without threads! Setting threads is not allowed.");
 #endif
 }
 

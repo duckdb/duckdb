@@ -4,8 +4,8 @@
 
 namespace duckdb {
 
-Node::Node(ART &art, NodeType type, size_t compressedPrefixSize) : prefix_length(0), count(0), type(type) {
-	this->prefix = unique_ptr<uint8_t[]>(new uint8_t[compressedPrefixSize]);
+Node::Node(ART &art, NodeType type, size_t compressed_prefix_size) : prefix_length(0), count(0), type(type) {
+	this->prefix = unique_ptr<uint8_t[]>(new uint8_t[compressed_prefix_size]);
 }
 
 void Node::CopyPrefix(ART &art, Node *src, Node *dst) {

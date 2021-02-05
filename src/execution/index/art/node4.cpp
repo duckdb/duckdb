@@ -4,7 +4,7 @@
 
 namespace duckdb {
 
-Node4::Node4(ART &art, size_t compressionLength) : Node(art, NodeType::N4, compressionLength) {
+Node4::Node4(ART &art, size_t compression_length) : Node(art, NodeType::N4, compression_length) {
 	memset(key, 0, sizeof(key));
 }
 
@@ -48,14 +48,14 @@ unique_ptr<Node> *Node4::GetChild(idx_t pos) {
 	return &child[pos];
 }
 
-void Node4::insert(ART &art, unique_ptr<Node> &node, uint8_t keyByte, unique_ptr<Node> &child) {
+void Node4::insert(ART &art, unique_ptr<Node> &node, uint8_t key_byte, unique_ptr<Node> &child) {
 	Node4 *n = static_cast<Node4 *>(node.get());
 
 	// Insert leaf into inner node
 	if (node->count < 4) {
 		// Insert element
 		idx_t pos = 0;
-		while((pos < node->count) && (n->key[pos] < keyByte)) {
+		while((pos < node->count) && (n->key[pos] < key_byte)) {
 			pos++;
 		}
 		if (n->child[pos] != nullptr) {
@@ -64,7 +64,7 @@ void Node4::insert(ART &art, unique_ptr<Node> &node, uint8_t keyByte, unique_ptr
 				n->child[i] = move(n->child[i - 1]);
 			}
 		}
-		n->key[pos] = keyByte;
+		n->key[pos] = key_byte;
 		n->child[pos] = move(child);
 		n->count++;
 	} else {
@@ -77,7 +77,7 @@ void Node4::insert(ART &art, unique_ptr<Node> &node, uint8_t keyByte, unique_ptr
 			new_node->child[i] = move(n->child[i]);
 		}
 		node = move(new_node);
-		Node16::insert(art, node, keyByte, child);
+		Node16::insert(art, node, key_byte, child);
 	}
 }
 

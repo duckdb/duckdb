@@ -7,7 +7,6 @@
 #include "miniz.hpp"
 
 #include "duckdb/common/limits.hpp"
-using namespace duckdb_miniz;
 
 namespace duckdb {
 
@@ -89,7 +88,7 @@ void GzipStreamBuf::initialize() {
 	in_buff_end = in_buff;
 	out_buff = new data_t[BUFFER_SIZE];
 
-	mz_stream_ptr = new mz_stream();
+	mz_stream_ptr = new duckdb_miniz::mz_stream();
 	// TODO use custom alloc/free methods in miniz to throw exceptions on OOM
 
 	FstreamUtil::OpenFile(filename, input, ios::in | ios::binary);
@@ -115,8 +114,8 @@ void GzipStreamBuf::initialize() {
 	input.seekg(data_start, input.beg);
 	// stream is now set to beginning of payload data
 
-	auto ret = mz_inflateInit2((mz_streamp)mz_stream_ptr, -MZ_DEFAULT_WINDOW_BITS);
-	if (ret != MZ_OK) {
+	auto ret = duckdb_miniz::mz_inflateInit2((duckdb_miniz::mz_streamp)mz_stream_ptr, -MZ_DEFAULT_WINDOW_BITS);
+	if (ret != duckdb_miniz::MZ_OK) {
 		throw Exception("Failed to initialize miniz");
 	}
 	// initialize eback, gptr, egptr
@@ -130,7 +129,7 @@ std::streambuf::int_type GzipStreamBuf::underflow() {
 	}
 
 	// adapted from https://github.com/mateidavid/zstr
-	auto zstrm_p = (mz_streamp)mz_stream_ptr;
+	auto zstrm_p = (duckdb_miniz::mz_streamp)mz_stream_ptr;
 	if (!zstrm_p) {
 		return traits_type::eof();
 	}
@@ -161,9 +160,9 @@ std::streambuf::int_type GzipStreamBuf::underflow() {
 			zstrm_p->next_out = (data_ptr_t)out_buff_free_start;
 			D_ASSERT((out_buff + BUFFER_SIZE) - out_buff_free_start < NumericLimits<int32_t>::Maximum());
 			zstrm_p->avail_out = (uint32_t)((out_buff + BUFFER_SIZE) - out_buff_free_start);
-			auto ret = mz_inflate(zstrm_p, MZ_NO_FLUSH);
-			if (ret != MZ_OK && ret != MZ_STREAM_END) {
-				throw Exception(mz_error(ret));
+			auto ret = duckdb_miniz::mz_inflate(zstrm_p, duckdb_miniz::MZ_NO_FLUSH);
+			if (ret != duckdb_miniz::MZ_OK && ret != duckdb_miniz::MZ_STREAM_END) {
+				throw Exception(duckdb_miniz::mz_error(ret));
 			}
 			// update pointers following inflate()
 			in_buff_start = (data_ptr_t)zstrm_p->next_in;
@@ -171,8 +170,8 @@ std::streambuf::int_type GzipStreamBuf::underflow() {
 			out_buff_free_start = (data_ptr_t)zstrm_p->next_out;
 			D_ASSERT(out_buff_free_start + zstrm_p->avail_out == out_buff + BUFFER_SIZE);
 			// if stream ended, deallocate inflator
-			if (ret == MZ_STREAM_END) {
-				mz_inflateEnd(zstrm_p);
+			if (ret == duckdb_miniz::MZ_STREAM_END) {
+				duckdb_miniz::mz_inflateEnd(zstrm_p);
 				delete zstrm_p;
 				mz_stream_ptr = nullptr;
 				break;
@@ -201,9 +200,9 @@ std::streambuf::int_type GzipStreamBuf::underflow() {
 GzipStreamBuf::~GzipStreamBuf() {
 	delete[] in_buff;
 	delete[] out_buff;
-	auto zstrm_p = (mz_streamp)mz_stream_ptr;
+	auto zstrm_p = (duckdb_miniz::mz_streamp)mz_stream_ptr;
 	if (zstrm_p) {
-		mz_inflateEnd(zstrm_p);
+		duckdb_miniz::mz_inflateEnd(zstrm_p);
 	}
 	delete zstrm_p;
 }

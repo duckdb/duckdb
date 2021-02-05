@@ -75,7 +75,7 @@ unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(Transaction &transac
 // Insert
 //===--------------------------------------------------------------------===//
 template <class T>
-static void generate_keys(Vector &input, idx_t count, vector<unique_ptr<Key>> &keys, bool is_little_endian) {
+static void GenerateKeys(Vector &input, idx_t count, vector<unique_ptr<Key>> &keys, bool is_little_endian) {
 	VectorData idata;
 	input.Orrify(count, idata);
 
@@ -91,7 +91,7 @@ static void generate_keys(Vector &input, idx_t count, vector<unique_ptr<Key>> &k
 }
 
 template <class T>
-static void concatenate_keys(Vector &input, idx_t count, vector<unique_ptr<Key>> &keys, bool is_little_endian) {
+static void ConcatenateKeys(Vector &input, idx_t count, vector<unique_ptr<Key>> &keys, bool is_little_endian) {
 	VectorData idata;
 	input.Orrify(count, idata);
 
@@ -119,40 +119,40 @@ void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
 	// generate keys for the first input column
 	switch (input.data[0].type.InternalType()) {
 	case PhysicalType::BOOL:
-		generate_keys<bool>(input.data[0], input.size(), keys, is_little_endian);
+		GenerateKeys<bool>(input.data[0], input.size(), keys, is_little_endian);
 		break;
 	case PhysicalType::INT8:
-		generate_keys<int8_t>(input.data[0], input.size(), keys, is_little_endian);
+		GenerateKeys<int8_t>(input.data[0], input.size(), keys, is_little_endian);
 		break;
 	case PhysicalType::INT16:
-		generate_keys<int16_t>(input.data[0], input.size(), keys, is_little_endian);
+		GenerateKeys<int16_t>(input.data[0], input.size(), keys, is_little_endian);
 		break;
 	case PhysicalType::INT32:
-		generate_keys<int32_t>(input.data[0], input.size(), keys, is_little_endian);
+		GenerateKeys<int32_t>(input.data[0], input.size(), keys, is_little_endian);
 		break;
 	case PhysicalType::INT64:
-		generate_keys<int64_t>(input.data[0], input.size(), keys, is_little_endian);
+		GenerateKeys<int64_t>(input.data[0], input.size(), keys, is_little_endian);
 		break;
 	case PhysicalType::UINT8:
-		generate_keys<uint8_t>(input.data[0], input.size(), keys, is_little_endian);
+		GenerateKeys<uint8_t>(input.data[0], input.size(), keys, is_little_endian);
 		break;
 	case PhysicalType::UINT16:
-		generate_keys<uint16_t>(input.data[0], input.size(), keys, is_little_endian);
+		GenerateKeys<uint16_t>(input.data[0], input.size(), keys, is_little_endian);
 		break;
 	case PhysicalType::UINT32:
-		generate_keys<uint32_t>(input.data[0], input.size(), keys, is_little_endian);
+		GenerateKeys<uint32_t>(input.data[0], input.size(), keys, is_little_endian);
 		break;
 	case PhysicalType::UINT64:
-		generate_keys<uint64_t>(input.data[0], input.size(), keys, is_little_endian);
+		GenerateKeys<uint64_t>(input.data[0], input.size(), keys, is_little_endian);
 		break;
 	case PhysicalType::FLOAT:
-		generate_keys<float>(input.data[0], input.size(), keys, is_little_endian);
+		GenerateKeys<float>(input.data[0], input.size(), keys, is_little_endian);
 		break;
 	case PhysicalType::DOUBLE:
-		generate_keys<double>(input.data[0], input.size(), keys, is_little_endian);
+		GenerateKeys<double>(input.data[0], input.size(), keys, is_little_endian);
 		break;
 	case PhysicalType::VARCHAR:
-		generate_keys<string_t>(input.data[0], input.size(), keys, is_little_endian);
+		GenerateKeys<string_t>(input.data[0], input.size(), keys, is_little_endian);
 		break;
 	default:
 		throw InvalidTypeException(input.data[0].type, "Invalid type for index");
@@ -161,40 +161,40 @@ void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
 		// for each of the remaining columns, concatenate
 		switch (input.data[i].type.InternalType()) {
 		case PhysicalType::BOOL:
-			concatenate_keys<bool>(input.data[i], input.size(), keys, is_little_endian);
+			ConcatenateKeys<bool>(input.data[i], input.size(), keys, is_little_endian);
 			break;
 		case PhysicalType::INT8:
-			concatenate_keys<int8_t>(input.data[i], input.size(), keys, is_little_endian);
+			ConcatenateKeys<int8_t>(input.data[i], input.size(), keys, is_little_endian);
 			break;
 		case PhysicalType::INT16:
-			concatenate_keys<int16_t>(input.data[i], input.size(), keys, is_little_endian);
+			ConcatenateKeys<int16_t>(input.data[i], input.size(), keys, is_little_endian);
 			break;
 		case PhysicalType::INT32:
-			concatenate_keys<int32_t>(input.data[i], input.size(), keys, is_little_endian);
+			ConcatenateKeys<int32_t>(input.data[i], input.size(), keys, is_little_endian);
 			break;
 		case PhysicalType::INT64:
-			concatenate_keys<int64_t>(input.data[i], input.size(), keys, is_little_endian);
+			ConcatenateKeys<int64_t>(input.data[i], input.size(), keys, is_little_endian);
 			break;
 		case PhysicalType::UINT8:
-			concatenate_keys<uint8_t>(input.data[i], input.size(), keys, is_little_endian);
+			ConcatenateKeys<uint8_t>(input.data[i], input.size(), keys, is_little_endian);
 			break;
 		case PhysicalType::UINT16:
-			concatenate_keys<uint16_t>(input.data[i], input.size(), keys, is_little_endian);
+			ConcatenateKeys<uint16_t>(input.data[i], input.size(), keys, is_little_endian);
 			break;
 		case PhysicalType::UINT32:
-			concatenate_keys<uint32_t>(input.data[i], input.size(), keys, is_little_endian);
+			ConcatenateKeys<uint32_t>(input.data[i], input.size(), keys, is_little_endian);
 			break;
 		case PhysicalType::UINT64:
-			concatenate_keys<uint64_t>(input.data[i], input.size(), keys, is_little_endian);
+			ConcatenateKeys<uint64_t>(input.data[i], input.size(), keys, is_little_endian);
 			break;
 		case PhysicalType::FLOAT:
-			concatenate_keys<float>(input.data[i], input.size(), keys, is_little_endian);
+			ConcatenateKeys<float>(input.data[i], input.size(), keys, is_little_endian);
 			break;
 		case PhysicalType::DOUBLE:
-			concatenate_keys<double>(input.data[i], input.size(), keys, is_little_endian);
+			ConcatenateKeys<double>(input.data[i], input.size(), keys, is_little_endian);
 			break;
 		case PhysicalType::VARCHAR:
-			concatenate_keys<string_t>(input.data[i], input.size(), keys, is_little_endian);
+			ConcatenateKeys<string_t>(input.data[i], input.size(), keys, is_little_endian);
 			break;
 		default:
 			throw InvalidTypeException(input.data[0].type, "Invalid type for index");
@@ -490,10 +490,10 @@ Node *ART::Lookup(unique_ptr<Node> &node, Key &key, unsigned depth) {
 	while (node_val) {
 		if (node_val->type == NodeType::NLeaf) {
 			auto leaf = static_cast<Leaf *>(node_val);
-			Key &leafKey = *leaf->value;
+			Key &leaf_key = *leaf->value;
 			//! Check leaf
-			for (idx_t i = depth; i < leafKey.len; i++) {
-				if (leafKey[i] != key[i]) {
+			for (idx_t i = depth; i < leaf_key.len; i++) {
+				if (leaf_key[i] != key[i]) {
 					return nullptr;
 				}
 			}
@@ -714,10 +714,10 @@ static Leaf &FindMinimum(Iterator &it, Node &node) {
 		break;
 	case NodeType::N48: {
 		auto &n48 = (Node48 &)node;
-		while (n48.childIndex[pos] == Node::EMPTY_MARKER) {
+		while (n48.child_index[pos] == Node::EMPTY_MARKER) {
 			pos++;
 		}
-		next = n48.child[n48.childIndex[pos]].get();
+		next = n48.child[n48.child_index[pos]].get();
 		break;
 	}
 	case NodeType::N256: {

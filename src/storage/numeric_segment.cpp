@@ -172,7 +172,7 @@ static void TemplatedSelectOperation(SelectionVector &sel, Vector &result, Physi
 }
 
 template <class OPL, class OPR>
-static void templated_select_operation_between(SelectionVector &sel, Vector &result, PhysicalType type,
+static void TemplatedSelectOperationBetween(SelectionVector &sel, Vector &result, PhysicalType type,
                                                unsigned char *source, nullmask_t *source_mask, Value &constant_left,
                                                Value &constant_right, idx_t &approved_tuple_count) {
 	// the inplace loops take the result as the last parameter
@@ -295,21 +295,21 @@ void NumericSegment::Select(ColumnScanState &state, Vector &result, SelectionVec
 
 		if (table_filter[0].comparison_type == ExpressionType::COMPARE_GREATERTHAN) {
 			if (table_filter[1].comparison_type == ExpressionType::COMPARE_LESSTHAN) {
-				templated_select_operation_between<GreaterThan, LessThan>(
+				TemplatedSelectOperationBetween<GreaterThan, LessThan>(
 				    sel, result, state.current->type.InternalType(), source_data, source_nullmask,
 				    table_filter[0].constant, table_filter[1].constant, approved_tuple_count);
 			} else {
-				templated_select_operation_between<GreaterThan, LessThanEquals>(
+				TemplatedSelectOperationBetween<GreaterThan, LessThanEquals>(
 				    sel, result, state.current->type.InternalType(), source_data, source_nullmask,
 				    table_filter[0].constant, table_filter[1].constant, approved_tuple_count);
 			}
 		} else {
 			if (table_filter[1].comparison_type == ExpressionType::COMPARE_LESSTHAN) {
-				templated_select_operation_between<GreaterThanEquals, LessThan>(
+				TemplatedSelectOperationBetween<GreaterThanEquals, LessThan>(
 				    sel, result, state.current->type.InternalType(), source_data, source_nullmask,
 				    table_filter[0].constant, table_filter[1].constant, approved_tuple_count);
 			} else {
-				templated_select_operation_between<GreaterThanEquals, LessThanEquals>(
+				TemplatedSelectOperationBetween<GreaterThanEquals, LessThanEquals>(
 				    sel, result, state.current->type.InternalType(), source_data, source_nullmask,
 				    table_filter[0].constant, table_filter[1].constant, approved_tuple_count);
 			}
@@ -550,7 +550,7 @@ void NumericSegment::RollbackUpdate(UpdateInfo *info) {
 // Append
 //===--------------------------------------------------------------------===//
 template <class T>
-static inline void update_numeric_statistics_internal(T new_value, T &min, T &max) {
+static inline void UpdateNumericStatisticsInternal(T new_value, T &min, T &max) {
 	if (LessThan::Operation(new_value, min)) {
 		min = new_value;
 	}
@@ -560,76 +560,76 @@ static inline void update_numeric_statistics_internal(T new_value, T &min, T &ma
 }
 
 template <class T>
-static inline void update_numeric_statistics(SegmentStatistics &stats, T new_value);
+static inline void UpdateNumericStatistics(SegmentStatistics &stats, T new_value);
 
 template <>
-inline void update_numeric_statistics<int8_t>(SegmentStatistics &stats, int8_t new_value) {
+inline void UpdateNumericStatistics<int8_t>(SegmentStatistics &stats, int8_t new_value) {
 	auto &nstats = (NumericStatistics &)*stats.statistics;
-	update_numeric_statistics_internal<int8_t>(new_value, nstats.min.value_.tinyint, nstats.max.value_.tinyint);
+	UpdateNumericStatisticsInternal<int8_t>(new_value, nstats.min.value_.tinyint, nstats.max.value_.tinyint);
 }
 
 template <>
-inline void update_numeric_statistics<int16_t>(SegmentStatistics &stats, int16_t new_value) {
+inline void UpdateNumericStatistics<int16_t>(SegmentStatistics &stats, int16_t new_value) {
 	auto &nstats = (NumericStatistics &)*stats.statistics;
-	update_numeric_statistics_internal<int16_t>(new_value, nstats.min.value_.smallint, nstats.max.value_.smallint);
+	UpdateNumericStatisticsInternal<int16_t>(new_value, nstats.min.value_.smallint, nstats.max.value_.smallint);
 }
 
 template <>
-inline void update_numeric_statistics<int32_t>(SegmentStatistics &stats, int32_t new_value) {
+inline void UpdateNumericStatistics<int32_t>(SegmentStatistics &stats, int32_t new_value) {
 	auto &nstats = (NumericStatistics &)*stats.statistics;
-	update_numeric_statistics_internal<int32_t>(new_value, nstats.min.value_.integer, nstats.max.value_.integer);
+	UpdateNumericStatisticsInternal<int32_t>(new_value, nstats.min.value_.integer, nstats.max.value_.integer);
 }
 
 template <>
-inline void update_numeric_statistics<int64_t>(SegmentStatistics &stats, int64_t new_value) {
+inline void UpdateNumericStatistics<int64_t>(SegmentStatistics &stats, int64_t new_value) {
 	auto &nstats = (NumericStatistics &)*stats.statistics;
-	update_numeric_statistics_internal<int64_t>(new_value, nstats.min.value_.bigint, nstats.max.value_.bigint);
+	UpdateNumericStatisticsInternal<int64_t>(new_value, nstats.min.value_.bigint, nstats.max.value_.bigint);
 }
 
 template <>
-inline void update_numeric_statistics<uint8_t>(SegmentStatistics &stats, uint8_t new_value) {
+inline void UpdateNumericStatistics<uint8_t>(SegmentStatistics &stats, uint8_t new_value) {
 	auto &nstats = (NumericStatistics &)*stats.statistics;
-	update_numeric_statistics_internal<uint8_t>(new_value, nstats.min.value_.utinyint, nstats.max.value_.utinyint);
+	UpdateNumericStatisticsInternal<uint8_t>(new_value, nstats.min.value_.utinyint, nstats.max.value_.utinyint);
 }
 
 template <>
-inline void update_numeric_statistics<uint16_t>(SegmentStatistics &stats, uint16_t new_value) {
+inline void UpdateNumericStatistics<uint16_t>(SegmentStatistics &stats, uint16_t new_value) {
 	auto &nstats = (NumericStatistics &)*stats.statistics;
-	update_numeric_statistics_internal<uint16_t>(new_value, nstats.min.value_.usmallint, nstats.max.value_.usmallint);
+	UpdateNumericStatisticsInternal<uint16_t>(new_value, nstats.min.value_.usmallint, nstats.max.value_.usmallint);
 }
 
 template <>
-inline void update_numeric_statistics<uint32_t>(SegmentStatistics &stats, uint32_t new_value) {
+inline void UpdateNumericStatistics<uint32_t>(SegmentStatistics &stats, uint32_t new_value) {
 	auto &nstats = (NumericStatistics &)*stats.statistics;
-	update_numeric_statistics_internal<uint32_t>(new_value, nstats.min.value_.uinteger, nstats.max.value_.uinteger);
+	UpdateNumericStatisticsInternal<uint32_t>(new_value, nstats.min.value_.uinteger, nstats.max.value_.uinteger);
 }
 
 template <>
-inline void update_numeric_statistics<uint64_t>(SegmentStatistics &stats, uint64_t new_value) {
+inline void UpdateNumericStatistics<uint64_t>(SegmentStatistics &stats, uint64_t new_value) {
 	auto &nstats = (NumericStatistics &)*stats.statistics;
-	update_numeric_statistics_internal<uint64_t>(new_value, nstats.min.value_.ubigint, nstats.max.value_.ubigint);
+	UpdateNumericStatisticsInternal<uint64_t>(new_value, nstats.min.value_.ubigint, nstats.max.value_.ubigint);
 }
 
 template <>
-inline void update_numeric_statistics<hugeint_t>(SegmentStatistics &stats, hugeint_t new_value) {
+inline void UpdateNumericStatistics<hugeint_t>(SegmentStatistics &stats, hugeint_t new_value) {
 	auto &nstats = (NumericStatistics &)*stats.statistics;
-	update_numeric_statistics_internal<hugeint_t>(new_value, nstats.min.value_.hugeint, nstats.max.value_.hugeint);
+	UpdateNumericStatisticsInternal<hugeint_t>(new_value, nstats.min.value_.hugeint, nstats.max.value_.hugeint);
 }
 
 template <>
-inline void update_numeric_statistics<float>(SegmentStatistics &stats, float new_value) {
+inline void UpdateNumericStatistics<float>(SegmentStatistics &stats, float new_value) {
 	auto &nstats = (NumericStatistics &)*stats.statistics;
-	update_numeric_statistics_internal<float>(new_value, nstats.min.value_.float_, nstats.max.value_.float_);
+	UpdateNumericStatisticsInternal<float>(new_value, nstats.min.value_.float_, nstats.max.value_.float_);
 }
 
 template <>
-inline void update_numeric_statistics<double>(SegmentStatistics &stats, double new_value) {
+inline void UpdateNumericStatistics<double>(SegmentStatistics &stats, double new_value) {
 	auto &nstats = (NumericStatistics &)*stats.statistics;
-	update_numeric_statistics_internal<double>(new_value, nstats.min.value_.double_, nstats.max.value_.double_);
+	UpdateNumericStatisticsInternal<double>(new_value, nstats.min.value_.double_, nstats.max.value_.double_);
 }
 
 template <>
-void update_numeric_statistics<interval_t>(SegmentStatistics &stats, interval_t new_value) {
+void UpdateNumericStatistics<interval_t>(SegmentStatistics &stats, interval_t new_value) {
 }
 
 template <class T>
@@ -651,7 +651,7 @@ static void AppendLoop(SegmentStatistics &stats, data_ptr_t target, idx_t target
 				nullmask[target_idx] = true;
 				stats.statistics->has_null = true;
 			} else {
-				update_numeric_statistics<T>(stats, sdata[source_idx]);
+				UpdateNumericStatistics<T>(stats, sdata[source_idx]);
 				tdata[target_idx] = sdata[source_idx];
 			}
 		}
@@ -659,7 +659,7 @@ static void AppendLoop(SegmentStatistics &stats, data_ptr_t target, idx_t target
 		for (idx_t i = 0; i < count; i++) {
 			auto source_idx = adata.sel->get_index(offset + i);
 			auto target_idx = target_offset + i;
-			update_numeric_statistics<T>(stats, sdata[source_idx]);
+			UpdateNumericStatistics<T>(stats, sdata[source_idx]);
 			tdata[target_idx] = sdata[source_idx];
 		}
 	}
@@ -701,7 +701,7 @@ static NumericSegment::append_function_t GetAppendFunction(PhysicalType type) {
 // Update
 //===--------------------------------------------------------------------===//
 template <class T>
-static void update_loop_null(T *__restrict undo_data, T *__restrict base_data, T *__restrict new_data,
+static void UpdateLoopNull(T *__restrict undo_data, T *__restrict base_data, T *__restrict new_data,
                              nullmask_t &undo_nullmask, nullmask_t &base_nullmask, nullmask_t &new_nullmask,
                              idx_t count, sel_t *__restrict base_sel, SegmentStatistics &stats) {
 	for (idx_t i = 0; i < count; i++) {
@@ -716,13 +716,13 @@ static void update_loop_null(T *__restrict undo_data, T *__restrict base_data, T
 		if (is_null) {
 			stats.statistics->has_null = true;
 		} else {
-			update_numeric_statistics<T>(stats, new_data[i]);
+			UpdateNumericStatistics<T>(stats, new_data[i]);
 		}
 	}
 }
 
 template <class T>
-static void update_loop_no_null(T *__restrict undo_data, T *__restrict base_data, T *__restrict new_data, idx_t count,
+static void UpdateLoopNoNull(T *__restrict undo_data, T *__restrict base_data, T *__restrict new_data, idx_t count,
                                 sel_t *__restrict base_sel, SegmentStatistics &stats) {
 	for (idx_t i = 0; i < count; i++) {
 		// first move the base data into the undo buffer info
@@ -730,7 +730,7 @@ static void update_loop_no_null(T *__restrict undo_data, T *__restrict base_data
 		// now move the new data in-place into the base table
 		base_data[base_sel[i]] = new_data[i];
 		// update the min max with the new data
-		update_numeric_statistics<T>(stats, new_data[i]);
+		UpdateNumericStatistics<T>(stats, new_data[i]);
 	}
 }
 
@@ -743,10 +743,10 @@ static void UpdateLoop(SegmentStatistics &stats, UpdateInfo *info, data_ptr_t ba
 	auto undo_data = (T *)info->tuple_data;
 
 	if (update_nullmask.any() || nullmask->any()) {
-		update_loop_null(undo_data, base_data, update_data, info->nullmask, *nullmask, update_nullmask, info->N,
+		UpdateLoopNull(undo_data, base_data, update_data, info->nullmask, *nullmask, update_nullmask, info->N,
 		                 info->tuples, stats);
 	} else {
-		update_loop_no_null(undo_data, base_data, update_data, info->N, info->tuples, stats);
+		UpdateLoopNoNull(undo_data, base_data, update_data, info->N, info->tuples, stats);
 	}
 }
 
@@ -794,7 +794,7 @@ static void MergeUpdateLoop(SegmentStatistics &stats, UpdateInfo *node, data_ptr
 	auto update_data = FlatVector::GetData<T>(update);
 	auto &update_nullmask = FlatVector::Nullmask(update);
 	for (idx_t i = 0; i < count; i++) {
-		update_numeric_statistics<T>(stats, update_data[i]);
+		UpdateNumericStatistics<T>(stats, update_data[i]);
 	}
 
 	// first we copy the old update info into a temporary structure

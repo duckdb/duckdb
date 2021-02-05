@@ -69,7 +69,7 @@ static uint8_t PositiveHugeintHighestBit(hugeint_t bits) {
 	return out;
 }
 
-static bool positive_hugeint_is_bit_set(hugeint_t lhs, uint8_t bit_position) {
+static bool PositiveHugeintIsBitSet(hugeint_t lhs, uint8_t bit_position) {
 	if (bit_position < 64) {
 		return lhs.lower & (uint64_t(1) << uint64_t(bit_position));
 	} else {
@@ -77,7 +77,7 @@ static bool positive_hugeint_is_bit_set(hugeint_t lhs, uint8_t bit_position) {
 	}
 }
 
-hugeint_t positive_hugeint_leftshift(hugeint_t lhs, uint32_t amount) {
+hugeint_t PositiveHugeintLeftShift(hugeint_t lhs, uint32_t amount) {
 	D_ASSERT(amount > 0 && amount < 64);
 	hugeint_t result;
 	result.lower = lhs.lower << amount;
@@ -100,10 +100,10 @@ hugeint_t Hugeint::DivModPositive(hugeint_t lhs, uint64_t rhs, uint64_t &remaind
 	// now iterate over the amount of bits that are set in the LHS
 	for (uint8_t x = highest_bit_set; x > 0; x--) {
 		// left-shift the current result and remainder by 1
-		div_result = positive_hugeint_leftshift(div_result, 1);
+		div_result = PositiveHugeintLeftShift(div_result, 1);
 		remainder <<= 1;
 		// we get the value of the bit at position X, where position 0 is the least-significant bit
-		if (positive_hugeint_is_bit_set(lhs, x - 1)) {
+		if (PositiveHugeintIsBitSet(lhs, x - 1)) {
 			// increment the remainder
 			remainder++;
 		}
@@ -277,11 +277,11 @@ hugeint_t Hugeint::DivMod(hugeint_t lhs, hugeint_t rhs, hugeint_t &remainder) {
 	// now iterate over the amount of bits that are set in the LHS
 	for (uint8_t x = highest_bit_set; x > 0; x--) {
 		// left-shift the current result and remainder by 1
-		div_result = positive_hugeint_leftshift(div_result, 1);
-		remainder = positive_hugeint_leftshift(remainder, 1);
+		div_result = PositiveHugeintLeftShift(div_result, 1);
+		remainder = PositiveHugeintLeftShift(remainder, 1);
 
 		// we get the value of the bit at position X, where position 0 is the least-significant bit
-		if (positive_hugeint_is_bit_set(lhs, x - 1)) {
+		if (PositiveHugeintIsBitSet(lhs, x - 1)) {
 			// increment the remainder
 			Hugeint::AddInPlace(remainder, 1);
 		}

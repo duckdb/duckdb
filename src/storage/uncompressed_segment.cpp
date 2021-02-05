@@ -319,7 +319,7 @@ void UncompressedSegment::FilterSelection(SelectionVector &sel, Vector &result, 
 	}
 }
 
-void UncompressedSegment::Select(Transaction &transaction, Vector &result, vector<TableFilter> &tableFilters,
+void UncompressedSegment::Select(Transaction &transaction, Vector &result, vector<TableFilter> &table_filters,
                                  SelectionVector &sel, idx_t &approved_tuple_count, ColumnScanState &state) {
 	auto read_lock = lock.GetSharedLock();
 	if (versions && versions[state.vector_index]) {
@@ -331,12 +331,12 @@ void UncompressedSegment::Select(Transaction &transaction, Vector &result, vecto
 		auto data = handle->node->buffer;
 		auto offset = vector_index * vector_size;
 		auto source_nullmask = (nullmask_t *)(data + offset);
-		for (auto &table_filter : tableFilters) {
+		for (auto &table_filter : table_filters) {
 			FilterSelection(sel, result, table_filter, approved_tuple_count, *source_nullmask);
 		}
 	} else {
 		//! Select the data from the base table
-		Select(state, result, sel, approved_tuple_count, tableFilters);
+		Select(state, result, sel, approved_tuple_count, table_filters);
 	}
 }
 

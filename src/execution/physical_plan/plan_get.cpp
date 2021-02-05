@@ -8,7 +8,7 @@
 
 namespace duckdb {
 
-unique_ptr<TableFilterSet> find_column_index(vector<TableFilter> &table_filters, vector<column_t> &column_ids) {
+unique_ptr<TableFilterSet> FindColumnIndex(vector<TableFilter> &table_filters, vector<column_t> &column_ids) {
 	// create the table filter map
 	auto table_filter_set = make_unique<TableFilterSet>();
 	for (auto &table_filter : table_filters) {
@@ -38,7 +38,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 
 	unique_ptr<TableFilterSet> table_filters;
 	if (!op.table_filters.empty()) {
-		table_filters = find_column_index(op.table_filters, op.column_ids);
+		table_filters = FindColumnIndex(op.table_filters, op.column_ids);
 	}
 
 	if (op.function.dependency) {

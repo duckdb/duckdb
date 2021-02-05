@@ -15,10 +15,9 @@
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
+#include "duckdb/common/chrono.hpp"
 
 namespace duckdb {
-
-using namespace std::chrono;
 
 DataTable::DataTable(DatabaseInstance &db, string schema, string table, vector<LogicalType> types_p,
                      unique_ptr<PersistentTableData> data)
@@ -246,13 +245,13 @@ void DataTable::InitializeScanWithOffset(TableScanState &state, const vector<col
 }
 
 idx_t DataTable::MaxThreads(ClientContext &context) {
-	idx_t PARALLEL_SCAN_VECTOR_COUNT = 100;
+	idx_t parallel_scan_vector_count = 100;
 	if (context.force_parallelism) {
-		PARALLEL_SCAN_VECTOR_COUNT = 1;
+		parallel_scan_vector_count = 1;
 	}
-	idx_t PARALLEL_SCAN_TUPLE_COUNT = STANDARD_VECTOR_SIZE * PARALLEL_SCAN_VECTOR_COUNT;
+	idx_t parallel_scan_tuple_count = STANDARD_VECTOR_SIZE * parallel_scan_vector_count;
 
-	return total_rows / PARALLEL_SCAN_TUPLE_COUNT + 1;
+	return total_rows / parallel_scan_tuple_count + 1;
 }
 
 void DataTable::InitializeParallelScan(ParallelTableScanState &state) {
@@ -262,14 +261,14 @@ void DataTable::InitializeParallelScan(ParallelTableScanState &state) {
 
 bool DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState &state, TableScanState &scan_state,
                                  const vector<column_t> &column_ids) {
-	idx_t PARALLEL_SCAN_VECTOR_COUNT = 100;
+	idx_t parallel_scan_vector_count = 100;
 	if (context.force_parallelism) {
-		PARALLEL_SCAN_VECTOR_COUNT = 1;
+		parallel_scan_vector_count = 1;
 	}
-	idx_t PARALLEL_SCAN_TUPLE_COUNT = STANDARD_VECTOR_SIZE * PARALLEL_SCAN_VECTOR_COUNT;
+	idx_t parallel_scan_tuple_count = STANDARD_VECTOR_SIZE * parallel_scan_vector_count;
 
 	if (state.current_row < total_rows) {
-		idx_t next = MinValue(state.current_row + PARALLEL_SCAN_TUPLE_COUNT, total_rows);
+		idx_t next = MinValue(state.current_row + parallel_scan_tuple_count, total_rows);
 
 		// scan a morsel from the persistent rows
 		InitializeScanWithOffset(scan_state, column_ids, scan_state.table_filters, state.current_row, next);

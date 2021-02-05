@@ -64,7 +64,7 @@ public:
 	static void FilterSelection(SelectionVector &sel, Vector &result, const TableFilter &filter,
 	                            idx_t &approved_tuple_count, nullmask_t &nullmask);
 	//! Executes the filters directly in the table's data
-	void Select(Transaction &transaction, Vector &result, vector<TableFilter> &tableFilters, SelectionVector &sel,
+	void Select(Transaction &transaction, Vector &result, vector<TableFilter> &table_filters, SelectionVector &sel,
 	            idx_t &approved_tuple_count, ColumnScanState &state);
 	//! Fetch a single vector from the base table
 	void Fetch(ColumnScanState &state, idx_t vector_index, Vector &result);

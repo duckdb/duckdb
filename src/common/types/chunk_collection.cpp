@@ -373,7 +373,7 @@ void ChunkCollection::Reorder(idx_t order_org[]) {
 }
 
 template <class TYPE>
-static void templated_set_values(ChunkCollection *src_coll, Vector &tgt_vec, idx_t order[], idx_t col_idx,
+static void TemplatedSetValues(ChunkCollection *src_coll, Vector &tgt_vec, idx_t order[], idx_t col_idx,
                                  idx_t start_offset, idx_t remaining_data) {
 	D_ASSERT(src_coll);
 
@@ -404,43 +404,43 @@ void ChunkCollection::MaterializeSortedChunk(DataChunk &target, idx_t order[], i
 		switch (types[col_idx].InternalType()) {
 		case PhysicalType::BOOL:
 		case PhysicalType::INT8:
-			templated_set_values<int8_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
+			TemplatedSetValues<int8_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
 		case PhysicalType::INT16:
-			templated_set_values<int16_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
+			TemplatedSetValues<int16_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
 		case PhysicalType::INT32:
-			templated_set_values<int32_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
+			TemplatedSetValues<int32_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
 		case PhysicalType::INT64:
-			templated_set_values<int64_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
+			TemplatedSetValues<int64_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
 		case PhysicalType::UINT8:
-			templated_set_values<uint8_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
+			TemplatedSetValues<uint8_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
 		case PhysicalType::UINT16:
-			templated_set_values<uint16_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
+			TemplatedSetValues<uint16_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
 		case PhysicalType::UINT32:
-			templated_set_values<uint32_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
+			TemplatedSetValues<uint32_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
 		case PhysicalType::UINT64:
-			templated_set_values<uint64_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
+			TemplatedSetValues<uint64_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
 		case PhysicalType::INT128:
-			templated_set_values<hugeint_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
+			TemplatedSetValues<hugeint_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
 		case PhysicalType::FLOAT:
-			templated_set_values<float>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
+			TemplatedSetValues<float>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
 		case PhysicalType::DOUBLE:
-			templated_set_values<double>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
+			TemplatedSetValues<double>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
 		case PhysicalType::VARCHAR:
-			templated_set_values<string_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
+			TemplatedSetValues<string_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
 		case PhysicalType::INTERVAL:
-			templated_set_values<interval_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
+			TemplatedSetValues<interval_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
 
 		case PhysicalType::LIST:
@@ -582,28 +582,28 @@ idx_t ChunkCollection::MaterializeHeapChunk(DataChunk &target, idx_t order[], id
 		switch (types[col_idx].InternalType()) {
 		case PhysicalType::BOOL:
 		case PhysicalType::INT8:
-			templated_set_values<int8_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
+			TemplatedSetValues<int8_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
 		case PhysicalType::INT16:
-			templated_set_values<int16_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
+			TemplatedSetValues<int16_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
 		case PhysicalType::INT32:
-			templated_set_values<int32_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
+			TemplatedSetValues<int32_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
 		case PhysicalType::INT64:
-			templated_set_values<int64_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
+			TemplatedSetValues<int64_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
 		case PhysicalType::INT128:
-			templated_set_values<hugeint_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
+			TemplatedSetValues<hugeint_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
 		case PhysicalType::FLOAT:
-			templated_set_values<float>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
+			TemplatedSetValues<float>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
 		case PhysicalType::DOUBLE:
-			templated_set_values<double>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
+			TemplatedSetValues<double>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
 		case PhysicalType::VARCHAR:
-			templated_set_values<string_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
+			TemplatedSetValues<string_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
 			// TODO this is ugly and sloooow!
 		case PhysicalType::STRUCT:

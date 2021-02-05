@@ -50,7 +50,7 @@ idx_t MergeJoinSimple::GreaterThanEquals::Operation(ScalarMergeInfo &l, ChunkMer
 }
 
 template <class T, class OP>
-static idx_t merge_join_simple_lt(ScalarMergeInfo &l, ChunkMergeInfo &r) {
+static idx_t MergeJoinSimpleLessThan(ScalarMergeInfo &l, ChunkMergeInfo &r) {
 	auto ldata = (T *)l.order.vdata.data;
 	auto &lorder = l.order.order;
 	l.pos = 0;
@@ -86,12 +86,12 @@ static idx_t merge_join_simple_lt(ScalarMergeInfo &l, ChunkMergeInfo &r) {
 
 template <class T>
 idx_t MergeJoinSimple::LessThan::Operation(ScalarMergeInfo &l, ChunkMergeInfo &r) {
-	return merge_join_simple_lt<T, duckdb::LessThan>(l, r);
+	return MergeJoinSimpleLessThan<T, duckdb::LessThan>(l, r);
 }
 
 template <class T>
 idx_t MergeJoinSimple::LessThanEquals::Operation(ScalarMergeInfo &l, ChunkMergeInfo &r) {
-	return merge_join_simple_lt<T, duckdb::LessThanEquals>(l, r);
+	return MergeJoinSimpleLessThan<T, duckdb::LessThanEquals>(l, r);
 }
 
 INSTANTIATE_MERGEJOIN_TEMPLATES(MergeJoinSimple, LessThan, ScalarMergeInfo, ChunkMergeInfo)

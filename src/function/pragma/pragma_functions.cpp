@@ -118,7 +118,7 @@ static void PragmaForceCheckpoint(ClientContext &context, FunctionParameters par
 	DBConfig::GetConfig(context).force_checkpoint = true;
 }
 
-static void pragma_disable_force_parallelism(ClientContext &context, FunctionParameters parameters) {
+static void PragmaDisableForceParallelism(ClientContext &context, FunctionParameters parameters) {
 	context.force_parallelism = false;
 }
 
@@ -226,7 +226,7 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_verification", PragmaDisableVerification));
 
 	set.AddFunction(PragmaFunction::PragmaStatement("force_parallelism", PragmaEnableForceParallelism));
-	set.AddFunction(PragmaFunction::PragmaStatement("disable_force_parallelism", pragma_disable_force_parallelism));
+	set.AddFunction(PragmaFunction::PragmaStatement("disable_force_parallelism", PragmaDisableForceParallelism));
 
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_object_cache", PragmaEnableObjectCache));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_object_cache", PragmaDisableObjectCache));

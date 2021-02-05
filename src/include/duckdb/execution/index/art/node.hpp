@@ -21,7 +21,7 @@ public:
 	static const uint8_t EMPTY_MARKER = 48;
 
 public:
-	Node(ART &art, NodeType type, size_t compressedPrefixSize);
+	Node(ART &art, NodeType type, size_t compressed_prefix_size);
 	virtual ~Node() {
 	}
 

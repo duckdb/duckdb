@@ -286,7 +286,7 @@ void QueryProfiler::ToStream(std::ostream &ss, bool print_optimizer_output) cons
 		return;
 	}
 
-	idx_t TOTAL_BOX_WIDTH = 39;
+	constexpr idx_t TOTAL_BOX_WIDTH = 39;
 	ss << "┌─────────────────────────────────────┐\n";
 	ss << "│┌───────────────────────────────────┐│\n";
 	string total_time = "Total Time: " + RenderTiming(main_query.Elapsed());

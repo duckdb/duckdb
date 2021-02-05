@@ -6,7 +6,7 @@
 
 namespace duckdb {
 
-Node16::Node16(ART &art, size_t compressionLength) : Node(art, NodeType::N16, compressionLength) {
+Node16::Node16(ART &art, size_t compression_length) : Node(art, NodeType::N16, compression_length) {
 	memset(key, 16, sizeof(key));
 }
 
@@ -52,13 +52,13 @@ idx_t Node16::GetMin() {
 	return 0;
 }
 
-void Node16::insert(ART &art, unique_ptr<Node> &node, uint8_t keyByte, unique_ptr<Node> &child) {
+void Node16::insert(ART &art, unique_ptr<Node> &node, uint8_t key_byte, unique_ptr<Node> &child) {
 	Node16 *n = static_cast<Node16 *>(node.get());
 
 	if (n->count < 16) {
 		// Insert element
 		idx_t pos = 0;
-		while(pos < node->count && n->key[pos] < keyByte) {
+		while(pos < node->count && n->key[pos] < key_byte) {
 			pos++;
 		}
 		if (n->child[pos] != nullptr) {
@@ -67,21 +67,21 @@ void Node16::insert(ART &art, unique_ptr<Node> &node, uint8_t keyByte, unique_pt
 				n->child[i] = move(n->child[i - 1]);
 			}
 		}
-		n->key[pos] = keyByte;
+		n->key[pos] = key_byte;
 		n->child[pos] = move(child);
 		n->count++;
 	} else {
 		// Grow to Node48
 		auto new_node = make_unique<Node48>(art, n->prefix_length);
 		for (idx_t i = 0; i < node->count; i++) {
-			new_node->childIndex[n->key[i]] = i;
+			new_node->child_index[n->key[i]] = i;
 			new_node->child[i] = move(n->child[i]);
 		}
 		CopyPrefix(art, n, new_node.get());
 		new_node->count = node->count;
 		node = move(new_node);
 
-		Node48::insert(art, node, keyByte, child);
+		Node48::insert(art, node, key_byte, child);
 	}
 }
 

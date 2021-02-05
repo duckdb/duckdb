@@ -150,7 +150,7 @@ static void SubstringFunction(DataChunk &args, ExpressionState &state, Vector &r
 	}
 }
 
-static void substring_function_ascii(DataChunk &args, ExpressionState &state, Vector &result) {
+static void SubstringFunctionASCII(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &input_vector = args.data[0];
 	auto &offset_vector = args.data[1];
 	if (args.ColumnCount() == 3) {
@@ -179,7 +179,7 @@ static unique_ptr<BaseStatistics> SubstringPropagateStats(ClientContext &context
 	// we only care about the stats of the first child (i.e. the string)
 	auto &sstats = (StringStatistics &)*child_stats[0];
 	if (!sstats.has_unicode) {
-		expr.function.function = substring_function_ascii;
+		expr.function.function = SubstringFunctionASCII;
 	}
 	return nullptr;
 }
