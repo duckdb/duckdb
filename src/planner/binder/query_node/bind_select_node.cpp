@@ -38,15 +38,16 @@ unique_ptr<Expression> Binder::BindOrderExpression(OrderBinder &order_binder, un
 	return bound_expr;
 }
 
-unique_ptr<Expression> bind_delimiter(ClientContext& context, unique_ptr<ParsedExpression> delimiter, int64_t & delimiter_value ) {
+unique_ptr<Expression> bind_delimiter(ClientContext &context, unique_ptr<ParsedExpression> delimiter,
+                                      int64_t &delimiter_value) {
 	Binder new_binder(context);
 	ExpressionBinder expr_binder(new_binder, context);
 	expr_binder.target_type = LogicalType::UBIGINT;
 	auto expr = expr_binder.Bind(delimiter);
-	if (expr->IsFoldable()){
+	if (expr->IsFoldable()) {
 		//! this is a constant
 		Value value = ExpressionExecutor::EvaluateScalar(*expr).CastAs(LogicalType::BIGINT);
-	    delimiter_value = value.GetValue<int64_t>();
+		delimiter_value = value.GetValue<int64_t>();
 		return nullptr;
 	}
 	return expr;
@@ -55,10 +56,10 @@ unique_ptr<Expression> bind_delimiter(ClientContext& context, unique_ptr<ParsedE
 unique_ptr<BoundResultModifier> Binder::BindLimit(LimitModifier &limit_mod) {
 	auto result = make_unique<BoundLimitModifier>();
 	if (limit_mod.limit) {
-		result->limit = bind_delimiter(context,move(limit_mod.limit),result->limit_val);
+		result->limit = bind_delimiter(context, move(limit_mod.limit), result->limit_val);
 	}
 	if (limit_mod.offset) {
-		result->offset = bind_delimiter(context,move(limit_mod.offset),result->offset_val);
+		result->offset = bind_delimiter(context, move(limit_mod.offset), result->offset_val);
 	}
 	return move(result);
 }

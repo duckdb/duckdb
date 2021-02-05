@@ -11,7 +11,7 @@ static string ExtractColumnFromLambda(ParsedExpression &expr) {
 	if (expr.type != ExpressionType::COLUMN_REF) {
 		throw ParserException("Lambda parameter must be a column name");
 	}
-	auto &colref = (ColumnRefExpression &) expr;
+	auto &colref = (ColumnRefExpression &)expr;
 	if (!colref.table_name.empty()) {
 		throw ParserException("Lambda parameter must be an unqualified name (e.g. 'x', not 'a.x')");
 	}
@@ -24,7 +24,7 @@ unique_ptr<ParsedExpression> Transformer::TransformLambda(duckdb_libpgquery::PGL
 		throw ParserException("Failed to transform expression list");
 	}
 	vector<string> parameters;
-	for(auto &expr : parameter_expressions) {
+	for (auto &expr : parameter_expressions) {
 		parameters.push_back(ExtractColumnFromLambda(*expr));
 	}
 

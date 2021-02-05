@@ -17,7 +17,7 @@ MoveConstantsRule::MoveConstantsRule(ExpressionRewriter &rewriter) : Rule(rewrit
 	// we handle multiplication, addition and subtraction because those are "easy"
 	// integer division makes the division case difficult
 	// e.g. [x / 2 = 3] means [x = 6 OR x = 7] because of truncation -> no clean rewrite rules
-	arithmetic->function = make_unique<ManyFunctionMatcher>(unordered_set<string>{"+", "-", "*"});
+	arithmetic->function = make_unique<ManyFunctionMatcher>(unordered_set<string> {"+", "-", "*"});
 	// we match only on integral numeric types
 	arithmetic->type = make_unique<IntegerTypeMatcher>();
 	arithmetic->matchers.push_back(make_unique<ConstantExpressionMatcher>());

@@ -39,7 +39,7 @@ public:
 	//! The types of all conditions
 	vector<LogicalType> build_types;
 	//! Index used for join
-	Index *index{};
+	Index *index {};
 
 	vector<JoinCondition> conditions;
 

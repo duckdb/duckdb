@@ -70,7 +70,8 @@ public:
 	shared_ptr<DatabaseInstance> instance;
 
 public:
-	template <class T> void LoadExtension() {
+	template <class T>
+	void LoadExtension() {
 		T extension;
 		extension.Load(*this);
 	}

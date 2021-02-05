@@ -25,15 +25,18 @@ public:
 	static double DoublePowersOfTen[40];
 
 public:
-	template <class T> static int UnsignedLength(T value);
-	template <class SIGNED, class UNSIGNED> static int SignedLength(SIGNED value) {
+	template <class T>
+	static int UnsignedLength(T value);
+	template <class SIGNED, class UNSIGNED>
+	static int SignedLength(SIGNED value) {
 		int sign = -(value < 0);
 		UNSIGNED unsigned_value = (value ^ sign) - sign;
 		return UnsignedLength(unsigned_value) - sign;
 	}
 
 	// Formats value in reverse and returns a pointer to the beginning.
-	template <class T> static char *FormatUnsigned(T value, char *ptr) {
+	template <class T>
+	static char *FormatUnsigned(T value, char *ptr) {
 		while (value >= 100) {
 			// Integer division is slow so do it for a group of two digits instead
 			// of for every digit. The idea comes from the talk by Alexandrescu
@@ -53,7 +56,8 @@ public:
 		return ptr;
 	}
 
-	template <class SIGNED, class UNSIGNED> static string_t FormatSigned(SIGNED value, Vector &vector) {
+	template <class SIGNED, class UNSIGNED>
+	static string_t FormatSigned(SIGNED value, Vector &vector) {
 		int sign = -(value < 0);
 		UNSIGNED unsigned_value = (value ^ sign) - sign;
 		int length = UnsignedLength<UNSIGNED>(unsigned_value) - sign;
@@ -69,13 +73,18 @@ public:
 	}
 };
 
-template <> int NumericHelper::UnsignedLength(uint8_t value);
-template <> int NumericHelper::UnsignedLength(uint16_t value);
-template <> int NumericHelper::UnsignedLength(uint32_t value);
-template <> int NumericHelper::UnsignedLength(uint64_t value);
+template <>
+int NumericHelper::UnsignedLength(uint8_t value);
+template <>
+int NumericHelper::UnsignedLength(uint16_t value);
+template <>
+int NumericHelper::UnsignedLength(uint32_t value);
+template <>
+int NumericHelper::UnsignedLength(uint64_t value);
 
 struct DecimalToString {
-	template <class SIGNED, class UNSIGNED> static int DecimalLength(SIGNED value, uint8_t scale) {
+	template <class SIGNED, class UNSIGNED>
+	static int DecimalLength(SIGNED value, uint8_t scale) {
 		if (scale == 0) {
 			// scale is 0: regular number
 			return NumericHelper::SignedLength<SIGNED, UNSIGNED>(value);
@@ -117,7 +126,8 @@ struct DecimalToString {
 		dst = NumericHelper::FormatUnsigned<UNSIGNED>(major, dst);
 	}
 
-	template <class SIGNED, class UNSIGNED> static string_t Format(SIGNED value, uint8_t scale, Vector &vector) {
+	template <class SIGNED, class UNSIGNED>
+	static string_t Format(SIGNED value, uint8_t scale, Vector &vector) {
 		int len = DecimalLength<SIGNED, UNSIGNED>(value, scale);
 		string_t result = StringVector::EmptyString(vector, len);
 		FormatDecimal<SIGNED, UNSIGNED>(value, scale, result.GetDataWriteable(), len);
@@ -367,11 +377,11 @@ struct TimeToStringCast {
 	static int32_t FormatMicros(uint32_t microseconds, char micro_buffer[]) {
 		char *endptr = micro_buffer + 6;
 		endptr = NumericHelper::FormatUnsigned<uint32_t>(microseconds, endptr);
-		while(endptr > micro_buffer) {
+		while (endptr > micro_buffer) {
 			*--endptr = '0';
 		}
 		idx_t trailing_zeros = 0;
-		for(idx_t i = 5; i > 0; i--) {
+		for (idx_t i = 5; i > 0; i--) {
 			if (micro_buffer[i] != '0') {
 				break;
 			}

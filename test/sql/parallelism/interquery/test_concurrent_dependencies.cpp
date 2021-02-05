@@ -9,7 +9,7 @@
 using namespace duckdb;
 using namespace std;
 
-#define CONCURRENT_DEPENDENCIES_REPETITIONS 100
+#define CONCURRENT_DEPENDENCIES_REPETITIONS  100
 #define CONCURRENT_DEPENDENCIES_THREAD_COUNT 10
 
 atomic<bool> finished;

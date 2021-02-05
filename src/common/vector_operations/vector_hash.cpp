@@ -10,7 +10,8 @@
 namespace duckdb {
 
 struct HashOp {
-	template <class T> static inline hash_t Operation(T input, bool is_null) {
+	template <class T>
+	static inline hash_t Operation(T input, bool is_null) {
 		return duckdb::Hash<T>(is_null ? duckdb::NullValue<T>() : input);
 	}
 };

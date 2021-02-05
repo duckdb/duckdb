@@ -113,9 +113,11 @@ private:
 	void SplitUpExtraInfo(string extra_info, vector<string> &result);
 	void SplitStringBuffer(const string &source, vector<string> &result);
 
-	template <class T> idx_t CreateRenderTreeRecursive(RenderTree &result, const T &op, idx_t x, idx_t y);
+	template <class T>
+	idx_t CreateRenderTreeRecursive(RenderTree &result, const T &op, idx_t x, idx_t y);
 
-	template <class T> unique_ptr<RenderTree> CreateRenderTree(const T &op);
+	template <class T>
+	unique_ptr<RenderTree> CreateRenderTree(const T &op);
 };
 
 } // namespace duckdb

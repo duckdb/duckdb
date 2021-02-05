@@ -2,7 +2,7 @@
 
 namespace duckdb {
 
-DropStatement::DropStatement() : SQLStatement(StatementType::DROP_STATEMENT), info(make_unique<DropInfo>()){};
+DropStatement::DropStatement() : SQLStatement(StatementType::DROP_STATEMENT), info(make_unique<DropInfo>()) {};
 
 unique_ptr<SQLStatement> DropStatement::Copy() const {
 	auto result = make_unique<DropStatement>();

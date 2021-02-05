@@ -14,7 +14,8 @@ public:
 		max_val = (1 << bit_width_) - 1;
 	}
 
-	template <typename T> void GetBatch(char *values_target_ptr, uint32_t batch_size) {
+	template <typename T>
+	void GetBatch(char *values_target_ptr, uint32_t batch_size) {
 		auto values = (T *)values_target_ptr;
 		uint32_t values_read = 0;
 
@@ -80,7 +81,8 @@ private:
 
 	/// Fills literal_count_ and repeat_count_ with next values. Returns false if there
 	/// are no more.
-	template <typename T> bool NextCounts() {
+	template <typename T>
+	bool NextCounts() {
 		// Read the next run's indicator int, it could be a literal or repeated run.
 		// The int is encoded as a vlq-encoded value.
 		if (bitpack_pos != 0) {
@@ -114,7 +116,8 @@ private:
 	static const uint32_t BITPACK_MASKS[];
 	static const uint8_t BITPACK_DLEN;
 
-	template <typename T> uint32_t BitUnpack(T *dest, uint32_t count) {
+	template <typename T>
+	uint32_t BitUnpack(T *dest, uint32_t count) {
 		auto mask = BITPACK_MASKS[bit_width_];
 
 		for (uint32_t i = 0; i < count; i++) {

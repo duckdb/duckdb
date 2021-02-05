@@ -1,6 +1,6 @@
-# name: test/sql/function/date/test_strftime_exhausted.test
+# name: test/sql/function/timestamp/test_strftime_timestamp.test
 # description: Test all strftime % codes with the date type
-# group: [date]
+# group: [timestamp]
 
 statement ok
 PRAGMA enable_verification

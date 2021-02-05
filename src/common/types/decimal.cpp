@@ -3,7 +3,8 @@
 
 namespace duckdb {
 
-template <class SIGNED, class UNSIGNED> string decimal_to_string(SIGNED value, uint8_t scale) {
+template <class SIGNED, class UNSIGNED>
+string decimal_to_string(SIGNED value, uint8_t scale) {
 	auto len = DecimalToString::DecimalLength<SIGNED, UNSIGNED>(value, scale);
 	auto data = unique_ptr<char[]>(new char[len + 1]);
 	DecimalToString::FormatDecimal<SIGNED, UNSIGNED>(value, scale, data.get(), len);

@@ -89,7 +89,7 @@ private:
 			auto bidx = bsel.get_index(i);
 			auto cidx = csel.get_index(i);
 			bool comparison_result = (NO_NULL || (!anullmask[aidx] && !bnullmask[bidx] && !cnullmask[cidx])) &&
-			    OP::Operation(adata[aidx], bdata[bidx], cdata[cidx]);
+			                         OP::Operation(adata[aidx], bdata[bidx], cdata[cidx]);
 			if (HAS_TRUE_SEL) {
 				true_sel->set_index(true_count, result_idx);
 				true_count += comparison_result;

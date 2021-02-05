@@ -35,7 +35,8 @@ static unique_ptr<BaseStatistics> templated_get_numeric_stats(const LogicalType 
 	return move(stats);
 }
 
-template <class T> static Value transform_statistics_plain(const_data_ptr_t input) {
+template <class T>
+static Value transform_statistics_plain(const_data_ptr_t input) {
 	return Value(Load<T>(input));
 }
 

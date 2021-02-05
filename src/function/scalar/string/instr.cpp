@@ -9,7 +9,8 @@
 namespace duckdb {
 
 struct InstrOperator {
-	template <class TA, class TB, class TR> static inline TR Operation(TA haystack, TB needle) {
+	template <class TA, class TB, class TR>
+	static inline TR Operation(TA haystack, TB needle) {
 		int64_t string_position = 0;
 
 		auto location = ContainsFun::Find(haystack, needle);
@@ -29,7 +30,8 @@ struct InstrOperator {
 };
 
 struct InstrAsciiOperator {
-	template <class TA, class TB, class TR> static inline TR Operation(TA haystack, TB needle) {
+	template <class TA, class TB, class TR>
+	static inline TR Operation(TA haystack, TB needle) {
 		auto location = ContainsFun::Find(haystack, needle);
 		return location == INVALID_INDEX ? 0 : location + 1;
 	}

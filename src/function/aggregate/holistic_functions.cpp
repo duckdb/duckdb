@@ -8,5 +8,4 @@ void BuiltinFunctions::RegisterHolisticAggregates() {
 	Register<ReservoirQuantileFun>();
 }
 
-
 } // namespace duckdb

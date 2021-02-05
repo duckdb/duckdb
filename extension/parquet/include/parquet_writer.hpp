@@ -22,7 +22,8 @@ class FileSystem;
 
 class ParquetWriter {
 public:
-	ParquetWriter(FileSystem &fs, string file_name, vector<LogicalType> types, vector<string> names, parquet::format::CompressionCodec::type codec);
+	ParquetWriter(FileSystem &fs, string file_name, vector<LogicalType> types, vector<string> names,
+	              parquet::format::CompressionCodec::type codec);
 
 public:
 	void Flush(ChunkCollection &buffer);

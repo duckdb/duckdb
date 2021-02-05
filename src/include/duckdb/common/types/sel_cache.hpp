@@ -18,4 +18,4 @@ struct SelCache {
 	unordered_map<sel_t *, buffer_ptr<VectorBuffer>> cache;
 };
 
-}
+} // namespace duckdb

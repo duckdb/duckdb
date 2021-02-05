@@ -51,8 +51,8 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 	}
 
 	//! Use zonemap checks as table filters for pre-processing
-	for (auto& zonemap_check: zonemap_checks){
-		if (zonemap_check.column_index != COLUMN_IDENTIFIER_ROW_ID){
+	for (auto &zonemap_check : zonemap_checks) {
+		if (zonemap_check.column_index != COLUMN_IDENTIFIER_ROW_ID) {
 			get.table_filters.push_back(zonemap_check);
 		}
 	}

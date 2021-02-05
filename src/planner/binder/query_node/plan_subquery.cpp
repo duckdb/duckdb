@@ -318,7 +318,7 @@ unique_ptr<Expression> Binder::PlanSubquery(BoundSubqueryExpression &expr, uniqu
 }
 
 void Binder::PlanSubqueries(unique_ptr<Expression> *expr_ptr, unique_ptr<LogicalOperator> *root) {
-	if (!*expr_ptr){
+	if (!*expr_ptr) {
 		return;
 	}
 	auto &expr = **expr_ptr;

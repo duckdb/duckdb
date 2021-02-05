@@ -14,7 +14,8 @@
 
 namespace duckdb {
 
-template <class T> class FunctionSet {
+template <class T>
+class FunctionSet {
 public:
 	FunctionSet(string name) : name(name) {
 	}

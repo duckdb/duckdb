@@ -10,14 +10,17 @@
 
 namespace duckdb {
 
-static unique_ptr<ParsedExpression> BindColumn(Binder &binder, ClientContext &context, const string &alias, const string &column_name) {
+static unique_ptr<ParsedExpression> BindColumn(Binder &binder, ClientContext &context, const string &alias,
+                                               const string &column_name) {
 	auto expr = make_unique_base<ParsedExpression, ColumnRefExpression>(column_name, alias);
 	ExpressionBinder expr_binder(binder, context);
 	auto result = expr_binder.Bind(expr);
 	return make_unique<BoundExpression>(move(result), nullptr);
 }
 
-static unique_ptr<ParsedExpression> AddCondition(ClientContext &context, Binder &left_binder, Binder &right_binder, const string &left_alias, const string &right_alias, const string &column_name) {
+static unique_ptr<ParsedExpression> AddCondition(ClientContext &context, Binder &left_binder, Binder &right_binder,
+                                                 const string &left_alias, const string &right_alias,
+                                                 const string &column_name) {
 	ExpressionBinder expr_binder(left_binder, context);
 	auto left = BindColumn(left_binder, context, left_alias, column_name);
 	auto right = BindColumn(right_binder, context, right_alias, column_name);
@@ -33,8 +36,8 @@ bool Binder::TryFindBinding(const string &using_column, const string &join_side,
 	// find the join binding
 	for (auto &binding : bindings) {
 		if (!result.empty()) {
-			string error = "Column name \"" + using_column +
-							"\" is ambiguous: it exists more than once on " + join_side + " side of join.\nCandidates:";
+			string error = "Column name \"" + using_column + "\" is ambiguous: it exists more than once on " +
+			               join_side + " side of join.\nCandidates:";
 			for (auto &binding : bindings) {
 				error += "\n\t" + binding + "." + using_column;
 			}
@@ -54,10 +57,9 @@ string Binder::FindBinding(const string &using_column, const string &join_side) 
 	return result;
 }
 
-
 static void AddUsingBindings(UsingColumnSet &set, UsingColumnSet *input_set, const string &input_binding) {
 	if (input_set) {
-		for(auto &entry : input_set->bindings) {
+		for (auto &entry : input_set->bindings) {
 			set.bindings.insert(entry);
 		}
 	} else {
@@ -65,8 +67,9 @@ static void AddUsingBindings(UsingColumnSet &set, UsingColumnSet *input_set, con
 	}
 }
 
-static void SetPrimaryBinding(UsingColumnSet &set, JoinType join_type, const string &left_binding, const string &right_binding) {
-	switch(join_type) {
+static void SetPrimaryBinding(UsingColumnSet &set, JoinType join_type, const string &left_binding,
+                              const string &right_binding) {
+	switch (join_type) {
 	case JoinType::LEFT:
 	case JoinType::INNER:
 	case JoinType::SEMI:
@@ -132,11 +135,13 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 			// first check if the binding is ambiguous on the LHS
 			if (!left_using_binding && left_binding.empty()) {
 				// binding is ambiguous on left or right side: throw an exception
-				string error_msg = "Column name \"" + column_name + "\" is ambiguous: it exists more than once on the left side of the join.";
+				string error_msg = "Column name \"" + column_name +
+				                   "\" is ambiguous: it exists more than once on the left side of the join.";
 				throw BinderException(FormatError(ref, error_msg));
 			}
 			// there is a match! create the join condition
-			extra_conditions.push_back(AddCondition(context, left_binder, right_binder, left_binding, right_binding, column_name));
+			extra_conditions.push_back(
+			    AddCondition(context, left_binder, right_binder, left_binding, right_binding, column_name));
 
 			UsingColumnSet set;
 			AddUsingBindings(set, left_using_binding, left_binding);
@@ -193,7 +198,8 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 			} else {
 				right_binding = right_using_binding->primary_binding;
 			}
-			extra_conditions.push_back(AddCondition(context, left_binder, right_binder, left_binding, right_binding, using_column));
+			extra_conditions.push_back(
+			    AddCondition(context, left_binder, right_binder, left_binding, right_binding, using_column));
 
 			UsingColumnSet set;
 			AddUsingBindings(set, left_using_binding, left_binding);
@@ -208,9 +214,10 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 	bind_context.AddContext(move(right_binder.bind_context));
 	MoveCorrelatedExpressions(left_binder);
 	MoveCorrelatedExpressions(right_binder);
-	for(auto &condition : extra_conditions) {
+	for (auto &condition : extra_conditions) {
 		if (ref.condition) {
-			ref.condition = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, move(ref.condition), move(condition));
+			ref.condition = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, move(ref.condition),
+			                                                   move(condition));
 		} else {
 			ref.condition = move(condition);
 		}

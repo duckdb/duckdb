@@ -63,7 +63,7 @@ struct QualifiedName {
 		} else {
 			throw ParserException("Expected schema.entry or entry: too many entries found");
 		}
-		return QualifiedName{schema, name};
+		return QualifiedName {schema, name};
 	}
 };
 

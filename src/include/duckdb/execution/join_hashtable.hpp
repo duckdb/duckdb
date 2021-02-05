@@ -81,7 +81,8 @@ public:
 		//! Scan the hashtable for matches of the specified keys, setting the found_match[] array to true or false for
 		//! every tuple
 		void ScanKeyMatches(DataChunk &keys);
-		template <bool MATCH> void NextSemiOrAntiJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
+		template <bool MATCH>
+		void NextSemiOrAntiJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
 
 		void ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &child, DataChunk &result);
 

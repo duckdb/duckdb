@@ -56,9 +56,9 @@ UsingColumnSet *BindContext::GetUsingBinding(const string &column_name) {
 	}
 	if (entry->second.size() > 1) {
 		string error = "Ambiguous column reference: column \"" + column_name + "\" can refer to either:\n";
-		for(auto &using_set : entry->second) {
+		for (auto &using_set : entry->second) {
 			string result_bindings;
-			for(auto &binding : using_set.bindings) {
+			for (auto &binding : using_set.bindings) {
 				if (result_bindings.empty()) {
 					result_bindings = "[";
 				} else {
@@ -81,7 +81,7 @@ UsingColumnSet *BindContext::GetUsingBinding(const string &column_name, const st
 	if (entry == using_columns.end()) {
 		return nullptr;
 	}
-	for(auto &using_set : entry->second) {
+	for (auto &using_set : entry->second) {
 		auto &bindings = using_set.bindings;
 		if (bindings.find(binding_name) != bindings.end()) {
 			return &using_set;
@@ -97,7 +97,7 @@ void BindContext::RemoveUsingBinding(const string &column_name, UsingColumnSet *
 	auto entry = using_columns.find(column_name);
 	D_ASSERT(entry != using_columns.end());
 	auto &bindings = entry->second;
-	for(size_t i = 0; i < bindings.size(); i++) {
+	for (size_t i = 0; i < bindings.size(); i++) {
 		if (&bindings[i] == set) {
 			bindings.erase(bindings.begin() + i);
 			break;
@@ -163,7 +163,7 @@ void BindContext::GenerateAllColumnExpressions(vector<unique_ptr<ParsedExpressio
 	}
 	if (relation_name == "") { // SELECT * case
 		// bind all expressions of each table in-order
-		unordered_set<UsingColumnSet*> handled_using_columns;
+		unordered_set<UsingColumnSet *> handled_using_columns;
 		for (auto &entry : bindings_list) {
 			auto binding = entry.second;
 			for (auto &column_name : binding->names) {
@@ -180,13 +180,14 @@ void BindContext::GenerateAllColumnExpressions(vector<unique_ptr<ParsedExpressio
 					if (using_binding->primary_binding.empty()) {
 						// no primary binding: output a coalesce
 						auto coalesce = make_unique<OperatorExpression>(ExpressionType::OPERATOR_COALESCE);
-						for(auto &child_binding : using_binding->bindings) {
+						for (auto &child_binding : using_binding->bindings) {
 							coalesce->children.push_back(make_unique<ColumnRefExpression>(column_name, child_binding));
 						}
 						new_select_list.push_back(move(coalesce));
 					} else {
 						// primary binding: output the qualified column ref
-						new_select_list.push_back(make_unique<ColumnRefExpression>(column_name, using_binding->primary_binding));
+						new_select_list.push_back(
+						    make_unique<ColumnRefExpression>(column_name, using_binding->primary_binding));
 					}
 					handled_using_columns.insert(using_binding);
 					continue;
@@ -272,10 +273,10 @@ void BindContext::AddContext(BindContext other) {
 		bindings_list.push_back(move(binding));
 	}
 	for (auto &entry : other.using_columns) {
-		for(auto &alias : entry.second) {
+		for (auto &alias : entry.second) {
 #ifdef DEBUG
-			for(auto &other_alias : using_columns[entry.first]) {
-				for(auto &col : alias.bindings) {
+			for (auto &other_alias : using_columns[entry.first]) {
+				for (auto &col : alias.bindings) {
 					D_ASSERT(other_alias.bindings.find(col) == other_alias.bindings.end());
 				}
 			}

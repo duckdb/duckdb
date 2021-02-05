@@ -79,7 +79,8 @@ public:
 	//! Add an implicit join condition (e.g. USING (x))
 	void AddUsingBinding(const string &column_name, UsingColumnSet set);
 
-	//! Returns any using column set for the given column name, or nullptr if there is none. On conflict (multiple using column sets with the same name) throw an exception.
+	//! Returns any using column set for the given column name, or nullptr if there is none. On conflict (multiple using
+	//! column sets with the same name) throw an exception.
 	UsingColumnSet *GetUsingBinding(const string &column_name);
 	//! Returns any using column set for the given column name, or nullptr if there is none
 	UsingColumnSet *GetUsingBinding(const string &column_name, const string &binding_name);

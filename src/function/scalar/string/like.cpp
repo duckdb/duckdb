@@ -337,7 +337,8 @@ parse_bracket : {
 }
 
 struct LikeEscapeOperator {
-	template <class TA, class TB, class TC> static inline bool Operation(TA str, TB pattern, TC escape) {
+	template <class TA, class TB, class TC>
+	static inline bool Operation(TA str, TB pattern, TC escape) {
 		// Only one escape character should be allowed
 		if (escape.GetSize() > 1) {
 			throw SyntaxException("Invalid escape string. Escape string must be empty or one character.");
@@ -349,19 +350,22 @@ struct LikeEscapeOperator {
 };
 
 struct NotLikeEscapeOperator {
-	template <class TA, class TB, class TC> static inline bool Operation(TA str, TB pattern, TC escape) {
+	template <class TA, class TB, class TC>
+	static inline bool Operation(TA str, TB pattern, TC escape) {
 		return !LikeEscapeOperator::Operation(str, pattern, escape);
 	}
 };
 
 struct LikeOperator {
-	template <class TA, class TB, class TR> static inline TR Operation(TA str, TB pattern) {
+	template <class TA, class TB, class TR>
+	static inline TR Operation(TA str, TB pattern) {
 		return like_operator(str, pattern);
 	}
 };
 
 struct ILikeOperator {
-	template <class TA, class TB, class TR> static inline TR Operation(TA str, TB pattern) {
+	template <class TA, class TB, class TR>
+	static inline TR Operation(TA str, TB pattern) {
 		auto str_data = str.GetDataUnsafe();
 		auto str_size = str.GetSize();
 		auto pat_data = pattern.GetDataUnsafe();
@@ -381,38 +385,44 @@ struct ILikeOperator {
 };
 
 struct NotLikeOperator {
-	template <class TA, class TB, class TR> static inline TR Operation(TA str, TB pattern) {
+	template <class TA, class TB, class TR>
+	static inline TR Operation(TA str, TB pattern) {
 		return !like_operator(str, pattern);
 	}
 };
 
 struct NotILikeOperator {
-	template <class TA, class TB, class TR> static inline TR Operation(TA str, TB pattern) {
+	template <class TA, class TB, class TR>
+	static inline TR Operation(TA str, TB pattern) {
 		return !ILikeOperator::Operation<TA, TB, TR>(str, pattern);
 	}
 };
 
 struct ILikeOperatorASCII {
-	template <class TA, class TB, class TR> static inline TR Operation(TA str, TB pattern) {
+	template <class TA, class TB, class TR>
+	static inline TR Operation(TA str, TB pattern) {
 		return templated_like_operator<'%', '_', ASCIILCaseReader>(str.GetDataUnsafe(), str.GetSize(),
 		                                                           pattern.GetDataUnsafe(), pattern.GetSize(), '\0');
 	}
 };
 
 struct NotILikeOperatorASCII {
-	template <class TA, class TB, class TR> static inline TR Operation(TA str, TB pattern) {
+	template <class TA, class TB, class TR>
+	static inline TR Operation(TA str, TB pattern) {
 		return !ILikeOperatorASCII::Operation<TA, TB, TR>(str, pattern);
 	}
 };
 
 struct GlobOperator {
-	template <class TA, class TB, class TR> static inline TR Operation(TA str, TB pattern) {
+	template <class TA, class TB, class TR>
+	static inline TR Operation(TA str, TB pattern) {
 		return LikeFun::Glob(str.GetDataUnsafe(), str.GetSize(), pattern.GetDataUnsafe(), pattern.GetSize());
 	}
 };
 
 // This can be moved to the scalar_function class
-template <typename Func> static void like_escape_function(DataChunk &args, ExpressionState &state, Vector &result) {
+template <typename Func>
+static void like_escape_function(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &str = args.data[0];
 	auto &pattern = args.data[1];
 	auto &escape = args.data[2];

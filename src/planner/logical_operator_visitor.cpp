@@ -70,19 +70,19 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 		callback(&join.condition);
 		break;
 	}
-	case LogicalOperatorType::LOGICAL_LIMIT:{
-		auto &limit = (LogicalLimit&) op;
-		if (limit.limit){
+	case LogicalOperatorType::LOGICAL_LIMIT: {
+		auto &limit = (LogicalLimit &)op;
+		if (limit.limit) {
 			callback(&limit.limit);
 		}
-		if (limit.offset){
+		if (limit.offset) {
 			callback(&limit.offset);
 		}
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 		auto &aggr = (LogicalAggregate &)op;
-		for (auto & group : aggr.groups) {
+		for (auto &group : aggr.groups) {
 			callback(&group);
 		}
 		break;
@@ -90,7 +90,7 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 	default:
 		break;
 	}
-	for (auto & expression : op.expressions) {
+	for (auto &expression : op.expressions) {
 		callback(&expression);
 	}
 }

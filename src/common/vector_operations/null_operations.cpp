@@ -9,7 +9,8 @@
 
 namespace duckdb {
 
-template <bool INVERSE> void is_null_loop(Vector &input, Vector &result, idx_t count) {
+template <bool INVERSE>
+void is_null_loop(Vector &input, Vector &result, idx_t count) {
 	D_ASSERT(result.type == LogicalType::BOOLEAN);
 
 	if (input.vector_type == VectorType::CONSTANT_VECTOR) {

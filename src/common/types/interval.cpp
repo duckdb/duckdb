@@ -15,7 +15,8 @@ bool Interval::FromString(string str, interval_t &result) {
 	return Interval::FromCString(str.c_str(), str.size(), result);
 }
 
-template <class T> void interval_try_addition(T &target, int64_t input, int64_t multiplier) {
+template <class T>
+void interval_try_addition(T &target, int64_t input, int64_t multiplier) {
 	int64_t addition;
 	if (!TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(input, multiplier, addition)) {
 		throw OutOfRangeException("interval value is out of range");

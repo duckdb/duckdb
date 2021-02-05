@@ -37,7 +37,7 @@ Expression *FilterCombiner::GetNode(Expression *expr) {
 idx_t FilterCombiner::GetEquivalenceSet(Expression *expr) {
 	D_ASSERT(stored_expressions.find(expr) != stored_expressions.end());
 	D_ASSERT(stored_expressions.find(expr)->second.get() == expr);
-    auto entry = equivalence_set_map.find(expr);
+	auto entry = equivalence_set_map.find(expr);
 	if (entry == equivalence_set_map.end()) {
 		idx_t index = set_index++;
 		equivalence_set_map[expr] = index;
@@ -260,14 +260,14 @@ FilterCombiner::FindZonemapChecks(vector<idx_t> &column_ids, unordered_set<idx_t
 		if (comp_in_exp.children[0]->type == ExpressionType::BOUND_COLUMN_REF) {
 			Value *min = nullptr, *max = nullptr;
 			auto &column_ref = (BoundColumnRefExpression &)*comp_in_exp.children[0].get();
-			for (size_t i{1}; i < comp_in_exp.children.size(); i++) {
+			for (size_t i {1}; i < comp_in_exp.children.size(); i++) {
 				if (comp_in_exp.children[i]->type != ExpressionType::VALUE_CONSTANT) {
 					//! This indicates the column has a comparison that is not with a constant
 					not_constants.insert(column_ids[column_ref.binding.column_index]);
 					break;
 				} else {
 					auto &const_value_expr = (BoundConstantExpression &)*comp_in_exp.children[i].get();
-					if (const_value_expr.value.is_null){
+					if (const_value_expr.value.is_null) {
 						return checks;
 					}
 					if (!min && !max) {
@@ -318,7 +318,7 @@ FilterCombiner::FindZonemapChecks(vector<idx_t> &column_ids, unordered_set<idx_t
 		     comp_exp.right->expression_class == ExpressionClass::BOUND_COLUMN_REF)) {
 			auto &column_ref = (BoundColumnRefExpression &)*comp_exp.right;
 			auto &constant_value_expr = (BoundConstantExpression &)*comp_exp.left;
-			checks[column_ids[column_ref.binding.column_index]] = { &constant_value_expr.value, nullptr};
+			checks[column_ids[column_ref.binding.column_index]] = {&constant_value_expr.value, nullptr};
 		}
 		return checks;
 	}
@@ -416,7 +416,7 @@ vector<TableFilter> FilterCombiner::GenerateTableScanFilters(vector<idx_t> &colu
 		}
 	}
 	//! Here we look for LIKE or IN filters
-	for (size_t rem_fil_idx{}; rem_fil_idx < remaining_filters.size(); rem_fil_idx++) {
+	for (size_t rem_fil_idx {}; rem_fil_idx < remaining_filters.size(); rem_fil_idx++) {
 		auto &remaining_filter = remaining_filters[rem_fil_idx];
 		if (remaining_filter->expression_class == ExpressionClass::BOUND_FUNCTION) {
 			auto &func = (BoundFunctionExpression &)*remaining_filter;
@@ -486,7 +486,7 @@ vector<TableFilter> FilterCombiner::GenerateTableScanFilters(vector<idx_t> &colu
 			}
 			//! check if all children are const expr
 			bool children_constant = true;
-			for (size_t i{1}; i < func.children.size(); i++) {
+			for (size_t i {1}; i < func.children.size(); i++) {
 				if (func.children[i]->type != ExpressionType::VALUE_CONSTANT) {
 					children_constant = false;
 				}
@@ -500,7 +500,7 @@ vector<TableFilter> FilterCombiner::GenerateTableScanFilters(vector<idx_t> &colu
 				continue;
 			}
 
-			for (size_t i{1}; i < func.children.size(); i++) {
+			for (size_t i {1}; i < func.children.size(); i++) {
 				auto &const_value_expr = (BoundConstantExpression &)*func.children[i].get();
 				in_values.push_back(const_value_expr.value);
 			}
@@ -509,7 +509,7 @@ vector<TableFilter> FilterCombiner::GenerateTableScanFilters(vector<idx_t> &colu
 			sort(in_values.begin(), in_values.end());
 
 			bool is_consecutive = true;
-			for (size_t in_val_idx{1}; in_val_idx < in_values.size(); in_val_idx++) {
+			for (size_t in_val_idx {1}; in_val_idx < in_values.size(); in_val_idx++) {
 				if (in_values[in_val_idx] - in_values[in_val_idx - 1] > one || in_values[in_val_idx - 1].is_null) {
 					is_consecutive = false;
 				}
@@ -703,7 +703,7 @@ FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &com
 	Expression *left_node = GetNode(comparison.left.get());
 	Expression *right_node = GetNode(comparison.right.get());
 	// In case with filters like CAST(i) = j and i = 5 we replace the COLUMN_REF i with the constant 5
-    if (right_node->type == ExpressionType::OPERATOR_CAST) {
+	if (right_node->type == ExpressionType::OPERATOR_CAST) {
 		auto &bound_cast_expr = (BoundCastExpression &)*right_node;
 		if (bound_cast_expr.child->type == ExpressionType::BOUND_COLUMN_REF) {
 			auto &col_ref = (BoundColumnRefExpression &)*bound_cast_expr.child;

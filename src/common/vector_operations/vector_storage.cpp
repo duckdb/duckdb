@@ -4,7 +4,8 @@
 
 namespace duckdb {
 
-template <class T> static void CopyToStorageLoop(VectorData &vdata, idx_t count, data_ptr_t target) {
+template <class T>
+static void CopyToStorageLoop(VectorData &vdata, idx_t count, data_ptr_t target) {
 	auto ldata = (T *)vdata.data;
 	auto result_data = (T *)target;
 	for (idx_t i = 0; i < count; i++) {
@@ -73,7 +74,8 @@ void VectorOperations::WriteToStorage(Vector &source, idx_t count, data_ptr_t ta
 	}
 }
 
-template <class T> static void ReadFromStorageLoop(data_ptr_t source, idx_t count, Vector &result) {
+template <class T>
+static void ReadFromStorageLoop(data_ptr_t source, idx_t count, Vector &result) {
 	auto ldata = (T *)source;
 	auto result_data = FlatVector::GetData<T>(result);
 	auto &nullmask = FlatVector::Nullmask(result);

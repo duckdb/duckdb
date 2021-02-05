@@ -83,12 +83,14 @@ static void vector_to_r(Vector &src_vec, size_t count, void *dest, uint64_t dest
 }
 
 struct RIntegralType {
-	template <class T> static double DoubleCast(T val) {
+	template <class T>
+	static double DoubleCast(T val) {
 		return double(val);
 	}
 };
 
-template <class T> static void RDecimalCastLoop(Vector &src_vec, size_t count, double *dest_ptr, uint8_t scale) {
+template <class T>
+static void RDecimalCastLoop(Vector &src_vec, size_t count, double *dest_ptr, uint8_t scale) {
 	auto src_ptr = FlatVector::GetData<T>(src_vec);
 	auto &nullmask = FlatVector::Nullmask(src_vec);
 	double division = pow(10, scale);
@@ -97,7 +99,8 @@ template <class T> static void RDecimalCastLoop(Vector &src_vec, size_t count, d
 	}
 }
 
-template <> double RIntegralType::DoubleCast<>(hugeint_t val) {
+template <>
+double RIntegralType::DoubleCast<>(hugeint_t val) {
 	return Hugeint::Cast<double>(val);
 }
 
@@ -805,7 +808,7 @@ struct DataFrameScanState : public FunctionOperatorData {
 struct DataFrameScanFunction : public TableFunction {
 	DataFrameScanFunction()
 	    : TableFunction("dataframe_scan", {LogicalType::VARCHAR}, dataframe_scan_function, dataframe_scan_bind,
-	                    dataframe_scan_init, nullptr, nullptr, nullptr, dataframe_scan_cardinality){};
+	                    dataframe_scan_init, nullptr, nullptr, nullptr, dataframe_scan_cardinality) {};
 
 	static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, vector<Value> &inputs,
 	                                                    unordered_map<string, Value> &named_parameters,

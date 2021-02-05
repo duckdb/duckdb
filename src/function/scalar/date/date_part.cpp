@@ -57,7 +57,8 @@ DatePartSpecifier GetDatePartSpecifier(string specifier) {
 	}
 }
 
-template <class T> static void year_operator(DataChunk &args, ExpressionState &state, Vector &result) {
+template <class T>
+static void year_operator(DataChunk &args, ExpressionState &state, Vector &result) {
 	int32_t last_year = 0;
 	UnaryExecutor::Execute<T, int64_t>(args.data[0], result, args.size(),
 	                                   [&](T input) { return Date::ExtractYear(input, &last_year); });
@@ -101,7 +102,8 @@ static unique_ptr<BaseStatistics> PropagateSimpleDatePartStatistics(vector<uniqu
 }
 
 struct YearOperator {
-	template <class TA, class TR> static inline TR Operation(TA input) {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
 		return Date::ExtractYear(input);
 	}
 
@@ -113,12 +115,14 @@ struct YearOperator {
 	}
 };
 
-template <> int64_t YearOperator::Operation(timestamp_t input) {
+template <>
+int64_t YearOperator::Operation(timestamp_t input) {
 	return YearOperator::Operation<date_t, int64_t>(Timestamp::GetDate(input));
 }
 
 struct MonthOperator {
-	template <class TA, class TR> static inline TR Operation(TA input) {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
 		return Date::ExtractMonth(input);
 	}
 
@@ -131,12 +135,14 @@ struct MonthOperator {
 	}
 };
 
-template <> int64_t MonthOperator::Operation(timestamp_t input) {
+template <>
+int64_t MonthOperator::Operation(timestamp_t input) {
 	return MonthOperator::Operation<date_t, int64_t>(Timestamp::GetDate(input));
 }
 
 struct DayOperator {
-	template <class TA, class TR> static inline TR Operation(TA input) {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
 		return Date::ExtractDay(input);
 	}
 
@@ -149,12 +155,14 @@ struct DayOperator {
 	}
 };
 
-template <> int64_t DayOperator::Operation(timestamp_t input) {
+template <>
+int64_t DayOperator::Operation(timestamp_t input) {
 	return DayOperator::Operation<date_t, int64_t>(Timestamp::GetDate(input));
 }
 
 struct DecadeOperator {
-	template <class TA, class TR> static inline TR Operation(TA input) {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
 		return Date::ExtractYear(input) / 10;
 	}
 
@@ -166,12 +174,14 @@ struct DecadeOperator {
 	}
 };
 
-template <> int64_t DecadeOperator::Operation(timestamp_t input) {
+template <>
+int64_t DecadeOperator::Operation(timestamp_t input) {
 	return DecadeOperator::Operation<date_t, int64_t>(Timestamp::GetDate(input));
 }
 
 struct CenturyOperator {
-	template <class TA, class TR> static inline TR Operation(TA input) {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
 		return ((Date::ExtractYear(input) - 1) / 100) + 1;
 	}
 
@@ -183,12 +193,14 @@ struct CenturyOperator {
 	}
 };
 
-template <> int64_t CenturyOperator::Operation(timestamp_t input) {
+template <>
+int64_t CenturyOperator::Operation(timestamp_t input) {
 	return CenturyOperator::Operation<date_t, int64_t>(Timestamp::GetDate(input));
 }
 
 struct MilleniumOperator {
-	template <class TA, class TR> static inline TR Operation(TA input) {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
 		return ((Date::ExtractYear(input) - 1) / 1000) + 1;
 	}
 
@@ -200,12 +212,14 @@ struct MilleniumOperator {
 	}
 };
 
-template <> int64_t MilleniumOperator::Operation(timestamp_t input) {
+template <>
+int64_t MilleniumOperator::Operation(timestamp_t input) {
 	return MilleniumOperator::Operation<date_t, int64_t>(Timestamp::GetDate(input));
 }
 
 struct QuarterOperator {
-	template <class TA, class TR> static inline TR Operation(TA input) {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
 		return (Date::ExtractMonth(input) - 1) / 3 + 1;
 	}
 
@@ -218,12 +232,14 @@ struct QuarterOperator {
 	}
 };
 
-template <> int64_t QuarterOperator::Operation(timestamp_t input) {
+template <>
+int64_t QuarterOperator::Operation(timestamp_t input) {
 	return QuarterOperator::Operation<date_t, int64_t>(Timestamp::GetDate(input));
 }
 
 struct DayOfWeekOperator {
-	template <class TA, class TR> static inline TR Operation(TA input) {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
 		// day of the week (Sunday = 0, Saturday = 6)
 		// turn sunday into 0 by doing mod 7
 		return Date::ExtractISODayOfTheWeek(input) % 7;
@@ -237,12 +253,14 @@ struct DayOfWeekOperator {
 	}
 };
 
-template <> int64_t DayOfWeekOperator::Operation(timestamp_t input) {
+template <>
+int64_t DayOfWeekOperator::Operation(timestamp_t input) {
 	return DayOfWeekOperator::Operation<date_t, int64_t>(Timestamp::GetDate(input));
 }
 
 struct ISODayOfWeekOperator {
-	template <class TA, class TR> static inline TR Operation(TA input) {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
 		// isodow (Monday = 1, Sunday = 7)
 		return Date::ExtractISODayOfTheWeek(input);
 	}
@@ -255,12 +273,14 @@ struct ISODayOfWeekOperator {
 	}
 };
 
-template <> int64_t ISODayOfWeekOperator::Operation(timestamp_t input) {
+template <>
+int64_t ISODayOfWeekOperator::Operation(timestamp_t input) {
 	return ISODayOfWeekOperator::Operation<date_t, int64_t>(Timestamp::GetDate(input));
 }
 
 struct DayOfYearOperator {
-	template <class TA, class TR> static inline TR Operation(TA input) {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
 		return Date::ExtractDayOfTheYear(input);
 	}
 
@@ -272,12 +292,14 @@ struct DayOfYearOperator {
 	}
 };
 
-template <> int64_t DayOfYearOperator::Operation(timestamp_t input) {
+template <>
+int64_t DayOfYearOperator::Operation(timestamp_t input) {
 	return DayOfYearOperator::Operation<date_t, int64_t>(Timestamp::GetDate(input));
 }
 
 struct WeekOperator {
-	template <class TA, class TR> static inline TR Operation(TA input) {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
 		return Date::ExtractISOWeekNumber(input);
 	}
 
@@ -289,12 +311,14 @@ struct WeekOperator {
 	}
 };
 
-template <> int64_t WeekOperator::Operation(timestamp_t input) {
+template <>
+int64_t WeekOperator::Operation(timestamp_t input) {
 	return WeekOperator::Operation<date_t, int64_t>(Timestamp::GetDate(input));
 }
 
 struct YearWeekOperator {
-	template <class TA, class TR> static inline TR Operation(TA input) {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
 		return YearOperator::Operation<TA, TR>(input) * 100 + WeekOperator::Operation<TA, TR>(input);
 	}
 
@@ -307,7 +331,8 @@ struct YearWeekOperator {
 };
 
 struct EpochOperator {
-	template <class TA, class TR> static inline TR Operation(TA input) {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
 		return Date::Epoch(input);
 	}
 
@@ -319,12 +344,14 @@ struct EpochOperator {
 	}
 };
 
-template <> int64_t EpochOperator::Operation(timestamp_t input) {
+template <>
+int64_t EpochOperator::Operation(timestamp_t input) {
 	return Timestamp::GetEpochSeconds(input);
 }
 
 struct MicrosecondsOperator {
-	template <class TA, class TR> static inline TR Operation(TA input) {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
 		return 0;
 	}
 
@@ -336,14 +363,16 @@ struct MicrosecondsOperator {
 	}
 };
 
-template <> int64_t MicrosecondsOperator::Operation(timestamp_t input) {
+template <>
+int64_t MicrosecondsOperator::Operation(timestamp_t input) {
 	auto time = Timestamp::GetTime(input);
 	// remove everything but the second & microsecond part
 	return time % Interval::MICROS_PER_MINUTE;
 }
 
 struct MillisecondsOperator {
-	template <class TA, class TR> static inline TR Operation(TA input) {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
 		return 0;
 	}
 
@@ -355,12 +384,14 @@ struct MillisecondsOperator {
 	}
 };
 
-template <> int64_t MillisecondsOperator::Operation(timestamp_t input) {
+template <>
+int64_t MillisecondsOperator::Operation(timestamp_t input) {
 	return MicrosecondsOperator::Operation<timestamp_t, int64_t>(input) / Interval::MICROS_PER_MSEC;
 }
 
 struct SecondsOperator {
-	template <class TA, class TR> static inline TR Operation(TA input) {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
 		return 0;
 	}
 
@@ -372,12 +403,14 @@ struct SecondsOperator {
 	}
 };
 
-template <> int64_t SecondsOperator::Operation(timestamp_t input) {
+template <>
+int64_t SecondsOperator::Operation(timestamp_t input) {
 	return MicrosecondsOperator::Operation<timestamp_t, int64_t>(input) / Interval::MICROS_PER_SEC;
 }
 
 struct MinutesOperator {
-	template <class TA, class TR> static inline TR Operation(TA input) {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
 		return 0;
 	}
 
@@ -389,14 +422,16 @@ struct MinutesOperator {
 	}
 };
 
-template <> int64_t MinutesOperator::Operation(timestamp_t input) {
+template <>
+int64_t MinutesOperator::Operation(timestamp_t input) {
 	auto time = Timestamp::GetTime(input);
 	// remove the hour part, and truncate to minutes
 	return (time % Interval::MICROS_PER_HOUR) / Interval::MICROS_PER_MINUTE;
 }
 
 struct HoursOperator {
-	template <class TA, class TR> static inline TR Operation(TA input) {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
 		return 0;
 	}
 
@@ -408,11 +443,13 @@ struct HoursOperator {
 	}
 };
 
-template <> int64_t HoursOperator::Operation(timestamp_t input) {
+template <>
+int64_t HoursOperator::Operation(timestamp_t input) {
 	return Timestamp::GetTime(input) / Interval::MICROS_PER_HOUR;
 }
 
-template <class T> static int64_t extract_element(DatePartSpecifier type, T element) {
+template <class T>
+static int64_t extract_element(DatePartSpecifier type, T element) {
 	switch (type) {
 	case DatePartSpecifier::YEAR:
 		return YearOperator::Operation<T, int64_t>(element);
@@ -454,7 +491,8 @@ template <class T> static int64_t extract_element(DatePartSpecifier type, T elem
 }
 
 struct DatePartOperator {
-	template <class TA, class TB, class TR> static inline TR Operation(TA specifier, TB date) {
+	template <class TA, class TB, class TR>
+	static inline TR Operation(TA specifier, TB date) {
 		return extract_element<TB>(GetDatePartSpecifier(specifier.GetString()), date);
 	}
 };
@@ -470,14 +508,16 @@ void AddGenericDatePartOperator(BuiltinFunctions &set, string name, scalar_funct
 	set.AddFunction(operator_set);
 }
 
-template <class OP> static void AddDatePartOperator(BuiltinFunctions &set, string name) {
+template <class OP>
+static void AddDatePartOperator(BuiltinFunctions &set, string name) {
 	AddGenericDatePartOperator(set, name, ScalarFunction::UnaryFunction<date_t, int64_t, OP>,
 	                           ScalarFunction::UnaryFunction<timestamp_t, int64_t, OP>,
 	                           OP::template PropagateStatistics<date_t>, OP::template PropagateStatistics<timestamp_t>);
 }
 
 struct LastDayOperator {
-	template <class TA, class TR> static inline TR Operation(TA input) {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
 		int32_t yyyy, mm, dd;
 		Date::Convert(input, yyyy, mm, dd);
 		yyyy += (mm / 12);
@@ -487,18 +527,21 @@ struct LastDayOperator {
 	}
 };
 
-template <> date_t LastDayOperator::Operation(timestamp_t input) {
+template <>
+date_t LastDayOperator::Operation(timestamp_t input) {
 	return LastDayOperator::Operation<date_t, date_t>(Timestamp::GetDate(input));
 }
 
 struct MonthNameOperator {
-	template <class TA, class TR> static inline TR Operation(TA input) {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
 		return Date::MonthNames[MonthOperator::Operation<TA, int64_t>(input) - 1];
 	}
 };
 
 struct DayNameOperator {
-	template <class TA, class TR> static inline TR Operation(TA input) {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
 		return Date::DayNames[DayOfWeekOperator::Operation<TA, int64_t>(input)];
 	}
 };

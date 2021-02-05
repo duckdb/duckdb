@@ -41,12 +41,12 @@ void PhysicalTableScan::GetChunkInternal(ExecutionContext &context, DataChunk &c
 			// check if there is any parallel state to fetch
 			state.parallel_state = nullptr;
 			auto task_info = task.task_info.find(this);
-			TableFilterCollection filters (table_filters.get());
+			TableFilterCollection filters(table_filters.get());
 			if (task_info != task.task_info.end()) {
 				// parallel scan init
 				state.parallel_state = task_info->second;
-				state.operator_data = function.parallel_init(context.client, bind_data.get(), state.parallel_state,
-				                                             column_ids, &filters);
+				state.operator_data =
+				    function.parallel_init(context.client, bind_data.get(), state.parallel_state, column_ids, &filters);
 			} else {
 				// sequential scan init
 				state.operator_data = function.init(context.client, bind_data.get(), column_ids, &filters);

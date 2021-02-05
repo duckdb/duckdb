@@ -60,7 +60,8 @@ TEST_CASE("Test different result types", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE data(i INTEGER, j VARCHAR, k DECIMAL(38,1), l DECIMAL(18,3), m HUGEINT, n DOUBLE)"));
+	REQUIRE_NO_FAIL(
+	    con.Query("CREATE TABLE data(i INTEGER, j VARCHAR, k DECIMAL(38,1), l DECIMAL(18,3), m HUGEINT, n DOUBLE)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO data VALUES (23, '17.1', 94289, 9842, 4982412, 17.3)"));
 
 	idx_t row_count = 0;
@@ -103,7 +104,8 @@ TEST_CASE("Test dates/times/timestamps", "[api]") {
 	Connection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE data(i DATE, j TIME, k TIMESTAMP)"));
-	REQUIRE_NO_FAIL(con.Query("INSERT INTO data VALUES (DATE '1992-01-01', TIME '13:00:17', TIMESTAMP '1993-01-01 14:00:17')"));
+	REQUIRE_NO_FAIL(
+	    con.Query("INSERT INTO data VALUES (DATE '1992-01-01', TIME '13:00:17', TIMESTAMP '1993-01-01 14:00:17')"));
 
 	idx_t row_count = 0;
 	auto result = con.Query("SELECT * FROM data;");

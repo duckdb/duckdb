@@ -52,11 +52,13 @@ void Appender::EndRow() {
 	}
 }
 
-template <class SRC, class DST> void Appender::AppendValueInternal(Vector &col, SRC input) {
+template <class SRC, class DST>
+void Appender::AppendValueInternal(Vector &col, SRC input) {
 	FlatVector::GetData<DST>(col)[chunk.size()] = Cast::Operation<SRC, DST>(input);
 }
 
-template <class T> void Appender::AppendValueInternal(T input) {
+template <class T>
+void Appender::AppendValueInternal(T input) {
 	if (column >= chunk.ColumnCount()) {
 		throw InvalidInputException("Too many appends for chunk!");
 	}
@@ -90,27 +92,33 @@ template <class T> void Appender::AppendValueInternal(T input) {
 	column++;
 }
 
-template <> void Appender::Append(bool value) {
+template <>
+void Appender::Append(bool value) {
 	AppendValueInternal<bool>(value);
 }
 
-template <> void Appender::Append(int8_t value) {
+template <>
+void Appender::Append(int8_t value) {
 	AppendValueInternal<int8_t>(value);
 }
 
-template <> void Appender::Append(int16_t value) {
+template <>
+void Appender::Append(int16_t value) {
 	AppendValueInternal<int16_t>(value);
 }
 
-template <> void Appender::Append(int32_t value) {
+template <>
+void Appender::Append(int32_t value) {
 	AppendValueInternal<int32_t>(value);
 }
 
-template <> void Appender::Append(int64_t value) {
+template <>
+void Appender::Append(int64_t value) {
 	AppendValueInternal<int64_t>(value);
 }
 
-template <> void Appender::Append(const char *value) {
+template <>
+void Appender::Append(const char *value) {
 	AppendValueInternal<string_t>(string_t(value));
 }
 
@@ -118,28 +126,32 @@ void Appender::Append(const char *value, uint32_t length) {
 	AppendValueInternal<string_t>(string_t(value, length));
 }
 
-template <> void Appender::Append(float value) {
+template <>
+void Appender::Append(float value) {
 	if (!Value::FloatIsValid(value)) {
 		throw InvalidInputException("Float value is out of range!");
 	}
 	AppendValueInternal<float>(value);
 }
 
-template <> void Appender::Append(double value) {
+template <>
+void Appender::Append(double value) {
 	if (!Value::DoubleIsValid(value)) {
 		throw InvalidInputException("Double value is out of range!");
 	}
 	AppendValueInternal<double>(value);
 }
 
-template <> void Appender::Append(Value value) {
+template <>
+void Appender::Append(Value value) {
 	if (column >= chunk.ColumnCount()) {
 		throw InvalidInputException("Too many appends for chunk!");
 	}
 	AppendValue(move(value));
 }
 
-template <> void Appender::Append(std::nullptr_t value) {
+template <>
+void Appender::Append(std::nullptr_t value) {
 	if (column >= chunk.ColumnCount()) {
 		throw InvalidInputException("Too many appends for chunk!");
 	}

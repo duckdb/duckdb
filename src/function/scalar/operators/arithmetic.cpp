@@ -16,7 +16,8 @@
 
 namespace duckdb {
 
-template <class OP> static scalar_function_t GetScalarIntegerFunction(PhysicalType type) {
+template <class OP>
+static scalar_function_t GetScalarIntegerFunction(PhysicalType type) {
 	scalar_function_t function;
 	switch (type) {
 	case PhysicalType::INT8:
@@ -49,7 +50,8 @@ template <class OP> static scalar_function_t GetScalarIntegerFunction(PhysicalTy
 	return function;
 }
 
-template <class OP> static scalar_function_t GetScalarBinaryFunction(PhysicalType type) {
+template <class OP>
+static scalar_function_t GetScalarBinaryFunction(PhysicalType type) {
 	scalar_function_t function;
 	switch (type) {
 	case PhysicalType::INT128:
@@ -410,8 +412,8 @@ struct MultiplyPropagateStatistics {
 		// etc
 		// rather than doing all this switcheroo we just multiply all combinations of lmin/lmax with rmin/rmax
 		// and check what the minimum/maximum value is
-		T lvals[]{lstats.min.GetValueUnsafe<T>(), lstats.max.GetValueUnsafe<T>()};
-		T rvals[]{rstats.min.GetValueUnsafe<T>(), rstats.max.GetValueUnsafe<T>()};
+		T lvals[] {lstats.min.GetValueUnsafe<T>(), lstats.max.GetValueUnsafe<T>()};
+		T rvals[] {rstats.min.GetValueUnsafe<T>(), rstats.max.GetValueUnsafe<T>()};
 		T min = NumericLimits<T>::Maximum();
 		T max = NumericLimits<T>::Minimum();
 		// multiplications
@@ -520,7 +522,8 @@ void MultiplyFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 // / [divide]
 //===--------------------------------------------------------------------===//
-template <> float DivideOperator::Operation(float left, float right) {
+template <>
+float DivideOperator::Operation(float left, float right) {
 	auto result = left / right;
 	if (!Value::FloatIsValid(result)) {
 		throw OutOfRangeException("Overflow in division of float!");
@@ -528,7 +531,8 @@ template <> float DivideOperator::Operation(float left, float right) {
 	return result;
 }
 
-template <> double DivideOperator::Operation(double left, double right) {
+template <>
+double DivideOperator::Operation(double left, double right) {
 	auto result = left / right;
 	if (!Value::DoubleIsValid(result)) {
 		throw OutOfRangeException("Overflow in division of double!");
@@ -536,14 +540,16 @@ template <> double DivideOperator::Operation(double left, double right) {
 	return result;
 }
 
-template <> hugeint_t DivideOperator::Operation(hugeint_t left, hugeint_t right) {
+template <>
+hugeint_t DivideOperator::Operation(hugeint_t left, hugeint_t right) {
 	if (right.lower == 0 && right.upper == 0) {
 		throw InternalException("Hugeint division by zero!");
 	}
 	return left / right;
 }
 
-template <> interval_t DivideOperator::Operation(interval_t left, int64_t right) {
+template <>
+interval_t DivideOperator::Operation(interval_t left, int64_t right) {
 	left.days /= right;
 	left.months /= right;
 	left.micros /= right;
@@ -578,7 +584,8 @@ static void BinaryScalarFunctionIgnoreZero(DataChunk &input, ExpressionState &st
 	BinaryExecutor::Execute<TA, TB, TC, OP, true, ZWRAPPER>(input.data[0], input.data[1], result, input.size());
 }
 
-template <class OP> static scalar_function_t GetBinaryFunctionIgnoreZero(LogicalType type) {
+template <class OP>
+static scalar_function_t GetBinaryFunctionIgnoreZero(LogicalType type) {
 	switch (type.id()) {
 	case LogicalTypeId::TINYINT:
 		return BinaryScalarFunctionIgnoreZero<int8_t, int8_t, int8_t, OP>;
@@ -627,17 +634,20 @@ void DivideFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 // % [modulo]
 //===--------------------------------------------------------------------===//
-template <> float ModuloOperator::Operation(float left, float right) {
+template <>
+float ModuloOperator::Operation(float left, float right) {
 	D_ASSERT(right != 0);
 	return fmod(left, right);
 }
 
-template <> double ModuloOperator::Operation(double left, double right) {
+template <>
+double ModuloOperator::Operation(double left, double right) {
 	D_ASSERT(right != 0);
 	return fmod(left, right);
 }
 
-template <> hugeint_t ModuloOperator::Operation(hugeint_t left, hugeint_t right) {
+template <>
+hugeint_t ModuloOperator::Operation(hugeint_t left, hugeint_t right) {
 	if (right.lower == 0 && right.upper == 0) {
 		throw InternalException("Hugeint division by zero!");
 	}
