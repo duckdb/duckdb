@@ -14,18 +14,18 @@
 #include "duckdb/storage/table/transient_segment.hpp"
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
+#include "duckdb/storage/checkpoint/table_data_writer.hpp"
 
 namespace duckdb {
 
 using namespace std::chrono;
 
-DataTable::DataTable(StorageManager &storage, string schema, string table, vector<LogicalType> types_,
+DataTable::DataTable(DatabaseInstance &db, string schema, string table, vector<LogicalType> types_,
                      unique_ptr<PersistentTableData> data)
-    : info(make_shared<DataTableInfo>(schema, table)), types(types_), storage(storage),
-      versions(make_shared<SegmentTree>()), total_rows(0), is_root(true) {
+    : info(make_shared<DataTableInfo>(schema, table)), types(types_), db(db), total_rows(0), is_root(true) {
 	// set up the segment trees for the column segments
 	for (idx_t i = 0; i < types.size(); i++) {
-		auto column_data = make_shared<ColumnData>(*storage.buffer_manager, *info, types[i], i);
+		auto column_data = make_shared<ColumnData>(db, *info, types[i], i);
 		columns.push_back(move(column_data));
 	}
 
@@ -42,13 +42,9 @@ DataTable::DataTable(StorageManager &storage, string schema, string table, vecto
 			}
 		}
 		total_rows = columns[0]->persistent_rows;
-		// create empty morsel info's
-		// in the future, we should lazily load these from the file as well (once we support deleted flags)
-		for (idx_t i = 0; i < total_rows; i += MorselInfo::MORSEL_SIZE) {
-			auto segment = make_unique<MorselInfo>(i, MorselInfo::MORSEL_SIZE);
-			versions->AppendSegment(move(segment));
-		}
+		versions = move(data->versions);
 	} else {
+		versions = make_shared<SegmentTree>();
 		// append one (empty) morsel to the table
 		auto segment = make_unique<MorselInfo>(0, MorselInfo::MORSEL_SIZE);
 		versions->AppendSegment(move(segment));
@@ -56,8 +52,8 @@ DataTable::DataTable(StorageManager &storage, string schema, string table, vecto
 }
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition &new_column, Expression *default_value)
-    : info(parent.info), types(parent.types), storage(parent.storage), versions(parent.versions),
-      total_rows(parent.total_rows), columns(parent.columns), is_root(true) {
+    : info(parent.info), types(parent.types), db(parent.db), versions(parent.versions), total_rows(parent.total_rows),
+      columns(parent.columns), is_root(true) {
 	// prevent any new tuples from being added to the parent
 	lock_guard<mutex> parent_lock(parent.append_lock);
 	// add the new column to this DataTable
@@ -65,7 +61,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 	idx_t new_column_idx = columns.size();
 
 	types.push_back(new_column_type);
-	auto column_data = make_shared<ColumnData>(*storage.buffer_manager, *info, new_column_type, new_column_idx);
+	auto column_data = make_shared<ColumnData>(db, *info, new_column_type, new_column_idx);
 	columns.push_back(move(column_data));
 
 	// fill the column with its DEFAULT value, or NULL if none is specified
@@ -99,8 +95,8 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 }
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_column)
-    : info(parent.info), types(parent.types), storage(parent.storage), versions(parent.versions),
-      total_rows(parent.total_rows), columns(parent.columns), is_root(true) {
+    : info(parent.info), types(parent.types), db(parent.db), versions(parent.versions), total_rows(parent.total_rows),
+      columns(parent.columns), is_root(true) {
 	// prevent any new tuples from being added to the parent
 	lock_guard<mutex> parent_lock(parent.append_lock);
 	// first check if there are any indexes that exist that point to the removed column
@@ -124,8 +120,8 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_idx, LogicalType target_type,
                      vector<column_t> bound_columns, Expression &cast_expr)
-    : info(parent.info), types(parent.types), storage(parent.storage), versions(parent.versions),
-      total_rows(parent.total_rows), columns(parent.columns), is_root(true) {
+    : info(parent.info), types(parent.types), db(parent.db), versions(parent.versions), total_rows(parent.total_rows),
+      columns(parent.columns), is_root(true) {
 
 	// prevent any new tuples from being added to the parent
 	CreateIndexScanState scan_state;
@@ -143,7 +139,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 	types[changed_idx] = target_type;
 
 	// construct a new column data for this type
-	auto column_data = make_shared<ColumnData>(*storage.buffer_manager, *info, target_type, changed_idx);
+	auto column_data = make_shared<ColumnData>(db, *info, target_type, changed_idx);
 
 	ColumnAppendState append_state;
 	column_data->InitializeAppend(append_state);
@@ -1054,6 +1050,43 @@ unique_ptr<BaseStatistics> DataTable::GetStatistics(ClientContext &context, colu
 	}
 	// FIXME: potentially merge with transaction local shtuff
 	return columns[column_id]->statistics->Copy();
+}
+
+//===--------------------------------------------------------------------===//
+// Checkpoint
+//===--------------------------------------------------------------------===//
+void DataTable::Checkpoint(TableDataWriter &writer) {
+	// checkpoint each individual column
+	for (size_t i = 0; i < columns.size(); i++) {
+		writer.CheckpointColumn(*columns[i], i);
+	}
+}
+
+void DataTable::CheckpointDeletes(TableDataWriter &writer) {
+	// then we checkpoint the deleted tuples
+	D_ASSERT(versions);
+	writer.CheckpointDeletes(((MorselInfo *)versions->GetRootSegment()));
+}
+
+void DataTable::CommitDropColumn(idx_t index) {
+	auto &block_manager = BlockManager::GetBlockManager(db);
+	auto segment = (ColumnSegment *)columns[index]->data.GetRootSegment();
+	while (segment) {
+		if (segment->segment_type == ColumnSegmentType::PERSISTENT) {
+			auto &persistent = (PersistentSegment &)*segment;
+			if (!persistent.HasChanges()) {
+				block_manager.MarkBlockAsModified(persistent.block_id);
+			}
+		}
+		segment = (ColumnSegment *)segment->next.get();
+	}
+}
+
+void DataTable::CommitDropTable() {
+	// commit a drop of this table: mark all blocks as modified so they can be reclaimed later on
+	for (size_t i = 0; i < columns.size(); i++) {
+		CommitDropColumn(i);
+	}
 }
 
 } // namespace duckdb

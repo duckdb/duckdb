@@ -81,8 +81,8 @@ static int64_t ImplicitCastBigint(LogicalType to) {
 static int64_t ImplicitCastUTinyint(LogicalType to) {
 	switch (to.id()) {
 	case LogicalTypeId::USMALLINT:
-		case LogicalTypeId::UINTEGER:
-	    case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::UINTEGER:
+	case LogicalTypeId::UBIGINT:
 	case LogicalTypeId::SMALLINT:
 	case LogicalTypeId::INTEGER:
 	case LogicalTypeId::BIGINT:
@@ -98,8 +98,8 @@ static int64_t ImplicitCastUTinyint(LogicalType to) {
 
 static int64_t ImplicitCastUSmallint(LogicalType to) {
 	switch (to.id()) {
-		case LogicalTypeId::UINTEGER:
-	    case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::UINTEGER:
+	case LogicalTypeId::UBIGINT:
 	case LogicalTypeId::INTEGER:
 	case LogicalTypeId::BIGINT:
 	case LogicalTypeId::HUGEINT:
@@ -115,7 +115,7 @@ static int64_t ImplicitCastUSmallint(LogicalType to) {
 static int64_t ImplicitCastUInteger(LogicalType to) {
 	switch (to.id()) {
 
-	    case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::UBIGINT:
 	case LogicalTypeId::BIGINT:
 	case LogicalTypeId::HUGEINT:
 	case LogicalTypeId::FLOAT:

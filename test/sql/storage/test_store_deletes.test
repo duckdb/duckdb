@@ -26,6 +26,9 @@ SELECT a, b FROM test ORDER BY a
 statement ok
 COMMIT
 
+statement ok
+CHECKPOINT;
+
 restart
 
 query II
@@ -60,6 +63,9 @@ SELECT a, b FROM test ORDER BY a
 ----
 11	24
 13	22
+
+statement ok
+CHECKPOINT;
 
 restart
 

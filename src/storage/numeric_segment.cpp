@@ -24,8 +24,8 @@ static NumericSegment::merge_update_function_t GetMergeUpdateFunction(PhysicalTy
 
 static NumericSegment::update_info_append_function_t GetUpdateInfoAppendFunction(PhysicalType type);
 
-NumericSegment::NumericSegment(BufferManager &manager, PhysicalType type, idx_t row_start, block_id_t block_id)
-    : UncompressedSegment(manager, type, row_start) {
+NumericSegment::NumericSegment(DatabaseInstance &db, PhysicalType type, idx_t row_start, block_id_t block_id)
+    : UncompressedSegment(db, type, row_start) {
 	// set up the different functions for this type of segment
 	this->append_function = GetAppendFunction(type);
 	this->update_function = GetUpdateFunction(type);
@@ -39,17 +39,18 @@ NumericSegment::NumericSegment(BufferManager &manager, PhysicalType type, idx_t 
 	this->vector_size = sizeof(nullmask_t) + type_size * STANDARD_VECTOR_SIZE;
 	this->max_vector_count = Storage::BLOCK_SIZE / vector_size;
 
+	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	if (block_id == INVALID_BLOCK) {
 		// no block id specified: allocate a buffer for the uncompressed segment
-		this->block = manager.RegisterMemory(Storage::BLOCK_ALLOC_SIZE, false);
-		auto handle = manager.Pin(block);
+		this->block = buffer_manager.RegisterMemory(Storage::BLOCK_ALLOC_SIZE, false);
+		auto handle = buffer_manager.Pin(block);
 		// initialize nullmasks to 0 for all vectors
 		for (idx_t i = 0; i < max_vector_count; i++) {
 			auto mask = (nullmask_t *)(handle->node->buffer + (i * vector_size));
 			mask->reset();
 		}
 	} else {
-		this->block = manager.RegisterBlock(block_id);
+		this->block = buffer_manager.RegisterBlock(block_id);
 	}
 }
 
@@ -178,22 +179,22 @@ static void templated_select_operation_between(SelectionVector &sel, Vector &res
 	switch (type) {
 	case PhysicalType::UINT8: {
 		Select<uint8_t, OPL, OPR>(sel, result, source, source_mask, constantLeft.value_.utinyint,
-		                         constantRight.value_.utinyint, approved_tuple_count);
+		                          constantRight.value_.utinyint, approved_tuple_count);
 		break;
 	}
 	case PhysicalType::UINT16: {
 		Select<uint16_t, OPL, OPR>(sel, result, source, source_mask, constantLeft.value_.usmallint,
-		                          constantRight.value_.usmallint, approved_tuple_count);
+		                           constantRight.value_.usmallint, approved_tuple_count);
 		break;
 	}
 	case PhysicalType::UINT32: {
 		Select<uint32_t, OPL, OPR>(sel, result, source, source_mask, constantLeft.value_.uinteger,
-		                          constantRight.value_.uinteger, approved_tuple_count);
+		                           constantRight.value_.uinteger, approved_tuple_count);
 		break;
 	}
 	case PhysicalType::UINT64: {
 		Select<uint64_t, OPL, OPR>(sel, result, source, source_mask, constantLeft.value_.ubigint,
-		                          constantRight.value_.ubigint, approved_tuple_count);
+		                           constantRight.value_.ubigint, approved_tuple_count);
 		break;
 	}
 	case PhysicalType::INT8: {
@@ -233,7 +234,7 @@ static void templated_select_operation_between(SelectionVector &sel, Vector &res
 	}
 	case PhysicalType::BOOL: {
 		Select<bool, OPL, OPR>(sel, result, source, source_mask, constantLeft.value_.boolean,
-		                         constantRight.value_.boolean, approved_tuple_count);
+		                       constantRight.value_.boolean, approved_tuple_count);
 		break;
 	}
 	default:
@@ -248,7 +249,8 @@ void NumericSegment::Select(ColumnScanState &state, Vector &result, SelectionVec
 	D_ASSERT(vector_index * STANDARD_VECTOR_SIZE <= tuple_count);
 
 	// pin the buffer for this segment
-	auto handle = manager.Pin(block);
+	auto &buffer_manager = BufferManager::GetBufferManager(db);
+	auto handle = buffer_manager.Pin(block);
 	auto data = handle->node->buffer;
 	auto offset = vector_index * vector_size;
 	auto source_nullmask = (nullmask_t *)(data + offset);
@@ -320,7 +322,8 @@ void NumericSegment::Select(ColumnScanState &state, Vector &result, SelectionVec
 //===--------------------------------------------------------------------===//
 void NumericSegment::InitializeScan(ColumnScanState &state) {
 	// pin the primary buffer
-	state.primary_handle = manager.Pin(block);
+	auto &buffer_manager = BufferManager::GetBufferManager(db);
+	state.primary_handle = buffer_manager.Pin(block);
 }
 
 //===--------------------------------------------------------------------===//
@@ -343,9 +346,9 @@ void NumericSegment::FetchBaseData(ColumnScanState &state, idx_t vector_index, V
 	memcpy(FlatVector::GetData(result), source_data, count * type_size);
 }
 
-void NumericSegment::FetchUpdateData(ColumnScanState &state, Transaction &transaction, UpdateInfo *version,
-                                     Vector &result) {
-	fetch_from_update_info(transaction, version, result);
+void NumericSegment::FetchUpdateData(ColumnScanState &state, transaction_t start_time, transaction_t transaction_id,
+                                     UpdateInfo *version, Vector &result) {
+	fetch_from_update_info(start_time, transaction_id, version, result);
 }
 
 template <class T>
@@ -407,22 +410,22 @@ void NumericSegment::FilterFetchBaseData(ColumnScanState &state, Vector &result,
 	}
 	case PhysicalType::UINT8: {
 		templated_assignment<uint8_t>(sel, source_data, result_data, *source_nullmask, result_nullmask,
-		                             approved_tuple_count);
+		                              approved_tuple_count);
 		break;
 	}
 	case PhysicalType::UINT16: {
 		templated_assignment<uint16_t>(sel, source_data, result_data, *source_nullmask, result_nullmask,
-		                              approved_tuple_count);
+		                               approved_tuple_count);
 		break;
 	}
 	case PhysicalType::UINT32: {
 		templated_assignment<uint32_t>(sel, source_data, result_data, *source_nullmask, result_nullmask,
-		                              approved_tuple_count);
+		                               approved_tuple_count);
 		break;
 	}
 	case PhysicalType::UINT64: {
 		templated_assignment<uint64_t>(sel, source_data, result_data, *source_nullmask, result_nullmask,
-		                              approved_tuple_count);
+		                               approved_tuple_count);
 		break;
 	}
 	case PhysicalType::INT128: {
@@ -458,7 +461,8 @@ void NumericSegment::FilterFetchBaseData(ColumnScanState &state, Vector &result,
 void NumericSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result,
                               idx_t result_idx) {
 	auto read_lock = lock.GetSharedLock();
-	auto handle = manager.Pin(block);
+	auto &buffer_manager = BufferManager::GetBufferManager(db);
+	auto handle = buffer_manager.Pin(block);
 
 	// get the vector index
 	idx_t vector_index = row_id / STANDARD_VECTOR_SIZE;
@@ -484,7 +488,8 @@ void NumericSegment::FetchRow(ColumnFetchState &state, Transaction &transaction,
 //===--------------------------------------------------------------------===//
 idx_t NumericSegment::Append(SegmentStatistics &stats, Vector &data, idx_t offset, idx_t count) {
 	D_ASSERT(data.type.InternalType() == type);
-	auto handle = manager.Pin(block);
+	auto &buffer_manager = BufferManager::GetBufferManager(db);
+	auto handle = buffer_manager.Pin(block);
 
 	idx_t initial_count = tuple_count;
 	while (count > 0) {
@@ -512,8 +517,9 @@ idx_t NumericSegment::Append(SegmentStatistics &stats, Vector &data, idx_t offse
 //===--------------------------------------------------------------------===//
 void NumericSegment::Update(ColumnData &column_data, SegmentStatistics &stats, Transaction &transaction, Vector &update,
                             row_t *ids, idx_t count, idx_t vector_index, idx_t vector_offset, UpdateInfo *node) {
+	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	if (!node) {
-		auto handle = manager.Pin(block);
+		auto handle = buffer_manager.Pin(block);
 
 		// create a new node in the undo buffer for this update
 		node = CreateUpdateInfo(column_data, transaction, ids, count, vector_index, vector_offset, type_size);
@@ -521,7 +527,7 @@ void NumericSegment::Update(ColumnData &column_data, SegmentStatistics &stats, T
 		update_function(stats, node, handle->node->buffer + vector_index * vector_size, update);
 	} else {
 		// node already exists for this transaction, we need to merge the new updates with the existing updates
-		auto handle = manager.Pin(block);
+		auto handle = buffer_manager.Pin(block);
 
 		merge_update_function(stats, node, handle->node->buffer + vector_index * vector_size, update, ids, count,
 		                      vector_offset);
@@ -531,7 +537,8 @@ void NumericSegment::Update(ColumnData &column_data, SegmentStatistics &stats, T
 void NumericSegment::RollbackUpdate(UpdateInfo *info) {
 	// obtain an exclusive lock
 	auto lock_handle = lock.GetExclusiveLock();
-	auto handle = manager.Pin(block);
+	auto &buffer_manager = BufferManager::GetBufferManager(db);
+	auto handle = buffer_manager.Pin(block);
 
 	// move the data from the UpdateInfo back into the base table
 	rollback_update(info, handle->node->buffer + info->vector_index * vector_size);
@@ -542,7 +549,8 @@ void NumericSegment::RollbackUpdate(UpdateInfo *info) {
 //===--------------------------------------------------------------------===//
 // Append
 //===--------------------------------------------------------------------===//
-template <class T> static inline void update_numeric_statistics_internal(T new_value, T &min, T &max) {
+template <class T>
+static inline void update_numeric_statistics_internal(T new_value, T &min, T &max) {
 	if (LessThan::Operation(new_value, min)) {
 		min = new_value;
 	}
@@ -551,64 +559,77 @@ template <class T> static inline void update_numeric_statistics_internal(T new_v
 	}
 }
 
-template <class T> static inline void update_numeric_statistics(SegmentStatistics &stats, T new_value);
+template <class T>
+static inline void update_numeric_statistics(SegmentStatistics &stats, T new_value);
 
-template <> inline void update_numeric_statistics<int8_t>(SegmentStatistics &stats, int8_t new_value) {
+template <>
+inline void update_numeric_statistics<int8_t>(SegmentStatistics &stats, int8_t new_value) {
 	auto &nstats = (NumericStatistics &)*stats.statistics;
 	update_numeric_statistics_internal<int8_t>(new_value, nstats.min.value_.tinyint, nstats.max.value_.tinyint);
 }
 
-template <> inline void update_numeric_statistics<int16_t>(SegmentStatistics &stats, int16_t new_value) {
+template <>
+inline void update_numeric_statistics<int16_t>(SegmentStatistics &stats, int16_t new_value) {
 	auto &nstats = (NumericStatistics &)*stats.statistics;
 	update_numeric_statistics_internal<int16_t>(new_value, nstats.min.value_.smallint, nstats.max.value_.smallint);
 }
 
-template <> inline void update_numeric_statistics<int32_t>(SegmentStatistics &stats, int32_t new_value) {
+template <>
+inline void update_numeric_statistics<int32_t>(SegmentStatistics &stats, int32_t new_value) {
 	auto &nstats = (NumericStatistics &)*stats.statistics;
 	update_numeric_statistics_internal<int32_t>(new_value, nstats.min.value_.integer, nstats.max.value_.integer);
 }
 
-template <> inline void update_numeric_statistics<int64_t>(SegmentStatistics &stats, int64_t new_value) {
+template <>
+inline void update_numeric_statistics<int64_t>(SegmentStatistics &stats, int64_t new_value) {
 	auto &nstats = (NumericStatistics &)*stats.statistics;
 	update_numeric_statistics_internal<int64_t>(new_value, nstats.min.value_.bigint, nstats.max.value_.bigint);
 }
 
-template <> inline void update_numeric_statistics<uint8_t>(SegmentStatistics &stats, uint8_t new_value) {
+template <>
+inline void update_numeric_statistics<uint8_t>(SegmentStatistics &stats, uint8_t new_value) {
 	auto &nstats = (NumericStatistics &)*stats.statistics;
 	update_numeric_statistics_internal<uint8_t>(new_value, nstats.min.value_.utinyint, nstats.max.value_.utinyint);
 }
 
-template <> inline void update_numeric_statistics<uint16_t>(SegmentStatistics &stats, uint16_t new_value) {
+template <>
+inline void update_numeric_statistics<uint16_t>(SegmentStatistics &stats, uint16_t new_value) {
 	auto &nstats = (NumericStatistics &)*stats.statistics;
 	update_numeric_statistics_internal<uint16_t>(new_value, nstats.min.value_.usmallint, nstats.max.value_.usmallint);
 }
 
-template <> inline void update_numeric_statistics<uint32_t>(SegmentStatistics &stats, uint32_t new_value) {
+template <>
+inline void update_numeric_statistics<uint32_t>(SegmentStatistics &stats, uint32_t new_value) {
 	auto &nstats = (NumericStatistics &)*stats.statistics;
 	update_numeric_statistics_internal<uint32_t>(new_value, nstats.min.value_.uinteger, nstats.max.value_.uinteger);
 }
 
-template <> inline void update_numeric_statistics<uint64_t>(SegmentStatistics &stats, uint64_t new_value) {
+template <>
+inline void update_numeric_statistics<uint64_t>(SegmentStatistics &stats, uint64_t new_value) {
 	auto &nstats = (NumericStatistics &)*stats.statistics;
 	update_numeric_statistics_internal<uint64_t>(new_value, nstats.min.value_.ubigint, nstats.max.value_.ubigint);
 }
 
-template <> inline void update_numeric_statistics<hugeint_t>(SegmentStatistics &stats, hugeint_t new_value) {
+template <>
+inline void update_numeric_statistics<hugeint_t>(SegmentStatistics &stats, hugeint_t new_value) {
 	auto &nstats = (NumericStatistics &)*stats.statistics;
 	update_numeric_statistics_internal<hugeint_t>(new_value, nstats.min.value_.hugeint, nstats.max.value_.hugeint);
 }
 
-template <> inline void update_numeric_statistics<float>(SegmentStatistics &stats, float new_value) {
+template <>
+inline void update_numeric_statistics<float>(SegmentStatistics &stats, float new_value) {
 	auto &nstats = (NumericStatistics &)*stats.statistics;
 	update_numeric_statistics_internal<float>(new_value, nstats.min.value_.float_, nstats.max.value_.float_);
 }
 
-template <> inline void update_numeric_statistics<double>(SegmentStatistics &stats, double new_value) {
+template <>
+inline void update_numeric_statistics<double>(SegmentStatistics &stats, double new_value) {
 	auto &nstats = (NumericStatistics &)*stats.statistics;
 	update_numeric_statistics_internal<double>(new_value, nstats.min.value_.double_, nstats.max.value_.double_);
 }
 
-template <> void update_numeric_statistics<interval_t>(SegmentStatistics &stats, interval_t new_value) {
+template <>
+void update_numeric_statistics<interval_t>(SegmentStatistics &stats, interval_t new_value) {
 }
 
 template <class T>
@@ -849,10 +870,12 @@ static NumericSegment::merge_update_function_t GetMergeUpdateFunction(PhysicalTy
 //===--------------------------------------------------------------------===//
 // Update Fetch
 //===--------------------------------------------------------------------===//
-template <class T> static void update_info_fetch(Transaction &transaction, UpdateInfo *info, Vector &result) {
+template <class T>
+static void update_info_fetch(transaction_t start_time, transaction_t transaction_id, UpdateInfo *info,
+                              Vector &result) {
 	auto result_data = FlatVector::GetData<T>(result);
 	auto &result_mask = FlatVector::Nullmask(result);
-	UpdateInfo::UpdatesForTransaction(info, transaction, [&](UpdateInfo *current) {
+	UpdateInfo::UpdatesForTransaction(info, start_time, transaction_id, [&](UpdateInfo *current) {
 		auto info_data = (T *)current->tuple_data;
 		for (idx_t i = 0; i < current->N; i++) {
 			result_data[current->tuples[i]] = info_data[i];
@@ -901,21 +924,23 @@ static void update_info_append(Transaction &transaction, UpdateInfo *info, idx_t
                                idx_t result_idx) {
 	auto result_data = FlatVector::GetData<T>(result);
 	auto &result_mask = FlatVector::Nullmask(result);
-	UpdateInfo::UpdatesForTransaction(info, transaction, [&](UpdateInfo *current) {
-		auto info_data = (T *)current->tuple_data;
-		// loop over the tuples in this UpdateInfo
-		for (idx_t i = 0; i < current->N; i++) {
-			if (current->tuples[i] == row_id) {
-				// found the relevant tuple
-				result_data[result_idx] = info_data[i];
-				result_mask[result_idx] = current->nullmask[current->tuples[i]];
-				break;
-			} else if (current->tuples[i] > row_id) {
-				// tuples are sorted: so if the current tuple is > row_id we will not find it anymore
-				break;
-			}
-		}
-	});
+	UpdateInfo::UpdatesForTransaction(info, transaction.start_time, transaction.transaction_id,
+	                                  [&](UpdateInfo *current) {
+		                                  auto info_data = (T *)current->tuple_data;
+		                                  // loop over the tuples in this UpdateInfo
+		                                  for (idx_t i = 0; i < current->N; i++) {
+			                                  if (current->tuples[i] == row_id) {
+				                                  // found the relevant tuple
+				                                  result_data[result_idx] = info_data[i];
+				                                  result_mask[result_idx] = current->nullmask[current->tuples[i]];
+				                                  break;
+			                                  } else if (current->tuples[i] > row_id) {
+				                                  // tuples are sorted: so if the current tuple is > row_id we will not
+				                                  // find it anymore
+				                                  break;
+			                                  }
+		                                  }
+	                                  });
 }
 
 static NumericSegment::update_info_append_function_t GetUpdateInfoAppendFunction(PhysicalType type) {
@@ -953,7 +978,8 @@ static NumericSegment::update_info_append_function_t GetUpdateInfoAppendFunction
 //===--------------------------------------------------------------------===//
 // Rollback Update
 //===--------------------------------------------------------------------===//
-template <class T> static void rollback_update(UpdateInfo *info, data_ptr_t base) {
+template <class T>
+static void rollback_update(UpdateInfo *info, data_ptr_t base) {
 	auto &nullmask = *((nullmask_t *)base);
 	auto info_data = (T *)info->tuple_data;
 	auto base_data = (T *)(base + sizeof(nullmask_t));

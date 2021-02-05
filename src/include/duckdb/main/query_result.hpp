@@ -82,7 +82,8 @@ private:
 		QueryResultIterator &iterator;
 		idx_t row;
 
-		template <class T> T GetValue(idx_t col_idx) const {
+		template <class T>
+		T GetValue(idx_t col_idx) const {
 			return iterator.result->iterator_chunk->GetValue(col_idx, iterator.row_idx).GetValue<T>();
 		}
 	};

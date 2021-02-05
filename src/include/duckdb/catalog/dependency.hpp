@@ -15,8 +15,8 @@ namespace duckdb {
 class CatalogEntry;
 
 struct Dependency {
-	Dependency(CatalogEntry *entry, bool requires_cascade = true) :
-		entry(entry), requires_cascade(requires_cascade) {}
+	Dependency(CatalogEntry *entry, bool requires_cascade = true) : entry(entry), requires_cascade(requires_cascade) {
+	}
 
 	//! The catalog entry this depends on
 	CatalogEntry *entry;
@@ -24,11 +24,10 @@ struct Dependency {
 	bool requires_cascade;
 };
 
-
 struct DependencyHashFunction {
 	uint64_t operator()(const Dependency &a) const {
-		std::hash<void*> hash_func;
-		return hash_func((void*)a.entry);
+		std::hash<void *> hash_func;
+		return hash_func((void *)a.entry);
 	}
 };
 

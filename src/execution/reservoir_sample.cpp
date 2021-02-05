@@ -65,7 +65,7 @@ idx_t ReservoirSample::FillReservoir(DataChunk &input) {
 	input.SetCardinality(required_count);
 	reservoir.Append(input);
 
-	reservoirSampling.InitializeReservoir(reservoir.Count(),sample_count);
+	reservoirSampling.InitializeReservoir(reservoir.Count(), sample_count);
 
 	// check if there are still elements remaining
 	// this happens if we are on a boundary
@@ -163,73 +163,72 @@ void ReservoirSamplePercentage::Finalize() {
 	is_finalized = true;
 }
 
-	BaseReservoirSampling::BaseReservoirSampling(int64_t seed) {
-		next_index = 0;
-		min_threshold = 0;
-		min_entry = 0;
-		current_count = 0;
-		//! Make a random number engine
-		rng = make_unique<pcg32>(seed);
-		uniform_dist = make_unique<std::uniform_real_distribution<double>>(0, 1);
-	}
+BaseReservoirSampling::BaseReservoirSampling(int64_t seed) {
+	next_index = 0;
+	min_threshold = 0;
+	min_entry = 0;
+	current_count = 0;
+	//! Make a random number engine
+	rng = make_unique<pcg32>(seed);
+	uniform_dist = make_unique<std::uniform_real_distribution<double>>(0, 1);
+}
 
-    BaseReservoirSampling::BaseReservoirSampling() {
-		next_index = 0;
-		min_threshold = 0;
-		min_entry = 0;
-		current_count = 0;
-		//! Seed with a real random value, if available
-		pcg_extras::seed_seq_from<std::random_device> seed_source;
-		//! Make a random number engine
-		rng = make_unique<pcg32>(seed_source);
-		uniform_dist = make_unique<std::uniform_real_distribution<double>>(0, 1);
-	}
+BaseReservoirSampling::BaseReservoirSampling() {
+	next_index = 0;
+	min_threshold = 0;
+	min_entry = 0;
+	current_count = 0;
+	//! Seed with a real random value, if available
+	pcg_extras::seed_seq_from<std::random_device> seed_source;
+	//! Make a random number engine
+	rng = make_unique<pcg32>(seed_source);
+	uniform_dist = make_unique<std::uniform_real_distribution<double>>(0, 1);
+}
 
-
-	void BaseReservoirSampling::InitializeReservoir(idx_t cur_size, idx_t sample_size) {
-		//! 1: The first m items of V are inserted into R
-		//! first we need to check if the reservoir already has "m" elements
-		if (cur_size == sample_size) {
-			//! 2. For each item vi ∈ R: Calculate a key ki = random(0, 1)
-			//! we then define the threshold to enter the reservoir T_w as the minimum key of R
-			//! we use a priority queue to extract the minimum key in O(1) time
-			for (idx_t i = 0; i < sample_size; i++) {
-				double k_i = (*uniform_dist)(*rng);
-				reservoir_weights.push(std::make_pair(-k_i, i));
-			}
-			SetNextEntry();
+void BaseReservoirSampling::InitializeReservoir(idx_t cur_size, idx_t sample_size) {
+	//! 1: The first m items of V are inserted into R
+	//! first we need to check if the reservoir already has "m" elements
+	if (cur_size == sample_size) {
+		//! 2. For each item vi ∈ R: Calculate a key ki = random(0, 1)
+		//! we then define the threshold to enter the reservoir T_w as the minimum key of R
+		//! we use a priority queue to extract the minimum key in O(1) time
+		for (idx_t i = 0; i < sample_size; i++) {
+			double k_i = (*uniform_dist)(*rng);
+			reservoir_weights.push(std::make_pair(-k_i, i));
 		}
-	}
-
-	void BaseReservoirSampling::SetNextEntry() {
-		//! 4. Let r = random(0, 1) and Xw = log(r) / log(T_w)
-		auto &min_key = reservoir_weights.top();
-		double T_w = -min_key.first;
-		double r = (*uniform_dist)(*rng);
-		double X_w = log(r) / log(T_w);
-		//! 5. From the current item vc skip items until item vi , such that:
-		//! 6. wc +wc+1 +···+wi−1 < Xw <= wc +wc+1 +···+wi−1 +wi
-		//! since all our weights are 1 (uniform sampling), we can just determine the amount of elements to skip
-		min_threshold = T_w;
-		min_entry = min_key.second;
-		next_index = MaxValue<idx_t>(1, idx_t(round(X_w)));
-		current_count = 0;
-	}
-
-	void BaseReservoirSampling::ReplaceElement() {
-		//! replace the entry in the reservoir
-		//! pop the minimum entry
-		reservoir_weights.pop();
-		//! now update the reservoir
-		//! 8. Let tw = Tw i , r2 = random(tw,1) and vi’s key: ki = (r2)1/wi
-		//! 9. The new threshold Tw is the new minimum key of R
-		//! we generate a random number between (min_threshold, 1)
-		std::uniform_real_distribution<double> dist(min_threshold, 1);
-		double r2 = dist(*rng);
-		//! now we insert the new weight into the reservoir
-		reservoir_weights.push(std::make_pair(-r2, min_entry));
-		//! we update the min entry with the new min entry in the reservoir
 		SetNextEntry();
 	}
+}
+
+void BaseReservoirSampling::SetNextEntry() {
+	//! 4. Let r = random(0, 1) and Xw = log(r) / log(T_w)
+	auto &min_key = reservoir_weights.top();
+	double T_w = -min_key.first;
+	double r = (*uniform_dist)(*rng);
+	double X_w = log(r) / log(T_w);
+	//! 5. From the current item vc skip items until item vi , such that:
+	//! 6. wc +wc+1 +···+wi−1 < Xw <= wc +wc+1 +···+wi−1 +wi
+	//! since all our weights are 1 (uniform sampling), we can just determine the amount of elements to skip
+	min_threshold = T_w;
+	min_entry = min_key.second;
+	next_index = MaxValue<idx_t>(1, idx_t(round(X_w)));
+	current_count = 0;
+}
+
+void BaseReservoirSampling::ReplaceElement() {
+	//! replace the entry in the reservoir
+	//! pop the minimum entry
+	reservoir_weights.pop();
+	//! now update the reservoir
+	//! 8. Let tw = Tw i , r2 = random(tw,1) and vi’s key: ki = (r2)1/wi
+	//! 9. The new threshold Tw is the new minimum key of R
+	//! we generate a random number between (min_threshold, 1)
+	std::uniform_real_distribution<double> dist(min_threshold, 1);
+	double r2 = dist(*rng);
+	//! now we insert the new weight into the reservoir
+	reservoir_weights.push(std::make_pair(-r2, min_entry));
+	//! we update the min entry with the new min entry in the reservoir
+	SetNextEntry();
+}
 
 } // namespace duckdb

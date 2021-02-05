@@ -9,12 +9,14 @@
 
 namespace duckdb {
 
-template <class T> struct min_max_state_t {
+template <class T>
+struct min_max_state_t {
 	T value;
 	bool isset;
 };
 
-template <class OP> static AggregateFunction GetUnaryAggregate(LogicalType type) {
+template <class OP>
+static AggregateFunction GetUnaryAggregate(LogicalType type) {
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
 		return AggregateFunction::UnaryAggregate<min_max_state_t<int8_t>, int8_t, int8_t, OP>(type, type);
@@ -50,12 +52,14 @@ template <class OP> static AggregateFunction GetUnaryAggregate(LogicalType type)
 }
 
 struct MinMaxBase {
-	template <class STATE> static void Initialize(STATE *state) {
+	template <class STATE>
+	static void Initialize(STATE *state) {
 		state->isset = false;
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state,FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
+	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask,
+	                              idx_t count) {
 		D_ASSERT(!nullmask[0]);
 		if (!state->isset) {
 			OP::template Assign<INPUT_TYPE, STATE>(state, input[0]);
@@ -66,7 +70,7 @@ struct MinMaxBase {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state,FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
+	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
 		if (!state->isset) {
 			OP::template Assign<INPUT_TYPE, STATE>(state, input[idx]);
 			state->isset = true;
@@ -81,7 +85,8 @@ struct MinMaxBase {
 };
 
 struct NumericMinMaxBase : public MinMaxBase {
-	template <class INPUT_TYPE, class STATE> static void Assign(STATE *state, INPUT_TYPE input) {
+	template <class INPUT_TYPE, class STATE>
+	static void Assign(STATE *state, INPUT_TYPE input) {
 		state->value = input;
 	}
 
@@ -93,13 +98,15 @@ struct NumericMinMaxBase : public MinMaxBase {
 };
 
 struct MinOperation : public NumericMinMaxBase {
-	template <class INPUT_TYPE, class STATE> static void Execute(STATE *state, INPUT_TYPE input) {
+	template <class INPUT_TYPE, class STATE>
+	static void Execute(STATE *state, INPUT_TYPE input) {
 		if (LessThan::Operation<INPUT_TYPE>(input, state->value)) {
 			state->value = input;
 		}
 	}
 
-	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
+	template <class STATE, class OP>
+	static void Combine(STATE source, STATE *target) {
 		if (!source.isset) {
 			// source is NULL, nothing to do
 			return;
@@ -114,13 +121,15 @@ struct MinOperation : public NumericMinMaxBase {
 };
 
 struct MaxOperation : public NumericMinMaxBase {
-	template <class INPUT_TYPE, class STATE> static void Execute(STATE *state, INPUT_TYPE input) {
+	template <class INPUT_TYPE, class STATE>
+	static void Execute(STATE *state, INPUT_TYPE input) {
 		if (GreaterThan::Operation<INPUT_TYPE>(input, state->value)) {
 			state->value = input;
 		}
 	}
 
-	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
+	template <class STATE, class OP>
+	static void Combine(STATE source, STATE *target) {
 		if (!source.isset) {
 			// source is NULL, nothing to do
 			return;
@@ -135,13 +144,15 @@ struct MaxOperation : public NumericMinMaxBase {
 };
 
 struct StringMinMaxBase : public MinMaxBase {
-	template <class STATE> static void Destroy(STATE *state) {
+	template <class STATE>
+	static void Destroy(STATE *state) {
 		if (state->isset && !state->value.IsInlined()) {
 			delete[] state->value.GetDataUnsafe();
 		}
 	}
 
-	template <class INPUT_TYPE, class STATE> static void Assign(STATE *state, INPUT_TYPE input) {
+	template <class INPUT_TYPE, class STATE>
+	static void Assign(STATE *state, INPUT_TYPE input) {
 		Destroy(state);
 		if (input.IsInlined()) {
 			state->value = input;
@@ -164,7 +175,8 @@ struct StringMinMaxBase : public MinMaxBase {
 		}
 	}
 
-	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
+	template <class STATE, class OP>
+	static void Combine(STATE source, STATE *target) {
 		if (!source.isset) {
 			// source is NULL, nothing to do
 			return;
@@ -180,7 +192,8 @@ struct StringMinMaxBase : public MinMaxBase {
 };
 
 struct MinOperationString : public StringMinMaxBase {
-	template <class INPUT_TYPE, class STATE> static void Execute(STATE *state, INPUT_TYPE input) {
+	template <class INPUT_TYPE, class STATE>
+	static void Execute(STATE *state, INPUT_TYPE input) {
 		if (LessThan::Operation<INPUT_TYPE>(input, state->value)) {
 			Assign(state, input);
 		}
@@ -188,7 +201,8 @@ struct MinOperationString : public StringMinMaxBase {
 };
 
 struct MaxOperationString : public StringMinMaxBase {
-	template <class INPUT_TYPE, class STATE> static void Execute(STATE *state, INPUT_TYPE input) {
+	template <class INPUT_TYPE, class STATE>
+	static void Execute(STATE *state, INPUT_TYPE input) {
 		if (GreaterThan::Operation<INPUT_TYPE>(input, state->value)) {
 			Assign(state, input);
 		}
@@ -218,7 +232,8 @@ unique_ptr<FunctionData> bind_decimal_min_max(ClientContext &context, AggregateF
 	return nullptr;
 }
 
-template <class OP, class OP_STRING> static void AddMinMaxOperator(AggregateFunctionSet &set) {
+template <class OP, class OP_STRING>
+static void AddMinMaxOperator(AggregateFunctionSet &set) {
 	for (auto type : LogicalType::ALL_TYPES) {
 		if (type.id() == LogicalTypeId::VARCHAR || type.id() == LogicalTypeId::BLOB) {
 			set.AddFunction(

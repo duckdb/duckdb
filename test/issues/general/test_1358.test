@@ -1,0 +1,26 @@
+# name: test/issues/general/test_1358.test
+# description: Issue 1358: Binder Error: column xxxx must appear in the GROUP BY clause or be used in an aggregate function
+# group: [general]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE planes(tailnum VARCHAR, "year" INTEGER, "type" VARCHAR, manufacturer VARCHAR, model VARCHAR, engines INTEGER, seats INTEGER, speed INTEGER, engine VARCHAR);
+
+statement ok
+CREATE TABLE flights("year" INTEGER, "month" INTEGER, "day" INTEGER, dep_time INTEGER, sched_dep_time INTEGER, dep_delay DOUBLE, arr_time INTEGER, sched_arr_time INTEGER, arr_delay DOUBLE, carrier VARCHAR, flight INTEGER, tailnum VARCHAR, origin VARCHAR, dest VARCHAR, air_time DOUBLE, distance DOUBLE, "hour" DOUBLE, "minute" DOUBLE, time_hour TIMESTAMP);
+
+statement ok
+SELECT origin, dest,
+    COUNT(flight) AS num_flts,
+    round(SUM(seats)) AS num_seats,
+    round(AVG(arr_delay)) AS avg_delay
+  FROM flights f LEFT OUTER JOIN planes p
+    ON f.tailnum = p.tailnum
+  WHERE distance BETWEEN 200 AND 300
+    AND air_time IS NOT NULL
+  GROUP BY origin, dest
+  HAVING num_flts > 3000
+  ORDER BY num_seats DESC, avg_delay ASC
+  LIMIT 2;

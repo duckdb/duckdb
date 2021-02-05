@@ -9,7 +9,6 @@
 #include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/parser/transformer.hpp"
 
-
 namespace duckdb {
 
 using namespace duckdb_libpgquery;
@@ -115,7 +114,6 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(PGFuncCall *root) {
 
 	auto lowercase_name = StringUtil::Lower(function_name);
 
-
 	if (root->agg_order) {
 		throw ParserException("ORDER BY is not implemented for aggregates");
 	}
@@ -181,7 +179,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(PGFuncCall *root) {
 	}
 	unique_ptr<ParsedExpression> filter_expr;
 	if (root->agg_filter) {
-		filter_expr  = TransformExpression(root->agg_filter);
+		filter_expr = TransformExpression(root->agg_filter);
 	}
 
 	// star gets eaten in the parser
@@ -213,7 +211,8 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(PGFuncCall *root) {
 		return move(expr);
 	}
 
-	auto function = make_unique<FunctionExpression>(schema, lowercase_name.c_str(), children,move(filter_expr), root->agg_distinct);
+	auto function = make_unique<FunctionExpression>(schema, lowercase_name.c_str(), children, move(filter_expr),
+	                                                root->agg_distinct);
 	function->query_location = root->location;
 	return move(function);
 }

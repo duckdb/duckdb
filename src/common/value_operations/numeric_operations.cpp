@@ -9,7 +9,8 @@
 
 namespace duckdb {
 
-template <class OP> static Value binary_value_operation(const Value &left, const Value &right) {
+template <class OP>
+static Value binary_value_operation(const Value &left, const Value &right) {
 	auto left_type = left.type();
 	auto right_type = right.type();
 	LogicalType result_type = left_type;

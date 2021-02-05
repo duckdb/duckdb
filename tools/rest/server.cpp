@@ -14,8 +14,8 @@
 // you can set this to enable compression. You will need to link zlib as well.
 // #define CPPHTTPLIB_ZLIB_SUPPORT 1
 #define CPPHTTPLIB_KEEPALIVE_TIMEOUT_USECOND 10000
-#define CPPHTTPLIB_KEEPALIVE_TIMEOUT_SECOND 0
-#define CPPHTTPLIB_THREAD_POOL_COUNT 16
+#define CPPHTTPLIB_KEEPALIVE_TIMEOUT_SECOND  0
+#define CPPHTTPLIB_THREAD_POOL_COUNT         16
 
 #include "httplib.hpp"
 #include "json.hpp"
@@ -62,7 +62,8 @@ struct RestClientState {
 
 enum ReturnContentType { JSON, BSON, CBOR, MESSAGE_PACK, UBJSON };
 
-template <class T, class TARGET> static void assign_json_loop(Vector &v, idx_t col_idx, idx_t count, json &j) {
+template <class T, class TARGET>
+static void assign_json_loop(Vector &v, idx_t col_idx, idx_t count, json &j) {
 	v.Normalify(count);
 	auto data_ptr = FlatVector::GetData<T>(v);
 	auto &nullmask = FlatVector::Nullmask(v);

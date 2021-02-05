@@ -35,7 +35,7 @@ public:
 	Value(uint16_t val) : type_(LogicalType::USMALLINT), is_null(false) {
 		value_.usmallint = val;
 	}
-		//! Create a UINTEGER value
+	//! Create a UINTEGER value
 	Value(uint32_t val) : type_(LogicalType::UINTEGER), is_null(false) {
 		value_.uinteger = val;
 	}
@@ -139,15 +139,18 @@ public:
 	//! Creates a blob by casting a specified string to a blob (i.e. interpreting \x characters)
 	static Value BLOB(string data);
 
-	template <class T> T GetValue() const {
+	template <class T>
+	T GetValue() const {
 		throw NotImplementedException("Unimplemented template type for Value::GetValue");
 	}
-	template <class T> static Value CreateValue(T value) {
+	template <class T>
+	static Value CreateValue(T value) {
 		throw NotImplementedException("Unimplemented template type for Value::CreateValue");
 	}
 	// Returns the internal value. Unlike GetValue(), this method does not perform casting, and assumes T matches the
 	// type of the value. Only use this if you know what you are doing.
-	template <class T> T &GetValueUnsafe() {
+	template <class T>
+	T &GetValueUnsafe() {
 		throw NotImplementedException("Unimplemented template type for Value::GetValueUnsafe");
 	}
 
@@ -198,7 +201,8 @@ public:
 	static bool FloatIsValid(float value);
 	static bool DoubleIsValid(double value);
 
-	template <class T> static bool IsValid(T value) {
+	template <class T>
+	static bool IsValid(T value) {
 		return true;
 	}
 
@@ -246,52 +250,87 @@ public:
 	std::vector<Value> list_value;
 
 private:
-	template <class T> T GetValueInternal() const;
+	template <class T>
+	T GetValueInternal() const;
 	//! Templated helper function for casting
-	template <class DST, class OP> static DST _cast(const Value &v);
+	template <class DST, class OP>
+	static DST _cast(const Value &v);
 
 	//! Templated helper function for binary operations
 	template <class OP>
 	static void _templated_binary_operation(const Value &left, const Value &right, Value &result, bool ignore_null);
 
 	//! Templated helper function for boolean operations
-	template <class OP> static bool _templated_boolean_operation(const Value &left, const Value &right);
+	template <class OP>
+	static bool _templated_boolean_operation(const Value &left, const Value &right);
 };
 
-template <> Value DUCKDB_API Value::CreateValue(bool value);
-template <> Value DUCKDB_API Value::CreateValue(int8_t value);
-template <> Value DUCKDB_API Value::CreateValue(int16_t value);
-template <> Value DUCKDB_API Value::CreateValue(int32_t value);
-template <> Value DUCKDB_API Value::CreateValue(int64_t value);
-template <> Value DUCKDB_API Value::CreateValue(hugeint_t value);
-template <> Value DUCKDB_API Value::CreateValue(const char *value);
-template <> Value DUCKDB_API Value::CreateValue(string value);
-template <> Value DUCKDB_API Value::CreateValue(string_t value);
-template <> Value DUCKDB_API Value::CreateValue(float value);
-template <> Value DUCKDB_API Value::CreateValue(double value);
-template <> Value DUCKDB_API Value::CreateValue(Value value);
+template <>
+Value DUCKDB_API Value::CreateValue(bool value);
+template <>
+Value DUCKDB_API Value::CreateValue(int8_t value);
+template <>
+Value DUCKDB_API Value::CreateValue(int16_t value);
+template <>
+Value DUCKDB_API Value::CreateValue(int32_t value);
+template <>
+Value DUCKDB_API Value::CreateValue(int64_t value);
+template <>
+Value DUCKDB_API Value::CreateValue(hugeint_t value);
+template <>
+Value DUCKDB_API Value::CreateValue(const char *value);
+template <>
+Value DUCKDB_API Value::CreateValue(string value);
+template <>
+Value DUCKDB_API Value::CreateValue(string_t value);
+template <>
+Value DUCKDB_API Value::CreateValue(float value);
+template <>
+Value DUCKDB_API Value::CreateValue(double value);
+template <>
+Value DUCKDB_API Value::CreateValue(Value value);
 
-template <> bool Value::GetValue() const;
-template <> int8_t Value::GetValue() const;
-template <> int16_t Value::GetValue() const;
-template <> int32_t Value::GetValue() const;
-template <> int64_t Value::GetValue() const;
-template <> hugeint_t Value::GetValue() const;
-template <> string Value::GetValue() const;
-template <> float Value::GetValue() const;
-template <> double Value::GetValue() const;
-template <> uintptr_t Value::GetValue() const;
+template <>
+bool Value::GetValue() const;
+template <>
+int8_t Value::GetValue() const;
+template <>
+int16_t Value::GetValue() const;
+template <>
+int32_t Value::GetValue() const;
+template <>
+int64_t Value::GetValue() const;
+template <>
+hugeint_t Value::GetValue() const;
+template <>
+string Value::GetValue() const;
+template <>
+float Value::GetValue() const;
+template <>
+double Value::GetValue() const;
+template <>
+uintptr_t Value::GetValue() const;
 
-template <> int8_t &Value::GetValueUnsafe();
-template <> int16_t &Value::GetValueUnsafe();
-template <> int32_t &Value::GetValueUnsafe();
-template <> int64_t &Value::GetValueUnsafe();
-template <> hugeint_t &Value::GetValueUnsafe();
-template <> string &Value::GetValueUnsafe();
-template <> float &Value::GetValueUnsafe();
-template <> double &Value::GetValueUnsafe();
+template <>
+int8_t &Value::GetValueUnsafe();
+template <>
+int16_t &Value::GetValueUnsafe();
+template <>
+int32_t &Value::GetValueUnsafe();
+template <>
+int64_t &Value::GetValueUnsafe();
+template <>
+hugeint_t &Value::GetValueUnsafe();
+template <>
+string &Value::GetValueUnsafe();
+template <>
+float &Value::GetValueUnsafe();
+template <>
+double &Value::GetValueUnsafe();
 
-template <> bool Value::IsValid(float value);
-template <> bool Value::IsValid(double value);
+template <>
+bool Value::IsValid(float value);
+template <>
+bool Value::IsValid(double value);
 
 } // namespace duckdb

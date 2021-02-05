@@ -24,4 +24,4 @@ namespace duckdb {
 //! Zero selection vector: completely filled with the value 0 [READ ONLY]
 extern const sel_t ZERO_VECTOR[STANDARD_VECTOR_SIZE];
 
-}
+} // namespace duckdb

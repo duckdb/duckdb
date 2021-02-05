@@ -6,12 +6,14 @@
 
 namespace duckdb {
 
-template <class T> struct bit_state_t {
+template <class T>
+struct bit_state_t {
 	bool is_set;
 	T value;
 };
 
-template <class OP> static AggregateFunction GetBitfieldUnaryAggregate(LogicalType type) {
+template <class OP>
+static AggregateFunction GetBitfieldUnaryAggregate(LogicalType type) {
 	switch (type.id()) {
 	case LogicalTypeId::TINYINT:
 		return AggregateFunction::UnaryAggregate<bit_state_t<uint8_t>, int8_t, int8_t, OP>(type, type);
@@ -37,7 +39,8 @@ template <class OP> static AggregateFunction GetBitfieldUnaryAggregate(LogicalTy
 }
 
 struct BitAndOperation {
-	template <class STATE> static void Initialize(STATE *state) {
+	template <class STATE>
+	static void Initialize(STATE *state) {
 		//  If there are no matching rows, BIT_AND() returns a null value.
 		state->is_set = false;
 	}
@@ -53,9 +56,10 @@ struct BitAndOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state,  FunctionData *bind_data,INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
+	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask,
+	                              idx_t count) {
 		//  count is irrelevant
-		Operation<INPUT_TYPE, STATE, OP>(state,bind_data, input, nullmask, 0);
+		Operation<INPUT_TYPE, STATE, OP>(state, bind_data, input, nullmask, 0);
 	}
 
 	template <class T, class STATE>
@@ -67,7 +71,8 @@ struct BitAndOperation {
 		}
 	}
 
-	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
+	template <class STATE, class OP>
+	static void Combine(STATE source, STATE *target) {
 		if (!source.is_set) {
 			// source is NULL, nothing to do.
 			return;
@@ -94,13 +99,14 @@ void BitAndFun::RegisterFunction(BuiltinFunctions &set) {
 }
 
 struct BitOrOperation {
-	template <class STATE> static void Initialize(STATE *state) {
+	template <class STATE>
+	static void Initialize(STATE *state) {
 		//  If there are no matching rows, BIT_OR() returns a null value.
 		state->is_set = false;
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state,  FunctionData *bind_data,INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
+	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
 		if (!state->is_set) {
 			state->is_set = true;
 			state->value = input[idx];
@@ -110,7 +116,8 @@ struct BitOrOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state,  FunctionData *bind_data,INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
+	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask,
+	                              idx_t count) {
 		//  count is irrelevant
 		Operation<INPUT_TYPE, STATE, OP>(state, bind_data, input, nullmask, 0);
 	}
@@ -124,7 +131,8 @@ struct BitOrOperation {
 		}
 	}
 
-	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
+	template <class STATE, class OP>
+	static void Combine(STATE source, STATE *target) {
 		if (!source.is_set) {
 			// source is NULL, nothing to do.
 			return;
@@ -151,7 +159,8 @@ void BitOrFun::RegisterFunction(BuiltinFunctions &set) {
 }
 
 struct BitXorOperation {
-	template <class STATE> static void Initialize(STATE *state) {
+	template <class STATE>
+	static void Initialize(STATE *state) {
 		//  If there are no matching rows, BIT_XOR() returns a null value.
 		state->is_set = false;
 	}
@@ -167,9 +176,10 @@ struct BitXorOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
+	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask,
+	                              idx_t count) {
 		//  count is irrelevant
-		Operation<INPUT_TYPE, STATE, OP>(state,bind_data, input, nullmask, 0);
+		Operation<INPUT_TYPE, STATE, OP>(state, bind_data, input, nullmask, 0);
 	}
 
 	template <class T, class STATE>
@@ -181,7 +191,8 @@ struct BitXorOperation {
 		}
 	}
 
-	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
+	template <class STATE, class OP>
+	static void Combine(STATE source, STATE *target) {
 		if (!source.is_set) {
 			// source is NULL, nothing to do.
 			return;

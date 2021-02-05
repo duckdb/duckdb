@@ -7,7 +7,8 @@
 
 namespace duckdb {
 
-template <class T> struct avg_state_t {
+template <class T>
+struct avg_state_t {
 	T value;
 	uint64_t count;
 };
@@ -25,14 +26,17 @@ public:
 };
 
 struct AverageSetOperation {
-	template <class STATE> static void Initialize(STATE *state) {
+	template <class STATE>
+	static void Initialize(STATE *state) {
 		state->count = 0;
 	}
-	template <class STATE> static void Combine(STATE source, STATE *target) {
+	template <class STATE>
+	static void Combine(STATE source, STATE *target) {
 		target->count += source.count;
 		target->value += source.value;
 	}
-	template <class STATE> static void AddValues(STATE *state, idx_t count) {
+	template <class STATE>
+	static void AddValues(STATE *state, idx_t count) {
 		state->count += count;
 	}
 };

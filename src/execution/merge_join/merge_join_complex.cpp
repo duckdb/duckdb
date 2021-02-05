@@ -5,7 +5,8 @@
 
 namespace duckdb {
 
-template <class T, class OP> idx_t merge_join_complex_lt(ScalarMergeInfo &l, ScalarMergeInfo &r) {
+template <class T, class OP>
+idx_t merge_join_complex_lt(ScalarMergeInfo &l, ScalarMergeInfo &r) {
 	if (r.pos >= r.order.count) {
 		return 0;
 	}
@@ -45,11 +46,13 @@ template <class T, class OP> idx_t merge_join_complex_lt(ScalarMergeInfo &l, Sca
 	return result_count;
 }
 
-template <class T> idx_t MergeJoinComplex::LessThan::Operation(ScalarMergeInfo &l, ScalarMergeInfo &r) {
+template <class T>
+idx_t MergeJoinComplex::LessThan::Operation(ScalarMergeInfo &l, ScalarMergeInfo &r) {
 	return merge_join_complex_lt<T, duckdb::LessThan>(l, r);
 }
 
-template <class T> idx_t MergeJoinComplex::LessThanEquals::Operation(ScalarMergeInfo &l, ScalarMergeInfo &r) {
+template <class T>
+idx_t MergeJoinComplex::LessThanEquals::Operation(ScalarMergeInfo &l, ScalarMergeInfo &r) {
 	return merge_join_complex_lt<T, duckdb::LessThanEquals>(l, r);
 }
 

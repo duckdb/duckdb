@@ -110,6 +110,7 @@ private:
 	unique_ptr<CallStatement> TransformCall(duckdb_libpgquery::PGNode *node);
 	unique_ptr<DropStatement> TransformDeallocate(duckdb_libpgquery::PGNode *node);
 	unique_ptr<SetStatement> TransformSet(duckdb_libpgquery::PGNode *node);
+	unique_ptr<SQLStatement> TransformCheckpoint(duckdb_libpgquery::PGNode *node);
 
 	//===--------------------------------------------------------------------===//
 	// Query Node Transform

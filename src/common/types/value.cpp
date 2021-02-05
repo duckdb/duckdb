@@ -223,8 +223,6 @@ Value Value::UBIGINT(uint64_t value) {
 	return result;
 }
 
-
-
 bool Value::FloatIsValid(float value) {
 	return !(std::isnan(value) || std::isinf(value));
 }
@@ -403,58 +401,71 @@ Value Value::INTERVAL(interval_t interval) {
 //===--------------------------------------------------------------------===//
 // CreateValue
 //===--------------------------------------------------------------------===//
-template <> Value Value::CreateValue(bool value) {
+template <>
+Value Value::CreateValue(bool value) {
 	return Value::BOOLEAN(value);
 }
 
-template <> Value Value::CreateValue(int8_t value) {
+template <>
+Value Value::CreateValue(int8_t value) {
 	return Value::TINYINT(value);
 }
 
-template <> Value Value::CreateValue(int16_t value) {
+template <>
+Value Value::CreateValue(int16_t value) {
 	return Value::SMALLINT(value);
 }
 
-template <> Value Value::CreateValue(int32_t value) {
+template <>
+Value Value::CreateValue(int32_t value) {
 	return Value::INTEGER(value);
 }
 
-template <> Value Value::CreateValue(int64_t value) {
+template <>
+Value Value::CreateValue(int64_t value) {
 	return Value::BIGINT(value);
 }
 
-template <> Value Value::CreateValue(hugeint_t value) {
+template <>
+Value Value::CreateValue(hugeint_t value) {
 	return Value::HUGEINT(value);
 }
 
-template <> Value Value::CreateValue(const char *value) {
+template <>
+Value Value::CreateValue(const char *value) {
 	return Value(string(value));
 }
 
-template <> Value Value::CreateValue(string value) {
+template <>
+Value Value::CreateValue(string value) {
 	return Value::BLOB(value);
 }
 
-template <> Value Value::CreateValue(string_t value) {
+template <>
+Value Value::CreateValue(string_t value) {
 	return Value(value);
 }
 
-template <> Value Value::CreateValue(float value) {
+template <>
+Value Value::CreateValue(float value) {
 	return Value::FLOAT(value);
 }
 
-template <> Value Value::CreateValue(double value) {
+template <>
+Value Value::CreateValue(double value) {
 	return Value::DOUBLE(value);
 }
 
-template <> Value Value::CreateValue(Value value) {
+template <>
+Value Value::CreateValue(Value value) {
 	return value;
 }
 
 //===--------------------------------------------------------------------===//
 // GetValue
 //===--------------------------------------------------------------------===//
-template <class T> T Value::GetValueInternal() const {
+template <class T>
+T Value::GetValueInternal() const {
 	if (is_null) {
 		return NullValue<T>();
 	}
@@ -484,40 +495,50 @@ template <class T> T Value::GetValueInternal() const {
 	}
 }
 
-template <> bool Value::GetValue() const {
+template <>
+bool Value::GetValue() const {
 	return GetValueInternal<int8_t>();
 }
-template <> int8_t Value::GetValue() const {
+template <>
+int8_t Value::GetValue() const {
 	return GetValueInternal<int8_t>();
 }
-template <> int16_t Value::GetValue() const {
+template <>
+int16_t Value::GetValue() const {
 	return GetValueInternal<int16_t>();
 }
-template <> int32_t Value::GetValue() const {
+template <>
+int32_t Value::GetValue() const {
 	if (type_.id() == LogicalTypeId::DATE) {
 		return value_.integer;
 	}
 	return GetValueInternal<int32_t>();
 }
-template <> int64_t Value::GetValue() const {
+template <>
+int64_t Value::GetValue() const {
 	if (type_.id() == LogicalTypeId::TIMESTAMP || type_.id() == LogicalTypeId::TIME) {
 		return value_.bigint;
 	}
 	return GetValueInternal<int64_t>();
 }
-template <> hugeint_t Value::GetValue() const {
+template <>
+hugeint_t Value::GetValue() const {
 	return GetValueInternal<hugeint_t>();
 }
-template <> string Value::GetValue() const {
+template <>
+string Value::GetValue() const {
 	return ToString();
 }
-template <> float Value::GetValue() const {
+template <>
+float Value::GetValue() const {
 	return GetValueInternal<float>();
 }
-template <> double Value::GetValue() const {
+template <>
+double Value::GetValue() const {
 	return GetValueInternal<double>();
 }
-template <> uintptr_t Value::GetValue() const {
+template <>
+uintptr_t Value::GetValue() const {
 	D_ASSERT(type() == LogicalType::POINTER);
 	return value_.pointer;
 }
@@ -562,42 +583,50 @@ Value Value::Numeric(LogicalType type, int64_t value) {
 //===--------------------------------------------------------------------===//
 // GetValueUnsafe
 //===--------------------------------------------------------------------===//
-template <> int8_t &Value::GetValueUnsafe() {
+template <>
+int8_t &Value::GetValueUnsafe() {
 	D_ASSERT(type_.InternalType() == PhysicalType::INT8 || type_.InternalType() == PhysicalType::BOOL);
 	return value_.tinyint;
 }
 
-template <> int16_t &Value::GetValueUnsafe() {
+template <>
+int16_t &Value::GetValueUnsafe() {
 	D_ASSERT(type_.InternalType() == PhysicalType::INT16);
 	return value_.smallint;
 }
 
-template <> int32_t &Value::GetValueUnsafe() {
+template <>
+int32_t &Value::GetValueUnsafe() {
 	D_ASSERT(type_.InternalType() == PhysicalType::INT32);
 	return value_.integer;
 }
 
-template <> int64_t &Value::GetValueUnsafe() {
+template <>
+int64_t &Value::GetValueUnsafe() {
 	D_ASSERT(type_.InternalType() == PhysicalType::INT64);
 	return value_.bigint;
 }
 
-template <> hugeint_t &Value::GetValueUnsafe() {
+template <>
+hugeint_t &Value::GetValueUnsafe() {
 	D_ASSERT(type_.InternalType() == PhysicalType::INT128);
 	return value_.hugeint;
 }
 
-template <> string &Value::GetValueUnsafe() {
+template <>
+string &Value::GetValueUnsafe() {
 	D_ASSERT(type_.InternalType() == PhysicalType::VARCHAR);
 	return str_value;
 }
 
-template <> float &Value::GetValueUnsafe() {
+template <>
+float &Value::GetValueUnsafe() {
 	D_ASSERT(type_.InternalType() == PhysicalType::FLOAT);
 	return value_.float_;
 }
 
-template <> double &Value::GetValueUnsafe() {
+template <>
+double &Value::GetValueUnsafe() {
 	D_ASSERT(type_.InternalType() == PhysicalType::DOUBLE);
 	return value_.double_;
 }
@@ -955,11 +984,13 @@ bool Value::ValuesAreEqual(Value result_value, Value value) {
 	}
 }
 
-template <> bool Value::IsValid(float value) {
+template <>
+bool Value::IsValid(float value) {
 	return Value::FloatIsValid(value);
 }
 
-template <> bool Value::IsValid(double value) {
+template <>
+bool Value::IsValid(double value) {
 	return Value::DoubleIsValid(value);
 }
 

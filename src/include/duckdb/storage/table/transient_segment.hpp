@@ -10,20 +10,20 @@
 
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/block.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/uncompressed_segment.hpp"
 
 namespace duckdb {
 struct ColumnAppendState;
+class DatabaseInstance;
 class PersistentSegment;
 
 class TransientSegment : public ColumnSegment {
 public:
-	TransientSegment(BufferManager &manager, LogicalType type, idx_t start);
+	TransientSegment(DatabaseInstance &db, LogicalType type, idx_t start);
 	TransientSegment(PersistentSegment &segment);
 
-	//! The buffer manager
-	BufferManager &manager;
+	//! The storage manager
+	DatabaseInstance &db;
 	//! The uncompressed segment holding the data
 	unique_ptr<UncompressedSegment> data;
 
@@ -31,6 +31,8 @@ public:
 	void InitializeScan(ColumnScanState &state) override;
 	//! Scan one vector from this transient segment
 	void Scan(Transaction &transaction, ColumnScanState &state, idx_t vector_index, Vector &result) override;
+	//! Scan one vector of committed data from this transient segment
+	void ScanCommitted(ColumnScanState &state, idx_t vector_index, Vector &result) override;
 	//! Scan the next vector from the column and apply a selection vector to filter the data
 	void FilterScan(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
 	                idx_t &approved_tuple_count) override;

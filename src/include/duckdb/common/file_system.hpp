@@ -22,6 +22,7 @@
 
 namespace duckdb {
 class ClientContext;
+class DatabaseInstance;
 class FileSystem;
 
 struct FileHandle {
@@ -70,6 +71,7 @@ public:
 
 public:
 	static FileSystem &GetFileSystem(ClientContext &context);
+	static FileSystem &GetFileSystem(DatabaseInstance &db);
 
 	virtual unique_ptr<FileHandle> OpenFile(const char *path, uint8_t flags, FileLockType lock = FileLockType::NO_LOCK);
 	unique_ptr<FileHandle> OpenFile(string &path, uint8_t flags, FileLockType lock = FileLockType::NO_LOCK) {

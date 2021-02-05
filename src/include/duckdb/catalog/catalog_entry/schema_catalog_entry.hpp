@@ -70,6 +70,8 @@ public:
 
 	//! Scan the specified catalog set, invoking the callback method for every entry
 	void Scan(ClientContext &context, CatalogType type, std::function<void(CatalogEntry *)> callback);
+	//! Scan the specified catalog set, invoking the callback method for every committed entry
+	void Scan(CatalogType type, std::function<void(CatalogEntry *)> callback);
 
 	//! Serialize the meta information of the SchemaCatalogEntry a serializer
 	virtual void Serialize(Serializer &serializer);

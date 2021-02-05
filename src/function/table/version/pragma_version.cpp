@@ -21,7 +21,7 @@ static unique_ptr<FunctionData> pragma_version_bind(ClientContext &context, vect
 
 static unique_ptr<FunctionOperatorData> pragma_version_init(ClientContext &context, const FunctionData *bind_data,
                                                             vector<column_t> &column_ids,
-                                                            TableFilterCollection* filters) {
+                                                            TableFilterCollection *filters) {
 	return make_unique<PragmaVersionData>();
 }
 

@@ -7,10 +7,10 @@
 #include <cmath>
 #include <stdlib.h>
 
-namespace duckdb{
+namespace duckdb {
 
 struct approx_quantile_state_t {
-	 tdigest::TDigest *h;
+	tdigest::TDigest *h;
 	idx_t pos;
 };
 
@@ -30,17 +30,20 @@ struct ApproximateQuantileBindData : public FunctionData {
 	float quantile;
 };
 
-template <class T> struct ApproxQuantileOperation {
+template <class T>
+struct ApproxQuantileOperation {
 
-	template <class STATE> static void Initialize(STATE *state) {
+	template <class STATE>
+	static void Initialize(STATE *state) {
 		state->pos = 0;
 		state->h = new tdigest::TDigest(100);
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
+	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask,
+	                              idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
-			Operation<INPUT_TYPE, STATE, OP>(state,bind_data, input, nullmask, 0);
+			Operation<INPUT_TYPE, STATE, OP>(state, bind_data, input, nullmask, 0);
 		}
 	}
 
@@ -54,14 +57,14 @@ template <class T> struct ApproxQuantileOperation {
 		state->pos++;
 	}
 
-	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
+	template <class STATE, class OP>
+	static void Combine(STATE source, STATE *target) {
 		if (source.pos == 0) {
 			return;
 		}
 		target->h->merge(source.h);
 		target->pos += source.pos;
 	}
-
 
 	template <class TARGET_TYPE, class STATE>
 	static void Finalize(Vector &result, FunctionData *bind_data_, STATE *state, TARGET_TYPE *target,
@@ -78,7 +81,8 @@ template <class T> struct ApproxQuantileOperation {
 		target[idx] = state->h->quantile(bind_data->quantile);
 	}
 
-	template <class STATE> static void Destroy(STATE *state) {
+	template <class STATE>
+	static void Destroy(STATE *state) {
 		if (state->h) {
 			delete state->h;
 		}
@@ -154,9 +158,9 @@ AggregateFunction GetApproximateQuantileAggregate(PhysicalType type) {
 
 void ApproximateQuantileFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet approx_quantile("approx_quantile");
-	approx_quantile.AddFunction(AggregateFunction({LogicalType::DECIMAL, LogicalType::FLOAT},
-	                                              LogicalType::DECIMAL, nullptr, nullptr, nullptr, nullptr, nullptr,
-	                                              nullptr, bind_approx_quantile_decimal));
+	approx_quantile.AddFunction(AggregateFunction({LogicalType::DECIMAL, LogicalType::FLOAT}, LogicalType::DECIMAL,
+	                                              nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+	                                              bind_approx_quantile_decimal));
 
 	approx_quantile.AddFunction(GetApproximateQuantileAggregate(PhysicalType::INT16));
 	approx_quantile.AddFunction(GetApproximateQuantileAggregate(PhysicalType::INT32));

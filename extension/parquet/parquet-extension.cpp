@@ -238,7 +238,7 @@ public:
 		if (parallel_state.row_group_index < parallel_state.current_reader->NumRowGroups()) {
 			// groups remain in the current parquet file: read the next group
 			scan_data.reader = parallel_state.current_reader;
-			vector<idx_t> group_indexes{parallel_state.row_group_index};
+			vector<idx_t> group_indexes {parallel_state.row_group_index};
 			scan_data.reader->Initialize(scan_data.scan_state, scan_data.column_ids, group_indexes,
 			                             scan_data.table_filters);
 			parallel_state.row_group_index++;
@@ -256,7 +256,7 @@ public:
 				}
 				// set up the scan state to read the first group
 				scan_data.reader = parallel_state.current_reader;
-				vector<idx_t> group_indexes{0};
+				vector<idx_t> group_indexes {0};
 				scan_data.reader->Initialize(scan_data.scan_state, scan_data.column_ids, group_indexes,
 				                             scan_data.table_filters);
 				parallel_state.row_group_index = 1;

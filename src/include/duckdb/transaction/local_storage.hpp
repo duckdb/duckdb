@@ -35,6 +35,7 @@ public:
 
 public:
 	void InitializeScan(LocalScanState &state, TableFilterSet *table_filters = nullptr);
+	idx_t EstimatedSize();
 
 	void Clear();
 };
@@ -69,6 +70,7 @@ public:
 	bool ChangesMade() noexcept {
 		return table_storage.size() > 0;
 	}
+	idx_t EstimatedSize();
 
 	bool Find(DataTable *table) {
 		return table_storage.find(table) != table_storage.end();
@@ -89,7 +91,8 @@ public:
 private:
 	LocalTableStorage *GetStorage(DataTable *table);
 
-	template <class T> bool ScanTableStorage(DataTable &table, LocalTableStorage &storage, T &&fun);
+	template <class T>
+	bool ScanTableStorage(DataTable &table, LocalTableStorage &storage, T &&fun);
 
 private:
 	Transaction &transaction;

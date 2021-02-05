@@ -23,7 +23,8 @@ public:
 		return result.row_count;
 	}
 
-	template <class T> T Fetch(idx_t col, idx_t row) {
+	template <class T>
+	T Fetch(idx_t col, idx_t row) {
 		throw NotImplementedException("Unimplemented type for fetch");
 	}
 
@@ -51,45 +52,55 @@ static bool NO_FAIL(unique_ptr<CAPIResult> result) {
 	return NO_FAIL(*result);
 }
 
-template <> bool CAPIResult::Fetch(idx_t col, idx_t row) {
+template <>
+bool CAPIResult::Fetch(idx_t col, idx_t row) {
 	return duckdb_value_boolean(&result, col, row);
 }
 
-template <> int8_t CAPIResult::Fetch(idx_t col, idx_t row) {
+template <>
+int8_t CAPIResult::Fetch(idx_t col, idx_t row) {
 	return duckdb_value_int8(&result, col, row);
 }
 
-template <> int16_t CAPIResult::Fetch(idx_t col, idx_t row) {
+template <>
+int16_t CAPIResult::Fetch(idx_t col, idx_t row) {
 	return duckdb_value_int16(&result, col, row);
 }
 
-template <> int32_t CAPIResult::Fetch(idx_t col, idx_t row) {
+template <>
+int32_t CAPIResult::Fetch(idx_t col, idx_t row) {
 	return duckdb_value_int32(&result, col, row);
 }
 
-template <> int64_t CAPIResult::Fetch(idx_t col, idx_t row) {
+template <>
+int64_t CAPIResult::Fetch(idx_t col, idx_t row) {
 	return duckdb_value_int64(&result, col, row);
 }
 
-template <> float CAPIResult::Fetch(idx_t col, idx_t row) {
+template <>
+float CAPIResult::Fetch(idx_t col, idx_t row) {
 	return duckdb_value_float(&result, col, row);
 }
 
-template <> double CAPIResult::Fetch(idx_t col, idx_t row) {
+template <>
+double CAPIResult::Fetch(idx_t col, idx_t row) {
 	return duckdb_value_double(&result, col, row);
 }
 
-template <> duckdb_date CAPIResult::Fetch(idx_t col, idx_t row) {
+template <>
+duckdb_date CAPIResult::Fetch(idx_t col, idx_t row) {
 	auto data = (duckdb_date *)result.columns[col].data;
 	return data[row];
 }
 
-template <> duckdb_timestamp CAPIResult::Fetch(idx_t col, idx_t row) {
+template <>
+duckdb_timestamp CAPIResult::Fetch(idx_t col, idx_t row) {
 	auto data = (duckdb_timestamp *)result.columns[col].data;
 	return data[row];
 }
 
-template <> string CAPIResult::Fetch(idx_t col, idx_t row) {
+template <>
+string CAPIResult::Fetch(idx_t col, idx_t row) {
 	auto value = duckdb_value_varchar(&result, col, row);
 	string strval = string(value);
 	free((void *)value);

@@ -15,8 +15,8 @@ extern "C" {
 #endif
 
 #define ARROW_FLAG_DICTIONARY_ORDERED 1
-#define ARROW_FLAG_NULLABLE 2
-#define ARROW_FLAG_MAP_KEYS_SORTED 4
+#define ARROW_FLAG_NULLABLE           2
+#define ARROW_FLAG_MAP_KEYS_SORTED    4
 
 struct ArrowSchema {
 	// Array type description

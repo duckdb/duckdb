@@ -83,7 +83,8 @@ public:
 	static string Lower(const string &str);
 
 	//! Format a string using printf semantics
-	template <typename... Args> static string Format(const string fmt_str, Args... params) {
+	template <typename... Args>
+	static string Format(const string fmt_str, Args... params) {
 		return Exception::ConstructMessage(fmt_str, params...);
 	}
 

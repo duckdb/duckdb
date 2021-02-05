@@ -36,6 +36,7 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 	switch (parent->type) {
 	case CatalogType::TABLE_ENTRY:
 		if (entry->type == CatalogType::TABLE_ENTRY) {
+			auto table_entry = (TableCatalogEntry *)entry;
 			// ALTER TABLE statement, read the extra data after the entry
 			auto extra_data_size = Load<idx_t>(dataptr);
 			auto extra_data = (data_ptr_t)(dataptr + sizeof(idx_t));
@@ -43,6 +44,7 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 			BufferedDeserializer source(extra_data, extra_data_size);
 			auto info = AlterInfo::Deserialize(source);
 			// write the alter table in the log
+			table_entry->CommitAlter(*info);
 			log->WriteAlter(*info);
 		} else {
 			// CREATE TABLE statement
@@ -78,7 +80,9 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 		break;
 	case CatalogType::DELETED_ENTRY:
 		if (entry->type == CatalogType::TABLE_ENTRY) {
-			log->WriteDropTable((TableCatalogEntry *)entry);
+			auto table_entry = (TableCatalogEntry *)entry;
+			table_entry->CommitDrop();
+			log->WriteDropTable(table_entry);
 		} else if (entry->type == CatalogType::SCHEMA_ENTRY) {
 			log->WriteDropSchema((SchemaCatalogEntry *)entry);
 		} else if (entry->type == CatalogType::VIEW_ENTRY) {
@@ -153,7 +157,8 @@ void CommitState::WriteUpdate(UpdateInfo *info) {
 	log->WriteUpdate(*update_chunk, info->column_data->column_idx);
 }
 
-template <bool HAS_LOG> void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
+template <bool HAS_LOG>
+void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 	switch (type) {
 	case UndoFlags::CATALOG_ENTRY: {
 		// set the commit timestamp of the catalog entry to the given id
