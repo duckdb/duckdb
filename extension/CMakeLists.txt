@@ -14,6 +14,6 @@ if(${BUILD_FTS_EXTENSION})
   add_subdirectory(fts)
 endif()
 
-#if(${BUILD_HTTPFS_EXTENSION})
+if(${BUILD_HTTPFS_EXTENSION})
   add_subdirectory(httpfs)
-#endif()
+endif()

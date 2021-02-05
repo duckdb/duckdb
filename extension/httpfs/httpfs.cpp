@@ -53,7 +53,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::Request(FileHandle &handle, string u
 		    }
 		    if (response.status < 300) { // done redirectering
 			    out_offset = 0;
-			    auto content_length = std::stol(response.get_header_value("Content-Length", 0));
+			    auto content_length = std::stoll(response.get_header_value("Content-Length", 0));
 			    if ((idx_t)content_length != buffer_len) {
 				    throw std::runtime_error("offset error");
 			    }
