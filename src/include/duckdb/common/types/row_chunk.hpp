@@ -65,6 +65,8 @@ public:
 	void DeserializeIntoVector(Vector &v, idx_t count, idx_t col_idx, data_ptr_t key_locations[],
 	                           data_ptr_t nullmask_locations[]);
 	void DeserializeRowBlock(DataChunk &chunk, RowDataBlock &block, idx_t entry);
+
+	void Append(RowChunk &chunk);
 };
 
 } // namespace duckdb

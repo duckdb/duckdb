@@ -98,6 +98,7 @@ bool Pipeline::ScheduleOperator(PhysicalOperator *op) {
 	switch (op->type) {
 	case PhysicalOperatorType::UNNEST:
 	case PhysicalOperatorType::FILTER:
+	case PhysicalOperatorType::ORDER_BY:
 	case PhysicalOperatorType::PROJECTION:
 	case PhysicalOperatorType::HASH_JOIN:
 	case PhysicalOperatorType::CROSS_PRODUCT:

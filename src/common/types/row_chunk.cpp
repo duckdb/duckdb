@@ -254,5 +254,25 @@ void RowChunk::DeserializeRowBlock(DataChunk &chunk, RowDataBlock &block, idx_t 
 		DeserializeIntoVector(chunk.data[i], next, i, key_locations, nullmask_locations);
 	}
 }
+void RowChunk::Append(RowChunk &chunk) {
+	if (count == 0) {
+		// this chunk is empty - initialize with appended chunk
+		nullmask_size = chunk.nullmask_size;
+		entry_size = chunk.entry_size;
+		block_capacity = chunk.block_capacity;
+	} else {
+		// not empty - assert compatibility
+		D_ASSERT(nullmask_size == chunk.nullmask_size);
+		D_ASSERT(entry_size == chunk.entry_size);
+		D_ASSERT(block_capacity == chunk.block_capacity);
+	}
+
+	// now we append
+	string_heap.MergeHeap(chunk.string_heap);
+	for (auto &block : chunk.blocks) {
+		count += block.count;
+		blocks.push_back(block);
+	}
+}
 
 } // namespace duckdb

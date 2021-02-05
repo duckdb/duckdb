@@ -26,6 +26,7 @@ public:
 
 public:
 	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) override;
+	void Combine(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate);
 	void Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> state) override;
 
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) override;
@@ -35,6 +36,10 @@ public:
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 
 	string ParamsToString() const override;
+
+private:
+	//! 2 << 24 (33MB)
+	const static idx_t SORTING_BLOCK_SIZE = 33554432;
 };
 
 } // namespace duckdb
