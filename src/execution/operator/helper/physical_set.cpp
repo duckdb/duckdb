@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/helper/physical_set.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
