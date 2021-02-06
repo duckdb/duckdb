@@ -21,8 +21,6 @@ void BuiltinFunctions::RegisterDistributiveAggregates() {
 	Register<ProductFun>();
 	Register<BoolOrFun>();
 	Register<BoolAndFun>();
-	Register<RegrAvgxFun>();
-	Register<RegrAvgyFun>();
 }
 
 } // namespace duckdb

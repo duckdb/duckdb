@@ -1,6 +1,6 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/function/aggregate/regression_functions.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 
 namespace duckdb {
@@ -55,6 +55,8 @@ struct RegrAvgYFunction: RegrAvgFunction {
 };
 
 
+
+
 void RegrAvgxFun::RegisterFunction(BuiltinFunctions &set) {
 		AggregateFunctionSet corr("regr_avgx");
 	corr.AddFunction(AggregateFunction::BinaryAggregate<regr_state_t, double, double, double, RegrAvgXFunction>(
@@ -70,12 +72,11 @@ void RegrAvgyFun::RegisterFunction(BuiltinFunctions &set) {
 }
 
 
+
+
 } // namespace duckdb
 
-// regr_count
 // regr_intercept
-// regr_r2
-// regr_slope
 // regr_sxx
 // regr_sxy
 // regr_syy

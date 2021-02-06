@@ -50,17 +50,6 @@ struct BoolOrFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-
-struct RegrAvgxFun {
-
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct RegrAvgyFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-
 struct ProductFun {
 	static AggregateFunction GetFunction();
 

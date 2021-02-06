@@ -8,6 +8,7 @@ create  table aggr(k int, v decimal(10,2), v2 decimal(10, 2));
 statement ok
 insert into aggr values(1, 10, null), (2, 10, 11), (2, 20, 22), (2, 25, null), (2, 30, 35);
 
+
 query II
 select k, regr_avgx(v, v2) from aggr group by k;
 ----
@@ -19,3 +20,21 @@ select k, regr_avgy(v, v2) from aggr group by k;
 ----
 1	NULL
 2	20
+
+query III
+select k, count(*), regr_count(v, v2) from aggr group by k;
+----
+1	1	0
+2	4	3
+
+query II
+select k, regr_slope(v, v2) from aggr group by k;
+----
+1	NULL
+2	0.831409
+
+query II
+select k, regr_r2(v, v2) from aggr group by k;
+----
+1	NULL
+2	0.997691
