@@ -23,7 +23,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::Request(FileHandle &handle, string u
 
 	auto path = url.substr(slash_pos);
 	if (path.empty()) {
-		throw std::runtime_error("URL needs to contain a bucket name");
+		throw std::runtime_error("URL needs to contain a path");
 	}
 
 	httplib::Client cli(proto_host_port.c_str());
