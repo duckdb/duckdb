@@ -37,6 +37,7 @@ enum class StatementType : uint8_t {
 	SHOW_STATEMENT,         // SHOW statement type
 	VACUUM_STATEMENT,       // VACUUM statement type
 	CALL_STATEMENT,         // CALL statement type
+	SET_STATEMENT,          // SET statement type
 	RELATION_STATEMENT
 };
 

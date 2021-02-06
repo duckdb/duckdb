@@ -16,7 +16,7 @@ extensions = ['.cpp', '.c', '.hpp', '.h', '.cc', '.hh', 'CMakeLists.txt', '.test
 formatted_directories = ['src', 'benchmark', 'test', 'tools', 'examples', 'extension']
 ignored_files = ['tpch_constants.hpp', 'tpcds_constants.hpp', '_generated', 'tpce_flat_input.hpp',
                  'test_csv_header.hpp', 'duckdb.cpp', 'duckdb.hpp', 'json.hpp', 'sqlite3.h', 'shell.c',
-                 'termcolor.hpp', 'test_insert_invalid.test', 'httplib.hpp', 'os_win.c', 'glob.c']
+                 'termcolor.hpp', 'test_insert_invalid.test', 'httplib.hpp', 'os_win.c', 'glob.c', 'printf.c']
 ignored_directories = ['.eggs', '__pycache__', 'icu', 'dbgen']
 format_all = False
 check_only = True
@@ -227,6 +227,8 @@ def format_file(f, full_path, directory, ext):
     new_text = get_formatted_text(f, full_path, directory, ext)
     if check_only:
         new_lines = new_text.split('\n')
+        old_lines = [x for x in old_lines if '...' not in x]
+        new_lines = [x for x in new_lines if '...' not in x]
         diff_result = difflib.unified_diff(old_lines, new_lines)
         total_diff = ""
         for diff_line in diff_result:

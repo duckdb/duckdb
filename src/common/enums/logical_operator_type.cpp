@@ -101,6 +101,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "TRANSACTION";
 	case LogicalOperatorType::LOGICAL_EXPORT:
 		return "EXPORT";
+	case LogicalOperatorType::LOGICAL_SET:
+		return "SET";
 	}
 	return "UNDEFINED";
 }

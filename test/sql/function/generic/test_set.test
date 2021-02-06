@@ -1,0 +1,39 @@
+# name: test/sql/function/generic/test_set.test
+# description: Test stats function
+# group: [generic]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+SET a = 42;
+
+query I
+SELECT CURRENT_SETTING('a');
+----
+42
+
+statement ok
+SET a = 'asdf';
+
+query I
+SELECT CURRENT_SETTING('a');
+----
+asdf
+
+statement ok
+SET b = asdf;
+
+query I
+SELECT CURRENT_SETTING('b');
+----
+asdf
+
+statement error
+SET a = NULL;
+
+statement error
+RESET a;
+
+statement error
+RESET ALL;

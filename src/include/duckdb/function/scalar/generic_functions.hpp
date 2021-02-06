@@ -40,4 +40,8 @@ struct ConstantOrNull {
 	static bool IsConstantOrNull(BoundFunctionExpression &expr, Value val);
 };
 
+struct CurrentSettingFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 } // namespace duckdb
