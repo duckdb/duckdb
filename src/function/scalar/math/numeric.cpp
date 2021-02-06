@@ -119,6 +119,8 @@ void AbsFun::RegisterFunction(BuiltinFunctions &set) {
 		}
 	}
 	set.AddFunction(abs);
+	abs.name = "@";
+	set.AddFunction(abs);
 }
 
 //===--------------------------------------------------------------------===//
@@ -557,6 +559,8 @@ void PowFun::RegisterFunction(BuiltinFunctions &set) {
 	power_function.name = "power";
 	set.AddFunction(power_function);
 	power_function.name = "**";
+	set.AddFunction(power_function);
+	power_function.name = "^";
 	set.AddFunction(power_function);
 }
 
