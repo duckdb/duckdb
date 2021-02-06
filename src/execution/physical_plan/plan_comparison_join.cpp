@@ -22,7 +22,7 @@ static bool can_plan_index_join(Transaction &transaction, TableScanBindData *bin
 		// transaction local appends: skip index join
 		return false;
 	}
-	if (scan.table_filters && scan.table_filters->filters.size() > 0) {
+	if (scan.table_filters && !scan.table_filters->filters.empty()) {
 		// table scan filters
 		return false;
 	}
@@ -72,7 +72,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 	auto right = CreatePlan(*op.children[1]);
 	D_ASSERT(left && right);
 
-	if (op.conditions.size() == 0) {
+	if (op.conditions.empty()) {
 		// no conditions: insert a cross product
 		return make_unique<PhysicalCrossProduct>(op.types, move(left), move(right));
 	}
@@ -84,7 +84,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 		if (cond.comparison == ExpressionType::COMPARE_EQUAL) {
 			has_equality = true;
 		}
-		if (cond.comparison == ExpressionType::COMPARE_NOTEQUAL) {
+		if (cond.comparison == ExpressionType::COMPARE_NOTEQUAL ||
+		    cond.comparison == ExpressionType::COMPARE_DISTINCT_FROM) {
 			has_inequality = true;
 		}
 		if (cond.null_values_are_equal) {

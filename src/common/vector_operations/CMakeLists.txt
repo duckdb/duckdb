@@ -10,7 +10,8 @@ add_library_unity(
   vector_hash.cpp
   vector_storage.cpp
   null_operations.cpp
-  numeric_inplace_operators.cpp)
+  numeric_inplace_operators.cpp
+  is_distinct_from.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_vector_operations>
     PARENT_SCOPE)
