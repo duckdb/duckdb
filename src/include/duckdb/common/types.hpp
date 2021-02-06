@@ -83,7 +83,7 @@ template <class T>
 using buffer_ptr = std::shared_ptr<T>;
 
 template <class T, typename... Args>
-buffer_ptr<T> make_buffer(Args &&...args) {
+buffer_ptr<T> make_buffer(Args &&... args) {
 	return std::make_shared<T>(std::forward<Args>(args)...);
 }
 
