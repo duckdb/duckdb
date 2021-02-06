@@ -5,7 +5,7 @@
 namespace duckdb {
 
 static unique_ptr<BaseStatistics> StatisticsOperationsNumericNumericCast(const BaseStatistics *input_p,
-                                                                         LogicalType target) {
+                                                                         const LogicalType &target) {
 	auto &input = (NumericStatistics &)*input_p;
 
 	Value min = input.min, max = input.max;
@@ -18,7 +18,7 @@ static unique_ptr<BaseStatistics> StatisticsOperationsNumericNumericCast(const B
 	return move(stats);
 }
 
-static unique_ptr<BaseStatistics> StatisticsNumericCastSwitch(const BaseStatistics *input, LogicalType target) {
+static unique_ptr<BaseStatistics> StatisticsNumericCastSwitch(const BaseStatistics *input, const LogicalType &target) {
 	switch (target.InternalType()) {
 	case PhysicalType::INT8:
 	case PhysicalType::INT16:

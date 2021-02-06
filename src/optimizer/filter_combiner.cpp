@@ -86,7 +86,7 @@ FilterResult FilterCombiner::AddFilter(unique_ptr<Expression> expr) {
 	return result;
 }
 
-void FilterCombiner::GenerateFilters(std::function<void(unique_ptr<Expression> filter)> callback) {
+void FilterCombiner::GenerateFilters(const std::function<void(unique_ptr<Expression> filter)> &callback) {
 	// first loop over the remaining filters
 	for (auto &filter : remaining_filters) {
 		callback(move(filter));

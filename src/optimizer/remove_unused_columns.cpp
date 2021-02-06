@@ -132,6 +132,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 					child->ResolveOperatorTypes();
 					auto bindings = child->GetColumnBindings();
 					vector<unique_ptr<Expression>> expressions;
+					expressions.reserve(entries.size());
 					for (auto &column_idx : entries) {
 						expressions.push_back(
 						    make_unique<BoundColumnRefExpression>(child->types[column_idx], bindings[column_idx]));
