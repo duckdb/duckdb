@@ -235,7 +235,7 @@ public:
 	}
 
 private:
-	FileSystem *FindFileSystem(string path) {
+	FileSystem *FindFileSystem(const string &path) {
 		for (auto &handler : protocol_handler_fss) {
 			if (path.rfind(handler.first, 0) == 0) {
 				return handler.second.get();
