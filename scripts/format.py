@@ -227,6 +227,8 @@ def format_file(f, full_path, directory, ext):
     new_text = get_formatted_text(f, full_path, directory, ext)
     if check_only:
         new_lines = new_text.split('\n')
+        old_lines = [x for x in old_lines if '...' not in x]
+        new_lines = [x for x in new_lines if '...' not in x]
         diff_result = difflib.unified_diff(old_lines, new_lines)
         total_diff = ""
         for diff_line in diff_result:
