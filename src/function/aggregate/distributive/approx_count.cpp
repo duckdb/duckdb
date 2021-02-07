@@ -3,6 +3,8 @@
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/common/types/hyperloglog.hpp"
+#include "duckdb/function/function_set.hpp"
+
 namespace duckdb {
 
 struct approx_distinct_count_state_t {

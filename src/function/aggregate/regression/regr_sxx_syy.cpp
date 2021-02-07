@@ -4,7 +4,7 @@
 // Returns REGR_COUNT(y, x) * VAR_POP(y) for non-null pairs.
 
 #include "duckdb/function/aggregate/regression/regr_count.hpp"
-
+#include "duckdb/function/function_set.hpp"
 namespace duckdb {
 struct regr_s__state_t {
 	size_t count;

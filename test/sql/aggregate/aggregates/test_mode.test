@@ -14,7 +14,7 @@ select mode(v) from aggr;
 10
 
 statement ok
-insert into aggr (k, v) values (2, 20), (2, 25), (2, 30);
+insert into aggr (k, v) values (2, 20),(2, 20), (2, 25), (2, 30);
 
 query I
 SELECT CASE
@@ -36,22 +36,8 @@ select k, mode(v)
     order by k;
 ----
 1	10.000000
-2	30.000000
+2	20.000000
 3	NULL
-
-query III
-select k, v, mode(v) over (partition by k)
-    from aggr
-    order by k, v;
-----
-1	10.00	10.000000
-1	10.00	10.000000
-1	20.00	10.000000
-1	21.00	10.000000
-2	20.00	30.000000
-2	25.00	30.000000
-2	30.00	30.000000
-3	NULL	NULL
 
 statement ok
 create table names (name string)
@@ -63,3 +49,19 @@ query I
 select mode(name) from names;
 ----
 pedro
+
+require vector_size 512
+query III
+select k, v, mode(v) over (partition by k)
+    from aggr
+    order by k, v;
+----
+1	10.00	10.000000
+1	10.00	10.000000
+1	20.00	10.000000
+1	21.00	10.000000
+2	20.00	20.000000
+2	20.00	20.000000
+2	25.00	20.000000
+2	30.00	20.000000
+3	NULL	NULL

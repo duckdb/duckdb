@@ -3,6 +3,7 @@
 #include "duckdb/function/aggregate/regression/regr_count.hpp"
 #include "duckdb/function/aggregate/algebraic/covar.hpp"
 #include "duckdb/function/aggregate/regression_functions.hpp"
+#include "duckdb/function/function_set.hpp"
 namespace duckdb {
 struct regr_sxy_state_t {
 	size_t count;
