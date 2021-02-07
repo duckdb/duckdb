@@ -93,4 +93,8 @@ struct LogGammaFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct FactorialFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 } // namespace duckdb
