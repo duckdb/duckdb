@@ -836,4 +836,26 @@ void LogGammaFun::RegisterFunction(BuiltinFunctions &set) {
 	                               UnaryDoubleFunctionWrapper<double, LogGammaOperator>));
 }
 
+//===--------------------------------------------------------------------===//
+// factorial(), !
+//===--------------------------------------------------------------------===//
+
+struct FactorialOperator {
+	template <class TA, class TR>
+	static inline TR Operation(TA left) {
+		TR ret = 1;
+		for (TA i = 2; i <= left; i++) {
+			ret *= i;
+		}
+		return ret;
+	}
+};
+
+void FactorialFun::RegisterFunction(BuiltinFunctions &set) {
+	auto fun = ScalarFunction({LogicalType::INTEGER}, LogicalType::HUGEINT,
+	                          ScalarFunction::UnaryFunction<int32_t, hugeint_t, FactorialOperator>);
+
+	set.AddFunction({"factorial", "!"}, fun);
+}
+
 } // namespace duckdb
