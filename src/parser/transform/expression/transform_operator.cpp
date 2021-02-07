@@ -191,8 +191,8 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(PGAExpr *root) {
 		// prefix operator
 		return TransformUnaryOperator(name, move(right_expr));
 	} else if (!right_expr) {
-		// postfix operator
-		return TransformUnaryOperator(name, move(left_expr));
+		// postfix operator, only ! is currently supported
+		return TransformUnaryOperator(name + "__postfix", move(left_expr));
 	} else {
 		return TransformBinaryOperator(name, move(left_expr), move(right_expr));
 	}

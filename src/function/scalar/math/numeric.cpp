@@ -855,7 +855,7 @@ void FactorialFun::RegisterFunction(BuiltinFunctions &set) {
 	auto fun = ScalarFunction({LogicalType::INTEGER}, LogicalType::HUGEINT,
 	                          ScalarFunction::UnaryFunction<int32_t, hugeint_t, FactorialOperator>);
 
-	set.AddFunction({"factorial", "!"}, fun);
+	set.AddFunction({"factorial", "!__postfix"}, fun);
 }
 
 } // namespace duckdb
