@@ -6,6 +6,8 @@
 
 #include "duckdb/function/aggregate/algebraic/corr.hpp"
 #include "duckdb/function/function_set.hpp"
+#include "duckdb/function/aggregate/regression_functions.hpp"
+
 namespace duckdb {
 struct regr_r2_state_t {
 	corr_state_t corr;

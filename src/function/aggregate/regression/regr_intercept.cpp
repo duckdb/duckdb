@@ -3,6 +3,7 @@
 #include "duckdb/function/aggregate/regression_functions.hpp"
 #include "duckdb/function/aggregate/regression/regr_slope.hpp"
 #include "duckdb/function/function_set.hpp"
+
 namespace duckdb {
 struct regr_intercept_state_t {
 	size_t count;

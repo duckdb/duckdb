@@ -8,6 +8,7 @@
 
 #include "duckdb/function/aggregate/regression/regr_slope.hpp"
 #include "duckdb/function/function_set.hpp"
+#include "duckdb/function/aggregate/regression_functions.hpp"
 namespace duckdb {
 void RegrSlopeFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet fun("regr_slope");

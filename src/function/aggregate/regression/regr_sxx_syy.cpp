@@ -5,6 +5,8 @@
 
 #include "duckdb/function/aggregate/regression/regr_count.hpp"
 #include "duckdb/function/function_set.hpp"
+#include "duckdb/function/aggregate/regression_functions.hpp"
+
 namespace duckdb {
 struct regr_s__state_t {
 	size_t count;

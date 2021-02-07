@@ -3,6 +3,7 @@
 #include "duckdb/function/aggregate/regression_functions.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/function/function_set.hpp"
+
 namespace duckdb {
 struct regr_state_t {
 	double sum;
