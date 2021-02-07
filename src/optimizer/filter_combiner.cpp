@@ -12,7 +12,7 @@
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
 
-#include <duckdb/common/operator/cast_operators.hpp>
+#include "duckdb/common/operator/cast_operators.hpp"
 
 namespace duckdb {
 

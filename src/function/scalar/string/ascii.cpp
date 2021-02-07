@@ -1,6 +1,6 @@
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "utf8proc.hpp"
-#include <utf8proc_wrapper.hpp>
+#include "utf8proc_wrapper.hpp"
 
 namespace duckdb {
 
