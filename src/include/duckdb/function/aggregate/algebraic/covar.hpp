@@ -94,4 +94,4 @@ struct CovarSampOperation : public CovarOperation {
 		}
 	}
 };
-}
+} // namespace duckdb

@@ -228,7 +228,7 @@ private:
 	void RegisterDistributiveAggregates();
 	void RegisterNestedAggregates();
 	void RegisterHolisticAggregates();
-    void RegisterRegressiveAggregates();
+	void RegisterRegressiveAggregates();
 
 	// scalar functions
 	void RegisterDateFunctions();

@@ -82,7 +82,6 @@ struct ModeFunction {
 	}
 };
 
-
 struct ModeFunctionString {
 	template <class STATE>
 	static void Initialize(STATE *state) {
@@ -178,8 +177,9 @@ AggregateFunction GetModeFunction(PhysicalType type) {
 		return AggregateFunction::UnaryAggregateDestructor<mode_state_t<double>, double, double, ModeFunction>(
 		    LogicalType::DOUBLE, LogicalType::DOUBLE);
 	case PhysicalType::VARCHAR:
-		return AggregateFunction::UnaryAggregateDestructor<mode_state_t<string>, string_t, string_t, ModeFunctionString>(
-		    LogicalType::VARCHAR, LogicalType::VARCHAR);
+		return AggregateFunction::UnaryAggregateDestructor<mode_state_t<string>, string_t, string_t,
+		                                                   ModeFunctionString>(LogicalType::VARCHAR,
+		                                                                       LogicalType::VARCHAR);
 
 	default:
 		throw NotImplementedException("Unimplemented mode aggregate");

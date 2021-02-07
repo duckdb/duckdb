@@ -38,7 +38,7 @@ struct BoolAndFunFunction {
 	}
 };
 
-struct BoolOrFunFunction  {
+struct BoolOrFunFunction {
 	template <class STATE>
 	static void Initialize(STATE *state) {
 		*state = false;
@@ -94,6 +94,5 @@ void BoolAndFun::RegisterFunction(BuiltinFunctions &set) {
 	bool_and.AddFunction(bool_and_function);
 	set.AddFunction(bool_and);
 }
-
 
 } // namespace duckdb

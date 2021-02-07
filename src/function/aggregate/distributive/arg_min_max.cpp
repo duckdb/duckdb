@@ -109,9 +109,9 @@ void ArgMinFun::RegisterFunction(BuiltinFunctions &set) {
 	                                                   ArgMinOperation>(LogicalType::DOUBLE, LogicalType::DOUBLE,
 	                                                                    LogicalType::DOUBLE));
 
-	fun.AddFunction(AggregateFunction::BinaryAggregate<arg_min_max_state_t<string_t, double>, string_t, double, string_t,
-	                                                   ArgMinOperation>(LogicalType::VARCHAR, LogicalType::DOUBLE,
-	                                                                    LogicalType::VARCHAR));
+	fun.AddFunction(AggregateFunction::BinaryAggregate<arg_min_max_state_t<string_t, double>, string_t, double,
+	                                                   string_t, ArgMinOperation>(
+	    LogicalType::VARCHAR, LogicalType::DOUBLE, LogicalType::VARCHAR));
 	set.AddFunction(fun);
 }
 
@@ -120,9 +120,9 @@ void ArgMaxFun::RegisterFunction(BuiltinFunctions &set) {
 	fun.AddFunction(AggregateFunction::BinaryAggregate<arg_min_max_state_t<double, double>, double, double, double,
 	                                                   ArgMaxOperation>(LogicalType::DOUBLE, LogicalType::DOUBLE,
 	                                                                    LogicalType::DOUBLE));
-	fun.AddFunction(AggregateFunction::BinaryAggregate<arg_min_max_state_t<string_t, double>, string_t, double, string_t,
-	                                                   ArgMaxOperation>(LogicalType::VARCHAR, LogicalType::DOUBLE,
-	                                                                    LogicalType::VARCHAR));
+	fun.AddFunction(AggregateFunction::BinaryAggregate<arg_min_max_state_t<string_t, double>, string_t, double,
+	                                                   string_t, ArgMaxOperation>(
+	    LogicalType::VARCHAR, LogicalType::DOUBLE, LogicalType::VARCHAR));
 	set.AddFunction(fun);
 }
 

@@ -3,12 +3,12 @@
 #include "duckdb/function/aggregate/regression_functions.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/function/aggregate/regression/regr_count.hpp"
-namespace duckdb{
+namespace duckdb {
 void RegrCountFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet corr("regr_count");
-	corr.AddFunction(AggregateFunction::BinaryAggregate<size_t , double, double, uint32_t , RegrCountFunction>(
+	corr.AddFunction(AggregateFunction::BinaryAggregate<size_t, double, double, uint32_t, RegrCountFunction>(
 	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::UINTEGER));
 	set.AddFunction(corr);
 }
 
-}
+} // namespace duckdb

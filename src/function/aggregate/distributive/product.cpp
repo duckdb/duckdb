@@ -38,10 +38,9 @@ struct ProductFunction {
 	}
 };
 
-
 AggregateFunction ProductFun::GetFunction() {
-	return AggregateFunction::UnaryAggregate<double, double, double, ProductFunction>(LogicalType(LogicalTypeId::DOUBLE),
-	                                                                                   LogicalType::DOUBLE);
+	return AggregateFunction::UnaryAggregate<double, double, double, ProductFunction>(
+	    LogicalType(LogicalTypeId::DOUBLE), LogicalType::DOUBLE);
 }
 
 void ProductFun::RegisterFunction(BuiltinFunctions &set) {
@@ -50,6 +49,5 @@ void ProductFun::RegisterFunction(BuiltinFunctions &set) {
 	product.AddFunction(product_function);
 	set.AddFunction(product);
 }
-
 
 } // namespace duckdb

@@ -40,7 +40,7 @@ struct RegrR2Operation {
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData * fd, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+	static void Finalize(Vector &result, FunctionData *fd, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
 		auto var_pop_x = state->var_pop_x.count > 1 ? (state->var_pop_x.dsquared / state->var_pop_x.count) : 0;
 		if (!Value::DoubleIsValid(var_pop_x)) {
 			throw OutOfRangeException("VARPOP(X) is out of range!");
@@ -53,12 +53,12 @@ struct RegrR2Operation {
 		if (!Value::DoubleIsValid(var_pop_y)) {
 			throw OutOfRangeException("VARPOP(Y) is out of range!");
 		}
-		if (var_pop_y == 0){
-            target[idx] = 1;
+		if (var_pop_y == 0) {
+			target[idx] = 1;
 			return;
 		}
-		CorrOperation::Finalize<T,corr_state_t>(result,fd,&state->corr,target,nullmask,idx);
-		target[idx] = pow(target[idx],2);
+		CorrOperation::Finalize<T, corr_state_t>(result, fd, &state->corr, target, nullmask, idx);
+		target[idx] = pow(target[idx], 2);
 	}
 
 	static bool IgnoreNull() {

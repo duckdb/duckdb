@@ -6,8 +6,6 @@
 
 namespace duckdb {
 
-
-
 void StdDevSampFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet stddev_samp("stddev_samp");
 	stddev_samp.AddFunction(AggregateFunction::UnaryAggregate<stddev_state_t, double, double, STDDevSampOperation>(

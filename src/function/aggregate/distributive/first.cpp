@@ -184,8 +184,6 @@ AggregateFunction FirstFun::GetFunction(LogicalType type) {
 	}
 }
 
-
-
 unique_ptr<FunctionData> bind_decimal_first(ClientContext &context, AggregateFunction &function,
                                             vector<unique_ptr<Expression>> &arguments) {
 	auto decimal_type = arguments[0]->return_type;

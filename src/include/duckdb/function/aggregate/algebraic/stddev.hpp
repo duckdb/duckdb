@@ -126,4 +126,4 @@ struct STDDevPopOperation : public STDDevBaseOperation {
 		}
 	}
 };
-}
+} // namespace duckdb

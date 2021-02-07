@@ -7,11 +7,11 @@
 //! Output : Double
 
 #include "duckdb/function/aggregate/regression/regr_slope.hpp"
-namespace duckdb{
+namespace duckdb {
 void RegrSlopeFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet fun("regr_slope");
 	fun.AddFunction(AggregateFunction::BinaryAggregate<regr_slope_state_t, double, double, double, RegrSlopeOperation>(
 	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE));
 	set.AddFunction(fun);
 }
-}
+} // namespace duckdb
