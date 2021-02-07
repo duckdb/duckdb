@@ -44,4 +44,8 @@ struct VarSampFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct VarianceFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 } // namespace duckdb

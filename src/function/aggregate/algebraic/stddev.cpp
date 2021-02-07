@@ -39,5 +39,11 @@ void VarSampFun::RegisterFunction(BuiltinFunctions &set) {
 	    LogicalType::DOUBLE, LogicalType::DOUBLE));
 	set.AddFunction(var_samp);
 }
+void VarianceFun::RegisterFunction(BuiltinFunctions &set) {
+	AggregateFunctionSet var_samp("variance");
+	var_samp.AddFunction(AggregateFunction::UnaryAggregate<stddev_state_t, double, double, VarSampOperation>(
+	    LogicalType::DOUBLE, LogicalType::DOUBLE));
+	set.AddFunction(var_samp);
+}
 
 } // namespace duckdb

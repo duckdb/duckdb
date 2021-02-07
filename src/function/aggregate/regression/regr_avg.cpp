@@ -75,8 +75,3 @@ void RegrAvgyFun::RegisterFunction(BuiltinFunctions &set) {
 
 
 } // namespace duckdb
-
-// regr_intercept
-// regr_sxx
-// regr_sxy
-// regr_syy

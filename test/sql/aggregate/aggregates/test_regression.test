@@ -38,3 +38,27 @@ select k, regr_r2(v, v2) from aggr group by k;
 ----
 1	NULL
 2	0.997691
+
+query II
+select k, regr_sxx(v, v2) from aggr group by k;
+----
+1	NULL
+2	288.666667
+
+query II
+select k, regr_syy(v, v2) from aggr group by k;
+----
+1	NULL
+2	200.000000
+
+query II
+select k, regr_sxy(v, v2) from aggr group by k;
+----
+1	NULL
+2	240.000000
+
+query II
+select k, regr_intercept(v, v2) from aggr group by k;
+----
+1	NULL
+2	1.154734

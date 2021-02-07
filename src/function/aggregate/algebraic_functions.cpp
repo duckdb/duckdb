@@ -13,6 +13,7 @@ void BuiltinFunctions::RegisterAlgebraicAggregates() {
 	Register<StdDevPopFun>();
 	Register<VarPopFun>();
 	Register<VarSampFun>();
+    Register <VarianceFun>();
 
 	Register<Corr>();
 }

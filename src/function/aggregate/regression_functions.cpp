@@ -12,6 +12,10 @@ void BuiltinFunctions::RegisterRegressiveAggregates() {
 	Register<RegrCountFun>();
 	Register<RegrSlopeFun>();
 	Register<RegrR2Fun>();
+	Register<RegrSYYFun>();
+	Register<RegrSXXFun>();
+	Register<RegrSXYFun>();
+	Register<RegrInterceptFun>();
 }
 
 } // namespace duckdb

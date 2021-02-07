@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/function/aggregate_function.hpp"
+#include <ctgmath>
 
 namespace duckdb {
 struct stddev_state_t {

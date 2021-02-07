@@ -34,5 +34,20 @@ struct RegrR2Fun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct RegrSXXFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct RegrSYYFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct RegrSXYFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct RegrInterceptFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
 
 } // namespace duckdb
