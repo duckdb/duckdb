@@ -1,6 +1,8 @@
 //! AVG(y)-REGR_SLOPE(y,x)*AVG(x)
 
 #include "duckdb/function/aggregate/regression_functions.hpp"
+#include "duckdb/function/aggregate/regression/regr_slope.hpp"
+
 namespace duckdb {
 struct regr_intercept_state_t {
 	size_t count;

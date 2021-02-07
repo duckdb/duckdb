@@ -9,7 +9,9 @@ add_library_unity(
   string_agg.cpp
   sum.cpp
   product.cpp
-bool.cpp)
+bool.cpp
+mode.cpp
+        arg_min_max.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_aggr_distr>
     PARENT_SCOPE)

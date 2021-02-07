@@ -1,0 +1,60 @@
+# name: test/sql/aggregate/aggregates/test_mode.test
+# description: Test mode function
+# group: [aggregates]
+
+statement ok
+create table aggr(k int, v decimal(10,2));
+
+statement ok
+insert into aggr (k, v) values (1, 10), (1, 10), (1, 20), (1, 21);
+
+query I
+select mode(v) from aggr;
+----
+10
+
+statement ok
+insert into aggr (k, v) values (2, 20), (2, 25), (2, 30);
+
+query I
+select mode(v) from aggr;
+----
+10
+
+statement ok
+insert into aggr (k, v) values (3, null);
+
+query II
+select k, mode(v)
+    from aggr
+    group by k
+    order by k;
+----
+1	10.000000
+2	30.000000
+3	NULL
+
+query III
+select k, v, mode(v) over (partition by k)
+    from aggr
+    order by k, v;
+----
+1	10.00	10.000000
+1	10.00	10.000000
+1	20.00	10.000000
+1	21.00	10.000000
+2	20.00	30.000000
+2	25.00	30.000000
+2	30.00	30.000000
+3	NULL	NULL
+
+statement ok
+create table names (name string)
+
+statement ok
+insert into names values ('pedro'), ('pedro'), ('pedro'),('hannes'),('hannes'),('mark'),(null);
+
+query I
+select mode(name) from names;
+----
+pedro

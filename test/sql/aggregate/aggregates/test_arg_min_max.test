@@ -1,0 +1,25 @@
+# name: test/sql/aggregate/aggregates/test_arg_min_max.test
+# description: Test arg_min and arg_max operator
+# group: [aggregates]
+
+statement ok
+create table args (a integer, b integer)
+
+statement ok
+insert into args values (1,1), (2,2), (8,8), (10,10)
+
+query II
+select arg_min(a,b), arg_max(a,b) from args;
+----
+1.000000	10.000000
+
+statement ok
+create table names (name string, salary integer)
+
+statement ok
+insert into names values ('pedro',10), ('hannes',20), ('mark',15)
+
+query II
+select arg_min(name,salary),arg_max(name,salary)  from names;
+----
+pedro	hannes

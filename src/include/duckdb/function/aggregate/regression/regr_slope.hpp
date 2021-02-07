@@ -6,6 +6,7 @@
 //! Input : Any numeric type
 //! Output : Double
 
+#pragma once
 #include "duckdb/function/aggregate/algebraic/stddev.hpp"
 #include "duckdb/function/aggregate/algebraic/covar.hpp"
 

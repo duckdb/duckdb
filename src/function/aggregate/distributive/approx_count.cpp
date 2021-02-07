@@ -87,7 +87,7 @@ AggregateFunction GetApproxCountDistinctFunction(PhysicalType type) {
 		                                                                                     LogicalType::BIGINT);
 
 	default:
-		throw NotImplementedException("Unimplemented quantile aggregate");
+		throw NotImplementedException("Unimplemented approximate_count aggregate");
 	}
 }
 
