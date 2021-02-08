@@ -22,7 +22,7 @@ void QueryProfiler::StartQuery(string query) {
 		return;
 	}
 	this->running = true;
-	this->query = query;
+	this->query = move(query);
 	tree_map.clear();
 	root = nullptr;
 	phase_timings.clear();
@@ -227,7 +227,7 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 	}
 }
 
-static string DrawPadded(string str, idx_t width) {
+static string DrawPadded(const string &str, idx_t width) {
 	if (str.size() > width) {
 		return str.substr(0, width);
 	} else {

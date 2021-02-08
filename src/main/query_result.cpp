@@ -8,13 +8,13 @@ QueryResult::QueryResult(QueryResultType type, StatementType statement_type)
     : type(type), statement_type(statement_type), success(true) {
 }
 
-QueryResult::QueryResult(QueryResultType type, StatementType statement_type, vector<LogicalType> types,
-                         vector<string> names)
-    : type(type), statement_type(statement_type), types(move(types)), names(move(names)), success(true) {
+QueryResult::QueryResult(QueryResultType type, StatementType statement_type, vector<LogicalType> types_p,
+                         vector<string> names_p)
+    : type(type), statement_type(statement_type), types(move(types_p)), names(move(names_p)), success(true) {
 	D_ASSERT(types.size() == names.size());
 }
 
-QueryResult::QueryResult(QueryResultType type, string error) : type(type), success(false), error(error) {
+QueryResult::QueryResult(QueryResultType type, string error) : type(type), success(false), error(move(error)) {
 }
 
 unique_ptr<DataChunk> QueryResult::Fetch() {

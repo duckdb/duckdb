@@ -50,8 +50,8 @@ public:
 	DUCKDB_API void Head(idx_t limit = 10);
 
 	DUCKDB_API shared_ptr<Relation> CreateView(string name, bool replace = true);
-	DUCKDB_API unique_ptr<QueryResult> Query(string sql);
-	DUCKDB_API unique_ptr<QueryResult> Query(string name, string sql);
+	DUCKDB_API unique_ptr<QueryResult> Query(const string &sql);
+	DUCKDB_API unique_ptr<QueryResult> Query(string name, const string &sql);
 
 	//! Explain the query plan of this relation
 	DUCKDB_API unique_ptr<QueryResult> Explain();
@@ -63,25 +63,25 @@ public:
 
 public:
 	// PROJECT
-	DUCKDB_API shared_ptr<Relation> Project(string select_list);
-	DUCKDB_API shared_ptr<Relation> Project(string expression, string alias);
-	DUCKDB_API shared_ptr<Relation> Project(string select_list, vector<string> aliases);
-	DUCKDB_API shared_ptr<Relation> Project(vector<string> expressions);
-	DUCKDB_API shared_ptr<Relation> Project(vector<string> expressions, vector<string> aliases);
+	DUCKDB_API shared_ptr<Relation> Project(const string &select_list);
+	DUCKDB_API shared_ptr<Relation> Project(const string &expression, const string &alias);
+	DUCKDB_API shared_ptr<Relation> Project(const string &select_list, vector<string> aliases);
+	DUCKDB_API shared_ptr<Relation> Project(const vector<string> &expressions);
+	DUCKDB_API shared_ptr<Relation> Project(const vector<string> &expressions, vector<string> aliases);
 
 	// FILTER
-	DUCKDB_API shared_ptr<Relation> Filter(string expression);
-	DUCKDB_API shared_ptr<Relation> Filter(vector<string> expressions);
+	DUCKDB_API shared_ptr<Relation> Filter(const string &expression);
+	DUCKDB_API shared_ptr<Relation> Filter(const vector<string> &expressions);
 
 	// LIMIT
 	DUCKDB_API shared_ptr<Relation> Limit(int64_t n, int64_t offset = 0);
 
 	// ORDER
-	DUCKDB_API shared_ptr<Relation> Order(string expression);
-	DUCKDB_API shared_ptr<Relation> Order(vector<string> expressions);
+	DUCKDB_API shared_ptr<Relation> Order(const string &expression);
+	DUCKDB_API shared_ptr<Relation> Order(const vector<string> &expressions);
 
 	// JOIN operation
-	DUCKDB_API shared_ptr<Relation> Join(shared_ptr<Relation> other, string condition, JoinType type = JoinType::INNER);
+	DUCKDB_API shared_ptr<Relation> Join(shared_ptr<Relation> other, const string &condition, JoinType type = JoinType::INNER);
 
 	// SET operations
 	DUCKDB_API shared_ptr<Relation> Union(shared_ptr<Relation> other);
@@ -92,10 +92,10 @@ public:
 	DUCKDB_API shared_ptr<Relation> Distinct();
 
 	// AGGREGATES
-	DUCKDB_API shared_ptr<Relation> Aggregate(string aggregate_list);
-	DUCKDB_API shared_ptr<Relation> Aggregate(vector<string> aggregates);
-	DUCKDB_API shared_ptr<Relation> Aggregate(string aggregate_list, string group_list);
-	DUCKDB_API shared_ptr<Relation> Aggregate(vector<string> aggregates, vector<string> groups);
+	DUCKDB_API shared_ptr<Relation> Aggregate(const string &aggregate_list);
+	DUCKDB_API shared_ptr<Relation> Aggregate(const vector<string> &aggregates);
+	DUCKDB_API shared_ptr<Relation> Aggregate(const string &aggregate_list, const string &group_list);
+	DUCKDB_API shared_ptr<Relation> Aggregate(const vector<string> &aggregates, const vector<string> &groups);
 
 	// ALIAS
 	DUCKDB_API shared_ptr<Relation> Alias(string alias);

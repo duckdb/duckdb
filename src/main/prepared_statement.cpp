@@ -7,11 +7,11 @@ namespace duckdb {
 
 PreparedStatement::PreparedStatement(shared_ptr<ClientContext> context, shared_ptr<PreparedStatementData> data_p,
                                      string query, idx_t n_param)
-    : context(context), data(move(data_p)), query(query), success(true), n_param(n_param) {
+    : context(move(context)), data(move(data_p)), query(move(query)), success(true), n_param(n_param) {
 	D_ASSERT(data || !success);
 }
 
-PreparedStatement::PreparedStatement(string error) : context(nullptr), success(false), error(error) {
+PreparedStatement::PreparedStatement(string error) : context(nullptr), success(false), error(move(error)) {
 }
 
 PreparedStatement::~PreparedStatement() {

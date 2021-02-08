@@ -109,7 +109,7 @@ public:
 	DUCKDB_API void TryBindRelation(Relation &relation, vector<ColumnDefinition> &result_columns);
 
 	//! Execute a relation
-	DUCKDB_API unique_ptr<QueryResult> Execute(shared_ptr<Relation> relation);
+	DUCKDB_API unique_ptr<QueryResult> Execute(const shared_ptr<Relation> &relation);
 
 	//! Prepare a query
 	DUCKDB_API unique_ptr<PreparedStatement> Prepare(const string &query);
@@ -131,9 +131,9 @@ public:
 
 	//! Runs a function with a valid transaction context, potentially starting a transaction if the context is in auto
 	//! commit mode.
-	DUCKDB_API void RunFunctionInTransaction(std::function<void(void)> fun, bool requires_valid_transaction = true);
+	DUCKDB_API void RunFunctionInTransaction(const std::function<void(void)> &fun, bool requires_valid_transaction = true);
 	//! Same as RunFunctionInTransaction, but does not obtain a lock on the client context or check for validation
-	DUCKDB_API void RunFunctionInTransactionInternal(ClientContextLock &lock, std::function<void(void)> fun,
+	DUCKDB_API void RunFunctionInTransactionInternal(ClientContextLock &lock, const std::function<void(void)> &fun,
 	                                                 bool requires_valid_transaction = true);
 
 private:
@@ -141,7 +141,7 @@ private:
 	vector<unique_ptr<SQLStatement>> ParseStatementsInternal(ClientContextLock &lock, const string &query);
 	//! Perform aggressive query verification of a SELECT statement. Only called when query_verification_enabled is
 	//! true.
-	string VerifyQuery(ClientContextLock &lock, string query, unique_ptr<SQLStatement> statement);
+	string VerifyQuery(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement);
 
 	void InitialCleanup(ClientContextLock &lock);
 	//! Internal clean up, does not lock. Caller must hold the context_lock.
@@ -171,7 +171,7 @@ private:
 	unique_ptr<QueryResult> RunStatementInternal(ClientContextLock &lock, const string &query,
 	                                             unique_ptr<SQLStatement> statement, bool allow_stream_result);
 	unique_ptr<PreparedStatement> PrepareInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement);
-	void LogQueryInternal(ClientContextLock &lock, string query);
+	void LogQueryInternal(ClientContextLock &lock, const string &query);
 
 	unique_ptr<ClientContextLock> LockContext();
 

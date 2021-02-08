@@ -43,7 +43,7 @@ private:
 };
 
 ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
-    : db(database), transaction(db->GetTransactionManager(), *this), interrupted(false), executor(*this),
+    : db(move(database)), transaction(db->GetTransactionManager(), *this), interrupted(false), executor(*this),
       temporary_objects(make_unique<SchemaCatalogEntry>(&db->GetCatalog(), TEMP_SCHEMA, true)), open_result(nullptr) {
 	std::random_device rd;
 	random_engine.seed(rd());
@@ -437,7 +437,7 @@ unique_ptr<QueryResult> ClientContext::RunStatements(ClientContextLock &lock, co
 	return result;
 }
 
-void ClientContext::LogQueryInternal(ClientContextLock &, string query) {
+void ClientContext::LogQueryInternal(ClientContextLock &, const string &query) {
 	if (!log_query_writer) {
 		return;
 	}
@@ -494,7 +494,7 @@ void ClientContext::DisableProfiling() {
 	profiler.Disable();
 }
 
-string ClientContext::VerifyQuery(ClientContextLock &lock, string query, unique_ptr<SQLStatement> statement) {
+string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement) {
 	D_ASSERT(statement->type == StatementType::SELECT_STATEMENT);
 	// aggressive query verification
 
@@ -655,7 +655,7 @@ void ClientContext::RegisterFunction(CreateFunctionInfo *info) {
 	});
 }
 
-void ClientContext::RunFunctionInTransactionInternal(ClientContextLock &lock, std::function<void(void)> fun,
+void ClientContext::RunFunctionInTransactionInternal(ClientContextLock &lock, const std::function<void(void)> &fun,
                                                      bool requires_valid_transaction) {
 	if (requires_valid_transaction && transaction.HasActiveTransaction() &&
 	    transaction.ActiveTransaction().IsInvalidated()) {
@@ -685,7 +685,7 @@ void ClientContext::RunFunctionInTransactionInternal(ClientContextLock &lock, st
 	}
 }
 
-void ClientContext::RunFunctionInTransaction(std::function<void(void)> fun, bool requires_valid_transaction) {
+void ClientContext::RunFunctionInTransaction(const std::function<void(void)> &fun, bool requires_valid_transaction) {
 	auto lock = LockContext();
 	RunFunctionInTransactionInternal(*lock, fun, requires_valid_transaction);
 }
@@ -739,7 +739,7 @@ void ClientContext::TryBindRelation(Relation &relation, vector<ColumnDefinition>
 	});
 }
 
-unique_ptr<QueryResult> ClientContext::Execute(shared_ptr<Relation> relation) {
+unique_ptr<QueryResult> ClientContext::Execute(const shared_ptr<Relation> &relation) {
 	auto lock = LockContext();
 	string query;
 	if (query_verification_enabled) {
