@@ -17,8 +17,8 @@ jobs:
     runs-on: ubuntu-20.04
 
     env:
-      CC: gcc-10
-      CXX: g++-10
+      CC: ccache gcc-10
+      CXX: ccache g++-10
       TREAT_WARNINGS_AS_ERRORS: 1
       GEN: ninja
 
@@ -28,7 +28,7 @@ jobs:
         fetch-depth: 0
 
     - name: Install
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build ccache
 
     - name: Build
       run: make debug
@@ -54,7 +54,10 @@ jobs:
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-format && sudo pip3 install cmake-format
 
     - name: Format Check
-      run: make format-check-silent
+      run: |
+        clang-format --version
+        clang-format --dump-config
+        make format-check-silent
 
   win-release-64:
     name: Windows (64 Bit)
@@ -165,6 +168,7 @@ jobs:
       BUILD_FTS: 1
       BUILD_REST: 1
       BUILD_JDBC: 1
+      BUILD_HTTPFS: 1
 
     steps:
     - uses: actions/checkout@v2
@@ -241,6 +245,7 @@ jobs:
       BUILD_FTS: 1
       BUILD_REST: 1
       BUILD_JDBC: 1
+      BUILD_HTTPFS: 1
 
     steps:
     - uses: actions/checkout@v2

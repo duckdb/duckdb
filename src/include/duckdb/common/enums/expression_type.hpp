@@ -55,6 +55,8 @@ enum class ExpressionType : uint8_t {
 	COMPARE_BETWEEN = 38,
 	COMPARE_NOT_BETWEEN = 39,
 	COMPARE_BOUNDARY_END = COMPARE_NOT_BETWEEN,
+	// IS NOT DISTINCT FROM operator
+	COMPARE_NOT_DISTINCT_FROM = 40,
 
 	// -----------------------------
 	// Conjunction Operators

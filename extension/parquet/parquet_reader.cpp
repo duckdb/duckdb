@@ -12,9 +12,6 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/date.hpp"
-#include "duckdb/common/types/time.hpp"
-#include "duckdb/common/types/timestamp.hpp"
-#include "duckdb/common/to_string.hpp"
 #include "duckdb/common/pair.hpp"
 
 #include "duckdb/storage/object_cache.hpp"
@@ -189,27 +186,29 @@ ParquetReader::ParquetReader(ClientContext &context, string file_name_, vector<L
 	auto handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ);
 
 	ResizeableBuffer buf;
-	buf.resize(4);
-	memset(buf.ptr, '\0', 4);
-	// check for magic bytes at start of file
-	fs.Read(*handle, buf.ptr, 4);
-	if (strncmp(buf.ptr, "PAR1", 4) != 0) {
-		throw FormatException("Missing magic bytes in front of Parquet file");
-	}
-
+	buf.resize(8);
+	memset(buf.ptr, '\0', 8);
+	// this check at the beginning is a pretty unneccessary iop
+	/*
+	#ifdef DEBUG // this is a pretty unnecessary io op
+	    // check for magic bytes at start of file
+	    fs.Read(*handle, buf.ptr, 4);
+	    if (strncmp(buf.ptr, "PAR1", 4) != 0) {
+	        throw FormatException("Missing magic bytes in front of Parquet file");
+	    }
+	#endif
+	*/
 	// check for magic bytes at end of file
 	auto file_size_signed = fs.GetFileSize(*handle);
 	if (file_size_signed < 12) {
 		throw FormatException("File too small to be a Parquet file");
 	}
 	auto file_size = (uint64_t)file_size_signed;
-	fs.Read(*handle, buf.ptr, 4, file_size - 4);
-	if (strncmp(buf.ptr, "PAR1", 4) != 0) {
+	fs.Read(*handle, buf.ptr, 8, file_size - 8);
+	if (strncmp(buf.ptr + 4, "PAR1", 4) != 0) {
 		throw FormatException("No magic bytes found at end of file");
 	}
-
 	// read four-byte footer length from just before the end magic bytes
-	fs.Read(*handle, buf.ptr, 4, file_size - 8);
 	auto footer_len = *(uint32_t *)buf.ptr;
 	if (footer_len <= 0) {
 		throw FormatException("Footer length can't be 0");
