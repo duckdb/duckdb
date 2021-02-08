@@ -143,11 +143,11 @@ void Appender::Append(double value) {
 }
 
 template <>
-void Appender::Append(Value value) {
+void Appender::Append(Value value) { // NOLINT: template shtuff
 	if (column >= chunk.ColumnCount()) {
 		throw InvalidInputException("Too many appends for chunk!");
 	}
-	AppendValue(move(value));
+	AppendValue(value);
 }
 
 template <>

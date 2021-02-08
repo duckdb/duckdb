@@ -10,8 +10,8 @@
 
 namespace duckdb {
 
-TransientSegment::TransientSegment(DatabaseInstance &db, LogicalType type, idx_t start)
-    : ColumnSegment(type, ColumnSegmentType::TRANSIENT, start), db(db) {
+TransientSegment::TransientSegment(DatabaseInstance &db, const LogicalType &type_p, idx_t start)
+    : ColumnSegment(type_p, ColumnSegmentType::TRANSIENT, start), db(db) {
 	if (type.InternalType() == PhysicalType::VARCHAR) {
 		data = make_unique<StringSegment>(db, start);
 	} else {

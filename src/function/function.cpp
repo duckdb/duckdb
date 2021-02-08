@@ -62,7 +62,7 @@ void BuiltinFunctions::AddCollation(string name, ScalarFunction function, bool c
 }
 
 void BuiltinFunctions::AddFunction(AggregateFunctionSet set) {
-	CreateAggregateFunctionInfo info(set);
+	CreateAggregateFunctionInfo info(move(set));
 	catalog.CreateFunction(context, &info);
 }
 
@@ -86,7 +86,7 @@ void BuiltinFunctions::AddFunction(ScalarFunction function) {
 	catalog.CreateFunction(context, &info);
 }
 
-void BuiltinFunctions::AddFunction(const vector<string> &names, ScalarFunction function) {
+void BuiltinFunctions::AddFunction(const vector<string> &names, const ScalarFunction &function) {
 	for (auto &name : names) {
 		function.name = name;
 		AddFunction(function);
@@ -290,6 +290,7 @@ idx_t Function::BindFunction(const string &name, vector<PragmaFunction> &functio
 
 vector<LogicalType> GetLogicalTypesFromExpressions(vector<unique_ptr<Expression>> &arguments) {
 	vector<LogicalType> types;
+	types.reserve(arguments.size());
 	for (auto &argument : arguments) {
 		types.push_back(argument->return_type);
 	}

@@ -17,7 +17,7 @@ class DatabaseInstance;
 
 class PersistentSegment : public ColumnSegment {
 public:
-	PersistentSegment(DatabaseInstance &db, block_id_t id, idx_t offset, LogicalType type, idx_t start, idx_t count,
+	PersistentSegment(DatabaseInstance &db, block_id_t id, idx_t offset, const LogicalType &type, idx_t start, idx_t count,
 	                  unique_ptr<BaseStatistics> statistics);
 
 	//! The storage manager

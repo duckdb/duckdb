@@ -47,7 +47,7 @@ PhysicalPerfectHashAggregate::PhysicalPerfectHashAggregate(ClientContext &contex
 	for (const auto &pay_filters : payload_types_filters) {
 		payload_types.push_back(pay_filters);
 	}
-	aggregate_objects = AggregateObject::CreateAggregateObjects(move(bindings));
+	aggregate_objects = AggregateObject::CreateAggregateObjects(bindings);
 }
 
 unique_ptr<PerfectAggregateHashTable> PhysicalPerfectHashAggregate::CreateHT(ClientContext &context) {

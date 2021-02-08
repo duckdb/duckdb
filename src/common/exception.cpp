@@ -5,8 +5,8 @@
 
 namespace duckdb {
 
-Exception::Exception(string message) : std::exception(), type(ExceptionType::INVALID) {
-	exception_message_ = move(message);
+Exception::Exception(const string &msg) : std::exception(), type(ExceptionType::INVALID) {
+	exception_message_ = msg;
 }
 
 Exception::Exception(ExceptionType exception_type, const string &message) : std::exception(), type(exception_type) {
@@ -131,7 +131,7 @@ ValueOutOfRangeException::ValueOutOfRangeException(const PhysicalType var_type, 
                 "The value is too long to fit into type " + TypeIdToString(var_type) + "(" + to_string(length) + ")") {
 }
 
-ConversionException::ConversionException(string msg) : Exception(ExceptionType::CONVERSION, msg) {
+ConversionException::ConversionException(const string &msg) : Exception(ExceptionType::CONVERSION, msg) {
 }
 
 InvalidTypeException::InvalidTypeException(PhysicalType type, const string &msg)
@@ -152,49 +152,49 @@ TypeMismatchException::TypeMismatchException(const LogicalType &type_1, const Lo
                 "Type " + type_1.ToString() + " does not match with " + type_2.ToString() + ". " + msg) {
 }
 
-TransactionException::TransactionException(string msg) : Exception(ExceptionType::TRANSACTION, move(msg)) {
+TransactionException::TransactionException(const string &msg) : Exception(ExceptionType::TRANSACTION, msg) {
 }
 
-NotImplementedException::NotImplementedException(string msg) : Exception(ExceptionType::NOT_IMPLEMENTED, move(msg)) {
+NotImplementedException::NotImplementedException(const string &msg) : Exception(ExceptionType::NOT_IMPLEMENTED, msg) {
 }
 
-OutOfRangeException::OutOfRangeException(string msg) : Exception(ExceptionType::OUT_OF_RANGE, move(msg)) {
+OutOfRangeException::OutOfRangeException(const string &msg) : Exception(ExceptionType::OUT_OF_RANGE, msg) {
 }
 
-CatalogException::CatalogException(string msg) : StandardException(ExceptionType::CATALOG, move(msg)) {
+CatalogException::CatalogException(const string &msg) : StandardException(ExceptionType::CATALOG, msg) {
 }
 
-ParserException::ParserException(string msg) : StandardException(ExceptionType::PARSER, move(msg)) {
+ParserException::ParserException(const string &msg) : StandardException(ExceptionType::PARSER, msg) {
 }
 
-SyntaxException::SyntaxException(string msg) : Exception(ExceptionType::SYNTAX, move(msg)) {
+SyntaxException::SyntaxException(const string &msg) : Exception(ExceptionType::SYNTAX, msg) {
 }
 
-ConstraintException::ConstraintException(string msg) : Exception(ExceptionType::CONSTRAINT, move(msg)) {
+ConstraintException::ConstraintException(const string &msg) : Exception(ExceptionType::CONSTRAINT, msg) {
 }
 
-BinderException::BinderException(string msg) : StandardException(ExceptionType::BINDER, move(msg)) {
+BinderException::BinderException(const string &msg) : StandardException(ExceptionType::BINDER, msg) {
 }
 
-IOException::IOException(string msg) : Exception(ExceptionType::IO, move(msg)) {
+IOException::IOException(const string &msg) : Exception(ExceptionType::IO, msg) {
 }
 
-SerializationException::SerializationException(string msg) : Exception(ExceptionType::SERIALIZATION, move(msg)) {
+SerializationException::SerializationException(const string &msg) : Exception(ExceptionType::SERIALIZATION, msg) {
 }
 
-SequenceException::SequenceException(string msg) : Exception(ExceptionType::SERIALIZATION, move(msg)) {
+SequenceException::SequenceException(const string &msg) : Exception(ExceptionType::SERIALIZATION, msg) {
 }
 
 InterruptException::InterruptException() : Exception(ExceptionType::INTERRUPT, "Interrupted!") {
 }
 
-FatalException::FatalException(string msg) : Exception(ExceptionType::FATAL, move(msg)) {
+FatalException::FatalException(const string &msg) : Exception(ExceptionType::FATAL, msg) {
 }
 
-InternalException::InternalException(string msg) : Exception(ExceptionType::INTERNAL, move(msg)) {
+InternalException::InternalException(const string &msg) : Exception(ExceptionType::INTERNAL, msg) {
 }
 
-InvalidInputException::InvalidInputException(string msg) : Exception(ExceptionType::INVALID_INPUT, move(msg)) {
+InvalidInputException::InvalidInputException(const string &msg) : Exception(ExceptionType::INVALID_INPUT, msg) {
 }
 
 } // namespace duckdb

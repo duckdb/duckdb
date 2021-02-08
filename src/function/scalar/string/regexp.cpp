@@ -15,7 +15,7 @@ namespace duckdb {
 RegexpMatchesBindData::RegexpMatchesBindData(duckdb_re2::RE2::Options options,
                                              unique_ptr<duckdb_re2::RE2> constant_pattern, string range_min,
                                              string range_max, bool range_success)
-    : options(options), constant_pattern(std::move(constant_pattern)), range_min(range_min), range_max(range_max),
+    : options(options), constant_pattern(move(constant_pattern)), range_min(move(range_min)), range_max(move(range_max)),
       range_success(range_success) {
 }
 

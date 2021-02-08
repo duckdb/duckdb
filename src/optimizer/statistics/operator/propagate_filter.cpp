@@ -35,7 +35,7 @@ void StatisticsPropagator::SetStatisticsNotNull(ColumnBinding binding) {
 }
 
 void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &stats, ExpressionType comparison_type,
-                                                  Value constant) {
+                                                  const Value &constant) {
 	// any comparison filter removes all null values
 	stats.has_null = false;
 	if (!stats.type.IsNumeric()) {

@@ -9,7 +9,7 @@
 
 namespace duckdb {
 
-ExpressionType Transformer::OperatorToExpressionType(string &op) {
+ExpressionType Transformer::OperatorToExpressionType(const string &op) {
 	if (op == "=" || op == "==") {
 		return ExpressionType::COMPARE_EQUAL;
 	} else if (op == "!=" || op == "<>") {
@@ -26,19 +26,19 @@ ExpressionType Transformer::OperatorToExpressionType(string &op) {
 	return ExpressionType::INVALID;
 }
 
-unique_ptr<ParsedExpression> Transformer::TransformUnaryOperator(string op, unique_ptr<ParsedExpression> child) {
+unique_ptr<ParsedExpression> Transformer::TransformUnaryOperator(const string &op, unique_ptr<ParsedExpression> child) {
 	const auto schema = DEFAULT_SCHEMA;
 
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(move(child));
 
 	// built-in operator function
-	auto result = make_unique<FunctionExpression>(schema, move(op), children);
+	auto result = make_unique<FunctionExpression>(schema, op, children);
 	result->is_operator = true;
 	return move(result);
 }
 
-unique_ptr<ParsedExpression> Transformer::TransformBinaryOperator(string op, unique_ptr<ParsedExpression> left,
+unique_ptr<ParsedExpression> Transformer::TransformBinaryOperator(const string &op, unique_ptr<ParsedExpression> left,
                                                                   unique_ptr<ParsedExpression> right) {
 	const auto schema = DEFAULT_SCHEMA;
 

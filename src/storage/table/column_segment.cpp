@@ -5,8 +5,8 @@
 
 namespace duckdb {
 
-ColumnSegment::ColumnSegment(LogicalType type, ColumnSegmentType segment_type, idx_t start, idx_t count)
-    : SegmentBase(start, count), type(type), type_size(GetTypeIdSize(type.InternalType())), segment_type(segment_type),
+ColumnSegment::ColumnSegment(LogicalType type_p, ColumnSegmentType segment_type, idx_t start, idx_t count)
+    : SegmentBase(start, count), type(move(type_p)), type_size(GetTypeIdSize(type.InternalType())), segment_type(segment_type),
       stats(type, type_size) {
 }
 

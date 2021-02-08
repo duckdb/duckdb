@@ -41,7 +41,7 @@ Vector::Vector() : vector_type(VectorType::FLAT_VECTOR), type(LogicalTypeId::INV
 }
 
 Vector::Vector(Vector &&other) noexcept
-    : vector_type(move(other.vector_type)), type(move(other.type)), data(move(other.data)), nullmask(move(other.nullmask)),
+    : vector_type(other.vector_type), type(move(other.type)), data(other.data), nullmask(other.nullmask),
       buffer(move(other.buffer)), auxiliary(move(other.auxiliary)) {
 }
 

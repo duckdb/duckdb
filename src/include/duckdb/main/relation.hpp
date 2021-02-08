@@ -65,9 +65,9 @@ public:
 	// PROJECT
 	DUCKDB_API shared_ptr<Relation> Project(const string &select_list);
 	DUCKDB_API shared_ptr<Relation> Project(const string &expression, const string &alias);
-	DUCKDB_API shared_ptr<Relation> Project(const string &select_list, vector<string> aliases);
+	DUCKDB_API shared_ptr<Relation> Project(const string &select_list, const vector<string> &aliases);
 	DUCKDB_API shared_ptr<Relation> Project(const vector<string> &expressions);
-	DUCKDB_API shared_ptr<Relation> Project(const vector<string> &expressions, vector<string> aliases);
+	DUCKDB_API shared_ptr<Relation> Project(const vector<string> &expressions, const vector<string> &aliases);
 
 	// FILTER
 	DUCKDB_API shared_ptr<Relation> Filter(const string &expression);
@@ -81,12 +81,12 @@ public:
 	DUCKDB_API shared_ptr<Relation> Order(const vector<string> &expressions);
 
 	// JOIN operation
-	DUCKDB_API shared_ptr<Relation> Join(shared_ptr<Relation> other, const string &condition, JoinType type = JoinType::INNER);
+	DUCKDB_API shared_ptr<Relation> Join(const shared_ptr<Relation> &other, const string &condition, JoinType type = JoinType::INNER);
 
 	// SET operations
-	DUCKDB_API shared_ptr<Relation> Union(shared_ptr<Relation> other);
-	DUCKDB_API shared_ptr<Relation> Except(shared_ptr<Relation> other);
-	DUCKDB_API shared_ptr<Relation> Intersect(shared_ptr<Relation> other);
+	DUCKDB_API shared_ptr<Relation> Union(const shared_ptr<Relation> &other);
+	DUCKDB_API shared_ptr<Relation> Except(const shared_ptr<Relation> &other);
+	DUCKDB_API shared_ptr<Relation> Intersect(const shared_ptr<Relation> &other);
 
 	// DISTINCT operation
 	DUCKDB_API shared_ptr<Relation> Distinct();
@@ -98,11 +98,11 @@ public:
 	DUCKDB_API shared_ptr<Relation> Aggregate(const vector<string> &aggregates, const vector<string> &groups);
 
 	// ALIAS
-	DUCKDB_API shared_ptr<Relation> Alias(string alias);
+	DUCKDB_API shared_ptr<Relation> Alias(const string &alias);
 
 	//! Insert the data from this relation into a table
 	DUCKDB_API void Insert(string table_name);
-	DUCKDB_API void Insert(string schema_name, string table_name);
+	DUCKDB_API void Insert(const string &schema_name, const string &table_name);
 	//! Insert a row (i.e.,list of values) into a table
 	DUCKDB_API void Insert(vector<vector<Value>> values);
 	//! Create a table and insert the data from this relation into that table

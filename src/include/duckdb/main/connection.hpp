@@ -96,20 +96,20 @@ public:
 	DUCKDB_API shared_ptr<Relation> Table(const string &tname);
 	DUCKDB_API shared_ptr<Relation> Table(const string &schema_name, const string &table_name);
 	//! Returns a relation that produces a view from this connection
-	DUCKDB_API shared_ptr<Relation> View(string tname);
-	DUCKDB_API shared_ptr<Relation> View(string schema_name, string table_name);
+	DUCKDB_API shared_ptr<Relation> View(const string &tname);
+	DUCKDB_API shared_ptr<Relation> View(const string &schema_name, const string &table_name);
 	//! Returns a relation that calls a specified table function
-	DUCKDB_API shared_ptr<Relation> TableFunction(string tname);
-	DUCKDB_API shared_ptr<Relation> TableFunction(string tname, vector<Value> values);
+	DUCKDB_API shared_ptr<Relation> TableFunction(const string &tname);
+	DUCKDB_API shared_ptr<Relation> TableFunction(const string &tname, const vector<Value> &values);
 	//! Returns a relation that produces values
-	DUCKDB_API shared_ptr<Relation> Values(vector<vector<Value>> values);
-	DUCKDB_API shared_ptr<Relation> Values(vector<vector<Value>> values, vector<string> column_names,
-	                                       string alias = "values");
-	DUCKDB_API shared_ptr<Relation> Values(string values);
-	DUCKDB_API shared_ptr<Relation> Values(string values, vector<string> column_names, string alias = "values");
+	DUCKDB_API shared_ptr<Relation> Values(const vector<vector<Value>> &values);
+	DUCKDB_API shared_ptr<Relation> Values(const vector<vector<Value>> &values, const vector<string> &column_names,
+	                                       const string &alias = "values");
+	DUCKDB_API shared_ptr<Relation> Values(const string &values);
+	DUCKDB_API shared_ptr<Relation> Values(const string &values, const vector<string> &column_names, const string &alias = "values");
 	//! Reads CSV file
-	DUCKDB_API shared_ptr<Relation> ReadCSV(string csv_file);
-	DUCKDB_API shared_ptr<Relation> ReadCSV(string csv_file, vector<string> columns);
+	DUCKDB_API shared_ptr<Relation> ReadCSV(const string &csv_file);
+	DUCKDB_API shared_ptr<Relation> ReadCSV(const string &csv_file, const vector<string> &columns);
 
 	DUCKDB_API void BeginTransaction();
 	DUCKDB_API void Commit();

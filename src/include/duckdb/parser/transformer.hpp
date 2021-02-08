@@ -178,10 +178,10 @@ private:
 	unique_ptr<SelectStatement> TransformRecursiveCTE(duckdb_libpgquery::PGCommonTableExpr *node,
 	                                                  CommonTableExpressionInfo &info);
 	// Operator String to ExpressionType (e.g. + => OPERATOR_ADD)
-	ExpressionType OperatorToExpressionType(string &op);
+	ExpressionType OperatorToExpressionType(const string &op);
 
-	unique_ptr<ParsedExpression> TransformUnaryOperator(string op, unique_ptr<ParsedExpression> child);
-	unique_ptr<ParsedExpression> TransformBinaryOperator(string op, unique_ptr<ParsedExpression> left,
+	unique_ptr<ParsedExpression> TransformUnaryOperator(const string &op, unique_ptr<ParsedExpression> child);
+	unique_ptr<ParsedExpression> TransformBinaryOperator(const string &op, unique_ptr<ParsedExpression> left,
 	                                                     unique_ptr<ParsedExpression> right);
 	//===--------------------------------------------------------------------===//
 	// TableRef transform

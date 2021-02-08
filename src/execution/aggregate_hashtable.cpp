@@ -19,10 +19,10 @@ namespace duckdb {
 
 GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manager, vector<LogicalType> group_types,
                                                      vector<LogicalType> payload_types,
-                                                     vector<BoundAggregateExpression *> bindings,
+                                                     const vector<BoundAggregateExpression *> &bindings,
                                                      HtEntryType entry_type)
     : GroupedAggregateHashTable(buffer_manager, move(group_types), move(payload_types),
-                                AggregateObject::CreateAggregateObjects(move(bindings)), entry_type) {
+                                AggregateObject::CreateAggregateObjects(bindings), entry_type) {
 }
 
 GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manager, vector<LogicalType> group_types)

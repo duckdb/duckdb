@@ -59,7 +59,7 @@ private:
 	FilterPropagateResult PropagateComparison(BaseStatistics &left, BaseStatistics &right, ExpressionType comparison);
 
 	//! Update filter statistics from a filter with a constant
-	void UpdateFilterStatistics(BaseStatistics &input, ExpressionType comparison_type, Value constant);
+	void UpdateFilterStatistics(BaseStatistics &input, ExpressionType comparison_type, const Value &constant);
 	//! Update statistics from a filter between two stats
 	void UpdateFilterStatistics(BaseStatistics &lstats, BaseStatistics &rstats, ExpressionType comparison_type);
 	//! Update filter statistics from a generic comparison

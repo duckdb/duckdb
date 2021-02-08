@@ -33,9 +33,9 @@ shared_ptr<Relation> Relation::Project(const string &expression, const string &a
 	return Project(expression, vector<string>({alias}));
 }
 
-shared_ptr<Relation> Relation::Project(const string &select_list, vector<string> aliases) {
+shared_ptr<Relation> Relation::Project(const string &select_list, const vector<string> &aliases) {
 	auto expressions = Parser::ParseExpressionList(select_list);
-	return make_shared<ProjectionRelation>(shared_from_this(), move(expressions), move(aliases));
+	return make_shared<ProjectionRelation>(shared_from_this(), move(expressions), aliases);
 }
 
 shared_ptr<Relation> Relation::Project(const vector<string> &expressions) {
@@ -58,9 +58,9 @@ static vector<unique_ptr<ParsedExpression>> StringListToExpressionList(const vec
 	return result_list;
 }
 
-shared_ptr<Relation> Relation::Project(const vector<string> &expressions, vector<string> aliases) {
-	auto result_list = StringListToExpressionList(move(expressions));
-	return make_shared<ProjectionRelation>(shared_from_this(), move(result_list), move(aliases));
+shared_ptr<Relation> Relation::Project(const vector<string> &expressions, const vector<string> &aliases) {
+	auto result_list = StringListToExpressionList(expressions);
+	return make_shared<ProjectionRelation>(shared_from_this(), move(result_list), aliases);
 }
 
 shared_ptr<Relation> Relation::Filter(const string &expression) {
@@ -109,7 +109,7 @@ shared_ptr<Relation> Relation::Order(const vector<string> &expressions) {
 	return make_shared<OrderRelation>(shared_from_this(), move(order_list));
 }
 
-shared_ptr<Relation> Relation::Join(shared_ptr<Relation> other, const string &condition, JoinType type) {
+shared_ptr<Relation> Relation::Join(const shared_ptr<Relation> &other, const string &condition, JoinType type) {
 	auto expression_list = Parser::ParseExpressionList(condition);
 	if (expression_list.size() == 0) {
 		throw ParserException("Expected a single expression as join condition");
@@ -127,30 +127,30 @@ shared_ptr<Relation> Relation::Join(shared_ptr<Relation> other, const string &co
 			}
 			using_columns.push_back(colref.column_name);
 		}
-		return make_shared<JoinRelation>(shared_from_this(), move(other), move(using_columns), type);
+		return make_shared<JoinRelation>(shared_from_this(), other, move(using_columns), type);
 	} else {
 		// single expression that is not a column reference: use the expression as a join condition
-		return make_shared<JoinRelation>(shared_from_this(), move(other), move(expression_list[0]), type);
+		return make_shared<JoinRelation>(shared_from_this(), other, move(expression_list[0]), type);
 	}
 }
 
-shared_ptr<Relation> Relation::Union(shared_ptr<Relation> other) {
-	return make_shared<SetOpRelation>(shared_from_this(), move(other), SetOperationType::UNION);
+shared_ptr<Relation> Relation::Union(const shared_ptr<Relation> &other) {
+	return make_shared<SetOpRelation>(shared_from_this(), other, SetOperationType::UNION);
 }
 
-shared_ptr<Relation> Relation::Except(shared_ptr<Relation> other) {
-	return make_shared<SetOpRelation>(shared_from_this(), move(other), SetOperationType::EXCEPT);
+shared_ptr<Relation> Relation::Except(const shared_ptr<Relation> &other) {
+	return make_shared<SetOpRelation>(shared_from_this(), other, SetOperationType::EXCEPT);
 }
 
-shared_ptr<Relation> Relation::Intersect(shared_ptr<Relation> other) {
-	return make_shared<SetOpRelation>(shared_from_this(), move(other), SetOperationType::INTERSECT);
+shared_ptr<Relation> Relation::Intersect(const shared_ptr<Relation> &other) {
+	return make_shared<SetOpRelation>(shared_from_this(), other, SetOperationType::INTERSECT);
 }
 
 shared_ptr<Relation> Relation::Distinct() {
 	return make_shared<DistinctRelation>(shared_from_this());
 }
 
-shared_ptr<Relation> Relation::Alias(string alias) {
+shared_ptr<Relation> Relation::Alias(const string &alias) {
 	return make_shared<SubqueryRelation>(shared_from_this(), alias);
 }
 
@@ -166,13 +166,13 @@ shared_ptr<Relation> Relation::Aggregate(const string &aggregate_list, const str
 }
 
 shared_ptr<Relation> Relation::Aggregate(const vector<string> &aggregates) {
-	auto aggregate_list = StringListToExpressionList(move(aggregates));
+	auto aggregate_list = StringListToExpressionList(aggregates);
 	return make_shared<AggregateRelation>(shared_from_this(), move(aggregate_list));
 }
 
 shared_ptr<Relation> Relation::Aggregate(const vector<string> &aggregates, const vector<string> &groups) {
-	auto aggregate_list = StringListToExpressionList(move(aggregates));
-	auto group_list = StringListToExpressionList(move(groups));
+	auto aggregate_list = StringListToExpressionList(aggregates);
+	auto group_list = StringListToExpressionList(groups);
 	return make_shared<AggregateRelation>(shared_from_this(), move(aggregate_list), move(group_list));
 }
 
@@ -200,8 +200,8 @@ void Relation::Insert(string table_name) {
 	Insert(DEFAULT_SCHEMA, move(table_name));
 }
 
-void Relation::Insert(string schema_name, string table_name) {
-	auto insert = make_shared<InsertRelation>(shared_from_this(), move(schema_name), move(table_name));
+void Relation::Insert(const string &schema_name, const string &table_name) {
+	auto insert = make_shared<InsertRelation>(shared_from_this(), schema_name, table_name);
 	insert->Execute();
 }
 
