@@ -17,8 +17,7 @@
 #include "duckdb/planner/expression_binder/select_binder.hpp"
 #include "duckdb/planner/expression_binder/where_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
-
-#include <duckdb/planner/expression_binder/aggregate_binder.hpp>
+#include "duckdb/planner/expression_binder/aggregate_binder.hpp"
 
 namespace duckdb {
 unique_ptr<Expression> Binder::BindFilter(unique_ptr<ParsedExpression> condition) {
