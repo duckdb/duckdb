@@ -1381,7 +1381,9 @@ struct DuckDBPyConnection {
 			}
 			auto args = DuckDBPyConnection::transform_python_param_list(single_query_params);
 			auto res = make_unique<DuckDBPyResult>();
+			Py_BEGIN_ALLOW_THREADS;
 			res->result = prep->Execute(args);
+			Py_END_ALLOW_THREADS;
 			if (!res->result->success) {
 				throw runtime_error(res->result->error);
 			}
@@ -1821,7 +1823,9 @@ struct DuckDBPyRelation {
 
 	py::object to_df() {
 		auto res = make_unique<DuckDBPyResult>();
+		Py_BEGIN_ALLOW_THREADS;
 		res->result = rel->Execute();
+		Py_END_ALLOW_THREADS;
 		if (!res->result->success) {
 			throw runtime_error(res->result->error);
 		}
@@ -1830,7 +1834,9 @@ struct DuckDBPyRelation {
 
 	py::object to_arrow_table() {
 		auto res = make_unique<DuckDBPyResult>();
+		Py_BEGIN_ALLOW_THREADS;
 		res->result = rel->Execute();
+		Py_END_ALLOW_THREADS;
 		if (!res->result->success) {
 			throw runtime_error(res->result->error);
 		}
@@ -1882,7 +1888,9 @@ struct DuckDBPyRelation {
 
 	unique_ptr<DuckDBPyResult> execute() {
 		auto res = make_unique<DuckDBPyResult>();
+		Py_BEGIN_ALLOW_THREADS;
 		res->result = rel->Execute();
+		Py_END_ALLOW_THREADS;
 		if (!res->result->success) {
 			throw runtime_error(res->result->error);
 		}
@@ -1907,8 +1915,12 @@ struct DuckDBPyRelation {
 	}
 
 	string print() {
-		return rel->ToString() + "\n---------------------\n-- Result Preview  --\n---------------------\n" +
-		       rel->Limit(10)->Execute()->ToString() + "\n";
+		string res;
+		Py_BEGIN_ALLOW_THREADS;
+		res = rel->ToString() + "\n---------------------\n-- Result Preview  --\n---------------------\n" +
+		      rel->Limit(10)->Execute()->ToString() + "\n";
+		Py_END_ALLOW_THREADS;
+		return res;
 	}
 
 	py::object getattr(py::str key) {
