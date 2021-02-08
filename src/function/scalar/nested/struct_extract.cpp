@@ -6,13 +6,15 @@
 namespace duckdb {
 
 struct StructExtractBindData : public FunctionData {
+	StructExtractBindData(string key, idx_t index, LogicalType type)
+	    : key(move(key)), index(index), type(move(type)) {
+	}
+
 	string key;
 	idx_t index;
 	LogicalType type;
 
-	StructExtractBindData(string key, idx_t index, LogicalType type) : key(key), index(index), type(type) {
-	}
-
+public:
 	unique_ptr<FunctionData> Copy() override {
 		return make_unique<StructExtractBindData>(key, index, type);
 	}

@@ -312,7 +312,7 @@ void TreeRenderer::SplitStringBuffer(const string &source, vector<string> &resul
 	}
 }
 
-void TreeRenderer::SplitUpExtraInfo(string extra_info, vector<string> &result) {
+void TreeRenderer::SplitUpExtraInfo(const string &extra_info, vector<string> &result) {
 	if (extra_info.empty()) {
 		return;
 	}
@@ -340,7 +340,7 @@ string TreeRenderer::ExtraInfoSeparator() {
 unique_ptr<RenderTreeNode> TreeRenderer::CreateRenderNode(string name, string extra_info) {
 	auto result = make_unique<RenderTreeNode>();
 	result->name = move(name);
-	result->extra_text = extra_info;
+	result->extra_text = move(extra_info);
 	return result;
 }
 

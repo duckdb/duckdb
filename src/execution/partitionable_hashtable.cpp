@@ -33,7 +33,7 @@ RadixPartitionInfo::RadixPartitionInfo(idx_t n_partitions_upper_bound)
 PartitionableHashTable::PartitionableHashTable(BufferManager &buffer_manager_p, RadixPartitionInfo &partition_info_p,
                                                vector<LogicalType> group_types_p, vector<LogicalType> payload_types_p,
                                                vector<BoundAggregateExpression *> bindings_p)
-    : buffer_manager(buffer_manager_p), group_types(group_types_p), payload_types(payload_types_p), bindings(bindings_p),
+    : buffer_manager(buffer_manager_p), group_types(move(group_types_p)), payload_types(move(payload_types_p)), bindings(move(bindings_p)),
       is_partitioned(false), partition_info(partition_info_p) {
 
 	sel_vectors.resize(partition_info.n_partitions);

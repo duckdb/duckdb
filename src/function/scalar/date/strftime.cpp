@@ -993,7 +993,7 @@ static unique_ptr<FunctionData> StrpTimeBindFunction(ClientContext &context, Sca
 	return make_unique<StrpTimeBindData>(format);
 }
 
-string StrpTimeFormat::FormatStrpTimeError(string input, idx_t position) {
+string StrpTimeFormat::FormatStrpTimeError(const string &input, idx_t position) {
 	if (position == INVALID_INDEX) {
 		return string();
 	}

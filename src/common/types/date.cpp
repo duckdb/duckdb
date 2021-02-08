@@ -281,7 +281,7 @@ date_t Date::FromCString(const char *buf, idx_t len, bool strict) {
 	return result;
 }
 
-date_t Date::FromString(string str, bool strict) {
+date_t Date::FromString(const string &str, bool strict) {
 	return Date::FromCString(str.c_str(), str.size(), strict);
 }
 

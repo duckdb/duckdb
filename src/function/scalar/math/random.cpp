@@ -34,7 +34,7 @@ static void RandomFunction(DataChunk &args, ExpressionState &state, Vector &resu
 unique_ptr<FunctionData> RandomBind(ClientContext &context, ScalarFunction &bound_function,
                                      vector<unique_ptr<Expression>> &arguments) {
 	std::uniform_real_distribution<double> dist(0, 1);
-	return make_unique<RandomBindData>(context, move(dist));
+	return make_unique<RandomBindData>(context, dist);
 }
 
 void RandomFun::RegisterFunction(BuiltinFunctions &set) {

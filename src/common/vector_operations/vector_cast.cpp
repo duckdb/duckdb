@@ -14,7 +14,7 @@ static void VectorStringCast(Vector &source, Vector &result, idx_t count) {
 	                                            [&](SRC input) { return OP::template Operation<SRC>(input, result); });
 }
 
-static NotImplementedException UnimplementedCast(LogicalType source_type, LogicalType target_type) {
+static NotImplementedException UnimplementedCast(const LogicalType &source_type, const LogicalType &target_type) {
 	return NotImplementedException("Unimplemented type for cast (%s -> %s)", source_type.ToString(),
 	                               target_type.ToString());
 }

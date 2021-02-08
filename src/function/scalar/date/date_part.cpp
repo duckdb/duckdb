@@ -497,14 +497,14 @@ struct DatePartOperator {
 	}
 };
 
-void AddGenericDatePartOperator(BuiltinFunctions &set, string name, scalar_function_t date_func,
+void AddGenericDatePartOperator(BuiltinFunctions &set, const string &name, scalar_function_t date_func,
                                 scalar_function_t ts_func, function_statistics_t date_stats,
                                 function_statistics_t ts_stats) {
 	ScalarFunctionSet operator_set(name);
 	operator_set.AddFunction(
-	    ScalarFunction({LogicalType::DATE}, LogicalType::BIGINT, date_func, false, nullptr, nullptr, date_stats));
+	    ScalarFunction({LogicalType::DATE}, LogicalType::BIGINT, move(date_func), false, nullptr, nullptr, date_stats));
 	operator_set.AddFunction(
-	    ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::BIGINT, ts_func, false, nullptr, nullptr, ts_stats));
+	    ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::BIGINT, move(ts_func), false, nullptr, nullptr, ts_stats));
 	set.AddFunction(operator_set);
 }
 

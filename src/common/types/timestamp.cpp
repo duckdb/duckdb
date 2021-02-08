@@ -59,7 +59,7 @@ timestamp_t Timestamp::FromCString(const char *str, idx_t len) {
 	return Timestamp::FromDatetime(date, time);
 }
 
-timestamp_t Timestamp::FromString(string str) {
+timestamp_t Timestamp::FromString(const string &str) {
 	return Timestamp::FromCString(str.c_str(), str.size());
 }
 

@@ -51,8 +51,8 @@ Value DataChunk::GetValue(idx_t col_idx, idx_t index) const {
 	return data[col_idx].GetValue(index);
 }
 
-void DataChunk::SetValue(idx_t col_idx, idx_t index, Value val) {
-	data[col_idx].SetValue(index, move(val));
+void DataChunk::SetValue(idx_t col_idx, idx_t index, const Value &val) {
+	data[col_idx].SetValue(index, val);
 }
 
 void DataChunk::Reference(DataChunk &chunk) {

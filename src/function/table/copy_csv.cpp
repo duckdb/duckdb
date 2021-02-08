@@ -12,12 +12,12 @@
 
 namespace duckdb {
 
-void SubstringDetection(string &str_1, string &str_2, string name_str_1, string name_str_2) {
+void SubstringDetection(string &str_1, string &str_2, const string &name_str_1, const string &name_str_2) {
 	if (str_1.size() == 0 || str_2.size() == 0) {
 		return;
 	}
 	if (str_1.find(str_2) != string::npos || str_2.find(str_1) != std::string::npos) {
-		throw BinderException(name_str_1 + " must not appear in the " + name_str_2 + " specification and vice versa");
+		throw BinderException("%s must not appear in the %s specification and vice versa", name_str_1, name_str_2);
 	}
 }
 
@@ -148,7 +148,7 @@ static vector<bool> ParseColumnList(vector<Value> &set, vector<string> &names) {
 				entry->second = true;
 			}
 		}
-		for (auto entry : option_map) {
+		for (auto &entry : option_map) {
 			if (!entry.second) {
 				throw BinderException("Column %s not found in table", entry.first.c_str());
 			}
@@ -274,7 +274,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
 //===--------------------------------------------------------------------===//
 // Helper writing functions
 //===--------------------------------------------------------------------===//
-static string AddEscapes(string &to_be_escaped, string escape, string val) {
+static string AddEscapes(string &to_be_escaped, const string &escape, const string &val) {
 	idx_t i = 0;
 	string new_val = "";
 	idx_t found = val.find(to_be_escaped);

@@ -9,7 +9,7 @@ namespace duckdb {
 
 WindowSegmentTree::WindowSegmentTree(AggregateFunction &aggregate, FunctionData *bind_info, LogicalType result_type,
                                      ChunkCollection *input)
-    : aggregate(aggregate), bind_info(bind_info), result_type(result_type), state(aggregate.state_size()),
+    : aggregate(aggregate), bind_info(bind_info), result_type(move(result_type)), state(aggregate.state_size()),
       internal_nodes(0), input_ref(input) {
 #if STANDARD_VECTOR_SIZE < 512
 	throw NotImplementedException("Window functions are not supported for vector sizes < 512");

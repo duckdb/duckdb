@@ -3,7 +3,7 @@
 
 namespace duckdb {
 
-vector<AggregateObject> AggregateObject::CreateAggregateObjects(vector<BoundAggregateExpression *> bindings) {
+vector<AggregateObject> AggregateObject::CreateAggregateObjects(const vector<BoundAggregateExpression *> &bindings) {
 	vector<AggregateObject> aggregates;
 	for (auto &binding : bindings) {
 		auto payload_size = binding->function.state_size();

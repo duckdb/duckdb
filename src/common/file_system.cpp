@@ -66,7 +66,7 @@ static void AssertValidFileFlags(uint8_t flags) {
 
 struct UnixFileHandle : public FileHandle {
 public:
-	UnixFileHandle(FileSystem &file_system, string path, int fd) : FileHandle(file_system, path), fd(fd) {
+	UnixFileHandle(FileSystem &file_system, string path, int fd) : FileHandle(file_system, move(path)), fd(fd) {
 	}
 	~UnixFileHandle() override {
 		Close();
@@ -286,7 +286,7 @@ void FileSystem::RemoveFile(const string &filename) {
 	}
 }
 
-bool FileSystem::ListFiles(const string &directory, std::function<void(string, bool)> callback) {
+bool FileSystem::ListFiles(const string &directory, const std::function<void(string, bool)> &callback) {
 	if (!DirectoryExists(directory)) {
 		return false;
 	}
@@ -338,7 +338,7 @@ void FileSystem::MoveFile(const string &source, const string &target) {
 	}
 }
 
-void FileSystem::SetWorkingDirectory(string path) {
+void FileSystem::SetWorkingDirectory(const string &path) {
 	if (chdir(path.c_str()) != 0) {
 		throw IOException("Could not change working directory!");
 	}
@@ -592,7 +592,7 @@ void FileSystem::RemoveFile(const string &filename) {
 	DeleteFileA(filename.c_str());
 }
 
-bool FileSystem::ListFiles(const string &directory, std::function<void(string, bool)> callback) {
+bool FileSystem::ListFiles(const string &directory, const std::function<void(string, bool)> &callback) {
 	string search_dir = JoinPath(directory, "*");
 
 	WIN32_FIND_DATA ffd;
@@ -635,7 +635,7 @@ void FileSystem::MoveFile(const string &source, const string &target) {
 	}
 }
 
-void FileSystem::SetWorkingDirectory(string path) {
+void FileSystem::SetWorkingDirectory(const string &path) {
 	if (!SetCurrentDirectory(path.c_str())) {
 		throw IOException("Could not change working directory!");
 	}
@@ -742,7 +742,7 @@ static void GlobFiles(FileSystem &fs, const string &path, const string &glob, bo
 	});
 }
 
-vector<string> FileSystem::Glob(string path) {
+vector<string> FileSystem::Glob(const string &path) {
 	if (path.size() == 0) {
 		return vector<string>();
 	}

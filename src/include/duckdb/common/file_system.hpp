@@ -102,7 +102,7 @@ public:
 	//! Recursively remove a directory and all files in it
 	virtual void RemoveDirectory(const string &directory);
 	//! List files in a directory, invoking the callback method for each one with (filename, is_dir)
-	virtual bool ListFiles(const string &directory, std::function<void(string, bool)> callback);
+	virtual bool ListFiles(const string &directory, const std::function<void(string, bool)> &callback);
 	//! Move a file from source path to the target, StorageManager relies on this being an atomic action for ACID
 	//! properties
 	virtual void MoveFile(const string &source, const string &target);
@@ -118,14 +118,14 @@ public:
 	virtual void FileSync(FileHandle &handle);
 
 	//! Sets the working directory
-	virtual void SetWorkingDirectory(string path);
+	virtual void SetWorkingDirectory(const string &path);
 	//! Gets the working directory
 	virtual string GetWorkingDirectory();
 	//! Gets the users home directory
 	virtual string GetHomeDirectory();
 
 	//! Runs a glob on the file system, returning a list of matching files
-	virtual vector<string> Glob(string path);
+	virtual vector<string> Glob(const string &path);
 
 	//! Returns the system-available memory in bytes
 	virtual idx_t GetAvailableMemory();

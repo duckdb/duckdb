@@ -11,7 +11,7 @@
 
 namespace duckdb {
 
-bool Interval::FromString(string str, interval_t &result) {
+bool Interval::FromString(const string &str, interval_t &result) {
 	return Interval::FromCString(str.c_str(), str.size(), result);
 }
 

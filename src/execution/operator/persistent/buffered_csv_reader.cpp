@@ -122,20 +122,20 @@ TextSearchShiftArray::TextSearchShiftArray(string search_term) : length(search_t
 	}
 }
 
-BufferedCSVReader::BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options,
-                                     vector<LogicalType> requested_types)
-    : options(options), buffer_size(0), position(0), start(0) {
+BufferedCSVReader::BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options_p,
+                                     const vector<LogicalType> &requested_types)
+    : options(move(options_p)), buffer_size(0), position(0), start(0) {
 	source = OpenCSV(context, options);
 	Initialize(requested_types);
 }
 
-BufferedCSVReader::BufferedCSVReader(BufferedCSVReaderOptions options, vector<LogicalType> requested_types,
+BufferedCSVReader::BufferedCSVReader(BufferedCSVReaderOptions options_p, const vector<LogicalType> &requested_types,
                                      unique_ptr<std::istream> ssource)
-    : options(options), source(move(ssource)), buffer_size(0), position(0), start(0) {
+    : options(move(options_p)), source(move(ssource)), buffer_size(0), position(0), start(0) {
 	Initialize(requested_types);
 }
 
-void BufferedCSVReader::Initialize(vector<LogicalType> requested_types) {
+void BufferedCSVReader::Initialize(const vector<LogicalType> &requested_types) {
 	if (options.auto_detect) {
 		sql_types = SniffCSV(requested_types);
 		if (cached_chunks.size() == 0) {
@@ -156,7 +156,7 @@ void BufferedCSVReader::PrepareComplexParser() {
 	quote_search = TextSearchShiftArray(options.quote);
 }
 
-unique_ptr<std::istream> BufferedCSVReader::OpenCSV(ClientContext &context, BufferedCSVReaderOptions options) {
+unique_ptr<std::istream> BufferedCSVReader::OpenCSV(ClientContext &context, const BufferedCSVReaderOptions &options) {
 	if (!FileSystem::GetFileSystem(context).FileExists(options.file_path)) {
 		throw IOException("File \"%s\" not found", options.file_path.c_str());
 	}
@@ -205,7 +205,7 @@ void BufferedCSVReader::SkipRowsAndReadHeader(idx_t skip_rows, bool skip_header)
 }
 
 // Helper function to generate column names
-static string GenerateColumnName(const idx_t total_cols, const idx_t col_number, const string prefix = "column") {
+static string GenerateColumnName(const idx_t total_cols, const idx_t col_number, const string &prefix = "column") {
 	int max_digits = NumericHelper::UnsignedLength(total_cols - 1);
 	int digits = NumericHelper::UnsignedLength(col_number);
 	string leading_zeros = string("0", max_digits - digits);
@@ -341,7 +341,7 @@ void BufferedCSVReader::SetDateFormat(const string &format_specifier, const Logi
 	StrTimeFormat::ParseFormatSpecifier(date_format.format_specifier, date_format);
 }
 
-bool BufferedCSVReader::TryCastValue(Value value, LogicalType sql_type) {
+bool BufferedCSVReader::TryCastValue(const Value &value, const LogicalType &sql_type) {
 	try {
 		if (options.has_format[LogicalTypeId::DATE] && sql_type.id() == LogicalTypeId::DATE) {
 			options.date_format[LogicalTypeId::DATE].ParseDate(string_t(value.str_value));
@@ -357,7 +357,7 @@ bool BufferedCSVReader::TryCastValue(Value value, LogicalType sql_type) {
 	return false;
 }
 
-bool BufferedCSVReader::TryCastVector(Vector &parse_chunk_col, idx_t size, LogicalType sql_type) {
+bool BufferedCSVReader::TryCastVector(Vector &parse_chunk_col, idx_t size, const LogicalType &sql_type) {
 	try {
 		// try vector-cast from string to sql_type
 		Vector dummy_result(sql_type);
@@ -398,7 +398,7 @@ void BufferedCSVReader::PrepareCandidateSets() {
 	}
 }
 
-vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_types) {
+vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &requested_types) {
 	for (auto &type : requested_types) {
 		// auto detect for blobs not supported: there may be invalid UTF-8 in the file
 		if (type.id() == LogicalTypeId::BLOB) {

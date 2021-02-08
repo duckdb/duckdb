@@ -11,7 +11,7 @@ ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(PhysicalType value)
 }
 template <>
 ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(LogicalType value) {
-	return ExceptionFormatValue(value.ToString());
+	return ExceptionFormatValue(value.ToString()); // NOLINT: templating requires us to copy value here
 }
 template <>
 ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(float value) {
@@ -23,7 +23,7 @@ ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(double value) {
 }
 template <>
 ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(string value) {
-	return ExceptionFormatValue(string(value));
+	return ExceptionFormatValue(move(value));
 }
 template <>
 ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const char *value) {
@@ -34,7 +34,7 @@ ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(char *value) {
 	return ExceptionFormatValue(string(value));
 }
 
-string ExceptionFormatValue::Format(string msg, vector<ExceptionFormatValue> &values) {
+string ExceptionFormatValue::Format(const string &msg, vector<ExceptionFormatValue> &values) {
 	std::vector<duckdb_fmt::basic_format_arg<duckdb_fmt::printf_context>> format_args;
 	for (auto &val : values) {
 		switch (val.type) {

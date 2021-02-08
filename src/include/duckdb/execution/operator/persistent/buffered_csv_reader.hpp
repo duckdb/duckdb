@@ -128,8 +128,8 @@ class BufferedCSVReader {
 
 public:
 	BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options,
-	                  vector<LogicalType> requested_types = vector<LogicalType>());
-	BufferedCSVReader(BufferedCSVReaderOptions options, vector<LogicalType> requested_types,
+	                  const vector<LogicalType> &requested_types = vector<LogicalType>());
+	BufferedCSVReader(BufferedCSVReaderOptions options, const vector<LogicalType> &requested_types,
 	                  unique_ptr<std::istream> source);
 
 	BufferedCSVReaderOptions options;
@@ -171,7 +171,7 @@ public:
 
 private:
 	//! Initialize Parser
-	void Initialize(vector<LogicalType> requested_types);
+	void Initialize(const vector<LogicalType> &requested_types);
 	//! Initializes the parse_chunk with varchar columns and aligns info with new number of cols
 	void InitParseChunk(idx_t num_cols);
 	//! Initializes the TextSearchShiftArrays for complex parser
@@ -179,13 +179,13 @@ private:
 	//! Extract a single DataChunk from the CSV file and stores it in insert_chunk
 	void ParseCSV(ParserMode mode, DataChunk &insert_chunk = DUMMY_CHUNK);
 	//! Sniffs CSV dialect and determines skip rows, header row, column types and column names
-	vector<LogicalType> SniffCSV(vector<LogicalType> requested_types);
+	vector<LogicalType> SniffCSV(const vector<LogicalType> &requested_types);
 	//! Change the date format for the type to the string
 	void SetDateFormat(const string &format_specifier, const LogicalTypeId &sql_type);
 	//! Try to cast a string value to the specified sql type
-	bool TryCastValue(Value value, LogicalType sql_type);
+	bool TryCastValue(const Value &value, const LogicalType &sql_type);
 	//! Try to cast a vector of values to the specified sql type
-	bool TryCastVector(Vector &parse_chunk_col, idx_t size, LogicalType sql_type);
+	bool TryCastVector(Vector &parse_chunk_col, idx_t size, const LogicalType &sql_type);
 	//! Skips skip_rows, reads header row from input stream
 	void SkipRowsAndReadHeader(idx_t skip_rows, bool skip_header);
 	//! Jumps back to the beginning of input stream and resets necessary internal states
@@ -213,7 +213,7 @@ private:
 	//! Reads a new buffer from the CSV file if the current one has been exhausted
 	bool ReadBuffer(idx_t &start);
 
-	unique_ptr<std::istream> OpenCSV(ClientContext &context, BufferedCSVReaderOptions options);
+	unique_ptr<std::istream> OpenCSV(ClientContext &context, const BufferedCSVReaderOptions &options);
 };
 
 } // namespace duckdb

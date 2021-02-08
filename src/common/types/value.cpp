@@ -26,7 +26,7 @@
 
 namespace duckdb {
 
-Value::Value(LogicalType type) : type_(type), is_null(true) {
+Value::Value(LogicalType type) : type_(move(type)), is_null(true) {
 }
 
 Value::Value(int32_t val) : type_(LogicalType::INTEGER), is_null(false) {
@@ -57,15 +57,14 @@ Value::Value(const char *val) : Value(val ? string(val) : string()) {
 Value::Value(string_t val) : Value(string(val.GetDataUnsafe(), val.GetSize())) {
 }
 
-Value::Value(string val) : type_(LogicalType::VARCHAR), is_null(false) {
-	auto utf_type = Utf8Proc::Analyze(val.c_str(), val.size());
+Value::Value(string val) : type_(LogicalType::VARCHAR), is_null(false), str_value(move(val)) {
+	auto utf_type = Utf8Proc::Analyze(str_value.c_str(), str_value.size());
 	if (utf_type == UnicodeType::INVALID) {
 		throw Exception("String value is not valid UTF8");
 	}
-	str_value = val;
 }
 
-Value Value::MinimumValue(LogicalType type) {
+Value Value::MinimumValue(const LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
 		return Value::BOOLEAN(false);
@@ -123,7 +122,7 @@ Value Value::MinimumValue(LogicalType type) {
 	}
 }
 
-Value Value::MaximumValue(LogicalType type) {
+Value Value::MaximumValue(const LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
 		return Value::BOOLEAN(false);
@@ -406,7 +405,7 @@ Value Value::BLOB(const_data_ptr_t data, idx_t len) {
 	return result;
 }
 
-Value Value::BLOB(string data) {
+Value Value::BLOB(const string &data) {
 	Value result(LogicalType::BLOB);
 	result.is_null = false;
 	result.str_value = Blob::ToBlob(string_t(data));
@@ -485,7 +484,7 @@ Value Value::CreateValue(const char *value) {
 }
 
 template <>
-Value Value::CreateValue(string value) {
+Value Value::CreateValue(string value) { // NOLINT: required for templating
 	return Value::BLOB(value);
 }
 
@@ -607,7 +606,7 @@ uintptr_t Value::GetValue() const {
 	return value_.pointer;
 }
 
-Value Value::Numeric(LogicalType type, int64_t value) {
+Value Value::Numeric(const LogicalType &type, int64_t value) {
 	switch (type.id()) {
 	case LogicalTypeId::TINYINT:
 		D_ASSERT(value <= NumericLimits<int8_t>::Maximum());
@@ -720,7 +719,7 @@ double &Value::GetValueUnsafe() {
 	return value_.double_;
 }
 
-Value Value::Numeric(LogicalType type, hugeint_t value) {
+Value Value::Numeric(const LogicalType &type, hugeint_t value) {
 	switch (type.id()) {
 	case LogicalTypeId::HUGEINT:
 		return Value::HUGEINT(value);
@@ -891,7 +890,7 @@ bool Value::operator>=(const int64_t &rhs) const {
 	return *this >= Value::Numeric(type_, rhs);
 }
 
-Value Value::CastAs(LogicalType target_type, bool strict) const {
+Value Value::CastAs(const LogicalType &target_type, bool strict) const {
 	if (type_ == target_type) {
 		return Copy();
 	}
@@ -902,7 +901,7 @@ Value Value::CastAs(LogicalType target_type, bool strict) const {
 	return result.GetValue(0);
 }
 
-bool Value::TryCastAs(LogicalType target_type, bool strict) {
+bool Value::TryCastAs(const LogicalType &target_type, bool strict) {
 	try {
 		Value new_value = CastAs(target_type, strict);
 		type_ = target_type;
@@ -1037,7 +1036,7 @@ void Value::Print() {
 	Printer::Print(ToString());
 }
 
-bool Value::ValuesAreEqual(Value result_value, Value value) {
+bool Value::ValuesAreEqual(const Value &result_value, const Value &value) {
 	if (result_value.is_null && value.is_null) {
 		// NULL = NULL in checking code
 		return true;

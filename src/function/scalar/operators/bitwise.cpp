@@ -4,7 +4,7 @@
 namespace duckdb {
 
 template <class OP>
-static scalar_function_t GetScalarIntegerUnaryFunction(LogicalType type) {
+static scalar_function_t GetScalarIntegerUnaryFunction(const LogicalType &type) {
 	scalar_function_t function;
 	switch (type.id()) {
 	case LogicalTypeId::TINYINT:
@@ -41,7 +41,7 @@ static scalar_function_t GetScalarIntegerUnaryFunction(LogicalType type) {
 }
 
 template <class OP>
-static scalar_function_t GetScalarIntegerBinaryFunction(LogicalType type) {
+static scalar_function_t GetScalarIntegerBinaryFunction(const LogicalType &type) {
 	scalar_function_t function;
 	switch (type.id()) {
 	case LogicalTypeId::TINYINT:

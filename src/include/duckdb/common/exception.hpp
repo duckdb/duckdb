@@ -78,7 +78,7 @@ enum class ExceptionType {
 class Exception : public std::exception {
 public:
 	explicit Exception(string message);
-	Exception(ExceptionType exception_type, string message);
+	Exception(ExceptionType exception_type, const string &message);
 
 	ExceptionType type;
 
@@ -93,10 +93,10 @@ public:
 		return ConstructMessageRecursive(msg, values, params...);
 	}
 
-	static string ConstructMessageRecursive(string msg, vector<ExceptionFormatValue> &values);
+	static string ConstructMessageRecursive(const string &msg, vector<ExceptionFormatValue> &values);
 
 	template <class T, typename... Args>
-	static string ConstructMessageRecursive(string msg, vector<ExceptionFormatValue> &values, T param, Args... params) {
+	static string ConstructMessageRecursive(const string &msg, vector<ExceptionFormatValue> &values, T param, Args... params) {
 		values.push_back(ExceptionFormatValue::CreateFormatValue<T>(param));
 		return ConstructMessageRecursive(msg, values, params...);
 	}
@@ -259,19 +259,19 @@ public:
 class CastException : public Exception {
 public:
 	CastException(const PhysicalType origType, const PhysicalType newType);
-	CastException(const LogicalType origType, const LogicalType newType);
+	CastException(const LogicalType &origType, const LogicalType &newType);
 };
 
 class InvalidTypeException : public Exception {
 public:
-	InvalidTypeException(PhysicalType type, string msg);
-	InvalidTypeException(LogicalType type, string msg);
+	InvalidTypeException(PhysicalType type, const string &msg);
+	InvalidTypeException(const LogicalType &type, const string &msg);
 };
 
 class TypeMismatchException : public Exception {
 public:
-	TypeMismatchException(const PhysicalType type_1, const PhysicalType type_2, string msg);
-	TypeMismatchException(const LogicalType type_1, const LogicalType type_2, string msg);
+	TypeMismatchException(const PhysicalType type_1, const PhysicalType type_2, const string &msg);
+	TypeMismatchException(const LogicalType &type_1, const LogicalType &type_2, const string &msg);
 };
 
 class ValueOutOfRangeException : public Exception {

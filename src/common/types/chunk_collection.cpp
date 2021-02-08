@@ -480,7 +480,7 @@ vector<Value> ChunkCollection::GetRow(idx_t index) {
 	return values;
 }
 
-void ChunkCollection::SetValue(idx_t column, idx_t index, Value value) {
+void ChunkCollection::SetValue(idx_t column, idx_t index, const Value &value) {
 	chunks[LocateChunk(index)]->SetValue(column, index % STANDARD_VECTOR_SIZE, value);
 }
 

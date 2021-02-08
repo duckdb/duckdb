@@ -56,11 +56,11 @@ void Connection::ForceParallelism() {
 	context->force_parallelism = true;
 }
 
-unique_ptr<QueryResult> Connection::SendQuery(string query) {
+unique_ptr<QueryResult> Connection::SendQuery(const string &query) {
 	return context->Query(query, true);
 }
 
-unique_ptr<MaterializedQueryResult> Connection::Query(string query) {
+unique_ptr<MaterializedQueryResult> Connection::Query(const string &query) {
 	auto result = context->Query(query, false);
 	D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
 	return unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
@@ -72,7 +72,7 @@ unique_ptr<MaterializedQueryResult> Connection::Query(unique_ptr<SQLStatement> s
 	return unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
 }
 
-unique_ptr<PreparedStatement> Connection::Prepare(string query) {
+unique_ptr<PreparedStatement> Connection::Prepare(const string &query) {
 	return context->Prepare(query);
 }
 
@@ -80,7 +80,7 @@ unique_ptr<PreparedStatement> Connection::Prepare(unique_ptr<SQLStatement> state
 	return context->Prepare(move(statement));
 }
 
-unique_ptr<QueryResult> Connection::QueryParamsRecursive(string query, vector<Value> &values) {
+unique_ptr<QueryResult> Connection::QueryParamsRecursive(const string &query, vector<Value> &values) {
 	auto statement = Prepare(query);
 	if (!statement->success) {
 		return make_unique<MaterializedQueryResult>(statement->error);
@@ -88,15 +88,15 @@ unique_ptr<QueryResult> Connection::QueryParamsRecursive(string query, vector<Va
 	return statement->Execute(values, false);
 }
 
-unique_ptr<TableDescription> Connection::TableInfo(string table_name) {
+unique_ptr<TableDescription> Connection::TableInfo(const string &table_name) {
 	return TableInfo(DEFAULT_SCHEMA, table_name);
 }
 
-unique_ptr<TableDescription> Connection::TableInfo(string schema_name, string table_name) {
+unique_ptr<TableDescription> Connection::TableInfo(const string &schema_name, const string &table_name) {
 	return context->TableInfo(schema_name, table_name);
 }
 
-vector<unique_ptr<SQLStatement>> Connection::ExtractStatements(string query) {
+vector<unique_ptr<SQLStatement>> Connection::ExtractStatements(const string &query) {
 	return context->ParseStatements(query);
 }
 
@@ -104,11 +104,11 @@ void Connection::Append(TableDescription &description, DataChunk &chunk) {
 	context->Append(description, chunk);
 }
 
-shared_ptr<Relation> Connection::Table(string table_name) {
-	return Table(DEFAULT_SCHEMA, move(table_name));
+shared_ptr<Relation> Connection::Table(const string &table_name) {
+	return Table(DEFAULT_SCHEMA, table_name);
 }
 
-shared_ptr<Relation> Connection::Table(string schema_name, string table_name) {
+shared_ptr<Relation> Connection::Table(const string &schema_name, const string &table_name) {
 	auto table_info = TableInfo(schema_name, table_name);
 	if (!table_info) {
 		throw Exception("Table does not exist!");
@@ -148,7 +148,7 @@ shared_ptr<Relation> Connection::Values(string values) {
 }
 
 shared_ptr<Relation> Connection::Values(string values, vector<string> column_names, string alias) {
-	return make_shared<ValueRelation>(*context, move(values), move(column_names), alias);
+	return make_shared<ValueRelation>(*context, move(values), move(column_names), move(alias));
 }
 
 shared_ptr<Relation> Connection::ReadCSV(string csv_file) {
@@ -159,7 +159,7 @@ shared_ptr<Relation> Connection::ReadCSV(string csv_file) {
 	for (idx_t i = 0; i < reader.sql_types.size(); i++) {
 		column_list.emplace_back(reader.col_names[i], reader.sql_types[i]);
 	}
-	return make_shared<ReadCSVRelation>(*context, csv_file, move(column_list), true);
+	return make_shared<ReadCSVRelation>(*context, move(csv_file), move(column_list), true);
 }
 
 shared_ptr<Relation> Connection::ReadCSV(string csv_file, vector<string> columns) {
@@ -172,7 +172,7 @@ shared_ptr<Relation> Connection::ReadCSV(string csv_file, vector<string> columns
 		}
 		column_list.push_back(move(col_list[0]));
 	}
-	return make_shared<ReadCSVRelation>(*context, csv_file, move(column_list));
+	return make_shared<ReadCSVRelation>(*context, move(csv_file), move(column_list));
 }
 
 void Connection::BeginTransaction() {

@@ -228,15 +228,16 @@ idx_t StringUtil::LevenshteinDistance(const string &s1, const string &s2) {
 	return array.Score(len1, len2);
 }
 
-vector<string> StringUtil::TopNLevenshtein(vector<string> strings, const string &target, idx_t n, idx_t threshold) {
+vector<string> StringUtil::TopNLevenshtein(const vector<string> &strings, const string &target, idx_t n, idx_t threshold) {
 	vector<pair<string, idx_t>> scores;
+	scores.reserve(strings.size());
 	for (auto &str : strings) {
 		scores.emplace_back(str, LevenshteinDistance(str, target));
 	}
 	return TopNStrings(scores, n, threshold);
 }
 
-string StringUtil::CandidatesMessage(const vector<string> &candidates, string candidate) {
+string StringUtil::CandidatesMessage(const vector<string> &candidates, const string &candidate) {
 	string result_str;
 	if (candidates.size() > 0) {
 		result_str = "\n" + candidate + ": ";

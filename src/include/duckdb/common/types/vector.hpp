@@ -51,7 +51,7 @@ class Vector {
 public:
 	Vector();
 	//! Create a vector of size one holding the passed on value
-	explicit Vector(Value value);
+	explicit Vector(const Value &value);
 	//! Create an empty standard vector with a type, equivalent to calling Vector(type, true, false)
 	explicit Vector(LogicalType type);
 	//! Create a non-owning vector that references the specified data
@@ -91,7 +91,7 @@ public:
 
 	//! Creates the data of this vector with the specified type. Any data that
 	//! is currently in the vector is destroyed.
-	void Initialize(LogicalType new_type = LogicalType::INVALID, bool zero_data = false);
+	void Initialize(const LogicalType &new_type = LogicalType::INVALID, bool zero_data = false);
 
 	//! Converts this Vector to a printable string representation
 	string ToString(idx_t count) const;
@@ -119,7 +119,7 @@ public:
 	//! Returns the [index] element of the Vector as a Value.
 	Value GetValue(idx_t index) const;
 	//! Sets the [index] element of the Vector to the specified Value.
-	void SetValue(idx_t index, Value val);
+	void SetValue(idx_t index, const Value &val);
 
 	//! Serializes a Vector to a stand-alone binary blob
 	void Serialize(idx_t count, Serializer &serializer);
@@ -259,7 +259,7 @@ struct StringVector {
 struct StructVector {
 	static bool HasEntries(const Vector &vector);
 	static child_list_t<unique_ptr<Vector>> &GetEntries(const Vector &vector);
-	static void AddEntry(Vector &vector, string name, unique_ptr<Vector> entry);
+	static void AddEntry(Vector &vector, const string &name, unique_ptr<Vector> entry);
 };
 
 struct SequenceVector {

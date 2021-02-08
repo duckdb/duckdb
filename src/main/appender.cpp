@@ -11,7 +11,7 @@
 
 namespace duckdb {
 
-Appender::Appender(Connection &con, string schema_name, string table_name) : context(con.context), column(0) {
+Appender::Appender(Connection &con, const string &schema_name, const string &table_name) : context(con.context), column(0) {
 	description = con.TableInfo(schema_name, table_name);
 	if (!description) {
 		// table could not be found
@@ -25,7 +25,7 @@ Appender::Appender(Connection &con, string schema_name, string table_name) : con
 	}
 }
 
-Appender::Appender(Connection &con, string table_name) : Appender(con, DEFAULT_SCHEMA, table_name) {
+Appender::Appender(Connection &con, const string &table_name) : Appender(con, DEFAULT_SCHEMA, table_name) {
 }
 
 Appender::~Appender() {
@@ -159,7 +159,7 @@ void Appender::Append(std::nullptr_t value) {
 	FlatVector::SetNull(col, chunk.size(), true);
 }
 
-void Appender::AppendValue(Value value) {
+void Appender::AppendValue(const Value &value) {
 	chunk.SetValue(column, chunk.size(), value);
 	column++;
 }

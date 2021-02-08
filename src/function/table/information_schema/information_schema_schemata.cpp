@@ -19,25 +19,25 @@ static unique_ptr<FunctionData> InformationSchemaSchemataBind(ClientContext &con
                                                                  unordered_map<string, Value> &named_parameters,
                                                                  vector<LogicalType> &return_types,
                                                                  vector<string> &names) {
-	names.push_back("catalog_name");
+	names.emplace_back("catalog_name");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("schema_name");
+	names.emplace_back("schema_name");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("schema_owner");
+	names.emplace_back("schema_owner");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("default_character_set_catalog");
+	names.emplace_back("default_character_set_catalog");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("default_character_set_schema");
+	names.emplace_back("default_character_set_schema");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("default_character_set_name");
+	names.emplace_back("default_character_set_name");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("sql_path");
+	names.emplace_back("sql_path");
 	return_types.push_back(LogicalType::VARCHAR);
 
 	return nullptr;

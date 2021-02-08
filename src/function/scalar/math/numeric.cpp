@@ -12,7 +12,7 @@
 namespace duckdb {
 
 template <class TR, class OP>
-static scalar_function_t GetScalarIntegerUnaryFunctionFixedReturn(LogicalType type) {
+static scalar_function_t GetScalarIntegerUnaryFunctionFixedReturn(const LogicalType &type) {
 	scalar_function_t function;
 	switch (type.id()) {
 	case LogicalTypeId::TINYINT:

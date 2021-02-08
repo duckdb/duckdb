@@ -95,7 +95,7 @@ static void LeastGreatestFunction(DataChunk &args, ExpressionState &state, Vecto
 }
 
 template <class OP>
-static void RegisterLeastGreatest(BuiltinFunctions &set, string fun_name) {
+static void RegisterLeastGreatest(BuiltinFunctions &set, const string &fun_name) {
 	ScalarFunctionSet fun_set(fun_name);
 	fun_set.AddFunction(ScalarFunction({LogicalType::DATE}, LogicalType::DATE, LeastGreatestFunction<date_t, OP>, false,
 	                                   nullptr, nullptr, nullptr, LogicalType::DATE));

@@ -17,23 +17,23 @@
 
 namespace duckdb {
 
-Vector::Vector(LogicalType type, bool create_data, bool zero_data)
-    : vector_type(VectorType::FLAT_VECTOR), type(type), data(nullptr) {
+Vector::Vector(LogicalType type_p, bool create_data, bool zero_data)
+    : vector_type(VectorType::FLAT_VECTOR), type(move(type_p)), data(nullptr) {
 	if (create_data) {
 		Initialize(type, zero_data);
 	}
 }
 
-Vector::Vector(LogicalType type) : Vector(type, true, false) {
+Vector::Vector(LogicalType type) : Vector(move(type), true, false) {
 }
 
-Vector::Vector(LogicalType type, data_ptr_t dataptr) : vector_type(VectorType::FLAT_VECTOR), type(type), data(dataptr) {
+Vector::Vector(LogicalType type_p, data_ptr_t dataptr) : vector_type(VectorType::FLAT_VECTOR), type(move(type_p)), data(dataptr) {
 	if (dataptr && type.id() == LogicalTypeId::INVALID) {
 		throw InvalidTypeException(type, "Cannot create a vector of type INVALID!");
 	}
 }
 
-Vector::Vector(Value value) : vector_type(VectorType::CONSTANT_VECTOR) {
+Vector::Vector(const Value &value) : vector_type(VectorType::CONSTANT_VECTOR) {
 	Reference(value);
 }
 
@@ -41,7 +41,7 @@ Vector::Vector() : vector_type(VectorType::FLAT_VECTOR), type(LogicalTypeId::INV
 }
 
 Vector::Vector(Vector &&other) noexcept
-    : vector_type(other.vector_type), type(other.type), data(other.data), nullmask(other.nullmask),
+    : vector_type(move(other.vector_type)), type(move(other.type)), data(move(other.data)), nullmask(move(other.nullmask)),
       buffer(move(other.buffer)), auxiliary(move(other.auxiliary)) {
 }
 
@@ -123,7 +123,7 @@ void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
 	}
 }
 
-void Vector::Initialize(LogicalType new_type, bool zero_data) {
+void Vector::Initialize(const LogicalType &new_type, bool zero_data) {
 	if (new_type.id() != LogicalTypeId::INVALID) {
 		type = new_type;
 	}
@@ -140,12 +140,12 @@ void Vector::Initialize(LogicalType new_type, bool zero_data) {
 	}
 }
 
-void Vector::SetValue(idx_t index, Value val) {
+void Vector::SetValue(idx_t index, const Value &val) {
 	if (vector_type == VectorType::DICTIONARY_VECTOR) {
 		// dictionary: apply dictionary and forward to child
 		auto &sel_vector = DictionaryVector::SelVector(*this);
 		auto &child = DictionaryVector::Child(*this);
-		return child.SetValue(sel_vector.get_index(index), move(val));
+		return child.SetValue(sel_vector.get_index(index), val);
 	}
 	if (val.type() != type) {
 		SetValue(index, val.CastAs(type));
@@ -943,7 +943,7 @@ child_list_t<unique_ptr<Vector>> &StructVector::GetEntries(const Vector &vector)
 	return ((VectorStructBuffer *)vector.auxiliary.get())->GetChildren();
 }
 
-void StructVector::AddEntry(Vector &vector, string name, unique_ptr<Vector> entry) {
+void StructVector::AddEntry(Vector &vector, const string &name, unique_ptr<Vector> entry) {
 	// TODO asser that an entry with this name does not already exist
 	D_ASSERT(vector.type.id() == LogicalTypeId::STRUCT);
 	D_ASSERT(vector.vector_type == VectorType::FLAT_VECTOR || vector.vector_type == VectorType::CONSTANT_VECTOR);

@@ -132,7 +132,7 @@ string Hugeint::ToString(hugeint_t input) {
 			break;
 		}
 		input = Hugeint::DivModPositive(input, 10, remainder);
-		result = string(1, '0' + remainder) + result;
+		result = string(1, '0' + remainder) + result; //NOLINT
 	}
 	if (result.empty()) {
 		// value is zero

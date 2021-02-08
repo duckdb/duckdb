@@ -303,7 +303,7 @@ struct LogicalType {
 	bool IsMoreGenericThan(LogicalType &other) const;
 	hash_t Hash() const;
 
-	static LogicalType MaxLogicalType(LogicalType left, LogicalType right);
+	static LogicalType MaxLogicalType(const LogicalType &left, const LogicalType &right);
 
 	//! Gets the decimal properties of a numeric type. Fails if the type is not numeric.
 	bool GetDecimalProperties(uint8_t &width, uint8_t &scale) const;
@@ -360,7 +360,7 @@ public:
 
 string LogicalTypeIdToString(LogicalTypeId type);
 
-LogicalType TransformStringToLogicalType(string str);
+LogicalType TransformStringToLogicalType(const string &str);
 
 //! Returns the PhysicalType for the given type
 template <class T>

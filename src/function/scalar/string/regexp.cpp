@@ -15,7 +15,7 @@ namespace duckdb {
 RegexpMatchesBindData::RegexpMatchesBindData(duckdb_re2::RE2::Options options,
                                              unique_ptr<duckdb_re2::RE2> constant_pattern, string range_min,
                                              string range_max, bool range_success)
-    : options(move(options)), constant_pattern(std::move(constant_pattern)), range_min(range_min), range_max(range_max),
+    : options(options), constant_pattern(std::move(constant_pattern)), range_min(range_min), range_max(range_max),
       range_success(range_success) {
 }
 
@@ -132,10 +132,10 @@ static unique_ptr<FunctionData> RegexpMatchesBind(ClientContext &context, Scalar
 
 			string range_min, range_max;
 			auto range_success = re->PossibleMatchRange(&range_min, &range_max, 1000);
-			return make_unique<RegexpMatchesBindData>(move(options), move(re), range_min, range_max, range_success);
+			return make_unique<RegexpMatchesBindData>(options, move(re), range_min, range_max, range_success);
 		}
 	}
-	return make_unique<RegexpMatchesBindData>(move(options), nullptr, "", "", false);
+	return make_unique<RegexpMatchesBindData>(options, nullptr, "", "", false);
 }
 
 static void RegexReplaceFunction(DataChunk &args, ExpressionState &state, Vector &result) {

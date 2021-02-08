@@ -46,12 +46,12 @@ public:
 	}
 
 	//! Create the lowest possible value of a given type (numeric only)
-	static Value MinimumValue(LogicalType type);
+	static Value MinimumValue(const LogicalType &type);
 	//! Create the highest possible value of a given type (numeric only)
-	static Value MaximumValue(LogicalType type);
+	static Value MaximumValue(const LogicalType &type);
 	//! Create a Numeric value of the specified type with the specified value
-	static Value Numeric(LogicalType type, int64_t value);
-	static Value Numeric(LogicalType type, hugeint_t value);
+	static Value Numeric(const LogicalType &type, int64_t value);
+	static Value Numeric(const LogicalType &type, hugeint_t value);
 
 	//! Create a tinyint Value from a specified value
 	static Value BOOLEAN(int8_t value);
@@ -112,7 +112,7 @@ public:
 	//! Create a blob Value from a data pointer and a length: no bytes are interpreted
 	static Value BLOB(const_data_ptr_t data, idx_t len);
 	//! Creates a blob by casting a specified string to a blob (i.e. interpreting \x characters)
-	static Value BLOB(string data);
+	static Value BLOB(const string &data);
 
 	template <class T>
 	T GetValue() const {
@@ -138,9 +138,9 @@ public:
 	DUCKDB_API string ToString() const;
 
 	//! Cast this value to another type
-	Value CastAs(LogicalType target_type, bool strict = false) const;
+	Value CastAs(const LogicalType &target_type, bool strict = false) const;
 	//! Tries to cast value to another type, throws exception if its not possible
-	bool TryCastAs(LogicalType target_type, bool strict = false);
+	bool TryCastAs(const LogicalType &target_type, bool strict = false);
 
 	//! Serializes a Value to a stand-alone binary blob
 	void Serialize(Serializer &serializer);
@@ -183,7 +183,7 @@ public:
 
 	//! Returns true if the values are (approximately) equivalent. Note this is NOT the SQL equivalence. For this
 	//! function, NULL values are equivalent and floating point values that are close are equivalent.
-	static bool ValuesAreEqual(Value result_value, Value value);
+	static bool ValuesAreEqual(const Value &result_value, const Value &value);
 
 	friend std::ostream &operator<<(std::ostream &out, const Value &val) {
 		out << val.ToString();

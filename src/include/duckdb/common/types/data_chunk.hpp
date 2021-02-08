@@ -57,7 +57,7 @@ public:
 	}
 
 	Value GetValue(idx_t col_idx, idx_t index) const;
-	void SetValue(idx_t col_idx, idx_t index, Value val);
+	void SetValue(idx_t col_idx, idx_t index, const Value &val);
 
 	//! Set the DataChunk to reference another data chunk
 	void Reference(DataChunk &chunk);

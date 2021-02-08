@@ -1158,7 +1158,7 @@ string_t StringCast::Operation(interval_t input, Vector &vector) {
 
 template <>
 duckdb::string_t StringCast::Operation(hugeint_t input, Vector &vector) {
-	return HugeintToStringCast::FormatSigned(move(input), vector);
+	return HugeintToStringCast::FormatSigned(input, vector);
 }
 
 //===--------------------------------------------------------------------===//
