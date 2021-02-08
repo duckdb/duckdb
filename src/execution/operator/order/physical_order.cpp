@@ -316,7 +316,7 @@ private:
 
 		// copy data in correct order and unpin the new block when done
 		for (idx_t i = 0; i < old_block.count; i++) {
-			memcpy(dataptr + idxs[i] * chunk.entry_size, key_locations[i], chunk.entry_size);
+			memcpy(dataptr + i * chunk.entry_size, key_locations[idxs[i]], chunk.entry_size);
 		}
 
 		// replace old block with new block, and unregister the old block
@@ -337,67 +337,105 @@ private:
 class PhysicalOrderMergeTask : public Task {
 public:
 	PhysicalOrderMergeTask(Pipeline &parent_, OrderGlobalState &state_, BufferManager &buffer_manager_,
-	                       RowDataBlock &sort_l_, RowDataBlock &sort_r_, RowDataBlock &payl_l_, RowDataBlock &payl_r_)
-	    : parent(parent_), state(state_), buffer_manager(buffer_manager_), sort_l(sort_l_), sort_r(sort_r_),
-	      payl_l(payl_l_), payl_r(payl_r_) {
+	                       vector<std::pair<RowDataBlock *, RowDataBlock *>> l_blocks_,
+	                       vector<std::pair<RowDataBlock *, RowDataBlock *>> r_blocks_,
+	                       vector<std::pair<RowDataBlock, RowDataBlock>> &result_, idx_t l_start_, idx_t r_start_,
+	                       idx_t l_end_, idx_t r_end_)
+	    : parent(parent_), state(state_), buffer_manager(buffer_manager_), l_blocks(l_blocks_), r_blocks(r_blocks_),
+	      result(result_), l_start(l_start_), r_start(r_start_), l_end(l_end_), r_end(r_end_) {
 	}
 
 	void Execute() override {
-		auto l_handle = buffer_manager.Pin(sort_l.block);
-		auto l_dataptr = l_handle->node->buffer;
-		auto l_locations = unique_ptr<data_ptr_t[]>(new data_ptr_t[sort_l.count]);
-		for (idx_t i = 0; i < sort_l.count; i++) {
-			l_locations[i] = l_dataptr;
-			l_dataptr += state.sorting.entry_size;
+		idx_t l_block_idx = 0, r_block_idx = 0;
+
+		auto l_sort_handle = buffer_manager.Pin(l_blocks[l_block_idx].first->block);
+		auto l_payl_handle = buffer_manager.Pin(l_blocks[l_block_idx].second->block);
+		auto r_sort_handle = buffer_manager.Pin(r_blocks[r_block_idx].first->block);
+		auto r_payl_handle = buffer_manager.Pin(r_blocks[r_block_idx].second->block);
+		auto l_sort_ptr = l_sort_handle->node->buffer + l_start * state.sorting.entry_size;
+		auto l_payl_ptr = l_payl_handle->node->buffer + l_start * state.payload.entry_size;
+		auto r_sort_ptr = r_sort_handle->node->buffer + r_start * state.sorting.entry_size;
+		auto r_payl_ptr = r_payl_handle->node->buffer + r_start * state.payload.entry_size;
+
+		idx_t l_offset = 0, r_offset = 0;
+		idx_t l_count = (l_block_idx == l_blocks.size() - 1 ? l_end : l_blocks[l_block_idx].first->count) - l_start;
+		idx_t r_count = (r_block_idx == r_blocks.size() - 1 ? r_end : r_blocks[r_block_idx].first->count) - r_start;
+
+		RowDataBlock write_sort, write_payl;
+		write_sort.count = 0;
+		write_payl.count = 0;
+		write_sort.capacity = state.sorting.block_capacity;
+		write_payl.capacity = state.payload.block_capacity;
+		write_sort.block = buffer_manager.RegisterMemory(write_sort.capacity * state.sorting.entry_size, false);
+		write_payl.block = buffer_manager.RegisterMemory(write_payl.capacity * state.payload.entry_size, false);
+		auto write_sort_handle = buffer_manager.Pin(write_sort.block);
+		auto write_payl_handle = buffer_manager.Pin(write_payl.block);
+		auto write_sort_ptr = write_sort_handle->node->buffer;
+		auto write_payl_ptr = write_payl_handle->node->buffer;
+
+		while (l_offset != l_blocks.size() && r_offset != r_blocks.size()) {
+			// allocate new blocks to write to
+			if (write_sort.count == write_sort.capacity) {
+				// append to result
+				result.push_back(std::make_pair(move(write_sort), move(write_payl)));
+				// initialize new blocks to write to
+				write_sort = RowDataBlock();
+				write_payl = RowDataBlock();
+				write_sort.count = 0;
+				write_payl.count = 0;
+				write_sort.capacity = state.sorting.block_capacity;
+				write_payl.capacity = state.payload.block_capacity;
+				write_sort.block = buffer_manager.RegisterMemory(write_sort.capacity * state.sorting.entry_size, false);
+				write_payl.block = buffer_manager.RegisterMemory(write_payl.capacity * state.payload.entry_size, false);
+				write_sort_handle = buffer_manager.Pin(write_sort.block);
+				write_payl_handle = buffer_manager.Pin(write_payl.block);
+				write_sort_ptr = write_sort_handle->node->buffer;
+				write_payl_ptr = write_payl_handle->node->buffer;
+			}
+			// load a new left or right block if needed
+			if (l_offset == l_count) {
+				l_block_idx++;
+				if (l_block_idx != l_blocks.size()) {
+					l_sort_handle = buffer_manager.Pin(l_blocks[l_block_idx].first->block);
+					l_payl_handle = buffer_manager.Pin(l_blocks[l_block_idx].second->block);
+					l_sort_ptr = l_sort_handle->node->buffer;
+					r_sort_ptr = r_sort_handle->node->buffer;
+					l_offset = 0;
+					l_count = l_block_idx == l_blocks.size() - 1 ? l_end : l_blocks[l_block_idx].first->count;
+				}
+			} else if (r_offset == r_count) {
+				r_block_idx++;
+				if (r_block_idx != r_blocks.size()) {
+					r_sort_handle = buffer_manager.Pin(r_blocks[r_block_idx].first->block);
+					r_payl_handle = buffer_manager.Pin(r_blocks[r_block_idx].second->block);
+					r_sort_ptr = r_sort_handle->node->buffer;
+					r_payl_ptr = r_payl_handle->node->buffer;
+					l_offset = 0;
+					r_count = r_block_idx == r_blocks.size() - 1 ? r_end : r_blocks[r_block_idx].first->count;
+				}
+			}
+			// append data and advance pointers
+			if ((r_block_idx == r_blocks.size() && l_block_idx != l_blocks.size()) ||
+			    compare_tuple(l_sort_ptr, r_sort_ptr, state) <= 0) {
+				memcpy(write_sort_ptr, l_sort_ptr, state.sorting.entry_size);
+				memcpy(write_payl_ptr, l_payl_ptr, state.payload.entry_size);
+				l_sort_ptr += state.sorting.entry_size;
+				l_payl_ptr += state.payload.entry_size;
+				l_offset++;
+			} else {
+				memcpy(write_sort_ptr, r_sort_ptr, state.sorting.entry_size);
+				memcpy(write_payl_ptr, r_payl_ptr, state.payload.entry_size);
+				r_sort_ptr += state.sorting.entry_size;
+				r_payl_ptr += state.payload.entry_size;
+				r_offset++;
+			}
+			write_sort_ptr += state.sorting.entry_size;
+			write_payl_ptr += state.payload.entry_size;
+			write_sort.count++;
+			write_payl.count++;
 		}
-
-		auto r_handle = buffer_manager.Pin(sort_r.block);
-		auto r_dataptr = r_handle->node->buffer;
-		auto r_locations = unique_ptr<data_ptr_t[]>(new data_ptr_t[sort_r.count]);
-		for (idx_t i = 0; i < sort_r.count; i++) {
-			r_locations[i] = r_dataptr;
-			r_dataptr += state.sorting.entry_size;
-		}
-
-		auto l_idxs = unique_ptr<idx_t[]>(new idx_t[sort_l.count]);
-		auto r_idxs = unique_ptr<idx_t[]>(new idx_t[sort_r.count]);
-		Merge(l_locations.get(), r_locations.get(), l_idxs.get(), r_idxs.get());
-
-		RowDataBlock sort_merged;
-		sort_merged.count = sort_l.count + sort_r.count;
-		sort_merged.capacity = sort_l.capacity + sort_r.capacity;
-		sort_merged.block = buffer_manager.RegisterMemory(sort_merged.capacity * state.sorting.entry_size, false);
-		auto sort_merged_handle = buffer_manager.Pin(sort_merged.block);
-		auto sort_merged_dataptr = sort_merged_handle->node->buffer;
-
-		ReOrder(l_idxs.get(), r_idxs.get(), l_locations.get(), r_locations.get(), sort_merged_dataptr);
-
-		l_handle = buffer_manager.Pin(payl_l.block);
-		l_dataptr = l_handle->node->buffer;
-		for (idx_t i = 0; i < payl_l.count; i++) {
-			l_locations[i] = l_dataptr;
-			l_dataptr += state.payload.entry_size;
-		}
-
-		r_handle = buffer_manager.Pin(payl_r.block);
-		r_dataptr = r_handle->node->buffer;
-		for (idx_t i = 0; i < payl_r.count; i++) {
-			r_locations[i] = r_dataptr;
-			r_dataptr += state.payload.entry_size;
-		}
-
-		RowDataBlock payl_merged;
-		payl_merged.count = payl_l.count + payl_r.count;
-		payl_merged.capacity = payl_l.capacity + payl_r.capacity;
-		payl_merged.block = buffer_manager.RegisterMemory(payl_merged.capacity * state.payload.entry_size, false);
-		auto payl_merged_handle = buffer_manager.Pin(payl_merged.block);
-		auto payl_merged_dataptr = payl_merged_handle->node->buffer;
-
-		ReOrder(l_idxs.get(), r_idxs.get(), l_locations.get(), r_locations.get(), payl_merged_dataptr);
 
 		lock_guard<mutex> glock(state.lock);
-		state.sorting.blocks.push_back(sort_merged);
-		state.payload.blocks.push_back(payl_merged);
 		parent.finished_tasks++;
 		// finish the whole pipeline
 		if (parent.total_tasks == parent.finished_tasks) {
@@ -406,60 +444,42 @@ public:
 	}
 
 private:
-	void Merge(data_ptr_t l_locations[], data_ptr_t r_locations[], idx_t l_idxs[], idx_t r_idxs[]) {
-		idx_t l_offset = 0;
-		idx_t r_offset = 0;
-		while (l_offset < sort_l.count || r_offset < sort_r.count) {
-			for (; l_offset < sort_l.count && compare_tuple(l_locations[l_offset], r_locations[r_offset], state) <= 0;
-			     l_offset++) {
-				l_idxs[l_offset] = l_offset + r_offset;
-			}
-			for (; r_offset < sort_r.count && compare_tuple(r_locations[r_offset], l_locations[l_offset], state) <= 0;
-			     r_offset++) {
-				r_idxs[r_offset] = r_offset + l_offset;
-			}
-		}
-	}
-
-	void ReOrder(idx_t l_idxs[], idx_t r_idxs[], data_ptr_t l_locations[], data_ptr_t r_locations[],
-	             data_ptr_t merged) {
-		for (idx_t i = 0; i < sort_l.count; i++) {
-			memcpy(merged + l_idxs[i] * state.sorting.entry_size, l_locations[i], state.sorting.entry_size);
-		}
-		for (idx_t i = 0; i < sort_r.count; i++) {
-			memcpy(merged + r_idxs[i] * state.sorting.entry_size, r_locations[i], state.sorting.entry_size);
-		}
-	}
-
 	Pipeline &parent;
 	OrderGlobalState &state;
 	BufferManager &buffer_manager;
 
-	RowDataBlock sort_l;
-	RowDataBlock sort_r;
-	RowDataBlock payl_l;
-	RowDataBlock payl_r;
+	vector<std::pair<RowDataBlock *, RowDataBlock *>> l_blocks;
+	vector<std::pair<RowDataBlock *, RowDataBlock *>> r_blocks;
+	vector<std::pair<RowDataBlock, RowDataBlock>> &result;
+
+	idx_t l_start;
+	idx_t r_start;
+	idx_t l_end;
+	idx_t r_end;
 };
 
 void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> state) {
 	// finalize: perform the actual sorting
 	auto &sink = (OrderGlobalState &)*state;
+	auto &scheduler = TaskScheduler::GetScheduler(context);
 
 	// schedule sorting tasks for each block
 	for (idx_t i = 0; i < sink.payload.blocks.size(); i++) {
 		auto new_task = make_unique<PhysicalOrderSortTask>(pipeline, sink, BufferManager::GetBufferManager(context), i);
-		TaskScheduler::GetScheduler(context).ScheduleTask(pipeline.token, move(new_task));
+		scheduler.ScheduleTask(pipeline.token, move(new_task));
 	}
 
+	// schedule merging tasks until the data is merged
+	idx_t n_per_thread = MaxValue(sink.sorting.count / scheduler.NumberOfThreads() + 1, sink.sorting.block_capacity);
 	while (sink.payload.blocks.size() > 1) {
 		while (sink.payload.blocks.size() > 1) {
 			auto s_l = sink.sorting.blocks.erase(sink.sorting.blocks.begin());
 			auto s_r = sink.sorting.blocks.erase(sink.sorting.blocks.begin());
 			auto p_l = sink.payload.blocks.erase(sink.payload.blocks.begin());
 			auto p_r = sink.payload.blocks.erase(sink.payload.blocks.begin());
-			auto new_task = make_unique<PhysicalOrderMergeTask>(
-			    pipeline, sink, BufferManager::GetBufferManager(context), *s_l, *s_r, *p_l, *p_r);
-			TaskScheduler::GetScheduler(context).ScheduleTask(pipeline.token, move(new_task));
+			//			auto new_task = make_unique<PhysicalOrderMergeTask>(
+			//			    pipeline, sink, BufferManager::GetBufferManager(context), *s_l, *s_r, *p_l, *p_r);
+			//			scheduler.ScheduleTask(pipeline.token, move(new_task));
 		}
 	}
 	// FIXME: schedule ?? merging tasks

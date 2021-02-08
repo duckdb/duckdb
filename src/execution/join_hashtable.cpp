@@ -37,14 +37,13 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition
 	}
 	// at least one equality is necessary
 	D_ASSERT(equality_types.size() > 0);
-	// the columns
+	// size of nullmask bitset for each column that is pushed in
+	row_chunk.nullmask_size = (build_types.size() + 7) / 8;
 	for (idx_t i = 0; i < build_types.size(); i++) {
 		build_size += GetTypeIdSize(build_types[i].InternalType());
 	}
 	tuple_size = condition_size + build_size;
-	pointer_offset = tuple_size;
-	// size of nullmask bitset for each column that is pushed in
-	row_chunk.nullmask_size = (build_types.size() + 7) / 8;
+	pointer_offset = row_chunk.nullmask_size + tuple_size;
 	// entry size is the tuple size and the size of the hash/next pointer
 	row_chunk.entry_size = row_chunk.nullmask_size + tuple_size + MaxValue(sizeof(hash_t), sizeof(uintptr_t));
 	if (IsRightOuterJoin(join_type)) {
