@@ -262,7 +262,7 @@ public:
 		auto handle = buffer_manager.Pin(sort.block);
 		auto dataptr = handle->node->buffer;
 
-		// fetch a batch of pointers to entries in the blocks
+		// fetch a batch of pointers to entries in the blocks, and initialize idxs
 		auto key_locations = unique_ptr<data_ptr_t[]>(new data_ptr_t[sort.count]);
 		auto idxs = unique_ptr<idx_t[]>(new idx_t[sort.count]);
 		for (idx_t i = 0; i < sort.count; i++) {

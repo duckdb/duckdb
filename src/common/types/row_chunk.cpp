@@ -239,7 +239,7 @@ void RowChunk::DeserializeRowBlock(DataChunk &chunk, RowDataBlock &block, idx_t 
 	data_ptr_t nullmask_locations[STANDARD_VECTOR_SIZE];
 
 	auto handle = buffer_manager.Pin(block.block);
-	auto dataptr = handle->node->buffer;
+	auto dataptr = handle->node->buffer + entry * entry_size;
 
 	// fetch the next vector of entries from the blocks
 	idx_t next = MinValue<idx_t>(STANDARD_VECTOR_SIZE, block.count - entry);
