@@ -1,0 +1,19 @@
+# name: test/sql/aggregate/aggregates/test_skewness.test
+# description: Test skewness aggregate
+# group: [aggregates]
+
+statement ok
+create table aggr(k int, v int, v2 int);
+
+statement ok
+insert into aggr values
+    (1, 10, null),
+    (2, 10, 12),
+    (2, 20, 22),
+    (2, 25, null),
+    (2, 30, 35);
+
+query III
+select kurtosis(k), kurtosis(v), kurtosis(v2) from aggr;
+----
+5.000000	-2.324219	NULL

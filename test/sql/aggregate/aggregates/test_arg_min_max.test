@@ -23,3 +23,9 @@ query II
 select arg_min(name,salary),arg_max(name,salary)  from names;
 ----
 pedro	hannes
+
+# test min_by max_by alias
+query II
+select min_by(name,salary),max_by(name,salary)  from names;
+----
+pedro	hannes
