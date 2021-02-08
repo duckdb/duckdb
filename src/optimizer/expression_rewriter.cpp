@@ -45,7 +45,8 @@ unique_ptr<Expression> ExpressionRewriter::ConstantOrNull(unique_ptr<Expression>
 }
 
 unique_ptr<Expression> ExpressionRewriter::ConstantOrNull(vector<unique_ptr<Expression>> children, Value value) {
-	return make_unique<BoundFunctionExpression>(value.type(), ConstantOrNull::GetFunction(value.type()), move(children),
+	auto type = value.type();
+	return make_unique<BoundFunctionExpression>(type, ConstantOrNull::GetFunction(type), move(children),
 	                                            ConstantOrNull::Bind(move(value)));
 }
 

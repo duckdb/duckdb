@@ -123,7 +123,7 @@ static AggregateFunction GetFirstAggregateTemplated(LogicalType type) {
 	return AggregateFunction::UnaryAggregate<FirstState<T>, T, T, FirstFunction>(type, type);
 }
 
-AggregateFunction GetDecimalFirstFunction(LogicalType type) {
+AggregateFunction GetDecimalFirstFunction(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::DECIMAL);
 	switch (type.InternalType()) {
 	case PhysicalType::INT16:
@@ -137,7 +137,7 @@ AggregateFunction GetDecimalFirstFunction(LogicalType type) {
 	}
 }
 
-AggregateFunction FirstFun::GetFunction(LogicalType type) {
+AggregateFunction FirstFun::GetFunction(const LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
 		return GetFirstAggregateTemplated<int8_t>(type);
@@ -193,7 +193,7 @@ unique_ptr<FunctionData> BindDecimalFirst(ClientContext &context, AggregateFunct
 
 void FirstFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet first("first");
-	for (auto type : LogicalType::ALL_TYPES) {
+	for (auto &type : LogicalType::ALL_TYPES) {
 		if (type.id() == LogicalTypeId::DECIMAL) {
 			first.AddFunction(AggregateFunction({type}, type, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
 			                                    BindDecimalFirst));

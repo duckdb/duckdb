@@ -10,15 +10,20 @@ void Binder::BindNamedParameters(unordered_map<string, LogicalType> &types, unor
 			// create a list of named parameters for the error
 			string named_params;
 			for (auto &kv : types) {
-				named_params += "    " + kv.first + " " + kv.second.ToString() + "\n";
+				named_params += "    ";
+				named_params += kv.first;
+				named_params += " ";
+				named_params += kv.second.ToString();
+				named_params += "\n";
 			}
+			string error_msg;
 			if (named_params.empty()) {
-				named_params = "Function does not accept any named parameters.";
+				error_msg = "Function does not accept any named parameters.";
 			} else {
-				named_params = "Candidates: " + named_params;
+				error_msg = "Candidates: " + named_params;
 			}
 			throw BinderException(error_context.FormatError("Invalid named parameter \"%s\" for function %s\n%s",
-			                                                kv.first, func_name, named_params));
+			                                                kv.first, func_name, error_msg));
 		}
 		if (entry->second.id() != LogicalTypeId::ANY) {
 			kv.second = kv.second.CastAs(entry->second);

@@ -33,7 +33,7 @@ unique_ptr<ParsedExpression> Transformer::TransformUnaryOperator(string op, uniq
 	children.push_back(move(child));
 
 	// built-in operator function
-	auto result = make_unique<FunctionExpression>(schema, op, children);
+	auto result = make_unique<FunctionExpression>(schema, move(op), children);
 	result->is_operator = true;
 	return move(result);
 }

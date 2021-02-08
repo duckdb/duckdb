@@ -159,7 +159,7 @@ void TaskScheduler::SetThreads(int32_t n) {
 }
 
 void TaskScheduler::SetThreadsInternal(int32_t n) {
-#ifdef DUCKDB_NO_THREADS
+#ifndef DUCKDB_NO_THREADS
 	if (threads.size() == idx_t(n - 1)) {
 		return;
 	}

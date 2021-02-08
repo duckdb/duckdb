@@ -234,7 +234,7 @@ unique_ptr<FunctionData> BindDecimalMinMax(ClientContext &context, AggregateFunc
 
 template <class OP, class OP_STRING>
 static void AddMinMaxOperator(AggregateFunctionSet &set) {
-	for (auto type : LogicalType::ALL_TYPES) {
+	for (auto &type : LogicalType::ALL_TYPES) {
 		if (type.id() == LogicalTypeId::VARCHAR || type.id() == LogicalTypeId::BLOB) {
 			set.AddFunction(
 			    AggregateFunction::UnaryAggregateDestructor<MinMaxState<string_t>, string_t, string_t, OP_STRING>(

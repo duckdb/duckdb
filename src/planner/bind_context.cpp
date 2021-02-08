@@ -39,7 +39,7 @@ vector<string> BindContext::GetSimilarBindings(const string &column_name) {
 		auto binding = kv.second.get();
 		for (auto &name : binding->names) {
 			idx_t distance = StringUtil::LevenshteinDistance(name, column_name);
-			scores.push_back(make_pair(binding->alias + "." + name, distance));
+			scores.emplace_back(binding->alias + "." + name, distance);
 		}
 	}
 	return StringUtil::TopNStrings(scores);
@@ -64,7 +64,9 @@ UsingColumnSet *BindContext::GetUsingBinding(const string &column_name) {
 				} else {
 					result_bindings += ", ";
 				}
-				result_bindings += binding + "." + column_name;
+				result_bindings += binding;
+				result_bindings += ".";
+				result_bindings += column_name;
 			}
 			error += result_bindings + "]";
 		}
@@ -157,7 +159,7 @@ BindResult BindContext::BindColumn(ColumnRefExpression &colref, idx_t depth) {
 }
 
 void BindContext::GenerateAllColumnExpressions(vector<unique_ptr<ParsedExpression>> &new_select_list,
-                                               string relation_name) {
+                                               const string &relation_name) {
 	if (bindings_list.size() == 0) {
 		throw BinderException("SELECT * expression without FROM clause!");
 	}
@@ -211,21 +213,21 @@ void BindContext::AddBinding(const string &alias, unique_ptr<Binding> binding) {
 	if (bindings.find(alias) != bindings.end()) {
 		throw BinderException("Duplicate alias \"%s\" in query!", alias);
 	}
-	bindings_list.push_back(make_pair(alias, binding.get()));
+	bindings_list.emplace_back(alias, binding.get());
 	bindings[alias] = move(binding);
 }
 
-void BindContext::AddBaseTable(idx_t index, const string &alias, vector<string> names, vector<LogicalType> types,
+void BindContext::AddBaseTable(idx_t index, const string &alias, const vector<string> &names, const vector<LogicalType> &types,
                                LogicalGet &get) {
-	AddBinding(alias, make_unique<TableBinding>(alias, move(types), move(names), get, index, true));
+	AddBinding(alias, make_unique<TableBinding>(alias, types, names, get, index, true));
 }
 
-void BindContext::AddTableFunction(idx_t index, const string &alias, vector<string> names, vector<LogicalType> types,
+void BindContext::AddTableFunction(idx_t index, const string &alias, const vector<string> &names, const vector<LogicalType> &types,
                                    LogicalGet &get) {
-	AddBinding(alias, make_unique<TableBinding>(alias, move(types), move(names), get, index));
+	AddBinding(alias, make_unique<TableBinding>(alias, types, names, get, index));
 }
 
-vector<string> BindContext::AliasColumnNames(string table_name, const vector<string> &names,
+vector<string> BindContext::AliasColumnNames(const string &table_name, const vector<string> &names,
                                              const vector<string> &column_aliases) {
 	vector<string> result;
 	if (column_aliases.size() > names.size()) {
@@ -248,12 +250,12 @@ void BindContext::AddSubquery(idx_t index, const string &alias, SubqueryRef &ref
 	AddGenericBinding(index, alias, names, subquery.types);
 }
 
-void BindContext::AddGenericBinding(idx_t index, const string &alias, vector<string> names, vector<LogicalType> types) {
-	AddBinding(alias, make_unique<Binding>(alias, move(types), move(names), index));
+void BindContext::AddGenericBinding(idx_t index, const string &alias, const vector<string> &names, const vector<LogicalType> &types) {
+	AddBinding(alias, make_unique<Binding>(alias, types, names, index));
 }
 
-void BindContext::AddCTEBinding(idx_t index, const string &alias, vector<string> names, vector<LogicalType> types) {
-	auto binding = make_shared<Binding>(alias, move(types), move(names), index);
+void BindContext::AddCTEBinding(idx_t index, const string &alias, const vector<string> &names, const vector<LogicalType> &types) {
+	auto binding = make_shared<Binding>(alias, move(types), names, index);
 
 	if (cte_bindings.find(alias) != cte_bindings.end()) {
 		throw BinderException("Duplicate alias \"%s\" in query!", alias);

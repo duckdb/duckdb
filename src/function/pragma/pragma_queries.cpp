@@ -4,27 +4,27 @@
 
 namespace duckdb {
 
-string PragmaTableInfo(ClientContext &context, FunctionParameters parameters) {
+string PragmaTableInfo(ClientContext &context, const FunctionParameters &parameters) {
 	return StringUtil::Format("SELECT * FROM pragma_table_info('%s')", parameters.values[0].ToString());
 }
 
-string PragmaShowTables(ClientContext &context, FunctionParameters parameters) {
+string PragmaShowTables(ClientContext &context, const FunctionParameters &parameters) {
 	return "SELECT name FROM sqlite_master() ORDER BY name";
 }
 
-string PragmaDatabaseList(ClientContext &context, FunctionParameters parameters) {
+string PragmaDatabaseList(ClientContext &context, const FunctionParameters &parameters) {
 	return "SELECT * FROM pragma_database_list() ORDER BY 1";
 }
 
-string PragmaCollations(ClientContext &context, FunctionParameters parameters) {
+string PragmaCollations(ClientContext &context, const FunctionParameters &parameters) {
 	return "SELECT * FROM pragma_collations() ORDER BY 1";
 }
 
-string PragmaFunctions(ClientContext &context, FunctionParameters parameters) {
+string PragmaFunctions(ClientContext &context, const FunctionParameters &parameters) {
 	return "SELECT * FROM pragma_functions() ORDER BY 1";
 }
 
-string PragmaShow(ClientContext &context, FunctionParameters parameters) {
+string PragmaShow(ClientContext &context, const FunctionParameters &parameters) {
 	// PRAGMA table_info but with some aliases
 	return StringUtil::Format(
 	    "SELECT name AS \"Field\", type as \"Type\", CASE WHEN \"notnull\" THEN 'NO' ELSE 'YES' END AS \"Null\", "
@@ -32,11 +32,11 @@ string PragmaShow(ClientContext &context, FunctionParameters parameters) {
 	    parameters.values[0].ToString());
 }
 
-string PragmaVersion(ClientContext &context, FunctionParameters parameters) {
+string PragmaVersion(ClientContext &context, const FunctionParameters &parameters) {
 	return "SELECT * FROM pragma_version()";
 }
 
-string PragmaImportDatabase(ClientContext &context, FunctionParameters parameters) {
+string PragmaImportDatabase(ClientContext &context, const FunctionParameters &parameters) {
 	auto &fs = FileSystem::GetFileSystem(context);
 	string query;
 	// read the "shema.sql" and "load.sql" files
@@ -53,7 +53,7 @@ string PragmaImportDatabase(ClientContext &context, FunctionParameters parameter
 	return query;
 }
 
-string PragmaDatabaseSize(ClientContext &context, FunctionParameters parameters) {
+string PragmaDatabaseSize(ClientContext &context, const FunctionParameters &parameters) {
 	return "SELECT * FROM pragma_database_size()";
 }
 

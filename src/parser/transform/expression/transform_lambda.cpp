@@ -22,6 +22,7 @@ unique_ptr<ParsedExpression> Transformer::TransformLambda(duckdb_libpgquery::PGL
 		throw ParserException("Failed to transform expression list");
 	}
 	vector<string> parameters;
+	parameters.reserve(parameter_expressions.size());
 	for (auto &expr : parameter_expressions) {
 		parameters.push_back(ExtractColumnFromLambda(*expr));
 	}

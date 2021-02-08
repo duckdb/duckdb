@@ -39,16 +39,17 @@ void LogicalOperator::ResolveOperatorTypes() {
 vector<ColumnBinding> LogicalOperator::GenerateColumnBindings(idx_t table_idx, idx_t column_count) {
 	vector<ColumnBinding> result;
 	for (idx_t i = 0; i < column_count; i++) {
-		result.push_back(ColumnBinding(table_idx, i));
+		result.emplace_back(table_idx, i);
 	}
 	return result;
 }
 
-vector<LogicalType> LogicalOperator::MapTypes(vector<LogicalType> types, vector<idx_t> projection_map) {
+vector<LogicalType> LogicalOperator::MapTypes(const vector<LogicalType> &types, const vector<idx_t> &projection_map) {
 	if (projection_map.size() == 0) {
 		return types;
 	} else {
 		vector<LogicalType> result_types;
+		result_types.reserve(projection_map.size());
 		for (auto index : projection_map) {
 			result_types.push_back(types[index]);
 		}
@@ -56,11 +57,12 @@ vector<LogicalType> LogicalOperator::MapTypes(vector<LogicalType> types, vector<
 	}
 }
 
-vector<ColumnBinding> LogicalOperator::MapBindings(vector<ColumnBinding> bindings, vector<idx_t> projection_map) {
+vector<ColumnBinding> LogicalOperator::MapBindings(const vector<ColumnBinding> &bindings, const vector<idx_t> &projection_map) {
 	if (projection_map.size() == 0) {
 		return bindings;
 	} else {
 		vector<ColumnBinding> result_bindings;
+		result_bindings.reserve(projection_map.size());
 		for (auto index : projection_map) {
 			result_bindings.push_back(bindings[index]);
 		}

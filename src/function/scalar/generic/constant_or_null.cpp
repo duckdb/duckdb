@@ -68,7 +68,7 @@ unique_ptr<FunctionData> ConstantOrNull::Bind(Value value) {
 	return make_unique<ConstantOrNullBindData>(move(value));
 }
 
-bool ConstantOrNull::IsConstantOrNull(BoundFunctionExpression &expr, Value val) {
+bool ConstantOrNull::IsConstantOrNull(BoundFunctionExpression &expr, const Value &val) {
 	if (expr.function.name != "constant_or_null") {
 		return false;
 	}

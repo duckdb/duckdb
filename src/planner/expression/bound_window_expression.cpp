@@ -83,7 +83,7 @@ unique_ptr<Expression> BoundWindowExpression::Copy() {
 	}
 
 	for (auto &o : orders) {
-		new_window->orders.push_back(BoundOrderByNode(o.type, o.null_order, o.expression->Copy()));
+		new_window->orders.emplace_back(o.type, o.null_order, o.expression->Copy());
 	}
 
 	new_window->start = start;

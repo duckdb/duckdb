@@ -24,8 +24,8 @@ public:
 	std::string error_message;
 	int error_location;
 public:
-	void Parse(std::string query);
-	static std::vector<duckdb_libpgquery::PGSimplifiedToken> Tokenize(std::string query);
+	void Parse(const std::string &query);
+	static std::vector<duckdb_libpgquery::PGSimplifiedToken> Tokenize(const std::string &query);
 
 	static bool IsKeyword(const std::string &text);
 };

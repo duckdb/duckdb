@@ -17,10 +17,13 @@
 namespace duckdb {
 
 unique_ptr<Expression> ExpressionBinder::PushCollation(ClientContext &context, unique_ptr<Expression> source,
-                                                       string collation, bool equality_only) {
+                                                       const string &collation_p, bool equality_only) {
 	// replace default collation with system collation
+	string collation;
 	if (collation.empty()) {
 		collation = DBConfig::GetConfig(context).collation;
+	} else {
+		collation = collation_p;
 	}
 	// bind the collation
 	if (collation.empty() || collation == "binary" || collation == "c" || collation == "posix") {
@@ -54,7 +57,7 @@ unique_ptr<Expression> ExpressionBinder::PushCollation(ClientContext &context, u
 	return source;
 }
 
-void ExpressionBinder::TestCollation(ClientContext &context, string collation) {
+void ExpressionBinder::TestCollation(ClientContext &context, const string &collation) {
 	PushCollation(context, make_unique<BoundConstantExpression>(Value("")), collation);
 }
 

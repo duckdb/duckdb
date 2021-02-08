@@ -9,7 +9,7 @@ BoundCastExpression::BoundCastExpression(unique_ptr<Expression> child_p, Logical
       child(move(child_p)) {
 }
 
-unique_ptr<Expression> BoundCastExpression::AddCastToType(unique_ptr<Expression> expr, LogicalType target_type) {
+unique_ptr<Expression> BoundCastExpression::AddCastToType(unique_ptr<Expression> expr, const LogicalType &target_type) {
 	D_ASSERT(expr);
 	if (expr->expression_class == ExpressionClass::BOUND_PARAMETER) {
 		auto &parameter = (BoundParameterExpression &)*expr;
@@ -23,7 +23,7 @@ unique_ptr<Expression> BoundCastExpression::AddCastToType(unique_ptr<Expression>
 	return expr;
 }
 
-bool BoundCastExpression::CastIsInvertible(LogicalType source_type, LogicalType target_type) {
+bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const LogicalType &target_type) {
 	if (source_type.id() == LogicalTypeId::BOOLEAN || target_type.id() == LogicalTypeId::BOOLEAN) {
 		return false;
 	}

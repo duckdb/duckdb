@@ -12,12 +12,12 @@
 
 namespace duckdb {
 
-static void PragmaEnableProfilingStatement(ClientContext &context, FunctionParameters parameters) {
+static void PragmaEnableProfilingStatement(ClientContext &context, const FunctionParameters &parameters) {
 	context.profiler.automatic_print_format = ProfilerPrintFormat::QUERY_TREE;
 	context.profiler.Enable();
 }
 
-static void PragmaEnableProfilingAssignment(ClientContext &context, FunctionParameters parameters) {
+static void PragmaEnableProfilingAssignment(ClientContext &context, const FunctionParameters &parameters) {
 	// this is either enable_profiling = json, or enable_profiling = query_tree
 	string assignment = parameters.values[0].ToString();
 	if (assignment == "json") {
@@ -43,24 +43,24 @@ void RegisterEnableProfiling(BuiltinFunctions &set) {
 	set.AddFunction("enable_profiling", functions);
 }
 
-static void PragmaDisableProfiling(ClientContext &context, FunctionParameters parameters) {
+static void PragmaDisableProfiling(ClientContext &context, const FunctionParameters &parameters) {
 	context.profiler.Disable();
 	context.profiler.automatic_print_format = ProfilerPrintFormat::NONE;
 }
 
-static void PragmaProfileOutput(ClientContext &context, FunctionParameters parameters) {
+static void PragmaProfileOutput(ClientContext &context, const FunctionParameters &parameters) {
 	context.profiler.save_location = parameters.values[0].ToString();
 }
 
 static idx_t ParseMemoryLimit(string arg);
 
-static void PragmaMemoryLimit(ClientContext &context, FunctionParameters parameters) {
+static void PragmaMemoryLimit(ClientContext &context, const FunctionParameters &parameters) {
 	idx_t new_limit = ParseMemoryLimit(parameters.values[0].ToString());
 	// set the new limit in the buffer manager
 	BufferManager::GetBufferManager(context).SetLimit(new_limit);
 }
 
-static void PragmaCollation(ClientContext &context, FunctionParameters parameters) {
+static void PragmaCollation(ClientContext &context, const FunctionParameters &parameters) {
 	auto collation_param = StringUtil::Lower(parameters.values[0].ToString());
 	// bind the collation to verify that it exists
 	ExpressionBinder::TestCollation(context, collation_param);
@@ -68,7 +68,7 @@ static void PragmaCollation(ClientContext &context, FunctionParameters parameter
 	config.collation = collation_param;
 }
 
-static void PragmaNullOrder(ClientContext &context, FunctionParameters parameters) {
+static void PragmaNullOrder(ClientContext &context, const FunctionParameters &parameters) {
 	auto &config = DBConfig::GetConfig(context);
 	string new_null_order = StringUtil::Lower(parameters.values[0].ToString());
 	if (new_null_order == "nulls first" || new_null_order == "null first" || new_null_order == "first") {
@@ -81,7 +81,7 @@ static void PragmaNullOrder(ClientContext &context, FunctionParameters parameter
 	}
 }
 
-static void PragmaDefaultOrder(ClientContext &context, FunctionParameters parameters) {
+static void PragmaDefaultOrder(ClientContext &context, const FunctionParameters &parameters) {
 	auto &config = DBConfig::GetConfig(context);
 	string new_order = StringUtil::Lower(parameters.values[0].ToString());
 	if (new_order == "ascending" || new_order == "asc") {
@@ -93,52 +93,52 @@ static void PragmaDefaultOrder(ClientContext &context, FunctionParameters parame
 	}
 }
 
-static void PragmaSetThreads(ClientContext &context, FunctionParameters parameters) {
+static void PragmaSetThreads(ClientContext &context, const FunctionParameters &parameters) {
 	auto nr_threads = parameters.values[0].GetValue<int64_t>();
 	TaskScheduler::GetScheduler(context).SetThreads(nr_threads);
 }
 
-static void PragmaEnableVerification(ClientContext &context, FunctionParameters parameters) {
+static void PragmaEnableVerification(ClientContext &context, const FunctionParameters &parameters) {
 	context.query_verification_enabled = true;
 }
 
-static void PragmaDisableVerification(ClientContext &context, FunctionParameters parameters) {
+static void PragmaDisableVerification(ClientContext &context, const FunctionParameters &parameters) {
 	context.query_verification_enabled = false;
 }
 
-static void PragmaEnableForceParallelism(ClientContext &context, FunctionParameters parameters) {
+static void PragmaEnableForceParallelism(ClientContext &context, const FunctionParameters &parameters) {
 	context.force_parallelism = true;
 }
 
-static void PragmaEnableForceIndexJoin(ClientContext &context, FunctionParameters parameters) {
+static void PragmaEnableForceIndexJoin(ClientContext &context, const FunctionParameters &parameters) {
 	context.force_index_join = true;
 }
 
-static void PragmaForceCheckpoint(ClientContext &context, FunctionParameters parameters) {
+static void PragmaForceCheckpoint(ClientContext &context, const FunctionParameters &parameters) {
 	DBConfig::GetConfig(context).force_checkpoint = true;
 }
 
-static void PragmaDisableForceParallelism(ClientContext &context, FunctionParameters parameters) {
+static void PragmaDisableForceParallelism(ClientContext &context, const FunctionParameters &parameters) {
 	context.force_parallelism = false;
 }
 
-static void PragmaEnableObjectCache(ClientContext &context, FunctionParameters parameters) {
+static void PragmaEnableObjectCache(ClientContext &context, const FunctionParameters &parameters) {
 	DBConfig::GetConfig(context).object_cache_enable = true;
 }
 
-static void PragmaDisableObjectCache(ClientContext &context, FunctionParameters parameters) {
+static void PragmaDisableObjectCache(ClientContext &context, const FunctionParameters &parameters) {
 	DBConfig::GetConfig(context).object_cache_enable = false;
 }
 
-static void PragmaEnableCheckpointOnShutdown(ClientContext &context, FunctionParameters parameters) {
+static void PragmaEnableCheckpointOnShutdown(ClientContext &context, const FunctionParameters &parameters) {
 	DBConfig::GetConfig(context).checkpoint_on_shutdown = true;
 }
 
-static void PragmaDisableCheckpointOnShutdown(ClientContext &context, FunctionParameters parameters) {
+static void PragmaDisableCheckpointOnShutdown(ClientContext &context, const FunctionParameters &parameters) {
 	DBConfig::GetConfig(context).checkpoint_on_shutdown = false;
 }
 
-static void PragmaLogQueryPath(ClientContext &context, FunctionParameters parameters) {
+static void PragmaLogQueryPath(ClientContext &context, const FunctionParameters &parameters) {
 	auto str_val = parameters.values[0].ToString();
 	if (str_val.empty()) {
 		// empty path: clean up query writer
@@ -148,7 +148,7 @@ static void PragmaLogQueryPath(ClientContext &context, FunctionParameters parame
 	}
 }
 
-static void PragmaExplainOutput(ClientContext &context, FunctionParameters parameters) {
+static void PragmaExplainOutput(ClientContext &context, const FunctionParameters &parameters) {
 	string val = StringUtil::Lower(parameters.values[0].ToString());
 	if (val == "all") {
 		context.explain_output_type = ExplainOutputType::ALL;
@@ -162,15 +162,15 @@ static void PragmaExplainOutput(ClientContext &context, FunctionParameters param
 	}
 }
 
-static void PragmaEnableOptimizer(ClientContext &context, FunctionParameters parameters) {
+static void PragmaEnableOptimizer(ClientContext &context, const FunctionParameters &parameters) {
 	context.enable_optimizer = true;
 }
 
-static void PragmaDisableOptimizer(ClientContext &context, FunctionParameters parameters) {
+static void PragmaDisableOptimizer(ClientContext &context, const FunctionParameters &parameters) {
 	context.enable_optimizer = false;
 }
 
-static void PragmaPerfectHashThreshold(ClientContext &context, FunctionParameters parameters) {
+static void PragmaPerfectHashThreshold(ClientContext &context, const FunctionParameters &parameters) {
 	auto bits = parameters.values[0].GetValue<int32_t>();
 	;
 	if (bits < 0 || bits > 32) {
@@ -179,12 +179,12 @@ static void PragmaPerfectHashThreshold(ClientContext &context, FunctionParameter
 	context.perfect_ht_threshold = bits;
 }
 
-static void PragmaAutoCheckpointThreshold(ClientContext &context, FunctionParameters parameters) {
+static void PragmaAutoCheckpointThreshold(ClientContext &context, const FunctionParameters &parameters) {
 	idx_t new_limit = ParseMemoryLimit(parameters.values[0].ToString());
 	DBConfig::GetConfig(context).checkpoint_wal_size = new_limit;
 }
 
-static void PragmaDebugCheckpointAbort(ClientContext &context, FunctionParameters parameters) {
+static void PragmaDebugCheckpointAbort(ClientContext &context, const FunctionParameters &parameters) {
 	auto checkpoint_abort = StringUtil::Lower(parameters.values[0].ToString());
 	auto &config = DBConfig::GetConfig(context);
 	if (checkpoint_abort == "none") {

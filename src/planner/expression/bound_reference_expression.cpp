@@ -8,7 +8,7 @@ namespace duckdb {
 
 BoundReferenceExpression::BoundReferenceExpression(string alias, LogicalType type, idx_t index)
     : Expression(ExpressionType::BOUND_REF, ExpressionClass::BOUND_REF, move(type)), index(index) {
-	this->alias = alias;
+	this->alias = move(alias);
 }
 BoundReferenceExpression::BoundReferenceExpression(LogicalType type, idx_t index)
     : BoundReferenceExpression(string(), move(type), index) {

@@ -262,7 +262,7 @@ void Binder::MergeCorrelatedColumns(vector<CorrelatedColumnInfo> &other) {
 	}
 }
 
-void Binder::AddCorrelatedColumn(CorrelatedColumnInfo info) {
+void Binder::AddCorrelatedColumn(const CorrelatedColumnInfo &info) {
 	// we only add correlated columns to the list if they are not already there
 	if (std::find(correlated_columns.begin(), correlated_columns.end(), info) == correlated_columns.end()) {
 		correlated_columns.push_back(info);
@@ -270,16 +270,16 @@ void Binder::AddCorrelatedColumn(CorrelatedColumnInfo info) {
 }
 
 string Binder::FormatError(ParsedExpression &expr_context, string message) {
-	return FormatError(expr_context.query_location, message);
+	return FormatError(expr_context.query_location, move(message));
 }
 
 string Binder::FormatError(TableRef &ref_context, string message) {
-	return FormatError(ref_context.query_location, message);
+	return FormatError(ref_context.query_location, move(message));
 }
 
 string Binder::FormatError(idx_t query_location, string message) {
 	QueryErrorContext context(root_statement, query_location);
-	return context.FormatError(message);
+	return context.FormatError(move(message));
 }
 
 } // namespace duckdb

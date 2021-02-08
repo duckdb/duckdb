@@ -36,10 +36,16 @@ bool Binder::TryFindBinding(const string &using_column, const string &join_side,
 	// find the join binding
 	for (auto &binding : bindings) {
 		if (!result.empty()) {
-			string error = "Column name \"" + using_column + "\" is ambiguous: it exists more than once on " +
-			               join_side + " side of join.\nCandidates:";
+			string error = "Column name \"";
+			error += using_column;
+			error += "\" is ambiguous: it exists more than once on ";
+			error += join_side;
+			error += " side of join.\nCandidates:";
 			for (auto &binding : bindings) {
-				error += "\n\t" + binding + "." + using_column;
+				error += "\n\t";
+				error += binding;
+				error += ".";
+				error += using_column;
 			}
 			throw BinderException(error);
 		} else {

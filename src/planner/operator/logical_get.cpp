@@ -36,7 +36,7 @@ vector<ColumnBinding> LogicalGet::GetColumnBindings() {
 	}
 	vector<ColumnBinding> result;
 	for (idx_t i = 0; i < column_ids.size(); i++) {
-		result.push_back(ColumnBinding(table_index, i));
+		result.emplace_back(table_index, i);
 	}
 	return result;
 }

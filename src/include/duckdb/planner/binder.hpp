@@ -119,7 +119,7 @@ public:
 
 	void MergeCorrelatedColumns(vector<CorrelatedColumnInfo> &other);
 	//! Add a correlated column to this binder (if it does not exist)
-	void AddCorrelatedColumn(CorrelatedColumnInfo info);
+	void AddCorrelatedColumn(const CorrelatedColumnInfo &info);
 
 	string FormatError(ParsedExpression &expr_context, string message);
 	string FormatError(TableRef &ref_context, string message);

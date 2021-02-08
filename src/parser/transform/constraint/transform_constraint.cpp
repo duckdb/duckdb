@@ -13,7 +13,7 @@ unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGLis
 		bool is_primary_key = constraint->contype == duckdb_libpgquery::PG_CONSTR_PRIMARY;
 		vector<string> columns;
 		for (auto kc = constraint->keys->head; kc; kc = kc->next) {
-			columns.push_back(string(reinterpret_cast<duckdb_libpgquery::PGValue *>(kc->data.ptr_value)->val.str));
+			columns.emplace_back(reinterpret_cast<duckdb_libpgquery::PGValue *>(kc->data.ptr_value)->val.str);
 		}
 		return make_unique<UniqueConstraint>(columns, is_primary_key);
 	}

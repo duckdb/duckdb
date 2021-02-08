@@ -90,8 +90,8 @@ private:
 
 	void ReplaceWithEmptyResult(unique_ptr<LogicalOperator> &node);
 
-	bool ExpressionIsConstant(Expression &expr, Value val);
-	bool ExpressionIsConstantOrNull(Expression &expr, Value val);
+	bool ExpressionIsConstant(Expression &expr, const Value &val);
+	bool ExpressionIsConstantOrNull(Expression &expr, const Value &val);
 
 private:
 	ClientContext &context;

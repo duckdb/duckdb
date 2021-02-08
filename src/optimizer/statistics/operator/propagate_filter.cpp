@@ -9,7 +9,7 @@
 
 namespace duckdb {
 
-bool StatisticsPropagator::ExpressionIsConstant(Expression &expr, Value val) {
+bool StatisticsPropagator::ExpressionIsConstant(Expression &expr, const Value &val) {
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
 		return false;
 	}
@@ -18,7 +18,7 @@ bool StatisticsPropagator::ExpressionIsConstant(Expression &expr, Value val) {
 	return bound_constant.value == val;
 }
 
-bool StatisticsPropagator::ExpressionIsConstantOrNull(Expression &expr, Value val) {
+bool StatisticsPropagator::ExpressionIsConstantOrNull(Expression &expr, const Value &val) {
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
 		return false;
 	}

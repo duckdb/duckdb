@@ -30,6 +30,7 @@ unique_ptr<TableRef> ExpressionListRef::Copy() {
 	auto result = make_unique<ExpressionListRef>();
 	for (auto &val_list : values) {
 		vector<unique_ptr<ParsedExpression>> new_val_list;
+		new_val_list.reserve(val_list.size());
 		for (auto &val : val_list) {
 			new_val_list.push_back(val->Copy());
 		}

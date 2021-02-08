@@ -7,7 +7,7 @@ namespace duckdb {
 
 SubqueryRef::SubqueryRef(unique_ptr<SelectStatement> subquery_p, string alias_p)
     : TableRef(TableReferenceType::SUBQUERY), subquery(move(subquery_p)) {
-	this->alias = alias_p;
+	this->alias = move(alias_p);
 }
 
 bool SubqueryRef::Equals(const TableRef *other_p) const {
