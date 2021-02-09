@@ -193,7 +193,7 @@ public:
 		FindFileSystem(directory)->RemoveDirectory(directory);
 	}
 
-	bool ListFiles(const string &directory, std::function<void(string, bool)> callback) override {
+	bool ListFiles(const string &directory, const std::function<void(string, bool)> &callback) override {
 		return FindFileSystem(directory)->ListFiles(directory, callback);
 	}
 
@@ -209,12 +209,12 @@ public:
 		FindFileSystem(filename)->RemoveFile(filename);
 	}
 
-	vector<string> Glob(string path) override {
+	vector<string> Glob(const string &path) override {
 		return FindFileSystem(path)->Glob(path);
 	}
 
 	// these goes to the default fs
-	void SetWorkingDirectory(string path) override {
+	void SetWorkingDirectory(const string &path) override {
 		default_fs.SetWorkingDirectory(path);
 	}
 
