@@ -16,7 +16,7 @@ namespace duckdb {
 class OperatorExpression : public ParsedExpression {
 public:
 	explicit OperatorExpression(ExpressionType type, unique_ptr<ParsedExpression> left = nullptr,
-	                   unique_ptr<ParsedExpression> right = nullptr);
+	                            unique_ptr<ParsedExpression> right = nullptr);
 
 	vector<unique_ptr<ParsedExpression>> children;
 

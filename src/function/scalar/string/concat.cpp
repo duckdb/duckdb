@@ -115,7 +115,7 @@ static void ConcatOperator(DataChunk &args, ExpressionState &state, Vector &resu
 }
 
 static void TemplatedConcatWS(DataChunk &args, string_t *sep_data, const SelectionVector &sep_sel,
-                                const SelectionVector &rsel, idx_t count, Vector &result) {
+                              const SelectionVector &rsel, idx_t count, Vector &result) {
 	vector<idx_t> result_lengths(args.size(), 0);
 	vector<bool> has_results(args.size(), false);
 	auto orrified_data = unique_ptr<VectorData[]>(new VectorData[args.ColumnCount() - 1]);
@@ -206,7 +206,7 @@ static void ConcatWSFunction(DataChunk &args, ExpressionState &state, Vector &re
 		}
 		// no null values
 		TemplatedConcatWS(args, (string_t *)vdata.data, *vdata.sel, FlatVector::incremental_selection_vector,
-		                    args.size(), result);
+		                  args.size(), result);
 		return;
 	default: {
 		// default case: loop over nullmask and create a non-null selection vector

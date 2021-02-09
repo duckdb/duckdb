@@ -3,7 +3,8 @@
 namespace duckdb {
 
 const SelectionVector ConstantVector::zero_selection_vector = SelectionVector((sel_t *)ConstantVector::zero_vector);
-const SelectionVector FlatVector::incremental_selection_vector = SelectionVector((sel_t *)FlatVector::incremental_vector);
+const SelectionVector FlatVector::incremental_selection_vector =
+    SelectionVector((sel_t *)FlatVector::incremental_vector);
 const sel_t ConstantVector::zero_vector[STANDARD_VECTOR_SIZE] = {0};
 
 #if STANDARD_VECTOR_SIZE == 2

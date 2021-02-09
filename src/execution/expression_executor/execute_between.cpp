@@ -35,8 +35,8 @@ struct ExclusiveBetweenOperator {
 };
 
 template <class OP>
-static idx_t BetweenLoopTypeSwitch(Vector &input, Vector &lower, Vector &upper, const SelectionVector *sel,
-                                      idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
+static idx_t BetweenLoopTypeSwitch(Vector &input, Vector &lower, Vector &upper, const SelectionVector *sel, idx_t count,
+                                   SelectionVector *true_sel, SelectionVector *false_sel) {
 	switch (input.type.InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
@@ -134,13 +134,13 @@ idx_t ExpressionExecutor::Select(BoundBetweenExpression &expr, ExpressionState *
 
 	if (expr.upper_inclusive && expr.lower_inclusive) {
 		return BetweenLoopTypeSwitch<BothInclusiveBetweenOperator>(input, lower, upper, sel, count, true_sel,
-		                                                              false_sel);
+		                                                           false_sel);
 	} else if (expr.lower_inclusive) {
 		return BetweenLoopTypeSwitch<LowerInclusiveBetweenOperator>(input, lower, upper, sel, count, true_sel,
-		                                                               false_sel);
+		                                                            false_sel);
 	} else if (expr.upper_inclusive) {
 		return BetweenLoopTypeSwitch<UpperInclusiveBetweenOperator>(input, lower, upper, sel, count, true_sel,
-		                                                               false_sel);
+		                                                            false_sel);
 	} else {
 		return BetweenLoopTypeSwitch<ExclusiveBetweenOperator>(input, lower, upper, sel, count, true_sel, false_sel);
 	}

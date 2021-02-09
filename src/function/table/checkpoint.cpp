@@ -6,8 +6,8 @@
 namespace duckdb {
 
 static unique_ptr<FunctionData> CheckpointBind(ClientContext &context, vector<Value> &inputs,
-                                                unordered_map<string, Value> &named_parameters,
-                                                vector<LogicalType> &return_types, vector<string> &names) {
+                                               unordered_map<string, Value> &named_parameters,
+                                               vector<LogicalType> &return_types, vector<string> &names) {
 	return_types.push_back(LogicalType::BOOLEAN);
 	names.emplace_back("Success");
 	return nullptr;
@@ -15,7 +15,7 @@ static unique_ptr<FunctionData> CheckpointBind(ClientContext &context, vector<Va
 
 template <bool FORCE>
 static void TemplatedCheckpointFunction(ClientContext &context, const FunctionData *bind_data_p,
-                                FunctionOperatorData *operator_state, DataChunk &output) {
+                                        FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &transaction_manager = TransactionManager::Get(context);
 	transaction_manager.Checkpoint(context, FORCE);
 }

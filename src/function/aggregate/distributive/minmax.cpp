@@ -211,7 +211,7 @@ struct MaxOperationString : public StringMinMaxBase {
 
 template <class OP>
 unique_ptr<FunctionData> BindDecimalMinMax(ClientContext &context, AggregateFunction &function,
-                                              vector<unique_ptr<Expression>> &arguments) {
+                                           vector<unique_ptr<Expression>> &arguments) {
 	auto decimal_type = arguments[0]->return_type;
 	switch (decimal_type.InternalType()) {
 	case PhysicalType::INT16:

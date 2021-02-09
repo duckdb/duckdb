@@ -19,7 +19,7 @@ namespace duckdb {
 class LogicalComparisonJoin : public LogicalJoin {
 public:
 	explicit LogicalComparisonJoin(JoinType type,
-	                      LogicalOperatorType logical_type = LogicalOperatorType::LOGICAL_COMPARISON_JOIN);
+	                               LogicalOperatorType logical_type = LogicalOperatorType::LOGICAL_COMPARISON_JOIN);
 
 	//! The conditions of the join
 	vector<JoinCondition> conditions;

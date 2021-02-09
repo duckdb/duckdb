@@ -33,8 +33,8 @@ struct BitLenOperator {
 };
 
 static unique_ptr<BaseStatistics> LengthPropagateStats(ClientContext &context, BoundFunctionExpression &expr,
-                                                         FunctionData *bind_data,
-                                                         vector<unique_ptr<BaseStatistics>> &child_stats) {
+                                                       FunctionData *bind_data,
+                                                       vector<unique_ptr<BaseStatistics>> &child_stats) {
 	D_ASSERT(child_stats.size() == 1);
 	// can only propagate stats if the children have stats
 	if (!child_stats[0]) {

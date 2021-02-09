@@ -98,7 +98,8 @@ CastException::CastException(const PhysicalType orig_type, const PhysicalType ne
 }
 
 CastException::CastException(const LogicalType &orig_type, const LogicalType &new_type)
-    : Exception(ExceptionType::CONVERSION, "Type " + orig_type.ToString() + " can't be cast as " + new_type.ToString()) {
+    : Exception(ExceptionType::CONVERSION,
+                "Type " + orig_type.ToString() + " can't be cast as " + new_type.ToString()) {
 }
 
 ValueOutOfRangeException::ValueOutOfRangeException(const int64_t value, const PhysicalType orig_type,

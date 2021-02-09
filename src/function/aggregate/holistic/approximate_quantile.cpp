@@ -125,7 +125,7 @@ AggregateFunction GetApproximateQuantileAggregateFunction(PhysicalType type) {
 }
 
 unique_ptr<FunctionData> BindApproxQuantile(ClientContext &context, AggregateFunction &function,
-                                              vector<unique_ptr<Expression>> &arguments) {
+                                            vector<unique_ptr<Expression>> &arguments) {
 	if (!arguments[1]->IsScalar()) {
 		throw BinderException("APPROXIMATE QUANTILE can only take constant quantile parameters");
 	}
@@ -141,7 +141,7 @@ unique_ptr<FunctionData> BindApproxQuantile(ClientContext &context, AggregateFun
 }
 
 unique_ptr<FunctionData> BindApproxQuantileDecimal(ClientContext &context, AggregateFunction &function,
-                                                      vector<unique_ptr<Expression>> &arguments) {
+                                                   vector<unique_ptr<Expression>> &arguments) {
 	auto bind_data = BindApproxQuantile(context, function, arguments);
 	function = GetApproximateQuantileAggregateFunction(arguments[0]->return_type.InternalType());
 	function.name = "approx_quantile";

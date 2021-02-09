@@ -48,7 +48,7 @@ static void CurrentTimestampFunction(DataChunk &input, ExpressionState &state, V
 }
 
 unique_ptr<FunctionData> BindCurrentTime(ClientContext &context, ScalarFunction &bound_function,
-                                      vector<unique_ptr<Expression>> &arguments) {
+                                         vector<unique_ptr<Expression>> &arguments) {
 	return make_unique<CurrentBindData>(context);
 }
 

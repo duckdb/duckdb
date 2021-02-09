@@ -183,7 +183,7 @@ AggregateFunction GetReservoirQuantileAggregateFunction(PhysicalType type) {
 }
 
 unique_ptr<FunctionData> BindReservoirQuantile(ClientContext &context, AggregateFunction &function,
-                                                 vector<unique_ptr<Expression>> &arguments) {
+                                               vector<unique_ptr<Expression>> &arguments) {
 	if (!arguments[1]->IsScalar()) {
 		throw BinderException("QUANTILE can only take constant quantile parameters");
 	}
@@ -214,7 +214,7 @@ unique_ptr<FunctionData> BindReservoirQuantile(ClientContext &context, Aggregate
 }
 
 unique_ptr<FunctionData> BindReservoirQuantileDecimal(ClientContext &context, AggregateFunction &function,
-                                                         vector<unique_ptr<Expression>> &arguments) {
+                                                      vector<unique_ptr<Expression>> &arguments) {
 	auto bind_data = BindReservoirQuantile(context, function, arguments);
 	function = GetReservoirQuantileAggregateFunction(arguments[0]->return_type.InternalType());
 	function.name = "reservoir_quantile";

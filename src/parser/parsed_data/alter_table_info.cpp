@@ -140,7 +140,8 @@ unique_ptr<AlterInfo> ChangeColumnTypeInfo::Deserialize(Deserializer &source, st
 	auto column_name = source.Read<string>();
 	auto target_type = LogicalType::Deserialize(source);
 	auto expression = source.ReadOptional<ParsedExpression>();
-	return make_unique<ChangeColumnTypeInfo>(move(schema), move(table), move(column_name), move(target_type), move(expression));
+	return make_unique<ChangeColumnTypeInfo>(move(schema), move(table), move(column_name), move(target_type),
+	                                         move(expression));
 }
 
 //===--------------------------------------------------------------------===//

@@ -65,7 +65,7 @@ static void MarkJoinSwitch(Vector &left, Vector &right, idx_t lcount, idx_t rcou
 }
 
 static void MarkJoinComparisonSwitch(Vector &left, Vector &right, idx_t lcount, idx_t rcount, bool found_match[],
-                      ExpressionType comparison_type) {
+                                     ExpressionType comparison_type) {
 	D_ASSERT(left.type == right.type);
 	switch (comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
@@ -93,7 +93,7 @@ void NestedLoopJoinMark::Perform(DataChunk &left, ChunkCollection &right, bool f
 		DataChunk &right_chunk = right.GetChunk(chunk_idx);
 		for (idx_t i = 0; i < conditions.size(); i++) {
 			MarkJoinComparisonSwitch(left.data[i], right_chunk.data[i], left.size(), right_chunk.size(), found_match,
-			          conditions[i].comparison);
+			                         conditions[i].comparison);
 		}
 	}
 }

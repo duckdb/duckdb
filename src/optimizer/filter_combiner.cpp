@@ -159,7 +159,7 @@ bool FilterCombiner::HasFilters() {
 }
 
 unordered_map<idx_t, std::pair<Value *, Value *>> MergeAnd(unordered_map<idx_t, std::pair<Value *, Value *>> &f_1,
-                                                            unordered_map<idx_t, std::pair<Value *, Value *>> &f_2) {
+                                                           unordered_map<idx_t, std::pair<Value *, Value *>> &f_2) {
 	unordered_map<idx_t, std::pair<Value *, Value *>> result;
 	for (auto &f : f_1) {
 		auto it = f_2.find(f.first);
@@ -205,7 +205,7 @@ unordered_map<idx_t, std::pair<Value *, Value *>> MergeAnd(unordered_map<idx_t, 
 }
 
 unordered_map<idx_t, std::pair<Value *, Value *>> MergeOr(unordered_map<idx_t, std::pair<Value *, Value *>> &f_1,
-                                                           unordered_map<idx_t, std::pair<Value *, Value *>> &f_2) {
+                                                          unordered_map<idx_t, std::pair<Value *, Value *>> &f_2) {
 	unordered_map<idx_t, std::pair<Value *, Value *>> result;
 	for (auto &f : f_1) {
 		auto it = f_2.find(f.first);
@@ -406,8 +406,8 @@ vector<TableFilter> FilterCombiner::GenerateTableScanFilters(vector<idx_t> &colu
 						// for each entry also create a comparison with each constant
 						for (idx_t k = 0; k < constant_list.size(); k++) {
 							table_filters.emplace_back(constant_value.second[k].constant,
-							                          constant_value.second[k].comparison_type,
-							                          filter_col_exp->binding.column_index);
+							                           constant_value.second[k].comparison_type,
+							                           filter_col_exp->binding.column_index);
 						}
 					}
 					equivalence_map.erase(filter_exp);
@@ -434,10 +434,10 @@ vector<TableFilter> FilterCombiner::GenerateTableScanFilters(vector<idx_t> &colu
 				const_value.str_value = like_string;
 				//! Here the like must be transformed to a BOUND COMPARISON geq le
 				table_filters.emplace_back(const_value, ExpressionType::COMPARE_GREATERTHANOREQUALTO,
-				                          column_ref.binding.column_index);
+				                           column_ref.binding.column_index);
 				const_value.str_value[const_value.str_value.size() - 1]++;
 				table_filters.emplace_back(const_value, ExpressionType::COMPARE_LESSTHAN,
-				                          column_ref.binding.column_index);
+				                           column_ref.binding.column_index);
 			}
 			if (func.function.name == "~~" && func.children[0]->expression_class == ExpressionClass::BOUND_COLUMN_REF &&
 			    func.children[1]->type == ExpressionType::VALUE_CONSTANT) {
@@ -463,14 +463,14 @@ vector<TableFilter> FilterCombiner::GenerateTableScanFilters(vector<idx_t> &colu
 				if (equality) {
 					//! Here the like can be transformed to an equality query
 					table_filters.emplace_back(const_value, ExpressionType::COMPARE_EQUAL,
-					                          column_ref.binding.column_index);
+					                           column_ref.binding.column_index);
 				} else {
 					//! Here the like must be transformed to a BOUND COMPARISON geq le
 					table_filters.emplace_back(const_value, ExpressionType::COMPARE_GREATERTHANOREQUALTO,
-					                          column_ref.binding.column_index);
+					                           column_ref.binding.column_index);
 					const_value.str_value[const_value.str_value.size() - 1]++;
 					table_filters.emplace_back(const_value, ExpressionType::COMPARE_LESSTHAN,
-					                          column_ref.binding.column_index);
+					                           column_ref.binding.column_index);
 				}
 			}
 		} else if (remaining_filter->type == ExpressionType::COMPARE_IN) {
@@ -518,9 +518,9 @@ vector<TableFilter> FilterCombiner::GenerateTableScanFilters(vector<idx_t> &colu
 				continue;
 			}
 			table_filters.emplace_back(in_values.front(), ExpressionType::COMPARE_GREATERTHANOREQUALTO,
-			                          column_ref.binding.column_index);
+			                           column_ref.binding.column_index);
 			table_filters.emplace_back(in_values.back(), ExpressionType::COMPARE_LESSTHANOREQUALTO,
-			                          column_ref.binding.column_index);
+			                           column_ref.binding.column_index);
 
 			remaining_filters.erase(remaining_filters.begin() + rem_fil_idx);
 		}

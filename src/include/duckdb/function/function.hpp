@@ -81,7 +81,8 @@ public:
 	//! Returns the formatted string name(arg1, arg2, ...)
 	static string CallToString(const string &name, const vector<LogicalType> &arguments);
 	//! Returns the formatted string name(arg1, arg2..) -> return_type
-	static string CallToString(const string &name, const vector<LogicalType> &arguments, const LogicalType &return_type);
+	static string CallToString(const string &name, const vector<LogicalType> &arguments,
+	                           const LogicalType &return_type);
 	//! Returns the formatted string name(arg1, arg2.., np1=a, np2=b, ...)
 	static string CallToString(const string &name, const vector<LogicalType> &arguments,
 	                           const unordered_map<string, LogicalType> &named_parameters);
@@ -90,8 +91,8 @@ public:
 	//! returns INVALID_INDEX and sets error if none could be found
 	static idx_t BindFunction(const string &name, vector<ScalarFunction> &functions, vector<LogicalType> &arguments,
 	                          string &error);
-	static idx_t BindFunction(const string &name, vector<ScalarFunction> &functions, vector<unique_ptr<Expression>> &arguments,
-	                          string &error);
+	static idx_t BindFunction(const string &name, vector<ScalarFunction> &functions,
+	                          vector<unique_ptr<Expression>> &arguments, string &error);
 	//! Bind an aggregate function from the set of functions and input arguments. Returns the index of the chosen
 	//! function, returns INVALID_INDEX and sets error if none could be found
 	static idx_t BindFunction(const string &name, vector<AggregateFunction> &functions, vector<LogicalType> &arguments,
@@ -102,8 +103,8 @@ public:
 	//! function, returns INVALID_INDEX and sets error if none could be found
 	static idx_t BindFunction(const string &name, vector<TableFunction> &functions, vector<LogicalType> &arguments,
 	                          string &error);
-	static idx_t BindFunction(const string &name, vector<TableFunction> &functions, vector<unique_ptr<Expression>> &arguments,
-	                          string &error);
+	static idx_t BindFunction(const string &name, vector<TableFunction> &functions,
+	                          vector<unique_ptr<Expression>> &arguments, string &error);
 	//! Bind a pragma function from the set of functions and input arguments
 	static idx_t BindFunction(const string &name, vector<PragmaFunction> &functions, PragmaInfo &info, string &error);
 };

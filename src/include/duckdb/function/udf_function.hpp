@@ -127,8 +127,8 @@ public:
 	                                                 bind_aggregate_function_t bind = nullptr,
 	                                                 aggregate_destructor_t destructor = nullptr) {
 
-		AggregateFunction aggr_function(move(name), move(arguments), move(return_type), state_size, initialize, update, combine, finalize,
-		                                simple_update, bind, destructor);
+		AggregateFunction aggr_function(move(name), move(arguments), move(return_type), state_size, initialize, update,
+		                                combine, finalize, simple_update, bind, destructor);
 		return aggr_function;
 	}
 
@@ -342,7 +342,8 @@ private:
 	}
 
 	template <typename UDF_OP, typename STATE, typename TR, typename TA>
-	static AggregateFunction CreateUnaryAggregateFunction(const string &name, LogicalType ret_type, LogicalType input_type) {
+	static AggregateFunction CreateUnaryAggregateFunction(const string &name, LogicalType ret_type,
+	                                                      LogicalType input_type) {
 		AggregateFunction aggr_function =
 		    AggregateFunction::UnaryAggregate<STATE, TR, TA, UDF_OP>(input_type, ret_type);
 		aggr_function.name = name;
@@ -358,8 +359,8 @@ private:
 	}
 
 	template <typename UDF_OP, typename STATE, typename TR, typename TA, typename TB>
-	static AggregateFunction CreateBinaryAggregateFunction(const string &name, LogicalType ret_type, LogicalType input_typeA,
-	                                                       LogicalType input_typeB) {
+	static AggregateFunction CreateBinaryAggregateFunction(const string &name, LogicalType ret_type,
+	                                                       LogicalType input_typeA, LogicalType input_typeB) {
 		AggregateFunction aggr_function =
 		    AggregateFunction::BinaryAggregate<STATE, TR, TA, TB, UDF_OP>(input_typeA, input_typeB, ret_type);
 		aggr_function.name = name;

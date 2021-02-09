@@ -18,7 +18,7 @@ struct HashOp {
 
 template <bool HAS_RSEL, class T>
 static inline void TightLoopHash(T *__restrict ldata, hash_t *__restrict result_data, const SelectionVector *rsel,
-                                   idx_t count, const SelectionVector *__restrict sel_vector, nullmask_t &nullmask) {
+                                 idx_t count, const SelectionVector *__restrict sel_vector, nullmask_t &nullmask) {
 	if (nullmask.any()) {
 		for (idx_t i = 0; i < count; i++) {
 			auto ridx = HAS_RSEL ? rsel->get_index(i) : i;
@@ -49,7 +49,7 @@ static inline void TemplatedLoopHash(Vector &input, Vector &result, const Select
 		input.Orrify(count, idata);
 
 		TightLoopHash<HAS_RSEL, T>((T *)idata.data, FlatVector::GetData<hash_t>(result), rsel, count, idata.sel,
-		                             *idata.nullmask);
+		                           *idata.nullmask);
 	}
 }
 
@@ -115,10 +115,9 @@ static inline hash_t CombineHashScalar(hash_t a, hash_t b) {
 }
 
 template <bool HAS_RSEL, class T>
-static inline void TightLoopCombineHashConstant(T *__restrict ldata, hash_t constant_hash,
-                                                    hash_t *__restrict hash_data, const SelectionVector *rsel,
-                                                    idx_t count, const SelectionVector *__restrict sel_vector,
-                                                    nullmask_t &nullmask) {
+static inline void TightLoopCombineHashConstant(T *__restrict ldata, hash_t constant_hash, hash_t *__restrict hash_data,
+                                                const SelectionVector *rsel, idx_t count,
+                                                const SelectionVector *__restrict sel_vector, nullmask_t &nullmask) {
 	if (nullmask.any()) {
 		for (idx_t i = 0; i < count; i++) {
 			auto ridx = HAS_RSEL ? rsel->get_index(i) : i;
@@ -137,9 +136,9 @@ static inline void TightLoopCombineHashConstant(T *__restrict ldata, hash_t cons
 }
 
 template <bool HAS_RSEL, class T>
-static inline void TightLoopCombineHash(T *__restrict ldata, hash_t *__restrict hash_data,
-                                           const SelectionVector *rsel, idx_t count,
-                                           const SelectionVector *__restrict sel_vector, nullmask_t &nullmask) {
+static inline void TightLoopCombineHash(T *__restrict ldata, hash_t *__restrict hash_data, const SelectionVector *rsel,
+                                        idx_t count, const SelectionVector *__restrict sel_vector,
+                                        nullmask_t &nullmask) {
 	if (nullmask.any()) {
 		for (idx_t i = 0; i < count; i++) {
 			auto ridx = HAS_RSEL ? rsel->get_index(i) : i;
@@ -174,12 +173,12 @@ void TemplatedLoopCombineHash(Vector &input, Vector &hashes, const SelectionVect
 			// now re-initialize the hashes vector to an empty flat vector
 			hashes.Initialize(hashes.type);
 			TightLoopCombineHashConstant<HAS_RSEL, T>((T *)idata.data, constant_hash,
-			                                              FlatVector::GetData<hash_t>(hashes), rsel, count, idata.sel,
-			                                              *idata.nullmask);
+			                                          FlatVector::GetData<hash_t>(hashes), rsel, count, idata.sel,
+			                                          *idata.nullmask);
 		} else {
 			D_ASSERT(hashes.vector_type == VectorType::FLAT_VECTOR);
 			TightLoopCombineHash<HAS_RSEL, T>((T *)idata.data, FlatVector::GetData<hash_t>(hashes), rsel, count,
-			                                     idata.sel, *idata.nullmask);
+			                                  idata.sel, *idata.nullmask);
 		}
 	}
 }

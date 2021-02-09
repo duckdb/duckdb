@@ -56,7 +56,6 @@ static Value transform_statistics_double(const_data_ptr_t input) {
 	return Value::CreateValue<double>(val);
 }
 
-
 static Value transform_statistics_timestamp_ms(const_data_ptr_t input) {
 	return Value::TIMESTAMP(parquet_timestamp_ms_to_timestamp(Load<int64_t>(input)));
 }

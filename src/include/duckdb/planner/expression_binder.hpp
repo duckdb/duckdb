@@ -61,8 +61,8 @@ public:
 	// Bind table names to ColumnRefExpressions
 	static void BindTableNames(Binder &binder, ParsedExpression &expr,
 	                           unordered_map<string, idx_t> *alias_map = nullptr);
-	static unique_ptr<Expression> PushCollation(ClientContext &context, unique_ptr<Expression> source, const string &collation,
-	                                            bool equality_only = false);
+	static unique_ptr<Expression> PushCollation(ClientContext &context, unique_ptr<Expression> source,
+	                                            const string &collation, bool equality_only = false);
 	static void TestCollation(ClientContext &context, const string &collation);
 
 	bool BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr);

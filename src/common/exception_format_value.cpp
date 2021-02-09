@@ -10,7 +10,8 @@ ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(PhysicalType value)
 	return ExceptionFormatValue(TypeIdToString(value));
 }
 template <>
-ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(LogicalType value) { // NOLINT: templating requires us to copy value here
+ExceptionFormatValue
+ExceptionFormatValue::CreateFormatValue(LogicalType value) { // NOLINT: templating requires us to copy value here
 	return ExceptionFormatValue(value.ToString());
 }
 template <>

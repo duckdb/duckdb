@@ -18,7 +18,8 @@ namespace duckdb {
 
 class FilterPullup {
 public:
-	explicit FilterPullup(bool pullup = false, bool add_column = false) : can_pullup(pullup), can_add_column(add_column) {
+	explicit FilterPullup(bool pullup = false, bool add_column = false)
+	    : can_pullup(pullup), can_add_column(add_column) {
 	}
 
 	//! Perform filter pullup

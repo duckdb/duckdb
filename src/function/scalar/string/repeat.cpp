@@ -37,7 +37,7 @@ void RepeatFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("repeat",                                    // name of the function
 	                               {LogicalType::VARCHAR, LogicalType::BIGINT}, // argument list
 	                               LogicalType::VARCHAR,                        // return type
-	                               RepeatFunction));                           // pointer to function implementation
+	                               RepeatFunction));                            // pointer to function implementation
 }
 
 } // namespace duckdb

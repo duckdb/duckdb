@@ -78,9 +78,9 @@ struct RefineNestedLoopJoin {
 };
 
 template <class NLTYPE, class OP>
-static idx_t NestedLoopJoinTypeSwitch(Vector &left, Vector &right, idx_t left_size, idx_t right_size,
-                                             idx_t &lpos, idx_t &rpos, SelectionVector &lvector,
-                                             SelectionVector &rvector, idx_t current_match_count) {
+static idx_t NestedLoopJoinTypeSwitch(Vector &left, Vector &right, idx_t left_size, idx_t right_size, idx_t &lpos,
+                                      idx_t &rpos, SelectionVector &lvector, SelectionVector &rvector,
+                                      idx_t current_match_count) {
 	switch (left.type.InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
@@ -128,29 +128,29 @@ static idx_t NestedLoopJoinTypeSwitch(Vector &left, Vector &right, idx_t left_si
 }
 
 template <class NLTYPE>
-idx_t NestedLoopJoinComparisonSwitch(Vector &left, Vector &right, idx_t left_size, idx_t right_size, idx_t &lpos, idx_t &rpos,
-                             SelectionVector &lvector, SelectionVector &rvector, idx_t current_match_count,
-                             ExpressionType comparison_type) {
+idx_t NestedLoopJoinComparisonSwitch(Vector &left, Vector &right, idx_t left_size, idx_t right_size, idx_t &lpos,
+                                     idx_t &rpos, SelectionVector &lvector, SelectionVector &rvector,
+                                     idx_t current_match_count, ExpressionType comparison_type) {
 	D_ASSERT(left.type == right.type);
 	switch (comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
-		return NestedLoopJoinTypeSwitch<NLTYPE, duckdb::Equals>(left, right, left_size, right_size, lpos, rpos,
-		                                                               lvector, rvector, current_match_count);
+		return NestedLoopJoinTypeSwitch<NLTYPE, duckdb::Equals>(left, right, left_size, right_size, lpos, rpos, lvector,
+		                                                        rvector, current_match_count);
 	case ExpressionType::COMPARE_NOTEQUAL:
-		return NestedLoopJoinTypeSwitch<NLTYPE, duckdb::NotEquals>(left, right, left_size, right_size, lpos,
-		                                                                  rpos, lvector, rvector, current_match_count);
+		return NestedLoopJoinTypeSwitch<NLTYPE, duckdb::NotEquals>(left, right, left_size, right_size, lpos, rpos,
+		                                                           lvector, rvector, current_match_count);
 	case ExpressionType::COMPARE_LESSTHAN:
 		return NestedLoopJoinTypeSwitch<NLTYPE, duckdb::LessThan>(left, right, left_size, right_size, lpos, rpos,
-		                                                                 lvector, rvector, current_match_count);
+		                                                          lvector, rvector, current_match_count);
 	case ExpressionType::COMPARE_GREATERTHAN:
-		return NestedLoopJoinTypeSwitch<NLTYPE, duckdb::GreaterThan>(
-		    left, right, left_size, right_size, lpos, rpos, lvector, rvector, current_match_count);
+		return NestedLoopJoinTypeSwitch<NLTYPE, duckdb::GreaterThan>(left, right, left_size, right_size, lpos, rpos,
+		                                                             lvector, rvector, current_match_count);
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		return NestedLoopJoinTypeSwitch<NLTYPE, duckdb::LessThanEquals>(
-		    left, right, left_size, right_size, lpos, rpos, lvector, rvector, current_match_count);
+		return NestedLoopJoinTypeSwitch<NLTYPE, duckdb::LessThanEquals>(left, right, left_size, right_size, lpos, rpos,
+		                                                                lvector, rvector, current_match_count);
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		return NestedLoopJoinTypeSwitch<NLTYPE, duckdb::GreaterThanEquals>(
-		    left, right, left_size, right_size, lpos, rpos, lvector, rvector, current_match_count);
+		return NestedLoopJoinTypeSwitch<NLTYPE, duckdb::GreaterThanEquals>(left, right, left_size, right_size, lpos,
+		                                                                   rpos, lvector, rvector, current_match_count);
 	default:
 		throw NotImplementedException("Unimplemented comparison type for join!");
 	}
@@ -178,9 +178,9 @@ idx_t NestedLoopJoinInner::Perform(idx_t &lpos, idx_t &rpos, DataChunk &left_con
 		Vector &l = left_conditions.data[i];
 		Vector &r = right_conditions.data[i];
 		// then we refine the currently obtained results using the RefineNestedLoopJoin
-		match_count =
-		    NestedLoopJoinComparisonSwitch<RefineNestedLoopJoin>(l, r, left_conditions.size(), right_conditions.size(), lpos,
-		                                                 rpos, lvector, rvector, match_count, conditions[i].comparison);
+		match_count = NestedLoopJoinComparisonSwitch<RefineNestedLoopJoin>(
+		    l, r, left_conditions.size(), right_conditions.size(), lpos, rpos, lvector, rvector, match_count,
+		    conditions[i].comparison);
 	}
 	return match_count;
 }

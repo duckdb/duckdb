@@ -17,9 +17,8 @@ struct InformationSchemaTablesData : public FunctionOperatorData {
 };
 
 static unique_ptr<FunctionData> InformationSchemaTablesBind(ClientContext &context, vector<Value> &inputs,
-                                                               unordered_map<string, Value> &named_parameters,
-                                                               vector<LogicalType> &return_types,
-                                                               vector<string> &names) {
+                                                            unordered_map<string, Value> &named_parameters,
+                                                            vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("table_catalog");
 	return_types.push_back(LogicalType::VARCHAR);
 
@@ -60,8 +59,8 @@ static unique_ptr<FunctionData> InformationSchemaTablesBind(ClientContext &conte
 }
 
 unique_ptr<FunctionOperatorData> InformationSchemaTablesInit(ClientContext &context, const FunctionData *bind_data,
-                                                                vector<column_t> &column_ids,
-                                                                TableFilterCollection *filters) {
+                                                             vector<column_t> &column_ids,
+                                                             TableFilterCollection *filters) {
 	auto result = make_unique<InformationSchemaTablesData>();
 
 	// scan all the schemas for tables and views and collect them
@@ -77,7 +76,7 @@ unique_ptr<FunctionOperatorData> InformationSchemaTablesInit(ClientContext &cont
 }
 
 void InformationSchemaTablesFunction(ClientContext &context, const FunctionData *bind_data,
-                               FunctionOperatorData *operator_state, DataChunk &output) {
+                                     FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &data = (InformationSchemaTablesData &)*operator_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values

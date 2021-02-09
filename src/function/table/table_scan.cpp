@@ -21,7 +21,7 @@ namespace duckdb {
 // Table Scan
 //===--------------------------------------------------------------------===//
 bool TableScanParallelStateNext(ClientContext &context, const FunctionData *bind_data,
-                                    FunctionOperatorData *operator_state, ParallelState *parallel_state_p);
+                                FunctionOperatorData *operator_state, ParallelState *parallel_state_p);
 
 struct TableScanOperatorData : public FunctionOperatorData {
 	//! The current position in the scan
@@ -30,7 +30,7 @@ struct TableScanOperatorData : public FunctionOperatorData {
 };
 
 static unique_ptr<FunctionOperatorData> TableScanInit(ClientContext &context, const FunctionData *bind_data_p,
-                                                        vector<column_t> &column_ids, TableFilterCollection *filters) {
+                                                      vector<column_t> &column_ids, TableFilterCollection *filters) {
 	auto result = make_unique<TableScanOperatorData>();
 	auto &transaction = Transaction::GetTransaction(context);
 	auto &bind_data = (const TableScanBindData &)*bind_data_p;
@@ -42,7 +42,7 @@ static unique_ptr<FunctionOperatorData> TableScanInit(ClientContext &context, co
 }
 
 static unique_ptr<BaseStatistics> TableScanStatistics(ClientContext &context, const FunctionData *bind_data_p,
-                                                        column_t column_id) {
+                                                      column_t column_id) {
 	auto &bind_data = (const TableScanBindData &)*bind_data_p;
 	auto &transaction = Transaction::GetTransaction(context);
 	if (transaction.storage.Find(bind_data.table->storage.get())) {
@@ -53,8 +53,8 @@ static unique_ptr<BaseStatistics> TableScanStatistics(ClientContext &context, co
 }
 
 static unique_ptr<FunctionOperatorData> TableScanParallelInit(ClientContext &context, const FunctionData *bind_data_p,
-                                                                 ParallelState *state, vector<column_t> &column_ids,
-                                                                 TableFilterCollection *filters) {
+                                                              ParallelState *state, vector<column_t> &column_ids,
+                                                              TableFilterCollection *filters) {
 	auto result = make_unique<TableScanOperatorData>();
 	result->column_ids = column_ids;
 	result->scan_state.table_filters = filters->table_filters;
@@ -64,8 +64,8 @@ static unique_ptr<FunctionOperatorData> TableScanParallelInit(ClientContext &con
 	return move(result);
 }
 
-static void TableScanFunc(ClientContext &context, const FunctionData *bind_data_p,
-                                FunctionOperatorData *operator_state, DataChunk &output) {
+static void TableScanFunc(ClientContext &context, const FunctionData *bind_data_p, FunctionOperatorData *operator_state,
+                          DataChunk &output) {
 	auto &bind_data = (const TableScanBindData &)*bind_data_p;
 	auto &state = (TableScanOperatorData &)*operator_state;
 	auto &transaction = Transaction::GetTransaction(context);
@@ -90,7 +90,7 @@ unique_ptr<ParallelState> TableScanInitParallelState(ClientContext &context, con
 }
 
 bool TableScanParallelStateNext(ClientContext &context, const FunctionData *bind_data_p,
-                                    FunctionOperatorData *operator_state, ParallelState *parallel_state_p) {
+                                FunctionOperatorData *operator_state, ParallelState *parallel_state_p) {
 	auto &bind_data = (const TableScanBindData &)*bind_data_p;
 	auto &parallel_state = (ParallelTableFunctionScanState &)*parallel_state_p;
 	auto &state = (TableScanOperatorData &)*operator_state;
@@ -125,7 +125,7 @@ struct IndexScanOperatorData : public FunctionOperatorData {
 };
 
 static unique_ptr<FunctionOperatorData> IndexScanInit(ClientContext &context, const FunctionData *bind_data_p,
-                                                        vector<column_t> &column_ids, TableFilterCollection *filters) {
+                                                      vector<column_t> &column_ids, TableFilterCollection *filters) {
 	auto result = make_unique<IndexScanOperatorData>();
 	auto &transaction = Transaction::GetTransaction(context);
 	auto &bind_data = (const TableScanBindData &)*bind_data_p;
@@ -142,7 +142,7 @@ static unique_ptr<FunctionOperatorData> IndexScanInit(ClientContext &context, co
 }
 
 static void IndexScanFunction(ClientContext &context, const FunctionData *bind_data_p,
-                                FunctionOperatorData *operator_state, DataChunk &output) {
+                              FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &bind_data = (const TableScanBindData &)*bind_data_p;
 	auto &state = (IndexScanOperatorData &)*operator_state;
 	auto &transaction = Transaction::GetTransaction(context);
@@ -177,7 +177,7 @@ static void RewriteIndexExpression(Index &index, LogicalGet &get, Expression &ex
 }
 
 void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
-                                        vector<unique_ptr<Expression>> &filters) {
+                                    vector<unique_ptr<Expression>> &filters) {
 	auto &bind_data = (TableScanBindData &)*bind_data_p;
 	auto table = bind_data.table;
 	auto &storage = *table->storage;

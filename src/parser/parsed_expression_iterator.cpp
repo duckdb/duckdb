@@ -14,8 +14,8 @@ void ParsedExpressionIterator::EnumerateChildren(ParsedExpression &expr,
 	EnumerateChildren(expr, [&](unique_ptr<ParsedExpression> &child) { callback(*child); });
 }
 
-void ParsedExpressionIterator::EnumerateChildren(ParsedExpression &expr,
-                                                 const std::function<void(unique_ptr<ParsedExpression> &child)> &callback) {
+void ParsedExpressionIterator::EnumerateChildren(
+    ParsedExpression &expr, const std::function<void(unique_ptr<ParsedExpression> &child)> &callback) {
 	switch (expr.expression_class) {
 	case ExpressionClass::CASE: {
 		auto &case_expr = (CaseExpression &)expr;

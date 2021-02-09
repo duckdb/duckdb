@@ -101,9 +101,8 @@ void CovarPopFun::RegisterFunction(BuiltinFunctions &set) {
 
 void CovarSampFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet covar_samp("covar_samp");
-	covar_samp.AddFunction(
-	    AggregateFunction::BinaryAggregate<CovarState, double, double, double, CovarSampOperation>(
-	        LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE));
+	covar_samp.AddFunction(AggregateFunction::BinaryAggregate<CovarState, double, double, double, CovarSampOperation>(
+	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE));
 	set.AddFunction(covar_samp);
 }
 

@@ -81,7 +81,8 @@ public:
 	DUCKDB_API shared_ptr<Relation> Order(const vector<string> &expressions);
 
 	// JOIN operation
-	DUCKDB_API shared_ptr<Relation> Join(const shared_ptr<Relation> &other, const string &condition, JoinType type = JoinType::INNER);
+	DUCKDB_API shared_ptr<Relation> Join(const shared_ptr<Relation> &other, const string &condition,
+	                                     JoinType type = JoinType::INNER);
 
 	// SET operations
 	DUCKDB_API shared_ptr<Relation> Union(const shared_ptr<Relation> &other);

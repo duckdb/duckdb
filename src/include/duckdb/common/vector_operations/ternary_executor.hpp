@@ -135,7 +135,7 @@ private:
 			                                                              false_sel);
 		} else {
 			return SelectLoopSelSwitch<A_TYPE, B_TYPE, C_TYPE, OP, true>(adata, bdata, cdata, sel, count, true_sel,
-			                                                              false_sel);
+			                                                             false_sel);
 		}
 	}
 

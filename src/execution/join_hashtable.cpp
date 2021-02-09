@@ -105,7 +105,7 @@ void JoinHashTable::Hash(DataChunk &keys, const SelectionVector &sel, idx_t coun
 }
 template <class T>
 static void TemplatedSerializeVData(VectorData &vdata, const SelectionVector &sel, idx_t count,
-                                      data_ptr_t key_locations[]) {
+                                    data_ptr_t key_locations[]) {
 	auto source = (T *)vdata.data;
 	if (vdata.nullmask->any()) {
 		for (idx_t i = 0; i < count; i++) {

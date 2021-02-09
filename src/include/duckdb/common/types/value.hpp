@@ -27,7 +27,7 @@ public:
 	//! Create an empty NULL value of the specified type
 	explicit Value(LogicalType type = LogicalType::SQLNULL);
 	//! Create an INTEGER value
-	Value(int32_t val);	// NOLINT: Allow implicit conversion from `int32_t`
+	Value(int32_t val); // NOLINT: Allow implicit conversion from `int32_t`
 	//! Create a BIGINT value
 	Value(int64_t val); // NOLINT: Allow implicit conversion from `int64_t`
 	//! Create a FLOAT value

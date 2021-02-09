@@ -19,8 +19,8 @@ struct PragmaFunctionsData : public FunctionOperatorData {
 };
 
 static unique_ptr<FunctionData> PragmaFunctionsBind(ClientContext &context, vector<Value> &inputs,
-                                                      unordered_map<string, Value> &named_parameters,
-                                                      vector<LogicalType> &return_types, vector<string> &names) {
+                                                    unordered_map<string, Value> &named_parameters,
+                                                    vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("name");
 	return_types.push_back(LogicalType::VARCHAR);
 
@@ -46,7 +46,7 @@ static unique_ptr<FunctionData> PragmaFunctionsBind(ClientContext &context, vect
 }
 
 unique_ptr<FunctionOperatorData> PragmaFunctionsInit(ClientContext &context, const FunctionData *bind_data,
-                                                       vector<column_t> &column_ids, TableFilterCollection *filters) {
+                                                     vector<column_t> &column_ids, TableFilterCollection *filters) {
 	auto result = make_unique<PragmaFunctionsData>();
 
 	Catalog::GetCatalog(context).schemas->Scan(context, [&](CatalogEntry *entry) {
@@ -91,7 +91,7 @@ void AddFunction(BaseScalarFunction &f, idx_t &count, DataChunk &output, bool is
 }
 
 static void PragmaFunctionsFunction(ClientContext &context, const FunctionData *bind_data,
-                             FunctionOperatorData *operator_state, DataChunk &output) {
+                                    FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &data = (PragmaFunctionsData &)*operator_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values

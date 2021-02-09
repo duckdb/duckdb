@@ -145,7 +145,7 @@ static int8_t TemplatedCompareValue(Vector &left_vec, Vector &right_vec, idx_t l
 
 // return type here is int32 because strcmp() on some platforms returns rather large values
 static int32_t CompareValue(Vector &left_vec, Vector &right_vec, idx_t vector_idx_left, idx_t vector_idx_right,
-                             OrderByNullType null_order) {
+                            OrderByNullType null_order) {
 	auto left_null = FlatVector::Nullmask(left_vec)[vector_idx_left];
 	auto right_null = FlatVector::Nullmask(right_vec)[vector_idx_right];
 
@@ -192,7 +192,7 @@ static int32_t CompareValue(Vector &left_vec, Vector &right_vec, idx_t vector_id
 }
 
 static int CompareTuple(ChunkCollection *sort_by, vector<OrderType> &desc, vector<OrderByNullType> &null_order,
-                         idx_t left, idx_t right) {
+                        idx_t left, idx_t right) {
 	D_ASSERT(sort_by);
 
 	idx_t chunk_idx_left = left / STANDARD_VECTOR_SIZE;
@@ -224,8 +224,8 @@ static int CompareTuple(ChunkCollection *sort_by, vector<OrderType> &desc, vecto
 	return 0;
 }
 
-static int64_t QuicksortInitial(ChunkCollection *sort_by, vector<OrderType> &desc,
-                                  vector<OrderByNullType> &null_order, idx_t *result) {
+static int64_t QuicksortInitial(ChunkCollection *sort_by, vector<OrderType> &desc, vector<OrderByNullType> &null_order,
+                                idx_t *result) {
 	// select pivot
 	int64_t pivot = 0;
 	int64_t low = 0, high = sort_by->Count() - 1;
@@ -272,7 +272,7 @@ struct QuicksortStack {
 };
 
 static void QuicksortInPlace(ChunkCollection *sort_by, vector<OrderType> &desc, vector<OrderByNullType> &null_order,
-                               idx_t *result, QuicksortInfo info, QuicksortStack &stack) {
+                             idx_t *result, QuicksortInfo info, QuicksortStack &stack) {
 	auto left = info.left;
 	auto right = info.right;
 
@@ -374,7 +374,7 @@ void ChunkCollection::Reorder(idx_t order_org[]) {
 
 template <class TYPE>
 static void TemplatedSetValues(ChunkCollection *src_coll, Vector &tgt_vec, idx_t order[], idx_t col_idx,
-                                 idx_t start_offset, idx_t remaining_data) {
+                               idx_t start_offset, idx_t remaining_data) {
 	D_ASSERT(src_coll);
 
 	for (idx_t row_idx = 0; row_idx < remaining_data; row_idx++) {
@@ -511,7 +511,7 @@ bool ChunkCollection::Equals(ChunkCollection &other) {
 	return true;
 }
 static void Heapify(ChunkCollection *input, vector<OrderType> &desc, vector<OrderByNullType> &null_order, idx_t *heap,
-                     idx_t heap_size, idx_t current_index) {
+                    idx_t heap_size, idx_t current_index) {
 	if (current_index >= heap_size) {
 		return;
 	}
@@ -538,7 +538,7 @@ static void Heapify(ChunkCollection *input, vector<OrderType> &desc, vector<Orde
 }
 
 static void HeapCreate(ChunkCollection *input, vector<OrderType> &desc, vector<OrderByNullType> &null_order,
-                         idx_t *heap, idx_t heap_size) {
+                       idx_t *heap, idx_t heap_size) {
 	for (idx_t i = 0; i < heap_size; i++) {
 		heap[i] = i;
 	}

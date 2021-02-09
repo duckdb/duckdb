@@ -145,7 +145,7 @@ static void SubstringFunction(DataChunk &args, ExpressionState &state, Vector &r
 		BinaryExecutor::Execute<string_t, int32_t, string_t, true>(
 		    input_vector, offset_vector, result, args.size(), [&](string_t input_string, int32_t offset) {
 			    return SubstringFun::SubstringScalarFunction(result, input_string, offset,
-			                                                   NumericLimits<int32_t>::Maximum());
+			                                                 NumericLimits<int32_t>::Maximum());
 		    });
 	}
 }
@@ -170,8 +170,8 @@ static void SubstringFunctionASCII(DataChunk &args, ExpressionState &state, Vect
 }
 
 static unique_ptr<BaseStatistics> SubstringPropagateStats(ClientContext &context, BoundFunctionExpression &expr,
-                                                            FunctionData *bind_data,
-                                                            vector<unique_ptr<BaseStatistics>> &child_stats) {
+                                                          FunctionData *bind_data,
+                                                          vector<unique_ptr<BaseStatistics>> &child_stats) {
 	// can only propagate stats if the children have stats
 	if (!child_stats[0]) {
 		return nullptr;

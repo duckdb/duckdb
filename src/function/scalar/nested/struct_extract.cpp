@@ -6,8 +6,7 @@
 namespace duckdb {
 
 struct StructExtractBindData : public FunctionData {
-	StructExtractBindData(string key, idx_t index, LogicalType type)
-	    : key(move(key)), index(index), type(move(type)) {
+	StructExtractBindData(string key, idx_t index, LogicalType type) : key(move(key)), index(index), type(move(type)) {
 	}
 
 	string key;
@@ -59,7 +58,7 @@ static void StructExtractFunction(DataChunk &args, ExpressionState &state, Vecto
 }
 
 static unique_ptr<FunctionData> StructExtractBind(ClientContext &context, ScalarFunction &bound_function,
-                                                    vector<unique_ptr<Expression>> &arguments) {
+                                                  vector<unique_ptr<Expression>> &arguments) {
 	auto &struct_children = arguments[0]->return_type.child_types();
 	if (struct_children.size() < 1) {
 		throw Exception("Can't extract something from an empty struct");

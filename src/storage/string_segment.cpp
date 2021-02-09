@@ -82,7 +82,7 @@ void StringSegment::InitializeScan(ColumnScanState &state) {
 // Filter base data
 //===--------------------------------------------------------------------===//
 void StringSegment::ReadString(string_t *result_data, Vector &result, data_ptr_t baseptr, int32_t *dict_offset,
-                                idx_t src_idx, idx_t res_idx, idx_t &update_idx, size_t vector_index) {
+                               idx_t src_idx, idx_t res_idx, idx_t &update_idx, size_t vector_index) {
 	if (string_updates && string_updates[vector_index]) {
 		auto &info = *string_updates[vector_index];
 		while (update_idx < STANDARD_VECTOR_SIZE && info.ids[update_idx] < src_idx) {
@@ -145,7 +145,7 @@ void StringSegment::Select(ColumnScanState &state, Vector &result, SelectionVect
 		}
 	} else {
 		bool is_first_greater = table_filter[0].comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
-		                      table_filter[0].comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO;
+		                        table_filter[0].comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO;
 		auto less = is_first_greater ? table_filter[1] : table_filter[0];
 		auto greater = is_first_greater ? table_filter[0] : table_filter[1];
 		if (greater.comparison_type == ExpressionType::COMPARE_GREATERTHAN) {

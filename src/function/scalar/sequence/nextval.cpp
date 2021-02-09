@@ -86,7 +86,7 @@ static void NextValFunction(DataChunk &args, ExpressionState &state, Vector &res
 }
 
 static unique_ptr<FunctionData> NextValBind(ClientContext &context, ScalarFunction &bound_function,
-                                             vector<unique_ptr<Expression>> &arguments) {
+                                            vector<unique_ptr<Expression>> &arguments) {
 	SequenceCatalogEntry *sequence = nullptr;
 	if (arguments[0]->IsFoldable()) {
 		// parameter to nextval function is a foldable constant

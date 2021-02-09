@@ -16,4 +16,4 @@ using std::chrono::duration_cast;
 using std::chrono::high_resolution_clock;
 using std::chrono::system_clock;
 using std::chrono::time_point;
-}
+} // namespace duckdb

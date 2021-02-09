@@ -228,7 +228,8 @@ idx_t StringUtil::LevenshteinDistance(const string &s1, const string &s2) {
 	return array.Score(len1, len2);
 }
 
-vector<string> StringUtil::TopNLevenshtein(const vector<string> &strings, const string &target, idx_t n, idx_t threshold) {
+vector<string> StringUtil::TopNLevenshtein(const vector<string> &strings, const string &target, idx_t n,
+                                           idx_t threshold) {
 	vector<pair<string, idx_t>> scores;
 	scores.reserve(strings.size());
 	for (auto &str : strings) {

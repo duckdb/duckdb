@@ -117,19 +117,16 @@ struct QuantileOperation {
 AggregateFunction GetQuantileAggregateFunction(PhysicalType type) {
 	switch (type) {
 	case PhysicalType::INT16:
-		return AggregateFunction::UnaryAggregateDestructor<QuantileState, int16_t, int16_t,
-		                                                   QuantileOperation<int16_t>>(LogicalType::SMALLINT,
-		                                                                               LogicalType::SMALLINT);
+		return AggregateFunction::UnaryAggregateDestructor<QuantileState, int16_t, int16_t, QuantileOperation<int16_t>>(
+		    LogicalType::SMALLINT, LogicalType::SMALLINT);
 
 	case PhysicalType::INT32:
-		return AggregateFunction::UnaryAggregateDestructor<QuantileState, int32_t, int32_t,
-		                                                   QuantileOperation<int32_t>>(LogicalType::INTEGER,
-		                                                                               LogicalType::INTEGER);
+		return AggregateFunction::UnaryAggregateDestructor<QuantileState, int32_t, int32_t, QuantileOperation<int32_t>>(
+		    LogicalType::INTEGER, LogicalType::INTEGER);
 
 	case PhysicalType::INT64:
-		return AggregateFunction::UnaryAggregateDestructor<QuantileState, int64_t, int64_t,
-		                                                   QuantileOperation<int64_t>>(LogicalType::BIGINT,
-		                                                                               LogicalType::BIGINT);
+		return AggregateFunction::UnaryAggregateDestructor<QuantileState, int64_t, int64_t, QuantileOperation<int64_t>>(
+		    LogicalType::BIGINT, LogicalType::BIGINT);
 
 	case PhysicalType::INT128:
 		return AggregateFunction::UnaryAggregateDestructor<QuantileState, hugeint_t, hugeint_t,
@@ -149,12 +146,12 @@ AggregateFunction GetQuantileAggregateFunction(PhysicalType type) {
 }
 
 unique_ptr<FunctionData> BindMedian(ClientContext &context, AggregateFunction &function,
-                                     vector<unique_ptr<Expression>> &arguments) {
+                                    vector<unique_ptr<Expression>> &arguments) {
 	return make_unique<QuantileBindData>(0.5);
 }
 
 unique_ptr<FunctionData> BindMedianDecimal(ClientContext &context, AggregateFunction &function,
-                                             vector<unique_ptr<Expression>> &arguments) {
+                                           vector<unique_ptr<Expression>> &arguments) {
 	auto bind_data = BindMedian(context, function, arguments);
 
 	function = GetQuantileAggregateFunction(arguments[0]->return_type.InternalType());
@@ -163,7 +160,7 @@ unique_ptr<FunctionData> BindMedianDecimal(ClientContext &context, AggregateFunc
 }
 
 unique_ptr<FunctionData> BindQuantile(ClientContext &context, AggregateFunction &function,
-                                       vector<unique_ptr<Expression>> &arguments) {
+                                      vector<unique_ptr<Expression>> &arguments) {
 	if (!arguments[1]->IsScalar()) {
 		throw BinderException("QUANTILE can only take constant quantile parameters");
 	}
@@ -177,7 +174,7 @@ unique_ptr<FunctionData> BindQuantile(ClientContext &context, AggregateFunction 
 	return make_unique<QuantileBindData>(quantile);
 }
 unique_ptr<FunctionData> BindQuantileDecimal(ClientContext &context, AggregateFunction &function,
-                                               vector<unique_ptr<Expression>> &arguments) {
+                                             vector<unique_ptr<Expression>> &arguments) {
 	auto bind_data = BindQuantile(context, function, arguments);
 	function = GetQuantileAggregateFunction(arguments[0]->return_type.InternalType());
 	function.name = "quantile";

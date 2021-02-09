@@ -12,8 +12,8 @@ struct PragmaDatabaseListData : public FunctionOperatorData {
 };
 
 static unique_ptr<FunctionData> PragmaDatabaseListBind(ClientContext &context, vector<Value> &inputs,
-                                                          unordered_map<string, Value> &named_parameters,
-                                                          vector<LogicalType> &return_types, vector<string> &names) {
+                                                       unordered_map<string, Value> &named_parameters,
+                                                       vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("seq");
 	return_types.push_back(LogicalType::INTEGER);
 
@@ -27,13 +27,12 @@ static unique_ptr<FunctionData> PragmaDatabaseListBind(ClientContext &context, v
 }
 
 unique_ptr<FunctionOperatorData> PragmaDatabaseListInit(ClientContext &context, const FunctionData *bind_data,
-                                                           vector<column_t> &column_ids,
-                                                           TableFilterCollection *filters) {
+                                                        vector<column_t> &column_ids, TableFilterCollection *filters) {
 	return make_unique<PragmaDatabaseListData>();
 }
 
-void PragmaDatabaseListFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
-                          DataChunk &output) {
+void PragmaDatabaseListFunction(ClientContext &context, const FunctionData *bind_data,
+                                FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &data = (PragmaDatabaseListData &)*operator_state;
 	if (data.finished) {
 		return;

@@ -104,8 +104,9 @@ static void RegisterLeastGreatest(BuiltinFunctions &set, const string &fun_name)
 	                                   LogicalType::TIMESTAMP));
 	fun_set.AddFunction(ScalarFunction({LogicalType::BIGINT}, LogicalType::BIGINT, LeastGreatestFunction<int64_t, OP>,
 	                                   false, nullptr, nullptr, nullptr, LogicalType::BIGINT));
-	fun_set.AddFunction(ScalarFunction({LogicalType::HUGEINT}, LogicalType::HUGEINT, LeastGreatestFunction<hugeint_t, OP>,
-	                                   false, nullptr, nullptr, nullptr, LogicalType::HUGEINT));
+	fun_set.AddFunction(ScalarFunction({LogicalType::HUGEINT}, LogicalType::HUGEINT,
+	                                   LeastGreatestFunction<hugeint_t, OP>, false, nullptr, nullptr, nullptr,
+	                                   LogicalType::HUGEINT));
 	fun_set.AddFunction(ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE, LeastGreatestFunction<double, OP>,
 	                                   false, nullptr, nullptr, nullptr, LogicalType::DOUBLE));
 	fun_set.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR,

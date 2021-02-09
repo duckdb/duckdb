@@ -128,7 +128,8 @@ string Function::CallToString(const string &name, const vector<LogicalType> &arg
 	return result + ")";
 }
 
-string Function::CallToString(const string &name, const vector<LogicalType> &arguments, const LogicalType &return_type) {
+string Function::CallToString(const string &name, const vector<LogicalType> &arguments,
+                              const LogicalType &return_type) {
 	string result = CallToString(name, arguments);
 	result += " -> " + return_type.ToString();
 	return result;
@@ -297,8 +298,8 @@ vector<LogicalType> GetLogicalTypesFromExpressions(vector<unique_ptr<Expression>
 	return types;
 }
 
-idx_t Function::BindFunction(const string &name, vector<ScalarFunction> &functions, vector<unique_ptr<Expression>> &arguments,
-                             string &error) {
+idx_t Function::BindFunction(const string &name, vector<ScalarFunction> &functions,
+                             vector<unique_ptr<Expression>> &arguments, string &error) {
 	auto types = GetLogicalTypesFromExpressions(arguments);
 	return Function::BindFunction(name, functions, types, error);
 }
@@ -309,8 +310,8 @@ idx_t Function::BindFunction(const string &name, vector<AggregateFunction> &func
 	return Function::BindFunction(name, functions, types, error);
 }
 
-idx_t Function::BindFunction(const string &name, vector<TableFunction> &functions, vector<unique_ptr<Expression>> &arguments,
-                             string &error) {
+idx_t Function::BindFunction(const string &name, vector<TableFunction> &functions,
+                             vector<unique_ptr<Expression>> &arguments, string &error) {
 	auto types = GetLogicalTypesFromExpressions(arguments);
 	return Function::BindFunction(name, functions, types, error);
 }

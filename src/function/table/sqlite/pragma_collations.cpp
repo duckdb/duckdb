@@ -16,8 +16,8 @@ struct PragmaCollateData : public FunctionOperatorData {
 };
 
 static unique_ptr<FunctionData> PragmaCollateBind(ClientContext &context, vector<Value> &inputs,
-                                                    unordered_map<string, Value> &named_parameters,
-                                                    vector<LogicalType> &return_types, vector<string> &names) {
+                                                  unordered_map<string, Value> &named_parameters,
+                                                  vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("collname");
 	return_types.push_back(LogicalType::VARCHAR);
 
@@ -25,7 +25,7 @@ static unique_ptr<FunctionData> PragmaCollateBind(ClientContext &context, vector
 }
 
 unique_ptr<FunctionOperatorData> PragmaCollateInit(ClientContext &context, const FunctionData *bind_data,
-                                                     vector<column_t> &column_ids, TableFilterCollection *filters) {
+                                                   vector<column_t> &column_ids, TableFilterCollection *filters) {
 	auto result = make_unique<PragmaCollateData>();
 
 	Catalog::GetCatalog(context).schemas->Scan(context, [&](CatalogEntry *entry) {
@@ -37,8 +37,8 @@ unique_ptr<FunctionOperatorData> PragmaCollateInit(ClientContext &context, const
 	return move(result);
 }
 
-static void PragmaCollateFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
-                           DataChunk &output) {
+static void PragmaCollateFunction(ClientContext &context, const FunctionData *bind_data,
+                                  FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &data = (PragmaCollateData &)*operator_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
@@ -55,7 +55,8 @@ static void PragmaCollateFunction(ClientContext &context, const FunctionData *bi
 }
 
 void PragmaCollations::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("pragma_collations", {}, PragmaCollateFunction, PragmaCollateBind, PragmaCollateInit));
+	set.AddFunction(
+	    TableFunction("pragma_collations", {}, PragmaCollateFunction, PragmaCollateBind, PragmaCollateInit));
 }
 
 } // namespace duckdb

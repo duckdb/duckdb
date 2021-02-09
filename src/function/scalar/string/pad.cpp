@@ -134,7 +134,7 @@ void LpadFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("lpad",                                      // name of the function
 	                               {LogicalType::VARCHAR, LogicalType::INTEGER, // argument list
 	                                LogicalType::VARCHAR},
-	                               LogicalType::VARCHAR,         // return type
+	                               LogicalType::VARCHAR,           // return type
 	                               PadFunction<LeftPadOperator>)); // pointer to function implementation
 }
 
@@ -142,7 +142,7 @@ void RpadFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("rpad",                                      // name of the function
 	                               {LogicalType::VARCHAR, LogicalType::INTEGER, // argument list
 	                                LogicalType::VARCHAR},
-	                               LogicalType::VARCHAR,         // return type
+	                               LogicalType::VARCHAR,            // return type
 	                               PadFunction<RightPadOperator>)); // pointer to function implementation
 }
 

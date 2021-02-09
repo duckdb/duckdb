@@ -10,8 +10,8 @@ struct GlobFunctionBindData : public TableFunctionData {
 };
 
 static unique_ptr<FunctionData> GlobFunctionBind(ClientContext &context, vector<Value> &inputs,
-                                                   unordered_map<string, Value> &named_parameters,
-                                                   vector<LogicalType> &return_types, vector<string> &names) {
+                                                 unordered_map<string, Value> &named_parameters,
+                                                 vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_unique<GlobFunctionBindData>();
 	auto &fs = FileSystem::GetFileSystem(context);
 	result->files = fs.Glob(inputs[0].str_value);
@@ -28,13 +28,12 @@ struct GlobFunctionState : public FunctionOperatorData {
 };
 
 static unique_ptr<FunctionOperatorData> GlobFunctionInit(ClientContext &context, const FunctionData *bind_data,
-                                                           vector<column_t> &column_ids,
-                                                           TableFilterCollection *filters) {
+                                                         vector<column_t> &column_ids, TableFilterCollection *filters) {
 	return make_unique<GlobFunctionState>();
 }
 
 static void GlobFunction(ClientContext &context, const FunctionData *bind_data_p, FunctionOperatorData *state_p,
-                          DataChunk &output) {
+                         DataChunk &output) {
 	auto &bind_data = (GlobFunctionBindData &)*bind_data_p;
 	auto &state = (GlobFunctionState &)*state_p;
 

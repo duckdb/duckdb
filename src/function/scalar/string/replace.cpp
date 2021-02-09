@@ -11,7 +11,7 @@
 namespace duckdb {
 
 static idx_t NextNeedle(const char *input_haystack, idx_t size_haystack, const char *input_needle,
-                         const idx_t size_needle) {
+                        const idx_t size_needle) {
 	// Needle needs something to proceed
 	if (size_needle > 0) {
 		// Haystack should be bigger or equal size to the needle
@@ -29,7 +29,7 @@ static idx_t NextNeedle(const char *input_haystack, idx_t size_haystack, const c
 }
 
 static string_t ReplaceScalarFunction(const string_t &haystack, const string_t &needle, const string_t &thread,
-                                        vector<char> &result) {
+                                      vector<char> &result) {
 	// Get information about the needle, the haystack and the "thread"
 	auto input_haystack = haystack.GetDataUnsafe();
 	auto size_haystack = haystack.GetSize();
@@ -83,7 +83,7 @@ void ReplaceFun::RegisterFunction(BuiltinFunctions &set) {
 	                               {LogicalType::VARCHAR, // argument list
 	                                LogicalType::VARCHAR, LogicalType::VARCHAR},
 	                               LogicalType::VARCHAR, // return type
-	                               ReplaceFunction));   // pointer to function implementation
+	                               ReplaceFunction));    // pointer to function implementation
 }
 
 } // namespace duckdb

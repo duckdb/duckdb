@@ -503,8 +503,8 @@ void AddGenericDatePartOperator(BuiltinFunctions &set, const string &name, scala
 	ScalarFunctionSet operator_set(name);
 	operator_set.AddFunction(
 	    ScalarFunction({LogicalType::DATE}, LogicalType::BIGINT, move(date_func), false, nullptr, nullptr, date_stats));
-	operator_set.AddFunction(
-	    ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::BIGINT, move(ts_func), false, nullptr, nullptr, ts_stats));
+	operator_set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::BIGINT, move(ts_func), false,
+	                                        nullptr, nullptr, ts_stats));
 	set.AddFunction(operator_set);
 }
 

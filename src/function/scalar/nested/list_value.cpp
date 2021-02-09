@@ -46,7 +46,7 @@ static void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &r
 }
 
 static unique_ptr<FunctionData> ListValueBind(ClientContext &context, ScalarFunction &bound_function,
-                                                vector<unique_ptr<Expression>> &arguments) {
+                                              vector<unique_ptr<Expression>> &arguments) {
 	// collect names and deconflict, construct return type
 	child_list_t<LogicalType> child_types;
 	if (arguments.size() > 0) {

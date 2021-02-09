@@ -26,13 +26,13 @@ static void StatsFunction(DataChunk &args, ExpressionState &state, Vector &resul
 }
 
 unique_ptr<FunctionData> StatsBind(ClientContext &context, ScalarFunction &bound_function,
-                                    vector<unique_ptr<Expression>> &arguments) {
+                                   vector<unique_ptr<Expression>> &arguments) {
 	return make_unique<StatsBindData>();
 }
 
 static unique_ptr<BaseStatistics> StatsPropagateStats(ClientContext &context, BoundFunctionExpression &expr,
-                                                        FunctionData *bind_data,
-                                                        vector<unique_ptr<BaseStatistics>> &child_stats) {
+                                                      FunctionData *bind_data,
+                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
 	if (child_stats[0]) {
 		auto &info = (StatsBindData &)*bind_data;
 		info.stats = child_stats[0]->ToString();

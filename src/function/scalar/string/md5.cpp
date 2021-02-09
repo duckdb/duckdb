@@ -23,7 +23,7 @@ void MD5Fun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("md5",                  // name of the function
 	                               {LogicalType::VARCHAR}, // argument list
 	                               LogicalType::VARCHAR,   // return type
-	                               MD5Function));         // pointer to function implementation
+	                               MD5Function));          // pointer to function implementation
 }
 
 } // namespace duckdb

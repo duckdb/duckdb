@@ -81,7 +81,7 @@ void TemplatedFillLoop(Vector &vector, Vector &result, SelectionVector &sel, sel
 
 template <class T>
 void TemplatedCaseLoop(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &tside, idx_t tcount,
-               SelectionVector &fside, idx_t fcount) {
+                       SelectionVector &fside, idx_t fcount) {
 	TemplatedFillLoop<T>(res_true, result, tside, tcount);
 	TemplatedFillLoop<T>(res_false, result, fside, fcount);
 }

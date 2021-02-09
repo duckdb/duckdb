@@ -247,7 +247,8 @@ void LocalStorage::Delete(DataTable *table, Vector &row_ids, idx_t count) {
 }
 
 template <class T>
-static void TemplatedUpdateLoop(Vector &data_vector, Vector &update_vector, Vector &row_ids, idx_t count, idx_t base_index) {
+static void TemplatedUpdateLoop(Vector &data_vector, Vector &update_vector, Vector &row_ids, idx_t count,
+                                idx_t base_index) {
 	VectorData udata;
 	update_vector.Orrify(count, udata);
 

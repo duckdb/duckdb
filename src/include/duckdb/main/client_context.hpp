@@ -131,7 +131,8 @@ public:
 
 	//! Runs a function with a valid transaction context, potentially starting a transaction if the context is in auto
 	//! commit mode.
-	DUCKDB_API void RunFunctionInTransaction(const std::function<void(void)> &fun, bool requires_valid_transaction = true);
+	DUCKDB_API void RunFunctionInTransaction(const std::function<void(void)> &fun,
+	                                         bool requires_valid_transaction = true);
 	//! Same as RunFunctionInTransaction, but does not obtain a lock on the client context or check for validation
 	DUCKDB_API void RunFunctionInTransactionInternal(ClientContextLock &lock, const std::function<void(void)> &fun,
 	                                                 bool requires_valid_transaction = true);

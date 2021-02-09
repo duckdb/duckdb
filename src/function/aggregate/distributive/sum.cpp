@@ -78,8 +78,8 @@ struct HugeintSumOperation : public BaseSumOperation<SumSetOperation, RegularAdd
 };
 
 unique_ptr<BaseStatistics> SumPropagateStats(ClientContext &context, BoundAggregateExpression &expr,
-                                               FunctionData *bind_data, vector<unique_ptr<BaseStatistics>> &child_stats,
-                                               NodeStatistics *node_stats) {
+                                             FunctionData *bind_data, vector<unique_ptr<BaseStatistics>> &child_stats,
+                                             NodeStatistics *node_stats) {
 	if (child_stats[0] && node_stats && node_stats->has_max_cardinality) {
 		auto &numeric_stats = (NumericStatistics &)*child_stats[0];
 		if (numeric_stats.min.is_null || numeric_stats.max.is_null) {
@@ -157,7 +157,7 @@ AggregateFunction GetSumAggregate(PhysicalType type) {
 }
 
 unique_ptr<FunctionData> BindDecimalSum(ClientContext &context, AggregateFunction &function,
-                                          vector<unique_ptr<Expression>> &arguments) {
+                                        vector<unique_ptr<Expression>> &arguments) {
 	auto decimal_type = arguments[0]->return_type;
 	function = GetSumAggregate(decimal_type.InternalType());
 	function.name = "sum";

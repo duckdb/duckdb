@@ -138,7 +138,8 @@ shared_ptr<Relation> Connection::Values(const vector<vector<Value>> &values) {
 	return Values(values, column_names);
 }
 
-shared_ptr<Relation> Connection::Values(const vector<vector<Value>> &values, const vector<string> &column_names, const string &alias) {
+shared_ptr<Relation> Connection::Values(const vector<vector<Value>> &values, const vector<string> &column_names,
+                                        const string &alias) {
 	return make_shared<ValueRelation>(*context, values, column_names, alias);
 }
 

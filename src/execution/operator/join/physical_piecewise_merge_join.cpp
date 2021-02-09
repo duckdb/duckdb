@@ -323,7 +323,7 @@ unique_ptr<PhysicalOperatorState> PhysicalPiecewiseMergeJoin::GetOperatorState()
 //===--------------------------------------------------------------------===//
 template <class T, class OP>
 static sel_t TemplatedQuicksortInitial(T *data, const SelectionVector &sel, const SelectionVector &not_null_sel,
-                                         idx_t count, SelectionVector &result) {
+                                       idx_t count, SelectionVector &result) {
 	// select pivot
 	auto pivot_idx = not_null_sel.get_index(0);
 	auto dpivot_idx = sel.get_index(pivot_idx);
@@ -345,7 +345,7 @@ static sel_t TemplatedQuicksortInitial(T *data, const SelectionVector &sel, cons
 
 template <class T, class OP>
 static void TemplatedQuicksortRefine(T *data, const SelectionVector &sel, idx_t count, SelectionVector &result,
-                                        sel_t left, sel_t right) {
+                                     sel_t left, sel_t right) {
 	if (left >= right) {
 		return;
 	}
@@ -382,7 +382,7 @@ static void TemplatedQuicksortRefine(T *data, const SelectionVector &sel, idx_t 
 
 template <class T, class OP>
 void TemplatedQuicksort(T *__restrict data, const SelectionVector &sel, const SelectionVector &not_null_sel,
-                         idx_t count, SelectionVector &result) {
+                        idx_t count, SelectionVector &result) {
 	auto part = TemplatedQuicksortInitial<T, OP>(data, sel, not_null_sel, count, result);
 	if (part > count) {
 		return;
@@ -393,7 +393,7 @@ void TemplatedQuicksort(T *__restrict data, const SelectionVector &sel, const Se
 
 template <class T>
 static void TemplatedQuicksort(VectorData &vdata, const SelectionVector &not_null_sel, idx_t not_null_count,
-                                SelectionVector &result) {
+                               SelectionVector &result) {
 	if (not_null_count == 0) {
 		return;
 	}

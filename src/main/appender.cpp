@@ -11,7 +11,8 @@
 
 namespace duckdb {
 
-Appender::Appender(Connection &con, const string &schema_name, const string &table_name) : context(con.context), column(0) {
+Appender::Appender(Connection &con, const string &schema_name, const string &table_name)
+    : context(con.context), column(0) {
 	description = con.TableInfo(schema_name, table_name);
 	if (!description) {
 		// table could not be found

@@ -96,7 +96,8 @@ public:
 	static string ConstructMessageRecursive(const string &msg, vector<ExceptionFormatValue> &values);
 
 	template <class T, typename... Args>
-	static string ConstructMessageRecursive(const string &msg, vector<ExceptionFormatValue> &values, T param, Args... params) {
+	static string ConstructMessageRecursive(const string &msg, vector<ExceptionFormatValue> &values, T param,
+	                                        Args... params) {
 		values.push_back(ExceptionFormatValue::CreateFormatValue<T>(param));
 		return ConstructMessageRecursive(msg, values, params...);
 	}
@@ -148,7 +149,8 @@ public:
 	explicit ConversionException(const string &msg);
 
 	template <typename... Args>
-	explicit ConversionException(const string &msg, Args... params) : ConversionException(ConstructMessage(msg, params...)) {
+	explicit ConversionException(const string &msg, Args... params)
+	    : ConversionException(ConstructMessage(msg, params...)) {
 	}
 };
 
@@ -157,7 +159,8 @@ public:
 	explicit TransactionException(const string &msg);
 
 	template <typename... Args>
-	explicit TransactionException(const string &msg, Args... params) : TransactionException(ConstructMessage(msg, params...)) {
+	explicit TransactionException(const string &msg, Args... params)
+	    : TransactionException(ConstructMessage(msg, params...)) {
 	}
 };
 
@@ -166,7 +169,8 @@ public:
 	explicit NotImplementedException(const string &msg);
 
 	template <typename... Args>
-	explicit NotImplementedException(const string &msg, Args... params) : NotImplementedException(ConstructMessage(msg, params...)) {
+	explicit NotImplementedException(const string &msg, Args... params)
+	    : NotImplementedException(ConstructMessage(msg, params...)) {
 	}
 };
 
@@ -175,7 +179,8 @@ public:
 	explicit OutOfRangeException(const string &msg);
 
 	template <typename... Args>
-	explicit OutOfRangeException(const string &msg, Args... params) : OutOfRangeException(ConstructMessage(msg, params...)) {
+	explicit OutOfRangeException(const string &msg, Args... params)
+	    : OutOfRangeException(ConstructMessage(msg, params...)) {
 	}
 };
 
@@ -193,7 +198,8 @@ public:
 	explicit ConstraintException(const string &msg);
 
 	template <typename... Args>
-	explicit ConstraintException(const string &msg, Args... params) : ConstraintException(ConstructMessage(msg, params...)) {
+	explicit ConstraintException(const string &msg, Args... params)
+	    : ConstraintException(ConstructMessage(msg, params...)) {
 	}
 };
 
@@ -211,7 +217,8 @@ public:
 	explicit SerializationException(const string &msg);
 
 	template <typename... Args>
-	explicit SerializationException(const string &msg, Args... params) : SerializationException(ConstructMessage(msg, params...)) {
+	explicit SerializationException(const string &msg, Args... params)
+	    : SerializationException(ConstructMessage(msg, params...)) {
 	}
 };
 
@@ -220,7 +227,8 @@ public:
 	explicit SequenceException(const string &msg);
 
 	template <typename... Args>
-	explicit SequenceException(const string &msg, Args... params) : SequenceException(ConstructMessage(msg, params...)) {
+	explicit SequenceException(const string &msg, Args... params)
+	    : SequenceException(ConstructMessage(msg, params...)) {
 	}
 };
 
@@ -243,7 +251,8 @@ public:
 	explicit InternalException(const string &msg);
 
 	template <typename... Args>
-	explicit InternalException(const string &msg, Args... params) : InternalException(ConstructMessage(msg, params...)) {
+	explicit InternalException(const string &msg, Args... params)
+	    : InternalException(ConstructMessage(msg, params...)) {
 	}
 };
 
@@ -252,7 +261,8 @@ public:
 	explicit InvalidInputException(const string &msg);
 
 	template <typename... Args>
-	explicit InvalidInputException(const string &msg, Args... params) : InvalidInputException(ConstructMessage(msg, params...)) {
+	explicit InvalidInputException(const string &msg, Args... params)
+	    : InvalidInputException(ConstructMessage(msg, params...)) {
 	}
 };
 

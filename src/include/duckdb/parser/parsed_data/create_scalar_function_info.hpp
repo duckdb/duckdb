@@ -15,7 +15,8 @@
 namespace duckdb {
 
 struct CreateScalarFunctionInfo : public CreateFunctionInfo {
-	explicit CreateScalarFunctionInfo(ScalarFunction function) : CreateFunctionInfo(CatalogType::SCALAR_FUNCTION_ENTRY) {
+	explicit CreateScalarFunctionInfo(ScalarFunction function)
+	    : CreateFunctionInfo(CatalogType::SCALAR_FUNCTION_ENTRY) {
 		this->name = function.name;
 		functions.push_back(function);
 	}

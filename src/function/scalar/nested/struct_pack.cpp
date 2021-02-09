@@ -30,7 +30,7 @@ static void StructPackFunction(DataChunk &args, ExpressionState &state, Vector &
 }
 
 static unique_ptr<FunctionData> StructPackBind(ClientContext &context, ScalarFunction &bound_function,
-                                                 vector<unique_ptr<Expression>> &arguments) {
+                                               vector<unique_ptr<Expression>> &arguments) {
 	unordered_set<string> name_collision_set;
 
 	// collect names and deconflict, construct return type

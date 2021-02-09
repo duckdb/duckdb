@@ -54,8 +54,8 @@ struct ArrowScanFunctionData : public TableFunctionData {
 };
 
 static unique_ptr<FunctionData> ArrowScanBind(ClientContext &context, vector<Value> &inputs,
-                                                unordered_map<string, Value> &named_parameters,
-                                                vector<LogicalType> &return_types, vector<string> &names) {
+                                              unordered_map<string, Value> &named_parameters,
+                                              vector<LogicalType> &return_types, vector<string> &names) {
 
 	auto res = make_unique<ArrowScanFunctionData>();
 	auto &data = *res;
@@ -135,7 +135,7 @@ static unique_ptr<FunctionData> ArrowScanBind(ClientContext &context, vector<Val
 }
 
 static unique_ptr<FunctionOperatorData> ArrowScanInit(ClientContext &context, const FunctionData *bind_data,
-                                                        vector<column_t> &column_ids, TableFilterCollection *filters) {
+                                                      vector<column_t> &column_ids, TableFilterCollection *filters) {
 	auto &data = (ArrowScanFunctionData &)*bind_data;
 	if (data.is_consumed) {
 		throw NotImplementedException("FIXME: Arrow streams can only be read once");
@@ -145,7 +145,7 @@ static unique_ptr<FunctionOperatorData> ArrowScanInit(ClientContext &context, co
 }
 
 static void ArrowScanFunction(ClientContext &context, const FunctionData *bind_data,
-                                FunctionOperatorData *operator_state, DataChunk &output) {
+                              FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &data = (ArrowScanFunctionData &)*bind_data;
 	if (!data.stream->release) {
 		// no more chunks

@@ -43,4 +43,4 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalShow &op) 
 	return move(chunk_scan);
 }
 
-}
+} // namespace duckdb

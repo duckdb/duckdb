@@ -136,7 +136,7 @@ private:
 	idx_t RemainingSpace(BufferHandle &handle);
 
 	void ReadString(string_t *result_data, Vector &result, data_ptr_t baseptr, int32_t *dict_offset, idx_t src_idx,
-	                 idx_t res_idx, idx_t &update_idx, size_t vector_index);
+	                idx_t res_idx, idx_t &update_idx, size_t vector_index);
 	template <class OP>
 	void Select_String(Vector &result, data_ptr_t baseptr, int32_t *dict_offset, SelectionVector &sel,
 	                   const string &constant, idx_t &approved_tuple_count, nullmask_t *source_nullmask,

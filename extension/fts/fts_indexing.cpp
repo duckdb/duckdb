@@ -27,16 +27,9 @@ string drop_fts_index_query(ClientContext &context, const FunctionParameters &pa
 	return "DROP SCHEMA " + fts_schema + " CASCADE;";
 }
 
-static string indexing_script(
-	const string &input_schema,
-	const string &input_table,
-	const string &input_id,
-	const vector<string> &input_values,
-	const string &stemmer,
-	const string &stopwords,
-	const string &ignore,
-	bool strip_accents,
-	bool lower) {
+static string indexing_script(const string &input_schema, const string &input_table, const string &input_id,
+                              const vector<string> &input_values, const string &stemmer, const string &stopwords,
+                              const string &ignore, bool strip_accents, bool lower) {
 	// clang-format off
     string result = R"(
         DROP SCHEMA IF EXISTS %fts_schema% CASCADE;

@@ -158,7 +158,7 @@ static vector<bool> ParseColumnList(vector<Value> &set, vector<string> &names) {
 }
 
 static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyInfo &info, vector<string> &names,
-                                               vector<LogicalType> &sql_types) {
+                                             vector<LogicalType> &sql_types) {
 	auto bind_data = make_unique<WriteCSVData>(info.file_path, sql_types, names);
 
 	// check all the options in the copy info
@@ -186,7 +186,7 @@ static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyInfo &i
 }
 
 static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &info, vector<string> &expected_names,
-                                              vector<LogicalType> &expected_types) {
+                                            vector<LogicalType> &expected_types) {
 	auto bind_data = make_unique<ReadCSVData>();
 	bind_data->sql_types = expected_types;
 
@@ -451,7 +451,7 @@ static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &co
 }
 
 static void WriteCSVSink(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
-                           LocalFunctionData &lstate, DataChunk &input) {
+                         LocalFunctionData &lstate, DataChunk &input) {
 	auto &csv_data = (WriteCSVData &)bind_data;
 	auto &options = csv_data.options;
 	auto &local_data = (LocalReadCSVData &)lstate;
@@ -509,7 +509,7 @@ static void WriteCSVSink(ClientContext &context, FunctionData &bind_data, Global
 // Combine
 //===--------------------------------------------------------------------===//
 static void WriteCSVCombine(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
-                              LocalFunctionData &lstate) {
+                            LocalFunctionData &lstate) {
 	auto &local_data = (LocalReadCSVData &)lstate;
 	auto &global_state = (GlobalWriteCSVData &)gstate;
 	auto &writer = local_data.serializer;

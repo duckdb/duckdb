@@ -384,7 +384,7 @@ void GroupedAggregateHashTable::FetchAggregates(DataChunk &groups, DataChunk &re
 
 template <class T>
 static void TemplatedScatter(VectorData &gdata, Vector &addresses, const SelectionVector &sel, idx_t count,
-                              idx_t type_size) {
+                             idx_t type_size) {
 	auto data = (T *)gdata.data;
 	auto pointers = FlatVector::GetData<uintptr_t>(addresses);
 	if (gdata.nullmask->any()) {
@@ -488,7 +488,7 @@ void GroupedAggregateHashTable::ScatterGroups(DataChunk &groups, unique_ptr<Vect
 
 template <class T>
 static void TemplatedCompareGroups(VectorData &gdata, Vector &addresses, SelectionVector &sel, idx_t &count,
-                                     idx_t type_size, SelectionVector &no_match, idx_t &no_match_count) {
+                                   idx_t type_size, SelectionVector &no_match, idx_t &no_match_count) {
 	auto data = (T *)gdata.data;
 	auto pointers = FlatVector::GetData<uintptr_t>(addresses);
 	idx_t match_count = 0;

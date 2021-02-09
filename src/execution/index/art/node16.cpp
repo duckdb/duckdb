@@ -58,7 +58,7 @@ void Node16::Insert(ART &art, unique_ptr<Node> &node, uint8_t key_byte, unique_p
 	if (n->count < 16) {
 		// Insert element
 		idx_t pos = 0;
-		while(pos < node->count && n->key[pos] < key_byte) {
+		while (pos < node->count && n->key[pos] < key_byte) {
 			pos++;
 		}
 		if (n->child[pos] != nullptr) {

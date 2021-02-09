@@ -106,7 +106,8 @@ public:
 	DUCKDB_API shared_ptr<Relation> Values(const vector<vector<Value>> &values, const vector<string> &column_names,
 	                                       const string &alias = "values");
 	DUCKDB_API shared_ptr<Relation> Values(const string &values);
-	DUCKDB_API shared_ptr<Relation> Values(const string &values, const vector<string> &column_names, const string &alias = "values");
+	DUCKDB_API shared_ptr<Relation> Values(const string &values, const vector<string> &column_names,
+	                                       const string &alias = "values");
 	//! Reads CSV file
 	DUCKDB_API shared_ptr<Relation> ReadCSV(const string &csv_file);
 	DUCKDB_API shared_ptr<Relation> ReadCSV(const string &csv_file, const vector<string> &columns);
@@ -124,13 +125,16 @@ public:
 	}
 
 	template <typename TR, typename... Args>
-	void CreateScalarFunction(const string &name, vector<LogicalType> args, LogicalType ret_type, TR (*udf_func)(Args...)) {
-		scalar_function_t function = UDFWrapper::CreateScalarFunction<TR, Args...>(name, args, move(ret_type), udf_func);
+	void CreateScalarFunction(const string &name, vector<LogicalType> args, LogicalType ret_type,
+	                          TR (*udf_func)(Args...)) {
+		scalar_function_t function =
+		    UDFWrapper::CreateScalarFunction<TR, Args...>(name, args, move(ret_type), udf_func);
 		UDFWrapper::RegisterFunction(name, args, ret_type, function, *context);
 	}
 
 	template <typename TR, typename... Args>
-	void CreateVectorizedFunction(const string &name, scalar_function_t udf_func, LogicalType varargs = LogicalType::INVALID) {
+	void CreateVectorizedFunction(const string &name, scalar_function_t udf_func,
+	                              LogicalType varargs = LogicalType::INVALID) {
 		UDFWrapper::RegisterFunction<TR, Args...>(name, udf_func, *context, move(varargs));
 	}
 
@@ -160,7 +164,8 @@ public:
 	}
 
 	template <typename UDF_OP, typename STATE, typename TR, typename TA, typename TB>
-	void CreateAggregateFunction(const string &name, LogicalType ret_type, LogicalType input_typeA, LogicalType input_typeB) {
+	void CreateAggregateFunction(const string &name, LogicalType ret_type, LogicalType input_typeA,
+	                             LogicalType input_typeB) {
 		AggregateFunction function =
 		    UDFWrapper::CreateAggregateFunction<UDF_OP, STATE, TR, TA, TB>(name, ret_type, input_typeA, input_typeB);
 		UDFWrapper::RegisterAggrFunction(function, *context);

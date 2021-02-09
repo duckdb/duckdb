@@ -20,8 +20,8 @@ struct SQLiteMasterData : public FunctionOperatorData {
 };
 
 static unique_ptr<FunctionData> SQLiteMasterBind(ClientContext &context, vector<Value> &inputs,
-                                                   unordered_map<string, Value> &named_parameters,
-                                                   vector<LogicalType> &return_types, vector<string> &names) {
+                                                 unordered_map<string, Value> &named_parameters,
+                                                 vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("type");
 	return_types.push_back(LogicalType::VARCHAR);
 
@@ -41,7 +41,7 @@ static unique_ptr<FunctionData> SQLiteMasterBind(ClientContext &context, vector<
 }
 
 unique_ptr<FunctionOperatorData> SQLiteMasterInit(ClientContext &context, const FunctionData *bind_data,
-                                                    vector<column_t> &column_ids, TableFilterCollection *filters) {
+                                                  vector<column_t> &column_ids, TableFilterCollection *filters) {
 	auto result = make_unique<SQLiteMasterData>();
 
 	// scan all the schemas for tables and views and collect them
@@ -55,7 +55,7 @@ unique_ptr<FunctionOperatorData> SQLiteMasterInit(ClientContext &context, const 
 }
 
 void SQLiteMasterFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
-                   DataChunk &output) {
+                          DataChunk &output) {
 	auto &data = (SQLiteMasterData &)*operator_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values

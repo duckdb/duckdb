@@ -27,7 +27,8 @@ Vector::Vector(LogicalType type_p, bool create_data, bool zero_data)
 Vector::Vector(LogicalType type) : Vector(move(type), true, false) {
 }
 
-Vector::Vector(LogicalType type_p, data_ptr_t dataptr) : vector_type(VectorType::FLAT_VECTOR), type(move(type_p)), data(dataptr) {
+Vector::Vector(LogicalType type_p, data_ptr_t dataptr)
+    : vector_type(VectorType::FLAT_VECTOR), type(move(type_p)), data(dataptr) {
 	if (dataptr && type.id() == LogicalTypeId::INVALID) {
 		throw InvalidTypeException(type, "Cannot create a vector of type INVALID!");
 	}

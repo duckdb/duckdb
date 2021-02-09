@@ -12,7 +12,8 @@ namespace duckdb {
 
 class PhysicalTableScanOperatorState : public PhysicalOperatorState {
 public:
-	explicit PhysicalTableScanOperatorState(PhysicalOperator &op) : PhysicalOperatorState(op, nullptr), initialized(false) {
+	explicit PhysicalTableScanOperatorState(PhysicalOperator &op)
+	    : PhysicalOperatorState(op, nullptr), initialized(false) {
 	}
 
 	ParallelState *parallel_state;

@@ -15,8 +15,8 @@ namespace duckdb {
 RegexpMatchesBindData::RegexpMatchesBindData(duckdb_re2::RE2::Options options,
                                              unique_ptr<duckdb_re2::RE2> constant_pattern, string range_min,
                                              string range_max, bool range_success)
-    : options(options), constant_pattern(move(constant_pattern)), range_min(move(range_min)), range_max(move(range_max)),
-      range_success(range_success) {
+    : options(options), constant_pattern(move(constant_pattern)), range_min(move(range_min)),
+      range_max(move(range_max)), range_success(range_success) {
 }
 
 RegexpMatchesBindData::~RegexpMatchesBindData() {
@@ -107,7 +107,7 @@ static void RegexpMatchesFunction(DataChunk &args, ExpressionState &state, Vecto
 }
 
 static unique_ptr<FunctionData> RegexpMatchesBind(ClientContext &context, ScalarFunction &bound_function,
-                                                                 vector<unique_ptr<Expression>> &arguments) {
+                                                  vector<unique_ptr<Expression>> &arguments) {
 	// pattern is the second argument. If its constant, we can already prepare the pattern and store it for later.
 	D_ASSERT(arguments.size() == 2 || arguments.size() == 3);
 	RE2::Options options;
@@ -167,7 +167,7 @@ unique_ptr<FunctionData> RegexpReplaceBindData::Copy() {
 }
 
 static unique_ptr<FunctionData> RegexReplaceBind(ClientContext &context, ScalarFunction &bound_function,
-                                                             vector<unique_ptr<Expression>> &arguments) {
+                                                 vector<unique_ptr<Expression>> &arguments) {
 	auto data = make_unique<RegexpReplaceBindData>();
 	data->options.set_log_errors(false);
 	if (arguments.size() == 4) {
@@ -186,8 +186,7 @@ static unique_ptr<FunctionData> RegexReplaceBind(ClientContext &context, ScalarF
 void RegexpFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet regexp_full_match("regexp_full_match");
 	regexp_full_match.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
-	                                             RegexpMatchesFunction<RegexFullMatch>, false,
-	                                             RegexpMatchesBind));
+	                                             RegexpMatchesFunction<RegexFullMatch>, false, RegexpMatchesBind));
 	regexp_full_match.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
 	                                             LogicalType::BOOLEAN, RegexpMatchesFunction<RegexFullMatch>, false,
 	                                             RegexpMatchesBind));
@@ -202,8 +201,7 @@ void RegexpFun::RegisterFunction(BuiltinFunctions &set) {
 
 	ScalarFunctionSet regexp_replace("regexp_replace");
 	regexp_replace.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
-	                                          LogicalType::VARCHAR, RegexReplaceFunction, false,
-	                                          RegexReplaceBind));
+	                                          LogicalType::VARCHAR, RegexReplaceFunction, false, RegexReplaceBind));
 	regexp_replace.AddFunction(
 	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
 	                   LogicalType::VARCHAR, RegexReplaceFunction, false, RegexReplaceBind));

@@ -110,7 +110,7 @@ static void ListFinalize(Vector &state_vector, FunctionData *, Vector &result, i
 }
 
 unique_ptr<FunctionData> ListBindFunction(ClientContext &context, AggregateFunction &function,
-                                   vector<unique_ptr<Expression>> &arguments) {
+                                          vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(arguments.size() == 1);
 	child_list_t<LogicalType> children;
 	children.push_back(make_pair("", arguments[0]->return_type));
@@ -123,8 +123,8 @@ unique_ptr<FunctionData> ListBindFunction(ClientContext &context, AggregateFunct
 void ListFun::RegisterFunction(BuiltinFunctions &set) {
 	auto agg = AggregateFunction(
 	    "list", {LogicalType::ANY}, LogicalType::LIST, AggregateFunction::StateSize<ListAggState>,
-	    AggregateFunction::StateInitialize<ListAggState, ListFunction>, ListUpdateFunction, ListCombineFunction, ListFinalize,
-	    nullptr, ListBindFunction, AggregateFunction::StateDestroy<ListAggState, ListFunction>);
+	    AggregateFunction::StateInitialize<ListAggState, ListFunction>, ListUpdateFunction, ListCombineFunction,
+	    ListFinalize, nullptr, ListBindFunction, AggregateFunction::StateDestroy<ListAggState, ListFunction>);
 	set.AddFunction(agg);
 	agg.name = "array_agg";
 	set.AddFunction(agg);

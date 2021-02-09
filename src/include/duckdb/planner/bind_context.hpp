@@ -56,7 +56,8 @@ public:
 	//! Generate column expressions for all columns that are present in the
 	//! referenced tables. This is used to resolve the * expression in a
 	//! selection list.
-	void GenerateAllColumnExpressions(vector<unique_ptr<ParsedExpression>> &new_select_list, const string &relation_name = "");
+	void GenerateAllColumnExpressions(vector<unique_ptr<ParsedExpression>> &new_select_list,
+	                                  const string &relation_name = "");
 	const vector<std::pair<string, Binding *>> &GetBindingsList() {
 		return bindings_list;
 	}
@@ -65,12 +66,13 @@ public:
 	void AddBaseTable(idx_t index, const string &alias, const vector<string> &names, const vector<LogicalType> &types,
 	                  LogicalGet &get);
 	//! Adds a call to a table function with the given alias to the BindContext.
-	void AddTableFunction(idx_t index, const string &alias, const vector<string> &names, const vector<LogicalType> &types,
-	                      LogicalGet &get);
+	void AddTableFunction(idx_t index, const string &alias, const vector<string> &names,
+	                      const vector<LogicalType> &types, LogicalGet &get);
 	//! Adds a subquery with a given alias to the BindContext.
 	void AddSubquery(idx_t index, const string &alias, SubqueryRef &ref, BoundQueryNode &subquery);
 	//! Adds a base table with the given alias to the BindContext.
-	void AddGenericBinding(idx_t index, const string &alias, const vector<string> &names, const vector<LogicalType> &types);
+	void AddGenericBinding(idx_t index, const string &alias, const vector<string> &names,
+	                       const vector<LogicalType> &types);
 
 	//! Adds a base table with the given alias to the CTE BindContext.
 	//! We need this to correctly bind recursive CTEs with multiple references.

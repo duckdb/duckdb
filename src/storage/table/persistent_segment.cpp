@@ -12,8 +12,8 @@
 
 namespace duckdb {
 
-PersistentSegment::PersistentSegment(DatabaseInstance &db, block_id_t id, idx_t offset, const LogicalType &type_p, idx_t start,
-                                     idx_t count, unique_ptr<BaseStatistics> statistics)
+PersistentSegment::PersistentSegment(DatabaseInstance &db, block_id_t id, idx_t offset, const LogicalType &type_p,
+                                     idx_t start, idx_t count, unique_ptr<BaseStatistics> statistics)
     : ColumnSegment(type_p, ColumnSegmentType::PERSISTENT, start, count, move(statistics)), db(db), block_id(id),
       offset(offset) {
 	D_ASSERT(offset == 0);

@@ -88,7 +88,7 @@ struct AbsOperator {
 
 template <class OP>
 unique_ptr<FunctionData> DecimalUnaryOpBind(ClientContext &context, ScalarFunction &bound_function,
-                                               vector<unique_ptr<Expression>> &arguments) {
+                                            vector<unique_ptr<Expression>> &arguments) {
 	auto decimal_type = arguments[0]->return_type;
 	switch (decimal_type.InternalType()) {
 	case PhysicalType::INT16:
@@ -197,7 +197,7 @@ static void GenericRoundFunctionDecimal(DataChunk &input, ExpressionState &state
 
 template <class OP>
 unique_ptr<FunctionData> BindGenericRoundFunctionDecimal(ClientContext &context, ScalarFunction &bound_function,
-                                                             vector<unique_ptr<Expression>> &arguments) {
+                                                         vector<unique_ptr<Expression>> &arguments) {
 	// ceil essentially removes the scale
 	auto decimal_type = arguments[0]->return_type;
 	if (decimal_type.scale() == 0) {
@@ -433,7 +433,7 @@ static void DecimalRoundPositivePrecisionFunction(DataChunk &input, ExpressionSt
 }
 
 unique_ptr<FunctionData> BindDecimalRoundPrecision(ClientContext &context, ScalarFunction &bound_function,
-                                                      vector<unique_ptr<Expression>> &arguments) {
+                                                   vector<unique_ptr<Expression>> &arguments) {
 	auto decimal_type = arguments[0]->return_type;
 	if (!arguments[1]->IsFoldable()) {
 		throw NotImplementedException("ROUND(DECIMAL, INTEGER) with non-constant precision is not supported");

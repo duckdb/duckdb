@@ -111,8 +111,8 @@ struct SubtractPropagateStatistics {
 
 template <class OP, class PROPAGATE, class BASEOP>
 static unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, BoundFunctionExpression &expr,
-                                                               FunctionData *bind_data,
-                                                               vector<unique_ptr<BaseStatistics>> &child_stats) {
+                                                        FunctionData *bind_data,
+                                                        vector<unique_ptr<BaseStatistics>> &child_stats) {
 	D_ASSERT(child_stats.size() == 2);
 	// can only propagate stats if the children have stats
 	if (!child_stats[0] || !child_stats[1]) {
@@ -158,7 +158,7 @@ static unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, 
 
 template <class OP, class OPOVERFLOWCHECK, bool IS_SUBTRACT = false>
 unique_ptr<FunctionData> BindDecimalAddSubtract(ClientContext &context, ScalarFunction &bound_function,
-                                                   vector<unique_ptr<Expression>> &arguments) {
+                                                vector<unique_ptr<Expression>> &arguments) {
 	// get the max width and scale of the input arguments
 	uint8_t max_width = 0, max_scale = 0, max_width_over_scale = 0;
 	for (idx_t i = 0; i < arguments.size(); i++) {
@@ -210,15 +210,14 @@ unique_ptr<FunctionData> BindDecimalAddSubtract(ClientContext &context, ScalarFu
 			bound_function.statistics =
 			    PropagateNumericStats<TryDecimalSubtract, SubtractPropagateStatistics, SubtractOperator>;
 		} else {
-			bound_function.statistics =
-			    PropagateNumericStats<TryDecimalAdd, AddPropagateStatistics, AddOperator>;
+			bound_function.statistics = PropagateNumericStats<TryDecimalAdd, AddPropagateStatistics, AddOperator>;
 		}
 	}
 	return nullptr;
 }
 
 unique_ptr<FunctionData> NopDecimalBind(ClientContext &context, ScalarFunction &bound_function,
-                                          vector<unique_ptr<Expression>> &arguments) {
+                                        vector<unique_ptr<Expression>> &arguments) {
 	bound_function.return_type = arguments[0]->return_type;
 	bound_function.arguments[0] = arguments[0]->return_type;
 	return nullptr;
@@ -283,7 +282,7 @@ void AddFun::RegisterFunction(BuiltinFunctions &set) {
 // - [subtract]
 //===--------------------------------------------------------------------===//
 unique_ptr<FunctionData> DecimalNegateBind(ClientContext &context, ScalarFunction &bound_function,
-                                             vector<unique_ptr<Expression>> &arguments) {
+                                           vector<unique_ptr<Expression>> &arguments) {
 	auto decimal_type = arguments[0]->return_type;
 	if (decimal_type.width() <= Decimal::MAX_WIDTH_INT16) {
 		bound_function.function = ScalarFunction::GetScalarUnaryFunction<NegateOperator>(LogicalTypeId::SMALLINT);
@@ -311,8 +310,8 @@ struct NegatePropagateStatistics {
 };
 
 static unique_ptr<BaseStatistics> NegateBindStatistics(ClientContext &context, BoundFunctionExpression &expr,
-                                                         FunctionData *bind_data,
-                                                         vector<unique_ptr<BaseStatistics>> &child_stats) {
+                                                       FunctionData *bind_data,
+                                                       vector<unique_ptr<BaseStatistics>> &child_stats) {
 	D_ASSERT(child_stats.size() == 1);
 	// can only propagate stats if the children have stats
 	if (!child_stats[0]) {
@@ -439,7 +438,7 @@ struct MultiplyPropagateStatistics {
 };
 
 unique_ptr<FunctionData> BindDecimalMultiply(ClientContext &context, ScalarFunction &bound_function,
-                                               vector<unique_ptr<Expression>> &arguments) {
+                                             vector<unique_ptr<Expression>> &arguments) {
 	uint8_t result_width = 0, result_scale = 0;
 	uint8_t max_width = 0;
 	for (idx_t i = 0; i < arguments.size(); i++) {

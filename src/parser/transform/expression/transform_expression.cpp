@@ -76,7 +76,8 @@ unique_ptr<ParsedExpression> Transformer::TransformExpression(duckdb_libpgquery:
 	}
 }
 
-bool Transformer::TransformExpressionList(duckdb_libpgquery::PGList *list, vector<unique_ptr<ParsedExpression>> &result) {
+bool Transformer::TransformExpressionList(duckdb_libpgquery::PGList *list,
+                                          vector<unique_ptr<ParsedExpression>> &result) {
 	if (!list) {
 		return false;
 	}

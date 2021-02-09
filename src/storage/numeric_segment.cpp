@@ -115,7 +115,7 @@ void Select(SelectionVector &sel, Vector &result, unsigned char *source, nullmas
 
 template <class OP>
 static void TemplatedSelectOperation(SelectionVector &sel, Vector &result, PhysicalType type, unsigned char *source,
-                                       nullmask_t *source_mask, Value &constant, idx_t &approved_tuple_count) {
+                                     nullmask_t *source_mask, Value &constant, idx_t &approved_tuple_count) {
 	// the inplace loops take the result as the last parameter
 	switch (type) {
 	case PhysicalType::UINT8: {
@@ -173,8 +173,8 @@ static void TemplatedSelectOperation(SelectionVector &sel, Vector &result, Physi
 
 template <class OPL, class OPR>
 static void TemplatedSelectOperationBetween(SelectionVector &sel, Vector &result, PhysicalType type,
-                                               unsigned char *source, nullmask_t *source_mask, Value &constant_left,
-                                               Value &constant_right, idx_t &approved_tuple_count) {
+                                            unsigned char *source, nullmask_t *source_mask, Value &constant_left,
+                                            Value &constant_right, idx_t &approved_tuple_count) {
 	// the inplace loops take the result as the last parameter
 	switch (type) {
 	case PhysicalType::UINT8: {
@@ -260,28 +260,28 @@ void NumericSegment::Select(ColumnScanState &state, Vector &result, SelectionVec
 		switch (table_filter[0].comparison_type) {
 		case ExpressionType::COMPARE_EQUAL: {
 			TemplatedSelectOperation<Equals>(sel, result, state.current->type.InternalType(), source_data,
-			                                   source_nullmask, table_filter[0].constant, approved_tuple_count);
+			                                 source_nullmask, table_filter[0].constant, approved_tuple_count);
 			break;
 		}
 		case ExpressionType::COMPARE_LESSTHAN: {
 			TemplatedSelectOperation<LessThan>(sel, result, state.current->type.InternalType(), source_data,
-			                                     source_nullmask, table_filter[0].constant, approved_tuple_count);
+			                                   source_nullmask, table_filter[0].constant, approved_tuple_count);
 			break;
 		}
 		case ExpressionType::COMPARE_GREATERTHAN: {
 			TemplatedSelectOperation<GreaterThan>(sel, result, state.current->type.InternalType(), source_data,
-			                                        source_nullmask, table_filter[0].constant, approved_tuple_count);
+			                                      source_nullmask, table_filter[0].constant, approved_tuple_count);
 			break;
 		}
 		case ExpressionType::COMPARE_LESSTHANOREQUALTO: {
 			TemplatedSelectOperation<LessThanEquals>(sel, result, state.current->type.InternalType(), source_data,
-			                                           source_nullmask, table_filter[0].constant, approved_tuple_count);
+			                                         source_nullmask, table_filter[0].constant, approved_tuple_count);
 			break;
 		}
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO: {
 			TemplatedSelectOperation<GreaterThanEquals>(sel, result, state.current->type.InternalType(), source_data,
-			                                              source_nullmask, table_filter[0].constant,
-			                                              approved_tuple_count);
+			                                            source_nullmask, table_filter[0].constant,
+			                                            approved_tuple_count);
 			break;
 		}
 		default:
@@ -352,8 +352,8 @@ void NumericSegment::FetchUpdateData(ColumnScanState &state, transaction_t start
 }
 
 template <class T>
-static void TemplatedAssignment(SelectionVector &sel, data_ptr_t source, data_ptr_t result,
-                                 nullmask_t &source_nullmask, nullmask_t &result_nullmask, idx_t approved_tuple_count) {
+static void TemplatedAssignment(SelectionVector &sel, data_ptr_t source, data_ptr_t result, nullmask_t &source_nullmask,
+                                nullmask_t &result_nullmask, idx_t approved_tuple_count) {
 	if (source_nullmask.any()) {
 		for (size_t i = 0; i < approved_tuple_count; i++) {
 			if (source_nullmask[sel.get_index(i)]) {
@@ -390,62 +390,62 @@ void NumericSegment::FilterFetchBaseData(ColumnScanState &state, Vector &result,
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8: {
 		TemplatedAssignment<int8_t>(sel, source_data, result_data, *source_nullmask, result_nullmask,
-		                             approved_tuple_count);
+		                            approved_tuple_count);
 		break;
 	}
 	case PhysicalType::INT16: {
 		TemplatedAssignment<int16_t>(sel, source_data, result_data, *source_nullmask, result_nullmask,
-		                              approved_tuple_count);
+		                             approved_tuple_count);
 		break;
 	}
 	case PhysicalType::INT32: {
 		TemplatedAssignment<int32_t>(sel, source_data, result_data, *source_nullmask, result_nullmask,
-		                              approved_tuple_count);
+		                             approved_tuple_count);
 		break;
 	}
 	case PhysicalType::INT64: {
 		TemplatedAssignment<int64_t>(sel, source_data, result_data, *source_nullmask, result_nullmask,
-		                              approved_tuple_count);
+		                             approved_tuple_count);
 		break;
 	}
 	case PhysicalType::UINT8: {
 		TemplatedAssignment<uint8_t>(sel, source_data, result_data, *source_nullmask, result_nullmask,
-		                              approved_tuple_count);
+		                             approved_tuple_count);
 		break;
 	}
 	case PhysicalType::UINT16: {
 		TemplatedAssignment<uint16_t>(sel, source_data, result_data, *source_nullmask, result_nullmask,
-		                               approved_tuple_count);
+		                              approved_tuple_count);
 		break;
 	}
 	case PhysicalType::UINT32: {
 		TemplatedAssignment<uint32_t>(sel, source_data, result_data, *source_nullmask, result_nullmask,
-		                               approved_tuple_count);
+		                              approved_tuple_count);
 		break;
 	}
 	case PhysicalType::UINT64: {
 		TemplatedAssignment<uint64_t>(sel, source_data, result_data, *source_nullmask, result_nullmask,
-		                               approved_tuple_count);
+		                              approved_tuple_count);
 		break;
 	}
 	case PhysicalType::INT128: {
 		TemplatedAssignment<hugeint_t>(sel, source_data, result_data, *source_nullmask, result_nullmask,
-		                                approved_tuple_count);
+		                               approved_tuple_count);
 		break;
 	}
 	case PhysicalType::FLOAT: {
 		TemplatedAssignment<float>(sel, source_data, result_data, *source_nullmask, result_nullmask,
-		                            approved_tuple_count);
+		                           approved_tuple_count);
 		break;
 	}
 	case PhysicalType::DOUBLE: {
 		TemplatedAssignment<double>(sel, source_data, result_data, *source_nullmask, result_nullmask,
-		                             approved_tuple_count);
+		                            approved_tuple_count);
 		break;
 	}
 	case PhysicalType::INTERVAL: {
 		TemplatedAssignment<interval_t>(sel, source_data, result_data, *source_nullmask, result_nullmask,
-		                                 approved_tuple_count);
+		                                approved_tuple_count);
 		break;
 	}
 	default:
@@ -634,7 +634,7 @@ void UpdateNumericStatistics<interval_t>(SegmentStatistics &stats, interval_t ne
 
 template <class T>
 static void AppendLoop(SegmentStatistics &stats, data_ptr_t target, idx_t target_offset, Vector &source, idx_t offset,
-                        idx_t count) {
+                       idx_t count) {
 	auto &nullmask = *((nullmask_t *)target);
 
 	VectorData adata;
@@ -702,8 +702,8 @@ static NumericSegment::append_function_t GetAppendFunction(PhysicalType type) {
 //===--------------------------------------------------------------------===//
 template <class T>
 static void UpdateLoopNull(T *__restrict undo_data, T *__restrict base_data, T *__restrict new_data,
-                             nullmask_t &undo_nullmask, nullmask_t &base_nullmask, nullmask_t &new_nullmask,
-                             idx_t count, sel_t *__restrict base_sel, SegmentStatistics &stats) {
+                           nullmask_t &undo_nullmask, nullmask_t &base_nullmask, nullmask_t &new_nullmask, idx_t count,
+                           sel_t *__restrict base_sel, SegmentStatistics &stats) {
 	for (idx_t i = 0; i < count; i++) {
 		bool is_null = new_nullmask[i];
 		// first move the base data into the undo buffer info
@@ -723,7 +723,7 @@ static void UpdateLoopNull(T *__restrict undo_data, T *__restrict base_data, T *
 
 template <class T>
 static void UpdateLoopNoNull(T *__restrict undo_data, T *__restrict base_data, T *__restrict new_data, idx_t count,
-                                sel_t *__restrict base_sel, SegmentStatistics &stats) {
+                             sel_t *__restrict base_sel, SegmentStatistics &stats) {
 	for (idx_t i = 0; i < count; i++) {
 		// first move the base data into the undo buffer info
 		undo_data[i] = base_data[base_sel[i]];
@@ -744,7 +744,7 @@ static void UpdateLoop(SegmentStatistics &stats, UpdateInfo *info, data_ptr_t ba
 
 	if (update_nullmask.any() || nullmask->any()) {
 		UpdateLoopNull(undo_data, base_data, update_data, info->nullmask, *nullmask, update_nullmask, info->N,
-		                 info->tuples, stats);
+		               info->tuples, stats);
 	} else {
 		UpdateLoopNoNull(undo_data, base_data, update_data, info->N, info->tuples, stats);
 	}
@@ -787,7 +787,7 @@ static NumericSegment::update_function_t GetUpdateFunction(PhysicalType type) {
 //===--------------------------------------------------------------------===//
 template <class T>
 static void MergeUpdateLoop(SegmentStatistics &stats, UpdateInfo *node, data_ptr_t base, Vector &update, row_t *ids,
-                              idx_t count, idx_t vector_offset) {
+                            idx_t count, idx_t vector_offset) {
 	auto &base_nullmask = *((nullmask_t *)base);
 	auto base_data = (T *)(base + sizeof(nullmask_t));
 	auto info_data = (T *)node->tuple_data;
@@ -871,8 +871,7 @@ static NumericSegment::merge_update_function_t GetMergeUpdateFunction(PhysicalTy
 // Update Fetch
 //===--------------------------------------------------------------------===//
 template <class T>
-static void UpdateInfoFetch(transaction_t start_time, transaction_t transaction_id, UpdateInfo *info,
-                              Vector &result) {
+static void UpdateInfoFetch(transaction_t start_time, transaction_t transaction_id, UpdateInfo *info, Vector &result) {
 	auto result_data = FlatVector::GetData<T>(result);
 	auto &result_mask = FlatVector::Nullmask(result);
 	UpdateInfo::UpdatesForTransaction(info, start_time, transaction_id, [&](UpdateInfo *current) {
@@ -921,7 +920,7 @@ static NumericSegment::update_info_fetch_function_t GetUpdateInfoFetchFunction(P
 //===--------------------------------------------------------------------===//
 template <class T>
 static void UpdateInfoAppend(Transaction &transaction, UpdateInfo *info, idx_t row_id, Vector &result,
-                               idx_t result_idx) {
+                             idx_t result_idx) {
 	auto result_data = FlatVector::GetData<T>(result);
 	auto &result_mask = FlatVector::Nullmask(result);
 	UpdateInfo::UpdatesForTransaction(info, transaction.start_time, transaction.transaction_id,

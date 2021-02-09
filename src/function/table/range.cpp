@@ -13,8 +13,8 @@ struct RangeFunctionBindData : public TableFunctionData {
 
 template <bool GENERATE_SERIES>
 static unique_ptr<FunctionData> RangeFunctionBind(ClientContext &context, vector<Value> &inputs,
-                                                    unordered_map<string, Value> &named_parameters,
-                                                    vector<LogicalType> &return_types, vector<string> &names) {
+                                                  unordered_map<string, Value> &named_parameters,
+                                                  vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_unique<RangeFunctionBindData>();
 	if (inputs.size() < 2) {
 		// single argument: only the end is specified
@@ -61,13 +61,13 @@ struct RangeFunctionState : public FunctionOperatorData {
 };
 
 static unique_ptr<FunctionOperatorData> RangeFunctionInit(ClientContext &context, const FunctionData *bind_data,
-                                                            vector<column_t> &column_ids,
-                                                            TableFilterCollection *filters) {
+                                                          vector<column_t> &column_ids,
+                                                          TableFilterCollection *filters) {
 	return make_unique<RangeFunctionState>();
 }
 
 static void RangeFunction(ClientContext &context, const FunctionData *bind_data_p, FunctionOperatorData *state_p,
-                           DataChunk &output) {
+                          DataChunk &output) {
 	auto &bind_data = (RangeFunctionBindData &)*bind_data_p;
 	auto &state = (RangeFunctionState &)*state_p;
 
@@ -92,12 +92,11 @@ void RangeTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunctionSet range("range");
 
 	// single argument range: (end) - implicit start = 0 and increment = 1
-	range.AddFunction(TableFunction({LogicalType::BIGINT}, RangeFunction, RangeFunctionBind<false>,
-	                                RangeFunctionInit, nullptr, nullptr, nullptr, RangeCardinality));
+	range.AddFunction(TableFunction({LogicalType::BIGINT}, RangeFunction, RangeFunctionBind<false>, RangeFunctionInit,
+	                                nullptr, nullptr, nullptr, RangeCardinality));
 	// two arguments range: (start, end) - implicit increment = 1
-	range.AddFunction(TableFunction({LogicalType::BIGINT, LogicalType::BIGINT}, RangeFunction,
-	                                RangeFunctionBind<false>, RangeFunctionInit, nullptr, nullptr, nullptr,
-	                                RangeCardinality));
+	range.AddFunction(TableFunction({LogicalType::BIGINT, LogicalType::BIGINT}, RangeFunction, RangeFunctionBind<false>,
+	                                RangeFunctionInit, nullptr, nullptr, nullptr, RangeCardinality));
 	// three arguments range: (start, end, increment)
 	range.AddFunction(TableFunction({LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT}, RangeFunction,
 	                                RangeFunctionBind<false>, RangeFunctionInit, nullptr, nullptr, nullptr,

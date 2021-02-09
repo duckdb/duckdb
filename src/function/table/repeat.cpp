@@ -18,8 +18,8 @@ struct RepeatOperatorData : public FunctionOperatorData {
 };
 
 static unique_ptr<FunctionData> RepeatBind(ClientContext &context, vector<Value> &inputs,
-                                            unordered_map<string, Value> &named_parameters,
-                                            vector<LogicalType> &return_types, vector<string> &names) {
+                                           unordered_map<string, Value> &named_parameters,
+                                           vector<LogicalType> &return_types, vector<string> &names) {
 	// the repeat function returns the type of the first argument
 	return_types.push_back(inputs[0].type());
 	names.push_back(inputs[0].ToString());
@@ -27,12 +27,12 @@ static unique_ptr<FunctionData> RepeatBind(ClientContext &context, vector<Value>
 }
 
 static unique_ptr<FunctionOperatorData> RepeatInit(ClientContext &context, const FunctionData *bind_data,
-                                                    vector<column_t> &column_ids, TableFilterCollection *filters) {
+                                                   vector<column_t> &column_ids, TableFilterCollection *filters) {
 	return make_unique<RepeatOperatorData>();
 }
 
 static void RepeatFunction(ClientContext &context, const FunctionData *bind_data_p,
-                            FunctionOperatorData *operator_state, DataChunk &output) {
+                           FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &bind_data = (RepeatFunctionData &)*bind_data_p;
 	auto &state = (RepeatOperatorData &)*operator_state;
 

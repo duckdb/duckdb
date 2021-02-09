@@ -198,7 +198,8 @@ CatalogEntry *SchemaCatalogEntry::GetEntry(ClientContext &context, CatalogType t
 	return entry;
 }
 
-void SchemaCatalogEntry::Scan(ClientContext &context, CatalogType type, const std::function<void(CatalogEntry *)> &callback) {
+void SchemaCatalogEntry::Scan(ClientContext &context, CatalogType type,
+                              const std::function<void(CatalogEntry *)> &callback) {
 	auto &set = GetCatalogSet(type);
 	set.Scan(context, callback);
 }

@@ -10,9 +10,8 @@ vector<AggregateObject> AggregateObject::CreateAggregateObjects(const vector<Bou
 #ifndef DUCKDB_ALLOW_UNDEFINED
 		payload_size = BaseAggregateHashTable::Align(payload_size);
 #endif
-		aggregates.emplace_back(binding->function, binding->bind_info.get(), binding->children.size(),
-		                                     payload_size, binding->distinct, binding->return_type.InternalType(),
-		                                     binding->filter.get());
+		aggregates.emplace_back(binding->function, binding->bind_info.get(), binding->children.size(), payload_size,
+		                        binding->distinct, binding->return_type.InternalType(), binding->filter.get());
 	}
 	return aggregates;
 }

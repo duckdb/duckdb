@@ -53,7 +53,7 @@ void ExpressionExecutor::Execute(BoundComparisonExpression &expr, ExpressionStat
 
 template <class OP>
 static idx_t TemplatedSelectOperation(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
-                                        SelectionVector *true_sel, SelectionVector *false_sel) {
+                                      SelectionVector *true_sel, SelectionVector *false_sel) {
 	// the inplace loops take the result as the last parameter
 	switch (left.type.InternalType()) {
 	case PhysicalType::BOOL:

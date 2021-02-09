@@ -57,7 +57,8 @@ protected:
 //! The DictionaryBuffer holds a selection vector
 class DictionaryBuffer : public VectorBuffer {
 public:
-	explicit DictionaryBuffer(const SelectionVector &sel) : VectorBuffer(VectorBufferType::DICTIONARY_BUFFER), sel_vector(sel) {
+	explicit DictionaryBuffer(const SelectionVector &sel)
+	    : VectorBuffer(VectorBufferType::DICTIONARY_BUFFER), sel_vector(sel) {
 	}
 	explicit DictionaryBuffer(buffer_ptr<SelectionData> data)
 	    : VectorBuffer(VectorBufferType::DICTIONARY_BUFFER), sel_vector(move(data)) {

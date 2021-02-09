@@ -39,7 +39,7 @@ unique_ptr<Expression> Binder::BindOrderExpression(OrderBinder &order_binder, un
 }
 
 unique_ptr<Expression> BindDelimiter(ClientContext &context, unique_ptr<ParsedExpression> delimiter,
-                                      int64_t &delimiter_value) {
+                                     int64_t &delimiter_value) {
 	Binder new_binder(context);
 	ExpressionBinder expr_binder(new_binder, context);
 	expr_binder.target_type = LogicalType::UBIGINT;
@@ -91,8 +91,8 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 					continue;
 				}
 				auto type = order_node.type == OrderType::ORDER_DEFAULT ? config.default_order_type : order_node.type;
-				auto null_order =
-				    order_node.null_order == OrderByNullType::ORDER_DEFAULT ? config.default_null_order : order_node.null_order;
+				auto null_order = order_node.null_order == OrderByNullType::ORDER_DEFAULT ? config.default_null_order
+				                                                                          : order_node.null_order;
 				bound_order->orders.emplace_back(type, null_order, move(order_expression));
 			}
 			if (!bound_order->orders.empty()) {

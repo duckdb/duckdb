@@ -47,7 +47,7 @@ bool TemplatedLikeOperator(const char *sdata, idx_t slen, const char *pdata, idx
 			}
 			for (; sidx < slen; sidx++) {
 				if (TemplatedLikeOperator<PERCENTAGE, UNDERSCORE, READER>(sdata + sidx, slen - sidx, pdata + pidx,
-				                                                            plen - pidx, escape)) {
+				                                                          plen - pidx, escape)) {
 					return true;
 				}
 			}
@@ -183,7 +183,7 @@ private:
 };
 
 static unique_ptr<FunctionData> LikeBindFunction(ClientContext &context, ScalarFunction &bound_function,
-                                                   vector<unique_ptr<Expression>> &arguments) {
+                                                 vector<unique_ptr<Expression>> &arguments) {
 	// pattern is the second argument. If its constant, we can already prepare the pattern and store it for later.
 	D_ASSERT(arguments.size() == 2 || arguments.size() == 3);
 	if (arguments[1]->IsFoldable()) {
@@ -344,7 +344,7 @@ struct LikeEscapeOperator {
 		}
 		char escape_char = escape.GetSize() == 0 ? '\0' : *escape.GetDataUnsafe();
 		return LikeOperatorFunction(str.GetDataUnsafe(), str.GetSize(), pattern.GetDataUnsafe(), pattern.GetSize(),
-		                     escape_char);
+		                            escape_char);
 	}
 };
 
@@ -401,7 +401,7 @@ struct ILikeOperatorASCII {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA str, TB pattern) {
 		return TemplatedLikeOperator<'%', '_', ASCIILCaseReader>(str.GetDataUnsafe(), str.GetSize(),
-		                                                           pattern.GetDataUnsafe(), pattern.GetSize(), '\0');
+		                                                         pattern.GetDataUnsafe(), pattern.GetSize(), '\0');
 	}
 };
 
@@ -432,8 +432,8 @@ static void LikeEscapeFunction(DataChunk &args, ExpressionState &state, Vector &
 
 template <class ASCII_OP>
 static unique_ptr<BaseStatistics> ILikePropagateStats(ClientContext &context, BoundFunctionExpression &expr,
-                                                        FunctionData *bind_data,
-                                                        vector<unique_ptr<BaseStatistics>> &child_stats) {
+                                                      FunctionData *bind_data,
+                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
 	D_ASSERT(child_stats.size() >= 1);
 	// can only propagate stats if the children have stats
 	if (!child_stats[0]) {
