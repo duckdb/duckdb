@@ -27,7 +27,7 @@ const uint8_t RleBpDecoder::BITPACK_DLEN = 8;
 ColumnReader::~ColumnReader() {
 }
 
-unique_ptr<ColumnReader> ColumnReader::CreateReader(LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p,
+unique_ptr<ColumnReader> ColumnReader::CreateReader(const LogicalType &type_p, const SchemaElement &schema_p, idx_t file_idx_p,
                                                     idx_t max_define, idx_t max_repeat) {
 	switch (type_p.id()) {
 	case LogicalTypeId::BOOLEAN:
@@ -184,7 +184,7 @@ void ColumnReader::PreparePage(idx_t compressed_page_size, idx_t uncompressed_pa
 	}
 }
 
-static uint8_t bit_width(idx_t val) {
+static uint8_t ComputeBitWidth(idx_t val) {
 	if (val == 0) {
 		return 0;
 	}
@@ -212,7 +212,7 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 		// TODO there seems to be some confusion whether this is in the bytes for v2
 		uint32_t rep_length = block->read<uint32_t>();
 		block->available(rep_length);
-		repeated_decoder = make_unique<RleBpDecoder>((const uint8_t *)block->ptr, rep_length, bit_width(max_repeat));
+		repeated_decoder = make_unique<RleBpDecoder>((const uint8_t *)block->ptr, rep_length, ComputeBitWidth(max_repeat));
 		block->inc(rep_length);
 	}
 
@@ -220,7 +220,7 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 		// TODO there seems to be some confusion whether this is in the bytes for v2
 		uint32_t def_length = block->read<uint32_t>();
 		block->available(def_length);
-		defined_decoder = make_unique<RleBpDecoder>((const uint8_t *)block->ptr, def_length, bit_width(max_define));
+		defined_decoder = make_unique<RleBpDecoder>((const uint8_t *)block->ptr, def_length, ComputeBitWidth(max_define));
 		block->inc(def_length);
 	}
 
@@ -340,7 +340,7 @@ void StringColumnReader::Dictionary(shared_ptr<ByteBuffer> data, idx_t num_entri
 
 class ParquetStringVectorBuffer : public VectorBuffer {
 public:
-	ParquetStringVectorBuffer(shared_ptr<ByteBuffer> buffer_p)
+	explicit ParquetStringVectorBuffer(shared_ptr<ByteBuffer> buffer_p)
 	    : VectorBuffer(VectorBufferType::OPAQUE_BUFFER), buffer(move(buffer_p)) {
 	}
 

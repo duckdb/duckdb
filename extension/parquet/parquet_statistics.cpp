@@ -11,7 +11,7 @@ using parquet::format::ConvertedType;
 using parquet::format::Type;
 
 template <Value (*FUNC)(const_data_ptr_t input)>
-static unique_ptr<BaseStatistics> templated_get_numeric_stats(const LogicalType &type,
+static unique_ptr<BaseStatistics> TemplatedGetNumericStats(const LogicalType &type,
                                                               const parquet::format::Statistics &parquet_stats) {
 	auto stats = make_unique<NumericStatistics>(type);
 
@@ -36,11 +36,11 @@ static unique_ptr<BaseStatistics> templated_get_numeric_stats(const LogicalType 
 }
 
 template <class T>
-static Value transform_statistics_plain(const_data_ptr_t input) {
+static Value TransformStatisticsPlain(const_data_ptr_t input) {
 	return Value::CreateValue<T>(Load<T>(input));
 }
 
-static Value transform_statistics_float(const_data_ptr_t input) {
+static Value TransformStatisticsFloat(const_data_ptr_t input) {
 	auto val = Load<float>(input);
 	if (!Value::FloatIsValid(val)) {
 		return Value(LogicalType::FLOAT);
@@ -48,7 +48,7 @@ static Value transform_statistics_float(const_data_ptr_t input) {
 	return Value::CreateValue<float>(val);
 }
 
-static Value transform_statistics_double(const_data_ptr_t input) {
+static Value TransformStatisticsDouble(const_data_ptr_t input) {
 	auto val = Load<double>(input);
 	if (!Value::DoubleIsValid(val)) {
 		return Value(LogicalType::DOUBLE);
@@ -56,15 +56,15 @@ static Value transform_statistics_double(const_data_ptr_t input) {
 	return Value::CreateValue<double>(val);
 }
 
-static Value transform_statistics_timestamp_ms(const_data_ptr_t input) {
+static Value TransformStatisticsTimestampMs(const_data_ptr_t input) {
 	return Value::TIMESTAMP(parquet_timestamp_ms_to_timestamp(Load<int64_t>(input)));
 }
 
-static Value transform_statistics_timestamp_micros(const_data_ptr_t input) {
+static Value TransformStatisticsTimestampMicros(const_data_ptr_t input) {
 	return Value::TIMESTAMP(parquet_timestamp_micros_to_timestamp(Load<int64_t>(input)));
 }
 
-static Value transform_statistics_timestamp_impala(const_data_ptr_t input) {
+static Value TransformStatisticsTimestampImpala(const_data_ptr_t input) {
 	return Value::TIMESTAMP(impala_timestamp_to_timestamp_t(Load<Int96>(input)));
 }
 
@@ -80,34 +80,34 @@ unique_ptr<BaseStatistics> parquet_transform_column_statistics(const SchemaEleme
 	switch (type.id()) {
 
 	case LogicalTypeId::UTINYINT:
-		row_group_stats = templated_get_numeric_stats<transform_statistics_plain<uint8_t>>(type, parquet_stats);
+		row_group_stats = TemplatedGetNumericStats<TransformStatisticsPlain<uint8_t>>(type, parquet_stats);
 		break;
 
 	case LogicalTypeId::USMALLINT:
-		row_group_stats = templated_get_numeric_stats<transform_statistics_plain<uint16_t>>(type, parquet_stats);
+		row_group_stats = TemplatedGetNumericStats<TransformStatisticsPlain<uint16_t>>(type, parquet_stats);
 		break;
 
 	case LogicalTypeId::UINTEGER:
-		row_group_stats = templated_get_numeric_stats<transform_statistics_plain<uint32_t>>(type, parquet_stats);
+		row_group_stats = TemplatedGetNumericStats<TransformStatisticsPlain<uint32_t>>(type, parquet_stats);
 		break;
 
 	case LogicalTypeId::UBIGINT:
-		row_group_stats = templated_get_numeric_stats<transform_statistics_plain<uint64_t>>(type, parquet_stats);
+		row_group_stats = TemplatedGetNumericStats<TransformStatisticsPlain<uint64_t>>(type, parquet_stats);
 		break;
 	case LogicalTypeId::INTEGER:
-		row_group_stats = templated_get_numeric_stats<transform_statistics_plain<int32_t>>(type, parquet_stats);
+		row_group_stats = TemplatedGetNumericStats<TransformStatisticsPlain<int32_t>>(type, parquet_stats);
 		break;
 
 	case LogicalTypeId::BIGINT:
-		row_group_stats = templated_get_numeric_stats<transform_statistics_plain<int64_t>>(type, parquet_stats);
+		row_group_stats = TemplatedGetNumericStats<TransformStatisticsPlain<int64_t>>(type, parquet_stats);
 		break;
 
 	case LogicalTypeId::FLOAT:
-		row_group_stats = templated_get_numeric_stats<transform_statistics_float>(type, parquet_stats);
+		row_group_stats = TemplatedGetNumericStats<TransformStatisticsFloat>(type, parquet_stats);
 		break;
 
 	case LogicalTypeId::DOUBLE:
-		row_group_stats = templated_get_numeric_stats<transform_statistics_double>(type, parquet_stats);
+		row_group_stats = TemplatedGetNumericStats<TransformStatisticsDouble>(type, parquet_stats);
 		break;
 
 		// here we go, our favorite type
@@ -118,10 +118,10 @@ unique_ptr<BaseStatistics> parquet_transform_column_statistics(const SchemaEleme
 			switch (s_ele.converted_type) {
 			case ConvertedType::TIMESTAMP_MICROS:
 				row_group_stats =
-				    templated_get_numeric_stats<transform_statistics_timestamp_micros>(type, parquet_stats);
+				    TemplatedGetNumericStats<TransformStatisticsTimestampMicros>(type, parquet_stats);
 				break;
 			case ConvertedType::TIMESTAMP_MILLIS:
-				row_group_stats = templated_get_numeric_stats<transform_statistics_timestamp_ms>(type, parquet_stats);
+				row_group_stats = TemplatedGetNumericStats<TransformStatisticsTimestampMs>(type, parquet_stats);
 				break;
 			default:
 				return nullptr;
@@ -129,7 +129,7 @@ unique_ptr<BaseStatistics> parquet_transform_column_statistics(const SchemaEleme
 			break;
 		case Type::INT96:
 			// impala timestamp
-			row_group_stats = templated_get_numeric_stats<transform_statistics_timestamp_impala>(type, parquet_stats);
+			row_group_stats = TemplatedGetNumericStats<TransformStatisticsTimestampImpala>(type, parquet_stats);
 			break;
 		default:
 			return nullptr;

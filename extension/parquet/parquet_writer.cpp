@@ -20,11 +20,11 @@
 
 namespace duckdb {
 
-using namespace parquet;
-using namespace apache::thrift;
-using namespace apache::thrift::protocol;
-using namespace apache::thrift::transport;
-using namespace duckdb_miniz;
+using namespace parquet; // NOLINT
+using namespace apache::thrift; // NOLINT
+using namespace apache::thrift::protocol; // NOLINT
+using namespace apache::thrift::transport; // NOLINT
+using namespace duckdb_miniz; // NOLINT
 
 using parquet::format::CompressionCodec;
 using parquet::format::ConvertedType;
@@ -38,7 +38,7 @@ using parquet::format::Type;
 
 class MyTransport : public TTransport {
 public:
-	MyTransport(Serializer &serializer) : serializer(serializer) {
+	explicit MyTransport(Serializer &serializer) : serializer(serializer) {
 	}
 
 	bool isOpen() const override {
@@ -59,7 +59,7 @@ private:
 	Serializer &serializer;
 };
 
-static Type::type duckdb_type_to_parquet_type(LogicalType duckdb_type) {
+static Type::type DuckDBTypeToParquetType(LogicalType duckdb_type) {
 	switch (duckdb_type.id()) {
 	case LogicalTypeId::BOOLEAN:
 		return Type::BOOLEAN;
@@ -85,7 +85,7 @@ static Type::type duckdb_type_to_parquet_type(LogicalType duckdb_type) {
 	}
 }
 
-static bool duckdb_type_to_converted_type(LogicalType duckdb_type, ConvertedType::type &result) {
+static bool DuckDBTypeToConvertedType(LogicalType duckdb_type, ConvertedType::type &result) {
 	switch (duckdb_type.id()) {
 	case LogicalTypeId::VARCHAR:
 		result = ConvertedType::UTF8;
@@ -120,7 +120,7 @@ static uint8_t GetVarintSize(uint32_t val) {
 }
 
 template <class SRC, class TGT>
-static void _write_plain(Vector &col, idx_t length, nullmask_t &nullmask, Serializer &ser) {
+static void TemplatedWritePlain(Vector &col, idx_t length, nullmask_t &nullmask, Serializer &ser) {
 	auto *ptr = FlatVector::GetData<SRC>(col);
 	for (idx_t r = 0; r < length; r++) {
 		if (!nullmask[r]) {
@@ -129,9 +129,9 @@ static void _write_plain(Vector &col, idx_t length, nullmask_t &nullmask, Serial
 	}
 }
 
-ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_, vector<LogicalType> types_p, vector<string> names_p,
+ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_p, vector<LogicalType> types_p, vector<string> names_p,
                              CompressionCodec::type codec)
-    : file_name(file_name_), sql_types(move(types_p)), column_names(move(names_p)), codec(codec) {
+    : file_name(move(file_name_p)), sql_types(move(types_p)), column_names(move(names_p)), codec(codec) {
 	// initialize the file writer
 	writer = make_unique<BufferedFileWriter>(fs, file_name.c_str(),
 	                                         FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
@@ -149,7 +149,7 @@ ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_, vector<LogicalTy
 	for (idx_t i = 0; i < sql_types.size(); i++) {
 		auto &schema_element = file_meta_data.schema[i + 1];
 
-		schema_element.type = duckdb_type_to_parquet_type(sql_types[i]);
+		schema_element.type = DuckDBTypeToParquetType(sql_types[i]);
 		schema_element.repetition_type = FieldRepetitionType::OPTIONAL;
 		schema_element.num_children = 0;
 		schema_element.__isset.num_children = true;
@@ -157,7 +157,7 @@ ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_, vector<LogicalTy
 		schema_element.__isset.repetition_type = true;
 		schema_element.name = column_names[i];
 		schema_element.__isset.converted_type =
-		    duckdb_type_to_converted_type(sql_types[i], schema_element.converted_type);
+		    DuckDBTypeToConvertedType(sql_types[i], schema_element.converted_type);
 	}
 }
 
@@ -251,29 +251,29 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 				break;
 			}
 			case LogicalTypeId::TINYINT:
-				_write_plain<int8_t, int32_t>(input_column, input.size(), nullmask, temp_writer);
+				TemplatedWritePlain<int8_t, int32_t>(input_column, input.size(), nullmask, temp_writer);
 				break;
 			case LogicalTypeId::SMALLINT:
-				_write_plain<int16_t, int32_t>(input_column, input.size(), nullmask, temp_writer);
+				TemplatedWritePlain<int16_t, int32_t>(input_column, input.size(), nullmask, temp_writer);
 				break;
 			case LogicalTypeId::INTEGER:
-				_write_plain<int32_t, int32_t>(input_column, input.size(), nullmask, temp_writer);
+				TemplatedWritePlain<int32_t, int32_t>(input_column, input.size(), nullmask, temp_writer);
 				break;
 			case LogicalTypeId::BIGINT:
-				_write_plain<int64_t, int64_t>(input_column, input.size(), nullmask, temp_writer);
+				TemplatedWritePlain<int64_t, int64_t>(input_column, input.size(), nullmask, temp_writer);
 				break;
 			case LogicalTypeId::FLOAT:
-				_write_plain<float, float>(input_column, input.size(), nullmask, temp_writer);
+				TemplatedWritePlain<float, float>(input_column, input.size(), nullmask, temp_writer);
 				break;
 			case LogicalTypeId::DECIMAL: {
 				// FIXME: fixed length byte array...
 				Vector double_vec(LogicalType::DOUBLE);
 				VectorOperations::Cast(input_column, double_vec, input.size());
-				_write_plain<double, double>(double_vec, input.size(), nullmask, temp_writer);
+				TemplatedWritePlain<double, double>(double_vec, input.size(), nullmask, temp_writer);
 				break;
 			}
 			case LogicalTypeId::DOUBLE:
-				_write_plain<double, double>(input_column, input.size(), nullmask, temp_writer);
+				TemplatedWritePlain<double, double>(input_column, input.size(), nullmask, temp_writer);
 				break;
 			case LogicalTypeId::DATE: {
 				auto *ptr = FlatVector::GetData<date_t>(input_column);

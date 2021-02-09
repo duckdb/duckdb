@@ -6,14 +6,14 @@
 namespace duckdb {
 
 // surely they are joking
-static constexpr int64_t kJulianToUnixEpochDays = 2440588LL;
-static constexpr int64_t kMillisecondsInADay = 86400000LL;
-static constexpr int64_t kNanosecondsInADay = kMillisecondsInADay * 1000LL * 1000LL;
+static constexpr int64_t JULIAN_TO_UNIX_EPOCH_DAYS = 2440588LL;
+static constexpr int64_t MILLISECONDS_PER_DAY = 86400000LL;
+static constexpr int64_t NANOSECONDS_PER_DAY = MILLISECONDS_PER_DAY * 1000LL * 1000LL;
 
 int64_t impala_timestamp_to_nanoseconds(const Int96 &impala_timestamp) {
-	int64_t days_since_epoch = impala_timestamp.value[2] - kJulianToUnixEpochDays;
+	int64_t days_since_epoch = impala_timestamp.value[2] - JULIAN_TO_UNIX_EPOCH_DAYS;
 	auto nanoseconds = Load<int64_t>((data_ptr_t)impala_timestamp.value);
-	return days_since_epoch * kNanosecondsInADay + nanoseconds;
+	return days_since_epoch * NANOSECONDS_PER_DAY + nanoseconds;
 }
 
 timestamp_t impala_timestamp_to_timestamp_t(const Int96 &raw_ts) {
@@ -30,7 +30,7 @@ Int96 timestamp_t_to_impala_timestamp(timestamp_t &ts) {
 	// last uint32 is number of days since year 4713 BC ("Julian date")
 	Int96 impala_ts;
 	Store<uint64_t>(ms_since_midnight * 1000000, (data_ptr_t)impala_ts.value);
-	impala_ts.value[2] = days_since_epoch + kJulianToUnixEpochDays;
+	impala_ts.value[2] = days_since_epoch + JULIAN_TO_UNIX_EPOCH_DAYS;
 	return impala_ts;
 }
 
