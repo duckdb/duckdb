@@ -607,27 +607,27 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 	D_ASSERT(group_hashes.type == LogicalType::HASH);
 
 	group_hashes.Normalify(groups.size());
-	const auto group_hashes_ptr = FlatVector::GetData<hash_t>(group_hashes);
+	auto group_hashes_ptr = FlatVector::GetData<hash_t>(group_hashes);
 
 	D_ASSERT(ht_offsets.vector_type == VectorType::FLAT_VECTOR);
 	D_ASSERT(ht_offsets.type == LogicalType::BIGINT);
 
 	D_ASSERT(addresses.type == LogicalType::POINTER);
 	addresses.Normalify(groups.size());
-	const auto addresses_ptr = FlatVector::GetData<data_ptr_t>(addresses);
+	auto addresses_ptr = FlatVector::GetData<data_ptr_t>(addresses);
 
 	// now compute the entry in the table based on the hash using a modulo
 	UnaryExecutor::Execute<hash_t, uint64_t>(group_hashes, ht_offsets, groups.size(), [&](hash_t element) {
 		D_ASSERT((element & bitmask) == (element % capacity));
 		return (element & bitmask);
 	});
-	const auto ht_offsets_ptr = FlatVector::GetData<uint64_t>(ht_offsets);
+	auto ht_offsets_ptr = FlatVector::GetData<uint64_t>(ht_offsets);
 
 	// precompute the hash salts for faster comparison below
 	D_ASSERT(hash_salts.type == LogicalType::SMALLINT);
 	UnaryExecutor::Execute<hash_t, uint16_t>(group_hashes, hash_salts, groups.size(),
 	                                         [&](hash_t element) { return (element >> hash_prefix_shift); });
-	const auto hash_salts_ptr = FlatVector::GetData<uint16_t>(hash_salts);
+	auto hash_salts_ptr = FlatVector::GetData<uint16_t>(hash_salts);
 
 	// we start out with all entries [0, 1, 2, ..., groups.size()]
 	const SelectionVector *sel_vector = &FlatVector::incremental_selection_vector;

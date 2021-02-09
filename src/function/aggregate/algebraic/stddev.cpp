@@ -27,11 +27,11 @@ struct STDDevBaseOperation {
 	                      idx_t idx) {
 		// update running mean and d^2
 		state->count++;
-		const double input = input_data[idx];
-		const double mean_differential = (input - state->mean) / state->count;
-		const double new_mean = state->mean + mean_differential;
-		const double dsquared_increment = (input - new_mean) * (input - state->mean);
-		const double new_dsquared = state->dsquared + dsquared_increment;
+		double input = input_data[idx];
+		double mean_differential = (input - state->mean) / state->count;
+		double new_mean = state->mean + mean_differential;
+		double dsquared_increment = (input - new_mean) * (input - state->mean);
+		double new_dsquared = state->dsquared + dsquared_increment;
 
 		state->mean = new_mean;
 		state->dsquared = new_dsquared;
@@ -50,9 +50,9 @@ struct STDDevBaseOperation {
 		if (target->count == 0) {
 			*target = source;
 		} else if (source.count > 0) {
-			const auto count = target->count + source.count;
-			const auto mean = (source.count * source.mean + target->count * target->mean) / count;
-			const auto delta = source.mean - target->mean;
+			auto count = target->count + source.count;
+			auto mean = (source.count * source.mean + target->count * target->mean) / count;
+			auto delta = source.mean - target->mean;
 			target->dsquared =
 			    source.dsquared + target->dsquared + delta * delta * source.count * target->count / count;
 			target->mean = mean;

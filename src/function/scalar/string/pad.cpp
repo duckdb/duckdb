@@ -17,7 +17,7 @@ static pair<idx_t, idx_t> PadCountChars(const idx_t len, const char *data, const
 	idx_t nchars = 0;
 	for (; nchars < len && nbytes < size; ++nchars) {
 		utf8proc_int32_t codepoint;
-		const auto bytes = utf8proc_iterate(str + nbytes, size - nbytes, &codepoint);
+		auto bytes = utf8proc_iterate(str + nbytes, size - nbytes, &codepoint);
 		D_ASSERT(bytes > 0);
 		nbytes += bytes;
 	}
@@ -27,8 +27,8 @@ static pair<idx_t, idx_t> PadCountChars(const idx_t len, const char *data, const
 
 static bool InsertPadding(const idx_t len, const string_t &pad, vector<char> &result) {
 	//  Copy the padding until the output is long enough
-	const auto data = pad.GetDataUnsafe();
-	const auto size = pad.GetSize();
+	auto data = pad.GetDataUnsafe();
+	auto size = pad.GetSize();
 
 	//  Check whether we need data that we don't have
 	if (len > 0 && size == 0) {
@@ -47,7 +47,7 @@ static bool InsertPadding(const idx_t len, const string_t &pad, vector<char> &re
 
 		//  Write the next character
 		utf8proc_int32_t codepoint;
-		const auto bytes = utf8proc_iterate(str + nbytes, size - nbytes, &codepoint);
+		auto bytes = utf8proc_iterate(str + nbytes, size - nbytes, &codepoint);
 		D_ASSERT(bytes > 0);
 		nbytes += bytes;
 	}
@@ -63,11 +63,11 @@ static string_t LeftPadFunction(const string_t &str, const int32_t len, const st
 	result.clear();
 
 	// Get information about the base string
-	const auto data_str = str.GetDataUnsafe();
-	const auto size_str = str.GetSize();
+	auto data_str = str.GetDataUnsafe();
+	auto size_str = str.GetSize();
 
 	//  Count how much of str will fit in the output
-	const auto written = PadCountChars(len, data_str, size_str);
+	auto written = PadCountChars(len, data_str, size_str);
 
 	//  Left pad by the number of characters still needed
 	if (!InsertPadding(len - written.second, pad, result)) {
@@ -92,11 +92,11 @@ static string_t RightPadFunction(const string_t &str, const int32_t len, const s
 	result.clear();
 
 	// Get information about the base string
-	const auto data_str = str.GetDataUnsafe();
-	const auto size_str = str.GetSize();
+	auto data_str = str.GetDataUnsafe();
+	auto size_str = str.GetSize();
 
-	//  Count how much of str will fit in the output
-	const auto written = PadCountChars(len, data_str, size_str);
+	// Count how much of str will fit in the output
+	auto written = PadCountChars(len, data_str, size_str);
 
 	//  Append as much of the original string as fits
 	result.insert(result.end(), data_str, data_str + written.first);

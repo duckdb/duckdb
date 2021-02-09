@@ -81,7 +81,7 @@ static void CaseConvert(const char *input_data, idx_t input_length, char *result
 			int sz = 0, new_sz = 0;
 			int codepoint = utf8proc_codepoint(input_data + i, sz);
 			int converted_codepoint = IS_UPPER ? utf8proc_toupper(codepoint) : utf8proc_tolower(codepoint);
-			const auto success = utf8proc_codepoint_to_utf8(converted_codepoint, new_sz, result_data);
+			auto success = utf8proc_codepoint_to_utf8(converted_codepoint, new_sz, result_data);
 			D_ASSERT(success);
 			(void)success;
 			result_data += new_sz;

@@ -20,7 +20,7 @@ struct InstrOperator {
 			D_ASSERT(len <= (utf8proc_ssize_t)haystack.GetSize());
 			for (++string_position; len > 0; ++string_position) {
 				utf8proc_int32_t codepoint;
-				const auto bytes = utf8proc_iterate(str, len, &codepoint);
+				auto bytes = utf8proc_iterate(str, len, &codepoint);
 				str += bytes;
 				len -= bytes;
 			}

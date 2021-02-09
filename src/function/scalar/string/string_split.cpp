@@ -15,10 +15,14 @@ namespace duckdb {
 
 struct StringSplitIterator {
 public:
-	explicit StringSplitIterator(const size_t size) : size(size) {
+	explicit StringSplitIterator(idx_t size) : size(size) {
 	}
 	virtual ~StringSplitIterator() {
 	}
+
+	idx_t size;
+
+public:
 	virtual idx_t Next(const char *input) {
 		return 0;
 	}
@@ -28,7 +32,6 @@ public:
 	idx_t Start() {
 		return start;
 	}
-	const size_t size;
 
 protected:
 	idx_t start = 0;  // end of last place a delim match was found

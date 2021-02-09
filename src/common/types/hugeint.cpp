@@ -594,7 +594,7 @@ hugeint_t hugeint_t::operator>>(const hugeint_t &rhs) const {
 		return hugeint_t(0);
 	}
 	hugeint_t result;
-	const uint64_t shift = rhs.lower;
+	uint64_t shift = rhs.lower;
 	if (rhs.upper != 0 || shift >= 128) {
 		return hugeint_t(0);
 	} else if (shift == 64) {
@@ -619,7 +619,7 @@ hugeint_t hugeint_t::operator<<(const hugeint_t &rhs) const {
 		return hugeint_t(0);
 	}
 	hugeint_t result;
-	const uint64_t shift = rhs.lower;
+	uint64_t shift = rhs.lower;
 	if (rhs.upper != 0 || shift >= 128) {
 		return hugeint_t(0);
 	} else if (shift == 64) {

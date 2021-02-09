@@ -28,17 +28,17 @@ struct CovarOperation {
 	static void Operation(STATE *state, FunctionData *bind_data, A_TYPE *x_data, B_TYPE *y_data, nullmask_t &anullmask,
 	                      nullmask_t &bnullmask, idx_t xidx, idx_t yidx) {
 		// update running mean and d^2
-		const uint64_t n = ++(state->count);
+		uint64_t n = ++(state->count);
 
-		const auto x = x_data[xidx];
-		const double dx = (x - state->meanx);
-		const double meanx = state->meanx + dx / n;
+		auto x = x_data[xidx];
+		double dx = (x - state->meanx);
+		double meanx = state->meanx + dx / n;
 
-		const auto y = y_data[yidx];
-		const double dy = (y - state->meany);
-		const double meany = state->meany + dy / n;
+		auto y = y_data[yidx];
+		double dy = (y - state->meany);
+		double meany = state->meany + dy / n;
 
-		const double new_co_moment = state->co_moment + dx * (y - meany);
+		double new_co_moment = state->co_moment + dx * (y - meany);
 
 		state->meanx = meanx;
 		state->meany = meany;
@@ -50,13 +50,13 @@ struct CovarOperation {
 		if (target->count == 0) {
 			*target = source;
 		} else if (source.count > 0) {
-			const auto count = target->count + source.count;
-			const auto meanx = (source.count * source.meanx + target->count * target->meanx) / count;
-			const auto meany = (source.count * source.meany + target->count * target->meany) / count;
+			auto count = target->count + source.count;
+			auto meanx = (source.count * source.meanx + target->count * target->meanx) / count;
+			auto meany = (source.count * source.meany + target->count * target->meany) / count;
 
 			//  Schubert and Gertz SSDBM 2018, equation 21
-			const auto deltax = target->meanx - source.meanx;
-			const auto deltay = target->meany - source.meany;
+			auto deltax = target->meanx - source.meanx;
+			auto deltay = target->meany - source.meany;
 			target->co_moment =
 			    source.co_moment + target->co_moment + deltax * deltay * source.count * target->count / count;
 			target->meanx = meanx;

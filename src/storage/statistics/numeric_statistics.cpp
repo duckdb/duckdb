@@ -24,7 +24,7 @@ void NumericStatistics::Merge(const BaseStatistics &other_p) {
 	}
 }
 
-bool NumericStatistics::CheckZonemap(ExpressionType comparison_type, Value constant) {
+bool NumericStatistics::CheckZonemap(ExpressionType comparison_type, const Value &constant) {
 	switch (comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
 		return constant >= min && constant <= max;

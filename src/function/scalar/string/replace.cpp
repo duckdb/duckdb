@@ -34,11 +34,11 @@ static string_t ReplaceScalarFunction(const string_t &haystack, const string_t &
 	auto input_haystack = haystack.GetDataUnsafe();
 	auto size_haystack = haystack.GetSize();
 
-	const auto input_needle = needle.GetDataUnsafe();
-	const auto size_needle = needle.GetSize();
+	auto input_needle = needle.GetDataUnsafe();
+	auto size_needle = needle.GetSize();
 
-	const auto input_thread = thread.GetDataUnsafe();
-	const auto size_thread = thread.GetSize();
+	auto input_thread = thread.GetDataUnsafe();
+	auto size_thread = thread.GetSize();
 
 	//  Reuse the buffer
 	result.clear();
