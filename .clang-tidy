@@ -8,16 +8,6 @@ CheckOptions:
     value:           CamelCase
   - key:             readability-identifier-naming.EnumCase
     value:           CamelCase
-  - key:             readability-identifier-naming.EnumConstantCase
-    value:           UPPER_CASE
-  - key:             readability-identifier-naming.ConstexprVariableCase
-    value:           UPPER_CASE
-  - key:             readability-identifier-naming.StaticConstantCase
-    value:           UPPER_CASE
-  - key:             readability-identifier-naming.TemplateTemplateParameterCase
-    value:           UPPER_CASE
-  - key:             readability-identifier-naming.TypeTemplateParameterCase
-    value:           UPPER_CASE
   - key:             readability-identifier-naming.TypedefCase
     value:           lower_case
   - key:             readability-identifier-naming.TypedefSuffix
@@ -28,11 +18,29 @@ CheckOptions:
     value:           lower_case
   - key:             readability-identifier-naming.ParameterCase
     value:           lower_case
+  - key:             readability-identifier-naming.NamespaceCase
+    value:           lower_case
+  - key:             readability-identifier-naming.MacroDefinitionCase
+    value:           UPPER_CASE
   - key:             readability-identifier-naming.StaticConstantCase
+    value:           UPPER_CASE
+  - key:             readability-identifier-naming.ConstantCase
+    value:           UPPER_CASE
+  - key:             readability-identifier-naming.ConstantMemberCase
     value:           UPPER_CASE
   - key:             readability-identifier-naming.StaticVariableCase
     value:           UPPER_CASE
   - key:             readability-identifier-naming.ClassConstantCase
+    value:           UPPER_CASE
+  - key:             readability-identifier-naming.EnumConstantCase
+    value:           UPPER_CASE
+  - key:             readability-identifier-naming.ConstexprVariableCase
+    value:           UPPER_CASE
+  - key:             readability-identifier-naming.StaticConstantCase
+    value:           UPPER_CASE
+  - key:             readability-identifier-naming.TemplateTemplateParameterCase
+    value:           UPPER_CASE
+  - key:             readability-identifier-naming.TypeTemplateParameterCase
     value:           UPPER_CASE
   - key:             readability-identifier-naming.VariableCase
     value:           lower_case
