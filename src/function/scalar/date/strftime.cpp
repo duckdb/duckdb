@@ -77,9 +77,9 @@ void StrfTimeFormat::AddFormatSpecifier(string preceding_literal, StrTimeSpecifi
 idx_t StrfTimeFormat::GetSpecifierLength(StrTimeSpecifier specifier, date_t date, dtime_t time) {
 	switch (specifier) {
 	case StrTimeSpecifier::FULL_WEEKDAY_NAME:
-		return Date::DayNames[Date::ExtractISODayOfTheWeek(date) % 7].GetSize();
+		return Date::DAY_NAMES[Date::ExtractISODayOfTheWeek(date) % 7].GetSize();
 	case StrTimeSpecifier::FULL_MONTH_NAME:
-		return Date::MonthNames[Date::ExtractMonth(date) - 1].GetSize();
+		return Date::MONTH_NAMES[Date::ExtractMonth(date) - 1].GetSize();
 	case StrTimeSpecifier::YEAR_DECIMAL: {
 		auto year = Date::ExtractYear(date);
 		return NumericHelper::SignedLength<int32_t, uint32_t>(year);
@@ -213,12 +213,12 @@ char *StrfTimeFormat::WriteDateSpecifier(StrTimeSpecifier specifier, date_t date
 	switch (specifier) {
 	case StrTimeSpecifier::ABBREVIATED_WEEKDAY_NAME: {
 		date_t dow = Date::ExtractISODayOfTheWeek(date);
-		target = WriteString(target, Date::DayNamesAbbreviated[dow % 7]);
+		target = WriteString(target, Date::DAY_NAMES_ABBREVIATED[dow % 7]);
 		break;
 	}
 	case StrTimeSpecifier::FULL_WEEKDAY_NAME: {
 		date_t dow = Date::ExtractISODayOfTheWeek(date);
-		target = WriteString(target, Date::DayNames[dow % 7]);
+		target = WriteString(target, Date::DAY_NAMES[dow % 7]);
 		break;
 	}
 	case StrTimeSpecifier::WEEKDAY_DECIMAL: {
@@ -257,11 +257,11 @@ char *StrfTimeFormat::WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t
 		target = WritePadded2(target, data[2]);
 		break;
 	case StrTimeSpecifier::ABBREVIATED_MONTH_NAME: {
-		auto &month_name = Date::MonthNamesAbbreviated[data[1] - 1];
+		auto &month_name = Date::MONTH_NAMES_ABBREVIATED[data[1] - 1];
 		return WriteString(target, month_name);
 	}
 	case StrTimeSpecifier::FULL_MONTH_NAME: {
-		auto &month_name = Date::MonthNames[data[1] - 1];
+		auto &month_name = Date::MONTH_NAMES[data[1] - 1];
 		return WriteString(target, month_name);
 	}
 	case StrTimeSpecifier::MONTH_DECIMAL_PADDED:
@@ -895,21 +895,21 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 			}
 			// we parse weekday names, but we don't use them as information
 			case StrTimeSpecifier::ABBREVIATED_WEEKDAY_NAME:
-				if (TryParseCollection(data, pos, size, Date::DayNamesAbbreviated, 7) < 0) {
+				if (TryParseCollection(data, pos, size, Date::DAY_NAMES_ABBREVIATED, 7) < 0) {
 					error_message = "Expected an abbreviated day name (Mon, Tue, Wed, Thu, Fri, Sat, Sun)";
 					error_position = pos;
 					return false;
 				}
 				break;
 			case StrTimeSpecifier::FULL_WEEKDAY_NAME:
-				if (TryParseCollection(data, pos, size, Date::DayNames, 7) < 0) {
+				if (TryParseCollection(data, pos, size, Date::DAY_NAMES, 7) < 0) {
 					error_message = "Expected a full day name (Monday, Tuesday, etc...)";
 					error_position = pos;
 					return false;
 				}
 				break;
 			case StrTimeSpecifier::ABBREVIATED_MONTH_NAME: {
-				int32_t month = TryParseCollection(data, pos, size, Date::MonthNamesAbbreviated, 12);
+				int32_t month = TryParseCollection(data, pos, size, Date::MONTH_NAMES_ABBREVIATED, 12);
 				if (month < 0) {
 					error_message = "Expected an abbreviated month name (Jan, Feb, Mar, etc..)";
 					error_position = pos;
@@ -919,7 +919,7 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 				break;
 			}
 			case StrTimeSpecifier::FULL_MONTH_NAME: {
-				int32_t month = TryParseCollection(data, pos, size, Date::MonthNames, 12);
+				int32_t month = TryParseCollection(data, pos, size, Date::MONTH_NAMES, 12);
 				if (month < 0) {
 					error_message = "Expected a full month name (January, February, etc...)";
 					error_position = pos;

@@ -282,10 +282,10 @@ interval_t Interval::GetDifference(timestamp_t timestamp_1, timestamp_t timestam
 	}
 	while (day_diff < 0) {
 		if (timestamp_1 < timestamp_2) {
-			day_diff += Date::IsLeapYear(year1) ? Date::LeapDays[month1] : Date::NormalDays[month1];
+			day_diff += Date::IsLeapYear(year1) ? Date::LEAP_DAYS[month1] : Date::NORMAL_DAYS[month1];
 			month_diff--;
 		} else {
-			day_diff += Date::IsLeapYear(year2) ? Date::LeapDays[month2] : Date::NormalDays[month2];
+			day_diff += Date::IsLeapYear(year2) ? Date::LEAP_DAYS[month2] : Date::NORMAL_DAYS[month2];
 			month_diff--;
 		}
 	}

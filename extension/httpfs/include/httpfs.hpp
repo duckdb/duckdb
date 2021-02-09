@@ -47,7 +47,7 @@ public:
 	std::unique_ptr<FileHandle> OpenFile(const char *path, uint8_t flags,
 	                                     FileLockType lock = FileLockType::NO_LOCK) override;
 
-	std::vector<std::string> Glob(std::string path) override {
+	std::vector<std::string> Glob(const std::string &path) override {
 		return {path}; // FIXME
 	}
 

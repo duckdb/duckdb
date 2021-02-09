@@ -535,14 +535,14 @@ date_t LastDayOperator::Operation(timestamp_t input) {
 struct MonthNameOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
-		return Date::MonthNames[MonthOperator::Operation<TA, int64_t>(input) - 1];
+		return Date::MONTH_NAMES[MonthOperator::Operation<TA, int64_t>(input) - 1];
 	}
 };
 
 struct DayNameOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
-		return Date::DayNames[DayOfWeekOperator::Operation<TA, int64_t>(input)];
+		return Date::DAY_NAMES[DayOfWeekOperator::Operation<TA, int64_t>(input)];
 	}
 };
 

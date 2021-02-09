@@ -93,7 +93,7 @@ template <class SOURCE, class DEST, class POWERS_SOURCE, class POWERS_DEST>
 void TemplatedDecimalScaleUp(Vector &source, Vector &result, idx_t count) {
 	D_ASSERT(result.type.scale() >= source.type.scale());
 	idx_t scale_difference = result.type.scale() - source.type.scale();
-	auto multiply_factor = POWERS_DEST::PowersOfTen[scale_difference];
+	auto multiply_factor = POWERS_DEST::POWERS_OF_TEN[scale_difference];
 	idx_t target_width = result.type.width() - scale_difference;
 	if (source.type.width() < target_width) {
 		// type will always fit: no need to check limit
@@ -102,7 +102,7 @@ void TemplatedDecimalScaleUp(Vector &source, Vector &result, idx_t count) {
 		});
 	} else {
 		// type might not fit: check limit
-		auto limit = POWERS_SOURCE::PowersOfTen[target_width];
+		auto limit = POWERS_SOURCE::POWERS_OF_TEN[target_width];
 		UnaryExecutor::Execute<SOURCE, DEST, true>(source, result, count, [&](SOURCE input) {
 			if (input >= limit || input <= -limit) {
 				throw OutOfRangeException("Casting value \"%s\" to type %s failed: value is out of range!",
@@ -118,14 +118,14 @@ void TemplatedDecimalScaleDown(Vector &source, Vector &result, idx_t count) {
 	D_ASSERT(result.type.scale() < source.type.scale());
 	idx_t scale_difference = source.type.scale() - result.type.scale();
 	idx_t target_width = result.type.width() + scale_difference;
-	auto divide_factor = POWERS_SOURCE::PowersOfTen[scale_difference];
+	auto divide_factor = POWERS_SOURCE::POWERS_OF_TEN[scale_difference];
 	if (source.type.width() < target_width) {
 		// type will always fit: no need to check limit
 		UnaryExecutor::Execute<SOURCE, DEST, true>(
 		    source, result, count, [&](SOURCE input) { return Cast::Operation<SOURCE, DEST>(input / divide_factor); });
 	} else {
 		// type might not fit: check limit
-		auto limit = POWERS_SOURCE::PowersOfTen[target_width];
+		auto limit = POWERS_SOURCE::POWERS_OF_TEN[target_width];
 		UnaryExecutor::Execute<SOURCE, DEST, true>(source, result, count, [&](SOURCE input) {
 			if (input >= limit || input <= -limit) {
 				throw OutOfRangeException("Casting value \"%s\" to type %s failed: value is out of range!",

@@ -10,7 +10,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // String Conversion
 //===--------------------------------------------------------------------===//
-hugeint_t Hugeint::PowersOfTen[] {hugeint_t(1),
+const hugeint_t Hugeint::POWERS_OF_TEN[] {hugeint_t(1),
                                   hugeint_t(10),
                                   hugeint_t(100),
                                   hugeint_t(1000),

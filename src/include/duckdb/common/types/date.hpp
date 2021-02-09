@@ -17,24 +17,24 @@ namespace duckdb {
 //! type.
 class Date {
 public:
-	static const string_t MonthNames[12];
-	static const string_t MonthNamesAbbreviated[12];
-	static const string_t DayNames[7];
-	static const string_t DayNamesAbbreviated[7];
-	static const int32_t NormalDays[13];
-	static const int32_t CumulativeDays[13];
-	static const int32_t LeapDays[13];
-	static const int32_t CumulativeLeapDays[13];
-	static const int32_t CumulativeYearDays[401];
-	static const int8_t MonthPerDayOfYear[365];
-	static const int8_t LeapMonthPerDayOfYear[366];
+	static const string_t MONTH_NAMES[12];
+	static const string_t MONTH_NAMES_ABBREVIATED[12];
+	static const string_t DAY_NAMES[7];
+	static const string_t DAY_NAMES_ABBREVIATED[7];
+	static const int32_t NORMAL_DAYS[13];
+	static const int32_t CUMULATIVE_DAYS[13];
+	static const int32_t LEAP_DAYS[13];
+	static const int32_t CUMULATIVE_LEAP_DAYS[13];
+	static const int32_t CUMULATIVE_YEAR_DAYS[401];
+	static const int8_t MONTH_PER_DAY_OF_YEAR[365];
+	static const int8_t LEAP_MONTH_PER_DAY_OF_YEAR[366];
 
-	constexpr static int32_t MinYear = -290307;
-	constexpr static int32_t MaxYear = 294247;
-	constexpr static int32_t EpochYear = 1970;
+	constexpr static const int32_t MIN_YEAR = -290307;
+	constexpr static const int32_t MAX_YEAR = 294247;
+	constexpr static const int32_t EPOCH_YEAR = 1970;
 
-	constexpr static int32_t YearInterval = 400;
-	constexpr static int32_t DaysPerYearInterval = 146097;
+	constexpr static const int32_t YEAR_INTERVAL = 400;
+	constexpr static const int32_t DAYS_PER_YEAR_INTERVAL = 146097;
 
 public:
 	//! Convert a string in the format "YYYY-MM-DD" to a date object
