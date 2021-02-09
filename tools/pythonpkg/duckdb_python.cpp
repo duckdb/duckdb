@@ -1381,9 +1381,9 @@ struct DuckDBPyConnection {
 			}
 			auto args = DuckDBPyConnection::transform_python_param_list(single_query_params);
 			auto res = make_unique<DuckDBPyResult>();
-			Py_BEGIN_ALLOW_THREADS;
+			py::gil_scoped_release release;
 			res->result = prep->Execute(args);
-			Py_END_ALLOW_THREADS;
+			py::gil_scoped_acquire acquire;
 			if (!res->result->success) {
 				throw runtime_error(res->result->error);
 			}
@@ -1823,9 +1823,9 @@ struct DuckDBPyRelation {
 
 	py::object to_df() {
 		auto res = make_unique<DuckDBPyResult>();
-		Py_BEGIN_ALLOW_THREADS;
+		py::gil_scoped_release release;
 		res->result = rel->Execute();
-		Py_END_ALLOW_THREADS;
+		py::gil_scoped_acquire acquire;
 		if (!res->result->success) {
 			throw runtime_error(res->result->error);
 		}
@@ -1834,9 +1834,9 @@ struct DuckDBPyRelation {
 
 	py::object to_arrow_table() {
 		auto res = make_unique<DuckDBPyResult>();
-		Py_BEGIN_ALLOW_THREADS;
+		py::gil_scoped_release release;
 		res->result = rel->Execute();
-		Py_END_ALLOW_THREADS;
+		py::gil_scoped_acquire acquire;
 		if (!res->result->success) {
 			throw runtime_error(res->result->error);
 		}
@@ -1888,9 +1888,9 @@ struct DuckDBPyRelation {
 
 	unique_ptr<DuckDBPyResult> execute() {
 		auto res = make_unique<DuckDBPyResult>();
-		Py_BEGIN_ALLOW_THREADS;
+		py::gil_scoped_release release;
 		res->result = rel->Execute();
-		Py_END_ALLOW_THREADS;
+		py::gil_scoped_acquire acquire;
 		if (!res->result->success) {
 			throw runtime_error(res->result->error);
 		}
@@ -1915,12 +1915,12 @@ struct DuckDBPyRelation {
 	}
 
 	string print() {
-		string res;
-		Py_BEGIN_ALLOW_THREADS;
-		res = rel->ToString() + "\n---------------------\n-- Result Preview  --\n---------------------\n" +
-		      rel->Limit(10)->Execute()->ToString() + "\n";
-		Py_END_ALLOW_THREADS;
-		return res;
+		py::gil_scoped_release release;
+		auto rel_res_string = rel->Limit(10)->Execute()->ToString();
+		py::gil_scoped_acquire acquire;
+
+		return rel->ToString() + "\n---------------------\n-- Result Preview  --\n---------------------\n" +
+		       rel_res_string + "\n";
 	}
 
 	py::object getattr(py::str key) {
