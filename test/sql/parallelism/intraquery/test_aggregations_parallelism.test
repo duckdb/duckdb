@@ -14,7 +14,6 @@ create  table t as select range a, range%10 b from range(100000);
 statement ok
 create table bool (a bool);
 
-# verify individually that all 100 values are there
 loop i 0 5000
 
 statement ok
