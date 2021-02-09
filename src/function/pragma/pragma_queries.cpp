@@ -20,7 +20,7 @@ string PragmaCollations(ClientContext &context, const FunctionParameters &parame
 	return "SELECT * FROM pragma_collations() ORDER BY 1";
 }
 
-string PragmaFunctions(ClientContext &context, const FunctionParameters &parameters) {
+string PragmaFunctionsQuery(ClientContext &context, const FunctionParameters &parameters) {
 	return "SELECT * FROM pragma_functions() ORDER BY 1";
 }
 
@@ -65,7 +65,7 @@ void PragmaQueries::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(PragmaFunction::PragmaCall("show", PragmaShow, {LogicalType::VARCHAR}));
 	set.AddFunction(PragmaFunction::PragmaStatement("version", PragmaVersion));
 	set.AddFunction(PragmaFunction::PragmaStatement("database_size", PragmaDatabaseSize));
-	set.AddFunction(PragmaFunction::PragmaStatement("functions", PragmaFunctions));
+	set.AddFunction(PragmaFunction::PragmaStatement("functions", PragmaFunctionsQuery));
 	set.AddFunction(PragmaFunction::PragmaCall("import_database", PragmaImportDatabase, {LogicalType::VARCHAR}));
 }
 

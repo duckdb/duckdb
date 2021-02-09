@@ -59,6 +59,9 @@ endif
 ifeq (${BUILD_REST}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DBUILD_REST=1
 endif
+ifeq ($(TIDY_THREADS),)
+	TIDY_THREADS := 4
+endif
 
 clean:
 	rm -rf build
@@ -136,7 +139,7 @@ tidy-check-parallel:
 	mkdir -p build/tidy && \
 	cd build/tidy && \
 	cmake -DCLANG_TIDY=1 -DDISABLE_UNITY=1 -DBUILD_SHELL=0 -DCMAKE_EXPORT_COMPILE_COMMANDS=ON ../.. && \
-	python3 ../../scripts/run-clang-tidy.py -quiet -j 4
+	python3 ../../scripts/run-clang-tidy.py -quiet -j ${TIDY_THREADS}
 
 tidy-fix:
 	mkdir -p build/tidy && \
