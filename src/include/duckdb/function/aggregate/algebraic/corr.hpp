@@ -59,10 +59,10 @@ struct CorrOperation {
 				throw OutOfRangeException("STDDEV_POP for X is invalid!");
 			}
 			auto std_y = state->dev_pop_y.count > 1 ? sqrt(state->dev_pop_y.dsquared / state->dev_pop_y.count) : 0;
-			if (!Value::DoubleIsValid(std_y) ) {
+			if (!Value::DoubleIsValid(std_y)) {
 				throw OutOfRangeException("STDDEV_POP for Y is invalid!");
 			}
-			if (std_x * std_y == 0){
+			if (std_x * std_y == 0) {
 				nullmask[idx] = true;
 				return;
 			}

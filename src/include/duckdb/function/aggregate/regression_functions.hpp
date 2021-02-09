@@ -14,7 +14,6 @@
 
 namespace duckdb {
 struct RegrAvgxFun {
-
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

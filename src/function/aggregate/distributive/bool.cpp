@@ -25,7 +25,7 @@ struct BoolAndFunFunction {
 
 	template <class T, class STATE>
 	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
-		if (state->empty){
+		if (state->empty) {
 			nullmask[idx] = true;
 			return;
 		}
@@ -34,7 +34,7 @@ struct BoolAndFunFunction {
 
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
-		if (state->empty){
+		if (state->empty) {
 			state->empty = false;
 		}
 		state->val = input[idx] && state->val;
@@ -67,7 +67,7 @@ struct BoolOrFunFunction {
 
 	template <class T, class STATE>
 	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
-		if (state->empty){
+		if (state->empty) {
 			nullmask[idx] = true;
 			return;
 		}
@@ -75,7 +75,7 @@ struct BoolOrFunFunction {
 	}
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
-		if (state->empty){
+		if (state->empty) {
 			state->empty = false;
 		}
 		state->val = input[idx] || state->val;
@@ -95,13 +95,13 @@ struct BoolOrFunFunction {
 };
 
 AggregateFunction BoolOrFun::GetFunction() {
-	return AggregateFunction::UnaryAggregate<bool_state_t, bool, bool, BoolOrFunFunction>(LogicalType(LogicalTypeId::BOOLEAN),
-	                                                                              LogicalType::BOOLEAN);
+	return AggregateFunction::UnaryAggregate<bool_state_t, bool, bool, BoolOrFunFunction>(
+	    LogicalType(LogicalTypeId::BOOLEAN), LogicalType::BOOLEAN);
 }
 
 AggregateFunction BoolAndFun::GetFunction() {
-	return AggregateFunction::UnaryAggregate<bool_state_t, bool, bool, BoolAndFunFunction>(LogicalType(LogicalTypeId::BOOLEAN),
-	                                                                               LogicalType::BOOLEAN);
+	return AggregateFunction::UnaryAggregate<bool_state_t, bool, bool, BoolAndFunFunction>(
+	    LogicalType(LogicalTypeId::BOOLEAN), LogicalType::BOOLEAN);
 }
 
 void BoolOrFun::RegisterFunction(BuiltinFunctions &set) {

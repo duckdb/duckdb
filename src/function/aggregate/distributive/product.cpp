@@ -26,7 +26,7 @@ struct ProductFunction {
 
 	template <class T, class STATE>
 	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
-		if (state->empty){
+		if (state->empty) {
 			nullmask[idx] = true;
 			return;
 		}
@@ -34,7 +34,7 @@ struct ProductFunction {
 	}
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
-		if (state->empty){
+		if (state->empty) {
 			state->empty = false;
 		}
 		state->val *= input[idx];
