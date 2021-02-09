@@ -1,7 +1,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 
 struct DistinctBinaryLambdaWrapper {
 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
@@ -443,4 +443,6 @@ idx_t VectorOperations::SelectDistinctFrom(Vector &left, Vector &right, const Se
 idx_t VectorOperations::SelectNotDistinctFrom(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
                                               SelectionVector *true_sel, SelectionVector *false_sel) {
 	return TemplatedDistinctSelectOperation<duckdb::NotDistinctFrom>(left, right, sel, count, true_sel, false_sel);
+}
+
 }
