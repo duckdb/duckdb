@@ -87,7 +87,7 @@ string BaseStatistics::ToString() {
 }
 
 void BaseStatistics::Verify(Vector &vector, idx_t count) {
-	D_ASSERT(vector.type == this->type);
+	D_ASSERT(vector.buffer->type == this->type);
 	if (!has_null) {
 		if (VectorOperations::HasNull(vector, count)) {
 			throw InternalException(

@@ -167,7 +167,7 @@ void PhysicalPiecewiseMergeJoin::ResolveSimpleJoin(ExecutionContext &context, Da
 			// sort by join key
 			OrderVector(state->join_keys.data[k], state->join_keys.size(), state->left_orders);
 		}
-		ScalarMergeInfo left_info(state->left_orders, state->join_keys.data[0].type, state->left_position);
+		ScalarMergeInfo left_info(state->left_orders, state->join_keys.data[0].buffer->type, state->left_position);
 		ChunkMergeInfo right_info(gstate.right_conditions, gstate.right_orders);
 
 		// perform the actual join
@@ -244,8 +244,8 @@ void PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionContext &context, D
 		auto &right_condition_chunk = gstate.right_conditions.GetChunk(state->right_chunk_index);
 		auto &right_orders = gstate.right_orders[state->right_chunk_index];
 
-		ScalarMergeInfo left_info(state->left_orders, state->join_keys.data[0].type, state->left_position);
-		ScalarMergeInfo right_info(right_orders, right_condition_chunk.data[0].type, state->right_position);
+		ScalarMergeInfo left_info(state->left_orders, state->join_keys.data[0].buffer->type, state->left_position);
+		ScalarMergeInfo right_info(right_orders, right_condition_chunk.data[0].buffer->type, state->right_position);
 
 		idx_t result_count = MergeJoinComplex::Perform(left_info, right_info, conditions[0].comparison);
 		if (result_count == 0) {
@@ -420,7 +420,7 @@ void OrderVector(Vector &vector, idx_t count, MergeOrder &order) {
 
 	order.count = not_null_count;
 	order.order.Initialize(STANDARD_VECTOR_SIZE);
-	switch (vector.type.InternalType()) {
+	switch (vector.buffer->type.InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 		TemplatedQuicksort<int8_t>(vdata, not_null, not_null_count, order.order);

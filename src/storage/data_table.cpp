@@ -370,7 +370,7 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 			auto column = column_ids[i];
 			if (column == COLUMN_IDENTIFIER_ROW_ID) {
 				// scan row id
-				D_ASSERT(result.data[i].type.InternalType() == ROW_TYPE);
+				D_ASSERT(result.data[i].buffer->type.InternalType() == ROW_TYPE);
 				result.data[i].Sequence(current_row, 1);
 			} else {
 				columns[column]->Scan(transaction, state.column_scans[i], result.data[i]);
@@ -403,8 +403,8 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 			if (!state.table_filters || state.table_filters->filters.find(i) == state.table_filters->filters.end()) {
 				auto column = column_ids[i];
 				if (column == COLUMN_IDENTIFIER_ROW_ID) {
-					D_ASSERT(result.data[i].type.InternalType() == PhysicalType::INT64);
-					result.data[i].vector_type = VectorType::FLAT_VECTOR;
+					D_ASSERT(result.data[i].buffer->type.InternalType() == PhysicalType::INT64);
+					result.data[i].buffer->vector_type = VectorType::FLAT_VECTOR;
 					auto result_data = (int64_t *)FlatVector::GetData(result.data[i]);
 					for (size_t sel_idx = 0; sel_idx < approved_tuple_count; sel_idx++) {
 						result_data[sel_idx] = current_row + sel.get_index(sel_idx);
@@ -445,8 +445,8 @@ void DataTable::Fetch(Transaction &transaction, DataChunk &result, vector<column
 		auto column = column_ids[col_idx];
 		if (column == COLUMN_IDENTIFIER_ROW_ID) {
 			// row id column: fill in the row ids
-			D_ASSERT(result.data[col_idx].type.InternalType() == PhysicalType::INT64);
-			result.data[col_idx].vector_type = VectorType::FLAT_VECTOR;
+			D_ASSERT(result.data[col_idx].buffer->type.InternalType() == PhysicalType::INT64);
+			result.data[col_idx].buffer->vector_type = VectorType::FLAT_VECTOR;
 			auto data = FlatVector::GetData<row_t>(result.data[col_idx]);
 			for (idx_t i = 0; i < count; i++) {
 				data[i] = rows[i];
@@ -462,7 +462,7 @@ void DataTable::Fetch(Transaction &transaction, DataChunk &result, vector<column
 }
 
 idx_t DataTable::FetchRows(Transaction &transaction, Vector &row_identifiers, idx_t fetch_count, row_t result_rows[]) {
-	D_ASSERT(row_identifiers.type.InternalType() == ROW_TYPE);
+	D_ASSERT(row_identifiers.buffer->type.InternalType() == ROW_TYPE);
 
 	// now iterate over the row ids and figure out which rows to use
 	idx_t count = 0;
@@ -823,7 +823,7 @@ void DataTable::RemoveFromIndexes(Vector &row_identifiers, idx_t count) {
 // Delete
 //===--------------------------------------------------------------------===//
 void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector &row_identifiers, idx_t count) {
-	D_ASSERT(row_identifiers.type.InternalType() == ROW_TYPE);
+	D_ASSERT(row_identifiers.buffer->type.InternalType() == ROW_TYPE);
 	if (count == 0) {
 		return;
 	}
@@ -922,7 +922,7 @@ void DataTable::VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chu
 
 void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector &row_ids, vector<column_t> &column_ids,
                        DataChunk &updates) {
-	D_ASSERT(row_ids.type.InternalType() == ROW_TYPE);
+	D_ASSERT(row_ids.buffer->type.InternalType() == ROW_TYPE);
 
 	updates.Verify();
 	if (updates.size() == 0) {
@@ -984,7 +984,7 @@ bool DataTable::ScanCreateIndex(CreateIndexScanState &state, const vector<column
 		auto column = column_ids[i];
 		if (column == COLUMN_IDENTIFIER_ROW_ID) {
 			// scan row id
-			D_ASSERT(result.data[i].type.InternalType() == ROW_TYPE);
+			D_ASSERT(result.data[i].buffer->type.InternalType() == ROW_TYPE);
 			result.data[i].Sequence(current_row, 1);
 		} else {
 			// scan actual base column

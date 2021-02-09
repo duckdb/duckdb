@@ -54,7 +54,7 @@ void WindowSegmentTree::AggregateInit() {
 Value WindowSegmentTree::AggegateFinal() {
 	Vector statev(Value::POINTER((idx_t)state.data()));
 	Vector result(result_type);
-	result.vector_type = VectorType::CONSTANT_VECTOR;
+	result.buffer->vector_type = VectorType::CONSTANT_VECTOR;
 	ConstantVector::SetNull(result, false);
 	aggregate.finalize(statev, bind_info, result, 1);
 

@@ -81,7 +81,7 @@ idx_t PartitionableHashTable::AddChunk(DataChunk &groups, DataChunk &payload, bo
 		sel_vector_sizes[r] = 0;
 	}
 
-	D_ASSERT(hashes.vector_type == VectorType::FLAT_VECTOR);
+	D_ASSERT(hashes.buffer->vector_type == VectorType::FLAT_VECTOR);
 	auto hashes_ptr = FlatVector::GetData<hash_t>(hashes);
 
 	for (idx_t i = 0; i < groups.size(); i++) {

@@ -582,7 +582,7 @@ static void StrfTimeFunctionDate(DataChunk &args, ExpressionState &state, Vector
 	auto &info = (StrfTimeBindData &)*func_expr.bind_info;
 
 	if (ConstantVector::IsNull(args.data[1])) {
-		result.vector_type = VectorType::CONSTANT_VECTOR;
+		result.buffer->vector_type = VectorType::CONSTANT_VECTOR;
 		ConstantVector::SetNull(result, true);
 		return;
 	}
@@ -602,7 +602,7 @@ static void StrfTimeFunctionTimestamp(DataChunk &args, ExpressionState &state, V
 	auto &info = (StrfTimeBindData &)*func_expr.bind_info;
 
 	if (ConstantVector::IsNull(args.data[1])) {
-		result.vector_type = VectorType::CONSTANT_VECTOR;
+		result.buffer->vector_type = VectorType::CONSTANT_VECTOR;
 		ConstantVector::SetNull(result, true);
 		return;
 	}
@@ -1027,7 +1027,7 @@ static void StrpTimeFunction(DataChunk &args, ExpressionState &state, Vector &re
 	auto &info = (StrpTimeBindData &)*func_expr.bind_info;
 
 	if (ConstantVector::IsNull(args.data[1])) {
-		result.vector_type = VectorType::CONSTANT_VECTOR;
+		result.buffer->vector_type = VectorType::CONSTANT_VECTOR;
 		ConstantVector::SetNull(result, true);
 		return;
 	}

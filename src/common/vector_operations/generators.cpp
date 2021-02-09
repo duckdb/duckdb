@@ -11,11 +11,11 @@ namespace duckdb {
 
 template <class T>
 void TemplatedGenerateSequence(Vector &result, idx_t count, int64_t start, int64_t increment) {
-	D_ASSERT(result.type.IsNumeric());
+	D_ASSERT(result.buffer->type.IsNumeric());
 	if (start > NumericLimits<T>::Maximum() || increment > NumericLimits<T>::Maximum()) {
 		throw Exception("Sequence start or increment out of type range");
 	}
-	result.vector_type = VectorType::FLAT_VECTOR;
+	result.buffer->vector_type = VectorType::FLAT_VECTOR;
 	auto result_data = FlatVector::GetData<T>(result);
 	auto value = (T)start;
 	for (idx_t i = 0; i < count; i++) {
@@ -25,10 +25,10 @@ void TemplatedGenerateSequence(Vector &result, idx_t count, int64_t start, int64
 }
 
 void VectorOperations::GenerateSequence(Vector &result, idx_t count, int64_t start, int64_t increment) {
-	if (!result.type.IsNumeric()) {
-		throw InvalidTypeException(result.type, "Can only generate sequences for numeric values!");
+	if (!result.buffer->type.IsNumeric()) {
+		throw InvalidTypeException(result.buffer->type, "Can only generate sequences for numeric values!");
 	}
-	switch (result.type.InternalType()) {
+	switch (result.buffer->type.InternalType()) {
 	case PhysicalType::INT8:
 		TemplatedGenerateSequence<int8_t>(result, count, start, increment);
 		break;
@@ -55,11 +55,11 @@ void VectorOperations::GenerateSequence(Vector &result, idx_t count, int64_t sta
 template <class T>
 void TemplatedGenerateSequence(Vector &result, idx_t count, const SelectionVector &sel, int64_t start,
                                int64_t increment) {
-	D_ASSERT(result.type.IsNumeric());
+	D_ASSERT(result.buffer->type.IsNumeric());
 	if (start > NumericLimits<T>::Maximum() || increment > NumericLimits<T>::Maximum()) {
 		throw Exception("Sequence start or increment out of type range");
 	}
-	result.vector_type = VectorType::FLAT_VECTOR;
+	result.buffer->vector_type = VectorType::FLAT_VECTOR;
 	auto result_data = FlatVector::GetData<T>(result);
 	auto value = (T)start;
 	for (idx_t i = 0; i < count; i++) {
@@ -70,10 +70,10 @@ void TemplatedGenerateSequence(Vector &result, idx_t count, const SelectionVecto
 
 void VectorOperations::GenerateSequence(Vector &result, idx_t count, const SelectionVector &sel, int64_t start,
                                         int64_t increment) {
-	if (!result.type.IsNumeric()) {
-		throw InvalidTypeException(result.type, "Can only generate sequences for numeric values!");
+	if (!result.buffer->type.IsNumeric()) {
+		throw InvalidTypeException(result.buffer->type, "Can only generate sequences for numeric values!");
 	}
-	switch (result.type.InternalType()) {
+	switch (result.buffer->type.InternalType()) {
 	case PhysicalType::INT8:
 		TemplatedGenerateSequence<int8_t>(result, count, sel, start, increment);
 		break;

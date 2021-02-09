@@ -10,14 +10,14 @@
 namespace duckdb {
 
 static void ConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	result.vector_type = VectorType::CONSTANT_VECTOR;
+	result.buffer->vector_type = VectorType::CONSTANT_VECTOR;
 	// iterate over the vectors to count how large the final string will be
 	idx_t constant_lengths = 0;
 	vector<idx_t> result_lengths(args.size(), 0);
 	for (idx_t col_idx = 0; col_idx < args.ColumnCount(); col_idx++) {
 		auto &input = args.data[col_idx];
-		D_ASSERT(input.type.id() == LogicalTypeId::VARCHAR);
-		if (input.vector_type == VectorType::CONSTANT_VECTOR) {
+		D_ASSERT(input.buffer->type.id() == LogicalTypeId::VARCHAR);
+		if (input.buffer->vector_type == VectorType::CONSTANT_VECTOR) {
 			if (ConstantVector::IsNull(input)) {
 				// constant null, skip
 				continue;
@@ -26,7 +26,7 @@ static void ConcatFunction(DataChunk &args, ExpressionState &state, Vector &resu
 			constant_lengths += input_data->GetSize();
 		} else {
 			// non-constant vector: set the result type to a flat vector
-			result.vector_type = VectorType::FLAT_VECTOR;
+			result.buffer->vector_type = VectorType::FLAT_VECTOR;
 			// now get the lengths of each of the input elements
 			VectorData vdata;
 			input.Orrify(args.size(), vdata);
@@ -58,7 +58,7 @@ static void ConcatFunction(DataChunk &args, ExpressionState &state, Vector &resu
 		auto &input = args.data[col_idx];
 
 		// loop over the vector and concat to all results
-		if (input.vector_type == VectorType::CONSTANT_VECTOR) {
+		if (input.buffer->vector_type == VectorType::CONSTANT_VECTOR) {
 			// constant vector
 			if (ConstantVector::IsNull(input)) {
 				// constant null, skip
@@ -189,18 +189,18 @@ static void ConcatWSFunction(DataChunk &args, ExpressionState &state, Vector &re
 	VectorData vdata;
 	separator.Orrify(args.size(), vdata);
 
-	result.vector_type = VectorType::CONSTANT_VECTOR;
+	result.buffer->vector_type = VectorType::CONSTANT_VECTOR;
 	for (idx_t col_idx = 0; col_idx < args.ColumnCount(); col_idx++) {
-		if (args.data[col_idx].vector_type != VectorType::CONSTANT_VECTOR) {
-			result.vector_type = VectorType::FLAT_VECTOR;
+		if (args.data[col_idx].buffer->vector_type != VectorType::CONSTANT_VECTOR) {
+			result.buffer->vector_type = VectorType::FLAT_VECTOR;
 			break;
 		}
 	}
-	switch (separator.vector_type) {
+	switch (separator.buffer->vector_type) {
 	case VectorType::CONSTANT_VECTOR:
 		if (ConstantVector::IsNull(separator)) {
 			// constant NULL as separator: return constant NULL vector
-			result.vector_type = VectorType::CONSTANT_VECTOR;
+			result.buffer->vector_type = VectorType::CONSTANT_VECTOR;
 			ConstantVector::SetNull(result, true);
 			return;
 		}

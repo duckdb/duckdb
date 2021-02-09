@@ -66,7 +66,7 @@ void ExpressionExecutor::ExecuteExpression(Vector &result) {
 
 void ExpressionExecutor::ExecuteExpression(idx_t expr_idx, Vector &result) {
 	D_ASSERT(expr_idx < expressions.size());
-	D_ASSERT(result.type == expressions[expr_idx]->return_type);
+	D_ASSERT(result.buffer->type == expressions[expr_idx]->return_type);
 	Execute(*expressions[expr_idx], states[expr_idx]->root_state.get(), nullptr, chunk ? chunk->size() : 1, result);
 }
 
@@ -78,14 +78,14 @@ Value ExpressionExecutor::EvaluateScalar(Expression &expr) {
 	Vector result(expr.return_type);
 	executor.ExecuteExpression(result);
 
-	D_ASSERT(result.vector_type == VectorType::CONSTANT_VECTOR);
+	D_ASSERT(result.buffer->vector_type == VectorType::CONSTANT_VECTOR);
 	auto result_value = result.GetValue(0);
 	D_ASSERT(result_value.type() == expr.return_type);
 	return result_value;
 }
 
 void ExpressionExecutor::Verify(Expression &expr, Vector &vector, idx_t count) {
-	D_ASSERT(expr.return_type == vector.type);
+	D_ASSERT(expr.return_type == vector.buffer->type);
 	vector.Verify(count);
 	if (expr.stats) {
 		expr.stats->Verify(vector, count);

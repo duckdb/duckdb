@@ -221,7 +221,7 @@ static void StringSplitExecutor(DataChunk &args, ExpressionState &state, Vector 
 	args.data[1].Orrify(args.size(), delim_data);
 	auto delims = (string_t *)delim_data.data;
 
-	D_ASSERT(result.type.id() == LogicalTypeId::LIST);
+	D_ASSERT(result.buffer->type.id() == LogicalTypeId::LIST);
 	auto list_struct_data = FlatVector::GetData<list_entry_t>(result);
 
 	auto list_child = make_unique<ChunkCollection>();
@@ -257,9 +257,9 @@ static void StringSplitExecutor(DataChunk &args, ExpressionState &state, Vector 
 	}
 
 	D_ASSERT(list_child->Count() == total_len);
-	if (args.data[0].vector_type == VectorType::CONSTANT_VECTOR &&
-	    args.data[1].vector_type == VectorType::CONSTANT_VECTOR) {
-		result.vector_type = VectorType::CONSTANT_VECTOR;
+	if (args.data[0].buffer->vector_type == VectorType::CONSTANT_VECTOR &&
+	    args.data[1].buffer->vector_type == VectorType::CONSTANT_VECTOR) {
+		result.buffer->vector_type = VectorType::CONSTANT_VECTOR;
 	}
 	ListVector::SetEntry(result, move(list_child));
 }

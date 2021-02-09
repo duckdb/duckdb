@@ -37,7 +37,7 @@ struct ExclusiveBetweenOperator {
 template <class OP>
 static idx_t BetweenLoopTypeSwitch(Vector &input, Vector &lower, Vector &upper, const SelectionVector *sel, idx_t count,
                                    SelectionVector *true_sel, SelectionVector *false_sel) {
-	switch (input.type.InternalType()) {
+	switch (input.buffer->type.InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 		return TernaryExecutor::Select<int8_t, int8_t, int8_t, OP>(input, lower, upper, sel, count, true_sel,
@@ -75,7 +75,7 @@ static idx_t BetweenLoopTypeSwitch(Vector &input, Vector &lower, Vector &upper, 
 		return TernaryExecutor::Select<string_t, string_t, string_t, OP>(input, lower, upper, sel, count, true_sel,
 		                                                                 false_sel);
 	default:
-		throw InvalidTypeException(input.type, "Invalid type for BETWEEN");
+		throw InvalidTypeException(input.buffer->type, "Invalid type for BETWEEN");
 	}
 }
 

@@ -42,8 +42,8 @@ void ExpressionExecutor::Execute(BoundFunctionExpression &expr, ExpressionState 
 	arguments.SetCardinality(count);
 	expr.function.function(arguments, *state, result);
 
-	if (result.type != expr.return_type) {
-		throw TypeMismatchException(expr.return_type, result.type,
+	if (result.buffer->type != expr.return_type) {
+		throw TypeMismatchException(expr.return_type, result.buffer->type,
 		                            "expected function to return the former "
 		                            "but the function returned the latter");
 	}

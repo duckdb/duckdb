@@ -15,12 +15,13 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 template <class OP>
 static void TemplatedBooleanNullmask(Vector &left, Vector &right, Vector &result, idx_t count) {
-	D_ASSERT(left.type.id() == LogicalTypeId::BOOLEAN && right.type.id() == LogicalTypeId::BOOLEAN &&
-	         result.type.id() == LogicalTypeId::BOOLEAN);
+	D_ASSERT(left.buffer->type.id() == LogicalTypeId::BOOLEAN && right.buffer->type.id() == LogicalTypeId::BOOLEAN &&
+	         result.buffer->type.id() == LogicalTypeId::BOOLEAN);
 
-	if (left.vector_type == VectorType::CONSTANT_VECTOR && right.vector_type == VectorType::CONSTANT_VECTOR) {
+	if (left.buffer->vector_type == VectorType::CONSTANT_VECTOR &&
+	    right.buffer->vector_type == VectorType::CONSTANT_VECTOR) {
 		// operation on two constants, result is constant vector
-		result.vector_type = VectorType::CONSTANT_VECTOR;
+		result.buffer->vector_type = VectorType::CONSTANT_VECTOR;
 		auto ldata = ConstantVector::GetData<uint8_t>(left);
 		auto rdata = ConstantVector::GetData<uint8_t>(right);
 		auto result_data = ConstantVector::GetData<bool>(result);
@@ -34,7 +35,7 @@ static void TemplatedBooleanNullmask(Vector &left, Vector &right, Vector &result
 		left.Orrify(count, ldata);
 		right.Orrify(count, rdata);
 
-		result.vector_type = VectorType::FLAT_VECTOR;
+		result.buffer->vector_type = VectorType::FLAT_VECTOR;
 		auto left_data = (uint8_t *)ldata.data; // we use uint8 to avoid load of gunk bools
 		auto right_data = (uint8_t *)rdata.data;
 		auto result_data = FlatVector::GetData<bool>(result);
@@ -169,7 +170,7 @@ struct NotOperator {
 };
 
 void VectorOperations::Not(Vector &input, Vector &result, idx_t count) {
-	D_ASSERT(input.type == LogicalType::BOOLEAN && result.type == LogicalType::BOOLEAN);
+	D_ASSERT(input.buffer->type == LogicalType::BOOLEAN && result.buffer->type == LogicalType::BOOLEAN);
 	UnaryExecutor::Execute<bool, bool, NotOperator>(input, result, count);
 }
 

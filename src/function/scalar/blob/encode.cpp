@@ -7,7 +7,7 @@ static void EncodeFunction(DataChunk &args, ExpressionState &state, Vector &resu
 	// encode is essentially a nop cast from varchar to blob
 	// we just reference the input vector and set the type to blob
 	result.Reference(args.data[0]);
-	result.type = LogicalType::BLOB;
+	result.buffer->type = LogicalType::BLOB;
 }
 
 static void DecodeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
