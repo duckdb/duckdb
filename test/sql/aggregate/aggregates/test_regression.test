@@ -2,6 +2,145 @@
 # description: Test Regression Functions
 # group: [aggregates]
 
+#Corner cases
+statement error
+select regr_avgx()
+
+query I
+select regr_avgx(NULL,NULL)
+----
+NULL
+
+query I
+select regr_avgx(1,1)
+----
+1
+
+statement error
+select regr_avgx(*)
+
+statement error
+select regr_avgy()
+
+query I
+select regr_avgy(NULL,NULL)
+----
+NULL
+
+query I
+select regr_avgy(1,1)
+----
+1
+
+statement error
+select regr_avgy(*)
+
+statement error
+select regr_count()
+
+query I
+select regr_count(NULL,NULL)
+----
+0
+
+query I
+select regr_count(1,1)
+----
+1
+
+statement error
+select regr_count(*)
+
+statement error
+select regr_slope()
+
+query I
+select regr_slope(NULL,NULL)
+----
+NULL
+
+statement error
+select regr_slope(1,1)
+
+statement error
+select regr_slope(*)
+
+statement error
+select regr_r2()
+
+query I
+select regr_r2(NULL,NULL)
+----
+NULL
+
+query I
+select regr_r2(1,1)
+----
+NULL
+
+statement error
+select regr_r2(*)
+
+statement error
+select regr_sxx()
+
+query I
+select regr_sxx(NULL,NULL)
+----
+NULL
+
+query I
+select regr_sxx(1,1)
+----
+0
+
+statement error
+select regr_syy()
+
+query I
+select regr_syy(NULL,NULL)
+----
+NULL
+
+query I
+select regr_syy(1,1)
+----
+0
+
+statement error
+select regr_sxy(*)
+
+statement error
+select regr_sxy()
+
+query I
+select regr_sxy(NULL,NULL)
+----
+NULL
+
+query I
+select regr_sxy(1,1)
+----
+0
+
+statement error
+select regr_syy(*)
+
+statement error
+select regr_intercept()
+
+query I
+select regr_intercept(NULL,NULL)
+----
+NULL
+
+statement error
+select regr_intercept(1,1)
+
+
+statement error
+select regr_intercept(*)
+
 statement ok
 create  table aggr(k int, v decimal(10,2), v2 decimal(10, 2));
 
@@ -62,3 +201,296 @@ select k, regr_intercept(v, v2) from aggr group by k;
 ----
 1	NULL
 2	1.154734
+
+query I
+select regr_avgx(v, v2) from aggr ;
+----
+22.666667
+
+query I
+select  regr_avgy(v, v2) from aggr ;
+----
+20
+
+query I
+select  regr_count(v, v2) from aggr ;
+----
+3
+
+query I
+select regr_slope(v, v2) from aggr ;
+----
+0.831409
+
+query I
+select regr_r2(v, v2) from aggr ;
+----
+0.997691
+
+query I
+select  regr_sxx(v, v2) from aggr ;
+----
+288.666667
+
+query I
+select regr_syy(v, v2) from aggr ;
+----
+200.000000
+
+query I
+select regr_sxy(v, v2) from aggr;
+----
+240.000000
+
+query I
+select regr_intercept(v, v2) from aggr;
+----
+1.154734
+
+
+# Window Function
+require vector_size 512
+
+query I
+select  regr_avgx(v, v2) over (partition by k)
+    from aggr;
+----
+NULL
+22.666667
+22.666667
+22.666667
+22.666667
+
+query I
+select  regr_avgy(v, v2) over (partition by k)
+    from aggr;
+----
+NULL
+20.000000
+20.000000
+20.000000
+20.000000
+
+query I
+select  regr_count(v, v2) over (partition by k)
+    from aggr;
+----
+0
+3
+3
+3
+3
+
+query I
+select  regr_slope(v, v2) over (partition by k)
+    from aggr;
+----
+NULL
+0.831409
+0.831409
+0.831409
+0.831409
+
+query I
+select  regr_r2(v, v2) over (partition by k)
+    from aggr;
+----
+NULL
+0.997691
+0.997691
+0.997691
+0.997691
+
+query I
+select  regr_sxx(v, v2) over (partition by k)
+    from aggr;
+----
+NULL
+288.666667
+288.666667
+288.666667
+288.666667
+
+query I
+select  regr_syy(v, v2) over (partition by k)
+    from aggr;
+----
+NULL
+200.000000
+200.000000
+200.000000
+200.000000
+
+query I
+select  regr_sxy(v, v2) over (partition by k)
+    from aggr;
+----
+NULL
+240.000000
+240.000000
+240.000000
+240.000000
+
+query I
+select  regr_intercept(v, v2) over (partition by k)
+    from aggr;
+----
+NULL
+1.154734
+1.154734
+1.154734
+1.154734
+
+statement ok
+PRAGMA threads=4
+
+statement ok
+PRAGMA force_parallelism
+
+query II
+select k, regr_avgx(v, v2) from aggr group by k;
+----
+1	NULL
+2	22.666667
+
+query II
+select k, regr_avgy(v, v2) from aggr group by k;
+----
+1	NULL
+2	20
+
+query III
+select k, count(*), regr_count(v, v2) from aggr group by k;
+----
+1	1	0
+2	4	3
+
+query II
+select k, regr_slope(v, v2) from aggr group by k;
+----
+1	NULL
+2	0.831409
+
+query II
+select k, regr_r2(v, v2) from aggr group by k;
+----
+1	NULL
+2	0.997691
+
+query II
+select k, regr_sxx(v, v2) from aggr group by k;
+----
+1	NULL
+2	288.666667
+
+query II
+select k, regr_syy(v, v2) from aggr group by k;
+----
+1	NULL
+2	200.000000
+
+query II
+select k, regr_sxy(v, v2) from aggr group by k;
+----
+1	NULL
+2	240.000000
+
+query II
+select k, regr_intercept(v, v2) from aggr group by k;
+----
+1	NULL
+2	1.154734
+
+# Window Function
+require vector_size 512
+
+query I
+select  regr_avgx(v, v2) over (partition by k)
+    from aggr;
+----
+NULL
+22.666667
+22.666667
+22.666667
+22.666667
+
+query I
+select  regr_avgy(v, v2) over (partition by k)
+    from aggr;
+----
+NULL
+20.000000
+20.000000
+20.000000
+20.000000
+
+query I
+select  regr_count(v, v2) over (partition by k)
+    from aggr;
+----
+0
+3
+3
+3
+3
+
+query I
+select  regr_slope(v, v2) over (partition by k)
+    from aggr;
+----
+NULL
+0.831409
+0.831409
+0.831409
+0.831409
+
+query I
+select  regr_r2(v, v2) over (partition by k)
+    from aggr;
+----
+NULL
+0.997691
+0.997691
+0.997691
+0.997691
+
+query I
+select  regr_sxx(v, v2) over (partition by k)
+    from aggr;
+----
+NULL
+288.666667
+288.666667
+288.666667
+288.666667
+
+query I
+select  regr_syy(v, v2) over (partition by k)
+    from aggr;
+----
+NULL
+200.000000
+200.000000
+200.000000
+200.000000
+
+query I
+select  regr_sxy(v, v2) over (partition by k)
+    from aggr;
+----
+NULL
+240.000000
+240.000000
+240.000000
+240.000000
+
+query I
+select  regr_intercept(v, v2) over (partition by k)
+    from aggr;
+----
+NULL
+1.154734
+1.154734
+1.154734
+1.154734
+

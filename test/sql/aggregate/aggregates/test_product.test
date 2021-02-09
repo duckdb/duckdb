@@ -2,8 +2,14 @@
 # description: Test Product operator
 # group: [aggregates]
 
+#Corner cases
 statement error
 select product()
+
+query I
+select product(NULL)
+----
+NULL
 
 query I
 select product(1)
@@ -24,4 +30,65 @@ SELECT product(i)  FROM integers
 ----
 8
 
+query I
+SELECT PRODUCT(2) FROM range(100);
+----
+1267650600228229401496703205376
 
+query I
+SELECT PRODUCT(2) FROM range(100) tbl(i) WHERE i % 2 != 0;
+----
+1125899906842624
+
+# Grouped Aggregation
+query I
+select product(i) from integers group by i%2
+----
+1.000000
+8.000000
+NULL
+
+# Empty Table
+query I
+SELECT PRODUCT(i) FROM range(100) tbl(i) WHERE 1=0;
+----
+NULL
+
+# Window Function
+require vector_size 512
+
+query I
+select product(i) over (partition by i%2)
+    from integers;
+----
+NULL
+8
+8
+1
+
+statement ok
+PRAGMA threads=4
+
+statement ok
+PRAGMA force_parallelism
+
+query I
+SELECT product(i)  FROM integers
+----
+8
+
+query I
+SELECT PRODUCT(2) FROM range(100);
+----
+1267650600228229401496703205376
+
+query I
+SELECT PRODUCT(2) FROM range(100) tbl(i) WHERE i % 2 != 0;
+----
+1125899906842624
+
+
+query I
+SELECT PRODUCT(i) FROM range(100) tbl(i) WHERE 1=0;
+----
+NULL

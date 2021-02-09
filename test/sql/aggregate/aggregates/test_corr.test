@@ -2,6 +2,23 @@
 # description: Test CORR operator
 # group: [aggregates]
 
+#Corner cases
+statement error
+select corr()
+
+query I
+select corr(NULL,NULL)
+----
+NULL
+
+query I
+select corr(1,1)
+----
+NULL
+
+statement error
+select corr(*)
+
 statement ok
 create table aggr(k int, v decimal(10,2), v2 decimal(10, 2));
 
@@ -13,3 +30,51 @@ select k, corr(v, v2) from aggr group by k;
 ----
 1	NULL
 2	0.9988445981
+
+query I
+select  corr(v, v2) from aggr
+----
+0.9988445981
+
+# Window Function
+require vector_size 512
+
+query I
+select  corr(v, v2) over (partition by k)
+    from aggr;
+----
+NULL
+0.998845
+0.998845
+0.998845
+0.998845
+
+statement ok
+PRAGMA threads=4
+
+statement ok
+PRAGMA force_parallelism
+
+query II
+select k, corr(v, v2) from aggr group by k;
+----
+1	NULL
+2	0.9988445981
+
+query I
+select  corr(v, v2) from aggr
+----
+0.9988445981
+
+# Window Function
+require vector_size 512
+
+query I
+select  corr(v, v2) over (partition by k)
+    from aggr;
+----
+NULL
+0.998845
+0.998845
+0.998845
+0.998845

@@ -11,41 +11,40 @@ struct approx_distinct_count_state_t {
 	HyperLogLog *log;
 };
 
-struct ApproxCountDistinctFunction {
+struct ApproxCountDistinctFunctionBase {
 	template <class STATE>
 	static void Initialize(STATE *state) {
-		state->log = new HyperLogLog();
+		state->log = nullptr;
 	}
 
 	template <class STATE, class OP>
-	static void Combine(STATE source, STATE *target) {
+	static void Combine(STATE &source, STATE *target) {
+		if (!source.log){
+			return;
+		}
+		if (!target->log){
+			target->log = source.log;
+			source.log = nullptr;
+			return;
+		}
 		auto new_log = target->log->Merge_P(*source.log);
 		D_ASSERT(target->log);
 		D_ASSERT(source.log);
 		delete target->log;
+		delete source.log;
 		target->log = new_log;
+		source.log = nullptr;
 	}
 
 	template <class T, class STATE>
 	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
-		target[idx] = state->log->Count();
-	}
-
-	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
-		if (nullmask[idx]) {
-			return;
+		if (state->log){
+			target[idx] = state->log->Count();
 		}
-		INPUT_TYPE value = input[idx];
-		state->log->Add((uint8_t *)&value, sizeof(value));
-	}
-
-	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask,
-	                              idx_t count) {
-		for (idx_t i = 0; i < count; i++) {
-			Operation<INPUT_TYPE, STATE, OP>(state, bind_data, input, nullmask, 0);
+		else{
+			target[idx] = 0;
 		}
+
 	}
 
 	static bool IgnoreNull() {
@@ -57,6 +56,51 @@ struct ApproxCountDistinctFunction {
 			delete state->log;
 		}
 	}
+};
+
+struct ApproxCountDistinctFunction : ApproxCountDistinctFunctionBase {
+
+	template <class INPUT_TYPE, class STATE, class OP>
+	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
+		if (!state->log ){
+			state->log = new HyperLogLog();
+		}
+		if (nullmask[idx]) {
+			return;
+		}
+		INPUT_TYPE value = input[idx];
+		state->log->Add((uint8_t *)&value, sizeof(value));
+	}
+		template <class INPUT_TYPE, class STATE, class OP>
+	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask,
+	                              idx_t count) {
+		for (idx_t i = 0; i < count; i++) {
+			Operation<INPUT_TYPE, STATE, OP>(state, bind_data, input, nullmask, 0);
+		}
+	}
+};
+
+struct ApproxCountDistinctFunctionString : ApproxCountDistinctFunctionBase {
+
+	template <class INPUT_TYPE, class STATE, class OP>
+	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
+		if (!state->log ){
+			state->log = new HyperLogLog();
+		}
+		if (nullmask[idx]) {
+			return;
+		}
+		string value = input[idx].GetString();
+		state->log->Add((uint8_t *)&value,value.size());
+	}
+		template <class INPUT_TYPE, class STATE, class OP>
+	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask,
+	                              idx_t count) {
+		for (idx_t i = 0; i < count; i++) {
+			Operation<INPUT_TYPE, STATE, OP>(state, bind_data, input, nullmask, 0);
+		}
+	}
+
 };
 
 AggregateFunction GetApproxCountDistinctFunction(PhysicalType type) {
@@ -93,6 +137,10 @@ AggregateFunction GetApproxCountDistinctFunction(PhysicalType type) {
 		return AggregateFunction::UnaryAggregateDestructor<approx_distinct_count_state_t, double, int64_t,
 		                                                   ApproxCountDistinctFunction>(LogicalType::DOUBLE,
 		                                                                                LogicalType::BIGINT);
+	case PhysicalType::VARCHAR:
+		return AggregateFunction::UnaryAggregateDestructor<approx_distinct_count_state_t, string_t, int64_t,
+		                                                   ApproxCountDistinctFunctionString>(LogicalType::VARCHAR,
+		                                                                                LogicalType::BIGINT);
 
 	default:
 		throw NotImplementedException("Unimplemented approximate_count aggregate");
@@ -110,6 +158,10 @@ void ApproxCountDistinctFun::RegisterFunction(BuiltinFunctions &set) {
 	approx_count.AddFunction(GetApproxCountDistinctFunction(PhysicalType::INT32));
 	approx_count.AddFunction(GetApproxCountDistinctFunction(PhysicalType::INT64));
 	approx_count.AddFunction(GetApproxCountDistinctFunction(PhysicalType::DOUBLE));
+	approx_count.AddFunction(GetApproxCountDistinctFunction(PhysicalType::VARCHAR));
+	approx_count.AddFunction(AggregateFunction::UnaryAggregateDestructor<approx_distinct_count_state_t, int64_t , int64_t,
+		                                                   ApproxCountDistinctFunction>(LogicalType::TIMESTAMP,
+		                                                                                LogicalType::BIGINT));
 	set.AddFunction(approx_count);
 }
 

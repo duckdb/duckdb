@@ -2,24 +2,22 @@
 # description: Test Bool operator
 # group: [aggregates]
 
-statement ok
-create table t (d date)
-
-statement ok
-insert into t values (CURRENT_DATE-1),(CURRENT_DATE+1)
-
-query II
-select bool_or(d > CURRENT_DATE) AS or_result,
-       bool_and(d > CURRENT_DATE) AS and_result
-from t;
-----
-1	0
-
+# Corner Cases
 statement error
 select bool_or(0)
 
 statement error
 select bool_and(0)
+
+query I
+select bool_or(NULL)
+----
+NULL
+
+query I
+select bool_and(NULL)
+----
+NULL
 
 statement error
 select bool_or()
@@ -32,3 +30,101 @@ select bool_or(*)
 
 statement error
 select bool_and(*)
+
+query I
+SELECT bool_or(True) FROM range(100);
+----
+1
+
+query I
+SELECT bool_and(True) FROM range(100);
+----
+1
+
+query I
+SELECT bool_or(True) FROM range(100) tbl(i) WHERE 1=0;
+----
+NULL
+
+query I
+SELECT bool_and(True) FROM range(100) tbl(i) WHERE 1=0;
+----
+NULL
+
+statement ok
+create table t (d date)
+
+statement ok
+insert into t values (DATE'2021-02-09'-1),(DATE'2021-02-09'+1)
+
+query II
+select bool_or(d > '2021-02-09') AS or_result,
+       bool_and(d > '2021-02-09') AS and_result
+from t;
+----
+1	0
+
+query III
+select d,bool_or(d > '2021-02-09') AS or_result,
+       bool_and(d > '2021-02-09') AS and_result
+from t
+group by d;
+----
+2021-02-08	0	0
+2021-02-10	1	1
+
+# Window Function
+require vector_size 512
+
+query I
+select bool_or(d > '2021-02-09') over (partition by d)
+    from t;
+----
+0
+1
+
+query I
+select bool_and(d > '2021-02-09') over (partition by d)
+    from t;
+----
+0
+1
+
+statement ok
+PRAGMA threads=4
+
+statement ok
+PRAGMA force_parallelism
+
+query II
+select bool_or(d > '2021-02-09') AS or_result,
+       bool_and(d > '2021-02-09') AS and_result
+from t;
+----
+1	0
+
+query III
+select d,bool_or(d > '2021-02-09') AS or_result,
+       bool_and(d > '2021-02-09') AS and_result
+from t
+group by d;
+----
+2021-02-08	0	0
+2021-02-10	1	1
+
+# Window Function
+require vector_size 512
+
+query I
+select bool_or(d > '2021-02-09') over (partition by d)
+    from t;
+----
+0
+1
+
+query I
+select bool_and(d > '2021-02-09') over (partition by d)
+    from t;
+----
+0
+1
