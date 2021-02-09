@@ -21,7 +21,7 @@ namespace duckdb {
 
 DataTable::DataTable(DatabaseInstance &db, string schema, string table, vector<LogicalType> types_p,
                      unique_ptr<PersistentTableData> data)
-    : info(make_shared<DataTableInfo>(schema, table)), types(types_p), db(db), total_rows(0), is_root(true) {
+    : info(make_shared<DataTableInfo>(schema, table)), types(move(types_p)), db(db), total_rows(0), is_root(true) {
 	// set up the segment trees for the column segments
 	for (idx_t i = 0; i < types.size(); i++) {
 		auto column_data = make_shared<ColumnData>(db, *info, types[i], i);
@@ -620,7 +620,7 @@ void DataTable::Append(Transaction &transaction, DataChunk &chunk, TableAppendSt
 	state.current_row += chunk.size();
 }
 
-void DataTable::ScanTableSegment(idx_t row_start, idx_t count, std::function<void(DataChunk &chunk)> function) {
+void DataTable::ScanTableSegment(idx_t row_start, idx_t count, const std::function<void(DataChunk &chunk)> &function) {
 	idx_t end = row_start + count;
 
 	vector<column_t> column_ids;

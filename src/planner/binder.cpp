@@ -269,17 +269,17 @@ void Binder::AddCorrelatedColumn(const CorrelatedColumnInfo &info) {
 	}
 }
 
-string Binder::FormatError(ParsedExpression &expr_context, string message) {
-	return FormatError(expr_context.query_location, move(message));
+string Binder::FormatError(ParsedExpression &expr_context, const string &message) {
+	return FormatError(expr_context.query_location, message);
 }
 
-string Binder::FormatError(TableRef &ref_context, string message) {
-	return FormatError(ref_context.query_location, move(message));
+string Binder::FormatError(TableRef &ref_context, const string &message) {
+	return FormatError(ref_context.query_location, message);
 }
 
-string Binder::FormatError(idx_t query_location, string message) {
+string Binder::FormatError(idx_t query_location, const string &message) {
 	QueryErrorContext context(root_statement, query_location);
-	return context.FormatError(move(message));
+	return context.FormatError(message);
 }
 
 } // namespace duckdb

@@ -198,7 +198,7 @@ public:
 	void AddFunction(PragmaFunction function);
 	void AddFunction(const string &name, vector<PragmaFunction> functions);
 	void AddFunction(ScalarFunction function);
-	void AddFunction(const vector<string> &names, const ScalarFunction &function);
+	void AddFunction(const vector<string> &names, ScalarFunction function);
 	void AddFunction(TableFunctionSet set);
 	void AddFunction(TableFunction function);
 	void AddFunction(CopyFunction function);

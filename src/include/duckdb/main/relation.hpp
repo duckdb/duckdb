@@ -101,21 +101,21 @@ public:
 	DUCKDB_API shared_ptr<Relation> Alias(const string &alias);
 
 	//! Insert the data from this relation into a table
-	DUCKDB_API void Insert(string table_name);
+	DUCKDB_API void Insert(const string &table_name);
 	DUCKDB_API void Insert(const string &schema_name, const string &table_name);
 	//! Insert a row (i.e.,list of values) into a table
 	DUCKDB_API void Insert(vector<vector<Value>> values);
 	//! Create a table and insert the data from this relation into that table
-	DUCKDB_API void Create(string table_name);
-	DUCKDB_API void Create(string schema_name, string table_name);
+	DUCKDB_API void Create(const string &table_name);
+	DUCKDB_API void Create(const string &schema_name, const string &table_name);
 
 	//! Write a relation to a CSV file
-	DUCKDB_API void WriteCSV(string csv_file);
+	DUCKDB_API void WriteCSV(const string &csv_file);
 
 	//! Update a table, can only be used on a TableRelation
-	DUCKDB_API virtual void Update(string update, string condition = string());
+	DUCKDB_API virtual void Update(const string &update, const string &condition = string());
 	//! Delete from a table, can only be used on a TableRelation
-	DUCKDB_API virtual void Delete(string condition = string());
+	DUCKDB_API virtual void Delete(const string &condition = string());
 
 public:
 	//! Whether or not the relation inherits column bindings from its child or not, only relevant for binding

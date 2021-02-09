@@ -121,9 +121,9 @@ public:
 	//! Add a correlated column to this binder (if it does not exist)
 	void AddCorrelatedColumn(const CorrelatedColumnInfo &info);
 
-	string FormatError(ParsedExpression &expr_context, string message);
-	string FormatError(TableRef &ref_context, string message);
-	string FormatError(idx_t query_location, string message);
+	string FormatError(ParsedExpression &expr_context, const string &message);
+	string FormatError(TableRef &ref_context, const string &message);
+	string FormatError(idx_t query_location, const string &message);
 
 private:
 	//! The parent binder (if any)

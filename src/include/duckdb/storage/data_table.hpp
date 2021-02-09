@@ -122,7 +122,7 @@ public:
 	void RevertAppend(idx_t start_row, idx_t count);
 	void RevertAppendInternal(idx_t start_row, idx_t count);
 
-	void ScanTableSegment(idx_t start_row, idx_t count, std::function<void(DataChunk &chunk)> function);
+	void ScanTableSegment(idx_t start_row, idx_t count, const std::function<void(DataChunk &chunk)> &function);
 
 	//! Append a chunk with the row ids [row_start, ..., row_start + chunk.size()] to all indexes of the table, returns
 	//! whether or not the append succeeded

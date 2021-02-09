@@ -86,7 +86,7 @@ void BuiltinFunctions::AddFunction(ScalarFunction function) {
 	catalog.CreateFunction(context, &info);
 }
 
-void BuiltinFunctions::AddFunction(const vector<string> &names, const ScalarFunction &function) {
+void BuiltinFunctions::AddFunction(const vector<string> &names, ScalarFunction function) { // NOLINT: false positive
 	for (auto &name : names) {
 		function.name = name;
 		AddFunction(function);

@@ -56,6 +56,26 @@ jobs:
     - name: Format Check
       run: make format-check-silent
 
+  tidy-check:
+    name: Tidy Check
+    runs-on: ubuntu-20.04
+
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Install
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-tidy
+
+    - name: Tidy Check
+      run: make tidy-check-parallel
+
   win-release-64:
     name: Windows (64 Bit)
     runs-on: windows-latest

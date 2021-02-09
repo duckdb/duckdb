@@ -7,8 +7,8 @@
 
 namespace duckdb {
 
-Index::Index(IndexType type, vector<column_t> column_ids, vector<unique_ptr<Expression>> unbound_expressions)
-    : type(type), column_ids(column_ids), unbound_expressions(move(unbound_expressions)) {
+Index::Index(IndexType type, vector<column_t> column_ids_p, vector<unique_ptr<Expression>> unbound_expressions)
+    : type(type), column_ids(move(column_ids_p)), unbound_expressions(move(unbound_expressions)) {
 	for (auto &expr : this->unbound_expressions) {
 		types.push_back(expr->return_type.InternalType());
 		logical_types.push_back(expr->return_type);

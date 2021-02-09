@@ -54,6 +54,7 @@ unique_ptr<TableRef> ValueRelation::GetTableRef() {
 	// copy the expressions
 	for (auto &expr_list : expressions) {
 		vector<unique_ptr<ParsedExpression>> copied_list;
+		copied_list.reserve(expr_list.size());
 		for (auto &expr : expr_list) {
 			copied_list.push_back(expr->Copy());
 		}

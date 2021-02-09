@@ -18,7 +18,7 @@
 namespace duckdb {
 
 StorageManager::StorageManager(DatabaseInstance &db, string path, bool read_only)
-    : db(db), path(path), wal(db), read_only(read_only) {
+    : db(db), path(move(path)), wal(db), read_only(read_only) {
 }
 
 StorageManager::~StorageManager() {

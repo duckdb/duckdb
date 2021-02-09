@@ -196,8 +196,8 @@ BoundStatement Relation::Bind(Binder &binder) {
 	return binder.Bind((SQLStatement &)stmt);
 }
 
-void Relation::Insert(string table_name) {
-	Insert(DEFAULT_SCHEMA, move(table_name));
+void Relation::Insert(const string &table_name) {
+	Insert(DEFAULT_SCHEMA, table_name);
 }
 
 void Relation::Insert(const string &schema_name, const string &table_name) {
@@ -211,16 +211,16 @@ void Relation::Insert(vector<vector<Value>> values) {
 	rel->Insert(GetAlias());
 }
 
-void Relation::Create(string table_name) {
-	Create(DEFAULT_SCHEMA, move(table_name));
+void Relation::Create(const string &table_name) {
+	Create(DEFAULT_SCHEMA, table_name);
 }
 
-void Relation::Create(string schema_name, string table_name) {
-	auto create = make_shared<CreateTableRelation>(shared_from_this(), move(schema_name), move(table_name));
+void Relation::Create(const string &schema_name, const string &table_name) {
+	auto create = make_shared<CreateTableRelation>(shared_from_this(), schema_name, table_name);
 	create->Execute();
 }
 
-void Relation::WriteCSV(string csv_file) {
+void Relation::WriteCSV(const string &csv_file) {
 	auto write_csv = make_shared<WriteCSVRelation>(shared_from_this(), move(csv_file));
 	write_csv->Execute();
 }
@@ -250,11 +250,11 @@ unique_ptr<QueryResult> Relation::Explain() {
 	return explain->Execute();
 }
 
-void Relation::Update(string update, string condition) {
+void Relation::Update(const string &update, const string &condition) {
 	throw Exception("UPDATE can only be used on base tables!");
 }
 
-void Relation::Delete(string condition) {
+void Relation::Delete(const string &condition) {
 	throw Exception("DELETE can only be used on base tables!");
 }
 
