@@ -168,13 +168,13 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(duckdb_libpgquery::PGAE
 			return move(result);
 		}
 	}
-	case PG_AEXPR_NOT_DISTINCT: {
+	case duckdb_libpgquery::PG_AEXPR_NOT_DISTINCT: {
 		auto left_expr = TransformExpression(root->lexpr);
 		auto right_expr = TransformExpression(root->rexpr);
 		return make_unique<ComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM, move(left_expr),
 		                                         move(right_expr));
 	}
-	case PG_AEXPR_DISTINCT: {
+	case duckdb_libpgquery::PG_AEXPR_DISTINCT: {
 		auto left_expr = TransformExpression(root->lexpr);
 		auto right_expr = TransformExpression(root->rexpr);
 		return make_unique<ComparisonExpression>(ExpressionType::COMPARE_DISTINCT_FROM, move(left_expr),
