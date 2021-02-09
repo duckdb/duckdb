@@ -56,7 +56,7 @@ void NumericStatistics::Serialize(Serializer &serializer) {
 unique_ptr<BaseStatistics> NumericStatistics::Deserialize(Deserializer &source, LogicalType type) {
 	auto min = Value::Deserialize(source);
 	auto max = Value::Deserialize(source);
-	return make_unique_base<BaseStatistics, NumericStatistics>(type, min, max);
+	return make_unique_base<BaseStatistics, NumericStatistics>(move(type), min, max);
 }
 
 string NumericStatistics::ToString() {

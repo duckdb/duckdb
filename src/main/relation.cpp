@@ -205,9 +205,9 @@ void Relation::Insert(const string &schema_name, const string &table_name) {
 	insert->Execute();
 }
 
-void Relation::Insert(vector<vector<Value>> values) {
+void Relation::Insert(const vector<vector<Value>> &values) {
 	vector<string> column_names;
-	auto rel = make_shared<ValueRelation>(context, move(values), move(column_names), "values");
+	auto rel = make_shared<ValueRelation>(context, values, move(column_names), "values");
 	rel->Insert(GetAlias());
 }
 
@@ -221,7 +221,7 @@ void Relation::Create(const string &schema_name, const string &table_name) {
 }
 
 void Relation::WriteCSV(const string &csv_file) {
-	auto write_csv = make_shared<WriteCSVRelation>(shared_from_this(), move(csv_file));
+	auto write_csv = make_shared<WriteCSVRelation>(shared_from_this(), csv_file);
 	write_csv->Execute();
 }
 
@@ -230,8 +230,8 @@ void Relation::Head(idx_t limit) {
 	limit_node->Execute()->Print();
 }
 
-shared_ptr<Relation> Relation::CreateView(string name, bool replace) {
-	auto view = make_shared<CreateViewRelation>(shared_from_this(), move(name), replace);
+shared_ptr<Relation> Relation::CreateView(const string &name, bool replace) {
+	auto view = make_shared<CreateViewRelation>(shared_from_this(), name, replace);
 	view->Execute();
 	return shared_from_this();
 }
@@ -240,8 +240,8 @@ unique_ptr<QueryResult> Relation::Query(const string &sql) {
 	return context.Query(sql, false);
 }
 
-unique_ptr<QueryResult> Relation::Query(string name, const string &sql) {
-	CreateView(move(name));
+unique_ptr<QueryResult> Relation::Query(const string &name, const string &sql) {
+	CreateView(name);
 	return Query(sql);
 }
 

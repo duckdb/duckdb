@@ -49,9 +49,9 @@ public:
 	DUCKDB_API void Print();
 	DUCKDB_API void Head(idx_t limit = 10);
 
-	DUCKDB_API shared_ptr<Relation> CreateView(string name, bool replace = true);
+	DUCKDB_API shared_ptr<Relation> CreateView(const string &name, bool replace = true);
 	DUCKDB_API unique_ptr<QueryResult> Query(const string &sql);
-	DUCKDB_API unique_ptr<QueryResult> Query(string name, const string &sql);
+	DUCKDB_API unique_ptr<QueryResult> Query(const string &name, const string &sql);
 
 	//! Explain the query plan of this relation
 	DUCKDB_API unique_ptr<QueryResult> Explain();
@@ -104,7 +104,7 @@ public:
 	DUCKDB_API void Insert(const string &table_name);
 	DUCKDB_API void Insert(const string &schema_name, const string &table_name);
 	//! Insert a row (i.e.,list of values) into a table
-	DUCKDB_API void Insert(vector<vector<Value>> values);
+	DUCKDB_API void Insert(const vector<vector<Value>> &values);
 	//! Create a table and insert the data from this relation into that table
 	DUCKDB_API void Create(const string &table_name);
 	DUCKDB_API void Create(const string &schema_name, const string &table_name);

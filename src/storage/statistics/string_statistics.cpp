@@ -6,7 +6,7 @@
 
 namespace duckdb {
 
-StringStatistics::StringStatistics(LogicalType type) : BaseStatistics(type) {
+StringStatistics::StringStatistics(LogicalType type_p) : BaseStatistics(move(type_p)) {
 	for (idx_t i = 0; i < MAX_STRING_MINMAX_SIZE; i++) {
 		min[i] = 0xFF;
 		max[i] = 0;
@@ -37,7 +37,7 @@ void StringStatistics::Serialize(Serializer &serializer) {
 }
 
 unique_ptr<BaseStatistics> StringStatistics::Deserialize(Deserializer &source, LogicalType type) {
-	auto stats = make_unique<StringStatistics>(type);
+	auto stats = make_unique<StringStatistics>(move(type));
 	source.ReadData(stats->min, MAX_STRING_MINMAX_SIZE);
 	source.ReadData(stats->max, MAX_STRING_MINMAX_SIZE);
 	stats->has_unicode = source.Read<bool>();
@@ -104,7 +104,7 @@ void StringStatistics::Merge(const BaseStatistics &other_p) {
 	has_overflow_strings = has_overflow_strings || other.has_overflow_strings;
 }
 
-bool StringStatistics::CheckZonemap(ExpressionType comparison_type, string constant) {
+bool StringStatistics::CheckZonemap(ExpressionType comparison_type, const string &constant) {
 	auto data = (const_data_ptr_t)constant.c_str();
 	auto size = constant.size();
 

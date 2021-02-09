@@ -39,7 +39,7 @@ public:
 	static unique_ptr<BaseStatistics> Deserialize(Deserializer &source, LogicalType type);
 	void Verify(Vector &vector, idx_t count) override;
 
-	bool CheckZonemap(ExpressionType comparison_type, string value);
+	bool CheckZonemap(ExpressionType comparison_type, const string &value);
 
 	string ToString() override;
 };
