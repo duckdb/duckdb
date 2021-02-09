@@ -55,7 +55,7 @@ statement ok
 create table t (d date)
 
 statement ok
-insert into t values (DATE'2021-02-09'-1),(DATE'2021-02-09'+1)
+insert into t values (DATE'2021-02-09'-1),(DATE'2021-02-09'+1),(NULL)
 
 query II
 select bool_or(d > '2021-02-09') AS or_result,
@@ -70,6 +70,7 @@ select d,bool_or(d > '2021-02-09') AS or_result,
 from t
 group by d;
 ----
+NULL	NULL	NULL
 2021-02-08	0	0
 2021-02-10	1	1
 
@@ -80,6 +81,7 @@ query I
 select bool_or(d > '2021-02-09') over (partition by d)
     from t;
 ----
+NULL
 0
 1
 
@@ -87,44 +89,7 @@ query I
 select bool_and(d > '2021-02-09') over (partition by d)
     from t;
 ----
+NULL
 0
 1
 
-statement ok
-PRAGMA threads=4
-
-statement ok
-PRAGMA force_parallelism
-
-query II
-select bool_or(d > '2021-02-09') AS or_result,
-       bool_and(d > '2021-02-09') AS and_result
-from t;
-----
-1	0
-
-query III
-select d,bool_or(d > '2021-02-09') AS or_result,
-       bool_and(d > '2021-02-09') AS and_result
-from t
-group by d;
-----
-2021-02-08	0	0
-2021-02-10	1	1
-
-# Window Function
-require vector_size 512
-
-query I
-select bool_or(d > '2021-02-09') over (partition by d)
-    from t;
-----
-0
-1
-
-query I
-select bool_and(d > '2021-02-09') over (partition by d)
-    from t;
-----
-0
-1
