@@ -41,7 +41,7 @@ statement ok
 CREATE TABLE IF NOT EXISTS names (t string);
 
 statement ok
-INSERT INTO names VALUES ('Pedro'), (NULL), ('Pedro'), ('Pedro'), ('Mark'), ('Mark'),('Mark'),('Hannes-Muehleisen'),('Hannes-Muehleisen')
+INSERT INTO names VALUES ('Pedro'), (NULL), ('Pedro'), ('Pedro'), ('Mark'), ('Mark'),('Mark'),('Hannessss-Muhleeeeeeisen'),('Hannessss-Muhleeeeeeisen'),('Hannes')
 
 # test counts on a set of values
 statement ok
@@ -50,13 +50,13 @@ create  table t as select range a, mod(range,10) b from range(2000);
 query III
 SELECT COUNT( a),approx_count_distinct(a),approx_count_distinct(b) from t
 ----
-2000	1990	10
+2000	2006	10
 
 query I
 SELECT approx_count_distinct(a) from t group by a %2;
 ----
-1007
-1003
+1002
+996
 
 require vector_size 512
 
@@ -87,5 +87,5 @@ SELECT COUNT( t),approx_count_distinct(t) from dates
 query II
 SELECT COUNT(t),approx_count_distinct(t) from names
 ----
-8	4
+9	4
 

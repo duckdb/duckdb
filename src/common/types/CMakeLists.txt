@@ -9,7 +9,6 @@ add_library_unity(
   decimal.cpp
   hash.cpp
   hugeint.cpp
-  hyperloglog.cpp
   interval.cpp
   null_value.cpp
   selection_vector.cpp
