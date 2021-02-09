@@ -4,11 +4,9 @@
 
 namespace duckdb {
 
-using namespace duckdb_libpgquery;
-
 unique_ptr<SetStatement> Transformer::TransformSet(PGNode *node) {
-	D_ASSERT(node->type == T_PGVariableSetStmt);
-	auto stmt = reinterpret_cast<PGVariableSetStmt *>(node);
+	D_ASSERT(node->type == duckdb_libpgquery::T_PGVariableSetStmt);
+	auto stmt = reinterpret_cast<duckdb_libpgquery::PGVariableSetStmt *>(node);
 
 	if (stmt->kind != VariableSetKind::VAR_SET_VALUE) {
 		throw ParserException("Can only SET a variable to a value");

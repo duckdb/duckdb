@@ -388,7 +388,7 @@ static void ExecuteDistinct(Vector &left, Vector &right, Vector &result, idx_t c
 }
 
 template <class OP>
-static idx_t templated_distinct_select_operation(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+static idx_t TemplatedDistinctSelectOperation(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
                                                  SelectionVector *true_sel, SelectionVector *false_sel) {
 	// the inplace loops take the result as the last parameter
 	switch (left.type.InternalType()) {
@@ -437,10 +437,10 @@ void VectorOperations::NotDistinctFrom(Vector &left, Vector &right, Vector &resu
 // result = A != B with nulls being equal
 idx_t VectorOperations::SelectDistinctFrom(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
                                            SelectionVector *true_sel, SelectionVector *false_sel) {
-	return templated_distinct_select_operation<duckdb::DistinctFrom>(left, right, sel, count, true_sel, false_sel);
+	return TemplatedDistinctSelectOperation<duckdb::DistinctFrom>(left, right, sel, count, true_sel, false_sel);
 }
 // result = A == B with nulls being equal
 idx_t VectorOperations::SelectNotDistinctFrom(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
                                               SelectionVector *true_sel, SelectionVector *false_sel) {
-	return templated_distinct_select_operation<duckdb::NotDistinctFrom>(left, right, sel, count, true_sel, false_sel);
+	return TemplatedDistinctSelectOperation<duckdb::NotDistinctFrom>(left, right, sel, count, true_sel, false_sel);
 }
