@@ -71,7 +71,7 @@ public:
 
 protected:
 	const char *delim;
-	const size_t delim_size;
+	size_t delim_size;
 };
 
 struct UnicodeStringSplitIterator : virtual public StringSplitIterator {
@@ -113,7 +113,7 @@ public:
 
 protected:
 	vector<utf8proc_int32_t> delim_cps;
-	const size_t delim_size;
+	size_t delim_size;
 };
 
 struct RegexStringSplitIterator : virtual public StringSplitIterator {
@@ -145,7 +145,7 @@ public:
 
 protected:
 	unique_ptr<RE2> re;
-	const bool ascii_only;
+	bool ascii_only;
 };
 
 void BaseStringSplitFunction(const char *input, StringSplitIterator &iter, ChunkCollection &result) {

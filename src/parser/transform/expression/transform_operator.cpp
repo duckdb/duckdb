@@ -27,20 +27,20 @@ ExpressionType Transformer::OperatorToExpressionType(const string &op) {
 }
 
 unique_ptr<ParsedExpression> Transformer::TransformUnaryOperator(const string &op, unique_ptr<ParsedExpression> child) {
-	const auto FUNCTION_SCHEMA = DEFAULT_SCHEMA;
+	const auto schema = DEFAULT_SCHEMA;
 
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(move(child));
 
 	// built-in operator function
-	auto result = make_unique<FunctionExpression>(FUNCTION_SCHEMA, op, children);
+	auto result = make_unique<FunctionExpression>(schema, op, children);
 	result->is_operator = true;
 	return move(result);
 }
 
 unique_ptr<ParsedExpression> Transformer::TransformBinaryOperator(const string &op, unique_ptr<ParsedExpression> left,
                                                                   unique_ptr<ParsedExpression> right) {
-	const auto FUNCTION_SCHEMA = DEFAULT_SCHEMA;
+	const auto schema = DEFAULT_SCHEMA;
 
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(move(left));
@@ -50,7 +50,7 @@ unique_ptr<ParsedExpression> Transformer::TransformBinaryOperator(const string &
 		// rewrite 'asdf' SIMILAR TO '.*sd.*' into regexp_full_match('asdf', '.*sd.*')
 		bool invert_similar = op == "!~";
 
-		auto result = make_unique<FunctionExpression>(FUNCTION_SCHEMA, "regexp_full_match", children);
+		auto result = make_unique<FunctionExpression>(schema, "regexp_full_match", children);
 		if (invert_similar) {
 			return make_unique<OperatorExpression>(ExpressionType::OPERATOR_NOT, move(result));
 		} else {
@@ -63,7 +63,7 @@ unique_ptr<ParsedExpression> Transformer::TransformBinaryOperator(const string &
 			return make_unique<ComparisonExpression>(target_type, move(children[0]), move(children[1]));
 		}
 		// not a special operator: convert to a function expression
-		auto result = make_unique<FunctionExpression>(FUNCTION_SCHEMA, op, children);
+		auto result = make_unique<FunctionExpression>(schema, op, children);
 		result->is_operator = true;
 		return move(result);
 	}
@@ -158,9 +158,9 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(duckdb_libpgquery::PGAE
 			// NOT SIMILAR TO
 			invert_similar = true;
 		}
-		const auto REGEX_SCHEMA = DEFAULT_SCHEMA;
-		const auto REGEX_FUNCTION = "regexp_full_match";
-		auto result = make_unique<FunctionExpression>(REGEX_SCHEMA, REGEX_FUNCTION, children);
+		const auto schema = DEFAULT_SCHEMA;
+		const auto regex_function = "regexp_full_match";
+		auto result = make_unique<FunctionExpression>(schema, regex_function, children);
 
 		if (invert_similar) {
 			return make_unique<OperatorExpression>(ExpressionType::OPERATOR_NOT, move(result));

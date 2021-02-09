@@ -20,11 +20,11 @@ static idx_t ContainsUnaligned(const unsigned char *haystack, idx_t haystack_siz
 	// first we set up the needle and the first NEEDLE_SIZE characters of the haystack as UNSIGNED integers
 	UNSIGNED needle_entry = 0;
 	UNSIGNED haystack_entry = 0;
-	const UNSIGNED START_POSITION = (sizeof(UNSIGNED) * 8) - 8;
-	const UNSIGNED SHIFT_AMOUNT = (sizeof(UNSIGNED) - NEEDLE_SIZE) * 8;
+	const UNSIGNED start = (sizeof(UNSIGNED) * 8) - 8;
+	const UNSIGNED shift = (sizeof(UNSIGNED) - NEEDLE_SIZE) * 8;
 	for (int i = 0; i < NEEDLE_SIZE; i++) {
-		needle_entry |= UNSIGNED(needle[i]) << UNSIGNED(START_POSITION - i * 8);
-		haystack_entry |= UNSIGNED(haystack[i]) << UNSIGNED(START_POSITION - i * 8);
+		needle_entry |= UNSIGNED(needle[i]) << UNSIGNED(start - i * 8);
+		haystack_entry |= UNSIGNED(haystack[i]) << UNSIGNED(start - i * 8);
 	}
 	// now we perform the actual search
 	for (idx_t offset = NEEDLE_SIZE; offset < haystack_size; offset++) {
@@ -37,7 +37,7 @@ static idx_t ContainsUnaligned(const unsigned char *haystack, idx_t haystack_siz
 		// (2) adding the next character (bitwise or, with potential shift)
 		// this shift is only necessary if the needle size is not aligned with the unsigned integer size
 		// (e.g. needle size 3, unsigned integer size 4, we need to shift by 1)
-		haystack_entry = (haystack_entry << 8) | ((UNSIGNED(haystack[offset])) << SHIFT_AMOUNT);
+		haystack_entry = (haystack_entry << 8) | ((UNSIGNED(haystack[offset])) << shift);
 	}
 	if (haystack_entry == needle_entry) {
 		return base_offset + haystack_size - NEEDLE_SIZE;
