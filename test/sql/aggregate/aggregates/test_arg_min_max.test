@@ -72,9 +72,6 @@ select arg_min(a,b), arg_max(a,b) from args group by a%2;
 1	1
 2	10
 
-# Window Function
-require vector_size 512
-
 query I
 select arg_min(a,b) over ( partition by a%2) from args;
 ----

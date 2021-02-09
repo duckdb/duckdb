@@ -1,12 +1,12 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
-#include "duckdb/function/function_set.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
-#include "hyperloglog.hpp"
+#include "duckdb/common/types/hyperloglog.hpp"
+#include "duckdb/function/function_set.hpp"
 
 namespace duckdb {
-using namespace hll;
+
 struct approx_distinct_count_state_t {
 	HyperLogLog *log;
 };
@@ -27,13 +27,19 @@ struct ApproxCountDistinctFunctionBase {
 			source.log = nullptr;
 			return;
 		}
-		target->log->merge(*source.log);
+		auto new_log = target->log->Merge_P(*source.log);
+		D_ASSERT(target->log);
+		D_ASSERT(source.log);
+		delete target->log;
+		delete source.log;
+		target->log = new_log;
+		source.log = nullptr;
 	}
 
 	template <class T, class STATE>
 	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
 		if (state->log) {
-			target[idx] = state->log->estimate();
+			target[idx] = state->log->Count();
 		} else {
 			target[idx] = 0;
 		}
@@ -54,14 +60,13 @@ struct ApproxCountDistinctFunction : ApproxCountDistinctFunctionBase {
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
 		if (!state->log) {
-			state->log = new HyperLogLog(16);
+			state->log = new HyperLogLog();
 		}
 		if (nullmask[idx]) {
 			return;
 		}
 		INPUT_TYPE value = input[idx];
-		auto value_bytes = static_cast<char *>(static_cast<void *>(&value));
-		state->log->add(value_bytes, sizeof(value));
+		state->log->Add((uint8_t *)&value, sizeof(value));
 	}
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask,
@@ -76,14 +81,13 @@ struct ApproxCountDistinctFunctionString : ApproxCountDistinctFunctionBase {
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
 		if (!state->log) {
-			state->log = new HyperLogLog(16);
+			state->log = new HyperLogLog();
 		}
 		if (nullmask[idx]) {
 			return;
 		}
 		string value = input[idx].GetString();
-		auto val_c_str = value.c_str();
-		state->log->add(val_c_str, value.size());
+		state->log->Add((uint8_t *)&value, value.size());
 	}
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask,
