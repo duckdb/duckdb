@@ -36,7 +36,7 @@ public:
 
 private:
 	//! Propagate statistics through an operator
-	unique_ptr<NodeStatistics> PropagateStatistics(LogicalOperator &root, unique_ptr<LogicalOperator> *node_ptr);
+	unique_ptr<NodeStatistics> PropagateStatistics(LogicalOperator &node, unique_ptr<LogicalOperator> *node_ptr);
 
 	unique_ptr<NodeStatistics> PropagateStatistics(LogicalFilter &op, unique_ptr<LogicalOperator> *node_ptr);
 	unique_ptr<NodeStatistics> PropagateStatistics(LogicalGet &op, unique_ptr<LogicalOperator> *node_ptr);

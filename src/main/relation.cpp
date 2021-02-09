@@ -74,7 +74,7 @@ shared_ptr<Relation> Relation::Filter(const string &expression) {
 shared_ptr<Relation> Relation::Filter(const vector<string> &expressions) {
 	// if there are multiple expressions, we AND them together
 	auto expression_list = StringListToExpressionList(expressions);
-	if (expression_list.size() == 0) {
+	if (expression_list.empty()) {
 		throw ParserException("Zero filter conditions provided");
 	}
 	auto expr = move(expression_list[0]);

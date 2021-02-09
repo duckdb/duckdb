@@ -21,7 +21,7 @@ public:
 	explicit FilterPushdown(Optimizer &optimizer) : optimizer(optimizer) {
 	}
 	//! Perform filter pushdown
-	unique_ptr<LogicalOperator> Rewrite(unique_ptr<LogicalOperator> node);
+	unique_ptr<LogicalOperator> Rewrite(unique_ptr<LogicalOperator> op);
 
 	struct Filter {
 		unordered_set<idx_t> bindings;

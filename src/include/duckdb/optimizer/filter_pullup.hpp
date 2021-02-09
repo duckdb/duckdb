@@ -23,7 +23,7 @@ public:
 	}
 
 	//! Perform filter pullup
-	unique_ptr<LogicalOperator> Rewrite(unique_ptr<LogicalOperator> node);
+	unique_ptr<LogicalOperator> Rewrite(unique_ptr<LogicalOperator> op);
 
 private:
 	vector<unique_ptr<Expression>> filters_expr_pullup;

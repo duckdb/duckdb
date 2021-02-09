@@ -54,7 +54,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			// FIXME: groups that are not referenced need to stay -> but they don't need to be scanned and output!
 			auto &aggr = (LogicalAggregate &)op;
 			ClearUnusedExpressions(aggr.expressions, aggr.aggregate_index);
-			if (aggr.expressions.size() == 0 && aggr.groups.size() == 0) {
+			if (aggr.expressions.empty() && aggr.groups.empty()) {
 				// removed all expressions from the aggregate: push a COUNT(*)
 				auto count_star_fun = CountStarFun::GetFunction();
 				aggr.expressions.push_back(
@@ -116,7 +116,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			}
 			ClearUnusedExpressions(entries, setop.table_index);
 			if (entries.size() < setop.column_count) {
-				if (entries.size() == 0) {
+				if (entries.empty()) {
 					// no columns referenced: this happens in the case of a COUNT(*)
 					// extract the first column
 					entries.push_back(0);
@@ -165,7 +165,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			auto &proj = (LogicalProjection &)op;
 			ClearUnusedExpressions(proj.expressions, proj.table_index);
 
-			if (proj.expressions.size() == 0) {
+			if (proj.expressions.empty()) {
 				// nothing references the projected expressions
 				// this happens in the case of e.g. EXISTS(SELECT * FROM ...)
 				// in this case we only need to project a single constant
