@@ -30,7 +30,8 @@ public:
 	std::streambuf::int_type underflow() override;
 
 private:
-	void initialize();
+	void Initialize();
+
 	std::fstream input;
 	idx_t data_start = 0;
 	void *mz_stream_ptr = nullptr; // void* so we don't have to include the header

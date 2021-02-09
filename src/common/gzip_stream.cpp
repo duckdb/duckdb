@@ -75,7 +75,7 @@ static constexpr const uint8_t GZIP_HEADER_MINSIZE = 10;
 static constexpr const unsigned char GZIP_FLAG_UNSUPPORTED =
     GZIP_FLAG_ASCII | GZIP_FLAG_MULTIPART | GZIP_FLAG_EXTRA | GZIP_FLAG_COMMENT | GZIP_FLAG_ENCRYPT;
 
-void GzipStreamBuf::initialize() {
+void GzipStreamBuf::Initialize() {
 	if (is_initialized) {
 		return;
 	}
@@ -125,7 +125,7 @@ void GzipStreamBuf::initialize() {
 
 std::streambuf::int_type GzipStreamBuf::underflow() {
 	if (!is_initialized) {
-		initialize();
+		Initialize();
 	}
 
 	// adapted from https://github.com/mateidavid/zstr

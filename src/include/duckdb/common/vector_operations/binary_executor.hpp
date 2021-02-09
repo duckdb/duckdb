@@ -395,7 +395,7 @@ public:
 	static idx_t Select(Vector &left, Vector &right, const SelectionVector *sel, idx_t count, SelectionVector *true_sel,
 	                    SelectionVector *false_sel) {
 		if (!sel) {
-			sel = &FlatVector::IncrementalSelectionVector;
+			sel = &FlatVector::incremental_selection_vector;
 		}
 		if (left.vector_type == VectorType::CONSTANT_VECTOR && right.vector_type == VectorType::CONSTANT_VECTOR) {
 			return SelectConstant<LEFT_TYPE, RIGHT_TYPE, OP>(left, right, sel, count, true_sel, false_sel);

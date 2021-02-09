@@ -52,7 +52,7 @@ idx_t Node16::GetMin() {
 	return 0;
 }
 
-void Node16::insert(ART &art, unique_ptr<Node> &node, uint8_t key_byte, unique_ptr<Node> &child) {
+void Node16::Insert(ART &art, unique_ptr<Node> &node, uint8_t key_byte, unique_ptr<Node> &child) {
 	Node16 *n = static_cast<Node16 *>(node.get());
 
 	if (n->count < 16) {
@@ -81,11 +81,11 @@ void Node16::insert(ART &art, unique_ptr<Node> &node, uint8_t key_byte, unique_p
 		new_node->count = node->count;
 		node = move(new_node);
 
-		Node48::insert(art, node, key_byte, child);
+		Node48::Insert(art, node, key_byte, child);
 	}
 }
 
-void Node16::erase(ART &art, unique_ptr<Node> &node, int pos) {
+void Node16::Erase(ART &art, unique_ptr<Node> &node, int pos) {
 	Node16 *n = static_cast<Node16 *>(node.get());
 	// erase the child and decrease the count
 	n->child[pos].reset();

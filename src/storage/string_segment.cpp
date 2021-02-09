@@ -81,7 +81,7 @@ void StringSegment::InitializeScan(ColumnScanState &state) {
 //===--------------------------------------------------------------------===//
 // Filter base data
 //===--------------------------------------------------------------------===//
-void StringSegment::read_string(string_t *result_data, Vector &result, data_ptr_t baseptr, int32_t *dict_offset,
+void StringSegment::ReadString(string_t *result_data, Vector &result, data_ptr_t baseptr, int32_t *dict_offset,
                                 idx_t src_idx, idx_t res_idx, idx_t &update_idx, size_t vector_index) {
 	if (string_updates && string_updates[vector_index]) {
 		auto &info = *string_updates[vector_index];
@@ -232,15 +232,15 @@ void StringSegment::FilterFetchBaseData(ColumnScanState &state, Vector &result, 
 			idx_t src_idx = sel.get_index(i);
 			if (base_nullmask[src_idx]) {
 				result_nullmask.set(i, true);
-				read_string(result_data, result, baseptr, base_data, src_idx, i, update_idx, state.vector_index);
+				ReadString(result_data, result, baseptr, base_data, src_idx, i, update_idx, state.vector_index);
 			} else {
-				read_string(result_data, result, baseptr, base_data, src_idx, i, update_idx, state.vector_index);
+				ReadString(result_data, result, baseptr, base_data, src_idx, i, update_idx, state.vector_index);
 			}
 		}
 	} else {
 		for (idx_t i = 0; i < approved_tuple_count; i++) {
 			idx_t src_idx = sel.get_index(i);
-			read_string(result_data, result, baseptr, base_data, src_idx, i, update_idx, state.vector_index);
+			ReadString(result_data, result, baseptr, base_data, src_idx, i, update_idx, state.vector_index);
 		}
 	}
 	FlatVector::SetNullmask(result, result_nullmask);

@@ -21,9 +21,6 @@ namespace duckdb {
 //! Type used for nullmasks
 typedef bitset<STANDARD_VECTOR_SIZE> nullmask_t;
 
-//! Zero NULL mask: filled with the value 0 [READ ONLY]
-extern nullmask_t ZERO_MASK;
-
 struct VectorData {
 	const SelectionVector *sel;
 	data_ptr_t data;
@@ -175,7 +172,7 @@ struct ConstantVector {
 	}
 
 	static const sel_t zero_vector[STANDARD_VECTOR_SIZE];
-	static const SelectionVector ZeroSelectionVector;
+	static const SelectionVector zero_selection_vector;
 };
 
 struct DictionaryVector {
@@ -224,7 +221,7 @@ struct FlatVector {
 	}
 
 	static const sel_t incremental_vector[STANDARD_VECTOR_SIZE];
-	static const SelectionVector IncrementalSelectionVector;
+	static const SelectionVector incremental_selection_vector;
 };
 
 struct ListVector {

@@ -69,7 +69,7 @@ string_t SubstringASCII(Vector &result, string_t input, int64_t offset, int64_t 
 	return SubstringSlice(result, input_data, start, end - start);
 }
 
-string_t SubstringFun::substring_scalar_function(Vector &result, string_t input, int32_t offset, int32_t length) {
+string_t SubstringFun::SubstringScalarFunction(Vector &result, string_t input, int32_t offset, int32_t length) {
 	auto input_data = input.GetDataUnsafe();
 	auto input_size = input.GetSize();
 
@@ -139,12 +139,12 @@ static void SubstringFunction(DataChunk &args, ExpressionState &state, Vector &r
 		TernaryExecutor::Execute<string_t, int32_t, int32_t, string_t>(
 		    input_vector, offset_vector, length_vector, result, args.size(),
 		    [&](string_t input_string, int32_t offset, int32_t length) {
-			    return SubstringFun::substring_scalar_function(result, input_string, offset, length);
+			    return SubstringFun::SubstringScalarFunction(result, input_string, offset, length);
 		    });
 	} else {
 		BinaryExecutor::Execute<string_t, int32_t, string_t, true>(
 		    input_vector, offset_vector, result, args.size(), [&](string_t input_string, int32_t offset) {
-			    return SubstringFun::substring_scalar_function(result, input_string, offset,
+			    return SubstringFun::SubstringScalarFunction(result, input_string, offset,
 			                                                   NumericLimits<int32_t>::Maximum());
 		    });
 	}

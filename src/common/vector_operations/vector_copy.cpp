@@ -199,12 +199,12 @@ void VectorOperations::Copy(Vector &source, Vector &target, idx_t source_count, 
 		break;
 	}
 	case VectorType::CONSTANT_VECTOR:
-		VectorOperations::Copy(source, target, ConstantVector::ZeroSelectionVector, source_count, source_offset,
+		VectorOperations::Copy(source, target, ConstantVector::zero_selection_vector, source_count, source_offset,
 		                       target_offset);
 		break;
 	default:
 		source.Normalify(source_count);
-		VectorOperations::Copy(source, target, FlatVector::IncrementalSelectionVector, source_count, source_offset,
+		VectorOperations::Copy(source, target, FlatVector::incremental_selection_vector, source_count, source_offset,
 		                       target_offset);
 		break;
 	}

@@ -51,14 +51,14 @@ unique_ptr<Node> *Node256::GetChild(idx_t pos) {
 	return &child[pos];
 }
 
-void Node256::insert(ART &art, unique_ptr<Node> &node, uint8_t key_byte, unique_ptr<Node> &child) {
+void Node256::Insert(ART &art, unique_ptr<Node> &node, uint8_t key_byte, unique_ptr<Node> &child) {
 	Node256 *n = static_cast<Node256 *>(node.get());
 
 	n->count++;
 	n->child[key_byte] = move(child);
 }
 
-void Node256::erase(ART &art, unique_ptr<Node> &node, int pos) {
+void Node256::Erase(ART &art, unique_ptr<Node> &node, int pos) {
 	Node256 *n = static_cast<Node256 *>(node.get());
 
 	n->child[pos].reset();

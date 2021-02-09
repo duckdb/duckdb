@@ -637,13 +637,13 @@ void DivideFun::RegisterFunction(BuiltinFunctions &set) {
 template <>
 float ModuloOperator::Operation(float left, float right) {
 	D_ASSERT(right != 0);
-	return fmod(left, right);
+	return std::fmod(left, right);
 }
 
 template <>
 double ModuloOperator::Operation(double left, double right) {
 	D_ASSERT(right != 0);
-	return fmod(left, right);
+	return std::fmod(left, right);
 }
 
 template <>

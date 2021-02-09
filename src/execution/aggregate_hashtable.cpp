@@ -630,7 +630,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 	const auto hash_salts_ptr = FlatVector::GetData<uint16_t>(hash_salts);
 
 	// we start out with all entries [0, 1, 2, ..., groups.size()]
-	const SelectionVector *sel_vector = &FlatVector::IncrementalSelectionVector;
+	const SelectionVector *sel_vector = &FlatVector::incremental_selection_vector;
 
 	idx_t remaining_entries = groups.size();
 

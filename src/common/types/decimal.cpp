@@ -4,7 +4,7 @@
 namespace duckdb {
 
 template <class SIGNED, class UNSIGNED>
-string DecimalToString(SIGNED value, uint8_t scale) {
+string TemplatedDecimalToString(SIGNED value, uint8_t scale) {
 	auto len = DecimalToString::DecimalLength<SIGNED, UNSIGNED>(value, scale);
 	auto data = unique_ptr<char[]>(new char[len + 1]);
 	DecimalToString::FormatDecimal<SIGNED, UNSIGNED>(value, scale, data.get(), len);
@@ -12,15 +12,15 @@ string DecimalToString(SIGNED value, uint8_t scale) {
 }
 
 string Decimal::ToString(int16_t value, uint8_t scale) {
-	return DecimalToString<int16_t, uint16_t>(value, scale);
+	return TemplatedDecimalToString<int16_t, uint16_t>(value, scale);
 }
 
 string Decimal::ToString(int32_t value, uint8_t scale) {
-	return DecimalToString<int32_t, uint32_t>(value, scale);
+	return TemplatedDecimalToString<int32_t, uint32_t>(value, scale);
 }
 
 string Decimal::ToString(int64_t value, uint8_t scale) {
-	return DecimalToString<int64_t, uint64_t>(value, scale);
+	return TemplatedDecimalToString<int64_t, uint64_t>(value, scale);
 }
 
 string Decimal::ToString(hugeint_t value, uint8_t scale) {

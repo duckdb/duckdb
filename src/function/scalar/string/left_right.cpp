@@ -8,12 +8,12 @@ namespace duckdb {
 
 static string_t LeftScalarFunction(Vector &result, const string_t str, int64_t pos) {
 	if (pos >= 0) {
-		return SubstringFun::substring_scalar_function(result, str, 1, pos);
+		return SubstringFun::SubstringScalarFunction(result, str, 1, pos);
 	}
 
 	int64_t num_characters = LengthFun::Length<string_t, int64_t>(str);
 	pos = MaxValue<int64_t>(0, num_characters + pos);
-	return SubstringFun::substring_scalar_function(result, str, 1, pos);
+	return SubstringFun::SubstringScalarFunction(result, str, 1, pos);
 }
 
 static void LeftFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -35,12 +35,12 @@ static string_t RightScalarFunction(Vector &result, const string_t str, int64_t 
 	if (pos >= 0) {
 		int64_t len = MinValue<int64_t>(num_characters, pos);
 		int64_t start = num_characters - len + 1;
-		return SubstringFun::substring_scalar_function(result, str, start, len);
+		return SubstringFun::SubstringScalarFunction(result, str, start, len);
 	}
 
 	int64_t len = num_characters - MinValue<int64_t>(num_characters, -pos);
 	int64_t start = num_characters - len + 1;
-	return SubstringFun::substring_scalar_function(result, str, start, len);
+	return SubstringFun::SubstringScalarFunction(result, str, start, len);
 }
 
 static void RightFunction(DataChunk &args, ExpressionState &state, Vector &result) {

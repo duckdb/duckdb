@@ -55,7 +55,7 @@ idx_t Node48::GetMin() {
 	return INVALID_INDEX;
 }
 
-void Node48::insert(ART &art, unique_ptr<Node> &node, uint8_t key_byte, unique_ptr<Node> &child) {
+void Node48::Insert(ART &art, unique_ptr<Node> &node, uint8_t key_byte, unique_ptr<Node> &child) {
 	Node48 *n = static_cast<Node48 *>(node.get());
 
 	// Insert leaf into inner node
@@ -83,11 +83,11 @@ void Node48::insert(ART &art, unique_ptr<Node> &node, uint8_t key_byte, unique_p
 		new_node->count = n->count;
 		CopyPrefix(art, n, new_node.get());
 		node = move(new_node);
-		Node256::insert(art, node, key_byte, child);
+		Node256::Insert(art, node, key_byte, child);
 	}
 }
 
-void Node48::erase(ART &art, unique_ptr<Node> &node, int pos) {
+void Node48::Erase(ART &art, unique_ptr<Node> &node, int pos) {
 	Node48 *n = static_cast<Node48 *>(node.get());
 
 	n->child[n->child_index[pos]].reset();

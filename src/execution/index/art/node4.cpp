@@ -48,7 +48,7 @@ unique_ptr<Node> *Node4::GetChild(idx_t pos) {
 	return &child[pos];
 }
 
-void Node4::insert(ART &art, unique_ptr<Node> &node, uint8_t key_byte, unique_ptr<Node> &child) {
+void Node4::Insert(ART &art, unique_ptr<Node> &node, uint8_t key_byte, unique_ptr<Node> &child) {
 	Node4 *n = static_cast<Node4 *>(node.get());
 
 	// Insert leaf into inner node
@@ -77,11 +77,11 @@ void Node4::insert(ART &art, unique_ptr<Node> &node, uint8_t key_byte, unique_pt
 			new_node->child[i] = move(n->child[i]);
 		}
 		node = move(new_node);
-		Node16::insert(art, node, key_byte, child);
+		Node16::Insert(art, node, key_byte, child);
 	}
 }
 
-void Node4::erase(ART &art, unique_ptr<Node> &node, int pos) {
+void Node4::Erase(ART &art, unique_ptr<Node> &node, int pos) {
 	Node4 *n = static_cast<Node4 *>(node.get());
 	D_ASSERT(pos < n->count);
 

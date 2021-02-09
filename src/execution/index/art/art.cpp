@@ -315,9 +315,9 @@ bool ART::Insert(unique_ptr<Node> &node, unique_ptr<Key> value, unsigned depth, 
 		unique_ptr<Node> new_node = make_unique<Node4>(*this, new_prefix_length);
 		new_node->prefix_length = new_prefix_length;
 		memcpy(new_node->prefix.get(), &key[depth], new_prefix_length);
-		Node4::insert(*this, new_node, existing_key[depth + new_prefix_length], node);
+		Node4::Insert(*this, new_node, existing_key[depth + new_prefix_length], node);
 		unique_ptr<Node> leaf_node = make_unique<Leaf>(*this, move(value), row_id);
-		Node4::insert(*this, new_node, key[depth + new_prefix_length], leaf_node);
+		Node4::Insert(*this, new_node, key[depth + new_prefix_length], leaf_node);
 		node = move(new_node);
 		return true;
 	}
@@ -332,11 +332,11 @@ bool ART::Insert(unique_ptr<Node> &node, unique_ptr<Key> value, unsigned depth, 
 			memcpy(new_node->prefix.get(), node->prefix.get(), mismatch_pos);
 			// Break up prefix
 			auto node_ptr = node.get();
-			Node4::insert(*this, new_node, node->prefix[mismatch_pos], node);
+			Node4::Insert(*this, new_node, node->prefix[mismatch_pos], node);
 			node_ptr->prefix_length -= (mismatch_pos + 1);
 			memmove(node_ptr->prefix.get(), node_ptr->prefix.get() + mismatch_pos + 1, node_ptr->prefix_length);
 			unique_ptr<Node> leaf_node = make_unique<Leaf>(*this, move(value), row_id);
-			Node4::insert(*this, new_node, key[depth + mismatch_pos], leaf_node);
+			Node4::Insert(*this, new_node, key[depth + mismatch_pos], leaf_node);
 			node = move(new_node);
 			return true;
 		}

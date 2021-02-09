@@ -30,5 +30,9 @@ CheckOptions:
     value:           lower_case
   - key:             readability-identifier-naming.StaticConstantCase
     value:           UPPER_CASE
+  - key:             readability-identifier-naming.StaticVariableCase
+    value:           UPPER_CASE
+  - key:             readability-identifier-naming.ClassConstantCase
+    value:           UPPER_CASE
   - key:             readability-identifier-naming.VariableCase
     value:           lower_case

@@ -382,7 +382,7 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 		if (count != max_count) {
 			sel.Initialize(valid_sel);
 		} else {
-			sel.Initialize(FlatVector::IncrementalSelectionVector);
+			sel.Initialize(FlatVector::incremental_selection_vector);
 		}
 		//! First, we scan the columns with filters, fetch their data and generate a selection vector.
 		//! get runtime statistics

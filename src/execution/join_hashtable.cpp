@@ -242,7 +242,7 @@ idx_t JoinHashTable::PrepareKeys(DataChunk &keys, unique_ptr<VectorData[]> &key_
 	key_data = keys.Orrify();
 
 	// figure out which keys are NULL, and create a selection vector out of them
-	current_sel = &FlatVector::IncrementalSelectionVector;
+	current_sel = &FlatVector::incremental_selection_vector;
 	idx_t added_count = keys.size();
 	if (build_side && IsRightOuterJoin(join_type)) {
 		// in case of a right or full outer join, we cannot remove NULL keys from the build side
@@ -763,7 +763,7 @@ void ScanStructure::GatherResult(Vector &result, const SelectionVector &result_v
 }
 
 void ScanStructure::GatherResult(Vector &result, const SelectionVector &sel_vector, idx_t count, idx_t &offset) {
-	GatherResult(result, FlatVector::IncrementalSelectionVector, sel_vector, count, offset);
+	GatherResult(result, FlatVector::incremental_selection_vector, sel_vector, count, offset);
 }
 
 void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
@@ -1093,8 +1093,8 @@ void JoinHashTable::ScanFullOuter(DataChunk &result, JoinHTScanState &state) {
 		for (idx_t i = 0; i < build_types.size(); i++) {
 			auto &vector = result.data[left_column_count + i];
 			D_ASSERT(vector.type == build_types[i]);
-			GatherResultVector(vector, FlatVector::IncrementalSelectionVector, (uintptr_t *)key_locations,
-			                   FlatVector::IncrementalSelectionVector, found_entries, offset);
+			GatherResultVector(vector, FlatVector::incremental_selection_vector, (uintptr_t *)key_locations,
+			                   FlatVector::incremental_selection_vector, found_entries, offset);
 		}
 	}
 }
