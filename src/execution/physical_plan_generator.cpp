@@ -132,6 +132,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 		return CreatePlan((LogicalCTERef &)op);
 	case LogicalOperatorType::LOGICAL_EXPORT:
 		return CreatePlan((LogicalExport &)op);
+	case LogicalOperatorType::LOGICAL_SET:
+		return CreatePlan((LogicalSet &)op);
 	default:
 		throw NotImplementedException("Unimplemented logical operator type!");
 	}

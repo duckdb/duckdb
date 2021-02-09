@@ -76,8 +76,6 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(duckdb_libpgquery::PGAE
 	auto name = string((reinterpret_cast<duckdb_libpgquery::PGValue *>(root->name->head->data.ptr_value))->val.str);
 
 	switch (root->kind) {
-	case duckdb_libpgquery::PG_AEXPR_DISTINCT:
-		break;
 	case duckdb_libpgquery::PG_AEXPR_IN: {
 		auto left_expr = TransformExpression(root->lexpr);
 		ExpressionType operator_type;
@@ -92,7 +90,7 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(duckdb_libpgquery::PGAE
 		auto result = make_unique<OperatorExpression>(operator_type, move(left_expr));
 		TransformExpressionList((duckdb_libpgquery::PGList *)root->rexpr, result->children);
 		return move(result);
-	} break;
+	}
 	// rewrite NULLIF(a, b) into CASE WHEN a=b THEN NULL ELSE a END
 	case duckdb_libpgquery::PG_AEXPR_NULLIF: {
 		auto case_expr = make_unique<CaseExpression>();
@@ -105,7 +103,7 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(duckdb_libpgquery::PGAE
 		// else A
 		case_expr->result_if_false = move(value);
 		return move(case_expr);
-	} break;
+	}
 	// rewrite (NOT) X BETWEEN A AND B into (NOT) AND(GREATERTHANOREQUALTO(X,
 	// A), LESSTHANOREQUALTO(X, B))
 	case duckdb_libpgquery::PG_AEXPR_BETWEEN:
@@ -132,7 +130,7 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(duckdb_libpgquery::PGAE
 		} else {
 			return make_unique<OperatorExpression>(ExpressionType::OPERATOR_NOT, move(compare_between));
 		}
-	} break;
+	}
 	// rewrite SIMILAR TO into regexp_full_match('asdf', '.*sd.*')
 	case duckdb_libpgquery::PG_AEXPR_SIMILAR: {
 		auto left_expr = TransformExpression(root->lexpr);
@@ -169,7 +167,20 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(duckdb_libpgquery::PGAE
 		} else {
 			return move(result);
 		}
-	} break;
+	}
+	case PG_AEXPR_NOT_DISTINCT: {
+		auto left_expr = TransformExpression(root->lexpr);
+		auto right_expr = TransformExpression(root->rexpr);
+		return make_unique<ComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM, move(left_expr),
+		                                         move(right_expr));
+	}
+	case PG_AEXPR_DISTINCT: {
+		auto left_expr = TransformExpression(root->lexpr);
+		auto right_expr = TransformExpression(root->rexpr);
+		return make_unique<ComparisonExpression>(ExpressionType::COMPARE_DISTINCT_FROM, move(left_expr),
+		                                         move(right_expr));
+	}
+
 	default:
 		break;
 	}
@@ -180,7 +191,8 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(duckdb_libpgquery::PGAE
 		// prefix operator
 		return TransformUnaryOperator(name, move(right_expr));
 	} else if (!right_expr) {
-		throw NotImplementedException("Postfix operators not implemented!");
+		// postfix operator, only ! is currently supported
+		return TransformUnaryOperator(name + "__postfix", move(left_expr));
 	} else {
 		return TransformBinaryOperator(name, move(left_expr), move(right_expr));
 	}

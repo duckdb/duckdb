@@ -10,7 +10,6 @@
 
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/storage/checkpoint/table_data_writer.hpp"
 
 #include "duckdb/storage/table/morsel_info.hpp"
 

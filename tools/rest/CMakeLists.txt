@@ -1,5 +1,7 @@
 include_directories(.)
 
+include_directories(../../third_party/httplib)
+
 add_executable(duckdb_rest_server server.cpp)
 
 if(${BUILD_SUN})

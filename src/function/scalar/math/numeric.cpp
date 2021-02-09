@@ -119,6 +119,8 @@ void AbsFun::RegisterFunction(BuiltinFunctions &set) {
 		}
 	}
 	set.AddFunction(abs);
+	abs.name = "@";
+	set.AddFunction(abs);
 }
 
 //===--------------------------------------------------------------------===//
@@ -559,6 +561,8 @@ void PowFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(power_function);
 	power_function.name = "**";
 	set.AddFunction(power_function);
+	power_function.name = "^";
+	set.AddFunction(power_function);
 }
 
 //===--------------------------------------------------------------------===//
@@ -831,6 +835,28 @@ struct LogGammaOperator {
 void LogGammaFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("lgamma", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
 	                               UnaryDoubleFunctionWrapper<double, LogGammaOperator>));
+}
+
+//===--------------------------------------------------------------------===//
+// factorial(), !
+//===--------------------------------------------------------------------===//
+
+struct FactorialOperator {
+	template <class TA, class TR>
+	static inline TR Operation(TA left) {
+		TR ret = 1;
+		for (TA i = 2; i <= left; i++) {
+			ret *= i;
+		}
+		return ret;
+	}
+};
+
+void FactorialFun::RegisterFunction(BuiltinFunctions &set) {
+	auto fun = ScalarFunction({LogicalType::INTEGER}, LogicalType::HUGEINT,
+	                          ScalarFunction::UnaryFunction<int32_t, hugeint_t, FactorialOperator>);
+
+	set.AddFunction({"factorial", "!__postfix"}, fun);
 }
 
 } // namespace duckdb

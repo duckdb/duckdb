@@ -45,6 +45,21 @@ struct GreaterThanEquals {
 		return left >= right;
 	}
 };
+
+struct DistinctFrom {
+	template <class T>
+	static inline bool Operation(T left, T right, bool left_null, bool right_null) {
+		return ((left != right) && !left_null && !right_null) || (left_null != right_null);
+	}
+};
+
+struct NotDistinctFrom {
+	template <class T>
+	static inline bool Operation(T left, T right, bool left_null, bool right_null) {
+		return ((left == right) && !left_null && !right_null) || (left_null && right_null);
+	}
+};
+
 struct LessThan {
 	template <class T>
 	static inline bool Operation(T left, T right) {
@@ -103,6 +118,17 @@ inline bool NotEquals::Operation(string_t left, string_t right) {
 	return StringComparisonOperators::EqualsOrNot<true>(left, right);
 }
 
+template <>
+inline bool NotDistinctFrom::Operation(string_t left, string_t right, bool left_null, bool right_null) {
+	return (StringComparisonOperators::EqualsOrNot<false>(left, right) && !left_null && !right_null) ||
+	       (left_null && right_null);
+}
+template <>
+inline bool DistinctFrom::Operation(string_t left, string_t right, bool left_null, bool right_null) {
+	return (StringComparisonOperators::EqualsOrNot<true>(left, right) && !left_null && !right_null) ||
+	       (left_null != right_null);
+}
+
 // compare up to shared length. if still the same, compare lengths
 template <class OP>
 static bool templated_string_compare_op(string_t left, string_t right) {
@@ -157,6 +183,15 @@ inline bool LessThan::Operation(interval_t left, interval_t right) {
 template <>
 inline bool LessThanEquals::Operation(interval_t left, interval_t right) {
 	return GreaterThanEquals::Operation(right, left);
+}
+
+template <>
+inline bool NotDistinctFrom::Operation(interval_t left, interval_t right, bool left_null, bool right_null) {
+	return (Interval::Equals(left, right) && !left_null && !right_null) || (left_null && right_null);
+}
+template <>
+inline bool DistinctFrom::Operation(interval_t left, interval_t right, bool left_null, bool right_null) {
+	return (!Equals::Operation(left, right) && !left_null && !right_null) || (left_null != right_null);
 }
 //===--------------------------------------------------------------------===//
 // Specialized Hugeint Comparison Operators

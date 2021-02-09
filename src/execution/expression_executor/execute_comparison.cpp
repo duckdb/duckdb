@@ -45,7 +45,11 @@ void ExpressionExecutor::Execute(BoundComparisonExpression &expr, ExpressionStat
 		VectorOperations::GreaterThanEquals(left, right, result, count);
 		break;
 	case ExpressionType::COMPARE_DISTINCT_FROM:
-		throw NotImplementedException("Unimplemented compare: COMPARE_DISTINCT_FROM");
+		VectorOperations::DistinctFrom(left, right, result, count);
+		break;
+	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+		VectorOperations::NotDistinctFrom(left, right, result, count);
+		break;
 	default:
 		throw NotImplementedException("Unknown comparison type!");
 	}
@@ -114,7 +118,9 @@ idx_t ExpressionExecutor::Select(BoundComparisonExpression &expr, ExpressionStat
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 		return TemplatedSelectOperation<duckdb::GreaterThanEquals>(left, right, sel, count, true_sel, false_sel);
 	case ExpressionType::COMPARE_DISTINCT_FROM:
-		throw NotImplementedException("Unimplemented compare: COMPARE_DISTINCT_FROM");
+		return VectorOperations::SelectDistinctFrom(left, right, sel, count, true_sel, false_sel);
+	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+		return VectorOperations::SelectNotDistinctFrom(left, right, sel, count, true_sel, false_sel);
 	default:
 		throw NotImplementedException("Unknown comparison type!");
 	}

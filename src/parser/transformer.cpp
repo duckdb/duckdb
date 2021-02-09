@@ -85,6 +85,8 @@ unique_ptr<SQLStatement> Transformer::TransformStatement(duckdb_libpgquery::PGNo
 		return TransformShowSelect(stmt);
 	case duckdb_libpgquery::T_PGCallStmt:
 		return TransformCall(stmt);
+	case duckdb_libpgquery::T_PGVariableSetStmt:
+		return TransformSet(stmt);
 	case duckdb_libpgquery::T_PGCheckPointStmt:
 		return TransformCheckpoint(stmt);
 	default:

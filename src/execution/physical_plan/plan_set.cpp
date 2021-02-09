@@ -1,0 +1,10 @@
+#include "duckdb/execution/physical_plan_generator.hpp"
+#include "duckdb/planner/operator/logical_set.hpp"
+#include "duckdb/execution/operator/helper/physical_set.hpp"
+
+using namespace duckdb;
+using namespace std;
+
+unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSet &op) {
+	return make_unique<PhysicalSet>(op.name, op.value);
+}

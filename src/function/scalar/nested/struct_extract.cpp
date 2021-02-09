@@ -66,7 +66,7 @@ static unique_ptr<FunctionData> StructExtractBind(ClientContext &context, Scalar
 
 	auto &key_child = arguments[1];
 
-	if (arguments[1]->return_type.id() != LogicalTypeId::VARCHAR ||
+	if (key_child->return_type.id() != LogicalTypeId::VARCHAR ||
 	    key_child->return_type.id() != LogicalTypeId::VARCHAR || !key_child->IsFoldable()) {
 		throw Exception("Key name for struct_extract needs to be a constant string");
 	}
