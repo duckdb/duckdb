@@ -315,7 +315,7 @@ template <class LEFT_TYPE, class RIGHT_TYPE, class OP>
 static idx_t DistinctSelect(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
                             SelectionVector *true_sel, SelectionVector *false_sel) {
 	if (!sel) {
-		sel = &FlatVector::IncrementalSelectionVector;
+		sel = &FlatVector::incremental_selection_vector;
 	}
 	if (left.vector_type == VectorType::CONSTANT_VECTOR && right.vector_type == VectorType::CONSTANT_VECTOR) {
 		return DistinctSelectConstant<LEFT_TYPE, RIGHT_TYPE, OP>(left, right, sel, count, true_sel, false_sel);
