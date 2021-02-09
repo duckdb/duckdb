@@ -619,13 +619,13 @@ void Vector::Orrify(idx_t count, VectorData &data) {
 		break;
 	}
 	case VectorType::CONSTANT_VECTOR:
-		data.sel = &ConstantVector::zero_selection_vector;
+		data.sel = &ConstantVector::ZERO_SELECTION_VECTOR;
 		data.data = ConstantVector::GetData(*this);
 		data.nullmask = &nullmask;
 		break;
 	default:
 		Normalify(count);
-		data.sel = &FlatVector::incremental_selection_vector;
+		data.sel = &FlatVector::INCREMENTAL_SELECTION_VECTOR;
 		data.data = FlatVector::GetData(*this);
 		data.nullmask = &nullmask;
 		break;
@@ -728,7 +728,7 @@ void Vector::UTFVerify(const SelectionVector &sel, idx_t count) {
 }
 
 void Vector::UTFVerify(idx_t count) {
-	UTFVerify(FlatVector::incremental_selection_vector, count);
+	UTFVerify(FlatVector::INCREMENTAL_SELECTION_VECTOR, count);
 }
 
 void Vector::Verify(const SelectionVector &sel, idx_t count) {
@@ -835,7 +835,7 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 }
 
 void Vector::Verify(idx_t count) {
-	Verify(FlatVector::incremental_selection_vector, count);
+	Verify(FlatVector::INCREMENTAL_SELECTION_VECTOR, count);
 }
 
 string_t StringVector::AddString(Vector &vector, const char *data, idx_t len) {

@@ -171,8 +171,8 @@ struct ConstantVector {
 		return vector.nullmask;
 	}
 
-	static const sel_t zero_vector[STANDARD_VECTOR_SIZE];
-	static const SelectionVector zero_selection_vector;
+	static const sel_t ZERO_VECTOR[STANDARD_VECTOR_SIZE];
+	static const SelectionVector ZERO_SELECTION_VECTOR;
 };
 
 struct DictionaryVector {
@@ -220,8 +220,8 @@ struct FlatVector {
 		return vector.nullmask[idx];
 	}
 
-	static const sel_t incremental_vector[STANDARD_VECTOR_SIZE];
-	static const SelectionVector incremental_selection_vector;
+	static const sel_t INCREMENTAL_VECTOR[STANDARD_VECTOR_SIZE];
+	static const SelectionVector INCREMENTAL_SELECTION_VECTOR;
 };
 
 struct ListVector {

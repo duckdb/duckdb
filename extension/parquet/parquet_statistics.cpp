@@ -57,18 +57,18 @@ static Value TransformStatisticsDouble(const_data_ptr_t input) {
 }
 
 static Value TransformStatisticsTimestampMs(const_data_ptr_t input) {
-	return Value::TIMESTAMP(parquet_timestamp_ms_to_timestamp(Load<int64_t>(input)));
+	return Value::TIMESTAMP(ParquetTimestampMsToTimestamp(Load<int64_t>(input)));
 }
 
 static Value TransformStatisticsTimestampMicros(const_data_ptr_t input) {
-	return Value::TIMESTAMP(parquet_timestamp_micros_to_timestamp(Load<int64_t>(input)));
+	return Value::TIMESTAMP(ParquetTimestampMicrosToTimestamp(Load<int64_t>(input)));
 }
 
 static Value TransformStatisticsTimestampImpala(const_data_ptr_t input) {
-	return Value::TIMESTAMP(impala_timestamp_to_timestamp_t(Load<Int96>(input)));
+	return Value::TIMESTAMP(ImpalaTimestampToTimestamp(Load<Int96>(input)));
 }
 
-unique_ptr<BaseStatistics> parquet_transform_column_statistics(const SchemaElement &s_ele, const LogicalType &type,
+unique_ptr<BaseStatistics> ParquetTransformColumnStatistics(const SchemaElement &s_ele, const LogicalType &type,
                                                                const ColumnChunk &column_chunk) {
 	if (!column_chunk.__isset.meta_data || !column_chunk.meta_data.__isset.statistics) {
 		// no stats present for row group

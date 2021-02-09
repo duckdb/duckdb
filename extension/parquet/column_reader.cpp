@@ -59,15 +59,15 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(const LogicalType &type_p, c
 	case LogicalTypeId::TIMESTAMP:
 		switch (schema_p.type) {
 		case Type::INT96:
-			return make_unique<CallbackColumnReader<Int96, timestamp_t, impala_timestamp_to_timestamp_t>>(
+			return make_unique<CallbackColumnReader<Int96, timestamp_t, ImpalaTimestampToTimestamp>>(
 			    type_p, schema_p, file_idx_p, max_define, max_repeat);
 		case Type::INT64:
 			switch (schema_p.converted_type) {
 			case ConvertedType::TIMESTAMP_MICROS:
-				return make_unique<CallbackColumnReader<int64_t, timestamp_t, parquet_timestamp_micros_to_timestamp>>(
+				return make_unique<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampMicrosToTimestamp>>(
 				    type_p, schema_p, file_idx_p, max_define, max_repeat);
 			case ConvertedType::TIMESTAMP_MILLIS:
-				return make_unique<CallbackColumnReader<int64_t, timestamp_t, parquet_timestamp_ms_to_timestamp>>(
+				return make_unique<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampMsToTimestamp>>(
 				    type_p, schema_p, file_idx_p, max_define, max_repeat);
 			default:
 				break;
@@ -77,7 +77,7 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(const LogicalType &type_p, c
 		}
 		break;
 	case LogicalTypeId::DATE:
-		return make_unique<CallbackColumnReader<int32_t, date_t, parquet_int_to_date>>(type_p, schema_p, file_idx_p,
+		return make_unique<CallbackColumnReader<int32_t, date_t, ParquetIntToDate>>(type_p, schema_p, file_idx_p,
 		                                                                               max_define, max_repeat);
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR:

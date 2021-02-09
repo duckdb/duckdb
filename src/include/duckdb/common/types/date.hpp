@@ -17,17 +17,17 @@ namespace duckdb {
 //! type.
 class Date {
 public:
-	static string_t MonthNames[12];
-	static string_t MonthNamesAbbreviated[12];
-	static string_t DayNames[7];
-	static string_t DayNamesAbbreviated[7];
-	static int32_t NormalDays[13];
-	static int32_t CumulativeDays[13];
-	static int32_t LeapDays[13];
-	static int32_t CumulativeLeapDays[13];
-	static int32_t CumulativeYearDays[401];
-	static int8_t MonthPerDayOfYear[365];
-	static int8_t LeapMonthPerDayOfYear[366];
+	static const string_t MonthNames[12];
+	static const string_t MonthNamesAbbreviated[12];
+	static const string_t DayNames[7];
+	static const string_t DayNamesAbbreviated[7];
+	static const int32_t NormalDays[13];
+	static const int32_t CumulativeDays[13];
+	static const int32_t LeapDays[13];
+	static const int32_t CumulativeLeapDays[13];
+	static const int32_t CumulativeYearDays[401];
+	static const int8_t MonthPerDayOfYear[365];
+	static const int8_t LeapMonthPerDayOfYear[366];
 
 	constexpr static int32_t MinYear = -290307;
 	constexpr static int32_t MaxYear = 294247;

@@ -19,7 +19,7 @@ CheckOptions:
   - key:             readability-identifier-naming.ParameterCase
     value:           lower_case
   - key:             readability-identifier-naming.ConstantCase
-    value:           lower_case
+    value:           aNy_CasE
   - key:             readability-identifier-naming.ConstantParameterCase
     value:           lower_case
   - key:             readability-identifier-naming.NamespaceCase

@@ -144,7 +144,7 @@ public:
 	static idx_t Select(Vector &a, Vector &b, Vector &c, const SelectionVector *sel, idx_t count,
 	                    SelectionVector *true_sel, SelectionVector *false_sel) {
 		if (!sel) {
-			sel = &FlatVector::incremental_selection_vector;
+			sel = &FlatVector::INCREMENTAL_SELECTION_VECTOR;
 		}
 		VectorData adata, bdata, cdata;
 		a.Orrify(count, adata);

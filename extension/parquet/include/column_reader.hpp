@@ -86,7 +86,7 @@ public:
 		if (Type().id() == LogicalTypeId::LIST || Type().id() == LogicalTypeId::STRUCT) {
 			return nullptr;
 		}
-		return parquet_transform_column_statistics(Schema(), Type(), columns[file_idx]);
+		return ParquetTransformColumnStatistics(Schema(), Type(), columns[file_idx]);
 	}
 
 protected:

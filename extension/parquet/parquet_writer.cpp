@@ -279,7 +279,7 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 				for (idx_t r = 0; r < input.size(); r++) {
 					if (!nullmask[r]) {
 						auto ts = Timestamp::FromDatetime(ptr[r], 0);
-						temp_writer.Write<Int96>(timestamp_t_to_impala_timestamp(ts));
+						temp_writer.Write<Int96>(TimestampToImpalaTimestamp(ts));
 					}
 				}
 				break;
@@ -288,7 +288,7 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 				auto *ptr = FlatVector::GetData<timestamp_t>(input_column);
 				for (idx_t r = 0; r < input.size(); r++) {
 					if (!nullmask[r]) {
-						temp_writer.Write<Int96>(timestamp_t_to_impala_timestamp(ptr[r]));
+						temp_writer.Write<Int96>(TimestampToImpalaTimestamp(ptr[r]));
 					}
 				}
 				break;
