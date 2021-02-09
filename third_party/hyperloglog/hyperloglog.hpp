@@ -62,7 +62,7 @@ public:
      *
      * @exception std::invalid_argument the argument is out of range.
      */
-    explicit HyperLogLog(uint8_t b = 4) noexcept(false) :
+    HyperLogLog(uint8_t b = 4) throw (std::invalid_argument) :
             b_(b), m_(1 << b), M_(m_, 0) {
 
         if (b < 4 || 30 < b) {
@@ -139,7 +139,7 @@ public:
      * 
      * @exception std::invalid_argument number of registers doesn't match.
      */
-    void merge(const HyperLogLog& other) noexcept(false) {
+    void merge(const HyperLogLog& other) throw (std::invalid_argument) {
         if (m_ != other.m_) {
             std::stringstream ss;
             ss << "number of registers doesn't match: " << m_ << " != " << other.m_;
@@ -187,7 +187,7 @@ public:
      *
      * @exception std::runtime_error When failed to dump.
      */
-    void dump(std::ostream& os) const noexcept(false){
+    void dump(std::ostream& os) const throw(std::runtime_error){
         os.write((char*)&b_, sizeof(b_));
         os.write((char*)&M_[0], sizeof(M_[0]) * M_.size());
         if(os.fail()){
@@ -202,7 +202,7 @@ public:
      *
      * @exception std::runtime_error When failed to restore.
      */
-    void restore(std::istream& is) noexcept(false){
+    void restore(std::istream& is) throw(std::runtime_error){
         uint8_t b = 0;
         is.read((char*)&b, sizeof(b));
         HyperLogLog tempHLL(b);
@@ -234,7 +234,7 @@ public:
      *
      * @exception std::invalid_argument the argument is out of range.
      */
-    explicit HyperLogLogHIP(uint8_t b = 4) noexcept(false) : HyperLogLog(b), register_limit_((1 << 5) - 1), c_(0.0), p_(1 << b) {
+    HyperLogLogHIP(uint8_t b = 4) throw (std::invalid_argument) : HyperLogLog(b), register_limit_((1 << 5) - 1), c_(0.0), p_(1 << b) {
     }
 
     /**
@@ -277,7 +277,7 @@ public:
      * 
      * @exception std::invalid_argument number of registers doesn't match.
      */
-    void merge(const HyperLogLogHIP& other) noexcept(false) {
+    void merge(const HyperLogLogHIP& other) throw (std::invalid_argument) {
         if (m_ != other.m_) {
             std::stringstream ss;
             ss << "number of registers doesn't match: " << m_ << " != " << other.m_;
@@ -334,7 +334,7 @@ public:
      *
      * @exception std::runtime_error When failed to dump.
      */
-    void dump(std::ostream& os) const noexcept(false){
+    void dump(std::ostream& os) const throw(std::runtime_error){
         os.write((char*)&b_, sizeof(b_));
         os.write((char*)&M_[0], sizeof(M_[0]) * M_.size());
         os.write((char*)&c_, sizeof(c_));
@@ -351,7 +351,7 @@ public:
      *
      * @exception std::runtime_error When failed to restore.
      */
-    void restore(std::istream& is) noexcept(false){
+    void restore(std::istream& is) throw(std::runtime_error){
         uint8_t b = 0;
         is.read((char*)&b, sizeof(b));
         HyperLogLogHIP tempHLL(b);
