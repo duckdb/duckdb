@@ -12,7 +12,7 @@ using parquet::format::Type;
 
 template <Value (*FUNC)(const_data_ptr_t input)>
 static unique_ptr<BaseStatistics> TemplatedGetNumericStats(const LogicalType &type,
-                                                              const parquet::format::Statistics &parquet_stats) {
+                                                           const parquet::format::Statistics &parquet_stats) {
 	auto stats = make_unique<NumericStatistics>(type);
 
 	// for reasons unknown to science, Parquet defines *both* `min` and `min_value` as well as `max` and
@@ -117,8 +117,7 @@ unique_ptr<BaseStatistics> parquet_transform_column_statistics(const SchemaEleme
 			// arrow timestamp
 			switch (s_ele.converted_type) {
 			case ConvertedType::TIMESTAMP_MICROS:
-				row_group_stats =
-				    TemplatedGetNumericStats<TransformStatisticsTimestampMicros>(type, parquet_stats);
+				row_group_stats = TemplatedGetNumericStats<TransformStatisticsTimestampMicros>(type, parquet_stats);
 				break;
 			case ConvertedType::TIMESTAMP_MILLIS:
 				row_group_stats = TemplatedGetNumericStats<TransformStatisticsTimestampMs>(type, parquet_stats);

@@ -389,7 +389,7 @@ static void ExecuteDistinct(Vector &left, Vector &right, Vector &result, idx_t c
 
 template <class OP>
 static idx_t TemplatedDistinctSelectOperation(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
-                                                 SelectionVector *true_sel, SelectionVector *false_sel) {
+                                              SelectionVector *true_sel, SelectionVector *false_sel) {
 	// the inplace loops take the result as the last parameter
 	switch (left.type.InternalType()) {
 	case PhysicalType::BOOL:
@@ -445,4 +445,4 @@ idx_t VectorOperations::SelectNotDistinctFrom(Vector &left, Vector &right, const
 	return TemplatedDistinctSelectOperation<duckdb::NotDistinctFrom>(left, right, sel, count, true_sel, false_sel);
 }
 
-}
+} // namespace duckdb

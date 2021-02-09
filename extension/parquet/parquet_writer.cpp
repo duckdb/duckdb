@@ -20,11 +20,11 @@
 
 namespace duckdb {
 
-using namespace parquet; // NOLINT
-using namespace apache::thrift; // NOLINT
-using namespace apache::thrift::protocol; // NOLINT
+using namespace parquet;                   // NOLINT
+using namespace apache::thrift;            // NOLINT
+using namespace apache::thrift::protocol;  // NOLINT
 using namespace apache::thrift::transport; // NOLINT
-using namespace duckdb_miniz; // NOLINT
+using namespace duckdb_miniz;              // NOLINT
 
 using parquet::format::CompressionCodec;
 using parquet::format::ConvertedType;
@@ -156,8 +156,7 @@ ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_p, vector<LogicalT
 		schema_element.__isset.type = true;
 		schema_element.__isset.repetition_type = true;
 		schema_element.name = column_names[i];
-		schema_element.__isset.converted_type =
-		    DuckDBTypeToConvertedType(sql_types[i], schema_element.converted_type);
+		schema_element.__isset.converted_type = DuckDBTypeToConvertedType(sql_types[i], schema_element.converted_type);
 	}
 }
 

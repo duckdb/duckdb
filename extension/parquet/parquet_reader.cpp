@@ -106,9 +106,8 @@ static LogicalType DeriveLogicalType(const SchemaElement &s_ele) {
 	}
 }
 
-static unique_ptr<ColumnReader> CreateReaderRecursive(const FileMetaData *file_meta_data, idx_t depth,
-                                                        idx_t max_define, idx_t max_repeat, idx_t &next_schema_idx,
-                                                        idx_t &next_file_idx) {
+static unique_ptr<ColumnReader> CreateReaderRecursive(const FileMetaData *file_meta_data, idx_t depth, idx_t max_define,
+                                                      idx_t max_repeat, idx_t &next_schema_idx, idx_t &next_file_idx) {
 	D_ASSERT(file_meta_data);
 	D_ASSERT(next_schema_idx < file_meta_data->schema.size());
 	auto &s_ele = file_meta_data->schema[next_schema_idx];
@@ -137,7 +136,7 @@ static unique_ptr<ColumnReader> CreateReaderRecursive(const FileMetaData *file_m
 			auto &child_ele = file_meta_data->schema[next_schema_idx];
 
 			auto child_reader = CreateReaderRecursive(file_meta_data, depth + 1, max_define, max_repeat,
-			                                            next_schema_idx, next_file_idx);
+			                                          next_schema_idx, next_file_idx);
 			child_types.push_back(make_pair(child_ele.name, child_reader->Type()));
 			child_readers.push_back(move(child_reader));
 
@@ -542,23 +541,23 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 				switch (filter.comparison_type) {
 				case ExpressionType::COMPARE_EQUAL:
 					FilterOperationSwitch<Equals>(result.data[filter_col.first], filter.constant, filter_mask,
-					                                   this_output_chunk_rows);
+					                              this_output_chunk_rows);
 					break;
 				case ExpressionType::COMPARE_LESSTHAN:
 					FilterOperationSwitch<LessThan>(result.data[filter_col.first], filter.constant, filter_mask,
-					                                     this_output_chunk_rows);
+					                                this_output_chunk_rows);
 					break;
 				case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-					FilterOperationSwitch<LessThanEquals>(result.data[filter_col.first], filter.constant,
-					                                           filter_mask, this_output_chunk_rows);
+					FilterOperationSwitch<LessThanEquals>(result.data[filter_col.first], filter.constant, filter_mask,
+					                                      this_output_chunk_rows);
 					break;
 				case ExpressionType::COMPARE_GREATERTHAN:
 					FilterOperationSwitch<GreaterThan>(result.data[filter_col.first], filter.constant, filter_mask,
-					                                        this_output_chunk_rows);
+					                                   this_output_chunk_rows);
 					break;
 				case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 					FilterOperationSwitch<GreaterThanEquals>(result.data[filter_col.first], filter.constant,
-					                                              filter_mask, this_output_chunk_rows);
+					                                         filter_mask, this_output_chunk_rows);
 					break;
 				default:
 					D_ASSERT(0);

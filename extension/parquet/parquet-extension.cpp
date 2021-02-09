@@ -58,8 +58,8 @@ public:
 	}
 
 	static unique_ptr<FunctionData> ParquetReadBind(ClientContext &context, CopyInfo &info,
-	                                                  vector<string> &expected_names,
-	                                                  vector<LogicalType> &expected_types) {
+	                                                vector<string> &expected_names,
+	                                                vector<LogicalType> &expected_types) {
 		for (auto &option : info.options) {
 			throw NotImplementedException("Unsupported option for COPY FROM parquet: %s", option.first);
 		}
@@ -75,7 +75,7 @@ public:
 	}
 
 	static unique_ptr<BaseStatistics> ParquetScanStats(ClientContext &context, const FunctionData *bind_data_p,
-	                                                     column_t column_index) {
+	                                                   column_t column_index) {
 		auto &bind_data = (ParquetReadBindData &)*bind_data_p;
 
 		if (column_index == COLUMN_IDENTIFIER_ROW_ID) {
@@ -127,8 +127,8 @@ public:
 	}
 
 	static unique_ptr<FunctionData> ParquetScanBind(ClientContext &context, vector<Value> &inputs,
-	                                                  unordered_map<string, Value> &named_parameters,
-	                                                  vector<LogicalType> &return_types, vector<string> &names) {
+	                                                unordered_map<string, Value> &named_parameters,
+	                                                vector<LogicalType> &return_types, vector<string> &names) {
 		auto file_name = inputs[0].GetValue<string>();
 		auto result = make_unique<ParquetReadBindData>();
 
@@ -146,8 +146,8 @@ public:
 	}
 
 	static unique_ptr<FunctionOperatorData> ParquetScanInit(ClientContext &context, const FunctionData *bind_data_p,
-	                                                          vector<column_t> &column_ids,
-	                                                          TableFilterCollection *filters) {
+	                                                        vector<column_t> &column_ids,
+	                                                        TableFilterCollection *filters) {
 		auto &bind_data = (ParquetReadBindData &)*bind_data_p;
 
 		auto result = make_unique<ParquetReadOperatorData>();
@@ -168,7 +168,7 @@ public:
 
 	static unique_ptr<FunctionOperatorData>
 	ParquetScanParallelInit(ClientContext &context, const FunctionData *bind_data_p, ParallelState *parallel_state_p,
-	                           vector<column_t> &column_ids, TableFilterCollection *filters) {
+	                        vector<column_t> &column_ids, TableFilterCollection *filters) {
 		auto result = make_unique<ParquetReadOperatorData>();
 		result->column_ids = column_ids;
 		result->is_parallel = true;
@@ -180,7 +180,7 @@ public:
 	}
 
 	static void ParquetScanImplementation(ClientContext &context, const FunctionData *bind_data_p,
-	                                  FunctionOperatorData *operator_state, DataChunk &output) {
+	                                      FunctionOperatorData *operator_state, DataChunk &output) {
 		auto &data = (ParquetReadOperatorData &)*operator_state;
 		do {
 			data.reader->Scan(data.scan_state, output);
@@ -218,8 +218,7 @@ public:
 		return data.initial_reader->NumRowGroups() * data.files.size();
 	}
 
-	static unique_ptr<ParallelState> ParquetInitParallelState(ClientContext &context,
-	                                                             const FunctionData *bind_data_p) {
+	static unique_ptr<ParallelState> ParquetInitParallelState(ClientContext &context, const FunctionData *bind_data_p) {
 		auto &bind_data = (ParquetReadBindData &)*bind_data_p;
 		auto result = make_unique<ParquetReadParallelState>();
 		result->current_reader = bind_data.initial_reader;
@@ -229,7 +228,7 @@ public:
 	}
 
 	static bool ParquetParallelStateNext(ClientContext &context, const FunctionData *bind_data_p,
-	                                        FunctionOperatorData *state_p, ParallelState *parallel_state_p) {
+	                                     FunctionOperatorData *state_p, ParallelState *parallel_state_p) {
 		auto &bind_data = (ParquetReadBindData &)*bind_data_p;
 		auto &parallel_state = (ParquetReadParallelState &)*parallel_state_p;
 		auto &scan_data = (ParquetReadOperatorData &)*state_p;
@@ -287,7 +286,7 @@ struct ParquetWriteLocalState : public LocalFunctionData {
 };
 
 unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyInfo &info, vector<string> &names,
-                                            vector<LogicalType> &sql_types) {
+                                          vector<LogicalType> &sql_types) {
 	auto bind_data = make_unique<ParquetWriteBindData>();
 	for (auto &option : info.options) {
 		auto loption = StringUtil::Lower(option.first);
@@ -330,7 +329,7 @@ unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext &conte
 }
 
 void ParquetWriteSink(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
-                        LocalFunctionData &lstate, DataChunk &input) {
+                      LocalFunctionData &lstate, DataChunk &input) {
 	auto &global_state = (ParquetWriteGlobalState &)gstate;
 	auto &local_state = (ParquetWriteLocalState &)lstate;
 
@@ -345,7 +344,7 @@ void ParquetWriteSink(ClientContext &context, FunctionData &bind_data, GlobalFun
 }
 
 void ParquetWriteCombine(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
-                           LocalFunctionData &lstate) {
+                         LocalFunctionData &lstate) {
 	auto &global_state = (ParquetWriteGlobalState &)gstate;
 	auto &local_state = (ParquetWriteLocalState &)lstate;
 	// flush any data left in the local state to the file

@@ -8,4 +8,4 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSet &op) {
 	return make_unique<PhysicalSet>(op.name, op.value);
 }
 
-}
+} // namespace duckdb

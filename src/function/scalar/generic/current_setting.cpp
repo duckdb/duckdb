@@ -25,7 +25,7 @@ static void CurrentSettingFunction(DataChunk &args, ExpressionState &state, Vect
 }
 
 unique_ptr<FunctionData> CurrentSettingBind(ClientContext &context, ScalarFunction &bound_function,
-                                              vector<unique_ptr<Expression>> &arguments) {
+                                            vector<unique_ptr<Expression>> &arguments) {
 
 	auto &key_child = arguments[0];
 
@@ -49,8 +49,8 @@ unique_ptr<FunctionData> CurrentSettingBind(ClientContext &context, ScalarFuncti
 }
 
 void CurrentSettingFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("current_setting", {LogicalType::VARCHAR}, LogicalType::ANY,
-	                               CurrentSettingFunction, false, CurrentSettingBind));
+	set.AddFunction(ScalarFunction("current_setting", {LogicalType::VARCHAR}, LogicalType::ANY, CurrentSettingFunction,
+	                               false, CurrentSettingBind));
 }
 
 } // namespace duckdb
