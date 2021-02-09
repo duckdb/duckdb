@@ -14,9 +14,9 @@
 namespace duckdb {
 
 const string_t Date::MONTH_NAMES_ABBREVIATED[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                                                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+                                                  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
 const string_t Date::MONTH_NAMES[] = {"January", "February", "March",     "April",   "May",      "June",
-                                     "July",    "August",   "September", "October", "November", "December"};
+                                      "July",    "August",   "September", "October", "November", "December"};
 const string_t Date::DAY_NAMES[] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 const string_t Date::DAY_NAMES_ABBREVIATED[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
 
