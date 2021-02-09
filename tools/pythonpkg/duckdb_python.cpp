@@ -748,6 +748,7 @@ struct PandasScanFunction : public TableFunction {
 	                                                 unordered_map<string, Value> &named_parameters,
 	                                                 vector<LogicalType> &return_types, vector<string> &names) {
 		// Hey, it works (TM)
+		py::gil_scoped_acquire acquire;
 		py::handle df((PyObject *)std::stoull(inputs[0].GetValue<string>(), nullptr, 16));
 
 		/* TODO this fails on Python2 for some reason
@@ -1381,7 +1382,10 @@ struct DuckDBPyConnection {
 			}
 			auto args = DuckDBPyConnection::transform_python_param_list(single_query_params);
 			auto res = make_unique<DuckDBPyResult>();
-			res->result = prep->Execute(args);
+			{
+				py::gil_scoped_release release;
+				res->result = prep->Execute(args);
+			}
 			if (!res->result->success) {
 				throw runtime_error(res->result->error);
 			}
@@ -1821,7 +1825,10 @@ struct DuckDBPyRelation {
 
 	py::object to_df() {
 		auto res = make_unique<DuckDBPyResult>();
-		res->result = rel->Execute();
+		{
+			py::gil_scoped_release release;
+			res->result = rel->Execute();
+		}
 		if (!res->result->success) {
 			throw runtime_error(res->result->error);
 		}
@@ -1830,7 +1837,10 @@ struct DuckDBPyRelation {
 
 	py::object to_arrow_table() {
 		auto res = make_unique<DuckDBPyResult>();
-		res->result = rel->Execute();
+		{
+			py::gil_scoped_release release;
+			res->result = rel->Execute();
+		}
 		if (!res->result->success) {
 			throw runtime_error(res->result->error);
 		}
@@ -1882,7 +1892,10 @@ struct DuckDBPyRelation {
 
 	unique_ptr<DuckDBPyResult> execute() {
 		auto res = make_unique<DuckDBPyResult>();
-		res->result = rel->Execute();
+		{
+			py::gil_scoped_release release;
+			res->result = rel->Execute();
+		}
 		if (!res->result->success) {
 			throw runtime_error(res->result->error);
 		}
@@ -1907,8 +1920,14 @@ struct DuckDBPyRelation {
 	}
 
 	string print() {
+		std::string rel_res_string;
+		{
+			py::gil_scoped_release release;
+			rel_res_string = rel->Limit(10)->Execute()->ToString();
+		}
+
 		return rel->ToString() + "\n---------------------\n-- Result Preview  --\n---------------------\n" +
-		       rel->Limit(10)->Execute()->ToString() + "\n";
+		       rel_res_string + "\n";
 	}
 
 	py::object getattr(py::str key) {
