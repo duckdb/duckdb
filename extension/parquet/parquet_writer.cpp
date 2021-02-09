@@ -59,7 +59,7 @@ private:
 	Serializer &serializer;
 };
 
-static Type::type DuckDBTypeToParquetType(LogicalType duckdb_type) {
+static Type::type DuckDBTypeToParquetType(const LogicalType &duckdb_type) {
 	switch (duckdb_type.id()) {
 	case LogicalTypeId::BOOLEAN:
 		return Type::BOOLEAN;
@@ -85,7 +85,7 @@ static Type::type DuckDBTypeToParquetType(LogicalType duckdb_type) {
 	}
 }
 
-static bool DuckDBTypeToConvertedType(LogicalType duckdb_type, ConvertedType::type &result) {
+static bool DuckDBTypeToConvertedType(const LogicalType &duckdb_type, ConvertedType::type &result) {
 	switch (duckdb_type.id()) {
 	case LogicalTypeId::VARCHAR:
 		result = ConvertedType::UTF8;
