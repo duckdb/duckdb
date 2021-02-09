@@ -748,6 +748,7 @@ struct PandasScanFunction : public TableFunction {
 	                                                 unordered_map<string, Value> &named_parameters,
 	                                                 vector<LogicalType> &return_types, vector<string> &names) {
 		// Hey, it works (TM)
+		py::gil_scoped_acquire acquire;
 		py::handle df((PyObject *)std::stoull(inputs[0].GetValue<string>(), nullptr, 16));
 
 		/* TODO this fails on Python2 for some reason
