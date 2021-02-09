@@ -146,7 +146,7 @@ idx_t StrfTimeFormat::GetLength(date_t date, dtime_t time) {
 	return size;
 }
 
-char *StrfTimeFormat::WriteString(char *target, string_t &str) {
+char *StrfTimeFormat::WriteString(char *target, const string_t &str) {
 	idx_t size = str.GetSize();
 	memcpy(target, str.GetDataUnsafe(), size);
 	return target + size;
@@ -682,7 +682,7 @@ int StrpTimeFormat::NumericSpecifierWidth(StrTimeSpecifier specifier) {
 
 enum class TimeSpecifierAMOrPM : uint8_t { TIME_SPECIFIER_NONE = 0, TIME_SPECIFIER_AM = 1, TIME_SPECIFIER_PM = 2 };
 
-int32_t StrpTimeFormat::TryParseCollection(const char *data, idx_t &pos, idx_t size, string_t collection[],
+int32_t StrpTimeFormat::TryParseCollection(const char *data, idx_t &pos, idx_t size, const string_t collection[],
                                            idx_t collection_count) {
 	for (idx_t c = 0; c < collection_count; c++) {
 		auto &entry = collection[c];
