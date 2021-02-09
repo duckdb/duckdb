@@ -102,7 +102,7 @@ void TableScanState::NextVector() {
 
 void ColumnData::InitializeAppend(ColumnAppendState &state) {
 	lock_guard<mutex> tree_lock(data.node_lock);
-	if (data.nodes.size() == 0) {
+	if (data.nodes.empty()) {
 		// no transient segments yet, append one
 		AppendTransientSegment(persistent_rows);
 	}

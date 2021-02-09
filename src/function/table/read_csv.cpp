@@ -98,7 +98,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, vector<Value
 				}
 				return_types.push_back(TransformStringToLogicalType(val.second.str_value.c_str()));
 			}
-			if (names.size() == 0) {
+			if (names.empty()) {
 				throw BinderException("read_csv requires at least a single column as input!");
 			}
 		} else if (kv.first == "compression") {
@@ -107,12 +107,12 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, vector<Value
 			result->include_file_name = kv.second.value_.boolean;
 		}
 	}
-	if (!options.auto_detect && return_types.size() == 0) {
+	if (!options.auto_detect && return_types.empty()) {
 		throw BinderException("read_csv requires columns to be specified. Use read_csv_auto or set read_csv(..., "
 		                      "AUTO_DETECT=TRUE) to automatically guess columns.");
 	}
 	if (!(options.compression == "infer" || options.compression == "gzip" || options.compression == "none" ||
-	      options.compression == "")) {
+	      options.compression.empty())) {
 		throw BinderException("read_csv currently only supports 'gzip' compression.");
 	}
 	if (options.auto_detect) {

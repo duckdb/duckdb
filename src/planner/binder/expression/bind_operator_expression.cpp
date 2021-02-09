@@ -14,7 +14,7 @@ static LogicalType ResolveNotType(OperatorExpression &op, vector<BoundExpression
 }
 
 static LogicalType ResolveInType(OperatorExpression &op, vector<BoundExpression *> &children) {
-	if (children.size() == 0) {
+	if (children.empty()) {
 		return LogicalType::BOOLEAN;
 	}
 	// get the maximum type from the children
@@ -64,7 +64,7 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 	// now resolve the types
 	LogicalType result_type = ResolveOperatorType(op, children);
 	if (op.type == ExpressionType::OPERATOR_COALESCE) {
-		if (children.size() == 0) {
+		if (children.empty()) {
 			return BindResult("COALESCE needs at least one child");
 		}
 		unique_ptr<Expression> current_node;

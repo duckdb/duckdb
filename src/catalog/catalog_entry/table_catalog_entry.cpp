@@ -230,7 +230,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 		}
 		return nullptr;
 	}
-	if (create_info->columns.size() == 0) {
+	if (create_info->columns.empty()) {
 		throw CatalogException("Cannot drop column: table only has one column remaining!");
 	}
 	// handle constraints for the new table
@@ -373,7 +373,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 	auto expression = info.expression->Copy();
 	auto bound_expression = expr_binder.Bind(expression);
 	auto bound_create_info = binder.BindCreateTableInfo(move(create_info));
-	if (bound_columns.size() == 0) {
+	if (bound_columns.empty()) {
 		bound_columns.push_back(COLUMN_IDENTIFIER_ROW_ID);
 	}
 

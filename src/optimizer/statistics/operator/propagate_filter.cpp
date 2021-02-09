@@ -221,7 +221,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalFilt
 			// erase this condition
 			filter.expressions.erase(filter.expressions.begin() + i);
 			i--;
-			if (filter.expressions.size() == 0) {
+			if (filter.expressions.empty()) {
 				// all conditions have been erased: remove the entire filter
 				*node_ptr = move(filter.children[0]);
 				break;

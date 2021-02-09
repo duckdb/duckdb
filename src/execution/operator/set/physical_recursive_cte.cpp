@@ -105,7 +105,7 @@ void PhysicalRecursiveCTE::GetChunkInternal(ExecutionContext &context, DataChunk
 }
 
 void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) {
-	if (pipelines.size() == 0) {
+	if (pipelines.empty()) {
 		return;
 	}
 

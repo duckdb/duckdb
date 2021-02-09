@@ -44,7 +44,7 @@ shared_ptr<Relation> Relation::Project(const vector<string> &expressions) {
 }
 
 static vector<unique_ptr<ParsedExpression>> StringListToExpressionList(const vector<string> &expressions) {
-	if (expressions.size() == 0) {
+	if (expressions.empty()) {
 		throw ParserException("Zero expressions provided");
 	}
 	vector<unique_ptr<ParsedExpression>> result_list;
@@ -95,7 +95,7 @@ shared_ptr<Relation> Relation::Order(const string &expression) {
 }
 
 shared_ptr<Relation> Relation::Order(const vector<string> &expressions) {
-	if (expressions.size() == 0) {
+	if (expressions.empty()) {
 		throw ParserException("Zero ORDER BY expressions provided");
 	}
 	vector<OrderByNode> order_list;
@@ -111,7 +111,7 @@ shared_ptr<Relation> Relation::Order(const vector<string> &expressions) {
 
 shared_ptr<Relation> Relation::Join(const shared_ptr<Relation> &other, const string &condition, JoinType type) {
 	auto expression_list = Parser::ParseExpressionList(condition);
-	if (expression_list.size() == 0) {
+	if (expression_list.empty()) {
 		throw ParserException("Expected a single expression as join condition");
 	}
 	if (expression_list.size() > 1 || expression_list[0]->type == ExpressionType::COLUMN_REF) {

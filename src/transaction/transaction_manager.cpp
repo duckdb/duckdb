@@ -300,7 +300,7 @@ void TransactionManager::RemoveTransaction(Transaction *transaction) noexcept {
 		                                      recently_committed_transactions.begin() + i);
 	}
 	// check if we can free the memory of any old transactions
-	i = active_transactions.size() == 0 ? old_transactions.size() : 0;
+	i = active_transactions.empty() ? old_transactions.size() : 0;
 	for (; i < old_transactions.size(); i++) {
 		D_ASSERT(old_transactions[i]);
 		D_ASSERT(old_transactions[i]->highest_active_query > 0);
@@ -334,7 +334,7 @@ void TransactionManager::AddCatalogSet(ClientContext &context, unique_ptr<Catalo
 	Catalog::GetCatalog(context).dependency_manager->ClearDependencies(*catalog_set);
 
 	lock_guard<mutex> lock(transaction_lock);
-	if (active_transactions.size() > 0) {
+	if (!active_transactions.empty()) {
 		// if there are active transactions we wait with deleting the objects
 		StoredCatalogSet set;
 		set.stored_set = move(catalog_set);

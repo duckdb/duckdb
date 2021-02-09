@@ -228,7 +228,7 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		((string_t *)data)[index] = StringVector::AddStringOrBlob(*this, val.str_value);
 		break;
 	case LogicalTypeId::STRUCT: {
-		if (!auxiliary || StructVector::GetEntries(*this).size() == 0) {
+		if (!auxiliary || StructVector::GetEntries(*this).empty()) {
 			for (size_t i = 0; i < val.struct_value.size(); i++) {
 				auto &struct_child = val.struct_value[i];
 				auto cv = make_unique<Vector>(struct_child.second.type());
@@ -257,7 +257,7 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		auto &child_cc = ListVector::GetEntry(*this);
 		// TODO optimization: in-place update if fits
 		auto offset = child_cc.Count();
-		if (val.list_value.size() > 0) {
+		if (!val.list_value.empty()) {
 			idx_t append_idx = 0;
 			while (append_idx < val.list_value.size()) {
 				idx_t this_append_len = MinValue<idx_t>(STANDARD_VECTOR_SIZE, val.list_value.size() - append_idx);

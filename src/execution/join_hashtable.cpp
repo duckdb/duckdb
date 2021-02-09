@@ -268,7 +268,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 		return;
 	}
 	// special case: correlated mark join
-	if (join_type == JoinType::MARK && correlated_mark_join_info.correlated_types.size() > 0) {
+	if (join_type == JoinType::MARK && !correlated_mark_join_info.correlated_types.empty()) {
 		auto &info = correlated_mark_join_info;
 		lock_guard<mutex> mj_lock(info.mj_lock);
 		// Correlated MARK join
@@ -305,7 +305,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	{
 		// first append to the last block (if any)
 		lock_guard<mutex> append_lock(ht_lock);
-		if (blocks.size() != 0) {
+		if (!blocks.empty()) {
 			auto &last_block = blocks.back();
 			if (last_block.count < last_block.capacity) {
 				// last block has space: pin the buffer of this block
@@ -352,7 +352,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 		SerializeVectorData(key_data[i], keys.data[i].type.InternalType(), *current_sel, added_count, key_locations);
 	}
 	// now serialize the payload
-	if (build_types.size() > 0) {
+	if (!build_types.empty()) {
 		for (idx_t i = 0; i < payload.ColumnCount(); i++) {
 			SerializeVector(payload.data[i], payload.size(), *current_sel, added_count, key_locations);
 		}
@@ -915,7 +915,7 @@ void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &input, DataChunk &r
 	D_ASSERT(ht.count > 0);
 
 	ScanKeyMatches(keys);
-	if (ht.correlated_mark_join_info.correlated_types.size() == 0) {
+	if (ht.correlated_mark_join_info.correlated_types.empty()) {
 		ConstructMarkJoinResult(keys, input, result);
 	} else {
 		auto &info = ht.correlated_mark_join_info;

@@ -215,7 +215,7 @@ void TableDataWriter::FlushSegment(SegmentTree &new_tree, idx_t col_idx) {
 	data_pointer.block_id = block_id;
 	data_pointer.offset = offset_in_block;
 	data_pointer.row_start = 0;
-	if (data_pointers[col_idx].size() > 0) {
+	if (!data_pointers[col_idx].empty()) {
 		auto &last_pointer = data_pointers[col_idx].back();
 		data_pointer.row_start = last_pointer.row_start + last_pointer.tuple_count;
 	}

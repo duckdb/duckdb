@@ -29,7 +29,7 @@ DataTable::DataTable(DatabaseInstance &db, const string &schema, const string &t
 	}
 
 	// initialize the table with the existing data from disk, if any
-	if (data && data->table_data[0].size() > 0) {
+	if (data && !data->table_data[0].empty()) {
 		for (idx_t i = 0; i < types.size(); i++) {
 			columns[i]->statistics = move(data->column_stats[i]);
 		}
@@ -239,7 +239,7 @@ void DataTable::InitializeScanWithOffset(TableScanState &state, const vector<col
 	state.max_row = end_row;
 	state.version_info = (MorselInfo *)versions->GetSegment(state.current_row);
 	state.table_filters = table_filters;
-	if (table_filters && table_filters->filters.size() > 0) {
+	if (table_filters && !table_filters->filters.empty()) {
 		state.adaptive_filter = make_unique<AdaptiveFilter>(table_filters);
 	}
 }
@@ -724,7 +724,7 @@ void DataTable::RevertAppendInternal(idx_t start_row, idx_t count) {
 
 void DataTable::RevertAppend(idx_t start_row, idx_t count) {
 	lock_guard<mutex> lock(append_lock);
-	if (info->indexes.size() > 0) {
+	if (!info->indexes.empty()) {
 		auto index_locks = unique_ptr<IndexLock[]>(new IndexLock[info->indexes.size()]);
 		for (idx_t i = 0; i < info->indexes.size(); i++) {
 			info->indexes[i]->InitializeLock(index_locks[i]);
@@ -750,7 +750,7 @@ void DataTable::RevertAppend(idx_t start_row, idx_t count) {
 //===--------------------------------------------------------------------===//
 bool DataTable::AppendToIndexes(TableAppendState &state, DataChunk &chunk, row_t row_start) {
 	D_ASSERT(is_root);
-	if (info->indexes.size() == 0) {
+	if (info->indexes.empty()) {
 		return true;
 	}
 	// first generate the vector of row identifiers
@@ -778,7 +778,7 @@ bool DataTable::AppendToIndexes(TableAppendState &state, DataChunk &chunk, row_t
 
 void DataTable::RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, row_t row_start) {
 	D_ASSERT(is_root);
-	if (info->indexes.size() == 0) {
+	if (info->indexes.empty()) {
 		return;
 	}
 	// first generate the vector of row identifiers

@@ -243,7 +243,7 @@ ExpressionBinder *Binder::GetActiveBinder() {
 }
 
 bool Binder::HasActiveBinder() {
-	return GetActiveBinders().size() > 0;
+	return !GetActiveBinders().empty();
 }
 
 vector<ExpressionBinder *> &Binder::GetActiveBinders() {

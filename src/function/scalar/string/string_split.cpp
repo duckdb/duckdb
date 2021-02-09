@@ -127,7 +127,7 @@ public:
 		if (re->Match(input_sp, start, size, RE2::UNANCHORED, &match, 1)) {
 			offset = match.data() - input;
 			// special case: 0 length match
-			if (match.size() == 0 && start < size) {
+			if (match.empty() && start < size) {
 				if (ascii_only) {
 					offset++;
 				} else {

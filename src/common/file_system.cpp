@@ -743,7 +743,7 @@ static void GlobFiles(FileSystem &fs, const string &path, const string &glob, bo
 }
 
 vector<string> FileSystem::Glob(const string &path) {
-	if (path.size() == 0) {
+	if (path.empty()) {
 		return vector<string>();
 	}
 	// first check if the path has a glob at all
@@ -822,7 +822,7 @@ vector<string> FileSystem::Glob(const string &path) {
 				}
 			}
 		}
-		if (is_last_chunk || result.size() == 0) {
+		if (is_last_chunk || result.empty()) {
 			return result;
 		}
 		previous_directories = move(result);

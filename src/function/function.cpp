@@ -224,7 +224,7 @@ static idx_t BindFunctionFromArguments(const string &name, vector<T> &functions,
 		lowest_cost = cost;
 		best_function = f_idx;
 	}
-	if (conflicting_functions.size() > 0) {
+	if (!conflicting_functions.empty()) {
 		// there are multiple possible function definitions
 		// throw an exception explaining which overloads are there
 		conflicting_functions.push_back(best_function);

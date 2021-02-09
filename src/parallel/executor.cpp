@@ -52,7 +52,7 @@ void Executor::Initialize(PhysicalOperator *plan) {
 	}
 
 	pipelines.clear();
-	if (exceptions.size() > 0) {
+	if (!exceptions.empty()) {
 		// an exception has occurred executing one of the pipelines
 		throw Exception(exceptions[0]);
 	}

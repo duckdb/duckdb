@@ -51,7 +51,7 @@ unique_ptr<TableRef> Transformer::TransformJoin(duckdb_libpgquery::PGJoinExpr *r
 		return move(result);
 	}
 
-	if (!root->quals && result->using_columns.size() == 0 && !result->is_natural) { // CROSS PRODUCT
+	if (!root->quals && result->using_columns.empty() && !result->is_natural) { // CROSS PRODUCT
 		auto cross = make_unique<CrossProductRef>();
 		cross->left = move(result->left);
 		cross->right = move(result->right);

@@ -33,7 +33,7 @@ unique_ptr<PragmaStatement> Transformer::TransformPragma(duckdb_libpgquery::PGNo
 	// now parse the pragma type
 	switch (stmt->kind) {
 	case duckdb_libpgquery::PG_PRAGMA_TYPE_NOTHING:
-		if (info.parameters.size() > 0 || info.named_parameters.size() > 0) {
+		if (!info.parameters.empty() || !info.named_parameters.empty()) {
 			throw ParserException("PRAGMA statement that is not a call or assignment cannot contain parameters");
 		}
 		break;
@@ -41,7 +41,7 @@ unique_ptr<PragmaStatement> Transformer::TransformPragma(duckdb_libpgquery::PGNo
 		if (info.parameters.size() != 1) {
 			throw ParserException("PRAGMA statement with assignment should contain exactly one parameter");
 		}
-		if (info.named_parameters.size() > 0) {
+		if (!info.named_parameters.empty()) {
 			throw ParserException("PRAGMA statement with assignment cannot have named parameters");
 		}
 		break;

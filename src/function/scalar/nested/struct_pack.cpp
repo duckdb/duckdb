@@ -34,16 +34,16 @@ static unique_ptr<FunctionData> StructPackBind(ClientContext &context, ScalarFun
 	unordered_set<string> name_collision_set;
 
 	// collect names and deconflict, construct return type
-	if (arguments.size() == 0) {
+	if (arguments.empty()) {
 		throw Exception("Can't pack nothing into a struct");
 	}
 	child_list_t<LogicalType> struct_children;
 	for (idx_t i = 0; i < arguments.size(); i++) {
 		auto &child = arguments[i];
-		if (child->alias.size() == 0 && bound_function.name == "struct_pack") {
+		if (child->alias.empty() && bound_function.name == "struct_pack") {
 			throw Exception("Need named argument for struct pack, e.g. STRUCT_PACK(a := b)");
 		}
-		if (child->alias.size() == 0 && bound_function.name == "row") {
+		if (child->alias.empty() && bound_function.name == "row") {
 			child->alias = "v" + std::to_string(i + 1);
 		}
 		if (name_collision_set.find(child->alias) != name_collision_set.end()) {

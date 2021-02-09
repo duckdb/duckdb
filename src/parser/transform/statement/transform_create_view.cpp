@@ -40,7 +40,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateView(duckdb_libpgquery::
 				throw NotImplementedException("View projection type");
 			}
 		}
-		if (info->aliases.size() < 1) {
+		if (info->aliases.empty()) {
 			throw ParserException("Need at least one column name in CREATE VIEW projection list");
 		}
 	}

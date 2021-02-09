@@ -118,7 +118,7 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(duckdb_libpgquery::PGSele
 	// both the set operations and the regular select can have an ORDER BY/LIMIT attached to them
 	vector<OrderByNode> orders;
 	TransformOrderBy(stmt->sortClause, orders);
-	if (orders.size() > 0) {
+	if (!orders.empty()) {
 		auto order_modifier = make_unique<OrderModifier>();
 		order_modifier->orders = move(orders);
 		node->modifiers.push_back(move(order_modifier));

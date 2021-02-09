@@ -138,7 +138,7 @@ idx_t StrfTimeFormat::GetSpecifierLength(StrTimeSpecifier specifier, date_t date
 //! Returns the total length of the date formatted by this format specifier
 idx_t StrfTimeFormat::GetLength(date_t date, dtime_t time) {
 	idx_t size = constant_size;
-	if (var_length_specifiers.size() > 0) {
+	if (!var_length_specifiers.empty()) {
 		for (auto &specifier : var_length_specifiers) {
 			size += GetSpecifierLength(specifier, date, time);
 		}

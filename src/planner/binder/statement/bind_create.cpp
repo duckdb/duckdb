@@ -25,7 +25,7 @@
 namespace duckdb {
 
 SchemaCatalogEntry *Binder::BindSchema(CreateInfo &info) {
-	if (info.schema == INVALID_SCHEMA) {
+	if (info.schema.empty()) {
 		info.schema = info.temporary ? TEMP_SCHEMA : DEFAULT_SCHEMA;
 	}
 

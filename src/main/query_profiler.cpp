@@ -135,7 +135,7 @@ void QueryProfiler::EndPhase() {
 	// now remove the last added phase
 	phase_stack.pop_back();
 
-	if (phase_stack.size() > 0) {
+	if (!phase_stack.empty()) {
 		phase_profiler.Start();
 	}
 }
@@ -336,7 +336,7 @@ static void ToJSONRecursive(QueryProfiler::TreeNode &node, std::ostream &ss, int
 	ss << string(depth * 3, ' ') << "\"cardinality\":" + to_string(node.info.elements) + ",\n";
 	ss << string(depth * 3, ' ') << "\"extra_info\": \"" + StringUtil::Replace(node.extra_info, "\n", "\\n") + "\",\n";
 	ss << string(depth * 3, ' ') << "\"children\": [";
-	if (node.children.size() == 0) {
+	if (node.children.empty()) {
 		ss << "]\n";
 	} else {
 		for (idx_t i = 0; i < node.children.size(); i++) {

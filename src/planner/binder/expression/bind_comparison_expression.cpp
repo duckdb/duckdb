@@ -38,7 +38,7 @@ unique_ptr<Expression> ExpressionBinder::PushCollation(ClientContext &context, u
 		if (collation_entry->combinable) {
 			entries.insert(entries.begin(), collation_entry);
 		} else {
-			if (entries.size() > 0 && !entries.back()->combinable) {
+			if (!entries.empty() && !entries.back()->combinable) {
 				throw BinderException("Cannot combine collation types \"%s\" and \"%s\"", entries.back()->name,
 				                      collation_entry->name);
 			}

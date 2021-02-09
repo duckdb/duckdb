@@ -292,7 +292,7 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyInfo &info
 	for (auto &option : info.options) {
 		auto loption = StringUtil::Lower(option.first);
 		if (loption == "compression" || loption == "codec") {
-			if (option.second.size() > 0) {
+			if (!option.second.empty()) {
 				auto roption = StringUtil::Lower(option.second[0].ToString());
 				if (roption == "uncompressed") {
 					bind_data->codec = parquet::format::CompressionCodec::UNCOMPRESSED;

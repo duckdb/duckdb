@@ -363,7 +363,7 @@ string LogicalType::ToString() const {
 		return ret;
 	}
 	case LogicalTypeId::LIST: {
-		if (child_types_.size() == 0) {
+		if (child_types_.empty()) {
 			return "LIST<?>";
 		}
 		if (child_types_.size() != 1) {

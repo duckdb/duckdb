@@ -121,7 +121,7 @@ CatalogEntry *Catalog::CreateCollation(ClientContext &context, SchemaCatalogEntr
 }
 
 CatalogEntry *Catalog::CreateSchema(ClientContext &context, CreateSchemaInfo *info) {
-	if (info->schema == INVALID_SCHEMA) {
+	if (info->schema.empty()) {
 		throw CatalogException("Schema not specified");
 	}
 	if (info->schema == TEMP_SCHEMA) {
@@ -144,7 +144,7 @@ CatalogEntry *Catalog::CreateSchema(ClientContext &context, CreateSchemaInfo *in
 }
 
 void Catalog::DropSchema(ClientContext &context, DropInfo *info) {
-	if (info->name == INVALID_SCHEMA) {
+	if (info->name.empty()) {
 		throw CatalogException("Schema not specified");
 	}
 	ModifyCatalog();
@@ -161,7 +161,7 @@ void Catalog::DropEntry(ClientContext &context, DropInfo *info) {
 		// DROP SCHEMA
 		DropSchema(context, info);
 	} else {
-		if (info->schema == INVALID_SCHEMA) {
+		if (info->schema.empty()) {
 			// invalid schema: check if the entry is in the temp schema
 			auto entry = GetEntry(context, info->type, TEMP_SCHEMA, info->name, true);
 			info->schema = entry ? TEMP_SCHEMA : DEFAULT_SCHEMA;
@@ -173,7 +173,7 @@ void Catalog::DropEntry(ClientContext &context, DropInfo *info) {
 
 SchemaCatalogEntry *Catalog::GetSchema(ClientContext &context, const string &schema_name,
                                        QueryErrorContext error_context) {
-	if (schema_name == INVALID_SCHEMA) {
+	if (schema_name.empty()) {
 		throw CatalogException("Schema not specified");
 	}
 	if (schema_name == TEMP_SCHEMA) {
@@ -193,7 +193,7 @@ void Catalog::ScanSchemas(ClientContext &context, std::function<void(CatalogEntr
 
 CatalogEntry *Catalog::GetEntry(ClientContext &context, CatalogType type, string schema_name, const string &name,
                                 bool if_exists, QueryErrorContext error_context) {
-	if (schema_name == INVALID_SCHEMA) {
+	if (schema_name.empty()) {
 		// invalid schema: first search the temporary schema
 		auto entry = GetEntry(context, type, TEMP_SCHEMA, name, true);
 		if (entry) {
@@ -280,7 +280,7 @@ CollateCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_nam
 
 void Catalog::Alter(ClientContext &context, AlterInfo *info) {
 	ModifyCatalog();
-	if (info->schema == INVALID_SCHEMA) {
+	if (info->schema.empty()) {
 		auto catalog_type = info->GetCatalogType();
 		// invalid schema: first search the temporary schema
 		auto entry = GetEntry(context, catalog_type, TEMP_SCHEMA, info->name, true);

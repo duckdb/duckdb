@@ -432,7 +432,7 @@ void PhysicalHashAggregate::GetChunkInternal(ExecutionContext &context, DataChun
 
 unique_ptr<PhysicalOperatorState> PhysicalHashAggregate::GetOperatorState() {
 	return make_unique<PhysicalHashAggregateState>(*this, group_types, aggregate_return_types,
-	                                               children.size() == 0 ? nullptr : children[0].get());
+	                                               children.empty() ? nullptr : children[0].get());
 }
 
 bool PhysicalHashAggregate::ForceSingleHT(GlobalOperatorState &state) {

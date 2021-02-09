@@ -60,7 +60,7 @@ static void StructExtractFunction(DataChunk &args, ExpressionState &state, Vecto
 static unique_ptr<FunctionData> StructExtractBind(ClientContext &context, ScalarFunction &bound_function,
                                                   vector<unique_ptr<Expression>> &arguments) {
 	auto &struct_children = arguments[0]->return_type.child_types();
-	if (struct_children.size() < 1) {
+	if (struct_children.empty()) {
 		throw Exception("Can't extract something from an empty struct");
 	}
 

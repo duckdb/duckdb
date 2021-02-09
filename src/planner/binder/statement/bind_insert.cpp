@@ -36,7 +36,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	auto insert = make_unique<LogicalInsert>(table);
 
 	vector<idx_t> named_column_map;
-	if (stmt.columns.size() > 0) {
+	if (!stmt.columns.empty()) {
 		// insertion statement specifies column list
 
 		// create a mapping of (list index) -> (column index)
@@ -77,7 +77,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 		return result;
 	}
 
-	idx_t expected_columns = stmt.columns.size() == 0 ? table->columns.size() : stmt.columns.size();
+	idx_t expected_columns = stmt.columns.empty() ? table->columns.size() : stmt.columns.size();
 	// special case: check if we are inserting from a VALUES statement
 	if (stmt.select_statement->node->type == QueryNodeType::SELECT_NODE) {
 		auto &node = (SelectNode &)*stmt.select_statement->node;
@@ -87,12 +87,12 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 			expr_list.expected_names.resize(expected_columns);
 
 			D_ASSERT(expr_list.values.size() > 0);
-			CheckInsertColumnCountMismatch(expected_columns, expr_list.values[0].size(), stmt.columns.size() != 0,
+			CheckInsertColumnCountMismatch(expected_columns, expr_list.values[0].size(), !stmt.columns.empty(),
 			                               table->name.c_str());
 
 			// VALUES list!
 			for (idx_t col_idx = 0; col_idx < expected_columns; col_idx++) {
-				idx_t table_col_idx = stmt.columns.size() == 0 ? col_idx : named_column_map[col_idx];
+				idx_t table_col_idx = stmt.columns.empty() ? col_idx : named_column_map[col_idx];
 				D_ASSERT(table_col_idx < table->columns.size());
 
 				// set the expected types as the types for the INSERT statement
@@ -118,7 +118,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	// insert from select statement
 	// parse select statement and add to logical plan
 	auto root_select = Bind(*stmt.select_statement);
-	CheckInsertColumnCountMismatch(expected_columns, root_select.types.size(), stmt.columns.size() != 0,
+	CheckInsertColumnCountMismatch(expected_columns, root_select.types.size(), !stmt.columns.empty(),
 	                               table->name.c_str());
 
 	auto root = CastLogicalOperatorToTypes(root_select.types, insert->expected_types, move(root_select.plan));

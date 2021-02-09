@@ -13,7 +13,7 @@
 namespace duckdb {
 
 void SubstringDetection(string &str_1, string &str_2, const string &name_str_1, const string &name_str_2) {
-	if (str_1.size() == 0 || str_2.size() == 0) {
+	if (str_1.empty() || str_2.empty()) {
 		return;
 	}
 	if (str_1.find(str_2) != string::npos || str_2.find(str_1) != std::string::npos) {
@@ -22,7 +22,7 @@ void SubstringDetection(string &str_1, string &str_2, const string &name_str_1, 
 }
 
 static bool ParseBoolean(vector<Value> &set) {
-	if (set.size() == 0) {
+	if (set.empty()) {
 		// no option specified: default to true
 		return true;
 	}
@@ -84,7 +84,7 @@ static bool ParseBaseOption(BufferedCSVReaderOptions &options, string &loption, 
 	} else if (loption == "compression") {
 		options.compression = ParseString(set);
 		if (!(options.compression == "infer" || options.compression == "gzip" || options.compression == "none" ||
-		      options.compression == "")) {
+		      options.compression.empty())) {
 			throw BinderException("read_csv currently only supports 'gzip' compression.");
 		}
 	} else {
@@ -111,7 +111,7 @@ void BaseCSVData::Finalize() {
 	if (options.quote != options.escape && options.has_quote && options.has_escape) {
 		SubstringDetection(options.quote, options.escape, "QUOTE", "ESCAPE");
 	}
-	if (options.null_str != "") {
+	if (!options.null_str.empty()) {
 		// null string and delimiter must not be substrings of each other
 		if (options.has_delimiter) {
 			SubstringDetection(options.delimiter, options.null_str, "DELIMITER", "NULL");
@@ -128,7 +128,7 @@ void BaseCSVData::Finalize() {
 
 static vector<bool> ParseColumnList(vector<Value> &set, vector<string> &names) {
 	vector<bool> result;
-	if (set.size() == 0) {
+	if (set.empty()) {
 		throw BinderException("Expected a column list or * as parameter");
 	}
 	if (set.size() == 1 && set[0].type().id() == LogicalTypeId::VARCHAR && set[0].GetValue<string>() == "*") {
@@ -175,7 +175,7 @@ static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyInfo &i
 		}
 	}
 	// verify the parsed options
-	if (bind_data->force_quote.size() == 0) {
+	if (bind_data->force_quote.empty()) {
 		// no FORCE_QUOTE specified: initialize to false
 		bind_data->force_quote.resize(names.size(), false);
 	}
@@ -263,7 +263,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
 		}
 	}
 	// verify the parsed options
-	if (options.force_not_null.size() == 0) {
+	if (options.force_not_null.empty()) {
 		// no FORCE_QUOTE specified: initialize to false
 		options.force_not_null.resize(expected_types.size(), false);
 	}

@@ -291,7 +291,7 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(const string &query) {
 
 		// first parse the query
 		auto statements = ParseStatementsInternal(*lock, query);
-		if (statements.size() == 0) {
+		if (statements.empty()) {
 			throw Exception("No statement to prepare!");
 		}
 		if (statements.size() > 1) {
@@ -472,7 +472,7 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, bool allow_str
 		return make_unique<MaterializedQueryResult>(ex.what());
 	}
 
-	if (statements.size() == 0) {
+	if (statements.empty()) {
 		// no statements, return empty successful result
 		return make_unique<MaterializedQueryResult>(StatementType::INVALID_STATEMENT);
 	}

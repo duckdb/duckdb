@@ -273,7 +273,7 @@ public:
 	explicit RecursiveSubqueryPlanner(Binder &binder) : binder(binder) {
 	}
 	void VisitOperator(LogicalOperator &op) override {
-		if (op.children.size() > 0) {
+		if (!op.children.empty()) {
 			root = move(op.children[0]);
 			VisitOperatorExpressions(op);
 			op.children[0] = move(root);

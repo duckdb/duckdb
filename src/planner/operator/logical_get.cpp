@@ -31,7 +31,7 @@ string LogicalGet::ParamsToString() const {
 }
 
 vector<ColumnBinding> LogicalGet::GetColumnBindings() {
-	if (column_ids.size() == 0) {
+	if (column_ids.empty()) {
 		return {ColumnBinding(table_index, 0)};
 	}
 	vector<ColumnBinding> result;
@@ -42,7 +42,7 @@ vector<ColumnBinding> LogicalGet::GetColumnBindings() {
 }
 
 void LogicalGet::ResolveTypes() {
-	if (column_ids.size() == 0) {
+	if (column_ids.empty()) {
 		column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
 	}
 	for (auto &index : column_ids) {

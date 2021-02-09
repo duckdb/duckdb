@@ -36,7 +36,7 @@ void Parser::ParseQuery(const string &query) {
 		// SQLStatements
 		transformer.TransformParseTree(parser.parse_tree, statements);
 	}
-	if (statements.size() > 0) {
+	if (!statements.empty()) {
 		auto &last_statement = statements.back();
 		last_statement->stmt_length = query.size() - last_statement->stmt_location;
 		for (auto &statement : statements) {
@@ -118,7 +118,7 @@ vector<OrderByNode> Parser::ParseOrderList(const string &select_list) {
 		throw ParserException("Expected a single SELECT node");
 	}
 	auto &select_node = (SelectNode &)*select.node;
-	if (select_node.modifiers.size() == 0 || select_node.modifiers[0]->type != ResultModifierType::ORDER_MODIFIER) {
+	if (select_node.modifiers.empty() || select_node.modifiers[0]->type != ResultModifierType::ORDER_MODIFIER) {
 		throw ParserException("Expected a single ORDER clause");
 	}
 	auto &order = (OrderModifier &)*select_node.modifiers[0];

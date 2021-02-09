@@ -160,10 +160,10 @@ BindResult BindContext::BindColumn(ColumnRefExpression &colref, idx_t depth) {
 
 void BindContext::GenerateAllColumnExpressions(vector<unique_ptr<ParsedExpression>> &new_select_list,
                                                const string &relation_name) {
-	if (bindings_list.size() == 0) {
+	if (bindings_list.empty()) {
 		throw BinderException("SELECT * expression without FROM clause!");
 	}
-	if (relation_name == "") { // SELECT * case
+	if (relation_name.empty()) { // SELECT * case
 		// bind all expressions of each table in-order
 		unordered_set<UsingColumnSet *> handled_using_columns;
 		for (auto &entry : bindings_list) {

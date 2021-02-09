@@ -159,7 +159,7 @@ string StringUtil::Replace(string source, const string &from, const string &to) 
 }
 
 vector<string> StringUtil::TopNStrings(vector<pair<string, idx_t>> scores, idx_t n, idx_t threshold) {
-	if (scores.size() == 0) {
+	if (scores.empty()) {
 		return vector<string>();
 	}
 	sort(scores.begin(), scores.end(),
@@ -240,7 +240,7 @@ vector<string> StringUtil::TopNLevenshtein(const vector<string> &strings, const 
 
 string StringUtil::CandidatesMessage(const vector<string> &candidates, const string &candidate) {
 	string result_str;
-	if (candidates.size() > 0) {
+	if (!candidates.empty()) {
 		result_str = "\n" + candidate + ": ";
 		for (idx_t i = 0; i < candidates.size(); i++) {
 			if (i > 0) {

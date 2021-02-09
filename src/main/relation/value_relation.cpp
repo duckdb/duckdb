@@ -39,7 +39,7 @@ unique_ptr<QueryNode> ValueRelation::GetQueryNode() {
 unique_ptr<TableRef> ValueRelation::GetTableRef() {
 	auto table_ref = make_unique<ExpressionListRef>();
 	// set the expected types/names
-	if (columns.size() == 0) {
+	if (columns.empty()) {
 		// no columns yet: only set up names
 		for (idx_t i = 0; i < names.size(); i++) {
 			table_ref->expected_names.push_back(names[i]);

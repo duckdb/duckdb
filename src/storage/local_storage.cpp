@@ -173,7 +173,7 @@ void LocalStorage::Append(DataTable *table, DataChunk &chunk) {
 		storage = entry->second.get();
 	}
 	// append to unique indices (if any)
-	if (storage->indexes.size() > 0) {
+	if (!storage->indexes.empty()) {
 		idx_t base_id = MAX_ROW_ID + storage->collection.Count();
 
 		// first generate the vector of row identifiers

@@ -30,7 +30,7 @@ static unique_ptr<ParsedExpression> AddCondition(ClientContext &context, Binder 
 bool Binder::TryFindBinding(const string &using_column, const string &join_side, string &result) {
 	// for each using column, get the matching binding
 	auto bindings = bind_context.GetMatchingBindings(using_column);
-	if (bindings.size() == 0) {
+	if (bindings.empty()) {
 		return false;
 	}
 	// find the join binding
@@ -157,7 +157,7 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 			right_binder.bind_context.RemoveUsingBinding(column_name, right_using_binding);
 			bind_context.AddUsingBinding(column_name, move(set));
 		}
-		if (extra_conditions.size() == 0) {
+		if (extra_conditions.empty()) {
 			// no matching bindings found in natural join: throw an exception
 			string error_msg = "No columns found to join on in NATURAL JOIN.\n";
 			error_msg += "Use CROSS JOIN if you intended for this to be a cross-product.";
@@ -184,7 +184,7 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 			error_msg += "\n   Right candidates: " + right_candidates;
 			throw BinderException(FormatError(ref, error_msg));
 		}
-	} else if (ref.using_columns.size() > 0) {
+	} else if (!ref.using_columns.empty()) {
 		// USING columns
 		D_ASSERT(!result->condition);
 

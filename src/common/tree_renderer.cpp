@@ -317,7 +317,7 @@ void TreeRenderer::SplitUpExtraInfo(const string &extra_info, vector<string> &re
 		return;
 	}
 	auto splits = StringUtil::Split(extra_info, "\n");
-	if (splits.size() > 0 && splits[0] != "[INFOSEPARATOR]") {
+	if (!splits.empty() && splits[0] != "[INFOSEPARATOR]") {
 		result.push_back(ExtraInfoSeparator());
 	}
 	for (auto &split : splits) {
@@ -326,7 +326,7 @@ void TreeRenderer::SplitUpExtraInfo(const string &extra_info, vector<string> &re
 			continue;
 		}
 		string str = RemovePadding(split);
-		if (str.size() == 0) {
+		if (str.empty()) {
 			continue;
 		}
 		SplitStringBuffer(str, result);
@@ -346,7 +346,7 @@ unique_ptr<RenderTreeNode> TreeRenderer::CreateRenderNode(string name, string ex
 
 template <class T>
 static void GetTreeWidthHeight(const T &op, idx_t &width, idx_t &height) {
-	if (op.children.size() == 0) {
+	if (op.children.empty()) {
 		width = 1;
 		height = 1;
 		return;
@@ -368,7 +368,7 @@ idx_t TreeRenderer::CreateRenderTreeRecursive(RenderTree &result, const T &op, i
 	auto node = TreeRenderer::CreateNode(op);
 	result.SetNode(x, y, move(node));
 
-	if (op.children.size() == 0) {
+	if (op.children.empty()) {
 		return 1;
 	}
 	idx_t width = 0;

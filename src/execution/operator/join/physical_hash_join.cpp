@@ -58,7 +58,7 @@ unique_ptr<GlobalOperatorState> PhysicalHashJoin::GetGlobalState(ClientContext &
 	auto state = make_unique<HashJoinGlobalState>();
 	state->hash_table =
 	    make_unique<JoinHashTable>(BufferManager::GetBufferManager(context), conditions, build_types, join_type);
-	if (delim_types.size() > 0 && join_type == JoinType::MARK) {
+	if (!delim_types.empty() && join_type == JoinType::MARK) {
 		// correlated MARK join
 		if (delim_types.size() + 1 == conditions.size()) {
 			// the correlated MARK join has one more condition than the amount of correlated columns
@@ -105,7 +105,7 @@ unique_ptr<GlobalOperatorState> PhysicalHashJoin::GetGlobalState(ClientContext &
 
 unique_ptr<LocalSinkState> PhysicalHashJoin::GetLocalSinkState(ExecutionContext &context) {
 	auto state = make_unique<HashJoinLocalState>();
-	if (right_projection_map.size() > 0) {
+	if (!right_projection_map.empty()) {
 		state->build_chunk.Initialize(build_types);
 	}
 	for (auto &cond : conditions) {
@@ -122,7 +122,7 @@ void PhysicalHashJoin::Sink(ExecutionContext &context, GlobalOperatorState &stat
 	// resolve the join keys for the right chunk
 	lstate.build_executor.Execute(input, lstate.join_keys);
 	// build the HT
-	if (right_projection_map.size() > 0) {
+	if (!right_projection_map.empty()) {
 		// there is a projection map: fill the build chunk with the projected columns
 		lstate.build_chunk.Reset();
 		lstate.build_chunk.SetCardinality(input);

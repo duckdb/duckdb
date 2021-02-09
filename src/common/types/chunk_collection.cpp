@@ -65,7 +65,7 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 
 	idx_t remaining_data = new_chunk.size();
 	idx_t offset = 0;
-	if (chunks.size() == 0) {
+	if (chunks.empty()) {
 		// first chunk
 		types = new_chunk.GetTypes();
 	} else {
@@ -86,7 +86,7 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 						auto &new_types = ListVector::GetEntry(new_vec).types;
 						D_ASSERT(new_types.size() <= 1);
 						D_ASSERT(chunk_types.size() <= 1);
-						if (chunk_types.size() > 0 && new_types.size() > 0 && chunk_types != new_types) {
+						if (!chunk_types.empty() && !new_types.empty() && chunk_types != new_types) {
 							throw TypeMismatchException(chunk_types[0], new_types[0],
 							                            "Type mismatch when combining lists");
 						}

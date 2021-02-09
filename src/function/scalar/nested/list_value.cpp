@@ -49,7 +49,7 @@ static unique_ptr<FunctionData> ListValueBind(ClientContext &context, ScalarFunc
                                               vector<unique_ptr<Expression>> &arguments) {
 	// collect names and deconflict, construct return type
 	child_list_t<LogicalType> child_types;
-	if (arguments.size() > 0) {
+	if (!arguments.empty()) {
 		child_types.push_back(make_pair("", arguments[0]->return_type));
 	} else {
 		child_types.push_back(make_pair("", LogicalType::SQLNULL));

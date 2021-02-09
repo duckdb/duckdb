@@ -38,7 +38,7 @@ PartitionableHashTable::PartitionableHashTable(BufferManager &buffer_manager_p, 
 	sel_vectors.resize(partition_info.n_partitions);
 	sel_vector_sizes.resize(partition_info.n_partitions);
 	group_subset.Initialize(group_types);
-	if (payload_types.size() > 0) {
+	if (!payload_types.empty()) {
 		payload_subset.Initialize(payload_types);
 	}
 	hashes.Initialize(LogicalType::HASH);

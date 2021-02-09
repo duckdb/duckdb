@@ -45,7 +45,7 @@ vector<ColumnBinding> LogicalOperator::GenerateColumnBindings(idx_t table_idx, i
 }
 
 vector<LogicalType> LogicalOperator::MapTypes(const vector<LogicalType> &types, const vector<idx_t> &projection_map) {
-	if (projection_map.size() == 0) {
+	if (projection_map.empty()) {
 		return types;
 	} else {
 		vector<LogicalType> result_types;
@@ -59,7 +59,7 @@ vector<LogicalType> LogicalOperator::MapTypes(const vector<LogicalType> &types, 
 
 vector<ColumnBinding> LogicalOperator::MapBindings(const vector<ColumnBinding> &bindings,
                                                    const vector<idx_t> &projection_map) {
-	if (projection_map.size() == 0) {
+	if (projection_map.empty()) {
 		return bindings;
 	} else {
 		vector<ColumnBinding> result_bindings;
