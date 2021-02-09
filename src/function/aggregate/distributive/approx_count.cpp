@@ -87,7 +87,9 @@ struct ApproxCountDistinctFunctionString : ApproxCountDistinctFunctionBase {
 			return;
 		}
 		string value = input[idx].GetString();
-		state->log->Add((uint8_t *)&value, value.size());
+		//! FIXME: Hash this in the future
+		auto size = value.size() > 8 ? 8 : value.size();
+		state->log->Add((uint8_t *)&value, size);
 	}
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask,
