@@ -1381,9 +1381,10 @@ struct DuckDBPyConnection {
 			}
 			auto args = DuckDBPyConnection::transform_python_param_list(single_query_params);
 			auto res = make_unique<DuckDBPyResult>();
-			py::gil_scoped_release release;
-			res->result = prep->Execute(args);
-			py::gil_scoped_acquire acquire;
+			{
+				py::gil_scoped_release release;
+				res->result = prep->Execute(args);
+			}
 			if (!res->result->success) {
 				throw runtime_error(res->result->error);
 			}
@@ -1823,9 +1824,10 @@ struct DuckDBPyRelation {
 
 	py::object to_df() {
 		auto res = make_unique<DuckDBPyResult>();
-		py::gil_scoped_release release;
-		res->result = rel->Execute();
-		py::gil_scoped_acquire acquire;
+		{
+			py::gil_scoped_release release;
+			res->result = rel->Execute();
+		}
 		if (!res->result->success) {
 			throw runtime_error(res->result->error);
 		}
@@ -1834,9 +1836,10 @@ struct DuckDBPyRelation {
 
 	py::object to_arrow_table() {
 		auto res = make_unique<DuckDBPyResult>();
-		py::gil_scoped_release release;
-		res->result = rel->Execute();
-		py::gil_scoped_acquire acquire;
+		{
+			py::gil_scoped_release release;
+			res->result = rel->Execute();
+		}
 		if (!res->result->success) {
 			throw runtime_error(res->result->error);
 		}
@@ -1888,9 +1891,10 @@ struct DuckDBPyRelation {
 
 	unique_ptr<DuckDBPyResult> execute() {
 		auto res = make_unique<DuckDBPyResult>();
-		py::gil_scoped_release release;
-		res->result = rel->Execute();
-		py::gil_scoped_acquire acquire;
+		{
+			py::gil_scoped_release release;
+			res->result = rel->Execute();
+		}
 		if (!res->result->success) {
 			throw runtime_error(res->result->error);
 		}
@@ -1915,9 +1919,11 @@ struct DuckDBPyRelation {
 	}
 
 	string print() {
-		py::gil_scoped_release release;
-		auto rel_res_string = rel->Limit(10)->Execute()->ToString();
-		py::gil_scoped_acquire acquire;
+		std::string rel_res_string;
+		{
+			py::gil_scoped_release release;
+			rel_res_string = rel->Limit(10)->Execute()->ToString();
+		}
 
 		return rel->ToString() + "\n---------------------\n-- Result Preview  --\n---------------------\n" +
 		       rel_res_string + "\n";
