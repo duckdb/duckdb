@@ -399,8 +399,8 @@ endif()
 
 add_subdirectory(src)
 
+add_subdirectory(extension)
 if(NOT CLANG_TIDY)
-  add_subdirectory(extension)
   if(${BUILD_UNITTESTS})
     add_subdirectory(test)
     if(NOT WIN32
