@@ -11,6 +11,6 @@ using parquet::format::SchemaElement;
 struct LogicalType;
 
 unique_ptr<BaseStatistics> ParquetTransformColumnStatistics(const SchemaElement &s_ele, const LogicalType &type,
-                                                               const ColumnChunk &column_chunk);
+                                                            const ColumnChunk &column_chunk);
 
 } // namespace duckdb

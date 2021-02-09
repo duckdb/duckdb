@@ -69,7 +69,7 @@ static Value TransformStatisticsTimestampImpala(const_data_ptr_t input) {
 }
 
 unique_ptr<BaseStatistics> ParquetTransformColumnStatistics(const SchemaElement &s_ele, const LogicalType &type,
-                                                               const ColumnChunk &column_chunk) {
+                                                            const ColumnChunk &column_chunk) {
 	if (!column_chunk.__isset.meta_data || !column_chunk.meta_data.__isset.statistics) {
 		// no stats present for row group
 		return nullptr;
