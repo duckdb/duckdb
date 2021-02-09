@@ -6,8 +6,17 @@ include_directories(
   include ../../third_party/parquet ../../third_party/snappy
   ../../third_party/miniz ../../third_party/thrift ../../third_party/zstd)
 
-add_library(
-  parquet_extension STATIC
+set(PARQUET_EXTENSION_FILES
+  parquet-extension.cpp
+  parquet_reader.cpp
+  parquet_timestamp.cpp
+  parquet_writer.cpp
+  parquet_statistics.cpp
+  column_reader.cpp)
+
+if(NOT CLANG_TIDY)
+set(PARQUET_EXTENSION_FILES
+  ${PARQUET_EXTENSION_FILES}
   ../../third_party/parquet/parquet_constants.cpp
   ../../third_party/parquet/parquet_types.cpp
   ../../third_party/thrift/thrift/protocol/TProtocol.cpp
@@ -35,10 +44,8 @@ add_library(
   ../../third_party/zstd/compress/zstd_fast.cpp
   ../../third_party/zstd/compress/zstd_lazy.cpp
   ../../third_party/zstd/compress/zstd_ldm.cpp
-  ../../third_party/zstd/compress/zstd_opt.cpp
-  parquet-extension.cpp
-  parquet_reader.cpp
-  parquet_timestamp.cpp
-  parquet_writer.cpp
-  parquet_statistics.cpp
-  column_reader.cpp)
+  ../../third_party/zstd/compress/zstd_opt.cpp)
+endif()
+
+
+add_library(parquet_extension STATIC ${PARQUET_EXTENSION_FILES})
