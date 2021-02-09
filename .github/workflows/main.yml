@@ -251,6 +251,12 @@ jobs:
     - name: Test
       run: make unit
 
+    - name: Amalgamation
+      run: |
+        python scripts/amalgamation.py
+        cd src/amalgamation
+        clang++ -std=c++11 -emit-llvm -S duckdb.cpp
+
 
   linux-release-64:
     name: Linux (64 Bit)
