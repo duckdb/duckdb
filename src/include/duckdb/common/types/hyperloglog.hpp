@@ -26,7 +26,7 @@ public:
 	idx_t Count();
 	//! Merge this HyperLogLog counter with another counter to create a new one
 	unique_ptr<HyperLogLog> Merge(HyperLogLog &other);
-	HyperLogLog *Merge_P(HyperLogLog &other);
+	HyperLogLog *MergePointer(HyperLogLog &other);
 	//! Merge a set of HyperLogLogs to create one big one
 	static unique_ptr<HyperLogLog> Merge(HyperLogLog logs[], idx_t count);
 

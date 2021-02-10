@@ -28,7 +28,7 @@ struct ApproxCountDistinctFunctionBase {
 			source.log = nullptr;
 			return;
 		}
-		auto new_log = target->log->Merge_P(*source.log);
+		auto new_log = target->log->MergePointer(*source.log);
 		D_ASSERT(target->log);
 		D_ASSERT(source.log);
 		delete target->log;
