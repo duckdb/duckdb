@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// third_party/hyperloglog/hyperloglog.h
+// third_party/hyperloglog/hyperloglog.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -13,6 +13,7 @@ extern "C" {
 #endif
 
 #include <string.h>
+#include <stdint.h>
 
 /* Error codes */
 #define C_OK                    0
@@ -32,6 +33,8 @@ int hll_add(robj *o, unsigned char *ele, size_t elesize);
 int hll_count(robj *o, size_t *result);
 //! Merge hll_count HyperLogLog objects into a single one. Returns NULL on failure, or the new HLL object on success.
 robj *hll_merge(robj **hlls, size_t hll_count);
+
+uint64_t MurmurHash64A (const void * key, int len, unsigned int seed);
 
 #ifdef __cplusplus
 }
