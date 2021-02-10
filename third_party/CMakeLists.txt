@@ -7,6 +7,7 @@ if(NOT AMALGAMATION_BUILD)
   add_subdirectory(re2)
   add_subdirectory(miniz)
   add_subdirectory(utf8proc)
+  add_subdirectory(hyperloglog)
 endif()
 
 if(NOT WIN32

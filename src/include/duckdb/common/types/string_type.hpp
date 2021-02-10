@@ -8,8 +8,9 @@
 
 #pragma once
 
-#include "duckdb/common/constants.hpp"
 #include "duckdb/common/assert.hpp"
+#include "duckdb/common/constants.hpp"
+
 #include <cstring>
 
 namespace duckdb {
@@ -94,6 +95,11 @@ public:
 
 	void Verify();
 	void VerifyNull();
+	bool operator<(const string_t &r) const {
+		auto this_str = this->GetString();
+		auto r_str = r.GetString();
+		return this_str < r_str;
+	}
 
 private:
 	union {

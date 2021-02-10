@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/function/aggregate/algebraic_functions.hpp
+// duckdb/function/aggregate/regression_functions.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -9,42 +9,43 @@
 #pragma once
 
 #include "duckdb/function/aggregate_function.hpp"
+#include "duckdb/function/function_set.hpp"
+#include "duckdb/common/types/null_value.hpp"
 
 namespace duckdb {
-
-struct AvgFun {
+struct RegrAvgxFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct CovarSampFun {
+struct RegrAvgyFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct CovarPopFun {
+struct RegrCountFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct Corr {
+struct RegrSlopeFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct StdDevSampFun {
+struct RegrR2Fun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct StdDevPopFun {
+struct RegrSXXFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct VarPopFun {
+struct RegrSYYFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct VarSampFun {
+struct RegrSXYFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct VarianceFun {
+struct RegrInterceptFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
