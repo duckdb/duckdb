@@ -15,7 +15,7 @@ namespace duckdb {
 
 class ExplainStatement : public SQLStatement {
 public:
-	ExplainStatement(unique_ptr<SQLStatement> stmt);
+	explicit ExplainStatement(unique_ptr<SQLStatement> stmt);
 
 	unique_ptr<SQLStatement> stmt;
 

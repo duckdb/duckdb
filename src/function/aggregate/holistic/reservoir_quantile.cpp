@@ -13,7 +13,7 @@
 
 namespace duckdb {
 
-struct reservoir_quantile_state_t {
+struct ReservoirQuantileState {
 	data_ptr_t v;
 	idx_t len;
 	idx_t pos;
@@ -40,7 +40,8 @@ void FillReservoir(STATE *state, idx_t sample_size, T element) {
 }
 
 struct ReservoirQuantileBindData : public FunctionData {
-	ReservoirQuantileBindData(float quantile_, int32_t sample_size_) : quantile(quantile_), sample_size(sample_size_) {
+	ReservoirQuantileBindData(float quantile_p, int32_t sample_size_p)
+	    : quantile(quantile_p), sample_size(sample_size_p) {
 	}
 
 	unique_ptr<FunctionData> Copy() override {
@@ -66,7 +67,7 @@ struct ReservoirQuantileOperation {
 		state->r_samp = new BaseReservoirSampling();
 	}
 
-	static void resize_state(reservoir_quantile_state_t *state, idx_t new_len) {
+	static void ResizeState(ReservoirQuantileState *state, idx_t new_len) {
 		if (new_len <= state->len) {
 			return;
 		}
@@ -86,14 +87,14 @@ struct ReservoirQuantileOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, FunctionData *bind_data_, INPUT_TYPE *data, nullmask_t &nullmask, idx_t idx) {
-		auto bind_data = (ReservoirQuantileBindData *)bind_data_;
+	static void Operation(STATE *state, FunctionData *bind_data_p, INPUT_TYPE *data, nullmask_t &nullmask, idx_t idx) {
+		auto bind_data = (ReservoirQuantileBindData *)bind_data_p;
 		D_ASSERT(bind_data);
 		if (nullmask[idx]) {
 			return;
 		}
 		if (state->pos == 0) {
-			resize_state(state, bind_data->sample_size);
+			ResizeState(state, bind_data->sample_size);
 		}
 		D_ASSERT(state->v);
 		FillReservoir<STATE, T>(state, bind_data->sample_size, data[idx]);
@@ -105,7 +106,7 @@ struct ReservoirQuantileOperation {
 			return;
 		}
 		if (target->pos == 0) {
-			resize_state(target, source.len);
+			ResizeState(target, source.len);
 		}
 		for (idx_t src_idx = 0; src_idx < source.pos; src_idx++) {
 			FillReservoir<STATE, T>(target, target->len, ((T *)source.v)[src_idx]);
@@ -113,15 +114,15 @@ struct ReservoirQuantileOperation {
 	}
 
 	template <class TARGET_TYPE, class STATE>
-	static void Finalize(Vector &result, FunctionData *bind_data_, STATE *state, TARGET_TYPE *target,
+	static void Finalize(Vector &result, FunctionData *bind_data_p, STATE *state, TARGET_TYPE *target,
 	                     nullmask_t &nullmask, idx_t idx) {
 		if (state->pos == 0) {
 			nullmask[idx] = true;
 			return;
 		}
 		D_ASSERT(state->v);
-		D_ASSERT(bind_data_);
-		auto bind_data = (ReservoirQuantileBindData *)bind_data_;
+		D_ASSERT(bind_data_p);
+		auto bind_data = (ReservoirQuantileBindData *)bind_data_p;
 		auto v_t = (T *)state->v;
 		auto offset = (idx_t)((double)(state->pos - 1) * bind_data->quantile);
 		std::nth_element(v_t, v_t + offset, v_t + state->pos);
@@ -148,31 +149,31 @@ struct ReservoirQuantileOperation {
 AggregateFunction GetReservoirQuantileAggregateFunction(PhysicalType type) {
 	switch (type) {
 	case PhysicalType::INT16:
-		return AggregateFunction::UnaryAggregateDestructor<reservoir_quantile_state_t, int16_t, int16_t,
+		return AggregateFunction::UnaryAggregateDestructor<ReservoirQuantileState, int16_t, int16_t,
 		                                                   ReservoirQuantileOperation<int16_t>>(LogicalType::SMALLINT,
 		                                                                                        LogicalType::SMALLINT);
 
 	case PhysicalType::INT32:
-		return AggregateFunction::UnaryAggregateDestructor<reservoir_quantile_state_t, int32_t, int32_t,
+		return AggregateFunction::UnaryAggregateDestructor<ReservoirQuantileState, int32_t, int32_t,
 		                                                   ReservoirQuantileOperation<int32_t>>(LogicalType::INTEGER,
 		                                                                                        LogicalType::INTEGER);
 
 	case PhysicalType::INT64:
-		return AggregateFunction::UnaryAggregateDestructor<reservoir_quantile_state_t, int64_t, int64_t,
+		return AggregateFunction::UnaryAggregateDestructor<ReservoirQuantileState, int64_t, int64_t,
 		                                                   ReservoirQuantileOperation<int64_t>>(LogicalType::BIGINT,
 		                                                                                        LogicalType::BIGINT);
 
 	case PhysicalType::INT128:
-		return AggregateFunction::UnaryAggregateDestructor<reservoir_quantile_state_t, hugeint_t, hugeint_t,
+		return AggregateFunction::UnaryAggregateDestructor<ReservoirQuantileState, hugeint_t, hugeint_t,
 		                                                   ReservoirQuantileOperation<hugeint_t>>(LogicalType::HUGEINT,
 		                                                                                          LogicalType::HUGEINT);
 	case PhysicalType::FLOAT:
-		return AggregateFunction::UnaryAggregateDestructor<reservoir_quantile_state_t, float, float,
+		return AggregateFunction::UnaryAggregateDestructor<ReservoirQuantileState, float, float,
 		                                                   ReservoirQuantileOperation<float>>(LogicalType::FLOAT,
 		                                                                                      LogicalType::FLOAT);
 
 	case PhysicalType::DOUBLE:
-		return AggregateFunction::UnaryAggregateDestructor<reservoir_quantile_state_t, double, double,
+		return AggregateFunction::UnaryAggregateDestructor<ReservoirQuantileState, double, double,
 		                                                   ReservoirQuantileOperation<double>>(LogicalType::DOUBLE,
 		                                                                                       LogicalType::DOUBLE);
 
@@ -181,8 +182,8 @@ AggregateFunction GetReservoirQuantileAggregateFunction(PhysicalType type) {
 	}
 }
 
-unique_ptr<FunctionData> bind_reservoir_quantile(ClientContext &context, AggregateFunction &function,
-                                                 vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> BindReservoirQuantile(ClientContext &context, AggregateFunction &function,
+                                               vector<unique_ptr<Expression>> &arguments) {
 	if (!arguments[1]->IsScalar()) {
 		throw BinderException("QUANTILE can only take constant quantile parameters");
 	}
@@ -212,9 +213,9 @@ unique_ptr<FunctionData> bind_reservoir_quantile(ClientContext &context, Aggrega
 	return make_unique<ReservoirQuantileBindData>(quantile, sample_size);
 }
 
-unique_ptr<FunctionData> bind_reservoir_quantile_decimal(ClientContext &context, AggregateFunction &function,
-                                                         vector<unique_ptr<Expression>> &arguments) {
-	auto bind_data = bind_reservoir_quantile(context, function, arguments);
+unique_ptr<FunctionData> BindReservoirQuantileDecimal(ClientContext &context, AggregateFunction &function,
+                                                      vector<unique_ptr<Expression>> &arguments) {
+	auto bind_data = BindReservoirQuantile(context, function, arguments);
 	function = GetReservoirQuantileAggregateFunction(arguments[0]->return_type.InternalType());
 	function.name = "reservoir_quantile";
 	return bind_data;
@@ -222,7 +223,7 @@ unique_ptr<FunctionData> bind_reservoir_quantile_decimal(ClientContext &context,
 
 AggregateFunction GetReservoirQuantileAggregate(PhysicalType type) {
 	auto fun = GetReservoirQuantileAggregateFunction(type);
-	fun.bind = bind_reservoir_quantile;
+	fun.bind = BindReservoirQuantile;
 	// temporarily push an argument so we can bind the actual quantile
 	fun.arguments.push_back(LogicalType::FLOAT);
 	return fun;
@@ -232,10 +233,10 @@ void ReservoirQuantileFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet reservoir_quantile("reservoir_quantile");
 	reservoir_quantile.AddFunction(AggregateFunction({LogicalType::DECIMAL, LogicalType::FLOAT, LogicalType::INTEGER},
 	                                                 LogicalType::DECIMAL, nullptr, nullptr, nullptr, nullptr, nullptr,
-	                                                 nullptr, bind_reservoir_quantile_decimal));
+	                                                 nullptr, BindReservoirQuantileDecimal));
 	reservoir_quantile.AddFunction(AggregateFunction({LogicalType::DECIMAL, LogicalType::FLOAT}, LogicalType::DECIMAL,
 	                                                 nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
-	                                                 bind_reservoir_quantile_decimal));
+	                                                 BindReservoirQuantileDecimal));
 	reservoir_quantile.AddFunction(GetReservoirQuantileAggregate(PhysicalType::INT16));
 	reservoir_quantile.AddFunction(GetReservoirQuantileAggregate(PhysicalType::INT32));
 	reservoir_quantile.AddFunction(GetReservoirQuantileAggregate(PhysicalType::INT64));

@@ -3,7 +3,7 @@
 
 namespace duckdb {
 
-void duckdb_assert_internal(bool condition, const char *condition_name, const char *file, int linenr) {
+void DuckDBAssertInternal(bool condition, const char *condition_name, const char *file, int linenr) {
 	if (condition) {
 		return;
 	}

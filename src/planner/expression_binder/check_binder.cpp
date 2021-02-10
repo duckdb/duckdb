@@ -7,7 +7,7 @@ namespace duckdb {
 
 CheckBinder::CheckBinder(Binder &binder, ClientContext &context, string table, vector<ColumnDefinition> &columns,
                          unordered_set<column_t> &bound_columns)
-    : ExpressionBinder(binder, context), table(table), columns(columns), bound_columns(bound_columns) {
+    : ExpressionBinder(binder, context), table(move(table)), columns(columns), bound_columns(bound_columns) {
 	target_type = LogicalType::INTEGER;
 }
 

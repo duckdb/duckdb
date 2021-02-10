@@ -8,7 +8,7 @@ namespace duckdb {
 BoundColumnRefExpression::BoundColumnRefExpression(string alias, LogicalType type, ColumnBinding binding, idx_t depth)
     : Expression(ExpressionType::BOUND_COLUMN_REF, ExpressionClass::BOUND_COLUMN_REF, move(type)), binding(binding),
       depth(depth) {
-	this->alias = alias;
+	this->alias = move(alias);
 }
 
 BoundColumnRefExpression::BoundColumnRefExpression(LogicalType type, ColumnBinding binding, idx_t depth)
@@ -26,11 +26,11 @@ hash_t BoundColumnRefExpression::Hash() const {
 	return CombineHash(result, duckdb::Hash<uint64_t>(depth));
 }
 
-bool BoundColumnRefExpression::Equals(const BaseExpression *other_) const {
-	if (!Expression::Equals(other_)) {
+bool BoundColumnRefExpression::Equals(const BaseExpression *other_p) const {
+	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto other = (BoundColumnRefExpression *)other_;
+	auto other = (BoundColumnRefExpression *)other_p;
 	return other->binding == binding && other->depth == depth;
 }
 

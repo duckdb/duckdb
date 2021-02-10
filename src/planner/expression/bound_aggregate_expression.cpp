@@ -36,11 +36,11 @@ hash_t BoundAggregateExpression::Hash() const {
 	return result;
 }
 
-bool BoundAggregateExpression::Equals(const BaseExpression *other_) const {
-	if (!Expression::Equals(other_)) {
+bool BoundAggregateExpression::Equals(const BaseExpression *other_p) const {
+	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto other = (BoundAggregateExpression *)other_;
+	auto other = (BoundAggregateExpression *)other_p;
 	if (other->distinct != distinct) {
 		return false;
 	}

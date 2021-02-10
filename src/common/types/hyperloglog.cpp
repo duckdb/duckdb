@@ -4,7 +4,6 @@
 #include "hyperloglog.hpp"
 
 namespace duckdb {
-using namespace std;
 
 HyperLogLog::HyperLogLog() : hll(nullptr) {
 	hll = hll_create();
@@ -42,7 +41,7 @@ unique_ptr<HyperLogLog> HyperLogLog::Merge(HyperLogLog &other) {
 	return unique_ptr<HyperLogLog>(new HyperLogLog((void *)new_hll));
 }
 
-HyperLogLog *HyperLogLog::Merge_P(HyperLogLog &other) {
+HyperLogLog *HyperLogLog::MergePointer(HyperLogLog &other) {
 	robj *hlls[2];
 	hlls[0] = (robj *)hll;
 	hlls[1] = (robj *)other.hll;

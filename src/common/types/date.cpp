@@ -13,18 +13,18 @@
 
 namespace duckdb {
 
-string_t Date::MonthNamesAbbreviated[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                                          "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
-string_t Date::MonthNames[] = {"January", "February", "March",     "April",   "May",      "June",
-                               "July",    "August",   "September", "October", "November", "December"};
-string_t Date::DayNames[] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
-string_t Date::DayNamesAbbreviated[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+const string_t Date::MONTH_NAMES_ABBREVIATED[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                                                  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+const string_t Date::MONTH_NAMES[] = {"January", "February", "March",     "April",   "May",      "June",
+                                      "July",    "August",   "September", "October", "November", "December"};
+const string_t Date::DAY_NAMES[] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
+const string_t Date::DAY_NAMES_ABBREVIATED[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
 
-int32_t Date::NormalDays[] = {0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-int32_t Date::CumulativeDays[] = {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365};
-int32_t Date::LeapDays[] = {0, 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-int32_t Date::CumulativeLeapDays[] = {0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335, 366};
-int8_t Date::MonthPerDayOfYear[] = {
+const int32_t Date::NORMAL_DAYS[] = {0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+const int32_t Date::CUMULATIVE_DAYS[] = {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365};
+const int32_t Date::LEAP_DAYS[] = {0, 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+const int32_t Date::CUMULATIVE_LEAP_DAYS[] = {0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335, 366};
+const int8_t Date::MONTH_PER_DAY_OF_YEAR[] = {
     1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,
     1,  1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,
     2,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,
@@ -38,7 +38,7 @@ int8_t Date::MonthPerDayOfYear[] = {
     10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11,
     11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12,
     12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12};
-int8_t Date::LeapMonthPerDayOfYear[] = {
+const int8_t Date::LEAP_MONTH_PER_DAY_OF_YEAR[] = {
     1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,
     1,  1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,
     2,  2,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,
@@ -52,7 +52,7 @@ int8_t Date::LeapMonthPerDayOfYear[] = {
     10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11,
     11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12,
     12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12};
-int32_t Date::CumulativeYearDays[] = {
+const int32_t Date::CUMULATIVE_YEAR_DAYS[] = {
     0,      365,    730,    1096,   1461,   1826,   2191,   2557,   2922,   3287,   3652,   4018,   4383,   4748,
     5113,   5479,   5844,   6209,   6574,   6940,   7305,   7670,   8035,   8401,   8766,   9131,   9496,   9862,
     10227,  10592,  10957,  11323,  11688,  12053,  12418,  12784,  13149,  13514,  13879,  14245,  14610,  14975,
@@ -84,47 +84,47 @@ int32_t Date::CumulativeYearDays[] = {
     143175, 143540, 143905, 144271, 144636, 145001, 145366, 145732, 146097};
 
 void Date::ExtractYearOffset(int32_t &n, int32_t &year, int32_t &year_offset) {
-	year = Date::EpochYear;
+	year = Date::EPOCH_YEAR;
 	// first we normalize n to be in the year range [1970, 2370]
 	// since leap years repeat every 400 years, we can safely normalize just by "shifting" the CumulativeYearDays array
 	while (n < 0) {
-		n += Date::DaysPerYearInterval;
-		year -= Date::YearInterval;
+		n += Date::DAYS_PER_YEAR_INTERVAL;
+		year -= Date::YEAR_INTERVAL;
 	}
-	while (n >= Date::DaysPerYearInterval) {
-		n -= Date::DaysPerYearInterval;
-		year += Date::YearInterval;
+	while (n >= Date::DAYS_PER_YEAR_INTERVAL) {
+		n -= Date::DAYS_PER_YEAR_INTERVAL;
+		year += Date::YEAR_INTERVAL;
 	}
 	// interpolation search
 	// we can find an upper bound of the year by assuming each year has 365 days
 	year_offset = n / 365;
 	// because of leap years we might be off by a little bit: compensate by decrementing the year offset until we find
 	// our year
-	while (n < Date::CumulativeYearDays[year_offset]) {
+	while (n < Date::CUMULATIVE_YEAR_DAYS[year_offset]) {
 		year_offset--;
 		D_ASSERT(year_offset >= 0);
 	}
 	year += year_offset;
-	D_ASSERT(n >= Date::CumulativeYearDays[year_offset]);
+	D_ASSERT(n >= Date::CUMULATIVE_YEAR_DAYS[year_offset]);
 }
 
 void Date::Convert(int32_t n, int32_t &year, int32_t &month, int32_t &day) {
 	int32_t year_offset;
 	Date::ExtractYearOffset(n, year, year_offset);
 
-	day = n - Date::CumulativeYearDays[year_offset];
+	day = n - Date::CUMULATIVE_YEAR_DAYS[year_offset];
 	D_ASSERT(day >= 0 && day <= 365);
 
-	bool is_leap_year = (Date::CumulativeYearDays[year_offset + 1] - Date::CumulativeYearDays[year_offset]) == 366;
+	bool is_leap_year = (Date::CUMULATIVE_YEAR_DAYS[year_offset + 1] - Date::CUMULATIVE_YEAR_DAYS[year_offset]) == 366;
 	if (is_leap_year) {
-		month = Date::LeapMonthPerDayOfYear[day];
-		day -= Date::CumulativeLeapDays[month - 1];
+		month = Date::LEAP_MONTH_PER_DAY_OF_YEAR[day];
+		day -= Date::CUMULATIVE_LEAP_DAYS[month - 1];
 	} else {
-		month = Date::MonthPerDayOfYear[day];
-		day -= Date::CumulativeDays[month - 1];
+		month = Date::MONTH_PER_DAY_OF_YEAR[day];
+		day -= Date::CUMULATIVE_DAYS[month - 1];
 	}
 	day++;
-	D_ASSERT(day > 0 && day <= (is_leap_year ? Date::LeapDays[month] : Date::NormalDays[month]));
+	D_ASSERT(day > 0 && day <= (is_leap_year ? Date::LEAP_DAYS[month] : Date::NORMAL_DAYS[month]));
 	D_ASSERT(month > 0 && month <= 12);
 }
 
@@ -134,15 +134,15 @@ int32_t Date::FromDate(int32_t year, int32_t month, int32_t day) {
 		throw ConversionException("Date out of range: %d-%d-%d", year, month, day);
 	}
 	while (year < 1970) {
-		year += Date::YearInterval;
-		n -= Date::DaysPerYearInterval;
+		year += Date::YEAR_INTERVAL;
+		n -= Date::DAYS_PER_YEAR_INTERVAL;
 	}
 	while (year >= 2370) {
-		year -= Date::YearInterval;
-		n += Date::DaysPerYearInterval;
+		year -= Date::YEAR_INTERVAL;
+		n += Date::DAYS_PER_YEAR_INTERVAL;
 	}
-	n += Date::CumulativeYearDays[year - 1970];
-	n += Date::IsLeapYear(year) ? Date::CumulativeLeapDays[month - 1] : Date::CumulativeDays[month - 1];
+	n += Date::CUMULATIVE_YEAR_DAYS[year - 1970];
+	n += Date::IsLeapYear(year) ? Date::CUMULATIVE_LEAP_DAYS[month - 1] : Date::CUMULATIVE_DAYS[month - 1];
 	n += day - 1;
 	return n;
 }
@@ -191,13 +191,13 @@ bool Date::TryConvertDate(const char *buf, idx_t len, idx_t &pos, date_t &result
 	// first parse the year
 	for (; pos < len && StringUtil::CharacterIsDigit(buf[pos]); pos++) {
 		year = (buf[pos] - '0') + year * 10;
-		if (year > Date::MaxYear) {
+		if (year > Date::MAX_YEAR) {
 			break;
 		}
 	}
 	if (yearneg) {
 		year = -year;
-		if (year < Date::MinYear) {
+		if (year < Date::MIN_YEAR) {
 			return false;
 		}
 	}
@@ -244,7 +244,7 @@ bool Date::TryConvertDate(const char *buf, idx_t len, idx_t &pos, date_t &result
 		year = -year + 1;
 		pos += 5;
 
-		if (year < Date::MinYear) {
+		if (year < Date::MIN_YEAR) {
 			return false;
 		}
 	}
@@ -281,7 +281,7 @@ date_t Date::FromCString(const char *buf, idx_t len, bool strict) {
 	return result;
 }
 
-date_t Date::FromString(string str, bool strict) {
+date_t Date::FromString(const string &str, bool strict) {
 	return Date::FromCString(str.c_str(), str.size(), strict);
 }
 
@@ -309,13 +309,13 @@ bool Date::IsValid(int32_t year, int32_t month, int32_t day) {
 	if (month < 1 || month > 12) {
 		return false;
 	}
-	if (year < Date::MinYear || year > Date::MaxYear) {
+	if (year < Date::MIN_YEAR || year > Date::MAX_YEAR) {
 		return false;
 	}
 	if (day < 1) {
 		return false;
 	}
-	return Date::IsLeapYear(year) ? day <= Date::LeapDays[month] : day <= Date::NormalDays[month];
+	return Date::IsLeapYear(year) ? day <= Date::LEAP_DAYS[month] : day <= Date::NORMAL_DAYS[month];
 }
 
 date_t Date::EpochDaysToDate(int32_t epoch) {
@@ -341,8 +341,8 @@ int64_t Date::EpochNanoseconds(date_t date) {
 int32_t Date::ExtractYear(date_t n, int32_t *last_year) {
 	// cached look up: check if year of this date is the same as the last one we looked up
 	// note that this only works for years in the range [1970, 2370]
-	if (n >= Date::CumulativeYearDays[*last_year] && n < Date::CumulativeYearDays[*last_year + 1]) {
-		return Date::EpochYear + *last_year;
+	if (n >= Date::CUMULATIVE_YEAR_DAYS[*last_year] && n < Date::CUMULATIVE_YEAR_DAYS[*last_year + 1]) {
+		return Date::EPOCH_YEAR + *last_year;
 	}
 	int32_t year;
 	Date::ExtractYearOffset(n, year, *last_year);
@@ -374,7 +374,7 @@ int32_t Date::ExtractDay(date_t date) {
 int32_t Date::ExtractDayOfTheYear(date_t date) {
 	int32_t year, year_offset;
 	Date::ExtractYearOffset(date, year, year_offset);
-	return date - Date::CumulativeYearDays[year_offset] + 1;
+	return date - Date::CUMULATIVE_YEAR_DAYS[year_offset] + 1;
 }
 
 int32_t Date::ExtractISODayOfTheWeek(date_t date) {
@@ -405,7 +405,7 @@ int32_t Date::ExtractISODayOfTheWeek(date_t date) {
 
 static int32_t GetISOWeek(int32_t year, int32_t month, int32_t day) {
 	auto day_of_the_year =
-	    (Date::IsLeapYear(year) ? Date::CumulativeLeapDays[month] : Date::CumulativeDays[month]) + day;
+	    (Date::IsLeapYear(year) ? Date::CUMULATIVE_LEAP_DAYS[month] : Date::CUMULATIVE_DAYS[month]) + day;
 	// get the first day of the first week of the year
 	// the first week is the week that has the 4th of January in it
 	auto day_of_the_fourth = Date::ExtractISODayOfTheWeek(Date::FromDate(year, 1, 4));
@@ -435,7 +435,7 @@ int32_t Date::ExtractWeekNumberRegular(date_t date, bool monday_first) {
 	day -= 1;
 	// get the day of the year
 	auto day_of_the_year =
-	    (Date::IsLeapYear(year) ? Date::CumulativeLeapDays[month] : Date::CumulativeDays[month]) + day;
+	    (Date::IsLeapYear(year) ? Date::CUMULATIVE_LEAP_DAYS[month] : Date::CUMULATIVE_DAYS[month]) + day;
 	// now figure out the first monday or sunday of the year
 	// what day is January 1st?
 	auto day_of_jan_first = Date::ExtractISODayOfTheWeek(Date::FromDate(year, 1, 1));

@@ -18,7 +18,7 @@ class BaseStatistics;
 class Expression : public BaseExpression {
 public:
 	Expression(ExpressionType type, ExpressionClass expression_class, LogicalType return_type);
-	~Expression();
+	~Expression() override;
 
 	//! The return type of the expression
 	LogicalType return_type;
@@ -36,7 +36,7 @@ public:
 
 	hash_t Hash() const override;
 
-	virtual bool Equals(const BaseExpression *other) const override {
+	bool Equals(const BaseExpression *other) const override {
 		if (!BaseExpression::Equals(other)) {
 			return false;
 		}

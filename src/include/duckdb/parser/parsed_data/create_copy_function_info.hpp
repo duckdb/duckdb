@@ -14,7 +14,8 @@
 namespace duckdb {
 
 struct CreateCopyFunctionInfo : public CreateInfo {
-	CreateCopyFunctionInfo(CopyFunction function) : CreateInfo(CatalogType::COPY_FUNCTION_ENTRY), function(function) {
+	explicit CreateCopyFunctionInfo(CopyFunction function)
+	    : CreateInfo(CatalogType::COPY_FUNCTION_ENTRY), function(function) {
 		this->name = function.name;
 	}
 

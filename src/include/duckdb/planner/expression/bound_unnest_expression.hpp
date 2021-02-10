@@ -15,7 +15,7 @@ namespace duckdb {
 //! Represents a function call that has been bound to a base function
 class BoundUnnestExpression : public Expression {
 public:
-	BoundUnnestExpression(LogicalType return_type);
+	explicit BoundUnnestExpression(LogicalType return_type);
 
 	unique_ptr<Expression> child;
 

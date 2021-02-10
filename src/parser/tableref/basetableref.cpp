@@ -4,11 +4,11 @@
 
 namespace duckdb {
 
-bool BaseTableRef::Equals(const TableRef *other_) const {
-	if (!TableRef::Equals(other_)) {
+bool BaseTableRef::Equals(const TableRef *other_p) const {
+	if (!TableRef::Equals(other_p)) {
 		return false;
 	}
-	auto other = (BaseTableRef *)other_;
+	auto other = (BaseTableRef *)other_p;
 	return other->schema_name == schema_name && other->table_name == table_name &&
 	       column_name_alias == other->column_name_alias;
 }

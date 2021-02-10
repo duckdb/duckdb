@@ -8,13 +8,13 @@ QueryResult::QueryResult(QueryResultType type, StatementType statement_type)
     : type(type), statement_type(statement_type), success(true) {
 }
 
-QueryResult::QueryResult(QueryResultType type, StatementType statement_type, vector<LogicalType> types,
-                         vector<string> names)
-    : type(type), statement_type(statement_type), types(move(types)), names(move(names)), success(true) {
+QueryResult::QueryResult(QueryResultType type, StatementType statement_type, vector<LogicalType> types_p,
+                         vector<string> names_p)
+    : type(type), statement_type(statement_type), types(move(types_p)), names(move(names_p)), success(true) {
 	D_ASSERT(types.size() == names.size());
 }
 
-QueryResult::QueryResult(QueryResultType type, string error) : type(type), success(false), error(error) {
+QueryResult::QueryResult(QueryResultType type, string error) : type(type), success(false), error(move(error)) {
 }
 
 unique_ptr<DataChunk> QueryResult::Fetch() {
@@ -96,7 +96,7 @@ struct DuckDBArrowSchemaHolder {
 	unique_ptr<ArrowSchema *[]> children; // just space for the *pointers* to children, not the children themselves
 };
 
-static void release_duckdb_arrow_schema(ArrowSchema *schema) {
+static void ReleaseDuckDBArrowSchema(ArrowSchema *schema) {
 	if (!schema || !schema->release) {
 		return;
 	}
@@ -112,7 +112,7 @@ void QueryResult::ToArrowSchema(ArrowSchema *out_schema) {
 
 	root_holder->children = unique_ptr<ArrowSchema *[]>(new ArrowSchema *[ColumnCount()]);
 	out_schema->private_data = root_holder;
-	out_schema->release = release_duckdb_arrow_schema;
+	out_schema->release = ReleaseDuckDBArrowSchema;
 
 	out_schema->children = root_holder->children.get();
 
@@ -127,7 +127,7 @@ void QueryResult::ToArrowSchema(ArrowSchema *out_schema) {
 		auto holder = new DuckDBArrowSchemaHolder();
 		auto &child = holder->schema;
 		child.private_data = holder;
-		child.release = release_duckdb_arrow_schema;
+		child.release = ReleaseDuckDBArrowSchema;
 		child.flags = ARROW_FLAG_NULLABLE;
 
 		child.name = names[col_idx].c_str();

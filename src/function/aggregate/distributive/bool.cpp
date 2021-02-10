@@ -3,9 +3,10 @@
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/function/function_set.hpp"
+
 namespace duckdb {
 
-struct bool_state_t {
+struct BoolState {
 	bool empty;
 	bool val;
 };
@@ -95,12 +96,12 @@ struct BoolOrFunFunction {
 };
 
 AggregateFunction BoolOrFun::GetFunction() {
-	return AggregateFunction::UnaryAggregate<bool_state_t, bool, bool, BoolOrFunFunction>(
+	return AggregateFunction::UnaryAggregate<BoolState, bool, bool, BoolOrFunFunction>(
 	    LogicalType(LogicalTypeId::BOOLEAN), LogicalType::BOOLEAN);
 }
 
 AggregateFunction BoolAndFun::GetFunction() {
-	return AggregateFunction::UnaryAggregate<bool_state_t, bool, bool, BoolAndFunFunction>(
+	return AggregateFunction::UnaryAggregate<BoolState, bool, bool, BoolAndFunFunction>(
 	    LogicalType(LogicalTypeId::BOOLEAN), LogicalType::BOOLEAN);
 }
 

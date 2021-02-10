@@ -23,7 +23,7 @@ class ClientContext;
 //! logical query plan
 class PhysicalPlanGenerator {
 public:
-	PhysicalPlanGenerator(ClientContext &context) : context(context) {
+	explicit PhysicalPlanGenerator(ClientContext &context) : context(context) {
 	}
 
 	unordered_set<CatalogEntry *> dependencies;

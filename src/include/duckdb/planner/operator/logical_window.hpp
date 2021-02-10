@@ -16,7 +16,7 @@ namespace duckdb {
 //! operator.
 class LogicalWindow : public LogicalOperator {
 public:
-	LogicalWindow(idx_t window_index)
+	explicit LogicalWindow(idx_t window_index)
 	    : LogicalOperator(LogicalOperatorType::LOGICAL_WINDOW), window_index(window_index) {
 	}
 

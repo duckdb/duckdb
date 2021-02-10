@@ -6,13 +6,11 @@
 
 namespace duckdb {
 
-using namespace duckdb_libpgquery;
-
-unique_ptr<CreateStatement> Transformer::TransformCreateFunction(PGNode *node) {
+unique_ptr<CreateStatement> Transformer::TransformCreateFunction(duckdb_libpgquery::PGNode *node) {
 	D_ASSERT(node);
-	D_ASSERT(node->type == T_PGCreateFunctionStmt);
+	D_ASSERT(node->type == duckdb_libpgquery::T_PGCreateFunctionStmt);
 
-	auto stmt = reinterpret_cast<PGCreateFunctionStmt *>(node);
+	auto stmt = reinterpret_cast<duckdb_libpgquery::PGCreateFunctionStmt *>(node);
 	D_ASSERT(stmt);
 
 	auto result = make_unique<CreateStatement>();

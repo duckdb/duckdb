@@ -18,35 +18,35 @@ struct PragmaFunctionsData : public FunctionOperatorData {
 	idx_t offset_in_entry;
 };
 
-static unique_ptr<FunctionData> pragma_functions_bind(ClientContext &context, vector<Value> &inputs,
-                                                      unordered_map<string, Value> &named_parameters,
-                                                      vector<LogicalType> &return_types, vector<string> &names) {
-	names.push_back("name");
+static unique_ptr<FunctionData> PragmaFunctionsBind(ClientContext &context, vector<Value> &inputs,
+                                                    unordered_map<string, Value> &named_parameters,
+                                                    vector<LogicalType> &return_types, vector<string> &names) {
+	names.emplace_back("name");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("type");
+	names.emplace_back("type");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("parameters");
+	names.emplace_back("parameters");
 	child_list_t<LogicalType> child_types;
 	child_types.push_back(std::make_pair("", LogicalType::VARCHAR));
 	LogicalType param_types(LogicalTypeId::LIST, move(child_types));
 	return_types.push_back(move(param_types));
 
-	names.push_back("varargs");
+	names.emplace_back("varargs");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("return_type");
+	names.emplace_back("return_type");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("side_effects");
+	names.emplace_back("side_effects");
 	return_types.push_back(LogicalType::BOOLEAN);
 
 	return nullptr;
 }
 
-unique_ptr<FunctionOperatorData> pragma_functions_init(ClientContext &context, const FunctionData *bind_data,
-                                                       vector<column_t> &column_ids, TableFilterCollection *filters) {
+unique_ptr<FunctionOperatorData> PragmaFunctionsInit(ClientContext &context, const FunctionData *bind_data,
+                                                     vector<column_t> &column_ids, TableFilterCollection *filters) {
 	auto result = make_unique<PragmaFunctionsData>();
 
 	Catalog::GetCatalog(context).schemas->Scan(context, [&](CatalogEntry *entry) {
@@ -73,7 +73,7 @@ void AddFunction(BaseScalarFunction &f, idx_t &count, DataChunk &output, bool is
 	DataChunk chunk;
 	chunk.Initialize(types);
 	for (idx_t i = 0; i < f.arguments.size(); i++) {
-		chunk.data[0].SetValue(chunk.size(), f.arguments[i].ToString());
+		chunk.data[0].SetValue(chunk.size(), Value(f.arguments[i].ToString()));
 		chunk.SetCardinality(chunk.size() + 1);
 		if (chunk.size() == STANDARD_VECTOR_SIZE) {
 			cc.Append(chunk);
@@ -90,8 +90,8 @@ void AddFunction(BaseScalarFunction &f, idx_t &count, DataChunk &output, bool is
 	count++;
 }
 
-static void pragma_functions(ClientContext &context, const FunctionData *bind_data,
-                             FunctionOperatorData *operator_state, DataChunk &output) {
+static void PragmaFunctionsFunction(ClientContext &context, const FunctionData *bind_data,
+                                    FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &data = (PragmaFunctionsData &)*operator_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
@@ -131,7 +131,7 @@ static void pragma_functions(ClientContext &context, const FunctionData *bind_da
 
 void PragmaFunctionPragma::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(
-	    TableFunction("pragma_functions", {}, pragma_functions, pragma_functions_bind, pragma_functions_init));
+	    TableFunction("pragma_functions", {}, PragmaFunctionsFunction, PragmaFunctionsBind, PragmaFunctionsInit));
 }
 
 } // namespace duckdb

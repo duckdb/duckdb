@@ -5,7 +5,7 @@
 #include "duckdb/function/function_set.hpp"
 
 namespace duckdb {
-struct regr_state_t {
+struct RegrState {
 	double sum;
 	size_t count;
 };
@@ -55,14 +55,14 @@ struct RegrAvgYFunction : RegrAvgFunction {
 
 void RegrAvgxFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet corr("regr_avgx");
-	corr.AddFunction(AggregateFunction::BinaryAggregate<regr_state_t, double, double, double, RegrAvgXFunction>(
+	corr.AddFunction(AggregateFunction::BinaryAggregate<RegrState, double, double, double, RegrAvgXFunction>(
 	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE));
 	set.AddFunction(corr);
 }
 
 void RegrAvgyFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet corr("regr_avgy");
-	corr.AddFunction(AggregateFunction::BinaryAggregate<regr_state_t, double, double, double, RegrAvgYFunction>(
+	corr.AddFunction(AggregateFunction::BinaryAggregate<RegrState, double, double, double, RegrAvgYFunction>(
 	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE));
 	set.AddFunction(corr);
 }

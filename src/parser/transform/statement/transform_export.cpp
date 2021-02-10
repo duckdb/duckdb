@@ -3,10 +3,8 @@
 
 namespace duckdb {
 
-using namespace duckdb_libpgquery;
-
-unique_ptr<ExportStatement> Transformer::TransformExport(PGNode *node) {
-	PGExportStmt *stmt = reinterpret_cast<PGExportStmt *>(node);
+unique_ptr<ExportStatement> Transformer::TransformExport(duckdb_libpgquery::PGNode *node) {
+	auto stmt = reinterpret_cast<duckdb_libpgquery::PGExportStmt *>(node);
 	auto info = make_unique<CopyInfo>();
 	info->file_path = stmt->filename;
 	info->format = "csv";

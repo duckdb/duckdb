@@ -14,9 +14,9 @@
 #define D_ASSERT assert
 #else
 namespace duckdb {
-void duckdb_assert_internal(bool condition, const char *condition_name, const char *file, int linenr);
+void DuckDBAssertInternal(bool condition, const char *condition_name, const char *file, int linenr);
 }
 
-#define D_ASSERT(condition) duckdb::duckdb_assert_internal(bool(condition), #condition, __FILE__, __LINE__)
+#define D_ASSERT(condition) duckdb::DuckDBAssertInternal(bool(condition), #condition, __FILE__, __LINE__)
 
 #endif

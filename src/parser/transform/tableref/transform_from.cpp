@@ -4,9 +4,7 @@
 
 namespace duckdb {
 
-using namespace duckdb_libpgquery;
-
-unique_ptr<TableRef> Transformer::TransformFrom(PGList *root) {
+unique_ptr<TableRef> Transformer::TransformFrom(duckdb_libpgquery::PGList *root) {
 	if (!root) {
 		return make_unique<EmptyTableRef>();
 	}
@@ -16,7 +14,7 @@ unique_ptr<TableRef> Transformer::TransformFrom(PGList *root) {
 		auto result = make_unique<CrossProductRef>();
 		CrossProductRef *cur_root = result.get();
 		for (auto node = root->head; node != nullptr; node = node->next) {
-			auto n = reinterpret_cast<PGNode *>(node->data.ptr_value);
+			auto n = reinterpret_cast<duckdb_libpgquery::PGNode *>(node->data.ptr_value);
 			unique_ptr<TableRef> next = TransformTableRefNode(n);
 			if (!cur_root->left) {
 				cur_root->left = move(next);
@@ -33,7 +31,7 @@ unique_ptr<TableRef> Transformer::TransformFrom(PGList *root) {
 		return move(result);
 	}
 
-	auto n = reinterpret_cast<PGNode *>(root->head->data.ptr_value);
+	auto n = reinterpret_cast<duckdb_libpgquery::PGNode *>(root->head->data.ptr_value);
 	return TransformTableRefNode(n);
 }
 

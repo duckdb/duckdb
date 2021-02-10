@@ -6,7 +6,7 @@
 
 namespace duckdb {
 
-struct product_state_t {
+struct ProductState {
 	bool empty;
 	double val;
 };
@@ -54,7 +54,7 @@ struct ProductFunction {
 };
 
 AggregateFunction ProductFun::GetFunction() {
-	return AggregateFunction::UnaryAggregate<product_state_t, double, double, ProductFunction>(
+	return AggregateFunction::UnaryAggregate<ProductState, double, double, ProductFunction>(
 	    LogicalType(LogicalTypeId::DOUBLE), LogicalType::DOUBLE);
 }
 

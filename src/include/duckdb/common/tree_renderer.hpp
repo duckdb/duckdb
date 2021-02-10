@@ -74,7 +74,7 @@ struct TreeRendererConfig {
 
 class TreeRenderer {
 public:
-	TreeRenderer(TreeRendererConfig config_p = TreeRendererConfig()) : config(move(config_p)) {
+	explicit TreeRenderer(TreeRendererConfig config_p = TreeRendererConfig()) : config(move(config_p)) {
 	}
 
 	string ToString(const LogicalOperator &op);
@@ -110,7 +110,7 @@ private:
 	bool CanSplitOnThisChar(char l);
 	bool IsPadding(char l);
 	string RemovePadding(string l);
-	void SplitUpExtraInfo(string extra_info, vector<string> &result);
+	void SplitUpExtraInfo(const string &extra_info, vector<string> &result);
 	void SplitStringBuffer(const string &source, vector<string> &result);
 
 	template <class T>

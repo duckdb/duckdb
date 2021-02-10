@@ -17,8 +17,8 @@ namespace duckdb {
 //! LogicalSimple represents a simple logical operator that only passes on the parse info
 class LogicalPragma : public LogicalOperator {
 public:
-	LogicalPragma(PragmaFunction function_, PragmaInfo info_)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_PRAGMA), function(move(function_)), info(move(info_)) {
+	LogicalPragma(PragmaFunction function_p, PragmaInfo info_p)
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_PRAGMA), function(move(function_p)), info(move(info_p)) {
 	}
 
 	//! The pragma function to call

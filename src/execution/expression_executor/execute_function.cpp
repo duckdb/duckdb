@@ -16,7 +16,7 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundFunctionExp
 		result->AddChild(child.get());
 	}
 	result->Finalize();
-	if (result->types.size() > 0) {
+	if (!result->types.empty()) {
 		result->arguments.InitializeEmpty(result->types);
 	}
 	return move(result);
@@ -26,7 +26,7 @@ void ExpressionExecutor::Execute(BoundFunctionExpression &expr, ExpressionState 
                                  idx_t count, Vector &result) {
 	auto &fstate = (FunctionExpressionState &)*state;
 	auto &arguments = fstate.arguments;
-	if (state->types.size() > 0) {
+	if (!state->types.empty()) {
 		arguments.Reference(state->intermediate_chunk);
 		for (idx_t i = 0; i < expr.children.size(); i++) {
 			D_ASSERT(state->types[i] == expr.children[i]->return_type);

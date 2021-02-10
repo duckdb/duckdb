@@ -3,14 +3,12 @@
 
 namespace duckdb {
 
-using namespace duckdb_libpgquery;
-
-unique_ptr<CallStatement> Transformer::TransformCall(PGNode *node) {
-	auto stmt = reinterpret_cast<PGCallStmt *>(node);
+unique_ptr<CallStatement> Transformer::TransformCall(duckdb_libpgquery::PGNode *node) {
+	auto stmt = reinterpret_cast<duckdb_libpgquery::PGCallStmt *>(node);
 	D_ASSERT(stmt);
 
 	auto result = make_unique<CallStatement>();
-	result->function = TransformFuncCall((PGFuncCall *)stmt->func);
+	result->function = TransformFuncCall((duckdb_libpgquery::PGFuncCall *)stmt->func);
 	return result;
 }
 

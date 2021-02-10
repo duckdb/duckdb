@@ -4,15 +4,15 @@ namespace duckdb {
 
 class PhysicalChunkScanState : public PhysicalOperatorState {
 public:
-	PhysicalChunkScanState(PhysicalOperator &op) : PhysicalOperatorState(op, nullptr), chunk_index(0) {
+	explicit PhysicalChunkScanState(PhysicalOperator &op) : PhysicalOperatorState(op, nullptr), chunk_index(0) {
 	}
 
 	//! The current position in the scan
 	idx_t chunk_index;
 };
 
-void PhysicalChunkScan::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
-	auto state = (PhysicalChunkScanState *)state_;
+void PhysicalChunkScan::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
+	auto state = (PhysicalChunkScanState *)state_p;
 	D_ASSERT(collection);
 	if (collection->Count() == 0) {
 		return;

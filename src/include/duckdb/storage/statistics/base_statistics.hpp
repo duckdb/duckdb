@@ -20,10 +20,8 @@ class Vector;
 
 class BaseStatistics {
 public:
-	BaseStatistics(LogicalType type) : type(type), has_null(false) {
-	}
-	virtual ~BaseStatistics() {
-	}
+	explicit BaseStatistics(LogicalType type);
+	virtual ~BaseStatistics();
 
 	//! The type of the logical segment
 	LogicalType type;

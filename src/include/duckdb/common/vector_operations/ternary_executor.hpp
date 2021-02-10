@@ -134,8 +134,8 @@ private:
 			return SelectLoopSelSwitch<A_TYPE, B_TYPE, C_TYPE, OP, false>(adata, bdata, cdata, sel, count, true_sel,
 			                                                              false_sel);
 		} else {
-			return SelectLoopSelSwitch<A_TYPE, B_TYPE, C_TYPE, OP, false>(adata, bdata, cdata, sel, count, true_sel,
-			                                                              false_sel);
+			return SelectLoopSelSwitch<A_TYPE, B_TYPE, C_TYPE, OP, true>(adata, bdata, cdata, sel, count, true_sel,
+			                                                             false_sel);
 		}
 	}
 
@@ -144,7 +144,7 @@ public:
 	static idx_t Select(Vector &a, Vector &b, Vector &c, const SelectionVector *sel, idx_t count,
 	                    SelectionVector *true_sel, SelectionVector *false_sel) {
 		if (!sel) {
-			sel = &FlatVector::IncrementalSelectionVector;
+			sel = &FlatVector::INCREMENTAL_SELECTION_VECTOR;
 		}
 		VectorData adata, bdata, cdata;
 		a.Orrify(count, adata);

@@ -16,7 +16,7 @@ namespace duckdb {
 struct VariableReturnBindData : public FunctionData {
 	LogicalType stype;
 
-	VariableReturnBindData(LogicalType stype) : stype(stype) {
+	explicit VariableReturnBindData(LogicalType stype) : stype(stype) {
 	}
 
 	unique_ptr<FunctionData> Copy() override {

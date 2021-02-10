@@ -7,25 +7,25 @@
 namespace duckdb {
 
 struct CurrentSettingBindData : public FunctionData {
+	explicit CurrentSettingBindData(Value value_p) : value(move(value_p)) {
+	}
 
 	Value value;
 
-	CurrentSettingBindData(Value value_p) : value(value_p) {
-	}
-
+public:
 	unique_ptr<FunctionData> Copy() override {
 		return make_unique<CurrentSettingBindData>(value);
 	}
 };
 
-static void current_setting_function(DataChunk &args, ExpressionState &state, Vector &result) {
+static void CurrentSettingFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (CurrentSettingBindData &)*func_expr.bind_info;
 	result.Reference(info.value);
 }
 
-unique_ptr<FunctionData> current_setting_bind(ClientContext &context, ScalarFunction &bound_function,
-                                              vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> CurrentSettingBind(ClientContext &context, ScalarFunction &bound_function,
+                                            vector<unique_ptr<Expression>> &arguments) {
 
 	auto &key_child = arguments[0];
 
@@ -49,8 +49,8 @@ unique_ptr<FunctionData> current_setting_bind(ClientContext &context, ScalarFunc
 }
 
 void CurrentSettingFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("current_setting", {LogicalType::VARCHAR}, LogicalType::ANY,
-	                               current_setting_function, false, current_setting_bind));
+	set.AddFunction(ScalarFunction("current_setting", {LogicalType::VARCHAR}, LogicalType::ANY, CurrentSettingFunction,
+	                               false, CurrentSettingBind));
 }
 
 } // namespace duckdb

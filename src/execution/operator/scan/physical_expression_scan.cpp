@@ -17,8 +17,8 @@ public:
 };
 
 void PhysicalExpressionScan::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
-                                              PhysicalOperatorState *state_) {
-	auto state = (PhysicalExpressionScanState *)state_;
+                                              PhysicalOperatorState *state_p) {
+	auto state = (PhysicalExpressionScanState *)state_p;
 	if (state->expression_index >= expressions.size()) {
 		// finished executing all expression lists
 		return;

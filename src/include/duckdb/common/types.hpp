@@ -31,7 +31,7 @@ public:
 
 public:
 	hugeint_t() = default;
-	hugeint_t(int64_t value);
+	hugeint_t(int64_t value); // NOLINT: Allow implicit conversion from `int64_t`
 	hugeint_t(const hugeint_t &rhs) = default;
 	hugeint_t(hugeint_t &&rhs) = default;
 	hugeint_t &operator=(const hugeint_t &rhs) = default;
@@ -260,7 +260,7 @@ enum class LogicalTypeId : uint8_t {
 
 struct LogicalType {
 	LogicalType();
-	LogicalType(LogicalTypeId id);
+	LogicalType(LogicalTypeId id); // NOLINT: Allow implicit conversion from `LogicalTypeId`
 	LogicalType(LogicalTypeId id, string collation);
 	LogicalType(LogicalTypeId id, uint8_t width, uint8_t scale);
 	LogicalType(LogicalTypeId id, child_list_t<LogicalType> child_types);
@@ -304,7 +304,7 @@ struct LogicalType {
 	bool IsMoreGenericThan(LogicalType &other) const;
 	hash_t Hash() const;
 
-	static LogicalType MaxLogicalType(LogicalType left, LogicalType right);
+	static LogicalType MaxLogicalType(const LogicalType &left, const LogicalType &right);
 
 	//! Gets the decimal properties of a numeric type. Fails if the type is not numeric.
 	bool GetDecimalProperties(uint8_t &width, uint8_t &scale) const;
@@ -361,7 +361,7 @@ public:
 
 string LogicalTypeIdToString(LogicalTypeId type);
 
-LogicalType TransformStringToLogicalType(string str);
+LogicalType TransformStringToLogicalType(const string &str);
 
 //! Returns the PhysicalType for the given type
 template <class T>

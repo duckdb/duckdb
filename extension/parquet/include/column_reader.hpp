@@ -28,8 +28,8 @@ typedef nullmask_t parquet_filter_t;
 class ColumnReader {
 
 public:
-	static unique_ptr<ColumnReader> CreateReader(LogicalType type_p, const SchemaElement &schema_p, idx_t schema_idx_p,
-	                                             idx_t max_define, idx_t max_repeat);
+	static unique_ptr<ColumnReader> CreateReader(const LogicalType &type_p, const SchemaElement &schema_p,
+	                                             idx_t schema_idx_p, idx_t max_define, idx_t max_repeat);
 
 	ColumnReader(LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p, idx_t max_define_p,
 	             idx_t max_repeat_p)
@@ -86,7 +86,7 @@ public:
 		if (Type().id() == LogicalTypeId::LIST || Type().id() == LogicalTypeId::STRUCT) {
 			return nullptr;
 		}
-		return parquet_transform_column_statistics(Schema(), Type(), columns[file_idx]);
+		return ParquetTransformColumnStatistics(Schema(), Type(), columns[file_idx]);
 	}
 
 protected:

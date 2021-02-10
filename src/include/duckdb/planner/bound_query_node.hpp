@@ -17,7 +17,7 @@ namespace duckdb {
 //! Bound equivalent of QueryNode
 class BoundQueryNode {
 public:
-	BoundQueryNode(QueryNodeType type) : type(type) {
+	explicit BoundQueryNode(QueryNodeType type) : type(type) {
 	}
 	virtual ~BoundQueryNode() {
 	}

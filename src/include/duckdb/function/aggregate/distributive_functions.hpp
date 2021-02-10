@@ -73,7 +73,7 @@ struct ArgMaxFun {
 };
 
 struct FirstFun {
-	static AggregateFunction GetFunction(LogicalType type);
+	static AggregateFunction GetFunction(const LogicalType &type);
 
 	static void RegisterFunction(BuiltinFunctions &set);
 };

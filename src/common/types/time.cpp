@@ -121,7 +121,7 @@ dtime_t Time::FromCString(const char *buf, idx_t len, bool strict) {
 	return result;
 }
 
-dtime_t Time::FromString(string str, bool strict) {
+dtime_t Time::FromString(const string &str, bool strict) {
 	return Time::FromCString(str.c_str(), str.size(), strict);
 }
 

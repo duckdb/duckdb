@@ -14,7 +14,7 @@ namespace duckdb {
 // AND/OR
 //===--------------------------------------------------------------------===//
 template <class OP>
-static void templated_boolean_nullmask(Vector &left, Vector &right, Vector &result, idx_t count) {
+static void TemplatedBooleanNullmask(Vector &left, Vector &right, Vector &result, idx_t count) {
 	D_ASSERT(left.type.id() == LogicalTypeId::BOOLEAN && right.type.id() == LogicalTypeId::BOOLEAN &&
 	         result.type.id() == LogicalTypeId::BOOLEAN);
 
@@ -105,7 +105,7 @@ struct TernaryAnd {
 };
 
 void VectorOperations::And(Vector &left, Vector &right, Vector &result, idx_t count) {
-	templated_boolean_nullmask<TernaryAnd>(left, right, result, count);
+	TemplatedBooleanNullmask<TernaryAnd>(left, right, result, count);
 }
 
 /*
@@ -158,7 +158,7 @@ struct TernaryOr {
 };
 
 void VectorOperations::Or(Vector &left, Vector &right, Vector &result, idx_t count) {
-	templated_boolean_nullmask<TernaryOr>(left, right, result, count);
+	TemplatedBooleanNullmask<TernaryOr>(left, right, result, count);
 }
 
 struct NotOperator {

@@ -8,7 +8,7 @@
 
 namespace duckdb {
 
-ValueRelation::ValueRelation(ClientContext &context, vector<vector<Value>> values, vector<string> names_p,
+ValueRelation::ValueRelation(ClientContext &context, const vector<vector<Value>> &values, vector<string> names_p,
                              string alias_p)
     : Relation(context, RelationType::VALUE_LIST_RELATION), names(move(names_p)), alias(move(alias_p)) {
 	// create constant expressions for the values
@@ -23,7 +23,7 @@ ValueRelation::ValueRelation(ClientContext &context, vector<vector<Value>> value
 	context.TryBindRelation(*this, this->columns);
 }
 
-ValueRelation::ValueRelation(ClientContext &context, string values_list, vector<string> names_p, string alias_p)
+ValueRelation::ValueRelation(ClientContext &context, const string &values_list, vector<string> names_p, string alias_p)
     : Relation(context, RelationType::VALUE_LIST_RELATION), names(move(names_p)), alias(move(alias_p)) {
 	this->expressions = Parser::ParseValuesList(values_list);
 	context.TryBindRelation(*this, this->columns);
@@ -39,7 +39,7 @@ unique_ptr<QueryNode> ValueRelation::GetQueryNode() {
 unique_ptr<TableRef> ValueRelation::GetTableRef() {
 	auto table_ref = make_unique<ExpressionListRef>();
 	// set the expected types/names
-	if (columns.size() == 0) {
+	if (columns.empty()) {
 		// no columns yet: only set up names
 		for (idx_t i = 0; i < names.size(); i++) {
 			table_ref->expected_names.push_back(names[i]);
@@ -54,6 +54,7 @@ unique_ptr<TableRef> ValueRelation::GetTableRef() {
 	// copy the expressions
 	for (auto &expr_list : expressions) {
 		vector<unique_ptr<ParsedExpression>> copied_list;
+		copied_list.reserve(expr_list.size());
 		for (auto &expr : expr_list) {
 			copied_list.push_back(expr->Copy());
 		}

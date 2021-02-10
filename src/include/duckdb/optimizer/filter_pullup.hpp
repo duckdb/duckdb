@@ -18,11 +18,12 @@ namespace duckdb {
 
 class FilterPullup {
 public:
-	FilterPullup(bool pullup = false, bool add_column = false) : can_pullup(pullup), can_add_column(add_column) {
+	explicit FilterPullup(bool pullup = false, bool add_column = false)
+	    : can_pullup(pullup), can_add_column(add_column) {
 	}
 
 	//! Perform filter pullup
-	unique_ptr<LogicalOperator> Rewrite(unique_ptr<LogicalOperator> node);
+	unique_ptr<LogicalOperator> Rewrite(unique_ptr<LogicalOperator> op);
 
 private:
 	vector<unique_ptr<Expression>> filters_expr_pullup;

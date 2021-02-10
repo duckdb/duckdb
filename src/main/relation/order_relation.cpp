@@ -15,7 +15,7 @@ unique_ptr<QueryNode> OrderRelation::GetQueryNode() {
 	auto child_node = child->GetQueryNode();
 	auto order_node = make_unique<OrderModifier>();
 	for (idx_t i = 0; i < orders.size(); i++) {
-		order_node->orders.push_back(OrderByNode(orders[i].type, orders[i].null_order, orders[i].expression->Copy()));
+		order_node->orders.emplace_back(orders[i].type, orders[i].null_order, orders[i].expression->Copy());
 	}
 	child_node->modifiers.push_back(move(order_node));
 	return child_node;

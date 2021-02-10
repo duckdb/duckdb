@@ -17,8 +17,8 @@ class DatabaseInstance;
 
 class PersistentSegment : public ColumnSegment {
 public:
-	PersistentSegment(DatabaseInstance &db, block_id_t id, idx_t offset, LogicalType type, idx_t start, idx_t count,
-	                  unique_ptr<BaseStatistics> statistics);
+	PersistentSegment(DatabaseInstance &db, block_id_t id, idx_t offset, const LogicalType &type, idx_t start,
+	                  idx_t count, unique_ptr<BaseStatistics> statistics);
 
 	//! The storage manager
 	DatabaseInstance &db;
@@ -44,7 +44,7 @@ public:
 	                idx_t &approved_tuple_count) override;
 	//! Executes the filters directly in the table's data
 	void Select(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
-	            idx_t &approved_tuple_count, vector<TableFilter> &tableFilter) override;
+	            idx_t &approved_tuple_count, vector<TableFilter> &table_filter) override;
 	//! Fetch the base table vector index that belongs to this row
 	void Fetch(ColumnScanState &state, idx_t vector_index, Vector &result) override;
 	//! Fetch a value of the specific row id and append it to the result

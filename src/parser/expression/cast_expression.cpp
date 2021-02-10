@@ -5,7 +5,7 @@
 namespace duckdb {
 
 CastExpression::CastExpression(LogicalType target, unique_ptr<ParsedExpression> child)
-    : ParsedExpression(ExpressionType::OPERATOR_CAST, ExpressionClass::CAST), cast_type(target) {
+    : ParsedExpression(ExpressionType::OPERATOR_CAST, ExpressionClass::CAST), cast_type(move(target)) {
 	D_ASSERT(child);
 	this->child = move(child);
 }

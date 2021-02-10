@@ -43,8 +43,9 @@ bool StringUtil::StartsWith(string str, string prefix) {
 }
 
 bool StringUtil::EndsWith(const string &str, const string &suffix) {
-	if (suffix.size() > str.size())
+	if (suffix.size() > str.size()) {
 		return false;
+	}
 	return equal(suffix.rbegin(), suffix.rend(), str.rbegin());
 }
 
@@ -65,7 +66,7 @@ vector<string> StringUtil::Split(const string &str, char delimiter) {
 	string temp;
 	while (getline(ss, temp, delimiter)) {
 		lines.push_back(temp);
-	} // WHILE
+	}
 	return (lines);
 }
 
@@ -75,33 +76,35 @@ string StringUtil::Join(const vector<string> &input, const string &separator) {
 
 string StringUtil::Prefix(const string &str, const string &prefix) {
 	vector<string> lines = StringUtil::Split(str, '\n');
-	if (lines.empty())
+	if (lines.empty()) {
 		return ("");
+	}
 
 	std::ostringstream os;
 	for (idx_t i = 0, cnt = lines.size(); i < cnt; i++) {
-		if (i > 0)
+		if (i > 0) {
 			os << std::endl;
+		}
 		os << prefix << lines[i];
-	} // FOR
+	}
 	return (os.str());
 }
 
 // http://ubuntuforums.org/showpost.php?p=10215516&postcount=5
 string StringUtil::FormatSize(idx_t bytes) {
-	double BASE = 1024;
-	double KB = BASE;
-	double MB = KB * BASE;
-	double GB = MB * BASE;
+	double multiplier = 1024;
+	double kilobytes = multiplier;
+	double megabytes = multiplier * kilobytes;
+	double gigabytes = multiplier * megabytes;
 
 	std::ostringstream os;
 
-	if (bytes >= GB) {
-		os << std::fixed << std::setprecision(2) << (bytes / GB) << " GB";
-	} else if (bytes >= MB) {
-		os << std::fixed << std::setprecision(2) << (bytes / MB) << " MB";
-	} else if (bytes >= KB) {
-		os << std::fixed << std::setprecision(2) << (bytes / KB) << " KB";
+	if (bytes >= gigabytes) {
+		os << std::fixed << std::setprecision(2) << (bytes / gigabytes) << " GB";
+	} else if (bytes >= megabytes) {
+		os << std::fixed << std::setprecision(2) << (bytes / megabytes) << " MB";
+	} else if (bytes >= kilobytes) {
+		os << std::fixed << std::setprecision(2) << (bytes / kilobytes) << " KB";
 	} else {
 		os << to_string(bytes) + " bytes";
 	}
@@ -143,9 +146,9 @@ vector<string> StringUtil::Split(const string &input, const string &split) {
 }
 
 string StringUtil::Replace(string source, const string &from, const string &to) {
-	if (from.empty())
+	if (from.empty()) {
 		return source;
-	;
+	}
 	idx_t start_pos = 0;
 	while ((start_pos = source.find(from, start_pos)) != string::npos) {
 		source.replace(start_pos, from.length(), to);
@@ -156,7 +159,7 @@ string StringUtil::Replace(string source, const string &from, const string &to) 
 }
 
 vector<string> StringUtil::TopNStrings(vector<pair<string, idx_t>> scores, idx_t n, idx_t threshold) {
-	if (scores.size() == 0) {
+	if (scores.empty()) {
 		return vector<string>();
 	}
 	sort(scores.begin(), scores.end(),
@@ -177,15 +180,15 @@ struct LevenshteinArray {
 		dist = unique_ptr<idx_t[]>(new idx_t[len1 * len2]);
 	}
 
-	idx_t &score(idx_t i, idx_t j) {
-		return dist[get_index(i, j)];
+	idx_t &Score(idx_t i, idx_t j) {
+		return dist[GetIndex(i, j)];
 	}
 
 private:
 	idx_t len1;
 	unique_ptr<idx_t[]> dist;
 
-	idx_t get_index(idx_t i, idx_t j) {
+	idx_t GetIndex(idx_t i, idx_t j) {
 		return j * len1 + i;
 	}
 };
@@ -201,12 +204,12 @@ idx_t StringUtil::LevenshteinDistance(const string &s1, const string &s2) {
 		return len1;
 	}
 	LevenshteinArray array(len1 + 1, len2 + 1);
-	array.score(0, 0) = 0;
+	array.Score(0, 0) = 0;
 	for (idx_t i = 0; i <= len1; i++) {
-		array.score(i, 0) = i;
+		array.Score(i, 0) = i;
 	}
 	for (idx_t j = 0; j <= len2; j++) {
-		array.score(0, j) = j;
+		array.Score(0, j) = j;
 	}
 	for (idx_t i = 1; i <= len1; i++) {
 		for (idx_t j = 1; j <= len2; j++) {
@@ -214,28 +217,30 @@ idx_t StringUtil::LevenshteinDistance(const string &s1, const string &s2) {
 			//                      d[i][j - 1] + 1,
 			//                      d[i - 1][j - 1] + (s1[i - 1] == s2[j - 1] ? 0 : 1) });
 			int equal = s1[i - 1] == s2[j - 1] ? 0 : 1;
-			idx_t adjacent_score1 = array.score(i - 1, j) + 1;
-			idx_t adjacent_score2 = array.score(i, j - 1) + 1;
-			idx_t adjacent_score3 = array.score(i - 1, j - 1) + equal;
+			idx_t adjacent_score1 = array.Score(i - 1, j) + 1;
+			idx_t adjacent_score2 = array.Score(i, j - 1) + 1;
+			idx_t adjacent_score3 = array.Score(i - 1, j - 1) + equal;
 
 			idx_t t = MinValue<idx_t>(adjacent_score1, adjacent_score2);
-			array.score(i, j) = MinValue<idx_t>(t, adjacent_score3);
+			array.Score(i, j) = MinValue<idx_t>(t, adjacent_score3);
 		}
 	}
-	return array.score(len1, len2);
+	return array.Score(len1, len2);
 }
 
-vector<string> StringUtil::TopNLevenshtein(vector<string> strings, const string &target, idx_t n, idx_t threshold) {
+vector<string> StringUtil::TopNLevenshtein(const vector<string> &strings, const string &target, idx_t n,
+                                           idx_t threshold) {
 	vector<pair<string, idx_t>> scores;
+	scores.reserve(strings.size());
 	for (auto &str : strings) {
-		scores.push_back(make_pair(str, LevenshteinDistance(str, target)));
+		scores.emplace_back(str, LevenshteinDistance(str, target));
 	}
 	return TopNStrings(scores, n, threshold);
 }
 
-string StringUtil::CandidatesMessage(const vector<string> &candidates, string candidate) {
+string StringUtil::CandidatesMessage(const vector<string> &candidates, const string &candidate) {
 	string result_str;
-	if (candidates.size() > 0) {
+	if (!candidates.empty()) {
 		result_str = "\n" + candidate + ": ";
 		for (idx_t i = 0; i < candidates.size(); i++) {
 			if (i > 0) {

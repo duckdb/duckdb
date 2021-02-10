@@ -123,7 +123,7 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		auto null_order =
 		    order.null_order == OrderByNullType::ORDER_DEFAULT ? config.default_null_order : order.null_order;
 		auto expression = GetExpression(order.expression);
-		result->orders.push_back(BoundOrderByNode(type, null_order, move(expression)));
+		result->orders.emplace_back(type, null_order, move(expression));
 	}
 	result->start_expr = GetExpression(window.start_expr);
 	result->end_expr = GetExpression(window.end_expr);

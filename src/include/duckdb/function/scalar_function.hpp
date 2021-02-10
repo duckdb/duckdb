@@ -58,7 +58,8 @@ public:
 	//! The statistics propagation function (if any)
 	function_statistics_t statistics;
 
-	static unique_ptr<BoundFunctionExpression> BindScalarFunction(ClientContext &context, string schema, string name,
+	static unique_ptr<BoundFunctionExpression> BindScalarFunction(ClientContext &context, const string &schema,
+	                                                              const string &name,
 	                                                              vector<unique_ptr<Expression>> children,
 	                                                              string &error, bool is_operator = false);
 	static unique_ptr<BoundFunctionExpression> BindScalarFunction(ClientContext &context,

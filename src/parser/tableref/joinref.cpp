@@ -5,11 +5,11 @@
 
 namespace duckdb {
 
-bool JoinRef::Equals(const TableRef *other_) const {
-	if (!TableRef::Equals(other_)) {
+bool JoinRef::Equals(const TableRef *other_p) const {
+	if (!TableRef::Equals(other_p)) {
 		return false;
 	}
-	auto other = (JoinRef *)other_;
+	auto other = (JoinRef *)other_p;
 	if (using_columns.size() != other->using_columns.size()) {
 		return false;
 	}

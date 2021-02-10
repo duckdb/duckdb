@@ -31,8 +31,8 @@ class Appender {
 	idx_t column = 0;
 
 public:
-	DUCKDB_API Appender(Connection &con, string schema_name, string table_name);
-	DUCKDB_API Appender(Connection &con, string table_name);
+	DUCKDB_API Appender(Connection &con, const string &schema_name, const string &table_name);
+	DUCKDB_API Appender(Connection &con, const string &table_name);
 	DUCKDB_API ~Appender();
 
 	//! Begins a new row append, after calling this the other AppendX() functions
@@ -87,7 +87,7 @@ private:
 		AppendRowRecursive(args...);
 	}
 
-	void AppendValue(Value value);
+	void AppendValue(const Value &value);
 };
 
 template <>

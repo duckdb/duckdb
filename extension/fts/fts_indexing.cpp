@@ -8,11 +8,11 @@
 
 namespace duckdb {
 
-static string fts_schema_name(string schema, string table) {
+static string fts_schema_name(const string &schema, const string &table) {
 	return "fts_" + schema + "_" + table;
 }
 
-string drop_fts_index_query(ClientContext &context, FunctionParameters parameters) {
+string drop_fts_index_query(ClientContext &context, const FunctionParameters &parameters) {
 	auto qname = QualifiedName::Parse(parameters.values[0].str_value);
 	qname.schema = qname.schema == INVALID_SCHEMA ? DEFAULT_SCHEMA : qname.schema;
 	string fts_schema = fts_schema_name(qname.schema, qname.name);
@@ -27,8 +27,9 @@ string drop_fts_index_query(ClientContext &context, FunctionParameters parameter
 	return "DROP SCHEMA " + fts_schema + " CASCADE;";
 }
 
-static string indexing_script(string input_schema, string input_table, string input_id, vector<string> input_values,
-                              string stemmer, string stopwords, string ignore, bool strip_accents, bool lower) {
+static string indexing_script(const string &input_schema, const string &input_table, const string &input_id,
+                              const vector<string> &input_values, const string &stemmer, const string &stopwords,
+                              const string &ignore, bool strip_accents, bool lower) {
 	// clang-format off
     string result = R"(
         DROP SCHEMA IF EXISTS %fts_schema% CASCADE;
@@ -233,7 +234,7 @@ void check_exists(ClientContext &context, QualifiedName &qname) {
 	catalog.GetEntry<TableCatalogEntry>(context, qname.schema, qname.name);
 }
 
-string create_fts_index_query(ClientContext &context, FunctionParameters parameters) {
+string create_fts_index_query(ClientContext &context, const FunctionParameters &parameters) {
 	auto qname = QualifiedName::Parse(parameters.values[0].str_value);
 	qname.schema = qname.schema == INVALID_SCHEMA ? DEFAULT_SCHEMA : qname.schema;
 	check_exists(context, qname);
@@ -241,12 +242,15 @@ string create_fts_index_query(ClientContext &context, FunctionParameters paramet
 
 	// get named parameters
 	string stemmer = "porter";
-	if (parameters.named_parameters.find("stemmer") != parameters.named_parameters.end()) {
-		stemmer = parameters.named_parameters["stemmer"].str_value;
+	auto stemmer_entry = parameters.named_parameters.find("stemmer");
+	if (stemmer_entry != parameters.named_parameters.end()) {
+		stemmer = stemmer_entry->second.str_value;
 	}
 	string stopwords = "english";
-	if (parameters.named_parameters.find("stopwords") != parameters.named_parameters.end()) {
-		stopwords = parameters.named_parameters["stopwords"].str_value;
+
+	auto stopword_entry = parameters.named_parameters.find("stopwords");
+	if (stopword_entry != parameters.named_parameters.end()) {
+		stopwords = stopword_entry->second.str_value;
 		if (stopwords != "english" && stopwords != "none") {
 			auto stopwords_qname = QualifiedName::Parse(stopwords);
 			stopwords_qname.schema = stopwords_qname.schema == INVALID_SCHEMA ? DEFAULT_SCHEMA : stopwords_qname.schema;
@@ -254,20 +258,24 @@ string create_fts_index_query(ClientContext &context, FunctionParameters paramet
 		}
 	}
 	string ignore = "(\\\\.|[^a-z])+";
-	if (parameters.named_parameters.find("ignore") != parameters.named_parameters.end()) {
-		ignore = parameters.named_parameters["ignore"].str_value;
+	auto ignore_entry = parameters.named_parameters.find("ignore");
+	if (ignore_entry != parameters.named_parameters.end()) {
+		ignore = ignore_entry->second.str_value;
 	}
 	bool strip_accents = true;
-	if (parameters.named_parameters.find("strip_accents") != parameters.named_parameters.end()) {
-		strip_accents = parameters.named_parameters["strip_accents"].value_.boolean;
+	auto strip_accents_entry = parameters.named_parameters.find("strip_accents");
+	if (strip_accents_entry != parameters.named_parameters.end()) {
+		strip_accents = strip_accents_entry->second.value_.boolean;
 	}
 	bool lower = true;
-	if (parameters.named_parameters.find("lower") != parameters.named_parameters.end()) {
-		lower = parameters.named_parameters["lower"].value_.boolean;
+	auto lower_entry = parameters.named_parameters.find("lower");
+	if (lower_entry != parameters.named_parameters.end()) {
+		lower = lower_entry->second.value_.boolean;
 	}
 	bool overwrite = false;
-	if (parameters.named_parameters.find("overwrite") != parameters.named_parameters.end()) {
-		overwrite = parameters.named_parameters["overwrite"].value_.boolean;
+	auto overwrite_entry = parameters.named_parameters.find("overwrite");
+	if (overwrite_entry != parameters.named_parameters.end()) {
+		overwrite = overwrite_entry->second.value_.boolean;
 	}
 
 	// throw error if an index already exists on this table

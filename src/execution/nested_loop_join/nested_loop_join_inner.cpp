@@ -143,9 +143,9 @@ struct RefineNestedLoopJoin {
 };
 
 template <class NLTYPE, class OP>
-static idx_t nested_loop_join_inner_operator(Vector &left, Vector &right, idx_t left_size, idx_t right_size,
-                                             idx_t &lpos, idx_t &rpos, SelectionVector &lvector,
-                                             SelectionVector &rvector, idx_t current_match_count) {
+static idx_t NestedLoopJoinTypeSwitch(Vector &left, Vector &right, idx_t left_size, idx_t right_size, idx_t &lpos,
+                                      idx_t &rpos, SelectionVector &lvector, SelectionVector &rvector,
+                                      idx_t current_match_count) {
 	switch (left.type.InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
@@ -193,9 +193,9 @@ static idx_t nested_loop_join_inner_operator(Vector &left, Vector &right, idx_t 
 }
 
 template <class NLTYPE, class OP>
-static idx_t distinct_nested_loop_join_inner_operator(Vector &left, Vector &right, idx_t left_size, idx_t right_size,
-                                                      idx_t &lpos, idx_t &rpos, SelectionVector &lvector,
-                                                      SelectionVector &rvector, idx_t current_match_count) {
+static idx_t DistinctNestedLoopJoinTypeSwitch(Vector &left, Vector &right, idx_t left_size, idx_t right_size,
+                                              idx_t &lpos, idx_t &rpos, SelectionVector &lvector,
+                                              SelectionVector &rvector, idx_t current_match_count) {
 	switch (left.type.InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
@@ -237,31 +237,31 @@ static idx_t distinct_nested_loop_join_inner_operator(Vector &left, Vector &righ
 }
 
 template <class NLTYPE>
-idx_t nested_loop_join_inner(Vector &left, Vector &right, idx_t left_size, idx_t right_size, idx_t &lpos, idx_t &rpos,
-                             SelectionVector &lvector, SelectionVector &rvector, idx_t current_match_count,
-                             ExpressionType comparison_type) {
+idx_t NestedLoopJoinComparisonSwitch(Vector &left, Vector &right, idx_t left_size, idx_t right_size, idx_t &lpos,
+                                     idx_t &rpos, SelectionVector &lvector, SelectionVector &rvector,
+                                     idx_t current_match_count, ExpressionType comparison_type) {
 	D_ASSERT(left.type == right.type);
 	switch (comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
-		return nested_loop_join_inner_operator<NLTYPE, duckdb::Equals>(left, right, left_size, right_size, lpos, rpos,
-		                                                               lvector, rvector, current_match_count);
+		return NestedLoopJoinTypeSwitch<NLTYPE, duckdb::Equals>(left, right, left_size, right_size, lpos, rpos, lvector,
+		                                                        rvector, current_match_count);
 	case ExpressionType::COMPARE_NOTEQUAL:
-		return nested_loop_join_inner_operator<NLTYPE, duckdb::NotEquals>(left, right, left_size, right_size, lpos,
-		                                                                  rpos, lvector, rvector, current_match_count);
+		return NestedLoopJoinTypeSwitch<NLTYPE, duckdb::NotEquals>(left, right, left_size, right_size, lpos, rpos,
+		                                                           lvector, rvector, current_match_count);
 	case ExpressionType::COMPARE_LESSTHAN:
-		return nested_loop_join_inner_operator<NLTYPE, duckdb::LessThan>(left, right, left_size, right_size, lpos, rpos,
-		                                                                 lvector, rvector, current_match_count);
+		return NestedLoopJoinTypeSwitch<NLTYPE, duckdb::LessThan>(left, right, left_size, right_size, lpos, rpos,
+		                                                          lvector, rvector, current_match_count);
 	case ExpressionType::COMPARE_GREATERTHAN:
-		return nested_loop_join_inner_operator<NLTYPE, duckdb::GreaterThan>(
-		    left, right, left_size, right_size, lpos, rpos, lvector, rvector, current_match_count);
+		return NestedLoopJoinTypeSwitch<NLTYPE, duckdb::GreaterThan>(left, right, left_size, right_size, lpos, rpos,
+		                                                             lvector, rvector, current_match_count);
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		return nested_loop_join_inner_operator<NLTYPE, duckdb::LessThanEquals>(
-		    left, right, left_size, right_size, lpos, rpos, lvector, rvector, current_match_count);
+		return NestedLoopJoinTypeSwitch<NLTYPE, duckdb::LessThanEquals>(left, right, left_size, right_size, lpos, rpos,
+		                                                                lvector, rvector, current_match_count);
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		return nested_loop_join_inner_operator<NLTYPE, duckdb::GreaterThanEquals>(
-		    left, right, left_size, right_size, lpos, rpos, lvector, rvector, current_match_count);
+		return NestedLoopJoinTypeSwitch<NLTYPE, duckdb::GreaterThanEquals>(left, right, left_size, right_size, lpos,
+		                                                                   rpos, lvector, rvector, current_match_count);
 	case ExpressionType::COMPARE_DISTINCT_FROM:
-		return distinct_nested_loop_join_inner_operator<NLTYPE, duckdb::DistinctFrom>(
+		return DistinctNestedLoopJoinTypeSwitch<NLTYPE, duckdb::DistinctFrom>(
 		    left, right, left_size, right_size, lpos, rpos, lvector, rvector, current_match_count);
 	default:
 		throw NotImplementedException("Unimplemented comparison type for join!");
@@ -277,7 +277,7 @@ idx_t NestedLoopJoinInner::Perform(idx_t &lpos, idx_t &rpos, DataChunk &left_con
 	}
 	// for the first condition, lvector and rvector are not set yet
 	// we initialize them using the InitialNestedLoopJoin
-	idx_t match_count = nested_loop_join_inner<InitialNestedLoopJoin>(
+	idx_t match_count = NestedLoopJoinComparisonSwitch<InitialNestedLoopJoin>(
 	    left_conditions.data[0], right_conditions.data[0], left_conditions.size(), right_conditions.size(), lpos, rpos,
 	    lvector, rvector, 0, conditions[0].comparison);
 	// now resolve the rest of the conditions
@@ -290,9 +290,9 @@ idx_t NestedLoopJoinInner::Perform(idx_t &lpos, idx_t &rpos, DataChunk &left_con
 		Vector &l = left_conditions.data[i];
 		Vector &r = right_conditions.data[i];
 		// then we refine the currently obtained results using the RefineNestedLoopJoin
-		match_count =
-		    nested_loop_join_inner<RefineNestedLoopJoin>(l, r, left_conditions.size(), right_conditions.size(), lpos,
-		                                                 rpos, lvector, rvector, match_count, conditions[i].comparison);
+		match_count = NestedLoopJoinComparisonSwitch<RefineNestedLoopJoin>(
+		    l, r, left_conditions.size(), right_conditions.size(), lpos, rpos, lvector, rvector, match_count,
+		    conditions[i].comparison);
 	}
 	return match_count;
 }

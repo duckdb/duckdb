@@ -104,7 +104,7 @@ public:
 		int lower_smaller_equals = lhs.lower <= rhs.lower;
 		return upper_smaller | (upper_equal & lower_smaller_equals);
 	}
-	static hugeint_t PowersOfTen[40];
+	static const hugeint_t POWERS_OF_TEN[40];
 };
 
 template <>

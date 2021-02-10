@@ -57,13 +57,13 @@ void ColumnData::FilterScan(Transaction &transaction, ColumnScanState &state, Ve
 }
 
 void ColumnData::Select(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
-                        idx_t &approved_tuple_count, vector<TableFilter> &tableFilter) {
+                        idx_t &approved_tuple_count, vector<TableFilter> &table_filter) {
 	if (!state.initialized) {
 		state.current->InitializeScan(state);
 		state.initialized = true;
 	}
 	// perform a scan of this segment
-	state.current->Select(transaction, state, result, sel, approved_tuple_count, tableFilter);
+	state.current->Select(transaction, state, result, sel, approved_tuple_count, table_filter);
 	// move over to the next vector
 	state.Next();
 }
@@ -102,7 +102,7 @@ void TableScanState::NextVector() {
 
 void ColumnData::InitializeAppend(ColumnAppendState &state) {
 	lock_guard<mutex> tree_lock(data.node_lock);
-	if (data.nodes.size() == 0) {
+	if (data.nodes.empty()) {
 		// no transient segments yet, append one
 		AppendTransientSegment(persistent_rows);
 	}

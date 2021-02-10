@@ -80,7 +80,7 @@ unique_ptr<CreateViewInfo> ViewCatalogEntry::Deserialize(Deserializer &source) {
 }
 
 string ViewCatalogEntry::ToSQL() {
-	if (sql.size() == 0) {
+	if (sql.empty()) {
 		throw NotImplementedException("Cannot convert VIEW to SQL because it was not created with a SQL statement");
 	}
 	return sql + "\n;";
