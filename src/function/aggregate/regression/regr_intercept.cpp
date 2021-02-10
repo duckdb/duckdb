@@ -29,7 +29,7 @@ struct RegrInterceptOperation {
 		state->sum_x += y_data[yidx];
 		state->sum_y += x_data[xidx];
 		RegrSlopeOperation::Operation<A_TYPE, B_TYPE, RegrSlopeState, OP>(&state->slope, bind_data, x_data, y_data,
-		                                                                      anullmask, bnullmask, xidx, yidx);
+		                                                                  anullmask, bnullmask, xidx, yidx);
 	}
 
 	template <class STATE, class OP>

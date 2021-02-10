@@ -34,12 +34,10 @@ struct CorrOperation {
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
 	static void Operation(STATE *state, FunctionData *bind_data, A_TYPE *x_data, B_TYPE *y_data, nullmask_t &anullmask,
 	                      nullmask_t &bnullmask, idx_t xidx, idx_t yidx) {
-		CovarOperation::Operation<A_TYPE, B_TYPE, CovarState, OP>(&state->cov_pop, bind_data, x_data, y_data,
-		                                                             anullmask, bnullmask, xidx, yidx);
-		STDDevBaseOperation::Operation<A_TYPE, StddevState, OP>(&state->dev_pop_x, bind_data, x_data, anullmask,
-		                                                           xidx);
-		STDDevBaseOperation::Operation<B_TYPE, StddevState, OP>(&state->dev_pop_y, bind_data, y_data, bnullmask,
-		                                                           yidx);
+		CovarOperation::Operation<A_TYPE, B_TYPE, CovarState, OP>(&state->cov_pop, bind_data, x_data, y_data, anullmask,
+		                                                          bnullmask, xidx, yidx);
+		STDDevBaseOperation::Operation<A_TYPE, StddevState, OP>(&state->dev_pop_x, bind_data, x_data, anullmask, xidx);
+		STDDevBaseOperation::Operation<B_TYPE, StddevState, OP>(&state->dev_pop_y, bind_data, y_data, bnullmask, yidx);
 	}
 
 	template <class STATE, class OP>

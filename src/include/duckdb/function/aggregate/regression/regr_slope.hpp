@@ -27,8 +27,8 @@ struct RegrSlopeOperation {
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
 	static void Operation(STATE *state, FunctionData *bind_data, A_TYPE *x_data, B_TYPE *y_data, nullmask_t &anullmask,
 	                      nullmask_t &bnullmask, idx_t xidx, idx_t yidx) {
-		CovarOperation::Operation<A_TYPE, B_TYPE, CovarState, OP>(&state->cov_pop, bind_data, y_data, x_data,
-		                                                             bnullmask, anullmask, yidx, xidx);
+		CovarOperation::Operation<A_TYPE, B_TYPE, CovarState, OP>(&state->cov_pop, bind_data, y_data, x_data, bnullmask,
+		                                                          anullmask, yidx, xidx);
 		STDDevBaseOperation::Operation<A_TYPE, StddevState, OP>(&state->var_pop, bind_data, y_data, bnullmask, yidx);
 	}
 

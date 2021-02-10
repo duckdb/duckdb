@@ -24,8 +24,8 @@ struct RegrSXYOperation {
 	                      nullmask_t &bnullmask, idx_t xidx, idx_t yidx) {
 		RegrCountFunction::Operation<A_TYPE, B_TYPE, size_t, OP>(&state->count, bind_data, y_data, x_data, bnullmask,
 		                                                         anullmask, yidx, xidx);
-		CovarOperation::Operation<A_TYPE, B_TYPE, CovarState, OP>(&state->cov_pop, bind_data, x_data, y_data,
-		                                                             anullmask, bnullmask, xidx, yidx);
+		CovarOperation::Operation<A_TYPE, B_TYPE, CovarState, OP>(&state->cov_pop, bind_data, x_data, y_data, anullmask,
+		                                                          bnullmask, xidx, yidx);
 	}
 
 	template <class STATE, class OP>

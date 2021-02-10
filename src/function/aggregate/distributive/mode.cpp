@@ -177,9 +177,8 @@ AggregateFunction GetModeFunction(PhysicalType type) {
 		return AggregateFunction::UnaryAggregateDestructor<ModeState<double>, double, double, ModeFunction>(
 		    LogicalType::DOUBLE, LogicalType::DOUBLE);
 	case PhysicalType::VARCHAR:
-		return AggregateFunction::UnaryAggregateDestructor<ModeState<string>, string_t, string_t,
-		                                                   ModeFunctionString>(LogicalType::VARCHAR,
-		                                                                       LogicalType::VARCHAR);
+		return AggregateFunction::UnaryAggregateDestructor<ModeState<string>, string_t, string_t, ModeFunctionString>(
+		    LogicalType::VARCHAR, LogicalType::VARCHAR);
 
 	default:
 		throw NotImplementedException("Unimplemented mode aggregate");

@@ -108,13 +108,13 @@ AggregateFunction GetArgMinMaxFunctionArg2(LogicalTypeId arg_2, const LogicalTyp
 	switch (arg_2) {
 	case LogicalTypeId::INTEGER:
 		return AggregateFunction::BinaryAggregate<ArgMinMaxState<T, int>, T, int, T, OP>(arg, LogicalType::INTEGER,
-		                                                                                      arg);
+		                                                                                 arg);
 	case LogicalTypeId::BIGINT:
 		return AggregateFunction::BinaryAggregate<ArgMinMaxState<T, uint64_t>, T, uint64_t, T, OP>(
 		    arg, LogicalType::BIGINT, arg);
 	case LogicalTypeId::DOUBLE:
-		return AggregateFunction::BinaryAggregate<ArgMinMaxState<T, double>, T, double, T, OP>(
-		    arg, LogicalType::DOUBLE, arg);
+		return AggregateFunction::BinaryAggregate<ArgMinMaxState<T, double>, T, double, T, OP>(arg, LogicalType::DOUBLE,
+		                                                                                       arg);
 	case LogicalTypeId::VARCHAR:
 		return AggregateFunction::BinaryAggregate<ArgMinMaxState<T, string_t>, T, string_t, T, OP>(
 		    arg, LogicalType::VARCHAR, arg);

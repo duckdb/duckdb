@@ -156,8 +156,8 @@ void ApproxCountDistinctFun::RegisterFunction(BuiltinFunctions &set) {
 	approx_count.AddFunction(GetApproxCountDistinctFunction(PhysicalType::INT64));
 	approx_count.AddFunction(GetApproxCountDistinctFunction(PhysicalType::DOUBLE));
 	approx_count.AddFunction(GetApproxCountDistinctFunction(PhysicalType::VARCHAR));
-	approx_count.AddFunction(AggregateFunction::UnaryAggregateDestructor<ApproxDistinctCountState, int64_t,
-	                                                                     int64_t, ApproxCountDistinctFunction>(
+	approx_count.AddFunction(AggregateFunction::UnaryAggregateDestructor<ApproxDistinctCountState, int64_t, int64_t,
+	                                                                     ApproxCountDistinctFunction>(
 	    LogicalType::TIMESTAMP, LogicalType::BIGINT));
 	set.AddFunction(approx_count);
 }
