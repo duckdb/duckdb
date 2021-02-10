@@ -87,5 +87,5 @@ SELECT COUNT( t),approx_count_distinct(t) from dates
 query II
 SELECT COUNT(t),approx_count_distinct(t) from names
 ----
-8	4
+8	3
 

@@ -86,10 +86,8 @@ struct ApproxCountDistinctFunctionString : ApproxCountDistinctFunctionBase {
 		if (nullmask[idx]) {
 			return;
 		}
-		string value = input[idx].GetString();
-		//! FIXME: Hash this in the future
-		auto size = value.size() > 8 ? 8 : value.size();
-		state->log->Add((uint8_t *)&value, size);
+		auto str_hash = std::hash<std::string> {}(input[idx].GetString());
+		state->log->Add((uint8_t *)&str_hash, sizeof(str_hash));
 	}
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask,
