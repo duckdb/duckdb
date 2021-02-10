@@ -2,35 +2,35 @@
 # description: Test skewness aggregate
 # group: [aggregates]
 
-#Corner cases
-statement error
-select skewness()
-
-query I
-select skewness(NULL)
-----
-NULL
-
-query I
-select skewness(1)
-----
-NULL
-
-statement error
-select skewness(*)
-
-
-# Constant Value
-query I
-select skewness (10) from range (5)
-----
-NULL
-
-#Empty Table
-query I
-select skewness (10) from range (5) where 1 == 0
-----
-NULL
+##Corner cases
+#statement error
+#select skewness()
+#
+#query I
+#select skewness(NULL)
+#----
+#NULL
+#
+#query I
+#select skewness(1)
+#----
+#NULL
+#
+#statement error
+#select skewness(*)
+#
+#
+## Constant Value
+#query I
+#select skewness (10) from range (5)
+#----
+#NULL
+#
+##Empty Table
+#query I
+#select skewness (10) from range (5) where 1 == 0
+#----
+#NULL
 
 statement ok
 create table aggr(k int, v decimal(10,2), v2 decimal(10, 2));
@@ -62,7 +62,18 @@ NULL
 NULL
 -0.330141
 
-#query I
-#select skewness(v2) over (partition by v)
-#    from aggr;
-#----
+query I
+select skewness(v2) over (partition by v)
+    from aggr;
+----
+-0.423273
+-0.423273
+-0.423273
+-0.423273
+NULL
+NULL
+NULL
+-0.330141
+-0.330141
+-0.330141
+-0.330141

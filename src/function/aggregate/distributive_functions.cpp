@@ -29,7 +29,6 @@ void BuiltinFunctions::RegisterDistributiveAggregates() {
 	Register<ArbitraryFun>();
 	Register<SkewFun>();
 	Register<KurtosisFun>();
-
 }
 
 } // namespace duckdb
