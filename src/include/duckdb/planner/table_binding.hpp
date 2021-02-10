@@ -60,7 +60,7 @@ public:
 //! MacroBinding is like the Binding, except the alias and index are set by default. Used for binding Macro
 //! Params/Arguments.
 struct MacroBinding : public Binding {
-	MacroBinding(vector<LogicalType> types_, vector<string> names_, string macro_name);
+	MacroBinding(vector<LogicalType> types_p, vector<string> names_p, string macro_name);
 
 	//! Arguments
 	vector<unique_ptr<ParsedExpression>> arguments;

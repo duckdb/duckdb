@@ -3,8 +3,7 @@
 #include "duckdb/parser/parsed_data/show_select_info.hpp"
 #include "duckdb/planner/operator/logical_show.hpp"
 
-using namespace duckdb;
-using namespace std;
+namespace duckdb {
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalShow &op) {
 	DataChunk output;
@@ -43,3 +42,5 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalShow &op) 
 	chunk_scan->collection = chunk_scan->owned_collection.get();
 	return move(chunk_scan);
 }
+
+} // namespace duckdb

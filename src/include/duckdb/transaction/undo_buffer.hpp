@@ -16,7 +16,7 @@ namespace duckdb {
 class WriteAheadLog;
 
 struct UndoChunk {
-	UndoChunk(idx_t size);
+	explicit UndoChunk(idx_t size);
 	~UndoChunk();
 
 	data_ptr_t WriteEntry(UndoFlags type, uint32_t len);

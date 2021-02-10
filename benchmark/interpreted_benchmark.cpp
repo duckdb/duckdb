@@ -298,13 +298,13 @@ string InterpretedBenchmark::GetQuery() {
 	return run_query;
 }
 
-void InterpretedBenchmark::Run(BenchmarkState *state_) {
-	auto &state = (InterpretedBenchmarkState &)*state_;
+void InterpretedBenchmark::Run(BenchmarkState *state_p) {
+	auto &state = (InterpretedBenchmarkState &)*state_p;
 	state.result = state.con.Query(run_query);
 }
 
-void InterpretedBenchmark::Cleanup(BenchmarkState *state_) {
-	auto &state = (InterpretedBenchmarkState &)*state_;
+void InterpretedBenchmark::Cleanup(BenchmarkState *state_p) {
+	auto &state = (InterpretedBenchmarkState &)*state_p;
 	if (queries.find("cleanup") != queries.end()) {
 		unique_ptr<QueryResult> result;
 		string cleanup_query = queries["cleanup"];
@@ -318,8 +318,8 @@ void InterpretedBenchmark::Cleanup(BenchmarkState *state_) {
 	}
 }
 
-string InterpretedBenchmark::Verify(BenchmarkState *state_) {
-	auto &state = (InterpretedBenchmarkState &)*state_;
+string InterpretedBenchmark::Verify(BenchmarkState *state_p) {
+	auto &state = (InterpretedBenchmarkState &)*state_p;
 	if (!state.result->success) {
 		return state.result->error;
 	}
@@ -355,8 +355,8 @@ string InterpretedBenchmark::Verify(BenchmarkState *state_) {
 	return string();
 }
 
-void InterpretedBenchmark::Interrupt(BenchmarkState *state_) {
-	auto &state = (InterpretedBenchmarkState &)*state_;
+void InterpretedBenchmark::Interrupt(BenchmarkState *state_p) {
+	auto &state = (InterpretedBenchmarkState &)*state_p;
 	state.con.Interrupt();
 }
 
@@ -364,8 +364,8 @@ string InterpretedBenchmark::BenchmarkInfo() {
 	return string();
 }
 
-string InterpretedBenchmark::GetLogOutput(BenchmarkState *state_) {
-	auto &state = (InterpretedBenchmarkState &)*state_;
+string InterpretedBenchmark::GetLogOutput(BenchmarkState *state_p) {
+	auto &state = (InterpretedBenchmarkState &)*state_p;
 	return state.con.context->profiler.ToJSON();
 }
 

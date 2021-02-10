@@ -28,7 +28,7 @@ struct OperatorTimingInformation {
 	double time = 0;
 	idx_t elements = 0;
 
-	OperatorTimingInformation(double time_ = 0, idx_t elements_ = 0) : time(time_), elements(elements_) {
+	explicit OperatorTimingInformation(double time_ = 0, idx_t elements_ = 0) : time(time_), elements(elements_) {
 	}
 };
 
@@ -37,7 +37,7 @@ class OperatorProfiler {
 	friend class QueryProfiler;
 
 public:
-	DUCKDB_API OperatorProfiler(bool enabled);
+	DUCKDB_API explicit OperatorProfiler(bool enabled);
 
 	DUCKDB_API void StartOperator(PhysicalOperator *phys_op);
 	DUCKDB_API void EndOperator(DataChunk *chunk);

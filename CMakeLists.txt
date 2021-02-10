@@ -156,6 +156,8 @@ option(BUILD_PYTHON "Build the DuckDB Python extension" FALSE)
 option(BUILD_REST "Build the DuckDB REST server" FALSE)
 option(BUILD_SHELL "Build the DuckDB Shell and SQLite API Wrappers" TRUE)
 option(DISABLE_THREADS "Disable support for multi-threading" FALSE)
+option(CLANG_TIDY "Enable build for clang-tidy, this disables all source files excluding the core database. This does not produce a working build." FALSE)
+option(BUILD_UNITTESTS "Build the C++ Unit Tests." TRUE)
 option(
   ASSERT_EXCEPTION
   "Throw an exception on an assert failing, instead of triggering a sigabort"
@@ -419,21 +421,22 @@ if(${EXPORT_DLL_SYMBOLS})
   add_definitions(-DDUCKDB_BUILD_LIBRARY)
 endif()
 
-add_subdirectory(extension)
 add_subdirectory(src)
 
-option(BUILD_UNITTESTS "Build the C++ Unit Tests." TRUE)
-if(${BUILD_UNITTESTS})
-  add_subdirectory(test)
-  if(NOT WIN32
-     AND NOT SUN
-     AND ${BUILD_BENCHMARKS})
-    add_subdirectory(benchmark)
+add_subdirectory(extension)
+if(NOT CLANG_TIDY)
+  if(${BUILD_UNITTESTS})
+    add_subdirectory(test)
+    if(NOT WIN32
+      AND NOT SUN
+      AND ${BUILD_BENCHMARKS})
+      add_subdirectory(benchmark)
+    endif()
   endif()
-endif()
 
-add_subdirectory(third_party)
-add_subdirectory(tools)
+  add_subdirectory(third_party)
+  add_subdirectory(tools)
+endif()
 
 # Write the export set for build and install tree
 install(EXPORT "${DUCKDB_EXPORT_SET}" DESTINATION "${INSTALL_CMAKE_DIR}")

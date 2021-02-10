@@ -19,8 +19,8 @@ class DatabaseInstance;
 //! This struct is responsible for writing metadata to disk
 class MetaBlockWriter : public Serializer {
 public:
-	MetaBlockWriter(DatabaseInstance &db);
-	~MetaBlockWriter();
+	explicit MetaBlockWriter(DatabaseInstance &db);
+	~MetaBlockWriter() override;
 
 	DatabaseInstance &db;
 	unique_ptr<Block> block;

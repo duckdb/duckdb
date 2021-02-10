@@ -8,8 +8,9 @@
 
 #pragma once
 
-#include "duckdb/common/constants.hpp"
 #include "duckdb/common/assert.hpp"
+#include "duckdb/common/constants.hpp"
+
 #include <cstring>
 
 namespace duckdb {
@@ -23,7 +24,7 @@ public:
 	static constexpr idx_t INLINE_LENGTH = 12;
 
 	string_t() = default;
-	string_t(uint32_t len) {
+	explicit string_t(uint32_t len) {
 		value.inlined.length = len;
 	}
 	string_t(const char *data, uint32_t len) {
@@ -48,9 +49,10 @@ public:
 			value.pointer.ptr = (char *)data;
 		}
 	}
-	string_t(const char *data) : string_t(data, strlen(data)) {
+	string_t(const char *data) : string_t(data, strlen(data)) { // NOLINT: Allow implicit conversion from `const char*`
 	}
-	string_t(const string &value) : string_t(value.c_str(), value.size()) {
+	string_t(const string &value)
+	    : string_t(value.c_str(), value.size()) { // NOLINT: Allow implicit conversion from `const char*`
 	}
 
 	bool IsInlined() const {
@@ -94,6 +96,11 @@ public:
 
 	void Verify();
 	void VerifyNull();
+	bool operator<(const string_t &r) const {
+		auto this_str = this->GetString();
+		auto r_str = r.GetString();
+		return this_str < r_str;
+	}
 
 private:
 	union {

@@ -16,7 +16,7 @@ namespace duckdb {
 //! flattening, and involves performing duplicate elimination on the LEFT side which is then pushed into the RIGHT side.
 class LogicalDelimJoin : public LogicalComparisonJoin {
 public:
-	LogicalDelimJoin(JoinType type) : LogicalComparisonJoin(type, LogicalOperatorType::LOGICAL_DELIM_JOIN) {
+	explicit LogicalDelimJoin(JoinType type) : LogicalComparisonJoin(type, LogicalOperatorType::LOGICAL_DELIM_JOIN) {
 	}
 
 	//! The set of columns that will be duplicate eliminated from the LHS and pushed into the RHS

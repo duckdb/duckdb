@@ -104,8 +104,36 @@ void JoinHashTable::Hash(DataChunk &keys, const SelectionVector &sel, idx_t coun
 		}
 	}
 }
+<<<<<<< HEAD
+=======
+template <class T>
+static void TemplatedSerializeVData(VectorData &vdata, const SelectionVector &sel, idx_t count,
+                                    data_ptr_t key_locations[]) {
+	auto source = (T *)vdata.data;
+	if (vdata.nullmask->any()) {
+		for (idx_t i = 0; i < count; i++) {
+			auto idx = sel.get_index(i);
+			auto source_idx = vdata.sel->get_index(idx);
 
-static void initialize_outer_join(idx_t count, data_ptr_t key_locations[]) {
+			auto target = (T *)key_locations[i];
+			T value = (*vdata.nullmask)[source_idx] ? NullValue<T>() : source[source_idx];
+			Store<T>(value, (data_ptr_t)target);
+			key_locations[i] += sizeof(T);
+		}
+	} else {
+		for (idx_t i = 0; i < count; i++) {
+			auto idx = sel.get_index(i);
+			auto source_idx = vdata.sel->get_index(idx);
+
+			auto target = (T *)key_locations[i];
+			Store<T>(source[source_idx], (data_ptr_t)target);
+			key_locations[i] += sizeof(T);
+		}
+	}
+}
+>>>>>>> master
+
+static void InitializeOuterJoin(idx_t count, data_ptr_t key_locations[]) {
 	for (idx_t i = 0; i < count; i++) {
 		auto target = (bool *)key_locations[i];
 		*target = false;
@@ -113,6 +141,96 @@ static void initialize_outer_join(idx_t count, data_ptr_t key_locations[]) {
 	}
 }
 
+<<<<<<< HEAD
+=======
+void JoinHashTable::SerializeVectorData(VectorData &vdata, PhysicalType type, const SelectionVector &sel, idx_t count,
+                                        data_ptr_t key_locations[]) {
+	switch (type) {
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
+		TemplatedSerializeVData<int8_t>(vdata, sel, count, key_locations);
+		break;
+	case PhysicalType::INT16:
+		TemplatedSerializeVData<int16_t>(vdata, sel, count, key_locations);
+		break;
+	case PhysicalType::INT32:
+		TemplatedSerializeVData<int32_t>(vdata, sel, count, key_locations);
+		break;
+	case PhysicalType::INT64:
+		TemplatedSerializeVData<int64_t>(vdata, sel, count, key_locations);
+		break;
+	case PhysicalType::UINT8:
+		TemplatedSerializeVData<uint8_t>(vdata, sel, count, key_locations);
+		break;
+	case PhysicalType::UINT16:
+		TemplatedSerializeVData<uint16_t>(vdata, sel, count, key_locations);
+		break;
+	case PhysicalType::UINT32:
+		TemplatedSerializeVData<uint32_t>(vdata, sel, count, key_locations);
+		break;
+	case PhysicalType::UINT64:
+		TemplatedSerializeVData<uint64_t>(vdata, sel, count, key_locations);
+		break;
+	case PhysicalType::INT128:
+		TemplatedSerializeVData<hugeint_t>(vdata, sel, count, key_locations);
+		break;
+	case PhysicalType::FLOAT:
+		TemplatedSerializeVData<float>(vdata, sel, count, key_locations);
+		break;
+	case PhysicalType::DOUBLE:
+		TemplatedSerializeVData<double>(vdata, sel, count, key_locations);
+		break;
+	case PhysicalType::HASH:
+		TemplatedSerializeVData<hash_t>(vdata, sel, count, key_locations);
+		break;
+	case PhysicalType::INTERVAL:
+		TemplatedSerializeVData<interval_t>(vdata, sel, count, key_locations);
+		break;
+	case PhysicalType::VARCHAR: {
+		StringHeap local_heap;
+		auto source = (string_t *)vdata.data;
+		for (idx_t i = 0; i < count; i++) {
+			auto idx = sel.get_index(i);
+			auto source_idx = vdata.sel->get_index(idx);
+
+			string_t new_val;
+			if ((*vdata.nullmask)[source_idx]) {
+				new_val = NullValue<string_t>();
+			} else if (source[source_idx].IsInlined()) {
+				new_val = source[source_idx];
+			} else {
+				new_val = local_heap.AddBlob(source[source_idx].GetDataUnsafe(), source[source_idx].GetSize());
+			}
+			Store<string_t>(new_val, key_locations[i]);
+			key_locations[i] += sizeof(string_t);
+		}
+		lock_guard<mutex> append_lock(ht_lock);
+		string_heap.MergeHeap(local_heap);
+		break;
+	}
+	default:
+		throw NotImplementedException("FIXME: unimplemented serialize");
+	}
+}
+
+void JoinHashTable::SerializeVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t count,
+                                    data_ptr_t key_locations[]) {
+	VectorData vdata;
+	v.Orrify(vcount, vdata);
+
+	SerializeVectorData(vdata, v.type.InternalType(), sel, count, key_locations);
+}
+
+idx_t JoinHashTable::AppendToBlock(HTDataBlock &block, BufferHandle &handle, vector<BlockAppendEntry> &append_entries,
+                                   idx_t remaining) {
+	idx_t append_count = MinValue<idx_t>(remaining, block.capacity - block.count);
+	auto dataptr = handle.node->buffer + block.count * entry_size;
+	append_entries.emplace_back(dataptr, append_count);
+	block.count += append_count;
+	return append_count;
+}
+
+>>>>>>> master
 static idx_t FilterNullValues(VectorData &vdata, const SelectionVector &sel, idx_t count, SelectionVector &result) {
 	auto &nullmask = *vdata.nullmask;
 	idx_t result_count = 0;
@@ -131,7 +249,7 @@ idx_t JoinHashTable::PrepareKeys(DataChunk &keys, unique_ptr<VectorData[]> &key_
 	key_data = keys.Orrify();
 
 	// figure out which keys are NULL, and create a selection vector out of them
-	current_sel = &FlatVector::IncrementalSelectionVector;
+	current_sel = &FlatVector::INCREMENTAL_SELECTION_VECTOR;
 	idx_t added_count = keys.size();
 	if (build_side && IsRightOuterJoin(join_type)) {
 		// in case of a right or full outer join, we cannot remove NULL keys from the build side
@@ -157,7 +275,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 		return;
 	}
 	// special case: correlated mark join
-	if (join_type == JoinType::MARK && correlated_mark_join_info.correlated_types.size() > 0) {
+	if (join_type == JoinType::MARK && !correlated_mark_join_info.correlated_types.empty()) {
 		auto &info = correlated_mark_join_info;
 		lock_guard<mutex> mj_lock(info.mj_lock);
 		// Correlated MARK join
@@ -200,7 +318,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 		                              key_locations, nullmask_locations);
 	}
 	// now serialize the payload
-	if (build_types.size() > 0) {
+	if (!build_types.empty()) {
 		for (idx_t i = 0; i < payload.ColumnCount(); i++) {
 			row_chunk.SerializeVector(payload.data[i], payload.size(), *current_sel, added_count,
 			                          keys.ColumnCount() + i, key_locations, nullmask_locations);
@@ -208,7 +326,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	}
 	if (IsRightOuterJoin(join_type)) {
 		// for FULL/RIGHT OUTER joins initialize the "found" boolean to false
-		initialize_outer_join(added_count, key_locations);
+		InitializeOuterJoin(added_count, key_locations);
 	}
 	row_chunk.SerializeVector(hash_values, payload.size(), *current_sel, added_count,
 	                          keys.ColumnCount() + build_types.size() - 1, key_locations, nullmask_locations);
@@ -613,7 +731,7 @@ void ScanStructure::GatherResult(Vector &result, const SelectionVector &result_v
 }
 
 void ScanStructure::GatherResult(Vector &result, const SelectionVector &sel_vector, idx_t count, idx_t &offset) {
-	GatherResult(result, FlatVector::IncrementalSelectionVector, sel_vector, count, offset);
+	GatherResult(result, FlatVector::INCREMENTAL_SELECTION_VECTOR, sel_vector, count, offset);
 }
 
 void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
@@ -765,7 +883,7 @@ void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &input, DataChunk &r
 	D_ASSERT(ht.size() > 0);
 
 	ScanKeyMatches(keys);
-	if (ht.correlated_mark_join_info.correlated_types.size() == 0) {
+	if (ht.correlated_mark_join_info.correlated_types.empty()) {
 		ConstructMarkJoinResult(keys, input, result);
 	} else {
 		auto &info = ht.correlated_mark_join_info;
@@ -943,8 +1061,8 @@ void JoinHashTable::ScanFullOuter(DataChunk &result, JoinHTScanState &state) {
 		for (idx_t i = 0; i < build_types.size(); i++) {
 			auto &vector = result.data[left_column_count + i];
 			D_ASSERT(vector.type == build_types[i]);
-			GatherResultVector(vector, FlatVector::IncrementalSelectionVector, (uintptr_t *)key_locations,
-			                   FlatVector::IncrementalSelectionVector, found_entries, offset);
+			GatherResultVector(vector, FlatVector::INCREMENTAL_SELECTION_VECTOR, (uintptr_t *)key_locations,
+			                   FlatVector::INCREMENTAL_SELECTION_VECTOR, found_entries, offset);
 		}
 	}
 }

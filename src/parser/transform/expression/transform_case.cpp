@@ -5,9 +5,7 @@
 
 namespace duckdb {
 
-using namespace duckdb_libpgquery;
-
-unique_ptr<ParsedExpression> Transformer::TransformCase(PGCaseExpr *root) {
+unique_ptr<ParsedExpression> Transformer::TransformCase(duckdb_libpgquery::PGCaseExpr *root) {
 	if (!root) {
 		return nullptr;
 	}
@@ -17,7 +15,7 @@ unique_ptr<ParsedExpression> Transformer::TransformCase(PGCaseExpr *root) {
 
 	unique_ptr<ParsedExpression> def_res;
 	if (root->defresult) {
-		def_res = TransformExpression(reinterpret_cast<PGNode *>(root->defresult));
+		def_res = TransformExpression(reinterpret_cast<duckdb_libpgquery::PGNode *>(root->defresult));
 	} else {
 		def_res = make_unique<ConstantExpression>(Value(LogicalType::SQLNULL));
 	}
@@ -29,10 +27,10 @@ unique_ptr<ParsedExpression> Transformer::TransformCase(PGCaseExpr *root) {
 	auto exp_root = make_unique<CaseExpression>();
 	auto cur_root = exp_root.get();
 	for (auto cell = root->args->head; cell != nullptr; cell = cell->next) {
-		auto w = reinterpret_cast<PGCaseWhen *>(cell->data.ptr_value);
-		auto test_raw = TransformExpression(reinterpret_cast<PGNode *>(w->expr));
+		auto w = reinterpret_cast<duckdb_libpgquery::PGCaseWhen *>(cell->data.ptr_value);
+		auto test_raw = TransformExpression(reinterpret_cast<duckdb_libpgquery::PGNode *>(w->expr));
 		unique_ptr<ParsedExpression> test;
-		auto arg = TransformExpression(reinterpret_cast<PGNode *>(root->arg));
+		auto arg = TransformExpression(reinterpret_cast<duckdb_libpgquery::PGNode *>(root->arg));
 		if (arg) {
 			test = make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, move(arg), move(test_raw));
 		} else {
@@ -40,7 +38,7 @@ unique_ptr<ParsedExpression> Transformer::TransformCase(PGCaseExpr *root) {
 		}
 
 		cur_root->check = move(test);
-		cur_root->result_if_true = TransformExpression(reinterpret_cast<PGNode *>(w->result));
+		cur_root->result_if_true = TransformExpression(reinterpret_cast<duckdb_libpgquery::PGNode *>(w->result));
 		if (cell->next == nullptr) {
 			// finished all cases
 			// res_false is the default result

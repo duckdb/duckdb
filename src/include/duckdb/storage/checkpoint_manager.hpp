@@ -26,7 +26,7 @@ class ViewCatalogEntry;
 //! CheckpointManager is responsible for checkpointing the database
 class CheckpointManager {
 public:
-	CheckpointManager(DatabaseInstance &db);
+	explicit CheckpointManager(DatabaseInstance &db);
 
 	//! Checkpoint the current state of the WAL and flush it to the main storage. This should be called BEFORE any
 	//! connction is available because right now the checkpointing cannot be done online. (TODO)

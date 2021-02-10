@@ -144,7 +144,7 @@ public:
 	RowChunk payload;
 
 	// allocate in order to data to the chunks
-	const SelectionVector *sel_ptr = &FlatVector::IncrementalSelectionVector;
+	const SelectionVector *sel_ptr = &FlatVector::INCREMENTAL_SELECTION_VECTOR;
 	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
 	data_ptr_t nullmask_locations[STANDARD_VECTOR_SIZE];
 
@@ -270,7 +270,7 @@ void PhysicalOrder::Combine(ExecutionContext &context, GlobalOperatorState &stat
 // Finalize
 //===--------------------------------------------------------------------===//
 template <class TYPE>
-static int8_t templated_compare_value(data_ptr_t &l_val, data_ptr_t &r_val) {
+static int8_t TemplatedCompareValue(data_ptr_t &l_val, data_ptr_t &r_val) {
 	auto left_val = Load<TYPE>(l_val);
 	auto right_val = Load<TYPE>(r_val);
 	if (Equals::Operation<TYPE>(left_val, right_val)) {
@@ -282,8 +282,8 @@ static int8_t templated_compare_value(data_ptr_t &l_val, data_ptr_t &r_val) {
 	return 1;
 }
 
-static int32_t compare_value(data_ptr_t &l_nullmask, data_ptr_t &r_nullmask, data_ptr_t &l_val, data_ptr_t &r_val,
-                             const idx_t &sort_idx, OrderGlobalState &state) {
+static int32_t CompareValue(data_ptr_t &l_nullmask, data_ptr_t &r_nullmask, data_ptr_t &l_val, data_ptr_t &r_val,
+                            const idx_t &sort_idx, OrderGlobalState &state) {
 	bool left_null = *l_nullmask & (1 << sort_idx);
 	bool right_null = *r_nullmask & (1 << sort_idx);
 
@@ -298,31 +298,31 @@ static int32_t compare_value(data_ptr_t &l_nullmask, data_ptr_t &r_nullmask, dat
 	switch (state.sorting_types[sort_idx]) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
-		return templated_compare_value<int8_t>(l_val, r_val);
+		return TemplatedCompareValue<int8_t>(l_val, r_val);
 	case PhysicalType::INT16:
-		return templated_compare_value<int16_t>(l_val, r_val);
+		return TemplatedCompareValue<int16_t>(l_val, r_val);
 	case PhysicalType::INT32:
-		return templated_compare_value<int32_t>(l_val, r_val);
+		return TemplatedCompareValue<int32_t>(l_val, r_val);
 	case PhysicalType::INT64:
-		return templated_compare_value<int64_t>(l_val, r_val);
+		return TemplatedCompareValue<int64_t>(l_val, r_val);
 	case PhysicalType::UINT8:
-		return templated_compare_value<uint8_t>(l_val, r_val);
+		return TemplatedCompareValue<uint8_t>(l_val, r_val);
 	case PhysicalType::UINT16:
-		return templated_compare_value<uint16_t>(l_val, r_val);
+		return TemplatedCompareValue<uint16_t>(l_val, r_val);
 	case PhysicalType::UINT32:
-		return templated_compare_value<uint32_t>(l_val, r_val);
+		return TemplatedCompareValue<uint32_t>(l_val, r_val);
 	case PhysicalType::UINT64:
-		return templated_compare_value<uint64_t>(l_val, r_val);
+		return TemplatedCompareValue<uint64_t>(l_val, r_val);
 	case PhysicalType::INT128:
-		return templated_compare_value<hugeint_t>(l_val, r_val);
+		return TemplatedCompareValue<hugeint_t>(l_val, r_val);
 	case PhysicalType::FLOAT:
-		return templated_compare_value<float>(l_val, r_val);
+		return TemplatedCompareValue<float>(l_val, r_val);
 	case PhysicalType::DOUBLE:
-		return templated_compare_value<double>(l_val, r_val);
+		return TemplatedCompareValue<double>(l_val, r_val);
 	case PhysicalType::VARCHAR:
-		return templated_compare_value<string_t>(l_val, r_val);
+		return TemplatedCompareValue<string_t>(l_val, r_val);
 	case PhysicalType::INTERVAL:
-		return templated_compare_value<interval_t>(l_val, r_val);
+		return TemplatedCompareValue<interval_t>(l_val, r_val);
 	default:
 		throw NotImplementedException("Type for comparison");
 	}
@@ -332,7 +332,7 @@ static int compare_tuple(data_ptr_t &l_start, data_ptr_t &r_start, OrderGlobalSt
 	auto l_val = l_start + state.sorting.nullmask_size;
 	auto r_val = r_start + state.sorting.nullmask_size;
 	for (idx_t i = 0; i < state.op.orders.size(); i++) {
-		auto comp_res = compare_value(l_start, r_start, l_val, r_val, i, state);
+		auto comp_res = CompareValue(l_start, r_start, l_val, r_val, i, state);
 		if (comp_res == 0) {
 			l_val += state.sorting_sizes[i];
 			r_val += state.sorting_sizes[i];
@@ -591,8 +591,8 @@ unique_ptr<PhysicalOperatorState> PhysicalOrder::GetOperatorState() {
 	return make_unique<PhysicalOrderOperatorState>(*this, children[0].get());
 }
 
-void PhysicalOrder::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
-	auto state = reinterpret_cast<PhysicalOrderOperatorState *>(state_);
+void PhysicalOrder::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
+	auto state = reinterpret_cast<PhysicalOrderOperatorState *>(state_p);
 	auto &sink = (OrderGlobalState &)*this->sink_state;
 
 	if (state->current_block >= sink.result.size()) {

@@ -17,7 +17,7 @@ namespace duckdb {
 //! SQLStatement is the base class of any type of SQL statement.
 class SQLStatement {
 public:
-	SQLStatement(StatementType type) : type(type) {};
+	explicit SQLStatement(StatementType type) : type(type) {};
 	virtual ~SQLStatement() {
 	}
 

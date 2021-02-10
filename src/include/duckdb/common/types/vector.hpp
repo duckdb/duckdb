@@ -21,9 +21,6 @@ namespace duckdb {
 //! Type used for nullmasks
 typedef bitset<STANDARD_VECTOR_SIZE> nullmask_t;
 
-//! Zero NULL mask: filled with the value 0 [READ ONLY]
-extern nullmask_t ZERO_MASK;
-
 struct VectorData {
 	const SelectionVector *sel;
 	data_ptr_t data;
@@ -51,9 +48,9 @@ class Vector {
 public:
 	Vector();
 	//! Create a vector of size one holding the passed on value
-	Vector(Value value);
+	explicit Vector(const Value &value);
 	//! Create an empty standard vector with a type, equivalent to calling Vector(type, true, false)
-	Vector(LogicalType type);
+	explicit Vector(LogicalType type);
 	//! Create a non-owning vector that references the specified data
 	Vector(LogicalType type, data_ptr_t dataptr);
 	//! Create an owning vector that holds at most STANDARD_VECTOR_SIZE entries.
@@ -91,7 +88,7 @@ public:
 
 	//! Creates the data of this vector with the specified type. Any data that
 	//! is currently in the vector is destroyed.
-	void Initialize(LogicalType new_type = LogicalType::INVALID, bool zero_data = false);
+	void Initialize(const LogicalType &new_type = LogicalType::INVALID, bool zero_data = false);
 
 	//! Converts this Vector to a printable string representation
 	string ToString(idx_t count) const;
@@ -119,7 +116,7 @@ public:
 	//! Returns the [index] element of the Vector as a Value.
 	Value GetValue(idx_t index) const;
 	//! Sets the [index] element of the Vector to the specified Value.
-	void SetValue(idx_t index, Value val);
+	void SetValue(idx_t index, const Value &val);
 
 	//! Serializes a Vector to a stand-alone binary blob
 	void Serialize(idx_t count, Serializer &serializer);
@@ -174,8 +171,8 @@ struct ConstantVector {
 		return vector.nullmask;
 	}
 
-	static const sel_t zero_vector[STANDARD_VECTOR_SIZE];
-	static const SelectionVector ZeroSelectionVector;
+	static const sel_t ZERO_VECTOR[STANDARD_VECTOR_SIZE];
+	static const SelectionVector ZERO_SELECTION_VECTOR;
 };
 
 struct DictionaryVector {
@@ -223,8 +220,8 @@ struct FlatVector {
 		return vector.nullmask[idx];
 	}
 
-	static const sel_t incremental_vector[STANDARD_VECTOR_SIZE];
-	static const SelectionVector IncrementalSelectionVector;
+	static const sel_t INCREMENTAL_VECTOR[STANDARD_VECTOR_SIZE];
+	static const SelectionVector INCREMENTAL_SELECTION_VECTOR;
 };
 
 struct ListVector {
@@ -251,7 +248,7 @@ struct StringVector {
 	//! Adds a reference to a handle that stores strings of this vector
 	static void AddHandle(Vector &vector, unique_ptr<BufferHandle> handle);
 	//! Adds a reference to an unspecified vector buffer that stores strings of this vector
-	static void AddBuffer(Vector &vector, unique_ptr<VectorBuffer> buffer);
+	static void AddBuffer(Vector &vector, buffer_ptr<VectorBuffer> buffer);
 	//! Add a reference from this vector to the string heap of the provided vector
 	static void AddHeapReference(Vector &vector, Vector &other);
 };
@@ -259,7 +256,7 @@ struct StringVector {
 struct StructVector {
 	static bool HasEntries(const Vector &vector);
 	static child_list_t<unique_ptr<Vector>> &GetEntries(const Vector &vector);
-	static void AddEntry(Vector &vector, string name, unique_ptr<Vector> entry);
+	static void AddEntry(Vector &vector, const string &name, unique_ptr<Vector> entry);
 };
 
 struct SequenceVector {

@@ -30,13 +30,13 @@ enum class FilterPropagateResult : uint8_t {
 
 class StatisticsPropagator {
 public:
-	StatisticsPropagator(ClientContext &context);
+	explicit StatisticsPropagator(ClientContext &context);
 
 	unique_ptr<NodeStatistics> PropagateStatistics(unique_ptr<LogicalOperator> &node_ptr);
 
 private:
 	//! Propagate statistics through an operator
-	unique_ptr<NodeStatistics> PropagateStatistics(LogicalOperator &root, unique_ptr<LogicalOperator> *node_ptr);
+	unique_ptr<NodeStatistics> PropagateStatistics(LogicalOperator &node, unique_ptr<LogicalOperator> *node_ptr);
 
 	unique_ptr<NodeStatistics> PropagateStatistics(LogicalFilter &op, unique_ptr<LogicalOperator> *node_ptr);
 	unique_ptr<NodeStatistics> PropagateStatistics(LogicalGet &op, unique_ptr<LogicalOperator> *node_ptr);
@@ -59,7 +59,7 @@ private:
 	FilterPropagateResult PropagateComparison(BaseStatistics &left, BaseStatistics &right, ExpressionType comparison);
 
 	//! Update filter statistics from a filter with a constant
-	void UpdateFilterStatistics(BaseStatistics &input, ExpressionType comparison_type, Value constant);
+	void UpdateFilterStatistics(BaseStatistics &input, ExpressionType comparison_type, const Value &constant);
 	//! Update statistics from a filter between two stats
 	void UpdateFilterStatistics(BaseStatistics &lstats, BaseStatistics &rstats, ExpressionType comparison_type);
 	//! Update filter statistics from a generic comparison
@@ -90,8 +90,8 @@ private:
 
 	void ReplaceWithEmptyResult(unique_ptr<LogicalOperator> &node);
 
-	bool ExpressionIsConstant(Expression &expr, Value val);
-	bool ExpressionIsConstantOrNull(Expression &expr, Value val);
+	bool ExpressionIsConstant(Expression &expr, const Value &val);
+	bool ExpressionIsConstantOrNull(Expression &expr, const Value &val);
 
 private:
 	ClientContext &context;

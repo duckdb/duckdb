@@ -24,7 +24,7 @@ void NumericStatistics::Merge(const BaseStatistics &other_p) {
 	}
 }
 
-bool NumericStatistics::CheckZonemap(ExpressionType comparison_type, Value constant) {
+bool NumericStatistics::CheckZonemap(ExpressionType comparison_type, const Value &constant) {
 	switch (comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
 		return constant >= min && constant <= max;
@@ -56,7 +56,7 @@ void NumericStatistics::Serialize(Serializer &serializer) {
 unique_ptr<BaseStatistics> NumericStatistics::Deserialize(Deserializer &source, LogicalType type) {
 	auto min = Value::Deserialize(source);
 	auto max = Value::Deserialize(source);
-	return make_unique_base<BaseStatistics, NumericStatistics>(type, min, max);
+	return make_unique_base<BaseStatistics, NumericStatistics>(move(type), min, max);
 }
 
 string NumericStatistics::ToString() {

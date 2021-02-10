@@ -14,7 +14,8 @@
 namespace duckdb {
 
 struct CreatePragmaFunctionInfo : public CreateFunctionInfo {
-	CreatePragmaFunctionInfo(PragmaFunction function) : CreateFunctionInfo(CatalogType::PRAGMA_FUNCTION_ENTRY) {
+	explicit CreatePragmaFunctionInfo(PragmaFunction function)
+	    : CreateFunctionInfo(CatalogType::PRAGMA_FUNCTION_ENTRY) {
 		functions.push_back(move(function));
 		this->name = function.name;
 	}

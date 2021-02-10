@@ -21,7 +21,7 @@ struct PragmaInfo;
 //! Pragma handler is responsible for converting certain pragma statements into new queries
 class PragmaHandler {
 public:
-	PragmaHandler(ClientContext &context);
+	explicit PragmaHandler(ClientContext &context);
 
 	void HandlePragmaStatements(ClientContextLock &lock, vector<unique_ptr<SQLStatement>> &statements);
 

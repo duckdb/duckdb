@@ -18,8 +18,8 @@ namespace duckdb {
 
 class WriteOverflowStringsToDisk : public OverflowStringWriter {
 public:
-	WriteOverflowStringsToDisk(DatabaseInstance &db);
-	~WriteOverflowStringsToDisk();
+	explicit WriteOverflowStringsToDisk(DatabaseInstance &db);
+	~WriteOverflowStringsToDisk() override;
 
 	//! The checkpoint manager
 	DatabaseInstance &db;
@@ -93,7 +93,6 @@ void TableDataWriter::CheckpointColumn(ColumnData &col_data, idx_t col_idx) {
 
 	auto owned_segment = move(col_data.data.root_node);
 	auto segment = (ColumnSegment *)owned_segment.get();
-	DataPointer pointer;
 	while (segment) {
 		if (segment->segment_type == ColumnSegmentType::PERSISTENT) {
 			auto &persistent = (PersistentSegment &)*segment;
@@ -108,6 +107,7 @@ void TableDataWriter::CheckpointColumn(ColumnData &col_data, idx_t col_idx) {
 				}
 
 				// set up the data pointer directly using the data from the persistent segment
+				DataPointer pointer;
 				pointer.block_id = persistent.block_id;
 				pointer.offset = 0;
 				pointer.row_start = segment->start;
@@ -215,7 +215,7 @@ void TableDataWriter::FlushSegment(SegmentTree &new_tree, idx_t col_idx) {
 	data_pointer.block_id = block_id;
 	data_pointer.offset = offset_in_block;
 	data_pointer.row_start = 0;
-	if (data_pointers[col_idx].size() > 0) {
+	if (!data_pointers[col_idx].empty()) {
 		auto &last_pointer = data_pointers[col_idx].back();
 		data_pointer.row_start = last_pointer.row_start + last_pointer.tuple_count;
 	}

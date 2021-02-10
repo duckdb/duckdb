@@ -748,6 +748,7 @@ struct PandasScanFunction : public TableFunction {
 	                                                 unordered_map<string, Value> &named_parameters,
 	                                                 vector<LogicalType> &return_types, vector<string> &names) {
 		// Hey, it works (TM)
+		py::gil_scoped_acquire acquire;
 		py::handle df((PyObject *)std::stoull(inputs[0].GetValue<string>(), nullptr, 16));
 
 		/* TODO this fails on Python2 for some reason
@@ -807,10 +808,10 @@ struct PandasScanFunction : public TableFunction {
 		return make_unique<PandasScanFunctionData>(df, row_count, move(pandas_bind_data), return_types);
 	}
 
-	static unique_ptr<FunctionOperatorData> pandas_scan_init(ClientContext &context, const FunctionData *bind_data_,
+	static unique_ptr<FunctionOperatorData> pandas_scan_init(ClientContext &context, const FunctionData *bind_data_p,
 	                                                         vector<column_t> &column_ids,
 	                                                         TableFilterCollection *filters) {
-		auto &bind_data = (const PandasScanFunctionData &)*bind_data_;
+		auto &bind_data = (const PandasScanFunctionData &)*bind_data_p;
 		auto result = make_unique<PandasScanState>(0, bind_data.row_count);
 		result->column_ids = column_ids;
 		return result;
@@ -818,31 +819,31 @@ struct PandasScanFunction : public TableFunction {
 
 	static constexpr idx_t PANDAS_PARTITION_COUNT = 50 * STANDARD_VECTOR_SIZE;
 
-	static idx_t pandas_scan_max_threads(ClientContext &context, const FunctionData *bind_data_) {
-		auto &bind_data = (const PandasScanFunctionData &)*bind_data_;
+	static idx_t pandas_scan_max_threads(ClientContext &context, const FunctionData *bind_data_p) {
+		auto &bind_data = (const PandasScanFunctionData &)*bind_data_p;
 		return bind_data.row_count / PANDAS_PARTITION_COUNT + 1;
 	}
 
 	static unique_ptr<ParallelState> pandas_scan_init_parallel_state(ClientContext &context,
-	                                                                 const FunctionData *bind_data_) {
+	                                                                 const FunctionData *bind_data_p) {
 		return make_unique<ParallelPandasScanState>();
 	}
 
 	static unique_ptr<FunctionOperatorData>
-	pandas_scan_parallel_init(ClientContext &context, const FunctionData *bind_data_, ParallelState *state,
+	pandas_scan_parallel_init(ClientContext &context, const FunctionData *bind_data_p, ParallelState *state,
 	                          vector<column_t> &column_ids, TableFilterCollection *filters) {
 		auto result = make_unique<PandasScanState>(0, 0);
 		result->column_ids = column_ids;
-		if (!pandas_scan_parallel_state_next(context, bind_data_, result.get(), state)) {
+		if (!pandas_scan_parallel_state_next(context, bind_data_p, result.get(), state)) {
 			return nullptr;
 		}
 		return move(result);
 	}
 
-	static bool pandas_scan_parallel_state_next(ClientContext &context, const FunctionData *bind_data_,
-	                                            FunctionOperatorData *operator_state, ParallelState *parallel_state_) {
-		auto &bind_data = (const PandasScanFunctionData &)*bind_data_;
-		auto &parallel_state = (ParallelPandasScanState &)*parallel_state_;
+	static bool pandas_scan_parallel_state_next(ClientContext &context, const FunctionData *bind_data_p,
+	                                            FunctionOperatorData *operator_state, ParallelState *parallel_state_p) {
+		auto &bind_data = (const PandasScanFunctionData &)*bind_data_p;
+		auto &parallel_state = (ParallelPandasScanState &)*parallel_state_p;
 		auto &state = (PandasScanState &)*operator_state;
 
 		lock_guard<mutex> parallel_lock(parallel_state.lock);
@@ -1381,7 +1382,10 @@ struct DuckDBPyConnection {
 			}
 			auto args = DuckDBPyConnection::transform_python_param_list(single_query_params);
 			auto res = make_unique<DuckDBPyResult>();
-			res->result = prep->Execute(args);
+			{
+				py::gil_scoped_release release;
+				res->result = prep->Execute(args);
+			}
 			if (!res->result->success) {
 				throw runtime_error(res->result->error);
 			}
@@ -1821,7 +1825,10 @@ struct DuckDBPyRelation {
 
 	py::object to_df() {
 		auto res = make_unique<DuckDBPyResult>();
-		res->result = rel->Execute();
+		{
+			py::gil_scoped_release release;
+			res->result = rel->Execute();
+		}
 		if (!res->result->success) {
 			throw runtime_error(res->result->error);
 		}
@@ -1830,7 +1837,10 @@ struct DuckDBPyRelation {
 
 	py::object to_arrow_table() {
 		auto res = make_unique<DuckDBPyResult>();
-		res->result = rel->Execute();
+		{
+			py::gil_scoped_release release;
+			res->result = rel->Execute();
+		}
 		if (!res->result->success) {
 			throw runtime_error(res->result->error);
 		}
@@ -1882,7 +1892,10 @@ struct DuckDBPyRelation {
 
 	unique_ptr<DuckDBPyResult> execute() {
 		auto res = make_unique<DuckDBPyResult>();
-		res->result = rel->Execute();
+		{
+			py::gil_scoped_release release;
+			res->result = rel->Execute();
+		}
 		if (!res->result->success) {
 			throw runtime_error(res->result->error);
 		}
@@ -1907,8 +1920,14 @@ struct DuckDBPyRelation {
 	}
 
 	string print() {
+		std::string rel_res_string;
+		{
+			py::gil_scoped_release release;
+			rel_res_string = rel->Limit(10)->Execute()->ToString();
+		}
+
 		return rel->ToString() + "\n---------------------\n-- Result Preview  --\n---------------------\n" +
-		       rel->Limit(10)->Execute()->ToString() + "\n";
+		       rel_res_string + "\n";
 	}
 
 	py::object getattr(py::str key) {

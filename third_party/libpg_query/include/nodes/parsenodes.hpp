@@ -1932,10 +1932,10 @@ typedef struct PGImportStmt {
  */
 typedef struct PGIntervalConstant {
 	PGNodeTag type;
-	int val_type;         /* interval constant type, either T_PGString, T_PGInteger or T_PGAExpr */
-	char *sval;           /* T_PGString */
-	int ival;             /* T_PGString */
-	PGNode *eval;         /* T_PGAExpr */
+	int val_type;         /* interval constant type, either duckdb_libpgquery::T_PGString, duckdb_libpgquery::T_PGInteger or duckdb_libpgquery::T_PGAExpr */
+	char *sval;           /* duckdb_libpgquery::T_PGString */
+	int ival;             /* duckdb_libpgquery::T_PGString */
+	PGNode *eval;         /* duckdb_libpgquery::T_PGAExpr */
 	PGList *typmods;      /* how to interpret the interval constant (year, month, day, etc)  */
 	int location;         /* token location, or -1 if unknown */
 } PGIntervalConstant;

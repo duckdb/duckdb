@@ -124,7 +124,7 @@ void UndoBuffer::ReverseIterateEntries(T &&callback) {
 			start += sizeof(UndoFlags);
 			auto len = Load<uint32_t>(start);
 			start += sizeof(uint32_t);
-			nodes.push_back(make_pair(type, start));
+			nodes.emplace_back(type, start);
 			start += len;
 		}
 		// iterate over it in reverse order

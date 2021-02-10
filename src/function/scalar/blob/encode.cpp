@@ -3,14 +3,14 @@
 
 namespace duckdb {
 
-static void encode_function(DataChunk &args, ExpressionState &state, Vector &result) {
+static void EncodeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	// encode is essentially a nop cast from varchar to blob
 	// we just reference the input vector and set the type to blob
 	result.Reference(args.data[0]);
 	result.type = LogicalType::BLOB;
 }
 
-static void decode_function(DataChunk &args, ExpressionState &state, Vector &result) {
+static void DecodeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	// decode is also a nop cast, but requires verification if the provided string is actually
 	UnaryExecutor::Execute<string_t, string_t, true>(args.data[0], result, args.size(), [&](string_t input) {
 		auto input_data = input.GetDataUnsafe();
@@ -26,9 +26,9 @@ static void decode_function(DataChunk &args, ExpressionState &state, Vector &res
 
 void EncodeFun::RegisterFunction(BuiltinFunctions &set) {
 	// encode goes from varchar -> blob, this never fails
-	set.AddFunction(ScalarFunction("encode", {LogicalType::VARCHAR}, LogicalType::BLOB, encode_function));
+	set.AddFunction(ScalarFunction("encode", {LogicalType::VARCHAR}, LogicalType::BLOB, EncodeFunction));
 	// decode goes from blob -> varchar, this fails if the varchar is not valid utf8
-	set.AddFunction(ScalarFunction("decode", {LogicalType::BLOB}, LogicalType::VARCHAR, decode_function));
+	set.AddFunction(ScalarFunction("decode", {LogicalType::BLOB}, LogicalType::VARCHAR, DecodeFunction));
 }
 
 } // namespace duckdb

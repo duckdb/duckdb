@@ -41,7 +41,7 @@ typedef unique_ptr<FunctionData> (*copy_from_bind_t)(ClientContext &context, Cop
 
 class CopyFunction : public Function {
 public:
-	CopyFunction(string name)
+	explicit CopyFunction(string name)
 	    : Function(name), copy_to_bind(nullptr), copy_to_initialize_local(nullptr), copy_to_initialize_global(nullptr),
 	      copy_to_sink(nullptr), copy_to_combine(nullptr), copy_to_finalize(nullptr), copy_from_bind(nullptr) {
 	}

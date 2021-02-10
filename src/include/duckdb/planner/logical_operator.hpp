@@ -24,7 +24,7 @@ namespace duckdb {
 //! logical query tree
 class LogicalOperator {
 public:
-	LogicalOperator(LogicalOperatorType type) : type(type) {
+	explicit LogicalOperator(LogicalOperatorType type) : type(type) {
 	}
 	LogicalOperator(LogicalOperatorType type, vector<unique_ptr<Expression>> expressions)
 	    : type(type), expressions(move(expressions)) {
@@ -46,8 +46,8 @@ public:
 		return {ColumnBinding(0, 0)};
 	}
 	static vector<ColumnBinding> GenerateColumnBindings(idx_t table_idx, idx_t column_count);
-	static vector<LogicalType> MapTypes(vector<LogicalType> types, vector<idx_t> projection_map);
-	static vector<ColumnBinding> MapBindings(vector<ColumnBinding> types, vector<idx_t> projection_map);
+	static vector<LogicalType> MapTypes(const vector<LogicalType> &types, const vector<idx_t> &projection_map);
+	static vector<ColumnBinding> MapBindings(const vector<ColumnBinding> &types, const vector<idx_t> &projection_map);
 
 	//! Resolve the types of the logical operator and its children
 	void ResolveOperatorTypes();

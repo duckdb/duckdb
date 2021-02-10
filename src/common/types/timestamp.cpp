@@ -5,8 +5,8 @@
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/chrono.hpp"
 
-#include <chrono> // chrono::system_clock
 #include <ctime>
 
 namespace duckdb {
@@ -59,7 +59,7 @@ timestamp_t Timestamp::FromCString(const char *str, idx_t len) {
 	return Timestamp::FromDatetime(date, time);
 }
 
-timestamp_t Timestamp::FromString(string str) {
+timestamp_t Timestamp::FromString(const string &str) {
 	return Timestamp::FromCString(str.c_str(), str.size());
 }
 
@@ -90,9 +90,8 @@ void Timestamp::Convert(timestamp_t timestamp, date_t &out_date, dtime_t &out_ti
 }
 
 timestamp_t Timestamp::GetCurrentTimestamp() {
-	using std::chrono::system_clock;
-	auto now = std::chrono::system_clock::now();
-	auto epoch_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+	auto now = system_clock::now();
+	auto epoch_ms = duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
 	return Timestamp::FromEpochMs(epoch_ms);
 }
 

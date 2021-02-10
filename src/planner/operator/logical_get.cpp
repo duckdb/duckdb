@@ -31,18 +31,18 @@ string LogicalGet::ParamsToString() const {
 }
 
 vector<ColumnBinding> LogicalGet::GetColumnBindings() {
-	if (column_ids.size() == 0) {
+	if (column_ids.empty()) {
 		return {ColumnBinding(table_index, 0)};
 	}
 	vector<ColumnBinding> result;
 	for (idx_t i = 0; i < column_ids.size(); i++) {
-		result.push_back(ColumnBinding(table_index, i));
+		result.emplace_back(table_index, i);
 	}
 	return result;
 }
 
 void LogicalGet::ResolveTypes() {
-	if (column_ids.size() == 0) {
+	if (column_ids.empty()) {
 		column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
 	}
 	for (auto &index : column_ids) {

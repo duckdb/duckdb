@@ -39,7 +39,7 @@ unique_ptr<QueryNode> AggregateRelation::GetQueryNode() {
 	}
 	D_ASSERT(result->type == QueryNodeType::SELECT_NODE);
 	auto &select_node = (SelectNode &)*result;
-	if (groups.size() > 0) {
+	if (!groups.empty()) {
 		// explicit groups provided: use standard handling
 		select_node.aggregate_handling = AggregateHandling::STANDARD_HANDLING;
 		select_node.groups.clear();

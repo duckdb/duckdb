@@ -9,7 +9,7 @@
 
 namespace duckdb {
 
-static void concat_function(DataChunk &args, ExpressionState &state, Vector &result) {
+static void ConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	result.vector_type = VectorType::CONSTANT_VECTOR;
 	// iterate over the vectors to count how large the final string will be
 	idx_t constant_lengths = 0;
@@ -95,7 +95,7 @@ static void concat_function(DataChunk &args, ExpressionState &state, Vector &res
 	}
 }
 
-static void concat_operator(DataChunk &args, ExpressionState &state, Vector &result) {
+static void ConcatOperator(DataChunk &args, ExpressionState &state, Vector &result) {
 	BinaryExecutor::Execute<string_t, string_t, string_t, true>(
 	    args.data[0], args.data[1], result, args.size(), [&](string_t a, string_t b) {
 		    auto a_data = a.GetDataUnsafe();
@@ -114,8 +114,8 @@ static void concat_operator(DataChunk &args, ExpressionState &state, Vector &res
 	    });
 }
 
-static void templated_concat_ws(DataChunk &args, string_t *sep_data, const SelectionVector &sep_sel,
-                                const SelectionVector &rsel, idx_t count, Vector &result) {
+static void TemplatedConcatWS(DataChunk &args, string_t *sep_data, const SelectionVector &sep_sel,
+                              const SelectionVector &rsel, idx_t count, Vector &result) {
 	vector<idx_t> result_lengths(args.size(), 0);
 	vector<bool> has_results(args.size(), false);
 	auto orrified_data = unique_ptr<VectorData[]>(new VectorData[args.ColumnCount() - 1]);
@@ -184,7 +184,7 @@ static void templated_concat_ws(DataChunk &args, string_t *sep_data, const Selec
 	}
 }
 
-static void concat_ws_function(DataChunk &args, ExpressionState &state, Vector &result) {
+static void ConcatWSFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &separator = args.data[0];
 	VectorData vdata;
 	separator.Orrify(args.size(), vdata);
@@ -205,8 +205,8 @@ static void concat_ws_function(DataChunk &args, ExpressionState &state, Vector &
 			return;
 		}
 		// no null values
-		templated_concat_ws(args, (string_t *)vdata.data, *vdata.sel, FlatVector::IncrementalSelectionVector,
-		                    args.size(), result);
+		TemplatedConcatWS(args, (string_t *)vdata.data, *vdata.sel, FlatVector::INCREMENTAL_SELECTION_VECTOR,
+		                  args.size(), result);
 		return;
 	default: {
 		// default case: loop over nullmask and create a non-null selection vector
@@ -220,7 +220,7 @@ static void concat_ws_function(DataChunk &args, ExpressionState &state, Vector &
 				not_null_vector.set_index(not_null_count++, i);
 			}
 		}
-		templated_concat_ws(args, (string_t *)vdata.data, *vdata.sel, not_null_vector, not_null_count, result);
+		TemplatedConcatWS(args, (string_t *)vdata.data, *vdata.sel, not_null_vector, not_null_count, result);
 		return;
 	}
 	}
@@ -242,18 +242,18 @@ void ConcatFun::RegisterFunction(BuiltinFunctions &set) {
 	// e.g.:
 	// concat_ws(',', NULL, NULL) = ""
 	// concat_ws(',', '', '') = ","
-	ScalarFunction concat = ScalarFunction("concat", {LogicalType::VARCHAR}, LogicalType::VARCHAR, concat_function);
+	ScalarFunction concat = ScalarFunction("concat", {LogicalType::VARCHAR}, LogicalType::VARCHAR, ConcatFunction);
 	concat.varargs = LogicalType::VARCHAR;
 	set.AddFunction(concat);
 
 	ScalarFunctionSet concat_op("||");
 	concat_op.AddFunction(
-	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR, concat_operator));
-	concat_op.AddFunction(ScalarFunction({LogicalType::BLOB, LogicalType::BLOB}, LogicalType::BLOB, concat_operator));
+	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR, ConcatOperator));
+	concat_op.AddFunction(ScalarFunction({LogicalType::BLOB, LogicalType::BLOB}, LogicalType::BLOB, ConcatOperator));
 	set.AddFunction(concat_op);
 
 	ScalarFunction concat_ws = ScalarFunction("concat_ws", {LogicalType::VARCHAR, LogicalType::VARCHAR},
-	                                          LogicalType::VARCHAR, concat_ws_function);
+	                                          LogicalType::VARCHAR, ConcatWSFunction);
 	concat_ws.varargs = LogicalType::VARCHAR;
 	set.AddFunction(concat_ws);
 }

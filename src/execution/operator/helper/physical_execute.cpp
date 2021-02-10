@@ -2,9 +2,9 @@
 
 namespace duckdb {
 
-void PhysicalExecute::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalExecute::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
 	D_ASSERT(plan);
-	plan->GetChunk(context, chunk, state_);
+	plan->GetChunk(context, chunk, state_p);
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalExecute::GetOperatorState() {

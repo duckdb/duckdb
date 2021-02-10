@@ -20,7 +20,7 @@ class PreparedStatementData;
 //! using the Binder and LogicalPlanGenerator.
 class Planner {
 public:
-	Planner(ClientContext &context);
+	explicit Planner(ClientContext &context);
 
 	void CreatePlan(unique_ptr<SQLStatement> statement);
 

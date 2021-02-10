@@ -55,13 +55,13 @@ enum HtEntryType { HT_WIDTH_32, HT_WIDTH_64 };
 class GroupedAggregateHashTable : public BaseAggregateHashTable {
 public:
 	GroupedAggregateHashTable(BufferManager &buffer_manager, vector<LogicalType> group_types,
-	                          vector<LogicalType> payload_types, vector<BoundAggregateExpression *> aggregates,
+	                          vector<LogicalType> payload_types, const vector<BoundAggregateExpression *> &aggregates,
 	                          HtEntryType entry_type = HtEntryType::HT_WIDTH_64);
 	GroupedAggregateHashTable(BufferManager &buffer_manager, vector<LogicalType> group_types,
 	                          vector<LogicalType> payload_types, vector<AggregateObject> aggregates,
 	                          HtEntryType entry_type = HtEntryType::HT_WIDTH_64);
 	GroupedAggregateHashTable(BufferManager &buffer_manager, vector<LogicalType> group_types);
-	~GroupedAggregateHashTable();
+	~GroupedAggregateHashTable() override;
 
 	//! Add the given data to the HT, computing the aggregates grouped by the
 	//! data in the group chunk. When resize = true, aggregates will not be

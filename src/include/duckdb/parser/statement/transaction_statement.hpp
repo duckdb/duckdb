@@ -15,7 +15,7 @@ namespace duckdb {
 
 class TransactionStatement : public SQLStatement {
 public:
-	TransactionStatement(TransactionType type);
+	explicit TransactionStatement(TransactionType type);
 
 	unique_ptr<TransactionInfo> info;
 

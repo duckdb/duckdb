@@ -9,8 +9,8 @@ RowChunk::RowChunk(BufferManager &buffer_manager)
 }
 
 template <class T>
-static void templated_serialize_vdata(VectorData &vdata, const SelectionVector &sel, idx_t count, idx_t col_idx,
-                                      data_ptr_t key_locations[], data_ptr_t nullmask_locations[]) {
+static void TemplatedSerializeVData(VectorData &vdata, const SelectionVector &sel, idx_t count, idx_t col_idx,
+                                    data_ptr_t *key_locations, data_ptr_t *nullmask_locations) {
 	auto source = (T *)vdata.data;
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = sel.get_index(i);
@@ -30,43 +30,43 @@ void RowChunk::SerializeVectorData(VectorData &vdata, PhysicalType type, const S
 	switch (type) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
-		templated_serialize_vdata<int8_t>(vdata, sel, count, col_idx, key_locations, nullmask_locations);
+		TemplatedSerializeVData<int8_t>(vdata, sel, count, col_idx, key_locations, nullmask_locations);
 		break;
 	case PhysicalType::INT16:
-		templated_serialize_vdata<int16_t>(vdata, sel, count, col_idx, key_locations, nullmask_locations);
+		TemplatedSerializeVData<int16_t>(vdata, sel, count, col_idx, key_locations, nullmask_locations);
 		break;
 	case PhysicalType::INT32:
-		templated_serialize_vdata<int32_t>(vdata, sel, count, col_idx, key_locations, nullmask_locations);
+		TemplatedSerializeVData<int32_t>(vdata, sel, count, col_idx, key_locations, nullmask_locations);
 		break;
 	case PhysicalType::INT64:
-		templated_serialize_vdata<int64_t>(vdata, sel, count, col_idx, key_locations, nullmask_locations);
+		TemplatedSerializeVData<int64_t>(vdata, sel, count, col_idx, key_locations, nullmask_locations);
 		break;
 	case PhysicalType::UINT8:
-		templated_serialize_vdata<uint8_t>(vdata, sel, count, col_idx, key_locations, nullmask_locations);
+		TemplatedSerializeVData<uint8_t>(vdata, sel, count, col_idx, key_locations, nullmask_locations);
 		break;
 	case PhysicalType::UINT16:
-		templated_serialize_vdata<uint16_t>(vdata, sel, count, col_idx, key_locations, nullmask_locations);
+		TemplatedSerializeVData<uint16_t>(vdata, sel, count, col_idx, key_locations, nullmask_locations);
 		break;
 	case PhysicalType::UINT32:
-		templated_serialize_vdata<uint32_t>(vdata, sel, count, col_idx, key_locations, nullmask_locations);
+		TemplatedSerializeVData<uint32_t>(vdata, sel, count, col_idx, key_locations, nullmask_locations);
 		break;
 	case PhysicalType::UINT64:
-		templated_serialize_vdata<uint64_t>(vdata, sel, count, col_idx, key_locations, nullmask_locations);
+		TemplatedSerializeVData<uint64_t>(vdata, sel, count, col_idx, key_locations, nullmask_locations);
 		break;
 	case PhysicalType::INT128:
-		templated_serialize_vdata<hugeint_t>(vdata, sel, count, col_idx, key_locations, nullmask_locations);
+		TemplatedSerializeVData<hugeint_t>(vdata, sel, count, col_idx, key_locations, nullmask_locations);
 		break;
 	case PhysicalType::FLOAT:
-		templated_serialize_vdata<float>(vdata, sel, count, col_idx, key_locations, nullmask_locations);
+		TemplatedSerializeVData<float>(vdata, sel, count, col_idx, key_locations, nullmask_locations);
 		break;
 	case PhysicalType::DOUBLE:
-		templated_serialize_vdata<double>(vdata, sel, count, col_idx, key_locations, nullmask_locations);
+		TemplatedSerializeVData<double>(vdata, sel, count, col_idx, key_locations, nullmask_locations);
 		break;
 	case PhysicalType::HASH:
-		templated_serialize_vdata<hash_t>(vdata, sel, count, col_idx, key_locations, nullmask_locations);
+		TemplatedSerializeVData<hash_t>(vdata, sel, count, col_idx, key_locations, nullmask_locations);
 		break;
 	case PhysicalType::INTERVAL:
-		templated_serialize_vdata<interval_t>(vdata, sel, count, col_idx, key_locations, nullmask_locations);
+		TemplatedSerializeVData<interval_t>(vdata, sel, count, col_idx, key_locations, nullmask_locations);
 		break;
 	case PhysicalType::VARCHAR: {
 		StringHeap local_heap;
@@ -122,7 +122,7 @@ void RowChunk::Build(idx_t added_count, data_ptr_t key_locations[], data_ptr_t n
 	{
 		// first append to the last block (if any)
 		lock_guard<mutex> append_lock(rc_lock);
-		if (blocks.size() != 0) {
+		if (blocks.empty()) {
 			auto &last_block = blocks.back();
 			if (last_block.count < last_block.capacity) {
 				// last block has space: pin the buffer of this block
@@ -160,8 +160,8 @@ void RowChunk::Build(idx_t added_count, data_ptr_t key_locations[], data_ptr_t n
 }
 
 template <class T>
-static void templated_deserialize_into_vector(VectorData &vdata, idx_t count, idx_t col_idx, data_ptr_t key_locations[],
-                                              data_ptr_t nullmask_locations[]) {
+static void TemplatedDeserializeIntoVector(VectorData &vdata, idx_t count, idx_t col_idx, data_ptr_t *key_locations,
+                                           data_ptr_t *nullmask_locations) {
 	auto target = (T *)vdata.data;
 	for (idx_t i = 0; i < count; i++) {
 		target[i] = Load<T>(key_locations[i]);
@@ -175,46 +175,46 @@ void RowChunk::DeserializeIntoVectorData(VectorData &vdata, PhysicalType type, i
 	switch (type) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
-		templated_deserialize_into_vector<int8_t>(vdata, count, col_idx, key_locations, nullmask_locations);
+		TemplatedDeserializeIntoVector<int8_t>(vdata, count, col_idx, key_locations, nullmask_locations);
 		break;
 	case PhysicalType::INT16:
-		templated_deserialize_into_vector<int16_t>(vdata, count, col_idx, key_locations, nullmask_locations);
+		TemplatedDeserializeIntoVector<int16_t>(vdata, count, col_idx, key_locations, nullmask_locations);
 		break;
 	case PhysicalType::INT32:
-		templated_deserialize_into_vector<int32_t>(vdata, count, col_idx, key_locations, nullmask_locations);
+		TemplatedDeserializeIntoVector<int32_t>(vdata, count, col_idx, key_locations, nullmask_locations);
 		break;
 	case PhysicalType::INT64:
-		templated_deserialize_into_vector<int64_t>(vdata, count, col_idx, key_locations, nullmask_locations);
+		TemplatedDeserializeIntoVector<int64_t>(vdata, count, col_idx, key_locations, nullmask_locations);
 		break;
 	case PhysicalType::UINT8:
-		templated_deserialize_into_vector<uint8_t>(vdata, count, col_idx, key_locations, nullmask_locations);
+		TemplatedDeserializeIntoVector<uint8_t>(vdata, count, col_idx, key_locations, nullmask_locations);
 		break;
 	case PhysicalType::UINT16:
-		templated_deserialize_into_vector<uint16_t>(vdata, count, col_idx, key_locations, nullmask_locations);
+		TemplatedDeserializeIntoVector<uint16_t>(vdata, count, col_idx, key_locations, nullmask_locations);
 		break;
 	case PhysicalType::UINT32:
-		templated_deserialize_into_vector<uint32_t>(vdata, count, col_idx, key_locations, nullmask_locations);
+		TemplatedDeserializeIntoVector<uint32_t>(vdata, count, col_idx, key_locations, nullmask_locations);
 		break;
 	case PhysicalType::UINT64:
-		templated_deserialize_into_vector<uint64_t>(vdata, count, col_idx, key_locations, nullmask_locations);
+		TemplatedDeserializeIntoVector<uint64_t>(vdata, count, col_idx, key_locations, nullmask_locations);
 		break;
 	case PhysicalType::INT128:
-		templated_deserialize_into_vector<hugeint_t>(vdata, count, col_idx, key_locations, nullmask_locations);
+		TemplatedDeserializeIntoVector<hugeint_t>(vdata, count, col_idx, key_locations, nullmask_locations);
 		break;
 	case PhysicalType::FLOAT:
-		templated_deserialize_into_vector<float>(vdata, count, col_idx, key_locations, nullmask_locations);
+		TemplatedDeserializeIntoVector<float>(vdata, count, col_idx, key_locations, nullmask_locations);
 		break;
 	case PhysicalType::DOUBLE:
-		templated_deserialize_into_vector<double>(vdata, count, col_idx, key_locations, nullmask_locations);
+		TemplatedDeserializeIntoVector<double>(vdata, count, col_idx, key_locations, nullmask_locations);
 		break;
 	case PhysicalType::HASH:
-		templated_deserialize_into_vector<hash_t>(vdata, count, col_idx, key_locations, nullmask_locations);
+		TemplatedDeserializeIntoVector<hash_t>(vdata, count, col_idx, key_locations, nullmask_locations);
 		break;
 	case PhysicalType::INTERVAL:
-		templated_deserialize_into_vector<interval_t>(vdata, count, col_idx, key_locations, nullmask_locations);
+		TemplatedDeserializeIntoVector<interval_t>(vdata, count, col_idx, key_locations, nullmask_locations);
 		break;
 	case PhysicalType::VARCHAR:
-		templated_deserialize_into_vector<string_t>(vdata, count, col_idx, key_locations, nullmask_locations);
+		TemplatedDeserializeIntoVector<string_t>(vdata, count, col_idx, key_locations, nullmask_locations);
 		break;
 	default:
 		throw NotImplementedException("FIXME: unimplemented deserialize");

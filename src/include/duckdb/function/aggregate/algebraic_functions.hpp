@@ -24,6 +24,10 @@ struct CovarPopFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct Corr {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct StdDevSampFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
@@ -37,6 +41,10 @@ struct VarPopFun {
 };
 
 struct VarSampFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct VarianceFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

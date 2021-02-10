@@ -3,10 +3,8 @@
 
 namespace duckdb {
 
-using namespace duckdb_libpgquery;
-
-unique_ptr<DeleteStatement> Transformer::TransformDelete(PGNode *node) {
-	auto stmt = reinterpret_cast<PGDeleteStmt *>(node);
+unique_ptr<DeleteStatement> Transformer::TransformDelete(duckdb_libpgquery::PGNode *node) {
+	auto stmt = reinterpret_cast<duckdb_libpgquery::PGDeleteStmt *>(node);
 	D_ASSERT(stmt);
 	auto result = make_unique<DeleteStatement>();
 

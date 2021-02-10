@@ -10,7 +10,7 @@ namespace duckdb {
 
 PostgresParser::PostgresParser() : success(false), parse_tree(nullptr), error_message(""), error_location(0) {}
 
-void PostgresParser::Parse(string query) {
+void PostgresParser::Parse(const string &query) {
 	duckdb_libpgquery::pg_parser_init();
     duckdb_libpgquery::parse_result res;
 	pg_parser_parse(query.c_str(), &res);
@@ -24,7 +24,7 @@ void PostgresParser::Parse(string query) {
 	}
 }
 
-vector<duckdb_libpgquery::PGSimplifiedToken> PostgresParser::Tokenize(std::string query) {
+vector<duckdb_libpgquery::PGSimplifiedToken> PostgresParser::Tokenize(const std::string &query) {
 	duckdb_libpgquery::pg_parser_init();
 	auto tokens = duckdb_libpgquery::tokenize(query.c_str());
 	duckdb_libpgquery::pg_parser_cleanup();

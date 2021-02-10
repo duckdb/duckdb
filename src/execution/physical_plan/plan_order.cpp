@@ -8,7 +8,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOrder &op)
 	D_ASSERT(op.children.size() == 1);
 
 	auto plan = CreatePlan(*op.children[0]);
-	if (op.orders.size() > 0) {
+	if (!op.orders.empty()) {
 		auto order = make_unique<PhysicalOrder>(op.types, move(op.orders));
 		order->children.push_back(move(plan));
 		plan = move(order);

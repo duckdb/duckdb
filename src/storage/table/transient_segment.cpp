@@ -10,8 +10,8 @@
 
 namespace duckdb {
 
-TransientSegment::TransientSegment(DatabaseInstance &db, LogicalType type, idx_t start)
-    : ColumnSegment(type, ColumnSegmentType::TRANSIENT, start), db(db) {
+TransientSegment::TransientSegment(DatabaseInstance &db, const LogicalType &type_p, idx_t start)
+    : ColumnSegment(type_p, ColumnSegmentType::TRANSIENT, start), db(db) {
 	if (type.InternalType() == PhysicalType::VARCHAR) {
 		data = make_unique<StringSegment>(db, start);
 	} else {
@@ -52,8 +52,8 @@ void TransientSegment::IndexScan(ColumnScanState &state, Vector &result) {
 }
 
 void TransientSegment::Select(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
-                              idx_t &approved_tuple_count, vector<TableFilter> &tableFilter) {
-	return data->Select(transaction, result, tableFilter, sel, approved_tuple_count, state);
+                              idx_t &approved_tuple_count, vector<TableFilter> &table_filter) {
+	return data->Select(transaction, result, table_filter, sel, approved_tuple_count, state);
 }
 
 void TransientSegment::Fetch(ColumnScanState &state, idx_t vector_index, Vector &result) {

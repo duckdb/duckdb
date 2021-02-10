@@ -77,8 +77,8 @@ enum class ExceptionType {
 
 class Exception : public std::exception {
 public:
-	Exception(string message);
-	Exception(ExceptionType exception_type, string message);
+	explicit Exception(const string &msg);
+	Exception(ExceptionType exception_type, const string &message);
 
 	ExceptionType type;
 
@@ -88,15 +88,16 @@ public:
 	string ExceptionTypeToString(ExceptionType type);
 
 	template <typename... Args>
-	static string ConstructMessage(string msg, Args... params) {
+	static string ConstructMessage(const string &msg, Args... params) {
 		vector<ExceptionFormatValue> values;
 		return ConstructMessageRecursive(msg, values, params...);
 	}
 
-	static string ConstructMessageRecursive(string msg, vector<ExceptionFormatValue> &values);
+	static string ConstructMessageRecursive(const string &msg, vector<ExceptionFormatValue> &values);
 
 	template <class T, typename... Args>
-	static string ConstructMessageRecursive(string msg, vector<ExceptionFormatValue> &values, T param, Args... params) {
+	static string ConstructMessageRecursive(const string &msg, vector<ExceptionFormatValue> &values, T param,
+	                                        Args... params) {
 		values.push_back(ExceptionFormatValue::CreateFormatValue<T>(param));
 		return ConstructMessageRecursive(msg, values, params...);
 	}
@@ -118,109 +119,116 @@ public:
 
 class CatalogException : public StandardException {
 public:
-	CatalogException(string msg);
+	explicit CatalogException(const string &msg);
 
 	template <typename... Args>
-	CatalogException(string msg, Args... params) : CatalogException(ConstructMessage(msg, params...)) {
+	explicit CatalogException(const string &msg, Args... params) : CatalogException(ConstructMessage(msg, params...)) {
 	}
 };
 
 class ParserException : public StandardException {
 public:
-	ParserException(string msg);
+	explicit ParserException(const string &msg);
 
 	template <typename... Args>
-	ParserException(string msg, Args... params) : ParserException(ConstructMessage(msg, params...)) {
+	explicit ParserException(const string &msg, Args... params) : ParserException(ConstructMessage(msg, params...)) {
 	}
 };
 
 class BinderException : public StandardException {
 public:
-	BinderException(string msg);
+	explicit BinderException(const string &msg);
 
 	template <typename... Args>
-	BinderException(string msg, Args... params) : BinderException(ConstructMessage(msg, params...)) {
+	explicit BinderException(const string &msg, Args... params) : BinderException(ConstructMessage(msg, params...)) {
 	}
 };
 
 class ConversionException : public Exception {
 public:
-	ConversionException(string msg);
+	explicit ConversionException(const string &msg);
 
 	template <typename... Args>
-	ConversionException(string msg, Args... params) : ConversionException(ConstructMessage(msg, params...)) {
+	explicit ConversionException(const string &msg, Args... params)
+	    : ConversionException(ConstructMessage(msg, params...)) {
 	}
 };
 
 class TransactionException : public Exception {
 public:
-	TransactionException(string msg);
+	explicit TransactionException(const string &msg);
 
 	template <typename... Args>
-	TransactionException(string msg, Args... params) : TransactionException(ConstructMessage(msg, params...)) {
+	explicit TransactionException(const string &msg, Args... params)
+	    : TransactionException(ConstructMessage(msg, params...)) {
 	}
 };
 
 class NotImplementedException : public Exception {
 public:
-	NotImplementedException(string msg);
+	explicit NotImplementedException(const string &msg);
 
 	template <typename... Args>
-	NotImplementedException(string msg, Args... params) : NotImplementedException(ConstructMessage(msg, params...)) {
+	explicit NotImplementedException(const string &msg, Args... params)
+	    : NotImplementedException(ConstructMessage(msg, params...)) {
 	}
 };
 
 class OutOfRangeException : public Exception {
 public:
-	OutOfRangeException(string msg);
+	explicit OutOfRangeException(const string &msg);
 
 	template <typename... Args>
-	OutOfRangeException(string msg, Args... params) : OutOfRangeException(ConstructMessage(msg, params...)) {
+	explicit OutOfRangeException(const string &msg, Args... params)
+	    : OutOfRangeException(ConstructMessage(msg, params...)) {
 	}
 };
 
 class SyntaxException : public Exception {
 public:
-	SyntaxException(string msg);
+	explicit SyntaxException(const string &msg);
 
 	template <typename... Args>
-	SyntaxException(string msg, Args... params) : SyntaxException(ConstructMessage(msg, params...)) {
+	explicit SyntaxException(const string &msg, Args... params) : SyntaxException(ConstructMessage(msg, params...)) {
 	}
 };
 
 class ConstraintException : public Exception {
 public:
-	ConstraintException(string msg);
+	explicit ConstraintException(const string &msg);
 
 	template <typename... Args>
-	ConstraintException(string msg, Args... params) : ConstraintException(ConstructMessage(msg, params...)) {
+	explicit ConstraintException(const string &msg, Args... params)
+	    : ConstraintException(ConstructMessage(msg, params...)) {
 	}
 };
 
 class IOException : public Exception {
 public:
-	IOException(string msg);
+	explicit IOException(const string &msg);
 
 	template <typename... Args>
-	IOException(string msg, Args... params) : IOException(ConstructMessage(msg, params...)) {
+	explicit IOException(const string &msg, Args... params) : IOException(ConstructMessage(msg, params...)) {
 	}
 };
 
 class SerializationException : public Exception {
 public:
-	SerializationException(string msg);
+	explicit SerializationException(const string &msg);
 
 	template <typename... Args>
-	SerializationException(string msg, Args... params) : SerializationException(ConstructMessage(msg, params...)) {
+	explicit SerializationException(const string &msg, Args... params)
+	    : SerializationException(ConstructMessage(msg, params...)) {
 	}
 };
 
 class SequenceException : public Exception {
 public:
-	SequenceException(string msg);
+	explicit SequenceException(const string &msg);
 
 	template <typename... Args>
-	SequenceException(string msg, Args... params) : SequenceException(ConstructMessage(msg, params...)) {
+	explicit SequenceException(const string &msg, Args... params)
+	    : SequenceException(ConstructMessage(msg, params...)) {
 	}
 };
 
@@ -231,47 +239,49 @@ public:
 
 class FatalException : public Exception {
 public:
-	FatalException(string msg);
+	explicit FatalException(const string &msg);
 
 	template <typename... Args>
-	FatalException(string msg, Args... params) : FatalException(ConstructMessage(msg, params...)) {
+	explicit FatalException(const string &msg, Args... params) : FatalException(ConstructMessage(msg, params...)) {
 	}
 };
 
 class InternalException : public Exception {
 public:
-	InternalException(string msg);
+	explicit InternalException(const string &msg);
 
 	template <typename... Args>
-	InternalException(string msg, Args... params) : InternalException(ConstructMessage(msg, params...)) {
+	explicit InternalException(const string &msg, Args... params)
+	    : InternalException(ConstructMessage(msg, params...)) {
 	}
 };
 
 class InvalidInputException : public Exception {
 public:
-	InvalidInputException(string msg);
+	explicit InvalidInputException(const string &msg);
 
 	template <typename... Args>
-	InvalidInputException(string msg, Args... params) : InvalidInputException(ConstructMessage(msg, params...)) {
+	explicit InvalidInputException(const string &msg, Args... params)
+	    : InvalidInputException(ConstructMessage(msg, params...)) {
 	}
 };
 
 class CastException : public Exception {
 public:
 	CastException(const PhysicalType origType, const PhysicalType newType);
-	CastException(const LogicalType origType, const LogicalType newType);
+	CastException(const LogicalType &origType, const LogicalType &newType);
 };
 
 class InvalidTypeException : public Exception {
 public:
-	InvalidTypeException(PhysicalType type, string msg);
-	InvalidTypeException(LogicalType type, string msg);
+	InvalidTypeException(PhysicalType type, const string &msg);
+	InvalidTypeException(const LogicalType &type, const string &msg);
 };
 
 class TypeMismatchException : public Exception {
 public:
-	TypeMismatchException(const PhysicalType type_1, const PhysicalType type_2, string msg);
-	TypeMismatchException(const LogicalType type_1, const LogicalType type_2, string msg);
+	TypeMismatchException(const PhysicalType type_1, const PhysicalType type_2, const string &msg);
+	TypeMismatchException(const LogicalType &type_1, const LogicalType &type_2, const string &msg);
 };
 
 class ValueOutOfRangeException : public Exception {

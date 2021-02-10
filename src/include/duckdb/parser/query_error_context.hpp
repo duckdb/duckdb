@@ -17,7 +17,7 @@ class SQLStatement;
 
 class QueryErrorContext {
 public:
-	QueryErrorContext(SQLStatement *statement_ = nullptr, idx_t query_location_ = INVALID_INDEX)
+	explicit QueryErrorContext(SQLStatement *statement_ = nullptr, idx_t query_location_ = INVALID_INDEX)
 	    : statement(statement_), query_location(query_location_) {
 	}
 
@@ -29,15 +29,15 @@ public:
 public:
 	static string Format(const string &query, const string &error_message, int error_location);
 
-	string FormatErrorRecursive(string msg, vector<ExceptionFormatValue> &values);
+	string FormatErrorRecursive(const string &msg, vector<ExceptionFormatValue> &values);
 	template <class T, typename... Args>
-	string FormatErrorRecursive(string msg, vector<ExceptionFormatValue> &values, T param, Args... params) {
+	string FormatErrorRecursive(const string &msg, vector<ExceptionFormatValue> &values, T param, Args... params) {
 		values.push_back(ExceptionFormatValue::CreateFormatValue<T>(param));
 		return FormatErrorRecursive(msg, values, params...);
 	}
 
 	template <typename... Args>
-	string FormatError(string msg, Args... params) {
+	string FormatError(const string &msg, Args... params) {
 		vector<ExceptionFormatValue> values;
 		return FormatErrorRecursive(msg, values, params...);
 	}

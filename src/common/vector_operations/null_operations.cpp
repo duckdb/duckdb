@@ -10,7 +10,7 @@
 namespace duckdb {
 
 template <bool INVERSE>
-void is_null_loop(Vector &input, Vector &result, idx_t count) {
+void IsNullLoop(Vector &input, Vector &result, idx_t count) {
 	D_ASSERT(result.type == LogicalType::BOOLEAN);
 
 	if (input.vector_type == VectorType::CONSTANT_VECTOR) {
@@ -32,11 +32,11 @@ void is_null_loop(Vector &input, Vector &result, idx_t count) {
 }
 
 void VectorOperations::IsNotNull(Vector &input, Vector &result, idx_t count) {
-	is_null_loop<true>(input, result, count);
+	IsNullLoop<true>(input, result, count);
 }
 
 void VectorOperations::IsNull(Vector &input, Vector &result, idx_t count) {
-	is_null_loop<false>(input, result, count);
+	IsNullLoop<false>(input, result, count);
 }
 
 bool VectorOperations::HasNotNull(Vector &input, idx_t count) {

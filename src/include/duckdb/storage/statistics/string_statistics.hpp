@@ -17,7 +17,7 @@ public:
 	constexpr static uint32_t MAX_STRING_MINMAX_SIZE = 8;
 
 public:
-	StringStatistics(LogicalType type);
+	explicit StringStatistics(LogicalType type);
 
 	//! The minimum value of the segment, potentially truncated
 	data_t min[MAX_STRING_MINMAX_SIZE];
@@ -39,7 +39,7 @@ public:
 	static unique_ptr<BaseStatistics> Deserialize(Deserializer &source, LogicalType type);
 	void Verify(Vector &vector, idx_t count) override;
 
-	bool CheckZonemap(ExpressionType comparison_type, string value);
+	bool CheckZonemap(ExpressionType comparison_type, const string &value);
 
 	string ToString() override;
 };

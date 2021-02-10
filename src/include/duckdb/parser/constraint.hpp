@@ -29,7 +29,7 @@ enum class ConstraintType : uint8_t {
 //! Constraint is the base class of any type of table constraint.
 class Constraint {
 public:
-	Constraint(ConstraintType type) : type(type) {};
+	explicit Constraint(ConstraintType type) : type(type) {};
 	virtual ~Constraint() {
 	}
 

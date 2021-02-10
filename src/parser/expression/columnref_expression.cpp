@@ -8,11 +8,11 @@ namespace duckdb {
 
 //! Specify both the column and table name
 ColumnRefExpression::ColumnRefExpression(string column_name, string table_name)
-    : ParsedExpression(ExpressionType::COLUMN_REF, ExpressionClass::COLUMN_REF), column_name(column_name),
-      table_name(table_name) {
+    : ParsedExpression(ExpressionType::COLUMN_REF, ExpressionClass::COLUMN_REF), column_name(move(column_name)),
+      table_name(move(table_name)) {
 }
 
-ColumnRefExpression::ColumnRefExpression(string column_name) : ColumnRefExpression(column_name, string()) {
+ColumnRefExpression::ColumnRefExpression(string column_name) : ColumnRefExpression(move(column_name), string()) {
 }
 
 string ColumnRefExpression::GetName() const {

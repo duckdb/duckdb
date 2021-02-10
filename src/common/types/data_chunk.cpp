@@ -51,8 +51,8 @@ Value DataChunk::GetValue(idx_t col_idx, idx_t index) const {
 	return data[col_idx].GetValue(index);
 }
 
-void DataChunk::SetValue(idx_t col_idx, idx_t index, Value val) {
-	data[col_idx].SetValue(index, move(val));
+void DataChunk::SetValue(idx_t col_idx, idx_t index, const Value &val) {
+	data[col_idx].SetValue(index, val);
 }
 
 void DataChunk::Reference(DataChunk &chunk) {
@@ -204,7 +204,7 @@ struct DuckDBArrowArrayHolder {
 	unique_ptr<data_t[]> string_data;
 };
 
-static void release_duckdb_arrow_array(ArrowArray *array) {
+static void ReleaseDuckDBArrowArray(ArrowArray *array) {
 	if (!array || !array->release) {
 		return;
 	}
@@ -220,7 +220,7 @@ void DataChunk::ToArrowArray(ArrowArray *out_array) {
 	auto root_holder = new DuckDBArrowArrayHolder();
 	root_holder->children = unique_ptr<ArrowArray *[]>(new ArrowArray *[ColumnCount()]);
 	out_array->private_data = root_holder;
-	out_array->release = release_duckdb_arrow_array;
+	out_array->release = ReleaseDuckDBArrowArray;
 
 	out_array->children = root_holder->children.get();
 	out_array->length = size();
@@ -238,7 +238,7 @@ void DataChunk::ToArrowArray(ArrowArray *out_array) {
 		auto &child = holder->array;
 		auto &vector = holder->vector;
 		child.private_data = holder;
-		child.release = release_duckdb_arrow_array;
+		child.release = ReleaseDuckDBArrowArray;
 
 		child.n_children = 0;
 		child.null_count = -1; // unknown
