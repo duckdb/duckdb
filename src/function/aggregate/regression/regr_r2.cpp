@@ -9,36 +9,36 @@
 #include "duckdb/function/aggregate/regression_functions.hpp"
 
 namespace duckdb {
-struct regr_r2_state_t {
-	corr_state_t corr;
-	stddev_state_t var_pop_x;
-	stddev_state_t var_pop_y;
+struct RegrR2State {
+	CorrState corr;
+	StddevState var_pop_x;
+	StddevState var_pop_y;
 };
 
 struct RegrR2Operation {
 	template <class STATE>
 	static void Initialize(STATE *state) {
-		CorrOperation::Initialize<corr_state_t>(&state->corr);
-		STDDevBaseOperation::Initialize<stddev_state_t>(&state->var_pop_x);
-		STDDevBaseOperation::Initialize<stddev_state_t>(&state->var_pop_y);
+		CorrOperation::Initialize<CorrState>(&state->corr);
+		STDDevBaseOperation::Initialize<StddevState>(&state->var_pop_x);
+		STDDevBaseOperation::Initialize<StddevState>(&state->var_pop_y);
 	}
 
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
 	static void Operation(STATE *state, FunctionData *bind_data, A_TYPE *x_data, B_TYPE *y_data, nullmask_t &anullmask,
 	                      nullmask_t &bnullmask, idx_t xidx, idx_t yidx) {
-		CorrOperation::Operation<A_TYPE, B_TYPE, corr_state_t, OP>(&state->corr, bind_data, y_data, x_data, bnullmask,
+		CorrOperation::Operation<A_TYPE, B_TYPE, CorrState, OP>(&state->corr, bind_data, y_data, x_data, bnullmask,
 		                                                           anullmask, yidx, xidx);
-		STDDevBaseOperation::Operation<A_TYPE, stddev_state_t, OP>(&state->var_pop_x, bind_data, y_data, bnullmask,
+		STDDevBaseOperation::Operation<A_TYPE, StddevState, OP>(&state->var_pop_x, bind_data, y_data, bnullmask,
 		                                                           yidx);
-		STDDevBaseOperation::Operation<A_TYPE, stddev_state_t, OP>(&state->var_pop_y, bind_data, x_data, anullmask,
+		STDDevBaseOperation::Operation<A_TYPE, StddevState, OP>(&state->var_pop_y, bind_data, x_data, anullmask,
 		                                                           xidx);
 	}
 
 	template <class STATE, class OP>
 	static void Combine(STATE source, STATE *target) {
-		CorrOperation::Combine<corr_state_t, OP>(source.corr, &target->corr);
-		STDDevBaseOperation::Combine<stddev_state_t, OP>(source.var_pop_x, &target->var_pop_x);
-		STDDevBaseOperation::Combine<stddev_state_t, OP>(source.var_pop_y, &target->var_pop_y);
+		CorrOperation::Combine<CorrState, OP>(source.corr, &target->corr);
+		STDDevBaseOperation::Combine<StddevState, OP>(source.var_pop_x, &target->var_pop_x);
+		STDDevBaseOperation::Combine<StddevState, OP>(source.var_pop_y, &target->var_pop_y);
 	}
 
 	template <class T, class STATE>
@@ -59,7 +59,7 @@ struct RegrR2Operation {
 			target[idx] = 1;
 			return;
 		}
-		CorrOperation::Finalize<T, corr_state_t>(result, fd, &state->corr, target, nullmask, idx);
+		CorrOperation::Finalize<T, CorrState>(result, fd, &state->corr, target, nullmask, idx);
 		target[idx] = pow(target[idx], 2);
 	}
 
@@ -70,7 +70,7 @@ struct RegrR2Operation {
 
 void RegrR2Fun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet fun("regr_r2");
-	fun.AddFunction(AggregateFunction::BinaryAggregate<regr_r2_state_t, double, double, double, RegrR2Operation>(
+	fun.AddFunction(AggregateFunction::BinaryAggregate<RegrR2State, double, double, double, RegrR2Operation>(
 	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE));
 	set.AddFunction(fun);
 }

@@ -7,8 +7,9 @@
 #include <utility>
 
 namespace duckdb {
+
 template <class T, class T2>
-struct arg_min_max_state_t {
+struct ArgMinMaxState {
 	T arg;
 	T2 value;
 	bool is_initialized;
@@ -106,22 +107,22 @@ template <class OP, class T>
 AggregateFunction GetArgMinMaxFunctionArg2(LogicalTypeId arg_2, const LogicalType &arg) {
 	switch (arg_2) {
 	case LogicalTypeId::INTEGER:
-		return AggregateFunction::BinaryAggregate<arg_min_max_state_t<T, int>, T, int, T, OP>(arg, LogicalType::INTEGER,
+		return AggregateFunction::BinaryAggregate<ArgMinMaxState<T, int>, T, int, T, OP>(arg, LogicalType::INTEGER,
 		                                                                                      arg);
 	case LogicalTypeId::BIGINT:
-		return AggregateFunction::BinaryAggregate<arg_min_max_state_t<T, uint64_t>, T, uint64_t, T, OP>(
+		return AggregateFunction::BinaryAggregate<ArgMinMaxState<T, uint64_t>, T, uint64_t, T, OP>(
 		    arg, LogicalType::BIGINT, arg);
 	case LogicalTypeId::DOUBLE:
-		return AggregateFunction::BinaryAggregate<arg_min_max_state_t<T, double>, T, double, T, OP>(
+		return AggregateFunction::BinaryAggregate<ArgMinMaxState<T, double>, T, double, T, OP>(
 		    arg, LogicalType::DOUBLE, arg);
 	case LogicalTypeId::VARCHAR:
-		return AggregateFunction::BinaryAggregate<arg_min_max_state_t<T, string_t>, T, string_t, T, OP>(
+		return AggregateFunction::BinaryAggregate<ArgMinMaxState<T, string_t>, T, string_t, T, OP>(
 		    arg, LogicalType::VARCHAR, arg);
 	case LogicalTypeId::DATE:
-		return AggregateFunction::BinaryAggregate<arg_min_max_state_t<T, uint64_t>, T, uint64_t, T, OP>(
+		return AggregateFunction::BinaryAggregate<ArgMinMaxState<T, uint64_t>, T, uint64_t, T, OP>(
 		    arg, LogicalType::DATE, arg);
 	case LogicalTypeId::TIMESTAMP:
-		return AggregateFunction::BinaryAggregate<arg_min_max_state_t<T, uint64_t>, T, uint64_t, T, OP>(
+		return AggregateFunction::BinaryAggregate<ArgMinMaxState<T, uint64_t>, T, uint64_t, T, OP>(
 		    arg, LogicalType::TIMESTAMP, arg);
 	default:
 		throw NotImplementedException("Unimplemented arg_min/arg_max aggregate");

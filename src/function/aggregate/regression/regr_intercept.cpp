@@ -5,11 +5,12 @@
 #include "duckdb/function/function_set.hpp"
 
 namespace duckdb {
-struct regr_intercept_state_t {
+
+struct RegrInterceptState {
 	size_t count;
 	double sum_x;
 	double sum_y;
-	regr_slope_state_t slope;
+	RegrSlopeState slope;
 };
 
 struct RegrInterceptOperation {
@@ -18,7 +19,7 @@ struct RegrInterceptOperation {
 		state->count = 0;
 		state->sum_x = 0;
 		state->sum_y = 0;
-		RegrSlopeOperation::Initialize<regr_slope_state_t>(&state->slope);
+		RegrSlopeOperation::Initialize<RegrSlopeState>(&state->slope);
 	}
 
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
@@ -27,7 +28,7 @@ struct RegrInterceptOperation {
 		state->count++;
 		state->sum_x += y_data[yidx];
 		state->sum_y += x_data[xidx];
-		RegrSlopeOperation::Operation<A_TYPE, B_TYPE, regr_slope_state_t, OP>(&state->slope, bind_data, x_data, y_data,
+		RegrSlopeOperation::Operation<A_TYPE, B_TYPE, RegrSlopeState, OP>(&state->slope, bind_data, x_data, y_data,
 		                                                                      anullmask, bnullmask, xidx, yidx);
 	}
 
@@ -36,12 +37,12 @@ struct RegrInterceptOperation {
 		target->count += source.count;
 		target->sum_x += source.sum_x;
 		target->sum_y += source.sum_y;
-		RegrSlopeOperation::Combine<regr_slope_state_t, OP>(source.slope, &target->slope);
+		RegrSlopeOperation::Combine<RegrSlopeState, OP>(source.slope, &target->slope);
 	}
 
 	template <class T, class STATE>
 	static void Finalize(Vector &result, FunctionData *fd, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
-		RegrSlopeOperation::Finalize<T, regr_slope_state_t>(result, fd, &state->slope, target, nullmask, idx);
+		RegrSlopeOperation::Finalize<T, RegrSlopeState>(result, fd, &state->slope, target, nullmask, idx);
 		auto x_avg = state->sum_x / state->count;
 		auto y_avg = state->sum_y / state->count;
 		target[idx] = y_avg - target[idx] * x_avg;
@@ -55,7 +56,7 @@ struct RegrInterceptOperation {
 void RegrInterceptFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet fun("regr_intercept");
 	fun.AddFunction(
-	    AggregateFunction::BinaryAggregate<regr_intercept_state_t, double, double, double, RegrInterceptOperation>(
+	    AggregateFunction::BinaryAggregate<RegrInterceptState, double, double, double, RegrInterceptOperation>(
 	        LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE));
 	set.AddFunction(fun);
 }
