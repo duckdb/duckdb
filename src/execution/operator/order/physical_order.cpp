@@ -12,6 +12,93 @@ PhysicalOrder::PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode>
     : PhysicalSink(PhysicalOperatorType::ORDER_BY, move(types)), orders(move(orders)) {
 }
 
+struct ContinuousBlock {
+public:
+	ContinuousBlock(BufferManager &buffer_manager_) : buffer_manager(buffer_manager_), curr_block_idx(0) {
+	}
+
+	BufferManager &buffer_manager;
+	idx_t sorting_entry_size;
+	idx_t payload_entry_size;
+
+	vector<shared_ptr<RowDataBlock>> sorting;
+	vector<shared_ptr<RowDataBlock>> payload;
+	idx_t start;
+	idx_t end;
+
+	data_ptr_t sorting_ptr;
+	data_ptr_t payload_ptr;
+
+	bool IsDone() const {
+		return curr_block_idx >= sorting.size();
+	}
+
+	void PinBlock() {
+		if (IsDone()) {
+			return;
+		}
+		curr_entry_idx = curr_block_idx == 0 ? start : 0;
+		curr_block_end = curr_block_idx == sorting.size() - 1 ? end : sorting[curr_block_idx]->count;
+		sorting_handle = buffer_manager.Pin(sorting[curr_block_idx]->block);
+		payload_handle = buffer_manager.Pin(payload[curr_block_idx]->block);
+		sorting_ptr = sorting_handle->node->buffer + curr_entry_idx * sorting_entry_size;
+		payload_ptr = payload_handle->node->buffer + curr_entry_idx * payload_entry_size;
+	}
+
+	void Advance() {
+		curr_entry_idx++;
+		if (curr_entry_idx < curr_block_end) {
+			sorting_ptr += sorting_entry_size;
+			payload_ptr += payload_entry_size;
+		} else {
+			curr_block_idx++;
+			PinBlock();
+		}
+	}
+
+	void FlushData(ContinuousBlock &result) {
+		if (result.sorting.back()->count + (curr_block_end - curr_entry_idx) > result.sorting.back()->capacity) {
+			// if it does not fit in the back, create new blocks to write to
+			result.sorting.emplace_back(
+			    make_shared<RowDataBlock>(buffer_manager, sorting[0]->capacity, sorting_entry_size));
+			result.payload.emplace_back(
+			    make_shared<RowDataBlock>(buffer_manager, payload[0]->capacity, payload_entry_size));
+		}
+		auto write_sort = result.sorting.back();
+		auto write_payl = result.payload.back();
+		auto write_sort_handle = buffer_manager.Pin(result.sorting.back()->block);
+		auto write_payl_handle = buffer_manager.Pin(result.payload.back()->block);
+		auto write_sort_ptr = write_sort_handle->node->buffer + write_sort->count * sorting_entry_size;
+		auto write_payl_ptr = write_payl_handle->node->buffer + write_payl->count * payload_entry_size;
+
+		for (; curr_entry_idx < curr_block_end; curr_entry_idx++) {
+			memcpy(write_sort_ptr, sorting_ptr, sorting_entry_size);
+			memcpy(write_payl_ptr, payload_ptr, payload_entry_size);
+			write_sort_ptr += sorting_entry_size;
+			write_payl_ptr += payload_entry_size;
+			write_sort->count++;
+			write_payl->count++;
+
+			sorting_ptr += sorting_entry_size;
+			payload_ptr += payload_entry_size;
+		}
+		curr_block_idx++;
+
+		for (; curr_block_idx < sorting.size(); curr_block_idx++) {
+			result.sorting.push_back(move(sorting[curr_block_idx]));
+			result.payload.push_back(move(payload[curr_block_idx]));
+		}
+	}
+
+private:
+	idx_t curr_block_idx;
+	idx_t curr_entry_idx;
+	idx_t curr_block_end;
+
+	unique_ptr<BufferHandle> sorting_handle;
+	unique_ptr<BufferHandle> payload_handle;
+};
+
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
@@ -35,6 +122,13 @@ public:
 	RowChunk sorting;
 	//! Payload in row format
 	RowChunk payload;
+
+	//! Ordered segments
+	vector<unique_ptr<ContinuousBlock>> continuous;
+	//! Intermediate results
+	vector<unique_ptr<ContinuousBlock>> intermediate;
+	//! Final sorted blocks
+	vector<RowDataBlock> result;
 };
 
 class OrderLocalState : public LocalSinkState {
@@ -54,25 +148,25 @@ public:
 	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
 	data_ptr_t nullmask_locations[STANDARD_VECTOR_SIZE];
 
-	void Flush(RowChunk &sorting, RowChunk &payload) {
+	void Flush(RowChunk &sorting_, RowChunk &payload_) {
 		// sink local sorting buffer into the given RowChunk
 		for (auto next_chunk = sorting_buffer.Fetch(); next_chunk != nullptr; next_chunk = sorting_buffer.Fetch()) {
 			// TODO: convert this to a bit representation that is sortable by memcmp?
 			//  using 'orders' - this would reduce branch predictions in inner loop 'compare_tuple'
-			sorting.Build(next_chunk->size(), key_locations, nullmask_locations);
+			sorting_.Build(next_chunk->size(), key_locations, nullmask_locations);
 			for (idx_t i = 0; i < next_chunk->data.size(); i++) {
-				sorting.SerializeVector(next_chunk->data[i], next_chunk->size(), *sel_ptr, next_chunk->size(), i,
-				                        key_locations, nullmask_locations);
+				sorting_.SerializeVector(next_chunk->data[i], next_chunk->size(), *sel_ptr, next_chunk->size(), i,
+				                         key_locations, nullmask_locations);
 			}
 		}
 		sorting_buffer.Reset();
 
 		// sink local payload buffer into the given RowChunk
 		for (auto next_chunk = payload_buffer.Fetch(); next_chunk != nullptr; next_chunk = payload_buffer.Fetch()) {
-			payload.Build(next_chunk->size(), key_locations, nullmask_locations);
+			payload_.Build(next_chunk->size(), key_locations, nullmask_locations);
 			for (idx_t i = 0; i < next_chunk->data.size(); i++) {
-				payload.SerializeVector(next_chunk->data[i], next_chunk->size(), *sel_ptr, next_chunk->size(), i,
-				                        key_locations, nullmask_locations);
+				payload_.SerializeVector(next_chunk->data[i], next_chunk->size(), *sel_ptr, next_chunk->size(), i,
+				                         key_locations, nullmask_locations);
 			}
 		}
 		payload_buffer.Reset();
@@ -252,9 +346,10 @@ static int compare_tuple(data_ptr_t &l_start, data_ptr_t &r_start, OrderGlobalSt
 
 class PhysicalOrderSortTask : public Task {
 public:
-	PhysicalOrderSortTask(Pipeline &parent_, OrderGlobalState &state_, BufferManager &buffer_manager_, idx_t block_idx_)
-	    : parent(parent_), state(state_), buffer_manager(buffer_manager_), block_idx(block_idx_),
-	      sort(state.sorting.blocks[block_idx]), payl(state.payload.blocks[block_idx]) {
+	PhysicalOrderSortTask(Pipeline &parent_, ClientContext &context_, OrderGlobalState &state_, idx_t block_idx_,
+	                      ContinuousBlock &result_)
+	    : parent(parent_), context(context_), buffer_manager(BufferManager::GetBufferManager(context_)), state(state_),
+	      sort(state.sorting.blocks[block_idx_]), payl(state.payload.blocks[block_idx_]), result(result_) {
 	}
 
 	void Execute() override {
@@ -275,7 +370,7 @@ public:
 		Sort(key_locations.get(), idxs.get());
 
 		// re-order sorting data
-		ReOrder(state.sorting, key_locations.get(), idxs.get());
+		auto sorting_ordered = ReOrder(state.sorting, sort, key_locations.get(), idxs.get());
 
 		// now re-order payload data
 		handle = buffer_manager.Pin(payl.block);
@@ -284,207 +379,200 @@ public:
 			key_locations[i] = dataptr;
 			dataptr += state.payload.entry_size;
 		}
-		ReOrder(state.payload, key_locations.get(), idxs.get());
+		auto payload_ordered = ReOrder(state.payload, payl, key_locations.get(), idxs.get());
 
-		// finish task
+		result.start = 0;
+		result.end = sorting_ordered->count;
+		result.sorting.push_back(move(sorting_ordered));
+		result.payload.push_back(move(payload_ordered));
+
 		lock_guard<mutex> glock(state.lock);
 		parent.finished_tasks++;
+		// move on to merging step
+		if (parent.total_tasks == parent.finished_tasks) {
+			PhysicalOrder::ScheduleMergeTasks(parent, context, state);
+		}
 	}
 
 private:
 	void Sort(data_ptr_t key_locations[], idx_t idxs[]) {
-		// create reference so it can be used in the lambda function
+		// create reference so it can be captured by the lambda function
 		OrderGlobalState &state_ref = state;
 		std::sort(idxs, idxs + sort.count, [key_locations, &state_ref](const idx_t &l_i, const idx_t &r_i) {
 			return compare_tuple(key_locations[l_i], key_locations[r_i], state_ref) <= 0;
 		});
 	}
 
-	void ReOrder(RowChunk &chunk, data_ptr_t key_locations[], const idx_t idxs[]) {
-		// reference to old block
-		auto &old_block = chunk.blocks[block_idx];
-
+	shared_ptr<RowDataBlock> ReOrder(RowChunk &chunk, RowDataBlock &old_block, data_ptr_t key_locations[],
+	                                 const idx_t idxs[]) {
 		// initialize new block with same size as old block
-		RowDataBlock new_block;
-		new_block.count = old_block.count;
-		new_block.capacity = old_block.capacity;
-		new_block.block = buffer_manager.RegisterMemory(chunk.block_capacity * chunk.entry_size, false);
+		auto new_block = make_shared<RowDataBlock>(buffer_manager, old_block.capacity, chunk.entry_size);
 
 		// pin the new block
-		auto new_buffer_handle = buffer_manager.Pin(new_block.block);
+		auto new_buffer_handle = buffer_manager.Pin(new_block->block);
 		auto dataptr = new_buffer_handle->node->buffer;
 
 		// copy data in correct order and unpin the new block when done
 		for (idx_t i = 0; i < old_block.count; i++) {
 			memcpy(dataptr + i * chunk.entry_size, key_locations[idxs[i]], chunk.entry_size);
 		}
+		new_block->count = old_block.count;
 
-		// replace old block with new block, and unregister the old block
-		chunk.blocks[block_idx] = new_block;
-		// FIXME: does this need to be unregistered manually?
-		//		buffer_manager.UnregisterBlock(old_block.block->BlockId(), true);
+		return new_block;
 	}
 
 	Pipeline &parent;
-	OrderGlobalState &state;
+	ClientContext &context;
 	BufferManager &buffer_manager;
+	OrderGlobalState &state;
 
-	idx_t block_idx;
-	RowDataBlock sort;
-	RowDataBlock payl;
+	RowDataBlock &sort;
+	RowDataBlock &payl;
+	ContinuousBlock &result;
 };
 
 class PhysicalOrderMergeTask : public Task {
 public:
-	PhysicalOrderMergeTask(Pipeline &parent_, OrderGlobalState &state_, BufferManager &buffer_manager_,
-	                       vector<std::pair<RowDataBlock *, RowDataBlock *>> l_blocks_,
-	                       vector<std::pair<RowDataBlock *, RowDataBlock *>> r_blocks_,
-	                       vector<std::pair<RowDataBlock, RowDataBlock>> &result_, idx_t l_start_, idx_t r_start_,
-	                       idx_t l_end_, idx_t r_end_)
-	    : parent(parent_), state(state_), buffer_manager(buffer_manager_), l_blocks(l_blocks_), r_blocks(r_blocks_),
-	      result(result_), l_start(l_start_), r_start(r_start_), l_end(l_end_), r_end(r_end_) {
+	PhysicalOrderMergeTask(Pipeline &parent_, ClientContext &context_, OrderGlobalState &state_, ContinuousBlock &left_,
+	                       ContinuousBlock &right_, ContinuousBlock &result_)
+	    : parent(parent_), context(context_), buffer_manager(BufferManager::GetBufferManager(context_)), state(state_),
+	      left(left_), right(right_), result(result_) {
 	}
 
 	void Execute() override {
-		idx_t l_block_idx = 0, r_block_idx = 0;
+		// initialize blocks to read from
+		left.PinBlock();
+		right.PinBlock();
 
-		auto l_sort_handle = buffer_manager.Pin(l_blocks[l_block_idx].first->block);
-		auto l_payl_handle = buffer_manager.Pin(l_blocks[l_block_idx].second->block);
-		auto r_sort_handle = buffer_manager.Pin(r_blocks[r_block_idx].first->block);
-		auto r_payl_handle = buffer_manager.Pin(r_blocks[r_block_idx].second->block);
-		auto l_sort_ptr = l_sort_handle->node->buffer + l_start * state.sorting.entry_size;
-		auto l_payl_ptr = l_payl_handle->node->buffer + l_start * state.payload.entry_size;
-		auto r_sort_ptr = r_sort_handle->node->buffer + r_start * state.sorting.entry_size;
-		auto r_payl_ptr = r_payl_handle->node->buffer + r_start * state.payload.entry_size;
-
-		idx_t l_offset = 0, r_offset = 0;
-		idx_t l_count = (l_block_idx == l_blocks.size() - 1 ? l_end : l_blocks[l_block_idx].first->count) - l_start;
-		idx_t r_count = (r_block_idx == r_blocks.size() - 1 ? r_end : r_blocks[r_block_idx].first->count) - r_start;
-
-		RowDataBlock write_sort, write_payl;
-		write_sort.count = 0;
-		write_payl.count = 0;
-		write_sort.capacity = state.sorting.block_capacity;
-		write_payl.capacity = state.payload.block_capacity;
-		write_sort.block = buffer_manager.RegisterMemory(write_sort.capacity * state.sorting.entry_size, false);
-		write_payl.block = buffer_manager.RegisterMemory(write_payl.capacity * state.payload.entry_size, false);
-		auto write_sort_handle = buffer_manager.Pin(write_sort.block);
-		auto write_payl_handle = buffer_manager.Pin(write_payl.block);
+		// initialize blocks to write to
+		auto write_sort =
+		    make_shared<RowDataBlock>(buffer_manager, state.sorting.block_capacity, state.sorting.entry_size);
+		auto write_payl =
+		    make_shared<RowDataBlock>(buffer_manager, state.payload.block_capacity, state.payload.entry_size);
+		auto write_sort_handle = buffer_manager.Pin(write_sort->block);
+		auto write_payl_handle = buffer_manager.Pin(write_payl->block);
 		auto write_sort_ptr = write_sort_handle->node->buffer;
 		auto write_payl_ptr = write_payl_handle->node->buffer;
 
-		while (l_offset != l_blocks.size() && r_offset != r_blocks.size()) {
-			// allocate new blocks to write to
-			if (write_sort.count == write_sort.capacity) {
+		while (!left.IsDone() && !right.IsDone()) {
+			if (write_sort->count == write_sort->capacity) {
 				// append to result
-				result.push_back(std::make_pair(move(write_sort), move(write_payl)));
+				result.sorting.push_back((move(write_sort)));
+				result.payload.push_back((move(write_payl)));
 				// initialize new blocks to write to
-				write_sort = RowDataBlock();
-				write_payl = RowDataBlock();
-				write_sort.count = 0;
-				write_payl.count = 0;
-				write_sort.capacity = state.sorting.block_capacity;
-				write_payl.capacity = state.payload.block_capacity;
-				write_sort.block = buffer_manager.RegisterMemory(write_sort.capacity * state.sorting.entry_size, false);
-				write_payl.block = buffer_manager.RegisterMemory(write_payl.capacity * state.payload.entry_size, false);
-				write_sort_handle = buffer_manager.Pin(write_sort.block);
-				write_payl_handle = buffer_manager.Pin(write_payl.block);
+				write_sort =
+				    make_shared<RowDataBlock>(buffer_manager, state.sorting.block_capacity, state.sorting.entry_size);
+				write_payl =
+				    make_shared<RowDataBlock>(buffer_manager, state.payload.block_capacity, state.payload.entry_size);
+				write_sort_handle = buffer_manager.Pin(write_sort->block);
+				write_payl_handle = buffer_manager.Pin(write_payl->block);
 				write_sort_ptr = write_sort_handle->node->buffer;
 				write_payl_ptr = write_payl_handle->node->buffer;
 			}
-			// load a new left or right block if needed
-			if (l_offset == l_count) {
-				l_block_idx++;
-				if (l_block_idx != l_blocks.size()) {
-					l_sort_handle = buffer_manager.Pin(l_blocks[l_block_idx].first->block);
-					l_payl_handle = buffer_manager.Pin(l_blocks[l_block_idx].second->block);
-					l_sort_ptr = l_sort_handle->node->buffer;
-					r_sort_ptr = r_sort_handle->node->buffer;
-					l_offset = 0;
-					l_count = l_block_idx == l_blocks.size() - 1 ? l_end : l_blocks[l_block_idx].first->count;
-				}
-			} else if (r_offset == r_count) {
-				r_block_idx++;
-				if (r_block_idx != r_blocks.size()) {
-					r_sort_handle = buffer_manager.Pin(r_blocks[r_block_idx].first->block);
-					r_payl_handle = buffer_manager.Pin(r_blocks[r_block_idx].second->block);
-					r_sort_ptr = r_sort_handle->node->buffer;
-					r_payl_ptr = r_payl_handle->node->buffer;
-					l_offset = 0;
-					r_count = r_block_idx == r_blocks.size() - 1 ? r_end : r_blocks[r_block_idx].first->count;
-				}
-			}
-			// append data and advance pointers
-			if ((r_block_idx == r_blocks.size() && l_block_idx != l_blocks.size()) ||
-			    compare_tuple(l_sort_ptr, r_sort_ptr, state) <= 0) {
-				memcpy(write_sort_ptr, l_sort_ptr, state.sorting.entry_size);
-				memcpy(write_payl_ptr, l_payl_ptr, state.payload.entry_size);
-				l_sort_ptr += state.sorting.entry_size;
-				l_payl_ptr += state.payload.entry_size;
-				l_offset++;
+			if (compare_tuple(left.sorting_ptr, right.sorting_ptr, state) <= 0) {
+				memcpy(write_sort_ptr, left.sorting_ptr, state.sorting.entry_size);
+				memcpy(write_payl_ptr, left.payload_ptr, state.payload.entry_size);
+				left.Advance();
 			} else {
-				memcpy(write_sort_ptr, r_sort_ptr, state.sorting.entry_size);
-				memcpy(write_payl_ptr, r_payl_ptr, state.payload.entry_size);
-				r_sort_ptr += state.sorting.entry_size;
-				r_payl_ptr += state.payload.entry_size;
-				r_offset++;
+				memcpy(write_sort_ptr, right.sorting_ptr, state.sorting.entry_size);
+				memcpy(write_payl_ptr, right.payload_ptr, state.payload.entry_size);
+				right.Advance();
 			}
 			write_sort_ptr += state.sorting.entry_size;
 			write_payl_ptr += state.payload.entry_size;
-			write_sort.count++;
-			write_payl.count++;
+			write_sort->count++;
+			write_payl->count++;
 		}
+		result.sorting.push_back((move(write_sort)));
+		result.payload.push_back((move(write_payl)));
+
+		// flush data of last block(s)
+		if (!left.IsDone()) {
+			left.FlushData(result);
+		} else if (!right.IsDone()) {
+			right.FlushData(result);
+		}
+
+		result.start = 0;
+		result.end = result.sorting.back()->count;
 
 		lock_guard<mutex> glock(state.lock);
 		parent.finished_tasks++;
-		// finish the whole pipeline
 		if (parent.total_tasks == parent.finished_tasks) {
-			parent.Finish();
+			PhysicalOrder::ScheduleMergeTasks(parent, context, state);
 		}
 	}
 
 private:
 	Pipeline &parent;
-	OrderGlobalState &state;
+	ClientContext &context;
 	BufferManager &buffer_manager;
+	OrderGlobalState &state;
 
-	vector<std::pair<RowDataBlock *, RowDataBlock *>> l_blocks;
-	vector<std::pair<RowDataBlock *, RowDataBlock *>> r_blocks;
-	vector<std::pair<RowDataBlock, RowDataBlock>> &result;
-
-	idx_t l_start;
-	idx_t r_start;
-	idx_t l_end;
-	idx_t r_end;
+	ContinuousBlock &left;
+	ContinuousBlock &right;
+	ContinuousBlock &result;
 };
 
+void PhysicalOrder::ScheduleMergeTasks(Pipeline &pipeline, ClientContext &context, GlobalOperatorState &state) {
+	auto &sink = (OrderGlobalState &)state;
+	auto &bm = BufferManager::GetBufferManager(context);
+
+	// cleanup - move intermediate to result
+	for (auto &cb : sink.continuous) {
+		for (idx_t i = 0; i < cb->sorting.size(); i++) {
+			bm.UnregisterBlock(cb->sorting[i]->block->BlockId(), true);
+			bm.UnregisterBlock(cb->payload[i]->block->BlockId(), true);
+		}
+	}
+	sink.continuous.clear();
+	for (auto &cb : sink.intermediate) {
+		sink.continuous.push_back(move(cb));
+	}
+	sink.intermediate.clear();
+
+	// finish pipeline if there is only one continuous block left
+	if (sink.continuous.size() == 1) {
+		// unregister sorting blocks and move payload blocks to result
+		for (idx_t i = 0; i < sink.continuous[0]->sorting.size(); i++) {
+			bm.UnregisterBlock(sink.continuous[0]->sorting[i]->block->BlockId(), true);
+			sink.result.push_back(*sink.continuous[0]->payload[i]);
+		}
+		pipeline.Finish();
+		return;
+	}
+
+	// if not, schedule tasks
+	for (idx_t i = 0; i < sink.continuous.size() - 1; i += 2) {
+		pipeline.total_tasks++;
+		sink.intermediate.push_back(make_unique<ContinuousBlock>(bm));
+		sink.intermediate.back()->sorting_entry_size = sink.sorting.entry_size;
+		sink.intermediate.back()->payload_entry_size = sink.payload.entry_size;
+		auto new_task = make_unique<PhysicalOrderMergeTask>(pipeline, context, sink, *sink.continuous[i],
+		                                                    *sink.continuous[i + 1], *sink.intermediate.back());
+		TaskScheduler::GetScheduler(context).ScheduleTask(pipeline.token, move(new_task));
+	}
+
+	// add last element if odd amount
+	if (sink.continuous.size() % 2 == 1) {
+		sink.intermediate.push_back(move(sink.continuous.back()));
+		sink.continuous.pop_back();
+	}
+}
+
 void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> state) {
-	// finalize: perform the actual sorting
-	auto &sink = (OrderGlobalState &)*state;
-	auto &scheduler = TaskScheduler::GetScheduler(context);
+	this->sink_state = move(state);
+	auto &sink = (OrderGlobalState &)*this->sink_state;
 
 	// schedule sorting tasks for each block
 	for (idx_t i = 0; i < sink.payload.blocks.size(); i++) {
-		auto new_task = make_unique<PhysicalOrderSortTask>(pipeline, sink, BufferManager::GetBufferManager(context), i);
-		scheduler.ScheduleTask(pipeline.token, move(new_task));
+		pipeline.total_tasks++;
+		sink.intermediate.push_back(make_unique<ContinuousBlock>(BufferManager::GetBufferManager(context)));
+		sink.intermediate.back()->sorting_entry_size = sink.sorting.entry_size;
+		sink.intermediate.back()->payload_entry_size = sink.payload.entry_size;
+		auto new_task = make_unique<PhysicalOrderSortTask>(pipeline, context, sink, i, *sink.intermediate.back());
+		TaskScheduler::GetScheduler(context).ScheduleTask(pipeline.token, move(new_task));
 	}
-
-	// schedule merging tasks until the data is merged
-	idx_t n_per_thread = MaxValue(sink.sorting.count / scheduler.NumberOfThreads() + 1, sink.sorting.block_capacity);
-	while (sink.payload.blocks.size() > 1) {
-		while (sink.payload.blocks.size() > 1) {
-			auto s_l = sink.sorting.blocks.erase(sink.sorting.blocks.begin());
-			auto s_r = sink.sorting.blocks.erase(sink.sorting.blocks.begin());
-			auto p_l = sink.payload.blocks.erase(sink.payload.blocks.begin());
-			auto p_r = sink.payload.blocks.erase(sink.payload.blocks.begin());
-			//			auto new_task = make_unique<PhysicalOrderMergeTask>(
-			//			    pipeline, sink, BufferManager::GetBufferManager(context), *s_l, *s_r, *p_l, *p_r);
-			//			scheduler.ScheduleTask(pipeline.token, move(new_task));
-		}
-	}
-	// FIXME: schedule ?? merging tasks
-
-	PhysicalSink::Finalize(pipeline, context, move(state));
 }
 
 //===--------------------------------------------------------------------===//
@@ -495,7 +583,6 @@ public:
 	PhysicalOrderOperatorState(PhysicalOperator &op, PhysicalOperator *child)
 	    : PhysicalOperatorState(op, child), current_block(0), position(0) {
 	}
-
 	idx_t current_block;
 	idx_t position;
 };
@@ -508,18 +595,22 @@ void PhysicalOrder::GetChunkInternal(ExecutionContext &context, DataChunk &chunk
 	auto state = reinterpret_cast<PhysicalOrderOperatorState *>(state_);
 	auto &sink = (OrderGlobalState &)*this->sink_state;
 
-	if (state->current_block >= sink.payload.blocks.size()) {
+	if (state->current_block >= sink.result.size()) {
+		for (const auto &b : sink.result) {
+			BufferManager::GetBufferManager(context.client).UnregisterBlock(b.block->BlockId(), true);
+		}
+		state->finished = true;
 		return;
 	}
 
-	sink.payload.DeserializeRowBlock(chunk, sink.payload.blocks[state->current_block], state->position);
+	sink.payload.DeserializeRowBlock(chunk, sink.result[state->current_block], state->position);
 
 	state->position += STANDARD_VECTOR_SIZE;
-	if (state->position >= sink.payload.blocks[state->current_block].count) {
+	if (state->position >= sink.result[state->current_block].count) {
 		state->current_block++;
-		// FIXME: does this need to be unregistered manually?
-		//		sink.payload.buffer_manager.UnregisterBlock(sink.payload.blocks[state->current_block].block->BlockId(),
-		// true);
+		state->position = 0;
+		BufferManager::GetBufferManager(context.client)
+		    .UnregisterBlock(sink.result[state->current_block - 1].block->BlockId(), true);
 	}
 }
 

@@ -135,13 +135,8 @@ void RowChunk::Build(idx_t added_count, data_ptr_t key_locations[], data_ptr_t n
 		}
 		while (remaining > 0) {
 			// now for the remaining data, allocate new buffers to store the data and append there
-			auto block = buffer_manager.RegisterMemory(block_capacity * entry_size, false);
-			auto handle = buffer_manager.Pin(block);
-
-			RowDataBlock new_block;
-			new_block.count = 0;
-			new_block.capacity = block_capacity;
-			new_block.block = move(block);
+			RowDataBlock new_block(buffer_manager, block_capacity, entry_size);
+			auto handle = buffer_manager.Pin(new_block.block);
 
 			idx_t append_count = AppendToBlock(new_block, *handle, append_entries, remaining);
 			remaining -= append_count;

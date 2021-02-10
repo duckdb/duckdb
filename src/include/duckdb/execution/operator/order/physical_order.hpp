@@ -29,6 +29,8 @@ public:
 	void Combine(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate);
 	void Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> state) override;
 
+	static void ScheduleMergeTasks(Pipeline &pipeline, ClientContext &context, GlobalOperatorState &state);
+
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) override;
 	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;
 
@@ -38,8 +40,8 @@ public:
 	string ParamsToString() const override;
 
 private:
-	//! 2 << 24 (33MB)
-	const static idx_t SORTING_BLOCK_SIZE = 33554432;
+	//! 2 << 21 (4MB)
+	const static idx_t SORTING_BLOCK_SIZE = 4194304;
 };
 
 } // namespace duckdb

@@ -17,6 +17,9 @@
 namespace duckdb {
 
 struct RowDataBlock {
+	RowDataBlock(BufferManager &buffer_manager, idx_t capacity_, idx_t entry_size) : count(0), capacity(capacity_) {
+		block = buffer_manager.RegisterMemory(capacity * entry_size, false);
+	}
 	idx_t count;
 	idx_t capacity;
 	shared_ptr<BlockHandle> block;
@@ -25,7 +28,6 @@ struct RowDataBlock {
 struct BlockAppendEntry {
 	BlockAppendEntry(data_ptr_t baseptr_, idx_t count_) : baseptr(baseptr_), count(count_) {
 	}
-
 	data_ptr_t baseptr;
 	idx_t count;
 };
