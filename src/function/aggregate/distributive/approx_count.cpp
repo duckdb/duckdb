@@ -4,7 +4,7 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/common/types/hyperloglog.hpp"
 #include "duckdb/function/function_set.hpp"
-#include "hyperloglog.hpp"
+#include "duckdb/common/types/hash.hpp"
 
 namespace duckdb {
 
@@ -89,7 +89,7 @@ struct ApproxCountDistinctFunctionString : ApproxCountDistinctFunctionBase {
 		}
 		auto str = input[idx].GetDataUnsafe();
 		auto str_len = input[idx].GetSize();
-		auto str_hash = MurmurHash64A(str, str_len, 0xadc83b19ULL);
+		auto str_hash = Hash(str, str_len);
 		state->log->Add((uint8_t *)&str_hash, sizeof(str_hash));
 	}
 	template <class INPUT_TYPE, class STATE, class OP>
