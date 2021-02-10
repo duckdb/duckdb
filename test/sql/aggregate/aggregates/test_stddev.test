@@ -63,6 +63,11 @@ select round(var_samp(val), 1) from stddev_test
 229281.600000
 
 query R
+select round(variance(val), 1) from stddev_test
+----
+229281.600000
+
+query R
 select round(var_samp(val), 1) from stddev_test  where val is not null
 ----
 229281.600000

@@ -247,6 +247,9 @@ bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 }
 
 bool ART::Append(IndexLock &lock, DataChunk &appended_data, Vector &row_identifiers) {
+	DataChunk expression_result;
+	expression_result.Initialize(logical_types);
+
 	// first resolve the expressions for the index
 	ExecuteExpressions(appended_data, expression_result);
 
@@ -258,6 +261,10 @@ void ART::VerifyAppend(DataChunk &chunk) {
 	if (!is_unique) {
 		return;
 	}
+
+	DataChunk expression_result;
+	expression_result.Initialize(logical_types);
+
 	// unique index, check
 	lock_guard<mutex> l(lock);
 	// first resolve the expressions for the index
@@ -358,6 +365,9 @@ bool ART::Insert(unique_ptr<Node> &node, unique_ptr<Key> value, unsigned depth, 
 // Delete
 //===--------------------------------------------------------------------===//
 void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
+	DataChunk expression_result;
+	expression_result.Initialize(logical_types);
+
 	// first resolve the expressions
 	ExecuteExpressions(input, expression_result);
 

@@ -93,13 +93,13 @@ void Vector::Slice(const SelectionVector &sel, idx_t count) {
 		// already a dictionary, slice the current dictionary
 		auto &current_sel = DictionaryVector::SelVector(*this);
 		auto sliced_dictionary = current_sel.Slice(sel, count);
-		buffer = make_unique<DictionaryBuffer>(move(sliced_dictionary));
+		buffer = make_buffer<DictionaryBuffer>(move(sliced_dictionary));
 		return;
 	}
 	auto child_ref = make_buffer<VectorChildBuffer>();
 	child_ref->data.Reference(*this);
 
-	auto dict_buffer = make_unique<DictionaryBuffer>(sel);
+	auto dict_buffer = make_buffer<DictionaryBuffer>(sel);
 	buffer = move(dict_buffer);
 	auxiliary = move(child_ref);
 	vector_type = VectorType::DICTIONARY_VECTOR;
@@ -607,7 +607,7 @@ void Vector::Orrify(idx_t count, VectorData &data) {
 			data.nullmask = &FlatVector::Nullmask(child);
 		} else {
 			// dictionary with non-flat child: create a new reference to the child and normalify it
-			auto new_aux = make_unique<VectorChildBuffer>();
+			auto new_aux = make_buffer<VectorChildBuffer>();
 			new_aux->data.Reference(child);
 			new_aux->data.Normalify(sel, count);
 
@@ -897,10 +897,10 @@ void StringVector::AddHandle(Vector &vector, unique_ptr<BufferHandle> handle) {
 		vector.auxiliary = make_buffer<VectorStringBuffer>();
 	}
 	auto &string_buffer = (VectorStringBuffer &)*vector.auxiliary;
-	string_buffer.AddHeapReference(make_unique<ManagedVectorBuffer>(move(handle)));
+	string_buffer.AddHeapReference(make_buffer<ManagedVectorBuffer>(move(handle)));
 }
 
-void StringVector::AddBuffer(Vector &vector, unique_ptr<VectorBuffer> buffer) {
+void StringVector::AddBuffer(Vector &vector, buffer_ptr<VectorBuffer> buffer) {
 	D_ASSERT(vector.type.InternalType() == PhysicalType::VARCHAR);
 	if (!vector.auxiliary) {
 		vector.auxiliary = make_buffer<VectorStringBuffer>();

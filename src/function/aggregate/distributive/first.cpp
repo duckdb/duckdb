@@ -203,5 +203,4 @@ void FirstFun::RegisterFunction(BuiltinFunctions &set) {
 	}
 	set.AddFunction(first);
 }
-
 } // namespace duckdb

@@ -34,6 +34,7 @@ void BuiltinFunctions::Initialize() {
 	RegisterDistributiveAggregates();
 	RegisterNestedAggregates();
 	RegisterHolisticAggregates();
+	RegisterRegressiveAggregates();
 
 	RegisterDateFunctions();
 	RegisterGenericFunctions();

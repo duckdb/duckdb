@@ -351,10 +351,10 @@ private:
 };
 
 void StringColumnReader::DictReference(Vector &result) {
-	StringVector::AddBuffer(result, make_unique<ParquetStringVectorBuffer>(dict));
+	StringVector::AddBuffer(result, make_buffer<ParquetStringVectorBuffer>(dict));
 }
 void StringColumnReader::PlainReference(shared_ptr<ByteBuffer> plain_data, Vector &result) {
-	StringVector::AddBuffer(result, make_unique<ParquetStringVectorBuffer>(move(plain_data)));
+	StringVector::AddBuffer(result, make_buffer<ParquetStringVectorBuffer>(move(plain_data)));
 }
 
 string_t StringParquetValueConversion::DictRead(ByteBuffer &dict, uint32_t &offset, ColumnReader &reader) {
