@@ -5,25 +5,39 @@
 #include "duckdb/function/function_set.hpp"
 namespace duckdb {
 
+struct bool_state_t {
+	bool empty;
+	bool val;
+};
+
 struct BoolAndFunFunction {
 	template <class STATE>
 	static void Initialize(STATE *state) {
-		*state = true;
+		state->val = true;
+		state->empty = true;
 	}
 
 	template <class STATE, class OP>
 	static void Combine(STATE source, STATE *target) {
-		*target = source && *target;
+		target->val = target->val && source.val;
+		target->empty = target->empty && source.empty;
 	}
 
 	template <class T, class STATE>
 	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
-		target[idx] = *state;
+		if (state->empty) {
+			nullmask[idx] = true;
+			return;
+		}
+		target[idx] = state->val;
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
-		*state = input[idx] && *state;
+		if (state->empty) {
+			state->empty = false;
+		}
+		state->val = input[idx] && state->val;
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
@@ -41,21 +55,30 @@ struct BoolAndFunFunction {
 struct BoolOrFunFunction {
 	template <class STATE>
 	static void Initialize(STATE *state) {
-		*state = false;
+		state->val = false;
+		state->empty = true;
 	}
 
 	template <class STATE, class OP>
 	static void Combine(STATE source, STATE *target) {
-		*target = source || *target;
+		target->val = target->val || source.val;
+		target->empty = target->empty && source.empty;
 	}
 
 	template <class T, class STATE>
 	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
-		target[idx] = *state;
+		if (state->empty) {
+			nullmask[idx] = true;
+			return;
+		}
+		target[idx] = state->val;
 	}
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
-		*state = input[idx] || *state;
+		if (state->empty) {
+			state->empty = false;
+		}
+		state->val = input[idx] || state->val;
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
@@ -72,13 +95,13 @@ struct BoolOrFunFunction {
 };
 
 AggregateFunction BoolOrFun::GetFunction() {
-	return AggregateFunction::UnaryAggregate<bool, bool, bool, BoolOrFunFunction>(LogicalType(LogicalTypeId::BOOLEAN),
-	                                                                              LogicalType::BOOLEAN);
+	return AggregateFunction::UnaryAggregate<bool_state_t, bool, bool, BoolOrFunFunction>(
+	    LogicalType(LogicalTypeId::BOOLEAN), LogicalType::BOOLEAN);
 }
 
 AggregateFunction BoolAndFun::GetFunction() {
-	return AggregateFunction::UnaryAggregate<bool, bool, bool, BoolAndFunFunction>(LogicalType(LogicalTypeId::BOOLEAN),
-	                                                                               LogicalType::BOOLEAN);
+	return AggregateFunction::UnaryAggregate<bool_state_t, bool, bool, BoolAndFunFunction>(
+	    LogicalType(LogicalTypeId::BOOLEAN), LogicalType::BOOLEAN);
 }
 
 void BoolOrFun::RegisterFunction(BuiltinFunctions &set) {

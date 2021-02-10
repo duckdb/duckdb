@@ -1,6 +1,3 @@
-//
-// Created by holanda on 2/5/21.
-//
 #include "duckdb/function/aggregate/algebraic_functions.hpp"
 #include "duckdb/function/aggregate/algebraic/covar.hpp"
 #include "duckdb/function/aggregate/algebraic/stddev.hpp"

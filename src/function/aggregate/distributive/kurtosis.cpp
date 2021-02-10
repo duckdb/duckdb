@@ -96,7 +96,7 @@ struct KurtosisOperation {
 			return;
 		}
 		target[idx] = ((n * (n+1))/ ((n-1) * (n-2) * (n-3)));
-        target[idx] *= state->M4/ pow(sqrt(state->M2/(n-1.0)),4);
+        target[idx] *= state->M4/ pow(state->M2/(n-1.0),2);
 		target[idx] -= 3*(pow(n -1,2)/ ((n -2) * (n-3)));
 	}
 
@@ -104,6 +104,7 @@ struct KurtosisOperation {
 		return false;
 	}
 };
+
 
 void KurtosisFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet functionSet("kurtosis");

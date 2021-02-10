@@ -47,6 +47,10 @@ struct RegrSlopeOperation {
 			if (!Value::DoubleIsValid(var_pop)) {
 				throw OutOfRangeException("VARPOP is out of range!");
 			}
+			if (var_pop == 0) {
+				nullmask[idx] = true;
+				return;
+			}
 			target[idx] = cov / var_pop;
 		}
 	}

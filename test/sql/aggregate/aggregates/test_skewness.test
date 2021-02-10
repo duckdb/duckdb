@@ -2,18 +2,67 @@
 # description: Test skewness aggregate
 # group: [aggregates]
 
+#Corner cases
+statement error
+select skewness()
+
+query I
+select skewness(NULL)
+----
+NULL
+
+query I
+select skewness(1)
+----
+NULL
+
+statement error
+select skewness(*)
+
+
+# Constant Value
+query I
+select skewness (10) from range (5)
+----
+NULL
+
+#Empty Table
+query I
+select skewness (10) from range (5) where 1 == 0
+----
+NULL
+
 statement ok
-create table aggr(k int, v int, v2 int);
+create table aggr(k int, v decimal(10,2), v2 decimal(10, 2));
 
 statement ok
 insert into aggr values
     (1, 10, null),
-    (2, 10, 12),
+    (2, 10, 11),
+    (2, 10, 15),
+    (2, 10, 18),
     (2, 20, 22),
+    (2, 20, 25),
     (2, 25, null),
-    (2, 30, 35);
+    (2, 30, 35),
+    (2, 30, 40),
+    (2, 30, 50),
+    (2, 30, 51);
 
 query III
-select kurtosis(k), kurtosis(v), kurtosis(v2) from aggr;
+select skewness(k), skewness(v), skewness(v2) from aggr
 ----
-5.000000	-2.324219	NULL
+-3.316625	-0.163444	0.365401
+
+query I
+select skewness(v2) from aggr group by v
+----
+-0.423273
+NULL
+NULL
+-0.330141
+
+#query I
+#select skewness(v2) over (partition by v)
+#    from aggr;
+#----

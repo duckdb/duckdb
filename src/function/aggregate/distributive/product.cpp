@@ -6,24 +6,38 @@
 
 namespace duckdb {
 
+struct product_state_t {
+	bool empty;
+	double val;
+};
+
 struct ProductFunction {
 	template <class STATE>
 	static void Initialize(STATE *state) {
-		*state = 1;
+		state->val = 1;
+		state->empty = true;
 	}
 
 	template <class STATE, class OP>
 	static void Combine(STATE source, STATE *target) {
-		*target *= source;
+		target->val *= source.val;
+		target->empty = target->empty && source.empty;
 	}
 
 	template <class T, class STATE>
 	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
-		target[idx] = *state;
+		if (state->empty) {
+			nullmask[idx] = true;
+			return;
+		}
+		target[idx] = state->val;
 	}
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
-		*state *= input[idx];
+		if (state->empty) {
+			state->empty = false;
+		}
+		state->val *= input[idx];
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
@@ -40,7 +54,7 @@ struct ProductFunction {
 };
 
 AggregateFunction ProductFun::GetFunction() {
-	return AggregateFunction::UnaryAggregate<double, double, double, ProductFunction>(
+	return AggregateFunction::UnaryAggregate<product_state_t, double, double, ProductFunction>(
 	    LogicalType(LogicalTypeId::DOUBLE), LogicalType::DOUBLE);
 }
 

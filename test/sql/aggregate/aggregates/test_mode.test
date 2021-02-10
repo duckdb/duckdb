@@ -2,6 +2,23 @@
 # description: Test mode function
 # group: [aggregates]
 
+#Corner cases
+statement error
+select mode()
+
+query I
+select mode(NULL)
+----
+NULL
+
+query I
+select mode(1)
+----
+1
+
+statement error
+select mode(*)
+
 statement ok
 create table aggr(k int, v decimal(10,2));
 
@@ -12,6 +29,11 @@ query I
 select mode(v) from aggr;
 ----
 10
+
+query I
+SELECT mode(2) FROM range(100);
+----
+2
 
 statement ok
 insert into aggr (k, v) values (2, 20),(2, 20), (2, 25), (2, 30);
@@ -65,3 +87,10 @@ select k, v, mode(v) over (partition by k)
 2	25.00	20.000000
 2	30.00	20.000000
 3	NULL	NULL
+
+# Empty Table
+query I
+SELECT mode(i) FROM range(100) tbl(i) WHERE 1=0;
+----
+NULL
+

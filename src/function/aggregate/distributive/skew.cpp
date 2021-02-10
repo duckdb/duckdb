@@ -7,14 +7,14 @@ namespace duckdb {
 
 struct skew_state_t {
 	size_t n;
-	double M1, M2, M3, M4;
+	double M1, M2, M3;
 };
 
 struct SkewnessOperation {
 	template <class STATE>
 	static void Initialize(STATE *state) {
 		state->n = 0;
-		state->M1 = state->M2 = state->M3 = state->M4 = 0.0;
+		state->M1 = state->M2 = state->M3;
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
@@ -30,16 +30,13 @@ struct SkewnessOperation {
 		if (nullmask[idx]) {
 			return;
 		}
-		double delta, delta_n, delta_n2, term1;
+		double delta, delta_n, term1;
 		idx_t n1 = state->n;
 		state->n++;
 		delta = data[idx] - state->M1;
 		delta_n = delta / state->n;
-		delta_n2 = delta_n * delta_n;
 		term1 = delta * delta_n * n1;
 		state->M1 += delta_n;
-		state->M4 += term1 * delta_n2 * (state->n * state->n - 3 * state->n + 3) + 6 * delta_n2 * state->M2 -
-		             4 * delta_n * state->M3;
 		state->M3 += term1 * delta_n * (state->n - 2) - 3 * delta_n * state->M2;
 		state->M2 += term1;
 	}
@@ -49,32 +46,32 @@ struct SkewnessOperation {
 		if (source.n == 0) {
 			return;
 		}
-		double  combined_n = source.n + target->n;
+		if (target->n == 0) {
+			target->n = source.n;
+            target->M1 = source.M1;
+            target->M2 = source.M2;
+            target->M3 = source.M3;
+			return;
+		}
+		double combined_n = source.n + target->n;
 
-    double delta = target->M1 - source.M1;
-    double delta2 = delta*delta;
-    double delta3 = delta*delta2;
-    double delta4 = delta2*delta2;
+		double delta = target->M1 - source.M1;
+		double delta2 = delta * delta;
+		double delta3 = delta * delta2;
 
-    double combined_M1 = (source.n*source.M1 + target->n*target->M1) / combined_n;
+		double combined_M1 = (source.n * source.M1 + target->n * target->M1) / combined_n;
 
-    double combined_M2 = source.M2 + target->M2 +
-                  delta2 * source.n * target->n / combined_n;
+		double combined_M2 = source.M2 + target->M2 + delta2 * source.n * target->n / combined_n;
 
-    double combined_M3 = source.M3 + target->M3 +
-                  delta3 * source.n * target->n * (source.n - target->n)/(combined_n*combined_n);
-    combined_M3 += 3.0*delta * (source.n*target->M2 - target->n*source.M2) / combined_n;
+		double combined_M3 =
+		    source.M3 + target->M3 + delta3 * source.n * target->n * (source.n - target->n) / (combined_n * combined_n);
+		combined_M3 += 3.0 * delta * (source.n * target->M2 - target->n * source.M2) / combined_n;
 
-    double combined_M4 = source.M4 + target->M4 + delta4*source.n*target->n * (source.n*source.n - source.n*target->n + target->n*target->n) /
-                  (combined_n*combined_n*combined_n);
-    combined_M4 += 6.0*delta2 * (source.n*source.n*target->M2 + target->n*target->n*source.M2)/(combined_n*combined_n) +
-                  4.0*delta*(source.n*target->M3 - target->n*source.M3) / combined_n;
 
 		target->n = combined_n;
 		target->M1 = combined_M1;
 		target->M2 = combined_M2;
 		target->M3 = combined_M3;
-		target->M4 = combined_M4;
 	}
 
 	template <class TARGET_TYPE, class STATE>
@@ -84,7 +81,11 @@ struct SkewnessOperation {
 			nullmask[idx] = true;
 			return;
 		}
-		target[idx] = sqrt(double(state->n)) * state->M3 / pow(state->M2, 1.5);
+		double n = state->n;
+		target[idx] = (sqrt( n-1) * (n) /(n-2)) * (state->M3/pow(state->M2,1.5));
+		if (!Value::DoubleIsValid(target[idx])) {
+				nullmask[idx] = true;
+			}
 	}
 
 	static bool IgnoreNull() {

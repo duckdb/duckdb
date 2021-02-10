@@ -2,6 +2,59 @@
 # description: Test arg_min and arg_max operator
 # group: [aggregates]
 
+#Corner cases
+statement error
+select arg_min()
+
+query I
+select arg_min(NULL,NULL)
+----
+NULL
+
+query I
+select arg_min(1,1)
+----
+1
+
+statement error
+select arg_min(*)
+
+query I
+select arg_min(i,i) from range (100) tbl(i);
+----
+0
+
+query I
+select arg_min(i,i) from range (100) tbl(i) where 1 = 0;
+----
+NULL
+
+statement error
+select arg_max()
+
+query I
+select arg_max(NULL,NULL)
+----
+NULL
+
+query I
+select arg_max(1,1)
+----
+1
+
+statement error
+select arg_max(*)
+
+query I
+select arg_max(i,i) from range (100) tbl(i);
+----
+99
+
+query I
+select arg_max(i,i) from range (100) tbl(i) where 1 = 0;
+----
+NULL
+
 statement ok
 create table args (a integer, b integer)
 
@@ -13,19 +66,49 @@ select arg_min(a,b), arg_max(a,b) from args;
 ----
 1.000000	10.000000
 
+query II
+select arg_min(a,b), arg_max(a,b) from args group by a%2;
+----
+1	1
+2	10
+
+# Window Function
+require vector_size 512
+
+query I
+select arg_min(a,b) over ( partition by a%2) from args;
+----
+2
+2
+2
+1
+
+query I
+select arg_max(a,b) over ( partition by a%2) from args;
+----
+10
+10
+10
+1
+
 statement ok
 create table names (name string, salary integer)
 
 statement ok
-insert into names values ('pedro',10), ('hannes',20), ('mark',15)
+insert into names values ('Pedro',10), ('Hannes',20), ('Mark',15), ('Hubert-Blaine-Wolfeschlegelsteinhausenbergerdorff',30)
 
 query II
 select arg_min(name,salary),arg_max(name,salary)  from names;
 ----
-pedro	hannes
+Pedro	Hubert-Blaine-Wolfeschlegelsteinhausenbergerdorff
+
+query II
+select arg_min(salary,name),arg_max(salary,name)  from names;
+----
+20	10
 
 # test min_by max_by alias
 query II
 select min_by(name,salary),max_by(name,salary)  from names;
 ----
-pedro	hannes
+Pedro	Hubert-Blaine-Wolfeschlegelsteinhausenbergerdorff
