@@ -175,7 +175,7 @@ unique_ptr<PhysicalOperatorState> PhysicalHashJoin::GetOperatorState() {
 void PhysicalHashJoin::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
 	auto state = reinterpret_cast<PhysicalHashJoinState *>(state_p);
 	auto &sink = (HashJoinGlobalState &)*sink_state;
-	if (sink.hash_table->size() == 0 &&
+	if (sink.hash_table->Size() == 0 &&
 	    (sink.hash_table->join_type == JoinType::INNER || sink.hash_table->join_type == JoinType::SEMI)) {
 		// empty hash table with INNER or SEMI join means empty result set
 		return;
@@ -240,7 +240,7 @@ void PhysicalHashJoin::ProbeHashTable(ExecutionContext &context, DataChunk &chun
 		if (state->child_chunk.size() == 0) {
 			return;
 		}
-		if (sink.hash_table->size() == 0) {
+		if (sink.hash_table->Size() == 0) {
 			ConstructEmptyJoinResult(sink.hash_table->join_type, sink.hash_table->has_null, state->child_chunk, chunk);
 			return;
 		}

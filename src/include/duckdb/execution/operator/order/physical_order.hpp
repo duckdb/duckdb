@@ -25,8 +25,9 @@ public:
 	vector<BoundOrderByNode> orders;
 
 public:
-	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) override;
-	void Combine(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate);
+	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_p,
+	          DataChunk &input) override;
+	void Combine(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_p);
 	void Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> state) override;
 
 	static void ScheduleMergeTasks(Pipeline &pipeline, ClientContext &context, GlobalOperatorState &state);

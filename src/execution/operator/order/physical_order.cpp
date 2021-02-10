@@ -1,6 +1,5 @@
 #include "duckdb/execution/operator/order/physical_order.hpp"
 
-#include "duckdb/common/assert.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/types/row_chunk.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -14,7 +13,7 @@ PhysicalOrder::PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode>
 
 struct ContinuousBlock {
 public:
-	ContinuousBlock(BufferManager &buffer_manager_) : buffer_manager(buffer_manager_), curr_block_idx(0) {
+	ContinuousBlock(BufferManager &buffer_manager) : buffer_manager(buffer_manager), curr_block_idx(0) {
 	}
 
 	BufferManager &buffer_manager;
@@ -104,8 +103,8 @@ private:
 //===--------------------------------------------------------------------===//
 class OrderGlobalState : public GlobalOperatorState {
 public:
-	OrderGlobalState(PhysicalOrder &_op, BufferManager &buffer_manager)
-	    : op(_op), sorting(buffer_manager), payload(buffer_manager) {
+	OrderGlobalState(PhysicalOrder &op, BufferManager &buffer_manager)
+	    : op(op), sorting(buffer_manager), payload(buffer_manager) {
 	}
 	PhysicalOrder &op;
 
@@ -148,25 +147,25 @@ public:
 	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
 	data_ptr_t nullmask_locations[STANDARD_VECTOR_SIZE];
 
-	void Flush(RowChunk &sorting_, RowChunk &payload_) {
+	void Flush(RowChunk &sorting_target, RowChunk &payload_target) {
 		// sink local sorting buffer into the given RowChunk
 		for (auto next_chunk = sorting_buffer.Fetch(); next_chunk != nullptr; next_chunk = sorting_buffer.Fetch()) {
 			// TODO: convert this to a bit representation that is sortable by memcmp?
-			//  using 'orders' - this would reduce branch predictions in inner loop 'compare_tuple'
-			sorting_.Build(next_chunk->size(), key_locations, nullmask_locations);
+			//  using 'orders' - this would reduce branch predictions in inner loop 'CompareTuple'
+			sorting_target.Build(next_chunk->size(), key_locations, nullmask_locations);
 			for (idx_t i = 0; i < next_chunk->data.size(); i++) {
-				sorting_.SerializeVector(next_chunk->data[i], next_chunk->size(), *sel_ptr, next_chunk->size(), i,
-				                         key_locations, nullmask_locations);
+				sorting_target.SerializeVector(next_chunk->data[i], next_chunk->size(), *sel_ptr, next_chunk->size(), i,
+				                               key_locations, nullmask_locations);
 			}
 		}
 		sorting_buffer.Reset();
 
 		// sink local payload buffer into the given RowChunk
 		for (auto next_chunk = payload_buffer.Fetch(); next_chunk != nullptr; next_chunk = payload_buffer.Fetch()) {
-			payload_.Build(next_chunk->size(), key_locations, nullmask_locations);
+			payload_target.Build(next_chunk->size(), key_locations, nullmask_locations);
 			for (idx_t i = 0; i < next_chunk->data.size(); i++) {
-				payload_.SerializeVector(next_chunk->data[i], next_chunk->size(), *sel_ptr, next_chunk->size(), i,
-				                         key_locations, nullmask_locations);
+				payload_target.SerializeVector(next_chunk->data[i], next_chunk->size(), *sel_ptr, next_chunk->size(), i,
+				                               key_locations, nullmask_locations);
 			}
 		}
 		payload_buffer.Reset();
@@ -211,10 +210,10 @@ unique_ptr<LocalSinkState> PhysicalOrder::GetLocalSinkState(ExecutionContext &co
 	return state;
 }
 
-void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_,
+void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_p,
                          DataChunk &input) {
 	auto &gstate = (OrderGlobalState &)state;
-	auto &lstate = (OrderLocalState &)lstate_;
+	auto &lstate = (OrderLocalState &)lstate_p;
 
 	// obtain sorting columns
 	vector<LogicalType> sort_types;
@@ -236,9 +235,9 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &state, 
 	}
 }
 
-void PhysicalOrder::Combine(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_) {
+void PhysicalOrder::Combine(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_p) {
 	auto &gstate = (OrderGlobalState &)state;
-	auto &lstate = (OrderLocalState &)lstate_;
+	auto &lstate = (OrderLocalState &)lstate_p;
 
 	lock_guard<mutex> glock(gstate.lock);
 	if (gstate.sorting.blocks.empty()) {
@@ -328,7 +327,7 @@ static int32_t CompareValue(data_ptr_t &l_nullmask, data_ptr_t &r_nullmask, data
 	}
 }
 
-static int compare_tuple(data_ptr_t &l_start, data_ptr_t &r_start, OrderGlobalState &state) {
+static int CompareTuple(data_ptr_t &l_start, data_ptr_t &r_start, OrderGlobalState &state) {
 	auto l_val = l_start + state.sorting.nullmask_size;
 	auto r_val = r_start + state.sorting.nullmask_size;
 	for (idx_t i = 0; i < state.op.orders.size(); i++) {
@@ -346,10 +345,10 @@ static int compare_tuple(data_ptr_t &l_start, data_ptr_t &r_start, OrderGlobalSt
 
 class PhysicalOrderSortTask : public Task {
 public:
-	PhysicalOrderSortTask(Pipeline &parent_, ClientContext &context_, OrderGlobalState &state_, idx_t block_idx_,
-	                      ContinuousBlock &result_)
-	    : parent(parent_), context(context_), buffer_manager(BufferManager::GetBufferManager(context_)), state(state_),
-	      sort(state.sorting.blocks[block_idx_]), payl(state.payload.blocks[block_idx_]), result(result_) {
+	PhysicalOrderSortTask(Pipeline &parent, ClientContext &context, OrderGlobalState &state, idx_t block_idx,
+	                      ContinuousBlock &result)
+	    : parent(parent), context(context), buffer_manager(BufferManager::GetBufferManager(context)), state(state),
+	      sort(state.sorting.blocks[block_idx]), payl(state.payload.blocks[block_idx]), result(result) {
 	}
 
 	void Execute() override {
@@ -399,7 +398,7 @@ private:
 		// create reference so it can be captured by the lambda function
 		OrderGlobalState &state_ref = state;
 		std::sort(idxs, idxs + sort.count, [key_locations, &state_ref](const idx_t &l_i, const idx_t &r_i) {
-			return compare_tuple(key_locations[l_i], key_locations[r_i], state_ref) <= 0;
+			return CompareTuple(key_locations[l_i], key_locations[r_i], state_ref) <= 0;
 		});
 	}
 
@@ -433,10 +432,10 @@ private:
 
 class PhysicalOrderMergeTask : public Task {
 public:
-	PhysicalOrderMergeTask(Pipeline &parent_, ClientContext &context_, OrderGlobalState &state_, ContinuousBlock &left_,
-	                       ContinuousBlock &right_, ContinuousBlock &result_)
-	    : parent(parent_), context(context_), buffer_manager(BufferManager::GetBufferManager(context_)), state(state_),
-	      left(left_), right(right_), result(result_) {
+	PhysicalOrderMergeTask(Pipeline &parent, ClientContext &context, OrderGlobalState &state, ContinuousBlock &left,
+	                       ContinuousBlock &right, ContinuousBlock &result)
+	    : parent(parent), context(context), buffer_manager(BufferManager::GetBufferManager(context)), state(state),
+	      left(left), right(right), result(result) {
 	}
 
 	void Execute() override {
@@ -469,7 +468,7 @@ public:
 				write_sort_ptr = write_sort_handle->node->buffer;
 				write_payl_ptr = write_payl_handle->node->buffer;
 			}
-			if (compare_tuple(left.sorting_ptr, right.sorting_ptr, state) <= 0) {
+			if (CompareTuple(left.sorting_ptr, right.sorting_ptr, state) <= 0) {
 				memcpy(write_sort_ptr, left.sorting_ptr, state.sorting.entry_size);
 				memcpy(write_payl_ptr, left.payload_ptr, state.payload.entry_size);
 				left.Advance();

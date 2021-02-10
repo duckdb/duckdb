@@ -90,9 +90,9 @@ public:
 
 		idx_t ResolvePredicates(DataChunk &keys, SelectionVector &match_sel);
 		idx_t ResolvePredicates(DataChunk &keys, SelectionVector &match_sel, SelectionVector &no_match_sel);
-		void GatherResult(Vector &result, const SelectionVector &result_vector, const SelectionVector &sel_vector,
-		                  idx_t count, idx_t &offset);
-		void GatherResult(Vector &result, const SelectionVector &sel_vector, idx_t count, idx_t &offset);
+		void GatherResult(Vector &result, const SelectionVector &result_vector, const SelectionVector &v_sel_vector,
+		                  idx_t vcount, idx_t &offset);
+		void GatherResult(Vector &result, const SelectionVector &v_sel_vector, idx_t vcount, idx_t &offset);
 
 		template <bool NO_MATCH_SEL>
 		idx_t ResolvePredicates(DataChunk &keys, SelectionVector *match_sel, SelectionVector *no_match_sel);
@@ -116,7 +116,7 @@ public:
 	//! Scan the HT to construct the final full outer join result after
 	void ScanFullOuter(DataChunk &result, JoinHTScanState &state);
 
-	idx_t size() {
+	idx_t Size() {
 		return row_chunk.count;
 	}
 
