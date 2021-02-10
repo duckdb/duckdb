@@ -4,7 +4,6 @@
 #include "hyperloglog.hpp"
 
 namespace duckdb {
-using namespace std;
 
 HyperLogLog::HyperLogLog() : hll(nullptr) {
 	hll = hll_create();

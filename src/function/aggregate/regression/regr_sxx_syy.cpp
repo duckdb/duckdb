@@ -8,12 +8,13 @@
 #include "duckdb/function/aggregate/regression_functions.hpp"
 
 namespace duckdb {
+
 struct RegrSState {
 	size_t count;
 	StddevState var_pop;
 };
 
-struct RegrS__Operation {
+struct RegrBaseOperation {
 	template <class STATE>
 	static void Initialize(STATE *state) {
 		RegrCountFunction::Initialize<size_t>(&state->count);
@@ -45,7 +46,7 @@ struct RegrS__Operation {
 	}
 };
 
-struct RegrSXXOperation : RegrS__Operation {
+struct RegrSXXOperation : RegrBaseOperation {
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
 	static void Operation(STATE *state, FunctionData *bind_data, A_TYPE *x_data, B_TYPE *y_data, nullmask_t &anullmask,
 	                      nullmask_t &bnullmask, idx_t xidx, idx_t yidx) {
@@ -55,7 +56,7 @@ struct RegrSXXOperation : RegrS__Operation {
 	}
 };
 
-struct RegrSYYOperation : RegrS__Operation {
+struct RegrSYYOperation : RegrBaseOperation {
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
 	static void Operation(STATE *state, FunctionData *bind_data, A_TYPE *x_data, B_TYPE *y_data, nullmask_t &anullmask,
 	                      nullmask_t &bnullmask, idx_t xidx, idx_t yidx) {
