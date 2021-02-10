@@ -6,6 +6,7 @@ void BuiltinFunctions::RegisterNestedFunctions() {
 	Register<StructPackFun>();
 	Register<StructExtractFun>();
 	Register<ListValueFun>();
+	Register<ListExtractFun>();
 }
 
 } // namespace duckdb

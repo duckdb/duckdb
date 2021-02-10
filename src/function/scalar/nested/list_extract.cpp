@@ -1,0 +1,167 @@
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/parser/expression/bound_expression.hpp"
+#include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/common/types/chunk_collection.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/pair.hpp"
+
+namespace duckdb {
+
+template <class T, bool HEAP_REF = false>
+void list_extract_template(idx_t count, Vector &list, Vector &offsets, Vector &result) {
+	VectorData list_data, offsets_data, child_data;
+
+	list.Orrify(count, list_data);
+	offsets.Orrify(count, offsets_data);
+
+	result.vector_type = VectorType::FLAT_VECTOR;
+	auto result_data = FlatVector::GetData<T>(result);
+	auto &result_nullmask = FlatVector::Nullmask(result);
+
+	auto lsel = list_data.sel;
+	auto rsel = offsets_data.sel;
+	auto &lnullmask = *list_data.nullmask;
+	auto &rnullmask = *offsets_data.nullmask;
+
+	auto ldata = (list_entry_t *)list_data.data;
+	auto rdata = (int64_t *)offsets_data.data;
+
+	auto &list_child_collection = ListVector::GetEntry(list);
+	// heap-ref once
+	if (HEAP_REF) {
+		for (auto &chunk : list_child_collection.Chunks()) {
+			D_ASSERT(chunk->data.size() == 1);
+			StringVector::AddHeapReference(result, chunk->data[0]);
+		}
+	}
+
+	// this is lifted from ExecuteGenericLoop because we can't push the list child data into this otherwise
+	// should have gone with GetValue perhaps
+	for (idx_t i = 0; i < count; i++) {
+		auto list_index = lsel->get_index(i);
+		auto offsets_index = rsel->get_index(i);
+		if (!lnullmask[list_index] && !rnullmask[offsets_index]) {
+			auto list_entry = ldata[list_index];
+			auto offsets_entry = rdata[offsets_index];
+			idx_t child_offset;
+			if (offsets_entry < 0) {
+				if ((idx_t)-offsets_entry > list_entry.length) {
+					result_nullmask[i] = true;
+					continue;
+				}
+				child_offset = list_entry.offset + list_entry.length + offsets_entry;
+			} else {
+				if ((idx_t)offsets_entry >= list_entry.length) {
+					result_nullmask[i] = true;
+					continue;
+				}
+				child_offset = list_entry.offset + offsets_entry;
+			}
+			D_ASSERT(child_offset < list_child_collection.Count());
+			auto &child_chunk = list_child_collection.GetChunkForRow(child_offset);
+			D_ASSERT(child_chunk.data.size() == 1);
+			auto &child_vector = child_chunk.data[0];
+			auto child_index = child_offset % STANDARD_VECTOR_SIZE;
+			child_vector.Orrify(child_chunk.size(), child_data);
+			auto child_index_sel = child_data.sel->get_index(child_index);
+			if (!(*child_data.nullmask)[child_index_sel]) {
+				result_data[i] = ((T *)child_data.data)[child_index_sel];
+			} else {
+				result_nullmask[i] = true;
+			}
+		} else {
+			result_nullmask[i] = true;
+		}
+	}
+	if (count == 1) {
+		result.vector_type = VectorType::CONSTANT_VECTOR;
+	}
+}
+
+static void list_extract_fun(DataChunk &args, ExpressionState &state, Vector &result) {
+	D_ASSERT(args.data.size() == 2);
+	D_ASSERT(args.data[0].type.id() == LogicalTypeId::LIST);
+
+	auto &list = args.data[0];
+	auto &offsets = args.data[1];
+	auto count = args.size();
+
+	switch (result.type.id()) {
+	case LogicalTypeId::UTINYINT:
+		list_extract_template<uint8_t>(count, list, offsets, result);
+		break;
+	case LogicalTypeId::TINYINT:
+		list_extract_template<int8_t>(count, list, offsets, result);
+		break;
+	case LogicalTypeId::USMALLINT:
+		list_extract_template<uint16_t>(count, list, offsets, result);
+		break;
+	case LogicalTypeId::SMALLINT:
+		list_extract_template<int16_t>(count, list, offsets, result);
+		break;
+	case LogicalTypeId::UINTEGER:
+		list_extract_template<uint32_t>(count, list, offsets, result);
+		break;
+	case LogicalTypeId::INTEGER:
+		list_extract_template<int32_t>(count, list, offsets, result);
+		break;
+	case LogicalTypeId::UBIGINT:
+		list_extract_template<uint64_t>(count, list, offsets, result);
+		break;
+	case LogicalTypeId::BIGINT:
+		list_extract_template<int64_t>(count, list, offsets, result);
+		break;
+	case LogicalTypeId::HUGEINT:
+		list_extract_template<hugeint_t>(count, list, offsets, result);
+		break;
+	case LogicalTypeId::FLOAT:
+		list_extract_template<float>(count, list, offsets, result);
+		break;
+	case LogicalTypeId::DOUBLE:
+		list_extract_template<double>(count, list, offsets, result);
+		break;
+	case LogicalTypeId::DATE:
+		list_extract_template<date_t>(count, list, offsets, result);
+		break;
+	case LogicalTypeId::TIME:
+		list_extract_template<time_t>(count, list, offsets, result);
+		break;
+	case LogicalTypeId::TIMESTAMP:
+		list_extract_template<timestamp_t>(count, list, offsets, result);
+		break;
+	case LogicalTypeId::BLOB:
+	case LogicalTypeId::VARCHAR:
+		list_extract_template<string_t, true>(count, list, offsets, result);
+		break;
+	case LogicalTypeId::SQLNULL:
+		result.Reference(Value());
+		break;
+	default:
+		throw NotImplementedException("Unimplemented type for LIST_EXTRACT");
+	}
+
+	result.Verify(args.size());
+}
+
+static unique_ptr<FunctionData> list_extract_bind(ClientContext &context, ScalarFunction &bound_function,
+                                                  vector<unique_ptr<Expression>> &arguments) {
+	if (arguments[0]->return_type.id() != LogicalTypeId::LIST) {
+		throw BinderException("LIST_EXTRACT can only operate on LISTs");
+	}
+	// list extract returns the child type of the list as return type
+	bound_function.return_type = arguments[0]->return_type.child_types()[0].second;
+	return make_unique<VariableReturnBindData>(bound_function.return_type);
+}
+
+void ListExtractFun::RegisterFunction(BuiltinFunctions &set) {
+	// return type is set in bind, unknown at this point
+	ScalarFunction fun("list_extract", {LogicalType::ANY, LogicalType::BIGINT}, LogicalType::ANY, list_extract_fun,
+	                   false, list_extract_bind);
+	fun.varargs = LogicalType::ANY;
+	set.AddFunction(fun);
+	fun.name = "list_element";
+	set.AddFunction(fun);
+}
+
+} // namespace duckdb

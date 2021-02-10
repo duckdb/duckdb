@@ -32,6 +32,10 @@ struct ListValueFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct ListExtractFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct StructExtractFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
