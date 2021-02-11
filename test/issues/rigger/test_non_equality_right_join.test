@@ -1,5 +1,5 @@
-# name: test/issues/rigger/test_rowid_right_join.test
-# description: SQLancer bug that detected a problem when using the rowid column in a RIGHT JOIN
+# name: test/issues/rigger/test_non_equality_right_join.test
+# description: SQLancer bug that detected a problem with a non-equality predicate which would not get correctly flipped when transforming between left <-> right join
 # group: [rigger]
 
 statement ok
@@ -63,13 +63,3 @@ SELECT t0.actual_rowid, t6.c0, t0.c0 FROM t0 RIGHT JOIN t6 ON ((t0.actual_rowid)
 7	NULL	1970-01-23
 8	NULL	NULL
 9	NULL	NULL
-
-# query III
-# SELECT t0.rowid, t6.c0, t0.c0 FROM t0 RIGHT JOIN t6 ON ((t0.rowid)>=(((((t6.c0)<=(t6.c0))) IS NOT NULL))) GROUP BY t0.rowid, t6.c0, t0.c0;
-# ----
-# 0	NULL	1969-12-16
-
-# query III
-# SELECT t0.rowid, t6.c0, t0.c0 FROM t0 RIGHT JOIN t6 ON ((t0.rowid)>=(((((t6.c0)<=(t6.c0))) IS NOT NULL))) WHERE t0.rowid GROUP BY t0.rowid, t6.c0, t0.c0;
-# ----
-# NULL	NULL	NULL
