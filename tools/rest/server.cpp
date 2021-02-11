@@ -14,8 +14,8 @@
 // you can set this to enable compression. You will need to link zlib as well.
 // #define CPPHTTPLIB_ZLIB_SUPPORT 1
 #define CPPHTTPLIB_KEEPALIVE_TIMEOUT_USECOND 10000
-#define CPPHTTPLIB_KEEPALIVE_TIMEOUT_SECOND 0
-#define CPPHTTPLIB_THREAD_POOL_COUNT 16
+#define CPPHTTPLIB_KEEPALIVE_TIMEOUT_SECOND  0
+#define CPPHTTPLIB_THREAD_POOL_COUNT         16
 
 #include "httplib.hpp"
 #include "json.hpp"
@@ -55,14 +55,15 @@ std::string random_string(size_t length) {
 }
 
 struct RestClientState {
-	unique_ptr<QueryResult> res;
-	unique_ptr<Connection> con;
+	unique_ptr<duckdb::QueryResult> res;
+	unique_ptr<duckdb::Connection> con;
 	time_t touched;
 };
 
 enum ReturnContentType { JSON, BSON, CBOR, MESSAGE_PACK, UBJSON };
 
-template <class T, class TARGET> static void assign_json_loop(Vector &v, idx_t col_idx, idx_t count, json &j) {
+template <class T, class TARGET>
+static void assign_json_loop(Vector &v, idx_t col_idx, idx_t count, json &j) {
 	v.Normalify(count);
 	auto data_ptr = FlatVector::GetData<T>(v);
 	auto &nullmask = FlatVector::Nullmask(v);
@@ -191,7 +192,7 @@ void serialize_json(const Request &req, Response &resp, json &j) {
 	}
 }
 
-void sleep_thread(Connection *conn, bool *is_active, int timeout_duration) {
+void sleep_thread(duckdb::Connection *conn, bool *is_active, int timeout_duration) {
 	// timeout is given in seconds
 	// we wait 10ms per iteration, so timeout * 100 gives us the amount of
 	// iterations
@@ -344,7 +345,7 @@ int main(int argc, char **argv) {
 		json j;
 
 		RestClientState state;
-		state.con = make_unique<Connection>(duckdb);
+		state.con = make_unique<duckdb::Connection>(duckdb);
 		state.con->EnableProfiling();
 		state.touched = std::time(nullptr);
 		bool is_active = true;
@@ -438,7 +439,7 @@ int main(int argc, char **argv) {
 
 	svr.Get("/close", [&](const Request &req, Response &resp) {
 		auto ref = req.get_param_value("ref");
-		Connection conn(duckdb);
+		duckdb::Connection conn(duckdb);
 		json j;
 		std::lock_guard<std::mutex> guard(client_state_map_mutex);
 		if (client_state_map.find(ref) != client_state_map.end()) {

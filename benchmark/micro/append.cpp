@@ -67,13 +67,13 @@ struct DuckDBPreparedState : public DuckDBBenchmarkState {
 		auto result = make_unique<DuckDBPreparedState>(GetDatabasePath());                                             \
 		return move(result);                                                                                           \
 	}                                                                                                                  \
-	void Load(DuckDBBenchmarkState *state_) override {                                                                 \
-		auto state = (DuckDBPreparedState *)state_;                                                                    \
+	void Load(DuckDBBenchmarkState *state_p) override {                                                                \
+		auto state = (DuckDBPreparedState *)state_p;                                                                   \
 		state->conn.Query(CREATE_STATEMENT);                                                                           \
 		state->prepared = state->conn.Prepare("INSERT INTO integers VALUES ($1)");                                     \
 	}                                                                                                                  \
-	void RunBenchmark(DuckDBBenchmarkState *state_) override {                                                         \
-		auto state = (DuckDBPreparedState *)state_;                                                                    \
+	void RunBenchmark(DuckDBBenchmarkState *state_p) override {                                                        \
+		auto state = (DuckDBPreparedState *)state_p;                                                                   \
 		state->conn.Query("BEGIN TRANSACTION");                                                                        \
 		for (int32_t i = 0; i < 100000; i++) {                                                                         \
 			state->prepared->Execute(i);                                                                               \

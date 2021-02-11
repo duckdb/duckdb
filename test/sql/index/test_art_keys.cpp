@@ -172,7 +172,6 @@ TEST_CASE("Test correct functioning of art keys", "[art]") {
 
 	keys.clear();
 
-
 	// Test strings
 	keys.push_back(Key::CreateKey<const char *>("abc", is_little_endian));
 	keys.push_back(Key::CreateKey<const char *>("babababa", is_little_endian));

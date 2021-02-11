@@ -55,13 +55,13 @@ enum HtEntryType { HT_WIDTH_32, HT_WIDTH_64 };
 class GroupedAggregateHashTable : public BaseAggregateHashTable {
 public:
 	GroupedAggregateHashTable(BufferManager &buffer_manager, vector<LogicalType> group_types,
-	                          vector<LogicalType> payload_types, vector<BoundAggregateExpression *> aggregates,
+	                          vector<LogicalType> payload_types, const vector<BoundAggregateExpression *> &aggregates,
 	                          HtEntryType entry_type = HtEntryType::HT_WIDTH_64);
 	GroupedAggregateHashTable(BufferManager &buffer_manager, vector<LogicalType> group_types,
 	                          vector<LogicalType> payload_types, vector<AggregateObject> aggregates,
 	                          HtEntryType entry_type = HtEntryType::HT_WIDTH_64);
 	GroupedAggregateHashTable(BufferManager &buffer_manager, vector<LogicalType> group_types);
-	~GroupedAggregateHashTable();
+	~GroupedAggregateHashTable() override;
 
 	//! Add the given data to the HT, computing the aggregates grouped by the
 	//! data in the group chunk. When resize = true, aggregates will not be
@@ -86,7 +86,8 @@ public:
 	void FindOrCreateGroups(DataChunk &groups, Vector &addresses_out);
 
 	//! Executes the filter(if any) and update the aggregates
-	static void UpdateAggregate(AggregateObject& aggr, DataChunk &payload,Vector& distinct_addresses, idx_t input_count, idx_t payload_idx);
+	static void UpdateAggregate(AggregateObject &aggr, DataChunk &payload, Vector &distinct_addresses,
+	                            idx_t input_count, idx_t payload_idx);
 	void Combine(GroupedAggregateHashTable &other);
 
 	idx_t Size() {
@@ -161,13 +162,16 @@ private:
 	void FlushMove(Vector &source_addresses, Vector &source_hashes, idx_t count);
 	void NewBlock();
 
-	template <class T> void VerifyInternal();
-	template <class T> void Resize(idx_t size);
+	template <class T>
+	void VerifyInternal();
+	template <class T>
+	void Resize(idx_t size);
 	template <class T>
 	idx_t FindOrCreateGroupsInternal(DataChunk &groups, Vector &group_hashes, Vector &addresses,
 	                                 SelectionVector &new_groups);
 
-	template <class FUNC = std::function<void(idx_t, idx_t, data_ptr_t)>> void PayloadApply(FUNC fun);
+	template <class FUNC = std::function<void(idx_t, idx_t, data_ptr_t)>>
+	void PayloadApply(FUNC fun);
 };
 
 } // namespace duckdb

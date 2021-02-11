@@ -109,7 +109,7 @@ void PhysicalJoin::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &left
 //===--------------------------------------------------------------------===//
 class NestedLoopJoinLocalState : public LocalSinkState {
 public:
-	NestedLoopJoinLocalState(vector<JoinCondition> &conditions) {
+	explicit NestedLoopJoinLocalState(vector<JoinCondition> &conditions) {
 		vector<LogicalType> condition_types;
 		for (auto &cond : conditions) {
 			rhs_executor.AddExpression(*cond.right);
@@ -211,8 +211,8 @@ public:
 };
 
 void PhysicalNestedLoopJoin::ResolveSimpleJoin(ExecutionContext &context, DataChunk &chunk,
-                                               PhysicalOperatorState *state_) {
-	auto state = reinterpret_cast<PhysicalNestedLoopJoinState *>(state_);
+                                               PhysicalOperatorState *state_p) {
+	auto state = reinterpret_cast<PhysicalNestedLoopJoinState *>(state_p);
 	auto &gstate = (NestedLoopJoinGlobalState &)*sink_state;
 	do {
 		// fetch the chunk to resolve
@@ -263,8 +263,8 @@ void PhysicalJoin::ConstructLeftJoinResult(DataChunk &left, DataChunk &result, b
 }
 
 void PhysicalNestedLoopJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &chunk,
-                                                PhysicalOperatorState *state_) {
-	auto state = reinterpret_cast<PhysicalNestedLoopJoinState *>(state_);
+                                                PhysicalOperatorState *state_p) {
+	auto state = reinterpret_cast<PhysicalNestedLoopJoinState *>(state_p);
 	auto &gstate = (NestedLoopJoinGlobalState &)*sink_state;
 
 	do {
@@ -351,8 +351,8 @@ void PhysicalNestedLoopJoin::ResolveComplexJoin(ExecutionContext &context, DataC
 }
 
 void PhysicalNestedLoopJoin::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
-                                              PhysicalOperatorState *state_) {
-	auto state = reinterpret_cast<PhysicalNestedLoopJoinState *>(state_);
+                                              PhysicalOperatorState *state_p) {
+	auto state = reinterpret_cast<PhysicalNestedLoopJoinState *>(state_p);
 	auto &gstate = (NestedLoopJoinGlobalState &)*sink_state;
 
 	if (gstate.right_chunks.Count() == 0) {
@@ -375,13 +375,13 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ExecutionContext &context, DataChu
 	case JoinType::ANTI:
 	case JoinType::MARK:
 		// simple joins can have max STANDARD_VECTOR_SIZE matches per chunk
-		ResolveSimpleJoin(context, chunk, state_);
+		ResolveSimpleJoin(context, chunk, state_p);
 		break;
 	case JoinType::LEFT:
 	case JoinType::INNER:
 	case JoinType::OUTER:
 	case JoinType::RIGHT:
-		ResolveComplexJoin(context, chunk, state_);
+		ResolveComplexJoin(context, chunk, state_p);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for nested loop join!");

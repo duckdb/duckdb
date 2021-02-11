@@ -17,7 +17,7 @@ public:
 	PerfectAggregateHashTable(BufferManager &buffer_manager, vector<LogicalType> group_types,
 	                          vector<LogicalType> payload_types_p, vector<AggregateObject> aggregate_objects,
 	                          vector<Value> group_minima, vector<idx_t> required_bits);
-	~PerfectAggregateHashTable();
+	~PerfectAggregateHashTable() override;
 
 public:
 	//! Add the given data to the HT

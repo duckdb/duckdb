@@ -137,20 +137,20 @@ const LogicalType LogicalType::LIST = LogicalType(LogicalTypeId::LIST);
 
 const LogicalType LogicalType::ANY = LogicalType(LogicalTypeId::ANY);
 
-const vector<LogicalType> LogicalType::NUMERIC = {LogicalType::TINYINT, LogicalType::SMALLINT, LogicalType::INTEGER,
-                                                  LogicalType::BIGINT,  LogicalType::HUGEINT,  LogicalType::FLOAT,
-                                                  LogicalType::DOUBLE,  LogicalType::DECIMAL, LogicalType::UTINYINT,
-                                                  LogicalType::USMALLINT,LogicalType::UINTEGER, LogicalType::UBIGINT};
+const vector<LogicalType> LogicalType::NUMERIC = {LogicalType::TINYINT,   LogicalType::SMALLINT, LogicalType::INTEGER,
+                                                  LogicalType::BIGINT,    LogicalType::HUGEINT,  LogicalType::FLOAT,
+                                                  LogicalType::DOUBLE,    LogicalType::DECIMAL,  LogicalType::UTINYINT,
+                                                  LogicalType::USMALLINT, LogicalType::UINTEGER, LogicalType::UBIGINT};
 
-const vector<LogicalType> LogicalType::INTEGRAL = {LogicalType::TINYINT, LogicalType::SMALLINT, LogicalType::INTEGER,
-                                                   LogicalType::BIGINT, LogicalType::HUGEINT, LogicalType::UTINYINT,
-                                                  LogicalType::USMALLINT,LogicalType::UINTEGER, LogicalType::UBIGINT};
+const vector<LogicalType> LogicalType::INTEGRAL = {LogicalType::TINYINT,   LogicalType::SMALLINT, LogicalType::INTEGER,
+                                                   LogicalType::BIGINT,    LogicalType::HUGEINT,  LogicalType::UTINYINT,
+                                                   LogicalType::USMALLINT, LogicalType::UINTEGER, LogicalType::UBIGINT};
 
 const vector<LogicalType> LogicalType::ALL_TYPES = {
-    LogicalType::BOOLEAN, LogicalType::TINYINT,   LogicalType::SMALLINT, LogicalType::INTEGER, LogicalType::BIGINT,
-    LogicalType::DATE,    LogicalType::TIMESTAMP, LogicalType::DOUBLE,   LogicalType::FLOAT,   LogicalType::VARCHAR,
-    LogicalType::BLOB,    LogicalType::INTERVAL,  LogicalType::HUGEINT,  LogicalType::DECIMAL, LogicalType::UTINYINT,
-                                                  LogicalType::USMALLINT,LogicalType::UINTEGER, LogicalType::UBIGINT};
+    LogicalType::BOOLEAN,   LogicalType::TINYINT,   LogicalType::SMALLINT, LogicalType::INTEGER, LogicalType::BIGINT,
+    LogicalType::DATE,      LogicalType::TIMESTAMP, LogicalType::DOUBLE,   LogicalType::FLOAT,   LogicalType::VARCHAR,
+    LogicalType::BLOB,      LogicalType::INTERVAL,  LogicalType::HUGEINT,  LogicalType::DECIMAL, LogicalType::UTINYINT,
+    LogicalType::USMALLINT, LogicalType::UINTEGER,  LogicalType::UBIGINT};
 // TODO add LIST/STRUCT here
 
 const LogicalType LOGICAL_ROW_TYPE = LogicalType::BIGINT;
@@ -363,7 +363,7 @@ string LogicalType::ToString() const {
 		return ret;
 	}
 	case LogicalTypeId::LIST: {
-		if (child_types_.size() == 0) {
+		if (child_types_.empty()) {
 			return "LIST<?>";
 		}
 		if (child_types_.size() != 1) {
@@ -382,7 +382,7 @@ string LogicalType::ToString() const {
 	}
 }
 
-LogicalType TransformStringToLogicalType(string str) {
+LogicalType TransformStringToLogicalType(const string &str) {
 	auto lower_str = StringUtil::Lower(str);
 	// Transform column type
 	if (lower_str == "int" || lower_str == "int4" || lower_str == "signed" || lower_str == "integer" ||
@@ -419,16 +419,15 @@ LogicalType TransformStringToLogicalType(string str) {
 		return LogicalType::HUGEINT;
 	} else if (lower_str == "struct" || lower_str == "row") {
 		return LogicalType::STRUCT;
-	} else if (lower_str == "utinyint"){
+	} else if (lower_str == "utinyint") {
 		return LogicalType::UTINYINT;
-	} else if (lower_str == "usmallint"){
+	} else if (lower_str == "usmallint") {
 		return LogicalType::USMALLINT;
-	} else if (lower_str == "uinteger"){
+	} else if (lower_str == "uinteger") {
 		return LogicalType::UINTEGER;
-	} else if (lower_str == "ubigint"){
+	} else if (lower_str == "ubigint") {
 		return LogicalType::UBIGINT;
-	}
-	else {
+	} else {
 		throw NotImplementedException("DataType %s not supported yet...\n", str);
 	}
 }
@@ -630,7 +629,7 @@ bool LogicalType::IsMoreGenericThan(LogicalType &other) const {
 	return true;
 }
 
-LogicalType LogicalType::MaxLogicalType(LogicalType left, LogicalType right) {
+LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalType &right) {
 	if (left.id() < right.id()) {
 		return right;
 	} else if (right.id() < left.id()) {
@@ -650,7 +649,9 @@ LogicalType LogicalType::MaxLogicalType(LogicalType left, LogicalType right) {
 		} else if (left.id() == LogicalTypeId::LIST) {
 			// list: perform max recursively on child type
 			child_list_t<LogicalType> child_types;
-			child_types.push_back(make_pair(left.child_types()[0].first, MaxLogicalType(left.child_types()[0].second, right.child_types()[0].second)));
+			child_types.push_back(
+			    make_pair(left.child_types()[0].first,
+			              MaxLogicalType(left.child_types()[0].second, right.child_types()[0].second)));
 			return LogicalType(LogicalTypeId::LIST, move(child_types));
 		} else {
 			// types are equal but no extra specifier: just return the type

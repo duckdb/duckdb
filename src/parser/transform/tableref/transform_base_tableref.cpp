@@ -3,9 +3,7 @@
 
 namespace duckdb {
 
-using namespace duckdb_libpgquery;
-
-unique_ptr<TableRef> Transformer::TransformRangeVar(PGRangeVar *root) {
+unique_ptr<TableRef> Transformer::TransformRangeVar(duckdb_libpgquery::PGRangeVar *root) {
 	auto result = make_unique<BaseTableRef>();
 
 	result->alias = TransformAlias(root->alias, result->column_name_alias);

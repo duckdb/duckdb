@@ -5,14 +5,15 @@
 
 namespace duckdb {
 
-static bool prefix(const string_t &str, const string_t &pattern);
+static bool PrefixFunction(const string_t &str, const string_t &pattern);
 
 struct PrefixOperator {
-	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
-		return prefix(left, right);
+	template <class TA, class TB, class TR>
+	static inline TR Operation(TA left, TB right) {
+		return PrefixFunction(left, right);
 	}
 };
-static bool prefix(const string_t &str, const string_t &pattern) {
+static bool PrefixFunction(const string_t &str, const string_t &pattern) {
 	auto str_length = str.GetSize();
 	auto patt_length = pattern.GetSize();
 	if (patt_length > str_length) {
@@ -29,8 +30,9 @@ static bool prefix(const string_t &str, const string_t &pattern) {
 		const char *str_pref = str.GetPrefix();
 		const char *patt_pref = pattern.GetPrefix();
 		for (idx_t i = 0; i < patt_length; ++i) {
-			if (str_pref[i] != patt_pref[i])
+			if (str_pref[i] != patt_pref[i]) {
 				return false;
+			}
 		}
 		return true;
 	} else {

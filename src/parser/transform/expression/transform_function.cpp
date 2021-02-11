@@ -9,10 +9,7 @@
 #include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/parser/transformer.hpp"
 
-
 namespace duckdb {
-
-using namespace duckdb_libpgquery;
 
 static ExpressionType WindowToExpressionType(string &fun_name) {
 	if (fun_name == "rank") {
@@ -40,7 +37,7 @@ static ExpressionType WindowToExpressionType(string &fun_name) {
 	return ExpressionType::WINDOW_AGGREGATE;
 }
 
-void Transformer::TransformWindowDef(PGWindowDef *window_spec, WindowExpression *expr) {
+void Transformer::TransformWindowDef(duckdb_libpgquery::PGWindowDef *window_spec, WindowExpression *expr) {
 	D_ASSERT(window_spec);
 	D_ASSERT(expr);
 
@@ -99,22 +96,21 @@ void Transformer::TransformWindowDef(PGWindowDef *window_spec, WindowExpression 
 	}
 }
 
-unique_ptr<ParsedExpression> Transformer::TransformFuncCall(PGFuncCall *root) {
+unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::PGFuncCall *root) {
 	auto name = root->funcname;
 	string schema, function_name;
 	if (name->length == 2) {
 		// schema + name
-		schema = reinterpret_cast<PGValue *>(name->head->data.ptr_value)->val.str;
-		function_name = reinterpret_cast<PGValue *>(name->head->next->data.ptr_value)->val.str;
+		schema = reinterpret_cast<duckdb_libpgquery::PGValue *>(name->head->data.ptr_value)->val.str;
+		function_name = reinterpret_cast<duckdb_libpgquery::PGValue *>(name->head->next->data.ptr_value)->val.str;
 	} else {
 		// unqualified name
 		//		schema = DEFAULT_SCHEMA;
 		schema = INVALID_SCHEMA;
-		function_name = reinterpret_cast<PGValue *>(name->head->data.ptr_value)->val.str;
+		function_name = reinterpret_cast<duckdb_libpgquery::PGValue *>(name->head->data.ptr_value)->val.str;
 	}
 
 	auto lowercase_name = StringUtil::Lower(function_name);
-
 
 	if (root->agg_order) {
 		throw ParserException("ORDER BY is not implemented for aggregates");
@@ -157,7 +153,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(PGFuncCall *root) {
 				D_ASSERT(function_list.size() <= 3);
 			}
 		}
-		auto window_spec = reinterpret_cast<PGWindowDef *>(root->over);
+		auto window_spec = reinterpret_cast<duckdb_libpgquery::PGWindowDef *>(root->over);
 		if (window_spec->name) {
 			auto it = window_clauses.find(StringUtil::Lower(string(window_spec->name)));
 			if (it == window_clauses.end()) {
@@ -175,13 +171,13 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(PGFuncCall *root) {
 	vector<unique_ptr<ParsedExpression>> children;
 	if (root->args != nullptr) {
 		for (auto node = root->args->head; node != nullptr; node = node->next) {
-			auto child_expr = TransformExpression((PGNode *)node->data.ptr_value);
+			auto child_expr = TransformExpression((duckdb_libpgquery::PGNode *)node->data.ptr_value);
 			children.push_back(move(child_expr));
 		}
 	}
 	unique_ptr<ParsedExpression> filter_expr;
 	if (root->agg_filter) {
-		filter_expr  = TransformExpression(root->agg_filter);
+		filter_expr = TransformExpression(root->agg_filter);
 	}
 
 	// star gets eaten in the parser
@@ -214,49 +210,50 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(PGFuncCall *root) {
 		return move(coalesce_op);
 	}
 
-	auto function = make_unique<FunctionExpression>(schema, lowercase_name.c_str(), children,move(filter_expr), root->agg_distinct);
+	auto function = make_unique<FunctionExpression>(schema, lowercase_name.c_str(), children, move(filter_expr),
+	                                                root->agg_distinct);
 	function->query_location = root->location;
 	return move(function);
 }
 
-static string SQLValueOpToString(PGSQLValueFunctionOp op) {
+static string SQLValueOpToString(duckdb_libpgquery::PGSQLValueFunctionOp op) {
 	switch (op) {
-	case PG_SVFOP_CURRENT_DATE:
+	case duckdb_libpgquery::PG_SVFOP_CURRENT_DATE:
 		return "current_date";
-	case PG_SVFOP_CURRENT_TIME:
+	case duckdb_libpgquery::PG_SVFOP_CURRENT_TIME:
 		return "current_time";
-	case PG_SVFOP_CURRENT_TIME_N:
+	case duckdb_libpgquery::PG_SVFOP_CURRENT_TIME_N:
 		return "current_time_n";
-	case PG_SVFOP_CURRENT_TIMESTAMP:
+	case duckdb_libpgquery::PG_SVFOP_CURRENT_TIMESTAMP:
 		return "current_timestamp";
-	case PG_SVFOP_CURRENT_TIMESTAMP_N:
+	case duckdb_libpgquery::PG_SVFOP_CURRENT_TIMESTAMP_N:
 		return "current_timestamp_n";
-	case PG_SVFOP_LOCALTIME:
+	case duckdb_libpgquery::PG_SVFOP_LOCALTIME:
 		return "current_localtime";
-	case PG_SVFOP_LOCALTIME_N:
+	case duckdb_libpgquery::PG_SVFOP_LOCALTIME_N:
 		return "current_localtime_n";
-	case PG_SVFOP_LOCALTIMESTAMP:
+	case duckdb_libpgquery::PG_SVFOP_LOCALTIMESTAMP:
 		return "current_localtimestamp";
-	case PG_SVFOP_LOCALTIMESTAMP_N:
+	case duckdb_libpgquery::PG_SVFOP_LOCALTIMESTAMP_N:
 		return "current_localtimestamp_n";
-	case PG_SVFOP_CURRENT_ROLE:
+	case duckdb_libpgquery::PG_SVFOP_CURRENT_ROLE:
 		return "current_role";
-	case PG_SVFOP_CURRENT_USER:
+	case duckdb_libpgquery::PG_SVFOP_CURRENT_USER:
 		return "current_user";
-	case PG_SVFOP_USER:
+	case duckdb_libpgquery::PG_SVFOP_USER:
 		return "user";
-	case PG_SVFOP_SESSION_USER:
+	case duckdb_libpgquery::PG_SVFOP_SESSION_USER:
 		return "session_user";
-	case PG_SVFOP_CURRENT_CATALOG:
+	case duckdb_libpgquery::PG_SVFOP_CURRENT_CATALOG:
 		return "current_catalog";
-	case PG_SVFOP_CURRENT_SCHEMA:
+	case duckdb_libpgquery::PG_SVFOP_CURRENT_SCHEMA:
 		return "current_schema";
 	default:
 		throw Exception("Could not find named SQL value function specification " + to_string((int)op));
 	}
 }
 
-unique_ptr<ParsedExpression> Transformer::TransformSQLValueFunction(PGSQLValueFunction *node) {
+unique_ptr<ParsedExpression> Transformer::TransformSQLValueFunction(duckdb_libpgquery::PGSQLValueFunction *node) {
 	if (!node) {
 		return nullptr;
 	}

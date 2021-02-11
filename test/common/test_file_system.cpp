@@ -75,7 +75,8 @@ TEST_CASE("Test file operations", "[file_system]") {
 	// standard reading/writing test
 
 	// open file for writing
-	REQUIRE_NOTHROW(handle = fs.OpenFile(fname, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE, FileLockType::NO_LOCK));
+	REQUIRE_NOTHROW(handle = fs.OpenFile(fname, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE,
+	                                     FileLockType::NO_LOCK));
 	// write 10 integers
 	REQUIRE_NOTHROW(handle->Write((void *)test_data, sizeof(int64_t) * INTEGER_COUNT, 0));
 	// close the file
@@ -110,7 +111,9 @@ TEST_CASE("Test file buffers for reading/writing to file", "[file_system]") {
 	}
 
 	// open file for writing
-	REQUIRE_NOTHROW(handle = fs.OpenFile(fname, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE | FileFlags::FILE_FLAGS_DIRECT_IO,
+	REQUIRE_NOTHROW(handle = fs.OpenFile(fname,
+	                                     FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE |
+	                                         FileFlags::FILE_FLAGS_DIRECT_IO,
 	                                     FileLockType::WRITE_LOCK));
 	// write the buffer
 	REQUIRE_NOTHROW(buf->Write(*handle, 0));

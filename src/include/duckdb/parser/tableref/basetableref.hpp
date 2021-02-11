@@ -30,7 +30,7 @@ public:
 		return "GET(" + schema_name + "." + table_name + ")";
 	}
 
-	bool Equals(const TableRef *other_) const override;
+	bool Equals(const TableRef *other_p) const override;
 
 	unique_ptr<TableRef> Copy() override;
 

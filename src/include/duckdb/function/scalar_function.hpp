@@ -58,7 +58,8 @@ public:
 	//! The statistics propagation function (if any)
 	function_statistics_t statistics;
 
-	static unique_ptr<BoundFunctionExpression> BindScalarFunction(ClientContext &context, string schema, string name,
+	static unique_ptr<BoundFunctionExpression> BindScalarFunction(ClientContext &context, const string &schema,
+	                                                              const string &name,
 	                                                              vector<unique_ptr<Expression>> children,
 	                                                              string &error, bool is_operator = false);
 	static unique_ptr<BoundFunctionExpression> BindScalarFunction(ClientContext &context,
@@ -113,7 +114,8 @@ public:
 	}
 
 public:
-	template <class OP> static scalar_function_t GetScalarUnaryFunction(LogicalType type) {
+	template <class OP>
+	static scalar_function_t GetScalarUnaryFunction(LogicalType type) {
 		scalar_function_t function;
 		switch (type.id()) {
 		case LogicalTypeId::TINYINT:
@@ -155,7 +157,8 @@ public:
 		return function;
 	}
 
-	template <class TR, class OP> static scalar_function_t GetScalarUnaryFunctionFixedReturn(LogicalType type) {
+	template <class TR, class OP>
+	static scalar_function_t GetScalarUnaryFunctionFixedReturn(LogicalType type) {
 		scalar_function_t function;
 		switch (type.id()) {
 		case LogicalTypeId::TINYINT:

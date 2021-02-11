@@ -21,7 +21,7 @@ class IndexCatalogEntry : public StandardEntry {
 public:
 	//! Create a real TableCatalogEntry and initialize storage for it
 	IndexCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateIndexInfo *info);
-	~IndexCatalogEntry();
+	~IndexCatalogEntry() override;
 
 	Index *index;
 	shared_ptr<DataTableInfo> info;

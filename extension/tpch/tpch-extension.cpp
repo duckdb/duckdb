@@ -55,7 +55,7 @@ static void dbgen_function(ClientContext &context, const FunctionData *bind_data
 
 	data.finished = true;
 }
-static string pragma_tpch_query(ClientContext &context, FunctionParameters parameters) {
+static string pragma_tpch_query(ClientContext &context, const FunctionParameters &parameters) {
 	auto index = parameters.values[0].GetValue<int32_t>();
 	return tpch::DBGenWrapper::GetQuery(index);
 }

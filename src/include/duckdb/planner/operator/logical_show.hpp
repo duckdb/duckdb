@@ -14,7 +14,7 @@ namespace duckdb {
 
 class LogicalShow : public LogicalOperator {
 public:
-	LogicalShow(unique_ptr<LogicalOperator> plan) : LogicalOperator(LogicalOperatorType::LOGICAL_SHOW) {
+	explicit LogicalShow(unique_ptr<LogicalOperator> plan) : LogicalOperator(LogicalOperatorType::LOGICAL_SHOW) {
 		children.push_back(move(plan));
 	}
 
@@ -23,12 +23,12 @@ public:
 
 protected:
 	void ResolveTypes() override {
-		types = {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR,
-		         LogicalType::VARCHAR, LogicalType::VARCHAR};
+		types = {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR,
+		         LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR};
 	}
 	vector<ColumnBinding> GetColumnBindings() override {
-		return {ColumnBinding(0, 0), ColumnBinding(0, 1), ColumnBinding(0, 2), ColumnBinding(0, 3),
-		        ColumnBinding(0, 4), ColumnBinding(0, 5)};
+		return {ColumnBinding(0, 0), ColumnBinding(0, 1), ColumnBinding(0, 2),
+		        ColumnBinding(0, 3), ColumnBinding(0, 4), ColumnBinding(0, 5)};
 	}
 };
 } // namespace duckdb

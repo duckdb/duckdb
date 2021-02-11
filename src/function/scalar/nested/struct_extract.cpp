@@ -6,13 +6,14 @@
 namespace duckdb {
 
 struct StructExtractBindData : public FunctionData {
+	StructExtractBindData(string key, idx_t index, LogicalType type) : key(move(key)), index(index), type(move(type)) {
+	}
+
 	string key;
 	idx_t index;
 	LogicalType type;
 
-	StructExtractBindData(string key, idx_t index, LogicalType type) : key(key), index(index), type(type) {
-	}
-
+public:
 	unique_ptr<FunctionData> Copy() override {
 		return make_unique<StructExtractBindData>(key, index, type);
 	}
@@ -22,7 +23,7 @@ struct StructExtractBindData : public FunctionData {
 	}
 };
 
-static void struct_extract_fun(DataChunk &args, ExpressionState &state, Vector &result) {
+static void StructExtractFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (StructExtractBindData &)*func_expr.bind_info;
 
@@ -56,16 +57,16 @@ static void struct_extract_fun(DataChunk &args, ExpressionState &state, Vector &
 	result.Verify(args.size());
 }
 
-static unique_ptr<FunctionData> struct_extract_bind(ClientContext &context, ScalarFunction &bound_function,
-                                                    vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> StructExtractBind(ClientContext &context, ScalarFunction &bound_function,
+                                                  vector<unique_ptr<Expression>> &arguments) {
 	auto &struct_children = arguments[0]->return_type.child_types();
-	if (struct_children.size() < 1) {
+	if (struct_children.empty()) {
 		throw Exception("Can't extract something from an empty struct");
 	}
 
 	auto &key_child = arguments[1];
 
-	if (arguments[1]->return_type.id() != LogicalTypeId::VARCHAR ||
+	if (key_child->return_type.id() != LogicalTypeId::VARCHAR ||
 	    key_child->return_type.id() != LogicalTypeId::VARCHAR || !key_child->IsFoldable()) {
 		throw Exception("Key name for struct_extract needs to be a constant string");
 	}
@@ -101,7 +102,7 @@ static unique_ptr<FunctionData> struct_extract_bind(ClientContext &context, Scal
 void StructExtractFun::RegisterFunction(BuiltinFunctions &set) {
 	// the arguments and return types are actually set in the binder function
 	ScalarFunction fun("struct_extract", {LogicalType::STRUCT, LogicalType::VARCHAR}, LogicalType::ANY,
-	                   struct_extract_fun, false, struct_extract_bind);
+	                   StructExtractFunction, false, StructExtractBind);
 	set.AddFunction(fun);
 }
 

@@ -11,6 +11,8 @@
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/file_buffer.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/exception.hpp"
 
 #include <functional>
 
@@ -102,7 +104,7 @@ public:
 	//! Recursively remove a directory and all files in it
 	virtual void RemoveDirectory(const string &directory);
 	//! List files in a directory, invoking the callback method for each one with (filename, is_dir)
-	virtual bool ListFiles(const string &directory, std::function<void(string, bool)> callback);
+	virtual bool ListFiles(const string &directory, const std::function<void(string, bool)> &callback);
 	//! Move a file from source path to the target, StorageManager relies on this being an atomic action for ACID
 	//! properties
 	virtual void MoveFile(const string &source, const string &target);
@@ -118,21 +120,133 @@ public:
 	virtual void FileSync(FileHandle &handle);
 
 	//! Sets the working directory
-	virtual void SetWorkingDirectory(string path);
+	virtual void SetWorkingDirectory(const string &path);
 	//! Gets the working directory
 	virtual string GetWorkingDirectory();
 	//! Gets the users home directory
 	virtual string GetHomeDirectory();
 
 	//! Runs a glob on the file system, returning a list of matching files
-	virtual vector<string> Glob(string path);
+	virtual vector<string> Glob(const string &path);
 
 	//! Returns the system-available memory in bytes
 	virtual idx_t GetAvailableMemory();
 
+	//! registers a sub-file system to handle certain file name prefixes, e.g. http:// etc.
+	virtual void RegisterProtocolHandler(string protocol, unique_ptr<FileSystem> protocol_fs) {
+		throw NotImplementedException("Can't register a protocol handler on a non-virtual file system");
+	}
+
 private:
 	//! Set the file pointer of a file handle to a specified location. Reads and writes will happen from this location
 	void SetFilePointer(FileHandle &handle, idx_t location);
+};
+
+// bunch of wrappers to allow registering protocol handlers
+class VirtualFileSystem : public FileSystem {
+public:
+	unique_ptr<FileHandle> OpenFile(const char *path, uint8_t flags,
+	                                FileLockType lock = FileLockType::NO_LOCK) override {
+		return FindFileSystem(path)->OpenFile(path, flags, lock);
+	}
+
+	virtual void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
+		handle.file_system.Read(handle, buffer, nr_bytes, location);
+	};
+
+	virtual void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
+		handle.file_system.Write(handle, buffer, nr_bytes, location);
+	}
+
+	int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes) override {
+		return handle.file_system.Read(handle, buffer, nr_bytes);
+	}
+
+	int64_t Write(FileHandle &handle, void *buffer, int64_t nr_bytes) override {
+		return handle.file_system.Write(handle, buffer, nr_bytes);
+	}
+
+	int64_t GetFileSize(FileHandle &handle) override {
+		return handle.file_system.GetFileSize(handle);
+	}
+	time_t GetLastModifiedTime(FileHandle &handle) override {
+		return handle.file_system.GetLastModifiedTime(handle);
+	}
+
+	void Truncate(FileHandle &handle, int64_t new_size) override {
+		handle.file_system.Truncate(handle, new_size);
+	}
+
+	void FileSync(FileHandle &handle) override {
+		handle.file_system.FileSync(handle);
+	}
+
+	// need to look up correct fs for this
+	bool DirectoryExists(const string &directory) override {
+		return FindFileSystem(directory)->DirectoryExists(directory);
+	}
+	void CreateDirectory(const string &directory) override {
+		FindFileSystem(directory)->CreateDirectory(directory);
+	}
+
+	void RemoveDirectory(const string &directory) override {
+		FindFileSystem(directory)->RemoveDirectory(directory);
+	}
+
+	bool ListFiles(const string &directory, const std::function<void(string, bool)> &callback) override {
+		return FindFileSystem(directory)->ListFiles(directory, callback);
+	}
+
+	void MoveFile(const string &source, const string &target) override {
+		FindFileSystem(source)->MoveFile(source, target);
+	}
+
+	bool FileExists(const string &filename) override {
+		return FindFileSystem(filename)->FileExists(filename);
+	}
+
+	virtual void RemoveFile(const string &filename) override {
+		FindFileSystem(filename)->RemoveFile(filename);
+	}
+
+	vector<string> Glob(const string &path) override {
+		return FindFileSystem(path)->Glob(path);
+	}
+
+	// these goes to the default fs
+	void SetWorkingDirectory(const string &path) override {
+		default_fs.SetWorkingDirectory(path);
+	}
+
+	string GetWorkingDirectory() override {
+		return default_fs.GetWorkingDirectory();
+	}
+
+	string GetHomeDirectory() override {
+		return default_fs.GetWorkingDirectory();
+	}
+
+	idx_t GetAvailableMemory() override {
+		return default_fs.GetAvailableMemory();
+	}
+
+	void RegisterProtocolHandler(string protocol, unique_ptr<FileSystem> protocol_fs) override {
+		protocol_handler_fss[protocol] = move(protocol_fs);
+	}
+
+private:
+	FileSystem *FindFileSystem(const string &path) {
+		for (auto &handler : protocol_handler_fss) {
+			if (path.rfind(handler.first, 0) == 0) {
+				return handler.second.get();
+			}
+		}
+		return &default_fs;
+	}
+
+private:
+	unordered_map<string, unique_ptr<FileSystem>> protocol_handler_fss;
+	FileSystem default_fs;
 };
 
 } // namespace duckdb

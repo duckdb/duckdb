@@ -20,7 +20,7 @@ class BufferManager;
 
 struct AggregateObject {
 	AggregateObject(AggregateFunction function, FunctionData *bind_data, idx_t child_count, idx_t payload_size,
-	                bool distinct, PhysicalType return_type, Expression* filter = nullptr)
+	                bool distinct, PhysicalType return_type, Expression *filter = nullptr)
 	    : function(move(function)), bind_data(bind_data), child_count(child_count), payload_size(payload_size),
 	      distinct(distinct), return_type(return_type), filter(filter) {
 	}
@@ -33,7 +33,7 @@ struct AggregateObject {
 	PhysicalType return_type;
 	Expression *filter = nullptr;
 
-	static vector<AggregateObject> CreateAggregateObjects(vector<BoundAggregateExpression *> bindings);
+	static vector<AggregateObject> CreateAggregateObjects(const vector<BoundAggregateExpression *> &bindings);
 };
 
 class BaseAggregateHashTable {

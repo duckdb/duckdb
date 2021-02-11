@@ -59,12 +59,12 @@ unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<E
 unique_ptr<Expression> LikeOptimizationRule::ApplyRule(BoundFunctionExpression *expr, ScalarFunction function,
                                                        string pattern) {
 	// replace LIKE by an optimized function
-	expr->function = function;
+	expr->function = move(function);
 
 	// removing "%" from the pattern
 	pattern.erase(std::remove(pattern.begin(), pattern.end(), '%'), pattern.end());
 
-	expr->children[1] = make_unique<BoundConstantExpression>(Value(pattern));
+	expr->children[1] = make_unique<BoundConstantExpression>(Value(move(pattern)));
 
 	return expr->Copy();
 }

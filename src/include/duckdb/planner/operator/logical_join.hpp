@@ -17,7 +17,7 @@ namespace duckdb {
 //! LogicalJoin represents a join between two relations
 class LogicalJoin : public LogicalOperator {
 public:
-	LogicalJoin(JoinType type, LogicalOperatorType logical_type = LogicalOperatorType::LOGICAL_JOIN);
+	explicit LogicalJoin(JoinType type, LogicalOperatorType logical_type = LogicalOperatorType::LOGICAL_JOIN);
 
 	// Gets the set of table references that are reachable from this node
 	static void GetTableReferences(LogicalOperator &op, unordered_set<idx_t> &bindings);

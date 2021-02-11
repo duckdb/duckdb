@@ -13,7 +13,7 @@ unique_ptr<LogicalOperator> FilterPullup::PullupBothSide(unique_ptr<LogicalOpera
 		left_pullup.filters_expr_pullup.push_back(move(right_pullup.filters_expr_pullup[i]));
 	}
 
-	if (left_pullup.filters_expr_pullup.size() > 0) {
+	if (!left_pullup.filters_expr_pullup.empty()) {
 		return GeneratePullupFilter(move(op), left_pullup.filters_expr_pullup);
 	}
 	return op;

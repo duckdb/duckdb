@@ -9,7 +9,8 @@
 
 namespace duckdb {
 
-template <class OP> static Value binary_value_operation(const Value &left, const Value &right) {
+template <class OP>
+static Value BinaryValueOperation(const Value &left, const Value &right) {
 	auto left_type = left.type();
 	auto right_type = right.type();
 	LogicalType result_type = left_type;
@@ -17,7 +18,7 @@ template <class OP> static Value binary_value_operation(const Value &left, const
 		result_type = LogicalType::MaxLogicalType(left.type(), right.type());
 		Value left_cast = left.CastAs(result_type);
 		Value right_cast = right.CastAs(result_type);
-		return binary_value_operation<OP>(left_cast, right_cast);
+		return BinaryValueOperation<OP>(left_cast, right_cast);
 	}
 	if (left.is_null || right.is_null) {
 		return Value().CastAs(result_type);
@@ -67,22 +68,22 @@ template <class OP> static Value binary_value_operation(const Value &left, const
 // Numeric Operations
 //===--------------------------------------------------------------------===//
 Value ValueOperations::Add(const Value &left, const Value &right) {
-	return binary_value_operation<duckdb::AddOperator>(left, right);
+	return BinaryValueOperation<duckdb::AddOperator>(left, right);
 }
 
 Value ValueOperations::Subtract(const Value &left, const Value &right) {
-	return binary_value_operation<duckdb::SubtractOperator>(left, right);
+	return BinaryValueOperation<duckdb::SubtractOperator>(left, right);
 }
 
 Value ValueOperations::Multiply(const Value &left, const Value &right) {
-	return binary_value_operation<duckdb::MultiplyOperator>(left, right);
+	return BinaryValueOperation<duckdb::MultiplyOperator>(left, right);
 }
 
 Value ValueOperations::Modulo(const Value &left, const Value &right) {
 	if (right == 0) {
 		return Value(right.type());
 	} else {
-		return binary_value_operation<duckdb::ModuloOperator>(left, right);
+		return BinaryValueOperation<duckdb::ModuloOperator>(left, right);
 	}
 }
 
@@ -90,7 +91,7 @@ Value ValueOperations::Divide(const Value &left, const Value &right) {
 	if (right == 0) {
 		return Value(right.type());
 	} else {
-		return binary_value_operation<duckdb::DivideOperator>(left, right);
+		return BinaryValueOperation<duckdb::DivideOperator>(left, right);
 	}
 }
 

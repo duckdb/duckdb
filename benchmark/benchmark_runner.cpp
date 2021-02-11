@@ -263,7 +263,7 @@ ConfigurationError run_benchmarks() {
 	if (!instance.configuration.name_pattern.empty()) {
 		// run only benchmarks which names matches the
 		// passed name pattern.
-		std::vector<int> benchmark_indices{};
+		std::vector<int> benchmark_indices {};
 		benchmark_indices.reserve(benchmarks.size());
 		for (idx_t index = 0; index < benchmarks.size(); ++index) {
 			if (RE2::FullMatch(benchmarks[index]->name, instance.configuration.name_pattern)) {

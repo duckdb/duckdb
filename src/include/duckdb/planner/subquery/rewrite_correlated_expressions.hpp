@@ -48,7 +48,7 @@ private:
 //! Helper class that rewrites COUNT aggregates into a CASE expression turning NULL into 0 after a LEFT OUTER JOIN
 class RewriteCountAggregates : public LogicalOperatorVisitor {
 public:
-	RewriteCountAggregates(column_binding_map_t<idx_t> &replacement_map);
+	explicit RewriteCountAggregates(column_binding_map_t<idx_t> &replacement_map);
 
 	unique_ptr<Expression> VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 

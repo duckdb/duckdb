@@ -30,9 +30,9 @@ class SimpleFunction;
 struct MacroBinding;
 
 struct BindResult {
-	BindResult(string error) : error(error) {
+	explicit BindResult(string error) : error(error) {
 	}
-	BindResult(unique_ptr<Expression> expr) : expression(move(expr)) {
+	explicit BindResult(unique_ptr<Expression> expr) : expression(move(expr)) {
 	}
 
 	bool HasError() {
@@ -59,16 +59,20 @@ public:
 	string Bind(unique_ptr<ParsedExpression> *expr, idx_t depth, bool root_expression = false);
 
 	// Bind table names to ColumnRefExpressions
-	static void BindTableNames(Binder &binder, ParsedExpression &expr, unordered_map<string, idx_t> *alias_map = nullptr);
-	static unique_ptr<Expression> PushCollation(ClientContext &context, unique_ptr<Expression> source, string collation,
-	                                            bool equality_only = false);
-	static void TestCollation(ClientContext &context, string collation);
+	static void BindTableNames(Binder &binder, ParsedExpression &expr,
+	                           unordered_map<string, idx_t> *alias_map = nullptr);
+	static unique_ptr<Expression> PushCollation(ClientContext &context, unique_ptr<Expression> source,
+	                                            const string &collation, bool equality_only = false);
+	static void TestCollation(ClientContext &context, const string &collation);
 
 	bool BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr);
 
 	//! The target type that should result from the binder. If the result is not of this type, a cast to this type will
 	//! be added. Defaults to INVALID.
 	LogicalType target_type;
+
+	void BindChild(unique_ptr<ParsedExpression> &expr, idx_t depth, string &error);
+	static void ExtractCorrelatedExpressions(Binder &binder, Expression &expr);
 
 protected:
 	virtual BindResult BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth,
@@ -88,11 +92,7 @@ protected:
 	BindResult BindExpression(StarExpression &expr, idx_t depth);
 	BindResult BindExpression(SubqueryExpression &expr, idx_t depth);
 
-	void BindChild(unique_ptr<ParsedExpression> &expr, idx_t depth, string &error);
-
 protected:
-	static void ExtractCorrelatedExpressions(Binder &binder, Expression &expr);
-
 	virtual BindResult BindFunction(FunctionExpression &expr, ScalarFunctionCatalogEntry *function, idx_t depth);
 	virtual BindResult BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry *function, idx_t depth);
 	virtual BindResult BindUnnest(FunctionExpression &expr, idx_t depth);

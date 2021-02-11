@@ -73,7 +73,7 @@ private:
 
 class TableScanState {
 public:
-	TableScanState(){};
+	TableScanState() {};
 	idx_t current_row, max_row;
 	idx_t base_row;
 	unique_ptr<ColumnScanState[]> column_scans;

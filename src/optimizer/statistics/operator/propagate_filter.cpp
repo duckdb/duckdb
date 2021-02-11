@@ -9,7 +9,7 @@
 
 namespace duckdb {
 
-bool StatisticsPropagator::ExpressionIsConstant(Expression &expr, Value val) {
+bool StatisticsPropagator::ExpressionIsConstant(Expression &expr, const Value &val) {
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
 		return false;
 	}
@@ -18,7 +18,7 @@ bool StatisticsPropagator::ExpressionIsConstant(Expression &expr, Value val) {
 	return bound_constant.value == val;
 }
 
-bool StatisticsPropagator::ExpressionIsConstantOrNull(Expression &expr, Value val) {
+bool StatisticsPropagator::ExpressionIsConstantOrNull(Expression &expr, const Value &val) {
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
 		return false;
 	}
@@ -35,7 +35,7 @@ void StatisticsPropagator::SetStatisticsNotNull(ColumnBinding binding) {
 }
 
 void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &stats, ExpressionType comparison_type,
-                                                  Value constant) {
+                                                  const Value &constant) {
 	// any comparison filter removes all null values
 	stats.has_null = false;
 	if (!stats.type.IsNumeric()) {
@@ -221,7 +221,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalFilt
 			// erase this condition
 			filter.expressions.erase(filter.expressions.begin() + i);
 			i--;
-			if (filter.expressions.size() == 0) {
+			if (filter.expressions.empty()) {
 				// all conditions have been erased: remove the entire filter
 				*node_ptr = move(filter.children[0]);
 				break;

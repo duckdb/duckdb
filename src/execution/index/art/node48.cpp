@@ -4,14 +4,14 @@
 
 namespace duckdb {
 
-Node48::Node48(ART &art, size_t compressionLength) : Node(art, NodeType::N48, compressionLength) {
+Node48::Node48(ART &art, size_t compression_length) : Node(art, NodeType::N48, compression_length) {
 	for (idx_t i = 0; i < 256; i++) {
-		childIndex[i] = Node::EMPTY_MARKER;
+		child_index[i] = Node::EMPTY_MARKER;
 	}
 }
 
 idx_t Node48::GetChildPos(uint8_t k) {
-	if (childIndex[k] == Node::EMPTY_MARKER) {
+	if (child_index[k] == Node::EMPTY_MARKER) {
 		return INVALID_INDEX;
 	} else {
 		return k;
@@ -20,7 +20,7 @@ idx_t Node48::GetChildPos(uint8_t k) {
 
 idx_t Node48::GetChildGreaterEqual(uint8_t k, bool &equal) {
 	for (idx_t pos = k; pos < 256; pos++) {
-		if (childIndex[pos] != Node::EMPTY_MARKER) {
+		if (child_index[pos] != Node::EMPTY_MARKER) {
 			if (pos == k) {
 				equal = true;
 			} else {
@@ -34,7 +34,7 @@ idx_t Node48::GetChildGreaterEqual(uint8_t k, bool &equal) {
 
 idx_t Node48::GetNextPos(idx_t pos) {
 	for (pos == INVALID_INDEX ? pos = 0 : pos++; pos < 256; pos++) {
-		if (childIndex[pos] != Node::EMPTY_MARKER) {
+		if (child_index[pos] != Node::EMPTY_MARKER) {
 			return pos;
 		}
 	}
@@ -42,20 +42,20 @@ idx_t Node48::GetNextPos(idx_t pos) {
 }
 
 unique_ptr<Node> *Node48::GetChild(idx_t pos) {
-	D_ASSERT(childIndex[pos] != Node::EMPTY_MARKER);
-	return &child[childIndex[pos]];
+	D_ASSERT(child_index[pos] != Node::EMPTY_MARKER);
+	return &child[child_index[pos]];
 }
 
 idx_t Node48::GetMin() {
 	for (idx_t i = 0; i < 256; i++) {
-		if (childIndex[i] != Node::EMPTY_MARKER) {
+		if (child_index[i] != Node::EMPTY_MARKER) {
 			return i;
 		}
 	}
 	return INVALID_INDEX;
 }
 
-void Node48::insert(ART &art, unique_ptr<Node> &node, uint8_t keyByte, unique_ptr<Node> &child) {
+void Node48::Insert(ART &art, unique_ptr<Node> &node, uint8_t key_byte, unique_ptr<Node> &child) {
 	Node48 *n = static_cast<Node48 *>(node.get());
 
 	// Insert leaf into inner node
@@ -70,39 +70,39 @@ void Node48::insert(ART &art, unique_ptr<Node> &node, uint8_t keyByte, unique_pt
 			}
 		}
 		n->child[pos] = move(child);
-		n->childIndex[keyByte] = pos;
+		n->child_index[key_byte] = pos;
 		n->count++;
 	} else {
 		// Grow to Node256
-		auto newNode = make_unique<Node256>(art, n->prefix_length);
+		auto new_node = make_unique<Node256>(art, n->prefix_length);
 		for (idx_t i = 0; i < 256; i++) {
-			if (n->childIndex[i] != Node::EMPTY_MARKER) {
-				newNode->child[i] = move(n->child[n->childIndex[i]]);
+			if (n->child_index[i] != Node::EMPTY_MARKER) {
+				new_node->child[i] = move(n->child[n->child_index[i]]);
 			}
 		}
-		newNode->count = n->count;
-		CopyPrefix(art, n, newNode.get());
-		node = move(newNode);
-		Node256::insert(art, node, keyByte, child);
+		new_node->count = n->count;
+		CopyPrefix(art, n, new_node.get());
+		node = move(new_node);
+		Node256::Insert(art, node, key_byte, child);
 	}
 }
 
-void Node48::erase(ART &art, unique_ptr<Node> &node, int pos) {
+void Node48::Erase(ART &art, unique_ptr<Node> &node, int pos) {
 	Node48 *n = static_cast<Node48 *>(node.get());
 
-	n->child[n->childIndex[pos]].reset();
-	n->childIndex[pos] = Node::EMPTY_MARKER;
+	n->child[n->child_index[pos]].reset();
+	n->child_index[pos] = Node::EMPTY_MARKER;
 	n->count--;
 	if (node->count <= 12) {
-		auto newNode = make_unique<Node16>(art, n->prefix_length);
-		CopyPrefix(art, n, newNode.get());
+		auto new_node = make_unique<Node16>(art, n->prefix_length);
+		CopyPrefix(art, n, new_node.get());
 		for (idx_t i = 0; i < 256; i++) {
-			if (n->childIndex[i] != Node::EMPTY_MARKER) {
-				newNode->key[newNode->count] = i;
-				newNode->child[newNode->count++] = move(n->child[n->childIndex[i]]);
+			if (n->child_index[i] != Node::EMPTY_MARKER) {
+				new_node->key[new_node->count] = i;
+				new_node->child[new_node->count++] = move(n->child[n->child_index[i]]);
 			}
 		}
-		node = move(newNode);
+		node = move(new_node);
 	}
 }
 

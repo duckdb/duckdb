@@ -1,4 +1,4 @@
-# name: test/sql/function/date/test_strftime_exhausted.test
+# name: test/sql/function/date/test_strftime_exhaustive.test
 # description: Test all strftime % codes with the date type
 # group: [date]
 

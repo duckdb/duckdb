@@ -15,7 +15,8 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // + [add]
 //===--------------------------------------------------------------------===//
-template <> float AddOperator::Operation(float left, float right) {
+template <>
+float AddOperator::Operation(float left, float right) {
 	auto result = left + right;
 	if (!Value::FloatIsValid(result)) {
 		throw OutOfRangeException("Overflow in addition of float!");
@@ -23,7 +24,8 @@ template <> float AddOperator::Operation(float left, float right) {
 	return result;
 }
 
-template <> double AddOperator::Operation(double left, double right) {
+template <>
+double AddOperator::Operation(double left, double right) {
 	auto result = left + right;
 	if (!Value::DoubleIsValid(result)) {
 		throw OutOfRangeException("Overflow in addition of double!");
@@ -31,14 +33,16 @@ template <> double AddOperator::Operation(double left, double right) {
 	return result;
 }
 
-template <> interval_t AddOperator::Operation(interval_t left, interval_t right) {
+template <>
+interval_t AddOperator::Operation(interval_t left, interval_t right) {
 	left.months = AddOperatorOverflowCheck::Operation<int32_t, int32_t, int32_t>(left.months, right.months);
 	left.days = AddOperatorOverflowCheck::Operation<int32_t, int32_t, int32_t>(left.days, right.days);
 	left.micros = AddOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(left.micros, right.micros);
 	return left;
 }
 
-template <> date_t AddOperator::Operation(date_t left, interval_t right) {
+template <>
+date_t AddOperator::Operation(date_t left, interval_t right) {
 	date_t result;
 	if (right.months != 0) {
 		int32_t year, month, day;
@@ -66,11 +70,13 @@ template <> date_t AddOperator::Operation(date_t left, interval_t right) {
 	return result;
 }
 
-template <> date_t AddOperator::Operation(interval_t left, date_t right) {
+template <>
+date_t AddOperator::Operation(interval_t left, date_t right) {
 	return AddOperator::Operation<date_t, interval_t, date_t>(right, left);
 }
 
-template <> timestamp_t AddOperator::Operation(timestamp_t left, interval_t right) {
+template <>
+timestamp_t AddOperator::Operation(timestamp_t left, interval_t right) {
 	date_t date;
 	dtime_t time;
 	Timestamp::Convert(left, date, time);
@@ -79,7 +85,8 @@ template <> timestamp_t AddOperator::Operation(timestamp_t left, interval_t righ
 	return Timestamp::FromDatetime(new_date, new_time);
 }
 
-template <> timestamp_t AddOperator::Operation(interval_t left, timestamp_t right) {
+template <>
+timestamp_t AddOperator::Operation(interval_t left, timestamp_t right) {
 	return AddOperator::Operation<timestamp_t, interval_t, timestamp_t>(right, left);
 }
 
@@ -87,7 +94,8 @@ template <> timestamp_t AddOperator::Operation(interval_t left, timestamp_t righ
 // + [add] with overflow check
 //===--------------------------------------------------------------------===//
 struct OverflowCheckedAddition {
-	template <class SRCTYPE, class UTYPE> static inline bool Operation(SRCTYPE left, SRCTYPE right, SRCTYPE &result) {
+	template <class SRCTYPE, class UTYPE>
+	static inline bool Operation(SRCTYPE left, SRCTYPE right, SRCTYPE &result) {
 		UTYPE uresult = AddOperator::Operation<UTYPE, UTYPE, UTYPE>(UTYPE(left), UTYPE(right));
 		if (uresult < NumericLimits<SRCTYPE>::Minimum() || uresult > NumericLimits<SRCTYPE>::Maximum()) {
 			return false;
@@ -97,38 +105,44 @@ struct OverflowCheckedAddition {
 	}
 };
 
-
-template <> bool TryAddOperator::Operation(uint8_t left, uint8_t right, uint8_t &result){
+template <>
+bool TryAddOperator::Operation(uint8_t left, uint8_t right, uint8_t &result) {
 	return OverflowCheckedAddition::Operation<uint8_t, uint16_t>(left, right, result);
 }
-template <> bool TryAddOperator::Operation(uint16_t left, uint16_t right, uint16_t &result){
+template <>
+bool TryAddOperator::Operation(uint16_t left, uint16_t right, uint16_t &result) {
 	return OverflowCheckedAddition::Operation<uint16_t, uint32_t>(left, right, result);
 }
-template <> bool TryAddOperator::Operation(uint32_t left, uint32_t right, uint32_t &result){
+template <>
+bool TryAddOperator::Operation(uint32_t left, uint32_t right, uint32_t &result) {
 	return OverflowCheckedAddition::Operation<uint32_t, uint64_t>(left, right, result);
 }
 
-template <> bool TryAddOperator::Operation(uint64_t left, uint64_t right, uint64_t &result){
-	if (NumericLimits<uint64_t>::Maximum() - left < right){
+template <>
+bool TryAddOperator::Operation(uint64_t left, uint64_t right, uint64_t &result) {
+	if (NumericLimits<uint64_t>::Maximum() - left < right) {
 		return false;
 	}
 	return OverflowCheckedAddition::Operation<uint64_t, uint64_t>(left, right, result);
 }
 
-
-template <> bool TryAddOperator::Operation(int8_t left, int8_t right, int8_t &result) {
+template <>
+bool TryAddOperator::Operation(int8_t left, int8_t right, int8_t &result) {
 	return OverflowCheckedAddition::Operation<int8_t, int16_t>(left, right, result);
 }
 
-template <> bool TryAddOperator::Operation(int16_t left, int16_t right, int16_t &result) {
+template <>
+bool TryAddOperator::Operation(int16_t left, int16_t right, int16_t &result) {
 	return OverflowCheckedAddition::Operation<int16_t, int32_t>(left, right, result);
 }
 
-template <> bool TryAddOperator::Operation(int32_t left, int32_t right, int32_t &result) {
+template <>
+bool TryAddOperator::Operation(int32_t left, int32_t right, int32_t &result) {
 	return OverflowCheckedAddition::Operation<int32_t, int64_t>(left, right, result);
 }
 
-template <> bool TryAddOperator::Operation(int64_t left, int64_t right, int64_t &result) {
+template <>
+bool TryAddOperator::Operation(int64_t left, int64_t right, int64_t &result) {
 #if (__GNUC__ >= 5) || defined(__clang__)
 	if (__builtin_add_overflow(left, right, &result)) {
 		return false;
@@ -150,7 +164,8 @@ template <> bool TryAddOperator::Operation(int64_t left, int64_t right, int64_t 
 //===--------------------------------------------------------------------===//
 // add decimal with overflow check
 //===--------------------------------------------------------------------===//
-template <class T, T min, T max> bool TryDecimalAddTemplated(T left, T right, T &result) {
+template <class T, T min, T max>
+bool TryDecimalAddTemplated(T left, T right, T &result) {
 	if (right < 0) {
 		if (min - right > left) {
 			return false;
@@ -164,27 +179,32 @@ template <class T, T min, T max> bool TryDecimalAddTemplated(T left, T right, T 
 	return true;
 }
 
-template <> bool TryDecimalAdd::Operation(int16_t left, int16_t right, int16_t &result) {
+template <>
+bool TryDecimalAdd::Operation(int16_t left, int16_t right, int16_t &result) {
 	return TryDecimalAddTemplated<int16_t, -9999, 9999>(left, right, result);
 }
 
-template <> bool TryDecimalAdd::Operation(int32_t left, int32_t right, int32_t &result) {
+template <>
+bool TryDecimalAdd::Operation(int32_t left, int32_t right, int32_t &result) {
 	return TryDecimalAddTemplated<int32_t, -999999999, 999999999>(left, right, result);
 }
 
-template <> bool TryDecimalAdd::Operation(int64_t left, int64_t right, int64_t &result) {
+template <>
+bool TryDecimalAdd::Operation(int64_t left, int64_t right, int64_t &result) {
 	return TryDecimalAddTemplated<int64_t, -999999999999999999, 999999999999999999>(left, right, result);
 }
 
-template <> bool TryDecimalAdd::Operation(hugeint_t left, hugeint_t right, hugeint_t &result) {
+template <>
+bool TryDecimalAdd::Operation(hugeint_t left, hugeint_t right, hugeint_t &result) {
 	result = left + right;
-	if (result <= -Hugeint::PowersOfTen[38] || result >= Hugeint::PowersOfTen[38]) {
+	if (result <= -Hugeint::POWERS_OF_TEN[38] || result >= Hugeint::POWERS_OF_TEN[38]) {
 		return false;
 	}
 	return true;
 }
 
-template <> hugeint_t DecimalAddOverflowCheck::Operation(hugeint_t left, hugeint_t right) {
+template <>
+hugeint_t DecimalAddOverflowCheck::Operation(hugeint_t left, hugeint_t right) {
 	hugeint_t result;
 	if (!TryDecimalAdd::Operation(left, right, result)) {
 		throw OutOfRangeException("Overflow in addition of DECIMAL(38) (%s + %s);", left.ToString(), right.ToString());
@@ -195,7 +215,8 @@ template <> hugeint_t DecimalAddOverflowCheck::Operation(hugeint_t left, hugeint
 //===--------------------------------------------------------------------===//
 // add time operator
 //===--------------------------------------------------------------------===//
-template <> dtime_t AddTimeOperator::Operation(dtime_t left, interval_t right) {
+template <>
+dtime_t AddTimeOperator::Operation(dtime_t left, interval_t right) {
 	int64_t diff = right.micros - ((right.micros / Interval::MICROS_PER_DAY) * Interval::MICROS_PER_DAY);
 	left += diff;
 	if (left >= Interval::MICROS_PER_DAY) {
@@ -206,7 +227,8 @@ template <> dtime_t AddTimeOperator::Operation(dtime_t left, interval_t right) {
 	return left;
 }
 
-template <> dtime_t AddTimeOperator::Operation(interval_t left, dtime_t right) {
+template <>
+dtime_t AddTimeOperator::Operation(interval_t left, dtime_t right) {
 	return AddTimeOperator::Operation<dtime_t, interval_t, dtime_t>(right, left);
 }
 

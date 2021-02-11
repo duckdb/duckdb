@@ -6,11 +6,13 @@
 namespace duckdb {
 
 struct BaseCountFunction {
-	template <class STATE> static void Initialize(STATE *state) {
+	template <class STATE>
+	static void Initialize(STATE *state) {
 		*state = 0;
 	}
 
-	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
+	template <class STATE, class OP>
+	static void Combine(STATE source, STATE *target) {
 		*target += source;
 	}
 
@@ -21,23 +23,26 @@ struct BaseCountFunction {
 };
 
 struct CountStarFunction : public BaseCountFunction {
-	template <class STATE, class OP> static void Operation(STATE *state,FunctionData *bind_data,  idx_t idx) {
+	template <class STATE, class OP>
+	static void Operation(STATE *state, FunctionData *bind_data, idx_t idx) {
 		*state += 1;
 	}
 
-	template <class STATE, class OP> static void ConstantOperation(STATE *state,FunctionData *bind_data,  idx_t count) {
+	template <class STATE, class OP>
+	static void ConstantOperation(STATE *state, FunctionData *bind_data, idx_t count) {
 		*state += count;
 	}
 };
 
 struct CountFunction : public BaseCountFunction {
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state,FunctionData *bind_data,  INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
+	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
 		*state += 1;
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state,FunctionData *bind_data,  INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
+	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask,
+	                              idx_t count) {
 		*state += count;
 	}
 
@@ -55,10 +60,9 @@ AggregateFunction CountStarFun::GetFunction() {
 	return AggregateFunction::NullaryAggregate<int64_t, int64_t, CountStarFunction>(LogicalType::BIGINT);
 }
 
-unique_ptr<BaseStatistics> count_propagate_stats(ClientContext &context, BoundAggregateExpression &expr,
-                                                 FunctionData *bind_data,
-                                                 vector<unique_ptr<BaseStatistics>> &child_stats,
-                                                 NodeStatistics *node_stats) {
+unique_ptr<BaseStatistics> CountPropagateStats(ClientContext &context, BoundAggregateExpression &expr,
+                                               FunctionData *bind_data, vector<unique_ptr<BaseStatistics>> &child_stats,
+                                               NodeStatistics *node_stats) {
 	if (child_stats[0] && !child_stats[0]->has_null && !expr.distinct) {
 		// count on a column without null values: use count star
 		expr.function = CountStarFun::GetFunction();
@@ -70,7 +74,7 @@ unique_ptr<BaseStatistics> count_propagate_stats(ClientContext &context, BoundAg
 
 void CountFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunction count_function = CountFun::GetFunction();
-	count_function.statistics = count_propagate_stats;
+	count_function.statistics = CountPropagateStats;
 	AggregateFunctionSet count("count");
 	count.AddFunction(count_function);
 	// the count function can also be called without arguments

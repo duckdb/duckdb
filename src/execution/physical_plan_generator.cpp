@@ -9,7 +9,7 @@ namespace duckdb {
 
 class DependencyExtractor : public LogicalOperatorVisitor {
 public:
-	DependencyExtractor(unordered_set<CatalogEntry *> &dependencies) : dependencies(dependencies) {
+	explicit DependencyExtractor(unordered_set<CatalogEntry *> &dependencies) : dependencies(dependencies) {
 	}
 
 protected:
@@ -132,6 +132,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 		return CreatePlan((LogicalCTERef &)op);
 	case LogicalOperatorType::LOGICAL_EXPORT:
 		return CreatePlan((LogicalExport &)op);
+	case LogicalOperatorType::LOGICAL_SET:
+		return CreatePlan((LogicalSet &)op);
 	default:
 		throw NotImplementedException("Unimplemented logical operator type!");
 	}

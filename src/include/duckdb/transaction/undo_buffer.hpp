@@ -16,7 +16,7 @@ namespace duckdb {
 class WriteAheadLog;
 
 struct UndoChunk {
-	UndoChunk(idx_t size);
+	explicit UndoChunk(idx_t size);
 	~UndoChunk();
 
 	data_ptr_t WriteEntry(UndoFlags type, uint32_t len);
@@ -64,10 +64,12 @@ private:
 	UndoChunk *tail;
 
 private:
-	template <class T> void IterateEntries(UndoBuffer::IteratorState &state, T &&callback);
+	template <class T>
+	void IterateEntries(UndoBuffer::IteratorState &state, T &&callback);
 	template <class T>
 	void IterateEntries(UndoBuffer::IteratorState &state, UndoBuffer::IteratorState &end_state, T &&callback);
-	template <class T> void ReverseIterateEntries(T &&callback);
+	template <class T>
+	void ReverseIterateEntries(T &&callback);
 };
 
 } // namespace duckdb

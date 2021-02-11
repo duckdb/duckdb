@@ -174,22 +174,20 @@ PhysicalPlanGenerator::ExtractAggregateExpressions(unique_ptr<PhysicalOperator> 
 	vector<unique_ptr<Expression>> expressions;
 	vector<LogicalType> types;
 
-	for (auto & group_ : groups) {
-		auto &group = group_;
+	for (auto &group : groups) {
 		auto ref = make_unique<BoundReferenceExpression>(group->return_type, expressions.size());
 		types.push_back(group->return_type);
 		expressions.push_back(move(group));
-		group_ = move(ref);
+		group = move(ref);
 	}
 
 	for (auto &aggr : aggregates) {
 		auto &bound_aggr = (BoundAggregateExpression &)*aggr;
-		for (auto & child_ : bound_aggr.children) {
-			auto &child = child_;
+		for (auto &child : bound_aggr.children) {
 			auto ref = make_unique<BoundReferenceExpression>(child->return_type, expressions.size());
 			types.push_back(child->return_type);
 			expressions.push_back(move(child));
-			child_ = move(ref);
+			child = move(ref);
 		}
 		if (bound_aggr.filter) {
 			auto &filter = bound_aggr.filter;

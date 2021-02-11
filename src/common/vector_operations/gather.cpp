@@ -10,7 +10,8 @@
 
 namespace duckdb {
 
-template <class T> static void templated_gather_loop(Vector &source, Vector &dest, idx_t count) {
+template <class T>
+static void TemplatedGatherLoop(Vector &source, Vector &dest, idx_t count) {
 	auto addresses = FlatVector::GetData<uintptr_t>(source);
 	auto data = FlatVector::GetData<T>(dest);
 	auto &nullmask = FlatVector::Nullmask(dest);
@@ -33,47 +34,47 @@ void VectorOperations::Gather::Set(Vector &source, Vector &dest, idx_t count) {
 	dest.vector_type = VectorType::FLAT_VECTOR;
 	switch (dest.type.InternalType()) {
 	case PhysicalType::UINT8:
-		templated_gather_loop<uint8_t>(source, dest, count);
+		TemplatedGatherLoop<uint8_t>(source, dest, count);
 		break;
 	case PhysicalType::UINT16:
-		templated_gather_loop<uint16_t>(source, dest, count);
+		TemplatedGatherLoop<uint16_t>(source, dest, count);
 		break;
 	case PhysicalType::UINT32:
-		templated_gather_loop<uint32_t>(source, dest, count);
+		TemplatedGatherLoop<uint32_t>(source, dest, count);
 		break;
 	case PhysicalType::UINT64:
-		templated_gather_loop<uint64_t>(source, dest, count);
+		TemplatedGatherLoop<uint64_t>(source, dest, count);
 		break;
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
-		templated_gather_loop<int8_t>(source, dest, count);
+		TemplatedGatherLoop<int8_t>(source, dest, count);
 		break;
 	case PhysicalType::INT16:
-		templated_gather_loop<int16_t>(source, dest, count);
+		TemplatedGatherLoop<int16_t>(source, dest, count);
 		break;
 	case PhysicalType::INT32:
-		templated_gather_loop<int32_t>(source, dest, count);
+		TemplatedGatherLoop<int32_t>(source, dest, count);
 		break;
 	case PhysicalType::INT64:
-		templated_gather_loop<int64_t>(source, dest, count);
+		TemplatedGatherLoop<int64_t>(source, dest, count);
 		break;
 	case PhysicalType::INT128:
-		templated_gather_loop<hugeint_t>(source, dest, count);
+		TemplatedGatherLoop<hugeint_t>(source, dest, count);
 		break;
 	case PhysicalType::FLOAT:
-		templated_gather_loop<float>(source, dest, count);
+		TemplatedGatherLoop<float>(source, dest, count);
 		break;
 	case PhysicalType::DOUBLE:
-		templated_gather_loop<double>(source, dest, count);
+		TemplatedGatherLoop<double>(source, dest, count);
 		break;
 	case PhysicalType::POINTER:
-		templated_gather_loop<uintptr_t>(source, dest, count);
+		TemplatedGatherLoop<uintptr_t>(source, dest, count);
 		break;
 	case PhysicalType::INTERVAL:
-		templated_gather_loop<interval_t>(source, dest, count);
+		TemplatedGatherLoop<interval_t>(source, dest, count);
 		break;
 	case PhysicalType::VARCHAR:
-		templated_gather_loop<string_t>(source, dest, count);
+		TemplatedGatherLoop<string_t>(source, dest, count);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for gather");

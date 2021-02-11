@@ -41,6 +41,9 @@ endif
 ifeq (${BUILD_FTS}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DBUILD_FTS_EXTENSION=1
 endif
+ifeq (${BUILD_HTTPFS}, 1)
+	EXTENSIONS:=${EXTENSIONS} -DBUILD_HTTPFS_EXTENSION=1
+endif
 ifeq (${BUILD_SQLSMITH}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DBUILD_SQLSMITH=1
 endif
@@ -58,6 +61,9 @@ ifeq (${BUILD_R}, 1)
 endif
 ifeq (${BUILD_REST}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DBUILD_REST=1
+endif
+ifneq ($(TIDY_THREADS),)
+	TIDY_THREAD_PARAMETER := -j ${TIDY_THREADS}
 endif
 
 clean:
@@ -126,12 +132,29 @@ amaldebug:
 	cmake $(GENERATOR) $(FORCE_COLOR) ${STATIC_LIBCPP} ${EXTENSIONS} -DAMALGAMATION_BUILD=1 -DCMAKE_BUILD_TYPE=Debug ../.. && \
 	cmake --build .
 
+tidy-check:
+	mkdir -p build/tidy && \
+	cd build/tidy && \
+	cmake -DCLANG_TIDY=1 -DDISABLE_UNITY=1 -DBUILD_PARQUET_EXTENSION=TRUE -DBUILD_SHELL=0 -DCMAKE_EXPORT_COMPILE_COMMANDS=ON ../.. && \
+	python3 ../../scripts/run-clang-tidy.py -quiet ${TIDY_THREAD_PARAMETER}
+
+tidy-fix:
+	mkdir -p build/tidy && \
+	cd build/tidy && \
+	cmake -DCLANG_TIDY=1 -DDISABLE_UNITY=1 -DBUILD_PARQUET_EXTENSION=TRUE -DBUILD_SHELL=0 -DCMAKE_EXPORT_COMPILE_COMMANDS=ON ../.. && \
+	python3 ../../scripts/run-clang-tidy.py -fix
 
 test_compile: # test compilation of individual cpp files
 	python scripts/amalgamation.py --compile
 
-format:
-	python3 scripts/format.py
+format-check:
+	python3 scripts/format.py --all --check
+
+format-check-silent:
+	python3 scripts/format.py --all --check --silent
+
+format-fix:
+	python3 scripts/format.py --all --fix
 
 third_party/sqllogictest:
 	git clone --depth=1 https://github.com/cwida/sqllogictest.git third_party/sqllogictest

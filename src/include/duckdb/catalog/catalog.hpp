@@ -47,7 +47,7 @@ class DependencyManager;
 //! The Catalog object represents the catalog of the database.
 class Catalog {
 public:
-	Catalog(DatabaseInstance &db);
+	explicit Catalog(DatabaseInstance &db);
 	~Catalog();
 
 	//! Reference to the database

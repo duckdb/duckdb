@@ -50,7 +50,7 @@ void QueryNode::CopyProperties(QueryNode &other) {
 	}
 	for (auto &kv : cte_map) {
 		auto kv_info = make_unique<CommonTableExpressionInfo>();
-		for (auto al : kv.second->aliases) {
+		for (auto &al : kv.second->aliases) {
 			kv_info->aliases.push_back(al);
 		}
 		kv_info->query = unique_ptr_cast<SQLStatement, SelectStatement>(kv.second->query->Copy());

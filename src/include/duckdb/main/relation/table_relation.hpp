@@ -28,8 +28,8 @@ public:
 
 	unique_ptr<TableRef> GetTableRef() override;
 
-	void Update(string update, string condition = string()) override;
-	void Delete(string condition = string()) override;
+	void Update(const string &update, const string &condition = string()) override;
+	void Delete(const string &condition = string()) override;
 };
 
 } // namespace duckdb

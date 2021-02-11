@@ -2,8 +2,7 @@
 #include "duckdb/parser/statement/show_statement.hpp"
 #include "duckdb/planner/operator/logical_show.hpp"
 
-using namespace duckdb;
-using namespace std;
+namespace duckdb {
 
 BoundStatement Binder::Bind(ShowStatement &stmt) {
 	BoundStatement result;
@@ -19,7 +18,9 @@ BoundStatement Binder::Bind(ShowStatement &stmt) {
 	result.plan = move(show);
 
 	result.names = {"Field", "Type", "Null", "Key", "Default", "Extra"};
-	result.types = {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR,
-	                LogicalType::VARCHAR, LogicalType::VARCHAR};
+	result.types = {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR,
+	                LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR};
 	return result;
 }
+
+} // namespace duckdb

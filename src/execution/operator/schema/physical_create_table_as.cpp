@@ -31,7 +31,7 @@ unique_ptr<GlobalOperatorState> PhysicalCreateTableAs::GetGlobalState(ClientCont
 	return move(sink);
 }
 
-void PhysicalCreateTableAs::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_,
+void PhysicalCreateTableAs::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_p,
                                  DataChunk &input) {
 	auto &sink = (CreateTableAsGlobalState &)state;
 	if (sink.table) {

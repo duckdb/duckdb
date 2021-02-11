@@ -13,11 +13,11 @@ string BoundBetweenExpression::ToString() const {
 	return input->ToString() + " BETWEEN " + lower->ToString() + " AND " + upper->ToString();
 }
 
-bool BoundBetweenExpression::Equals(const BaseExpression *other_) const {
-	if (!Expression::Equals(other_)) {
+bool BoundBetweenExpression::Equals(const BaseExpression *other_p) const {
+	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto other = (BoundBetweenExpression *)other_;
+	auto other = (BoundBetweenExpression *)other_p;
 	if (!Expression::Equals(input.get(), other->input.get())) {
 		return false;
 	}

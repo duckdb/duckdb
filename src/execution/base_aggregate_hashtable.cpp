@@ -3,15 +3,15 @@
 
 namespace duckdb {
 
-vector<AggregateObject> AggregateObject::CreateAggregateObjects(vector<BoundAggregateExpression *> bindings) {
+vector<AggregateObject> AggregateObject::CreateAggregateObjects(const vector<BoundAggregateExpression *> &bindings) {
 	vector<AggregateObject> aggregates;
 	for (auto &binding : bindings) {
 		auto payload_size = binding->function.state_size();
 #ifndef DUCKDB_ALLOW_UNDEFINED
 		payload_size = BaseAggregateHashTable::Align(payload_size);
 #endif
-		aggregates.push_back(AggregateObject(binding->function, binding->bind_info.get(), binding->children.size(),
-		                                     payload_size, binding->distinct, binding->return_type.InternalType(),binding->filter.get()));
+		aggregates.emplace_back(binding->function, binding->bind_info.get(), binding->children.size(), payload_size,
+		                        binding->distinct, binding->return_type.InternalType(), binding->filter.get());
 	}
 	return aggregates;
 }

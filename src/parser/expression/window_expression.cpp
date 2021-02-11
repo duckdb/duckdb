@@ -6,8 +6,9 @@
 
 namespace duckdb {
 
-WindowExpression::WindowExpression(ExpressionType type, string schema, string function_name)
-    : ParsedExpression(type, ExpressionClass::WINDOW), schema(schema), function_name(StringUtil::Lower(function_name)) {
+WindowExpression::WindowExpression(ExpressionType type, string schema, const string &function_name)
+    : ParsedExpression(type, ExpressionClass::WINDOW), schema(move(schema)),
+      function_name(StringUtil::Lower(function_name)) {
 	switch (type) {
 	case ExpressionType::WINDOW_AGGREGATE:
 	case ExpressionType::WINDOW_ROW_NUMBER:
@@ -88,7 +89,7 @@ unique_ptr<ParsedExpression> WindowExpression::Copy() const {
 	}
 
 	for (auto &o : orders) {
-		new_window->orders.push_back(OrderByNode(o.type, o.null_order, o.expression->Copy()));
+		new_window->orders.emplace_back(o.type, o.null_order, o.expression->Copy());
 	}
 
 	new_window->start = start;

@@ -65,7 +65,7 @@ void RenameColumnInfo::Serialize(Serializer &serializer) {
 unique_ptr<AlterInfo> RenameColumnInfo::Deserialize(Deserializer &source, string schema, string table) {
 	auto old_name = source.Read<string>();
 	auto new_name = source.Read<string>();
-	return make_unique<RenameColumnInfo>(schema, table, old_name, new_name);
+	return make_unique<RenameColumnInfo>(move(schema), move(table), old_name, new_name);
 }
 
 //===--------------------------------------------------------------------===//
@@ -82,7 +82,7 @@ void RenameTableInfo::Serialize(Serializer &serializer) {
 
 unique_ptr<AlterInfo> RenameTableInfo::Deserialize(Deserializer &source, string schema, string table) {
 	auto new_name = source.Read<string>();
-	return make_unique<RenameTableInfo>(schema, table, new_name);
+	return make_unique<RenameTableInfo>(move(schema), move(table), new_name);
 }
 
 //===--------------------------------------------------------------------===//
@@ -99,7 +99,7 @@ void AddColumnInfo::Serialize(Serializer &serializer) {
 
 unique_ptr<AlterInfo> AddColumnInfo::Deserialize(Deserializer &source, string schema, string table) {
 	auto new_column = ColumnDefinition::Deserialize(source);
-	return make_unique<AddColumnInfo>(schema, table, move(new_column));
+	return make_unique<AddColumnInfo>(move(schema), move(table), move(new_column));
 }
 
 //===--------------------------------------------------------------------===//
@@ -118,7 +118,7 @@ void RemoveColumnInfo::Serialize(Serializer &serializer) {
 unique_ptr<AlterInfo> RemoveColumnInfo::Deserialize(Deserializer &source, string schema, string table) {
 	auto new_name = source.Read<string>();
 	auto if_exists = source.Read<bool>();
-	return make_unique<RemoveColumnInfo>(schema, table, new_name, if_exists);
+	return make_unique<RemoveColumnInfo>(move(schema), move(table), new_name, if_exists);
 }
 
 //===--------------------------------------------------------------------===//
@@ -140,7 +140,8 @@ unique_ptr<AlterInfo> ChangeColumnTypeInfo::Deserialize(Deserializer &source, st
 	auto column_name = source.Read<string>();
 	auto target_type = LogicalType::Deserialize(source);
 	auto expression = source.ReadOptional<ParsedExpression>();
-	return make_unique<ChangeColumnTypeInfo>(schema, table, move(column_name), move(target_type), move(expression));
+	return make_unique<ChangeColumnTypeInfo>(move(schema), move(table), move(column_name), move(target_type),
+	                                         move(expression));
 }
 
 //===--------------------------------------------------------------------===//
@@ -159,7 +160,7 @@ void SetDefaultInfo::Serialize(Serializer &serializer) {
 unique_ptr<AlterInfo> SetDefaultInfo::Deserialize(Deserializer &source, string schema, string table) {
 	auto column_name = source.Read<string>();
 	auto new_default = source.ReadOptional<ParsedExpression>();
-	return make_unique<SetDefaultInfo>(schema, table, move(column_name), move(new_default));
+	return make_unique<SetDefaultInfo>(move(schema), move(table), move(column_name), move(new_default));
 }
 
 //===--------------------------------------------------------------------===//
@@ -199,7 +200,7 @@ void RenameViewInfo::Serialize(Serializer &serializer) {
 
 unique_ptr<AlterInfo> RenameViewInfo::Deserialize(Deserializer &source, string schema, string view) {
 	auto new_name = source.Read<string>();
-	return make_unique<RenameViewInfo>(schema, view, new_name);
+	return make_unique<RenameViewInfo>(move(schema), move(view), new_name);
 }
 
 } // namespace duckdb

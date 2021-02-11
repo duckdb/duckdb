@@ -12,7 +12,7 @@ namespace duckdb {
 struct CurrentBindData : public FunctionData {
 	ClientContext &context;
 
-	CurrentBindData(ClientContext &context) : context(context) {
+	explicit CurrentBindData(ClientContext &context) : context(context) {
 	}
 
 	unique_ptr<FunctionData> Copy() override {
@@ -20,49 +20,49 @@ struct CurrentBindData : public FunctionData {
 	}
 };
 
-static timestamp_t get_transaction_ts(ExpressionState &state) {
+static timestamp_t GetTransactionTimestamp(ExpressionState &state) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (CurrentBindData &)*func_expr.bind_info;
 	return info.context.ActiveTransaction().start_timestamp;
 }
 
-static void current_time_function(DataChunk &input, ExpressionState &state, Vector &result) {
+static void CurrentTimeFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	D_ASSERT(input.ColumnCount() == 0);
 
-	auto val = Value::TIME(Timestamp::GetTime(get_transaction_ts(state)));
+	auto val = Value::TIME(Timestamp::GetTime(GetTransactionTimestamp(state)));
 	result.Reference(val);
 }
 
-static void current_date_function(DataChunk &input, ExpressionState &state, Vector &result) {
+static void CurrentDateFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	D_ASSERT(input.ColumnCount() == 0);
 
-	auto val = Value::DATE(Timestamp::GetDate(get_transaction_ts(state)));
+	auto val = Value::DATE(Timestamp::GetDate(GetTransactionTimestamp(state)));
 	result.Reference(val);
 }
 
-static void current_timestamp_function(DataChunk &input, ExpressionState &state, Vector &result) {
+static void CurrentTimestampFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	D_ASSERT(input.ColumnCount() == 0);
 
-	auto val = Value::TIMESTAMP(get_transaction_ts(state));
+	auto val = Value::TIMESTAMP(GetTransactionTimestamp(state));
 	result.Reference(val);
 }
 
-unique_ptr<FunctionData> current_bind(ClientContext &context, ScalarFunction &bound_function,
-                                      vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> BindCurrentTime(ClientContext &context, ScalarFunction &bound_function,
+                                         vector<unique_ptr<Expression>> &arguments) {
 	return make_unique<CurrentBindData>(context);
 }
 
 void CurrentTimeFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("current_time", {}, LogicalType::TIME, current_time_function, false, current_bind));
+	set.AddFunction(ScalarFunction("current_time", {}, LogicalType::TIME, CurrentTimeFunction, false, BindCurrentTime));
 }
 
 void CurrentDateFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("current_date", {}, LogicalType::DATE, current_date_function, false, current_bind));
+	set.AddFunction(ScalarFunction("current_date", {}, LogicalType::DATE, CurrentDateFunction, false, BindCurrentTime));
 }
 
 void CurrentTimestampFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction({"now", "current_timestamp"},
-	                ScalarFunction({}, LogicalType::TIMESTAMP, current_timestamp_function, false, current_bind));
+	                ScalarFunction({}, LogicalType::TIMESTAMP, CurrentTimestampFunction, false, BindCurrentTime));
 }
 
 } // namespace duckdb

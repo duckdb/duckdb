@@ -36,7 +36,7 @@ class TransactionManager {
 	friend struct CheckpointLock;
 
 public:
-	TransactionManager(DatabaseInstance &db);
+	explicit TransactionManager(DatabaseInstance &db);
 	~TransactionManager();
 
 	//! Start a new transaction

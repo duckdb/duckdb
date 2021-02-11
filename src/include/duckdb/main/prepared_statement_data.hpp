@@ -21,7 +21,7 @@ class SQLStatement;
 
 class PreparedStatementData {
 public:
-	DUCKDB_API PreparedStatementData(StatementType type);
+	DUCKDB_API explicit PreparedStatementData(StatementType type);
 	DUCKDB_API ~PreparedStatementData();
 
 	StatementType statement_type;

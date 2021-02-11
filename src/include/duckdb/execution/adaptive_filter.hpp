@@ -16,8 +16,8 @@ struct TableFilter;
 
 class AdaptiveFilter {
 public:
-	AdaptiveFilter(Expression &expr);
-	AdaptiveFilter(TableFilterSet *table_filters);
+	explicit AdaptiveFilter(Expression &expr);
+	explicit AdaptiveFilter(TableFilterSet *table_filters);
 	void AdaptRuntimeStatistics(double duration);
 	vector<idx_t> permutation;
 

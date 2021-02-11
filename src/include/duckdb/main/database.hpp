@@ -62,15 +62,16 @@ private:
 //! database-specific meta information.
 class DuckDB {
 public:
-	DUCKDB_API DuckDB(const char *path = nullptr, DBConfig *config = nullptr);
-	DUCKDB_API DuckDB(const string &path, DBConfig *config = nullptr);
+	DUCKDB_API explicit DuckDB(const char *path = nullptr, DBConfig *config = nullptr);
+	DUCKDB_API explicit DuckDB(const string &path, DBConfig *config = nullptr);
 	DUCKDB_API ~DuckDB();
 
 	//! Reference to the actual database instance
 	shared_ptr<DatabaseInstance> instance;
 
 public:
-	template <class T> void LoadExtension() {
+	template <class T>
+	void LoadExtension() {
 		T extension;
 		extension.Load(*this);
 	}

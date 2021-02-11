@@ -19,7 +19,8 @@ private:
 	}
 
 public:
-	template <class OP> static inline void Execute(Vector &left, Vector &right, Vector &result, idx_t count) {
+	template <class OP>
+	static inline void Execute(Vector &left, Vector &right, Vector &result, idx_t count) {
 		D_ASSERT(left.type == right.type && result.type == LogicalType::BOOLEAN);
 		// the inplace loops take the result as the last parameter
 		switch (left.type.InternalType()) {

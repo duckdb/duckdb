@@ -19,7 +19,8 @@ public:
 	static atomic<bool> finished;
 	static atomic<size_t> finished_threads;
 
-	template <bool FORCE_CHECKPOINT> static void CheckpointThread(DuckDB *db, bool *read_correct) {
+	template <bool FORCE_CHECKPOINT>
+	static void CheckpointThread(DuckDB *db, bool *read_correct) {
 		Connection con(*db);
 		while (!finished) {
 			{

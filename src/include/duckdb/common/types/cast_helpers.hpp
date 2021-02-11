@@ -21,19 +21,22 @@ namespace duckdb {
 //! NumericHelper is a static class that holds helper functions for integers/doubles
 class NumericHelper {
 public:
-	static int64_t PowersOfTen[20];
-	static double DoublePowersOfTen[40];
+	static const int64_t POWERS_OF_TEN[20];
+	static const double DOUBLE_POWERS_OF_TEN[40];
 
 public:
-	template <class T> static int UnsignedLength(T value);
-	template <class SIGNED, class UNSIGNED> static int SignedLength(SIGNED value) {
+	template <class T>
+	static int UnsignedLength(T value);
+	template <class SIGNED, class UNSIGNED>
+	static int SignedLength(SIGNED value) {
 		int sign = -(value < 0);
 		UNSIGNED unsigned_value = (value ^ sign) - sign;
 		return UnsignedLength(unsigned_value) - sign;
 	}
 
 	// Formats value in reverse and returns a pointer to the beginning.
-	template <class T> static char *FormatUnsigned(T value, char *ptr) {
+	template <class T>
+	static char *FormatUnsigned(T value, char *ptr) {
 		while (value >= 100) {
 			// Integer division is slow so do it for a group of two digits instead
 			// of for every digit. The idea comes from the talk by Alexandrescu
@@ -53,7 +56,8 @@ public:
 		return ptr;
 	}
 
-	template <class SIGNED, class UNSIGNED> static string_t FormatSigned(SIGNED value, Vector &vector) {
+	template <class SIGNED, class UNSIGNED>
+	static string_t FormatSigned(SIGNED value, Vector &vector) {
 		int sign = -(value < 0);
 		UNSIGNED unsigned_value = (value ^ sign) - sign;
 		int length = UnsignedLength<UNSIGNED>(unsigned_value) - sign;
@@ -69,13 +73,18 @@ public:
 	}
 };
 
-template <> int NumericHelper::UnsignedLength(uint8_t value);
-template <> int NumericHelper::UnsignedLength(uint16_t value);
-template <> int NumericHelper::UnsignedLength(uint32_t value);
-template <> int NumericHelper::UnsignedLength(uint64_t value);
+template <>
+int NumericHelper::UnsignedLength(uint8_t value);
+template <>
+int NumericHelper::UnsignedLength(uint16_t value);
+template <>
+int NumericHelper::UnsignedLength(uint32_t value);
+template <>
+int NumericHelper::UnsignedLength(uint64_t value);
 
 struct DecimalToString {
-	template <class SIGNED, class UNSIGNED> static int DecimalLength(SIGNED value, uint8_t scale) {
+	template <class SIGNED, class UNSIGNED>
+	static int DecimalLength(SIGNED value, uint8_t scale) {
 		if (scale == 0) {
 			// scale is 0: regular number
 			return NumericHelper::SignedLength<SIGNED, UNSIGNED>(value);
@@ -104,8 +113,8 @@ struct DecimalToString {
 		// we write two numbers:
 		// the numbers BEFORE the decimal (major)
 		// and the numbers AFTER the decimal (minor)
-		UNSIGNED minor = value % (UNSIGNED)NumericHelper::PowersOfTen[scale];
-		UNSIGNED major = value / (UNSIGNED)NumericHelper::PowersOfTen[scale];
+		UNSIGNED minor = value % (UNSIGNED)NumericHelper::POWERS_OF_TEN[scale];
+		UNSIGNED major = value / (UNSIGNED)NumericHelper::POWERS_OF_TEN[scale];
 		// write the number after the decimal
 		dst = NumericHelper::FormatUnsigned<UNSIGNED>(minor, end);
 		// (optionally) pad with zeros and add the decimal point
@@ -117,7 +126,8 @@ struct DecimalToString {
 		dst = NumericHelper::FormatUnsigned<UNSIGNED>(major, dst);
 	}
 
-	template <class SIGNED, class UNSIGNED> static string_t Format(SIGNED value, uint8_t scale, Vector &vector) {
+	template <class SIGNED, class UNSIGNED>
+	static string_t Format(SIGNED value, uint8_t scale, Vector &vector) {
 		int len = DecimalLength<SIGNED, UNSIGNED>(value, scale);
 		string_t result = StringVector::EmptyString(vector, len);
 		FormatDecimal<SIGNED, UNSIGNED>(value, scale, result.GetDataWriteable(), len);
@@ -132,61 +142,61 @@ struct HugeintToStringCast {
 		if (value.upper == 0) {
 			return NumericHelper::UnsignedLength<uint64_t>(value.lower);
 		}
-		// search the length using the PowersOfTen array
+		// search the length using the POWERS_OF_TEN array
 		// the length has to be between [17] and [38], because the hugeint is bigger than 2^63
 		// we use the same approach as above, but split a bit more because comparisons for hugeints are more expensive
-		if (value >= Hugeint::PowersOfTen[27]) {
+		if (value >= Hugeint::POWERS_OF_TEN[27]) {
 			// [27..38]
-			if (value >= Hugeint::PowersOfTen[32]) {
-				if (value >= Hugeint::PowersOfTen[36]) {
+			if (value >= Hugeint::POWERS_OF_TEN[32]) {
+				if (value >= Hugeint::POWERS_OF_TEN[36]) {
 					int length = 37;
-					length += value >= Hugeint::PowersOfTen[37];
-					length += value >= Hugeint::PowersOfTen[38];
+					length += value >= Hugeint::POWERS_OF_TEN[37];
+					length += value >= Hugeint::POWERS_OF_TEN[38];
 					return length;
 				} else {
 					int length = 33;
-					length += value >= Hugeint::PowersOfTen[33];
-					length += value >= Hugeint::PowersOfTen[34];
-					length += value >= Hugeint::PowersOfTen[35];
+					length += value >= Hugeint::POWERS_OF_TEN[33];
+					length += value >= Hugeint::POWERS_OF_TEN[34];
+					length += value >= Hugeint::POWERS_OF_TEN[35];
 					return length;
 				}
 			} else {
-				if (value >= Hugeint::PowersOfTen[30]) {
+				if (value >= Hugeint::POWERS_OF_TEN[30]) {
 					int length = 31;
-					length += value >= Hugeint::PowersOfTen[31];
-					length += value >= Hugeint::PowersOfTen[32];
+					length += value >= Hugeint::POWERS_OF_TEN[31];
+					length += value >= Hugeint::POWERS_OF_TEN[32];
 					return length;
 				} else {
 					int length = 28;
-					length += value >= Hugeint::PowersOfTen[28];
-					length += value >= Hugeint::PowersOfTen[29];
+					length += value >= Hugeint::POWERS_OF_TEN[28];
+					length += value >= Hugeint::POWERS_OF_TEN[29];
 					return length;
 				}
 			}
 		} else {
 			// [17..27]
-			if (value >= Hugeint::PowersOfTen[22]) {
+			if (value >= Hugeint::POWERS_OF_TEN[22]) {
 				// [22..27]
-				if (value >= Hugeint::PowersOfTen[25]) {
+				if (value >= Hugeint::POWERS_OF_TEN[25]) {
 					int length = 26;
-					length += value >= Hugeint::PowersOfTen[26];
+					length += value >= Hugeint::POWERS_OF_TEN[26];
 					return length;
 				} else {
 					int length = 23;
-					length += value >= Hugeint::PowersOfTen[23];
-					length += value >= Hugeint::PowersOfTen[24];
+					length += value >= Hugeint::POWERS_OF_TEN[23];
+					length += value >= Hugeint::POWERS_OF_TEN[24];
 					return length;
 				}
 			} else {
 				// [17..22]
-				if (value >= Hugeint::PowersOfTen[20]) {
+				if (value >= Hugeint::POWERS_OF_TEN[20]) {
 					int length = 21;
-					length += value >= Hugeint::PowersOfTen[21];
+					length += value >= Hugeint::POWERS_OF_TEN[21];
 					return length;
 				} else {
 					int length = 18;
-					length += value >= Hugeint::PowersOfTen[18];
-					length += value >= Hugeint::PowersOfTen[19];
+					length += value >= Hugeint::POWERS_OF_TEN[18];
+					length += value >= Hugeint::POWERS_OF_TEN[19];
 					return length;
 				}
 			}
@@ -284,7 +294,7 @@ struct HugeintToStringCast {
 		// the numbers BEFORE the decimal (major)
 		// and the numbers AFTER the decimal (minor)
 		hugeint_t minor;
-		hugeint_t major = Hugeint::DivMod(value, Hugeint::PowersOfTen[scale], minor);
+		hugeint_t major = Hugeint::DivMod(value, Hugeint::POWERS_OF_TEN[scale], minor);
 
 		// write the number after the decimal
 		dst = FormatUnsigned(minor, endptr);
@@ -367,11 +377,11 @@ struct TimeToStringCast {
 	static int32_t FormatMicros(uint32_t microseconds, char micro_buffer[]) {
 		char *endptr = micro_buffer + 6;
 		endptr = NumericHelper::FormatUnsigned<uint32_t>(microseconds, endptr);
-		while(endptr > micro_buffer) {
+		while (endptr > micro_buffer) {
 			*--endptr = '0';
 		}
 		idx_t trailing_zeros = 0;
-		for(idx_t i = 5; i > 0; i--) {
+		for (idx_t i = 5; i > 0; i--) {
 			if (micro_buffer[i] != '0') {
 				break;
 			}

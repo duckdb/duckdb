@@ -80,9 +80,9 @@ unique_ptr<idx_t[]> PhysicalTopN::ComputeTopN(ChunkCollection &big_data, idx_t &
 //===--------------------------------------------------------------------===//
 // Combine
 //===--------------------------------------------------------------------===//
-void PhysicalTopN::Combine(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_) {
+void PhysicalTopN::Combine(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_p) {
 	auto &gstate = (TopNGlobalState &)state;
-	auto &lstate = (TopNLocalState &)lstate_;
+	auto &lstate = (TopNLocalState &)lstate_p;
 
 	// first construct the top n of the local sink state
 	idx_t local_heap_size;
@@ -126,8 +126,8 @@ public:
 	idx_t position;
 };
 
-void PhysicalTopN::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
-	auto &state = (PhysicalTopNOperatorState &)*state_;
+void PhysicalTopN::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
+	auto &state = (PhysicalTopNOperatorState &)*state_p;
 	auto &gstate = (TopNGlobalState &)*sink_state;
 
 	if (state.position >= gstate.heap_size) {

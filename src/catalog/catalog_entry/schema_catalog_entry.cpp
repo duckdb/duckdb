@@ -35,7 +35,7 @@
 namespace duckdb {
 
 SchemaCatalogEntry::SchemaCatalogEntry(Catalog *catalog, string name, bool internal)
-    : CatalogEntry(CatalogType::SCHEMA_ENTRY, catalog, name),
+    : CatalogEntry(CatalogType::SCHEMA_ENTRY, catalog, move(name)),
       tables(*catalog, make_unique<DefaultViewGenerator>(*catalog, this)), indexes(*catalog), table_functions(*catalog),
       copy_functions(*catalog), pragma_functions(*catalog), functions(*catalog, name == DEFAULT_SCHEMA ? make_unique<DefaultFunctionGenerator>(*catalog, this) : nullptr), sequences(*catalog),
       collations(*catalog) {
@@ -199,12 +199,13 @@ CatalogEntry *SchemaCatalogEntry::GetEntry(ClientContext &context, CatalogType t
 	return entry;
 }
 
-void SchemaCatalogEntry::Scan(ClientContext &context, CatalogType type, std::function<void(CatalogEntry *)> callback) {
+void SchemaCatalogEntry::Scan(ClientContext &context, CatalogType type,
+                              const std::function<void(CatalogEntry *)> &callback) {
 	auto &set = GetCatalogSet(type);
 	set.Scan(context, callback);
 }
 
-void SchemaCatalogEntry::Scan(CatalogType type, std::function<void(CatalogEntry *)> callback) {
+void SchemaCatalogEntry::Scan(CatalogType type, const std::function<void(CatalogEntry *)> &callback) {
 	auto &set = GetCatalogSet(type);
 	set.Scan(callback);
 }

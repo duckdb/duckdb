@@ -1,4 +1,4 @@
-# name: test/sql/storage/catalog/test_rename_view.test
+# name: test/sql/storage/catalog/test_store_rename_view.test
 # description: Test storage of alter view
 # group: [catalog]
 

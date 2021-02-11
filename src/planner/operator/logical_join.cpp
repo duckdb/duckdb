@@ -17,7 +17,7 @@ vector<ColumnBinding> LogicalJoin::GetColumnBindings() {
 	}
 	if (join_type == JoinType::MARK) {
 		// for MARK join we project the left hand side plus the MARK column
-		left_bindings.push_back(ColumnBinding(mark_index, 0));
+		left_bindings.emplace_back(mark_index, 0);
 		return left_bindings;
 	}
 	// for other join types we project both the LHS and the RHS

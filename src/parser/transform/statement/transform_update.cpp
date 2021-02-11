@@ -3,10 +3,8 @@
 
 namespace duckdb {
 
-using namespace duckdb_libpgquery;
-
-unique_ptr<UpdateStatement> Transformer::TransformUpdate(PGNode *node) {
-	auto stmt = reinterpret_cast<PGUpdateStmt *>(node);
+unique_ptr<UpdateStatement> Transformer::TransformUpdate(duckdb_libpgquery::PGNode *node) {
+	auto stmt = reinterpret_cast<duckdb_libpgquery::PGUpdateStmt *>(node);
 	D_ASSERT(stmt);
 
 	auto result = make_unique<UpdateStatement>();
@@ -17,9 +15,9 @@ unique_ptr<UpdateStatement> Transformer::TransformUpdate(PGNode *node) {
 	}
 
 	auto root = stmt->targetList;
-	for (auto cell = root->head; cell != NULL; cell = cell->next) {
-		auto target = (PGResTarget *)(cell->data.ptr_value);
-		result->columns.push_back(target->name);
+	for (auto cell = root->head; cell != nullptr; cell = cell->next) {
+		auto target = (duckdb_libpgquery::PGResTarget *)(cell->data.ptr_value);
+		result->columns.emplace_back(target->name);
 		result->expressions.push_back(TransformExpression(target->val));
 	}
 

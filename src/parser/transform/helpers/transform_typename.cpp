@@ -7,10 +7,8 @@
 
 namespace duckdb {
 
-using namespace duckdb_libpgquery;
-
-LogicalType Transformer::TransformTypeName(PGTypeName *type_name) {
-	auto name = (reinterpret_cast<PGValue *>(type_name->names->tail->data.ptr_value)->val.str);
+LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_name) {
+	auto name = (reinterpret_cast<duckdb_libpgquery::PGValue *>(type_name->names->tail->data.ptr_value)->val.str);
 	// transform it to the SQL type
 	LogicalType base_type = TransformStringToLogicalType(name);
 
@@ -20,13 +18,13 @@ LogicalType Transformer::TransformTypeName(PGTypeName *type_name) {
 		unordered_set<string> name_collision_set;
 
 		for (auto node = type_name->typmods->head; node; node = node->next) {
-			auto &type_val = *((PGList *)node->data.ptr_value);
+			auto &type_val = *((duckdb_libpgquery::PGList *)node->data.ptr_value);
 			D_ASSERT(type_val.length == 2);
 
-			auto entry_name_node = (PGValue *)(type_val.head->data.ptr_value);
-			D_ASSERT(entry_name_node->type == T_PGString);
-			auto entry_type_node = (PGValue *)(type_val.tail->data.ptr_value);
-			D_ASSERT(entry_type_node->type == T_PGTypeName);
+			auto entry_name_node = (duckdb_libpgquery::PGValue *)(type_val.head->data.ptr_value);
+			D_ASSERT(entry_name_node->type == duckdb_libpgquery::T_PGString);
+			auto entry_type_node = (duckdb_libpgquery::PGValue *)(type_val.tail->data.ptr_value);
+			D_ASSERT(entry_type_node->type == duckdb_libpgquery::T_PGTypeName);
 
 			auto entry_name = string(entry_name_node->val.str);
 			D_ASSERT(!entry_name.empty());
@@ -36,7 +34,7 @@ LogicalType Transformer::TransformTypeName(PGTypeName *type_name) {
 			}
 			name_collision_set.insert(entry_name);
 
-			auto entry_type = TransformTypeName((PGTypeName *)entry_type_node);
+			auto entry_type = TransformTypeName((duckdb_libpgquery::PGTypeName *)entry_type_node);
 			children.push_back(make_pair(entry_name, entry_type));
 		}
 		D_ASSERT(!children.empty());
@@ -48,8 +46,9 @@ LogicalType Transformer::TransformTypeName(PGTypeName *type_name) {
 	int modifier_idx = 0;
 	if (type_name->typmods) {
 		for (auto node = type_name->typmods->head; node; node = node->next) {
-			auto &const_val = *((PGAConst *)node->data.ptr_value);
-			if (const_val.type != T_PGAConst || const_val.val.type != T_PGInteger) {
+			auto &const_val = *((duckdb_libpgquery::PGAConst *)node->data.ptr_value);
+			if (const_val.type != duckdb_libpgquery::T_PGAConst ||
+			    const_val.val.type != duckdb_libpgquery::T_PGInteger) {
 				throw ParserException("Expected an integer constant as type modifier");
 			}
 			if (const_val.val.val.ival < 0) {

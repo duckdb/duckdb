@@ -15,7 +15,7 @@ namespace duckdb {
 
 class RelationStatement : public SQLStatement {
 public:
-	RelationStatement(shared_ptr<Relation> relation);
+	explicit RelationStatement(shared_ptr<Relation> relation);
 
 	shared_ptr<Relation> relation;
 

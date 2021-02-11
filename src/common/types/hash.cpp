@@ -7,31 +7,38 @@
 
 namespace duckdb {
 
-template <> hash_t Hash(uint64_t val) {
+template <>
+hash_t Hash(uint64_t val) {
 	return murmurhash64(val);
 }
 
-template <> hash_t Hash(int64_t val) {
+template <>
+hash_t Hash(int64_t val) {
 	return murmurhash64((uint64_t)val);
 }
 
-template <> hash_t Hash(hugeint_t val) {
+template <>
+hash_t Hash(hugeint_t val) {
 	return murmurhash64(val.lower) ^ murmurhash64(val.upper);
 }
 
-template <> hash_t Hash(float val) {
-	return std::hash<float>{}(val);
+template <>
+hash_t Hash(float val) {
+	return std::hash<float> {}(val);
 }
 
-template <> hash_t Hash(double val) {
-	return std::hash<double>{}(val);
+template <>
+hash_t Hash(double val) {
+	return std::hash<double> {}(val);
 }
 
-template <> hash_t Hash(interval_t val) {
+template <>
+hash_t Hash(interval_t val) {
 	return Hash(val.days) ^ Hash(val.months) ^ Hash(val.micros);
 }
 
-template <> hash_t Hash(const char *str) {
+template <>
+hash_t Hash(const char *str) {
 	hash_t hash = 5381;
 	hash_t c;
 
@@ -42,11 +49,13 @@ template <> hash_t Hash(const char *str) {
 	return hash;
 }
 
-template <> hash_t Hash(string_t val) {
+template <>
+hash_t Hash(string_t val) {
 	return Hash(val.GetDataUnsafe(), val.GetSize());
 }
 
-template <> hash_t Hash(char *val) {
+template <>
+hash_t Hash(char *val) {
 	return Hash<const char *>(val);
 }
 

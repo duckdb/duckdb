@@ -25,7 +25,8 @@ private:
 	}
 
 	template <class STATE_TYPE, class OP>
-	static inline void NullaryScatterLoop(STATE_TYPE **__restrict states,FunctionData *bind_data,  const SelectionVector &ssel, idx_t count) {
+	static inline void NullaryScatterLoop(STATE_TYPE **__restrict states, FunctionData *bind_data,
+	                                      const SelectionVector &ssel, idx_t count) {
 
 		for (idx_t i = 0; i < count; i++) {
 			auto sidx = ssel.get_index(i);
@@ -34,8 +35,8 @@ private:
 	}
 
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
-	static inline void UnaryFlatLoop(INPUT_TYPE *__restrict idata,FunctionData *bind_data,  STATE_TYPE **__restrict states, nullmask_t &nullmask,
-	                                 idx_t count) {
+	static inline void UnaryFlatLoop(INPUT_TYPE *__restrict idata, FunctionData *bind_data,
+	                                 STATE_TYPE **__restrict states, nullmask_t &nullmask, idx_t count) {
 		if (OP::IgnoreNull() && nullmask.any()) {
 			// potential NULL values and NULL values are ignored
 			for (idx_t i = 0; i < count; i++) {
@@ -51,9 +52,9 @@ private:
 		}
 	}
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
-	static inline void UnaryScatterLoop(INPUT_TYPE *__restrict idata,FunctionData *bind_data,  STATE_TYPE **__restrict states,
-	                                    const SelectionVector &isel, const SelectionVector &ssel, nullmask_t &nullmask,
-	                                    idx_t count) {
+	static inline void UnaryScatterLoop(INPUT_TYPE *__restrict idata, FunctionData *bind_data,
+	                                    STATE_TYPE **__restrict states, const SelectionVector &isel,
+	                                    const SelectionVector &ssel, nullmask_t &nullmask, idx_t count) {
 		if (OP::IgnoreNull() && nullmask.any()) {
 			// potential NULL values and NULL values are ignored
 			for (idx_t i = 0; i < count; i++) {
@@ -68,14 +69,15 @@ private:
 			for (idx_t i = 0; i < count; i++) {
 				auto idx = isel.get_index(i);
 				auto sidx = ssel.get_index(i);
-				OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(states[sidx],bind_data, idata, nullmask, idx);
+				OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(states[sidx], bind_data, idata, nullmask, idx);
 			}
 		}
 	}
 
 	template <class STATE_TYPE, class INPUT_TYPE, class OP, bool HAS_SEL_VECTOR>
-	static inline void UnaryUpdateLoop(INPUT_TYPE *__restrict idata,FunctionData *bind_data,  STATE_TYPE *__restrict state, idx_t count,
-	                                   nullmask_t &nullmask, const SelectionVector *__restrict sel_vector) {
+	static inline void UnaryUpdateLoop(INPUT_TYPE *__restrict idata, FunctionData *bind_data,
+	                                   STATE_TYPE *__restrict state, idx_t count, nullmask_t &nullmask,
+	                                   const SelectionVector *__restrict sel_vector) {
 		if (OP::IgnoreNull() && nullmask.any()) {
 			// potential NULL values and NULL values are ignored
 			for (idx_t i = 0; i < count; i++) {
@@ -88,13 +90,13 @@ private:
 			// quick path: no NULL values or NULL values are not ignored
 			for (idx_t i = 0; i < count; i++) {
 				auto idx = HAS_SEL_VECTOR ? sel_vector->get_index(i) : i;
-				OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(state,bind_data,  idata, nullmask, idx);
+				OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(state, bind_data, idata, nullmask, idx);
 			}
 		}
 	}
 
 	template <class STATE_TYPE, class A_TYPE, class B_TYPE, class OP>
-	static inline void BinaryScatterLoop(A_TYPE *__restrict adata,FunctionData *bind_data,  B_TYPE *__restrict bdata,
+	static inline void BinaryScatterLoop(A_TYPE *__restrict adata, FunctionData *bind_data, B_TYPE *__restrict bdata,
 	                                     STATE_TYPE **__restrict states, idx_t count, const SelectionVector &asel,
 	                                     const SelectionVector &bsel, const SelectionVector &ssel,
 	                                     nullmask_t &anullmask, nullmask_t &bnullmask) {
@@ -105,8 +107,8 @@ private:
 				auto bidx = bsel.get_index(i);
 				auto sidx = ssel.get_index(i);
 				if (!anullmask[aidx] && !bnullmask[bidx]) {
-					OP::template Operation<A_TYPE, B_TYPE, STATE_TYPE, OP>(states[sidx], bind_data, adata, bdata, anullmask,
-					                                                       bnullmask, aidx, bidx);
+					OP::template Operation<A_TYPE, B_TYPE, STATE_TYPE, OP>(states[sidx], bind_data, adata, bdata,
+					                                                       anullmask, bnullmask, aidx, bidx);
 				}
 			}
 		} else {
@@ -115,14 +117,14 @@ private:
 				auto aidx = asel.get_index(i);
 				auto bidx = bsel.get_index(i);
 				auto sidx = ssel.get_index(i);
-				OP::template Operation<A_TYPE, B_TYPE, STATE_TYPE, OP>(states[sidx], bind_data, adata, bdata, anullmask, bnullmask,
-				                                                       aidx, bidx);
+				OP::template Operation<A_TYPE, B_TYPE, STATE_TYPE, OP>(states[sidx], bind_data, adata, bdata, anullmask,
+				                                                       bnullmask, aidx, bidx);
 			}
 		}
 	}
 
 	template <class STATE_TYPE, class A_TYPE, class B_TYPE, class OP>
-	static inline void BinaryUpdateLoop(A_TYPE *__restrict adata,FunctionData *bind_data,  B_TYPE *__restrict bdata,
+	static inline void BinaryUpdateLoop(A_TYPE *__restrict adata, FunctionData *bind_data, B_TYPE *__restrict bdata,
 	                                    STATE_TYPE *__restrict state, idx_t count, const SelectionVector &asel,
 	                                    const SelectionVector &bsel, nullmask_t &anullmask, nullmask_t &bnullmask) {
 		if (OP::IgnoreNull() && (anullmask.any() || bnullmask.any())) {
@@ -131,8 +133,8 @@ private:
 				auto aidx = asel.get_index(i);
 				auto bidx = bsel.get_index(i);
 				if (!anullmask[aidx] && !bnullmask[bidx]) {
-					OP::template Operation<A_TYPE, B_TYPE, STATE_TYPE, OP>(state,bind_data, adata, bdata, anullmask, bnullmask,
-					                                                       aidx, bidx);
+					OP::template Operation<A_TYPE, B_TYPE, STATE_TYPE, OP>(state, bind_data, adata, bdata, anullmask,
+					                                                       bnullmask, aidx, bidx);
 				}
 			}
 		} else {
@@ -140,28 +142,30 @@ private:
 			for (idx_t i = 0; i < count; i++) {
 				auto aidx = asel.get_index(i);
 				auto bidx = bsel.get_index(i);
-				OP::template Operation<A_TYPE, B_TYPE, STATE_TYPE, OP>(state,bind_data, adata, bdata, anullmask, bnullmask, aidx,
-				                                                       bidx);
+				OP::template Operation<A_TYPE, B_TYPE, STATE_TYPE, OP>(state, bind_data, adata, bdata, anullmask,
+				                                                       bnullmask, aidx, bidx);
 			}
 		}
 	}
 
 public:
-	template <class STATE_TYPE, class OP> static void NullaryScatter(Vector &states,FunctionData *bind_data, idx_t count) {
+	template <class STATE_TYPE, class OP>
+	static void NullaryScatter(Vector &states, FunctionData *bind_data, idx_t count) {
 		if (states.vector_type == VectorType::CONSTANT_VECTOR) {
 			auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
 			OP::template ConstantOperation<STATE_TYPE, OP>(*sdata, bind_data, count);
 		} else if (states.vector_type == VectorType::FLAT_VECTOR) {
 			auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
-			NullaryFlatLoop<STATE_TYPE, OP>(sdata,bind_data, count);
+			NullaryFlatLoop<STATE_TYPE, OP>(sdata, bind_data, count);
 		} else {
 			VectorData sdata;
 			states.Orrify(count, sdata);
-			NullaryScatterLoop<STATE_TYPE, OP>((STATE_TYPE **)sdata.data, bind_data,*sdata.sel, count);
+			NullaryScatterLoop<STATE_TYPE, OP>((STATE_TYPE **)sdata.data, bind_data, *sdata.sel, count);
 		}
 	}
 
-	template <class STATE_TYPE, class OP> static void NullaryUpdate(data_ptr_t state,FunctionData *bind_data,  idx_t count) {
+	template <class STATE_TYPE, class OP>
+	static void NullaryUpdate(data_ptr_t state, FunctionData *bind_data, idx_t count) {
 		OP::template ConstantOperation<STATE_TYPE, OP>((STATE_TYPE *)state, bind_data, count);
 	}
 
@@ -175,44 +179,44 @@ public:
 			// regular constant: get first state
 			auto idata = ConstantVector::GetData<INPUT_TYPE>(input);
 			auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
-			OP::template ConstantOperation<INPUT_TYPE, STATE_TYPE, OP>(*sdata,bind_data, idata, ConstantVector::Nullmask(input),
-			                                                           count);
+			OP::template ConstantOperation<INPUT_TYPE, STATE_TYPE, OP>(*sdata, bind_data, idata,
+			                                                           ConstantVector::Nullmask(input), count);
 		} else if (input.vector_type == VectorType::FLAT_VECTOR && states.vector_type == VectorType::FLAT_VECTOR) {
 			auto idata = FlatVector::GetData<INPUT_TYPE>(input);
 			auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
-			UnaryFlatLoop<STATE_TYPE, INPUT_TYPE, OP>(idata,bind_data, sdata, FlatVector::Nullmask(input), count);
+			UnaryFlatLoop<STATE_TYPE, INPUT_TYPE, OP>(idata, bind_data, sdata, FlatVector::Nullmask(input), count);
 		} else {
 			VectorData idata, sdata;
 			input.Orrify(count, idata);
 			states.Orrify(count, sdata);
-			UnaryScatterLoop<STATE_TYPE, INPUT_TYPE, OP>((INPUT_TYPE *)idata.data, bind_data,(STATE_TYPE **)sdata.data,
+			UnaryScatterLoop<STATE_TYPE, INPUT_TYPE, OP>((INPUT_TYPE *)idata.data, bind_data, (STATE_TYPE **)sdata.data,
 			                                             *idata.sel, *sdata.sel, *idata.nullmask, count);
 		}
 	}
 
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
-	static void UnaryUpdate(Vector &input,FunctionData *bind_data, data_ptr_t state, idx_t count) {
+	static void UnaryUpdate(Vector &input, FunctionData *bind_data, data_ptr_t state, idx_t count) {
 		switch (input.vector_type) {
 		case VectorType::CONSTANT_VECTOR: {
 			if (OP::IgnoreNull() && ConstantVector::IsNull(input)) {
 				return;
 			}
 			auto idata = ConstantVector::GetData<INPUT_TYPE>(input);
-			OP::template ConstantOperation<INPUT_TYPE, STATE_TYPE, OP>((STATE_TYPE *)state,bind_data, idata,
+			OP::template ConstantOperation<INPUT_TYPE, STATE_TYPE, OP>((STATE_TYPE *)state, bind_data, idata,
 			                                                           ConstantVector::Nullmask(input), count);
 			break;
 		}
 		case VectorType::FLAT_VECTOR: {
 			auto idata = FlatVector::GetData<INPUT_TYPE>(input);
-			UnaryUpdateLoop<STATE_TYPE, INPUT_TYPE, OP, false>(idata,bind_data, (STATE_TYPE *)state, count,
+			UnaryUpdateLoop<STATE_TYPE, INPUT_TYPE, OP, false>(idata, bind_data, (STATE_TYPE *)state, count,
 			                                                   FlatVector::Nullmask(input), nullptr);
 			break;
 		}
 		default: {
 			VectorData idata;
 			input.Orrify(count, idata);
-			UnaryUpdateLoop<STATE_TYPE, INPUT_TYPE, OP, true>((INPUT_TYPE *)idata.data, bind_data,(STATE_TYPE *)state, count,
-			                                                  *idata.nullmask, idata.sel);
+			UnaryUpdateLoop<STATE_TYPE, INPUT_TYPE, OP, true>((INPUT_TYPE *)idata.data, bind_data, (STATE_TYPE *)state,
+			                                                  count, *idata.nullmask, idata.sel);
 			break;
 		}
 		}
@@ -226,7 +230,7 @@ public:
 		b.Orrify(count, bdata);
 		states.Orrify(count, sdata);
 
-		BinaryScatterLoop<STATE_TYPE, A_TYPE, B_TYPE, OP>((A_TYPE *)adata.data,bind_data, (B_TYPE *)bdata.data,
+		BinaryScatterLoop<STATE_TYPE, A_TYPE, B_TYPE, OP>((A_TYPE *)adata.data, bind_data, (B_TYPE *)bdata.data,
 		                                                  (STATE_TYPE **)sdata.data, count, *adata.sel, *bdata.sel,
 		                                                  *sdata.sel, *adata.nullmask, *bdata.nullmask);
 	}
@@ -238,12 +242,13 @@ public:
 		a.Orrify(count, adata);
 		b.Orrify(count, bdata);
 
-		BinaryUpdateLoop<STATE_TYPE, A_TYPE, B_TYPE, OP>((A_TYPE *)adata.data,bind_data, (B_TYPE *)bdata.data,
+		BinaryUpdateLoop<STATE_TYPE, A_TYPE, B_TYPE, OP>((A_TYPE *)adata.data, bind_data, (B_TYPE *)bdata.data,
 		                                                 (STATE_TYPE *)state, count, *adata.sel, *bdata.sel,
 		                                                 *adata.nullmask, *bdata.nullmask);
 	}
 
-	template <class STATE_TYPE, class OP> static void Combine(Vector &source, Vector &target, idx_t count) {
+	template <class STATE_TYPE, class OP>
+	static void Combine(Vector &source, Vector &target, idx_t count) {
 		D_ASSERT(source.type.id() == LogicalTypeId::POINTER && target.type.id() == LogicalTypeId::POINTER);
 		auto sdata = FlatVector::GetData<STATE_TYPE *>(source);
 		auto tdata = FlatVector::GetData<STATE_TYPE *>(target);
@@ -275,7 +280,8 @@ public:
 		}
 	}
 
-	template <class STATE_TYPE, class OP> static void Destroy(Vector &states, idx_t count) {
+	template <class STATE_TYPE, class OP>
+	static void Destroy(Vector &states, idx_t count) {
 		auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
 		for (idx_t i = 0; i < count; i++) {
 			OP::template Destroy<STATE_TYPE>(sdata[i]);

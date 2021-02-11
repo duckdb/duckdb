@@ -97,7 +97,7 @@ string AdjustTextForRendering(string source, idx_t max_render_width) {
 		idx_t char_render_width = utf8proc_render_width(source.c_str(), source.size(), cpos);
 		cpos = utf8proc_next_grapheme_cluster(source.c_str(), source.size(), cpos);
 		render_width += char_render_width;
-		render_widths.push_back(make_pair(cpos, render_width));
+		render_widths.emplace_back(cpos, render_width);
 		if (render_width > max_render_width) {
 			break;
 		}
@@ -282,7 +282,7 @@ string TreeRenderer::RemovePadding(string l) {
 }
 
 void TreeRenderer::SplitStringBuffer(const string &source, vector<string> &result) {
-	idx_t MAX_LINE_RENDER_SIZE = config.NODE_RENDER_WIDTH - 2;
+	idx_t max_line_render_size = config.NODE_RENDER_WIDTH - 2;
 	// utf8 in prompt, get render width
 	idx_t cpos = 0;
 	idx_t start_pos = 0;
@@ -295,7 +295,7 @@ void TreeRenderer::SplitStringBuffer(const string &source, vector<string> &resul
 		}
 		size_t char_render_width = utf8proc_render_width(source.c_str(), source.size(), cpos);
 		idx_t next_cpos = utf8proc_next_grapheme_cluster(source.c_str(), source.size(), cpos);
-		if (render_width + char_render_width > MAX_LINE_RENDER_SIZE) {
+		if (render_width + char_render_width > max_line_render_size) {
 			if (last_possible_split <= start_pos + 8) {
 				last_possible_split = cpos;
 			}
@@ -312,12 +312,12 @@ void TreeRenderer::SplitStringBuffer(const string &source, vector<string> &resul
 	}
 }
 
-void TreeRenderer::SplitUpExtraInfo(string extra_info, vector<string> &result) {
+void TreeRenderer::SplitUpExtraInfo(const string &extra_info, vector<string> &result) {
 	if (extra_info.empty()) {
 		return;
 	}
 	auto splits = StringUtil::Split(extra_info, "\n");
-	if (splits.size() > 0 && splits[0] != "[INFOSEPARATOR]") {
+	if (!splits.empty() && splits[0] != "[INFOSEPARATOR]") {
 		result.push_back(ExtraInfoSeparator());
 	}
 	for (auto &split : splits) {
@@ -326,7 +326,7 @@ void TreeRenderer::SplitUpExtraInfo(string extra_info, vector<string> &result) {
 			continue;
 		}
 		string str = RemovePadding(split);
-		if (str.size() == 0) {
+		if (str.empty()) {
 			continue;
 		}
 		SplitStringBuffer(str, result);
@@ -340,12 +340,13 @@ string TreeRenderer::ExtraInfoSeparator() {
 unique_ptr<RenderTreeNode> TreeRenderer::CreateRenderNode(string name, string extra_info) {
 	auto result = make_unique<RenderTreeNode>();
 	result->name = move(name);
-	result->extra_text = extra_info;
+	result->extra_text = move(extra_info);
 	return result;
 }
 
-template <class T> static void GetTreeWidthHeight(const T &op, idx_t &width, idx_t &height) {
-	if (op.children.size() == 0) {
+template <class T>
+static void GetTreeWidthHeight(const T &op, idx_t &width, idx_t &height) {
+	if (op.children.empty()) {
 		width = 1;
 		height = 1;
 		return;
@@ -362,11 +363,12 @@ template <class T> static void GetTreeWidthHeight(const T &op, idx_t &width, idx
 	height++;
 }
 
-template <class T> idx_t TreeRenderer::CreateRenderTreeRecursive(RenderTree &result, const T &op, idx_t x, idx_t y) {
+template <class T>
+idx_t TreeRenderer::CreateRenderTreeRecursive(RenderTree &result, const T &op, idx_t x, idx_t y) {
 	auto node = TreeRenderer::CreateNode(op);
 	result.SetNode(x, y, move(node));
 
-	if (op.children.size() == 0) {
+	if (op.children.empty()) {
 		return 1;
 	}
 	idx_t width = 0;
@@ -377,7 +379,8 @@ template <class T> idx_t TreeRenderer::CreateRenderTreeRecursive(RenderTree &res
 	return width;
 }
 
-template <class T> unique_ptr<RenderTree> TreeRenderer::CreateRenderTree(const T &op) {
+template <class T>
+unique_ptr<RenderTree> TreeRenderer::CreateRenderTree(const T &op) {
 	idx_t width, height;
 	GetTreeWidthHeight<T>(op, width, height);
 

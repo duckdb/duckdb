@@ -20,11 +20,11 @@ unique_ptr<SelectStatement> SelectStatement::Deserialize(Deserializer &source) {
 	return result;
 }
 
-bool SelectStatement::Equals(const SQLStatement *other_) const {
-	if (type != other_->type) {
+bool SelectStatement::Equals(const SQLStatement *other_p) const {
+	if (type != other_p->type) {
 		return false;
 	}
-	auto other = (SelectStatement *)other_;
+	auto other = (SelectStatement *)other_p;
 	return node->Equals(other->node.get());
 }
 

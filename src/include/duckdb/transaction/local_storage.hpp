@@ -18,7 +18,7 @@ struct TableAppendState;
 
 class LocalTableStorage {
 public:
-	LocalTableStorage(DataTable &table);
+	explicit LocalTableStorage(DataTable &table);
 	~LocalTableStorage();
 
 	DataTable &table;
@@ -48,7 +48,7 @@ public:
 	};
 
 public:
-	LocalStorage(Transaction &transaction) : transaction(transaction) {
+	explicit LocalStorage(Transaction &transaction) : transaction(transaction) {
 	}
 
 	//! Initialize a scan of the local storage
@@ -85,13 +85,14 @@ public:
 	}
 
 	void AddColumn(DataTable *old_dt, DataTable *new_dt, ColumnDefinition &new_column, Expression *default_value);
-	void ChangeType(DataTable *old_dt, DataTable *new_dt, idx_t changed_idx, LogicalType target_type,
-	                vector<column_t> bound_columns, Expression &cast_expr);
+	void ChangeType(DataTable *old_dt, DataTable *new_dt, idx_t changed_idx, const LogicalType &target_type,
+	                const vector<column_t> &bound_columns, Expression &cast_expr);
 
 private:
 	LocalTableStorage *GetStorage(DataTable *table);
 
-	template <class T> bool ScanTableStorage(DataTable &table, LocalTableStorage &storage, T &&fun);
+	template <class T>
+	bool ScanTableStorage(DataTable &table, LocalTableStorage &storage, T &&fun);
 
 private:
 	Transaction &transaction;

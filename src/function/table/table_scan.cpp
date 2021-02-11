@@ -20,8 +20,8 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Table Scan
 //===--------------------------------------------------------------------===//
-bool table_scan_parallel_state_next(ClientContext &context, const FunctionData *bind_data,
-                                    FunctionOperatorData *operator_state, ParallelState *parallel_state_);
+bool TableScanParallelStateNext(ClientContext &context, const FunctionData *bind_data,
+                                FunctionOperatorData *operator_state, ParallelState *parallel_state_p);
 
 struct TableScanOperatorData : public FunctionOperatorData {
 	//! The current position in the scan
@@ -29,21 +29,21 @@ struct TableScanOperatorData : public FunctionOperatorData {
 	vector<column_t> column_ids;
 };
 
-
-static unique_ptr<FunctionOperatorData> table_scan_init(ClientContext &context, const FunctionData *bind_data_,
-                                                        vector<column_t> &column_ids,TableFilterCollection* filters) {
+static unique_ptr<FunctionOperatorData> TableScanInit(ClientContext &context, const FunctionData *bind_data_p,
+                                                      vector<column_t> &column_ids, TableFilterCollection *filters) {
 	auto result = make_unique<TableScanOperatorData>();
 	auto &transaction = Transaction::GetTransaction(context);
-	auto &bind_data = (const TableScanBindData &)*bind_data_;
+	auto &bind_data = (const TableScanBindData &)*bind_data_p;
 	result->column_ids = column_ids;
 	result->scan_state.table_filters = filters->table_filters;
-	bind_data.table->storage->InitializeScan(transaction, result->scan_state, result->column_ids, filters->table_filters);
+	bind_data.table->storage->InitializeScan(transaction, result->scan_state, result->column_ids,
+	                                         filters->table_filters);
 	return move(result);
 }
 
-static unique_ptr<BaseStatistics> table_scan_statistics(ClientContext &context, const FunctionData *bind_data_,
-                                                        column_t column_id) {
-	auto &bind_data = (const TableScanBindData &)*bind_data_;
+static unique_ptr<BaseStatistics> TableScanStatistics(ClientContext &context, const FunctionData *bind_data_p,
+                                                      column_t column_id) {
+	auto &bind_data = (const TableScanBindData &)*bind_data_p;
 	auto &transaction = Transaction::GetTransaction(context);
 	if (transaction.storage.Find(bind_data.table->storage.get())) {
 		// we don't emit any statistics for tables that have outstanding transaction-local data
@@ -52,20 +52,21 @@ static unique_ptr<BaseStatistics> table_scan_statistics(ClientContext &context, 
 	return bind_data.table->storage->GetStatistics(context, column_id);
 }
 
-static unique_ptr<FunctionOperatorData> table_scan_parallel_init(ClientContext &context, const FunctionData *bind_data_,
-                                                                 ParallelState *state, vector<column_t> &column_ids, TableFilterCollection* filters) {
+static unique_ptr<FunctionOperatorData> TableScanParallelInit(ClientContext &context, const FunctionData *bind_data_p,
+                                                              ParallelState *state, vector<column_t> &column_ids,
+                                                              TableFilterCollection *filters) {
 	auto result = make_unique<TableScanOperatorData>();
 	result->column_ids = column_ids;
 	result->scan_state.table_filters = filters->table_filters;
-	if (!table_scan_parallel_state_next(context, bind_data_, result.get(), state)) {
+	if (!TableScanParallelStateNext(context, bind_data_p, result.get(), state)) {
 		return nullptr;
 	}
 	return move(result);
 }
 
-static void table_scan_function(ClientContext &context, const FunctionData *bind_data_,
-                                FunctionOperatorData *operator_state, DataChunk &output) {
-	auto &bind_data = (const TableScanBindData &)*bind_data_;
+static void TableScanFunc(ClientContext &context, const FunctionData *bind_data_p, FunctionOperatorData *operator_state,
+                          DataChunk &output) {
+	auto &bind_data = (const TableScanBindData &)*bind_data_p;
 	auto &state = (TableScanOperatorData &)*operator_state;
 	auto &transaction = Transaction::GetTransaction(context);
 	bind_data.table->storage->Scan(transaction, output, state.scan_state, state.column_ids);
@@ -76,22 +77,22 @@ struct ParallelTableFunctionScanState : public ParallelState {
 	std::mutex lock;
 };
 
-idx_t table_scan_max_threads(ClientContext &context, const FunctionData *bind_data_) {
-	auto &bind_data = (const TableScanBindData &)*bind_data_;
+idx_t TableScanMaxThreads(ClientContext &context, const FunctionData *bind_data_p) {
+	auto &bind_data = (const TableScanBindData &)*bind_data_p;
 	return bind_data.table->storage->MaxThreads(context);
 }
 
-unique_ptr<ParallelState> table_scan_init_parallel_state(ClientContext &context, const FunctionData *bind_data_) {
-	auto &bind_data = (const TableScanBindData &)*bind_data_;
+unique_ptr<ParallelState> TableScanInitParallelState(ClientContext &context, const FunctionData *bind_data_p) {
+	auto &bind_data = (const TableScanBindData &)*bind_data_p;
 	auto result = make_unique<ParallelTableFunctionScanState>();
 	bind_data.table->storage->InitializeParallelScan(result->state);
 	return move(result);
 }
 
-bool table_scan_parallel_state_next(ClientContext &context, const FunctionData *bind_data_,
-                                    FunctionOperatorData *operator_state, ParallelState *parallel_state_) {
-	auto &bind_data = (const TableScanBindData &)*bind_data_;
-	auto &parallel_state = (ParallelTableFunctionScanState &)*parallel_state_;
+bool TableScanParallelStateNext(ClientContext &context, const FunctionData *bind_data_p,
+                                FunctionOperatorData *operator_state, ParallelState *parallel_state_p) {
+	auto &bind_data = (const TableScanBindData &)*bind_data_p;
+	auto &parallel_state = (ParallelTableFunctionScanState &)*parallel_state_p;
 	auto &state = (TableScanOperatorData &)*operator_state;
 
 	lock_guard<mutex> parallel_lock(parallel_state.lock);
@@ -99,13 +100,13 @@ bool table_scan_parallel_state_next(ClientContext &context, const FunctionData *
 	                                                  state.column_ids);
 }
 
-void table_scan_dependency(unordered_set<CatalogEntry *> &entries, const FunctionData *bind_data_) {
-	auto &bind_data = (const TableScanBindData &)*bind_data_;
+void TableScanDependency(unordered_set<CatalogEntry *> &entries, const FunctionData *bind_data_p) {
+	auto &bind_data = (const TableScanBindData &)*bind_data_p;
 	entries.insert(bind_data.table);
 }
 
-unique_ptr<NodeStatistics> table_scan_cardinality(ClientContext &context, const FunctionData *bind_data_) {
-	auto &bind_data = (const TableScanBindData &)*bind_data_;
+unique_ptr<NodeStatistics> TableScanCardinality(ClientContext &context, const FunctionData *bind_data_p) {
+	auto &bind_data = (const TableScanBindData &)*bind_data_p;
 	auto &transaction = Transaction::GetTransaction(context);
 	idx_t estimated_cardinality =
 	    bind_data.table->storage->info->cardinality + transaction.storage.AddedRows(bind_data.table->storage.get());
@@ -123,25 +124,26 @@ struct IndexScanOperatorData : public FunctionOperatorData {
 	bool finished;
 };
 
-static unique_ptr<FunctionOperatorData> index_scan_init(ClientContext &context, const FunctionData *bind_data_,
-                                                        vector<column_t> &column_ids, TableFilterCollection* filters) {
+static unique_ptr<FunctionOperatorData> IndexScanInit(ClientContext &context, const FunctionData *bind_data_p,
+                                                      vector<column_t> &column_ids, TableFilterCollection *filters) {
 	auto result = make_unique<IndexScanOperatorData>();
 	auto &transaction = Transaction::GetTransaction(context);
-	auto &bind_data = (const TableScanBindData &)*bind_data_;
+	auto &bind_data = (const TableScanBindData &)*bind_data_p;
 	result->column_ids = column_ids;
 	result->row_ids.type = LOGICAL_ROW_TYPE;
 	if (!bind_data.result_ids.empty()) {
 		FlatVector::SetData(result->row_ids, (data_ptr_t)&bind_data.result_ids[0]);
 	}
-	transaction.storage.InitializeScan(bind_data.table->storage.get(), result->local_storage_state, filters->table_filters);
+	transaction.storage.InitializeScan(bind_data.table->storage.get(), result->local_storage_state,
+	                                   filters->table_filters);
 
 	result->finished = false;
 	return move(result);
 }
 
-static void index_scan_function(ClientContext &context, const FunctionData *bind_data_,
-                                FunctionOperatorData *operator_state, DataChunk &output) {
-	auto &bind_data = (const TableScanBindData &)*bind_data_;
+static void IndexScanFunction(ClientContext &context, const FunctionData *bind_data_p,
+                              FunctionOperatorData *operator_state, DataChunk &output) {
+	auto &bind_data = (const TableScanBindData &)*bind_data_p;
 	auto &state = (IndexScanOperatorData &)*operator_state;
 	auto &transaction = Transaction::GetTransaction(context);
 	if (!state.finished) {
@@ -174,9 +176,9 @@ static void RewriteIndexExpression(Index &index, LogicalGet &get, Expression &ex
 	    expr, [&](Expression &child) { RewriteIndexExpression(index, get, child, rewrite_possible); });
 }
 
-void table_scan_pushdown_complex_filter(ClientContext &context, LogicalGet &get, FunctionData *bind_data_,
-                                        vector<unique_ptr<Expression>> &filters) {
-	auto &bind_data = (TableScanBindData &)*bind_data_;
+void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
+                                    vector<unique_ptr<Expression>> &filters) {
+	auto &bind_data = (TableScanBindData &)*bind_data_p;
 	auto table = bind_data.table;
 	auto &storage = *table->storage;
 
@@ -206,7 +208,7 @@ void table_scan_pushdown_complex_filter(ClientContext &context, LogicalGet &get,
 		Value low_value, high_value, equal_value;
 		ExpressionType low_comparison_type = ExpressionType::INVALID, high_comparison_type = ExpressionType::INVALID;
 		// try to find a matching index for any of the filter expressions
-		for (auto & filter : filters) {
+		for (auto &filter : filters) {
 			auto expr = filter.get();
 
 			// create a matcher for a comparison with a constant
@@ -294,8 +296,8 @@ void table_scan_pushdown_complex_filter(ClientContext &context, LogicalGet &get,
 			if (index->Scan(transaction, storage, *index_state, STANDARD_VECTOR_SIZE, bind_data.result_ids)) {
 				// use an index scan!
 				bind_data.is_index_scan = true;
-				get.function.init = index_scan_init;
-				get.function.function = index_scan_function;
+				get.function.init = IndexScanInit;
+				get.function.function = IndexScanFunction;
 				get.function.max_threads = nullptr;
 				get.function.init_parallel_state = nullptr;
 				get.function.parallel_state_next = nullptr;
@@ -308,24 +310,24 @@ void table_scan_pushdown_complex_filter(ClientContext &context, LogicalGet &get,
 	}
 }
 
-string table_scan_to_string(const FunctionData *bind_data_) {
-	auto &bind_data = (const TableScanBindData &)*bind_data_;
+string TableScanToString(const FunctionData *bind_data_p) {
+	auto &bind_data = (const TableScanBindData &)*bind_data_p;
 	string result = bind_data.table->name;
 	return result;
 }
 
 TableFunction TableScanFunction::GetFunction() {
-	TableFunction scan_function("seq_scan", {}, table_scan_function);
-	scan_function.init = table_scan_init;
-	scan_function.statistics = table_scan_statistics;
-	scan_function.dependency = table_scan_dependency;
-	scan_function.cardinality = table_scan_cardinality;
-	scan_function.pushdown_complex_filter = table_scan_pushdown_complex_filter;
-	scan_function.to_string = table_scan_to_string;
-	scan_function.max_threads = table_scan_max_threads;
-	scan_function.init_parallel_state = table_scan_init_parallel_state;
-	scan_function.parallel_init = table_scan_parallel_init;
-	scan_function.parallel_state_next = table_scan_parallel_state_next;
+	TableFunction scan_function("seq_scan", {}, TableScanFunc);
+	scan_function.init = TableScanInit;
+	scan_function.statistics = TableScanStatistics;
+	scan_function.dependency = TableScanDependency;
+	scan_function.cardinality = TableScanCardinality;
+	scan_function.pushdown_complex_filter = TableScanPushdownComplexFilter;
+	scan_function.to_string = TableScanToString;
+	scan_function.max_threads = TableScanMaxThreads;
+	scan_function.init_parallel_state = TableScanInitParallelState;
+	scan_function.parallel_init = TableScanParallelInit;
+	scan_function.parallel_state_next = TableScanParallelStateNext;
 	scan_function.projection_pushdown = true;
 	scan_function.filter_pushdown = true;
 	return scan_function;

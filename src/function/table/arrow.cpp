@@ -47,15 +47,15 @@ struct ArrowScanFunctionData : public TableFunctionData {
 		}
 	}
 
-	~ArrowScanFunctionData() {
+	~ArrowScanFunctionData() override {
 		ReleaseSchema();
 		ReleaseArray();
 	}
 };
 
-static unique_ptr<FunctionData> arrow_scan_bind(ClientContext &context, vector<Value> &inputs,
-                                                unordered_map<string, Value> &named_parameters,
-                                                vector<LogicalType> &return_types, vector<string> &names) {
+static unique_ptr<FunctionData> ArrowScanBind(ClientContext &context, vector<Value> &inputs,
+                                              unordered_map<string, Value> &named_parameters,
+                                              vector<LogicalType> &return_types, vector<string> &names) {
 
 	auto res = make_unique<ArrowScanFunctionData>();
 	auto &data = *res;
@@ -134,8 +134,8 @@ static unique_ptr<FunctionData> arrow_scan_bind(ClientContext &context, vector<V
 	return move(res);
 }
 
-static unique_ptr<FunctionOperatorData> arrow_scan_init(ClientContext &context, const FunctionData *bind_data,
-                                                        vector<column_t> &column_ids, TableFilterCollection* filters) {
+static unique_ptr<FunctionOperatorData> ArrowScanInit(ClientContext &context, const FunctionData *bind_data,
+                                                      vector<column_t> &column_ids, TableFilterCollection *filters) {
 	auto &data = (ArrowScanFunctionData &)*bind_data;
 	if (data.is_consumed) {
 		throw NotImplementedException("FIXME: Arrow streams can only be read once");
@@ -144,8 +144,8 @@ static unique_ptr<FunctionOperatorData> arrow_scan_init(ClientContext &context, 
 	return make_unique<FunctionOperatorData>();
 }
 
-static void arrow_scan_function(ClientContext &context, const FunctionData *bind_data,
-                                FunctionOperatorData *operator_state, DataChunk &output) {
+static void ArrowScanFunction(ClientContext &context, const FunctionData *bind_data,
+                              FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &data = (ArrowScanFunctionData &)*bind_data;
 	if (!data.stream->release) {
 		// no more chunks
@@ -281,7 +281,7 @@ static void arrow_scan_function(ClientContext &context, const FunctionData *bind
 void ArrowTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunctionSet arrow("arrow_scan");
 
-	arrow.AddFunction(TableFunction({LogicalType::POINTER}, arrow_scan_function, arrow_scan_bind, arrow_scan_init));
+	arrow.AddFunction(TableFunction({LogicalType::POINTER}, ArrowScanFunction, ArrowScanBind, ArrowScanInit));
 	set.AddFunction(arrow);
 }
 

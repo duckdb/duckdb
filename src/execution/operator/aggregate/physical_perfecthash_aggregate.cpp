@@ -44,10 +44,10 @@ PhysicalPerfectHashAggregate::PhysicalPerfectHashAggregate(ClientContext &contex
 			payload_types_filters.push_back(aggr.filter->return_type);
 		}
 	}
-		for (const auto &pay_filters : payload_types_filters) {
+	for (const auto &pay_filters : payload_types_filters) {
 		payload_types.push_back(pay_filters);
 	}
-	aggregate_objects = AggregateObject::CreateAggregateObjects(move(bindings));
+	aggregate_objects = AggregateObject::CreateAggregateObjects(bindings);
 }
 
 unique_ptr<PerfectAggregateHashTable> PhysicalPerfectHashAggregate::CreateHT(ClientContext &context) {

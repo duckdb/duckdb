@@ -1,0 +1,52 @@
+# name: test/sql/function/numeric/test_factorial.test
+# description: Mod test
+# group: [numeric]
+
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT factorial(0);
+----
+1
+
+query I
+SELECT factorial(-1);
+----
+1
+
+query I
+SELECT factorial(NULL);
+----
+NULL
+
+query I
+SELECT factorial(2);
+----
+2
+
+query I
+SELECT factorial(10);
+----
+3628800
+
+# postfix op
+query I
+SELECT 10!;
+----
+3628800
+
+query I
+SELECT factorial(20);
+----
+2432902008176640000
+
+query I
+SELECT factorial(30);
+----
+265252859812191058636308480000000
+
+# overflow
+statement error
+SELECT factorial(40);

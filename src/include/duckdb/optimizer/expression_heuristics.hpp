@@ -15,7 +15,7 @@ namespace duckdb {
 
 class ExpressionHeuristics : public LogicalOperatorVisitor {
 public:
-	ExpressionHeuristics(Optimizer &optimizer) : optimizer(optimizer) {
+	explicit ExpressionHeuristics(Optimizer &optimizer) : optimizer(optimizer) {
 	}
 
 	Optimizer &optimizer;

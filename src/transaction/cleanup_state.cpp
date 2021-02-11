@@ -58,7 +58,7 @@ void CleanupState::CleanupUpdate(UpdateInfo *info) {
 void CleanupState::CleanupDelete(DeleteInfo *info) {
 	auto version_table = info->table;
 	version_table->info->cardinality -= info->count;
-	if (version_table->info->indexes.size() == 0) {
+	if (version_table->info->indexes.empty()) {
 		// this table has no indexes: no cleanup to be done
 		return;
 	}

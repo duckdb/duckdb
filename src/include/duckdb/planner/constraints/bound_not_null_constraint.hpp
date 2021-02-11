@@ -14,7 +14,7 @@ namespace duckdb {
 
 class BoundNotNullConstraint : public BoundConstraint {
 public:
-	BoundNotNullConstraint(column_t index) : BoundConstraint(ConstraintType::NOT_NULL), index(index) {
+	explicit BoundNotNullConstraint(column_t index) : BoundConstraint(ConstraintType::NOT_NULL), index(index) {
 	}
 
 	//! Column index this constraint pertains to

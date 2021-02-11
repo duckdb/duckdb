@@ -79,7 +79,7 @@ unique_ptr<LogicalOperator> FilterPullup::FinishPullup(unique_ptr<LogicalOperato
 		op->children[i] = pullup.Rewrite(move(op->children[i]));
 	}
 	// now pull up any existing filters
-	if (filters_expr_pullup.size() == 0) {
+	if (filters_expr_pullup.empty()) {
 		// no filters to pull up
 		return op;
 	}

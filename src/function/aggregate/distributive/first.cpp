@@ -5,14 +5,16 @@
 
 namespace duckdb {
 
-template <class T> struct FirstState {
+template <class T>
+struct FirstState {
 	T value;
 	bool is_set;
 	bool is_null;
 };
 
 struct FirstFunctionBase {
-	template <class STATE> static void Initialize(STATE *state) {
+	template <class STATE>
+	static void Initialize(STATE *state) {
 		state->is_set = false;
 		state->is_null = false;
 	}
@@ -37,11 +39,13 @@ struct FirstFunction : public FirstFunctionBase {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
+	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask,
+	                              idx_t count) {
 		Operation<INPUT_TYPE, STATE, OP>(state, bind_data, input, nullmask, 0);
 	}
 
-	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
+	template <class STATE, class OP>
+	static void Combine(STATE source, STATE *target) {
 		if (!target->is_set) {
 			*target = source;
 		}
@@ -58,7 +62,8 @@ struct FirstFunction : public FirstFunctionBase {
 };
 
 struct FirstFunctionString : public FirstFunctionBase {
-	template <class STATE> static void SetValue(STATE *state, string_t value, bool is_null) {
+	template <class STATE>
+	static void SetValue(STATE *state, string_t value, bool is_null) {
 		state->is_set = true;
 		if (is_null) {
 			state->is_null = true;
@@ -84,11 +89,13 @@ struct FirstFunctionString : public FirstFunctionBase {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state,  FunctionData *bind_data,INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
-		Operation<INPUT_TYPE, STATE, OP>(state,bind_data, input, nullmask, 0);
+	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask,
+	                              idx_t count) {
+		Operation<INPUT_TYPE, STATE, OP>(state, bind_data, input, nullmask, 0);
 	}
 
-	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
+	template <class STATE, class OP>
+	static void Combine(STATE source, STATE *target) {
 		if (source.is_set && !target->is_set) {
 			SetValue(target, source.value, source.is_null);
 		}
@@ -103,18 +110,20 @@ struct FirstFunctionString : public FirstFunctionBase {
 		}
 	}
 
-	template <class STATE> static void Destroy(STATE *state) {
+	template <class STATE>
+	static void Destroy(STATE *state) {
 		if (state->is_set && !state->is_null && !state->value.IsInlined()) {
 			delete[] state->value.GetDataUnsafe();
 		}
 	}
 };
 
-template <class T> static AggregateFunction GetFirstAggregateTemplated(LogicalType type) {
+template <class T>
+static AggregateFunction GetFirstAggregateTemplated(LogicalType type) {
 	return AggregateFunction::UnaryAggregate<FirstState<T>, T, T, FirstFunction>(type, type);
 }
 
-AggregateFunction GetDecimalFirstFunction(LogicalType type) {
+AggregateFunction GetDecimalFirstFunction(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::DECIMAL);
 	switch (type.InternalType()) {
 	case PhysicalType::INT16:
@@ -128,7 +137,7 @@ AggregateFunction GetDecimalFirstFunction(LogicalType type) {
 	}
 }
 
-AggregateFunction FirstFun::GetFunction(LogicalType type) {
+AggregateFunction FirstFun::GetFunction(const LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
 		return GetFirstAggregateTemplated<int8_t>(type);
@@ -175,8 +184,8 @@ AggregateFunction FirstFun::GetFunction(LogicalType type) {
 	}
 }
 
-unique_ptr<FunctionData> bind_decimal_first(ClientContext &context, AggregateFunction &function,
-                                            vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> BindDecimalFirst(ClientContext &context, AggregateFunction &function,
+                                          vector<unique_ptr<Expression>> &arguments) {
 	auto decimal_type = arguments[0]->return_type;
 	function = FirstFun::GetFunction(decimal_type);
 	return nullptr;
@@ -184,15 +193,14 @@ unique_ptr<FunctionData> bind_decimal_first(ClientContext &context, AggregateFun
 
 void FirstFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet first("first");
-	for (auto type : LogicalType::ALL_TYPES) {
+	for (auto &type : LogicalType::ALL_TYPES) {
 		if (type.id() == LogicalTypeId::DECIMAL) {
 			first.AddFunction(AggregateFunction({type}, type, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
-			                                    bind_decimal_first));
+			                                    BindDecimalFirst));
 		} else {
 			first.AddFunction(FirstFun::GetFunction(type));
 		}
 	}
 	set.AddFunction(first);
 }
-
 } // namespace duckdb

@@ -20,10 +20,9 @@ namespace duckdb {
 class BaseReservoirSampling {
 public:
 	explicit BaseReservoirSampling(int64_t seed);
-    BaseReservoirSampling();
+	BaseReservoirSampling();
 
 	void InitializeReservoir(idx_t cur_size, idx_t sample_size);
-
 
 	void SetNextEntry();
 
@@ -47,7 +46,7 @@ public:
 
 class BlockingSample {
 public:
-	BlockingSample(int64_t seed) : random(seed), reservoirSampling(seed) {
+	explicit BlockingSample(int64_t seed) : random(seed), reservoirSampling(seed) {
 	}
 	virtual ~BlockingSample() {
 	}
@@ -80,7 +79,6 @@ public:
 	unique_ptr<DataChunk> GetChunk() override;
 
 private:
-
 	//! Replace a single element of the input
 	void ReplaceElement(DataChunk &input, idx_t index_in_chunk);
 
@@ -92,7 +90,6 @@ private:
 	idx_t sample_count;
 	//! The current reservoir
 	ChunkCollection reservoir;
-
 };
 
 //! The reservoir sample sample_size class maintains a streaming sample of variable size

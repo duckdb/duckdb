@@ -1,4 +1,4 @@
-# name: test/issues/general/test_1248.test
+# name: test/issues/general/test_1290.test
 # description: Issue 1290: FULL JOIN reports missing values for join key
 # group: [general]
 

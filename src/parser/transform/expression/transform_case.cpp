@@ -5,9 +5,7 @@
 
 namespace duckdb {
 
-using namespace duckdb_libpgquery;
-
-unique_ptr<ParsedExpression> Transformer::TransformCase(PGCaseExpr *root) {
+unique_ptr<ParsedExpression> Transformer::TransformCase(duckdb_libpgquery::PGCaseExpr *root) {
 	if (!root) {
 		return nullptr;
 	}
@@ -18,21 +16,21 @@ unique_ptr<ParsedExpression> Transformer::TransformCase(PGCaseExpr *root) {
 	for (auto cell = root->args->head; cell != nullptr; cell = cell->next) {
 		CaseCheck case_check;
 
-		auto w = reinterpret_cast<PGCaseWhen *>(cell->data.ptr_value);
-		auto test_raw = TransformExpression(reinterpret_cast<PGNode *>(w->expr));
+		auto w = reinterpret_cast<duckdb_libpgquery::PGCaseWhen *>(cell->data.ptr_value);
+		auto test_raw = TransformExpression(reinterpret_cast<duckdb_libpgquery::PGNode *>(w->expr));
 		unique_ptr<ParsedExpression> test;
-		auto arg = TransformExpression(reinterpret_cast<PGNode *>(root->arg));
+		auto arg = TransformExpression(reinterpret_cast<duckdb_libpgquery::PGNode *>(root->arg));
 		if (arg) {
 			case_check.when_expr = make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, move(arg), move(test_raw));
 		} else {
 			case_check.when_expr = move(test_raw);
 		}
-		case_check.then_expr = TransformExpression(reinterpret_cast<PGNode *>(w->result));
+		case_check.then_expr = TransformExpression(reinterpret_cast<duckdb_libpgquery::PGNode *>(w->result));
 		case_node->case_checks.push_back(move(case_check));
 	}
 
 	if (root->defresult) {
-		case_node->else_expr = TransformExpression(reinterpret_cast<PGNode *>(root->defresult));
+		case_node->else_expr = TransformExpression(reinterpret_cast<duckdb_libpgquery::PGNode *>(root->defresult));
 	} else {
 		case_node->else_expr = make_unique<ConstantExpression>(Value(LogicalType::SQLNULL));
 	}

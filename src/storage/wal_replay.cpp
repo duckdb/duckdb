@@ -423,7 +423,7 @@ void ReplayState::ReplayUpdate() {
 		throw Exception("Corrupt WAL: update without table");
 	}
 
-	vector<column_t> column_ids{column_index};
+	vector<column_t> column_ids {column_index};
 	if (column_index >= current_table->columns.size()) {
 		throw Exception("Corrupt WAL: column index for update out of bounds");
 	}

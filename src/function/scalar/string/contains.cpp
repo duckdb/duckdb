@@ -145,7 +145,8 @@ idx_t ContainsFun::Find(const string_t &haystack_s, const string_t &needle_s) {
 }
 
 struct ContainsOperator {
-	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
+	template <class TA, class TB, class TR>
+	static inline TR Operation(TA left, TB right) {
 		return ContainsFun::Find(left, right) != INVALID_INDEX;
 	}
 };

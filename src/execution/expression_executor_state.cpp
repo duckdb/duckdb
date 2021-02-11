@@ -10,7 +10,7 @@ void ExpressionState::AddChild(Expression *expr) {
 }
 
 void ExpressionState::Finalize() {
-	if (types.size() > 0) {
+	if (!types.empty()) {
 		intermediate_chunk.Initialize(types);
 	}
 }

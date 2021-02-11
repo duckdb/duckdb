@@ -14,7 +14,7 @@ static LogicalType ResolveNotType(OperatorExpression &op, vector<BoundExpression
 }
 
 static LogicalType ResolveInType(OperatorExpression &op, vector<BoundExpression *> &children) {
-	if (children.size() == 0) {
+	if (children.empty()) {
 		return LogicalType::BOOLEAN;
 	}
 	// get the maximum type from the children
@@ -64,18 +64,19 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 	// now resolve the types
 	LogicalType result_type = ResolveOperatorType(op, children);
 	if (op.type == ExpressionType::OPERATOR_COALESCE) {
-		if (children.size() == 0) {
+		if (children.empty()) {
 			return BindResult("COALESCE needs at least one child");
 		}
 		unique_ptr<Expression> current_node;
-		for(size_t i = children.size(); i > 0; i--) {
+		for (size_t i = children.size(); i > 0; i--) {
 			auto child = move(children[i - 1]->expr);
 			if (!current_node) {
 				// no node yet: simply move the child
 				current_node = move(child);
 			} else {
 				// create a case statement
-				auto check = make_unique<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
+				auto check =
+				    make_unique<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
 				check->children.push_back(child->Copy());
 				current_node = make_unique<BoundCaseExpression>(move(check), move(child), move(current_node));
 			}

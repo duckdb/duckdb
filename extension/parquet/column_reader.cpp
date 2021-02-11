@@ -27,8 +27,8 @@ const uint8_t RleBpDecoder::BITPACK_DLEN = 8;
 ColumnReader::~ColumnReader() {
 }
 
-unique_ptr<ColumnReader> ColumnReader::CreateReader(LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p,
-                                                    idx_t max_define, idx_t max_repeat) {
+unique_ptr<ColumnReader> ColumnReader::CreateReader(const LogicalType &type_p, const SchemaElement &schema_p,
+                                                    idx_t file_idx_p, idx_t max_define, idx_t max_repeat) {
 	switch (type_p.id()) {
 	case LogicalTypeId::BOOLEAN:
 		return make_unique<BooleanColumnReader>(type_p, schema_p, file_idx_p, max_define, max_repeat);
@@ -59,15 +59,15 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(LogicalType type_p, const Sc
 	case LogicalTypeId::TIMESTAMP:
 		switch (schema_p.type) {
 		case Type::INT96:
-			return make_unique<CallbackColumnReader<Int96, timestamp_t, impala_timestamp_to_timestamp_t>>(
+			return make_unique<CallbackColumnReader<Int96, timestamp_t, ImpalaTimestampToTimestamp>>(
 			    type_p, schema_p, file_idx_p, max_define, max_repeat);
 		case Type::INT64:
 			switch (schema_p.converted_type) {
 			case ConvertedType::TIMESTAMP_MICROS:
-				return make_unique<CallbackColumnReader<int64_t, timestamp_t, parquet_timestamp_micros_to_timestamp>>(
+				return make_unique<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampMicrosToTimestamp>>(
 				    type_p, schema_p, file_idx_p, max_define, max_repeat);
 			case ConvertedType::TIMESTAMP_MILLIS:
-				return make_unique<CallbackColumnReader<int64_t, timestamp_t, parquet_timestamp_ms_to_timestamp>>(
+				return make_unique<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampMsToTimestamp>>(
 				    type_p, schema_p, file_idx_p, max_define, max_repeat);
 			default:
 				break;
@@ -77,8 +77,8 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(LogicalType type_p, const Sc
 		}
 		break;
 	case LogicalTypeId::DATE:
-		return make_unique<CallbackColumnReader<int32_t, date_t, parquet_int_to_date>>(type_p, schema_p, file_idx_p,
-		                                                                               max_define, max_repeat);
+		return make_unique<CallbackColumnReader<int32_t, date_t, ParquetIntToDate>>(type_p, schema_p, file_idx_p,
+		                                                                            max_define, max_repeat);
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR:
 		return make_unique<StringColumnReader>(type_p, schema_p, file_idx_p, max_define, max_repeat);
@@ -184,7 +184,7 @@ void ColumnReader::PreparePage(idx_t compressed_page_size, idx_t uncompressed_pa
 	}
 }
 
-static uint8_t bit_width(idx_t val) {
+static uint8_t ComputeBitWidth(idx_t val) {
 	if (val == 0) {
 		return 0;
 	}
@@ -212,7 +212,8 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 		// TODO there seems to be some confusion whether this is in the bytes for v2
 		uint32_t rep_length = block->read<uint32_t>();
 		block->available(rep_length);
-		repeated_decoder = make_unique<RleBpDecoder>((const uint8_t *)block->ptr, rep_length, bit_width(max_repeat));
+		repeated_decoder =
+		    make_unique<RleBpDecoder>((const uint8_t *)block->ptr, rep_length, ComputeBitWidth(max_repeat));
 		block->inc(rep_length);
 	}
 
@@ -220,7 +221,8 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 		// TODO there seems to be some confusion whether this is in the bytes for v2
 		uint32_t def_length = block->read<uint32_t>();
 		block->available(def_length);
-		defined_decoder = make_unique<RleBpDecoder>((const uint8_t *)block->ptr, def_length, bit_width(max_define));
+		defined_decoder =
+		    make_unique<RleBpDecoder>((const uint8_t *)block->ptr, def_length, ComputeBitWidth(max_define));
 		block->inc(def_length);
 	}
 
@@ -340,7 +342,7 @@ void StringColumnReader::Dictionary(shared_ptr<ByteBuffer> data, idx_t num_entri
 
 class ParquetStringVectorBuffer : public VectorBuffer {
 public:
-	ParquetStringVectorBuffer(shared_ptr<ByteBuffer> buffer_p)
+	explicit ParquetStringVectorBuffer(shared_ptr<ByteBuffer> buffer_p)
 	    : VectorBuffer(VectorBufferType::OPAQUE_BUFFER), buffer(move(buffer_p)) {
 	}
 
@@ -349,10 +351,10 @@ private:
 };
 
 void StringColumnReader::DictReference(Vector &result) {
-	StringVector::AddBuffer(result, make_unique<ParquetStringVectorBuffer>(dict));
+	StringVector::AddBuffer(result, make_buffer<ParquetStringVectorBuffer>(dict));
 }
 void StringColumnReader::PlainReference(shared_ptr<ByteBuffer> plain_data, Vector &result) {
-	StringVector::AddBuffer(result, make_unique<ParquetStringVectorBuffer>(move(plain_data)));
+	StringVector::AddBuffer(result, make_buffer<ParquetStringVectorBuffer>(move(plain_data)));
 }
 
 string_t StringParquetValueConversion::DictRead(ByteBuffer &dict, uint32_t &offset, ColumnReader &reader) {
