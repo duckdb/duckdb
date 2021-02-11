@@ -76,7 +76,7 @@ void ListExtractTemplate(idx_t count, Vector &list, Vector &offsets, Vector &res
 	}
 }
 
-static void ListExtractFun(DataChunk &args, ExpressionState &state, Vector &result) {
+static void ListExtractFunFun(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.data.size() == 2);
 	D_ASSERT(args.data[0].type.id() == LogicalTypeId::LIST);
 
@@ -153,7 +153,7 @@ static unique_ptr<FunctionData> ListExtractBind(ClientContext &context, ScalarFu
 
 void ListExtractFun::RegisterFunction(BuiltinFunctions &set) {
 	// return type is set in bind, unknown at this point
-	ScalarFunction fun("list_extract", {LogicalType::ANY, LogicalType::BIGINT}, LogicalType::ANY, ListExtractFun, false,
+	ScalarFunction fun("list_extract", {LogicalType::ANY, LogicalType::BIGINT}, LogicalType::ANY, ListExtractFunFun, false,
 	                   ListExtractBind);
 	fun.varargs = LogicalType::ANY;
 	set.AddFunction(fun);
