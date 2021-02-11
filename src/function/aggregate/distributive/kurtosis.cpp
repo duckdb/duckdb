@@ -60,7 +60,14 @@ struct KurtosisOperation {
 			nullmask[idx] = true;
 			return;
 		}
-		long double temp = 1 / n;
+		double temp = 1 / n;
+		//! This is necessary due to linux 32 bits
+		long double temp_aux = 1 / n;
+		if (state->sum_sqr - state->sum * state->sum * temp == 0 ||
+		    state->sum_sqr - state->sum * state->sum * temp_aux == 0) {
+			nullmask[idx] = true;
+			return;
+		}
 		double m4 =
 		    temp * (state->sum_four - 4 * state->sum_cub * state->sum * temp +
 		            6 * state->sum_sqr * state->sum * state->sum * temp * temp - 3 * pow(state->sum, 4) * pow(temp, 3));
