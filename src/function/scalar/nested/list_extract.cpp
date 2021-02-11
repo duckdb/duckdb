@@ -153,8 +153,8 @@ static unique_ptr<FunctionData> ListExtractBind(ClientContext &context, ScalarFu
 
 void ListExtractFun::RegisterFunction(BuiltinFunctions &set) {
 	// return type is set in bind, unknown at this point
-	ScalarFunction fun("list_extract", {LogicalType::ANY, LogicalType::BIGINT}, LogicalType::ANY, ListExtractFunFun, false,
-	                   ListExtractBind);
+	ScalarFunction fun("list_extract", {LogicalType::ANY, LogicalType::BIGINT}, LogicalType::ANY, ListExtractFunFun,
+	                   false, ListExtractBind);
 	fun.varargs = LogicalType::ANY;
 	set.AddFunction(fun);
 	fun.name = "list_element";
