@@ -59,7 +59,7 @@ template <class OP>
 static idx_t TemplatedSelectOperation(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
                                       SelectionVector *true_sel, SelectionVector *false_sel) {
 	// the inplace loops take the result as the last parameter
-	switch (left.buffer->type.InternalType()) {
+	switch (left.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 		return BinaryExecutor::Select<int8_t, int8_t, OP>(left, right, sel, count, true_sel, false_sel);
@@ -90,7 +90,7 @@ static idx_t TemplatedSelectOperation(Vector &left, Vector &right, const Selecti
 	case PhysicalType::VARCHAR:
 		return BinaryExecutor::Select<string_t, string_t, OP>(left, right, sel, count, true_sel, false_sel);
 	default:
-		throw InvalidTypeException(left.buffer->type, "Invalid type for comparison");
+		throw InvalidTypeException(left.GetType(), "Invalid type for comparison");
 	}
 }
 

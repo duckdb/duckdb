@@ -497,7 +497,7 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 
 	VectorData idata;
 	input.Orrify(count, idata);
-	switch (input.buffer->type.id()) {
+	switch (input.GetType().id()) {
 	case LogicalTypeId::BOOLEAN:
 		may_have_null = ConvertColumnRegular<bool>(current_offset, dataptr, maskptr, idata, count);
 		break;
@@ -536,7 +536,7 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 		may_have_null = ConvertColumnRegular<double>(current_offset, dataptr, maskptr, idata, count);
 		break;
 	case LogicalTypeId::DECIMAL:
-		may_have_null = ConvertDecimal(input.buffer->type, current_offset, dataptr, maskptr, idata, count);
+		may_have_null = ConvertDecimal(input.GetType(), current_offset, dataptr, maskptr, idata, count);
 		break;
 	case LogicalTypeId::TIMESTAMP:
 		may_have_null = ConvertColumn<timestamp_t, int64_t, duckdb_py_convert::TimestampConvert>(
@@ -559,7 +559,7 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 		                                                                                    maskptr, idata, count);
 		break;
 	default:
-		throw runtime_error("unsupported type " + input.buffer->type.ToString());
+		throw runtime_error("unsupported type " + input.GetType().ToString());
 	}
 	if (may_have_null) {
 		requires_mask = true;
@@ -1038,7 +1038,7 @@ struct PandasScanFunction : public TableFunction {
 			break;
 		}
 		default:
-			throw runtime_error("Unsupported type " + out.buffer->type.ToString());
+			throw runtime_error("Unsupported type " + out.GetType().ToString());
 		}
 	}
 

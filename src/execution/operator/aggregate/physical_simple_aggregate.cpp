@@ -35,7 +35,7 @@ struct AggregateState {
 				continue;
 			}
 			Vector state_vector(Value::POINTER((uintptr_t)aggregates[i].get()));
-			state_vector.buffer->vector_type = VectorType::FLAT_VECTOR;
+			state_vector.SetVectorType(VectorType::FLAT_VECTOR);
 
 			destructors[i](state_vector, 1);
 		}

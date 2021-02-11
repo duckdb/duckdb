@@ -25,7 +25,7 @@ void ExpressionExecutor::Execute(BoundCastExpression &expr, ExpressionState *sta
 		result.Reference(child);
 	} else {
 		// cast it to the type specified by the cast expression
-		D_ASSERT(result.buffer->type == expr.return_type);
+		D_ASSERT(result.GetType() == expr.return_type);
 		VectorOperations::Cast(child, result, count);
 	}
 }

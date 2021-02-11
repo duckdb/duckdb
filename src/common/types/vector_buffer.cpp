@@ -15,14 +15,12 @@ buffer_ptr<VectorBuffer> VectorBuffer::CreateConstantVector(PhysicalType type) {
 	return make_buffer<VectorBuffer>(GetTypeIdSize(type));
 }
 
-buffer_ptr<VectorBuffer> VectorBuffer::CreateConstantVector(VectorType vector_type, const LogicalType &logical_type,
-                                                            PhysicalType type) {
-	return make_buffer<VectorBuffer>(vector_type, logical_type, GetTypeIdSize(type));
+buffer_ptr<VectorBuffer> VectorBuffer::CreateConstantVector(VectorType vector_type, const LogicalType &type) {
+	return make_buffer<VectorBuffer>(vector_type, type, GetTypeIdSize(type.InternalType()));
 }
 
-buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(VectorType vector_type, const LogicalType &logical_type,
-                                                            PhysicalType type) {
-	return make_buffer<VectorBuffer>(vector_type, logical_type, STANDARD_VECTOR_SIZE * GetTypeIdSize(type));
+buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(VectorType vector_type, const LogicalType &type) {
+	return make_buffer<VectorBuffer>(vector_type, type, STANDARD_VECTOR_SIZE * GetTypeIdSize(type.InternalType()));
 }
 
 buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(VectorType vector_type, PhysicalType type) {

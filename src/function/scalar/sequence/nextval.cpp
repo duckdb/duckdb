@@ -66,7 +66,7 @@ static void NextValFunction(DataChunk &args, ExpressionState &state, Vector &res
 	if (info.sequence) {
 		// sequence to use is hard coded
 		// increment the sequence
-		result.buffer->vector_type = VectorType::FLAT_VECTOR;
+		result.SetVectorType(VectorType::FLAT_VECTOR);
 		auto result_data = FlatVector::GetData<int64_t>(result);
 		for (idx_t i = 0; i < args.size(); i++) {
 			// get the next value from the sequence

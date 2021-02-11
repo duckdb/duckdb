@@ -71,7 +71,7 @@ static void ComputeGroupLocation(Vector &group, Value &min, uintptr_t *address_d
 	VectorData vdata;
 	group.Orrify(count, vdata);
 
-	switch (group.buffer->type.InternalType()) {
+	switch (group.GetType().InternalType()) {
 	case PhysicalType::INT8:
 		ComputeGroupLocationTemplated<int8_t>(vdata, min, address_data, current_shift, count);
 		break;
@@ -203,7 +203,7 @@ static void ReconstructGroupVector(uint32_t group_values[], Value &min, idx_t re
                                    idx_t entry_count, Vector &result) {
 	// construct the mask for this entry
 	idx_t mask = (1 << required_bits) - 1;
-	switch (result.buffer->type.InternalType()) {
+	switch (result.GetType().InternalType()) {
 	case PhysicalType::INT8:
 		ReconstructGroupVectorTemplated<int8_t>(group_values, min, mask, shift, entry_count, result);
 		break;

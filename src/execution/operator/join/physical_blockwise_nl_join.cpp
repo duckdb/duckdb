@@ -139,7 +139,7 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ExecutionContext &context, DataCh
 					chunk.Slice(state->child_chunk, sel, result_count);
 					// for the RHS, set the mask to NULL and set the sel_vector and count
 					for (idx_t i = state->child_chunk.ColumnCount(); i < chunk.ColumnCount(); i++) {
-						chunk.data[i].buffer->vector_type = VectorType::CONSTANT_VECTOR;
+						chunk.data[i].SetVectorType(VectorType::CONSTANT_VECTOR);
 						ConstantVector::SetNull(chunk.data[i], true);
 					}
 					state->checked_found_match = true;

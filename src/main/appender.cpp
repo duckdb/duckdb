@@ -64,7 +64,7 @@ void Appender::AppendValueInternal(T input) {
 		throw InvalidInputException("Too many appends for chunk!");
 	}
 	auto &col = chunk.data[column];
-	switch (col.buffer->type.InternalType()) {
+	switch (col.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 		AppendValueInternal<T, bool>(col, input);
 		break;

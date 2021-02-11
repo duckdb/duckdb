@@ -35,7 +35,7 @@ static void TemplatedMarkJoin(Vector &left, Vector &right, idx_t lcount, idx_t r
 
 template <class OP>
 static void MarkJoinSwitch(Vector &left, Vector &right, idx_t lcount, idx_t rcount, bool found_match[]) {
-	switch (left.buffer->type.InternalType()) {
+	switch (left.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 		return TemplatedMarkJoin<int8_t, OP>(left, right, lcount, rcount, found_match);
@@ -66,7 +66,7 @@ static void MarkJoinSwitch(Vector &left, Vector &right, idx_t lcount, idx_t rcou
 
 static void MarkJoinComparisonSwitch(Vector &left, Vector &right, idx_t lcount, idx_t rcount, bool found_match[],
                                      ExpressionType comparison_type) {
-	D_ASSERT(left.buffer->type == right.buffer->type);
+	D_ASSERT(left.GetType() == right.GetType());
 	switch (comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
 		return MarkJoinSwitch<duckdb::Equals>(left, right, lcount, rcount, found_match);

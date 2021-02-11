@@ -75,13 +75,33 @@ public:
 
 	static buffer_ptr<VectorBuffer> CreateStandardVector(PhysicalType type);
 	static buffer_ptr<VectorBuffer> CreateConstantVector(PhysicalType type);
-	static buffer_ptr<VectorBuffer> CreateConstantVector(VectorType vectorType, const LogicalType &logicalType,
-	                                                     PhysicalType type);
-	static buffer_ptr<VectorBuffer> CreateStandardVector(VectorType vectorType, const LogicalType &logicalType,
-	                                                     PhysicalType type);
+	static buffer_ptr<VectorBuffer> CreateConstantVector(VectorType vectorType, const LogicalType &logicalType);
+	static buffer_ptr<VectorBuffer> CreateStandardVector(VectorType vectorType, const LogicalType &logicalType);
 	static buffer_ptr<VectorBuffer> CreateStandardVector(VectorType vectorType, PhysicalType type);
 
-public:
+	// Getters
+	inline VectorType GetVectorType() const {
+		return vector_type;
+	}
+	inline const LogicalType &GetType() const {
+		return type;
+	}
+	inline VectorBufferType GetBufferType() const {
+		return buffer_type;
+	}
+
+	// Setters
+	inline void SetVectorType(VectorType vector_type) {
+		this->vector_type = vector_type;
+	}
+	inline void SetType(const LogicalType &type) {
+		this->type = type;
+	}
+	inline void SetBufferType(VectorBufferType buffer_type) {
+		this->buffer_type = buffer_type;
+	}
+
+protected:
 	unique_ptr<data_t[]> data;
 	//! The vector type specifies how the data of the vector is physically stored (i.e. if it is a single repeated
 	//! constant, if it is compressed)
@@ -113,6 +133,9 @@ public:
 	}
 	SelectionVector &GetSelVector() {
 		return sel_vector;
+	}
+	void SetSelVector(const SelectionVector &vector) {
+		this->sel_vector.Initialize(vector);
 	}
 
 private:

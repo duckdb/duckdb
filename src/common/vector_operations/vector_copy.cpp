@@ -26,9 +26,9 @@ static void TemplatedCopy(Vector &source, const SelectionVector &sel, Vector &ta
 void VectorOperations::Copy(Vector &source, Vector &target, const SelectionVector &sel, idx_t source_count,
                             idx_t source_offset, idx_t target_offset) {
 	D_ASSERT(source_offset <= source_count);
-	D_ASSERT(target.buffer->vector_type == VectorType::FLAT_VECTOR);
-	D_ASSERT(source.buffer->type == target.buffer->type);
-	switch (source.buffer->vector_type) {
+	D_ASSERT(target.GetVectorType() == VectorType::FLAT_VECTOR);
+	D_ASSERT(source.GetType() == target.GetType());
+	switch (source.GetVectorType()) {
 	case VectorType::DICTIONARY_VECTOR: {
 		// dictionary vector: merge selection vectors
 		auto &child = DictionaryVector::Child(source);
@@ -41,7 +41,7 @@ void VectorOperations::Copy(Vector &source, Vector &target, const SelectionVecto
 	}
 	case VectorType::SEQUENCE_VECTOR: {
 		int64_t start, increment;
-		Vector seq(source.buffer->type);
+		Vector seq(source.GetType());
 		SequenceVector::GetSequence(source, start, increment);
 		VectorOperations::GenerateSequence(seq, source_count, sel, start, increment);
 		VectorOperations::Copy(seq, target, sel, source_count, source_offset, target_offset);
@@ -62,7 +62,7 @@ void VectorOperations::Copy(Vector &source, Vector &target, const SelectionVecto
 
 	// first copy the nullmask
 	auto &tmask = FlatVector::Nullmask(target);
-	if (source.buffer->vector_type == VectorType::CONSTANT_VECTOR) {
+	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		if (ConstantVector::IsNull(source)) {
 			for (idx_t i = 0; i < copy_count; i++) {
 				tmask[target_offset + i] = true;
@@ -77,7 +77,7 @@ void VectorOperations::Copy(Vector &source, Vector &target, const SelectionVecto
 	}
 
 	// now copy over the data
-	switch (source.buffer->type.InternalType()) {
+	switch (source.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 		TemplatedCopy<int8_t>(source, sel, target, source_offset, target_offset, copy_count);
@@ -147,7 +147,7 @@ void VectorOperations::Copy(Vector &source, Vector &target, const SelectionVecto
 			// target has no entries: create new entries for the target
 			auto &source_children = StructVector::GetEntries(source);
 			for (auto &child : source_children) {
-				auto child_copy = make_unique<Vector>(child.second->buffer->type);
+				auto child_copy = make_unique<Vector>(child.second->GetType());
 
 				VectorOperations::Copy(*child.second, *child_copy, sel, source_count, source_offset, target_offset);
 				StructVector::AddEntry(target, child.first, move(child_copy));
@@ -156,7 +156,7 @@ void VectorOperations::Copy(Vector &source, Vector &target, const SelectionVecto
 		break;
 	}
 	case PhysicalType::LIST: {
-		D_ASSERT(target.buffer->type.InternalType() == PhysicalType::LIST);
+		D_ASSERT(target.GetType().InternalType() == PhysicalType::LIST);
 		if (ListVector::HasEntry(source)) {
 			// if the source has list offsets, we need to append them to the target
 			if (!ListVector::HasEntry(target)) {
@@ -185,13 +185,13 @@ void VectorOperations::Copy(Vector &source, Vector &target, const SelectionVecto
 	}
 	default:
 		throw NotImplementedException("Unimplemented type '%s' for copy!",
-		                              TypeIdToString(source.buffer->type.InternalType()));
+		                              TypeIdToString(source.GetType().InternalType()));
 	}
 }
 
 void VectorOperations::Copy(Vector &source, Vector &target, idx_t source_count, idx_t source_offset,
                             idx_t target_offset) {
-	switch (source.buffer->vector_type) {
+	switch (source.GetVectorType()) {
 	case VectorType::DICTIONARY_VECTOR: {
 		// dictionary: continue into child with selection vector
 		auto &child = DictionaryVector::Child(source);

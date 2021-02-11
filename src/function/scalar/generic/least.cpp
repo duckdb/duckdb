@@ -20,10 +20,10 @@ static void LeastGreatestFunction(DataChunk &args, ExpressionState &state, Vecto
 	}
 	auto result_type = VectorType::CONSTANT_VECTOR;
 	for (idx_t col_idx = 0; col_idx < args.ColumnCount(); col_idx++) {
-		if (args.data[col_idx].buffer->vector_type == VectorType::CONSTANT_VECTOR) {
+		if (args.data[col_idx].GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			if (ConstantVector::IsNull(args.data[col_idx])) {
 				// constant NULL: result is constant NULL
-				result.buffer->vector_type = VectorType::CONSTANT_VECTOR;
+				result.SetVectorType(VectorType::CONSTANT_VECTOR);
 				ConstantVector::SetNull(result, true);
 				return;
 			}
@@ -91,7 +91,7 @@ static void LeastGreatestFunction(DataChunk &args, ExpressionState &state, Vecto
 			}
 		}
 	}
-	result.buffer->vector_type = result_type;
+	result.SetVectorType(result_type);
 }
 
 template <class OP>

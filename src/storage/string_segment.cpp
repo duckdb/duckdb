@@ -223,7 +223,7 @@ void StringSegment::FilterFetchBaseData(ColumnScanState &state, Vector &result, 
 	auto base = baseptr + state.vector_index * vector_size;
 	auto &base_nullmask = *((nullmask_t *)base);
 	auto base_data = (int32_t *)(base + sizeof(nullmask_t));
-	result.buffer->vector_type = VectorType::FLAT_VECTOR;
+	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::GetData<string_t>(result);
 	nullmask_t result_nullmask;
 	idx_t update_idx = 0;
@@ -423,7 +423,7 @@ void StringSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, 
 // Append
 //===--------------------------------------------------------------------===//
 idx_t StringSegment::Append(SegmentStatistics &stats, Vector &data, idx_t offset, idx_t count) {
-	D_ASSERT(data.buffer->type.InternalType() == PhysicalType::VARCHAR);
+	D_ASSERT(data.GetType().InternalType() == PhysicalType::VARCHAR);
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	auto handle = buffer_manager.Pin(block);
 	idx_t initial_count = tuple_count;

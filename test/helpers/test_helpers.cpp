@@ -206,9 +206,9 @@ string show_diff(DataChunk &left, DataChunk &right) {
 		bool has_differences = false;
 		auto &left_vector = left.data[i];
 		auto &right_vector = right.data[i];
-		string left_column = StringUtil::Format("Result\n------\n%s [", left_vector.buffer->type.ToString().c_str());
-		string right_column = StringUtil::Format("Expect\n------\n%s [", right_vector.buffer->type.ToString().c_str());
-		if (left_vector.buffer->type == right_vector.buffer->type) {
+		string left_column = StringUtil::Format("Result\n------\n%s [", left_vector.GetType().ToString().c_str());
+		string right_column = StringUtil::Format("Expect\n------\n%s [", right_vector.GetType().ToString().c_str());
+		if (left_vector.GetType() == right_vector.GetType()) {
 			for (size_t j = 0; j < left.size(); j++) {
 				auto left_value = left_vector.GetValue(j);
 				auto right_value = right_vector.GetValue(j);
@@ -245,7 +245,7 @@ bool compare_chunk(DataChunk &left, DataChunk &right) {
 	for (size_t i = 0; i < left.ColumnCount(); i++) {
 		auto &left_vector = left.data[i];
 		auto &right_vector = right.data[i];
-		if (left_vector.buffer->type == right_vector.buffer->type) {
+		if (left_vector.GetType() == right_vector.GetType()) {
 			for (size_t j = 0; j < left.size(); j++) {
 				auto left_value = left_vector.GetValue(j);
 				auto right_value = right_vector.GetValue(j);
