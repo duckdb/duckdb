@@ -17,17 +17,17 @@
 
 namespace duckdb {
 
-Vector::Vector(LogicalType type, bool create_data, bool zero_data) : data(nullptr) {
+Vector::Vector(const LogicalType &type, bool create_data, bool zero_data) : data(nullptr) {
 	buffer = make_buffer<VectorBuffer>(VectorType::FLAT_VECTOR, type);
 	if (create_data) {
 		Initialize(type, zero_data);
 	}
 }
 
-Vector::Vector(LogicalType type) : Vector(move(type), true, false) {
+Vector::Vector(const LogicalType &type) : Vector(move(type), true, false) {
 }
 
-Vector::Vector(LogicalType type, data_ptr_t dataptr) : data(dataptr) {
+Vector::Vector(const LogicalType &type, data_ptr_t dataptr) : data(dataptr) {
 	buffer = make_buffer<VectorBuffer>(VectorType::FLAT_VECTOR, type);
 	if (dataptr && type.id() == LogicalTypeId::INVALID) {
 		throw InvalidTypeException(type, "Cannot create a vector of type INVALID!");
@@ -144,7 +144,7 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		// dictionary: apply dictionary and forward to child
 		auto &sel_vector = DictionaryVector::SelVector(*this);
 		auto &child = DictionaryVector::Child(*this);
-		return child.SetValue(sel_vector.get_index(index), move(val));
+		return child.SetValue(sel_vector.get_index(index), val);
 	}
 	if (val.type() != buffer->type) {
 		SetValue(index, val.CastAs(buffer->type));

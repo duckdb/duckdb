@@ -15,18 +15,18 @@ buffer_ptr<VectorBuffer> VectorBuffer::CreateConstantVector(PhysicalType type) {
 	return make_buffer<VectorBuffer>(GetTypeIdSize(type));
 }
 
-buffer_ptr<VectorBuffer> VectorBuffer::CreateConstantVector(VectorType vectorType, const LogicalType &logicalType,
+buffer_ptr<VectorBuffer> VectorBuffer::CreateConstantVector(VectorType vector_type, const LogicalType &logical_type,
                                                             PhysicalType type) {
-	return make_buffer<VectorBuffer>(vectorType, logicalType, GetTypeIdSize(type));
+	return make_buffer<VectorBuffer>(vector_type, logical_type, GetTypeIdSize(type));
 }
 
-buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(VectorType vectorType, const LogicalType &logicalType,
+buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(VectorType vector_type, const LogicalType &logical_type,
                                                             PhysicalType type) {
-	return make_buffer<VectorBuffer>(vectorType, logicalType, STANDARD_VECTOR_SIZE * GetTypeIdSize(type));
+	return make_buffer<VectorBuffer>(vector_type, logical_type, STANDARD_VECTOR_SIZE * GetTypeIdSize(type));
 }
 
-buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(VectorType vectorType, PhysicalType type) {
-	return make_buffer<VectorBuffer>(vectorType, STANDARD_VECTOR_SIZE * GetTypeIdSize(type));
+buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(VectorType vector_type, PhysicalType type) {
+	return make_buffer<VectorBuffer>(vector_type, STANDARD_VECTOR_SIZE * GetTypeIdSize(type));
 }
 
 VectorStringBuffer::VectorStringBuffer() : VectorBuffer(VectorBufferType::STRING_BUFFER) {

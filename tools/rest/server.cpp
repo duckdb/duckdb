@@ -80,7 +80,7 @@ static void assign_json_loop(Vector &v, idx_t col_idx, idx_t count, json &j) {
 static void assign_json_string_loop(Vector &v, idx_t col_idx, idx_t count, json &j) {
 	Vector cast_vector(LogicalType::VARCHAR);
 	Vector *result_vector;
-	if (v.type.id() != LogicalTypeId::VARCHAR) {
+	if (v.buffer->type.id() != LogicalTypeId::VARCHAR) {
 		VectorOperations::Cast(v, cast_vector, count);
 		result_vector = &cast_vector;
 	} else {
@@ -103,7 +103,7 @@ void serialize_chunk(QueryResult *res, DataChunk *chunk, json &j) {
 	D_ASSERT(res);
 	for (size_t col_idx = 0; col_idx < chunk->ColumnCount(); col_idx++) {
 		Vector &v = chunk->data[col_idx];
-		switch (v.type.id()) {
+		switch (v.buffer->type.id()) {
 		case LogicalTypeId::BOOLEAN:
 			assign_json_loop<bool, int64_t>(v, col_idx, chunk->size(), j);
 			break;

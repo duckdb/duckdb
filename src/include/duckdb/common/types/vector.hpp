@@ -50,16 +50,16 @@ public:
 	//! Create a vector of size one holding the passed on value
 	explicit Vector(const Value &value);
 	//! Create an empty standard vector with a type, equivalent to calling Vector(type, true, false)
-	explicit Vector(LogicalType type);
+	explicit Vector(const LogicalType &type);
 	//! Create a non-owning vector that references the specified data
-	Vector(LogicalType type, data_ptr_t dataptr);
+	Vector(const LogicalType &type, data_ptr_t dataptr);
 	//! Create an owning vector that holds at most STANDARD_VECTOR_SIZE entries.
 	/*!
 	    Create a new vector
 	    If create_data is true, the vector will be an owning empty vector.
 	    If zero_data is true, the allocated data will be zero-initialized.
 	*/
-	Vector(LogicalType type, bool create_data, bool zero_data);
+	Vector(const LogicalType &type, bool create_data, bool zero_data);
 	// implicit copying of Vectors is not allowed
 	Vector(const Vector &) = delete;
 	// but moving of vectors is allowed
