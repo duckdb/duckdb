@@ -14,13 +14,13 @@ namespace duckdb {
 
 PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types,
                                              vector<unique_ptr<Expression>> expressions, PhysicalOperatorType type)
-    : PhysicalHashAggregate(context, types, move(expressions), {}, type) {
+    : PhysicalHashAggregate(context, move(types), move(expressions), {}, type) {
 }
 
 PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types,
                                              vector<unique_ptr<Expression>> expressions,
                                              vector<unique_ptr<Expression>> groups_p, PhysicalOperatorType type)
-    : PhysicalSink(type, types), groups(move(groups_p)), all_combinable(true), any_distinct(false) {
+    : PhysicalSink(type, move(types)), groups(move(groups_p)), all_combinable(true), any_distinct(false) {
 	// get a list of all aggregates to be computed
 	// fake a single group with a constant value for aggregation without groups
 	if (this->groups.empty()) {
@@ -69,8 +69,8 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 //===--------------------------------------------------------------------===//
 class HashAggregateGlobalState : public GlobalOperatorState {
 public:
-	HashAggregateGlobalState(PhysicalHashAggregate &_op, ClientContext &context)
-	    : op(_op), is_empty(true), lossy_total_groups(0),
+	HashAggregateGlobalState(PhysicalHashAggregate &op_p, ClientContext &context)
+	    : op(op_p), is_empty(true), lossy_total_groups(0),
 	      partition_info((idx_t)TaskScheduler::GetScheduler(context).NumberOfThreads()) {
 	}
 
@@ -90,7 +90,7 @@ public:
 
 class HashAggregateLocalState : public LocalSinkState {
 public:
-	HashAggregateLocalState(PhysicalHashAggregate &_op) : op(_op), is_empty(true) {
+	explicit HashAggregateLocalState(PhysicalHashAggregate &op_p) : op(op_p), is_empty(true) {
 		group_chunk.InitializeEmpty(op.group_types);
 		if (!op.payload_types.empty()) {
 			aggregate_input_chunk.InitializeEmpty(op.payload_types);
@@ -258,8 +258,8 @@ void PhysicalHashAggregate::Combine(ExecutionContext &context, GlobalOperatorSta
 // folds them into the global ht finally.
 class PhysicalHashAggregateFinalizeTask : public Task {
 public:
-	PhysicalHashAggregateFinalizeTask(Pipeline &parent_, HashAggregateGlobalState &state_, idx_t radix_)
-	    : parent(parent_), state(state_), radix(radix_) {
+	PhysicalHashAggregateFinalizeTask(Pipeline &parent_p, HashAggregateGlobalState &state_p, idx_t radix_p)
+	    : parent(parent_p), state(state_p), radix(radix_p) {
 	}
 	static void FinalizeHT(HashAggregateGlobalState &gstate, idx_t radix) {
 		D_ASSERT(gstate.finalized_hts[radix]);
@@ -272,7 +272,7 @@ public:
 		gstate.finalized_hts[radix]->Finalize();
 	}
 
-	void Execute() {
+	void Execute() override {
 		FinalizeHT(state, radix);
 		lock_guard<mutex> glock(state.lock);
 		parent.finished_tasks++;
@@ -366,9 +366,9 @@ void PhysicalHashAggregate::FinalizeInternal(ClientContext &context, unique_ptr<
 }
 
 void PhysicalHashAggregate::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
-                                             PhysicalOperatorState *state_) {
+                                             PhysicalOperatorState *state_p) {
 	auto &gstate = (HashAggregateGlobalState &)*sink_state;
-	auto &state = (PhysicalHashAggregateState &)*state_;
+	auto &state = (PhysicalHashAggregateState &)*state_p;
 
 	state.scan_chunk.Reset();
 
@@ -432,7 +432,7 @@ void PhysicalHashAggregate::GetChunkInternal(ExecutionContext &context, DataChun
 
 unique_ptr<PhysicalOperatorState> PhysicalHashAggregate::GetOperatorState() {
 	return make_unique<PhysicalHashAggregateState>(*this, group_types, aggregate_return_types,
-	                                               children.size() == 0 ? nullptr : children[0].get());
+	                                               children.empty() ? nullptr : children[0].get());
 }
 
 bool PhysicalHashAggregate::ForceSingleHT(GlobalOperatorState &state) {

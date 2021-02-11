@@ -18,7 +18,7 @@ namespace duckdb {
 class CatalogEntry;
 
 struct BoundCreateTableInfo {
-	BoundCreateTableInfo(unique_ptr<CreateInfo> base) : base(move(base)) {
+	explicit BoundCreateTableInfo(unique_ptr<CreateInfo> base) : base(move(base)) {
 	}
 
 	//! The schema to create the table in

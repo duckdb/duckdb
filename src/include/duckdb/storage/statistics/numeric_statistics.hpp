@@ -19,7 +19,7 @@ namespace duckdb {
 
 class NumericStatistics : public BaseStatistics {
 public:
-	NumericStatistics(LogicalType type);
+	explicit NumericStatistics(LogicalType type);
 	NumericStatistics(LogicalType type, Value min, Value max);
 
 	//! The minimum value of the segment
@@ -29,7 +29,7 @@ public:
 
 public:
 	void Merge(const BaseStatistics &other) override;
-	bool CheckZonemap(ExpressionType comparison_type, Value constant);
+	bool CheckZonemap(ExpressionType comparison_type, const Value &constant);
 
 	unique_ptr<BaseStatistics> Copy() override;
 	void Serialize(Serializer &serializer) override;

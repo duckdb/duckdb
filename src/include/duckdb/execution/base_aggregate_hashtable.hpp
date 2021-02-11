@@ -33,7 +33,7 @@ struct AggregateObject {
 	PhysicalType return_type;
 	Expression *filter = nullptr;
 
-	static vector<AggregateObject> CreateAggregateObjects(vector<BoundAggregateExpression *> bindings);
+	static vector<AggregateObject> CreateAggregateObjects(const vector<BoundAggregateExpression *> &bindings);
 };
 
 class BaseAggregateHashTable {

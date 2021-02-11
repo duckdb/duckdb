@@ -12,7 +12,7 @@
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
 
-#include <duckdb/common/operator/cast_operators.hpp>
+#include "duckdb/common/operator/cast_operators.hpp"
 
 namespace duckdb {
 
@@ -86,7 +86,7 @@ FilterResult FilterCombiner::AddFilter(unique_ptr<Expression> expr) {
 	return result;
 }
 
-void FilterCombiner::GenerateFilters(std::function<void(unique_ptr<Expression> filter)> callback) {
+void FilterCombiner::GenerateFilters(const std::function<void(unique_ptr<Expression> filter)> &callback) {
 	// first loop over the remaining filters
 	for (auto &filter : remaining_filters) {
 		callback(move(filter));
@@ -158,8 +158,8 @@ bool FilterCombiner::HasFilters() {
 	return has_filters;
 }
 
-unordered_map<idx_t, std::pair<Value *, Value *>> merge_and(unordered_map<idx_t, std::pair<Value *, Value *>> &f_1,
-                                                            unordered_map<idx_t, std::pair<Value *, Value *>> &f_2) {
+unordered_map<idx_t, std::pair<Value *, Value *>> MergeAnd(unordered_map<idx_t, std::pair<Value *, Value *>> &f_1,
+                                                           unordered_map<idx_t, std::pair<Value *, Value *>> &f_2) {
 	unordered_map<idx_t, std::pair<Value *, Value *>> result;
 	for (auto &f : f_1) {
 		auto it = f_2.find(f.first);
@@ -204,8 +204,8 @@ unordered_map<idx_t, std::pair<Value *, Value *>> merge_and(unordered_map<idx_t,
 	return result;
 }
 
-unordered_map<idx_t, std::pair<Value *, Value *>> merge_or(unordered_map<idx_t, std::pair<Value *, Value *>> &f_1,
-                                                           unordered_map<idx_t, std::pair<Value *, Value *>> &f_2) {
+unordered_map<idx_t, std::pair<Value *, Value *>> MergeOr(unordered_map<idx_t, std::pair<Value *, Value *>> &f_1,
+                                                          unordered_map<idx_t, std::pair<Value *, Value *>> &f_2) {
 	unordered_map<idx_t, std::pair<Value *, Value *>> result;
 	for (auto &f : f_1) {
 		auto it = f_2.find(f.first);
@@ -242,7 +242,7 @@ FilterCombiner::FindZonemapChecks(vector<idx_t> &column_ids, unordered_set<idx_t
 		checks = FindZonemapChecks(column_ids, not_constants, or_exp.children[0].get());
 		for (size_t i = 1; i < or_exp.children.size(); ++i) {
 			auto child_check = FindZonemapChecks(column_ids, not_constants, or_exp.children[i].get());
-			checks = merge_or(checks, child_check);
+			checks = MergeOr(checks, child_check);
 		}
 		return checks;
 	}
@@ -251,7 +251,7 @@ FilterCombiner::FindZonemapChecks(vector<idx_t> &column_ids, unordered_set<idx_t
 		checks = FindZonemapChecks(column_ids, not_constants, and_exp.children[0].get());
 		for (size_t i = 1; i < and_exp.children.size(); ++i) {
 			auto child_check = FindZonemapChecks(column_ids, not_constants, and_exp.children[i].get());
-			checks = merge_and(checks, child_check);
+			checks = MergeAnd(checks, child_check);
 		}
 		return checks;
 	}
@@ -356,7 +356,7 @@ vector<TableFilter> FilterCombiner::GenerateZonemapChecks(vector<idx_t> &column_
 	auto checks = FindZonemapChecks(column_ids, not_constants, remaining_filters[0].get());
 	for (size_t i = 1; i < remaining_filters.size(); ++i) {
 		auto child_check = FindZonemapChecks(column_ids, not_constants, remaining_filters[i].get());
-		checks = merge_and(checks, child_check);
+		checks = MergeAnd(checks, child_check);
 	}
 	//! We construct the equivalent filters
 	for (auto not_constant : not_constants) {
@@ -379,7 +379,7 @@ vector<TableFilter> FilterCombiner::GenerateZonemapChecks(vector<idx_t> &column_
 }
 
 vector<TableFilter> FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_ids) {
-	vector<TableFilter> tableFilters;
+	vector<TableFilter> table_filters;
 	//! First, we figure the filters that have constant expressions that we can push down to the table scan
 	for (auto &constant_value : constant_values) {
 		if (!constant_value.second.empty()) {
@@ -405,9 +405,9 @@ vector<TableFilter> FilterCombiner::GenerateTableScanFilters(vector<idx_t> &colu
 					for (idx_t i = 0; i < entries.size(); i++) {
 						// for each entry also create a comparison with each constant
 						for (idx_t k = 0; k < constant_list.size(); k++) {
-							tableFilters.emplace_back(constant_value.second[k].constant,
-							                          constant_value.second[k].comparison_type,
-							                          filter_col_exp->binding.column_index);
+							table_filters.emplace_back(constant_value.second[k].constant,
+							                           constant_value.second[k].comparison_type,
+							                           filter_col_exp->binding.column_index);
 						}
 					}
 					equivalence_map.erase(filter_exp);
@@ -433,11 +433,11 @@ vector<TableFilter> FilterCombiner::GenerateTableScanFilters(vector<idx_t> &colu
 				auto const_value = constant_value_expr.value.Copy();
 				const_value.str_value = like_string;
 				//! Here the like must be transformed to a BOUND COMPARISON geq le
-				tableFilters.emplace_back(const_value, ExpressionType::COMPARE_GREATERTHANOREQUALTO,
-				                          column_ref.binding.column_index);
+				table_filters.emplace_back(const_value, ExpressionType::COMPARE_GREATERTHANOREQUALTO,
+				                           column_ref.binding.column_index);
 				const_value.str_value[const_value.str_value.size() - 1]++;
-				tableFilters.emplace_back(const_value, ExpressionType::COMPARE_LESSTHAN,
-				                          column_ref.binding.column_index);
+				table_filters.emplace_back(const_value, ExpressionType::COMPARE_LESSTHAN,
+				                           column_ref.binding.column_index);
 			}
 			if (func.function.name == "~~" && func.children[0]->expression_class == ExpressionClass::BOUND_COLUMN_REF &&
 			    func.children[1]->type == ExpressionType::VALUE_CONSTANT) {
@@ -462,15 +462,15 @@ vector<TableFilter> FilterCombiner::GenerateTableScanFilters(vector<idx_t> &colu
 				const_value.str_value = prefix;
 				if (equality) {
 					//! Here the like can be transformed to an equality query
-					tableFilters.emplace_back(const_value, ExpressionType::COMPARE_EQUAL,
-					                          column_ref.binding.column_index);
+					table_filters.emplace_back(const_value, ExpressionType::COMPARE_EQUAL,
+					                           column_ref.binding.column_index);
 				} else {
 					//! Here the like must be transformed to a BOUND COMPARISON geq le
-					tableFilters.emplace_back(const_value, ExpressionType::COMPARE_GREATERTHANOREQUALTO,
-					                          column_ref.binding.column_index);
+					table_filters.emplace_back(const_value, ExpressionType::COMPARE_GREATERTHANOREQUALTO,
+					                           column_ref.binding.column_index);
 					const_value.str_value[const_value.str_value.size() - 1]++;
-					tableFilters.emplace_back(const_value, ExpressionType::COMPARE_LESSTHAN,
-					                          column_ref.binding.column_index);
+					table_filters.emplace_back(const_value, ExpressionType::COMPARE_LESSTHAN,
+					                           column_ref.binding.column_index);
 				}
 			}
 		} else if (remaining_filter->type == ExpressionType::COMPARE_IN) {
@@ -517,16 +517,16 @@ vector<TableFilter> FilterCombiner::GenerateTableScanFilters(vector<idx_t> &colu
 			if (!is_consecutive || in_values.empty()) {
 				continue;
 			}
-			tableFilters.emplace_back(in_values.front(), ExpressionType::COMPARE_GREATERTHANOREQUALTO,
-			                          column_ref.binding.column_index);
-			tableFilters.emplace_back(in_values.back(), ExpressionType::COMPARE_LESSTHANOREQUALTO,
-			                          column_ref.binding.column_index);
+			table_filters.emplace_back(in_values.front(), ExpressionType::COMPARE_GREATERTHANOREQUALTO,
+			                           column_ref.binding.column_index);
+			table_filters.emplace_back(in_values.back(), ExpressionType::COMPARE_LESSTHANOREQUALTO,
+			                           column_ref.binding.column_index);
 
 			remaining_filters.erase(remaining_filters.begin() + rem_fil_idx);
 		}
 	}
 
-	return tableFilters;
+	return table_filters;
 }
 
 static bool IsGreaterThan(ExpressionType type) {
@@ -733,8 +733,8 @@ FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &com
 
 	vector<ExpressionValueInformation> &left_constants = constant_values.find(left_equivalence_set)->second;
 	vector<ExpressionValueInformation> &right_constants = constant_values.find(right_equivalence_set)->second;
-	bool isSuccessful = false;
-	bool isInserted = false;
+	bool is_successful = false;
+	bool is_inserted = false;
 	// read every constant filters already inserted for the right scalar variable
 	// and see if we can create new transitive filters, e.g., there is already a filter i > 10,
 	// suppose that we have now the j >= i, then we can infer a new filter j > 10
@@ -755,12 +755,12 @@ FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &com
 			// filters (j >= i AND i [>, >=] 10) OR (j <= i AND i [<, <=] 10)
 			// create filter j [>, >=] 10 and add the filter j [>=, <=] i into the remaining filters
 			info.comparison_type = right_constant.comparison_type; // create filter j [>, >=, <, <=] 10
-			if (!isInserted) {
+			if (!is_inserted) {
 				// Add the filter j >= i in the remaing filters
 				auto filter = make_unique<BoundComparisonExpression>(comparison.type, comparison.left->Copy(),
 				                                                     comparison.right->Copy());
 				remaining_filters.push_back(move(filter));
-				isInserted = true;
+				is_inserted = true;
 			}
 		} else if ((comparison.type == ExpressionType::COMPARE_GREATERTHAN &&
 		            IsGreaterThan(right_constant.comparison_type)) ||
@@ -770,12 +770,12 @@ FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &com
 			// create filter j [>, <] 10 and add the filter j [>, <] i into the remaining filters
 			// the comparisons j > i and j < i are more restrictive
 			info.comparison_type = comparison.type;
-			if (!isInserted) {
+			if (!is_inserted) {
 				// Add the filter j [>, <] i
 				auto filter = make_unique<BoundComparisonExpression>(comparison.type, comparison.left->Copy(),
 				                                                     comparison.right->Copy());
 				remaining_filters.push_back(move(filter));
-				isInserted = true;
+				is_inserted = true;
 			}
 		} else {
 			// we cannot add a new filter
@@ -785,9 +785,9 @@ FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &com
 		if (AddConstantComparison(left_constants, info) == FilterResult::UNSATISFIABLE) {
 			return FilterResult::UNSATISFIABLE;
 		}
-		isSuccessful = true;
+		is_successful = true;
 	}
-	if (isSuccessful) {
+	if (is_successful) {
 		// now check for remaining trasitive filters from the left column
 		auto transitive_filter = FindTransitiveFilter(comparison.left.get());
 		if (transitive_filter != nullptr) {

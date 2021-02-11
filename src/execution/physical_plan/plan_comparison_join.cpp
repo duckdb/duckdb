@@ -12,7 +12,7 @@
 
 namespace duckdb {
 
-static bool can_plan_index_join(Transaction &transaction, TableScanBindData *bind_data, PhysicalTableScan &scan) {
+static bool CanPlanIndexJoin(Transaction &transaction, TableScanBindData *bind_data, PhysicalTableScan &scan) {
 	if (!bind_data) {
 		// not a table scan
 		return false;
@@ -22,7 +22,7 @@ static bool can_plan_index_join(Transaction &transaction, TableScanBindData *bin
 		// transaction local appends: skip index join
 		return false;
 	}
-	if (scan.table_filters && scan.table_filters->filters.size() > 0) {
+	if (scan.table_filters && !scan.table_filters->filters.empty()) {
 		// table scan filters
 		return false;
 	}
@@ -39,7 +39,7 @@ void TransformIndexJoin(ClientContext &context, LogicalComparisonJoin &op, Index
 		if (left->type == PhysicalOperatorType::TABLE_SCAN) {
 			auto &tbl_scan = (PhysicalTableScan &)*left;
 			auto tbl = dynamic_cast<TableScanBindData *>(tbl_scan.bind_data.get());
-			if (can_plan_index_join(transaction, tbl, tbl_scan)) {
+			if (CanPlanIndexJoin(transaction, tbl, tbl_scan)) {
 				for (auto &index : tbl->table->storage->info->indexes) {
 					if (index->unbound_expressions[0]->alias == op.conditions[0].left->alias) {
 						*left_index = index.get();
@@ -51,7 +51,7 @@ void TransformIndexJoin(ClientContext &context, LogicalComparisonJoin &op, Index
 		if (right->type == PhysicalOperatorType::TABLE_SCAN) {
 			auto &tbl_scan = (PhysicalTableScan &)*right;
 			auto tbl = dynamic_cast<TableScanBindData *>(tbl_scan.bind_data.get());
-			if (can_plan_index_join(transaction, tbl, tbl_scan)) {
+			if (CanPlanIndexJoin(transaction, tbl, tbl_scan)) {
 				for (auto &index : tbl->table->storage->info->indexes) {
 					if (index->unbound_expressions[0]->alias == op.conditions[0].right->alias) {
 						*right_index = index.get();
@@ -72,7 +72,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 	auto right = CreatePlan(*op.children[1]);
 	D_ASSERT(left && right);
 
-	if (op.conditions.size() == 0) {
+	if (op.conditions.empty()) {
 		// no conditions: insert a cross product
 		return make_unique<PhysicalCrossProduct>(op.types, move(left), move(right));
 	}
@@ -84,7 +84,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 		if (cond.comparison == ExpressionType::COMPARE_EQUAL) {
 			has_equality = true;
 		}
-		if (cond.comparison == ExpressionType::COMPARE_NOTEQUAL) {
+		if (cond.comparison == ExpressionType::COMPARE_NOTEQUAL ||
+		    cond.comparison == ExpressionType::COMPARE_DISTINCT_FROM) {
 			has_inequality = true;
 		}
 		if (cond.null_values_are_equal) {

@@ -67,7 +67,7 @@ private:
 };
 
 struct CentroidList {
-	CentroidList(const std::vector<Centroid> &s) : iter(s.cbegin()), end(s.cend()) {
+	explicit CentroidList(const std::vector<Centroid> &s) : iter(s.cbegin()), end(s.cend()) {
 	}
 	std::vector<Centroid>::const_iterator iter;
 	std::vector<Centroid>::const_iterator end;
@@ -254,8 +254,9 @@ public:
 
 	// return the cdf on the t-digest
 	Value cdf(Value x) {
-		if (haveUnprocessed() || isDirty())
+		if (haveUnprocessed() || isDirty()) {
 			process();
+		}
 		return cdfProcessed(x);
 	}
 
@@ -325,8 +326,9 @@ public:
 
 	// this returns a quantile on the t-digest
 	Value quantile(Value q) {
-		if (haveUnprocessed() || isDirty())
+		if (haveUnprocessed() || isDirty()) {
 			process();
+		}
 		return quantileProcessed(q);
 	}
 
@@ -400,8 +402,9 @@ public:
 			const size_t diff = std::distance(iter, end);
 			const size_t room = maxUnprocessed_ - unprocessed_.size();
 			auto mid = iter + std::min(diff, room);
-			while (iter != mid)
+			while (iter != mid) {
 				unprocessed_.push_back(*(iter++));
+			}
 			if (unprocessed_.size() >= maxUnprocessed_) {
 				process();
 			}
@@ -441,8 +444,9 @@ private:
 
 	// append all unprocessed centroids into current unprocessed vector
 	void mergeUnprocessed(const std::vector<const TDigest *> &tdigests) {
-		if (tdigests.size() == 0)
+		if (tdigests.size() == 0) {
 			return;
+		}
 
 		size_t total = unprocessed_.size();
 		for (auto &td : tdigests) {
@@ -458,8 +462,9 @@ private:
 
 	// merge all processed centroids together into a single sorted vector
 	void mergeProcessed(const std::vector<const TDigest *> &tdigests) {
-		if (tdigests.size() == 0)
+		if (tdigests.size() == 0) {
 			return;
+		}
 
 		size_t total = 0;
 		CentroidListQueue pq(CentroidListComparator {});
@@ -472,8 +477,9 @@ private:
 				processedWeight_ += td->processedWeight_;
 			}
 		}
-		if (total == 0)
+		if (total == 0) {
 			return;
+		}
 
 		if (processed_.size() > 0) {
 			pq.push(CentroidList(processed_));
@@ -487,8 +493,9 @@ private:
 			auto best = pq.top();
 			pq.pop();
 			sorted.push_back(*(best.iter));
-			if (best.advance())
+			if (best.advance()) {
 				pq.push(best);
+			}
 		}
 		processed_ = std::move(sorted);
 		if (processed_.size() > 0) {

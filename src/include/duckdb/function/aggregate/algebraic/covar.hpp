@@ -11,7 +11,8 @@
 #include "duckdb/function/aggregate_function.hpp"
 
 namespace duckdb {
-struct covar_state_t {
+
+struct CovarState {
 	uint64_t count;
 	double meanx;
 	double meany;

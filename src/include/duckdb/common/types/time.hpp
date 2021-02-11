@@ -17,7 +17,7 @@ namespace duckdb {
 class Time {
 public:
 	//! Convert a string in the format "hh:mm:ss" to a time object
-	static dtime_t FromString(string str, bool strict = false);
+	static dtime_t FromString(const string &str, bool strict = false);
 	static dtime_t FromCString(const char *buf, idx_t len, bool strict = false);
 	static bool TryConvertTime(const char *buf, idx_t len, idx_t &pos, dtime_t &result, bool strict = false);
 

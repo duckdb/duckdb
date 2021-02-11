@@ -15,7 +15,7 @@ namespace duckdb {
 //! Bound equivalent of Constraint
 class BoundConstraint {
 public:
-	BoundConstraint(ConstraintType type) : type(type) {};
+	explicit BoundConstraint(ConstraintType type) : type(type) {};
 	virtual ~BoundConstraint() {
 	}
 

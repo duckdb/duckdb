@@ -79,7 +79,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 
 		auto logical_get =
 		    make_unique<LogicalGet>(table_index, scan_function, move(bind_data), table_types, table_names);
-		bind_context.AddBaseTable(table_index, alias, move(table_names), move(table_types), *logical_get);
+		bind_context.AddBaseTable(table_index, alias, table_names, table_types, *logical_get);
 		return make_unique_base<BoundTableRef, BoundBaseTableRef>(table, move(logical_get));
 	}
 	case CatalogType::VIEW_ENTRY: {

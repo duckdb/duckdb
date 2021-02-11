@@ -8,22 +8,23 @@
 #include "duckdb/function/aggregate/regression_functions.hpp"
 
 namespace duckdb {
-struct regr_s__state_t {
+
+struct RegrSState {
 	size_t count;
-	stddev_state_t var_pop;
+	StddevState var_pop;
 };
 
-struct RegrS__Operation {
+struct RegrBaseOperation {
 	template <class STATE>
 	static void Initialize(STATE *state) {
 		RegrCountFunction::Initialize<size_t>(&state->count);
-		STDDevBaseOperation::Initialize<stddev_state_t>(&state->var_pop);
+		STDDevBaseOperation::Initialize<StddevState>(&state->var_pop);
 	}
 
 	template <class STATE, class OP>
 	static void Combine(STATE source, STATE *target) {
 		RegrCountFunction::Combine<size_t, OP>(source.count, &target->count);
-		STDDevBaseOperation::Combine<stddev_state_t, OP>(source.var_pop, &target->var_pop);
+		STDDevBaseOperation::Combine<StddevState, OP>(source.var_pop, &target->var_pop);
 	}
 
 	template <class T, class STATE>
@@ -45,36 +46,36 @@ struct RegrS__Operation {
 	}
 };
 
-struct RegrSXXOperation : RegrS__Operation {
+struct RegrSXXOperation : RegrBaseOperation {
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
 	static void Operation(STATE *state, FunctionData *bind_data, A_TYPE *x_data, B_TYPE *y_data, nullmask_t &anullmask,
 	                      nullmask_t &bnullmask, idx_t xidx, idx_t yidx) {
 		RegrCountFunction::Operation<A_TYPE, B_TYPE, size_t, OP>(&state->count, bind_data, y_data, x_data, bnullmask,
 		                                                         anullmask, yidx, xidx);
-		STDDevBaseOperation::Operation<A_TYPE, stddev_state_t, OP>(&state->var_pop, bind_data, y_data, bnullmask, yidx);
+		STDDevBaseOperation::Operation<A_TYPE, StddevState, OP>(&state->var_pop, bind_data, y_data, bnullmask, yidx);
 	}
 };
 
-struct RegrSYYOperation : RegrS__Operation {
+struct RegrSYYOperation : RegrBaseOperation {
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
 	static void Operation(STATE *state, FunctionData *bind_data, A_TYPE *x_data, B_TYPE *y_data, nullmask_t &anullmask,
 	                      nullmask_t &bnullmask, idx_t xidx, idx_t yidx) {
 		RegrCountFunction::Operation<A_TYPE, B_TYPE, size_t, OP>(&state->count, bind_data, y_data, x_data, bnullmask,
 		                                                         anullmask, yidx, xidx);
-		STDDevBaseOperation::Operation<A_TYPE, stddev_state_t, OP>(&state->var_pop, bind_data, x_data, bnullmask, xidx);
+		STDDevBaseOperation::Operation<A_TYPE, StddevState, OP>(&state->var_pop, bind_data, x_data, bnullmask, xidx);
 	}
 };
 
 void RegrSXXFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet fun("regr_sxx");
-	fun.AddFunction(AggregateFunction::BinaryAggregate<regr_s__state_t, double, double, double, RegrSXXOperation>(
+	fun.AddFunction(AggregateFunction::BinaryAggregate<RegrSState, double, double, double, RegrSXXOperation>(
 	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE));
 	set.AddFunction(fun);
 }
 
 void RegrSYYFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet fun("regr_syy");
-	fun.AddFunction(AggregateFunction::BinaryAggregate<regr_s__state_t, double, double, double, RegrSYYOperation>(
+	fun.AddFunction(AggregateFunction::BinaryAggregate<RegrSState, double, double, double, RegrSYYOperation>(
 	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE));
 	set.AddFunction(fun);
 }

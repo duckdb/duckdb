@@ -196,7 +196,7 @@ bool SingleFileBlockManager::IsRootBlock(block_id_t root) {
 
 block_id_t SingleFileBlockManager::GetFreeBlockId() {
 	block_id_t block;
-	if (free_list.size() > 0) {
+	if (!free_list.empty()) {
 		// free list is non empty
 		// take an entry from the free list
 		block = *free_list.begin();
@@ -243,7 +243,7 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 	}
 	modified_blocks.clear();
 
-	if (free_list.size() > 0) {
+	if (!free_list.empty()) {
 		// there are blocks in the free list
 		// write them to the file
 		MetaBlockWriter writer(db);

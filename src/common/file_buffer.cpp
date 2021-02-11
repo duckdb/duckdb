@@ -9,26 +9,26 @@
 namespace duckdb {
 
 FileBuffer::FileBuffer(FileBufferType type, uint64_t bufsiz) : type(type) {
-	const int SECTOR_SIZE = Storage::SECTOR_SIZE;
-	// round up to the nearest SECTOR_SIZE, thi sis only really necessary if the file buffer will be used for Direct IO
-	if (bufsiz % SECTOR_SIZE != 0) {
-		bufsiz += SECTOR_SIZE - (bufsiz % SECTOR_SIZE);
+	const int sector_size = Storage::SECTOR_SIZE;
+	// round up to the nearest sector_size, this is only really necessary if the file buffer will be used for Direct IO
+	if (bufsiz % sector_size != 0) {
+		bufsiz += sector_size - (bufsiz % sector_size);
 	}
-	D_ASSERT(bufsiz % SECTOR_SIZE == 0);
-	D_ASSERT(bufsiz >= SECTOR_SIZE);
-	// we add (SECTOR_SIZE - 1) to ensure that we can align the buffer to SECTOR_SIZE
-	malloced_buffer = (data_ptr_t)malloc(bufsiz + (SECTOR_SIZE - 1));
+	D_ASSERT(bufsiz % sector_size == 0);
+	D_ASSERT(bufsiz >= sector_size);
+	// we add (sector_size - 1) to ensure that we can align the buffer to sector_size
+	malloced_buffer = (data_ptr_t)malloc(bufsiz + (sector_size - 1));
 	if (!malloced_buffer) {
 		throw std::bad_alloc();
 	}
-	// round to multiple of SECTOR_SIZE
+	// round to multiple of sector_size
 	uint64_t num = (uint64_t)malloced_buffer;
-	uint64_t remainder = num % SECTOR_SIZE;
+	uint64_t remainder = num % sector_size;
 	if (remainder != 0) {
-		num = num + SECTOR_SIZE - remainder;
+		num = num + sector_size - remainder;
 	}
-	D_ASSERT(num % SECTOR_SIZE == 0);
-	D_ASSERT(num + bufsiz <= ((uint64_t)malloced_buffer + bufsiz + (SECTOR_SIZE - 1)));
+	D_ASSERT(num % sector_size == 0);
+	D_ASSERT(num + bufsiz <= ((uint64_t)malloced_buffer + bufsiz + (sector_size - 1)));
 	D_ASSERT(num >= (uint64_t)malloced_buffer);
 	// construct the FileBuffer object
 	internal_buffer = (data_ptr_t)num;

@@ -42,7 +42,7 @@ BindResult HavingBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, 
 		return BindResult(StringUtil::Format(
 		    "column %s must appear in the GROUP BY clause or be used in an aggregate function", expr.ToString()));
 	default:
-		return ExpressionBinder::BindExpression(expr_ptr, depth);
+		return duckdb::SelectBinder::BindExpression(expr_ptr, depth);
 	}
 }
 

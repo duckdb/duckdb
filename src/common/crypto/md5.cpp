@@ -26,7 +26,7 @@ namespace duckdb {
 /*
  * Note: this code is harmless on little-endian machines.
  */
-static void byteReverse(unsigned char *buf, unsigned longs) {
+static void ByteReverse(unsigned char *buf, unsigned longs) {
 	uint32_t t;
 	do {
 		t = (uint32_t)((unsigned)buf[3] << 8 | buf[2]) << 16 | ((unsigned)buf[1] << 8 | buf[0]);
@@ -37,13 +37,13 @@ static void byteReverse(unsigned char *buf, unsigned longs) {
 /* The four core functions - F1 is optimized somewhat */
 
 /* #define F1(x, y, z) (x & y | ~x & z) */
-#define F1(x, y, z) (z ^ (x & (y ^ z)))
+#define F1(x, y, z) ((z) ^ ((x) & ((y) ^ (z))))
 #define F2(x, y, z) F1(z, x, y)
-#define F3(x, y, z) (x ^ y ^ z)
-#define F4(x, y, z) (y ^ (x | ~z))
+#define F3(x, y, z) ((x) ^ (y) ^ (z))
+#define F4(x, y, z) ((y) ^ ((x) | ~(z)))
 
 /* This is the central step in the MD5 algorithm. */
-#define MD5STEP(f, w, x, y, z, data, s) (w += f(x, y, z) + data, w = w << s | w >> (32 - s), w += x)
+#define MD5STEP(f, w, x, y, z, data, s) ((w) += f(x, y, z) + (data), (w) = (w) << (s) | (w) >> (32 - (s)), (w) += (x))
 
 /*
  * The core of the MD5 algorithm, this alters an existing MD5 hash to
@@ -155,8 +155,9 @@ void MD5Context::MD5Update(const_data_ptr_t input, idx_t len) {
 	/* Update bitcount */
 
 	t = bits[0];
-	if ((bits[0] = t + ((uint32_t)len << 3)) < t)
+	if ((bits[0] = t + ((uint32_t)len << 3)) < t) {
 		bits[1]++; /* Carry from low to high */
+	}
 	bits[1] += len >> 29;
 
 	t = (t >> 3) & 0x3f; /* Bytes already in shsInfo->data */
@@ -172,7 +173,7 @@ void MD5Context::MD5Update(const_data_ptr_t input, idx_t len) {
 			return;
 		}
 		memcpy(p, input, t);
-		byteReverse(in, 16);
+		ByteReverse(in, 16);
 		MD5Transform(buf, (uint32_t *)in);
 		input += t;
 		len -= t;
@@ -182,7 +183,7 @@ void MD5Context::MD5Update(const_data_ptr_t input, idx_t len) {
 
 	while (len >= 64) {
 		memcpy(in, input, 64);
-		byteReverse(in, 16);
+		ByteReverse(in, 16);
 		MD5Transform(buf, (uint32_t *)in);
 		input += 64;
 		len -= 64;
@@ -215,7 +216,7 @@ void MD5Context::Finish(data_ptr_t out_digest) {
 	if (count < 8) {
 		/* Two lots of padding:  Pad the first block to 64 bytes */
 		memset(p, 0, count);
-		byteReverse(in, 16);
+		ByteReverse(in, 16);
 		MD5Transform(buf, (uint32_t *)in);
 
 		/* Now fill the next block with 56 bytes */
@@ -224,25 +225,25 @@ void MD5Context::Finish(data_ptr_t out_digest) {
 		/* Pad block to 56 bytes */
 		memset(p, 0, count - 8);
 	}
-	byteReverse(in, 14);
+	ByteReverse(in, 14);
 
 	/* Append length in bits and transform */
 	((uint32_t *)in)[14] = bits[0];
 	((uint32_t *)in)[15] = bits[1];
 
 	MD5Transform(buf, (uint32_t *)in);
-	byteReverse((unsigned char *)buf, 4);
+	ByteReverse((unsigned char *)buf, 4);
 	memcpy(out_digest, buf, 16);
 }
 
-void MD5Context::DigestToBase16(const_data_ptr_t digest, char *zBuf) {
-	static char const zEncode[] = "0123456789abcdef";
+void MD5Context::DigestToBase16(const_data_ptr_t digest, char *zbuf) {
+	static char const HEX_CODES[] = "0123456789abcdef";
 	int i, j;
 
 	for (j = i = 0; i < 16; i++) {
 		int a = digest[i];
-		zBuf[j++] = zEncode[(a >> 4) & 0xf];
-		zBuf[j++] = zEncode[a & 0xf];
+		zbuf[j++] = HEX_CODES[(a >> 4) & 0xf];
+		zbuf[j++] = HEX_CODES[a & 0xf];
 	}
 }
 

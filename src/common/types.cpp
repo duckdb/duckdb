@@ -363,7 +363,7 @@ string LogicalType::ToString() const {
 		return ret;
 	}
 	case LogicalTypeId::LIST: {
-		if (child_types_.size() == 0) {
+		if (child_types_.empty()) {
 			return "LIST<?>";
 		}
 		if (child_types_.size() != 1) {
@@ -382,7 +382,7 @@ string LogicalType::ToString() const {
 	}
 }
 
-LogicalType TransformStringToLogicalType(string str) {
+LogicalType TransformStringToLogicalType(const string &str) {
 	auto lower_str = StringUtil::Lower(str);
 	// Transform column type
 	if (lower_str == "int" || lower_str == "int4" || lower_str == "signed" || lower_str == "integer" ||
@@ -629,7 +629,7 @@ bool LogicalType::IsMoreGenericThan(LogicalType &other) const {
 	return true;
 }
 
-LogicalType LogicalType::MaxLogicalType(LogicalType left, LogicalType right) {
+LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalType &right) {
 	if (left.id() < right.id()) {
 		return right;
 	} else if (right.id() < left.id()) {

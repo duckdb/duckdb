@@ -37,7 +37,7 @@ struct CorrelatedColumnInfo {
 	string name;
 	idx_t depth;
 
-	CorrelatedColumnInfo(BoundColumnRefExpression &expr)
+	explicit CorrelatedColumnInfo(BoundColumnRefExpression &expr)
 	    : binding(expr.binding), type(expr.return_type), name(expr.GetName()), depth(expr.depth) {
 	}
 
@@ -57,7 +57,7 @@ class Binder {
 	friend class RecursiveSubqueryPlanner;
 
 public:
-	Binder(ClientContext &context, Binder *parent = nullptr, bool inherit_ctes = true);
+	explicit Binder(ClientContext &context, Binder *parent = nullptr, bool inherit_ctes = true);
 
 	//! The client context
 	ClientContext &context;
@@ -119,11 +119,11 @@ public:
 
 	void MergeCorrelatedColumns(vector<CorrelatedColumnInfo> &other);
 	//! Add a correlated column to this binder (if it does not exist)
-	void AddCorrelatedColumn(CorrelatedColumnInfo info);
+	void AddCorrelatedColumn(const CorrelatedColumnInfo &info);
 
-	string FormatError(ParsedExpression &expr_context, string message);
-	string FormatError(TableRef &ref_context, string message);
-	string FormatError(idx_t query_location, string message);
+	string FormatError(ParsedExpression &expr_context, const string &message);
+	string FormatError(TableRef &ref_context, const string &message);
+	string FormatError(idx_t query_location, const string &message);
 
 private:
 	//! The parent binder (if any)
@@ -164,6 +164,7 @@ private:
 	BoundStatement Bind(ShowStatement &stmt);
 	BoundStatement Bind(CallStatement &stmt);
 	BoundStatement Bind(ExportStatement &stmt);
+	BoundStatement Bind(SetStatement &stmt);
 
 	unique_ptr<BoundQueryNode> BindNode(SelectNode &node);
 	unique_ptr<BoundQueryNode> BindNode(SetOperationNode &node);

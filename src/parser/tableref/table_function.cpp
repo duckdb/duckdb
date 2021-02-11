@@ -4,11 +4,11 @@
 
 namespace duckdb {
 
-bool TableFunctionRef::Equals(const TableRef *other_) const {
-	if (!TableRef::Equals(other_)) {
+bool TableFunctionRef::Equals(const TableRef *other_p) const {
+	if (!TableRef::Equals(other_p)) {
 		return false;
 	}
-	auto other = (TableFunctionRef *)other_;
+	auto other = (TableFunctionRef *)other_p;
 	return function->Equals(other->function.get());
 }
 

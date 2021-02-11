@@ -10,7 +10,7 @@
 namespace duckdb {
 
 template <class T>
-struct min_max_state_t {
+struct MinMaxState {
 	T value;
 	bool isset;
 };
@@ -19,33 +19,33 @@ template <class OP>
 static AggregateFunction GetUnaryAggregate(LogicalType type) {
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
-		return AggregateFunction::UnaryAggregate<min_max_state_t<int8_t>, int8_t, int8_t, OP>(type, type);
+		return AggregateFunction::UnaryAggregate<MinMaxState<int8_t>, int8_t, int8_t, OP>(type, type);
 	case LogicalTypeId::TINYINT:
-		return AggregateFunction::UnaryAggregate<min_max_state_t<int8_t>, int8_t, int8_t, OP>(type, type);
+		return AggregateFunction::UnaryAggregate<MinMaxState<int8_t>, int8_t, int8_t, OP>(type, type);
 	case LogicalTypeId::SMALLINT:
-		return AggregateFunction::UnaryAggregate<min_max_state_t<int16_t>, int16_t, int16_t, OP>(type, type);
+		return AggregateFunction::UnaryAggregate<MinMaxState<int16_t>, int16_t, int16_t, OP>(type, type);
 	case LogicalTypeId::DATE:
 	case LogicalTypeId::INTEGER:
-		return AggregateFunction::UnaryAggregate<min_max_state_t<int32_t>, int32_t, int32_t, OP>(type, type);
+		return AggregateFunction::UnaryAggregate<MinMaxState<int32_t>, int32_t, int32_t, OP>(type, type);
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::BIGINT:
-		return AggregateFunction::UnaryAggregate<min_max_state_t<int64_t>, int64_t, int64_t, OP>(type, type);
+		return AggregateFunction::UnaryAggregate<MinMaxState<int64_t>, int64_t, int64_t, OP>(type, type);
 	case LogicalTypeId::UTINYINT:
-		return AggregateFunction::UnaryAggregate<min_max_state_t<uint8_t>, uint8_t, uint8_t, OP>(type, type);
+		return AggregateFunction::UnaryAggregate<MinMaxState<uint8_t>, uint8_t, uint8_t, OP>(type, type);
 	case LogicalTypeId::USMALLINT:
-		return AggregateFunction::UnaryAggregate<min_max_state_t<uint16_t>, uint16_t, uint16_t, OP>(type, type);
+		return AggregateFunction::UnaryAggregate<MinMaxState<uint16_t>, uint16_t, uint16_t, OP>(type, type);
 	case LogicalTypeId::UINTEGER:
-		return AggregateFunction::UnaryAggregate<min_max_state_t<uint32_t>, uint32_t, uint32_t, OP>(type, type);
+		return AggregateFunction::UnaryAggregate<MinMaxState<uint32_t>, uint32_t, uint32_t, OP>(type, type);
 	case LogicalTypeId::UBIGINT:
-		return AggregateFunction::UnaryAggregate<min_max_state_t<uint64_t>, uint64_t, uint64_t, OP>(type, type);
+		return AggregateFunction::UnaryAggregate<MinMaxState<uint64_t>, uint64_t, uint64_t, OP>(type, type);
 	case LogicalTypeId::HUGEINT:
-		return AggregateFunction::UnaryAggregate<min_max_state_t<hugeint_t>, hugeint_t, hugeint_t, OP>(type, type);
+		return AggregateFunction::UnaryAggregate<MinMaxState<hugeint_t>, hugeint_t, hugeint_t, OP>(type, type);
 	case LogicalTypeId::FLOAT:
-		return AggregateFunction::UnaryAggregate<min_max_state_t<float>, float, float, OP>(type, type);
+		return AggregateFunction::UnaryAggregate<MinMaxState<float>, float, float, OP>(type, type);
 	case LogicalTypeId::DOUBLE:
-		return AggregateFunction::UnaryAggregate<min_max_state_t<double>, double, double, OP>(type, type);
+		return AggregateFunction::UnaryAggregate<MinMaxState<double>, double, double, OP>(type, type);
 	case LogicalTypeId::INTERVAL:
-		return AggregateFunction::UnaryAggregate<min_max_state_t<interval_t>, interval_t, interval_t, OP>(type, type);
+		return AggregateFunction::UnaryAggregate<MinMaxState<interval_t>, interval_t, interval_t, OP>(type, type);
 	default:
 		throw NotImplementedException("Unimplemented type for min/max aggregate");
 	}
@@ -210,8 +210,8 @@ struct MaxOperationString : public StringMinMaxBase {
 };
 
 template <class OP>
-unique_ptr<FunctionData> bind_decimal_min_max(ClientContext &context, AggregateFunction &function,
-                                              vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> BindDecimalMinMax(ClientContext &context, AggregateFunction &function,
+                                           vector<unique_ptr<Expression>> &arguments) {
 	auto decimal_type = arguments[0]->return_type;
 	switch (decimal_type.InternalType()) {
 	case PhysicalType::INT16:
@@ -234,14 +234,14 @@ unique_ptr<FunctionData> bind_decimal_min_max(ClientContext &context, AggregateF
 
 template <class OP, class OP_STRING>
 static void AddMinMaxOperator(AggregateFunctionSet &set) {
-	for (auto type : LogicalType::ALL_TYPES) {
+	for (auto &type : LogicalType::ALL_TYPES) {
 		if (type.id() == LogicalTypeId::VARCHAR || type.id() == LogicalTypeId::BLOB) {
 			set.AddFunction(
-			    AggregateFunction::UnaryAggregateDestructor<min_max_state_t<string_t>, string_t, string_t, OP_STRING>(
+			    AggregateFunction::UnaryAggregateDestructor<MinMaxState<string_t>, string_t, string_t, OP_STRING>(
 			        type.id(), type.id()));
 		} else if (type.id() == LogicalTypeId::DECIMAL) {
 			set.AddFunction(AggregateFunction({type}, type, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
-			                                  bind_decimal_min_max<OP>));
+			                                  BindDecimalMinMax<OP>));
 		} else {
 			set.AddFunction(GetUnaryAggregate<OP>(type));
 		}

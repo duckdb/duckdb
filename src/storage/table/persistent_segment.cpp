@@ -12,9 +12,9 @@
 
 namespace duckdb {
 
-PersistentSegment::PersistentSegment(DatabaseInstance &db, block_id_t id, idx_t offset, LogicalType type, idx_t start,
-                                     idx_t count, unique_ptr<BaseStatistics> statistics)
-    : ColumnSegment(type, ColumnSegmentType::PERSISTENT, start, count, move(statistics)), db(db), block_id(id),
+PersistentSegment::PersistentSegment(DatabaseInstance &db, block_id_t id, idx_t offset, const LogicalType &type_p,
+                                     idx_t start, idx_t count, unique_ptr<BaseStatistics> statistics)
+    : ColumnSegment(type_p, ColumnSegmentType::PERSISTENT, start, count, move(statistics)), db(db), block_id(id),
       offset(offset) {
 	D_ASSERT(offset == 0);
 	if (type.InternalType() == PhysicalType::VARCHAR) {
@@ -48,8 +48,8 @@ void PersistentSegment::IndexScan(ColumnScanState &state, Vector &result) {
 }
 
 void PersistentSegment::Select(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
-                               idx_t &approved_tuple_count, vector<TableFilter> &tableFilter) {
-	data->Select(transaction, result, tableFilter, sel, approved_tuple_count, state);
+                               idx_t &approved_tuple_count, vector<TableFilter> &table_filter) {
+	data->Select(transaction, result, table_filter, sel, approved_tuple_count, state);
 }
 
 void PersistentSegment::Fetch(ColumnScanState &state, idx_t vector_index, Vector &result) {

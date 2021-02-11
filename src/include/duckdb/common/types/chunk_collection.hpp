@@ -55,7 +55,7 @@ public:
 	//! Gets the value of the column at the specified index
 	Value GetValue(idx_t column, idx_t index);
 	//! Sets the value of the column at the specified index
-	void SetValue(idx_t column, idx_t index, Value value);
+	void SetValue(idx_t column, idx_t index, const Value &value);
 
 	vector<Value> GetRow(idx_t index);
 

@@ -166,7 +166,7 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 	if (new_config.file_system) {
 		config.file_system = move(new_config.file_system);
 	} else {
-		config.file_system = make_unique<FileSystem>();
+		config.file_system = make_unique<VirtualFileSystem>();
 	}
 	if (config.maximum_memory == (idx_t)-1) {
 		config.maximum_memory = config.file_system->GetAvailableMemory() * 8 / 10;

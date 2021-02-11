@@ -18,7 +18,7 @@ namespace duckdb {
 //! A ResultModifier
 class BoundResultModifier {
 public:
-	BoundResultModifier(ResultModifierType type) : type(type) {
+	explicit BoundResultModifier(ResultModifierType type) : type(type) {
 	}
 	virtual ~BoundResultModifier() {
 	}

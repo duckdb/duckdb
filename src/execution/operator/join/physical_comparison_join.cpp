@@ -4,19 +4,19 @@
 namespace duckdb {
 
 PhysicalComparisonJoin::PhysicalComparisonJoin(LogicalOperator &op, PhysicalOperatorType type,
-                                               vector<JoinCondition> conditions_, JoinType join_type)
+                                               vector<JoinCondition> conditions_p, JoinType join_type)
     : PhysicalJoin(op, type, join_type) {
-	conditions.resize(conditions_.size());
+	conditions.resize(conditions_p.size());
 	// we reorder conditions so the ones with COMPARE_EQUAL occur first
 	idx_t equal_position = 0;
-	idx_t other_position = conditions_.size() - 1;
-	for (idx_t i = 0; i < conditions_.size(); i++) {
-		if (conditions_[i].comparison == ExpressionType::COMPARE_EQUAL) {
+	idx_t other_position = conditions_p.size() - 1;
+	for (idx_t i = 0; i < conditions_p.size(); i++) {
+		if (conditions_p[i].comparison == ExpressionType::COMPARE_EQUAL) {
 			// COMPARE_EQUAL, move to the start
-			conditions[equal_position++] = std::move(conditions_[i]);
+			conditions[equal_position++] = std::move(conditions_p[i]);
 		} else {
 			// other expression, move to the end
-			conditions[other_position--] = std::move(conditions_[i]);
+			conditions[other_position--] = std::move(conditions_p[i]);
 		}
 	}
 }

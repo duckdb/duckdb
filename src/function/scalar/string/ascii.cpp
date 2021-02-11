@@ -1,10 +1,10 @@
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "utf8proc.hpp"
-#include <utf8proc_wrapper.hpp>
+#include "utf8proc_wrapper.hpp"
 
 namespace duckdb {
 
-struct asciiOperator {
+struct AsciiOperator {
 	template <class TA, class TR>
 	static inline TR Operation(const TA &input) {
 		auto str = input.GetDataUnsafe();
@@ -18,7 +18,7 @@ struct asciiOperator {
 
 void ASCII::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunction ascii("ascii", {LogicalType::VARCHAR}, LogicalType::INTEGER,
-	                     ScalarFunction::UnaryFunction<string_t, int32_t, asciiOperator, true>);
+	                     ScalarFunction::UnaryFunction<string_t, int32_t, AsciiOperator, true>);
 	set.AddFunction(ascii);
 }
 

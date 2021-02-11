@@ -33,6 +33,7 @@ class ExplainStatement;
 class ExportStatement;
 class VacuumStatement;
 class RelationStatement;
+class SetStatement;
 
 //===--------------------------------------------------------------------===//
 // Query Node

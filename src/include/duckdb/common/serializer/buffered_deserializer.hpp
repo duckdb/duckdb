@@ -16,7 +16,7 @@ namespace duckdb {
 class BufferedDeserializer : public Deserializer {
 public:
 	BufferedDeserializer(data_ptr_t ptr, idx_t data_size);
-	BufferedDeserializer(BufferedSerializer &serializer);
+	explicit BufferedDeserializer(BufferedSerializer &serializer);
 
 	data_ptr_t ptr;
 	data_ptr_t endptr;

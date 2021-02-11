@@ -12,7 +12,8 @@
 #include <ctgmath>
 
 namespace duckdb {
-struct stddev_state_t {
+
+struct StddevState {
 	uint64_t count;  //  n
 	double mean;     //  M1
 	double dsquared; //  M2

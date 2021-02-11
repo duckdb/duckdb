@@ -25,7 +25,7 @@ static uint8_t FlipSign(uint8_t key_byte) {
 }
 
 uint32_t Key::EncodeFloat(float x) {
-	unsigned long buff;
+	uint64_t buff;
 
 	//! zero
 	if (x == 0) {

@@ -71,7 +71,7 @@ void QueryGraph::CreateEdge(JoinRelationSet *left, JoinRelationSet *right, Filte
 	info->neighbors.push_back(move(n));
 }
 
-void QueryGraph::EnumerateNeighbors(JoinRelationSet *node, std::function<bool(NeighborInfo *)> callback) {
+void QueryGraph::EnumerateNeighbors(JoinRelationSet *node, const std::function<bool(NeighborInfo *)> &callback) {
 	for (idx_t j = 0; j < node->count; j++) {
 		QueryEdge *info = &root;
 		for (idx_t i = j; i < node->count; i++) {

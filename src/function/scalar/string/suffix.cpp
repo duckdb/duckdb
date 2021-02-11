@@ -5,16 +5,16 @@
 
 namespace duckdb {
 
-static bool suffix(const string_t &str, const string_t &suffix);
+static bool SuffixFunction(const string_t &str, const string_t &suffix);
 
 struct SuffixOperator {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA left, TB right) {
-		return suffix(left, right);
+		return SuffixFunction(left, right);
 	}
 };
 
-static bool suffix(const string_t &str, const string_t &suffix) {
+static bool SuffixFunction(const string_t &str, const string_t &suffix) {
 	auto suffix_size = suffix.GetSize();
 	auto str_size = str.GetSize();
 	if (suffix_size > str_size) {

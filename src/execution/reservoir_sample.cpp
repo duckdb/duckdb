@@ -203,15 +203,15 @@ void BaseReservoirSampling::InitializeReservoir(idx_t cur_size, idx_t sample_siz
 void BaseReservoirSampling::SetNextEntry() {
 	//! 4. Let r = random(0, 1) and Xw = log(r) / log(T_w)
 	auto &min_key = reservoir_weights.top();
-	double T_w = -min_key.first;
+	double t_w = -min_key.first;
 	double r = (*uniform_dist)(*rng);
-	double X_w = log(r) / log(T_w);
+	double x_w = log(r) / log(t_w);
 	//! 5. From the current item vc skip items until item vi , such that:
 	//! 6. wc +wc+1 +···+wi−1 < Xw <= wc +wc+1 +···+wi−1 +wi
 	//! since all our weights are 1 (uniform sampling), we can just determine the amount of elements to skip
-	min_threshold = T_w;
+	min_threshold = t_w;
 	min_entry = min_key.second;
-	next_index = MaxValue<idx_t>(1, idx_t(round(X_w)));
+	next_index = MaxValue<idx_t>(1, idx_t(round(x_w)));
 	current_count = 0;
 }
 

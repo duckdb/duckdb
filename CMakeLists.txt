@@ -147,6 +147,7 @@ option(BUILD_ICU_EXTENSION "Build the ICU extension." FALSE)
 option(BUILD_PARQUET_EXTENSION "Build the Parquet extension." FALSE)
 option(BUILD_TPCH_EXTENSION "Build the TPC-H extension." FALSE)
 option(BUILD_FTS_EXTENSION "Build the FTS extension." FALSE)
+option(BUILD_HTTPFS_EXTENSION "Build the HTTP File System extension." FALSE)
 option(BUILD_BENCHMARKS "Enable building of the benchmark suite." FALSE)
 option(BUILD_SQLSMITH "Enable building of SQLSmith." FALSE)
 option(BUILD_TPCE "Enable building of the TPC-E tool." FALSE)
@@ -155,6 +156,8 @@ option(BUILD_PYTHON "Build the DuckDB Python extension" FALSE)
 option(BUILD_REST "Build the DuckDB REST server" FALSE)
 option(BUILD_SHELL "Build the DuckDB Shell and SQLite API Wrappers" TRUE)
 option(DISABLE_THREADS "Disable support for multi-threading" FALSE)
+option(CLANG_TIDY "Enable build for clang-tidy, this disables all source files excluding the core database. This does not produce a working build." FALSE)
+option(BUILD_UNITTESTS "Build the C++ Unit Tests." TRUE)
 option(
   ASSERT_EXCEPTION
   "Throw an exception on an assert failing, instead of triggering a sigabort"
@@ -348,6 +351,16 @@ function(add_extension_definitions)
     include_directories(${CMAKE_SOURCE_DIR}/extension/fts/include)
     add_definitions(-DBUILD_FTS_EXTENSION=${BUILD_FTS_EXTENSION})
   endif()
+
+  if(${BUILD_HTTPFS_EXTENSION})
+    if (APPLE)
+      set(OPENSSL_INCLUDE_DIR /usr/local/opt/openssl/include)
+      else()
+      find_package(OpenSSL REQUIRED)
+    endif()
+    include_directories(${CMAKE_SOURCE_DIR}/extension/httpfs/include ${OPENSSL_INCLUDE_DIR})
+    add_definitions(-DBUILD_HTTPFS_EXTENSION=${BUILD_HTTPFS_EXTENSION})
+  endif()
 endfunction()
 
 function(add_extension_dependencies LIBRARY)
@@ -365,6 +378,10 @@ function(add_extension_dependencies LIBRARY)
 
   if(${BUILD_FTS_EXTENSION})
     add_dependencies(${LIBRARY} fts_extension)
+  endif()
+
+  if(${BUILD_FTS_EXTENSION})
+    add_dependencies(${LIBRARY} httpfs_extension)
   endif()
 endfunction()
 
@@ -384,6 +401,15 @@ function(link_extension_libraries LIBRARY)
   if(${BUILD_FTS_EXTENSION})
     target_link_libraries(${LIBRARY} fts_extension)
   endif()
+
+  if(${BUILD_HTTPFS_EXTENSION})
+    if (APPLE)
+      set(OPENSSL_LIBRARIES /usr/local/opt/openssl/lib/libcrypto.dylib /usr/local/opt/openssl/lib/libssl.dylib )
+      else()
+      find_package(OpenSSL REQUIRED)
+    endif()
+    target_link_libraries(${LIBRARY} httpfs_extension ${OPENSSL_LIBRARIES})
+  endif()
 endfunction()
 
 function(link_threads LIBRARY)
@@ -395,21 +421,22 @@ if(${EXPORT_DLL_SYMBOLS})
   add_definitions(-DDUCKDB_BUILD_LIBRARY)
 endif()
 
-add_subdirectory(extension)
 add_subdirectory(src)
 
-option(BUILD_UNITTESTS "Build the C++ Unit Tests." TRUE)
-if(${BUILD_UNITTESTS})
-  add_subdirectory(test)
-  if(NOT WIN32
-     AND NOT SUN
-     AND ${BUILD_BENCHMARKS})
-    add_subdirectory(benchmark)
+add_subdirectory(extension)
+if(NOT CLANG_TIDY)
+  if(${BUILD_UNITTESTS})
+    add_subdirectory(test)
+    if(NOT WIN32
+      AND NOT SUN
+      AND ${BUILD_BENCHMARKS})
+      add_subdirectory(benchmark)
+    endif()
   endif()
-endif()
 
-add_subdirectory(third_party)
-add_subdirectory(tools)
+  add_subdirectory(third_party)
+  add_subdirectory(tools)
+endif()
 
 # Write the export set for build and install tree
 install(EXPORT "${DUCKDB_EXPORT_SET}" DESTINATION "${INSTALL_CMAKE_DIR}")

@@ -35,22 +35,22 @@ public:
 	void ParseQuery(const string &query);
 
 	//! Tokenize a query, returning the raw tokens together with their locations
-	static vector<SimplifiedToken> Tokenize(string query);
+	static vector<SimplifiedToken> Tokenize(const string &query);
 
 	//! Returns true if the given text matches a keyword of the parser
 	static bool IsKeyword(const string &text);
 
 	//! Parses a list of expressions (i.e. the list found in a SELECT clause)
-	static vector<unique_ptr<ParsedExpression>> ParseExpressionList(string select_list);
+	static vector<unique_ptr<ParsedExpression>> ParseExpressionList(const string &select_list);
 	//! Parses a list as found in an ORDER BY expression (i.e. including optional ASCENDING/DESCENDING modifiers)
-	static vector<OrderByNode> ParseOrderList(string select_list);
+	static vector<OrderByNode> ParseOrderList(const string &select_list);
 	//! Parses an update list (i.e. the list found in the SET clause of an UPDATE statement)
-	static void ParseUpdateList(string update_list, vector<string> &update_columns,
+	static void ParseUpdateList(const string &update_list, vector<string> &update_columns,
 	                            vector<unique_ptr<ParsedExpression>> &expressions);
 	//! Parses a VALUES list (i.e. the list of expressions after a VALUES clause)
-	static vector<vector<unique_ptr<ParsedExpression>>> ParseValuesList(string value_list);
+	static vector<vector<unique_ptr<ParsedExpression>>> ParseValuesList(const string &value_list);
 	//! Parses a column list (i.e. as found in a CREATE TABLE statement)
-	static vector<ColumnDefinition> ParseColumnList(string column_list);
+	static vector<ColumnDefinition> ParseColumnList(const string &column_list);
 
 	//! The parsed SQL statements from an invocation to ParseQuery.
 	vector<unique_ptr<SQLStatement>> statements;

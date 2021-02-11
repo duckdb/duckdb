@@ -5,21 +5,19 @@
 
 namespace duckdb {
 
-using namespace duckdb_libpgquery;
-
-unique_ptr<Constraint> Transformer::TransformConstraint(PGListCell *cell) {
-	auto constraint = reinterpret_cast<PGConstraint *>(cell->data.ptr_value);
+unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGListCell *cell) {
+	auto constraint = reinterpret_cast<duckdb_libpgquery::PGConstraint *>(cell->data.ptr_value);
 	switch (constraint->contype) {
-	case PG_CONSTR_UNIQUE:
-	case PG_CONSTR_PRIMARY: {
-		bool is_primary_key = constraint->contype == PG_CONSTR_PRIMARY;
+	case duckdb_libpgquery::PG_CONSTR_UNIQUE:
+	case duckdb_libpgquery::PG_CONSTR_PRIMARY: {
+		bool is_primary_key = constraint->contype == duckdb_libpgquery::PG_CONSTR_PRIMARY;
 		vector<string> columns;
 		for (auto kc = constraint->keys->head; kc; kc = kc->next) {
-			columns.push_back(string(reinterpret_cast<PGValue *>(kc->data.ptr_value)->val.str));
+			columns.emplace_back(reinterpret_cast<duckdb_libpgquery::PGValue *>(kc->data.ptr_value)->val.str);
 		}
 		return make_unique<UniqueConstraint>(columns, is_primary_key);
 	}
-	case PG_CONSTR_CHECK: {
+	case duckdb_libpgquery::PG_CONSTR_CHECK: {
 		auto expression = TransformExpression(constraint->raw_expr);
 		if (expression->HasSubquery()) {
 			throw ParserException("subqueries prohibited in CHECK constraints");
@@ -34,24 +32,25 @@ unique_ptr<Constraint> Transformer::TransformConstraint(PGListCell *cell) {
 	}
 }
 
-unique_ptr<Constraint> Transformer::TransformConstraint(PGListCell *cell, ColumnDefinition &column, idx_t index) {
-	auto constraint = reinterpret_cast<PGConstraint *>(cell->data.ptr_value);
+unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGListCell *cell, ColumnDefinition &column,
+                                                        idx_t index) {
+	auto constraint = reinterpret_cast<duckdb_libpgquery::PGConstraint *>(cell->data.ptr_value);
 	D_ASSERT(constraint);
 	switch (constraint->contype) {
-	case PG_CONSTR_NOTNULL:
+	case duckdb_libpgquery::PG_CONSTR_NOTNULL:
 		return make_unique<NotNullConstraint>(index);
-	case PG_CONSTR_CHECK:
+	case duckdb_libpgquery::PG_CONSTR_CHECK:
 		return TransformConstraint(cell);
-	case PG_CONSTR_PRIMARY:
+	case duckdb_libpgquery::PG_CONSTR_PRIMARY:
 		return make_unique<UniqueConstraint>(index, true);
-	case PG_CONSTR_UNIQUE:
+	case duckdb_libpgquery::PG_CONSTR_UNIQUE:
 		return make_unique<UniqueConstraint>(index, false);
-	case PG_CONSTR_NULL:
+	case duckdb_libpgquery::PG_CONSTR_NULL:
 		return nullptr;
-	case PG_CONSTR_DEFAULT:
+	case duckdb_libpgquery::PG_CONSTR_DEFAULT:
 		column.default_value = TransformExpression(constraint->raw_expr);
 		return nullptr;
-	case PG_CONSTR_FOREIGN:
+	case duckdb_libpgquery::PG_CONSTR_FOREIGN:
 	default:
 		throw NotImplementedException("Constraint not implemented!");
 	}

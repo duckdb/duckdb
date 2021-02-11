@@ -5,7 +5,7 @@
 
 namespace duckdb {
 
-static SampleMethod GetSampleMethod(string method) {
+static SampleMethod GetSampleMethod(const string &method) {
 	auto lmethod = StringUtil::Lower(method);
 	if (lmethod == "system") {
 		return SampleMethod::SYSTEM_SAMPLE;

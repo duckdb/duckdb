@@ -4,7 +4,7 @@
 namespace duckdb {
 
 struct StatsBindData : public FunctionData {
-	StatsBindData(string stats = string()) : stats(move(stats)) {
+	explicit StatsBindData(string stats_p = string()) : stats(move(stats_p)) {
 	}
 
 	string stats;
@@ -15,7 +15,7 @@ public:
 	}
 };
 
-static void stats_function(DataChunk &args, ExpressionState &state, Vector &result) {
+static void StatsFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (StatsBindData &)*func_expr.bind_info;
 	if (info.stats.empty()) {
@@ -25,14 +25,14 @@ static void stats_function(DataChunk &args, ExpressionState &state, Vector &resu
 	result.Reference(v);
 }
 
-unique_ptr<FunctionData> stats_bind(ClientContext &context, ScalarFunction &bound_function,
-                                    vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> StatsBind(ClientContext &context, ScalarFunction &bound_function,
+                                   vector<unique_ptr<Expression>> &arguments) {
 	return make_unique<StatsBindData>();
 }
 
-static unique_ptr<BaseStatistics> stats_propagate_stats(ClientContext &context, BoundFunctionExpression &expr,
-                                                        FunctionData *bind_data,
-                                                        vector<unique_ptr<BaseStatistics>> &child_stats) {
+static unique_ptr<BaseStatistics> StatsPropagateStats(ClientContext &context, BoundFunctionExpression &expr,
+                                                      FunctionData *bind_data,
+                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
 	if (child_stats[0]) {
 		auto &info = (StatsBindData &)*bind_data;
 		info.stats = child_stats[0]->ToString();
@@ -41,8 +41,8 @@ static unique_ptr<BaseStatistics> stats_propagate_stats(ClientContext &context, 
 }
 
 void StatsFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("stats", {LogicalType::ANY}, LogicalType::VARCHAR, stats_function, true, stats_bind,
-	                               nullptr, stats_propagate_stats));
+	set.AddFunction(ScalarFunction("stats", {LogicalType::ANY}, LogicalType::VARCHAR, StatsFunction, true, StatsBind,
+	                               nullptr, StatsPropagateStats));
 }
 
 } // namespace duckdb

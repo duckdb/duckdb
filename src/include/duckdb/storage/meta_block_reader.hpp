@@ -21,7 +21,7 @@ class DatabaseInstance;
 class MetaBlockReader : public Deserializer {
 public:
 	MetaBlockReader(DatabaseInstance &db, block_id_t block);
-	~MetaBlockReader();
+	~MetaBlockReader() override;
 
 	DatabaseInstance &db;
 	shared_ptr<BlockHandle> block;

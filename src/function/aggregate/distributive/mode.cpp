@@ -7,12 +7,12 @@
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 
-#include <unordered_map>
+#include "duckdb/common/unordered_map.hpp"
 
 namespace duckdb {
 
 template <class T>
-struct mode_state_t {
+struct ModeState {
 	unordered_map<T, size_t> *frequency_map;
 };
 
@@ -153,33 +153,32 @@ struct ModeFunctionString {
 AggregateFunction GetModeFunction(PhysicalType type) {
 	switch (type) {
 	case PhysicalType::UINT16:
-		return AggregateFunction::UnaryAggregateDestructor<mode_state_t<uint16_t>, uint16_t, uint16_t, ModeFunction>(
+		return AggregateFunction::UnaryAggregateDestructor<ModeState<uint16_t>, uint16_t, uint16_t, ModeFunction>(
 		    LogicalType::UTINYINT, LogicalType::UTINYINT);
 	case PhysicalType::UINT32:
-		return AggregateFunction::UnaryAggregateDestructor<mode_state_t<uint32_t>, uint32_t, uint32_t, ModeFunction>(
+		return AggregateFunction::UnaryAggregateDestructor<ModeState<uint32_t>, uint32_t, uint32_t, ModeFunction>(
 		    LogicalType::UINTEGER, LogicalType::UINTEGER);
 	case PhysicalType::UINT64:
-		return AggregateFunction::UnaryAggregateDestructor<mode_state_t<uint64_t>, uint64_t, uint64_t, ModeFunction>(
+		return AggregateFunction::UnaryAggregateDestructor<ModeState<uint64_t>, uint64_t, uint64_t, ModeFunction>(
 		    LogicalType::UBIGINT, LogicalType::UBIGINT);
 	case PhysicalType::INT16:
-		return AggregateFunction::UnaryAggregateDestructor<mode_state_t<int16_t>, int16_t, int16_t, ModeFunction>(
+		return AggregateFunction::UnaryAggregateDestructor<ModeState<int16_t>, int16_t, int16_t, ModeFunction>(
 		    LogicalType::TINYINT, LogicalType::TINYINT);
 	case PhysicalType::INT32:
-		return AggregateFunction::UnaryAggregateDestructor<mode_state_t<int32_t>, int32_t, int32_t, ModeFunction>(
+		return AggregateFunction::UnaryAggregateDestructor<ModeState<int32_t>, int32_t, int32_t, ModeFunction>(
 		    LogicalType::INTEGER, LogicalType::INTEGER);
 	case PhysicalType::INT64:
-		return AggregateFunction::UnaryAggregateDestructor<mode_state_t<int64_t>, int64_t, int64_t, ModeFunction>(
+		return AggregateFunction::UnaryAggregateDestructor<ModeState<int64_t>, int64_t, int64_t, ModeFunction>(
 		    LogicalType::BIGINT, LogicalType::BIGINT);
 	case PhysicalType::FLOAT:
-		return AggregateFunction::UnaryAggregateDestructor<mode_state_t<float>, float, float, ModeFunction>(
+		return AggregateFunction::UnaryAggregateDestructor<ModeState<float>, float, float, ModeFunction>(
 		    LogicalType::FLOAT, LogicalType::FLOAT);
 	case PhysicalType::DOUBLE:
-		return AggregateFunction::UnaryAggregateDestructor<mode_state_t<double>, double, double, ModeFunction>(
+		return AggregateFunction::UnaryAggregateDestructor<ModeState<double>, double, double, ModeFunction>(
 		    LogicalType::DOUBLE, LogicalType::DOUBLE);
 	case PhysicalType::VARCHAR:
-		return AggregateFunction::UnaryAggregateDestructor<mode_state_t<string>, string_t, string_t,
-		                                                   ModeFunctionString>(LogicalType::VARCHAR,
-		                                                                       LogicalType::VARCHAR);
+		return AggregateFunction::UnaryAggregateDestructor<ModeState<string>, string_t, string_t, ModeFunctionString>(
+		    LogicalType::VARCHAR, LogicalType::VARCHAR);
 
 	default:
 		throw NotImplementedException("Unimplemented mode aggregate");

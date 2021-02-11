@@ -4,10 +4,11 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/common/types/hyperloglog.hpp"
 #include "duckdb/function/function_set.hpp"
+#include "duckdb/common/types/hash.hpp"
 
 namespace duckdb {
 
-struct approx_distinct_count_state_t {
+struct ApproxDistinctCountState {
 	HyperLogLog *log;
 };
 
@@ -27,7 +28,7 @@ struct ApproxCountDistinctFunctionBase {
 			source.log = nullptr;
 			return;
 		}
-		auto new_log = target->log->Merge_P(*source.log);
+		auto new_log = target->log->MergePointer(*source.log);
 		D_ASSERT(target->log);
 		D_ASSERT(source.log);
 		delete target->log;
@@ -86,7 +87,9 @@ struct ApproxCountDistinctFunctionString : ApproxCountDistinctFunctionBase {
 		if (nullmask[idx]) {
 			return;
 		}
-		auto str_hash = std::hash<std::string> {}(input[idx].GetString());
+		auto str = input[idx].GetDataUnsafe();
+		auto str_len = input[idx].GetSize();
+		auto str_hash = Hash(str, str_len);
 		state->log->Add((uint8_t *)&str_hash, sizeof(str_hash));
 	}
 	template <class INPUT_TYPE, class STATE, class OP>
@@ -101,39 +104,39 @@ struct ApproxCountDistinctFunctionString : ApproxCountDistinctFunctionBase {
 AggregateFunction GetApproxCountDistinctFunction(PhysicalType type) {
 	switch (type) {
 	case PhysicalType::UINT16:
-		return AggregateFunction::UnaryAggregateDestructor<approx_distinct_count_state_t, uint16_t, int64_t,
+		return AggregateFunction::UnaryAggregateDestructor<ApproxDistinctCountState, uint16_t, int64_t,
 		                                                   ApproxCountDistinctFunction>(LogicalType::UTINYINT,
 		                                                                                LogicalType::BIGINT);
 	case PhysicalType::UINT32:
-		return AggregateFunction::UnaryAggregateDestructor<approx_distinct_count_state_t, uint32_t, int64_t,
+		return AggregateFunction::UnaryAggregateDestructor<ApproxDistinctCountState, uint32_t, int64_t,
 		                                                   ApproxCountDistinctFunction>(LogicalType::UINTEGER,
 		                                                                                LogicalType::BIGINT);
 	case PhysicalType::UINT64:
-		return AggregateFunction::UnaryAggregateDestructor<approx_distinct_count_state_t, uint64_t, int64_t,
+		return AggregateFunction::UnaryAggregateDestructor<ApproxDistinctCountState, uint64_t, int64_t,
 		                                                   ApproxCountDistinctFunction>(LogicalType::UBIGINT,
 		                                                                                LogicalType::BIGINT);
 	case PhysicalType::INT16:
-		return AggregateFunction::UnaryAggregateDestructor<approx_distinct_count_state_t, int16_t, int64_t,
+		return AggregateFunction::UnaryAggregateDestructor<ApproxDistinctCountState, int16_t, int64_t,
 		                                                   ApproxCountDistinctFunction>(LogicalType::TINYINT,
 		                                                                                LogicalType::BIGINT);
 	case PhysicalType::INT32:
-		return AggregateFunction::UnaryAggregateDestructor<approx_distinct_count_state_t, int32_t, int64_t,
+		return AggregateFunction::UnaryAggregateDestructor<ApproxDistinctCountState, int32_t, int64_t,
 		                                                   ApproxCountDistinctFunction>(LogicalType::INTEGER,
 		                                                                                LogicalType::BIGINT);
 	case PhysicalType::INT64:
-		return AggregateFunction::UnaryAggregateDestructor<approx_distinct_count_state_t, int64_t, int64_t,
+		return AggregateFunction::UnaryAggregateDestructor<ApproxDistinctCountState, int64_t, int64_t,
 		                                                   ApproxCountDistinctFunction>(LogicalType::BIGINT,
 		                                                                                LogicalType::BIGINT);
 	case PhysicalType::FLOAT:
-		return AggregateFunction::UnaryAggregateDestructor<approx_distinct_count_state_t, float, int64_t,
+		return AggregateFunction::UnaryAggregateDestructor<ApproxDistinctCountState, float, int64_t,
 		                                                   ApproxCountDistinctFunction>(LogicalType::FLOAT,
 		                                                                                LogicalType::BIGINT);
 	case PhysicalType::DOUBLE:
-		return AggregateFunction::UnaryAggregateDestructor<approx_distinct_count_state_t, double, int64_t,
+		return AggregateFunction::UnaryAggregateDestructor<ApproxDistinctCountState, double, int64_t,
 		                                                   ApproxCountDistinctFunction>(LogicalType::DOUBLE,
 		                                                                                LogicalType::BIGINT);
 	case PhysicalType::VARCHAR:
-		return AggregateFunction::UnaryAggregateDestructor<approx_distinct_count_state_t, string_t, int64_t,
+		return AggregateFunction::UnaryAggregateDestructor<ApproxDistinctCountState, string_t, int64_t,
 		                                                   ApproxCountDistinctFunctionString>(LogicalType::VARCHAR,
 		                                                                                      LogicalType::BIGINT);
 
@@ -153,8 +156,8 @@ void ApproxCountDistinctFun::RegisterFunction(BuiltinFunctions &set) {
 	approx_count.AddFunction(GetApproxCountDistinctFunction(PhysicalType::INT64));
 	approx_count.AddFunction(GetApproxCountDistinctFunction(PhysicalType::DOUBLE));
 	approx_count.AddFunction(GetApproxCountDistinctFunction(PhysicalType::VARCHAR));
-	approx_count.AddFunction(AggregateFunction::UnaryAggregateDestructor<approx_distinct_count_state_t, int64_t,
-	                                                                     int64_t, ApproxCountDistinctFunction>(
+	approx_count.AddFunction(AggregateFunction::UnaryAggregateDestructor<ApproxDistinctCountState, int64_t, int64_t,
+	                                                                     ApproxCountDistinctFunction>(
 	    LogicalType::TIMESTAMP, LogicalType::BIGINT));
 	set.AddFunction(approx_count);
 }

@@ -51,7 +51,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 		                      "same number of result columns");
 	}
 
-	if (statement.modifiers.size() > 0) {
+	if (!statement.modifiers.empty()) {
 		throw NotImplementedException("FIXME: bind modifiers in recursive CTE");
 	}
 

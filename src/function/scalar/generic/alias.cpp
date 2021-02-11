@@ -3,14 +3,14 @@
 
 namespace duckdb {
 
-static void alias_function(DataChunk &args, ExpressionState &state, Vector &result) {
+static void AliasFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	Value v(state.expr.alias.empty() ? func_expr.children[0]->GetName() : state.expr.alias);
 	result.Reference(v);
 }
 
 void AliasFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("alias", {LogicalType::ANY}, LogicalType::VARCHAR, alias_function));
+	set.AddFunction(ScalarFunction("alias", {LogicalType::ANY}, LogicalType::VARCHAR, AliasFunction));
 }
 
 } // namespace duckdb
