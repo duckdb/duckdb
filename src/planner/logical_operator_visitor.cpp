@@ -18,7 +18,7 @@ void LogicalOperatorVisitor::VisitOperatorChildren(LogicalOperator &op) {
 }
 
 void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
-                                                  std::function<void(unique_ptr<Expression> *child)> callback) {
+                                                  const std::function<void(unique_ptr<Expression> *child)> &callback) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_EXPRESSION_GET: {
 		auto &get = (LogicalExpressionGet &)op;

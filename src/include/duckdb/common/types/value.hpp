@@ -25,58 +25,33 @@ class Value {
 
 public:
 	//! Create an empty NULL value of the specified type
-	explicit Value(LogicalType type = LogicalType::SQLNULL) : type_(type), is_null(true) {
-	}
-	//! Create a UTINYINT value
-	Value(uint8_t val) : type_(LogicalType::UTINYINT), is_null(false) {
-		value_.utinyint = val;
-	}
-	//! Create a USMALLINT value
-	Value(uint16_t val) : type_(LogicalType::USMALLINT), is_null(false) {
-		value_.usmallint = val;
-	}
-	//! Create a UINTEGER value
-	Value(uint32_t val) : type_(LogicalType::UINTEGER), is_null(false) {
-		value_.uinteger = val;
-	}
-	//! Create a UBIGINT value
-	Value(uint64_t val) : type_(LogicalType::UBIGINT), is_null(false) {
-		value_.ubigint = val;
-	}
+	explicit Value(LogicalType type = LogicalType::SQLNULL);
 	//! Create an INTEGER value
-	Value(int32_t val) : type_(LogicalType::INTEGER), is_null(false) {
-		value_.integer = val;
-	}
+	Value(int32_t val); // NOLINT: Allow implicit conversion from `int32_t`
 	//! Create a BIGINT value
-	Value(int64_t val) : type_(LogicalType::BIGINT), is_null(false) {
-		value_.bigint = val;
-	}
+	Value(int64_t val); // NOLINT: Allow implicit conversion from `int64_t`
 	//! Create a FLOAT value
-	Value(float val) : type_(LogicalType::FLOAT), is_null(false) {
-		value_.float_ = val;
-	}
+	Value(float val); // NOLINT: Allow implicit conversion from `float`
 	//! Create a DOUBLE value
-	Value(double val) : type_(LogicalType::DOUBLE), is_null(false) {
-		value_.double_ = val;
-	}
+	Value(double val); // NOLINT: Allow implicit conversion from `double`
 	//! Create a VARCHAR value
-	Value(const char *val) : Value(val ? string(val) : string()) {
-	}
-	Value(string_t val);
+	Value(const char *val); // NOLINT: Allow implicit conversion from `const char *`
 	//! Create a VARCHAR value
-	Value(string val);
+	Value(string_t val); // NOLINT: Allow implicit conversion from `string_t`
+	//! Create a VARCHAR value
+	Value(string val); // NOLINT: Allow implicit conversion from `string`
 
 	LogicalType type() const {
 		return type_;
 	}
 
 	//! Create the lowest possible value of a given type (numeric only)
-	static Value MinimumValue(LogicalType type);
+	static Value MinimumValue(const LogicalType &type);
 	//! Create the highest possible value of a given type (numeric only)
-	static Value MaximumValue(LogicalType type);
+	static Value MaximumValue(const LogicalType &type);
 	//! Create a Numeric value of the specified type with the specified value
-	static Value Numeric(LogicalType type, int64_t value);
-	static Value Numeric(LogicalType type, hugeint_t value);
+	static Value Numeric(const LogicalType &type, int64_t value);
+	static Value Numeric(const LogicalType &type, hugeint_t value);
 
 	//! Create a tinyint Value from a specified value
 	static Value BOOLEAN(int8_t value);
@@ -137,7 +112,7 @@ public:
 	//! Create a blob Value from a data pointer and a length: no bytes are interpreted
 	static Value BLOB(const_data_ptr_t data, idx_t len);
 	//! Creates a blob by casting a specified string to a blob (i.e. interpreting \x characters)
-	static Value BLOB(string data);
+	static Value BLOB(const string &data);
 
 	template <class T>
 	T GetValue() const {
@@ -163,9 +138,9 @@ public:
 	DUCKDB_API string ToString() const;
 
 	//! Cast this value to another type
-	Value CastAs(LogicalType target_type, bool strict = false) const;
+	Value CastAs(const LogicalType &target_type, bool strict = false) const;
 	//! Tries to cast value to another type, throws exception if its not possible
-	bool TryCastAs(LogicalType target_type, bool strict = false);
+	bool TryCastAs(const LogicalType &target_type, bool strict = false);
 
 	//! Serializes a Value to a stand-alone binary blob
 	void Serialize(Serializer &serializer);
@@ -208,7 +183,7 @@ public:
 
 	//! Returns true if the values are (approximately) equivalent. Note this is NOT the SQL equivalence. For this
 	//! function, NULL values are equivalent and floating point values that are close are equivalent.
-	static bool ValuesAreEqual(Value result_value, Value value);
+	static bool ValuesAreEqual(const Value &result_value, const Value &value);
 
 	friend std::ostream &operator<<(std::ostream &out, const Value &val) {
 		out << val.ToString();
@@ -268,6 +243,14 @@ private:
 template <>
 Value DUCKDB_API Value::CreateValue(bool value);
 template <>
+Value DUCKDB_API Value::CreateValue(uint8_t value);
+template <>
+Value DUCKDB_API Value::CreateValue(uint16_t value);
+template <>
+Value DUCKDB_API Value::CreateValue(uint32_t value);
+template <>
+Value DUCKDB_API Value::CreateValue(uint64_t value);
+template <>
 Value DUCKDB_API Value::CreateValue(int8_t value);
 template <>
 Value DUCKDB_API Value::CreateValue(int16_t value);
@@ -301,6 +284,10 @@ int32_t Value::GetValue() const;
 template <>
 int64_t Value::GetValue() const;
 template <>
+uint8_t Value::GetValue() const;
+template <>
+uint16_t Value::GetValue() const;
+template <>
 hugeint_t Value::GetValue() const;
 template <>
 string Value::GetValue() const;
@@ -321,6 +308,14 @@ template <>
 int64_t &Value::GetValueUnsafe();
 template <>
 hugeint_t &Value::GetValueUnsafe();
+template <>
+uint8_t &Value::GetValueUnsafe();
+template <>
+uint16_t &Value::GetValueUnsafe();
+template <>
+uint32_t &Value::GetValueUnsafe();
+template <>
+uint64_t &Value::GetValueUnsafe();
 template <>
 string &Value::GetValueUnsafe();
 template <>

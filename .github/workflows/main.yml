@@ -59,6 +59,27 @@ jobs:
         clang-format --dump-config
         make format-check-silent
 
+  tidy-check:
+    name: Tidy Check
+    runs-on: ubuntu-20.04
+
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+      TIDY_THREADS: 4
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Install
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-tidy
+
+    - name: Tidy Check
+      run: make tidy-check
+
   win-release-64:
     name: Windows (64 Bit)
     runs-on: windows-latest
@@ -230,6 +251,12 @@ jobs:
 
     - name: Test
       run: make unit
+
+    - name: Amalgamation
+      run: |
+        python scripts/amalgamation.py
+        cd src/amalgamation
+        clang++ -std=c++11 -emit-llvm -S duckdb.cpp
 
 
   linux-release-64:

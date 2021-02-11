@@ -22,7 +22,7 @@ struct ReverseFun {
 };
 
 struct LowerFun {
-	static uint8_t ASCIIToLowerMap[];
+	static uint8_t ascii_to_lower_map[];
 
 	//! Returns the length of the result string obtained from lowercasing the given input (in bytes)
 	static idx_t LowerLength(const char *input_data, idx_t input_length);
@@ -34,7 +34,7 @@ struct LowerFun {
 };
 
 struct UpperFun {
-	static uint8_t ASCIIToUpperMap[];
+	static uint8_t ascii_to_upper_map[];
 
 	static void RegisterFunction(BuiltinFunctions &set);
 };
@@ -110,7 +110,7 @@ struct RegexpFun {
 
 struct SubstringFun {
 	static void RegisterFunction(BuiltinFunctions &set);
-	static string_t substring_scalar_function(Vector &result, string_t input, int32_t offset, int32_t length);
+	static string_t SubstringScalarFunction(Vector &result, string_t input, int32_t offset, int32_t length);
 };
 
 struct PrintfFun {

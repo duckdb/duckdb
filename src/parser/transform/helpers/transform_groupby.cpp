@@ -3,16 +3,14 @@
 
 namespace duckdb {
 
-using namespace duckdb_libpgquery;
-
 // FIXME: what is the difference between GroupBy and expression list?
-bool Transformer::TransformGroupBy(PGList *group, vector<unique_ptr<ParsedExpression>> &result) {
+bool Transformer::TransformGroupBy(duckdb_libpgquery::PGList *group, vector<unique_ptr<ParsedExpression>> &result) {
 	if (!group) {
 		return false;
 	}
 
 	for (auto node = group->head; node != nullptr; node = node->next) {
-		auto n = reinterpret_cast<PGNode *>(node->data.ptr_value);
+		auto n = reinterpret_cast<duckdb_libpgquery::PGNode *>(node->data.ptr_value);
 		result.push_back(TransformExpression(n));
 	}
 	return true;

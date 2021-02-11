@@ -16,7 +16,7 @@ class NodeStatistics {
 public:
 	NodeStatistics() : has_estimated_cardinality(false), has_max_cardinality(false) {
 	}
-	NodeStatistics(idx_t estimated_cardinality)
+	explicit NodeStatistics(idx_t estimated_cardinality)
 	    : has_estimated_cardinality(true), estimated_cardinality(estimated_cardinality), has_max_cardinality(false) {
 	}
 	NodeStatistics(idx_t estimated_cardinality, idx_t max_cardinality)

@@ -52,7 +52,7 @@ struct ParquetReaderScanState {
 class ParquetReader {
 public:
 	ParquetReader(ClientContext &context, string file_name, vector<LogicalType> expected_types,
-	              string initial_filename = string());
+	              const string &initial_filename = string());
 	ParquetReader(ClientContext &context, string file_name) : ParquetReader(context, file_name, vector<LogicalType>()) {
 	}
 	~ParquetReader();

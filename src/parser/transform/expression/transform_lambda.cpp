@@ -5,8 +5,6 @@
 
 namespace duckdb {
 
-using namespace duckdb_libpgquery;
-
 static string ExtractColumnFromLambda(ParsedExpression &expr) {
 	if (expr.type != ExpressionType::COLUMN_REF) {
 		throw ParserException("Lambda parameter must be a column name");
@@ -24,6 +22,7 @@ unique_ptr<ParsedExpression> Transformer::TransformLambda(duckdb_libpgquery::PGL
 		throw ParserException("Failed to transform expression list");
 	}
 	vector<string> parameters;
+	parameters.reserve(parameter_expressions.size());
 	for (auto &expr : parameter_expressions) {
 		parameters.push_back(ExtractColumnFromLambda(*expr));
 	}

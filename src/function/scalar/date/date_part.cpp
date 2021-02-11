@@ -58,7 +58,7 @@ DatePartSpecifier GetDatePartSpecifier(string specifier) {
 }
 
 template <class T>
-static void year_operator(DataChunk &args, ExpressionState &state, Vector &result) {
+static void YearOperator(DataChunk &args, ExpressionState &state, Vector &result) {
 	int32_t last_year = 0;
 	UnaryExecutor::Execute<T, int64_t>(args.data[0], result, args.size(),
 	                                   [&](T input) { return Date::ExtractYear(input, &last_year); });
@@ -449,7 +449,7 @@ int64_t HoursOperator::Operation(timestamp_t input) {
 }
 
 template <class T>
-static int64_t extract_element(DatePartSpecifier type, T element) {
+static int64_t ExtractElement(DatePartSpecifier type, T element) {
 	switch (type) {
 	case DatePartSpecifier::YEAR:
 		return YearOperator::Operation<T, int64_t>(element);
@@ -493,18 +493,18 @@ static int64_t extract_element(DatePartSpecifier type, T element) {
 struct DatePartOperator {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA specifier, TB date) {
-		return extract_element<TB>(GetDatePartSpecifier(specifier.GetString()), date);
+		return ExtractElement<TB>(GetDatePartSpecifier(specifier.GetString()), date);
 	}
 };
 
-void AddGenericDatePartOperator(BuiltinFunctions &set, string name, scalar_function_t date_func,
+void AddGenericDatePartOperator(BuiltinFunctions &set, const string &name, scalar_function_t date_func,
                                 scalar_function_t ts_func, function_statistics_t date_stats,
                                 function_statistics_t ts_stats) {
 	ScalarFunctionSet operator_set(name);
 	operator_set.AddFunction(
-	    ScalarFunction({LogicalType::DATE}, LogicalType::BIGINT, date_func, false, nullptr, nullptr, date_stats));
-	operator_set.AddFunction(
-	    ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::BIGINT, ts_func, false, nullptr, nullptr, ts_stats));
+	    ScalarFunction({LogicalType::DATE}, LogicalType::BIGINT, move(date_func), false, nullptr, nullptr, date_stats));
+	operator_set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::BIGINT, move(ts_func), false,
+	                                        nullptr, nullptr, ts_stats));
 	set.AddFunction(operator_set);
 }
 
@@ -535,20 +535,20 @@ date_t LastDayOperator::Operation(timestamp_t input) {
 struct MonthNameOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
-		return Date::MonthNames[MonthOperator::Operation<TA, int64_t>(input) - 1];
+		return Date::MONTH_NAMES[MonthOperator::Operation<TA, int64_t>(input) - 1];
 	}
 };
 
 struct DayNameOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
-		return Date::DayNames[DayOfWeekOperator::Operation<TA, int64_t>(input)];
+		return Date::DAY_NAMES[DayOfWeekOperator::Operation<TA, int64_t>(input)];
 	}
 };
 
 void DatePartFun::RegisterFunction(BuiltinFunctions &set) {
 	// register the individual operators
-	AddGenericDatePartOperator(set, "year", year_operator<date_t>, year_operator<timestamp_t>,
+	AddGenericDatePartOperator(set, "year", YearOperator<date_t>, YearOperator<timestamp_t>,
 	                           YearOperator::PropagateStatistics<date_t>,
 	                           YearOperator::PropagateStatistics<timestamp_t>);
 	AddDatePartOperator<MonthOperator>(set, "month");

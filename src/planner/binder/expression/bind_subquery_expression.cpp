@@ -18,11 +18,11 @@ public:
 	unique_ptr<BoundQueryNode> bound_node;
 	unique_ptr<SelectStatement> subquery;
 
-	const vector<unique_ptr<ParsedExpression>> &GetSelectList() const {
+	const vector<unique_ptr<ParsedExpression>> &GetSelectList() const override {
 		throw Exception("Cannot get select list of bound subquery node");
 	}
 
-	unique_ptr<QueryNode> Copy() {
+	unique_ptr<QueryNode> Copy() override {
 		throw Exception("Cannot copy bound subquery node");
 	}
 };

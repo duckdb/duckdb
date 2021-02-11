@@ -11,12 +11,12 @@
 
 namespace duckdb {
 
-bool Interval::FromString(string str, interval_t &result) {
+bool Interval::FromString(const string &str, interval_t &result) {
 	return Interval::FromCString(str.c_str(), str.size(), result);
 }
 
 template <class T>
-void interval_try_addition(T &target, int64_t input, int64_t multiplier) {
+void IntervalTryAddition(T &target, int64_t input, int64_t multiplier) {
 	int64_t addition;
 	if (!TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(input, multiplier, addition)) {
 		throw OutOfRangeException("interval value is out of range");
@@ -135,43 +135,43 @@ interval_parse_identifier:
 	// add the specifier to the interval
 	switch (specifier) {
 	case DatePartSpecifier::MILLENNIUM:
-		interval_try_addition<int32_t>(result.months, number, MONTHS_PER_MILLENIUM);
+		IntervalTryAddition<int32_t>(result.months, number, MONTHS_PER_MILLENIUM);
 		break;
 	case DatePartSpecifier::CENTURY:
-		interval_try_addition<int32_t>(result.months, number, MONTHS_PER_CENTURY);
+		IntervalTryAddition<int32_t>(result.months, number, MONTHS_PER_CENTURY);
 		break;
 	case DatePartSpecifier::DECADE:
-		interval_try_addition<int32_t>(result.months, number, MONTHS_PER_DECADE);
+		IntervalTryAddition<int32_t>(result.months, number, MONTHS_PER_DECADE);
 		break;
 	case DatePartSpecifier::YEAR:
-		interval_try_addition<int32_t>(result.months, number, MONTHS_PER_YEAR);
+		IntervalTryAddition<int32_t>(result.months, number, MONTHS_PER_YEAR);
 		break;
 	case DatePartSpecifier::QUARTER:
-		interval_try_addition<int32_t>(result.months, number, MONTHS_PER_QUARTER);
+		IntervalTryAddition<int32_t>(result.months, number, MONTHS_PER_QUARTER);
 		break;
 	case DatePartSpecifier::MONTH:
-		interval_try_addition<int32_t>(result.months, number, 1);
+		IntervalTryAddition<int32_t>(result.months, number, 1);
 		break;
 	case DatePartSpecifier::DAY:
-		interval_try_addition<int32_t>(result.days, number, 1);
+		IntervalTryAddition<int32_t>(result.days, number, 1);
 		break;
 	case DatePartSpecifier::WEEK:
-		interval_try_addition<int32_t>(result.days, number, DAYS_PER_WEEK);
+		IntervalTryAddition<int32_t>(result.days, number, DAYS_PER_WEEK);
 		break;
 	case DatePartSpecifier::MICROSECONDS:
-		interval_try_addition<int64_t>(result.micros, number, 1);
+		IntervalTryAddition<int64_t>(result.micros, number, 1);
 		break;
 	case DatePartSpecifier::MILLISECONDS:
-		interval_try_addition<int64_t>(result.micros, number, MICROS_PER_MSEC);
+		IntervalTryAddition<int64_t>(result.micros, number, MICROS_PER_MSEC);
 		break;
 	case DatePartSpecifier::SECOND:
-		interval_try_addition<int64_t>(result.micros, number, MICROS_PER_SEC);
+		IntervalTryAddition<int64_t>(result.micros, number, MICROS_PER_SEC);
 		break;
 	case DatePartSpecifier::MINUTE:
-		interval_try_addition<int64_t>(result.micros, number, MICROS_PER_MINUTE);
+		IntervalTryAddition<int64_t>(result.micros, number, MICROS_PER_MINUTE);
 		break;
 	case DatePartSpecifier::HOUR:
-		interval_try_addition<int64_t>(result.micros, number, MICROS_PER_HOUR);
+		IntervalTryAddition<int64_t>(result.micros, number, MICROS_PER_HOUR);
 		break;
 	default:
 		return false;
@@ -282,10 +282,10 @@ interval_t Interval::GetDifference(timestamp_t timestamp_1, timestamp_t timestam
 	}
 	while (day_diff < 0) {
 		if (timestamp_1 < timestamp_2) {
-			day_diff += Date::IsLeapYear(year1) ? Date::LeapDays[month1] : Date::NormalDays[month1];
+			day_diff += Date::IsLeapYear(year1) ? Date::LEAP_DAYS[month1] : Date::NORMAL_DAYS[month1];
 			month_diff--;
 		} else {
-			day_diff += Date::IsLeapYear(year2) ? Date::LeapDays[month2] : Date::NormalDays[month2];
+			day_diff += Date::IsLeapYear(year2) ? Date::LEAP_DAYS[month2] : Date::NORMAL_DAYS[month2];
 			month_diff--;
 		}
 	}
@@ -312,7 +312,7 @@ interval_t Interval::GetDifference(timestamp_t timestamp_1, timestamp_t timestam
 	return interval;
 }
 
-static void normalize_interval_entries(interval_t input, int64_t &months, int64_t &days, int64_t &micros) {
+static void NormalizeIntervalEntries(interval_t input, int64_t &months, int64_t &days, int64_t &micros) {
 	int64_t extra_months_d = input.days / Interval::DAYS_PER_MONTH;
 	int64_t extra_months_micros = input.micros / Interval::MICROS_PER_MONTH;
 	input.days -= extra_months_d * Interval::DAYS_PER_MONTH;
@@ -333,8 +333,8 @@ bool Interval::Equals(interval_t left, interval_t right) {
 bool Interval::GreaterThan(interval_t left, interval_t right) {
 	int64_t lmonths, ldays, lmicros;
 	int64_t rmonths, rdays, rmicros;
-	normalize_interval_entries(left, lmonths, ldays, lmicros);
-	normalize_interval_entries(right, rmonths, rdays, rmicros);
+	NormalizeIntervalEntries(left, lmonths, ldays, lmicros);
+	NormalizeIntervalEntries(right, rmonths, rdays, rmicros);
 
 	if (lmonths > rmonths) {
 		return true;

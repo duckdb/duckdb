@@ -25,11 +25,11 @@ string BoundOperatorExpression::ToString() const {
 	return result;
 }
 
-bool BoundOperatorExpression::Equals(const BaseExpression *other_) const {
-	if (!Expression::Equals(other_)) {
+bool BoundOperatorExpression::Equals(const BaseExpression *other_p) const {
+	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto other = (BoundOperatorExpression *)other_;
+	auto other = (BoundOperatorExpression *)other_p;
 	if (children.size() != other->children.size()) {
 		return false;
 	}

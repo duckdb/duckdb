@@ -19,7 +19,7 @@ class Serializer;
 //! Represents a generic expression that returns a table.
 class TableRef {
 public:
-	TableRef(TableReferenceType type) : type(type) {
+	explicit TableRef(TableReferenceType type) : type(type) {
 	}
 	virtual ~TableRef() {
 	}

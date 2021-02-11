@@ -6,28 +6,26 @@
 
 namespace duckdb {
 
-using namespace duckdb_libpgquery;
-
-unique_ptr<TableRef> Transformer::TransformJoin(PGJoinExpr *root) {
+unique_ptr<TableRef> Transformer::TransformJoin(duckdb_libpgquery::PGJoinExpr *root) {
 	auto result = make_unique<JoinRef>();
 	switch (root->jointype) {
-	case PG_JOIN_INNER: {
+	case duckdb_libpgquery::PG_JOIN_INNER: {
 		result->type = JoinType::INNER;
 		break;
 	}
-	case PG_JOIN_LEFT: {
+	case duckdb_libpgquery::PG_JOIN_LEFT: {
 		result->type = JoinType::LEFT;
 		break;
 	}
-	case PG_JOIN_FULL: {
+	case duckdb_libpgquery::PG_JOIN_FULL: {
 		result->type = JoinType::OUTER;
 		break;
 	}
-	case PG_JOIN_RIGHT: {
+	case duckdb_libpgquery::PG_JOIN_RIGHT: {
 		result->type = JoinType::RIGHT;
 		break;
 	}
-	case PG_JOIN_SEMI: {
+	case duckdb_libpgquery::PG_JOIN_SEMI: {
 		result->type = JoinType::SEMI;
 		break;
 	}
@@ -45,15 +43,15 @@ unique_ptr<TableRef> Transformer::TransformJoin(PGJoinExpr *root) {
 	if (root->usingClause && root->usingClause->length > 0) {
 		// usingClause is a list of strings
 		for (auto node = root->usingClause->head; node != nullptr; node = node->next) {
-			auto target = reinterpret_cast<PGNode *>(node->data.ptr_value);
-			D_ASSERT(target->type == T_PGString);
-			auto column_name = string(reinterpret_cast<PGValue *>(target)->val.str);
+			auto target = reinterpret_cast<duckdb_libpgquery::PGNode *>(node->data.ptr_value);
+			D_ASSERT(target->type == duckdb_libpgquery::T_PGString);
+			auto column_name = string(reinterpret_cast<duckdb_libpgquery::PGValue *>(target)->val.str);
 			result->using_columns.push_back(column_name);
 		}
 		return move(result);
 	}
 
-	if (!root->quals && result->using_columns.size() == 0 && !result->is_natural) { // CROSS PRODUCT
+	if (!root->quals && result->using_columns.empty() && !result->is_natural) { // CROSS PRODUCT
 		auto cross = make_unique<CrossProductRef>();
 		cross->left = move(result->left);
 		cross->right = move(result->right);

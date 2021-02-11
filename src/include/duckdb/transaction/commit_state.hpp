@@ -22,7 +22,7 @@ struct UpdateInfo;
 
 class CommitState {
 public:
-	CommitState(transaction_t commit_id, WriteAheadLog *log = nullptr);
+	explicit CommitState(transaction_t commit_id, WriteAheadLog *log = nullptr);
 
 	WriteAheadLog *log;
 	transaction_t commit_id;

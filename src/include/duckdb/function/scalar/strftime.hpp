@@ -90,7 +90,7 @@ protected:
 
 	void AddFormatSpecifier(string preceding_literal, StrTimeSpecifier specifier) override;
 	static idx_t GetSpecifierLength(StrTimeSpecifier specifier, date_t date, dtime_t time);
-	char *WriteString(char *target, string_t &str);
+	char *WriteString(char *target, const string_t &str);
 	char *Write2(char *target, uint8_t value);
 	char *WritePadded2(char *target, int32_t value);
 	char *WritePadded3(char *target, uint32_t value);
@@ -116,10 +116,11 @@ public:
 	timestamp_t ParseTimestamp(string_t str);
 
 protected:
-	string FormatStrpTimeError(string input, idx_t position);
-	void AddFormatSpecifier(string preceding_literal, StrTimeSpecifier specifier);
+	string FormatStrpTimeError(const string &input, idx_t position);
+	void AddFormatSpecifier(string preceding_literal, StrTimeSpecifier specifier) override;
 	int NumericSpecifierWidth(StrTimeSpecifier specifier);
-	int32_t TryParseCollection(const char *data, idx_t &pos, idx_t size, string_t collection[], idx_t collection_count);
+	int32_t TryParseCollection(const char *data, idx_t &pos, idx_t size, const string_t collection[],
+	                           idx_t collection_count);
 };
 
 } // namespace duckdb

@@ -46,7 +46,7 @@ public:
 
 class BlockingSample {
 public:
-	BlockingSample(int64_t seed) : random(seed), reservoirSampling(seed) {
+	explicit BlockingSample(int64_t seed) : random(seed), reservoirSampling(seed) {
 	}
 	virtual ~BlockingSample() {
 	}

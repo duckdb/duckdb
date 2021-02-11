@@ -8,7 +8,7 @@
 
 namespace duckdb {
 
-static void age_function_standard(DataChunk &input, ExpressionState &state, Vector &result) {
+static void AgeFunctionStandard(DataChunk &input, ExpressionState &state, Vector &result) {
 	D_ASSERT(input.ColumnCount() == 1);
 	auto current_timestamp = Timestamp::GetCurrentTimestamp();
 
@@ -17,7 +17,7 @@ static void age_function_standard(DataChunk &input, ExpressionState &state, Vect
 	});
 }
 
-static void age_function(DataChunk &input, ExpressionState &state, Vector &result) {
+static void AgeFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	D_ASSERT(input.ColumnCount() == 2);
 
 	BinaryExecutor::Execute<timestamp_t, timestamp_t, interval_t, true>(
@@ -27,9 +27,9 @@ static void age_function(DataChunk &input, ExpressionState &state, Vector &resul
 
 void AgeFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet age("age");
-	age.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::INTERVAL, age_function_standard));
+	age.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::INTERVAL, AgeFunctionStandard));
 	age.AddFunction(
-	    ScalarFunction({LogicalType::TIMESTAMP, LogicalType::TIMESTAMP}, LogicalType::INTERVAL, age_function));
+	    ScalarFunction({LogicalType::TIMESTAMP, LogicalType::TIMESTAMP}, LogicalType::INTERVAL, AgeFunction));
 	set.AddFunction(age);
 }
 

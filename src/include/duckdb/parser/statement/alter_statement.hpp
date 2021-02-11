@@ -17,7 +17,7 @@ namespace duckdb {
 class AlterStatement : public SQLStatement {
 public:
 	AlterStatement();
-	AlterStatement(unique_ptr<AlterInfo> info);
+	explicit AlterStatement(unique_ptr<AlterInfo> info);
 
 	unique_ptr<AlterInfo> info;
 

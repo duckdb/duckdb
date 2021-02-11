@@ -13,7 +13,7 @@ namespace duckdb {
 
 class Node256 : public Node {
 public:
-	Node256(ART &art, size_t compressionLength);
+	Node256(ART &art, size_t compression_length);
 
 	unique_ptr<Node> child[256];
 
@@ -31,9 +31,9 @@ public:
 	idx_t GetMin() override;
 
 	//! Insert node From Node256
-	static void insert(ART &art, unique_ptr<Node> &node, uint8_t keyByte, unique_ptr<Node> &child);
+	static void Insert(ART &art, unique_ptr<Node> &node, uint8_t key_byte, unique_ptr<Node> &child);
 
 	//! Shrink to node 48
-	static void erase(ART &art, unique_ptr<Node> &node, int pos);
+	static void Erase(ART &art, unique_ptr<Node> &node, int pos);
 };
 } // namespace duckdb

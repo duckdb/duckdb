@@ -27,6 +27,7 @@ public:
 	    : default_executor(bound_defaults) {
 		// initialize the update chunk
 		vector<LogicalType> update_types;
+		update_types.reserve(expressions.size());
 		for (auto &expr : expressions) {
 			update_types.push_back(expr->return_type);
 		}

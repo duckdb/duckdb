@@ -35,7 +35,7 @@ public:
 	ColumnSegment(LogicalType type, ColumnSegmentType segment_type, idx_t start, idx_t count,
 	              unique_ptr<BaseStatistics> statistics);
 
-	virtual ~ColumnSegment() = default;
+	~ColumnSegment() override = default;
 
 	//! The type stored in the column
 	LogicalType type;
@@ -59,7 +59,7 @@ public:
 	virtual void IndexScan(ColumnScanState &state, Vector &result) = 0;
 	//! Executes filter in this column
 	virtual void Select(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
-	                    idx_t &approved_tuple_count, vector<TableFilter> &tableFilter) = 0;
+	                    idx_t &approved_tuple_count, vector<TableFilter> &table_filter) = 0;
 	//! Fetch the base table vector index that belongs to this row
 	virtual void Fetch(ColumnScanState &state, idx_t vector_index, Vector &result) = 0;
 	//! Fetch a value of the specific row id and append it to the result

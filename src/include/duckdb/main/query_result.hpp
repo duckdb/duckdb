@@ -76,7 +76,7 @@ private:
 	class QueryResultIterator;
 	class QueryResultRow {
 	public:
-		QueryResultRow(QueryResultIterator &iterator) : iterator(iterator), row(0) {
+		explicit QueryResultRow(QueryResultIterator &iterator) : iterator(iterator), row(0) {
 		}
 
 		QueryResultIterator &iterator;
@@ -90,7 +90,7 @@ private:
 	//! The row-based query result iterator. Invoking the
 	class QueryResultIterator {
 	public:
-		QueryResultIterator(QueryResult *result) : current_row(*this), result(result), row_idx(0) {
+		explicit QueryResultIterator(QueryResult *result) : current_row(*this), result(result), row_idx(0) {
 			if (result) {
 				result->iterator_chunk = result->Fetch();
 			}

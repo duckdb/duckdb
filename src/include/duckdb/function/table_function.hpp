@@ -27,7 +27,7 @@ struct FunctionOperatorData {
 
 struct TableFilterCollection {
 	TableFilterSet *table_filters;
-	TableFilterCollection(TableFilterSet *table_filters) : table_filters(table_filters) {
+	explicit TableFilterCollection(TableFilterSet *table_filters) : table_filters(table_filters) {
 	}
 };
 
@@ -141,7 +141,7 @@ public:
 	//! that applies the table filter directly.
 	bool filter_pushdown;
 
-	string ToString() {
+	string ToString() override {
 		return SimpleNamedParameterFunction::ToString();
 	}
 };

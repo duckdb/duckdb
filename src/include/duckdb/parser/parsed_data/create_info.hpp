@@ -23,11 +23,11 @@ enum class OnCreateConflict : uint8_t {
 };
 
 struct CreateInfo : public ParseInfo {
-	CreateInfo(CatalogType type, string schema = DEFAULT_SCHEMA)
+	explicit CreateInfo(CatalogType type, string schema = DEFAULT_SCHEMA)
 	    : type(type), schema(schema), on_conflict(OnCreateConflict::ERROR_ON_CONFLICT), temporary(false),
 	      internal(false) {
 	}
-	virtual ~CreateInfo() {
+	~CreateInfo() override {
 	}
 
 	//! The to-be-created catalog type

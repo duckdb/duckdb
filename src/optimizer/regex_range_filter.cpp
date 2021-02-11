@@ -52,7 +52,7 @@ unique_ptr<LogicalOperator> RegexRangeFilter::Rewrite(unique_ptr<LogicalOperator
 		}
 	}
 
-	if (new_filter->expressions.size() > 0) {
+	if (!new_filter->expressions.empty()) {
 		new_filter->children = move(op->children);
 		op->children.clear();
 		op->children.push_back(move(new_filter));

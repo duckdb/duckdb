@@ -19,7 +19,7 @@ public:
 	StandardEntry(CatalogType type, SchemaCatalogEntry *schema, Catalog *catalog, string name)
 	    : CatalogEntry(type, catalog, name), schema(schema) {
 	}
-	virtual ~StandardEntry() {
+	~StandardEntry() override {
 	}
 
 	//! The schema the entry belongs to

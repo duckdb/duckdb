@@ -41,7 +41,7 @@ void PhysicalInsert::Sink(ExecutionContext &context, GlobalOperatorState &state,
 
 	istate.insert_chunk.Reset();
 	istate.insert_chunk.SetCardinality(chunk);
-	if (column_index_map.size() > 0) {
+	if (!column_index_map.empty()) {
 		// columns specified by the user, use column_index_map
 		for (idx_t i = 0; i < table->columns.size(); i++) {
 			if (column_index_map[i] == INVALID_INDEX) {

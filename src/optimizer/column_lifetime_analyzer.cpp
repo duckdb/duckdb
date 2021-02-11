@@ -20,7 +20,7 @@ void ColumnLifetimeAnalyzer::ExtractUnusedColumnBindings(vector<ColumnBinding> b
 void ColumnLifetimeAnalyzer::GenerateProjectionMap(vector<ColumnBinding> bindings,
                                                    column_binding_set_t &unused_bindings,
                                                    vector<idx_t> &projection_map) {
-	if (unused_bindings.size() == 0) {
+	if (unused_bindings.empty()) {
 		return;
 	}
 	// now iterate over the result bindings of the child

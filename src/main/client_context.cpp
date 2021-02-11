@@ -33,7 +33,7 @@ namespace duckdb {
 
 class ClientContextLock {
 public:
-	ClientContextLock(mutex &context_lock) : client_guard(context_lock) {
+	explicit ClientContextLock(mutex &context_lock) : client_guard(context_lock) {
 	}
 	~ClientContextLock() {
 	}
@@ -43,7 +43,7 @@ private:
 };
 
 ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
-    : db(database), transaction(db->GetTransactionManager(), *this), interrupted(false), executor(*this),
+    : db(move(database)), transaction(db->GetTransactionManager(), *this), interrupted(false), executor(*this),
       temporary_objects(make_unique<SchemaCatalogEntry>(&db->GetCatalog(), TEMP_SCHEMA, true)), open_result(nullptr) {
 	std::random_device rd;
 	random_engine.seed(rd());
@@ -291,7 +291,7 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(const string &query) {
 
 		// first parse the query
 		auto statements = ParseStatementsInternal(*lock, query);
-		if (statements.size() == 0) {
+		if (statements.empty()) {
 			throw Exception("No statement to prepare!");
 		}
 		if (statements.size() > 1) {
@@ -437,7 +437,7 @@ unique_ptr<QueryResult> ClientContext::RunStatements(ClientContextLock &lock, co
 	return result;
 }
 
-void ClientContext::LogQueryInternal(ClientContextLock &, string query) {
+void ClientContext::LogQueryInternal(ClientContextLock &, const string &query) {
 	if (!log_query_writer) {
 		return;
 	}
@@ -472,7 +472,7 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, bool allow_str
 		return make_unique<MaterializedQueryResult>(ex.what());
 	}
 
-	if (statements.size() == 0) {
+	if (statements.empty()) {
 		// no statements, return empty successful result
 		return make_unique<MaterializedQueryResult>(StatementType::INVALID_STATEMENT);
 	}
@@ -494,7 +494,7 @@ void ClientContext::DisableProfiling() {
 	profiler.Disable();
 }
 
-string ClientContext::VerifyQuery(ClientContextLock &lock, string query, unique_ptr<SQLStatement> statement) {
+string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement) {
 	D_ASSERT(statement->type == StatementType::SELECT_STATEMENT);
 	// aggressive query verification
 
@@ -655,7 +655,7 @@ void ClientContext::RegisterFunction(CreateFunctionInfo *info) {
 	});
 }
 
-void ClientContext::RunFunctionInTransactionInternal(ClientContextLock &lock, std::function<void(void)> fun,
+void ClientContext::RunFunctionInTransactionInternal(ClientContextLock &lock, const std::function<void(void)> &fun,
                                                      bool requires_valid_transaction) {
 	if (requires_valid_transaction && transaction.HasActiveTransaction() &&
 	    transaction.ActiveTransaction().IsInvalidated()) {
@@ -685,7 +685,7 @@ void ClientContext::RunFunctionInTransactionInternal(ClientContextLock &lock, st
 	}
 }
 
-void ClientContext::RunFunctionInTransaction(std::function<void(void)> fun, bool requires_valid_transaction) {
+void ClientContext::RunFunctionInTransaction(const std::function<void(void)> &fun, bool requires_valid_transaction) {
 	auto lock = LockContext();
 	RunFunctionInTransactionInternal(*lock, fun, requires_valid_transaction);
 }
@@ -704,7 +704,7 @@ unique_ptr<TableDescription> ClientContext::TableInfo(const string &schema_name,
 		result->schema = schema_name;
 		result->table = table_name;
 		for (auto &column : table->columns) {
-			result->columns.push_back(ColumnDefinition(column.name, column.type));
+			result->columns.emplace_back(column.name, column.type);
 		}
 	});
 	return result;
@@ -734,12 +734,12 @@ void ClientContext::TryBindRelation(Relation &relation, vector<ColumnDefinition>
 		auto result = relation.Bind(binder);
 		D_ASSERT(result.names.size() == result.types.size());
 		for (idx_t i = 0; i < result.names.size(); i++) {
-			result_columns.push_back(ColumnDefinition(result.names[i], result.types[i]));
+			result_columns.emplace_back(result.names[i], result.types[i]);
 		}
 	});
 }
 
-unique_ptr<QueryResult> ClientContext::Execute(shared_ptr<Relation> relation) {
+unique_ptr<QueryResult> ClientContext::Execute(const shared_ptr<Relation> &relation) {
 	auto lock = LockContext();
 	string query;
 	if (query_verification_enabled) {

@@ -13,9 +13,9 @@ namespace duckdb {
 
 class Node48 : public Node {
 public:
-	Node48(ART &art, size_t compressionLength);
+	Node48(ART &art, size_t compression_length);
 
-	uint8_t childIndex[256];
+	uint8_t child_index[256];
 	unique_ptr<Node> child[48];
 
 public:
@@ -32,9 +32,9 @@ public:
 	idx_t GetMin() override;
 
 	//! Insert node in Node48
-	static void insert(ART &art, unique_ptr<Node> &node, uint8_t keyByte, unique_ptr<Node> &child);
+	static void Insert(ART &art, unique_ptr<Node> &node, uint8_t key_byte, unique_ptr<Node> &child);
 
 	//! Shrink to node 16
-	static void erase(ART &art, unique_ptr<Node> &node, int pos);
+	static void Erase(ART &art, unique_ptr<Node> &node, int pos);
 };
 } // namespace duckdb

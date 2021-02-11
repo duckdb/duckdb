@@ -40,7 +40,7 @@ bool Binder::BindFunctionParameters(vector<unique_ptr<ParsedExpression>> &expres
 		auto constant = ExpressionExecutor::EvaluateScalar(*expr);
 		if (parameter_name.empty()) {
 			// unnamed parameter
-			if (named_parameters.size() > 0) {
+			if (!named_parameters.empty()) {
 				error = "Unnamed parameters cannot come after named parameters";
 				return false;
 			}

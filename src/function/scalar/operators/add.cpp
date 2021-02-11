@@ -197,7 +197,7 @@ bool TryDecimalAdd::Operation(int64_t left, int64_t right, int64_t &result) {
 template <>
 bool TryDecimalAdd::Operation(hugeint_t left, hugeint_t right, hugeint_t &result) {
 	result = left + right;
-	if (result <= -Hugeint::PowersOfTen[38] || result >= Hugeint::PowersOfTen[38]) {
+	if (result <= -Hugeint::POWERS_OF_TEN[38] || result >= Hugeint::POWERS_OF_TEN[38]) {
 		return false;
 	}
 	return true;

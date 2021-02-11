@@ -2,13 +2,13 @@
 
 namespace duckdb {
 
-static void typeof_function(DataChunk &args, ExpressionState &state, Vector &result) {
+static void TypeOfFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	Value v(args.data[0].type.ToString());
 	result.Reference(v);
 }
 
 void TypeOfFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("typeof", {LogicalType::ANY}, LogicalType::VARCHAR, typeof_function));
+	set.AddFunction(ScalarFunction("typeof", {LogicalType::ANY}, LogicalType::VARCHAR, TypeOfFunction));
 }
 
 } // namespace duckdb

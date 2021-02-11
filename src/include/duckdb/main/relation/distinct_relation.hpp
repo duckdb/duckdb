@@ -14,7 +14,7 @@ namespace duckdb {
 
 class DistinctRelation : public Relation {
 public:
-	DistinctRelation(shared_ptr<Relation> child);
+	explicit DistinctRelation(shared_ptr<Relation> child);
 
 	shared_ptr<Relation> child;
 

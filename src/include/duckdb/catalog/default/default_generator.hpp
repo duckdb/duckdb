@@ -15,7 +15,7 @@ class ClientContext;
 
 class DefaultGenerator {
 public:
-	DefaultGenerator(Catalog &catalog) : catalog(catalog) {
+	explicit DefaultGenerator(Catalog &catalog) : catalog(catalog) {
 	}
 	virtual ~DefaultGenerator() {
 	}

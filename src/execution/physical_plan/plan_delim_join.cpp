@@ -30,7 +30,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDelimJoin 
 	// first gather the scans on the duplicate eliminated data set from the RHS
 	vector<PhysicalOperator *> delim_scans;
 	GatherDelimScans(plan->children[1].get(), delim_scans);
-	if (delim_scans.size() == 0) {
+	if (delim_scans.empty()) {
 		// no duplicate eliminated scans in the RHS!
 		// in this case we don't need to create a delim join
 		// just push the normal join

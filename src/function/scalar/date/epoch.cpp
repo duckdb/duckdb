@@ -7,7 +7,7 @@
 
 namespace duckdb {
 
-static void epoch_sec_function(DataChunk &input, ExpressionState &state, Vector &result) {
+static void EpochSecFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	D_ASSERT(input.ColumnCount() == 1);
 
 	string output_buffer;
@@ -15,7 +15,7 @@ static void epoch_sec_function(DataChunk &input, ExpressionState &state, Vector 
 	    input.data[0], result, input.size(), [&](int64_t input) { return Timestamp::FromEpochSeconds(input); });
 }
 
-static void epoch_ms_function(DataChunk &input, ExpressionState &state, Vector &result) {
+static void EpochMillisFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	D_ASSERT(input.ColumnCount() == 1);
 
 	string output_buffer;
@@ -25,11 +25,11 @@ static void epoch_ms_function(DataChunk &input, ExpressionState &state, Vector &
 
 void EpochFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet epoch("epoch_ms");
-	epoch.AddFunction(ScalarFunction({LogicalType::BIGINT}, LogicalType::TIMESTAMP, epoch_ms_function));
+	epoch.AddFunction(ScalarFunction({LogicalType::BIGINT}, LogicalType::TIMESTAMP, EpochMillisFunction));
 	set.AddFunction(epoch);
 	// to_timestamp is an alias from Postgres that converts the time in seconds to a timestamp
 	ScalarFunctionSet to_timestamp("to_timestamp");
-	to_timestamp.AddFunction(ScalarFunction({LogicalType::BIGINT}, LogicalType::TIMESTAMP, epoch_sec_function));
+	to_timestamp.AddFunction(ScalarFunction({LogicalType::BIGINT}, LogicalType::TIMESTAMP, EpochSecFunction));
 	set.AddFunction(to_timestamp);
 }
 

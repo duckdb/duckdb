@@ -4,13 +4,11 @@
 
 namespace duckdb {
 
-using namespace duckdb_libpgquery;
+unique_ptr<SetStatement> Transformer::TransformSet(duckdb_libpgquery::PGNode *node) {
+	D_ASSERT(node->type == duckdb_libpgquery::T_PGVariableSetStmt);
+	auto stmt = reinterpret_cast<duckdb_libpgquery::PGVariableSetStmt *>(node);
 
-unique_ptr<SetStatement> Transformer::TransformSet(PGNode *node) {
-	D_ASSERT(node->type == T_PGVariableSetStmt);
-	auto stmt = reinterpret_cast<PGVariableSetStmt *>(node);
-
-	if (stmt->kind != VariableSetKind::VAR_SET_VALUE) {
+	if (stmt->kind != duckdb_libpgquery::VariableSetKind::VAR_SET_VALUE) {
 		throw ParserException("Can only SET a variable to a value");
 	}
 	auto name = std::string(stmt->name);
@@ -19,9 +17,9 @@ unique_ptr<SetStatement> Transformer::TransformSet(PGNode *node) {
 		throw ParserException("SET needs a single scalar value parameter");
 	}
 	D_ASSERT(stmt->args->head && stmt->args->head->data.ptr_value);
-	D_ASSERT(((PGNode *)stmt->args->head->data.ptr_value)->type == T_PGAConst);
+	D_ASSERT(((duckdb_libpgquery::PGNode *)stmt->args->head->data.ptr_value)->type == duckdb_libpgquery::T_PGAConst);
 
-	auto value = TransformValue(((PGAConst *)stmt->args->head->data.ptr_value)->val)->value;
+	auto value = TransformValue(((duckdb_libpgquery::PGAConst *)stmt->args->head->data.ptr_value)->val)->value;
 
 	return make_unique<SetStatement>(name, value);
 }

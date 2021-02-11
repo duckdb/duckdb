@@ -109,8 +109,8 @@ public:
 	static vector<string> TopNStrings(vector<std::pair<string, idx_t>> scores, idx_t n = 5, idx_t threshold = 5);
 	//! Computes the levenshtein distance of each string in strings, and compares it to target, then returns TopNStrings
 	//! with the given params.
-	static vector<string> TopNLevenshtein(vector<string> strings, const string &target, idx_t n = 5,
+	static vector<string> TopNLevenshtein(const vector<string> &strings, const string &target, idx_t n = 5,
 	                                      idx_t threshold = 5);
-	static string CandidatesMessage(const vector<string> &candidates, string candidate = "Candidate bindings");
+	static string CandidatesMessage(const vector<string> &candidates, const string &candidate = "Candidate bindings");
 };
 } // namespace duckdb

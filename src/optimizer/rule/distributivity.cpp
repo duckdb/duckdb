@@ -77,7 +77,7 @@ unique_ptr<Expression> DistributivityRule::Apply(LogicalOperator &op, vector<Exp
 		}
 		candidate_set = intersect_result;
 	}
-	if (candidate_set.size() == 0) {
+	if (candidate_set.empty()) {
 		// nothing found: abort
 		return nullptr;
 	}

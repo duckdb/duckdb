@@ -25,7 +25,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateTabl
 			ExtractDependencies(*default_value, op.info->dependencies);
 		}
 	}
-	if (op.children.size() > 0) {
+	if (!op.children.empty()) {
 		D_ASSERT(op.children.size() == 1);
 		auto create = make_unique<PhysicalCreateTableAs>(op, op.schema, move(op.info));
 		auto plan = CreatePlan(*op.children[0]);

@@ -18,7 +18,7 @@ PhysicalSimpleAggregate::PhysicalSimpleAggregate(vector<LogicalType> types, vect
 //===--------------------------------------------------------------------===//
 
 struct AggregateState {
-	AggregateState(vector<unique_ptr<Expression>> &aggregate_expressions) {
+	explicit AggregateState(vector<unique_ptr<Expression>> &aggregate_expressions) {
 		for (auto &aggregate : aggregate_expressions) {
 			D_ASSERT(aggregate->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 			auto &aggr = (BoundAggregateExpression &)*aggregate;
@@ -54,7 +54,7 @@ struct AggregateState {
 
 class SimpleAggregateGlobalState : public GlobalOperatorState {
 public:
-	SimpleAggregateGlobalState(vector<unique_ptr<Expression>> &aggregates) : state(aggregates) {
+	explicit SimpleAggregateGlobalState(vector<unique_ptr<Expression>> &aggregates) : state(aggregates) {
 	}
 
 	//! The lock for updating the global aggregate state
@@ -65,7 +65,7 @@ public:
 
 class SimpleAggregateLocalState : public LocalSinkState {
 public:
-	SimpleAggregateLocalState(vector<unique_ptr<Expression>> &aggregates) : state(aggregates) {
+	explicit SimpleAggregateLocalState(vector<unique_ptr<Expression>> &aggregates) : state(aggregates) {
 		vector<LogicalType> payload_types;
 		for (auto &aggregate : aggregates) {
 			D_ASSERT(aggregate->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);

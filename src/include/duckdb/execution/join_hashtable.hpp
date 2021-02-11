@@ -56,7 +56,7 @@ public:
 		JoinHashTable &ht;
 		bool finished;
 
-		ScanStructure(JoinHashTable &ht);
+		explicit ScanStructure(JoinHashTable &ht);
 		//! Get the next batch of data from the scan structure
 		void Next(DataChunk &keys, DataChunk &left, DataChunk &result);
 

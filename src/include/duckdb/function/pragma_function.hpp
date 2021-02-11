@@ -16,9 +16,9 @@ namespace duckdb {
 class ClientContext;
 
 //! Return a substitute query to execute instead of this pragma statement
-typedef string (*pragma_query_t)(ClientContext &context, FunctionParameters parameters);
+typedef string (*pragma_query_t)(ClientContext &context, const FunctionParameters &parameters);
 //! Execute the main pragma function
-typedef void (*pragma_function_t)(ClientContext &context, FunctionParameters parameters);
+typedef void (*pragma_function_t)(ClientContext &context, const FunctionParameters &parameters);
 
 //! Pragma functions are invoked by calling PRAGMA x
 //! Pragma functions come in three types:
@@ -34,18 +34,18 @@ typedef void (*pragma_function_t)(ClientContext &context, FunctionParameters par
 class PragmaFunction : public SimpleNamedParameterFunction {
 public:
 	// Call
-	static PragmaFunction PragmaCall(string name, pragma_query_t query, vector<LogicalType> arguments,
+	static PragmaFunction PragmaCall(const string &name, pragma_query_t query, vector<LogicalType> arguments,
 	                                 LogicalType varargs = LogicalType::INVALID);
-	static PragmaFunction PragmaCall(string name, pragma_function_t function, vector<LogicalType> arguments,
+	static PragmaFunction PragmaCall(const string &name, pragma_function_t function, vector<LogicalType> arguments,
 	                                 LogicalType varargs = LogicalType::INVALID);
 	// Statement
-	static PragmaFunction PragmaStatement(string name, pragma_query_t query);
-	static PragmaFunction PragmaStatement(string name, pragma_function_t function);
+	static PragmaFunction PragmaStatement(const string &name, pragma_query_t query);
+	static PragmaFunction PragmaStatement(const string &name, pragma_function_t function);
 	// Assignment
-	static PragmaFunction PragmaAssignment(string name, pragma_query_t query, LogicalType type);
-	static PragmaFunction PragmaAssignment(string name, pragma_function_t function, LogicalType type);
+	static PragmaFunction PragmaAssignment(const string &name, pragma_query_t query, LogicalType type);
+	static PragmaFunction PragmaAssignment(const string &name, pragma_function_t function, LogicalType type);
 
-	string ToString();
+	string ToString() override;
 
 public:
 	PragmaType type;

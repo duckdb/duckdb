@@ -21,7 +21,7 @@ IndexCatalogEntry::~IndexCatalogEntry() {
 }
 
 string IndexCatalogEntry::ToSQL() {
-	if (sql.size() == 0) {
+	if (sql.empty()) {
 		throw NotImplementedException("Cannot convert INDEX to SQL because it was not created with a SQL statement");
 	}
 	return sql;

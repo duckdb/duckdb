@@ -20,7 +20,7 @@ struct InstrOperator {
 			D_ASSERT(len <= (utf8proc_ssize_t)haystack.GetSize());
 			for (++string_position; len > 0; ++string_position) {
 				utf8proc_int32_t codepoint;
-				const auto bytes = utf8proc_iterate(str, len, &codepoint);
+				auto bytes = utf8proc_iterate(str, len, &codepoint);
 				str += bytes;
 				len -= bytes;
 			}
@@ -37,9 +37,9 @@ struct InstrAsciiOperator {
 	}
 };
 
-static unique_ptr<BaseStatistics> instr_propagate_stats(ClientContext &context, BoundFunctionExpression &expr,
-                                                        FunctionData *bind_data,
-                                                        vector<unique_ptr<BaseStatistics>> &child_stats) {
+static unique_ptr<BaseStatistics> InStrPropagateStats(ClientContext &context, BoundFunctionExpression &expr,
+                                                      FunctionData *bind_data,
+                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
 	D_ASSERT(child_stats.size() == 2);
 	// can only propagate stats if the children have stats
 	if (!child_stats[0]) {
@@ -58,7 +58,7 @@ void InstrFun::RegisterFunction(BuiltinFunctions &set) {
 	                     {LogicalType::VARCHAR, LogicalType::VARCHAR}, // argument list
 	                     LogicalType::BIGINT,                          // return type
 	                     ScalarFunction::BinaryFunction<string_t, string_t, int64_t, InstrOperator, true>, false,
-	                     nullptr, nullptr, instr_propagate_stats);
+	                     nullptr, nullptr, InStrPropagateStats);
 	set.AddFunction(instr);
 	instr.name = "strpos";
 	set.AddFunction(instr);

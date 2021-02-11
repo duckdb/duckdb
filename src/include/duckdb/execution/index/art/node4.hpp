@@ -13,7 +13,7 @@ namespace duckdb {
 
 class Node4 : public Node {
 public:
-	Node4(ART &art, size_t compressionLength);
+	Node4(ART &art, size_t compression_length);
 
 	uint8_t key[4];
 	unique_ptr<Node> child[4];
@@ -32,8 +32,8 @@ public:
 	idx_t GetMin() override;
 
 	//! Insert Leaf to the Node4
-	static void insert(ART &art, unique_ptr<Node> &node, uint8_t keyByte, unique_ptr<Node> &child);
+	static void Insert(ART &art, unique_ptr<Node> &node, uint8_t key_byte, unique_ptr<Node> &child);
 	//! Remove Leaf from Node4
-	static void erase(ART &art, unique_ptr<Node> &node, int pos);
+	static void Erase(ART &art, unique_ptr<Node> &node, int pos);
 };
 } // namespace duckdb

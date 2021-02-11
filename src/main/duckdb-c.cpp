@@ -92,7 +92,7 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 		// no result to write to, only return the status
 		return result->success ? DuckDBSuccess : DuckDBError;
 	}
-	out->error_message = NULL;
+	out->error_message = nullptr;
 	if (!result->success) {
 		// write the error message
 		out->error_message = strdup(result->error.c_str());
@@ -560,7 +560,7 @@ static Value GetCValue(duckdb_result *result, idx_t col, idx_t row) {
 
 const char *duckdb_column_name(duckdb_result *result, idx_t col) {
 	if (!result || col >= result->column_count) {
-		return NULL;
+		return nullptr;
 	}
 	return result->columns[col].name;
 }

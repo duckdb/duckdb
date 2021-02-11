@@ -39,7 +39,7 @@ public:
 
 public:
 	//! Convert a string to an interval object
-	static bool FromString(string str, interval_t &result);
+	static bool FromString(const string &str, interval_t &result);
 	//! Convert a string to an interval object
 	static bool FromCString(const char *str, idx_t len, interval_t &result);
 	//! Convert an interval object to a string

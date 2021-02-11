@@ -16,7 +16,7 @@ namespace duckdb {
 
 class ExportStatement : public SQLStatement {
 public:
-	ExportStatement(unique_ptr<CopyInfo> info);
+	explicit ExportStatement(unique_ptr<CopyInfo> info);
 
 	unique_ptr<CopyInfo> info;
 

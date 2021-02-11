@@ -6,7 +6,7 @@
 namespace duckdb {
 
 struct ConstantOrNullBindData : public FunctionData {
-	ConstantOrNullBindData(Value val) : value(val) {
+	explicit ConstantOrNullBindData(Value val) : value(move(val)) {
 	}
 
 	Value value;
@@ -17,7 +17,7 @@ public:
 	}
 };
 
-static void constant_or_null(DataChunk &args, ExpressionState &state, Vector &result) {
+static void ConstantOrNullFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (ConstantOrNullBindData &)*func_expr.bind_info;
 	result.Reference(info.value);
@@ -61,14 +61,14 @@ static void constant_or_null(DataChunk &args, ExpressionState &state, Vector &re
 }
 
 ScalarFunction ConstantOrNull::GetFunction(LogicalType return_type) {
-	return ScalarFunction("constant_or_null", {}, return_type, constant_or_null);
+	return ScalarFunction("constant_or_null", {}, move(return_type), ConstantOrNullFunction);
 }
 
 unique_ptr<FunctionData> ConstantOrNull::Bind(Value value) {
 	return make_unique<ConstantOrNullBindData>(move(value));
 }
 
-bool ConstantOrNull::IsConstantOrNull(BoundFunctionExpression &expr, Value val) {
+bool ConstantOrNull::IsConstantOrNull(BoundFunctionExpression &expr, const Value &val) {
 	if (expr.function.name != "constant_or_null") {
 		return false;
 	}

@@ -10,6 +10,7 @@
 
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/single_thread_ptr.hpp"
 #include "duckdb/common/vector.hpp"
 
 namespace duckdb {
@@ -30,7 +31,7 @@ public:
 
 public:
 	hugeint_t() = default;
-	hugeint_t(int64_t value);
+	hugeint_t(int64_t value); // NOLINT: Allow implicit conversion from `int64_t`
 	hugeint_t(const hugeint_t &rhs) = default;
 	hugeint_t(hugeint_t &&rhs) = default;
 	hugeint_t &operator=(const hugeint_t &rhs) = default;
@@ -80,11 +81,11 @@ struct string_t;
 template <class T>
 using child_list_t = std::vector<std::pair<std::string, T>>;
 template <class T>
-using buffer_ptr = std::shared_ptr<T>;
+using buffer_ptr = single_thread_ptr<T>;
 
 template <class T, typename... Args>
 buffer_ptr<T> make_buffer(Args &&...args) {
-	return std::make_shared<T>(std::forward<Args>(args)...);
+	return single_thread_make_shared<T>(std::forward<Args>(args)...);
 }
 
 struct list_entry_t {
@@ -259,7 +260,7 @@ enum class LogicalTypeId : uint8_t {
 
 struct LogicalType {
 	LogicalType();
-	LogicalType(LogicalTypeId id);
+	LogicalType(LogicalTypeId id); // NOLINT: Allow implicit conversion from `LogicalTypeId`
 	LogicalType(LogicalTypeId id, string collation);
 	LogicalType(LogicalTypeId id, uint8_t width, uint8_t scale);
 	LogicalType(LogicalTypeId id, child_list_t<LogicalType> child_types);
@@ -303,7 +304,7 @@ struct LogicalType {
 	bool IsMoreGenericThan(LogicalType &other) const;
 	hash_t Hash() const;
 
-	static LogicalType MaxLogicalType(LogicalType left, LogicalType right);
+	static LogicalType MaxLogicalType(const LogicalType &left, const LogicalType &right);
 
 	//! Gets the decimal properties of a numeric type. Fails if the type is not numeric.
 	bool GetDecimalProperties(uint8_t &width, uint8_t &scale) const;
@@ -360,7 +361,7 @@ public:
 
 string LogicalTypeIdToString(LogicalTypeId type);
 
-LogicalType TransformStringToLogicalType(string str);
+LogicalType TransformStringToLogicalType(const string &str);
 
 //! Returns the PhysicalType for the given type
 template <class T>

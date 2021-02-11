@@ -171,7 +171,7 @@ timestamp_t MilliSecondsTruncOperator::Operation(date_t input) {
 }
 
 template <class TA, class TR>
-static TR truncate_element(DatePartSpecifier type, TA element) {
+static TR TruncateElement(DatePartSpecifier type, TA element) {
 	switch (type) {
 	case DatePartSpecifier::MILLENNIUM:
 		return MillenniumTruncOperator::Operation<TA, TR>(element);
@@ -208,7 +208,7 @@ static TR truncate_element(DatePartSpecifier type, TA element) {
 struct DateTruncOperator {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA specifier, TB date) {
-		return truncate_element<TB, TR>(GetDatePartSpecifier(specifier.GetString()), date);
+		return TruncateElement<TB, TR>(GetDatePartSpecifier(specifier.GetString()), date);
 	}
 };
 

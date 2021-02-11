@@ -16,52 +16,51 @@ struct InformationSchemaTablesData : public FunctionOperatorData {
 	idx_t offset;
 };
 
-static unique_ptr<FunctionData> information_schema_tables_bind(ClientContext &context, vector<Value> &inputs,
-                                                               unordered_map<string, Value> &named_parameters,
-                                                               vector<LogicalType> &return_types,
-                                                               vector<string> &names) {
-	names.push_back("table_catalog");
+static unique_ptr<FunctionData> InformationSchemaTablesBind(ClientContext &context, vector<Value> &inputs,
+                                                            unordered_map<string, Value> &named_parameters,
+                                                            vector<LogicalType> &return_types, vector<string> &names) {
+	names.emplace_back("table_catalog");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("table_schema");
+	names.emplace_back("table_schema");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("table_name");
+	names.emplace_back("table_name");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("table_type");
+	names.emplace_back("table_type");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("self_referencing_column_name");
+	names.emplace_back("self_referencing_column_name");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("reference_generation");
+	names.emplace_back("reference_generation");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("user_defined_type_catalog");
+	names.emplace_back("user_defined_type_catalog");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("user_defined_type_schema");
+	names.emplace_back("user_defined_type_schema");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("user_defined_type_name");
+	names.emplace_back("user_defined_type_name");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("is_insertable_into");
+	names.emplace_back("is_insertable_into");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("is_typed");
+	names.emplace_back("is_typed");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("commit_action");
+	names.emplace_back("commit_action");
 	return_types.push_back(LogicalType::VARCHAR);
 
 	return nullptr;
 }
 
-unique_ptr<FunctionOperatorData> information_schema_tables_init(ClientContext &context, const FunctionData *bind_data,
-                                                                vector<column_t> &column_ids,
-                                                                TableFilterCollection *filters) {
+unique_ptr<FunctionOperatorData> InformationSchemaTablesInit(ClientContext &context, const FunctionData *bind_data,
+                                                             vector<column_t> &column_ids,
+                                                             TableFilterCollection *filters) {
 	auto result = make_unique<InformationSchemaTablesData>();
 
 	// scan all the schemas for tables and views and collect them
@@ -76,8 +75,8 @@ unique_ptr<FunctionOperatorData> information_schema_tables_init(ClientContext &c
 	return move(result);
 }
 
-void information_schema_tables(ClientContext &context, const FunctionData *bind_data,
-                               FunctionOperatorData *operator_state, DataChunk &output) {
+void InformationSchemaTablesFunction(ClientContext &context, const FunctionData *bind_data,
+                                     FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &data = (InformationSchemaTablesData &)*operator_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
@@ -141,8 +140,8 @@ void information_schema_tables(ClientContext &context, const FunctionData *bind_
 }
 
 void InformationSchemaTables::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("information_schema_tables", {}, information_schema_tables,
-	                              information_schema_tables_bind, information_schema_tables_init));
+	set.AddFunction(TableFunction("information_schema_tables", {}, InformationSchemaTablesFunction,
+	                              InformationSchemaTablesBind, InformationSchemaTablesInit));
 }
 
 } // namespace duckdb

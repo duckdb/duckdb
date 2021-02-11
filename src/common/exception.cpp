@@ -5,11 +5,11 @@
 
 namespace duckdb {
 
-Exception::Exception(string message) : std::exception(), type(ExceptionType::INVALID) {
-	exception_message_ = message;
+Exception::Exception(const string &msg) : std::exception(), type(ExceptionType::INVALID) {
+	exception_message_ = msg;
 }
 
-Exception::Exception(ExceptionType exception_type, string message) : std::exception(), type(exception_type) {
+Exception::Exception(ExceptionType exception_type, const string &message) : std::exception(), type(exception_type) {
 	exception_message_ = ExceptionTypeToString(exception_type) + " Error: " + message;
 }
 
@@ -17,7 +17,7 @@ const char *Exception::what() const noexcept {
 	return exception_message_.c_str();
 }
 
-string Exception::ConstructMessageRecursive(string msg, vector<ExceptionFormatValue> &values) {
+string Exception::ConstructMessageRecursive(const string &msg, vector<ExceptionFormatValue> &values) {
 	return ExceptionFormatValue::Format(msg, values);
 }
 
@@ -92,109 +92,110 @@ string Exception::ExceptionTypeToString(ExceptionType type) {
 	}
 }
 
-CastException::CastException(const PhysicalType origType, const PhysicalType newType)
+CastException::CastException(const PhysicalType orig_type, const PhysicalType new_type)
     : Exception(ExceptionType::CONVERSION,
-                "Type " + TypeIdToString(origType) + " can't be cast as " + TypeIdToString(newType)) {
+                "Type " + TypeIdToString(orig_type) + " can't be cast as " + TypeIdToString(new_type)) {
 }
 
-CastException::CastException(const LogicalType origType, const LogicalType newType)
-    : Exception(ExceptionType::CONVERSION, "Type " + origType.ToString() + " can't be cast as " + newType.ToString()) {
+CastException::CastException(const LogicalType &orig_type, const LogicalType &new_type)
+    : Exception(ExceptionType::CONVERSION,
+                "Type " + orig_type.ToString() + " can't be cast as " + new_type.ToString()) {
 }
 
-ValueOutOfRangeException::ValueOutOfRangeException(const int64_t value, const PhysicalType origType,
-                                                   const PhysicalType newType)
-    : Exception(ExceptionType::CONVERSION, "Type " + TypeIdToString(origType) + " with value " +
+ValueOutOfRangeException::ValueOutOfRangeException(const int64_t value, const PhysicalType orig_type,
+                                                   const PhysicalType new_type)
+    : Exception(ExceptionType::CONVERSION, "Type " + TypeIdToString(orig_type) + " with value " +
                                                to_string((intmax_t)value) +
                                                " can't be cast because the value is out of range "
                                                "for the destination type " +
-                                               TypeIdToString(newType)) {
+                                               TypeIdToString(new_type)) {
 }
 
-ValueOutOfRangeException::ValueOutOfRangeException(const double value, const PhysicalType origType,
-                                                   const PhysicalType newType)
-    : Exception(ExceptionType::CONVERSION, "Type " + TypeIdToString(origType) + " with value " + to_string(value) +
+ValueOutOfRangeException::ValueOutOfRangeException(const double value, const PhysicalType orig_type,
+                                                   const PhysicalType new_type)
+    : Exception(ExceptionType::CONVERSION, "Type " + TypeIdToString(orig_type) + " with value " + to_string(value) +
                                                " can't be cast because the value is out of range "
                                                "for the destination type " +
-                                               TypeIdToString(newType)) {
+                                               TypeIdToString(new_type)) {
 }
 
-ValueOutOfRangeException::ValueOutOfRangeException(const hugeint_t value, const PhysicalType origType,
-                                                   const PhysicalType newType)
-    : Exception(ExceptionType::CONVERSION, "Type " + TypeIdToString(origType) + " with value " + value.ToString() +
+ValueOutOfRangeException::ValueOutOfRangeException(const hugeint_t value, const PhysicalType orig_type,
+                                                   const PhysicalType new_type)
+    : Exception(ExceptionType::CONVERSION, "Type " + TypeIdToString(orig_type) + " with value " + value.ToString() +
                                                " can't be cast because the value is out of range "
                                                "for the destination type " +
-                                               TypeIdToString(newType)) {
+                                               TypeIdToString(new_type)) {
 }
 
-ValueOutOfRangeException::ValueOutOfRangeException(const PhysicalType varType, const idx_t length)
+ValueOutOfRangeException::ValueOutOfRangeException(const PhysicalType var_type, const idx_t length)
     : Exception(ExceptionType::OUT_OF_RANGE,
-                "The value is too long to fit into type " + TypeIdToString(varType) + "(" + to_string(length) + ")") {
+                "The value is too long to fit into type " + TypeIdToString(var_type) + "(" + to_string(length) + ")") {
 }
 
-ConversionException::ConversionException(string msg) : Exception(ExceptionType::CONVERSION, msg) {
+ConversionException::ConversionException(const string &msg) : Exception(ExceptionType::CONVERSION, msg) {
 }
 
-InvalidTypeException::InvalidTypeException(PhysicalType type, string msg)
+InvalidTypeException::InvalidTypeException(PhysicalType type, const string &msg)
     : Exception(ExceptionType::INVALID_TYPE, "Invalid Type [" + TypeIdToString(type) + "]: " + msg) {
 }
 
-InvalidTypeException::InvalidTypeException(LogicalType type, string msg)
+InvalidTypeException::InvalidTypeException(const LogicalType &type, const string &msg)
     : Exception(ExceptionType::INVALID_TYPE, "Invalid Type [" + type.ToString() + "]: " + msg) {
 }
 
-TypeMismatchException::TypeMismatchException(const PhysicalType type_1, const PhysicalType type_2, string msg)
+TypeMismatchException::TypeMismatchException(const PhysicalType type_1, const PhysicalType type_2, const string &msg)
     : Exception(ExceptionType::MISMATCH_TYPE,
                 "Type " + TypeIdToString(type_1) + " does not match with " + TypeIdToString(type_2) + ". " + msg) {
 }
 
-TypeMismatchException::TypeMismatchException(const LogicalType type_1, const LogicalType type_2, string msg)
+TypeMismatchException::TypeMismatchException(const LogicalType &type_1, const LogicalType &type_2, const string &msg)
     : Exception(ExceptionType::MISMATCH_TYPE,
                 "Type " + type_1.ToString() + " does not match with " + type_2.ToString() + ". " + msg) {
 }
 
-TransactionException::TransactionException(string msg) : Exception(ExceptionType::TRANSACTION, msg) {
+TransactionException::TransactionException(const string &msg) : Exception(ExceptionType::TRANSACTION, msg) {
 }
 
-NotImplementedException::NotImplementedException(string msg) : Exception(ExceptionType::NOT_IMPLEMENTED, msg) {
+NotImplementedException::NotImplementedException(const string &msg) : Exception(ExceptionType::NOT_IMPLEMENTED, msg) {
 }
 
-OutOfRangeException::OutOfRangeException(string msg) : Exception(ExceptionType::OUT_OF_RANGE, msg) {
+OutOfRangeException::OutOfRangeException(const string &msg) : Exception(ExceptionType::OUT_OF_RANGE, msg) {
 }
 
-CatalogException::CatalogException(string msg) : StandardException(ExceptionType::CATALOG, msg) {
+CatalogException::CatalogException(const string &msg) : StandardException(ExceptionType::CATALOG, msg) {
 }
 
-ParserException::ParserException(string msg) : StandardException(ExceptionType::PARSER, msg) {
+ParserException::ParserException(const string &msg) : StandardException(ExceptionType::PARSER, msg) {
 }
 
-SyntaxException::SyntaxException(string msg) : Exception(ExceptionType::SYNTAX, msg) {
+SyntaxException::SyntaxException(const string &msg) : Exception(ExceptionType::SYNTAX, msg) {
 }
 
-ConstraintException::ConstraintException(string msg) : Exception(ExceptionType::CONSTRAINT, msg) {
+ConstraintException::ConstraintException(const string &msg) : Exception(ExceptionType::CONSTRAINT, msg) {
 }
 
-BinderException::BinderException(string msg) : StandardException(ExceptionType::BINDER, msg) {
+BinderException::BinderException(const string &msg) : StandardException(ExceptionType::BINDER, msg) {
 }
 
-IOException::IOException(string msg) : Exception(ExceptionType::IO, msg) {
+IOException::IOException(const string &msg) : Exception(ExceptionType::IO, msg) {
 }
 
-SerializationException::SerializationException(string msg) : Exception(ExceptionType::SERIALIZATION, msg) {
+SerializationException::SerializationException(const string &msg) : Exception(ExceptionType::SERIALIZATION, msg) {
 }
 
-SequenceException::SequenceException(string msg) : Exception(ExceptionType::SERIALIZATION, msg) {
+SequenceException::SequenceException(const string &msg) : Exception(ExceptionType::SERIALIZATION, msg) {
 }
 
 InterruptException::InterruptException() : Exception(ExceptionType::INTERRUPT, "Interrupted!") {
 }
 
-FatalException::FatalException(string msg) : Exception(ExceptionType::FATAL, msg) {
+FatalException::FatalException(const string &msg) : Exception(ExceptionType::FATAL, msg) {
 }
 
-InternalException::InternalException(string msg) : Exception(ExceptionType::INTERNAL, msg) {
+InternalException::InternalException(const string &msg) : Exception(ExceptionType::INTERNAL, msg) {
 }
 
-InvalidInputException::InvalidInputException(string msg) : Exception(ExceptionType::INVALID_INPUT, msg) {
+InvalidInputException::InvalidInputException(const string &msg) : Exception(ExceptionType::INVALID_INPUT, msg) {
 }
 
 } // namespace duckdb

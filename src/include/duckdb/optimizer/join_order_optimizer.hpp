@@ -43,7 +43,7 @@ public:
 	};
 
 public:
-	JoinOrderOptimizer(ClientContext &context) : context(context) {
+	explicit JoinOrderOptimizer(ClientContext &context) : context(context) {
 	}
 
 	//! Perform join reordering inside a plan

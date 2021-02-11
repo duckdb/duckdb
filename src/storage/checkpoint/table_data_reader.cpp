@@ -1,5 +1,4 @@
 #include "duckdb/storage/checkpoint/table_data_reader.hpp"
-#include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
 
 #include "duckdb/common/vector_operations/vector_operations.hpp"

@@ -28,7 +28,7 @@ public:
 //! The SpecificExpressionTypeMatcher class matches a single specified Expression type
 class SpecificExpressionTypeMatcher : public ExpressionTypeMatcher {
 public:
-	SpecificExpressionTypeMatcher(ExpressionType type) : type(type) {
+	explicit SpecificExpressionTypeMatcher(ExpressionType type) : type(type) {
 	}
 
 	bool Match(ExpressionType type) override {
@@ -42,7 +42,7 @@ private:
 //! The ManyExpressionTypeMatcher class matches a set of ExpressionTypes
 class ManyExpressionTypeMatcher : public ExpressionTypeMatcher {
 public:
-	ManyExpressionTypeMatcher(vector<ExpressionType> types) : types(move(types)) {
+	explicit ManyExpressionTypeMatcher(vector<ExpressionType> types) : types(move(types)) {
 	}
 
 	bool Match(ExpressionType type) override {

@@ -27,7 +27,7 @@ public:
 		return function->ToString();
 	}
 
-	bool Equals(const TableRef *other_) const override;
+	bool Equals(const TableRef *other_p) const override;
 
 	unique_ptr<TableRef> Copy() override;
 

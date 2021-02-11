@@ -16,7 +16,7 @@ class ExpressionRewriter;
 
 class Rule {
 public:
-	Rule(ExpressionRewriter &rewriter) : rewriter(rewriter) {
+	explicit Rule(ExpressionRewriter &rewriter) : rewriter(rewriter) {
 	}
 	virtual ~Rule() {
 	}
