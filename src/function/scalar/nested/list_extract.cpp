@@ -9,7 +9,7 @@
 namespace duckdb {
 
 template <class T, bool HEAP_REF = false>
-void list_extract_template(idx_t count, Vector &list, Vector &offsets, Vector &result) {
+void ListExtractTemplate(idx_t count, Vector &list, Vector &offsets, Vector &result) {
 	VectorData list_data, offsets_data, child_data;
 
 	list.Orrify(count, list_data);
@@ -23,9 +23,6 @@ void list_extract_template(idx_t count, Vector &list, Vector &offsets, Vector &r
 	auto rsel = offsets_data.sel;
 	auto &lnullmask = *list_data.nullmask;
 	auto &rnullmask = *offsets_data.nullmask;
-
-	auto ldata = (list_entry_t *)list_data.data;
-	auto rdata = (int64_t *)offsets_data.data;
 
 	auto &list_child_collection = ListVector::GetEntry(list);
 	// heap-ref once
@@ -42,8 +39,8 @@ void list_extract_template(idx_t count, Vector &list, Vector &offsets, Vector &r
 		auto list_index = lsel->get_index(i);
 		auto offsets_index = rsel->get_index(i);
 		if (!lnullmask[list_index] && !rnullmask[offsets_index]) {
-			auto list_entry = ldata[list_index];
-			auto offsets_entry = rdata[offsets_index];
+			auto list_entry = ((list_entry_t *)list_data.data)[list_index];
+			auto offsets_entry = ((int64_t *)offsets_data.data)[offsets_index];
 			idx_t child_offset;
 			if (offsets_entry < 0) {
 				if ((idx_t)-offsets_entry > list_entry.length) {
@@ -79,7 +76,7 @@ void list_extract_template(idx_t count, Vector &list, Vector &offsets, Vector &r
 	}
 }
 
-static void list_extract_fun(DataChunk &args, ExpressionState &state, Vector &result) {
+static void ListExtractFun(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.data.size() == 2);
 	D_ASSERT(args.data[0].type.id() == LogicalTypeId::LIST);
 
@@ -89,50 +86,50 @@ static void list_extract_fun(DataChunk &args, ExpressionState &state, Vector &re
 
 	switch (result.type.id()) {
 	case LogicalTypeId::UTINYINT:
-		list_extract_template<uint8_t>(count, list, offsets, result);
+		ListExtractTemplate<uint8_t>(count, list, offsets, result);
 		break;
 	case LogicalTypeId::TINYINT:
-		list_extract_template<int8_t>(count, list, offsets, result);
+		ListExtractTemplate<int8_t>(count, list, offsets, result);
 		break;
 	case LogicalTypeId::USMALLINT:
-		list_extract_template<uint16_t>(count, list, offsets, result);
+		ListExtractTemplate<uint16_t>(count, list, offsets, result);
 		break;
 	case LogicalTypeId::SMALLINT:
-		list_extract_template<int16_t>(count, list, offsets, result);
+		ListExtractTemplate<int16_t>(count, list, offsets, result);
 		break;
 	case LogicalTypeId::UINTEGER:
-		list_extract_template<uint32_t>(count, list, offsets, result);
+		ListExtractTemplate<uint32_t>(count, list, offsets, result);
 		break;
 	case LogicalTypeId::INTEGER:
-		list_extract_template<int32_t>(count, list, offsets, result);
+		ListExtractTemplate<int32_t>(count, list, offsets, result);
 		break;
 	case LogicalTypeId::UBIGINT:
-		list_extract_template<uint64_t>(count, list, offsets, result);
+		ListExtractTemplate<uint64_t>(count, list, offsets, result);
 		break;
 	case LogicalTypeId::BIGINT:
-		list_extract_template<int64_t>(count, list, offsets, result);
+		ListExtractTemplate<int64_t>(count, list, offsets, result);
 		break;
 	case LogicalTypeId::HUGEINT:
-		list_extract_template<hugeint_t>(count, list, offsets, result);
+		ListExtractTemplate<hugeint_t>(count, list, offsets, result);
 		break;
 	case LogicalTypeId::FLOAT:
-		list_extract_template<float>(count, list, offsets, result);
+		ListExtractTemplate<float>(count, list, offsets, result);
 		break;
 	case LogicalTypeId::DOUBLE:
-		list_extract_template<double>(count, list, offsets, result);
+		ListExtractTemplate<double>(count, list, offsets, result);
 		break;
 	case LogicalTypeId::DATE:
-		list_extract_template<date_t>(count, list, offsets, result);
+		ListExtractTemplate<date_t>(count, list, offsets, result);
 		break;
 	case LogicalTypeId::TIME:
-		list_extract_template<time_t>(count, list, offsets, result);
+		ListExtractTemplate<time_t>(count, list, offsets, result);
 		break;
 	case LogicalTypeId::TIMESTAMP:
-		list_extract_template<timestamp_t>(count, list, offsets, result);
+		ListExtractTemplate<timestamp_t>(count, list, offsets, result);
 		break;
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR:
-		list_extract_template<string_t, true>(count, list, offsets, result);
+		ListExtractTemplate<string_t, true>(count, list, offsets, result);
 		break;
 	case LogicalTypeId::SQLNULL:
 		result.Reference(Value());
@@ -144,8 +141,8 @@ static void list_extract_fun(DataChunk &args, ExpressionState &state, Vector &re
 	result.Verify(args.size());
 }
 
-static unique_ptr<FunctionData> list_extract_bind(ClientContext &context, ScalarFunction &bound_function,
-                                                  vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> ListExtractBind(ClientContext &context, ScalarFunction &bound_function,
+                                                vector<unique_ptr<Expression>> &arguments) {
 	if (arguments[0]->return_type.id() != LogicalTypeId::LIST) {
 		throw BinderException("LIST_EXTRACT can only operate on LISTs");
 	}
@@ -156,8 +153,8 @@ static unique_ptr<FunctionData> list_extract_bind(ClientContext &context, Scalar
 
 void ListExtractFun::RegisterFunction(BuiltinFunctions &set) {
 	// return type is set in bind, unknown at this point
-	ScalarFunction fun("list_extract", {LogicalType::ANY, LogicalType::BIGINT}, LogicalType::ANY, list_extract_fun,
-	                   false, list_extract_bind);
+	ScalarFunction fun("list_extract", {LogicalType::ANY, LogicalType::BIGINT}, LogicalType::ANY, ListExtractFun, false,
+	                   ListExtractBind);
 	fun.varargs = LogicalType::ANY;
 	set.AddFunction(fun);
 	fun.name = "list_element";
