@@ -2,8 +2,8 @@
 
 namespace duckdb {
 
-BoundCaseExpression::BoundCaseExpression(LogicalType type) :
-	Expression(ExpressionType::CASE_EXPR, ExpressionClass::BOUND_CASE, move(type)) {
+BoundCaseExpression::BoundCaseExpression(LogicalType type)
+    : Expression(ExpressionType::CASE_EXPR, ExpressionClass::BOUND_CASE, move(type)) {
 }
 
 BoundCaseExpression::BoundCaseExpression(unique_ptr<Expression> check, unique_ptr<Expression> res_if_true,

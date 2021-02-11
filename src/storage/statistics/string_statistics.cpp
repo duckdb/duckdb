@@ -59,7 +59,8 @@ static int StringValueComparison(const_data_ptr_t data, idx_t len, const_data_pt
 }
 
 static void ConstructValue(const_data_ptr_t data, idx_t size, data_t target[]) {
-	idx_t value_size = size > StringStatistics::MAX_STRING_MINMAX_SIZE ? StringStatistics::MAX_STRING_MINMAX_SIZE : size;
+	idx_t value_size =
+	    size > StringStatistics::MAX_STRING_MINMAX_SIZE ? StringStatistics::MAX_STRING_MINMAX_SIZE : size;
 	memcpy(target, data, value_size);
 	for (idx_t i = value_size; i < StringStatistics::MAX_STRING_MINMAX_SIZE; i++) {
 		target[i] = '\0';

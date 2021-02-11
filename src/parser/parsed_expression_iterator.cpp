@@ -19,7 +19,7 @@ void ParsedExpressionIterator::EnumerateChildren(
 	switch (expr.expression_class) {
 	case ExpressionClass::CASE: {
 		auto &case_expr = (CaseExpression &)expr;
-		for(auto &check : case_expr.case_checks) {
+		for (auto &check : case_expr.case_checks) {
 			callback(check.when_expr);
 			callback(check.then_expr);
 		}

@@ -12,9 +12,8 @@ struct DefaultMacro {
 	const char *macro;
 };
 
-static DefaultMacro internal_macros[] = {
-    {"nullif", {"a", "b", nullptr}, "CASE WHEN a=b THEN NULL ELSE a END"},
-    {nullptr, { nullptr }, nullptr}};
+static DefaultMacro internal_macros[] = {{"nullif", {"a", "b", nullptr}, "CASE WHEN a=b THEN NULL ELSE a END"},
+                                         {nullptr, {nullptr}, nullptr}};
 
 static unique_ptr<CreateFunctionInfo> GetDefaultFunction(string schema, string name) {
 	for (idx_t index = 0; internal_macros[index].name != nullptr; index++) {
@@ -25,7 +24,8 @@ static unique_ptr<CreateFunctionInfo> GetDefaultFunction(string schema, string n
 
 			auto result = make_unique<MacroFunction>(move(expressions[0]));
 			for (idx_t param_idx = 0; internal_macros[index].parameters[param_idx] != nullptr; param_idx++) {
-				result->parameters.push_back(make_unique<ColumnRefExpression>(internal_macros[index].parameters[param_idx]));
+				result->parameters.push_back(
+				    make_unique<ColumnRefExpression>(internal_macros[index].parameters[param_idx]));
 			}
 
 			auto bind_info = make_unique<CreateMacroInfo>();
@@ -44,10 +44,11 @@ DefaultFunctionGenerator::DefaultFunctionGenerator(Catalog &catalog, SchemaCatal
     : DefaultGenerator(catalog), schema(schema) {
 }
 
-unique_ptr<CatalogEntry> DefaultFunctionGenerator::CreateDefaultEntry(ClientContext &context, const string &entry_name) {
+unique_ptr<CatalogEntry> DefaultFunctionGenerator::CreateDefaultEntry(ClientContext &context,
+                                                                      const string &entry_name) {
 	auto info = GetDefaultFunction(schema->name, entry_name);
 	if (info) {
-		return make_unique_base<CatalogEntry, MacroCatalogEntry>(&catalog, schema, (CreateMacroInfo *) info.get());
+		return make_unique_base<CatalogEntry, MacroCatalogEntry>(&catalog, schema, (CreateMacroInfo *)info.get());
 	}
 	return nullptr;
 }

@@ -8,7 +8,7 @@ namespace duckdb {
 BindResult ExpressionBinder::BindExpression(CaseExpression &expr, idx_t depth) {
 	// first try to bind the children of the case expression
 	string error;
-	for(auto &check : expr.case_checks) {
+	for (auto &check : expr.case_checks) {
 		BindChild(check.when_expr, depth, error);
 		BindChild(check.then_expr, depth, error);
 	}
@@ -19,7 +19,7 @@ BindResult ExpressionBinder::BindExpression(CaseExpression &expr, idx_t depth) {
 	// the children have been successfully resolved
 	// figure out the result type of the CASE expression
 	auto return_type = ((BoundExpression &)*expr.else_expr).expr->return_type;
-	for(auto &check : expr.case_checks) {
+	for (auto &check : expr.case_checks) {
 		auto &then_expr = (BoundExpression &)*check.then_expr;
 		return_type = LogicalType::MaxLogicalType(return_type, then_expr.expr->return_type);
 	}
@@ -30,7 +30,7 @@ BindResult ExpressionBinder::BindExpression(CaseExpression &expr, idx_t depth) {
 
 	auto root = make_unique<BoundCaseExpression>(return_type);
 	auto current_root = root.get();
-	for(idx_t i = 0; i < expr.case_checks.size(); i++) {
+	for (idx_t i = 0; i < expr.case_checks.size(); i++) {
 		auto &check = expr.case_checks[i];
 		auto &when_expr = (BoundExpression &)*check.when_expr;
 		auto &then_expr = (BoundExpression &)*check.then_expr;
