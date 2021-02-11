@@ -5,7 +5,7 @@
 
 namespace duckdb {
 
-struct skew_state_t {
+struct SkewState {
 	size_t n;
 	double sum;
 	double sum_sqr;
@@ -28,7 +28,7 @@ struct SkewnessOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, FunctionData *bind_data_, INPUT_TYPE *data, nullmask_t &nullmask, idx_t idx) {
+	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *data, nullmask_t &nullmask, idx_t idx) {
 		if (nullmask[idx]) {
 			return;
 		}
@@ -52,7 +52,7 @@ struct SkewnessOperation {
 	}
 
 	template <class TARGET_TYPE, class STATE>
-	static void Finalize(Vector &result, FunctionData *bind_data_, STATE *state, TARGET_TYPE *target,
+	static void Finalize(Vector &result, FunctionData *bind_data, STATE *state, TARGET_TYPE *target,
 	                     nullmask_t &nullmask, idx_t idx) {
 		if (state->n == 0) {
 			nullmask[idx] = true;
@@ -75,10 +75,10 @@ struct SkewnessOperation {
 };
 
 void SkewFun::RegisterFunction(BuiltinFunctions &set) {
-	AggregateFunctionSet functionSet("skewness");
-	functionSet.AddFunction(AggregateFunction::UnaryAggregate<skew_state_t, double, double, SkewnessOperation>(
+	AggregateFunctionSet function_set("skewness");
+	function_set.AddFunction(AggregateFunction::UnaryAggregate<SkewState, double, double, SkewnessOperation>(
 	    LogicalType::DOUBLE, LogicalType::DOUBLE));
-	set.AddFunction(functionSet);
+	set.AddFunction(function_set);
 }
 
 } // namespace duckdb

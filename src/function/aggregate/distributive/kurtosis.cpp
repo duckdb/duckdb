@@ -5,7 +5,7 @@
 
 namespace duckdb {
 
-struct kurtosis_state_t {
+struct KurtosisState {
 	idx_t n;
 	double sum;
 	double sum_sqr;
@@ -29,7 +29,7 @@ struct KurtosisOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, FunctionData *bind_data_, INPUT_TYPE *data, nullmask_t &nullmask, idx_t idx) {
+	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *data, nullmask_t &nullmask, idx_t idx) {
 		if (nullmask[idx]) {
 			return;
 		}
@@ -53,18 +53,22 @@ struct KurtosisOperation {
 	}
 
 	template <class TARGET_TYPE, class STATE>
-	static void Finalize(Vector &result, FunctionData *bind_data_, STATE *state, TARGET_TYPE *target,
+	static void Finalize(Vector &result, FunctionData *bind_data, STATE *state, TARGET_TYPE *target,
 	                     nullmask_t &nullmask, idx_t idx) {
 		auto n = (double)state->n;
 		if (n == 0) {
 			nullmask[idx] = true;
 			return;
 		}
-		double temp = 1 / n;
+		long double temp = 1 / n;
 		double m4 =
 		    temp * (state->sum_four - 4 * state->sum_cub * state->sum * temp +
 		            6 * state->sum_sqr * state->sum * state->sum * temp * temp - 3 * pow(state->sum, 4) * pow(temp, 3));
+
 		double m2 = temp * (state->sum_sqr - state->sum * state->sum * temp);
+		if (((m2 * m2) - 3 * (n - 1)) == 0 || ((n - 2) * (n - 3)) == 0) {
+			nullmask[idx] = true;
+		}
 		target[idx] = (n - 1) * ((n + 1) * m4 / (m2 * m2) - 3 * (n - 1)) / ((n - 2) * (n - 3));
 		if (!Value::DoubleIsValid(target[idx])) {
 			nullmask[idx] = true;
@@ -77,10 +81,10 @@ struct KurtosisOperation {
 };
 
 void KurtosisFun::RegisterFunction(BuiltinFunctions &set) {
-	AggregateFunctionSet functionSet("kurtosis");
-	functionSet.AddFunction(AggregateFunction::UnaryAggregate<kurtosis_state_t, double, double, KurtosisOperation>(
+	AggregateFunctionSet function_set("kurtosis");
+	function_set.AddFunction(AggregateFunction::UnaryAggregate<KurtosisState, double, double, KurtosisOperation>(
 	    LogicalType::DOUBLE, LogicalType::DOUBLE));
-	set.AddFunction(functionSet);
+	set.AddFunction(function_set);
 }
 
 } // namespace duckdb

@@ -3,24 +3,24 @@
 # group: [aggregates]
 
 #Corner cases
-statement error
-select kurtosis()
+#statement error
+#select kurtosis()
+#
+#query I
+#select kurtosis(NULL)
+#----
+#NULL
+#
+#query I
+#select kurtosis(1)
+#----
+#NULL
+#
+#statement error
+#select kurtosis(*)
 
-query I
-select kurtosis(NULL)
-----
-NULL
 
-query I
-select kurtosis(1)
-----
-NULL
-
-statement error
-select kurtosis(*)
-
-
-# Constant Value
+# Constant Value (This shoud be an error)
 query I
 select kurtosis (10) from range (5)
 ----

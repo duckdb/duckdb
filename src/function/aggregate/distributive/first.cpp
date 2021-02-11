@@ -206,10 +206,10 @@ void FirstFun::RegisterFunction(BuiltinFunctions &set) {
 
 void ArbitraryFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet first("arbitrary");
-	for (auto type : LogicalType::ALL_TYPES) {
+	for (const auto &type : LogicalType::ALL_TYPES) {
 		if (type.id() == LogicalTypeId::DECIMAL) {
 			first.AddFunction(AggregateFunction({type}, type, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
-			                                    bind_decimal_first));
+			                                    BindDecimalFirst));
 		} else {
 			first.AddFunction(FirstFun::GetFunction(type));
 		}
