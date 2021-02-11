@@ -110,6 +110,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 					std::swap(join.children[0], join.children[1]);
 					for (auto &cond : join.conditions) {
 						std::swap(cond.left, cond.right);
+						cond.comparison = FlipComparisionExpression(cond.comparison);
 					}
 				}
 			}

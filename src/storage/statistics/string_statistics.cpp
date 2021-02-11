@@ -58,24 +58,30 @@ static int StringValueComparison(const_data_ptr_t data, idx_t len, const_data_pt
 	return 0;
 }
 
+static void ConstructValue(const_data_ptr_t data, idx_t size, data_t target[]) {
+	idx_t value_size =
+	    size > StringStatistics::MAX_STRING_MINMAX_SIZE ? StringStatistics::MAX_STRING_MINMAX_SIZE : size;
+	memcpy(target, data, value_size);
+	for (idx_t i = value_size; i < StringStatistics::MAX_STRING_MINMAX_SIZE; i++) {
+		target[i] = '\0';
+	}
+}
+
 void StringStatistics::Update(const string_t &value) {
 	auto data = (const_data_ptr_t)value.GetDataUnsafe();
 	auto size = value.GetSize();
 
 	//! we can only fit 8 bytes, so we might need to trim our string
-	idx_t value_size = size > MAX_STRING_MINMAX_SIZE ? MAX_STRING_MINMAX_SIZE : size;
+	// construct the value
+	data_t target[MAX_STRING_MINMAX_SIZE];
+	ConstructValue(data, size, target);
+
 	// update the min and max
-	if (StringValueComparison(data, value_size, min) < 0) {
-		memcpy(min, data, value_size);
-		for (idx_t i = value_size; i < MAX_STRING_MINMAX_SIZE; i++) {
-			min[i] = '\0';
-		}
+	if (StringValueComparison(target, MAX_STRING_MINMAX_SIZE, min) < 0) {
+		memcpy(min, target, MAX_STRING_MINMAX_SIZE);
 	}
-	if (StringValueComparison(data, value_size, max) > 0) {
-		memcpy(max, data, value_size);
-		for (idx_t i = value_size; i < MAX_STRING_MINMAX_SIZE; i++) {
-			max[i] = '\0';
-		}
+	if (StringValueComparison(target, MAX_STRING_MINMAX_SIZE, max) > 0) {
+		memcpy(max, target, MAX_STRING_MINMAX_SIZE);
 	}
 	if (size > max_string_length) {
 		max_string_length = size;

@@ -501,6 +501,8 @@ void Vector::Normalify(idx_t count) {
 		// non-null constant: have to repeat the constant
 		switch (type.InternalType()) {
 		case PhysicalType::BOOL:
+			TemplatedFlattenConstantVector<bool>(data, old_data, count);
+			break;
 		case PhysicalType::INT8:
 			TemplatedFlattenConstantVector<int8_t>(data, old_data, count);
 			break;
