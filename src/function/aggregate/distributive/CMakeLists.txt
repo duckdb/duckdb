@@ -11,7 +11,9 @@ add_library_unity(
   product.cpp
   bool.cpp
   mode.cpp
-  arg_min_max.cpp)
+  arg_min_max.cpp
+  skew.cpp
+  kurtosis.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_aggr_distr>
     PARENT_SCOPE)

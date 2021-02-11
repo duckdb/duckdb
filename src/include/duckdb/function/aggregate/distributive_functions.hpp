@@ -78,6 +78,10 @@ struct FirstFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct ArbitraryFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct MaxFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
@@ -86,7 +90,23 @@ struct MinFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct MaxByFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct MinByFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct SumFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct SkewFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct KurtosisFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

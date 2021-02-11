@@ -106,3 +106,9 @@ query II
 select arg_min(salary,name),arg_max(salary,name)  from names;
 ----
 20	10
+
+# test min_by max_by alias
+query II
+select min_by(name,salary),max_by(name,salary)  from names;
+----
+Pedro	Hubert-Blaine-Wolfeschlegelsteinhausenbergerdorff

@@ -206,4 +206,27 @@ void ArgMaxFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(fun);
 }
 
+void MinByFun::RegisterFunction(BuiltinFunctions &set) {
+	AggregateFunctionSet fun("min_by");
+	fun.AddFunction(
+	    AggregateFunction::BinaryAggregate<ArgMinMaxState<double, double>, double, double, double, ArgMinOperation>(
+	        LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE));
+
+	fun.AddFunction(AggregateFunction::BinaryAggregate<ArgMinMaxState<string_t, double>, string_t, double, string_t,
+	                                                   ArgMinOperation>(LogicalType::VARCHAR, LogicalType::DOUBLE,
+	                                                                    LogicalType::VARCHAR));
+	set.AddFunction(fun);
+}
+
+void MaxByFun::RegisterFunction(BuiltinFunctions &set) {
+	AggregateFunctionSet fun("max_by");
+	fun.AddFunction(
+	    AggregateFunction::BinaryAggregate<ArgMinMaxState<double, double>, double, double, double, ArgMaxOperation>(
+	        LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE));
+	fun.AddFunction(AggregateFunction::BinaryAggregate<ArgMinMaxState<string_t, double>, string_t, double, string_t,
+	                                                   ArgMaxOperation>(LogicalType::VARCHAR, LogicalType::DOUBLE,
+	                                                                    LogicalType::VARCHAR));
+	set.AddFunction(fun);
+}
+
 } // namespace duckdb

@@ -203,4 +203,17 @@ void FirstFun::RegisterFunction(BuiltinFunctions &set) {
 	}
 	set.AddFunction(first);
 }
+
+void ArbitraryFun::RegisterFunction(BuiltinFunctions &set) {
+	AggregateFunctionSet first("arbitrary");
+	for (const auto &type : LogicalType::ALL_TYPES) {
+		if (type.id() == LogicalTypeId::DECIMAL) {
+			first.AddFunction(AggregateFunction({type}, type, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+			                                    BindDecimalFirst));
+		} else {
+			first.AddFunction(FirstFun::GetFunction(type));
+		}
+	}
+	set.AddFunction(first);
+}
 } // namespace duckdb
