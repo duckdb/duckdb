@@ -15,7 +15,7 @@ struct DefaultMacro {
 static DefaultMacro internal_macros[] = {{"nullif", {"a", "b", nullptr}, "CASE WHEN a=b THEN NULL ELSE a END"},
                                          {nullptr, {nullptr}, nullptr}};
 
-static unique_ptr<CreateFunctionInfo> GetDefaultFunction(string schema, string name) {
+static unique_ptr<CreateFunctionInfo> GetDefaultFunction(const string &schema, const string &name) {
 	for (idx_t index = 0; internal_macros[index].name != nullptr; index++) {
 		if (internal_macros[index].name == name) {
 			// parse the expression
