@@ -1,0 +1,94 @@
+# name: test/sql/aggregate/aggregates/test_entropy.test
+# description: Test entropy function
+# group: [aggregates]
+
+#Corner cases
+statement error
+select entropy()
+
+query I
+select entropy(NULL)
+----
+0
+
+query I
+select entropy(1)
+----
+0
+
+statement error
+select entropy(*)
+
+statement ok
+create table aggr(k int);
+
+statement ok
+insert into aggr values (0),(1),(1),(1),(4),(0),(3),(3),(2),(2),(4),(4),(2),(4),(0),(0),(0),(1),(2),(3),(4),(2),(3),(3),(1);
+
+query I
+select entropy(k) from aggr ;
+----
+2.321928
+
+query I
+SELECT entropy(2) FROM range(100);
+----
+0
+
+
+
+query I
+select entropy(k) from aggr group by k%2
+----
+1.584963
+1.000000
+
+statement ok
+create table names (name string)
+
+statement ok
+insert into names values ('pedro'), ('pedro'), ('pedro'),('hannes'),('hannes'),('mark'),(null);
+
+query I
+select entropy(name) from names;
+----
+1.459148
+
+require vector_size 512
+
+query I
+select entropy(k) over (partition by k%2)
+    from aggr;
+----
+1.584963
+1.584963
+1.584963
+1.584963
+1.584963
+1.584963
+1.584963
+1.584963
+1.584963
+1.584963
+1.584963
+1.584963
+1.584963
+1.584963
+1.584963
+1.000000
+1.000000
+1.000000
+1.000000
+1.000000
+1.000000
+1.000000
+1.000000
+1.000000
+1.000000
+
+# Empty Table
+query I
+SELECT entropy(i) FROM range(100) tbl(i) WHERE 1=0;
+----
+0
+
