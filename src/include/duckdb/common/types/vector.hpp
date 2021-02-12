@@ -131,6 +131,9 @@ public:
 	inline VectorBufferType GetBufferType() const {
 		return buffer->GetBufferType();
 	}
+	inline data_ptr_t GetData() {
+		return data;
+	}
 	// Setters
 	inline void SetVectorType(VectorType vector_type) {
 		buffer->SetVectorType(vector_type);
