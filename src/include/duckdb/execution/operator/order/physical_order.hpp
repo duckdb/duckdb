@@ -16,6 +16,8 @@
 
 namespace duckdb {
 
+struct ContinuousBlock;
+
 //! Represents a physical ordering of the data. Note that this will not change
 //! the data but only add a selection vector.
 class PhysicalOrder : public PhysicalSink {

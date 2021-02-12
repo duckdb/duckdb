@@ -112,7 +112,7 @@ idx_t RowChunk::AppendToBlock(RowDataBlock &block, BufferHandle &handle, vector<
 	return append_count;
 }
 
-void RowChunk::Build(idx_t added_count, data_ptr_t key_locations[], data_ptr_t nullmask_locations[]) {
+void RowChunk::Build(idx_t added_count, data_ptr_t key_locations[]) {
 	count += added_count;
 
 	vector<unique_ptr<BufferHandle>> handles;
@@ -149,11 +149,7 @@ void RowChunk::Build(idx_t added_count, data_ptr_t key_locations[], data_ptr_t n
 	for (auto &append_entry : append_entries) {
 		idx_t next = append_idx + append_entry.count;
 		for (; append_idx < next; append_idx++) {
-			// initialize nullmask to 0
-			memset(append_entry.baseptr, 0, nullmask_size);
-			nullmask_locations[append_idx] = append_entry.baseptr;
-			// data starts after the nullmask
-			key_locations[append_idx] = append_entry.baseptr + nullmask_size;
+			key_locations[append_idx] = append_entry.baseptr;
 			append_entry.baseptr += entry_size;
 		}
 	}
@@ -229,35 +225,13 @@ void RowChunk::DeserializeIntoVector(Vector &v, idx_t vcount, idx_t col_idx, dat
 	DeserializeIntoVectorData(vdata, v.type.InternalType(), vcount, col_idx, key_locations, nullmask_locations);
 }
 
-void RowChunk::DeserializeRowBlock(DataChunk &chunk, RowDataBlock &block, idx_t entry) {
-	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
-	data_ptr_t nullmask_locations[STANDARD_VECTOR_SIZE];
-
-	auto handle = buffer_manager.Pin(block.block);
-	auto dataptr = handle->node->buffer + entry * entry_size;
-
-	// fetch the next vector of entries from the blocks
-	idx_t next = MinValue<idx_t>(STANDARD_VECTOR_SIZE, block.count - entry);
-	for (idx_t i = 0; i < next; i++) {
-		nullmask_locations[i] = dataptr;
-		key_locations[i] = dataptr + nullmask_size;
-		dataptr += entry_size;
-	}
-	// now insert into the data chunk
-	chunk.SetCardinality(next);
-	for (idx_t i = 0; i < chunk.ColumnCount(); i++) {
-		DeserializeIntoVector(chunk.data[i], next, i, key_locations, nullmask_locations);
-	}
-}
 void RowChunk::Append(RowChunk &chunk) {
 	if (count == 0) {
 		// this chunk is empty - initialize with appended chunk
-		nullmask_size = chunk.nullmask_size;
 		entry_size = chunk.entry_size;
 		block_capacity = chunk.block_capacity;
 	} else {
 		// not empty - assert compatibility
-		D_ASSERT(nullmask_size == chunk.nullmask_size);
 		D_ASSERT(entry_size == chunk.entry_size);
 		D_ASSERT(block_capacity == chunk.block_capacity);
 	}

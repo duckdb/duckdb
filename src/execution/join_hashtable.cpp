@@ -38,14 +38,14 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition
 	// at least one equality is necessary
 	D_ASSERT(!equality_types.empty());
 	// size of nullmask bitset for each column that is pushed in
-	row_chunk.nullmask_size = (build_types.size() + 7) / 8;
+	//	row_chunk.nullmask_size = (build_types.size() + 7) / 8;
 	for (idx_t i = 0; i < build_types.size(); i++) {
 		build_size += GetTypeIdSize(build_types[i].InternalType());
 	}
 	tuple_size = condition_size + build_size;
-	pointer_offset = row_chunk.nullmask_size + tuple_size;
+	//	pointer_offset = row_chunk.nullmask_size + tuple_size;
 	// entry size is the tuple size and the size of the hash/next pointer
-	row_chunk.entry_size = row_chunk.nullmask_size + tuple_size + MaxValue(sizeof(hash_t), sizeof(uintptr_t));
+	//	row_chunk.entry_size = row_chunk.nullmask_size + tuple_size + MaxValue(sizeof(hash_t), sizeof(uintptr_t));
 	if (IsRightOuterJoin(join_type)) {
 		// full/right outer joins need an extra bool to keep track of whether or not a tuple has found a matching entry
 		// we place the bool before the NEXT pointer
@@ -186,8 +186,8 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	}
 
 	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
-	data_ptr_t nullmask_locations[STANDARD_VECTOR_SIZE];
-	row_chunk.Build(added_count, key_locations, nullmask_locations);
+	data_ptr_t nullmask_locations[STANDARD_VECTOR_SIZE]; // FIXME: nullmask locations
+	row_chunk.Build(added_count, key_locations);
 
 	// hash the keys and obtain an entry in the list
 	// note that we only hash the keys used in the equality comparison
@@ -265,7 +265,7 @@ void JoinHashTable::Finalize() {
 			idx_t next = MinValue<idx_t>(STANDARD_VECTOR_SIZE, block.count - entry);
 			for (idx_t i = 0; i < next; i++) {
 				hash_data[i] = Load<hash_t>((data_ptr_t)(dataptr + pointer_offset));
-				key_locations[i] = dataptr + row_chunk.nullmask_size;
+				//				key_locations[i] = dataptr + row_chunk.nullmask_size;
 				dataptr += row_chunk.entry_size;
 			}
 			// now insert into the hash table

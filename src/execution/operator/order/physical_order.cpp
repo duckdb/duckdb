@@ -3,6 +3,7 @@
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/pipeline.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 
 namespace duckdb {
 
@@ -10,127 +11,38 @@ PhysicalOrder::PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode>
     : PhysicalSink(PhysicalOperatorType::ORDER_BY, move(types)), orders(move(orders)) {
 }
 
-struct ContinuousBlock {
-public:
-	ContinuousBlock(RowChunk &sorting, RowChunk &payload)
-	    : buffer_manager(sorting.buffer_manager), capacity(sorting.block_capacity),
-	      sorting_entry_size(sorting.entry_size), payload_entry_size(payload.entry_size), start(0), curr_block_idx(0) {
-	}
-
-	BufferManager &buffer_manager;
-	idx_t capacity;
-	idx_t sorting_entry_size;
-	idx_t payload_entry_size;
-
-	vector<shared_ptr<RowDataBlock>> sorting;
-	vector<shared_ptr<RowDataBlock>> payload;
-	idx_t start;
-	idx_t end;
-
-	data_ptr_t sorting_ptr;
-	data_ptr_t payload_ptr;
-
-	//! Used only for the initial merge after sorting in Sink
-	unique_ptr<idx_t[]> ordered_idxs = nullptr;
-
-	bool IsDone() const {
-		return curr_block_idx >= sorting.size();
-	}
-
-	void PinBlock() {
-		if (IsDone()) {
-			return;
-		}
-		curr_entry_idx = curr_block_idx == 0 ? start : 0;
-		curr_block_end = curr_block_idx == sorting.size() - 1 ? end : sorting[curr_block_idx]->count;
-		sorting_handle = buffer_manager.Pin(sorting[curr_block_idx]->block);
-		payload_handle = buffer_manager.Pin(payload[curr_block_idx]->block);
-		if (ordered_idxs) {
-			sorting_ptr = sorting_handle->node->buffer + (ordered_idxs[curr_entry_idx] * sorting_entry_size);
-			payload_ptr = payload_handle->node->buffer + (ordered_idxs[curr_entry_idx] * payload_entry_size);
-		} else {
-			sorting_ptr = sorting_handle->node->buffer + curr_entry_idx * sorting_entry_size;
-			payload_ptr = payload_handle->node->buffer + curr_entry_idx * payload_entry_size;
-		}
-	}
-
-	void Advance() {
-		curr_entry_idx++;
-		if (curr_entry_idx < curr_block_end) {
-			if (ordered_idxs) {
-				sorting_ptr = sorting_handle->node->buffer + (ordered_idxs[curr_entry_idx] * sorting_entry_size);
-				payload_ptr = payload_handle->node->buffer + (ordered_idxs[curr_entry_idx] * payload_entry_size);
-			} else {
-				sorting_ptr += sorting_entry_size;
-				payload_ptr += payload_entry_size;
-			}
-		} else {
-			curr_block_idx++;
-			PinBlock();
-		}
-	}
-
-	void FlushData(ContinuousBlock &result) {
-		if (result.sorting.empty() || result.sorting.back()->count + (curr_block_end - curr_entry_idx) > capacity) {
-			// if it does not fit in the back, create new blocks to write to
-			result.sorting.emplace_back(make_shared<RowDataBlock>(buffer_manager, capacity, sorting_entry_size));
-			result.payload.emplace_back(make_shared<RowDataBlock>(buffer_manager, capacity, payload_entry_size));
-		}
-		auto write_sort = result.sorting.back();
-		auto write_payl = result.payload.back();
-		auto write_sort_handle = buffer_manager.Pin(result.sorting.back()->block);
-		auto write_payl_handle = buffer_manager.Pin(result.payload.back()->block);
-		auto write_sort_ptr = write_sort_handle->node->buffer + write_sort->count * sorting_entry_size;
-		auto write_payl_ptr = write_payl_handle->node->buffer + write_payl->count * payload_entry_size;
-
-		while (!IsDone()) {
-			memcpy(write_sort_ptr, sorting_ptr, sorting_entry_size);
-			memcpy(write_payl_ptr, payload_ptr, payload_entry_size);
-			Advance();
-			write_sort_ptr += sorting_entry_size;
-			write_payl_ptr += payload_entry_size;
-			write_sort->count++;
-			write_payl->count++;
-		}
-
-		for (; curr_block_idx < sorting.size(); curr_block_idx++) {
-			result.sorting.push_back(move(sorting[curr_block_idx]));
-			result.payload.push_back(move(payload[curr_block_idx]));
-		}
-	}
-
-private:
-	idx_t curr_block_idx;
-	idx_t curr_entry_idx;
-	idx_t curr_block_end;
-
-	unique_ptr<BufferHandle> sorting_handle;
-	unique_ptr<BufferHandle> payload_handle;
-};
-
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
 class OrderGlobalState : public GlobalOperatorState {
 public:
 	OrderGlobalState(PhysicalOrder &op, BufferManager &buffer_manager)
-	    : op(op), sorting(buffer_manager), payload(buffer_manager) {
+	    : op(op), buffer_manager(buffer_manager), row_chunk(buffer_manager), sorting_size(0), entry_size(0) {
 	}
 	PhysicalOrder &op;
+	BufferManager &buffer_manager;
 
-	//! The lock for updating the global aggregate state
+	//! The lock for updating the global order state
 	mutex lock;
 
-	//! Types of the sorting columns
-	vector<PhysicalType> sorting_types;
-	//! Sizes of the sorting columns
-	vector<idx_t> sorting_sizes;
 	//! To execute the expressions that are sorted
 	ExpressionExecutor executor;
+	vector<LogicalType> sorting_l_types;
+	vector<PhysicalType> sorting_p_types;
+	vector<PhysicalType> payload_types;
+
+	//! Mappings from sorting index to payload index and vice versa
+	std::unordered_map<idx_t, idx_t> s_to_p;
+	std::unordered_map<idx_t, idx_t> p_to_s;
+	std::unordered_map<idx_t, idx_t> p_to_p;
+
 	//! Sorting columns in row format
-	RowChunk sorting;
-	//! Payload in row format
-	RowChunk payload;
+	RowChunk row_chunk;
+	idx_t sorting_nullmask_size;
+	idx_t payload_nullmask_size;
+	idx_t sorting_size;
+	idx_t entry_size;
+	idx_t block_capacity;
 
 	//! Ordered segments
 	vector<unique_ptr<ContinuousBlock>> continuous;
@@ -142,17 +54,16 @@ public:
 
 class OrderLocalState : public LocalSinkState {
 public:
-	OrderLocalState(BufferManager &buffer_manager) : sorting(buffer_manager), payload(buffer_manager) {
+	OrderLocalState(BufferManager &buffer_manager) : row_chunk(buffer_manager) {
 	}
 
 	//! Incoming data in row format
-	RowChunk sorting;
-	RowChunk payload;
+	RowChunk row_chunk;
 
 	//! Allocate arrays for vector serialization
 	const SelectionVector *sel_ptr = &FlatVector::INCREMENTAL_SELECTION_VECTOR;
-	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
-	data_ptr_t nullmask_locations[STANDARD_VECTOR_SIZE];
+	data_ptr_t key_locations[STANDARD_VECTOR_SIZE] {};
+	data_ptr_t nullmask_locations[STANDARD_VECTOR_SIZE] {};
 
 	//! Sorted incoming data (sorted each time a block is filled)
 	vector<unique_ptr<ContinuousBlock>> continuous;
@@ -160,41 +71,133 @@ public:
 
 unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &context) {
 	auto state = make_unique<OrderGlobalState>(*this, BufferManager::GetBufferManager(context));
-	for (auto &order : orders) {
-		state->sorting_types.push_back(order.expression->return_type.InternalType());
-		state->sorting_sizes.push_back(GetTypeIdSize(order.expression->return_type.InternalType()));
-		state->executor.AddExpression(*order.expression);
+	for (idx_t i = 0; i < orders.size(); i++) {
+		auto &expr = orders[i].expression;
+		state->executor.AddExpression(*expr);
+		state->sorting_l_types.push_back(expr->return_type);
+		state->sorting_p_types.push_back(expr->return_type.InternalType());
+		if (orders[i].expression->type == ExpressionType::BOUND_REF) {
+			auto &ref = (BoundReferenceExpression &)*expr;
+			state->s_to_p[i] = ref.index;
+			state->p_to_s[i] = ref.index;
+		}
 	}
+	for (idx_t i = 0; i < children[0]->types.size(); i++) {
+		if (state->p_to_s.find(i) != state->p_to_s.end()) {
+			state->payload_types.push_back(children[0]->types[i].InternalType());
+		} else {
+			state->p_to_p[i] = i - state->payload_types.size();
+		}
+	}
+	state->sorting_nullmask_size = (state->sorting_p_types.size() + 7) / 8;
+	state->payload_nullmask_size = (state->payload_types.size() + 7) / 8;
+	state->entry_size += state->sorting_nullmask_size;
+	for (auto &type : state->sorting_p_types) {
+		state->sorting_size += GetTypeIdSize(type);
+	}
+	state->entry_size += state->sorting_size;
+	state->entry_size += state->payload_nullmask_size;
+	for (auto &type : state->payload_types) {
+		state->entry_size += GetTypeIdSize(type);
+	}
+	idx_t vectors_per_block = (SORTING_BLOCK_SIZE / state->entry_size / STANDARD_VECTOR_SIZE);
+	state->block_capacity = vectors_per_block * STANDARD_VECTOR_SIZE;
 	return state;
 }
 
 unique_ptr<LocalSinkState> PhysicalOrder::GetLocalSinkState(ExecutionContext &context) {
-	auto state = make_unique<OrderLocalState>(BufferManager::GetBufferManager(context.client));
-
-	// initialize sorting
-	auto &sorting = state->sorting;
-	sorting.nullmask_size = (orders.size() + 7) / 8;
-	sorting.entry_size += sorting.nullmask_size;
-	for (auto &order : orders) {
-		sorting.entry_size += GetTypeIdSize(order.expression->return_type.InternalType());
-	}
-
-	// initialize payload
-	auto &payload = state->payload;
-	payload.nullmask_size = (types.size() + 7) / 8;
-	payload.entry_size += payload.nullmask_size;
-	for (auto &type : types) {
-		payload.entry_size += GetTypeIdSize(type.InternalType());
-	}
-
-	// initialize block capacities
-	auto min_entry_size = MinValue<idx_t>(sorting.entry_size, payload.entry_size);
-	idx_t vectors_per_block = (SORTING_BLOCK_SIZE / min_entry_size + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE;
-	sorting.block_capacity = vectors_per_block * STANDARD_VECTOR_SIZE;
-	payload.block_capacity = sorting.block_capacity;
-
-	return state;
+	return make_unique<OrderLocalState>(BufferManager::GetBufferManager(context.client));
 }
+
+struct ContinuousBlock {
+public:
+	ContinuousBlock(OrderGlobalState &state) : state(state), start(0), block_idx(0) {
+	}
+	OrderGlobalState &state;
+
+	vector<RowDataBlock> blocks;
+	idx_t start;
+	idx_t end;
+
+	unique_ptr<data_ptr_t[]> key_locations = nullptr;
+	//! Used only for the initial merge after sorting in Sink
+	unique_ptr<idx_t[]> offsets = nullptr; // FIXME: may need to share these offsets!
+
+	data_ptr_t &DataPtr() {
+		return key_locations[entry_idx];
+	}
+
+	bool HasNext() {
+		return !(block_idx >= blocks.size() && entry_idx >= block_end);
+	}
+
+	void Advance() {
+		entry_idx++;
+		if (entry_idx >= block_end) {
+			block_idx++;
+			PinBlock();
+		}
+	}
+
+	void PinBlock() {
+		if (HasNext()) {
+			return;
+		}
+		entry_idx = block_idx == 0 ? start : 0;
+		block_end = block_idx == blocks.size() - 1 ? end : blocks[block_idx].count;
+		handle = state.buffer_manager.Pin(blocks[block_idx].block);
+		data_ptr_t dataptr = handle->node->buffer;
+		if (!key_locations) {
+			key_locations = unique_ptr<data_ptr_t[]>(new data_ptr_t[blocks[block_idx].count]);
+		}
+		if (offsets) {
+			for (idx_t i = entry_idx; i < end; i++) {
+				key_locations[i] = dataptr + offsets[i];
+			}
+			offsets.release();
+		} else {
+			for (idx_t i = entry_idx; i < end; i++) {
+				key_locations[i] = dataptr;
+				dataptr += state.entry_size;
+			}
+		}
+	}
+
+	void FlushData(ContinuousBlock &target) {
+		for (; block_idx < blocks.size(); block_idx++) {
+			if (entry_idx == 0 && block_end == blocks[block_idx].count) {
+				// a full block can be appended
+				target.blocks.push_back(blocks[block_idx]);
+				continue;
+			} else {
+				// partial block must be appended
+				if (target.blocks.empty() ||
+				    target.blocks.back().count + (block_end - entry_idx) >= state.block_capacity) {
+					// if it does not fit in the back, create a new block to write to
+					target.blocks.emplace_back(state.buffer_manager, state.block_capacity, state.entry_size);
+				}
+				auto write_block = target.blocks.back();
+				auto write_handle = state.buffer_manager.Pin(write_block.block);
+				auto write_ptr = write_handle->node->buffer;
+
+				// flush into last block
+				while (HasNext()) {
+					memcpy(write_ptr, DataPtr(), state.entry_size);
+					write_block.count++;
+					Advance();
+				}
+			}
+		}
+		target.end = target.blocks.back().count;
+	}
+
+private:
+	idx_t block_idx;
+	idx_t entry_idx;
+	idx_t block_end;
+
+	unique_ptr<BufferHandle> handle;
+};
 
 template <class TYPE>
 static int8_t TemplatedCompareValue(data_ptr_t &l_val, data_ptr_t &r_val) {
@@ -209,8 +212,8 @@ static int8_t TemplatedCompareValue(data_ptr_t &l_val, data_ptr_t &r_val) {
 	return 1;
 }
 
-static int32_t CompareValue(data_ptr_t &l_nullmask, data_ptr_t &r_nullmask, data_ptr_t &l_val, data_ptr_t &r_val,
-                            const idx_t &sort_idx, OrderGlobalState &state) {
+static int32_t CompareValue(const data_ptr_t &l_nullmask, const data_ptr_t &r_nullmask, data_ptr_t &l_val,
+                            data_ptr_t &r_val, const idx_t &sort_idx, OrderGlobalState &state) {
 	bool left_null = *l_nullmask & (1 << sort_idx);
 	bool right_null = *r_nullmask & (1 << sort_idx);
 
@@ -222,7 +225,7 @@ static int32_t CompareValue(data_ptr_t &l_nullmask, data_ptr_t &r_nullmask, data
 		return state.op.orders[sort_idx].null_order == OrderByNullType::NULLS_FIRST ? -1 : 1;
 	}
 
-	switch (state.sorting_types[sort_idx]) {
+	switch (state.sorting_p_types[sort_idx]) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 		return TemplatedCompareValue<int8_t>(l_val, r_val);
@@ -255,14 +258,15 @@ static int32_t CompareValue(data_ptr_t &l_nullmask, data_ptr_t &r_nullmask, data
 	}
 }
 
-static int CompareTuple(data_ptr_t &l_start, data_ptr_t &r_start, OrderGlobalState &state) {
-	auto l_val = l_start + state.sorting.nullmask_size;
-	auto r_val = r_start + state.sorting.nullmask_size;
+static int CompareTuple(const data_ptr_t &l_start, const data_ptr_t &r_start, OrderGlobalState &state) {
+	auto l_val = l_start + state.sorting_nullmask_size;
+	auto r_val = r_start + state.sorting_nullmask_size;
 	for (idx_t i = 0; i < state.op.orders.size(); i++) {
 		auto comp_res = CompareValue(l_start, r_start, l_val, r_val, i, state);
 		if (comp_res == 0) {
-			l_val += state.sorting_sizes[i];
-			r_val += state.sorting_sizes[i];
+			idx_t val_size = GetTypeIdSize(state.sorting_p_types[i]);
+			l_val += val_size;
+			r_val += val_size;
 			continue;
 		}
 		return comp_res < 0 ? (state.op.orders[i].type == OrderType::ASCENDING ? -1 : 1)
@@ -271,25 +275,29 @@ static int CompareTuple(data_ptr_t &l_start, data_ptr_t &r_start, OrderGlobalSta
 	return 0;
 }
 
-void Sort(RowDataBlock &sort, OrderGlobalState &state, ContinuousBlock &result) {
-	// get sorting data from the buffer manager
-	auto handle = state.sorting.buffer_manager.Pin(sort.block);
-	auto dataptr = handle->node->buffer;
+void Sort(ContinuousBlock &cb, OrderGlobalState &state) {
+	D_ASSERT(cb.blocks.size() == 1);
+	auto &block = cb.blocks[0];
+	cb.end = block.count;
+
+	auto handle = state.row_chunk.buffer_manager.Pin(block.block);
+	data_ptr_t dataptr = handle->node->buffer;
 
 	// fetch a batch of pointers to entries in the blocks, and initialize idxs
-	auto key_locations = unique_ptr<data_ptr_t[]>(new data_ptr_t[sort.count]);
-	result.ordered_idxs = unique_ptr<idx_t[]>(new idx_t[sort.count]);
-	auto idxs = result.ordered_idxs.get();
-	for (idx_t i = 0; i < sort.count; i++) {
-		key_locations[i] = dataptr;
-		*(idxs + i) = i;
-		dataptr += state.sorting.entry_size;
+	cb.key_locations = unique_ptr<data_ptr_t[]>(new data_ptr_t[block.count]);
+	for (idx_t i = 0; i < block.count; i++) {
+		cb.key_locations[i] = dataptr;
+		dataptr += state.entry_size;
 	}
 
-	std::sort(idxs, idxs + sort.count, [&key_locations, &state](const idx_t &l_i, const idx_t &r_i) {
-		return CompareTuple(key_locations[l_i], key_locations[r_i], state) <= 0;
-	});
-	result.end = sort.count;
+	std::sort(cb.key_locations.get(), cb.key_locations.get() + block.count,
+	          [&state](const data_ptr_t &l, const data_ptr_t &r) { return CompareTuple(l, r, state) <= 0; });
+
+	// convert sorted pointers to offsets
+	cb.offsets = unique_ptr<idx_t[]>(new idx_t[block.count]);
+	for (idx_t i = 0; i < block.count; i++) {
+		cb.offsets[i] = cb.key_locations[i] - handle->node->buffer;
+	}
 }
 
 void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_p,
@@ -297,34 +305,51 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &state, 
 	auto &gstate = (OrderGlobalState &)state;
 	auto &lstate = (OrderLocalState &)lstate_p;
 
-	// obtain sorting columns
-	vector<LogicalType> sort_types;
-	for (auto &order : orders) {
-		sort_types.push_back(order.expression->return_type);
+	if (lstate.row_chunk.blocks.empty()) {
+		// init using global state
+		lstate.row_chunk.entry_size = gstate.entry_size;
+		lstate.row_chunk.block_capacity = gstate.block_capacity;
 	}
+
+	// obtain sorting columns
 	DataChunk sort;
-	sort.Initialize(sort_types);
+	sort.Initialize(gstate.sorting_l_types);
 	gstate.executor.Execute(input, sort);
 
-	idx_t n_blocks_before = lstate.sorting.blocks.size();
-
-	// convert sorting columns and payload to row-wise format
-	lstate.sorting.Build(input.size(), lstate.key_locations, lstate.nullmask_locations);
+	// build the block
+	lstate.row_chunk.Build(input.size(), lstate.nullmask_locations);
+	for (idx_t i = 0; i < sort.size(); i++) {
+		// initialize nullmasks to 0
+		memset(lstate.nullmask_locations[i], 0, gstate.sorting_nullmask_size);
+		lstate.key_locations[i] = lstate.nullmask_locations[i] + gstate.sorting_nullmask_size;
+	}
+	// serialize sorting columns to row-wise format
 	for (idx_t i = 0; i < sort.data.size(); i++) {
-		lstate.sorting.SerializeVector(sort.data[i], sort.size(), *lstate.sel_ptr, sort.size(), i, lstate.key_locations,
-		                               lstate.nullmask_locations);
+		lstate.row_chunk.SerializeVector(sort.data[i], sort.size(), *lstate.sel_ptr, sort.size(), i,
+		                                 lstate.key_locations, lstate.nullmask_locations);
 	}
-	lstate.payload.Build(input.size(), lstate.key_locations, lstate.nullmask_locations);
-	for (idx_t i = 0; i < input.data.size(); i++) {
-		lstate.payload.SerializeVector(input.data[i], input.size(), *lstate.sel_ptr, input.size(), i,
-		                               lstate.key_locations, lstate.nullmask_locations);
+	// move key- and nullmask locations for the payload columns
+	for (idx_t i = 0; i < input.size(); i++) {
+		lstate.nullmask_locations[i] = lstate.key_locations[i];
+		// initialize nullmasks to 0
+		memset(lstate.nullmask_locations[i], 0, gstate.payload_nullmask_size);
+		lstate.key_locations[i] = lstate.nullmask_locations[i] + gstate.payload_nullmask_size;
 	}
-
-	if (lstate.sorting.blocks.size() > 1 && lstate.sorting.blocks.size() > n_blocks_before) {
-		lstate.continuous.push_back(make_unique<ContinuousBlock>(lstate.sorting, lstate.payload));
-		lstate.continuous.back()->sorting.push_back(lstate.sorting.blocks[lstate.sorting.Size() - 2].Copy());
-		lstate.continuous.back()->payload.push_back(lstate.payload.blocks[lstate.payload.Size() - 2].Copy());
-		Sort(*lstate.continuous.back()->sorting.back(), gstate, *lstate.continuous.back());
+	// serialize payload columns to row-wise format
+	for (idx_t i = 0, p_i = 0; i < input.data.size(); i++) {
+		if (gstate.p_to_s.find(i) != gstate.p_to_s.end()) {
+			// this column is already serialized as a sorting column
+			continue;
+		}
+		lstate.row_chunk.SerializeVector(input.data[i], input.size(), *lstate.sel_ptr, input.size(), p_i,
+		                                 lstate.key_locations, lstate.nullmask_locations);
+		p_i++;
+	}
+	// sort the block if it is full
+	if (!lstate.row_chunk.blocks.empty() && lstate.row_chunk.blocks.back().count == gstate.block_capacity) {
+		lstate.continuous.push_back(make_unique<ContinuousBlock>(gstate));
+		lstate.continuous.back()->blocks.push_back(lstate.row_chunk.blocks.back());
+		Sort(*lstate.continuous.back(), gstate);
 	}
 }
 
@@ -332,28 +357,30 @@ void PhysicalOrder::Combine(ExecutionContext &context, GlobalOperatorState &stat
 	auto &gstate = (OrderGlobalState &)state;
 	auto &lstate = (OrderLocalState &)lstate_p;
 
-	if (lstate.sorting.blocks.empty()) {
+	if (lstate.row_chunk.blocks.empty()) {
 		return;
 	}
 
-	// last block of each localstate is never sorted, get reference
-	ContinuousBlock *last_block;
+	ContinuousBlock *unsorted_block = nullptr;
 	{
 		// append to global state. this initializes gstate RowChunks if empty
 		lock_guard<mutex> glock(gstate.lock);
-		gstate.sorting.Append(lstate.sorting);
-		gstate.payload.Append(lstate.payload);
+		gstate.row_chunk.Append(lstate.row_chunk);
 		for (auto &c : lstate.continuous) {
 			gstate.intermediate.push_back(move(c));
 		}
-		gstate.intermediate.push_back(make_unique<ContinuousBlock>(gstate.sorting, gstate.payload));
-		last_block = gstate.intermediate.back().get();
+		if (lstate.row_chunk.blocks.back().count != gstate.block_capacity) {
+			// last block not full - create ContinuousBlock and set the pointer
+			gstate.intermediate.push_back(make_unique<ContinuousBlock>(gstate));
+			unsorted_block = gstate.intermediate.back().get();
+		}
 	}
 
-	// sort the last block
-	last_block->sorting.push_back(lstate.sorting.blocks.back().Copy());
-	last_block->payload.push_back(lstate.payload.blocks.back().Copy());
-	Sort(*last_block->sorting.back(), gstate, *last_block);
+	if (unsorted_block) {
+		// there was a unsorted block - push it into the ContinuousBlock and sort it
+		unsorted_block->blocks.push_back(lstate.row_chunk.blocks.back());
+		Sort(*unsorted_block, gstate);
+	}
 }
 
 class PhysicalOrderMergeTask : public Task {
@@ -370,55 +397,37 @@ public:
 		right.PinBlock();
 
 		// initialize blocks to write to
-		auto write_sort =
-		    make_shared<RowDataBlock>(buffer_manager, state.sorting.block_capacity, state.sorting.entry_size);
-		auto write_payl =
-		    make_shared<RowDataBlock>(buffer_manager, state.payload.block_capacity, state.payload.entry_size);
-		auto write_sort_handle = buffer_manager.Pin(write_sort->block);
-		auto write_payl_handle = buffer_manager.Pin(write_payl->block);
-		auto write_sort_ptr = write_sort_handle->node->buffer;
-		auto write_payl_ptr = write_payl_handle->node->buffer;
+		RowDataBlock write_block(buffer_manager, state.block_capacity, state.entry_size);
+		auto write_handle = buffer_manager.Pin(write_block.block);
+		auto write_ptr = write_handle->node->buffer;
 
-		while (!left.IsDone() && !right.IsDone()) {
-			if (write_sort->count == write_sort->capacity) {
+		while (left.HasNext() && right.HasNext()) {
+			if (write_block.count == write_block.capacity) {
 				// append to result
-				result.sorting.push_back((move(write_sort)));
-				result.payload.push_back((move(write_payl)));
+				result.blocks.push_back(write_block);
 				// initialize new blocks to write to
-				write_sort =
-				    make_shared<RowDataBlock>(buffer_manager, state.sorting.block_capacity, state.sorting.entry_size);
-				write_payl =
-				    make_shared<RowDataBlock>(buffer_manager, state.payload.block_capacity, state.payload.entry_size);
-				write_sort_handle = buffer_manager.Pin(write_sort->block);
-				write_payl_handle = buffer_manager.Pin(write_payl->block);
-				write_sort_ptr = write_sort_handle->node->buffer;
-				write_payl_ptr = write_payl_handle->node->buffer;
+				write_block = RowDataBlock(buffer_manager, state.block_capacity, state.entry_size);
+				write_handle = buffer_manager.Pin(write_block.block);
+				write_ptr = write_handle->node->buffer;
 			}
-			if (CompareTuple(left.sorting_ptr, right.sorting_ptr, state) <= 0) {
-				memcpy(write_sort_ptr, left.sorting_ptr, state.sorting.entry_size);
-				memcpy(write_payl_ptr, left.payload_ptr, state.payload.entry_size);
+			if (CompareTuple(left.DataPtr(), right.DataPtr(), state) <= 0) {
+				memcpy(write_ptr, left.DataPtr(), state.entry_size);
 				left.Advance();
 			} else {
-				memcpy(write_sort_ptr, right.sorting_ptr, state.sorting.entry_size);
-				memcpy(write_payl_ptr, right.payload_ptr, state.payload.entry_size);
+				memcpy(write_ptr, right.DataPtr(), state.entry_size);
 				right.Advance();
 			}
-			write_sort_ptr += state.sorting.entry_size;
-			write_payl_ptr += state.payload.entry_size;
-			write_sort->count++;
-			write_payl->count++;
+			write_ptr += state.entry_size;
+			write_block.count++;
 		}
-		result.sorting.push_back((move(write_sort)));
-		result.payload.push_back((move(write_payl)));
+		result.blocks.push_back(write_block);
 
 		// flush data of last block(s)
-		if (!left.IsDone()) {
+		if (left.HasNext()) {
 			left.FlushData(result);
-		} else if (!right.IsDone()) {
+		} else {
 			right.FlushData(result);
 		}
-
-		result.end = result.sorting.back()->count;
 
 		lock_guard<mutex> glock(state.lock);
 		parent.finished_tasks++;
@@ -444,9 +453,8 @@ void PhysicalOrder::ScheduleMergeTasks(Pipeline &pipeline, ClientContext &contex
 
 	// cleanup - move intermediate to result
 	for (auto &cb : sink.continuous) {
-		for (idx_t i = 0; i < cb->sorting.size(); i++) {
-			bm.UnregisterBlock(cb->sorting[i]->block->BlockId(), true);
-			bm.UnregisterBlock(cb->payload[i]->block->BlockId(), true);
+		for (idx_t i = 0; i < cb->blocks.size(); i++) {
+			bm.UnregisterBlock(cb->blocks[i].block->BlockId(), true);
 		}
 	}
 	sink.continuous.clear();
@@ -457,18 +465,14 @@ void PhysicalOrder::ScheduleMergeTasks(Pipeline &pipeline, ClientContext &contex
 
 	// finish pipeline if there is only one continuous block left
 	if (sink.continuous.size() == 1) {
-		// unregister sorting blocks and move payload blocks to result
-		for (idx_t i = 0; i < sink.continuous[0]->sorting.size(); i++) {
-			bm.UnregisterBlock(sink.continuous[0]->sorting[i]->block->BlockId(), true);
-			sink.result.push_back(*sink.continuous[0]->payload[i]);
-		}
+		pipeline.Finish(); // TODO: is this needed?
 		return;
 	}
 
 	// if not, schedule tasks
 	for (idx_t i = 0; i < sink.continuous.size() - 1; i += 2) {
 		pipeline.total_tasks++;
-		sink.intermediate.push_back(make_unique<ContinuousBlock>(sink.sorting, sink.payload));
+		sink.intermediate.push_back(make_unique<ContinuousBlock>(sink));
 		auto new_task = make_unique<PhysicalOrderMergeTask>(pipeline, context, sink, *sink.continuous[i],
 		                                                    *sink.continuous[i + 1], *sink.intermediate.back());
 		TaskScheduler::GetScheduler(context).ScheduleTask(pipeline.token, move(new_task));
@@ -488,7 +492,7 @@ void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 	if (sink.intermediate.capacity() == 1) {
 		// special case: only one block arrived, it was sorted but not re-ordered
 		auto single_block = move(sink.intermediate[0]);
-		sink.intermediate[0] = make_unique<ContinuousBlock>(sink.sorting, sink.payload);
+		sink.intermediate[0] = make_unique<ContinuousBlock>(sink);
 		single_block->PinBlock();
 		single_block->FlushData(*sink.intermediate[0]);
 	}
@@ -524,7 +528,44 @@ void PhysicalOrder::GetChunkInternal(ExecutionContext &context, DataChunk &chunk
 		return;
 	}
 
-	sink.payload.DeserializeRowBlock(chunk, sink.result[state->current_block], state->position);
+	auto &block = sink.continuous[0]->blocks[state->current_block];
+	auto handle = sink.buffer_manager.Pin(block.block);
+	auto dataptr = handle->node->buffer + state->position * sink.entry_size;
+
+	data_ptr_t s_nullmask_locations[STANDARD_VECTOR_SIZE];
+	data_ptr_t s_key_locations[STANDARD_VECTOR_SIZE];
+	data_ptr_t p_nullmask_locations[STANDARD_VECTOR_SIZE];
+	data_ptr_t p_key_locations[STANDARD_VECTOR_SIZE];
+
+	// fetch the next vector of entries from the blocks
+	idx_t next = MinValue<idx_t>(STANDARD_VECTOR_SIZE, block.count - state->position);
+	for (idx_t i = 0; i < next; i++) {
+		s_nullmask_locations[i] = dataptr;
+		s_key_locations[i] = s_nullmask_locations[i] + sink.sorting_nullmask_size;
+		p_nullmask_locations[i] = p_nullmask_locations[i] + sink.sorting_size;
+		p_key_locations[i] = p_nullmask_locations[i] + sink.payload_nullmask_size;
+		dataptr += sink.entry_size;
+	}
+	chunk.SetCardinality(next);
+
+	idx_t col_in_block;
+	data_ptr_t *nullmask_locations;
+	data_ptr_t *key_locations;
+	for (idx_t i = 0; i < chunk.ColumnCount(); i++) {
+		if (sink.p_to_s.find(i) != sink.p_to_s.end()) {
+			// column is a sorting column
+			col_in_block = sink.p_to_s[i];
+			nullmask_locations = s_nullmask_locations;
+			key_locations = s_key_locations;
+		} else {
+			// column is a payload column
+			col_in_block = sink.p_to_p[i];
+			nullmask_locations = p_nullmask_locations;
+			key_locations = p_key_locations;
+		}
+		// now insert into the data chunk
+		sink.row_chunk.DeserializeIntoVector(chunk.data[i], next, col_in_block, key_locations, nullmask_locations);
+	}
 
 	state->position += STANDARD_VECTOR_SIZE;
 	if (state->position >= sink.result[state->current_block].count) {
