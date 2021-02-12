@@ -250,12 +250,25 @@ set_output_tz <- function(x, timezone, convert) {
   if (timezone == "UTC") return(x)
 
   tz_convert <- switch(convert,
-                       with = lubridate::with_tz,
-                       force = lubridate::force_tz)
+                       with = tz_convert,
+                       force = tz_force)
 
   is_datetime <- which(vapply(x, inherits, "POSIXt", FUN.VALUE = logical(1)))
+
   if (length(is_datetime) > 0) {
     x[is_datetime] <- lapply(x[is_datetime], tz_convert, timezone)
   }
   x
+}
+
+tz_convert <- function(x, timezone) {
+  attr(x, "tzone") <- timezone
+  x
+}
+
+tz_force <- function(x, timezone) {
+  # convert to character, stripping the timezone
+  ct <- as.character(x, usetz = FALSE)
+  # recreate the POSIXct with specified timezone
+  as.POSIXct(ct, tz = timezone)
 }

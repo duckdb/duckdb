@@ -230,19 +230,19 @@ is_installed <- function(pkg) {
 
 check_tz <- function(timezone) {
 
-  tryCatch({
-    lubridate::force_tz(as.POSIXct("2021-03-01 10:40"), timezone)
-    timezone
-  },
-    error = function(e) {
-      warning(
-        "Invalid time zone '", timezone, "', ",
-        "falling back to UTC.\n",
-        "Set the `timezone_out` argument to a valid time zone.\n",
-        conditionMessage(e),
-        call. = FALSE
-      )
-      "UTC"
-    }
-  )
+  if (!is.null(timezone) && timezone == "") {
+    return(Sys.timezone())
+  }
+
+  if (is.null(timezone) || !timezone %in% OlsonNames()) {
+    warning(
+      "Invalid time zone '", timezone, "', ",
+      "falling back to UTC.\n",
+      "Set the `timezone_out` argument to a valid time zone.\n",
+      call. = FALSE
+    )
+    return("UTC")
+  }
+
+  timezone
 }

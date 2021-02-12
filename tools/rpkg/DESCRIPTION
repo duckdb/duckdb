@@ -42,8 +42,7 @@ Depends:
     R (>= 3.5.0)
 Imports:
     methods,
-    utils,
-    lubridate
+    utils
 Suggests:
     callr,
     DBItest,
