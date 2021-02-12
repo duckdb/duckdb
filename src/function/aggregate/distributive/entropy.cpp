@@ -2,16 +2,14 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
-#include "duckdb/common/types/hyperloglog.hpp"
 #include "duckdb/function/function_set.hpp"
-#include "duckdb/common/types/hash.hpp"
 
 namespace duckdb {
 
 template <class T>
 struct EntropyState {
-	size_t count;
-	unordered_map<T, size_t> *distinct;
+	idx_t count;
+	unordered_map<T, idx_t> *distinct;
 };
 
 struct EntropyFunctionBase {
