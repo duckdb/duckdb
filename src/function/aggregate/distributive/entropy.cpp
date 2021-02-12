@@ -3,6 +3,7 @@
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/function/function_set.hpp"
+#include <unordered_map>
 
 namespace duckdb {
 
@@ -66,7 +67,7 @@ struct EntropyFunction : EntropyFunctionBase {
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
 		if (!state->distinct) {
-			state->distinct = new unordered_map<INPUT_TYPE, size_t>();
+			state->distinct = new unordered_map<INPUT_TYPE, idx_t>();
 		}
 		(*state->distinct)[input[idx]]++;
 		state->count++;
@@ -84,7 +85,7 @@ struct EntropyFunctionString : EntropyFunctionBase {
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
 		if (!state->distinct) {
-			state->distinct = new unordered_map<string, size_t>();
+			state->distinct = new unordered_map<string, idx_t>();
 		}
 		auto value = input[idx].GetString();
 		(*state->distinct)[value]++;
