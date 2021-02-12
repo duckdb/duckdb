@@ -24,7 +24,7 @@ Vector::Vector(const LogicalType &type, bool create_data, bool zero_data) : data
 	}
 }
 
-Vector::Vector(const LogicalType &type) : Vector(move(type), true, false) {
+Vector::Vector(const LogicalType &type) : Vector(type, true, false) {
 }
 
 Vector::Vector(const LogicalType &type, data_ptr_t dataptr) : data(dataptr) {
