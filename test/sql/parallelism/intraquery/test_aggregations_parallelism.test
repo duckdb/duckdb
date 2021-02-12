@@ -101,7 +101,10 @@ select corr(a,b) from t group by b%2;
 0.000098
 0.000098
 
-
+query I
+select entropy(a) from t;
+----
+16.609640
 
 query I
 select product(b) from t where a < 2000 group by b ;

@@ -110,6 +110,10 @@ struct KurtosisFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct EntropyFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct StringAggFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
