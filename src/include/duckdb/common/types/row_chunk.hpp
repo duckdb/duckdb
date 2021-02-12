@@ -17,12 +17,22 @@
 namespace duckdb {
 
 struct RowDataBlock {
+	RowDataBlock() {
+	}
 	RowDataBlock(BufferManager &buffer_manager, idx_t capacity_, idx_t entry_size) : count(0), capacity(capacity_) {
 		block = buffer_manager.RegisterMemory(capacity * entry_size, false);
 	}
 	idx_t count;
 	idx_t capacity;
 	shared_ptr<BlockHandle> block;
+
+	shared_ptr<RowDataBlock> Copy() {
+		auto result = make_shared<RowDataBlock>();
+		result->count = count;
+		result->capacity = capacity;
+		result->block = block;
+		return result;
+	}
 };
 
 struct BlockAppendEntry {
@@ -52,6 +62,10 @@ public:
 	idx_t count;
 	//! The blocks holding the main data
 	vector<RowDataBlock> blocks;
+
+	idx_t Size() {
+		return blocks.size();
+	}
 
 public:
 	void SerializeVectorData(VectorData &vdata, PhysicalType type, const SelectionVector &sel, idx_t ser_count,

@@ -9,8 +9,9 @@
 #pragma once
 
 #include "duckdb/common/types/chunk_collection.hpp"
-#include "duckdb/execution/physical_sink.hpp"
+#include "duckdb/common/types/row_chunk.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/physical_sink.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
 
 namespace duckdb {
