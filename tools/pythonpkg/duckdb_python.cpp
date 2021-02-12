@@ -30,42 +30,50 @@ using namespace std;
 namespace duckdb_py_convert {
 
 struct RegularConvert {
-	template <class DUCKDB_T, class NUMPY_T> static NUMPY_T convert_value(DUCKDB_T val) {
+	template <class DUCKDB_T, class NUMPY_T>
+	static NUMPY_T convert_value(DUCKDB_T val) {
 		return (NUMPY_T)val;
 	}
 
-	template <class NUMPY_T> static NUMPY_T null_value() {
+	template <class NUMPY_T>
+	static NUMPY_T null_value() {
 		return 0;
 	}
 };
 
 struct TimestampConvert {
-	template <class DUCKDB_T, class NUMPY_T> static int64_t convert_value(timestamp_t val) {
+	template <class DUCKDB_T, class NUMPY_T>
+	static int64_t convert_value(timestamp_t val) {
 		return Timestamp::GetEpochNanoSeconds(val);
 	}
 
-	template <class NUMPY_T> static NUMPY_T null_value() {
+	template <class NUMPY_T>
+	static NUMPY_T null_value() {
 		return 0;
 	}
 };
 
 struct DateConvert {
-	template <class DUCKDB_T, class NUMPY_T> static int64_t convert_value(date_t val) {
+	template <class DUCKDB_T, class NUMPY_T>
+	static int64_t convert_value(date_t val) {
 		return Date::EpochNanoseconds(val);
 	}
 
-	template <class NUMPY_T> static NUMPY_T null_value() {
+	template <class NUMPY_T>
+	static NUMPY_T null_value() {
 		return 0;
 	}
 };
 
 struct TimeConvert {
-	template <class DUCKDB_T, class NUMPY_T> static PyObject *convert_value(dtime_t val) {
+	template <class DUCKDB_T, class NUMPY_T>
+	static PyObject *convert_value(dtime_t val) {
 		auto str = duckdb::Time::ToString(val);
 		return PyUnicode_FromStringAndSize(str.c_str(), str.size());
 	}
 
-	template <class NUMPY_T> static NUMPY_T null_value() {
+	template <class NUMPY_T>
+	static NUMPY_T null_value() {
 		return nullptr;
 	}
 };
@@ -141,7 +149,8 @@ struct StringConvert {
 		return result;
 	}
 
-	template <class DUCKDB_T, class NUMPY_T> static PyObject *convert_value(string_t val) {
+	template <class DUCKDB_T, class NUMPY_T>
+	static PyObject *convert_value(string_t val) {
 		// we could use PyUnicode_FromStringAndSize here, but it does a lot of verification that we don't need
 		// because of that it is a lot slower than it needs to be
 		auto data = (uint8_t *)val.GetDataUnsafe();
@@ -161,37 +170,44 @@ struct StringConvert {
 		return result;
 	}
 #else
-	template <class DUCKDB_T, class NUMPY_T> static PyObject* convert_value(string_t val) {
+	template <class DUCKDB_T, class NUMPY_T>
+	static PyObject *convert_value(string_t val) {
 		return py::str(val.GetString()).release().ptr();
 	}
 #endif
 
-	template <class NUMPY_T> static NUMPY_T null_value() {
+	template <class NUMPY_T>
+	static NUMPY_T null_value() {
 		return nullptr;
 	}
 };
 
 struct BlobConvert {
-	template <class DUCKDB_T, class NUMPY_T> static PyObject *convert_value(string_t val) {
+	template <class DUCKDB_T, class NUMPY_T>
+	static PyObject *convert_value(string_t val) {
 		return PyByteArray_FromStringAndSize(val.GetDataUnsafe(), val.GetSize());
 	}
 
-	template <class NUMPY_T> static NUMPY_T null_value() {
+	template <class NUMPY_T>
+	static NUMPY_T null_value() {
 		return nullptr;
 	}
 };
 
 struct IntegralConvert {
-	template <class DUCKDB_T, class NUMPY_T> static NUMPY_T convert_value(DUCKDB_T val) {
+	template <class DUCKDB_T, class NUMPY_T>
+	static NUMPY_T convert_value(DUCKDB_T val) {
 		return NUMPY_T(val);
 	}
 
-	template <class NUMPY_T> static NUMPY_T null_value() {
+	template <class NUMPY_T>
+	static NUMPY_T null_value() {
 		return 0;
 	}
 };
 
-template <> double IntegralConvert::convert_value(hugeint_t val) {
+template <>
+double IntegralConvert::convert_value(hugeint_t val) {
 	double result;
 	Hugeint::TryCast(val, result);
 	return result;
@@ -311,7 +327,7 @@ public:
 	void Initialize(idx_t capacity);
 	void Resize(idx_t new_capacity);
 	void Append(idx_t current_offset, Vector &input, idx_t count);
-	py::object ToArray(idx_t count);
+	py::object ToArray(idx_t count) const;
 };
 
 class NumpyResultConversion {
@@ -337,6 +353,18 @@ RawArrayWrapper::RawArrayWrapper(LogicalType type) : data(nullptr), type(type), 
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
 		type_width = sizeof(bool);
+		break;
+	case LogicalTypeId::UTINYINT:
+		type_width = sizeof(uint8_t);
+		break;
+	case LogicalTypeId::USMALLINT:
+		type_width = sizeof(uint16_t);
+		break;
+	case LogicalTypeId::UINTEGER:
+		type_width = sizeof(uint32_t);
+		break;
+	case LogicalTypeId::UBIGINT:
+		type_width = sizeof(uint64_t);
 		break;
 	case LogicalTypeId::TINYINT:
 		type_width = sizeof(int8_t);
@@ -400,6 +428,18 @@ void RawArrayWrapper::Initialize(idx_t capacity) {
 	case LogicalTypeId::BIGINT:
 		dtype = "int64";
 		break;
+	case LogicalTypeId::UTINYINT:
+		dtype = "uint8";
+		break;
+	case LogicalTypeId::USMALLINT:
+		dtype = "uint16";
+		break;
+	case LogicalTypeId::UINTEGER:
+		dtype = "uint32";
+		break;
+	case LogicalTypeId::UBIGINT:
+		dtype = "uint64";
+		break;
 	case LogicalTypeId::FLOAT:
 		dtype = "float32";
 		break;
@@ -427,7 +467,7 @@ void RawArrayWrapper::Initialize(idx_t capacity) {
 }
 
 void RawArrayWrapper::Resize(idx_t new_capacity) {
-	vector<ssize_t> new_shape{ssize_t(new_capacity)};
+	vector<ssize_t> new_shape {ssize_t(new_capacity)};
 	array.resize(new_shape, false);
 	data = (data_ptr_t)array.mutable_data();
 }
@@ -473,6 +513,18 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 	case LogicalTypeId::BIGINT:
 		may_have_null = ConvertColumnRegular<int64_t>(current_offset, dataptr, maskptr, idata, count);
 		break;
+	case LogicalTypeId::UTINYINT:
+		may_have_null = ConvertColumnRegular<uint8_t>(current_offset, dataptr, maskptr, idata, count);
+		break;
+	case LogicalTypeId::USMALLINT:
+		may_have_null = ConvertColumnRegular<uint16_t>(current_offset, dataptr, maskptr, idata, count);
+		break;
+	case LogicalTypeId::UINTEGER:
+		may_have_null = ConvertColumnRegular<uint32_t>(current_offset, dataptr, maskptr, idata, count);
+		break;
+	case LogicalTypeId::UBIGINT:
+		may_have_null = ConvertColumnRegular<uint64_t>(current_offset, dataptr, maskptr, idata, count);
+		break;
 	case LogicalTypeId::HUGEINT:
 		may_have_null = ConvertColumn<hugeint_t, double, duckdb_py_convert::IntegralConvert>(current_offset, dataptr,
 		                                                                                     maskptr, idata, count);
@@ -516,7 +568,7 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 	mask->count += count;
 }
 
-py::object ArrayWrapper::ToArray(idx_t count) {
+py::object ArrayWrapper::ToArray(idx_t count) const {
 	D_ASSERT(data->array && mask->array);
 	data->Resize(data->count);
 	if (!requires_mask) {
@@ -536,19 +588,19 @@ NumpyResultConversion::NumpyResultConversion(vector<LogicalType> &types, idx_t i
     : count(0), capacity(0) {
 	owned_data.reserve(types.size());
 	for (auto &type : types) {
-		owned_data.push_back(ArrayWrapper(type));
+		owned_data.emplace_back(type);
 	}
 	Resize(initial_capacity);
 }
 
 void NumpyResultConversion::Resize(idx_t new_capacity) {
 	if (capacity == 0) {
-		for (idx_t col_idx = 0; col_idx < owned_data.size(); col_idx++) {
-			owned_data[col_idx].Initialize(new_capacity);
+		for (auto &data : owned_data) {
+			data.Initialize(new_capacity);
 		}
 	} else {
-		for (idx_t col_idx = 0; col_idx < owned_data.size(); col_idx++) {
-			owned_data[col_idx].Resize(new_capacity);
+		for (auto &data : owned_data) {
+			data.Resize(new_capacity);
 		}
 	}
 	capacity = new_capacity;
@@ -562,9 +614,9 @@ void NumpyResultConversion::Append(DataChunk &chunk) {
 		owned_data[col_idx].Append(count, chunk.data[col_idx], chunk.size());
 	}
 	count += chunk.size();
-	for (idx_t col_idx = 0; col_idx < owned_data.size(); col_idx++) {
-		D_ASSERT(owned_data[col_idx].data->count == count);
-		D_ASSERT(owned_data[col_idx].mask->count == count);
+	for (auto &data : owned_data) {
+		D_ASSERT(data.data->count == count);
+		D_ASSERT(data.mask->count == count);
 	}
 }
 
@@ -584,7 +636,21 @@ std::string generate() {
 }
 } // namespace random_string
 
-enum class PandasType : uint8_t { BOOLEAN, TINYINT, SMALLINT, INTEGER, BIGINT, FLOAT, DOUBLE, TIMESTAMP, VARCHAR };
+enum class PandasType : uint8_t {
+	BOOLEAN,
+	TINYINT,
+	SMALLINT,
+	INTEGER,
+	BIGINT,
+	UTINYINT,
+	USMALLINT,
+	UINTEGER,
+	UBIGINT,
+	FLOAT,
+	DOUBLE,
+	TIMESTAMP,
+	VARCHAR
+};
 
 struct NumPyArrayWrapper {
 	NumPyArrayWrapper(py::array numpy_array) : numpy_array(move(numpy_array)) {
@@ -639,6 +705,18 @@ struct PandasScanFunction : public TableFunction {
 		if (col_type == "bool") {
 			duckdb_col_type = LogicalType::BOOLEAN;
 			pandas_type = PandasType::BOOLEAN;
+		} else if (col_type == "uint8" || col_type == "Uint8") {
+			duckdb_col_type = LogicalType::UTINYINT;
+			pandas_type = PandasType::UTINYINT;
+		} else if (col_type == "uint16" || col_type == "Uint16") {
+			duckdb_col_type = LogicalType::USMALLINT;
+			pandas_type = PandasType::USMALLINT;
+		} else if (col_type == "uint32" || col_type == "Uint32") {
+			duckdb_col_type = LogicalType::UINTEGER;
+			pandas_type = PandasType::UINTEGER;
+		} else if (col_type == "uint64" || col_type == "Uint64") {
+			duckdb_col_type = LogicalType::UBIGINT;
+			pandas_type = PandasType::UBIGINT;
 		} else if (col_type == "int8" || col_type == "Int8") {
 			duckdb_col_type = LogicalType::TINYINT;
 			pandas_type = PandasType::TINYINT;
@@ -670,6 +748,7 @@ struct PandasScanFunction : public TableFunction {
 	                                                 unordered_map<string, Value> &named_parameters,
 	                                                 vector<LogicalType> &return_types, vector<string> &names) {
 		// Hey, it works (TM)
+		py::gil_scoped_acquire acquire;
 		py::handle df((PyObject *)std::stoull(inputs[0].GetValue<string>(), nullptr, 16));
 
 		/* TODO this fails on Python2 for some reason
@@ -729,10 +808,10 @@ struct PandasScanFunction : public TableFunction {
 		return make_unique<PandasScanFunctionData>(df, row_count, move(pandas_bind_data), return_types);
 	}
 
-	static unique_ptr<FunctionOperatorData> pandas_scan_init(ClientContext &context, const FunctionData *bind_data_,
+	static unique_ptr<FunctionOperatorData> pandas_scan_init(ClientContext &context, const FunctionData *bind_data_p,
 	                                                         vector<column_t> &column_ids,
-	                                                         TableFilterSet *table_filters) {
-		auto &bind_data = (const PandasScanFunctionData &)*bind_data_;
+	                                                         TableFilterCollection *filters) {
+		auto &bind_data = (const PandasScanFunctionData &)*bind_data_p;
 		auto result = make_unique<PandasScanState>(0, bind_data.row_count);
 		result->column_ids = column_ids;
 		return result;
@@ -740,31 +819,31 @@ struct PandasScanFunction : public TableFunction {
 
 	static constexpr idx_t PANDAS_PARTITION_COUNT = 50 * STANDARD_VECTOR_SIZE;
 
-	static idx_t pandas_scan_max_threads(ClientContext &context, const FunctionData *bind_data_) {
-		auto &bind_data = (const PandasScanFunctionData &)*bind_data_;
+	static idx_t pandas_scan_max_threads(ClientContext &context, const FunctionData *bind_data_p) {
+		auto &bind_data = (const PandasScanFunctionData &)*bind_data_p;
 		return bind_data.row_count / PANDAS_PARTITION_COUNT + 1;
 	}
 
 	static unique_ptr<ParallelState> pandas_scan_init_parallel_state(ClientContext &context,
-	                                                                 const FunctionData *bind_data_) {
+	                                                                 const FunctionData *bind_data_p) {
 		return make_unique<ParallelPandasScanState>();
 	}
 
 	static unique_ptr<FunctionOperatorData>
-	pandas_scan_parallel_init(ClientContext &context, const FunctionData *bind_data_, ParallelState *state,
-	                          vector<column_t> &column_ids, TableFilterSet *table_filters) {
+	pandas_scan_parallel_init(ClientContext &context, const FunctionData *bind_data_p, ParallelState *state,
+	                          vector<column_t> &column_ids, TableFilterCollection *filters) {
 		auto result = make_unique<PandasScanState>(0, 0);
 		result->column_ids = column_ids;
-		if (!pandas_scan_parallel_state_next(context, bind_data_, result.get(), state)) {
+		if (!pandas_scan_parallel_state_next(context, bind_data_p, result.get(), state)) {
 			return nullptr;
 		}
 		return move(result);
 	}
 
-	static bool pandas_scan_parallel_state_next(ClientContext &context, const FunctionData *bind_data_,
-	                                            FunctionOperatorData *operator_state, ParallelState *parallel_state_) {
-		auto &bind_data = (const PandasScanFunctionData &)*bind_data_;
-		auto &parallel_state = (ParallelPandasScanState &)*parallel_state_;
+	static bool pandas_scan_parallel_state_next(ClientContext &context, const FunctionData *bind_data_p,
+	                                            FunctionOperatorData *operator_state, ParallelState *parallel_state_p) {
+		auto &bind_data = (const PandasScanFunctionData &)*bind_data_p;
+		auto &parallel_state = (ParallelPandasScanState &)*parallel_state_p;
 		auto &state = (PandasScanState &)*operator_state;
 
 		lock_guard<mutex> parallel_lock(parallel_state.lock);
@@ -780,7 +859,8 @@ struct PandasScanFunction : public TableFunction {
 		return true;
 	}
 
-	template <class T> static void scan_pandas_column(py::array &numpy_col, idx_t count, idx_t offset, Vector &out) {
+	template <class T>
+	static void scan_pandas_column(py::array &numpy_col, idx_t count, idx_t offset, Vector &out) {
 		auto src_ptr = (T *)numpy_col.data();
 		FlatVector::SetData(out, (data_ptr_t)(src_ptr + offset));
 	}
@@ -799,11 +879,13 @@ struct PandasScanFunction : public TableFunction {
 		}
 	}
 
-	template <class T> static bool ValueIsNull(T value) {
+	template <class T>
+	static bool ValueIsNull(T value) {
 		throw runtime_error("unsupported type for ValueIsNull");
 	}
 
-	template <class T> static void scan_pandas_fp_column(T *src_ptr, idx_t count, idx_t offset, Vector &out) {
+	template <class T>
+	static void scan_pandas_fp_column(T *src_ptr, idx_t count, idx_t offset, Vector &out) {
 		FlatVector::SetData(out, (data_ptr_t)(src_ptr + offset));
 		auto tgt_ptr = FlatVector::GetData<T>(out);
 		auto &nullmask = FlatVector::Nullmask(out);
@@ -814,7 +896,8 @@ struct PandasScanFunction : public TableFunction {
 		}
 	}
 
-	template <class T> static string_t DecodePythonUnicode(T *codepoints, idx_t codepoint_count, Vector &out) {
+	template <class T>
+	static string_t DecodePythonUnicode(T *codepoints, idx_t codepoint_count, Vector &out) {
 		// first figure out how many bytes to allocate
 		idx_t utf8_length = 0;
 		for (idx_t i = 0; i < codepoint_count; i++) {
@@ -838,6 +921,18 @@ struct PandasScanFunction : public TableFunction {
 		switch (bind_data.pandas_type) {
 		case PandasType::BOOLEAN:
 			scan_pandas_column<bool>(numpy_col, count, offset, out);
+			break;
+		case PandasType::UTINYINT:
+			scan_pandas_numeric<uint8_t>(bind_data, count, offset, out);
+			break;
+		case PandasType::USMALLINT:
+			scan_pandas_numeric<uint16_t>(bind_data, count, offset, out);
+			break;
+		case PandasType::UINTEGER:
+			scan_pandas_numeric<uint32_t>(bind_data, count, offset, out);
+			break;
+		case PandasType::UBIGINT:
+			scan_pandas_numeric<uint64_t>(bind_data, count, offset, out);
 			break;
 		case PandasType::TINYINT:
 			scan_pandas_numeric<int8_t>(bind_data, count, offset, out);
@@ -977,14 +1072,18 @@ struct PandasScanFunction : public TableFunction {
 	}
 };
 
-template <> bool PandasScanFunction::ValueIsNull(float value);
-template <> bool PandasScanFunction::ValueIsNull(double value);
+template <>
+bool PandasScanFunction::ValueIsNull(float value);
+template <>
+bool PandasScanFunction::ValueIsNull(double value);
 
-template <> bool PandasScanFunction::ValueIsNull(float value) {
+template <>
+bool PandasScanFunction::ValueIsNull(float value) {
 	return !Value::FloatIsValid(value);
 }
 
-template <> bool PandasScanFunction::ValueIsNull(double value) {
+template <>
+bool PandasScanFunction::ValueIsNull(double value) {
 	return !Value::DoubleIsValid(value);
 }
 
@@ -996,7 +1095,8 @@ public:
 	unique_ptr<DataChunk> current_chunk;
 
 public:
-	template <class SRC> static SRC fetch_scalar(Vector &src_vec, idx_t offset) {
+	template <class SRC>
+	static SRC fetch_scalar(Vector &src_vec, idx_t offset) {
 		auto src_ptr = FlatVector::GetData<SRC>(src_vec);
 		return src_ptr[offset];
 	}
@@ -1036,6 +1136,18 @@ public:
 				break;
 			case LogicalTypeId::BIGINT:
 				res[col_idx] = val.GetValue<int64_t>();
+				break;
+			case LogicalTypeId::UTINYINT:
+				res[col_idx] = val.GetValue<uint8_t>();
+				break;
+			case LogicalTypeId::USMALLINT:
+				res[col_idx] = val.GetValue<uint16_t>();
+				break;
+			case LogicalTypeId::UINTEGER:
+				res[col_idx] = val.GetValue<uint32_t>();
+				break;
+			case LogicalTypeId::UBIGINT:
+				res[col_idx] = val.GetValue<uint64_t>();
 				break;
 			case LogicalTypeId::HUGEINT: {
 				auto hugeint_str = val.GetValue<string>();
@@ -1109,7 +1221,7 @@ public:
 		return res;
 	}
 
-	py::dict fetchnumpy() {
+	py::dict fetchnumpy(bool stream = false) {
 		if (!result) {
 			throw runtime_error("result closed");
 		}
@@ -1125,17 +1237,26 @@ public:
 		NumpyResultConversion conversion(result->types, initial_capacity);
 		if (result->type == QueryResultType::MATERIALIZED_RESULT) {
 			auto &materialized = (MaterializedQueryResult &)*result;
-			for (auto &chunk : materialized.collection.Chunks()) {
-				conversion.Append(*chunk);
-			}
-			materialized.collection.Reset();
-		} else {
-			while (true) {
-				auto chunk = result->FetchRaw();
-				if (!chunk || chunk->size() == 0) {
-					// finished
-					break;
+			if (!stream) {
+				for (auto &chunk : materialized.collection.Chunks()) {
+					conversion.Append(*chunk);
 				}
+				materialized.collection.Reset();
+			} else {
+				conversion.Append(*materialized.Fetch());
+			}
+		} else {
+			if (!stream) {
+				while (true) {
+					auto chunk = result->FetchRaw();
+					if (!chunk || chunk->size() == 0) {
+						// finished
+						break;
+					}
+					conversion.Append(*chunk);
+				}
+			} else {
+				auto chunk = result->FetchRaw();
 				conversion.Append(*chunk);
 			}
 		}
@@ -1150,6 +1271,10 @@ public:
 
 	py::object fetchdf() {
 		return py::module::import("pandas").attr("DataFrame").attr("from_dict")(fetchnumpy());
+	}
+
+	py::object fetchdfchunk() {
+		return py::module::import("pandas").attr("DataFrame").attr("from_dict")(fetchnumpy(true));
 	}
 
 	py::object fetch_arrow_table() {
@@ -1257,7 +1382,10 @@ struct DuckDBPyConnection {
 			}
 			auto args = DuckDBPyConnection::transform_python_param_list(single_query_params);
 			auto res = make_unique<DuckDBPyResult>();
-			res->result = prep->Execute(args);
+			{
+				py::gil_scoped_release release;
+				res->result = prep->Execute(args);
+			}
 			if (!res->result->success) {
 				throw runtime_error(res->result->error);
 			}
@@ -1303,7 +1431,7 @@ struct DuckDBPyConnection {
 		if (!connection) {
 			throw runtime_error("connection closed");
 		}
-		vector<vector<Value>> values{DuckDBPyConnection::transform_python_param_list(params)};
+		vector<vector<Value>> values {DuckDBPyConnection::transform_python_param_list(params)};
 		return make_unique<DuckDBPyRelation>(connection->Values(values));
 	}
 
@@ -1508,6 +1636,14 @@ struct DuckDBPyConnection {
 		}
 		return result->fetchdf();
 	}
+
+	py::object fetchdfchunk() const {
+		if (!result) {
+			throw runtime_error("no open result set");
+		}
+		return result->fetchdfchunk();
+	}
+
 	py::object fetcharrow() {
 		if (!result) {
 			throw runtime_error("no open result set");
@@ -1529,8 +1665,9 @@ struct DuckDBPyConnection {
 		CreateTableFunctionInfo info(scan_fun);
 
 		auto &context = *res->connection->context;
+		auto &catalog = Catalog::GetCatalog(context);
 		context.transaction.BeginTransaction();
-		context.catalog.CreateTableFunction(context, &info);
+		catalog.CreateTableFunction(context, &info);
 		context.transaction.Commit();
 
 		return res;
@@ -1688,7 +1825,10 @@ struct DuckDBPyRelation {
 
 	py::object to_df() {
 		auto res = make_unique<DuckDBPyResult>();
-		res->result = rel->Execute();
+		{
+			py::gil_scoped_release release;
+			res->result = rel->Execute();
+		}
 		if (!res->result->success) {
 			throw runtime_error(res->result->error);
 		}
@@ -1697,7 +1837,10 @@ struct DuckDBPyRelation {
 
 	py::object to_arrow_table() {
 		auto res = make_unique<DuckDBPyResult>();
-		res->result = rel->Execute();
+		{
+			py::gil_scoped_release release;
+			res->result = rel->Execute();
+		}
 		if (!res->result->success) {
 			throw runtime_error(res->result->error);
 		}
@@ -1749,7 +1892,10 @@ struct DuckDBPyRelation {
 
 	unique_ptr<DuckDBPyResult> execute() {
 		auto res = make_unique<DuckDBPyResult>();
-		res->result = rel->Execute();
+		{
+			py::gil_scoped_release release;
+			res->result = rel->Execute();
+		}
 		if (!res->result->success) {
 			throw runtime_error(res->result->error);
 		}
@@ -1765,7 +1911,7 @@ struct DuckDBPyRelation {
 	}
 
 	void insert(py::object params = py::list()) {
-		vector<vector<Value>> values{DuckDBPyConnection::transform_python_param_list(params)};
+		vector<vector<Value>> values {DuckDBPyConnection::transform_python_param_list(params)};
 		rel->Insert(values);
 	}
 
@@ -1774,8 +1920,14 @@ struct DuckDBPyRelation {
 	}
 
 	string print() {
+		std::string rel_res_string;
+		{
+			py::gil_scoped_release release;
+			rel_res_string = rel->Limit(10)->Execute()->ToString();
+		}
+
 		return rel->ToString() + "\n---------------------\n-- Result Preview  --\n---------------------\n" +
-		       rel->Limit(10)->Execute()->ToString() + "\n";
+		       rel_res_string + "\n";
 	}
 
 	py::object getattr(py::str key) {
@@ -1882,6 +2034,9 @@ PYBIND11_MODULE(duckdb, m) {
 	        .def("fetchnumpy", &DuckDBPyConnection::fetchnumpy,
 	             "Fetch a result as list of NumPy arrays following execute")
 	        .def("fetchdf", &DuckDBPyConnection::fetchdf, "Fetch a result as Data.Frame following execute()")
+	        .def("fetch_df", &DuckDBPyConnection::fetchdf, "Fetch a result as Data.Frame following execute()")
+	        .def("fetch_df_chunk", &DuckDBPyConnection::fetchdfchunk,
+	             "Fetch a chunk of the result as Data.Frame following execute()")
 	        .def("df", &DuckDBPyConnection::fetchdf, "Fetch a result as Data.Frame following execute()")
 	        .def("fetch_arrow_table", &DuckDBPyConnection::fetcharrow,
 	             "Fetch a result as Arrow table following execute()")
@@ -1922,6 +2077,7 @@ PYBIND11_MODULE(duckdb, m) {
 	    .def("fetchnumpy", &DuckDBPyResult::fetchnumpy)
 	    .def("fetchdf", &DuckDBPyResult::fetchdf)
 	    .def("fetch_df", &DuckDBPyResult::fetchdf)
+	    .def("fetch_df_chunk", &DuckDBPyResult::fetchdfchunk)
 	    .def("fetch_arrow_table", &DuckDBPyResult::fetch_arrow_table)
 	    .def("arrow", &DuckDBPyResult::fetch_arrow_table)
 	    .def("df", &DuckDBPyResult::fetchdf);
@@ -2007,7 +2163,9 @@ PYBIND11_MODULE(duckdb, m) {
 	      py::arg("df"), py::arg("file_name"));
 
 	// we need this because otherwise we try to remove registered_dfs on shutdown when python is already dead
-	auto clean_default_connection = []() { default_connection_.reset(); };
+	auto clean_default_connection = []() {
+		default_connection_.reset();
+	};
 	m.add_object("_clean_default_connection", py::capsule(clean_default_connection));
 	PyDateTime_IMPORT;
 }

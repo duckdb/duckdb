@@ -9,7 +9,7 @@ namespace duckdb {
 
 WindowSegmentTree::WindowSegmentTree(AggregateFunction &aggregate, FunctionData *bind_info, LogicalType result_type,
                                      ChunkCollection *input)
-    : aggregate(aggregate), bind_info(bind_info), result_type(result_type), state(aggregate.state_size()),
+    : aggregate(aggregate), bind_info(bind_info), result_type(move(result_type)), state(aggregate.state_size()),
       internal_nodes(0), input_ref(input) {
 #if STANDARD_VECTOR_SIZE < 512
 	throw NotImplementedException("Window functions are not supported for vector sizes < 512");
@@ -97,7 +97,7 @@ void WindowSegmentTree::WindowSegmentValue(idx_t l_idx, idx_t begin, idx_t end) 
 				VectorOperations::Copy(chunk_b.data[i], v, chunk_b_count, 0, chunk_a_count);
 			}
 		}
-		aggregate.update(&inputs.data[0], input_count, s, inputs.size());
+		aggregate.update(&inputs.data[0], bind_info, input_count, s, inputs.size());
 	} else {
 		D_ASSERT(end - begin <= STANDARD_VECTOR_SIZE);
 		// find out where the states begin

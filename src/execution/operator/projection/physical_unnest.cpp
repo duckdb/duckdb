@@ -31,8 +31,8 @@ PhysicalUnnest::PhysicalUnnest(vector<LogicalType> types, vector<unique_ptr<Expr
 	D_ASSERT(this->select_list.size() > 0);
 }
 
-void PhysicalUnnest::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
-	auto state = reinterpret_cast<PhysicalUnnestOperatorState *>(state_);
+void PhysicalUnnest::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
+	auto state = reinterpret_cast<PhysicalUnnestOperatorState *>(state_p);
 	while (true) { // repeat until we actually have produced some rows
 		if (state->child_chunk.size() == 0 || state->parent_position >= state->child_chunk.size()) {
 			// get the child data
@@ -76,7 +76,7 @@ void PhysicalUnnest::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 			for (idx_t col_idx = 0; col_idx < state->list_data.ColumnCount(); col_idx++) {
 				auto &v = state->list_data.data[col_idx];
 
-				D_ASSERT(v.type == LogicalType::LIST);
+				D_ASSERT(v.type.id() == LogicalTypeId::LIST);
 
 				// deal with NULL values
 				if (unnest_null) {

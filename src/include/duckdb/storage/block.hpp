@@ -16,7 +16,7 @@ namespace duckdb {
 
 class Block : public FileBuffer {
 public:
-	Block(block_id_t id);
+	explicit Block(block_id_t id);
 
 	block_id_t id;
 };

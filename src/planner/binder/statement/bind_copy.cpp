@@ -11,8 +11,8 @@
 
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
-#include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
 
 #include <algorithm>
 
@@ -81,7 +81,7 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 	// lookup the table to copy into
 	auto table = Catalog::GetCatalog(context).GetEntry<TableCatalogEntry>(context, stmt.info->schema, stmt.info->table);
 	vector<string> expected_names;
-	if (bound_insert.column_index_map.size() > 0) {
+	if (!bound_insert.column_index_map.empty()) {
 		expected_names.resize(bound_insert.expected_types.size());
 		for (idx_t i = 0; i < table->columns.size(); i++) {
 			if (bound_insert.column_index_map[i] != INVALID_INDEX) {
@@ -117,7 +117,7 @@ BoundStatement Binder::Bind(CopyStatement &stmt) {
 
 		auto statement = make_unique<SelectNode>();
 		statement->from_table = move(ref);
-		if (stmt.info->select_list.size() > 0) {
+		if (!stmt.info->select_list.empty()) {
 			for (auto &name : stmt.info->select_list) {
 				statement->select_list.push_back(make_unique<ColumnRefExpression>(name));
 			}

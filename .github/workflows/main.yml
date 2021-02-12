@@ -12,14 +12,13 @@ env:
   NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
 
 jobs:
-
   linux-debug:
     name: Linux Debug
     runs-on: ubuntu-20.04
 
     env:
-      CC: gcc-10
-      CXX: g++-10
+      CC: ccache gcc-10
+      CXX: ccache g++-10
       TREAT_WARNINGS_AS_ERRORS: 1
       GEN: ninja
 
@@ -29,7 +28,7 @@ jobs:
         fetch-depth: 0
 
     - name: Install
-      run: sudo apt-get install ninja-build
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build ccache
 
     - name: Build
       run: make debug
@@ -37,6 +36,49 @@ jobs:
     - name: Test
       run: make unit
 
+  format-check:
+    name: Format Check
+    runs-on: ubuntu-20.04
+
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Install
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-format && sudo pip3 install cmake-format
+
+    - name: Format Check
+      run: |
+        clang-format --version
+        clang-format --dump-config
+        make format-check-silent
+
+  tidy-check:
+    name: Tidy Check
+    runs-on: ubuntu-20.04
+
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+      TIDY_THREADS: 4
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Install
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-tidy
+
+    - name: Tidy Check
+      run: make tidy-check
 
   win-release-64:
     name: Windows (64 Bit)
@@ -147,6 +189,7 @@ jobs:
       BUILD_FTS: 1
       BUILD_REST: 1
       BUILD_JDBC: 1
+      BUILD_HTTPFS: 1
 
     steps:
     - uses: actions/checkout@v2
@@ -209,6 +252,12 @@ jobs:
     - name: Test
       run: make unit
 
+    - name: Amalgamation
+      run: |
+        python scripts/amalgamation.py
+        cd src/amalgamation
+        clang++ -std=c++11 -emit-llvm -S duckdb.cpp
+
 
   linux-release-64:
     name: Linux (64 Bit)
@@ -223,6 +272,7 @@ jobs:
       BUILD_FTS: 1
       BUILD_REST: 1
       BUILD_JDBC: 1
+      BUILD_HTTPFS: 1
 
     steps:
     - uses: actions/checkout@v2
@@ -234,7 +284,7 @@ jobs:
         python-version: '3.7'
 
     - name: Install
-      run: sudo apt-get install ninja-build
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
     - name: Build
       run: STATIC_LIBCPP=1 make
@@ -292,7 +342,7 @@ jobs:
         python-version: '3.7'
 
     - name: Install
-      run: sudo apt-get install ninja-build libc6-dev-i386 gcc-multilib g++-multilib lib32readline6-dev
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build libc6-dev-i386 gcc-multilib g++-multilib lib32readline6-dev
 
     - name: Build
       run: |
@@ -334,7 +384,7 @@ jobs:
 
     - name: Install
       run: |
-        sudo apt-get install ninja-build
+        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
         git clone https://github.com/raspberrypi/tools --depth=1 rpi-tools
 
     - name: Build
@@ -380,7 +430,7 @@ jobs:
         python-version: '3.7'
 
     - name: Install
-      run: sudo apt-get install g++-4.8 binutils
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq g++-4.8 binutils
 
     - name: Build
       run: make release
@@ -408,7 +458,7 @@ jobs:
         fetch-depth: 0
 
     - name: Install
-      run: sudo apt-get install ninja-build
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
     - name: Build
       run: make relassert
@@ -434,7 +484,7 @@ jobs:
         fetch-depth: 0
 
     - name: Install
-      run: sudo apt-get install ninja-build valgrind
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build valgrind
 
     - name: Build
       run: make debug
@@ -528,7 +578,7 @@ jobs:
         fetch-depth: 0
 
     - name: Install
-      run: sudo apt-get install ninja-build
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
     - name: Build
       run: make debug
@@ -540,8 +590,6 @@ jobs:
     needs: linux-debug
 
     env:
-      CC: gcc-10
-      CXX: g++-10
       BUILD_JDBC: 1
       GEN: ninja
 
@@ -552,9 +600,11 @@ jobs:
 
     - name: Install
       run: |
-        sudo apt-get install ninja-build
-        git clone https://github.com/hannesmuehleisen/sqlancer.git
-        (cd sqlancer && mvn package -q -DskipTests)
+        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+        git clone https://github.com/hannesmuehleisen/sqlancer
+        cd sqlancer
+        git checkout persistent
+        mvn package -q -DskipTests
 
     - name: Build
       run: make reldebug
@@ -562,7 +612,38 @@ jobs:
     - name: Test
       run: |
         cp build/reldebug/tools/jdbc/duckdb_jdbc.jar sqlancer/target/lib/duckdb_jdbc-*.jar
-        java -jar sqlancer/target/SQLancer-*.jar --num-queries 1000 --num-threads 1 --random-seed 0 --timeout-seconds 600 duckdb
+        java -jar sqlancer/target/sqlancer-*.jar --num-threads 2 --random-seed 0 --timeout-seconds 600 duckdb
+
+
+  sqlancer_persistent:
+    name: SQLancer (Persistent)
+    runs-on: ubuntu-20.04
+    needs: linux-debug
+
+    env:
+      BUILD_JDBC: 1
+      GEN: ninja
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Install
+      run: |
+        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+        git clone https://github.com/hannesmuehleisen/sqlancer
+        cd sqlancer
+        git checkout persistent
+        mvn package -q -DskipTests
+
+    - name: Build
+      run: make reldebug
+
+    - name: Test
+      run: |
+        cp build/reldebug/tools/jdbc/duckdb_jdbc.jar sqlancer/target/lib/duckdb_jdbc-*.jar
+        java -Dduckdb.database.file=/tmp/lancer_duckdb_db -jar sqlancer/target/sqlancer-*.jar --num-threads 1 --random-seed 0 --timeout-seconds 600 duckdb
 
 
   jdbc:
@@ -583,7 +664,7 @@ jobs:
 
     - name: Install
       run: |
-        sudo apt-get install ninja-build
+        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
         git clone https://github.com/cwida/jdbccts.git
 
     - name: Build
@@ -768,7 +849,7 @@ jobs:
 
     - name: Install
       run: |
-        sudo apt-get install -y texlive-latex-base texlive-fonts-extra
+        sudo apt-get update -y -qq && sudo apt-get install -y -qq texlive-latex-base texlive-fonts-extra
         mkdir -p $HOME/.R
         R -f tools/rpkg/dependencies.R
 
@@ -838,23 +919,12 @@ jobs:
 
     - name: Build
       run: |
-        if [[ -z "${GITHUB_HEAD_REF}" ]]; then
-          export GITHUB_HEAD_REF=master
-        fi
-        filename=$(basename $GITHUB_HEAD_REF)
-        dirname=$(echo $GITHUB_HEAD_REF | sed 's#/#-#g')
-        echo $GITHUB_ACTOR
-        echo $GITHUB_WORKSPACE
-        echo $GITHUB_HEAD_REF
-        echo $GITHUB_BASE_REF
-        echo $filename
-        echo $dirname
-        echo $GITHUB_REF
-        echo $GITHUB_SHA
-        echo $GITHUB_REPOSITORY
-        wget https://github.com/$GITHUB_ACTOR/duckdb/archive/$GITHUB_HEAD_REF.zip
-        unzip $filename.zip
-        cd duckdb-$dirname/tools/pythonpkg
+        git archive --format zip --output test-tarball.zip HEAD
+        mkdir duckdb-test-tarball
+        mv test-tarball.zip duckdb-test-tarball
+        cd duckdb-test-tarball
+        unzip test-tarball.zip
+        cd tools/pythonpkg
         export SETUPTOOLS_SCM_PRETEND_VERSION=0.2.2
         python3 setup.py install --user
 

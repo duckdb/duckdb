@@ -52,6 +52,8 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> *expr, 
 	case ExpressionClass::FUNCTION:
 		// binding function expression has extra parameter needed for macro's
 		return BindExpression((FunctionExpression &)expr_ref, depth, expr);
+	case ExpressionClass::LAMBDA:
+		return BindExpression((LambdaExpression &)expr_ref, depth);
 	case ExpressionClass::OPERATOR:
 		return BindExpression((OperatorExpression &)expr_ref, depth);
 	case ExpressionClass::SUBQUERY:
@@ -71,7 +73,7 @@ bool ExpressionBinder::BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr)
 	active_binders.pop_back();
 	idx_t depth = 1;
 	bool success = false;
-	while (active_binders.size() > 0) {
+	while (!active_binders.empty()) {
 		auto &next_binder = active_binders.back();
 		ExpressionBinder::BindTableNames(next_binder->binder, *expr);
 		auto bind_result = next_binder->Bind(&expr, depth);
@@ -87,7 +89,7 @@ bool ExpressionBinder::BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr)
 }
 
 void ExpressionBinder::BindChild(unique_ptr<ParsedExpression> &expr, idx_t depth, string &error) {
-	if (expr.get()) {
+	if (expr) {
 		string bind_error = Bind(&expr, depth);
 		if (error.empty()) {
 			error = bind_error;
@@ -163,7 +165,7 @@ string ExpressionBinder::Bind(unique_ptr<ParsedExpression> *expr, idx_t depth, b
 	}
 }
 
-void ExpressionBinder::BindTableNames(Binder &binder, ParsedExpression &expr) {
+void ExpressionBinder::BindTableNames(Binder &binder, ParsedExpression &expr, unordered_map<string, idx_t> *alias_map) {
 	if (expr.type == ExpressionType::COLUMN_REF) {
 		auto &colref = (ColumnRefExpression &)expr;
 		if (colref.table_name.empty()) {
@@ -171,6 +173,8 @@ void ExpressionBinder::BindTableNames(Binder &binder, ParsedExpression &expr) {
 			if (binder.macro_binding != nullptr && binder.macro_binding->HasMatchingBinding(colref.column_name)) {
 				// macro parameters get priority
 				colref.table_name = binder.macro_binding->alias;
+			} else if (alias_map && alias_map->find(colref.column_name) != alias_map->end()) {
+				// alias: leave unqualified
 			} else {
 				colref.table_name = binder.bind_context.GetMatchingBinding(colref.column_name);
 			}
@@ -178,7 +182,7 @@ void ExpressionBinder::BindTableNames(Binder &binder, ParsedExpression &expr) {
 		binder.bind_context.BindColumn(colref, 0);
 	}
 	ParsedExpressionIterator::EnumerateChildren(
-	    expr, [&](const ParsedExpression &child) { BindTableNames(binder, (ParsedExpression &)child); });
+	    expr, [&](const ParsedExpression &child) { BindTableNames(binder, (ParsedExpression &)child, alias_map); });
 }
 
 } // namespace duckdb

@@ -9,21 +9,19 @@
 
 namespace duckdb {
 
-using namespace duckdb_libpgquery;
-
-void Transformer::TransformCopyOptions(CopyInfo &info, PGList *options) {
+void Transformer::TransformCopyOptions(CopyInfo &info, duckdb_libpgquery::PGList *options) {
 	if (!options) {
 		return;
 	}
-	PGListCell *cell = nullptr;
+	duckdb_libpgquery::PGListCell *cell = nullptr;
 
 	// iterate over each option
 	for_each_cell(cell, options->head) {
-		auto *def_elem = reinterpret_cast<PGDefElem *>(cell->data.ptr_value);
+		auto *def_elem = reinterpret_cast<duckdb_libpgquery::PGDefElem *>(cell->data.ptr_value);
 		if (StringUtil::Lower(def_elem->defname) == "format") {
 			// format specifier: interpret this option
-			auto *format_val = (PGValue *)(def_elem->arg);
-			if (!format_val || format_val->type != T_PGString) {
+			auto *format_val = (duckdb_libpgquery::PGValue *)(def_elem->arg);
+			if (!format_val || format_val->type != duckdb_libpgquery::T_PGString) {
 				throw ParserException("Unsupported parameter type for FORMAT: expected e.g. FORMAT 'csv', 'parquet'");
 			}
 			info.format = StringUtil::Lower(format_val->val.str);
@@ -38,26 +36,27 @@ void Transformer::TransformCopyOptions(CopyInfo &info, PGList *options) {
 			continue;
 		}
 		switch (def_elem->arg->type) {
-		case T_PGList: {
-			auto column_list = (PGList *)(def_elem->arg);
-			for (auto c = column_list->head; c != NULL; c = lnext(c)) {
-				auto target = (PGResTarget *)(c->data.ptr_value);
+		case duckdb_libpgquery::T_PGList: {
+			auto column_list = (duckdb_libpgquery::PGList *)(def_elem->arg);
+			for (auto c = column_list->head; c != nullptr; c = lnext(c)) {
+				auto target = (duckdb_libpgquery::PGResTarget *)(c->data.ptr_value);
 				info.options[def_elem->defname].push_back(Value(target->name));
 			}
 			break;
 		}
-		case T_PGAStar:
+		case duckdb_libpgquery::T_PGAStar:
 			info.options[def_elem->defname].push_back(Value("*"));
 			break;
 		default:
-			info.options[def_elem->defname].push_back(TransformValue(*((PGValue *)def_elem->arg))->value);
+			info.options[def_elem->defname].push_back(
+			    TransformValue(*((duckdb_libpgquery::PGValue *)def_elem->arg))->value);
 			break;
 		}
 	}
 }
 
-unique_ptr<CopyStatement> Transformer::TransformCopy(PGNode *node) {
-	auto stmt = reinterpret_cast<PGCopyStmt *>(node);
+unique_ptr<CopyStatement> Transformer::TransformCopy(duckdb_libpgquery::PGNode *node) {
+	auto stmt = reinterpret_cast<duckdb_libpgquery::PGCopyStmt *>(node);
 	D_ASSERT(stmt);
 	auto result = make_unique<CopyStatement>();
 	auto &info = *result->info;
@@ -70,9 +69,9 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(PGNode *node) {
 	// get select_list
 	if (stmt->attlist) {
 		for (auto n = stmt->attlist->head; n != nullptr; n = n->next) {
-			auto target = reinterpret_cast<PGResTarget *>(n->data.ptr_value);
+			auto target = reinterpret_cast<duckdb_libpgquery::PGResTarget *>(n->data.ptr_value);
 			if (target->name) {
-				info.select_list.push_back(string(target->name));
+				info.select_list.emplace_back(target->name);
 			}
 		}
 	}
@@ -83,7 +82,7 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(PGNode *node) {
 		info.table = table.table_name;
 		info.schema = table.schema_name;
 	} else {
-		result->select_statement = TransformSelectNode((PGSelectStmt *)stmt->query);
+		result->select_statement = TransformSelectNode((duckdb_libpgquery::PGSelectStmt *)stmt->query);
 	}
 
 	// handle the different options of the COPY statement

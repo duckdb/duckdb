@@ -6,9 +6,7 @@
 
 namespace duckdb {
 
-using namespace duckdb_libpgquery;
-
-unique_ptr<ParsedExpression> Transformer::TransformTypeCast(PGTypeCast *root) {
+unique_ptr<ParsedExpression> Transformer::TransformTypeCast(duckdb_libpgquery::PGTypeCast *root) {
 	if (!root) {
 		return nullptr;
 	}
@@ -17,9 +15,9 @@ unique_ptr<ParsedExpression> Transformer::TransformTypeCast(PGTypeCast *root) {
 	LogicalType target_type = TransformTypeName(type_name);
 
 	// check for a constant BLOB value, then return ConstantExpression with BLOB
-	if (target_type == LogicalType::BLOB && root->arg->type == T_PGAConst) {
-		PGAConst *c = reinterpret_cast<PGAConst *>(root->arg);
-		if (c->val.type == T_PGString) {
+	if (target_type == LogicalType::BLOB && root->arg->type == duckdb_libpgquery::T_PGAConst) {
+		auto c = reinterpret_cast<duckdb_libpgquery::PGAConst *>(root->arg);
+		if (c->val.type == duckdb_libpgquery::T_PGString) {
 			return make_unique<ConstantExpression>(Value::BLOB(string(c->val.val.str)));
 		}
 	}

@@ -4,11 +4,11 @@
 
 namespace duckdb {
 
-bool CrossProductRef::Equals(const TableRef *other_) const {
-	if (!TableRef::Equals(other_)) {
+bool CrossProductRef::Equals(const TableRef *other_p) const {
+	if (!TableRef::Equals(other_p)) {
 		return false;
 	}
-	auto other = (CrossProductRef *)other_;
+	auto other = (CrossProductRef *)other_p;
 	return left->Equals(other->left.get()) && right->Equals(other->right.get());
 }
 

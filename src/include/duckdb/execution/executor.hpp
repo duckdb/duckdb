@@ -30,7 +30,7 @@ class Executor {
 	friend class PipelineTask;
 
 public:
-	Executor(ClientContext &context);
+	explicit Executor(ClientContext &context);
 	~Executor();
 
 	ClientContext &context;
@@ -46,7 +46,7 @@ public:
 	unique_ptr<DataChunk> FetchChunk();
 
 	//! Push a new error
-	void PushError(std::string exception);
+	void PushError(const string &exception);
 
 	//! Flush a thread context into the client context
 	void Flush(ThreadContext &context);

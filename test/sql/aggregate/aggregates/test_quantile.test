@@ -145,7 +145,7 @@ statement error
 SELECT quantile(r) FROM quantile
 
 statement error
-SELECT quantile(r, 0.1, 0.2) FROM quantile
+SELECT quantile(r, 0.1, 50) FROM quantile
 
 
 statement ok

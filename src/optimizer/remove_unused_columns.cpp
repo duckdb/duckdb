@@ -1,23 +1,20 @@
-#include <map>
-
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 
+#include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
-
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
-#include "duckdb/planner/column_binding_map.hpp"
 
-#include "duckdb/function/aggregate/distributive_functions.hpp"
-
-#include "duckdb/planner/expression_iterator.hpp"
-#include "duckdb/planner/binder.hpp"
+#include <map>
 
 namespace duckdb {
 
@@ -31,7 +28,8 @@ void RemoveUnusedColumns::ReplaceBinding(ColumnBinding current_binding, ColumnBi
 	}
 }
 
-template <class T> void RemoveUnusedColumns::ClearUnusedExpressions(vector<T> &list, idx_t table_idx) {
+template <class T>
+void RemoveUnusedColumns::ClearUnusedExpressions(vector<T> &list, idx_t table_idx) {
 	idx_t offset = 0;
 	for (idx_t col_idx = 0; col_idx < list.size(); col_idx++) {
 		auto current_binding = ColumnBinding(table_idx, col_idx + offset);
@@ -56,12 +54,11 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			// FIXME: groups that are not referenced need to stay -> but they don't need to be scanned and output!
 			auto &aggr = (LogicalAggregate &)op;
 			ClearUnusedExpressions(aggr.expressions, aggr.aggregate_index);
-
-			if (aggr.expressions.size() == 0 && aggr.groups.size() == 0) {
+			if (aggr.expressions.empty() && aggr.groups.empty()) {
 				// removed all expressions from the aggregate: push a COUNT(*)
 				auto count_star_fun = CountStarFun::GetFunction();
 				aggr.expressions.push_back(
-				    AggregateFunction::BindAggregateFunction(context, count_star_fun, {}, false));
+				    AggregateFunction::BindAggregateFunction(context, count_star_fun, {}, nullptr, false));
 			}
 		}
 
@@ -119,7 +116,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			}
 			ClearUnusedExpressions(entries, setop.table_index);
 			if (entries.size() < setop.column_count) {
-				if (entries.size() == 0) {
+				if (entries.empty()) {
 					// no columns referenced: this happens in the case of a COUNT(*)
 					// extract the first column
 					entries.push_back(0);
@@ -135,6 +132,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 					child->ResolveOperatorTypes();
 					auto bindings = child->GetColumnBindings();
 					vector<unique_ptr<Expression>> expressions;
+					expressions.reserve(entries.size());
 					for (auto &column_idx : entries) {
 						expressions.push_back(
 						    make_unique<BoundColumnRefExpression>(child->types[column_idx], bindings[column_idx]));
@@ -167,7 +165,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			auto &proj = (LogicalProjection &)op;
 			ClearUnusedExpressions(proj.expressions, proj.table_index);
 
-			if (proj.expressions.size() == 0) {
+			if (proj.expressions.empty()) {
 				// nothing references the projected expressions
 				// this happens in the case of e.g. EXISTS(SELECT * FROM ...)
 				// in this case we only need to project a single constant
@@ -186,7 +184,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			auto &get = (LogicalGet &)op;
 			// for every table filter, push a column binding into the column references map to prevent the column from
 			// being projected out
-			for (auto &filter : get.tableFilters) {
+			for (auto &filter : get.table_filters) {
 				idx_t index = INVALID_INDEX;
 				for (idx_t i = 0; i < get.column_ids.size(); i++) {
 					if (get.column_ids[i] == filter.column_index) {
@@ -205,7 +203,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			// table scan: figure out which columns are referenced
 			ClearUnusedExpressions(get.column_ids, get.table_index);
 
-			if (get.column_ids.size() == 0) {
+			if (get.column_ids.empty()) {
 				// this generally means we are only interested in whether or not anything exists in the table (e.g.
 				// EXISTS(SELECT * FROM tbl)) in this case, we just scan the row identifier column as it means we do not
 				// need to read any of the columns

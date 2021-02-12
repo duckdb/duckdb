@@ -12,6 +12,7 @@
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/result_modifier.hpp"
+#include "duckdb/parser/common_table_expression_info.hpp"
 
 namespace duckdb {
 
@@ -24,7 +25,7 @@ enum QueryNodeType : uint8_t {
 
 class QueryNode {
 public:
-	QueryNode(QueryNodeType type) : type(type) {
+	explicit QueryNode(QueryNodeType type) : type(type) {
 	}
 	virtual ~QueryNode() {
 	}
@@ -33,6 +34,8 @@ public:
 	QueryNodeType type;
 	//! The set of result modifiers associated with this query node
 	vector<unique_ptr<ResultModifier>> modifiers;
+	//! CTEs (used by SelectNode and SetOperationNode)
+	unordered_map<string, unique_ptr<CommonTableExpressionInfo>> cte_map;
 
 	virtual const vector<unique_ptr<ParsedExpression>> &GetSelectList() const = 0;
 

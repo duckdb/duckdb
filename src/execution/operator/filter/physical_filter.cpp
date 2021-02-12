@@ -28,8 +28,8 @@ PhysicalFilter::PhysicalFilter(vector<LogicalType> types, vector<unique_ptr<Expr
 	}
 }
 
-void PhysicalFilter::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
-	auto state = reinterpret_cast<PhysicalFilterState *>(state_);
+void PhysicalFilter::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
+	auto state = reinterpret_cast<PhysicalFilterState *>(state_p);
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
 	idx_t initial_count;
 	idx_t result_count;

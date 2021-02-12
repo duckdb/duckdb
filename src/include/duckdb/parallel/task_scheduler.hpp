@@ -57,6 +57,8 @@ public:
 	int32_t NumberOfThreads();
 
 private:
+	void SetThreadsInternal(int32_t n);
+
 	//! The task queue
 	unique_ptr<ConcurrentQueue> queue;
 	//! The active background threads of the task scheduler

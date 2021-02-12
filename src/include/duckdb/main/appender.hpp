@@ -31,8 +31,8 @@ class Appender {
 	idx_t column = 0;
 
 public:
-	DUCKDB_API Appender(Connection &con, string schema_name, string table_name);
-	DUCKDB_API Appender(Connection &con, string table_name);
+	DUCKDB_API Appender(Connection &con, const string &schema_name, const string &table_name);
+	DUCKDB_API Appender(Connection &con, const string &table_name);
 	DUCKDB_API ~Appender();
 
 	//! Begins a new row append, after calling this the other AppendX() functions
@@ -43,14 +43,16 @@ public:
 	DUCKDB_API void EndRow();
 
 	// Append functions
-	template <class T> void Append(T value) {
+	template <class T>
+	void Append(T value) {
 		throw Exception("Undefined type for Appender::Append!");
 	}
 
 	DUCKDB_API void Append(const char *value, uint32_t length);
 
 	// prepared statements
-	template <typename... Args> void AppendRow(Args... args) {
+	template <typename... Args>
+	void AppendRow(Args... args) {
 		BeginRow();
 		AppendRowRecursive(args...);
 	}
@@ -70,30 +72,43 @@ public:
 	}
 
 private:
-	template <class T> void AppendValueInternal(T value);
-	template <class SRC, class DST> void AppendValueInternal(Vector &vector, SRC input);
+	template <class T>
+	void AppendValueInternal(T value);
+	template <class SRC, class DST>
+	void AppendValueInternal(Vector &vector, SRC input);
 
 	void AppendRowRecursive() {
 		EndRow();
 	}
 
-	template <typename T, typename... Args> void AppendRowRecursive(T value, Args... args) {
+	template <typename T, typename... Args>
+	void AppendRowRecursive(T value, Args... args) {
 		Append<T>(value);
 		AppendRowRecursive(args...);
 	}
 
-	void AppendValue(Value value);
+	void AppendValue(const Value &value);
 };
 
-template <> void DUCKDB_API Appender::Append(bool value);
-template <> void DUCKDB_API Appender::Append(int8_t value);
-template <> void DUCKDB_API Appender::Append(int16_t value);
-template <> void DUCKDB_API Appender::Append(int32_t value);
-template <> void DUCKDB_API Appender::Append(int64_t value);
-template <> void DUCKDB_API Appender::Append(float value);
-template <> void DUCKDB_API Appender::Append(double value);
-template <> void DUCKDB_API Appender::Append(const char *value);
-template <> void DUCKDB_API Appender::Append(Value value);
-template <> void DUCKDB_API Appender::Append(std::nullptr_t value);
+template <>
+void DUCKDB_API Appender::Append(bool value);
+template <>
+void DUCKDB_API Appender::Append(int8_t value);
+template <>
+void DUCKDB_API Appender::Append(int16_t value);
+template <>
+void DUCKDB_API Appender::Append(int32_t value);
+template <>
+void DUCKDB_API Appender::Append(int64_t value);
+template <>
+void DUCKDB_API Appender::Append(float value);
+template <>
+void DUCKDB_API Appender::Append(double value);
+template <>
+void DUCKDB_API Appender::Append(const char *value);
+template <>
+void DUCKDB_API Appender::Append(Value value);
+template <>
+void DUCKDB_API Appender::Append(std::nullptr_t value);
 
 } // namespace duckdb

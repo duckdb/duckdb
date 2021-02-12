@@ -21,10 +21,10 @@ void LogicalAggregate::ResolveTypes() {
 vector<ColumnBinding> LogicalAggregate::GetColumnBindings() {
 	vector<ColumnBinding> result;
 	for (idx_t i = 0; i < groups.size(); i++) {
-		result.push_back(ColumnBinding(group_index, i));
+		result.emplace_back(group_index, i);
 	}
 	for (idx_t i = 0; i < expressions.size(); i++) {
-		result.push_back(ColumnBinding(aggregate_index, i));
+		result.emplace_back(aggregate_index, i);
 	}
 	return result;
 }
@@ -38,7 +38,7 @@ string LogicalAggregate::ParamsToString() const {
 		result += groups[i]->GetName();
 	}
 	for (idx_t i = 0; i < expressions.size(); i++) {
-		if (i > 0 || groups.size() > 0) {
+		if (i > 0 || !groups.empty()) {
 			result += "\n";
 		}
 		result += expressions[i]->GetName();

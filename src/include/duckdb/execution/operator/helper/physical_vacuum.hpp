@@ -16,7 +16,7 @@ namespace duckdb {
 //! PhysicalVacuum represents a VACUUM operation (e.g. VACUUM or ANALYZE)
 class PhysicalVacuum : public PhysicalOperator {
 public:
-	PhysicalVacuum(unique_ptr<VacuumInfo> info)
+	explicit PhysicalVacuum(unique_ptr<VacuumInfo> info)
 	    : PhysicalOperator(PhysicalOperatorType::VACUUM, {LogicalType::BOOLEAN}), info(move(info)) {
 	}
 

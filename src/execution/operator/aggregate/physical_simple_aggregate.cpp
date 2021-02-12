@@ -18,7 +18,7 @@ PhysicalSimpleAggregate::PhysicalSimpleAggregate(vector<LogicalType> types, vect
 //===--------------------------------------------------------------------===//
 
 struct AggregateState {
-	AggregateState(vector<unique_ptr<Expression>> &aggregate_expressions) {
+	explicit AggregateState(vector<unique_ptr<Expression>> &aggregate_expressions) {
 		for (auto &aggregate : aggregate_expressions) {
 			D_ASSERT(aggregate->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 			auto &aggr = (BoundAggregateExpression &)*aggregate;
@@ -54,7 +54,7 @@ struct AggregateState {
 
 class SimpleAggregateGlobalState : public GlobalOperatorState {
 public:
-	SimpleAggregateGlobalState(vector<unique_ptr<Expression>> &aggregates) : state(aggregates) {
+	explicit SimpleAggregateGlobalState(vector<unique_ptr<Expression>> &aggregates) : state(aggregates) {
 	}
 
 	//! The lock for updating the global aggregate state
@@ -65,22 +65,26 @@ public:
 
 class SimpleAggregateLocalState : public LocalSinkState {
 public:
-	SimpleAggregateLocalState(vector<unique_ptr<Expression>> &aggregates) : state(aggregates) {
+	explicit SimpleAggregateLocalState(vector<unique_ptr<Expression>> &aggregates) : state(aggregates) {
 		vector<LogicalType> payload_types;
 		for (auto &aggregate : aggregates) {
 			D_ASSERT(aggregate->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 			auto &aggr = (BoundAggregateExpression &)*aggregate;
 			// initialize the payload chunk
-			if (aggr.children.size()) {
-				for (idx_t i = 0; i < aggr.children.size(); ++i) {
-					payload_types.push_back(aggr.children[i]->return_type);
-					child_executor.AddExpression(*aggr.children[i]);
+			if (!aggr.children.empty()) {
+				for (auto &child : aggr.children) {
+					payload_types.push_back(child->return_type);
+					child_executor.AddExpression(*child);
 				}
 			}
 		}
 		if (!payload_types.empty()) { // for select count(*) from t; there is no payload at all
-			payload_chunk.Initialize(payload_types);
+			payload_chunk_base.Initialize(payload_types);
+			payload_chunk.InitializeEmpty(payload_types);
 		}
+	}
+	void Reset() {
+		payload_chunk.Reference(payload_chunk_base);
 	}
 
 	//! The local aggregate state
@@ -89,6 +93,8 @@ public:
 	ExpressionExecutor child_executor;
 	//! The payload chunk
 	DataChunk payload_chunk;
+	//! The payload chunk
+	DataChunk payload_chunk_base;
 };
 
 unique_ptr<GlobalOperatorState> PhysicalSimpleAggregate::GetGlobalState(ClientContext &context) {
@@ -104,15 +110,28 @@ void PhysicalSimpleAggregate::Sink(ExecutionContext &context, GlobalOperatorStat
 	auto &sink = (SimpleAggregateLocalState &)lstate;
 	// perform the aggregation inside the local state
 	idx_t payload_idx = 0, payload_expr_idx = 0;
+	sink.Reset();
+
 	DataChunk &payload_chunk = sink.payload_chunk;
-	payload_chunk.Reset();
 	sink.child_executor.SetChunk(input);
 	payload_chunk.SetCardinality(input);
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
+		DataChunk filtered_input;
 		auto &aggregate = (BoundAggregateExpression &)*aggregates[aggr_idx];
 		idx_t payload_cnt = 0;
+		// resolve the filter (if any)
+		if (aggregate.filter) {
+			ExpressionExecutor filter_execution(aggregate.filter.get());
+			SelectionVector true_sel(STANDARD_VECTOR_SIZE);
+			auto count = filter_execution.SelectExpression(input, true_sel);
+			auto input_types = input.GetTypes();
+			filtered_input.Initialize(input_types);
+			filtered_input.Slice(input, true_sel, count);
+			sink.child_executor.SetChunk(filtered_input);
+			payload_chunk.SetCardinality(count);
+		}
 		// resolve the child expressions of the aggregate (if any)
-		if (aggregate.children.size() > 0) {
+		if (!aggregate.children.empty()) {
 			for (idx_t i = 0; i < aggregate.children.size(); ++i) {
 				sink.child_executor.ExecuteExpression(payload_expr_idx, payload_chunk.data[payload_idx + payload_cnt]);
 				payload_expr_idx++;
@@ -121,8 +140,9 @@ void PhysicalSimpleAggregate::Sink(ExecutionContext &context, GlobalOperatorStat
 		}
 
 		// perform the actual aggregation
-		aggregate.function.simple_update(payload_cnt == 0 ? nullptr : &payload_chunk.data[payload_idx], payload_cnt,
-		                                 sink.state.aggregates[aggr_idx].get(), payload_chunk.size());
+		aggregate.function.simple_update(payload_cnt == 0 ? nullptr : &payload_chunk.data[payload_idx],
+		                                 aggregate.bind_info.get(), payload_cnt, sink.state.aggregates[aggr_idx].get(),
+		                                 payload_chunk.size());
 		payload_idx += payload_cnt;
 	}
 }
@@ -176,10 +196,14 @@ void PhysicalSimpleAggregate::GetChunkInternal(ExecutionContext &context, DataCh
 string PhysicalSimpleAggregate::ParamsToString() const {
 	string result;
 	for (idx_t i = 0; i < aggregates.size(); i++) {
+		auto &aggregate = (BoundAggregateExpression &)*aggregates[i];
 		if (i > 0) {
 			result += "\n";
 		}
 		result += aggregates[i]->GetName();
+		if (aggregate.filter) {
+			result += " Filter: " + aggregate.filter->GetName();
+		}
 	}
 	return result;
 }

@@ -13,7 +13,7 @@ project(DuckDBJDummy NONE)
 file(GLOB JAVA_SRC_FILES src/main/java/org/duckdb/*.java)
 file(GLOB JAVA_TEST_FILES src/test/java/org/duckdb/test/*.java)
 
-set(CMAKE_JAVA_COMPILE_FLAGS -source 1.7 -target 1.7)
+set(CMAKE_JAVA_COMPILE_FLAGS -source 1.7 -target 1.7 -encoding utf-8)
 
 add_jar(duckdb_jdbc ${JAVA_SRC_FILES} ${JAVA_TEST_FILES}
         META-INF/services/java.sql.Driver GENERATE_NATIVE_HEADERS duckdb-native)
@@ -37,6 +37,10 @@ include_directories(../../extension/parquet/include)
 add_library(duckdb_java SHARED src/jni/duckdb_java.cpp)
 target_compile_options(duckdb_java PRIVATE -fexceptions)
 target_link_libraries(duckdb_java duckdb-native duckdb_static parquet_extension)
+if(OS_NAME STREQUAL "linux")
+  target_link_libraries(duckdb_java -static-libgcc -static-libstdc++
+  )# static link to libstdc++ to target more linux distro
+endif()
 string(JOIN "_" LIB_SUFFIX ".so" ${OS_NAME} ${JVM_BITNESS})
 set_target_properties(duckdb_java PROPERTIES SUFFIX ${LIB_SUFFIX})
 set_target_properties(duckdb_java PROPERTIES PREFIX "lib")

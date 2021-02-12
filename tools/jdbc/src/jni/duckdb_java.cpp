@@ -26,10 +26,10 @@ static jobject decode_charbuffer_to_jstring(JNIEnv *env, const char *d_str, idx_
 	jclass charset_class = env->FindClass("java/nio/charset/Charset");
 	jclass charbuffer_class = env->FindClass("java/nio/CharBuffer");
 	jmethodID for_name =
-		env->GetStaticMethodID(charset_class, "forName", "(Ljava/lang/String;)Ljava/nio/charset/Charset;");
+	    env->GetStaticMethodID(charset_class, "forName", "(Ljava/lang/String;)Ljava/nio/charset/Charset;");
 	jobject charset = env->CallStaticObjectMethod(charset_class, for_name, env->NewStringUTF("UTF-8"));
 	jmethodID charset_decode =
-		env->GetMethodID(charset_class, "decode", "(Ljava/nio/ByteBuffer;)Ljava/nio/CharBuffer;");
+	    env->GetMethodID(charset_class, "decode", "(Ljava/nio/ByteBuffer;)Ljava/nio/CharBuffer;");
 	jmethodID charbuffer_to_string = env->GetMethodID(charbuffer_class, "toString", "()Ljava/lang/String;");
 
 	auto bb = env->NewDirectByteBuffer((void *)d_str, d_str_len);
@@ -241,7 +241,8 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1meta(JNIEnv
 	auto type_array = env->NewObjectArray(column_count, env->FindClass("java/lang/String"), nullptr);
 
 	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
-		env->SetObjectArrayElement(name_array, col_idx, decode_charbuffer_to_jstring(env, names[col_idx].c_str(), names[col_idx].length()));
+		env->SetObjectArrayElement(name_array, col_idx,
+		                           decode_charbuffer_to_jstring(env, names[col_idx].c_str(), names[col_idx].length()));
 		env->SetObjectArrayElement(type_array, col_idx, env->NewStringUTF(types[col_idx].ToString().c_str()));
 	}
 
@@ -297,6 +298,18 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 			break;
 		case LogicalTypeId::BIGINT:
 			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(int64_t));
+			break;
+		case LogicalTypeId::UTINYINT:
+			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(uint8_t));
+			break;
+		case LogicalTypeId::USMALLINT:
+			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(uint16_t));
+			break;
+		case LogicalTypeId::UINTEGER:
+			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(uint32_t));
+			break;
+		case LogicalTypeId::UBIGINT:
+			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(uint64_t));
 			break;
 		case LogicalTypeId::HUGEINT:
 			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(hugeint_t));

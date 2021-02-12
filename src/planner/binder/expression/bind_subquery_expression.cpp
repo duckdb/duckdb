@@ -18,11 +18,11 @@ public:
 	unique_ptr<BoundQueryNode> bound_node;
 	unique_ptr<SelectStatement> subquery;
 
-	const vector<unique_ptr<ParsedExpression>> &GetSelectList() const {
+	const vector<unique_ptr<ParsedExpression>> &GetSelectList() const override {
 		throw Exception("Cannot get select list of bound subquery node");
 	}
 
-	unique_ptr<QueryNode> Copy() {
+	unique_ptr<QueryNode> Copy() override {
 		throw Exception("Cannot copy bound subquery node");
 	}
 };
@@ -32,9 +32,6 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 		D_ASSERT(depth == 0);
 		// first bind the actual subquery in a new binder
 		auto subquery_binder = make_unique<Binder>(context, &binder);
-		for (auto &cte_it : expr.subquery->cte_map) {
-			subquery_binder->AddCTE(cte_it.first, cte_it.second.get());
-		}
 		auto bound_node = subquery_binder->BindNode(*expr.subquery->node);
 		// check the correlated columns of the subquery for correlated columns with depth > 1
 		for (idx_t i = 0; i < subquery_binder->correlated_columns.size(); i++) {

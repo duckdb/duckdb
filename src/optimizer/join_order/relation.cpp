@@ -67,7 +67,7 @@ JoinRelationSet *JoinRelationSetManager::GetJoinRelation(idx_t index) {
 
 JoinRelationSet *JoinRelationSetManager::GetJoinRelation(unordered_set<idx_t> &bindings) {
 	// create a sorted vector of the relations
-	unique_ptr<idx_t[]> relations = bindings.size() == 0 ? nullptr : unique_ptr<idx_t[]>(new idx_t[bindings.size()]);
+	unique_ptr<idx_t[]> relations = bindings.empty() ? nullptr : unique_ptr<idx_t[]>(new idx_t[bindings.size()]);
 	idx_t count = 0;
 	for (auto &entry : bindings) {
 		relations[count++] = entry;

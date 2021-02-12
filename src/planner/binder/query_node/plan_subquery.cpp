@@ -22,13 +22,13 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 	case SubqueryType::EXISTS: {
 		// uncorrelated EXISTS
 		// we only care about existence, hence we push a LIMIT 1 operator
-		auto limit = make_unique<LogicalLimit>(1, 0);
+		auto limit = make_unique<LogicalLimit>(1, 0, nullptr, nullptr);
 		limit->AddChild(move(plan));
 		plan = move(limit);
 
 		// now we push a COUNT(*) aggregate onto the limit, this will be either 0 or 1 (EXISTS or NOT EXISTS)
 		auto count_star_fun = CountStarFun::GetFunction();
-		auto count_star = AggregateFunction::BindAggregateFunction(binder.context, count_star_fun, {}, false);
+		auto count_star = AggregateFunction::BindAggregateFunction(binder.context, count_star_fun, {}, nullptr, false);
 		auto idx_type = count_star->return_type;
 		vector<unique_ptr<Expression>> aggregate_list;
 		aggregate_list.push_back(move(count_star));
@@ -72,7 +72,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 
 		// in the uncorrelated case we are only interested in the first result of the query
 		// hence we simply push a LIMIT 1 to get the first row of the subquery
-		auto limit = make_unique<LogicalLimit>(1, 0);
+		auto limit = make_unique<LogicalLimit>(1, 0, nullptr, nullptr);
 		limit->AddChild(move(plan));
 		plan = move(limit);
 
@@ -82,7 +82,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		vector<unique_ptr<Expression>> first_children;
 		first_children.push_back(move(bound));
 		auto first_agg = AggregateFunction::BindAggregateFunction(
-		    binder.context, FirstFun::GetFunction(expr.return_type), move(first_children), false);
+		    binder.context, FirstFun::GetFunction(expr.return_type), move(first_children), nullptr, false);
 
 		expressions.push_back(move(first_agg));
 		auto aggr_index = binder.GenerateTableIndex();
@@ -139,6 +139,7 @@ static unique_ptr<LogicalDelimJoin> CreateDuplicateEliminatedJoin(vector<Correla
 		auto &col = correlated_columns[i];
 		delim_join->duplicate_eliminated_columns.push_back(
 		    make_unique<BoundColumnRefExpression>(col.type, col.binding));
+		delim_join->delim_types.push_back(col.type);
 	}
 	return delim_join;
 }
@@ -269,10 +270,10 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 
 class RecursiveSubqueryPlanner : public LogicalOperatorVisitor {
 public:
-	RecursiveSubqueryPlanner(Binder &binder) : binder(binder) {
+	explicit RecursiveSubqueryPlanner(Binder &binder) : binder(binder) {
 	}
 	void VisitOperator(LogicalOperator &op) override {
-		if (op.children.size() > 0) {
+		if (!op.children.empty()) {
 			root = move(op.children[0]);
 			VisitOperatorExpressions(op);
 			op.children[0] = move(root);
@@ -317,6 +318,9 @@ unique_ptr<Expression> Binder::PlanSubquery(BoundSubqueryExpression &expr, uniqu
 }
 
 void Binder::PlanSubqueries(unique_ptr<Expression> *expr_ptr, unique_ptr<LogicalOperator> *root) {
+	if (!*expr_ptr) {
+		return;
+	}
 	auto &expr = **expr_ptr;
 
 	// first visit the children of the node, if any

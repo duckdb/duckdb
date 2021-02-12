@@ -10,9 +10,10 @@ namespace duckdb {
 
 PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
                                    unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
-                                   vector<idx_t> left_projection_map, vector<idx_t> right_projection_map)
+                                   const vector<idx_t> &left_projection_map,
+                                   const vector<idx_t> &right_projection_map_p, vector<LogicalType> delim_types)
     : PhysicalComparisonJoin(op, PhysicalOperatorType::HASH_JOIN, move(cond), join_type),
-      right_projection_map(right_projection_map) {
+      right_projection_map(right_projection_map_p), delim_types(move(delim_types)) {
 	children.push_back(move(left));
 	children.push_back(move(right));
 
@@ -29,7 +30,7 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
 
 PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
                                    unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type)
-    : PhysicalHashJoin(op, move(left), move(right), move(cond), join_type, {}, {}) {
+    : PhysicalHashJoin(op, move(left), move(right), move(cond), join_type, {}, {}, {}) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -57,7 +58,7 @@ unique_ptr<GlobalOperatorState> PhysicalHashJoin::GetGlobalState(ClientContext &
 	auto state = make_unique<HashJoinGlobalState>();
 	state->hash_table =
 	    make_unique<JoinHashTable>(BufferManager::GetBufferManager(context), conditions, build_types, join_type);
-	if (delim_types.size() > 0 && join_type == JoinType::MARK) {
+	if (!delim_types.empty() && join_type == JoinType::MARK) {
 		// correlated MARK join
 		if (delim_types.size() + 1 == conditions.size()) {
 			// the correlated MARK join has one more condition than the amount of correlated columns
@@ -76,7 +77,7 @@ unique_ptr<GlobalOperatorState> PhysicalHashJoin::GetGlobalState(ClientContext &
 
 			// jury-rigging the GroupedAggregateHashTable
 			// we need a count_star and a count to get counts with and without NULLs
-			aggr = AggregateFunction::BindAggregateFunction(context, CountStarFun::GetFunction(), {}, false);
+			aggr = AggregateFunction::BindAggregateFunction(context, CountStarFun::GetFunction(), {}, nullptr, false);
 			correlated_aggregates.push_back(&*aggr);
 			payload_types.push_back(aggr->return_type);
 			info.correlated_aggregates.push_back(move(aggr));
@@ -85,7 +86,7 @@ unique_ptr<GlobalOperatorState> PhysicalHashJoin::GetGlobalState(ClientContext &
 			vector<unique_ptr<Expression>> children;
 			// this is a dummy but we need it to make the hash table understand whats going on
 			children.push_back(make_unique_base<Expression, BoundReferenceExpression>(count_fun.return_type, 0));
-			aggr = AggregateFunction::BindAggregateFunction(context, count_fun, move(children), false);
+			aggr = AggregateFunction::BindAggregateFunction(context, count_fun, move(children), nullptr, false);
 			correlated_aggregates.push_back(&*aggr);
 			payload_types.push_back(aggr->return_type);
 			info.correlated_aggregates.push_back(move(aggr));
@@ -104,7 +105,7 @@ unique_ptr<GlobalOperatorState> PhysicalHashJoin::GetGlobalState(ClientContext &
 
 unique_ptr<LocalSinkState> PhysicalHashJoin::GetLocalSinkState(ExecutionContext &context) {
 	auto state = make_unique<HashJoinLocalState>();
-	if (right_projection_map.size() > 0) {
+	if (!right_projection_map.empty()) {
 		state->build_chunk.Initialize(build_types);
 	}
 	for (auto &cond : conditions) {
@@ -114,14 +115,14 @@ unique_ptr<LocalSinkState> PhysicalHashJoin::GetLocalSinkState(ExecutionContext 
 	return move(state);
 }
 
-void PhysicalHashJoin::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_,
+void PhysicalHashJoin::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_p,
                             DataChunk &input) {
 	auto &sink = (HashJoinGlobalState &)state;
-	auto &lstate = (HashJoinLocalState &)lstate_;
+	auto &lstate = (HashJoinLocalState &)lstate_p;
 	// resolve the join keys for the right chunk
 	lstate.build_executor.Execute(input, lstate.join_keys);
 	// build the HT
-	if (right_projection_map.size() > 0) {
+	if (!right_projection_map.empty()) {
 		// there is a projection map: fill the build chunk with the projected columns
 		lstate.build_chunk.Reset();
 		lstate.build_chunk.SetCardinality(input);
@@ -171,8 +172,8 @@ unique_ptr<PhysicalOperatorState> PhysicalHashJoin::GetOperatorState() {
 	return move(state);
 }
 
-void PhysicalHashJoin::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
-	auto state = reinterpret_cast<PhysicalHashJoinState *>(state_);
+void PhysicalHashJoin::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
+	auto state = reinterpret_cast<PhysicalHashJoinState *>(state_p);
 	auto &sink = (HashJoinGlobalState &)*sink_state;
 	if (sink.hash_table->size() == 0 &&
 	    (sink.hash_table->join_type == JoinType::INNER || sink.hash_table->join_type == JoinType::SEMI)) {
@@ -218,8 +219,8 @@ void PhysicalHashJoin::GetChunkInternal(ExecutionContext &context, DataChunk &ch
 	} while (true);
 }
 
-void PhysicalHashJoin::ProbeHashTable(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
-	auto state = reinterpret_cast<PhysicalHashJoinState *>(state_);
+void PhysicalHashJoin::ProbeHashTable(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
+	auto state = reinterpret_cast<PhysicalHashJoinState *>(state_p);
 	auto &sink = (HashJoinGlobalState &)*sink_state;
 
 	if (state->child_chunk.size() > 0 && state->scan_structure) {

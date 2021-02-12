@@ -35,7 +35,10 @@ if(AMALGAMATION_BUILD)
   link_threads(duckdb_static)
 
   install(FILES "${PROJECT_SOURCE_DIR}/src/amalgamation/duckdb.hpp"
+                "${PROJECT_SOURCE_DIR}/src/include/duckdb.h"
           DESTINATION "${INSTALL_INCLUDE_DIR}")
+  install(FILES "${PROJECT_SOURCE_DIR}/src/include/duckdb/common/winapi.hpp"
+          DESTINATION "${INSTALL_INCLUDE_DIR}/duckdb/common")
 
 else()
 
@@ -51,7 +54,7 @@ else()
   add_subdirectory(storage)
   add_subdirectory(transaction)
 
-  set(DUCKDB_LINK_LIBS fmt pg_query duckdb_re2 miniz utf8proc)
+  set(DUCKDB_LINK_LIBS fmt pg_query duckdb_re2 miniz utf8proc hyperloglog)
 
   add_library(duckdb SHARED ${ALL_OBJECT_FILES})
   target_link_libraries(duckdb ${DUCKDB_LINK_LIBS})

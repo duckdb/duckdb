@@ -13,14 +13,14 @@ namespace duckdb {
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalFilter &op) {
 	D_ASSERT(op.children.size() == 1);
 	unique_ptr<PhysicalOperator> plan = CreatePlan(*op.children[0]);
-	if (op.expressions.size() > 0) {
+	if (!op.expressions.empty()) {
 		D_ASSERT(plan->types.size() > 0);
 		// create a filter if there is anything to filter
 		auto filter = make_unique<PhysicalFilter>(plan->types, move(op.expressions));
 		filter->children.push_back(move(plan));
 		plan = move(filter);
 	}
-	if (op.projection_map.size() > 0) {
+	if (!op.projection_map.empty()) {
 		// there is a projection map, generate a physical projection
 		vector<unique_ptr<Expression>> select_list;
 		for (idx_t i = 0; i < op.projection_map.size(); i++) {

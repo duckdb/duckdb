@@ -10,20 +10,20 @@
 
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/block.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/uncompressed_segment.hpp"
 
 namespace duckdb {
 struct ColumnAppendState;
+class DatabaseInstance;
 class PersistentSegment;
 
 class TransientSegment : public ColumnSegment {
 public:
-	TransientSegment(BufferManager &manager, LogicalType type, idx_t start);
-	TransientSegment(PersistentSegment &segment);
+	TransientSegment(DatabaseInstance &db, const LogicalType &type, idx_t start);
+	explicit TransientSegment(PersistentSegment &segment);
 
-	//! The buffer manager
-	BufferManager &manager;
+	//! The storage manager
+	DatabaseInstance &db;
 	//! The uncompressed segment holding the data
 	unique_ptr<UncompressedSegment> data;
 
@@ -31,6 +31,8 @@ public:
 	void InitializeScan(ColumnScanState &state) override;
 	//! Scan one vector from this transient segment
 	void Scan(Transaction &transaction, ColumnScanState &state, idx_t vector_index, Vector &result) override;
+	//! Scan one vector of committed data from this transient segment
+	void ScanCommitted(ColumnScanState &state, idx_t vector_index, Vector &result) override;
 	//! Scan the next vector from the column and apply a selection vector to filter the data
 	void FilterScan(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
 	                idx_t &approved_tuple_count) override;
@@ -38,7 +40,7 @@ public:
 	void IndexScan(ColumnScanState &state, Vector &result) override;
 	//! Executes the filters directly in the table's data
 	void Select(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
-	            idx_t &approved_tuple_count, vector<TableFilter> &tableFilter) override;
+	            idx_t &approved_tuple_count, vector<TableFilter> &table_filter) override;
 	//! Fetch the base table vector index that belongs to this row
 	void Fetch(ColumnScanState &state, idx_t vector_index, Vector &result) override;
 	//! Fetch a value of the specific row id and append it to the result

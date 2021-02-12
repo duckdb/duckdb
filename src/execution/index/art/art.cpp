@@ -8,7 +8,7 @@
 namespace duckdb {
 
 ART::ART(vector<column_t> column_ids, vector<unique_ptr<Expression>> unbound_expressions, bool is_unique)
-    : Index(IndexType::ART, column_ids, move(unbound_expressions)), is_unique(is_unique) {
+    : Index(IndexType::ART, move(column_ids), move(unbound_expressions)), is_unique(is_unique) {
 	tree = nullptr;
 	expression_result.Initialize(logical_types);
 	int n = 1;
@@ -24,6 +24,10 @@ ART::ART(vector<column_t> column_ids, vector<unique_ptr<Expression>> unbound_exp
 	case PhysicalType::INT16:
 	case PhysicalType::INT32:
 	case PhysicalType::INT64:
+	case PhysicalType::UINT8:
+	case PhysicalType::UINT16:
+	case PhysicalType::UINT32:
+	case PhysicalType::UINT64:
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE:
 	case PhysicalType::VARCHAR:
@@ -71,7 +75,7 @@ unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(Transaction &transac
 // Insert
 //===--------------------------------------------------------------------===//
 template <class T>
-static void generate_keys(Vector &input, idx_t count, vector<unique_ptr<Key>> &keys, bool is_little_endian) {
+static void TemplatedGenerateKeys(Vector &input, idx_t count, vector<unique_ptr<Key>> &keys, bool is_little_endian) {
 	VectorData idata;
 	input.Orrify(count, idata);
 
@@ -87,7 +91,7 @@ static void generate_keys(Vector &input, idx_t count, vector<unique_ptr<Key>> &k
 }
 
 template <class T>
-static void concatenate_keys(Vector &input, idx_t count, vector<unique_ptr<Key>> &keys, bool is_little_endian) {
+static void ConcatenateKeys(Vector &input, idx_t count, vector<unique_ptr<Key>> &keys, bool is_little_endian) {
 	VectorData idata;
 	input.Orrify(count, idata);
 
@@ -101,11 +105,11 @@ static void concatenate_keys(Vector &input, idx_t count, vector<unique_ptr<Key>>
 			// concatenate the keys
 			auto old_key = move(keys[i]);
 			auto new_key = Key::CreateKey<T>(input_data[idx], is_little_endian);
-			auto keyLen = old_key->len + new_key->len;
-			auto compound_data = unique_ptr<data_t[]>(new data_t[keyLen]);
+			auto key_len = old_key->len + new_key->len;
+			auto compound_data = unique_ptr<data_t[]>(new data_t[key_len]);
 			memcpy(compound_data.get(), old_key->data.get(), old_key->len);
 			memcpy(compound_data.get() + old_key->len, new_key->data.get(), new_key->len);
-			keys[i] = make_unique<Key>(move(compound_data), keyLen);
+			keys[i] = make_unique<Key>(move(compound_data), key_len);
 		}
 	}
 }
@@ -115,28 +119,40 @@ void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
 	// generate keys for the first input column
 	switch (input.data[0].type.InternalType()) {
 	case PhysicalType::BOOL:
-		generate_keys<bool>(input.data[0], input.size(), keys, is_little_endian);
+		TemplatedGenerateKeys<bool>(input.data[0], input.size(), keys, is_little_endian);
 		break;
 	case PhysicalType::INT8:
-		generate_keys<int8_t>(input.data[0], input.size(), keys, is_little_endian);
+		TemplatedGenerateKeys<int8_t>(input.data[0], input.size(), keys, is_little_endian);
 		break;
 	case PhysicalType::INT16:
-		generate_keys<int16_t>(input.data[0], input.size(), keys, is_little_endian);
+		TemplatedGenerateKeys<int16_t>(input.data[0], input.size(), keys, is_little_endian);
 		break;
 	case PhysicalType::INT32:
-		generate_keys<int32_t>(input.data[0], input.size(), keys, is_little_endian);
+		TemplatedGenerateKeys<int32_t>(input.data[0], input.size(), keys, is_little_endian);
 		break;
 	case PhysicalType::INT64:
-		generate_keys<int64_t>(input.data[0], input.size(), keys, is_little_endian);
+		TemplatedGenerateKeys<int64_t>(input.data[0], input.size(), keys, is_little_endian);
+		break;
+	case PhysicalType::UINT8:
+		TemplatedGenerateKeys<uint8_t>(input.data[0], input.size(), keys, is_little_endian);
+		break;
+	case PhysicalType::UINT16:
+		TemplatedGenerateKeys<uint16_t>(input.data[0], input.size(), keys, is_little_endian);
+		break;
+	case PhysicalType::UINT32:
+		TemplatedGenerateKeys<uint32_t>(input.data[0], input.size(), keys, is_little_endian);
+		break;
+	case PhysicalType::UINT64:
+		TemplatedGenerateKeys<uint64_t>(input.data[0], input.size(), keys, is_little_endian);
 		break;
 	case PhysicalType::FLOAT:
-		generate_keys<float>(input.data[0], input.size(), keys, is_little_endian);
+		TemplatedGenerateKeys<float>(input.data[0], input.size(), keys, is_little_endian);
 		break;
 	case PhysicalType::DOUBLE:
-		generate_keys<double>(input.data[0], input.size(), keys, is_little_endian);
+		TemplatedGenerateKeys<double>(input.data[0], input.size(), keys, is_little_endian);
 		break;
 	case PhysicalType::VARCHAR:
-		generate_keys<string_t>(input.data[0], input.size(), keys, is_little_endian);
+		TemplatedGenerateKeys<string_t>(input.data[0], input.size(), keys, is_little_endian);
 		break;
 	default:
 		throw InvalidTypeException(input.data[0].type, "Invalid type for index");
@@ -145,28 +161,40 @@ void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
 		// for each of the remaining columns, concatenate
 		switch (input.data[i].type.InternalType()) {
 		case PhysicalType::BOOL:
-			concatenate_keys<bool>(input.data[i], input.size(), keys, is_little_endian);
+			ConcatenateKeys<bool>(input.data[i], input.size(), keys, is_little_endian);
 			break;
 		case PhysicalType::INT8:
-			concatenate_keys<int8_t>(input.data[i], input.size(), keys, is_little_endian);
+			ConcatenateKeys<int8_t>(input.data[i], input.size(), keys, is_little_endian);
 			break;
 		case PhysicalType::INT16:
-			concatenate_keys<int16_t>(input.data[i], input.size(), keys, is_little_endian);
+			ConcatenateKeys<int16_t>(input.data[i], input.size(), keys, is_little_endian);
 			break;
 		case PhysicalType::INT32:
-			concatenate_keys<int32_t>(input.data[i], input.size(), keys, is_little_endian);
+			ConcatenateKeys<int32_t>(input.data[i], input.size(), keys, is_little_endian);
 			break;
 		case PhysicalType::INT64:
-			concatenate_keys<int64_t>(input.data[i], input.size(), keys, is_little_endian);
+			ConcatenateKeys<int64_t>(input.data[i], input.size(), keys, is_little_endian);
+			break;
+		case PhysicalType::UINT8:
+			ConcatenateKeys<uint8_t>(input.data[i], input.size(), keys, is_little_endian);
+			break;
+		case PhysicalType::UINT16:
+			ConcatenateKeys<uint16_t>(input.data[i], input.size(), keys, is_little_endian);
+			break;
+		case PhysicalType::UINT32:
+			ConcatenateKeys<uint32_t>(input.data[i], input.size(), keys, is_little_endian);
+			break;
+		case PhysicalType::UINT64:
+			ConcatenateKeys<uint64_t>(input.data[i], input.size(), keys, is_little_endian);
 			break;
 		case PhysicalType::FLOAT:
-			concatenate_keys<float>(input.data[i], input.size(), keys, is_little_endian);
+			ConcatenateKeys<float>(input.data[i], input.size(), keys, is_little_endian);
 			break;
 		case PhysicalType::DOUBLE:
-			concatenate_keys<double>(input.data[i], input.size(), keys, is_little_endian);
+			ConcatenateKeys<double>(input.data[i], input.size(), keys, is_little_endian);
 			break;
 		case PhysicalType::VARCHAR:
-			concatenate_keys<string_t>(input.data[i], input.size(), keys, is_little_endian);
+			ConcatenateKeys<string_t>(input.data[i], input.size(), keys, is_little_endian);
 			break;
 		default:
 			throw InvalidTypeException(input.data[0].type, "Invalid type for index");
@@ -219,6 +247,9 @@ bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 }
 
 bool ART::Append(IndexLock &lock, DataChunk &appended_data, Vector &row_identifiers) {
+	DataChunk expression_result;
+	expression_result.Initialize(logical_types);
+
 	// first resolve the expressions for the index
 	ExecuteExpressions(appended_data, expression_result);
 
@@ -230,6 +261,10 @@ void ART::VerifyAppend(DataChunk &chunk) {
 	if (!is_unique) {
 		return;
 	}
+
+	DataChunk expression_result;
+	expression_result.Initialize(logical_types);
+
 	// unique index, check
 	lock_guard<mutex> l(lock);
 	// first resolve the expressions for the index
@@ -270,46 +305,46 @@ bool ART::Insert(unique_ptr<Node> &node, unique_ptr<Key> value, unsigned depth, 
 		// Replace leaf with Node4 and store both leaves in it
 		auto leaf = static_cast<Leaf *>(node.get());
 
-		Key &existingKey = *leaf->value;
-		uint32_t newPrefixLength = 0;
+		Key &existing_key = *leaf->value;
+		uint32_t new_prefix_length = 0;
 		// Leaf node is already there, update row_id vector
-		if (depth + newPrefixLength == existingKey.len && existingKey.len == key.len) {
+		if (depth + new_prefix_length == existing_key.len && existing_key.len == key.len) {
 			return InsertToLeaf(*leaf, row_id);
 		}
-		while (existingKey[depth + newPrefixLength] == key[depth + newPrefixLength]) {
-			newPrefixLength++;
+		while (existing_key[depth + new_prefix_length] == key[depth + new_prefix_length]) {
+			new_prefix_length++;
 			// Leaf node is already there, update row_id vector
-			if (depth + newPrefixLength == existingKey.len && existingKey.len == key.len) {
+			if (depth + new_prefix_length == existing_key.len && existing_key.len == key.len) {
 				return InsertToLeaf(*leaf, row_id);
 			}
 		}
 
-		unique_ptr<Node> newNode = make_unique<Node4>(*this, newPrefixLength);
-		newNode->prefix_length = newPrefixLength;
-		memcpy(newNode->prefix.get(), &key[depth], newPrefixLength);
-		Node4::insert(*this, newNode, existingKey[depth + newPrefixLength], node);
+		unique_ptr<Node> new_node = make_unique<Node4>(*this, new_prefix_length);
+		new_node->prefix_length = new_prefix_length;
+		memcpy(new_node->prefix.get(), &key[depth], new_prefix_length);
+		Node4::Insert(*this, new_node, existing_key[depth + new_prefix_length], node);
 		unique_ptr<Node> leaf_node = make_unique<Leaf>(*this, move(value), row_id);
-		Node4::insert(*this, newNode, key[depth + newPrefixLength], leaf_node);
-		node = move(newNode);
+		Node4::Insert(*this, new_node, key[depth + new_prefix_length], leaf_node);
+		node = move(new_node);
 		return true;
 	}
 
 	// Handle prefix of inner node
 	if (node->prefix_length) {
-		uint32_t mismatchPos = Node::PrefixMismatch(*this, node.get(), key, depth);
-		if (mismatchPos != node->prefix_length) {
+		uint32_t mismatch_pos = Node::PrefixMismatch(*this, node.get(), key, depth);
+		if (mismatch_pos != node->prefix_length) {
 			// Prefix differs, create new node
-			unique_ptr<Node> newNode = make_unique<Node4>(*this, mismatchPos);
-			newNode->prefix_length = mismatchPos;
-			memcpy(newNode->prefix.get(), node->prefix.get(), mismatchPos);
+			unique_ptr<Node> new_node = make_unique<Node4>(*this, mismatch_pos);
+			new_node->prefix_length = mismatch_pos;
+			memcpy(new_node->prefix.get(), node->prefix.get(), mismatch_pos);
 			// Break up prefix
 			auto node_ptr = node.get();
-			Node4::insert(*this, newNode, node->prefix[mismatchPos], node);
-			node_ptr->prefix_length -= (mismatchPos + 1);
-			memmove(node_ptr->prefix.get(), node_ptr->prefix.get() + mismatchPos + 1, node_ptr->prefix_length);
+			Node4::Insert(*this, new_node, node->prefix[mismatch_pos], node);
+			node_ptr->prefix_length -= (mismatch_pos + 1);
+			memmove(node_ptr->prefix.get(), node_ptr->prefix.get() + mismatch_pos + 1, node_ptr->prefix_length);
 			unique_ptr<Node> leaf_node = make_unique<Leaf>(*this, move(value), row_id);
-			Node4::insert(*this, newNode, key[depth + mismatchPos], leaf_node);
-			node = move(newNode);
+			Node4::Insert(*this, new_node, key[depth + mismatch_pos], leaf_node);
+			node = move(new_node);
 			return true;
 		}
 		depth += node->prefix_length;
@@ -321,8 +356,8 @@ bool ART::Insert(unique_ptr<Node> &node, unique_ptr<Key> value, unsigned depth, 
 		auto child = node->GetChild(pos);
 		return Insert(*child, move(value), depth + 1, row_id);
 	}
-	unique_ptr<Node> newNode = make_unique<Leaf>(*this, move(value), row_id);
-	Node::InsertLeaf(*this, node, key[depth], newNode);
+	unique_ptr<Node> new_node = make_unique<Leaf>(*this, move(value), row_id);
+	Node::InsertLeaf(*this, node, key[depth], new_node);
 	return true;
 }
 
@@ -330,6 +365,9 @@ bool ART::Insert(unique_ptr<Node> &node, unique_ptr<Key> value, unsigned depth, 
 // Delete
 //===--------------------------------------------------------------------===//
 void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
+	DataChunk expression_result;
+	expression_result.Initialize(logical_types);
+
 	// first resolve the expressions
 	ExecuteExpressions(input, expression_result);
 
@@ -410,6 +448,14 @@ static unique_ptr<Key> CreateKey(ART &art, PhysicalType type, Value &value) {
 		return Key::CreateKey<int32_t>(value.value_.integer, art.is_little_endian);
 	case PhysicalType::INT64:
 		return Key::CreateKey<int64_t>(value.value_.bigint, art.is_little_endian);
+	case PhysicalType::UINT8:
+		return Key::CreateKey<uint8_t>(value.value_.utinyint, art.is_little_endian);
+	case PhysicalType::UINT16:
+		return Key::CreateKey<uint16_t>(value.value_.usmallint, art.is_little_endian);
+	case PhysicalType::UINT32:
+		return Key::CreateKey<uint32_t>(value.value_.uinteger, art.is_little_endian);
+	case PhysicalType::UINT64:
+		return Key::CreateKey<uint64_t>(value.value_.ubigint, art.is_little_endian);
 	case PhysicalType::FLOAT:
 		return Key::CreateKey<float>(value.value_.float_, art.is_little_endian);
 	case PhysicalType::DOUBLE:
@@ -454,10 +500,10 @@ Node *ART::Lookup(unique_ptr<Node> &node, Key &key, unsigned depth) {
 	while (node_val) {
 		if (node_val->type == NodeType::NLeaf) {
 			auto leaf = static_cast<Leaf *>(node_val);
-			Key &leafKey = *leaf->value;
+			Key &leaf_key = *leaf->value;
 			//! Check leaf
-			for (idx_t i = depth; i < leafKey.len; i++) {
-				if (leafKey[i] != key[i]) {
+			for (idx_t i = depth; i < leaf_key.len; i++) {
+				if (leaf_key[i] != key[i]) {
 					return nullptr;
 				}
 			}
@@ -615,9 +661,9 @@ bool ART::Bound(unique_ptr<Node> &n, Key &key, Iterator &it, bool inclusive) {
 			}
 			return false;
 		}
-		uint32_t mismatchPos = Node::PrefixMismatch(*this, node, key, depth);
-		if (mismatchPos != node->prefix_length) {
-			if (node->prefix[mismatchPos] < key[depth + mismatchPos]) {
+		uint32_t mismatch_pos = Node::PrefixMismatch(*this, node, key, depth);
+		if (mismatch_pos != node->prefix_length) {
+			if (node->prefix[mismatch_pos] < key[depth + mismatch_pos]) {
 				// Less
 				it.depth--;
 				return IteratorNext(it);
@@ -678,10 +724,10 @@ static Leaf &FindMinimum(Iterator &it, Node &node) {
 		break;
 	case NodeType::N48: {
 		auto &n48 = (Node48 &)node;
-		while (n48.childIndex[pos] == Node::EMPTY_MARKER) {
+		while (n48.child_index[pos] == Node::EMPTY_MARKER) {
 			pos++;
 		}
-		next = n48.child[n48.childIndex[pos]].get();
+		next = n48.child[n48.child_index[pos]].get();
 		break;
 	}
 	case NodeType::N256: {

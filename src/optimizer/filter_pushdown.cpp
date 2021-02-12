@@ -77,8 +77,8 @@ FilterResult FilterPushdown::AddFilter(unique_ptr<Expression> expr) {
 	expressions.push_back(move(expr));
 	LogicalFilter::SplitPredicates(expressions);
 	// push the filters into the combiner
-	for (auto &expr : expressions) {
-		if (combiner.AddFilter(move(expr)) == FilterResult::UNSATISFIABLE) {
+	for (auto &child_expr : expressions) {
+		if (combiner.AddFilter(move(child_expr)) == FilterResult::UNSATISFIABLE) {
 			return FilterResult::UNSATISFIABLE;
 		}
 	}
@@ -86,7 +86,7 @@ FilterResult FilterPushdown::AddFilter(unique_ptr<Expression> expr) {
 }
 
 void FilterPushdown::GenerateFilters() {
-	if (filters.size() > 0) {
+	if (!filters.empty()) {
 		D_ASSERT(!combiner.HasFilters());
 		return;
 	}
@@ -100,12 +100,12 @@ void FilterPushdown::GenerateFilters() {
 
 unique_ptr<LogicalOperator> FilterPushdown::FinishPushdown(unique_ptr<LogicalOperator> op) {
 	// unhandled type, first perform filter pushdown in its children
-	for (idx_t i = 0; i < op->children.size(); i++) {
+	for (auto &child : op->children) {
 		FilterPushdown pushdown(optimizer);
-		op->children[i] = pushdown.Rewrite(move(op->children[i]));
+		child = pushdown.Rewrite(move(child));
 	}
 	// now push any existing filters
-	if (filters.size() == 0) {
+	if (filters.empty()) {
 		// no filters to push
 		return op;
 	}

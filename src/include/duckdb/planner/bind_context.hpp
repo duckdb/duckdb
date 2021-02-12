@@ -25,6 +25,11 @@ class Binder;
 class LogicalGet;
 class BoundQueryNode;
 
+struct UsingColumnSet {
+	string primary_binding;
+	unordered_set<string> bindings;
+};
+
 //! The BindContext object keeps track of all the tables and columns that are
 //! encountered during the binding process.
 class BindContext {
@@ -51,30 +56,38 @@ public:
 	//! Generate column expressions for all columns that are present in the
 	//! referenced tables. This is used to resolve the * expression in a
 	//! selection list.
-	void GenerateAllColumnExpressions(vector<unique_ptr<ParsedExpression>> &new_select_list, string relation_name = "");
+	void GenerateAllColumnExpressions(vector<unique_ptr<ParsedExpression>> &new_select_list,
+	                                  const string &relation_name = "");
 	const vector<std::pair<string, Binding *>> &GetBindingsList() {
 		return bindings_list;
 	}
 
 	//! Adds a base table with the given alias to the BindContext.
-	void AddBaseTable(idx_t index, const string &alias, vector<string> names, vector<LogicalType> types,
+	void AddBaseTable(idx_t index, const string &alias, const vector<string> &names, const vector<LogicalType> &types,
 	                  LogicalGet &get);
 	//! Adds a call to a table function with the given alias to the BindContext.
-	void AddTableFunction(idx_t index, const string &alias, vector<string> names, vector<LogicalType> types,
-	                      LogicalGet &get);
+	void AddTableFunction(idx_t index, const string &alias, const vector<string> &names,
+	                      const vector<LogicalType> &types, LogicalGet &get);
 	//! Adds a subquery with a given alias to the BindContext.
 	void AddSubquery(idx_t index, const string &alias, SubqueryRef &ref, BoundQueryNode &subquery);
 	//! Adds a base table with the given alias to the BindContext.
-	void AddGenericBinding(idx_t index, const string &alias, vector<string> names, vector<LogicalType> types);
+	void AddGenericBinding(idx_t index, const string &alias, const vector<string> &names,
+	                       const vector<LogicalType> &types);
 
 	//! Adds a base table with the given alias to the CTE BindContext.
 	//! We need this to correctly bind recursive CTEs with multiple references.
-	void AddCTEBinding(idx_t index, const string &alias, vector<string> names, vector<LogicalType> types);
+	void AddCTEBinding(idx_t index, const string &alias, const vector<string> &names, const vector<LogicalType> &types);
 
-	//! Hide a binding
-	void HideBinding(const string &binding_name, const string &column_name);
-	//! Returns true if the given column is hidden from the given binding
-	bool BindingIsHidden(const string &binding_name, const string &column_name);
+	//! Add an implicit join condition (e.g. USING (x))
+	void AddUsingBinding(const string &column_name, UsingColumnSet set);
+
+	//! Returns any using column set for the given column name, or nullptr if there is none. On conflict (multiple using
+	//! column sets with the same name) throw an exception.
+	UsingColumnSet *GetUsingBinding(const string &column_name);
+	//! Returns any using column set for the given column name, or nullptr if there is none
+	UsingColumnSet *GetUsingBinding(const string &column_name, const string &binding_name);
+	//! Erase a using binding from the set of using bindings
+	void RemoveUsingBinding(const string &column_name, UsingColumnSet *set);
 
 	unordered_map<string, std::shared_ptr<Binding>> GetCTEBindings() {
 		return cte_bindings;
@@ -85,7 +98,7 @@ public:
 
 	//! Alias a set of column names for the specified table, using the original names if there are not enough aliases
 	//! specified.
-	static vector<string> AliasColumnNames(string table_name, const vector<string> &names,
+	static vector<string> AliasColumnNames(const string &table_name, const vector<string> &names,
 	                                       const vector<string> &column_aliases);
 
 	//! Add all the bindings from a BindContext to this BindContext. The other BindContext is destroyed in the process.
@@ -96,15 +109,14 @@ private:
 	//! Gets a binding of the specified name. Returns a nullptr and sets the out_error if the binding could not be
 	//! found.
 	Binding *GetBinding(const string &name, string &out_error);
-	void GenerateAllColumnExpressions(vector<unique_ptr<ParsedExpression>> &new_select_list, Binding *binding);
 
 private:
 	//! The set of bindings
 	unordered_map<string, unique_ptr<Binding>> bindings;
 	//! The list of bindings in insertion order
 	vector<std::pair<string, Binding *>> bindings_list;
-	//! The set of hidden columns from the result
-	qualified_column_set_t hidden_columns;
+	//! The set of columns used in USING join conditions
+	unordered_map<string, vector<UsingColumnSet>> using_columns;
 
 	//! The set of CTE bindings
 	unordered_map<string, std::shared_ptr<Binding>> cte_bindings;

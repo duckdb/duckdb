@@ -1,0 +1,31 @@
+# name: test/sql/storage/shutdown_running_transaction_updates.test
+# description: Shutdown with running transaction with pending updates
+# group: [storage]
+
+# load the DB from disk
+load __TEST_DIR__/shutdown_running_transaction_updates.db
+
+# create a database and insert values
+
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (11, 22), (13, 22);
+
+# we start a transaction, but shutdown the DB before committing
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+UPDATE test SET a=a+1
+
+# reload the database from disk
+
+restart
+
+query II
+SELECT * FROM test ORDER BY a
+----
+11	22
+13	22

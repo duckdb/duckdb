@@ -37,7 +37,7 @@ struct CorrelatedColumnInfo {
 	string name;
 	idx_t depth;
 
-	CorrelatedColumnInfo(BoundColumnRefExpression &expr)
+	explicit CorrelatedColumnInfo(BoundColumnRefExpression &expr)
 	    : binding(expr.binding), type(expr.return_type), name(expr.GetName()), depth(expr.depth) {
 	}
 
@@ -57,14 +57,14 @@ class Binder {
 	friend class RecursiveSubqueryPlanner;
 
 public:
-	Binder(ClientContext &context, Binder *parent = nullptr, bool inherit_ctes = true);
+	explicit Binder(ClientContext &context, Binder *parent = nullptr, bool inherit_ctes = true);
 
 	//! The client context
 	ClientContext &context;
 	//! A mapping of names to common table expressions
 	unordered_map<string, CommonTableExpressionInfo *> CTE_bindings;
 	//! The CTEs that have already been bound
-	unordered_set<CommonTableExpressionInfo*> bound_ctes;
+	unordered_set<CommonTableExpressionInfo *> bound_ctes;
 	//! The bind context
 	BindContext bind_context;
 	//! The set of correlated columns bound by this binder (FIXME: this should probably be an unordered_set and not a
@@ -107,7 +107,7 @@ public:
 	//! Find a common table expression by name; returns nullptr if none exists
 	CommonTableExpressionInfo *FindCTE(const string &name, bool skip = false);
 
-	bool CTEIsAlreadyBound(CommonTableExpressionInfo* cte);
+	bool CTEIsAlreadyBound(CommonTableExpressionInfo *cte);
 
 	void PushExpressionBinder(ExpressionBinder *binder);
 	void PopExpressionBinder();
@@ -119,11 +119,11 @@ public:
 
 	void MergeCorrelatedColumns(vector<CorrelatedColumnInfo> &other);
 	//! Add a correlated column to this binder (if it does not exist)
-	void AddCorrelatedColumn(CorrelatedColumnInfo info);
+	void AddCorrelatedColumn(const CorrelatedColumnInfo &info);
 
-	string FormatError(ParsedExpression &expr_context, string message);
-	string FormatError(TableRef &ref_context, string message);
-	string FormatError(idx_t query_location, string message);
+	string FormatError(ParsedExpression &expr_context, const string &message);
+	string FormatError(TableRef &ref_context, const string &message);
+	string FormatError(idx_t query_location, const string &message);
 
 private:
 	//! The parent binder (if any)
@@ -164,6 +164,7 @@ private:
 	BoundStatement Bind(ShowStatement &stmt);
 	BoundStatement Bind(CallStatement &stmt);
 	BoundStatement Bind(ExportStatement &stmt);
+	BoundStatement Bind(SetStatement &stmt);
 
 	unique_ptr<BoundQueryNode> BindNode(SelectNode &node);
 	unique_ptr<BoundQueryNode> BindNode(SetOperationNode &node);
@@ -219,6 +220,9 @@ private:
 	unique_ptr<LogicalOperator> CastLogicalOperatorToTypes(vector<LogicalType> &source_types,
 	                                                       vector<LogicalType> &target_types,
 	                                                       unique_ptr<LogicalOperator> op);
+
+	string FindBinding(const string &using_column, const string &join_side);
+	bool TryFindBinding(const string &using_column, const string &join_side, string &result);
 };
 
 } // namespace duckdb

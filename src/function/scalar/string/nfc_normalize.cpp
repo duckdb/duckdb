@@ -4,7 +4,7 @@
 
 namespace duckdb {
 
-static void nfc_normalize_function(DataChunk &args, ExpressionState &state, Vector &result) {
+static void NFCNormalizeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 1);
 
 	UnaryExecutor::Execute<string_t, string_t, true>(args.data[0], result, args.size(), [&](string_t input) {
@@ -23,7 +23,7 @@ static void nfc_normalize_function(DataChunk &args, ExpressionState &state, Vect
 }
 
 ScalarFunction NFCNormalizeFun::GetFunction() {
-	return ScalarFunction("nfc_normalize", {LogicalType::VARCHAR}, LogicalType::VARCHAR, nfc_normalize_function);
+	return ScalarFunction("nfc_normalize", {LogicalType::VARCHAR}, LogicalType::VARCHAR, NFCNormalizeFunction);
 }
 
 void NFCNormalizeFun::RegisterFunction(BuiltinFunctions &set) {

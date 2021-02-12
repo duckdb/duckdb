@@ -30,6 +30,7 @@ class StorageManager;
 class TableCatalogEntry;
 class Transaction;
 class WriteAheadLog;
+class TableDataWriter;
 
 struct DataTableInfo {
 	DataTableInfo(string schema, string table) : cardinality(0), schema(move(schema)), table(move(table)) {
@@ -59,21 +60,21 @@ struct ParallelTableScanState {
 class DataTable {
 public:
 	//! Constructs a new data table from an (optional) set of persistent segments
-	DataTable(StorageManager &storage, string schema, string table, vector<LogicalType> types,
+	DataTable(DatabaseInstance &db, const string &schema, const string &table, vector<LogicalType> types,
 	          unique_ptr<PersistentTableData> data = nullptr);
 	//! Constructs a DataTable as a delta on an existing data table with a newly added column
 	DataTable(ClientContext &context, DataTable &parent, ColumnDefinition &new_column, Expression *default_value);
 	//! Constructs a DataTable as a delta on an existing data table but with one column removed
 	DataTable(ClientContext &context, DataTable &parent, idx_t removed_column);
 	//! Constructs a DataTable as a delta on an existing data table but with one column changed type
-	DataTable(ClientContext &context, DataTable &parent, idx_t changed_idx, LogicalType target_type,
+	DataTable(ClientContext &context, DataTable &parent, idx_t changed_idx, const LogicalType &target_type,
 	          vector<column_t> bound_columns, Expression &cast_expr);
 
 	shared_ptr<DataTableInfo> info;
 	//! Types managed by data table
 	vector<LogicalType> types;
-	//! A reference to the base storage manager
-	StorageManager &storage;
+	//! A reference to the database instance
+	DatabaseInstance &db;
 
 public:
 	void InitializeScan(TableScanState &state, const vector<column_t> &column_ids,
@@ -121,7 +122,7 @@ public:
 	void RevertAppend(idx_t start_row, idx_t count);
 	void RevertAppendInternal(idx_t start_row, idx_t count);
 
-	void ScanTableSegment(idx_t start_row, idx_t count, std::function<void(DataChunk &chunk)> function);
+	void ScanTableSegment(idx_t start_row, idx_t count, const std::function<void(DataChunk &chunk)> &function);
 
 	//! Append a chunk with the row ids [row_start, ..., row_start + chunk.size()] to all indexes of the table, returns
 	//! whether or not the append succeeded
@@ -138,6 +139,12 @@ public:
 	}
 
 	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id);
+
+	//! Checkpoint the table to the specified table data writer
+	void Checkpoint(TableDataWriter &writer);
+	void CheckpointDeletes(TableDataWriter &writer);
+	void CommitDropTable();
+	void CommitDropColumn(idx_t index);
 
 private:
 	//! Verify constraints with a chunk from the Append containing all columns of the table

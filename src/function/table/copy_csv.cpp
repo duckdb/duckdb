@@ -12,17 +12,17 @@
 
 namespace duckdb {
 
-void SubstringDetection(string &str_1, string &str_2, string name_str_1, string name_str_2) {
-	if (str_1.size() == 0 || str_2.size() == 0) {
+void SubstringDetection(string &str_1, string &str_2, const string &name_str_1, const string &name_str_2) {
+	if (str_1.empty() || str_2.empty()) {
 		return;
 	}
 	if (str_1.find(str_2) != string::npos || str_2.find(str_1) != std::string::npos) {
-		throw BinderException(name_str_1 + " must not appear in the " + name_str_2 + " specification and vice versa");
+		throw BinderException("%s must not appear in the %s specification and vice versa", name_str_1, name_str_2);
 	}
 }
 
 static bool ParseBoolean(vector<Value> &set) {
-	if (set.size() == 0) {
+	if (set.empty()) {
 		// no option specified: default to true
 		return true;
 	}
@@ -81,6 +81,12 @@ static bool ParseBaseOption(BufferedCSVReaderOptions &options, string &loption, 
 		if (encoding != "utf8" && encoding != "utf-8") {
 			throw BinderException("Copy is only supported for UTF-8 encoded files, ENCODING 'UTF-8'");
 		}
+	} else if (loption == "compression") {
+		options.compression = ParseString(set);
+		if (!(options.compression == "infer" || options.compression == "gzip" || options.compression == "none" ||
+		      options.compression.empty())) {
+			throw BinderException("read_csv currently only supports 'gzip' compression.");
+		}
 	} else {
 		// unrecognized option in base CSV
 		return false;
@@ -105,7 +111,7 @@ void BaseCSVData::Finalize() {
 	if (options.quote != options.escape && options.has_quote && options.has_escape) {
 		SubstringDetection(options.quote, options.escape, "QUOTE", "ESCAPE");
 	}
-	if (options.null_str != "") {
+	if (!options.null_str.empty()) {
 		// null string and delimiter must not be substrings of each other
 		if (options.has_delimiter) {
 			SubstringDetection(options.delimiter, options.null_str, "DELIMITER", "NULL");
@@ -122,7 +128,7 @@ void BaseCSVData::Finalize() {
 
 static vector<bool> ParseColumnList(vector<Value> &set, vector<string> &names) {
 	vector<bool> result;
-	if (set.size() == 0) {
+	if (set.empty()) {
 		throw BinderException("Expected a column list or * as parameter");
 	}
 	if (set.size() == 1 && set[0].type().id() == LogicalTypeId::VARCHAR && set[0].GetValue<string>() == "*") {
@@ -142,7 +148,7 @@ static vector<bool> ParseColumnList(vector<Value> &set, vector<string> &names) {
 				entry->second = true;
 			}
 		}
-		for (auto entry : option_map) {
+		for (auto &entry : option_map) {
 			if (!entry.second) {
 				throw BinderException("Column %s not found in table", entry.first.c_str());
 			}
@@ -151,8 +157,8 @@ static vector<bool> ParseColumnList(vector<Value> &set, vector<string> &names) {
 	return result;
 }
 
-static unique_ptr<FunctionData> write_csv_bind(ClientContext &context, CopyInfo &info, vector<string> &names,
-                                               vector<LogicalType> &sql_types) {
+static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyInfo &info, vector<string> &names,
+                                             vector<LogicalType> &sql_types) {
 	auto bind_data = make_unique<WriteCSVData>(info.file_path, sql_types, names);
 
 	// check all the options in the copy info
@@ -169,7 +175,7 @@ static unique_ptr<FunctionData> write_csv_bind(ClientContext &context, CopyInfo 
 		}
 	}
 	// verify the parsed options
-	if (bind_data->force_quote.size() == 0) {
+	if (bind_data->force_quote.empty()) {
 		// no FORCE_QUOTE specified: initialize to false
 		bind_data->force_quote.resize(names.size(), false);
 	}
@@ -179,8 +185,8 @@ static unique_ptr<FunctionData> write_csv_bind(ClientContext &context, CopyInfo 
 	return move(bind_data);
 }
 
-static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, CopyInfo &info, vector<string> &expected_names,
-                                              vector<LogicalType> &expected_types) {
+static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &info, vector<string> &expected_names,
+                                            vector<LogicalType> &expected_types) {
 	auto bind_data = make_unique<ReadCSVData>();
 	bind_data->sql_types = expected_types;
 
@@ -257,7 +263,7 @@ static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, CopyInfo &
 		}
 	}
 	// verify the parsed options
-	if (options.force_not_null.size() == 0) {
+	if (options.force_not_null.empty()) {
 		// no FORCE_QUOTE specified: initialize to false
 		options.force_not_null.resize(expected_types.size(), false);
 	}
@@ -268,7 +274,7 @@ static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, CopyInfo &
 //===--------------------------------------------------------------------===//
 // Helper writing functions
 //===--------------------------------------------------------------------===//
-static string AddEscapes(string &to_be_escaped, string escape, string val) {
+static string AddEscapes(string &to_be_escaped, const string &escape, const string &val) {
 	idx_t i = 0;
 	string new_val = "";
 	idx_t found = val.find(to_be_escaped);
@@ -317,11 +323,13 @@ static bool RequiresQuotes(WriteCSVData &csv_data, const char *str, idx_t len) {
 		}
 
 		// check for delimiter
-		if (ContainsFun::Find((const unsigned char*) str, len, (const unsigned char*) options.delimiter.c_str(), options.delimiter.size()) != INVALID_INDEX) {
+		if (ContainsFun::Find((const unsigned char *)str, len, (const unsigned char *)options.delimiter.c_str(),
+		                      options.delimiter.size()) != INVALID_INDEX) {
 			return true;
 		}
 		// check for quote
-		if (ContainsFun::Find((const unsigned char*) str, len, (const unsigned char*) options.quote.c_str(), options.quote.size()) != INVALID_INDEX) {
+		if (ContainsFun::Find((const unsigned char *)str, len, (const unsigned char *)options.quote.c_str(),
+		                      options.quote.size()) != INVALID_INDEX) {
 			return true;
 		}
 		return false;
@@ -350,9 +358,11 @@ static void WriteQuotedString(Serializer &serializer, WriteCSVData &csv_data, co
 		} else {
 			// complex CSV
 			// check for quote or escape separately
-			if (ContainsFun::Find((const unsigned char*) str, len, (const unsigned char*) options.quote.c_str(), options.quote.size()) != INVALID_INDEX) {
+			if (ContainsFun::Find((const unsigned char *)str, len, (const unsigned char *)options.quote.c_str(),
+			                      options.quote.size()) != INVALID_INDEX) {
 				requires_escape = true;
-			} else if (ContainsFun::Find((const unsigned char*) str, len, (const unsigned char*) options.escape.c_str(), options.escape.size()) != INVALID_INDEX) {
+			} else if (ContainsFun::Find((const unsigned char *)str, len, (const unsigned char *)options.escape.c_str(),
+			                             options.escape.size()) != INVALID_INDEX) {
 				requires_escape = true;
 			}
 		}
@@ -407,7 +417,7 @@ struct GlobalWriteCSVData : public GlobalFunctionData {
 	unique_ptr<FileHandle> handle;
 };
 
-static unique_ptr<LocalFunctionData> write_csv_initialize_local(ClientContext &context, FunctionData &bind_data) {
+static unique_ptr<LocalFunctionData> WriteCSVInitializeLocal(ClientContext &context, FunctionData &bind_data) {
 	auto &csv_data = (WriteCSVData &)bind_data;
 	auto local_data = make_unique<LocalReadCSVData>();
 
@@ -419,7 +429,7 @@ static unique_ptr<LocalFunctionData> write_csv_initialize_local(ClientContext &c
 	return move(local_data);
 }
 
-static unique_ptr<GlobalFunctionData> write_csv_initialize_global(ClientContext &context, FunctionData &bind_data) {
+static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &context, FunctionData &bind_data) {
 	auto &csv_data = (WriteCSVData &)bind_data;
 	auto &options = csv_data.options;
 	auto global_data = make_unique<GlobalWriteCSVData>(FileSystem::GetFileSystem(context), csv_data.files[0]);
@@ -440,8 +450,8 @@ static unique_ptr<GlobalFunctionData> write_csv_initialize_global(ClientContext 
 	return move(global_data);
 }
 
-static void write_csv_sink(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
-                           LocalFunctionData &lstate, DataChunk &input) {
+static void WriteCSVSink(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
+                         LocalFunctionData &lstate, DataChunk &input) {
 	auto &csv_data = (WriteCSVData &)bind_data;
 	auto &options = csv_data.options;
 	auto &local_data = (LocalReadCSVData &)lstate;
@@ -498,8 +508,8 @@ static void write_csv_sink(ClientContext &context, FunctionData &bind_data, Glob
 //===--------------------------------------------------------------------===//
 // Combine
 //===--------------------------------------------------------------------===//
-static void write_csv_combine(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
-                              LocalFunctionData &lstate) {
+static void WriteCSVCombine(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
+                            LocalFunctionData &lstate) {
 	auto &local_data = (LocalReadCSVData &)lstate;
 	auto &global_state = (GlobalWriteCSVData &)gstate;
 	auto &writer = local_data.serializer;
@@ -512,13 +522,13 @@ static void write_csv_combine(ClientContext &context, FunctionData &bind_data, G
 
 void CSVCopyFunction::RegisterFunction(BuiltinFunctions &set) {
 	CopyFunction info("csv");
-	info.copy_to_bind = write_csv_bind;
-	info.copy_to_initialize_local = write_csv_initialize_local;
-	info.copy_to_initialize_global = write_csv_initialize_global;
-	info.copy_to_sink = write_csv_sink;
-	info.copy_to_combine = write_csv_combine;
+	info.copy_to_bind = WriteCSVBind;
+	info.copy_to_initialize_local = WriteCSVInitializeLocal;
+	info.copy_to_initialize_global = WriteCSVInitializeGlobal;
+	info.copy_to_sink = WriteCSVSink;
+	info.copy_to_combine = WriteCSVCombine;
 
-	info.copy_from_bind = read_csv_bind;
+	info.copy_from_bind = ReadCSVBind;
 	info.copy_from_function = ReadCSVTableFunction::GetFunction();
 
 	info.extension = "csv";

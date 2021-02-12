@@ -5,7 +5,7 @@
 
 namespace duckdb {
 
-static SampleMethod GetSampleMethod(string method) {
+static SampleMethod GetSampleMethod(const string &method) {
 	auto lmethod = StringUtil::Lower(method);
 	if (lmethod == "system") {
 		return SampleMethod::SYSTEM_SAMPLE;
@@ -28,10 +28,10 @@ unique_ptr<SampleOptions> Transformer::TransformSampleOptions(duckdb_libpgquery:
 	auto sample_value = TransformValue(sample_size.sample_size)->value;
 	result->is_percentage = sample_size.is_percentage;
 	if (sample_size.is_percentage) {
-		// sample size is given in percentage: use system sampling
+		// sample size is given in sample_size: use system sampling
 		auto percentage = sample_value.GetValue<double>();
 		if (percentage < 0 || percentage > 100) {
-			throw ParserException("Sample percentage %llf out of range, must be between 0 and 100", percentage);
+			throw ParserException("Sample sample_size %llf out of range, must be between 0 and 100", percentage);
 		}
 		result->sample_size = Value::DOUBLE(percentage);
 		result->method = SampleMethod::SYSTEM_SAMPLE;

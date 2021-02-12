@@ -22,7 +22,7 @@ public:
 	DUCKDB_API PreparedStatement(shared_ptr<ClientContext> context, shared_ptr<PreparedStatementData> data,
 	                             string query, idx_t n_param);
 	//! Create a prepared statement that was not successfully prepared
-	DUCKDB_API PreparedStatement(string error);
+	DUCKDB_API explicit PreparedStatement(string error);
 
 	DUCKDB_API ~PreparedStatement();
 
@@ -51,7 +51,8 @@ public:
 	const vector<string> &GetNames();
 
 	//! Execute the prepared statement with the given set of arguments
-	template <typename... Args> unique_ptr<QueryResult> Execute(Args... args) {
+	template <typename... Args>
+	unique_ptr<QueryResult> Execute(Args... args) {
 		vector<Value> values;
 		return ExecuteRecursive(values, args...);
 	}

@@ -1,4 +1,4 @@
-# name: test/sql/storage/test_update_delete_mix.test
+# name: test/sql/storage/test_update_delete_mix.test_slow
 # description: Test mix of updates and deletes with storage
 # group: [storage]
 

@@ -6,6 +6,7 @@ add_library_unity(
   physical_pragma.cpp
   physical_prepare.cpp
   physical_reservoir_sample.cpp
+  physical_set.cpp
   physical_streaming_sample.cpp
   physical_transaction.cpp
   physical_vacuum.cpp)

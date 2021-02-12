@@ -16,7 +16,7 @@ namespace duckdb {
 //! the tree will always return an empty result.
 class LogicalEmptyResult : public LogicalOperator {
 public:
-	LogicalEmptyResult(unique_ptr<LogicalOperator> op);
+	explicit LogicalEmptyResult(unique_ptr<LogicalOperator> op);
 
 	//! The set of return types of the empty result
 	vector<LogicalType> return_types;

@@ -25,7 +25,7 @@
 namespace duckdb {
 
 SchemaCatalogEntry *Binder::BindSchema(CreateInfo &info) {
-	if (info.schema == INVALID_SCHEMA) {
+	if (info.schema.empty()) {
 		info.schema = info.temporary ? TEMP_SCHEMA : DEFAULT_SCHEMA;
 	}
 
@@ -177,7 +177,8 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		auto root = move(bound_info->query);
 
 		// create the logical operator
-		auto create_table = make_unique<LogicalCreateTable>(bound_info->schema, move(bound_info));
+		auto &schema = bound_info->schema;
+		auto create_table = make_unique<LogicalCreateTable>(schema, move(bound_info));
 		if (root) {
 			create_table->children.push_back(move(root));
 		}

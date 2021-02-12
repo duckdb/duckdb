@@ -28,62 +28,92 @@
 
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/checkpoint/table_data_reader.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 
-// constexpr uint64_t CheckpointManager::DATA_BLOCK_HEADER_SIZE;
-
-CheckpointManager::CheckpointManager(StorageManager &manager)
-    : block_manager(*manager.block_manager), buffer_manager(*manager.buffer_manager), database(manager.database) {
+CheckpointManager::CheckpointManager(DatabaseInstance &db) : db(db) {
 }
 
 void CheckpointManager::CreateCheckpoint() {
+	auto &config = DBConfig::GetConfig(db);
+	auto &storage_manager = StorageManager::GetStorageManager(db);
+	if (storage_manager.InMemory()) {
+		return;
+	}
 	// assert that the checkpoint manager hasn't been used before
 	D_ASSERT(!metadata_writer);
 
-	Connection con(database);
-	con.BeginTransaction();
-
+	auto &block_manager = BlockManager::GetBlockManager(db);
 	block_manager.StartCheckpoint();
 
 	//! Set up the writers for the checkpoints
-	metadata_writer = make_unique<MetaBlockWriter>(block_manager);
-	tabledata_writer = make_unique<MetaBlockWriter>(block_manager);
+	metadata_writer = make_unique<MetaBlockWriter>(db);
+	tabledata_writer = make_unique<MetaBlockWriter>(db);
 
 	// get the id of the first meta block
 	block_id_t meta_block = metadata_writer->block->id;
 
 	vector<SchemaCatalogEntry *> schemas;
-	auto &catalog = Catalog::GetCatalog(*con.context);
-	// we scan the schemas
-	catalog.schemas->Scan(*con.context, [&](CatalogEntry *entry) { schemas.push_back((SchemaCatalogEntry *)entry); });
+	// we scan the set of committed schemas
+	auto &catalog = Catalog::GetCatalog(db);
+	catalog.schemas->Scan([&](CatalogEntry *entry) { schemas.push_back((SchemaCatalogEntry *)entry); });
 	// write the actual data into the database
 	// write the amount of schemas
 	metadata_writer->Write<uint32_t>(schemas.size());
 	for (auto &schema : schemas) {
-		WriteSchema(*con.context, *schema);
+		WriteSchema(*schema);
 	}
 	// flush the meta data to disk
 	metadata_writer->Flush();
 	tabledata_writer->Flush();
 
+	// write a checkpoint flag to the WAL
+	// this protects against the rare event that the database crashes AFTER writing the file, but BEFORE truncating the
+	// WAL we write an entry CHECKPOINT "meta_block_id" into the WAL upon loading, if we see there is an entry
+	// CHECKPOINT "meta_block_id", and the id MATCHES the head idin the file we know that the database was successfully
+	// checkpointed, so we know that we should avoid replaying the WAL to avoid duplicating data
+	auto wal = storage_manager.GetWriteAheadLog();
+	wal->WriteCheckpoint(meta_block);
+	wal->Flush();
+
+	if (config.checkpoint_abort == CheckpointAbort::DEBUG_ABORT_BEFORE_HEADER) {
+		throw IOException("Checkpoint aborted before header write because of PRAGMA checkpoint_abort flag");
+	}
+
 	// finally write the updated header
 	DatabaseHeader header;
 	header.meta_block = meta_block;
 	block_manager.WriteHeader(header);
+
+	if (config.checkpoint_abort == CheckpointAbort::DEBUG_ABORT_BEFORE_TRUNCATE) {
+		throw IOException("Checkpoint aborted before truncate because of PRAGMA checkpoint_abort flag");
+	}
+
+	// truncate the WAL
+	wal->Truncate(0);
+
+	// mark all blocks written as part of the metadata as modified
+	for (auto &block_id : metadata_writer->written_blocks) {
+		block_manager.MarkBlockAsModified(block_id);
+	}
+	for (auto &block_id : tabledata_writer->written_blocks) {
+		block_manager.MarkBlockAsModified(block_id);
+	}
 }
 
 void CheckpointManager::LoadFromStorage() {
+	auto &block_manager = BlockManager::GetBlockManager(db);
 	block_id_t meta_block = block_manager.GetMetaBlock();
 	if (meta_block < 0) {
 		// storage is empty
 		return;
 	}
 
-	Connection con(database);
+	Connection con(db);
 	con.BeginTransaction();
 	// create the MetaBlockReader to read from the storage
-	MetaBlockReader reader(buffer_manager, meta_block);
+	MetaBlockReader reader(db, meta_block);
 	uint32_t schema_count = reader.Read<uint32_t>();
 	for (uint32_t i = 0; i < schema_count; i++) {
 		ReadSchema(*con.context, reader);
@@ -94,13 +124,13 @@ void CheckpointManager::LoadFromStorage() {
 //===--------------------------------------------------------------------===//
 // Schema
 //===--------------------------------------------------------------------===//
-void CheckpointManager::WriteSchema(ClientContext &context, SchemaCatalogEntry &schema) {
+void CheckpointManager::WriteSchema(SchemaCatalogEntry &schema) {
 	// write the schema data
 	schema.Serialize(*metadata_writer);
 	// then, we fetch the tables/views/sequences information
 	vector<TableCatalogEntry *> tables;
 	vector<ViewCatalogEntry *> views;
-	schema.Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) {
+	schema.Scan(CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) {
 		if (entry->type == CatalogType::TABLE_ENTRY) {
 			tables.push_back((TableCatalogEntry *)entry);
 		} else if (entry->type == CatalogType::VIEW_ENTRY) {
@@ -110,11 +140,11 @@ void CheckpointManager::WriteSchema(ClientContext &context, SchemaCatalogEntry &
 		}
 	});
 	vector<SequenceCatalogEntry *> sequences;
-	schema.Scan(context, CatalogType::SEQUENCE_ENTRY,
+	schema.Scan(CatalogType::SEQUENCE_ENTRY,
 	            [&](CatalogEntry *entry) { sequences.push_back((SequenceCatalogEntry *)entry); });
 
 	vector<MacroCatalogEntry *> macros;
-	schema.Scan(context, CatalogType::SCALAR_FUNCTION_ENTRY, [&](CatalogEntry *entry) {
+	schema.Scan(CatalogType::SCALAR_FUNCTION_ENTRY, [&](CatalogEntry *entry) {
 		if (entry->type == CatalogType::MACRO_ENTRY) {
 			macros.push_back((MacroCatalogEntry *)entry);
 		}
@@ -128,7 +158,7 @@ void CheckpointManager::WriteSchema(ClientContext &context, SchemaCatalogEntry &
 	// now write the tables
 	metadata_writer->Write<uint32_t>(tables.size());
 	for (auto &table : tables) {
-		WriteTable(context, *table);
+		WriteTable(*table);
 	}
 	// now write the views
 	metadata_writer->Write<uint32_t>(views.size());
@@ -143,11 +173,12 @@ void CheckpointManager::WriteSchema(ClientContext &context, SchemaCatalogEntry &
 }
 
 void CheckpointManager::ReadSchema(ClientContext &context, MetaBlockReader &reader) {
+	auto &catalog = Catalog::GetCatalog(db);
+
 	// read the schema and create it in the catalog
 	auto info = SchemaCatalogEntry::Deserialize(reader);
 	// we set create conflict to ignore to ignore the failure of recreating the main schema
 	info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
-	auto &catalog = Catalog::GetCatalog(context);
 	catalog.CreateSchema(context, info.get());
 
 	// read the sequences
@@ -182,7 +213,7 @@ void CheckpointManager::WriteView(ViewCatalogEntry &view) {
 void CheckpointManager::ReadView(ClientContext &context, MetaBlockReader &reader) {
 	auto info = ViewCatalogEntry::Deserialize(reader);
 
-	auto &catalog = Catalog::GetCatalog(context);
+	auto &catalog = Catalog::GetCatalog(db);
 	catalog.CreateView(context, info.get());
 }
 
@@ -196,7 +227,7 @@ void CheckpointManager::WriteSequence(SequenceCatalogEntry &seq) {
 void CheckpointManager::ReadSequence(ClientContext &context, MetaBlockReader &reader) {
 	auto info = SequenceCatalogEntry::Deserialize(reader);
 
-	auto &catalog = Catalog::GetCatalog(context);
+	auto &catalog = Catalog::GetCatalog(db);
 	catalog.CreateSequence(context, info.get());
 }
 
@@ -210,14 +241,14 @@ void CheckpointManager::WriteMacro(MacroCatalogEntry &macro) {
 void CheckpointManager::ReadMacro(ClientContext &context, MetaBlockReader &reader) {
 	auto info = MacroCatalogEntry::Deserialize(reader);
 
-	auto &catalog = Catalog::GetCatalog(context);
+	auto &catalog = Catalog::GetCatalog(db);
 	catalog.CreateFunction(context, info.get());
 }
 
 //===--------------------------------------------------------------------===//
 // Table Metadata
 //===--------------------------------------------------------------------===//
-void CheckpointManager::WriteTable(ClientContext &context, TableCatalogEntry &table) {
+void CheckpointManager::WriteTable(TableCatalogEntry &table) {
 	// write the table meta data
 	table.Serialize(*metadata_writer);
 	//! write the blockId for the table info
@@ -225,8 +256,8 @@ void CheckpointManager::WriteTable(ClientContext &context, TableCatalogEntry &ta
 	//! and the offset to where the info starts
 	metadata_writer->Write<uint64_t>(tabledata_writer->offset);
 	// now we need to write the table data
-	TableDataWriter writer(*this, table);
-	writer.WriteTableData(context);
+	TableDataWriter writer(db, table, *tabledata_writer);
+	writer.WriteTableData();
 }
 
 void CheckpointManager::ReadTable(ClientContext &context, MetaBlockReader &reader) {
@@ -239,13 +270,13 @@ void CheckpointManager::ReadTable(ClientContext &context, MetaBlockReader &reade
 	// now read the actual table data and place it into the create table info
 	auto block_id = reader.Read<block_id_t>();
 	auto offset = reader.Read<uint64_t>();
-	MetaBlockReader table_data_reader(buffer_manager, block_id);
+	MetaBlockReader table_data_reader(db, block_id);
 	table_data_reader.offset = offset;
-	TableDataReader data_reader(*this, table_data_reader, *bound_info);
+	TableDataReader data_reader(db, table_data_reader, *bound_info);
 	data_reader.ReadTableData();
 
 	// finally create the table in the catalog
-	auto &catalog = Catalog::GetCatalog(context);
+	auto &catalog = Catalog::GetCatalog(db);
 	catalog.CreateTable(context, bound_info.get());
 }
 

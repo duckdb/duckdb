@@ -18,10 +18,10 @@ class Optimizer;
 
 class FilterPushdown {
 public:
-	FilterPushdown(Optimizer &optimizer) : optimizer(optimizer) {
+	explicit FilterPushdown(Optimizer &optimizer) : optimizer(optimizer) {
 	}
 	//! Perform filter pushdown
-	unique_ptr<LogicalOperator> Rewrite(unique_ptr<LogicalOperator> node);
+	unique_ptr<LogicalOperator> Rewrite(unique_ptr<LogicalOperator> op);
 
 	struct Filter {
 		unordered_set<idx_t> bindings;
@@ -29,7 +29,7 @@ public:
 
 		Filter() {
 		}
-		Filter(unique_ptr<Expression> filter) : filter(move(filter)) {
+		explicit Filter(unique_ptr<Expression> filter) : filter(move(filter)) {
 		}
 
 		void ExtractBindings();

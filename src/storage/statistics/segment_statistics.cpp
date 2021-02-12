@@ -6,12 +6,12 @@
 
 namespace duckdb {
 
-SegmentStatistics::SegmentStatistics(LogicalType type, idx_t type_size) : type(type), type_size(type_size) {
+SegmentStatistics::SegmentStatistics(LogicalType type, idx_t type_size) : type(move(type)), type_size(type_size) {
 	Reset();
 }
 
 SegmentStatistics::SegmentStatistics(LogicalType type, idx_t type_size, unique_ptr<BaseStatistics> stats)
-    : type(type), type_size(type_size), statistics(move(stats)) {
+    : type(move(type)), type_size(type_size), statistics(move(stats)) {
 }
 
 void SegmentStatistics::Reset() {
@@ -20,6 +20,10 @@ void SegmentStatistics::Reset() {
 
 bool SegmentStatistics::CheckZonemap(TableFilter &filter) {
 	switch (type.InternalType()) {
+	case PhysicalType::UINT8:
+	case PhysicalType::UINT16:
+	case PhysicalType::UINT32:
+	case PhysicalType::UINT64:
 	case PhysicalType::INT8:
 	case PhysicalType::INT16:
 	case PhysicalType::INT32:

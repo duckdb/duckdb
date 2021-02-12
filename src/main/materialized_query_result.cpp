@@ -9,11 +9,11 @@ MaterializedQueryResult::MaterializedQueryResult(StatementType statement_type)
 
 MaterializedQueryResult::MaterializedQueryResult(StatementType statement_type, vector<LogicalType> types,
                                                  vector<string> names)
-    : QueryResult(QueryResultType::MATERIALIZED_RESULT, statement_type, move(types), names) {
+    : QueryResult(QueryResultType::MATERIALIZED_RESULT, statement_type, move(types), move(names)) {
 }
 
 MaterializedQueryResult::MaterializedQueryResult(string error)
-    : QueryResult(QueryResultType::MATERIALIZED_RESULT, error) {
+    : QueryResult(QueryResultType::MATERIALIZED_RESULT, move(error)) {
 }
 
 Value MaterializedQueryResult::GetValue(idx_t column, idx_t index) {

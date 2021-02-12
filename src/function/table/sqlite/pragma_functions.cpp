@@ -13,48 +13,46 @@ struct PragmaFunctionsData : public FunctionOperatorData {
 	PragmaFunctionsData() : offset(0), offset_in_entry(0) {
 	}
 
-	vector<CatalogEntry*> entries;
+	vector<CatalogEntry *> entries;
 	idx_t offset;
 	idx_t offset_in_entry;
 };
 
-static unique_ptr<FunctionData> pragma_functions_bind(ClientContext &context, vector<Value> &inputs,
+static unique_ptr<FunctionData> PragmaFunctionsBind(ClientContext &context, vector<Value> &inputs,
                                                     unordered_map<string, Value> &named_parameters,
                                                     vector<LogicalType> &return_types, vector<string> &names) {
-	names.push_back("name");
+	names.emplace_back("name");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("type");
+	names.emplace_back("type");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("parameters");
+	names.emplace_back("parameters");
 	child_list_t<LogicalType> child_types;
 	child_types.push_back(std::make_pair("", LogicalType::VARCHAR));
 	LogicalType param_types(LogicalTypeId::LIST, move(child_types));
 	return_types.push_back(move(param_types));
 
-	names.push_back("varargs");
+	names.emplace_back("varargs");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("return_type");
+	names.emplace_back("return_type");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("side_effects");
+	names.emplace_back("side_effects");
 	return_types.push_back(LogicalType::BOOLEAN);
 
 	return nullptr;
 }
 
-unique_ptr<FunctionOperatorData> pragma_functions_init(ClientContext &context, const FunctionData *bind_data,
-                                                     vector<column_t> &column_ids, TableFilterSet *table_filters) {
+unique_ptr<FunctionOperatorData> PragmaFunctionsInit(ClientContext &context, const FunctionData *bind_data,
+                                                     vector<column_t> &column_ids, TableFilterCollection *filters) {
 	auto result = make_unique<PragmaFunctionsData>();
 
 	Catalog::GetCatalog(context).schemas->Scan(context, [&](CatalogEntry *entry) {
 		auto schema = (SchemaCatalogEntry *)entry;
 		schema->Scan(context, CatalogType::SCALAR_FUNCTION_ENTRY,
-		[&](CatalogEntry *entry) {
-			result->entries.push_back(entry);
-		});
+		             [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	});
 
 	return move(result);
@@ -71,11 +69,11 @@ void AddFunction(BaseScalarFunction &f, idx_t &count, DataChunk &output, bool is
 	result_data[count].offset = cc.Count();
 	result_data[count].length = f.arguments.size();
 	string parameters;
-	vector<LogicalType> types { LogicalType::VARCHAR };
+	vector<LogicalType> types {LogicalType::VARCHAR};
 	DataChunk chunk;
 	chunk.Initialize(types);
-	for(idx_t i = 0; i < f.arguments.size(); i++) {
-		chunk.data[0].SetValue(chunk.size(), f.arguments[i].ToString());
+	for (idx_t i = 0; i < f.arguments.size(); i++) {
+		chunk.data[0].SetValue(chunk.size(), Value(f.arguments[i].ToString()));
 		chunk.SetCardinality(chunk.size() + 1);
 		if (chunk.size() == STANDARD_VECTOR_SIZE) {
 			cc.Append(chunk);
@@ -92,19 +90,19 @@ void AddFunction(BaseScalarFunction &f, idx_t &count, DataChunk &output, bool is
 	count++;
 }
 
-static void pragma_functions(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
-                           DataChunk &output) {
+static void PragmaFunctionsFunction(ClientContext &context, const FunctionData *bind_data,
+                                    FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &data = (PragmaFunctionsData &)*operator_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;
 	}
 	idx_t count = 0;
-	while(count < STANDARD_VECTOR_SIZE && data.offset < data.entries.size()) {
+	while (count < STANDARD_VECTOR_SIZE && data.offset < data.entries.size()) {
 		auto &entry = data.entries[data.offset];
-		switch(entry->type) {
+		switch (entry->type) {
 		case CatalogType::SCALAR_FUNCTION_ENTRY: {
-			auto &func = (ScalarFunctionCatalogEntry &) *entry;
+			auto &func = (ScalarFunctionCatalogEntry &)*entry;
 			if (data.offset_in_entry >= func.functions.size()) {
 				data.offset++;
 				data.offset_in_entry = 0;
@@ -114,7 +112,7 @@ static void pragma_functions(ClientContext &context, const FunctionData *bind_da
 			break;
 		}
 		case CatalogType::AGGREGATE_FUNCTION_ENTRY: {
-			auto &aggr = (AggregateFunctionCatalogEntry &) *entry;
+			auto &aggr = (AggregateFunctionCatalogEntry &)*entry;
 			if (data.offset_in_entry >= aggr.functions.size()) {
 				data.offset++;
 				data.offset_in_entry = 0;
@@ -132,7 +130,8 @@ static void pragma_functions(ClientContext &context, const FunctionData *bind_da
 }
 
 void PragmaFunctionPragma::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("pragma_functions", {}, pragma_functions, pragma_functions_bind, pragma_functions_init));
+	set.AddFunction(
+	    TableFunction("pragma_functions", {}, PragmaFunctionsFunction, PragmaFunctionsBind, PragmaFunctionsInit));
 }
 
 } // namespace duckdb

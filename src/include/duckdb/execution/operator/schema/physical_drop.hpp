@@ -16,7 +16,7 @@ namespace duckdb {
 //! PhysicalDrop represents a DROP [...] command
 class PhysicalDrop : public PhysicalOperator {
 public:
-	PhysicalDrop(unique_ptr<DropInfo> info)
+	explicit PhysicalDrop(unique_ptr<DropInfo> info)
 	    : PhysicalOperator(PhysicalOperatorType::DROP, {LogicalType::BOOLEAN}), info(move(info)) {
 	}
 

@@ -22,7 +22,7 @@ void QueryProfiler::StartQuery(string query) {
 		return;
 	}
 	this->running = true;
-	this->query = query;
+	this->query = move(query);
 	tree_map.clear();
 	root = nullptr;
 	phase_timings.clear();
@@ -135,7 +135,7 @@ void QueryProfiler::EndPhase() {
 	// now remove the last added phase
 	phase_stack.pop_back();
 
-	if (phase_stack.size() > 0) {
+	if (!phase_stack.empty()) {
 		phase_profiler.Start();
 	}
 }
@@ -156,7 +156,7 @@ void QueryProfiler::Initialize(PhysicalOperator *root_op) {
 	}
 }
 
-OperatorProfiler::OperatorProfiler(bool enabled_) : enabled(enabled_) {
+OperatorProfiler::OperatorProfiler(bool enabled_p) : enabled(enabled_p) {
 	execution_stack = std::stack<PhysicalOperator *>();
 }
 
@@ -227,7 +227,7 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 	}
 }
 
-static string DrawPadded(string str, idx_t width) {
+static string DrawPadded(const string &str, idx_t width) {
 	if (str.size() > width) {
 		return str.substr(0, width);
 	} else {
@@ -286,7 +286,7 @@ void QueryProfiler::ToStream(std::ostream &ss, bool print_optimizer_output) cons
 		return;
 	}
 
-	idx_t TOTAL_BOX_WIDTH = 39;
+	constexpr idx_t TOTAL_BOX_WIDTH = 39;
 	ss << "┌─────────────────────────────────────┐\n";
 	ss << "│┌───────────────────────────────────┐│\n";
 	string total_time = "Total Time: " + RenderTiming(main_query.Elapsed());
@@ -336,7 +336,7 @@ static void ToJSONRecursive(QueryProfiler::TreeNode &node, std::ostream &ss, int
 	ss << string(depth * 3, ' ') << "\"cardinality\":" + to_string(node.info.elements) + ",\n";
 	ss << string(depth * 3, ' ') << "\"extra_info\": \"" + StringUtil::Replace(node.extra_info, "\n", "\\n") + "\",\n";
 	ss << string(depth * 3, ' ') << "\"children\": [";
-	if (node.children.size() == 0) {
+	if (node.children.empty()) {
 		ss << "]\n";
 	} else {
 		for (idx_t i = 0; i < node.children.size(); i++) {

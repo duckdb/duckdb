@@ -20,7 +20,7 @@ struct CSEReplacementState;
 //! if there are any, it pushes a projection under the operator that resolves these expressions
 class CommonSubExpressionOptimizer : public LogicalOperatorVisitor {
 public:
-	CommonSubExpressionOptimizer(Binder &binder) : binder(binder) {
+	explicit CommonSubExpressionOptimizer(Binder &binder) : binder(binder) {
 	}
 
 public:

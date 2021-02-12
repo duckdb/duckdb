@@ -1,0 +1,190 @@
+# name: test/sql/copy/parquet/test_parquet_nested.test
+# description: Test basic parquet reading
+# group: [parquet]
+
+require parquet
+
+
+query II
+select struct_extract(h, 'key'), struct_extract(h, 'value') from (SELECT unlist(raw_header) h FROM parquet_scan('test/sql/copy/parquet/data/map.parquet')) sq limit 30;
+----
+Content-Encoding	gzip
+X-Frame-Options	SAMEORIGIN
+Connection	keep-alive
+Via	1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf)
+X-Xss-Protection	1; mode=block
+Content-Type	text/html;charset=utf-8
+Date	Sat, 30 Jan 2021 16:19:57 GMT
+X-Cache	MISS from ip-10-1-1-216.ec2.internal
+Vary	Accept-Encoding
+Server	nginx/1.10.3
+X-Cache-Lookup	HIT from ip-10-1-1-216.ec2.internal:3128
+X-Content-Type-Options	nosniff
+Content-Length	921
+Content-Encoding	gzip
+X-Frame-Options	SAMEORIGIN
+Connection	keep-alive
+Via	1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf)
+X-Xss-Protection	1; mode=block
+Content-Type	text/html;charset=utf-8
+Date	Sat, 30 Jan 2021 16:19:59 GMT
+X-Cache	MISS from ip-10-1-1-216.ec2.internal
+Vary	Accept-Encoding
+Server	nginx/1.10.3
+X-Cache-Lookup	HIT from ip-10-1-1-216.ec2.internal:3128
+X-Content-Type-Options	nosniff
+Content-Length	922
+Content-Encoding	gzip
+X-Frame-Options	SAMEORIGIN
+Connection	keep-alive
+Via	1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf)
+
+
+# this was a hard one
+query II
+SELECT * FROM parquet_scan('test/sql/copy/parquet/data/nested_lists.snappy.parquet')
+----
+[[[a, b], [c]], [NULL, [d]]]	1
+[[[a, b], [c, d]], [NULL, [e]]]	1
+[[[a, b], [c, d], [e]], [NULL, [f]]]	1
+
+# arrow sez
+#                                      a  b
+#0          [[[a, b], [c]], [None, [d]]]  1
+#1       [[[a, b], [c, d]], [None, [e]]]  1
+#2  [[[a, b], [c, d], [e]], [None, [f]]]  1
+
+
+query I
+SELECT unnest(a) FROM parquet_scan('test/sql/copy/parquet/data/nested_lists.snappy.parquet')
+----
+[[a, b], [c]]
+[NULL, [d]]
+[[a, b], [c, d]]
+[NULL, [e]]
+[[a, b], [c, d], [e]]
+[NULL, [f]]
+
+
+# FIXME
+#query I
+#SELECT unnest(unnest(a)) FROM parquet_scan('test/sql/copy/parquet/data/nested_lists.snappy.parquet')
+#----
+
+
+query II
+SELECT * FROM parquet_scan('test/sql/copy/parquet/data/list_columns.parquet')
+----
+[1, 2, 3]	[abc, efg, hij]
+[NULL, 1]	NULL
+[4]	[efg, NULL, hij, xyz]
+
+# spark and arrow say:
+#
+#0  [1.0, 2.0, 3.0]        [abc, efg, hij]
+#1       [nan, 1.0]                   None
+#2            [4.0]  [efg, None, hij, xyz]
+
+
+## need to fix data page v2 for this
+#query II
+#SELECT * FROM parquet_scan('test/sql/copy/parquet/data/datapage_v2.snappy.parquet')
+#----
+#
+
+
+query II
+SELECT id, url FROM parquet_scan('test/sql/copy/parquet/data/apkwan.parquet') limit 10
+----
+53e997b9b7602d9701f9f044	[https://link.springer.com/10.1007/s00108-004-1229-0]
+53e997b2b7602d9701f8fea5	NULL
+53e997aeb7602d9701f8856e	[http://www.ncbi.nlm.nih.gov/pubmed/4669724?report=xml&format=text, http://www.ncbi.nlm.nih.gov/pubmed/5123793?report=xml&format=text, http://www.ncbi.nlm.nih.gov/pubmed/5315218?report=xml&format=text]
+53e997bab7602d9701fa1e34	NULL
+53e997abb7602d9701f846c0	NULL
+53e9978db7602d9701f4d7e8	NULL
+53e9984bb7602d970207c61d	[http://subs.emis.de/LNI/Proceedings/Proceedings26/article639.html]
+53e99796b7602d9701f5cd36	NULL
+53e99809b7602d970201f551	[http://dx.doi.org/10.1016/S0140-6736(00)82170-4, http://www.ncbi.nlm.nih.gov/pubmed/20914302?report=xml&format=text]
+53e997a6b7602d9701f7ffb0	[http://www.ncbi.nlm.nih.gov/pubmed/4051185?report=xml&format=text]
+
+
+query II
+select * from (SELECT id, unnest(url) u FROM parquet_scan('test/sql/copy/parquet/data/apkwan.parquet')) sq where u is not null limit 10
+----
+53e997b9b7602d9701f9f044	https://link.springer.com/10.1007/s00108-004-1229-0
+53e997aeb7602d9701f8856e	http://www.ncbi.nlm.nih.gov/pubmed/4669724?report=xml&format=text
+53e997aeb7602d9701f8856e	http://www.ncbi.nlm.nih.gov/pubmed/5123793?report=xml&format=text
+53e997aeb7602d9701f8856e	http://www.ncbi.nlm.nih.gov/pubmed/5315218?report=xml&format=text
+53e9984bb7602d970207c61d	http://subs.emis.de/LNI/Proceedings/Proceedings26/article639.html
+53e99809b7602d970201f551	http://dx.doi.org/10.1016/S0140-6736(00)82170-4
+53e99809b7602d970201f551	http://www.ncbi.nlm.nih.gov/pubmed/20914302?report=xml&format=text
+53e997a6b7602d9701f7ffb0	http://www.ncbi.nlm.nih.gov/pubmed/4051185?report=xml&format=text
+53e99813b7602d970202f0a1	http://dx.doi.org/10.1002/nadc.200747186
+53e99796b7602d9701f5ca78	http://www.ncbi.nlm.nih.gov/pubmed/1488574?report=xml&format=text
+
+
+query II
+SELECT id, authors FROM parquet_scan('test/sql/copy/parquet/data/apkwan.parquet') limit 10
+----
+53e997b9b7602d9701f9f044	[<name: M. Stoll, id: 56018d9645cedb3395e77641, org: Abteilung Klinische Immunologie Medizinische Hochschule Hannover>, <name: H. Heiken, id: 53f4d53adabfaef34ff814c8, org: Abteilung Klinische Immunologie Medizinische Hochschule Hannover>, <name: G. M. N. Behrens, id: 53f42afbdabfaec09f0ed4e0, org: Abteilung Klinische Immunologie Medizinische Hochschule Hannover>, <name: R. E. Schmidt, id: 56018d9645cedb3395e77644, org: Abteilung Klinische Immunologie Medizinische Hochschule Hannover>]
+53e997b2b7602d9701f8fea5	[<name: D. Barr, id: 5440d4cfdabfae805a6fd46c, org: Camborne School of Mines Redruth, Cornwall England>]
+53e997aeb7602d9701f8856e	[<name: B Sharf, id: 54059f34dabfae44f081a626, org: NULL>, <name: E Bental, id: 5434518edabfaebba5856df4, org: NULL>]
+53e997bab7602d9701fa1e34	[<name: R. A. Kyle, id: 53f45704dabfaedd74e30781, org: NULL>]
+53e997abb7602d9701f846c0	[<name: J. Mitchell, id: 5405942bdabfae44f08177f9, org: NULL>]
+53e9978db7602d9701f4d7e8	[<name: &NA;, id: NULL, org: NULL>]
+53e9984bb7602d970207c61d	[<name: Olaf Th. Buck, id: 53f4cef7dabfaeedd477c91f, org: NULL>, <name: Volker Linnemann, id: 544837ccdabfae87b7dea930, org: NULL>]
+53e99796b7602d9701f5cd36	[<name: D. P. McKenzie, id: 53f4384cdabfaeb22f48309c, org: NULL>, <name: J. G. Gluyas, id: 53f42c87dabfaec09f108097, org: NULL>, <name: G. Eglinton, id: 56017dd445cedb3395e642dd, org: NULL>, <name: M. L. Coleman, id: 53f44fc6dabfaedd74e13c0e, org: NULL>]
+53e99809b7602d970201f551	[<name: A Moncrieff, id: 53f42dcfdabfaee43ebca730, org: NULL>, <name: L E Whitby, id: 53f4508fdabfaeb22f4e9af6, org: NULL>]
+53e997a6b7602d9701f7ffb0	[<name: R R Walters, id: 53f43b0edabfaee0d9b91d40, org: NULL>]
+
+
+query II
+SELECT id, unnest(authors) FROM parquet_scan('test/sql/copy/parquet/data/apkwan.parquet') limit 20
+----
+53e997b9b7602d9701f9f044	<name: M. Stoll, id: 56018d9645cedb3395e77641, org: Abteilung Klinische Immunologie Medizinische Hochschule Hannover>
+53e997b9b7602d9701f9f044	<name: H. Heiken, id: 53f4d53adabfaef34ff814c8, org: Abteilung Klinische Immunologie Medizinische Hochschule Hannover>
+53e997b9b7602d9701f9f044	<name: G. M. N. Behrens, id: 53f42afbdabfaec09f0ed4e0, org: Abteilung Klinische Immunologie Medizinische Hochschule Hannover>
+53e997b9b7602d9701f9f044	<name: R. E. Schmidt, id: 56018d9645cedb3395e77644, org: Abteilung Klinische Immunologie Medizinische Hochschule Hannover>
+53e997b2b7602d9701f8fea5	<name: D. Barr, id: 5440d4cfdabfae805a6fd46c, org: Camborne School of Mines Redruth, Cornwall England>
+53e997aeb7602d9701f8856e	<name: B Sharf, id: 54059f34dabfae44f081a626, org: NULL>
+53e997aeb7602d9701f8856e	<name: E Bental, id: 5434518edabfaebba5856df4, org: NULL>
+53e997bab7602d9701fa1e34	<name: R. A. Kyle, id: 53f45704dabfaedd74e30781, org: NULL>
+53e997abb7602d9701f846c0	<name: J. Mitchell, id: 5405942bdabfae44f08177f9, org: NULL>
+53e9978db7602d9701f4d7e8	<name: &NA;, id: NULL, org: NULL>
+53e9984bb7602d970207c61d	<name: Olaf Th. Buck, id: 53f4cef7dabfaeedd477c91f, org: NULL>
+53e9984bb7602d970207c61d	<name: Volker Linnemann, id: 544837ccdabfae87b7dea930, org: NULL>
+53e99796b7602d9701f5cd36	<name: D. P. McKenzie, id: 53f4384cdabfaeb22f48309c, org: NULL>
+53e99796b7602d9701f5cd36	<name: J. G. Gluyas, id: 53f42c87dabfaec09f108097, org: NULL>
+53e99796b7602d9701f5cd36	<name: G. Eglinton, id: 56017dd445cedb3395e642dd, org: NULL>
+53e99796b7602d9701f5cd36	<name: M. L. Coleman, id: 53f44fc6dabfaedd74e13c0e, org: NULL>
+53e99809b7602d970201f551	<name: A Moncrieff, id: 53f42dcfdabfaee43ebca730, org: NULL>
+53e99809b7602d970201f551	<name: L E Whitby, id: 53f4508fdabfaeb22f4e9af6, org: NULL>
+53e997a6b7602d9701f7ffb0	<name: R R Walters, id: 53f43b0edabfaee0d9b91d40, org: NULL>
+53e99813b7602d970202f0a1	<name: Sean Milmo, id: 53f45f64dabfaee4dc832b5f, org: NULL>
+
+
+query III
+SELECT id, struct_extract(unnest(authors), 'name'), struct_extract(unnest(authors), 'id') FROM parquet_scan('test/sql/copy/parquet/data/apkwan.parquet') limit 20
+----
+53e997b9b7602d9701f9f044	M. Stoll	56018d9645cedb3395e77641
+53e997b9b7602d9701f9f044	H. Heiken	53f4d53adabfaef34ff814c8
+53e997b9b7602d9701f9f044	G. M. N. Behrens	53f42afbdabfaec09f0ed4e0
+53e997b9b7602d9701f9f044	R. E. Schmidt	56018d9645cedb3395e77644
+53e997b2b7602d9701f8fea5	D. Barr	5440d4cfdabfae805a6fd46c
+53e997aeb7602d9701f8856e	B Sharf	54059f34dabfae44f081a626
+53e997aeb7602d9701f8856e	E Bental	5434518edabfaebba5856df4
+53e997bab7602d9701fa1e34	R. A. Kyle	53f45704dabfaedd74e30781
+53e997abb7602d9701f846c0	J. Mitchell	5405942bdabfae44f08177f9
+53e9978db7602d9701f4d7e8	&NA;	NULL
+53e9984bb7602d970207c61d	Olaf Th. Buck	53f4cef7dabfaeedd477c91f
+53e9984bb7602d970207c61d	Volker Linnemann	544837ccdabfae87b7dea930
+53e99796b7602d9701f5cd36	D. P. McKenzie	53f4384cdabfaeb22f48309c
+53e99796b7602d9701f5cd36	J. G. Gluyas	53f42c87dabfaec09f108097
+53e99796b7602d9701f5cd36	G. Eglinton	56017dd445cedb3395e642dd
+53e99796b7602d9701f5cd36	M. L. Coleman	53f44fc6dabfaedd74e13c0e
+53e99809b7602d970201f551	A Moncrieff	53f42dcfdabfaee43ebca730
+53e99809b7602d970201f551	L E Whitby	53f4508fdabfaeb22f4e9af6
+53e997a6b7602d9701f7ffb0	R R Walters	53f43b0edabfaee0d9b91d40
+53e99813b7602d970202f0a1	Sean Milmo	53f45f64dabfaee4dc832b5f
+
+

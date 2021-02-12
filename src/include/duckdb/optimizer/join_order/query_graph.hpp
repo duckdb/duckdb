@@ -58,7 +58,7 @@ public:
 	//! neighbor has multiple nodes, this function will return the lowest entry in that set.
 	vector<idx_t> GetNeighbors(JoinRelationSet *node, unordered_set<idx_t> &exclusion_set);
 	//! Enumerate all neighbors of a given JoinRelationSet node
-	void EnumerateNeighbors(JoinRelationSet *node, std::function<bool(NeighborInfo *)> callback);
+	void EnumerateNeighbors(JoinRelationSet *node, const std::function<bool(NeighborInfo *)> &callback);
 
 private:
 	//! Get the QueryEdge of a specific node

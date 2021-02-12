@@ -45,10 +45,6 @@ SELECT a FROM test LIMIT SUM(42)
 statement error
 SELECT a FROM test LIMIT row_number() OVER ()
 
-# subquery in limit
-statement error
-SELECT a FROM test LIMIT (SELECT MIN(a) FROM test)
-
 # LIMIT Bug #321 Crazy Result
 statement ok
 CREATE TABLE test2 (a STRING);
@@ -67,3 +63,122 @@ Hello World
 # can only limit by integers
 statement error
 select 1 limit date '1992-01-01';
+
+
+# Test limits with no constants
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3), (4), (5);
+
+statement ok
+CREATE SEQUENCE seq START 3;
+
+statement ok
+PRAGMA disable_verification;
+
+query I
+SELECT * FROM integers LIMIT nextval('seq');
+----
+1
+2
+3
+
+query I
+SELECT * FROM integers LIMIT nextval('seq');
+----
+1
+2
+3
+4
+
+
+# non-foldable expression in limit
+statement ok
+SELECT * FROM integers LIMIT RANDOM();
+
+# subquery in limit
+query I
+SELECT * FROM integers as int LIMIT (SELECT MIN(integers.i) FROM integers);
+----
+1
+
+statement ok
+CREATE SEQUENCE of_seq START 1;
+
+query I
+SELECT * FROM integers OFFSET nextval('of_seq');
+----
+2
+3
+4
+5
+
+query I
+SELECT * FROM integers OFFSET nextval('of_seq');
+----
+3
+4
+5
+
+# non-foldable expression in limit
+statement ok
+SELECT * FROM integers OFFSET RANDOM();
+
+# subquery in limit
+query I
+SELECT * FROM integers as int OFFSET (SELECT MIN(integers.i) FROM integers);
+----
+2
+3
+4
+5
+
+#Both LIMIT and OFFSET together with subqueries
+query I
+SELECT * FROM integers as int LIMIT (SELECT MAX(integers.i) FROM integers) OFFSET (SELECT MIN(integers.i) FROM integers);
+----
+2
+3
+4
+5
+
+#Subqueries that return zero rows = Same as ommiting limit clause
+query I
+SELECT * FROM integers as int LIMIT (SELECT max(integers.i) FROM integers where i > 5)
+----
+1
+2
+3
+4
+5
+
+#Limit of NULL, offset of NULL
+query I
+SELECT * FROM integers as int LIMIT (SELECT max(integers.i) FROM integers where i > 5)
+----
+1
+2
+3
+4
+5
+
+#Subqueries that return NULL
+query I
+SELECT * FROM integers as int LIMIT (SELECT NULL)
+----
+1
+2
+3
+4
+5
+
+
+#Subqueries that return negative values
+statement error
+SELECT * FROM integers as int LIMIT (SELECT -1);
+
+#Subqueries that return strings that can't be converted to integers
+statement error
+SELECT * FROM integers as int LIMIT (SELECT 'ab');

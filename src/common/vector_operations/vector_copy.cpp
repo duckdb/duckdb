@@ -92,6 +92,18 @@ void VectorOperations::Copy(Vector &source, Vector &target, const SelectionVecto
 	case PhysicalType::INT64:
 		TemplatedCopy<int64_t>(source, sel, target, source_offset, target_offset, copy_count);
 		break;
+	case PhysicalType::UINT8:
+		TemplatedCopy<uint8_t>(source, sel, target, source_offset, target_offset, copy_count);
+		break;
+	case PhysicalType::UINT16:
+		TemplatedCopy<uint16_t>(source, sel, target, source_offset, target_offset, copy_count);
+		break;
+	case PhysicalType::UINT32:
+		TemplatedCopy<uint32_t>(source, sel, target, source_offset, target_offset, copy_count);
+		break;
+	case PhysicalType::UINT64:
+		TemplatedCopy<uint64_t>(source, sel, target, source_offset, target_offset, copy_count);
+		break;
 	case PhysicalType::INT128:
 		TemplatedCopy<hugeint_t>(source, sel, target, source_offset, target_offset, copy_count);
 		break;
@@ -187,12 +199,12 @@ void VectorOperations::Copy(Vector &source, Vector &target, idx_t source_count, 
 		break;
 	}
 	case VectorType::CONSTANT_VECTOR:
-		VectorOperations::Copy(source, target, ConstantVector::ZeroSelectionVector, source_count, source_offset,
+		VectorOperations::Copy(source, target, ConstantVector::ZERO_SELECTION_VECTOR, source_count, source_offset,
 		                       target_offset);
 		break;
 	default:
 		source.Normalify(source_count);
-		VectorOperations::Copy(source, target, FlatVector::IncrementalSelectionVector, source_count, source_offset,
+		VectorOperations::Copy(source, target, FlatVector::INCREMENTAL_SELECTION_VECTOR, source_count, source_offset,
 		                       target_offset);
 		break;
 	}

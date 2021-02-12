@@ -4,25 +4,18 @@
 
 namespace duckdb {
 
-using namespace duckdb_libpgquery;
-
-unique_ptr<SelectStatement> Transformer::TransformSelect(PGNode *node, bool isSelect) {
-	auto stmt = reinterpret_cast<PGSelectStmt *>(node);
+unique_ptr<SelectStatement> Transformer::TransformSelect(duckdb_libpgquery::PGNode *node, bool is_select) {
+	auto stmt = reinterpret_cast<duckdb_libpgquery::PGSelectStmt *>(node);
 	auto result = make_unique<SelectStatement>();
 
 	// Both Insert/Create Table As uses this.
-	if (isSelect) {
+	if (is_select) {
 		if (stmt->intoClause) {
 			throw ParserException("SELECT INTO not supported!");
 		}
 		if (stmt->lockingClause) {
 			throw ParserException("SELECT locking clause is not supported!");
 		}
-	}
-
-	// may contain windows so second
-	if (stmt->withClause) {
-		TransformCTE(reinterpret_cast<PGWithClause *>(stmt->withClause), *result);
 	}
 
 	result->node = TransformSelectNode(stmt);

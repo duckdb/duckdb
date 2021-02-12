@@ -35,6 +35,7 @@ idx_t SegmentTree::GetSegmentIndex(idx_t row_number) {
 }
 
 void SegmentTree::AppendSegment(unique_ptr<SegmentBase> segment) {
+	D_ASSERT(segment);
 	// add the node to the list of nodes
 	SegmentNode node;
 	node.row_start = segment->start;
@@ -43,10 +44,16 @@ void SegmentTree::AppendSegment(unique_ptr<SegmentBase> segment) {
 
 	if (nodes.size() > 1) {
 		// add the node as the next pointer of the last node
+		D_ASSERT(!nodes[nodes.size() - 2].node->next);
 		nodes[nodes.size() - 2].node->next = move(segment);
 	} else {
 		root_node = move(segment);
 	}
+}
+
+void SegmentTree::Replace(SegmentTree &other) {
+	root_node = move(other.root_node);
+	nodes = move(other.nodes);
 }
 
 } // namespace duckdb

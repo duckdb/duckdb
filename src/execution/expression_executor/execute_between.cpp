@@ -7,32 +7,36 @@
 namespace duckdb {
 
 struct BothInclusiveBetweenOperator {
-	template <class T> static inline bool Operation(T input, T lower, T upper) {
+	template <class T>
+	static inline bool Operation(T input, T lower, T upper) {
 		return GreaterThanEquals::Operation<T>(input, lower) && LessThanEquals::Operation<T>(input, upper);
 	}
 };
 
 struct LowerInclusiveBetweenOperator {
-	template <class T> static inline bool Operation(T input, T lower, T upper) {
+	template <class T>
+	static inline bool Operation(T input, T lower, T upper) {
 		return GreaterThanEquals::Operation<T>(input, lower) && LessThan::Operation<T>(input, upper);
 	}
 };
 
 struct UpperInclusiveBetweenOperator {
-	template <class T> static inline bool Operation(T input, T lower, T upper) {
+	template <class T>
+	static inline bool Operation(T input, T lower, T upper) {
 		return GreaterThan::Operation<T>(input, lower) && LessThanEquals::Operation<T>(input, upper);
 	}
 };
 
 struct ExclusiveBetweenOperator {
-	template <class T> static inline bool Operation(T input, T lower, T upper) {
+	template <class T>
+	static inline bool Operation(T input, T lower, T upper) {
 		return GreaterThan::Operation<T>(input, lower) && LessThan::Operation<T>(input, upper);
 	}
 };
 
 template <class OP>
-static idx_t between_loop_type_switch(Vector &input, Vector &lower, Vector &upper, const SelectionVector *sel,
-                                      idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
+static idx_t BetweenLoopTypeSwitch(Vector &input, Vector &lower, Vector &upper, const SelectionVector *sel, idx_t count,
+                                   SelectionVector *true_sel, SelectionVector *false_sel) {
 	switch (input.type.InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
@@ -50,6 +54,18 @@ static idx_t between_loop_type_switch(Vector &input, Vector &lower, Vector &uppe
 	case PhysicalType::INT128:
 		return TernaryExecutor::Select<hugeint_t, hugeint_t, hugeint_t, OP>(input, lower, upper, sel, count, true_sel,
 		                                                                    false_sel);
+	case PhysicalType::UINT8:
+		return TernaryExecutor::Select<uint8_t, uint8_t, uint8_t, OP>(input, lower, upper, sel, count, true_sel,
+		                                                              false_sel);
+	case PhysicalType::UINT16:
+		return TernaryExecutor::Select<uint16_t, uint16_t, uint16_t, OP>(input, lower, upper, sel, count, true_sel,
+		                                                                 false_sel);
+	case PhysicalType::UINT32:
+		return TernaryExecutor::Select<uint32_t, uint32_t, uint32_t, OP>(input, lower, upper, sel, count, true_sel,
+		                                                                 false_sel);
+	case PhysicalType::UINT64:
+		return TernaryExecutor::Select<uint64_t, uint64_t, uint64_t, OP>(input, lower, upper, sel, count, true_sel,
+		                                                                 false_sel);
 	case PhysicalType::FLOAT:
 		return TernaryExecutor::Select<float, float, float, OP>(input, lower, upper, sel, count, true_sel, false_sel);
 	case PhysicalType::DOUBLE:
@@ -117,16 +133,16 @@ idx_t ExpressionExecutor::Select(BoundBetweenExpression &expr, ExpressionState *
 	Execute(*expr.upper, state->child_states[2].get(), sel, count, upper);
 
 	if (expr.upper_inclusive && expr.lower_inclusive) {
-		return between_loop_type_switch<BothInclusiveBetweenOperator>(input, lower, upper, sel, count, true_sel,
-		                                                              false_sel);
+		return BetweenLoopTypeSwitch<BothInclusiveBetweenOperator>(input, lower, upper, sel, count, true_sel,
+		                                                           false_sel);
 	} else if (expr.lower_inclusive) {
-		return between_loop_type_switch<LowerInclusiveBetweenOperator>(input, lower, upper, sel, count, true_sel,
-		                                                               false_sel);
+		return BetweenLoopTypeSwitch<LowerInclusiveBetweenOperator>(input, lower, upper, sel, count, true_sel,
+		                                                            false_sel);
 	} else if (expr.upper_inclusive) {
-		return between_loop_type_switch<UpperInclusiveBetweenOperator>(input, lower, upper, sel, count, true_sel,
-		                                                               false_sel);
+		return BetweenLoopTypeSwitch<UpperInclusiveBetweenOperator>(input, lower, upper, sel, count, true_sel,
+		                                                            false_sel);
 	} else {
-		return between_loop_type_switch<ExclusiveBetweenOperator>(input, lower, upper, sel, count, true_sel, false_sel);
+		return BetweenLoopTypeSwitch<ExclusiveBetweenOperator>(input, lower, upper, sel, count, true_sel, false_sel);
 	}
 }
 

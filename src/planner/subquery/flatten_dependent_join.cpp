@@ -44,7 +44,7 @@ bool FlattenDependentJoins::DetectCorrelatedExpressions(LogicalOperator *op) {
 
 unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoin(unique_ptr<LogicalOperator> plan) {
 	auto result = PushDownDependentJoinInternal(move(plan));
-	if (replacement_map.size() > 0) {
+	if (!replacement_map.empty()) {
 		// check if we have to replace any COUNT aggregates into "CASE WHEN X IS NULL THEN 0 ELSE COUNT END"
 		RewriteCountAggregates aggr(replacement_map);
 		aggr.VisitOperator(*result);
@@ -114,6 +114,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		}
 		if (aggr.groups.size() == correlated_columns.size()) {
 			// we have to perform a LEFT OUTER JOIN between the result of this aggregate and the delim scan
+			// FIXME: this does not always have to be a LEFT OUTER JOIN, depending on whether aggr.expressions return
+			// NULL or a value
 			auto left_outer_join = make_unique<LogicalComparisonJoin>(JoinType::LEFT);
 			auto left_index = binder.GenerateTableIndex();
 			auto delim_scan = make_unique<LogicalDelimGet>(left_index, delim_types);
@@ -261,11 +263,11 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 	}
 	case LogicalOperatorType::LOGICAL_LIMIT: {
 		auto &limit = (LogicalLimit &)*plan;
-		if (limit.offset > 0) {
+		if (limit.offset_val > 0) {
 			throw ParserException("OFFSET not supported in correlated subquery");
 		}
 		plan->children[0] = PushDownDependentJoinInternal(move(plan->children[0]));
-		if (limit.limit == 0) {
+		if (limit.limit_val == 0) {
 			// limit = 0 means we return zero columns here
 			return plan;
 		} else {

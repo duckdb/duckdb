@@ -32,16 +32,12 @@ public:
 	bool null_values_are_equal = false;
 };
 
-// enum class JoinSide : uint8_t {
-// 	NONE, LEFT, RIGHT, BOTH
-// };
-
 class JoinSide {
 public:
 	enum join_value : uint8_t { NONE, LEFT, RIGHT, BOTH };
 
 	JoinSide() = default;
-	constexpr JoinSide(join_value val) : value(val) {
+	constexpr JoinSide(join_value val) : value(val) { // NOLINT: Allow implicit conversion from `join_value`
 	}
 
 	bool operator==(JoinSide a) const {
@@ -56,7 +52,7 @@ public:
 	                            unordered_set<uint64_t> &right_bindings);
 	static JoinSide GetJoinSide(Expression &expression, unordered_set<idx_t> &left_bindings,
 	                            unordered_set<idx_t> &right_bindings);
-	static JoinSide GetJoinSide(unordered_set<idx_t> bindings, unordered_set<idx_t> &left_bindings,
+	static JoinSide GetJoinSide(const unordered_set<idx_t> &bindings, unordered_set<idx_t> &left_bindings,
 	                            unordered_set<idx_t> &right_bindings);
 
 private:

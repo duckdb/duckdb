@@ -66,9 +66,9 @@ static void AssertValidFileFlags(uint8_t flags) {
 
 struct UnixFileHandle : public FileHandle {
 public:
-	UnixFileHandle(FileSystem &file_system, string path, int fd) : FileHandle(file_system, path), fd(fd) {
+	UnixFileHandle(FileSystem &file_system, string path, int fd) : FileHandle(file_system, move(path)), fd(fd) {
 	}
-	virtual ~UnixFileHandle() {
+	~UnixFileHandle() override {
 		Close();
 	}
 
@@ -200,8 +200,9 @@ bool FileSystem::DirectoryExists(const string &directory) {
 		if (access(directory.c_str(), 0) == 0) {
 			struct stat status;
 			stat(directory.c_str(), &status);
-			if (status.st_mode & S_IFDIR)
+			if (status.st_mode & S_IFDIR) {
 				return true;
+			}
 		}
 	}
 	// if any condition fails
@@ -213,8 +214,9 @@ bool FileSystem::FileExists(const string &filename) {
 		if (access(filename.c_str(), 0) == 0) {
 			struct stat status;
 			stat(filename.c_str(), &status);
-			if (!(status.st_mode & S_IFDIR))
+			if (!(status.st_mode & S_IFDIR)) {
 				return true;
+			}
 		}
 	}
 	// if any condition fails
@@ -234,7 +236,7 @@ void FileSystem::CreateDirectory(const string &directory) {
 	}
 }
 
-int remove_directory_recursively(const char *path) {
+int RemoveDirectoryRecursive(const char *path) {
 	DIR *d = opendir(path);
 	idx_t path_len = (idx_t)strlen(path);
 	int r = -1;
@@ -257,7 +259,7 @@ int remove_directory_recursively(const char *path) {
 				snprintf(buf, len, "%s/%s", path, p->d_name);
 				if (!stat(buf, &statbuf)) {
 					if (S_ISDIR(statbuf.st_mode)) {
-						r2 = remove_directory_recursively(buf);
+						r2 = RemoveDirectoryRecursive(buf);
 					} else {
 						r2 = unlink(buf);
 					}
@@ -275,7 +277,7 @@ int remove_directory_recursively(const char *path) {
 }
 
 void FileSystem::RemoveDirectory(const string &directory) {
-	remove_directory_recursively(directory.c_str());
+	RemoveDirectoryRecursive(directory.c_str());
 }
 
 void FileSystem::RemoveFile(const string &filename) {
@@ -284,7 +286,7 @@ void FileSystem::RemoveFile(const string &filename) {
 	}
 }
 
-bool FileSystem::ListFiles(const string &directory, std::function<void(string, bool)> callback) {
+bool FileSystem::ListFiles(const string &directory, const std::function<void(string, bool)> &callback) {
 	if (!DirectoryExists(directory)) {
 		return false;
 	}
@@ -294,7 +296,7 @@ bool FileSystem::ListFiles(const string &directory, std::function<void(string, b
 	}
 	struct dirent *ent;
 	// loop over all files in the directory
-	while ((ent = readdir(dir)) != NULL) {
+	while ((ent = readdir(dir)) != nullptr) {
 		string name = string(ent->d_name);
 		// skip . .. and empty files
 		if (name.empty() || name == "." || name == "..") {
@@ -336,7 +338,7 @@ void FileSystem::MoveFile(const string &source, const string &target) {
 	}
 }
 
-void FileSystem::SetWorkingDirectory(string path) {
+void FileSystem::SetWorkingDirectory(const string &path) {
 	if (chdir(path.c_str()) != 0) {
 		throw IOException("Could not change working directory!");
 	}
@@ -344,7 +346,7 @@ void FileSystem::SetWorkingDirectory(string path) {
 
 idx_t FileSystem::GetAvailableMemory() {
 	errno = 0;
-	idx_t max_memory = MinValue<idx_t>(sysconf(_SC_PHYS_PAGES) * sysconf(_SC_PAGESIZE), UINTPTR_MAX);
+	idx_t max_memory = MinValue<idx_t>((idx_t)sysconf(_SC_PHYS_PAGES) * (idx_t)sysconf(_SC_PAGESIZE), UINTPTR_MAX);
 	if (errno != 0) {
 		throw IOException("Could not fetch available system memory!");
 	}
@@ -590,7 +592,7 @@ void FileSystem::RemoveFile(const string &filename) {
 	DeleteFileA(filename.c_str());
 }
 
-bool FileSystem::ListFiles(const string &directory, std::function<void(string, bool)> callback) {
+bool FileSystem::ListFiles(const string &directory, const std::function<void(string, bool)> &callback) {
 	string search_dir = JoinPath(directory, "*");
 
 	WIN32_FIND_DATA ffd;
@@ -633,7 +635,7 @@ void FileSystem::MoveFile(const string &source, const string &target) {
 	}
 }
 
-void FileSystem::SetWorkingDirectory(string path) {
+void FileSystem::SetWorkingDirectory(const string &path) {
 	if (!SetCurrentDirectory(path.c_str())) {
 		throw IOException("Could not change working directory!");
 	}
@@ -740,8 +742,8 @@ static void GlobFiles(FileSystem &fs, const string &path, const string &glob, bo
 	});
 }
 
-vector<string> FileSystem::Glob(string path) {
-	if (path.size() == 0) {
+vector<string> FileSystem::Glob(const string &path) {
+	if (path.empty()) {
 		return vector<string>();
 	}
 	// first check if the path has a glob at all
@@ -820,7 +822,7 @@ vector<string> FileSystem::Glob(string path) {
 				}
 			}
 		}
-		if (is_last_chunk || result.size() == 0) {
+		if (is_last_chunk || result.empty()) {
 			return result;
 		}
 		previous_directories = move(result);

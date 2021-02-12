@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "duckdb/function/function.hpp"
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb/function/function.hpp"
 #include "duckdb/storage/statistics/node_statistics.hpp"
 
 #include <functional>
@@ -25,12 +25,18 @@ struct FunctionOperatorData {
 	}
 };
 
+struct TableFilterCollection {
+	TableFilterSet *table_filters;
+	explicit TableFilterCollection(TableFilterSet *table_filters) : table_filters(table_filters) {
+	}
+};
+
 typedef unique_ptr<FunctionData> (*table_function_bind_t)(ClientContext &context, vector<Value> &inputs,
                                                           unordered_map<string, Value> &named_parameters,
                                                           vector<LogicalType> &return_types, vector<string> &names);
 typedef unique_ptr<FunctionOperatorData> (*table_function_init_t)(ClientContext &context, const FunctionData *bind_data,
                                                                   vector<column_t> &column_ids,
-                                                                  TableFilterSet *table_filters);
+                                                                  TableFilterCollection *filters);
 typedef unique_ptr<BaseStatistics> (*table_statistics_t)(ClientContext &context, const FunctionData *bind_data,
                                                          column_t column_index);
 typedef void (*table_function_t)(ClientContext &context, const FunctionData *bind_data,
@@ -44,7 +50,7 @@ typedef unique_ptr<FunctionOperatorData> (*table_function_init_parallel_t)(Clien
                                                                            const FunctionData *bind_data,
                                                                            ParallelState *state,
                                                                            vector<column_t> &column_ids,
-                                                                           TableFilterSet *table_filters);
+                                                                           TableFilterCollection *filters);
 typedef bool (*table_function_parallel_state_next_t)(ClientContext &context, const FunctionData *bind_data,
                                                      FunctionOperatorData *state, ParallelState *parallel_state);
 typedef void (*table_function_dependency_t)(unordered_set<CatalogEntry *> &dependencies, const FunctionData *bind_data);
@@ -91,11 +97,11 @@ public:
 	TableFunction() : SimpleNamedParameterFunction("", {}) {
 	}
 
-	//! (Optional) Bind function
+	//! Bind function
 	//! This function is used for determining the return type of a table producing function and returning bind data
 	//! The returned FunctionData object should be constant and should not be changed during execution.
 	table_function_bind_t bind;
-	//! init function
+	//! (Optional) init function
 	//! Initialize the operator state of the function. The operator state is used to keep track of the progress in the
 	//! table function.
 	table_function_init_t init;
@@ -135,7 +141,7 @@ public:
 	//! that applies the table filter directly.
 	bool filter_pushdown;
 
-	string ToString() {
+	string ToString() override {
 		return SimpleNamedParameterFunction::ToString();
 	}
 };

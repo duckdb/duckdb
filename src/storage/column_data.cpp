@@ -3,11 +3,13 @@
 #include "duckdb/storage/table/transient_segment.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/storage/data_pointer.hpp"
+#include "duckdb/storage/checkpoint/table_data_writer.hpp"
 
 namespace duckdb {
 
-ColumnData::ColumnData(BufferManager &manager, DataTableInfo &table_info, LogicalType type, idx_t column_idx)
-    : table_info(table_info), type(move(type)), manager(manager), column_idx(column_idx), persistent_rows(0) {
+ColumnData::ColumnData(DatabaseInstance &db, DataTableInfo &table_info, LogicalType type, idx_t column_idx)
+    : table_info(table_info), type(move(type)), db(db), column_idx(column_idx), persistent_rows(0) {
 	statistics = BaseStatistics::CreateEmpty(type);
 }
 
@@ -55,13 +57,13 @@ void ColumnData::FilterScan(Transaction &transaction, ColumnScanState &state, Ve
 }
 
 void ColumnData::Select(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
-                        idx_t &approved_tuple_count, vector<TableFilter> &tableFilter) {
+                        idx_t &approved_tuple_count, vector<TableFilter> &table_filter) {
 	if (!state.initialized) {
 		state.current->InitializeScan(state);
 		state.initialized = true;
 	}
 	// perform a scan of this segment
-	state.current->Select(transaction, state, result, sel, approved_tuple_count, tableFilter);
+	state.current->Select(transaction, state, result, sel, approved_tuple_count, table_filter);
 	// move over to the next vector
 	state.Next();
 }
@@ -100,7 +102,7 @@ void TableScanState::NextVector() {
 
 void ColumnData::InitializeAppend(ColumnAppendState &state) {
 	lock_guard<mutex> tree_lock(data.node_lock);
-	if (data.nodes.size() == 0) {
+	if (data.nodes.empty()) {
 		// no transient segments yet, append one
 		AppendTransientSegment(persistent_rows);
 	}
@@ -194,7 +196,7 @@ void ColumnData::FetchRow(ColumnFetchState &state, Transaction &transaction, row
 }
 
 void ColumnData::AppendTransientSegment(idx_t start_row) {
-	auto new_segment = make_unique<TransientSegment>(manager, type, start_row);
+	auto new_segment = make_unique<TransientSegment>(db, type, start_row);
 	data.AppendSegment(move(new_segment));
 }
 

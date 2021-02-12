@@ -17,7 +17,7 @@ namespace duckdb {
 
 class GzipStreamBuf : public std::streambuf {
 public:
-	GzipStreamBuf(std::string filename) : filename(filename) {
+	explicit GzipStreamBuf(std::string filename) : filename(filename) {
 	}
 
 	GzipStreamBuf(const GzipStreamBuf &) = delete;
@@ -25,12 +25,13 @@ public:
 	GzipStreamBuf &operator=(const GzipStreamBuf &) = delete;
 	GzipStreamBuf &operator=(GzipStreamBuf &&) = default;
 
-	~GzipStreamBuf();
+	~GzipStreamBuf() override;
 
 	std::streambuf::int_type underflow() override;
 
 private:
-	void initialize();
+	void Initialize();
+
 	std::fstream input;
 	idx_t data_start = 0;
 	void *mz_stream_ptr = nullptr; // void* so we don't have to include the header
@@ -42,12 +43,13 @@ private:
 
 class GzipStream : public std::istream {
 public:
-	GzipStream(std::string filename) : std::istream(new GzipStreamBuf(filename)) {
+	explicit GzipStream(std::string filename) : std::istream(new GzipStreamBuf(filename)) {
 		exceptions(std::ios_base::badbit);
 	}
-	~GzipStream() {
-		if (rdbuf())
+	~GzipStream() override {
+		if (rdbuf()) {
 			delete rdbuf();
+		}
 	}
 }; // class istream
 

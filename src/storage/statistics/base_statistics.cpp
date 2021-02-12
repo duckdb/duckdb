@@ -7,6 +7,12 @@
 
 namespace duckdb {
 
+BaseStatistics::BaseStatistics(LogicalType type) : type(move(type)), has_null(false) {
+}
+
+BaseStatistics::~BaseStatistics() {
+}
+
 unique_ptr<BaseStatistics> BaseStatistics::Copy() {
 	auto statistics = make_unique<BaseStatistics>(type);
 	statistics->has_null = has_null;
@@ -24,14 +30,18 @@ unique_ptr<BaseStatistics> BaseStatistics::CreateEmpty(LogicalType type) {
 	case PhysicalType::INT16:
 	case PhysicalType::INT32:
 	case PhysicalType::INT64:
+	case PhysicalType::UINT8:
+	case PhysicalType::UINT16:
+	case PhysicalType::UINT32:
+	case PhysicalType::UINT64:
 	case PhysicalType::INT128:
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE:
-		return make_unique<NumericStatistics>(type);
+		return make_unique<NumericStatistics>(move(type));
 	case PhysicalType::VARCHAR:
-		return make_unique<StringStatistics>(type);
+		return make_unique<StringStatistics>(move(type));
 	case PhysicalType::INTERVAL:
-		return make_unique<BaseStatistics>(type);
+		return make_unique<BaseStatistics>(move(type));
 	default:
 		return nullptr;
 	}
@@ -50,16 +60,20 @@ unique_ptr<BaseStatistics> BaseStatistics::Deserialize(Deserializer &source, Log
 	case PhysicalType::INT16:
 	case PhysicalType::INT32:
 	case PhysicalType::INT64:
+	case PhysicalType::UINT8:
+	case PhysicalType::UINT16:
+	case PhysicalType::UINT32:
+	case PhysicalType::UINT64:
 	case PhysicalType::INT128:
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE:
-		result = NumericStatistics::Deserialize(source, type);
+		result = NumericStatistics::Deserialize(source, move(type));
 		break;
 	case PhysicalType::VARCHAR:
-		result = StringStatistics::Deserialize(source, type);
+		result = StringStatistics::Deserialize(source, move(type));
 		break;
 	case PhysicalType::INTERVAL:
-		result = make_unique<BaseStatistics>(type);
+		result = make_unique<BaseStatistics>(move(type));
 		break;
 	default:
 		throw InternalException("Unimplemented type for statistics deserialization");

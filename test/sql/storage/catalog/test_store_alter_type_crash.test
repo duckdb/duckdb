@@ -1,11 +1,6 @@
-# name: test/sql/storage/catalog/test_store_remove_column.test
+# name: test/sql/storage/catalog/test_store_alter_type_crash.test
 # description: Remove column from persistent table
 # group: [catalog]
-
-# FIXME: this test crashes
-# this is likely because the ALTER TYPE causes the persistent and transient segments to be unaligned between columns
-# the data-table should be persistent/transient agnostic, persistent/transient manager need to be merged...
-mode skip
 
 load __TEST_DIR__/test_store_alter_type.db
 

@@ -12,6 +12,7 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/catalog/default/default_functions.hpp"
 #include "duckdb/catalog/default/default_views.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
@@ -33,11 +34,12 @@
 
 namespace duckdb {
 
-SchemaCatalogEntry::SchemaCatalogEntry(Catalog *catalog, string name, bool internal)
-    : CatalogEntry(CatalogType::SCHEMA_ENTRY, catalog, name),
+SchemaCatalogEntry::SchemaCatalogEntry(Catalog *catalog, string name_p, bool internal)
+    : CatalogEntry(CatalogType::SCHEMA_ENTRY, catalog, move(name_p)),
       tables(*catalog, make_unique<DefaultViewGenerator>(*catalog, this)), indexes(*catalog), table_functions(*catalog),
-      copy_functions(*catalog), pragma_functions(*catalog), functions(*catalog), sequences(*catalog),
-      collations(*catalog) {
+      copy_functions(*catalog), pragma_functions(*catalog),
+      functions(*catalog, name == DEFAULT_SCHEMA ? make_unique<DefaultFunctionGenerator>(*catalog, this) : nullptr),
+      sequences(*catalog), collations(*catalog) {
 	this->internal = internal;
 }
 
@@ -198,9 +200,15 @@ CatalogEntry *SchemaCatalogEntry::GetEntry(ClientContext &context, CatalogType t
 	return entry;
 }
 
-void SchemaCatalogEntry::Scan(ClientContext &context, CatalogType type, std::function<void(CatalogEntry *)> callback) {
+void SchemaCatalogEntry::Scan(ClientContext &context, CatalogType type,
+                              const std::function<void(CatalogEntry *)> &callback) {
 	auto &set = GetCatalogSet(type);
 	set.Scan(context, callback);
+}
+
+void SchemaCatalogEntry::Scan(CatalogType type, const std::function<void(CatalogEntry *)> &callback) {
+	auto &set = GetCatalogSet(type);
+	set.Scan(callback);
 }
 
 void SchemaCatalogEntry::Serialize(Serializer &serializer) {

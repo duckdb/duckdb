@@ -15,7 +15,7 @@ class Optimizer;
 
 class InClauseRewriter : public LogicalOperatorVisitor {
 public:
-	InClauseRewriter(Optimizer &optimizer) : optimizer(optimizer) {
+	explicit InClauseRewriter(Optimizer &optimizer) : optimizer(optimizer) {
 	}
 
 	Optimizer &optimizer;

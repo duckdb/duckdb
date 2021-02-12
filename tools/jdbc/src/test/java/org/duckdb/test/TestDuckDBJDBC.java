@@ -917,7 +917,7 @@ public class TestDuckDBJDBC {
 		assertFalse(rs.next());
 		rs.close();
 
-		rs = md.getColumns(null, null, null, null);
+		rs = md.getColumns(null, null, "a", null);
 		assertTrue(rs.next());
 		assertNull(rs.getObject("TABLE_CAT"));
 		assertNull(rs.getObject(1));

@@ -33,6 +33,7 @@ class ExplainStatement;
 class ExportStatement;
 class VacuumStatement;
 class RelationStatement;
+class SetStatement;
 
 //===--------------------------------------------------------------------===//
 // Query Node
@@ -56,6 +57,7 @@ class ConjunctionExpression;
 class ConstantExpression;
 class DefaultExpression;
 class FunctionExpression;
+class LambdaExpression;
 class OperatorExpression;
 class ParameterExpression;
 class StarExpression;

@@ -82,7 +82,8 @@ double generate_double(double min_double, double max_double) {
 	return min_double + static_cast<double>(rand()) / (static_cast<double>(RAND_MAX / (max_double - min_double)));
 }
 
-template <class T> int full_scan(T *keys, idx_t size, T low, T high) {
+template <class T>
+int full_scan(T *keys, idx_t size, T low, T high) {
 	int sum = 0;
 	for (idx_t i = 0; i < size; i++) {
 		if (keys[i] >= low && keys[i] <= high) {

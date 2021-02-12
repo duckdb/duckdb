@@ -5,10 +5,10 @@
 
 namespace duckdb {
 
-const idx_t MorselInfo::MORSEL_VECTOR_COUNT;
-const idx_t MorselInfo::MORSEL_SIZE;
-const idx_t MorselInfo::MORSEL_LAYER_COUNT;
-const idx_t MorselInfo::MORSEL_LAYER_SIZE;
+constexpr const idx_t MorselInfo::MORSEL_VECTOR_COUNT;
+constexpr const idx_t MorselInfo::MORSEL_SIZE;
+constexpr const idx_t MorselInfo::MORSEL_LAYER_COUNT;
+constexpr const idx_t MorselInfo::MORSEL_LAYER_SIZE;
 
 ChunkInfo *MorselInfo::GetChunkInfo(idx_t vector_idx) {
 	if (!root) {

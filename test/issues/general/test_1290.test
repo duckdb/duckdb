@@ -1,0 +1,123 @@
+# name: test/issues/general/test_1290.test
+# description: Issue 1290: FULL JOIN reports missing values for join key
+# group: [general]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table a as select 42 as i, 80 as j;
+
+statement ok
+create table b as select 43 as i, 84 as k;
+
+statement ok
+create table c as select 44 as i, 84 as l;
+
+query III
+select i, a.i, b.i from a inner join b using (i);
+----
+
+query III
+select i, a.i, b.i from a left outer join b using (i);
+----
+42	42	NULL
+
+query III
+select i, a.i, b.i from a right outer join b using (i);
+----
+43	NULL	43
+
+query III
+select i, a.i, b.i from a natural full outer join b order by 1;
+----
+42	42	NULL
+43	NULL	43
+
+query III
+select i, a.i, b.i from a full outer join b using (i) order by 1;
+----
+42	42	NULL
+43	NULL	43
+
+query III
+select * from a full outer join b using (i) order by 1;
+----
+42	80	NULL
+43	NULL	84
+
+query IIII
+select i, a.i, b.i, c.i from a full outer join b using (i) full outer join c using (i) order by 1;
+----
+42	42	NULL	NULL
+43	NULL	43	NULL
+44	NULL	NULL	44
+
+query IIII
+select * from a full outer join b using (i) full outer join c using (i) order by 1;
+----
+42	80	NULL	NULL
+43	NULL	84	NULL
+44	NULL	NULL	84
+
+query IIII
+select i, a.i, b.i, c.i from a natural full outer join b natural full outer join (values (42)) c(i) order by 1;
+----
+42	42	NULL	42
+43	NULL	43	NULL
+
+query IIII
+select i, a.i, b.i, c.i from a natural full outer join b natural full outer join (values (43)) c(i) order by 1;
+----
+42	42	NULL	NULL
+43	NULL	43	43
+
+query IIII
+select i, a.i, b.i, c.i from a natural full outer join b natural full outer join (values (44)) c(i) order by 1;
+----
+42	42	NULL	NULL
+43	NULL	43	NULL
+44	NULL	NULL	44
+
+query IIII
+select i, a.i, b.i, c.i from a natural full outer join b natural full outer join c order by 1;
+----
+42	42	NULL	NULL
+43	NULL	43	NULL
+44	NULL	NULL	44
+
+query IIII
+select * from a natural full outer join b natural full outer join c order by 1;
+----
+42	80	NULL	NULL
+43	NULL	84	NULL
+44	NULL	NULL	84
+
+# right join
+query III
+select * from a natural right outer join b order by 1;
+----
+43	NULL	84
+
+query IIIII
+select * from a, b natural right outer join c;
+----
+42	80	44	NULL	84
+
+query IIIIIIIIII
+select *, * from a, b natural right outer join c;
+----
+42	80	44	NULL	84	42	80	44	NULL	84
+
+query IIIIII
+select a.*, b.*, c.* from a, b natural right outer join c;
+----
+42	80	NULL	NULL	44	84
+
+query IIIIII
+select * from a natural full outer join b, a a1 natural full outer join c;
+----
+42	80	NULL	42	80	NULL
+42	80	NULL	44	NULL	84
+43	NULL	84	42	80	NULL
+43	NULL	84	44	NULL	84

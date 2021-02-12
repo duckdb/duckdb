@@ -70,7 +70,7 @@ long mk_cust(DSS_HUGE n_cust, customer_t *c) {
 	static char szFormat[100];
 
 	if (!bInit) {
-		sprintf(szFormat, C_NAME_FMT, 9, HUGE_FORMAT + 1);
+		sprintf(szFormat, C_NAME_FMT, 9, &HUGE_FORMAT[1]);
 		bInit = 1;
 	}
 	c->custkey = n_cust;
@@ -123,7 +123,7 @@ long mk_order(DSS_HUGE index, order_t *o, long upd_num) {
 	static char szFormat[100];
 
 	if (!bInit) {
-		sprintf(szFormat, O_CLRK_FMT, 9, HUGE_FORMAT + 1);
+		sprintf(szFormat, O_CLRK_FMT, 9, &HUGE_FORMAT[1]);
 		bInit = 1;
 	}
 	if (asc_date == NULL)
@@ -222,8 +222,8 @@ long mk_part(DSS_HUGE index, part_t *p) {
 	static char szBrandFormat[100];
 
 	if (!bInit) {
-		sprintf(szFormat, P_MFG_FMT, 1, HUGE_FORMAT + 1);
-		sprintf(szBrandFormat, P_BRND_FMT, 2, HUGE_FORMAT + 1);
+		sprintf(szFormat, P_MFG_FMT, 1, &HUGE_FORMAT[1]);
+		sprintf(szBrandFormat, P_BRND_FMT, 2, &HUGE_FORMAT[1]);
 		bInit = 1;
 	}
 	p->partkey = index;
@@ -257,7 +257,7 @@ long mk_supp(DSS_HUGE index, supplier_t *s) {
 	static char szFormat[100];
 
 	if (!bInit) {
-		sprintf(szFormat, S_NAME_FMT, 9, HUGE_FORMAT + 1);
+		sprintf(szFormat, S_NAME_FMT, 9, &HUGE_FORMAT[1]);
 		bInit = 1;
 	}
 	s->suppkey = index;

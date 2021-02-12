@@ -39,7 +39,7 @@ public:
 	//! The types of all conditions
 	vector<LogicalType> build_types;
 	//! Index used for join
-	Index *index{};
+	Index *index {};
 
 	vector<JoinCondition> conditions;
 
@@ -50,9 +50,9 @@ public:
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 
 private:
-	void GetRHSMatches(ExecutionContext &context, PhysicalOperatorState *state_) const;
+	void GetRHSMatches(ExecutionContext &context, PhysicalOperatorState *state_p) const;
 	//! Fills result chunk
-	void Output(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_);
+	void Output(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p);
 };
 
 } // namespace duckdb

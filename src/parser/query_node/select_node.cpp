@@ -3,14 +3,14 @@
 
 namespace duckdb {
 
-bool SelectNode::Equals(const QueryNode *other_) const {
-	if (!QueryNode::Equals(other_)) {
+bool SelectNode::Equals(const QueryNode *other_p) const {
+	if (!QueryNode::Equals(other_p)) {
 		return false;
 	}
-	if (this == other_) {
+	if (this == other_p) {
 		return true;
 	}
-	auto other = (SelectNode *)other_;
+	auto other = (SelectNode *)other_p;
 
 	// SELECT
 	if (!ExpressionUtil::ListEquals(select_list, other->select_list)) {

@@ -15,6 +15,7 @@ add_library_unity(
   prepare_statement.cpp
   relation_statement.cpp
   select_statement.cpp
+  set_statement.cpp
   show_statement.cpp
   transaction_statement.cpp
   update_statement.cpp

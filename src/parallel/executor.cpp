@@ -52,7 +52,7 @@ void Executor::Initialize(PhysicalOperator *plan) {
 	}
 
 	pipelines.clear();
-	if (exceptions.size() > 0) {
+	if (!exceptions.empty()) {
 		// an exception has occurred executing one of the pipelines
 		throw Exception(exceptions[0]);
 	}
@@ -220,7 +220,7 @@ vector<LogicalType> Executor::GetTypes() {
 	return physical_plan->GetTypes();
 }
 
-void Executor::PushError(std::string exception) {
+void Executor::PushError(const string &exception) {
 	lock_guard<mutex> elock(executor_lock);
 	// interrupt execution of any other pipelines that belong to this executor
 	context.interrupted = true;

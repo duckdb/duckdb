@@ -1,6 +1,7 @@
 #include "duckdb/planner/binder.hpp"
 
 #include "duckdb/parser/statement/list.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
 #include "duckdb/planner/bound_tableref.hpp"
 #include "duckdb/planner/expression.hpp"
@@ -10,17 +11,17 @@
 
 namespace duckdb {
 
-Binder::Binder(ClientContext &context, Binder *parent_, bool inherit_ctes_)
-    : context(context), read_only(true), requires_valid_transaction(true), allow_stream_result(false), parent(parent_),
-      bound_tables(0), inherit_ctes(inherit_ctes_) {
-	if (parent_) {
+Binder::Binder(ClientContext &context, Binder *parent_p, bool inherit_ctes_p)
+    : context(context), read_only(true), requires_valid_transaction(true), allow_stream_result(false), parent(parent_p),
+      bound_tables(0), inherit_ctes(inherit_ctes_p) {
+	if (parent) {
 		// We have to inherit macro parameter bindings from the parent binder, if there is a parent.
-		macro_binding = parent_->macro_binding;
-		if (inherit_ctes_) {
+		macro_binding = parent->macro_binding;
+		if (inherit_ctes) {
 			// We have to inherit CTE bindings from the parent bind_context, if there is a parent.
-			bind_context.SetCTEBindings(parent_->bind_context.GetCTEBindings());
-			bind_context.cte_references = parent_->bind_context.cte_references;
-			parameters = parent_->parameters;
+			bind_context.SetCTEBindings(parent->bind_context.GetCTEBindings());
+			bind_context.cte_references = parent->bind_context.cte_references;
+			parameters = parent->parameters;
 		}
 	}
 }
@@ -54,12 +55,14 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 		return Bind((ExplainStatement &)statement);
 	case StatementType::VACUUM_STATEMENT:
 		return Bind((VacuumStatement &)statement);
-  case StatementType::SHOW_STATEMENT:
-    return Bind((ShowStatement &)statement);
+	case StatementType::SHOW_STATEMENT:
+		return Bind((ShowStatement &)statement);
 	case StatementType::CALL_STATEMENT:
 		return Bind((CallStatement &)statement);
 	case StatementType::EXPORT_STATEMENT:
 		return Bind((ExportStatement &)statement);
+	case StatementType::SET_STATEMENT:
+		return Bind((SetStatement &)statement);
 	default:
 		throw NotImplementedException("Unimplemented statement type \"%s\" for Bind",
 		                              StatementTypeToString(statement.type));
@@ -67,6 +70,11 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 }
 
 unique_ptr<BoundQueryNode> Binder::BindNode(QueryNode &node) {
+	// first we visit the set of CTEs and add them to the bind context
+	for (auto &cte_it : node.cte_map) {
+		AddCTE(cte_it.first, cte_it.second.get());
+	}
+	// now we bind the node
 	unique_ptr<BoundQueryNode> result;
 	switch (node.type) {
 	case QueryNodeType::SELECT_NODE:
@@ -84,10 +92,9 @@ unique_ptr<BoundQueryNode> Binder::BindNode(QueryNode &node) {
 }
 
 BoundStatement Binder::Bind(QueryNode &node) {
-	BoundStatement result;
-	// bind the node
 	auto bound_node = BindNode(node);
 
+	BoundStatement result;
 	result.names = bound_node->names;
 	result.types = bound_node->types;
 
@@ -200,7 +207,7 @@ CommonTableExpressionInfo *Binder::FindCTE(const string &name, bool skip) {
 	return nullptr;
 }
 
-bool Binder::CTEIsAlreadyBound(CommonTableExpressionInfo* cte) {
+bool Binder::CTEIsAlreadyBound(CommonTableExpressionInfo *cte) {
 	if (bound_ctes.find(cte) != bound_ctes.end()) {
 		return true;
 	}
@@ -236,7 +243,7 @@ ExpressionBinder *Binder::GetActiveBinder() {
 }
 
 bool Binder::HasActiveBinder() {
-	return GetActiveBinders().size() > 0;
+	return !GetActiveBinders().empty();
 }
 
 vector<ExpressionBinder *> &Binder::GetActiveBinders() {
@@ -257,22 +264,22 @@ void Binder::MergeCorrelatedColumns(vector<CorrelatedColumnInfo> &other) {
 	}
 }
 
-void Binder::AddCorrelatedColumn(CorrelatedColumnInfo info) {
+void Binder::AddCorrelatedColumn(const CorrelatedColumnInfo &info) {
 	// we only add correlated columns to the list if they are not already there
 	if (std::find(correlated_columns.begin(), correlated_columns.end(), info) == correlated_columns.end()) {
 		correlated_columns.push_back(info);
 	}
 }
 
-string Binder::FormatError(ParsedExpression &expr_context, string message) {
+string Binder::FormatError(ParsedExpression &expr_context, const string &message) {
 	return FormatError(expr_context.query_location, message);
 }
 
-string Binder::FormatError(TableRef &ref_context, string message) {
+string Binder::FormatError(TableRef &ref_context, const string &message) {
 	return FormatError(ref_context.query_location, message);
 }
 
-string Binder::FormatError(idx_t query_location, string message) {
+string Binder::FormatError(idx_t query_location, const string &message) {
 	QueryErrorContext context(root_statement, query_location);
 	return context.FormatError(message);
 }

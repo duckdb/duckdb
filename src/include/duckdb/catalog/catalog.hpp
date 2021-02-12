@@ -40,18 +40,18 @@ class SequenceCatalogEntry;
 class TableFunctionCatalogEntry;
 class CopyFunctionCatalogEntry;
 class PragmaFunctionCatalogEntry;
-class StorageManager;
 class CatalogSet;
+class DatabaseInstance;
 class DependencyManager;
 
 //! The Catalog object represents the catalog of the database.
 class Catalog {
 public:
-	Catalog(StorageManager &storage);
+	explicit Catalog(DatabaseInstance &db);
 	~Catalog();
 
-	//! Reference to the storage manager
-	StorageManager &storage;
+	//! Reference to the database
+	DatabaseInstance &db;
 	//! The catalog set holding the schemas
 	unique_ptr<CatalogSet> schemas;
 	//! The DependencyManager manages dependencies between different catalog objects
@@ -62,6 +62,7 @@ public:
 public:
 	//! Get the ClientContext from the Catalog
 	static Catalog &GetCatalog(ClientContext &context);
+	static Catalog &GetCatalog(DatabaseInstance &db);
 
 	//! Returns the current version of the catalog (incremented whenever anything changes, not stored between restarts)
 	idx_t GetCatalogVersion();

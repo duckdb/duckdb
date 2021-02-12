@@ -4,7 +4,8 @@
 
 namespace duckdb {
 
-template <class T> static void CopyToStorageLoop(VectorData &vdata, idx_t count, data_ptr_t target) {
+template <class T>
+static void CopyToStorageLoop(VectorData &vdata, idx_t count, data_ptr_t target) {
 	auto ldata = (T *)vdata.data;
 	auto result_data = (T *)target;
 	for (idx_t i = 0; i < count; i++) {
@@ -38,6 +39,18 @@ void VectorOperations::WriteToStorage(Vector &source, idx_t count, data_ptr_t ta
 	case PhysicalType::INT64:
 		CopyToStorageLoop<int64_t>(vdata, count, target);
 		break;
+	case PhysicalType::UINT8:
+		CopyToStorageLoop<uint8_t>(vdata, count, target);
+		break;
+	case PhysicalType::UINT16:
+		CopyToStorageLoop<uint16_t>(vdata, count, target);
+		break;
+	case PhysicalType::UINT32:
+		CopyToStorageLoop<uint32_t>(vdata, count, target);
+		break;
+	case PhysicalType::UINT64:
+		CopyToStorageLoop<uint64_t>(vdata, count, target);
+		break;
 	case PhysicalType::INT128:
 		CopyToStorageLoop<hugeint_t>(vdata, count, target);
 		break;
@@ -61,7 +74,8 @@ void VectorOperations::WriteToStorage(Vector &source, idx_t count, data_ptr_t ta
 	}
 }
 
-template <class T> static void ReadFromStorageLoop(data_ptr_t source, idx_t count, Vector &result) {
+template <class T>
+static void ReadFromStorageLoop(data_ptr_t source, idx_t count, Vector &result) {
 	auto ldata = (T *)source;
 	auto result_data = FlatVector::GetData<T>(result);
 	auto &nullmask = FlatVector::Nullmask(result);
@@ -89,6 +103,18 @@ void VectorOperations::ReadFromStorage(data_ptr_t source, idx_t count, Vector &r
 		break;
 	case PhysicalType::INT64:
 		ReadFromStorageLoop<int64_t>(source, count, result);
+		break;
+	case PhysicalType::UINT8:
+		ReadFromStorageLoop<uint8_t>(source, count, result);
+		break;
+	case PhysicalType::UINT16:
+		ReadFromStorageLoop<uint16_t>(source, count, result);
+		break;
+	case PhysicalType::UINT32:
+		ReadFromStorageLoop<uint32_t>(source, count, result);
+		break;
+	case PhysicalType::UINT64:
+		ReadFromStorageLoop<uint64_t>(source, count, result);
 		break;
 	case PhysicalType::INT128:
 		ReadFromStorageLoop<hugeint_t>(source, count, result);

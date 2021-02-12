@@ -1,9 +1,10 @@
 #include "duckdb/execution/operator/aggregate/physical_perfecthash_aggregate.hpp"
+
 #include "duckdb/execution/perfect_aggregate_hashtable.hpp"
-#include "duckdb/storage/statistics/numeric_statistics.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/statistics/numeric_statistics.hpp"
 
 namespace duckdb {
 
@@ -27,6 +28,7 @@ PhysicalPerfectHashAggregate::PhysicalPerfectHashAggregate(ClientContext &contex
 	}
 
 	vector<BoundAggregateExpression *> bindings;
+	vector<LogicalType> payload_types_filters;
 	for (auto &expr : aggregates) {
 		D_ASSERT(expr->expression_class == ExpressionClass::BOUND_AGGREGATE);
 		D_ASSERT(expr->IsAggregate());
@@ -35,11 +37,17 @@ PhysicalPerfectHashAggregate::PhysicalPerfectHashAggregate(ClientContext &contex
 
 		D_ASSERT(!aggr.distinct);
 		D_ASSERT(aggr.function.combine);
-		for (idx_t i = 0; i < aggr.children.size(); ++i) {
-			payload_types.push_back(aggr.children[i]->return_type);
+		for (auto &child : aggr.children) {
+			payload_types.push_back(child->return_type);
+		}
+		if (aggr.filter) {
+			payload_types_filters.push_back(aggr.filter->return_type);
 		}
 	}
-	aggregate_objects = AggregateObject::CreateAggregateObjects(move(bindings));
+	for (const auto &pay_filters : payload_types_filters) {
+		payload_types.push_back(pay_filters);
+	}
+	aggregate_objects = AggregateObject::CreateAggregateObjects(bindings);
 }
 
 unique_ptr<PerfectAggregateHashTable> PhysicalPerfectHashAggregate::CreateHT(ClientContext &context) {
@@ -67,7 +75,7 @@ public:
 	PerfectHashAggregateLocalState(PhysicalPerfectHashAggregate &op, ClientContext &context)
 	    : ht(op.CreateHT(context)) {
 		group_chunk.InitializeEmpty(op.group_types);
-		if (op.payload_types.size() > 0) {
+		if (!op.payload_types.empty()) {
 			aggregate_input_chunk.InitializeEmpty(op.payload_types);
 		}
 	}
@@ -99,16 +107,31 @@ void PhysicalPerfectHashAggregate::Sink(ExecutionContext &context, GlobalOperato
 		group_chunk.data[group_idx].Reference(input.data[bound_ref_expr.index]);
 	}
 	idx_t aggregate_input_idx = 0;
-	for (idx_t i = 0; i < aggregates.size(); i++) {
-		auto &aggr = (BoundAggregateExpression &)*aggregates[i];
+	for (auto &aggregate : aggregates) {
+		auto &aggr = (BoundAggregateExpression &)*aggregate;
 		for (auto &child_expr : aggr.children) {
 			D_ASSERT(child_expr->type == ExpressionType::BOUND_REF);
 			auto &bound_ref_expr = (BoundReferenceExpression &)*child_expr;
 			aggregate_input_chunk.data[aggregate_input_idx++].Reference(input.data[bound_ref_expr.index]);
 		}
 	}
+	for (auto &aggregate : aggregates) {
+		auto &aggr = (BoundAggregateExpression &)*aggregate;
+		if (aggr.filter) {
+			auto &bound_ref_expr = (BoundReferenceExpression &)*aggr.filter;
+			auto it = ht.find(aggr.filter.get());
+			if (it == ht.end()) {
+				aggregate_input_chunk.data[aggregate_input_idx].Reference(input.data[bound_ref_expr.index]);
+				ht[aggr.filter.get()] = bound_ref_expr.index;
+				bound_ref_expr.index = aggregate_input_idx++;
+			} else {
+				aggregate_input_chunk.data[aggregate_input_idx++].Reference(input.data[it->second]);
+			}
+		}
+	}
 
 	group_chunk.SetCardinality(input.size());
+
 	aggregate_input_chunk.SetCardinality(input.size());
 
 	group_chunk.Verify();
@@ -163,10 +186,14 @@ string PhysicalPerfectHashAggregate::ParamsToString() const {
 		result += groups[i]->GetName();
 	}
 	for (idx_t i = 0; i < aggregates.size(); i++) {
-		if (i > 0 || groups.size() > 0) {
+		if (i > 0 || !groups.empty()) {
 			result += "\n";
 		}
 		result += aggregates[i]->GetName();
+		auto &aggregate = (BoundAggregateExpression &)*aggregates[i];
+		if (aggregate.filter) {
+			result += " Filter: " + aggregate.filter->GetName();
+		}
 	}
 	return result;
 }

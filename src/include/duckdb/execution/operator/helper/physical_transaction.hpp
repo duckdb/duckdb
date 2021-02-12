@@ -16,7 +16,7 @@ namespace duckdb {
 //! PhysicalTransaction represents a transaction operator (e.g. BEGIN or COMMIT)
 class PhysicalTransaction : public PhysicalOperator {
 public:
-	PhysicalTransaction(unique_ptr<TransactionInfo> info)
+	explicit PhysicalTransaction(unique_ptr<TransactionInfo> info)
 	    : PhysicalOperator(PhysicalOperatorType::TRANSACTION, {LogicalType::BOOLEAN}), info(move(info)) {
 	}
 

@@ -21,7 +21,7 @@ class DependencyManager {
 	friend class CatalogSet;
 
 public:
-	DependencyManager(Catalog &catalog);
+	explicit DependencyManager(Catalog &catalog);
 
 	//! Erase the object from the DependencyManager; this should only happen when the object itself is destroyed
 	void EraseObject(CatalogEntry *object);

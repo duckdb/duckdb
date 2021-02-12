@@ -23,22 +23,26 @@ class TaskScheduler;
 class ObjectCache;
 
 class DatabaseInstance : public std::enable_shared_from_this<DatabaseInstance> {
-	friend class BufferManager;
-	friend class ClientContext;
-	friend class ObjectCache;
-	friend class StorageManager;
 	friend class DuckDB;
-	friend class TaskScheduler;
 
 public:
 	DUCKDB_API DatabaseInstance();
+	DUCKDB_API ~DatabaseInstance();
 
 	DBConfig config;
 
 public:
+	StorageManager &GetStorageManager();
+	Catalog &GetCatalog();
 	FileSystem &GetFileSystem();
+	TransactionManager &GetTransactionManager();
+	TaskScheduler &GetScheduler();
+	ObjectCache &GetObjectCache();
+	ConnectionManager &GetConnectionManager();
 
 	idx_t NumberOfThreads();
+
+	static DatabaseInstance &GetDatabase(ClientContext &context);
 
 private:
 	void Initialize(const char *path, DBConfig *config);
@@ -51,21 +55,23 @@ private:
 	unique_ptr<TransactionManager> transaction_manager;
 	unique_ptr<TaskScheduler> scheduler;
 	unique_ptr<ObjectCache> object_cache;
+	unique_ptr<ConnectionManager> connection_manager;
 };
 
 //! The database object. This object holds the catalog and all the
 //! database-specific meta information.
 class DuckDB {
 public:
-	DUCKDB_API DuckDB(const char *path = nullptr, DBConfig *config = nullptr);
-	DUCKDB_API DuckDB(const string &path, DBConfig *config = nullptr);
+	DUCKDB_API explicit DuckDB(const char *path = nullptr, DBConfig *config = nullptr);
+	DUCKDB_API explicit DuckDB(const string &path, DBConfig *config = nullptr);
 	DUCKDB_API ~DuckDB();
 
 	//! Reference to the actual database instance
 	shared_ptr<DatabaseInstance> instance;
 
 public:
-	template <class T> void LoadExtension() {
+	template <class T>
+	void LoadExtension() {
 		T extension;
 		extension.Load(*this);
 	}

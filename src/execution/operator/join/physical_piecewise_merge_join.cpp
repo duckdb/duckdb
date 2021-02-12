@@ -28,7 +28,7 @@ PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(LogicalOperator &op, uniq
 //===--------------------------------------------------------------------===//
 class MergeJoinLocalState : public LocalSinkState {
 public:
-	MergeJoinLocalState(vector<JoinCondition> &conditions) {
+	explicit MergeJoinLocalState(vector<JoinCondition> &conditions) {
 		vector<LogicalType> condition_types;
 		for (auto &cond : conditions) {
 			rhs_executor.AddExpression(*cond.right);
@@ -151,8 +151,8 @@ public:
 };
 
 void PhysicalPiecewiseMergeJoin::ResolveSimpleJoin(ExecutionContext &context, DataChunk &chunk,
-                                                   PhysicalOperatorState *state_) {
-	auto state = reinterpret_cast<PhysicalPiecewiseMergeJoinState *>(state_);
+                                                   PhysicalOperatorState *state_p) {
+	auto state = reinterpret_cast<PhysicalPiecewiseMergeJoinState *>(state_p);
 	auto &gstate = (MergeJoinGlobalState &)*sink_state;
 	do {
 		children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
@@ -192,8 +192,8 @@ void PhysicalPiecewiseMergeJoin::ResolveSimpleJoin(ExecutionContext &context, Da
 }
 
 void PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &chunk,
-                                                    PhysicalOperatorState *state_) {
-	auto state = reinterpret_cast<PhysicalPiecewiseMergeJoinState *>(state_);
+                                                    PhysicalOperatorState *state_p) {
+	auto state = reinterpret_cast<PhysicalPiecewiseMergeJoinState *>(state_p);
 	auto &gstate = (MergeJoinGlobalState &)*sink_state;
 	do {
 		// check if we have to fetch a child from the left side
@@ -278,8 +278,8 @@ void PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionContext &context, D
 }
 
 void PhysicalPiecewiseMergeJoin::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
-                                                  PhysicalOperatorState *state_) {
-	auto state = reinterpret_cast<PhysicalPiecewiseMergeJoinState *>(state_);
+                                                  PhysicalOperatorState *state_p) {
+	auto state = reinterpret_cast<PhysicalPiecewiseMergeJoinState *>(state_p);
 	auto &gstate = (MergeJoinGlobalState &)*sink_state;
 
 	if (gstate.right_chunks.Count() == 0) {
@@ -301,13 +301,13 @@ void PhysicalPiecewiseMergeJoin::GetChunkInternal(ExecutionContext &context, Dat
 	case JoinType::ANTI:
 	case JoinType::MARK:
 		// simple joins can have max STANDARD_VECTOR_SIZE matches per chunk
-		ResolveSimpleJoin(context, chunk, state_);
+		ResolveSimpleJoin(context, chunk, state_p);
 		break;
 	case JoinType::LEFT:
 	case JoinType::INNER:
 	case JoinType::RIGHT:
 	case JoinType::OUTER:
-		ResolveComplexJoin(context, chunk, state_);
+		ResolveComplexJoin(context, chunk, state_p);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for nested loop join!");
@@ -322,8 +322,8 @@ unique_ptr<PhysicalOperatorState> PhysicalPiecewiseMergeJoin::GetOperatorState()
 // OrderVector
 //===--------------------------------------------------------------------===//
 template <class T, class OP>
-static sel_t templated_quicksort_initial(T *data, const SelectionVector &sel, const SelectionVector &not_null_sel,
-                                         idx_t count, SelectionVector &result) {
+static sel_t TemplatedQuicksortInitial(T *data, const SelectionVector &sel, const SelectionVector &not_null_sel,
+                                       idx_t count, SelectionVector &result) {
 	// select pivot
 	auto pivot_idx = not_null_sel.get_index(0);
 	auto dpivot_idx = sel.get_index(pivot_idx);
@@ -344,8 +344,8 @@ static sel_t templated_quicksort_initial(T *data, const SelectionVector &sel, co
 }
 
 template <class T, class OP>
-static void templated_quicksort_inplace(T *data, const SelectionVector &sel, idx_t count, SelectionVector &result,
-                                        sel_t left, sel_t right) {
+static void TemplatedQuicksortRefine(T *data, const SelectionVector &sel, idx_t count, SelectionVector &result,
+                                     sel_t left, sel_t right) {
 	if (left >= right) {
 		return;
 	}
@@ -375,29 +375,29 @@ static void templated_quicksort_inplace(T *data, const SelectionVector &sel, idx
 	sel_t part = i - 1;
 
 	if (part > 0) {
-		templated_quicksort_inplace<T, OP>(data, sel, count, result, left, part - 1);
+		TemplatedQuicksortRefine<T, OP>(data, sel, count, result, left, part - 1);
 	}
-	templated_quicksort_inplace<T, OP>(data, sel, count, result, part + 1, right);
+	TemplatedQuicksortRefine<T, OP>(data, sel, count, result, part + 1, right);
 }
 
 template <class T, class OP>
-void templated_quicksort(T *__restrict data, const SelectionVector &sel, const SelectionVector &not_null_sel,
-                         idx_t count, SelectionVector &result) {
-	auto part = templated_quicksort_initial<T, OP>(data, sel, not_null_sel, count, result);
+void TemplatedQuicksort(T *__restrict data, const SelectionVector &sel, const SelectionVector &not_null_sel,
+                        idx_t count, SelectionVector &result) {
+	auto part = TemplatedQuicksortInitial<T, OP>(data, sel, not_null_sel, count, result);
 	if (part > count) {
 		return;
 	}
-	templated_quicksort_inplace<T, OP>(data, sel, count, result, 0, part);
-	templated_quicksort_inplace<T, OP>(data, sel, count, result, part + 1, count - 1);
+	TemplatedQuicksortRefine<T, OP>(data, sel, count, result, 0, part);
+	TemplatedQuicksortRefine<T, OP>(data, sel, count, result, part + 1, count - 1);
 }
 
 template <class T>
-static void templated_quicksort(VectorData &vdata, const SelectionVector &not_null_sel, idx_t not_null_count,
-                                SelectionVector &result) {
+static void TemplatedQuicksort(VectorData &vdata, const SelectionVector &not_null_sel, idx_t not_null_count,
+                               SelectionVector &result) {
 	if (not_null_count == 0) {
 		return;
 	}
-	templated_quicksort<T, duckdb::LessThanEquals>((T *)vdata.data, *vdata.sel, not_null_sel, not_null_count, result);
+	TemplatedQuicksort<T, duckdb::LessThanEquals>((T *)vdata.data, *vdata.sel, not_null_sel, not_null_count, result);
 }
 
 void OrderVector(Vector &vector, idx_t count, MergeOrder &order) {
@@ -423,31 +423,43 @@ void OrderVector(Vector &vector, idx_t count, MergeOrder &order) {
 	switch (vector.type.InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
-		templated_quicksort<int8_t>(vdata, not_null, not_null_count, order.order);
+		TemplatedQuicksort<int8_t>(vdata, not_null, not_null_count, order.order);
 		break;
 	case PhysicalType::INT16:
-		templated_quicksort<int16_t>(vdata, not_null, not_null_count, order.order);
+		TemplatedQuicksort<int16_t>(vdata, not_null, not_null_count, order.order);
 		break;
 	case PhysicalType::INT32:
-		templated_quicksort<int32_t>(vdata, not_null, not_null_count, order.order);
+		TemplatedQuicksort<int32_t>(vdata, not_null, not_null_count, order.order);
 		break;
 	case PhysicalType::INT64:
-		templated_quicksort<int64_t>(vdata, not_null, not_null_count, order.order);
+		TemplatedQuicksort<int64_t>(vdata, not_null, not_null_count, order.order);
+		break;
+	case PhysicalType::UINT8:
+		TemplatedQuicksort<uint8_t>(vdata, not_null, not_null_count, order.order);
+		break;
+	case PhysicalType::UINT16:
+		TemplatedQuicksort<uint16_t>(vdata, not_null, not_null_count, order.order);
+		break;
+	case PhysicalType::UINT32:
+		TemplatedQuicksort<uint32_t>(vdata, not_null, not_null_count, order.order);
+		break;
+	case PhysicalType::UINT64:
+		TemplatedQuicksort<uint64_t>(vdata, not_null, not_null_count, order.order);
 		break;
 	case PhysicalType::INT128:
-		templated_quicksort<hugeint_t>(vdata, not_null, not_null_count, order.order);
+		TemplatedQuicksort<hugeint_t>(vdata, not_null, not_null_count, order.order);
 		break;
 	case PhysicalType::FLOAT:
-		templated_quicksort<float>(vdata, not_null, not_null_count, order.order);
+		TemplatedQuicksort<float>(vdata, not_null, not_null_count, order.order);
 		break;
 	case PhysicalType::DOUBLE:
-		templated_quicksort<double>(vdata, not_null, not_null_count, order.order);
+		TemplatedQuicksort<double>(vdata, not_null, not_null_count, order.order);
 		break;
 	case PhysicalType::INTERVAL:
-		templated_quicksort<interval_t>(vdata, not_null, not_null_count, order.order);
+		TemplatedQuicksort<interval_t>(vdata, not_null, not_null_count, order.order);
 		break;
 	case PhysicalType::VARCHAR:
-		templated_quicksort<string_t>(vdata, not_null, not_null_count, order.order);
+		TemplatedQuicksort<string_t>(vdata, not_null, not_null_count, order.order);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for sort");

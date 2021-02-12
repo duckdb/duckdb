@@ -16,7 +16,7 @@ namespace duckdb {
 //! PhysicalAlter represents an ALTER TABLE command
 class PhysicalAlter : public PhysicalOperator {
 public:
-	PhysicalAlter(unique_ptr<AlterInfo> info)
+	explicit PhysicalAlter(unique_ptr<AlterInfo> info)
 	    : PhysicalOperator(PhysicalOperatorType::ALTER, {LogicalType::BOOLEAN}), info(move(info)) {
 	}
 

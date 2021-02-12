@@ -3,6 +3,7 @@ add_library_unity(
   OBJECT
   transform_alter_table.cpp
   transform_call.cpp
+  transform_checkpoint.cpp
   transform_create_function.cpp
   transform_copy.cpp
   transform_create_table_as.cpp
@@ -20,6 +21,7 @@ add_library_unity(
   transform_rename.cpp
   transform_select.cpp
   transform_select_node.cpp
+  transform_set.cpp
   transform_prepare.cpp
   transform_show.cpp
   transform_show_select.cpp

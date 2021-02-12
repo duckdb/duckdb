@@ -62,8 +62,3 @@ SELECT +d FROM dates
 
 statement error
 SELECT -d FROM dates
-
-# postfix operators not implemented
-statement error
-SELECT 2!
-

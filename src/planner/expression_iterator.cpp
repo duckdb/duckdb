@@ -9,21 +9,24 @@
 namespace duckdb {
 
 void ExpressionIterator::EnumerateChildren(const Expression &expr,
-                                           std::function<void(const Expression &child)> callback) {
+                                           const std::function<void(const Expression &child)> &callback) {
 	EnumerateChildren((Expression &)expr, [&](unique_ptr<Expression> &child) { callback(*child); });
 }
 
-void ExpressionIterator::EnumerateChildren(Expression &expr, std::function<void(Expression &child)> callback) {
+void ExpressionIterator::EnumerateChildren(Expression &expr, const std::function<void(Expression &child)> &callback) {
 	EnumerateChildren(expr, [&](unique_ptr<Expression> &child) { callback(*child); });
 }
 
 void ExpressionIterator::EnumerateChildren(Expression &expr,
-                                           std::function<void(unique_ptr<Expression> &child)> callback) {
+                                           const std::function<void(unique_ptr<Expression> &child)> &callback) {
 	switch (expr.expression_class) {
 	case ExpressionClass::BOUND_AGGREGATE: {
 		auto &aggr_expr = (BoundAggregateExpression &)expr;
 		for (auto &child : aggr_expr.children) {
 			callback(child);
+		}
+		if (aggr_expr.filter) {
+			callback(aggr_expr.filter);
 		}
 		break;
 	}
@@ -119,7 +122,7 @@ void ExpressionIterator::EnumerateChildren(Expression &expr,
 }
 
 void ExpressionIterator::EnumerateExpression(unique_ptr<Expression> &expr,
-                                             std::function<void(Expression &child)> callback) {
+                                             const std::function<void(Expression &child)> &callback) {
 	if (!expr) {
 		return;
 	}
@@ -129,7 +132,7 @@ void ExpressionIterator::EnumerateExpression(unique_ptr<Expression> &expr,
 }
 
 void ExpressionIterator::EnumerateTableRefChildren(BoundTableRef &ref,
-                                                   std::function<void(Expression &child)> callback) {
+                                                   const std::function<void(Expression &child)> &callback) {
 	switch (ref.type) {
 	case TableReferenceType::CROSS_PRODUCT: {
 		auto &bound_crossproduct = (BoundCrossProductRef &)ref;
@@ -157,7 +160,7 @@ void ExpressionIterator::EnumerateTableRefChildren(BoundTableRef &ref,
 }
 
 void ExpressionIterator::EnumerateQueryNodeChildren(BoundQueryNode &node,
-                                                    std::function<void(Expression &child)> callback) {
+                                                    const std::function<void(Expression &child)> &callback) {
 	switch (node.type) {
 	case QueryNodeType::SET_OPERATION_NODE: {
 		auto &bound_setop = (BoundSetOperationNode &)node;

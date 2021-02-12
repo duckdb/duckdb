@@ -15,11 +15,12 @@
 namespace duckdb {
 
 struct CreateScalarFunctionInfo : public CreateFunctionInfo {
-	CreateScalarFunctionInfo(ScalarFunction function) : CreateFunctionInfo(CatalogType::SCALAR_FUNCTION_ENTRY) {
+	explicit CreateScalarFunctionInfo(ScalarFunction function)
+	    : CreateFunctionInfo(CatalogType::SCALAR_FUNCTION_ENTRY) {
 		this->name = function.name;
 		functions.push_back(function);
 	}
-	CreateScalarFunctionInfo(ScalarFunctionSet set)
+	explicit CreateScalarFunctionInfo(ScalarFunctionSet set)
 	    : CreateFunctionInfo(CatalogType::SCALAR_FUNCTION_ENTRY), functions(move(set.functions)) {
 		this->name = set.name;
 		for (auto &func : functions) {

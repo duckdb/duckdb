@@ -197,6 +197,7 @@ bool sqlite3_display_result(StatementType type) {
 	case StatementType::EXPLAIN_STATEMENT:
 	case StatementType::PRAGMA_STATEMENT:
 	case StatementType::SELECT_STATEMENT:
+	case StatementType::SHOW_STATEMENT:
 		return true;
 	default:
 		return false;
@@ -745,8 +746,8 @@ typedef uint8_t u8;
 ** Token types used by the sqlite3_complete() routine.  See the header
 ** comments on that procedure for additional information.
 */
-#define tkSEMI 0
-#define tkWS 1
+#define tkSEMI  0
+#define tkWS    1
 #define tkOTHER 2
 
 const unsigned char sqlite3CtypeMap[256] = {

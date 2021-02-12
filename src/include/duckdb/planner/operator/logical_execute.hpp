@@ -15,7 +15,7 @@ namespace duckdb {
 
 class LogicalExecute : public LogicalOperator {
 public:
-	LogicalExecute(shared_ptr<PreparedStatementData> prepared_p)
+	explicit LogicalExecute(shared_ptr<PreparedStatementData> prepared_p)
 	    : LogicalOperator(LogicalOperatorType::LOGICAL_EXECUTE), prepared(move(prepared_p)) {
 		D_ASSERT(prepared);
 		types = prepared->types;

@@ -14,6 +14,12 @@ SELECT FIRST(b) FROM tbl WHERE a=2
 ----
 thisisalongstring
 
+# Check if arbitraty alias works like FIRST
+query T
+SELECT ARBITRARY(b) FROM tbl WHERE a=2
+----
+thisisalongstring
+
 query T
 SELECT FIRST(b) FROM tbl WHERE a=1
 ----

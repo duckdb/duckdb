@@ -84,8 +84,8 @@ void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 //===--------------------------------------------------------------------===//
 // GetChunkInternal
 //===--------------------------------------------------------------------===//
-void PhysicalOrder::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
-	auto state = reinterpret_cast<PhysicalOrderOperatorState *>(state_);
+void PhysicalOrder::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
+	auto state = reinterpret_cast<PhysicalOrderOperatorState *>(state_p);
 	auto &sink = (OrderByGlobalOperatorState &)*this->sink_state;
 	ChunkCollection &big_data = sink.sorted_data;
 	if (state->position >= big_data.Count()) {

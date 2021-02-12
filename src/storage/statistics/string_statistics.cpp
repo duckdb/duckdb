@@ -6,7 +6,7 @@
 
 namespace duckdb {
 
-StringStatistics::StringStatistics(LogicalType type) : BaseStatistics(type) {
+StringStatistics::StringStatistics(LogicalType type_p) : BaseStatistics(move(type_p)) {
 	for (idx_t i = 0; i < MAX_STRING_MINMAX_SIZE; i++) {
 		min[i] = 0xFF;
 		max[i] = 0;
@@ -37,7 +37,7 @@ void StringStatistics::Serialize(Serializer &serializer) {
 }
 
 unique_ptr<BaseStatistics> StringStatistics::Deserialize(Deserializer &source, LogicalType type) {
-	auto stats = make_unique<StringStatistics>(type);
+	auto stats = make_unique<StringStatistics>(move(type));
 	source.ReadData(stats->min, MAX_STRING_MINMAX_SIZE);
 	source.ReadData(stats->max, MAX_STRING_MINMAX_SIZE);
 	stats->has_unicode = source.Read<bool>();
@@ -46,7 +46,7 @@ unique_ptr<BaseStatistics> StringStatistics::Deserialize(Deserializer &source, L
 	return move(stats);
 }
 
-static int string_value_comparison(const_data_ptr_t data, idx_t len, const_data_ptr_t comparison) {
+static int StringValueComparison(const_data_ptr_t data, idx_t len, const_data_ptr_t comparison) {
 	D_ASSERT(len <= StringStatistics::MAX_STRING_MINMAX_SIZE);
 	for (idx_t i = 0; i < len; i++) {
 		if (data[i] < comparison[i]) {
@@ -58,24 +58,30 @@ static int string_value_comparison(const_data_ptr_t data, idx_t len, const_data_
 	return 0;
 }
 
+static void ConstructValue(const_data_ptr_t data, idx_t size, data_t target[]) {
+	idx_t value_size =
+	    size > StringStatistics::MAX_STRING_MINMAX_SIZE ? StringStatistics::MAX_STRING_MINMAX_SIZE : size;
+	memcpy(target, data, value_size);
+	for (idx_t i = value_size; i < StringStatistics::MAX_STRING_MINMAX_SIZE; i++) {
+		target[i] = '\0';
+	}
+}
+
 void StringStatistics::Update(const string_t &value) {
 	auto data = (const_data_ptr_t)value.GetDataUnsafe();
 	auto size = value.GetSize();
 
 	//! we can only fit 8 bytes, so we might need to trim our string
-	idx_t value_size = size > MAX_STRING_MINMAX_SIZE ? MAX_STRING_MINMAX_SIZE : size;
+	// construct the value
+	data_t target[MAX_STRING_MINMAX_SIZE];
+	ConstructValue(data, size, target);
+
 	// update the min and max
-	if (string_value_comparison(data, value_size, min) < 0) {
-		memcpy(min, data, value_size);
-		for (idx_t i = value_size; i < MAX_STRING_MINMAX_SIZE; i++) {
-			min[i] = '\0';
-		}
+	if (StringValueComparison(target, MAX_STRING_MINMAX_SIZE, min) < 0) {
+		memcpy(min, target, MAX_STRING_MINMAX_SIZE);
 	}
-	if (string_value_comparison(data, value_size, max) > 0) {
-		memcpy(max, data, value_size);
-		for (idx_t i = value_size; i < MAX_STRING_MINMAX_SIZE; i++) {
-			max[i] = '\0';
-		}
+	if (StringValueComparison(target, MAX_STRING_MINMAX_SIZE, max) > 0) {
+		memcpy(max, target, MAX_STRING_MINMAX_SIZE);
 	}
 	if (size > max_string_length) {
 		max_string_length = size;
@@ -90,12 +96,12 @@ void StringStatistics::Update(const string_t &value) {
 	}
 }
 
-void StringStatistics::Merge(const BaseStatistics &other_) {
-	auto &other = (const StringStatistics &)other_;
-	if (string_value_comparison(other.min, MAX_STRING_MINMAX_SIZE, min) < 0) {
+void StringStatistics::Merge(const BaseStatistics &other_p) {
+	auto &other = (const StringStatistics &)other_p;
+	if (StringValueComparison(other.min, MAX_STRING_MINMAX_SIZE, min) < 0) {
 		memcpy(min, other.min, MAX_STRING_MINMAX_SIZE);
 	}
-	if (string_value_comparison(other.max, MAX_STRING_MINMAX_SIZE, max) > 0) {
+	if (StringValueComparison(other.max, MAX_STRING_MINMAX_SIZE, max) > 0) {
 		memcpy(max, other.max, MAX_STRING_MINMAX_SIZE);
 	}
 	has_null = has_null || other.has_null;
@@ -104,13 +110,13 @@ void StringStatistics::Merge(const BaseStatistics &other_) {
 	has_overflow_strings = has_overflow_strings || other.has_overflow_strings;
 }
 
-bool StringStatistics::CheckZonemap(ExpressionType comparison_type, string constant) {
+bool StringStatistics::CheckZonemap(ExpressionType comparison_type, const string &constant) {
 	auto data = (const_data_ptr_t)constant.c_str();
 	auto size = constant.size();
 
 	idx_t value_size = size > MAX_STRING_MINMAX_SIZE ? MAX_STRING_MINMAX_SIZE : size;
-	int min_comp = string_value_comparison(data, value_size, min);
-	int max_comp = string_value_comparison(data, value_size, max);
+	int min_comp = StringValueComparison(data, value_size, min);
+	int max_comp = StringValueComparison(data, value_size, max);
 	switch (comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
 		return min_comp >= 0 && max_comp <= 0;
@@ -127,7 +133,7 @@ bool StringStatistics::CheckZonemap(ExpressionType comparison_type, string const
 
 static idx_t GetValidMinMaxSubstring(data_ptr_t data) {
 	idx_t len = 0;
-	for(idx_t i = 0; i < StringStatistics::MAX_STRING_MINMAX_SIZE; i++) {
+	for (idx_t i = 0; i < StringStatistics::MAX_STRING_MINMAX_SIZE; i++) {
 		if (data[i] == '\0') {
 			return i;
 		}
@@ -179,11 +185,11 @@ void StringStatistics::Verify(Vector &vector, idx_t count) {
 				throw InternalException("Invalid unicode detected in vector: %s", vector.ToString(count));
 			}
 		}
-		if (string_value_comparison((const_data_ptr_t) data, MinValue<idx_t>(len, MAX_STRING_MINMAX_SIZE), min) < 0) {
+		if (StringValueComparison((const_data_ptr_t)data, MinValue<idx_t>(len, MAX_STRING_MINMAX_SIZE), min) < 0) {
 			throw InternalException("Statistics mismatch: value is smaller than min.\nStatistics: %s\nVector: %s",
 			                        ToString(), vector.ToString(count));
 		}
-		if (string_value_comparison((const_data_ptr_t) data, MinValue<idx_t>(len, MAX_STRING_MINMAX_SIZE), max) > 0) {
+		if (StringValueComparison((const_data_ptr_t)data, MinValue<idx_t>(len, MAX_STRING_MINMAX_SIZE), max) > 0) {
 			throw InternalException("Statistics mismatch: value is bigger than max.\nStatistics: %s\nVector: %s",
 			                        ToString(), vector.ToString(count));
 		}

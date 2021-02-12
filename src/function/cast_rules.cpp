@@ -1,10 +1,9 @@
 #include "duckdb/function/cast_rules.hpp"
-#include "duckdb/common/exception.hpp"
 
 namespace duckdb {
 
 //! The target type determines the preferred implicit casts
-static int64_t TargetTypeCost(LogicalType type) {
+static int64_t TargetTypeCost(const LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::INTEGER:
 		return 103;
@@ -25,7 +24,7 @@ static int64_t TargetTypeCost(LogicalType type) {
 	}
 }
 
-static int64_t ImplicitCastTinyint(LogicalType to) {
+static int64_t ImplicitCastTinyint(const LogicalType &to) {
 	switch (to.id()) {
 	case LogicalTypeId::SMALLINT:
 	case LogicalTypeId::INTEGER:
@@ -40,7 +39,7 @@ static int64_t ImplicitCastTinyint(LogicalType to) {
 	}
 }
 
-static int64_t ImplicitCastSmallint(LogicalType to) {
+static int64_t ImplicitCastSmallint(const LogicalType &to) {
 	switch (to.id()) {
 	case LogicalTypeId::INTEGER:
 	case LogicalTypeId::BIGINT:
@@ -54,7 +53,7 @@ static int64_t ImplicitCastSmallint(LogicalType to) {
 	}
 }
 
-static int64_t ImplicitCastInteger(LogicalType to) {
+static int64_t ImplicitCastInteger(const LogicalType &to) {
 	switch (to.id()) {
 	case LogicalTypeId::BIGINT:
 	case LogicalTypeId::HUGEINT:
@@ -67,7 +66,7 @@ static int64_t ImplicitCastInteger(LogicalType to) {
 	}
 }
 
-static int64_t ImplicitCastBigint(LogicalType to) {
+static int64_t ImplicitCastBigint(const LogicalType &to) {
 	switch (to.id()) {
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
@@ -79,7 +78,68 @@ static int64_t ImplicitCastBigint(LogicalType to) {
 	}
 }
 
-static int64_t ImplicitCastFloat(LogicalType to) {
+static int64_t ImplicitCastUTinyint(const LogicalType &to) {
+	switch (to.id()) {
+	case LogicalTypeId::USMALLINT:
+	case LogicalTypeId::UINTEGER:
+	case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::SMALLINT:
+	case LogicalTypeId::INTEGER:
+	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::FLOAT:
+	case LogicalTypeId::DOUBLE:
+	case LogicalTypeId::DECIMAL:
+		return TargetTypeCost(to);
+	default:
+		return -1;
+	}
+}
+
+static int64_t ImplicitCastUSmallint(const LogicalType &to) {
+	switch (to.id()) {
+	case LogicalTypeId::UINTEGER:
+	case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::INTEGER:
+	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::FLOAT:
+	case LogicalTypeId::DOUBLE:
+	case LogicalTypeId::DECIMAL:
+		return TargetTypeCost(to);
+	default:
+		return -1;
+	}
+}
+
+static int64_t ImplicitCastUInteger(const LogicalType &to) {
+	switch (to.id()) {
+
+	case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::FLOAT:
+	case LogicalTypeId::DOUBLE:
+	case LogicalTypeId::DECIMAL:
+		return TargetTypeCost(to);
+	default:
+		return -1;
+	}
+}
+
+static int64_t ImplicitCastUBigint(const LogicalType &to) {
+	switch (to.id()) {
+	case LogicalTypeId::FLOAT:
+	case LogicalTypeId::DOUBLE:
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::DECIMAL:
+		return TargetTypeCost(to);
+	default:
+		return -1;
+	}
+}
+
+static int64_t ImplicitCastFloat(const LogicalType &to) {
 	switch (to.id()) {
 	case LogicalTypeId::DOUBLE:
 		return TargetTypeCost(to);
@@ -88,14 +148,14 @@ static int64_t ImplicitCastFloat(LogicalType to) {
 	}
 }
 
-static int64_t ImplicitCastDouble(LogicalType to) {
+static int64_t ImplicitCastDouble(const LogicalType &to) {
 	switch (to.id()) {
 	default:
 		return -1;
 	}
 }
 
-static int64_t ImplicitCastDecimal(LogicalType to) {
+static int64_t ImplicitCastDecimal(const LogicalType &to) {
 	switch (to.id()) {
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
@@ -105,7 +165,7 @@ static int64_t ImplicitCastDecimal(LogicalType to) {
 	}
 }
 
-static int64_t ImplicitCastHugeint(LogicalType to) {
+static int64_t ImplicitCastHugeint(const LogicalType &to) {
 	switch (to.id()) {
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
@@ -116,7 +176,7 @@ static int64_t ImplicitCastHugeint(LogicalType to) {
 	}
 }
 
-static int64_t ImplicitCastDate(LogicalType to) {
+static int64_t ImplicitCastDate(const LogicalType &to) {
 	switch (to.id()) {
 	case LogicalTypeId::TIMESTAMP:
 		return TargetTypeCost(to);
@@ -125,7 +185,7 @@ static int64_t ImplicitCastDate(LogicalType to) {
 	}
 }
 
-int64_t CastRules::ImplicitCast(LogicalType from, LogicalType to) {
+int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) {
 	if (to.id() == LogicalTypeId::ANY) {
 		// anything can be cast to ANY type for no cost
 		return 0;
@@ -151,6 +211,14 @@ int64_t CastRules::ImplicitCast(LogicalType from, LogicalType to) {
 		return ImplicitCastInteger(to);
 	case LogicalTypeId::BIGINT:
 		return ImplicitCastBigint(to);
+	case LogicalTypeId::UTINYINT:
+		return ImplicitCastUTinyint(to);
+	case LogicalTypeId::USMALLINT:
+		return ImplicitCastUSmallint(to);
+	case LogicalTypeId::UINTEGER:
+		return ImplicitCastUInteger(to);
+	case LogicalTypeId::UBIGINT:
+		return ImplicitCastUBigint(to);
 	case LogicalTypeId::HUGEINT:
 		return ImplicitCastHugeint(to);
 	case LogicalTypeId::FLOAT:
