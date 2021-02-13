@@ -1610,7 +1610,7 @@ struct DuckDBPyConnection {
 	}
 
 	// these should be functions on the result but well
-	py::tuple fetchone() {
+	py::object fetchone() {
 		if (!result) {
 			throw runtime_error("no open result set");
 		}
