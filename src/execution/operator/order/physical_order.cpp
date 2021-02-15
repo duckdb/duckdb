@@ -29,7 +29,7 @@ public:
 	ExpressionExecutor executor;
 	vector<LogicalType> sorting_l_types;
 	vector<PhysicalType> sorting_p_types;
-	vector<PhysicalType> payload_types;
+	vector<PhysicalType> payload_p_types;
 
 	//! Mappings from sorting index to payload index and vice versa
 	std::unordered_map<idx_t, idx_t> s_to_p;
@@ -48,8 +48,6 @@ public:
 	vector<unique_ptr<ContinuousBlock>> continuous;
 	//! Intermediate results
 	vector<unique_ptr<ContinuousBlock>> intermediate;
-	//! Final sorted blocks
-	vector<RowDataBlock> result;
 };
 
 class OrderLocalState : public LocalSinkState {
@@ -72,32 +70,32 @@ public:
 unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &context) {
 	auto state = make_unique<OrderGlobalState>(*this, BufferManager::GetBufferManager(context));
 	for (idx_t i = 0; i < orders.size(); i++) {
-		auto &expr = orders[i].expression;
-		state->executor.AddExpression(*expr);
-		state->sorting_l_types.push_back(expr->return_type);
-		state->sorting_p_types.push_back(expr->return_type.InternalType());
-		if (orders[i].expression->type == ExpressionType::BOUND_REF) {
-			auto &ref = (BoundReferenceExpression &)*expr;
+		auto &expr = *orders[i].expression;
+		state->executor.AddExpression(expr);
+		state->sorting_l_types.push_back(expr.return_type);
+		state->sorting_p_types.push_back(expr.return_type.InternalType());
+		if (expr.type == ExpressionType::BOUND_REF) {
+			auto &ref = (BoundReferenceExpression &)expr;
 			state->s_to_p[i] = ref.index;
-			state->p_to_s[i] = ref.index;
+			state->p_to_s[ref.index] = i;
 		}
 	}
 	for (idx_t i = 0; i < children[0]->types.size(); i++) {
-		if (state->p_to_s.find(i) != state->p_to_s.end()) {
-			state->payload_types.push_back(children[0]->types[i].InternalType());
-		} else {
-			state->p_to_p[i] = i - state->payload_types.size();
+		if (state->p_to_s.find(i) == state->p_to_s.end()) {
+			// if the column is not already in sorting columns, add it to the payload
+			state->p_to_p[state->payload_p_types.size()] = i;
+			state->payload_p_types.push_back(children[0]->types[i].InternalType());
 		}
 	}
 	state->sorting_nullmask_size = (state->sorting_p_types.size() + 7) / 8;
-	state->payload_nullmask_size = (state->payload_types.size() + 7) / 8;
+	state->payload_nullmask_size = (state->payload_p_types.size() + 7) / 8;
 	state->entry_size += state->sorting_nullmask_size;
 	for (auto &type : state->sorting_p_types) {
 		state->sorting_size += GetTypeIdSize(type);
 	}
 	state->entry_size += state->sorting_size;
 	state->entry_size += state->payload_nullmask_size;
-	for (auto &type : state->payload_types) {
+	for (auto &type : state->payload_p_types) {
 		state->entry_size += GetTypeIdSize(type);
 	}
 	idx_t vectors_per_block = (SORTING_BLOCK_SIZE / state->entry_size / STANDARD_VECTOR_SIZE);
@@ -127,28 +125,36 @@ public:
 		return key_locations[entry_idx];
 	}
 
+	void InitializeBlock() {
+		if (block_idx >= blocks.size()) {
+			return;
+		}
+		entry_idx = block_idx == 0 ? start : 0;
+		block_end = block_idx == blocks.size() - 1 ? end : blocks[block_idx].count;
+	}
+
 	bool HasNext() {
-		return !(block_idx >= blocks.size() && entry_idx >= block_end);
+		return entry_idx < block_end - 1 || block_idx < blocks.size() - 1;
 	}
 
 	void Advance() {
-		entry_idx++;
-		if (entry_idx >= block_end) {
+		if (entry_idx < block_end - 1) {
+			entry_idx++;
+		} else if (block_idx < blocks.size() - 1) {
 			block_idx++;
 			PinBlock();
 		}
 	}
 
 	void PinBlock() {
-		if (HasNext()) {
+		InitializeBlock();
+		if (!HasNext()) {
 			return;
 		}
-		entry_idx = block_idx == 0 ? start : 0;
-		block_end = block_idx == blocks.size() - 1 ? end : blocks[block_idx].count;
 		handle = state.buffer_manager.Pin(blocks[block_idx].block);
 		data_ptr_t dataptr = handle->node->buffer;
 		if (!key_locations) {
-			key_locations = unique_ptr<data_ptr_t[]>(new data_ptr_t[blocks[block_idx].count]);
+			key_locations = unique_ptr<data_ptr_t[]>(new data_ptr_t[state.block_capacity]);
 		}
 		if (offsets) {
 			for (idx_t i = entry_idx; i < end; i++) {
@@ -164,28 +170,29 @@ public:
 	}
 
 	void FlushData(ContinuousBlock &target) {
-		for (; block_idx < blocks.size(); block_idx++) {
-			if (entry_idx == 0 && block_end == blocks[block_idx].count) {
+		for (; block_idx < blocks.size(); block_idx++, InitializeBlock()) {
+			if (offsets) {
+				// this block has been sorted but not re-ordered
+				PinBlock();
+			} else if (entry_idx == 0 && block_end == blocks[block_idx].count) {
 				// a full block can be appended
 				target.blocks.push_back(blocks[block_idx]);
 				continue;
-			} else {
-				// partial block must be appended
-				if (target.blocks.empty() ||
-				    target.blocks.back().count + (block_end - entry_idx) >= state.block_capacity) {
-					// if it does not fit in the back, create a new block to write to
-					target.blocks.emplace_back(state.buffer_manager, state.block_capacity, state.entry_size);
-				}
-				auto write_block = target.blocks.back();
-				auto write_handle = state.buffer_manager.Pin(write_block.block);
-				auto write_ptr = write_handle->node->buffer;
+			}
+			// partial block must be appended
+			if (target.blocks.empty() || target.blocks.back().count + (block_end - entry_idx) > state.block_capacity) {
+				// if it does not fit in the back, create a new block to write to
+				target.blocks.emplace_back(state.buffer_manager, state.block_capacity, state.entry_size);
+			}
+			auto &write_block = target.blocks.back();
+			auto write_handle = state.buffer_manager.Pin(write_block.block);
+			auto write_ptr = write_handle->node->buffer;
 
-				// flush into last block
-				while (HasNext()) {
-					memcpy(write_ptr, DataPtr(), state.entry_size);
-					write_block.count++;
-					Advance();
-				}
+			// flush into last block
+			for (; entry_idx < block_end; entry_idx++) {
+				memcpy(write_ptr, DataPtr(), state.entry_size);
+				write_ptr += state.entry_size;
+				write_block.count++;
 			}
 		}
 		target.end = target.blocks.back().count;
@@ -336,14 +343,13 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &state, 
 		lstate.key_locations[i] = lstate.nullmask_locations[i] + gstate.payload_nullmask_size;
 	}
 	// serialize payload columns to row-wise format
-	for (idx_t i = 0, p_i = 0; i < input.data.size(); i++) {
+	for (idx_t i = 0; i < input.data.size(); i++) {
 		if (gstate.p_to_s.find(i) != gstate.p_to_s.end()) {
 			// this column is already serialized as a sorting column
 			continue;
 		}
-		lstate.row_chunk.SerializeVector(input.data[i], input.size(), *lstate.sel_ptr, input.size(), p_i,
+		lstate.row_chunk.SerializeVector(input.data[i], input.size(), *lstate.sel_ptr, input.size(), gstate.p_to_p[i],
 		                                 lstate.key_locations, lstate.nullmask_locations);
-		p_i++;
 	}
 	// sort the block if it is full
 	if (!lstate.row_chunk.blocks.empty() && lstate.row_chunk.blocks.back().count == gstate.block_capacity) {
@@ -465,7 +471,7 @@ void PhysicalOrder::ScheduleMergeTasks(Pipeline &pipeline, ClientContext &contex
 
 	// finish pipeline if there is only one continuous block left
 	if (sink.continuous.size() == 1) {
-		pipeline.Finish(); // TODO: is this needed?
+		//		pipeline.Finish(); // TODO: is this needed?
 		return;
 	}
 
@@ -493,7 +499,6 @@ void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 		// special case: only one block arrived, it was sorted but not re-ordered
 		auto single_block = move(sink.intermediate[0]);
 		sink.intermediate[0] = make_unique<ContinuousBlock>(sink);
-		single_block->PinBlock();
 		single_block->FlushData(*sink.intermediate[0]);
 	}
 
@@ -520,10 +525,9 @@ void PhysicalOrder::GetChunkInternal(ExecutionContext &context, DataChunk &chunk
 	auto state = reinterpret_cast<PhysicalOrderOperatorState *>(state_p);
 	auto &sink = (OrderGlobalState &)*this->sink_state;
 
-	if (state->current_block >= sink.result.size()) {
-		for (const auto &b : sink.result) {
-			BufferManager::GetBufferManager(context.client).UnregisterBlock(b.block->BlockId(), true);
-		}
+	D_ASSERT(sink.continuous.size() == 1);
+
+	if (state->current_block >= sink.continuous[0]->blocks.size()) {
 		state->finished = true;
 		return;
 	}
@@ -532,47 +536,51 @@ void PhysicalOrder::GetChunkInternal(ExecutionContext &context, DataChunk &chunk
 	auto handle = sink.buffer_manager.Pin(block.block);
 	auto dataptr = handle->node->buffer + state->position * sink.entry_size;
 
-	data_ptr_t s_nullmask_locations[STANDARD_VECTOR_SIZE];
-	data_ptr_t s_key_locations[STANDARD_VECTOR_SIZE];
-	data_ptr_t p_nullmask_locations[STANDARD_VECTOR_SIZE];
-	data_ptr_t p_key_locations[STANDARD_VECTOR_SIZE];
+	data_ptr_t nullmask_locations[STANDARD_VECTOR_SIZE];
+	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
 
 	// fetch the next vector of entries from the blocks
 	idx_t next = MinValue<idx_t>(STANDARD_VECTOR_SIZE, block.count - state->position);
 	for (idx_t i = 0; i < next; i++) {
-		s_nullmask_locations[i] = dataptr;
-		s_key_locations[i] = s_nullmask_locations[i] + sink.sorting_nullmask_size;
-		p_nullmask_locations[i] = p_nullmask_locations[i] + sink.sorting_size;
-		p_key_locations[i] = p_nullmask_locations[i] + sink.payload_nullmask_size;
+		nullmask_locations[i] = dataptr;
+		key_locations[i] = dataptr + sink.sorting_nullmask_size;
 		dataptr += sink.entry_size;
 	}
 	chunk.SetCardinality(next);
 
-	idx_t col_in_block;
-	data_ptr_t *nullmask_locations;
-	data_ptr_t *key_locations;
-	for (idx_t i = 0; i < chunk.ColumnCount(); i++) {
-		if (sink.p_to_s.find(i) != sink.p_to_s.end()) {
-			// column is a sorting column
-			col_in_block = sink.p_to_s[i];
-			nullmask_locations = s_nullmask_locations;
-			key_locations = s_key_locations;
+	// deserialize sorting columns (if needed)
+	for (idx_t sort_idx = 0; sort_idx < sink.sorting_p_types.size(); sort_idx++) {
+		if (sink.s_to_p.find(sort_idx) == sink.s_to_p.end()) {
+			// sorting column does not need to be output
+			idx_t size = GetTypeIdSize(sink.sorting_p_types[sort_idx]);
+			for (idx_t i = 0; i < next; i++) {
+				key_locations[i] += size;
+			}
 		} else {
-			// column is a payload column
-			col_in_block = sink.p_to_p[i];
-			nullmask_locations = p_nullmask_locations;
-			key_locations = p_key_locations;
+			// sorting column needs to be output
+			sink.row_chunk.DeserializeIntoVector(chunk.data[sink.s_to_p[sort_idx]], next, sort_idx, key_locations,
+			                                     nullmask_locations);
 		}
-		// now insert into the data chunk
-		sink.row_chunk.DeserializeIntoVector(chunk.data[i], next, col_in_block, key_locations, nullmask_locations);
 	}
 
+	// move pointers to payload
+	for (idx_t i = 0; i < next; i++) {
+		nullmask_locations[i] = key_locations[i];
+		key_locations[i] += sink.payload_nullmask_size;
+	}
+
+	// deserialize payload columns
+	for (idx_t payl_idx = 0; payl_idx < sink.payload_p_types.size(); payl_idx++) {
+		sink.row_chunk.DeserializeIntoVector(chunk.data[sink.p_to_p[payl_idx]], next, payl_idx, key_locations,
+		                                     nullmask_locations);
+	}
+	chunk.Verify();
+
 	state->position += STANDARD_VECTOR_SIZE;
-	if (state->position >= sink.result[state->current_block].count) {
+	if (state->position >= block.count) {
 		state->current_block++;
 		state->position = 0;
-		BufferManager::GetBufferManager(context.client)
-		    .UnregisterBlock(sink.result[state->current_block - 1].block->BlockId(), true);
+		BufferManager::GetBufferManager(context.client).UnregisterBlock(block.block->BlockId(), true);
 	}
 }
 
