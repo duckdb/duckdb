@@ -151,10 +151,10 @@ private:
 public:
 	template <class STATE_TYPE, class OP>
 	static void NullaryScatter(Vector &states, FunctionData *bind_data, idx_t count) {
-		if (states.vector_type == VectorType::CONSTANT_VECTOR) {
+		if (states.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
 			OP::template ConstantOperation<STATE_TYPE, OP>(*sdata, bind_data, count);
-		} else if (states.vector_type == VectorType::FLAT_VECTOR) {
+		} else if (states.GetVectorType() == VectorType::FLAT_VECTOR) {
 			auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
 			NullaryFlatLoop<STATE_TYPE, OP>(sdata, bind_data, count);
 		} else {
@@ -171,7 +171,8 @@ public:
 
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
 	static void UnaryScatter(Vector &input, Vector &states, FunctionData *bind_data, idx_t count) {
-		if (input.vector_type == VectorType::CONSTANT_VECTOR && states.vector_type == VectorType::CONSTANT_VECTOR) {
+		if (input.GetVectorType() == VectorType::CONSTANT_VECTOR &&
+		    states.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			if (OP::IgnoreNull() && ConstantVector::IsNull(input)) {
 				// constant NULL input in function that ignores NULL values
 				return;
@@ -181,7 +182,8 @@ public:
 			auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
 			OP::template ConstantOperation<INPUT_TYPE, STATE_TYPE, OP>(*sdata, bind_data, idata,
 			                                                           ConstantVector::Nullmask(input), count);
-		} else if (input.vector_type == VectorType::FLAT_VECTOR && states.vector_type == VectorType::FLAT_VECTOR) {
+		} else if (input.GetVectorType() == VectorType::FLAT_VECTOR &&
+		           states.GetVectorType() == VectorType::FLAT_VECTOR) {
 			auto idata = FlatVector::GetData<INPUT_TYPE>(input);
 			auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
 			UnaryFlatLoop<STATE_TYPE, INPUT_TYPE, OP>(idata, bind_data, sdata, FlatVector::Nullmask(input), count);
@@ -196,7 +198,7 @@ public:
 
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
 	static void UnaryUpdate(Vector &input, FunctionData *bind_data, data_ptr_t state, idx_t count) {
-		switch (input.vector_type) {
+		switch (input.GetVectorType()) {
 		case VectorType::CONSTANT_VECTOR: {
 			if (OP::IgnoreNull() && ConstantVector::IsNull(input)) {
 				return;
@@ -249,7 +251,7 @@ public:
 
 	template <class STATE_TYPE, class OP>
 	static void Combine(Vector &source, Vector &target, idx_t count) {
-		D_ASSERT(source.type.id() == LogicalTypeId::POINTER && target.type.id() == LogicalTypeId::POINTER);
+		D_ASSERT(source.GetType().id() == LogicalTypeId::POINTER && target.GetType().id() == LogicalTypeId::POINTER);
 		auto sdata = FlatVector::GetData<STATE_TYPE *>(source);
 		auto tdata = FlatVector::GetData<STATE_TYPE *>(target);
 
@@ -260,16 +262,16 @@ public:
 
 	template <class STATE_TYPE, class RESULT_TYPE, class OP>
 	static void Finalize(Vector &states, FunctionData *bind_data, Vector &result, idx_t count) {
-		if (states.vector_type == VectorType::CONSTANT_VECTOR) {
-			result.vector_type = VectorType::CONSTANT_VECTOR;
+		if (states.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 
 			auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
 			auto rdata = ConstantVector::GetData<RESULT_TYPE>(result);
 			OP::template Finalize<RESULT_TYPE, STATE_TYPE>(result, bind_data, *sdata, rdata,
 			                                               ConstantVector::Nullmask(result), 0);
 		} else {
-			D_ASSERT(states.vector_type == VectorType::FLAT_VECTOR);
-			result.vector_type = VectorType::FLAT_VECTOR;
+			D_ASSERT(states.GetVectorType() == VectorType::FLAT_VECTOR);
+			result.SetVectorType(VectorType::FLAT_VECTOR);
 
 			auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
 			auto rdata = FlatVector::GetData<RESULT_TYPE>(result);

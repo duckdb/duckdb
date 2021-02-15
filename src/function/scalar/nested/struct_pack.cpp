@@ -15,16 +15,16 @@ static void StructPackFunction(DataChunk &args, ExpressionState &state, Vector &
 
 	bool all_const = true;
 	for (size_t i = 0; i < args.ColumnCount(); i++) {
-		if (args.data[i].vector_type != VectorType::CONSTANT_VECTOR) {
+		if (args.data[i].GetVectorType() != VectorType::CONSTANT_VECTOR) {
 			all_const = false;
 		}
 		// same holds for this
-		D_ASSERT(args.data[i].type == info.stype.child_types()[i].second);
+		D_ASSERT(args.data[i].GetType() == info.stype.child_types()[i].second);
 		auto new_child = make_unique<Vector>(info.stype.child_types()[i].second);
 		new_child->Reference(args.data[i]);
 		StructVector::AddEntry(result, info.stype.child_types()[i].first, move(new_child));
 	}
-	result.vector_type = all_const ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR;
+	result.SetVectorType(all_const ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR);
 
 	result.Verify(args.size());
 }

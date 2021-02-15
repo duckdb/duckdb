@@ -50,26 +50,20 @@ public:
 	//! Create a vector of size one holding the passed on value
 	explicit Vector(const Value &value);
 	//! Create an empty standard vector with a type, equivalent to calling Vector(type, true, false)
-	explicit Vector(LogicalType type);
+	explicit Vector(const LogicalType &type);
 	//! Create a non-owning vector that references the specified data
-	Vector(LogicalType type, data_ptr_t dataptr);
+	Vector(const LogicalType &type, data_ptr_t dataptr);
 	//! Create an owning vector that holds at most STANDARD_VECTOR_SIZE entries.
 	/*!
 	    Create a new vector
 	    If create_data is true, the vector will be an owning empty vector.
 	    If zero_data is true, the allocated data will be zero-initialized.
 	*/
-	Vector(LogicalType type, bool create_data, bool zero_data);
+	Vector(const LogicalType &type, bool create_data, bool zero_data);
 	// implicit copying of Vectors is not allowed
 	Vector(const Vector &) = delete;
 	// but moving of vectors is allowed
 	Vector(Vector &&other) noexcept;
-
-	//! The vector type specifies how the data of the vector is physically stored (i.e. if it is a single repeated
-	//! constant, if it is compressed)
-	VectorType vector_type;
-	//! The type of the elements stored in the vector (e.g. integer, float)
-	LogicalType type;
 
 public:
 	//! Create a vector that references the specified value.
@@ -127,6 +121,30 @@ public:
 		return nullmask.all();
 	}
 
+	// Getters
+	inline VectorType GetVectorType() const {
+		return buffer->GetVectorType();
+	}
+	inline const LogicalType &GetType() const {
+		return buffer->GetType();
+	}
+	inline VectorBufferType GetBufferType() const {
+		return buffer->GetBufferType();
+	}
+	inline data_ptr_t GetData() {
+		return data;
+	}
+	// Setters
+	inline void SetVectorType(VectorType vector_type) {
+		buffer->SetVectorType(vector_type);
+	}
+	inline void SetType(const LogicalType &type) {
+		buffer->SetType(type);
+	}
+	inline void SetBufferType(VectorBufferType buffer_type) {
+		buffer->SetBufferType(buffer_type);
+	}
+
 protected:
 	//! A pointer to the data.
 	data_ptr_t data;
@@ -151,7 +169,8 @@ public:
 
 struct ConstantVector {
 	static inline data_ptr_t GetData(Vector &vector) {
-		D_ASSERT(vector.vector_type == VectorType::CONSTANT_VECTOR || vector.vector_type == VectorType::FLAT_VECTOR);
+		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR ||
+		         vector.GetVectorType() == VectorType::FLAT_VECTOR);
 		return vector.data;
 	}
 	template <class T>
@@ -159,15 +178,15 @@ struct ConstantVector {
 		return (T *)ConstantVector::GetData(vector);
 	}
 	static inline bool IsNull(const Vector &vector) {
-		D_ASSERT(vector.vector_type == VectorType::CONSTANT_VECTOR);
+		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
 		return vector.nullmask[0];
 	}
 	static inline void SetNull(Vector &vector, bool is_null) {
-		D_ASSERT(vector.vector_type == VectorType::CONSTANT_VECTOR);
+		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
 		vector.nullmask[0] = is_null;
 	}
 	static inline nullmask_t &Nullmask(Vector &vector) {
-		D_ASSERT(vector.vector_type == VectorType::CONSTANT_VECTOR);
+		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
 		return vector.nullmask;
 	}
 
@@ -177,11 +196,11 @@ struct ConstantVector {
 
 struct DictionaryVector {
 	static inline SelectionVector &SelVector(const Vector &vector) {
-		D_ASSERT(vector.vector_type == VectorType::DICTIONARY_VECTOR);
+		D_ASSERT(vector.GetVectorType() == VectorType::DICTIONARY_VECTOR);
 		return ((DictionaryBuffer &)*vector.buffer).GetSelVector();
 	}
 	static inline Vector &Child(const Vector &vector) {
-		D_ASSERT(vector.vector_type == VectorType::DICTIONARY_VECTOR);
+		D_ASSERT(vector.GetVectorType() == VectorType::DICTIONARY_VECTOR);
 		return ((VectorChildBuffer &)*vector.auxiliary).data;
 	}
 };
@@ -195,28 +214,28 @@ struct FlatVector {
 		return ConstantVector::GetData<T>(vector);
 	}
 	static inline void SetData(Vector &vector, data_ptr_t data) {
-		D_ASSERT(vector.vector_type == VectorType::FLAT_VECTOR);
+		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
 		vector.data = data;
 	}
 	template <class T>
 	static inline T GetValue(Vector &vector, idx_t idx) {
-		D_ASSERT(vector.vector_type == VectorType::FLAT_VECTOR);
+		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
 		return FlatVector::GetData<T>(vector)[idx];
 	}
 	static inline nullmask_t &Nullmask(Vector &vector) {
-		D_ASSERT(vector.vector_type == VectorType::FLAT_VECTOR);
+		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
 		return vector.nullmask;
 	}
 	static inline void SetNullmask(Vector &vector, nullmask_t new_mask) {
-		D_ASSERT(vector.vector_type == VectorType::FLAT_VECTOR);
+		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
 		vector.nullmask = move(new_mask);
 	}
 	static inline void SetNull(Vector &vector, idx_t idx, bool value) {
-		D_ASSERT(vector.vector_type == VectorType::FLAT_VECTOR);
+		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
 		vector.nullmask[idx] = value;
 	}
 	static inline bool IsNull(const Vector &vector, idx_t idx) {
-		D_ASSERT(vector.vector_type == VectorType::FLAT_VECTOR);
+		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
 		return vector.nullmask[idx];
 	}
 
@@ -261,7 +280,7 @@ struct StructVector {
 
 struct SequenceVector {
 	static void GetSequence(const Vector &vector, int64_t &start, int64_t &increment) {
-		D_ASSERT(vector.vector_type == VectorType::SEQUENCE_VECTOR);
+		D_ASSERT(vector.GetVectorType() == VectorType::SEQUENCE_VECTOR);
 		auto data = (int64_t *)vector.buffer->GetData();
 		start = data[0];
 		increment = data[1];

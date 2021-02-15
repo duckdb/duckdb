@@ -71,7 +71,7 @@ void PhysicalJoin::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &left
 		result.data[i].Reference(left.data[i]);
 	}
 	auto &mark_vector = result.data.back();
-	mark_vector.vector_type = VectorType::FLAT_VECTOR;
+	mark_vector.SetVectorType(VectorType::FLAT_VECTOR);
 	// first we set the NULL values from the join keys
 	// if there is any NULL in the keys, the result is NULL
 	auto bool_result = FlatVector::GetData<bool>(mark_vector);
@@ -256,7 +256,7 @@ void PhysicalJoin::ConstructLeftJoinResult(DataChunk &left, DataChunk &result, b
 	if (remaining_count > 0) {
 		result.Slice(left, remaining_sel, remaining_count);
 		for (idx_t idx = left.ColumnCount(); idx < result.ColumnCount(); idx++) {
-			result.data[idx].vector_type = VectorType::CONSTANT_VECTOR;
+			result.data[idx].SetVectorType(VectorType::CONSTANT_VECTOR);
 			ConstantVector::SetNull(result.data[idx], true);
 		}
 	}

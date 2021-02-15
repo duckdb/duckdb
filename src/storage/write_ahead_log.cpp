@@ -199,7 +199,7 @@ void WriteAheadLog::WriteDelete(DataChunk &chunk) {
 		return;
 	}
 	D_ASSERT(chunk.size() > 0);
-	D_ASSERT(chunk.ColumnCount() == 1 && chunk.data[0].type == LOGICAL_ROW_TYPE);
+	D_ASSERT(chunk.ColumnCount() == 1 && chunk.data[0].GetType() == LOGICAL_ROW_TYPE);
 	chunk.Verify();
 
 	writer->Write<WALType>(WALType::DELETE_TUPLE);

@@ -27,3 +27,11 @@ SELECT decode('\xFF'::BLOB)
 
 statement error
 SELECT decode('\x00'::BLOB)
+
+query I
+SELECT decode(encode(a)) || a from (values ('hello'), ('world')) tbl(a);
+----
+hellohello
+worldworld
+
+
