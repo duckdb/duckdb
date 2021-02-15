@@ -187,23 +187,23 @@ static void ArrowScanFunction(ClientContext &context, const FunctionData *bind_d
 			throw NotImplementedException("arrow_scan: dictionary vectors not supported yet");
 		}
 		if (array.null_count != 0 && array.buffers[0]) {
-			auto &nullmask = FlatVector::Nullmask(output.data[col_idx]);
+			auto &mask = FlatVector::Validity(output.data[col_idx]);
 
 			auto bit_offset = data.chunk_offset + array.offset;
 			auto n_bitmask_bytes = (output.size() + 8 - 1) / 8;
 
+			mask.EnsureWritable();
 			if (bit_offset % 8 == 0) {
 				// just memcpy nullmask
-				memcpy(&nullmask, (uint8_t *)array.buffers[0] + bit_offset / 8, n_bitmask_bytes);
+				memcpy((void*) mask.GetData(), (uint8_t *)array.buffers[0] + bit_offset / 8, n_bitmask_bytes);
 			} else {
 				// need to re-align nullmask :/
 				bitset<STANDARD_VECTOR_SIZE + 8> temp_nullmask;
 				memcpy(&temp_nullmask, (uint8_t *)array.buffers[0] + bit_offset / 8, n_bitmask_bytes + 1);
 
 				temp_nullmask >>= (bit_offset % 8); // why this has to be a right shift is a mystery to me
-				memcpy(&nullmask, (data_ptr_t)&temp_nullmask, n_bitmask_bytes);
+				memcpy((void*) mask.GetData(), (data_ptr_t)&temp_nullmask, n_bitmask_bytes);
 			}
-			nullmask.flip(); // arrow uses inverse nullmask logic
 		}
 
 		switch (output.data[col_idx].type.id()) {
@@ -233,7 +233,7 @@ static void ArrowScanFunction(ClientContext &context, const FunctionData *bind_d
 			auto cdata = (char *)array.buffers[2];
 
 			for (idx_t row_idx = 0; row_idx < output.size(); row_idx++) {
-				if (FlatVector::Nullmask(output.data[col_idx])[row_idx]) {
+				if (FlatVector::IsNull(output.data[col_idx], row_idx)) {
 					continue;
 				}
 				auto cptr = cdata + offsets[row_idx];

@@ -11,8 +11,10 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/vector_size.hpp"
+#include "duckdb/common/to_string.hpp"
 
 namespace duckdb {
+struct ValidityMask;
 
 using validity_t = uint64_t;
 
@@ -20,13 +22,8 @@ struct ValidityData {
 	static constexpr const int BITS_PER_VALUE = sizeof(validity_t) * 8;
 	static constexpr const validity_t MAX_ENTRY = ~validity_t(0);
 public:
-	explicit ValidityData(idx_t count) {
-		auto entry_count = EntryCount(count);
-		owned_data = unique_ptr<validity_t[]>(new validity_t[entry_count]);
-		for(size_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
-			owned_data[entry_idx] = MAX_ENTRY;
-		}
-	}
+	explicit ValidityData(idx_t count);
+	ValidityData(const ValidityMask &original, idx_t count);
 
 	unique_ptr<validity_t[]> owned_data;
 
@@ -38,19 +35,35 @@ public:
 
 //! Type used for validity masks
 struct ValidityMask {
+	friend struct ValidityData;
+public:
 	static constexpr const int BITS_PER_VALUE = sizeof(validity_t) * 8;
 
+public:
 	ValidityMask() : validity_mask(nullptr) {
 	}
 	explicit ValidityMask(idx_t max_count) {
 		Initialize(max_count);
 	}
+	explicit ValidityMask(data_ptr_t ptr) :
+		validity_mask((validity_t *) ptr) {
+	}
+	ValidityMask(const ValidityMask &original, idx_t count) {
+		Copy(original, count);
+	}
 
+	static inline idx_t ValidityMaskSize(idx_t count = STANDARD_VECTOR_SIZE) {
+		return ValidityData::EntryCount(count) * sizeof(validity_t);
+	}
 	bool AllValid() const {
 		return !validity_mask;
 	}
 	validity_t *GetData() const {
 		return validity_mask;
+	}
+	void Reset() {
+		validity_mask = nullptr;
+		validity_data.reset();
 	}
 
 	static inline idx_t EntryCount(idx_t count) {
@@ -101,42 +114,27 @@ struct ValidityMask {
 			SetInvalid(row_idx);
 		}
 	}
-
-	void Combine(const ValidityMask& other, idx_t count) {
-		if (other.AllValid()) {
-			// X & 1 = X
-			return;
-		}
-		if (AllValid()) {
-			// 1 & Y = Y
-			Initialize(other);
-			return;
-		}
-		if (validity_mask == other.validity_mask) {
-			// X & X == X
-			return;
-		}
-		// have to merge
-		// create a new validity mask that contains the combined mask
-		auto data = GetData();
-		auto other_data = other.GetData();
-
-		Initialize(count);
-		auto result_data = GetData();
-
-		auto entry_count = ValidityData::EntryCount(count);
-		for(idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
-			result_data[entry_idx] = data[entry_idx] & other_data[entry_idx];
+	inline void EnsureWritable() {
+		if (!validity_mask) {
+			Initialize();
 		}
 	}
-	string ToString(idx_t count) const {
-		string result = "Validity Mask (" + to_string(count) + ") [";
-		for (idx_t i = 0; i < count; i++) {
-			result += RowIsValid(i) ? "." : "X";
+	inline void SetAllInvalid(idx_t count) {
+		D_ASSERT(count < STANDARD_VECTOR_SIZE);
+		EnsureWritable();
+		for(idx_t i = 0; i < ValidityData::EntryCount(count); i++) {
+			validity_mask[i] = 0;
 		}
-		result += "]";
-		return result;
 	}
+	inline void SetAllValid(idx_t count) {
+		D_ASSERT(count < STANDARD_VECTOR_SIZE);
+		EnsureWritable();
+		for(idx_t i = 0; i < ValidityData::EntryCount(count); i++) {
+			validity_mask[i] = ValidityData::MAX_ENTRY;
+		}
+	}
+	void Combine(const ValidityMask& other, idx_t count);
+	string ToString(idx_t count) const;
 
 public:
 	void Initialize(validity_t *validity) {
@@ -149,6 +147,10 @@ public:
 	}
 	void Initialize(idx_t count = STANDARD_VECTOR_SIZE) {
 		validity_data = make_buffer<ValidityData>(count);
+		validity_mask = validity_data->owned_data.get();
+	}
+	void Copy(const ValidityMask &other, idx_t count) {
+		validity_data = make_buffer<ValidityData>(other, count);
 		validity_mask = validity_data->owned_data.get();
 	}
 private:

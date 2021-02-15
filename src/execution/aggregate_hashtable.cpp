@@ -387,13 +387,13 @@ static void TemplatedScatter(VectorData &gdata, Vector &addresses, const Selecti
                              idx_t type_size) {
 	auto data = (T *)gdata.data;
 	auto pointers = FlatVector::GetData<uintptr_t>(addresses);
-	if (gdata.nullmask->any()) {
+	if (!gdata.validity.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
 			auto pointer_idx = sel.get_index(i);
 			auto group_idx = gdata.sel->get_index(pointer_idx);
 			auto ptr = (T *)pointers[pointer_idx];
 
-			T store_value = (*gdata.nullmask)[group_idx] ? NullValue<T>() : data[group_idx];
+			T store_value = gdata.validity.RowIsValid(group_idx) ? NullValue<T>() : data[group_idx];
 			Store<T>(store_value, (data_ptr_t)ptr);
 			pointers[pointer_idx] += type_size;
 		}
@@ -466,7 +466,7 @@ void GroupedAggregateHashTable::ScatterGroups(DataChunk &groups, unique_ptr<Vect
 				auto pointer_idx = sel.get_index(i);
 				auto group_idx = gdata.sel->get_index(pointer_idx);
 				auto ptr = pointers[pointer_idx];
-				if ((*gdata.nullmask)[group_idx]) {
+				if (gdata.validity.RowIsValid(group_idx)) {
 					Store<string_t>(NullValue<string_t>(), ptr);
 				} else if (string_data[group_idx].IsInlined()) {
 					Store<string_t>(string_data[group_idx], ptr);
@@ -492,13 +492,13 @@ static void TemplatedCompareGroups(VectorData &gdata, Vector &addresses, Selecti
 	auto data = (T *)gdata.data;
 	auto pointers = FlatVector::GetData<uintptr_t>(addresses);
 	idx_t match_count = 0;
-	if (gdata.nullmask->any()) {
+	if (!gdata.validity.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = sel.get_index(i);
 			auto group_idx = gdata.sel->get_index(idx);
 			auto value = Load<T>((data_ptr_t)pointers[idx]);
 
-			if ((*gdata.nullmask)[group_idx]) {
+			if (!gdata.validity.RowIsValid(group_idx)) {
 				if (IsNullValue<T>(value)) {
 					// match: move to next value to compare
 					sel.set_index(match_count++, idx);

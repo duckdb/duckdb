@@ -120,10 +120,10 @@ static uint8_t GetVarintSize(uint32_t val) {
 }
 
 template <class SRC, class TGT>
-static void TemplatedWritePlain(Vector &col, idx_t length, nullmask_t &nullmask, Serializer &ser) {
+static void TemplatedWritePlain(Vector &col, idx_t length, ValidityMask &mask, Serializer &ser) {
 	auto *ptr = FlatVector::GetData<SRC>(col);
 	for (idx_t r = 0; r < length; r++) {
-		if (!nullmask[r]) {
+		if (mask.RowIsValid(r)) {
 			ser.Write<TGT>((TGT)ptr[r]);
 		}
 	}
@@ -210,19 +210,23 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 		VarintEncode(define_header, temp_writer);
 
 		for (auto &chunk : buffer.Chunks()) {
-			auto defined = FlatVector::Nullmask(chunk->data[i]);
-			// flip the nullmask to go from nulls -> defines
-			defined.flip();
-			// write the bits of the nullmask
+			auto &validity = FlatVector::Validity(chunk->data[i]);
+			auto validity_data = validity.GetData();
 			auto chunk_define_byte_count = (chunk->size() + 7) / 8;
-			temp_writer.WriteData((const_data_ptr_t)&defined, chunk_define_byte_count);
+			if (!validity_data) {
+				ValidityMask nop_mask(chunk->size());
+				temp_writer.WriteData((const_data_ptr_t) nop_mask.GetData(), chunk_define_byte_count);
+			} else {
+				// write the bits of the nullmask
+				temp_writer.WriteData((const_data_ptr_t) validity_data, chunk_define_byte_count);
+			}
 		}
 
 		// now write the actual payload: we write this as PLAIN values (for now? possibly for ever?)
 		for (auto &chunk : buffer.Chunks()) {
 			auto &input = *chunk;
 			auto &input_column = input.data[i];
-			auto &nullmask = FlatVector::Nullmask(input_column);
+			auto &mask = FlatVector::Validity(input_column);
 
 			// write actual payload data
 			switch (sql_types[i].id()) {
@@ -231,7 +235,7 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 				uint8_t byte = 0;
 				uint8_t byte_pos = 0;
 				for (idx_t r = 0; r < input.size(); r++) {
-					if (!nullmask[r]) { // only encode if non-null
+					if (mask.RowIsValid(r)) { // only encode if non-null
 						byte |= (ptr[r] & 1) << byte_pos;
 						byte_pos++;
 
@@ -250,34 +254,34 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 				break;
 			}
 			case LogicalTypeId::TINYINT:
-				TemplatedWritePlain<int8_t, int32_t>(input_column, input.size(), nullmask, temp_writer);
+				TemplatedWritePlain<int8_t, int32_t>(input_column, input.size(), mask, temp_writer);
 				break;
 			case LogicalTypeId::SMALLINT:
-				TemplatedWritePlain<int16_t, int32_t>(input_column, input.size(), nullmask, temp_writer);
+				TemplatedWritePlain<int16_t, int32_t>(input_column, input.size(), mask, temp_writer);
 				break;
 			case LogicalTypeId::INTEGER:
-				TemplatedWritePlain<int32_t, int32_t>(input_column, input.size(), nullmask, temp_writer);
+				TemplatedWritePlain<int32_t, int32_t>(input_column, input.size(), mask, temp_writer);
 				break;
 			case LogicalTypeId::BIGINT:
-				TemplatedWritePlain<int64_t, int64_t>(input_column, input.size(), nullmask, temp_writer);
+				TemplatedWritePlain<int64_t, int64_t>(input_column, input.size(), mask, temp_writer);
 				break;
 			case LogicalTypeId::FLOAT:
-				TemplatedWritePlain<float, float>(input_column, input.size(), nullmask, temp_writer);
+				TemplatedWritePlain<float, float>(input_column, input.size(), mask, temp_writer);
 				break;
 			case LogicalTypeId::DECIMAL: {
 				// FIXME: fixed length byte array...
 				Vector double_vec(LogicalType::DOUBLE);
 				VectorOperations::Cast(input_column, double_vec, input.size());
-				TemplatedWritePlain<double, double>(double_vec, input.size(), nullmask, temp_writer);
+				TemplatedWritePlain<double, double>(double_vec, input.size(), mask, temp_writer);
 				break;
 			}
 			case LogicalTypeId::DOUBLE:
-				TemplatedWritePlain<double, double>(input_column, input.size(), nullmask, temp_writer);
+				TemplatedWritePlain<double, double>(input_column, input.size(), mask, temp_writer);
 				break;
 			case LogicalTypeId::DATE: {
 				auto *ptr = FlatVector::GetData<date_t>(input_column);
 				for (idx_t r = 0; r < input.size(); r++) {
-					if (!nullmask[r]) {
+					if (mask.RowIsValid(r)) {
 						auto ts = Timestamp::FromDatetime(ptr[r], 0);
 						temp_writer.Write<Int96>(TimestampToImpalaTimestamp(ts));
 					}
@@ -287,7 +291,7 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 			case LogicalTypeId::TIMESTAMP: {
 				auto *ptr = FlatVector::GetData<timestamp_t>(input_column);
 				for (idx_t r = 0; r < input.size(); r++) {
-					if (!nullmask[r]) {
+					if (mask.RowIsValid(r)) {
 						temp_writer.Write<Int96>(TimestampToImpalaTimestamp(ptr[r]));
 					}
 				}
@@ -297,7 +301,7 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 			case LogicalTypeId::VARCHAR: {
 				auto *ptr = FlatVector::GetData<string_t>(input_column);
 				for (idx_t r = 0; r < input.size(); r++) {
-					if (!nullmask[r]) {
+					if (mask.RowIsValid(r)) {
 						temp_writer.Write<uint32_t>(ptr[r].GetSize());
 						temp_writer.WriteData((const_data_ptr_t)ptr[r].GetDataUnsafe(), ptr[r].GetSize());
 					}

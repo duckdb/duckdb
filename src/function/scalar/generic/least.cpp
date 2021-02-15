@@ -39,18 +39,18 @@ static void LeastGreatestFunction(DataChunk &args, ExpressionState &state, Vecto
 
 	// we start off performing a binary operation between the first two inputs, where we store the lowest (or highest)
 	// directly in the result
-	BinaryExecutor::ExecuteGeneric<T, T, T, BinarySingleArgumentOperatorWrapper, LeastOperator<OP>, bool, IS_STRING>(
+	BinaryExecutor::ExecuteGeneric<T, T, T, BinarySingleArgumentOperatorWrapper, LeastOperator<OP>, bool>(
 	    args.data[0], args.data[1], result, args.size(), false);
 
 	// now we loop over the other columns and compare it to the stored result
 	auto result_data = FlatVector::GetData<T>(result);
-	auto &result_nullmask = FlatVector::Nullmask(result);
+	auto &result_mask = FlatVector::Validity(result);
 	SelectionVector rsel;
 	idx_t rcount = 0;
-	// create a selection vector from the nullmask
+	// create a selection vector from the mask
 	rsel.Initialize();
 	for (idx_t i = 0; i < args.size(); i++) {
-		if (!result_nullmask[i]) {
+		if (result_mask.RowIsValid(i)) {
 			rsel.set_index(rcount++, i);
 		}
 	}
@@ -59,15 +59,15 @@ static void LeastGreatestFunction(DataChunk &args, ExpressionState &state, Vecto
 		args.data[col_idx].Orrify(args.size(), vdata);
 
 		auto input_data = (T *)vdata.data;
-		if (vdata.nullmask->any()) {
+		if (!vdata.validity.AllValid()) {
 			// potential new null entries: have to check the null mask
 			idx_t new_count = 0;
 			for (idx_t i = 0; i < rcount; i++) {
 				auto rindex = rsel.get_index(i);
 				auto vindex = vdata.sel->get_index(rindex);
-				if ((*vdata.nullmask)[vindex]) {
+				if (!vdata.validity.RowIsValid(vindex)) {
 					// new null entry: set nullmask
-					result_nullmask[rindex] = true;
+					result_mask.SetInvalid(rindex);
 				} else {
 					// not a null entry: perform the operation and add to new set
 					auto ivalue = input_data[vindex];

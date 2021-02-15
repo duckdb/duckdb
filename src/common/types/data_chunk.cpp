@@ -300,9 +300,9 @@ void DataChunk::ToArrowArray(ArrowArray *out_array) {
 				// step 1: figure out total string length:
 				idx_t total_string_length = 0;
 				auto string_t_ptr = FlatVector::GetData<string_t>(vector);
-				auto is_null = FlatVector::Nullmask(vector);
+				auto &mask = FlatVector::Validity(vector);
 				for (idx_t row_idx = 0; row_idx < size(); row_idx++) {
-					if (is_null[row_idx]) {
+					if (!mask.RowIsValid(row_idx)) {
 						continue;
 					}
 					total_string_length += string_t_ptr[row_idx].GetSize();
@@ -317,7 +317,7 @@ void DataChunk::ToArrowArray(ArrowArray *out_array) {
 
 				for (idx_t row_idx = 0; row_idx < size(); row_idx++) {
 					target_ptr[row_idx] = current_heap_offset;
-					if (is_null[row_idx]) {
+					if (!mask.RowIsValid(row_idx)) {
 						continue;
 					}
 					auto &str = string_t_ptr[row_idx];
@@ -332,21 +332,15 @@ void DataChunk::ToArrowArray(ArrowArray *out_array) {
 				throw std::runtime_error("Unsupported type " + GetTypes()[col_idx].ToString());
 			}
 
-			auto &nullmask = FlatVector::Nullmask(vector);
-			if (child.length == STANDARD_VECTOR_SIZE) {
-				// vector is completely full; null count is equal to the number of bits set in the mask
-				child.null_count = nullmask.count();
+			auto &mask = FlatVector::Validity(vector);
+			if (!mask.AllValid()) {
+				// any bits are set: might have nulls
+				child.null_count = -1;
 			} else {
-				// vector is not completely full; we cannot easily figure out the exact null count
-				if (nullmask.any()) {
-					// any bits are set: might have nulls
-					child.null_count = -1;
-				} else {
-					// no bits are set; we know there are no nulls
-					child.null_count = 0;
-				}
+				// no bits are set; we know there are no nulls
+				child.null_count = 0;
 			}
-			child.buffers[0] = (void *)&nullmask.flip();
+			child.buffers[0] = (void *)mask.GetData();
 			break;
 		}
 		default:

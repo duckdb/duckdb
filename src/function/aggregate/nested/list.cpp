@@ -78,13 +78,13 @@ static void ListFinalize(Vector &state_vector, FunctionData *, Vector &result, i
 	D_ASSERT(result.type.id() == LogicalTypeId::LIST);
 	result.Initialize(result.type); // deals with constants
 	auto list_struct_data = FlatVector::GetData<list_entry_t>(result);
-	auto &nullmask = FlatVector::Nullmask(result);
+	auto &mask = FlatVector::Validity(result);
 
 	size_t total_len = 0;
 	for (idx_t i = 0; i < count; i++) {
 		auto state = states[sdata.sel->get_index(i)];
 		if (!state->cc) {
-			nullmask[i] = true;
+			mask.SetInvalid(i);
 			continue;
 		}
 		D_ASSERT(state->cc);

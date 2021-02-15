@@ -48,7 +48,7 @@ static unique_ptr<BaseStatistics> InStrPropagateStats(ClientContext &context, Bo
 	// for strpos, we only care if the FIRST string has unicode or not
 	auto &sstats = (StringStatistics &)*child_stats[0];
 	if (!sstats.has_unicode) {
-		expr.function.function = ScalarFunction::BinaryFunction<string_t, string_t, int64_t, InstrAsciiOperator, true>;
+		expr.function.function = ScalarFunction::BinaryFunction<string_t, string_t, int64_t, InstrAsciiOperator>;
 	}
 	return nullptr;
 }
@@ -57,7 +57,7 @@ void InstrFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunction instr("instr",                                      // name of the function
 	                     {LogicalType::VARCHAR, LogicalType::VARCHAR}, // argument list
 	                     LogicalType::BIGINT,                          // return type
-	                     ScalarFunction::BinaryFunction<string_t, string_t, int64_t, InstrOperator, true>, false,
+	                     ScalarFunction::BinaryFunction<string_t, string_t, int64_t, InstrOperator>, false,
 	                     nullptr, nullptr, InStrPropagateStats);
 	set.AddFunction(instr);
 	instr.name = "strpos";

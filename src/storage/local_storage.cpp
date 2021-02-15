@@ -140,9 +140,9 @@ void LocalStorage::Scan(LocalScanState &state, const vector<column_t> &column_id
 			if (column_filters != state.table_filters->filters.end()) {
 				//! We have filters to apply here
 				for (auto &column_filter : column_filters->second) {
-					nullmask_t nullmask = FlatVector::Nullmask(result.data[i]);
+					auto &mask = FlatVector::Validity(result.data[i]);
 					UncompressedSegment::FilterSelection(sel, result.data[i], column_filter, approved_tuple_count,
-					                                     nullmask);
+					                                     mask);
 				}
 				count = approved_tuple_count;
 			}
@@ -253,7 +253,7 @@ static void TemplatedUpdateLoop(Vector &data_vector, Vector &update_vector, Vect
 	update_vector.Orrify(count, udata);
 
 	auto target = FlatVector::GetData<T>(data_vector);
-	auto &nullmask = FlatVector::Nullmask(data_vector);
+	auto &mask = FlatVector::Validity(data_vector);
 	auto ids = FlatVector::GetData<row_t>(row_ids);
 	auto updates = (T *)udata.data;
 
@@ -262,7 +262,7 @@ static void TemplatedUpdateLoop(Vector &data_vector, Vector &update_vector, Vect
 
 		auto id = ids[i] - base_index;
 		target[id] = updates[uidx];
-		nullmask[id] = (*udata.nullmask)[uidx];
+		mask.Set(id, udata.validity.RowIsValid(uidx));
 	}
 }
 
@@ -415,7 +415,7 @@ void LocalStorage::AddColumn(DataTable *old_dt, DataTable *new_dt, ColumnDefinit
 			dummy_chunk.SetCardinality(chunk.size());
 			executor.ExecuteExpression(dummy_chunk, result);
 		} else {
-			FlatVector::Nullmask(result).set();
+			FlatVector::Validity(result).SetAllInvalid(chunk.size());
 		}
 		chunk.data.push_back(move(result));
 	}

@@ -11,7 +11,7 @@ static void EpochSecFunction(DataChunk &input, ExpressionState &state, Vector &r
 	D_ASSERT(input.ColumnCount() == 1);
 
 	string output_buffer;
-	UnaryExecutor::Execute<int64_t, timestamp_t, true>(
+	UnaryExecutor::Execute<int64_t, timestamp_t>(
 	    input.data[0], result, input.size(), [&](int64_t input) { return Timestamp::FromEpochSeconds(input); });
 }
 
@@ -19,7 +19,7 @@ static void EpochMillisFunction(DataChunk &input, ExpressionState &state, Vector
 	D_ASSERT(input.ColumnCount() == 1);
 
 	string output_buffer;
-	UnaryExecutor::Execute<int64_t, timestamp_t, true>(input.data[0], result, input.size(),
+	UnaryExecutor::Execute<int64_t, timestamp_t>(input.data[0], result, input.size(),
 	                                                   [&](int64_t input) { return Timestamp::FromEpochMs(input); });
 }
 

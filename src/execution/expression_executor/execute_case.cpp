@@ -53,12 +53,12 @@ void ExpressionExecutor::Execute(BoundCaseExpression &expr, ExpressionState *sta
 template <class T>
 void TemplatedFillLoop(Vector &vector, Vector &result, SelectionVector &sel, sel_t count) {
 	auto res = FlatVector::GetData<T>(result);
-	auto &result_nullmask = FlatVector::Nullmask(result);
+	auto &result_mask = FlatVector::Validity(result);
 	if (vector.vector_type == VectorType::CONSTANT_VECTOR) {
 		auto data = ConstantVector::GetData<T>(vector);
 		if (ConstantVector::IsNull(vector)) {
 			for (idx_t i = 0; i < count; i++) {
-				result_nullmask[sel.get_index(i)] = true;
+				result_mask.SetInvalid(sel.get_index(i));
 			}
 		} else {
 			for (idx_t i = 0; i < count; i++) {
@@ -74,7 +74,7 @@ void TemplatedFillLoop(Vector &vector, Vector &result, SelectionVector &sel, sel
 			auto res_idx = sel.get_index(i);
 
 			res[res_idx] = data[source_idx];
-			result_nullmask[res_idx] = (*vdata.nullmask)[source_idx];
+			result_mask.Set(res_idx, vdata.validity.RowIsValid(source_idx));
 		}
 	}
 }
@@ -158,7 +158,7 @@ void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &
 
 		auto data = (list_entry_t *)fdata.data;
 		auto res = FlatVector::GetData<list_entry_t>(result);
-		auto &mask = FlatVector::Nullmask(result);
+		auto &mask = FlatVector::Validity(result);
 
 		for (idx_t i = 0; i < fcount; i++) {
 			auto fidx = fdata.sel->get_index(i);
@@ -166,7 +166,7 @@ void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &
 			auto list_entry = data[fidx];
 			list_entry.offset += offset;
 			res[res_idx] = list_entry;
-			mask[res_idx] = (*fdata.nullmask)[fidx];
+			mask.Set(res_idx, fdata.validity.RowIsValid(fidx));
 		}
 
 		result.Verify(tcount + fcount);

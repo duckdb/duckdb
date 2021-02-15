@@ -10,7 +10,7 @@ static void CopyToStorageLoop(VectorData &vdata, idx_t count, data_ptr_t target)
 	auto result_data = (T *)target;
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);
-		if ((*vdata.nullmask)[idx]) {
+		if (!vdata.validity.RowIsValid(idx)) {
 			result_data[i] = NullValue<T>();
 		} else {
 			result_data[i] = ldata[idx];
@@ -78,10 +78,10 @@ template <class T>
 static void ReadFromStorageLoop(data_ptr_t source, idx_t count, Vector &result) {
 	auto ldata = (T *)source;
 	auto result_data = FlatVector::GetData<T>(result);
-	auto &nullmask = FlatVector::Nullmask(result);
+	auto &mask = FlatVector::Validity(result);
 	for (idx_t i = 0; i < count; i++) {
 		if (IsNullValue<T>(ldata[i])) {
-			nullmask[i] = true;
+			mask.SetInvalid(i);
 		} else {
 			result_data[i] = ldata[i];
 		}

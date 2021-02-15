@@ -75,10 +75,10 @@ void WriteData(duckdb_result *out, ChunkCollection &source, idx_t col) {
 	auto target = (T *)out->columns[col].data;
 	for (auto &chunk : source.Chunks()) {
 		auto source = FlatVector::GetData<T>(chunk->data[col]);
-		auto &nullmask = FlatVector::Nullmask(chunk->data[col]);
+		auto &mask = FlatVector::Validity(chunk->data[col]);
 
 		for (idx_t k = 0; k < chunk->size(); k++, row++) {
-			if (nullmask[k]) {
+			if (!mask.RowIsValid(k)) {
 				continue;
 			}
 			target[row] = source[k];

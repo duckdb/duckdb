@@ -146,8 +146,8 @@ static int8_t TemplatedCompareValue(Vector &left_vec, Vector &right_vec, idx_t l
 // return type here is int32 because strcmp() on some platforms returns rather large values
 static int32_t CompareValue(Vector &left_vec, Vector &right_vec, idx_t vector_idx_left, idx_t vector_idx_right,
                             OrderByNullType null_order) {
-	auto left_null = FlatVector::Nullmask(left_vec)[vector_idx_left];
-	auto right_null = FlatVector::Nullmask(right_vec)[vector_idx_right];
+	auto left_null = FlatVector::IsNull(left_vec, vector_idx_left);
+	auto right_null = FlatVector::IsNull(right_vec, vector_idx_right);
 
 	if (left_null && right_null) {
 		return 0;

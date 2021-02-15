@@ -55,13 +55,13 @@ static scalar_function_t GetScalarBinaryFunction(PhysicalType type) {
 	scalar_function_t function;
 	switch (type) {
 	case PhysicalType::INT128:
-		function = &ScalarFunction::BinaryFunction<hugeint_t, hugeint_t, hugeint_t, OP, true>;
+		function = &ScalarFunction::BinaryFunction<hugeint_t, hugeint_t, hugeint_t, OP>;
 		break;
 	case PhysicalType::FLOAT:
-		function = &ScalarFunction::BinaryFunction<float, float, float, OP, true>;
+		function = &ScalarFunction::BinaryFunction<float, float, float, OP>;
 		break;
 	case PhysicalType::DOUBLE:
-		function = &ScalarFunction::BinaryFunction<double, double, double, OP, true>;
+		function = &ScalarFunction::BinaryFunction<double, double, double, OP>;
 		break;
 	default:
 		function = GetScalarIntegerFunction<OP>(type);
@@ -557,9 +557,9 @@ interval_t DivideOperator::Operation(interval_t left, int64_t right) {
 
 struct BinaryZeroIsNullWrapper {
 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
-	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, nullmask_t &nullmask, idx_t idx) {
+	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, ValidityMask &mask, idx_t idx) {
 		if (right == 0) {
-			nullmask[idx] = true;
+			mask.SetInvalid(idx);
 			return left;
 		} else {
 			return OP::template Operation<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(left, right);
@@ -568,9 +568,9 @@ struct BinaryZeroIsNullWrapper {
 };
 struct BinaryZeroIsNullHugeintWrapper {
 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
-	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, nullmask_t &nullmask, idx_t idx) {
+	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, ValidityMask &mask, idx_t idx) {
 		if (right.upper == 0 && right.lower == 0) {
-			nullmask[idx] = true;
+			mask.SetInvalid(idx);
 			return left;
 		} else {
 			return OP::template Operation<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(left, right);
@@ -580,7 +580,7 @@ struct BinaryZeroIsNullHugeintWrapper {
 
 template <class TA, class TB, class TC, class OP, class ZWRAPPER = BinaryZeroIsNullWrapper>
 static void BinaryScalarFunctionIgnoreZero(DataChunk &input, ExpressionState &state, Vector &result) {
-	BinaryExecutor::Execute<TA, TB, TC, OP, true, ZWRAPPER>(input.data[0], input.data[1], result, input.size());
+	BinaryExecutor::Execute<TA, TB, TC, OP, ZWRAPPER>(input.data[0], input.data[1], result, input.size());
 }
 
 template <class OP>

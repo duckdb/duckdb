@@ -42,7 +42,7 @@ Vector::Vector() : vector_type(VectorType::FLAT_VECTOR), type(LogicalTypeId::INV
 }
 
 Vector::Vector(Vector &&other) noexcept
-    : vector_type(other.vector_type), type(move(other.type)), data(other.data), nullmask(other.nullmask),
+    : vector_type(other.vector_type), type(move(other.type)), data(other.data), validity(move(other.validity)),
       buffer(move(other.buffer)), auxiliary(move(other.auxiliary)) {
 }
 
@@ -61,7 +61,7 @@ void Vector::Reference(Vector &other) {
 	auxiliary = other.auxiliary;
 	data = other.data;
 	type = other.type;
-	nullmask = other.nullmask;
+	validity = other.validity;
 }
 
 void Vector::Slice(Vector &other, idx_t offset) {
@@ -74,8 +74,9 @@ void Vector::Slice(Vector &other, idx_t offset) {
 	// create a reference to the other vector
 	Reference(other);
 	if (offset > 0) {
-		data = data + GetTypeIdSize(type.InternalType()) * offset;
-		nullmask >>= offset;
+		throw Exception("Eek");
+		// data = data + GetTypeIdSize(type.InternalType()) * offset;
+		// nullmask >>= offset;
 	}
 }
 
@@ -131,7 +132,7 @@ void Vector::Initialize(const LogicalType &new_type, bool zero_data) {
 	vector_type = VectorType::FLAT_VECTOR;
 	buffer.reset();
 	auxiliary.reset();
-	nullmask.reset();
+	validity.Reset();
 	if (GetTypeIdSize(type.InternalType()) > 0) {
 		buffer = VectorBuffer::CreateStandardVector(type.InternalType());
 		data = buffer->GetData();
@@ -153,7 +154,8 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		return;
 	}
 
-	nullmask[index] = val.is_null;
+	validity.EnsureWritable();
+	validity.Set(index, !val.is_null);
 	if (val.is_null) {
 		return;
 	}
@@ -306,7 +308,7 @@ Value Vector::GetValue(idx_t index) const {
 		throw NotImplementedException("Unimplemented vector type for Vector::GetValue");
 	}
 
-	if (nullmask[index]) {
+	if (!validity.RowIsValid(index)) {
 		return Value(type);
 	}
 	switch (type.id()) {
@@ -487,15 +489,17 @@ void Vector::Normalify(idx_t count) {
 		break;
 	}
 	case VectorType::CONSTANT_VECTOR: {
+		bool is_null = ConstantVector::IsNull(*this);
 		vector_type = VectorType::FLAT_VECTOR;
 		// allocate a new buffer for the vector
 		auto old_buffer = move(buffer);
 		auto old_data = data;
 		buffer = VectorBuffer::CreateStandardVector(type.InternalType());
 		data = buffer->GetData();
-		if (nullmask[0]) {
+		if (is_null) {
 			// constant NULL, set nullmask
-			nullmask.set();
+			validity.EnsureWritable();
+			validity.SetAllInvalid(count);
 			return;
 		}
 		// non-null constant: have to repeat the constant
@@ -606,7 +610,7 @@ void Vector::Orrify(idx_t count, VectorData &data) {
 		if (child.vector_type == VectorType::FLAT_VECTOR) {
 			data.sel = &sel;
 			data.data = FlatVector::GetData(child);
-			data.nullmask = &FlatVector::Nullmask(child);
+			data.validity = FlatVector::Validity(child);
 		} else {
 			// dictionary with non-flat child: create a new reference to the child and normalify it
 			auto new_aux = make_buffer<VectorChildBuffer>();
@@ -615,7 +619,7 @@ void Vector::Orrify(idx_t count, VectorData &data) {
 
 			data.sel = &sel;
 			data.data = FlatVector::GetData(new_aux->data);
-			data.nullmask = &FlatVector::Nullmask(new_aux->data);
+			data.validity = FlatVector::Validity(new_aux->data);
 			this->auxiliary = move(new_aux);
 		}
 		break;
@@ -623,13 +627,13 @@ void Vector::Orrify(idx_t count, VectorData &data) {
 	case VectorType::CONSTANT_VECTOR:
 		data.sel = &ConstantVector::ZERO_SELECTION_VECTOR;
 		data.data = ConstantVector::GetData(*this);
-		data.nullmask = &nullmask;
+		data.validity = ConstantVector::Validity(*this);
 		break;
 	default:
 		Normalify(count);
 		data.sel = &FlatVector::INCREMENTAL_SELECTION_VECTOR;
 		data.data = FlatVector::GetData(*this);
-		data.nullmask = &nullmask;
+		data.validity = FlatVector::Validity(*this);
 		break;
 	}
 }
@@ -640,7 +644,7 @@ void Vector::Sequence(int64_t start, int64_t increment) {
 	auto data = (int64_t *)buffer->GetData();
 	data[0] = start;
 	data[1] = increment;
-	nullmask.reset();
+	validity.Reset();
 	auxiliary.reset();
 }
 
@@ -660,7 +664,7 @@ void Vector::Serialize(idx_t count, Serializer &serializer) {
 			auto strings = (string_t *)vdata.data;
 			for (idx_t i = 0; i < count; i++) {
 				auto idx = vdata.sel->get_index(i);
-				auto source = (*vdata.nullmask)[idx] ? NullValue<string_t>() : strings[idx];
+				auto source = !vdata.validity.RowIsValid(idx) ? NullValue<string_t>() : strings[idx];
 				serializer.WriteStringLen((const_data_ptr_t)source.GetDataUnsafe(), source.GetSize());
 			}
 			break;
@@ -681,14 +685,14 @@ void Vector::Deserialize(idx_t count, Deserializer &source) {
 		VectorOperations::ReadFromStorage(ptr.get(), count, *this);
 	} else {
 		auto strings = FlatVector::GetData<string_t>(*this);
-		auto &nullmask = FlatVector::Nullmask(*this);
+		auto &validity = FlatVector::Validity(*this);
 		for (idx_t i = 0; i < count; i++) {
 			// read the strings
 			auto str = source.Read<string>();
 			// now add the string to the StringHeap of the vector
 			// and write the pointer into the vector
 			if (IsNullValue<const char *>((const char *)str.c_str())) {
-				nullmask[i] = true;
+				validity.SetInvalid(i);
 			} else {
 				strings[i] = StringVector::AddStringOrBlob(*this, str);
 			}
@@ -716,7 +720,7 @@ void Vector::UTFVerify(const SelectionVector &sel, idx_t count) {
 			auto strings = FlatVector::GetData<string_t>(*this);
 			for (idx_t i = 0; i < count; i++) {
 				auto oidx = sel.get_index(i);
-				if (!nullmask[oidx]) {
+				if (validity.RowIsValid(oidx)) {
 					strings[oidx].Verify();
 				}
 			}
@@ -771,7 +775,7 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 			auto doubles = FlatVector::GetData<double>(*this);
 			for (idx_t i = 0; i < count; i++) {
 				auto oidx = sel.get_index(i);
-				if (!nullmask[oidx]) {
+				if (validity.RowIsValid(oidx)) {
 					D_ASSERT(Value::DoubleIsValid(doubles[oidx]));
 				}
 			}
@@ -788,7 +792,7 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 			auto strings = FlatVector::GetData<string_t>(*this);
 			for (idx_t i = 0; i < count; i++) {
 				auto oidx = sel.get_index(i);
-				if (!nullmask[oidx]) {
+				if (validity.RowIsValid(oidx)) {
 					strings[oidx].VerifyNull();
 				}
 			}
@@ -826,7 +830,7 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 			for (idx_t i = 0; i < count; i++) {
 				auto idx = sel.get_index(i);
 				auto &le = list_data[idx];
-				if (!nullmask[idx]) {
+				if (validity.RowIsValid(idx)) {
 					D_ASSERT(le.offset + le.length <= ListVector::GetEntry(*this).Count());
 				}
 			}

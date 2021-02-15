@@ -18,71 +18,81 @@ namespace duckdb {
 
 struct UnaryOperatorWrapper {
 	template <class FUNC, class OP, class INPUT_TYPE, class RESULT_TYPE>
-	static inline RESULT_TYPE Operation(FUNC fun, INPUT_TYPE input, nullmask_t &nullmask, idx_t idx) {
+	static inline RESULT_TYPE Operation(FUNC fun, INPUT_TYPE input, ValidityMask &mask, idx_t idx) {
 		return OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input);
 	}
 };
 
 struct UnaryLambdaWrapper {
 	template <class FUNC, class OP, class INPUT_TYPE, class RESULT_TYPE>
-	static inline RESULT_TYPE Operation(FUNC fun, INPUT_TYPE input, nullmask_t &nullmask, idx_t idx) {
+	static inline RESULT_TYPE Operation(FUNC fun, INPUT_TYPE input, ValidityMask &mask, idx_t idx) {
 		return fun(input);
 	}
 };
 
 struct UnaryExecutor {
 private:
-	template <class INPUT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC, bool IGNORE_NULL>
+	template <class INPUT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC>
 	static inline void ExecuteLoop(INPUT_TYPE *__restrict ldata, RESULT_TYPE *__restrict result_data, idx_t count,
-	                               const SelectionVector *__restrict sel_vector, nullmask_t &nullmask,
-	                               nullmask_t &result_nullmask, FUNC fun) {
+	                               const SelectionVector *__restrict sel_vector, ValidityMask &mask,
+	                               ValidityMask &result_mask, FUNC fun) {
 		ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
 
-		if (nullmask.any()) {
+		if (!mask.AllValid()) {
 			for (idx_t i = 0; i < count; i++) {
 				auto idx = sel_vector->get_index(i);
-				if (!nullmask[idx]) {
+				if (mask.RowIsValid(i)) {
 					result_data[i] = OPWRAPPER::template Operation<FUNC, OP, INPUT_TYPE, RESULT_TYPE>(
-					    fun, ldata[idx], result_nullmask, i);
+					    fun, ldata[idx], result_mask, i);
 				} else {
-					result_nullmask[i] = true;
+					result_mask.SetInvalid(i);
 				}
 			}
 		} else {
 			for (idx_t i = 0; i < count; i++) {
 				auto idx = sel_vector->get_index(i);
 				result_data[i] = OPWRAPPER::template Operation<FUNC, OP, INPUT_TYPE, RESULT_TYPE>(fun, ldata[idx],
-				                                                                                  result_nullmask, i);
+				                                                                                  result_mask, i);
 			}
 		}
 	}
 
-	template <class INPUT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC, bool IGNORE_NULL>
+	template <class INPUT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC>
 	static inline void ExecuteFlat(INPUT_TYPE *__restrict ldata, RESULT_TYPE *__restrict result_data, idx_t count,
-	                               nullmask_t &nullmask, nullmask_t &result_nullmask, FUNC fun) {
+	                               ValidityMask &mask, ValidityMask &result_mask, FUNC fun) {
 		ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
 
-		if (
-#ifdef DUCKDB_ALLOW_UNDEFINED
-		    IGNORE_NULL &&
-#endif
-		    nullmask.any()) {
-			result_nullmask = nullmask;
-			for (idx_t i = 0; i < count; i++) {
-				if (!nullmask[i]) {
-					result_data[i] = OPWRAPPER::template Operation<FUNC, OP, INPUT_TYPE, RESULT_TYPE>(
-					    fun, ldata[i], result_nullmask, i);
+		if (!mask.AllValid()) {
+			result_mask.Copy(mask, count);
+		}
+		idx_t base_idx = 0;
+		auto entry_count = ValidityMask::EntryCount(count);
+		for(idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
+			auto validity_entry = mask.GetValidityEntry(entry_idx);
+			idx_t next = MinValue<idx_t>(base_idx + ValidityMask::BitsPerValue(), count);
+			if (ValidityMask::AllValid(validity_entry)) {
+				// all valid: perform operation
+				for(; base_idx < next; base_idx++) {
+					result_data[base_idx] = OPWRAPPER::template Operation<FUNC, OP, INPUT_TYPE, RESULT_TYPE>(
+					    fun, ldata[base_idx], result_mask, base_idx);
 				}
-			}
-		} else {
-			for (idx_t i = 0; i < count; i++) {
-				result_data[i] =
-				    OPWRAPPER::template Operation<FUNC, OP, INPUT_TYPE, RESULT_TYPE>(fun, ldata[i], result_nullmask, i);
+			} else if (ValidityMask::NoneValid(validity_entry)) {
+				// nothing valid: skip all
+				continue;
+			} else {
+				// partially valid: need to check individual elements for validity
+				idx_t start = base_idx;
+				for(; base_idx < next; base_idx++) {
+					if (ValidityMask::RowIsValid(validity_entry, base_idx - start)) {
+						result_data[base_idx] = OPWRAPPER::template Operation<FUNC, OP, INPUT_TYPE, RESULT_TYPE>(
+							fun, ldata[base_idx], result_mask, base_idx);
+					}
+				}
 			}
 		}
 	}
 
-	template <class INPUT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC, bool IGNORE_NULL>
+	template <class INPUT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC>
 	static inline void ExecuteStandard(Vector &input, Vector &result, idx_t count, FUNC fun) {
 		switch (input.vector_type) {
 		case VectorType::CONSTANT_VECTOR: {
@@ -95,7 +105,7 @@ private:
 			} else {
 				ConstantVector::SetNull(result, false);
 				*result_data = OPWRAPPER::template Operation<FUNC, OP, INPUT_TYPE, RESULT_TYPE>(
-				    fun, *ldata, ConstantVector::Nullmask(result), 0);
+				    fun, *ldata, ConstantVector::Validity(result), 0);
 			}
 			break;
 		}
@@ -104,10 +114,8 @@ private:
 			auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
 			auto ldata = FlatVector::GetData<INPUT_TYPE>(input);
 
-			FlatVector::SetNullmask(result, FlatVector::Nullmask(input));
-
-			ExecuteFlat<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL>(
-			    ldata, result_data, count, FlatVector::Nullmask(input), FlatVector::Nullmask(result), fun);
+			ExecuteFlat<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC>(
+			    ldata, result_data, count, FlatVector::Validity(input), FlatVector::Validity(result), fun);
 			break;
 		}
 		default: {
@@ -118,24 +126,24 @@ private:
 			auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
 			auto ldata = (INPUT_TYPE *)vdata.data;
 
-			ExecuteLoop<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL>(
-			    ldata, result_data, count, vdata.sel, *vdata.nullmask, FlatVector::Nullmask(result), fun);
+			ExecuteLoop<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC>(
+			    ldata, result_data, count, vdata.sel, vdata.validity, FlatVector::Validity(result), fun);
 			break;
 		}
 		}
 	}
 
 public:
-	template <class INPUT_TYPE, class RESULT_TYPE, class OP, bool IGNORE_NULL = false,
+	template <class INPUT_TYPE, class RESULT_TYPE, class OP,
 	          class OPWRAPPER = UnaryOperatorWrapper>
 	static void Execute(Vector &input, Vector &result, idx_t count) {
-		ExecuteStandard<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP, bool, IGNORE_NULL>(input, result, count, false);
+		ExecuteStandard<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP, bool>(input, result, count, false);
 	}
 
-	template <class INPUT_TYPE, class RESULT_TYPE, bool IGNORE_NULL = false,
+	template <class INPUT_TYPE, class RESULT_TYPE,
 	          class FUNC = std::function<RESULT_TYPE(INPUT_TYPE)>>
 	static void Execute(Vector &input, Vector &result, idx_t count, FUNC fun) {
-		ExecuteStandard<INPUT_TYPE, RESULT_TYPE, UnaryLambdaWrapper, bool, FUNC, IGNORE_NULL>(input, result, count,
+		ExecuteStandard<INPUT_TYPE, RESULT_TYPE, UnaryLambdaWrapper, bool, FUNC>(input, result, count,
 		                                                                                      fun);
 	}
 };

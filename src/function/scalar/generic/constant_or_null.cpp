@@ -24,12 +24,12 @@ static void ConstantOrNullFunction(DataChunk &args, ExpressionState &state, Vect
 	for (idx_t idx = 0; idx < args.ColumnCount(); idx++) {
 		switch (args.data[idx].vector_type) {
 		case VectorType::FLAT_VECTOR: {
-			auto &input_mask = FlatVector::Nullmask(args.data[idx]);
-			if (input_mask.any()) {
+			auto &input_mask = FlatVector::Validity(args.data[idx]);
+			if (!input_mask.AllValid()) {
 				// there are null values: need to merge them into the result
 				result.Normalify(args.size());
-				auto &result_mask = FlatVector::Nullmask(result);
-				result_mask |= input_mask;
+				auto &result_mask = FlatVector::Validity(result);
+				result_mask.Combine(input_mask, args.size());
 			}
 			break;
 		}
@@ -45,12 +45,12 @@ static void ConstantOrNullFunction(DataChunk &args, ExpressionState &state, Vect
 		default: {
 			VectorData vdata;
 			args.data[idx].Orrify(args.size(), vdata);
-			if (vdata.nullmask->any()) {
+			if (!vdata.validity.AllValid()) {
 				result.Normalify(args.size());
-				auto &result_mask = FlatVector::Nullmask(result);
+				auto &result_mask = FlatVector::Validity(result);
 				for (idx_t i = 0; i < args.size(); i++) {
-					if ((*vdata.nullmask)[vdata.sel->get_index(i)]) {
-						result_mask[i] = true;
+					if (!vdata.validity.RowIsValid(vdata.sel->get_index(i))) {
+						result_mask.SetInvalid(i);
 					}
 				}
 			}

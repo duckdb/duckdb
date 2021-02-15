@@ -272,7 +272,7 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 		auto null_array = env->NewBooleanArray(row_count);
 		jboolean *null_array_ptr = env->GetBooleanArrayElements(null_array, nullptr);
 		for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-			null_array_ptr[row_idx] = FlatVector::Nullmask(vec)[row_idx];
+			null_array_ptr[row_idx] = FlatVector::IsNull(vec, row_idx);
 		}
 		env->ReleaseBooleanArrayElements(null_array, null_array_ptr, 0);
 
@@ -338,7 +338,7 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 		case LogicalTypeId::VARCHAR:
 			varlen_data = env->NewObjectArray(row_count, env->FindClass("java/lang/String"), nullptr);
 			for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-				if (FlatVector::Nullmask(vec)[row_idx]) {
+				if (FlatVector::IsNull(vec, row_idx)) {
 					continue;
 				}
 				auto d_str = ((string_t *)FlatVector::GetData(vec))[row_idx];

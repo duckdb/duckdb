@@ -61,18 +61,18 @@ void VectorOperations::Copy(Vector &source, Vector &target, const SelectionVecto
 	}
 
 	// first copy the nullmask
-	auto &tmask = FlatVector::Nullmask(target);
+	auto &tmask = FlatVector::Validity(target);
 	if (source.vector_type == VectorType::CONSTANT_VECTOR) {
 		if (ConstantVector::IsNull(source)) {
 			for (idx_t i = 0; i < copy_count; i++) {
-				tmask[target_offset + i] = true;
+				tmask.SetInvalid(target_offset + i);
 			}
 		}
 	} else {
-		auto &smask = FlatVector::Nullmask(source);
+		auto &smask = FlatVector::Validity(source);
 		for (idx_t i = 0; i < copy_count; i++) {
 			auto idx = sel.get_index(source_offset + i);
-			tmask[target_offset + i] = smask[idx];
+			tmask.Set(target_offset + i, smask.RowIsValid(idx));
 		}
 	}
 
@@ -125,7 +125,7 @@ void VectorOperations::Copy(Vector &source, Vector &target, const SelectionVecto
 		for (idx_t i = 0; i < copy_count; i++) {
 			auto source_idx = sel.get_index(source_offset + i);
 			auto target_idx = target_offset + i;
-			if (!tmask[target_idx]) {
+			if (tmask.RowIsValid(target_idx)) {
 				tdata[target_idx] = StringVector::AddStringOrBlob(target, ldata[source_idx]);
 			}
 		}

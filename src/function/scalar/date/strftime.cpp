@@ -588,7 +588,7 @@ static void StrfTimeFunctionDate(DataChunk &args, ExpressionState &state, Vector
 	}
 
 	dtime_t time = 0;
-	UnaryExecutor::Execute<date_t, string_t, true>(args.data[0], result, args.size(), [&](date_t date) {
+	UnaryExecutor::Execute<date_t, string_t>(args.data[0], result, args.size(), [&](date_t date) {
 		idx_t len = info.format.GetLength(date, time);
 		string_t target = StringVector::EmptyString(result, len);
 		info.format.FormatString(date, time, target.GetDataWriteable());
@@ -607,7 +607,7 @@ static void StrfTimeFunctionTimestamp(DataChunk &args, ExpressionState &state, V
 		return;
 	}
 
-	UnaryExecutor::Execute<timestamp_t, string_t, true>(args.data[0], result, args.size(), [&](timestamp_t timestamp) {
+	UnaryExecutor::Execute<timestamp_t, string_t>(args.data[0], result, args.size(), [&](timestamp_t timestamp) {
 		date_t date;
 		dtime_t time;
 		Timestamp::Convert(timestamp, date, time);
@@ -1031,7 +1031,7 @@ static void StrpTimeFunction(DataChunk &args, ExpressionState &state, Vector &re
 		ConstantVector::SetNull(result, true);
 		return;
 	}
-	UnaryExecutor::Execute<string_t, timestamp_t, true>(
+	UnaryExecutor::Execute<string_t, timestamp_t>(
 	    args.data[0], result, args.size(), [&](string_t input) { return info.format.ParseTimestamp(input); });
 }
 

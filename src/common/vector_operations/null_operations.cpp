@@ -23,10 +23,9 @@ void IsNullLoop(Vector &input, Vector &result, idx_t count) {
 
 		result.vector_type = VectorType::FLAT_VECTOR;
 		auto result_data = FlatVector::GetData<bool>(result);
-		auto &nullmask = *data.nullmask;
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = data.sel->get_index(i);
-			result_data[i] = INVERSE ? !nullmask[idx] : nullmask[idx];
+			result_data[i] = INVERSE ? data.validity.RowIsValid(idx) : !data.validity.RowIsValid(idx);
 		}
 	}
 }
@@ -49,12 +48,12 @@ bool VectorOperations::HasNotNull(Vector &input, idx_t count) {
 		VectorData data;
 		input.Orrify(count, data);
 
-		if (data.nullmask->none()) {
+		if (data.validity.AllValid()) {
 			return true;
 		}
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = data.sel->get_index(i);
-			if (!(*data.nullmask)[idx]) {
+			if (data.validity.RowIsValid(idx)) {
 				return true;
 			}
 		}
@@ -72,12 +71,12 @@ bool VectorOperations::HasNull(Vector &input, idx_t count) {
 		VectorData data;
 		input.Orrify(count, data);
 
-		if (data.nullmask->none()) {
+		if (data.validity.AllValid()) {
 			return false;
 		}
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = data.sel->get_index(i);
-			if ((*data.nullmask)[idx]) {
+			if (!data.validity.RowIsValid(idx)) {
 				return true;
 			}
 		}

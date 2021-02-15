@@ -17,12 +17,12 @@ static void TemplatedMarkJoin(Vector &left, Vector &right, idx_t lcount, idx_t r
 			continue;
 		}
 		auto lidx = left_data.sel->get_index(i);
-		if ((*left_data.nullmask)[lidx]) {
+		if (!left_data.validity.RowIsValid(lidx)) {
 			continue;
 		}
 		for (idx_t j = 0; j < rcount; j++) {
 			auto ridx = right_data.sel->get_index(j);
-			if ((*right_data.nullmask)[ridx]) {
+			if (!right_data.validity.RowIsValid(ridx)) {
 				continue;
 			}
 			if (OP::Operation(ldata[lidx], rdata[ridx])) {

@@ -18,7 +18,7 @@ struct InitialNestedLoopJoin {
 		idx_t result_count = 0;
 		for (; rpos < right_size; rpos++) {
 			idx_t right_position = right_data.sel->get_index(rpos);
-			if ((*right_data.nullmask)[right_position]) {
+			if (!right_data.validity.RowIsValid(right_position)) {
 				continue;
 			}
 			for (; lpos < left_size; lpos++) {
@@ -27,7 +27,7 @@ struct InitialNestedLoopJoin {
 					return result_count;
 				}
 				idx_t left_position = left_data.sel->get_index(lpos);
-				if ((*left_data.nullmask)[left_position]) {
+				if (!left_data.validity.RowIsValid(left_position)) {
 					continue;
 				}
 				if (OP::Operation(ldata[left_position], rdata[right_position])) {
@@ -63,8 +63,8 @@ struct InitialNestedLoopJoin {
 					return result_count;
 				}
 				idx_t left_position = left_data.sel->get_index(lpos);
-				if (OP::Operation(ldata[left_position], rdata[right_position], (*left_data.nullmask)[left_position],
-				                  (*right_data.nullmask)[right_position])) {
+				if (OP::Operation(ldata[left_position], rdata[right_position], !left_data.validity.RowIsValid(left_position),
+				                  !right_data.validity.RowIsValid(right_position))) {
 					// emit tuple
 					lvector.set_index(result_count, lpos);
 					rvector.set_index(result_count, rpos);
@@ -97,8 +97,7 @@ struct RefineNestedLoopJoin {
 			auto ridx = rvector.get_index(i);
 			auto left_idx = left_data.sel->get_index(lidx);
 			auto right_idx = right_data.sel->get_index(ridx);
-			// null values should be filtered out before
-			if ((*left_data.nullmask)[left_idx] || (*right_data.nullmask)[right_idx]) {
+			if (!left_data.validity.RowIsValid(left_idx) || !right_data.validity.RowIsValid(right_idx)) {
 				continue;
 			}
 			if (OP::Operation(ldata[left_idx], rdata[right_idx])) {
@@ -131,8 +130,8 @@ struct RefineNestedLoopJoin {
 			auto left_idx = left_data.sel->get_index(lidx);
 			auto right_idx = right_data.sel->get_index(ridx);
 			// null values should be filtered out before
-			if (OP::Operation(ldata[left_idx], rdata[right_idx], (*left_data.nullmask)[left_idx],
-			                  (*right_data.nullmask)[right_idx])) {
+			if (OP::Operation(ldata[left_idx], rdata[right_idx], !left_data.validity.RowIsValid(left_idx),
+			                  !right_data.validity.RowIsValid(right_idx))) {
 				lvector.set_index(result_count, lidx);
 				rvector.set_index(result_count, ridx);
 				result_count++;

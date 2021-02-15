@@ -130,7 +130,7 @@ private:
 	                                       idx_t vector_offset, StringUpdateInfo &update_info);
 
 	void MergeUpdateInfo(UpdateInfo *node, row_t *ids, idx_t update_count, idx_t vector_offset,
-	                     string_location_t string_locations[], nullmask_t original_nullmask);
+	                     string_location_t string_locations[], ValidityMask &base_mask);
 
 	//! The amount of bytes remaining to store in the block
 	idx_t RemainingSpace(BufferHandle &handle);
@@ -139,18 +139,18 @@ private:
 	                idx_t res_idx, idx_t &update_idx, size_t vector_index);
 	template <class OP>
 	void Select_String(Vector &result, data_ptr_t baseptr, int32_t *dict_offset, SelectionVector &sel,
-	                   const string &constant, idx_t &approved_tuple_count, nullmask_t *source_nullmask,
+	                   const string &constant, idx_t &approved_tuple_count, ValidityMask &source,
 	                   size_t vector_index) {
 		result.vector_type = VectorType::FLAT_VECTOR;
 		auto result_data = FlatVector::GetData<string_t>(result);
 		SelectionVector new_sel(approved_tuple_count);
 		idx_t result_count = 0;
 		idx_t update_idx = 0;
-		if (source_nullmask->any()) {
+		if (!source.AllValid()) {
 			for (idx_t i = 0; i < approved_tuple_count; i++) {
 				idx_t src_idx = sel.get_index(i);
 				ReadString(result_data, result, baseptr, dict_offset, src_idx, src_idx, update_idx, vector_index);
-				if (!(*source_nullmask)[src_idx] && OP::Operation(result_data[src_idx].GetString(), constant)) {
+				if (source.RowIsValid(src_idx) && OP::Operation(result_data[src_idx].GetString(), constant)) {
 					new_sel.set_index(result_count++, src_idx);
 				}
 			}
@@ -170,17 +170,17 @@ private:
 	template <class OPL, class OPR>
 	void Select_String_Between(Vector &result, data_ptr_t baseptr, int32_t *dict_offset, SelectionVector &sel,
 	                           string constant_left, string constant_right, idx_t &approved_tuple_count,
-	                           nullmask_t *source_nullmask, size_t vector_index) {
+	                           ValidityMask &source_mask, size_t vector_index) {
 		result.vector_type = VectorType::FLAT_VECTOR;
 		auto result_data = FlatVector::GetData<string_t>(result);
 		SelectionVector new_sel(approved_tuple_count);
 		idx_t result_count = 0;
 		idx_t update_idx = 0;
-		if (source_nullmask->any()) {
+		if (!source_mask.AllValid()) {
 			for (idx_t i = 0; i < approved_tuple_count; i++) {
 				idx_t src_idx = sel.get_index(i);
 				ReadString(result_data, result, baseptr, dict_offset, src_idx, src_idx, update_idx, vector_index);
-				if (!(*source_nullmask)[src_idx] && OPL::Operation(result_data[src_idx].GetString(), constant_left) &&
+				if (source_mask.RowIsValid(src_idx) && OPL::Operation(result_data[src_idx].GetString(), constant_left) &&
 				    OPR::Operation(result_data[src_idx].GetString(), constant_right)) {
 					new_sel.set_index(result_count++, src_idx);
 				}

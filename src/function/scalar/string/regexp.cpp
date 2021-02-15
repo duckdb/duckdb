@@ -91,11 +91,11 @@ static void RegexpMatchesFunction(DataChunk &args, ExpressionState &state, Vecto
 	auto &info = (RegexpMatchesBindData &)*func_expr.bind_info;
 
 	if (info.constant_pattern) {
-		UnaryExecutor::Execute<string_t, bool, true>(strings, result, args.size(), [&](string_t input) {
+		UnaryExecutor::Execute<string_t, bool>(strings, result, args.size(), [&](string_t input) {
 			return OP::Operation(CreateStringPiece(input), *info.constant_pattern);
 		});
 	} else {
-		BinaryExecutor::Execute<string_t, string_t, bool, true>(strings, patterns, result, args.size(),
+		BinaryExecutor::Execute<string_t, string_t, bool>(strings, patterns, result, args.size(),
 		                                                        [&](string_t input, string_t pattern) {
 			                                                        RE2 re(CreateStringPiece(pattern), info.options);
 			                                                        if (!re.ok()) {

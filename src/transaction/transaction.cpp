@@ -64,7 +64,7 @@ UpdateInfo *Transaction::CreateUpdateInfo(idx_t type_size, idx_t entries) {
 	update_info->tuples = (sel_t *)(((data_ptr_t)update_info) + sizeof(UpdateInfo));
 	update_info->tuple_data = ((data_ptr_t)update_info) + sizeof(UpdateInfo) + sizeof(sel_t) * entries;
 	update_info->version_number = transaction_id;
-	update_info->nullmask.reset();
+	update_info->mask.Reset();
 	return update_info;
 }
 

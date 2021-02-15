@@ -231,14 +231,14 @@ static void StringSplitExecutor(DataChunk &args, ExpressionState &state, Vector 
 
 	size_t total_len = 0;
 	for (idx_t i = 0; i < args.size(); i++) {
-		if ((*input_data.nullmask)[input_data.sel->get_index(i)]) {
+		if (!input_data.validity.RowIsValid(input_data.sel->get_index(i))) {
 			FlatVector::SetNull(result, i, true);
 			continue;
 		}
 		string_t input = inputs[input_data.sel->get_index(i)];
 
 		unique_ptr<ChunkCollection> split_input;
-		if ((*delim_data.nullmask)[delim_data.sel->get_index(i)]) {
+		if (!delim_data.validity.RowIsValid(delim_data.sel->get_index(i))) {
 			// special case: delimiter is NULL
 			split_input = make_unique<ChunkCollection>();
 

@@ -16,7 +16,7 @@ struct ChrOperator {
 
 void CHR::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunction chr("chr", {LogicalType::INTEGER}, LogicalType::VARCHAR,
-	                   ScalarFunction::UnaryFunction<int32_t, string_t, ChrOperator, true>);
+	                   ScalarFunction::UnaryFunction<int32_t, string_t, ChrOperator>);
 	set.AddFunction(chr);
 }
 

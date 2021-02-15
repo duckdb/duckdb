@@ -107,13 +107,13 @@ template <class T>
 static void TemplatedSerializeVData(VectorData &vdata, const SelectionVector &sel, idx_t count,
                                     data_ptr_t key_locations[]) {
 	auto source = (T *)vdata.data;
-	if (vdata.nullmask->any()) {
+	if (!vdata.validity.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = sel.get_index(i);
 			auto source_idx = vdata.sel->get_index(idx);
 
 			auto target = (T *)key_locations[i];
-			T value = (*vdata.nullmask)[source_idx] ? NullValue<T>() : source[source_idx];
+			T value = !vdata.validity.RowIsValid(source_idx) ? NullValue<T>() : source[source_idx];
 			Store<T>(value, (data_ptr_t)target);
 			key_locations[i] += sizeof(T);
 		}
@@ -188,7 +188,7 @@ void JoinHashTable::SerializeVectorData(VectorData &vdata, PhysicalType type, co
 			auto source_idx = vdata.sel->get_index(idx);
 
 			string_t new_val;
-			if ((*vdata.nullmask)[source_idx]) {
+			if (!vdata.validity.RowIsValid(source_idx)) {
 				new_val = NullValue<string_t>();
 			} else if (source[source_idx].IsInlined()) {
 				new_val = source[source_idx];
@@ -225,12 +225,11 @@ idx_t JoinHashTable::AppendToBlock(HTDataBlock &block, BufferHandle &handle, vec
 }
 
 static idx_t FilterNullValues(VectorData &vdata, const SelectionVector &sel, idx_t count, SelectionVector &result) {
-	auto &nullmask = *vdata.nullmask;
 	idx_t result_count = 0;
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = sel.get_index(i);
 		auto key_idx = vdata.sel->get_index(idx);
-		if (!nullmask[key_idx]) {
+		if (vdata.validity.RowIsValid(key_idx)) {
 			result.set_index(result_count++, idx);
 		}
 	}
@@ -250,7 +249,7 @@ idx_t JoinHashTable::PrepareKeys(DataChunk &keys, unique_ptr<VectorData[]> &key_
 	}
 	for (idx_t i = 0; i < keys.ColumnCount(); i++) {
 		if (!null_values_are_equal[i]) {
-			if (!key_data[i].nullmask->any()) {
+			if (key_data[i].validity.AllValid()) {
 				continue;
 			}
 			added_count = FilterNullValues(key_data[i], *current_sel, added_count, sel);
@@ -517,7 +516,7 @@ static idx_t TemplatedGather(VectorData &vdata, Vector &pointers, const Selectio
 		auto kidx = vdata.sel->get_index(idx);
 		auto gdata = (T *)(ptrs[idx] + offset);
 		T val = Load<T>((data_ptr_t)gdata);
-		if ((*vdata.nullmask)[kidx]) {
+		if (!vdata.validity.RowIsValid(kidx)) {
 			if (IsNullValue<T>(val)) {
 				match_sel->set_index(result_count++, idx);
 			} else {
@@ -693,13 +692,13 @@ template <class T>
 static void TemplatedGatherResult(Vector &result, uintptr_t *pointers, const SelectionVector &result_vector,
                                   const SelectionVector &sel_vector, idx_t count, idx_t offset) {
 	auto rdata = FlatVector::GetData<T>(result);
-	auto &nullmask = FlatVector::Nullmask(result);
+	auto &mask = FlatVector::Validity(result);
 	for (idx_t i = 0; i < count; i++) {
 		auto ridx = result_vector.get_index(i);
 		auto pidx = sel_vector.get_index(i);
 		T hdata = Load<T>((data_ptr_t)(pointers[pidx] + offset));
 		if (IsNullValue<T>(hdata)) {
-			nullmask[ridx] = true;
+			mask.SetInvalid(ridx);
 		} else {
 			rdata[ridx] = hdata;
 		}
@@ -876,17 +875,17 @@ void ScanStructure::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &chi
 	// first we set the NULL values from the join keys
 	// if there is any NULL in the keys, the result is NULL
 	auto bool_result = FlatVector::GetData<bool>(mark_vector);
-	auto &nullmask = FlatVector::Nullmask(mark_vector);
+	auto &mask = FlatVector::Validity(mark_vector);
 	for (idx_t col_idx = 0; col_idx < join_keys.ColumnCount(); col_idx++) {
 		if (ht.null_values_are_equal[col_idx]) {
 			continue;
 		}
 		VectorData jdata;
 		join_keys.data[col_idx].Orrify(join_keys.size(), jdata);
-		if (jdata.nullmask->any()) {
+		if (!jdata.validity.AllValid()) {
 			for (idx_t i = 0; i < join_keys.size(); i++) {
 				auto jidx = jdata.sel->get_index(i);
-				nullmask[i] = (*jdata.nullmask)[jidx];
+				mask.Set(i, jdata.validity.RowIsValid(jidx));
 			}
 		}
 	}
@@ -902,7 +901,7 @@ void ScanStructure::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &chi
 	if (ht.has_null) {
 		for (idx_t i = 0; i < child.size(); i++) {
 			if (!bool_result[i]) {
-				nullmask[i] = true;
+				mask.SetInvalid(i);
 			}
 		}
 	}
@@ -939,22 +938,22 @@ void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &input, DataChunk &r
 		// first set the nullmask based on whether or not there were NULL values in the join key
 		result_vector.vector_type = VectorType::FLAT_VECTOR;
 		auto bool_result = FlatVector::GetData<bool>(result_vector);
-		auto &nullmask = FlatVector::Nullmask(result_vector);
+		auto &mask = FlatVector::Validity(result_vector);
 		switch (last_key.vector_type) {
 		case VectorType::CONSTANT_VECTOR:
 			if (ConstantVector::IsNull(last_key)) {
-				nullmask.set();
+				mask.SetAllInvalid(input.size());
 			}
 			break;
 		case VectorType::FLAT_VECTOR:
-			nullmask = FlatVector::Nullmask(last_key);
+			mask = FlatVector::Validity(last_key);
 			break;
 		default: {
 			VectorData kdata;
 			last_key.Orrify(keys.size(), kdata);
 			for (idx_t i = 0; i < input.size(); i++) {
 				auto kidx = kdata.sel->get_index(i);
-				nullmask[i] = (*kdata.nullmask)[kidx];
+				mask.Set(i, kdata.validity.RowIsValid(kidx));
 			}
 			break;
 		}
@@ -968,11 +967,11 @@ void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &input, DataChunk &r
 			bool_result[i] = found_match ? found_match[i] : false;
 			if (!bool_result[i] && count_star[i] > count[i]) {
 				// RHS has NULL value and result is false: set to null
-				nullmask[i] = true;
+				mask.SetInvalid(i);
 			}
 			if (count_star[i] == 0) {
 				// count == 0, set nullmask to false (we know the result is false now)
-				nullmask[i] = false;
+				mask.SetValid(i);
 			}
 		}
 	}
@@ -1043,10 +1042,10 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &input, DataChunk 
 	for (idx_t i = 0; i < ht.build_types.size(); i++) {
 		auto &vector = result.data[input.ColumnCount() + i];
 		// set NULL entries for every entry that was not found
-		auto &nullmask = FlatVector::Nullmask(vector);
-		nullmask.set();
+		auto &mask = FlatVector::Validity(vector);
+		mask.SetAllInvalid(input.size());
 		for (idx_t j = 0; j < result_count; j++) {
-			nullmask[result_sel.get_index(j)] = false;
+			mask.SetValid(result_sel.get_index(j));
 		}
 		// for the remaining values we fetch the values
 		GatherResult(vector, result_sel, result_sel, result_count, offset);

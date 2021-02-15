@@ -14,12 +14,12 @@ template <class T>
 static void TemplatedGatherLoop(Vector &source, Vector &dest, idx_t count) {
 	auto addresses = FlatVector::GetData<uintptr_t>(source);
 	auto data = FlatVector::GetData<T>(dest);
-	auto &nullmask = FlatVector::Nullmask(dest);
+	auto &mask = FlatVector::Validity(dest);
 
 	for (idx_t i = 0; i < count; i++) {
 		auto val = Load<T>((const_data_ptr_t)addresses[i]);
 		if (IsNullValue<T>(val)) {
-			nullmask[i] = true;
+			mask.SetInvalid(i);
 		} else {
 			data[i] = val;
 		}
