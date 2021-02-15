@@ -45,7 +45,7 @@ public:
 
 private:
 	//! 2 << 21 (4MB)
-	const static idx_t SORTING_BLOCK_SIZE = 4194304;
+	const static idx_t SORTING_BLOCK_SIZE = 524288; // 4194304;
 };
 
 } // namespace duckdb

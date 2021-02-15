@@ -60,8 +60,8 @@ public:
 
 	//! Allocate arrays for vector serialization
 	const SelectionVector *sel_ptr = &FlatVector::INCREMENTAL_SELECTION_VECTOR;
-	data_ptr_t key_locations[STANDARD_VECTOR_SIZE] {};
-	data_ptr_t nullmask_locations[STANDARD_VECTOR_SIZE] {};
+	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
+	data_ptr_t nullmask_locations[STANDARD_VECTOR_SIZE];
 
 	//! Sorted incoming data (sorted each time a block is filled)
 	vector<unique_ptr<ContinuousBlock>> continuous;
@@ -118,7 +118,7 @@ public:
 	idx_t end;
 
 	unique_ptr<data_ptr_t[]> key_locations = nullptr;
-	//! Used only for the initial merge after sorting in Sink
+	//! Used only for the initial merge after sorting in Sink/Combine
 	unique_ptr<idx_t[]> offsets = nullptr; // FIXME: may need to share these offsets!
 
 	data_ptr_t &DataPtr() {
@@ -129,26 +129,27 @@ public:
 		if (block_idx >= blocks.size()) {
 			return;
 		}
-		entry_idx = block_idx == 0 ? start : 0;
+		block_start = block_idx == 0 ? start : 0;
 		block_end = block_idx == blocks.size() - 1 ? end : blocks[block_idx].count;
+		entry_idx = block_start;
 	}
 
-	bool HasNext() {
-		return entry_idx < block_end - 1 || block_idx < blocks.size() - 1;
+	bool Done() {
+		return entry_idx >= block_end && block_idx >= blocks.size() - 1;
 	}
 
 	void Advance() {
-		if (entry_idx < block_end - 1) {
+		if (entry_idx < block_end) {
 			entry_idx++;
 		} else if (block_idx < blocks.size() - 1) {
 			block_idx++;
+			InitializeBlock();
 			PinBlock();
 		}
 	}
 
 	void PinBlock() {
-		InitializeBlock();
-		if (!HasNext()) {
+		if (Done()) {
 			return;
 		}
 		handle = state.buffer_manager.Pin(blocks[block_idx].block);
@@ -157,12 +158,12 @@ public:
 			key_locations = unique_ptr<data_ptr_t[]>(new data_ptr_t[state.block_capacity]);
 		}
 		if (offsets) {
-			for (idx_t i = entry_idx; i < end; i++) {
+			for (idx_t i = entry_idx; i < block_end; i++) {
 				key_locations[i] = dataptr + offsets[i];
 			}
-			offsets.release();
+			offsets.reset();
 		} else {
-			for (idx_t i = entry_idx; i < end; i++) {
+			for (idx_t i = entry_idx; i < block_end; i++) {
 				key_locations[i] = dataptr;
 				dataptr += state.entry_size;
 			}
@@ -171,13 +172,14 @@ public:
 
 	void FlushData(ContinuousBlock &target) {
 		for (; block_idx < blocks.size(); block_idx++, InitializeBlock()) {
-			if (offsets) {
-				// this block has been sorted but not re-ordered
-				PinBlock();
-			} else if (entry_idx == 0 && block_end == blocks[block_idx].count) {
+			if (!offsets && entry_idx == 0 && block_end == blocks[block_idx].count) {
 				// a full block can be appended
 				target.blocks.push_back(blocks[block_idx]);
 				continue;
+			}
+			if (entry_idx == block_start) {
+				// reading a new block that has not yet been pinned
+				PinBlock();
 			}
 			// partial block must be appended
 			if (target.blocks.empty() || target.blocks.back().count + (block_end - entry_idx) > state.block_capacity) {
@@ -186,7 +188,7 @@ public:
 			}
 			auto &write_block = target.blocks.back();
 			auto write_handle = state.buffer_manager.Pin(write_block.block);
-			auto write_ptr = write_handle->node->buffer;
+			auto write_ptr = write_handle->node->buffer + write_block.count * state.entry_size;
 
 			// flush into last block
 			for (; entry_idx < block_end; entry_idx++) {
@@ -198,9 +200,21 @@ public:
 		target.end = target.blocks.back().count;
 	}
 
+	unique_ptr<ContinuousBlock> Copy() {
+		auto copy = make_unique<ContinuousBlock>(state);
+		copy->start = start;
+		copy->end = end;
+		if (offsets) {
+			copy->offsets = unique_ptr<idx_t[]>(new idx_t[blocks[0].count]);
+			memcpy(copy->offsets.get(), offsets.get(), blocks[0].count * sizeof(idx_t));
+		}
+		return copy;
+	}
+
 private:
 	idx_t block_idx;
 	idx_t entry_idx;
+	idx_t block_start;
 	idx_t block_end;
 
 	unique_ptr<BufferHandle> handle;
@@ -399,7 +413,9 @@ public:
 
 	void Execute() override {
 		// initialize blocks to read from
+		left.InitializeBlock();
 		left.PinBlock();
+		right.InitializeBlock();
 		right.PinBlock();
 
 		// initialize blocks to write to
@@ -407,7 +423,7 @@ public:
 		auto write_handle = buffer_manager.Pin(write_block.block);
 		auto write_ptr = write_handle->node->buffer;
 
-		while (left.HasNext() && right.HasNext()) {
+		while (!left.Done() && !right.Done()) {
 			if (write_block.count == write_block.capacity) {
 				// append to result
 				result.blocks.push_back(write_block);
@@ -429,10 +445,10 @@ public:
 		result.blocks.push_back(write_block);
 
 		// flush data of last block(s)
-		if (left.HasNext()) {
-			left.FlushData(result);
-		} else {
+		if (left.Done()) {
 			right.FlushData(result);
+		} else {
+			left.FlushData(result);
 		}
 
 		lock_guard<mutex> glock(state.lock);
@@ -471,23 +487,28 @@ void PhysicalOrder::ScheduleMergeTasks(Pipeline &pipeline, ClientContext &contex
 
 	// finish pipeline if there is only one continuous block left
 	if (sink.continuous.size() == 1) {
-		//		pipeline.Finish(); // TODO: is this needed?
+		pipeline.Finish();
 		return;
 	}
 
-	// if not, schedule tasks
-	for (idx_t i = 0; i < sink.continuous.size() - 1; i += 2) {
+	// add last element if odd amount
+	if (sink.continuous.size() % 2 == 1) {
+		auto first_half = move(sink.continuous.back());
+		auto second_half = first_half->Copy();
+		sink.continuous.pop_back();
+		first_half->end = first_half->end / 2;
+		second_half->start = first_half->end;
+		sink.continuous.push_back(move(first_half));
+		sink.continuous.push_back(move(second_half));
+	}
+
+	// schedule merge tasks
+	for (idx_t i = 0; i < sink.continuous.size(); i += 2) {
 		pipeline.total_tasks++;
 		sink.intermediate.push_back(make_unique<ContinuousBlock>(sink));
 		auto new_task = make_unique<PhysicalOrderMergeTask>(pipeline, context, sink, *sink.continuous[i],
 		                                                    *sink.continuous[i + 1], *sink.intermediate.back());
 		TaskScheduler::GetScheduler(context).ScheduleTask(pipeline.token, move(new_task));
-	}
-
-	// add last element if odd amount
-	if (sink.continuous.size() % 2 == 1) {
-		sink.intermediate.push_back(move(sink.continuous.back()));
-		sink.continuous.pop_back();
 	}
 }
 
@@ -497,9 +518,9 @@ void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 
 	if (sink.intermediate.capacity() == 1) {
 		// special case: only one block arrived, it was sorted but not re-ordered
-		auto single_block = move(sink.intermediate[0]);
-		sink.intermediate[0] = make_unique<ContinuousBlock>(sink);
-		single_block->FlushData(*sink.intermediate[0]);
+		sink.continuous.push_back(make_unique<ContinuousBlock>(sink));
+		sink.intermediate.back()->FlushData(*sink.continuous.back());
+		return;
 	}
 
 	ScheduleMergeTasks(pipeline, context, sink);

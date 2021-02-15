@@ -25,14 +25,6 @@ struct RowDataBlock {
 	idx_t count;
 	idx_t capacity;
 	shared_ptr<BlockHandle> block;
-
-	shared_ptr<RowDataBlock> Copy() {
-		auto result = make_shared<RowDataBlock>();
-		result->count = count;
-		result->capacity = capacity;
-		result->block = block;
-		return result;
-	}
 };
 
 struct BlockAppendEntry {

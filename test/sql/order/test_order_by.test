@@ -5,11 +5,16 @@
 statement ok
 PRAGMA enable_verification
 
-#statement ok
-#create table test as select range r, random() rand from range(800000)
-#
-#statement ok
-#CREATE TABLE test2 AS (SELECT * FROM test ORDER BY rand)
+statement ok
+create table test as select range r, random() rand from range(80000)
+
+statement ok
+CREATE TABLE test2 AS (SELECT * FROM test ORDER BY rand)
+
+query T
+SELECT COUNT(DISTINCT(r)) FROM test2
+----
+50000
 
 statement ok
 CREATE TABLE test (a INTEGER, b INTEGER);
