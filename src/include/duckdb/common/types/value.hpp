@@ -30,6 +30,10 @@ public:
 	Value(int32_t val); // NOLINT: Allow implicit conversion from `int32_t`
 	//! Create a BIGINT value
 	Value(int64_t val); // NOLINT: Allow implicit conversion from `int64_t`
+	//! Create an UINTEGER value
+	Value(uint32_t val); // NOLINT: Allow implicit conversion from `int32_t`
+	//! Create a UBIGINT value
+	Value(uint64_t val); // NOLINT: Allow implicit conversion from `int64_t`
 	//! Create a FLOAT value
 	Value(float val); // NOLINT: Allow implicit conversion from `float`
 	//! Create a DOUBLE value
