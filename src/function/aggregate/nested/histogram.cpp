@@ -4,23 +4,24 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/map.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/types/chunk_collection.hpp"
 
 namespace duckdb {
 template <class T>
 struct HistogramAggState {
-	map<T, size_t> *map;
+	map<T, size_t> *hist;
 };
 
 struct HistogramFunction {
 	template <class STATE>
 	static void Initialize(STATE *state) {
-		state->map = nullptr;
+		state->hist = nullptr;
 	}
 
 	template <class STATE>
 	static void Destroy(STATE *state) {
-		if (state->map) {
-			delete state->map;
+		if (state->hist) {
+			delete state->hist;
 		}
 	}
 
@@ -44,11 +45,11 @@ static void HistogramUpdateFunction(Vector inputs[], FunctionData *, idx_t input
 	for (idx_t i = 0; i < count; i++) {
 		if (!(*input_data.nullmask)[input_data.sel->get_index(i)]) {
 			auto state = states[sdata.sel->get_index(i)];
-			if (!state->map) {
-				state->map = new map<T, size_t>();
+			if (!state->hist) {
+				state->hist = new map<T, size_t>();
 			}
 			T value = input.GetValue(i).GetValue<T>();
-			(*state->map)[value]++;
+			(*state->hist)[value]++;
 		}
 	}
 }
@@ -63,11 +64,11 @@ static void HistogramCombineFunction(Vector &state, Vector &combined, idx_t coun
 
 	for (idx_t i = 0; i < count; i++) {
 		auto state = states_ptr[sdata.sel->get_index(i)];
-		if (!combined_ptr[i]->map) {
-			combined_ptr[i]->map = new map<T, size_t>();
+		if (!combined_ptr[i]->hist) {
+			combined_ptr[i]->hist = new map<T, size_t>();
 		}
-		for (auto &entry : *state->map) {
-			(*combined_ptr[i]->map)[entry.first] += entry.second;
+		for (auto &entry : *state->hist) {
+			(*combined_ptr[i]->hist)[entry.first] += entry.second;
 		}
 	}
 }
@@ -77,23 +78,23 @@ static void HistogramFinalize(Vector &state_vector, FunctionData *, Vector &resu
 	VectorData sdata;
 	state_vector.Orrify(count, sdata);
 	auto states = (HistogramAggState<T> **)sdata.data;
-	result.Initialize(result.type);
+	result.Initialize(result.GetType());
 	auto list_struct_data = FlatVector::GetData<list_entry_t>(result);
 	auto list_child = make_unique<ChunkCollection>();
 	size_t total_len = 0, old_len = 0;
 	DataChunk insert_chunk;
 	vector<LogicalType> chunk_types;
-	chunk_types.emplace_back(result.type.child_types()[0].second);
+	chunk_types.emplace_back(result.GetType().child_types()[0].second);
 	insert_chunk.Initialize(chunk_types);
 	auto &nullmask = FlatVector::Nullmask(result);
 	for (idx_t i = 0; i < count; i++) {
 		auto state = states[sdata.sel->get_index(i)];
 		size_t chunk_idx = 0;
-		if (!state->map) {
+		if (!state->hist) {
 			nullmask[i] = true;
 			continue;
 		}
-		for (auto &entry : *state->map) {
+		for (auto &entry : *state->hist) {
 			child_list_t<Value> struct_values;
 			struct_values.push_back({"k", Value::CreateValue(entry.first)});
 			struct_values.push_back({"v", Value::UBIGINT(entry.second)});
