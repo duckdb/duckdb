@@ -172,6 +172,23 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 			}
 			break;
 		}
+		case LogicalTypeId::BLOB: {
+			idx_t row = 0;
+			auto target = (duckdb_blob *)out->columns[col].data;
+			for (auto &chunk : result->collection.Chunks()) {
+				auto source = FlatVector::GetData<string_t>(chunk->data[col]);
+				for (idx_t k = 0; k < chunk->size(); k++) {
+					if (!FlatVector::IsNull(chunk->data[col], k)) {
+						target[row].data = (char *)malloc(source[k].GetSize());
+						target[row].size = source[k].GetSize();
+						assert(target[row].data);
+						memcpy((void *)target[row].data, source[k].GetDataUnsafe(), source[k].GetSize());
+					}
+					row++;
+				}
+			}
+			break;
+		}
 		case LogicalTypeId::DATE: {
 			idx_t row = 0;
 			auto target = (duckdb_date *)out->columns[col].data;
@@ -293,6 +310,14 @@ static void duckdb_destroy_column(duckdb_column column, idx_t count) {
 			for (idx_t i = 0; i < count; i++) {
 				if (data[i]) {
 					free(data[i]);
+				}
+			}
+		} else if (column.type == DUCKDB_TYPE_BLOB) {
+			// blob, delete individual blobs
+			auto data = (duckdb_blob *)column.data;
+			for (idx_t i = 0; i < count; i++) {
+				if (data[i].data) {
+					free( (void *) data[i].data);
 				}
 			}
 		}
@@ -448,6 +473,8 @@ duckdb_type ConvertCPPTypeToC(LogicalType sql_type) {
 		return DUCKDB_TYPE_TIME;
 	case LogicalTypeId::VARCHAR:
 		return DUCKDB_TYPE_VARCHAR;
+	case LogicalTypeId::BLOB:
+		return DUCKDB_TYPE_BLOB;
 	case LogicalTypeId::INTERVAL:
 		return DUCKDB_TYPE_INTERVAL;
 	default:
@@ -481,6 +508,8 @@ idx_t GetCTypeSize(duckdb_type type) {
 		return sizeof(duckdb_timestamp);
 	case DUCKDB_TYPE_VARCHAR:
 		return sizeof(const char *);
+	case DUCKDB_TYPE_BLOB:
+		return sizeof(duckdb_blob);
 	case DUCKDB_TYPE_INTERVAL:
 		return sizeof(duckdb_interval);
 	default:
@@ -551,6 +580,10 @@ static Value GetCValue(duckdb_result *result, idx_t col, idx_t row) {
 	}
 	case DUCKDB_TYPE_VARCHAR:
 		return Value(string(UnsafeFetch<const char *>(result, col, row)));
+	case DUCKDB_TYPE_BLOB: {
+		auto blob = UnsafeFetch<duckdb_blob>(result, col, row);
+		return Value::BLOB((const_data_ptr_t) blob.data, blob.size);
+	}
 	default:
 		// invalid type for C to C++ conversion
 		D_ASSERT(0);
@@ -631,4 +664,18 @@ double duckdb_value_double(duckdb_result *result, idx_t col, idx_t row) {
 char *duckdb_value_varchar(duckdb_result *result, idx_t col, idx_t row) {
 	Value val = GetCValue(result, col, row);
 	return strdup(val.ToString().c_str());
+}
+
+duckdb_blob duckdb_value_blob(duckdb_result *result, idx_t col, idx_t row) {
+	duckdb_blob blob;
+	Value val = GetCValue(result, col, row).CastAs(LogicalType::BLOB);
+	if (val.is_null) {
+		blob.data = nullptr;
+		blob.size = 0;
+	} else {
+		blob.data = malloc(val.str_value.size());
+		memcpy((void *) blob.data, val.str_value.c_str(), val.str_value.size());
+		blob.size = val.str_value.size();
+	}
+	return blob;
 }
