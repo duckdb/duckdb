@@ -53,13 +53,13 @@ unique_ptr<FunctionData> BindPrintfFunction(ClientContext &context, ScalarFuncti
 template <class FORMAT_FUN, class CTX>
 static void PrintfFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &format_string = args.data[0];
-	result.vector_type = VectorType::CONSTANT_VECTOR;
+	result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	for (idx_t i = 0; i < args.ColumnCount(); i++) {
-		switch (args.data[i].vector_type) {
+		switch (args.data[i].GetVectorType()) {
 		case VectorType::CONSTANT_VECTOR:
 			if (ConstantVector::IsNull(args.data[i])) {
 				// constant null! result is always NULL regardless of other input
-				result.vector_type = VectorType::CONSTANT_VECTOR;
+				result.SetVectorType(VectorType::CONSTANT_VECTOR);
 				ConstantVector::SetNull(result, true);
 				return;
 			}
@@ -67,23 +67,23 @@ static void PrintfFunction(DataChunk &args, ExpressionState &state, Vector &resu
 		default:
 			// FLAT VECTOR, we can directly OR the nullmask
 			args.data[i].Normalify(args.size());
-			result.vector_type = VectorType::FLAT_VECTOR;
+			result.SetVectorType(VectorType::FLAT_VECTOR);
 			FlatVector::Nullmask(result) |= FlatVector::Nullmask(args.data[i]);
 			break;
 		}
 	}
-	idx_t count = result.vector_type == VectorType::CONSTANT_VECTOR ? 1 : args.size();
+	idx_t count = result.GetVectorType() == VectorType::CONSTANT_VECTOR ? 1 : args.size();
 
 	auto format_data = FlatVector::GetData<string_t>(format_string);
 	auto result_data = FlatVector::GetData<string_t>(result);
 	for (idx_t idx = 0; idx < count; idx++) {
-		if (result.vector_type == VectorType::FLAT_VECTOR && FlatVector::IsNull(result, idx)) {
+		if (result.GetVectorType() == VectorType::FLAT_VECTOR && FlatVector::IsNull(result, idx)) {
 			// this entry is NULL: skip it
 			continue;
 		}
 
 		// first fetch the format string
-		auto fmt_idx = format_string.vector_type == VectorType::CONSTANT_VECTOR ? 0 : idx;
+		auto fmt_idx = format_string.GetVectorType() == VectorType::CONSTANT_VECTOR ? 0 : idx;
 		auto format_string = format_data[fmt_idx].GetString();
 
 		// now gather all the format arguments
@@ -92,8 +92,8 @@ static void PrintfFunction(DataChunk &args, ExpressionState &state, Vector &resu
 
 		for (idx_t col_idx = 1; col_idx < args.ColumnCount(); col_idx++) {
 			auto &col = args.data[col_idx];
-			idx_t arg_idx = col.vector_type == VectorType::CONSTANT_VECTOR ? 0 : idx;
-			switch (col.type.id()) {
+			idx_t arg_idx = col.GetVectorType() == VectorType::CONSTANT_VECTOR ? 0 : idx;
+			switch (col.GetType().id()) {
 			case LogicalTypeId::BOOLEAN: {
 				auto arg_data = FlatVector::GetData<bool>(col);
 				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(arg_data[arg_idx]));
@@ -137,7 +137,7 @@ static void PrintfFunction(DataChunk &args, ExpressionState &state, Vector &resu
 				break;
 			}
 			default:
-				throw InvalidInputException("Unsupported type for format: \"%s\"!", col.type.ToString());
+				throw InvalidInputException("Unsupported type for format: \"%s\"!", col.GetType().ToString());
 			}
 		}
 		// finally actually perform the format

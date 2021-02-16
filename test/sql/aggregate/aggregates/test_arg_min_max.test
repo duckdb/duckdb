@@ -72,6 +72,22 @@ select arg_min(a,b), arg_max(a,b) from args group by a%2;
 1	1
 2	10
 
+statement ok
+CREATE TABLE blobs (b BYTEA, a BIGINT);
+
+statement ok
+INSERT INTO blobs VALUES('\xaa\xff\xaa',5), ('\xAA\xFF\xAA\xAA\xFF\xAA',30), ('\xAA\xFF\xAA\xAA\xFF\xAA\xAA\xFF\xAA',20)
+
+query II
+select arg_min(b,a), arg_max(b,a)  from blobs ;
+----
+\xAA\xFF\xAA	\xAA\xFF\xAA\xAA\xFF\xAA
+
+query II
+select arg_min(a,b), arg_max(a,b)  from blobs ;
+----
+5	20
+
 # Window Function
 require vector_size 512
 
@@ -106,3 +122,9 @@ query II
 select arg_min(salary,name),arg_max(salary,name)  from names;
 ----
 20	10
+
+# test min_by max_by alias
+query II
+select min_by(name,salary),max_by(name,salary)  from names;
+----
+Pedro	Hubert-Blaine-Wolfeschlegelsteinhausenbergerdorff

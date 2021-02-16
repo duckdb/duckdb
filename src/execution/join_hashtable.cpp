@@ -61,7 +61,7 @@ JoinHashTable::~JoinHashTable() {
 }
 
 void JoinHashTable::ApplyBitmask(Vector &hashes, idx_t count) {
-	if (hashes.vector_type == VectorType::CONSTANT_VECTOR) {
+	if (hashes.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		D_ASSERT(!ConstantVector::IsNull(hashes));
 		auto indices = ConstantVector::GetData<hash_t>(hashes);
 		*indices = *indices & bitmask;
@@ -196,7 +196,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 
 	// serialize the keys to the key locations
 	for (idx_t i = 0; i < keys.ColumnCount(); i++) {
-		row_chunk.SerializeVectorData(key_data[i], keys.data[i].type.InternalType(), *current_sel, added_count, i,
+		row_chunk.SerializeVectorData(key_data[i], keys.data[i].GetType().InternalType(), *current_sel, added_count, i,
 		                              key_locations, nullmask_locations);
 	}
 	// now serialize the payload
@@ -215,14 +215,14 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 }
 
 void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_locations[]) {
-	D_ASSERT(hashes.type.id() == LogicalTypeId::HASH);
+	D_ASSERT(hashes.GetType().id() == LogicalTypeId::HASH);
 
 	// use bitmask to get position in array
 	ApplyBitmask(hashes, count);
 
 	hashes.Normalify(count);
 
-	D_ASSERT(hashes.vector_type == VectorType::FLAT_VECTOR);
+	D_ASSERT(hashes.GetVectorType() == VectorType::FLAT_VECTOR);
 	auto pointers = (data_ptr_t *)hash_map->node->buffer;
 	auto indices = FlatVector::GetData<hash_t>(hashes);
 	for (idx_t i = 0; i < count; i++) {
@@ -445,7 +445,7 @@ idx_t ScanStructure::ResolvePredicates(DataChunk &keys, SelectionVector *match_s
 	idx_t offset = 0;
 	idx_t no_match_count = 0;
 	for (idx_t i = 0; i < ht.predicates.size(); i++) {
-		auto internal_type = keys.data[i].type.InternalType();
+		auto internal_type = keys.data[i].GetType().InternalType();
 		switch (ht.predicates[i]) {
 		case ExpressionType::COMPARE_EQUAL:
 			remaining_count =
@@ -558,8 +558,8 @@ static void TemplatedGatherResult(Vector &result, uintptr_t *pointers, const Sel
 
 static void GatherResultVector(Vector &result, const SelectionVector &result_vector, uintptr_t *ptrs,
                                const SelectionVector &sel_vector, idx_t count, idx_t &offset) {
-	result.vector_type = VectorType::FLAT_VECTOR;
-	switch (result.type.InternalType()) {
+	result.SetVectorType(VectorType::FLAT_VECTOR);
+	switch (result.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 		TemplatedGatherResult<int8_t>(result, ptrs, result_vector, sel_vector, count, offset);
@@ -603,7 +603,7 @@ static void GatherResultVector(Vector &result, const SelectionVector &result_vec
 	default:
 		throw NotImplementedException("Unimplemented type for ScanStructure::GatherResult");
 	}
-	offset += GetTypeIdSize(result.type.InternalType());
+	offset += GetTypeIdSize(result.GetType().InternalType());
 }
 
 void ScanStructure::GatherResult(Vector &result, const SelectionVector &result_vector,
@@ -646,7 +646,7 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 		idx_t offset = ht.condition_size;
 		for (idx_t i = 0; i < ht.build_types.size(); i++) {
 			auto &vector = result.data[left.ColumnCount() + i];
-			D_ASSERT(vector.type == ht.build_types[i]);
+			D_ASSERT(vector.GetType() == ht.build_types[i]);
 			GatherResult(vector, result_vector, result_count, offset);
 		}
 		AdvancePointers();
@@ -722,7 +722,7 @@ void ScanStructure::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &chi
 		result.data[i].Reference(child.data[i]);
 	}
 	auto &mark_vector = result.data.back();
-	mark_vector.vector_type = VectorType::FLAT_VECTOR;
+	mark_vector.SetVectorType(VectorType::FLAT_VECTOR);
 	// first we set the NULL values from the join keys
 	// if there is any NULL in the keys, the result is NULL
 	auto bool_result = FlatVector::GetData<bool>(mark_vector);
@@ -760,7 +760,7 @@ void ScanStructure::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &chi
 
 void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &input, DataChunk &result) {
 	D_ASSERT(result.ColumnCount() == input.ColumnCount() + 1);
-	D_ASSERT(result.data.back().type == LogicalType::BOOLEAN);
+	D_ASSERT(result.data.back().GetType() == LogicalType::BOOLEAN);
 	// this method should only be called for a non-empty HT
 	D_ASSERT(ht.Size() > 0);
 
@@ -787,10 +787,10 @@ void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &input, DataChunk &r
 		auto &last_key = keys.data.back();
 		auto &result_vector = result.data.back();
 		// first set the nullmask based on whether or not there were NULL values in the join key
-		result_vector.vector_type = VectorType::FLAT_VECTOR;
+		result_vector.SetVectorType(VectorType::FLAT_VECTOR);
 		auto bool_result = FlatVector::GetData<bool>(result_vector);
 		auto &nullmask = FlatVector::Nullmask(result_vector);
-		switch (last_key.vector_type) {
+		switch (last_key.GetVectorType()) {
 		case VectorType::CONSTANT_VECTOR:
 			if (ConstantVector::IsNull(last_key)) {
 				nullmask.set();
@@ -852,7 +852,7 @@ void ScanStructure::NextLeftJoin(DataChunk &keys, DataChunk &left, DataChunk &re
 
 			// now set the right side to NULL
 			for (idx_t i = left.ColumnCount(); i < result.ColumnCount(); i++) {
-				result.data[i].vector_type = VectorType::CONSTANT_VECTOR;
+				result.data[i].SetVectorType(VectorType::CONSTANT_VECTOR);
 				ConstantVector::SetNull(result.data[i], true);
 			}
 		}
@@ -935,14 +935,14 @@ void JoinHashTable::ScanFullOuter(DataChunk &result, JoinHTScanState &state) {
 		idx_t left_column_count = result.ColumnCount() - build_types.size();
 		// set the left side as a constant NULL
 		for (idx_t i = 0; i < left_column_count; i++) {
-			result.data[i].vector_type = VectorType::CONSTANT_VECTOR;
+			result.data[i].SetVectorType(VectorType::CONSTANT_VECTOR);
 			ConstantVector::SetNull(result.data[i], true);
 		}
 		// gather the values from the RHS
 		idx_t offset = condition_size;
 		for (idx_t i = 0; i < build_types.size(); i++) {
 			auto &vector = result.data[left_column_count + i];
-			D_ASSERT(vector.type == build_types[i]);
+			D_ASSERT(vector.GetType() == build_types[i]);
 			GatherResultVector(vector, FlatVector::INCREMENTAL_SELECTION_VECTOR, (uintptr_t *)key_locations,
 			                   FlatVector::INCREMENTAL_SELECTION_VECTOR, found_entries, offset);
 		}

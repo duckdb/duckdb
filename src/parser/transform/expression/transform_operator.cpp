@@ -93,23 +93,16 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(duckdb_libpgquery::PGAE
 	}
 	// rewrite NULLIF(a, b) into CASE WHEN a=b THEN NULL ELSE a END
 	case duckdb_libpgquery::PG_AEXPR_NULLIF: {
-		auto case_expr = make_unique<CaseExpression>();
-		auto value = TransformExpression(root->lexpr);
-		// the check (A = B)
-		case_expr->check = make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, value->Copy(),
-		                                                     TransformExpression(root->rexpr));
-		// if A = B, then constant NULL
-		case_expr->result_if_true = make_unique<ConstantExpression>(Value(LogicalType::SQLNULL));
-		// else A
-		case_expr->result_if_false = move(value);
-		return move(case_expr);
+		vector<unique_ptr<ParsedExpression>> children;
+		children.push_back(TransformExpression(root->lexpr));
+		children.push_back(TransformExpression(root->rexpr));
+		return make_unique<FunctionExpression>("nullif", children);
 	}
 	// rewrite (NOT) X BETWEEN A AND B into (NOT) AND(GREATERTHANOREQUALTO(X,
 	// A), LESSTHANOREQUALTO(X, B))
 	case duckdb_libpgquery::PG_AEXPR_BETWEEN:
 	case duckdb_libpgquery::PG_AEXPR_NOT_BETWEEN: {
 		auto between_args = reinterpret_cast<duckdb_libpgquery::PGList *>(root->rexpr);
-
 		if (between_args->length != 2 || !between_args->head->data.ptr_value || !between_args->tail->data.ptr_value) {
 			throw Exception("(NOT) BETWEEN needs two args");
 		}
