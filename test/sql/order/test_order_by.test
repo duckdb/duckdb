@@ -8,16 +8,16 @@ PRAGMA enable_verification
 #statement ok
 #pragma threads=4
 #
-#statement ok
-#create table test as select range r, random() rand from range(200000)
-#
-#statement ok
-#CREATE TABLE test2 AS (SELECT * FROM test ORDER BY rand)
-#
-#query T
-#SELECT COUNT(DISTINCT(r)) FROM test2
-#----
-#50000
+statement ok
+create table test as select range r, random() rand from range(200000)
+
+statement ok
+CREATE TABLE test2 AS (SELECT * FROM test ORDER BY rand)
+
+query T
+SELECT COUNT(DISTINCT(r)) FROM test2
+----
+200000
 
 statement ok
 CREATE TABLE test (a INTEGER, b INTEGER);

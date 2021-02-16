@@ -120,32 +120,34 @@ public:
 	//! Used only for the initial merge after sorting in Sink/Combine
 	unique_ptr<idx_t[]> offsets = nullptr; // FIXME: may need to share these offsets!
 
-	data_ptr_t DataPtr() {
-		if (offsets) {
-			return handle->node->buffer + offsets[entry_idx];
-		} else {
-			return dataptr;
+	idx_t Count() {
+		idx_t count = 0;
+		for (auto &block : blocks) {
+			count += block.count;
 		}
+		return count;
+	}
+
+	data_ptr_t &DataPtr() {
+		return dataptr;
 	}
 
 	void InitializeBlock() {
-		if (block_idx >= blocks.size()) {
+		if (Done()) {
 			return;
 		}
-		block_start = block_idx == 0 ? start : 0;
+		entry_idx = block_idx == 0 ? start : 0;
 		block_end = block_idx == blocks.size() - 1 ? end : blocks[block_idx].count;
-		entry_idx = block_start;
 	}
 
 	bool Done() {
-		return entry_idx >= block_end && block_idx >= blocks.size() - 1;
+		return block_idx >= blocks.size(); // && entry_idx >= block_end;
 	}
 
 	void Advance() {
-		if (entry_idx < block_end) {
-			entry_idx++;
-			dataptr += state.entry_size;
-		} else if (block_idx < blocks.size() - 1) {
+		if (entry_idx < block_end - 1) {
+			AdvanceInternal();
+		} else if (block_idx < blocks.size()) {
 			block_idx++;
 			InitializeBlock();
 			PinBlock();
@@ -157,7 +159,11 @@ public:
 			return;
 		}
 		handle = state.buffer_manager.Pin(blocks[block_idx].block);
-		dataptr = handle->node->buffer;
+		if (offsets) {
+			dataptr = handle->node->buffer + offsets[entry_idx];
+		} else {
+			dataptr = handle->node->buffer + entry_idx * state.entry_size;
+		}
 	}
 
 	void FlushData(ContinuousBlock &target) {
@@ -167,11 +173,8 @@ public:
 				target.blocks.push_back(blocks[block_idx]);
 				continue;
 			}
-			if (entry_idx == block_start) {
-				// reading a new block that has not yet been pinned
-				PinBlock();
-			}
 			// partial block must be appended
+			PinBlock();
 			if (target.blocks.empty() || target.blocks.back().count + (block_end - entry_idx) > state.block_capacity) {
 				// if it does not fit in the back, create a new block to write to
 				target.blocks.emplace_back(state.buffer_manager, state.block_capacity, state.entry_size);
@@ -180,8 +183,14 @@ public:
 			auto write_handle = state.buffer_manager.Pin(write_block.block);
 			auto write_ptr = write_handle->node->buffer + write_block.count * state.entry_size;
 
+			// copy first element
+			memcpy(write_ptr, DataPtr(), state.entry_size);
+			write_ptr += state.entry_size;
+			write_block.count++;
+
 			// flush into last block
-			for (; entry_idx < block_end; entry_idx++, dataptr += state.entry_size) {
+			while (entry_idx < block_end - 1) {
+				AdvanceInternal();
 				memcpy(write_ptr, DataPtr(), state.entry_size);
 				write_ptr += state.entry_size;
 				write_block.count++;
@@ -190,21 +199,29 @@ public:
 		target.end = target.blocks.back().count;
 	}
 
-	unique_ptr<ContinuousBlock> Copy() {
-		auto copy = make_unique<ContinuousBlock>(state);
-		copy->start = start;
-		copy->end = end;
-		if (offsets) {
-			copy->offsets = unique_ptr<idx_t[]>(new idx_t[blocks[0].count]);
-			memcpy(copy->offsets.get(), offsets.get(), blocks[0].count * sizeof(idx_t));
-		}
-		return copy;
-	}
+	//	unique_ptr<ContinuousBlock> Copy() {
+	//		auto copy = make_unique<ContinuousBlock>(state);
+	//		copy->start = start;
+	//		copy->end = end;
+	//		if (offsets) {
+	//			copy->offsets = unique_ptr<idx_t[]>(new idx_t[blocks[0].count]);
+	//			memcpy(copy->offsets.get(), offsets.get(), blocks[0].count * sizeof(idx_t));
+	//		}
+	//		return copy;
+	//	}
 
 private:
+	void AdvanceInternal() {
+		entry_idx++;
+		if (offsets) {
+			dataptr = handle->node->buffer + offsets[entry_idx];
+		} else {
+			dataptr += state.entry_size;
+		}
+	}
+
 	idx_t block_idx;
 	idx_t entry_idx;
-	idx_t block_start;
 	idx_t block_end;
 
 	unique_ptr<BufferHandle> handle;
@@ -441,6 +458,8 @@ public:
 		} else {
 			left.FlushData(result);
 		}
+
+		D_ASSERT(result.Count() == left.Count() + right.Count());
 
 		lock_guard<mutex> glock(state.lock);
 		parent.finished_tasks++;
