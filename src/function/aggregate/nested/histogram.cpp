@@ -1,30 +1,24 @@
 #include "duckdb/function/aggregate/nested_functions.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
-#include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/pair.hpp"
-#include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include <map>
+#include "duckdb/common/map.hpp"
 #include "duckdb/common/types/vector.hpp"
+
 namespace duckdb {
 template <class T>
 struct HistogramAggState {
-	ChunkCollection *cc;
-	std::map<T, size_t> *map;
+	map<T, size_t> *map;
 };
 
 struct HistogramFunction {
 	template <class STATE>
 	static void Initialize(STATE *state) {
-		state->cc = nullptr;
 		state->map = nullptr;
 	}
 
 	template <class STATE>
 	static void Destroy(STATE *state) {
-		if (state->cc) {
-			delete state->cc;
-		}
 		if (state->map) {
 			delete state->map;
 		}
@@ -51,7 +45,7 @@ static void HistogramUpdateFunction(Vector inputs[], FunctionData *, idx_t input
 		if (!(*input_data.nullmask)[input_data.sel->get_index(i)]) {
 			auto state = states[sdata.sel->get_index(i)];
 			if (!state->map) {
-				state->map = new std::map<T, size_t>();
+				state->map = new map<T, size_t>();
 			}
 			T value = input.GetValue(i).GetValue<T>();
 			(*state->map)[value]++;
@@ -69,9 +63,8 @@ static void HistogramCombineFunction(Vector &state, Vector &combined, idx_t coun
 
 	for (idx_t i = 0; i < count; i++) {
 		auto state = states_ptr[sdata.sel->get_index(i)];
-		D_ASSERT(state->cc);
 		if (!combined_ptr[i]->map) {
-			combined_ptr[i]->map = new std::map<T, size_t>();
+			combined_ptr[i]->map = new map<T, size_t>();
 		}
 		for (auto &entry : *state->map) {
 			(*combined_ptr[i]->map)[entry.first] += entry.second;
@@ -102,8 +95,8 @@ static void HistogramFinalize(Vector &state_vector, FunctionData *, Vector &resu
 		}
 		for (auto &entry : *state->map) {
 			child_list_t<Value> struct_values;
-			struct_values.push_back({"k", Value(entry.first)});
-			struct_values.push_back({"v", Value(entry.second)});
+			struct_values.push_back({"k", Value::CreateValue(entry.first)});
+			struct_values.push_back({"v", Value::UBIGINT(entry.second)});
 			insert_chunk.SetValue(0, total_len++, Value::STRUCT(struct_values));
 			chunk_idx++;
 		}
@@ -124,7 +117,7 @@ unique_ptr<FunctionData> HistogramBindFunction(ClientContext &context, Aggregate
 	D_ASSERT(arguments.size() == 1);
 	child_list_t<LogicalType> struct_children;
 	struct_children.push_back({"k", arguments[0]->return_type});
-	struct_children.push_back({"v", LogicalType::UINTEGER});
+	struct_children.push_back({"v", LogicalType::UBIGINT});
 	auto struct_type = LogicalType(LogicalTypeId::STRUCT, move(struct_children));
 	child_list_t<LogicalType> children;
 	children.push_back(make_pair("", struct_type));

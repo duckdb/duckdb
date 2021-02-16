@@ -69,12 +69,12 @@ statement ok
 create table names (name string)
 
 statement ok
-insert into names values ('pedro'), ('pedro'), ('pedro'),('hannes'),('hannes'),('mark'),(null);
+insert into names values ('pedro'), ('pedro'), ('pedro'),('hannes'),('hannes'),('mark'),(null),('Hubert Blaine Wolfeschlegelsteinhausenbergerdorff Sr.');
 
 query I
 select histogram(name) from names;
 ----
-[<k: hannes, v: 2>, <k: mark, v: 1>, <k: pedro, v: 3>]
+[<k: Hubert Blaine Wolfeschlegelsteinhausenbergerdorff Sr., v: 1>, <k: hannes, v: 2>, <k: mark, v: 1>, <k: pedro, v: 3>]
 
 require vector_size 512
 

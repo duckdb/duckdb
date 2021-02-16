@@ -37,14 +37,6 @@ Value::Value(int64_t val) : type_(LogicalType::BIGINT), is_null(false) {
 	value_.bigint = val;
 }
 
-Value::Value(uint32_t val) : type_(LogicalType::UINTEGER), is_null(false) {
-	value_.uinteger = val;
-}
-
-Value::Value(uint64_t val) : type_(LogicalType::UBIGINT), is_null(false) {
-	value_.ubigint = val;
-}
-
 Value::Value(float val) : type_(LogicalType::FLOAT), is_null(false) {
 	if (!Value::FloatIsValid(val)) {
 		throw OutOfRangeException("Invalid float value %f", val);
