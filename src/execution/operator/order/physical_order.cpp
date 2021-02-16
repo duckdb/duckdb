@@ -229,7 +229,7 @@ private:
 };
 
 template <class TYPE>
-static int8_t TemplatedCompareValue(data_ptr_t &l_val, data_ptr_t &r_val) {
+static int8_t TemplatedCompareValue(const data_ptr_t &l_val, const data_ptr_t &r_val) {
 	auto left_val = Load<TYPE>(l_val);
 	auto right_val = Load<TYPE>(r_val);
 	if (Equals::Operation<TYPE>(left_val, right_val)) {
@@ -241,8 +241,8 @@ static int8_t TemplatedCompareValue(data_ptr_t &l_val, data_ptr_t &r_val) {
 	return 1;
 }
 
-static int32_t CompareValue(const data_ptr_t &l_nullmask, const data_ptr_t &r_nullmask, data_ptr_t &l_val,
-                            data_ptr_t &r_val, const idx_t &sort_idx, OrderGlobalState &state) {
+static int32_t CompareValue(const data_ptr_t &l_nullmask, const data_ptr_t &r_nullmask, const data_ptr_t &l_val,
+                            const data_ptr_t &r_val, const idx_t &sort_idx, const OrderGlobalState &state) {
 	bool left_null = *l_nullmask & (1 << sort_idx);
 	bool right_null = *r_nullmask & (1 << sort_idx);
 
@@ -287,7 +287,7 @@ static int32_t CompareValue(const data_ptr_t &l_nullmask, const data_ptr_t &r_nu
 	}
 }
 
-static int CompareTuple(const data_ptr_t &l_start, const data_ptr_t &r_start, OrderGlobalState &state) {
+static int CompareTuple(const data_ptr_t &l_start, const data_ptr_t &r_start, const OrderGlobalState &state) {
 	auto l_val = l_start + state.sorting_nullmask_size;
 	auto r_val = r_start + state.sorting_nullmask_size;
 	for (idx_t i = 0; i < state.op.orders.size(); i++) {

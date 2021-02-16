@@ -30,7 +30,7 @@ public:
 public:
 	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_p,
 	          DataChunk &input) override;
-	void Combine(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_p);
+	void Combine(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_p) override;
 	void Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> state) override;
 
 	static void ScheduleMergeTasks(Pipeline &pipeline, ClientContext &context, GlobalOperatorState &state);
@@ -44,8 +44,8 @@ public:
 	string ParamsToString() const override;
 
 private:
-	//! 2 << 21 (4MB)
-	const static idx_t SORTING_BLOCK_SIZE = 524288; // 4194304;
+	//! 2 << 17 (256KB)
+	const static idx_t SORTING_BLOCK_SIZE = 262144;
 };
 
 } // namespace duckdb

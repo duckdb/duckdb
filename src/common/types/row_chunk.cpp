@@ -100,7 +100,7 @@ void RowChunk::SerializeVector(Vector &v, idx_t vcount, const SelectionVector &s
 	VectorData vdata;
 	v.Orrify(vcount, vdata);
 
-	SerializeVectorData(vdata, v.type.InternalType(), sel, ser_count, col_idx, key_locations, nullmask_locations);
+	SerializeVectorData(vdata, v.GetType().InternalType(), sel, ser_count, col_idx, key_locations, nullmask_locations);
 }
 
 idx_t RowChunk::AppendToBlock(RowDataBlock &block, BufferHandle &handle, vector<BlockAppendEntry> &append_entries,
@@ -222,7 +222,7 @@ void RowChunk::DeserializeIntoVector(Vector &v, idx_t vcount, idx_t col_idx, dat
 	VectorData vdata;
 	v.Orrify(vcount, vdata);
 
-	DeserializeIntoVectorData(vdata, v.type.InternalType(), vcount, col_idx, key_locations, nullmask_locations);
+	DeserializeIntoVectorData(vdata, v.GetType().InternalType(), vcount, col_idx, key_locations, nullmask_locations);
 }
 
 void RowChunk::Append(RowChunk &chunk) {
