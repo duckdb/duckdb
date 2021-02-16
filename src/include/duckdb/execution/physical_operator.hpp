@@ -14,20 +14,17 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/execution/execution_context.hpp"
-
 #include <functional>
 
 namespace duckdb {
-class ExpressionExecutor;
 class PhysicalOperator;
-
 //! The current state/context of the operator. The PhysicalOperatorState is
 //! updated using the GetChunk function, and allows the caller to repeatedly
 //! call the GetChunk function and get new batches of data everytime until the
 //! data source is exhausted.
 class PhysicalOperatorState {
 public:
-	PhysicalOperatorState(PhysicalOperator &op, PhysicalOperator *child);
+	PhysicalOperatorState(ExecutionContext &execution_context, PhysicalOperator &op, PhysicalOperator *child);
 	virtual ~PhysicalOperatorState() = default;
 
 	//! Flag indicating whether or not the operator is finished [note: not all
@@ -94,8 +91,9 @@ public:
 	void GetChunk(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state);
 
 	//! Create a new empty instance of the operator state
-	virtual unique_ptr<PhysicalOperatorState> GetOperatorState() {
-		return make_unique<PhysicalOperatorState>(*this, children.size() == 0 ? nullptr : children[0].get());
+	virtual unique_ptr<PhysicalOperatorState> GetOperatorState(ExecutionContext &execution_context) {
+		return make_unique<PhysicalOperatorState>(execution_context, *this,
+		                                          children.size() == 0 ? nullptr : children[0].get());
 	}
 
 	virtual bool IsSink() const {

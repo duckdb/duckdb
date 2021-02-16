@@ -164,5 +164,8 @@ unique_ptr<ParsedExpression> ParsedExpression::Deserialize(Deserializer &source)
 	result->alias = alias;
 	return result;
 }
+string ParsedExpression::ToString() const {
+	return "parsed";
+}
 
 } // namespace duckdb

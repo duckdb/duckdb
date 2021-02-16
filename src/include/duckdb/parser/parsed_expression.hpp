@@ -42,6 +42,7 @@ public:
 	bool Equals(const BaseExpression *other) const override;
 	hash_t Hash() const override;
 
+	string ToString() const override;
 	//! Create a copy of this expression
 	virtual unique_ptr<ParsedExpression> Copy() const = 0;
 

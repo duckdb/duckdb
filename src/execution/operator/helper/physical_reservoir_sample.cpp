@@ -63,8 +63,8 @@ void PhysicalReservoirSample::GetChunkInternal(ExecutionContext &context, DataCh
 	chunk.Reference(*sample_chunk);
 }
 
-unique_ptr<PhysicalOperatorState> PhysicalReservoirSample::GetOperatorState() {
-	return make_unique<PhysicalOperatorState>(*this, children[0].get());
+unique_ptr<PhysicalOperatorState> PhysicalReservoirSample::GetOperatorState(ExecutionContext &execution_context) {
+	return make_unique<PhysicalOperatorState>(execution_context, *this, children[0].get());
 }
 
 string PhysicalReservoirSample::ParamsToString() const {

@@ -48,12 +48,13 @@ void PhysicalCopyToFile::Combine(ExecutionContext &context, GlobalOperatorState 
 		function.copy_to_combine(context.client, *bind_data, *g.global_state, *l.local_state);
 	}
 }
-void PhysicalCopyToFile::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> gstate) {
+void PhysicalCopyToFile::Finalize(Pipeline &pipeline, ExecutionContext &execution_context,
+                                  unique_ptr<GlobalOperatorState> gstate) {
 	auto g = (CopyToFunctionGlobalState *)gstate.get();
 	if (function.copy_to_finalize) {
-		function.copy_to_finalize(context, *bind_data, *g->global_state);
+		function.copy_to_finalize(execution_context.client, *bind_data, *g->global_state);
 	}
-	PhysicalSink::Finalize(pipeline, context, move(gstate));
+	PhysicalSink::Finalize(pipeline, execution_context, move(gstate));
 }
 
 unique_ptr<LocalSinkState> PhysicalCopyToFile::GetLocalSinkState(ExecutionContext &context) {

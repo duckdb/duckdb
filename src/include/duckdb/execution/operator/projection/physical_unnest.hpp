@@ -25,7 +25,7 @@ public:
 	vector<unique_ptr<Expression>> select_list;
 
 public:
-	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
+	unique_ptr<PhysicalOperatorState> GetOperatorState(ExecutionContext &execution_context) override;
 };
 
 } // namespace duckdb

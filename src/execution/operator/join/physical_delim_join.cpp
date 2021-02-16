@@ -10,7 +10,8 @@ namespace duckdb {
 
 class PhysicalDelimJoinState : public PhysicalOperatorState {
 public:
-	PhysicalDelimJoinState(PhysicalOperator &op, PhysicalOperator *left) : PhysicalOperatorState(op, left) {
+	PhysicalDelimJoinState(ExecutionContext &execution_context, PhysicalOperator &op, PhysicalOperator *left)
+	    : PhysicalOperatorState(execution_context, op, left) {
 	}
 
 	unique_ptr<PhysicalOperatorState> join_state;
@@ -69,17 +70,18 @@ void PhysicalDelimJoin::Sink(ExecutionContext &context, GlobalOperatorState &sta
 	distinct->Sink(context, *state.distinct_state, lstate, input);
 }
 
-void PhysicalDelimJoin::Finalize(Pipeline &pipeline, ClientContext &client, unique_ptr<GlobalOperatorState> state) {
+void PhysicalDelimJoin::Finalize(Pipeline &pipeline, ExecutionContext &execution_context,
+                                 unique_ptr<GlobalOperatorState> state) {
 	auto &dstate = (DelimJoinGlobalState &)*state;
 	// finalize the distinct HT
-	distinct->FinalizeImmediate(client, move(dstate.distinct_state));
+	distinct->FinalizeImmediate(execution_context.client, move(dstate.distinct_state));
 	// materialize the distinct collection
 	DataChunk delim_chunk;
 	distinct->InitializeChunk(delim_chunk);
-	auto distinct_state = distinct->GetOperatorState();
-	ThreadContext thread(client);
+	auto distinct_state = distinct->GetOperatorState(execution_context);
+	ThreadContext thread(execution_context.client);
 	TaskContext task;
-	ExecutionContext context(client, thread, task);
+	ExecutionContext context(execution_context.client, thread, task);
 	while (true) {
 		distinct->GetChunk(context, delim_chunk, distinct_state.get());
 		if (delim_chunk.size() == 0) {
@@ -87,7 +89,7 @@ void PhysicalDelimJoin::Finalize(Pipeline &pipeline, ClientContext &client, uniq
 		}
 		dstate.delim_data.Append(delim_chunk);
 	}
-	PhysicalSink::Finalize(pipeline, client, move(state));
+	PhysicalSink::Finalize(pipeline, execution_context, move(state));
 }
 
 void PhysicalDelimJoin::Combine(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate) {
@@ -99,14 +101,14 @@ void PhysicalDelimJoin::GetChunkInternal(ExecutionContext &context, DataChunk &c
 	auto state = reinterpret_cast<PhysicalDelimJoinState *>(state_p);
 	if (!state->join_state) {
 		// create the state of the underlying join
-		state->join_state = join->GetOperatorState();
+		state->join_state = join->GetOperatorState(context);
 	}
 	// now pull from the RHS from the underlying join
 	join->GetChunk(context, chunk, state->join_state.get());
 }
 
-unique_ptr<PhysicalOperatorState> PhysicalDelimJoin::GetOperatorState() {
-	return make_unique<PhysicalDelimJoinState>(*this, children[0].get());
+unique_ptr<PhysicalOperatorState> PhysicalDelimJoin::GetOperatorState(ExecutionContext &execution_context) {
+	return make_unique<PhysicalDelimJoinState>(execution_context, *this, children[0].get());
 }
 
 string PhysicalDelimJoin::ParamsToString() const {

@@ -33,6 +33,16 @@ static void PragmaEnableProfilingAssignment(ClientContext &context, const Functi
 	context.profiler.Enable();
 }
 
+static void PragmaEnableDetailedProfilingStatement(ClientContext &context, const FunctionParameters &parameters) {
+	PragmaEnableProfilingStatement(context, parameters);
+	context.profiler.DetailedEnable();
+}
+
+static void PragmaEnableDetailedProfilingAssignment(ClientContext &context, const FunctionParameters &parameters) {
+	PragmaEnableProfilingAssignment(context, parameters);
+	context.profiler.DetailedEnable();
+}
+
 void RegisterEnableProfiling(BuiltinFunctions &set) {
 	vector<PragmaFunction> functions;
 	functions.push_back(PragmaFunction::PragmaStatement(string(), PragmaEnableProfilingStatement));
@@ -41,6 +51,16 @@ void RegisterEnableProfiling(BuiltinFunctions &set) {
 
 	set.AddFunction("enable_profile", functions);
 	set.AddFunction("enable_profiling", functions);
+}
+
+void RegisterDetailedEnableProfiling(BuiltinFunctions &set) {
+	vector<PragmaFunction> functions;
+	functions.push_back(PragmaFunction::PragmaStatement(string(), PragmaEnableDetailedProfilingStatement));
+	functions.push_back(
+	    PragmaFunction::PragmaAssignment(string(), PragmaEnableDetailedProfilingAssignment, LogicalType::VARCHAR));
+
+	set.AddFunction("enable_detailed_profile", functions);
+	set.AddFunction("enable_detailed_profiling", functions);
 }
 
 static void PragmaDisableProfiling(ClientContext &context, const FunctionParameters &parameters) {
@@ -201,6 +221,7 @@ static void PragmaDebugCheckpointAbort(ClientContext &context, const FunctionPar
 
 void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	RegisterEnableProfiling(set);
+	RegisterDetailedEnableProfiling(set);
 
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_profile", PragmaDisableProfiling));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_profiling", PragmaDisableProfiling));

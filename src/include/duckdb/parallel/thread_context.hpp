@@ -21,5 +21,4 @@ public:
 	//! The operator profiler for the individual thread context
 	OperatorProfiler profiler;
 };
-
 } // namespace duckdb

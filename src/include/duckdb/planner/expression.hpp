@@ -33,6 +33,7 @@ public:
 	bool HasParameter() const override;
 	virtual bool HasSideEffects() const;
 	virtual bool IsFoldable() const;
+	string ToString() const override;
 
 	hash_t Hash() const override;
 

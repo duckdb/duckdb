@@ -11,8 +11,8 @@ namespace duckdb {
 //! The operator state of the window
 class PhysicalUnnestOperatorState : public PhysicalOperatorState {
 public:
-	PhysicalUnnestOperatorState(PhysicalOperator &op, PhysicalOperator *child)
-	    : PhysicalOperatorState(op, child), parent_position(0), list_position(0), list_length(-1) {
+	PhysicalUnnestOperatorState(ExecutionContext &execution_context, PhysicalOperator &op, PhysicalOperator *child)
+	    : PhysicalOperatorState(execution_context, op, child), parent_position(0), list_position(0), list_length(-1) {
 	}
 
 	idx_t parent_position;
@@ -145,8 +145,8 @@ void PhysicalUnnest::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 	}
 }
 
-unique_ptr<PhysicalOperatorState> PhysicalUnnest::GetOperatorState() {
-	return make_unique<PhysicalUnnestOperatorState>(*this, children[0].get());
+unique_ptr<PhysicalOperatorState> PhysicalUnnest::GetOperatorState(ExecutionContext &execution_context) {
+	return make_unique<PhysicalUnnestOperatorState>(execution_context, *this, children[0].get());
 }
 
 } // namespace duckdb

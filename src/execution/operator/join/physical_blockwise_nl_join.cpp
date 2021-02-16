@@ -55,14 +55,14 @@ void PhysicalBlockwiseNLJoin::Sink(ExecutionContext &context, GlobalOperatorStat
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//
-void PhysicalBlockwiseNLJoin::Finalize(Pipeline &pipeline, ClientContext &context,
+void PhysicalBlockwiseNLJoin::Finalize(Pipeline &pipeline, ExecutionContext &execution_context,
                                        unique_ptr<GlobalOperatorState> state) {
 	auto &gstate = (BlockwiseNLJoinGlobalState &)*state;
 	if (IsRightOuterJoin(join_type)) {
 		gstate.rhs_found_match = unique_ptr<bool[]>(new bool[gstate.right_chunks.Count()]);
 		memset(gstate.rhs_found_match.get(), 0, sizeof(bool) * gstate.right_chunks.Count());
 	}
-	PhysicalSink::Finalize(pipeline, context, move(state));
+	PhysicalSink::Finalize(pipeline, execution_context, move(state));
 }
 
 //===--------------------------------------------------------------------===//
@@ -70,10 +70,10 @@ void PhysicalBlockwiseNLJoin::Finalize(Pipeline &pipeline, ClientContext &contex
 //===--------------------------------------------------------------------===//
 class PhysicalBlockwiseNLJoinState : public PhysicalOperatorState {
 public:
-	PhysicalBlockwiseNLJoinState(PhysicalOperator &op, PhysicalOperator *left, JoinType join_type,
-	                             Expression &condition)
-	    : PhysicalOperatorState(op, left), left_position(0), right_position(0), fill_in_rhs(false),
-	      checked_found_match(false), executor(condition) {
+	PhysicalBlockwiseNLJoinState(ExecutionContext &execution_context, PhysicalOperator &op, PhysicalOperator *left,
+	                             JoinType join_type, Expression &condition)
+	    : PhysicalOperatorState(execution_context, op, left), left_position(0), right_position(0), fill_in_rhs(false),
+	      checked_found_match(false), executor(&op, &execution_context.thread, condition) {
 		if (IsLeftOuterJoin(join_type)) {
 			lhs_found_match = unique_ptr<bool[]>(new bool[STANDARD_VECTOR_SIZE]);
 		}
@@ -212,8 +212,9 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ExecutionContext &context, DataCh
 	} while (result_count == 0);
 }
 
-unique_ptr<PhysicalOperatorState> PhysicalBlockwiseNLJoin::GetOperatorState() {
-	return make_unique<PhysicalBlockwiseNLJoinState>(*this, children[0].get(), join_type, *condition);
+unique_ptr<PhysicalOperatorState> PhysicalBlockwiseNLJoin::GetOperatorState(ExecutionContext &execution_context) {
+	return make_unique<PhysicalBlockwiseNLJoinState>(execution_context, *this, children[0].get(), join_type,
+	                                                 *condition);
 }
 
 string PhysicalBlockwiseNLJoin::ParamsToString() const {

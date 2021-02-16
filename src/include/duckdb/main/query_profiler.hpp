@@ -16,20 +16,41 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/execution/physical_operator.hpp"
-
+#include "duckdb/execution/expression_executor_state.hpp"
 #include <stack>
 #include <unordered_map>
 
 namespace duckdb {
+class ExpressionExecutor;
 class PhysicalOperator;
 class SQLStatement;
+
+struct ExpressionExecutionInformation {
+	explicit ExpressionExecutionInformation(ExpressionExecutor &executor);
+
+	//! Count the number of time the executor called
+	uint64_t total_count = 0;
+	//! Count the number of time the executor called since last sampling
+	uint64_t current_count = 0;
+	//! Count the number of samples
+	uint64_t sample_count = 0;
+	//! Count the number of tuples in all samples
+	uint64_t sample_tuples_count = 0;
+	//! Count the number of tuples processed by this executor
+	uint64_t tuples_count = 0;
+
+	vector<unique_ptr<ExpressionExecutorState>> states;
+};
 
 struct OperatorTimingInformation {
 	double time = 0;
 	idx_t elements = 0;
-
+	bool has_executor = false;
 	explicit OperatorTimingInformation(double time_ = 0, idx_t elements_ = 0) : time(time_), elements(elements_) {
 	}
+
+	//! A mapping of physical operators to recorded timings
+	unique_ptr<ExpressionExecutionInformation> executors_info;
 };
 
 //! The OperatorProfiler measures timings of individual operators
@@ -41,6 +62,10 @@ public:
 
 	DUCKDB_API void StartOperator(PhysicalOperator *phys_op);
 	DUCKDB_API void EndOperator(DataChunk *chunk);
+	DUCKDB_API void Flush(ExpressionExecutor *expression_executor);
+
+	~OperatorProfiler() {
+	}
 
 private:
 	void AddTiming(PhysicalOperator *op, double time, idx_t elements);
@@ -69,14 +94,19 @@ public:
 private:
 	unique_ptr<TreeNode> CreateTree(PhysicalOperator *root, idx_t depth = 0);
 
-	static void Render(TreeNode &node, std::ostream &str);
+	void Render(const TreeNode &node, std::ostream &str) const;
 
 public:
-	DUCKDB_API QueryProfiler() : automatic_print_format(ProfilerPrintFormat::NONE), enabled(false), running(false) {
+	DUCKDB_API QueryProfiler()
+	    : automatic_print_format(ProfilerPrintFormat::NONE), enabled(false), detailed_enabled(false), running(false) {
 	}
 
 	DUCKDB_API void Enable() {
 		enabled = true;
+	}
+
+	DUCKDB_API void DetailedEnable() {
+		detailed_enabled = true;
 	}
 
 	DUCKDB_API void Disable() {
@@ -85,6 +115,10 @@ public:
 
 	DUCKDB_API bool IsEnabled() {
 		return enabled;
+	}
+
+	bool IsDetailedEnabled() const {
+		return detailed_enabled;
 	}
 
 	DUCKDB_API void StartQuery(string query);
@@ -114,6 +148,8 @@ public:
 private:
 	//! Whether or not query profiling is enabled
 	bool enabled;
+	//! Whether or not detailed query profiling is enabled
+	bool detailed_enabled;
 	//! Whether or not the query profiler is running
 	bool running;
 

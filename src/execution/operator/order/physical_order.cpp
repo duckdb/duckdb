@@ -10,8 +10,8 @@ namespace duckdb {
 
 class PhysicalOrderOperatorState : public PhysicalOperatorState {
 public:
-	PhysicalOrderOperatorState(PhysicalOperator &op, PhysicalOperator *child)
-	    : PhysicalOperatorState(op, child), position(0) {
+	PhysicalOrderOperatorState(ExecutionContext &execution_context, PhysicalOperator &op, PhysicalOperator *child)
+	    : PhysicalOperatorState(execution_context, op, child), position(0) {
 	}
 
 	idx_t position;
@@ -45,7 +45,8 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &state, 
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//
-void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> state) {
+void PhysicalOrder::Finalize(Pipeline &pipeline, ExecutionContext &execution_context,
+                             unique_ptr<GlobalOperatorState> state) {
 	// finalize: perform the actual sorting
 	auto &sink = (OrderByGlobalOperatorState &)*state;
 	ChunkCollection &big_data = sink.sorted_data;
@@ -78,7 +79,7 @@ void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 	sink.sorted_vector = unique_ptr<idx_t[]>(new idx_t[sort_collection.Count()]);
 	sort_collection.Sort(order_types, null_order_types, sink.sorted_vector.get());
 
-	PhysicalSink::Finalize(pipeline, context, move(state));
+	PhysicalSink::Finalize(pipeline, execution_context, move(state));
 }
 
 //===--------------------------------------------------------------------===//
@@ -96,8 +97,8 @@ void PhysicalOrder::GetChunkInternal(ExecutionContext &context, DataChunk &chunk
 	state->position += STANDARD_VECTOR_SIZE;
 }
 
-unique_ptr<PhysicalOperatorState> PhysicalOrder::GetOperatorState() {
-	return make_unique<PhysicalOrderOperatorState>(*this, children[0].get());
+unique_ptr<PhysicalOperatorState> PhysicalOrder::GetOperatorState(ExecutionContext &execution_context) {
+	return make_unique<PhysicalOrderOperatorState>(execution_context, *this, children[0].get());
 }
 
 string PhysicalOrder::ParamsToString() const {

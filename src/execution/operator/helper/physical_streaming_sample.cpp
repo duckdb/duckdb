@@ -15,8 +15,9 @@ PhysicalStreamingSample::PhysicalStreamingSample(vector<LogicalType> types, Samp
 //===--------------------------------------------------------------------===//
 class StreamingSampleOperatorState : public PhysicalOperatorState {
 public:
-	StreamingSampleOperatorState(PhysicalOperator &op, PhysicalOperator *child, int64_t seed)
-	    : PhysicalOperatorState(op, child), random(seed) {
+	StreamingSampleOperatorState(ExecutionContext &execution_context, PhysicalOperator &op, PhysicalOperator *child,
+	                             int64_t seed)
+	    : PhysicalOperatorState(execution_context, op, child), random(seed) {
 	}
 
 	RandomEngine random;
@@ -72,8 +73,8 @@ void PhysicalStreamingSample::GetChunkInternal(ExecutionContext &context, DataCh
 	} while (chunk.size() == 0);
 }
 
-unique_ptr<PhysicalOperatorState> PhysicalStreamingSample::GetOperatorState() {
-	return make_unique<StreamingSampleOperatorState>(*this, children[0].get(), seed);
+unique_ptr<PhysicalOperatorState> PhysicalStreamingSample::GetOperatorState(ExecutionContext &execution_context) {
+	return make_unique<StreamingSampleOperatorState>(execution_context, *this, children[0].get(), seed);
 }
 
 string PhysicalStreamingSample::ParamsToString() const {

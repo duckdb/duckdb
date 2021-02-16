@@ -12,8 +12,8 @@ namespace duckdb {
 
 class PhysicalTableScanOperatorState : public PhysicalOperatorState {
 public:
-	explicit PhysicalTableScanOperatorState(PhysicalOperator &op)
-	    : PhysicalOperatorState(op, nullptr), initialized(false) {
+	explicit PhysicalTableScanOperatorState(ExecutionContext &execution_context, PhysicalOperator &op)
+	    : PhysicalOperatorState(execution_context, op, nullptr), initialized(false) {
 	}
 
 	ParallelState *parallel_state;
@@ -124,8 +124,8 @@ string PhysicalTableScan::ParamsToString() const {
 	return result;
 }
 
-unique_ptr<PhysicalOperatorState> PhysicalTableScan::GetOperatorState() {
-	return make_unique<PhysicalTableScanOperatorState>(*this);
+unique_ptr<PhysicalOperatorState> PhysicalTableScan::GetOperatorState(ExecutionContext &execution_context) {
+	return make_unique<PhysicalTableScanOperatorState>(execution_context, *this);
 }
 
 } // namespace duckdb

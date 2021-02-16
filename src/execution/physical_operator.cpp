@@ -18,11 +18,13 @@ string PhysicalOperator::ToString() const {
 	return renderer.ToString(*this);
 }
 
-PhysicalOperatorState::PhysicalOperatorState(PhysicalOperator &op, PhysicalOperator *child) : finished(false) {
+PhysicalOperatorState::PhysicalOperatorState(ExecutionContext &execution_context, PhysicalOperator &op,
+                                             PhysicalOperator *child)
+    : finished(false) {
 	op.InitializeChunk(initial_chunk);
 	if (child) {
 		child->InitializeChunkEmpty(child_chunk);
-		child_state = child->GetOperatorState();
+		child_state = child->GetOperatorState(execution_context);
 	}
 }
 

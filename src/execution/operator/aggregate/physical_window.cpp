@@ -34,8 +34,8 @@ public:
 //! The operator state of the window
 class PhysicalWindowOperatorState : public PhysicalOperatorState {
 public:
-	PhysicalWindowOperatorState(PhysicalOperator &op, PhysicalOperator *child)
-	    : PhysicalOperatorState(op, child), position(0) {
+	PhysicalWindowOperatorState(ExecutionContext &execution_context, PhysicalOperator &op, PhysicalOperator *child)
+	    : PhysicalOperatorState(execution_context, op, child), position(0) {
 	}
 
 	idx_t position;
@@ -519,8 +519,8 @@ void PhysicalWindow::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 	state->position += STANDARD_VECTOR_SIZE;
 }
 
-unique_ptr<PhysicalOperatorState> PhysicalWindow::GetOperatorState() {
-	return make_unique<PhysicalWindowOperatorState>(*this, children[0].get());
+unique_ptr<PhysicalOperatorState> PhysicalWindow::GetOperatorState(ExecutionContext &execution_context) {
+	return make_unique<PhysicalWindowOperatorState>(execution_context, *this, children[0].get());
 }
 
 void PhysicalWindow::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_p,
@@ -536,7 +536,8 @@ void PhysicalWindow::Combine(ExecutionContext &context, GlobalOperatorState &gst
 	gstate.chunks.Merge(lstate.chunks);
 }
 
-void PhysicalWindow::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> gstate_p) {
+void PhysicalWindow::Finalize(Pipeline &pipeline, ExecutionContext &execution_context,
+                              unique_ptr<GlobalOperatorState> gstate_p) {
 	this->sink_state = move(gstate_p);
 	auto &gstate = (WindowGlobalState &)*this->sink_state;
 

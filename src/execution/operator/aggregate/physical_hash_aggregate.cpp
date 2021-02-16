@@ -200,9 +200,10 @@ void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState 
 
 class PhysicalHashAggregateState : public PhysicalOperatorState {
 public:
-	PhysicalHashAggregateState(PhysicalOperator &op, vector<LogicalType> &group_types,
-	                           vector<LogicalType> &aggregate_types, PhysicalOperator *child)
-	    : PhysicalOperatorState(op, child), ht_index(0), ht_scan_position(0) {
+	PhysicalHashAggregateState(ExecutionContext &execution_context, PhysicalOperator &op,
+	                           vector<LogicalType> &group_types, vector<LogicalType> &aggregate_types,
+	                           PhysicalOperator *child)
+	    : PhysicalOperatorState(execution_context, op, child), ht_index(0), ht_scan_position(0) {
 		auto scan_chunk_types = group_types;
 		for (auto &aggr_type : aggregate_types) {
 			scan_chunk_types.push_back(aggr_type);
@@ -288,9 +289,9 @@ private:
 	idx_t radix;
 };
 
-void PhysicalHashAggregate::Finalize(Pipeline &pipeline, ClientContext &context,
+void PhysicalHashAggregate::Finalize(Pipeline &pipeline, ExecutionContext &execution_context,
                                      unique_ptr<GlobalOperatorState> state) {
-	FinalizeInternal(context, move(state), false, &pipeline);
+	FinalizeInternal(execution_context.client, move(state), false, &pipeline);
 }
 
 void PhysicalHashAggregate::FinalizeImmediate(ClientContext &context, unique_ptr<GlobalOperatorState> state) {
@@ -430,8 +431,8 @@ void PhysicalHashAggregate::GetChunkInternal(ExecutionContext &context, DataChun
 	}
 }
 
-unique_ptr<PhysicalOperatorState> PhysicalHashAggregate::GetOperatorState() {
-	return make_unique<PhysicalHashAggregateState>(*this, group_types, aggregate_return_types,
+unique_ptr<PhysicalOperatorState> PhysicalHashAggregate::GetOperatorState(ExecutionContext &execution_context) {
+	return make_unique<PhysicalHashAggregateState>(execution_context, *this, group_types, aggregate_return_types,
 	                                               children.empty() ? nullptr : children[0].get());
 }
 

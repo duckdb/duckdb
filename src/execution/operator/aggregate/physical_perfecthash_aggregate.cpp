@@ -158,8 +158,8 @@ void PhysicalPerfectHashAggregate::Combine(ExecutionContext &context, GlobalOper
 //===--------------------------------------------------------------------===//
 class PerfectHashAggregateState : public PhysicalOperatorState {
 public:
-	PerfectHashAggregateState(PhysicalOperator &op, PhysicalOperator *child)
-	    : PhysicalOperatorState(op, child), ht_scan_position(0) {
+	PerfectHashAggregateState(ExecutionContext &execution_context, PhysicalOperator &op, PhysicalOperator *child)
+	    : PhysicalOperatorState(execution_context, op, child), ht_scan_position(0) {
 	}
 	//! The current position to scan the HT for output tuples
 	idx_t ht_scan_position;
@@ -173,8 +173,8 @@ void PhysicalPerfectHashAggregate::GetChunkInternal(ExecutionContext &context, D
 	gstate.ht->Scan(state.ht_scan_position, chunk);
 }
 
-unique_ptr<PhysicalOperatorState> PhysicalPerfectHashAggregate::GetOperatorState() {
-	return make_unique<PerfectHashAggregateState>(*this, children[0].get());
+unique_ptr<PhysicalOperatorState> PhysicalPerfectHashAggregate::GetOperatorState(ExecutionContext &execution_context) {
+	return make_unique<PerfectHashAggregateState>(execution_context, *this, children[0].get());
 }
 
 string PhysicalPerfectHashAggregate::ParamsToString() const {

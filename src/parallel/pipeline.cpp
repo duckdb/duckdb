@@ -25,7 +25,7 @@ public:
 public:
 	void Execute() override {
 		pipeline->Execute(task);
-		pipeline->FinishTask();
+		pipeline->FinishTask(task);
 	}
 };
 
@@ -46,7 +46,7 @@ void Pipeline::Execute(TaskContext &task) {
 	ThreadContext thread(client);
 	ExecutionContext context(client, thread, task);
 	try {
-		auto state = child->GetOperatorState();
+		auto state = child->GetOperatorState(context);
 		auto lstate = sink->GetLocalSinkState(context);
 		// incrementally process the pipeline
 		DataChunk intermediate;
@@ -69,12 +69,14 @@ void Pipeline::Execute(TaskContext &task) {
 	executor.Flush(thread);
 }
 
-void Pipeline::FinishTask() {
+void Pipeline::FinishTask(TaskContext &task) {
+	ThreadContext thread(executor.context);
+	ExecutionContext context(executor.context, thread, task);
 	D_ASSERT(finished_tasks < total_tasks);
 	idx_t current_finished = ++finished_tasks;
 	if (current_finished == total_tasks) {
 		try {
-			sink->Finalize(*this, executor.context, move(sink_state));
+			sink->Finalize(*this, context, move(sink_state));
 		} catch (std::exception &ex) {
 			executor.PushError(ex.what());
 		} catch (...) {

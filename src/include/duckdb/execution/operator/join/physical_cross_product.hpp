@@ -24,7 +24,7 @@ public:
 	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) override;
 
 	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
-	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
+	unique_ptr<PhysicalOperatorState> GetOperatorState(ExecutionContext &execution_context) override;
 };
 
 } // namespace duckdb

@@ -28,6 +28,7 @@ public:
 
 	Executor &executor;
 	ProducerToken &token;
+	shared_ptr<ThreadContext> thread_context;
 
 public:
 	//! Execute a task within the pipeline on a single thread
@@ -43,7 +44,7 @@ public:
 	void Schedule();
 
 	//! Finish a single task of this pipeline
-	void FinishTask();
+	void FinishTask(TaskContext &task);
 	//! Finish executing this pipeline
 	void Finish();
 

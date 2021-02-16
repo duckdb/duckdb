@@ -76,5 +76,8 @@ hash_t Expression::Hash() const {
 	                                      [&](const Expression &child) { hash = CombineHash(child.Hash(), hash); });
 	return hash;
 }
+string Expression::ToString() const {
+	return "noname";
+}
 
 } // namespace duckdb

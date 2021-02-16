@@ -47,7 +47,7 @@ public:
 	//! In case we swap rhs with lhs we need to output columns related to rhs first.
 	bool lhs_first = true;
 	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
-	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
+	unique_ptr<PhysicalOperatorState> GetOperatorState(ExecutionContext &execution_context) override;
 
 private:
 	void GetRHSMatches(ExecutionContext &context, PhysicalOperatorState *state_p) const;

@@ -34,6 +34,7 @@ public:
 	~Executor();
 
 	ClientContext &context;
+	shared_ptr<ThreadContext> thread_context;
 
 public:
 	void Initialize(PhysicalOperator *physical_plan);

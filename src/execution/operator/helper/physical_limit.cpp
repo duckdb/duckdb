@@ -8,8 +8,9 @@ namespace duckdb {
 
 class PhysicalLimitOperatorState : public PhysicalOperatorState {
 public:
-	PhysicalLimitOperatorState(PhysicalOperator &op, PhysicalOperator *child, idx_t current_offset = 0)
-	    : PhysicalOperatorState(op, child), current_offset(current_offset) {
+	PhysicalLimitOperatorState(ExecutionContext &execution_context, PhysicalOperator &op, PhysicalOperator *child,
+	                           idx_t current_offset = 0)
+	    : PhysicalOperatorState(execution_context, op, child), current_offset(current_offset) {
 	}
 
 	idx_t current_offset;
@@ -90,8 +91,8 @@ void PhysicalLimit::GetChunkInternal(ExecutionContext &context, DataChunk &chunk
 	} while (chunk.size() == 0);
 }
 
-unique_ptr<PhysicalOperatorState> PhysicalLimit::GetOperatorState() {
-	return make_unique<PhysicalLimitOperatorState>(*this, children[0].get(), 0);
+unique_ptr<PhysicalOperatorState> PhysicalLimit::GetOperatorState(ExecutionContext &execution_context) {
+	return make_unique<PhysicalLimitOperatorState>(execution_context, *this, children[0].get(), 0);
 }
 
 } // namespace duckdb
