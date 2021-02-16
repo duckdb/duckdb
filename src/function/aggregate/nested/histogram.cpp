@@ -5,6 +5,7 @@
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include <map>
+#include "duckdb/common/types/vector.hpp"
 namespace duckdb {
 template <class T>
 struct HistogramAggState {
@@ -130,7 +131,7 @@ unique_ptr<FunctionData> HistogramBindFunction(ClientContext &context, Aggregate
 
 	function.return_type = LogicalType(LogicalTypeId::LIST, move(children));
 	return make_unique<ListBindData>(); // TODO atm this is not used anywhere but it might not be required after all
-	// except for sanity checking
+	                                    // except for sanity checking
 }
 
 AggregateFunction GetHistogramFunction(PhysicalType type) {
