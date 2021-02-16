@@ -12,8 +12,8 @@ static void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &r
 	//	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	//	auto &info = (VariableReturnBindData &)*func_expr.bind_info;
 
-	D_ASSERT(result.type.id() == LogicalTypeId::LIST);
-	D_ASSERT(result.type.child_types().size() == 1);
+	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
+	D_ASSERT(result.GetType().child_types().size() == 1);
 
 	auto list_child = make_unique<ChunkCollection>();
 	ListVector::SetEntry(result, move(list_child));
@@ -26,10 +26,10 @@ static void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &r
 		append_vals.Initialize(types);
 		append_vals.SetCardinality(1);
 	}
-	result.vector_type = VectorType::CONSTANT_VECTOR;
+	result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	for (idx_t i = 0; i < args.ColumnCount(); i++) {
-		if (args.data[i].vector_type != VectorType::CONSTANT_VECTOR) {
-			result.vector_type = VectorType::FLAT_VECTOR;
+		if (args.data[i].GetVectorType() != VectorType::CONSTANT_VECTOR) {
+			result.SetVectorType(VectorType::FLAT_VECTOR);
 		}
 	}
 

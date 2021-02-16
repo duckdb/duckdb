@@ -283,8 +283,8 @@ static bool ConvertDecimalInternal(idx_t target_offset, data_ptr_t target_data, 
 	}
 }
 
-static bool ConvertDecimal(LogicalType &decimal_type, idx_t target_offset, data_ptr_t target_data, bool *target_mask,
-                           VectorData &idata, idx_t count) {
+static bool ConvertDecimal(const LogicalType &decimal_type, idx_t target_offset, data_ptr_t target_data,
+                           bool *target_mask, VectorData &idata, idx_t count) {
 	auto dec_scale = decimal_type.scale();
 	double division = pow(10, dec_scale);
 	switch (decimal_type.InternalType()) {
@@ -497,7 +497,7 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 
 	VectorData idata;
 	input.Orrify(count, idata);
-	switch (input.type.id()) {
+	switch (input.GetType().id()) {
 	case LogicalTypeId::BOOLEAN:
 		may_have_null = ConvertColumnRegular<bool>(current_offset, dataptr, maskptr, idata, count);
 		break;
@@ -536,7 +536,7 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 		may_have_null = ConvertColumnRegular<double>(current_offset, dataptr, maskptr, idata, count);
 		break;
 	case LogicalTypeId::DECIMAL:
-		may_have_null = ConvertDecimal(input.type, current_offset, dataptr, maskptr, idata, count);
+		may_have_null = ConvertDecimal(input.GetType(), current_offset, dataptr, maskptr, idata, count);
 		break;
 	case LogicalTypeId::TIMESTAMP:
 		may_have_null = ConvertColumn<timestamp_t, int64_t, duckdb_py_convert::TimestampConvert>(
@@ -559,7 +559,7 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 		                                                                                    maskptr, idata, count);
 		break;
 	default:
-		throw runtime_error("unsupported type " + input.type.ToString());
+		throw runtime_error("unsupported type " + input.GetType().ToString());
 	}
 	if (may_have_null) {
 		requires_mask = true;
@@ -1038,7 +1038,7 @@ struct PandasScanFunction : public TableFunction {
 			break;
 		}
 		default:
-			throw runtime_error("Unsupported type " + out.type.ToString());
+			throw runtime_error("Unsupported type " + out.GetType().ToString());
 		}
 	}
 
@@ -1610,7 +1610,7 @@ struct DuckDBPyConnection {
 	}
 
 	// these should be functions on the result but well
-	py::tuple fetchone() {
+	py::object fetchone() {
 		if (!result) {
 			throw runtime_error("no open result set");
 		}

@@ -180,7 +180,7 @@ static void ReadCSVFunction(ClientContext &context, const FunctionData *bind_dat
 	if (bind_data.include_file_name) {
 		auto &col = output.data.back();
 		col.SetValue(0, Value(data.csv_reader->options.file_path));
-		col.vector_type = VectorType::CONSTANT_VECTOR;
+		col.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 }
 

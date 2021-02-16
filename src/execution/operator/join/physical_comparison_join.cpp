@@ -43,7 +43,7 @@ void PhysicalComparisonJoin::ConstructEmptyJoinResult(JoinType join_type, bool h
 		D_ASSERT(join_type == JoinType::MARK);
 		D_ASSERT(result.ColumnCount() == input.ColumnCount() + 1);
 		auto &result_vector = result.data.back();
-		D_ASSERT(result_vector.type == LogicalType::BOOLEAN);
+		D_ASSERT(result_vector.GetType() == LogicalType::BOOLEAN);
 		// for every data vector, we just reference the child chunk
 		result.SetCardinality(input);
 		for (idx_t i = 0; i < input.ColumnCount(); i++) {
@@ -70,7 +70,7 @@ void PhysicalComparisonJoin::ConstructEmptyJoinResult(JoinType join_type, bool h
 		}
 		// for the RHS
 		for (idx_t k = input.ColumnCount(); k < result.ColumnCount(); k++) {
-			result.data[k].vector_type = VectorType::CONSTANT_VECTOR;
+			result.data[k].SetVectorType(VectorType::CONSTANT_VECTOR);
 			ConstantVector::SetNull(result.data[k], true);
 		}
 	}
@@ -94,7 +94,7 @@ void PhysicalComparisonJoin::ConstructFullOuterJoinResult(bool *found_match, Chu
 			// if there were any tuples that didn't find a match, output them
 			idx_t left_column_count = result.ColumnCount() - input.ColumnCount();
 			for (idx_t i = 0; i < left_column_count; i++) {
-				result.data[i].vector_type = VectorType::CONSTANT_VECTOR;
+				result.data[i].SetVectorType(VectorType::CONSTANT_VECTOR);
 				ConstantVector::SetNull(result.data[i], true);
 			}
 			for (idx_t col_idx = 0; col_idx < rhs_chunk.ColumnCount(); col_idx++) {

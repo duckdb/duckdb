@@ -21,9 +21,9 @@ private:
 public:
 	template <class OP>
 	static inline void Execute(Vector &left, Vector &right, Vector &result, idx_t count) {
-		D_ASSERT(left.type == right.type && result.type == LogicalType::BOOLEAN);
+		D_ASSERT(left.GetType() == right.GetType() && result.GetType() == LogicalType::BOOLEAN);
 		// the inplace loops take the result as the last parameter
-		switch (left.type.InternalType()) {
+		switch (left.GetType().InternalType()) {
 		case PhysicalType::BOOL:
 		case PhysicalType::INT8:
 			TemplatedExecute<int8_t, OP>(left, right, result, count);
@@ -68,7 +68,7 @@ public:
 			TemplatedExecute<string_t, OP, true>(left, right, result, count);
 			break;
 		default:
-			throw InvalidTypeException(left.type, "Invalid type for comparison");
+			throw InvalidTypeException(left.GetType(), "Invalid type for comparison");
 		}
 	}
 };
