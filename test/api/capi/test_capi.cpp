@@ -457,6 +457,29 @@ TEST_CASE("Test prepared statements in C API", "[capi][.]") {
 	duckdb_destroy_result(&res);
 	duckdb_destroy_prepare(&stmt);
 
+
+	status = duckdb_prepare(tester.connection, "SELECT CAST($1 AS VARCHAR)", &stmt);
+	REQUIRE(status == DuckDBSuccess);
+	REQUIRE(stmt != nullptr);
+
+	duckdb_bind_varchar_length(stmt, 1, "hello world", 5);
+	status = duckdb_execute_prepared(stmt, &res);
+	REQUIRE(status == DuckDBSuccess);
+	auto value = duckdb_value_varchar(&res, 0, 0);
+	REQUIRE(string(value) == "hello");
+	free(value);
+	duckdb_destroy_result(&res);
+
+	duckdb_bind_blob(stmt, 1, "hello\0world", 11);
+	status = duckdb_execute_prepared(stmt, &res);
+	REQUIRE(status == DuckDBSuccess);
+	value = duckdb_value_varchar(&res, 0, 0);
+	REQUIRE(string(value) == "hello\\x00world");
+	free(value);
+	duckdb_destroy_result(&res);
+
+	duckdb_destroy_prepare(&stmt);
+
 	status = duckdb_query(tester.connection, "CREATE TABLE a (i INTEGER)", NULL);
 	REQUIRE(status == DuckDBSuccess);
 

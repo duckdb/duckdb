@@ -421,6 +421,14 @@ duckdb_state duckdb_bind_varchar(duckdb_prepared_statement prepared_statement, i
 	return duckdb_bind_value(prepared_statement, param_idx, Value(val));
 }
 
+duckdb_state duckdb_bind_varchar_length(duckdb_prepared_statement prepared_statement, idx_t param_idx, const char *val, idx_t length) {
+	return duckdb_bind_value(prepared_statement, param_idx, Value(string(val, length)));
+}
+
+duckdb_state duckdb_bind_blob(duckdb_prepared_statement prepared_statement, idx_t param_idx, const void *data, idx_t length) {
+	return duckdb_bind_value(prepared_statement, param_idx, Value::BLOB((const_data_ptr_t) data, length));
+}
+
 duckdb_state duckdb_bind_null(duckdb_prepared_statement prepared_statement, idx_t param_idx) {
 	return duckdb_bind_value(prepared_statement, param_idx, Value());
 }
