@@ -100,6 +100,11 @@ static void HistogramFinalize(Vector &state_vector, FunctionData *, Vector &resu
 			struct_values.push_back({"v", Value::UBIGINT(entry.second)});
 			insert_chunk.SetValue(0, total_len++, Value::STRUCT(struct_values));
 			chunk_idx++;
+			if (total_len == STANDARD_VECTOR_SIZE) {
+				insert_chunk.SetCardinality(total_len);
+				list_child->Append(insert_chunk);
+				total_len = 0;
+			}
 		}
 		list_struct_data[i].length = chunk_idx;
 		list_struct_data[i].offset = old_len;
