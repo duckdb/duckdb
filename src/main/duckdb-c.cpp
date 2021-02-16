@@ -317,7 +317,7 @@ static void duckdb_destroy_column(duckdb_column column, idx_t count) {
 			auto data = (duckdb_blob *)column.data;
 			for (idx_t i = 0; i < count; i++) {
 				if (data[i].data) {
-					free( (void *) data[i].data);
+					free((void *)data[i].data);
 				}
 			}
 		}
@@ -421,12 +421,14 @@ duckdb_state duckdb_bind_varchar(duckdb_prepared_statement prepared_statement, i
 	return duckdb_bind_value(prepared_statement, param_idx, Value(val));
 }
 
-duckdb_state duckdb_bind_varchar_length(duckdb_prepared_statement prepared_statement, idx_t param_idx, const char *val, idx_t length) {
+duckdb_state duckdb_bind_varchar_length(duckdb_prepared_statement prepared_statement, idx_t param_idx, const char *val,
+                                        idx_t length) {
 	return duckdb_bind_value(prepared_statement, param_idx, Value(string(val, length)));
 }
 
-duckdb_state duckdb_bind_blob(duckdb_prepared_statement prepared_statement, idx_t param_idx, const void *data, idx_t length) {
-	return duckdb_bind_value(prepared_statement, param_idx, Value::BLOB((const_data_ptr_t) data, length));
+duckdb_state duckdb_bind_blob(duckdb_prepared_statement prepared_statement, idx_t param_idx, const void *data,
+                              idx_t length) {
+	return duckdb_bind_value(prepared_statement, param_idx, Value::BLOB((const_data_ptr_t)data, length));
 }
 
 duckdb_state duckdb_bind_null(duckdb_prepared_statement prepared_statement, idx_t param_idx) {
@@ -590,7 +592,7 @@ static Value GetCValue(duckdb_result *result, idx_t col, idx_t row) {
 		return Value(string(UnsafeFetch<const char *>(result, col, row)));
 	case DUCKDB_TYPE_BLOB: {
 		auto blob = UnsafeFetch<duckdb_blob>(result, col, row);
-		return Value::BLOB((const_data_ptr_t) blob.data, blob.size);
+		return Value::BLOB((const_data_ptr_t)blob.data, blob.size);
 	}
 	default:
 		// invalid type for C to C++ conversion
@@ -682,7 +684,7 @@ duckdb_blob duckdb_value_blob(duckdb_result *result, idx_t col, idx_t row) {
 		blob.size = 0;
 	} else {
 		blob.data = malloc(val.str_value.size());
-		memcpy((void *) blob.data, val.str_value.c_str(), val.str_value.size());
+		memcpy((void *)blob.data, val.str_value.c_str(), val.str_value.size());
 		blob.size = val.str_value.size();
 	}
 	return blob;

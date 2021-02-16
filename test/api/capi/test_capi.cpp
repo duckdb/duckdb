@@ -457,7 +457,6 @@ TEST_CASE("Test prepared statements in C API", "[capi][.]") {
 	duckdb_destroy_result(&res);
 	duckdb_destroy_prepare(&stmt);
 
-
 	status = duckdb_prepare(tester.connection, "SELECT CAST($1 AS VARCHAR)", &stmt);
 	REQUIRE(status == DuckDBSuccess);
 	REQUIRE(stmt != nullptr);
