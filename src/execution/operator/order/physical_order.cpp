@@ -117,12 +117,15 @@ public:
 	idx_t start;
 	idx_t end;
 
-	unique_ptr<data_ptr_t[]> key_locations = nullptr;
 	//! Used only for the initial merge after sorting in Sink/Combine
 	unique_ptr<idx_t[]> offsets = nullptr; // FIXME: may need to share these offsets!
 
-	data_ptr_t &DataPtr() {
-		return key_locations[entry_idx];
+	data_ptr_t DataPtr() {
+		if (offsets) {
+			return handle->node->buffer + offsets[entry_idx];
+		} else {
+			return dataptr;
+		}
 	}
 
 	void InitializeBlock() {
@@ -141,6 +144,7 @@ public:
 	void Advance() {
 		if (entry_idx < block_end) {
 			entry_idx++;
+			dataptr += state.entry_size;
 		} else if (block_idx < blocks.size() - 1) {
 			block_idx++;
 			InitializeBlock();
@@ -153,21 +157,7 @@ public:
 			return;
 		}
 		handle = state.buffer_manager.Pin(blocks[block_idx].block);
-		data_ptr_t dataptr = handle->node->buffer;
-		if (!key_locations) {
-			key_locations = unique_ptr<data_ptr_t[]>(new data_ptr_t[state.block_capacity]);
-		}
-		if (offsets) {
-			for (idx_t i = entry_idx; i < block_end; i++) {
-				key_locations[i] = dataptr + offsets[i];
-			}
-			offsets.reset();
-		} else {
-			for (idx_t i = entry_idx; i < block_end; i++) {
-				key_locations[i] = dataptr;
-				dataptr += state.entry_size;
-			}
-		}
+		dataptr = handle->node->buffer;
 	}
 
 	void FlushData(ContinuousBlock &target) {
@@ -191,7 +181,7 @@ public:
 			auto write_ptr = write_handle->node->buffer + write_block.count * state.entry_size;
 
 			// flush into last block
-			for (; entry_idx < block_end; entry_idx++) {
+			for (; entry_idx < block_end; entry_idx++, dataptr += state.entry_size) {
 				memcpy(write_ptr, DataPtr(), state.entry_size);
 				write_ptr += state.entry_size;
 				write_block.count++;
@@ -218,6 +208,7 @@ private:
 	idx_t block_end;
 
 	unique_ptr<BufferHandle> handle;
+	data_ptr_t dataptr;
 };
 
 template <class TYPE>
@@ -305,19 +296,19 @@ void Sort(ContinuousBlock &cb, OrderGlobalState &state) {
 	data_ptr_t dataptr = handle->node->buffer;
 
 	// fetch a batch of pointers to entries in the blocks, and initialize idxs
-	cb.key_locations = unique_ptr<data_ptr_t[]>(new data_ptr_t[block.count]);
+	auto key_locations = unique_ptr<data_ptr_t[]>(new data_ptr_t[block.count]);
 	for (idx_t i = 0; i < block.count; i++) {
-		cb.key_locations[i] = dataptr;
+		key_locations[i] = dataptr;
 		dataptr += state.entry_size;
 	}
 
-	std::sort(cb.key_locations.get(), cb.key_locations.get() + block.count,
+	std::sort(key_locations.get(), key_locations.get() + block.count,
 	          [&state](const data_ptr_t &l, const data_ptr_t &r) { return CompareTuple(l, r, state) <= 0; });
 
 	// convert sorted pointers to offsets
 	cb.offsets = unique_ptr<idx_t[]>(new idx_t[block.count]);
 	for (idx_t i = 0; i < block.count; i++) {
-		cb.offsets[i] = cb.key_locations[i] - handle->node->buffer;
+		cb.offsets[i] = key_locations[i] - handle->node->buffer;
 	}
 }
 
@@ -493,13 +484,8 @@ void PhysicalOrder::ScheduleMergeTasks(Pipeline &pipeline, ClientContext &contex
 
 	// add last element if odd amount
 	if (sink.continuous.size() % 2 == 1) {
-		auto first_half = move(sink.continuous.back());
-		auto second_half = first_half->Copy();
+		sink.intermediate.push_back(move(sink.continuous.back()));
 		sink.continuous.pop_back();
-		first_half->end = first_half->end / 2;
-		second_half->start = first_half->end;
-		sink.continuous.push_back(move(first_half));
-		sink.continuous.push_back(move(second_half));
 	}
 
 	// schedule merge tasks
@@ -519,6 +505,7 @@ void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 	if (sink.intermediate.capacity() == 1) {
 		// special case: only one block arrived, it was sorted but not re-ordered
 		sink.continuous.push_back(make_unique<ContinuousBlock>(sink));
+		sink.intermediate.back()->InitializeBlock();
 		sink.intermediate.back()->FlushData(*sink.continuous.back());
 		return;
 	}
