@@ -17,7 +17,7 @@ class Optimizer;
 class TopN {
 public:
 	//! Optimize ORDER BY + LIMIT to TopN
-	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> node);
+	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> op);
 };
 
 } // namespace duckdb

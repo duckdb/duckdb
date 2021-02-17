@@ -2,11 +2,9 @@
 #include "duckdb/parser/transformer.hpp"
 
 namespace duckdb {
-using namespace std;
-using namespace duckdb_libpgquery;
 
-unique_ptr<VacuumStatement> Transformer::TransformVacuum(PGNode *node) {
-	auto stmt = reinterpret_cast<PGVacuumStmt *>(node);
+unique_ptr<VacuumStatement> Transformer::TransformVacuum(duckdb_libpgquery::PGNode *node) {
+	auto stmt = reinterpret_cast<duckdb_libpgquery::PGVacuumStmt *>(node);
 	D_ASSERT(stmt);
 	(void)stmt;
 	auto result = make_unique<VacuumStatement>();

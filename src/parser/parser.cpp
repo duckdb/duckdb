@@ -13,12 +13,11 @@
 #include "parser/parser.hpp"
 
 namespace duckdb {
-using namespace std;
 
 Parser::Parser() {
 }
 
-void Parser::ParseQuery(string query) {
+void Parser::ParseQuery(const string &query) {
 	Transformer transformer;
 	{
 		PostgresParser parser;
@@ -37,26 +36,26 @@ void Parser::ParseQuery(string query) {
 		// SQLStatements
 		transformer.TransformParseTree(parser.parse_tree, statements);
 	}
-	if (statements.size() > 0) {
+	if (!statements.empty()) {
 		auto &last_statement = statements.back();
 		last_statement->stmt_length = query.size() - last_statement->stmt_location;
 		for (auto &statement : statements) {
 			statement->query = query;
 			if (statement->type == StatementType::CREATE_STATEMENT) {
-				auto &create = (CreateStatement &) *statement;
+				auto &create = (CreateStatement &)*statement;
 				create.info->sql = query.substr(statement->stmt_location, statement->stmt_length);
 			}
 		}
 	}
 }
 
-vector<SimplifiedToken> Parser::Tokenize(string query) {
+vector<SimplifiedToken> Parser::Tokenize(const string &query) {
 	auto pg_tokens = PostgresParser::Tokenize(query);
 	vector<SimplifiedToken> result;
 	result.reserve(pg_tokens.size());
-	for(auto &pg_token : pg_tokens) {
+	for (auto &pg_token : pg_tokens) {
 		SimplifiedToken token;
-		switch(pg_token.type) {
+		switch (pg_token.type) {
 		case duckdb_libpgquery::PGSimplifiedTokenType::PG_SIMPLIFIED_TOKEN_IDENTIFIER:
 			token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER;
 			break;
@@ -77,7 +76,7 @@ vector<SimplifiedToken> Parser::Tokenize(string query) {
 			break;
 		}
 		token.start = pg_token.start;
-		result.push_back(move(token));
+		result.push_back(token);
 	}
 	return result;
 }
@@ -86,7 +85,7 @@ bool Parser::IsKeyword(const string &text) {
 	return PostgresParser::IsKeyword(text);
 }
 
-vector<unique_ptr<ParsedExpression>> Parser::ParseExpressionList(string select_list) {
+vector<unique_ptr<ParsedExpression>> Parser::ParseExpressionList(const string &select_list) {
 	// construct a mock query prefixed with SELECT
 	string mock_query = "SELECT " + select_list;
 	// parse the query
@@ -104,7 +103,7 @@ vector<unique_ptr<ParsedExpression>> Parser::ParseExpressionList(string select_l
 	return move(select_node.select_list);
 }
 
-vector<OrderByNode> Parser::ParseOrderList(string select_list) {
+vector<OrderByNode> Parser::ParseOrderList(const string &select_list) {
 	// construct a mock query
 	string mock_query = "SELECT * FROM tbl ORDER BY " + select_list;
 	// parse the query
@@ -119,14 +118,14 @@ vector<OrderByNode> Parser::ParseOrderList(string select_list) {
 		throw ParserException("Expected a single SELECT node");
 	}
 	auto &select_node = (SelectNode &)*select.node;
-	if (select_node.modifiers.size() == 0 || select_node.modifiers[0]->type != ResultModifierType::ORDER_MODIFIER) {
+	if (select_node.modifiers.empty() || select_node.modifiers[0]->type != ResultModifierType::ORDER_MODIFIER) {
 		throw ParserException("Expected a single ORDER clause");
 	}
 	auto &order = (OrderModifier &)*select_node.modifiers[0];
 	return move(order.orders);
 }
 
-void Parser::ParseUpdateList(string update_list, vector<string> &update_columns,
+void Parser::ParseUpdateList(const string &update_list, vector<string> &update_columns,
                              vector<unique_ptr<ParsedExpression>> &expressions) {
 	// construct a mock query
 	string mock_query = "UPDATE tbl SET " + update_list;
@@ -142,7 +141,7 @@ void Parser::ParseUpdateList(string update_list, vector<string> &update_columns,
 	expressions = move(update.expressions);
 }
 
-vector<vector<unique_ptr<ParsedExpression>>> Parser::ParseValuesList(string value_list) {
+vector<vector<unique_ptr<ParsedExpression>>> Parser::ParseValuesList(const string &value_list) {
 	// construct a mock query
 	string mock_query = "VALUES " + value_list;
 	// parse the query
@@ -164,7 +163,7 @@ vector<vector<unique_ptr<ParsedExpression>>> Parser::ParseValuesList(string valu
 	return move(values_list.values);
 }
 
-vector<ColumnDefinition> Parser::ParseColumnList(string column_list) {
+vector<ColumnDefinition> Parser::ParseColumnList(const string &column_list) {
 	string mock_query = "CREATE TABLE blabla (" + column_list + ")";
 	Parser parser;
 	parser.ParseQuery(mock_query);

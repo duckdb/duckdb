@@ -1,4 +1,4 @@
-# name: test/sql/update/test_update.test
+# name: test/sql/update/test_update_from.test
 # description: Test updates that use a from clause
 # group: [update]
 
@@ -102,6 +102,9 @@ SELECT * FROM test
 
 # test with multiple updates per row (which is undefined),
 # but in this case the last value in the table will win
+# FIXME:
+mode skip
+
 statement ok
 INSERT INTO src VALUES (7)
 
@@ -112,6 +115,8 @@ query I
 SELECT * FROM test
 ----
 7
+
+mode unskip
 
 # test described in issue 1035
 
@@ -137,14 +142,14 @@ statement ok
 insert into terms values (2, 3);
 
 statement ok
-UPDATE docs 
-SET len = sq.len 
-FROM ( 
-    SELECT docid AS id, count(term) AS len 
-    FROM terms 
-    GROUP BY docid 
-    ORDER BY docid 
-) AS sq 
+UPDATE docs
+SET len = sq.len
+FROM (
+    SELECT docid AS id, count(term) AS len
+    FROM terms
+    GROUP BY docid
+    ORDER BY docid
+) AS sq
 WHERE docs.id = sq.id;
 
 query II

@@ -18,7 +18,7 @@ struct TableAppendState;
 
 class LocalTableStorage {
 public:
-	LocalTableStorage(DataTable &table);
+	explicit LocalTableStorage(DataTable &table);
 	~LocalTableStorage();
 
 	DataTable &table;
@@ -34,7 +34,8 @@ public:
 	idx_t active_scans = 0;
 
 public:
-	void InitializeScan(LocalScanState &state);
+	void InitializeScan(LocalScanState &state, TableFilterSet *table_filters = nullptr);
+	idx_t EstimatedSize();
 
 	void Clear();
 };
@@ -47,14 +48,13 @@ public:
 	};
 
 public:
-	LocalStorage(Transaction &transaction) : transaction(transaction) {
+	explicit LocalStorage(Transaction &transaction) : transaction(transaction) {
 	}
 
 	//! Initialize a scan of the local storage
-	void InitializeScan(DataTable *table, LocalScanState &state);
+	void InitializeScan(DataTable *table, LocalScanState &state, TableFilterSet *table_filters);
 	//! Scan
-	void Scan(LocalScanState &state, const vector<column_t> &column_ids, DataChunk &result,
-	          unordered_map<idx_t, vector<TableFilter>> *table_filters = nullptr);
+	void Scan(LocalScanState &state, const vector<column_t> &column_ids, DataChunk &result);
 
 	//! Append a chunk to the local storage
 	void Append(DataTable *table, DataChunk &chunk);
@@ -70,19 +70,29 @@ public:
 	bool ChangesMade() noexcept {
 		return table_storage.size() > 0;
 	}
+	idx_t EstimatedSize();
 
 	bool Find(DataTable *table) {
 		return table_storage.find(table) != table_storage.end();
 	}
 
+	idx_t AddedRows(DataTable *table) {
+		auto entry = table_storage.find(table);
+		if (entry == table_storage.end()) {
+			return 0;
+		}
+		return entry->second->collection.Count() - entry->second->deleted_rows;
+	}
+
 	void AddColumn(DataTable *old_dt, DataTable *new_dt, ColumnDefinition &new_column, Expression *default_value);
-	void ChangeType(DataTable *old_dt, DataTable *new_dt, idx_t changed_idx, LogicalType target_type,
-	                vector<column_t> bound_columns, Expression &cast_expr);
+	void ChangeType(DataTable *old_dt, DataTable *new_dt, idx_t changed_idx, const LogicalType &target_type,
+	                const vector<column_t> &bound_columns, Expression &cast_expr);
 
 private:
 	LocalTableStorage *GetStorage(DataTable *table);
 
-	template <class T> bool ScanTableStorage(DataTable &table, LocalTableStorage &storage, T &&fun);
+	template <class T>
+	bool ScanTableStorage(DataTable &table, LocalTableStorage &storage, T &&fun);
 
 private:
 	Transaction &transaction;

@@ -86,6 +86,16 @@ test_that("dbBind() is called from dbGetQuery and dbExecute", {
   dbDisconnect(con, shutdown = T)
 })
 
+test_that("test blobs", {
+  con <- dbConnect(duckdb::duckdb())
+
+  res <- dbGetQuery(con, "SELECT BLOB 'hello'")
+
+  expect_equal(res[[1]][[1]], charToRaw("hello"))
+
+  dbDisconnect(con, shutdown = T)
+})
+
 test_that("various error cases for dbBind()", {
   # testthat::skip("eek")
   con <- dbConnect(duckdb::duckdb())

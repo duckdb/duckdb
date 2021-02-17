@@ -1,6 +1,7 @@
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/tableref/bound_basetableref.hpp"
 #include "duckdb/planner/tableref/bound_subqueryref.hpp"
@@ -10,7 +11,6 @@
 #include "duckdb/function/table/table_scan.hpp"
 
 namespace duckdb {
-using namespace std;
 
 unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 	QueryErrorContext error_context(root_statement, ref.query_location);
@@ -21,8 +21,12 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		// Check if there is a CTE binding in the BindContext
 		auto ctebinding = bind_context.GetCTEBinding(ref.table_name);
 		if (!ctebinding) {
+			if (CTEIsAlreadyBound(cte)) {
+				throw BinderException("Circular reference to CTE \"%s\", use WITH RECURSIVE to use recursive CTEs",
+				                      ref.table_name);
+			}
 			// Move CTE to subquery and bind recursively
-			SubqueryRef subquery(cte->query->Copy());
+			SubqueryRef subquery(unique_ptr_cast<SQLStatement, SelectStatement>(cte->query->Copy()));
 			subquery.alias = ref.alias.empty() ? ref.table_name : ref.alias;
 			subquery.column_name_alias = cte->aliases;
 			for (idx_t i = 0; i < ref.column_name_alias.size(); i++) {
@@ -32,7 +36,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 					subquery.column_name_alias.push_back(ref.column_name_alias[i]);
 				}
 			}
-			return Bind(subquery);
+			return Bind(subquery, cte);
 		} else {
 			// There is a CTE binding in the BindContext.
 			// This can only be the case if there is a recursive CTE present.
@@ -75,7 +79,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 
 		auto logical_get =
 		    make_unique<LogicalGet>(table_index, scan_function, move(bind_data), table_types, table_names);
-		bind_context.AddBaseTable(table_index, alias, move(table_names), move(table_types), *logical_get);
+		bind_context.AddBaseTable(table_index, alias, table_names, table_types, *logical_get);
 		return make_unique_base<BoundTableRef, BoundBaseTableRef>(table, move(logical_get));
 	}
 	case CatalogType::VIEW_ENTRY: {
@@ -86,7 +90,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		// for the view and for the current query
 		bool inherit_ctes = false;
 		Binder view_binder(context, this, inherit_ctes);
-		SubqueryRef subquery(view_catalog_entry->query->Copy());
+		SubqueryRef subquery(unique_ptr_cast<SQLStatement, SelectStatement>(view_catalog_entry->query->Copy()));
 		subquery.alias = ref.alias.empty() ? ref.table_name : ref.alias;
 		subquery.column_name_alias =
 		    BindContext::AliasColumnNames(subquery.alias, view_catalog_entry->aliases, ref.column_name_alias);

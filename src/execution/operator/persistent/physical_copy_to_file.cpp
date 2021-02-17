@@ -3,13 +3,11 @@
 
 #include <algorithm>
 
-using namespace std;
-
 namespace duckdb {
 
 class CopyToFunctionGlobalState : public GlobalOperatorState {
 public:
-	CopyToFunctionGlobalState(unique_ptr<GlobalFunctionData> global_state)
+	explicit CopyToFunctionGlobalState(unique_ptr<GlobalFunctionData> global_state)
 	    : rows_copied(0), global_state(move(global_state)) {
 	}
 
@@ -19,7 +17,7 @@ public:
 
 class CopyToFunctionLocalState : public LocalSinkState {
 public:
-	CopyToFunctionLocalState(unique_ptr<LocalFunctionData> local_state) : local_state(move(local_state)) {
+	explicit CopyToFunctionLocalState(unique_ptr<LocalFunctionData> local_state) : local_state(move(local_state)) {
 	}
 	unique_ptr<LocalFunctionData> local_state;
 };

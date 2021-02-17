@@ -4,10 +4,8 @@
 #include "duckdb/main/client_context.hpp"
 
 #include "duckdb/common/tree_renderer.hpp"
-#include <iostream>
 
 namespace duckdb {
-using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalExplain &op) {
 	D_ASSERT(op.children.size() == 1);

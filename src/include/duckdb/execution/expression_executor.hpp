@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "duckdb/execution/expression_executor_state.hpp"
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb/execution/expression_executor_state.hpp"
 #include "duckdb/planner/bound_tokens.hpp"
 #include "duckdb/planner/expression.hpp"
 
@@ -19,9 +19,9 @@ namespace duckdb {
 class ExpressionExecutor {
 public:
 	ExpressionExecutor();
-	ExpressionExecutor(Expression *expression);
-	ExpressionExecutor(Expression &expression);
-	ExpressionExecutor(vector<unique_ptr<Expression>> &expressions);
+	explicit ExpressionExecutor(Expression *expression);
+	explicit ExpressionExecutor(Expression &expression);
+	explicit ExpressionExecutor(vector<unique_ptr<Expression>> &expressions);
 
 	//! Add an expression to the set of to-be-executed expressions of the executor
 	void AddExpression(Expression &expr);
@@ -89,6 +89,7 @@ protected:
 	             Vector &result);
 	void Execute(BoundCastExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
 	             Vector &result);
+
 	void Execute(BoundComparisonExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
 	             Vector &result);
 	void Execute(BoundConjunctionExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,

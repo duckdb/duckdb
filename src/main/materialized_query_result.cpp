@@ -1,7 +1,7 @@
 #include "duckdb/main/materialized_query_result.hpp"
+#include "duckdb/common/to_string.hpp"
 
 namespace duckdb {
-using namespace std;
 
 MaterializedQueryResult::MaterializedQueryResult(StatementType statement_type)
     : QueryResult(QueryResultType::MATERIALIZED_RESULT, statement_type) {
@@ -9,15 +9,15 @@ MaterializedQueryResult::MaterializedQueryResult(StatementType statement_type)
 
 MaterializedQueryResult::MaterializedQueryResult(StatementType statement_type, vector<LogicalType> types,
                                                  vector<string> names)
-    : QueryResult(QueryResultType::MATERIALIZED_RESULT, statement_type, move(types), names) {
+    : QueryResult(QueryResultType::MATERIALIZED_RESULT, statement_type, move(types), move(names)) {
 }
 
 MaterializedQueryResult::MaterializedQueryResult(string error)
-    : QueryResult(QueryResultType::MATERIALIZED_RESULT, error) {
+    : QueryResult(QueryResultType::MATERIALIZED_RESULT, move(error)) {
 }
 
 Value MaterializedQueryResult::GetValue(idx_t column, idx_t index) {
-	auto &data = collection.GetChunk(index).data[column];
+	auto &data = collection.GetChunkForRow(index).data[column];
 	auto offset_in_chunk = index % STANDARD_VECTOR_SIZE;
 	return data.GetValue(offset_in_chunk);
 }
@@ -26,9 +26,9 @@ string MaterializedQueryResult::ToString() {
 	string result;
 	if (success) {
 		result = HeaderToString();
-		result += "[ Rows: " + to_string(collection.count) + "]\n";
-		for (idx_t j = 0; j < collection.count; j++) {
-			for (idx_t i = 0; i < collection.column_count(); i++) {
+		result += "[ Rows: " + to_string(collection.Count()) + "]\n";
+		for (idx_t j = 0; j < collection.Count(); j++) {
+			for (idx_t i = 0; i < collection.ColumnCount(); i++) {
 				auto val = collection.GetValue(i, j);
 				result += val.is_null ? "NULL" : val.ToString();
 				result += "\t";
@@ -43,15 +43,14 @@ string MaterializedQueryResult::ToString() {
 }
 
 unique_ptr<DataChunk> MaterializedQueryResult::Fetch() {
+	return FetchRaw();
+}
+
+unique_ptr<DataChunk> MaterializedQueryResult::FetchRaw() {
 	if (!success) {
-		return nullptr;
+		throw InvalidInputException("Attempting to fetch from an unsuccessful query result");
 	}
-	if (collection.chunks.size() == 0) {
-		return make_unique<DataChunk>();
-	}
-	auto chunk = move(collection.chunks[0]);
-	collection.chunks.erase(collection.chunks.begin() + 0);
-	return chunk;
+	return collection.Fetch();
 }
 
 } // namespace duckdb

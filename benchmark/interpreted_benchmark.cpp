@@ -65,7 +65,7 @@ public:
 	}
 
 	std::string FormatException(string exception_msg) {
-		return path + ":" + to_string(linenr) + " - " + exception_msg;
+		return path + ":" + std::to_string(linenr) + " - " + exception_msg;
 	}
 
 private:
@@ -182,7 +182,7 @@ void InterpretedBenchmark::LoadBenchmark() {
 					auto result_splits = StringUtil::Split(line, "|");
 					if (result_column_count < 0) {
 						result_column_count = result_splits.size();
-					} else if (result_column_count != result_splits.size()) {
+					} else if (idx_t(result_column_count) != result_splits.size()) {
 						throw std::runtime_error("error in file " + splits[1] + ", inconsistent amount of rows in CSV");
 					}
 					result_values.push_back(move(result_splits));
@@ -203,9 +203,9 @@ void InterpretedBenchmark::LoadBenchmark() {
 					}
 					auto result_splits = StringUtil::Split(line, "\t");
 					if ((int64_t)result_splits.size() != result_column_count) {
-						throw std::runtime_error(reader.FormatException("expected " + to_string(result_splits.size()) +
-						                                                " values but got " +
-						                                                to_string(result_column_count)));
+						throw std::runtime_error(
+						    reader.FormatException("expected " + std::to_string(result_splits.size()) +
+						                           " values but got " + std::to_string(result_column_count)));
 					}
 					result_values.push_back(move(result_splits));
 				}
@@ -298,13 +298,13 @@ string InterpretedBenchmark::GetQuery() {
 	return run_query;
 }
 
-void InterpretedBenchmark::Run(BenchmarkState *state_) {
-	auto &state = (InterpretedBenchmarkState &)*state_;
+void InterpretedBenchmark::Run(BenchmarkState *state_p) {
+	auto &state = (InterpretedBenchmarkState &)*state_p;
 	state.result = state.con.Query(run_query);
 }
 
-void InterpretedBenchmark::Cleanup(BenchmarkState *state_) {
-	auto &state = (InterpretedBenchmarkState &)*state_;
+void InterpretedBenchmark::Cleanup(BenchmarkState *state_p) {
+	auto &state = (InterpretedBenchmarkState &)*state_p;
 	if (queries.find("cleanup") != queries.end()) {
 		unique_ptr<QueryResult> result;
 		string cleanup_query = queries["cleanup"];
@@ -318,8 +318,8 @@ void InterpretedBenchmark::Cleanup(BenchmarkState *state_) {
 	}
 }
 
-string InterpretedBenchmark::Verify(BenchmarkState *state_) {
-	auto &state = (InterpretedBenchmarkState &)*state_;
+string InterpretedBenchmark::Verify(BenchmarkState *state_p) {
+	auto &state = (InterpretedBenchmarkState &)*state_p;
 	if (!state.result->success) {
 		return state.result->error;
 	}
@@ -328,15 +328,15 @@ string InterpretedBenchmark::Verify(BenchmarkState *state_) {
 		return string();
 	}
 	// compare the column count
-	if ((int64_t)state.result->column_count() != result_column_count) {
+	if ((int64_t)state.result->ColumnCount() != result_column_count) {
 		return StringUtil::Format("Error in result: expected %lld columns but got %lld\nObtained result: %s",
-		                          (int64_t)result_column_count, (int64_t)state.result->column_count(),
+		                          (int64_t)result_column_count, (int64_t)state.result->ColumnCount(),
 		                          state.result->ToString());
 	}
 	// compare row count
-	if (state.result->collection.count != result_values.size()) {
+	if (state.result->collection.Count() != result_values.size()) {
 		return StringUtil::Format("Error in result: expected %lld rows but got %lld\nObtained result: %s",
-		                          (int64_t)state.result->collection.count, (int64_t)result_values.size(),
+		                          (int64_t)state.result->collection.Count(), (int64_t)result_values.size(),
 		                          state.result->ToString());
 	}
 	// compare values
@@ -355,8 +355,8 @@ string InterpretedBenchmark::Verify(BenchmarkState *state_) {
 	return string();
 }
 
-void InterpretedBenchmark::Interrupt(BenchmarkState *state_) {
-	auto &state = (InterpretedBenchmarkState &)*state_;
+void InterpretedBenchmark::Interrupt(BenchmarkState *state_p) {
+	auto &state = (InterpretedBenchmarkState &)*state_p;
 	state.con.Interrupt();
 }
 
@@ -364,8 +364,8 @@ string InterpretedBenchmark::BenchmarkInfo() {
 	return string();
 }
 
-string InterpretedBenchmark::GetLogOutput(BenchmarkState *state_) {
-	auto &state = (InterpretedBenchmarkState &)*state_;
+string InterpretedBenchmark::GetLogOutput(BenchmarkState *state_p) {
+	auto &state = (InterpretedBenchmarkState &)*state_p;
 	return state.con.context->profiler.ToJSON();
 }
 

@@ -1,0 +1,14 @@
+# name: test/sql/pragma/test_pragma_functions.test
+# description: Test PRAGMA functions
+# group: [pragma]
+
+statement ok
+PRAGMA functions
+
+statement ok
+SELECT * FROM pragma_functions();
+
+query I
+SELECT name FROM pragma_functions() WHERE name='count' GROUP BY name
+----
+count

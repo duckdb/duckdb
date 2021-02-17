@@ -2,6 +2,7 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+#include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/aggregate_function.hpp"
@@ -19,8 +20,6 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 // add your initializer for new functions here
@@ -34,6 +33,8 @@ void BuiltinFunctions::Initialize() {
 	RegisterAlgebraicAggregates();
 	RegisterDistributiveAggregates();
 	RegisterNestedAggregates();
+	RegisterHolisticAggregates();
+	RegisterRegressiveAggregates();
 
 	RegisterDateFunctions();
 	RegisterGenericFunctions();
@@ -45,11 +46,6 @@ void BuiltinFunctions::Initialize() {
 	RegisterTrigonometricsFunctions();
 
 	RegisterPragmaFunctions();
-
-	// binder functions
-	// FIXME shouldn't be here
-	AddFunction(ScalarFunction("alias", {LogicalType::ANY}, LogicalType::VARCHAR, nullptr));
-	AddFunction(ScalarFunction("typeof", {LogicalType::ANY}, LogicalType::VARCHAR, nullptr));
 
 	// initialize collations
 	AddCollation("nocase", LowerFun::GetFunction(), true);
@@ -67,31 +63,31 @@ void BuiltinFunctions::AddCollation(string name, ScalarFunction function, bool c
 }
 
 void BuiltinFunctions::AddFunction(AggregateFunctionSet set) {
-	CreateAggregateFunctionInfo info(set);
+	CreateAggregateFunctionInfo info(move(set));
 	catalog.CreateFunction(context, &info);
 }
 
 void BuiltinFunctions::AddFunction(AggregateFunction function) {
-	CreateAggregateFunctionInfo info(function);
+	CreateAggregateFunctionInfo info(move(function));
 	catalog.CreateFunction(context, &info);
 }
 
 void BuiltinFunctions::AddFunction(PragmaFunction function) {
-	CreatePragmaFunctionInfo info(function);
+	CreatePragmaFunctionInfo info(move(function));
 	catalog.CreatePragmaFunction(context, &info);
 }
 
-void BuiltinFunctions::AddFunction(string name, vector<PragmaFunction> functions) {
+void BuiltinFunctions::AddFunction(const string &name, vector<PragmaFunction> functions) {
 	CreatePragmaFunctionInfo info(name, move(functions));
 	catalog.CreatePragmaFunction(context, &info);
 }
 
 void BuiltinFunctions::AddFunction(ScalarFunction function) {
-	CreateScalarFunctionInfo info(function);
+	CreateScalarFunctionInfo info(move(function));
 	catalog.CreateFunction(context, &info);
 }
 
-void BuiltinFunctions::AddFunction(vector<string> names, ScalarFunction function) {
+void BuiltinFunctions::AddFunction(const vector<string> &names, ScalarFunction function) { // NOLINT: false positive
 	for (auto &name : names) {
 		function.name = name;
 		AddFunction(function);
@@ -99,41 +95,51 @@ void BuiltinFunctions::AddFunction(vector<string> names, ScalarFunction function
 }
 
 void BuiltinFunctions::AddFunction(ScalarFunctionSet set) {
-	CreateScalarFunctionInfo info(set);
+	CreateScalarFunctionInfo info(move(set));
 	catalog.CreateFunction(context, &info);
 }
 
 void BuiltinFunctions::AddFunction(TableFunction function) {
-	CreateTableFunctionInfo info(function);
+	CreateTableFunctionInfo info(move(function));
 	catalog.CreateTableFunction(context, &info);
 }
 
 void BuiltinFunctions::AddFunction(TableFunctionSet set) {
-	CreateTableFunctionInfo info(set);
+	CreateTableFunctionInfo info(move(set));
 	catalog.CreateTableFunction(context, &info);
 }
 
 void BuiltinFunctions::AddFunction(CopyFunction function) {
-	CreateCopyFunctionInfo info(function);
+	CreateCopyFunctionInfo info(move(function));
 	catalog.CreateCopyFunction(context, &info);
 }
 
-string Function::CallToString(string name, vector<LogicalType> arguments) {
+hash_t BaseScalarFunction::Hash() const {
+	hash_t hash = return_type.Hash();
+	for (auto &arg : arguments) {
+		duckdb::CombineHash(hash, arg.Hash());
+	}
+	return hash;
+}
+
+string Function::CallToString(const string &name, const vector<LogicalType> &arguments) {
 	string result = name + "(";
 	result += StringUtil::Join(arguments, arguments.size(), ", ",
 	                           [](const LogicalType &argument) { return argument.ToString(); });
 	return result + ")";
 }
 
-string Function::CallToString(string name, vector<LogicalType> arguments, LogicalType return_type) {
+string Function::CallToString(const string &name, const vector<LogicalType> &arguments,
+                              const LogicalType &return_type) {
 	string result = CallToString(name, arguments);
 	result += " -> " + return_type.ToString();
 	return result;
 }
 
-string Function::CallToString(string name, vector<LogicalType> arguments,
-                              unordered_map<string, LogicalType> named_parameters) {
+string Function::CallToString(const string &name, const vector<LogicalType> &arguments,
+                              const unordered_map<string, LogicalType> &named_parameters) {
 	vector<string> input_arguments;
+	input_arguments.reserve(arguments.size() + named_parameters.size());
 	for (auto &arg : arguments) {
 		input_arguments.push_back(arg.ToString());
 	}
@@ -195,7 +201,7 @@ static int64_t BindFunctionCost(SimpleFunction &func, vector<LogicalType> &argum
 }
 
 template <class T>
-static idx_t BindFunctionFromArguments(string name, vector<T> &functions, vector<LogicalType> &arguments,
+static idx_t BindFunctionFromArguments(const string &name, vector<T> &functions, vector<LogicalType> &arguments,
                                        string &error) {
 	idx_t best_function = INVALID_INDEX;
 	int64_t lowest_cost = NumericLimits<int64_t>::Maximum();
@@ -219,7 +225,7 @@ static idx_t BindFunctionFromArguments(string name, vector<T> &functions, vector
 		lowest_cost = cost;
 		best_function = f_idx;
 	}
-	if (conflicting_functions.size() > 0) {
+	if (!conflicting_functions.empty()) {
 		// there are multiple possible function definitions
 		// throw an exception explaining which overloads are there
 		conflicting_functions.push_back(best_function);
@@ -250,22 +256,22 @@ static idx_t BindFunctionFromArguments(string name, vector<T> &functions, vector
 	return best_function;
 }
 
-idx_t Function::BindFunction(string name, vector<ScalarFunction> &functions, vector<LogicalType> &arguments,
+idx_t Function::BindFunction(const string &name, vector<ScalarFunction> &functions, vector<LogicalType> &arguments,
                              string &error) {
 	return BindFunctionFromArguments(name, functions, arguments, error);
 }
 
-idx_t Function::BindFunction(string name, vector<AggregateFunction> &functions, vector<LogicalType> &arguments,
+idx_t Function::BindFunction(const string &name, vector<AggregateFunction> &functions, vector<LogicalType> &arguments,
                              string &error) {
 	return BindFunctionFromArguments(name, functions, arguments, error);
 }
 
-idx_t Function::BindFunction(string name, vector<TableFunction> &functions, vector<LogicalType> &arguments,
+idx_t Function::BindFunction(const string &name, vector<TableFunction> &functions, vector<LogicalType> &arguments,
                              string &error) {
 	return BindFunctionFromArguments(name, functions, arguments, error);
 }
 
-idx_t Function::BindFunction(string name, vector<PragmaFunction> &functions, PragmaInfo &info, string &error) {
+idx_t Function::BindFunction(const string &name, vector<PragmaFunction> &functions, PragmaInfo &info, string &error) {
 	vector<LogicalType> types;
 	for (auto &value : info.parameters) {
 		types.push_back(value.type());
@@ -286,26 +292,27 @@ idx_t Function::BindFunction(string name, vector<PragmaFunction> &functions, Pra
 
 vector<LogicalType> GetLogicalTypesFromExpressions(vector<unique_ptr<Expression>> &arguments) {
 	vector<LogicalType> types;
+	types.reserve(arguments.size());
 	for (auto &argument : arguments) {
 		types.push_back(argument->return_type);
 	}
 	return types;
 }
 
-idx_t Function::BindFunction(string name, vector<ScalarFunction> &functions, vector<unique_ptr<Expression>> &arguments,
-                             string &error) {
-	auto types = GetLogicalTypesFromExpressions(arguments);
-	return Function::BindFunction(name, functions, types, error);
-}
-
-idx_t Function::BindFunction(string name, vector<AggregateFunction> &functions,
+idx_t Function::BindFunction(const string &name, vector<ScalarFunction> &functions,
                              vector<unique_ptr<Expression>> &arguments, string &error) {
 	auto types = GetLogicalTypesFromExpressions(arguments);
 	return Function::BindFunction(name, functions, types, error);
 }
 
-idx_t Function::BindFunction(string name, vector<TableFunction> &functions, vector<unique_ptr<Expression>> &arguments,
-                             string &error) {
+idx_t Function::BindFunction(const string &name, vector<AggregateFunction> &functions,
+                             vector<unique_ptr<Expression>> &arguments, string &error) {
+	auto types = GetLogicalTypesFromExpressions(arguments);
+	return Function::BindFunction(name, functions, types, error);
+}
+
+idx_t Function::BindFunction(const string &name, vector<TableFunction> &functions,
+                             vector<unique_ptr<Expression>> &arguments, string &error) {
 	auto types = GetLogicalTypesFromExpressions(arguments);
 	return Function::BindFunction(name, functions, types, error);
 }
@@ -321,8 +328,8 @@ void BaseScalarFunction::CastToFunctionArguments(vector<unique_ptr<Expression>> 
 	}
 }
 
-unique_ptr<BoundFunctionExpression> ScalarFunction::BindScalarFunction(ClientContext &context, string schema,
-                                                                       string name,
+unique_ptr<BoundFunctionExpression> ScalarFunction::BindScalarFunction(ClientContext &context, const string &schema,
+                                                                       const string &name,
                                                                        vector<unique_ptr<Expression>> children,
                                                                        string &error, bool is_operator) {
 	// bind the function
@@ -366,15 +373,20 @@ unique_ptr<BoundFunctionExpression> ScalarFunction::BindScalarFunction(ClientCon
 unique_ptr<BoundAggregateExpression> AggregateFunction::BindAggregateFunction(ClientContext &context,
                                                                               AggregateFunction bound_function,
                                                                               vector<unique_ptr<Expression>> children,
+                                                                              unique_ptr<Expression> filter,
                                                                               bool is_distinct) {
 	unique_ptr<FunctionData> bind_info;
 	if (bound_function.bind) {
 		bind_info = bound_function.bind(context, bound_function, children);
+		// we may have lost some arguments in the bind
+		children.resize(MinValue(bound_function.arguments.size(), children.size()));
 	}
+
 	// check if we need to add casts to the children
 	bound_function.CastToFunctionArguments(children);
 
-	return make_unique<BoundAggregateExpression>(bound_function, move(children), move(bind_info), is_distinct);
+	return make_unique<BoundAggregateExpression>(move(bound_function), move(children), move(filter), move(bind_info),
+	                                             is_distinct);
 }
 
 } // namespace duckdb

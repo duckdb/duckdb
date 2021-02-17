@@ -30,13 +30,13 @@ class Executor {
 	friend class PipelineTask;
 
 public:
-	Executor(ClientContext &context);
+	explicit Executor(ClientContext &context);
 	~Executor();
 
 	ClientContext &context;
 
 public:
-	void Initialize(unique_ptr<PhysicalOperator> physical_plan);
+	void Initialize(PhysicalOperator *physical_plan);
 	void BuildPipelines(PhysicalOperator *op, Pipeline *parent);
 
 	void Reset();
@@ -46,13 +46,13 @@ public:
 	unique_ptr<DataChunk> FetchChunk();
 
 	//! Push a new error
-	void PushError(std::string exception);
+	void PushError(const string &exception);
 
 	//! Flush a thread context into the client context
 	void Flush(ThreadContext &context);
 
 private:
-	unique_ptr<PhysicalOperator> physical_plan;
+	PhysicalOperator *physical_plan;
 	unique_ptr<PhysicalOperatorState> physical_state;
 
 	mutex executor_lock;

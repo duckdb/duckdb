@@ -9,4 +9,6 @@ add_subdirectory(scan)
 add_subdirectory(schema)
 add_subdirectory(set)
 
-set(ALL_OBJECT_FILES ${ALL_OBJECT_FILES} PARENT_SCOPE)
+set(ALL_OBJECT_FILES
+    ${ALL_OBJECT_FILES}
+    PARENT_SCOPE)

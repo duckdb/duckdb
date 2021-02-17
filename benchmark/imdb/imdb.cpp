@@ -4,7 +4,6 @@
 #include "imdb.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 #define IMDB_QUERY_BODY(QNR)                                                                                           \
 	virtual void Load(DuckDBBenchmarkState *state) {                                                                   \

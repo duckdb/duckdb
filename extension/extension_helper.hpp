@@ -22,6 +22,14 @@
 #include "tpch-extension.hpp"
 #endif
 
+#ifdef BUILD_FTS_EXTENSION
+#include "fts-extension.hpp"
+#endif
+
+#ifdef BUILD_HTTPFS_EXTENSION
+#include "httpfs-extension.hpp"
+#endif
+
 namespace duckdb {
 class DuckDB;
 
@@ -38,6 +46,12 @@ public:
 #endif
 #ifdef BUILD_TPCH_EXTENSION
 		db.LoadExtension<TPCHExtension>();
+#endif
+#ifdef BUILD_FTS_EXTENSION
+		db.LoadExtension<FTSExtension>();
+#endif
+#ifdef BUILD_HTTPFS_EXTENSION
+		db.LoadExtension<HTTPFsExtension>();
 #endif
 	}
 
@@ -61,6 +75,19 @@ public:
 			db.LoadExtension<TPCHExtension>();
 #else
 			// icu extension required but not build: skip this test
+			return ExtensionLoadResult::NOT_LOADED;
+#endif
+		} else if (extension == "fts") {
+#ifdef BUILD_FTS_EXTENSION
+			db.LoadExtension<FTSExtension>();
+#else
+			// fts extension required but not build: skip this test
+			return ExtensionLoadResult::NOT_LOADED;
+#endif
+		} else if (extension == "httpfs") {
+#ifdef BUILD_HTTPFS_EXTENSION
+			db.LoadExtension<HTTPFsExtension>();
+#else
 			return ExtensionLoadResult::NOT_LOADED;
 #endif
 		} else {

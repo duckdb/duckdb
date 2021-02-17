@@ -2,7 +2,6 @@
 #include "duckdb/planner/expression/list.hpp"
 
 namespace duckdb {
-using namespace std;
 
 unique_ptr<LogicalOperator> ExpressionHeuristics::Rewrite(unique_ptr<LogicalOperator> op) {
 	VisitOperator(*op);
@@ -137,7 +136,6 @@ idx_t ExpressionHeuristics::ExpressionCost(PhysicalType return_type, idx_t multi
 	case PhysicalType::VARCHAR:
 		return 5 * multiplier;
 	case PhysicalType::FLOAT:
-		return 2 * multiplier;
 	case PhysicalType::DOUBLE:
 		return 2 * multiplier;
 	default:

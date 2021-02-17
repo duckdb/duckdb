@@ -9,26 +9,29 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/enums/order_type.hpp"
+#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/winapi.hpp"
+#include "duckdb/common/types/value.hpp"
 
 namespace duckdb {
 class ClientContext;
 
 enum class AccessMode : uint8_t { UNDEFINED = 0, AUTOMATIC = 1, READ_ONLY = 2, READ_WRITE = 3 };
+enum class CheckpointAbort : uint8_t { NO_ABORT = 0, DEBUG_ABORT_BEFORE_TRUNCATE = 1, DEBUG_ABORT_BEFORE_HEADER = 2 };
 
 // this is optional and only used in tests at the moment
 struct DBConfig {
-	friend class DuckDB;
+	friend class DatabaseInstance;
 	friend class StorageManager;
 
 public:
-	~DBConfig();
+	DUCKDB_API ~DBConfig();
 
 	//! Access mode of the database (AUTOMATIC, READ_ONLY or READ_WRITE)
 	AccessMode access_mode = AccessMode::AUTOMATIC;
-	// Checkpoint when WAL reaches this size
-	idx_t checkpoint_wal_size = 1 << 20;
+	// Checkpoint when WAL reaches this size (default: 16MB)
+	idx_t checkpoint_wal_size = 1 << 24;
 	//! Whether or not to use Direct IO, bypassing operating system buffers
 	bool use_direct_io = false;
 	//! The FileSystem to use, can be overwritten to allow for injecting custom file systems for testing purposes (e.g.
@@ -48,13 +51,20 @@ public:
 	OrderByNullType default_null_order = OrderByNullType::NULLS_FIRST;
 	//! enable COPY and related commands
 	bool enable_copy = true;
+	//! Wether or not object cache is used
+	bool object_cache_enable = false;
+	//! Database configuration variables as controlled by SET
+	unordered_map<std::string, Value> set_variables;
+	//! Force checkpoint when CHECKPOINT is called or on shutdown, even if no changes have been made
+	bool force_checkpoint = false;
+	//! Run a checkpoint on successful shutdown and delete the WAL, to leave only a single database file behind
+	bool checkpoint_on_shutdown = true;
+	//! Debug flag that decides when a checkpoing should be aborted. Only used for testing purposes.
+	CheckpointAbort checkpoint_abort = CheckpointAbort::NO_ABORT;
 
 public:
-	static DBConfig &GetConfig(ClientContext &context);
-
-private:
-	// FIXME: don't set this as a user: used internally (only for now)
-	bool checkpoint_only = false;
+	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);
+	DUCKDB_API static DBConfig &GetConfig(DatabaseInstance &db);
 };
 
 } // namespace duckdb

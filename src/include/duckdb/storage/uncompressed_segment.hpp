@@ -14,9 +14,10 @@
 #include "duckdb/storage/table/scan_state.hpp"
 
 namespace duckdb {
-class BufferManager;
+class BlockHandle;
 class ColumnData;
 class Transaction;
+class StorageManager;
 
 struct ColumnAppendState;
 struct UpdateInfo;
@@ -24,15 +25,15 @@ struct UpdateInfo;
 //! An uncompressed segment represents an uncompressed segment of a column residing in a block
 class UncompressedSegment {
 public:
-	UncompressedSegment(BufferManager &manager, PhysicalType type, idx_t row_start);
+	UncompressedSegment(DatabaseInstance &db, PhysicalType type, idx_t row_start);
 	virtual ~UncompressedSegment();
 
-	//! The buffer manager
-	BufferManager &manager;
+	//! The storage manager
+	DatabaseInstance &db;
 	//! Type of the uncompressed segment
 	PhysicalType type;
-	//! The block id that this segment relates to
-	block_id_t block_id;
+	//! The block that this segment relates to
+	shared_ptr<BlockHandle> block;
 	//! The size of a vector of this type
 	idx_t vector_size;
 	//! The maximum amount of vectors that can be stored in this segment
@@ -52,16 +53,18 @@ public:
 	//! Fetch the vector at index "vector_index" from the uncompressed segment, storing it in the result vector
 	void Scan(Transaction &transaction, ColumnScanState &state, idx_t vector_index, Vector &result,
 	          bool get_lock = true);
+	void ScanCommitted(ColumnScanState &state, idx_t vector_index, Vector &result);
+
 	//! Scan the next vector from the column and apply a selection vector to filter the data
 	void FilterScan(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
 	                idx_t &approved_tuple_count);
 	//! Fetch the vector at index "vector_index" from the uncompressed segment, throwing an exception if there are any
 	//! outstanding updates
 	void IndexScan(ColumnScanState &state, idx_t vector_index, Vector &result);
-	static void filterSelection(SelectionVector &sel, Vector &result, TableFilter filter, idx_t &approved_tuple_count,
-	                            nullmask_t &nullmask);
+	static void FilterSelection(SelectionVector &sel, Vector &result, const TableFilter &filter,
+	                            idx_t &approved_tuple_count, nullmask_t &nullmask);
 	//! Executes the filters directly in the table's data
-	void Select(Transaction &transaction, Vector &result, vector<TableFilter> &tableFilters, SelectionVector &sel,
+	void Select(Transaction &transaction, Vector &result, vector<TableFilter> &table_filters, SelectionVector &sel,
 	            idx_t &approved_tuple_count, ColumnScanState &state);
 	//! Fetch a single vector from the base table
 	void Fetch(ColumnScanState &state, idx_t vector_index, Vector &result);
@@ -87,6 +90,7 @@ public:
 	//! Convert a persistently backed uncompressed segment (i.e. one where block_id refers to an on-disk block) to a
 	//! temporary in-memory one
 	virtual void ToTemporary();
+	void ToTemporaryInternal();
 
 	//! Get the amount of tuples in a vector
 	idx_t GetVectorCount(idx_t vector_index) {
@@ -102,15 +106,15 @@ protected:
 	                    row_t *ids, idx_t count, idx_t vector_index, idx_t vector_offset, UpdateInfo *node) = 0;
 	//! Executes the filters directly in the table's data
 	virtual void Select(ColumnScanState &state, Vector &result, SelectionVector &sel, idx_t &approved_tuple_count,
-	                    vector<TableFilter> &tableFilter) = 0;
+	                    vector<TableFilter> &table_filter) = 0;
 	//! Fetch the base data and apply a filter to it
 	virtual void FilterFetchBaseData(ColumnScanState &state, Vector &result, SelectionVector &sel,
 	                                 idx_t &approved_tuple_count) = 0;
 	//! Fetch base table data
 	virtual void FetchBaseData(ColumnScanState &state, idx_t vector_index, Vector &result) = 0;
 	//! Fetch update data from an UpdateInfo version
-	virtual void FetchUpdateData(ColumnScanState &state, Transaction &transaction, UpdateInfo *version,
-	                             Vector &result) = 0;
+	virtual void FetchUpdateData(ColumnScanState &state, transaction_t start_time, transaction_t transaction_id,
+	                             UpdateInfo *version, Vector &result) = 0;
 
 	//! Create a new update info for the specified transaction reflecting an update of the specified rows
 	UpdateInfo *CreateUpdateInfo(ColumnData &data, Transaction &transaction, row_t *ids, idx_t count,

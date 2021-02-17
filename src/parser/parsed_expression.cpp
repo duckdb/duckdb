@@ -6,7 +6,6 @@
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 
 namespace duckdb {
-using namespace std;
 
 bool ParsedExpression::IsAggregate() const {
 	bool is_aggregate = false;
@@ -73,6 +72,8 @@ bool ParsedExpression::Equals(const BaseExpression *other) const {
 		return true;
 	case ExpressionClass::FUNCTION:
 		return FunctionExpression::Equals((FunctionExpression *)this, (FunctionExpression *)other);
+	case ExpressionClass::LAMBDA:
+		return LambdaExpression::Equals((LambdaExpression *)this, (LambdaExpression *)other);
 	case ExpressionClass::OPERATOR:
 		return OperatorExpression::Equals((OperatorExpression *)this, (OperatorExpression *)other);
 	case ExpressionClass::PARAMETER:
@@ -86,7 +87,7 @@ bool ParsedExpression::Equals(const BaseExpression *other) const {
 	case ExpressionClass::WINDOW:
 		return WindowExpression::Equals((WindowExpression *)this, (WindowExpression *)other);
 	default:
-		throw SerializationException("Unsupported type for expression deserialization!");
+		throw SerializationException("Unsupported type for expression comparison!");
 	}
 }
 
@@ -135,6 +136,9 @@ unique_ptr<ParsedExpression> ParsedExpression::Deserialize(Deserializer &source)
 		break;
 	case ExpressionClass::FUNCTION:
 		result = FunctionExpression::Deserialize(type, source);
+		break;
+	case ExpressionClass::LAMBDA:
+		result = LambdaExpression::Deserialize(type, source);
 		break;
 	case ExpressionClass::OPERATOR:
 		result = OperatorExpression::Deserialize(type, source);

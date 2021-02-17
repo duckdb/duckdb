@@ -10,7 +10,6 @@
 #include <algorithm>
 
 namespace duckdb {
-using namespace std;
 
 static void CreateColumnMap(BoundCreateTableInfo &info) {
 	auto &base = (CreateTableInfo &)*info.base;
@@ -70,7 +69,7 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 					if (entry == info.name_map.end()) {
 						throw ParserException("column \"%s\" named in key does not exist", keyname);
 					}
-					if (find(keys.begin(), keys.end(), entry->second) != keys.end()) {
+					if (keys.find(entry->second) != keys.end()) {
 						throw ParserException("column \"%s\" appears twice in "
 						                      "primary key constraint",
 						                      keyname);
@@ -136,7 +135,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		auto &sql_types = query_obj.types;
 		D_ASSERT(names.size() == sql_types.size());
 		for (idx_t i = 0; i < names.size(); i++) {
-			base.columns.push_back(ColumnDefinition(names[i], sql_types[i]));
+			base.columns.emplace_back(names[i], sql_types[i]);
 		}
 		// create the name map for the statement
 		CreateColumnMap(*result);

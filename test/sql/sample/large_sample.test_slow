@@ -1,0 +1,15 @@
+# name: test/sql/sample/large_sample.test_slow
+# description: Test sampling of larger relations
+# group: [sample]
+
+statement ok
+PRAGMA enable_verification;
+
+loop i 0 3
+
+# sample_size sampling with a large reservoir
+query I nosort reservoirlarge
+select count(*) from (select * from range(200000) tbl(i) where i % 997 != 0) tbl(i) using sample 80% (reservoir);
+----
+
+endloop

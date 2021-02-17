@@ -1,16 +1,15 @@
 #include "duckdb/parser/query_node/set_operation_node.hpp"
 
 namespace duckdb {
-using namespace std;
 
-bool SetOperationNode::Equals(const QueryNode *other_) const {
-	if (!QueryNode::Equals(other_)) {
+bool SetOperationNode::Equals(const QueryNode *other_p) const {
+	if (!QueryNode::Equals(other_p)) {
 		return false;
 	}
-	if (this == other_) {
+	if (this == other_p) {
 		return true;
 	}
-	auto other = (SetOperationNode *)other_;
+	auto other = (SetOperationNode *)other_p;
 	if (setop_type != other->setop_type) {
 		return false;
 	}

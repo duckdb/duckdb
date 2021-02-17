@@ -15,7 +15,8 @@ namespace duckdb {
 //! LogicalInsert represents an insertion of data into a base table
 class LogicalInsert : public LogicalOperator {
 public:
-	LogicalInsert(TableCatalogEntry *table) : LogicalOperator(LogicalOperatorType::LOGICAL_INSERT), table(table) {
+	explicit LogicalInsert(TableCatalogEntry *table)
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_INSERT), table(table) {
 	}
 
 	vector<vector<unique_ptr<Expression>>> insert_values;

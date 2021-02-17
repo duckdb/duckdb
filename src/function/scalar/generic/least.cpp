@@ -1,29 +1,29 @@
 #include "duckdb/function/scalar/generic_functions.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
-template <class OP> struct LeastOperator {
-	template <class T> static T Operation(T left, T right) {
+template <class OP>
+struct LeastOperator {
+	template <class T>
+	static T Operation(T left, T right) {
 		return OP::Operation(left, right) ? left : right;
 	}
 };
 
 template <class T, class OP, bool IS_STRING = false>
-static void least_greatest_impl(DataChunk &args, ExpressionState &state, Vector &result) {
-	if (args.column_count() == 1) {
+static void LeastGreatestFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	if (args.ColumnCount() == 1) {
 		// single input: nop
 		result.Reference(args.data[0]);
 		return;
 	}
 	auto result_type = VectorType::CONSTANT_VECTOR;
-	for (idx_t col_idx = 0; col_idx < args.column_count(); col_idx++) {
-		if (args.data[col_idx].vector_type == VectorType::CONSTANT_VECTOR) {
+	for (idx_t col_idx = 0; col_idx < args.ColumnCount(); col_idx++) {
+		if (args.data[col_idx].GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			if (ConstantVector::IsNull(args.data[col_idx])) {
 				// constant NULL: result is constant NULL
-				result.vector_type = VectorType::CONSTANT_VECTOR;
+				result.SetVectorType(VectorType::CONSTANT_VECTOR);
 				ConstantVector::SetNull(result, true);
 				return;
 			}
@@ -54,7 +54,7 @@ static void least_greatest_impl(DataChunk &args, ExpressionState &state, Vector 
 			rsel.set_index(rcount++, i);
 		}
 	}
-	for (idx_t col_idx = 2; col_idx < args.column_count(); col_idx++) {
+	for (idx_t col_idx = 2; col_idx < args.ColumnCount(); col_idx++) {
 		VectorData vdata;
 		args.data[col_idx].Orrify(args.size(), vdata);
 
@@ -91,34 +91,36 @@ static void least_greatest_impl(DataChunk &args, ExpressionState &state, Vector 
 			}
 		}
 	}
-	result.vector_type = result_type;
+	result.SetVectorType(result_type);
 }
 
-template <class OP> static void register_least_greatest(BuiltinFunctions &set, string fun_name) {
+template <class OP>
+static void RegisterLeastGreatest(BuiltinFunctions &set, const string &fun_name) {
 	ScalarFunctionSet fun_set(fun_name);
-	fun_set.AddFunction(ScalarFunction({LogicalType::DATE}, LogicalType::DATE, least_greatest_impl<date_t, OP>, false,
-	                                   nullptr, nullptr, LogicalType::DATE));
+	fun_set.AddFunction(ScalarFunction({LogicalType::DATE}, LogicalType::DATE, LeastGreatestFunction<date_t, OP>, false,
+	                                   nullptr, nullptr, nullptr, LogicalType::DATE));
 	fun_set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::TIMESTAMP,
-	                                   least_greatest_impl<timestamp_t, OP>, false, nullptr, nullptr,
+	                                   LeastGreatestFunction<timestamp_t, OP>, false, nullptr, nullptr, nullptr,
 	                                   LogicalType::TIMESTAMP));
-	fun_set.AddFunction(ScalarFunction({LogicalType::BIGINT}, LogicalType::BIGINT, least_greatest_impl<int64_t, OP>,
-	                                   false, nullptr, nullptr, LogicalType::BIGINT));
-	fun_set.AddFunction(ScalarFunction({LogicalType::HUGEINT}, LogicalType::HUGEINT, least_greatest_impl<hugeint_t, OP>,
-	                                   false, nullptr, nullptr, LogicalType::HUGEINT));
-	fun_set.AddFunction(ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE, least_greatest_impl<double, OP>,
-	                                   false, nullptr, nullptr, LogicalType::DOUBLE));
+	fun_set.AddFunction(ScalarFunction({LogicalType::BIGINT}, LogicalType::BIGINT, LeastGreatestFunction<int64_t, OP>,
+	                                   false, nullptr, nullptr, nullptr, LogicalType::BIGINT));
+	fun_set.AddFunction(ScalarFunction({LogicalType::HUGEINT}, LogicalType::HUGEINT,
+	                                   LeastGreatestFunction<hugeint_t, OP>, false, nullptr, nullptr, nullptr,
+	                                   LogicalType::HUGEINT));
+	fun_set.AddFunction(ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE, LeastGreatestFunction<double, OP>,
+	                                   false, nullptr, nullptr, nullptr, LogicalType::DOUBLE));
 	fun_set.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                                   least_greatest_impl<string_t, OP, true>, false, nullptr, nullptr,
+	                                   LeastGreatestFunction<string_t, OP, true>, false, nullptr, nullptr, nullptr,
 	                                   LogicalType::VARCHAR));
 	set.AddFunction(fun_set);
 }
 
 void LeastFun::RegisterFunction(BuiltinFunctions &set) {
-	register_least_greatest<duckdb::LessThan>(set, "least");
+	RegisterLeastGreatest<duckdb::LessThan>(set, "least");
 }
 
 void GreatestFun::RegisterFunction(BuiltinFunctions &set) {
-	register_least_greatest<duckdb::GreaterThan>(set, "greatest");
+	RegisterLeastGreatest<duckdb::GreaterThan>(set, "greatest");
 }
 
 } // namespace duckdb

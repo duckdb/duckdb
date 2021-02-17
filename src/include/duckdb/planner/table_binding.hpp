@@ -47,13 +47,31 @@ public:
 //! TableBinding is exactly like the Binding, except it keeps track of which columns were bound in the linked LogicalGet
 //! node for projection pushdown purposes.
 struct TableBinding : public Binding {
-	TableBinding(const string &alias, vector<LogicalType> types, vector<string> names, LogicalGet &get, idx_t index, bool add_row_id = false);
+	TableBinding(const string &alias, vector<LogicalType> types, vector<string> names, LogicalGet &get, idx_t index,
+	             bool add_row_id = false);
 
 	//! the underlying LogicalGet
 	LogicalGet &get;
 
 public:
 	BindResult Bind(ColumnRefExpression &colref, idx_t depth) override;
+};
+
+//! MacroBinding is like the Binding, except the alias and index are set by default. Used for binding Macro
+//! Params/Arguments.
+struct MacroBinding : public Binding {
+	MacroBinding(vector<LogicalType> types_p, vector<string> names_p, string macro_name);
+
+	//! Arguments
+	vector<unique_ptr<ParsedExpression>> arguments;
+	//! The name of the macro
+	string macro_name;
+
+public:
+	BindResult Bind(ColumnRefExpression &colref, idx_t depth) override;
+
+	//! Given the parameter colref, returns a copy of the argument that was supplied for this parameter
+	unique_ptr<ParsedExpression> ParamToArg(ColumnRefExpression &colref);
 };
 
 } // namespace duckdb

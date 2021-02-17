@@ -4,7 +4,6 @@
 #include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
-using namespace std;
 
 BoundUnnestExpression::BoundUnnestExpression(LogicalType return_type)
     : Expression(ExpressionType::BOUND_UNNEST, ExpressionClass::BOUND_UNNEST, move(return_type)) {
@@ -23,11 +22,11 @@ hash_t BoundUnnestExpression::Hash() const {
 	return CombineHash(result, duckdb::Hash("unnest"));
 }
 
-bool BoundUnnestExpression::Equals(const BaseExpression *other_) const {
-	if (!Expression::Equals(other_)) {
+bool BoundUnnestExpression::Equals(const BaseExpression *other_p) const {
+	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto other = (BoundUnnestExpression *)other_;
+	auto other = (BoundUnnestExpression *)other_p;
 	if (!Expression::Equals(child.get(), other->child.get())) {
 		return false;
 	}

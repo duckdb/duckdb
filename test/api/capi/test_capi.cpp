@@ -15,7 +15,7 @@ public:
 		success = (duckdb_query(connection, query.c_str(), &result) == DuckDBSuccess);
 	}
 
-	idx_t column_count() {
+	idx_t ColumnCount() {
 		return result.column_count;
 	}
 
@@ -23,7 +23,8 @@ public:
 		return result.row_count;
 	}
 
-	template <class T> T Fetch(idx_t col, idx_t row) {
+	template <class T>
+	T Fetch(idx_t col, idx_t row) {
 		throw NotImplementedException("Unimplemented type for fetch");
 	}
 
@@ -51,45 +52,61 @@ static bool NO_FAIL(unique_ptr<CAPIResult> result) {
 	return NO_FAIL(*result);
 }
 
-template <> bool CAPIResult::Fetch(idx_t col, idx_t row) {
+template <>
+bool CAPIResult::Fetch(idx_t col, idx_t row) {
 	return duckdb_value_boolean(&result, col, row);
 }
 
-template <> int8_t CAPIResult::Fetch(idx_t col, idx_t row) {
+template <>
+int8_t CAPIResult::Fetch(idx_t col, idx_t row) {
 	return duckdb_value_int8(&result, col, row);
 }
 
-template <> int16_t CAPIResult::Fetch(idx_t col, idx_t row) {
+template <>
+int16_t CAPIResult::Fetch(idx_t col, idx_t row) {
 	return duckdb_value_int16(&result, col, row);
 }
 
-template <> int32_t CAPIResult::Fetch(idx_t col, idx_t row) {
+template <>
+int32_t CAPIResult::Fetch(idx_t col, idx_t row) {
 	return duckdb_value_int32(&result, col, row);
 }
 
-template <> int64_t CAPIResult::Fetch(idx_t col, idx_t row) {
+template <>
+int64_t CAPIResult::Fetch(idx_t col, idx_t row) {
 	return duckdb_value_int64(&result, col, row);
 }
 
-template <> float CAPIResult::Fetch(idx_t col, idx_t row) {
+template <>
+float CAPIResult::Fetch(idx_t col, idx_t row) {
 	return duckdb_value_float(&result, col, row);
 }
 
-template <> double CAPIResult::Fetch(idx_t col, idx_t row) {
+template <>
+double CAPIResult::Fetch(idx_t col, idx_t row) {
 	return duckdb_value_double(&result, col, row);
 }
 
-template <> duckdb_date CAPIResult::Fetch(idx_t col, idx_t row) {
+template <>
+duckdb_date CAPIResult::Fetch(idx_t col, idx_t row) {
 	auto data = (duckdb_date *)result.columns[col].data;
 	return data[row];
 }
 
-template <> duckdb_timestamp CAPIResult::Fetch(idx_t col, idx_t row) {
+template <>
+duckdb_timestamp CAPIResult::Fetch(idx_t col, idx_t row) {
 	auto data = (duckdb_timestamp *)result.columns[col].data;
 	return data[row];
 }
 
-template <> string CAPIResult::Fetch(idx_t col, idx_t row) {
+template <>
+duckdb_blob CAPIResult::Fetch(idx_t col, idx_t row) {
+	auto data = (duckdb_blob *)result.columns[col].data;
+	return data[row];
+}
+
+template <>
+string CAPIResult::Fetch(idx_t col, idx_t row) {
 	auto value = duckdb_value_varchar(&result, col, row);
 	string strval = string(value);
 	free((void *)value);
@@ -146,7 +163,7 @@ TEST_CASE("Basic test of C API", "[capi]") {
 	// select scalar value
 	result = tester.Query("SELECT CAST(42 AS BIGINT)");
 	REQUIRE_NO_FAIL(*result);
-	REQUIRE(result->column_count() == 1);
+	REQUIRE(result->ColumnCount() == 1);
 	REQUIRE(result->row_count() == 1);
 	REQUIRE(result->Fetch<int64_t>(0, 0) == 42);
 	REQUIRE(!result->IsNull(0, 0));
@@ -154,7 +171,7 @@ TEST_CASE("Basic test of C API", "[capi]") {
 	// select scalar NULL
 	result = tester.Query("SELECT NULL");
 	REQUIRE_NO_FAIL(*result);
-	REQUIRE(result->column_count() == 1);
+	REQUIRE(result->ColumnCount() == 1);
 	REQUIRE(result->row_count() == 1);
 	REQUIRE(result->Fetch<int64_t>(0, 0) == 0);
 	REQUIRE(result->IsNull(0, 0));
@@ -162,9 +179,31 @@ TEST_CASE("Basic test of C API", "[capi]") {
 	// select scalar string
 	result = tester.Query("SELECT 'hello'");
 	REQUIRE_NO_FAIL(*result);
-	REQUIRE(result->column_count() == 1);
+	REQUIRE(result->ColumnCount() == 1);
 	REQUIRE(result->row_count() == 1);
 	REQUIRE(result->Fetch<string>(0, 0) == "hello");
+	REQUIRE(!result->IsNull(0, 0));
+
+	result = tester.Query("SELECT 1=1");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->ColumnCount() == 1);
+	REQUIRE(result->row_count() == 1);
+	REQUIRE(result->Fetch<bool>(0, 0) == true);
+	REQUIRE(!result->IsNull(0, 0));
+
+	result = tester.Query("SELECT 1=0");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->ColumnCount() == 1);
+	REQUIRE(result->row_count() == 1);
+	REQUIRE(result->Fetch<bool>(0, 0) == false);
+	REQUIRE(!result->IsNull(0, 0));
+
+	result = tester.Query("SELECT i FROM (values (true), (false)) tbl(i) group by i order by i");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->ColumnCount() == 1);
+	REQUIRE(result->row_count() == 2);
+	REQUIRE(result->Fetch<bool>(0, 0) == false);
+	REQUIRE(result->Fetch<bool>(0, 1) == true);
 	REQUIRE(!result->IsNull(0, 0));
 
 	// multiple insertions
@@ -256,7 +295,7 @@ TEST_CASE("Test different types of C API", "[capi]") {
 	}
 	// date columns
 	REQUIRE_NO_FAIL(tester.Query("CREATE TABLE dates(d DATE)"));
-	REQUIRE_NO_FAIL(tester.Query("INSERT INTO dates VALUES ('1992-09-20'), (NULL), ('1000000-09-20')"));
+	REQUIRE_NO_FAIL(tester.Query("INSERT INTO dates VALUES ('1992-09-20'), (NULL), ('30000-09-20')"));
 
 	result = tester.Query("SELECT * FROM dates ORDER BY d");
 	REQUIRE_NO_FAIL(*result);
@@ -267,10 +306,10 @@ TEST_CASE("Test different types of C API", "[capi]") {
 	REQUIRE(date.day == 20);
 	REQUIRE(result->Fetch<string>(0, 1) == Value::DATE(1992, 9, 20).ToString());
 	date = result->Fetch<duckdb_date>(0, 2);
-	REQUIRE(date.year == 1000000);
+	REQUIRE(date.year == 30000);
 	REQUIRE(date.month == 9);
 	REQUIRE(date.day == 20);
-	REQUIRE(result->Fetch<string>(0, 2) == Value::DATE(1000000, 9, 20).ToString());
+	REQUIRE(result->Fetch<string>(0, 2) == Value::DATE(30000, 9, 20).ToString());
 
 	// timestamp columns
 	REQUIRE_NO_FAIL(tester.Query("CREATE TABLE timestamps(t TIMESTAMP)"));
@@ -286,8 +325,24 @@ TEST_CASE("Test different types of C API", "[capi]") {
 	REQUIRE(stamp.time.hour == 12);
 	REQUIRE(stamp.time.min == 1);
 	REQUIRE(stamp.time.sec == 30);
-	REQUIRE(stamp.time.msec == 0);
+	REQUIRE(stamp.time.micros == 0);
 	REQUIRE(result->Fetch<string>(0, 1) == Value::TIMESTAMP(1992, 9, 20, 12, 1, 30, 0).ToString());
+
+	// blob columns
+	REQUIRE_NO_FAIL(tester.Query("CREATE TABLE blobs(b BLOB)"));
+	REQUIRE_NO_FAIL(tester.Query("INSERT INTO blobs VALUES ('hello\\x12world'), ('\\x00'), (NULL)"));
+
+	result = tester.Query("SELECT * FROM blobs");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(!result->IsNull(0, 0));
+	duckdb_blob blob = result->Fetch<duckdb_blob>(0, 0);
+	REQUIRE(blob.size == 11);
+	REQUIRE(memcmp(blob.data, "hello\012world", 11));
+	REQUIRE(result->Fetch<string>(0, 1) == "\\x00");
+	REQUIRE(result->IsNull(0, 2));
+	blob = result->Fetch<duckdb_blob>(0, 2);
+	REQUIRE(blob.data == nullptr);
+	REQUIRE(blob.size == 0);
 
 	// boolean columns
 	REQUIRE_NO_FAIL(tester.Query("CREATE TABLE booleans(b BOOLEAN)"));
@@ -400,6 +455,28 @@ TEST_CASE("Test prepared statements in C API", "[capi][.]") {
 	duckdb_destroy_prepare(&stmt);
 	// again to make sure it does not crash
 	duckdb_destroy_result(&res);
+	duckdb_destroy_prepare(&stmt);
+
+	status = duckdb_prepare(tester.connection, "SELECT CAST($1 AS VARCHAR)", &stmt);
+	REQUIRE(status == DuckDBSuccess);
+	REQUIRE(stmt != nullptr);
+
+	duckdb_bind_varchar_length(stmt, 1, "hello world", 5);
+	status = duckdb_execute_prepared(stmt, &res);
+	REQUIRE(status == DuckDBSuccess);
+	auto value = duckdb_value_varchar(&res, 0, 0);
+	REQUIRE(string(value) == "hello");
+	free(value);
+	duckdb_destroy_result(&res);
+
+	duckdb_bind_blob(stmt, 1, "hello\0world", 11);
+	status = duckdb_execute_prepared(stmt, &res);
+	REQUIRE(status == DuckDBSuccess);
+	value = duckdb_value_varchar(&res, 0, 0);
+	REQUIRE(string(value) == "hello\\x00world");
+	free(value);
+	duckdb_destroy_result(&res);
+
 	duckdb_destroy_prepare(&stmt);
 
 	status = duckdb_query(tester.connection, "CREATE TABLE a (i INTEGER)", NULL);

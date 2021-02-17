@@ -1,11 +1,12 @@
 #include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/operator/list.hpp"
-#include "duckdb/planner/query_node/bound_select_node.hpp"
-#include "duckdb/planner/operator/logical_expression_get.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/operator/list.hpp"
+#include "duckdb/planner/operator/logical_expression_get.hpp"
+#include "duckdb/planner/operator/logical_limit.hpp"
+#include "duckdb/planner/query_node/bound_select_node.hpp"
 
 namespace duckdb {
-using namespace std;
 
 unique_ptr<LogicalOperator> Binder::PlanFilter(unique_ptr<Expression> condition, unique_ptr<LogicalOperator> root) {
 	PlanSubqueries(&condition, &root);
@@ -20,15 +21,19 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 	root = CreatePlan(*statement.from_table);
 	D_ASSERT(root);
 
+	// plan the sample clause
+	if (statement.sample_options) {
+		root = make_unique<LogicalSample>(move(statement.sample_options), move(root));
+	}
+
 	if (statement.where_clause) {
 		root = PlanFilter(move(statement.where_clause), move(root));
 	}
 
-	if (statement.aggregates.size() > 0 || statement.groups.size() > 0) {
-		if (statement.groups.size() > 0) {
+	if (!statement.aggregates.empty() || !statement.groups.empty()) {
+		if (!statement.groups.empty()) {
 			// visit the groups
-			for (idx_t i = 0; i < statement.groups.size(); i++) {
-				auto &group = statement.groups[i];
+			for (auto &group : statement.groups) {
 				PlanSubqueries(&group, &root);
 			}
 		}
@@ -53,32 +58,52 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 		root = move(having);
 	}
 
-	if (statement.windows.size() > 0) {
+	if (!statement.windows.empty()) {
 		auto win = make_unique<LogicalWindow>(statement.window_index);
 		win->expressions = move(statement.windows);
 		// visit the window expressions
 		for (auto &expr : win->expressions) {
 			PlanSubqueries(&expr, &root);
 		}
-		D_ASSERT(win->expressions.size() > 0);
+		D_ASSERT(!win->expressions.empty());
 		win->AddChild(move(root));
 		root = move(win);
 	}
 
-	if (statement.unnests.size() > 0) {
+	if (!statement.unnests.empty()) {
 		auto unnest = make_unique<LogicalUnnest>(statement.unnest_index);
 		unnest->expressions = move(statement.unnests);
-		// visit the window expressions
+		// visit the unnest expressions
 		for (auto &expr : unnest->expressions) {
 			PlanSubqueries(&expr, &root);
 		}
-		D_ASSERT(unnest->expressions.size() > 0);
+		D_ASSERT(!unnest->expressions.empty());
 		unnest->AddChild(move(root));
 		root = move(unnest);
 	}
 
 	for (auto &expr : statement.select_list) {
 		PlanSubqueries(&expr, &root);
+	}
+
+	for (size_t i = 0; i < statement.modifiers.size(); i++) {
+		auto &modifier = statement.modifiers[i];
+		if (modifier->type != ResultModifierType::LIMIT_MODIFIER) {
+			continue;
+		}
+		auto &limit_modifier = (BoundLimitModifier &)*modifier;
+		if (limit_modifier.limit || limit_modifier.offset) {
+			PlanSubqueries(&limit_modifier.limit, &root);
+			PlanSubqueries(&limit_modifier.offset, &root);
+			auto limit = make_unique<LogicalLimit>(limit_modifier.limit_val, limit_modifier.offset_val,
+			                                       move(limit_modifier.limit), move(limit_modifier.offset));
+			limit->AddChild(move(root));
+			root = move(limit);
+			// Delete from modifiers
+			std::swap(statement.modifiers[i], statement.modifiers.back());
+			statement.modifiers.erase(statement.modifiers.end() - 1);
+			i--;
+		}
 	}
 
 	// create the projection

@@ -7,13 +7,12 @@
 #include "duckdb/common/limits.hpp"
 
 namespace duckdb {
-using namespace std;
 
 struct SetseedBindData : public FunctionData {
 	//! The client context for the function call
 	ClientContext &context;
 
-	SetseedBindData(ClientContext &context) : context(context) {
+	explicit SetseedBindData(ClientContext &context) : context(context) {
 	}
 
 	unique_ptr<FunctionData> Copy() override {
@@ -21,7 +20,7 @@ struct SetseedBindData : public FunctionData {
 	}
 };
 
-static void setseed_function(DataChunk &args, ExpressionState &state, Vector &result) {
+static void SetSeedFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (SetseedBindData &)*func_expr.bind_info;
 	auto &input = args.data[0];
@@ -38,18 +37,18 @@ static void setseed_function(DataChunk &args, ExpressionState &state, Vector &re
 		info.context.random_engine.seed(norm_seed);
 	}
 
-	result.vector_type = VectorType::CONSTANT_VECTOR;
+	result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	ConstantVector::SetNull(result, true);
 }
 
-unique_ptr<FunctionData> setseed_bind(ClientContext &context, ScalarFunction &bound_function,
-                                      vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> SetSeedBind(ClientContext &context, ScalarFunction &bound_function,
+                                     vector<unique_ptr<Expression>> &arguments) {
 	return make_unique<SetseedBindData>(context);
 }
 
 void SetseedFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(
-	    ScalarFunction("setseed", {LogicalType::DOUBLE}, LogicalType::SQLNULL, setseed_function, true, setseed_bind));
+	    ScalarFunction("setseed", {LogicalType::DOUBLE}, LogicalType::SQLNULL, SetSeedFunction, true, SetSeedBind));
 }
 
 } // namespace duckdb

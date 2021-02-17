@@ -1,9 +1,9 @@
 #include "duckdb/common/serializer.hpp"
 
 namespace duckdb {
-using namespace std;
 
-template <> string Deserializer::Read() {
+template <>
+string Deserializer::Read() {
 	uint32_t size = Read<uint32_t>();
 	auto buffer = unique_ptr<data_t[]>(new data_t[size]);
 	ReadData(buffer.get(), size);

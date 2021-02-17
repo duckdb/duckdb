@@ -2,10 +2,8 @@
 #include "duckdb/parser/transformer.hpp"
 
 namespace duckdb {
-using namespace std;
-using namespace duckdb_libpgquery;
 
-unique_ptr<TableRef> Transformer::TransformRangeSubselect(PGRangeSubselect *root) {
+unique_ptr<TableRef> Transformer::TransformRangeSubselect(duckdb_libpgquery::PGRangeSubselect *root) {
 	Transformer subquery_transformer(this);
 	auto subquery = subquery_transformer.TransformSelect(root->subquery);
 	if (!subquery) {
@@ -13,6 +11,9 @@ unique_ptr<TableRef> Transformer::TransformRangeSubselect(PGRangeSubselect *root
 	}
 	auto result = make_unique<SubqueryRef>(move(subquery));
 	result->alias = TransformAlias(root->alias, result->column_name_alias);
+	if (root->sample) {
+		result->sample = TransformSampleOptions(root->sample);
+	}
 	return move(result);
 }
 

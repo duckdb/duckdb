@@ -8,8 +8,11 @@
 
 #pragma once
 
-#include "duckdb/function/function.hpp"
 #include "duckdb/common/vector_operations/aggregate_executor.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/storage/statistics/node_statistics.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
 
@@ -20,11 +23,17 @@ typedef idx_t (*aggregate_size_t)();
 //! The type used for initializing hashed aggregate function states
 typedef void (*aggregate_initialize_t)(data_ptr_t state);
 //! The type used for updating hashed aggregate functions
-typedef void (*aggregate_update_t)(Vector inputs[], idx_t input_count, Vector &state, idx_t count);
+typedef void (*aggregate_update_t)(Vector inputs[], FunctionData *bind_data, idx_t input_count, Vector &state,
+                                   idx_t count);
 //! The type used for combining hashed aggregate states (optional)
 typedef void (*aggregate_combine_t)(Vector &state, Vector &combined, idx_t count);
 //! The type used for finalizing hashed aggregate function payloads
-typedef void (*aggregate_finalize_t)(Vector &state, Vector &result, idx_t count);
+typedef void (*aggregate_finalize_t)(Vector &state, FunctionData *bind_data, Vector &result, idx_t count);
+//! The type used for propagating statistics in aggregate functions (optional)
+typedef unique_ptr<BaseStatistics> (*aggregate_statistics_t)(ClientContext &context, BoundAggregateExpression &expr,
+                                                             FunctionData *bind_data,
+                                                             vector<unique_ptr<BaseStatistics>> &child_stats,
+                                                             NodeStatistics *node_stats);
 //! Binds the scalar function and creates the function data
 typedef unique_ptr<FunctionData> (*bind_aggregate_function_t)(ClientContext &context, AggregateFunction &function,
                                                               vector<unique_ptr<Expression>> &arguments);
@@ -32,25 +41,28 @@ typedef unique_ptr<FunctionData> (*bind_aggregate_function_t)(ClientContext &con
 typedef void (*aggregate_destructor_t)(Vector &state, idx_t count);
 
 //! The type used for updating simple (non-grouped) aggregate functions
-typedef void (*aggregate_simple_update_t)(Vector inputs[], idx_t input_count, data_ptr_t state, idx_t count);
+typedef void (*aggregate_simple_update_t)(Vector inputs[], FunctionData *bind_data, idx_t input_count, data_ptr_t state,
+                                          idx_t count);
 
 class AggregateFunction : public BaseScalarFunction {
 public:
 	AggregateFunction(string name, vector<LogicalType> arguments, LogicalType return_type, aggregate_size_t state_size,
 	                  aggregate_initialize_t initialize, aggregate_update_t update, aggregate_combine_t combine,
 	                  aggregate_finalize_t finalize, aggregate_simple_update_t simple_update = nullptr,
-	                  bind_aggregate_function_t bind = nullptr, aggregate_destructor_t destructor = nullptr)
+	                  bind_aggregate_function_t bind = nullptr, aggregate_destructor_t destructor = nullptr,
+	                  aggregate_statistics_t statistics = nullptr)
 	    : BaseScalarFunction(name, arguments, return_type, false), state_size(state_size), initialize(initialize),
 	      update(update), combine(combine), finalize(finalize), simple_update(simple_update), bind(bind),
-	      destructor(destructor) {
+	      destructor(destructor), statistics(statistics) {
 	}
 
 	AggregateFunction(vector<LogicalType> arguments, LogicalType return_type, aggregate_size_t state_size,
 	                  aggregate_initialize_t initialize, aggregate_update_t update, aggregate_combine_t combine,
 	                  aggregate_finalize_t finalize, aggregate_simple_update_t simple_update = nullptr,
-	                  bind_aggregate_function_t bind = nullptr, aggregate_destructor_t destructor = nullptr)
+	                  bind_aggregate_function_t bind = nullptr, aggregate_destructor_t destructor = nullptr,
+	                  aggregate_statistics_t statistics = nullptr)
 	    : AggregateFunction(string(), arguments, return_type, state_size, initialize, update, combine, finalize,
-	                        simple_update, bind, destructor) {
+	                        simple_update, bind, destructor, statistics) {
 	}
 
 	//! The hashed aggregate state sizing function
@@ -71,6 +83,9 @@ public:
 	//! The destructor method (may be null)
 	aggregate_destructor_t destructor;
 
+	//! The statistics propagation function (may be null)
+	aggregate_statistics_t statistics;
+
 	bool operator==(const AggregateFunction &rhs) const {
 		return state_size == rhs.state_size && initialize == rhs.initialize && update == rhs.update &&
 		       combine == rhs.combine && finalize == rhs.finalize;
@@ -82,9 +97,18 @@ public:
 	static unique_ptr<BoundAggregateExpression> BindAggregateFunction(ClientContext &context,
 	                                                                  AggregateFunction bound_function,
 	                                                                  vector<unique_ptr<Expression>> children,
+	                                                                  unique_ptr<Expression> filter = nullptr,
 	                                                                  bool is_distinct = false);
 
 public:
+	template <class STATE, class RESULT_TYPE, class OP>
+	static AggregateFunction NullaryAggregate(LogicalType return_type) {
+		return AggregateFunction(
+		    {}, return_type, AggregateFunction::StateSize<STATE>, AggregateFunction::StateInitialize<STATE, OP>,
+		    AggregateFunction::NullaryScatterUpdate<STATE, OP>, AggregateFunction::StateCombine<STATE, OP>,
+		    AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>, AggregateFunction::NullaryUpdate<STATE, OP>);
+	}
+
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>
 	static AggregateFunction UnaryAggregate(LogicalType input_type, LogicalType return_type) {
 		return AggregateFunction(
@@ -112,48 +136,70 @@ public:
 	}
 
 public:
-	template <class STATE> static idx_t StateSize() {
+	template <class STATE>
+	static idx_t StateSize() {
 		return sizeof(STATE);
 	}
 
-	template <class STATE, class OP> static void StateInitialize(data_ptr_t state) {
+	template <class STATE, class OP>
+	static void StateInitialize(data_ptr_t state) {
 		OP::Initialize((STATE *)state);
 	}
 
+	template <class STATE, class OP>
+	static void NullaryScatterUpdate(Vector inputs[], FunctionData *bind_data, idx_t input_count, Vector &states,
+	                                 idx_t count) {
+		D_ASSERT(input_count == 0);
+		AggregateExecutor::NullaryScatter<STATE, OP>(states, bind_data, count);
+	}
+
+	template <class STATE, class OP>
+	static void NullaryUpdate(Vector inputs[], FunctionData *bind_data, idx_t input_count, data_ptr_t state,
+	                          idx_t count) {
+		D_ASSERT(input_count == 0);
+		AggregateExecutor::NullaryUpdate<STATE, OP>(state, bind_data, count);
+	}
+
 	template <class STATE, class T, class OP>
-	static void UnaryScatterUpdate(Vector inputs[], idx_t input_count, Vector &states, idx_t count) {
+	static void UnaryScatterUpdate(Vector inputs[], FunctionData *bind_data, idx_t input_count, Vector &states,
+	                               idx_t count) {
 		D_ASSERT(input_count == 1);
-		AggregateExecutor::UnaryScatter<STATE, T, OP>(inputs[0], states, count);
+		AggregateExecutor::UnaryScatter<STATE, T, OP>(inputs[0], states, bind_data, count);
 	}
 
 	template <class STATE, class INPUT_TYPE, class OP>
-	static void UnaryUpdate(Vector inputs[], idx_t input_count, data_ptr_t state, idx_t count) {
+	static void UnaryUpdate(Vector inputs[], FunctionData *bind_data, idx_t input_count, data_ptr_t state,
+	                        idx_t count) {
 		D_ASSERT(input_count == 1);
-		AggregateExecutor::UnaryUpdate<STATE, INPUT_TYPE, OP>(inputs[0], state, count);
+		AggregateExecutor::UnaryUpdate<STATE, INPUT_TYPE, OP>(inputs[0], bind_data, state, count);
 	}
 
 	template <class STATE, class A_TYPE, class B_TYPE, class OP>
-	static void BinaryScatterUpdate(Vector inputs[], idx_t input_count, Vector &states, idx_t count) {
+	static void BinaryScatterUpdate(Vector inputs[], FunctionData *bind_data, idx_t input_count, Vector &states,
+	                                idx_t count) {
 		D_ASSERT(input_count == 2);
-		AggregateExecutor::BinaryScatter<STATE, A_TYPE, B_TYPE, OP>(inputs[0], inputs[1], states, count);
+		AggregateExecutor::BinaryScatter<STATE, A_TYPE, B_TYPE, OP>(bind_data, inputs[0], inputs[1], states, count);
 	}
 
 	template <class STATE, class A_TYPE, class B_TYPE, class OP>
-	static void BinaryUpdate(Vector inputs[], idx_t input_count, data_ptr_t state, idx_t count) {
+	static void BinaryUpdate(Vector inputs[], FunctionData *bind_data, idx_t input_count, data_ptr_t state,
+	                         idx_t count) {
 		D_ASSERT(input_count == 2);
-		AggregateExecutor::BinaryUpdate<STATE, A_TYPE, B_TYPE, OP>(inputs[0], inputs[1], state, count);
+		AggregateExecutor::BinaryUpdate<STATE, A_TYPE, B_TYPE, OP>(bind_data, inputs[0], inputs[1], state, count);
 	}
 
-	template <class STATE, class OP> static void StateCombine(Vector &source, Vector &target, idx_t count) {
+	template <class STATE, class OP>
+	static void StateCombine(Vector &source, Vector &target, idx_t count) {
 		AggregateExecutor::Combine<STATE, OP>(source, target, count);
 	}
 
 	template <class STATE, class RESULT_TYPE, class OP>
-	static void StateFinalize(Vector &states, Vector &result, idx_t count) {
-		AggregateExecutor::Finalize<STATE, RESULT_TYPE, OP>(states, result, count);
+	static void StateFinalize(Vector &states, FunctionData *bind_data, Vector &result, idx_t count) {
+		AggregateExecutor::Finalize<STATE, RESULT_TYPE, OP>(states, bind_data, result, count);
 	}
 
-	template <class STATE, class OP> static void StateDestroy(Vector &states, idx_t count) {
+	template <class STATE, class OP>
+	static void StateDestroy(Vector &states, idx_t count) {
 		AggregateExecutor::Destroy<STATE, OP>(states, count);
 	}
 };

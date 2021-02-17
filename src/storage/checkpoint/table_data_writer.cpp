@@ -9,21 +9,24 @@
 #include "duckdb/storage/numeric_segment.hpp"
 #include "duckdb/storage/string_segment.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
-#include "duckdb/transaction/transaction.hpp"
+#include "duckdb/storage/table/persistent_segment.hpp"
+#include "duckdb/storage/table/transient_segment.hpp"
+#include "duckdb/storage/column_data.hpp"
+#include "duckdb/storage/table/morsel_info.hpp"
 
 namespace duckdb {
-using namespace std;
 
 class WriteOverflowStringsToDisk : public OverflowStringWriter {
 public:
-	WriteOverflowStringsToDisk(CheckpointManager &manager);
-	~WriteOverflowStringsToDisk();
+	explicit WriteOverflowStringsToDisk(DatabaseInstance &db);
+	~WriteOverflowStringsToDisk() override;
 
 	//! The checkpoint manager
-	CheckpointManager &manager;
-	//! Block handle use for writing to
+	DatabaseInstance &db;
+
+	//! Temporary buffer
 	unique_ptr<BufferHandle> handle;
-	//! The current block we are writing to
+	//! The block on-disk to which we are writing
 	block_id_t block_id;
 	//! The offset within the current block
 	idx_t offset;
@@ -37,72 +40,142 @@ private:
 	void AllocateNewBlock(block_id_t new_block_id);
 };
 
-TableDataWriter::TableDataWriter(CheckpointManager &manager, TableCatalogEntry &table)
-    : manager(manager), table(table) {
+TableDataWriter::TableDataWriter(DatabaseInstance &db, TableCatalogEntry &table, MetaBlockWriter &meta_writer)
+    : db(db), table(table), meta_writer(meta_writer) {
 }
 
 TableDataWriter::~TableDataWriter() {
 }
 
-void TableDataWriter::WriteTableData(ClientContext &context) {
-	auto &transaction = Transaction::GetTransaction(context);
-	// allocate segments to write the table to
+void TableDataWriter::WriteTableData() {
+	// allocate the initial segments
 	segments.resize(table.columns.size());
 	data_pointers.resize(table.columns.size());
+	stats.reserve(table.columns.size());
+	column_stats.reserve(table.columns.size());
 	for (idx_t i = 0; i < table.columns.size(); i++) {
 		auto type_id = table.columns[i].type.InternalType();
-		stats.push_back(make_unique<SegmentStatistics>(type_id, GetTypeIdSize(type_id)));
+		stats.push_back(make_unique<SegmentStatistics>(table.columns[i].type, GetTypeIdSize(type_id)));
+		column_stats.push_back(BaseStatistics::CreateEmpty(table.columns[i].type));
 		CreateSegment(i);
 	}
 
 	// now start scanning the table and append the data to the uncompressed segments
-	vector<column_t> column_ids;
-	for (auto &column : table.columns) {
-		column_ids.push_back(column.oid);
-	}
-	// initialize scan structures to prepare for the scan
-	TableScanState state;
-	table.storage->InitializeScan(transaction, state, column_ids);
-	//! get all types of the table and initialize the chunk
-	auto types = table.GetTypes();
-	DataChunk chunk;
-	chunk.Initialize(types);
+	table.storage->Checkpoint(*this);
 
-	while (true) {
-		chunk.Reset();
-		// now scan the table to construct the blocks
-		unordered_map<idx_t, vector<TableFilter>> mock;
-		table.storage->Scan(transaction, chunk, state, column_ids, mock);
-		if (chunk.size() == 0) {
-			break;
-		}
-		// for each column, we append whatever we can fit into the block
-		idx_t chunk_size = chunk.size();
-		for (idx_t i = 0; i < table.columns.size(); i++) {
-			D_ASSERT(chunk.data[i].type == table.columns[i].type);
-			AppendData(transaction, i, chunk.data[i], chunk_size);
-		}
-	}
-	// flush any remaining data and write the data pointers to disk
-	for (idx_t i = 0; i < table.columns.size(); i++) {
-		FlushSegment(transaction, i);
-	}
 	VerifyDataPointers();
 	WriteDataPointers();
+
+	// then we checkpoint the deleted tuples
+	table.storage->CheckpointDeletes(*this);
 }
 
 void TableDataWriter::CreateSegment(idx_t col_idx) {
 	auto type_id = table.columns[col_idx].type.InternalType();
 	if (type_id == PhysicalType::VARCHAR) {
-		auto string_segment = make_unique<StringSegment>(manager.buffer_manager, 0);
-		string_segment->overflow_writer = make_unique<WriteOverflowStringsToDisk>(manager);
+		auto string_segment = make_unique<StringSegment>(db, 0);
+		string_segment->overflow_writer = make_unique<WriteOverflowStringsToDisk>(db);
 		segments[col_idx] = move(string_segment);
 	} else {
-		segments[col_idx] = make_unique<NumericSegment>(manager.buffer_manager, type_id, 0);
+		segments[col_idx] = make_unique<NumericSegment>(db, type_id, 0);
 	}
 }
 
-void TableDataWriter::AppendData(Transaction &transaction, idx_t col_idx, Vector &data, idx_t count) {
+void TableDataWriter::CheckpointColumn(ColumnData &col_data, idx_t col_idx) {
+	if (!col_data.data.root_node) {
+		return;
+	}
+	Vector intermediate(col_data.type);
+
+	// scan the segments of the column data
+	// we create a new segment tree with all the new segments
+	SegmentTree new_tree;
+
+	auto owned_segment = move(col_data.data.root_node);
+	auto segment = (ColumnSegment *)owned_segment.get();
+	while (segment) {
+		if (segment->segment_type == ColumnSegmentType::PERSISTENT) {
+			auto &persistent = (PersistentSegment &)*segment;
+			// persistent segment; check if there were changes made to the segment
+			if (!persistent.HasChanges()) {
+				// unchanged persistent segment: no need to write the data
+
+				// flush any segments preceding this persistent segment
+				if (segments[col_idx]->tuple_count > 0) {
+					FlushSegment(new_tree, col_idx);
+					CreateSegment(col_idx);
+				}
+
+				// set up the data pointer directly using the data from the persistent segment
+				DataPointer pointer;
+				pointer.block_id = persistent.block_id;
+				pointer.offset = 0;
+				pointer.row_start = segment->start;
+				pointer.tuple_count = persistent.count;
+				pointer.statistics = persistent.stats.statistics->Copy();
+
+				// merge the persistent stats into the global column stats
+				column_stats[col_idx]->Merge(*persistent.stats.statistics);
+
+				// directly append the current segment to the new tree
+				new_tree.AppendSegment(move(owned_segment));
+
+				data_pointers[col_idx].push_back(move(pointer));
+
+				// move to the next segment in the list
+				owned_segment = move(segment->next);
+				segment = (ColumnSegment *)owned_segment.get();
+				continue;
+			}
+		}
+		// not persisted yet: scan the segment and write it to disk
+		ColumnScanState state;
+		segment->InitializeScan(state);
+		for (idx_t vector_index = 0; vector_index * STANDARD_VECTOR_SIZE < segment->count; vector_index++) {
+			idx_t count = MinValue<idx_t>(segment->count - vector_index * STANDARD_VECTOR_SIZE, STANDARD_VECTOR_SIZE);
+			segment->ScanCommitted(state, vector_index, intermediate);
+			AppendData(new_tree, col_idx, intermediate, count);
+		}
+		// move to the next segment in the list
+		owned_segment = move(segment->next);
+		segment = (ColumnSegment *)owned_segment.get();
+	}
+	// flush the final segment
+	FlushSegment(new_tree, col_idx);
+	// replace the old tree with the new one
+	col_data.data.Replace(new_tree);
+}
+
+void TableDataWriter::CheckpointDeletes(MorselInfo *morsel_info) {
+	// deletes! write them after the data pointers
+	while (morsel_info) {
+		if (morsel_info->root) {
+			// first count how many ChunkInfo's we need to deserialize
+			idx_t chunk_info_count = 0;
+			for (idx_t vector_idx = 0; vector_idx < MorselInfo::MORSEL_VECTOR_COUNT; vector_idx++) {
+				auto chunk_info = morsel_info->root->info[vector_idx].get();
+				if (!chunk_info) {
+					continue;
+				}
+				chunk_info_count++;
+			}
+			meta_writer.Write<idx_t>(chunk_info_count);
+			for (idx_t vector_idx = 0; vector_idx < MorselInfo::MORSEL_VECTOR_COUNT; vector_idx++) {
+				auto chunk_info = morsel_info->root->info[vector_idx].get();
+				if (!chunk_info) {
+					continue;
+				}
+				meta_writer.Write<idx_t>(vector_idx);
+				chunk_info->Serialize(meta_writer);
+			}
+		} else {
+			meta_writer.Write<idx_t>(0);
+		}
+		morsel_info = (MorselInfo *)morsel_info->next.get();
+	}
+}
+
+void TableDataWriter::AppendData(SegmentTree &new_tree, idx_t col_idx, Vector &data, idx_t count) {
 	idx_t offset = 0;
 	while (count > 0) {
 		idx_t appended = segments[col_idx]->Append(*stats[col_idx], data, offset, count);
@@ -111,7 +184,7 @@ void TableDataWriter::AppendData(Transaction &transaction, idx_t col_idx, Vector
 			return;
 		}
 		// the segment is full: flush it to disk
-		FlushSegment(transaction, col_idx);
+		FlushSegment(new_tree, col_idx);
 
 		// now create a new segment and continue appending
 		CreateSegment(col_idx);
@@ -120,35 +193,48 @@ void TableDataWriter::AppendData(Transaction &transaction, idx_t col_idx, Vector
 	}
 }
 
-void TableDataWriter::FlushSegment(Transaction &transaction, idx_t col_idx) {
+void TableDataWriter::FlushSegment(SegmentTree &new_tree, idx_t col_idx) {
 	auto tuple_count = segments[col_idx]->tuple_count;
 	if (tuple_count == 0) {
 		return;
 	}
 
 	// get the buffer of the segment and pin it
-	auto handle = manager.buffer_manager.Pin(segments[col_idx]->block_id);
+	auto &buffer_manager = BufferManager::GetBufferManager(db);
+	auto &block_manager = BlockManager::GetBlockManager(db);
+
+	auto handle = buffer_manager.Pin(segments[col_idx]->block);
 
 	// get a free block id to write to
-	auto block_id = manager.block_manager.GetFreeBlockId();
+	auto block_id = block_manager.GetFreeBlockId();
 
-	// construct the data pointer, FIXME: add statistics as well
+	// construct the data pointer
+	uint32_t offset_in_block = 0;
+
 	DataPointer data_pointer;
 	data_pointer.block_id = block_id;
-	data_pointer.offset = 0;
+	data_pointer.offset = offset_in_block;
 	data_pointer.row_start = 0;
-	if (data_pointers[col_idx].size() > 0) {
+	if (!data_pointers[col_idx].empty()) {
 		auto &last_pointer = data_pointers[col_idx].back();
 		data_pointer.row_start = last_pointer.row_start + last_pointer.tuple_count;
 	}
 	data_pointer.tuple_count = tuple_count;
-	idx_t type_size = stats[col_idx]->type == PhysicalType::VARCHAR ? 8 : stats[col_idx]->type_size;
-	memcpy(&data_pointer.min_stats, stats[col_idx]->minimum.get(), type_size);
-	memcpy(&data_pointer.max_stats, stats[col_idx]->maximum.get(), type_size);
+	data_pointer.statistics = stats[col_idx]->statistics->Copy();
+
+	// construct a persistent segment that points to this block, and append it to the new segment tree
+	auto persistent_segment = make_unique<PersistentSegment>(db, block_id, offset_in_block, table.columns[col_idx].type,
+	                                                         data_pointer.row_start, data_pointer.tuple_count,
+	                                                         stats[col_idx]->statistics->Copy());
+	new_tree.AppendSegment(move(persistent_segment));
+
 	data_pointers[col_idx].push_back(move(data_pointer));
 	// write the block to disk
-	manager.block_manager.Write(*handle->node, block_id);
+	block_manager.Write(*handle->node, block_id);
 
+	column_stats[col_idx]->Merge(*stats[col_idx]->statistics);
+	stats[col_idx] = make_unique<SegmentStatistics>(table.columns[col_idx].type,
+	                                                GetTypeIdSize(table.columns[col_idx].type.InternalType()));
 	handle.reset();
 	segments[col_idx] = nullptr;
 }
@@ -178,42 +264,46 @@ void TableDataWriter::VerifyDataPointers() {
 }
 
 void TableDataWriter::WriteDataPointers() {
+	for (auto &stats : column_stats) {
+		stats->Serialize(meta_writer);
+	}
+
 	for (idx_t i = 0; i < data_pointers.size(); i++) {
 		// get a reference to the data column
 		auto &data_pointer_list = data_pointers[i];
-		manager.tabledata_writer->Write<idx_t>(data_pointer_list.size());
+		meta_writer.Write<idx_t>(data_pointer_list.size());
 		// then write the data pointers themselves
 		for (idx_t k = 0; k < data_pointer_list.size(); k++) {
 			auto &data_pointer = data_pointer_list[k];
-			manager.tabledata_writer->Write<double>(data_pointer.min);
-			manager.tabledata_writer->Write<double>(data_pointer.max);
-			manager.tabledata_writer->Write<idx_t>(data_pointer.row_start);
-			manager.tabledata_writer->Write<idx_t>(data_pointer.tuple_count);
-			manager.tabledata_writer->Write<block_id_t>(data_pointer.block_id);
-			manager.tabledata_writer->Write<uint32_t>(data_pointer.offset);
-			manager.tabledata_writer->WriteData(data_pointer.min_stats, 16);
-			manager.tabledata_writer->WriteData(data_pointer.max_stats, 16);
+			meta_writer.Write<idx_t>(data_pointer.row_start);
+			meta_writer.Write<idx_t>(data_pointer.tuple_count);
+			meta_writer.Write<block_id_t>(data_pointer.block_id);
+			meta_writer.Write<uint32_t>(data_pointer.offset);
+			data_pointer.statistics->Serialize(meta_writer);
 		}
 	}
 }
 
-WriteOverflowStringsToDisk::WriteOverflowStringsToDisk(CheckpointManager &manager)
-    : manager(manager), handle(nullptr), block_id(INVALID_BLOCK), offset(0) {
+WriteOverflowStringsToDisk::WriteOverflowStringsToDisk(DatabaseInstance &db)
+    : db(db), block_id(INVALID_BLOCK), offset(0) {
 }
 
 WriteOverflowStringsToDisk::~WriteOverflowStringsToDisk() {
+	auto &block_manager = BlockManager::GetBlockManager(db);
 	if (offset > 0) {
-		manager.block_manager.Write(*handle->node, block_id);
+		block_manager.Write(*handle->node, block_id);
 	}
 }
 
 void WriteOverflowStringsToDisk::WriteString(string_t string, block_id_t &result_block, int32_t &result_offset) {
+	auto &buffer_manager = BufferManager::GetBufferManager(db);
+	auto &block_manager = BlockManager::GetBlockManager(db);
 	if (!handle) {
-		handle = manager.buffer_manager.Allocate(Storage::BLOCK_ALLOC_SIZE);
+		handle = buffer_manager.Allocate(Storage::BLOCK_ALLOC_SIZE);
 	}
 	// first write the length of the string
 	if (block_id == INVALID_BLOCK || offset + sizeof(uint32_t) >= STRING_SPACE) {
-		AllocateNewBlock(manager.block_manager.GetFreeBlockId());
+		AllocateNewBlock(block_manager.GetFreeBlockId());
 	}
 	result_block = block_id;
 	result_offset = offset;
@@ -237,7 +327,7 @@ void WriteOverflowStringsToDisk::WriteString(string_t string, block_id_t &result
 		if (remaining > 0) {
 			// there is still remaining stuff to write
 			// first get the new block id and write it to the end of the previous block
-			auto new_block_id = manager.block_manager.GetFreeBlockId();
+			auto new_block_id = block_manager.GetFreeBlockId();
 			Store<block_id_t>(new_block_id, handle->node->buffer + offset);
 			// now write the current block to disk and allocate a new block
 			AllocateNewBlock(new_block_id);
@@ -246,9 +336,10 @@ void WriteOverflowStringsToDisk::WriteString(string_t string, block_id_t &result
 }
 
 void WriteOverflowStringsToDisk::AllocateNewBlock(block_id_t new_block_id) {
+	auto &block_manager = BlockManager::GetBlockManager(db);
 	if (block_id != INVALID_BLOCK) {
 		// there is an old block, write it first
-		manager.block_manager.Write(*handle->node, block_id);
+		block_manager.Write(*handle->node, block_id);
 	}
 	offset = 0;
 	block_id = new_block_id;

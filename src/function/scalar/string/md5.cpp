@@ -4,11 +4,9 @@
 #include "duckdb/common/crypto/md5.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
-static void md5_function(DataChunk &args, ExpressionState &state, Vector &result) {
+static void MD5Function(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &input = args.data[0];
 
 	UnaryExecutor::Execute<string_t, string_t, true>(input, result, args.size(), [&](string_t input) {
@@ -25,7 +23,7 @@ void MD5Fun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("md5",                  // name of the function
 	                               {LogicalType::VARCHAR}, // argument list
 	                               LogicalType::VARCHAR,   // return type
-	                               md5_function));         // pointer to function implementation
+	                               MD5Function));          // pointer to function implementation
 }
 
 } // namespace duckdb

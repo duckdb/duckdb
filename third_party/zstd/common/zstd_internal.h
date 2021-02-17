@@ -185,7 +185,14 @@ struct ZSTDInternalConstants {
     static const size_t ZSTD_blockHeaderSize;
     static const U32 LL_bits[MaxLL+1];
     static const S16 LL_defaultNorm[MaxLL+1];
+    static const U32 LL_defaultNormLog;
     static const U32 ML_bits[MaxML+1];
+    static const S16 ML_defaultNorm[MaxML+1];
+    static const U32 ML_defaultNormLog;
+    static const S16 OF_defaultNorm[DefaultMaxOff+1];
+    static const U32 OF_defaultNormLog;
+    static const ZSTD_customMem ZSTD_defaultCMem;
+    static const U32 repStartValue[ZSTD_REP_NUM];
 };
 
 #define LL_DEFAULTNORMLOG 6  /* for static allocation */

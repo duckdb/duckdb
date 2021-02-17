@@ -14,15 +14,16 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/catalog/catalog.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 unique_ptr<Expression> ExpressionBinder::PushCollation(ClientContext &context, unique_ptr<Expression> source,
-                                                       string collation, bool equality_only) {
+                                                       const string &collation_p, bool equality_only) {
 	// replace default collation with system collation
-	if (collation.empty()) {
+	string collation;
+	if (collation_p.empty()) {
 		collation = DBConfig::GetConfig(context).collation;
+	} else {
+		collation = collation_p;
 	}
 	// bind the collation
 	if (collation.empty() || collation == "binary" || collation == "c" || collation == "posix") {
@@ -37,7 +38,7 @@ unique_ptr<Expression> ExpressionBinder::PushCollation(ClientContext &context, u
 		if (collation_entry->combinable) {
 			entries.insert(entries.begin(), collation_entry);
 		} else {
-			if (entries.size() > 0 && !entries.back()->combinable) {
+			if (!entries.empty() && !entries.back()->combinable) {
 				throw BinderException("Cannot combine collation types \"%s\" and \"%s\"", entries.back()->name,
 				                      collation_entry->name);
 			}
@@ -56,7 +57,7 @@ unique_ptr<Expression> ExpressionBinder::PushCollation(ClientContext &context, u
 	return source;
 }
 
-void ExpressionBinder::TestCollation(ClientContext &context, string collation) {
+void ExpressionBinder::TestCollation(ClientContext &context, const string &collation) {
 	PushCollation(context, make_unique<BoundConstantExpression>(Value("")), collation);
 }
 
@@ -66,18 +67,18 @@ LogicalType BoundComparisonExpression::BindComparison(LogicalType left_type, Log
 	case LogicalTypeId::DECIMAL: {
 		// result is a decimal: we need the maximum width and the maximum scale over width
 		vector<LogicalType> argument_types = {left_type, right_type};
-		int max_width = 0, max_scale = 0, max_width_over_scale = 0;
+		uint8_t max_width = 0, max_scale = 0, max_width_over_scale = 0;
 		for (idx_t i = 0; i < argument_types.size(); i++) {
-			int width, scale;
+			uint8_t width, scale;
 			auto can_convert = argument_types[i].GetDecimalProperties(width, scale);
 			if (!can_convert) {
 				return result_type;
 			}
-			max_width = MaxValue<int>(width, max_width);
-			max_scale = MaxValue<int>(scale, max_scale);
-			max_width_over_scale = MaxValue<int>(width - scale, max_width_over_scale);
+			max_width = MaxValue<uint8_t>(width, max_width);
+			max_scale = MaxValue<uint8_t>(scale, max_scale);
+			max_width_over_scale = MaxValue<uint8_t>(width - scale, max_width_over_scale);
 		}
-		max_width = MaxValue(max_scale + max_width_over_scale, max_width);
+		max_width = MaxValue<uint8_t>(max_scale + max_width_over_scale, max_width);
 		if (max_width > Decimal::MAX_WIDTH_DECIMAL) {
 			// target width does not fit in decimal: truncate the scale (if possible) to try and make it fit
 			max_width = Decimal::MAX_WIDTH_DECIMAL;

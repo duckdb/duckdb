@@ -9,8 +9,6 @@
 
 #include <algorithm>
 
-using namespace std;
-
 namespace duckdb {
 
 struct SQLiteMasterData : public FunctionOperatorData {
@@ -21,44 +19,43 @@ struct SQLiteMasterData : public FunctionOperatorData {
 	idx_t offset;
 };
 
-static unique_ptr<FunctionData> sqlite_master_bind(ClientContext &context, vector<Value> &inputs,
-                                                   unordered_map<string, Value> &named_parameters,
-                                                   vector<LogicalType> &return_types, vector<string> &names) {
-	names.push_back("type");
+static unique_ptr<FunctionData> SQLiteMasterBind(ClientContext &context, vector<Value> &inputs,
+                                                 unordered_map<string, Value> &named_parameters,
+                                                 vector<LogicalType> &return_types, vector<string> &names) {
+	names.emplace_back("type");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("name");
+	names.emplace_back("name");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("tbl_name");
+	names.emplace_back("tbl_name");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("rootpage");
+	names.emplace_back("rootpage");
 	return_types.push_back(LogicalType::INTEGER);
 
-	names.push_back("sql");
+	names.emplace_back("sql");
 	return_types.push_back(LogicalType::VARCHAR);
 
 	return nullptr;
 }
 
-unique_ptr<FunctionOperatorData> sqlite_master_init(ClientContext &context, const FunctionData *bind_data,
-                                                    vector<column_t> &column_ids,
-                                                    unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+unique_ptr<FunctionOperatorData> SQLiteMasterInit(ClientContext &context, const FunctionData *bind_data,
+                                                  vector<column_t> &column_ids, TableFilterCollection *filters) {
 	auto result = make_unique<SQLiteMasterData>();
 
 	// scan all the schemas for tables and views and collect them
 	Catalog::GetCatalog(context).schemas->Scan(context, [&](CatalogEntry *entry) {
 		auto schema = (SchemaCatalogEntry *)entry;
-		schema->tables.Scan(context, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
-		schema->indexes.Scan(context, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
+		schema->Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
+		schema->Scan(context, CatalogType::INDEX_ENTRY, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	});
 
 	return move(result);
 }
 
-void sqlite_master(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
-                   DataChunk &output) {
+void SQLiteMasterFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
+                          DataChunk &output) {
 	auto &data = (SQLiteMasterData &)*operator_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
@@ -92,7 +89,7 @@ void sqlite_master(ClientContext &context, const FunctionData *bind_data, Functi
 			type_str = "view";
 			break;
 		case CatalogType::INDEX_ENTRY: {
-			auto &index = (IndexCatalogEntry &) *entry;
+			auto &index = (IndexCatalogEntry &)*entry;
 			table_name = index.info->table;
 			type_str = "index";
 			break;
@@ -115,7 +112,7 @@ void sqlite_master(ClientContext &context, const FunctionData *bind_data, Functi
 }
 
 void SQLiteMaster::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("sqlite_master", {}, sqlite_master, sqlite_master_bind, sqlite_master_init));
+	set.AddFunction(TableFunction("sqlite_master", {}, SQLiteMasterFunction, SQLiteMasterBind, SQLiteMasterInit));
 }
 
 } // namespace duckdb

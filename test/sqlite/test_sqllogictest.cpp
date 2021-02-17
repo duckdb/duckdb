@@ -311,8 +311,8 @@ static int duckdbConvertResult(MaterializedQueryResult &result, bool original_sq
                                vector<string> &pazResult /* RETURN:  Array of result values */
 ) {
 	size_t r, c;
-	idx_t row_count = result.collection.count;
-	idx_t column_count = result.column_count();
+	idx_t row_count = result.collection.Count();
+	idx_t column_count = result.ColumnCount();
 
 	pazResult.resize(row_count * column_count);
 	for (r = 0; r < row_count; r++) {
@@ -337,11 +337,11 @@ static void print_header(string header) {
 static void print_sql(string sql) {
 	std::cerr << termcolor::bold << "SQL Query" << termcolor::reset << std::endl;
 	auto tokens = Parser::Tokenize(sql);
-	for(idx_t i = 0; i < tokens.size(); i++) {
+	for (idx_t i = 0; i < tokens.size(); i++) {
 		auto &token = tokens[i];
-		idx_t next = i  + 1 < tokens.size() ? tokens[i + 1].start : sql.size();
+		idx_t next = i + 1 < tokens.size() ? tokens[i + 1].start : sql.size();
 		// adjust the highlighting based on the type
-		switch(token.type) {
+		switch (token.type) {
 		case SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER:
 			break;
 		case SimplifiedTokenType::SIMPLIFIED_TOKEN_NUMERIC_CONSTANT:
@@ -360,7 +360,7 @@ static void print_sql(string sql) {
 		// print the current token
 		std::cerr << sql.substr(token.start, next - token.start);
 		// reset and move to the next token
-		std::cerr <<  termcolor::reset;
+		std::cerr << termcolor::reset;
 	}
 	std::cerr << std::endl;
 }
@@ -473,6 +473,24 @@ bool compare_values(MaterializedQueryResult &result, string lvalue_str, string r
 			print_line_sep();
 			return false;
 		}
+	} else if (sql_type == LogicalType::BOOLEAN) {
+		auto low_r_val = StringUtil::Lower(rvalue_str);
+		auto low_l_val = StringUtil::Lower(lvalue_str);
+
+		string true_str = "true";
+		string false_str = "false";
+		if (low_l_val == true_str || lvalue_str == "1") {
+			lvalue = Value(1);
+		} else if (low_l_val == false_str || lvalue_str == "0") {
+			lvalue = Value(0);
+		}
+		if (low_r_val == true_str || rvalue_str == "1") {
+			rvalue = Value(1);
+		} else if (low_r_val == false_str || rvalue_str == "0") {
+			rvalue = Value(0);
+		}
+		error = !Value::ValuesAreEqual(lvalue, rvalue);
+
 	} else {
 		// for other types we just mark the result as incorrect
 		error = true;
@@ -634,7 +652,7 @@ void Statement::Execute() {
 void Query::ColumnCountMismatch(MaterializedQueryResult &result, int expected_column_count, bool row_wise) {
 	print_error_header("Wrong column count in query!", file_name, query_line);
 	std::cerr << "Expected " << termcolor::bold << expected_column_count << termcolor::reset << " columns, but got "
-	          << termcolor::bold << result.column_count() << termcolor::reset << " columns" << std::endl;
+	          << termcolor::bold << result.ColumnCount() << termcolor::reset << " columns" << std::endl;
 	print_line_sep();
 	print_sql(sql_query);
 	print_line_sep();
@@ -663,7 +681,7 @@ vector<string> Query::LoadResultFromFile(string fname, vector<string> names) {
 		print_error_header(error.c_str(), file_name.c_str(), query_line);
 		FAIL_LINE(file_name, query_line);
 	}
-	expected_column_count = csv_result->column_count();
+	expected_column_count = csv_result->ColumnCount();
 
 	vector<string> values;
 	while (true) {
@@ -672,7 +690,7 @@ vector<string> Query::LoadResultFromFile(string fname, vector<string> names) {
 			break;
 		}
 		for (idx_t r = 0; r < chunk->size(); r++) {
-			for (idx_t c = 0; c < chunk->column_count(); c++) {
+			for (idx_t c = 0; c < chunk->ColumnCount(); c++) {
 				values.push_back(chunk->GetValue(c, r).ToString());
 			}
 		}
@@ -701,8 +719,8 @@ void Query::Execute() {
 		result->Print();
 		FAIL_LINE(file_name, query_line);
 	}
-	idx_t row_count = result->collection.count;
-	idx_t column_count = result->column_count();
+	idx_t row_count = result->collection.Count();
+	idx_t column_count = result->ColumnCount();
 	int nResult = row_count * column_count;
 	int compare_hash = query_has_label || (runner.hashThreshold > 0 && nResult > runner.hashThreshold);
 	// check if the current line (the first line of the result) is a hash value
@@ -714,7 +732,7 @@ void Query::Execute() {
 	duckdbConvertResult(*result, runner.original_sqlite_test, azResult);
 	if (runner.output_result_mode) {
 		// names
-		for (idx_t c = 0; c < result->column_count(); c++) {
+		for (idx_t c = 0; c < result->ColumnCount(); c++) {
 			if (c != 0) {
 				std::cerr << "\t";
 			}
@@ -722,7 +740,7 @@ void Query::Execute() {
 		}
 		std::cerr << std::endl;
 		// types
-		for (idx_t c = 0; c < result->column_count(); c++) {
+		for (idx_t c = 0; c < result->ColumnCount(); c++) {
 			if (c != 0) {
 				std::cerr << "\t";
 			}
@@ -730,12 +748,12 @@ void Query::Execute() {
 		}
 		std::cerr << std::endl;
 		print_line_sep();
-		for (idx_t r = 0; r < result->collection.count; r++) {
-			for (idx_t c = 0; c < result->column_count(); c++) {
+		for (idx_t r = 0; r < result->collection.Count(); r++) {
+			for (idx_t c = 0; c < result->ColumnCount(); c++) {
 				if (c != 0) {
 					std::cerr << "\t";
 				}
-				std::cerr << azResult[r * result->column_count() + c];
+				std::cerr << azResult[r * result->ColumnCount() + c];
 			}
 			std::cerr << std::endl;
 		}
@@ -747,7 +765,7 @@ void Query::Execute() {
 	} else if (sort_style == SortStyle::ROW_SORT) {
 		/* Row-oriented sorting */
 		// construct rows
-		int nColumn = result->column_count();
+		int nColumn = result->ColumnCount();
 		int nRow = nResult / nColumn;
 		vector<vector<string>> rows;
 		rows.reserve(nRow);
@@ -814,15 +832,15 @@ void Query::Execute() {
 		// check if the row/column count matches
 		int original_expected_columns = expected_column_count;
 		bool column_count_mismatch = false;
-		if (expected_column_count != result->column_count()) {
+		if (expected_column_count != result->ColumnCount()) {
 			// expected column count is different from the count found in the result
 			// we try to keep going with the number of columns in the result
-			expected_column_count = result->column_count();
+			expected_column_count = result->ColumnCount();
 			column_count_mismatch = true;
 		}
 		idx_t expected_rows = comparison_values.size() / expected_column_count;
 		// we first check the counts: if the values are equal to the amount of rows we expect the results to be row-wise
-		bool row_wise = expected_column_count > 1 && comparison_values.size() == result->collection.count;
+		bool row_wise = expected_column_count > 1 && comparison_values.size() == result->collection.Count();
 		if (!row_wise) {
 			// the counts do not match up for it to be row-wise
 			// however, this can also be because the query returned an incorrect # of rows
@@ -851,13 +869,13 @@ void Query::Execute() {
 			fprintf(stderr, "This is not cleanly divisible (i.e. the last row does not have enough values)\n");
 			FAIL_LINE(file_name, query_line);
 		}
-		if (expected_rows != result->collection.count) {
+		if (expected_rows != result->collection.Count()) {
 			if (column_count_mismatch) {
 				ColumnCountMismatch(*result, original_expected_columns, row_wise);
 			}
 			print_error_header("Wrong row count in query!", file_name, query_line);
 			std::cerr << "Expected " << termcolor::bold << expected_rows << termcolor::reset << " rows, but got "
-			          << termcolor::bold << result->collection.count << termcolor::reset << " rows" << std::endl;
+			          << termcolor::bold << result->collection.Count() << termcolor::reset << " rows" << std::endl;
 			print_line_sep();
 			print_sql(sql_query);
 			print_line_sep();
@@ -930,7 +948,7 @@ void Query::Execute() {
 			std::cerr << "The expected result " << termcolor::bold << "matched" << termcolor::reset
 			          << " the query result." << std::endl;
 			std::cerr << termcolor::bold << "Suggested fix: modify header to \"" << termcolor::green << "query "
-			          << string(result->column_count(), 'I') << termcolor::reset << termcolor::bold << "\""
+			          << string(result->ColumnCount(), 'I') << termcolor::reset << termcolor::bold << "\""
 			          << termcolor::reset << std::endl;
 			print_line_sep();
 			FAIL_LINE(file_name, query_line);
@@ -1074,13 +1092,13 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			int bMatch;
 			/* The "skipif" and "onlyif" modifiers allow skipping or using
 			** statement or query record for a particular database engine.
-			** In this way, SQL features implmented by a majority of the
+			** In this way, SQL features implemented by a majority of the
 			** engines can be tested without causing spurious errors for
 			** engines that don't support it.
 			**
-			** Once this record is encountered, an the current selected
+			** Once this record is encountered, and the current selected
 			** db interface matches the db engine specified in the record,
-			** the we skip this rest of this record for "skipif" or for
+			** then we skip this rest of this record for "skipif". For
 			** "onlyif" we skip the record if the record does not match.
 			*/
 			bMatch = stricmp(sScript.azToken[1], zDbEngine) == 0;
@@ -1472,8 +1490,17 @@ struct AutoRegTests {
 		    "evidence/slt_lang_dropindex.test",                // "
 		    "evidence/slt_lang_createtrigger.test",            // "
 		    "evidence/slt_lang_droptrigger.test",              // "
-		    "evidence/slt_lang_update.test"                    //  Multiple assignments to same column "x"
-		};
+		    "evidence/slt_lang_update.test",                   //  Multiple assignments to same column "x"
+		    // these fail because of overflows in multiplications (sqlite does automatic upcasting)
+		    "random/aggregates/slt_good_51.test", "random/aggregates/slt_good_73.test",
+		    "random/aggregates/slt_good_3.test", "random/aggregates/slt_good_64.test",
+		    "random/aggregates/slt_good_122.test", "random/aggregates/slt_good_110.test",
+		    "random/aggregates/slt_good_101.test", "random/aggregates/slt_good_56.test",
+		    "random/aggregates/slt_good_75.test", "random/expr/slt_good_51.test", "random/expr/slt_good_77.test",
+		    "random/expr/slt_good_66.test", "random/expr/slt_good_0.test", "random/expr/slt_good_61.test",
+		    "random/expr/slt_good_47.test", "random/expr/slt_good_11.test", "random/expr/slt_good_40.test",
+		    "random/expr/slt_good_42.test", "random/expr/slt_good_27.test", "random/expr/slt_good_103.test",
+		    "random/expr/slt_good_75.test"};
 		FileSystem fs;
 		fs.SetWorkingDirectory(DUCKDB_ROOT_DIRECTORY);
 		listFiles(fs, fs.JoinPath(fs.JoinPath("third_party", "sqllogictest"), "test"), [excludes](const string &path) {

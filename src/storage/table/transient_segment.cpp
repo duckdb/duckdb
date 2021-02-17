@@ -6,22 +6,22 @@
 #include "duckdb/storage/string_segment.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/persistent_segment.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 
 namespace duckdb {
-using namespace std;
 
-TransientSegment::TransientSegment(BufferManager &manager, PhysicalType type, idx_t start)
-    : ColumnSegment(type, ColumnSegmentType::TRANSIENT, start), manager(manager) {
-	if (type == PhysicalType::VARCHAR) {
-		data = make_unique<StringSegment>(manager, start);
+TransientSegment::TransientSegment(DatabaseInstance &db, const LogicalType &type_p, idx_t start)
+    : ColumnSegment(type_p, ColumnSegmentType::TRANSIENT, start), db(db) {
+	if (type.InternalType() == PhysicalType::VARCHAR) {
+		data = make_unique<StringSegment>(db, start);
 	} else {
-		data = make_unique<NumericSegment>(manager, type, start);
+		data = make_unique<NumericSegment>(db, type.InternalType(), start);
 	}
 }
 
 TransientSegment::TransientSegment(PersistentSegment &segment)
-    : ColumnSegment(segment.type, ColumnSegmentType::TRANSIENT, segment.start), manager(segment.manager) {
-	if (segment.block_id == segment.data->block_id) {
+    : ColumnSegment(segment.type, ColumnSegmentType::TRANSIENT, segment.start), db(segment.db) {
+	if (segment.block_id == segment.data->block->BlockId()) {
 		segment.data->ToTemporary();
 	}
 	data = move(segment.data);
@@ -38,6 +38,10 @@ void TransientSegment::Scan(Transaction &transaction, ColumnScanState &state, id
 	data->Scan(transaction, state, vector_index, result);
 }
 
+void TransientSegment::ScanCommitted(ColumnScanState &state, idx_t vector_index, Vector &result) {
+	data->ScanCommitted(state, vector_index, result);
+}
+
 void TransientSegment::FilterScan(Transaction &transaction, ColumnScanState &state, Vector &result,
                                   SelectionVector &sel, idx_t &approved_tuple_count) {
 	data->FilterScan(transaction, state, result, sel, approved_tuple_count);
@@ -48,8 +52,8 @@ void TransientSegment::IndexScan(ColumnScanState &state, Vector &result) {
 }
 
 void TransientSegment::Select(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
-                              idx_t &approved_tuple_count, vector<TableFilter> &tableFilter) {
-	return data->Select(transaction, result, tableFilter, sel, approved_tuple_count, state);
+                              idx_t &approved_tuple_count, vector<TableFilter> &table_filter) {
+	return data->Select(transaction, result, table_filter, sel, approved_tuple_count, state);
 }
 
 void TransientSegment::Fetch(ColumnScanState &state, idx_t vector_index, Vector &result) {

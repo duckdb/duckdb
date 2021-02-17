@@ -8,14 +8,14 @@
 #include "duckdb/common/limits.hpp"
 
 namespace duckdb {
-using namespace std;
 
-template <class T> void templated_generate_sequence(Vector &result, idx_t count, int64_t start, int64_t increment) {
-	D_ASSERT(result.type.IsNumeric());
+template <class T>
+void TemplatedGenerateSequence(Vector &result, idx_t count, int64_t start, int64_t increment) {
+	D_ASSERT(result.GetType().IsNumeric());
 	if (start > NumericLimits<T>::Maximum() || increment > NumericLimits<T>::Maximum()) {
 		throw Exception("Sequence start or increment out of type range");
 	}
-	result.vector_type = VectorType::FLAT_VECTOR;
+	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::GetData<T>(result);
 	auto value = (T)start;
 	for (idx_t i = 0; i < count; i++) {
@@ -25,27 +25,27 @@ template <class T> void templated_generate_sequence(Vector &result, idx_t count,
 }
 
 void VectorOperations::GenerateSequence(Vector &result, idx_t count, int64_t start, int64_t increment) {
-	if (!result.type.IsNumeric()) {
-		throw InvalidTypeException(result.type, "Can only generate sequences for numeric values!");
+	if (!result.GetType().IsNumeric()) {
+		throw InvalidTypeException(result.GetType(), "Can only generate sequences for numeric values!");
 	}
-	switch (result.type.InternalType()) {
+	switch (result.GetType().InternalType()) {
 	case PhysicalType::INT8:
-		templated_generate_sequence<int8_t>(result, count, start, increment);
+		TemplatedGenerateSequence<int8_t>(result, count, start, increment);
 		break;
 	case PhysicalType::INT16:
-		templated_generate_sequence<int16_t>(result, count, start, increment);
+		TemplatedGenerateSequence<int16_t>(result, count, start, increment);
 		break;
 	case PhysicalType::INT32:
-		templated_generate_sequence<int32_t>(result, count, start, increment);
+		TemplatedGenerateSequence<int32_t>(result, count, start, increment);
 		break;
 	case PhysicalType::INT64:
-		templated_generate_sequence<int64_t>(result, count, start, increment);
+		TemplatedGenerateSequence<int64_t>(result, count, start, increment);
 		break;
 	case PhysicalType::FLOAT:
-		templated_generate_sequence<float>(result, count, start, increment);
+		TemplatedGenerateSequence<float>(result, count, start, increment);
 		break;
 	case PhysicalType::DOUBLE:
-		templated_generate_sequence<double>(result, count, start, increment);
+		TemplatedGenerateSequence<double>(result, count, start, increment);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for generate sequence");
@@ -53,13 +53,13 @@ void VectorOperations::GenerateSequence(Vector &result, idx_t count, int64_t sta
 }
 
 template <class T>
-void templated_generate_sequence(Vector &result, idx_t count, const SelectionVector &sel, int64_t start,
-                                 int64_t increment) {
-	D_ASSERT(result.type.IsNumeric());
+void TemplatedGenerateSequence(Vector &result, idx_t count, const SelectionVector &sel, int64_t start,
+                               int64_t increment) {
+	D_ASSERT(result.GetType().IsNumeric());
 	if (start > NumericLimits<T>::Maximum() || increment > NumericLimits<T>::Maximum()) {
 		throw Exception("Sequence start or increment out of type range");
 	}
-	result.vector_type = VectorType::FLAT_VECTOR;
+	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::GetData<T>(result);
 	auto value = (T)start;
 	for (idx_t i = 0; i < count; i++) {
@@ -70,27 +70,27 @@ void templated_generate_sequence(Vector &result, idx_t count, const SelectionVec
 
 void VectorOperations::GenerateSequence(Vector &result, idx_t count, const SelectionVector &sel, int64_t start,
                                         int64_t increment) {
-	if (!result.type.IsNumeric()) {
-		throw InvalidTypeException(result.type, "Can only generate sequences for numeric values!");
+	if (!result.GetType().IsNumeric()) {
+		throw InvalidTypeException(result.GetType(), "Can only generate sequences for numeric values!");
 	}
-	switch (result.type.InternalType()) {
+	switch (result.GetType().InternalType()) {
 	case PhysicalType::INT8:
-		templated_generate_sequence<int8_t>(result, count, sel, start, increment);
+		TemplatedGenerateSequence<int8_t>(result, count, sel, start, increment);
 		break;
 	case PhysicalType::INT16:
-		templated_generate_sequence<int16_t>(result, count, sel, start, increment);
+		TemplatedGenerateSequence<int16_t>(result, count, sel, start, increment);
 		break;
 	case PhysicalType::INT32:
-		templated_generate_sequence<int32_t>(result, count, sel, start, increment);
+		TemplatedGenerateSequence<int32_t>(result, count, sel, start, increment);
 		break;
 	case PhysicalType::INT64:
-		templated_generate_sequence<int64_t>(result, count, sel, start, increment);
+		TemplatedGenerateSequence<int64_t>(result, count, sel, start, increment);
 		break;
 	case PhysicalType::FLOAT:
-		templated_generate_sequence<float>(result, count, sel, start, increment);
+		TemplatedGenerateSequence<float>(result, count, sel, start, increment);
 		break;
 	case PhysicalType::DOUBLE:
-		templated_generate_sequence<double>(result, count, sel, start, increment);
+		TemplatedGenerateSequence<double>(result, count, sel, start, increment);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for generate sequence");

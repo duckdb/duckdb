@@ -5,10 +5,10 @@
 
 namespace duckdb {
 
-const idx_t MorselInfo::MORSEL_VECTOR_COUNT;
-const idx_t MorselInfo::MORSEL_SIZE;
-const idx_t MorselInfo::MORSEL_LAYER_COUNT;
-const idx_t MorselInfo::MORSEL_LAYER_SIZE;
+constexpr const idx_t MorselInfo::MORSEL_VECTOR_COUNT;
+constexpr const idx_t MorselInfo::MORSEL_SIZE;
+constexpr const idx_t MorselInfo::MORSEL_LAYER_COUNT;
+constexpr const idx_t MorselInfo::MORSEL_LAYER_SIZE;
 
 ChunkInfo *MorselInfo::GetChunkInfo(idx_t vector_idx) {
 	if (!root) {
@@ -161,6 +161,9 @@ void VersionDeleteState::Delete(row_t row_id) {
 			// info exists but it's a constant info: convert to a vector info
 			auto new_info = make_unique<ChunkVectorInfo>(info.start + vector_idx * STANDARD_VECTOR_SIZE, info);
 			new_info->insert_id = constant.insert_id;
+			for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
+				new_info->inserted[i] = constant.insert_id;
+			}
 			info.root->info[vector_idx] = move(new_info);
 		}
 		D_ASSERT(info.root->info[vector_idx]->type == ChunkInfoType::VECTOR_INFO);

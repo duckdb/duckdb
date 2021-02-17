@@ -1,12 +1,10 @@
-#include "duckdb/parser/statement/alter_table_statement.hpp"
+#include "duckdb/parser/statement/alter_statement.hpp"
 #include "duckdb/parser/statement/transaction_statement.hpp"
 #include "duckdb/planner/operator/logical_simple.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/planner/binder.hpp"
-
-using namespace std;
 
 //! This file contains the binder definitions for statements that do not need to be bound at all and only require a
 //! straightforward conversion

@@ -3,7 +3,7 @@
 
 namespace duckdb {
 
-static void base64_encode_function(DataChunk &args, ExpressionState &state, Vector &result) {
+static void Base64EncodeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	// decode is also a nop cast, but requires verification if the provided string is actually
 	UnaryExecutor::Execute<string_t, string_t, true>(args.data[0], result, args.size(), [&](string_t input) {
 		auto result_str = StringVector::EmptyString(result, Blob::ToBase64Size(input));
@@ -13,7 +13,7 @@ static void base64_encode_function(DataChunk &args, ExpressionState &state, Vect
 	});
 }
 
-static void base64_decode_function(DataChunk &args, ExpressionState &state, Vector &result) {
+static void Base64DecodeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	// decode is also a nop cast, but requires verification if the provided string is actually
 	UnaryExecutor::Execute<string_t, string_t, true>(args.data[0], result, args.size(), [&](string_t input) {
 		auto result_size = Blob::FromBase64Size(input);
@@ -26,12 +26,12 @@ static void base64_decode_function(DataChunk &args, ExpressionState &state, Vect
 
 void Base64Fun::RegisterFunction(BuiltinFunctions &set) {
 	// base64 encode
-	ScalarFunction to_base64("base64", {LogicalType::BLOB}, LogicalType::VARCHAR, base64_encode_function);
+	ScalarFunction to_base64("base64", {LogicalType::BLOB}, LogicalType::VARCHAR, Base64EncodeFunction);
 	set.AddFunction(to_base64);
 	to_base64.name = "to_base64"; // mysql alias
 	set.AddFunction(to_base64);
 
-	set.AddFunction(ScalarFunction("from_base64", {LogicalType::VARCHAR}, LogicalType::BLOB, base64_decode_function));
+	set.AddFunction(ScalarFunction("from_base64", {LogicalType::VARCHAR}, LogicalType::BLOB, Base64DecodeFunction));
 }
 
 } // namespace duckdb

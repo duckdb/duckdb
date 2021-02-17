@@ -1,12 +1,10 @@
 #include "duckdb/execution/operator/set/physical_union.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 class PhysicalUnionOperatorState : public PhysicalOperatorState {
 public:
-	PhysicalUnionOperatorState(PhysicalOperator &op) : PhysicalOperatorState(op, nullptr), top_done(false) {
+	explicit PhysicalUnionOperatorState(PhysicalOperator &op) : PhysicalOperatorState(op, nullptr), top_done(false) {
 	}
 	unique_ptr<PhysicalOperatorState> top_state;
 	unique_ptr<PhysicalOperatorState> bottom_state;
@@ -21,8 +19,8 @@ PhysicalUnion::PhysicalUnion(vector<LogicalType> types, unique_ptr<PhysicalOpera
 }
 
 // first exhaust top, then exhaust bottom. state to remember which.
-void PhysicalUnion::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
-	auto state = reinterpret_cast<PhysicalUnionOperatorState *>(state_);
+void PhysicalUnion::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
+	auto state = reinterpret_cast<PhysicalUnionOperatorState *>(state_p);
 	if (!state->top_done) {
 		children[0]->GetChunk(context, chunk, state->top_state.get());
 		if (chunk.size() == 0) {

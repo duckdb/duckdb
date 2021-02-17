@@ -16,7 +16,7 @@ namespace duckdb {
 class VectorBuffer;
 
 struct SelectionData {
-	SelectionData(idx_t count) {
+	explicit SelectionData(idx_t count) {
 		owned_data = unique_ptr<sel_t[]>(new sel_t[count]);
 	}
 
@@ -26,10 +26,10 @@ struct SelectionData {
 struct SelectionVector {
 	SelectionVector() : sel_vector(nullptr) {
 	}
-	SelectionVector(sel_t *sel) {
+	explicit SelectionVector(sel_t *sel) {
 		Initialize(sel);
 	}
-	SelectionVector(idx_t count) {
+	explicit SelectionVector(idx_t count) {
 		Initialize(count);
 	}
 	SelectionVector(idx_t start, idx_t count) {
@@ -41,7 +41,7 @@ struct SelectionVector {
 	SelectionVector(const SelectionVector &sel_vector) {
 		Initialize(sel_vector);
 	}
-	SelectionVector(buffer_ptr<SelectionData> data) {
+	explicit SelectionVector(buffer_ptr<SelectionData> data) {
 		Initialize(move(data));
 	}
 

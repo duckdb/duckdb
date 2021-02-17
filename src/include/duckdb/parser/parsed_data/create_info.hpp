@@ -23,11 +23,11 @@ enum class OnCreateConflict : uint8_t {
 };
 
 struct CreateInfo : public ParseInfo {
-	CreateInfo(CatalogType type, string schema = DEFAULT_SCHEMA)
+	explicit CreateInfo(CatalogType type, string schema = DEFAULT_SCHEMA)
 	    : type(type), schema(schema), on_conflict(OnCreateConflict::ERROR_ON_CONFLICT), temporary(false),
 	      internal(false) {
 	}
-	virtual ~CreateInfo() {
+	~CreateInfo() override {
 	}
 
 	//! The to-be-created catalog type
@@ -42,6 +42,17 @@ struct CreateInfo : public ParseInfo {
 	bool internal;
 	//! The SQL string of the CREATE statement
 	string sql;
+
+public:
+	virtual unique_ptr<CreateInfo> Copy() const = 0;
+	void CopyProperties(CreateInfo &other) const {
+		other.type = type;
+		other.schema = schema;
+		other.on_conflict = on_conflict;
+		other.temporary = temporary;
+		other.internal = internal;
+		other.sql = sql;
+	}
 };
 
 } // namespace duckdb

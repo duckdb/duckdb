@@ -9,8 +9,25 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/transaction/transaction.hpp"
+
 namespace duckdb {
-using namespace std;
+
+static bool CanPlanIndexJoin(Transaction &transaction, TableScanBindData *bind_data, PhysicalTableScan &scan) {
+	if (!bind_data) {
+		// not a table scan
+		return false;
+	}
+	auto table = bind_data->table;
+	if (transaction.storage.Find(table->storage.get())) {
+		// transaction local appends: skip index join
+		return false;
+	}
+	if (scan.table_filters && !scan.table_filters->filters.empty()) {
+		// table scan filters
+		return false;
+	}
+	return true;
+}
 
 void TransformIndexJoin(ClientContext &context, LogicalComparisonJoin &op, Index **left_index, Index **right_index,
                         PhysicalOperator *left, PhysicalOperator *right) {
@@ -22,7 +39,7 @@ void TransformIndexJoin(ClientContext &context, LogicalComparisonJoin &op, Index
 		if (left->type == PhysicalOperatorType::TABLE_SCAN) {
 			auto &tbl_scan = (PhysicalTableScan &)*left;
 			auto tbl = dynamic_cast<TableScanBindData *>(tbl_scan.bind_data.get());
-			if (tbl && !transaction.storage.Find(tbl->table->storage.get()) && tbl_scan.table_filters.empty()) {
+			if (CanPlanIndexJoin(transaction, tbl, tbl_scan)) {
 				for (auto &index : tbl->table->storage->info->indexes) {
 					if (index->unbound_expressions[0]->alias == op.conditions[0].left->alias) {
 						*left_index = index.get();
@@ -34,7 +51,7 @@ void TransformIndexJoin(ClientContext &context, LogicalComparisonJoin &op, Index
 		if (right->type == PhysicalOperatorType::TABLE_SCAN) {
 			auto &tbl_scan = (PhysicalTableScan &)*right;
 			auto tbl = dynamic_cast<TableScanBindData *>(tbl_scan.bind_data.get());
-			if (tbl && !transaction.storage.Find(tbl->table->storage.get()) && tbl_scan.table_filters.empty()) {
+			if (CanPlanIndexJoin(transaction, tbl, tbl_scan)) {
 				for (auto &index : tbl->table->storage->info->indexes) {
 					if (index->unbound_expressions[0]->alias == op.conditions[0].right->alias) {
 						*right_index = index.get();
@@ -49,13 +66,13 @@ void TransformIndexJoin(ClientContext &context, LogicalComparisonJoin &op, Index
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparisonJoin &op) {
 	// now visit the children
 	D_ASSERT(op.children.size() == 2);
-	idx_t lhs_cardinality = op.children[0]->EstimateCardinality();
-	idx_t rhs_cardinality = op.children[1]->EstimateCardinality();
+	idx_t lhs_cardinality = op.children[0]->EstimateCardinality(context);
+	idx_t rhs_cardinality = op.children[1]->EstimateCardinality(context);
 	auto left = CreatePlan(*op.children[0]);
 	auto right = CreatePlan(*op.children[1]);
 	D_ASSERT(left && right);
 
-	if (op.conditions.size() == 0) {
+	if (op.conditions.empty()) {
 		// no conditions: insert a cross product
 		return make_unique<PhysicalCrossProduct>(op.types, move(left), move(right));
 	}
@@ -67,7 +84,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 		if (cond.comparison == ExpressionType::COMPARE_EQUAL) {
 			has_equality = true;
 		}
-		if (cond.comparison == ExpressionType::COMPARE_NOTEQUAL) {
+		if (cond.comparison == ExpressionType::COMPARE_NOTEQUAL ||
+		    cond.comparison == ExpressionType::COMPARE_DISTINCT_FROM) {
 			has_inequality = true;
 		}
 		if (cond.null_values_are_equal) {
@@ -75,11 +93,11 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 			D_ASSERT(cond.comparison == ExpressionType::COMPARE_EQUAL);
 		}
 	}
-	(void) has_null_equal_conditions;
+	(void)has_null_equal_conditions;
 
 	unique_ptr<PhysicalOperator> plan;
 	if (has_equality) {
-		Index *left_index{}, *right_index{};
+		Index *left_index {}, *right_index {};
 		TransformIndexJoin(context, op, &left_index, &right_index, left.get(), right.get());
 		if (left_index && (context.force_index_join || rhs_cardinality < 0.01 * lhs_cardinality)) {
 			auto &tbl_scan = (PhysicalTableScan &)*left;
@@ -96,7 +114,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 		}
 		// equality join: use hash join
 		plan = make_unique<PhysicalHashJoin>(op, move(left), move(right), move(op.conditions), op.join_type,
-		                                     op.left_projection_map, op.right_projection_map);
+		                                     op.left_projection_map, op.right_projection_map, move(op.delim_types));
 	} else {
 		D_ASSERT(!has_null_equal_conditions); // don't support this for anything but hash joins for now
 		if (op.conditions.size() == 1 && !has_inequality) {

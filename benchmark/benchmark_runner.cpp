@@ -16,7 +16,6 @@
 #include <thread>
 
 using namespace duckdb;
-using namespace std;
 
 void BenchmarkRunner::RegisterBenchmark(Benchmark *benchmark) {
 	GetInstance().benchmarks.push_back(benchmark);
@@ -142,7 +141,7 @@ void BenchmarkRunner::RunBenchmark(Benchmark *benchmark) {
 		}
 		is_active = true;
 		timeout = false;
-		thread interrupt_thread(sleep_thread, benchmark, state.get(), benchmark->Timeout());
+		std::thread interrupt_thread(sleep_thread, benchmark, state.get(), benchmark->Timeout());
 
 		profiler.Start();
 		benchmark->Run(state.get());
@@ -167,7 +166,7 @@ void BenchmarkRunner::RunBenchmark(Benchmark *benchmark) {
 					LogOutput("INCORRECT RESULT: " + verify);
 					break;
 				} else {
-					LogResult(to_string(profiler.Elapsed()));
+					LogResult(std::to_string(profiler.Elapsed()));
 				}
 			}
 		} else {
@@ -264,7 +263,7 @@ ConfigurationError run_benchmarks() {
 	if (!instance.configuration.name_pattern.empty()) {
 		// run only benchmarks which names matches the
 		// passed name pattern.
-		std::vector<int> benchmark_indices{};
+		std::vector<int> benchmark_indices {};
 		benchmark_indices.reserve(benchmarks.size());
 		for (idx_t index = 0; index < benchmarks.size(); ++index) {
 			if (RE2::FullMatch(benchmarks[index]->name, instance.configuration.name_pattern)) {
@@ -285,7 +284,8 @@ ConfigurationError run_benchmarks() {
 				auto display_name = benchmarks[benchmark_index]->DisplayName();
 				auto display_group = benchmarks[benchmark_index]->Group();
 				auto subgroup = benchmarks[benchmark_index]->Subgroup();
-				fprintf(stdout, "display_name:%s\ngroup:%s\nsubgroup:%s\n", display_name.c_str(), display_group.c_str(), subgroup.c_str());
+				fprintf(stdout, "display_name:%s\ngroup:%s\nsubgroup:%s\n", display_name.c_str(), display_group.c_str(),
+				        subgroup.c_str());
 			}
 		} else if (instance.configuration.meta == BenchmarkMetaType::QUERY) {
 			for (const auto &benchmark_index : benchmark_indices) {

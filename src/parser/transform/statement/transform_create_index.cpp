@@ -6,8 +6,6 @@
 #include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
-using namespace std;
-using namespace duckdb_libpgquery;
 
 static IndexType StringToIndexType(const string &str) {
 	string upper_str = StringUtil::Upper(str);
@@ -21,17 +19,18 @@ static IndexType StringToIndexType(const string &str) {
 	return IndexType::INVALID;
 }
 
-unique_ptr<CreateStatement> Transformer::TransformCreateIndex(PGNode *node) {
-	auto stmt = reinterpret_cast<PGIndexStmt *>(node);
+unique_ptr<CreateStatement> Transformer::TransformCreateIndex(duckdb_libpgquery::PGNode *node) {
+	auto stmt = reinterpret_cast<duckdb_libpgquery::PGIndexStmt *>(node);
 	D_ASSERT(stmt);
 	auto result = make_unique<CreateStatement>();
 	auto info = make_unique<CreateIndexInfo>();
 
 	info->unique = stmt->unique;
-	info->on_conflict = stmt->if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
+	info->on_conflict =
+	    stmt->if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 
 	for (auto cell = stmt->indexParams->head; cell != nullptr; cell = cell->next) {
-		auto index_element = (PGIndexElem *)cell->data.ptr_value;
+		auto index_element = (duckdb_libpgquery::PGIndexElem *)cell->data.ptr_value;
 		if (index_element->collation) {
 			throw NotImplementedException("Index with collation not supported yet!");
 		}

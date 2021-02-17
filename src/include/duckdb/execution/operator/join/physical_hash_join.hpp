@@ -20,8 +20,8 @@ namespace duckdb {
 class PhysicalHashJoin : public PhysicalComparisonJoin {
 public:
 	PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right,
-	                 vector<JoinCondition> cond, JoinType join_type, vector<idx_t> left_projection_map,
-	                 vector<idx_t> right_projection_map);
+	                 vector<JoinCondition> cond, JoinType join_type, const vector<idx_t> &left_projection_map,
+	                 const vector<idx_t> &right_projection_map, vector<LogicalType> delim_types);
 	PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right,
 	                 vector<JoinCondition> cond, JoinType join_type);
 
@@ -44,7 +44,7 @@ public:
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 
 private:
-	void ProbeHashTable(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_);
+	void ProbeHashTable(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p);
 };
 
 } // namespace duckdb

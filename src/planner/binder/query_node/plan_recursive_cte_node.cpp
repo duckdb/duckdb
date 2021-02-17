@@ -6,7 +6,6 @@
 #include "duckdb/planner/query_node/bound_recursive_cte_node.hpp"
 
 namespace duckdb {
-using namespace std;
 
 unique_ptr<LogicalOperator> Binder::CreatePlan(BoundRecursiveCTENode &node) {
 	// Generate the logical plan for the left and right sides of the set operation
@@ -24,7 +23,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundRecursiveCTENode &node) {
 	left_node = CastLogicalOperatorToTypes(node.left->types, node.types, move(left_node));
 	right_node = CastLogicalOperatorToTypes(node.right->types, node.types, move(right_node));
 
-	if (node.right_binder->bind_context.cte_references[node.ctename] == 0) {
+	if (node.right_binder->bind_context.cte_references[node.ctename] == nullptr) {
 		auto root = make_unique<LogicalSetOperation>(node.setop_index, node.types.size(), move(left_node),
 		                                             move(right_node), LogicalOperatorType::LOGICAL_UNION);
 		return VisitQueryNode(node, move(root));

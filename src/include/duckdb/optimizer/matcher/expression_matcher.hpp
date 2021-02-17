@@ -20,7 +20,7 @@ namespace duckdb {
 //! The ExpressionMatcher class contains a set of matchers that can be used to pattern match Expressions
 class ExpressionMatcher {
 public:
-	ExpressionMatcher(ExpressionClass type = ExpressionClass::INVALID) : expr_class(type) {
+	explicit ExpressionMatcher(ExpressionClass type = ExpressionClass::INVALID) : expr_class(type) {
 	}
 	virtual ~ExpressionMatcher() {
 	}
@@ -40,7 +40,8 @@ public:
 //! The ExpressionEqualityMatcher matches on equality with another (given) expression
 class ExpressionEqualityMatcher : public ExpressionMatcher {
 public:
-	ExpressionEqualityMatcher(Expression *expr) : ExpressionMatcher(ExpressionClass::INVALID), expression(expr) {
+	explicit ExpressionEqualityMatcher(Expression *expr)
+	    : ExpressionMatcher(ExpressionClass::INVALID), expression(expr) {
 	}
 
 	bool Match(Expression *expr, vector<Expression *> &bindings) override;
@@ -82,6 +83,18 @@ public:
 class ComparisonExpressionMatcher : public ExpressionMatcher {
 public:
 	ComparisonExpressionMatcher() : ExpressionMatcher(ExpressionClass::BOUND_COMPARISON) {
+	}
+	//! The matchers for the child expressions
+	vector<unique_ptr<ExpressionMatcher>> matchers;
+	//! The set matcher matching policy to use
+	SetMatcher::Policy policy;
+
+	bool Match(Expression *expr_, vector<Expression *> &bindings) override;
+};
+
+class InClauseExpressionMatcher : public ExpressionMatcher {
+public:
+	InClauseExpressionMatcher() : ExpressionMatcher(ExpressionClass::BOUND_OPERATOR) {
 	}
 	//! The matchers for the child expressions
 	vector<unique_ptr<ExpressionMatcher>> matchers;

@@ -5,18 +5,16 @@
 #include "duckdb/common/types/decimal.hpp"
 
 namespace duckdb {
-using namespace std;
-using namespace duckdb_libpgquery;
 
-unique_ptr<ConstantExpression> Transformer::TransformValue(PGValue val) {
+unique_ptr<ConstantExpression> Transformer::TransformValue(duckdb_libpgquery::PGValue val) {
 	switch (val.type) {
-	case T_PGInteger:
+	case duckdb_libpgquery::T_PGInteger:
 		D_ASSERT(val.val.ival <= NumericLimits<int32_t>::Maximum());
 		return make_unique<ConstantExpression>(Value::INTEGER((int32_t)val.val.ival));
-	case T_PGBitString: // FIXME: this should actually convert to BLOB
-	case T_PGString:
+	case duckdb_libpgquery::T_PGBitString: // FIXME: this should actually convert to BLOB
+	case duckdb_libpgquery::T_PGString:
 		return make_unique<ConstantExpression>(Value(string(val.val.str)));
-	case T_PGFloat: {
+	case duckdb_libpgquery::T_PGFloat: {
 		string_t str_val(val.val.str);
 		bool try_cast_as_integer = true;
 		bool try_cast_as_decimal = true;
@@ -47,10 +45,10 @@ unique_ptr<ConstantExpression> Transformer::TransformValue(PGValue val) {
 				return make_unique<ConstantExpression>(Value::HUGEINT(hugeint_value));
 			}
 		}
-		if (try_cast_as_decimal && decimal_position >= 0) {
+		if (try_cast_as_decimal && decimal_position >= 0 && str_val.GetSize() < Decimal::MAX_WIDTH_DECIMAL + 2) {
 			// figure out the width/scale based on the decimal position
-			int width = str_val.GetSize() - 1;
-			int scale = width - decimal_position;
+			auto width = uint8_t(str_val.GetSize() - 1);
+			auto scale = uint8_t(width - decimal_position);
 			if (val.val.str[0] == '-') {
 				width--;
 			}
@@ -68,14 +66,14 @@ unique_ptr<ConstantExpression> Transformer::TransformValue(PGValue val) {
 		}
 		return make_unique<ConstantExpression>(Value::DOUBLE(dbl_value));
 	}
-	case T_PGNull:
+	case duckdb_libpgquery::T_PGNull:
 		return make_unique<ConstantExpression>(Value(LogicalType::SQLNULL));
 	default:
 		throw NotImplementedException("Value not implemented!");
 	}
 }
 
-unique_ptr<ParsedExpression> Transformer::TransformConstant(PGAConst *c) {
+unique_ptr<ParsedExpression> Transformer::TransformConstant(duckdb_libpgquery::PGAConst *c) {
 	return TransformValue(c->val);
 }
 

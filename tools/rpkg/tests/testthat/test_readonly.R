@@ -36,7 +36,6 @@ test_that("read_only flag and shutdown works as expected", {
 
   dbDisconnect(con)
   dbDisconnect(con2, shutdown = TRUE)
-  duckdb::duckdb_shutdown(con@driver)
 
 
   # now we can get write access again

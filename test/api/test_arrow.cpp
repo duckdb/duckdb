@@ -1,6 +1,6 @@
 #include "catch.hpp"
-#include "test_helpers.hpp"
 #include "duckdb/common/arrow.hpp"
+#include "test_helpers.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -33,10 +33,10 @@ struct MyArrowArrayStream {
 			return -1;
 		}
 		auto chunk = my_stream->duckdb_result->Fetch();
-		chunk->ToArrowArray(out);
-		if (chunk->size() == 0) {
-			out->release(out);
+		if (!chunk || chunk->size() == 0) {
+			return 0;
 		}
+		chunk->ToArrowArray(out);
 		return 0;
 	}
 
@@ -72,12 +72,12 @@ static void test_arrow_round_trip(string q) {
 	auto my_stream = new MyArrowArrayStream(move(result));
 	auto result2 = con.TableFunction("arrow_scan", {Value::POINTER((uintptr_t)&my_stream->stream)})->Execute();
 
-	idx_t column_count = result2->column_count();
+	idx_t column_count = result2->ColumnCount();
 	vector<vector<Value>> values;
 	values.resize(column_count);
 	while (true) {
 		auto chunk = result2->Fetch();
-		if (chunk->size() == 0) {
+		if (!chunk || chunk->size() == 0) {
 			break;
 		}
 		for (idx_t c = 0; c < column_count; c++) {
@@ -101,7 +101,16 @@ TEST_CASE("Test Arrow API round trip", "[arrow]") {
 	    "'1969-01-01'::date, TIME '13:07:16'::time c_time, timestamp '1992-01-01 12:00:00' c_timestamp "
 	    "from (select case when range % 2 == 0 then range else null end as c from range(-10, 10)) sq");
 	// big result set
+	test_arrow_round_trip("select i from range(0, 2000) sq(i)");
+}
+
+TEST_CASE("Test Arrow API unsigned", "[arrow]") {
+	// all unsigned types
 	test_arrow_round_trip(
-	    "select i from range(0, 2000) sq(i)");
+	    "select (c%128)::utinyint c_utinyint ,c::usmallint*1000 c_usmallint, "
+	    "c::uinteger*100000 c_uinteger, c::ubigint*1000000000000 c_ubigint from (select case when range "
+	    "% 2 == 0 then range else null end as c from range(0, 100)) sq");
+	// big result set
+	test_arrow_round_trip("select i from range(0, 2000) sq(i)");
 }
 // TODO interval decimal

@@ -21,6 +21,14 @@ public:
 	static size_t NextGraphemeCluster(const char *s, size_t len, size_t pos);
 	//! Returns the position (in bytes) of the previous grapheme cluster
 	static size_t PreviousGraphemeCluster(const char *s, size_t len, size_t pos);
+
+	//! Transform a codepoint to utf8 and writes it to "c", sets "sz" to the size of the codepoint
+	static bool CodepointToUtf8(int cp, int &sz, char *c);
+	//! Returns the codepoint length in bytes when encoded in UTF8
+	static int CodepointLength(int cp);
+	//! Transform a UTF8 string to a codepoint; returns the codepoint and writes the length of the codepoint (in UTF8) to sz
+	static int32_t UTF8ToCodepoint(const char *c, int &sz);
+
 };
 
 }

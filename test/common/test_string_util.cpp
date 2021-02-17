@@ -1,5 +1,6 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/common/to_string.hpp"
 
 #include "catch.hpp"
 
@@ -125,21 +126,21 @@ TEST_CASE("Test join vector items", "[string_util]") {
 	SECTION("Three int items") {
 		std::vector<int> int_items = {1, 2, 3};
 		std::string result =
-		    StringUtil::Join(int_items, int_items.size(), ", ", [](const int &item) { return std::to_string(item); });
+		    StringUtil::Join(int_items, int_items.size(), ", ", [](const int &item) { return to_string(item); });
 		REQUIRE(result == "1, 2, 3");
 	}
 
 	SECTION("One int item") {
 		std::vector<int> int_items = {1};
 		std::string result =
-		    StringUtil::Join(int_items, int_items.size(), ", ", [](const int &item) { return std::to_string(item); });
+		    StringUtil::Join(int_items, int_items.size(), ", ", [](const int &item) { return to_string(item); });
 		REQUIRE(result == "1");
 	}
 
 	SECTION("No int items") {
 		std::vector<int> int_items;
 		std::string result =
-		    StringUtil::Join(int_items, int_items.size(), ", ", [](const int &item) { return std::to_string(item); });
+		    StringUtil::Join(int_items, int_items.size(), ", ", [](const int &item) { return to_string(item); });
 		REQUIRE(result == "");
 	}
 }

@@ -2,13 +2,11 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/execution/adaptive_filter.hpp"
+#include "duckdb/common/chrono.hpp"
 
-#include <chrono>
 #include <random>
 
 namespace duckdb {
-using namespace std;
-using namespace chrono;
 
 struct ConjunctionState : public ExpressionState {
 	ConjunctionState(Expression &expr, ExpressionExecutorState &root) : ExpressionState(expr, root) {
@@ -55,9 +53,9 @@ void ExpressionExecutor::Execute(BoundConjunctionExpression &expr, ExpressionSta
 	}
 }
 
-idx_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionState *state_, const SelectionVector *sel,
+idx_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionState *state_p, const SelectionVector *sel,
                                  idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
-	auto state = (ConjunctionState *)state_;
+	auto state = (ConjunctionState *)state_p;
 
 	if (expr.type == ExpressionType::CONJUNCTION_AND) {
 		// get runtime statistics

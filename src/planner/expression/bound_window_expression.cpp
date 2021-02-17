@@ -2,22 +2,23 @@
 #include "duckdb/function/aggregate_function.hpp"
 
 namespace duckdb {
-using namespace std;
 
 BoundWindowExpression::BoundWindowExpression(ExpressionType type, LogicalType return_type,
-                                             unique_ptr<AggregateFunction> aggregate)
-    : Expression(type, ExpressionClass::BOUND_WINDOW, move(return_type)), aggregate(move(aggregate)) {
+                                             unique_ptr<AggregateFunction> aggregate,
+                                             unique_ptr<FunctionData> bind_info)
+    : Expression(type, ExpressionClass::BOUND_WINDOW, move(return_type)), aggregate(move(aggregate)),
+      bind_info(move(bind_info)) {
 }
 
 string BoundWindowExpression::ToString() const {
 	return "WINDOW";
 }
 
-bool BoundWindowExpression::Equals(const BaseExpression *other_) const {
-	if (!Expression::Equals(other_)) {
+bool BoundWindowExpression::Equals(const BaseExpression *other_p) const {
+	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto other = (BoundWindowExpression *)other_;
+	auto other = (BoundWindowExpression *)other_p;
 
 	if (start != other->start || end != other->end) {
 		return false;
@@ -65,11 +66,14 @@ bool BoundWindowExpression::Equals(const BaseExpression *other_) const {
 }
 
 unique_ptr<Expression> BoundWindowExpression::Copy() {
-	auto new_window = make_unique<BoundWindowExpression>(type, return_type, nullptr);
+	auto new_window = make_unique<BoundWindowExpression>(type, return_type, nullptr, nullptr);
 	new_window->CopyProperties(*this);
 
 	if (aggregate) {
 		new_window->aggregate = make_unique<AggregateFunction>(*aggregate);
+	}
+	if (bind_info) {
+		new_window->bind_info = bind_info->Copy();
 	}
 	for (auto &child : children) {
 		new_window->children.push_back(child->Copy());
@@ -79,7 +83,7 @@ unique_ptr<Expression> BoundWindowExpression::Copy() {
 	}
 
 	for (auto &o : orders) {
-		new_window->orders.push_back(BoundOrderByNode(o.type, o.null_order, o.expression->Copy()));
+		new_window->orders.emplace_back(o.type, o.null_order, o.expression->Copy());
 	}
 
 	new_window->start = start;

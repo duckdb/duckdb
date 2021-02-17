@@ -3,12 +3,10 @@
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
-#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/operator/logical_distinct.hpp"
 
 namespace duckdb {
-using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreateDistinctOn(unique_ptr<PhysicalOperator> child,
                                                                      vector<unique_ptr<Expression>> distinct_targets) {
@@ -53,7 +51,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreateDistinctOn(unique_ptr<
 			vector<unique_ptr<Expression>> first_children;
 			first_children.push_back(move(bound));
 			auto first_aggregate = AggregateFunction::BindAggregateFunction(
-			    context, FirstFun::GetFunction(logical_type), move(first_children), false);
+			    context, FirstFun::GetFunction(logical_type), move(first_children), nullptr, false);
 			// add the projection
 			projections.push_back(make_unique<BoundReferenceExpression>(logical_type, group_count + aggregates.size()));
 			// push it to the list of aggregates
@@ -63,9 +61,10 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreateDistinctOn(unique_ptr<
 		}
 	}
 
+	child = ExtractAggregateExpressions(move(child), aggregates, groups);
+
 	// we add a physical hash aggregation in the plan to select the distinct groups
-	auto groupby = make_unique<PhysicalHashAggregate>(context, aggregate_types, move(aggregates), move(groups),
-	                                                  PhysicalOperatorType::DISTINCT);
+	auto groupby = make_unique<PhysicalHashAggregate>(context, aggregate_types, move(aggregates), move(groups));
 	groupby->children.push_back(move(child));
 	if (!requires_projection) {
 		return move(groupby);

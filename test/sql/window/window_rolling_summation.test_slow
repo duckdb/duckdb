@@ -1,4 +1,4 @@
-# name: test/sql/window/window_rolling_summation.test
+# name: test/sql/window/window_rolling_summation.test_slow
 # description: Rolling summation (issue #965)
 # group: [window]
 

@@ -119,6 +119,65 @@ makeStringConstCast(char *str, int location, PGTypeName *tpname)
 }
 
 static PGNode *
+makeIntervalNode(char *str, int location, PGList *typmods) {
+	PGIntervalConstant *n = makeNode(PGIntervalConstant);
+
+	n->val_type = T_PGString;
+	n->sval = str;
+	n->location = location;
+	n->typmods = typmods;
+
+	return (PGNode *)n;
+
+}
+
+static PGNode *
+makeIntervalNode(int val, int location, PGList *typmods) {
+	PGIntervalConstant *n = makeNode(PGIntervalConstant);
+
+	n->val_type = T_PGInteger;
+	n->ival = val;
+	n->location = location;
+	n->typmods = typmods;
+
+	return (PGNode *)n;
+}
+
+static PGNode *
+makeIntervalNode(PGNode *arg, int location, PGList *typmods) {
+	PGIntervalConstant *n = makeNode(PGIntervalConstant);
+
+	n->val_type = T_PGAExpr;
+	n->eval = arg;
+	n->location = location;
+	n->typmods = typmods;
+
+	return (PGNode *)n;
+}
+
+static PGNode *
+makeSampleSize(PGValue *sample_size, bool is_percentage) {
+	PGSampleSize *n = makeNode(PGSampleSize);
+
+	n->sample_size = *sample_size;
+	n->is_percentage = is_percentage;
+
+	return (PGNode *)n;
+}
+
+static PGNode *
+makeSampleOptions(PGNode *sample_size, char *method, int seed, int location) {
+	PGSampleOptions *n = makeNode(PGSampleOptions);
+
+	n->sample_size = sample_size;
+	n->method = method;
+	n->seed = seed;
+	n->location = location;
+
+	return (PGNode *)n;
+}
+
+static PGNode *
 makeIntConst(int val, int location)
 {
 	PGAConst *n = makeNode(PGAConst);

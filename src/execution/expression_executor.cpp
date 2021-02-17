@@ -1,9 +1,9 @@
 #include "duckdb/execution/expression_executor.hpp"
 
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
-using namespace std;
 
 ExpressionExecutor::ExpressionExecutor() {
 }
@@ -39,8 +39,8 @@ void ExpressionExecutor::Initialize(Expression &expression, ExpressionExecutorSt
 void ExpressionExecutor::Execute(DataChunk *input, DataChunk &result) {
 	SetChunk(input);
 
-	D_ASSERT(expressions.size() == result.column_count());
-	D_ASSERT(expressions.size() > 0);
+	D_ASSERT(expressions.size() == result.ColumnCount());
+	D_ASSERT(!expressions.empty());
 	for (idx_t i = 0; i < expressions.size(); i++) {
 		ExecuteExpression(i, result.data[i]);
 	}
@@ -66,7 +66,7 @@ void ExpressionExecutor::ExecuteExpression(Vector &result) {
 
 void ExpressionExecutor::ExecuteExpression(idx_t expr_idx, Vector &result) {
 	D_ASSERT(expr_idx < expressions.size());
-	D_ASSERT(result.type == expressions[expr_idx]->return_type);
+	D_ASSERT(result.GetType() == expressions[expr_idx]->return_type);
 	Execute(*expressions[expr_idx], states[expr_idx]->root_state.get(), nullptr, chunk ? chunk->size() : 1, result);
 }
 
@@ -78,15 +78,18 @@ Value ExpressionExecutor::EvaluateScalar(Expression &expr) {
 	Vector result(expr.return_type);
 	executor.ExecuteExpression(result);
 
-	D_ASSERT(result.vector_type == VectorType::CONSTANT_VECTOR);
+	D_ASSERT(result.GetVectorType() == VectorType::CONSTANT_VECTOR);
 	auto result_value = result.GetValue(0);
 	D_ASSERT(result_value.type() == expr.return_type);
 	return result_value;
 }
 
 void ExpressionExecutor::Verify(Expression &expr, Vector &vector, idx_t count) {
-	D_ASSERT(expr.return_type == vector.type);
+	D_ASSERT(expr.return_type == vector.GetType());
 	vector.Verify(count);
+	if (expr.stats) {
+		expr.stats->Verify(vector, count);
+	}
 }
 
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(Expression &expr, ExpressionExecutorState &state) {
@@ -230,7 +233,7 @@ idx_t ExpressionExecutor::DefaultSelect(Expression &expr, ExpressionState *state
 	VectorData idata;
 	intermediate.Orrify(count, idata);
 	if (!sel) {
-		sel = &FlatVector::IncrementalSelectionVector;
+		sel = &FlatVector::INCREMENTAL_SELECTION_VECTOR;
 	}
 	if (idata.nullmask->any()) {
 		return DefaultSelectSwitch<false>(idata, sel, count, true_sel, false_sel);

@@ -4,7 +4,6 @@
 #include "duckdb/planner/operator/logical_create_index.hpp"
 
 namespace duckdb {
-using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateIndex &op) {
 	D_ASSERT(op.children.size() == 0);

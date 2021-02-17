@@ -1,0 +1,96 @@
+# name: test/sql/copy/parquet/test_parquet_filter_pushdown.test
+# description: Test basic parquet reading
+# group: [parquet]
+
+require parquet
+require vector_size 512
+
+statement ok
+pragma enable_verification
+
+# userdata1.parquet
+query I
+SELECT COUNT(*) FROM parquet_scan('test/sql/copy/parquet/data/userdata1.parquet') where id > 500
+----
+500
+
+query I
+SELECT COUNT(*) FROM parquet_scan('test/sql/copy/parquet/data/userdata1.parquet') where id < 500
+----
+499
+
+query I
+SELECT COUNT(*) FROM parquet_scan('test/sql/copy/parquet/data/userdata1.parquet') where id > 100 and id < 900
+----
+799
+
+query I
+SELECT COUNT(*) FROM parquet_scan('test/sql/copy/parquet/data/userdata1.parquet') where id between 100 and 900
+----
+801
+
+query IIIII
+SELECT registration_dttm, id, first_name, birthdate, salary FROM parquet_scan('test/sql/copy/parquet/data/userdata1.parquet') where id = 42
+----
+2016-02-03 04:33:04	42	Todd	12/19/1999	284728.990000
+
+
+query I
+SELECT COUNT(*) FROM parquet_scan('test/sql/copy/parquet/data/userdata1.parquet') where id = 42
+----
+1
+
+query I
+SELECT COUNT(*) FROM parquet_scan('test/sql/copy/parquet/data/userdata1.parquet') where salary < 1000
+----
+0
+
+query I
+SELECT COUNT(*) FROM parquet_scan('test/sql/copy/parquet/data/userdata1.parquet') where salary < 1000
+----
+0
+
+query II
+SELECT first_name, gender FROM parquet_scan('test/sql/copy/parquet/data/userdata1.parquet') where first_name = 'Mark' and gender <> ''
+----
+Mark	Male
+Mark	Male
+Mark	Male
+Mark	Male
+Mark	Male
+Mark	Male
+Mark	Male
+Mark	Male
+Mark	Male
+Mark	Male
+
+query I
+SELECT COUNT(*) FROM parquet_scan('test/sql/copy/parquet/data/userdata1.parquet') where gender = 'Male' and first_name = 'Mark'
+----
+10
+
+
+query I
+SELECT last_name FROM parquet_scan('test/sql/copy/parquet/data/userdata1.parquet') where first_name > 'Mark' and country > 'Germany' and salary > 0 order by last_name limit 10
+----
+Adams
+Adams
+Allen
+Allen
+Allen
+Alvarez
+Alvarez
+Alvarez
+Arnold
+Arnold
+
+
+query I
+SELECT length(l_comment) FROM parquet_scan('test/sql/copy/parquet/data/lineitem-top10000.gzip.parquet') where l_orderkey = 1 order by l_comment
+----
+24
+17
+23
+23
+34
+29

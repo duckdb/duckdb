@@ -3,10 +3,13 @@
 #include "duckdb/common/printer.hpp"
 
 namespace duckdb {
-using namespace std;
 
 void BaseExpression::Print() {
 	Printer::Print(ToString());
+}
+
+string BaseExpression::GetName() const {
+	return !alias.empty() ? alias : ToString();
 }
 
 bool BaseExpression::Equals(const BaseExpression *other) const {

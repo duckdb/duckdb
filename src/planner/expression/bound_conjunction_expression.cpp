@@ -2,7 +2,6 @@
 #include "duckdb/parser/expression_util.hpp"
 
 namespace duckdb {
-using namespace std;
 
 BoundConjunctionExpression::BoundConjunctionExpression(ExpressionType type)
     : Expression(type, ExpressionClass::BOUND_CONJUNCTION, LogicalType::BOOLEAN) {
@@ -23,11 +22,11 @@ string BoundConjunctionExpression::ToString() const {
 	return result + ")";
 }
 
-bool BoundConjunctionExpression::Equals(const BaseExpression *other_) const {
-	if (!Expression::Equals(other_)) {
+bool BoundConjunctionExpression::Equals(const BaseExpression *other_p) const {
+	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto other = (BoundConjunctionExpression *)other_;
+	auto other = (BoundConjunctionExpression *)other_p;
 	return ExpressionUtil::SetEquals(children, other->children);
 }
 

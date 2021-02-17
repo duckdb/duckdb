@@ -9,7 +9,7 @@ ProjectionRelation::ProjectionRelation(shared_ptr<Relation> child_p,
                                        vector<unique_ptr<ParsedExpression>> parsed_expressions, vector<string> aliases)
     : Relation(child_p->context, RelationType::PROJECTION_RELATION), expressions(move(parsed_expressions)),
       child(move(child_p)) {
-	if (aliases.size() > 0) {
+	if (!aliases.empty()) {
 		if (aliases.size() != expressions.size()) {
 			throw ParserException("Aliases list length must match expression list length!");
 		}

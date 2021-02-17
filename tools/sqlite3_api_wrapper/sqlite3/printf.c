@@ -9,10 +9,10 @@ struct StrAccum {
 	u8 accError;    /* STRACCUM_NOMEM or STRACCUM_TOOBIG */
 	u8 printfFlags; /* SQLITE_PRINTF flags below */
 };
-#define STRACCUM_NOMEM 1
-#define STRACCUM_TOOBIG 2
+#define STRACCUM_NOMEM         1
+#define STRACCUM_TOOBIG        2
 #define SQLITE_PRINTF_INTERNAL 0x01 /* Internal-use-only converters allowed */
-#define SQLITE_PRINTF_SQLFUNC 0x02  /* SQL function arguments to VXPrintf */
+#define SQLITE_PRINTF_SQLFUNC  0x02 /* SQL function arguments to VXPrintf */
 #define SQLITE_PRINTF_MALLOCED 0x04 /* True if xText is allocated space */
 
 #define isMalloced(X) (((X)->printfFlags & SQLITE_PRINTF_MALLOCED) != 0)
@@ -41,26 +41,26 @@ void sqlite3StrAccumReset(StrAccum *p);
 ** Conversion types fall into various categories as defined by the
 ** following enumeration.
 */
-#define etRADIX 0     /* non-decimal integer types.  %x %o */
-#define etFLOAT 1     /* Floating point.  %f */
-#define etEXP 2       /* Exponentional notation. %e and %E */
-#define etGENERIC 3   /* Floating or exponential, depending on exponent. %g */
-#define etSIZE 4      /* Return number of characters processed so far. %n */
-#define etSTRING 5    /* Strings. %s */
+#define etRADIX     0 /* non-decimal integer types.  %x %o */
+#define etFLOAT     1 /* Floating point.  %f */
+#define etEXP       2 /* Exponentional notation. %e and %E */
+#define etGENERIC   3 /* Floating or exponential, depending on exponent. %g */
+#define etSIZE      4 /* Return number of characters processed so far. %n */
+#define etSTRING    5 /* Strings. %s */
 #define etDYNSTRING 6 /* Dynamically allocated strings. %z */
-#define etPERCENT 7   /* Percent symbol. %% */
-#define etCHARX 8     /* Characters. %c */
+#define etPERCENT   7 /* Percent symbol. %% */
+#define etCHARX     8 /* Characters. %c */
 /* The rest are extensions, not normally found in printf() */
 #define etSQLESCAPE 9 /* Strings with '\'' doubled.  %q */
 #define etSQLESCAPE2                                                                                                   \
 	10                  /* Strings with '\'' doubled and enclosed in '',                                               \
 	                      NULL pointers replaced by SQL NULL.  %Q */
-#define etTOKEN 11      /* a pointer to a Token structure */
-#define etSRCLIST 12    /* a pointer to a SrcList */
-#define etPOINTER 13    /* The %p conversion */
+#define etTOKEN      11 /* a pointer to a Token structure */
+#define etSRCLIST    12 /* a pointer to a SrcList */
+#define etPOINTER    13 /* The %p conversion */
 #define etSQLESCAPE3 14 /* %w -> Strings with '\"' doubled */
-#define etORDINAL 15    /* %r -> 1st, 2nd, 3rd, 4th, etc.  English only */
-#define etDECIMAL 16    /* %d or %u, but not %x, %o */
+#define etORDINAL    15 /* %r -> 1st, 2nd, 3rd, 4th, etc.  English only */
+#define etDECIMAL    16 /* %d or %u, but not %x, %o */
 
 #define etINVALID 17 /* Any unrecognized conversion type */
 

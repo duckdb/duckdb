@@ -5,7 +5,6 @@
 #include "duckdb/planner/operator/logical_empty_result.hpp"
 
 namespace duckdb {
-using namespace std;
 
 using Filter = FilterPushdown::Filter;
 
@@ -28,8 +27,8 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownInnerJoin(unique_ptr<Logical
 		D_ASSERT(op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN);
 		auto &comp_join = (LogicalComparisonJoin &)join;
 		// turn the conditions into filters
-		for (idx_t i = 0; i < comp_join.conditions.size(); i++) {
-			auto condition = JoinCondition::CreateExpression(move(comp_join.conditions[i]));
+		for (auto &i : comp_join.conditions) {
+			auto condition = JoinCondition::CreateExpression(move(i));
 			if (AddFilter(move(condition)) == FilterResult::UNSATISFIABLE) {
 				// filter statically evaluates to false, strip tree
 				return make_unique<LogicalEmptyResult>(move(op));

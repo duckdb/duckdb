@@ -15,7 +15,8 @@ namespace duckdb {
 //! LogicalDummyScan represents a dummy scan returning a single row
 class LogicalDummyScan : public LogicalOperator {
 public:
-	LogicalDummyScan(idx_t table_index) : LogicalOperator(LogicalOperatorType::LOGICAL_DUMMY_SCAN), table_index(table_index) {
+	explicit LogicalDummyScan(idx_t table_index)
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_DUMMY_SCAN), table_index(table_index) {
 	}
 
 	idx_t table_index;
@@ -25,7 +26,7 @@ public:
 		return {ColumnBinding(table_index, 0)};
 	}
 
-	idx_t EstimateCardinality() override {
+	idx_t EstimateCardinality(ClientContext &context) override {
 		return 1;
 	}
 

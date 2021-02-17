@@ -3,10 +3,9 @@
 #include "duckdb/execution/nested_loop_join.hpp"
 
 namespace duckdb {
-using namespace std;
 
 template <class T, class OP>
-static void mark_join_templated(Vector &left, Vector &right, idx_t lcount, idx_t rcount, bool found_match[]) {
+static void TemplatedMarkJoin(Vector &left, Vector &right, idx_t lcount, idx_t rcount, bool found_match[]) {
 	VectorData left_data, right_data;
 	left.Orrify(lcount, left_data);
 	right.Orrify(rcount, right_data);
@@ -35,44 +34,52 @@ static void mark_join_templated(Vector &left, Vector &right, idx_t lcount, idx_t
 }
 
 template <class OP>
-static void mark_join_operator(Vector &left, Vector &right, idx_t lcount, idx_t rcount, bool found_match[]) {
-	switch (left.type.InternalType()) {
+static void MarkJoinSwitch(Vector &left, Vector &right, idx_t lcount, idx_t rcount, bool found_match[]) {
+	switch (left.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
-		return mark_join_templated<int8_t, OP>(left, right, lcount, rcount, found_match);
+		return TemplatedMarkJoin<int8_t, OP>(left, right, lcount, rcount, found_match);
 	case PhysicalType::INT16:
-		return mark_join_templated<int16_t, OP>(left, right, lcount, rcount, found_match);
+		return TemplatedMarkJoin<int16_t, OP>(left, right, lcount, rcount, found_match);
 	case PhysicalType::INT32:
-		return mark_join_templated<int32_t, OP>(left, right, lcount, rcount, found_match);
+		return TemplatedMarkJoin<int32_t, OP>(left, right, lcount, rcount, found_match);
 	case PhysicalType::INT64:
-		return mark_join_templated<int64_t, OP>(left, right, lcount, rcount, found_match);
+		return TemplatedMarkJoin<int64_t, OP>(left, right, lcount, rcount, found_match);
+	case PhysicalType::UINT8:
+		return TemplatedMarkJoin<uint8_t, OP>(left, right, lcount, rcount, found_match);
+	case PhysicalType::UINT16:
+		return TemplatedMarkJoin<uint16_t, OP>(left, right, lcount, rcount, found_match);
+	case PhysicalType::UINT32:
+		return TemplatedMarkJoin<uint32_t, OP>(left, right, lcount, rcount, found_match);
+	case PhysicalType::UINT64:
+		return TemplatedMarkJoin<uint64_t, OP>(left, right, lcount, rcount, found_match);
 	case PhysicalType::FLOAT:
-		return mark_join_templated<float, OP>(left, right, lcount, rcount, found_match);
+		return TemplatedMarkJoin<float, OP>(left, right, lcount, rcount, found_match);
 	case PhysicalType::DOUBLE:
-		return mark_join_templated<double, OP>(left, right, lcount, rcount, found_match);
+		return TemplatedMarkJoin<double, OP>(left, right, lcount, rcount, found_match);
 	case PhysicalType::VARCHAR:
-		return mark_join_templated<string_t, OP>(left, right, lcount, rcount, found_match);
+		return TemplatedMarkJoin<string_t, OP>(left, right, lcount, rcount, found_match);
 	default:
 		throw NotImplementedException("Unimplemented type for join!");
 	}
 }
 
-static void mark_join(Vector &left, Vector &right, idx_t lcount, idx_t rcount, bool found_match[],
-                      ExpressionType comparison_type) {
-	D_ASSERT(left.type == right.type);
+static void MarkJoinComparisonSwitch(Vector &left, Vector &right, idx_t lcount, idx_t rcount, bool found_match[],
+                                     ExpressionType comparison_type) {
+	D_ASSERT(left.GetType() == right.GetType());
 	switch (comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
-		return mark_join_operator<duckdb::Equals>(left, right, lcount, rcount, found_match);
+		return MarkJoinSwitch<duckdb::Equals>(left, right, lcount, rcount, found_match);
 	case ExpressionType::COMPARE_NOTEQUAL:
-		return mark_join_operator<duckdb::NotEquals>(left, right, lcount, rcount, found_match);
+		return MarkJoinSwitch<duckdb::NotEquals>(left, right, lcount, rcount, found_match);
 	case ExpressionType::COMPARE_LESSTHAN:
-		return mark_join_operator<duckdb::LessThan>(left, right, lcount, rcount, found_match);
+		return MarkJoinSwitch<duckdb::LessThan>(left, right, lcount, rcount, found_match);
 	case ExpressionType::COMPARE_GREATERTHAN:
-		return mark_join_operator<duckdb::GreaterThan>(left, right, lcount, rcount, found_match);
+		return MarkJoinSwitch<duckdb::GreaterThan>(left, right, lcount, rcount, found_match);
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		return mark_join_operator<duckdb::LessThanEquals>(left, right, lcount, rcount, found_match);
+		return MarkJoinSwitch<duckdb::LessThanEquals>(left, right, lcount, rcount, found_match);
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		return mark_join_operator<duckdb::GreaterThanEquals>(left, right, lcount, rcount, found_match);
+		return MarkJoinSwitch<duckdb::GreaterThanEquals>(left, right, lcount, rcount, found_match);
 	default:
 		throw NotImplementedException("Unimplemented comparison type for join!");
 	}
@@ -82,11 +89,11 @@ void NestedLoopJoinMark::Perform(DataChunk &left, ChunkCollection &right, bool f
                                  vector<JoinCondition> &conditions) {
 	// initialize a new temporary selection vector for the left chunk
 	// loop over all chunks in the RHS
-	for (idx_t chunk_idx = 0; chunk_idx < right.chunks.size(); chunk_idx++) {
-		DataChunk &right_chunk = *right.chunks[chunk_idx];
+	for (idx_t chunk_idx = 0; chunk_idx < right.ChunkCount(); chunk_idx++) {
+		DataChunk &right_chunk = right.GetChunk(chunk_idx);
 		for (idx_t i = 0; i < conditions.size(); i++) {
-			mark_join(left.data[i], right_chunk.data[i], left.size(), right_chunk.size(), found_match,
-			          conditions[i].comparison);
+			MarkJoinComparisonSwitch(left.data[i], right_chunk.data[i], left.size(), right_chunk.size(), found_match,
+			                         conditions[i].comparison);
 		}
 	}
 }

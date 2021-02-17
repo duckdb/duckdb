@@ -10,7 +10,6 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
 namespace duckdb {
-using namespace std;
 
 struct ComparisonExecutor {
 private:
@@ -20,10 +19,11 @@ private:
 	}
 
 public:
-	template <class OP> static inline void Execute(Vector &left, Vector &right, Vector &result, idx_t count) {
-		D_ASSERT(left.type == right.type && result.type == LogicalType::BOOLEAN);
+	template <class OP>
+	static inline void Execute(Vector &left, Vector &right, Vector &result, idx_t count) {
+		D_ASSERT(left.GetType() == right.GetType() && result.GetType() == LogicalType::BOOLEAN);
 		// the inplace loops take the result as the last parameter
-		switch (left.type.InternalType()) {
+		switch (left.GetType().InternalType()) {
 		case PhysicalType::BOOL:
 		case PhysicalType::INT8:
 			TemplatedExecute<int8_t, OP>(left, right, result, count);
@@ -36,6 +36,18 @@ public:
 			break;
 		case PhysicalType::INT64:
 			TemplatedExecute<int64_t, OP>(left, right, result, count);
+			break;
+		case PhysicalType::UINT8:
+			TemplatedExecute<uint8_t, OP>(left, right, result, count);
+			break;
+		case PhysicalType::UINT16:
+			TemplatedExecute<uint16_t, OP>(left, right, result, count);
+			break;
+		case PhysicalType::UINT32:
+			TemplatedExecute<uint32_t, OP>(left, right, result, count);
+			break;
+		case PhysicalType::UINT64:
+			TemplatedExecute<uint64_t, OP>(left, right, result, count);
 			break;
 		case PhysicalType::INT128:
 			TemplatedExecute<hugeint_t, OP>(left, right, result, count);
@@ -56,7 +68,7 @@ public:
 			TemplatedExecute<string_t, OP, true>(left, right, result, count);
 			break;
 		default:
-			throw InvalidTypeException(left.type, "Invalid type for comparison");
+			throw InvalidTypeException(left.GetType(), "Invalid type for comparison");
 		}
 	}
 };

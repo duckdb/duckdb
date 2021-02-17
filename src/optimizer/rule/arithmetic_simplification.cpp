@@ -3,9 +3,9 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/optimizer/expression_rewriter.hpp"
 
 namespace duckdb {
-using namespace std;
 
 ArithmeticSimplificationRule::ArithmeticSimplificationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	// match on an OperatorExpression that has a ConstantExpression as child
@@ -14,7 +14,7 @@ ArithmeticSimplificationRule::ArithmeticSimplificationRule(ExpressionRewriter &r
 	op->matchers.push_back(make_unique<ExpressionMatcher>());
 	op->policy = SetMatcher::Policy::SOME;
 	// we only match on simple arithmetic expressions (+, -, *, /)
-	op->function = make_unique<ManyFunctionMatcher>(unordered_set<string>{"+", "-", "*", "/"});
+	op->function = make_unique<ManyFunctionMatcher>(unordered_set<string> {"+", "-", "*", "/"});
 	// and only with numeric results
 	op->type = make_unique<IntegerTypeMatcher>();
 	op->matchers[0]->type = make_unique<IntegerTypeMatcher>();
@@ -50,6 +50,10 @@ unique_ptr<Expression> ArithmeticSimplificationRule::Apply(LogicalOperator &op, 
 		if (constant->value == 1) {
 			// multiply with 1, replace with non-constant child
 			return move(root->children[1 - constant_child]);
+		} else if (constant->value == 0) {
+			// multiply by zero: replace with constant or null
+			return ExpressionRewriter::ConstantOrNull(move(root->children[1 - constant_child]),
+			                                          Value::Numeric(root->return_type, 0));
 		}
 	} else {
 		D_ASSERT(func_name == "/");

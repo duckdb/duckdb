@@ -43,10 +43,12 @@ public:
 	//! The payload types
 	vector<LogicalType> payload_types;
 	//! The aggregate return types
-	vector<LogicalType> aggregate_types;
+	vector<LogicalType> aggregate_return_types;
 
 	//! Pointers to the aggregates
 	vector<BoundAggregateExpression *> bindings;
+
+	unordered_map<Expression *, size_t> ht;
 
 public:
 	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) override;

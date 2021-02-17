@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
 #include "duckdb/planner/constraints/bound_unique_constraint.hpp"
 
@@ -11,12 +12,10 @@
 
 #include <algorithm>
 
-using namespace std;
-
 namespace duckdb {
 
 struct PragmaTableFunctionData : public TableFunctionData {
-	PragmaTableFunctionData(CatalogEntry *entry_) : entry(entry_) {
+	explicit PragmaTableFunctionData(CatalogEntry *entry_p) : entry(entry_p) {
 	}
 
 	CatalogEntry *entry;
@@ -28,59 +27,56 @@ struct PragmaTableOperatorData : public FunctionOperatorData {
 	idx_t offset;
 };
 
-static unique_ptr<FunctionData> pragma_table_info_bind(ClientContext &context, vector<Value> &inputs,
-                                                       unordered_map<string, Value> &named_parameters,
-                                                       vector<LogicalType> &return_types, vector<string> &names) {
-	names.push_back("cid");
+static unique_ptr<FunctionData> PragmaTableInfoBind(ClientContext &context, vector<Value> &inputs,
+                                                    unordered_map<string, Value> &named_parameters,
+                                                    vector<LogicalType> &return_types, vector<string> &names) {
+	names.emplace_back("cid");
 	return_types.push_back(LogicalType::INTEGER);
 
-	names.push_back("name");
+	names.emplace_back("name");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("type");
+	names.emplace_back("type");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("notnull");
+	names.emplace_back("notnull");
 	return_types.push_back(LogicalType::BOOLEAN);
 
-	names.push_back("dflt_value");
+	names.emplace_back("dflt_value");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("pk");
+	names.emplace_back("pk");
 	return_types.push_back(LogicalType::BOOLEAN);
 
-	string schema, table_name;
-	auto range_var = inputs[0].GetValue<string>();
-	Catalog::ParseRangeVar(range_var, schema, table_name);
+	auto qname = QualifiedName::Parse(inputs[0].GetValue<string>());
 
 	// look up the table name in the catalog
 	auto &catalog = Catalog::GetCatalog(context);
-	auto entry = catalog.GetEntry(context, CatalogType::TABLE_ENTRY, schema, table_name);
+	auto entry = catalog.GetEntry(context, CatalogType::TABLE_ENTRY, qname.schema, qname.name);
 	return make_unique<PragmaTableFunctionData>(entry);
 }
 
-unique_ptr<FunctionOperatorData> pragma_table_info_init(ClientContext &context, const FunctionData *bind_data,
-                                                        vector<column_t> &column_ids,
-                                                        unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+unique_ptr<FunctionOperatorData> PragmaTableInfoInit(ClientContext &context, const FunctionData *bind_data,
+                                                     vector<column_t> &column_ids, TableFilterCollection *filters) {
 	return make_unique<PragmaTableOperatorData>();
 }
 
-static void check_constraints(TableCatalogEntry *table, idx_t oid, bool &out_not_null, bool &out_pk) {
+static void CheckConstraints(TableCatalogEntry *table, idx_t oid, bool &out_not_null, bool &out_pk) {
 	out_not_null = false;
 	out_pk = false;
 	// check all constraints
 	// FIXME: this is pretty inefficient, it probably doesn't matter
-	for(auto &constraint : table->bound_constraints) {
-		switch(constraint->type) {
+	for (auto &constraint : table->bound_constraints) {
+		switch (constraint->type) {
 		case ConstraintType::NOT_NULL: {
-			auto &not_null = (BoundNotNullConstraint &) *constraint;
+			auto &not_null = (BoundNotNullConstraint &)*constraint;
 			if (not_null.index == oid) {
 				out_not_null = true;
 			}
 			break;
 		}
 		case ConstraintType::UNIQUE: {
-			auto &unique = (BoundUniqueConstraint &) *constraint;
+			auto &unique = (BoundUniqueConstraint &)*constraint;
 			if (unique.is_primary_key && unique.keys.find(oid) != unique.keys.end()) {
 				out_pk = true;
 			}
@@ -92,14 +88,14 @@ static void check_constraints(TableCatalogEntry *table, idx_t oid, bool &out_not
 	}
 }
 
-static void pragma_table_info_table(PragmaTableOperatorData &data, TableCatalogEntry *table, DataChunk &output) {
+static void PragmaTableInfoTable(PragmaTableOperatorData &data, TableCatalogEntry *table, DataChunk &output) {
 	if (data.offset >= table->columns.size()) {
 		// finished returning values
 		return;
 	}
 	// start returning values
 	// either fill up the chunk or return all the remaining columns
-	idx_t next = min(data.offset + STANDARD_VECTOR_SIZE, (idx_t)table->columns.size());
+	idx_t next = MinValue<idx_t>(data.offset + STANDARD_VECTOR_SIZE, table->columns.size());
 	output.SetCardinality(next - data.offset);
 
 	for (idx_t i = data.offset; i < next; i++) {
@@ -107,7 +103,7 @@ static void pragma_table_info_table(PragmaTableOperatorData &data, TableCatalogE
 		auto index = i - data.offset;
 		auto &column = table->columns[i];
 		D_ASSERT(column.oid < (idx_t)NumericLimits<int32_t>::Maximum());
-		check_constraints(table, column.oid, not_null, pk);
+		CheckConstraints(table, column.oid, not_null, pk);
 
 		// return values:
 		// "cid", PhysicalType::INT32
@@ -127,14 +123,14 @@ static void pragma_table_info_table(PragmaTableOperatorData &data, TableCatalogE
 	data.offset = next;
 }
 
-static void pragma_table_info_view(PragmaTableOperatorData &data, ViewCatalogEntry *view, DataChunk &output) {
+static void PragmaTableInfoView(PragmaTableOperatorData &data, ViewCatalogEntry *view, DataChunk &output) {
 	if (data.offset >= view->types.size()) {
 		// finished returning values
 		return;
 	}
 	// start returning values
 	// either fill up the chunk or return all the remaining columns
-	idx_t next = min(data.offset + STANDARD_VECTOR_SIZE, (idx_t)view->types.size());
+	idx_t next = MinValue<idx_t>(data.offset + STANDARD_VECTOR_SIZE, view->types.size());
 	output.SetCardinality(next - data.offset);
 
 	for (idx_t i = data.offset; i < next; i++) {
@@ -159,16 +155,16 @@ static void pragma_table_info_view(PragmaTableOperatorData &data, ViewCatalogEnt
 	data.offset = next;
 }
 
-static void pragma_table_info(ClientContext &context, const FunctionData *bind_data_,
-                              FunctionOperatorData *operator_state, DataChunk &output) {
-	auto &bind_data = (PragmaTableFunctionData &)*bind_data_;
+static void PragmaTableInfoFunction(ClientContext &context, const FunctionData *bind_data_p,
+                                    FunctionOperatorData *operator_state, DataChunk &output) {
+	auto &bind_data = (PragmaTableFunctionData &)*bind_data_p;
 	auto &state = (PragmaTableOperatorData &)*operator_state;
 	switch (bind_data.entry->type) {
 	case CatalogType::TABLE_ENTRY:
-		pragma_table_info_table(state, (TableCatalogEntry *)bind_data.entry, output);
+		PragmaTableInfoTable(state, (TableCatalogEntry *)bind_data.entry, output);
 		break;
 	case CatalogType::VIEW_ENTRY:
-		pragma_table_info_view(state, (ViewCatalogEntry *)bind_data.entry, output);
+		PragmaTableInfoView(state, (ViewCatalogEntry *)bind_data.entry, output);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented catalog type for pragma_table_info");
@@ -176,8 +172,8 @@ static void pragma_table_info(ClientContext &context, const FunctionData *bind_d
 }
 
 void PragmaTableInfo::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("pragma_table_info", {LogicalType::VARCHAR}, pragma_table_info,
-	                              pragma_table_info_bind, pragma_table_info_init));
+	set.AddFunction(TableFunction("pragma_table_info", {LogicalType::VARCHAR}, PragmaTableInfoFunction,
+	                              PragmaTableInfoBind, PragmaTableInfoInit));
 }
 
 } // namespace duckdb

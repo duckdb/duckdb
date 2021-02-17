@@ -10,7 +10,6 @@
 #include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
-using namespace std;
 
 CatalogSet::CatalogSet(Catalog &catalog, unique_ptr<DefaultGenerator> defaults)
     : catalog(catalog), defaults(move(defaults)) {
@@ -168,7 +167,7 @@ void CatalogSet::DropEntryInternal(ClientContext &context, idx_t entry_index, Ca
 
 	// add this catalog to the lock set, if it is not there yet
 	if (lock_set.find(this) == lock_set.end()) {
-		lock_set.insert(make_pair(this, unique_lock<mutex>(catalog_lock)));
+		lock_set.insert(make_pair(this, std::unique_lock<mutex>(catalog_lock)));
 	}
 
 	// create a new entry and replace the currently stored one
@@ -285,6 +284,18 @@ CatalogEntry *CatalogSet::GetEntryForTransaction(ClientContext &context, Catalog
 	return current;
 }
 
+CatalogEntry *CatalogSet::GetCommittedEntry(CatalogEntry *current) {
+	while (current->child) {
+		if (current->timestamp < TRANSACTION_ID_START) {
+			// this entry is committed: use it
+			break;
+		}
+		current = current->child.get();
+		D_ASSERT(current);
+	}
+	return current;
+}
+
 string CatalogSet::SimilarEntry(ClientContext &context, const string &name) {
 	lock_guard<mutex> lock(catalog_lock);
 
@@ -393,6 +404,8 @@ void CatalogSet::Undo(CatalogEntry *entry) {
 			mapping.erase(restored_entry);
 		}
 	}
+	// we mark the catalog as being modified, since this action can lead to e.g. tables being dropped
+	entry->catalog->ModifyCatalog();
 }
 
 } // namespace duckdb

@@ -24,7 +24,7 @@ public:
 //! The SpecificLogicalTypeMatcher class matches only a single specified LogicalOperatorType
 class SpecificLogicalTypeMatcher : public LogicalOperatorMatcher {
 public:
-	SpecificLogicalTypeMatcher(LogicalOperatorType type) : type(type) {
+	explicit SpecificLogicalTypeMatcher(LogicalOperatorType type) : type(type) {
 	}
 
 	bool Match(LogicalOperatorType type) override {

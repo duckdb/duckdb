@@ -123,6 +123,55 @@ TEST_CASE("Test correct functioning of art keys", "[art]") {
 
 	keys.clear();
 
+	// Test utiny int
+	keys.push_back(Key::CreateKey<uint8_t>(0, is_little_endian));
+	keys.push_back(Key::CreateKey<uint8_t>(1, is_little_endian));
+	keys.push_back(Key::CreateKey<uint8_t>(55, is_little_endian));
+	keys.push_back(Key::CreateKey<uint8_t>(127, is_little_endian));
+	keys.push_back(Key::CreateKey<uint8_t>(200, is_little_endian));
+	keys.push_back(Key::CreateKey<uint8_t>(250, is_little_endian));
+	TestKeys(keys);
+
+	keys.clear();
+
+	// Test small int
+	keys.push_back(Key::CreateKey<uint16_t>(0, is_little_endian));
+	keys.push_back(Key::CreateKey<uint16_t>(1, is_little_endian));
+	keys.push_back(Key::CreateKey<uint16_t>(55, is_little_endian));
+	keys.push_back(Key::CreateKey<uint16_t>(127, is_little_endian));
+	keys.push_back(Key::CreateKey<uint16_t>(32767, is_little_endian));
+	keys.push_back(Key::CreateKey<uint16_t>(40000, is_little_endian));
+	keys.push_back(Key::CreateKey<uint16_t>(60000, is_little_endian));
+
+	TestKeys(keys);
+
+	keys.clear();
+
+	// Test int
+	keys.push_back(Key::CreateKey<uint32_t>(0, is_little_endian));
+	keys.push_back(Key::CreateKey<uint32_t>(1, is_little_endian));
+	keys.push_back(Key::CreateKey<uint32_t>(32767, is_little_endian));
+	keys.push_back(Key::CreateKey<uint32_t>(8388608, is_little_endian));
+	keys.push_back(Key::CreateKey<uint32_t>(2147483647, is_little_endian));
+	keys.push_back(Key::CreateKey<uint32_t>(3047483647, is_little_endian));
+	keys.push_back(Key::CreateKey<uint32_t>(4047483647, is_little_endian));
+	TestKeys(keys);
+
+	keys.clear();
+
+	// Test big int
+	keys.push_back(Key::CreateKey<uint64_t>(0, is_little_endian));
+	keys.push_back(Key::CreateKey<uint64_t>(1, is_little_endian));
+	keys.push_back(Key::CreateKey<uint64_t>(32767, is_little_endian));
+	keys.push_back(Key::CreateKey<uint64_t>(8388608, is_little_endian));
+	keys.push_back(Key::CreateKey<uint64_t>(2147483647, is_little_endian));
+	keys.push_back(Key::CreateKey<uint64_t>(1099511627776, is_little_endian));
+	keys.push_back(Key::CreateKey<uint64_t>(281474976710656, is_little_endian));
+	keys.push_back(Key::CreateKey<uint64_t>(72057594037927936, is_little_endian));
+	TestKeys(keys);
+
+	keys.clear();
+
 	// Test strings
 	keys.push_back(Key::CreateKey<const char *>("abc", is_little_endian));
 	keys.push_back(Key::CreateKey<const char *>("babababa", is_little_endian));

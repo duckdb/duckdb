@@ -16,6 +16,6 @@ namespace duckdb {
 class Printer {
 public:
 	//! Print the object to stderr
-	static void Print(string str);
+	static void Print(const string &str);
 };
 } // namespace duckdb

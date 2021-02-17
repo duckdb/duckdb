@@ -5,8 +5,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/storage/data_table.hpp"
-
-using namespace std;
+#include "duckdb/common/to_string.hpp"
 
 namespace duckdb {
 
@@ -56,21 +55,21 @@ unique_ptr<idx_t[]> PhysicalTopN::ComputeTopN(ChunkCollection &big_data, idx_t &
 		executor.AddExpression(*expr);
 	}
 
-	heap_size = (big_data.count > offset) ? min(limit + offset, big_data.count) : 0;
+	heap_size = (big_data.Count() > offset) ? MinValue<idx_t>(limit + offset, big_data.Count()) : 0;
 	if (heap_size == 0) {
 		return nullptr;
 	}
 
 	ChunkCollection heap_collection;
-	for (idx_t i = 0; i < big_data.chunks.size(); i++) {
+	for (idx_t i = 0; i < big_data.ChunkCount(); i++) {
 		DataChunk heap_chunk;
 		heap_chunk.Initialize(sort_types);
 
-		executor.Execute(*big_data.chunks[i], heap_chunk);
+		executor.Execute(big_data.GetChunk(i), heap_chunk);
 		heap_collection.Append(heap_chunk);
 	}
 
-	D_ASSERT(heap_collection.count == big_data.count);
+	D_ASSERT(heap_collection.Count() == big_data.Count());
 
 	// create and use the heap
 	auto heap = unique_ptr<idx_t[]>(new idx_t[heap_size]);
@@ -81,9 +80,9 @@ unique_ptr<idx_t[]> PhysicalTopN::ComputeTopN(ChunkCollection &big_data, idx_t &
 //===--------------------------------------------------------------------===//
 // Combine
 //===--------------------------------------------------------------------===//
-void PhysicalTopN::Combine(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_) {
+void PhysicalTopN::Combine(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_p) {
 	auto &gstate = (TopNGlobalState &)state;
-	auto &lstate = (TopNLocalState &)lstate_;
+	auto &lstate = (TopNLocalState &)lstate_p;
 
 	// first construct the top n of the local sink state
 	idx_t local_heap_size;
@@ -127,8 +126,8 @@ public:
 	idx_t position;
 };
 
-void PhysicalTopN::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
-	auto &state = (PhysicalTopNOperatorState &)*state_;
+void PhysicalTopN::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
+	auto &state = (PhysicalTopNOperatorState &)*state_p;
 	auto &gstate = (TopNGlobalState &)*sink_state;
 
 	if (state.position >= gstate.heap_size) {
@@ -146,10 +145,10 @@ unique_ptr<PhysicalOperatorState> PhysicalTopN::GetOperatorState() {
 
 string PhysicalTopN::ParamsToString() const {
 	string result;
-	result += "Top " + std::to_string(limit);
+	result += "Top " + to_string(limit);
 	if (offset > 0) {
 		result += "\n";
-		result += "Offset " + std::to_string(offset);
+		result += "Offset " + to_string(offset);
 	}
 	result += "\n[INFOSEPARATOR]";
 	for (idx_t i = 0; i < orders.size(); i++) {

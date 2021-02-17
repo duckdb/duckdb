@@ -10,8 +10,6 @@
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 struct NextvalBindData : public FunctionData {
@@ -28,7 +26,7 @@ struct NextvalBindData : public FunctionData {
 	}
 };
 
-static int64_t next_sequence_value(Transaction &transaction, SequenceCatalogEntry *seq) {
+static int64_t NextSequenceValue(Transaction &transaction, SequenceCatalogEntry *seq) {
 	lock_guard<mutex> seqlock(seq->lock);
 	int64_t result;
 	if (seq->cycle) {
@@ -59,7 +57,7 @@ static int64_t next_sequence_value(Transaction &transaction, SequenceCatalogEntr
 	return result;
 }
 
-static void nextval_function(DataChunk &args, ExpressionState &state, Vector &result) {
+static void NextValFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (NextvalBindData &)*func_expr.bind_info;
 	auto &input = args.data[0];
@@ -68,44 +66,42 @@ static void nextval_function(DataChunk &args, ExpressionState &state, Vector &re
 	if (info.sequence) {
 		// sequence to use is hard coded
 		// increment the sequence
-		result.vector_type = VectorType::FLAT_VECTOR;
+		result.SetVectorType(VectorType::FLAT_VECTOR);
 		auto result_data = FlatVector::GetData<int64_t>(result);
 		for (idx_t i = 0; i < args.size(); i++) {
 			// get the next value from the sequence
-			result_data[i] = next_sequence_value(transaction, info.sequence);
+			result_data[i] = NextSequenceValue(transaction, info.sequence);
 		}
 	} else {
 		// sequence to use comes from the input
 		UnaryExecutor::Execute<string_t, int64_t, true>(input, result, args.size(), [&](string_t value) {
-			string schema, seq;
-			string seqname = value.GetString();
-			Catalog::ParseRangeVar(seqname, schema, seq);
+			auto qname = QualifiedName::Parse(value.GetString());
 			// fetch the sequence from the catalog
-			auto sequence = Catalog::GetCatalog(info.context).GetEntry<SequenceCatalogEntry>(info.context, schema, seq);
+			auto sequence = Catalog::GetCatalog(info.context)
+			                    .GetEntry<SequenceCatalogEntry>(info.context, qname.schema, qname.name);
 			// finally get the next value from the sequence
-			return next_sequence_value(transaction, sequence);
+			return NextSequenceValue(transaction, sequence);
 		});
 	}
 }
 
-static unique_ptr<FunctionData> nextval_bind(ClientContext &context, ScalarFunction &bound_function,
-                                             vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> NextValBind(ClientContext &context, ScalarFunction &bound_function,
+                                            vector<unique_ptr<Expression>> &arguments) {
 	SequenceCatalogEntry *sequence = nullptr;
 	if (arguments[0]->IsFoldable()) {
-		string schema, seq;
 		// parameter to nextval function is a foldable constant
 		// evaluate the constant and perform the catalog lookup already
 		Value seqname = ExpressionExecutor::EvaluateScalar(*arguments[0]);
 		if (!seqname.is_null) {
 			D_ASSERT(seqname.type().id() == LogicalTypeId::VARCHAR);
-			Catalog::ParseRangeVar(seqname.str_value, schema, seq);
-			sequence = Catalog::GetCatalog(context).GetEntry<SequenceCatalogEntry>(context, schema, seq);
+			auto qname = QualifiedName::Parse(seqname.str_value);
+			sequence = Catalog::GetCatalog(context).GetEntry<SequenceCatalogEntry>(context, qname.schema, qname.name);
 		}
 	}
 	return make_unique<NextvalBindData>(context, sequence);
 }
 
-static void nextval_dependency(BoundFunctionExpression &expr, unordered_set<CatalogEntry *> &dependencies) {
+static void NextValDependency(BoundFunctionExpression &expr, unordered_set<CatalogEntry *> &dependencies) {
 	auto &info = (NextvalBindData &)*expr.bind_info;
 	if (info.sequence) {
 		dependencies.insert(info.sequence);
@@ -113,8 +109,8 @@ static void nextval_dependency(BoundFunctionExpression &expr, unordered_set<Cata
 }
 
 void NextvalFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("nextval", {LogicalType::VARCHAR}, LogicalType::BIGINT, nextval_function, true,
-	                               nextval_bind, nextval_dependency));
+	set.AddFunction(ScalarFunction("nextval", {LogicalType::VARCHAR}, LogicalType::BIGINT, NextValFunction, true,
+	                               NextValBind, NextValDependency));
 }
 
 } // namespace duckdb

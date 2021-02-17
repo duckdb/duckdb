@@ -9,10 +9,9 @@
 #include "duckdb/transaction/cleanup_state.hpp"
 #include "duckdb/transaction/commit_state.hpp"
 #include "duckdb/transaction/rollback_state.hpp"
+#include "duckdb/common/pair.hpp"
 
 #include <unordered_map>
-
-using namespace std;
 
 namespace duckdb {
 constexpr uint32_t DEFAULT_UNDO_CHUNK_SIZE = 4096 * 3;
@@ -67,7 +66,8 @@ data_ptr_t UndoBuffer::CreateEntry(UndoFlags type, idx_t len) {
 	return head->WriteEntry(type, len);
 }
 
-template <class T> void UndoBuffer::IterateEntries(UndoBuffer::IteratorState &state, T &&callback) {
+template <class T>
+void UndoBuffer::IterateEntries(UndoBuffer::IteratorState &state, T &&callback) {
 	// iterate in insertion order: start with the tail
 	state.current = tail;
 	while (state.current) {
@@ -110,7 +110,8 @@ void UndoBuffer::IterateEntries(UndoBuffer::IteratorState &state, UndoBuffer::It
 	}
 }
 
-template <class T> void UndoBuffer::ReverseIterateEntries(T &&callback) {
+template <class T>
+void UndoBuffer::ReverseIterateEntries(T &&callback) {
 	// iterate in reverse insertion order: start with the head
 	auto current = head.get();
 	while (current) {
@@ -123,7 +124,7 @@ template <class T> void UndoBuffer::ReverseIterateEntries(T &&callback) {
 			start += sizeof(UndoFlags);
 			auto len = Load<uint32_t>(start);
 			start += sizeof(uint32_t);
-			nodes.push_back(make_pair(type, start));
+			nodes.emplace_back(type, start);
 			start += len;
 		}
 		// iterate over it in reverse order
@@ -136,6 +137,16 @@ template <class T> void UndoBuffer::ReverseIterateEntries(T &&callback) {
 
 bool UndoBuffer::ChangesMade() {
 	return head->maximum_size > 0;
+}
+
+idx_t UndoBuffer::EstimatedSize() {
+	idx_t estimated_size = 0;
+	auto node = head.get();
+	while (node) {
+		estimated_size += node->current_position;
+		node = node->next.get();
+	}
+	return estimated_size;
 }
 
 void UndoBuffer::Cleanup() {

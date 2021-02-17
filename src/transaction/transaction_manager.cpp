@@ -8,11 +8,37 @@
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/transaction.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/connection_manager.hpp"
 
 namespace duckdb {
-using namespace std;
 
-TransactionManager::TransactionManager(StorageManager &storage) : storage(storage) {
+struct CheckpointLock {
+	explicit CheckpointLock(TransactionManager &manager) : manager(manager), is_locked(false) {
+	}
+	~CheckpointLock() {
+		Unlock();
+	}
+
+	TransactionManager &manager;
+	bool is_locked;
+
+	void Lock() {
+		D_ASSERT(!manager.thread_is_checkpointing);
+		manager.thread_is_checkpointing = true;
+		is_locked = true;
+	}
+	void Unlock() {
+		if (!is_locked) {
+			return;
+		}
+		D_ASSERT(manager.thread_is_checkpointing);
+		manager.thread_is_checkpointing = false;
+		is_locked = false;
+	}
+};
+
+TransactionManager::TransactionManager(DatabaseInstance &db) : db(db), thread_is_checkpointing(false) {
 	// start timestamp starts at zero
 	current_start_timestamp = 0;
 	// transaction ID starts very high:
@@ -27,10 +53,9 @@ TransactionManager::TransactionManager(StorageManager &storage) : storage(storag
 TransactionManager::~TransactionManager() {
 }
 
-Transaction *TransactionManager::StartTransaction() {
+Transaction *TransactionManager::StartTransaction(ClientContext &context) {
 	// obtain the transaction lock during this function
 	lock_guard<mutex> lock(transaction_lock);
-
 	if (current_start_timestamp >= TRANSACTION_ID_START) {
 		throw Exception("Cannot start more transactions, ran out of "
 		                "transaction identifiers!");
@@ -42,7 +67,9 @@ Transaction *TransactionManager::StartTransaction() {
 	timestamp_t start_timestamp = Timestamp::GetCurrentTimestamp();
 
 	// create the actual transaction
-	auto transaction = make_unique<Transaction>(start_time, transaction_id, start_timestamp);
+	auto &catalog = Catalog::GetCatalog(db);
+	auto transaction = make_unique<Transaction>(weak_ptr<ClientContext>(context.shared_from_this()), start_time,
+	                                            transaction_id, start_timestamp, catalog.GetCatalogVersion());
 	auto transaction_ptr = transaction.get();
 
 	// store it in the set of active transactions
@@ -50,23 +77,149 @@ Transaction *TransactionManager::StartTransaction() {
 	return transaction_ptr;
 }
 
-string TransactionManager::CommitTransaction(Transaction *transaction) {
-	// obtain the transaction lock during this function
-	lock_guard<mutex> lock(transaction_lock);
+struct ClientLockWrapper {
+	ClientLockWrapper(mutex &client_lock, shared_ptr<ClientContext> connection)
+	    : connection(move(connection)), connection_lock(make_unique<lock_guard<mutex>>(client_lock)) {
+	}
 
+	shared_ptr<ClientContext> connection;
+	unique_ptr<lock_guard<mutex>> connection_lock;
+};
+
+void TransactionManager::LockClients(vector<ClientLockWrapper> &client_locks, ClientContext &context) {
+	auto &connection_manager = ConnectionManager::Get(context);
+	client_locks.emplace_back(connection_manager.connections_lock, nullptr);
+	auto connection_list = connection_manager.GetConnectionList();
+	for (auto &con : connection_list) {
+		if (con.get() == &context) {
+			continue;
+		}
+		auto &context_lock = con->context_lock;
+		client_locks.emplace_back(context_lock, move(con));
+	}
+}
+
+void TransactionManager::Checkpoint(ClientContext &context, bool force) {
+	auto &storage_manager = StorageManager::GetStorageManager(db);
+	if (storage_manager.InMemory()) {
+		return;
+	}
+
+	// first check if no other thread is checkpointing right now
+	auto lock = make_unique<lock_guard<mutex>>(transaction_lock);
+	if (thread_is_checkpointing) {
+		throw TransactionException("Cannot CHECKPOINT: another thread is checkpointing right now");
+	}
+	CheckpointLock checkpoint_lock(*this);
+	checkpoint_lock.Lock();
+	lock.reset();
+
+	// lock all the clients AND the connection manager now
+	// this ensures no new queries can be started, and no new connections to the database can be made
+	// to avoid deadlock we release the transaction lock while locking the clients
+	vector<ClientLockWrapper> client_locks;
+	LockClients(client_locks, context);
+
+	lock = make_unique<lock_guard<mutex>>(transaction_lock);
+	auto current = &Transaction::GetTransaction(context);
+	if (current->ChangesMade()) {
+		throw TransactionException("Cannot CHECKPOINT: the current transaction has transaction local changes");
+	}
+	if (!force) {
+		if (!CanCheckpoint(current)) {
+			throw TransactionException("Cannot CHECKPOINT: there are other transactions. Use FORCE CHECKPOINT to abort "
+			                           "the other transactions and force a checkpoint");
+		}
+	} else {
+		if (!CanCheckpoint(current)) {
+			for (size_t i = 0; i < active_transactions.size(); i++) {
+				auto &transaction = active_transactions[i];
+				// rollback the transaction
+				transaction->Rollback();
+				auto transaction_context = transaction->context.lock();
+
+				// remove the transaction id from the list of active transactions
+				// potentially resulting in garbage collection
+				RemoveTransaction(transaction.get());
+				if (transaction_context) {
+					transaction_context->transaction.ClearTransaction();
+				}
+				i--;
+			}
+			D_ASSERT(CanCheckpoint(nullptr));
+		}
+	}
+	auto &storage = StorageManager::GetStorageManager(context);
+	storage.CreateCheckpoint();
+}
+
+bool TransactionManager::CanCheckpoint(Transaction *current) {
+	auto &storage_manager = StorageManager::GetStorageManager(db);
+	if (storage_manager.InMemory()) {
+		return false;
+	}
+	if (!recently_committed_transactions.empty() || !old_transactions.empty()) {
+		return false;
+	}
+	for (auto &transaction : active_transactions) {
+		if (transaction.get() != current) {
+			return false;
+		}
+	}
+	return true;
+}
+
+string TransactionManager::CommitTransaction(ClientContext &context, Transaction *transaction) {
+	vector<ClientLockWrapper> client_locks;
+	auto lock = make_unique<lock_guard<mutex>>(transaction_lock);
+	CheckpointLock checkpoint_lock(*this);
+	// check if we can checkpoint
+	bool checkpoint = thread_is_checkpointing ? false : CanCheckpoint(transaction);
+	if (checkpoint) {
+		if (transaction->AutomaticCheckpoint(db)) {
+			checkpoint_lock.Lock();
+			// we might be able to checkpoint: lock all clients
+			// to avoid deadlock we release the transaction lock while locking the clients
+			lock.reset();
+
+			LockClients(client_locks, context);
+
+			lock = make_unique<lock_guard<mutex>>(transaction_lock);
+			checkpoint = CanCheckpoint(transaction);
+			if (!checkpoint) {
+				checkpoint_lock.Unlock();
+				client_locks.clear();
+			}
+		} else {
+			checkpoint = false;
+		}
+	}
 	// obtain a commit id for the transaction
 	transaction_t commit_id = current_start_timestamp++;
 	// commit the UndoBuffer of the transaction
-	string error = transaction->Commit(storage.GetWriteAheadLog(), commit_id);
+	string error = transaction->Commit(db, commit_id, checkpoint);
 	if (!error.empty()) {
 		// commit unsuccessful: rollback the transaction instead
+		checkpoint = false;
 		transaction->commit_id = 0;
 		transaction->Rollback();
+	}
+	if (!checkpoint) {
+		// we won't checkpoint after all: unlock the clients again
+		checkpoint_lock.Unlock();
+		client_locks.clear();
 	}
 
 	// commit successful: remove the transaction id from the list of active transactions
 	// potentially resulting in garbage collection
 	RemoveTransaction(transaction);
+	// now perform a checkpoint if (1) we are able to checkpoint, and (2) the WAL has reached sufficient size to
+	// checkpoint
+	if (checkpoint) {
+		// checkpoint the database to disk
+		auto &storage_manager = StorageManager::GetStorageManager(db);
+		storage_manager.CreateCheckpoint(false, true);
+	}
 	return error;
 }
 
@@ -147,7 +300,7 @@ void TransactionManager::RemoveTransaction(Transaction *transaction) noexcept {
 		                                      recently_committed_transactions.begin() + i);
 	}
 	// check if we can free the memory of any old transactions
-	i = active_transactions.size() == 0 ? old_transactions.size() : 0;
+	i = active_transactions.empty() ? old_transactions.size() : 0;
 	for (; i < old_transactions.size(); i++) {
 		D_ASSERT(old_transactions[i]);
 		D_ASSERT(old_transactions[i]->highest_active_query > 0);
@@ -181,7 +334,7 @@ void TransactionManager::AddCatalogSet(ClientContext &context, unique_ptr<Catalo
 	Catalog::GetCatalog(context).dependency_manager->ClearDependencies(*catalog_set);
 
 	lock_guard<mutex> lock(transaction_lock);
-	if (active_transactions.size() > 0) {
+	if (!active_transactions.empty()) {
 		// if there are active transactions we wait with deleting the objects
 		StoredCatalogSet set;
 		set.stored_set = move(catalog_set);

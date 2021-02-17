@@ -3,7 +3,6 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 
 namespace duckdb {
-using namespace std;
 
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundCastExpression &expr,
                                                                 ExpressionExecutorState &root) {
@@ -26,7 +25,7 @@ void ExpressionExecutor::Execute(BoundCastExpression &expr, ExpressionState *sta
 		result.Reference(child);
 	} else {
 		// cast it to the type specified by the cast expression
-		D_ASSERT(result.type == expr.return_type);
+		D_ASSERT(result.GetType() == expr.return_type);
 		VectorOperations::Cast(child, result, count);
 	}
 }

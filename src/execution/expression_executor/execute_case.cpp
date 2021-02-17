@@ -4,7 +4,6 @@
 #include "duckdb/common/types/chunk_collection.hpp"
 
 namespace duckdb {
-using namespace std;
 
 void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &tside, idx_t tcount,
           SelectionVector &fside, idx_t fcount);
@@ -51,10 +50,11 @@ void ExpressionExecutor::Execute(BoundCaseExpression &expr, ExpressionState *sta
 	}
 }
 
-template <class T> void fill_loop(Vector &vector, Vector &result, SelectionVector &sel, sel_t count) {
+template <class T>
+void TemplatedFillLoop(Vector &vector, Vector &result, SelectionVector &sel, sel_t count) {
 	auto res = FlatVector::GetData<T>(result);
 	auto &result_nullmask = FlatVector::Nullmask(result);
-	if (vector.vector_type == VectorType::CONSTANT_VECTOR) {
+	if (vector.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		auto data = ConstantVector::GetData<T>(vector);
 		if (ConstantVector::IsNull(vector)) {
 			for (idx_t i = 0; i < count; i++) {
@@ -80,41 +80,53 @@ template <class T> void fill_loop(Vector &vector, Vector &result, SelectionVecto
 }
 
 template <class T>
-void case_loop(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &tside, idx_t tcount,
-               SelectionVector &fside, idx_t fcount) {
-	fill_loop<T>(res_true, result, tside, tcount);
-	fill_loop<T>(res_false, result, fside, fcount);
+void TemplatedCaseLoop(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &tside, idx_t tcount,
+                       SelectionVector &fside, idx_t fcount) {
+	TemplatedFillLoop<T>(res_true, result, tside, tcount);
+	TemplatedFillLoop<T>(res_false, result, fside, fcount);
 }
 
 void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &tside, idx_t tcount,
           SelectionVector &fside, idx_t fcount) {
-	D_ASSERT(res_true.type == res_false.type && res_true.type == result.type);
+	D_ASSERT(res_true.GetType() == res_false.GetType() && res_true.GetType() == result.GetType());
 
-	switch (result.type.InternalType()) {
+	switch (result.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
-		case_loop<int8_t>(res_true, res_false, result, tside, tcount, fside, fcount);
+		TemplatedCaseLoop<int8_t>(res_true, res_false, result, tside, tcount, fside, fcount);
 		break;
 	case PhysicalType::INT16:
-		case_loop<int16_t>(res_true, res_false, result, tside, tcount, fside, fcount);
+		TemplatedCaseLoop<int16_t>(res_true, res_false, result, tside, tcount, fside, fcount);
 		break;
 	case PhysicalType::INT32:
-		case_loop<int32_t>(res_true, res_false, result, tside, tcount, fside, fcount);
+		TemplatedCaseLoop<int32_t>(res_true, res_false, result, tside, tcount, fside, fcount);
 		break;
 	case PhysicalType::INT64:
-		case_loop<int64_t>(res_true, res_false, result, tside, tcount, fside, fcount);
+		TemplatedCaseLoop<int64_t>(res_true, res_false, result, tside, tcount, fside, fcount);
+		break;
+	case PhysicalType::UINT8:
+		TemplatedCaseLoop<uint8_t>(res_true, res_false, result, tside, tcount, fside, fcount);
+		break;
+	case PhysicalType::UINT16:
+		TemplatedCaseLoop<uint16_t>(res_true, res_false, result, tside, tcount, fside, fcount);
+		break;
+	case PhysicalType::UINT32:
+		TemplatedCaseLoop<uint32_t>(res_true, res_false, result, tside, tcount, fside, fcount);
+		break;
+	case PhysicalType::UINT64:
+		TemplatedCaseLoop<uint64_t>(res_true, res_false, result, tside, tcount, fside, fcount);
 		break;
 	case PhysicalType::INT128:
-		case_loop<hugeint_t>(res_true, res_false, result, tside, tcount, fside, fcount);
+		TemplatedCaseLoop<hugeint_t>(res_true, res_false, result, tside, tcount, fside, fcount);
 		break;
 	case PhysicalType::FLOAT:
-		case_loop<float>(res_true, res_false, result, tside, tcount, fside, fcount);
+		TemplatedCaseLoop<float>(res_true, res_false, result, tside, tcount, fside, fcount);
 		break;
 	case PhysicalType::DOUBLE:
-		case_loop<double>(res_true, res_false, result, tside, tcount, fside, fcount);
+		TemplatedCaseLoop<double>(res_true, res_false, result, tside, tcount, fside, fcount);
 		break;
 	case PhysicalType::VARCHAR:
-		case_loop<string_t>(res_true, res_false, result, tside, tcount, fside, fcount);
+		TemplatedCaseLoop<string_t>(res_true, res_false, result, tside, tcount, fside, fcount);
 		StringVector::AddHeapReference(result, res_true);
 		StringVector::AddHeapReference(result, res_false);
 		break;
@@ -126,18 +138,18 @@ void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &
 		idx_t offset = 0;
 		if (ListVector::HasEntry(res_true)) {
 			auto &true_child = ListVector::GetEntry(res_true);
-			D_ASSERT(true_child.types.size() == 1);
-			offset += true_child.count;
+			D_ASSERT(true_child.Types().size() == 1);
+			offset += true_child.Count();
 			result_child.Append(true_child);
 		}
 		if (ListVector::HasEntry(res_false)) {
 			auto &false_child = ListVector::GetEntry(res_false);
-			D_ASSERT(false_child.types.size() == 1);
+			D_ASSERT(false_child.Types().size() == 1);
 			result_child.Append(false_child);
 		}
 
 		// all the false offsets need to be incremented by true_child.count
-		fill_loop<list_entry_t>(res_true, result, tside, tcount);
+		TemplatedFillLoop<list_entry_t>(res_true, result, tside, tcount);
 
 		// FIXME the nullmask here is likely borked
 		// TODO uuugly
@@ -161,7 +173,7 @@ void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &
 		break;
 	}
 	default:
-		throw NotImplementedException("Unimplemented type for case expression: %s", result.type.ToString());
+		throw NotImplementedException("Unimplemented type for case expression: %s", result.GetType().ToString());
 	}
 }
 

@@ -8,17 +8,17 @@
 
 #pragma once
 
-#include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
 
 namespace duckdb {
 //! Represents a function call
 class FunctionExpression : public ParsedExpression {
 public:
-	FunctionExpression(string schema_name, string function_name, vector<unique_ptr<ParsedExpression>> &children,
-	                   bool distinct = false, bool is_operator = false);
-	FunctionExpression(string function_name, vector<unique_ptr<ParsedExpression>> &children, bool distinct = false,
-	                   bool is_operator = false);
+	FunctionExpression(string schema_name, const string &function_name, vector<unique_ptr<ParsedExpression>> &children,
+	                   unique_ptr<ParsedExpression> filter = nullptr, bool distinct = false, bool is_operator = false);
+	FunctionExpression(const string &function_name, vector<unique_ptr<ParsedExpression>> &children,
+	                   unique_ptr<ParsedExpression> filter = nullptr, bool distinct = false, bool is_operator = false);
 
 	//! Schema of the function
 	string schema;
@@ -30,6 +30,8 @@ public:
 	vector<unique_ptr<ParsedExpression>> children;
 	//! Whether or not the aggregate function is distinct, only used for aggregates
 	bool distinct;
+	//! Expression representing a filter, only used for aggregates
+	unique_ptr<ParsedExpression> filter;
 
 public:
 	string ToString() const override;

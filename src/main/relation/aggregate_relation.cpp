@@ -7,7 +7,8 @@ namespace duckdb {
 
 AggregateRelation::AggregateRelation(shared_ptr<Relation> child_p,
                                      vector<unique_ptr<ParsedExpression>> parsed_expressions)
-    : Relation(child_p->context, RelationType::AGGREGATE_RELATION), expressions(move(parsed_expressions)), child(move(child_p)) {
+    : Relation(child_p->context, RelationType::AGGREGATE_RELATION), expressions(move(parsed_expressions)),
+      child(move(child_p)) {
 	// bind the expressions
 	context.TryBindRelation(*this, this->columns);
 }
@@ -38,7 +39,7 @@ unique_ptr<QueryNode> AggregateRelation::GetQueryNode() {
 	}
 	D_ASSERT(result->type == QueryNodeType::SELECT_NODE);
 	auto &select_node = (SelectNode &)*result;
-	if (groups.size() > 0) {
+	if (!groups.empty()) {
 		// explicit groups provided: use standard handling
 		select_node.aggregate_handling = AggregateHandling::STANDARD_HANDLING;
 		select_node.groups.clear();

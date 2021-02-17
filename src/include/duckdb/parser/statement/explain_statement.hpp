@@ -15,9 +15,12 @@ namespace duckdb {
 
 class ExplainStatement : public SQLStatement {
 public:
-	ExplainStatement(unique_ptr<SQLStatement> stmt) : SQLStatement(StatementType::EXPLAIN_STATEMENT), stmt(move(stmt)){};
+	explicit ExplainStatement(unique_ptr<SQLStatement> stmt);
 
 	unique_ptr<SQLStatement> stmt;
+
+public:
+	unique_ptr<SQLStatement> Copy() const override;
 };
 
 } // namespace duckdb

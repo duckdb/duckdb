@@ -1,13 +1,16 @@
 #include "duckdb/storage/meta_block_reader.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 #include <cstring>
 
 namespace duckdb {
-using namespace std;
 
-MetaBlockReader::MetaBlockReader(BufferManager &manager, block_id_t block_id)
-    : manager(manager), handle(nullptr), offset(0), next_block(-1) {
+MetaBlockReader::MetaBlockReader(DatabaseInstance &db, block_id_t block_id)
+    : db(db), handle(nullptr), offset(0), next_block(-1) {
 	ReadNewBlock(block_id);
+}
+
+MetaBlockReader::~MetaBlockReader() {
 }
 
 void MetaBlockReader::ReadData(data_ptr_t buffer, idx_t read_size) {
@@ -29,7 +32,12 @@ void MetaBlockReader::ReadData(data_ptr_t buffer, idx_t read_size) {
 }
 
 void MetaBlockReader::ReadNewBlock(block_id_t id) {
-	handle = manager.Pin(id);
+	auto &block_manager = BlockManager::GetBlockManager(db);
+	auto &buffer_manager = BufferManager::GetBufferManager(db);
+
+	block_manager.MarkBlockAsModified(id);
+	block = buffer_manager.RegisterBlock(id);
+	handle = buffer_manager.Pin(block);
 
 	next_block = Load<block_id_t>(handle->node->buffer);
 	offset = sizeof(block_id_t);

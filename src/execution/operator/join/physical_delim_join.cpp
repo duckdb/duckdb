@@ -6,8 +6,6 @@
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/parallel/task_context.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 class PhysicalDelimJoinState : public PhysicalOperatorState {
@@ -35,7 +33,7 @@ PhysicalDelimJoin::PhysicalDelimJoin(vector<LogicalType> types, unique_ptr<Physi
 
 class DelimJoinGlobalState : public GlobalOperatorState {
 public:
-	DelimJoinGlobalState(PhysicalDelimJoin *delim_join) {
+	explicit DelimJoinGlobalState(PhysicalDelimJoin *delim_join) {
 		D_ASSERT(delim_join->delim_scans.size() > 0);
 		// for any duplicate eliminated scans in the RHS, point them to the duplicate eliminated chunk that we create
 		// here
@@ -64,9 +62,9 @@ unique_ptr<LocalSinkState> PhysicalDelimJoin::GetLocalSinkState(ExecutionContext
 	return distinct->GetLocalSinkState(context);
 }
 
-void PhysicalDelimJoin::Sink(ExecutionContext &context, GlobalOperatorState &state_, LocalSinkState &lstate,
+void PhysicalDelimJoin::Sink(ExecutionContext &context, GlobalOperatorState &state_p, LocalSinkState &lstate,
                              DataChunk &input) {
-	auto &state = (DelimJoinGlobalState &)state_;
+	auto &state = (DelimJoinGlobalState &)state_p;
 	state.lhs_data.Append(input);
 	distinct->Sink(context, *state.distinct_state, lstate, input);
 }
@@ -97,8 +95,8 @@ void PhysicalDelimJoin::Combine(ExecutionContext &context, GlobalOperatorState &
 	distinct->Combine(context, *dstate.distinct_state, lstate);
 }
 
-void PhysicalDelimJoin::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
-	auto state = reinterpret_cast<PhysicalDelimJoinState *>(state_);
+void PhysicalDelimJoin::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
+	auto state = reinterpret_cast<PhysicalDelimJoinState *>(state_p);
 	if (!state->join_state) {
 		// create the state of the underlying join
 		state->join_state = join->GetOperatorState();

@@ -10,6 +10,7 @@
 
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/single_thread_ptr.hpp"
 #include "duckdb/common/vector.hpp"
 
 namespace duckdb {
@@ -20,7 +21,7 @@ class Deserializer;
 struct interval_t {
 	int32_t months;
 	int32_t days;
-	int64_t msecs;
+	int64_t micros;
 };
 
 struct hugeint_t {
@@ -30,7 +31,7 @@ public:
 
 public:
 	hugeint_t() = default;
-	hugeint_t(int64_t value);
+	hugeint_t(int64_t value); // NOLINT: Allow implicit conversion from `int64_t`
 	hugeint_t(const hugeint_t &rhs) = default;
 	hugeint_t(hugeint_t &&rhs) = default;
 	hugeint_t &operator=(const hugeint_t &rhs) = default;
@@ -77,11 +78,14 @@ public:
 
 struct string_t;
 
-template <class T> using child_list_t = std::vector<std::pair<std::string, T>>;
-template <class T> using buffer_ptr = std::shared_ptr<T>;
+template <class T>
+using child_list_t = std::vector<std::pair<std::string, T>>;
+template <class T>
+using buffer_ptr = single_thread_ptr<T>;
 
-template <class T, typename... Args> buffer_ptr<T> make_buffer(Args &&... args) {
-	return std::make_shared<T>(std::forward<Args>(args)...);
+template <class T, typename... Args>
+buffer_ptr<T> make_buffer(Args &&...args) {
+	return single_thread_make_shared<T>(std::forward<Args>(args)...);
 }
 
 struct list_entry_t {
@@ -242,7 +246,10 @@ enum class LogicalTypeId : uint8_t {
 	VARCHAR = 22,
 	BLOB = 24,
 	INTERVAL = 25,
-
+	UTINYINT = 26,
+	USMALLINT = 27,
+	UINTEGER = 28,
+	UBIGINT = 29,
 	HUGEINT = 50,
 	POINTER = 51,
 	HASH = 52,
@@ -253,7 +260,7 @@ enum class LogicalTypeId : uint8_t {
 
 struct LogicalType {
 	LogicalType();
-	LogicalType(LogicalTypeId id);
+	LogicalType(LogicalTypeId id); // NOLINT: Allow implicit conversion from `LogicalTypeId`
 	LogicalType(LogicalTypeId id, string collation);
 	LogicalType(LogicalTypeId id, uint8_t width, uint8_t scale);
 	LogicalType(LogicalTypeId id, child_list_t<LogicalType> child_types);
@@ -280,14 +287,14 @@ struct LogicalType {
 	}
 
 	bool operator==(const LogicalType &rhs) const {
-		return id_ == rhs.id_ && width_ == rhs.width_ && scale_ == rhs.scale_;
+		return id_ == rhs.id_ && width_ == rhs.width_ && scale_ == rhs.scale_ && child_types_ == rhs.child_types_;
 	}
 	bool operator!=(const LogicalType &rhs) const {
 		return !(*this == rhs);
 	}
 
 	//! Serializes a LogicalType to a stand-alone binary blob
-	void Serialize(Serializer &serializer);
+	void Serialize(Serializer &serializer) const;
 	//! Deserializes a blob back into an LogicalType
 	static LogicalType Deserialize(Deserializer &source);
 
@@ -297,10 +304,10 @@ struct LogicalType {
 	bool IsMoreGenericThan(LogicalType &other) const;
 	hash_t Hash() const;
 
-	static LogicalType MaxLogicalType(LogicalType left, LogicalType right);
+	static LogicalType MaxLogicalType(const LogicalType &left, const LogicalType &right);
 
 	//! Gets the decimal properties of a numeric type. Fails if the type is not numeric.
-	bool GetDecimalProperties(int &width, int &scale) const;
+	bool GetDecimalProperties(uint8_t &width, uint8_t &scale) const;
 
 	void Verify() const;
 
@@ -320,9 +327,13 @@ public:
 	static const LogicalType SQLNULL;
 	static const LogicalType BOOLEAN;
 	static const LogicalType TINYINT;
+	static const LogicalType UTINYINT;
 	static const LogicalType SMALLINT;
+	static const LogicalType USMALLINT;
 	static const LogicalType INTEGER;
+	static const LogicalType UINTEGER;
 	static const LogicalType BIGINT;
+	static const LogicalType UBIGINT;
 	static const LogicalType FLOAT;
 	static const LogicalType DOUBLE;
 	static const LogicalType DECIMAL;
@@ -350,10 +361,11 @@ public:
 
 string LogicalTypeIdToString(LogicalTypeId type);
 
-LogicalType TransformStringToLogicalType(string str);
+LogicalType TransformStringToLogicalType(const string &str);
 
 //! Returns the PhysicalType for the given type
-template <class T> PhysicalType GetTypeId() {
+template <class T>
+PhysicalType GetTypeId() {
 	if (std::is_same<T, bool>()) {
 		return PhysicalType::BOOL;
 	} else if (std::is_same<T, int8_t>()) {
@@ -364,6 +376,14 @@ template <class T> PhysicalType GetTypeId() {
 		return PhysicalType::INT32;
 	} else if (std::is_same<T, int64_t>()) {
 		return PhysicalType::INT64;
+	} else if (std::is_same<T, uint8_t>()) {
+		return PhysicalType::UINT8;
+	} else if (std::is_same<T, uint16_t>()) {
+		return PhysicalType::UINT16;
+	} else if (std::is_same<T, uint32_t>()) {
+		return PhysicalType::UINT32;
+	} else if (std::is_same<T, uint64_t>()) {
+		return PhysicalType::UINT64;
 	} else if (std::is_same<T, hugeint_t>()) {
 		return PhysicalType::INT128;
 	} else if (std::is_same<T, uint64_t>()) {
@@ -383,7 +403,8 @@ template <class T> PhysicalType GetTypeId() {
 	}
 }
 
-template <class T> bool IsValidType() {
+template <class T>
+bool IsValidType() {
 	return GetTypeId<T>() != PhysicalType::INVALID;
 }
 
@@ -398,7 +419,8 @@ bool TypeIsIntegral(PhysicalType type);
 bool TypeIsNumeric(PhysicalType type);
 bool TypeIsInteger(PhysicalType type);
 
-template <class T> bool IsIntegerType() {
+template <class T>
+bool IsIntegerType() {
 	return TypeIsIntegral(GetTypeId<T>());
 }
 

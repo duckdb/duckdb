@@ -4,7 +4,8 @@
 
 namespace duckdb {
 
-template <class T> static void CopyToStorageLoop(VectorData &vdata, idx_t count, data_ptr_t target) {
+template <class T>
+static void CopyToStorageLoop(VectorData &vdata, idx_t count, data_ptr_t target) {
 	auto ldata = (T *)vdata.data;
 	auto result_data = (T *)target;
 	for (idx_t i = 0; i < count; i++) {
@@ -24,7 +25,7 @@ void VectorOperations::WriteToStorage(Vector &source, idx_t count, data_ptr_t ta
 	VectorData vdata;
 	source.Orrify(count, vdata);
 
-	switch (source.type.InternalType()) {
+	switch (source.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 		CopyToStorageLoop<int8_t>(vdata, count, target);
@@ -37,6 +38,18 @@ void VectorOperations::WriteToStorage(Vector &source, idx_t count, data_ptr_t ta
 		break;
 	case PhysicalType::INT64:
 		CopyToStorageLoop<int64_t>(vdata, count, target);
+		break;
+	case PhysicalType::UINT8:
+		CopyToStorageLoop<uint8_t>(vdata, count, target);
+		break;
+	case PhysicalType::UINT16:
+		CopyToStorageLoop<uint16_t>(vdata, count, target);
+		break;
+	case PhysicalType::UINT32:
+		CopyToStorageLoop<uint32_t>(vdata, count, target);
+		break;
+	case PhysicalType::UINT64:
+		CopyToStorageLoop<uint64_t>(vdata, count, target);
 		break;
 	case PhysicalType::INT128:
 		CopyToStorageLoop<hugeint_t>(vdata, count, target);
@@ -61,7 +74,8 @@ void VectorOperations::WriteToStorage(Vector &source, idx_t count, data_ptr_t ta
 	}
 }
 
-template <class T> static void ReadFromStorageLoop(data_ptr_t source, idx_t count, Vector &result) {
+template <class T>
+static void ReadFromStorageLoop(data_ptr_t source, idx_t count, Vector &result) {
 	auto ldata = (T *)source;
 	auto result_data = FlatVector::GetData<T>(result);
 	auto &nullmask = FlatVector::Nullmask(result);
@@ -75,8 +89,8 @@ template <class T> static void ReadFromStorageLoop(data_ptr_t source, idx_t coun
 }
 
 void VectorOperations::ReadFromStorage(data_ptr_t source, idx_t count, Vector &result) {
-	result.vector_type = VectorType::FLAT_VECTOR;
-	switch (result.type.InternalType()) {
+	result.SetVectorType(VectorType::FLAT_VECTOR);
+	switch (result.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 		ReadFromStorageLoop<int8_t>(source, count, result);
@@ -89,6 +103,18 @@ void VectorOperations::ReadFromStorage(data_ptr_t source, idx_t count, Vector &r
 		break;
 	case PhysicalType::INT64:
 		ReadFromStorageLoop<int64_t>(source, count, result);
+		break;
+	case PhysicalType::UINT8:
+		ReadFromStorageLoop<uint8_t>(source, count, result);
+		break;
+	case PhysicalType::UINT16:
+		ReadFromStorageLoop<uint16_t>(source, count, result);
+		break;
+	case PhysicalType::UINT32:
+		ReadFromStorageLoop<uint32_t>(source, count, result);
+		break;
+	case PhysicalType::UINT64:
+		ReadFromStorageLoop<uint64_t>(source, count, result);
 		break;
 	case PhysicalType::INT128:
 		ReadFromStorageLoop<hugeint_t>(source, count, result);

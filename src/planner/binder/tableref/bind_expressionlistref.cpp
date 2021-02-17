@@ -2,9 +2,9 @@
 #include "duckdb/planner/tableref/bound_expressionlistref.hpp"
 #include "duckdb/parser/tableref/expressionlistref.hpp"
 #include "duckdb/planner/expression_binder/insert_binder.hpp"
+#include "duckdb/common/to_string.hpp"
 
 namespace duckdb {
-using namespace std;
 
 unique_ptr<BoundTableRef> Binder::Bind(ExpressionListRef &expr) {
 	auto result = make_unique<BoundExpressionListRef>();
@@ -15,7 +15,7 @@ unique_ptr<BoundTableRef> Binder::Bind(ExpressionListRef &expr) {
 	binder.target_type = LogicalType(LogicalTypeId::INVALID);
 	for (idx_t list_idx = 0; list_idx < expr.values.size(); list_idx++) {
 		auto &expression_list = expr.values[list_idx];
-		if (result->names.size() == 0) {
+		if (result->names.empty()) {
 			// no names provided, generate them
 			for (idx_t val_idx = 0; val_idx < expression_list.size(); val_idx++) {
 				result->names.push_back("col" + to_string(val_idx));
@@ -23,7 +23,7 @@ unique_ptr<BoundTableRef> Binder::Bind(ExpressionListRef &expr) {
 		}
 
 		vector<unique_ptr<Expression>> list;
-		if (result->types.size() == 0) {
+		if (result->types.empty()) {
 			// for the first list, we set the expected types as the types of these expressions
 			for (idx_t val_idx = 0; val_idx < expression_list.size(); val_idx++) {
 				LogicalType result_type;

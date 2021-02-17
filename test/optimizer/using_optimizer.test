@@ -1,0 +1,131 @@
+# name: test/optimizer/using_optimizer.test
+# description: Test optimization of USING columns
+# group: [optimizer]
+
+statement ok
+PRAGMA explain_output='optimized_only';
+
+statement ok
+create table a as select 42 as i, 80 as j;
+
+statement ok
+create table b as select 43 as i, 84 as k;
+
+statement ok
+create table c as select 44 as i, 84 as l;
+
+# inner join
+query II nosort inner
+explain select i from a inner join b using (i);
+----
+
+query II nosort inner
+explain select a.i from a, b where a.i=b.i;
+----
+
+query II nosort inner
+explain select a.i from a natural join b;
+----
+
+# left join
+query II nosort left
+explain select i from a left outer join b using (i);
+----
+
+query II nosort left
+explain select a.i from a left outer join b using (i);
+----
+
+query II nosort left
+explain select a.i from a left outer join b on (a.i=b.i);
+----
+
+# right join
+query II nosort right
+explain select i from a right outer join b using (i);
+----
+
+query II nosort right
+explain select b.i from a right outer join b using (i);
+----
+
+query II nosort right
+explain select b.i from a right outer join b on (a.i=b.i);
+----
+
+# left join followed by inner join
+query I
+select i from a left outer join b using (i) inner join c using (i);
+----
+
+query I
+select a.i from a left outer join b on (a.i=b.i) inner join c on (a.i=c.i);
+----
+
+query II nosort leftinner
+explain select i from a left outer join b using (i) inner join c using (i);
+----
+
+query II nosort leftinner
+explain select a.i from a left outer join b on (a.i=b.i) inner join c on (a.i=c.i);
+----
+
+# left join followed by left join
+query I
+select i from a left outer join b using (i) left outer join c using (i);
+----
+42
+
+query I
+select a.i from a left outer join b on (a.i=b.i) left outer join c on (a.i=c.i);
+----
+42
+
+query II nosort leftleft
+explain select i from a left outer join b using (i) left outer join c using (i);
+----
+
+query II nosort leftleft
+explain select a.i from a left outer join b on (a.i=b.i) left outer join c on (a.i=c.i);
+----
+
+# left join followed by right join
+query I
+select i from a left outer join b using (i) right join c using (i);
+----
+44
+
+query I
+select c.i from a left outer join b on (a.i=b.i) right join c on (a.i=c.i);
+----
+44
+
+query II nosort leftright
+explain select i from a left outer join b using (i) right join c using (i);
+----
+
+query II nosort leftright
+explain select a.i from a left outer join b on (a.i=b.i) right join c on (a.i=c.i);
+----
+
+# full outer join
+# need to use a case expression here
+query I
+select i from a full outer join b using (i);
+----
+42
+43
+
+query I
+select case when(a.i is not null) then a.i else b.i end from a full outer join b on (a.i=b.i);
+----
+42
+43
+
+query II nosort fullouter
+explain select i from a full outer join b using (i);
+----
+
+query II nosort fullouter
+explain select case when(a.i is not null) then a.i else b.i end from a full outer join b on (a.i=b.i);
+----

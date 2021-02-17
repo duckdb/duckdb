@@ -4,7 +4,7 @@
 
 namespace duckdb {
 
-Node4::Node4(ART &art, size_t compressionLength) : Node(art, NodeType::N4, compressionLength) {
+Node4::Node4(ART &art, size_t compression_length) : Node(art, NodeType::N4, compression_length) {
 	memset(key, 0, sizeof(key));
 }
 
@@ -48,39 +48,40 @@ unique_ptr<Node> *Node4::GetChild(idx_t pos) {
 	return &child[pos];
 }
 
-void Node4::insert(ART &art, unique_ptr<Node> &node, uint8_t keyByte, unique_ptr<Node> &child) {
+void Node4::Insert(ART &art, unique_ptr<Node> &node, uint8_t key_byte, unique_ptr<Node> &child) {
 	Node4 *n = static_cast<Node4 *>(node.get());
 
 	// Insert leaf into inner node
 	if (node->count < 4) {
 		// Insert element
-		unsigned pos;
-		for (pos = 0; (pos < node->count) && (n->key[pos] < keyByte); pos++)
-			;
+		idx_t pos = 0;
+		while ((pos < node->count) && (n->key[pos] < key_byte)) {
+			pos++;
+		}
 		if (n->child[pos] != nullptr) {
-			for (unsigned i = n->count; i > pos; i--) {
+			for (idx_t i = n->count; i > pos; i--) {
 				n->key[i] = n->key[i - 1];
 				n->child[i] = move(n->child[i - 1]);
 			}
 		}
-		n->key[pos] = keyByte;
+		n->key[pos] = key_byte;
 		n->child[pos] = move(child);
 		n->count++;
 	} else {
 		// Grow to Node16
-		auto newNode = make_unique<Node16>(art, n->prefix_length);
-		newNode->count = 4;
-		CopyPrefix(art, node.get(), newNode.get());
-		for (unsigned i = 0; i < 4; i++) {
-			newNode->key[i] = n->key[i];
-			newNode->child[i] = move(n->child[i]);
+		auto new_node = make_unique<Node16>(art, n->prefix_length);
+		new_node->count = 4;
+		CopyPrefix(art, node.get(), new_node.get());
+		for (idx_t i = 0; i < 4; i++) {
+			new_node->key[i] = n->key[i];
+			new_node->child[i] = move(n->child[i]);
 		}
-		node = move(newNode);
-		Node16::insert(art, node, keyByte, child);
+		node = move(new_node);
+		Node16::Insert(art, node, key_byte, child);
 	}
 }
 
-void Node4::erase(ART &art, unique_ptr<Node> &node, int pos) {
+void Node4::Erase(ART &art, unique_ptr<Node> &node, int pos) {
 	Node4 *n = static_cast<Node4 *>(node.get());
 	D_ASSERT(pos < n->count);
 

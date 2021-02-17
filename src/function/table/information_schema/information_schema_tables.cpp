@@ -6,8 +6,6 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/transaction/transaction.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 struct InformationSchemaTablesData : public FunctionOperatorData {
@@ -18,73 +16,73 @@ struct InformationSchemaTablesData : public FunctionOperatorData {
 	idx_t offset;
 };
 
-static unique_ptr<FunctionData> information_schema_tables_bind(ClientContext &context, vector<Value> &inputs,
-                                                               unordered_map<string, Value> &named_parameters,
-                                                               vector<LogicalType> &return_types,
-                                                               vector<string> &names) {
-	names.push_back("table_catalog");
+static unique_ptr<FunctionData> InformationSchemaTablesBind(ClientContext &context, vector<Value> &inputs,
+                                                            unordered_map<string, Value> &named_parameters,
+                                                            vector<LogicalType> &return_types, vector<string> &names) {
+	names.emplace_back("table_catalog");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("table_schema");
+	names.emplace_back("table_schema");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("table_name");
+	names.emplace_back("table_name");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("table_type");
+	names.emplace_back("table_type");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("self_referencing_column_name");
+	names.emplace_back("self_referencing_column_name");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("reference_generation");
+	names.emplace_back("reference_generation");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("user_defined_type_catalog");
+	names.emplace_back("user_defined_type_catalog");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("user_defined_type_schema");
+	names.emplace_back("user_defined_type_schema");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("user_defined_type_name");
+	names.emplace_back("user_defined_type_name");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("is_insertable_into");
+	names.emplace_back("is_insertable_into");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("is_typed");
+	names.emplace_back("is_typed");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("commit_action");
+	names.emplace_back("commit_action");
 	return_types.push_back(LogicalType::VARCHAR);
 
 	return nullptr;
 }
 
-unique_ptr<FunctionOperatorData>
-information_schema_tables_init(ClientContext &context, const FunctionData *bind_data, vector<column_t> &column_ids,
-                               unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+unique_ptr<FunctionOperatorData> InformationSchemaTablesInit(ClientContext &context, const FunctionData *bind_data,
+                                                             vector<column_t> &column_ids,
+                                                             TableFilterCollection *filters) {
 	auto result = make_unique<InformationSchemaTablesData>();
 
 	// scan all the schemas for tables and views and collect them
 	Catalog::GetCatalog(context).schemas->Scan(context, [&](CatalogEntry *entry) {
 		auto schema = (SchemaCatalogEntry *)entry;
-		schema->tables.Scan(context, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
+		schema->Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	});
 
 	// check the temp schema as well
-	context.temporary_objects->tables.Scan(context, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
+	context.temporary_objects->Scan(context, CatalogType::TABLE_ENTRY,
+	                                [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	return move(result);
 }
 
-void information_schema_tables(ClientContext &context, const FunctionData *bind_data,
-                               FunctionOperatorData *operator_state, DataChunk &output) {
+void InformationSchemaTablesFunction(ClientContext &context, const FunctionData *bind_data,
+                                     FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &data = (InformationSchemaTablesData &)*operator_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;
 	}
-	idx_t next = min(data.offset + STANDARD_VECTOR_SIZE, (idx_t)data.entries.size());
+	idx_t next = MinValue<idx_t>(data.offset + STANDARD_VECTOR_SIZE, data.entries.size());
 	output.SetCardinality(next - data.offset);
 
 	// start returning values
@@ -142,8 +140,8 @@ void information_schema_tables(ClientContext &context, const FunctionData *bind_
 }
 
 void InformationSchemaTables::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("information_schema_tables", {}, information_schema_tables,
-	                              information_schema_tables_bind, information_schema_tables_init));
+	set.AddFunction(TableFunction("information_schema_tables", {}, InformationSchemaTablesFunction,
+	                              InformationSchemaTablesBind, InformationSchemaTablesInit));
 }
 
 } // namespace duckdb

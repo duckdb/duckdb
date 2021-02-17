@@ -1,7 +1,5 @@
 #include "duckdb/execution/operator/scan/physical_dummy_scan.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 void PhysicalDummyScan::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) {

@@ -1,0 +1,82 @@
+# name: test/sql/aggregate/aggregates/test_kurtosis.test
+# description: Test kurtosis aggregate
+# group: [aggregates]
+
+#Corner cases
+statement error
+select kurtosis()
+
+query I
+select kurtosis(NULL)
+----
+NULL
+
+query I
+select kurtosis(1)
+----
+NULL
+
+statement error
+select kurtosis(*)
+
+
+# Constant Value (This shoud be an error)
+query I
+select kurtosis (10) from range (5)
+----
+NULL
+
+#Empty Table
+query I
+select kurtosis (10) from range (5) where 1 == 0
+----
+NULL
+
+statement ok
+create table aggr(k int, v int, v2 int);
+
+statement ok
+insert into aggr values
+    (1, 10, null),
+    (2, 10, 11),
+    (2, 10, 15),
+    (2, 10, 18),
+    (2, 20, 22),
+    (2, 20, 25),
+    (2, 25, null),
+    (2, 30, 35),
+    (2, 30, 40),
+    (2, 30, 50),
+    (2, 30, 51);
+
+query III
+select kurtosis(k), kurtosis(v), kurtosis(v2) from aggr;
+----
+11.000000	-1.961428	-1.445120
+
+query I
+select  kurtosis(v2) from aggr group by v;
+----
+NULL
+NULL
+NULL
+-3.977599
+
+# Window Function
+require vector_size 512
+
+query I
+select kurtosis(v2) over (partition by v)
+    from aggr;
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+-3.977599
+-3.977599
+-3.977599
+-3.977599

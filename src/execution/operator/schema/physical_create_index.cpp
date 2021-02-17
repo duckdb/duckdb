@@ -5,12 +5,10 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 void PhysicalCreateIndex::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
-	if (column_ids.size() == 0) {
+	if (column_ids.empty()) {
 		throw NotImplementedException("CREATE INDEX does not refer to any columns in the base table!");
 	}
 

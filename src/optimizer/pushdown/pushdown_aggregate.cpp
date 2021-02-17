@@ -6,7 +6,6 @@
 #include "duckdb/planner/operator/logical_join.hpp"
 
 namespace duckdb {
-using namespace std;
 
 using Filter = FilterPushdown::Filter;
 
@@ -19,9 +18,8 @@ static unique_ptr<Expression> ReplaceGroupBindings(LogicalAggregate &proj, uniqu
 		// replace the binding with a copy to the expression at the referenced index
 		return proj.groups[colref.binding.column_index]->Copy();
 	}
-	ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> child) -> unique_ptr<Expression> {
-		return ReplaceGroupBindings(proj, move(child));
-	});
+	ExpressionIterator::EnumerateChildren(
+	    *expr, [&](unique_ptr<Expression> &child) { child = ReplaceGroupBindings(proj, move(child)); });
 	return expr;
 }
 

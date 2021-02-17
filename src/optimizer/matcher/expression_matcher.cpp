@@ -3,7 +3,6 @@
 #include "duckdb/planner/expression/list.hpp"
 
 namespace duckdb {
-using namespace std;
 
 bool ExpressionMatcher::Match(Expression *expr, vector<Expression *> &bindings) {
 	if (type && !type->Match(expr->return_type.InternalType())) {
@@ -27,11 +26,11 @@ bool ExpressionEqualityMatcher::Match(Expression *expr, vector<Expression *> &bi
 	return true;
 }
 
-bool CaseExpressionMatcher::Match(Expression *expr_, vector<Expression *> &bindings) {
-	if (!ExpressionMatcher::Match(expr_, bindings)) {
+bool CaseExpressionMatcher::Match(Expression *expr_p, vector<Expression *> &bindings) {
+	if (!ExpressionMatcher::Match(expr_p, bindings)) {
 		return false;
 	}
-	auto expr = (BoundCaseExpression *)expr_;
+	auto expr = (BoundCaseExpression *)expr_p;
 	if (check && !check->Match(expr->check.get(), bindings)) {
 		return false;
 	}
@@ -44,50 +43,58 @@ bool CaseExpressionMatcher::Match(Expression *expr_, vector<Expression *> &bindi
 	return true;
 }
 
-bool CastExpressionMatcher::Match(Expression *expr_, vector<Expression *> &bindings) {
-	if (!ExpressionMatcher::Match(expr_, bindings)) {
+bool CastExpressionMatcher::Match(Expression *expr_p, vector<Expression *> &bindings) {
+	if (!ExpressionMatcher::Match(expr_p, bindings)) {
 		return false;
 	}
-	auto expr = (BoundCastExpression *)expr_;
+	auto expr = (BoundCastExpression *)expr_p;
 	if (child && !child->Match(expr->child.get(), bindings)) {
 		return false;
 	}
 	return true;
 }
 
-bool ComparisonExpressionMatcher::Match(Expression *expr_, vector<Expression *> &bindings) {
-	if (!ExpressionMatcher::Match(expr_, bindings)) {
+bool ComparisonExpressionMatcher::Match(Expression *expr_p, vector<Expression *> &bindings) {
+	if (!ExpressionMatcher::Match(expr_p, bindings)) {
 		return false;
 	}
-	auto expr = (BoundComparisonExpression *)expr_;
+	auto expr = (BoundComparisonExpression *)expr_p;
 	vector<Expression *> expressions = {expr->left.get(), expr->right.get()};
 	return SetMatcher::Match(matchers, expressions, bindings, policy);
 }
 
-bool ConjunctionExpressionMatcher::Match(Expression *expr_, vector<Expression *> &bindings) {
-	if (!ExpressionMatcher::Match(expr_, bindings)) {
+bool InClauseExpressionMatcher::Match(Expression *expr_p, vector<Expression *> &bindings) {
+	if (!ExpressionMatcher::Match(expr_p, bindings)) {
 		return false;
 	}
-	auto expr = (BoundConjunctionExpression *)expr_;
+	auto expr = (BoundOperatorExpression *)expr_p;
+	return SetMatcher::Match(matchers, expr->children, bindings, policy);
+}
+
+bool ConjunctionExpressionMatcher::Match(Expression *expr_p, vector<Expression *> &bindings) {
+	if (!ExpressionMatcher::Match(expr_p, bindings)) {
+		return false;
+	}
+	auto expr = (BoundConjunctionExpression *)expr_p;
 	if (!SetMatcher::Match(matchers, expr->children, bindings, policy)) {
 		return false;
 	}
 	return true;
 }
 
-bool OperatorExpressionMatcher::Match(Expression *expr_, vector<Expression *> &bindings) {
-	if (!ExpressionMatcher::Match(expr_, bindings)) {
+bool OperatorExpressionMatcher::Match(Expression *expr_p, vector<Expression *> &bindings) {
+	if (!ExpressionMatcher::Match(expr_p, bindings)) {
 		return false;
 	}
-	auto expr = (BoundOperatorExpression *)expr_;
+	auto expr = (BoundOperatorExpression *)expr_p;
 	return SetMatcher::Match(matchers, expr->children, bindings, policy);
 }
 
-bool FunctionExpressionMatcher::Match(Expression *expr_, vector<Expression *> &bindings) {
-	if (!ExpressionMatcher::Match(expr_, bindings)) {
+bool FunctionExpressionMatcher::Match(Expression *expr_p, vector<Expression *> &bindings) {
+	if (!ExpressionMatcher::Match(expr_p, bindings)) {
 		return false;
 	}
-	auto expr = (BoundFunctionExpression *)expr_;
+	auto expr = (BoundFunctionExpression *)expr_p;
 	if (!FunctionMatcher::Match(function, expr->function.name)) {
 		return false;
 	}

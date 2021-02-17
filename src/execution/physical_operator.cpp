@@ -7,8 +7,6 @@
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/common/tree_renderer.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 string PhysicalOperator::GetName() const {

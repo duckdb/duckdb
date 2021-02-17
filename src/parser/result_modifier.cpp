@@ -29,11 +29,11 @@ unique_ptr<ResultModifier> ResultModifier::Deserialize(Deserializer &source) {
 	}
 }
 
-bool LimitModifier::Equals(const ResultModifier *other_) const {
-	if (!ResultModifier::Equals(other_)) {
+bool LimitModifier::Equals(const ResultModifier *other_p) const {
+	if (!ResultModifier::Equals(other_p)) {
 		return false;
 	}
-	auto &other = (LimitModifier &)*other_;
+	auto &other = (LimitModifier &)*other_p;
 	if (!BaseExpression::Equals(limit.get(), other.limit.get())) {
 		return false;
 	}
@@ -67,11 +67,11 @@ unique_ptr<ResultModifier> LimitModifier::Deserialize(Deserializer &source) {
 	return move(mod);
 }
 
-bool DistinctModifier::Equals(const ResultModifier *other_) const {
-	if (!ResultModifier::Equals(other_)) {
+bool DistinctModifier::Equals(const ResultModifier *other_p) const {
+	if (!ResultModifier::Equals(other_p)) {
 		return false;
 	}
-	auto &other = (DistinctModifier &)*other_;
+	auto &other = (DistinctModifier &)*other_p;
 	if (!ExpressionUtil::ListEquals(distinct_on_targets, other.distinct_on_targets)) {
 		return false;
 	}
@@ -97,11 +97,11 @@ unique_ptr<ResultModifier> DistinctModifier::Deserialize(Deserializer &source) {
 	return move(mod);
 }
 
-bool OrderModifier::Equals(const ResultModifier *other_) const {
-	if (!ResultModifier::Equals(other_)) {
+bool OrderModifier::Equals(const ResultModifier *other_p) const {
+	if (!ResultModifier::Equals(other_p)) {
 		return false;
 	}
-	auto &other = (OrderModifier &)*other_;
+	auto &other = (OrderModifier &)*other_p;
 	if (orders.size() != other.orders.size()) {
 		return false;
 	}
@@ -119,7 +119,7 @@ bool OrderModifier::Equals(const ResultModifier *other_) const {
 unique_ptr<ResultModifier> OrderModifier::Copy() {
 	auto copy = make_unique<OrderModifier>();
 	for (auto &order : orders) {
-		copy->orders.push_back(OrderByNode(order.type, order.null_order, order.expression->Copy()));
+		copy->orders.emplace_back(order.type, order.null_order, order.expression->Copy());
 	}
 	return move(copy);
 }

@@ -1,7 +1,6 @@
 #include "duckdb/planner/operator/logical_projection.hpp"
 
 namespace duckdb {
-using namespace std;
 
 LogicalProjection::LogicalProjection(idx_t table_index, vector<unique_ptr<Expression>> select_list)
     : LogicalOperator(LogicalOperatorType::LOGICAL_PROJECTION, move(select_list)), table_index(table_index) {

@@ -3,33 +3,35 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/string_util.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 struct StructExtractBindData : public FunctionData {
+	StructExtractBindData(string key, idx_t index, LogicalType type) : key(move(key)), index(index), type(move(type)) {
+	}
+
 	string key;
 	idx_t index;
 	LogicalType type;
 
-	StructExtractBindData(string key, idx_t index, LogicalType type) : key(key), index(index), type(type) {
-	}
-
+public:
 	unique_ptr<FunctionData> Copy() override {
 		return make_unique<StructExtractBindData>(key, index, type);
 	}
+	bool Equals(FunctionData &other_p) override {
+		auto &other = (StructExtractBindData &)other_p;
+		return key == other.key && index == other.index && type == other.type;
+	}
 };
 
-static void struct_extract_fun(DataChunk &args, ExpressionState &state, Vector &result) {
+static void StructExtractFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (StructExtractBindData &)*func_expr.bind_info;
 
 	// this should be guaranteed by the binder
-	D_ASSERT(args.column_count() == 1);
 	auto &vec = args.data[0];
 
 	vec.Verify(args.size());
-	if (vec.vector_type == VectorType::DICTIONARY_VECTOR) {
+	if (vec.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		auto &child = DictionaryVector::Child(vec);
 		auto &dict_sel = DictionaryVector::SelVector(vec);
 		auto &children = StructVector::GetEntries(child);
@@ -37,7 +39,7 @@ static void struct_extract_fun(DataChunk &args, ExpressionState &state, Vector &
 			throw Exception("Not enough struct entries for struct_extract");
 		}
 		auto &struct_child = children[info.index];
-		if (struct_child.first != info.key || struct_child.second->type != info.type) {
+		if (struct_child.first != info.key || struct_child.second->GetType() != info.type) {
 			throw Exception("Struct key or type mismatch");
 		}
 		result.Slice(*struct_child.second, dict_sel, args.size());
@@ -47,7 +49,7 @@ static void struct_extract_fun(DataChunk &args, ExpressionState &state, Vector &
 			throw Exception("Not enough struct entries for struct_extract");
 		}
 		auto &struct_child = children[info.index];
-		if (struct_child.first != info.key || struct_child.second->type != info.type) {
+		if (struct_child.first != info.key || struct_child.second->GetType() != info.type) {
 			throw Exception("Struct key or type mismatch");
 		}
 		result.Reference(*struct_child.second);
@@ -55,16 +57,16 @@ static void struct_extract_fun(DataChunk &args, ExpressionState &state, Vector &
 	result.Verify(args.size());
 }
 
-static unique_ptr<FunctionData> struct_extract_bind(ClientContext &context, ScalarFunction &bound_function,
-                                                    vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> StructExtractBind(ClientContext &context, ScalarFunction &bound_function,
+                                                  vector<unique_ptr<Expression>> &arguments) {
 	auto &struct_children = arguments[0]->return_type.child_types();
-	if (struct_children.size() < 1) {
+	if (struct_children.empty()) {
 		throw Exception("Can't extract something from an empty struct");
 	}
 
 	auto &key_child = arguments[1];
 
-	if (arguments[1]->return_type.id() != LogicalTypeId::VARCHAR ||
+	if (key_child->return_type.id() != LogicalTypeId::VARCHAR ||
 	    key_child->return_type.id() != LogicalTypeId::VARCHAR || !key_child->IsFoldable()) {
 		throw Exception("Key name for struct_extract needs to be a constant string");
 	}
@@ -93,14 +95,14 @@ static unique_ptr<FunctionData> struct_extract_bind(ClientContext &context, Scal
 	}
 
 	bound_function.return_type = return_type;
-	arguments.pop_back();
+	bound_function.arguments[0] = arguments[0]->return_type;
 	return make_unique<StructExtractBindData>(key, key_index, return_type);
 }
 
 void StructExtractFun::RegisterFunction(BuiltinFunctions &set) {
 	// the arguments and return types are actually set in the binder function
 	ScalarFunction fun("struct_extract", {LogicalType::STRUCT, LogicalType::VARCHAR}, LogicalType::ANY,
-	                   struct_extract_fun, false, struct_extract_bind);
+	                   StructExtractFunction, false, StructExtractBind);
 	set.AddFunction(fun);
 }
 

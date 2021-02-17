@@ -37,7 +37,7 @@
 #include "duckdb/transaction/transaction.hpp"
 
 using namespace duckdb;
-using namespace std;
+
 template class std::unique_ptr<SQLStatement>;
 template class std::unique_ptr<AlterStatement>;
 template class std::unique_ptr<CopyStatement>;
@@ -64,7 +64,6 @@ template class std::unique_ptr<DefaultExpression>;
 template class std::unique_ptr<FunctionExpression>;
 template class std::unique_ptr<OperatorExpression>;
 template class std::unique_ptr<ParameterExpression>;
-template class std::unique_ptr<PreparedStatementData>;
 template class std::unique_ptr<StarExpression>;
 template class std::unique_ptr<SubqueryExpression>;
 template class std::unique_ptr<WindowExpression>;
@@ -80,6 +79,7 @@ template class std::unique_ptr<SubqueryRef>;
 template class std::unique_ptr<TableFunctionRef>;
 template class std::unique_ptr<Pipeline>;
 template class std::shared_ptr<Pipeline>;
+template class std::shared_ptr<PreparedStatementData>;
 
 template class std::unique_ptr<Expression>;
 template class std::unique_ptr<BoundQueryNode>;
@@ -99,7 +99,6 @@ template class std::unique_ptr<BoundParameterExpression>;
 template class std::unique_ptr<BoundReferenceExpression>;
 template class std::unique_ptr<BoundSubqueryExpression>;
 template class std::unique_ptr<BoundWindowExpression>;
-template class std::unique_ptr<CommonSubExpression>;
 
 template class std::unique_ptr<CatalogEntry>;
 template class std::unique_ptr<BindContext>;
@@ -131,7 +130,6 @@ template class std::unique_ptr<JoinOrderOptimizer::JoinNode>;
 template class std::unique_ptr<SingleJoinRelation>;
 template class std::shared_ptr<Relation>;
 template class std::unique_ptr<CatalogSet>;
-template class std::unique_ptr<PreparedStatementCatalogEntry>;
 template class std::unique_ptr<Binder>;
 
 #define INSTANTIATE_VECTOR(VECTOR_DEFINITION)                                                                          \

@@ -3,10 +3,8 @@
 #include "duckdb/common/algorithm.hpp"
 
 namespace duckdb {
-using namespace std;
-using namespace duckdb_libpgquery;
 
-unique_ptr<ParsedExpression> Transformer::TransformParamRef(PGParamRef *node) {
+unique_ptr<ParsedExpression> Transformer::TransformParamRef(duckdb_libpgquery::PGParamRef *node) {
 	if (!node) {
 		return nullptr;
 	}
@@ -16,7 +14,7 @@ unique_ptr<ParsedExpression> Transformer::TransformParamRef(PGParamRef *node) {
 	} else {
 		expr->parameter_nr = node->number;
 	}
-	SetParamCount(max(ParamCount(), expr->parameter_nr));
+	SetParamCount(MaxValue<idx_t>(ParamCount(), expr->parameter_nr));
 	return move(expr);
 }
 

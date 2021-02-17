@@ -15,7 +15,7 @@ namespace duckdb {
 //! Represents a table.* expression in the SELECT clause
 class TableStarExpression : public ParsedExpression {
 public:
-	TableStarExpression(string relation_name);
+	explicit TableStarExpression(string relation_name);
 
 public:
 	string ToString() const override;

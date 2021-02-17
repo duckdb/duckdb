@@ -5,8 +5,6 @@
 
 #include <atomic>
 
-using namespace std;
-
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//

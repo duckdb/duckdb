@@ -1,9 +1,8 @@
 #include "duckdb/optimizer/join_order/join_relation.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/to_string.hpp"
 
 #include <algorithm>
-
-using namespace std;
 
 namespace duckdb {
 
@@ -68,12 +67,12 @@ JoinRelationSet *JoinRelationSetManager::GetJoinRelation(idx_t index) {
 
 JoinRelationSet *JoinRelationSetManager::GetJoinRelation(unordered_set<idx_t> &bindings) {
 	// create a sorted vector of the relations
-	unique_ptr<idx_t[]> relations = bindings.size() == 0 ? nullptr : unique_ptr<idx_t[]>(new idx_t[bindings.size()]);
+	unique_ptr<idx_t[]> relations = bindings.empty() ? nullptr : unique_ptr<idx_t[]>(new idx_t[bindings.size()]);
 	idx_t count = 0;
 	for (auto &entry : bindings) {
 		relations[count++] = entry;
 	}
-	sort(relations.get(), relations.get() + count);
+	std::sort(relations.get(), relations.get() + count);
 	return GetJoinRelation(move(relations), count);
 }
 
@@ -144,4 +143,4 @@ JoinRelationSet *JoinRelationSetManager::Difference(JoinRelationSet *left, JoinR
 	return GetJoinRelation(move(relations), count);
 }
 
-}
+} // namespace duckdb

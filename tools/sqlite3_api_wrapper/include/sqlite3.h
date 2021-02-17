@@ -4495,7 +4495,7 @@ SQLITE_API int sqlite3_clear_bindings(sqlite3_stmt*);
 ** [prepared statement] returns no data (for example an [UPDATE]).
 ** ^However, just because this routine returns a positive number does not
 ** mean that one or more rows of data will be returned.  ^A SELECT statement
-** will always have a positive sqlite3_column_count() but depending on the
+** will always have a positive sqlite3_ColumnCount() but depending on the
 ** WHERE clause constraints and the table content, it might return no rows.
 **
 ** See also: [sqlite3_data_count()]
@@ -4715,7 +4715,7 @@ SQLITE_API int sqlite3_step(sqlite3_stmt*);
 ** where it always returns zero since each step of that multi-step
 ** pragma returns 0 columns of data.
 **
-** See also: [sqlite3_column_count()]
+** See also: [sqlite3_ColumnCount()]
 */
 SQLITE_API int sqlite3_data_count(sqlite3_stmt *pStmt);
 
@@ -4785,7 +4785,7 @@ SQLITE_API int sqlite3_data_count(sqlite3_stmt *pStmt);
 ** and the second argument is the index of the column for which information
 ** should be returned. ^The leftmost column of the result set has the index 0.
 ** ^The number of columns in the result can be determined using
-** [sqlite3_column_count()].
+** [sqlite3_ColumnCount()].
 **
 ** If the SQL statement does not currently point to a valid row, or if the
 ** column index is out of range, the result is undefined.

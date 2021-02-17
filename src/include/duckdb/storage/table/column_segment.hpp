@@ -13,51 +13,32 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/statistics/segment_statistics.hpp"
 
 namespace duckdb {
 class BlockManager;
 class ColumnSegment;
 class ColumnData;
 class Transaction;
-class TableFilter;
+class BaseStatistics;
+struct TableFilter;
 struct ColumnFetchState;
 struct ColumnScanState;
 enum class ColumnSegmentType : uint8_t { TRANSIENT, PERSISTENT };
 //! TableFilter represents a filter pushed down into the table scan.
 
-class SegmentStatistics {
-public:
-	SegmentStatistics(PhysicalType type, idx_t type_size);
-	SegmentStatistics(PhysicalType type, idx_t type_size, data_t stats_min[], data_t stats_max[]);
-	PhysicalType type;
-	idx_t type_size;
-	//! The minimum value of the segment
-	unique_ptr<data_t[]> minimum;
-	//! The maximum value of the segment
-	unique_ptr<data_t[]> maximum;
-	//! Whether or not the segment has NULL values
-	bool has_null;
-	//! The maximum string length, only used for string columns
-	idx_t max_string_length;
-	//! Whether or not the segment contains any big strings in overflow blocks, only used for string columns
-	bool has_overflow_strings;
-
-public:
-	void Reset();
-};
-
 class ColumnSegment : public SegmentBase {
 public:
 	//! Initialize an empty column segment of the specified type
-	ColumnSegment(PhysicalType type, ColumnSegmentType segment_type, idx_t start, idx_t count = 0);
+	ColumnSegment(LogicalType type, ColumnSegmentType segment_type, idx_t start, idx_t count = 0);
 
-	ColumnSegment(PhysicalType type, ColumnSegmentType segment_type, idx_t start, idx_t count, data_t stats_min[],
-	              data_t stats_max[]);
+	ColumnSegment(LogicalType type, ColumnSegmentType segment_type, idx_t start, idx_t count,
+	              unique_ptr<BaseStatistics> statistics);
 
-	virtual ~ColumnSegment() = default;
+	~ColumnSegment() override = default;
 
 	//! The type stored in the column
-	PhysicalType type;
+	LogicalType type;
 	//! The size of the type
 	idx_t type_size;
 	//! The column segment type (transient or persistent)
@@ -69,6 +50,8 @@ public:
 	virtual void InitializeScan(ColumnScanState &state) = 0;
 	//! Scan one vector from this segment
 	virtual void Scan(Transaction &transaction, ColumnScanState &state, idx_t vector_index, Vector &result) = 0;
+	//! Scan one vector of committed data from this segment
+	virtual void ScanCommitted(ColumnScanState &state, idx_t vector_index, Vector &result) = 0;
 	//! Scan the next vector from the column and apply a selection vector to filter the data
 	virtual void FilterScan(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
 	                        idx_t &approved_tuple_count) = 0;
@@ -76,7 +59,7 @@ public:
 	virtual void IndexScan(ColumnScanState &state, Vector &result) = 0;
 	//! Executes filter in this column
 	virtual void Select(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
-	                    idx_t &approved_tuple_count, vector<TableFilter> &tableFilter) = 0;
+	                    idx_t &approved_tuple_count, vector<TableFilter> &table_filter) = 0;
 	//! Fetch the base table vector index that belongs to this row
 	virtual void Fetch(ColumnScanState &state, idx_t vector_index, Vector &result) = 0;
 	//! Fetch a value of the specific row id and append it to the result

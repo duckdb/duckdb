@@ -3,17 +3,16 @@
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 AlterBinder::AlterBinder(Binder &binder, ClientContext &context, string table, vector<ColumnDefinition> &columns,
                          vector<column_t> &bound_columns, LogicalType target_type)
-    : ExpressionBinder(binder, context), table(table), columns(columns), bound_columns(bound_columns) {
-	this->target_type = target_type;
+    : ExpressionBinder(binder, context), table(move(table)), columns(columns), bound_columns(bound_columns) {
+	this->target_type = move(target_type);
 }
 
-BindResult AlterBinder::BindExpression(ParsedExpression &expr, idx_t depth, bool root_expression) {
+BindResult AlterBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth, bool root_expression) {
+	auto &expr = **expr_ptr;
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::WINDOW:
 		return BindResult("window functions are not allowed in alter statement");
@@ -22,7 +21,7 @@ BindResult AlterBinder::BindExpression(ParsedExpression &expr, idx_t depth, bool
 	case ExpressionClass::COLUMN_REF:
 		return BindColumn((ColumnRefExpression &)expr);
 	default:
-		return ExpressionBinder::BindExpression(expr, depth);
+		return ExpressionBinder::BindExpression(expr_ptr, depth);
 	}
 }
 

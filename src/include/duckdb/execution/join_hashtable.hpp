@@ -56,7 +56,7 @@ public:
 		JoinHashTable &ht;
 		bool finished;
 
-		ScanStructure(JoinHashTable &ht);
+		explicit ScanStructure(JoinHashTable &ht);
 		//! Get the next batch of data from the scan structure
 		void Next(DataChunk &keys, DataChunk &left, DataChunk &result);
 
@@ -80,7 +80,8 @@ public:
 		//! Scan the hashtable for matches of the specified keys, setting the found_match[] array to true or false for
 		//! every tuple
 		void ScanKeyMatches(DataChunk &keys);
-		template <bool MATCH> void NextSemiOrAntiJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
+		template <bool MATCH>
+		void NextSemiOrAntiJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
 
 		void ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &child, DataChunk &result);
 
@@ -103,7 +104,7 @@ private:
 	struct HTDataBlock {
 		idx_t count;
 		idx_t capacity;
-		block_id_t block_id;
+		shared_ptr<BlockHandle> block;
 	};
 
 	struct BlockAppendEntry {
@@ -199,7 +200,7 @@ private:
 	void InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_locations[]);
 
 	idx_t PrepareKeys(DataChunk &keys, unique_ptr<VectorData[]> &key_data, const SelectionVector *&current_sel,
-	                  SelectionVector &sel);
+	                  SelectionVector &sel, bool build_side);
 	void SerializeVectorData(VectorData &vdata, PhysicalType type, const SelectionVector &sel, idx_t count,
 	                         data_ptr_t key_locations[]);
 	void SerializeVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t count, data_ptr_t key_locations[]);

@@ -1,0 +1,20 @@
+# name: test/issues/rigger/test_1224.test
+# description: SQLancer bug that detected an error in casting of the result of a sum to double
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t0(c0 INT);
+
+statement ok
+INSERT INTO t0(c0) VALUES (-1);
+
+statement ok
+INSERT INTO t0(c0) VALUES (0);
+
+query I
+SELECT * FROM t0 WHERE t0.c0::BOOL = true; -- expected: {-1}, actual: {}
+----
+-1

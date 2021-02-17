@@ -28,10 +28,12 @@ class UpdateStatement;
 class PrepareStatement;
 class ExecuteStatement;
 class PragmaStatement;
+class ShowStatement;
 class ExplainStatement;
 class ExportStatement;
 class VacuumStatement;
 class RelationStatement;
+class SetStatement;
 
 //===--------------------------------------------------------------------===//
 // Query Node
@@ -55,6 +57,7 @@ class ConjunctionExpression;
 class ConstantExpression;
 class DefaultExpression;
 class FunctionExpression;
+class LambdaExpression;
 class OperatorExpression;
 class ParameterExpression;
 class StarExpression;
@@ -82,5 +85,10 @@ class SubqueryRef;
 class TableFunctionRef;
 class EmptyTableRef;
 class ExpressionListRef;
+
+//===--------------------------------------------------------------------===//
+// Other
+//===--------------------------------------------------------------------===//
+struct SampleOptions;
 
 } // namespace duckdb
