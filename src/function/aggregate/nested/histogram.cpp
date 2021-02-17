@@ -48,8 +48,31 @@ static void HistogramUpdateFunction(Vector inputs[], FunctionData *, idx_t input
 			if (!state->hist) {
 				state->hist = new map<T, size_t>();
 			}
-			T value = input.GetValue(i).GetValue<T>();
-			(*state->hist)[value]++;
+			auto value = (T *)input_data.data;
+			(*state->hist)[value[input_data.sel->get_index(i)]]++;
+		}
+	}
+}
+
+static void HistogramUpdateFunctionString(Vector inputs[], FunctionData *, idx_t input_count, Vector &state_vector,
+                                          idx_t count) {
+	D_ASSERT(input_count == 1);
+
+	auto &input = inputs[0];
+	VectorData sdata;
+	state_vector.Orrify(count, sdata);
+	VectorData input_data;
+	input.Orrify(count, input_data);
+
+	auto states = (HistogramAggState<string> **)sdata.data;
+	for (idx_t i = 0; i < count; i++) {
+		if (!(*input_data.nullmask)[input_data.sel->get_index(i)]) {
+			auto state = states[sdata.sel->get_index(i)];
+			if (!state->hist) {
+				state->hist = new map<string, size_t>();
+			}
+			auto value = (string_t *)input_data.data;
+			(*state->hist)[value[input_data.sel->get_index(i)].GetString()]++;
 		}
 	}
 }
@@ -122,8 +145,8 @@ unique_ptr<FunctionData> HistogramBindFunction(ClientContext &context, Aggregate
 	}
 	D_ASSERT(arguments.size() == 1);
 	child_list_t<LogicalType> struct_children;
-	struct_children.push_back({"k", arguments[0]->return_type});
-	struct_children.push_back({"v", LogicalType::UBIGINT});
+	struct_children.push_back({"bucket", arguments[0]->return_type});
+	struct_children.push_back({"count", LogicalType::UBIGINT});
 	auto struct_type = LogicalType(LogicalTypeId::STRUCT, move(struct_children));
 	child_list_t<LogicalType> children;
 	children.push_back(make_pair("", struct_type));
@@ -195,7 +218,7 @@ AggregateFunction GetHistogramFunction(PhysicalType type) {
 		return AggregateFunction("histogram", {LogicalType::VARCHAR}, LogicalType::STRUCT,
 		                         AggregateFunction::StateSize<HistogramAggState<string>>,
 		                         AggregateFunction::StateInitialize<HistogramAggState<string>, HistogramFunction>,
-		                         HistogramUpdateFunction<string>, HistogramCombineFunction<string>,
+		                         HistogramUpdateFunctionString, HistogramCombineFunction<string>,
 		                         HistogramFinalize<string>, nullptr, HistogramBindFunction,
 		                         AggregateFunction::StateDestroy<HistogramAggState<string>, HistogramFunction>);
 

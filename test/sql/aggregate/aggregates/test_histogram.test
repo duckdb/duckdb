@@ -23,7 +23,7 @@ NULL
 query I
 select histogram(1)
 ----
-[<k: 1, v: 1>]
+[<bucket: 1, count: 1>]
 
 statement error
 select histogram(*)
@@ -31,7 +31,7 @@ select histogram(*)
 query I
 SELECT histogram(2) FROM range(100);
 ----
-[<k: 2, v: 100>]
+[<bucket: 2, count: 100>]
 
 statement ok
 CREATE TABLE hist_data (g INTEGER, e INTEGER)
@@ -43,27 +43,27 @@ INSERT INTO hist_data VALUES (1, 1), (1, 2), (2, 3), (2, 4), (2, 5), (3, 6), (5,
 query T
 SELECT histogram(g) from hist_data
 ----
-[<k: 1, v: 2>, <k: 2, v: 3>, <k: 3, v: 1>, <k: 5, v: 1>]
+[<bucket: 1, count: 2>, <bucket: 2, count: 3>, <bucket: 3, count: 1>, <bucket: 5, count: 1>]
 
 query T
 SELECT histogram(e) from hist_data
 ----
-[<k: 1, v: 1>, <k: 2, v: 1>, <k: 3, v: 1>, <k: 4, v: 1>, <k: 5, v: 1>, <k: 6, v: 1>]
+[<bucket: 1, count: 1>, <bucket: 2, count: 1>, <bucket: 3, count: 1>, <bucket: 4, count: 1>, <bucket: 5, count: 1>, <bucket: 6, count: 1>]
 
 query I
 select histogram(g)
     from hist_data
     group by g%2==0
 ----
-[<k: 1, v: 2>, <k: 3, v: 1>, <k: 5, v: 1>]
-[<k: 2, v: 3>]
+[<bucket: 1, count: 2>, <bucket: 3, count: 1>, <bucket: 5, count: 1>]
+[<bucket: 2, count: 3>]
 
 query I
 select histogram(g)
     from hist_data
     where g < 3
 ----
-[<k: 1, v: 2>, <k: 2, v: 3>]
+[<bucket: 1, count: 2>, <bucket: 2, count: 3>]
 
 statement ok
 create table names (name string)
@@ -74,7 +74,7 @@ insert into names values ('pedro'), ('pedro'), ('pedro'),('hannes'),('hannes'),(
 query I
 select histogram(name) from names;
 ----
-[<k: Hubert Blaine Wolfeschlegelsteinhausenbergerdorff Sr., v: 1>, <k: hannes, v: 2>, <k: mark, v: 1>, <k: pedro, v: 3>]
+[<bucket: Hubert Blaine Wolfeschlegelsteinhausenbergerdorff Sr., count: 1>, <bucket: hannes, count: 2>, <bucket: mark, count: 1>, <bucket: pedro, count: 3>]
 
 require vector_size 512
 
@@ -82,12 +82,12 @@ query II
 select g,histogram(g) over (partition by g%2)
     from hist_data;
 ----
-2	[<k: 2, v: 3>]
-2	[<k: 2, v: 3>]
-2	[<k: 2, v: 3>]
-1	[<k: 1, v: 2>, <k: 3, v: 1>, <k: 5, v: 1>]
-1	[<k: 1, v: 2>, <k: 3, v: 1>, <k: 5, v: 1>]
-5	[<k: 1, v: 2>, <k: 3, v: 1>, <k: 5, v: 1>]
-3	[<k: 1, v: 2>, <k: 3, v: 1>, <k: 5, v: 1>]
+2	[<bucket: 2, count: 3>]
+2	[<bucket: 2, count: 3>]
+2	[<bucket: 2, count: 3>]
+1	[<bucket: 1, count: 2>, <bucket: 3, count: 1>, <bucket: 5, count: 1>]
+1	[<bucket: 1, count: 2>, <bucket: 3, count: 1>, <bucket: 5, count: 1>]
+5	[<bucket: 1, count: 2>, <bucket: 3, count: 1>, <bucket: 5, count: 1>]
+3	[<bucket: 1, count: 2>, <bucket: 3, count: 1>, <bucket: 5, count: 1>]
 
 

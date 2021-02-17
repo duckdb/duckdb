@@ -143,4 +143,4 @@ select mode(a), mode(b) from t group by b%2;
 query I
 select histogram(b) from t;
 ----
-[<k: 0, v: 10000>, <k: 1, v: 10001>, <k: 2, v: 10001>, <k: 3, v: 10000>, <k: 4, v: 10000>, <k: 5, v: 10000>, <k: 6, v: 10000>, <k: 7, v: 10000>, <k: 8, v: 10000>, <k: 9, v: 10000>]
+[<bucket: 0, count: 10000>, <bucket: 1, count: 10001>, <bucket: 2, count: 10001>, <bucket: 3, count: 10000>, <bucket: 4, count: 10000>, <bucket: 5, count: 10000>, <bucket: 6, count: 10000>, <bucket: 7, count: 10000>, <bucket: 8, count: 10000>, <bucket: 9, count: 10000>]
