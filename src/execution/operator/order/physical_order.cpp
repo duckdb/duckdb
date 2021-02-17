@@ -41,6 +41,27 @@ struct SortingState {
 	const vector<int8_t> NULLS_FIRST;
 };
 
+struct BlockStatistics {
+	BlockStatistics(const data_ptr_t &start, const idx_t &count, SortingState &state) {
+		// compute indices, values
+	}
+
+	vector<idx_t> indices;
+	vector<unique_ptr<std::uint8_t[]>> values;
+
+	bool LowerThanMax(char sorting_data[]) {
+		// check whether the given data is lower than the max value of this block
+	}
+
+	std::pair<idx_t, idx_t> GetCrossOverInterval(data_ptr_t other_side) {
+		// return the interval where this block becomes greater than the given data (based on statistics)
+	}
+
+	idx_t FindExactCrossOver(char sorting_data[]) {
+		// return the exact index where this block becomes greater than the other block
+	}
+};
+
 class OrderGlobalState : public GlobalOperatorState {
 public:
 	OrderGlobalState(PhysicalOrder &op, BufferManager &buffer_manager)
@@ -85,6 +106,8 @@ public:
 	}
 
 	unique_ptr<SortingState> sorting_state;
+
+	std::unordered_map<idx_t, unique_ptr<BlockStatistics>> block_stats;
 };
 
 class OrderLocalState : public LocalSinkState {
@@ -534,6 +557,76 @@ private:
 	ContinuousBlock &result;
 };
 
+class BlockStatsScanner {
+public:
+	BlockStatsScanner(OrderGlobalState &state, ContinuousBlock &cb) : state(state), cb(cb), block_idx(0), stats_idx(0) {
+		for (idx_t i = 0; i < cb.blocks.size(); i++) {
+			auto block_id = cb.blocks[i].block->BlockId();
+			block_stats.push_back(state.block_stats[block_id].get());
+		}
+	}
+
+	std::pair<idx_t, data_ptr_t> NextPercentile() {
+		if (stats_idx < block_stats.size() - 1) {
+			// can give next percentile of current block
+			idx_t count = block_stats[block_idx]->indices[stats_idx + 1] - block_stats[block_idx]->indices[stats_idx];
+			data_ptr_t val = block_stats[block_idx]->values[stats_idx + 1].get();
+			return std::make_pair(count, val);
+		} else if (block_idx < cb.blocks.size() - 1) {
+			// can give first stats of next block
+			data_ptr_t val = block_stats[block_idx + 1]->values[0].get();
+			return std::make_pair(1, val);
+		} else {
+			// we ran out of stats
+			return std::make_pair(0, nullptr);
+		}
+	}
+
+	void Advance() {
+		if (stats_idx < block_stats.size() - 1) {
+			stats_idx++;
+		} else if (block_idx < cb.blocks.size() - 1) {
+			block_idx++;
+		}
+	}
+
+	idx_t CountAt(const idx_t &bi, const idx_t &si) {
+		idx_t count = 0;
+		for (idx_t i = 0; i < bi; i++) {
+			count += cb.blocks[i].count;
+		}
+		count += block_stats[bi]->indices[si] + 1;
+		return count;
+	}
+
+	idx_t Count() {
+		return CountAt(block_idx, stats_idx);
+	}
+
+	idx_t BoundedCountUntilVal(const data_ptr_t &val) {
+		idx_t bi = block_idx;
+		idx_t si = stats_idx;
+		for (; bi < block_stats.size(); bi++) {
+			auto stats = block_stats[bi];
+			for (; si < stats->values.size(); si++) {
+				if (CompareTuple(stats->values[si].get(), val, *state.sorting_state) <= 0) {
+					return CountAt(bi, si) - Count();
+				}
+			}
+			si = 0;
+		}
+		return CountAt(bi, si) - Count();
+	}
+
+private:
+	OrderGlobalState &state;
+	ContinuousBlock &cb;
+
+	vector<BlockStatistics *> block_stats;
+	idx_t block_idx;
+	idx_t stats_idx;
+};
+
 void PhysicalOrder::ScheduleMergeTasks(Pipeline &pipeline, ClientContext &context, GlobalOperatorState &state) {
 	auto &sink = (OrderGlobalState &)state;
 	auto &bm = BufferManager::GetBufferManager(context);
@@ -556,6 +649,10 @@ void PhysicalOrder::ScheduleMergeTasks(Pipeline &pipeline, ClientContext &contex
 		return;
 	}
 
+	/**
+	 * do this if we have more blocks than threads
+	 */
+
 	// add last element if odd amount
 	if (sink.continuous.size() % 2 == 1) {
 		sink.intermediate.push_back(move(sink.continuous.back()));
@@ -569,6 +666,44 @@ void PhysicalOrder::ScheduleMergeTasks(Pipeline &pipeline, ClientContext &contex
 		auto new_task = make_unique<PhysicalOrderMergeTask>(pipeline, context, sink, *sink.continuous[i],
 		                                                    *sink.continuous[i + 1], *sink.intermediate.back());
 		TaskScheduler::GetScheduler(context).ScheduleTask(pipeline.token, move(new_task));
+	}
+
+	/**
+	 * TODO: do this if we don't have enough
+	 */
+	idx_t tuples_per_thread = 1024; // placeholder
+
+	//	// initialize variables for left side of the merge
+	auto &l_cb = *sink.continuous[0];
+	//	idx_t l_block_idx = 0;
+	//	idx_t l_block_id = l_cb.blocks[l_block_idx].block->BlockId();
+	//	auto &l_block_stats = *sink.block_stats[l_block_id];
+	//	idx_t l_stats_idx = 0;
+	//	data_ptr_t l_entry_val = l_block_stats.values[l_stats_idx].get();
+	//	idx_t l_entry_idx = 0;
+	//
+	//	// initialize variables for right side of the merge
+	auto &r_cb = *sink.continuous[1];
+	//	idx_t r_block_idx = 0;
+	//	idx_t r_block_id = r_cb.blocks[r_block_idx].block->BlockId();
+	//	auto &r_block_stats = *sink.block_stats[r_block_id];
+	//	idx_t r_stats_idx = 0;
+	//	data_ptr_t r_entry_val = r_block_stats.values[r_stats_idx].get();
+	//	idx_t r_entry_idx = 0;
+
+	idx_t cb_idx = 1;
+	while (cb_idx < sink.continuous.size()) {
+		idx_t l_block_idx, l_entry_idx;
+		idx_t r_block_idx, r_entry_idx;
+		data_ptr_t l_val, r_val;
+		for (l_block_idx = 0; l_block_idx < l_cb.blocks.size(); l_block_idx++) {
+			auto l_block_id = l_cb.blocks[l_block_idx].block->BlockId();
+			auto &l_block_stats = *sink.block_stats[l_block_id];
+			for (idx_t l_stats_idx = 0; l_stats_idx < l_block_stats.values.size(); l_stats_idx++) {
+				l_entry_idx = l_block_stats.indices[l_stats_idx];
+				l_val = l_block_stats.values[l_stats_idx].get();
+			}
+		}
 	}
 }
 
