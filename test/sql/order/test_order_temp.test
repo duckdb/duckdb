@@ -3,7 +3,7 @@
 # group: [order]
 
 statement ok
-create table test as select range r, random() rand from range(1000000)
+create table test as select range r, random() rand from range(10000000)
 
 statement ok
 SELECT * FROM test ORDER BY rand
