@@ -36,7 +36,7 @@ NumericSegment::NumericSegment(DatabaseInstance &db, PhysicalType type, idx_t ro
 
 	// figure out how many vectors we want to store in this block
 	this->type_size = GetTypeIdSize(type);
-	this->vector_size = ValidityMask::ValidityMaskSize() + type_size * STANDARD_VECTOR_SIZE;
+	this->vector_size = ValidityMask::STANDARD_MASK_SIZE + type_size * STANDARD_VECTOR_SIZE;
 	this->max_vector_count = Storage::BLOCK_SIZE / vector_size;
 
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
@@ -47,7 +47,7 @@ NumericSegment::NumericSegment(DatabaseInstance &db, PhysicalType type, idx_t ro
 		// initialize masks to 1 for all vectors
 		for (idx_t i = 0; i < max_vector_count; i++) {
 			auto mask = (data_ptr_t *)(handle->node->buffer + (i * vector_size));
-			memset(mask, 0xFF, ValidityMask::ValidityMaskSize());
+			memset(mask, 0xFF, ValidityMask::STANDARD_MASK_SIZE);
 		}
 	} else {
 		this->block = buffer_manager.RegisterBlock(block_id);
@@ -255,7 +255,7 @@ void NumericSegment::Select(ColumnScanState &state, Vector &result, SelectionVec
 	auto offset = vector_index * vector_size;
 	auto source_mask_ptr = (data_ptr_t) (data + offset);
 	ValidityMask source_mask(source_mask_ptr);
-	auto source_data = data + offset + ValidityMask::ValidityMaskSize();
+	auto source_data = data + offset + ValidityMask::STANDARD_MASK_SIZE;
 
 	if (table_filter.size() == 1) {
 		switch (table_filter[0].comparison_type) {
@@ -343,7 +343,7 @@ void NumericSegment::FetchBaseData(ColumnScanState &state, idx_t vector_index, V
 	ValidityMask source_mask(data + offset);
 	result_mask.Copy(source_mask, count);
 
-	auto source_data = data + offset + sizeof(ValidityMask::ValidityMaskSize());
+	auto source_data = data + offset + ValidityMask::STANDARD_MASK_SIZE;
 
 	// fetch the nullmask and copy the data from the base table
 	result.vector_type = VectorType::FLAT_VECTOR;
@@ -358,17 +358,19 @@ void NumericSegment::FetchUpdateData(ColumnScanState &state, transaction_t start
 template <class T>
 static void TemplatedAssignment(SelectionVector &sel, data_ptr_t source, data_ptr_t result, ValidityMask &source_mask,
                                 ValidityMask &result_mask, idx_t approved_tuple_count) {
+	auto source_data = (T *) source;
+	auto result_data = (T *) result;
 	if (!source_mask.AllValid()) {
-		for (size_t i = 0; i < approved_tuple_count; i++) {
-			if (source_mask.RowIsValid(sel.get_index(i))) {
+		for (idx_t i = 0; i < approved_tuple_count; i++) {
+			if (!source_mask.RowIsValidUnsafe(sel.get_index(i))) {
 				result_mask.SetInvalid(i);
 			} else {
-				((T *)result)[i] = ((T *)source)[sel.get_index(i)];
+				result_data[i] = source_data[sel.get_index(i)];
 			}
 		}
 	} else {
-		for (size_t i = 0; i < approved_tuple_count; i++) {
-			((T *)result)[i] = ((T *)source)[sel.get_index(i)];
+		for (idx_t i = 0; i < approved_tuple_count; i++) {
+			result_data[i] = source_data[sel.get_index(i)];
 		}
 	}
 }
@@ -384,7 +386,7 @@ void NumericSegment::FilterFetchBaseData(ColumnScanState &state, Vector &result,
 
 	auto offset = vector_index * vector_size;
 	auto source_mask_ptr = (data_ptr_t) (data + offset);
-	auto source_data = data + offset + sizeof(ValidityMask::ValidityMaskSize());
+	auto source_data = data + offset + ValidityMask::STANDARD_MASK_SIZE;
 
 	ValidityMask source_mask(source_mask_ptr);
 	// fetch the nullmask and copy the data from the base table
@@ -475,7 +477,7 @@ void NumericSegment::FetchRow(ColumnFetchState &state, Transaction &transaction,
 
 	// first fetch the data from the base table
 	auto data = handle->node->buffer + vector_index * vector_size;
-	auto vector_ptr = data + sizeof(ValidityMask::ValidityMaskSize());
+	auto vector_ptr = data + ValidityMask::STANDARD_MASK_SIZE;
 
 	ValidityMask source_mask(data);
 
@@ -646,7 +648,7 @@ static void AppendLoop(SegmentStatistics &stats, data_ptr_t target, idx_t target
 	source.Orrify(count, adata);
 
 	auto sdata = (T *)adata.data;
-	auto tdata = (T *)(target + ValidityMask::ValidityMaskSize());
+	auto tdata = (T *)(target + ValidityMask::STANDARD_MASK_SIZE);
 	if (!adata.validity.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
 			auto source_idx = adata.sel->get_index(offset + i);
@@ -744,11 +746,12 @@ static void UpdateLoop(SegmentStatistics &stats, UpdateInfo *info, data_ptr_t ba
 	auto update_data = FlatVector::GetData<T>(update);
 	auto &update_mask = FlatVector::Validity(update);
 	ValidityMask base_mask(base);
-	auto base_data = (T *)(base + ValidityMask::ValidityMaskSize());
+	auto base_data = (T *)(base + ValidityMask::STANDARD_MASK_SIZE);
 	auto undo_data = (T *)info->tuple_data;
 
 	if (!update_mask.AllValid() || !base_mask.AllValid()) {
-		UpdateLoopNull(undo_data, base_data, update_data, info->mask, base_mask, update_mask, info->N,
+		ValidityMask info_mask(info->validity);
+		UpdateLoopNull(undo_data, base_data, update_data, info_mask, base_mask, update_mask, info->N,
 		               info->tuples, stats);
 	} else {
 		UpdateLoopNoNull(undo_data, base_data, update_data, info->N, info->tuples, stats);
@@ -794,7 +797,7 @@ template <class T>
 static void MergeUpdateLoop(SegmentStatistics &stats, UpdateInfo *node, data_ptr_t base, Vector &update, row_t *ids,
                             idx_t count, idx_t vector_offset) {
 	ValidityMask base_mask(base);
-	auto base_data = (T *)(base + ValidityMask::ValidityMaskSize());
+	auto base_data = (T *)(base + ValidityMask::STANDARD_MASK_SIZE);
 	auto info_data = (T *)node->tuple_data;
 	auto update_data = FlatVector::GetData<T>(update);
 	auto &update_mask = FlatVector::Validity(update);
@@ -819,11 +822,13 @@ static void MergeUpdateLoop(SegmentStatistics &stats, UpdateInfo *node, data_ptr
 		info_data[count] = old_data[bidx];
 		node->tuples[count] = id;
 	};
+
+	ValidityMask node_mask(node->validity);
 	auto pick_new = [&](idx_t id, idx_t aidx, idx_t count) {
 		// new_id comes before the old id
 		// insert the base table data into the update info
 		info_data[count] = base_data[id];
-		node->mask.Set(id, base_mask.RowIsValid(id));
+		node_mask.Set(id, base_mask.RowIsValid(id));
 
 		// and insert the update info into the base table
 		base_mask.Set(id, update_mask.RowIsValid(aidx));
@@ -880,10 +885,11 @@ static void UpdateInfoFetch(transaction_t start_time, transaction_t transaction_
 	auto result_data = FlatVector::GetData<T>(result);
 	auto &result_mask = FlatVector::Validity(result);
 	UpdateInfo::UpdatesForTransaction(info, start_time, transaction_id, [&](UpdateInfo *current) {
+		ValidityMask current_mask(current->validity);
 		auto info_data = (T *)current->tuple_data;
 		for (idx_t i = 0; i < current->N; i++) {
 			result_data[current->tuples[i]] = info_data[i];
-			result_mask.Set(current->tuples[i], current->mask.RowIsValid(current->tuples[i]));
+			result_mask.Set(current->tuples[i], current_mask.RowIsValidUnsafe(current->tuples[i]));
 		}
 	});
 }
@@ -931,12 +937,13 @@ static void UpdateInfoAppend(Transaction &transaction, UpdateInfo *info, idx_t r
 	UpdateInfo::UpdatesForTransaction(info, transaction.start_time, transaction.transaction_id,
 	[&](UpdateInfo *current) {
 		auto info_data = (T *)current->tuple_data;
+		ValidityMask current_mask(current->validity);
 		// loop over the tuples in this UpdateInfo
 		for (idx_t i = 0; i < current->N; i++) {
 			if (current->tuples[i] == row_id) {
 				// found the relevant tuple
 				result_data[result_idx] = info_data[i];
-				result_mask.Set(result_idx, current->mask.RowIsValid(current->tuples[i]));
+				result_mask.Set(result_idx, current_mask.RowIsValidUnsafe(current->tuples[i]));
 				break;
 			} else if (current->tuples[i] > row_id) {
 				// tuples are sorted: so if the current tuple is > row_id we will not
@@ -986,11 +993,12 @@ template <class T>
 static void RollbackUpdate(UpdateInfo *info, data_ptr_t base) {
 	ValidityMask mask(base);
 	auto info_data = (T *)info->tuple_data;
-	auto base_data = (T *)(base + ValidityMask::ValidityMaskSize());
+	auto base_data = (T *)(base + ValidityMask::STANDARD_MASK_SIZE);
 
+	ValidityMask info_mask(info->validity);
 	for (idx_t i = 0; i < info->N; i++) {
 		base_data[info->tuples[i]] = info_data[i];
-		mask.Set(info->tuples[i], info->mask.RowIsValid(info->tuples[i]));
+		mask.Set(info->tuples[i], info_mask.RowIsValidUnsafe(info->tuples[i]));
 	}
 }
 

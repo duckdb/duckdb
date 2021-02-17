@@ -393,7 +393,7 @@ static void TemplatedScatter(VectorData &gdata, Vector &addresses, const Selecti
 			auto group_idx = gdata.sel->get_index(pointer_idx);
 			auto ptr = (T *)pointers[pointer_idx];
 
-			T store_value = gdata.validity.RowIsValid(group_idx) ? NullValue<T>() : data[group_idx];
+			T store_value = !gdata.validity.RowIsValid(group_idx) ? NullValue<T>() : data[group_idx];
 			Store<T>(store_value, (data_ptr_t)ptr);
 			pointers[pointer_idx] += type_size;
 		}
@@ -466,7 +466,7 @@ void GroupedAggregateHashTable::ScatterGroups(DataChunk &groups, unique_ptr<Vect
 				auto pointer_idx = sel.get_index(i);
 				auto group_idx = gdata.sel->get_index(pointer_idx);
 				auto ptr = pointers[pointer_idx];
-				if (gdata.validity.RowIsValid(group_idx)) {
+				if (!gdata.validity.RowIsValid(group_idx)) {
 					Store<string_t>(NullValue<string_t>(), ptr);
 				} else if (string_data[group_idx].IsInlined()) {
 					Store<string_t>(string_data[group_idx], ptr);

@@ -37,7 +37,9 @@ public:
 struct ValidityMask {
 	friend struct ValidityData;
 public:
-	static constexpr const int BITS_PER_VALUE = sizeof(validity_t) * 8;
+	static constexpr const int BITS_PER_VALUE = ValidityData::BITS_PER_VALUE;
+	static constexpr const int STANDARD_ENTRY_COUNT = (STANDARD_VECTOR_SIZE + (BITS_PER_VALUE - 1)) / BITS_PER_VALUE;
+	static constexpr const int STANDARD_MASK_SIZE = STANDARD_ENTRY_COUNT * sizeof(validity_t);
 
 public:
 	ValidityMask() : validity_mask(nullptr) {
@@ -45,8 +47,11 @@ public:
 	explicit ValidityMask(idx_t max_count) {
 		Initialize(max_count);
 	}
+	explicit ValidityMask(validity_t *ptr) :
+		validity_mask(ptr) {
+	}
 	explicit ValidityMask(data_ptr_t ptr) :
-		validity_mask((validity_t *) ptr) {
+		ValidityMask((validity_t *) ptr) {
 	}
 	ValidityMask(const ValidityMask &original, idx_t count) {
 		Copy(original, count);
@@ -91,22 +96,61 @@ public:
 		entry_idx = row_idx / BitsPerValue();
 		idx_in_entry = row_idx % BitsPerValue();
 	}
-	inline bool RowIsValid(idx_t row_idx) const {
+
+	//! RowIsValidUnsafe should only be used if AllValid() is false: it achieves the same as RowIsValid but skips a not-null check
+	inline bool RowIsValidUnsafe(idx_t row_idx) const {
+		D_ASSERT(validity_mask);
 		idx_t entry_idx, idx_in_entry;
 		GetEntryIndex(row_idx, entry_idx, idx_in_entry);
 		auto entry = GetValidityEntry(entry_idx);
 		return RowIsValid(entry, idx_in_entry);
 	}
-	inline void SetValid(idx_t row_idx) {
+
+	//! Returns true if a row is valid (i.e. not null), false otherwise
+	inline bool RowIsValid(idx_t row_idx) const {
+		if (!validity_mask) {
+			return true;
+		}
+		return RowIsValidUnsafe(row_idx);
+	}
+
+	//! Same as SetValid, but skips a null check on validity_mask
+	inline void SetValidUnsafe(idx_t row_idx) {
+		D_ASSERT(validity_mask);
 		idx_t entry_idx, idx_in_entry;
 		GetEntryIndex(row_idx, entry_idx, idx_in_entry);
 		validity_mask[entry_idx] |= (validity_t(1) << validity_t(idx_in_entry));
 	}
-	inline void SetInvalid(idx_t row_idx) {
+
+	//! Marks the entry at the specified row index as valid (i.e. not-null)
+	inline void SetValid(idx_t row_idx) {
+		if (!validity_mask) {
+			// if AllValid() we don't need to do anything
+			// the row is already valid
+			return;
+		}
+		SetValidUnsafe(row_idx);
+	}
+
+
+	//! Marks the entry at the specified row index as invalid (i.e. null)
+	inline void SetInvalidUnsafe(idx_t row_idx) {
+		D_ASSERT(validity_mask);
 		idx_t entry_idx, idx_in_entry;
 		GetEntryIndex(row_idx, entry_idx, idx_in_entry);
 		validity_mask[entry_idx] &= ~(validity_t(1) << validity_t(idx_in_entry));
 	}
+
+	//! Marks the entry at the specified row index as invalid (i.e. null)
+	inline void SetInvalid(idx_t row_idx) {
+		if (!validity_mask) {
+			D_ASSERT(row_idx <= STANDARD_VECTOR_SIZE);
+			Initialize(STANDARD_VECTOR_SIZE);
+		}
+		SetInvalidUnsafe(row_idx);
+	}
+
+	//! Mark the entrry at the specified index as either valid or invalid (non-null or null)
 	inline void Set(idx_t row_idx, bool valid) {
 		if (valid) {
 			SetValid(row_idx);
@@ -114,25 +158,32 @@ public:
 			SetInvalid(row_idx);
 		}
 	}
+
+	//! Ensure the validity mask is writable, allocating space if it is not initialized
 	inline void EnsureWritable() {
 		if (!validity_mask) {
 			Initialize();
 		}
 	}
+
+	//! Marks "count" entries in the validity mask as invalid (null)
 	inline void SetAllInvalid(idx_t count) {
-		D_ASSERT(count < STANDARD_VECTOR_SIZE);
+		D_ASSERT(count <= STANDARD_VECTOR_SIZE);
 		EnsureWritable();
 		for(idx_t i = 0; i < ValidityData::EntryCount(count); i++) {
 			validity_mask[i] = 0;
 		}
 	}
+
+	//! Marks "count" entries in the validity mask as valid (not null)
 	inline void SetAllValid(idx_t count) {
-		D_ASSERT(count < STANDARD_VECTOR_SIZE);
+		D_ASSERT(count <= STANDARD_VECTOR_SIZE);
 		EnsureWritable();
 		for(idx_t i = 0; i < ValidityData::EntryCount(count); i++) {
 			validity_mask[i] = ValidityData::MAX_ENTRY;
 		}
 	}
+
 	void Combine(const ValidityMask& other, idx_t count);
 	string ToString(idx_t count) const;
 

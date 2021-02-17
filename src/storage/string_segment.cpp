@@ -15,7 +15,7 @@ StringSegment::StringSegment(DatabaseInstance &db, idx_t row_start, block_id_t b
     : UncompressedSegment(db, PhysicalType::VARCHAR, row_start) {
 	this->max_vector_count = 0;
 	// the vector_size is given in the size of the dictionary offsets
-	this->vector_size = STANDARD_VECTOR_SIZE * sizeof(int32_t) + ValidityMask::ValidityMaskSize();
+	this->vector_size = STANDARD_VECTOR_SIZE * sizeof(int32_t) + ValidityMask::STANDARD_MASK_SIZE;
 	this->string_updates = nullptr;
 
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
@@ -109,7 +109,7 @@ void StringSegment::Select(ColumnScanState &state, Vector &result, SelectionVect
 	auto baseptr = handle->node->buffer;
 	// fetch the data from the base segment
 	auto base = baseptr + state.vector_index * vector_size;
-	auto base_data = (int32_t *)(base + ValidityMask::ValidityMaskSize());
+	auto base_data = (int32_t *)(base + ValidityMask::STANDARD_MASK_SIZE);
 	ValidityMask base_mask(base);
 
 	if (table_filter.size() == 1) {
@@ -191,7 +191,7 @@ void StringSegment::FetchBaseData(ColumnScanState &state, data_ptr_t baseptr, id
 	ValidityMask base_mask(base);
 	result_mask.Copy(base_mask, count);
 
-	auto base_data = (int32_t *)(base + ValidityMask::ValidityMaskSize());
+	auto base_data = (int32_t *)(base + ValidityMask::STANDARD_MASK_SIZE);
 	auto result_data = FlatVector::GetData<string_t>(result);
 
 	if (string_updates && string_updates[vector_index]) {
@@ -226,7 +226,7 @@ void StringSegment::FilterFetchBaseData(ColumnScanState &state, Vector &result, 
 	ValidityMask base_mask(base);
 	auto &result_mask = FlatVector::Validity(result);
 
-	auto base_data = (int32_t *)(base + ValidityMask::ValidityMaskSize());
+	auto base_data = (int32_t *)(base + ValidityMask::STANDARD_MASK_SIZE);
 	result.vector_type = VectorType::FLAT_VECTOR;
 	auto result_data = FlatVector::GetData<string_t>(result);
 
@@ -261,10 +261,11 @@ void StringSegment::FetchUpdateData(ColumnScanState &state, transaction_t start_
 	auto &result_mask = FlatVector::Validity(result);
 	UpdateInfo::UpdatesForTransaction(info, start_time, transaction_id, [&](UpdateInfo *current) {
 		auto info_data = (string_location_t *)current->tuple_data;
+		ValidityMask current_mask(current->validity);
 		for (idx_t i = 0; i < current->N; i++) {
 			auto string = FetchString(result, handle->node->buffer, info_data[i]);
 			result_data[current->tuples[i]] = string;
-			result_mask.Set(current->tuples[i], current->mask.RowIsValid(current->tuples[i]));
+			result_mask.Set(current->tuples[i], current_mask.RowIsValidUnsafe(current->tuples[i]));
 		}
 	});
 }
@@ -275,7 +276,7 @@ void StringSegment::FetchUpdateData(ColumnScanState &state, transaction_t start_
 void StringSegment::FetchStringLocations(data_ptr_t baseptr, row_t *ids, idx_t vector_index, idx_t vector_offset,
                                          idx_t count, string_location_t result[]) {
 	auto base = baseptr + vector_index * vector_size;
-	auto base_data = (int32_t *)(base + ValidityMask::ValidityMaskSize());
+	auto base_data = (int32_t *)(base + ValidityMask::STANDARD_MASK_SIZE);
 
 	if (string_updates && string_updates[vector_index]) {
 		// there are updates: merge them in
@@ -376,7 +377,7 @@ void StringSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, 
 
 	auto base = baseptr + vector_index * vector_size;
 	ValidityMask base_mask(base);
-	auto base_data = (int32_t *)(base + ValidityMask::ValidityMaskSize());
+	auto base_data = (int32_t *)(base + ValidityMask::STANDARD_MASK_SIZE);
 	auto result_data = FlatVector::GetData<string_t>(result);
 	auto &result_mask = FlatVector::Validity(result);
 
@@ -387,12 +388,13 @@ void StringSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, 
 		    versions[vector_index], transaction.start_time, transaction.transaction_id, [&](UpdateInfo *current) {
 			    auto info_data = (string_location_t *)current->tuple_data;
 			    // loop over the tuples in this UpdateInfo
+				ValidityMask current_mask(current->validity);
 			    for (idx_t i = 0; i < current->N; i++) {
 				    if (current->tuples[i] == row_id) {
 					    // found the relevant tuple
 					    found_data = true;
 					    result_data[result_idx] = FetchString(result, baseptr, info_data[i]);
-					    result_mask.Set(result_idx, current->mask.RowIsValid(current->tuples[i]));
+					    result_mask.Set(result_idx, current_mask.RowIsValidUnsafe(current->tuples[i]));
 					    break;
 				    } else if (current->tuples[i] > row_id) {
 					    // tuples are sorted: so if the current tuple is > row_id we will not find it anymore
@@ -476,7 +478,7 @@ void StringSegment::AppendData(BufferHandle &handle, SegmentStatistics &stats, d
 
 	auto sdata = (string_t *)adata.data;
 	ValidityMask result_mask(target);
-	auto result_data = (int32_t *)(target + ValidityMask::ValidityMaskSize());
+	auto result_data = (int32_t *)(target + ValidityMask::STANDARD_MASK_SIZE);
 
 	idx_t remaining_strings = STANDARD_VECTOR_SIZE - (this->tuple_count % STANDARD_VECTOR_SIZE);
 	for (idx_t i = 0; i < count; i++) {
@@ -743,11 +745,12 @@ void StringSegment::MergeUpdateInfo(UpdateInfo *node, row_t *ids, idx_t update_c
 		info_data[count] = old_data[bidx];
 		node->tuples[count] = id;
 	};
+	ValidityMask node_mask(node->validity);
 	auto pick_new = [&](idx_t id, idx_t aidx, idx_t count) {
 		// new_id comes before the old id, insert the base table data into the update info
 		D_ASSERT(base_data[aidx].IsValid());
 		info_data[count] = base_data[aidx];
-		node->mask.Set(id, base_mask.RowIsValid(aidx));
+		node_mask.Set(id, base_mask.RowIsValid(aidx));
 
 		node->tuples[count] = id;
 	};
@@ -780,7 +783,9 @@ void StringSegment::Update(ColumnData &column_data, SegmentStatistics &stats, Tr
 
 	// fetch the original string locations and copy the original nullmask
 	string_location_t string_locations[STANDARD_VECTOR_SIZE];
-	ValidityMask original_mask(base_mask);
+	validity_t original_validity[ValidityMask::STANDARD_ENTRY_COUNT];
+	memcpy(original_validity, base, ValidityMask::STANDARD_ENTRY_COUNT * sizeof(validity_t));
+
 	FetchStringLocations(baseptr, ids, vector_index, vector_offset, count, string_locations);
 
 	string_update_info_t new_update_info;
@@ -807,10 +812,11 @@ void StringSegment::Update(ColumnData &column_data, SegmentStatistics &stats, Tr
 		                        sizeof(string_location_t));
 
 		// copy the string location data into the undo buffer
-		node->mask = move(original_mask);
+		memcpy(node->validity, original_validity, ValidityMask::STANDARD_ENTRY_COUNT * sizeof(validity_t));
 		memcpy(node->tuple_data, string_locations, sizeof(string_location_t) * count);
 	} else {
 		// node in the update info already exists, merge the new updates in
+		ValidityMask original_mask(original_validity);
 		MergeUpdateInfo(node, ids, count, vector_offset, string_locations, original_mask);
 	}
 	// finally move the string updates in place
@@ -831,8 +837,9 @@ void StringSegment::RollbackUpdate(UpdateInfo *info) {
 	auto baseptr = handle->node->buffer;
 	auto base = baseptr + info->vector_index * vector_size;
 	ValidityMask base_mask(base);
+	ValidityMask info_mask(info->validity);
 	for (idx_t i = 0; i < info->N; i++) {
-		base_mask.Set(info->tuples[i], info->mask.RowIsValid(info->tuples[i]));
+		base_mask.Set(info->tuples[i], info_mask.RowIsValidUnsafe(info->tuples[i]));
 	}
 
 	// now put the original values back into the update info

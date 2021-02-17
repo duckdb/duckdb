@@ -74,7 +74,7 @@ void Vector::Slice(Vector &other, idx_t offset) {
 	// create a reference to the other vector
 	Reference(other);
 	if (offset > 0) {
-		throw Exception("Eek");
+		throw Exception("FIXME: vector slice with offset");
 		// data = data + GetTypeIdSize(type.InternalType()) * offset;
 		// nullmask >>= offset;
 	}

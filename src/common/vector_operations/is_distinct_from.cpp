@@ -4,53 +4,64 @@
 namespace duckdb {
 
 struct DistinctBinaryLambdaWrapper {
-	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
-	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, bool is_left_null,
+	template <class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
+	static inline RESULT_TYPE Operation(LEFT_TYPE left, RIGHT_TYPE right, bool is_left_null,
 	                                    bool is_right_null) {
 		return OP::template Operation<LEFT_TYPE>(left, right, is_left_null, is_right_null);
 	}
 };
 
-template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC, bool IGNORE_NULL>
+template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP>
 static void DistinctExecuteGenericLoop(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata,
                                        RESULT_TYPE *__restrict result_data, const SelectionVector *__restrict lsel,
                                        const SelectionVector *__restrict rsel, idx_t count, ValidityMask &lmask,
-                                       ValidityMask &rmask, ValidityMask &result_mask, FUNC fun) {
+                                       ValidityMask &rmask, ValidityMask &result_mask) {
 	for (idx_t i = 0; i < count; i++) {
 		auto lindex = lsel->get_index(i);
 		auto rindex = rsel->get_index(i);
 		auto lentry = ldata[lindex];
 		auto rentry = rdata[rindex];
-		result_data[i] = OPWRAPPER::template Operation<FUNC, OP, LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(
-		    fun, lentry, rentry, !lmask.RowIsValid(lindex), rmask.RowIsValid(rindex));
+		result_data[i] = OP::template Operation<LEFT_TYPE>(lentry, rentry, !lmask.RowIsValid(lindex), !rmask.RowIsValid(rindex));
 	}
 }
 
-template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC, bool IGNORE_NULL>
-static void DistinctExecuteGeneric(Vector &left, Vector &right, Vector &result, idx_t count, FUNC fun) {
-	VectorData ldata, rdata;
+template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP>
+static void DistinctExecuteConstant(Vector &left, Vector &right, Vector &result) {
+       result.vector_type = VectorType::CONSTANT_VECTOR;
 
-	left.Orrify(count, ldata);
-	right.Orrify(count, rdata);
-
-	result.vector_type = VectorType::FLAT_VECTOR;
-	auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
-	DistinctExecuteGenericLoop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL>(
-	    (LEFT_TYPE *)ldata.data, (RIGHT_TYPE *)rdata.data, result_data, ldata.sel, rdata.sel, count, ldata.validity,
-	    rdata.validity, FlatVector::Validity(result), fun);
+       auto ldata = ConstantVector::GetData<LEFT_TYPE>(left);
+       auto rdata = ConstantVector::GetData<RIGHT_TYPE>(right);
+       auto result_data = ConstantVector::GetData<RESULT_TYPE>(result);
+       *result_data = OP::template Operation<LEFT_TYPE>(*ldata, *rdata, ConstantVector::IsNull(left), ConstantVector::IsNull(right));
 }
 
-template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC, bool IGNORE_NULL>
-static void DistinctExecuteSwitch(Vector &left, Vector &right, Vector &result, idx_t count, FUNC fun) {
-	DistinctExecuteGeneric<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL>(
-		    left, right, result, count, fun);
+template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP>
+static void DistinctExecuteGeneric(Vector &left, Vector &right, Vector &result, idx_t count) {
+	if (left.vector_type == VectorType::CONSTANT_VECTOR && right.vector_type == VectorType::CONSTANT_VECTOR) {
+		DistinctExecuteConstant<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OP>(left, right, result);
+	} else {
+		VectorData ldata, rdata;
+
+		left.Orrify(count, ldata);
+		right.Orrify(count, rdata);
+
+		result.vector_type = VectorType::FLAT_VECTOR;
+		auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
+		DistinctExecuteGenericLoop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OP>(
+			(LEFT_TYPE *)ldata.data, (RIGHT_TYPE *)rdata.data, result_data, ldata.sel, rdata.sel, count, ldata.validity,
+			rdata.validity, FlatVector::Validity(result));
+	}
 }
 
-template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP, bool IGNORE_NULL = false,
-          class OPWRAPPER = DistinctBinaryLambdaWrapper>
+template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP>
+static void DistinctExecuteSwitch(Vector &left, Vector &right, Vector &result, idx_t count) {
+	DistinctExecuteGeneric<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OP>(
+		    left, right, result, count);
+}
+
+template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP>
 static void DistinctExecute(Vector &left, Vector &right, Vector &result, idx_t count) {
-	DistinctExecuteSwitch<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, bool, IGNORE_NULL>(left, right, result,
-	                                                                                            count, false);
+	DistinctExecuteSwitch<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OP>(left, right, result, count);
 }
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool NO_NULL, bool HAS_TRUE_SEL, bool HAS_FALSE_SEL>
@@ -69,7 +80,7 @@ DistinctSelectGenericLoop(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rd
 				true_sel->set_index(true_count++, result_idx);
 			}
 		} else {
-			if (OP::Operation(ldata[lindex], rdata[rindex], lmask.RowIsValid(i), rmask.RowIsValid(i)) && HAS_FALSE_SEL) {
+			if (OP::Operation(ldata[lindex], rdata[rindex], !lmask.RowIsValid(i), !rmask.RowIsValid(i)) && HAS_FALSE_SEL) {
 				false_sel->set_index(false_count++, result_idx);
 			}
 		}
@@ -137,7 +148,7 @@ static inline idx_t DistinctSelectFlatLoop(LEFT_TYPE *__restrict ldata, RIGHT_TY
 		idx_t result_idx = sel->get_index(i);
 		idx_t lidx = LEFT_CONSTANT ? 0 : i;
 		idx_t ridx = RIGHT_CONSTANT ? 0 : i;
-		bool comparison_result = OP::Operation(ldata[lidx], rdata[ridx], lmask.RowIsValid(i), rmask.RowIsValid(i));
+		bool comparison_result = OP::Operation(ldata[lidx], rdata[ridx], !lmask.RowIsValid(i), !rmask.RowIsValid(i));
 		if (HAS_TRUE_SEL) {
 			true_sel->set_index(true_count, result_idx);
 			true_count += comparison_result;
@@ -252,9 +263,9 @@ static idx_t DistinctSelect(Vector &left, Vector &right, const SelectionVector *
 		return DistinctSelectGeneric<LEFT_TYPE, RIGHT_TYPE, OP>(left, right, sel, count, true_sel, false_sel);
 	}
 }
-template <class T, class OP, bool IGNORE_NULL = false>
+template <class T, class OP>
 static inline void TemplatedDistinctExecute(Vector &left, Vector &right, Vector &result, idx_t count) {
-	DistinctExecute<T, T, bool, OP, IGNORE_NULL>(left, right, result, count);
+	DistinctExecute<T, T, bool, OP>(left, right, result, count);
 }
 template <class OP>
 static void ExecuteDistinct(Vector &left, Vector &right, Vector &result, idx_t count) {
@@ -302,7 +313,7 @@ static void ExecuteDistinct(Vector &left, Vector &right, Vector &result, idx_t c
 		TemplatedDistinctExecute<interval_t, OP>(left, right, result, count);
 		break;
 	case PhysicalType::VARCHAR:
-		TemplatedDistinctExecute<string_t, OP, true>(left, right, result, count);
+		TemplatedDistinctExecute<string_t, OP>(left, right, result, count);
 		break;
 	default:
 		throw InvalidTypeException(left.type, "Invalid type for distinct comparison");

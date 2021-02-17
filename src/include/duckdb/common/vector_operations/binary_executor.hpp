@@ -71,6 +71,7 @@ struct BinaryExecutor {
 				}
 			} else if (ValidityMask::NoneValid(validity_entry)) {
 				// nothing valid: skip all
+				base_idx = next;
 				continue;
 			} else {
 				// partially valid: need to check individual elements for validity
@@ -266,24 +267,29 @@ public:
 				}
 			} else if (ValidityMask::NoneValid(validity_entry)) {
 				// nothing valid: skip all
+				if (HAS_FALSE_SEL) {
+					for(; base_idx < next; base_idx++) {
+						idx_t result_idx = sel->get_index(base_idx);
+						false_sel->set_index(false_count, result_idx);
+						false_count++;
+					}
+				}
 				continue;
 			} else {
 				// partially valid: need to check individual elements for validity
 				idx_t start = base_idx;
 				for(; base_idx < next; base_idx++) {
-					if (ValidityMask::RowIsValid(validity_entry, base_idx - start)) {
-						idx_t result_idx = sel->get_index(base_idx);
-						idx_t lidx = LEFT_CONSTANT ? 0 : base_idx;
-						idx_t ridx = RIGHT_CONSTANT ? 0 : base_idx;
-						bool comparison_result = OP::Operation(ldata[lidx], rdata[ridx]);
-						if (HAS_TRUE_SEL) {
-							true_sel->set_index(true_count, result_idx);
-							true_count += comparison_result;
-						}
-						if (HAS_FALSE_SEL) {
-							false_sel->set_index(false_count, result_idx);
-							false_count += !comparison_result;
-						}
+					idx_t result_idx = sel->get_index(base_idx);
+					idx_t lidx = LEFT_CONSTANT ? 0 : base_idx;
+					idx_t ridx = RIGHT_CONSTANT ? 0 : base_idx;
+					bool comparison_result = ValidityMask::RowIsValid(validity_entry, base_idx - start) && OP::Operation(ldata[lidx], rdata[ridx]);
+					if (HAS_TRUE_SEL) {
+						true_sel->set_index(true_count, result_idx);
+						true_count += comparison_result;
+					}
+					if (HAS_FALSE_SEL) {
+						false_sel->set_index(false_count, result_idx);
+						false_count += !comparison_result;
 					}
 				}
 			}

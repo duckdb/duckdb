@@ -34,6 +34,7 @@ void ValidityMask::Combine(const ValidityMask& other, idx_t count) {
 	}
 	// have to merge
 	// create a new validity mask that contains the combined mask
+	auto owned_data = move(validity_data);
 	auto data = GetData();
 	auto other_data = other.GetData();
 

@@ -885,7 +885,7 @@ void ScanStructure::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &chi
 		if (!jdata.validity.AllValid()) {
 			for (idx_t i = 0; i < join_keys.size(); i++) {
 				auto jidx = jdata.sel->get_index(i);
-				mask.Set(i, jdata.validity.RowIsValid(jidx));
+				mask.Set(i, jdata.validity.RowIsValidUnsafe(jidx));
 			}
 		}
 	}
@@ -946,7 +946,7 @@ void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &input, DataChunk &r
 			}
 			break;
 		case VectorType::FLAT_VECTOR:
-			mask = FlatVector::Validity(last_key);
+			mask.Copy(FlatVector::Validity(last_key), input.size());
 			break;
 		default: {
 			VectorData kdata;
