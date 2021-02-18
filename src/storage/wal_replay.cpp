@@ -399,7 +399,7 @@ void ReplayState::ReplayDelete() {
 		throw Exception("Corrupt WAL: delete without table");
 	}
 
-	D_ASSERT(chunk.ColumnCount() == 1 && chunk.data[0].type == LOGICAL_ROW_TYPE);
+	D_ASSERT(chunk.ColumnCount() == 1 && chunk.data[0].GetType() == LOGICAL_ROW_TYPE);
 	row_t row_ids[1];
 	Vector row_identifiers(LOGICAL_ROW_TYPE, (data_ptr_t)row_ids);
 

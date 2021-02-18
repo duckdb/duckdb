@@ -346,7 +346,7 @@ void FileSystem::SetWorkingDirectory(const string &path) {
 
 idx_t FileSystem::GetAvailableMemory() {
 	errno = 0;
-	idx_t max_memory = MinValue<idx_t>(sysconf(_SC_PHYS_PAGES) * sysconf(_SC_PAGESIZE), UINTPTR_MAX);
+	idx_t max_memory = MinValue<idx_t>((idx_t)sysconf(_SC_PHYS_PAGES) * (idx_t)sysconf(_SC_PAGESIZE), UINTPTR_MAX);
 	if (errno != 0) {
 		throw IOException("Could not fetch available system memory!");
 	}

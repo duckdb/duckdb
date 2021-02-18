@@ -1,0 +1,65 @@
+# name: test/issues/rigger/test_non_equality_right_join.test
+# description: SQLancer bug that detected a problem with a non-equality predicate which would not get correctly flipped when transforming between left <-> right join
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+CREATE TABLE t0(c0 DATE, c1 VARCHAR DEFAULT(CAST('1970-01-16 12:55:22' AS TIMESTAMP)), actual_rowid BIGINT);
+
+statement ok
+INSERT INTO t0 VALUES('1969-12-16','810092761', 0);
+
+statement ok
+INSERT INTO t0 VALUES('1970-01-15','810092761', 1);
+
+statement ok
+INSERT INTO t0 VALUES('1970-01-11','810092761', 2);
+
+statement ok
+INSERT INTO t0 VALUES(NULL,'810092761', 3);
+
+statement ok
+INSERT INTO t0 VALUES(NULL,'810092761', 4);
+
+statement ok
+INSERT INTO t0 VALUES(NULL,'810092761', 5);
+
+statement ok
+INSERT INTO t0 VALUES(NULL,'810092761', 6);
+
+statement ok
+INSERT INTO t0 VALUES('1970-01-23','810092761', 7);
+
+statement ok
+INSERT INTO t0 VALUES(NULL,'false', 8);
+
+statement ok
+INSERT INTO t0 VALUES(NULL,'', 9);
+
+statement ok
+CREATE TABLE t6(c0 DOUBLE, c1 SMALLINT DEFAULT(CAST('1969-12-27' AS DATE)), PRIMARY KEY(c1));;
+
+statement ok
+INSERT INTO t6 VALUES(NULL,0);
+
+statement ok
+COMMIT;
+
+query III
+SELECT t0.actual_rowid, t6.c0, t0.c0 FROM t0 RIGHT JOIN t6 ON ((t0.actual_rowid)>=(((((t6.c0)<=(t6.c0))) IS NOT NULL)::INTEGER)) GROUP BY t0.actual_rowid, t6.c0, t0.c0 order by 1, 2, 3;
+----
+0	NULL	1969-12-16
+1	NULL	1970-01-15
+2	NULL	1970-01-11
+3	NULL	NULL
+4	NULL	NULL
+5	NULL	NULL
+6	NULL	NULL
+7	NULL	1970-01-23
+8	NULL	NULL
+9	NULL	NULL

@@ -14,6 +14,7 @@ namespace duckdb {
 
 class BoundCaseExpression : public Expression {
 public:
+	BoundCaseExpression(LogicalType type);
 	BoundCaseExpression(unique_ptr<Expression> check, unique_ptr<Expression> res_if_true,
 	                    unique_ptr<Expression> res_if_false);
 

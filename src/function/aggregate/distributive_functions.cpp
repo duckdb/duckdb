@@ -15,6 +15,8 @@ void BuiltinFunctions::RegisterDistributiveAggregates() {
 	Register<FirstFun>();
 	Register<MaxFun>();
 	Register<MinFun>();
+	Register<MaxByFun>();
+	Register<MinByFun>();
 	Register<SumFun>();
 	Register<StringAggFun>();
 	Register<ApproxCountDistinctFun>();
@@ -24,6 +26,10 @@ void BuiltinFunctions::RegisterDistributiveAggregates() {
 	Register<ModeFun>();
 	Register<ArgMinFun>();
 	Register<ArgMaxFun>();
+	Register<ArbitraryFun>();
+	Register<SkewFun>();
+	Register<KurtosisFun>();
+	Register<EntropyFun>();
 }
 
 } // namespace duckdb

@@ -28,11 +28,11 @@ static void TemplatedGatherLoop(Vector &source, Vector &dest, idx_t count) {
 }
 
 void VectorOperations::Gather::Set(Vector &source, Vector &dest, idx_t count) {
-	D_ASSERT(source.vector_type == VectorType::FLAT_VECTOR);
-	D_ASSERT(source.type.id() == LogicalTypeId::POINTER); // "Cannot gather from non-pointer type!"
+	D_ASSERT(source.GetVectorType() == VectorType::FLAT_VECTOR);
+	D_ASSERT(source.GetType().id() == LogicalTypeId::POINTER); // "Cannot gather from non-pointer type!"
 
-	dest.vector_type = VectorType::FLAT_VECTOR;
-	switch (dest.type.InternalType()) {
+	dest.SetVectorType(VectorType::FLAT_VECTOR);
+	switch (dest.GetType().InternalType()) {
 	case PhysicalType::UINT8:
 		TemplatedGatherLoop<uint8_t>(source, dest, count);
 		break;

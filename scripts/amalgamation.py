@@ -83,7 +83,7 @@ linenumbers = False
 
 def get_includes(fpath, text):
     # find all the includes referred to in the directory
-    include_statements = re.findall("(^[#]include[\t ]+[\"]([^\"]+)[\"])", text, flags=re.MULTILINE)
+    include_statements = re.findall("(^[\t ]*[#][\t ]*include[\t ]+[\"]([^\"]+)[\"])", text, flags=re.MULTILINE)
     include_files = []
     # figure out where they are located
     for included_file in [x[1] for x in include_statements]:
