@@ -41,27 +41,6 @@ struct SortingState {
 	const vector<int8_t> NULLS_FIRST;
 };
 
-struct BlockStatistics {
-	BlockStatistics(const data_ptr_t &start, const idx_t &count, SortingState &state) {
-		// compute indices, values
-	}
-
-	vector<idx_t> indices;
-	vector<unique_ptr<std::uint8_t[]>> values;
-
-	bool LowerThanMax(char sorting_data[]) {
-		// check whether the given data is lower than the max value of this block
-	}
-
-	std::pair<idx_t, idx_t> GetCrossOverInterval(data_ptr_t other_side) {
-		// return the interval where this block becomes greater than the given data (based on statistics)
-	}
-
-	idx_t FindExactCrossOver(char sorting_data[]) {
-		// return the exact index where this block becomes greater than the other block
-	}
-};
-
 class OrderGlobalState : public GlobalOperatorState {
 public:
 	OrderGlobalState(PhysicalOrder &op, BufferManager &buffer_manager)
@@ -95,7 +74,7 @@ public:
 	//! Ordered segments
 	vector<unique_ptr<ContinuousBlock>> continuous;
 	//! Intermediate results
-	vector<unique_ptr<ContinuousBlock>> intermediate;
+	vector<vector<unique_ptr<ContinuousBlock>>> intermediate;
 
 	void InitializeSortingState(const vector<idx_t> &sorting_p_sizes, const vector<OrderByNullType> &null_orders,
 	                            const vector<OrderType> &order_types, const vector<int8_t> &is_asc,
@@ -106,8 +85,6 @@ public:
 	}
 
 	unique_ptr<SortingState> sorting_state;
-
-	std::unordered_map<idx_t, unique_ptr<BlockStatistics>> block_stats;
 };
 
 class OrderLocalState : public LocalSinkState {
@@ -270,16 +247,16 @@ public:
 		target.end = target.blocks.back().count;
 	}
 
-	//	unique_ptr<ContinuousBlock> Copy() {
-	//		auto copy = make_unique<ContinuousBlock>(state);
-	//		copy->start = start;
-	//		copy->end = end;
-	//		if (offsets) {
-	//			copy->offsets = unique_ptr<idx_t[]>(new idx_t[blocks[0].count]);
-	//			memcpy(copy->offsets.get(), offsets.get(), blocks[0].count * sizeof(idx_t));
-	//		}
-	//		return copy;
-	//	}
+	std::pair<idx_t, idx_t> GlobalToLocalIndex(idx_t global_idx) {
+		idx_t local_block_idx;
+		for (local_block_idx = 0; local_block_idx < blocks.size(); local_block_idx++) {
+			if (global_idx < blocks[local_block_idx].count) {
+				break;
+			}
+			global_idx -= blocks[local_block_idx].count;
+		}
+		return std::make_pair(local_block_idx, global_idx);
+	}
 
 private:
 	void AdvanceInternal() {
@@ -471,12 +448,14 @@ void PhysicalOrder::Combine(ExecutionContext &context, GlobalOperatorState &stat
 		lock_guard<mutex> glock(gstate.lock);
 		gstate.row_chunk.Append(lstate.row_chunk);
 		for (auto &c : lstate.continuous) {
-			gstate.intermediate.push_back(move(c));
+			gstate.intermediate.emplace_back();
+			gstate.intermediate.back().push_back(move(c));
 		}
 		if (lstate.row_chunk.blocks.back().count != gstate.block_capacity) {
 			// last block not full - create ContinuousBlock and set the pointer
-			gstate.intermediate.push_back(make_unique<ContinuousBlock>(gstate));
-			unsorted_block = gstate.intermediate.back().get();
+			gstate.intermediate.emplace_back();
+			gstate.intermediate.back().push_back(make_unique<ContinuousBlock>(gstate));
+			unsorted_block = gstate.intermediate.back().back().get();
 		}
 	}
 
@@ -486,6 +465,73 @@ void PhysicalOrder::Combine(ExecutionContext &context, GlobalOperatorState &stat
 		Sort(*unsorted_block, gstate);
 	}
 }
+
+class PhysicalOrderMergePathTask : public Task {
+	PhysicalOrderMergePathTask(Pipeline &parent, ClientContext &context, OrderGlobalState &state, idx_t &sum,
+	                           ContinuousBlock &left, ContinuousBlock &right,
+	                           std::pair<idx_t, idx_t> &left_intersection, std::pair<idx_t, idx_t> &right_intersection)
+	    : parent(parent), context(context), buffer_manager(BufferManager::GetBufferManager(context)), state(state),
+	      sum(sum), left(left), right(right), left_intersection(left_intersection),
+	      right_intersection(right_intersection) {
+	}
+
+	void Execute() override {
+		const auto &sorting_state = *state.sorting_state;
+		const idx_t l_count = left.Count();
+		const idx_t r_count = right.Count();
+
+		// determine bounds for binary search
+		idx_t l_lower = r_count > sum ? 0 : sum - r_count;
+		idx_t r_upper = MinValue(sum, r_count);
+
+		RowDataBlock *l_block;
+		RowDataBlock *r_block;
+		unique_ptr<BufferHandle> l_block_handle;
+		unique_ptr<BufferHandle> r_block_handle;
+		std::pair<idx_t, idx_t> l_block_entry;
+        std::pair<idx_t, idx_t> r_block_entry;
+
+		idx_t l = 0;
+		idx_t r = MinValue(sum, l_count) - l_lower;
+		while (l <= r) {
+			// determine the entries to compare from each block
+			idx_t middle = (l + r) / 2;
+			l_block_entry = left.GlobalToLocalIndex(l_lower + middle);
+			r_block_entry = right.GlobalToLocalIndex(r_upper - middle);
+
+			if (!l_block || ) {
+				l_block = &left.blocks[l_block_entry.first];
+				l_block_handle = buffer_manager.Pin(l_block->block);
+			}
+			r_block = &right.blocks[r_block_entry.first];
+			r_block_handle = buffer_manager.Pin(r_block->block);
+
+			auto comp_res = CompareTuple(
+			    l_block_handle->node->buffer + l_block_entry.second * sorting_state.SORTING_SIZE,
+			    r_block_handle->node->buffer + r_block_entry.second * sorting_state.SORTING_SIZE, sorting_state);
+			if (comp_res == 0) {
+				// left and right are equal - it's always ok to merge here
+				break;
+			} else if (comp_res < 0) {
+				// left side is smaller - increase left index and reduce right index
+
+			} else {
+				// right side is smaller - increase right index and reduce left index
+			}
+		}
+	}
+
+	Pipeline &parent;
+	ClientContext &context;
+	BufferManager &buffer_manager;
+	OrderGlobalState &state;
+
+	idx_t sum;
+	ContinuousBlock &left;
+	ContinuousBlock &right;
+	std::pair<idx_t, idx_t> &left_intersection;
+	std::pair<idx_t, idx_t> &right_intersection;
+};
 
 class PhysicalOrderMergeTask : public Task {
 public:
@@ -557,76 +603,6 @@ private:
 	ContinuousBlock &result;
 };
 
-class BlockStatsScanner {
-public:
-	BlockStatsScanner(OrderGlobalState &state, ContinuousBlock &cb) : state(state), cb(cb), block_idx(0), stats_idx(0) {
-		for (idx_t i = 0; i < cb.blocks.size(); i++) {
-			auto block_id = cb.blocks[i].block->BlockId();
-			block_stats.push_back(state.block_stats[block_id].get());
-		}
-	}
-
-	std::pair<idx_t, data_ptr_t> NextPercentile() {
-		if (stats_idx < block_stats.size() - 1) {
-			// can give next percentile of current block
-			idx_t count = block_stats[block_idx]->indices[stats_idx + 1] - block_stats[block_idx]->indices[stats_idx];
-			data_ptr_t val = block_stats[block_idx]->values[stats_idx + 1].get();
-			return std::make_pair(count, val);
-		} else if (block_idx < cb.blocks.size() - 1) {
-			// can give first stats of next block
-			data_ptr_t val = block_stats[block_idx + 1]->values[0].get();
-			return std::make_pair(1, val);
-		} else {
-			// we ran out of stats
-			return std::make_pair(0, nullptr);
-		}
-	}
-
-	void Advance() {
-		if (stats_idx < block_stats.size() - 1) {
-			stats_idx++;
-		} else if (block_idx < cb.blocks.size() - 1) {
-			block_idx++;
-		}
-	}
-
-	idx_t CountAt(const idx_t &bi, const idx_t &si) {
-		idx_t count = 0;
-		for (idx_t i = 0; i < bi; i++) {
-			count += cb.blocks[i].count;
-		}
-		count += block_stats[bi]->indices[si] + 1;
-		return count;
-	}
-
-	idx_t Count() {
-		return CountAt(block_idx, stats_idx);
-	}
-
-	idx_t BoundedCountUntilVal(const data_ptr_t &val) {
-		idx_t bi = block_idx;
-		idx_t si = stats_idx;
-		for (; bi < block_stats.size(); bi++) {
-			auto stats = block_stats[bi];
-			for (; si < stats->values.size(); si++) {
-				if (CompareTuple(stats->values[si].get(), val, *state.sorting_state) <= 0) {
-					return CountAt(bi, si) - Count();
-				}
-			}
-			si = 0;
-		}
-		return CountAt(bi, si) - Count();
-	}
-
-private:
-	OrderGlobalState &state;
-	ContinuousBlock &cb;
-
-	vector<BlockStatistics *> block_stats;
-	idx_t block_idx;
-	idx_t stats_idx;
-};
-
 void PhysicalOrder::ScheduleMergeTasks(Pipeline &pipeline, ClientContext &context, GlobalOperatorState &state) {
 	auto &sink = (OrderGlobalState &)state;
 	auto &bm = BufferManager::GetBufferManager(context);
@@ -638,8 +614,13 @@ void PhysicalOrder::ScheduleMergeTasks(Pipeline &pipeline, ClientContext &contex
 		}
 	}
 	sink.continuous.clear();
-	for (auto &cb : sink.intermediate) {
-		sink.continuous.push_back(move(cb));
+	for (auto &continuous_vec : sink.intermediate) {
+		sink.continuous.emplace_back(make_unique<ContinuousBlock>(sink));
+		auto &combined_cb = *sink.continuous.back();
+		for (auto &cb : continuous_vec) {
+			combined_cb.blocks.insert(combined_cb.blocks.end(), cb->blocks.begin(), cb->blocks.end());
+		}
+		combined_cb.end = combined_cb.blocks.back().count;
 	}
 	sink.intermediate.clear();
 
@@ -649,61 +630,38 @@ void PhysicalOrder::ScheduleMergeTasks(Pipeline &pipeline, ClientContext &contex
 		return;
 	}
 
-	/**
-	 * do this if we have more blocks than threads
-	 */
-
-	// add last element if odd amount
+	// cannot merge last element if odd amount
 	if (sink.continuous.size() % 2 == 1) {
-		sink.intermediate.push_back(move(sink.continuous.back()));
+		sink.intermediate.emplace_back();
+		sink.intermediate.back().push_back(move(sink.continuous.back()));
 		sink.continuous.pop_back();
 	}
 
-	// schedule merge tasks
-	for (idx_t i = 0; i < sink.continuous.size(); i += 2) {
-		pipeline.total_tasks++;
-		sink.intermediate.push_back(make_unique<ContinuousBlock>(sink));
-		auto new_task = make_unique<PhysicalOrderMergeTask>(pipeline, context, sink, *sink.continuous[i],
-		                                                    *sink.continuous[i + 1], *sink.intermediate.back());
-		TaskScheduler::GetScheduler(context).ScheduleTask(pipeline.token, move(new_task));
+	auto &ts = TaskScheduler::GetScheduler(context);
+	idx_t n_threads = ts.NumberOfThreads();
+	if (n_threads >= sink.continuous.size() / 2) {
+		// easy: we can assign two blocks per thread
+		for (idx_t i = 0; i < sink.continuous.size(); i += 2) {
+			pipeline.total_tasks++;
+			sink.intermediate.emplace_back();
+			sink.intermediate.back().push_back(make_unique<ContinuousBlock>(sink));
+			auto new_task =
+			    make_unique<PhysicalOrderMergeTask>(pipeline, context, sink, *sink.continuous[i],
+			                                        *sink.continuous[i + 1], *sink.intermediate.back().back());
+			ts.ScheduleTask(pipeline.token, move(new_task));
+		}
+		return;
 	}
 
-	/**
-	 * TODO: do this if we don't have enough
-	 */
-	idx_t tuples_per_thread = 1024; // placeholder
-
-	//	// initialize variables for left side of the merge
-	auto &l_cb = *sink.continuous[0];
-	//	idx_t l_block_idx = 0;
-	//	idx_t l_block_id = l_cb.blocks[l_block_idx].block->BlockId();
-	//	auto &l_block_stats = *sink.block_stats[l_block_id];
-	//	idx_t l_stats_idx = 0;
-	//	data_ptr_t l_entry_val = l_block_stats.values[l_stats_idx].get();
-	//	idx_t l_entry_idx = 0;
-	//
-	//	// initialize variables for right side of the merge
-	auto &r_cb = *sink.continuous[1];
-	//	idx_t r_block_idx = 0;
-	//	idx_t r_block_id = r_cb.blocks[r_block_idx].block->BlockId();
-	//	auto &r_block_stats = *sink.block_stats[r_block_id];
-	//	idx_t r_stats_idx = 0;
-	//	data_ptr_t r_entry_val = r_block_stats.values[r_stats_idx].get();
-	//	idx_t r_entry_idx = 0;
-
-	idx_t cb_idx = 1;
-	while (cb_idx < sink.continuous.size()) {
-		idx_t l_block_idx, l_entry_idx;
-		idx_t r_block_idx, r_entry_idx;
-		data_ptr_t l_val, r_val;
-		for (l_block_idx = 0; l_block_idx < l_cb.blocks.size(); l_block_idx++) {
-			auto l_block_id = l_cb.blocks[l_block_idx].block->BlockId();
-			auto &l_block_stats = *sink.block_stats[l_block_id];
-			for (idx_t l_stats_idx = 0; l_stats_idx < l_block_stats.values.size(); l_stats_idx++) {
-				l_entry_idx = l_block_stats.indices[l_stats_idx];
-				l_val = l_block_stats.values[l_stats_idx].get();
-			}
-		}
+	// we must carefully balance the load TODO
+	// all threads work on merging the same two blocks
+	for (idx_t i = 0; i < sink.continuous.size(); i += 2) {
+		auto &l_cb = *sink.continuous[i];
+		auto &r_cb = *sink.continuous[i + 1];
+		idx_t l_count = l_cb.Count();
+		idx_t r_count = r_cb.Count();
+		idx_t tuples_per_thread = (l_count + r_count) / n_threads;
+		//
 	}
 }
 
@@ -713,9 +671,10 @@ void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 
 	if (sink.intermediate.capacity() == 1) {
 		// special case: only one block arrived, it was sorted but not re-ordered
+		auto single_block = sink.intermediate.back().back().get();
 		sink.continuous.push_back(make_unique<ContinuousBlock>(sink));
-		sink.intermediate.back()->InitializeBlock();
-		sink.intermediate.back()->FlushData(*sink.continuous.back());
+		single_block->InitializeBlock();
+		single_block->FlushData(*sink.continuous.back());
 		return;
 	}
 

@@ -3,7 +3,15 @@
 # group: [order]
 
 statement ok
-create table test as select range r, random() rand from range(10000000)
+CREATE TABLE test AS SELECT range r, random() rand FROM range(10000000)
+
+#statement ok
+#CREATE TABLE test2 AS (SELECT * FROM test ORDER BY rand)
+#
+#query T
+#SELECT count(*) FROM test2
+#----
+#10000000
 
 statement ok
 SELECT * FROM test ORDER BY rand
