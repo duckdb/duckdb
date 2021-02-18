@@ -40,13 +40,14 @@ private:
 		if (!mask.AllValid()) {
 			idx_t base_idx = 0;
 			auto entry_count = ValidityMask::EntryCount(count);
-			for(idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
+			for (idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
 				auto validity_entry = mask.GetValidityEntry(entry_idx);
 				idx_t next = MinValue<idx_t>(base_idx + ValidityMask::BITS_PER_VALUE, count);
 				if (!OP::IgnoreNull() || ValidityMask::AllValid(validity_entry)) {
 					// all valid: perform operation
-					for(; base_idx < next; base_idx++) {
-						OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(states[base_idx], bind_data, idata, mask, base_idx);
+					for (; base_idx < next; base_idx++) {
+						OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(states[base_idx], bind_data, idata, mask,
+						                                                   base_idx);
 					}
 				} else if (ValidityMask::NoneValid(validity_entry)) {
 					// nothing valid: skip all
@@ -54,15 +55,16 @@ private:
 				} else {
 					// partially valid: need to check individual elements for validity
 					idx_t start = base_idx;
-					for(; base_idx < next; base_idx++) {
+					for (; base_idx < next; base_idx++) {
 						if (ValidityMask::RowIsValid(validity_entry, base_idx - start)) {
-							OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(states[base_idx], bind_data, idata, mask, base_idx);
+							OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(states[base_idx], bind_data, idata, mask,
+							                                                   base_idx);
 						}
 					}
 				}
 			}
 		} else {
-			for(idx_t i = 0; i < count; i++) {
+			for (idx_t i = 0; i < count; i++) {
 				OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(states[i], bind_data, idata, mask, i);
 			}
 		}
@@ -93,15 +95,15 @@ private:
 
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
 	static inline void UnaryFlatUpdateLoop(INPUT_TYPE *__restrict idata, FunctionData *bind_data,
-	                                   STATE_TYPE *__restrict state, idx_t count, ValidityMask &mask) {
+	                                       STATE_TYPE *__restrict state, idx_t count, ValidityMask &mask) {
 		idx_t base_idx = 0;
 		auto entry_count = ValidityMask::EntryCount(count);
-		for(idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
+		for (idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
 			auto validity_entry = mask.GetValidityEntry(entry_idx);
 			idx_t next = MinValue<idx_t>(base_idx + ValidityMask::BITS_PER_VALUE, count);
 			if (!OP::IgnoreNull() || ValidityMask::AllValid(validity_entry)) {
 				// all valid: perform operation
-				for(; base_idx < next; base_idx++) {
+				for (; base_idx < next; base_idx++) {
 					OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(state, bind_data, idata, mask, base_idx);
 				}
 			} else if (ValidityMask::NoneValid(validity_entry)) {
@@ -111,7 +113,7 @@ private:
 			} else {
 				// partially valid: need to check individual elements for validity
 				idx_t start = base_idx;
-				for(; base_idx < next; base_idx++) {
+				for (; base_idx < next; base_idx++) {
 					if (ValidityMask::RowIsValid(validity_entry, base_idx - start)) {
 						OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(state, bind_data, idata, mask, base_idx);
 					}
@@ -163,7 +165,8 @@ private:
 				auto aidx = asel.get_index(i);
 				auto bidx = bsel.get_index(i);
 				auto sidx = ssel.get_index(i);
-				OP::template Operation<A_TYPE, B_TYPE, STATE_TYPE, OP>(states[sidx], bind_data, adata, bdata, avalidity, bvalidity, aidx, bidx);
+				OP::template Operation<A_TYPE, B_TYPE, STATE_TYPE, OP>(states[sidx], bind_data, adata, bdata, avalidity,
+				                                                       bvalidity, aidx, bidx);
 			}
 		}
 	}
@@ -178,7 +181,8 @@ private:
 				auto aidx = asel.get_index(i);
 				auto bidx = bsel.get_index(i);
 				if (avalidity.RowIsValid(aidx) && bvalidity.RowIsValid(bidx)) {
-					OP::template Operation<A_TYPE, B_TYPE, STATE_TYPE, OP>(state, bind_data, adata, bdata, avalidity, bvalidity, aidx, bidx);
+					OP::template Operation<A_TYPE, B_TYPE, STATE_TYPE, OP>(state, bind_data, adata, bdata, avalidity,
+					                                                       bvalidity, aidx, bidx);
 				}
 			}
 		} else {
@@ -186,7 +190,8 @@ private:
 			for (idx_t i = 0; i < count; i++) {
 				auto aidx = asel.get_index(i);
 				auto bidx = bsel.get_index(i);
-				OP::template Operation<A_TYPE, B_TYPE, STATE_TYPE, OP>(state, bind_data, adata, bdata, avalidity, bvalidity, aidx, bidx);
+				OP::template Operation<A_TYPE, B_TYPE, STATE_TYPE, OP>(state, bind_data, adata, bdata, avalidity,
+				                                                       bvalidity, aidx, bidx);
 			}
 		}
 	}
@@ -225,7 +230,8 @@ public:
 			auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
 			OP::template ConstantOperation<INPUT_TYPE, STATE_TYPE, OP>(*sdata, bind_data, idata,
 			                                                           ConstantVector::Validity(input), count);
-		} else if (input.GetVectorType() == VectorType::FLAT_VECTOR && states.GetVectorType() == VectorType::FLAT_VECTOR) {
+		} else if (input.GetVectorType() == VectorType::FLAT_VECTOR &&
+		           states.GetVectorType() == VectorType::FLAT_VECTOR) {
 			auto idata = FlatVector::GetData<INPUT_TYPE>(input);
 			auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
 			UnaryFlatLoop<STATE_TYPE, INPUT_TYPE, OP>(idata, bind_data, sdata, FlatVector::Validity(input), count);
@@ -252,13 +258,15 @@ public:
 		}
 		case VectorType::FLAT_VECTOR: {
 			auto idata = FlatVector::GetData<INPUT_TYPE>(input);
-			UnaryFlatUpdateLoop<STATE_TYPE, INPUT_TYPE, OP>(idata, bind_data, (STATE_TYPE *)state, count, FlatVector::Validity(input));
+			UnaryFlatUpdateLoop<STATE_TYPE, INPUT_TYPE, OP>(idata, bind_data, (STATE_TYPE *)state, count,
+			                                                FlatVector::Validity(input));
 			break;
 		}
 		default: {
 			VectorData idata;
 			input.Orrify(count, idata);
-			UnaryUpdateLoop<STATE_TYPE, INPUT_TYPE, OP>((INPUT_TYPE *)idata.data, bind_data, (STATE_TYPE *)state, count, idata.validity, *idata.sel);
+			UnaryUpdateLoop<STATE_TYPE, INPUT_TYPE, OP>((INPUT_TYPE *)idata.data, bind_data, (STATE_TYPE *)state, count,
+			                                            idata.validity, *idata.sel);
 			break;
 		}
 		}

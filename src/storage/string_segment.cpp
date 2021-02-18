@@ -390,7 +390,7 @@ void StringSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, 
 		    versions[vector_index], transaction.start_time, transaction.transaction_id, [&](UpdateInfo *current) {
 			    auto info_data = (string_location_t *)current->tuple_data;
 			    // loop over the tuples in this UpdateInfo
-				ValidityMask current_mask(current->validity);
+			    ValidityMask current_mask(current->validity);
 			    for (idx_t i = 0; i < current->N; i++) {
 				    if (current->tuples[i] == row_id) {
 					    // found the relevant tuple

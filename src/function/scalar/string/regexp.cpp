@@ -96,13 +96,13 @@ static void RegexpMatchesFunction(DataChunk &args, ExpressionState &state, Vecto
 		});
 	} else {
 		BinaryExecutor::Execute<string_t, string_t, bool>(strings, patterns, result, args.size(),
-		                                                        [&](string_t input, string_t pattern) {
-			                                                        RE2 re(CreateStringPiece(pattern), info.options);
-			                                                        if (!re.ok()) {
-				                                                        throw Exception(re.error());
-			                                                        }
-			                                                        return OP::Operation(CreateStringPiece(input), re);
-		                                                        });
+		                                                  [&](string_t input, string_t pattern) {
+			                                                  RE2 re(CreateStringPiece(pattern), info.options);
+			                                                  if (!re.ok()) {
+				                                                  throw Exception(re.error());
+			                                                  }
+			                                                  return OP::Operation(CreateStringPiece(input), re);
+		                                                  });
 	}
 }
 

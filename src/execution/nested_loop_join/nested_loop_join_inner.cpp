@@ -63,7 +63,8 @@ struct InitialNestedLoopJoin {
 					return result_count;
 				}
 				idx_t left_position = left_data.sel->get_index(lpos);
-				if (OP::Operation(ldata[left_position], rdata[right_position], !left_data.validity.RowIsValid(left_position),
+				if (OP::Operation(ldata[left_position], rdata[right_position],
+				                  !left_data.validity.RowIsValid(left_position),
 				                  !right_data.validity.RowIsValid(right_position))) {
 					// emit tuple
 					lvector.set_index(result_count, lpos);

@@ -21,6 +21,7 @@ using validity_t = uint64_t;
 struct ValidityData {
 	static constexpr const int BITS_PER_VALUE = sizeof(validity_t) * 8;
 	static constexpr const validity_t MAX_ENTRY = ~validity_t(0);
+
 public:
 	explicit ValidityData(idx_t count);
 	ValidityData(const ValidityMask &original, idx_t count);
@@ -36,6 +37,7 @@ public:
 //! Type used for validity masks
 struct ValidityMask {
 	friend struct ValidityData;
+
 public:
 	static constexpr const int BITS_PER_VALUE = ValidityData::BITS_PER_VALUE;
 	static constexpr const int STANDARD_ENTRY_COUNT = (STANDARD_VECTOR_SIZE + (BITS_PER_VALUE - 1)) / BITS_PER_VALUE;
@@ -47,11 +49,9 @@ public:
 	explicit ValidityMask(idx_t max_count) {
 		Initialize(max_count);
 	}
-	explicit ValidityMask(validity_t *ptr) :
-		validity_mask(ptr) {
+	explicit ValidityMask(validity_t *ptr) : validity_mask(ptr) {
 	}
-	explicit ValidityMask(data_ptr_t ptr) :
-		ValidityMask((validity_t *) ptr) {
+	explicit ValidityMask(data_ptr_t ptr) : ValidityMask((validity_t *)ptr) {
 	}
 	ValidityMask(const ValidityMask &original, idx_t count) {
 		Copy(original, count);
@@ -69,7 +69,7 @@ public:
 		}
 		idx_t entry_count = ValidityData::EntryCount(count);
 		idx_t valid_count = 0;
-		for(idx_t i = 0; i < entry_count; i++) {
+		for (idx_t i = 0; i < entry_count; i++) {
 			valid_count += validity_mask[i] == ValidityData::MAX_ENTRY;
 		}
 		return valid_count == entry_count;
@@ -105,7 +105,8 @@ public:
 		idx_in_entry = row_idx % BITS_PER_VALUE;
 	}
 
-	//! RowIsValidUnsafe should only be used if AllValid() is false: it achieves the same as RowIsValid but skips a not-null check
+	//! RowIsValidUnsafe should only be used if AllValid() is false: it achieves the same as RowIsValid but skips a
+	//! not-null check
 	inline bool RowIsValidUnsafe(idx_t row_idx) const {
 		D_ASSERT(validity_mask);
 		idx_t entry_idx, idx_in_entry;
@@ -139,7 +140,6 @@ public:
 		}
 		SetValidUnsafe(row_idx);
 	}
-
 
 	//! Marks the entry at the specified row index as invalid (i.e. null)
 	inline void SetInvalidUnsafe(idx_t row_idx) {
@@ -178,7 +178,7 @@ public:
 	inline void SetAllInvalid(idx_t count) {
 		D_ASSERT(count <= STANDARD_VECTOR_SIZE);
 		EnsureWritable();
-		for(idx_t i = 0; i < ValidityData::EntryCount(count); i++) {
+		for (idx_t i = 0; i < ValidityData::EntryCount(count); i++) {
 			validity_mask[i] = 0;
 		}
 	}
@@ -187,13 +187,13 @@ public:
 	inline void SetAllValid(idx_t count) {
 		D_ASSERT(count <= STANDARD_VECTOR_SIZE);
 		EnsureWritable();
-		for(idx_t i = 0; i < ValidityData::EntryCount(count); i++) {
+		for (idx_t i = 0; i < ValidityData::EntryCount(count); i++) {
 			validity_mask[i] = ValidityData::MAX_ENTRY;
 		}
 	}
 
 	void Slice(const ValidityMask &other, idx_t offset);
-	void Combine(const ValidityMask& other, idx_t count);
+	void Combine(const ValidityMask &other, idx_t count);
 	string ToString(idx_t count) const;
 
 public:
@@ -218,10 +218,10 @@ public:
 			validity_mask = validity_data->owned_data.get();
 		}
 	}
+
 private:
 	validity_t *validity_mask;
 	buffer_ptr<ValidityData> validity_data;
 };
 
-}
-
+} // namespace duckdb

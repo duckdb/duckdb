@@ -22,7 +22,8 @@ private:
 	static inline void ExecuteLoop(A_TYPE *__restrict adata, B_TYPE *__restrict bdata, C_TYPE *__restrict cdata,
 	                               RESULT_TYPE *__restrict result_data, idx_t count, const SelectionVector &asel,
 	                               const SelectionVector &bsel, const SelectionVector &csel, ValidityMask &avalidity,
-	                               ValidityMask &bvalidity, ValidityMask &cvalidity, ValidityMask &result_validity, FUN fun) {
+	                               ValidityMask &bvalidity, ValidityMask &cvalidity, ValidityMask &result_validity,
+	                               FUN fun) {
 		if (!avalidity.AllValid() || !bvalidity.AllValid() || !cvalidity.AllValid()) {
 			for (idx_t i = 0; i < count; i++) {
 				auto aidx = asel.get_index(i);
@@ -88,8 +89,9 @@ private:
 			auto aidx = asel.get_index(i);
 			auto bidx = bsel.get_index(i);
 			auto cidx = csel.get_index(i);
-			bool comparison_result = (NO_NULL || (avalidity.RowIsValid(aidx) && bvalidity.RowIsValid(bidx) && cvalidity.RowIsValid(cidx))) &&
-			                         OP::Operation(adata[aidx], bdata[bidx], cdata[cidx]);
+			bool comparison_result =
+			    (NO_NULL || (avalidity.RowIsValid(aidx) && bvalidity.RowIsValid(bidx) && cvalidity.RowIsValid(cidx))) &&
+			    OP::Operation(adata[aidx], bdata[bidx], cdata[cidx]);
 			if (HAS_TRUE_SEL) {
 				true_sel->set_index(true_count, result_idx);
 				true_count += comparison_result;

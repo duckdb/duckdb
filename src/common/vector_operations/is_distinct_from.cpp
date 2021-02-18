@@ -5,8 +5,7 @@ namespace duckdb {
 
 struct DistinctBinaryLambdaWrapper {
 	template <class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
-	static inline RESULT_TYPE Operation(LEFT_TYPE left, RIGHT_TYPE right, bool is_left_null,
-	                                    bool is_right_null) {
+	static inline RESULT_TYPE Operation(LEFT_TYPE left, RIGHT_TYPE right, bool is_left_null, bool is_right_null) {
 		return OP::template Operation<LEFT_TYPE>(left, right, is_left_null, is_right_null);
 	}
 };
@@ -21,18 +20,20 @@ static void DistinctExecuteGenericLoop(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *
 		auto rindex = rsel->get_index(i);
 		auto lentry = ldata[lindex];
 		auto rentry = rdata[rindex];
-		result_data[i] = OP::template Operation<LEFT_TYPE>(lentry, rentry, !lmask.RowIsValid(lindex), !rmask.RowIsValid(rindex));
+		result_data[i] =
+		    OP::template Operation<LEFT_TYPE>(lentry, rentry, !lmask.RowIsValid(lindex), !rmask.RowIsValid(rindex));
 	}
 }
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP>
 static void DistinctExecuteConstant(Vector &left, Vector &right, Vector &result) {
-       result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	result.SetVectorType(VectorType::CONSTANT_VECTOR);
 
-       auto ldata = ConstantVector::GetData<LEFT_TYPE>(left);
-       auto rdata = ConstantVector::GetData<RIGHT_TYPE>(right);
-       auto result_data = ConstantVector::GetData<RESULT_TYPE>(result);
-       *result_data = OP::template Operation<LEFT_TYPE>(*ldata, *rdata, ConstantVector::IsNull(left), ConstantVector::IsNull(right));
+	auto ldata = ConstantVector::GetData<LEFT_TYPE>(left);
+	auto rdata = ConstantVector::GetData<RIGHT_TYPE>(right);
+	auto result_data = ConstantVector::GetData<RESULT_TYPE>(result);
+	*result_data =
+	    OP::template Operation<LEFT_TYPE>(*ldata, *rdata, ConstantVector::IsNull(left), ConstantVector::IsNull(right));
 }
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP>
@@ -48,15 +49,14 @@ static void DistinctExecuteGeneric(Vector &left, Vector &right, Vector &result, 
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 		auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
 		DistinctExecuteGenericLoop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OP>(
-			(LEFT_TYPE *)ldata.data, (RIGHT_TYPE *)rdata.data, result_data, ldata.sel, rdata.sel, count, ldata.validity,
-			rdata.validity, FlatVector::Validity(result));
+		    (LEFT_TYPE *)ldata.data, (RIGHT_TYPE *)rdata.data, result_data, ldata.sel, rdata.sel, count, ldata.validity,
+		    rdata.validity, FlatVector::Validity(result));
 	}
 }
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP>
 static void DistinctExecuteSwitch(Vector &left, Vector &right, Vector &result, idx_t count) {
-	DistinctExecuteGeneric<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OP>(
-		    left, right, result, count);
+	DistinctExecuteGeneric<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OP>(left, right, result, count);
 }
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP>
@@ -80,7 +80,8 @@ DistinctSelectGenericLoop(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rd
 				true_sel->set_index(true_count++, result_idx);
 			}
 		} else {
-			if (OP::Operation(ldata[lindex], rdata[rindex], !lmask.RowIsValid(i), !rmask.RowIsValid(i)) && HAS_FALSE_SEL) {
+			if (OP::Operation(ldata[lindex], rdata[rindex], !lmask.RowIsValid(i), !rmask.RowIsValid(i)) &&
+			    HAS_FALSE_SEL) {
 				false_sel->set_index(false_count++, result_idx);
 			}
 		}
@@ -141,8 +142,7 @@ template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool LEFT_CONSTANT, bool 
           bool HAS_TRUE_SEL, bool HAS_FALSE_SEL>
 static inline idx_t DistinctSelectFlatLoop(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata,
                                            const SelectionVector *sel, idx_t count, ValidityMask &lmask,
-                                           ValidityMask &rmask, SelectionVector *true_sel,
-                                           SelectionVector *false_sel) {
+                                           ValidityMask &rmask, SelectionVector *true_sel, SelectionVector *false_sel) {
 	idx_t true_count = 0, false_count = 0;
 	for (idx_t i = 0; i < count; i++) {
 		idx_t result_idx = sel->get_index(i);

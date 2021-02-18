@@ -368,9 +368,9 @@ bool BufferedCSVReader::TryCastVector(Vector &parse_chunk_col, idx_t size, const
 			});
 		} else if (options.has_format[LogicalTypeId::TIMESTAMP] && sql_type == LogicalTypeId::TIMESTAMP) {
 			// use the date format to cast the chunk
-			UnaryExecutor::Execute<string_t, timestamp_t>(
-			    parse_chunk_col, dummy_result, size,
-			    [&](string_t input) { return options.date_format[LogicalTypeId::TIMESTAMP].ParseTimestamp(input); });
+			UnaryExecutor::Execute<string_t, timestamp_t>(parse_chunk_col, dummy_result, size, [&](string_t input) {
+				return options.date_format[LogicalTypeId::TIMESTAMP].ParseTimestamp(input);
+			});
 		} else {
 			// target type is not varchar: perform a cast
 			VectorOperations::Cast(parse_chunk_col, dummy_result, size, true);

@@ -215,10 +215,10 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 			auto chunk_define_byte_count = (chunk->size() + 7) / 8;
 			if (!validity_data) {
 				ValidityMask nop_mask(chunk->size());
-				temp_writer.WriteData((const_data_ptr_t) nop_mask.GetData(), chunk_define_byte_count);
+				temp_writer.WriteData((const_data_ptr_t)nop_mask.GetData(), chunk_define_byte_count);
 			} else {
 				// write the bits of the nullmask
-				temp_writer.WriteData((const_data_ptr_t) validity_data, chunk_define_byte_count);
+				temp_writer.WriteData((const_data_ptr_t)validity_data, chunk_define_byte_count);
 			}
 		}
 

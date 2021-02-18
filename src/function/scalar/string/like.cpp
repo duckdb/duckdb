@@ -458,7 +458,7 @@ static void RegularLikeFunction(DataChunk &input, ExpressionState &state, Vector
 	} else {
 		// use generic like matcher
 		BinaryExecutor::ExecuteStandard<string_t, string_t, bool, OP>(input.data[0], input.data[1], result,
-		                                                                    input.size());
+		                                                              input.size());
 	}
 }
 void LikeFun::RegisterFunction(BuiltinFunctions &set) {
@@ -477,8 +477,8 @@ void LikeFun::RegisterFunction(BuiltinFunctions &set) {
 	                               nullptr, nullptr, ILikePropagateStats<ILikeOperatorASCII>));
 	// not ilike
 	set.AddFunction(ScalarFunction("!~~*", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
-	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, NotILikeOperator>,
-	                               false, nullptr, nullptr, ILikePropagateStats<NotILikeOperatorASCII>));
+	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, NotILikeOperator>, false,
+	                               nullptr, nullptr, ILikePropagateStats<NotILikeOperatorASCII>));
 }
 
 void LikeEscapeFun::RegisterFunction(BuiltinFunctions &set) {

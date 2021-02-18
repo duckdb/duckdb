@@ -253,15 +253,15 @@ void NumericSegment::Select(ColumnScanState &state, Vector &result, SelectionVec
 	auto handle = buffer_manager.Pin(block);
 	auto data = handle->node->buffer;
 	auto offset = vector_index * vector_size;
-	auto source_mask_ptr = (data_ptr_t) (data + offset);
+	auto source_mask_ptr = (data_ptr_t)(data + offset);
 	ValidityMask source_mask(source_mask_ptr);
 	auto source_data = data + offset + ValidityMask::STANDARD_MASK_SIZE;
 
 	if (table_filter.size() == 1) {
 		switch (table_filter[0].comparison_type) {
 		case ExpressionType::COMPARE_EQUAL: {
-			TemplatedSelectOperation<Equals>(sel, result, state.current->type.InternalType(), source_data,
-			                                 source_mask, table_filter[0].constant, approved_tuple_count);
+			TemplatedSelectOperation<Equals>(sel, result, state.current->type.InternalType(), source_data, source_mask,
+			                                 table_filter[0].constant, approved_tuple_count);
 			break;
 		}
 		case ExpressionType::COMPARE_LESSTHAN: {
@@ -281,8 +281,7 @@ void NumericSegment::Select(ColumnScanState &state, Vector &result, SelectionVec
 		}
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO: {
 			TemplatedSelectOperation<GreaterThanEquals>(sel, result, state.current->type.InternalType(), source_data,
-			                                            source_mask, table_filter[0].constant,
-			                                            approved_tuple_count);
+			                                            source_mask, table_filter[0].constant, approved_tuple_count);
 			break;
 		}
 		default:
@@ -297,22 +296,22 @@ void NumericSegment::Select(ColumnScanState &state, Vector &result, SelectionVec
 		if (table_filter[0].comparison_type == ExpressionType::COMPARE_GREATERTHAN) {
 			if (table_filter[1].comparison_type == ExpressionType::COMPARE_LESSTHAN) {
 				TemplatedSelectOperationBetween<GreaterThan, LessThan>(
-				    sel, result, state.current->type.InternalType(), source_data, source_mask,
-				    table_filter[0].constant, table_filter[1].constant, approved_tuple_count);
+				    sel, result, state.current->type.InternalType(), source_data, source_mask, table_filter[0].constant,
+				    table_filter[1].constant, approved_tuple_count);
 			} else {
 				TemplatedSelectOperationBetween<GreaterThan, LessThanEquals>(
-				    sel, result, state.current->type.InternalType(), source_data, source_mask,
-				    table_filter[0].constant, table_filter[1].constant, approved_tuple_count);
+				    sel, result, state.current->type.InternalType(), source_data, source_mask, table_filter[0].constant,
+				    table_filter[1].constant, approved_tuple_count);
 			}
 		} else {
 			if (table_filter[1].comparison_type == ExpressionType::COMPARE_LESSTHAN) {
 				TemplatedSelectOperationBetween<GreaterThanEquals, LessThan>(
-				    sel, result, state.current->type.InternalType(), source_data, source_mask,
-				    table_filter[0].constant, table_filter[1].constant, approved_tuple_count);
+				    sel, result, state.current->type.InternalType(), source_data, source_mask, table_filter[0].constant,
+				    table_filter[1].constant, approved_tuple_count);
 			} else {
 				TemplatedSelectOperationBetween<GreaterThanEquals, LessThanEquals>(
-				    sel, result, state.current->type.InternalType(), source_data, source_mask,
-				    table_filter[0].constant, table_filter[1].constant, approved_tuple_count);
+				    sel, result, state.current->type.InternalType(), source_data, source_mask, table_filter[0].constant,
+				    table_filter[1].constant, approved_tuple_count);
 			}
 		}
 	}
@@ -360,8 +359,8 @@ void NumericSegment::FetchUpdateData(ColumnScanState &state, transaction_t start
 template <class T>
 static void TemplatedAssignment(SelectionVector &sel, data_ptr_t source, data_ptr_t result, ValidityMask &source_mask,
                                 ValidityMask &result_mask, idx_t approved_tuple_count) {
-	auto source_data = (T *) source;
-	auto result_data = (T *) result;
+	auto source_data = (T *)source;
+	auto result_data = (T *)result;
 	if (!source_mask.AllValid()) {
 		for (idx_t i = 0; i < approved_tuple_count; i++) {
 			if (!source_mask.RowIsValidUnsafe(sel.get_index(i))) {
@@ -387,7 +386,7 @@ void NumericSegment::FilterFetchBaseData(ColumnScanState &state, Vector &result,
 	auto data = state.primary_handle->node->buffer;
 
 	auto offset = vector_index * vector_size;
-	auto source_mask_ptr = (data_ptr_t) (data + offset);
+	auto source_mask_ptr = (data_ptr_t)(data + offset);
 	auto source_data = data + offset + ValidityMask::STANDARD_MASK_SIZE;
 
 	ValidityMask source_mask(source_mask_ptr);
@@ -399,63 +398,51 @@ void NumericSegment::FilterFetchBaseData(ColumnScanState &state, Vector &result,
 	switch (type) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8: {
-		TemplatedAssignment<int8_t>(sel, source_data, result_data, source_mask, result_mask,
-		                            approved_tuple_count);
+		TemplatedAssignment<int8_t>(sel, source_data, result_data, source_mask, result_mask, approved_tuple_count);
 		break;
 	}
 	case PhysicalType::INT16: {
-		TemplatedAssignment<int16_t>(sel, source_data, result_data, source_mask, result_mask,
-		                             approved_tuple_count);
+		TemplatedAssignment<int16_t>(sel, source_data, result_data, source_mask, result_mask, approved_tuple_count);
 		break;
 	}
 	case PhysicalType::INT32: {
-		TemplatedAssignment<int32_t>(sel, source_data, result_data, source_mask, result_mask,
-		                             approved_tuple_count);
+		TemplatedAssignment<int32_t>(sel, source_data, result_data, source_mask, result_mask, approved_tuple_count);
 		break;
 	}
 	case PhysicalType::INT64: {
-		TemplatedAssignment<int64_t>(sel, source_data, result_data, source_mask, result_mask,
-		                             approved_tuple_count);
+		TemplatedAssignment<int64_t>(sel, source_data, result_data, source_mask, result_mask, approved_tuple_count);
 		break;
 	}
 	case PhysicalType::UINT8: {
-		TemplatedAssignment<uint8_t>(sel, source_data, result_data, source_mask, result_mask,
-		                             approved_tuple_count);
+		TemplatedAssignment<uint8_t>(sel, source_data, result_data, source_mask, result_mask, approved_tuple_count);
 		break;
 	}
 	case PhysicalType::UINT16: {
-		TemplatedAssignment<uint16_t>(sel, source_data, result_data, source_mask, result_mask,
-		                              approved_tuple_count);
+		TemplatedAssignment<uint16_t>(sel, source_data, result_data, source_mask, result_mask, approved_tuple_count);
 		break;
 	}
 	case PhysicalType::UINT32: {
-		TemplatedAssignment<uint32_t>(sel, source_data, result_data, source_mask, result_mask,
-		                              approved_tuple_count);
+		TemplatedAssignment<uint32_t>(sel, source_data, result_data, source_mask, result_mask, approved_tuple_count);
 		break;
 	}
 	case PhysicalType::UINT64: {
-		TemplatedAssignment<uint64_t>(sel, source_data, result_data, source_mask, result_mask,
-		                              approved_tuple_count);
+		TemplatedAssignment<uint64_t>(sel, source_data, result_data, source_mask, result_mask, approved_tuple_count);
 		break;
 	}
 	case PhysicalType::INT128: {
-		TemplatedAssignment<hugeint_t>(sel, source_data, result_data, source_mask, result_mask,
-		                               approved_tuple_count);
+		TemplatedAssignment<hugeint_t>(sel, source_data, result_data, source_mask, result_mask, approved_tuple_count);
 		break;
 	}
 	case PhysicalType::FLOAT: {
-		TemplatedAssignment<float>(sel, source_data, result_data, source_mask, result_mask,
-		                           approved_tuple_count);
+		TemplatedAssignment<float>(sel, source_data, result_data, source_mask, result_mask, approved_tuple_count);
 		break;
 	}
 	case PhysicalType::DOUBLE: {
-		TemplatedAssignment<double>(sel, source_data, result_data, source_mask, result_mask,
-		                            approved_tuple_count);
+		TemplatedAssignment<double>(sel, source_data, result_data, source_mask, result_mask, approved_tuple_count);
 		break;
 	}
 	case PhysicalType::INTERVAL: {
-		TemplatedAssignment<interval_t>(sel, source_data, result_data, source_mask, result_mask,
-		                                approved_tuple_count);
+		TemplatedAssignment<interval_t>(sel, source_data, result_data, source_mask, result_mask, approved_tuple_count);
 		break;
 	}
 	default:
@@ -753,8 +740,8 @@ static void UpdateLoop(SegmentStatistics &stats, UpdateInfo *info, data_ptr_t ba
 
 	if (!update_mask.AllValid() || !base_mask.AllValid()) {
 		ValidityMask info_mask(info->validity);
-		UpdateLoopNull(undo_data, base_data, update_data, info_mask, base_mask, update_mask, info->N,
-		               info->tuples, stats);
+		UpdateLoopNull(undo_data, base_data, update_data, info_mask, base_mask, update_mask, info->N, info->tuples,
+		               stats);
 	} else {
 		UpdateLoopNoNull(undo_data, base_data, update_data, info->N, info->tuples, stats);
 	}
@@ -936,24 +923,24 @@ static void UpdateInfoAppend(Transaction &transaction, UpdateInfo *info, idx_t r
                              idx_t result_idx) {
 	auto result_data = FlatVector::GetData<T>(result);
 	auto &result_mask = FlatVector::Validity(result);
-	UpdateInfo::UpdatesForTransaction(info, transaction.start_time, transaction.transaction_id,
-	[&](UpdateInfo *current) {
-		auto info_data = (T *)current->tuple_data;
-		ValidityMask current_mask(current->validity);
-		// loop over the tuples in this UpdateInfo
-		for (idx_t i = 0; i < current->N; i++) {
-			if (current->tuples[i] == row_id) {
-				// found the relevant tuple
-				result_data[result_idx] = info_data[i];
-				result_mask.Set(result_idx, current_mask.RowIsValidUnsafe(current->tuples[i]));
-				break;
-			} else if (current->tuples[i] > row_id) {
-				// tuples are sorted: so if the current tuple is > row_id we will not
-				// find it anymore
-				break;
-			}
-		}
-	});
+	UpdateInfo::UpdatesForTransaction(
+	    info, transaction.start_time, transaction.transaction_id, [&](UpdateInfo *current) {
+		    auto info_data = (T *)current->tuple_data;
+		    ValidityMask current_mask(current->validity);
+		    // loop over the tuples in this UpdateInfo
+		    for (idx_t i = 0; i < current->N; i++) {
+			    if (current->tuples[i] == row_id) {
+				    // found the relevant tuple
+				    result_data[result_idx] = info_data[i];
+				    result_mask.Set(result_idx, current_mask.RowIsValidUnsafe(current->tuples[i]));
+				    break;
+			    } else if (current->tuples[i] > row_id) {
+				    // tuples are sorted: so if the current tuple is > row_id we will not
+				    // find it anymore
+				    break;
+			    }
+		    }
+	    });
 }
 
 static NumericSegment::update_info_append_function_t GetUpdateInfoAppendFunction(PhysicalType type) {

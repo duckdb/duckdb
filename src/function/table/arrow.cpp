@@ -195,14 +195,14 @@ static void ArrowScanFunction(ClientContext &context, const FunctionData *bind_d
 			mask.EnsureWritable();
 			if (bit_offset % 8 == 0) {
 				// just memcpy nullmask
-				memcpy((void*) mask.GetData(), (uint8_t *)array.buffers[0] + bit_offset / 8, n_bitmask_bytes);
+				memcpy((void *)mask.GetData(), (uint8_t *)array.buffers[0] + bit_offset / 8, n_bitmask_bytes);
 			} else {
 				// need to re-align nullmask :/
 				bitset<STANDARD_VECTOR_SIZE + 8> temp_nullmask;
 				memcpy(&temp_nullmask, (uint8_t *)array.buffers[0] + bit_offset / 8, n_bitmask_bytes + 1);
 
 				temp_nullmask >>= (bit_offset % 8); // why this has to be a right shift is a mystery to me
-				memcpy((void*) mask.GetData(), (data_ptr_t)&temp_nullmask, n_bitmask_bytes);
+				memcpy((void *)mask.GetData(), (data_ptr_t)&temp_nullmask, n_bitmask_bytes);
 			}
 		}
 

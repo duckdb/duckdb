@@ -162,8 +162,8 @@ static void FilterSelectionSwitch(T *vec, T *predicate, SelectionVector &sel, id
 	switch (comparison_type) {
 	case ExpressionType::COMPARE_EQUAL: {
 		if (mask.AllValid()) {
-			approved_tuple_count = TemplatedFilterSelection<T, Equals, false>(vec, predicate, sel, approved_tuple_count,
-			                                                                  mask, new_sel);
+			approved_tuple_count =
+			    TemplatedFilterSelection<T, Equals, false>(vec, predicate, sel, approved_tuple_count, mask, new_sel);
 		} else {
 			approved_tuple_count =
 			    TemplatedFilterSelection<T, Equals, true>(vec, predicate, sel, approved_tuple_count, mask, new_sel);
@@ -172,21 +172,21 @@ static void FilterSelectionSwitch(T *vec, T *predicate, SelectionVector &sel, id
 	}
 	case ExpressionType::COMPARE_LESSTHAN: {
 		if (mask.AllValid()) {
-			approved_tuple_count = TemplatedFilterSelection<T, LessThan, false>(
-			    vec, predicate, sel, approved_tuple_count, mask, new_sel);
+			approved_tuple_count =
+			    TemplatedFilterSelection<T, LessThan, false>(vec, predicate, sel, approved_tuple_count, mask, new_sel);
 		} else {
-			approved_tuple_count = TemplatedFilterSelection<T, LessThan, true>(vec, predicate, sel,
-			                                                                   approved_tuple_count, mask, new_sel);
+			approved_tuple_count =
+			    TemplatedFilterSelection<T, LessThan, true>(vec, predicate, sel, approved_tuple_count, mask, new_sel);
 		}
 		break;
 	}
 	case ExpressionType::COMPARE_GREATERTHAN: {
 		if (mask.AllValid()) {
-			approved_tuple_count = TemplatedFilterSelection<T, GreaterThan, false>(
-			    vec, predicate, sel, approved_tuple_count, mask, new_sel);
+			approved_tuple_count = TemplatedFilterSelection<T, GreaterThan, false>(vec, predicate, sel,
+			                                                                       approved_tuple_count, mask, new_sel);
 		} else {
-			approved_tuple_count = TemplatedFilterSelection<T, GreaterThan, true>(
-			    vec, predicate, sel, approved_tuple_count, mask, new_sel);
+			approved_tuple_count = TemplatedFilterSelection<T, GreaterThan, true>(vec, predicate, sel,
+			                                                                      approved_tuple_count, mask, new_sel);
 		}
 		break;
 	}
@@ -224,8 +224,7 @@ void UncompressedSegment::FilterSelection(SelectionVector &sel, Vector &result, 
 		auto result_flat = FlatVector::GetData<uint8_t>(result);
 		Vector predicate_vector(filter.constant);
 		auto predicate = FlatVector::GetData<uint8_t>(predicate_vector);
-		FilterSelectionSwitch<uint8_t>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type,
-		                               mask);
+		FilterSelectionSwitch<uint8_t>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type, mask);
 		break;
 	}
 	case PhysicalType::UINT16: {
@@ -256,48 +255,42 @@ void UncompressedSegment::FilterSelection(SelectionVector &sel, Vector &result, 
 		auto result_flat = FlatVector::GetData<int8_t>(result);
 		Vector predicate_vector(filter.constant);
 		auto predicate = FlatVector::GetData<int8_t>(predicate_vector);
-		FilterSelectionSwitch<int8_t>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type,
-		                              mask);
+		FilterSelectionSwitch<int8_t>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type, mask);
 		break;
 	}
 	case PhysicalType::INT16: {
 		auto result_flat = FlatVector::GetData<int16_t>(result);
 		Vector predicate_vector(filter.constant);
 		auto predicate = FlatVector::GetData<int16_t>(predicate_vector);
-		FilterSelectionSwitch<int16_t>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type,
-		                               mask);
+		FilterSelectionSwitch<int16_t>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type, mask);
 		break;
 	}
 	case PhysicalType::INT32: {
 		auto result_flat = FlatVector::GetData<int32_t>(result);
 		Vector predicate_vector(filter.constant);
 		auto predicate = FlatVector::GetData<int32_t>(predicate_vector);
-		FilterSelectionSwitch<int32_t>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type,
-		                               mask);
+		FilterSelectionSwitch<int32_t>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type, mask);
 		break;
 	}
 	case PhysicalType::INT64: {
 		auto result_flat = FlatVector::GetData<int64_t>(result);
 		Vector predicate_vector(filter.constant);
 		auto predicate = FlatVector::GetData<int64_t>(predicate_vector);
-		FilterSelectionSwitch<int64_t>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type,
-		                               mask);
+		FilterSelectionSwitch<int64_t>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type, mask);
 		break;
 	}
 	case PhysicalType::FLOAT: {
 		auto result_flat = FlatVector::GetData<float>(result);
 		Vector predicate_vector(filter.constant);
 		auto predicate = FlatVector::GetData<float>(predicate_vector);
-		FilterSelectionSwitch<float>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type,
-		                             mask);
+		FilterSelectionSwitch<float>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type, mask);
 		break;
 	}
 	case PhysicalType::DOUBLE: {
 		auto result_flat = FlatVector::GetData<double>(result);
 		Vector predicate_vector(filter.constant);
 		auto predicate = FlatVector::GetData<double>(predicate_vector);
-		FilterSelectionSwitch<double>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type,
-		                              mask);
+		FilterSelectionSwitch<double>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type, mask);
 		break;
 	}
 	case PhysicalType::VARCHAR: {
@@ -312,8 +305,7 @@ void UncompressedSegment::FilterSelection(SelectionVector &sel, Vector &result, 
 		auto result_flat = FlatVector::GetData<bool>(result);
 		Vector predicate_vector(filter.constant);
 		auto predicate = FlatVector::GetData<bool>(predicate_vector);
-		FilterSelectionSwitch<bool>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type,
-		                            mask);
+		FilterSelectionSwitch<bool>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type, mask);
 		break;
 	}
 	default:

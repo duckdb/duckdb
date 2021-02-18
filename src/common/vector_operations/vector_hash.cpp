@@ -137,8 +137,7 @@ static inline void TightLoopCombineHashConstant(T *__restrict ldata, hash_t cons
 
 template <bool HAS_RSEL, class T>
 static inline void TightLoopCombineHash(T *__restrict ldata, hash_t *__restrict hash_data, const SelectionVector *rsel,
-                                        idx_t count, const SelectionVector *__restrict sel_vector,
-                                        ValidityMask &mask) {
+                                        idx_t count, const SelectionVector *__restrict sel_vector, ValidityMask &mask) {
 	if (!mask.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
 			auto ridx = HAS_RSEL ? rsel->get_index(i) : i;

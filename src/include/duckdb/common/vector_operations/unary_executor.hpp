@@ -43,8 +43,8 @@ private:
 			for (idx_t i = 0; i < count; i++) {
 				auto idx = sel_vector->get_index(i);
 				if (mask.RowIsValidUnsafe(idx)) {
-					result_data[i] = OPWRAPPER::template Operation<FUNC, OP, INPUT_TYPE, RESULT_TYPE>(
-					    fun, ldata[idx], result_mask, i);
+					result_data[i] = OPWRAPPER::template Operation<FUNC, OP, INPUT_TYPE, RESULT_TYPE>(fun, ldata[idx],
+					                                                                                  result_mask, i);
 				} else {
 					result_mask.SetInvalid(i);
 				}
@@ -52,8 +52,8 @@ private:
 		} else {
 			for (idx_t i = 0; i < count; i++) {
 				auto idx = sel_vector->get_index(i);
-				result_data[i] = OPWRAPPER::template Operation<FUNC, OP, INPUT_TYPE, RESULT_TYPE>(fun, ldata[idx],
-				                                                                                  result_mask, i);
+				result_data[i] =
+				    OPWRAPPER::template Operation<FUNC, OP, INPUT_TYPE, RESULT_TYPE>(fun, ldata[idx], result_mask, i);
 			}
 		}
 	}
@@ -67,14 +67,14 @@ private:
 			result_mask.Copy(mask, count);
 			idx_t base_idx = 0;
 			auto entry_count = ValidityMask::EntryCount(count);
-			for(idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
+			for (idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
 				auto validity_entry = mask.GetValidityEntry(entry_idx);
 				idx_t next = MinValue<idx_t>(base_idx + ValidityMask::BITS_PER_VALUE, count);
 				if (ValidityMask::AllValid(validity_entry)) {
 					// all valid: perform operation
-					for(; base_idx < next; base_idx++) {
+					for (; base_idx < next; base_idx++) {
 						result_data[base_idx] = OPWRAPPER::template Operation<FUNC, OP, INPUT_TYPE, RESULT_TYPE>(
-							fun, ldata[base_idx], result_mask, base_idx);
+						    fun, ldata[base_idx], result_mask, base_idx);
 					}
 				} else if (ValidityMask::NoneValid(validity_entry)) {
 					// nothing valid: skip all
@@ -83,19 +83,19 @@ private:
 				} else {
 					// partially valid: need to check individual elements for validity
 					idx_t start = base_idx;
-					for(; base_idx < next; base_idx++) {
+					for (; base_idx < next; base_idx++) {
 						if (ValidityMask::RowIsValid(validity_entry, base_idx - start)) {
 							D_ASSERT(mask.RowIsValid(base_idx));
 							result_data[base_idx] = OPWRAPPER::template Operation<FUNC, OP, INPUT_TYPE, RESULT_TYPE>(
-								fun, ldata[base_idx], result_mask, base_idx);
+							    fun, ldata[base_idx], result_mask, base_idx);
 						}
 					}
 				}
 			}
 		} else {
-			for(idx_t i = 0; i < count; i++) {
-				result_data[i] = OPWRAPPER::template Operation<FUNC, OP, INPUT_TYPE, RESULT_TYPE>(
-					fun, ldata[i], result_mask, i);
+			for (idx_t i = 0; i < count; i++) {
+				result_data[i] =
+				    OPWRAPPER::template Operation<FUNC, OP, INPUT_TYPE, RESULT_TYPE>(fun, ldata[i], result_mask, i);
 			}
 		}
 	}
@@ -142,17 +142,14 @@ private:
 	}
 
 public:
-	template <class INPUT_TYPE, class RESULT_TYPE, class OP,
-	          class OPWRAPPER = UnaryOperatorWrapper>
+	template <class INPUT_TYPE, class RESULT_TYPE, class OP, class OPWRAPPER = UnaryOperatorWrapper>
 	static void Execute(Vector &input, Vector &result, idx_t count) {
 		ExecuteStandard<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP, bool>(input, result, count, false);
 	}
 
-	template <class INPUT_TYPE, class RESULT_TYPE,
-	          class FUNC = std::function<RESULT_TYPE(INPUT_TYPE)>>
+	template <class INPUT_TYPE, class RESULT_TYPE, class FUNC = std::function<RESULT_TYPE(INPUT_TYPE)>>
 	static void Execute(Vector &input, Vector &result, idx_t count, FUNC fun) {
-		ExecuteStandard<INPUT_TYPE, RESULT_TYPE, UnaryLambdaWrapper, bool, FUNC>(input, result, count,
-		                                                                                      fun);
+		ExecuteStandard<INPUT_TYPE, RESULT_TYPE, UnaryLambdaWrapper, bool, FUNC>(input, result, count, fun);
 	}
 };
 

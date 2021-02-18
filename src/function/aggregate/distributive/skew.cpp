@@ -48,8 +48,8 @@ struct SkewnessOperation {
 	}
 
 	template <class TARGET_TYPE, class STATE>
-	static void Finalize(Vector &result, FunctionData *bind_data, STATE *state, TARGET_TYPE *target,
-	                     ValidityMask &mask, idx_t idx) {
+	static void Finalize(Vector &result, FunctionData *bind_data, STATE *state, TARGET_TYPE *target, ValidityMask &mask,
+	                     idx_t idx) {
 		if (state->n <= 2) {
 			mask.SetInvalid(idx);
 			return;

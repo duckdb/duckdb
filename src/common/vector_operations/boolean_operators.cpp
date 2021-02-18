@@ -43,8 +43,9 @@ static void TemplatedBooleanNullmask(Vector &left, Vector &right, Vector &result
 			for (idx_t i = 0; i < count; i++) {
 				auto lidx = ldata.sel->get_index(i);
 				auto ridx = rdata.sel->get_index(i);
-				bool is_null = OP::Operation(left_data[lidx] > 0, right_data[ridx] > 0, !ldata.validity.RowIsValid(lidx),
-				                             !rdata.validity.RowIsValid(ridx), result_data[i]);
+				bool is_null =
+				    OP::Operation(left_data[lidx] > 0, right_data[ridx] > 0, !ldata.validity.RowIsValid(lidx),
+				                  !rdata.validity.RowIsValid(ridx), result_data[i]);
 				result_mask.Set(i, !is_null);
 			}
 		} else {

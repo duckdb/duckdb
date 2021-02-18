@@ -231,7 +231,6 @@ struct FlatVector {
 	static inline bool IsNull(const Vector &vector, idx_t idx) {
 		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
 		return !vector.validity.RowIsValid(idx);
-
 	}
 
 	static const sel_t INCREMENTAL_VECTOR[STANDARD_VECTOR_SIZE];

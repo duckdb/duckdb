@@ -59,16 +59,17 @@ struct BinaryExecutor {
 		if (!mask.AllValid()) {
 			idx_t base_idx = 0;
 			auto entry_count = ValidityMask::EntryCount(count);
-			for(idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
+			for (idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
 				auto validity_entry = mask.GetValidityEntry(entry_idx);
 				idx_t next = MinValue<idx_t>(base_idx + ValidityMask::BITS_PER_VALUE, count);
 				if (ValidityMask::AllValid(validity_entry)) {
 					// all valid: perform operation
-					for(; base_idx < next; base_idx++) {
+					for (; base_idx < next; base_idx++) {
 						auto lentry = ldata[LEFT_CONSTANT ? 0 : base_idx];
 						auto rentry = rdata[RIGHT_CONSTANT ? 0 : base_idx];
-						result_data[base_idx] = OPWRAPPER::template Operation<FUNC, OP, LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(
-							fun, lentry, rentry, mask, base_idx);
+						result_data[base_idx] =
+						    OPWRAPPER::template Operation<FUNC, OP, LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(
+						        fun, lentry, rentry, mask, base_idx);
 					}
 				} else if (ValidityMask::NoneValid(validity_entry)) {
 					// nothing valid: skip all
@@ -77,22 +78,23 @@ struct BinaryExecutor {
 				} else {
 					// partially valid: need to check individual elements for validity
 					idx_t start = base_idx;
-					for(; base_idx < next; base_idx++) {
+					for (; base_idx < next; base_idx++) {
 						if (ValidityMask::RowIsValid(validity_entry, base_idx - start)) {
 							auto lentry = ldata[LEFT_CONSTANT ? 0 : base_idx];
 							auto rentry = rdata[RIGHT_CONSTANT ? 0 : base_idx];
-							result_data[base_idx] = OPWRAPPER::template Operation<FUNC, OP, LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(
-								fun, lentry, rentry, mask, base_idx);
+							result_data[base_idx] =
+							    OPWRAPPER::template Operation<FUNC, OP, LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(
+							        fun, lentry, rentry, mask, base_idx);
 						}
 					}
 				}
 			}
 		} else {
-			for(idx_t i = 0; i < count; i++) {
+			for (idx_t i = 0; i < count; i++) {
 				auto lentry = ldata[LEFT_CONSTANT ? 0 : i];
 				auto rentry = rdata[RIGHT_CONSTANT ? 0 : i];
 				result_data[i] = OPWRAPPER::template Operation<FUNC, OP, LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(
-					fun, lentry, rentry, mask, i);
+				    fun, lentry, rentry, mask, i);
 			}
 		}
 	}
@@ -113,7 +115,8 @@ struct BinaryExecutor {
 		    fun, *ldata, *rdata, ConstantVector::Validity(result), 0);
 	}
 
-	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC, bool LEFT_CONSTANT, bool RIGHT_CONSTANT>
+	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC,
+	          bool LEFT_CONSTANT, bool RIGHT_CONSTANT>
 	static void ExecuteFlat(Vector &left, Vector &right, Vector &result, idx_t count, FUNC fun) {
 		auto ldata = FlatVector::GetData<LEFT_TYPE>(left);
 		auto rdata = FlatVector::GetData<RIGHT_TYPE>(right);
@@ -135,8 +138,8 @@ struct BinaryExecutor {
 			FlatVector::SetValidity(result, FlatVector::Validity(left));
 			FlatVector::Validity(result).Combine(FlatVector::Validity(right), count);
 		}
-		ExecuteFlatLoop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, LEFT_CONSTANT,
-		                RIGHT_CONSTANT>(ldata, rdata, result_data, count, FlatVector::Validity(result), fun);
+		ExecuteFlatLoop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, LEFT_CONSTANT, RIGHT_CONSTANT>(
+		    ldata, rdata, result_data, count, FlatVector::Validity(result), fun);
 	}
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC>
@@ -177,8 +180,8 @@ struct BinaryExecutor {
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 		auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
 		ExecuteGenericLoop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC>(
-		    (LEFT_TYPE *)ldata.data, (RIGHT_TYPE *)rdata.data, result_data, ldata.sel, rdata.sel, count,
-		    ldata.validity, rdata.validity, FlatVector::Validity(result), fun);
+		    (LEFT_TYPE *)ldata.data, (RIGHT_TYPE *)rdata.data, result_data, ldata.sel, rdata.sel, count, ldata.validity,
+		    rdata.validity, FlatVector::Validity(result), fun);
 	}
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC>
@@ -186,41 +189,39 @@ struct BinaryExecutor {
 		auto left_vector_type = left.GetVectorType();
 		auto right_vector_type = right.GetVectorType();
 		if (left_vector_type == VectorType::CONSTANT_VECTOR && right_vector_type == VectorType::CONSTANT_VECTOR) {
-			ExecuteConstant<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC>(left, right, result,
-			                                                                                      fun);
+			ExecuteConstant<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC>(left, right, result, fun);
 		} else if (left_vector_type == VectorType::FLAT_VECTOR && right_vector_type == VectorType::CONSTANT_VECTOR) {
-			ExecuteFlat<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, false, true>(
-			    left, right, result, count, fun);
+			ExecuteFlat<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, false, true>(left, right, result,
+			                                                                                  count, fun);
 		} else if (left_vector_type == VectorType::CONSTANT_VECTOR && right_vector_type == VectorType::FLAT_VECTOR) {
-			ExecuteFlat<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, true, false>(
-			    left, right, result, count, fun);
+			ExecuteFlat<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, true, false>(left, right, result,
+			                                                                                  count, fun);
 		} else if (left_vector_type == VectorType::FLAT_VECTOR && right_vector_type == VectorType::FLAT_VECTOR) {
-			ExecuteFlat<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, false, false>(
-			    left, right, result, count, fun);
+			ExecuteFlat<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, false, false>(left, right, result,
+			                                                                                   count, fun);
 		} else {
-			ExecuteGeneric<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC>(left, right, result,
-			                                                                                     count, fun);
+			ExecuteGeneric<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC>(left, right, result, count, fun);
 		}
 	}
 
 public:
-	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class FUNC = std::function<RESULT_TYPE(LEFT_TYPE, RIGHT_TYPE)>>
+	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE,
+	          class FUNC = std::function<RESULT_TYPE(LEFT_TYPE, RIGHT_TYPE)>>
 	static void Execute(Vector &left, Vector &right, Vector &result, idx_t count, FUNC fun) {
-		ExecuteSwitch<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, BinaryLambdaWrapper, bool, FUNC>(
-		    left, right, result, count, fun);
+		ExecuteSwitch<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, BinaryLambdaWrapper, bool, FUNC>(left, right, result, count,
+		                                                                                   fun);
 	}
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP,
 	          class OPWRAPPER = BinarySingleArgumentOperatorWrapper>
 	static void Execute(Vector &left, Vector &right, Vector &result, idx_t count) {
-		ExecuteSwitch<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, bool>(left, right, result, count,
-		                                                                                    false);
+		ExecuteSwitch<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, bool>(left, right, result, count, false);
 	}
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP>
 	static void ExecuteStandard(Vector &left, Vector &right, Vector &result, idx_t count) {
-		ExecuteSwitch<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, BinaryStandardOperatorWrapper, OP, bool>(
-		    left, right, result, count, false);
+		ExecuteSwitch<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, BinaryStandardOperatorWrapper, OP, bool>(left, right, result,
+		                                                                                           count, false);
 	}
 
 public:
@@ -249,20 +250,20 @@ public:
 		}
 	}
 
-	template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool LEFT_CONSTANT, bool RIGHT_CONSTANT,
-	          bool HAS_TRUE_SEL, bool HAS_FALSE_SEL>
+	template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool LEFT_CONSTANT, bool RIGHT_CONSTANT, bool HAS_TRUE_SEL,
+	          bool HAS_FALSE_SEL>
 	static inline idx_t SelectFlatLoop(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata,
 	                                   const SelectionVector *sel, idx_t count, ValidityMask &validity_mask,
 	                                   SelectionVector *true_sel, SelectionVector *false_sel) {
 		idx_t true_count = 0, false_count = 0;
 		idx_t base_idx = 0;
 		auto entry_count = ValidityMask::EntryCount(count);
-		for(idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
+		for (idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
 			auto validity_entry = validity_mask.GetValidityEntry(entry_idx);
 			idx_t next = MinValue<idx_t>(base_idx + ValidityMask::BITS_PER_VALUE, count);
 			if (ValidityMask::AllValid(validity_entry)) {
 				// all valid: perform operation
-				for(; base_idx < next; base_idx++) {
+				for (; base_idx < next; base_idx++) {
 					idx_t result_idx = sel->get_index(base_idx);
 					idx_t lidx = LEFT_CONSTANT ? 0 : base_idx;
 					idx_t ridx = RIGHT_CONSTANT ? 0 : base_idx;
@@ -279,7 +280,7 @@ public:
 			} else if (ValidityMask::NoneValid(validity_entry)) {
 				// nothing valid: skip all
 				if (HAS_FALSE_SEL) {
-					for(; base_idx < next; base_idx++) {
+					for (; base_idx < next; base_idx++) {
 						idx_t result_idx = sel->get_index(base_idx);
 						false_sel->set_index(false_count, result_idx);
 						false_count++;
@@ -289,11 +290,12 @@ public:
 			} else {
 				// partially valid: need to check individual elements for validity
 				idx_t start = base_idx;
-				for(; base_idx < next; base_idx++) {
+				for (; base_idx < next; base_idx++) {
 					idx_t result_idx = sel->get_index(base_idx);
 					idx_t lidx = LEFT_CONSTANT ? 0 : base_idx;
 					idx_t ridx = RIGHT_CONSTANT ? 0 : base_idx;
-					bool comparison_result = ValidityMask::RowIsValid(validity_entry, base_idx - start) && OP::Operation(ldata[lidx], rdata[ridx]);
+					bool comparison_result = ValidityMask::RowIsValid(validity_entry, base_idx - start) &&
+					                         OP::Operation(ldata[lidx], rdata[ridx]);
 					if (HAS_TRUE_SEL) {
 						true_sel->set_index(true_count, result_idx);
 						true_count += comparison_result;
@@ -408,7 +410,7 @@ public:
 	SelectGenericLoopSwitch(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata,
 	                        const SelectionVector *__restrict lsel, const SelectionVector *__restrict rsel,
 	                        const SelectionVector *__restrict result_sel, idx_t count, ValidityMask &lvalidity,
-	                           ValidityMask &rvalidity, SelectionVector *true_sel, SelectionVector *false_sel) {
+	                        ValidityMask &rvalidity, SelectionVector *true_sel, SelectionVector *false_sel) {
 		if (!lvalidity.AllValid() || !rvalidity.AllValid()) {
 			return SelectGenericLoopSelSwitch<LEFT_TYPE, RIGHT_TYPE, OP, false>(
 			    ldata, rdata, lsel, rsel, result_sel, count, lvalidity, rvalidity, true_sel, false_sel);

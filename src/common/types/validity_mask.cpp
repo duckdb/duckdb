@@ -5,7 +5,7 @@ namespace duckdb {
 ValidityData::ValidityData(idx_t count) {
 	auto entry_count = EntryCount(count);
 	owned_data = unique_ptr<validity_t[]>(new validity_t[entry_count]);
-	for(size_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
+	for (idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
 		owned_data[entry_idx] = MAX_ENTRY;
 	}
 }
@@ -13,12 +13,12 @@ ValidityData::ValidityData(const ValidityMask &original, idx_t count) {
 	D_ASSERT(original.validity_mask);
 	auto entry_count = EntryCount(count);
 	owned_data = unique_ptr<validity_t[]>(new validity_t[entry_count]);
-	for(size_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
+	for (idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
 		owned_data[entry_idx] = original.validity_mask[entry_idx];
 	}
 }
 
-void ValidityMask::Combine(const ValidityMask& other, idx_t count) {
+void ValidityMask::Combine(const ValidityMask &other, idx_t count) {
 	if (other.AllValid()) {
 		// X & 1 = X
 		return;
@@ -42,7 +42,7 @@ void ValidityMask::Combine(const ValidityMask& other, idx_t count) {
 	auto result_data = GetData();
 
 	auto entry_count = ValidityData::EntryCount(count);
-	for(idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
+	for (idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
 		result_data[entry_idx] = data[entry_idx] & other_data[entry_idx];
 	}
 }
@@ -73,7 +73,7 @@ void ValidityMask::Slice(const ValidityMask &other, idx_t offset) {
 	idx_t sub_units = offset - entire_units % BITS_PER_VALUE;
 	if (entire_units > 0) {
 		idx_t validity_idx;
-		for(validity_idx = 0; validity_idx + entire_units < STANDARD_ENTRY_COUNT; validity_idx++) {
+		for (validity_idx = 0; validity_idx + entire_units < STANDARD_ENTRY_COUNT; validity_idx++) {
 			validity_mask[validity_idx] = other.validity_mask[validity_idx + entire_units];
 		}
 	}
@@ -88,11 +88,12 @@ void ValidityMask::Slice(const ValidityMask &other, idx_t offset) {
 	// 0110|1000
 	if (sub_units > 0) {
 		idx_t validity_idx;
-		for(validity_idx = 0; validity_idx + 1 < STANDARD_ENTRY_COUNT; validity_idx++) {
-			validity_mask[validity_idx] = (other.validity_mask[validity_idx] >> sub_units) | (other.validity_mask[validity_idx + 1] << (BITS_PER_VALUE - sub_units));
+		for (validity_idx = 0; validity_idx + 1 < STANDARD_ENTRY_COUNT; validity_idx++) {
+			validity_mask[validity_idx] = (other.validity_mask[validity_idx] >> sub_units) |
+			                              (other.validity_mask[validity_idx + 1] << (BITS_PER_VALUE - sub_units));
 		}
 		validity_mask[validity_idx] >>= sub_units;
 	}
 }
 
-}
+} // namespace duckdb

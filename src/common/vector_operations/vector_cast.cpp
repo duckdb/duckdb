@@ -11,7 +11,7 @@ template <class SRC, class OP>
 static void VectorStringCast(Vector &source, Vector &result, idx_t count) {
 	D_ASSERT(result.GetType().InternalType() == PhysicalType::VARCHAR);
 	UnaryExecutor::Execute<SRC, string_t>(source, result, count,
-	                                            [&](SRC input) { return OP::template Operation<SRC>(input, result); });
+	                                      [&](SRC input) { return OP::template Operation<SRC>(input, result); });
 }
 
 static NotImplementedException UnimplementedCast(const LogicalType &source_type, const LogicalType &target_type) {

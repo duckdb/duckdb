@@ -26,8 +26,8 @@ struct RegrR2Operation {
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
 	static void Operation(STATE *state, FunctionData *bind_data, A_TYPE *x_data, B_TYPE *y_data, ValidityMask &amask,
 	                      ValidityMask &bmask, idx_t xidx, idx_t yidx) {
-		CorrOperation::Operation<A_TYPE, B_TYPE, CorrState, OP>(&state->corr, bind_data, y_data, x_data, bmask,
-		                                                        amask, yidx, xidx);
+		CorrOperation::Operation<A_TYPE, B_TYPE, CorrState, OP>(&state->corr, bind_data, y_data, x_data, bmask, amask,
+		                                                        yidx, xidx);
 		STDDevBaseOperation::Operation<A_TYPE, StddevState, OP>(&state->var_pop_x, bind_data, y_data, bmask, yidx);
 		STDDevBaseOperation::Operation<A_TYPE, StddevState, OP>(&state->var_pop_y, bind_data, x_data, amask, xidx);
 	}
