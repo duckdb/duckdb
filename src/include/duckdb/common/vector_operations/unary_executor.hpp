@@ -65,32 +65,37 @@ private:
 
 		if (!mask.AllValid()) {
 			result_mask.Copy(mask, count);
-		}
-		idx_t base_idx = 0;
-		auto entry_count = ValidityMask::EntryCount(count);
-		for(idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
-			auto validity_entry = mask.GetValidityEntry(entry_idx);
-			idx_t next = MinValue<idx_t>(base_idx + ValidityMask::BITS_PER_VALUE, count);
-			if (ValidityMask::AllValid(validity_entry)) {
-				// all valid: perform operation
-				for(; base_idx < next; base_idx++) {
-					result_data[base_idx] = OPWRAPPER::template Operation<FUNC, OP, INPUT_TYPE, RESULT_TYPE>(
-					    fun, ldata[base_idx], result_mask, base_idx);
-				}
-			} else if (ValidityMask::NoneValid(validity_entry)) {
-				// nothing valid: skip all
-				base_idx = next;
-				continue;
-			} else {
-				// partially valid: need to check individual elements for validity
-				idx_t start = base_idx;
-				for(; base_idx < next; base_idx++) {
-					if (ValidityMask::RowIsValid(validity_entry, base_idx - start)) {
-						D_ASSERT(mask.RowIsValid(base_idx));
+			idx_t base_idx = 0;
+			auto entry_count = ValidityMask::EntryCount(count);
+			for(idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
+				auto validity_entry = mask.GetValidityEntry(entry_idx);
+				idx_t next = MinValue<idx_t>(base_idx + ValidityMask::BITS_PER_VALUE, count);
+				if (ValidityMask::AllValid(validity_entry)) {
+					// all valid: perform operation
+					for(; base_idx < next; base_idx++) {
 						result_data[base_idx] = OPWRAPPER::template Operation<FUNC, OP, INPUT_TYPE, RESULT_TYPE>(
 							fun, ldata[base_idx], result_mask, base_idx);
 					}
+				} else if (ValidityMask::NoneValid(validity_entry)) {
+					// nothing valid: skip all
+					base_idx = next;
+					continue;
+				} else {
+					// partially valid: need to check individual elements for validity
+					idx_t start = base_idx;
+					for(; base_idx < next; base_idx++) {
+						if (ValidityMask::RowIsValid(validity_entry, base_idx - start)) {
+							D_ASSERT(mask.RowIsValid(base_idx));
+							result_data[base_idx] = OPWRAPPER::template Operation<FUNC, OP, INPUT_TYPE, RESULT_TYPE>(
+								fun, ldata[base_idx], result_mask, base_idx);
+						}
+					}
 				}
+			}
+		} else {
+			for(idx_t i = 0; i < count; i++) {
+				result_data[i] = OPWRAPPER::template Operation<FUNC, OP, INPUT_TYPE, RESULT_TYPE>(
+					fun, ldata[i], result_mask, i);
 			}
 		}
 	}

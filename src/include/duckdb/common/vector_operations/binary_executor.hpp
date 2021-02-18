@@ -56,34 +56,43 @@ struct BinaryExecutor {
 			ASSERT_RESTRICT(rdata, rdata + count, result_data, result_data + count);
 		}
 
-		idx_t base_idx = 0;
-		auto entry_count = ValidityMask::EntryCount(count);
-		for(idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
-			auto validity_entry = mask.GetValidityEntry(entry_idx);
-			idx_t next = MinValue<idx_t>(base_idx + ValidityMask::BITS_PER_VALUE, count);
-			if (ValidityMask::AllValid(validity_entry)) {
-				// all valid: perform operation
-				for(; base_idx < next; base_idx++) {
-					auto lentry = ldata[LEFT_CONSTANT ? 0 : base_idx];
-					auto rentry = rdata[RIGHT_CONSTANT ? 0 : base_idx];
-					result_data[base_idx] = OPWRAPPER::template Operation<FUNC, OP, LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(
-					    fun, lentry, rentry, mask, base_idx);
-				}
-			} else if (ValidityMask::NoneValid(validity_entry)) {
-				// nothing valid: skip all
-				base_idx = next;
-				continue;
-			} else {
-				// partially valid: need to check individual elements for validity
-				idx_t start = base_idx;
-				for(; base_idx < next; base_idx++) {
-					if (ValidityMask::RowIsValid(validity_entry, base_idx - start)) {
+		if (!mask.AllValid()) {
+			idx_t base_idx = 0;
+			auto entry_count = ValidityMask::EntryCount(count);
+			for(idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
+				auto validity_entry = mask.GetValidityEntry(entry_idx);
+				idx_t next = MinValue<idx_t>(base_idx + ValidityMask::BITS_PER_VALUE, count);
+				if (ValidityMask::AllValid(validity_entry)) {
+					// all valid: perform operation
+					for(; base_idx < next; base_idx++) {
 						auto lentry = ldata[LEFT_CONSTANT ? 0 : base_idx];
 						auto rentry = rdata[RIGHT_CONSTANT ? 0 : base_idx];
 						result_data[base_idx] = OPWRAPPER::template Operation<FUNC, OP, LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(
 							fun, lentry, rentry, mask, base_idx);
 					}
+				} else if (ValidityMask::NoneValid(validity_entry)) {
+					// nothing valid: skip all
+					base_idx = next;
+					continue;
+				} else {
+					// partially valid: need to check individual elements for validity
+					idx_t start = base_idx;
+					for(; base_idx < next; base_idx++) {
+						if (ValidityMask::RowIsValid(validity_entry, base_idx - start)) {
+							auto lentry = ldata[LEFT_CONSTANT ? 0 : base_idx];
+							auto rentry = rdata[RIGHT_CONSTANT ? 0 : base_idx];
+							result_data[base_idx] = OPWRAPPER::template Operation<FUNC, OP, LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(
+								fun, lentry, rentry, mask, base_idx);
+						}
+					}
 				}
+			}
+		} else {
+			for(idx_t i = 0; i < count; i++) {
+				auto lentry = ldata[LEFT_CONSTANT ? 0 : i];
+				auto rentry = rdata[RIGHT_CONSTANT ? 0 : i];
+				result_data[i] = OPWRAPPER::template Operation<FUNC, OP, LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(
+					fun, lentry, rentry, mask, i);
 			}
 		}
 	}

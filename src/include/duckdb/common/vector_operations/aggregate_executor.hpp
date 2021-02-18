@@ -37,27 +37,33 @@ private:
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
 	static inline void UnaryFlatLoop(INPUT_TYPE *__restrict idata, FunctionData *bind_data,
 	                                 STATE_TYPE **__restrict states, ValidityMask &mask, idx_t count) {
-		idx_t base_idx = 0;
-		auto entry_count = ValidityMask::EntryCount(count);
-		for(idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
-			auto validity_entry = mask.GetValidityEntry(entry_idx);
-			idx_t next = MinValue<idx_t>(base_idx + ValidityMask::BITS_PER_VALUE, count);
-			if (!OP::IgnoreNull() || ValidityMask::AllValid(validity_entry)) {
-				// all valid: perform operation
-				for(; base_idx < next; base_idx++) {
-					OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(states[base_idx], bind_data, idata, mask, base_idx);
-				}
-			} else if (ValidityMask::NoneValid(validity_entry)) {
-				// nothing valid: skip all
-				continue;
-			} else {
-				// partially valid: need to check individual elements for validity
-				idx_t start = base_idx;
-				for(; base_idx < next; base_idx++) {
-					if (ValidityMask::RowIsValid(validity_entry, base_idx - start)) {
+		if (!mask.AllValid()) {
+			idx_t base_idx = 0;
+			auto entry_count = ValidityMask::EntryCount(count);
+			for(idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
+				auto validity_entry = mask.GetValidityEntry(entry_idx);
+				idx_t next = MinValue<idx_t>(base_idx + ValidityMask::BITS_PER_VALUE, count);
+				if (!OP::IgnoreNull() || ValidityMask::AllValid(validity_entry)) {
+					// all valid: perform operation
+					for(; base_idx < next; base_idx++) {
 						OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(states[base_idx], bind_data, idata, mask, base_idx);
 					}
+				} else if (ValidityMask::NoneValid(validity_entry)) {
+					// nothing valid: skip all
+					continue;
+				} else {
+					// partially valid: need to check individual elements for validity
+					idx_t start = base_idx;
+					for(; base_idx < next; base_idx++) {
+						if (ValidityMask::RowIsValid(validity_entry, base_idx - start)) {
+							OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(states[base_idx], bind_data, idata, mask, base_idx);
+						}
+					}
 				}
+			}
+		} else {
+			for(idx_t i = 0; i < count; i++) {
+				OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(states[i], bind_data, idata, mask, i);
 			}
 		}
 	}
