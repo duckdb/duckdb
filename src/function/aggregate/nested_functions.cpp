@@ -4,6 +4,7 @@ namespace duckdb {
 
 void BuiltinFunctions::RegisterNestedAggregates() {
 	Register<ListFun>();
+	Register<HistogramFun>();
 }
 
 } // namespace duckdb
