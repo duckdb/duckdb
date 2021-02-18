@@ -57,7 +57,7 @@ NumericSegment::NumericSegment(DatabaseInstance &db, PhysicalType type, idx_t ro
 template <class T, class OP>
 void Select(SelectionVector &sel, Vector &result, unsigned char *source, ValidityMask &source_mask, T constant,
             idx_t &approved_tuple_count) {
-	result.vector_type = VectorType::FLAT_VECTOR;
+	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::GetData(result);
 	SelectionVector new_sel(approved_tuple_count);
 	idx_t result_count = 0;
@@ -85,7 +85,7 @@ void Select(SelectionVector &sel, Vector &result, unsigned char *source, Validit
 template <class T, class OPL, class OPR>
 void Select(SelectionVector &sel, Vector &result, unsigned char *source, ValidityMask &source_mask,
             const T constant_left, const T constant_right, idx_t &approved_tuple_count) {
-	result.vector_type = VectorType::FLAT_VECTOR;
+	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::GetData(result);
 	SelectionVector new_sel(approved_tuple_count);
 	idx_t result_count = 0;
@@ -346,7 +346,7 @@ void NumericSegment::FetchBaseData(ColumnScanState &state, idx_t vector_index, V
 	auto source_data = data + offset + ValidityMask::STANDARD_MASK_SIZE;
 
 	// fetch the nullmask and copy the data from the base table
-	result.vector_type = VectorType::FLAT_VECTOR;
+	result.SetVectorType(VectorType::FLAT_VECTOR);
 	memcpy(FlatVector::GetData(result), source_data, count * type_size);
 }
 
@@ -390,7 +390,7 @@ void NumericSegment::FilterFetchBaseData(ColumnScanState &state, Vector &result,
 
 	ValidityMask source_mask(source_mask_ptr);
 	// fetch the nullmask and copy the data from the base table
-	result.vector_type = VectorType::FLAT_VECTOR;
+	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::GetData(result);
 	auto &result_mask = FlatVector::Validity(result);
 	// the inplace loops take the result as the last parameter
@@ -494,7 +494,7 @@ void NumericSegment::FetchRow(ColumnFetchState &state, Transaction &transaction,
 // Append
 //===--------------------------------------------------------------------===//
 idx_t NumericSegment::Append(SegmentStatistics &stats, Vector &data, idx_t offset, idx_t count) {
-	D_ASSERT(data.type.InternalType() == type);
+	D_ASSERT(data.GetType().InternalType() == type);
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	auto handle = buffer_manager.Pin(block);
 

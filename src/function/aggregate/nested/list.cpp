@@ -36,7 +36,7 @@ static void ListUpdateFunction(Vector inputs[], FunctionData *, idx_t input_coun
 	DataChunk insert_chunk;
 
 	vector<LogicalType> chunk_types;
-	chunk_types.push_back(input.type);
+	chunk_types.push_back(input.GetType());
 	insert_chunk.Initialize(chunk_types);
 	insert_chunk.SetCardinality(1);
 
@@ -75,8 +75,8 @@ static void ListFinalize(Vector &state_vector, FunctionData *, Vector &result, i
 	state_vector.Orrify(count, sdata);
 	auto states = (ListAggState **)sdata.data;
 
-	D_ASSERT(result.type.id() == LogicalTypeId::LIST);
-	result.Initialize(result.type); // deals with constants
+	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
+	result.Initialize(result.GetType()); // deals with constants
 	auto list_struct_data = FlatVector::GetData<list_entry_t>(result);
 	auto &mask = FlatVector::Validity(result);
 

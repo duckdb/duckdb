@@ -68,7 +68,7 @@ void DataChunk::Copy(DataChunk &other, idx_t offset) {
 	D_ASSERT(other.size() == 0);
 
 	for (idx_t i = 0; i < ColumnCount(); i++) {
-		D_ASSERT(other.data[i].vector_type == VectorType::FLAT_VECTOR);
+		D_ASSERT(other.data[i].GetVectorType() == VectorType::FLAT_VECTOR);
 		VectorOperations::Copy(data[i], other.data[i], size(), offset, 0);
 	}
 	other.SetCardinality(size() - offset);
@@ -82,7 +82,7 @@ void DataChunk::Append(DataChunk &other) {
 		throw OutOfRangeException("Column counts of appending chunk doesn't match!");
 	}
 	for (idx_t i = 0; i < ColumnCount(); i++) {
-		D_ASSERT(data[i].vector_type == VectorType::FLAT_VECTOR);
+		D_ASSERT(data[i].GetVectorType() == VectorType::FLAT_VECTOR);
 		VectorOperations::Copy(other.data[i], data[i], other.size(), 0, size());
 	}
 	SetCardinality(size() + other.size());
@@ -97,7 +97,7 @@ void DataChunk::Normalify() {
 vector<LogicalType> DataChunk::GetTypes() {
 	vector<LogicalType> types;
 	for (idx_t i = 0; i < ColumnCount(); i++) {
-		types.push_back(data[i].type);
+		types.push_back(data[i].GetType());
 	}
 	return types;
 }
@@ -116,7 +116,7 @@ void DataChunk::Serialize(Serializer &serializer) {
 	serializer.Write<idx_t>(ColumnCount());
 	for (idx_t col_idx = 0; col_idx < ColumnCount(); col_idx++) {
 		// write the types
-		data[col_idx].type.Serialize(serializer);
+		data[col_idx].GetType().Serialize(serializer);
 	}
 	// write the data
 	for (idx_t col_idx = 0; col_idx < ColumnCount(); col_idx++) {
@@ -154,7 +154,7 @@ void DataChunk::Slice(DataChunk &other, const SelectionVector &sel, idx_t count,
 	this->count = count;
 	SelCache merge_cache;
 	for (idx_t c = 0; c < other.ColumnCount(); c++) {
-		if (other.data[c].vector_type == VectorType::DICTIONARY_VECTOR) {
+		if (other.data[c].GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 			// already a dictionary! merge the dictionaries
 			data[col_offset + c].Reference(other.data[c]);
 			data[col_offset + c].Slice(sel, count, merge_cache);
@@ -173,7 +173,7 @@ unique_ptr<VectorData[]> DataChunk::Orrify() {
 }
 
 void DataChunk::Hash(Vector &result) {
-	D_ASSERT(result.type.id() == LogicalTypeId::HASH);
+	D_ASSERT(result.GetType().id() == LogicalTypeId::HASH);
 	VectorOperations::Hash(data[0], result, size());
 	for (idx_t i = 1; i < ColumnCount(); i++) {
 		VectorOperations::CombineHash(result, data[i], size());
@@ -248,7 +248,7 @@ void DataChunk::ToArrowArray(ArrowArray *out_array) {
 
 		child.length = size();
 
-		switch (vector.vector_type) {
+		switch (vector.GetVectorType()) {
 			// TODO support other vector types
 		case VectorType::FLAT_VECTOR: {
 			switch (GetTypes()[col_idx].id()) {
@@ -344,7 +344,7 @@ void DataChunk::ToArrowArray(ArrowArray *out_array) {
 			break;
 		}
 		default:
-			throw NotImplementedException(VectorTypeToString(vector.vector_type));
+			throw NotImplementedException(VectorTypeToString(vector.GetVectorType()));
 		}
 		out_array->children[col_idx] = &child;
 	}

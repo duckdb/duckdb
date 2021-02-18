@@ -48,9 +48,9 @@ public:
 	template <class A_TYPE, class B_TYPE, class C_TYPE, class RESULT_TYPE,
 	          class FUN = std::function<RESULT_TYPE(A_TYPE, B_TYPE, C_TYPE)>>
 	static void Execute(Vector &a, Vector &b, Vector &c, Vector &result, idx_t count, FUN fun) {
-		if (a.vector_type == VectorType::CONSTANT_VECTOR && b.vector_type == VectorType::CONSTANT_VECTOR &&
-		    c.vector_type == VectorType::CONSTANT_VECTOR) {
-			result.vector_type = VectorType::CONSTANT_VECTOR;
+		if (a.GetVectorType() == VectorType::CONSTANT_VECTOR && b.GetVectorType() == VectorType::CONSTANT_VECTOR &&
+		    c.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 			if (ConstantVector::IsNull(a) || ConstantVector::IsNull(b) || ConstantVector::IsNull(c)) {
 				ConstantVector::SetNull(result, true);
 			} else {
@@ -61,7 +61,7 @@ public:
 				result_data[0] = fun(*adata, *bdata, *cdata);
 			}
 		} else {
-			result.vector_type = VectorType::FLAT_VECTOR;
+			result.SetVectorType(VectorType::FLAT_VECTOR);
 
 			VectorData adata, bdata, cdata;
 			a.Orrify(count, adata);

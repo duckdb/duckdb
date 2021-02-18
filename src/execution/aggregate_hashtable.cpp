@@ -364,7 +364,7 @@ void GroupedAggregateHashTable::FetchAggregates(DataChunk &groups, DataChunk &re
 	groups.Verify();
 	D_ASSERT(groups.ColumnCount() == group_types.size());
 	for (idx_t i = 0; i < result.ColumnCount(); i++) {
-		D_ASSERT(result.data[i].type == payload_types[i]);
+		D_ASSERT(result.data[i].GetType() == payload_types[i]);
 	}
 	result.SetCardinality(groups);
 	if (groups.size() == 0) {
@@ -418,9 +418,9 @@ void GroupedAggregateHashTable::ScatterGroups(DataChunk &groups, unique_ptr<Vect
 		auto &data = groups.data[grp_idx];
 		auto &gdata = group_data[grp_idx];
 
-		auto type_size = GetTypeIdSize(data.type.InternalType());
+		auto type_size = GetTypeIdSize(data.GetType().InternalType());
 
-		switch (data.type.InternalType()) {
+		switch (data.GetType().InternalType()) {
 		case PhysicalType::BOOL:
 		case PhysicalType::INT8:
 			TemplatedScatter<int8_t>(gdata, addresses, sel, count, type_size);
@@ -537,8 +537,8 @@ static void CompareGroups(DataChunk &groups, unique_ptr<VectorData[]> &group_dat
 	for (idx_t group_idx = 0; group_idx < groups.ColumnCount(); group_idx++) {
 		auto &data = groups.data[group_idx];
 		auto &gdata = group_data[group_idx];
-		auto type_size = GetTypeIdSize(data.type.InternalType());
-		switch (data.type.InternalType()) {
+		auto type_size = GetTypeIdSize(data.GetType().InternalType());
+		switch (data.GetType().InternalType()) {
 		case PhysicalType::BOOL:
 		case PhysicalType::INT8:
 			TemplatedCompareGroups<int8_t>(gdata, addresses, sel, count, type_size, no_match, no_match_count);
@@ -604,15 +604,15 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 	D_ASSERT(groups.ColumnCount() == group_types.size());
 	// we need to be able to fit at least one vector of data
 	D_ASSERT(capacity - entries >= groups.size());
-	D_ASSERT(group_hashes.type == LogicalType::HASH);
+	D_ASSERT(group_hashes.GetType() == LogicalType::HASH);
 
 	group_hashes.Normalify(groups.size());
 	auto group_hashes_ptr = FlatVector::GetData<hash_t>(group_hashes);
 
-	D_ASSERT(ht_offsets.vector_type == VectorType::FLAT_VECTOR);
-	D_ASSERT(ht_offsets.type == LogicalType::BIGINT);
+	D_ASSERT(ht_offsets.GetVectorType() == VectorType::FLAT_VECTOR);
+	D_ASSERT(ht_offsets.GetType() == LogicalType::BIGINT);
 
-	D_ASSERT(addresses.type == LogicalType::POINTER);
+	D_ASSERT(addresses.GetType() == LogicalType::POINTER);
 	addresses.Normalify(groups.size());
 	auto addresses_ptr = FlatVector::GetData<data_ptr_t>(addresses);
 
@@ -624,7 +624,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 	auto ht_offsets_ptr = FlatVector::GetData<uint64_t>(ht_offsets);
 
 	// precompute the hash salts for faster comparison below
-	D_ASSERT(hash_salts.type == LogicalType::SMALLINT);
+	D_ASSERT(hash_salts.GetType() == LogicalType::SMALLINT);
 	UnaryExecutor::Execute<hash_t, uint16_t>(group_hashes, hash_salts, groups.size(),
 	                                         [&](hash_t element) { return (element >> hash_prefix_shift); });
 	auto hash_salts_ptr = FlatVector::GetData<uint16_t>(hash_salts);
@@ -758,8 +758,8 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroups(DataChunk &groups, Vector &a
 }
 
 void GroupedAggregateHashTable::FlushMove(Vector &source_addresses, Vector &source_hashes, idx_t count) {
-	D_ASSERT(source_addresses.type == LogicalType::POINTER);
-	D_ASSERT(source_hashes.type == LogicalType::HASH);
+	D_ASSERT(source_addresses.GetType() == LogicalType::POINTER);
+	D_ASSERT(source_hashes.GetType() == LogicalType::HASH);
 
 	DataChunk groups;
 	groups.Initialize(group_types);

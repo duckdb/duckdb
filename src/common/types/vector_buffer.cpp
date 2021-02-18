@@ -7,18 +7,24 @@
 
 namespace duckdb {
 
-VectorBuffer::VectorBuffer(idx_t data_size) : type(VectorBufferType::STANDARD_BUFFER) {
-	if (data_size > 0) {
-		data = unique_ptr<data_t[]>(new data_t[data_size]);
-	}
-}
-
 buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(PhysicalType type) {
 	return make_buffer<VectorBuffer>(STANDARD_VECTOR_SIZE * GetTypeIdSize(type));
 }
 
 buffer_ptr<VectorBuffer> VectorBuffer::CreateConstantVector(PhysicalType type) {
 	return make_buffer<VectorBuffer>(GetTypeIdSize(type));
+}
+
+buffer_ptr<VectorBuffer> VectorBuffer::CreateConstantVector(VectorType vector_type, const LogicalType &type) {
+	return make_buffer<VectorBuffer>(vector_type, type, GetTypeIdSize(type.InternalType()));
+}
+
+buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(VectorType vector_type, const LogicalType &type) {
+	return make_buffer<VectorBuffer>(vector_type, type, STANDARD_VECTOR_SIZE * GetTypeIdSize(type.InternalType()));
+}
+
+buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(VectorType vector_type, PhysicalType type) {
+	return make_buffer<VectorBuffer>(vector_type, STANDARD_VECTOR_SIZE * GetTypeIdSize(type));
 }
 
 VectorStringBuffer::VectorStringBuffer() : VectorBuffer(VectorBufferType::STRING_BUFFER) {

@@ -36,14 +36,14 @@ static inline void TightLoopHash(T *__restrict ldata, hash_t *__restrict result_
 
 template <bool HAS_RSEL, class T>
 static inline void TemplatedLoopHash(Vector &input, Vector &result, const SelectionVector *rsel, idx_t count) {
-	if (input.vector_type == VectorType::CONSTANT_VECTOR) {
-		result.vector_type = VectorType::CONSTANT_VECTOR;
+	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 
 		auto ldata = ConstantVector::GetData<T>(input);
 		auto result_data = ConstantVector::GetData<hash_t>(result);
 		*result_data = HashOp::Operation(*ldata, ConstantVector::IsNull(input));
 	} else {
-		result.vector_type = VectorType::FLAT_VECTOR;
+		result.SetVectorType(VectorType::FLAT_VECTOR);
 
 		VectorData idata;
 		input.Orrify(count, idata);
@@ -55,8 +55,8 @@ static inline void TemplatedLoopHash(Vector &input, Vector &result, const Select
 
 template <bool HAS_RSEL>
 static inline void HashTypeSwitch(Vector &input, Vector &result, const SelectionVector *rsel, idx_t count) {
-	D_ASSERT(result.type.id() == LogicalTypeId::HASH);
-	switch (input.type.InternalType()) {
+	D_ASSERT(result.GetType().id() == LogicalTypeId::HASH);
+	switch (input.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 		TemplatedLoopHash<HAS_RSEL, int8_t>(input, result, rsel, count);
@@ -98,7 +98,7 @@ static inline void HashTypeSwitch(Vector &input, Vector &result, const Selection
 		TemplatedLoopHash<HAS_RSEL, string_t>(input, result, rsel, count);
 		break;
 	default:
-		throw InvalidTypeException(input.type, "Invalid type for hash");
+		throw InvalidTypeException(input.GetType(), "Invalid type for hash");
 	}
 }
 
@@ -158,7 +158,7 @@ static inline void TightLoopCombineHash(T *__restrict ldata, hash_t *__restrict 
 
 template <bool HAS_RSEL, class T>
 void TemplatedLoopCombineHash(Vector &input, Vector &hashes, const SelectionVector *rsel, idx_t count) {
-	if (input.vector_type == VectorType::CONSTANT_VECTOR && hashes.vector_type == VectorType::CONSTANT_VECTOR) {
+	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR && hashes.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		auto ldata = ConstantVector::GetData<T>(input);
 		auto hash_data = ConstantVector::GetData<hash_t>(hashes);
 
@@ -167,16 +167,16 @@ void TemplatedLoopCombineHash(Vector &input, Vector &hashes, const SelectionVect
 	} else {
 		VectorData idata;
 		input.Orrify(count, idata);
-		if (hashes.vector_type == VectorType::CONSTANT_VECTOR) {
+		if (hashes.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			// mix constant with non-constant, first get the constant value
 			auto constant_hash = *ConstantVector::GetData<hash_t>(hashes);
 			// now re-initialize the hashes vector to an empty flat vector
-			hashes.Initialize(hashes.type);
+			hashes.Initialize(hashes.GetType());
 			TightLoopCombineHashConstant<HAS_RSEL, T>((T *)idata.data, constant_hash,
 			                                          FlatVector::GetData<hash_t>(hashes), rsel, count, idata.sel,
 			                                          idata.validity);
 		} else {
-			D_ASSERT(hashes.vector_type == VectorType::FLAT_VECTOR);
+			D_ASSERT(hashes.GetVectorType() == VectorType::FLAT_VECTOR);
 			TightLoopCombineHash<HAS_RSEL, T>((T *)idata.data, FlatVector::GetData<hash_t>(hashes), rsel, count,
 			                                  idata.sel, idata.validity);
 		}
@@ -185,8 +185,8 @@ void TemplatedLoopCombineHash(Vector &input, Vector &hashes, const SelectionVect
 
 template <bool HAS_RSEL>
 static inline void CombineHashTypeSwitch(Vector &hashes, Vector &input, const SelectionVector *rsel, idx_t count) {
-	D_ASSERT(hashes.type.id() == LogicalTypeId::HASH);
-	switch (input.type.InternalType()) {
+	D_ASSERT(hashes.GetType().id() == LogicalTypeId::HASH);
+	switch (input.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 		TemplatedLoopCombineHash<HAS_RSEL, int8_t>(input, hashes, rsel, count);
@@ -228,7 +228,7 @@ static inline void CombineHashTypeSwitch(Vector &hashes, Vector &input, const Se
 		TemplatedLoopCombineHash<HAS_RSEL, string_t>(input, hashes, rsel, count);
 		break;
 	default:
-		throw InvalidTypeException(input.type, "Invalid type for hash");
+		throw InvalidTypeException(input.GetType(), "Invalid type for hash");
 	}
 }
 

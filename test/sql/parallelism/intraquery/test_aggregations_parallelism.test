@@ -101,7 +101,10 @@ select corr(a,b) from t group by b%2;
 0.000098
 0.000098
 
-
+query I
+select entropy(a) from t;
+----
+16.609640
 
 query I
 select product(b) from t where a < 2000 group by b ;
@@ -137,3 +140,7 @@ select mode(a), mode(b) from t group by b%2;
 2	2
 1	1
 
+query I
+select histogram(b) from t;
+----
+[<bucket: 0, count: 10000>, <bucket: 1, count: 10001>, <bucket: 2, count: 10001>, <bucket: 3, count: 10000>, <bucket: 4, count: 10000>, <bucket: 5, count: 10000>, <bucket: 6, count: 10000>, <bucket: 7, count: 10000>, <bucket: 8, count: 10000>, <bucket: 9, count: 10000>]

@@ -219,7 +219,7 @@ static void FilterSelectionSwitch(T *vec, T *predicate, SelectionVector &sel, id
 void UncompressedSegment::FilterSelection(SelectionVector &sel, Vector &result, const TableFilter &filter,
                                           idx_t &approved_tuple_count, ValidityMask &mask) {
 	// the inplace loops take the result as the last parameter
-	switch (result.type.InternalType()) {
+	switch (result.GetType().InternalType()) {
 	case PhysicalType::UINT8: {
 		auto result_flat = FlatVector::GetData<uint8_t>(result);
 		Vector predicate_vector(filter.constant);
@@ -317,7 +317,7 @@ void UncompressedSegment::FilterSelection(SelectionVector &sel, Vector &result, 
 		break;
 	}
 	default:
-		throw InvalidTypeException(result.type, "Invalid type for filter pushed down to table comparison");
+		throw InvalidTypeException(result.GetType(), "Invalid type for filter pushed down to table comparison");
 	}
 }
 

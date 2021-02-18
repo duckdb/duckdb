@@ -75,7 +75,7 @@ void PhysicalUnnest::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 			for (idx_t col_idx = 0; col_idx < state->list_data.ColumnCount(); col_idx++) {
 				auto &v = state->list_data.data[col_idx];
 
-				D_ASSERT(v.type.id() == LogicalTypeId::LIST);
+				D_ASSERT(v.GetType().id() == LogicalTypeId::LIST);
 
 				// deal with NULL values
 				if (unnest_null) {

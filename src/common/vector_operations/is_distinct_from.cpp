@@ -250,13 +250,15 @@ static idx_t DistinctSelect(Vector &left, Vector &right, const SelectionVector *
 	if (!sel) {
 		sel = &FlatVector::INCREMENTAL_SELECTION_VECTOR;
 	}
-	if (left.vector_type == VectorType::CONSTANT_VECTOR && right.vector_type == VectorType::CONSTANT_VECTOR) {
+	if (left.GetVectorType() == VectorType::CONSTANT_VECTOR && right.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		return DistinctSelectConstant<LEFT_TYPE, RIGHT_TYPE, OP>(left, right, sel, count, true_sel, false_sel);
-	} else if (left.vector_type == VectorType::CONSTANT_VECTOR && right.vector_type == VectorType::FLAT_VECTOR) {
+	} else if (left.GetVectorType() == VectorType::CONSTANT_VECTOR &&
+	           right.GetVectorType() == VectorType::FLAT_VECTOR) {
 		return DistinctSelectFlat<LEFT_TYPE, RIGHT_TYPE, OP, true, false>(left, right, sel, count, true_sel, false_sel);
-	} else if (left.vector_type == VectorType::FLAT_VECTOR && right.vector_type == VectorType::CONSTANT_VECTOR) {
+	} else if (left.GetVectorType() == VectorType::FLAT_VECTOR &&
+	           right.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		return DistinctSelectFlat<LEFT_TYPE, RIGHT_TYPE, OP, false, true>(left, right, sel, count, true_sel, false_sel);
-	} else if (left.vector_type == VectorType::FLAT_VECTOR && right.vector_type == VectorType::FLAT_VECTOR) {
+	} else if (left.GetVectorType() == VectorType::FLAT_VECTOR && right.GetVectorType() == VectorType::FLAT_VECTOR) {
 		return DistinctSelectFlat<LEFT_TYPE, RIGHT_TYPE, OP, false, false>(left, right, sel, count, true_sel,
 		                                                                   false_sel);
 	} else {
@@ -269,9 +271,9 @@ static inline void TemplatedDistinctExecute(Vector &left, Vector &right, Vector 
 }
 template <class OP>
 static void ExecuteDistinct(Vector &left, Vector &right, Vector &result, idx_t count) {
-	D_ASSERT(left.type == right.type && result.type == LogicalType::BOOLEAN);
+	D_ASSERT(left.GetType() == right.GetType() && result.GetType() == LogicalType::BOOLEAN);
 	// the inplace loops take the result as the last parameter
-	switch (left.type.InternalType()) {
+	switch (left.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 		TemplatedDistinctExecute<int8_t, OP>(left, right, result, count);
@@ -316,7 +318,7 @@ static void ExecuteDistinct(Vector &left, Vector &right, Vector &result, idx_t c
 		TemplatedDistinctExecute<string_t, OP>(left, right, result, count);
 		break;
 	default:
-		throw InvalidTypeException(left.type, "Invalid type for distinct comparison");
+		throw InvalidTypeException(left.GetType(), "Invalid type for distinct comparison");
 	}
 }
 
@@ -324,7 +326,7 @@ template <class OP>
 static idx_t TemplatedDistinctSelectOperation(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
                                               SelectionVector *true_sel, SelectionVector *false_sel) {
 	// the inplace loops take the result as the last parameter
-	switch (left.type.InternalType()) {
+	switch (left.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 		return DistinctSelect<int8_t, int8_t, OP>(left, right, sel, count, true_sel, false_sel);
@@ -355,7 +357,7 @@ static idx_t TemplatedDistinctSelectOperation(Vector &left, Vector &right, const
 	case PhysicalType::VARCHAR:
 		return DistinctSelect<string_t, string_t, OP>(left, right, sel, count, true_sel, false_sel);
 	default:
-		throw InvalidTypeException(left.type, "Invalid type for comparison");
+		throw InvalidTypeException(left.GetType(), "Invalid type for comparison");
 	}
 }
 

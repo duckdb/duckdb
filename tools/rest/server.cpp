@@ -79,7 +79,7 @@ static void assign_json_loop(Vector &v, idx_t col_idx, idx_t count, json &j) {
 static void assign_json_string_loop(Vector &v, idx_t col_idx, idx_t count, json &j) {
 	Vector cast_vector(LogicalType::VARCHAR);
 	Vector *result_vector;
-	if (v.type.id() != LogicalTypeId::VARCHAR) {
+	if (v.GetType().id() != LogicalTypeId::VARCHAR) {
 		VectorOperations::Cast(v, cast_vector, count);
 		result_vector = &cast_vector;
 	} else {
@@ -102,7 +102,7 @@ void serialize_chunk(QueryResult *res, DataChunk *chunk, json &j) {
 	D_ASSERT(res);
 	for (size_t col_idx = 0; col_idx < chunk->ColumnCount(); col_idx++) {
 		Vector &v = chunk->data[col_idx];
-		switch (v.type.id()) {
+		switch (v.GetType().id()) {
 		case LogicalTypeId::BOOLEAN:
 			assign_json_loop<bool, int64_t>(v, col_idx, chunk->size(), j);
 			break;
@@ -387,7 +387,9 @@ int main(int argc, char **argv) {
 			string query_ref = random_string(10);
 			j["ref"] = query_ref;
 			auto chunk = state.res->Fetch();
-			serialize_chunk(state.res.get(), chunk.get(), j);
+			if (chunk != nullptr) {
+				serialize_chunk(state.res.get(), chunk.get(), j);
+			}
 			{
 				std::lock_guard<std::mutex> guard(client_state_map_mutex);
 				client_state_map[query_ref] = move(state);

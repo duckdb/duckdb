@@ -391,7 +391,7 @@ void ParquetReader::Initialize(ParquetReaderScanState &state, vector<column_t> c
 
 template <class T, class OP>
 void TemplatedFilterOperation(Vector &v, T constant, parquet_filter_t &filter_mask, idx_t count) {
-	D_ASSERT(v.vector_type == VectorType::FLAT_VECTOR); // we just created the damn thing it better be
+	D_ASSERT(v.GetVectorType() == VectorType::FLAT_VECTOR); // we just created the damn thing it better be
 
 	auto v_ptr = FlatVector::GetData<T>(v);
 	auto &mask = FlatVector::Validity(v);
@@ -412,7 +412,7 @@ static void FilterOperationSwitch(Vector &v, Value &constant, parquet_filter_t &
 	if (filter_mask.none() || count == 0) {
 		return;
 	}
-	switch (v.type.id()) {
+	switch (v.GetType().id()) {
 	case LogicalTypeId::BOOLEAN:
 		TemplatedFilterOperation<bool, OP>(v, constant.value_.boolean, filter_mask, count);
 		break;

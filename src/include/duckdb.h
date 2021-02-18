@@ -10,7 +10,15 @@
 
 #pragma once
 
-#include "duckdb/common/winapi.hpp"
+#ifdef _WIN32
+#ifdef DUCKDB_BUILD_LIBRARY
+#define DUCKDB_API __declspec(dllexport)
+#else
+#define DUCKDB_API __declspec(dllimport)
+#endif
+#else
+#define DUCKDB_API
+#endif
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -49,7 +57,9 @@ typedef enum DUCKDB_TYPE {
 	// duckdb_hugeint
 	DUCKDB_TYPE_HUGEINT,
 	// const char*
-	DUCKDB_TYPE_VARCHAR
+	DUCKDB_TYPE_VARCHAR,
+	// duckdb_blob
+	DUCKDB_TYPE_BLOB
 } duckdb_type;
 
 typedef struct {
@@ -80,6 +90,11 @@ typedef struct {
 	uint64_t lower;
 	int64_t upper;
 } duckdb_hugeint;
+
+typedef struct {
+	void *data;
+	idx_t size;
+} duckdb_blob;
 
 typedef struct {
 	void *data;
@@ -152,6 +167,9 @@ DUCKDB_API float duckdb_value_float(duckdb_result *result, idx_t col, idx_t row)
 DUCKDB_API double duckdb_value_double(duckdb_result *result, idx_t col, idx_t row);
 //! Converts the specified value to a string. Returns nullptr on failure or NULL. The result must be freed with free.
 DUCKDB_API char *duckdb_value_varchar(duckdb_result *result, idx_t col, idx_t row);
+//! Fetches a blob from a result set column. Returns a blob with blob.data set to nullptr on failure or NULL. The
+//! resulting "blob.data" must be freed with free.
+DUCKDB_API duckdb_blob duckdb_value_blob(duckdb_result *result, idx_t col, idx_t row);
 
 // Prepared Statements
 
@@ -171,6 +189,10 @@ DUCKDB_API duckdb_state duckdb_bind_float(duckdb_prepared_statement prepared_sta
 DUCKDB_API duckdb_state duckdb_bind_double(duckdb_prepared_statement prepared_statement, idx_t param_idx, double val);
 DUCKDB_API duckdb_state duckdb_bind_varchar(duckdb_prepared_statement prepared_statement, idx_t param_idx,
                                             const char *val);
+DUCKDB_API duckdb_state duckdb_bind_varchar_length(duckdb_prepared_statement prepared_statement, idx_t param_idx,
+                                                   const char *val, idx_t length);
+DUCKDB_API duckdb_state duckdb_bind_blob(duckdb_prepared_statement prepared_statement, idx_t param_idx,
+                                         const void *data, idx_t length);
 DUCKDB_API duckdb_state duckdb_bind_null(duckdb_prepared_statement prepared_statement, idx_t param_idx);
 
 //! Executes the prepared statements with currently bound parameters

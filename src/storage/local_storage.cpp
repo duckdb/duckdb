@@ -267,10 +267,10 @@ static void TemplatedUpdateLoop(Vector &data_vector, Vector &update_vector, Vect
 }
 
 static void UpdateChunk(Vector &data, Vector &updates, Vector &row_ids, idx_t count, idx_t base_index) {
-	D_ASSERT(data.type == updates.type);
-	D_ASSERT(row_ids.type == LOGICAL_ROW_TYPE);
+	D_ASSERT(data.GetType() == updates.GetType());
+	D_ASSERT(row_ids.GetType() == LOGICAL_ROW_TYPE);
 
-	switch (data.type.InternalType()) {
+	switch (data.GetType().InternalType()) {
 	case PhysicalType::INT8:
 		TemplatedUpdateLoop<int8_t>(data, updates, row_ids, count, base_index);
 		break;

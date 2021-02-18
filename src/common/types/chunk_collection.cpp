@@ -131,7 +131,7 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 
 template <class TYPE>
 static int8_t TemplatedCompareValue(Vector &left_vec, Vector &right_vec, idx_t left_idx, idx_t right_idx) {
-	D_ASSERT(left_vec.type == right_vec.type);
+	D_ASSERT(left_vec.GetType() == right_vec.GetType());
 	auto left_val = FlatVector::GetData<TYPE>(left_vec)[left_idx];
 	auto right_val = FlatVector::GetData<TYPE>(right_vec)[right_idx];
 	if (Equals::Operation<TYPE>(left_val, right_val)) {
@@ -157,7 +157,7 @@ static int32_t CompareValue(Vector &left_vec, Vector &right_vec, idx_t vector_id
 		return null_order == OrderByNullType::NULLS_FIRST ? -1 : 1;
 	}
 
-	switch (left_vec.type.InternalType()) {
+	switch (left_vec.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 		return TemplatedCompareValue<int8_t>(left_vec, right_vec, vector_idx_left, vector_idx_right);
@@ -209,9 +209,9 @@ static int CompareTuple(ChunkCollection *sort_by, vector<OrderType> &desc, vecto
 		auto &left_vec = left_chunk.data[col_idx];
 		auto &right_vec = right_chunk.data[col_idx];
 
-		D_ASSERT(left_vec.vector_type == VectorType::FLAT_VECTOR);
-		D_ASSERT(right_vec.vector_type == VectorType::FLAT_VECTOR);
-		D_ASSERT(left_vec.type == right_vec.type);
+		D_ASSERT(left_vec.GetVectorType() == VectorType::FLAT_VECTOR);
+		D_ASSERT(right_vec.GetVectorType() == VectorType::FLAT_VECTOR);
+		D_ASSERT(left_vec.GetType() == right_vec.GetType());
 
 		auto comp_res = CompareValue(left_vec, right_vec, vector_idx_left, vector_idx_right, null_order[col_idx]);
 

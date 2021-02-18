@@ -72,6 +72,22 @@ select arg_min(a,b), arg_max(a,b) from args group by a%2;
 1	1
 2	10
 
+statement ok
+CREATE TABLE blobs (b BYTEA, a BIGINT);
+
+statement ok
+INSERT INTO blobs VALUES('\xaa\xff\xaa',5), ('\xAA\xFF\xAA\xAA\xFF\xAA',30), ('\xAA\xFF\xAA\xAA\xFF\xAA\xAA\xFF\xAA',20)
+
+query II
+select arg_min(b,a), arg_max(b,a)  from blobs ;
+----
+\xAA\xFF\xAA	\xAA\xFF\xAA\xAA\xFF\xAA
+
+query II
+select arg_min(a,b), arg_max(a,b)  from blobs ;
+----
+5	20
+
 # Window Function
 require vector_size 512
 
