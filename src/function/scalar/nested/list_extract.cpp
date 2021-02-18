@@ -15,14 +15,9 @@ void ListExtractTemplate(idx_t count, Vector &list, Vector &offsets, Vector &res
 	list.Orrify(count, list_data);
 	offsets.Orrify(count, offsets_data);
 
-	result.vector_type = VectorType::FLAT_VECTOR;
+	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::GetData<T>(result);
 	auto &result_nullmask = FlatVector::Nullmask(result);
-
-	auto lsel = list_data.sel;
-	auto rsel = offsets_data.sel;
-	auto &lnullmask = *list_data.nullmask;
-	auto &rnullmask = *offsets_data.nullmask;
 
 	auto &list_child_collection = ListVector::GetEntry(list);
 	// heap-ref once
@@ -36,9 +31,9 @@ void ListExtractTemplate(idx_t count, Vector &list, Vector &offsets, Vector &res
 	// this is lifted from ExecuteGenericLoop because we can't push the list child data into this otherwise
 	// should have gone with GetValue perhaps
 	for (idx_t i = 0; i < count; i++) {
-		auto list_index = lsel->get_index(i);
-		auto offsets_index = rsel->get_index(i);
-		if (!lnullmask[list_index] && !rnullmask[offsets_index]) {
+		auto list_index = list_data.sel->get_index(i);
+		auto offsets_index = offsets_data.sel->get_index(i);
+		if (!(*list_data.nullmask)[list_index] && !(*offsets_data.nullmask)[offsets_index]) {
 			auto list_entry = ((list_entry_t *)list_data.data)[list_index];
 			auto offsets_entry = ((int64_t *)offsets_data.data)[offsets_index];
 			idx_t child_offset;
@@ -72,19 +67,19 @@ void ListExtractTemplate(idx_t count, Vector &list, Vector &offsets, Vector &res
 		}
 	}
 	if (count == 1) {
-		result.vector_type = VectorType::CONSTANT_VECTOR;
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 }
 
 static void ListExtractFunFun(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.data.size() == 2);
-	D_ASSERT(args.data[0].type.id() == LogicalTypeId::LIST);
+	D_ASSERT(args.data[0].GetType().id() == LogicalTypeId::LIST);
 
 	auto &list = args.data[0];
 	auto &offsets = args.data[1];
 	auto count = args.size();
 
-	switch (result.type.id()) {
+	switch (result.GetType().id()) {
 	case LogicalTypeId::UTINYINT:
 		ListExtractTemplate<uint8_t>(count, list, offsets, result);
 		break;
