@@ -122,7 +122,7 @@ static void ListExtractFunFun(DataChunk &args, ExpressionState &state, Vector &r
 		ListExtractTemplate<date_t>(count, list, offsets, result);
 		break;
 	case LogicalTypeId::TIME:
-		ListExtractTemplate<time_t>(count, list, offsets, result);
+		ListExtractTemplate<dtime_t>(count, list, offsets, result);
 		break;
 	case LogicalTypeId::TIMESTAMP:
 		ListExtractTemplate<timestamp_t>(count, list, offsets, result);
