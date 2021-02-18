@@ -220,12 +220,11 @@ static bool ConvertColumn(idx_t target_offset, data_ptr_t target_data, bool *tar
                           idx_t count) {
 	auto src_ptr = (DUCKDB_T *)idata.data;
 	auto out_ptr = (NUMPY_T *)target_data;
-	if (idata.nullmask && idata.nullmask->any()) {
-		auto &nullmask = *idata.nullmask;
+	if (!idata.validity.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
 			idx_t src_idx = idata.sel->get_index(i);
 			idx_t offset = target_offset + i;
-			if (nullmask[src_idx]) {
+			if (!idata.validity.RowIsValidUnsafe(src_idx)) {
 				target_mask[offset] = true;
 				out_ptr[offset] = CONVERT::template null_value<NUMPY_T>();
 			} else {
@@ -257,12 +256,11 @@ static bool ConvertDecimalInternal(idx_t target_offset, data_ptr_t target_data, 
                                    idx_t count, double division) {
 	auto src_ptr = (DUCKDB_T *)idata.data;
 	auto out_ptr = (double *)target_data;
-	if (idata.nullmask && idata.nullmask->any()) {
-		auto &nullmask = *idata.nullmask;
+	if (!idata.validity.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
 			idx_t src_idx = idata.sel->get_index(i);
 			idx_t offset = target_offset + i;
-			if (nullmask[src_idx]) {
+			if (!idata.validity.RowIsValidUnsafe(src_idx)) {
 				target_mask[offset] = true;
 			} else {
 				out_ptr[offset] =
@@ -888,10 +886,10 @@ struct PandasScanFunction : public TableFunction {
 	static void scan_pandas_fp_column(T *src_ptr, idx_t count, idx_t offset, Vector &out) {
 		FlatVector::SetData(out, (data_ptr_t)(src_ptr + offset));
 		auto tgt_ptr = FlatVector::GetData<T>(out);
-		auto &nullmask = FlatVector::Nullmask(out);
+		auto &mask = FlatVector::Validity(out);
 		for (idx_t i = 0; i < count; i++) {
 			if (ValueIsNull(tgt_ptr[i])) {
-				nullmask[i] = true;
+				mask.SetInvalid(i);
 			}
 		}
 	}
@@ -955,13 +953,13 @@ struct PandasScanFunction : public TableFunction {
 		case PandasType::TIMESTAMP: {
 			auto src_ptr = (int64_t *)numpy_col.data();
 			auto tgt_ptr = FlatVector::GetData<timestamp_t>(out);
-			auto &nullmask = FlatVector::Nullmask(out);
+			auto &mask = FlatVector::Validity(out);
 
 			for (idx_t row = 0; row < count; row++) {
 				auto source_idx = offset + row;
 				if (src_ptr[source_idx] <= NumericLimits<int64_t>::Minimum()) {
 					// pandas Not a Time (NaT)
-					nullmask[row] = true;
+					mask.SetInvalid(row);
 					continue;
 				}
 				tgt_ptr[row] = Timestamp::FromEpochNanoSeconds(src_ptr[source_idx]);
@@ -1115,8 +1113,8 @@ public:
 		py::tuple res(result->types.size());
 
 		for (idx_t col_idx = 0; col_idx < result->types.size(); col_idx++) {
-			auto &nullmask = FlatVector::Nullmask(current_chunk->data[col_idx]);
-			if (nullmask[chunk_offset]) {
+			auto &mask = FlatVector::Validity(current_chunk->data[col_idx]);
+			if (!mask.RowIsValid(chunk_offset)) {
 				res[col_idx] = py::none();
 				continue;
 			}

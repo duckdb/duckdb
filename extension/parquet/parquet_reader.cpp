@@ -398,7 +398,7 @@ void TemplatedFilterOperation(Vector &v, T constant, parquet_filter_t &filter_ma
 
 	if (!mask.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
-			filter_mask[i] = filter_mask[i] && !mask.RowIsValid(i) && OP::Operation(v_ptr[i], constant);
+			filter_mask[i] = filter_mask[i] && mask.RowIsValid(i) && OP::Operation(v_ptr[i], constant);
 		}
 	} else {
 		for (idx_t i = 0; i < count; i++) {

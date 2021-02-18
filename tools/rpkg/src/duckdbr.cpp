@@ -75,10 +75,10 @@ struct RStatement {
 template <class SRC, class DEST>
 static void vector_to_r(Vector &src_vec, size_t count, void *dest, uint64_t dest_offset, DEST na_val) {
 	auto src_ptr = FlatVector::GetData<SRC>(src_vec);
-	auto &nullmask = FlatVector::Nullmask(src_vec);
+	auto &mask = FlatVector::Validity(src_vec);
 	auto dest_ptr = ((DEST *)dest) + dest_offset;
 	for (size_t row_idx = 0; row_idx < count; row_idx++) {
-		dest_ptr[row_idx] = nullmask[row_idx] ? na_val : src_ptr[row_idx];
+		dest_ptr[row_idx] = !mask.RowIsValid(row_idx) ? na_val : src_ptr[row_idx];
 	}
 }
 
@@ -92,10 +92,10 @@ struct RIntegralType {
 template <class T>
 static void RDecimalCastLoop(Vector &src_vec, size_t count, double *dest_ptr, uint8_t scale) {
 	auto src_ptr = FlatVector::GetData<T>(src_vec);
-	auto &nullmask = FlatVector::Nullmask(src_vec);
+	auto &mask = FlatVector::Validity(src_vec);
 	double division = pow(10, scale);
 	for (size_t row_idx = 0; row_idx < count; row_idx++) {
-		dest_ptr[row_idx] = nullmask[row_idx] ? NA_REAL : RIntegralType::DoubleCast<T>(src_ptr[row_idx]) / division;
+		dest_ptr[row_idx] = !mask.RowIsValid(row_idx) ? NA_REAL : RIntegralType::DoubleCast<T>(src_ptr[row_idx]) / division;
 	}
 }
 
@@ -180,11 +180,11 @@ struct RBooleanType : public RIntegerType {
 template <class SRC, class DST, class RTYPE>
 static void AppendColumnSegment(SRC *source_data, Vector &result, idx_t count) {
 	auto result_data = FlatVector::GetData<DST>(result);
-	auto &result_mask = FlatVector::Nullmask(result);
+	auto &result_mask = FlatVector::Validity(result);
 	for (idx_t i = 0; i < count; i++) {
 		auto val = source_data[i];
 		if (RTYPE::IsNull(val)) {
-			result_mask[i] = true;
+			result_mask.SetInvalid(i);
 		} else {
 			result_data[i] = RTYPE::Convert(val);
 		}
@@ -193,11 +193,11 @@ static void AppendColumnSegment(SRC *source_data, Vector &result, idx_t count) {
 
 static void AppendStringSegment(SEXP coldata, Vector &result, idx_t row_idx, idx_t count) {
 	auto result_data = FlatVector::GetData<string_t>(result);
-	auto &result_mask = FlatVector::Nullmask(result);
+	auto &result_mask = FlatVector::Validity(result);
 	for (idx_t i = 0; i < count; i++) {
 		SEXP val = STRING_ELT(coldata, row_idx + i);
 		if (val == NA_STRING) {
-			result_mask[i] = true;
+			result_mask.SetInvalid(i);
 		} else {
 			result_data[i] = string_t((char *)CHAR(val));
 		}
@@ -207,12 +207,12 @@ static void AppendStringSegment(SEXP coldata, Vector &result, idx_t row_idx, idx
 static void AppendFactor(SEXP coldata, Vector &result, idx_t row_idx, idx_t count) {
 	auto source_data = INTEGER_POINTER(coldata) + row_idx;
 	auto result_data = FlatVector::GetData<string_t>(result);
-	auto &result_mask = FlatVector::Nullmask(result);
+	auto &result_mask = FlatVector::Validity(result);
 	SEXP factor_levels = GET_LEVELS(coldata);
 	for (idx_t i = 0; i < count; i++) {
 		int val = source_data[i];
 		if (RIntegerType::IsNull(val)) {
-			result_mask[i] = true;
+			result_mask.SetInvalid(i);
 		} else {
 			result_data[i] = string_t(CHAR(STRING_ELT(factor_levels, val - 1)));
 		}
@@ -631,11 +631,11 @@ SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 			case LogicalTypeId::TIMESTAMP: {
 				auto &src_vec = chunk->data[col_idx];
 				auto src_data = FlatVector::GetData<timestamp_t>(src_vec);
-				auto &nullmask = FlatVector::Nullmask(src_vec);
+				auto &mask = FlatVector::Validity(src_vec);
 				double *dest_ptr = ((double *)NUMERIC_POINTER(dest)) + dest_offset;
 				for (size_t row_idx = 0; row_idx < chunk->size(); row_idx++) {
 					dest_ptr[row_idx] =
-					    nullmask[row_idx] ? NA_REAL : (double)Timestamp::GetEpochSeconds(src_data[row_idx]);
+					    !mask.RowIsValid(row_idx) ? NA_REAL : (double)Timestamp::GetEpochSeconds(src_data[row_idx]);
 				}
 
 				// some dresssup for R
@@ -650,10 +650,10 @@ SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 			case LogicalTypeId::DATE: {
 				auto &src_vec = chunk->data[col_idx];
 				auto src_data = FlatVector::GetData<date_t>(src_vec);
-				auto &nullmask = FlatVector::Nullmask(src_vec);
+				auto &mask = FlatVector::Validity(src_vec);
 				double *dest_ptr = ((double *)NUMERIC_POINTER(dest)) + dest_offset;
 				for (size_t row_idx = 0; row_idx < chunk->size(); row_idx++) {
-					dest_ptr[row_idx] = nullmask[row_idx] ? NA_REAL : (double)(src_data[row_idx]);
+					dest_ptr[row_idx] = !mask.RowIsValid(row_idx) ? NA_REAL : (double)(src_data[row_idx]);
 				}
 
 				// some dresssup for R
@@ -664,10 +664,10 @@ SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 			case LogicalTypeId::TIME: {
 				auto &src_vec = chunk->data[col_idx];
 				auto src_data = FlatVector::GetData<dtime_t>(src_vec);
-				auto &nullmask = FlatVector::Nullmask(src_vec);
+				auto &mask = FlatVector::Validity(src_vec);
 				double *dest_ptr = ((double *)NUMERIC_POINTER(dest)) + dest_offset;
 				for (size_t row_idx = 0; row_idx < chunk->size(); row_idx++) {
-					if (nullmask[row_idx]) {
+					if (!mask.RowIsValid(row_idx)) {
 						dest_ptr[row_idx] = NA_REAL;
 					} else {
 						dtime_t n = src_data[row_idx];
@@ -688,10 +688,10 @@ SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 			case LogicalTypeId::HUGEINT: {
 				auto &src_vec = chunk->data[col_idx];
 				auto src_data = FlatVector::GetData<hugeint_t>(src_vec);
-				auto &nullmask = FlatVector::Nullmask(src_vec);
+				auto &mask = FlatVector::Validity(src_vec);
 				double *dest_ptr = ((double *)NUMERIC_POINTER(dest)) + dest_offset;
 				for (size_t row_idx = 0; row_idx < chunk->size(); row_idx++) {
-					if (nullmask[row_idx]) {
+					if (!mask.RowIsValid(row_idx)) {
 						dest_ptr[row_idx] = NA_REAL;
 					} else {
 						Hugeint::TryCast(src_data[row_idx], dest_ptr[row_idx]);
@@ -733,9 +733,9 @@ SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 				break;
 			case LogicalTypeId::VARCHAR: {
 				auto src_ptr = FlatVector::GetData<string_t>(chunk->data[col_idx]);
-				auto &nullmask = FlatVector::Nullmask(chunk->data[col_idx]);
+				auto &mask = FlatVector::Validity(chunk->data[col_idx]);
 				for (size_t row_idx = 0; row_idx < chunk->size(); row_idx++) {
-					if (nullmask[row_idx]) {
+					if (!mask.RowIsValid(row_idx)) {
 						SET_STRING_ELT(dest, dest_offset + row_idx, NA_STRING);
 					} else {
 						SET_STRING_ELT(
@@ -747,9 +747,9 @@ SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 			}
 			case LogicalTypeId::BLOB: {
 				auto src_ptr = FlatVector::GetData<string_t>(chunk->data[col_idx]);
-				auto &nullmask = FlatVector::Nullmask(chunk->data[col_idx]);
+				auto &mask = FlatVector::Validity(chunk->data[col_idx]);
 				for (size_t row_idx = 0; row_idx < chunk->size(); row_idx++) {
-					if (nullmask[row_idx]) {
+					if (mask.RowIsValid(row_idx)) {
 						SET_VECTOR_ELT(dest, dest_offset + row_idx, Rf_ScalarLogical(NA_LOGICAL));
 					} else {
 						SEXP rawval = NEW_RAW(src_ptr[row_idx].GetSize());
