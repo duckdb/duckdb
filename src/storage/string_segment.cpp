@@ -189,7 +189,9 @@ void StringSegment::FetchBaseData(ColumnScanState &state, data_ptr_t baseptr, id
 
 	auto &result_mask = FlatVector::Validity(result);
 	ValidityMask base_mask(base);
-	result_mask.Copy(base_mask, count);
+	if (!base_mask.CheckAllValid(count)) {
+		result_mask.Copy(base_mask, count);
+	}
 
 	auto base_data = (int32_t *)(base + ValidityMask::STANDARD_MASK_SIZE);
 	auto result_data = FlatVector::GetData<string_t>(result);

@@ -341,7 +341,9 @@ void NumericSegment::FetchBaseData(ColumnScanState &state, idx_t vector_index, V
 
 	auto &result_mask = FlatVector::Validity(result);
 	ValidityMask source_mask(data + offset);
-	result_mask.Copy(source_mask, count);
+	if (!source_mask.CheckAllValid(count)) {
+		result_mask.Copy(source_mask, count);
+	}
 
 	auto source_data = data + offset + ValidityMask::STANDARD_MASK_SIZE;
 

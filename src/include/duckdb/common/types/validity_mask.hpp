@@ -63,6 +63,17 @@ public:
 	bool AllValid() const {
 		return !validity_mask;
 	}
+	bool CheckAllValid(idx_t count) const {
+		if (AllValid()) {
+			return true;
+		}
+		idx_t entry_count = ValidityData::EntryCount(count);
+		idx_t valid_count = 0;
+		for(idx_t i = 0; i < entry_count; i++) {
+			valid_count += validity_mask[i] == ValidityData::MAX_ENTRY;
+		}
+		return valid_count == entry_count;
+	}
 	validity_t *GetData() const {
 		return validity_mask;
 	}
