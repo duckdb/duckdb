@@ -655,7 +655,7 @@ static void AppendLoop(SegmentStatistics &stats, data_ptr_t target, idx_t target
 			auto target_idx = target_offset + i;
 			bool is_null = !adata.validity.RowIsValid(source_idx);
 			if (is_null) {
-				mask.SetInvalid(target_idx);
+				mask.SetInvalidUnsafe(target_idx);
 				stats.statistics->has_null = true;
 			} else {
 				UpdateNumericStatistics<T>(stats, sdata[source_idx]);

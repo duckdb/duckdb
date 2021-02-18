@@ -53,7 +53,7 @@ struct KurtosisOperation {
 	static void Finalize(Vector &result, FunctionData *bind_data, STATE *state, TARGET_TYPE *target,
 	                     ValidityMask &mask, idx_t idx) {
 		auto n = (double)state->n;
-		if (n == 0) {
+		if (n <= 3) {
 			mask.SetInvalid(idx);
 			return;
 		}
@@ -80,7 +80,7 @@ struct KurtosisOperation {
 	}
 
 	static bool IgnoreNull() {
-		return false;
+		return true;
 	}
 };
 

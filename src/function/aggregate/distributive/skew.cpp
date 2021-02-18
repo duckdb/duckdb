@@ -50,16 +50,21 @@ struct SkewnessOperation {
 	template <class TARGET_TYPE, class STATE>
 	static void Finalize(Vector &result, FunctionData *bind_data, STATE *state, TARGET_TYPE *target,
 	                     ValidityMask &mask, idx_t idx) {
-		if (state->n == 0) {
+		if (state->n <= 2) {
 			mask.SetInvalid(idx);
 			return;
 		}
 		double n = state->n;
 		double temp = 1 / n;
+		double div = (std::sqrt(std::pow(temp * (state->sum_sqr - state->sum * state->sum * temp), 3)));
+		if (div == 0) {
+			mask.SetInvalid(idx);
+			return;
+		}
 		double temp1 = std::sqrt(n * (n - 1)) / (n - 2);
 		target[idx] = temp1 * temp *
 		              (state->sum_cub - 3 * state->sum_sqr * state->sum * temp + 2 * pow(state->sum, 3) * temp * temp) /
-		              (std::sqrt(std::pow(temp * (state->sum_sqr - state->sum * state->sum * temp), 3)));
+		              div;
 		if (!Value::DoubleIsValid(target[idx])) {
 			mask.SetInvalid(idx);
 		}

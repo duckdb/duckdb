@@ -41,7 +41,7 @@ private:
 		auto entry_count = ValidityMask::EntryCount(count);
 		for(idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
 			auto validity_entry = mask.GetValidityEntry(entry_idx);
-			idx_t next = MinValue<idx_t>(base_idx + ValidityMask::BitsPerValue(), count);
+			idx_t next = MinValue<idx_t>(base_idx + ValidityMask::BITS_PER_VALUE, count);
 			if (!OP::IgnoreNull() || ValidityMask::AllValid(validity_entry)) {
 				// all valid: perform operation
 				for(; base_idx < next; base_idx++) {
@@ -92,7 +92,7 @@ private:
 		auto entry_count = ValidityMask::EntryCount(count);
 		for(idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
 			auto validity_entry = mask.GetValidityEntry(entry_idx);
-			idx_t next = MinValue<idx_t>(base_idx + ValidityMask::BitsPerValue(), count);
+			idx_t next = MinValue<idx_t>(base_idx + ValidityMask::BITS_PER_VALUE, count);
 			if (!OP::IgnoreNull() || ValidityMask::AllValid(validity_entry)) {
 				// all valid: perform operation
 				for(; base_idx < next; base_idx++) {
@@ -100,6 +100,7 @@ private:
 				}
 			} else if (ValidityMask::NoneValid(validity_entry)) {
 				// nothing valid: skip all
+				base_idx = next;
 				continue;
 			} else {
 				// partially valid: need to check individual elements for validity

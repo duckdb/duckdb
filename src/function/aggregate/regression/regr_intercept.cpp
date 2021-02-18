@@ -42,6 +42,10 @@ struct RegrInterceptOperation {
 
 	template <class T, class STATE>
 	static void Finalize(Vector &result, FunctionData *fd, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
+		if (state->count == 0) {
+			mask.SetInvalid(idx);
+			return;
+		}
 		RegrSlopeOperation::Finalize<T, RegrSlopeState>(result, fd, &state->slope, target, mask, idx);
 		auto x_avg = state->sum_x / state->count;
 		auto y_avg = state->sum_y / state->count;

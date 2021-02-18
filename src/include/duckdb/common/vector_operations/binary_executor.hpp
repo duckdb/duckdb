@@ -60,7 +60,7 @@ struct BinaryExecutor {
 		auto entry_count = ValidityMask::EntryCount(count);
 		for(idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
 			auto validity_entry = mask.GetValidityEntry(entry_idx);
-			idx_t next = MinValue<idx_t>(base_idx + ValidityMask::BitsPerValue(), count);
+			idx_t next = MinValue<idx_t>(base_idx + ValidityMask::BITS_PER_VALUE, count);
 			if (ValidityMask::AllValid(validity_entry)) {
 				// all valid: perform operation
 				for(; base_idx < next; base_idx++) {
@@ -248,7 +248,7 @@ public:
 		auto entry_count = ValidityMask::EntryCount(count);
 		for(idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
 			auto validity_entry = validity_mask.GetValidityEntry(entry_idx);
-			idx_t next = MinValue<idx_t>(base_idx + ValidityMask::BitsPerValue(), count);
+			idx_t next = MinValue<idx_t>(base_idx + ValidityMask::BITS_PER_VALUE, count);
 			if (ValidityMask::AllValid(validity_entry)) {
 				// all valid: perform operation
 				for(; base_idx < next; base_idx++) {

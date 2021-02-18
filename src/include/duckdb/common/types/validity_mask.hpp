@@ -74,9 +74,6 @@ public:
 	static inline idx_t EntryCount(idx_t count) {
 		return ValidityData::EntryCount(count);
 	}
-	static inline idx_t BitsPerValue() {
-		return ValidityData::BITS_PER_VALUE;
-	}
 	validity_t GetValidityEntry(idx_t entry_idx) const {
 		if (!validity_mask) {
 			return ValidityData::MAX_ENTRY;
@@ -93,8 +90,8 @@ public:
 		return entry & (validity_t(1) << validity_t(idx_in_entry));
 	}
 	inline void GetEntryIndex(idx_t row_idx, idx_t &entry_idx, idx_t &idx_in_entry) const {
-		entry_idx = row_idx / BitsPerValue();
-		idx_in_entry = row_idx % BitsPerValue();
+		entry_idx = row_idx / BITS_PER_VALUE;
+		idx_in_entry = row_idx % BITS_PER_VALUE;
 	}
 
 	//! RowIsValidUnsafe should only be used if AllValid() is false: it achieves the same as RowIsValid but skips a not-null check
@@ -184,6 +181,7 @@ public:
 		}
 	}
 
+	void Slice(const ValidityMask &other, idx_t offset);
 	void Combine(const ValidityMask& other, idx_t count);
 	string ToString(idx_t count) const;
 
@@ -201,8 +199,13 @@ public:
 		validity_mask = validity_data->owned_data.get();
 	}
 	void Copy(const ValidityMask &other, idx_t count) {
-		validity_data = make_buffer<ValidityData>(other, count);
-		validity_mask = validity_data->owned_data.get();
+		if (other.AllValid()) {
+			validity_data = nullptr;
+			validity_mask = nullptr;
+		} else {
+			validity_data = make_buffer<ValidityData>(other, count);
+			validity_mask = validity_data->owned_data.get();
+		}
 	}
 private:
 	validity_t *validity_mask;

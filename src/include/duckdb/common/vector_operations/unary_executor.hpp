@@ -39,9 +39,10 @@ private:
 		ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
 
 		if (!mask.AllValid()) {
+			result_mask.EnsureWritable();
 			for (idx_t i = 0; i < count; i++) {
 				auto idx = sel_vector->get_index(i);
-				if (mask.RowIsValid(i)) {
+				if (mask.RowIsValidUnsafe(idx)) {
 					result_data[i] = OPWRAPPER::template Operation<FUNC, OP, INPUT_TYPE, RESULT_TYPE>(
 					    fun, ldata[idx], result_mask, i);
 				} else {
@@ -78,6 +79,7 @@ private:
 				}
 			} else if (ValidityMask::NoneValid(validity_entry)) {
 				// nothing valid: skip all
+				base_idx = next;
 				continue;
 			} else {
 				// partially valid: need to check individual elements for validity

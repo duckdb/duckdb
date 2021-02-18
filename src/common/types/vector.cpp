@@ -69,14 +69,14 @@ void Vector::Slice(Vector &other, idx_t offset) {
 		Reference(other);
 		return;
 	}
+	D_ASSERT(vector_type == VectorType::FLAT_VECTOR);
 	D_ASSERT(other.vector_type == VectorType::FLAT_VECTOR);
 
 	// create a reference to the other vector
 	Reference(other);
 	if (offset > 0) {
-		throw Exception("FIXME: vector slice with offset");
-		// data = data + GetTypeIdSize(type.InternalType()) * offset;
-		// nullmask >>= offset;
+		data = data + GetTypeIdSize(type.InternalType()) * offset;
+		validity.Slice(other.validity, offset);
 	}
 }
 
