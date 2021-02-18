@@ -129,7 +129,7 @@ void Vector::Initialize(const LogicalType &new_type, bool zero_data) {
 	auxiliary.reset();
 	validity.Reset();
 	if (GetTypeIdSize(GetType().InternalType()) > 0) {
-		buffer = VectorBuffer::CreateStandardVector(GetType());
+		buffer = VectorBuffer::CreateStandardVector(VectorType::FLAT_VECTOR, GetType());
 		data = buffer->GetData();
 		if (zero_data) {
 			memset(data, 0, STANDARD_VECTOR_SIZE * GetTypeIdSize(new_type.InternalType()));

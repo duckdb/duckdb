@@ -27,7 +27,7 @@ static void DistinctExecuteGenericLoop(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP>
 static void DistinctExecuteConstant(Vector &left, Vector &right, Vector &result) {
-       result.vector_type = VectorType::CONSTANT_VECTOR;
+       result.SetVectorType(VectorType::CONSTANT_VECTOR);
 
        auto ldata = ConstantVector::GetData<LEFT_TYPE>(left);
        auto rdata = ConstantVector::GetData<RIGHT_TYPE>(right);
@@ -37,7 +37,7 @@ static void DistinctExecuteConstant(Vector &left, Vector &right, Vector &result)
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP>
 static void DistinctExecuteGeneric(Vector &left, Vector &right, Vector &result, idx_t count) {
-	if (left.vector_type == VectorType::CONSTANT_VECTOR && right.vector_type == VectorType::CONSTANT_VECTOR) {
+	if (left.GetVectorType() == VectorType::CONSTANT_VECTOR && right.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		DistinctExecuteConstant<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OP>(left, right, result);
 	} else {
 		VectorData ldata, rdata;
@@ -45,7 +45,7 @@ static void DistinctExecuteGeneric(Vector &left, Vector &right, Vector &result, 
 		left.Orrify(count, ldata);
 		right.Orrify(count, rdata);
 
-		result.vector_type = VectorType::FLAT_VECTOR;
+		result.SetVectorType(VectorType::FLAT_VECTOR);
 		auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
 		DistinctExecuteGenericLoop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OP>(
 			(LEFT_TYPE *)ldata.data, (RIGHT_TYPE *)rdata.data, result_data, ldata.sel, rdata.sel, count, ldata.validity,
