@@ -7,7 +7,7 @@ group micro
 subgroup nulls
 
 load
-CREATE TABLE integers AS SELECT CASE WHEN i=0 THEN NULL ELSE i END i FROM range(1000) tbl(i), repeat(0, 10000) tbl2(j)
+CREATE TABLE integers AS SELECT CASE WHEN i=0 THEN NULL ELSE i END i FROM range(1000) tbl(i), repeat(0, 100000) tbl2(j)
 
 run
 SELECT MIN(i + 1) FROM integers
