@@ -137,7 +137,7 @@ static void udf_unary_function(DataChunk &input, ExpressionState &state, Vector 
 		auto result_data = FlatVector::GetData<string_t>(result);
 		auto ldata = FlatVector::GetData<string_t>(input.data[0]);
 
-		FlatVector::SetNullmask(result, FlatVector::Nullmask(input.data[0]));
+		FlatVector::SetValidity(result, FlatVector::Validity(input.data[0]));
 
 		for (idx_t i = 0; i < input.size(); i++) {
 			auto input_length = ldata[i].GetSize();
@@ -153,11 +153,11 @@ static void udf_unary_function(DataChunk &input, ExpressionState &state, Vector 
 		result.vector_type = VectorType::FLAT_VECTOR;
 		auto result_data = FlatVector::GetData<TYPE>(result);
 		auto ldata = FlatVector::GetData<TYPE>(input.data[0]);
-		auto nullmask = FlatVector::Nullmask(input.data[0]);
-		FlatVector::SetNullmask(result, nullmask);
+		auto mask = FlatVector::Validity(input.data[0]);
+		FlatVector::SetValidity(result, mask);
 
 		for (idx_t i = 0; i < input.size(); i++) {
-			if (nullmask[i]) {
+			if (!mask.RowIsValid(i)) {
 				continue;
 			}
 			result_data[i] = ldata[i];
@@ -177,7 +177,7 @@ static void udf_binary_function(DataChunk &input, ExpressionState &state, Vector
 		auto result_data = FlatVector::GetData<string_t>(result);
 		auto ldata = FlatVector::GetData<string_t>(input.data[1]);
 
-		FlatVector::SetNullmask(result, FlatVector::Nullmask(input.data[1]));
+		FlatVector::SetValidity(result, FlatVector::Validity(input.data[1]));
 
 		for (idx_t i = 0; i < input.size(); i++) {
 			auto input_length = ldata[i].GetSize();
@@ -193,11 +193,11 @@ static void udf_binary_function(DataChunk &input, ExpressionState &state, Vector
 		result.vector_type = VectorType::FLAT_VECTOR;
 		auto result_data = FlatVector::GetData<TYPE>(result);
 		auto ldata = FlatVector::GetData<TYPE>(input.data[1]);
-		auto &nullmask = FlatVector::Nullmask(input.data[1]);
-		FlatVector::SetNullmask(result, nullmask);
+		auto &mask = FlatVector::Validity(input.data[1]);
+		FlatVector::SetValidity(result, mask);
 
 		for (idx_t i = 0; i < input.size(); i++) {
-			if (nullmask[i]) {
+			if (!mask.RowIsValid(i)) {
 				continue;
 			}
 			result_data[i] = ldata[i];
@@ -217,7 +217,7 @@ static void udf_ternary_function(DataChunk &input, ExpressionState &state, Vecto
 		auto result_data = FlatVector::GetData<string_t>(result);
 		auto ldata = FlatVector::GetData<string_t>(input.data[2]);
 
-		FlatVector::SetNullmask(result, FlatVector::Nullmask(input.data[2]));
+		FlatVector::SetValidity(result, FlatVector::Validity(input.data[2]));
 
 		for (idx_t i = 0; i < input.size(); i++) {
 			auto input_length = ldata[i].GetSize();
@@ -233,11 +233,11 @@ static void udf_ternary_function(DataChunk &input, ExpressionState &state, Vecto
 		result.vector_type = VectorType::FLAT_VECTOR;
 		auto result_data = FlatVector::GetData<TYPE>(result);
 		auto ldata = FlatVector::GetData<TYPE>(input.data[2]);
-		auto &nullmask = FlatVector::Nullmask(input.data[2]);
-		FlatVector::SetNullmask(result, nullmask);
+		auto &mask = FlatVector::Validity(input.data[2]);
+		FlatVector::SetValidity(result, mask);
 
 		for (idx_t i = 0; i < input.size(); i++) {
-			if (nullmask[i]) {
+			if (!mask.RowIsValid(i)) {
 				continue;
 			}
 			result_data[i] = ldata[i];
@@ -379,8 +379,8 @@ struct UDFCovarOperation {
 	}
 
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, FunctionData *bind_data, A_TYPE *x_data, B_TYPE *y_data, nullmask_t &anullmask,
-	                      nullmask_t &bnullmask, idx_t xidx, idx_t yidx) {
+	static void Operation(STATE *state, FunctionData *bind_data, A_TYPE *x_data, B_TYPE *y_data, ValidityMask &amask,
+	                      ValidityMask &bmask, idx_t xidx, idx_t yidx) {
 		// update running mean and d^2
 		const uint64_t n = ++(state->count);
 
@@ -484,11 +484,11 @@ struct UDFSum {
 		} else if (inputs[0].vector_type == VectorType::FLAT_VECTOR && states.vector_type == VectorType::FLAT_VECTOR) {
 			auto idata = FlatVector::GetData<INPUT_TYPE>(inputs[0]);
 			auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
-			auto nullmask = FlatVector::Nullmask(inputs[0]);
-			if (nullmask.any()) {
+			auto mask = FlatVector::Validity(inputs[0]);
+			if (!mask.AllValid()) {
 				// potential NULL values and NULL values are ignored
 				for (idx_t i = 0; i < count; i++) {
-					if (!nullmask[i]) {
+					if (mask.RowIsValid(i)) {
 						UDFSum::Operation<INPUT_TYPE, STATE_TYPE>(sdata[i], bind_data, idata, i);
 					}
 				}
@@ -518,11 +518,11 @@ struct UDFSum {
 		}
 		case VectorType::FLAT_VECTOR: {
 			auto idata = FlatVector::GetData<INPUT_TYPE>(inputs[0]);
-			auto nullmask = FlatVector::Nullmask(inputs[0]);
-			if (nullmask.any()) {
+			auto &mask = FlatVector::Validity(inputs[0]);
+			if (!mask.AllValid()) {
 				// potential NULL values and NULL values are ignored
 				for (idx_t i = 0; i < count; i++) {
-					if (!nullmask[i]) {
+					if (mask.RowIsValid(i)) {
 						UDFSum::Operation<INPUT_TYPE, STATE_TYPE>((STATE_TYPE *)state, bind_data, idata, i);
 					}
 				}
@@ -568,7 +568,7 @@ struct UDFSum {
 
 			auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
 			auto rdata = ConstantVector::GetData<RESULT_TYPE>(result);
-			UDFSum::Finalize<RESULT_TYPE, STATE_TYPE>(result, *sdata, rdata, ConstantVector::Nullmask(result), 0);
+			UDFSum::Finalize<RESULT_TYPE, STATE_TYPE>(result, *sdata, rdata, ConstantVector::Validity(result), 0);
 		} else {
 			D_ASSERT(states.vector_type == VectorType::FLAT_VECTOR);
 			result.vector_type = VectorType::FLAT_VECTOR;
@@ -576,7 +576,7 @@ struct UDFSum {
 			auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
 			auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
 			for (idx_t i = 0; i < count; i++) {
-				UDFSum::Finalize<RESULT_TYPE, STATE_TYPE>(result, sdata[i], rdata, FlatVector::Nullmask(result), i);
+				UDFSum::Finalize<RESULT_TYPE, STATE_TYPE>(result, sdata[i], rdata, FlatVector::Validity(result), i);
 			}
 		}
 	}
