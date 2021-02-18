@@ -40,6 +40,15 @@ setMethod(
 #' @param ... Ignored
 #' @param debug Print additional debug information such as queries
 #' @param read_only Set to `TRUE` for read-only operation
+#' @param timezone_out The time zone returned to R, defaults to `"UTC"`, which
+#'   is currently the only timezone supported by duckdb.
+#'   If you want to display datetime values in the local timezone,
+#'   set to [Sys.timezone()] or `""`.
+#' @param tz_out_convert How to convert timestamp columns to the timezone specified
+#'   in `timezone_out`. There are two options: `"with"`, and `"force"`. If `"with"`
+#'   is chosen, the timestamp will be returned as it would appear in the specified time zone.
+#'   If `"force"` is chosen, the timestamp will have the same clock
+#'   time as the timestamp in the database, but with the new time zone.
 #'
 #' @return `dbConnect()` returns an object of class
 #'   \linkS4class{duckdb_connection}.
@@ -61,13 +70,18 @@ setMethod(
 #' dbDisconnect(con, shutdown = TRUE)
 setMethod(
   "dbConnect", "duckdb_driver",
-  function(drv, dbdir = DBDIR_MEMORY, ..., debug = getOption("duckdb.debug", FALSE), read_only = FALSE) {
+  function(drv, dbdir = DBDIR_MEMORY, ...,
+           debug = getOption("duckdb.debug", FALSE),
+           read_only = FALSE,
+           timezone_out = "UTC",
+           tz_out_convert = c("with", "force")) {
 
     check_flag(debug)
+    timezone_out <- check_tz(timezone_out)
+    tz_out_convert <- match.arg(tz_out_convert)
 
     missing_dbdir <- missing(dbdir)
     dbdir <- path.expand(as.character(dbdir))
-
 
     # aha, a late comer. let's make a new instance.
     if (!missing_dbdir && dbdir != drv@dbdir) {
@@ -75,7 +89,14 @@ setMethod(
       drv <- duckdb(dbdir, read_only)
     }
 
-    duckdb_connection(drv, debug = debug)
+    conn <- duckdb_connection(drv, debug = debug)
+    on.exit(dbDisconnect(conn))
+
+    conn@timezone_out <- timezone_out
+    conn@tz_out_convert <- tz_out_convert
+
+    on.exit(NULL)
+    conn
   }
 )
 
@@ -205,4 +226,23 @@ duckdb_shutdown <- function(drv) {
 
 is_installed <- function(pkg) {
   as.logical(requireNamespace(pkg, quietly = TRUE)) == TRUE
+}
+
+check_tz <- function(timezone) {
+
+  if (!is.null(timezone) && timezone == "") {
+    return(Sys.timezone())
+  }
+
+  if (is.null(timezone) || !timezone %in% OlsonNames()) {
+    warning(
+      "Invalid time zone '", timezone, "', ",
+      "falling back to UTC.\n",
+      "Set the `timezone_out` argument to a valid time zone.\n",
+      call. = FALSE
+    )
+    return("UTC")
+  }
+
+  timezone
 }

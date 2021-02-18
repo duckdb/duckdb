@@ -48,7 +48,8 @@ Suggests:
     DBItest,
     dbplyr,
     nycflights13,
-    testthat
+    testthat,
+    withr
 Encoding: UTF-8
 LazyData: true
 Roxygen: list(markdown = TRUE)
