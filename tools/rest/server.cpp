@@ -388,7 +388,9 @@ int main(int argc, char **argv) {
 			string query_ref = random_string(10);
 			j["ref"] = query_ref;
 			auto chunk = state.res->Fetch();
-			serialize_chunk(state.res.get(), chunk.get(), j);
+			if (chunk != nullptr) {
+				serialize_chunk(state.res.get(), chunk.get(), j);
+			}
 			{
 				std::lock_guard<std::mutex> guard(client_state_map_mutex);
 				client_state_map[query_ref] = move(state);
