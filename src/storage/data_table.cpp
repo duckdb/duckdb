@@ -1081,6 +1081,10 @@ void DataTable::CommitDropColumn(idx_t index) {
 	}
 }
 
+idx_t DataTable::GetTotalRows(){
+    return total_rows;
+}
+
 void DataTable::CommitDropTable() {
 	// commit a drop of this table: mark all blocks as modified so they can be reclaimed later on
 	for (size_t i = 0; i < columns.size(); i++) {

@@ -100,6 +100,9 @@ private:
 	//! The recursive CTE node that this pipeline belongs to, and may be executed multiple times
 	PhysicalOperator *recursive_cte;
 
+	//! Current progress on the table scan
+	int query_progress = 0;
+
 private:
 	void ScheduleSequentialTask();
 	bool ScheduleOperator(PhysicalOperator *op);

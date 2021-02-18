@@ -25,6 +25,9 @@ struct TableScanBindData : public FunctionData {
 	//! The row ids to fetch (in case of an index scan)
 	vector<row_t> result_ids;
 
+	//! How many chunks we already scanned
+	idx_t chunk_count = 0;
+
 	unique_ptr<FunctionData> Copy() override {
 		auto result = make_unique<TableScanBindData>(table);
 		result->is_index_scan = is_index_scan;

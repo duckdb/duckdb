@@ -100,6 +100,12 @@ bool TableScanParallelStateNext(ClientContext &context, const FunctionData *bind
 	                                                  state.column_ids);
 }
 
+int TableScanProgress(ClientContext &context, const FunctionData *bind_data_p) {
+	auto &bind_data = (TableScanBindData &)*bind_data_p;
+	bind_data.chunk_count++;
+	return (bind_data.chunk_count*STANDARD_VECTOR_SIZE*100)/bind_data.table->storage->GetTotalRows();
+}
+
 void TableScanDependency(unordered_set<CatalogEntry *> &entries, const FunctionData *bind_data_p) {
 	auto &bind_data = (const TableScanBindData &)*bind_data_p;
 	entries.insert(bind_data.table);
@@ -301,6 +307,7 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 				get.function.max_threads = nullptr;
 				get.function.init_parallel_state = nullptr;
 				get.function.parallel_state_next = nullptr;
+				get.function.table_scan_progress = nullptr;
 				get.function.filter_pushdown = false;
 			} else {
 				bind_data.result_ids.clear();
@@ -328,6 +335,7 @@ TableFunction TableScanFunction::GetFunction() {
 	scan_function.init_parallel_state = TableScanInitParallelState;
 	scan_function.parallel_init = TableScanParallelInit;
 	scan_function.parallel_state_next = TableScanParallelStateNext;
+	scan_function.table_scan_progress = TableScanProgress;
 	scan_function.projection_pushdown = true;
 	scan_function.filter_pushdown = true;
 	return scan_function;

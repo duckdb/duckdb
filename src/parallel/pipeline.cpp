@@ -53,6 +53,12 @@ void Pipeline::Execute(TaskContext &task) {
 		child->InitializeChunkEmpty(intermediate);
 		while (true) {
 			child->GetChunk(context, intermediate, state.get());
+			if (child->type == PhysicalOperatorType::TABLE_SCAN){
+			    auto &get = (PhysicalTableScan &)*child;
+			    if(get.function.table_scan_progress){
+			        query_progress = get.function.table_scan_progress(context.client, get.bind_data.get());
+			    }
+			}
 			thread.profiler.StartOperator(sink);
 			if (intermediate.size() == 0) {
 				sink->Combine(context, *sink_state, *lstate);

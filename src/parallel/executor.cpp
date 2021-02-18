@@ -233,6 +233,14 @@ void Executor::Flush(ThreadContext &tcontext) {
 	context.profiler.Flush(tcontext.profiler);
 }
 
+int Executor::GetPipelinesProgress(){
+    int progress = 0;
+    for (auto& pipeline: pipelines){
+        progress += pipeline->query_progress;
+    }
+    return progress;
+}
+
 unique_ptr<DataChunk> Executor::FetchChunk() {
 	D_ASSERT(physical_plan);
 

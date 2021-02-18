@@ -51,6 +51,9 @@ public:
 	//! Flush a thread context into the client context
 	void Flush(ThreadContext &context);
 
+	//! Returns the progress of the pipelines
+	int GetPipelinesProgress();
+
 private:
 	PhysicalOperator *physical_plan;
 	unique_ptr<PhysicalOperatorState> physical_state;
