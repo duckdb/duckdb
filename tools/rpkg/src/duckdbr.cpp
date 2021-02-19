@@ -750,7 +750,7 @@ SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 				auto src_ptr = FlatVector::GetData<string_t>(chunk->data[col_idx]);
 				auto &mask = FlatVector::Validity(chunk->data[col_idx]);
 				for (size_t row_idx = 0; row_idx < chunk->size(); row_idx++) {
-					if (mask.RowIsValid(row_idx)) {
+					if (!mask.RowIsValid(row_idx)) {
 						SET_VECTOR_ELT(dest, dest_offset + row_idx, Rf_ScalarLogical(NA_LOGICAL));
 					} else {
 						SEXP rawval = NEW_RAW(src_ptr[row_idx].GetSize());
