@@ -11,71 +11,133 @@ using namespace std;
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
-// Sink
+// Heaps
 //===--------------------------------------------------------------------===//
-class TopNGlobalState : public GlobalOperatorState {
+class TopNHeap {
 public:
-	mutex lock;
-	ChunkCollection big_data;
-	unique_ptr<idx_t[]> heap;
+	TopNHeap(const vector<BoundOrderByNode>& orders, idx_t limit, idx_t offset)
+		: limit(limit), offset(offset), heap_size(0) {
+		for (auto &order : orders) {
+			auto &expr = order.expression;
+			sort_types.push_back(expr->return_type);
+			order_types.push_back(order.type);
+			null_order_types.push_back(order.null_order);
+			executor.AddExpression(*expr);
+		}
+		// preallocate the heap
+		heap = unique_ptr<idx_t[]>(new idx_t[limit + offset]);
+	}
+
+	void Append(DataChunk &top_chunk, DataChunk &heap_chunk) {
+		top_data.Append(top_chunk);
+		heap_data.Append(heap_chunk);
+		D_ASSERT(heap_data.count == top_data.count);
+	}
+
+	void Sink(DataChunk &input);
+	void Combine(TopNHeap &other);
+	void Reduce();
+
+	idx_t MaterializeTopChunk(DataChunk& top_chunk, idx_t position) {
+		return top_data.MaterializeHeapChunk(top_chunk, heap.get(), position, heap_size);
+	}
+
+	const idx_t limit;
+	const idx_t offset;
 	idx_t heap_size;
-};
-
-class TopNLocalState : public LocalSinkState {
-public:
-	ChunkCollection big_data;
-};
-
-unique_ptr<LocalSinkState> PhysicalTopN::GetLocalSinkState(ExecutionContext &context) {
-	return make_unique<TopNLocalState>();
-}
-
-unique_ptr<GlobalOperatorState> PhysicalTopN::GetGlobalState(ClientContext &context) {
-	return make_unique<TopNGlobalState>();
-}
-
-void PhysicalTopN::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
-                        DataChunk &input) {
-	// append to the local sink state
-	auto &sink = (TopNLocalState &)lstate;
-	sink.big_data.Append(input);
-}
-
-unique_ptr<idx_t[]> PhysicalTopN::ComputeTopN(ChunkCollection &big_data, idx_t &heap_size) {
-	// now perform the actual ordering of the data
-	// compute the sorting columns from the input data
 	ExpressionExecutor executor;
 	vector<LogicalType> sort_types;
 	vector<OrderType> order_types;
 	vector<OrderByNullType> null_order_types;
-	for (idx_t i = 0; i < orders.size(); i++) {
-		auto &expr = orders[i].expression;
-		sort_types.push_back(expr->return_type);
-		order_types.push_back(orders[i].type);
-		null_order_types.push_back(orders[i].null_order);
-		executor.AddExpression(*expr);
-	}
+	ChunkCollection top_data;
+	ChunkCollection heap_data;
+	unique_ptr<idx_t[]> heap;
+};
 
-	heap_size = (big_data.count > offset) ? min(limit + offset, big_data.count) : 0;
+void
+TopNHeap::Sink(DataChunk &input) {
+	// compute the ordering values for the new chunk
+	DataChunk heap_chunk;
+	heap_chunk.Initialize(sort_types);
+
+	executor.Execute(input, heap_chunk);
+
+	// append the new chunk to what we have already
+	Append(input, heap_chunk);
+}
+
+void
+TopNHeap::Combine(TopNHeap &other) {
+	for (idx_t i = 0; i < other.top_data.chunks.size(); ++i) {
+		auto& top_chunk = *other.top_data.chunks[i];
+		auto& heap_chunk = *other.heap_data.chunks[i];
+		Append(top_chunk, heap_chunk);
+	}
+}
+
+void
+TopNHeap::Reduce() {
+	heap_size = (heap_data.count > offset) ? min(limit + offset, heap_data.count) : 0;
 	if (heap_size == 0) {
-		return nullptr;
+		return;
 	}
 
-	ChunkCollection heap_collection;
-	for (idx_t i = 0; i < big_data.chunks.size(); i++) {
-		DataChunk heap_chunk;
-		heap_chunk.Initialize(sort_types);
+	// create the heap
+	heap_data.Heap(order_types, null_order_types, heap.get(), heap_size);
 
-		executor.Execute(*big_data.chunks[i], heap_chunk);
-		heap_collection.Append(heap_chunk);
+	// extract the top rows into new collections
+	ChunkCollection new_top;
+	ChunkCollection new_heap;
+    DataChunk top_chunk;
+    top_chunk.Initialize(top_data.types);
+    DataChunk heap_chunk;
+    heap_chunk.Initialize(heap_data.types);
+	for (idx_t position = 0; position < heap_size;) {
+		(void) top_data.MaterializeHeapChunk(top_chunk, heap.get(), position, heap_size);
+        position = heap_data.MaterializeHeapChunk(heap_chunk, heap.get(), position, heap_size);
+		new_top.Append(top_chunk);
+		new_heap.Append(heap_chunk);
 	}
 
-	D_ASSERT(heap_collection.count == big_data.count);
+	// replace the old data
+    swap(top_data, new_top);
+    swap(heap_data, new_heap);
+}
 
-	// create and use the heap
-	auto heap = unique_ptr<idx_t[]>(new idx_t[heap_size]);
-	heap_collection.Heap(order_types, null_order_types, heap.get(), heap_size);
-	return heap;
+class TopNGlobalState : public GlobalOperatorState {
+public:
+	TopNGlobalState(const vector<BoundOrderByNode>& orders, idx_t limit, idx_t offset)
+		: heap(orders, limit, offset) {
+	}
+	mutex lock;
+	TopNHeap heap;
+};
+
+class TopNLocalState : public LocalSinkState {
+public:
+	TopNLocalState(const vector<BoundOrderByNode>& orders, idx_t limit, idx_t offset)
+		: heap(orders, limit, offset) {
+	}
+	TopNHeap heap;
+};
+
+unique_ptr<LocalSinkState> PhysicalTopN::GetLocalSinkState(ExecutionContext &context) {
+	return make_unique<TopNLocalState>(orders, limit, offset);
+}
+
+unique_ptr<GlobalOperatorState> PhysicalTopN::GetGlobalState(ClientContext &context) {
+	return make_unique<TopNGlobalState>(orders, limit, offset);
+}
+
+//===--------------------------------------------------------------------===//
+// Sink
+//===--------------------------------------------------------------------===//
+void PhysicalTopN::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
+                        DataChunk &input) {
+	// append to the local sink state
+	auto &sink = (TopNLocalState &)lstate;
+    sink.heap.Sink(input);
+    sink.heap.Reduce();
 }
 
 //===--------------------------------------------------------------------===//
@@ -85,23 +147,9 @@ void PhysicalTopN::Combine(ExecutionContext &context, GlobalOperatorState &state
 	auto &gstate = (TopNGlobalState &)state;
 	auto &lstate = (TopNLocalState &)lstate_;
 
-	// first construct the top n of the local sink state
-	idx_t local_heap_size;
-	auto local_heap = ComputeTopN(lstate.big_data, local_heap_size);
-	if (!local_heap) {
-		return;
-	}
-
-	// now scan the local top N and add it to the global heap
+	// scan the local top N and append it to the global heap
 	lock_guard<mutex> glock(gstate.lock);
-	idx_t position = 0;
-	DataChunk chunk;
-	chunk.Initialize(types);
-	while (position < local_heap_size) {
-		position = lstate.big_data.MaterializeHeapChunk(chunk, local_heap.get(), position, local_heap_size);
-		gstate.big_data.Append(chunk);
-	}
-	gstate.heap_size += local_heap_size;
+	gstate.heap.Combine(lstate.heap);
 }
 
 //===--------------------------------------------------------------------===//
@@ -110,7 +158,7 @@ void PhysicalTopN::Combine(ExecutionContext &context, GlobalOperatorState &state
 void PhysicalTopN::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> state) {
 	auto &gstate = (TopNGlobalState &)*state;
 	// global finalize: compute the final top N
-	gstate.heap = ComputeTopN(gstate.big_data, gstate.heap_size);
+	gstate.heap.Reduce();
 
 	PhysicalSink::Finalize(pipeline, context, move(state));
 }
@@ -131,13 +179,13 @@ void PhysicalTopN::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
 	auto &state = (PhysicalTopNOperatorState &)*state_;
 	auto &gstate = (TopNGlobalState &)*sink_state;
 
-	if (state.position >= gstate.heap_size) {
+	if (state.position >= gstate.heap.heap_size) {
 		return;
 	} else if (state.position < offset) {
 		state.position = offset;
 	}
 
-	state.position = gstate.big_data.MaterializeHeapChunk(chunk, gstate.heap.get(), state.position, gstate.heap_size);
+	state.position = gstate.heap.MaterializeTopChunk(chunk, state.position);
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalTopN::GetOperatorState() {
