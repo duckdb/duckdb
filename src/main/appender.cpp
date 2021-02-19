@@ -68,14 +68,26 @@ void Appender::AppendValueInternal(T input) {
 	case PhysicalType::BOOL:
 		AppendValueInternal<T, bool>(col, input);
 		break;
+	case PhysicalType::UINT8:
+		AppendValueInternal<T, uint8_t>(col, input);
+		break;
 	case PhysicalType::INT8:
 		AppendValueInternal<T, int8_t>(col, input);
+		break;
+	case PhysicalType::UINT16:
+		AppendValueInternal<T, uint16_t>(col, input);
 		break;
 	case PhysicalType::INT16:
 		AppendValueInternal<T, int16_t>(col, input);
 		break;
+	case PhysicalType::UINT32:
+		AppendValueInternal<T, uint32_t>(col, input);
+		break;
 	case PhysicalType::INT32:
 		AppendValueInternal<T, int32_t>(col, input);
+		break;
+	case PhysicalType::UINT64:
+		AppendValueInternal<T, uint64_t>(col, input);
 		break;
 	case PhysicalType::INT64:
 		AppendValueInternal<T, int64_t>(col, input);
@@ -116,6 +128,26 @@ void Appender::Append(int32_t value) {
 template <>
 void Appender::Append(int64_t value) {
 	AppendValueInternal<int64_t>(value);
+}
+
+template <>
+void Appender::Append(uint8_t value) {
+	AppendValueInternal<uint8_t>(value);
+}
+
+template <>
+void Appender::Append(uint16_t value) {
+	AppendValueInternal<uint16_t>(value);
+}
+
+template <>
+void Appender::Append(uint32_t value) {
+	AppendValueInternal<uint32_t>(value);
+}
+
+template <>
+void Appender::Append(uint64_t value) {
+	AppendValueInternal<uint64_t>(value);
 }
 
 template <>

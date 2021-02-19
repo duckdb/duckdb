@@ -409,6 +409,22 @@ duckdb_state duckdb_bind_int64(duckdb_prepared_statement prepared_statement, idx
 	return duckdb_bind_value(prepared_statement, param_idx, Value::BIGINT(val));
 }
 
+duckdb_state duckdb_bind_uint8(duckdb_prepared_statement prepared_statement, idx_t param_idx, uint8_t val) {
+	return duckdb_bind_value(prepared_statement, param_idx, Value::UTINYINT(val));
+}
+
+duckdb_state duckdb_bind_uint16(duckdb_prepared_statement prepared_statement, idx_t param_idx, uint16_t val) {
+	return duckdb_bind_value(prepared_statement, param_idx, Value::USMALLINT(val));
+}
+
+duckdb_state duckdb_bind_uint32(duckdb_prepared_statement prepared_statement, idx_t param_idx, uint32_t val) {
+	return duckdb_bind_value(prepared_statement, param_idx, Value::UINTEGER(val));
+}
+
+duckdb_state duckdb_bind_uint64(duckdb_prepared_statement prepared_statement, idx_t param_idx, uint64_t val) {
+	return duckdb_bind_value(prepared_statement, param_idx, Value::UBIGINT(val));
+}
+
 duckdb_state duckdb_bind_float(duckdb_prepared_statement prepared_statement, idx_t param_idx, float val) {
 	return duckdb_bind_value(prepared_statement, param_idx, Value(val));
 }
@@ -653,6 +669,42 @@ int64_t duckdb_value_int64(duckdb_result *result, idx_t col, idx_t row) {
 	}
 }
 
+uint8_t duckdb_value_uint8(duckdb_result *result, idx_t col, idx_t row) {
+	Value val = GetCValue(result, col, row);
+	if (val.is_null) {
+		return 0;
+	} else {
+		return val.GetValue<uint8_t>();
+	}
+}
+
+uint16_t duckdb_value_uint16(duckdb_result *result, idx_t col, idx_t row) {
+	Value val = GetCValue(result, col, row);
+	if (val.is_null) {
+		return 0;
+	} else {
+		return val.GetValue<uint16_t>();
+	}
+}
+
+uint32_t duckdb_value_uint32(duckdb_result *result, idx_t col, idx_t row) {
+	Value val = GetCValue(result, col, row);
+	if (val.is_null) {
+		return 0;
+	} else {
+		return val.GetValue<uint32_t>();
+	}
+}
+
+uint64_t duckdb_value_uint64(duckdb_result *result, idx_t col, idx_t row) {
+	Value val = GetCValue(result, col, row);
+	if (val.is_null) {
+		return 0;
+	} else {
+		return val.GetValue<uint64_t>();
+	}
+}
+
 float duckdb_value_float(duckdb_result *result, idx_t col, idx_t row) {
 	Value val = GetCValue(result, col, row);
 	if (val.is_null) {
@@ -688,4 +740,136 @@ duckdb_blob duckdb_value_blob(duckdb_result *result, idx_t col, idx_t row) {
 		blob.size = val.str_value.size();
 	}
 	return blob;
+}
+
+duckdb_state duckdb_appender_create(duckdb_connection connection, const char *schema, const char *table,
+                                    duckdb_appender *out_appender) {
+	Connection *conn = (Connection *)connection;
+
+	if (!connection || !table) {
+		return DuckDBError;
+	}
+	if (schema == nullptr) {
+
+		schema = DEFAULT_SCHEMA;
+	}
+	try {
+		auto *appender = new Appender(*conn, schema, table);
+		*out_appender = appender;
+	} catch (...) {
+		return DuckDBError;
+	}
+	return DuckDBSuccess;
+}
+
+duckdb_state duckdb_appender_destroy(duckdb_appender *appender) {
+	if (!appender || !*appender) {
+		return DuckDBError;
+	}
+	auto *appender_instance = *((Appender **)appender);
+	delete appender_instance;
+	*appender = nullptr;
+	return DuckDBSuccess;
+}
+
+#define APPENDER_CALL(FUN)                                                                                             \
+	if (!appender) {                                                                                                   \
+		return DuckDBError;                                                                                            \
+	}                                                                                                                  \
+	auto *appender_instance = (Appender *)appender;                                                                    \
+	try {                                                                                                              \
+		appender_instance->FUN();                                                                                      \
+	} catch (...) {                                                                                                    \
+		return DuckDBError;                                                                                            \
+	}                                                                                                                  \
+	return DuckDBSuccess;
+
+#define APPENDER_CALL_PARAM(FUN, PARAM)                                                                                \
+	if (!appender) {                                                                                                   \
+		return DuckDBError;                                                                                            \
+	}                                                                                                                  \
+	auto *appender_instance = (Appender *)appender;                                                                    \
+	try {                                                                                                              \
+		appender_instance->FUN(PARAM);                                                                                 \
+	} catch (...) {                                                                                                    \
+		return DuckDBError;                                                                                            \
+	}                                                                                                                  \
+	return DuckDBSuccess;
+
+duckdb_state duckdb_appender_begin_row(duckdb_appender appender) {
+	APPENDER_CALL(BeginRow);
+}
+
+duckdb_state duckdb_appender_end_row(duckdb_appender appender) {
+	APPENDER_CALL(EndRow);
+}
+
+duckdb_state duckdb_append_bool(duckdb_appender appender, bool value) {
+	APPENDER_CALL_PARAM(Append<bool>, value);
+}
+
+duckdb_state duckdb_append_int8(duckdb_appender appender, int8_t value) {
+	APPENDER_CALL_PARAM(Append<int8_t>, value);
+}
+
+duckdb_state duckdb_append_int16(duckdb_appender appender, int16_t value) {
+	APPENDER_CALL_PARAM(Append<int16_t>, value);
+}
+
+duckdb_state duckdb_append_int32(duckdb_appender appender, int32_t value) {
+	APPENDER_CALL_PARAM(Append<int32_t>, value);
+}
+
+duckdb_state duckdb_append_int64(duckdb_appender appender, int64_t value) {
+	APPENDER_CALL_PARAM(Append<int64_t>, value);
+}
+
+duckdb_state duckdb_append_uint8(duckdb_appender appender, uint8_t value) {
+	APPENDER_CALL_PARAM(Append<uint8_t>, value);
+}
+
+duckdb_state duckdb_append_uint16(duckdb_appender appender, uint16_t value) {
+	APPENDER_CALL_PARAM(Append<uint16_t>, value);
+}
+
+duckdb_state duckdb_append_uint32(duckdb_appender appender, uint32_t value) {
+	APPENDER_CALL_PARAM(Append<uint32_t>, value);
+}
+
+duckdb_state duckdb_append_uint64(duckdb_appender appender, uint64_t value) {
+	APPENDER_CALL_PARAM(Append<uint64_t>, value);
+}
+
+duckdb_state duckdb_append_float(duckdb_appender appender, float value) {
+	APPENDER_CALL_PARAM(Append<float>, value);
+}
+
+duckdb_state duckdb_append_double(duckdb_appender appender, double value) {
+	APPENDER_CALL_PARAM(Append<double>, value);
+}
+
+duckdb_state duckdb_append_null(duckdb_appender appender) {
+	APPENDER_CALL_PARAM(Append<nullptr_t>, nullptr);
+}
+
+duckdb_state duckdb_append_varchar(duckdb_appender appender, const char *val) {
+	auto string_val = Value(val);
+	APPENDER_CALL_PARAM(Append<Value>, string_val);
+}
+
+duckdb_state duckdb_append_varchar_length(duckdb_appender appender, const char *val, idx_t length) {
+	auto string_val = Value(string(val, length)); // TODO this copies orr
+	APPENDER_CALL_PARAM(Append<Value>, string_val);
+}
+duckdb_state duckdb_append_blob(duckdb_appender appender, const void *data, idx_t length) {
+	auto blob_val = Value::BLOB((const_data_ptr_t)data, length);
+	APPENDER_CALL_PARAM(Append<Value>, blob_val);
+}
+
+duckdb_state duckdb_appender_flush(duckdb_appender appender) {
+	APPENDER_CALL(Flush);
+}
+
+duckdb_state duckdb_appender_close(duckdb_appender appender) {
+	APPENDER_CALL(Close);
 }
