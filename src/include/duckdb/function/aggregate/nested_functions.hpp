@@ -25,5 +25,7 @@ struct ListBindData : public FunctionData {
 struct ListFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
-
+struct HistogramFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
 } // namespace duckdb

@@ -51,3 +51,16 @@ test_that("various error cases for duckdb_register()", {
 
   expect_error(duckdb::duckdb_unregister(con, "my_df1"))
 })
+
+
+test_that("uppercase data frames are queryable", {
+  con <- dbConnect(duckdb::duckdb())
+  duckdb::duckdb_register(con, "My_Mtcars", mtcars)
+  dbGetQuery(con, "SELECT * FROM \"My_Mtcars\"")
+
+  res <- dbReadTable(con, "My_Mtcars")
+  row.names(res) <- row.names(mtcars)
+  expect_true(identical(res, mtcars))
+  duckdb::duckdb_unregister(con, "My_Mtcars")
+  dbDisconnect(con, shutdown = T)
+})

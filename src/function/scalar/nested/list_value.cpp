@@ -65,6 +65,8 @@ void ListValueFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunction fun("list_value", {}, LogicalType::LIST, ListValueFunction, false, ListValueBind);
 	fun.varargs = LogicalType::ANY;
 	set.AddFunction(fun);
+	fun.name = "list_pack";
+	set.AddFunction(fun);
 }
 
 } // namespace duckdb
