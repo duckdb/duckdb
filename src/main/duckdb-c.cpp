@@ -849,7 +849,7 @@ duckdb_state duckdb_append_double(duckdb_appender appender, double value) {
 }
 
 duckdb_state duckdb_append_null(duckdb_appender appender) {
-	APPENDER_CALL_PARAM(Append<nullptr_t>, nullptr);
+	APPENDER_CALL_PARAM(Append<std::nullptr_t>, nullptr);
 }
 
 duckdb_state duckdb_append_varchar(duckdb_appender appender, const char *val) {
