@@ -526,8 +526,6 @@ TEST_CASE("Test prepared statements in C API", "[capi][.]") {
 TEST_CASE("Test appender statements in C API", "[capi][.]") {
 	CAPITester tester;
 	unique_ptr<CAPIResult> result;
-	duckdb_result res;
-	duckdb_prepared_statement stmt = nullptr;
 	duckdb_state status;
 
 	// open the database in in-memory mode
