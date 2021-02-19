@@ -4,8 +4,8 @@
 namespace duckdb {
 
 PhysicalComparisonJoin::PhysicalComparisonJoin(LogicalOperator &op, PhysicalOperatorType type,
-                                               vector<JoinCondition> conditions_p, JoinType join_type)
-    : PhysicalJoin(op, type, join_type) {
+                                               vector<JoinCondition> conditions_p, JoinType join_type, idx_t estimated_cardinality)
+    : PhysicalJoin(op, type, join_type,estimated_cardinality) {
 	conditions.resize(conditions_p.size());
 	// we reorder conditions so the ones with COMPARE_EQUAL occur first
 	idx_t equal_position = 0;

@@ -20,10 +20,10 @@ class BufferManager;
 //! a hash table to perform the grouping
 class PhysicalHashAggregate : public PhysicalSink {
 public:
-	PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
+	PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types, vector<unique_ptr<Expression>> expressions, idx_t estimated_cardinality,
 	                      PhysicalOperatorType type = PhysicalOperatorType::HASH_GROUP_BY);
 	PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
-	                      vector<unique_ptr<Expression>> groups,
+	                      vector<unique_ptr<Expression>> groups, idx_t estimated_cardinality,
 	                      PhysicalOperatorType type = PhysicalOperatorType::HASH_GROUP_BY);
 
 	//! The groups

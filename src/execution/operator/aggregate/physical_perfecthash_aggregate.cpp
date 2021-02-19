@@ -12,8 +12,8 @@ PhysicalPerfectHashAggregate::PhysicalPerfectHashAggregate(ClientContext &contex
                                                            vector<unique_ptr<Expression>> aggregates_p,
                                                            vector<unique_ptr<Expression>> groups_p,
                                                            vector<unique_ptr<BaseStatistics>> group_stats,
-                                                           vector<idx_t> required_bits_p)
-    : PhysicalSink(PhysicalOperatorType::PERFECT_HASH_GROUP_BY, move(types_p)), groups(move(groups_p)),
+                                                           vector<idx_t> required_bits_p, idx_t estimated_cardinality)
+    : PhysicalSink(PhysicalOperatorType::PERFECT_HASH_GROUP_BY, move(types_p),estimated_cardinality), groups(move(groups_p)),
       aggregates(move(aggregates_p)), required_bits(move(required_bits_p)) {
 	D_ASSERT(groups.size() == group_stats.size());
 	group_minima.reserve(group_stats.size());

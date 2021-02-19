@@ -234,11 +234,13 @@ void Executor::Flush(ThreadContext &tcontext) {
 }
 
 int Executor::GetPipelinesProgress(){
-    int progress = 0;
-    for (auto& pipeline: pipelines){
-        progress += pipeline->query_progress;
+    if (!pipelines.empty()){
+        return pipelines.back()->GetProgress();
     }
-    return progress;
+    else {
+        return 0;
+    }
+
 }
 
 unique_ptr<DataChunk> Executor::FetchChunk() {

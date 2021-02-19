@@ -16,8 +16,8 @@ namespace duckdb {
 //! The PhysicalExpressionScan scans a set of expressions
 class PhysicalExpressionScan : public PhysicalOperator {
 public:
-	PhysicalExpressionScan(vector<LogicalType> types, vector<vector<unique_ptr<Expression>>> expressions)
-	    : PhysicalOperator(PhysicalOperatorType::EXPRESSION_SCAN, move(types)), expressions(move(expressions)) {
+	PhysicalExpressionScan(vector<LogicalType> types, vector<vector<unique_ptr<Expression>>> expressions, idx_t estimated_cardinality)
+	    : PhysicalOperator(PhysicalOperatorType::EXPRESSION_SCAN, move(types),estimated_cardinality), expressions(move(expressions)) {
 	}
 
 	//! The set of expressions to scan

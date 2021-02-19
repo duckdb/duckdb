@@ -17,8 +17,8 @@ public:
 };
 
 PhysicalDelimJoin::PhysicalDelimJoin(vector<LogicalType> types, unique_ptr<PhysicalOperator> original_join,
-                                     vector<PhysicalOperator *> delim_scans)
-    : PhysicalSink(PhysicalOperatorType::DELIM_JOIN, move(types)), join(move(original_join)),
+                                     vector<PhysicalOperator *> delim_scans, idx_t estimated_cardinality)
+    : PhysicalSink(PhysicalOperatorType::DELIM_JOIN, move(types),estimated_cardinality), join(move(original_join)),
       delim_scans(move(delim_scans)) {
 	D_ASSERT(join->children.size() == 2);
 	// now for the original join
@@ -27,7 +27,7 @@ PhysicalDelimJoin::PhysicalDelimJoin(vector<LogicalType> types, unique_ptr<Physi
 
 	// we replace it with a PhysicalChunkCollectionScan, that scans the ChunkCollection that we keep cached
 	// the actual chunk collection to scan will be created in the DelimJoinGlobalState
-	auto cached_chunk_scan = make_unique<PhysicalChunkScan>(children[0]->GetTypes(), PhysicalOperatorType::CHUNK_SCAN);
+	auto cached_chunk_scan = make_unique<PhysicalChunkScan>(children[0]->GetTypes(), PhysicalOperatorType::CHUNK_SCAN,estimated_cardinality);
 	join->children[0] = move(cached_chunk_scan);
 }
 

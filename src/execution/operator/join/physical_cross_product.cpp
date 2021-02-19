@@ -5,8 +5,8 @@
 namespace duckdb {
 
 PhysicalCrossProduct::PhysicalCrossProduct(vector<LogicalType> types, unique_ptr<PhysicalOperator> left,
-                                           unique_ptr<PhysicalOperator> right)
-    : PhysicalSink(PhysicalOperatorType::CROSS_PRODUCT, move(types)) {
+                                           unique_ptr<PhysicalOperator> right, idx_t estimated_cardinality)
+    : PhysicalSink(PhysicalOperatorType::CROSS_PRODUCT, move(types),estimated_cardinality) {
 	children.push_back(move(left));
 	children.push_back(move(right));
 }

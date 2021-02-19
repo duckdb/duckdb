@@ -8,8 +8,8 @@ namespace duckdb {
 
 PhysicalBlockwiseNLJoin::PhysicalBlockwiseNLJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
                                                  unique_ptr<PhysicalOperator> right, unique_ptr<Expression> condition,
-                                                 JoinType join_type)
-    : PhysicalJoin(op, PhysicalOperatorType::BLOCKWISE_NL_JOIN, join_type), condition(move(condition)) {
+                                                 JoinType join_type, idx_t estimated_cardinality)
+    : PhysicalJoin(op, PhysicalOperatorType::BLOCKWISE_NL_JOIN, join_type, estimated_cardinality), condition(move(condition)) {
 	children.push_back(move(left));
 	children.push_back(move(right));
 	// MARK, SINGLE and RIGHT OUTER joins not handled

@@ -16,8 +16,8 @@ namespace duckdb {
 //! PhysicalCreateSequence represents a CREATE SEQUENCE command
 class PhysicalCreateSequence : public PhysicalOperator {
 public:
-	explicit PhysicalCreateSequence(unique_ptr<CreateSequenceInfo> info)
-	    : PhysicalOperator(PhysicalOperatorType::CREATE_SEQUENCE, {LogicalType::BIGINT}), info(move(info)) {
+	explicit PhysicalCreateSequence(unique_ptr<CreateSequenceInfo> info, idx_t estimated_cardinality)
+	    : PhysicalOperator(PhysicalOperatorType::CREATE_SEQUENCE, {LogicalType::BIGINT},estimated_cardinality), info(move(info)) {
 	}
 
 	unique_ptr<CreateSequenceInfo> info;

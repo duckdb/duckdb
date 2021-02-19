@@ -19,7 +19,7 @@ namespace duckdb {
 class PhysicalTableScan : public PhysicalOperator {
 public:
 	PhysicalTableScan(vector<LogicalType> types, TableFunction function, unique_ptr<FunctionData> bind_data,
-	                  vector<column_t> column_ids, vector<string> names, unique_ptr<TableFilterSet> table_filters);
+	                  vector<column_t> column_ids, vector<string> names, unique_ptr<TableFilterSet> table_filters, idx_t estimated_cardinality);
 
 	//! The table function
 	TableFunction function;

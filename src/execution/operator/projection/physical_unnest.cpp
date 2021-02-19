@@ -24,9 +24,9 @@ public:
 };
 
 // this implements a sorted window functions variant
-PhysicalUnnest::PhysicalUnnest(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
+PhysicalUnnest::PhysicalUnnest(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list, idx_t estimated_cardinality,
                                PhysicalOperatorType type)
-    : PhysicalOperator(type, move(types)), select_list(std::move(select_list)) {
+    : PhysicalOperator(type, move(types),estimated_cardinality), select_list(std::move(select_list)) {
 
 	D_ASSERT(this->select_list.size() > 0);
 }

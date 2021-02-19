@@ -23,8 +23,8 @@ class PhysicalCreateIndex : public PhysicalOperator {
 public:
 	PhysicalCreateIndex(LogicalOperator &op, TableCatalogEntry &table, vector<column_t> column_ids,
 	                    vector<unique_ptr<Expression>> expressions, unique_ptr<CreateIndexInfo> info,
-	                    vector<unique_ptr<Expression>> unbinded_expressions)
-	    : PhysicalOperator(PhysicalOperatorType::CREATE_INDEX, op.types), table(table), column_ids(column_ids),
+	                    vector<unique_ptr<Expression>> unbinded_expressions, idx_t estimated_cardinality)
+	    : PhysicalOperator(PhysicalOperatorType::CREATE_INDEX, op.types,estimated_cardinality), table(table), column_ids(column_ids),
 	      expressions(move(expressions)), info(std::move(info)), unbound_expressions(move(unbinded_expressions)) {
 	}
 

@@ -211,8 +211,7 @@ bool sqlite3_display_result(StatementType type) {
 class ProgressBar {
 public:
 
-//    string pbstr = "||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||";
-    string pbstr = "🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆";
+    string pbstr = "🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆";
     idx_t pbwidth = 60;
     bool finished = false;
     Executor *executor = nullptr;
@@ -232,10 +231,10 @@ public:
     }
 
     void ProgressBarThread() {
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+//        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
         while (!StopRequested()) {
             PrintProgress(executor->GetPipelinesProgress());
-            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
     }
 
@@ -254,7 +253,7 @@ public:
         if (progress_bar_thread.joinable()) {
             exit_signal.set_value();
             progress_bar_thread.join();
-            printf("\n");
+            printf(" \n");
             fflush(stdout);
         }
 

@@ -16,7 +16,7 @@ namespace duckdb {
 //! Physically CREATE TABLE AS statement
 class PhysicalCreateTableAs : public PhysicalSink {
 public:
-	PhysicalCreateTableAs(LogicalOperator &op, SchemaCatalogEntry *schema, unique_ptr<BoundCreateTableInfo> info);
+	PhysicalCreateTableAs(LogicalOperator &op, SchemaCatalogEntry *schema, unique_ptr<BoundCreateTableInfo> info, idx_t estimated_cardinality);
 
 	//! Schema to insert to
 	SchemaCatalogEntry *schema;

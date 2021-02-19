@@ -68,6 +68,8 @@ public:
 	bool IsFinished() {
 		return finished;
 	}
+    // Returns query progress
+	int GetProgress();
 
 public:
 	//! The current threads working on the pipeline
@@ -100,10 +102,8 @@ private:
 	//! The recursive CTE node that this pipeline belongs to, and may be executed multiple times
 	PhysicalOperator *recursive_cte;
 
-	//! Current progress on the table scan
-	int query_progress = 0;
-
 private:
+    int GetProgress(ClientContext &context,PhysicalOperator * op);
 	void ScheduleSequentialTask();
 	bool ScheduleOperator(PhysicalOperator *op);
 };
