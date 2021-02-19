@@ -643,9 +643,10 @@ void Vector::Sequence(int64_t start, int64_t increment) {
 }
 
 void Vector::Serialize(idx_t count, Serializer &serializer) {
-	if (TypeIsConstantSize(GetType().InternalType())) {
+	auto &type = GetType();
+	if (TypeIsConstantSize(type.InternalType())) {
 		// constant size type: simple copy
-		idx_t write_size = GetTypeIdSize(GetType().InternalType()) * count;
+		idx_t write_size = GetTypeIdSize(type.InternalType()) * count;
 		auto ptr = unique_ptr<data_t[]>(new data_t[write_size]);
 		VectorOperations::WriteToStorage(*this, count, ptr.get());
 		serializer.WriteData(ptr.get(), write_size);
@@ -653,7 +654,7 @@ void Vector::Serialize(idx_t count, Serializer &serializer) {
 		VectorData vdata;
 		Orrify(count, vdata);
 
-		switch (GetType().InternalType()) {
+		switch (type.InternalType()) {
 		case PhysicalType::VARCHAR: {
 			auto strings = (string_t *)vdata.data;
 			for (idx_t i = 0; i < count; i++) {
@@ -670,9 +671,10 @@ void Vector::Serialize(idx_t count, Serializer &serializer) {
 }
 
 void Vector::Deserialize(idx_t count, Deserializer &source) {
-	if (TypeIsConstantSize(GetType().InternalType())) {
+	auto &type = GetType();
+	if (TypeIsConstantSize(type.InternalType())) {
 		// constant size type: read fixed amount of data from
-		auto column_size = GetTypeIdSize(GetType().InternalType()) * count;
+		auto column_size = GetTypeIdSize(type.InternalType()) * count;
 		auto ptr = unique_ptr<data_t[]>(new data_t[column_size]);
 		source.ReadData(ptr.get(), column_size);
 

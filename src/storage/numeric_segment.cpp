@@ -46,8 +46,8 @@ NumericSegment::NumericSegment(DatabaseInstance &db, PhysicalType type, idx_t ro
 		auto handle = buffer_manager.Pin(block);
 		// initialize masks to 1 for all vectors
 		for (idx_t i = 0; i < max_vector_count; i++) {
-			auto mask = (data_ptr_t *)(handle->node->buffer + (i * vector_size));
-			memset(mask, 0xFF, ValidityMask::STANDARD_MASK_SIZE);
+			ValidityMask mask(handle->node->buffer + (i * vector_size));
+			mask.SetAllValid(STANDARD_VECTOR_SIZE);
 		}
 	} else {
 		this->block = buffer_manager.RegisterBlock(block_id);
