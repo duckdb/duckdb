@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-source "$(dirname "$BASH_SOURCE[0]")/wasm_env.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/wasm_env.sh"
 
 DUCKDB_CC="${PROJECT_ROOT}/src/amalgamation/duckdb.cpp"
 DUCKDB_H="${PROJECT_ROOT}/src/amalgamation/duckdb.hpp"

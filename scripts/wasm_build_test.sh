@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-source "$(dirname "$BASH_SOURCE[0]")/wasm_env.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/wasm_env.sh"
 
 HELLO_WASM_CPP="${PROJECT_ROOT}/test/wasm/hello_wasm.cpp"
 

@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-source "$(dirname "$BASH_SOURCE[0]")/wasm_env.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/wasm_env.sh"
 
 curl --version \
     && { echo "[ OK  ] Command: curl"; } \
