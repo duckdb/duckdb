@@ -41,8 +41,8 @@ public:
 		return top_data.MaterializeHeapChunk(top_chunk, heap.get(), position, heap_size);
 	}
 
-	const idx_t limit;
-	const idx_t offset;
+	idx_t limit;
+	idx_t offset;
 	idx_t heap_size;
 	ExpressionExecutor executor;
 	vector<LogicalType> sort_types;
@@ -105,8 +105,7 @@ TopNHeap::Reduce() {
 
 class TopNGlobalState : public GlobalOperatorState {
 public:
-	TopNGlobalState(const vector<BoundOrderByNode>& orders, idx_t limit, idx_t offset)
-		: heap(orders, limit, offset) {
+	TopNGlobalState(const vector<BoundOrderByNode>& orders, idx_t limit, idx_t offset) : heap(orders, limit, offset) {
 	}
 	mutex lock;
 	TopNHeap heap;
@@ -114,8 +113,7 @@ public:
 
 class TopNLocalState : public LocalSinkState {
 public:
-	TopNLocalState(const vector<BoundOrderByNode>& orders, idx_t limit, idx_t offset)
-		: heap(orders, limit, offset) {
+	TopNLocalState(const vector<BoundOrderByNode>& orders, idx_t limit, idx_t offset) : heap(orders, limit, offset) {
 	}
 	TopNHeap heap;
 };
