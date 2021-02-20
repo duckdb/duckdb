@@ -3,7 +3,7 @@
 #include "duckdb/storage/storage_manager.hpp"
 
 #include "duckdb/common/exception.hpp"
-#include "concurrentqueue.h"
+#include "duckdb/parallel/concurrentqueue.hpp"
 
 namespace duckdb {
 
