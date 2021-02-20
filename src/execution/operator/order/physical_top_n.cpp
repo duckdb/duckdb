@@ -14,8 +14,8 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 class TopNHeap {
 public:
-	TopNHeap(const vector<BoundOrderByNode>& orders, idx_t limit, idx_t offset)
-		: limit(limit), offset(offset), heap_size(0) {
+	TopNHeap(const vector<BoundOrderByNode> &orders, idx_t limit, idx_t offset)
+	    : limit(limit), offset(offset), heap_size(0) {
 		for (auto &order : orders) {
 			auto &expr = order.expression;
 			sort_types.push_back(expr->return_type);
@@ -37,7 +37,7 @@ public:
 	void Combine(TopNHeap &other);
 	void Reduce();
 
-	idx_t MaterializeTopChunk(DataChunk& top_chunk, idx_t position) {
+	idx_t MaterializeTopChunk(DataChunk &top_chunk, idx_t position) {
 		return top_data.MaterializeHeapChunk(top_chunk, heap.get(), position, heap_size);
 	}
 
@@ -53,8 +53,7 @@ public:
 	unique_ptr<idx_t[]> heap;
 };
 
-void
-TopNHeap::Sink(DataChunk &input) {
+void TopNHeap::Sink(DataChunk &input) {
 	// compute the ordering values for the new chunk
 	DataChunk heap_chunk;
 	heap_chunk.Initialize(sort_types);
@@ -65,17 +64,15 @@ TopNHeap::Sink(DataChunk &input) {
 	Append(input, heap_chunk);
 }
 
-void
-TopNHeap::Combine(TopNHeap &other) {
+void TopNHeap::Combine(TopNHeap &other) {
 	for (idx_t i = 0; i < other.top_data.ChunkCount(); ++i) {
-		auto& top_chunk = other.top_data.GetChunk(i);
-		auto& heap_chunk = other.heap_data.GetChunk(i);
+		auto &top_chunk = other.top_data.GetChunk(i);
+		auto &heap_chunk = other.heap_data.GetChunk(i);
 		Append(top_chunk, heap_chunk);
 	}
 }
 
-void
-TopNHeap::Reduce() {
+void TopNHeap::Reduce() {
 	heap_size = (heap_data.Count() > offset) ? std::min(limit + offset, heap_data.Count()) : 0;
 	if (heap_size == 0) {
 		return;
@@ -87,25 +84,25 @@ TopNHeap::Reduce() {
 	// extract the top rows into new collections
 	ChunkCollection new_top;
 	ChunkCollection new_heap;
-    DataChunk top_chunk;
-    top_chunk.Initialize(top_data.Types());
-    DataChunk heap_chunk;
-    heap_chunk.Initialize(heap_data.Types());
+	DataChunk top_chunk;
+	top_chunk.Initialize(top_data.Types());
+	DataChunk heap_chunk;
+	heap_chunk.Initialize(heap_data.Types());
 	for (idx_t position = 0; position < heap_size;) {
-		(void) top_data.MaterializeHeapChunk(top_chunk, heap.get(), position, heap_size);
-        position = heap_data.MaterializeHeapChunk(heap_chunk, heap.get(), position, heap_size);
+		(void)top_data.MaterializeHeapChunk(top_chunk, heap.get(), position, heap_size);
+		position = heap_data.MaterializeHeapChunk(heap_chunk, heap.get(), position, heap_size);
 		new_top.Append(top_chunk);
 		new_heap.Append(heap_chunk);
 	}
 
 	// replace the old data
-    std::swap(top_data, new_top);
-    std::swap(heap_data, new_heap);
+	std::swap(top_data, new_top);
+	std::swap(heap_data, new_heap);
 }
 
 class TopNGlobalState : public GlobalOperatorState {
 public:
-	TopNGlobalState(const vector<BoundOrderByNode>& orders, idx_t limit, idx_t offset) : heap(orders, limit, offset) {
+	TopNGlobalState(const vector<BoundOrderByNode> &orders, idx_t limit, idx_t offset) : heap(orders, limit, offset) {
 	}
 	mutex lock;
 	TopNHeap heap;
@@ -113,7 +110,7 @@ public:
 
 class TopNLocalState : public LocalSinkState {
 public:
-	TopNLocalState(const vector<BoundOrderByNode>& orders, idx_t limit, idx_t offset) : heap(orders, limit, offset) {
+	TopNLocalState(const vector<BoundOrderByNode> &orders, idx_t limit, idx_t offset) : heap(orders, limit, offset) {
 	}
 	TopNHeap heap;
 };
@@ -133,8 +130,8 @@ void PhysicalTopN::Sink(ExecutionContext &context, GlobalOperatorState &state, L
                         DataChunk &input) {
 	// append to the local sink state
 	auto &sink = (TopNLocalState &)lstate;
-    sink.heap.Sink(input);
-    sink.heap.Reduce();
+	sink.heap.Sink(input);
+	sink.heap.Reduce();
 }
 
 //===--------------------------------------------------------------------===//
