@@ -93,6 +93,7 @@ CatalogEntry *SchemaCatalogEntry::CreateSequence(ClientContext &context, CreateS
 
 CatalogEntry *SchemaCatalogEntry::CreateTable(ClientContext &context, BoundCreateTableInfo *info) {
 	auto table = make_unique<TableCatalogEntry>(catalog, this, info);
+	table->storage->info->cardinality = table->storage->GetTotalRows();
 	return AddEntry(context, move(table), info->Base().on_conflict, info->dependencies);
 }
 

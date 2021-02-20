@@ -35,29 +35,36 @@ namespace duckdb {
               finished(false), recursive_cte(nullptr) {
     }
 
-    int Pipeline::GetProgress(ClientContext &context,PhysicalOperator * op) {
+    int Pipeline::GetProgress(ClientContext &context, PhysicalOperator *op) {
         switch (op->type) {
             case PhysicalOperatorType::TABLE_SCAN: {
                 auto &get = (PhysicalTableScan &) *op;
                 if (get.function.table_scan_progress) {
-                   return get.function.table_scan_progress(context, get.bind_data.get());
+                    return get.function.table_scan_progress(context, get.bind_data.get());
                 }
                 return -1;
             }
-            case PhysicalOperatorType::HASH_JOIN:{
-                auto &hash_join = (PhysicalHashJoin&) *op;
-                int lhs = GetProgress(context,op->children[0].get());
-                int rhs = GetProgress(context,op->children[1].get());
-                return (lhs+rhs)/2;
+            default:{
+                vector<idx_t> progress;
+                vector<idx_t> cardinality;
+                double total_cardinality = 0;
+                double cur_percentage = 0;
+                for (auto& op_child : op->children){
+                    progress.push_back(GetProgress(context, op_child.get()));
+                    cardinality.push_back(op_child->estimated_cardinality);
+                    total_cardinality+=op_child->estimated_cardinality;
+                }
+                for (size_t i = 0; i < progress.size(); i++){
+                    cur_percentage += progress[i]*cardinality[i]/total_cardinality;
+                }
+                return cur_percentage;
             }
-            default:
-                return -1;
         }
     }
 
     int Pipeline::GetProgress() {
         auto &client = executor.context;
-        return GetProgress(client,child);
+        return GetProgress(client, child);
     }
 
 

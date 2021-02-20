@@ -233,6 +233,11 @@ public:
     void ProgressBarThread() {
 //        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
         while (!StopRequested()) {
+            int cur_percentage = executor->GetPipelinesProgress();
+            if (cur_percentage == -1){
+                //!uh-oh this operator is not supported for the progressive bar
+                return;
+            }
             PrintProgress(executor->GetPipelinesProgress());
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
