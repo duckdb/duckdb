@@ -18,7 +18,7 @@ class PhysicalRecursiveCTE : public PhysicalOperator {
 public:
 	PhysicalRecursiveCTE(vector<LogicalType> types, bool union_all, unique_ptr<PhysicalOperator> top,
 	                     unique_ptr<PhysicalOperator> bottom);
-	~PhysicalRecursiveCTE();
+	~PhysicalRecursiveCTE() override;
 
 	bool union_all;
 	std::shared_ptr<ChunkCollection> working_table;

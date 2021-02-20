@@ -24,7 +24,7 @@ static DefaultView internal_views[] = {
     {"information_schema", "tables", "SELECT * FROM information_schema_tables()"},
     {nullptr, nullptr, nullptr}};
 
-static unique_ptr<CreateViewInfo> GetDefaultView(string schema, string name) {
+static unique_ptr<CreateViewInfo> GetDefaultView(const string &schema, const string &name) {
 	for (idx_t index = 0; internal_views[index].name != nullptr; index++) {
 		if (internal_views[index].schema == schema && internal_views[index].name == name) {
 			auto result = make_unique<CreateViewInfo>();

@@ -1,0 +1,53 @@
+# name: test/sql/copy/parquet/parquet_write_codecs.test
+# description: Parquet write with various codecs
+# group: [parquet]
+
+require parquet
+
+# codec uncompressed
+statement ok
+COPY (SELECT 42, 'hello') TO '__TEST_DIR__/uncompressed.parquet' (FORMAT 'parquet', CODEC 'UNCOMPRESSED');
+
+query II
+SELECT * FROM parquet_scan('__TEST_DIR__/uncompressed.parquet');
+----
+42	hello
+
+# codec snappy
+statement ok
+COPY (SELECT 42, 'hello') TO '__TEST_DIR__/snappy.parquet' (FORMAT 'parquet', CODEC 'SNAPPY');
+
+query II
+SELECT * FROM parquet_scan('__TEST_DIR__/snappy.parquet');
+----
+42	hello
+
+# codec gzip
+statement ok
+COPY (SELECT 42, 'hello') TO '__TEST_DIR__/gzip.parquet' (FORMAT 'parquet', CODEC 'GZIP');
+
+query II
+SELECT * FROM parquet_scan('__TEST_DIR__/gzip.parquet');
+----
+42	hello
+
+# codec zstd
+statement ok
+COPY (SELECT 42, 'hello') TO '__TEST_DIR__/zstd.parquet' (FORMAT 'parquet', CODEC 'ZSTD');
+
+query II
+SELECT * FROM parquet_scan('__TEST_DIR__/zstd.parquet');
+----
+42	hello
+
+# unsupported codec
+statement error
+COPY (SELECT 42, 'hello') TO '__TEST_DIR__/gzip.parquet' (FORMAT 'parquet', CODEC 'BLABLABLA');
+
+# empty codec
+statement error
+COPY (SELECT 42, 'hello') TO '__TEST_DIR__/gzip.parquet' (FORMAT 'parquet', CODEC);
+
+# integer codec
+statement error
+COPY (SELECT 42, 'hello') TO '__TEST_DIR__/gzip.parquet' (FORMAT 'parquet', CODEC 3);

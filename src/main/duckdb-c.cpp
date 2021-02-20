@@ -69,10 +69,11 @@ void duckdb_disconnect(duckdb_connection *connection) {
 	}
 }
 
-template <class T> void WriteData(duckdb_result *out, ChunkCollection &source, idx_t col) {
+template <class T>
+void WriteData(duckdb_result *out, ChunkCollection &source, idx_t col) {
 	idx_t row = 0;
 	auto target = (T *)out->columns[col].data;
-	for (auto &chunk : source.chunks) {
+	for (auto &chunk : source.Chunks()) {
 		auto source = FlatVector::GetData<T>(chunk->data[col]);
 		auto &nullmask = FlatVector::Nullmask(chunk->data[col]);
 
@@ -91,7 +92,7 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 		// no result to write to, only return the status
 		return result->success ? DuckDBSuccess : DuckDBError;
 	}
-	out->error_message = NULL;
+	out->error_message = nullptr;
 	if (!result->success) {
 		// write the error message
 		out->error_message = strdup(result->error.c_str());
@@ -100,7 +101,7 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 	// copy the data
 	// first write the meta data
 	out->column_count = result->types.size();
-	out->row_count = result->collection.count;
+	out->row_count = result->collection.Count();
 	out->columns = (duckdb_column *)malloc(sizeof(duckdb_column) * out->column_count);
 	if (!out->columns) {
 		return DuckDBError;
@@ -125,7 +126,7 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 	for (idx_t col = 0; col < out->column_count; col++) {
 		// first set the nullmask
 		idx_t row = 0;
-		for (auto &chunk : result->collection.chunks) {
+		for (auto &chunk : result->collection.Chunks()) {
 			for (idx_t k = 0; k < chunk->size(); k++) {
 				out->columns[col].nullmask[row++] = FlatVector::IsNull(chunk->data[col], k);
 			}
@@ -156,7 +157,7 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 		case LogicalTypeId::VARCHAR: {
 			idx_t row = 0;
 			auto target = (const char **)out->columns[col].data;
-			for (auto &chunk : result->collection.chunks) {
+			for (auto &chunk : result->collection.Chunks()) {
 				auto source = FlatVector::GetData<string_t>(chunk->data[col]);
 				for (idx_t k = 0; k < chunk->size(); k++) {
 					if (!FlatVector::IsNull(chunk->data[col], k)) {
@@ -171,10 +172,27 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 			}
 			break;
 		}
+		case LogicalTypeId::BLOB: {
+			idx_t row = 0;
+			auto target = (duckdb_blob *)out->columns[col].data;
+			for (auto &chunk : result->collection.Chunks()) {
+				auto source = FlatVector::GetData<string_t>(chunk->data[col]);
+				for (idx_t k = 0; k < chunk->size(); k++) {
+					if (!FlatVector::IsNull(chunk->data[col], k)) {
+						target[row].data = (char *)malloc(source[k].GetSize());
+						target[row].size = source[k].GetSize();
+						assert(target[row].data);
+						memcpy((void *)target[row].data, source[k].GetDataUnsafe(), source[k].GetSize());
+					}
+					row++;
+				}
+			}
+			break;
+		}
 		case LogicalTypeId::DATE: {
 			idx_t row = 0;
 			auto target = (duckdb_date *)out->columns[col].data;
-			for (auto &chunk : result->collection.chunks) {
+			for (auto &chunk : result->collection.Chunks()) {
 				auto source = FlatVector::GetData<date_t>(chunk->data[col]);
 				for (idx_t k = 0; k < chunk->size(); k++) {
 					if (!FlatVector::IsNull(chunk->data[col], k)) {
@@ -192,16 +210,16 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 		case LogicalTypeId::TIME: {
 			idx_t row = 0;
 			auto target = (duckdb_time *)out->columns[col].data;
-			for (auto &chunk : result->collection.chunks) {
+			for (auto &chunk : result->collection.Chunks()) {
 				auto source = FlatVector::GetData<dtime_t>(chunk->data[col]);
 				for (idx_t k = 0; k < chunk->size(); k++) {
 					if (!FlatVector::IsNull(chunk->data[col], k)) {
-						int32_t hour, min, sec, msec;
-						Time::Convert(source[k], hour, min, sec, msec);
+						int32_t hour, min, sec, micros;
+						Time::Convert(source[k], hour, min, sec, micros);
 						target[row].hour = hour;
 						target[row].min = min;
 						target[row].sec = sec;
-						target[row].msec = msec;
+						target[row].micros = micros;
 					}
 					row++;
 				}
@@ -211,7 +229,7 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 		case LogicalTypeId::TIMESTAMP: {
 			idx_t row = 0;
 			auto target = (duckdb_timestamp *)out->columns[col].data;
-			for (auto &chunk : result->collection.chunks) {
+			for (auto &chunk : result->collection.Chunks()) {
 				auto source = FlatVector::GetData<timestamp_t>(chunk->data[col]);
 				for (idx_t k = 0; k < chunk->size(); k++) {
 					if (!FlatVector::IsNull(chunk->data[col], k)) {
@@ -222,8 +240,8 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 						int32_t year, month, day;
 						Date::Convert(date, year, month, day);
 
-						int32_t hour, min, sec, msec;
-						Time::Convert(time, hour, min, sec, msec);
+						int32_t hour, min, sec, micros;
+						Time::Convert(time, hour, min, sec, micros);
 
 						target[row].date.year = year;
 						target[row].date.month = month;
@@ -231,7 +249,7 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 						target[row].time.hour = hour;
 						target[row].time.min = min;
 						target[row].time.sec = sec;
-						target[row].time.msec = msec;
+						target[row].time.micros = micros;
 					}
 					row++;
 				}
@@ -241,7 +259,7 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 		case LogicalTypeId::HUGEINT: {
 			idx_t row = 0;
 			auto target = (duckdb_hugeint *)out->columns[col].data;
-			for (auto &chunk : result->collection.chunks) {
+			for (auto &chunk : result->collection.Chunks()) {
 				auto source = FlatVector::GetData<hugeint_t>(chunk->data[col]);
 				for (idx_t k = 0; k < chunk->size(); k++) {
 					if (!FlatVector::IsNull(chunk->data[col], k)) {
@@ -256,13 +274,13 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 		case LogicalTypeId::INTERVAL: {
 			idx_t row = 0;
 			auto target = (duckdb_interval *)out->columns[col].data;
-			for (auto &chunk : result->collection.chunks) {
+			for (auto &chunk : result->collection.Chunks()) {
 				auto source = FlatVector::GetData<interval_t>(chunk->data[col]);
 				for (idx_t k = 0; k < chunk->size(); k++) {
 					if (!FlatVector::IsNull(chunk->data[col], k)) {
 						target[row].days = source[k].days;
 						target[row].months = source[k].months;
-						target[row].msecs = source[k].msecs;
+						target[row].micros = source[k].micros;
 					}
 					row++;
 				}
@@ -292,6 +310,14 @@ static void duckdb_destroy_column(duckdb_column column, idx_t count) {
 			for (idx_t i = 0; i < count; i++) {
 				if (data[i]) {
 					free(data[i]);
+				}
+			}
+		} else if (column.type == DUCKDB_TYPE_BLOB) {
+			// blob, delete individual blobs
+			auto data = (duckdb_blob *)column.data;
+			for (idx_t i = 0; i < count; i++) {
+				if (data[i].data) {
+					free((void *)data[i].data);
 				}
 			}
 		}
@@ -341,7 +367,7 @@ duckdb_state duckdb_prepare(duckdb_connection connection, const char *query,
 
 duckdb_state duckdb_nparams(duckdb_prepared_statement prepared_statement, idx_t *nparams_out) {
 	auto wrapper = (PreparedStatementWrapper *)prepared_statement;
-	if (!wrapper || !wrapper->statement || !wrapper->statement->success || wrapper->statement->is_invalidated) {
+	if (!wrapper || !wrapper->statement || !wrapper->statement->success) {
 		return DuckDBError;
 	}
 	*nparams_out = wrapper->statement->n_param;
@@ -350,7 +376,7 @@ duckdb_state duckdb_nparams(duckdb_prepared_statement prepared_statement, idx_t 
 
 static duckdb_state duckdb_bind_value(duckdb_prepared_statement prepared_statement, idx_t param_idx, Value val) {
 	auto wrapper = (PreparedStatementWrapper *)prepared_statement;
-	if (!wrapper || !wrapper->statement || !wrapper->statement->success || wrapper->statement->is_invalidated) {
+	if (!wrapper || !wrapper->statement || !wrapper->statement->success) {
 		return DuckDBError;
 	}
 	if (param_idx > wrapper->statement->n_param) {
@@ -395,13 +421,23 @@ duckdb_state duckdb_bind_varchar(duckdb_prepared_statement prepared_statement, i
 	return duckdb_bind_value(prepared_statement, param_idx, Value(val));
 }
 
+duckdb_state duckdb_bind_varchar_length(duckdb_prepared_statement prepared_statement, idx_t param_idx, const char *val,
+                                        idx_t length) {
+	return duckdb_bind_value(prepared_statement, param_idx, Value(string(val, length)));
+}
+
+duckdb_state duckdb_bind_blob(duckdb_prepared_statement prepared_statement, idx_t param_idx, const void *data,
+                              idx_t length) {
+	return duckdb_bind_value(prepared_statement, param_idx, Value::BLOB((const_data_ptr_t)data, length));
+}
+
 duckdb_state duckdb_bind_null(duckdb_prepared_statement prepared_statement, idx_t param_idx) {
 	return duckdb_bind_value(prepared_statement, param_idx, Value());
 }
 
 duckdb_state duckdb_execute_prepared(duckdb_prepared_statement prepared_statement, duckdb_result *out_result) {
 	auto wrapper = (PreparedStatementWrapper *)prepared_statement;
-	if (!wrapper || !wrapper->statement || !wrapper->statement->success || wrapper->statement->is_invalidated) {
+	if (!wrapper || !wrapper->statement || !wrapper->statement->success) {
 		return DuckDBError;
 	}
 	auto result = wrapper->statement->Execute(wrapper->values, false);
@@ -447,6 +483,8 @@ duckdb_type ConvertCPPTypeToC(LogicalType sql_type) {
 		return DUCKDB_TYPE_TIME;
 	case LogicalTypeId::VARCHAR:
 		return DUCKDB_TYPE_VARCHAR;
+	case LogicalTypeId::BLOB:
+		return DUCKDB_TYPE_BLOB;
 	case LogicalTypeId::INTERVAL:
 		return DUCKDB_TYPE_INTERVAL;
 	default:
@@ -480,6 +518,8 @@ idx_t GetCTypeSize(duckdb_type type) {
 		return sizeof(duckdb_timestamp);
 	case DUCKDB_TYPE_VARCHAR:
 		return sizeof(const char *);
+	case DUCKDB_TYPE_BLOB:
+		return sizeof(duckdb_blob);
 	case DUCKDB_TYPE_INTERVAL:
 		return sizeof(duckdb_interval);
 	default:
@@ -489,7 +529,8 @@ idx_t GetCTypeSize(duckdb_type type) {
 	}
 }
 
-template <class T> T UnsafeFetch(duckdb_result *result, idx_t col, idx_t row) {
+template <class T>
+T UnsafeFetch(duckdb_result *result, idx_t col, idx_t row) {
 	D_ASSERT(row < result->row_count);
 	return ((T *)result->columns[col].data)[row];
 }
@@ -525,12 +566,12 @@ static Value GetCValue(duckdb_result *result, idx_t col, idx_t row) {
 	}
 	case DUCKDB_TYPE_TIME: {
 		auto time = UnsafeFetch<duckdb_time>(result, col, row);
-		return Value::TIME(time.hour, time.min, time.sec, time.msec);
+		return Value::TIME(time.hour, time.min, time.sec, time.micros);
 	}
 	case DUCKDB_TYPE_TIMESTAMP: {
 		auto timestamp = UnsafeFetch<duckdb_timestamp>(result, col, row);
 		return Value::TIMESTAMP(timestamp.date.year, timestamp.date.month, timestamp.date.day, timestamp.time.hour,
-		                        timestamp.time.min, timestamp.time.sec, timestamp.time.msec);
+		                        timestamp.time.min, timestamp.time.sec, timestamp.time.micros);
 	}
 	case DUCKDB_TYPE_HUGEINT: {
 		hugeint_t val;
@@ -544,11 +585,15 @@ static Value GetCValue(duckdb_result *result, idx_t col, idx_t row) {
 		auto interval = UnsafeFetch<duckdb_interval>(result, col, row);
 		val.days = interval.days;
 		val.months = interval.months;
-		val.msecs = interval.msecs;
+		val.micros = interval.micros;
 		return Value::INTERVAL(val);
 	}
 	case DUCKDB_TYPE_VARCHAR:
 		return Value(string(UnsafeFetch<const char *>(result, col, row)));
+	case DUCKDB_TYPE_BLOB: {
+		auto blob = UnsafeFetch<duckdb_blob>(result, col, row);
+		return Value::BLOB((const_data_ptr_t)blob.data, blob.size);
+	}
 	default:
 		// invalid type for C to C++ conversion
 		D_ASSERT(0);
@@ -558,7 +603,7 @@ static Value GetCValue(duckdb_result *result, idx_t col, idx_t row) {
 
 const char *duckdb_column_name(duckdb_result *result, idx_t col) {
 	if (!result || col >= result->column_count) {
-		return NULL;
+		return nullptr;
 	}
 	return result->columns[col].name;
 }
@@ -629,4 +674,18 @@ double duckdb_value_double(duckdb_result *result, idx_t col, idx_t row) {
 char *duckdb_value_varchar(duckdb_result *result, idx_t col, idx_t row) {
 	Value val = GetCValue(result, col, row);
 	return strdup(val.ToString().c_str());
+}
+
+duckdb_blob duckdb_value_blob(duckdb_result *result, idx_t col, idx_t row) {
+	duckdb_blob blob;
+	Value val = GetCValue(result, col, row).CastAs(LogicalType::BLOB);
+	if (val.is_null) {
+		blob.data = nullptr;
+		blob.size = 0;
+	} else {
+		blob.data = malloc(val.str_value.size());
+		memcpy((void *)blob.data, val.str_value.c_str(), val.str_value.size());
+		blob.size = val.str_value.size();
+	}
+	return blob;
 }

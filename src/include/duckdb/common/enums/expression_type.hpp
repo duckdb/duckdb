@@ -55,6 +55,8 @@ enum class ExpressionType : uint8_t {
 	COMPARE_BETWEEN = 38,
 	COMPARE_NOT_BETWEEN = 39,
 	COMPARE_BOUNDARY_END = COMPARE_NOT_BETWEEN,
+	// IS NOT DISTINCT FROM operator
+	COMPARE_NOT_DISTINCT_FROM = 40,
 
 	// -----------------------------
 	// Conjunction Operators
@@ -129,11 +131,11 @@ enum class ExpressionType : uint8_t {
 	// Miscellaneous
 	// -----------------------------
 	CAST = 225,
-	COMMON_SUBEXPRESSION = 226,
 	BOUND_REF = 227,
 	BOUND_COLUMN_REF = 228,
 	BOUND_UNNEST = 229,
-	COLLATE = 230
+	COLLATE = 230,
+	LAMBDA = 231
 };
 
 //===--------------------------------------------------------------------===//
@@ -160,6 +162,7 @@ enum class ExpressionClass : uint8_t {
 	WINDOW = 14,
 	PARAMETER = 15,
 	COLLATE = 16,
+	LAMBDA = 17,
 	//===--------------------------------------------------------------------===//
 	// Bound Expressions
 	//===--------------------------------------------------------------------===//
@@ -182,8 +185,7 @@ enum class ExpressionClass : uint8_t {
 	//===--------------------------------------------------------------------===//
 	// Miscellaneous
 	//===--------------------------------------------------------------------===//
-	BOUND_EXPRESSION = 50,
-	COMMON_SUBEXPRESSION = 51
+	BOUND_EXPRESSION = 50
 };
 
 string ExpressionTypeToString(ExpressionType type);

@@ -5,8 +5,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/storage/data_table.hpp"
-
-using namespace std;
+#include "duckdb/common/to_string.hpp"
 
 namespace duckdb {
 
@@ -31,7 +30,7 @@ public:
 	void Append(DataChunk &top_chunk, DataChunk &heap_chunk) {
 		top_data.Append(top_chunk);
 		heap_data.Append(heap_chunk);
-		D_ASSERT(heap_data.count == top_data.count);
+		D_ASSERT(heap_data.Count() == top_data.Count());
 	}
 
 	void Sink(DataChunk &input);
@@ -68,16 +67,16 @@ TopNHeap::Sink(DataChunk &input) {
 
 void
 TopNHeap::Combine(TopNHeap &other) {
-	for (idx_t i = 0; i < other.top_data.chunks.size(); ++i) {
-		auto& top_chunk = *other.top_data.chunks[i];
-		auto& heap_chunk = *other.heap_data.chunks[i];
+	for (idx_t i = 0; i < other.top_data.ChunkCount(); ++i) {
+		auto& top_chunk = other.top_data.GetChunk(i);
+		auto& heap_chunk = other.heap_data.GetChunk(i);
 		Append(top_chunk, heap_chunk);
 	}
 }
 
 void
 TopNHeap::Reduce() {
-	heap_size = (heap_data.count > offset) ? min(limit + offset, heap_data.count) : 0;
+	heap_size = (heap_data.Count() > offset) ? std::min(limit + offset, heap_data.Count()) : 0;
 	if (heap_size == 0) {
 		return;
 	}
@@ -89,9 +88,9 @@ TopNHeap::Reduce() {
 	ChunkCollection new_top;
 	ChunkCollection new_heap;
     DataChunk top_chunk;
-    top_chunk.Initialize(top_data.types);
+    top_chunk.Initialize(top_data.Types());
     DataChunk heap_chunk;
-    heap_chunk.Initialize(heap_data.types);
+    heap_chunk.Initialize(heap_data.Types());
 	for (idx_t position = 0; position < heap_size;) {
 		(void) top_data.MaterializeHeapChunk(top_chunk, heap.get(), position, heap_size);
         position = heap_data.MaterializeHeapChunk(heap_chunk, heap.get(), position, heap_size);
@@ -100,8 +99,8 @@ TopNHeap::Reduce() {
 	}
 
 	// replace the old data
-    swap(top_data, new_top);
-    swap(heap_data, new_heap);
+    std::swap(top_data, new_top);
+    std::swap(heap_data, new_heap);
 }
 
 class TopNGlobalState : public GlobalOperatorState {
@@ -143,9 +142,9 @@ void PhysicalTopN::Sink(ExecutionContext &context, GlobalOperatorState &state, L
 //===--------------------------------------------------------------------===//
 // Combine
 //===--------------------------------------------------------------------===//
-void PhysicalTopN::Combine(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_) {
+void PhysicalTopN::Combine(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_p) {
 	auto &gstate = (TopNGlobalState &)state;
-	auto &lstate = (TopNLocalState &)lstate_;
+	auto &lstate = (TopNLocalState &)lstate_p;
 
 	// scan the local top N and append it to the global heap
 	lock_guard<mutex> glock(gstate.lock);
@@ -175,8 +174,8 @@ public:
 	idx_t position;
 };
 
-void PhysicalTopN::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
-	auto &state = (PhysicalTopNOperatorState &)*state_;
+void PhysicalTopN::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
+	auto &state = (PhysicalTopNOperatorState &)*state_p;
 	auto &gstate = (TopNGlobalState &)*sink_state;
 
 	if (state.position >= gstate.heap.heap_size) {
@@ -194,10 +193,10 @@ unique_ptr<PhysicalOperatorState> PhysicalTopN::GetOperatorState() {
 
 string PhysicalTopN::ParamsToString() const {
 	string result;
-	result += "Top " + std::to_string(limit);
+	result += "Top " + to_string(limit);
 	if (offset > 0) {
 		result += "\n";
-		result += "Offset " + std::to_string(offset);
+		result += "Offset " + to_string(offset);
 	}
 	result += "\n[INFOSEPARATOR]";
 	for (idx_t i = 0; i < orders.size(); i++) {

@@ -38,7 +38,7 @@ string TableRelation::ToString(idx_t depth) {
 	return RenderWhitespace(depth) + "Scan Table [" + description->table + "]";
 }
 
-static unique_ptr<ParsedExpression> ParseCondition(string condition) {
+static unique_ptr<ParsedExpression> ParseCondition(const string &condition) {
 	if (!condition.empty()) {
 		auto expression_list = Parser::ParseExpressionList(condition);
 		if (expression_list.size() != 1) {
@@ -50,7 +50,7 @@ static unique_ptr<ParsedExpression> ParseCondition(string condition) {
 	}
 }
 
-void TableRelation::Update(string update_list, string condition) {
+void TableRelation::Update(const string &update_list, const string &condition) {
 	vector<string> update_columns;
 	vector<unique_ptr<ParsedExpression>> expressions;
 	auto cond = ParseCondition(condition);
@@ -60,7 +60,7 @@ void TableRelation::Update(string update_list, string condition) {
 	update->Execute();
 }
 
-void TableRelation::Delete(string condition) {
+void TableRelation::Delete(const string &condition) {
 	auto cond = ParseCondition(condition);
 	auto del = make_shared<DeleteRelation>(context, move(cond), description->schema, description->table);
 	del->Execute();

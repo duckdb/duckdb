@@ -12,8 +12,6 @@
 #include <iostream>
 #include <utility>
 
-using namespace std;
-
 namespace duckdb {
 
 class PhysicalIndexJoinOperatorState : public PhysicalOperatorState {
@@ -41,11 +39,11 @@ public:
 PhysicalIndexJoin::PhysicalIndexJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
                                      unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
                                      const vector<idx_t> &left_projection_map, vector<idx_t> right_projection_map,
-                                     vector<column_t> column_ids_, Index *index, bool lhs_first)
+                                     vector<column_t> column_ids_p, Index *index, bool lhs_first)
     : PhysicalOperator(PhysicalOperatorType::INDEX_JOIN, move(op.types)), left_projection_map(left_projection_map),
       right_projection_map(move(right_projection_map)), index(index), conditions(move(cond)), join_type(join_type),
       lhs_first(lhs_first) {
-	column_ids = move(column_ids_);
+	column_ids = move(column_ids_p);
 	children.push_back(move(left));
 	children.push_back(move(right));
 	for (auto &condition : conditions) {
@@ -55,7 +53,7 @@ PhysicalIndexJoin::PhysicalIndexJoin(LogicalOperator &op, unique_ptr<PhysicalOpe
 	for (auto &index_id : index->column_ids) {
 		index_ids.insert(index_id);
 	}
-	for (size_t column_id = 0; column_id < column_ids.size(); column_id++) {
+	for (idx_t column_id = 0; column_id < column_ids.size(); column_id++) {
 		auto it = index_ids.find(column_ids[column_id]);
 		if (it == index_ids.end()) {
 			fetch_ids.push_back(column_ids[column_id]);
@@ -64,7 +62,7 @@ PhysicalIndexJoin::PhysicalIndexJoin(LogicalOperator &op, unique_ptr<PhysicalOpe
 	}
 }
 
-void PhysicalIndexJoin::Output(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalIndexJoin::Output(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
 	auto &transaction = Transaction::GetTransaction(context.client);
 	auto &phy_tbl_scan = (PhysicalTableScan &)*children[1];
 	auto &bind_tbl = (TableScanBindData &)*phy_tbl_scan.bind_data;
@@ -73,9 +71,9 @@ void PhysicalIndexJoin::Output(ExecutionContext &context, DataChunk &chunk, Phys
 	idx_t rhs_column_idx = 0;
 	SelectionVector sel;
 	sel.Initialize(STANDARD_VECTOR_SIZE);
-	size_t output_sel_idx{};
+	idx_t output_sel_idx = 0;
 	vector<row_t> fetch_rows;
-	auto state = reinterpret_cast<PhysicalIndexJoinOperatorState *>(state_);
+	auto state = reinterpret_cast<PhysicalIndexJoinOperatorState *>(state_p);
 	while (output_sel_idx < STANDARD_VECTOR_SIZE && state->lhs_idx < state->child_chunk.size()) {
 		if (state->rhs_idx < state->result_sizes[state->lhs_idx]) {
 			sel.set_index(output_sel_idx++, state->lhs_idx);
@@ -92,13 +90,13 @@ void PhysicalIndexJoin::Output(ExecutionContext &context, DataChunk &chunk, Phys
 	}
 	//! Now we fetch the RHS data
 	if (!fetch_types.empty()) {
-		if (fetch_rows.size() == 0) {
+		if (fetch_rows.empty()) {
 			return;
 		}
 		rhs_chunk.Initialize(fetch_types);
 		ColumnFetchState fetch_state;
 		Vector row_ids;
-		row_ids.type = LOGICAL_ROW_TYPE;
+		row_ids.SetType(LOGICAL_ROW_TYPE);
 		FlatVector::SetData(row_ids, (data_ptr_t)&fetch_rows[0]);
 		tbl->Fetch(transaction, rhs_chunk, fetch_ids, row_ids, output_sel_idx, fetch_state);
 	}
@@ -124,8 +122,8 @@ void PhysicalIndexJoin::Output(ExecutionContext &context, DataChunk &chunk, Phys
 	chunk.SetCardinality(state->result_size);
 }
 
-void PhysicalIndexJoin::GetRHSMatches(ExecutionContext &context, PhysicalOperatorState *state_) const {
-	auto state = reinterpret_cast<PhysicalIndexJoinOperatorState *>(state_);
+void PhysicalIndexJoin::GetRHSMatches(ExecutionContext &context, PhysicalOperatorState *state_p) const {
+	auto state = reinterpret_cast<PhysicalIndexJoinOperatorState *>(state_p);
 	auto &art = (ART &)*index;
 	auto &transaction = Transaction::GetTransaction(context.client);
 	for (idx_t i = 0; i < state->child_chunk.size(); i++) {
@@ -137,7 +135,7 @@ void PhysicalIndexJoin::GetRHSMatches(ExecutionContext &context, PhysicalOperato
 				//! Nothing to materialize
 				art.SearchEqualJoinNoFetch(equal_value, state->result_sizes[i]);
 			} else {
-				art.SearchEqual((ARTIndexScanState *)index_state.get(), (size_t)-1, state->rhs_rows[i]);
+				art.SearchEqual((ARTIndexScanState *)index_state.get(), (idx_t)-1, state->rhs_rows[i]);
 				state->result_sizes[i] = state->rhs_rows[i].size();
 			}
 		} else {
@@ -151,8 +149,8 @@ void PhysicalIndexJoin::GetRHSMatches(ExecutionContext &context, PhysicalOperato
 	}
 }
 
-void PhysicalIndexJoin::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
-	auto state = reinterpret_cast<PhysicalIndexJoinOperatorState *>(state_);
+void PhysicalIndexJoin::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
+	auto state = reinterpret_cast<PhysicalIndexJoinOperatorState *>(state_p);
 	if (!state->lock.index_lock) {
 		index->InitializeLock(state->lock);
 	}
@@ -172,11 +170,11 @@ void PhysicalIndexJoin::GetChunkInternal(ExecutionContext &context, DataChunk &c
 		}
 		//! Fill Matches for the current LHS chunk
 		if (state->lhs_idx == 0 && state->rhs_idx == 0) {
-			GetRHSMatches(context, state_);
+			GetRHSMatches(context, state_p);
 		}
 		//! Output vectors
 		if (state->lhs_idx < state->child_chunk.size()) {
-			Output(context, chunk, state_);
+			Output(context, chunk, state_p);
 		}
 	}
 }
@@ -189,7 +187,7 @@ unique_ptr<PhysicalOperatorState> PhysicalIndexJoin::GetOperatorState() {
 		}
 	}
 	if (left_projection_map.empty()) {
-		for (column_t i = 0; i < state->child_chunk.column_count(); i++) {
+		for (column_t i = 0; i < state->child_chunk.ColumnCount(); i++) {
 			left_projection_map.push_back(i);
 		}
 	}

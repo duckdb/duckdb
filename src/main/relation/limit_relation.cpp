@@ -2,6 +2,7 @@
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/common/to_string.hpp"
 
 namespace duckdb {
 
@@ -33,9 +34,9 @@ const vector<ColumnDefinition> &LimitRelation::Columns() {
 }
 
 string LimitRelation::ToString(idx_t depth) {
-	string str = RenderWhitespace(depth) + "Limit " + std::to_string(limit);
+	string str = RenderWhitespace(depth) + "Limit " + to_string(limit);
 	if (offset > 0) {
-		str += " Offset " + std::to_string(offset);
+		str += " Offset " + to_string(offset);
 	}
 	str += "\n";
 	return str + child->ToString(depth + 1);

@@ -2,7 +2,6 @@
 #include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
-using namespace std;
 
 BoundOperatorExpression::BoundOperatorExpression(ExpressionType type, LogicalType return_type)
     : Expression(type, ExpressionClass::BOUND_OPERATOR, move(return_type)) {
@@ -26,11 +25,11 @@ string BoundOperatorExpression::ToString() const {
 	return result;
 }
 
-bool BoundOperatorExpression::Equals(const BaseExpression *other_) const {
-	if (!Expression::Equals(other_)) {
+bool BoundOperatorExpression::Equals(const BaseExpression *other_p) const {
+	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto other = (BoundOperatorExpression *)other_;
+	auto other = (BoundOperatorExpression *)other_p;
 	if (children.size() != other->children.size()) {
 		return false;
 	}

@@ -16,7 +16,7 @@ namespace duckdb {
 // date_part('year', x) => year(x))
 class DatePartSimplificationRule : public Rule {
 public:
-	DatePartSimplificationRule(ExpressionRewriter &rewriter);
+	explicit DatePartSimplificationRule(ExpressionRewriter &rewriter);
 
 	unique_ptr<Expression> Apply(LogicalOperator &op, vector<Expression *> &bindings, bool &changes_made) override;
 };

@@ -9,8 +9,6 @@
 
 #include <set>
 
-using namespace std;
-
 namespace duckdb {
 
 struct InformationSchemaColumnsData : public FunctionOperatorData {
@@ -22,65 +20,65 @@ struct InformationSchemaColumnsData : public FunctionOperatorData {
 	idx_t column_offset;
 };
 
-static unique_ptr<FunctionData> information_schema_columns_bind(ClientContext &context, vector<Value> &inputs,
-                                                                unordered_map<string, Value> &named_parameters,
-                                                                vector<LogicalType> &return_types,
-                                                                vector<string> &names) {
-	names.push_back("table_catalog");
+static unique_ptr<FunctionData> InformationSchemaColumnsBind(ClientContext &context, vector<Value> &inputs,
+                                                             unordered_map<string, Value> &named_parameters,
+                                                             vector<LogicalType> &return_types, vector<string> &names) {
+	names.emplace_back("table_catalog");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("table_schema");
+	names.emplace_back("table_schema");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("table_name");
+	names.emplace_back("table_name");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("column_name");
+	names.emplace_back("column_name");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("ordinal_position");
+	names.emplace_back("ordinal_position");
 	return_types.push_back(LogicalType::INTEGER);
 
-	names.push_back("column_default");
+	names.emplace_back("column_default");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("is_nullable"); // YES/NO
+	names.emplace_back("is_nullable"); // YES/NO
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("data_type");
+	names.emplace_back("data_type");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("character_maximum_length");
+	names.emplace_back("character_maximum_length");
 	return_types.push_back(LogicalType::INTEGER);
 
-	names.push_back("character_octet_length");
+	names.emplace_back("character_octet_length");
 	return_types.push_back(LogicalType::INTEGER);
 
-	names.push_back("numeric_precision");
+	names.emplace_back("numeric_precision");
 	return_types.push_back(LogicalType::INTEGER);
 
-	names.push_back("numeric_scale");
+	names.emplace_back("numeric_scale");
 	return_types.push_back(LogicalType::INTEGER);
 
-	names.push_back("datetime_precision");
+	names.emplace_back("datetime_precision");
 	return_types.push_back(LogicalType::INTEGER);
 
 	return nullptr;
 }
 
-unique_ptr<FunctionOperatorData>
-information_schema_columns_init(ClientContext &context, const FunctionData *bind_data, vector<column_t> &column_ids,
-                                unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+unique_ptr<FunctionOperatorData> InformationSchemaColumnsInit(ClientContext &context, const FunctionData *bind_data,
+                                                              vector<column_t> &column_ids,
+                                                              TableFilterCollection *filters) {
 	auto result = make_unique<InformationSchemaColumnsData>();
 
 	// scan all the schemas for tables and views and collect them
 	Catalog::GetCatalog(context).schemas->Scan(context, [&](CatalogEntry *entry) {
 		auto schema = (SchemaCatalogEntry *)entry;
-		schema->tables.Scan(context, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
+		schema->Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	});
 
 	// check the temp schema as well
-	context.temporary_objects->tables.Scan(context, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
+	context.temporary_objects->Scan(context, CatalogType::TABLE_ENTRY,
+	                                [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	return move(result);
 }
 
@@ -105,7 +103,7 @@ public:
 
 class TableColumnHelper : public ColumnHelper {
 public:
-	TableColumnHelper(TableCatalogEntry *entry) : entry(entry) {
+	explicit TableColumnHelper(TableCatalogEntry *entry) : entry(entry) {
 		for (auto &constraint : entry->constraints) {
 			if (constraint->type == ConstraintType::NOT_NULL) {
 				auto &not_null = *reinterpret_cast<NotNullConstraint *>(constraint.get());
@@ -114,54 +112,54 @@ public:
 		}
 	}
 
-	StandardEntry *Entry() {
+	StandardEntry *Entry() override {
 		return entry;
 	}
-	idx_t NumColumns() {
+	idx_t NumColumns() override {
 		return entry->columns.size();
 	}
-	const string &ColumnName(idx_t col) {
+	const string &ColumnName(idx_t col) override {
 		return entry->columns[col].name;
 	}
-	const LogicalType &ColumnType(idx_t col) {
+	const LogicalType &ColumnType(idx_t col) override {
 		return entry->columns[col].type;
 	}
-	const Value ColumnDefault(idx_t col) {
+	const Value ColumnDefault(idx_t col) override {
 		if (entry->columns[col].default_value) {
 			return Value(entry->columns[col].default_value->ToString());
 		}
 		return Value();
 	}
-	bool IsNullable(idx_t col) {
+	bool IsNullable(idx_t col) override {
 		return not_null_cols.find(col) == not_null_cols.end();
 	}
 
 private:
 	TableCatalogEntry *entry;
-	set<idx_t> not_null_cols;
+	std::set<idx_t> not_null_cols;
 };
 
 class ViewColumnHelper : public ColumnHelper {
 public:
-	ViewColumnHelper(ViewCatalogEntry *entry) : entry(entry) {
+	explicit ViewColumnHelper(ViewCatalogEntry *entry) : entry(entry) {
 	}
 
-	StandardEntry *Entry() {
+	StandardEntry *Entry() override {
 		return entry;
 	}
-	idx_t NumColumns() {
+	idx_t NumColumns() override {
 		return entry->types.size();
 	}
-	const string &ColumnName(idx_t col) {
+	const string &ColumnName(idx_t col) override {
 		return entry->aliases[col];
 	}
-	const LogicalType &ColumnType(idx_t col) {
+	const LogicalType &ColumnType(idx_t col) override {
 		return entry->types[col];
 	}
-	const Value ColumnDefault(idx_t col) {
+	const Value ColumnDefault(idx_t col) override {
 		return Value();
 	}
-	bool IsNullable(idx_t col) {
+	bool IsNullable(idx_t col) override {
 		return true;
 	}
 
@@ -176,7 +174,7 @@ unique_ptr<ColumnHelper> ColumnHelper::Create(CatalogEntry *entry) {
 	case CatalogType::VIEW_ENTRY:
 		return make_unique<ViewColumnHelper>((ViewCatalogEntry *)entry);
 	default:
-		throw new NotImplementedException("Unsupported catalog type for information_schema_columns");
+		throw NotImplementedException("Unsupported catalog type for information_schema_columns");
 	}
 }
 
@@ -276,8 +274,8 @@ void ColumnHelper::WriteColumns(idx_t start_index, idx_t start_col, idx_t end_co
 
 } // anonymous namespace
 
-void information_schema_columns(ClientContext &context, const FunctionData *bind_data,
-                                FunctionOperatorData *operator_state, DataChunk &output) {
+void InformationSchemaColumnsFunction(ClientContext &context, const FunctionData *bind_data,
+                                      FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &data = (InformationSchemaColumnsData &)*operator_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
@@ -319,8 +317,8 @@ void information_schema_columns(ClientContext &context, const FunctionData *bind
 }
 
 void InformationSchemaColumns::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("information_schema_columns", {}, information_schema_columns,
-	                              information_schema_columns_bind, information_schema_columns_init));
+	set.AddFunction(TableFunction("information_schema_columns", {}, InformationSchemaColumnsFunction,
+	                              InformationSchemaColumnsBind, InformationSchemaColumnsInit));
 }
 
 } // namespace duckdb

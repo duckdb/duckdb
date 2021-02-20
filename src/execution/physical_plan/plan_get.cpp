@@ -7,18 +7,15 @@
 #include "duckdb/function/table/table_scan.hpp"
 
 namespace duckdb {
-using namespace std;
 
-unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
-	D_ASSERT(op.children.empty());
-
+unique_ptr<TableFilterSet> FindColumnIndex(vector<TableFilter> &table_filters, vector<column_t> &column_ids) {
 	// create the table filter map
-	unordered_map<idx_t, vector<TableFilter>> table_filter_umap;
-	for (auto &tableFilter : op.tableFilters) {
+	auto table_filter_set = make_unique<TableFilterSet>();
+	for (auto &table_filter : table_filters) {
 		// find the relative column index from the absolute column index into the table
 		idx_t column_index = INVALID_INDEX;
-		for (idx_t i = 0; i < op.column_ids.size(); i++) {
-			if (tableFilter.column_index == op.column_ids[i]) {
+		for (idx_t i = 0; i < column_ids.size(); i++) {
+			if (table_filter.column_index == column_ids[i]) {
 				column_index = i;
 				break;
 			}
@@ -26,13 +23,22 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 		if (column_index == INVALID_INDEX) {
 			throw InternalException("Could not find column index for table filter");
 		}
-		tableFilter.column_index = column_index;
-		auto filter = table_filter_umap.find(column_index);
-		if (filter != table_filter_umap.end()) {
-			filter->second.push_back(tableFilter);
+		table_filter.column_index = column_index;
+		auto filter = table_filter_set->filters.find(column_index);
+		if (filter != table_filter_set->filters.end()) {
+			filter->second.push_back(table_filter);
 		} else {
-			table_filter_umap.insert(make_pair(column_index, vector<TableFilter>{tableFilter}));
+			table_filter_set->filters.insert(make_pair(column_index, vector<TableFilter> {table_filter}));
 		}
+	}
+	return table_filter_set;
+}
+unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
+	D_ASSERT(op.children.empty());
+
+	unique_ptr<TableFilterSet> table_filters;
+	if (!op.table_filters.empty()) {
+		table_filters = FindColumnIndex(op.table_filters, op.column_ids);
 	}
 
 	if (op.function.dependency) {
@@ -42,7 +48,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 	if (!op.function.projection_pushdown) {
 		// function does not support projection pushdown
 		auto node = make_unique<PhysicalTableScan>(op.returned_types, op.function, move(op.bind_data), op.column_ids,
-		                                           op.names, move(table_filter_umap));
+		                                           op.names, move(table_filters));
 		// first check if an additional projection is necessary
 		if (op.column_ids.size() == op.returned_types.size()) {
 			bool projection_necessary = false;
@@ -76,7 +82,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 		return move(projection);
 	} else {
 		return make_unique<PhysicalTableScan>(op.types, op.function, move(op.bind_data), op.column_ids, op.names,
-		                                      move(table_filter_umap));
+		                                      move(table_filters));
 	}
 }
 

@@ -15,13 +15,13 @@ typedef uint64_t u64;
 typedef int64_t sqlite3_int64;
 typedef uint64_t sqlite_uint64;
 
-#define sqlite3Malloc malloc
-#define sqlite3_free free
+#define sqlite3Malloc     malloc
+#define sqlite3_free      free
 #define sqlite3_realloc64 realloc
-#define sqlite3IsNaN isnan
+#define sqlite3IsNaN      isnan
 
-#define ArraySize(X) ((int)(sizeof(X) / sizeof(X[0])))
-#define LARGEST_INT64 (0xffffffff | (((i64)0x7fffffff) << 32))
+#define ArraySize(X)   ((int)(sizeof(X) / sizeof(X[0])))
+#define LARGEST_INT64  (0xffffffff | (((i64)0x7fffffff) << 32))
 #define SMALLEST_INT64 (((i64)-1) - LARGEST_INT64)
 
 #include <assert.h>

@@ -8,17 +8,17 @@
 #include "duckdb/common/types/null_value.hpp"
 
 namespace duckdb {
-using namespace std;
 
 struct HashOp {
-	template <class T> static inline hash_t Operation(T input, bool is_null) {
+	template <class T>
+	static inline hash_t Operation(T input, bool is_null) {
 		return duckdb::Hash<T>(is_null ? duckdb::NullValue<T>() : input);
 	}
 };
 
 template <bool HAS_RSEL, class T>
-static inline void tight_loop_hash(T *__restrict ldata, hash_t *__restrict result_data, const SelectionVector *rsel,
-                                   idx_t count, const SelectionVector *__restrict sel_vector, nullmask_t &nullmask) {
+static inline void TightLoopHash(T *__restrict ldata, hash_t *__restrict result_data, const SelectionVector *rsel,
+                                 idx_t count, const SelectionVector *__restrict sel_vector, nullmask_t &nullmask) {
 	if (nullmask.any()) {
 		for (idx_t i = 0; i < count; i++) {
 			auto ridx = HAS_RSEL ? rsel->get_index(i) : i;
@@ -35,186 +35,209 @@ static inline void tight_loop_hash(T *__restrict ldata, hash_t *__restrict resul
 }
 
 template <bool HAS_RSEL, class T>
-static inline void templated_loop_hash(Vector &input, Vector &result, const SelectionVector *rsel, idx_t count) {
-	if (input.vector_type == VectorType::CONSTANT_VECTOR) {
-		result.vector_type = VectorType::CONSTANT_VECTOR;
+static inline void TemplatedLoopHash(Vector &input, Vector &result, const SelectionVector *rsel, idx_t count) {
+	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 
 		auto ldata = ConstantVector::GetData<T>(input);
 		auto result_data = ConstantVector::GetData<hash_t>(result);
 		*result_data = HashOp::Operation(*ldata, ConstantVector::IsNull(input));
 	} else {
-		result.vector_type = VectorType::FLAT_VECTOR;
+		result.SetVectorType(VectorType::FLAT_VECTOR);
 
 		VectorData idata;
 		input.Orrify(count, idata);
 
-		tight_loop_hash<HAS_RSEL, T>((T *)idata.data, FlatVector::GetData<hash_t>(result), rsel, count, idata.sel,
-		                             *idata.nullmask);
+		TightLoopHash<HAS_RSEL, T>((T *)idata.data, FlatVector::GetData<hash_t>(result), rsel, count, idata.sel,
+		                           *idata.nullmask);
 	}
 }
 
 template <bool HAS_RSEL>
-static inline void hash_type_switch(Vector &input, Vector &result, const SelectionVector *rsel, idx_t count) {
-	D_ASSERT(result.type.id() == LogicalTypeId::HASH);
-	switch (input.type.InternalType()) {
+static inline void HashTypeSwitch(Vector &input, Vector &result, const SelectionVector *rsel, idx_t count) {
+	D_ASSERT(result.GetType().id() == LogicalTypeId::HASH);
+	switch (input.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
-		templated_loop_hash<HAS_RSEL, int8_t>(input, result, rsel, count);
+		TemplatedLoopHash<HAS_RSEL, int8_t>(input, result, rsel, count);
 		break;
 	case PhysicalType::INT16:
-		templated_loop_hash<HAS_RSEL, int16_t>(input, result, rsel, count);
+		TemplatedLoopHash<HAS_RSEL, int16_t>(input, result, rsel, count);
 		break;
 	case PhysicalType::INT32:
-		templated_loop_hash<HAS_RSEL, int32_t>(input, result, rsel, count);
+		TemplatedLoopHash<HAS_RSEL, int32_t>(input, result, rsel, count);
 		break;
 	case PhysicalType::INT64:
-		templated_loop_hash<HAS_RSEL, int64_t>(input, result, rsel, count);
+		TemplatedLoopHash<HAS_RSEL, int64_t>(input, result, rsel, count);
+		break;
+	case PhysicalType::UINT8:
+		TemplatedLoopHash<HAS_RSEL, uint8_t>(input, result, rsel, count);
+		break;
+	case PhysicalType::UINT16:
+		TemplatedLoopHash<HAS_RSEL, uint16_t>(input, result, rsel, count);
+		break;
+	case PhysicalType::UINT32:
+		TemplatedLoopHash<HAS_RSEL, uint32_t>(input, result, rsel, count);
+		break;
+	case PhysicalType::UINT64:
+		TemplatedLoopHash<HAS_RSEL, uint64_t>(input, result, rsel, count);
 		break;
 	case PhysicalType::INT128:
-		templated_loop_hash<HAS_RSEL, hugeint_t>(input, result, rsel, count);
+		TemplatedLoopHash<HAS_RSEL, hugeint_t>(input, result, rsel, count);
 		break;
 	case PhysicalType::FLOAT:
-		templated_loop_hash<HAS_RSEL, float>(input, result, rsel, count);
+		TemplatedLoopHash<HAS_RSEL, float>(input, result, rsel, count);
 		break;
 	case PhysicalType::DOUBLE:
-		templated_loop_hash<HAS_RSEL, double>(input, result, rsel, count);
+		TemplatedLoopHash<HAS_RSEL, double>(input, result, rsel, count);
 		break;
 	case PhysicalType::INTERVAL:
-		templated_loop_hash<HAS_RSEL, interval_t>(input, result, rsel, count);
+		TemplatedLoopHash<HAS_RSEL, interval_t>(input, result, rsel, count);
 		break;
 	case PhysicalType::VARCHAR:
-		templated_loop_hash<HAS_RSEL, string_t>(input, result, rsel, count);
+		TemplatedLoopHash<HAS_RSEL, string_t>(input, result, rsel, count);
 		break;
 	default:
-		throw InvalidTypeException(input.type, "Invalid type for hash");
+		throw InvalidTypeException(input.GetType(), "Invalid type for hash");
 	}
 }
 
 void VectorOperations::Hash(Vector &input, Vector &result, idx_t count) {
-	hash_type_switch<false>(input, result, nullptr, count);
+	HashTypeSwitch<false>(input, result, nullptr, count);
 }
 
 void VectorOperations::Hash(Vector &input, Vector &result, const SelectionVector &sel, idx_t count) {
-	hash_type_switch<true>(input, result, &sel, count);
+	HashTypeSwitch<true>(input, result, &sel, count);
 }
 
-static inline hash_t combine_hash(hash_t a, hash_t b) {
+static inline hash_t CombineHashScalar(hash_t a, hash_t b) {
 	return (a * UINT64_C(0xbf58476d1ce4e5b9)) ^ b;
 }
 
 template <bool HAS_RSEL, class T>
-static inline void tight_loop_combine_hash_constant(T *__restrict ldata, hash_t constant_hash,
-                                                    hash_t *__restrict hash_data, const SelectionVector *rsel,
-                                                    idx_t count, const SelectionVector *__restrict sel_vector,
-                                                    nullmask_t &nullmask) {
+static inline void TightLoopCombineHashConstant(T *__restrict ldata, hash_t constant_hash, hash_t *__restrict hash_data,
+                                                const SelectionVector *rsel, idx_t count,
+                                                const SelectionVector *__restrict sel_vector, nullmask_t &nullmask) {
 	if (nullmask.any()) {
 		for (idx_t i = 0; i < count; i++) {
 			auto ridx = HAS_RSEL ? rsel->get_index(i) : i;
 			auto idx = sel_vector->get_index(ridx);
 			auto other_hash = HashOp::Operation(ldata[idx], nullmask[idx]);
-			hash_data[ridx] = combine_hash(constant_hash, other_hash);
+			hash_data[ridx] = CombineHashScalar(constant_hash, other_hash);
 		}
 	} else {
 		for (idx_t i = 0; i < count; i++) {
 			auto ridx = HAS_RSEL ? rsel->get_index(i) : i;
 			auto idx = sel_vector->get_index(ridx);
 			auto other_hash = duckdb::Hash<T>(ldata[idx]);
-			hash_data[ridx] = combine_hash(constant_hash, other_hash);
+			hash_data[ridx] = CombineHashScalar(constant_hash, other_hash);
 		}
 	}
 }
 
 template <bool HAS_RSEL, class T>
-static inline void tight_loop_combine_hash(T *__restrict ldata, hash_t *__restrict hash_data,
-                                           const SelectionVector *rsel, idx_t count,
-                                           const SelectionVector *__restrict sel_vector, nullmask_t &nullmask) {
+static inline void TightLoopCombineHash(T *__restrict ldata, hash_t *__restrict hash_data, const SelectionVector *rsel,
+                                        idx_t count, const SelectionVector *__restrict sel_vector,
+                                        nullmask_t &nullmask) {
 	if (nullmask.any()) {
 		for (idx_t i = 0; i < count; i++) {
 			auto ridx = HAS_RSEL ? rsel->get_index(i) : i;
 			auto idx = sel_vector->get_index(ridx);
 			auto other_hash = HashOp::Operation(ldata[idx], nullmask[idx]);
-			hash_data[ridx] = combine_hash(hash_data[ridx], other_hash);
+			hash_data[ridx] = CombineHashScalar(hash_data[ridx], other_hash);
 		}
 	} else {
 		for (idx_t i = 0; i < count; i++) {
 			auto ridx = HAS_RSEL ? rsel->get_index(i) : i;
 			auto idx = sel_vector->get_index(ridx);
 			auto other_hash = duckdb::Hash<T>(ldata[idx]);
-			hash_data[ridx] = combine_hash(hash_data[ridx], other_hash);
+			hash_data[ridx] = CombineHashScalar(hash_data[ridx], other_hash);
 		}
 	}
 }
 
 template <bool HAS_RSEL, class T>
-void templated_loop_combine_hash(Vector &input, Vector &hashes, const SelectionVector *rsel, idx_t count) {
-	if (input.vector_type == VectorType::CONSTANT_VECTOR && hashes.vector_type == VectorType::CONSTANT_VECTOR) {
+void TemplatedLoopCombineHash(Vector &input, Vector &hashes, const SelectionVector *rsel, idx_t count) {
+	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR && hashes.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		auto ldata = ConstantVector::GetData<T>(input);
 		auto hash_data = ConstantVector::GetData<hash_t>(hashes);
 
 		auto other_hash = HashOp::Operation(*ldata, ConstantVector::IsNull(input));
-		*hash_data = combine_hash(*hash_data, other_hash);
+		*hash_data = CombineHashScalar(*hash_data, other_hash);
 	} else {
 		VectorData idata;
 		input.Orrify(count, idata);
-		if (hashes.vector_type == VectorType::CONSTANT_VECTOR) {
+		if (hashes.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			// mix constant with non-constant, first get the constant value
 			auto constant_hash = *ConstantVector::GetData<hash_t>(hashes);
 			// now re-initialize the hashes vector to an empty flat vector
-			hashes.Initialize(hashes.type);
-			tight_loop_combine_hash_constant<HAS_RSEL, T>((T *)idata.data, constant_hash,
-			                                              FlatVector::GetData<hash_t>(hashes), rsel, count, idata.sel,
-			                                              *idata.nullmask);
+			hashes.Initialize(hashes.GetType());
+			TightLoopCombineHashConstant<HAS_RSEL, T>((T *)idata.data, constant_hash,
+			                                          FlatVector::GetData<hash_t>(hashes), rsel, count, idata.sel,
+			                                          *idata.nullmask);
 		} else {
-			D_ASSERT(hashes.vector_type == VectorType::FLAT_VECTOR);
-			tight_loop_combine_hash<HAS_RSEL, T>((T *)idata.data, FlatVector::GetData<hash_t>(hashes), rsel, count,
-			                                     idata.sel, *idata.nullmask);
+			D_ASSERT(hashes.GetVectorType() == VectorType::FLAT_VECTOR);
+			TightLoopCombineHash<HAS_RSEL, T>((T *)idata.data, FlatVector::GetData<hash_t>(hashes), rsel, count,
+			                                  idata.sel, *idata.nullmask);
 		}
 	}
 }
 
 template <bool HAS_RSEL>
-static inline void combine_hash_type_switch(Vector &hashes, Vector &input, const SelectionVector *rsel, idx_t count) {
-	D_ASSERT(hashes.type.id() == LogicalTypeId::HASH);
-	switch (input.type.InternalType()) {
+static inline void CombineHashTypeSwitch(Vector &hashes, Vector &input, const SelectionVector *rsel, idx_t count) {
+	D_ASSERT(hashes.GetType().id() == LogicalTypeId::HASH);
+	switch (input.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
-		templated_loop_combine_hash<HAS_RSEL, int8_t>(input, hashes, rsel, count);
+		TemplatedLoopCombineHash<HAS_RSEL, int8_t>(input, hashes, rsel, count);
 		break;
 	case PhysicalType::INT16:
-		templated_loop_combine_hash<HAS_RSEL, int16_t>(input, hashes, rsel, count);
+		TemplatedLoopCombineHash<HAS_RSEL, int16_t>(input, hashes, rsel, count);
 		break;
 	case PhysicalType::INT32:
-		templated_loop_combine_hash<HAS_RSEL, int32_t>(input, hashes, rsel, count);
+		TemplatedLoopCombineHash<HAS_RSEL, int32_t>(input, hashes, rsel, count);
 		break;
 	case PhysicalType::INT64:
-		templated_loop_combine_hash<HAS_RSEL, int64_t>(input, hashes, rsel, count);
+		TemplatedLoopCombineHash<HAS_RSEL, int64_t>(input, hashes, rsel, count);
+		break;
+	case PhysicalType::UINT8:
+		TemplatedLoopCombineHash<HAS_RSEL, uint8_t>(input, hashes, rsel, count);
+		break;
+	case PhysicalType::UINT16:
+		TemplatedLoopCombineHash<HAS_RSEL, uint16_t>(input, hashes, rsel, count);
+		break;
+	case PhysicalType::UINT32:
+		TemplatedLoopCombineHash<HAS_RSEL, uint32_t>(input, hashes, rsel, count);
+		break;
+	case PhysicalType::UINT64:
+		TemplatedLoopCombineHash<HAS_RSEL, uint64_t>(input, hashes, rsel, count);
 		break;
 	case PhysicalType::INT128:
-		templated_loop_combine_hash<HAS_RSEL, hugeint_t>(input, hashes, rsel, count);
+		TemplatedLoopCombineHash<HAS_RSEL, hugeint_t>(input, hashes, rsel, count);
 		break;
 	case PhysicalType::FLOAT:
-		templated_loop_combine_hash<HAS_RSEL, float>(input, hashes, rsel, count);
+		TemplatedLoopCombineHash<HAS_RSEL, float>(input, hashes, rsel, count);
 		break;
 	case PhysicalType::DOUBLE:
-		templated_loop_combine_hash<HAS_RSEL, double>(input, hashes, rsel, count);
+		TemplatedLoopCombineHash<HAS_RSEL, double>(input, hashes, rsel, count);
 		break;
 	case PhysicalType::INTERVAL:
-		templated_loop_combine_hash<HAS_RSEL, interval_t>(input, hashes, rsel, count);
+		TemplatedLoopCombineHash<HAS_RSEL, interval_t>(input, hashes, rsel, count);
 		break;
 	case PhysicalType::VARCHAR:
-		templated_loop_combine_hash<HAS_RSEL, string_t>(input, hashes, rsel, count);
+		TemplatedLoopCombineHash<HAS_RSEL, string_t>(input, hashes, rsel, count);
 		break;
 	default:
-		throw InvalidTypeException(input.type, "Invalid type for hash");
+		throw InvalidTypeException(input.GetType(), "Invalid type for hash");
 	}
 }
 
 void VectorOperations::CombineHash(Vector &hashes, Vector &input, idx_t count) {
-	combine_hash_type_switch<false>(hashes, input, nullptr, count);
+	CombineHashTypeSwitch<false>(hashes, input, nullptr, count);
 }
 
 void VectorOperations::CombineHash(Vector &hashes, Vector &input, const SelectionVector &rsel, idx_t count) {
-	combine_hash_type_switch<true>(hashes, input, &rsel, count);
+	CombineHashTypeSwitch<true>(hashes, input, &rsel, count);
 }
 
 } // namespace duckdb

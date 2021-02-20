@@ -62,6 +62,29 @@ NULL
 NULL
 
 # COALESCE
+statement error
+SELECT COALESCE()
+
+
+query I
+SELECT COALESCE(NULL)
+----
+NULL
+
+query I
+SELECT COALESCE(42)
+----
+42
+
+query I
+SELECT COALESCE(a) FROM exprtest
+----
+42
+43
+NULL
+45
+
+
 query I
 SELECT COALESCE(NULL, NULL, 42, 43)
 ----
@@ -118,7 +141,7 @@ SELECT * FROM intest WHERE a IN (42, 43)
 43	42	42
 
 query T
-SELECT a IN (42, 43) FROM intest 
+SELECT a IN (42, 43) FROM intest
 ----
 1
 1

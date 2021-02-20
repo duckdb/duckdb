@@ -33,9 +33,9 @@ public:
 	unique_ptr<ParsedExpression> default_value;
 
 public:
-	ColumnDefinition Copy();
+	ColumnDefinition Copy() const;
 
-	void Serialize(Serializer &serializer);
+	void Serialize(Serializer &serializer) const;
 	static ColumnDefinition Deserialize(Deserializer &source);
 };
 

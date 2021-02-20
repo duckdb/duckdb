@@ -1,21 +1,19 @@
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 
-#include <utility>
-
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/transaction/transaction.hpp"
-#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
-
-#include "duckdb/parallel/task_context.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/parallel/task_context.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
+#include "duckdb/transaction/transaction.hpp"
 
-using namespace std;
+#include <utility>
 
 namespace duckdb {
 
 class PhysicalTableScanOperatorState : public PhysicalOperatorState {
 public:
-	PhysicalTableScanOperatorState(PhysicalOperator &op) : PhysicalOperatorState(op, nullptr), initialized(false) {
+	explicit PhysicalTableScanOperatorState(PhysicalOperator &op)
+	    : PhysicalOperatorState(op, nullptr), initialized(false) {
 	}
 
 	ParallelState *parallel_state;
@@ -24,16 +22,16 @@ public:
 	bool initialized;
 };
 
-PhysicalTableScan::PhysicalTableScan(vector<LogicalType> types, TableFunction function_,
+PhysicalTableScan::PhysicalTableScan(vector<LogicalType> types, TableFunction function_p,
                                      unique_ptr<FunctionData> bind_data_p, vector<column_t> column_ids_p,
-                                     vector<string> names_p, unordered_map<idx_t, vector<TableFilter>> table_filters_p)
-    : PhysicalOperator(PhysicalOperatorType::TABLE_SCAN, move(types)), function(move(function_)),
+                                     vector<string> names_p, unique_ptr<TableFilterSet> table_filters_p)
+    : PhysicalOperator(PhysicalOperatorType::TABLE_SCAN, move(types)), function(move(function_p)),
       bind_data(move(bind_data_p)), column_ids(move(column_ids_p)), names(move(names_p)),
       table_filters(move(table_filters_p)) {
 }
 
-void PhysicalTableScan::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
-	auto &state = (PhysicalTableScanOperatorState &)*state_;
+void PhysicalTableScan::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
+	auto &state = (PhysicalTableScanOperatorState &)*state_p;
 	if (column_ids.empty()) {
 		return;
 	}
@@ -44,14 +42,15 @@ void PhysicalTableScan::GetChunkInternal(ExecutionContext &context, DataChunk &c
 			// check if there is any parallel state to fetch
 			state.parallel_state = nullptr;
 			auto task_info = task.task_info.find(this);
+			TableFilterCollection filters(table_filters.get());
 			if (task_info != task.task_info.end()) {
 				// parallel scan init
 				state.parallel_state = task_info->second;
-				state.operator_data = function.parallel_init(context.client, bind_data.get(), state.parallel_state,
-				                                             column_ids, table_filters);
+				state.operator_data =
+				    function.parallel_init(context.client, bind_data.get(), state.parallel_state, column_ids, &filters);
 			} else {
 				// sequential scan init
-				state.operator_data = function.init(context.client, bind_data.get(), column_ids, table_filters);
+				state.operator_data = function.init(context.client, bind_data.get(), column_ids, &filters);
 			}
 			if (!state.operator_data) {
 				// no operator data returned: nothing to scan
@@ -99,23 +98,25 @@ string PhysicalTableScan::ParamsToString() const {
 		result = function.to_string(bind_data.get());
 		result += "\n[INFOSEPARATOR]\n";
 	}
-	for (idx_t i = 0; i < column_ids.size(); i++) {
-		if (column_ids[i] < names.size()) {
-			if (i > 0) {
-				result += "\n";
+	if (function.projection_pushdown) {
+		for (idx_t i = 0; i < column_ids.size(); i++) {
+			if (column_ids[i] < names.size()) {
+				if (i > 0) {
+					result += "\n";
+				}
+				result += names[column_ids[i]];
 			}
-			result += names[column_ids[i]];
 		}
 	}
-	if (table_filters.size() > 0) {
+	if (function.filter_pushdown && table_filters) {
 		result += "\n[INFOSEPARATOR]\n";
 		result += "Filters: ";
-		for (auto &f : table_filters) {
+		for (auto &f : table_filters->filters) {
 			for (auto &filter : f.second) {
 				if (filter.column_index < names.size()) {
 					result += "\n";
-					result += names[filter.column_index] + ExpressionTypeToOperator(filter.comparison_type) +
-							filter.constant.ToString();
+					result += names[column_ids[filter.column_index]] +
+					          ExpressionTypeToOperator(filter.comparison_type) + filter.constant.ToString();
 				}
 			}
 		}

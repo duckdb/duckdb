@@ -12,11 +12,11 @@
 #include <algorithm>
 
 namespace duckdb {
-using namespace std;
 
 BoundStatement Binder::Bind(ExportStatement &stmt) {
 	// COPY TO a file
-	if (!context.db.config.enable_copy) {
+	auto &config = DBConfig::GetConfig(context);
+	if (!config.enable_copy) {
 		throw Exception("COPY TO is disabled by configuration");
 	}
 	BoundStatement result;
@@ -34,7 +34,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	vector<TableCatalogEntry *> tables;
 	Catalog::GetCatalog(context).schemas->Scan(context, [&](CatalogEntry *entry) {
 		auto schema = (SchemaCatalogEntry *)entry;
-		schema->tables.Scan(context, [&](CatalogEntry *entry) {
+		schema->Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) {
 			if (entry->type == CatalogType::TABLE_ENTRY) {
 				tables.push_back((TableCatalogEntry *)entry);
 			}
@@ -70,8 +70,9 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		auto bound_statement = copy_binder.Bind(copy_stmt);
 		if (child_operator) {
 			// use UNION ALL to combine the individual copy statements into a single node
-			auto copy_union = make_unique<LogicalSetOperation>(GenerateTableIndex(), 1, move(child_operator),
-			                                                   move(bound_statement.plan), LogicalOperatorType::LOGICAL_UNION);
+			auto copy_union =
+			    make_unique<LogicalSetOperation>(GenerateTableIndex(), 1, move(child_operator),
+			                                     move(bound_statement.plan), LogicalOperatorType::LOGICAL_UNION);
 			child_operator = move(copy_union);
 		} else {
 			child_operator = move(bound_statement.plan);

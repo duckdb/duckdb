@@ -12,8 +12,11 @@
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table/persistent_segment.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
+class DatabaseInstance;
+class TableDataWriter;
 class PersistentSegment;
 class Transaction;
 
@@ -21,23 +24,25 @@ struct DataTableInfo;
 
 class ColumnData {
 public:
-	ColumnData(BufferManager &manager, DataTableInfo &table_info);
-	//! Set up the column data with the set of persistent segments, returns the amount of rows
-	void Initialize(vector<unique_ptr<PersistentSegment>> &segments);
+	ColumnData(DatabaseInstance &db, DataTableInfo &table_info, LogicalType type, idx_t column_idx);
 
 	DataTableInfo &table_info;
 	//! The type of the column
 	LogicalType type;
-	//! The buffer manager
-	BufferManager &manager;
+	//! The database
+	DatabaseInstance &db;
 	//! The column index of the column
 	idx_t column_idx;
 	//! The segments holding the data of the column
 	SegmentTree data;
 	//! The amount of persistent rows
 	idx_t persistent_rows;
+	//! The statistics of the column
+	unique_ptr<BaseStatistics> statistics;
 
 public:
+	//! Set up the column data with the set of persistent segments
+	void Initialize(vector<unique_ptr<PersistentSegment>> &segments);
 	//! Initialize a scan of the column
 	void InitializeScan(ColumnScanState &state);
 	//! Initialize a scan starting at the specified offset
@@ -51,7 +56,7 @@ public:
 	void IndexScan(ColumnScanState &state, Vector &result);
 	//! Executes the filters directly in the table's data
 	void Select(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
-	            idx_t &approved_tuple_count, vector<TableFilter> &tableFilter);
+	            idx_t &approved_tuple_count, vector<TableFilter> &table_filter);
 	//! Initialize an appending phase for this column
 	void InitializeAppend(ColumnAppendState &state);
 	//! Append a vector of type [type] to the end of the column

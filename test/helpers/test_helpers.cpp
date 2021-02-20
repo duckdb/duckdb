@@ -101,11 +101,11 @@ void WriteBinary(string path, const uint8_t *data, uint64_t length) {
 }
 
 bool CHECK_COLUMN(QueryResult &result_, size_t column_number, vector<duckdb::Value> values) {
-	unique_ptr<MaterializedQueryResult> materialized;
 	if (result_.type == QueryResultType::STREAM_RESULT) {
-		materialized = ((StreamQueryResult &)result_).Materialize();
+		fprintf(stderr, "Unexpected stream query result in CHECK_COLUMN\n");
+		return false;
 	}
-	auto &result = materialized ? *materialized : (MaterializedQueryResult &)result_;
+	auto &result = (MaterializedQueryResult &)result_;
 	if (!result.success) {
 		fprintf(stderr, "Query failed with message: %s\n", result.error.c_str());
 		return false;
@@ -116,14 +116,14 @@ bool CHECK_COLUMN(QueryResult &result_, size_t column_number, vector<duckdb::Val
 		return false;
 	}
 	if (values.size() == 0) {
-		if (result.collection.count != 0) {
+		if (result.collection.Count() != 0) {
 			result.Print();
 			return false;
 		} else {
 			return true;
 		}
 	}
-	if (result.collection.count == 0) {
+	if (result.collection.Count() == 0) {
 		result.Print();
 		return false;
 	}
@@ -133,13 +133,13 @@ bool CHECK_COLUMN(QueryResult &result_, size_t column_number, vector<duckdb::Val
 	}
 	size_t chunk_index = 0;
 	for (size_t i = 0; i < values.size();) {
-		if (chunk_index >= result.collection.chunks.size()) {
+		if (chunk_index >= result.collection.ChunkCount()) {
 			// ran out of chunks
 			result.Print();
 			return false;
 		}
 		// check this vector
-		auto &chunk = *result.collection.chunks[chunk_index];
+		auto &chunk = result.collection.GetChunk(chunk_index);
 		auto &vector = chunk.data[column_number];
 		if (i + chunk.size() > values.size()) {
 			// too many values in this vector
@@ -167,6 +167,10 @@ bool CHECK_COLUMN(QueryResult &result_, size_t column_number, vector<duckdb::Val
 }
 
 bool CHECK_COLUMN(unique_ptr<duckdb::QueryResult> &result, size_t column_number, vector<duckdb::Value> values) {
+	if (result->type == QueryResultType::STREAM_RESULT) {
+		auto &stream = (StreamQueryResult &)*result;
+		result = stream.Materialize();
+	}
 	return CHECK_COLUMN(*result, column_number, values);
 }
 
@@ -190,21 +194,21 @@ string compare_csv(duckdb::QueryResult &result, string csv, bool header) {
 }
 
 string show_diff(DataChunk &left, DataChunk &right) {
-	if (left.column_count() != right.column_count()) {
-		return StringUtil::Format("Different column counts: %d vs %d", (int)left.column_count(),
-		                          (int)right.column_count());
+	if (left.ColumnCount() != right.ColumnCount()) {
+		return StringUtil::Format("Different column counts: %d vs %d", (int)left.ColumnCount(),
+		                          (int)right.ColumnCount());
 	}
 	if (left.size() != right.size()) {
 		return StringUtil::Format("Different sizes: %zu vs %zu", left.size(), right.size());
 	}
 	string difference;
-	for (size_t i = 0; i < left.column_count(); i++) {
+	for (size_t i = 0; i < left.ColumnCount(); i++) {
 		bool has_differences = false;
 		auto &left_vector = left.data[i];
 		auto &right_vector = right.data[i];
-		string left_column = StringUtil::Format("Result\n------\n%s [", left_vector.type.ToString().c_str());
-		string right_column = StringUtil::Format("Expect\n------\n%s [", right_vector.type.ToString().c_str());
-		if (left_vector.type == right_vector.type) {
+		string left_column = StringUtil::Format("Result\n------\n%s [", left_vector.GetType().ToString().c_str());
+		string right_column = StringUtil::Format("Expect\n------\n%s [", right_vector.GetType().ToString().c_str());
+		if (left_vector.GetType() == right_vector.GetType()) {
 			for (size_t j = 0; j < left.size(); j++) {
 				auto left_value = left_vector.GetValue(j);
 				auto right_value = right_vector.GetValue(j);
@@ -232,16 +236,16 @@ string show_diff(DataChunk &left, DataChunk &right) {
 }
 
 bool compare_chunk(DataChunk &left, DataChunk &right) {
-	if (left.column_count() != right.column_count()) {
+	if (left.ColumnCount() != right.ColumnCount()) {
 		return false;
 	}
 	if (left.size() != right.size()) {
 		return false;
 	}
-	for (size_t i = 0; i < left.column_count(); i++) {
+	for (size_t i = 0; i < left.ColumnCount(); i++) {
 		auto &left_vector = left.data[i];
 		auto &right_vector = right.data[i];
-		if (left_vector.type == right_vector.type) {
+		if (left_vector.GetType() == right_vector.GetType()) {
 			for (size_t j = 0; j < left.size(); j++) {
 				auto left_value = left_vector.GetValue(j);
 				auto right_value = right_vector.GetValue(j);
@@ -258,7 +262,7 @@ bool compare_chunk(DataChunk &left, DataChunk &right) {
 //! Returns true if they are equal, and stores an error_message otherwise
 bool compare_result(string csv, ChunkCollection &collection, vector<LogicalType> sql_types, bool has_header,
                     string &error_message) {
-	D_ASSERT(collection.count == 0 || collection.types.size() == sql_types.size());
+	D_ASSERT(collection.Count() == 0 || collection.Types().size() == sql_types.size());
 
 	// set up the CSV reader
 	BufferedCSVReaderOptions options;
@@ -289,14 +293,14 @@ bool compare_result(string csv, ChunkCollection &collection, vector<LogicalType>
 		}
 		if (parsed_result.size() == 0) {
 			// out of tuples in CSV file
-			if (collection_index < collection.chunks.size()) {
+			if (collection_index < collection.ChunkCount()) {
 				error_message = StringUtil::Format("Too many tuples in result! Found %llu tuples, but expected %llu",
-				                                   collection.count, tuple_count);
+				                                   collection.Count(), tuple_count);
 				return false;
 			}
 			return true;
 		}
-		if (collection_index >= collection.chunks.size()) {
+		if (collection_index >= collection.ChunkCount()) {
 			// ran out of chunks in the collection, but there are still tuples in the result
 			// keep parsing the csv file to get the total expected count
 			while (parsed_result.size() > 0) {
@@ -305,12 +309,12 @@ bool compare_result(string csv, ChunkCollection &collection, vector<LogicalType>
 				reader.ParseCSV(parsed_result);
 			}
 			error_message = StringUtil::Format("Too few tuples in result! Found %llu tuples, but expected %llu",
-			                                   collection.count, tuple_count);
+			                                   collection.Count(), tuple_count);
 			return false;
 		}
 		// same counts, compare tuples in chunks
-		if (!compare_chunk(*collection.chunks[collection_index], parsed_result)) {
-			error_message = show_diff(*collection.chunks[collection_index], parsed_result);
+		if (!compare_chunk(collection.GetChunk(collection_index), parsed_result)) {
+			error_message = show_diff(collection.GetChunk(collection_index), parsed_result);
 			return false;
 		}
 

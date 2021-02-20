@@ -3,7 +3,6 @@
 #include "duckdb/common/limits.hpp"
 
 namespace duckdb {
-using namespace std;
 
 const idx_t INVALID_INDEX = (idx_t)-1;
 const row_t MAX_ROW_ID = 4611686018427388000ULL; // 2^62

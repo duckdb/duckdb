@@ -3,14 +3,14 @@
 #include "duckdb/common/serializer.hpp"
 
 namespace duckdb {
-using namespace std;
 
-bool BaseTableRef::Equals(const TableRef *other_) const {
-	if (!TableRef::Equals(other_)) {
+bool BaseTableRef::Equals(const TableRef *other_p) const {
+	if (!TableRef::Equals(other_p)) {
 		return false;
 	}
-	auto other = (BaseTableRef *)other_;
-	return other->schema_name == schema_name && other->table_name == table_name && column_name_alias == other->column_name_alias;
+	auto other = (BaseTableRef *)other_p;
+	return other->schema_name == schema_name && other->table_name == table_name &&
+	       column_name_alias == other->column_name_alias;
 }
 
 void BaseTableRef::Serialize(Serializer &serializer) {
@@ -36,8 +36,8 @@ unique_ptr<TableRef> BaseTableRef::Copy() {
 
 	copy->schema_name = schema_name;
 	copy->table_name = table_name;
-	copy->alias = alias;
 	copy->column_name_alias = column_name_alias;
+	CopyProperties(*copy);
 
 	return move(copy);
 }

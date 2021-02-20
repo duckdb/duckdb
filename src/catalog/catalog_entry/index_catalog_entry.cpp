@@ -3,9 +3,8 @@
 
 namespace duckdb {
 
-
 IndexCatalogEntry::IndexCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateIndexInfo *info)
-	: StandardEntry(CatalogType::INDEX_ENTRY, schema, catalog, info->index_name), index(nullptr), sql(info->sql) {
+    : StandardEntry(CatalogType::INDEX_ENTRY, schema, catalog, info->index_name), index(nullptr), sql(info->sql) {
 }
 
 IndexCatalogEntry::~IndexCatalogEntry() {
@@ -22,7 +21,7 @@ IndexCatalogEntry::~IndexCatalogEntry() {
 }
 
 string IndexCatalogEntry::ToSQL() {
-	if (sql.size() == 0) {
+	if (sql.empty()) {
 		throw NotImplementedException("Cannot convert INDEX to SQL because it was not created with a SQL statement");
 	}
 	return sql;

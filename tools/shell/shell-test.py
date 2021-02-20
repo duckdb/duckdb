@@ -35,11 +35,17 @@ def test(cmd, out=None, err=None, extra_commands=None):
      if not err and stderr != '':
           test_exception(command, cmd, stdout, stderr, 'got err test failed')
 
+     if err is None and res.returncode != 0:
+          test_exception(command, cmd, stdout, stderr, 'process returned non-zero exit code but no error was specified')
+
+
 def tf():
 	return tempfile.mktemp().replace('\\','/')
 
 # basic test
 test('select \'asdf\' as a;', out='asdf')
+
+test('select * from range(10000);', out='9999')
 
 # test pragma
 test("""
@@ -183,7 +189,7 @@ CREATE TABLE asdf (i INTEGER);
 .schema as%
 ''', err="subquery in FROM must have an alias")
 
-test('.fullschema')
+test('.fullschema', 'No STAT tables available', '')
 
 test('''
 CREATE TABLE asda (i INTEGER);
@@ -366,6 +372,13 @@ INSERT INTO a VALUES (42);
 .dump
 ''', 'CREATE TABLE a(i INTEGER)')
 
+test('''
+CREATE TABLE a (I INTEGER);
+.changes off
+INSERT INTO a VALUES (42);
+.dump
+''', 'COMMIT')
+
 # .dump a specific table
 test('''
 CREATE TABLE a (I INTEGER);
@@ -414,6 +427,28 @@ SELECT SUM(i)*MAX(i) FROM integers JOIN integers2 USING (i);
 
 shutil.rmtree(target_dir)
 
+# test using .import with a CSV file containing invalid UTF8
+
+duckdb_nonsensecsv = 'duckdbtest_nonsensecsv.csv'
+with open(duckdb_nonsensecsv, 'wb+') as f:
+     f.write(b'\xFF\n')
+test('''
+.nullvalue NULL
+CREATE TABLE test(i INTEGER);
+.import duckdbtest_nonsensecsv.csv test
+SELECT * FROM test;
+''', out="NULL")
+os.remove(duckdb_nonsensecsv)
+
+# .mode latex
+test('''
+.mode latex
+CREATE TABLE a (I INTEGER);
+.changes off
+INSERT INTO a VALUES (42);
+SELECT * FROM a;
+''', '\\begin{tabular}')
+
 # dump blobs: FIXME
 # test('''
 # CREATE TABLE a (b BLOB);
@@ -430,3 +465,22 @@ shutil.rmtree(target_dir)
 # CREATE INDEX a_idx ON a(i);
 # .imposter a_idx a_idx_imp
 # ''')
+
+
+# test that sqlite3_complete works somewhat correctly
+
+test('''/*
+;
+*/
+select 42;
+''', out='42')
+
+test('''-- this is a comment ;
+select 42;
+''', out='42')
+
+test('''--;;;;;;
+select 42;
+''', out='42')
+
+test('/* ;;;;;; */ select 42;', out='42')

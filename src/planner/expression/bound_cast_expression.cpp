@@ -3,13 +3,13 @@
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 
 namespace duckdb {
-using namespace std;
 
-BoundCastExpression::BoundCastExpression(unique_ptr<Expression> child, LogicalType target_type)
-    : Expression(ExpressionType::OPERATOR_CAST, ExpressionClass::BOUND_CAST, move(target_type)), child(move(child)) {
+BoundCastExpression::BoundCastExpression(unique_ptr<Expression> child_p, LogicalType target_type_p)
+    : Expression(ExpressionType::OPERATOR_CAST, ExpressionClass::BOUND_CAST, move(target_type_p)),
+      child(move(child_p)) {
 }
 
-unique_ptr<Expression> BoundCastExpression::AddCastToType(unique_ptr<Expression> expr, LogicalType target_type) {
+unique_ptr<Expression> BoundCastExpression::AddCastToType(unique_ptr<Expression> expr, const LogicalType &target_type) {
 	D_ASSERT(expr);
 	if (expr->expression_class == ExpressionClass::BOUND_PARAMETER) {
 		auto &parameter = (BoundParameterExpression &)*expr;
@@ -23,7 +23,7 @@ unique_ptr<Expression> BoundCastExpression::AddCastToType(unique_ptr<Expression>
 	return expr;
 }
 
-bool BoundCastExpression::CastIsInvertible(LogicalType source_type, LogicalType target_type) {
+bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const LogicalType &target_type) {
 	if (source_type.id() == LogicalTypeId::BOOLEAN || target_type.id() == LogicalTypeId::BOOLEAN) {
 		return false;
 	}
@@ -46,11 +46,11 @@ string BoundCastExpression::ToString() const {
 	return "CAST[" + return_type.ToString() + "](" + child->GetName() + ")";
 }
 
-bool BoundCastExpression::Equals(const BaseExpression *other_) const {
-	if (!Expression::Equals(other_)) {
+bool BoundCastExpression::Equals(const BaseExpression *other_p) const {
+	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto other = (BoundCastExpression *)other_;
+	auto other = (BoundCastExpression *)other_p;
 	if (!Expression::Equals(child.get(), other->child.get())) {
 		return false;
 	}

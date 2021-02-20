@@ -1,16 +1,15 @@
 #include "duckdb/parser/query_node/recursive_cte_node.hpp"
 
 namespace duckdb {
-using namespace std;
 
-bool RecursiveCTENode::Equals(const QueryNode *other_) const {
-	if (!QueryNode::Equals(other_)) {
+bool RecursiveCTENode::Equals(const QueryNode *other_p) const {
+	if (!QueryNode::Equals(other_p)) {
 		return false;
 	}
-	if (this == other_) {
+	if (this == other_p) {
 		return true;
 	}
-	auto other = (RecursiveCTENode *)other_;
+	auto other = (RecursiveCTENode *)other_p;
 
 	if (other->union_all != union_all) {
 		return false;

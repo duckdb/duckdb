@@ -17,14 +17,28 @@ namespace duckdb {
 //! type.
 class Date {
 public:
-	static string_t MonthNames[12];
-	static string_t MonthNamesAbbreviated[12];
-	static string_t DayNames[7];
-	static string_t DayNamesAbbreviated[7];
+	static const string_t MONTH_NAMES[12];
+	static const string_t MONTH_NAMES_ABBREVIATED[12];
+	static const string_t DAY_NAMES[7];
+	static const string_t DAY_NAMES_ABBREVIATED[7];
+	static const int32_t NORMAL_DAYS[13];
+	static const int32_t CUMULATIVE_DAYS[13];
+	static const int32_t LEAP_DAYS[13];
+	static const int32_t CUMULATIVE_LEAP_DAYS[13];
+	static const int32_t CUMULATIVE_YEAR_DAYS[401];
+	static const int8_t MONTH_PER_DAY_OF_YEAR[365];
+	static const int8_t LEAP_MONTH_PER_DAY_OF_YEAR[366];
+
+	constexpr static const int32_t MIN_YEAR = -290307;
+	constexpr static const int32_t MAX_YEAR = 294247;
+	constexpr static const int32_t EPOCH_YEAR = 1970;
+
+	constexpr static const int32_t YEAR_INTERVAL = 400;
+	constexpr static const int32_t DAYS_PER_YEAR_INTERVAL = 146097;
 
 public:
 	//! Convert a string in the format "YYYY-MM-DD" to a date object
-	static date_t FromString(string str, bool strict = false);
+	static date_t FromString(const string &str, bool strict = false);
 	//! Convert a string in the format "YYYY-MM-DD" to a date object
 	static date_t FromCString(const char *str, idx_t len, bool strict = false);
 	//! Convert a date object to a string in the format "YYYY-MM-DD"
@@ -46,10 +60,12 @@ public:
 
 	//! Returns true if the specified (year, month, day) combination is a valid
 	//! date
-	static bool IsValidDay(int32_t year, int32_t month, int32_t day);
+	static bool IsValid(int32_t year, int32_t month, int32_t day);
 
 	//! Extract the epoch from the date (seconds since 1970-01-01)
 	static int64_t Epoch(date_t date);
+	//! Extract the epoch from the date (nanoseconds since 1970-01-01)
+	static int64_t EpochNanoseconds(date_t date);
 	//! Convert the epoch (seconds since 1970-01-01) to a date_t
 	static date_t EpochToDate(int64_t epoch);
 
@@ -60,6 +76,9 @@ public:
 
 	//! Extract year of a date entry
 	static int32_t ExtractYear(date_t date);
+	//! Extract year of a date entry, but optimized to first try the last year found
+	static int32_t ExtractYear(date_t date, int32_t *last_year);
+	static int32_t ExtractYear(timestamp_t ts, int32_t *last_year);
 	//! Extract month of a date entry
 	static int32_t ExtractMonth(date_t date);
 	//! Extract day of a date entry
@@ -81,5 +100,11 @@ public:
 	static int32_t ExtractWeekNumberRegular(date_t date, bool monday_first = true);
 	//! Returns the date of the monday of the current week.
 	static date_t GetMondayOfCurrentWeek(date_t date);
+
+	//! Helper function to parse two digits from a string (e.g. "30" -> 30, "03" -> 3, "3" -> 3)
+	static bool ParseDoubleDigit(const char *buf, idx_t len, idx_t &pos, int32_t &result);
+
+private:
+	static void ExtractYearOffset(int32_t &n, int32_t &year, int32_t &year_offset);
 };
 } // namespace duckdb

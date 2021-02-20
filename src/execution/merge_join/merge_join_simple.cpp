@@ -3,11 +3,10 @@
 #include "duckdb/execution/merge_join.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
-template <class T, class OP> static idx_t merge_join_simple_gt(ScalarMergeInfo &l, ChunkMergeInfo &r) {
+template <class T, class OP>
+static idx_t MergeJoinSimpleGreaterThan(ScalarMergeInfo &l, ChunkMergeInfo &r) {
 	auto ldata = (T *)l.order.vdata.data;
 	auto &lorder = l.order.order;
 	l.pos = l.order.count;
@@ -40,15 +39,18 @@ template <class T, class OP> static idx_t merge_join_simple_gt(ScalarMergeInfo &
 	}
 	return 0;
 }
-template <class T> idx_t MergeJoinSimple::GreaterThan::Operation(ScalarMergeInfo &l, ChunkMergeInfo &r) {
-	return merge_join_simple_gt<T, duckdb::GreaterThan>(l, r);
+template <class T>
+idx_t MergeJoinSimple::GreaterThan::Operation(ScalarMergeInfo &l, ChunkMergeInfo &r) {
+	return MergeJoinSimpleGreaterThan<T, duckdb::GreaterThan>(l, r);
 }
 
-template <class T> idx_t MergeJoinSimple::GreaterThanEquals::Operation(ScalarMergeInfo &l, ChunkMergeInfo &r) {
-	return merge_join_simple_gt<T, duckdb::GreaterThanEquals>(l, r);
+template <class T>
+idx_t MergeJoinSimple::GreaterThanEquals::Operation(ScalarMergeInfo &l, ChunkMergeInfo &r) {
+	return MergeJoinSimpleGreaterThan<T, duckdb::GreaterThanEquals>(l, r);
 }
 
-template <class T, class OP> static idx_t merge_join_simple_lt(ScalarMergeInfo &l, ChunkMergeInfo &r) {
+template <class T, class OP>
+static idx_t MergeJoinSimpleLessThan(ScalarMergeInfo &l, ChunkMergeInfo &r) {
 	auto ldata = (T *)l.order.vdata.data;
 	auto &lorder = l.order.order;
 	l.pos = 0;
@@ -82,12 +84,14 @@ template <class T, class OP> static idx_t merge_join_simple_lt(ScalarMergeInfo &
 	return 0;
 }
 
-template <class T> idx_t MergeJoinSimple::LessThan::Operation(ScalarMergeInfo &l, ChunkMergeInfo &r) {
-	return merge_join_simple_lt<T, duckdb::LessThan>(l, r);
+template <class T>
+idx_t MergeJoinSimple::LessThan::Operation(ScalarMergeInfo &l, ChunkMergeInfo &r) {
+	return MergeJoinSimpleLessThan<T, duckdb::LessThan>(l, r);
 }
 
-template <class T> idx_t MergeJoinSimple::LessThanEquals::Operation(ScalarMergeInfo &l, ChunkMergeInfo &r) {
-	return merge_join_simple_lt<T, duckdb::LessThanEquals>(l, r);
+template <class T>
+idx_t MergeJoinSimple::LessThanEquals::Operation(ScalarMergeInfo &l, ChunkMergeInfo &r) {
+	return MergeJoinSimpleLessThan<T, duckdb::LessThanEquals>(l, r);
 }
 
 INSTANTIATE_MERGEJOIN_TEMPLATES(MergeJoinSimple, LessThan, ScalarMergeInfo, ChunkMergeInfo)
@@ -95,4 +99,4 @@ INSTANTIATE_MERGEJOIN_TEMPLATES(MergeJoinSimple, LessThanEquals, ScalarMergeInfo
 INSTANTIATE_MERGEJOIN_TEMPLATES(MergeJoinSimple, GreaterThan, ScalarMergeInfo, ChunkMergeInfo)
 INSTANTIATE_MERGEJOIN_TEMPLATES(MergeJoinSimple, GreaterThanEquals, ScalarMergeInfo, ChunkMergeInfo)
 
-}
+} // namespace duckdb

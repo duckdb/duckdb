@@ -11,7 +11,7 @@ using namespace std;
 
 atomic<int> finished_threads;
 
-#define THREAD_COUNT 20
+#define THREAD_COUNT    20
 #define INSERT_ELEMENTS 2000
 
 static void append_to_integers(DuckDB *db, size_t threadnr) {

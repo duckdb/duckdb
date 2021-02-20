@@ -12,15 +12,20 @@
 #include "duckdb/planner/bound_tokens.hpp"
 #include "duckdb/planner/logical_tokens.hpp"
 
+#include <functional>
+
 namespace duckdb {
 //! The LogicalOperatorVisitor is an abstract base class that implements the
 //! Visitor pattern on LogicalOperator.
 class LogicalOperatorVisitor {
 public:
-	virtual ~LogicalOperatorVisitor(){};
+	virtual ~LogicalOperatorVisitor() {};
 
 	virtual void VisitOperator(LogicalOperator &op);
 	virtual void VisitExpression(unique_ptr<Expression> *expression);
+
+	static void EnumerateExpressions(LogicalOperator &op,
+	                                 const std::function<void(unique_ptr<Expression> *child)> &callback);
 
 protected:
 	//! Automatically calls the Visit method for LogicalOperator children of the current operator. Can be overloaded to
@@ -50,6 +55,5 @@ protected:
 	virtual unique_ptr<Expression> VisitReplace(BoundParameterExpression &expr, unique_ptr<Expression> *expr_ptr);
 	virtual unique_ptr<Expression> VisitReplace(BoundWindowExpression &expr, unique_ptr<Expression> *expr_ptr);
 	virtual unique_ptr<Expression> VisitReplace(BoundUnnestExpression &expr, unique_ptr<Expression> *expr_ptr);
-	virtual unique_ptr<Expression> VisitReplace(CommonSubExpression &expr, unique_ptr<Expression> *expr_ptr);
 };
 } // namespace duckdb

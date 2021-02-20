@@ -2,10 +2,9 @@
 #include "duckdb/common/serializer.hpp"
 
 namespace duckdb {
-using namespace std;
 
 TableStarExpression::TableStarExpression(string relation_name)
-    : ParsedExpression(ExpressionType::TABLE_STAR, ExpressionClass::TABLE_STAR), relation_name(relation_name) {
+    : ParsedExpression(ExpressionType::TABLE_STAR, ExpressionClass::TABLE_STAR), relation_name(move(relation_name)) {
 }
 
 string TableStarExpression::ToString() const {

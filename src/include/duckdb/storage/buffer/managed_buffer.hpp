@@ -13,15 +13,14 @@
 #include "duckdb/storage/storage_info.hpp"
 
 namespace duckdb {
-class BufferManager;
+class DatabaseInstance;
 
 //! Managed buffer is an arbitrarily-sized buffer that is at least of size >= BLOCK_SIZE
 class ManagedBuffer : public FileBuffer {
 public:
-	ManagedBuffer(BufferManager &manager, idx_t size, bool can_destroy, block_id_t id);
+	ManagedBuffer(DatabaseInstance &db, idx_t size, bool can_destroy, block_id_t id);
 
-	//! The buffer manager this buffer belongs to
-	BufferManager &manager;
+	DatabaseInstance &db;
 	//! Whether or not the managed buffer can be freely destroyed when unpinned.
 	//! - If can_destroy is true, the buffer can be destroyed when unpinned and hence be unrecoverable. After being
 	//! destroyed, Pin() will return false.

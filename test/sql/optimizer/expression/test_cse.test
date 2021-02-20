@@ -17,11 +17,30 @@ SELECT (a*2)+(a*2) FROM test
 ----
 168
 
-# multiple CSE
+# multiple CSEs
 query I
 SELECT (a*2)+(a*2)+(a*2)+(a*2)+(a*2) FROM test
 ----
 420
+
+# use the actual columns still
+query II
+SELECT (a*2)+(a*2)+(a*2)+(a*2)+(a*2), a FROM test
+----
+420	42
+
+# CSE in aggregates
+query I
+SELECT SUM((a*2)+(a*2)+(a*2)+(a*2)+(a*2)) FROM test
+----
+420
+
+# also with group by clause
+query II
+SELECT a, SUM((a*2)+(a*2)+(a*2)+(a*2)+(a*2)) FROM test GROUP BY a
+----
+42	420
+
 
 # CSE in WHERE clause
 query I

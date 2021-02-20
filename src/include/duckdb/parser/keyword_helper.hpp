@@ -24,4 +24,4 @@ public:
 	static string WriteOptionallyQuoted(const string &text);
 };
 
-}
+} // namespace duckdb

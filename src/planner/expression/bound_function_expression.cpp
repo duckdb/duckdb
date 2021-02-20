@@ -5,13 +5,16 @@
 #include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
-using namespace std;
 
 BoundFunctionExpression::BoundFunctionExpression(LogicalType return_type, ScalarFunction bound_function,
                                                  vector<unique_ptr<Expression>> arguments,
                                                  unique_ptr<FunctionData> bind_info, bool is_operator)
     : Expression(ExpressionType::BOUND_FUNCTION, ExpressionClass::BOUND_FUNCTION, move(return_type)),
-      function(bound_function), children(move(arguments)), bind_info(move(bind_info)), is_operator(is_operator) {
+      function(move(bound_function)), children(move(arguments)), bind_info(move(bind_info)), is_operator(is_operator) {
+}
+
+bool BoundFunctionExpression::HasSideEffects() const {
+	return function.has_side_effects ? true : Expression::HasSideEffects();
 }
 
 bool BoundFunctionExpression::IsFoldable() const {
@@ -29,14 +32,14 @@ string BoundFunctionExpression::ToString() const {
 
 hash_t BoundFunctionExpression::Hash() const {
 	hash_t result = Expression::Hash();
-	return CombineHash(result, duckdb::Hash(function.name.c_str()));
+	return CombineHash(result, function.Hash());
 }
 
-bool BoundFunctionExpression::Equals(const BaseExpression *other_) const {
-	if (!Expression::Equals(other_)) {
+bool BoundFunctionExpression::Equals(const BaseExpression *other_p) const {
+	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto other = (BoundFunctionExpression *)other_;
+	auto other = (BoundFunctionExpression *)other_p;
 	if (other->function != function) {
 		return false;
 	}
@@ -47,6 +50,9 @@ bool BoundFunctionExpression::Equals(const BaseExpression *other_) const {
 		if (!Expression::Equals(children[i].get(), other->children[i].get())) {
 			return false;
 		}
+	}
+	if (!FunctionData::Equals(bind_info.get(), other->bind_info.get())) {
+		return false;
 	}
 	return true;
 }

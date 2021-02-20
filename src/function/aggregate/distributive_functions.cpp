@@ -4,8 +4,6 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/aggregate_function.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 void BuiltinFunctions::RegisterDistributiveAggregates() {
@@ -17,8 +15,21 @@ void BuiltinFunctions::RegisterDistributiveAggregates() {
 	Register<FirstFun>();
 	Register<MaxFun>();
 	Register<MinFun>();
+	Register<MaxByFun>();
+	Register<MinByFun>();
 	Register<SumFun>();
 	Register<StringAggFun>();
+	Register<ApproxCountDistinctFun>();
+	Register<ProductFun>();
+	Register<BoolOrFun>();
+	Register<BoolAndFun>();
+	Register<ModeFun>();
+	Register<ArgMinFun>();
+	Register<ArgMaxFun>();
+	Register<ArbitraryFun>();
+	Register<SkewFun>();
+	Register<KurtosisFun>();
+	Register<EntropyFun>();
 }
 
 } // namespace duckdb

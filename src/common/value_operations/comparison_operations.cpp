@@ -4,18 +4,18 @@
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 
 namespace duckdb {
-using namespace std;
 
 //===--------------------------------------------------------------------===//
 // Comparison Operations
 //===--------------------------------------------------------------------===//
-template <class OP> static bool templated_boolean_operation(const Value &left, const Value &right) {
+template <class OP>
+static bool TemplatedBooleanOperation(const Value &left, const Value &right) {
 	auto left_type = left.type(), right_type = right.type();
 	if (left_type != right_type) {
 		try {
 			LogicalType comparison_type = BoundComparisonExpression::BindComparison(left_type, right_type);
-			return templated_boolean_operation<OP>(left.CastAs(comparison_type), right.CastAs(comparison_type));
-		} catch(...) {
+			return TemplatedBooleanOperation<OP>(left.CastAs(comparison_type), right.CastAs(comparison_type));
+		} catch (...) {
 			return false;
 		}
 	}
@@ -30,6 +30,14 @@ template <class OP> static bool templated_boolean_operation(const Value &left, c
 		return OP::Operation(left.value_.integer, right.value_.integer);
 	case PhysicalType::INT64:
 		return OP::Operation(left.value_.bigint, right.value_.bigint);
+	case PhysicalType::UINT8:
+		return OP::Operation(left.value_.utinyint, right.value_.utinyint);
+	case PhysicalType::UINT16:
+		return OP::Operation(left.value_.usmallint, right.value_.usmallint);
+	case PhysicalType::UINT32:
+		return OP::Operation(left.value_.uinteger, right.value_.uinteger);
+	case PhysicalType::UINT64:
+		return OP::Operation(left.value_.ubigint, right.value_.ubigint);
 	case PhysicalType::INT128:
 		return OP::Operation(left.value_.hugeint, right.value_.hugeint);
 	case PhysicalType::POINTER:
@@ -57,7 +65,7 @@ template <class OP> static bool templated_boolean_operation(const Value &left, c
 		return left.list_value == right.list_value;
 	}
 	default:
-		throw NotImplementedException("Unimplemented type");
+		throw InternalException("Unimplemented type for value comparison");
 	}
 }
 
@@ -68,7 +76,7 @@ bool ValueOperations::Equals(const Value &left, const Value &right) {
 	if (left.is_null != right.is_null) {
 		return false;
 	}
-	return templated_boolean_operation<duckdb::Equals>(left, right);
+	return TemplatedBooleanOperation<duckdb::Equals>(left, right);
 }
 
 bool ValueOperations::NotEquals(const Value &left, const Value &right) {
@@ -83,7 +91,7 @@ bool ValueOperations::GreaterThan(const Value &left, const Value &right) {
 	} else if (left.is_null) {
 		return false;
 	}
-	return templated_boolean_operation<duckdb::GreaterThan>(left, right);
+	return TemplatedBooleanOperation<duckdb::GreaterThan>(left, right);
 }
 
 bool ValueOperations::GreaterThanEquals(const Value &left, const Value &right) {
@@ -94,7 +102,7 @@ bool ValueOperations::GreaterThanEquals(const Value &left, const Value &right) {
 	} else if (left.is_null) {
 		return false;
 	}
-	return templated_boolean_operation<duckdb::GreaterThanEquals>(left, right);
+	return TemplatedBooleanOperation<duckdb::GreaterThanEquals>(left, right);
 }
 
 bool ValueOperations::LessThan(const Value &left, const Value &right) {

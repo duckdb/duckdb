@@ -22,7 +22,8 @@ public:
 
 	virtual void WriteData(const_data_ptr_t buffer, idx_t write_size) = 0;
 
-	template <class T> void Write(T element) {
+	template <class T>
+	void Write(T element) {
 		WriteData((const_data_ptr_t)&element, sizeof(T));
 	}
 
@@ -44,7 +45,8 @@ public:
 		}
 	}
 
-	template <class T> void WriteList(vector<unique_ptr<T>> &list) {
+	template <class T>
+	void WriteList(vector<unique_ptr<T>> &list) {
 		Write<uint32_t>((uint32_t)list.size());
 		for (auto &child : list) {
 			child->Serialize(*this);
@@ -58,7 +60,8 @@ public:
 		}
 	}
 
-	template <class T> void WriteOptional(unique_ptr<T> &element) {
+	template <class T>
+	void WriteOptional(const unique_ptr<T> &element) {
 		Write<bool>(element ? true : false);
 		if (element) {
 			element->Serialize(*this);
@@ -76,12 +79,14 @@ public:
 	//! Reads [read_size] bytes into the buffer
 	virtual void ReadData(data_ptr_t buffer, idx_t read_size) = 0;
 
-	template <class T> T Read() {
+	template <class T>
+	T Read() {
 		T value;
 		ReadData((data_ptr_t)&value, sizeof(T));
 		return value;
 	}
-	template <class T> void ReadList(vector<unique_ptr<T>> &list) {
+	template <class T>
+	void ReadList(vector<unique_ptr<T>> &list) {
 		auto select_count = Read<uint32_t>();
 		for (uint32_t i = 0; i < select_count; i++) {
 			auto child = T::Deserialize(*this);
@@ -89,7 +94,8 @@ public:
 		}
 	}
 
-	template <class T> unique_ptr<T> ReadOptional() {
+	template <class T>
+	unique_ptr<T> ReadOptional() {
 		auto has_entry = Read<bool>();
 		if (has_entry) {
 			return T::Deserialize(*this);
@@ -100,6 +106,7 @@ public:
 	void ReadStringVector(vector<string> &list);
 };
 
-template <> string Deserializer::Read();
+template <>
+string Deserializer::Read();
 
 } // namespace duckdb

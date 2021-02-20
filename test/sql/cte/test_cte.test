@@ -95,3 +95,25 @@ select * from vb
 ----
 43
 
+# cte in set operation node
+query I
+SELECT 1 UNION ALL (WITH cte AS (SELECT 42) SELECT * FROM cte);
+----
+1
+42
+
+# cte in recursive cte
+query I
+WITH RECURSIVE cte(d) AS (
+		SELECT 1
+	UNION ALL
+		(WITH c(d) AS (SELECT * FROM cte)
+			SELECT d + 1
+			FROM c
+			WHERE FALSE
+		)
+)
+SELECT max(d) FROM cte;
+----
+1
+

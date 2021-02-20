@@ -9,11 +9,6 @@ statement ok
 PRAGMA explain_output = OPTIMIZED_ONLY;
 
 # empty prefix/suffix/contains is transformed to this case statement
-# FIXME true_or_null
-query I nosort no_output
-EXPLAIN SELECT CASE WHEN S IS NOT NULL THEN TRUE ELSE NULL END FROM test
-----
-
 query I nosort no_output
 EXPLAIN SELECT PREFIX(S, '') FROM test
 ----

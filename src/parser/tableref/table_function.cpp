@@ -3,13 +3,12 @@
 #include "duckdb/common/serializer.hpp"
 
 namespace duckdb {
-using namespace std;
 
-bool TableFunctionRef::Equals(const TableRef *other_) const {
-	if (!TableRef::Equals(other_)) {
+bool TableFunctionRef::Equals(const TableRef *other_p) const {
+	if (!TableRef::Equals(other_p)) {
 		return false;
 	}
-	auto other = (TableFunctionRef *)other_;
+	auto other = (TableFunctionRef *)other_p;
 	return function->Equals(other->function.get());
 }
 
@@ -34,8 +33,8 @@ unique_ptr<TableRef> TableFunctionRef::Copy() {
 	auto copy = make_unique<TableFunctionRef>();
 
 	copy->function = function->Copy();
-	copy->alias = alias;
 	copy->column_name_alias = column_name_alias;
+	CopyProperties(*copy);
 
 	return move(copy);
 }

@@ -10,7 +10,6 @@
 #include <algorithm>
 
 namespace duckdb {
-using namespace std;
 
 void ViewCatalogEntry::Initialize(CreateViewInfo *info) {
 	query = move(info->query);
@@ -81,7 +80,7 @@ unique_ptr<CreateViewInfo> ViewCatalogEntry::Deserialize(Deserializer &source) {
 }
 
 string ViewCatalogEntry::ToSQL() {
-	if (sql.size() == 0) {
+	if (sql.empty()) {
 		throw NotImplementedException("Cannot convert VIEW to SQL because it was not created with a SQL statement");
 	}
 	return sql + "\n;";
@@ -90,7 +89,7 @@ string ViewCatalogEntry::ToSQL() {
 unique_ptr<CatalogEntry> ViewCatalogEntry::Copy(ClientContext &context) {
 	D_ASSERT(!internal);
 	auto create_info = make_unique<CreateViewInfo>(schema->name, name);
-	create_info->query = query->Copy();
+	create_info->query = unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy());
 	for (idx_t i = 0; i < aliases.size(); i++) {
 		create_info->aliases.push_back(aliases[i]);
 	}

@@ -2,7 +2,7 @@
 
 #include "duckdb.hpp"
 #include "duckdb/parser/parser.hpp"
-#include "duckdb/planner/pragma_handler.hpp"
+#include "duckdb/main/client_context.hpp"
 
 #include <ctype.h>
 #include <stdio.h>
@@ -147,12 +147,11 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 		vector<unique_ptr<SQLStatement>> statements;
 		statements.push_back(move(parser.statements[0]));
 
-		PragmaHandler handler(*db->con->context);
-		handler.HandlePragmaStatements(statements);
+		db->con->context->HandlePragmaStatements(statements);
 
 		// if there are multiple statements here, we are dealing with an import database statement
 		// we directly execute all statements besides the final one
-		for(idx_t i = 0; i + 1 < statements.size(); i++) {
+		for (idx_t i = 0; i + 1 < statements.size(); i++) {
 			auto res = db->con->Query(move(statements[i]));
 			if (!res->success) {
 				db->last_error = res->error;
@@ -198,6 +197,7 @@ bool sqlite3_display_result(StatementType type) {
 	case StatementType::EXPLAIN_STATEMENT:
 	case StatementType::PRAGMA_STATEMENT:
 	case StatementType::SELECT_STATEMENT:
+	case StatementType::SHOW_STATEMENT:
 		return true;
 	default:
 		return false;
@@ -216,7 +216,7 @@ int sqlite3_step(sqlite3_stmt *pStmt) {
 	pStmt->current_text = nullptr;
 	if (!pStmt->result) {
 		// no result yet! call Execute()
-		pStmt->result = pStmt->prepared->Execute(pStmt->bound_values);
+		pStmt->result = pStmt->prepared->Execute(pStmt->bound_values, false);
 		if (!pStmt->result->success) {
 			// error in execute: clear prepared statement
 			pStmt->db->last_error = pStmt->result->error;
@@ -226,12 +226,12 @@ int sqlite3_step(sqlite3_stmt *pStmt) {
 		// fetch a chunk
 		pStmt->current_chunk = pStmt->result->Fetch();
 		pStmt->current_row = -1;
-		if (!sqlite3_display_result(pStmt->prepared->type)) {
+		if (!sqlite3_display_result(pStmt->prepared->GetStatementType())) {
 			// only SELECT statements return results
 			sqlite3_reset(pStmt);
 		}
 	}
-	if (!pStmt->current_chunk) {
+	if (!pStmt->current_chunk || pStmt->current_chunk->size() == 0) {
 		return SQLITE_DONE;
 	}
 	pStmt->current_row++;
@@ -360,10 +360,10 @@ const char *sqlite3_sql(sqlite3_stmt *pStmt) {
 }
 
 int sqlite3_column_count(sqlite3_stmt *pStmt) {
-	if (!pStmt) {
+	if (!pStmt || !pStmt->prepared) {
 		return 0;
 	}
-	return (int)pStmt->prepared->types.size();
+	return (int)pStmt->prepared->ColumnCount();
 }
 
 ////////////////////////////
@@ -404,10 +404,10 @@ int sqlite3_column_type(sqlite3_stmt *pStmt, int iCol) {
 }
 
 const char *sqlite3_column_name(sqlite3_stmt *pStmt, int N) {
-	if (!pStmt) {
+	if (!pStmt || !pStmt->prepared) {
 		return nullptr;
 	}
-	return pStmt->prepared->names[N].c_str();
+	return pStmt->prepared->GetNames()[N].c_str();
 }
 
 static bool sqlite3_column_has_value(sqlite3_stmt *pStmt, int iCol, LogicalType target_type, Value &val) {
@@ -552,7 +552,11 @@ int sqlite3_bind_text(sqlite3_stmt *stmt, int idx, const char *val, int length, 
 	if (free_func && ((ptrdiff_t)free_func) != -1) {
 		free_func((void *)val);
 	}
-	return sqlite3_internal_bind_value(stmt, idx, Value(value));
+	try {
+		return sqlite3_internal_bind_value(stmt, idx, Value(value));
+	} catch (std::exception &ex) {
+		return SQLITE_ERROR;
+	}
 }
 
 int sqlite3_clear_bindings(sqlite3_stmt *stmt) {
@@ -733,9 +737,180 @@ int sqlite3_total_changes(sqlite3 *) {
 	return 0;
 }
 
+// some code borrowed from sqlite
+// its probably best to match its behavior
+
+typedef uint8_t u8;
+
+/*
+** Token types used by the sqlite3_complete() routine.  See the header
+** comments on that procedure for additional information.
+*/
+#define tkSEMI  0
+#define tkWS    1
+#define tkOTHER 2
+
+const unsigned char sqlite3CtypeMap[256] = {
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 00..07    ........ */
+    0x00, 0x01, 0x01, 0x01, 0x01, 0x01, 0x00, 0x00, /* 08..0f    ........ */
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 10..17    ........ */
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 18..1f    ........ */
+    0x01, 0x00, 0x80, 0x00, 0x40, 0x00, 0x00, 0x80, /* 20..27     !"#$%&' */
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 28..2f    ()*+,-./ */
+    0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c, /* 30..37    01234567 */
+    0x0c, 0x0c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 38..3f    89:;<=>? */
+
+    0x00, 0x0a, 0x0a, 0x0a, 0x0a, 0x0a, 0x0a, 0x02, /* 40..47    @ABCDEFG */
+    0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, /* 48..4f    HIJKLMNO */
+    0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, /* 50..57    PQRSTUVW */
+    0x02, 0x02, 0x02, 0x80, 0x00, 0x00, 0x00, 0x40, /* 58..5f    XYZ[\]^_ */
+    0x80, 0x2a, 0x2a, 0x2a, 0x2a, 0x2a, 0x2a, 0x22, /* 60..67    `abcdefg */
+    0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, /* 68..6f    hijklmno */
+    0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, /* 70..77    pqrstuvw */
+    0x22, 0x22, 0x22, 0x00, 0x00, 0x00, 0x00, 0x00, /* 78..7f    xyz{|}~. */
+
+    0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, /* 80..87    ........ */
+    0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, /* 88..8f    ........ */
+    0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, /* 90..97    ........ */
+    0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, /* 98..9f    ........ */
+    0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, /* a0..a7    ........ */
+    0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, /* a8..af    ........ */
+    0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, /* b0..b7    ........ */
+    0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, /* b8..bf    ........ */
+
+    0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, /* c0..c7    ........ */
+    0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, /* c8..cf    ........ */
+    0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, /* d0..d7    ........ */
+    0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, /* d8..df    ........ */
+    0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, /* e0..e7    ........ */
+    0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, /* e8..ef    ........ */
+    0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, /* f0..f7    ........ */
+    0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40  /* f8..ff    ........ */
+};
+
+// TODO this can probably be simplified
+#define IdChar(C) ((sqlite3CtypeMap[(unsigned char)C] & 0x46) != 0)
+
+int sqlite3_complete(const char *zSql) {
+	u8 state = 0; /* Current state, using numbers defined in header comment */
+	u8 token;     /* Value of the next token */
+
+	/* If triggers are not supported by this compile then the statement machine
+	 ** used to detect the end of a statement is much simpler
+	 */
+	static const u8 trans[3][3] = {
+	    /* Token:           */
+	    /* State:       **  SEMI  WS  OTHER */
+	    /* 0 INVALID: */ {
+	        1,
+	        0,
+	        2,
+	    },
+	    /* 1   START: */
+	    {
+	        1,
+	        1,
+	        2,
+	    },
+	    /* 2  NORMAL: */
+	    {
+	        1,
+	        2,
+	        2,
+	    },
+	};
+
+	while (*zSql) {
+		switch (*zSql) {
+		case ';': { /* A semicolon */
+			token = tkSEMI;
+			break;
+		}
+		case ' ':
+		case '\r':
+		case '\t':
+		case '\n':
+		case '\f': { /* White space is ignored */
+			token = tkWS;
+			break;
+		}
+		case '/': { /* C-style comments */
+			if (zSql[1] != '*') {
+				token = tkOTHER;
+				break;
+			}
+			zSql += 2;
+			while (zSql[0] && (zSql[0] != '*' || zSql[1] != '/')) {
+				zSql++;
+			}
+			if (zSql[0] == 0)
+				return 0;
+			zSql++;
+			token = tkWS;
+			break;
+		}
+		case '-': { /* SQL-style comments from "--" to end of line */
+			if (zSql[1] != '-') {
+				token = tkOTHER;
+				break;
+			}
+			while (*zSql && *zSql != '\n') {
+				zSql++;
+			}
+			if (*zSql == 0)
+				return state == 1;
+			token = tkWS;
+			break;
+		}
+		case '[': { /* Microsoft-style identifiers in [...] */
+			zSql++;
+			while (*zSql && *zSql != ']') {
+				zSql++;
+			}
+			if (*zSql == 0)
+				return 0;
+			token = tkOTHER;
+			break;
+		}
+		case '`': /* Grave-accent quoted symbols used by MySQL */
+		case '"': /* single- and double-quoted strings */
+		case '\'': {
+			int c = *zSql;
+			zSql++;
+			while (*zSql && *zSql != c) {
+				zSql++;
+			}
+			if (*zSql == 0)
+				return 0;
+			token = tkOTHER;
+			break;
+		}
+		default: {
+
+			if (IdChar((u8)*zSql)) {
+				/* Keywords and unquoted identifiers */
+				int nId;
+				for (nId = 1; IdChar(zSql[nId]); nId++) {
+				}
+				token = tkOTHER;
+
+				zSql += nId - 1;
+			} else {
+				/* Operators and special symbols */
+				token = tkOTHER;
+			}
+			break;
+		}
+		}
+		state = trans[state][token];
+		zSql++;
+	}
+	return state == 1;
+}
+
 // checks if input ends with ;
-int sqlite3_complete(const char *sql) {
-	// FIXME fprintf(stderr, "sqlite3_complete: unsupported.\n");
+int sqlite3_complete_old(const char *sql) {
+	fprintf(stderr, "sqlite3_complete: unsupported. '%s'\n", sql);
 	return -1;
 }
 
@@ -797,9 +972,46 @@ int sqlite3_table_column_metadata(sqlite3 *db,             /* Connection handle 
 	return -1;
 }
 
-const char *sqlite3_column_decltype(sqlite3_stmt *stmt, int col) {
-	fprintf(stderr, "sqlite3_column_decltype: unsupported.\n");
-	return nullptr;
+const char *sqlite3_column_decltype(sqlite3_stmt *pStmt, int iCol) {
+	if (!pStmt || !pStmt->prepared) {
+		return NULL;
+	}
+	auto column_type = pStmt->prepared->GetTypes()[iCol];
+	switch (column_type.id()) {
+	case LogicalTypeId::BOOLEAN:
+		return "BOOLEAN";
+	case LogicalTypeId::TINYINT:
+		return "TINYINT";
+	case LogicalTypeId::SMALLINT:
+		return "SMALLINT";
+	case LogicalTypeId::INTEGER:
+		return "INTEGER";
+	case LogicalTypeId::BIGINT:
+		return "BIGINT";
+	case LogicalTypeId::FLOAT:
+		return "FLOAT";
+	case LogicalTypeId::DOUBLE:
+		return "DOUBLE";
+	case LogicalTypeId::DECIMAL:
+		return "DECIMAL";
+	case LogicalTypeId::DATE:
+		return "DATE";
+	case LogicalTypeId::TIME:
+		return "TIME";
+	case LogicalTypeId::TIMESTAMP:
+		return "TIMESTAMP";
+	case LogicalTypeId::VARCHAR:
+		return "VARCHAR";
+	case LogicalTypeId::LIST:
+		return "LIST";
+	case LogicalTypeId::STRUCT:
+		return "STRUCT";
+	case LogicalTypeId::BLOB:
+		return "BLOB";
+	default:
+		return NULL;
+	}
+	return NULL;
 }
 
 int sqlite3_status64(int op, sqlite3_int64 *pCurrent, sqlite3_int64 *pHighwater, int resetFlag) {
@@ -1177,7 +1389,6 @@ SQLITE_API void *sqlite3_aggregate_context(sqlite3_context *, int nBytes) {
 
 SQLITE_API int sqlite3_create_collation(sqlite3 *, const char *zName, int eTextRep, void *pArg,
                                         int (*xCompare)(void *, int, const void *, int, const void *)) {
-
 	return SQLITE_ERROR;
 }
 
@@ -1221,7 +1432,7 @@ SQLITE_API int sqlite3_stmt_isexplain(sqlite3_stmt *pStmt) {
 	if (!pStmt || !pStmt->prepared) {
 		return 0;
 	}
-	return pStmt->prepared->type == StatementType::EXPLAIN_STATEMENT;
+	return pStmt->prepared->GetStatementType() == StatementType::EXPLAIN_STATEMENT;
 }
 
 SQLITE_API int sqlite3_vtab_config(sqlite3 *, int op, ...) {

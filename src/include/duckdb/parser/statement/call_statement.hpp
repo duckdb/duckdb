@@ -16,8 +16,11 @@ namespace duckdb {
 
 class CallStatement : public SQLStatement {
 public:
-	CallStatement() : SQLStatement(StatementType::CALL_STATEMENT){};
+	CallStatement();
 
 	unique_ptr<ParsedExpression> function;
+
+public:
+	unique_ptr<SQLStatement> Copy() const override;
 };
 } // namespace duckdb

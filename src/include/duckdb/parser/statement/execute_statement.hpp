@@ -16,9 +16,12 @@ namespace duckdb {
 
 class ExecuteStatement : public SQLStatement {
 public:
-	ExecuteStatement() : SQLStatement(StatementType::EXECUTE_STATEMENT){};
+	ExecuteStatement();
 
 	string name;
 	vector<unique_ptr<ParsedExpression>> values;
+
+public:
+	unique_ptr<SQLStatement> Copy() const override;
 };
 } // namespace duckdb

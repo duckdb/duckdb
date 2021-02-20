@@ -14,7 +14,8 @@
 namespace duckdb {
 
 struct CreatePragmaFunctionInfo : public CreateFunctionInfo {
-	CreatePragmaFunctionInfo(PragmaFunction function) : CreateFunctionInfo(CatalogType::PRAGMA_FUNCTION_ENTRY) {
+	explicit CreatePragmaFunctionInfo(PragmaFunction function)
+	    : CreateFunctionInfo(CatalogType::PRAGMA_FUNCTION_ENTRY) {
 		functions.push_back(move(function));
 		this->name = function.name;
 	}
@@ -27,6 +28,13 @@ struct CreatePragmaFunctionInfo : public CreateFunctionInfo {
 	}
 
 	vector<PragmaFunction> functions;
+
+public:
+	unique_ptr<CreateInfo> Copy() const override {
+		auto result = make_unique<CreatePragmaFunctionInfo>(functions[0].name, functions);
+		CopyProperties(*result);
+		return move(result);
+	}
 };
 
 } // namespace duckdb

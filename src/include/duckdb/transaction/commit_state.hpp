@@ -22,7 +22,7 @@ struct UpdateInfo;
 
 class CommitState {
 public:
-	CommitState(transaction_t commit_id, WriteAheadLog *log = nullptr);
+	explicit CommitState(transaction_t commit_id, WriteAheadLog *log = nullptr);
 
 	WriteAheadLog *log;
 	transaction_t commit_id;
@@ -35,7 +35,8 @@ public:
 	unique_ptr<DataChunk> update_chunk;
 
 public:
-	template <bool HAS_LOG> void CommitEntry(UndoFlags type, data_ptr_t data);
+	template <bool HAS_LOG>
+	void CommitEntry(UndoFlags type, data_ptr_t data);
 	void RevertCommit(UndoFlags type, data_ptr_t data);
 
 private:

@@ -20,11 +20,12 @@ miniz_dir = os.path.join('third_party', 'miniz')
 re2_dir = os.path.join('third_party', 're2')
 pg_query_dir = os.path.join('third_party', 'libpg_query')
 pg_query_include_dir = os.path.join('third_party', 'libpg_query', 'include')
-
+hll_dir = os.path.join('third_party', 'hyperloglog')
 utf8proc_dir = os.path.join('third_party', 'utf8proc')
 utf8proc_include_dir = os.path.join('third_party', 'utf8proc', 'include')
 
 moodycamel_include_dir = os.path.join('third_party', 'concurrentqueue')
+pcg_include_dir = os.path.join('third_party', 'pcg')
 
 # files included in the amalgamated "duckdb.hpp" file
 main_header_files = [os.path.join(include_dir, 'duckdb.hpp'),
@@ -44,11 +45,30 @@ main_header_files = [os.path.join(include_dir, 'duckdb.hpp'),
     os.path.join(include_dir, 'duckdb', 'function', 'table_function.hpp'),
     os.path.join(include_dir, 'duckdb', 'parser', 'parsed_data', 'create_table_function_info.hpp'),
     os.path.join(include_dir, 'duckdb', 'parser', 'parsed_data', 'create_copy_function_info.hpp')]
+if '--extended' in sys.argv:
+    def add_include_dir(dirpath):
+        return [os.path.join(dirpath, x) for x in os.listdir(dirpath)]
 
+
+    main_header_files += [os.path.join(include_dir, x) for x in [
+        'duckdb/planner/expression/bound_constant_expression.hpp',
+        'duckdb/planner/expression/bound_function_expression.hpp',
+        'duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp',
+        'duckdb/parser/parsed_data/create_table_info.hpp',
+        'duckdb/planner/parsed_data/bound_create_table_info.hpp',
+        'duckdb/parser/constraints/not_null_constraint.hpp',
+        'duckdb/storage/data_table.hpp',
+        'duckdb/function/pragma_function.hpp',
+        'duckdb/parser/qualified_name.hpp',
+        'duckdb/parser/parser.hpp',
+        'duckdb/planner/binder.hpp']]
+    main_header_files += add_include_dir(os.path.join(include_dir, 'duckdb/parser/expression'))
+    main_header_files += add_include_dir(os.path.join(include_dir, 'duckdb/parser/parsed_data'))
+    main_header_files += add_include_dir(os.path.join(include_dir, 'duckdb/parser/tableref'))
 # include paths for where to search for include files during amalgamation
-include_paths = [include_dir, fmt_include_dir, re2_dir, miniz_dir, utf8proc_include_dir, utf8proc_dir, pg_query_include_dir, pg_query_dir, moodycamel_include_dir]
+include_paths = [include_dir, fmt_include_dir, re2_dir, miniz_dir, utf8proc_include_dir, hll_dir, utf8proc_dir, pg_query_include_dir, pg_query_dir, moodycamel_include_dir,pcg_include_dir]
 # paths of where to look for files to compile and include to the final amalgamation
-compile_directories = [src_dir, fmt_dir, miniz_dir, re2_dir, utf8proc_dir, pg_query_dir]
+compile_directories = [src_dir, fmt_dir, miniz_dir, re2_dir, hll_dir, utf8proc_dir, pg_query_dir]
 
 # files always excluded
 always_excluded = ['src/amalgamation/duckdb.cpp', 'src/amalgamation/duckdb.hpp', 'src/amalgamation/parquet-extension.cpp', 'src/amalgamation/parquet-extension.hpp']
@@ -63,7 +83,7 @@ linenumbers = False
 
 def get_includes(fpath, text):
     # find all the includes referred to in the directory
-    include_statements = re.findall("(^[#]include[\t ]+[\"]([^\"]+)[\"])", text, flags=re.MULTILINE)
+    include_statements = re.findall("(^[\t ]*[#][\t ]*include[\t ]+[\"]([^\"]+)[\"])", text, flags=re.MULTILINE)
     include_files = []
     # figure out where they are located
     for included_file in [x[1] for x in include_statements]:
@@ -187,8 +207,20 @@ def copy_if_different(src, dest):
     shutil.copyfile(src, dest)
 
 def git_commit_hash():
-    return subprocess.check_output(['git','log','-1','--format=%h']).strip()
+    return subprocess.check_output(['git','log','-1','--format=%h']).strip().decode('utf8')
 
+def git_dev_version():
+    version = subprocess.check_output(['git','describe','--tags','--abbrev=0']).strip().decode('utf8')
+    long_version = subprocess.check_output(['git','describe','--tags','--long']).strip().decode('utf8')
+    version_splits = version.lstrip('v').split('.')
+    dev_version = long_version.split('-')[1]
+    if int(dev_version) == 0:
+        # directly on a tag: emit the regular version
+        return '.'.join(version_splits)
+    else:
+        # not on a tag: increment the version by one and add a -devX suffix
+        version_splits[2] = str(int(version_splits[2]) + 1)
+        return '.'.join(version_splits) + "-dev" + dev_version
 
 def generate_duckdb_hpp(header_file):
     print("-----------------------")
@@ -201,7 +233,8 @@ def generate_duckdb_hpp(header_file):
 
         hfile.write("#pragma once\n")
         hfile.write("#define DUCKDB_AMALGAMATION 1\n")
-        hfile.write("#define DUCKDB_SOURCE_ID \"%s\"\n" % git_commit_hash().decode('utf8'))
+        hfile.write("#define DUCKDB_SOURCE_ID \"%s\"\n" % git_commit_hash())
+        hfile.write("#define DUCKDB_VERSION \"%s\"\n" % git_dev_version())
         for fpath in main_header_files:
             hfile.write(write_file(fpath))
 

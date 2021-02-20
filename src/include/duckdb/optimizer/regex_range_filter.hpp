@@ -19,7 +19,7 @@ public:
 	RegexRangeFilter() {
 	}
 	//! Perform filter pushdown
-	unique_ptr<LogicalOperator> Rewrite(unique_ptr<LogicalOperator> node);
+	unique_ptr<LogicalOperator> Rewrite(unique_ptr<LogicalOperator> op);
 };
 
 } // namespace duckdb

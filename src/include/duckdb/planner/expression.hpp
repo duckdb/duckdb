@@ -12,13 +12,18 @@
 #include "duckdb/common/types.hpp"
 
 namespace duckdb {
+class BaseStatistics;
+
 //!  The Expression class represents a bound Expression with a return type
 class Expression : public BaseExpression {
 public:
 	Expression(ExpressionType type, ExpressionClass expression_class, LogicalType return_type);
+	~Expression() override;
 
 	//! The return type of the expression
 	LogicalType return_type;
+	//! Expression statistics (if any)
+	unique_ptr<BaseStatistics> stats;
 
 public:
 	bool IsAggregate() const override;
@@ -26,15 +31,16 @@ public:
 	bool HasSubquery() const override;
 	bool IsScalar() const override;
 	bool HasParameter() const override;
+	virtual bool HasSideEffects() const;
 	virtual bool IsFoldable() const;
 
 	hash_t Hash() const override;
 
-	virtual bool Equals(const BaseExpression *other) const override {
+	bool Equals(const BaseExpression *other) const override {
 		if (!BaseExpression::Equals(other)) {
 			return false;
 		}
-		return return_type == ((Expression *) other)->return_type;
+		return return_type == ((Expression *)other)->return_type;
 	}
 
 	static bool Equals(Expression *left, Expression *right) {

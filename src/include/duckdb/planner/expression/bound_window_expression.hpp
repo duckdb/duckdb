@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/parser/expression/window_expression.hpp"
+#include "duckdb/function/function.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
 #include "duckdb/planner/expression.hpp"
 
@@ -17,10 +18,13 @@ class AggregateFunction;
 
 class BoundWindowExpression : public Expression {
 public:
-	BoundWindowExpression(ExpressionType type, LogicalType return_type, unique_ptr<AggregateFunction> aggregate);
+	BoundWindowExpression(ExpressionType type, LogicalType return_type, unique_ptr<AggregateFunction> aggregate,
+	                      unique_ptr<FunctionData> bind_info);
 
 	//! The bound aggregate function
 	unique_ptr<AggregateFunction> aggregate;
+	//! The bound function info
+	unique_ptr<FunctionData> bind_info;
 	//! The child expressions of the main window aggregate
 	vector<unique_ptr<Expression>> children;
 	//! The set of expressions to partition by

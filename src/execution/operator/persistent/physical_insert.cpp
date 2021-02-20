@@ -6,8 +6,6 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/storage/data_table.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
@@ -43,7 +41,7 @@ void PhysicalInsert::Sink(ExecutionContext &context, GlobalOperatorState &state,
 
 	istate.insert_chunk.Reset();
 	istate.insert_chunk.SetCardinality(chunk);
-	if (column_index_map.size() > 0) {
+	if (!column_index_map.empty()) {
 		// columns specified by the user, use column_index_map
 		for (idx_t i = 0; i < table->columns.size(); i++) {
 			if (column_index_map[i] == INVALID_INDEX) {
@@ -51,15 +49,15 @@ void PhysicalInsert::Sink(ExecutionContext &context, GlobalOperatorState &state,
 				istate.default_executor.ExecuteExpression(i, istate.insert_chunk.data[i]);
 			} else {
 				// get value from child chunk
-				D_ASSERT((idx_t)column_index_map[i] < chunk.column_count());
-				D_ASSERT(istate.insert_chunk.data[i].type == chunk.data[column_index_map[i]].type);
+				D_ASSERT((idx_t)column_index_map[i] < chunk.ColumnCount());
+				D_ASSERT(istate.insert_chunk.data[i].GetType() == chunk.data[column_index_map[i]].GetType());
 				istate.insert_chunk.data[i].Reference(chunk.data[column_index_map[i]]);
 			}
 		}
 	} else {
 		// no columns specified, just append directly
-		for (idx_t i = 0; i < istate.insert_chunk.column_count(); i++) {
-			D_ASSERT(istate.insert_chunk.data[i].type == chunk.data[i].type);
+		for (idx_t i = 0; i < istate.insert_chunk.ColumnCount(); i++) {
+			D_ASSERT(istate.insert_chunk.data[i].GetType() == chunk.data[i].GetType());
 			istate.insert_chunk.data[i].Reference(chunk.data[i]);
 		}
 	}

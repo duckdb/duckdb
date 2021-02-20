@@ -7,27 +7,28 @@ import time
 import sys
 import inspect
 import subprocess
+import difflib
 from python_helpers import open_utf8
 
-cpp_format_command = 'clang-format -i -sort-includes=${SORT_INCLUDES} -style=file "${FILE}"'
-sql_format_command = 'pg_format "${FILE}" -o "${FILE}.out" && mv "${FILE}.out" "${FILE}"'
-cmake_format_command = 'cmake-format -i "${FILE}"'
-extensions = ['.cpp', '.c', '.hpp', '.h', '.cc', '.hh', '.sql', '.txt', '.test', '.test_slow']
+cpp_format_command = 'clang-format --sort-includes=0 -style=file'
+cmake_format_command = 'cmake-format'
+extensions = ['.cpp', '.c', '.hpp', '.h', '.cc', '.hh', 'CMakeLists.txt', '.test', '.test_slow']
 formatted_directories = ['src', 'benchmark', 'test', 'tools', 'examples', 'extension']
 ignored_files = ['tpch_constants.hpp', 'tpcds_constants.hpp', '_generated', 'tpce_flat_input.hpp',
-                 'test_csv_header.hpp', 'duckdb.cpp', 'duckdb.hpp', 'json.hpp', 'sqlite3.h', 'shell.c', 'termcolor.hpp']
-confirm = True
+                 'test_csv_header.hpp', 'duckdb.cpp', 'duckdb.hpp', 'json.hpp', 'sqlite3.h', 'shell.c',
+                 'termcolor.hpp', 'test_insert_invalid.test', 'httplib.hpp', 'os_win.c', 'glob.c', 'printf.c']
+ignored_directories = ['.eggs', '__pycache__', 'icu', 'dbgen']
 format_all = False
-
-os.system("git fetch origin master:master")
-
+check_only = True
+confirm = True
+silent = False
 
 def print_usage():
-    print("Usage: python scripts/format.py [revision|--all] [--no-confirm]")
+    print("Usage: python scripts/format.py [revision|--all] [--check|--fix]")
     print("   [revision]     is an optional revision number, all files that changed since that revision will be formatted (default=HEAD)")
     print(
         "                  if [revision] is set to --all, all files will be formatted")
-    print("   [--no-confirm] if set, the confirm dialog is skipped")
+    print("   --check only prints differences, --fix also fixes the files (--check is default)")
     exit(1)
 
 
@@ -40,16 +41,21 @@ else:
 
 if len(sys.argv) > 2:
     for arg in sys.argv[2:]:
-        if arg == '--no-confirm':
+        if arg == '--check':
+            check_only = True
+        elif arg == '--fix':
+            check_only = False
+        elif arg == '--noconfirm':
             confirm = False
         elif arg == '--confirm':
             confirm = True
+        elif arg == '--silent':
+            silent = True
         else:
             print_usage()
 
 if revision == '--all':
     format_all = True
-
 
 def can_format_file(full_path):
     global extensions, formatted_directories, ignored_files
@@ -71,14 +77,12 @@ def can_format_file(full_path):
     for dname in formatted_directories:
         if full_path.startswith(dname):
             return True
-    # skip files that end in .txt but are not CMakeLists.txt
-    if full_path.endswith('.txt'):
-        return fname == 'CMakeLists.txt'
     return False
 
 
-print("Formatting since branch or revision: " + revision)
-
+action = "Formatting"
+if check_only:
+    action = "Checking"
 
 def get_changed_files(revision):
     proc = subprocess.Popen(
@@ -91,8 +95,19 @@ def get_changed_files(revision):
         changed_files.append(f)
     return changed_files
 
+if os.path.isfile(revision):
+    print(action + " individual file: " + revision)
+    changed_files = [revision]
+elif os.path.isdir(revision):
+    print(action + " files in directory: " + revision)
+    changed_files = [os.path.join(revision, x) for x in os.listdir(revision)]
 
-if not format_all:
+    print("Changeset:")
+    for fname in changed_files:
+        print(fname)
+elif not format_all:
+    os.system("git fetch origin master:master")
+    print(action + " since branch or revision: " + revision)
     changed_files = get_changed_files(revision)
     if len(changed_files) == 0:
         print("No changed files found!")
@@ -102,9 +117,10 @@ if not format_all:
     for fname in changed_files:
         print(fname)
 else:
-    print("Formatting all files")
+    print(action + " all files")
 
-if confirm:
+if confirm and not check_only:
+    print("The files listed above will be reformatted.")
     result = input("Continue with changes (y/n)?\n")
     if result != 'y':
         print("Aborting.")
@@ -117,9 +133,10 @@ format_commands = {
     '.h': cpp_format_command,
     '.hh': cpp_format_command,
     '.cc': cpp_format_command,
-    '.sql': sql_format_command,
     '.txt': cmake_format_command
 }
+
+difference_files = []
 
 header_top = "//===----------------------------------------------------------------------===//\n"
 header_top += "//                         DuckDB\n" + "//\n"
@@ -127,42 +144,41 @@ header_bottom = "//\n" + "//\n"
 header_bottom += "//===----------------------------------------------------------------------===//\n\n"
 base_dir = os.path.join(os.getcwd(), 'src/include')
 
-
-def format_file(f, full_path, directory, ext, sort_includes):
-    if not os.path.isfile(full_path):
-        return
+def get_formatted_text(f, full_path, directory, ext):
+    if not can_format_file(full_path):
+        print("Eek, cannot format file " + full_path + " but attempted to format anyway")
+        exit(1)
     if f == 'list.hpp':
         # fill in list file
-        list = [os.path.join(dp, f) for dp, dn, filenames in os.walk(
+        file_list = [os.path.join(dp, f) for dp, dn, filenames in os.walk(
             directory) for f in filenames if os.path.splitext(f)[1] == '.hpp' and not f.endswith("list.hpp")]
-        list = [x.replace('src/include/', '') for x in list]
-        list.sort()
-        with open_utf8(full_path, "w") as file:
-            for x in list:
-                file.write('#include "%s"\n' % (x))
-    elif ext == ".hpp" and directory.startswith("src/include"):
+        file_list = [x.replace('src/include/', '') for x in file_list]
+        file_list.sort()
+        result = ""
+        for x in file_list:
+            result += '#include "%s"\n' % (x)
+        return result
+
+    if ext == ".hpp" and directory.startswith("src/include"):
+        f = open_utf8(full_path, 'r')
+        lines = f.readlines()
+        f.close()
+
         # format header in files
         header_middle = "// " + os.path.relpath(full_path, base_dir) + "\n"
-        file = open_utf8(full_path, "r")
-        lines = file.readlines()
-        file.close()
-        file = open_utf8(full_path, "w")
-        file.write(header_top + header_middle + header_bottom)
+        text = header_top + header_middle + header_bottom
         is_old_header = True
         for line in lines:
             if not (line.startswith("//") or line.startswith("\n")) and is_old_header:
                 is_old_header = False
             if not is_old_header:
-                file.write(line)
-        file.close()
-    elif ext == ".txt" and f != 'CMakeLists.txt':
-        return
-    elif ext == '.test' or ext == '.test_slow':
-        try:
-            with open_utf8(full_path, "r") as file_:
-                lines = file_.readlines()
-        except:
-            return
+                text += line
+
+    if ext == '.test' or ext == '.test_slow':
+        f = open_utf8(full_path, 'r')
+        lines = f.readlines()
+        f.close()
+
         found_name = False
         found_group = False
         group_name = full_path.split('/')[-2]
@@ -177,7 +193,6 @@ def format_file(f, full_path, directory, ext, sort_includes):
                     exit(1)
                 found_name = True
                 if lines[i] != new_path_line:
-                    found_diff = True
                     lines[i] = new_path_line
             if line.startswith('# group: ') or line.startswith('#group: '):
                 if found_group:
@@ -185,44 +200,69 @@ def format_file(f, full_path, directory, ext, sort_includes):
                     exit(1)
                 found_group = True
                 if lines[i] != new_group_line:
-                    found_diff = True
                     lines[i] = new_group_line
         if not found_group:
             lines = [new_group_line] + lines
-            found_diff = True
         if not found_name:
             lines = [new_path_line] + lines
-            found_diff = True
-        if found_diff:
-            print(full_path)
-            print(new_path_line)
-            print(new_group_line)
-            with open_utf8(full_path, "w+") as file_:
-                file_.write(''.join(lines))
-        return
-    format_command = format_commands[ext]
-    cmd = format_command.replace("${FILE}", full_path).replace(
-        "${SORT_INCLUDES}", "1" if sort_includes else "0")
-    print(cmd)
-    os.system(cmd)
-    # remove empty lines at beginning and end of file
-    with open_utf8(full_path, 'r') as fp:
-        text = fp.read()
-        text = text.strip() + "\n"
-    with open_utf8(full_path, 'w+') as fp:
-        fp.write(text)
+        return ''.join(lines)
+    proc_command = format_commands[ext].split(' ') + [full_path]
+    proc = subprocess.Popen(proc_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    new_text = proc.stdout.read().decode('utf8')
+    stderr = proc.stderr.read().decode('utf8')
+    if len(stderr) > 0:
+        print(os.getcwd())
+        print("Failed to format file " + full_path)
+        print(' '.join(proc_command))
+        print(stderr)
+        exit(1)
+    return new_text
 
+def format_file(f, full_path, directory, ext):
+    global difference_files
+    f = open_utf8(full_path, 'r')
+    old_lines = f.read().split('\n')
+    f.close()
 
-def format_directory(directory, sort_includes=False):
+    new_text = get_formatted_text(f, full_path, directory, ext)
+    if check_only:
+        new_lines = new_text.split('\n')
+        old_lines = [x for x in old_lines if '...' not in x]
+        new_lines = [x for x in new_lines if '...' not in x]
+        diff_result = difflib.unified_diff(old_lines, new_lines)
+        total_diff = ""
+        for diff_line in diff_result:
+            total_diff += diff_line + "\n"
+        total_diff = total_diff.strip()
+        if len(total_diff) > 0:
+            print("----------------------------------------")
+            print("----------------------------------------")
+            print("Found differences in file " + full_path)
+            print("----------------------------------------")
+            print("----------------------------------------")
+            print(total_diff)
+            difference_files.append(full_path)
+    else:
+        tmpfile = full_path + ".tmp"
+        f = open_utf8(tmpfile, 'w+')
+        f.write(new_text)
+        f.close()
+        os.rename(tmpfile, full_path)
+
+def format_directory(directory):
     files = os.listdir(directory)
+    files.sort()
     for f in files:
         full_path = os.path.join(directory, f)
         if os.path.isdir(full_path):
-            print(full_path)
-            format_directory(full_path, sort_includes)
+            if f in ignored_directories:
+                continue
+            if not silent:
+                print(full_path)
+            format_directory(full_path)
         elif can_format_file(full_path):
             format_file(f, full_path, directory, '.' +
-                        f.split('.')[-1], sort_includes)
+                        f.split('.')[-1])
 
 
 if format_all:
@@ -240,4 +280,18 @@ else:
         fname = splits[-1]
         dirname = os.path.sep.join(splits[:-1])
         ext = '.' + full_path.split('.')[-1]
-        format_file(fname, full_path, dirname, ext, False)
+        format_file(fname, full_path, dirname, ext)
+
+if check_only:
+    if len(difference_files) > 0:
+        print("")
+        print("")
+        print("")
+        print("Failed format-check: differences were found in the following files:")
+        for fname in difference_files:
+            print("- " + fname)
+        print('Run "make format-fix" to fix these differences automatically')
+        exit(1)
+    else:
+        print("Passed format-check")
+        exit(0)

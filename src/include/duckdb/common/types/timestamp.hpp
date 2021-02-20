@@ -26,7 +26,7 @@ struct timestamp_struct {
 class Timestamp {
 public:
 	//! Convert a string in the format "YYYY-MM-DD hh:mm:ss" to a timestamp object
-	static timestamp_t FromString(string str);
+	static timestamp_t FromString(const string &str);
 	static timestamp_t FromCString(const char *str, idx_t len);
 	//! Convert a date object to a string in the format "YYYY-MM-DD hh:mm:ss"
 	static string ToString(timestamp_t timestamp);
@@ -41,17 +41,22 @@ public:
 	//! Returns current timestamp
 	static timestamp_t GetCurrentTimestamp();
 
+	//! Convert the epoch (in sec) to a timestamp
+	static timestamp_t FromEpochSeconds(int64_t ms);
 	//! Convert the epoch (in ms) to a timestamp
 	static timestamp_t FromEpochMs(int64_t ms);
 	//! Convert the epoch (in microseconds) to a timestamp
 	static timestamp_t FromEpochMicroSeconds(int64_t micros);
+	//! Convert the epoch (in nanoseconds) to a timestamp
+	static timestamp_t FromEpochNanoSeconds(int64_t micros);
 
-	// Unix epoch: milliseconds since 1970
-	static int64_t GetEpoch(timestamp_t timestamp);
-	// Seconds including fractional part multiplied by 1000
-	static int64_t GetMilliseconds(timestamp_t timestamp);
-	static int64_t GetSeconds(timestamp_t timestamp);
-	static int64_t GetMinutes(timestamp_t timestamp);
-	static int64_t GetHours(timestamp_t timestamp);
+	//! Convert the epoch (in seconds) to a timestamp
+	static int64_t GetEpochSeconds(timestamp_t timestamp);
+	//! Convert the epoch (in ms) to a timestamp
+	static int64_t GetEpochMs(timestamp_t timestamp);
+	//! Convert a timestamp to epoch (in microseconds)
+	static int64_t GetEpochMicroSeconds(timestamp_t timestamp);
+	//! Convert a timestamp to epoch (in nanoseconds)
+	static int64_t GetEpochNanoSeconds(timestamp_t timestamp);
 };
 } // namespace duckdb

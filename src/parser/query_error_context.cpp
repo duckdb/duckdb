@@ -1,11 +1,13 @@
 #include "duckdb/parser/query_error_context.hpp"
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/to_string.hpp"
+
 #include "utf8proc_wrapper.h"
 
 namespace duckdb {
 
-string QueryErrorContext::Format(string &query, string error_message, int error_loc) {
+string QueryErrorContext::Format(const string &query, const string &error_message, int error_loc) {
 	if (error_loc < 0 || size_t(error_loc) >= query.size()) {
 		// no location in query provided
 		return error_message;
@@ -88,7 +90,7 @@ string QueryErrorContext::Format(string &query, string error_message, int error_
 			break;
 		}
 	}
-	string line_indicator = "LINE " + std::to_string(line_number) + ": ";
+	string line_indicator = "LINE " + to_string(line_number) + ": ";
 	string begin_trunc = truncate_beginning ? "..." : "";
 	string end_trunc = truncate_end ? "..." : "";
 
@@ -100,13 +102,14 @@ string QueryErrorContext::Format(string &query, string error_message, int error_
 	error_render_width += line_indicator.size() + begin_trunc.size();
 
 	// now first print the error message plus the current line (or a subset of the line)
-	error_message += "\n" + line_indicator + begin_trunc + query.substr(start_pos, end_pos - start_pos) + end_trunc;
+	string result = error_message;
+	result += "\n" + line_indicator + begin_trunc + query.substr(start_pos, end_pos - start_pos) + end_trunc;
 	// print an arrow pointing at the error location
-	error_message += "\n" + string(error_render_width, ' ') + "^";
-	return error_message;
+	result += "\n" + string(error_render_width, ' ') + "^";
+	return result;
 }
 
-string QueryErrorContext::FormatErrorRecursive(string msg, vector<ExceptionFormatValue> &values) {
+string QueryErrorContext::FormatErrorRecursive(const string &msg, vector<ExceptionFormatValue> &values) {
 	string error_message = ExceptionFormatValue::Format(msg, values);
 	if (!statement || query_location >= statement->query.size()) {
 		// no statement provided or query location out of range

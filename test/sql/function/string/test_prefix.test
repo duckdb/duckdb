@@ -208,3 +208,34 @@ SELECT prefix('two ñ three ₡ four 🦆 end', 'two ñ three ₡ four 🦆 end'
 ----
 1
 
+# test empty prefix removal
+statement ok
+INSERT INTO t0 VALUES ('a'), ('b'), ('d')
+
+query I
+SELECT COUNT(*) FROM t0 WHERE prefix(t0.c0, '');
+----
+3
+
+query II
+SELECT c0, prefix(t0.c0, '') FROM t0 WHERE c0 <> 'b' ORDER BY t0.c0;
+----
+a	1
+d	1
+
+
+# now with a NULL value
+statement ok
+INSERT INTO t0 VALUES (NULL)
+
+query I
+SELECT COUNT(*) FROM t0 WHERE prefix(t0.c0, '');
+----
+3
+
+query II
+SELECT c0, prefix(t0.c0, '') FROM t0 WHERE c0 IS NULL OR c0 <> 'b' ORDER BY t0.c0;
+----
+NULL	NULL
+a	1
+d	1

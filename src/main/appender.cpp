@@ -10,9 +10,9 @@
 #include "duckdb/common/operator/cast_operators.hpp"
 
 namespace duckdb {
-using namespace std;
 
-Appender::Appender(Connection &con, string schema_name, string table_name) : con(con), column(0) {
+Appender::Appender(Connection &con, const string &schema_name, const string &table_name)
+    : context(con.context), column(0) {
 	description = con.TableInfo(schema_name, table_name);
 	if (!description) {
 		// table could not be found
@@ -23,32 +23,28 @@ Appender::Appender(Connection &con, string schema_name, string table_name) : con
 			types.push_back(column.type);
 		}
 		chunk.Initialize(types);
-		con.context->RegisterAppender(this);
 	}
 }
 
-Appender::Appender(Connection &con, string table_name) : Appender(con, DEFAULT_SCHEMA, table_name) {
+Appender::Appender(Connection &con, const string &table_name) : Appender(con, DEFAULT_SCHEMA, table_name) {
 }
 
 Appender::~Appender() {
-	Close();
-}
-
-void Appender::CheckInvalidated() {
-	if (!invalidated_msg.empty()) {
-		throw Exception("Invalid appender: " + invalidated_msg);
+	// flush any remaining chunks
+	// wrapped in a try/catch because Close() can throw if the table was dropped in the meantime
+	try {
+		Close();
+	} catch (...) {
 	}
 }
 
 void Appender::BeginRow() {
-	CheckInvalidated();
 }
 
 void Appender::EndRow() {
-	CheckInvalidated();
 	// check that all rows have been appended to
-	if (column != chunk.column_count()) {
-		InvalidateException("Call to EndRow before all rows have been appended to!");
+	if (column != chunk.ColumnCount()) {
+		throw InvalidInputException("Call to EndRow before all rows have been appended to!");
 	}
 	column = 0;
 	chunk.SetCardinality(chunk.size() + 1);
@@ -57,22 +53,18 @@ void Appender::EndRow() {
 	}
 }
 
-template <class SRC, class DST> void Appender::AppendValueInternal(Vector &col, SRC input) {
+template <class SRC, class DST>
+void Appender::AppendValueInternal(Vector &col, SRC input) {
 	FlatVector::GetData<DST>(col)[chunk.size()] = Cast::Operation<SRC, DST>(input);
 }
 
-void Appender::InvalidateException(string msg) {
-	Invalidate(msg);
-	throw Exception(msg);
-}
-
-template <class T> void Appender::AppendValueInternal(T input) {
-	CheckInvalidated();
-	if (column >= chunk.column_count()) {
-		InvalidateException("Too many appends for chunk!");
+template <class T>
+void Appender::AppendValueInternal(T input) {
+	if (column >= chunk.ColumnCount()) {
+		throw InvalidInputException("Too many appends for chunk!");
 	}
 	auto &col = chunk.data[column];
-	switch (col.type.InternalType()) {
+	switch (col.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 		AppendValueInternal<T, bool>(col, input);
 		break;
@@ -101,27 +93,33 @@ template <class T> void Appender::AppendValueInternal(T input) {
 	column++;
 }
 
-template <> void Appender::Append(bool value) {
+template <>
+void Appender::Append(bool value) {
 	AppendValueInternal<bool>(value);
 }
 
-template <> void Appender::Append(int8_t value) {
+template <>
+void Appender::Append(int8_t value) {
 	AppendValueInternal<int8_t>(value);
 }
 
-template <> void Appender::Append(int16_t value) {
+template <>
+void Appender::Append(int16_t value) {
 	AppendValueInternal<int16_t>(value);
 }
 
-template <> void Appender::Append(int32_t value) {
+template <>
+void Appender::Append(int32_t value) {
 	AppendValueInternal<int32_t>(value);
 }
 
-template <> void Appender::Append(int64_t value) {
+template <>
+void Appender::Append(int64_t value) {
 	AppendValueInternal<int64_t>(value);
 }
 
-template <> void Appender::Append(const char *value) {
+template <>
+void Appender::Append(const char *value) {
 	AppendValueInternal<string_t>(string_t(value));
 }
 
@@ -129,78 +127,63 @@ void Appender::Append(const char *value, uint32_t length) {
 	AppendValueInternal<string_t>(string_t(value, length));
 }
 
-template <> void Appender::Append(float value) {
+template <>
+void Appender::Append(float value) {
 	if (!Value::FloatIsValid(value)) {
-		InvalidateException("Float value is out of range!");
+		throw InvalidInputException("Float value is out of range!");
 	}
 	AppendValueInternal<float>(value);
 }
 
-template <> void Appender::Append(double value) {
+template <>
+void Appender::Append(double value) {
 	if (!Value::DoubleIsValid(value)) {
-		InvalidateException("Double value is out of range!");
+		throw InvalidInputException("Double value is out of range!");
 	}
 	AppendValueInternal<double>(value);
 }
 
-template <> void Appender::Append(Value value) {
-	if (column >= chunk.column_count()) {
-		InvalidateException("Too many appends for chunk!");
+template <>
+void Appender::Append(Value value) { // NOLINT: template shtuff
+	if (column >= chunk.ColumnCount()) {
+		throw InvalidInputException("Too many appends for chunk!");
 	}
-	AppendValue(move(value));
+	AppendValue(value);
 }
 
-template <> void Appender::Append(nullptr_t value) {
-	if (column >= chunk.column_count()) {
-		InvalidateException("Too many appends for chunk!");
+template <>
+void Appender::Append(std::nullptr_t value) {
+	if (column >= chunk.ColumnCount()) {
+		throw InvalidInputException("Too many appends for chunk!");
 	}
 	auto &col = chunk.data[column++];
 	FlatVector::SetNull(col, chunk.size(), true);
 }
 
-void Appender::AppendValue(Value value) {
+void Appender::AppendValue(const Value &value) {
 	chunk.SetValue(column, chunk.size(), value);
 	column++;
 }
 
 void Appender::Flush() {
-	CheckInvalidated();
-	try {
-		// check that all vectors have the same length before appending
-		if (column != 0) {
-			throw Exception("Failed to Flush appender: incomplete append to row!");
-		}
-
-		if (chunk.size() == 0) {
-			return;
-		}
-		con.Append(*description, chunk);
-	} catch (Exception &ex) {
-		Invalidate(ex.what());
-		throw ex;
+	// check that all vectors have the same length before appending
+	if (column != 0) {
+		throw InvalidInputException("Failed to Flush appender: incomplete append to row!");
 	}
+
+	if (chunk.size() == 0) {
+		return;
+	}
+	context->Append(*description, chunk);
+
 	chunk.Reset();
 	column = 0;
 }
 
 void Appender::Close() {
-	if (!invalidated_msg.empty()) {
-		return;
-	}
-	if (column == 0 || column == chunk.column_count()) {
+	if (column == 0 || column == chunk.ColumnCount()) {
 		Flush();
 	}
-	Invalidate("The appender has been closed!");
 }
 
-void Appender::Invalidate(string msg, bool close) {
-	if (!invalidated_msg.empty()) {
-		return;
-	}
-	if (close) {
-		con.context->RemoveAppender(this);
-	}
-	D_ASSERT(!msg.empty());
-	invalidated_msg = msg;
-}
 } // namespace duckdb

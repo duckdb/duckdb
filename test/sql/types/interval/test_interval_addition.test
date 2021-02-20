@@ -211,16 +211,6 @@ SELECT TIME '10:00:00' + INTERVAL '1' DAY
 ----
 10:00:00
 
-query T
-SELECT TIME '10:00:00' + INTERVAL '1' DAY TO HOUR
-----
-10:00:00
-
-query T
-SELECT TIME '10:00:00' - INTERVAL '1' DAY TO HOUR
-----
-10:00:00
-
 # test wrapping behavior
 query T
 SELECT TIME '23:00:00' + INTERVAL '1' HOUR

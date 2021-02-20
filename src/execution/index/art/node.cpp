@@ -4,8 +4,8 @@
 
 namespace duckdb {
 
-Node::Node(ART &art, NodeType type, size_t compressedPrefixSize) : prefix_length(0), count(0), type(type) {
-	this->prefix = unique_ptr<uint8_t[]>(new uint8_t[compressedPrefixSize]);
+Node::Node(ART &art, NodeType type, size_t compressed_prefix_size) : prefix_length(0), count(0), type(type) {
+	this->prefix = unique_ptr<uint8_t[]>(new uint8_t[compressed_prefix_size]);
 }
 
 void Node::CopyPrefix(ART &art, Node *src, Node *dst) {
@@ -33,19 +33,19 @@ uint32_t Node::PrefixMismatch(ART &art, Node *node, Key &key, uint64_t depth) {
 	return pos;
 }
 
-void Node::InsertLeaf(ART &art, unique_ptr<Node> &node, uint8_t key, unique_ptr<Node> &newNode) {
+void Node::InsertLeaf(ART &art, unique_ptr<Node> &node, uint8_t key, unique_ptr<Node> &new_node) {
 	switch (node->type) {
 	case NodeType::N4:
-		Node4::insert(art, node, key, newNode);
+		Node4::Insert(art, node, key, new_node);
 		break;
 	case NodeType::N16:
-		Node16::insert(art, node, key, newNode);
+		Node16::Insert(art, node, key, new_node);
 		break;
 	case NodeType::N48:
-		Node48::insert(art, node, key, newNode);
+		Node48::Insert(art, node, key, new_node);
 		break;
 	case NodeType::N256:
-		Node256::insert(art, node, key, newNode);
+		Node256::Insert(art, node, key, new_node);
 		break;
 	default:
 		D_ASSERT(0);
@@ -55,19 +55,19 @@ void Node::InsertLeaf(ART &art, unique_ptr<Node> &node, uint8_t key, unique_ptr<
 void Node::Erase(ART &art, unique_ptr<Node> &node, idx_t pos) {
 	switch (node->type) {
 	case NodeType::N4: {
-		Node4::erase(art, node, pos);
+		Node4::Erase(art, node, pos);
 		break;
 	}
 	case NodeType::N16: {
-		Node16::erase(art, node, pos);
+		Node16::Erase(art, node, pos);
 		break;
 	}
 	case NodeType::N48: {
-		Node48::erase(art, node, pos);
+		Node48::Erase(art, node, pos);
 		break;
 	}
 	case NodeType::N256:
-		Node256::erase(art, node, pos);
+		Node256::Erase(art, node, pos);
 		break;
 	default:
 		D_ASSERT(0);

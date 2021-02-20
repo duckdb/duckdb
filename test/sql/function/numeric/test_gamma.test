@@ -1,0 +1,109 @@
+# name: test/sql/function/numeric/test_gamma.test
+# description: Test gamma function
+# group: [numeric]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT gamma(NULL)
+----
+NULL
+
+query I
+SELECT gamma(0)
+----
+NULL
+
+query I
+SELECT gamma(-1)
+----
+NULL
+
+query I
+SELECT gamma(1)
+----
+1
+
+query I
+SELECT gamma(-0.1)
+----
+-10.686287021193193
+
+
+query I
+SELECT gamma(2)
+----
+1
+
+query I
+SELECT gamma(10)
+----
+362880.0
+
+query I
+SELECT gamma(2::tinyint)
+----
+1
+
+query I
+SELECT gamma(2::hugeint)
+----
+1
+
+statement error
+SELECT gamma('asdf')
+
+query I
+SELECT lgamma(NULL)
+----
+NULL
+
+query I
+SELECT lgamma(0)
+----
+NULL
+
+query I
+SELECT lgamma(-1)
+----
+NULL
+
+query I
+SELECT lgamma(-100)
+----
+NULL
+
+query I
+SELECT lgamma(1)
+----
+0
+
+query I
+SELECT lgamma(2)
+----
+0
+
+query I
+SELECT lgamma(3)
+----
+0.693147180559945
+
+query I
+SELECT lgamma(10)
+----
+12.801827480081467
+
+
+query I
+SELECT lgamma(2::tinyint)
+----
+0
+
+query I
+SELECT lgamma(2::hugeint)
+----
+0
+
+statement error
+SELECT lgamma('asdf')

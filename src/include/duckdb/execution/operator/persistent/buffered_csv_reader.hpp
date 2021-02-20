@@ -33,7 +33,7 @@ struct StrpTimeFormat;
  */
 struct TextSearchShiftArray {
 	TextSearchShiftArray();
-	TextSearchShiftArray(string search_term);
+	explicit TextSearchShiftArray(string search_term);
 
 	inline bool Match(uint8_t &position, uint8_t byte_value) {
 		if (position >= length) {
@@ -50,6 +50,9 @@ struct TextSearchShiftArray {
 struct BufferedCSVReaderOptions {
 	//! The file path of the CSV file to read
 	string file_path;
+	//! Whether file is compressed or not, and if so which compression type
+	//! ("infer" (default; infer from file extention), "gzip", "none")
+	string compression = "infer";
 	//! Whether or not to automatically detect dialect and datatypes
 	bool auto_detect = false;
 	//! Whether or not a delimiter was defined by the user
@@ -81,7 +84,7 @@ struct BufferedCSVReaderOptions {
 	//! Number of sample chunks used for type detection
 	idx_t sample_chunks = 10;
 	//! Number of samples to buffer
-	idx_t buffer_size = STANDARD_VECTOR_SIZE * 10;
+	idx_t buffer_size = STANDARD_VECTOR_SIZE * 100;
 	//! Consider all columns to be of type varchar
 	bool all_varchar = false;
 	//! The date format to use (if any is specified)
@@ -94,7 +97,7 @@ struct BufferedCSVReaderOptions {
 		       ", QUOTE='" + quote + (has_quote ? "'" : (auto_detect ? "' (auto detected)" : "' (default)")) +
 		       ", ESCAPE='" + escape + (has_escape ? "'" : (auto_detect ? "' (auto detected)" : "' (default)")) +
 		       ", HEADER=" + std::to_string(header) +
-		       (has_header ? "" : (auto_detect ? "' (auto detected)" : "' (default)")) +
+		       (has_header ? "" : (auto_detect ? " (auto detected)" : "' (default)")) +
 		       ", SAMPLE_SIZE=" + std::to_string(sample_chunk_size * sample_chunks) +
 		       ", ALL_VARCHAR=" + std::to_string(all_varchar);
 	}
@@ -125,8 +128,8 @@ class BufferedCSVReader {
 
 public:
 	BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options,
-	                  vector<LogicalType> requested_types = vector<LogicalType>());
-	BufferedCSVReader(BufferedCSVReaderOptions options, vector<LogicalType> requested_types,
+	                  const vector<LogicalType> &requested_types = vector<LogicalType>());
+	BufferedCSVReader(BufferedCSVReaderOptions options, const vector<LogicalType> &requested_types,
 	                  unique_ptr<std::istream> source);
 
 	BufferedCSVReaderOptions options;
@@ -134,6 +137,7 @@ public:
 	vector<string> col_names;
 	unique_ptr<std::istream> source;
 	bool plain_file_source = false;
+	bool gzip_compressed = false;
 	idx_t file_size = 0;
 
 	unique_ptr<char[]> buffer;
@@ -145,6 +149,7 @@ public:
 	bool linenr_estimated = false;
 
 	vector<idx_t> sniffed_column_counts;
+	bool row_empty = false;
 	idx_t sample_chunk_idx = 0;
 	bool jumping_samples = false;
 	bool end_of_file_reached = false;
@@ -166,7 +171,7 @@ public:
 
 private:
 	//! Initialize Parser
-	void Initialize(vector<LogicalType> requested_types);
+	void Initialize(const vector<LogicalType> &requested_types);
 	//! Initializes the parse_chunk with varchar columns and aligns info with new number of cols
 	void InitParseChunk(idx_t num_cols);
 	//! Initializes the TextSearchShiftArrays for complex parser
@@ -174,13 +179,13 @@ private:
 	//! Extract a single DataChunk from the CSV file and stores it in insert_chunk
 	void ParseCSV(ParserMode mode, DataChunk &insert_chunk = DUMMY_CHUNK);
 	//! Sniffs CSV dialect and determines skip rows, header row, column types and column names
-	vector<LogicalType> SniffCSV(vector<LogicalType> requested_types);
+	vector<LogicalType> SniffCSV(const vector<LogicalType> &requested_types);
 	//! Change the date format for the type to the string
 	void SetDateFormat(const string &format_specifier, const LogicalTypeId &sql_type);
 	//! Try to cast a string value to the specified sql type
-	bool TryCastValue(Value value, LogicalType sql_type);
+	bool TryCastValue(const Value &value, const LogicalType &sql_type);
 	//! Try to cast a vector of values to the specified sql type
-	bool TryCastVector(Vector &parse_chunk_col, idx_t size, LogicalType sql_type);
+	bool TryCastVector(Vector &parse_chunk_col, idx_t size, const LogicalType &sql_type);
 	//! Skips skip_rows, reads header row from input stream
 	void SkipRowsAndReadHeader(idx_t skip_rows, bool skip_header);
 	//! Jumps back to the beginning of input stream and resets necessary internal states
@@ -208,7 +213,7 @@ private:
 	//! Reads a new buffer from the CSV file if the current one has been exhausted
 	bool ReadBuffer(idx_t &start);
 
-	unique_ptr<std::istream> OpenCSV(ClientContext &context, BufferedCSVReaderOptions options);
+	unique_ptr<std::istream> OpenCSV(ClientContext &context, const BufferedCSVReaderOptions &options);
 };
 
 } // namespace duckdb

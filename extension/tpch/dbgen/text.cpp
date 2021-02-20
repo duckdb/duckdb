@@ -19,7 +19,7 @@
 #define DECLARER
 #endif /* TEST */
 
-#include "config.h"
+#include "dbgen/config.h"
 
 #include <stdlib.h>
 #if (defined(_POSIX_) || !defined(WIN32)) /* Change for Windows NT */
@@ -63,8 +63,8 @@
 
 #define TEXT_POOL_SIZE (300 * 1024 * 1024) /* 300MiB */
 
-#include "dss.h"
-#include "dsstypes.h"
+#include "dbgen/dss.h"
+#include "dbgen/dsstypes.h"
 
 /*
  * txt_vp() --

@@ -6,7 +6,6 @@
 #include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
-using namespace std;
 
 LogicalGet::LogicalGet(idx_t table_index, TableFunction function, unique_ptr<FunctionData> bind_data,
                        vector<LogicalType> returned_types, vector<string> returned_names)
@@ -20,7 +19,7 @@ string LogicalGet::GetName() const {
 
 string LogicalGet::ParamsToString() const {
 	string result;
-	for (auto &filter : tableFilters) {
+	for (auto &filter : table_filters) {
 		result +=
 		    names[filter.column_index] + ExpressionTypeToOperator(filter.comparison_type) + filter.constant.ToString();
 		result += "\n";
@@ -32,18 +31,18 @@ string LogicalGet::ParamsToString() const {
 }
 
 vector<ColumnBinding> LogicalGet::GetColumnBindings() {
-	if (column_ids.size() == 0) {
+	if (column_ids.empty()) {
 		return {ColumnBinding(table_index, 0)};
 	}
 	vector<ColumnBinding> result;
 	for (idx_t i = 0; i < column_ids.size(); i++) {
-		result.push_back(ColumnBinding(table_index, i));
+		result.emplace_back(table_index, i);
 	}
 	return result;
 }
 
 void LogicalGet::ResolveTypes() {
-	if (column_ids.size() == 0) {
+	if (column_ids.empty()) {
 		column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
 	}
 	for (auto &index : column_ids) {
@@ -55,12 +54,14 @@ void LogicalGet::ResolveTypes() {
 	}
 }
 
-idx_t LogicalGet::EstimateCardinality() {
+idx_t LogicalGet::EstimateCardinality(ClientContext &context) {
 	if (function.cardinality) {
-		return function.cardinality(bind_data.get());
-	} else {
-		return 1;
+		auto node_stats = function.cardinality(context, bind_data.get());
+		if (node_stats && node_stats->has_estimated_cardinality) {
+			return node_stats->estimated_cardinality;
+		}
 	}
+	return 1;
 }
 
 } // namespace duckdb

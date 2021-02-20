@@ -18,7 +18,9 @@
 namespace duckdb {
 
 class ClientContext;
-class StorageManager;
+class Catalog;
+struct ClientLockWrapper;
+class DatabaseInstance;
 class Transaction;
 
 struct StoredCatalogSet {
@@ -31,14 +33,16 @@ struct StoredCatalogSet {
 //! The Transaction Manager is responsible for creating and managing
 //! transactions
 class TransactionManager {
+	friend struct CheckpointLock;
+
 public:
-	TransactionManager(StorageManager &storage);
+	explicit TransactionManager(DatabaseInstance &db);
 	~TransactionManager();
 
 	//! Start a new transaction
-	Transaction *StartTransaction();
+	Transaction *StartTransaction(ClientContext &context);
 	//! Commit the given transaction
-	string CommitTransaction(Transaction *transaction);
+	string CommitTransaction(ClientContext &context, Transaction *transaction);
 	//! Rollback the given transaction
 	void RollbackTransaction(Transaction *transaction);
 	//! Add the catalog set
@@ -48,10 +52,19 @@ public:
 		return current_query_number++;
 	}
 
+	void Checkpoint(ClientContext &context, bool force = false);
+
+	static TransactionManager &Get(ClientContext &context);
+	static TransactionManager &Get(DatabaseInstance &db);
+
 private:
+	bool CanCheckpoint(Transaction *current = nullptr);
 	//! Remove the given transaction from the list of active transactions
 	void RemoveTransaction(Transaction *transaction) noexcept;
+	void LockClients(vector<ClientLockWrapper> &client_locks, ClientContext &context);
 
+	//! The database instance
+	DatabaseInstance &db;
 	//! The current query number
 	std::atomic<transaction_t> current_query_number;
 	//! The current start timestamp used by transactions
@@ -68,8 +81,8 @@ private:
 	vector<StoredCatalogSet> old_catalog_sets;
 	//! The lock used for transaction operations
 	mutex transaction_lock;
-	//! The storage manager
-	StorageManager &storage;
+
+	bool thread_is_checkpointing;
 };
 
 } // namespace duckdb

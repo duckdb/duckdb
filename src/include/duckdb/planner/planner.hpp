@@ -11,32 +11,36 @@
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/logical_operator.hpp"
-#include "duckdb/catalog/catalog_entry/prepared_statement_catalog_entry.hpp"
 
 namespace duckdb {
 class ClientContext;
+class PreparedStatementData;
 
 //! The planner creates a logical query plan from the parsed SQL statements
 //! using the Binder and LogicalPlanGenerator.
 class Planner {
 public:
-	Planner(ClientContext &context);
+	explicit Planner(ClientContext &context);
 
 	void CreatePlan(unique_ptr<SQLStatement> statement);
 
 	unique_ptr<LogicalOperator> plan;
 	vector<string> names;
 	vector<LogicalType> types;
-	unordered_map<idx_t, unique_ptr<Value>> value_map;
+	unordered_map<idx_t, vector<unique_ptr<Value>>> value_map;
 
 	Binder binder;
 	ClientContext &context;
 
 	bool read_only;
 	bool requires_valid_transaction;
+	bool allow_stream_result;
 
 private:
 	void CreatePlan(SQLStatement &statement);
+	shared_ptr<PreparedStatementData> PrepareSQLStatement(unique_ptr<SQLStatement> statement);
+	void PlanPrepare(unique_ptr<SQLStatement> statement);
+	void PlanExecute(unique_ptr<SQLStatement> statement);
 
 	// void VerifyQuery(BoundSQLStatement &statement);
 	// void VerifyNode(BoundQueryNode &statement);

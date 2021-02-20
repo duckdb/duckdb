@@ -1,0 +1,91 @@
+# name: test/sql/aggregate/aggregates/test_approximate_distinct_count.test
+# description: Test approx_count_distinct operator
+# group: [aggregates]
+
+statement error
+select approx_count_distinct(*)
+
+query I
+select approx_count_distinct(1)
+----
+1
+
+query I
+select approx_count_distinct(NULL)
+----
+0
+
+query I
+select approx_count_distinct(10) from range(100);
+----
+1
+
+query I
+select approx_count_distinct (i) from range (100) tbl(i) WHERE 1 == 0;
+----
+0
+
+statement ok
+CREATE TABLE IF NOT EXISTS dates (t date);
+
+statement ok
+INSERT INTO dates VALUES ('2008-01-01'), (NULL), ('2007-01-01'), ('2008-02-01'), ('2008-01-02'), ('2008-01-01'), ('2008-01-01'), ('2008-01-01')
+
+statement ok
+CREATE TABLE IF NOT EXISTS timestamp (t TIMESTAMP);
+
+statement ok
+INSERT INTO timestamp VALUES ('2008-01-01 00:00:01'), (NULL), ('2007-01-01 00:00:01'), ('2008-02-01 00:00:01'), ('2008-01-02 00:00:01'), ('2008-01-01 10:00:00'), ('2008-01-01 00:10:00'), ('2008-01-01 00:00:10')
+
+statement ok
+CREATE TABLE IF NOT EXISTS names (t string);
+
+statement ok
+INSERT INTO names VALUES ('Pedro'), (NULL), ('Pedro'), ('Pedro'), ('Mark'), ('Mark'),('Mark'),('Hannes-Muehleisen'),('Hannes-Muehleisen')
+
+# test counts on a set of values
+statement ok
+create  table t as select range a, mod(range,10) b from range(2000);
+
+query III
+SELECT COUNT( a),approx_count_distinct(a),approx_count_distinct(b) from t
+----
+2000	1990	10
+
+query I
+SELECT approx_count_distinct(a) from t group by a %2;
+----
+1007
+1003
+
+require vector_size 512
+
+query I
+SELECT approx_count_distinct(a) over (partition by a%2) from t where a < 10;
+----
+5
+5
+5
+5
+5
+5
+5
+5
+5
+5
+
+query II
+SELECT COUNT( t),approx_count_distinct(t) from timestamp
+----
+7	7
+
+query II
+SELECT COUNT( t),approx_count_distinct(t) from dates
+----
+7	4
+
+query II
+SELECT COUNT(t),approx_count_distinct(t) from names
+----
+8	3
+

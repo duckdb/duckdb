@@ -2,8 +2,6 @@
 
 #include "duckdb/common/exception.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 string ExpressionTypeToString(ExpressionType type) {
@@ -32,6 +30,8 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "IN";
 	case ExpressionType::COMPARE_DISTINCT_FROM:
 		return "DISTINCT_FROM";
+	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+		return "NOT_DISTINCT_FROM";
 	case ExpressionType::CONJUNCTION_AND:
 		return "AND";
 	case ExpressionType::CONJUNCTION_OR:
@@ -104,8 +104,6 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "COMPARE_NOT_BETWEEN";
 	case ExpressionType::VALUE_DEFAULT:
 		return "VALUE_DEFAULT";
-	case ExpressionType::COMMON_SUBEXPRESSION:
-		return "COMMON_SUBEXPRESSION";
 	case ExpressionType::BOUND_REF:
 		return "BOUND_REF";
 	case ExpressionType::BOUND_COLUMN_REF:
@@ -178,6 +176,8 @@ ExpressionType NegateComparisionExpression(ExpressionType type) {
 ExpressionType FlipComparisionExpression(ExpressionType type) {
 	ExpressionType flipped_type = ExpressionType::INVALID;
 	switch (type) {
+	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+	case ExpressionType::COMPARE_DISTINCT_FROM:
 	case ExpressionType::COMPARE_NOTEQUAL:
 	case ExpressionType::COMPARE_EQUAL:
 		flipped_type = type;

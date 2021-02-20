@@ -43,7 +43,7 @@ SELECT l_orderkey,
        STRUCT_EXTRACT(struct, 'l_comment') l_comment
 FROM
   (SELECT l_orderkey,
-          UNLIST(rest) struct
+          UNLIST(rest) as struct
    FROM
      (SELECT l_orderkey,
              LIST(STRUCT_PACK(l_partkey , l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus , l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment)) rest

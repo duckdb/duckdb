@@ -5,8 +5,6 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/client_context.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 struct InformationSchemaSchemataData : public FunctionOperatorData {
@@ -17,37 +15,37 @@ struct InformationSchemaSchemataData : public FunctionOperatorData {
 	idx_t offset;
 };
 
-static unique_ptr<FunctionData> information_schema_schemata_bind(ClientContext &context, vector<Value> &inputs,
-                                                                 unordered_map<string, Value> &named_parameters,
-                                                                 vector<LogicalType> &return_types,
-                                                                 vector<string> &names) {
-	names.push_back("catalog_name");
+static unique_ptr<FunctionData> InformationSchemaSchemataBind(ClientContext &context, vector<Value> &inputs,
+                                                              unordered_map<string, Value> &named_parameters,
+                                                              vector<LogicalType> &return_types,
+                                                              vector<string> &names) {
+	names.emplace_back("catalog_name");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("schema_name");
+	names.emplace_back("schema_name");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("schema_owner");
+	names.emplace_back("schema_owner");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("default_character_set_catalog");
+	names.emplace_back("default_character_set_catalog");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("default_character_set_schema");
+	names.emplace_back("default_character_set_schema");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("default_character_set_name");
+	names.emplace_back("default_character_set_name");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.push_back("sql_path");
+	names.emplace_back("sql_path");
 	return_types.push_back(LogicalType::VARCHAR);
 
 	return nullptr;
 }
 
-unique_ptr<FunctionOperatorData>
-information_schema_schemata_init(ClientContext &context, const FunctionData *bind_data, vector<column_t> &column_ids,
-                                 unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+unique_ptr<FunctionOperatorData> InformationSchemaSchemataInit(ClientContext &context, const FunctionData *bind_data,
+                                                               vector<column_t> &column_ids,
+                                                               TableFilterCollection *filters) {
 	auto result = make_unique<InformationSchemaSchemataData>();
 
 	// scan all the schemas and collect them
@@ -59,8 +57,8 @@ information_schema_schemata_init(ClientContext &context, const FunctionData *bin
 	return move(result);
 }
 
-void information_schema_schemata(ClientContext &context, const FunctionData *bind_data,
-                                 FunctionOperatorData *operator_state, DataChunk &output) {
+void InformationSchemaSchemataFunction(ClientContext &context, const FunctionData *bind_data,
+                                       FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &data = (InformationSchemaSchemataData &)*operator_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
@@ -93,8 +91,8 @@ void information_schema_schemata(ClientContext &context, const FunctionData *bin
 }
 
 void InformationSchemaSchemata::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("information_schema_schemata", {}, information_schema_schemata,
-	                              information_schema_schemata_bind, information_schema_schemata_init));
+	set.AddFunction(TableFunction("information_schema_schemata", {}, InformationSchemaSchemataFunction,
+	                              InformationSchemaSchemataBind, InformationSchemaSchemataInit));
 }
 
 } // namespace duckdb

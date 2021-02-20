@@ -28,6 +28,7 @@ class ViewCatalogEntry;
 
 struct CreateInfo;
 struct BoundCreateTableInfo;
+struct BoundCreateFunctionInfo;
 struct CommonTableExpressionInfo;
 
 struct CorrelatedColumnInfo {
@@ -36,7 +37,7 @@ struct CorrelatedColumnInfo {
 	string name;
 	idx_t depth;
 
-	CorrelatedColumnInfo(BoundColumnRefExpression &expr)
+	explicit CorrelatedColumnInfo(BoundColumnRefExpression &expr)
 	    : binding(expr.binding), type(expr.return_type), name(expr.GetName()), depth(expr.depth) {
 	}
 
@@ -56,12 +57,14 @@ class Binder {
 	friend class RecursiveSubqueryPlanner;
 
 public:
-	Binder(ClientContext &context, Binder *parent = nullptr, bool inherit_ctes = true);
+	explicit Binder(ClientContext &context, Binder *parent = nullptr, bool inherit_ctes = true);
 
 	//! The client context
 	ClientContext &context;
 	//! A mapping of names to common table expressions
 	unordered_map<string, CommonTableExpressionInfo *> CTE_bindings;
+	//! The CTEs that have already been bound
+	unordered_set<CommonTableExpressionInfo *> bound_ctes;
 	//! The bind context
 	BindContext bind_context;
 	//! The set of correlated columns bound by this binder (FIXME: this should probably be an unordered_set and not a
@@ -72,9 +75,13 @@ public:
 	//! Whether or not the bound statement is read-only
 	bool read_only;
 	//! Whether or not the statement requires a valid transaction to run
-	bool requires_valid_transaction = true;
+	bool requires_valid_transaction;
+	//! Whether or not the statement can be streamed to the client
+	bool allow_stream_result;
 	//! The alias for the currently processing subquery, if it exists
 	string alias;
+	//! Macro parameter bindings (if any)
+	MacroBinding *macro_binding = nullptr;
 
 public:
 	BoundStatement Bind(SQLStatement &statement);
@@ -83,6 +90,11 @@ public:
 	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info);
 	void BindCreateViewInfo(CreateViewInfo &base);
 	SchemaCatalogEntry *BindSchema(CreateInfo &info);
+	SchemaCatalogEntry *BindCreateFunctionInfo(CreateInfo &info);
+
+	//! Check usage, and cast named parameters to their types
+	static void BindNamedParameters(unordered_map<string, LogicalType> &types, unordered_map<string, Value> &values,
+	                                QueryErrorContext &error_context, string &func_name);
 
 	unique_ptr<BoundTableRef> Bind(TableRef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundTableRef &ref);
@@ -95,6 +107,8 @@ public:
 	//! Find a common table expression by name; returns nullptr if none exists
 	CommonTableExpressionInfo *FindCTE(const string &name, bool skip = false);
 
+	bool CTEIsAlreadyBound(CommonTableExpressionInfo *cte);
+
 	void PushExpressionBinder(ExpressionBinder *binder);
 	void PopExpressionBinder();
 	void SetActiveBinder(ExpressionBinder *binder);
@@ -105,11 +119,11 @@ public:
 
 	void MergeCorrelatedColumns(vector<CorrelatedColumnInfo> &other);
 	//! Add a correlated column to this binder (if it does not exist)
-	void AddCorrelatedColumn(CorrelatedColumnInfo info);
+	void AddCorrelatedColumn(const CorrelatedColumnInfo &info);
 
-	string FormatError(ParsedExpression &expr_context, string message);
-	string FormatError(TableRef &ref_context, string message);
-	string FormatError(idx_t query_location, string message);
+	string FormatError(ParsedExpression &expr_context, const string &message);
+	string FormatError(TableRef &ref_context, const string &message);
+	string FormatError(idx_t query_location, const string &message);
 
 private:
 	//! The parent binder (if any)
@@ -140,7 +154,6 @@ private:
 	BoundStatement Bind(DeleteStatement &stmt);
 	BoundStatement Bind(UpdateStatement &stmt);
 	BoundStatement Bind(CreateStatement &stmt);
-	BoundStatement Bind(ExecuteStatement &stmt);
 	BoundStatement Bind(DropStatement &stmt);
 	BoundStatement Bind(AlterStatement &stmt);
 	BoundStatement Bind(TransactionStatement &stmt);
@@ -148,8 +161,10 @@ private:
 	BoundStatement Bind(ExplainStatement &stmt);
 	BoundStatement Bind(VacuumStatement &stmt);
 	BoundStatement Bind(RelationStatement &stmt);
+	BoundStatement Bind(ShowStatement &stmt);
 	BoundStatement Bind(CallStatement &stmt);
 	BoundStatement Bind(ExportStatement &stmt);
+	BoundStatement Bind(SetStatement &stmt);
 
 	unique_ptr<BoundQueryNode> BindNode(SelectNode &node);
 	unique_ptr<BoundQueryNode> BindNode(SetOperationNode &node);
@@ -165,10 +180,14 @@ private:
 	unique_ptr<BoundTableRef> Bind(BaseTableRef &ref);
 	unique_ptr<BoundTableRef> Bind(CrossProductRef &ref);
 	unique_ptr<BoundTableRef> Bind(JoinRef &ref);
-	unique_ptr<BoundTableRef> Bind(SubqueryRef &ref);
+	unique_ptr<BoundTableRef> Bind(SubqueryRef &ref, CommonTableExpressionInfo *cte = nullptr);
 	unique_ptr<BoundTableRef> Bind(TableFunctionRef &ref);
 	unique_ptr<BoundTableRef> Bind(EmptyTableRef &ref);
 	unique_ptr<BoundTableRef> Bind(ExpressionListRef &ref);
+
+	bool BindFunctionParameters(vector<unique_ptr<ParsedExpression>> &expressions, vector<LogicalType> &arguments,
+	                            vector<Value> &parameters, unordered_map<string, Value> &named_parameters,
+	                            string &error);
 
 	unique_ptr<LogicalOperator> CreatePlan(BoundBaseTableRef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundCrossProductRef &ref);
@@ -188,8 +207,7 @@ private:
 
 	void BindModifiers(OrderBinder &order_binder, QueryNode &statement, BoundQueryNode &result);
 	void BindModifierTypes(BoundQueryNode &result, const vector<LogicalType> &sql_types, idx_t projection_index);
-	void BindNamedParameters(unordered_map<string, LogicalType> &types, unordered_map<string, Value> &values,
-	                         QueryErrorContext &error_context, string &func_name);
+
 	unique_ptr<BoundResultModifier> BindLimit(LimitModifier &limit_mod);
 	unique_ptr<Expression> BindFilter(unique_ptr<ParsedExpression> condition);
 	unique_ptr<Expression> BindOrderExpression(OrderBinder &order_binder, unique_ptr<ParsedExpression> expr);
@@ -202,6 +220,9 @@ private:
 	unique_ptr<LogicalOperator> CastLogicalOperatorToTypes(vector<LogicalType> &source_types,
 	                                                       vector<LogicalType> &target_types,
 	                                                       unique_ptr<LogicalOperator> op);
+
+	string FindBinding(const string &using_column, const string &join_side);
+	bool TryFindBinding(const string &using_column, const string &join_side, string &result);
 };
 
 } // namespace duckdb

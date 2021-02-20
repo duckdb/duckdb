@@ -15,17 +15,24 @@ namespace duckdb {
 
 class LogicalExecute : public LogicalOperator {
 public:
-	LogicalExecute(PreparedStatementData *prepared)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_EXECUTE), prepared(prepared) {
+	explicit LogicalExecute(shared_ptr<PreparedStatementData> prepared_p)
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_EXECUTE), prepared(move(prepared_p)) {
 		D_ASSERT(prepared);
 		types = prepared->types;
 	}
 
-	PreparedStatementData *prepared;
+	shared_ptr<PreparedStatementData> prepared;
 
 protected:
 	void ResolveTypes() override {
 		// already resolved
+	}
+	vector<ColumnBinding> GetColumnBindings() override {
+		vector<ColumnBinding> bindings;
+		for (idx_t i = 0; i < types.size(); i++) {
+			bindings.push_back(ColumnBinding(0, i));
+		}
+		return bindings;
 	}
 };
 } // namespace duckdb

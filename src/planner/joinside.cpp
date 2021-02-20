@@ -6,7 +6,6 @@
 #include "duckdb/planner/expression_iterator.hpp"
 
 namespace duckdb {
-using namespace std;
 
 unique_ptr<Expression> JoinCondition::CreateExpression(JoinCondition cond) {
 	return make_unique<BoundComparisonExpression>(cond.comparison, move(cond.left), move(cond.right));
@@ -75,7 +74,7 @@ JoinSide JoinSide::GetJoinSide(Expression &expression, unordered_set<idx_t> &lef
 	return join_side;
 }
 
-JoinSide JoinSide::GetJoinSide(unordered_set<idx_t> bindings, unordered_set<idx_t> &left_bindings,
+JoinSide JoinSide::GetJoinSide(const unordered_set<idx_t> &bindings, unordered_set<idx_t> &left_bindings,
                                unordered_set<idx_t> &right_bindings) {
 	JoinSide side = JoinSide::NONE;
 	for (auto binding : bindings) {

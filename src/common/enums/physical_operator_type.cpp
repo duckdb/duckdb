@@ -1,7 +1,5 @@
 #include "duckdb/common/enums/physical_operator_type.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 string PhysicalOperatorToString(PhysicalOperatorType type) {
@@ -24,6 +22,10 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "ORDER_BY";
 	case PhysicalOperatorType::LIMIT:
 		return "LIMIT";
+	case PhysicalOperatorType::RESERVOIR_SAMPLE:
+		return "RESERVOIR_SAMPLE";
+	case PhysicalOperatorType::STREAMING_SAMPLE:
+		return "STREAMING_SAMPLE";
 	case PhysicalOperatorType::TOP_N:
 		return "TOP_N";
 	case PhysicalOperatorType::AGGREGATE:
@@ -32,12 +34,12 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "WINDOW";
 	case PhysicalOperatorType::UNNEST:
 		return "UNNEST";
-	case PhysicalOperatorType::DISTINCT:
-		return "DISTINCT";
 	case PhysicalOperatorType::SIMPLE_AGGREGATE:
 		return "SIMPLE_AGGREGATE";
 	case PhysicalOperatorType::HASH_GROUP_BY:
 		return "HASH_GROUP_BY";
+	case PhysicalOperatorType::PERFECT_HASH_GROUP_BY:
+		return "PERFECT_HASH_GROUP_BY";
 	case PhysicalOperatorType::SORT_GROUP_BY:
 		return "SORT_GROUP_BY";
 	case PhysicalOperatorType::FILTER:
@@ -74,8 +76,10 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "EXPORT_EXTERNAL_FILE";
 	case PhysicalOperatorType::EMPTY_RESULT:
 		return "EMPTY_RESULT";
-	case PhysicalOperatorType::CREATE:
-		return "CREATE";
+	case PhysicalOperatorType::CREATE_TABLE:
+		return "CREATE_TABLE";
+	case PhysicalOperatorType::CREATE_TABLE_AS:
+		return "CREATE_TABLE_AS";
 	case PhysicalOperatorType::CREATE_INDEX:
 		return "CREATE_INDEX";
 	case PhysicalOperatorType::EXPLAIN:
@@ -100,6 +104,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "CREATE_VIEW";
 	case PhysicalOperatorType::CREATE_SCHEMA:
 		return "CREATE_SCHEMA";
+	case PhysicalOperatorType::CREATE_MACRO:
+		return "CREATE_MACRO";
 	case PhysicalOperatorType::DROP:
 		return "DROP";
 	case PhysicalOperatorType::PRAGMA:
@@ -110,6 +116,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "PREPARE";
 	case PhysicalOperatorType::EXPORT:
 		return "EXPORT";
+	case PhysicalOperatorType::SET:
+		return "SET";
 	}
 	return "UNDEFINED";
 }

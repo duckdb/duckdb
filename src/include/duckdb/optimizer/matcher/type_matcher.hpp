@@ -24,7 +24,7 @@ public:
 //! The SpecificTypeMatcher class matches only a single specified type
 class SpecificTypeMatcher : public TypeMatcher {
 public:
-	SpecificTypeMatcher(PhysicalType type) : type(type) {
+	explicit SpecificTypeMatcher(PhysicalType type) : type(type) {
 	}
 
 	bool Match(PhysicalType type) override {

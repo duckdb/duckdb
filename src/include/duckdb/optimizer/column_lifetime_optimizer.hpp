@@ -19,7 +19,7 @@ class BoundColumnRefExpression;
 //! the plan when no longer required
 class ColumnLifetimeAnalyzer : public LogicalOperatorVisitor {
 public:
-	ColumnLifetimeAnalyzer(bool is_root = false) : everything_referenced(is_root) {
+	explicit ColumnLifetimeAnalyzer(bool is_root = false) : everything_referenced(is_root) {
 	}
 
 	void VisitOperator(LogicalOperator &op) override;

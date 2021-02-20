@@ -1,7 +1,10 @@
 #include "duckdb/planner/expression/bound_case_expression.hpp"
 
 namespace duckdb {
-using namespace std;
+
+BoundCaseExpression::BoundCaseExpression(LogicalType type)
+    : Expression(ExpressionType::CASE_EXPR, ExpressionClass::BOUND_CASE, move(type)) {
+}
 
 BoundCaseExpression::BoundCaseExpression(unique_ptr<Expression> check, unique_ptr<Expression> res_if_true,
                                          unique_ptr<Expression> res_if_false)
@@ -14,11 +17,11 @@ string BoundCaseExpression::ToString() const {
 	       result_if_false->GetName() + ")";
 }
 
-bool BoundCaseExpression::Equals(const BaseExpression *other_) const {
-	if (!Expression::Equals(other_)) {
+bool BoundCaseExpression::Equals(const BaseExpression *other_p) const {
+	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto other = (BoundCaseExpression *)other_;
+	auto other = (BoundCaseExpression *)other_p;
 	if (!Expression::Equals(check.get(), other->check.get())) {
 		return false;
 	}

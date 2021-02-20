@@ -1,0 +1,343 @@
+# name: test/sql/types/date/date_parsing.test
+# description: Test date parsing
+# group: [date]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT '1992-01-01'::DATE::VARCHAR == '1992-01-01'
+----
+1
+
+query I
+SELECT '1992-09-20'::DATE::VARCHAR == '1992-09-20'
+----
+1
+
+query I
+SELECT '1992-02-29'::DATE::VARCHAR == '1992-02-29'
+----
+1
+
+query I
+SELECT '3600-02-29'::DATE::VARCHAR == '3600-02-29'
+----
+1
+
+query I
+SELECT '0030-01-01'::DATE::VARCHAR == '0030-01-01'
+----
+1
+
+query I
+SELECT '30000-01-01'::DATE::VARCHAR == '30000-01-01'
+----
+1
+
+query I
+SELECT '1969-01-01'::DATE::VARCHAR == '1969-01-01'
+----
+1
+
+query I
+SELECT '1970-01-01'::DATE::VARCHAR == '1970-01-01'
+----
+1
+
+query I
+SELECT '2369-01-01'::DATE::VARCHAR == '2369-01-01'
+----
+1
+
+query I
+SELECT '2370-01-01'::DATE::VARCHAR == '2370-01-01'
+----
+1
+
+query I
+SELECT '2371-01-01'::DATE::VARCHAR == '2371-01-01'
+----
+1
+
+query I
+SELECT '-1000-01-01'::DATE::VARCHAR == '1001-01-01 (BC)'
+----
+1
+
+# we accept a few different separators when parsing dates
+query I
+SELECT '1992/09/20'::DATE::VARCHAR == '1992-09-20'
+----
+1
+
+query I
+SELECT '1992 09 20'::DATE::VARCHAR == '1992-09-20'
+----
+1
+
+query I
+SELECT '1992\09\20'::DATE::VARCHAR == '1992-09-20'
+----
+1
+
+# verify bounds of each month
+# January - 31 days
+# February - 28 days in non-leap year, 29 days in leap year
+# March - 31 days
+# April - 30 days
+# May - 31 days
+# June - 30 days
+# July - 31 days
+# August - 31 days
+# September - 30 days
+# October - 31 days
+# November - 30 days
+# December - 31 days
+
+# non leap year
+statement ok
+SELECT '1993-01-31'::DATE::VARCHAR
+
+statement error
+SELECT '1993-01-32'::DATE::VARCHAR
+
+statement ok
+SELECT '1993-02-28'::DATE::VARCHAR
+
+statement error
+SELECT '1993-02-29'::DATE::VARCHAR
+
+statement ok
+SELECT '1993-03-31'::DATE::VARCHAR
+
+statement error
+SELECT '1993-03-32'::DATE::VARCHAR
+
+statement ok
+SELECT '1993-04-30'::DATE::VARCHAR
+
+statement error
+SELECT '1993-04-31'::DATE::VARCHAR
+
+statement ok
+SELECT '1993-05-31'::DATE::VARCHAR
+
+statement error
+SELECT '1993-05-32'::DATE::VARCHAR
+
+statement ok
+SELECT '1993-06-30'::DATE::VARCHAR
+
+statement error
+SELECT '1993-06-31'::DATE::VARCHAR
+
+statement ok
+SELECT '1993-07-31'::DATE::VARCHAR
+
+statement error
+SELECT '1993-07-32'::DATE::VARCHAR
+
+statement ok
+SELECT '1993-08-31'::DATE::VARCHAR
+
+statement error
+SELECT '1993-08-32'::DATE::VARCHAR
+
+statement ok
+SELECT '1993-09-30'::DATE::VARCHAR
+
+statement error
+SELECT '1993-09-31'::DATE::VARCHAR
+
+statement ok
+SELECT '1993-10-31'::DATE::VARCHAR
+
+statement error
+SELECT '1993-10-32'::DATE::VARCHAR
+
+statement ok
+SELECT '1993-11-30'::DATE::VARCHAR
+
+statement error
+SELECT '1993-11-31'::DATE::VARCHAR
+
+statement ok
+SELECT '1993-12-31'::DATE::VARCHAR
+
+statement error
+SELECT '1993-12-32'::DATE::VARCHAR
+
+# leap year
+statement ok
+SELECT '1992-01-31'::DATE::VARCHAR
+
+statement error
+SELECT '1992-01-32'::DATE::VARCHAR
+
+statement ok
+SELECT '1992-02-29'::DATE::VARCHAR
+
+statement error
+SELECT '1992-02-30'::DATE::VARCHAR
+
+statement ok
+SELECT '1992-03-31'::DATE::VARCHAR
+
+statement error
+SELECT '1992-03-32'::DATE::VARCHAR
+
+statement ok
+SELECT '1992-04-30'::DATE::VARCHAR
+
+statement error
+SELECT '1992-04-31'::DATE::VARCHAR
+
+statement ok
+SELECT '1992-05-31'::DATE::VARCHAR
+
+statement error
+SELECT '1992-05-32'::DATE::VARCHAR
+
+statement ok
+SELECT '1992-06-30'::DATE::VARCHAR
+
+statement error
+SELECT '1992-06-31'::DATE::VARCHAR
+
+statement ok
+SELECT '1992-07-31'::DATE::VARCHAR
+
+statement error
+SELECT '1992-07-32'::DATE::VARCHAR
+
+statement ok
+SELECT '1992-08-31'::DATE::VARCHAR
+
+statement error
+SELECT '1992-08-32'::DATE::VARCHAR
+
+statement ok
+SELECT '1992-09-30'::DATE::VARCHAR
+
+statement error
+SELECT '1992-09-31'::DATE::VARCHAR
+
+statement ok
+SELECT '1992-10-31'::DATE::VARCHAR
+
+statement error
+SELECT '1992-10-32'::DATE::VARCHAR
+
+statement ok
+SELECT '1992-11-30'::DATE::VARCHAR
+
+statement error
+SELECT '1992-11-31'::DATE::VARCHAR
+
+statement ok
+SELECT '1992-12-31'::DATE::VARCHAR
+
+statement error
+SELECT '1992-12-32'::DATE::VARCHAR
+
+
+# 1900 is not a leap year
+statement error
+SELECT '1900-02-29'::DATE::VARCHAR
+
+# 2000 is a leap year
+query I
+SELECT '2000-02-29'::DATE::VARCHAR == '2000-02-29'
+----
+1
+
+# year 0 is fine, results in 1 BC (iso-8601)
+statement ok
+SELECT '0-01-01'::DATE::VARCHAR
+
+# year 1 and -1 are fine
+statement ok
+SELECT '1-01-01'::DATE::VARCHAR
+
+statement ok
+SELECT '-1-01-01'::DATE::VARCHAR
+
+# various invalid formats
+statement error
+SELECT '100000'::DATE::VARCHAR
+
+statement error
+SELECT '1992-10/10'::DATE::VARCHAR
+
+statement error
+SELECT '1992a10a10'::DATE::VARCHAR
+
+statement error
+SELECT '1992/10-10'::DATE::VARCHAR
+
+statement error
+SELECT 'hello'::DATE::VARCHAR
+
+statement error
+SELECT 'aa-10-10'::DATE::VARCHAR
+
+statement error
+SELECT '1992-aa-10'::DATE::VARCHAR
+
+statement error
+SELECT '1992-10-aa'::DATE::VARCHAR
+
+statement error
+SELECT ''::DATE::VARCHAR
+
+statement error
+SELECT '-'::DATE::VARCHAR
+
+statement error
+SELECT '-/10/10'::DATE::VARCHAR
+
+# min year is slightly smaller than max year, because we start at 1970
+# -291000 is out of range, but 291000 is not
+statement error
+SELECT '-291000-01-01'::DATE:VARCHAR;
+
+statement ok
+SELECT '291000-01-01'::DATE::VARCHAR;
+
+statement error
+SELECT '291000-01-01 (BC)'::DATE:VARCHAR;
+
+statement error
+SELECT '-a'::DATE::VARCHAR
+
+statement error
+SELECT '1992-'::DATE::VARCHAR
+
+statement error
+SELECT '1992-10'::DATE::VARCHAR
+
+statement error
+SELECT '1992-10-'::DATE::VARCHAR
+
+# dates out of range
+statement error
+SELECT '10000000000-01-01'::DATE::VARCHAR
+
+statement error
+SELECT '-10000000000-01-01'::DATE::VARCHAR
+
+statement error
+SELECT '1992-30-30'::DATE::VARCHAR
+
+statement error
+SELECT '1992-00-50'::DATE::VARCHAR
+
+statement error
+SELECT '1992-01-00'::DATE::VARCHAR
+
+statement error
+SELECT '1992-10-50'::DATE::VARCHAR
+
+statement error
+SELECT '1992-10-100'::DATE::VARCHAR

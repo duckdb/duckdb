@@ -8,7 +8,6 @@
 #include "duckdb/planner/expression_iterator.hpp"
 
 namespace duckdb {
-using namespace std;
 
 RewriteCorrelatedExpressions::RewriteCorrelatedExpressions(ColumnBinding base_binding,
                                                            column_binding_map_t<idx_t> &correlated_map)

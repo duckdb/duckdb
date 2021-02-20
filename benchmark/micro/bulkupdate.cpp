@@ -5,10 +5,9 @@
 #include <random>
 
 using namespace duckdb;
-using namespace std;
 
 #define GROUP_ROW_COUNT 1000000
-#define GROUP_COUNT 5
+#define GROUP_COUNT     5
 
 DUCKDB_BENCHMARK(BulkUpdate, "[bulkupdate]")
 int64_t sum = 0;
@@ -38,7 +37,7 @@ string VerifyResult(QueryResult *result) override {
 	auto &materialized = (MaterializedQueryResult &)*result;
 	Value val = materialized.GetValue(0, 0);
 	if (val != Value::BIGINT(sum + count)) {
-		return string("Value " + val.ToString() + " does not match expected value " + to_string(sum + count));
+		return string("Value " + val.ToString() + " does not match expected value " + std::to_string(sum + count));
 	}
 	return string();
 }
@@ -77,7 +76,7 @@ string VerifyResult(QueryResult *result) override {
 	auto &materialized = (MaterializedQueryResult &)*result;
 	Value val = materialized.GetValue(0, 0);
 	if (val != Value::BIGINT(sum - count)) {
-		return string("Value " + val.ToString() + " does not match expected value " + to_string(sum - count));
+		return string("Value " + val.ToString() + " does not match expected value " + std::to_string(sum - count));
 	}
 	return string();
 }

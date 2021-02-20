@@ -3,13 +3,11 @@
 #include "duckdb/parser/transformer.hpp"
 
 namespace duckdb {
-using namespace std;
-using namespace duckdb_libpgquery;
 
-unique_ptr<CreateStatement> Transformer::TransformCreateTableAs(PGNode *node) {
-	auto stmt = reinterpret_cast<PGCreateTableAsStmt *>(node);
+unique_ptr<CreateStatement> Transformer::TransformCreateTableAs(duckdb_libpgquery::PGNode *node) {
+	auto stmt = reinterpret_cast<duckdb_libpgquery::PGCreateTableAsStmt *>(node);
 	D_ASSERT(stmt);
-	if (stmt->relkind == PG_OBJECT_MATVIEW) {
+	if (stmt->relkind == duckdb_libpgquery::PG_OBJECT_MATVIEW) {
 		throw NotImplementedException("Materialized view not implemented");
 	}
 	if (stmt->is_select_into || stmt->into->colNames || stmt->into->options) {
@@ -22,7 +20,8 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTableAs(PGNode *node) {
 	auto info = make_unique<CreateTableInfo>();
 	info->schema = qname.schema;
 	info->table = qname.name;
-	info->on_conflict = stmt->if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
+	info->on_conflict =
+	    stmt->if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 	info->query = move(query);
 	result->info = move(info);
 	return result;

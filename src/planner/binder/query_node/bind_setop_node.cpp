@@ -9,8 +9,6 @@
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/expression_binder/order_binder.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 static void GatherAliases(BoundQueryNode &node, unordered_map<string, idx_t> &aliases,
@@ -76,7 +74,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 	result->right_binder = make_unique<Binder>(context, this);
 	result->right = result->right_binder->BindNode(*statement.right);
 
-	if (statement.modifiers.size() > 0) {
+	if (!statement.modifiers.empty()) {
 		// handle the ORDER BY/DISTINCT clauses
 
 		// we recursively visit the children of this node to extract aliases and expressions that can be referenced in

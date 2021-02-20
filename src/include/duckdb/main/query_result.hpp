@@ -8,8 +8,9 @@
 
 #pragma once
 
-#include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/enums/statement_type.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/winapi.hpp"
 
 struct ArrowSchema;
 
@@ -23,12 +24,13 @@ enum class QueryResultType : uint8_t { MATERIALIZED_RESULT, STREAM_RESULT };
 class QueryResult {
 public:
 	//! Creates an successful empty query result
-	QueryResult(QueryResultType type, StatementType statement_type);
+	DUCKDB_API QueryResult(QueryResultType type, StatementType statement_type);
 	//! Creates a successful query result with the specified names and types
-	QueryResult(QueryResultType type, StatementType statement_type, vector<LogicalType> types, vector<string> names);
+	DUCKDB_API QueryResult(QueryResultType type, StatementType statement_type, vector<LogicalType> types,
+	                       vector<string> names);
 	//! Creates an unsuccessful query result with error condition
-	QueryResult(QueryResultType type, string error);
-	virtual ~QueryResult() {
+	DUCKDB_API QueryResult(QueryResultType type, string error);
+	DUCKDB_API virtual ~QueryResult() {
 	}
 
 	//! The type of the result (MATERIALIZED or STREAMING)
@@ -47,44 +49,48 @@ public:
 	unique_ptr<QueryResult> next;
 
 public:
-	//! Fetches a DataChunk from the query result. Returns an empty chunk if the result is empty, or nullptr on failure.
-	virtual unique_ptr<DataChunk> Fetch() = 0;
+	//! Fetches a DataChunk of normalized (flat) vectors from the query result.
+	//! Returns nullptr if there are no more results to fetch.
+	DUCKDB_API virtual unique_ptr<DataChunk> Fetch();
+	//! Fetches a DataChunk from the query result. The vector types
+	DUCKDB_API virtual unique_ptr<DataChunk> FetchRaw() = 0;
 	// Converts the QueryResult to a string
-	virtual string ToString() = 0;
+	DUCKDB_API virtual string ToString() = 0;
 	//! Prints the QueryResult to the console
-	void Print();
+	DUCKDB_API void Print();
 	//! Returns true if the two results are identical; false otherwise. Note that this method is destructive; it calls
 	//! Fetch() until both results are exhausted. The data in the results will be lost.
-	bool Equals(QueryResult &other);
+	DUCKDB_API bool Equals(QueryResult &other);
 
-	idx_t column_count() {
+	DUCKDB_API idx_t ColumnCount() {
 		return types.size();
 	}
 
-	void ToArrowSchema(ArrowSchema *out_array);
+	DUCKDB_API void ToArrowSchema(ArrowSchema *out_array);
 
 private:
 	//! The current chunk used by the iterator
 	unique_ptr<DataChunk> iterator_chunk;
 
+private:
 	class QueryResultIterator;
-
 	class QueryResultRow {
 	public:
-		QueryResultRow(QueryResultIterator &iterator) : iterator(iterator), row(0) {
+		explicit QueryResultRow(QueryResultIterator &iterator) : iterator(iterator), row(0) {
 		}
 
 		QueryResultIterator &iterator;
 		idx_t row;
 
-		template <class T> T GetValue(idx_t col_idx) const {
+		template <class T>
+		T GetValue(idx_t col_idx) const {
 			return iterator.result->iterator_chunk->GetValue(col_idx, iterator.row_idx).GetValue<T>();
 		}
 	};
 	//! The row-based query result iterator. Invoking the
 	class QueryResultIterator {
 	public:
-		QueryResultIterator(QueryResult *result) : current_row(*this), result(result), row_idx(0) {
+		explicit QueryResultIterator(QueryResult *result) : current_row(*this), result(result), row_idx(0) {
 			if (result) {
 				result->iterator_chunk = result->Fetch();
 			}
@@ -112,7 +118,7 @@ private:
 			return *this;
 		}
 		bool operator!=(const QueryResultIterator &other) const {
-			return result->iterator_chunk && result->iterator_chunk->column_count() > 0;
+			return result->iterator_chunk && result->iterator_chunk->ColumnCount() > 0;
 		}
 		const QueryResultRow &operator*() const {
 			return current_row;
@@ -120,15 +126,15 @@ private:
 	};
 
 public:
-	QueryResultIterator begin() {
+	DUCKDB_API QueryResultIterator begin() {
 		return QueryResultIterator(this);
 	}
-	QueryResultIterator end() {
+	DUCKDB_API QueryResultIterator end() {
 		return QueryResultIterator(nullptr);
 	}
 
 protected:
-	string HeaderToString();
+	DUCKDB_API string HeaderToString();
 
 private:
 	QueryResult(const QueryResult &) = delete;

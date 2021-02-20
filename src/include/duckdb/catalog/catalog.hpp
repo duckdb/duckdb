@@ -13,6 +13,7 @@
 #include "duckdb/parser/query_error_context.hpp"
 
 #include <functional>
+#include <atomic>
 
 namespace duckdb {
 struct CreateSchemaInfo;
@@ -39,18 +40,18 @@ class SequenceCatalogEntry;
 class TableFunctionCatalogEntry;
 class CopyFunctionCatalogEntry;
 class PragmaFunctionCatalogEntry;
-class StorageManager;
 class CatalogSet;
+class DatabaseInstance;
 class DependencyManager;
 
 //! The Catalog object represents the catalog of the database.
 class Catalog {
 public:
-	Catalog(StorageManager &storage);
+	explicit Catalog(DatabaseInstance &db);
 	~Catalog();
 
-	//! Reference to the storage manager
-	StorageManager &storage;
+	//! Reference to the database
+	DatabaseInstance &db;
 	//! The catalog set holding the schemas
 	unique_ptr<CatalogSet> schemas;
 	//! The DependencyManager manages dependencies between different catalog objects
@@ -61,6 +62,12 @@ public:
 public:
 	//! Get the ClientContext from the Catalog
 	static Catalog &GetCatalog(ClientContext &context);
+	static Catalog &GetCatalog(DatabaseInstance &db);
+
+	//! Returns the current version of the catalog (incremented whenever anything changes, not stored between restarts)
+	idx_t GetCatalogVersion();
+	//! Trigger a modification in the catalog, increasing the catalog version
+	void ModifyCatalog();
 
 	//! Creates a schema in the catalog.
 	CatalogEntry *CreateSchema(ClientContext &context, CreateSchemaInfo *info);
@@ -81,6 +88,25 @@ public:
 	//! Creates a collation in the catalog
 	CatalogEntry *CreateCollation(ClientContext &context, CreateCollationInfo *info);
 
+	//! Creates a table in the catalog.
+	CatalogEntry *CreateTable(ClientContext &context, SchemaCatalogEntry *schema, BoundCreateTableInfo *info);
+	//! Create a table function in the catalog
+	CatalogEntry *CreateTableFunction(ClientContext &context, SchemaCatalogEntry *schema,
+	                                  CreateTableFunctionInfo *info);
+	//! Create a copy function in the catalog
+	CatalogEntry *CreateCopyFunction(ClientContext &context, SchemaCatalogEntry *schema, CreateCopyFunctionInfo *info);
+	//! Create a pragma function in the catalog
+	CatalogEntry *CreatePragmaFunction(ClientContext &context, SchemaCatalogEntry *schema,
+	                                   CreatePragmaFunctionInfo *info);
+	//! Create a scalar or aggregate function in the catalog
+	CatalogEntry *CreateFunction(ClientContext &context, SchemaCatalogEntry *schema, CreateFunctionInfo *info);
+	//! Creates a table in the catalog.
+	CatalogEntry *CreateView(ClientContext &context, SchemaCatalogEntry *schema, CreateViewInfo *info);
+	//! Creates a table in the catalog.
+	CatalogEntry *CreateSequence(ClientContext &context, SchemaCatalogEntry *schema, CreateSequenceInfo *info);
+	//! Creates a collation in the catalog
+	CatalogEntry *CreateCollation(ClientContext &context, SchemaCatalogEntry *schema, CreateCollationInfo *info);
+
 	//! Drops an entry from the catalog
 	void DropEntry(ClientContext &context, DropInfo *info);
 
@@ -95,25 +121,29 @@ public:
 	                       bool if_exists = false, QueryErrorContext error_context = QueryErrorContext());
 
 	template <class T>
-	T *GetEntry(ClientContext &context, string schema_name, const string &name, bool if_exists = false, QueryErrorContext error_context = QueryErrorContext());
+	T *GetEntry(ClientContext &context, string schema_name, const string &name, bool if_exists = false,
+	            QueryErrorContext error_context = QueryErrorContext());
 
 	//! Alter an existing entry in the catalog.
 	void Alter(ClientContext &context, AlterInfo *info);
 
-	//! Parse the (optional) schema and a name from a string in the format of e.g. "schema"."table"; if there is no dot
-	//! the schema will be set to DEFAULT_SCHEMA
-	static void ParseRangeVar(string input, string &schema, string &name);
+private:
+	//! The catalog version, incremented whenever anything changes in the catalog
+	std::atomic<idx_t> catalog_version;
 
 private:
 	void DropSchema(ClientContext &context, DropInfo *info);
 };
 
 template <>
-TableCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name, bool if_exists, QueryErrorContext error_context);
+TableCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name, bool if_exists,
+                                     QueryErrorContext error_context);
 template <>
-ViewCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name, bool if_exists, QueryErrorContext error_context);
+ViewCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name, bool if_exists,
+                                    QueryErrorContext error_context);
 template <>
-SequenceCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name, bool if_exists, QueryErrorContext error_context);
+SequenceCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name, bool if_exists,
+                                        QueryErrorContext error_context);
 template <>
 TableFunctionCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name,
                                              bool if_exists, QueryErrorContext error_context);
@@ -127,6 +157,7 @@ template <>
 AggregateFunctionCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name,
                                                  bool if_exists, QueryErrorContext error_context);
 template <>
-CollateCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name, bool if_exists, QueryErrorContext error_context);
+CollateCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name, bool if_exists,
+                                       QueryErrorContext error_context);
 
 } // namespace duckdb

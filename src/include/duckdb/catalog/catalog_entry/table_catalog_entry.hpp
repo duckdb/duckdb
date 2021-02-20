@@ -71,6 +71,9 @@ public:
 
 	void SetAsRoot() override;
 
+	void CommitAlter(AlterInfo &info);
+	void CommitDrop();
+
 private:
 	unique_ptr<CatalogEntry> RenameColumn(ClientContext &context, RenameColumnInfo &info);
 	unique_ptr<CatalogEntry> AddColumn(ClientContext &context, AddColumnInfo &info);

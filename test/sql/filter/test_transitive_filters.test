@@ -25,31 +25,31 @@ INSERT INTO vals1 SELECT DISTINCT(i), i-1 FROM vals1 ORDER by i
 query II
 SELECT * FROM vals1 WHERE i=5 AND j>=i
 ----
-5	5   
+5	5
 5	6
 
 query II
 SELECT * FROM vals1 WHERE i>9 AND j>=i
 ----
-10	10   
+10	10
 10	11
 
 query II
 SELECT * FROM vals1 WHERE i>=10 AND j>=i
 ----
-10	10   
+10	10
 10	11
 
 query II
 SELECT * FROM vals1 WHERE i<1 AND j>=i
 ----
-0	0   
+0	0
 0	1
 
 query II
 SELECT * FROM vals1 WHERE i<=0 AND j>=i
 ----
-0	0   
+0	0
 0	1
 
 ### constant comparison [=, >, >=, <, <=] followed by j <= i #########################
@@ -57,7 +57,7 @@ SELECT * FROM vals1 WHERE i<=0 AND j>=i
 query II
 SELECT * FROM vals1 WHERE i=5 AND j<=i
 ----
-5	5   
+5	5
 5	4
 
 query II
@@ -69,7 +69,7 @@ SELECT * FROM vals1 WHERE i>9 AND j<=i
 query II
 SELECT * FROM vals1 WHERE i>=10 AND j<=i
 ----
-10	10 
+10	10
 10	9
 
 query II

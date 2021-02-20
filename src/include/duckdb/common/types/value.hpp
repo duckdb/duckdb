@@ -11,6 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/winapi.hpp"
 
 namespace duckdb {
 
@@ -24,42 +25,33 @@ class Value {
 
 public:
 	//! Create an empty NULL value of the specified type
-	explicit Value(LogicalType type = LogicalType::SQLNULL) : type_(type), is_null(true) {
-	}
+	explicit Value(LogicalType type = LogicalType::SQLNULL);
+	//! Create an INTEGER value
+	Value(int32_t val); // NOLINT: Allow implicit conversion from `int32_t`
 	//! Create a BIGINT value
-	Value(int32_t val) : type_(LogicalType::INTEGER), is_null(false) {
-		value_.integer = val;
-	}
-	//! Create a BIGINT value
-	Value(int64_t val) : type_(LogicalType::BIGINT), is_null(false) {
-		value_.bigint = val;
-	}
+	Value(int64_t val); // NOLINT: Allow implicit conversion from `int64_t`
 	//! Create a FLOAT value
-	Value(float val) : type_(LogicalType::FLOAT), is_null(false) {
-		value_.float_ = val;
-	}
+	Value(float val); // NOLINT: Allow implicit conversion from `float`
 	//! Create a DOUBLE value
-	Value(double val) : type_(LogicalType::DOUBLE), is_null(false) {
-		value_.double_ = val;
-	}
+	Value(double val); // NOLINT: Allow implicit conversion from `double`
 	//! Create a VARCHAR value
-	Value(const char *val) : Value(val ? string(val) : string()) {
-	}
-	Value(string_t val);
+	Value(const char *val); // NOLINT: Allow implicit conversion from `const char *`
 	//! Create a VARCHAR value
-	Value(string val);
+	Value(string_t val); // NOLINT: Allow implicit conversion from `string_t`
+	//! Create a VARCHAR value
+	Value(string val); // NOLINT: Allow implicit conversion from `string`
 
 	LogicalType type() const {
 		return type_;
 	}
 
 	//! Create the lowest possible value of a given type (numeric only)
-	static Value MinimumValue(PhysicalType type);
+	static Value MinimumValue(const LogicalType &type);
 	//! Create the highest possible value of a given type (numeric only)
-	static Value MaximumValue(PhysicalType type);
+	static Value MaximumValue(const LogicalType &type);
 	//! Create a Numeric value of the specified type with the specified value
-	static Value Numeric(LogicalType type, int64_t value);
-	static Value Numeric(LogicalType type, hugeint_t value);
+	static Value Numeric(const LogicalType &type, int64_t value);
+	static Value Numeric(const LogicalType &type, hugeint_t value);
 
 	//! Create a tinyint Value from a specified value
 	static Value BOOLEAN(int8_t value);
@@ -71,6 +63,14 @@ public:
 	static Value INTEGER(int32_t value);
 	//! Create a bigint Value from a specified value
 	static Value BIGINT(int64_t value);
+	//! Create an unsigned tinyint Value from a specified value
+	static Value UTINYINT(uint8_t value);
+	//! Create an unsigned smallint Value from a specified value
+	static Value USMALLINT(uint16_t value);
+	//! Create an unsigned integer Value from a specified value
+	static Value UINTEGER(uint32_t value);
+	//! Create an unsigned bigint Value from a specified value
+	static Value UBIGINT(uint64_t value);
 	//! Create a hugeint Value from a specified value
 	static Value HUGEINT(hugeint_t value);
 	//! Create a hash Value from a specified value
@@ -84,15 +84,15 @@ public:
 	//! Create a time Value from a specified time
 	static Value TIME(dtime_t time);
 	//! Create a time Value from a specified time
-	static Value TIME(int32_t hour, int32_t min, int32_t sec, int32_t msec);
+	static Value TIME(int32_t hour, int32_t min, int32_t sec, int32_t micros);
 	//! Create a timestamp Value from a specified date/time combination
 	static Value TIMESTAMP(date_t date, dtime_t time);
 	//! Create a timestamp Value from a specified timestamp
 	static Value TIMESTAMP(timestamp_t timestamp);
 	//! Create a timestamp Value from a specified timestamp in separate values
 	static Value TIMESTAMP(int32_t year, int32_t month, int32_t day, int32_t hour, int32_t min, int32_t sec,
-	                       int32_t msec);
-	static Value INTERVAL(int32_t months, int32_t days, int64_t msecs);
+	                       int32_t micros);
+	static Value INTERVAL(int32_t months, int32_t days, int64_t micros);
 	static Value INTERVAL(interval_t interval);
 
 	// Decimal values
@@ -112,13 +112,21 @@ public:
 	//! Create a blob Value from a data pointer and a length: no bytes are interpreted
 	static Value BLOB(const_data_ptr_t data, idx_t len);
 	//! Creates a blob by casting a specified string to a blob (i.e. interpreting \x characters)
-	static Value BLOB(string data);
+	static Value BLOB(const string &data);
 
-	template <class T> T GetValue() const {
+	template <class T>
+	T GetValue() const {
 		throw NotImplementedException("Unimplemented template type for Value::GetValue");
 	}
-	template <class T> static Value CreateValue(T value) {
+	template <class T>
+	static Value CreateValue(T value) {
 		throw NotImplementedException("Unimplemented template type for Value::CreateValue");
+	}
+	// Returns the internal value. Unlike GetValue(), this method does not perform casting, and assumes T matches the
+	// type of the value. Only use this if you know what you are doing.
+	template <class T>
+	T &GetValueUnsafe() {
+		throw NotImplementedException("Unimplemented template type for Value::GetValueUnsafe");
 	}
 
 	//! Return a copy of this value
@@ -127,12 +135,12 @@ public:
 	}
 
 	//! Convert this value to a string
-	string ToString() const;
+	DUCKDB_API string ToString() const;
 
 	//! Cast this value to another type
-	Value CastAs(LogicalType target_type, bool strict = false) const;
+	Value CastAs(const LogicalType &target_type, bool strict = false) const;
 	//! Tries to cast value to another type, throws exception if its not possible
-	bool TryCastAs(LogicalType target_type, bool strict = false);
+	bool TryCastAs(const LogicalType &target_type, bool strict = false);
 
 	//! Serializes a Value to a stand-alone binary blob
 	void Serialize(Serializer &serializer);
@@ -167,9 +175,15 @@ public:
 
 	static bool FloatIsValid(float value);
 	static bool DoubleIsValid(double value);
+
+	template <class T>
+	static bool IsValid(T value) {
+		return true;
+	}
+
 	//! Returns true if the values are (approximately) equivalent. Note this is NOT the SQL equivalence. For this
 	//! function, NULL values are equivalent and floating point values that are close are equivalent.
-	static bool ValuesAreEqual(Value result_value, Value value);
+	static bool ValuesAreEqual(const Value &result_value, const Value &value);
 
 	friend std::ostream &operator<<(std::ostream &out, const Value &val) {
 		out << val.ToString();
@@ -192,6 +206,10 @@ public:
 		int16_t smallint;
 		int32_t integer;
 		int64_t bigint;
+		uint8_t utinyint;
+		uint16_t usmallint;
+		uint32_t uinteger;
+		uint64_t ubigint;
 		hugeint_t hugeint;
 		float float_;
 		double double_;
@@ -207,41 +225,107 @@ public:
 	std::vector<Value> list_value;
 
 private:
-	template <class T> T GetValueInternal() const;
+	template <class T>
+	T GetValueInternal() const;
 	//! Templated helper function for casting
-	template <class DST, class OP> static DST _cast(const Value &v);
+	template <class DST, class OP>
+	static DST _cast(const Value &v);
 
 	//! Templated helper function for binary operations
 	template <class OP>
 	static void _templated_binary_operation(const Value &left, const Value &right, Value &result, bool ignore_null);
 
 	//! Templated helper function for boolean operations
-	template <class OP> static bool _templated_boolean_operation(const Value &left, const Value &right);
+	template <class OP>
+	static bool _templated_boolean_operation(const Value &left, const Value &right);
 };
 
-template <> Value Value::CreateValue(bool value);
-template <> Value Value::CreateValue(int8_t value);
-template <> Value Value::CreateValue(int16_t value);
-template <> Value Value::CreateValue(int32_t value);
-template <> Value Value::CreateValue(int64_t value);
-template <> Value Value::CreateValue(hugeint_t value);
-template <> Value Value::CreateValue(const char *value);
-template <> Value Value::CreateValue(string value);
-template <> Value Value::CreateValue(string_t value);
-template <> Value Value::CreateValue(float value);
-template <> Value Value::CreateValue(double value);
-template <> Value Value::CreateValue(Value value);
+template <>
+Value DUCKDB_API Value::CreateValue(bool value);
+template <>
+Value DUCKDB_API Value::CreateValue(uint8_t value);
+template <>
+Value DUCKDB_API Value::CreateValue(uint16_t value);
+template <>
+Value DUCKDB_API Value::CreateValue(uint32_t value);
+template <>
+Value DUCKDB_API Value::CreateValue(uint64_t value);
+template <>
+Value DUCKDB_API Value::CreateValue(int8_t value);
+template <>
+Value DUCKDB_API Value::CreateValue(int16_t value);
+template <>
+Value DUCKDB_API Value::CreateValue(int32_t value);
+template <>
+Value DUCKDB_API Value::CreateValue(int64_t value);
+template <>
+Value DUCKDB_API Value::CreateValue(hugeint_t value);
+template <>
+Value DUCKDB_API Value::CreateValue(const char *value);
+template <>
+Value DUCKDB_API Value::CreateValue(string value);
+template <>
+Value DUCKDB_API Value::CreateValue(string_t value);
+template <>
+Value DUCKDB_API Value::CreateValue(float value);
+template <>
+Value DUCKDB_API Value::CreateValue(double value);
+template <>
+Value DUCKDB_API Value::CreateValue(Value value);
 
-template <> bool Value::GetValue() const;
-template <> int8_t Value::GetValue() const;
-template <> int16_t Value::GetValue() const;
-template <> int32_t Value::GetValue() const;
-template <> int64_t Value::GetValue() const;
-template <> hugeint_t Value::GetValue() const;
-template <> string Value::GetValue() const;
-template <> float Value::GetValue() const;
-template <> double Value::GetValue() const;
-template <> uintptr_t Value::GetValue() const;
+template <>
+bool Value::GetValue() const;
+template <>
+int8_t Value::GetValue() const;
+template <>
+int16_t Value::GetValue() const;
+template <>
+int32_t Value::GetValue() const;
+template <>
+int64_t Value::GetValue() const;
+template <>
+uint8_t Value::GetValue() const;
+template <>
+uint16_t Value::GetValue() const;
+template <>
+hugeint_t Value::GetValue() const;
+template <>
+string Value::GetValue() const;
+template <>
+float Value::GetValue() const;
+template <>
+double Value::GetValue() const;
+template <>
+uintptr_t Value::GetValue() const;
 
+template <>
+int8_t &Value::GetValueUnsafe();
+template <>
+int16_t &Value::GetValueUnsafe();
+template <>
+int32_t &Value::GetValueUnsafe();
+template <>
+int64_t &Value::GetValueUnsafe();
+template <>
+hugeint_t &Value::GetValueUnsafe();
+template <>
+uint8_t &Value::GetValueUnsafe();
+template <>
+uint16_t &Value::GetValueUnsafe();
+template <>
+uint32_t &Value::GetValueUnsafe();
+template <>
+uint64_t &Value::GetValueUnsafe();
+template <>
+string &Value::GetValueUnsafe();
+template <>
+float &Value::GetValueUnsafe();
+template <>
+double &Value::GetValueUnsafe();
+
+template <>
+bool Value::IsValid(float value);
+template <>
+bool Value::IsValid(double value);
 
 } // namespace duckdb

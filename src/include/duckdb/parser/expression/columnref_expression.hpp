@@ -19,7 +19,7 @@ public:
 	//! Specify both the column and table name
 	ColumnRefExpression(string column_name, string table_name);
 	//! Only specify the column name, the table name will be derived later
-	ColumnRefExpression(string column_name);
+	explicit ColumnRefExpression(string column_name);
 
 	//! Column name that is referenced
 	string column_name;

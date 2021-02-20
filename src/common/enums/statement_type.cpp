@@ -1,7 +1,5 @@
 #include "duckdb/common/enums/statement_type.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 string StatementTypeToString(StatementType type) {
@@ -38,6 +36,8 @@ string StatementTypeToString(StatementType type) {
 		return "DROP";
 	case StatementType::PRAGMA_STATEMENT:
 		return "PRAGMA";
+	case StatementType::SHOW_STATEMENT:
+		return "SHOW";
 	case StatementType::VACUUM_STATEMENT:
 		return "VACUUM";
 	case StatementType::RELATION_STATEMENT:
@@ -46,6 +46,8 @@ string StatementTypeToString(StatementType type) {
 		return "EXPORT";
 	case StatementType::CALL_STATEMENT:
 		return "CALL";
+	case StatementType::SET_STATEMENT:
+		return "SET";
 	case StatementType::INVALID_STATEMENT:
 		return "INVALID";
 	}

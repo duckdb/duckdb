@@ -7,7 +7,6 @@
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 
 namespace duckdb {
-using namespace std;
 
 unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 	auto result = make_unique<BoundRecursiveCTENode>();
@@ -52,7 +51,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 		                      "same number of result columns");
 	}
 
-	if (statement.modifiers.size() > 0) {
+	if (!statement.modifiers.empty()) {
 		throw NotImplementedException("FIXME: bind modifiers in recursive CTE");
 	}
 

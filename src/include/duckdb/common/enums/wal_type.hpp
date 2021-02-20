@@ -30,6 +30,9 @@ enum class WALType : uint8_t {
 	DROP_SEQUENCE = 9,
 	SEQUENCE_VALUE = 10,
 
+	CREATE_MACRO = 11,
+	DROP_MACRO = 12,
+
 	ALTER_INFO = 20,
 	// -----------------------------
 	// Data
@@ -41,6 +44,7 @@ enum class WALType : uint8_t {
 	// -----------------------------
 	// Flush
 	// -----------------------------
+	CHECKPOINT = 99,
 	WAL_FLUSH = 100
 };
 }

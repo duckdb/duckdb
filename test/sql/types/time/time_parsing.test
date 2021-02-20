@@ -1,0 +1,60 @@
+# name: test/sql/types/time/time_parsing.test
+# description: Test time parsing
+# group: [time]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT '14:42:04'::TIME::VARCHAR
+----
+14:42:04
+
+# microseconds
+query I
+SELECT '14:42:04.35'::TIME::VARCHAR
+----
+14:42:04.35
+
+# we support up until microsecond precision (max 0-999999)
+query I
+SELECT '14:42:04.999999'::TIME::VARCHAR
+----
+14:42:04.999999
+
+# nanosecond precision gets truncated
+query I
+SELECT '14:42:04.999999999'::TIME::VARCHAR
+----
+14:42:04.999999
+
+# trailing zeros get truncated
+query I
+SELECT '14:42:04.000000'::TIME::VARCHAR
+----
+14:42:04
+
+query I
+SELECT '14:42:04.500'::TIME::VARCHAR
+----
+14:42:04.5
+
+# out of range
+statement error
+SELECT '50:42:04.500'::TIME::VARCHAR
+
+statement error
+SELECT '100:42:04.500'::TIME::VARCHAR
+
+statement error
+SELECT '14:70:04.500'::TIME::VARCHAR
+
+statement error
+SELECT '14:100:04.500'::TIME::VARCHAR
+
+statement error
+SELECT '14:42:70.500'::TIME::VARCHAR
+
+# invalid separator
+statement error
+SELECT '14-42-04'::TIME::VARCHAR

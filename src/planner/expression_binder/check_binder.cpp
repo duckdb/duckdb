@@ -4,15 +4,15 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 
 namespace duckdb {
-using namespace std;
 
 CheckBinder::CheckBinder(Binder &binder, ClientContext &context, string table, vector<ColumnDefinition> &columns,
                          unordered_set<column_t> &bound_columns)
-    : ExpressionBinder(binder, context), table(table), columns(columns), bound_columns(bound_columns) {
+    : ExpressionBinder(binder, context), table(move(table)), columns(columns), bound_columns(bound_columns) {
 	target_type = LogicalType::INTEGER;
 }
 
-BindResult CheckBinder::BindExpression(ParsedExpression &expr, idx_t depth, bool root_expression) {
+BindResult CheckBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth, bool root_expression) {
+	auto &expr = **expr_ptr;
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::WINDOW:
 		return BindResult("window functions are not allowed in check constraints");
@@ -21,7 +21,7 @@ BindResult CheckBinder::BindExpression(ParsedExpression &expr, idx_t depth, bool
 	case ExpressionClass::COLUMN_REF:
 		return BindCheckColumn((ColumnRefExpression &)expr);
 	default:
-		return ExpressionBinder::BindExpression(expr, depth);
+		return ExpressionBinder::BindExpression(expr_ptr, depth);
 	}
 }
 

@@ -2,7 +2,6 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 
 namespace duckdb {
-using namespace std;
 
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundReferenceExpression &expr,
                                                                 ExpressionExecutorState &root) {
@@ -12,7 +11,7 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundReferenceEx
 void ExpressionExecutor::Execute(BoundReferenceExpression &expr, ExpressionState *state, const SelectionVector *sel,
                                  idx_t count, Vector &result) {
 	D_ASSERT(expr.index != INVALID_INDEX);
-	D_ASSERT(expr.index < chunk->column_count());
+	D_ASSERT(expr.index < chunk->ColumnCount());
 	if (sel) {
 		result.Slice(chunk->data[expr.index], *sel, count);
 	} else {

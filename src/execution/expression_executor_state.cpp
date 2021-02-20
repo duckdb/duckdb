@@ -3,7 +3,6 @@
 #include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
-using namespace std;
 
 void ExpressionState::AddChild(Expression *expr) {
 	types.push_back(expr->return_type);
@@ -11,7 +10,7 @@ void ExpressionState::AddChild(Expression *expr) {
 }
 
 void ExpressionState::Finalize() {
-	if (types.size() > 0) {
+	if (!types.empty()) {
 		intermediate_chunk.Initialize(types);
 	}
 }

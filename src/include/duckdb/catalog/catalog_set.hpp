@@ -26,7 +26,7 @@ class ClientContext;
 typedef unordered_map<CatalogSet *, std::unique_lock<std::mutex>> set_lock_map_t;
 
 struct MappingValue {
-	MappingValue(idx_t index_) : index(index_), timestamp(0), deleted(false), parent(nullptr) {
+	explicit MappingValue(idx_t index_) : index(index_), timestamp(0), deleted(false), parent(nullptr) {
 	}
 
 	idx_t index;
@@ -36,12 +36,12 @@ struct MappingValue {
 	MappingValue *parent;
 };
 
-//! The Catalog Set stores (key, value) map of a set of AbstractCatalogEntries
+//! The Catalog Set stores (key, value) map of a set of CatalogEntries
 class CatalogSet {
 	friend class DependencyManager;
 
 public:
-	CatalogSet(Catalog &catalog, unique_ptr<DefaultGenerator> defaults = nullptr);
+	explicit CatalogSet(Catalog &catalog, unique_ptr<DefaultGenerator> defaults = nullptr);
 
 	//! Create an entry in the catalog set. Returns whether or not it was
 	//! successful.
@@ -51,10 +51,9 @@ public:
 	bool AlterEntry(ClientContext &context, const string &name, AlterInfo *alter_info);
 
 	bool DropEntry(ClientContext &context, const string &name, bool cascade);
+
 	//! Returns the entry with the specified name
 	CatalogEntry *GetEntry(ClientContext &context, const string &name);
-	//! Returns the root entry with the specified name regardless of transaction (or nullptr if there are none)
-	CatalogEntry *GetRootEntry(const string &name);
 
 	//! Gets the entry that is most similar to the given name (i.e. smallest levenshtein distance), or empty string if
 	//! none is found
@@ -65,12 +64,27 @@ public:
 	void Undo(CatalogEntry *entry);
 
 	//! Scan the catalog set, invoking the callback method for every entry
-	template <class T> void Scan(ClientContext &context, T &&callback) {
+	template <class T>
+	void Scan(ClientContext &context, T &&callback) {
 		// lock the catalog set
 		std::lock_guard<std::mutex> lock(catalog_lock);
 		for (auto &kv : entries) {
 			auto entry = kv.second.get();
 			entry = GetEntryForTransaction(context, entry);
+			if (!entry->deleted) {
+				callback(entry);
+			}
+		}
+	}
+
+	//! Scan the catalog set, invoking the callback method for every committed entry
+	template <class T>
+	void Scan(T &&callback) {
+		// lock the catalog set
+		std::lock_guard<std::mutex> lock(catalog_lock);
+		for (auto &kv : entries) {
+			auto entry = kv.second.get();
+			entry = GetCommittedEntry(entry);
 			if (!entry->deleted) {
 				callback(entry);
 			}
@@ -84,9 +98,13 @@ public:
 	CatalogEntry *GetEntryFromIndex(idx_t index);
 	void UpdateTimestamp(CatalogEntry *entry, transaction_t timestamp);
 
+	//! Returns the root entry with the specified name regardless of transaction (or nullptr if there are none)
+	CatalogEntry *GetRootEntry(const string &name);
+
 private:
 	//! Given a root entry, gets the entry valid for this transaction
 	CatalogEntry *GetEntryForTransaction(ClientContext &context, CatalogEntry *current);
+	CatalogEntry *GetCommittedEntry(CatalogEntry *current);
 	bool GetEntryInternal(ClientContext &context, const string &name, idx_t &entry_index, CatalogEntry *&entry);
 	bool GetEntryInternal(ClientContext &context, idx_t entry_index, CatalogEntry *&entry);
 	//! Drops an entry from the catalog set; must hold the catalog_lock to safely call this

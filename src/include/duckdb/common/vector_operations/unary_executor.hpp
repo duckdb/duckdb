@@ -84,9 +84,9 @@ private:
 
 	template <class INPUT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC, bool IGNORE_NULL>
 	static inline void ExecuteStandard(Vector &input, Vector &result, idx_t count, FUNC fun) {
-		switch (input.vector_type) {
+		switch (input.GetVectorType()) {
 		case VectorType::CONSTANT_VECTOR: {
-			result.vector_type = VectorType::CONSTANT_VECTOR;
+			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 			auto result_data = ConstantVector::GetData<RESULT_TYPE>(result);
 			auto ldata = ConstantVector::GetData<INPUT_TYPE>(input);
 
@@ -100,7 +100,7 @@ private:
 			break;
 		}
 		case VectorType::FLAT_VECTOR: {
-			result.vector_type = VectorType::FLAT_VECTOR;
+			result.SetVectorType(VectorType::FLAT_VECTOR);
 			auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
 			auto ldata = FlatVector::GetData<INPUT_TYPE>(input);
 
@@ -114,7 +114,7 @@ private:
 			VectorData vdata;
 			input.Orrify(count, vdata);
 
-			result.vector_type = VectorType::FLAT_VECTOR;
+			result.SetVectorType(VectorType::FLAT_VECTOR);
 			auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
 			auto ldata = (INPUT_TYPE *)vdata.data;
 
