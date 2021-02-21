@@ -735,7 +735,7 @@ struct PandasScanFunction : public TableFunction {
 		} else if (col_type == "float64") {
 			duckdb_col_type = LogicalType::DOUBLE;
 			pandas_type = PandasType::DOUBLE;
-		} else if (col_type == "object") {
+		} else if (col_type == "object" || col_type == "string") {
 			// this better be strings
 			duckdb_col_type = LogicalType::VARCHAR;
 			pandas_type = PandasType::VARCHAR;
