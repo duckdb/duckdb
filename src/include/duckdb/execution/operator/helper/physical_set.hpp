@@ -17,7 +17,8 @@ namespace duckdb {
 class PhysicalSet : public PhysicalOperator {
 public:
 	PhysicalSet(std::string name_p, Value value_p, idx_t estimated_cardinality)
-	    : PhysicalOperator(PhysicalOperatorType::SET, {LogicalType::BOOLEAN},estimated_cardinality), name(name_p), value(value_p) {
+	    : PhysicalOperator(PhysicalOperatorType::SET, {LogicalType::BOOLEAN}, estimated_cardinality), name(name_p),
+	      value(value_p) {
 	}
 
 public:

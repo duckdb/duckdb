@@ -49,7 +49,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(unique_ptr<Logica
 }
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &op) {
-    op.estimated_cardinality = op.EstimateCardinality(context);
+	op.estimated_cardinality = op.EstimateCardinality(context);
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_GET:
 		return CreatePlan((LogicalGet &)op);

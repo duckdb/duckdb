@@ -13,14 +13,17 @@
 namespace duckdb {
 
 PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types,
-                                             vector<unique_ptr<Expression>> expressions, idx_t estimated_cardinality, PhysicalOperatorType type)
-    : PhysicalHashAggregate(context, move(types), move(expressions), {},estimated_cardinality, type) {
+                                             vector<unique_ptr<Expression>> expressions, idx_t estimated_cardinality,
+                                             PhysicalOperatorType type)
+    : PhysicalHashAggregate(context, move(types), move(expressions), {}, estimated_cardinality, type) {
 }
 
 PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types,
                                              vector<unique_ptr<Expression>> expressions,
-                                             vector<unique_ptr<Expression>> groups_p, idx_t estimated_cardinality, PhysicalOperatorType type)
-    : PhysicalSink(type, move(types),estimated_cardinality), groups(move(groups_p)), all_combinable(true), any_distinct(false) {
+                                             vector<unique_ptr<Expression>> groups_p, idx_t estimated_cardinality,
+                                             PhysicalOperatorType type)
+    : PhysicalSink(type, move(types), estimated_cardinality), groups(move(groups_p)), all_combinable(true),
+      any_distinct(false) {
 	// get a list of all aggregates to be computed
 	// fake a single group with a constant value for aggregation without groups
 	if (this->groups.empty()) {

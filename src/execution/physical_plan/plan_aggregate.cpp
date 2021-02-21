@@ -145,11 +145,11 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAggregate 
 			}
 		}
 		if (use_simple_aggregation) {
-			groupby = make_unique_base<PhysicalOperator, PhysicalSimpleAggregate>(op.types, move(op.expressions),
-			                                                                      all_combinable,op.estimated_cardinality);
+			groupby = make_unique_base<PhysicalOperator, PhysicalSimpleAggregate>(
+			    op.types, move(op.expressions), all_combinable, op.estimated_cardinality);
 		} else {
-			groupby =
-			    make_unique_base<PhysicalOperator, PhysicalHashAggregate>(context, op.types, move(op.expressions),op.estimated_cardinality);
+			groupby = make_unique_base<PhysicalOperator, PhysicalHashAggregate>(context, op.types, move(op.expressions),
+			                                                                    op.estimated_cardinality);
 		}
 	} else {
 		// groups! create a GROUP BY aggregator
@@ -157,10 +157,11 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAggregate 
 		vector<idx_t> required_bits;
 		if (CanUsePerfectHashAggregate(context, op, required_bits)) {
 			groupby = make_unique_base<PhysicalOperator, PhysicalPerfectHashAggregate>(
-			    context, op.types, move(op.expressions), move(op.groups), move(op.group_stats), move(required_bits),op.estimated_cardinality);
+			    context, op.types, move(op.expressions), move(op.groups), move(op.group_stats), move(required_bits),
+			    op.estimated_cardinality);
 		} else {
-			groupby = make_unique_base<PhysicalOperator, PhysicalHashAggregate>(context, op.types, move(op.expressions),
-			                                                                    move(op.groups),op.estimated_cardinality);
+			groupby = make_unique_base<PhysicalOperator, PhysicalHashAggregate>(
+			    context, op.types, move(op.expressions), move(op.groups), op.estimated_cardinality);
 		}
 	}
 	groupby->children.push_back(move(plan));
@@ -200,7 +201,7 @@ PhysicalPlanGenerator::ExtractAggregateExpressions(unique_ptr<PhysicalOperator> 
 	if (expressions.empty()) {
 		return child;
 	}
-	auto projection = make_unique<PhysicalProjection>(move(types), move(expressions),child->estimated_cardinality);
+	auto projection = make_unique<PhysicalProjection>(move(types), move(expressions), child->estimated_cardinality);
 	projection->children.push_back(move(child));
 	return move(projection);
 }

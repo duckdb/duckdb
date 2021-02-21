@@ -19,7 +19,7 @@ namespace duckdb {
 class PhysicalOrder : public PhysicalSink {
 public:
 	PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode> orders, idx_t estimated_cardinality)
-	    : PhysicalSink(PhysicalOperatorType::ORDER_BY, move(types),estimated_cardinality), orders(move(orders)) {
+	    : PhysicalSink(PhysicalOperatorType::ORDER_BY, move(types), estimated_cardinality), orders(move(orders)) {
 	}
 
 	vector<BoundOrderByNode> orders;

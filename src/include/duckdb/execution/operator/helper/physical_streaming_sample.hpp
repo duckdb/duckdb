@@ -16,7 +16,8 @@ namespace duckdb {
 //! PhysicalStreamingSample represents a streaming sample using either system or bernoulli sampling
 class PhysicalStreamingSample : public PhysicalOperator {
 public:
-	PhysicalStreamingSample(vector<LogicalType> types, SampleMethod method, double percentage, int64_t seed, idx_t estimated_cardinality);
+	PhysicalStreamingSample(vector<LogicalType> types, SampleMethod method, double percentage, int64_t seed,
+	                        idx_t estimated_cardinality);
 
 	SampleMethod method;
 	double percentage;

@@ -17,7 +17,8 @@ namespace duckdb {
 class PhysicalAlter : public PhysicalOperator {
 public:
 	explicit PhysicalAlter(unique_ptr<AlterInfo> info, idx_t estimated_cardinality)
-	    : PhysicalOperator(PhysicalOperatorType::ALTER, {LogicalType::BOOLEAN},estimated_cardinality), info(move(info)) {
+	    : PhysicalOperator(PhysicalOperatorType::ALTER, {LogicalType::BOOLEAN}, estimated_cardinality),
+	      info(move(info)) {
 	}
 
 	unique_ptr<AlterInfo> info;

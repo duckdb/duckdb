@@ -19,8 +19,8 @@ class PhysicalInsert : public PhysicalSink {
 public:
 	PhysicalInsert(vector<LogicalType> types, TableCatalogEntry *table, vector<idx_t> column_index_map,
 	               vector<unique_ptr<Expression>> bound_defaults, idx_t estimated_cardinality)
-	    : PhysicalSink(PhysicalOperatorType::INSERT, move(types),estimated_cardinality), column_index_map(std::move(column_index_map)), table(table),
-	      bound_defaults(move(bound_defaults)) {
+	    : PhysicalSink(PhysicalOperatorType::INSERT, move(types), estimated_cardinality),
+	      column_index_map(std::move(column_index_map)), table(table), bound_defaults(move(bound_defaults)) {
 	}
 
 	vector<idx_t> column_index_map;

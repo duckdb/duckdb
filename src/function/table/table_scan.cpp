@@ -103,17 +103,18 @@ bool TableScanParallelStateNext(ClientContext &context, const FunctionData *bind
 
 int TableScanProgress(ClientContext &context, const FunctionData *bind_data_p) {
 	auto &bind_data = (TableScanBindData &)*bind_data_p;
-	if (bind_data.table->storage->GetTotalRows() == 0 || bind_data.table->storage->GetTotalRows() < STANDARD_VECTOR_SIZE){
-	    //! Table is either empty or smaller than a vector size, so it is finished
-	    return 100;
+	if (bind_data.table->storage->GetTotalRows() == 0 ||
+	    bind_data.table->storage->GetTotalRows() < STANDARD_VECTOR_SIZE) {
+		//! Table is either empty or smaller than a vector size, so it is finished
+		return 100;
 	}
-	auto percentage = (bind_data.chunk_count*STANDARD_VECTOR_SIZE*100)/bind_data.table->storage->GetTotalRows();
-    if (percentage > 100){
-        //! In case the last chunk has less elements than STANDARD_VECTOR_SIZE, if our percentage is over 100
-        //! It means we finished this table.
-        return 100;
-    }
-    return percentage;
+	auto percentage = (bind_data.chunk_count * STANDARD_VECTOR_SIZE * 100) / bind_data.table->storage->GetTotalRows();
+	if (percentage > 100) {
+		//! In case the last chunk has less elements than STANDARD_VECTOR_SIZE, if our percentage is over 100
+		//! It means we finished this table.
+		return 100;
+	}
+	return percentage;
 }
 
 void TableScanDependency(unordered_set<CatalogEntry *> &entries, const FunctionData *bind_data_p) {

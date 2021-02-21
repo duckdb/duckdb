@@ -9,7 +9,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateInde
 	D_ASSERT(op.children.empty());
 	dependencies.insert(&op.table);
 	return make_unique<PhysicalCreateIndex>(op, op.table, op.column_ids, move(op.expressions), move(op.info),
-	                                        move(op.unbound_expressions),op.estimated_cardinality);
+	                                        move(op.unbound_expressions), op.estimated_cardinality);
 }
 
 } // namespace duckdb

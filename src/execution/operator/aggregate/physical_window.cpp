@@ -42,9 +42,9 @@ public:
 };
 
 // this implements a sorted window functions variant
-PhysicalWindow::PhysicalWindow(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list, idx_t estimated_cardinality,
-                               PhysicalOperatorType type)
-    : PhysicalSink(type, move(types),estimated_cardinality), select_list(move(select_list)) {
+PhysicalWindow::PhysicalWindow(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
+                               idx_t estimated_cardinality, PhysicalOperatorType type)
+    : PhysicalSink(type, move(types), estimated_cardinality), select_list(move(select_list)) {
 }
 
 static bool EqualsSubset(vector<Value> &a, vector<Value> &b, idx_t start, idx_t end) {

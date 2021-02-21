@@ -1081,8 +1081,8 @@ void DataTable::CommitDropColumn(idx_t index) {
 	}
 }
 
-idx_t DataTable::GetTotalRows(){
-    return total_rows;
+idx_t DataTable::GetTotalRows() {
+	return total_rows;
 }
 
 void DataTable::CommitDropTable() {

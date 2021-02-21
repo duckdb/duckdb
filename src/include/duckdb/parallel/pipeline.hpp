@@ -68,7 +68,7 @@ public:
 	bool IsFinished() {
 		return finished;
 	}
-    // Returns query progress
+	// Returns query progress
 	int GetProgress();
 
 public:
@@ -103,7 +103,7 @@ private:
 	PhysicalOperator *recursive_cte;
 
 private:
-    int GetProgress(ClientContext &context,PhysicalOperator * op);
+	int GetProgress(ClientContext &context, PhysicalOperator *op);
 	void ScheduleSequentialTask();
 	bool ScheduleOperator(PhysicalOperator *op);
 };

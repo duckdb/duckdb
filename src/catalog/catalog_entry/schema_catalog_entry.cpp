@@ -28,7 +28,7 @@
 #include "duckdb/parser/parsed_data/drop_info.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/transaction/transaction.hpp"
-
+#include "duckdb/storage/data_table.hpp"
 #include <algorithm>
 #include <sstream>
 

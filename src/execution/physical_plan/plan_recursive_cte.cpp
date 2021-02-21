@@ -19,7 +19,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalRecursiveC
 	auto left = CreatePlan(*op.children[0]);
 	auto right = CreatePlan(*op.children[1]);
 
-	auto cte = make_unique<PhysicalRecursiveCTE>(op.types, op.union_all, move(left), move(right),op.estimated_cardinality);
+	auto cte =
+	    make_unique<PhysicalRecursiveCTE>(op.types, op.union_all, move(left), move(right), op.estimated_cardinality);
 	cte->working_table = working_table;
 
 	return move(cte);
@@ -28,7 +29,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalRecursiveC
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCTERef &op) {
 	D_ASSERT(op.children.empty());
 
-	auto chunk_scan = make_unique<PhysicalChunkScan>(op.types, PhysicalOperatorType::RECURSIVE_CTE_SCAN,op.estimated_cardinality);
+	auto chunk_scan =
+	    make_unique<PhysicalChunkScan>(op.types, PhysicalOperatorType::RECURSIVE_CTE_SCAN, op.estimated_cardinality);
 
 	// CreatePlan of a LogicalRecursiveCTE must have happened before.
 	auto cte = rec_ctes.find(op.cte_index);

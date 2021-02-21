@@ -8,7 +8,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDelimGet &
 	D_ASSERT(op.children.empty());
 
 	// create a PhysicalChunkScan without an owned_collection, the collection will be added later
-	auto chunk_scan = make_unique<PhysicalChunkScan>(op.types, PhysicalOperatorType::DELIM_SCAN,op.estimated_cardinality);
+	auto chunk_scan =
+	    make_unique<PhysicalChunkScan>(op.types, PhysicalOperatorType::DELIM_SCAN, op.estimated_cardinality);
 	return move(chunk_scan);
 }
 

@@ -18,7 +18,8 @@ namespace duckdb {
 class PhysicalPiecewiseMergeJoin : public PhysicalComparisonJoin {
 public:
 	PhysicalPiecewiseMergeJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
-	                           unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality);
+	                           unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
+	                           idx_t estimated_cardinality);
 
 	vector<LogicalType> join_key_types;
 

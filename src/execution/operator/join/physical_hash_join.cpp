@@ -11,8 +11,9 @@ namespace duckdb {
 PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
                                    unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
                                    const vector<idx_t> &left_projection_map,
-                                   const vector<idx_t> &right_projection_map_p, vector<LogicalType> delim_types,idx_t estimated_cardinality)
-    : PhysicalComparisonJoin(op, PhysicalOperatorType::HASH_JOIN, move(cond), join_type,estimated_cardinality),
+                                   const vector<idx_t> &right_projection_map_p, vector<LogicalType> delim_types,
+                                   idx_t estimated_cardinality)
+    : PhysicalComparisonJoin(op, PhysicalOperatorType::HASH_JOIN, move(cond), join_type, estimated_cardinality),
       right_projection_map(right_projection_map_p), delim_types(move(delim_types)) {
 	children.push_back(move(left));
 	children.push_back(move(right));
@@ -29,8 +30,9 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
 }
 
 PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
-                                   unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality)
-    : PhysicalHashJoin(op, move(left), move(right), move(cond), join_type, {}, {}, {},estimated_cardinality) {
+                                   unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
+                                   idx_t estimated_cardinality)
+    : PhysicalHashJoin(op, move(left), move(right), move(cond), join_type, {}, {}, {}, estimated_cardinality) {
 }
 
 //===--------------------------------------------------------------------===//

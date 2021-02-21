@@ -233,14 +233,12 @@ void Executor::Flush(ThreadContext &tcontext) {
 	context.profiler.Flush(tcontext.profiler);
 }
 
-int Executor::GetPipelinesProgress(){
-    if (!pipelines.empty()){
-        return pipelines.back()->GetProgress();
-    }
-    else {
-        return 0;
-    }
-
+int Executor::GetPipelinesProgress() {
+	if (!pipelines.empty()) {
+		return pipelines.back()->GetProgress();
+	} else {
+		return 0;
+	}
 }
 
 unique_ptr<DataChunk> Executor::FetchChunk() {

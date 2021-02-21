@@ -39,10 +39,11 @@ public:
 PhysicalIndexJoin::PhysicalIndexJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
                                      unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
                                      const vector<idx_t> &left_projection_map, vector<idx_t> right_projection_map,
-                                     vector<column_t> column_ids_p, Index *index, bool lhs_first, idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::INDEX_JOIN, move(op.types),estimated_cardinality), left_projection_map(left_projection_map),
-      right_projection_map(move(right_projection_map)), index(index), conditions(move(cond)), join_type(join_type),
-      lhs_first(lhs_first) {
+                                     vector<column_t> column_ids_p, Index *index, bool lhs_first,
+                                     idx_t estimated_cardinality)
+    : PhysicalOperator(PhysicalOperatorType::INDEX_JOIN, move(op.types), estimated_cardinality),
+      left_projection_map(left_projection_map), right_projection_map(move(right_projection_map)), index(index),
+      conditions(move(cond)), join_type(join_type), lhs_first(lhs_first) {
 	column_ids = move(column_ids_p);
 	children.push_back(move(left));
 	children.push_back(move(right));

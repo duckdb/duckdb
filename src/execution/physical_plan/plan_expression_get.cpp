@@ -8,7 +8,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalExpression
 	D_ASSERT(op.children.size() == 1);
 	auto plan = CreatePlan(*op.children[0]);
 
-	auto expr_scan = make_unique<PhysicalExpressionScan>(op.types, move(op.expressions),op.estimated_cardinality);
+	auto expr_scan = make_unique<PhysicalExpressionScan>(op.types, move(op.expressions), op.estimated_cardinality);
 	expr_scan->children.push_back(move(plan));
 	return move(expr_scan);
 }
