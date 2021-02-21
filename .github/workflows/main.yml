@@ -979,3 +979,27 @@ jobs:
 
     - name: Node 15
       run: ./scripts/node_build.sh 15
+
+  linux-wasm:
+    name: WASM
+    runs-on: ubuntu-20.04
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Build Amalgamation
+      run: python scripts/amalgamation.py
+
+    - name: Setup
+      run: ./scripts/wasm_configure.sh
+
+    - name: Build Library Module
+      run: ./scripts/wasm_build_lib.sh
+
+    - name: Build Test Module
+      run: ./scripts/wasm_build_test.sh
+
+    - name: Test WASM Module
+      run: node ./test/wasm/hello_wasm_test.js
