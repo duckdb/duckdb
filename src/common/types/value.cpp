@@ -54,6 +54,9 @@ Value::Value(double val) : type_(LogicalType::DOUBLE), is_null(false) {
 Value::Value(const char *val) : Value(val ? string(val) : string()) {
 }
 
+Value::Value(std::nullptr_t val) : Value(LogicalType::VARCHAR) {
+}
+
 Value::Value(string_t val) : Value(string(val.GetDataUnsafe(), val.GetSize())) {
 }
 
