@@ -17,7 +17,7 @@
 
 namespace duckdb {
 
-Planner::Planner(ClientContext &context) : binder(context), context(context) {
+Planner::Planner(ClientContext &context) : binder(Binder::CreateBinder(context)), context(context) {
 }
 
 void Planner::CreatePlan(SQLStatement &statement) {
@@ -25,13 +25,13 @@ void Planner::CreatePlan(SQLStatement &statement) {
 
 	// first bind the tables and columns to the catalog
 	context.profiler.StartPhase("binder");
-	binder.parameters = &bound_parameters;
-	auto bound_statement = binder.Bind(statement);
+	binder->parameters = &bound_parameters;
+	auto bound_statement = binder->Bind(statement);
 	context.profiler.EndPhase();
 
-	this->read_only = binder.read_only;
-	this->requires_valid_transaction = binder.requires_valid_transaction;
-	this->allow_stream_result = binder.allow_stream_result;
+	this->read_only = binder->read_only;
+	this->requires_valid_transaction = binder->requires_valid_transaction;
+	this->allow_stream_result = binder->allow_stream_result;
 	this->names = bound_statement.names;
 	this->types = bound_statement.types;
 	this->plan = move(bound_statement.plan);
@@ -100,7 +100,7 @@ void Planner::PlanExecute(unique_ptr<SQLStatement> statement) {
 	// the bound prepared statement is ready: bind any supplied parameters
 	vector<Value> bind_values;
 	for (idx_t i = 0; i < stmt.values.size(); i++) {
-		ConstantBinder cbinder(binder, context, "EXECUTE statement");
+		ConstantBinder cbinder(*binder, context, "EXECUTE statement");
 		cbinder.target_type = prepared->GetType(i + 1);
 		auto bound_expr = cbinder.Bind(stmt.values[i]);
 

@@ -24,7 +24,7 @@ public:
 	}
 
 	//! The binder used to bind the subquery node
-	unique_ptr<Binder> binder;
+	shared_ptr<Binder> binder;
 	//! The bound subquery node
 	unique_ptr<BoundQueryNode> subquery;
 	//! The subquery type

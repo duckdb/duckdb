@@ -1,0 +1,54 @@
+# name: test/sql/catalog/case_insensitive_binder.test
+# description: Test case insensitive binder
+# group: [catalog]
+
+statement ok
+CREATE TABLE "MyTable"(i integer);
+
+statement ok
+SELECT * FROM mytable;
+
+statement ok
+SELECT * FROM MyTable;
+
+statement ok
+SELECT * FROM "MyTable";
+
+statement ok
+ALTER TABLE MyTable ADD COLUMN j INTEGER;
+
+statement ok
+ALTER TABLE MyTable RENAME TO "MyOtherTable"
+
+statement ok
+DROP TABLE MyOtherTable;
+
+statement ok
+CREATE TABLE "ABC"(i integer);
+
+statement ok
+CREATE TABLE "AbC"(i integer);
+
+statement ok
+SELECT * FROM "ABC";
+
+statement ok
+SELECT * FROM "AbC";
+
+statement error
+SELECT * FROM abc; -- error: which table did I mean?
+
+statement error
+ALTER TABLE abc ADD COLUMN j INTEGER;
+
+statement ok
+ALTER TABLE "ABC" ADD COLUMN j INTEGER;
+
+statement error
+DROP TABLE abc
+
+statement ok
+DROP TABLE "ABC"
+
+statement ok
+DROP TABLE "AbC"

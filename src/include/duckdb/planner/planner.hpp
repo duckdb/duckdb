@@ -29,7 +29,7 @@ public:
 	vector<LogicalType> types;
 	unordered_map<idx_t, vector<unique_ptr<Value>>> value_map;
 
-	Binder binder;
+	shared_ptr<Binder> binder;
 	ClientContext &context;
 
 	bool read_only;
