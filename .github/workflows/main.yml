@@ -1008,6 +1008,7 @@ jobs:
     - name: Package
       run: |
         zip -j duckdb-wasm32-nothreads.zip ./.wasm/build/duckdb.wasm
+        python scripts/asset-upload-gha.py duckdb-wasm32-nothreads.zip
 
     - uses: actions/upload-artifact@v2
       with:
