@@ -20,7 +20,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 	result->union_all = statement.union_all;
 	result->setop_index = GenerateTableIndex();
 
-	result->left_binder = make_unique<Binder>(context, this);
+	result->left_binder = Binder::CreateBinder(context, this);
 	result->left = result->left_binder->BindNode(*statement.left);
 
 	// the result types of the CTE are the types of the LHS
@@ -34,7 +34,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 	// This allows the right side to reference the CTE recursively
 	bind_context.AddGenericBinding(result->setop_index, statement.ctename, result->names, result->types);
 
-	result->right_binder = make_unique<Binder>(context, this);
+	result->right_binder = Binder::CreateBinder(context, this);
 
 	// Add bindings of left side to temporary CTE bindings context
 	result->right_binder->bind_context.AddCTEBinding(result->setop_index, statement.ctename, result->names,

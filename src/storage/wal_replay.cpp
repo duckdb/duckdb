@@ -210,8 +210,8 @@ void ReplayState::ReplayCreateTable() {
 	}
 
 	// bind the constraints to the table again
-	Binder binder(context);
-	auto bound_info = binder.BindCreateTableInfo(move(info));
+	auto binder = Binder::CreateBinder(context);
+	auto bound_info = binder->BindCreateTableInfo(move(info));
 
 	auto &catalog = Catalog::GetCatalog(context);
 	catalog.CreateTable(context, bound_info.get());

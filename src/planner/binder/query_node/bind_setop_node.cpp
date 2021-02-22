@@ -68,10 +68,10 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 
 	result->setop_index = GenerateTableIndex();
 
-	result->left_binder = make_unique<Binder>(context, this);
+	result->left_binder = Binder::CreateBinder(context, this);
 	result->left = result->left_binder->BindNode(*statement.left);
 
-	result->right_binder = make_unique<Binder>(context, this);
+	result->right_binder = Binder::CreateBinder(context, this);
 	result->right = result->right_binder->BindNode(*statement.right);
 
 	if (!statement.modifiers.empty()) {

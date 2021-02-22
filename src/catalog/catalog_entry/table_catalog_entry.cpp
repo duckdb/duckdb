@@ -190,8 +190,8 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RenameColumn(ClientContext &context,
 		}
 		create_info->constraints.push_back(move(copy));
 	}
-	Binder binder(context);
-	auto bound_create_info = binder.BindCreateTableInfo(move(create_info));
+	auto binder = Binder::CreateBinder(context);
+	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
 	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
 }
 
@@ -204,8 +204,8 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AddColumn(ClientContext &context, Ad
 	info.new_column.oid = columns.size();
 	create_info->columns.push_back(info.new_column.Copy());
 
-	Binder binder(context);
-	auto bound_create_info = binder.BindCreateTableInfo(move(create_info));
+	auto binder = Binder::CreateBinder(context);
+	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
 	auto new_storage =
 	    make_shared<DataTable>(context, *storage, info.new_column, bound_create_info->bound_defaults.back().get());
 	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(),
@@ -291,8 +291,8 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 		}
 	}
 
-	Binder binder(context);
-	auto bound_create_info = binder.BindCreateTableInfo(move(create_info));
+	auto binder = Binder::CreateBinder(context);
+	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
 	auto new_storage = make_shared<DataTable>(context, *storage, removed_index);
 	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(),
 	                                      new_storage);
@@ -319,8 +319,8 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetDefault(ClientContext &context, S
 		create_info->constraints.push_back(move(constraint));
 	}
 
-	Binder binder(context);
-	auto bound_create_info = binder.BindCreateTableInfo(move(create_info));
+	auto binder = Binder::CreateBinder(context);
+	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
 	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
 }
 
@@ -366,13 +366,13 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 		create_info->constraints.push_back(move(constraint));
 	}
 
-	Binder binder(context);
+	auto binder = Binder::CreateBinder(context);
 	// bind the specified expression
 	vector<column_t> bound_columns;
-	AlterBinder expr_binder(binder, context, name, columns, bound_columns, info.target_type);
+	AlterBinder expr_binder(*binder, context, name, columns, bound_columns, info.target_type);
 	auto expression = info.expression->Copy();
 	auto bound_expression = expr_binder.Bind(expression);
-	auto bound_create_info = binder.BindCreateTableInfo(move(create_info));
+	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
 	if (bound_columns.empty()) {
 		bound_columns.push_back(COLUMN_IDENTIFIER_ROW_ID);
 	}
@@ -532,8 +532,8 @@ unique_ptr<CatalogEntry> TableCatalogEntry::Copy(ClientContext &context) {
 		create_info->constraints.push_back(move(constraint));
 	}
 
-	Binder binder(context);
-	auto bound_create_info = binder.BindCreateTableInfo(move(create_info));
+	auto binder = Binder::CreateBinder(context);
+	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
 	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
 }
 
