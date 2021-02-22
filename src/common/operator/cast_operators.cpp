@@ -680,6 +680,9 @@ static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) 
 			}
 			if (ALLOW_EXPONENT) {
 				if (buf[pos] == 'e' || buf[pos] == 'E') {
+					if (pos == start_pos) {
+						return false;
+					}
 					pos++;
 					int64_t exponent = 0;
 					int negative = buf[pos] == '-';
@@ -856,6 +859,9 @@ static bool DoubleCastLoop(const char *buf, idx_t len, T &result, bool strict) {
 				ComputeDoubleResult<T, NEGATIVE>(result, decimal, decimal_factor);
 				return true;
 			} else if (buf[pos] == 'e' || buf[pos] == 'E') {
+				if (pos == start_pos) {
+					return false;
+				}
 				// E power
 				// parse an integer, this time not allowing another exponent
 				pos++;
