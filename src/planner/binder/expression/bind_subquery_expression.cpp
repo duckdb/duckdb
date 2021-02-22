@@ -8,13 +8,13 @@ namespace duckdb {
 
 class BoundSubqueryNode : public QueryNode {
 public:
-	BoundSubqueryNode(unique_ptr<Binder> subquery_binder, unique_ptr<BoundQueryNode> bound_node,
+	BoundSubqueryNode(shared_ptr<Binder> subquery_binder, unique_ptr<BoundQueryNode> bound_node,
 	                  unique_ptr<SelectStatement> subquery)
 	    : QueryNode(QueryNodeType::BOUND_SUBQUERY_NODE), subquery_binder(move(subquery_binder)),
 	      bound_node(move(bound_node)), subquery(move(subquery)) {
 	}
 
-	unique_ptr<Binder> subquery_binder;
+	shared_ptr<Binder> subquery_binder;
 	unique_ptr<BoundQueryNode> bound_node;
 	unique_ptr<SelectStatement> subquery;
 
@@ -31,7 +31,7 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 	if (expr.subquery->node->type != QueryNodeType::BOUND_SUBQUERY_NODE) {
 		D_ASSERT(depth == 0);
 		// first bind the actual subquery in a new binder
-		auto subquery_binder = make_unique<Binder>(context, &binder);
+		auto subquery_binder = Binder::CreateBinder(context, &binder);
 		auto bound_node = subquery_binder->BindNode(*expr.subquery->node);
 		// check the correlated columns of the subquery for correlated columns with depth > 1
 		for (idx_t i = 0; i < subquery_binder->correlated_columns.size(); i++) {

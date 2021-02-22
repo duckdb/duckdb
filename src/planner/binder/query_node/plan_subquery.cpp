@@ -296,9 +296,9 @@ unique_ptr<Expression> Binder::PlanSubquery(BoundSubqueryExpression &expr, uniqu
 	D_ASSERT(root);
 	// first we translate the QueryNode of the subquery into a logical plan
 	// note that we do not plan nested subqueries yet
-	Binder sub_binder(context);
-	sub_binder.plan_subquery = false;
-	auto subquery_root = sub_binder.CreatePlan(*expr.subquery);
+	auto sub_binder = Binder::CreateBinder(context);
+	sub_binder->plan_subquery = false;
+	auto subquery_root = sub_binder->CreatePlan(*expr.subquery);
 	D_ASSERT(subquery_root);
 
 	// now we actually flatten the subquery
@@ -310,7 +310,7 @@ unique_ptr<Expression> Binder::PlanSubquery(BoundSubqueryExpression &expr, uniqu
 		result_expression = PlanCorrelatedSubquery(*this, expr, root, move(plan));
 	}
 	// finally, we recursively plan the nested subqueries (if there are any)
-	if (sub_binder.has_unplanned_subqueries) {
+	if (sub_binder->has_unplanned_subqueries) {
 		RecursiveSubqueryPlanner plan(*this);
 		plan.VisitOperator(*root);
 	}

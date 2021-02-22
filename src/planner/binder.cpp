@@ -11,9 +11,13 @@
 
 namespace duckdb {
 
-Binder::Binder(ClientContext &context, Binder *parent_p, bool inherit_ctes_p)
-    : context(context), read_only(true), requires_valid_transaction(true), allow_stream_result(false), parent(parent_p),
-      bound_tables(0), inherit_ctes(inherit_ctes_p) {
+shared_ptr<Binder> Binder::CreateBinder(ClientContext &context, Binder *parent, bool inherit_ctes) {
+	return make_shared<Binder>(true, context, parent ? parent->shared_from_this() : nullptr, inherit_ctes);
+}
+
+Binder::Binder(bool, ClientContext &context, shared_ptr<Binder> parent_p, bool inherit_ctes_p)
+    : context(context), read_only(true), requires_valid_transaction(true), allow_stream_result(false),
+      parent(move(parent_p)), bound_tables(0), inherit_ctes(inherit_ctes_p) {
 	if (parent) {
 		// We have to inherit macro parameter bindings from the parent binder, if there is a parent.
 		macro_binding = parent->macro_binding;

@@ -39,8 +39,9 @@ unique_ptr<Expression> Binder::BindOrderExpression(OrderBinder &order_binder, un
 
 unique_ptr<Expression> BindDelimiter(ClientContext &context, unique_ptr<ParsedExpression> delimiter,
                                      int64_t &delimiter_value) {
-	Binder new_binder(context);
-	ExpressionBinder expr_binder(new_binder, context);
+
+	auto new_binder = Binder::CreateBinder(context);
+	ExpressionBinder expr_binder(*new_binder, context);
 	expr_binder.target_type = LogicalType::UBIGINT;
 	auto expr = expr_binder.Bind(delimiter);
 	if (expr->IsFoldable()) {
