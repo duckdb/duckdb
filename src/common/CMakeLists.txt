@@ -19,6 +19,7 @@ add_library_unity(
   gzip_stream.cpp
   limits.cpp
   printer.cpp
+  progress_bar.cpp
   serializer.cpp
   string_util.cpp
   symbols.cpp

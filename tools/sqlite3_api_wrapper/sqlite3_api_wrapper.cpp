@@ -14,9 +14,8 @@
 #include <cassert>
 
 #include "extension_helper.hpp"
-#include <iostream>
-#include <thread>
-#include <future>
+
+#include "duckdb/common/progress_bar.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -207,63 +206,6 @@ bool sqlite3_display_result(StatementType type) {
 	}
 }
 
-class ProgressBar {
-public:
-	string pbstr = "🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆"
-	               "🦆🦆🦆🦆🦆🦆🦆🦆";
-	idx_t pbwidth = 60;
-	bool finished = false;
-	Executor *executor = nullptr;
-	std::thread progress_bar_thread;
-	std::promise<void> exit_signal;
-	std::future<void> future_obj = exit_signal.get_future();
-
-	explicit ProgressBar(Executor *executor)
-	    : executor(executor) {
-
-	      };
-
-	void PrintProgress(int percentage) {
-		int lpad = (int)(percentage / 100.0 * pbwidth * 2);
-		int rpad = pbwidth - lpad * 0.5;
-		printf("\r%3d%% [%.*s%*s]", percentage, lpad, pbstr.c_str(), rpad, "");
-		fflush(stdout);
-	}
-
-	void ProgressBarThread() {
-		//        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-		while (!StopRequested()) {
-			int cur_percentage = executor->GetPipelinesProgress();
-			if (cur_percentage == -1) {
-				//! uh-oh this operator is not supported for the progressive bar
-				return;
-			}
-			PrintProgress(executor->GetPipelinesProgress());
-			std::this_thread::sleep_for(std::chrono::milliseconds(10));
-		}
-	}
-
-	void Start() {
-		progress_bar_thread = std::thread(&ProgressBar::ProgressBarThread, this);
-	}
-
-	bool StopRequested() {
-		if (future_obj.wait_for(std::chrono::milliseconds(0)) == std::future_status::timeout) {
-			return false;
-		}
-		return true;
-	}
-
-	void Stop() {
-		if (progress_bar_thread.joinable()) {
-			exit_signal.set_value();
-			progress_bar_thread.join();
-			printf(" \n");
-			fflush(stdout);
-		}
-	}
-};
-
 /* Prepare the next result to be retrieved */
 int sqlite3_step(sqlite3_stmt *pStmt) {
 	if (!pStmt) {
@@ -275,13 +217,13 @@ int sqlite3_step(sqlite3_stmt *pStmt) {
 	}
 	pStmt->current_text = nullptr;
 	if (!pStmt->result) {
-		ProgressBar progess_bar(&pStmt->prepared->context->executor);
+		ProgressBar progress_bar(&pStmt->prepared->context->executor, 2000, 100);
 		if (pStmt->prepared->GetStatementType() == StatementType::SELECT_STATEMENT) {
-			progess_bar.Start();
+			progress_bar.Start();
 		}
 		// no result yet! call Execute()
 		pStmt->result = pStmt->prepared->Execute(pStmt->bound_values, false);
-		progess_bar.Stop();
+		progress_bar.Stop();
 		if (!pStmt->result->success) {
 			// error in execute: clear prepared statement
 			pStmt->db->last_error = pStmt->result->error;
