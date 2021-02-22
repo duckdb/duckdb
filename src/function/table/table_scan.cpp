@@ -70,7 +70,10 @@ static void TableScanFunc(ClientContext &context, const FunctionData *bind_data_
 	auto &state = (TableScanOperatorData &)*operator_state;
 	auto &transaction = Transaction::GetTransaction(context);
 	bind_data.table->storage->Scan(transaction, output, state.scan_state, state.column_ids);
-	bind_data.chunk_count++;
+	{
+		std::lock_guard<decltype(bind_data.mutex)> lock(bind_data.mutex);
+		bind_data.chunk_count++;
+	}
 }
 
 struct ParallelTableFunctionScanState : public ParallelState {

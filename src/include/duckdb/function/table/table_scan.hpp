@@ -28,6 +28,8 @@ struct TableScanBindData : public FunctionData {
 	//! How many chunks we already scanned
 	idx_t chunk_count = 0;
 
+	std::mutex mutex;
+
 	unique_ptr<FunctionData> Copy() override {
 		auto result = make_unique<TableScanBindData>(table);
 		result->is_index_scan = is_index_scan;

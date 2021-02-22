@@ -35,14 +35,15 @@ Pipeline::Pipeline(Executor &executor_p, ProducerToken &token_p)
       finished(false), recursive_cte(nullptr) {
 }
 
-int Pipeline::GetProgress(ClientContext &context, PhysicalOperator *op, bool& supported) {
+int Pipeline::GetProgress(ClientContext &context, PhysicalOperator *op, bool &supported) {
 	switch (op->type) {
 	case PhysicalOperatorType::TABLE_SCAN: {
 		auto &get = (PhysicalTableScan &)*op;
 		if (get.function.table_scan_progress) {
 			return get.function.table_scan_progress(context, get.bind_data.get());
 		}
-		//! If the table_scan_progress is not implemented it means we don't support this function yet in the progress bar
+		//! If the table_scan_progress is not implemented it means we don't support this function yet in the progress
+		//! bar
 		supported = false;
 		return -1;
 	}
@@ -52,7 +53,7 @@ int Pipeline::GetProgress(ClientContext &context, PhysicalOperator *op, bool& su
 		double total_cardinality = 0;
 		double cur_percentage = 0;
 		for (auto &op_child : op->children) {
-			progress.push_back(GetProgress(context, op_child.get(),supported));
+			progress.push_back(GetProgress(context, op_child.get(), supported));
 			cardinality.push_back(op_child->estimated_cardinality);
 			total_cardinality += op_child->estimated_cardinality;
 		}
@@ -64,7 +65,7 @@ int Pipeline::GetProgress(ClientContext &context, PhysicalOperator *op, bool& su
 	}
 }
 
-int Pipeline::GetProgress(bool& supported) {
+int Pipeline::GetProgress(bool &supported) {
 	auto &client = executor.context;
 	return GetProgress(client, child, supported);
 }
