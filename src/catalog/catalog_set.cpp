@@ -217,7 +217,8 @@ bool CatalogSet::HasConflict(ClientContext &context, transaction_t timestamp) {
 	       (timestamp < TRANSACTION_ID_START && timestamp > transaction.start_time);
 }
 
-MappingValue *CatalogSet::GetMapping(ClientContext &context, const string &name, bool allow_lowercase_alias, bool get_latest) {
+MappingValue *CatalogSet::GetMapping(ClientContext &context, const string &name, bool allow_lowercase_alias,
+                                     bool get_latest) {
 	MappingValue *mapping_value;
 	auto entry = mapping.find(name);
 	if (entry != mapping.end()) {
@@ -226,7 +227,7 @@ MappingValue *CatalogSet::GetMapping(ClientContext &context, const string &name,
 		// entry not found: check if we can find an entry that matches if we lowercase it
 		auto lowercase_needle = StringUtil::Lower(name);
 		mapping_value = nullptr;
-		for(auto &kv : mapping) {
+		for (auto &kv : mapping) {
 			auto lower = StringUtil::Lower(kv.first);
 			if (lowercase_needle == lower) {
 				if (mapping_value) {
@@ -238,7 +239,6 @@ MappingValue *CatalogSet::GetMapping(ClientContext &context, const string &name,
 					mapping_value = kv.second.get();
 				}
 			}
-
 		}
 		if (!mapping_value) {
 			return nullptr;

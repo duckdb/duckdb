@@ -110,7 +110,8 @@ private:
 	//! Drops an entry from the catalog set; must hold the catalog_lock to safely call this
 	void DropEntryInternal(ClientContext &context, idx_t entry_index, CatalogEntry &entry, bool cascade,
 	                       set_lock_map_t &lock_set);
-	MappingValue *GetMapping(ClientContext &context, const string &name, bool allow_lowercase_alias, bool get_latest = false);
+	MappingValue *GetMapping(ClientContext &context, const string &name, bool allow_lowercase_alias,
+	                         bool get_latest = false);
 	void PutMapping(ClientContext &context, const string &name, idx_t entry_index);
 	void DeleteMapping(ClientContext &context, const string &name);
 
