@@ -10,13 +10,22 @@ test -f "${DUCKDB_WASM}" \
     && { echo "[ OK  ] DuckDB WASM: ${DUCKDB_WASM}"; } \
     || { echo "[ ERR ] DuckDB WASM: ${DUCKDB_WASM}"; exit 1; }
 
+BUILD_TYPE=${1:-Release}
+FLAGS=-O3
+case $BUILD_TYPE in
+  "Debug") FLAGS=-O0 -g ;;
+  "RelWithDebInfo") FLAGS=-O2 -g ;;
+   *) ;;
+esac
+echo "Build Type: ${BUILD_TYPE}"
+
 set -x
 
 source "${EMSDK_ENV}"
 
-${EMCC} \
+${EMCPP} \
+    ${FLAGS} \
     -std=gnu++17 \
-    -O2 -g \
     -fexceptions \
     -D NDEBUG \
     -D DUCKDB_NO_THREADS=1 \
