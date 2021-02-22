@@ -983,6 +983,7 @@ jobs:
   linux-wasm:
     name: WASM
     runs-on: ubuntu-20.04
+    needs: linux-debug
 
     steps:
     - uses: actions/checkout@v2
