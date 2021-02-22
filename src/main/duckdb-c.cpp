@@ -2,6 +2,8 @@
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/main/appender.hpp"
+
 #include "duckdb.h"
 #include "duckdb.hpp"
 
