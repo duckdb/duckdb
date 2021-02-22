@@ -746,7 +746,7 @@ duckdb_state duckdb_appender_create(duckdb_connection connection, const char *sc
                                     duckdb_appender *out_appender) {
 	Connection *conn = (Connection *)connection;
 
-	if (!connection || !table) {
+	if (!connection || !table || !out_appender) {
 		return DuckDBError;
 	}
 	if (schema == nullptr) {

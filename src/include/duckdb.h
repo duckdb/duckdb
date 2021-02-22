@@ -233,6 +233,9 @@ DUCKDB_API duckdb_state duckdb_append_uint16(duckdb_appender appender, uint16_t 
 DUCKDB_API duckdb_state duckdb_append_uint32(duckdb_appender appender, uint32_t value);
 DUCKDB_API duckdb_state duckdb_append_uint64(duckdb_appender appender, uint64_t value);
 
+DUCKDB_API duckdb_state duckdb_append_float(duckdb_appender appender, float value);
+DUCKDB_API duckdb_state duckdb_append_double(duckdb_appender appender, double value);
+
 DUCKDB_API duckdb_state duckdb_append_varchar(duckdb_appender appender, const char *val);
 DUCKDB_API duckdb_state duckdb_append_varchar_length(duckdb_appender appender, const char *val, idx_t length);
 DUCKDB_API duckdb_state duckdb_append_blob(duckdb_appender appender, const void *data, idx_t length);
