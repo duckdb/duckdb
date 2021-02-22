@@ -19,4 +19,4 @@ EMCC="${EMSCRIPTEN_DIR}/emcc"
 EMCPP="${EMSCRIPTEN_DIR}/em++"
 
 BUILD_DIR="${PROJECT_ROOT}/.wasm/build"
-DUCKDB_WASM="${BUILD_DIR}/duckdb.o"
+DUCKDB_WASM="${BUILD_DIR}/duckdb.wasm"

@@ -980,8 +980,8 @@ jobs:
     - name: Node 15
       run: ./scripts/node_build.sh 15
 
-  linux-wasm:
-    name: WASM
+  linux-wasm-release:
+    name: WebAssembly Release 
     runs-on: ubuntu-20.04
     needs: linux-debug
 
@@ -997,10 +997,20 @@ jobs:
       run: ./scripts/wasm_configure.sh
 
     - name: Build Library Module
-      run: ./scripts/wasm_build_lib.sh
+      run: ./scripts/wasm_build_lib.sh Release
 
     - name: Build Test Module
-      run: ./scripts/wasm_build_test.sh
+      run: ./scripts/wasm_build_test.sh Release
 
     - name: Test WASM Module
       run: node ./test/wasm/hello_wasm_test.js
+
+    - name: Package
+      run: |
+        zip -j duckdb-wasm32-nothreads.zip ./.wasm/build/duckdb.wasm
+
+    - uses: actions/upload-artifact@v2
+      with:
+        name: duckdb-wasm32-nothreads
+        path: |
+          duckdb-wasm32-nothreads.zip

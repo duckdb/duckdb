@@ -15,6 +15,15 @@ test -f "${DUCKDB_H}" \
     && { echo "[ OK  ] Amalgamation Header: ${DUCKDB_H}"; } \
     || { echo "[ ERR ] Amalgamation Header: ${DUCKDB_H}"; exit 1; }
 
+BUILD_TYPE=${1:-Release}
+FLAGS=-O3
+case $BUILD_TYPE in
+  "Debug") FLAGS=-O0 -g ;;
+  "RelWithDebInfo") FLAGS=-O2 -g ;;
+   *) ;;
+esac
+echo "Build Type: ${BUILD_TYPE}"
+
 set -x
 BUILD_DIR="${PROJECT_ROOT}/.wasm/build"
 if [ -d ${BUILD_DIR} ]; then
@@ -25,8 +34,8 @@ mkdir -p ${BUILD_DIR}
 source "${EMSDK_ENV}"
 
 ${EMCPP} \
+    ${FLAGS} \
     -std=gnu++17 \
-    -O2 -g \
     -fexceptions \
     -sDISABLE_EXCEPTION_CATCHING=0 \
     -sUSE_PTHREADS=0 \
