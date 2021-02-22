@@ -522,3 +522,100 @@ TEST_CASE("Test prepared statements in C API", "[capi][.]") {
 	duckdb_destroy_result(&res);
 	duckdb_destroy_prepare(&stmt);
 }
+
+TEST_CASE("Test appender statements in C API", "[capi][.]") {
+	CAPITester tester;
+	unique_ptr<CAPIResult> result;
+	duckdb_state status;
+
+	// open the database in in-memory mode
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	tester.Query("CREATE TABLE test (i INTEGER, d double, s string)");
+	duckdb_appender appender;
+
+	status = duckdb_appender_create(tester.connection, nullptr, "test", nullptr);
+	REQUIRE(status == DuckDBError);
+
+	status = duckdb_appender_create(tester.connection, nullptr, "test", &appender);
+	REQUIRE(status == DuckDBSuccess);
+
+	status = duckdb_appender_begin_row(appender);
+	REQUIRE(status == DuckDBSuccess);
+
+	status = duckdb_append_int32(appender, 42);
+	REQUIRE(status == DuckDBSuccess);
+
+	status = duckdb_append_double(appender, 4.2);
+	REQUIRE(status == DuckDBSuccess);
+
+	status = duckdb_append_varchar(appender, "Hello, World");
+	REQUIRE(status == DuckDBSuccess);
+
+	// out of cols here
+	status = duckdb_append_int32(appender, 42);
+	REQUIRE(status == DuckDBError);
+
+	status = duckdb_appender_end_row(appender);
+	REQUIRE(status == DuckDBSuccess);
+
+	status = duckdb_appender_flush(appender);
+	REQUIRE(status == DuckDBSuccess);
+
+	// we can flush again why not
+	status = duckdb_appender_flush(appender);
+	REQUIRE(status == DuckDBSuccess);
+
+	status = duckdb_appender_close(appender);
+	REQUIRE(status == DuckDBSuccess);
+
+	result = tester.Query("SELECT * FROM test");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<int32_t>(0, 0) == 42);
+	REQUIRE(result->Fetch<double>(1, 0) == 4.2);
+	REQUIRE(result->Fetch<string>(2, 0) == "Hello, World");
+
+	status = duckdb_appender_destroy(&appender);
+	REQUIRE(status == DuckDBSuccess);
+
+	// this has been destroyed
+
+	status = duckdb_appender_close(appender);
+	REQUIRE(status == DuckDBError);
+
+	status = duckdb_appender_flush(appender);
+	REQUIRE(status == DuckDBError);
+
+	status = duckdb_appender_begin_row(appender);
+	REQUIRE(status == DuckDBError);
+
+	status = duckdb_appender_end_row(appender);
+	REQUIRE(status == DuckDBError);
+
+	status = duckdb_append_int32(appender, 42);
+	REQUIRE(status == DuckDBError);
+
+	status = duckdb_appender_destroy(&appender);
+	REQUIRE(status == DuckDBError);
+
+	status = duckdb_appender_close(nullptr);
+	REQUIRE(status == DuckDBError);
+
+	status = duckdb_appender_flush(nullptr);
+	REQUIRE(status == DuckDBError);
+
+	status = duckdb_appender_begin_row(nullptr);
+	REQUIRE(status == DuckDBError);
+
+	status = duckdb_appender_end_row(nullptr);
+	REQUIRE(status == DuckDBError);
+
+	status = duckdb_append_int32(nullptr, 42);
+	REQUIRE(status == DuckDBError);
+
+	status = duckdb_appender_destroy(nullptr);
+	REQUIRE(status == DuckDBError);
+
+	status = duckdb_appender_destroy(nullptr);
+	REQUIRE(status == DuckDBError);
+}
