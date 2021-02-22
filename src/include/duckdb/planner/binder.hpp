@@ -227,7 +227,6 @@ private:
 public:
 	// This should really be a private constructor, but make_shared does not allow it...
 	Binder(bool I_know_what_I_am_doing, ClientContext &context, shared_ptr<Binder> parent, bool inherit_ctes);
-
 };
 
 } // namespace duckdb
