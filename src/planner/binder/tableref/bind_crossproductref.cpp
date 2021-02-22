@@ -6,8 +6,8 @@ namespace duckdb {
 
 unique_ptr<BoundTableRef> Binder::Bind(CrossProductRef &ref) {
 	auto result = make_unique<BoundCrossProductRef>();
-	result->left_binder = make_unique<Binder>(context, this);
-	result->right_binder = make_unique<Binder>(context, this);
+	result->left_binder = Binder::CreateBinder(context, this);
+	result->right_binder = Binder::CreateBinder(context, this);
 	auto &left_binder = *result->left_binder;
 	auto &right_binder = *result->right_binder;
 

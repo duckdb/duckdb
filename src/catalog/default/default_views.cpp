@@ -51,8 +51,8 @@ DefaultViewGenerator::DefaultViewGenerator(Catalog &catalog, SchemaCatalogEntry 
 unique_ptr<CatalogEntry> DefaultViewGenerator::CreateDefaultEntry(ClientContext &context, const string &entry_name) {
 	auto info = GetDefaultView(schema->name, entry_name);
 	if (info) {
-		Binder binder(context);
-		binder.BindCreateViewInfo(*info);
+		auto binder = Binder::CreateBinder(context);
+		binder->BindCreateViewInfo(*info);
 
 		return make_unique_base<CatalogEntry, ViewCatalogEntry>(&catalog, schema, info.get());
 	}

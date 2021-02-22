@@ -52,12 +52,12 @@ struct CorrelatedColumnInfo {
   tables and columns in the catalog. In the process, it also resolves types of
   all expressions.
 */
-class Binder {
+class Binder : public std::enable_shared_from_this<Binder> {
 	friend class ExpressionBinder;
 	friend class RecursiveSubqueryPlanner;
 
 public:
-	explicit Binder(ClientContext &context, Binder *parent = nullptr, bool inherit_ctes = true);
+	static shared_ptr<Binder> CreateBinder(ClientContext &context, Binder *parent = nullptr, bool inherit_ctes = true);
 
 	//! The client context
 	ClientContext &context;
@@ -127,7 +127,7 @@ public:
 
 private:
 	//! The parent binder (if any)
-	Binder *parent;
+	shared_ptr<Binder> parent;
 	//! The vector of active binders
 	vector<ExpressionBinder *> active_binders;
 	//! The count of bound_tables
@@ -223,6 +223,11 @@ private:
 
 	string FindBinding(const string &using_column, const string &join_side);
 	bool TryFindBinding(const string &using_column, const string &join_side, string &result);
+
+public:
+	// This should really be a private constructor, but make_shared does not allow it...
+	Binder(bool I_know_what_I_am_doing, ClientContext &context, shared_ptr<Binder> parent, bool inherit_ctes);
+
 };
 
 } // namespace duckdb
