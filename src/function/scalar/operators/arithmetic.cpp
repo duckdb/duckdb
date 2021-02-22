@@ -565,6 +565,10 @@ struct BinaryZeroIsNullWrapper {
 			return OP::template Operation<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(left, right);
 		}
 	}
+
+	static bool AddsNulls() {
+		return true;
+	}
 };
 struct BinaryZeroIsNullHugeintWrapper {
 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
@@ -575,6 +579,10 @@ struct BinaryZeroIsNullHugeintWrapper {
 		} else {
 			return OP::template Operation<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(left, right);
 		}
+	}
+
+	static bool AddsNulls() {
+		return true;
 	}
 };
 

@@ -47,6 +47,10 @@ struct UnaryDoubleWrapper {
 		}
 		return result;
 	}
+
+	static bool AddsNulls() {
+		return true;
+	}
 };
 
 template <class T, class OP>
@@ -66,6 +70,10 @@ struct BinaryDoubleWrapper {
 			return 0;
 		}
 		return result;
+	}
+
+	static bool AddsNulls() {
+		return true;
 	}
 };
 

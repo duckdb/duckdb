@@ -28,6 +28,10 @@ struct BinaryStandardOperatorWrapper {
 	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, ValidityMask &mask, idx_t idx) {
 		return OP::template Operation<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(left, right);
 	}
+
+	static bool AddsNulls() {
+		return false;
+	}
 };
 
 struct BinarySingleArgumentOperatorWrapper {
@@ -35,12 +39,20 @@ struct BinarySingleArgumentOperatorWrapper {
 	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, ValidityMask &mask, idx_t idx) {
 		return OP::template Operation<LEFT_TYPE>(left, right);
 	}
+
+	static bool AddsNulls() {
+		return false;
+	}
 };
 
 struct BinaryLambdaWrapper {
 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
 	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, ValidityMask &mask, idx_t idx) {
 		return fun(left, right);
+	}
+
+	static bool AddsNulls() {
+		return false;
 	}
 };
 
@@ -131,9 +143,17 @@ struct BinaryExecutor {
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 		auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
 		if (LEFT_CONSTANT) {
-			FlatVector::SetValidity(result, FlatVector::Validity(right));
+			if (OPWRAPPER::AddsNulls()) {
+				FlatVector::Validity(result).Copy(FlatVector::Validity(right), count);
+			} else {
+				FlatVector::SetValidity(result, FlatVector::Validity(right));
+			}
 		} else if (RIGHT_CONSTANT) {
-			FlatVector::SetValidity(result, FlatVector::Validity(left));
+			if (OPWRAPPER::AddsNulls()) {
+				FlatVector::Validity(result).Copy(FlatVector::Validity(left), count);
+			} else {
+				FlatVector::SetValidity(result, FlatVector::Validity(left));
+			}
 		} else {
 			FlatVector::SetValidity(result, FlatVector::Validity(left));
 			FlatVector::Validity(result).Combine(FlatVector::Validity(right), count);

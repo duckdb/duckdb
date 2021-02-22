@@ -1037,6 +1037,9 @@ void Value::Print() {
 }
 
 bool Value::ValuesAreEqual(const Value &result_value, const Value &value) {
+	if (result_value.is_null != value.is_null) {
+		return false;
+	}
 	if (result_value.is_null && value.is_null) {
 		// NULL = NULL in checking code
 		return true;

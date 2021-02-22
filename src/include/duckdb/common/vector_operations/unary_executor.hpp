@@ -21,12 +21,20 @@ struct UnaryOperatorWrapper {
 	static inline RESULT_TYPE Operation(FUNC fun, INPUT_TYPE input, ValidityMask &mask, idx_t idx) {
 		return OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input);
 	}
+
+	static bool AddsNulls() {
+		return false;
+	}
 };
 
 struct UnaryLambdaWrapper {
 	template <class FUNC, class OP, class INPUT_TYPE, class RESULT_TYPE>
 	static inline RESULT_TYPE Operation(FUNC fun, INPUT_TYPE input, ValidityMask &mask, idx_t idx) {
 		return fun(input);
+	}
+
+	static bool AddsNulls() {
+		return false;
 	}
 };
 
@@ -64,7 +72,11 @@ private:
 		ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
 
 		if (!mask.AllValid()) {
-			result_mask.Copy(mask, count);
+			if (!OPWRAPPER::AddsNulls()) {
+				result_mask.Initialize(mask);
+			} else {
+				result_mask.Copy(mask, count);
+			}
 			idx_t base_idx = 0;
 			auto entry_count = ValidityMask::EntryCount(count);
 			for (idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
