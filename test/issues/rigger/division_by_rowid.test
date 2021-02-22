@@ -1,4 +1,4 @@
-# name: test/issues/rigger/big_sum_cast_bug.test
+# name: test/issues/rigger/division_by_rowid.test
 # description: SQLancer bug that detected an error in casting of the result of a sum to double
 # group: [rigger]
 
