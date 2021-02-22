@@ -142,21 +142,27 @@ struct BinaryExecutor {
 
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 		auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
+		auto &result_validity = FlatVector::Validity(result);
 		if (LEFT_CONSTANT) {
 			if (OPWRAPPER::AddsNulls()) {
-				FlatVector::Validity(result).Copy(FlatVector::Validity(right), count);
+				result_validity.Copy(FlatVector::Validity(right), count);
 			} else {
 				FlatVector::SetValidity(result, FlatVector::Validity(right));
 			}
 		} else if (RIGHT_CONSTANT) {
 			if (OPWRAPPER::AddsNulls()) {
-				FlatVector::Validity(result).Copy(FlatVector::Validity(left), count);
+				result_validity.Copy(FlatVector::Validity(left), count);
 			} else {
 				FlatVector::SetValidity(result, FlatVector::Validity(left));
 			}
 		} else {
-			FlatVector::SetValidity(result, FlatVector::Validity(left));
-			FlatVector::Validity(result).Combine(FlatVector::Validity(right), count);
+			if (OPWRAPPER::AddsNulls()) {
+				result_validity.Copy(FlatVector::Validity(left), count);
+				result_validity.Combine(FlatVector::Validity(right), count);
+			} else {
+				FlatVector::SetValidity(result, FlatVector::Validity(left));
+				result_validity.Combine(FlatVector::Validity(right), count);
+			}
 		}
 		ExecuteFlatLoop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, LEFT_CONSTANT, RIGHT_CONSTANT>(
 		    ldata, rdata, result_data, count, FlatVector::Validity(result), fun);
