@@ -37,12 +37,14 @@ private:
 	Executor *executor = nullptr;
 	std::thread progress_bar_thread;
 	std::promise<void> exit_signal;
-	std::future<void> future_obj = exit_signal.get_future();
+	std::future<void> future_obj;
 	idx_t show_progress_after;
 	idx_t time_update_bar;
 	int cur_percentage = 0;
 	std::atomic<bool> valid_percentage;
 	bool running_test;
+	//! In case our progress bar tries to use a scan operator that is not implemented we don't print anything
+	bool supported = true;
 	//! Prints Progress
 	void PrintProgress(int percentage);
 	//! Starts the Progress Bar Thread that prints the progress bar

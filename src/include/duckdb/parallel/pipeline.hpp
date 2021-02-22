@@ -36,7 +36,7 @@ public:
 	void AddDependency(Pipeline *pipeline);
 	void CompleteDependency();
 	bool HasDependencies() {
-		return dependencies.size() != 0;
+		return !dependencies.empty();
 	}
 
 	void Reset(ClientContext &context);
@@ -68,8 +68,8 @@ public:
 	bool IsFinished() {
 		return finished;
 	}
-	// Returns query progress
-	int GetProgress();
+	//! Returns query progress
+	int GetProgress(bool& supported);
 
 public:
 	//! The current threads working on the pipeline
@@ -103,7 +103,7 @@ private:
 	PhysicalOperator *recursive_cte;
 
 private:
-	int GetProgress(ClientContext &context, PhysicalOperator *op);
+	int GetProgress(ClientContext &context, PhysicalOperator *op,bool& supported);
 	void ScheduleSequentialTask();
 	bool ScheduleOperator(PhysicalOperator *op);
 };
