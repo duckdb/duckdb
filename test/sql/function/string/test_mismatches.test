@@ -1,0 +1,24 @@
+# name: test/sql/function/string/test_mismatches.test
+# description: Test mismatches function
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE strings(s VARCHAR)
+
+statement ok
+INSERT INTO strings VALUES ('hello'), ('hallo'), ('aloha'), ('hoi'), ('world'), (NULL)
+
+# normal length
+query I
+SELECT mismatches(s, 'hallo') FROM strings ORDER BY s
+----
+NULL
+5
+0
+1
+-1
+4
+
