@@ -184,7 +184,7 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 }
 
 int ClientContext::GetProgress() {
-	return progress_bar->GetCurPercentage();
+	return progress_bar->GetCurrentPercentage();
 }
 
 unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(ClientContextLock &lock, const string &query,
@@ -204,7 +204,7 @@ unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(ClientContextLoc
 	statement.Bind(move(bound_values));
 
 	bool create_stream_result = statement.allow_stream_result && allow_stream_result;
-	if (enable_progress_bar) {
+	if (enable_progress_bar && !create_stream_result) {
 		if (progress_bar) {
 			progress_bar.reset();
 		}

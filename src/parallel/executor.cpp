@@ -233,11 +233,12 @@ void Executor::Flush(ThreadContext &tcontext) {
 	context.profiler.Flush(tcontext.profiler);
 }
 
-int Executor::GetPipelinesProgress(bool &supported) {
+bool Executor::GetPipelinesProgress(int &current_progress) {
 	if (!pipelines.empty()) {
-		return pipelines.back()->GetProgress(supported);
+		return pipelines.back()->GetProgress(current_progress);
 	} else {
-		return -1;
+	    current_progress = -1;
+		return true;
 	}
 }
 

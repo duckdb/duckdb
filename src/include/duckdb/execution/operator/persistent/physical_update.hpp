@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include <utility>
-
 #include "duckdb/execution/physical_sink.hpp"
 
 namespace duckdb {

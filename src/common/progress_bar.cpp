@@ -5,20 +5,21 @@ namespace duckdb {
 void ProgressBar::ProgressBarThread() {
 	WaitFor(std::chrono::milliseconds(show_progress_after));
 	while (!stop) {
-		auto new_percentage = executor->GetPipelinesProgress(supported);
-		if (new_percentage > 100 || new_percentage < cur_percentage) {
+	    int new_percentage;
+		supported = executor->GetPipelinesProgress(new_percentage);
+		if (new_percentage > 100 || new_percentage < current_percentage) {
 			valid_percentage = false;
 		}
-		cur_percentage = new_percentage;
-		if (supported && cur_percentage > -1) {
-			PrintProgress(cur_percentage);
+        current_percentage = new_percentage;
+		if (supported && current_percentage > -1) {
+			Printer::PrintProgress(current_percentage,PROGRESS_BAR_STRING.c_str(),PROGRESS_BAR_WIDTH);
 		}
-		WaitFor(std::chrono::milliseconds(100));
+		WaitFor(std::chrono::milliseconds(time_update_bar));
 	}
 }
 
-int ProgressBar::GetCurPercentage() {
-	return cur_percentage;
+int ProgressBar::GetCurrentPercentage() {
+	return current_percentage;
 }
 
 bool ProgressBar::IsPercentageValid() {
@@ -28,7 +29,7 @@ bool ProgressBar::IsPercentageValid() {
 void ProgressBar::Start() {
 #ifndef DUCKDB_NO_THREADS
 	valid_percentage = true;
-	cur_percentage = 0;
+    current_percentage = 0;
 	progress_bar_thread = std::thread(&ProgressBar::ProgressBarThread, this);
 #endif
 }
@@ -43,7 +44,7 @@ void ProgressBar::Stop() {
 		c.notify_one();
 		progress_bar_thread.join();
 		if (supported) {
-			FinishPrint();
+			Printer::FinishProgressBarPrint(PROGRESS_BAR_STRING.c_str(),PROGRESS_BAR_WIDTH);
 		}
 	}
 #endif

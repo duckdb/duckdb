@@ -69,7 +69,7 @@ public:
 		return finished;
 	}
 	//! Returns query progress
-	int GetProgress(bool &supported);
+	bool GetProgress(int &current_percentage);
 
 public:
 	//! The current threads working on the pipeline
@@ -103,7 +103,7 @@ private:
 	PhysicalOperator *recursive_cte;
 
 private:
-	int GetProgress(ClientContext &context, PhysicalOperator *op, bool &supported);
+	bool GetProgress(ClientContext &context, PhysicalOperator *op, int &current_percentage);
 	void ScheduleSequentialTask();
 	bool ScheduleOperator(PhysicalOperator *op);
 };

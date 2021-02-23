@@ -9,12 +9,11 @@
 #pragma once
 
 #include "duckdb/function/table_function.hpp"
-#include <mutex>
 namespace duckdb {
 class TableCatalogEntry;
 
 struct TableScanBindData : public FunctionData {
-	explicit TableScanBindData(TableCatalogEntry *table) : table(table), is_index_scan(false) {
+	explicit TableScanBindData(TableCatalogEntry *table) : table(table), is_index_scan(false),chunk_count(0) {
 	}
 
 	//! The table to scan
@@ -26,9 +25,8 @@ struct TableScanBindData : public FunctionData {
 	vector<row_t> result_ids;
 
 	//! How many chunks we already scanned
-	idx_t chunk_count = 0;
+	std::atomic<idx_t> chunk_count;
 
-	std::mutex mutex;
 
 	unique_ptr<FunctionData> Copy() override {
 		auto result = make_unique<TableScanBindData>(table);

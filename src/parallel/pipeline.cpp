@@ -35,7 +35,7 @@ Pipeline::Pipeline(Executor &executor_p, ProducerToken &token_p)
       finished(false), recursive_cte(nullptr) {
 }
 
-int Pipeline::GetProgress(ClientContext &context, PhysicalOperator *op, bool &supported) {
+bool Pipeline::GetProgress(ClientContext &context, PhysicalOperator *op, int &current_percentage) {
 	switch (op->type) {
 	case PhysicalOperatorType::TABLE_SCAN: {
 		auto &get = (PhysicalTableScan &)*op;
@@ -44,30 +44,30 @@ int Pipeline::GetProgress(ClientContext &context, PhysicalOperator *op, bool &su
 		}
 		//! If the table_scan_progress is not implemented it means we don't support this function yet in the progress
 		//! bar
-		supported = false;
-		return -1;
+		current_percentage = -1;
+		return false;
 	}
 	default: {
 		vector<idx_t> progress;
 		vector<idx_t> cardinality;
 		double total_cardinality = 0;
-		double cur_percentage = 0;
+		current_percentage = 0;
 		for (auto &op_child : op->children) {
-			progress.push_back(GetProgress(context, op_child.get(), supported));
+			progress.push_back(GetProgress(context, op_child.get(), current_percentage));
 			cardinality.push_back(op_child->estimated_cardinality);
 			total_cardinality += op_child->estimated_cardinality;
 		}
 		for (size_t i = 0; i < progress.size(); i++) {
-			cur_percentage += progress[i] * cardinality[i] / total_cardinality;
+			current_percentage += progress[i] * cardinality[i] / total_cardinality;
 		}
-		return cur_percentage;
+		return true;
 	}
 	}
 }
 
-int Pipeline::GetProgress(bool &supported) {
+bool Pipeline::GetProgress(int &current_percentage) {
 	auto &client = executor.context;
-	return GetProgress(client, child, supported);
+	return GetProgress(client, child, current_percentage);
 }
 
 void Pipeline::Execute(TaskContext &task) {

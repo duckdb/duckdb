@@ -52,7 +52,7 @@ public:
 	void Flush(ThreadContext &context);
 
 	//! Returns the progress of the pipelines
-	int GetPipelinesProgress(bool &supported);
+	bool GetPipelinesProgress(int &current_progress);
 
 private:
 	PhysicalOperator *physical_plan;

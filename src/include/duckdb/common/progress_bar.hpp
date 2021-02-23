@@ -8,9 +8,11 @@
 
 #pragma once
 
-#include <iostream>
+#ifndef DUCKDB_NO_THREADS
 #include <thread>
 #include <future>
+#endif
+
 #include "duckdb.h"
 #include "duckdb/execution/executor.hpp"
 
@@ -27,34 +29,33 @@ public:
 	//! Stops the thread
 	void Stop();
 	//! Gets current percentage
-	int GetCurPercentage();
+	int GetCurrentPercentage();
 	//! If all values in the percentage were valid
 	bool IsPercentageValid();
 
 private:
-	string pbstr = "||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||";
-	idx_t pbwidth = 60;
+    const string PROGRESS_BAR_STRING = "||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||";
+	static constexpr const idx_t PROGRESS_BAR_WIDTH = 60;
 	Executor *executor = nullptr;
 	std::thread progress_bar_thread;
 	idx_t show_progress_after;
 	idx_t time_update_bar;
-	int cur_percentage = -1;
+	int current_percentage = -1;
 	std::atomic<bool> valid_percentage;
 	std::condition_variable c;
 	std::mutex m;
 	bool stop = false;
 	//! In case our progress bar tries to use a scan operator that is not implemented we don't print anything
 	bool supported = true;
-	//! Prints Progress
-	void PrintProgress(int percentage);
-	//! Prints an empty line when progress bar is done
-	void FinishPrint();
 	//! Starts the Progress Bar Thread that prints the progress bar
 	void ProgressBarThread();
+
+	#ifndef DUCKDB_NO_THREADS
 	template <class DURATION>
 	bool WaitFor(DURATION duration) {
 		std::unique_lock<std::mutex> l(m);
 		return !c.wait_for(l, duration, [this]() { return stop; });
 	}
+    #endif
 };
 } // namespace duckdb
