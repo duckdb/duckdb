@@ -23,8 +23,7 @@ add_library_unity(
   trim.cpp
   left_right.cpp
   contains.cpp
-  string_split.cpp
-  mismatches.cpp)
+  string_split.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_func_string>
     PARENT_SCOPE)

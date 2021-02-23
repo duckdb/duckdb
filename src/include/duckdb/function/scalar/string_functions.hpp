@@ -171,8 +171,4 @@ struct CHR {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct MismatchesFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
 } // namespace duckdb
