@@ -27,5 +27,6 @@ public:
 
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 	string ParamsToString() const override;
+	void FinalizeOperatorState(PhysicalOperatorState &state_p, ExecutionContext &context) override;
 };
 } // namespace duckdb

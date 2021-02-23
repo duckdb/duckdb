@@ -399,12 +399,41 @@ unique_ptr<RenderTreeNode> TreeRenderer::CreateNode(const PhysicalOperator &op) 
 	return CreateRenderNode(op.GetName(), op.ParamsToString());
 }
 
+string TreeRenderer::ExtractExpressionsRecursive(ExpressionState &state) {
+	string result = "\n[INFOSEPARATOR]";
+	result += "\n" + state.name;
+	result += "\n" + StringUtil::Format("%.9f", state.time);
+	if (state.child_states.empty()) {
+		return result;
+	}
+	// render the children of this node
+	for (auto &child : state.child_states) {
+		result += ExtractExpressionsRecursive(*child);
+	}
+	return result;
+}
+
 unique_ptr<RenderTreeNode> TreeRenderer::CreateNode(const QueryProfiler::TreeNode &op) {
 	auto result = TreeRenderer::CreateRenderNode(op.name, op.extra_info);
 	result->extra_text += "\n[INFOSEPARATOR]";
 	result->extra_text += "\n" + to_string(op.info.elements);
 	string timing = StringUtil::Format("%.2f", op.info.time);
 	result->extra_text += "\n(" + timing + "s)";
+	if (op.info.has_executor && config.detailed) {
+		string sample_count = to_string(op.info.executors_info->sample_count);
+		result->extra_text += "\n[INFOSEPARATOR]";
+		result->extra_text += "\nsample_count: " + sample_count;
+		string sample_tuples_count = to_string(op.info.executors_info->sample_tuples_count);
+		result->extra_text += "\n[INFOSEPARATOR]";
+		result->extra_text += "\nsample_tuples_count: " + sample_tuples_count;
+		string total_count = to_string(op.info.executors_info->total_count);
+		result->extra_text += "\n[INFOSEPARATOR]";
+		result->extra_text += "\ntotal_count: " + total_count;
+		for (auto &state : op.info.executors_info->states) {
+			result->extra_text += ExtractExpressionsRecursive(*state->root_state);
+		}
+	}
+
 	return result;
 }
 
@@ -419,5 +448,4 @@ unique_ptr<RenderTree> TreeRenderer::CreateTree(const PhysicalOperator &op) {
 unique_ptr<RenderTree> TreeRenderer::CreateTree(const QueryProfiler::TreeNode &op) {
 	return CreateRenderTree<QueryProfiler::TreeNode>(op);
 }
-
 } // namespace duckdb

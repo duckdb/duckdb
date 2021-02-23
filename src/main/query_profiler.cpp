@@ -8,9 +8,8 @@
 #include "duckdb/execution/operator/helper/physical_execute.hpp"
 #include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/parser/sql_statement.hpp"
-#include "duckdb/common/printer.hpp"
 #include "duckdb/common/limits.hpp"
-#include "duckdb/common/to_string.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 
 #include <utility>
 #include <algorithm>
@@ -212,6 +211,14 @@ void OperatorProfiler::AddTiming(PhysicalOperator *op, double time, idx_t elemen
 		entry->second.elements += elements;
 	}
 }
+void OperatorProfiler::Flush(PhysicalOperator *phys_op, ExpressionExecutor *expression_executor) {
+	auto entry = timings.find(phys_op);
+	if (entry != timings.end()) {
+		auto &operator_timing = timings.find(phys_op)->second;
+		operator_timing.executors_info = make_unique<ExpressionExecutionInformation>(*expression_executor);
+		operator_timing.has_executor = true;
+	}
+}
 
 void QueryProfiler::Flush(OperatorProfiler &profiler) {
 	if (!enabled || !running) {
@@ -224,6 +231,8 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 
 		entry->second->info.time += node.second.time;
 		entry->second->info.elements += node.second.elements;
+		entry->second->info.executors_info = move(node.second.executors_info);
+		entry->second->info.has_executor = node.second.has_executor;
 	}
 }
 
@@ -333,7 +342,7 @@ static void ToJSONRecursive(QueryProfiler::TreeNode &node, std::ostream &ss, int
 	ss << "{\n";
 	ss << string(depth * 3, ' ') << "\"name\": \"" + node.name + "\",\n";
 	ss << string(depth * 3, ' ') << "\"timing\":" + StringUtil::Format("%.2f", node.info.time) + ",\n";
-	ss << string(depth * 3, ' ') << "\"cardinality\":" + to_string(node.info.elements) + ",\n";
+	ss << string(depth * 3, ' ') << "\"cardinality\":" + std::to_string(node.info.elements) + ",\n";
 	ss << string(depth * 3, ' ') << "\"extra_info\": \"" + StringUtil::Replace(node.extra_info, "\n", "\\n") + "\",\n";
 	ss << string(depth * 3, ' ') << "\"children\": [";
 	if (node.children.empty()) {
@@ -364,7 +373,7 @@ string QueryProfiler::ToJSON() const {
 	}
 	std::stringstream ss;
 	ss << "{\n";
-	ss << "   \"result\": " + to_string(main_query.Elapsed()) + ",\n";
+	ss << "   \"result\": " + std::to_string(main_query.Elapsed()) + ",\n";
 	// print the phase timings
 	ss << "   \"timings\": {\n";
 	const auto &ordered_phase_timings = GetOrderedPhaseTimings();
@@ -375,7 +384,7 @@ string QueryProfiler::ToJSON() const {
 		ss << "      \"";
 		ss << ordered_phase_timings[i].first;
 		ss << "\": ";
-		ss << to_string(ordered_phase_timings[i].second);
+		ss << std::to_string(ordered_phase_timings[i].second);
 	}
 	ss << "\n   },\n";
 	// recursively print the physical operator tree
@@ -425,8 +434,13 @@ unique_ptr<QueryProfiler::TreeNode> QueryProfiler::CreateTree(PhysicalOperator *
 	return node;
 }
 
-void QueryProfiler::Render(QueryProfiler::TreeNode &node, std::ostream &ss) {
+void QueryProfiler::Render(const QueryProfiler::TreeNode &node, std::ostream &ss) const {
 	TreeRenderer renderer;
+	if (IsDetailedEnabled()) {
+		renderer.EnableDetailed();
+	} else {
+		renderer.EnableStandard();
+	}
 	renderer.Render(node, ss);
 }
 
@@ -450,4 +464,9 @@ vector<QueryProfiler::PhaseTimingItem> QueryProfiler::GetOrderedPhaseTimings() c
 	return result;
 }
 
+ExpressionExecutionInformation::ExpressionExecutionInformation(ExpressionExecutor &executor)
+    : total_count(executor.total_count), current_count(executor.current_count), sample_count(executor.sample_count),
+      sample_tuples_count(executor.sample_tuples_count), tuples_count(executor.tuples_count),
+      states(executor.GetStates()) {
+}
 } // namespace duckdb

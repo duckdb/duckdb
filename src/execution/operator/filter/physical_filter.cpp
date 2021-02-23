@@ -1,7 +1,7 @@
 #include "duckdb/execution/operator/filter/physical_filter.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
-
+#include "duckdb/parallel/thread_context.hpp"
 namespace duckdb {
 
 class PhysicalFilterState : public PhysicalOperatorState {
@@ -57,6 +57,14 @@ unique_ptr<PhysicalOperatorState> PhysicalFilter::GetOperatorState() {
 
 string PhysicalFilter::ParamsToString() const {
 	return expression->GetName();
+}
+
+void PhysicalFilter::FinalizeOperatorState(PhysicalOperatorState &state_p, ExecutionContext &context) {
+	auto &state = reinterpret_cast<PhysicalFilterState &>(state_p);
+	context.thread.profiler.Flush(this, &state.executor);
+	if (!children.empty() && state.child_state) {
+		children[0]->FinalizeOperatorState(*state.child_state, context);
+	}
 }
 
 } // namespace duckdb

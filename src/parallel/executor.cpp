@@ -244,6 +244,7 @@ unique_ptr<DataChunk> Executor::FetchChunk() {
 	// run the plan to get the next chunks
 	physical_plan->InitializeChunkEmpty(*chunk);
 	physical_plan->GetChunk(econtext, *chunk, physical_state.get());
+	physical_plan->FinalizeOperatorState(*physical_state, econtext);
 	context.profiler.Flush(thread.profiler);
 	return chunk;
 }
