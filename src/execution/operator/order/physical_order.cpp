@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/order/physical_order.hpp"
 
+#include "duckdb/common/blockquicksort.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/pipeline.hpp"
@@ -362,7 +363,7 @@ static int CompareTuple(const data_ptr_t &l_start, const data_ptr_t &r_start, co
 	return 0;
 }
 
-void Sort(ContinuousBlock &cb, OrderGlobalState &state) {
+static void Sort(ContinuousBlock &cb, OrderGlobalState &state) {
 	D_ASSERT(cb.blocks.size() == 1);
 	auto &block = cb.blocks[0];
 	cb.end = block.count;
@@ -380,9 +381,9 @@ void Sort(ContinuousBlock &cb, OrderGlobalState &state) {
 	data_ptr_t *start = key_locations.get();
 	data_ptr_t *end = start + block.count;
 	const auto &sorting_state = *state.sorting_state;
-	std::sort(start, end, [&sorting_state](const data_ptr_t &l, const data_ptr_t &r) {
-		return CompareTuple(l, r, sorting_state) <= 0;
-	});
+	BlockQuickSort::Sort(start, end, [&sorting_state](const data_ptr_t &l, const data_ptr_t &r) {
+        return CompareTuple(l, r, sorting_state) <= 0;
+    });
 
 	// convert sorted pointers to offsets
 	cb.offsets = shared_ptr<idx_t[]>(new idx_t[block.count]);
