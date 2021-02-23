@@ -237,7 +237,7 @@ int Executor::GetPipelinesProgress(bool &supported) {
 	if (!pipelines.empty()) {
 		return pipelines.back()->GetProgress(supported);
 	} else {
-		return 0;
+		return -1;
 	}
 }
 

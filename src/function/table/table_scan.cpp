@@ -71,7 +71,7 @@ static void TableScanFunc(ClientContext &context, const FunctionData *bind_data_
 	auto &transaction = Transaction::GetTransaction(context);
 	bind_data.table->storage->Scan(transaction, output, state.scan_state, state.column_ids);
 	{
-		std::lock_guard<decltype(bind_data.mutex)> lock(bind_data.mutex);
+		lock_guard<mutex> read_lock(bind_data.mutex);
 		bind_data.chunk_count++;
 	}
 }

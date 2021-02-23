@@ -35,6 +35,7 @@ class ClientContextLock {
 public:
 	explicit ClientContextLock(mutex &context_lock) : client_guard(context_lock) {
 	}
+
 	~ClientContextLock() {
 	}
 
@@ -182,6 +183,10 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 	return result;
 }
 
+int ClientContext::GetProgress() {
+	return progress_bar->GetCurPercentage();
+}
+
 unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(ClientContextLock &lock, const string &query,
                                                                 shared_ptr<PreparedStatementData> statement_p,
                                                                 vector<Value> bound_values, bool allow_stream_result) {
@@ -199,7 +204,13 @@ unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(ClientContextLoc
 	statement.Bind(move(bound_values));
 
 	bool create_stream_result = statement.allow_stream_result && allow_stream_result;
-
+	if (enable_progress_bar) {
+		if (progress_bar) {
+			progress_bar.reset();
+		}
+		progress_bar = make_unique<ProgressBar>(&executor, wait_time);
+		progress_bar->Start();
+	}
 	// store the physical plan in the context for calls to Fetch()
 	executor.Initialize(statement.plan.get());
 
@@ -228,6 +239,9 @@ unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(ClientContextLoc
 		}
 #endif
 		result->collection.Append(*chunk);
+	}
+	if (progress_bar) {
+		progress_bar->Stop();
 	}
 	return move(result);
 }

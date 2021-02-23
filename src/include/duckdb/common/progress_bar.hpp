@@ -15,20 +15,20 @@
 #include "duckdb/execution/executor.hpp"
 
 namespace duckdb {
-
 class ProgressBar {
 public:
-	explicit ProgressBar(Executor *executor, idx_t show_progress_after, idx_t time_update_bar, bool test = false)
-	    : executor(executor), show_progress_after(show_progress_after), time_update_bar(time_update_bar),
-	      running_test(test) {
+	explicit ProgressBar(Executor *executor, idx_t show_progress_after, idx_t time_update_bar = 100)
+	    : executor(executor), show_progress_after(show_progress_after), time_update_bar(time_update_bar) {
 
-	      };
+	                                                                    };
 
 	//! Starts the thread
 	void Start();
 	//! Stops the thread
 	void Stop();
-	//! If all values of the percentage were valid
+	//! Gets current percentage
+	int GetCurPercentage();
+	//! If all values in the percentage were valid
 	bool IsPercentageValid();
 
 private:
@@ -36,22 +36,25 @@ private:
 	idx_t pbwidth = 60;
 	Executor *executor = nullptr;
 	std::thread progress_bar_thread;
-	std::promise<void> exit_signal;
-	std::future<void> future_obj;
 	idx_t show_progress_after;
 	idx_t time_update_bar;
-	int cur_percentage = 0;
+	int cur_percentage = -1;
 	std::atomic<bool> valid_percentage;
-	bool running_test;
+	std::condition_variable c;
+	std::mutex m;
+	bool stop = false;
 	//! In case our progress bar tries to use a scan operator that is not implemented we don't print anything
 	bool supported = true;
 	//! Prints Progress
 	void PrintProgress(int percentage);
+	//! Prints an empty line when progress bar is done
+	void FinishPrint();
 	//! Starts the Progress Bar Thread that prints the progress bar
 	void ProgressBarThread();
-	//! Starts the Progress Bar Thread that updates the cur_percentage (Used for testing)
-	void ProgressBarThreadTest();
-	//! Check if stop was requests
-	bool StopRequested();
+	template <class DURATION>
+	bool WaitFor(DURATION duration) {
+		std::unique_lock<std::mutex> l(m);
+		return !c.wait_for(l, duration, [this]() { return stop; });
+	}
 };
 } // namespace duckdb

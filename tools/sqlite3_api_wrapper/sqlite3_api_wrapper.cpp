@@ -15,8 +15,6 @@
 
 #include "extension_helper.hpp"
 
-#include "duckdb/common/progress_bar.hpp"
-
 using namespace duckdb;
 using namespace std;
 
@@ -217,13 +215,8 @@ int sqlite3_step(sqlite3_stmt *pStmt) {
 	}
 	pStmt->current_text = nullptr;
 	if (!pStmt->result) {
-		ProgressBar progress_bar(&pStmt->prepared->context->executor, 2000, 100);
-		if (pStmt->prepared->GetStatementType() == StatementType::SELECT_STATEMENT) {
-			progress_bar.Start();
-		}
 		// no result yet! call Execute()
 		pStmt->result = pStmt->prepared->Execute(pStmt->bound_values, false);
-		progress_bar.Stop();
 		if (!pStmt->result->success) {
 			// error in execute: clear prepared statement
 			pStmt->db->last_error = pStmt->result->error;

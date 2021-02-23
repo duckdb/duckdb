@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/function/table_function.hpp"
-
+#include <mutex>
 namespace duckdb {
 class TableCatalogEntry;
 

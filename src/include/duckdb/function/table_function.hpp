@@ -13,7 +13,6 @@
 #include "duckdb/storage/statistics/node_statistics.hpp"
 
 #include <functional>
-#include <utility>
 
 namespace duckdb {
 class BaseStatistics;
