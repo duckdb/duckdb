@@ -59,7 +59,7 @@ void PhysicalComparisonJoin::ConstructEmptyJoinResult(JoinType join_type, bool h
 				bool_result[i] = false;
 			}
 		} else {
-			FlatVector::Nullmask(result_vector).set();
+			FlatVector::Validity(result_vector).SetAllInvalid(result.size());
 		}
 	} else if (join_type == JoinType::LEFT || join_type == JoinType::OUTER || join_type == JoinType::SINGLE) {
 		// LEFT/FULL OUTER/SINGLE join and build side is empty

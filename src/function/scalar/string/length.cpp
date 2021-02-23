@@ -42,7 +42,7 @@ static unique_ptr<BaseStatistics> LengthPropagateStats(ClientContext &context, B
 	}
 	auto &sstats = (StringStatistics &)*child_stats[0];
 	if (!sstats.has_unicode) {
-		expr.function.function = ScalarFunction::UnaryFunction<string_t, int64_t, StrLenOperator, true>;
+		expr.function.function = ScalarFunction::UnaryFunction<string_t, int64_t, StrLenOperator>;
 	}
 	return nullptr;
 }
@@ -50,15 +50,15 @@ static unique_ptr<BaseStatistics> LengthPropagateStats(ClientContext &context, B
 void LengthFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction({"length", "len"},
 	                ScalarFunction({LogicalType::VARCHAR}, LogicalType::BIGINT,
-	                               ScalarFunction::UnaryFunction<string_t, int64_t, StringLengthOperator, true>, false,
+	                               ScalarFunction::UnaryFunction<string_t, int64_t, StringLengthOperator>, false,
 	                               nullptr, nullptr, LengthPropagateStats));
 	set.AddFunction(ScalarFunction("strlen", {LogicalType::VARCHAR}, LogicalType::BIGINT,
-	                               ScalarFunction::UnaryFunction<string_t, int64_t, StrLenOperator, true>));
+	                               ScalarFunction::UnaryFunction<string_t, int64_t, StrLenOperator>));
 	set.AddFunction(ScalarFunction("bit_length", {LogicalType::VARCHAR}, LogicalType::BIGINT,
-	                               ScalarFunction::UnaryFunction<string_t, int64_t, BitLenOperator, true>));
+	                               ScalarFunction::UnaryFunction<string_t, int64_t, BitLenOperator>));
 	// length for BLOB type
 	set.AddFunction(ScalarFunction("octet_length", {LogicalType::BLOB}, LogicalType::BIGINT,
-	                               ScalarFunction::UnaryFunction<string_t, int64_t, StrLenOperator, true>));
+	                               ScalarFunction::UnaryFunction<string_t, int64_t, StrLenOperator>));
 }
 
 struct UnicodeOperator {
@@ -74,7 +74,7 @@ struct UnicodeOperator {
 
 void UnicodeFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunction unicode("unicode", {LogicalType::VARCHAR}, LogicalType::INTEGER,
-	                       ScalarFunction::UnaryFunction<string_t, int32_t, UnicodeOperator, true>);
+	                       ScalarFunction::UnaryFunction<string_t, int32_t, UnicodeOperator>);
 	set.AddFunction(unicode);
 	unicode.name = "ord";
 	set.AddFunction(unicode);

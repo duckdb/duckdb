@@ -413,7 +413,7 @@ void OrderVector(Vector &vector, idx_t count, MergeOrder &order) {
 	idx_t not_null_count = 0;
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);
-		if (!(*vdata.nullmask)[idx]) {
+		if (vdata.validity.RowIsValid(idx)) {
 			not_null.set_index(not_null_count++, i);
 		}
 	}

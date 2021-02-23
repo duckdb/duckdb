@@ -26,10 +26,10 @@ struct FirstFunctionBase {
 
 struct FirstFunction : public FirstFunctionBase {
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
+	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
 		if (!state->is_set) {
 			state->is_set = true;
-			if (nullmask[idx]) {
+			if (!mask.RowIsValid(idx)) {
 				state->is_null = true;
 			} else {
 				state->is_null = false;
@@ -39,9 +39,9 @@ struct FirstFunction : public FirstFunctionBase {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask,
+	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask,
 	                              idx_t count) {
-		Operation<INPUT_TYPE, STATE, OP>(state, bind_data, input, nullmask, 0);
+		Operation<INPUT_TYPE, STATE, OP>(state, bind_data, input, mask, 0);
 	}
 
 	template <class STATE, class OP>
@@ -52,9 +52,9 @@ struct FirstFunction : public FirstFunctionBase {
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (!state->is_set || state->is_null) {
-			nullmask[idx] = true;
+			mask.SetInvalid(idx);
 		} else {
 			target[idx] = state->value;
 		}
@@ -82,16 +82,16 @@ struct FirstFunctionString : public FirstFunctionBase {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
+	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
 		if (!state->is_set) {
-			SetValue(state, input[idx], nullmask[idx]);
+			SetValue(state, input[idx], !mask.RowIsValid(idx));
 		}
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask,
+	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask,
 	                              idx_t count) {
-		Operation<INPUT_TYPE, STATE, OP>(state, bind_data, input, nullmask, 0);
+		Operation<INPUT_TYPE, STATE, OP>(state, bind_data, input, mask, 0);
 	}
 
 	template <class STATE, class OP>
@@ -102,9 +102,9 @@ struct FirstFunctionString : public FirstFunctionBase {
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (!state->is_set || state->is_null) {
-			nullmask[idx] = true;
+			mask.SetInvalid(idx);
 		} else {
 			target[idx] = StringVector::AddString(result, state->value);
 		}

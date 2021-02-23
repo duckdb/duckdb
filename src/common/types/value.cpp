@@ -54,6 +54,9 @@ Value::Value(double val) : type_(LogicalType::DOUBLE), is_null(false) {
 Value::Value(const char *val) : Value(val ? string(val) : string()) {
 }
 
+Value::Value(std::nullptr_t val) : Value(LogicalType::VARCHAR) {
+}
+
 Value::Value(string_t val) : Value(string(val.GetDataUnsafe(), val.GetSize())) {
 }
 
@@ -1037,6 +1040,9 @@ void Value::Print() {
 }
 
 bool Value::ValuesAreEqual(const Value &result_value, const Value &value) {
+	if (result_value.is_null != value.is_null) {
+		return false;
+	}
 	if (result_value.is_null && value.is_null) {
 		// NULL = NULL in checking code
 		return true;

@@ -66,11 +66,10 @@ template <class T, class TARGET>
 static void assign_json_loop(Vector &v, idx_t col_idx, idx_t count, json &j) {
 	v.Normalify(count);
 	auto data_ptr = FlatVector::GetData<T>(v);
-	auto &nullmask = FlatVector::Nullmask(v);
+	auto &mask = FlatVector::Validity(v);
 	for (idx_t i = 0; i < count; i++) {
-		if (!nullmask[i]) {
+		if (mask.RowIsValid(i)) {
 			j["data"][col_idx] += (TARGET)data_ptr[i];
-
 		} else {
 			j["data"][col_idx] += nullptr;
 		}
@@ -88,9 +87,9 @@ static void assign_json_string_loop(Vector &v, idx_t col_idx, idx_t count, json 
 	}
 	result_vector->Normalify(count);
 	auto data_ptr = FlatVector::GetData<string_t>(*result_vector);
-	auto &nullmask = FlatVector::Nullmask(*result_vector);
+	auto &mask = FlatVector::Validity(*result_vector);
 	for (idx_t i = 0; i < count; i++) {
-		if (!nullmask[i]) {
+		if (mask.RowIsValid(i)) {
 			j["data"][col_idx] += data_ptr[i].GetString();
 
 		} else {

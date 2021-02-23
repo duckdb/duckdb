@@ -394,11 +394,11 @@ void TemplatedFilterOperation(Vector &v, T constant, parquet_filter_t &filter_ma
 	D_ASSERT(v.GetVectorType() == VectorType::FLAT_VECTOR); // we just created the damn thing it better be
 
 	auto v_ptr = FlatVector::GetData<T>(v);
-	auto &nullmask = FlatVector::Nullmask(v);
+	auto &mask = FlatVector::Validity(v);
 
-	if (nullmask.any()) {
+	if (!mask.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
-			filter_mask[i] = filter_mask[i] && !(nullmask)[i] && OP::Operation(v_ptr[i], constant);
+			filter_mask[i] = filter_mask[i] && mask.RowIsValid(i) && OP::Operation(v_ptr[i], constant);
 		}
 	} else {
 		for (idx_t i = 0; i < count; i++) {

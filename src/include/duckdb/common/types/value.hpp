@@ -36,6 +36,8 @@ public:
 	Value(double val); // NOLINT: Allow implicit conversion from `double`
 	//! Create a VARCHAR value
 	Value(const char *val); // NOLINT: Allow implicit conversion from `const char *`
+	//! Create a NULL value
+	Value(std::nullptr_t val); // NOLINT: Allow implicit conversion from `nullptr_t`
 	//! Create a VARCHAR value
 	Value(string_t val); // NOLINT: Allow implicit conversion from `string_t`
 	//! Create a VARCHAR value

@@ -24,12 +24,12 @@ struct RegrR2Operation {
 	}
 
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, FunctionData *bind_data, A_TYPE *x_data, B_TYPE *y_data, nullmask_t &anullmask,
-	                      nullmask_t &bnullmask, idx_t xidx, idx_t yidx) {
-		CorrOperation::Operation<A_TYPE, B_TYPE, CorrState, OP>(&state->corr, bind_data, y_data, x_data, bnullmask,
-		                                                        anullmask, yidx, xidx);
-		STDDevBaseOperation::Operation<A_TYPE, StddevState, OP>(&state->var_pop_x, bind_data, y_data, bnullmask, yidx);
-		STDDevBaseOperation::Operation<A_TYPE, StddevState, OP>(&state->var_pop_y, bind_data, x_data, anullmask, xidx);
+	static void Operation(STATE *state, FunctionData *bind_data, A_TYPE *x_data, B_TYPE *y_data, ValidityMask &amask,
+	                      ValidityMask &bmask, idx_t xidx, idx_t yidx) {
+		CorrOperation::Operation<A_TYPE, B_TYPE, CorrState, OP>(&state->corr, bind_data, y_data, x_data, bmask, amask,
+		                                                        yidx, xidx);
+		STDDevBaseOperation::Operation<A_TYPE, StddevState, OP>(&state->var_pop_x, bind_data, y_data, bmask, yidx);
+		STDDevBaseOperation::Operation<A_TYPE, StddevState, OP>(&state->var_pop_y, bind_data, x_data, amask, xidx);
 	}
 
 	template <class STATE, class OP>
@@ -40,13 +40,13 @@ struct RegrR2Operation {
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *fd, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+	static void Finalize(Vector &result, FunctionData *fd, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		auto var_pop_x = state->var_pop_x.count > 1 ? (state->var_pop_x.dsquared / state->var_pop_x.count) : 0;
 		if (!Value::DoubleIsValid(var_pop_x)) {
 			throw OutOfRangeException("VARPOP(X) is out of range!");
 		}
 		if (var_pop_x == 0) {
-			nullmask[idx] = true;
+			mask.SetInvalid(idx);
 			return;
 		}
 		auto var_pop_y = state->var_pop_y.count > 1 ? (state->var_pop_y.dsquared / state->var_pop_y.count) : 0;
@@ -57,7 +57,7 @@ struct RegrR2Operation {
 			target[idx] = 1;
 			return;
 		}
-		CorrOperation::Finalize<T, CorrState>(result, fd, &state->corr, target, nullmask, idx);
+		CorrOperation::Finalize<T, CorrState>(result, fd, &state->corr, target, mask, idx);
 		target[idx] = pow(target[idx], 2);
 	}
 

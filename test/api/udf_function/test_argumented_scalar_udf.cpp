@@ -275,7 +275,7 @@ TEST_CASE("UDF functions with arguments", "[udf_function][.]") {
 		}
 	}
 
-	SECTION("Cheking NULLs with UDF functions") {
+	SECTION("Checking NULLs with UDF functions") {
 		for (LogicalType sql_type : all_sql_types) {
 			if (sql_type.id() == LogicalTypeId::DECIMAL) {
 				continue;
