@@ -34,7 +34,7 @@ public:
 	bool IsPercentageValid();
 
 private:
-    const string PROGRESS_BAR_STRING = "||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||";
+	const string PROGRESS_BAR_STRING = "||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||";
 	static constexpr const idx_t PROGRESS_BAR_WIDTH = 60;
 	Executor *executor = nullptr;
 	std::thread progress_bar_thread;
@@ -50,12 +50,12 @@ private:
 	//! Starts the Progress Bar Thread that prints the progress bar
 	void ProgressBarThread();
 
-	#ifndef DUCKDB_NO_THREADS
+#ifndef DUCKDB_NO_THREADS
 	template <class DURATION>
 	bool WaitFor(DURATION duration) {
 		std::unique_lock<std::mutex> l(m);
 		return !c.wait_for(l, duration, [this]() { return stop; });
 	}
-    #endif
+#endif
 };
 } // namespace duckdb

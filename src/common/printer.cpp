@@ -9,7 +9,7 @@ void Printer::Print(const string &str) {
 	fprintf(stderr, "%s\n", str.c_str());
 #endif
 }
-void Printer::PrintProgress(int percentage, const char* pbstr, int pbwidth) {
+void Printer::PrintProgress(int percentage, const char *pbstr, int pbwidth) {
 #ifndef DUCKDB_DISABLE_PRINT
 	int lpad = (int)(percentage / 100.0 * pbwidth);
 	int rpad = pbwidth - lpad;
@@ -18,9 +18,9 @@ void Printer::PrintProgress(int percentage, const char* pbstr, int pbwidth) {
 #endif
 }
 
-void Printer::FinishProgressBarPrint(const char* pbstr, int pbwidth) {
+void Printer::FinishProgressBarPrint(const char *pbstr, int pbwidth) {
 #ifndef DUCKDB_DISABLE_PRINT
-	PrintProgress(100,pbstr,pbwidth);
+	PrintProgress(100, pbstr, pbwidth);
 	printf(" \n");
 	fflush(stdout);
 #endif

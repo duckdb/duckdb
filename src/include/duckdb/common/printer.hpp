@@ -18,8 +18,8 @@ public:
 	//! Print the object to stderr
 	static void Print(const string &str);
 	//! Prints Progress
-	static void PrintProgress(int percentage, const char* pbstr, int pbwidth);
+	static void PrintProgress(int percentage, const char *pbstr, int pbwidth);
 	//! Prints an empty line when progress bar is done
-	static void FinishProgressBarPrint(const char* pbstr, int pbwidth);
+	static void FinishProgressBarPrint(const char *pbstr, int pbwidth);
 };
 } // namespace duckdb
