@@ -1,0 +1,49 @@
+# name: test/issues/rigger/complex_division.test
+# description: Division in complex operation
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+CREATE TABLE t0(c0 DOUBLE, c1 TINYINT);
+
+statement ok
+INSERT INTO t0 VALUES(0.5,0);
+
+statement ok
+INSERT INTO t0 VALUES(0.5,1);
+
+statement ok
+INSERT INTO t0 VALUES(0.5,NULL);
+
+statement ok
+INSERT INTO t0 VALUES(0.5,NULL);
+
+statement ok
+INSERT INTO t0 VALUES(0.5,NULL);
+
+statement ok
+COMMIT;
+
+query II
+SELECT c0, c1 FROM t0;
+----
+0.5	0
+0.5	1
+0.5	NULL
+0.5	NULL
+0.5	NULL
+
+
+query III
+SELECT c0, c1, ((t0.c0)!~(((t0.c0)/(t0.c1)))) FROM t0;
+----
+0.5	0	NULL
+0.5	1	false
+0.5	NULL	NULL
+0.5	NULL	NULL
+0.5	NULL	NULL

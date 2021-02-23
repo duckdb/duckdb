@@ -158,14 +158,18 @@ struct BinaryExecutor {
 		} else {
 			if (OPWRAPPER::AddsNulls()) {
 				result_validity.Copy(FlatVector::Validity(left), count);
-				result_validity.Combine(FlatVector::Validity(right), count);
+				if (result_validity.AllValid()) {
+					result_validity.Copy(FlatVector::Validity(right), count);
+				} else {
+					result_validity.Combine(FlatVector::Validity(right), count);
+				}
 			} else {
 				FlatVector::SetValidity(result, FlatVector::Validity(left));
 				result_validity.Combine(FlatVector::Validity(right), count);
 			}
 		}
 		ExecuteFlatLoop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, LEFT_CONSTANT, RIGHT_CONSTANT>(
-		    ldata, rdata, result_data, count, FlatVector::Validity(result), fun);
+		    ldata, rdata, result_data, count, result_validity, fun);
 	}
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC>

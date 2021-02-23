@@ -570,6 +570,7 @@ struct BinaryZeroIsNullWrapper {
 		return true;
 	}
 };
+
 struct BinaryZeroIsNullHugeintWrapper {
 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
 	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, ValidityMask &mask, idx_t idx) {
