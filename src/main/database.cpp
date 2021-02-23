@@ -175,7 +175,6 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 	}
 	config.checkpoint_wal_size = new_config.checkpoint_wal_size;
 	config.use_direct_io = new_config.use_direct_io;
-	config.maximum_memory = new_config.maximum_memory;
 	config.temporary_directory = new_config.temporary_directory;
 	config.collation = new_config.collation;
 	config.default_order_type = new_config.default_order_type;
