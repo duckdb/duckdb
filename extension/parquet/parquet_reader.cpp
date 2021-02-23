@@ -307,15 +307,16 @@ const RowGroup &ParquetReader::GetGroup(ParquetReaderScanState &state) {
 	return file_meta_data->row_groups[state.group_idx_list[state.current_group]];
 }
 
-void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t file_col_idx) {
+void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t out_col_idx) {
 	auto &group = GetGroup(state);
 
-	auto column_reader = ((StructColumnReader *)state.root_reader.get())->GetChildReader(file_col_idx);
+	auto column_reader = ((StructColumnReader *)state.root_reader.get())->GetChildReader(state.column_ids[out_col_idx]);
 
 	// TODO move this to columnreader too
 	if (state.filters) {
 		auto stats = column_reader->Stats(group.columns);
-		auto filter_entry = state.filters->filters.find(file_col_idx);
+		// filters contain output chunk index, not file col idx!
+		auto filter_entry = state.filters->filters.find(out_col_idx);
 		if (stats && filter_entry != state.filters->filters.end()) {
 			bool skip_chunk = false;
 			switch (column_reader->Type().id()) {
@@ -488,14 +489,12 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 		}
 
 		for (idx_t out_col_idx = 0; out_col_idx < result.ColumnCount(); out_col_idx++) {
-			auto file_col_idx = state.column_ids[out_col_idx];
-
 			// this is a special case where we are not interested in the actual contents of the file
-			if (file_col_idx == COLUMN_IDENTIFIER_ROW_ID) {
+			if (state.column_ids[out_col_idx] == COLUMN_IDENTIFIER_ROW_ID) {
 				continue;
 			}
 
-			PrepareRowGroupBuffer(state, file_col_idx);
+			PrepareRowGroupBuffer(state, out_col_idx);
 		}
 		return true;
 	}
