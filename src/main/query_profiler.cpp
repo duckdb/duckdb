@@ -1,5 +1,5 @@
 #include "duckdb/main/query_profiler.hpp"
-
+#include "duckdb/common/to_string.hpp"
 #include "duckdb/common/fstream.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -342,7 +342,7 @@ static void ToJSONRecursive(QueryProfiler::TreeNode &node, std::ostream &ss, int
 	ss << "{\n";
 	ss << string(depth * 3, ' ') << "\"name\": \"" + node.name + "\",\n";
 	ss << string(depth * 3, ' ') << "\"timing\":" + StringUtil::Format("%.2f", node.info.time) + ",\n";
-	ss << string(depth * 3, ' ') << "\"cardinality\":" + std::to_string(node.info.elements) + ",\n";
+	ss << string(depth * 3, ' ') << "\"cardinality\":" + to_string(node.info.elements) + ",\n";
 	ss << string(depth * 3, ' ') << "\"extra_info\": \"" + StringUtil::Replace(node.extra_info, "\n", "\\n") + "\",\n";
 	ss << string(depth * 3, ' ') << "\"children\": [";
 	if (node.children.empty()) {
@@ -373,7 +373,7 @@ string QueryProfiler::ToJSON() const {
 	}
 	std::stringstream ss;
 	ss << "{\n";
-	ss << "   \"result\": " + std::to_string(main_query.Elapsed()) + ",\n";
+	ss << "   \"result\": " + to_string(main_query.Elapsed()) + ",\n";
 	// print the phase timings
 	ss << "   \"timings\": {\n";
 	const auto &ordered_phase_timings = GetOrderedPhaseTimings();
@@ -384,7 +384,7 @@ string QueryProfiler::ToJSON() const {
 		ss << "      \"";
 		ss << ordered_phase_timings[i].first;
 		ss << "\": ";
-		ss << std::to_string(ordered_phase_timings[i].second);
+		ss << to_string(ordered_phase_timings[i].second);
 	}
 	ss << "\n   },\n";
 	// recursively print the physical operator tree
