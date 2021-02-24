@@ -37,13 +37,15 @@ private:
 	const string PROGRESS_BAR_STRING = "||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||";
 	static constexpr const idx_t PROGRESS_BAR_WIDTH = 60;
 	Executor *executor = nullptr;
+#ifndef DUCKDB_NO_THREADS
 	std::thread progress_bar_thread;
-	idx_t show_progress_after;
-	idx_t time_update_bar;
-	int current_percentage = -1;
 	std::atomic<bool> valid_percentage;
 	std::condition_variable c;
 	std::mutex m;
+#endif
+	idx_t show_progress_after;
+	idx_t time_update_bar;
+	int current_percentage = -1;
 	bool stop = false;
 	//! In case our progress bar tries to use a scan operator that is not implemented we don't print anything
 	bool supported = true;

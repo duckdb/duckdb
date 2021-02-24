@@ -4,6 +4,7 @@
 namespace duckdb {
 
 void ProgressBar::ProgressBarThread() {
+#ifndef DUCKDB_NO_THREADS
 	WaitFor(std::chrono::milliseconds(show_progress_after));
 	while (!stop) {
 		int new_percentage;
@@ -17,6 +18,7 @@ void ProgressBar::ProgressBarThread() {
 		}
 		WaitFor(std::chrono::milliseconds(time_update_bar));
 	}
+#endif
 }
 
 int ProgressBar::GetCurrentPercentage() {
@@ -24,7 +26,11 @@ int ProgressBar::GetCurrentPercentage() {
 }
 
 bool ProgressBar::IsPercentageValid() {
+#ifndef DUCKDB_NO_THREADS
 	return valid_percentage;
+#else
+	return true;
+#endif
 }
 
 void ProgressBar::Start() {
