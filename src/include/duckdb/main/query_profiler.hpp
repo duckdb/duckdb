@@ -25,8 +25,17 @@ class ExpressionExecutor;
 class PhysicalOperator;
 class SQLStatement;
 
-struct ExpressionExecutionInformation {
-	explicit ExpressionExecutionInformation(ExpressionExecutor &executor);
+struct ExpressionInformation {
+	ExpressionInformation(string &name, double time) : name(name), time(time) {
+	}
+    void ExtractExpressionsRecursive(unique_ptr<ExpressionState> &state);
+	vector<unique_ptr<ExpressionInformation>> children;
+    string name;
+    double time;
+};
+
+struct ExpressionExecutorInformation {
+	explicit ExpressionExecutorInformation(ExpressionExecutor &executor);
 
 	//! Count the number of time the executor called
 	uint64_t total_count = 0;
@@ -39,7 +48,7 @@ struct ExpressionExecutionInformation {
 	//! Count the number of tuples processed by this executor
 	uint64_t tuples_count = 0;
 
-	vector<shared_ptr<ExpressionExecutorState>> states;
+	vector<unique_ptr<ExpressionInformation>> roots;
 };
 
 struct OperatorTimingInformation {
@@ -50,7 +59,7 @@ struct OperatorTimingInformation {
 	}
 
 	//! A mapping of physical operators to recorded timings
-	unique_ptr<ExpressionExecutionInformation> executors_info;
+	unique_ptr<ExpressionExecutorInformation> executors_info;
 };
 
 //! The OperatorProfiler measures timings of individual operators

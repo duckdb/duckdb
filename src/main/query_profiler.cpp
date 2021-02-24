@@ -215,7 +215,7 @@ void OperatorProfiler::Flush(PhysicalOperator *phys_op, ExpressionExecutor *expr
 	auto entry = timings.find(phys_op);
 	if (entry != timings.end()) {
 		auto &operator_timing = timings.find(phys_op)->second;
-		operator_timing.executors_info = make_unique<ExpressionExecutionInformation>(*expression_executor);
+		operator_timing.executors_info = make_unique<ExpressionExecutorInformation>(*expression_executor);
 		operator_timing.has_executor = true;
 	}
 }
@@ -464,9 +464,26 @@ vector<QueryProfiler::PhaseTimingItem> QueryProfiler::GetOrderedPhaseTimings() c
 	return result;
 }
 
-ExpressionExecutionInformation::ExpressionExecutionInformation(ExpressionExecutor &executor)
+void ExpressionInformation::ExtractExpressionsRecursive(unique_ptr<ExpressionState> &state) {
+    if (state->child_states.empty()) {
+        return;
+    }
+    // extract the children of this node
+    for (auto &child : state->child_states) {
+        auto expression_info_p = make_unique<ExpressionInformation>(child.get()->name, child.get()->time);
+        expression_info_p->ExtractExpressionsRecursive(child);
+        children.push_back(move(expression_info_p));
+    }
+    return;
+}
+
+ExpressionExecutorInformation::ExpressionExecutorInformation(ExpressionExecutor &executor)
     : total_count(executor.total_count), current_count(executor.current_count), sample_count(executor.sample_count),
-      sample_tuples_count(executor.sample_tuples_count), tuples_count(executor.tuples_count),
-      states(executor.GetStates()) {
+      sample_tuples_count(executor.sample_tuples_count), tuples_count(executor.tuples_count) {
+	for(auto &state : executor.GetStates()){
+		auto expression_info_p = make_unique<ExpressionInformation>(state.get()->root_state->name, state.get()->root_state.get()->time);
+        expression_info_p->ExtractExpressionsRecursive(state.get()->root_state);
+		roots.push_back(move(expression_info_p));
+	}
 }
 } // namespace duckdb

@@ -260,7 +260,7 @@ idx_t ExpressionExecutor::DefaultSelect(Expression &expr, ExpressionState *state
 	}
 }
 
-vector<shared_ptr<ExpressionExecutorState>> &ExpressionExecutor::GetStates() {
+vector<unique_ptr<ExpressionExecutorState>> &ExpressionExecutor::GetStates() {
 	return states;
 }
 

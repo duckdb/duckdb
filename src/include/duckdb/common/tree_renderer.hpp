@@ -137,7 +137,7 @@ private:
 
 	template <class T>
 	unique_ptr<RenderTree> CreateRenderTree(const T &op);
-	string ExtractExpressionsRecursive(ExpressionState &states);
+	string ExtractExpressionsRecursive(ExpressionInformation &states);
 };
 
 } // namespace duckdb

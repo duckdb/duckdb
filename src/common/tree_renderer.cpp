@@ -399,15 +399,15 @@ unique_ptr<RenderTreeNode> TreeRenderer::CreateNode(const PhysicalOperator &op) 
 	return CreateRenderNode(op.GetName(), op.ParamsToString());
 }
 
-string TreeRenderer::ExtractExpressionsRecursive(ExpressionState &state) {
+string TreeRenderer::ExtractExpressionsRecursive(ExpressionInformation &state) {
 	string result = "\n[INFOSEPARATOR]";
 	result += "\n" + state.name;
 	result += "\n" + StringUtil::Format("%.9f", state.time);
-	if (state.child_states.empty()) {
+	if (state.children.empty()) {
 		return result;
 	}
 	// render the children of this node
-	for (auto &child : state.child_states) {
+	for (auto &child : state.children) {
 		result += ExtractExpressionsRecursive(*child);
 	}
 	return result;
@@ -429,8 +429,8 @@ unique_ptr<RenderTreeNode> TreeRenderer::CreateNode(const QueryProfiler::TreeNod
 		string total_count = to_string(op.info.executors_info->total_count);
 		result->extra_text += "\n[INFOSEPARATOR]";
 		result->extra_text += "\ntotal_count: " + total_count;
-		for (auto &state : op.info.executors_info->states) {
-			result->extra_text += ExtractExpressionsRecursive(*state->root_state);
+		for (auto &state : op.info.executors_info->roots) {
+			result->extra_text += ExtractExpressionsRecursive(*state);
 		}
 	}
 

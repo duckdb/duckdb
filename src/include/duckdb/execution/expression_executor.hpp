@@ -60,7 +60,7 @@ public:
 		SetChunk(&chunk);
 	}
 
-	vector<shared_ptr<ExpressionExecutorState>> &GetStates();
+	vector<unique_ptr<ExpressionExecutorState>> &GetStates();
 
 	//! Count the number of time the executor called
 	uint64_t total_count = 0;
@@ -139,6 +139,6 @@ protected:
 
 private:
 	//! The states of the expression executor; this holds any intermediates and temporary states of expressions
-	vector<shared_ptr<ExpressionExecutorState>> states;
+	vector<unique_ptr<ExpressionExecutorState>> states;
 };
 } // namespace duckdb
