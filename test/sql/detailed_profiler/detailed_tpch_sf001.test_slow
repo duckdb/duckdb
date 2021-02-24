@@ -1,5 +1,5 @@
-# name: test/sql/detailed_profiler/test_detailed_profiler.test
-# description: Detailed Profiler
+# name: test/sql/detailed_profiler/detailed_tpch_sf001.test_slow
+# description: est Detailed Profiler for TPC-H SF0.1
 # group: [detailed_profiler]
 
 require tpch
