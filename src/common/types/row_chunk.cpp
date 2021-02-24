@@ -21,7 +21,7 @@ static void TemplatedSerializeVData(VectorData &vdata, const SelectionVector &se
 		key_locations[i] += sizeof(T);
 
 		// set the nullmask
-		*nullmask_locations[i] |= vdata.nullmask->test(i) << col_idx;
+		*nullmask_locations[i] |= !vdata.validity.RowIsValid(i) << col_idx;
 	}
 }
 
@@ -76,7 +76,7 @@ void RowChunk::SerializeVectorData(VectorData &vdata, PhysicalType type, const S
 			auto source_idx = vdata.sel->get_index(idx);
 
 			string_t new_val;
-			if ((*vdata.nullmask)[source_idx]) {
+			if ((!vdata.validity.RowIsValid(source_idx))) {
 				new_val = NullValue<string_t>();
 			} else if (source[source_idx].IsInlined()) {
 				new_val = source[source_idx];
@@ -162,7 +162,7 @@ static void TemplatedDeserializeIntoVector(VectorData &vdata, idx_t count, idx_t
 	for (idx_t i = 0; i < count; i++) {
 		target[i] = Load<T>(key_locations[i]);
 		key_locations[i] += sizeof(T);
-		vdata.nullmask->set(i, *nullmask_locations[i] & (1 << col_idx));
+		vdata.validity.Set(i, *nullmask_locations[i] & (1 << col_idx));
 	}
 }
 
