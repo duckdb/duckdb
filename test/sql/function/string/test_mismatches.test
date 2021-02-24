@@ -90,3 +90,23 @@ SELECT mismatches('', s) FROM strings ORDER BY s
 
 statement error
 SELECT mismatches(s, '') FROM strings ORDER BY s
+
+
+statement ok
+DROP TABLE strings
+
+statement ok
+CREATE TABLE strings(s VARCHAR)
+
+statement ok
+INSERT INTO strings VALUES ('hello'), ('halo'), (NULL)
+
+
+# incorrect usage
+
+statement error
+SELECT mismatches(s, 'hallo') FROM strings
+
+statement error
+SELECT mismatches('hallo', s) FROM strings
+
