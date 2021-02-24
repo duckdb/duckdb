@@ -28,7 +28,8 @@ public:
 
 class PhysicalSink : public PhysicalOperator {
 public:
-	PhysicalSink(PhysicalOperatorType type, vector<LogicalType> types) : PhysicalOperator(type, move(types)) {
+	PhysicalSink(PhysicalOperatorType type, vector<LogicalType> types, idx_t estimated_cardinality)
+	    : PhysicalOperator(type, move(types), estimated_cardinality) {
 	}
 
 	unique_ptr<GlobalOperatorState> sink_state;

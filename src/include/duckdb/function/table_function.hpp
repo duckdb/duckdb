@@ -53,6 +53,7 @@ typedef unique_ptr<FunctionOperatorData> (*table_function_init_parallel_t)(Clien
                                                                            TableFilterCollection *filters);
 typedef bool (*table_function_parallel_state_next_t)(ClientContext &context, const FunctionData *bind_data,
                                                      FunctionOperatorData *state, ParallelState *parallel_state);
+typedef int (*table_function_progress_t)(ClientContext &context, const FunctionData *bind_data);
 typedef void (*table_function_dependency_t)(unordered_set<CatalogEntry *> &dependencies, const FunctionData *bind_data);
 typedef unique_ptr<NodeStatistics> (*table_function_cardinality_t)(ClientContext &context,
                                                                    const FunctionData *bind_data);
@@ -72,15 +73,15 @@ public:
 	              table_function_init_parallel_state_t init_parallel_state = nullptr,
 	              table_function_init_parallel_t parallel_init = nullptr,
 	              table_function_parallel_state_next_t parallel_state_next = nullptr, bool projection_pushdown = false,
-	              bool filter_pushdown = false)
-	    : SimpleNamedParameterFunction(name, move(arguments)), bind(bind), init(init), function(function),
+	              bool filter_pushdown = false, table_function_progress_t query_progress = nullptr)
+	    : SimpleNamedParameterFunction(std::move(name), move(arguments)), bind(bind), init(init), function(function),
 	      statistics(statistics), cleanup(cleanup), dependency(dependency), cardinality(cardinality),
 	      pushdown_complex_filter(pushdown_complex_filter), to_string(to_string), max_threads(max_threads),
 	      init_parallel_state(init_parallel_state), parallel_init(parallel_init),
-	      parallel_state_next(parallel_state_next), projection_pushdown(projection_pushdown),
-	      filter_pushdown(filter_pushdown) {
+	      parallel_state_next(parallel_state_next), table_scan_progress(query_progress),
+	      projection_pushdown(projection_pushdown), filter_pushdown(filter_pushdown) {
 	}
-	TableFunction(vector<LogicalType> arguments, table_function_t function, table_function_bind_t bind = nullptr,
+	TableFunction(const vector<LogicalType> &arguments, table_function_t function, table_function_bind_t bind = nullptr,
 	              table_function_init_t init = nullptr, table_statistics_t statistics = nullptr,
 	              table_function_cleanup_t cleanup = nullptr, table_function_dependency_t dependency = nullptr,
 	              table_function_cardinality_t cardinality = nullptr,
@@ -89,10 +90,10 @@ public:
 	              table_function_init_parallel_state_t init_parallel_state = nullptr,
 	              table_function_init_parallel_t parallel_init = nullptr,
 	              table_function_parallel_state_next_t parallel_state_next = nullptr, bool projection_pushdown = false,
-	              bool filter_pushdown = false)
-	    : TableFunction(string(), move(arguments), function, bind, init, statistics, cleanup, dependency, cardinality,
+	              bool filter_pushdown = false, table_function_progress_t query_progress = nullptr)
+	    : TableFunction(string(), arguments, function, bind, init, statistics, cleanup, dependency, cardinality,
 	                    pushdown_complex_filter, to_string, max_threads, init_parallel_state, parallel_init,
-	                    parallel_state_next, projection_pushdown, filter_pushdown) {
+	                    parallel_state_next, projection_pushdown, filter_pushdown, query_progress) {
 	}
 	TableFunction() : SimpleNamedParameterFunction("", {}) {
 	}
@@ -133,7 +134,8 @@ public:
 	table_function_init_parallel_t parallel_init;
 	//! (Optional) return the next chunk to process in the parallel scan, or return nullptr if there is none
 	table_function_parallel_state_next_t parallel_state_next;
-
+	//! (Optional) return how much of the table we have scanned up to this point (% of the data)
+	table_function_progress_t table_scan_progress;
 	//! Whether or not the table function supports projection pushdown. If not supported a projection will be added
 	//! that filters out unused columns.
 	bool projection_pushdown;

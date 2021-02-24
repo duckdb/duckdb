@@ -11,6 +11,7 @@
 #include "duckdb/execution/operator/aggregate/physical_simple_aggregate.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
+#include "duckdb/execution/operator/join/physical_hash_join.hpp"
 
 namespace duckdb {
 
@@ -32,6 +33,42 @@ public:
 Pipeline::Pipeline(Executor &executor_p, ProducerToken &token_p)
     : executor(executor_p), token(token_p), finished_tasks(0), total_tasks(0), finished_dependencies(0),
       finished(false), recursive_cte(nullptr) {
+}
+
+bool Pipeline::GetProgress(ClientContext &context, PhysicalOperator *op, int &current_percentage) {
+	switch (op->type) {
+	case PhysicalOperatorType::TABLE_SCAN: {
+		auto &get = (PhysicalTableScan &)*op;
+		if (get.function.table_scan_progress) {
+			current_percentage = get.function.table_scan_progress(context, get.bind_data.get());
+			return true;
+		}
+		//! If the table_scan_progress is not implemented it means we don't support this function yet in the progress
+		//! bar
+		current_percentage = -1;
+		return false;
+	}
+	default: {
+		vector<idx_t> progress;
+		vector<idx_t> cardinality;
+		double total_cardinality = 0;
+		current_percentage = 0;
+		for (auto &op_child : op->children) {
+			progress.push_back(GetProgress(context, op_child.get(), current_percentage));
+			cardinality.push_back(op_child->estimated_cardinality);
+			total_cardinality += op_child->estimated_cardinality;
+		}
+		for (size_t i = 0; i < progress.size(); i++) {
+			current_percentage += progress[i] * cardinality[i] / total_cardinality;
+		}
+		return true;
+	}
+	}
+}
+
+bool Pipeline::GetProgress(int &current_percentage) {
+	auto &client = executor.context;
+	return GetProgress(client, child, current_percentage);
 }
 
 void Pipeline::Execute(TaskContext &task) {

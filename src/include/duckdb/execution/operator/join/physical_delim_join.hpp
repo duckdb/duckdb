@@ -19,7 +19,7 @@ class PhysicalHashAggregate;
 class PhysicalDelimJoin : public PhysicalSink {
 public:
 	PhysicalDelimJoin(vector<LogicalType> types, unique_ptr<PhysicalOperator> original_join,
-	                  vector<PhysicalOperator *> delim_scans);
+	                  vector<PhysicalOperator *> delim_scans, idx_t estimated_cardinality);
 
 	unique_ptr<PhysicalOperator> join;
 	unique_ptr<PhysicalHashAggregate> distinct;

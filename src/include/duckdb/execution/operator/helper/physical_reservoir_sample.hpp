@@ -16,8 +16,9 @@ namespace duckdb {
 //! PhysicalReservoirSample represents a sample taken using reservoir sampling, which is a blocking sampling method
 class PhysicalReservoirSample : public PhysicalSink {
 public:
-	PhysicalReservoirSample(vector<LogicalType> types, unique_ptr<SampleOptions> options)
-	    : PhysicalSink(PhysicalOperatorType::RESERVOIR_SAMPLE, move(types)), options(move(options)) {
+	PhysicalReservoirSample(vector<LogicalType> types, unique_ptr<SampleOptions> options, idx_t estimated_cardinality)
+	    : PhysicalSink(PhysicalOperatorType::RESERVOIR_SAMPLE, move(types), estimated_cardinality),
+	      options(move(options)) {
 	}
 
 	unique_ptr<SampleOptions> options;
