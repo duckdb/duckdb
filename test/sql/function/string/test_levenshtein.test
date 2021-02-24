@@ -11,7 +11,32 @@ CREATE TABLE strings(s VARCHAR)
 statement ok
 INSERT INTO strings VALUES ('hello'), ('hallo'), ('aloha'), ('hoi'), ('world')
 
-# normal length
+# normal queries
+query I
+SELECT levenshtein('hallo', 'hallo')
+----
+0
+
+query I
+SELECT levenshtein('hallo', 'hello')
+----
+1
+
+query I
+SELECT levenshtein('hallo', 'hoi')
+----
+4
+
+query I
+SELECT levenshtein(NULL, 'hoi')
+----
+NULL
+
+query I
+SELECT levenshtein('hi', NULL)
+----
+NULL
+
 query I
 SELECT levenshtein(s, 'hallo') FROM strings ORDER BY s
 ----
@@ -20,3 +45,82 @@ SELECT levenshtein(s, 'hallo') FROM strings ORDER BY s
 1
 4
 4
+
+query I
+SELECT levenshtein('hallo', s) FROM strings ORDER BY s
+----
+3
+0
+1
+4
+3
+
+query I
+SELECT levenshtein(NULL, s) FROM strings 
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+
+query I
+SELECT levenshtein(NULL, s) FROM strings 
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+
+# incorrect usage
+statement error
+SELECT mismatches('', 'hallo') 
+
+statement error
+SELECT mismatches('hi', '') 
+
+statement error
+SELECT mismatches('', NULL) 
+
+statement error
+SELECT mismatches(NULL, '') 
+
+statement error
+SELECT mismatches('', s) FROM strings
+
+statement error
+SELECT mismatches(s, '')  FROM strings
+
+
+statement ok
+DROP TABLE strings
+
+statement ok
+CREATE TABLE strings(s VARCHAR)
+
+statement ok
+INSERT INTO strings VALUES (NULL)
+
+statement error
+SELECT mismatches('', s)  FROM strings
+
+statement error
+SELECT mismatches(s, '')  FROM strings
+
+
+
+statement ok
+DROP TABLE strings
+
+statement ok
+CREATE TABLE strings(s VARCHAR)
+
+statement ok
+INSERT INTO strings VALUES ('')
+
+statement error
+SELECT mismatches(NULL, s)  FROM strings
+
+statement error
+SELECT mismatches(s, NULL)  FROM strings
