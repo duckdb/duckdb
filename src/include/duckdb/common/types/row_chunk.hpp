@@ -9,21 +9,21 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/string_heap.hpp"
+#include "duckdb/common/types/vector.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
 struct RowDataBlock {
-	RowDataBlock() {
-	}
-	RowDataBlock(BufferManager &buffer_manager, idx_t capacity, idx_t entry_size) : count(0), capacity(capacity) {
-		block = buffer_manager.RegisterMemory(capacity * entry_size, false);
+	RowDataBlock(BufferManager &buffer_manager, idx_t byte_capacity)
+	    : count(0), byte_offset(0), byte_capacity(byte_capacity) {
+		block = buffer_manager.RegisterMemory(byte_capacity, false);
 	}
 	idx_t count;
-	idx_t capacity;
+	idx_t byte_offset;
+	idx_t byte_capacity;
 	shared_ptr<BlockHandle> block;
 };
 
@@ -40,16 +40,10 @@ public:
 
 	std::mutex rc_lock;
 
-	//! The stringheap of the RowChunk
-	StringHeap string_heap;
 	//! BufferManager
 	BufferManager &buffer_manager;
-	//! The size of an entry as stored in the HashTable
-	idx_t entry_size;
-	//! The amount of entries stored per block
+	//! The number of bytes per block
 	idx_t block_capacity;
-	//! The amount of entries stored in the HT currently
-	idx_t count;
 	//! The blocks holding the main data
 	vector<RowDataBlock> blocks;
 
@@ -63,15 +57,13 @@ public:
 	void SerializeVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count, idx_t col_idx,
 	                     data_ptr_t key_locations[], data_ptr_t nullmask_locations[]);
 	idx_t AppendToBlock(RowDataBlock &block, BufferHandle &handle, vector<BlockAppendEntry> &append_entries,
-	                    idx_t remaining);
-	void Build(idx_t added_count, data_ptr_t key_locations[]);
+	                    idx_t added_count, idx_t starting_entry, idx_t offsets[]);
+	void Build(idx_t added_count, idx_t offsets[], data_ptr_t key_locations[]);
 
-	void DeserializeIntoVectorData(VectorData &vdata, PhysicalType type, idx_t vcount, idx_t col_idx,
-	                               data_ptr_t key_locations[], data_ptr_t nullmask_locations[]);
-	void DeserializeIntoVector(Vector &v, idx_t vcount, idx_t col_idx, data_ptr_t key_locations[],
-	                           data_ptr_t nullmask_locations[]);
-
-	void Append(RowChunk &chunk);
+	static void DeserializeIntoVectorData(Vector &v, VectorData &vdata, PhysicalType type, idx_t vcount, idx_t col_idx,
+	                                      data_ptr_t key_locations[], data_ptr_t nullmask_locations[]);
+	static void DeserializeIntoVector(Vector &v, idx_t vcount, idx_t col_idx, data_ptr_t key_locations[],
+	                                  data_ptr_t nullmask_locations[]);
 };
 
 } // namespace duckdb

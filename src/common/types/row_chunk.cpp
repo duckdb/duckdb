@@ -4,8 +4,7 @@
 
 namespace duckdb {
 
-RowChunk::RowChunk(BufferManager &buffer_manager)
-    : buffer_manager(buffer_manager), entry_size(0), block_capacity(0), count(0) {
+RowChunk::RowChunk(BufferManager &buffer_manager) : buffer_manager(buffer_manager), block_capacity(0) {
 }
 
 template <class T>
@@ -69,25 +68,21 @@ void RowChunk::SerializeVectorData(VectorData &vdata, PhysicalType type, const S
 		TemplatedSerializeVData<interval_t>(vdata, sel, ser_count, col_idx, key_locations, nullmask_locations);
 		break;
 	case PhysicalType::VARCHAR: {
-		StringHeap local_heap;
-		auto source = (string_t *)vdata.data;
+		auto strings = (string_t *)vdata.data;
 		for (idx_t i = 0; i < ser_count; i++) {
-			auto idx = sel.get_index(i);
-			auto source_idx = vdata.sel->get_index(idx);
+			auto &string_entry = strings[vdata.sel->get_index(i)];
 
-			string_t new_val;
-			if ((!vdata.validity.RowIsValid(source_idx))) {
-				new_val = NullValue<string_t>();
-			} else if (source[source_idx].IsInlined()) {
-				new_val = source[source_idx];
-			} else {
-				new_val = local_heap.AddBlob(source[source_idx].GetDataUnsafe(), source[source_idx].GetSize());
-			}
-			Store<string_t>(new_val, key_locations[i]);
-			key_locations[i] += sizeof(string_t);
+			// store string size
+			Store<idx_t>(string_entry.GetSize(), key_locations[i]);
+			key_locations[i] += string_t::PREFIX_LENGTH;
+
+			// store the string
+			memcpy(key_locations[i], string_entry.GetDataUnsafe(), string_entry.GetSize());
+			key_locations[i] += string_entry.GetSize();
+
+			// set the nullmask
+			*nullmask_locations[i] |= !vdata.validity.RowIsValid(i) << col_idx;
 		}
-		lock_guard<mutex> append_lock(rc_lock);
-		string_heap.MergeHeap(local_heap);
 		break;
 	}
 	default:
@@ -104,42 +99,51 @@ void RowChunk::SerializeVector(Vector &v, idx_t vcount, const SelectionVector &s
 }
 
 idx_t RowChunk::AppendToBlock(RowDataBlock &block, BufferHandle &handle, vector<BlockAppendEntry> &append_entries,
-                              idx_t remaining) {
-	idx_t append_count = MinValue<idx_t>(remaining, block.capacity - block.count);
-	auto dataptr = handle.node->buffer + block.count * entry_size;
+                              idx_t added_count, idx_t starting_entry, idx_t byte_offsets[]) {
+	// find out how many entries
+	idx_t append_count;
+	idx_t starting_byte_offset = byte_offsets[starting_entry];
+	for (idx_t i = starting_entry; i < added_count; i++) {
+		if (block.byte_offset + (byte_offsets[i + 1] - starting_byte_offset) > block.byte_capacity) {
+			// stop when entry i cannot be added anymore
+			append_count = i - starting_entry;
+			break;
+		}
+	}
+	auto dataptr = handle.node->buffer + block.byte_offset;
 	append_entries.emplace_back(dataptr, append_count);
 	block.count += append_count;
 	return append_count;
 }
 
-void RowChunk::Build(idx_t added_count, data_ptr_t key_locations[]) {
-	count += added_count;
-
+void RowChunk::Build(idx_t added_count, idx_t byte_offsets[], data_ptr_t key_locations[]) {
 	vector<unique_ptr<BufferHandle>> handles;
 	vector<BlockAppendEntry> append_entries;
 	// first allocate space of where to serialize the chunk and payload columns
-	idx_t remaining = added_count;
+	idx_t row_entry = 0;
 	{
 		// first append to the last block (if any)
 		lock_guard<mutex> append_lock(rc_lock);
 		if (!blocks.empty()) {
 			auto &last_block = blocks.back();
-			if (last_block.count < last_block.capacity) {
+			if (last_block.byte_offset < last_block.byte_capacity) {
 				// last block has space: pin the buffer of this block
 				auto handle = buffer_manager.Pin(last_block.block);
 				// now append to the block
-				idx_t append_count = AppendToBlock(last_block, *handle, append_entries, remaining);
-				remaining -= append_count;
+				idx_t append_count =
+				    AppendToBlock(last_block, *handle, append_entries, added_count, row_entry, byte_offsets);
+				row_entry += append_count;
 				handles.push_back(move(handle));
 			}
 		}
-		while (remaining > 0) {
+		while (row_entry < added_count) {
 			// now for the remaining data, allocate new buffers to store the data and append there
-			RowDataBlock new_block(buffer_manager, block_capacity, entry_size);
+			RowDataBlock new_block(buffer_manager, block_capacity);
 			auto handle = buffer_manager.Pin(new_block.block);
 
-			idx_t append_count = AppendToBlock(new_block, *handle, append_entries, remaining);
-			remaining -= append_count;
+			idx_t append_count =
+			    AppendToBlock(new_block, *handle, append_entries, added_count, row_entry, byte_offsets);
+			row_entry += append_count;
 			handles.push_back(move(handle));
 			blocks.push_back(move(new_block));
 		}
@@ -150,7 +154,7 @@ void RowChunk::Build(idx_t added_count, data_ptr_t key_locations[]) {
 		idx_t next = append_idx + append_entry.count;
 		for (; append_idx < next; append_idx++) {
 			key_locations[append_idx] = append_entry.baseptr;
-			append_entry.baseptr += entry_size;
+			append_entry.baseptr += byte_offsets[append_idx + 1] - byte_offsets[append_idx];
 		}
 	}
 }
@@ -166,7 +170,7 @@ static void TemplatedDeserializeIntoVector(VectorData &vdata, idx_t count, idx_t
 	}
 }
 
-void RowChunk::DeserializeIntoVectorData(VectorData &vdata, PhysicalType type, idx_t vcount, idx_t col_idx,
+void RowChunk::DeserializeIntoVectorData(Vector &v, VectorData &vdata, PhysicalType type, idx_t vcount, idx_t col_idx,
                                          data_ptr_t key_locations[], data_ptr_t nullmask_locations[]) {
 	switch (type) {
 	case PhysicalType::BOOL:
@@ -209,9 +213,20 @@ void RowChunk::DeserializeIntoVectorData(VectorData &vdata, PhysicalType type, i
 	case PhysicalType::INTERVAL:
 		TemplatedDeserializeIntoVector<interval_t>(vdata, vcount, col_idx, key_locations, nullmask_locations);
 		break;
-	case PhysicalType::VARCHAR:
-		TemplatedDeserializeIntoVector<string_t>(vdata, vcount, col_idx, key_locations, nullmask_locations);
+	case PhysicalType::VARCHAR: {
+		idx_t len;
+		for (idx_t i = 0; i < vcount; i++) {
+			// deserialize string length
+			len = Load<idx_t>(key_locations[i]);
+			key_locations[i] += string_t::PREFIX_LENGTH;
+			// deserialize string
+			StringVector::AddString(v, (const char *)key_locations[i], len);
+			key_locations[i] += len;
+			// set nullmask
+			vdata.validity.Set(i, *nullmask_locations[i] & (1 << col_idx));
+		}
 		break;
+	}
 	default:
 		throw NotImplementedException("FIXME: unimplemented deserialize");
 	}
@@ -221,27 +236,7 @@ void RowChunk::DeserializeIntoVector(Vector &v, idx_t vcount, idx_t col_idx, dat
                                      data_ptr_t nullmask_locations[]) {
 	VectorData vdata;
 	v.Orrify(vcount, vdata);
-
-	DeserializeIntoVectorData(vdata, v.GetType().InternalType(), vcount, col_idx, key_locations, nullmask_locations);
-}
-
-void RowChunk::Append(RowChunk &chunk) {
-	if (count == 0) {
-		// this chunk is empty - initialize with appended chunk
-		entry_size = chunk.entry_size;
-		block_capacity = chunk.block_capacity;
-	} else {
-		// not empty - assert compatibility
-		D_ASSERT(entry_size == chunk.entry_size);
-		D_ASSERT(block_capacity == chunk.block_capacity);
-	}
-
-	// now we append
-	string_heap.MergeHeap(chunk.string_heap);
-	for (auto &block : chunk.blocks) {
-		count += block.count;
-		blocks.push_back(block);
-	}
+	DeserializeIntoVectorData(v, vdata, v.GetType().InternalType(), vcount, col_idx, key_locations, nullmask_locations);
 }
 
 } // namespace duckdb
