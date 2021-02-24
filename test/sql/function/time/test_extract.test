@@ -1,0 +1,101 @@
+# name: test/sql/function/time/test_extract.test
+# description: Extract function
+# group: [time]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE times(i TIME)
+
+statement ok
+INSERT INTO times VALUES ('00:01:20'), ('20:08:10.998'), ('20:08:10.33'), ('20:08:10.001'), (NULL)
+
+# extract various parts of the time
+query I
+SELECT EXTRACT(second FROM i) FROM times
+----
+20
+10
+10
+10
+NULL
+
+query I
+SELECT EXTRACT(minute FROM i) FROM times
+----
+1
+8
+8
+8
+NULL
+
+query I
+SELECT EXTRACT(hour FROM i) FROM times
+----
+0
+20
+20
+20
+NULL
+
+query I
+SELECT EXTRACT(milliseconds FROM i) FROM times
+----
+20000
+10998
+10330
+10001
+NULL
+
+query I
+SELECT EXTRACT(microseconds FROM i) FROM times
+----
+20000000
+10998000
+10330000
+10001000
+NULL
+
+query I
+SELECT EXTRACT(epoch FROM i) FROM times
+----
+20
+10
+10
+10
+NULL
+
+# time gives errors for date-only parts
+statement error
+SELECT EXTRACT(year FROM i) FROM times
+
+statement error
+SELECT EXTRACT(month FROM i) FROM times
+
+statement error
+SELECT EXTRACT(day FROM i) FROM times
+
+statement error
+SELECT EXTRACT(decade FROM i) FROM times
+
+statement error
+SELECT EXTRACT(century FROM i) FROM times
+
+statement error
+SELECT EXTRACT(millenium FROM i) FROM times
+
+statement error
+SELECT EXTRACT(quarter FROM i) FROM times
+
+statement error
+SELECT EXTRACT(dayofweek FROM i) FROM times
+
+statement error
+SELECT EXTRACT(isodow FROM i) FROM times
+
+statement error
+SELECT EXTRACT(dayofyear FROM i) FROM times
+
+statement error
+SELECT EXTRACT(week FROM i) FROM times
