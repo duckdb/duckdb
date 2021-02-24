@@ -28,10 +28,10 @@ class SQLStatement;
 struct ExpressionInformation {
 	ExpressionInformation(string &name, double time) : name(name), time(time) {
 	}
-    void ExtractExpressionsRecursive(unique_ptr<ExpressionState> &state);
+	void ExtractExpressionsRecursive(unique_ptr<ExpressionState> &state);
 	vector<unique_ptr<ExpressionInformation>> children;
-    string name;
-    double time;
+	string name;
+	double time;
 };
 
 struct ExpressionExecutorInformation {

@@ -465,24 +465,25 @@ vector<QueryProfiler::PhaseTimingItem> QueryProfiler::GetOrderedPhaseTimings() c
 }
 
 void ExpressionInformation::ExtractExpressionsRecursive(unique_ptr<ExpressionState> &state) {
-    if (state->child_states.empty()) {
-        return;
-    }
-    // extract the children of this node
-    for (auto &child : state->child_states) {
-        auto expression_info_p = make_unique<ExpressionInformation>(child.get()->name, child.get()->time);
-        expression_info_p->ExtractExpressionsRecursive(child);
-        children.push_back(move(expression_info_p));
-    }
-    return;
+	if (state->child_states.empty()) {
+		return;
+	}
+	// extract the children of this node
+	for (auto &child : state->child_states) {
+		auto expression_info_p = make_unique<ExpressionInformation>(child.get()->name, child.get()->time);
+		expression_info_p->ExtractExpressionsRecursive(child);
+		children.push_back(move(expression_info_p));
+	}
+	return;
 }
 
 ExpressionExecutorInformation::ExpressionExecutorInformation(ExpressionExecutor &executor)
     : total_count(executor.total_count), current_count(executor.current_count), sample_count(executor.sample_count),
       sample_tuples_count(executor.sample_tuples_count), tuples_count(executor.tuples_count) {
-	for(auto &state : executor.GetStates()){
-		auto expression_info_p = make_unique<ExpressionInformation>(state.get()->root_state->name, state.get()->root_state.get()->time);
-        expression_info_p->ExtractExpressionsRecursive(state.get()->root_state);
+	for (auto &state : executor.GetStates()) {
+		auto expression_info_p =
+		    make_unique<ExpressionInformation>(state.get()->root_state->name, state.get()->root_state.get()->time);
+		expression_info_p->ExtractExpressionsRecursive(state.get()->root_state);
 		roots.push_back(move(expression_info_p));
 	}
 }
