@@ -35,7 +35,7 @@ static void ConcatFunction(DataChunk &args, ExpressionState &state, Vector &resu
 			// now add the length of each vector to the result length
 			for (idx_t i = 0; i < args.size(); i++) {
 				auto idx = vdata.sel->get_index(i);
-				if ((*vdata.nullmask)[idx]) {
+				if (!vdata.validity.RowIsValid(idx)) {
 					continue;
 				}
 				result_lengths[i] += input_data[idx].GetSize();
@@ -80,7 +80,7 @@ static void ConcatFunction(DataChunk &args, ExpressionState &state, Vector &resu
 			auto input_data = (string_t *)idata.data;
 			for (idx_t i = 0; i < args.size(); i++) {
 				auto idx = idata.sel->get_index(i);
-				if ((*idata.nullmask)[idx]) {
+				if (!idata.validity.RowIsValid(idx)) {
 					continue;
 				}
 				auto input_ptr = input_data[idx].GetDataUnsafe();
@@ -96,7 +96,7 @@ static void ConcatFunction(DataChunk &args, ExpressionState &state, Vector &resu
 }
 
 static void ConcatOperator(DataChunk &args, ExpressionState &state, Vector &result) {
-	BinaryExecutor::Execute<string_t, string_t, string_t, true>(
+	BinaryExecutor::Execute<string_t, string_t, string_t>(
 	    args.data[0], args.data[1], result, args.size(), [&](string_t a, string_t b) {
 		    auto a_data = a.GetDataUnsafe();
 		    auto b_data = b.GetDataUnsafe();
@@ -132,7 +132,7 @@ static void TemplatedConcatWS(DataChunk &args, string_t *sep_data, const Selecti
 			auto ridx = rsel.get_index(i);
 			auto sep_idx = sep_sel.get_index(ridx);
 			auto idx = idata.sel->get_index(ridx);
-			if ((*idata.nullmask)[idx]) {
+			if (!idata.validity.RowIsValid(idx)) {
 				continue;
 			}
 			if (has_results[ridx]) {
@@ -162,7 +162,7 @@ static void TemplatedConcatWS(DataChunk &args, string_t *sep_data, const Selecti
 			auto ridx = rsel.get_index(i);
 			auto sep_idx = sep_sel.get_index(ridx);
 			auto idx = idata.sel->get_index(ridx);
-			if ((*idata.nullmask)[idx]) {
+			if (!idata.validity.RowIsValid(idx)) {
 				continue;
 			}
 			if (has_results[ridx]) {
@@ -212,10 +212,10 @@ static void ConcatWSFunction(DataChunk &args, ExpressionState &state, Vector &re
 		// default case: loop over nullmask and create a non-null selection vector
 		idx_t not_null_count = 0;
 		SelectionVector not_null_vector(STANDARD_VECTOR_SIZE);
-		auto &result_nullmask = FlatVector::Nullmask(result);
+		auto &result_mask = FlatVector::Validity(result);
 		for (idx_t i = 0; i < args.size(); i++) {
-			if ((*vdata.nullmask)[vdata.sel->get_index(i)]) {
-				result_nullmask[i] = true;
+			if (!vdata.validity.RowIsValid(vdata.sel->get_index(i))) {
+				result_mask.SetInvalid(i);
 			} else {
 				not_null_vector.set_index(not_null_count++, i);
 			}

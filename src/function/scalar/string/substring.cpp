@@ -142,7 +142,7 @@ static void SubstringFunction(DataChunk &args, ExpressionState &state, Vector &r
 			    return SubstringFun::SubstringScalarFunction(result, input_string, offset, length);
 		    });
 	} else {
-		BinaryExecutor::Execute<string_t, int32_t, string_t, true>(
+		BinaryExecutor::Execute<string_t, int32_t, string_t>(
 		    input_vector, offset_vector, result, args.size(), [&](string_t input_string, int32_t offset) {
 			    return SubstringFun::SubstringScalarFunction(result, input_string, offset,
 			                                                 NumericLimits<int32_t>::Maximum());
@@ -162,7 +162,7 @@ static void SubstringFunctionASCII(DataChunk &args, ExpressionState &state, Vect
 			    return SubstringASCII(result, input_string, offset, length);
 		    });
 	} else {
-		BinaryExecutor::Execute<string_t, int32_t, string_t, true>(
+		BinaryExecutor::Execute<string_t, int32_t, string_t>(
 		    input_vector, offset_vector, result, args.size(), [&](string_t input_string, int32_t offset) {
 			    return SubstringASCII(result, input_string, offset, NumericLimits<int32_t>::Maximum());
 		    });

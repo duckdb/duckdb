@@ -20,19 +20,15 @@ struct SkewnessOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask,
+	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask,
 	                              idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
-			Operation<INPUT_TYPE, STATE, OP>(state, bind_data, input, nullmask, 0);
+			Operation<INPUT_TYPE, STATE, OP>(state, bind_data, input, mask, 0);
 		}
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *data, nullmask_t &nullmask, idx_t idx) {
-		if (nullmask[idx]) {
-			return;
-		}
-
+	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *data, ValidityMask &mask, idx_t idx) {
 		state->n++;
 		state->sum += data[idx];
 		state->sum_sqr += pow(data[idx], 2);
@@ -52,20 +48,25 @@ struct SkewnessOperation {
 	}
 
 	template <class TARGET_TYPE, class STATE>
-	static void Finalize(Vector &result, FunctionData *bind_data, STATE *state, TARGET_TYPE *target,
-	                     nullmask_t &nullmask, idx_t idx) {
-		if (state->n == 0) {
-			nullmask[idx] = true;
+	static void Finalize(Vector &result, FunctionData *bind_data, STATE *state, TARGET_TYPE *target, ValidityMask &mask,
+	                     idx_t idx) {
+		if (state->n <= 2) {
+			mask.SetInvalid(idx);
 			return;
 		}
 		double n = state->n;
 		double temp = 1 / n;
+		double div = (std::sqrt(std::pow(temp * (state->sum_sqr - state->sum * state->sum * temp), 3)));
+		if (div == 0) {
+			mask.SetInvalid(idx);
+			return;
+		}
 		double temp1 = std::sqrt(n * (n - 1)) / (n - 2);
 		target[idx] = temp1 * temp *
 		              (state->sum_cub - 3 * state->sum_sqr * state->sum * temp + 2 * pow(state->sum, 3) * temp * temp) /
-		              (std::sqrt(std::pow(temp * (state->sum_sqr - state->sum * state->sum * temp), 3)));
+		              div;
 		if (!Value::DoubleIsValid(target[idx])) {
-			nullmask[idx] = true;
+			mask.SetInvalid(idx);
 		}
 	}
 

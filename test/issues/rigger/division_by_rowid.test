@@ -1,0 +1,63 @@
+# name: test/issues/rigger/division_by_rowid.test
+# description: SQLancer bug that detected an error in casting of the result of a sum to double
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+CREATE TABLE t0(c0 BOOLEAN);
+
+statement ok
+INSERT INTO t0 VALUES(true);
+
+statement ok
+INSERT INTO t0 VALUES(false);
+
+statement ok
+INSERT INTO t0 VALUES(NULL);
+
+statement ok
+INSERT INTO t0 VALUES(NULL);
+
+statement ok
+INSERT INTO t0 VALUES(NULL);
+
+statement ok
+INSERT INTO t0 VALUES(NULL);
+
+statement ok
+INSERT INTO t0 VALUES(NULL);
+
+statement ok
+INSERT INTO t0 VALUES(NULL);
+
+statement ok
+COMMIT;
+
+query II
+SELECT t0.c0, t0.rowid FROM t0 WHERE ((((t0.c0) ::REAL))/(t0.rowid)) GROUP BY t0.c0, t0.rowid UNION SELECT t0.c0, t0.rowid FROM t0 WHERE (NOT ((((t0.c0) ::FLOAT4))/(t0.rowid))) GROUP BY t0.c0, t0.rowid UNION SELECT t0.c0, t0.rowid FROM t0 WHERE ((((((t0.c0) ::REAL))/(t0.rowid))) IS NULL) GROUP BY t0.c0, t0.rowid ORDER BY 2;
+----
+true	0
+false	1
+NULL	2
+NULL	3
+NULL	4
+NULL	5
+NULL	6
+NULL	7
+
+query II
+SELECT t0.c0, t0.rowid FROM t0 GROUP BY t0.c0, t0.rowid ORDER BY 2;
+----
+true	0
+false	1
+NULL	2
+NULL	3
+NULL	4
+NULL	5
+NULL	6
+NULL	7

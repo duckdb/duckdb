@@ -31,9 +31,9 @@ public:
 	//! Index used by the set operation
 	idx_t setop_index;
 	//! The binder used by the left side of the set operation
-	unique_ptr<Binder> left_binder;
+	shared_ptr<Binder> left_binder;
 	//! The binder used by the right side of the set operation
-	unique_ptr<Binder> right_binder;
+	shared_ptr<Binder> right_binder;
 
 public:
 	idx_t GetRootIndex() override {

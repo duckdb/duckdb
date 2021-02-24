@@ -363,14 +363,14 @@ bool BufferedCSVReader::TryCastVector(Vector &parse_chunk_col, idx_t size, const
 		Vector dummy_result(sql_type);
 		if (options.has_format[LogicalTypeId::DATE] && sql_type == LogicalTypeId::DATE) {
 			// use the date format to cast the chunk
-			UnaryExecutor::Execute<string_t, date_t, true>(parse_chunk_col, dummy_result, size, [&](string_t input) {
+			UnaryExecutor::Execute<string_t, date_t>(parse_chunk_col, dummy_result, size, [&](string_t input) {
 				return options.date_format[LogicalTypeId::DATE].ParseDate(input);
 			});
 		} else if (options.has_format[LogicalTypeId::TIMESTAMP] && sql_type == LogicalTypeId::TIMESTAMP) {
 			// use the date format to cast the chunk
-			UnaryExecutor::Execute<string_t, timestamp_t, true>(
-			    parse_chunk_col, dummy_result, size,
-			    [&](string_t input) { return options.date_format[LogicalTypeId::TIMESTAMP].ParseTimestamp(input); });
+			UnaryExecutor::Execute<string_t, timestamp_t>(parse_chunk_col, dummy_result, size, [&](string_t input) {
+				return options.date_format[LogicalTypeId::TIMESTAMP].ParseTimestamp(input);
+			});
 		} else {
 			// target type is not varchar: perform a cast
 			VectorOperations::Cast(parse_chunk_col, dummy_result, size, true);
@@ -1414,13 +1414,13 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 			try {
 				if (options.has_format[LogicalTypeId::DATE] && sql_types[col_idx].id() == LogicalTypeId::DATE) {
 					// use the date format to cast the chunk
-					UnaryExecutor::Execute<string_t, date_t, true>(
+					UnaryExecutor::Execute<string_t, date_t>(
 					    parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size(),
 					    [&](string_t input) { return options.date_format[LogicalTypeId::DATE].ParseDate(input); });
 				} else if (options.has_format[LogicalTypeId::TIMESTAMP] &&
 				           sql_types[col_idx].id() == LogicalTypeId::TIMESTAMP) {
 					// use the date format to cast the chunk
-					UnaryExecutor::Execute<string_t, timestamp_t, true>(
+					UnaryExecutor::Execute<string_t, timestamp_t>(
 					    parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size(), [&](string_t input) {
 						    return options.date_format[LogicalTypeId::TIMESTAMP].ParseTimestamp(input);
 					    });

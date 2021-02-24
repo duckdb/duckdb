@@ -131,10 +131,14 @@ void TableDataWriter::CheckpointColumn(ColumnData &col_data, idx_t col_idx) {
 		// not persisted yet: scan the segment and write it to disk
 		ColumnScanState state;
 		segment->InitializeScan(state);
+
+		Vector scan_vector(col_data.type);
 		for (idx_t vector_index = 0; vector_index * STANDARD_VECTOR_SIZE < segment->count; vector_index++) {
+			scan_vector.Reference(intermediate);
+
 			idx_t count = MinValue<idx_t>(segment->count - vector_index * STANDARD_VECTOR_SIZE, STANDARD_VECTOR_SIZE);
-			segment->ScanCommitted(state, vector_index, intermediate);
-			AppendData(new_tree, col_idx, intermediate, count);
+			segment->ScanCommitted(state, vector_index, scan_vector);
+			AppendData(new_tree, col_idx, scan_vector, count);
 		}
 		// move to the next segment in the list
 		owned_segment = move(segment->next);

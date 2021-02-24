@@ -24,9 +24,9 @@ struct RegrAvgFunction {
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (state->count == 0) {
-			nullmask.set(0, true);
+			mask.SetInvalid(idx);
 		} else {
 			target[idx] = state->sum / (double)state->count;
 		}
@@ -37,8 +37,8 @@ struct RegrAvgFunction {
 };
 struct RegrAvgXFunction : RegrAvgFunction {
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, FunctionData *bind_data, A_TYPE *x_data, B_TYPE *y_data, nullmask_t &anullmask,
-	                      nullmask_t &bnullmask, idx_t xidx, idx_t yidx) {
+	static void Operation(STATE *state, FunctionData *bind_data, A_TYPE *x_data, B_TYPE *y_data, ValidityMask &amask,
+	                      ValidityMask &bmask, idx_t xidx, idx_t yidx) {
 		state->sum += y_data[yidx];
 		state->count++;
 	}
@@ -46,8 +46,8 @@ struct RegrAvgXFunction : RegrAvgFunction {
 
 struct RegrAvgYFunction : RegrAvgFunction {
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, FunctionData *bind_data, A_TYPE *x_data, B_TYPE *y_data, nullmask_t &anullmask,
-	                      nullmask_t &bnullmask, idx_t xidx, idx_t yidx) {
+	static void Operation(STATE *state, FunctionData *bind_data, A_TYPE *x_data, B_TYPE *y_data, ValidityMask &amask,
+	                      ValidityMask &bmask, idx_t xidx, idx_t yidx) {
 		state->sum += x_data[xidx];
 		state->count++;
 	}

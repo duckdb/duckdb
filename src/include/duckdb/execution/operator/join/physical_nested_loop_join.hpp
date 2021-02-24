@@ -21,7 +21,7 @@ idx_t nested_loop_comparison(ExpressionType op, Vector &left, Vector &right, sel
 class PhysicalNestedLoopJoin : public PhysicalComparisonJoin {
 public:
 	PhysicalNestedLoopJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right,
-	                       vector<JoinCondition> cond, JoinType join_type);
+	                       vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality);
 
 public:
 	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;

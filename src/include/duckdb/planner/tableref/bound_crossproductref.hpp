@@ -20,9 +20,9 @@ public:
 	}
 
 	//! The binder used to bind the LHS of the cross product
-	unique_ptr<Binder> left_binder;
+	shared_ptr<Binder> left_binder;
 	//! The binder used to bind the RHS of the cross product
-	unique_ptr<Binder> right_binder;
+	shared_ptr<Binder> right_binder;
 	//! The left hand side of the cross product
 	unique_ptr<BoundTableRef> left;
 	//! The right hand side of the cross product

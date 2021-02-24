@@ -40,6 +40,8 @@ public:
 	vector<unique_ptr<Expression>> expressions;
 	//! The types returned by this logical operator. Set by calling LogicalOperator::ResolveTypes.
 	vector<LogicalType> types;
+	//! Estimated Cardinality
+	idx_t estimated_cardinality = 0;
 
 public:
 	virtual vector<ColumnBinding> GetColumnBindings() {

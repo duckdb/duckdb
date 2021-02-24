@@ -75,10 +75,10 @@ struct RStatement {
 template <class SRC, class DEST>
 static void vector_to_r(Vector &src_vec, size_t count, void *dest, uint64_t dest_offset, DEST na_val) {
 	auto src_ptr = FlatVector::GetData<SRC>(src_vec);
-	auto &nullmask = FlatVector::Nullmask(src_vec);
+	auto &mask = FlatVector::Validity(src_vec);
 	auto dest_ptr = ((DEST *)dest) + dest_offset;
 	for (size_t row_idx = 0; row_idx < count; row_idx++) {
-		dest_ptr[row_idx] = nullmask[row_idx] ? na_val : src_ptr[row_idx];
+		dest_ptr[row_idx] = !mask.RowIsValid(row_idx) ? na_val : src_ptr[row_idx];
 	}
 }
 
@@ -92,10 +92,11 @@ struct RIntegralType {
 template <class T>
 static void RDecimalCastLoop(Vector &src_vec, size_t count, double *dest_ptr, uint8_t scale) {
 	auto src_ptr = FlatVector::GetData<T>(src_vec);
-	auto &nullmask = FlatVector::Nullmask(src_vec);
+	auto &mask = FlatVector::Validity(src_vec);
 	double division = pow(10, scale);
 	for (size_t row_idx = 0; row_idx < count; row_idx++) {
-		dest_ptr[row_idx] = nullmask[row_idx] ? NA_REAL : RIntegralType::DoubleCast<T>(src_ptr[row_idx]) / division;
+		dest_ptr[row_idx] =
+		    !mask.RowIsValid(row_idx) ? NA_REAL : RIntegralType::DoubleCast<T>(src_ptr[row_idx]) / division;
 	}
 }
 
@@ -180,11 +181,11 @@ struct RBooleanType : public RIntegerType {
 template <class SRC, class DST, class RTYPE>
 static void AppendColumnSegment(SRC *source_data, Vector &result, idx_t count) {
 	auto result_data = FlatVector::GetData<DST>(result);
-	auto &result_mask = FlatVector::Nullmask(result);
+	auto &result_mask = FlatVector::Validity(result);
 	for (idx_t i = 0; i < count; i++) {
 		auto val = source_data[i];
 		if (RTYPE::IsNull(val)) {
-			result_mask[i] = true;
+			result_mask.SetInvalid(i);
 		} else {
 			result_data[i] = RTYPE::Convert(val);
 		}
@@ -193,11 +194,11 @@ static void AppendColumnSegment(SRC *source_data, Vector &result, idx_t count) {
 
 static void AppendStringSegment(SEXP coldata, Vector &result, idx_t row_idx, idx_t count) {
 	auto result_data = FlatVector::GetData<string_t>(result);
-	auto &result_mask = FlatVector::Nullmask(result);
+	auto &result_mask = FlatVector::Validity(result);
 	for (idx_t i = 0; i < count; i++) {
 		SEXP val = STRING_ELT(coldata, row_idx + i);
 		if (val == NA_STRING) {
-			result_mask[i] = true;
+			result_mask.SetInvalid(i);
 		} else {
 			result_data[i] = string_t((char *)CHAR(val));
 		}
@@ -207,12 +208,12 @@ static void AppendStringSegment(SEXP coldata, Vector &result, idx_t row_idx, idx
 static void AppendFactor(SEXP coldata, Vector &result, idx_t row_idx, idx_t count) {
 	auto source_data = INTEGER_POINTER(coldata) + row_idx;
 	auto result_data = FlatVector::GetData<string_t>(result);
-	auto &result_mask = FlatVector::Nullmask(result);
+	auto &result_mask = FlatVector::Validity(result);
 	SEXP factor_levels = GET_LEVELS(coldata);
 	for (idx_t i = 0; i < count; i++) {
 		int val = source_data[i];
 		if (RIntegerType::IsNull(val)) {
-			result_mask[i] = true;
+			result_mask.SetInvalid(i);
 		} else {
 			result_data[i] = string_t(CHAR(STRING_ELT(factor_levels, val - 1)));
 		}
@@ -631,11 +632,11 @@ SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 			case LogicalTypeId::TIMESTAMP: {
 				auto &src_vec = chunk->data[col_idx];
 				auto src_data = FlatVector::GetData<timestamp_t>(src_vec);
-				auto &nullmask = FlatVector::Nullmask(src_vec);
+				auto &mask = FlatVector::Validity(src_vec);
 				double *dest_ptr = ((double *)NUMERIC_POINTER(dest)) + dest_offset;
 				for (size_t row_idx = 0; row_idx < chunk->size(); row_idx++) {
 					dest_ptr[row_idx] =
-					    nullmask[row_idx] ? NA_REAL : (double)Timestamp::GetEpochSeconds(src_data[row_idx]);
+					    !mask.RowIsValid(row_idx) ? NA_REAL : (double)Timestamp::GetEpochSeconds(src_data[row_idx]);
 				}
 
 				// some dresssup for R
@@ -650,10 +651,10 @@ SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 			case LogicalTypeId::DATE: {
 				auto &src_vec = chunk->data[col_idx];
 				auto src_data = FlatVector::GetData<date_t>(src_vec);
-				auto &nullmask = FlatVector::Nullmask(src_vec);
+				auto &mask = FlatVector::Validity(src_vec);
 				double *dest_ptr = ((double *)NUMERIC_POINTER(dest)) + dest_offset;
 				for (size_t row_idx = 0; row_idx < chunk->size(); row_idx++) {
-					dest_ptr[row_idx] = nullmask[row_idx] ? NA_REAL : (double)(src_data[row_idx]);
+					dest_ptr[row_idx] = !mask.RowIsValid(row_idx) ? NA_REAL : (double)(src_data[row_idx]);
 				}
 
 				// some dresssup for R
@@ -664,10 +665,10 @@ SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 			case LogicalTypeId::TIME: {
 				auto &src_vec = chunk->data[col_idx];
 				auto src_data = FlatVector::GetData<dtime_t>(src_vec);
-				auto &nullmask = FlatVector::Nullmask(src_vec);
+				auto &mask = FlatVector::Validity(src_vec);
 				double *dest_ptr = ((double *)NUMERIC_POINTER(dest)) + dest_offset;
 				for (size_t row_idx = 0; row_idx < chunk->size(); row_idx++) {
-					if (nullmask[row_idx]) {
+					if (!mask.RowIsValid(row_idx)) {
 						dest_ptr[row_idx] = NA_REAL;
 					} else {
 						dtime_t n = src_data[row_idx];
@@ -688,10 +689,10 @@ SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 			case LogicalTypeId::HUGEINT: {
 				auto &src_vec = chunk->data[col_idx];
 				auto src_data = FlatVector::GetData<hugeint_t>(src_vec);
-				auto &nullmask = FlatVector::Nullmask(src_vec);
+				auto &mask = FlatVector::Validity(src_vec);
 				double *dest_ptr = ((double *)NUMERIC_POINTER(dest)) + dest_offset;
 				for (size_t row_idx = 0; row_idx < chunk->size(); row_idx++) {
-					if (nullmask[row_idx]) {
+					if (!mask.RowIsValid(row_idx)) {
 						dest_ptr[row_idx] = NA_REAL;
 					} else {
 						Hugeint::TryCast(src_data[row_idx], dest_ptr[row_idx]);
@@ -733,9 +734,9 @@ SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 				break;
 			case LogicalTypeId::VARCHAR: {
 				auto src_ptr = FlatVector::GetData<string_t>(chunk->data[col_idx]);
-				auto &nullmask = FlatVector::Nullmask(chunk->data[col_idx]);
+				auto &mask = FlatVector::Validity(chunk->data[col_idx]);
 				for (size_t row_idx = 0; row_idx < chunk->size(); row_idx++) {
-					if (nullmask[row_idx]) {
+					if (!mask.RowIsValid(row_idx)) {
 						SET_STRING_ELT(dest, dest_offset + row_idx, NA_STRING);
 					} else {
 						SET_STRING_ELT(
@@ -747,9 +748,9 @@ SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 			}
 			case LogicalTypeId::BLOB: {
 				auto src_ptr = FlatVector::GetData<string_t>(chunk->data[col_idx]);
-				auto &nullmask = FlatVector::Nullmask(chunk->data[col_idx]);
+				auto &mask = FlatVector::Validity(chunk->data[col_idx]);
 				for (size_t row_idx = 0; row_idx < chunk->size(); row_idx++) {
-					if (nullmask[row_idx]) {
+					if (!mask.RowIsValid(row_idx)) {
 						SET_VECTOR_ELT(dest, dest_offset + row_idx, Rf_ScalarLogical(NA_LOGICAL));
 					} else {
 						SEXP rawval = NEW_RAW(src_ptr[row_idx].GetSize());
@@ -807,15 +808,14 @@ struct DataFrameScanState : public FunctionOperatorData {
 
 struct DataFrameScanFunction : public TableFunction {
 	DataFrameScanFunction()
-	    : TableFunction("dataframe_scan", {LogicalType::VARCHAR}, dataframe_scan_function, dataframe_scan_bind,
+	    : TableFunction("r_dataframe_scan", {LogicalType::POINTER}, dataframe_scan_function, dataframe_scan_bind,
 	                    dataframe_scan_init, nullptr, nullptr, nullptr, dataframe_scan_cardinality) {};
 
 	static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, vector<Value> &inputs,
 	                                                    unordered_map<string, Value> &named_parameters,
 	                                                    vector<LogicalType> &return_types, vector<string> &names) {
 		RProtector r;
-		// TODO have a better way to pass this pointer
-		SEXP df((SEXP)std::stoull(inputs[0].GetValue<string>(), nullptr, 16));
+		SEXP df((SEXP)inputs[0].GetValue<uintptr_t>());
 
 		auto df_names = r.Protect(GET_NAMES(df));
 		vector<RType> rtypes;
@@ -1027,68 +1027,52 @@ static SEXP duckdb_finalize_connection_R(SEXP connsexp) {
 }
 
 SEXP duckdb_register_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
-
 	if (TYPEOF(connsexp) != EXTPTRSXP) {
 		Rf_error("duckdb_register_R: Need external pointer parameter for connection");
 	}
-
 	Connection *conn = (Connection *)R_ExternalPtrAddr(connsexp);
 	if (!conn) {
 		Rf_error("duckdb_register_R: Invalid connection");
 	}
-
 	if (TYPEOF(namesexp) != STRSXP || Rf_length(namesexp) != 1) {
 		Rf_error("duckdb_register_R: Need single string parameter for name");
 	}
 	auto name = string(CHAR(STRING_ELT(namesexp, 0)));
-
+	if (name.empty()) {
+		Rf_error("duckdb_register_R: name parameter cannot be empty");
+	}
 	if (TYPEOF(valuesexp) != VECSXP || Rf_length(valuesexp) < 1 ||
 	    strcmp("data.frame", CHAR(STRING_ELT(GET_CLASS(valuesexp), 0))) != 0) {
 		Rf_error("duckdb_register_R: Need at least one-column data frame parameter for value");
 	}
-
-	auto key = Rf_install(("_registered_df_" + name).c_str());
-	Rf_setAttrib(connsexp, key, valuesexp);
-
-	// TODO put it into a conn attr that contains a named list to keep from gc!
-	std::ostringstream address;
-	address << (void const *)valuesexp;
-	string pointer_str = address.str();
-
-	// hack alert: put the pointer address into the function call as a string
-	auto res = conn->Query("CREATE OR REPLACE TEMPORARY VIEW \"" + name + "\" AS SELECT * FROM dataframe_scan('" +
-	                       pointer_str + "')");
-	if (!res->success) {
-		Rf_error(res->error.c_str());
+	try {
+		conn->TableFunction("r_dataframe_scan", {Value::POINTER((uintptr_t)valuesexp)})->CreateView(name, true);
+		auto key = Rf_install(("_registered_df_" + name).c_str());
+		Rf_setAttrib(connsexp, key, valuesexp);
+	} catch (exception &e) {
+		Rf_error("duckdb_register_R: Failed to register data frame: %s", e.what());
 	}
 	return R_NilValue;
 }
 
 SEXP duckdb_unregister_R(SEXP connsexp, SEXP namesexp) {
-
 	if (TYPEOF(connsexp) != EXTPTRSXP) {
 		Rf_error("duckdb_unregister_R: Need external pointer parameter for connection");
 	}
-
 	Connection *conn = (Connection *)R_ExternalPtrAddr(connsexp);
 	if (!conn) {
 		Rf_error("duckdb_unregister_R: Invalid connection");
 	}
-
 	if (TYPEOF(namesexp) != STRSXP || Rf_length(namesexp) != 1) {
 		Rf_error("duckdb_unregister_R: Need single string parameter for name");
 	}
 	auto name = string(CHAR(STRING_ELT(namesexp, 0)));
-
 	auto key = Rf_install(("_registered_df_" + name).c_str());
 	Rf_setAttrib(connsexp, key, R_NilValue);
-
 	auto res = conn->Query("DROP VIEW IF EXISTS \"" + name + "\"");
 	if (!res->success) {
 		Rf_error(res->error.c_str());
 	}
-
-	// TODO
 	return R_NilValue;
 }
 

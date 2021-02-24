@@ -1,0 +1,40 @@
+# name: test/sql/insert/null_values.test
+# description: Test inserting many null values
+# group: [insert]
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+statement ok
+INSERT INTO integers SELECT i FROM range(100) tbl(i);
+
+statement ok
+BEGIN TRANSACTION
+
+loop i 0 5
+
+statement ok
+INSERT INTO integers SELECT i FROM range(100) tbl(i);
+
+statement ok
+INSERT INTO integers SELECT NULL FROM range(100) tbl(i);
+
+endloop
+
+query IIIII
+SELECT COUNT(i), SUM(i), MIN(i), MAX(i), COUNT(*) FROM integers
+----
+600	29700	0	99	1100
+
+statement ok
+COMMIT
+
+query IIIII
+SELECT COUNT(i), SUM(i), MIN(i), MAX(i), COUNT(*) FROM integers
+----
+600	29700	0	99	1100
+
+query I
+SELECT SUM(CASE WHEN i IS NULL THEN 1 ELSE 0 END) FROM integers
+----
+500

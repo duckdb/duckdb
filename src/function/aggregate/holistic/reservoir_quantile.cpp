@@ -79,20 +79,17 @@ struct ReservoirQuantileOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask,
+	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask,
 	                              idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
-			Operation<INPUT_TYPE, STATE, OP>(state, bind_data, input, nullmask, 0);
+			Operation<INPUT_TYPE, STATE, OP>(state, bind_data, input, mask, 0);
 		}
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, FunctionData *bind_data_p, INPUT_TYPE *data, nullmask_t &nullmask, idx_t idx) {
+	static void Operation(STATE *state, FunctionData *bind_data_p, INPUT_TYPE *data, ValidityMask &mask, idx_t idx) {
 		auto bind_data = (ReservoirQuantileBindData *)bind_data_p;
 		D_ASSERT(bind_data);
-		if (nullmask[idx]) {
-			return;
-		}
 		if (state->pos == 0) {
 			ResizeState(state, bind_data->sample_size);
 		}
@@ -115,9 +112,9 @@ struct ReservoirQuantileOperation {
 
 	template <class TARGET_TYPE, class STATE>
 	static void Finalize(Vector &result, FunctionData *bind_data_p, STATE *state, TARGET_TYPE *target,
-	                     nullmask_t &nullmask, idx_t idx) {
+	                     ValidityMask &mask, idx_t idx) {
 		if (state->pos == 0) {
-			nullmask[idx] = true;
+			mask.SetInvalid(idx);
 			return;
 		}
 		D_ASSERT(state->v);

@@ -82,10 +82,10 @@ static void TemplatedGenerateKeys(Vector &input, idx_t count, vector<unique_ptr<
 	auto input_data = (T *)idata.data;
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = idata.sel->get_index(i);
-		if ((*idata.nullmask)[idx]) {
-			keys.push_back(nullptr);
-		} else {
+		if (idata.validity.RowIsValid(idx)) {
 			keys.push_back(Key::CreateKey<T>(input_data[idx], is_little_endian));
+		} else {
+			keys.push_back(nullptr);
 		}
 	}
 }
@@ -98,7 +98,7 @@ static void ConcatenateKeys(Vector &input, idx_t count, vector<unique_ptr<Key>> 
 	auto input_data = (T *)idata.data;
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = idata.sel->get_index(i);
-		if ((*idata.nullmask)[idx] || !keys[i]) {
+		if (!idata.validity.RowIsValid(idx) || !keys[i]) {
 			// either this column is NULL, or the previous column is NULL!
 			keys[i] = nullptr;
 		} else {

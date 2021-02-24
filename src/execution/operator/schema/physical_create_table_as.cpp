@@ -7,8 +7,9 @@
 namespace duckdb {
 
 PhysicalCreateTableAs::PhysicalCreateTableAs(LogicalOperator &op, SchemaCatalogEntry *schema,
-                                             unique_ptr<BoundCreateTableInfo> info)
-    : PhysicalSink(PhysicalOperatorType::CREATE_TABLE_AS, op.types), schema(schema), info(move(info)) {
+                                             unique_ptr<BoundCreateTableInfo> info, idx_t estimated_cardinality)
+    : PhysicalSink(PhysicalOperatorType::CREATE_TABLE_AS, op.types, estimated_cardinality), schema(schema),
+      info(move(info)) {
 }
 
 //===--------------------------------------------------------------------===//

@@ -28,7 +28,7 @@
 #include "duckdb/parser/parsed_data/drop_info.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/transaction/transaction.hpp"
-
+#include "duckdb/storage/data_table.hpp"
 #include <algorithm>
 #include <sstream>
 
@@ -93,6 +93,7 @@ CatalogEntry *SchemaCatalogEntry::CreateSequence(ClientContext &context, CreateS
 
 CatalogEntry *SchemaCatalogEntry::CreateTable(ClientContext &context, BoundCreateTableInfo *info) {
 	auto table = make_unique<TableCatalogEntry>(catalog, this, info);
+	table->storage->info->cardinality = table->storage->GetTotalRows();
 	return AddEntry(context, move(table), info->Base().on_conflict, info->dependencies);
 }
 

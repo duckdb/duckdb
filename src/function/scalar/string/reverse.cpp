@@ -30,7 +30,7 @@ static void StrReverseUnicode(const char *input, idx_t n, char *output) {
 }
 
 static void ReverseFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	UnaryExecutor::Execute<string_t, string_t, true>(args.data[0], result, args.size(), [&](string_t input) {
+	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, args.size(), [&](string_t input) {
 		auto input_data = input.GetDataUnsafe();
 		auto input_length = input.GetSize();
 

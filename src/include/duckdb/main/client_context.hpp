@@ -21,6 +21,7 @@
 #include "duckdb/transaction/transaction_context.hpp"
 
 #include <random>
+#include "duckdb/common/progress_bar.hpp"
 
 namespace duckdb {
 class Appender;
@@ -54,6 +55,13 @@ public:
 
 	//! The query executor
 	Executor executor;
+
+	//! The Progress Bar
+	unique_ptr<ProgressBar> progress_bar;
+	//! If the progress bar is enabled or not.
+	bool enable_progress_bar = false;
+	//! The wait time before showing the progress bar
+	int wait_time = 2000;
 
 	unique_ptr<SchemaCatalogEntry> temporary_objects;
 	unordered_map<string, shared_ptr<PreparedStatementData>> prepared_statements;
@@ -121,6 +129,9 @@ public:
 	//! modified in between the prepared statement being bound and the prepared statement being run.
 	DUCKDB_API unique_ptr<QueryResult> Execute(const string &query, shared_ptr<PreparedStatementData> &prepared,
 	                                           vector<Value> &values, bool allow_stream_result = true);
+
+	//! Gets current percentage of the query's progress, returns 0 in case the progress bar is disabled.
+	int GetProgress();
 
 	//! Register function in the temporary schema
 	DUCKDB_API void RegisterFunction(CreateFunctionInfo *info);

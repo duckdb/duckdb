@@ -58,9 +58,9 @@ struct MinMaxBase {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask,
+	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask,
 	                              idx_t count) {
-		D_ASSERT(!nullmask[0]);
+		D_ASSERT(mask.RowIsValid(0));
 		if (!state->isset) {
 			OP::template Assign<INPUT_TYPE, STATE>(state, input[0]);
 			state->isset = true;
@@ -70,7 +70,7 @@ struct MinMaxBase {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
+	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
 		if (!state->isset) {
 			OP::template Assign<INPUT_TYPE, STATE>(state, input[idx]);
 			state->isset = true;
@@ -91,8 +91,8 @@ struct NumericMinMaxBase : public MinMaxBase {
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
-		nullmask[idx] = !state->isset;
+	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
+		mask.Set(idx, state->isset);
 		target[idx] = state->value;
 	}
 };
@@ -167,9 +167,9 @@ struct StringMinMaxBase : public MinMaxBase {
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (!state->isset) {
-			nullmask[idx] = true;
+			mask.SetInvalid(idx);
 		} else {
 			target[idx] = StringVector::AddStringOrBlob(result, state->value);
 		}

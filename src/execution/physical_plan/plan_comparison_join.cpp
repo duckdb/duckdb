@@ -74,7 +74,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 
 	if (op.conditions.empty()) {
 		// no conditions: insert a cross product
-		return make_unique<PhysicalCrossProduct>(op.types, move(left), move(right));
+		return make_unique<PhysicalCrossProduct>(op.types, move(left), move(right), op.estimated_cardinality);
 	}
 
 	bool has_equality = false;
@@ -104,26 +104,28 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 			swap(op.conditions[0].left, op.conditions[0].right);
 			return make_unique<PhysicalIndexJoin>(op, move(right), move(left), move(op.conditions), op.join_type,
 			                                      op.right_projection_map, op.left_projection_map, tbl_scan.column_ids,
-			                                      left_index, false);
+			                                      left_index, false, op.estimated_cardinality);
 		}
 		if (right_index && (context.force_index_join || lhs_cardinality < 0.01 * rhs_cardinality)) {
 			auto &tbl_scan = (PhysicalTableScan &)*right;
 			return make_unique<PhysicalIndexJoin>(op, move(left), move(right), move(op.conditions), op.join_type,
 			                                      op.left_projection_map, op.right_projection_map, tbl_scan.column_ids,
-			                                      right_index, true);
+			                                      right_index, true, op.estimated_cardinality);
 		}
 		// equality join: use hash join
 		plan = make_unique<PhysicalHashJoin>(op, move(left), move(right), move(op.conditions), op.join_type,
-		                                     op.left_projection_map, op.right_projection_map, move(op.delim_types));
+		                                     op.left_projection_map, op.right_projection_map, move(op.delim_types),
+		                                     op.estimated_cardinality);
 	} else {
 		D_ASSERT(!has_null_equal_conditions); // don't support this for anything but hash joins for now
 		if (op.conditions.size() == 1 && !has_inequality) {
 			// range join: use piecewise merge join
-			plan =
-			    make_unique<PhysicalPiecewiseMergeJoin>(op, move(left), move(right), move(op.conditions), op.join_type);
+			plan = make_unique<PhysicalPiecewiseMergeJoin>(op, move(left), move(right), move(op.conditions),
+			                                               op.join_type, op.estimated_cardinality);
 		} else {
 			// inequality join: use nested loop
-			plan = make_unique<PhysicalNestedLoopJoin>(op, move(left), move(right), move(op.conditions), op.join_type);
+			plan = make_unique<PhysicalNestedLoopJoin>(op, move(left), move(right), move(op.conditions), op.join_type,
+			                                           op.estimated_cardinality);
 		}
 	}
 	return plan;

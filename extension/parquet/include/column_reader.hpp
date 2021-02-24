@@ -23,7 +23,7 @@ using parquet::format::FieldRepetitionType;
 using parquet::format::PageHeader;
 using parquet::format::SchemaElement;
 
-typedef nullmask_t parquet_filter_t;
+typedef std::bitset<STANDARD_VECTOR_SIZE> parquet_filter_t;
 
 class ColumnReader {
 

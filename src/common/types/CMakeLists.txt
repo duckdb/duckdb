@@ -18,6 +18,7 @@ add_library_unity(
   string_type.cpp
   timestamp.cpp
   time.cpp
+  validity_mask.cpp
   value.cpp
   vector_buffer.cpp
   vector.cpp

@@ -146,6 +146,8 @@ public:
 	void CommitDropTable();
 	void CommitDropColumn(idx_t index);
 
+	idx_t GetTotalRows();
+
 private:
 	//! Verify constraints with a chunk from the Append containing all columns of the table
 	void VerifyAppendConstraints(TableCatalogEntry &table, DataChunk &chunk);

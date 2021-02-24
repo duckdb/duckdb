@@ -233,6 +233,15 @@ void Executor::Flush(ThreadContext &tcontext) {
 	context.profiler.Flush(tcontext.profiler);
 }
 
+bool Executor::GetPipelinesProgress(int &current_progress) {
+	if (!pipelines.empty()) {
+		return pipelines.back()->GetProgress(current_progress);
+	} else {
+		current_progress = -1;
+		return true;
+	}
+}
+
 unique_ptr<DataChunk> Executor::FetchChunk() {
 	D_ASSERT(physical_plan);
 

@@ -38,7 +38,7 @@ struct ApproxCountDistinctFunctionBase {
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (state->log) {
 			target[idx] = state->log->Count();
 		} else {
@@ -59,33 +59,27 @@ struct ApproxCountDistinctFunctionBase {
 
 struct ApproxCountDistinctFunction : ApproxCountDistinctFunctionBase {
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
+	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
 		if (!state->log) {
 			state->log = new HyperLogLog();
-		}
-		if (nullmask[idx]) {
-			return;
 		}
 		INPUT_TYPE value = input[idx];
 		state->log->Add((uint8_t *)&value, sizeof(value));
 	}
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask,
+	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask,
 	                              idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
-			Operation<INPUT_TYPE, STATE, OP>(state, bind_data, input, nullmask, 0);
+			Operation<INPUT_TYPE, STATE, OP>(state, bind_data, input, mask, 0);
 		}
 	}
 };
 
 struct ApproxCountDistinctFunctionString : ApproxCountDistinctFunctionBase {
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
+	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
 		if (!state->log) {
 			state->log = new HyperLogLog();
-		}
-		if (nullmask[idx]) {
-			return;
 		}
 		auto str = input[idx].GetDataUnsafe();
 		auto str_len = input[idx].GetSize();
@@ -93,10 +87,10 @@ struct ApproxCountDistinctFunctionString : ApproxCountDistinctFunctionBase {
 		state->log->Add((uint8_t *)&str_hash, sizeof(str_hash));
 	}
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask,
+	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask,
 	                              idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
-			Operation<INPUT_TYPE, STATE, OP>(state, bind_data, input, nullmask, 0);
+			Operation<INPUT_TYPE, STATE, OP>(state, bind_data, input, mask, 0);
 		}
 	}
 };

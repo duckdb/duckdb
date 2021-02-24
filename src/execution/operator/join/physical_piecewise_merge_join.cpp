@@ -9,8 +9,9 @@ namespace duckdb {
 
 PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
                                                        unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond,
-                                                       JoinType join_type)
-    : PhysicalComparisonJoin(op, PhysicalOperatorType::PIECEWISE_MERGE_JOIN, move(cond), join_type) {
+                                                       JoinType join_type, idx_t estimated_cardinality)
+    : PhysicalComparisonJoin(op, PhysicalOperatorType::PIECEWISE_MERGE_JOIN, move(cond), join_type,
+                             estimated_cardinality) {
 	// for now we only support one condition!
 	D_ASSERT(conditions.size() == 1);
 	for (auto &cond : conditions) {
@@ -413,7 +414,7 @@ void OrderVector(Vector &vector, idx_t count, MergeOrder &order) {
 	idx_t not_null_count = 0;
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);
-		if (!(*vdata.nullmask)[idx]) {
+		if (vdata.validity.RowIsValid(idx)) {
 			not_null.set_index(not_null_count++, i);
 		}
 	}

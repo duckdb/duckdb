@@ -25,8 +25,8 @@ public:
 
 // this implements a sorted window functions variant
 PhysicalUnnest::PhysicalUnnest(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
-                               PhysicalOperatorType type)
-    : PhysicalOperator(type, move(types)), select_list(std::move(select_list)) {
+                               idx_t estimated_cardinality, PhysicalOperatorType type)
+    : PhysicalOperator(type, move(types), estimated_cardinality), select_list(std::move(select_list)) {
 
 	D_ASSERT(this->select_list.size() > 0);
 }
@@ -68,8 +68,8 @@ void PhysicalUnnest::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 		}
 
 		// whether we have UNNEST(*expression returning list that evaluated to NULL*)
-		bool unnest_null =
-		    (*state->list_vector_data.nullmask)[state->list_vector_data.sel->get_index(state->parent_position)];
+		bool unnest_null = !state->list_vector_data.validity.RowIsValid(
+		    state->list_vector_data.sel->get_index(state->parent_position));
 
 		// need to figure out how many times we need to repeat for current row
 		if (state->list_length < 0) {

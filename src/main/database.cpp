@@ -168,14 +168,13 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 	} else {
 		config.file_system = make_unique<VirtualFileSystem>();
 	}
-	if (config.maximum_memory == (idx_t)-1) {
+	if (new_config.maximum_memory == (idx_t)-1) {
 		config.maximum_memory = config.file_system->GetAvailableMemory() * 8 / 10;
 	} else {
 		config.maximum_memory = new_config.maximum_memory;
 	}
 	config.checkpoint_wal_size = new_config.checkpoint_wal_size;
 	config.use_direct_io = new_config.use_direct_io;
-	config.maximum_memory = new_config.maximum_memory;
 	config.temporary_directory = new_config.temporary_directory;
 	config.collation = new_config.collation;
 	config.default_order_type = new_config.default_order_type;

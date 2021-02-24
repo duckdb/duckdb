@@ -10,7 +10,15 @@
 
 #pragma once
 
-#include "duckdb/common/winapi.hpp"
+#ifdef _WIN32
+#ifdef DUCKDB_BUILD_LIBRARY
+#define DUCKDB_API __declspec(dllexport)
+#else
+#define DUCKDB_API __declspec(dllimport)
+#endif
+#else
+#define DUCKDB_API
+#endif
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -49,7 +57,9 @@ typedef enum DUCKDB_TYPE {
 	// duckdb_hugeint
 	DUCKDB_TYPE_HUGEINT,
 	// const char*
-	DUCKDB_TYPE_VARCHAR
+	DUCKDB_TYPE_VARCHAR,
+	// duckdb_blob
+	DUCKDB_TYPE_BLOB
 } duckdb_type;
 
 typedef struct {
@@ -83,6 +93,11 @@ typedef struct {
 
 typedef struct {
 	void *data;
+	idx_t size;
+} duckdb_blob;
+
+typedef struct {
+	void *data;
 	bool *nullmask;
 	duckdb_type type;
 	char *name;
@@ -109,6 +124,7 @@ typedef struct {
 typedef void *duckdb_database;
 typedef void *duckdb_connection;
 typedef void *duckdb_prepared_statement;
+typedef void *duckdb_appender;
 
 typedef enum { DuckDBSuccess = 0, DuckDBError = 1 } duckdb_state;
 
@@ -146,12 +162,23 @@ DUCKDB_API int16_t duckdb_value_int16(duckdb_result *result, idx_t col, idx_t ro
 DUCKDB_API int32_t duckdb_value_int32(duckdb_result *result, idx_t col, idx_t row);
 //! Converts the specified value to an int64_t. Returns 0 on failure or NULL.
 DUCKDB_API int64_t duckdb_value_int64(duckdb_result *result, idx_t col, idx_t row);
+//! Converts the specified value to an uint8_t. Returns 0 on failure or NULL.
+DUCKDB_API uint8_t duckdb_value_uint8(duckdb_result *result, idx_t col, idx_t row);
+//! Converts the specified value to an uint16_t. Returns 0 on failure or NULL.
+DUCKDB_API uint16_t duckdb_value_uint16(duckdb_result *result, idx_t col, idx_t row);
+//! Converts the specified value to an uint64_t. Returns 0 on failure or NULL.
+DUCKDB_API uint32_t duckdb_value_uint32(duckdb_result *result, idx_t col, idx_t row);
+//! Converts the specified value to an uint64_t. Returns 0 on failure or NULL.
+DUCKDB_API uint64_t duckdb_value_uint64(duckdb_result *result, idx_t col, idx_t row);
 //! Converts the specified value to a float. Returns 0.0 on failure or NULL.
 DUCKDB_API float duckdb_value_float(duckdb_result *result, idx_t col, idx_t row);
 //! Converts the specified value to a double. Returns 0.0 on failure or NULL.
 DUCKDB_API double duckdb_value_double(duckdb_result *result, idx_t col, idx_t row);
 //! Converts the specified value to a string. Returns nullptr on failure or NULL. The result must be freed with free.
 DUCKDB_API char *duckdb_value_varchar(duckdb_result *result, idx_t col, idx_t row);
+//! Fetches a blob from a result set column. Returns a blob with blob.data set to nullptr on failure or NULL. The
+//! resulting "blob.data" must be freed with free.
+DUCKDB_API duckdb_blob duckdb_value_blob(duckdb_result *result, idx_t col, idx_t row);
 
 // Prepared Statements
 
@@ -167,10 +194,18 @@ DUCKDB_API duckdb_state duckdb_bind_int8(duckdb_prepared_statement prepared_stat
 DUCKDB_API duckdb_state duckdb_bind_int16(duckdb_prepared_statement prepared_statement, idx_t param_idx, int16_t val);
 DUCKDB_API duckdb_state duckdb_bind_int32(duckdb_prepared_statement prepared_statement, idx_t param_idx, int32_t val);
 DUCKDB_API duckdb_state duckdb_bind_int64(duckdb_prepared_statement prepared_statement, idx_t param_idx, int64_t val);
+DUCKDB_API duckdb_state duckdb_bind_uint8(duckdb_prepared_statement prepared_statement, idx_t param_idx, int8_t val);
+DUCKDB_API duckdb_state duckdb_bind_uint16(duckdb_prepared_statement prepared_statement, idx_t param_idx, int16_t val);
+DUCKDB_API duckdb_state duckdb_bind_uint32(duckdb_prepared_statement prepared_statement, idx_t param_idx, int32_t val);
+DUCKDB_API duckdb_state duckdb_bind_uint64(duckdb_prepared_statement prepared_statement, idx_t param_idx, int64_t val);
 DUCKDB_API duckdb_state duckdb_bind_float(duckdb_prepared_statement prepared_statement, idx_t param_idx, float val);
 DUCKDB_API duckdb_state duckdb_bind_double(duckdb_prepared_statement prepared_statement, idx_t param_idx, double val);
 DUCKDB_API duckdb_state duckdb_bind_varchar(duckdb_prepared_statement prepared_statement, idx_t param_idx,
                                             const char *val);
+DUCKDB_API duckdb_state duckdb_bind_varchar_length(duckdb_prepared_statement prepared_statement, idx_t param_idx,
+                                                   const char *val, idx_t length);
+DUCKDB_API duckdb_state duckdb_bind_blob(duckdb_prepared_statement prepared_statement, idx_t param_idx,
+                                         const void *data, idx_t length);
 DUCKDB_API duckdb_state duckdb_bind_null(duckdb_prepared_statement prepared_statement, idx_t param_idx);
 
 //! Executes the prepared statements with currently bound parameters
@@ -179,6 +214,37 @@ DUCKDB_API duckdb_state duckdb_execute_prepared(duckdb_prepared_statement prepar
 
 //! Destroys the specified prepared statement descriptor
 DUCKDB_API void duckdb_destroy_prepare(duckdb_prepared_statement *prepared_statement);
+
+DUCKDB_API duckdb_state duckdb_appender_create(duckdb_connection connection, const char *schema, const char *table,
+                                               duckdb_appender *out_appender);
+
+DUCKDB_API duckdb_state duckdb_appender_begin_row(duckdb_appender appender);
+DUCKDB_API duckdb_state duckdb_appender_end_row(duckdb_appender appender);
+
+DUCKDB_API duckdb_state duckdb_append_bool(duckdb_appender appender, bool value);
+
+DUCKDB_API duckdb_state duckdb_append_int8(duckdb_appender appender, int8_t value);
+DUCKDB_API duckdb_state duckdb_append_int16(duckdb_appender appender, int16_t value);
+DUCKDB_API duckdb_state duckdb_append_int32(duckdb_appender appender, int32_t value);
+DUCKDB_API duckdb_state duckdb_append_int64(duckdb_appender appender, int64_t value);
+
+DUCKDB_API duckdb_state duckdb_append_uint8(duckdb_appender appender, uint8_t value);
+DUCKDB_API duckdb_state duckdb_append_uint16(duckdb_appender appender, uint16_t value);
+DUCKDB_API duckdb_state duckdb_append_uint32(duckdb_appender appender, uint32_t value);
+DUCKDB_API duckdb_state duckdb_append_uint64(duckdb_appender appender, uint64_t value);
+
+DUCKDB_API duckdb_state duckdb_append_float(duckdb_appender appender, float value);
+DUCKDB_API duckdb_state duckdb_append_double(duckdb_appender appender, double value);
+
+DUCKDB_API duckdb_state duckdb_append_varchar(duckdb_appender appender, const char *val);
+DUCKDB_API duckdb_state duckdb_append_varchar_length(duckdb_appender appender, const char *val, idx_t length);
+DUCKDB_API duckdb_state duckdb_append_blob(duckdb_appender appender, const void *data, idx_t length);
+DUCKDB_API duckdb_state duckdb_append_null(duckdb_appender appender);
+
+DUCKDB_API duckdb_state duckdb_appender_flush(duckdb_appender appender);
+DUCKDB_API duckdb_state duckdb_appender_close(duckdb_appender appender);
+
+DUCKDB_API duckdb_state duckdb_appender_destroy(duckdb_appender *appender);
 
 #ifdef __cplusplus
 }

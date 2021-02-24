@@ -13,8 +13,9 @@ public:
 	ExpressionExecutor executor;
 };
 
-PhysicalFilter::PhysicalFilter(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list)
-    : PhysicalOperator(PhysicalOperatorType::FILTER, move(types)) {
+PhysicalFilter::PhysicalFilter(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
+                               idx_t estimated_cardinality)
+    : PhysicalOperator(PhysicalOperatorType::FILTER, move(types), estimated_cardinality) {
 	D_ASSERT(select_list.size() > 0);
 	if (select_list.size() > 1) {
 		// create a big AND out of the expressions

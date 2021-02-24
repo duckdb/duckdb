@@ -1,0 +1,44 @@
+# name: test/sql/cast/test_exponent_in_cast.test
+# description: Test exponents in cast
+# group: [cast]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+SELECT CAST('e1' AS INTEGER);
+
+statement error
+SELECT CAST('  e1' AS INTEGER);
+
+statement error
+SELECT CAST('  E1' AS INTEGER);
+
+statement error
+SELECT CAST('e1' AS DOUBLE);
+
+statement error
+SELECT CAST('  e1' AS DOUBLE);
+
+statement error
+SELECT CAST('  E1' AS DOUBLE);
+
+query I
+SELECT CAST('1e1' AS INTEGER);
+----
+10
+
+query I
+SELECT CAST('  1e1' AS INTEGER);
+----
+10
+
+query I
+SELECT CAST('1e1' AS DOUBLE);
+----
+10.0
+
+query I
+SELECT CAST('   1e1' AS DOUBLE);
+----
+10.0

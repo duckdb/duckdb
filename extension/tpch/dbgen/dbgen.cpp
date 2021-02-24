@@ -548,8 +548,8 @@ template <class T> static void CreateTPCHTable(ClientContext &context, string sc
 		info->columns.push_back(ColumnDefinition(T::Columns[i], T::Types[i]));
 		info->constraints.push_back(make_unique<NotNullConstraint>(i));
 	}
-	Binder binder(context);
-	auto bound_info = binder.BindCreateTableInfo(move(info));
+	auto binder = Binder::CreateBinder(context);
+	auto bound_info = binder->BindCreateTableInfo(move(info));
 	auto &catalog = Catalog::GetCatalog(context);
 
 	catalog.CreateTable(context, bound_info.get());

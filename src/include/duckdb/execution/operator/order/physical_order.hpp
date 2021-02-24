@@ -22,7 +22,7 @@ struct ContinuousBlock;
 //! the data but only add a selection vector.
 class PhysicalOrder : public PhysicalSink {
 public:
-	PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode> orders);
+	PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode> orders, idx_t estimated_cardinality);
 
 	//! Input data
 	vector<BoundOrderByNode> orders;
