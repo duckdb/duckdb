@@ -1,10 +1,11 @@
 #include "duckdb/execution/operator/order/physical_order.hpp"
 
-#include "duckdb/common/blockquicksort.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
+
+#include "blockquicksort_wrapper.hpp"
 
 namespace duckdb {
 
