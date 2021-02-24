@@ -24,7 +24,8 @@ add_library_unity(
   left_right.cpp
   contains.cpp
   string_split.cpp
-  mismatches.cpp)
+  mismatches.cpp
+  levenshtein.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_func_string>
     PARENT_SCOPE)

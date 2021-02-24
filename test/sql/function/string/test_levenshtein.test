@@ -1,0 +1,22 @@
+# name: test/sql/function/string/test_levenshtein.test
+# description: Test levenshtein function
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE strings(s VARCHAR)
+
+statement ok
+INSERT INTO strings VALUES ('hello'), ('hallo'), ('aloha'), ('hoi'), ('world')
+
+# normal length
+query I
+SELECT levenshtein(s, 'hallo') FROM strings ORDER BY s
+----
+3
+0
+1
+3
+3
