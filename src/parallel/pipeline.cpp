@@ -40,7 +40,8 @@ bool Pipeline::GetProgress(ClientContext &context, PhysicalOperator *op, int &cu
 	case PhysicalOperatorType::TABLE_SCAN: {
 		auto &get = (PhysicalTableScan &)*op;
 		if (get.function.table_scan_progress) {
-			return get.function.table_scan_progress(context, get.bind_data.get());
+			current_percentage = get.function.table_scan_progress(context, get.bind_data.get());
+			return true;
 		}
 		//! If the table_scan_progress is not implemented it means we don't support this function yet in the progress
 		//! bar
