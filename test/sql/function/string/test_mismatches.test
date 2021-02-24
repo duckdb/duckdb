@@ -9,9 +9,9 @@ statement ok
 CREATE TABLE strings(s VARCHAR)
 
 statement ok
-INSERT INTO strings VALUES ('hello'), ('hallo'), ('aloha'), ('hoi'), ('world'), (NULL)
+INSERT INTO strings VALUES ('hello'), ('hallo'), ('aloha'), ('world'), (NULL)
 
-# normal length
+# normal counts
 query I
 SELECT mismatches(s, 'hallo') FROM strings ORDER BY s
 ----
@@ -19,6 +19,74 @@ NULL
 5
 0
 1
--1
 4
 
+query I
+SELECT mismatches('hallo', s) FROM strings ORDER BY s
+----
+NULL
+5
+0
+1
+4
+
+
+
+
+# special cases
+query I
+SELECT mismatches(NULL, s) FROM strings ORDER BY s
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+
+query I
+SELECT mismatches(s, NULL) FROM strings ORDER BY s
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+
+
+
+query I
+SELECT mismatches(NULL, 'hallo')
+----
+NULL
+
+query I
+SELECT mismatches('hello', NULL)
+----
+NULL
+
+query I
+SELECT mismatches(NULL, NULL)
+----
+NULL
+
+# incorrect usages
+statement error
+SELECT mismatches('hoi', 'hallo')
+
+statement error
+SELECT mismatches('hallo', 'hoi')
+
+statement error
+SELECT mismatches('', 'hallo')
+
+statement error
+SELECT mismatches('hi', '')
+
+statement error
+SELECT mismatches('', '')
+
+statement error
+SELECT mismatches('', s) FROM strings ORDER BY s
+
+statement error
+SELECT mismatches(s, '') FROM strings ORDER BY s

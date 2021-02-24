@@ -7,23 +7,22 @@
 namespace duckdb {
 
 static int64_t MismatchesScalarFunction(Vector &result, const string_t str, string_t tgt) {
-	int64_t num_characters_str = LengthFun::Length<string_t, int64_t>(str);
-	int64_t num_characters_tgt = LengthFun::Length<string_t, int64_t>(tgt);
-	if (num_characters_str != num_characters_tgt) {
-		return -1;  // Expected error code: both strings must be of equal length
-	}
-	if (num_characters_str < 1) {
-		return -1; // too shorts
-	}
+	idx_t str_len = str.GetSize();
+	idx_t tgt_len = tgt.GetSize();
+ 
+	if (str_len != tgt_len) throw InvalidInputException("Mismatch Function: Strings must be of equal length!");
+	if (str_len < 1) throw InvalidInputException("Mismatch Function: Strings are too short!");
 
-	int64_t mismatches = 0;
-
-	for (int64_t idx = 0; idx < (int64_t)str.GetSize(); ++idx) {
-		if (str.GetString()[idx] != tgt.GetString()[idx]) {
+	idx_t mismatches = 0;
+	auto str_str = str.GetDataUnsafe();
+	auto tgt_str = tgt.GetDataUnsafe();
+	
+	for (idx_t idx = 0; idx < str_len; ++idx) {
+		if (str_str[idx] != tgt_str[idx]) {
 			mismatches++;
 		}
 	}
-	return mismatches;
+	return (int64_t)mismatches;
 }
 
 static void MismatchesFunction(DataChunk &args, ExpressionState &state, Vector &result) {

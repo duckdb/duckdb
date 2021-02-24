@@ -10,44 +10,43 @@ namespace duckdb {
 // See: https://www.kdnuggets.com/2020/10/optimizing-levenshtein-distance-measuring-text-similarity.html
 // And: Iterative 2-row algorithm: https://en.wikipedia.org/wiki/Levenshtein_distance
 // Note: A first implementation using the array algorithm version resulted in an error raised by duckdb (too muach memory usage) 
-static int levenshtein2(const string& txt, const string& tgt) 
+static idx_t levenshtein2(const string_t& txt, const string_t& tgt) 
     {
-    if (txt.size() < 1 || tgt.size() < 1) 
-    {
-        return -1; // too short
-    }
-	if (txt.size() > 254 || tgt.size() > 254) 
-    {
-        return -2; // too long
-    }
+    auto txt_len = txt.GetSize();
+    auto tgt_len = tgt.GetSize();
 
-    std::vector<int> distances(txt.size() + 1, 0);
+    if (txt_len < 1 ) throw InvalidInputException("Levenshtein Function: 1st argument too short");
+    if (tgt_len < 1 ) throw InvalidInputException("Levenshtein Function: 2nd argument too short");
 
-    for (int pos = 1; pos <= (int)txt.size(); pos++) 
+    std::vector<idx_t> distances(txt_len + 1, 0);
+    auto txt_str = txt.GetDataUnsafe();
+    auto tgt_str = tgt.GetDataUnsafe();
+
+    for (idx_t pos = 1; pos <= txt_len; pos++) 
     {
         distances[pos] = std::min(distances[pos - 1], pos - 1);
-        if (txt[pos - 1] != tgt[0]) 
+        if (txt_str[pos - 1] != tgt_str[0]) 
         {
             distances[pos] += 1;
         } 
     }
 
-    int dist = 0;
-	int tempDist = 0;
+    idx_t dist = 0;
+	idx_t tempDist = 0;
 
-    for (int pos2 = 1; pos2 < (int)tgt.size(); pos2++) 
+    for (idx_t pos2 = 1; pos2 < tgt_len; pos2++) 
     {
         dist = pos2 + 1;
-        for (int pos1 = 1; pos1 <= (int)txt.size(); pos1++) 
+        for (idx_t pos1 = 1; pos1 <= txt_len; pos1++) 
         {
             tempDist = std::min(dist, std::min(distances[pos1 - 1], distances[pos1]) );
-            if (txt[pos1 - 1] != tgt[pos2]) {
+            if (txt_str[pos1 - 1] != tgt_str[pos2]) {
                 tempDist += 1;
             } 
             distances[pos1 - 1] = dist;
             dist = tempDist;
         }
-        distances[txt.size()] = dist;
+        distances[txt_len] = dist;
     }
 
     return dist;
@@ -55,12 +54,7 @@ static int levenshtein2(const string& txt, const string& tgt)
 
 
 static int64_t LevenshteinScalarFunction(Vector &result, const string_t str, string_t tgt) {
-	//const string atgt = utility::conversions::to_utf8string(tgt) ;
-	const string atgt = tgt.GetString();
-	//const string astr = utility::conversions::to_utf8string(str);
-	const string astr = str.GetString();
-	int64_t dist = (int64_t)levenshtein2(astr, atgt);
-	return dist;
+	return (int64_t)levenshtein2(str, tgt);
 }
 
 static void LevenshteinFunction(DataChunk &args, ExpressionState &state, Vector &result) {
