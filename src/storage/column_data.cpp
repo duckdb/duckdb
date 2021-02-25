@@ -73,8 +73,9 @@ void ColumnData::IndexScan(ColumnScanState &state, Vector &result) {
 		state.current->InitializeScan(state);
 		state.initialized = true;
 	}
-	// perform a scan of this segment
-	state.current->IndexScan(state, result);
+	throw NotImplementedException("FIXME: index scan");
+	// // perform a scan of this segment
+	// state.current->IndexScan(state, result);
 	// move over to the next vector
 	state.Next();
 }
@@ -108,19 +109,12 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 	}
 	auto segment = (ColumnSegment *)data.GetLastSegment();
 	if (segment->segment_type == ColumnSegmentType::PERSISTENT) {
-		// cannot append to persistent segment, convert the last segment into a transient segment
-		auto transient = make_unique<TransientSegment>((PersistentSegment &)*segment);
-		state.current = (TransientSegment *)transient.get();
-		data.nodes.back().node = (SegmentBase *)transient.get();
-		if (data.root_node.get() == segment) {
-			data.root_node = move(transient);
-		} else {
-			D_ASSERT(data.nodes.size() >= 2);
-			data.nodes[data.nodes.size() - 2].node->next = move(transient);
-		}
-	} else {
-		state.current = (TransientSegment *)segment;
+		// cannot append to persistent segment
+		// append a new transient segment
+		AppendTransientSegment(persistent_rows);
+		segment = (ColumnSegment *)data.GetLastSegment();
 	}
+	state.current = (TransientSegment *)segment;
 	D_ASSERT(state.current->segment_type == ColumnSegmentType::TRANSIENT);
 	state.current->InitializeAppend(state);
 }
@@ -171,12 +165,13 @@ void ColumnData::RevertAppend(row_t start_row) {
 }
 
 void ColumnData::Update(Transaction &transaction, Vector &updates, Vector &row_ids, idx_t count) {
-	// first find the segment that the update belongs to
-	idx_t first_id = FlatVector::GetValue<row_t>(row_ids, 0);
-	auto segment = (ColumnSegment *)data.GetSegment(first_id);
-	// now perform the update within the segment
-	segment->Update(*this, transaction, updates, FlatVector::GetData<row_t>(row_ids), count);
-	statistics->Merge(*segment->stats.statistics);
+	throw NotImplementedException("FIXME: update");
+	// // first find the segment that the update belongs to
+	// idx_t first_id = FlatVector::GetValue<row_t>(row_ids, 0);
+	// auto segment = (ColumnSegment *)data.GetSegment(first_id);
+	// // now perform the update within the segment
+	// segment->Update(*this, transaction, updates, FlatVector::GetData<row_t>(row_ids), count);
+	// statistics->Merge(*segment->stats.statistics);
 }
 
 void ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {

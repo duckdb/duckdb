@@ -50,13 +50,9 @@ public:
 	virtual void InitializeScan(ColumnScanState &state) = 0;
 	//! Scan one vector from this segment
 	virtual void Scan(Transaction &transaction, ColumnScanState &state, idx_t vector_index, Vector &result) = 0;
-	//! Scan one vector of committed data from this segment
-	virtual void ScanCommitted(ColumnScanState &state, idx_t vector_index, Vector &result) = 0;
 	//! Scan the next vector from the column and apply a selection vector to filter the data
 	virtual void FilterScan(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
 	                        idx_t &approved_tuple_count) = 0;
-	//! Scan one vector from this segment, throwing an exception if there are any outstanding updates
-	virtual void IndexScan(ColumnScanState &state, Vector &result) = 0;
 	//! Executes filter in this column
 	virtual void Select(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
 	                    idx_t &approved_tuple_count, vector<TableFilter> &table_filter) = 0;
@@ -65,10 +61,6 @@ public:
 	//! Fetch a value of the specific row id and append it to the result
 	virtual void FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result,
 	                      idx_t result_idx) = 0;
-
-	//! Perform an update within the segment
-	virtual void Update(ColumnData &column_data, Transaction &transaction, Vector &updates, row_t *ids,
-	                    idx_t count) = 0;
 };
 
 } // namespace duckdb

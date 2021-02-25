@@ -51,8 +51,9 @@ void CleanupState::CleanupEntry(UndoFlags type, data_ptr_t data) {
 void CleanupState::CleanupUpdate(UpdateInfo *info) {
 	// remove the update info from the update chain
 	// first obtain an exclusive lock on the segment
-	auto lock = info->segment->lock.GetExclusiveLock();
-	info->segment->CleanupUpdate(info);
+	throw NotImplementedException("FIXME: clean up update");
+	// auto lock = info->segment->lock.GetExclusiveLock();
+	// info->segment->CleanupUpdate(info);
 }
 
 void CleanupState::CleanupDelete(DeleteInfo *info) {

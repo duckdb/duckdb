@@ -42,25 +42,18 @@ public:
 	idx_t tuple_count;
 	//! The starting row of this segment
 	idx_t row_start;
-	//! Version chains for each of the vectors
-	unique_ptr<UpdateInfo *[]> versions;
-	//! The lock for the uncompressed segment
-	StorageLock lock;
 
 public:
 	virtual void InitializeScan(ColumnScanState &state) {
 	}
 	//! Fetch the vector at index "vector_index" from the uncompressed segment, storing it in the result vector
-	void Scan(Transaction &transaction, ColumnScanState &state, idx_t vector_index, Vector &result,
-	          bool get_lock = true);
-	void ScanCommitted(ColumnScanState &state, idx_t vector_index, Vector &result);
+	void Scan(Transaction &transaction, ColumnScanState &state, idx_t vector_index, Vector &result);
 
 	//! Scan the next vector from the column and apply a selection vector to filter the data
 	void FilterScan(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
 	                idx_t &approved_tuple_count);
 	//! Fetch the vector at index "vector_index" from the uncompressed segment, throwing an exception if there are any
 	//! outstanding updates
-	void IndexScan(ColumnScanState &state, idx_t vector_index, Vector &result);
 	static void FilterSelection(SelectionVector &sel, Vector &result, const TableFilter &filter,
 	                            idx_t &approved_tuple_count, ValidityMask &mask);
 	//! Executes the filters directly in the table's data
@@ -77,21 +70,6 @@ public:
 	//! full.
 	virtual idx_t Append(SegmentStatistics &stats, Vector &data, idx_t offset, idx_t count) = 0;
 
-	//! Update a set of row identifiers to the specified set of updated values
-	void Update(ColumnData &data, SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids,
-	            idx_t count, row_t offset);
-
-	//! Rollback a previous update
-	virtual void RollbackUpdate(UpdateInfo *info) = 0;
-	//! Cleanup an update, removing it from the version chain. This should only be called if an exclusive lock is held
-	//! on the segment
-	void CleanupUpdate(UpdateInfo *info);
-
-	//! Convert a persistently backed uncompressed segment (i.e. one where block_id refers to an on-disk block) to a
-	//! temporary in-memory one
-	virtual void ToTemporary();
-	void ToTemporaryInternal();
-
 	//! Get the amount of tuples in a vector
 	idx_t GetVectorCount(idx_t vector_index) {
 		D_ASSERT(vector_index < max_vector_count);
@@ -102,8 +80,6 @@ public:
 	virtual void Verify(Transaction &transaction);
 
 protected:
-	virtual void Update(ColumnData &data, SegmentStatistics &stats, Transaction &transaction, Vector &update,
-	                    row_t *ids, idx_t count, idx_t vector_index, idx_t vector_offset, UpdateInfo *node) = 0;
 	//! Executes the filters directly in the table's data
 	virtual void Select(ColumnScanState &state, Vector &result, SelectionVector &sel, idx_t &approved_tuple_count,
 	                    vector<TableFilter> &table_filter) = 0;
@@ -112,13 +88,6 @@ protected:
 	                                 idx_t &approved_tuple_count) = 0;
 	//! Fetch base table data
 	virtual void FetchBaseData(ColumnScanState &state, idx_t vector_index, Vector &result) = 0;
-	//! Fetch update data from an UpdateInfo version
-	virtual void FetchUpdateData(ColumnScanState &state, transaction_t start_time, transaction_t transaction_id,
-	                             UpdateInfo *version, Vector &result) = 0;
-
-	//! Create a new update info for the specified transaction reflecting an update of the specified rows
-	UpdateInfo *CreateUpdateInfo(ColumnData &data, Transaction &transaction, row_t *ids, idx_t count,
-	                             idx_t vector_index, idx_t vector_offset, idx_t type_size);
 };
 
 } // namespace duckdb

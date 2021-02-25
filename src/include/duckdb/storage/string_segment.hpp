@@ -40,15 +40,6 @@ struct string_location_t {
 	int32_t offset;
 };
 
-struct StringUpdateInfo {
-	sel_t count;
-	sel_t ids[STANDARD_VECTOR_SIZE];
-	block_id_t block_ids[STANDARD_VECTOR_SIZE];
-	int32_t offsets[STANDARD_VECTOR_SIZE];
-};
-
-typedef unique_ptr<StringUpdateInfo> string_update_info_t;
-
 class StringSegment : public UncompressedSegment {
 public:
 	StringSegment(DatabaseInstance &db, idx_t row_start, block_id_t block_id = INVALID_BLOCK);
@@ -57,8 +48,6 @@ public:
 	//! The string block holding strings that do not fit in the main block
 	//! FIXME: this should be replaced by a heap that also allows freeing of unused strings
 	unique_ptr<StringBlock> head;
-	//! Blocks that hold string updates (if any)
-	unique_ptr<string_update_info_t[]> string_updates;
 	//! Overflow string writer (if any), if not set overflow strings will be written to memory blocks
 	unique_ptr<OverflowStringWriter> overflow_writer;
 	//! Map of block id to string block
@@ -76,21 +65,11 @@ public:
 	//! full.
 	idx_t Append(SegmentStatistics &stats, Vector &data, idx_t offset, idx_t count) override;
 
-	//! Rollback a previous update
-	void RollbackUpdate(UpdateInfo *info) override;
-
-	void ToTemporary() override;
-
 protected:
-	void Update(ColumnData &column_data, SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids,
-	            idx_t count, idx_t vector_index, idx_t vector_offset, UpdateInfo *node) override;
-
 	void Select(ColumnScanState &state, Vector &result, SelectionVector &sel, idx_t &approved_tuple_count,
 	            vector<TableFilter> &table_filter) override;
 
 	void FetchBaseData(ColumnScanState &state, idx_t vector_index, Vector &result) override;
-	void FetchUpdateData(ColumnScanState &state, transaction_t start_time, transaction_t transaction_id,
-	                     UpdateInfo *versions, Vector &result) override;
 
 	void FilterFetchBaseData(ColumnScanState &state, Vector &result, SelectionVector &sel,
 	                         idx_t &approved_tuple_count) override;
@@ -123,14 +102,6 @@ private:
 
 	//! Expand the string segment, adding an additional maximum vector to the segment
 	void ExpandStringSegment(data_ptr_t baseptr);
-
-	string_update_info_t CreateStringUpdate(SegmentStatistics &stats, Vector &update, row_t *ids, idx_t count,
-	                                        idx_t vector_offset);
-	string_update_info_t MergeStringUpdate(SegmentStatistics &stats, Vector &update, row_t *ids, idx_t count,
-	                                       idx_t vector_offset, StringUpdateInfo &update_info);
-
-	void MergeUpdateInfo(UpdateInfo *node, row_t *ids, idx_t update_count, idx_t vector_offset,
-	                     string_location_t string_locations[], ValidityMask &base_mask);
 
 	//! The amount of bytes remaining to store in the block
 	idx_t RemainingSpace(BufferHandle &handle);

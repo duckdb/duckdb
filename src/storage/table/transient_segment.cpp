@@ -19,17 +19,6 @@ TransientSegment::TransientSegment(DatabaseInstance &db, const LogicalType &type
 	}
 }
 
-TransientSegment::TransientSegment(PersistentSegment &segment)
-    : ColumnSegment(segment.type, ColumnSegmentType::TRANSIENT, segment.start), db(segment.db) {
-	if (segment.block_id == segment.data->block->BlockId()) {
-		segment.data->ToTemporary();
-	}
-	data = move(segment.data);
-	stats = move(segment.stats);
-	count = segment.count;
-	D_ASSERT(!segment.next);
-}
-
 void TransientSegment::InitializeScan(ColumnScanState &state) {
 	data->InitializeScan(state);
 }
@@ -38,17 +27,9 @@ void TransientSegment::Scan(Transaction &transaction, ColumnScanState &state, id
 	data->Scan(transaction, state, vector_index, result);
 }
 
-void TransientSegment::ScanCommitted(ColumnScanState &state, idx_t vector_index, Vector &result) {
-	data->ScanCommitted(state, vector_index, result);
-}
-
 void TransientSegment::FilterScan(Transaction &transaction, ColumnScanState &state, Vector &result,
                                   SelectionVector &sel, idx_t &approved_tuple_count) {
 	data->FilterScan(transaction, state, result, sel, approved_tuple_count);
-}
-
-void TransientSegment::IndexScan(ColumnScanState &state, Vector &result) {
-	data->IndexScan(state, state.vector_index, result);
 }
 
 void TransientSegment::Select(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
@@ -65,13 +46,7 @@ void TransientSegment::FetchRow(ColumnFetchState &state, Transaction &transactio
 	data->FetchRow(state, transaction, row_id - this->start, result, result_idx);
 }
 
-void TransientSegment::Update(ColumnData &column_data, Transaction &transaction, Vector &updates, row_t *ids,
-                              idx_t count) {
-	data->Update(column_data, stats, transaction, updates, ids, count, this->start);
-}
-
 void TransientSegment::InitializeAppend(ColumnAppendState &state) {
-	state.lock = data->lock.GetExclusiveLock();
 }
 
 idx_t TransientSegment::Append(ColumnAppendState &state, Vector &append_data, idx_t offset, idx_t count) {

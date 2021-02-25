@@ -35,7 +35,8 @@ void RollbackState::RollbackEntry(UndoFlags type, data_ptr_t data) {
 	}
 	case UndoFlags::UPDATE_TUPLE: {
 		auto info = (UpdateInfo *)data;
-		info->segment->RollbackUpdate(info);
+		throw NotImplementedException("FIXME: rollback update");
+		// info->segment->RollbackUpdate(info);
 		break;
 	}
 	default:

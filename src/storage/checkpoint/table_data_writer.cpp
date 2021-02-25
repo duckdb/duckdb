@@ -137,7 +137,8 @@ void TableDataWriter::CheckpointColumn(ColumnData &col_data, idx_t col_idx) {
 			scan_vector.Reference(intermediate);
 
 			idx_t count = MinValue<idx_t>(segment->count - vector_index * STANDARD_VECTOR_SIZE, STANDARD_VECTOR_SIZE);
-			segment->ScanCommitted(state, vector_index, scan_vector);
+			throw NotImplementedException("FIXME: scan updates as well");
+			// segment->Scan(state, vector_index, scan_vector);
 			AppendData(new_tree, col_idx, scan_vector, count);
 		}
 		// move to the next segment in the list
