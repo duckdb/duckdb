@@ -127,7 +127,8 @@ struct UnsafeAppender {
 		chunk.Reset();
 	}
 
-	template <class T> void AppendValue(T value) {
+	template <class T>
+	void AppendValue(T value) {
 		assert(col < chunk.ColumnCount());
 		FlatVector::GetData<T>(chunk.data[col])[chunk.size()] = value;
 		col++;
@@ -538,7 +539,8 @@ const LogicalType LineitemInfo::Types[] = {
     LogicalType(LogicalTypeId::DATE),           LogicalType(LogicalTypeId::VARCHAR),
     LogicalType(LogicalTypeId::VARCHAR),        LogicalType(LogicalTypeId::VARCHAR)};
 
-template <class T> static void CreateTPCHTable(ClientContext &context, string schema, string suffix) {
+template <class T>
+static void CreateTPCHTable(ClientContext &context, string schema, string suffix) {
 	auto info = make_unique<CreateTableInfo>();
 	info->schema = schema;
 	info->table = T::Name + suffix;
