@@ -628,7 +628,7 @@ int64_t EpochOperator::Operation(DTime input) {
 template <>
 unique_ptr<BaseStatistics>
 EpochOperator::PropagateStatistics<DTime>(ClientContext &context, BoundFunctionExpression &expr,
-                                            FunctionData *bind_data, vector<unique_ptr<BaseStatistics>> &child_stats) {
+                                          FunctionData *bind_data, vector<unique_ptr<BaseStatistics>> &child_stats) {
 	return PropagateSimpleDatePartStatistics<0, 86400>(child_stats);
 }
 
