@@ -95,3 +95,6 @@ SELECT dayofyear( FROM i) FROM times
 
 statement error
 SELECT week( FROM i) FROM times
+
+statement error
+SELECT yearweek( FROM i) FROM times
