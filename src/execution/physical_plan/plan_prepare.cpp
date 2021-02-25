@@ -13,7 +13,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalPrepare &o
 	op.prepared->types = plan->types;
 	op.prepared->plan = move(plan);
 
-	return make_unique<PhysicalPrepare>(op.name, move(op.prepared));
+	return make_unique<PhysicalPrepare>(op.name, move(op.prepared), op.estimated_cardinality);
 }
 
 } // namespace duckdb

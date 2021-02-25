@@ -9,8 +9,8 @@ namespace duckdb {
 
 PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
                                                unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond,
-                                               JoinType join_type)
-    : PhysicalComparisonJoin(op, PhysicalOperatorType::NESTED_LOOP_JOIN, move(cond), join_type) {
+                                               JoinType join_type, idx_t estimated_cardinality)
+    : PhysicalComparisonJoin(op, PhysicalOperatorType::NESTED_LOOP_JOIN, move(cond), join_type, estimated_cardinality) {
 	children.push_back(move(left));
 	children.push_back(move(right));
 }
@@ -20,12 +20,12 @@ static bool HasNullValues(DataChunk &chunk) {
 		VectorData vdata;
 		chunk.data[col_idx].Orrify(chunk.size(), vdata);
 
-		if (vdata.nullmask->none()) {
+		if (vdata.validity.AllValid()) {
 			continue;
 		}
 		for (idx_t i = 0; i < chunk.size(); i++) {
 			auto idx = vdata.sel->get_index(i);
-			if ((*vdata.nullmask)[idx]) {
+			if (!vdata.validity.RowIsValid(idx)) {
 				return true;
 			}
 		}
@@ -75,14 +75,14 @@ void PhysicalJoin::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &left
 	// first we set the NULL values from the join keys
 	// if there is any NULL in the keys, the result is NULL
 	auto bool_result = FlatVector::GetData<bool>(mark_vector);
-	auto &nullmask = FlatVector::Nullmask(mark_vector);
+	auto &mask = FlatVector::Validity(mark_vector);
 	for (idx_t col_idx = 0; col_idx < join_keys.ColumnCount(); col_idx++) {
 		VectorData jdata;
 		join_keys.data[col_idx].Orrify(join_keys.size(), jdata);
-		if (jdata.nullmask->any()) {
+		if (!jdata.validity.AllValid()) {
 			for (idx_t i = 0; i < join_keys.size(); i++) {
 				auto jidx = jdata.sel->get_index(i);
-				nullmask[i] = (*jdata.nullmask)[jidx];
+				mask.Set(i, jdata.validity.RowIsValid(jidx));
 			}
 		}
 	}
@@ -98,7 +98,7 @@ void PhysicalJoin::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &left
 	if (has_null) {
 		for (idx_t i = 0; i < left.size(); i++) {
 			if (!bool_result[i]) {
-				nullmask[i] = true;
+				mask.SetInvalid(i);
 			}
 		}
 	}

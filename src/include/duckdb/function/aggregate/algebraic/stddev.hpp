@@ -30,7 +30,7 @@ struct STDDevBaseOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input_data, nullmask_t &nullmask,
+	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input_data, ValidityMask &mask,
 	                      idx_t idx) {
 		// update running mean and d^2
 		state->count++;
@@ -45,10 +45,10 @@ struct STDDevBaseOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input_data, nullmask_t &nullmask,
+	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input_data, ValidityMask &mask,
 	                              idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
-			Operation<INPUT_TYPE, STATE, OP>(state, bind_data, input_data, nullmask, 0);
+			Operation<INPUT_TYPE, STATE, OP>(state, bind_data, input_data, mask, 0);
 		}
 	}
 
@@ -74,9 +74,9 @@ struct STDDevBaseOperation {
 
 struct VarSampOperation : public STDDevBaseOperation {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (state->count == 0) {
-			nullmask[idx] = true;
+			mask.SetInvalid(idx);
 		} else {
 			target[idx] = state->count > 1 ? (state->dsquared / (state->count - 1)) : 0;
 			if (!Value::DoubleIsValid(target[idx])) {
@@ -88,9 +88,9 @@ struct VarSampOperation : public STDDevBaseOperation {
 
 struct VarPopOperation : public STDDevBaseOperation {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (state->count == 0) {
-			nullmask[idx] = true;
+			mask.SetInvalid(idx);
 		} else {
 			target[idx] = state->count > 1 ? (state->dsquared / state->count) : 0;
 			if (!Value::DoubleIsValid(target[idx])) {
@@ -102,9 +102,9 @@ struct VarPopOperation : public STDDevBaseOperation {
 
 struct STDDevSampOperation : public STDDevBaseOperation {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (state->count == 0) {
-			nullmask[idx] = true;
+			mask.SetInvalid(idx);
 		} else {
 			target[idx] = state->count > 1 ? sqrt(state->dsquared / (state->count - 1)) : 0;
 			if (!Value::DoubleIsValid(target[idx])) {
@@ -116,9 +116,9 @@ struct STDDevSampOperation : public STDDevBaseOperation {
 
 struct STDDevPopOperation : public STDDevBaseOperation {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (state->count == 0) {
-			nullmask[idx] = true;
+			mask.SetInvalid(idx);
 		} else {
 			target[idx] = state->count > 1 ? sqrt(state->dsquared / state->count) : 0;
 			if (!Value::DoubleIsValid(target[idx])) {

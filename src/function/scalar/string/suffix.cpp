@@ -37,7 +37,7 @@ ScalarFunction SuffixFun::GetFunction() {
 	return ScalarFunction("suffix",                                     // name of the function
 	                      {LogicalType::VARCHAR, LogicalType::VARCHAR}, // argument list
 	                      LogicalType::BOOLEAN,                         // return type
-	                      ScalarFunction::BinaryFunction<string_t, string_t, bool, SuffixOperator, true>);
+	                      ScalarFunction::BinaryFunction<string_t, string_t, bool, SuffixOperator>);
 }
 
 void SuffixFun::RegisterFunction(BuiltinFunctions &set) {

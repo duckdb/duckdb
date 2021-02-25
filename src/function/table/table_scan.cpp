@@ -66,10 +66,11 @@ static unique_ptr<FunctionOperatorData> TableScanParallelInit(ClientContext &con
 
 static void TableScanFunc(ClientContext &context, const FunctionData *bind_data_p, FunctionOperatorData *operator_state,
                           DataChunk &output) {
-	auto &bind_data = (const TableScanBindData &)*bind_data_p;
+	auto &bind_data = (TableScanBindData &)*bind_data_p;
 	auto &state = (TableScanOperatorData &)*operator_state;
 	auto &transaction = Transaction::GetTransaction(context);
 	bind_data.table->storage->Scan(transaction, output, state.scan_state, state.column_ids);
+	bind_data.chunk_count++;
 }
 
 struct ParallelTableFunctionScanState : public ParallelState {
@@ -98,6 +99,22 @@ bool TableScanParallelStateNext(ClientContext &context, const FunctionData *bind
 	lock_guard<mutex> parallel_lock(parallel_state.lock);
 	return bind_data.table->storage->NextParallelScan(context, parallel_state.state, state.scan_state,
 	                                                  state.column_ids);
+}
+
+int TableScanProgress(ClientContext &context, const FunctionData *bind_data_p) {
+	auto &bind_data = (TableScanBindData &)*bind_data_p;
+	idx_t total_rows = bind_data.table->storage->GetTotalRows();
+	if (total_rows == 0 || total_rows < STANDARD_VECTOR_SIZE) {
+		//! Table is either empty or smaller than a vector size, so it is finished
+		return 100;
+	}
+	auto percentage = (bind_data.chunk_count * STANDARD_VECTOR_SIZE * 100) / total_rows;
+	if (percentage > 100) {
+		//! In case the last chunk has less elements than STANDARD_VECTOR_SIZE, if our percentage is over 100
+		//! It means we finished this table.
+		return 100;
+	}
+	return percentage;
 }
 
 void TableScanDependency(unordered_set<CatalogEntry *> &entries, const FunctionData *bind_data_p) {
@@ -301,6 +318,7 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 				get.function.max_threads = nullptr;
 				get.function.init_parallel_state = nullptr;
 				get.function.parallel_state_next = nullptr;
+				get.function.table_scan_progress = nullptr;
 				get.function.filter_pushdown = false;
 			} else {
 				bind_data.result_ids.clear();
@@ -328,6 +346,7 @@ TableFunction TableScanFunction::GetFunction() {
 	scan_function.init_parallel_state = TableScanInitParallelState;
 	scan_function.parallel_init = TableScanParallelInit;
 	scan_function.parallel_state_next = TableScanParallelStateNext;
+	scan_function.table_scan_progress = TableScanProgress;
 	scan_function.projection_pushdown = true;
 	scan_function.filter_pushdown = true;
 	return scan_function;

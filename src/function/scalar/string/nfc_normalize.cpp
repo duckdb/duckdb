@@ -7,7 +7,7 @@ namespace duckdb {
 static void NFCNormalizeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 1);
 
-	UnaryExecutor::Execute<string_t, string_t, true>(args.data[0], result, args.size(), [&](string_t input) {
+	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, args.size(), [&](string_t input) {
 		auto input_data = input.GetDataUnsafe();
 		auto input_length = input.GetSize();
 		if (StripAccentsFun::IsAscii(input_data, input_length)) {

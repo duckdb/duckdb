@@ -62,7 +62,7 @@ ScalarFunction PrefixFun::GetFunction() {
 	return ScalarFunction("prefix",                                     // name of the function
 	                      {LogicalType::VARCHAR, LogicalType::VARCHAR}, // argument list
 	                      LogicalType::BOOLEAN,                         // return type
-	                      ScalarFunction::BinaryFunction<string_t, string_t, bool, PrefixOperator, true>);
+	                      ScalarFunction::BinaryFunction<string_t, string_t, bool, PrefixOperator>);
 }
 
 void PrefixFun::RegisterFunction(BuiltinFunctions &set) {

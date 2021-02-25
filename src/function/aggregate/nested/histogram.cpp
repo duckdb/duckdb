@@ -43,7 +43,7 @@ static void HistogramUpdateFunction(Vector inputs[], FunctionData *, idx_t input
 
 	auto states = (HistogramAggState<T> **)sdata.data;
 	for (idx_t i = 0; i < count; i++) {
-		if (!(*input_data.nullmask)[input_data.sel->get_index(i)]) {
+		if (input_data.validity.RowIsValid(input_data.sel->get_index(i))) {
 			auto state = states[sdata.sel->get_index(i)];
 			if (!state->hist) {
 				state->hist = new map<T, size_t>();
@@ -66,7 +66,7 @@ static void HistogramUpdateFunctionString(Vector inputs[], FunctionData *, idx_t
 
 	auto states = (HistogramAggState<string> **)sdata.data;
 	for (idx_t i = 0; i < count; i++) {
-		if (!(*input_data.nullmask)[input_data.sel->get_index(i)]) {
+		if (input_data.validity.RowIsValid(input_data.sel->get_index(i))) {
 			auto state = states[sdata.sel->get_index(i)];
 			if (!state->hist) {
 				state->hist = new map<string, size_t>();
@@ -109,12 +109,12 @@ static void HistogramFinalize(Vector &state_vector, FunctionData *, Vector &resu
 	vector<LogicalType> chunk_types;
 	chunk_types.emplace_back(result.GetType().child_types()[0].second);
 	insert_chunk.Initialize(chunk_types);
-	auto &nullmask = FlatVector::Nullmask(result);
+	auto &mask = FlatVector::Validity(result);
 	for (idx_t i = 0; i < count; i++) {
 		auto state = states[sdata.sel->get_index(i)];
 		size_t chunk_idx = 0;
 		if (!state->hist) {
-			nullmask[i] = true;
+			mask.SetInvalid(i);
 			continue;
 		}
 		for (auto &entry : *state->hist) {

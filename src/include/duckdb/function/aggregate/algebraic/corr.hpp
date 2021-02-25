@@ -32,12 +32,12 @@ struct CorrOperation {
 	}
 
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, FunctionData *bind_data, A_TYPE *x_data, B_TYPE *y_data, nullmask_t &anullmask,
-	                      nullmask_t &bnullmask, idx_t xidx, idx_t yidx) {
-		CovarOperation::Operation<A_TYPE, B_TYPE, CovarState, OP>(&state->cov_pop, bind_data, x_data, y_data, anullmask,
-		                                                          bnullmask, xidx, yidx);
-		STDDevBaseOperation::Operation<A_TYPE, StddevState, OP>(&state->dev_pop_x, bind_data, x_data, anullmask, xidx);
-		STDDevBaseOperation::Operation<B_TYPE, StddevState, OP>(&state->dev_pop_y, bind_data, y_data, bnullmask, yidx);
+	static void Operation(STATE *state, FunctionData *bind_data, A_TYPE *x_data, B_TYPE *y_data, ValidityMask &amask,
+	                      ValidityMask &bmask, idx_t xidx, idx_t yidx) {
+		CovarOperation::Operation<A_TYPE, B_TYPE, CovarState, OP>(&state->cov_pop, bind_data, x_data, y_data, amask,
+		                                                          bmask, xidx, yidx);
+		STDDevBaseOperation::Operation<A_TYPE, StddevState, OP>(&state->dev_pop_x, bind_data, x_data, amask, xidx);
+		STDDevBaseOperation::Operation<B_TYPE, StddevState, OP>(&state->dev_pop_y, bind_data, y_data, bmask, yidx);
 	}
 
 	template <class STATE, class OP>
@@ -48,9 +48,9 @@ struct CorrOperation {
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (state->cov_pop.count == 0 || state->dev_pop_x.count == 0 || state->dev_pop_y.count == 0) {
-			nullmask[idx] = true;
+			mask.SetInvalid(idx);
 		} else {
 			auto cov = state->cov_pop.co_moment / state->cov_pop.count;
 			auto std_x = state->dev_pop_x.count > 1 ? sqrt(state->dev_pop_x.dsquared / state->dev_pop_x.count) : 0;
@@ -62,7 +62,7 @@ struct CorrOperation {
 				throw OutOfRangeException("STDDEV_POP for Y is invalid!");
 			}
 			if (std_x * std_y == 0) {
-				nullmask[idx] = true;
+				mask.SetInvalid(idx);
 				return;
 			}
 			target[idx] = cov / (std_x * std_y);

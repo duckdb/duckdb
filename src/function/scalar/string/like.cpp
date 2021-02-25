@@ -441,7 +441,7 @@ static unique_ptr<BaseStatistics> ILikePropagateStats(ClientContext &context, Bo
 	}
 	auto &sstats = (StringStatistics &)*child_stats[0];
 	if (!sstats.has_unicode) {
-		expr.function.function = ScalarFunction::BinaryFunction<string_t, string_t, bool, ASCII_OP, true>;
+		expr.function.function = ScalarFunction::BinaryFunction<string_t, string_t, bool, ASCII_OP>;
 	}
 	return nullptr;
 }
@@ -452,13 +452,13 @@ static void RegularLikeFunction(DataChunk &input, ExpressionState &state, Vector
 	if (func_expr.bind_info) {
 		auto &matcher = (LikeMatcher &)*func_expr.bind_info;
 		// use fast like matcher
-		UnaryExecutor::Execute<string_t, bool, true>(input.data[0], result, input.size(), [&](string_t str) {
+		UnaryExecutor::Execute<string_t, bool>(input.data[0], result, input.size(), [&](string_t str) {
 			return INVERT ? !matcher.Match(str) : matcher.Match(str);
 		});
 	} else {
 		// use generic like matcher
-		BinaryExecutor::ExecuteStandard<string_t, string_t, bool, OP, true>(input.data[0], input.data[1], result,
-		                                                                    input.size());
+		BinaryExecutor::ExecuteStandard<string_t, string_t, bool, OP>(input.data[0], input.data[1], result,
+		                                                              input.size());
 	}
 }
 void LikeFun::RegisterFunction(BuiltinFunctions &set) {
@@ -470,15 +470,15 @@ void LikeFun::RegisterFunction(BuiltinFunctions &set) {
 	                               RegularLikeFunction<NotLikeOperator, true>, false, LikeBindFunction));
 	// glob
 	set.AddFunction(ScalarFunction("~~~", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
-	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, GlobOperator, true>));
+	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, GlobOperator>));
 	// ilike
 	set.AddFunction(ScalarFunction("~~*", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
-	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, ILikeOperator, true>, false,
+	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, ILikeOperator>, false,
 	                               nullptr, nullptr, ILikePropagateStats<ILikeOperatorASCII>));
 	// not ilike
 	set.AddFunction(ScalarFunction("!~~*", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
-	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, NotILikeOperator, true>,
-	                               false, nullptr, nullptr, ILikePropagateStats<NotILikeOperatorASCII>));
+	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, NotILikeOperator>, false,
+	                               nullptr, nullptr, ILikePropagateStats<NotILikeOperatorASCII>));
 }
 
 void LikeEscapeFun::RegisterFunction(BuiltinFunctions &set) {

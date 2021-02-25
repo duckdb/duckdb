@@ -61,7 +61,7 @@ static void icu_collate_function(DataChunk &args, ExpressionState &state, Vector
 
 	unique_ptr<char[]> buffer;
 	int32_t buffer_size = 0;
-	UnaryExecutor::Execute<string_t, string_t, true>(args.data[0], result, args.size(), [&](string_t input) {
+	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, args.size(), [&](string_t input) {
 		// create a sort key from the string
 		int32_t string_size = icu_get_sort_key(collator, input, buffer, buffer_size);
 		// convert the sort key to hexadecimal

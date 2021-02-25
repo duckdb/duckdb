@@ -8,9 +8,9 @@
 namespace duckdb {
 
 PhysicalSimpleAggregate::PhysicalSimpleAggregate(vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
-                                                 bool all_combinable)
-    : PhysicalSink(PhysicalOperatorType::SIMPLE_AGGREGATE, move(types)), aggregates(move(expressions)),
-      all_combinable(all_combinable) {
+                                                 bool all_combinable, idx_t estimated_cardinality)
+    : PhysicalSink(PhysicalOperatorType::SIMPLE_AGGREGATE, move(types), estimated_cardinality),
+      aggregates(move(expressions)), all_combinable(all_combinable) {
 }
 
 //===--------------------------------------------------------------------===//

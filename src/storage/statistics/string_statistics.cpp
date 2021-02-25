@@ -164,7 +164,7 @@ void StringStatistics::Verify(Vector &vector, idx_t count) {
 	auto data = (string_t *)vdata.data;
 	for (idx_t i = 0; i < count; i++) {
 		auto index = vdata.sel->get_index(i);
-		if ((*vdata.nullmask)[index]) {
+		if (!vdata.validity.RowIsValid(index)) {
 			continue;
 		}
 		auto value = data[index];

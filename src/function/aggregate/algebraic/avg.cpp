@@ -52,10 +52,10 @@ static double GetAverageDivident(uint64_t count, FunctionData *bind_data) {
 
 struct IntegerAverageOperation : public BaseSumOperation<AverageSetOperation, RegularAdd> {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *bind_data, STATE *state, T *target, nullmask_t &nullmask,
+	static void Finalize(Vector &result, FunctionData *bind_data, STATE *state, T *target, ValidityMask &mask,
 	                     idx_t idx) {
 		if (state->count == 0) {
-			nullmask[idx] = true;
+			mask.SetInvalid(idx);
 		} else {
 			double divident = GetAverageDivident(state->count, bind_data);
 			target[idx] = double(state->value) / divident;
@@ -65,10 +65,10 @@ struct IntegerAverageOperation : public BaseSumOperation<AverageSetOperation, Re
 
 struct IntegerAverageOperationHugeint : public BaseSumOperation<AverageSetOperation, HugeintAdd> {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *bind_data, STATE *state, T *target, nullmask_t &nullmask,
+	static void Finalize(Vector &result, FunctionData *bind_data, STATE *state, T *target, ValidityMask &mask,
 	                     idx_t idx) {
 		if (state->count == 0) {
-			nullmask[idx] = true;
+			mask.SetInvalid(idx);
 		} else {
 			double divident = GetAverageDivident(state->count, bind_data);
 			target[idx] = Hugeint::Cast<double>(state->value) / divident;
@@ -78,10 +78,10 @@ struct IntegerAverageOperationHugeint : public BaseSumOperation<AverageSetOperat
 
 struct HugeintAverageOperation : public BaseSumOperation<AverageSetOperation, RegularAdd> {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *bind_data, STATE *state, T *target, nullmask_t &nullmask,
+	static void Finalize(Vector &result, FunctionData *bind_data, STATE *state, T *target, ValidityMask &mask,
 	                     idx_t idx) {
 		if (state->count == 0) {
-			nullmask[idx] = true;
+			mask.SetInvalid(idx);
 		} else {
 			double divident = GetAverageDivident(state->count, bind_data);
 			target[idx] = Hugeint::Cast<double>(state->value) / divident;
@@ -91,9 +91,9 @@ struct HugeintAverageOperation : public BaseSumOperation<AverageSetOperation, Re
 
 struct NumericAverageOperation : public BaseSumOperation<AverageSetOperation, RegularAdd> {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (state->count == 0) {
-			nullmask[idx] = true;
+			mask.SetInvalid(idx);
 		} else {
 			if (!Value::DoubleIsValid(state->value)) {
 				throw OutOfRangeException("AVG is out of range!");

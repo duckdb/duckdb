@@ -19,7 +19,7 @@ namespace duckdb {
 class PhysicalBlockwiseNLJoin : public PhysicalJoin {
 public:
 	PhysicalBlockwiseNLJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right,
-	                        unique_ptr<Expression> condition, JoinType join_type);
+	                        unique_ptr<Expression> condition, JoinType join_type, idx_t estimated_cardinality);
 
 	unique_ptr<Expression> condition;
 

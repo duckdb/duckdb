@@ -17,7 +17,7 @@ class Pipeline;
 class PhysicalRecursiveCTE : public PhysicalOperator {
 public:
 	PhysicalRecursiveCTE(vector<LogicalType> types, bool union_all, unique_ptr<PhysicalOperator> top,
-	                     unique_ptr<PhysicalOperator> bottom);
+	                     unique_ptr<PhysicalOperator> bottom, idx_t estimated_cardinality);
 	~PhysicalRecursiveCTE() override;
 
 	bool union_all;

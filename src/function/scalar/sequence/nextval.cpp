@@ -74,7 +74,7 @@ static void NextValFunction(DataChunk &args, ExpressionState &state, Vector &res
 		}
 	} else {
 		// sequence to use comes from the input
-		UnaryExecutor::Execute<string_t, int64_t, true>(input, result, args.size(), [&](string_t value) {
+		UnaryExecutor::Execute<string_t, int64_t>(input, result, args.size(), [&](string_t value) {
 			auto qname = QualifiedName::Parse(value.GetString());
 			// fetch the sequence from the catalog
 			auto sequence = Catalog::GetCatalog(info.context)

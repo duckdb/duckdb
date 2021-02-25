@@ -47,7 +47,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalExplain &o
 	collection->Append(chunk);
 
 	// create a chunk scan to output the result
-	auto chunk_scan = make_unique<PhysicalChunkScan>(op.types, PhysicalOperatorType::CHUNK_SCAN);
+	auto chunk_scan =
+	    make_unique<PhysicalChunkScan>(op.types, PhysicalOperatorType::CHUNK_SCAN, op.estimated_cardinality);
 	chunk_scan->owned_collection = move(collection);
 	chunk_scan->collection = chunk_scan->owned_collection.get();
 	return move(chunk_scan);

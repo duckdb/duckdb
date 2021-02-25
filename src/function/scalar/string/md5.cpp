@@ -9,7 +9,7 @@ namespace duckdb {
 static void MD5Function(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &input = args.data[0];
 
-	UnaryExecutor::Execute<string_t, string_t, true>(input, result, args.size(), [&](string_t input) {
+	UnaryExecutor::Execute<string_t, string_t>(input, result, args.size(), [&](string_t input) {
 		auto hash = StringVector::EmptyString(result, MD5Context::MD5_HASH_LENGTH_TEXT);
 		MD5Context context;
 		context.Add(input);

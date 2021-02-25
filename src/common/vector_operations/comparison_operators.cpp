@@ -13,9 +13,9 @@ namespace duckdb {
 
 struct ComparisonExecutor {
 private:
-	template <class T, class OP, bool IGNORE_NULL = false>
+	template <class T, class OP>
 	static inline void TemplatedExecute(Vector &left, Vector &right, Vector &result, idx_t count) {
-		BinaryExecutor::Execute<T, T, bool, OP, IGNORE_NULL>(left, right, result, count);
+		BinaryExecutor::Execute<T, T, bool, OP>(left, right, result, count);
 	}
 
 public:
@@ -65,7 +65,7 @@ public:
 			TemplatedExecute<interval_t, OP>(left, right, result, count);
 			break;
 		case PhysicalType::VARCHAR:
-			TemplatedExecute<string_t, OP, true>(left, right, result, count);
+			TemplatedExecute<string_t, OP>(left, right, result, count);
 			break;
 		default:
 			throw InvalidTypeException(left.GetType(), "Invalid type for comparison");

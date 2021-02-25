@@ -4,8 +4,9 @@
 namespace duckdb {
 
 PhysicalComparisonJoin::PhysicalComparisonJoin(LogicalOperator &op, PhysicalOperatorType type,
-                                               vector<JoinCondition> conditions_p, JoinType join_type)
-    : PhysicalJoin(op, type, join_type) {
+                                               vector<JoinCondition> conditions_p, JoinType join_type,
+                                               idx_t estimated_cardinality)
+    : PhysicalJoin(op, type, join_type, estimated_cardinality) {
 	conditions.resize(conditions_p.size());
 	// we reorder conditions so the ones with COMPARE_EQUAL occur first
 	idx_t equal_position = 0;
@@ -59,7 +60,7 @@ void PhysicalComparisonJoin::ConstructEmptyJoinResult(JoinType join_type, bool h
 				bool_result[i] = false;
 			}
 		} else {
-			FlatVector::Nullmask(result_vector).set();
+			FlatVector::Validity(result_vector).SetAllInvalid(result.size());
 		}
 	} else if (join_type == JoinType::LEFT || join_type == JoinType::OUTER || join_type == JoinType::SINGLE) {
 		// LEFT/FULL OUTER/SINGLE join and build side is empty
