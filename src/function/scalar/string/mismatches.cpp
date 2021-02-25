@@ -35,12 +35,23 @@ static void MismatchesFunction(DataChunk &args, ExpressionState &state, Vector &
 }
 
 void MismatchesFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(
+	ScalarFunctionSet mismatches("mismatches");
+	mismatches.AddFunction(
 	    ScalarFunction("mismatches", {
 			LogicalType::VARCHAR, 
 			LogicalType::VARCHAR
 		}, 
 		LogicalType::BIGINT, MismatchesFunction)); // Pointer to function implementation
+	set.AddFunction(mismatches);
+
+	ScalarFunctionSet hamming("hamming");
+	hamming.AddFunction(
+	    ScalarFunction("mismatches", {
+			LogicalType::VARCHAR, 
+			LogicalType::VARCHAR
+		}, 
+		LogicalType::BIGINT, MismatchesFunction)); // Pointer to function implementation
+	set.AddFunction(hamming);
 }
 
 } // namespace duckdb
