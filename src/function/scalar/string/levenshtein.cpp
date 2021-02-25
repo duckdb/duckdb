@@ -7,20 +7,24 @@
 
 namespace duckdb {
 
-static idx_t minimum(const idx_t& x, const idx_t& y, const idx_t& z) {
+static idx_t Minimum(const idx_t& x, const idx_t& y, const idx_t& z) {
     return std::min(x, std::min(y, z));
 }
 
 // See: https://www.kdnuggets.com/2020/10/optimizing-levenshtein-distance-measuring-text-similarity.html
 // And: Iterative 2-row algorithm: https://en.wikipedia.org/wiki/Levenshtein_distance
 // Note: A first implementation using the array algorithm version resulted in an error raised by duckdb (too muach memory usage) 
-static idx_t levenshtein_distance(const string_t& txt, const string_t& tgt) 
+static idx_t Levenshtein_distance(const string_t& txt, const string_t& tgt) 
     {
     auto txt_len = txt.GetSize();
     auto tgt_len = tgt.GetSize();
 
-    if (txt_len < 1 ) throw InvalidInputException("Levenshtein Function: 1st argument too short");
-    if (tgt_len < 1 ) throw InvalidInputException("Levenshtein Function: 2nd argument too short");
+    if (txt_len < 1 ) {
+        throw InvalidInputException("Levenshtein Function: 1st argument too short");
+    } 
+    if (tgt_len < 1 ) {
+        throw InvalidInputException("Levenshtein Function: 2nd argument too short");
+    }
 
     auto txt_str = txt.GetDataUnsafe();
     auto tgt_str = tgt.GetDataUnsafe();
@@ -53,7 +57,7 @@ static idx_t levenshtein_distance(const string_t& txt, const string_t& tgt)
                 cost_substitution += 1;
             }
 
-            distances1[pos_tgt + 1] = minimum(cost_deletion, cost_substitution, cost_insertion);
+            distances1[pos_tgt + 1] = Minimum(cost_deletion, cost_substitution, cost_insertion);
 
         }
         // copy distances1 (current row) to distances0 (previous row) for next iteration
@@ -66,7 +70,7 @@ static idx_t levenshtein_distance(const string_t& txt, const string_t& tgt)
 
 
 static int64_t LevenshteinScalarFunction(Vector &result, const string_t str, string_t tgt) {
-	return (int64_t)levenshtein_distance(str, tgt);
+	return (int64_t)Levenshtein_distance(str, tgt);
 }
 
 static void LevenshteinFunction(DataChunk &args, ExpressionState &state, Vector &result) {
