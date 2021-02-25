@@ -70,7 +70,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 		DataChunk dummy_chunk;
 		Vector result(new_column_type);
 		if (!default_value) {
-			FlatVector::Nullmask(result).set();
+			FlatVector::Validity(result).SetAllInvalid(STANDARD_VECTOR_SIZE);
 		} else {
 			executor.AddExpression(*default_value);
 		}
@@ -505,7 +505,7 @@ static void VerifyCheckConstraint(TableCatalogEntry &table, Expression &expr, Da
 	auto dataptr = (int32_t *)vdata.data;
 	for (idx_t i = 0; i < chunk.size(); i++) {
 		auto idx = vdata.sel->get_index(i);
-		if (!(*vdata.nullmask)[idx] && dataptr[idx] == 0) {
+		if (vdata.validity.RowIsValid(idx) && dataptr[idx] == 0) {
 			throw ConstraintException("CHECK constraint failed: %s", table.name);
 		}
 	}
@@ -1079,6 +1079,10 @@ void DataTable::CommitDropColumn(idx_t index) {
 		}
 		segment = (ColumnSegment *)segment->next.get();
 	}
+}
+
+idx_t DataTable::GetTotalRows() {
+	return total_rows;
 }
 
 void DataTable::CommitDropTable() {

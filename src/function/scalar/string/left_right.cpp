@@ -20,7 +20,7 @@ static void LeftFunction(DataChunk &args, ExpressionState &state, Vector &result
 	auto &str_vec = args.data[0];
 	auto &pos_vec = args.data[1];
 
-	BinaryExecutor::Execute<string_t, int64_t, string_t, true>(
+	BinaryExecutor::Execute<string_t, int64_t, string_t>(
 	    str_vec, pos_vec, result, args.size(),
 	    [&](string_t str, int64_t pos) { return LeftScalarFunction(result, str, pos); });
 }
@@ -46,7 +46,7 @@ static string_t RightScalarFunction(Vector &result, const string_t str, int64_t 
 static void RightFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &str_vec = args.data[0];
 	auto &pos_vec = args.data[1];
-	BinaryExecutor::Execute<string_t, int64_t, string_t, true>(
+	BinaryExecutor::Execute<string_t, int64_t, string_t>(
 	    str_vec, pos_vec, result, args.size(),
 	    [&](string_t str, int64_t pos) { return RightScalarFunction(result, str, pos); });
 }

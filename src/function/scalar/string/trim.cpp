@@ -11,7 +11,7 @@ namespace duckdb {
 
 template <bool LTRIM, bool RTRIM>
 static void UnaryTrimFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	UnaryExecutor::Execute<string_t, string_t, true>(args.data[0], result, args.size(), [&](string_t input) {
+	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, args.size(), [&](string_t input) {
 		auto data = input.GetDataUnsafe();
 		auto size = input.GetSize();
 
@@ -70,7 +70,7 @@ static void GetIgnoredCodepoints(string_t ignored, unordered_set<utf8proc_int32_
 
 template <bool LTRIM, bool RTRIM>
 static void BinaryTrimFunction(DataChunk &input, ExpressionState &state, Vector &result) {
-	BinaryExecutor::Execute<string_t, string_t, string_t, true>(
+	BinaryExecutor::Execute<string_t, string_t, string_t>(
 	    input.data[0], input.data[1], result, input.size(), [&](string_t input, string_t ignored) {
 		    auto data = input.GetDataUnsafe();
 		    auto size = input.GetSize();

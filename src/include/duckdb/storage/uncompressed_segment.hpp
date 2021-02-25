@@ -62,7 +62,7 @@ public:
 	//! outstanding updates
 	void IndexScan(ColumnScanState &state, idx_t vector_index, Vector &result);
 	static void FilterSelection(SelectionVector &sel, Vector &result, const TableFilter &filter,
-	                            idx_t &approved_tuple_count, nullmask_t &nullmask);
+	                            idx_t &approved_tuple_count, ValidityMask &mask);
 	//! Executes the filters directly in the table's data
 	void Select(Transaction &transaction, Vector &result, vector<TableFilter> &table_filters, SelectionVector &sel,
 	            idx_t &approved_tuple_count, ColumnScanState &state);

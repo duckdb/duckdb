@@ -5,7 +5,7 @@
 namespace duckdb {
 
 unique_ptr<BoundTableRef> Binder::Bind(SubqueryRef &ref, CommonTableExpressionInfo *cte) {
-	auto binder = make_unique<Binder>(context, this);
+	auto binder = Binder::CreateBinder(context, this);
 	if (cte) {
 		binder->bound_ctes.insert(cte);
 	}

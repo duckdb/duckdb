@@ -1,0 +1,66 @@
+# name: test/issues/rigger/division_by_zero_null.test
+# description: SQLancer bug that detected an error in casting of the result of a sum to double
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+CREATE TABLE t0(c0 DOUBLE, c1 DOUBLE);;
+
+statement ok
+INSERT INTO t0 VALUES(0.0,0.0);
+
+statement ok
+INSERT INTO t0 VALUES(0.0,NULL);
+
+statement ok
+COMMIT;
+
+query II
+SELECT t0.c1, (1/t0.c1) IS NULL FROM t0;
+----
+0.0	1
+NULL	1
+
+query I
+SELECT t0.c1 FROM t0 WHERE (((1/(t0.c1))) IS NULL);
+----
+0.0
+NULL
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+CREATE TABLE t1(c0 DOUBLE);
+
+statement ok
+INSERT INTO t1 VALUES(10000.0);
+
+statement ok
+INSERT INTO t1 VALUES(0.0);
+
+statement ok
+COMMIT;
+
+query II
+SELECT c0, exp(c0) IS NULL FROM t1;
+----
+10000.0	1
+0.0	0
+
+query II
+SELECT c0, exp(c0) FROM t1;
+----
+10000.0	NULL
+0.0	1
+
+query I
+SELECT c0 FROM t1 WHERE exp(c0) IS NULL;
+----
+10000.0
+

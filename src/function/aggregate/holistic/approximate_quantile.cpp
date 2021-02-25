@@ -40,18 +40,15 @@ struct ApproxQuantileOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask,
+	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask,
 	                              idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
-			Operation<INPUT_TYPE, STATE, OP>(state, bind_data, input, nullmask, 0);
+			Operation<INPUT_TYPE, STATE, OP>(state, bind_data, input, mask, 0);
 		}
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *data, nullmask_t &nullmask, idx_t idx) {
-		if (nullmask[idx]) {
-			return;
-		}
+	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *data, ValidityMask &mask, idx_t idx) {
 		D_ASSERT(state->h);
 		state->h->add(data[idx]);
 		state->pos++;
@@ -68,10 +65,10 @@ struct ApproxQuantileOperation {
 
 	template <class TARGET_TYPE, class STATE>
 	static void Finalize(Vector &result, FunctionData *bind_data_p, STATE *state, TARGET_TYPE *target,
-	                     nullmask_t &nullmask, idx_t idx) {
+	                     ValidityMask &mask, idx_t idx) {
 
 		if (state->pos == 0) {
-			nullmask[idx] = true;
+			mask.SetInvalid(idx);
 			return;
 		}
 		D_ASSERT(state->h);

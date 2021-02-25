@@ -118,7 +118,7 @@ static string_t UnicodeCaseConvert(Vector &result, const char *input_data, idx_t
 
 template <bool IS_UPPER>
 static void CaseConvertFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	UnaryExecutor::Execute<string_t, string_t, true>(args.data[0], result, args.size(), [&](string_t input) {
+	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, args.size(), [&](string_t input) {
 		auto input_data = input.GetDataUnsafe();
 		auto input_length = input.GetSize();
 		return UnicodeCaseConvert<IS_UPPER>(result, input_data, input_length);
@@ -127,7 +127,7 @@ static void CaseConvertFunction(DataChunk &args, ExpressionState &state, Vector 
 
 template <bool IS_UPPER>
 static void CaseConvertFunctionASCII(DataChunk &args, ExpressionState &state, Vector &result) {
-	UnaryExecutor::Execute<string_t, string_t, true>(args.data[0], result, args.size(), [&](string_t input) {
+	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, args.size(), [&](string_t input) {
 		auto input_data = input.GetDataUnsafe();
 		auto input_length = input.GetSize();
 		return ASCIICaseConvert<IS_UPPER>(result, input_data, input_length);

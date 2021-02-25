@@ -5,7 +5,7 @@ namespace duckdb {
 
 static void Base64EncodeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	// decode is also a nop cast, but requires verification if the provided string is actually
-	UnaryExecutor::Execute<string_t, string_t, true>(args.data[0], result, args.size(), [&](string_t input) {
+	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, args.size(), [&](string_t input) {
 		auto result_str = StringVector::EmptyString(result, Blob::ToBase64Size(input));
 		Blob::ToBase64(input, result_str.GetDataWriteable());
 		result_str.Finalize();
@@ -15,7 +15,7 @@ static void Base64EncodeFunction(DataChunk &args, ExpressionState &state, Vector
 
 static void Base64DecodeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	// decode is also a nop cast, but requires verification if the provided string is actually
-	UnaryExecutor::Execute<string_t, string_t, true>(args.data[0], result, args.size(), [&](string_t input) {
+	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, args.size(), [&](string_t input) {
 		auto result_size = Blob::FromBase64Size(input);
 		auto result_blob = StringVector::EmptyString(result, result_size);
 		Blob::FromBase64(input, (data_ptr_t)result_blob.GetDataWriteable(), result_size);

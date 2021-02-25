@@ -17,7 +17,7 @@ void ListExtractTemplate(idx_t count, Vector &list, Vector &offsets, Vector &res
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::GetData<T>(result);
-	auto &result_nullmask = FlatVector::Nullmask(result);
+	auto &result_mask = FlatVector::Validity(result);
 
 	auto &list_child_collection = ListVector::GetEntry(list);
 	// heap-ref once
@@ -33,19 +33,19 @@ void ListExtractTemplate(idx_t count, Vector &list, Vector &offsets, Vector &res
 	for (idx_t i = 0; i < count; i++) {
 		auto list_index = list_data.sel->get_index(i);
 		auto offsets_index = offsets_data.sel->get_index(i);
-		if (!(*list_data.nullmask)[list_index] && !(*offsets_data.nullmask)[offsets_index]) {
+		if (list_data.validity.RowIsValid(list_index) && offsets_data.validity.RowIsValid(offsets_index)) {
 			auto list_entry = ((list_entry_t *)list_data.data)[list_index];
 			auto offsets_entry = ((int64_t *)offsets_data.data)[offsets_index];
 			idx_t child_offset;
 			if (offsets_entry < 0) {
 				if ((idx_t)-offsets_entry > list_entry.length) {
-					result_nullmask[i] = true;
+					result_mask.SetInvalid(i);
 					continue;
 				}
 				child_offset = list_entry.offset + list_entry.length + offsets_entry;
 			} else {
 				if ((idx_t)offsets_entry >= list_entry.length) {
-					result_nullmask[i] = true;
+					result_mask.SetInvalid(i);
 					continue;
 				}
 				child_offset = list_entry.offset + offsets_entry;
@@ -57,13 +57,13 @@ void ListExtractTemplate(idx_t count, Vector &list, Vector &offsets, Vector &res
 			auto child_index = child_offset % STANDARD_VECTOR_SIZE;
 			child_vector.Orrify(child_chunk.size(), child_data);
 			auto child_index_sel = child_data.sel->get_index(child_index);
-			if (!(*child_data.nullmask)[child_index_sel]) {
+			if (child_data.validity.RowIsValid(child_index_sel)) {
 				result_data[i] = ((T *)child_data.data)[child_index_sel];
 			} else {
-				result_nullmask[i] = true;
+				result_mask.SetInvalid(i);
 			}
 		} else {
-			result_nullmask[i] = true;
+			result_mask.SetInvalid(i);
 		}
 	}
 	if (count == 1) {

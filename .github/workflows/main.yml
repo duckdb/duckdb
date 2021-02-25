@@ -979,3 +979,39 @@ jobs:
 
     - name: Node 15
       run: ./scripts/node_build.sh 15
+
+  linux-wasm-release:
+    name: WebAssembly Release 
+    runs-on: ubuntu-20.04
+    needs: linux-debug
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Build Amalgamation
+      run: python scripts/amalgamation.py
+
+    - name: Setup
+      run: ./scripts/wasm_configure.sh
+
+    - name: Build Library Module
+      run: ./scripts/wasm_build_lib.sh Release
+
+    - name: Build Test Module
+      run: ./scripts/wasm_build_test.sh Release
+
+    - name: Test WASM Module
+      run: node ./test/wasm/hello_wasm_test.js
+
+    - name: Package
+      run: |
+        zip -j duckdb-wasm32-nothreads.zip ./.wasm/build/duckdb.wasm
+        python scripts/asset-upload-gha.py duckdb-wasm32-nothreads.zip
+
+    - uses: actions/upload-artifact@v2
+      with:
+        name: duckdb-wasm32-nothreads
+        path: |
+          duckdb-wasm32-nothreads.zip

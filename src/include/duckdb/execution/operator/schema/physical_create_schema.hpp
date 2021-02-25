@@ -16,8 +16,9 @@ namespace duckdb {
 //! PhysicalCreateSchema represents a CREATE SCHEMA command
 class PhysicalCreateSchema : public PhysicalOperator {
 public:
-	explicit PhysicalCreateSchema(unique_ptr<CreateSchemaInfo> info)
-	    : PhysicalOperator(PhysicalOperatorType::CREATE_SCHEMA, {LogicalType::BIGINT}), info(move(info)) {
+	explicit PhysicalCreateSchema(unique_ptr<CreateSchemaInfo> info, idx_t estimated_cardinality)
+	    : PhysicalOperator(PhysicalOperatorType::CREATE_SCHEMA, {LogicalType::BIGINT}, estimated_cardinality),
+	      info(move(info)) {
 	}
 
 	unique_ptr<CreateSchemaInfo> info;

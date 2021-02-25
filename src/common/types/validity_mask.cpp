@@ -1,0 +1,99 @@
+#include "duckdb/common/types/validity_mask.hpp"
+
+namespace duckdb {
+
+ValidityData::ValidityData(idx_t count) {
+	auto entry_count = EntryCount(count);
+	owned_data = unique_ptr<validity_t[]>(new validity_t[entry_count]);
+	for (idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
+		owned_data[entry_idx] = MAX_ENTRY;
+	}
+}
+ValidityData::ValidityData(const ValidityMask &original, idx_t count) {
+	D_ASSERT(original.validity_mask);
+	auto entry_count = EntryCount(count);
+	owned_data = unique_ptr<validity_t[]>(new validity_t[entry_count]);
+	for (idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
+		owned_data[entry_idx] = original.validity_mask[entry_idx];
+	}
+}
+
+void ValidityMask::Combine(const ValidityMask &other, idx_t count) {
+	if (other.AllValid()) {
+		// X & 1 = X
+		return;
+	}
+	if (AllValid()) {
+		// 1 & Y = Y
+		Initialize(other);
+		return;
+	}
+	if (validity_mask == other.validity_mask) {
+		// X & X == X
+		return;
+	}
+	// have to merge
+	// create a new validity mask that contains the combined mask
+	auto owned_data = move(validity_data);
+	auto data = GetData();
+	auto other_data = other.GetData();
+
+	Initialize(count);
+	auto result_data = GetData();
+
+	auto entry_count = ValidityData::EntryCount(count);
+	for (idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
+		result_data[entry_idx] = data[entry_idx] & other_data[entry_idx];
+	}
+}
+
+string ValidityMask::ToString(idx_t count) const {
+	string result = "Validity Mask (" + to_string(count) + ") [";
+	for (idx_t i = 0; i < count; i++) {
+		result += RowIsValid(i) ? "." : "X";
+	}
+	result += "]";
+	return result;
+}
+
+void ValidityMask::Slice(const ValidityMask &other, idx_t offset) {
+	if (other.AllValid()) {
+		validity_mask = nullptr;
+		validity_data.reset();
+		return;
+	}
+	if (offset == 0) {
+		Initialize(other);
+		return;
+	}
+	Initialize(STANDARD_VECTOR_SIZE);
+
+	// first shift the "whole" units
+	idx_t entire_units = offset / BITS_PER_VALUE;
+	idx_t sub_units = offset - entire_units % BITS_PER_VALUE;
+	if (entire_units > 0) {
+		idx_t validity_idx;
+		for (validity_idx = 0; validity_idx + entire_units < STANDARD_ENTRY_COUNT; validity_idx++) {
+			validity_mask[validity_idx] = other.validity_mask[validity_idx + entire_units];
+		}
+	}
+	// now we shift the remaining sub units
+	// this gets a bit more complicated because we have to shift over the borders of the entries
+	// e.g. suppose we have 2 entries of length 4 and we left-shift by two
+	// 0101|1010
+	// a regular left-shift of both gets us:
+	// 0100|1000
+	// we then OR the overflow (right-shifted by BITS_PER_VALUE - offset) together to get the correct result
+	// 0100|1000 ->
+	// 0110|1000
+	if (sub_units > 0) {
+		idx_t validity_idx;
+		for (validity_idx = 0; validity_idx + 1 < STANDARD_ENTRY_COUNT; validity_idx++) {
+			validity_mask[validity_idx] = (other.validity_mask[validity_idx] >> sub_units) |
+			                              (other.validity_mask[validity_idx + 1] << (BITS_PER_VALUE - sub_units));
+		}
+		validity_mask[validity_idx] >>= sub_units;
+	}
+}
+
+} // namespace duckdb

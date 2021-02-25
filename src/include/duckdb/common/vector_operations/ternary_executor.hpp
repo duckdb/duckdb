@@ -21,17 +21,18 @@ private:
 	template <class A_TYPE, class B_TYPE, class C_TYPE, class RESULT_TYPE, class FUN>
 	static inline void ExecuteLoop(A_TYPE *__restrict adata, B_TYPE *__restrict bdata, C_TYPE *__restrict cdata,
 	                               RESULT_TYPE *__restrict result_data, idx_t count, const SelectionVector &asel,
-	                               const SelectionVector &bsel, const SelectionVector &csel, nullmask_t &anullmask,
-	                               nullmask_t &bnullmask, nullmask_t &cnullmask, nullmask_t &result_nullmask, FUN fun) {
-		if (anullmask.any() || bnullmask.any() || cnullmask.any()) {
+	                               const SelectionVector &bsel, const SelectionVector &csel, ValidityMask &avalidity,
+	                               ValidityMask &bvalidity, ValidityMask &cvalidity, ValidityMask &result_validity,
+	                               FUN fun) {
+		if (!avalidity.AllValid() || !bvalidity.AllValid() || !cvalidity.AllValid()) {
 			for (idx_t i = 0; i < count; i++) {
 				auto aidx = asel.get_index(i);
 				auto bidx = bsel.get_index(i);
 				auto cidx = csel.get_index(i);
-				if (anullmask[aidx] || bnullmask[bidx] || cnullmask[cidx]) {
-					result_nullmask[i] = true;
-				} else {
+				if (avalidity.RowIsValid(aidx) && bvalidity.RowIsValid(bidx) && cvalidity.RowIsValid(cidx)) {
 					result_data[i] = fun(adata[aidx], bdata[bidx], cdata[cidx]);
+				} else {
+					result_validity.SetInvalid(i);
 				}
 			}
 		} else {
@@ -70,8 +71,8 @@ public:
 
 			ExecuteLoop<A_TYPE, B_TYPE, C_TYPE, RESULT_TYPE>(
 			    (A_TYPE *)adata.data, (B_TYPE *)bdata.data, (C_TYPE *)cdata.data,
-			    FlatVector::GetData<RESULT_TYPE>(result), count, *adata.sel, *bdata.sel, *cdata.sel, *adata.nullmask,
-			    *bdata.nullmask, *cdata.nullmask, FlatVector::Nullmask(result), fun);
+			    FlatVector::GetData<RESULT_TYPE>(result), count, *adata.sel, *bdata.sel, *cdata.sel, adata.validity,
+			    bdata.validity, cdata.validity, FlatVector::Validity(result), fun);
 		}
 	}
 
@@ -79,8 +80,8 @@ private:
 	template <class A_TYPE, class B_TYPE, class C_TYPE, class OP, bool NO_NULL, bool HAS_TRUE_SEL, bool HAS_FALSE_SEL>
 	static inline idx_t SelectLoop(A_TYPE *__restrict adata, B_TYPE *__restrict bdata, C_TYPE *__restrict cdata,
 	                               const SelectionVector *result_sel, idx_t count, const SelectionVector &asel,
-	                               const SelectionVector &bsel, const SelectionVector &csel, nullmask_t &anullmask,
-	                               nullmask_t &bnullmask, nullmask_t &cnullmask, SelectionVector *true_sel,
+	                               const SelectionVector &bsel, const SelectionVector &csel, ValidityMask &avalidity,
+	                               ValidityMask &bvalidity, ValidityMask &cvalidity, SelectionVector *true_sel,
 	                               SelectionVector *false_sel) {
 		idx_t true_count = 0, false_count = 0;
 		for (idx_t i = 0; i < count; i++) {
@@ -88,8 +89,9 @@ private:
 			auto aidx = asel.get_index(i);
 			auto bidx = bsel.get_index(i);
 			auto cidx = csel.get_index(i);
-			bool comparison_result = (NO_NULL || (!anullmask[aidx] && !bnullmask[bidx] && !cnullmask[cidx])) &&
-			                         OP::Operation(adata[aidx], bdata[bidx], cdata[cidx]);
+			bool comparison_result =
+			    (NO_NULL || (avalidity.RowIsValid(aidx) && bvalidity.RowIsValid(bidx) && cvalidity.RowIsValid(cidx))) &&
+			    OP::Operation(adata[aidx], bdata[bidx], cdata[cidx]);
 			if (HAS_TRUE_SEL) {
 				true_sel->set_index(true_count, result_idx);
 				true_count += comparison_result;
@@ -113,16 +115,16 @@ private:
 		if (true_sel && false_sel) {
 			return SelectLoop<A_TYPE, B_TYPE, C_TYPE, OP, NO_NULL, true, true>(
 			    (A_TYPE *)adata.data, (B_TYPE *)bdata.data, (C_TYPE *)cdata.data, sel, count, *adata.sel, *bdata.sel,
-			    *cdata.sel, *adata.nullmask, *bdata.nullmask, *cdata.nullmask, true_sel, false_sel);
+			    *cdata.sel, adata.validity, bdata.validity, cdata.validity, true_sel, false_sel);
 		} else if (true_sel) {
 			return SelectLoop<A_TYPE, B_TYPE, C_TYPE, OP, NO_NULL, true, false>(
 			    (A_TYPE *)adata.data, (B_TYPE *)bdata.data, (C_TYPE *)cdata.data, sel, count, *adata.sel, *bdata.sel,
-			    *cdata.sel, *adata.nullmask, *bdata.nullmask, *cdata.nullmask, true_sel, false_sel);
+			    *cdata.sel, adata.validity, bdata.validity, cdata.validity, true_sel, false_sel);
 		} else {
 			D_ASSERT(false_sel);
 			return SelectLoop<A_TYPE, B_TYPE, C_TYPE, OP, NO_NULL, false, true>(
 			    (A_TYPE *)adata.data, (B_TYPE *)bdata.data, (C_TYPE *)cdata.data, sel, count, *adata.sel, *bdata.sel,
-			    *cdata.sel, *adata.nullmask, *bdata.nullmask, *cdata.nullmask, true_sel, false_sel);
+			    *cdata.sel, adata.validity, bdata.validity, cdata.validity, true_sel, false_sel);
 		}
 	}
 
@@ -130,7 +132,7 @@ private:
 	static inline idx_t SelectLoopSwitch(VectorData &adata, VectorData &bdata, VectorData &cdata,
 	                                     const SelectionVector *sel, idx_t count, SelectionVector *true_sel,
 	                                     SelectionVector *false_sel) {
-		if (adata.nullmask->any() || bdata.nullmask->any() || cdata.nullmask->any()) {
+		if (!adata.validity.AllValid() || !bdata.validity.AllValid() || !cdata.validity.AllValid()) {
 			return SelectLoopSelSwitch<A_TYPE, B_TYPE, C_TYPE, OP, false>(adata, bdata, cdata, sel, count, true_sel,
 			                                                              false_sel);
 		} else {

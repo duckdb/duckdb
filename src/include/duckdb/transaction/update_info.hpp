@@ -10,6 +10,7 @@
 
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
 
 namespace duckdb {
 class ColumnData;
@@ -30,8 +31,8 @@ struct UpdateInfo {
 	sel_t max;
 	//! The row ids of the tuples that have been updated. This should always be kept sorted!
 	sel_t *tuples;
-	//! The nullmask of the tuples
-	nullmask_t nullmask;
+	//! The validity mask of the tuples
+	validity_t validity[ValidityMask::STANDARD_ENTRY_COUNT];
 	//! The data of the tuples
 	data_ptr_t tuple_data;
 	//! The previous update info (or nullptr if it is the base)

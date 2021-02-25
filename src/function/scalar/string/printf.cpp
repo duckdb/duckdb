@@ -68,7 +68,7 @@ static void PrintfFunction(DataChunk &args, ExpressionState &state, Vector &resu
 			// FLAT VECTOR, we can directly OR the nullmask
 			args.data[i].Normalify(args.size());
 			result.SetVectorType(VectorType::FLAT_VECTOR);
-			FlatVector::Nullmask(result) |= FlatVector::Nullmask(args.data[i]);
+			FlatVector::Validity(result).Combine(FlatVector::Validity(args.data[i]), args.size());
 			break;
 		}
 	}

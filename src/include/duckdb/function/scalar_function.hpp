@@ -100,17 +100,16 @@ public:
 		result.Reference(input.data[0]);
 	}
 
-	template <class TA, class TR, class OP, bool SKIP_NULLS = false>
+	template <class TA, class TR, class OP>
 	static void UnaryFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 		D_ASSERT(input.ColumnCount() >= 1);
-		UnaryExecutor::Execute<TA, TR, OP, SKIP_NULLS>(input.data[0], result, input.size());
+		UnaryExecutor::Execute<TA, TR, OP>(input.data[0], result, input.size());
 	}
 
-	template <class TA, class TB, class TR, class OP, bool IGNORE_NULL = false>
+	template <class TA, class TB, class TR, class OP>
 	static void BinaryFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 		D_ASSERT(input.ColumnCount() == 2);
-		BinaryExecutor::ExecuteStandard<TA, TB, TR, OP, IGNORE_NULL>(input.data[0], input.data[1], result,
-		                                                             input.size());
+		BinaryExecutor::ExecuteStandard<TA, TB, TR, OP>(input.data[0], input.data[1], result, input.size());
 	}
 
 public:

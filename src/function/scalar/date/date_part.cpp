@@ -796,42 +796,39 @@ void DatePartFun::RegisterFunction(BuiltinFunctions &set) {
 	//  register the last_day function
 	ScalarFunctionSet last_day("last_day");
 	last_day.AddFunction(ScalarFunction({LogicalType::DATE}, LogicalType::DATE,
-	                                    ScalarFunction::UnaryFunction<date_t, date_t, LastDayOperator, true>));
+	                                    ScalarFunction::UnaryFunction<date_t, date_t, LastDayOperator>));
 	last_day.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::DATE,
-	                                    ScalarFunction::UnaryFunction<timestamp_t, date_t, LastDayOperator, true>));
+	                                    ScalarFunction::UnaryFunction<timestamp_t, date_t, LastDayOperator>));
 	set.AddFunction(last_day);
 
 	//  register the monthname function
 	ScalarFunctionSet monthname("monthname");
 	monthname.AddFunction(ScalarFunction({LogicalType::DATE}, LogicalType::VARCHAR,
-	                                     ScalarFunction::UnaryFunction<date_t, string_t, MonthNameOperator, true>));
-	monthname.AddFunction(
-	    ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::VARCHAR,
-	                   ScalarFunction::UnaryFunction<timestamp_t, string_t, MonthNameOperator, true>));
+	                                     ScalarFunction::UnaryFunction<date_t, string_t, MonthNameOperator>));
+	monthname.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::VARCHAR,
+	                                     ScalarFunction::UnaryFunction<timestamp_t, string_t, MonthNameOperator>));
 	set.AddFunction(monthname);
 
 	//  register the dayname function
 	ScalarFunctionSet dayname("dayname");
 	dayname.AddFunction(ScalarFunction({LogicalType::DATE}, LogicalType::VARCHAR,
-	                                   ScalarFunction::UnaryFunction<date_t, string_t, DayNameOperator, true>));
+	                                   ScalarFunction::UnaryFunction<date_t, string_t, DayNameOperator>));
 	dayname.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::VARCHAR,
-	                                   ScalarFunction::UnaryFunction<timestamp_t, string_t, DayNameOperator, true>));
+	                                   ScalarFunction::UnaryFunction<timestamp_t, string_t, DayNameOperator>));
 	set.AddFunction(dayname);
 
 	// finally the actual date_part function
 	ScalarFunctionSet date_part("date_part");
-	date_part.AddFunction(
-	    ScalarFunction({LogicalType::VARCHAR, LogicalType::DATE}, LogicalType::BIGINT,
-	                   ScalarFunction::BinaryFunction<string_t, date_t, int64_t, DatePartOperator, true>));
+	date_part.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::DATE}, LogicalType::BIGINT,
+	                                     ScalarFunction::BinaryFunction<string_t, date_t, int64_t, DatePartOperator>));
 	date_part.AddFunction(
 	    ScalarFunction({LogicalType::VARCHAR, LogicalType::TIMESTAMP}, LogicalType::BIGINT,
-	                   ScalarFunction::BinaryFunction<string_t, timestamp_t, int64_t, DatePartOperator, true>));
-	date_part.AddFunction(
-	    ScalarFunction({LogicalType::VARCHAR, LogicalType::TIME}, LogicalType::BIGINT,
-	                   ScalarFunction::BinaryFunction<string_t, DTime, int64_t, DatePartOperator, true>));
+	                   ScalarFunction::BinaryFunction<string_t, timestamp_t, int64_t, DatePartOperator>));
+	date_part.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIME}, LogicalType::BIGINT,
+	                                     ScalarFunction::BinaryFunction<string_t, DTime, int64_t, DatePartOperator>));
 	date_part.AddFunction(
 	    ScalarFunction({LogicalType::VARCHAR, LogicalType::INTERVAL}, LogicalType::BIGINT,
-	                   ScalarFunction::BinaryFunction<string_t, interval_t, int64_t, DatePartOperator, true>));
+	                   ScalarFunction::BinaryFunction<string_t, interval_t, int64_t, DatePartOperator>));
 	set.AddFunction(date_part);
 	date_part.name = "datepart";
 	set.AddFunction(date_part);
