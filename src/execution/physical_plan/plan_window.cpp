@@ -14,7 +14,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalWindow &op
 	}
 #endif
 
-	auto window = make_unique<PhysicalWindow>(op.types, move(op.expressions));
+	auto window = make_unique<PhysicalWindow>(op.types, move(op.expressions), op.estimated_cardinality);
 	window->children.push_back(move(plan));
 	return move(window);
 }

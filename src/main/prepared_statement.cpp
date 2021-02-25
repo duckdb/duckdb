@@ -42,7 +42,8 @@ unique_ptr<QueryResult> PreparedStatement::Execute(vector<Value> &values, bool a
 		throw InvalidInputException("Attempting to execute an unsuccessfully prepared statement!");
 	}
 	D_ASSERT(data);
-	return context->Execute(query, data, values, allow_stream_result && data->allow_stream_result);
+	auto result = context->Execute(query, data, values, allow_stream_result && data->allow_stream_result);
+	return result;
 }
 
 } // namespace duckdb

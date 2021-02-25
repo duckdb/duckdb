@@ -138,20 +138,16 @@ unique_ptr<BaseStatistics> ParquetTransformColumnStatistics(const SchemaElement 
 	case LogicalTypeId::VARCHAR: {
 		auto string_stats = make_unique<StringStatistics>(type);
 		if (parquet_stats.__isset.min) {
-			memcpy(string_stats->min, (data_ptr_t)parquet_stats.min.data(),
-			       MinValue<idx_t>(parquet_stats.min.size(), StringStatistics::MAX_STRING_MINMAX_SIZE));
+			string_stats->Update(parquet_stats.min);
 		} else if (parquet_stats.__isset.min_value) {
-			memcpy(string_stats->min, (data_ptr_t)parquet_stats.min_value.data(),
-			       MinValue<idx_t>(parquet_stats.min_value.size(), StringStatistics::MAX_STRING_MINMAX_SIZE));
+			string_stats->Update(parquet_stats.min_value);
 		} else {
 			return nullptr;
 		}
 		if (parquet_stats.__isset.max) {
-			memcpy(string_stats->max, (data_ptr_t)parquet_stats.max.data(),
-			       MinValue<idx_t>(parquet_stats.max.size(), StringStatistics::MAX_STRING_MINMAX_SIZE));
+			string_stats->Update(parquet_stats.max);
 		} else if (parquet_stats.__isset.max_value) {
-			memcpy(string_stats->max, (data_ptr_t)parquet_stats.max_value.data(),
-			       MinValue<idx_t>(parquet_stats.max_value.size(), StringStatistics::MAX_STRING_MINMAX_SIZE));
+			string_stats->Update(parquet_stats.max_value);
 		} else {
 			return nullptr;
 		}

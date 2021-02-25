@@ -25,8 +25,8 @@ public:
 };
 
 PhysicalRecursiveCTE::PhysicalRecursiveCTE(vector<LogicalType> types, bool union_all, unique_ptr<PhysicalOperator> top,
-                                           unique_ptr<PhysicalOperator> bottom)
-    : PhysicalOperator(PhysicalOperatorType::RECURSIVE_CTE, move(types)), union_all(union_all) {
+                                           unique_ptr<PhysicalOperator> bottom, idx_t estimated_cardinality)
+    : PhysicalOperator(PhysicalOperatorType::RECURSIVE_CTE, move(types), estimated_cardinality), union_all(union_all) {
 	children.push_back(move(top));
 	children.push_back(move(bottom));
 }

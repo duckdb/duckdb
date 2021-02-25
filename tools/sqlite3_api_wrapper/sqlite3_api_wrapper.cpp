@@ -657,6 +657,7 @@ char *sqlite3_strdup(const char *str) {
 void *sqlite3_malloc64(sqlite3_uint64 n) {
 	return malloc(n);
 }
+
 void sqlite3_free(void *pVoid) {
 	free(pVoid);
 }
@@ -705,6 +706,7 @@ void sqlite3_interrupt(sqlite3 *db) {
 const char *sqlite3_libversion(void) {
 	return DuckDB::LibraryVersion();
 }
+
 const char *sqlite3_sourceid(void) {
 	return DuckDB::SourceID();
 }
@@ -1122,6 +1124,7 @@ sqlite3_vfs *sqlite3_vfs_find(const char *zVfsName) {
 	assert(res);
 	return res;
 }
+
 int sqlite3_vfs_register(sqlite3_vfs *, int makeDflt) {
 	// fprintf(stderr, "sqlite3_vfs_register: unsupported.\n");
 	return -1;
@@ -1133,6 +1136,7 @@ int sqlite3_backup_step(sqlite3_backup *p, int nPage) {
 	fprintf(stderr, "sqlite3_backup_step: unsupported.\n");
 	return -1;
 }
+
 int sqlite3_backup_finish(sqlite3_backup *p) {
 	fprintf(stderr, "sqlite3_backup_finish: unsupported.\n");
 	return -1;
@@ -1296,43 +1300,62 @@ SQLITE_API char *sqlite3_win32_unicode_to_utf8(LPCWSTR zWideText) {
 // TODO complain
 SQLITE_API void sqlite3_result_blob(sqlite3_context *, const void *, int, void (*)(void *)) {
 }
+
 SQLITE_API void sqlite3_result_blob64(sqlite3_context *, const void *, sqlite3_uint64, void (*)(void *)) {
 }
+
 SQLITE_API void sqlite3_result_double(sqlite3_context *, double) {
 }
+
 SQLITE_API void sqlite3_result_error(sqlite3_context *, const char *, int) {
 }
+
 SQLITE_API void sqlite3_result_error16(sqlite3_context *, const void *, int) {
 }
+
 SQLITE_API void sqlite3_result_error_toobig(sqlite3_context *) {
 }
+
 SQLITE_API void sqlite3_result_error_nomem(sqlite3_context *) {
 }
+
 SQLITE_API void sqlite3_result_error_code(sqlite3_context *, int) {
 }
+
 SQLITE_API void sqlite3_result_int(sqlite3_context *, int) {
 }
+
 SQLITE_API void sqlite3_result_int64(sqlite3_context *, sqlite3_int64) {
 }
+
 SQLITE_API void sqlite3_result_null(sqlite3_context *) {
 }
+
 SQLITE_API void sqlite3_result_text(sqlite3_context *, const char *, int, void (*)(void *)) {
 }
+
 SQLITE_API void sqlite3_result_text64(sqlite3_context *, const char *, sqlite3_uint64, void (*)(void *),
                                       unsigned char encoding) {
 }
+
 SQLITE_API void sqlite3_result_text16(sqlite3_context *, const void *, int, void (*)(void *)) {
 }
+
 SQLITE_API void sqlite3_result_text16le(sqlite3_context *, const void *, int, void (*)(void *)) {
 }
+
 SQLITE_API void sqlite3_result_text16be(sqlite3_context *, const void *, int, void (*)(void *)) {
 }
+
 SQLITE_API void sqlite3_result_value(sqlite3_context *, sqlite3_value *) {
 }
+
 SQLITE_API void sqlite3_result_pointer(sqlite3_context *, void *, const char *, void (*)(void *)) {
 }
+
 SQLITE_API void sqlite3_result_zeroblob(sqlite3_context *, int n) {
 }
+
 SQLITE_API int sqlite3_result_zeroblob64(sqlite3_context *, sqlite3_uint64 n) {
 	return -1;
 }
@@ -1341,42 +1364,55 @@ SQLITE_API int sqlite3_result_zeroblob64(sqlite3_context *, sqlite3_uint64 n) {
 const void *sqlite3_value_blob(sqlite3_value *) {
 	return nullptr;
 }
+
 double sqlite3_value_double(sqlite3_value *) {
 	return 0;
 }
+
 int sqlite3_value_int(sqlite3_value *) {
 	return 0;
 }
+
 sqlite3_int64 sqlite3_value_int64(sqlite3_value *) {
 	return 0;
 }
+
 void *sqlite3_value_pointer(sqlite3_value *, const char *) {
 	return nullptr;
 }
+
 const unsigned char *sqlite3_value_text(sqlite3_value *) {
 	return nullptr;
 }
+
 SQLITE_API const void *sqlite3_value_text16(sqlite3_value *) {
 	return nullptr;
 }
+
 SQLITE_API const void *sqlite3_value_text16le(sqlite3_value *) {
 	return nullptr;
 }
+
 SQLITE_API const void *sqlite3_value_text16be(sqlite3_value *) {
 	return nullptr;
 }
+
 SQLITE_API int sqlite3_value_bytes(sqlite3_value *) {
 	return 0;
 }
+
 SQLITE_API int sqlite3_value_bytes16(sqlite3_value *) {
 	return 0;
 }
+
 SQLITE_API int sqlite3_value_type(sqlite3_value *) {
 	return 0;
 }
+
 SQLITE_API int sqlite3_value_numeric_type(sqlite3_value *) {
 	return 0;
 }
+
 SQLITE_API int sqlite3_value_nochange(sqlite3_value *) {
 	return 0;
 }

@@ -6,10 +6,10 @@
 namespace duckdb {
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateIndex &op) {
-	D_ASSERT(op.children.size() == 0);
+	D_ASSERT(op.children.empty());
 	dependencies.insert(&op.table);
 	return make_unique<PhysicalCreateIndex>(op, op.table, op.column_ids, move(op.expressions), move(op.info),
-	                                        move(op.unbound_expressions));
+	                                        move(op.unbound_expressions), op.estimated_cardinality);
 }
 
 } // namespace duckdb
