@@ -9,7 +9,7 @@ statement ok
 CREATE TABLE strings(s VARCHAR)
 
 statement ok
-INSERT INTO strings VALUES ('hello'), ('hallo'), ('aloha'), ('hoi'), ('world')
+INSERT INTO strings VALUES ('hello'), ('hallo'), ('aloha'), ('fello'), ('fellow'), ('ducks')
 
 # normal queries
 query I
@@ -23,7 +23,37 @@ SELECT levenshtein('hallo', 'hello')
 1
 
 query I
+SELECT levenshtein('hello', 'hallo')
+----
+1
+
+query I
+SELECT levenshtein('lawn', 'flaw')
+----
+2
+
+query I
+SELECT levenshtein('flaw', 'lawn')
+----
+2
+
+query I
+SELECT levenshtein('kitten', 'sitting')
+----
+3
+
+query I
+SELECT levenshtein('sitting', 'kitten')
+----
+3
+
+query I
 SELECT levenshtein('hallo', 'hoi')
+----
+4
+
+query I
+SELECT levenshtein('hoi', 'hallo')
 ----
 4
 
@@ -40,20 +70,22 @@ NULL
 query I
 SELECT levenshtein(s, 'hallo') FROM strings ORDER BY s
 ----
-2
+4
 0
 1
-4
-4
+2
+3
+5
 
 query I
 SELECT levenshtein('hallo', s) FROM strings ORDER BY s
 ----
-2
+4
 0
 1
-4
-4
+2
+3
+5
 
 query I
 SELECT levenshtein(NULL, s) FROM strings 
