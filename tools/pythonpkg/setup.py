@@ -191,6 +191,7 @@ setup(
     keywords = 'DuckDB Database SQL OLAP',
     url="https://www.duckdb.org",
     long_description = 'See here for an introduction: https://duckdb.org/docs/api/python',
+    license='MIT',
     install_requires=[ # these version is still available for Python 2, newer ones aren't
          'numpy>=1.14'
     ],
@@ -202,7 +203,8 @@ setup(
     tests_require=['pytest'],
     classifiers = [
         'Topic :: Database :: Database Engines/Servers',
-        'Intended Audience :: Developers'
+        'Intended Audience :: Developers,
+        'License :: OSI Approved :: MIT License',
     ],
     ext_modules = [libduckdb],
     maintainer = "Hannes Muehleisen",
