@@ -73,7 +73,7 @@ static idx_t LevenshteinDistance(const string_t &txt, const string_t &tgt) {
 
 
 static int64_t LevenshteinScalarFunction(Vector &result, const string_t str, string_t tgt) {
-	return (int64_t)LevenshteinDistance(str, tgt);
+    return (int64_t)LevenshteinDistance(str, tgt);
 }
 
 static void LevenshteinFunction(DataChunk &args, ExpressionState &state, Vector &result) {
