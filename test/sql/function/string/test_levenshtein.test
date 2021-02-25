@@ -49,11 +49,11 @@ SELECT levenshtein(s, 'hallo') FROM strings ORDER BY s
 query I
 SELECT levenshtein('hallo', s) FROM strings ORDER BY s
 ----
-3
+2
 0
 1
 4
-3
+4
 
 query I
 SELECT levenshtein(NULL, s) FROM strings 

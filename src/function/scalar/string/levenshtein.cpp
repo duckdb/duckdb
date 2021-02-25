@@ -18,9 +18,10 @@ static idx_t levenshtein2(const string_t& txt, const string_t& tgt)
     if (txt_len < 1 ) throw InvalidInputException("Levenshtein Function: 1st argument too short");
     if (tgt_len < 1 ) throw InvalidInputException("Levenshtein Function: 2nd argument too short");
 
-    std::vector<idx_t> distances(txt_len + 1, 0);
     auto txt_str = txt.GetDataUnsafe();
     auto tgt_str = tgt.GetDataUnsafe();
+
+    std::vector<idx_t> distances(txt_len + 1, 0);
 
     for (idx_t pos = 1; pos <= txt_len; pos++) 
     {
