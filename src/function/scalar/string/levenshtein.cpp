@@ -7,15 +7,18 @@
 
 namespace duckdb {
 
-static idx_t Minimum(const idx_t& x, const idx_t& y, const idx_t& z) {
+static idx_t Minimum(const idx_t& x, const idx_t& y, const idx_t& z) 
+{
     return std::min(x, std::min(y, z));
 }
 
 // See: https://www.kdnuggets.com/2020/10/optimizing-levenshtein-distance-measuring-text-similarity.html
 // And: Iterative 2-row algorithm: https://en.wikipedia.org/wiki/Levenshtein_distance
-// Note: A first implementation using the array algorithm version resulted in an error raised by duckdb (too muach memory usage) 
+// Note: A first implementation using the array algorithm version resulted in an error raised by duckdb 
+// (too muach memory usage) 
+
 static idx_t Levenshtein_distance(const string_t& txt, const string_t& tgt) 
-    {
+{
     auto txt_len = txt.GetSize();
     auto tgt_len = tgt.GetSize();
 
