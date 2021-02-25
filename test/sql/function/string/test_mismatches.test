@@ -156,3 +156,10 @@ query I
 SELECT hamming(s, 'hallo') FROM strings WHERE s = 'hello'
 ----
 1
+
+# TODO
+drop table strings;
+CREATE TABLE strings(s VARCHAR, t VARCHAR)
+INSERT INTO strings VALUES ('hello', 'world'), ('hallo', 'ola'), ('aloha', 'hello'), ('world', 'wonder'), (NULL, NULL)
+
+SELECT s, t, levenshtein(s, t) l FROM strings WHERE s is not null and t is not null
