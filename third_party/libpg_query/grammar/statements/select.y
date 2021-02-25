@@ -1202,6 +1202,11 @@ Typename:	SimpleTypename opt_array_bounds
                $$ = SystemTypeName("struct");
                $$->typmods = $3;
                $$->location = @1;
+               }
+            | MAP '(' type_list ')' {
+               $$ = SystemTypeName("map");
+               $$->typmods = $3;
+               $$->location = @1;
 			}
 		;
 

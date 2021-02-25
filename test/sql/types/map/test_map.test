@@ -1,0 +1,34 @@
+# name: test/sql/types/map/test_map.test
+# description: Test basic casting of maps
+# group: [map]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+select typeof(cast(NULL AS MAP(int, float)));
+----
+MAP<INTEGER, FLOAT>
+
+query I
+select typeof(cast(NULL AS MAP(string, string)));
+----
+MAP<VARCHAR, VARCHAR>
+
+# all those are FORBIDDEN
+
+statement error
+select typeof(cast(NULL AS MAP(int)));
+
+statement error
+select typeof(cast(NULL AS MAP(string)));
+
+statement error
+select typeof(cast(NULL AS MAP(int, int, int)));
+
+statement error
+select typeof(cast(NULL AS MAP()));
+
+# not yet
+statement error
+select cast(NULL AS MAP(int, int));
