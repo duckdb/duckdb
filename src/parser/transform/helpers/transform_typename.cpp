@@ -54,8 +54,13 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_n
 		children.push_back(make_pair("key", key_type));
 		children.push_back(make_pair("value", value_type));
 
-		D_ASSERT(!children.empty());
-		return LogicalType(base_type.id(), children);
+		// for now we just transform MAP<TYPE_KEY, TYPE_VALUE> to LIST<STRUCT<key: TYPE_KEY, value: TYPE_VALUE>>
+		D_ASSERT(children.size() == 2);
+		auto struct_type = LogicalType(LogicalTypeId::STRUCT, children);
+		child_list_t<LogicalType> list_children;
+		list_children.push_back(make_pair("", struct_type));
+
+		return LogicalType(LogicalTypeId::LIST, list_children);
 	}
 
 	int8_t width = base_type.width(), scale = base_type.scale();

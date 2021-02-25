@@ -8,12 +8,12 @@ PRAGMA enable_verification
 query I
 select typeof(cast(NULL AS MAP(int, float)));
 ----
-MAP<INTEGER, FLOAT>
+LIST<STRUCT<key: INTEGER, value: FLOAT>>
 
 query I
 select typeof(cast(NULL AS MAP(string, string)));
 ----
-MAP<VARCHAR, VARCHAR>
+LIST<STRUCT<key: VARCHAR, value: VARCHAR>>
 
 # all those are FORBIDDEN
 
@@ -29,6 +29,7 @@ select typeof(cast(NULL AS MAP(int, int, int)));
 statement error
 select typeof(cast(NULL AS MAP()));
 
-# not yet
-statement error
-select cast(NULL AS MAP(int, int));
+query I
+select cast(NULL AS MAP(int, int))
+----
+NULL
