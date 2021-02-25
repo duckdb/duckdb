@@ -9,7 +9,11 @@ namespace duckdb {
 
 BufferedFileReader::BufferedFileReader(FileSystem &fs, const char *path)
     : fs(fs), data(unique_ptr<data_t[]>(new data_t[FILE_BUFFER_SIZE])), offset(0), read_data(0), total_read(0) {
+#ifdef DUCKDB_STALE_READ
+	handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ, FileLockType::NO_LOCK);
+#else
 	handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ, FileLockType::READ_LOCK);
+#endif // STALE_READ
 	file_size = fs.GetFileSize(*handle);
 }
 

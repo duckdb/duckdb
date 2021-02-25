@@ -74,7 +74,11 @@ SingleFileBlockManager::SingleFileBlockManager(DatabaseInstance &db, string path
 	if (read_only) {
 		D_ASSERT(!create_new);
 		flags = FileFlags::FILE_FLAGS_READ;
+#ifdef DUCKDB_STALE_READ
+		lock = FileLockType::NO_LOCK;
+#else
 		lock = FileLockType::READ_LOCK;
+#endif // STALE_READS
 	} else {
 		flags = FileFlags::FILE_FLAGS_WRITE;
 		lock = FileLockType::WRITE_LOCK;

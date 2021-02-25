@@ -163,6 +163,7 @@ option(
   "Throw an exception on an assert failing, instead of triggering a sigabort"
   TRUE)
 option(FORCE_ASSERT "Enable checking of assertions, even in release mode" FALSE)
+option(STALE_READ "Allow stale reads with concurrent writes" FALSE)
 
 option(TREAT_WARNINGS_AS_ERRORS "Treat warnings as errors" FALSE)
 option(EXPORT_DLL_SYMBOLS "Export dll symbols on Windows, else import" TRUE)
@@ -190,6 +191,10 @@ endif()
 
 if(FORCE_ASSERT)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_FORCE_ASSERT")
+endif()
+
+if(STALE_READ)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_STALE_READ")
 endif()
 
 if(NOT MSVC)
