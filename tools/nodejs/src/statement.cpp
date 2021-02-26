@@ -226,7 +226,7 @@ struct RunPreparedTask : public Task {
 			duckdb::idx_t count = 0;
 			while (true) {
 				auto chunk = result->Fetch();
-				if (chunk->size() == 0) {
+				if (!chunk || chunk->size() == 0) {
 					break;
 				}
 
@@ -252,7 +252,7 @@ struct RunPreparedTask : public Task {
 			duckdb::idx_t out_idx = 0;
 			while (true) {
 				auto chunk = result->Fetch();
-				if (chunk->size() == 0) {
+				if (!chunk || chunk->size() == 0) {
 					break;
 				}
 				// ToObject has to happen here otherwise the converted chunk gets garbage collected for some reason
