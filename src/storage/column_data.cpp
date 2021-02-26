@@ -5,6 +5,7 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/data_pointer.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
+#include "duckdb/storage/table/update_segment.hpp"
 
 namespace duckdb {
 
@@ -18,18 +19,23 @@ void ColumnData::Initialize(vector<unique_ptr<PersistentSegment>> &segments) {
 		persistent_rows += segment->count;
 		data.AppendSegment(move(segment));
 	}
+	throw NotImplementedException("FIXME: append empty update segments here");
 }
 
 void ColumnData::InitializeScan(ColumnScanState &state) {
 	state.current = (ColumnSegment *)data.GetRootSegment();
+	state.updates = (UpdateSegment *) updates.GetRootSegment();
 	state.vector_index = 0;
+	state.vector_index_updates = 0;
 	state.initialized = false;
 }
 
 void ColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t vector_idx) {
 	idx_t row_idx = vector_idx * STANDARD_VECTOR_SIZE;
 	state.current = (ColumnSegment *)data.GetSegment(row_idx);
+	state.updates = (UpdateSegment *) updates.GetSegment(row_idx);
 	state.vector_index = (row_idx - state.current->start) / STANDARD_VECTOR_SIZE;
+	state.vector_index_updates = (row_idx - state.updates->start) / STANDARD_VECTOR_SIZE;
 	state.initialized = false;
 }
 
@@ -39,7 +45,11 @@ void ColumnData::Scan(Transaction &transaction, ColumnScanState &state, Vector &
 		state.initialized = true;
 	}
 	// perform a scan of this segment
-	state.current->Scan(transaction, state, state.vector_index, result);
+	state.current->Scan(state, state.vector_index, result);
+
+	// merge the updates into the result
+	state.updates->MergeUpdates(transaction, state.vector_index_updates, result);
+
 	// move over to the next vector
 	state.Next();
 }
@@ -51,7 +61,10 @@ void ColumnData::FilterScan(Transaction &transaction, ColumnScanState &state, Ve
 		state.initialized = true;
 	}
 	// perform a scan of this segment
-	state.current->FilterScan(transaction, state, result, sel, approved_tuple_count);
+	state.current->FilterScan(state, result, sel, approved_tuple_count);
+	if (state.updates->HasUpdates()) {
+		throw NotImplementedException("FIXME: merge updates");
+	}
 	// move over to the next vector
 	state.Next();
 }
@@ -63,7 +76,10 @@ void ColumnData::Select(Transaction &transaction, ColumnScanState &state, Vector
 		state.initialized = true;
 	}
 	// perform a scan of this segment
-	state.current->Select(transaction, state, result, sel, approved_tuple_count, table_filter);
+	state.current->Select(state, result, sel, approved_tuple_count, table_filter);
+	if (state.updates->HasUpdates()) {
+		throw NotImplementedException("FIXME: merge updates");
+	}
 	// move over to the next vector
 	state.Next();
 }
@@ -73,9 +89,11 @@ void ColumnData::IndexScan(ColumnScanState &state, Vector &result) {
 		state.current->InitializeScan(state);
 		state.initialized = true;
 	}
-	throw NotImplementedException("FIXME: index scan");
 	// // perform a scan of this segment
-	// state.current->IndexScan(state, result);
+	state.current->Scan(state, state.vector_index, result);
+	if (state.updates->HasUpdates()) {
+		throw TransactionException("Cannot create index with outstanding updates");
+	}
 	// move over to the next vector
 	state.Next();
 }
@@ -92,6 +110,11 @@ void ColumnScanState::Next() {
 		initialized = false;
 		segment_checked = false;
 	}
+	vector_index_updates++;
+	if (vector_index_updates >= MorselInfo::MORSEL_VECTOR_COUNT) {
+		updates = (UpdateSegment *) updates->next.get();
+		vector_index_updates = 0;
+	}
 }
 
 void TableScanState::NextVector() {
@@ -106,6 +129,9 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 	if (data.nodes.empty()) {
 		// no transient segments yet, append one
 		AppendTransientSegment(persistent_rows);
+	}
+	if (updates.nodes.empty()) {
+		AppendUpdateSegment(0);
 	}
 	auto segment = (ColumnSegment *)data.GetLastSegment();
 	if (segment->segment_type == ColumnSegmentType::PERSISTENT) {
@@ -164,14 +190,14 @@ void ColumnData::RevertAppend(row_t start_row) {
 	transient.RevertAppend(start_row);
 }
 
-void ColumnData::Update(Transaction &transaction, Vector &updates, Vector &row_ids, idx_t count) {
-	throw NotImplementedException("FIXME: update");
-	// // first find the segment that the update belongs to
-	// idx_t first_id = FlatVector::GetValue<row_t>(row_ids, 0);
-	// auto segment = (ColumnSegment *)data.GetSegment(first_id);
-	// // now perform the update within the segment
-	// segment->Update(*this, transaction, updates, FlatVector::GetData<row_t>(row_ids), count);
-	// statistics->Merge(*segment->stats.statistics);
+void ColumnData::Update(Transaction &transaction, Vector &update_vector, Vector &row_ids, idx_t count) {
+	// throw NotImplementedException("FIXME: update");
+	// first find the segment that the update belongs to
+	idx_t first_id = FlatVector::GetValue<row_t>(row_ids, 0);
+	auto segment = (UpdateSegment *)updates.GetSegment(first_id);
+	// now perform the update within the segment
+	segment->Update(transaction, update_vector, FlatVector::GetData<row_t>(row_ids), count);
+	statistics->Merge(*segment->GetStatistics().statistics);
 }
 
 void ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
@@ -180,6 +206,7 @@ void ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
 	auto vector_index = (row_id - segment->start) / STANDARD_VECTOR_SIZE;
 	// now perform the fetch within the segment
 	segment->Fetch(state, vector_index, result);
+	throw NotImplementedException("FIXME: merge updates in fetch");
 }
 
 void ColumnData::FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result,
@@ -187,12 +214,18 @@ void ColumnData::FetchRow(ColumnFetchState &state, Transaction &transaction, row
 	// find the segment the row belongs to
 	auto segment = (ColumnSegment *)data.GetSegment(row_id);
 	// now perform the fetch within the segment
-	segment->FetchRow(state, transaction, row_id, result, result_idx);
+	segment->FetchRow(state, row_id, result, result_idx);
+	throw NotImplementedException("FIXME: merge updates in fetch row");
 }
 
 void ColumnData::AppendTransientSegment(idx_t start_row) {
 	auto new_segment = make_unique<TransientSegment>(db, type, start_row);
 	data.AppendSegment(move(new_segment));
+}
+
+void ColumnData::AppendUpdateSegment(idx_t start_row) {
+	auto new_segment = make_unique<UpdateSegment>(*this, start_row, UpdateSegment::MORSEL_SIZE);
+	updates.AppendSegment(move(new_segment));
 }
 
 } // namespace duckdb

@@ -30,27 +30,27 @@ void PersistentSegment::InitializeScan(ColumnScanState &state) {
 	data->InitializeScan(state);
 }
 
-void PersistentSegment::Scan(Transaction &transaction, ColumnScanState &state, idx_t vector_index, Vector &result) {
-	data->Scan(transaction, state, vector_index, result);
+void PersistentSegment::Scan(ColumnScanState &state, idx_t vector_index, Vector &result) {
+	data->Scan(state, vector_index, result);
 }
 
-void PersistentSegment::FilterScan(Transaction &transaction, ColumnScanState &state, Vector &result,
+void PersistentSegment::FilterScan(ColumnScanState &state, Vector &result,
                                    SelectionVector &sel, idx_t &approved_tuple_count) {
-	data->FilterScan(transaction, state, result, sel, approved_tuple_count);
+	data->FilterScan(state, result, sel, approved_tuple_count);
 }
 
-void PersistentSegment::Select(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
+void PersistentSegment::Select(ColumnScanState &state, Vector &result, SelectionVector &sel,
                                idx_t &approved_tuple_count, vector<TableFilter> &table_filter) {
-	data->Select(transaction, result, table_filter, sel, approved_tuple_count, state);
+	data->Select(result, table_filter, sel, approved_tuple_count, state);
 }
 
 void PersistentSegment::Fetch(ColumnScanState &state, idx_t vector_index, Vector &result) {
 	data->Fetch(state, vector_index, result);
 }
 
-void PersistentSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result,
+void PersistentSegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &result,
                                  idx_t result_idx) {
-	data->FetchRow(state, transaction, row_id - this->start, result, result_idx);
+	data->FetchRow(state, row_id - this->start, result, result_idx);
 }
 
 bool PersistentSegment::HasChanges() {

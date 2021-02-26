@@ -433,7 +433,7 @@ void NumericSegment::FilterFetchBaseData(ColumnScanState &state, Vector &result,
 //===--------------------------------------------------------------------===//
 // Fetch
 //===--------------------------------------------------------------------===//
-void NumericSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result,
+void NumericSegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &result,
                               idx_t result_idx) {
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	auto handle = buffer_manager.Pin(block);
@@ -486,89 +486,6 @@ idx_t NumericSegment::Append(SegmentStatistics &stats, Vector &data, idx_t offse
 // Append
 //===--------------------------------------------------------------------===//
 template <class T>
-static inline void UpdateNumericStatisticsInternal(T new_value, T &min, T &max) {
-	if (LessThan::Operation(new_value, min)) {
-		min = new_value;
-	}
-	if (GreaterThan::Operation(new_value, max)) {
-		max = new_value;
-	}
-}
-
-template <class T>
-static inline void UpdateNumericStatistics(SegmentStatistics &stats, T new_value);
-
-template <>
-inline void UpdateNumericStatistics<int8_t>(SegmentStatistics &stats, int8_t new_value) {
-	auto &nstats = (NumericStatistics &)*stats.statistics;
-	UpdateNumericStatisticsInternal<int8_t>(new_value, nstats.min.value_.tinyint, nstats.max.value_.tinyint);
-}
-
-template <>
-inline void UpdateNumericStatistics<int16_t>(SegmentStatistics &stats, int16_t new_value) {
-	auto &nstats = (NumericStatistics &)*stats.statistics;
-	UpdateNumericStatisticsInternal<int16_t>(new_value, nstats.min.value_.smallint, nstats.max.value_.smallint);
-}
-
-template <>
-inline void UpdateNumericStatistics<int32_t>(SegmentStatistics &stats, int32_t new_value) {
-	auto &nstats = (NumericStatistics &)*stats.statistics;
-	UpdateNumericStatisticsInternal<int32_t>(new_value, nstats.min.value_.integer, nstats.max.value_.integer);
-}
-
-template <>
-inline void UpdateNumericStatistics<int64_t>(SegmentStatistics &stats, int64_t new_value) {
-	auto &nstats = (NumericStatistics &)*stats.statistics;
-	UpdateNumericStatisticsInternal<int64_t>(new_value, nstats.min.value_.bigint, nstats.max.value_.bigint);
-}
-
-template <>
-inline void UpdateNumericStatistics<uint8_t>(SegmentStatistics &stats, uint8_t new_value) {
-	auto &nstats = (NumericStatistics &)*stats.statistics;
-	UpdateNumericStatisticsInternal<uint8_t>(new_value, nstats.min.value_.utinyint, nstats.max.value_.utinyint);
-}
-
-template <>
-inline void UpdateNumericStatistics<uint16_t>(SegmentStatistics &stats, uint16_t new_value) {
-	auto &nstats = (NumericStatistics &)*stats.statistics;
-	UpdateNumericStatisticsInternal<uint16_t>(new_value, nstats.min.value_.usmallint, nstats.max.value_.usmallint);
-}
-
-template <>
-inline void UpdateNumericStatistics<uint32_t>(SegmentStatistics &stats, uint32_t new_value) {
-	auto &nstats = (NumericStatistics &)*stats.statistics;
-	UpdateNumericStatisticsInternal<uint32_t>(new_value, nstats.min.value_.uinteger, nstats.max.value_.uinteger);
-}
-
-template <>
-inline void UpdateNumericStatistics<uint64_t>(SegmentStatistics &stats, uint64_t new_value) {
-	auto &nstats = (NumericStatistics &)*stats.statistics;
-	UpdateNumericStatisticsInternal<uint64_t>(new_value, nstats.min.value_.ubigint, nstats.max.value_.ubigint);
-}
-
-template <>
-inline void UpdateNumericStatistics<hugeint_t>(SegmentStatistics &stats, hugeint_t new_value) {
-	auto &nstats = (NumericStatistics &)*stats.statistics;
-	UpdateNumericStatisticsInternal<hugeint_t>(new_value, nstats.min.value_.hugeint, nstats.max.value_.hugeint);
-}
-
-template <>
-inline void UpdateNumericStatistics<float>(SegmentStatistics &stats, float new_value) {
-	auto &nstats = (NumericStatistics &)*stats.statistics;
-	UpdateNumericStatisticsInternal<float>(new_value, nstats.min.value_.float_, nstats.max.value_.float_);
-}
-
-template <>
-inline void UpdateNumericStatistics<double>(SegmentStatistics &stats, double new_value) {
-	auto &nstats = (NumericStatistics &)*stats.statistics;
-	UpdateNumericStatisticsInternal<double>(new_value, nstats.min.value_.double_, nstats.max.value_.double_);
-}
-
-template <>
-void UpdateNumericStatistics<interval_t>(SegmentStatistics &stats, interval_t new_value) {
-}
-
-template <class T>
 static void AppendLoop(SegmentStatistics &stats, data_ptr_t target, idx_t target_offset, Vector &source, idx_t offset,
                        idx_t count) {
 	ValidityMask mask(target);
@@ -587,7 +504,7 @@ static void AppendLoop(SegmentStatistics &stats, data_ptr_t target, idx_t target
 				mask.SetInvalidUnsafe(target_idx);
 				stats.statistics->has_null = true;
 			} else {
-				UpdateNumericStatistics<T>(stats, sdata[source_idx]);
+				NumericStatistics::Update<T>(stats, sdata[source_idx]);
 				tdata[target_idx] = sdata[source_idx];
 			}
 		}
@@ -595,7 +512,7 @@ static void AppendLoop(SegmentStatistics &stats, data_ptr_t target, idx_t target
 		for (idx_t i = 0; i < count; i++) {
 			auto source_idx = adata.sel->get_index(offset + i);
 			auto target_idx = target_offset + i;
-			UpdateNumericStatistics<T>(stats, sdata[source_idx]);
+			NumericStatistics::Update<T>(stats, sdata[source_idx]);
 			tdata[target_idx] = sdata[source_idx];
 		}
 	}

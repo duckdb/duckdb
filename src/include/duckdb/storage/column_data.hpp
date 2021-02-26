@@ -77,6 +77,8 @@ public:
 private:
 	//! Append a transient segment
 	void AppendTransientSegment(idx_t start_row);
+	//! Append an update segment segment
+	void AppendUpdateSegment(idx_t start_row);
 };
 
 } // namespace duckdb

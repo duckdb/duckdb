@@ -19,7 +19,7 @@ UncompressedSegment::UncompressedSegment(DatabaseInstance &db, PhysicalType type
 UncompressedSegment::~UncompressedSegment() {
 }
 
-void UncompressedSegment::Verify(Transaction &transaction) {
+void UncompressedSegment::Verify() {
 #ifdef DEBUG
 	// ColumnScanState state;
 	// InitializeScan(state);
@@ -214,7 +214,7 @@ void UncompressedSegment::FilterSelection(SelectionVector &sel, Vector &result, 
 	}
 }
 
-void UncompressedSegment::Select(Transaction &transaction, Vector &result, vector<TableFilter> &table_filters,
+void UncompressedSegment::Select(Vector &result, vector<TableFilter> &table_filters,
                                  SelectionVector &sel, idx_t &approved_tuple_count, ColumnScanState &state) {
 	//! Select the data from the base table
 	Select(state, result, sel, approved_tuple_count, table_filters);
@@ -223,11 +223,11 @@ void UncompressedSegment::Select(Transaction &transaction, Vector &result, vecto
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
-void UncompressedSegment::Scan(Transaction &transaction, ColumnScanState &state, idx_t vector_index, Vector &result) {
+void UncompressedSegment::Scan(ColumnScanState &state, idx_t vector_index, Vector &result) {
 	FetchBaseData(state, vector_index, result);
 }
 
-void UncompressedSegment::FilterScan(Transaction &transaction, ColumnScanState &state, Vector &result,
+void UncompressedSegment::FilterScan(ColumnScanState &state, Vector &result,
                                      SelectionVector &sel, idx_t &approved_tuple_count) {
 	FilterFetchBaseData(state, result, sel, approved_tuple_count);
 }

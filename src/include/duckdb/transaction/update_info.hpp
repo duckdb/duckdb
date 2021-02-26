@@ -13,14 +13,11 @@
 #include "duckdb/common/types/validity_mask.hpp"
 
 namespace duckdb {
-class ColumnData;
-class UncompressedSegment;
+class UpdateSegment;
 
 struct UpdateInfo {
-	//! The base ColumnData that this update affects
-	ColumnData *column_data;
-	//! The uncompressed segment that this update info affects
-	UncompressedSegment *segment;
+	//! The update segment that this update info affects
+	UpdateSegment *segment;
 	//! The version number
 	transaction_t version_number;
 	//! The vector index within the uncompressed segment

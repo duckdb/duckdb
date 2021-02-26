@@ -24,7 +24,7 @@ public:
 	void InitializeScan(ColumnScanState &state) override;
 
 	//! Fetch a single value and append it to the vector
-	void FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result,
+	void FetchRow(ColumnFetchState &state, row_t row_id, Vector &result,
 	              idx_t result_idx) override;
 
 	//! Append a part of a vector to the uncompressed segment with the given append state, updating the provided stats

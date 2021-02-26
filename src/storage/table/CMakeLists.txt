@@ -4,6 +4,7 @@ add_library_unity(
   chunk_info.cpp
   column_segment.cpp
   morsel_info.cpp
+  update_segment.cpp
   persistent_table_data.cpp
   segment_tree.cpp
   persistent_segment.cpp
