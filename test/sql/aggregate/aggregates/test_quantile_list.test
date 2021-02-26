@@ -1,0 +1,28 @@
+# name: test/sql/aggregate/aggregates/test_quantile_list.test
+# description: Test QUANTILE operator with LIST quantiles
+# group: [aggregates]
+
+statement ok
+PRAGMA enable_verification
+
+# scalar quantiles
+statement ok
+create table quantiles as select range r, random() from range(10000) union all values (NULL, 0.1), (NULL, 0.5), (NULL, 0.9) order by 2;
+
+query I
+SELECT quantile(r, LIST_VALUE(0.1, 0.5, 0.9)) from quantiles
+----
+8999
+#[999, 4999, 8999]
+
+statement ok
+pragma threads=4
+
+statement ok
+PRAGMA force_parallelism
+
+query I
+SELECT quantile(r, LIST_VALUE(0.1, 0.5, 0.9)) from quantiles
+----
+8999
+#[999, 4999, 8999]

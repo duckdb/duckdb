@@ -19,19 +19,22 @@ struct QuantileState {
 };
 
 struct QuantileBindData : public FunctionData {
-	explicit QuantileBindData(float quantile_p) : quantile(quantile_p) {
+	explicit QuantileBindData(float quantile_p) : quantiles(1, quantile_p) {
+	}
+
+	explicit QuantileBindData(const vector<float> &quantiles_p) : quantiles(quantiles_p) {
 	}
 
 	unique_ptr<FunctionData> Copy() override {
-		return make_unique<QuantileBindData>(quantile);
+		return make_unique<QuantileBindData>(quantiles);
 	}
 
 	bool Equals(FunctionData &other_p) override {
 		auto &other = (QuantileBindData &)other_p;
-		return quantile == other.quantile;
+		return quantiles == other.quantiles;
 	}
 
-	float quantile;
+	vector<float> quantiles;
 };
 
 template <class T>
@@ -93,9 +96,11 @@ struct QuantileOperation {
 		D_ASSERT(bind_data_p);
 		auto bind_data = (QuantileBindData *)bind_data_p;
 		auto v_t = (T *)state->v;
-		auto offset = (idx_t)((double)(state->pos - 1) * bind_data->quantile);
-		std::nth_element(v_t, v_t + offset, v_t + state->pos);
-		target[idx] = v_t[offset];
+		for (const auto &quantile : bind_data->quantiles) {
+			auto offset = (idx_t)((double)(state->pos - 1) * quantile);
+			std::nth_element(v_t, v_t + offset, v_t + state->pos);
+			target[idx] = v_t[offset];
+		}
 	}
 
 	template <class STATE>
@@ -156,19 +161,33 @@ unique_ptr<FunctionData> BindMedianDecimal(ClientContext &context, AggregateFunc
 	return bind_data;
 }
 
+static float CheckQuantile(const Value &quantile_val) {
+	auto quantile = quantile_val.GetValue<float>();
+
+	if (quantile_val.is_null || quantile < 0 || quantile > 1) {
+		throw BinderException("QUANTILE can only take parameters in range [0, 1]");
+	}
+
+	return quantile;
+}
+
 unique_ptr<FunctionData> BindQuantile(ClientContext &context, AggregateFunction &function,
                                       vector<unique_ptr<Expression>> &arguments) {
 	if (!arguments[1]->IsScalar()) {
 		throw BinderException("QUANTILE can only take constant quantile parameters");
 	}
 	Value quantile_val = ExpressionExecutor::EvaluateScalar(*arguments[1]);
-	auto quantile = quantile_val.GetValue<float>();
-
-	if (quantile_val.is_null || quantile < 0 || quantile > 1) {
-		throw BinderException("QUANTILE can only take parameters in range [0, 1]");
+	vector<float> quantiles;
+	if (quantile_val.type().IsNumeric()) {
+		quantiles.push_back(CheckQuantile(quantile_val));
+	} else {
+		for (const auto &element_val : quantile_val.list_value) {
+			quantiles.push_back(CheckQuantile(element_val));
+		}
 	}
+
 	arguments.pop_back();
-	return make_unique<QuantileBindData>(quantile);
+	return make_unique<QuantileBindData>(quantiles);
 }
 unique_ptr<FunctionData> BindQuantileDecimal(ClientContext &context, AggregateFunction &function,
                                              vector<unique_ptr<Expression>> &arguments) {
@@ -189,6 +208,15 @@ AggregateFunction GetQuantileAggregate(PhysicalType type) {
 	fun.bind = BindQuantile;
 	// temporarily push an argument so we can bind the actual quantile
 	fun.arguments.push_back(LogicalType::FLOAT);
+	return fun;
+}
+
+AggregateFunction GetQuantilesAggregate(PhysicalType type) {
+	auto fun = GetQuantileAggregateFunction(type);
+	fun.bind = BindQuantile;
+	// temporarily push an argument so we can bind the actual quantile
+	LogicalType list_of_float(LogicalTypeId::LIST, {std::make_pair("", LogicalType::FLOAT)});
+	fun.arguments.push_back(list_of_float);
 	return fun;
 }
 
@@ -213,6 +241,12 @@ void QuantileFun::RegisterFunction(BuiltinFunctions &set) {
 	quantile.AddFunction(GetQuantileAggregate(PhysicalType::INT64));
 	quantile.AddFunction(GetQuantileAggregate(PhysicalType::INT128));
 	quantile.AddFunction(GetQuantileAggregate(PhysicalType::DOUBLE));
+
+	quantile.AddFunction(GetQuantilesAggregate(PhysicalType::INT16));
+	quantile.AddFunction(GetQuantilesAggregate(PhysicalType::INT32));
+	quantile.AddFunction(GetQuantilesAggregate(PhysicalType::INT64));
+	quantile.AddFunction(GetQuantilesAggregate(PhysicalType::INT128));
+	quantile.AddFunction(GetQuantilesAggregate(PhysicalType::DOUBLE));
 
 	set.AddFunction(quantile);
 }
