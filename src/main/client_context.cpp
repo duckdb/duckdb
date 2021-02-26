@@ -96,6 +96,7 @@ unique_ptr<DataChunk> ClientContext::Fetch() {
 
 string ClientContext::FinalizeQuery(ClientContextLock &lock, bool success) {
 	profiler.EndQuery();
+	prev_profiler = move(profiler);
 
 	executor.Reset();
 

@@ -13,7 +13,8 @@ add_library_unity(
   read_csv.cpp
   sqlite_functions.cpp
   information_schema_functions.cpp
-  table_scan.cpp)
+  table_scan.cpp
+  prgama_last_profiling_output.cpp)
 
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_func_table>

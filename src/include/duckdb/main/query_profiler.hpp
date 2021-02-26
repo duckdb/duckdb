@@ -30,8 +30,10 @@ struct ExpressionInformation {
 	}
 	void ExtractExpressionsRecursive(unique_ptr<ExpressionState> &state);
 	vector<unique_ptr<ExpressionInformation>> children;
+	bool hasfunction = false;
 	string name;
-	double time;
+	string function_name;
+	uint64_t time = 0;
 };
 
 struct ExpressionExecutorInformation {
@@ -155,7 +157,11 @@ public:
 	//! console)
 	string save_location;
 
-private:
+	idx_t OperatorSize() {
+		return tree_map.size();
+	}
+
+public:
 	//! Whether or not query profiling is enabled
 	bool enabled;
 	//! Whether or not detailed query profiling is enabled

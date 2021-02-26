@@ -42,6 +42,8 @@ public:
 	DUCKDB_API explicit ClientContext(shared_ptr<DatabaseInstance> db);
 	DUCKDB_API ~ClientContext();
 
+	//! Previous Query profiler
+	QueryProfiler prev_profiler;
 	//! Query profiler
 	QueryProfiler profiler;
 	//! The database that this client is connected to
