@@ -136,7 +136,7 @@ static Napi::Value convert_chunk(Napi::Env &env, std::vector<std::string> names,
 			}
 
 			// TODO templateroo here
-			switch (chunk.data[col_idx].type.id()) {
+			switch (chunk.data[col_idx].GetType().id()) {
 			case duckdb::LogicalTypeId::INTEGER: {
 				value = Napi::Number::New(env, dval.value_.integer);
 			} break;
