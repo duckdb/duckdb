@@ -220,3 +220,50 @@ SELECT editdist3('hallo', 'hello')
 
 statement error
 SELECT editdist3(s, 'hello') FROM strings
+
+
+# Comparing fields from two columns row wise
+
+statement ok
+DROP TABLE strings
+
+statement ok
+CREATE TABLE strings(s VARCHAR, t VARCHAR)
+
+statement ok
+INSERT INTO strings VALUES 	('hello', 'hello'), ('hello', 'hallo'), ('flaw', 'lawn'),
+							('sitting', 'kitten'), ('hallo', 'aloha'),
+							('hello', 'aloha'), (NULL, NULL),
+							('', ''), (NULL, 'bora'), ('bora', NULL), ('hi', ''),
+							('', 'hi'), (NULL, ''), ('', NULL)
+
+statement error
+SELECT s, t, levenshtein(s, t) ld FROM strings WHERE length(s) > 1 AND s is not NULL and t is not NULL
+
+statement error
+SELECT levenshtein(s, t)  FROM strings
+
+query I
+statement error
+SELECT s, t, levenshtein(s, t) ld FROM strings WHERE length(s) > 1 AND length(t) > 0 AND s is not NULL and t is not NULL
+0
+1
+2
+3
+4
+5
+
+statement error
+SELECT levenshtein(s, t)  FROM strings WHERE s IS NULL
+
+statement error
+SELECT levenshtein(s, t)  FROM strings WHERE length(s) < 1
+
+statement error
+SELECT levenshtein(s, t)  FROM strings WHERE t IS NULL
+
+statement error
+SELECT levenshtein(s, t)  FROM strings WHERE length(t) < 1
+
+statement error
+SELECT levenshtein(s, t)  FROM strings WHERE rowid > 5

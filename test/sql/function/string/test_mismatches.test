@@ -76,6 +76,12 @@ NULL
 
 
 # special cases
+
+query I
+SELECT mismatches('', '')
+----
+0
+
 query I
 SELECT mismatches(NULL, s) FROM strings ORDER BY s
 ----
@@ -110,9 +116,6 @@ SELECT mismatches('', 'hallo')
 
 statement error
 SELECT mismatches('hi', '')
-
-statement error
-SELECT mismatches('', '')
 
 statement error
 SELECT mismatches('', s) FROM strings ORDER BY s
@@ -157,9 +160,21 @@ SELECT hamming(s, 'hallo') FROM strings WHERE s = 'hello'
 ----
 1
 
-# TODO
-drop table strings;
-CREATE TABLE strings(s VARCHAR, t VARCHAR)
-INSERT INTO strings VALUES ('hello', 'world'), ('hallo', 'ola'), ('aloha', 'hello'), ('world', 'wonder'), (NULL, NULL)
 
-SELECT s, t, levenshtein(s, t) l FROM strings WHERE s is not null and t is not null
+
+# Comparing fields from two columns row wise
+
+statement ok
+DROP TABLE strings;
+
+statement ok
+CREATE TABLE strings(s VARCHAR, t VARCHAR)
+
+statement ok
+INSERT INTO strings VALUES ('hello', 'world'), ('hallo', 'ola'), ('hello', ''), (NULL, NULL), ('', ''), ('bora', 'bora')
+
+statement error
+SELECT s, t, hamming(s, t) hd FROM strings WHERE length(s) = length(t)
+
+statement error
+SELECT hamming(s, t)  FROM strings
