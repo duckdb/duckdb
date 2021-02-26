@@ -942,6 +942,9 @@ jobs:
     - name: Setup
       run: ./scripts/node_version.sh upload
 
+    - name: Node 10
+      run: ./scripts/node_build.sh 10
+
     - name: Node 12
       run: ./scripts/node_build.sh 12
 
@@ -964,6 +967,9 @@ jobs:
 
     - name: Setup
       run: ./scripts/node_version.sh
+
+    - name: Node 10
+      run: ./scripts/node_build.sh 10
 
     - name: Node 12
       run: ./scripts/node_build.sh 12
