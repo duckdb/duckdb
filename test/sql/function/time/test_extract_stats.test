@@ -1,0 +1,46 @@
+# name: test/sql/function/time/test_extract_stats.test
+# description: Extract function statistics
+# group: [time]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE times(i TIME)
+
+statement ok
+INSERT INTO times VALUES ('00:01:20'), ('20:08:10.998'), ('20:08:10.33'), ('20:08:10.001'), (NULL)
+
+statement ok
+PRAGMA disable_verification
+
+# extract various parts of the time
+query I
+SELECT stats(EXTRACT(second FROM i)) FROM times LIMIT 1
+----
+<REGEX>:.*true.*0.*60.*
+
+query I
+SELECT stats(EXTRACT(minute FROM i)) FROM times LIMIT 1
+----
+<REGEX>:.*true.*0.*60.*
+
+query I
+SELECT stats(EXTRACT(hour FROM i)) FROM times LIMIT 1
+----
+<REGEX>:.*true.*0.*24.*
+
+query I
+SELECT stats(EXTRACT(milliseconds FROM i)) FROM times LIMIT 1
+----
+<REGEX>:.*true.*0.*60000.*
+
+query I
+SELECT stats(EXTRACT(microseconds FROM i)) FROM times LIMIT 1
+----
+<REGEX>:.*true.*0.*60000000.*
+
+query I
+SELECT stats(EXTRACT(epoch FROM i)) FROM times LIMIT 1
+----
+<REGEX>:.*true.*0.*86400.*
