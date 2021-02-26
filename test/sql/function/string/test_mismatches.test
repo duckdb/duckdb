@@ -77,10 +77,8 @@ NULL
 
 # special cases
 
-query I
+statement error
 SELECT mismatches('', '')
-----
-0
 
 query I
 SELECT mismatches(NULL, s) FROM strings ORDER BY s

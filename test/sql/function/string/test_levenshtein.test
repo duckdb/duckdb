@@ -232,20 +232,16 @@ CREATE TABLE strings(s VARCHAR, t VARCHAR)
 
 statement ok
 INSERT INTO strings VALUES 	('hello', 'hello'), ('hello', 'hallo'), ('flaw', 'lawn'),
-							('sitting', 'kitten'), ('hallo', 'aloha'),
-							('hello', 'aloha'), (NULL, NULL),
-							('', ''), (NULL, 'bora'), ('bora', NULL), ('hi', ''),
-							('', 'hi'), (NULL, ''), ('', NULL)
+							('sitting', 'kitten'), ('hallo', 'aloha'), ('hello', 'aloha'), 
+							(NULL, NULL), ('', ''), 
+							(NULL, 'bora'), ('bora', NULL), 
+							('hi', ''), ('', 'hi'), 
+							(NULL, ''), ('', NULL)
 
-statement error
-SELECT s, t, levenshtein(s, t) ld FROM strings WHERE length(s) > 1 AND s is not NULL and t is not NULL
-
-statement error
-SELECT levenshtein(s, t)  FROM strings
 
 query I
-statement error
-SELECT s, t, levenshtein(s, t) ld FROM strings WHERE length(s) > 1 AND length(t) > 0 AND s is not NULL and t is not NULL
+SELECT levenshtein(s, t) ld FROM strings WHERE length(s) > 1 AND length(t) > 0 AND s is not NULL and t is not NULL
+----
 0
 1
 2
@@ -253,17 +249,25 @@ SELECT s, t, levenshtein(s, t) ld FROM strings WHERE length(s) > 1 AND length(t)
 4
 5
 
+# NULL inserts result in empty string
+
 statement error
-SELECT levenshtein(s, t)  FROM strings WHERE s IS NULL
+SELECT levenshtein(s, t)  FROM strings
+
+statement error
+SELECT s, t, levenshtein(s, t) ld FROM strings WHERE length(s) > 1 AND s is not NULL and t is not NULL
 
 statement error
 SELECT levenshtein(s, t)  FROM strings WHERE length(s) < 1
 
 statement error
-SELECT levenshtein(s, t)  FROM strings WHERE t IS NULL
+SELECT levenshtein(t, s)  FROM strings WHERE length(s) < 1
 
 statement error
 SELECT levenshtein(s, t)  FROM strings WHERE length(t) < 1
+
+statement error
+SELECT levenshtein(t, s)  FROM strings WHERE length(t) < 1
 
 statement error
 SELECT levenshtein(s, t)  FROM strings WHERE rowid > 5
