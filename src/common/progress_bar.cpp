@@ -1,5 +1,6 @@
 #include "duckdb/common/progress_bar.hpp"
 #include "duckdb/common/printer.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
@@ -13,7 +14,7 @@ void ProgressBar::ProgressBarThread() {
 			valid_percentage = false;
 		}
 		current_percentage = new_percentage;
-		if (supported && current_percentage > -1) {
+		if (supported && current_percentage > -1 && !executor->context.test) {
 			Printer::PrintProgress(current_percentage, PROGRESS_BAR_STRING.c_str(), PROGRESS_BAR_WIDTH);
 		}
 		WaitFor(std::chrono::milliseconds(time_update_bar));
@@ -50,7 +51,7 @@ void ProgressBar::Stop() {
 		}
 		c.notify_one();
 		progress_bar_thread.join();
-		if (supported) {
+		if (supported && current_percentage > 0 && !executor->context.test) {
 			Printer::FinishProgressBarPrint(PROGRESS_BAR_STRING.c_str(), PROGRESS_BAR_WIDTH);
 		}
 	}

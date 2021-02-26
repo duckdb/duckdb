@@ -49,6 +49,7 @@ private:
 	bool stop = false;
 	//! In case our progress bar tries to use a scan operator that is not implemented we don't print anything
 	bool supported = true;
+	bool print = true;
 	//! Starts the Progress Bar Thread that prints the progress bar
 	void ProgressBarThread();
 
