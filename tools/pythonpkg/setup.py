@@ -203,7 +203,7 @@ setup(
     tests_require=['pytest'],
     classifiers = [
         'Topic :: Database :: Database Engines/Servers',
-        'Intended Audience :: Developers,
+        'Intended Audience :: Developers',
         'License :: OSI Approved :: MIT License',
     ],
     ext_modules = [libduckdb],
