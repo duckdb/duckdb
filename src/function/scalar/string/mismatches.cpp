@@ -8,7 +8,7 @@ namespace duckdb {
 
 static int64_t MismatchesScalarFunction(Vector &result, const string_t str, string_t tgt) {
 	idx_t str_len = str.GetSize();
-	idx_t tgt_len = tgt.GetSize(); 
+	idx_t tgt_len = tgt.GetSize();
 
 	if (str_len != tgt_len) {
 		throw InvalidInputException("Mismatch Function: Strings must be of equal length!");
