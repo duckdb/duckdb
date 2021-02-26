@@ -11,6 +11,7 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_set.hpp"
 #include "duckdb/common/enums/output_type.hpp"
+#include "duckdb/common/progress_bar.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/execution/executor.hpp"
@@ -21,7 +22,6 @@
 #include "duckdb/transaction/transaction_context.hpp"
 
 #include <random>
-#include "duckdb/common/progress_bar.hpp"
 
 namespace duckdb {
 class Appender;
@@ -63,6 +63,8 @@ public:
 	//! The wait time before showing the progress bar
 	int wait_time = 2000;
 
+	//! The default schema to search in when one is not explicitly provided
+	string default_schema = DEFAULT_SCHEMA;
 	unique_ptr<SchemaCatalogEntry> temporary_objects;
 	unordered_map<string, shared_ptr<PreparedStatementData>> prepared_statements;
 

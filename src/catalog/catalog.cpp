@@ -164,7 +164,7 @@ void Catalog::DropEntry(ClientContext &context, DropInfo *info) {
 		if (info->schema.empty()) {
 			// invalid schema: check if the entry is in the temp schema
 			auto entry = GetEntry(context, info->type, TEMP_SCHEMA, info->name, true);
-			info->schema = entry ? TEMP_SCHEMA : DEFAULT_SCHEMA;
+			info->schema = entry ? TEMP_SCHEMA : context.default_schema;
 		}
 		auto schema = GetSchema(context, info->schema);
 		schema->DropEntry(context, info);
@@ -200,7 +200,7 @@ CatalogEntry *Catalog::GetEntry(ClientContext &context, CatalogType type, string
 			return entry;
 		}
 		// if the entry does not exist in the temp schema, search in the default schema
-		schema_name = DEFAULT_SCHEMA;
+		schema_name = context.default_schema;
 	}
 	auto schema = GetSchema(context, schema_name, error_context);
 	return schema->GetEntry(context, type, name, if_exists, error_context);
@@ -289,7 +289,7 @@ void Catalog::Alter(ClientContext &context, AlterInfo *info) {
 			info->schema = TEMP_SCHEMA;
 		} else {
 			// if the entry does not exist in the temp schema, search in the default schema
-			info->schema = DEFAULT_SCHEMA;
+			info->schema = context.default_schema;
 		}
 	}
 	auto schema = GetSchema(context, info->schema);

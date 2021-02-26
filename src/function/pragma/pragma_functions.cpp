@@ -211,6 +211,10 @@ static void PragmaDebugCheckpointAbort(ClientContext &context, const FunctionPar
 	}
 }
 
+static void PragmaSetDefaultSchema(ClientContext &context, const FunctionParameters &parameters) {
+	context.default_schema = StringUtil::Lower(parameters.values[0].ToString());
+}
+
 void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	RegisterEnableProfiling(set);
 
@@ -271,6 +275,8 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 
 	set.AddFunction(
 	    PragmaFunction::PragmaAssignment("debug_checkpoint_abort", PragmaDebugCheckpointAbort, LogicalType::VARCHAR));
+
+	set.AddFunction(PragmaFunction::PragmaAssignment("default_schema", PragmaSetDefaultSchema, LogicalType::VARCHAR));
 }
 
 idx_t ParseMemoryLimit(string arg) {
