@@ -180,7 +180,7 @@ struct StatementParam {
 };
 
 struct RunPreparedTask : public Task {
-	RunPreparedTask(Statement &statement_, unique_ptr<StatementParam> params_, RunType run_type_)
+	RunPreparedTask(Statement &statement_, duckdb::unique_ptr<StatementParam> params_, RunType run_type_)
 	    : Task(statement_, params_->callback), params(move(params_)), run_type(run_type_) {
 	}
 
@@ -271,11 +271,11 @@ struct RunPreparedTask : public Task {
 		}
 	}
 	std::unique_ptr<duckdb::QueryResult> result;
-	unique_ptr<StatementParam> params;
+	duckdb::unique_ptr<StatementParam> params;
 	RunType run_type;
 };
 
-unique_ptr<StatementParam> Statement::HandleArgs(const Napi::CallbackInfo &info) {
+duckdb::unique_ptr<StatementParam> Statement::HandleArgs(const Napi::CallbackInfo &info) {
 	size_t start_idx = ignore_first_param ? 1 : 0;
 	auto params = duckdb::make_unique<StatementParam>();
 
