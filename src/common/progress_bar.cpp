@@ -10,9 +10,6 @@ void ProgressBar::ProgressBarThread() {
 	while (!stop) {
 		int new_percentage;
 		supported = executor->GetPipelinesProgress(new_percentage);
-		if (new_percentage > 100 || new_percentage < current_percentage) {
-			valid_percentage = false;
-		}
 		current_percentage = new_percentage;
 		if (supported && current_percentage > -1 && !executor->context.test) {
 			Printer::PrintProgress(current_percentage, PROGRESS_BAR_STRING.c_str(), PROGRESS_BAR_WIDTH);
@@ -26,17 +23,8 @@ int ProgressBar::GetCurrentPercentage() {
 	return current_percentage;
 }
 
-bool ProgressBar::IsPercentageValid() {
-#ifndef DUCKDB_NO_THREADS
-	return valid_percentage;
-#else
-	return true;
-#endif
-}
-
 void ProgressBar::Start() {
 #ifndef DUCKDB_NO_THREADS
-	valid_percentage = true;
 	current_percentage = 0;
 	progress_bar_thread = std::thread(&ProgressBar::ProgressBarThread, this);
 #endif
