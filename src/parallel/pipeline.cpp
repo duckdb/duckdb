@@ -98,6 +98,7 @@ void Pipeline::Execute(TaskContext &task) {
 			sink->Sink(context, *sink_state, *lstate, intermediate);
 			thread.profiler.EndOperator(nullptr);
 		}
+		child->FinalizeOperatorState(*state, context);
 	} catch (std::exception &ex) {
 		executor.PushError(ex.what());
 	} catch (...) {
