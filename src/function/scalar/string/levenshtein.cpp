@@ -7,10 +7,6 @@
 
 namespace duckdb {
 
-static idx_t Minimum(const idx_t &x, const idx_t &y, const idx_t &z) {
-	return std::min(x, std::min(y, z));
-}
-
 // See: https://www.kdnuggets.com/2020/10/optimizing-levenshtein-distance-measuring-text-similarity.html
 // And: Iterative 2-row algorithm: https://en.wikipedia.org/wiki/Levenshtein_distance
 // Note: A first implementation using the array algorithm version resulted in an error raised by duckdb
@@ -59,7 +55,7 @@ static idx_t LevenshteinDistance(const string_t &txt, const string_t &tgt) {
 				cost_substitution += 1;
 			}
 
-			distances1[pos_tgt + 1] = Minimum(cost_deletion, cost_substitution, cost_insertion);
+			distances1[pos_tgt + 1] = MinValue(cost_deletion, MinValue(cost_substitution, cost_insertion));
 		}
 		// copy distances1 (current row) to distances0 (previous row) for next iteration
 		// since data in distances1 is always invalidated, a swap without copy is more efficient
