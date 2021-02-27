@@ -54,7 +54,11 @@ bool Pipeline::GetProgress(ClientContext &context, PhysicalOperator *op, int &cu
 		double total_cardinality = 0;
 		current_percentage = 0;
 		for (auto &op_child : op->children) {
-			progress.push_back(GetProgress(context, op_child.get(), current_percentage));
+			int child_percentage = 0;
+			if (!GetProgress(context, op_child.get(), child_percentage)) {
+				return false;
+			}
+			progress.push_back(child_percentage);
 			cardinality.push_back(op_child->estimated_cardinality);
 			total_cardinality += op_child->estimated_cardinality;
 		}

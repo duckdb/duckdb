@@ -62,6 +62,8 @@ public:
 	bool enable_progress_bar = false;
 	//! The wait time before showing the progress bar
 	int wait_time = 2000;
+	//! Indicates if we are running tests
+	bool test = false;
 
 	unique_ptr<SchemaCatalogEntry> temporary_objects;
 	unordered_map<string, shared_ptr<PreparedStatementData>> prepared_statements;
