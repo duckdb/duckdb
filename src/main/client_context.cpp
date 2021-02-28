@@ -184,6 +184,9 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 }
 
 int ClientContext::GetProgress() {
+    if (!progress_bar){
+        return -1;
+    }
 	return progress_bar->GetCurrentPercentage();
 }
 

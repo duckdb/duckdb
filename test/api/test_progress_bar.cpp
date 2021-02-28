@@ -93,4 +93,27 @@ TEST_CASE("Test Progress Bar", "[api]") {
 	REQUIRE_NO_FAIL(con.Query("select count(*) from tbl where a = (select min(b) from tbl)"));
 	test_progress.End();
 }
+
+TEST_CASE("Test Progress Bar CSV", "[api]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+//	con.context->test = true;
+	TestProgressBar test_progress(con.context.get());
+	REQUIRE_NO_FAIL(con.Query("PRAGMA set_progress_bar_time=1"));
+
+	//! Create Tables From CSVs
+//	test_progress.Start();
+//	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/test/test.csv')"));
+//	test_progress.End();
+//
+//	test_progress.Start();
+//	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test_2 AS SELECT * FROM  read_csv('test/sql/copy/csv/data/test/test.csv', columns=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'VARCHAR'), sep=',', auto_detect='false')"));
+//	test_progress.End();
+//
+	//! Query directly from Read CSV Auto
+	test_progress.Start();
+	REQUIRE_NO_FAIL(con.Query("SELECT * FROM read_csv_auto('test/sql/copy/csv/data/test/test.csv', sep=',')"));
+    test_progress.End();
+}
 #endif
