@@ -6,9 +6,6 @@
   "gypfile": true,
   "dependencies": {
     "@mapbox/node-pre-gyp": "^1.0.0",
-    "aws-sdk": "^2.853.0",
-    "bindings": "*",
-    "mocha": "^8.3.0",
     "node-addon-api": "*",
     "node-gyp": "^7.1.2"
   },
@@ -27,7 +24,9 @@
     "lib": "lib",
     "test": "test"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "mocha": "^8.3.0"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/cwida/duckdb.git"
