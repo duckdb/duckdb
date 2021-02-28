@@ -17,39 +17,39 @@
 namespace duckdb {
 
 struct RowDataBlock {
-	RowDataBlock(BufferManager &buffer_manager, idx_t byte_capacity, idx_t constant_entry_size)
-	    : count(0), byte_offset(0), BYTE_CAPACITY(byte_capacity), CONSTANT_ENTRY_SIZE(constant_entry_size),
-	      ENTRY_CAPACITY(CONSTANT_ENTRY_SIZE ? BYTE_CAPACITY / CONSTANT_ENTRY_SIZE : 0) {
+	RowDataBlock(BufferManager &buffer_manager, const idx_t &byte_capacity, const idx_t &constant_entry_size,
+	             const idx_t &positions_blocksize)
+	    : count(0), byte_offset(0), byte_capacity(byte_capacity), constant_entry_size(constant_entry_size),
+	      entry_capacity(constant_entry_size ? byte_capacity / constant_entry_size : 0) {
 		block = buffer_manager.RegisterMemory(byte_capacity, false);
 		if (!constant_entry_size) {
-			entry_endings = buffer_manager.RegisterMemory(Storage::BLOCK_ALLOC_SIZE, false);
+			entry_positions = buffer_manager.RegisterMemory(positions_blocksize, false);
 		}
 	}
 	shared_ptr<BlockHandle> block;
 	idx_t count;
 
 	idx_t byte_offset;
-	const idx_t BYTE_CAPACITY;
-	shared_ptr<BlockHandle> entry_endings;
+	idx_t byte_capacity;
+	shared_ptr<BlockHandle> entry_positions = nullptr;
 
-	const idx_t CONSTANT_ENTRY_SIZE;
-	const idx_t ENTRY_CAPACITY;
+	idx_t constant_entry_size;
+	idx_t entry_capacity;
 };
 
 struct BlockAppendEntry {
-	BlockAppendEntry(data_ptr_t baseptr, idx_t count, idx_t *entry_endings)
-	    : baseptr(baseptr), count(count), entry_endings(entry_endings) {
+	BlockAppendEntry(data_ptr_t baseptr, idx_t count, idx_t *entry_positions)
+	    : baseptr(baseptr), count(count), entry_positions(entry_positions) {
 	}
 	data_ptr_t baseptr;
 	idx_t count;
 
-	idx_t *entry_endings;
-	idx_t prev_ending;
+	idx_t *entry_positions;
 };
 
 class RowChunk {
 public:
-	RowChunk(BufferManager &buffer_manager);
+	explicit RowChunk(BufferManager &buffer_manager);
 
 	std::mutex rc_lock;
 
@@ -71,7 +71,8 @@ public:
 	                     data_ptr_t key_locations[], data_ptr_t nullmask_locations[]);
 	idx_t AppendToBlock(RowDataBlock &block, BufferHandle &handle, vector<BlockAppendEntry> &append_entries,
 	                    idx_t remaining, idx_t entry_sizes[], BufferHandle *endings_handle);
-	void Build(idx_t added_count, data_ptr_t key_locations[], idx_t entry_sizes[], const idx_t &constant_entry_size);
+	void Build(idx_t added_count, data_ptr_t key_locations[], idx_t entry_sizes[], const idx_t &constant_entry_size,
+	           const idx_t &positions_blocksize);
 
 	static void DeserializeIntoVectorData(Vector &v, VectorData &vdata, PhysicalType type, idx_t vcount, idx_t col_idx,
 	                                      data_ptr_t key_locations[], data_ptr_t nullmask_locations[]);

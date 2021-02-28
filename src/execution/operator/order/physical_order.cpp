@@ -17,20 +17,21 @@ PhysicalOrder::PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode>
 //===--------------------------------------------------------------------===//
 struct SortingState {
 	SortingState(const vector<PhysicalType> &sorting_p_types, const vector<OrderByNullType> &null_orders,
-	             const idx_t &nullmask_size, const idx_t &constant_entry_size, const idx_t &block_capacity,
-	             const vector<int8_t> &is_asc, const vector<int8_t> &nulls_first)
-	    : SORTING_P_TYPES(sorting_p_types), NULL_ORDERS(null_orders), NULLMASK_SIZE(nullmask_size),
-	      CONSTANT_ENTRY_SIZE(constant_entry_size), BLOCK_CAPACITY(block_capacity), IS_ASC(is_asc),
-	      NULLS_FIRST(nulls_first) {
+	             const idx_t &validitymask_size, const idx_t &constant_entry_size, const idx_t &block_capacity,
+	             const idx_t &positions_blocksize, const vector<int8_t> &is_asc, const vector<int8_t> &nulls_first)
+	    : SORTING_P_TYPES(sorting_p_types), NULL_ORDERS(null_orders), VALIDITYMASK_SIZE(validitymask_size),
+	      CONSTANT_ENTRY_SIZE(constant_entry_size), BLOCK_CAPACITY(block_capacity),
+	      POSITIONS_BLOCKSIZE(positions_blocksize), IS_ASC(is_asc), NULLS_FIRST(nulls_first) {
 	}
 	const vector<PhysicalType> SORTING_P_TYPES;
 	const vector<OrderByNullType> NULL_ORDERS;
 
-	const idx_t NULLMASK_SIZE;
+	const idx_t VALIDITYMASK_SIZE;
 	const idx_t CONSTANT_ENTRY_SIZE;
 	const idx_t BLOCK_CAPACITY;
+	const idx_t POSITIONS_BLOCKSIZE;
 
-	const uint8_t NULL_BITS[8] = {1, 2, 4, 8, 16, 32, 64, 128};
+	const uint8_t VALID_BITS[8] = {1, 2, 4, 8, 16, 32, 64, 128};
 	const vector<int8_t> IS_ASC;
 	const vector<int8_t> NULLS_FIRST;
 };
@@ -58,7 +59,7 @@ public:
 	std::unordered_map<idx_t, idx_t> p_to_p;
 
 	//! Sorting columns in row format
-	idx_t nullmask_size;
+	idx_t validitymask_size;
 	idx_t block_capacity;
 
 	//! Ordered segments
@@ -67,10 +68,10 @@ public:
 	vector<vector<unique_ptr<ContinuousBlock>>> intermediate;
 
 	void InitializeSortingState(const vector<idx_t> &sorting_p_sizes, const vector<OrderByNullType> &null_orders,
-	                            const idx_t &constant_entry_size, const vector<int8_t> &is_asc,
-	                            const vector<int8_t> &nulls_first) {
-		sorting_state = make_unique<SortingState>(sorting_p_types, null_orders, nullmask_size, constant_entry_size,
-		                                          block_capacity, is_asc, nulls_first);
+	                            const idx_t &constant_entry_size, const idx_t &positions_blocksize,
+	                            const vector<int8_t> &is_asc, const vector<int8_t> &nulls_first) {
+		sorting_state = make_unique<SortingState>(sorting_p_types, null_orders, validitymask_size, constant_entry_size,
+		                                          block_capacity, positions_blocksize, is_asc, nulls_first);
 	}
 
 	//! Bunch of const for speed during sorting
@@ -101,7 +102,7 @@ public:
 	//! Allocate arrays for vector serialization
 	const SelectionVector *sel_ptr = &FlatVector::INCREMENTAL_SELECTION_VECTOR;
 	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
-	data_ptr_t nullmask_locations[STANDARD_VECTOR_SIZE];
+	data_ptr_t validitymask_locations[STANDARD_VECTOR_SIZE];
 	idx_t entry_sizes[STANDARD_VECTOR_SIZE];
 
 	//! Sorted incoming data (sorted each time a block is filled)
@@ -138,7 +139,7 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 			state->payload_p_types.push_back(children[0]->types[i].InternalType());
 		}
 	}
-	state->nullmask_size = (state->sorting_p_types.size() + state->payload_p_types.size() + 7) / 8;
+	state->validitymask_size = (state->sorting_p_types.size() + state->payload_p_types.size() + 7) / 8;
 	state->block_capacity = SORTING_BLOCK_SIZE;
 
 	// determine whether the entries are of variable size
@@ -152,10 +153,15 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 		constant = constant && TypeIsConstantSize(ptype);
 		entry_size += GetTypeIdSize(ptype);
 	}
-	if (!constant) {
-		entry_size = 0;
+	if (constant) {
+		state->InitializeSortingState(sorting_p_sizes, null_orders, entry_size + state->validitymask_size, 0, is_asc,
+		                              nulls_first);
+	} else {
+		idx_t positions_blocksize =
+		    MaxValue((idx_t)Storage::BLOCK_ALLOC_SIZE, ((SORTING_BLOCK_SIZE / entry_size) + 1) * sizeof(idx_t));
+		state->InitializeSortingState(sorting_p_sizes, null_orders, 0, positions_blocksize, is_asc, nulls_first);
 	}
-	state->InitializeSortingState(sorting_p_sizes, null_orders, entry_size, is_asc, nulls_first);
+
 	return state;
 }
 
@@ -179,8 +185,8 @@ public:
 	idx_t end;
 
 	//! Used only for the initial merge after sorting in Sink/Combine
-	shared_ptr<BlockHandle> sorted_indices_block;
-	shared_ptr<idx_t[]> sorted_indices = nullptr;
+	shared_ptr<BlockHandle> sorted_indices_block = nullptr;
+	idx_t *sorted_indices = nullptr;
 
 	idx_t Count() {
 		idx_t count = 0;
@@ -228,12 +234,17 @@ public:
 		// pin data block
 		handle = state.buffer_manager.Pin(blocks[block_idx].block);
 		base_dataptr = handle->node->buffer;
-		// pin endings block (if non-const length)
-		if (!sorting_state.CONSTANT_ENTRY_SIZE) {
-			entry_endings_handle = state.buffer_manager.Pin(blocks[block_idx].entry_endings);
-			entry_endings = ((idx_t *)entry_endings_handle->node->buffer);
-		} else {
+		// pin positions block (if non-const length)
+		if (sorting_state.CONSTANT_ENTRY_SIZE) {
 			current_entry_size = sorting_state.CONSTANT_ENTRY_SIZE;
+		} else {
+			positions_handle = state.buffer_manager.Pin(blocks[block_idx].entry_positions);
+			entry_positions = ((idx_t *)positions_handle->node->buffer);
+		}
+		// pin sorted indices (if any)
+		if (sorted_indices_block) {
+			sorted_indices_handle = state.buffer_manager.Pin(sorted_indices_block);
+			sorted_indices = (idx_t *)sorted_indices_handle->node->buffer;
 		}
 		// initialize current entry
 		InitializeEntry();
@@ -252,10 +263,10 @@ public:
 
 		// flush data of last block(s)
 		while (!Done()) {
-			if (!write_block || write_block->byte_offset + EntrySize() > write_block->BYTE_CAPACITY) {
+			if (!write_block || write_block->byte_offset + EntrySize() > write_block->byte_capacity) {
 				// initialize new blocks to write to
 				target.blocks.emplace_back(state.buffer_manager, sorting_state.BLOCK_CAPACITY,
-				                           sorting_state.CONSTANT_ENTRY_SIZE);
+				                           sorting_state.CONSTANT_ENTRY_SIZE, sorting_state.POSITIONS_BLOCKSIZE);
 				write_block = &target.blocks.back();
 				write_handle = state.buffer_manager.Pin(write_block->block);
 				write_ptr = write_handle->node->buffer;
@@ -304,21 +315,19 @@ private:
 	data_ptr_t base_dataptr;
 	data_ptr_t dataptr;
 
-	unique_ptr<BufferHandle> entry_endings_handle;
-	idx_t *entry_endings;
+	unique_ptr<BufferHandle> positions_handle;
+	idx_t *entry_positions;
 	idx_t current_entry_size;
 
-    unique_ptr<BufferHandle> sorted_indices_handle;
+	unique_ptr<BufferHandle> sorted_indices_handle;
 
 	void InitializeEntry() {
 		idx_t actual_entry_idx = sorted_indices ? sorted_indices[entry_idx] : entry_idx;
-		if (actual_entry_idx == 0) {
-			dataptr = base_dataptr;
-			current_entry_size = entry_endings[actual_entry_idx];
+		if (sorting_state.CONSTANT_ENTRY_SIZE) {
+			dataptr = base_dataptr + actual_entry_idx * sorting_state.CONSTANT_ENTRY_SIZE;
 		} else {
-			auto entry_offset = entry_endings[actual_entry_idx - 1];
-			dataptr = base_dataptr + entry_offset;
-			current_entry_size = entry_endings[actual_entry_idx] - entry_offset;
+			dataptr = base_dataptr + entry_positions[actual_entry_idx];
+			current_entry_size = entry_positions[actual_entry_idx + 1] - entry_positions[actual_entry_idx];
 		}
 	}
 };
@@ -330,26 +339,40 @@ static int8_t TemplatedCompareValue(data_ptr_t &l_val, data_ptr_t &r_val) {
 	if (Equals::Operation<TYPE>(left_val, right_val)) {
 		return 0;
 	}
-	l_val += sizeof(TYPE);
-	r_val += sizeof(TYPE);
 	if (LessThan::Operation<TYPE>(left_val, right_val)) {
 		return -1;
 	}
 	return 1;
 }
 
-static int32_t CompareValue(const data_ptr_t &l_nullmask, const data_ptr_t &r_nullmask, data_ptr_t &l_val,
-                            data_ptr_t &r_val, const idx_t &sort_idx, const SortingState &state) {
+static int32_t CompareValue(const data_ptr_t &l_validitymask, const data_ptr_t &r_validitymask, data_ptr_t &l_val,
+                            data_ptr_t &r_val, const idx_t &sort_idx, const SortingState &state, idx_t &l_size,
+                            idx_t &r_size) {
 	auto byte_offset = sort_idx / 8;
 	auto offset_in_byte = sort_idx % 8;
-	auto left_null = *(l_nullmask + byte_offset) & state.NULL_BITS[offset_in_byte];
-	auto right_null = *(r_nullmask + byte_offset) & state.NULL_BITS[offset_in_byte];
+	auto left_valid = *(l_validitymask + byte_offset) & state.VALID_BITS[offset_in_byte];
+	auto right_valid = *(r_validitymask + byte_offset) & state.VALID_BITS[offset_in_byte];
 
-	if (left_null && right_null) {
+	if (TypeIsConstantSize(state.SORTING_P_TYPES[sort_idx])) {
+		l_size = GetTypeIdSize(state.SORTING_P_TYPES[sort_idx]);
+		r_size = GetTypeIdSize(state.SORTING_P_TYPES[sort_idx]);
+	} else {
+        switch (state.SORTING_P_TYPES[sort_idx]) {
+        case PhysicalType::VARCHAR: {
+            l_size = string_t::PREFIX_LENGTH + Load<idx_t>(l_val);
+            r_size = string_t::PREFIX_LENGTH + Load<idx_t>(r_val);
+			break;
+        }
+        default:
+            throw NotImplementedException("Type for comparison");
+		}
+	}
+
+	if (!left_valid && !right_valid) {
 		return 0;
-	} else if (right_null) {
+	} else if (!right_valid) {
 		return state.NULLS_FIRST[sort_idx];
-	} else if (left_null) {
+	} else if (!left_valid) {
 		return -state.NULLS_FIRST[sort_idx];
 	}
 
@@ -380,13 +403,13 @@ static int32_t CompareValue(const data_ptr_t &l_nullmask, const data_ptr_t &r_nu
 	case PhysicalType::INTERVAL:
 		return TemplatedCompareValue<interval_t>(l_val, r_val);
 	case PhysicalType::VARCHAR: {
-		idx_t l_size = Load<idx_t>(l_val);
-		idx_t r_size = Load<idx_t>(r_val);
+		auto l_str_size = l_size - string_t::PREFIX_LENGTH;
+        auto r_str_size = r_size - string_t::PREFIX_LENGTH;
 		l_val += string_t::PREFIX_LENGTH;
 		r_val += string_t::PREFIX_LENGTH;
-		auto result = strncmp((const char *)l_val, (const char *)r_val, MinValue(l_size, r_size));
-		l_val += l_size;
-		r_val += r_size;
+		auto result = strncmp((const char *)l_val, (const char *)r_val, MinValue(l_str_size, r_str_size));
+		l_val += l_str_size;
+		r_val += r_str_size;
 		return result;
 	}
 	default:
@@ -395,11 +418,15 @@ static int32_t CompareValue(const data_ptr_t &l_nullmask, const data_ptr_t &r_nu
 }
 
 static int CompareTuple(const data_ptr_t &l_start, const data_ptr_t &r_start, const SortingState &state) {
-	data_ptr_t l_val = l_start + state.NULLMASK_SIZE;
-	data_ptr_t r_val = r_start + state.NULLMASK_SIZE;
+	data_ptr_t l_val = l_start + state.VALIDITYMASK_SIZE;
+	data_ptr_t r_val = r_start + state.VALIDITYMASK_SIZE;
+	idx_t l_size = 0;
+	idx_t r_size = 0;
 	for (idx_t i = 0; i < state.SORTING_P_TYPES.size(); i++) {
-		auto comp_res = CompareValue(l_start, r_start, l_val, r_val, i, state);
+		auto comp_res = CompareValue(l_start, r_start, l_val, r_val, i, state, l_size, r_size);
 		if (comp_res == 0) {
+			l_val += l_size;
+			r_val += r_size;
 			continue;
 		}
 		return comp_res * state.IS_ASC[i];
@@ -420,11 +447,10 @@ static void Sort(ContinuousBlock &cb, OrderGlobalState &state) {
 	const auto &sorting_state = *state.sorting_state;
 	auto key_locations = unique_ptr<data_ptr_t[]>(new data_ptr_t[block.count]);
 	if (!sorting_state.CONSTANT_ENTRY_SIZE) {
-		auto endings_handle = state.buffer_manager.Pin(block.entry_endings);
-		auto entry_endings = (idx_t *)endings_handle->node->buffer;
-		key_locations[0] = dataptr;
-		for (idx_t i = 1; i < block.count; i++) {
-			key_locations[i] = dataptr + entry_endings[i - 1];
+		auto positions_handle = state.buffer_manager.Pin(block.entry_positions);
+		auto entry_positions = (idx_t *)positions_handle->node->buffer;
+		for (idx_t i = 0; i < block.count; i++) {
+			key_locations[i] = dataptr + entry_positions[i];
 		}
 	} else {
 		for (idx_t i = 0; i < block.count; i++) {
@@ -433,17 +459,18 @@ static void Sort(ContinuousBlock &cb, OrderGlobalState &state) {
 		}
 	}
 
-	// TODO: buffermanage sorted_indices
-	cb.sorted_indices = shared_ptr<idx_t[]>(new idx_t[block.count]);
+	cb.sorted_indices_block = state.buffer_manager.RegisterMemory(
+	    MaxValue((idx_t)Storage::BLOCK_ALLOC_SIZE, block.count * sizeof(idx_t)), false);
+	auto sorted_indices_handle = state.buffer_manager.Pin(cb.sorted_indices_block);
+	cb.sorted_indices = (idx_t *)sorted_indices_handle->node->buffer;
 	for (idx_t i = 0; i < block.count; i++) {
 		cb.sorted_indices[i] = i;
 	}
 
-	idx_t *start = cb.sorted_indices.get();
-	idx_t *end = start + block.count;
-	BlockQuickSort::Sort(start, end, [&key_locations, &sorting_state](const idx_t &l, const idx_t &r) {
-		return CompareTuple(key_locations[l], key_locations[r], sorting_state) <= 0;
-	});
+	BlockQuickSort::Sort(cb.sorted_indices, cb.sorted_indices + block.count,
+	                     [&key_locations, &sorting_state](const idx_t &l, const idx_t &r) {
+		                     return CompareTuple(key_locations[l], key_locations[r], sorting_state) <= 0;
+	                     });
 }
 
 static void IncrementEntrySizes(DataChunk &chunk, OrderGlobalState &gstate, OrderLocalState &lstate, bool payload) {
@@ -494,8 +521,8 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &state, 
 	gstate.executor.Execute(input, sort);
 
 	if (!sorting_state.CONSTANT_ENTRY_SIZE) {
-		// compute the size of each entry, starting with the nullmask size
-		std::fill_n(lstate.entry_sizes, STANDARD_VECTOR_SIZE, sorting_state.NULLMASK_SIZE);
+		// compute the size of each entry, starting with the validitymask size
+		std::fill_n(lstate.entry_sizes, STANDARD_VECTOR_SIZE, sorting_state.VALIDITYMASK_SIZE);
 		// now the sorting and payload columns
 		IncrementEntrySizes(sort, gstate, lstate, false);
 		IncrementEntrySizes(input, gstate, lstate, true);
@@ -503,17 +530,17 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &state, 
 
 	// build the block
 	const idx_t block_count_before = lstate.row_chunk.Size();
-	lstate.row_chunk.Build(input.size(), lstate.nullmask_locations, lstate.entry_sizes,
-	                       sorting_state.CONSTANT_ENTRY_SIZE);
+	lstate.row_chunk.Build(input.size(), lstate.validitymask_locations, lstate.entry_sizes,
+	                       sorting_state.CONSTANT_ENTRY_SIZE, sorting_state.POSITIONS_BLOCKSIZE);
 	for (idx_t i = 0; i < sort.size(); i++) {
-		// initialize nullmasks to 0
-		memset(lstate.nullmask_locations[i], 0, sorting_state.NULLMASK_SIZE);
-		lstate.key_locations[i] += +sorting_state.NULLMASK_SIZE;
+		// initialize validitymasks to 0 and initialize key locations
+		memset(lstate.validitymask_locations[i], 0, sorting_state.VALIDITYMASK_SIZE);
+		lstate.key_locations[i] = lstate.validitymask_locations[i] + sorting_state.VALIDITYMASK_SIZE;
 	}
 	// serialize sorting columns to row-wise format
 	for (idx_t i = 0; i < sort.data.size(); i++) {
 		lstate.row_chunk.SerializeVector(sort.data[i], sort.size(), *lstate.sel_ptr, sort.size(), i,
-		                                 lstate.key_locations, lstate.nullmask_locations);
+		                                 lstate.key_locations, lstate.validitymask_locations);
 	}
 	// serialize payload columns to row-wise format
 	for (idx_t i = 0; i < input.data.size(); i++) {
@@ -523,7 +550,7 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &state, 
 		}
 		lstate.row_chunk.SerializeVector(input.data[i], input.size(), *lstate.sel_ptr, input.size(),
 		                                 gstate.p_to_p[i] + sort.size(), lstate.key_locations,
-		                                 lstate.nullmask_locations);
+		                                 lstate.validitymask_locations);
 	}
 	// sort the block if it is full
 	if (block_count_before != 0 && lstate.row_chunk.Size() > block_count_before) {
@@ -550,25 +577,21 @@ void PhysicalOrder::Combine(ExecutionContext &context, GlobalOperatorState &stat
 			gstate.intermediate.emplace_back();
 			gstate.intermediate.back().push_back(move(c));
 		}
-		if (lstate.row_chunk.blocks.back().count != gstate.block_capacity) {
-			// last block not full - create ContinuousBlock and set the pointer
-			gstate.intermediate.emplace_back();
-			gstate.intermediate.back().push_back(make_unique<ContinuousBlock>(gstate));
-			unsorted_block = gstate.intermediate.back().back().get();
-			unsorted_block->blocks.push_back(lstate.row_chunk.blocks.back());
-		}
+		// last block of each local state is always unsorted
+		gstate.intermediate.emplace_back();
+		gstate.intermediate.back().push_back(make_unique<ContinuousBlock>(gstate));
+		unsorted_block = gstate.intermediate.back().back().get();
+		unsorted_block->blocks.push_back(lstate.row_chunk.blocks.back());
 	}
 
-	if (unsorted_block) {
-		// there was a unsorted block - push it into the ContinuousBlock and sort it
-		Sort(*unsorted_block, gstate);
-	}
+	Sort(*unsorted_block, gstate);
 }
 
 class CBScanState {
 public:
 	//! Used by the MergePathTask
-	CBScanState(ContinuousBlock &cb, BufferManager &buffer_manager) : cb(cb), buffer_manager(buffer_manager) {
+	CBScanState(ContinuousBlock &cb, BufferManager &buffer_manager, SortingState &sorting_state)
+	    : cb(cb), buffer_manager(buffer_manager), sorting_state(sorting_state) {
 		block_entry = std::make_pair(0, 0);
 	}
 
@@ -580,16 +603,23 @@ public:
 			block_handle = buffer_manager.Pin(block->block);
 			baseptr = block_handle->node->buffer;
 
-			// pin endings block
-			endings_handle = buffer_manager.Pin(block->entry_endings);
-			entry_endings = (idx_t *)endings_handle->node->buffer;
+			// pin positions block
+			if (!sorting_state.CONSTANT_ENTRY_SIZE) {
+				positions_handle = buffer_manager.Pin(block->entry_positions);
+				entry_positions = (idx_t *)positions_handle->node->buffer;
+			}
+
+			if (cb.sorted_indices_block) {
+				sorted_indices_handle = buffer_manager.Pin(cb.sorted_indices_block);
+				sorted_indices = (idx_t *)sorted_indices_handle->node->buffer;
+			}
 		}
 
-		idx_t actual_idx = cb.sorted_indices ? cb.sorted_indices[block_entry.second] : block_entry.second;
-		if (actual_idx == 0) {
-			return baseptr;
+		idx_t actual_idx = sorted_indices ? sorted_indices[block_entry.second] : block_entry.second;
+		if (sorting_state.CONSTANT_ENTRY_SIZE) {
+			return baseptr + actual_idx * sorting_state.CONSTANT_ENTRY_SIZE;
 		} else {
-			return baseptr + entry_endings[actual_idx - 1];
+			return baseptr + entry_positions[actual_idx];
 		}
 	}
 
@@ -600,6 +630,7 @@ public:
 
 private:
 	BufferManager &buffer_manager;
+	const SortingState &sorting_state;
 
 	//! The last block that was accessed
 	RowDataBlock *block = nullptr;
@@ -608,17 +639,23 @@ private:
 	unique_ptr<BufferHandle> block_handle;
 	data_ptr_t baseptr;
 
-	//! Endings buffer
-	unique_ptr<BufferHandle> endings_handle;
-	idx_t *entry_endings;
+	//! Positions buffer
+	unique_ptr<BufferHandle> positions_handle;
+	idx_t *entry_positions;
+
+	//! Sorted indices buffer
+	unique_ptr<BufferHandle> sorted_indices_handle;
+	idx_t *sorted_indices = nullptr;
 };
 
 class PhysicalOrderMergePathTask : public Task {
 public:
 	PhysicalOrderMergePathTask(Pipeline &parent, ClientContext &context, OrderGlobalState &state, idx_t sum,
 	                           ContinuousBlock &left, ContinuousBlock &right, idx_t result_idx)
-	    : parent(parent), context(context), state(state), l_state(left, BufferManager::GetBufferManager(context)),
-	      r_state(right, BufferManager::GetBufferManager(context)), sum(sum), result_idx(result_idx) {
+	    : parent(parent), context(context), state(state),
+	      l_state(left, BufferManager::GetBufferManager(context), *state.sorting_state),
+	      r_state(right, BufferManager::GetBufferManager(context), *state.sorting_state), sum(sum),
+	      result_idx(result_idx) {
 	}
 
 	void Execute() override {
@@ -688,43 +725,45 @@ public:
 		left.PinBlock();
 		right.PinBlock();
 
-		// initialize blocks to write to
-		result.blocks.emplace_back(buffer_manager, sorting_state.BLOCK_CAPACITY, sorting_state.CONSTANT_ENTRY_SIZE);
-		auto write_block = &result.blocks.back();
-		auto write_handle = buffer_manager.Pin(write_block->block);
-		auto write_ptr = write_handle->node->buffer;
+		// pointer to the block that will be written to
+		RowDataBlock *write_block = nullptr;
+		unique_ptr<BufferHandle> write_handle;
+		data_ptr_t write_ptr;
+		unique_ptr<BufferHandle> write_pos_handle;
+		idx_t *entry_positions;
 
 		ContinuousBlock *source;
 		while (!left.Done() && !right.Done()) {
-			if (write_block->byte_offset + left.EntrySize() > write_block->BYTE_CAPACITY ||
-			    write_block->byte_offset + right.EntrySize() > write_block->BYTE_CAPACITY) {
-				// initialize new blocks to write to
-				result.blocks.emplace_back(buffer_manager, sorting_state.BLOCK_CAPACITY,
-				                           sorting_state.CONSTANT_ENTRY_SIZE);
-				write_block = &result.blocks.back();
-				write_handle = buffer_manager.Pin(write_block->block);
-				write_ptr = write_handle->node->buffer;
-			}
 			// determine where to copy from
 			if (CompareTuple(left.DataPtr(), right.DataPtr(), sorting_state) <= 0) {
 				source = &left;
 			} else {
 				source = &right;
 			}
-			if (write_block->byte_offset + source->EntrySize() > write_block->BYTE_CAPACITY) {
-				// initialize new blocks to write to if the current entry cannot be copied
+			if (!write_block || write_block->byte_offset + source->EntrySize() > write_block->byte_capacity) {
+				// initialize new blocks to write to if the current entry does not fit
 				result.blocks.emplace_back(buffer_manager, sorting_state.BLOCK_CAPACITY,
-				                           sorting_state.CONSTANT_ENTRY_SIZE);
+				                           sorting_state.CONSTANT_ENTRY_SIZE, sorting_state.POSITIONS_BLOCKSIZE);
 				write_block = &result.blocks.back();
 				write_handle = buffer_manager.Pin(write_block->block);
 				write_ptr = write_handle->node->buffer;
+				if (!sorting_state.CONSTANT_ENTRY_SIZE) {
+					write_pos_handle = buffer_manager.Pin(write_block->entry_positions);
+					entry_positions = (idx_t *)write_pos_handle->node->buffer;
+				}
 			}
-			// copy the entry and continue
+			// copy the entry
 			memcpy(write_ptr, source->DataPtr(), source->EntrySize());
+			if (!sorting_state.CONSTANT_ENTRY_SIZE) {
+				*entry_positions = write_block->byte_offset;
+				entry_positions++;
+			}
+			// write block bookkeeping
 			write_block->byte_offset += source->EntrySize();
 			write_ptr += source->EntrySize();
-			source->Advance();
 			write_block->count++;
+			// advance the block we read from
+			source->Advance();
 		}
 
 		if (left.Done()) {
@@ -888,6 +927,7 @@ void PhysicalOrder::ScheduleMergeTasks(Pipeline &pipeline, ClientContext &contex
 void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> state) {
 	this->sink_state = move(state);
 	auto &sink = (OrderGlobalState &)*this->sink_state;
+	D_ASSERT(!sink.intermediate.empty());
 
 	if (sink.intermediate.capacity() == 1) {
 		// special case: only one block arrived, it was sorted but not re-ordered
@@ -910,25 +950,27 @@ public:
 	    : PhysicalOperatorState(op, child), block_idx(0), entry_idx(0) {
 	}
 
-	unique_ptr<BufferHandle> handle;
+	unique_ptr<BufferHandle> handle = nullptr;
 	data_ptr_t base_dataptr;
 
-	unique_ptr<BufferHandle> endings_handle;
-	idx_t *entry_endings;
+	unique_ptr<BufferHandle> positions_handle = nullptr;
+	idx_t *entry_positions;
 
-	RowDataBlock *InitBlock(ContinuousBlock &cb, BufferManager &buffer_manager) {
+	RowDataBlock *InitBlock(ContinuousBlock &cb, BufferManager &buffer_manager, const SortingState &sorting_state) {
 		auto block = &cb.blocks[block_idx];
 
 		handle = buffer_manager.Pin(block->block);
 		base_dataptr = handle->node->buffer;
 
-		endings_handle = buffer_manager.Pin(block->entry_endings);
-		entry_endings = (idx_t *)endings_handle->node->buffer;
+		if (!sorting_state.CONSTANT_ENTRY_SIZE) {
+			positions_handle = buffer_manager.Pin(block->entry_positions);
+			entry_positions = (idx_t *)positions_handle->node->buffer;
+		}
 
 		return block;
 	}
 
-	data_ptr_t nullmask_locations[STANDARD_VECTOR_SIZE];
+	data_ptr_t validitymask_locations[STANDARD_VECTOR_SIZE];
 	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
 
 	idx_t block_idx;
@@ -947,64 +989,63 @@ void PhysicalOrder::GetChunkInternal(ExecutionContext &context, DataChunk &chunk
 	D_ASSERT(sink.continuous.size() == 1);
 
 	auto &cb = *sink.continuous[0];
-	if (state->block_idx >= cb.blocks.size()) {
-		state->finished = true;
-		return;
-	}
+	RowDataBlock *block = state->InitBlock(cb, BufferManager::GetBufferManager(context.client), sorting_state);
 
-	RowDataBlock *block = state->InitBlock(cb, BufferManager::GetBufferManager(context.client));
-	while (chunk.size() < STANDARD_VECTOR_SIZE && state->block_idx < cb.blocks.size()) {
+	idx_t tuples = 0;
+	while (tuples < STANDARD_VECTOR_SIZE && state->block_idx < cb.blocks.size()) {
+		// init the next block if needed
 		if (state->entry_idx >= block->count) {
 			state->block_idx++;
 			if (state->block_idx >= cb.blocks.size()) {
 				state->finished = true;
 				break;
 			}
-			block = state->InitBlock(cb, BufferManager::GetBufferManager(context.client));
+			state->entry_idx = 0;
+			block = state->InitBlock(cb, BufferManager::GetBufferManager(context.client), sorting_state);
 		}
 
 		// fetch the next vector of entries from the blocks
-		idx_t next = MinValue<idx_t>(STANDARD_VECTOR_SIZE - chunk.size(), block->count - state->entry_idx);
+		idx_t next = MinValue<idx_t>(STANDARD_VECTOR_SIZE - tuples, block->count - state->entry_idx);
 		data_ptr_t dataptr = state->base_dataptr;
 		if (sorting_state.CONSTANT_ENTRY_SIZE) {
 			dataptr += state->entry_idx * sorting_state.CONSTANT_ENTRY_SIZE;
-			for (idx_t i = 0; i < next; i++) {
-				state->nullmask_locations[i] = dataptr;
-				state->key_locations[i] = dataptr + sorting_state.NULLMASK_SIZE;
+			for (idx_t i = tuples; i < tuples + next; i++) {
+				state->validitymask_locations[i] = dataptr;
+				state->key_locations[i] = dataptr + sorting_state.VALIDITYMASK_SIZE;
 				dataptr += sorting_state.CONSTANT_ENTRY_SIZE;
 			}
 		} else {
 			const idx_t pos = state->entry_idx;
-			const data_ptr_t base_dataptr = state->base_dataptr + (pos == 0 ? 0 : state->entry_endings[pos - 1]);
-			for (idx_t i = 0; i < next; i++) {
-				state->nullmask_locations[i] = dataptr;
-				state->key_locations[i] = dataptr + sorting_state.NULLMASK_SIZE;
-				dataptr = base_dataptr + state->entry_endings[pos + i];
+			for (idx_t i = tuples; i < tuples + next; i++) {
+				state->validitymask_locations[i] = dataptr + state->entry_positions[pos + i];
+				state->key_locations[i] = state->validitymask_locations[i] + sorting_state.VALIDITYMASK_SIZE;
 			}
 		}
-		chunk.SetCardinality(chunk.size() + next);
-
-		// deserialize sorting columns (if needed)
-		for (idx_t sort_idx = 0; sort_idx < sink.sorting_p_types.size(); sort_idx++) {
-			if (sink.s_to_p.find(sort_idx) == sink.s_to_p.end()) {
-				// sorting column does not need to be output
-				idx_t size = GetTypeIdSize(sink.sorting_p_types[sort_idx]);
-				for (idx_t i = 0; i < next; i++) {
-					state->key_locations[i] += size;
-				}
-			} else {
-				// sorting column needs to be output
-				RowChunk::DeserializeIntoVector(chunk.data[sink.s_to_p[sort_idx]], next, sort_idx, state->key_locations,
-				                                state->nullmask_locations);
-			}
-		}
-		// deserialize payload columns
-		for (idx_t payl_idx = 0; payl_idx < sink.payload_p_types.size(); payl_idx++) {
-			RowChunk::DeserializeIntoVector(chunk.data[sink.p_to_p[payl_idx]], next,
-			                                sink.sorting_p_types.size() + payl_idx, state->key_locations,
-			                                state->nullmask_locations);
-		}
+		tuples += next;
+		state->entry_idx += next;
 	}
+    chunk.SetCardinality(tuples);
+
+    // deserialize sorting columns (if needed)
+    for (idx_t sort_idx = 0; sort_idx < sink.sorting_p_types.size(); sort_idx++) {
+        if (sink.s_to_p.find(sort_idx) == sink.s_to_p.end()) {
+            // sorting column does not need to be output
+            idx_t size = GetTypeIdSize(sink.sorting_p_types[sort_idx]);
+            for (idx_t i = 0; i < tuples; i++) {
+                state->key_locations[i] += size;
+            }
+        } else {
+            // sorting column needs to be output
+            RowChunk::DeserializeIntoVector(chunk.data[sink.s_to_p[sort_idx]], tuples, sort_idx, state->key_locations,
+                                            state->validitymask_locations);
+        }
+    }
+    // deserialize payload columns
+    for (idx_t payl_idx = 0; payl_idx < sink.payload_p_types.size(); payl_idx++) {
+        RowChunk::DeserializeIntoVector(chunk.data[sink.p_to_p[payl_idx]], tuples,
+                                        sink.sorting_p_types.size() + payl_idx, state->key_locations,
+                                        state->validitymask_locations);
+    }
 	chunk.Verify();
 }
 
