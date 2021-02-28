@@ -7,7 +7,7 @@ from contextlib import closing
 import urllib.parse
 import sys
 
-if (len(sys.argv) < 2):
+if len(sys.argv) < 2:
 	print("Usage: test_the_rest.py [path_to_tools_rest_binaries]")
 	sys.exit(-1)
 
