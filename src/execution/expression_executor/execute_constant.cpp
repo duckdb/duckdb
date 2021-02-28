@@ -6,7 +6,9 @@ namespace duckdb {
 
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundConstantExpression &expr,
                                                                 ExpressionExecutorState &root) {
-	return nullptr;
+	auto result = make_unique<ExpressionState>(expr, root);
+	result->Finalize();
+	return result;
 }
 
 void ExpressionExecutor::Execute(BoundConstantExpression &expr, ExpressionState *state, const SelectionVector *sel,

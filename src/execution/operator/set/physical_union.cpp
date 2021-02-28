@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/set/physical_union.hpp"
+#include "duckdb/parallel/thread_context.hpp"
 
 namespace duckdb {
 
@@ -40,6 +41,16 @@ unique_ptr<PhysicalOperatorState> PhysicalUnion::GetOperatorState() {
 	state->top_state = children[0]->GetOperatorState();
 	state->bottom_state = children[1]->GetOperatorState();
 	return (move(state));
+}
+
+void PhysicalUnion::FinalizeOperatorState(PhysicalOperatorState &state_p, ExecutionContext &context) {
+	auto &state = reinterpret_cast<PhysicalUnionOperatorState &>(state_p);
+	if (!children.empty() && state.top_state) {
+		children[0]->FinalizeOperatorState(*state.top_state, context);
+	}
+	if (!children.empty() && state.bottom_state) {
+		children[1]->FinalizeOperatorState(*state.bottom_state, context);
+	}
 }
 
 } // namespace duckdb
