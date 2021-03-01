@@ -39,7 +39,7 @@ inline std::map<string_t, int64_t> TabulateCharacters(std::map<string_t, int64_t
 	return txt;
 }
 
-static float JaccardSimilarity(string_t str, string_t txt) {
+static float JaccardSimilarity(const string_t &str, const string_t &txt) {
 	if (str.GetSize() < 1 || txt.GetSize() < 1) {
 			throw InvalidInputException("Jaccard Function: An argument too short!");
 		}
