@@ -17,56 +17,25 @@ static inline map<char, idx_t> GetSet(string_t str) {
 }
 
 static inline map<char, idx_t> TabulateCharacters(map<char, idx_t> str, map<char, idx_t> txt) {
-	auto tstr = map<char, idx_t>{};
-	auto ttxt = map<char, idx_t>{};
 	if (str.size() > txt.size()) {
-		ttxt = str;
-		tstr = txt;
-	} else {
-		ttxt = txt;
-		tstr = str;
+		str.swap(txt);
 	}
 
-	for (auto const &achar: tstr) {
-		++ttxt[achar.first];
+	for (auto const &achar: str) {
+		++txt[achar.first];
 	}
 
-// 	string_t achar;
-// 	// for (map<string_t, idx_t>::iterator it = sstr.begin(); it != sstr.end(); ++it) {
-// 	for (const auto &apair: tstr) {
-// 		// achar = apair.first;
-// 		// if (ttxt.count(achar) == 0) {
-// 		// 	// ttxt.insert(make_pair(achar, 1));
-// 		// } 
-// 		// else {
-// 		// 	ttxt.at(achar) += 1;
-// 		// }
-// 		// ++ttxt[apair.first];
-// 		// achar = apair.first;
-// 		// if (stxt.count(achar) == 1) {
-// 			// ++stxt[achar];
-			
-// 		// } else {
-// 		// 	/// stxt.insert(make_pair(achar, 1));
-// 		// }
-// 	}
-
-	return ttxt;
+	return txt;
 }
 
 static double JaccardSimilarity(const string_t &str, const string_t &txt) {
 	if (str.GetSize() < 1 || txt.GetSize() < 1) {
 			throw InvalidInputException("Jaccard Function: An argument too short!");
 		}
-	map<char, idx_t> ms, mt, mu;
-	ms = GetSet(str);
-	mt = GetSet(txt);
-	mu = TabulateCharacters(ms, mt); // for calculating union and intersection
 
-	// get size of union
+	map<char, idx_t> mu = TabulateCharacters(GetSet(str), GetSet(txt)); 
+
 	idx_t size_union = mu.size();
-
-	// get size of intersect -> counts > 1
 	idx_t size_intersect = 0;
 	for (const auto &apair: mu) {
 		if (apair.second > 1) {
@@ -75,13 +44,10 @@ static double JaccardSimilarity(const string_t &str, const string_t &txt) {
 	}
 
 	return (double)size_intersect / (double)size_union;
-	
-	// return (float) mu.size();
-	// return (float)1;
 }
 
 static double JaccardScalarFunction(Vector &result, const string_t str, string_t tgt) {
-	return (float)JaccardSimilarity(str, tgt);
+	return (double)JaccardSimilarity(str, tgt);
 }
 
 static void JaccardFunction(DataChunk &args, ExpressionState &state, Vector &result) {
