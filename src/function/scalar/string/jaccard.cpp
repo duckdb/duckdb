@@ -7,7 +7,7 @@
 
 namespace duckdb {
 
-inline std::map<string_t, int64_t> GetSet(string_t str) {
+static inline std::map<string_t, int64_t> GetSet(string_t str) {
 	std::map<string_t, int64_t> map_of_chars;
 	idx_t str_len = str.GetSize();
 	auto str_str = str.GetDataUnsafe();
@@ -18,7 +18,7 @@ inline std::map<string_t, int64_t> GetSet(string_t str) {
 	return map_of_chars;
 }
 
-inline std::map<string_t, int64_t> TabulateCharacters(std::map<string_t, int64_t> str,
+static inline std::map<string_t, int64_t> TabulateCharacters(std::map<string_t, int64_t> str,
                                                       std::map<string_t, int64_t> txt) {
 	// use the shorter map to insert & update the count
 	if (str.size() > txt.size()) {
