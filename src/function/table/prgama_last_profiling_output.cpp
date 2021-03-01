@@ -69,7 +69,8 @@ static void PragmaLastProfilingOutputFunction(ClientContext &context, const Func
 	if (state.rows > 0) {
 		int total_counter = 0;
 		int operator_counter = 1;
-		SetValue(output, total_counter++, 0, 0, "Query: " + context.prev_profiler.query, context.prev_profiler.main_query.Elapsed());
+		SetValue(output, total_counter++, 0, 0, "Query: " + context.prev_profiler.query,
+		         context.prev_profiler.main_query.Elapsed());
 		for (auto op : context.prev_profiler.tree_map) {
 			int function_counter = 1;
 			SetValue(output, total_counter++, operator_counter, 0, "Operator: " + op.second->name,
