@@ -32,6 +32,8 @@ void BuiltinFunctions::RegisterStringFunctions() {
 	Register<StringSplitFun>();
 	Register<ASCII>();
 	Register<CHR>();
+	Register<MismatchesFun>();
+	Register<LevenshteinFun>();
 
 	// blob functions
 	Register<Base64Fun>();

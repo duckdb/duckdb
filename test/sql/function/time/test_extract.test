@@ -99,3 +99,6 @@ SELECT EXTRACT(dayofyear FROM i) FROM times
 
 statement error
 SELECT EXTRACT(week FROM i) FROM times
+
+statement error
+SELECT EXTRACT(yearweek FROM i) FROM times

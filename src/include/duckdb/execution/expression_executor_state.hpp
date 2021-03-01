@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/profiler.hpp"
 
 namespace duckdb {
 class Expression;
@@ -17,8 +18,7 @@ class ExpressionExecutor;
 struct ExpressionExecutorState;
 
 struct ExpressionState {
-	ExpressionState(Expression &expr, ExpressionExecutorState &root) : expr(expr), root(root) {
-	}
+	ExpressionState(Expression &expr, ExpressionExecutorState &root);
 	virtual ~ExpressionState() {
 	}
 
@@ -27,6 +27,9 @@ struct ExpressionState {
 	vector<unique_ptr<ExpressionState>> child_states;
 	vector<LogicalType> types;
 	DataChunk intermediate_chunk;
+	string name;
+	double time;
+	Profiler<high_resolution_clock> profiler;
 
 public:
 	void AddChild(Expression *expr);

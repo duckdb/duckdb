@@ -136,7 +136,7 @@ static Napi::Value convert_chunk(Napi::Env &env, std::vector<std::string> names,
 			}
 
 			// TODO templateroo here
-			switch (chunk.data[col_idx].type.id()) {
+			switch (chunk.data[col_idx].GetType().id()) {
 			case duckdb::LogicalTypeId::INTEGER: {
 				value = Napi::Number::New(env, dval.value_.integer);
 			} break;
@@ -180,7 +180,7 @@ struct StatementParam {
 };
 
 struct RunPreparedTask : public Task {
-	RunPreparedTask(Statement &statement_, unique_ptr<StatementParam> params_, RunType run_type_)
+	RunPreparedTask(Statement &statement_, duckdb::unique_ptr<StatementParam> params_, RunType run_type_)
 	    : Task(statement_, params_->callback), params(move(params_)), run_type(run_type_) {
 	}
 
@@ -226,7 +226,7 @@ struct RunPreparedTask : public Task {
 			duckdb::idx_t count = 0;
 			while (true) {
 				auto chunk = result->Fetch();
-				if (chunk->size() == 0) {
+				if (!chunk || chunk->size() == 0) {
 					break;
 				}
 
@@ -252,7 +252,7 @@ struct RunPreparedTask : public Task {
 			duckdb::idx_t out_idx = 0;
 			while (true) {
 				auto chunk = result->Fetch();
-				if (chunk->size() == 0) {
+				if (!chunk || chunk->size() == 0) {
 					break;
 				}
 				// ToObject has to happen here otherwise the converted chunk gets garbage collected for some reason
@@ -271,11 +271,11 @@ struct RunPreparedTask : public Task {
 		}
 	}
 	std::unique_ptr<duckdb::QueryResult> result;
-	unique_ptr<StatementParam> params;
+	duckdb::unique_ptr<StatementParam> params;
 	RunType run_type;
 };
 
-unique_ptr<StatementParam> Statement::HandleArgs(const Napi::CallbackInfo &info) {
+duckdb::unique_ptr<StatementParam> Statement::HandleArgs(const Napi::CallbackInfo &info) {
 	size_t start_idx = ignore_first_param ? 1 : 0;
 	auto params = duckdb::make_unique<StatementParam>();
 

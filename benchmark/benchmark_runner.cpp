@@ -122,7 +122,7 @@ void BenchmarkRunner::LogOutput(string message) {
 }
 
 void BenchmarkRunner::RunBenchmark(Benchmark *benchmark) {
-	Profiler profiler;
+	Profiler<system_clock> profiler;
 	auto display_name = benchmark->DisplayName();
 	LogLine(string(display_name.size() + 6, '-'));
 	LogLine("|| " + display_name + " ||");

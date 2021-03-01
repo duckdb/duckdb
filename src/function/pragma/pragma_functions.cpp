@@ -17,6 +17,18 @@ static void PragmaEnableProfilingStatement(ClientContext &context, const Functio
 	context.profiler.Enable();
 }
 
+static void PragmaSetProfilingModeStatement(ClientContext &context, const FunctionParameters &parameters) {
+	// this is either profiling_mode = standard, or profiling_mode = detailed
+	string mode = StringUtil::Lower(parameters.values[0].ToString());
+	if (mode == "standard") {
+		context.profiler.Enable();
+	} else if (mode == "detailed") {
+		context.profiler.DetailedEnable();
+	} else {
+		throw ParserException("Unrecognized print format %s, supported formats: [standard, detailed]", mode);
+	}
+}
+
 static void PragmaEnableProfilingAssignment(ClientContext &context, const FunctionParameters &parameters) {
 	// this is either enable_profiling = json, or enable_profiling = query_tree
 	string assignment = parameters.values[0].ToString();
@@ -213,6 +225,9 @@ static void PragmaDebugCheckpointAbort(ClientContext &context, const FunctionPar
 
 void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	RegisterEnableProfiling(set);
+
+	set.AddFunction(
+	    PragmaFunction::PragmaAssignment("profiling_mode", PragmaSetProfilingModeStatement, LogicalType::VARCHAR));
 
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_profile", PragmaDisableProfiling));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_profiling", PragmaDisableProfiling));
