@@ -9,6 +9,7 @@
 #include "duckdb/catalog/catalog_set.hpp"
 #include "duckdb/common/serializer/buffered_deserializer.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
+#include "duckdb/storage/table/update_segment.hpp"
 
 #include "duckdb/storage/table/chunk_info.hpp"
 
@@ -197,12 +198,11 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 	}
 	case UndoFlags::UPDATE_TUPLE: {
 		// update:
-		throw NotImplementedException("FIXME: commit update stuff");
-		// auto info = (UpdateInfo *)data;
-		// if (HAS_LOG && !info->column_data->table_info.IsTemporary()) {
-		// 	WriteUpdate(info);
-		// }
-		// info->version_number = commit_id;
+		auto info = (UpdateInfo *)data;
+		if (HAS_LOG && !info->segment->column_data.table_info.IsTemporary()) {
+			WriteUpdate(info);
+		}
+		info->version_number = commit_id;
 		break;
 	}
 	default:

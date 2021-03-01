@@ -48,7 +48,7 @@ void ColumnData::Scan(Transaction &transaction, ColumnScanState &state, Vector &
 	state.current->Scan(state, state.vector_index, result);
 
 	// merge the updates into the result
-	state.updates->MergeUpdates(transaction, state.vector_index_updates, result);
+	state.updates->FetchUpdates(transaction, state.vector_index_updates, result);
 
 	// move over to the next vector
 	state.Next();
@@ -191,12 +191,20 @@ void ColumnData::RevertAppend(row_t start_row) {
 }
 
 void ColumnData::Update(Transaction &transaction, Vector &update_vector, Vector &row_ids, idx_t count) {
-	// throw NotImplementedException("FIXME: update");
-	// first find the segment that the update belongs to
 	idx_t first_id = FlatVector::GetValue<row_t>(row_ids, 0);
+
+	// fetch the raw base data for this segment
+	Vector base_data(type);
+	auto column_segment = (ColumnSegment *)data.GetSegment(first_id);
+	auto vector_index = (first_id - column_segment->start) / STANDARD_VECTOR_SIZE;
+	// now perform the fetch within the segment
+	ColumnScanState state;
+	column_segment->Fetch(state, vector_index, base_data);
+
+	// first find the segment that the update belongs to
 	auto segment = (UpdateSegment *)updates.GetSegment(first_id);
 	// now perform the update within the segment
-	segment->Update(transaction, update_vector, FlatVector::GetData<row_t>(row_ids), count);
+	segment->Update(transaction, update_vector, FlatVector::GetData<row_t>(row_ids), count, base_data);
 	statistics->Merge(*segment->GetStatistics().statistics);
 }
 
@@ -206,7 +214,6 @@ void ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
 	auto vector_index = (row_id - segment->start) / STANDARD_VECTOR_SIZE;
 	// now perform the fetch within the segment
 	segment->Fetch(state, vector_index, result);
-	throw NotImplementedException("FIXME: merge updates in fetch");
 }
 
 void ColumnData::FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result,

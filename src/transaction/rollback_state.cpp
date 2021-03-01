@@ -9,6 +9,7 @@
 #include "duckdb/catalog/catalog_entry.hpp"
 #include "duckdb/catalog/catalog_set.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/storage/table/update_segment.hpp"
 
 namespace duckdb {
 
@@ -35,8 +36,7 @@ void RollbackState::RollbackEntry(UndoFlags type, data_ptr_t data) {
 	}
 	case UndoFlags::UPDATE_TUPLE: {
 		auto info = (UpdateInfo *)data;
-		throw NotImplementedException("FIXME: rollback update");
-		// info->segment->RollbackUpdate(info);
+		info->segment->RollbackUpdate(info);
 		break;
 	}
 	default:

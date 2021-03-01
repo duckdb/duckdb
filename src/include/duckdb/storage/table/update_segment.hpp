@@ -34,8 +34,13 @@ public:
 public:
 	bool HasUpdates();
 
-	void MergeUpdates(Transaction &transaction, idx_t vector_index, Vector &result);
-	void Update(Transaction &transaction, Vector &update, row_t *ids, idx_t count);
+	void FetchUpdates(Transaction &transaction, idx_t vector_index, Vector &result);
+	void Update(Transaction &transaction, Vector &update, row_t *ids, idx_t count, Vector &base_data);
+
+	void RollbackUpdate(UpdateInfo *info);
+	void CleanupUpdateInternal(const StorageLockKey &lock, UpdateInfo *info);
+	void CleanupUpdate(UpdateInfo *info);
+
 	SegmentStatistics &GetStatistics() {
 		return stats;
 	}
@@ -51,10 +56,12 @@ private:
 
 public:
 	typedef void (*initialize_update_function_t)(SegmentStatistics &stats, UpdateInfo *info, Vector &update);
-	typedef void (*update_merge_function_t)(transaction_t start_time, transaction_t transaction_id, UpdateInfo *info, Vector &result);
+	typedef void (*merge_update_function_t)(SegmentStatistics &stats, UpdateInfo *base_info, Vector &base_data, UpdateInfo *update_info, Vector &update, row_t *ids, idx_t count);
+	typedef void (*fetch_update_function_t)(transaction_t start_time, transaction_t transaction_id, UpdateInfo *info, Vector &result);
 private:
 	initialize_update_function_t initialize_update_function;
-	update_merge_function_t update_merge_function;
+	merge_update_function_t merge_update_function;
+	fetch_update_function_t fetch_update_function;
 
 private:
 	void InitializeUpdateInfo(UpdateInfo &info, row_t *ids, idx_t count, idx_t vector_index, idx_t vector_offset);
