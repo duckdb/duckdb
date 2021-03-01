@@ -45,12 +45,12 @@ TEST_CASE("Test Progress Bar", "[api]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
-	con.context->test = true;
 	TestProgressBar test_progress(con.context.get());
 	REQUIRE_NO_FAIL(con.Query("create  table tbl as select range a, mod(range,10) b from range(10000000);"));
 	REQUIRE_NO_FAIL(con.Query("create  table tbl_2 as select range a from range(10000000);"));
 
 	REQUIRE_NO_FAIL(con.Query("PRAGMA set_progress_bar_time=10"));
+	REQUIRE_NO_FAIL(con.Query("PRAGMA disable_print_progress_bar"));
 	//! Simple Aggregation
 	test_progress.Start();
 	REQUIRE_NO_FAIL(con.Query("select count(*) from tbl"));
@@ -98,9 +98,10 @@ TEST_CASE("Test Progress Bar CSV", "[api]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
-	con.context->test = true;
+
 	TestProgressBar test_progress(con.context.get());
 	REQUIRE_NO_FAIL(con.Query("PRAGMA set_progress_bar_time=1"));
+	REQUIRE_NO_FAIL(con.Query("PRAGMA disable_print_progress_bar"));
 
 	//! Create Tables From CSVs
 	test_progress.Start();
