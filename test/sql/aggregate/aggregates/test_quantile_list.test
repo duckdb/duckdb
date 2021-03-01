@@ -12,8 +12,7 @@ create table quantiles as select range r, random() from range(10000) union all v
 query I
 SELECT quantile(r, LIST_VALUE(0.1, 0.5, 0.9)) from quantiles
 ----
-8999
-#[999, 4999, 8999]
+[999, 4999, 8999]
 
 statement ok
 pragma threads=4
@@ -24,5 +23,4 @@ PRAGMA force_parallelism
 query I
 SELECT quantile(r, LIST_VALUE(0.1, 0.5, 0.9)) from quantiles
 ----
-8999
-#[999, 4999, 8999]
+[999, 4999, 8999]
