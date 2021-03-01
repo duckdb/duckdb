@@ -1,0 +1,38 @@
+# name: test/sql/function/string/test_jaccard.test
+# description: Test jaccard function
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+# jaccard
+query I
+SELECT jaccard('hello', 'hello')
+----
+1
+
+query I
+SELECT jaccard('hello', NULL)
+----
+NULL
+
+query I
+SELECT jaccard(NULL, 'hello')
+----
+NULL
+
+query I
+SELECT jaccard(NULL, NULL)
+----
+NULL
+
+
+statement error
+SELECT jaccard('hello', '')
+
+statement error
+SELECT jaccard('', 'hello')
+
+statement error
+SELECT jaccard('', '')
+
