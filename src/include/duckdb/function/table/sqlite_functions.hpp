@@ -28,6 +28,10 @@ struct PragmaLastProfilingOutput {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct PragmaDetailedProfilingOutput {
+    static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct SQLiteMaster {
 	static void RegisterFunction(BuiltinFunctions &set);
 };

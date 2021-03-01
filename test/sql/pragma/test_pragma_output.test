@@ -1,0 +1,15 @@
+# name: test/sql/pragma/test_table_info.test
+# description: Test last_profiling_output, detailed_profiling_output and all_profiling_output pragma
+# group: [pragma]
+
+statement ok
+CREATE TABLE integers(i INTEGER DEFAULT 1+3, j INTEGER)
+
+statement ok
+SELECT * FROM pragma_last_profiling_output()
+
+statement ok
+SELECT * FROM detailed_profiling_output()
+
+statement ok
+PRAGMA all_profiling_output()

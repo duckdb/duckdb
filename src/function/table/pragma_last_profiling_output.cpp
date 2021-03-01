@@ -19,17 +19,20 @@ static unique_ptr<FunctionData> PragmaLastProfilingOutputBind(ClientContext &con
                                                               unordered_map<string, Value> &named_parameters,
                                                               vector<LogicalType> &return_types,
                                                               vector<string> &names) {
-	names.emplace_back("op_id");
+	names.emplace_back("OPERATOR_ID");
 	return_types.push_back(LogicalType::INTEGER);
 
-	names.emplace_back("fun_id");
-	return_types.push_back(LogicalType::INTEGER);
-
-	names.emplace_back("description");
+	names.emplace_back("NAME");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.emplace_back("time");
+	names.emplace_back("TIME");
 	return_types.push_back(LogicalType::DOUBLE);
+
+    names.emplace_back("CARDINALITY");
+    return_types.push_back(LogicalType::BIGINT);
+
+    names.emplace_back("DESCRIPTION");
+    return_types.push_back(LogicalType::VARCHAR);
 
 	return make_unique<TableFunctionData>();
 }
@@ -40,27 +43,13 @@ unique_ptr<FunctionOperatorData> PragmaLastProfilingOutputInit(ClientContext &co
 	return make_unique<PragmaLastProfilingOutputData>(1024);
 }
 
-static void SetValue(DataChunk &output, int index, int op_id, int fun_id, string description, double time) {
+static void SetValue(DataChunk &output, int index, int op_id, string name, double time, int64_t car, string description) {
 	output.SetValue(0, index, op_id);
-	output.SetValue(1, index, fun_id);
-	output.SetValue(2, index, move(description));
-	output.SetValue(3, index, time);
-}
+	output.SetValue(1, index, move(name));
+    output.SetValue(2, index, time);
+    output.SetValue(3, index, car);
+	output.SetValue(4, index, move(description));
 
-static void ExtractExpressions(ExpressionInformation &info, DataChunk &output, int &index, int op_id, int &fun_id,
-                               int sample_tuples_count) {
-	if (info.hasfunction) {
-		SetValue(output, index++, op_id, fun_id++, ", Function: " + info.function_name,
-		         double(info.time) / sample_tuples_count);
-	}
-	if (info.children.empty()) {
-		return;
-	}
-	// extract the children of this node
-	for (auto &child : info.children) {
-		ExtractExpressions(*child, output, index, op_id, fun_id, sample_tuples_count);
-	}
-	return;
 }
 
 static void PragmaLastProfilingOutputFunction(ClientContext &context, const FunctionData *bind_data_p,
@@ -69,21 +58,11 @@ static void PragmaLastProfilingOutputFunction(ClientContext &context, const Func
 	if (state.rows > 0) {
 		int total_counter = 0;
 		int operator_counter = 1;
-		SetValue(output, total_counter++, 0, 0, "Query: " + context.prev_profiler.query,
-		         context.prev_profiler.main_query.Elapsed());
+//		SetValue(output, total_counter++, 0, "Query: " + context.prev_profiler.query,
+//		         context.prev_profiler.main_query.Elapsed(), 0, "");
 		for (auto op : context.prev_profiler.tree_map) {
-			int function_counter = 1;
-			SetValue(output, total_counter++, operator_counter, 0, "Operator: " + op.second->name,
-			         op.second->info.time);
-			if (op.second->info.has_executor) {
-				for (auto &info : op.second->info.executors_info->roots) {
-					ExtractExpressions(*info, output, total_counter, operator_counter, function_counter,
-					                   op.second->info.executors_info->sample_tuples_count);
-				}
-			}
-			operator_counter++;
+			SetValue(output, total_counter++, operator_counter++, op.second->name, op.second->info.time, op.second->info.elements, " ");
 		}
-
 		state.rows = 0;
 		output.SetCardinality(total_counter);
 	} else {
