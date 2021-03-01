@@ -1,5 +1,5 @@
 #include "duckdb/execution/operator/projection/physical_projection.hpp"
-
+#include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
@@ -28,6 +28,14 @@ void PhysicalProjection::GetChunkInternal(ExecutionContext &context, DataChunk &
 
 unique_ptr<PhysicalOperatorState> PhysicalProjection::GetOperatorState() {
 	return make_unique<PhysicalProjectionState>(*this, children[0].get(), select_list);
+}
+
+void PhysicalProjection::FinalizeOperatorState(PhysicalOperatorState &state_p, ExecutionContext &context) {
+	auto &state = reinterpret_cast<PhysicalProjectionState &>(state_p);
+	context.thread.profiler.Flush(this, &state.executor);
+	if (!children.empty() && state.child_state) {
+		children[0]->FinalizeOperatorState(*state.child_state, context);
+	}
 }
 
 string PhysicalProjection::ParamsToString() const {

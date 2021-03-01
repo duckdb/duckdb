@@ -1,0 +1,178 @@
+# name: test/sql/function/string/test_mismatches.test
+# description: Test mismatches function
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT mismatches('hallo', 'hallo')
+----
+0
+
+query I
+SELECT mismatches('hello', 'hallo')
+----
+1
+
+query I
+SELECT mismatches('hallo', 'hello')
+----
+1
+
+query I
+SELECT mismatches('aloha', 'hallo')
+----
+5
+
+query I
+SELECT mismatches('hallo', 'aloha')
+----
+5
+
+query I
+SELECT mismatches(NULL, 'hallo')
+----
+NULL
+
+query I
+SELECT mismatches('hello', NULL)
+----
+NULL
+
+query I
+SELECT mismatches(NULL, NULL)
+----
+NULL
+
+
+
+statement ok
+CREATE TABLE strings(s VARCHAR)
+
+statement ok
+INSERT INTO strings VALUES ('hello'), ('hallo'), ('aloha'), ('world'), (NULL)
+
+# normal counts
+query I
+SELECT mismatches(s, 'hallo') FROM strings ORDER BY s
+----
+NULL
+5
+0
+1
+4
+
+query I
+SELECT mismatches('hallo', s) FROM strings ORDER BY s
+----
+NULL
+5
+0
+1
+4
+
+
+
+
+# special cases
+
+statement error
+SELECT mismatches('', '')
+
+query I
+SELECT mismatches(NULL, s) FROM strings ORDER BY s
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+
+query I
+SELECT mismatches(s, NULL) FROM strings ORDER BY s
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+
+
+
+
+
+# incorrect usages
+statement error
+SELECT mismatches('hoi', 'hallo')
+
+statement error
+SELECT mismatches('hallo', 'hoi')
+
+statement error
+SELECT mismatches('', 'hallo')
+
+statement error
+SELECT mismatches('hi', '')
+
+statement error
+SELECT mismatches('', s) FROM strings ORDER BY s
+
+statement error
+SELECT mismatches(s, '') FROM strings ORDER BY s
+
+
+statement ok
+DROP TABLE strings
+
+statement ok
+CREATE TABLE strings(s VARCHAR)
+
+statement ok
+INSERT INTO strings VALUES ('hello'), ('halo'), (NULL)
+
+
+# incorrect usage
+
+statement error
+SELECT mismatches(s, 'hallo') FROM strings
+
+statement error
+SELECT mismatches('hallo', s) FROM strings
+
+
+
+
+query I
+SELECT hamming('hallo', 'hallo')
+----
+0
+
+query I
+SELECT hamming('hello', 'hallo')
+----
+1
+
+query I
+SELECT hamming(s, 'hallo') FROM strings WHERE s = 'hello'
+----
+1
+
+
+
+# Comparing fields from two columns row wise
+
+statement ok
+DROP TABLE strings;
+
+statement ok
+CREATE TABLE strings(s VARCHAR, t VARCHAR)
+
+statement ok
+INSERT INTO strings VALUES ('hello', 'world'), ('hallo', 'ola'), ('hello', ''), (NULL, NULL), ('', ''), ('bora', 'bora')
+
+statement error
+SELECT s, t, hamming(s, t) hd FROM strings WHERE length(s) = length(t)
+
+statement error
+SELECT hamming(s, t)  FROM strings

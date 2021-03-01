@@ -1,0 +1,75 @@
+# name: test/sql/function/interval/test_date_part.test
+# description: Extract function
+# group: [interval]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE intervals(i INTERVAL, s VARCHAR)
+
+statement ok
+INSERT INTO intervals VALUES ('2 years', 'year'), ('16 months', 'quarter'), ('42 days', 'day'), ('2066343400 microseconds', 'minute')
+
+# test date_part with different combinations of constant/non-constant columns
+query I
+SELECT date_part(NULL::VARCHAR, NULL::INTERVAL) FROM intervals;
+----
+NULL
+NULL
+NULL
+NULL
+
+query I
+SELECT date_part(s, NULL::INTERVAL) FROM intervals;
+----
+NULL
+NULL
+NULL
+NULL
+
+# intervals
+query I
+SELECT date_part(NULL, i) FROM intervals;
+----
+NULL
+NULL
+NULL
+NULL
+
+query I
+SELECT date_part(s, INTERVAL '4 years 5 months 18 days 128 seconds') FROM intervals;
+----
+4
+2
+18
+2
+
+query I
+SELECT date_part('seconds', i) FROM intervals;
+----
+0
+0
+0
+2066
+
+query I
+SELECT date_part(s, i) FROM intervals;
+----
+2
+2
+42
+34
+
+# interval gives errors for date-only parts
+statement error
+SELECT dayofweek(i) FROM times
+
+statement error
+SELECT isodow(i) FROM times
+
+statement error
+SELECT dayofyear(i) FROM times
+
+statement error
+SELECT week(i) FROM times

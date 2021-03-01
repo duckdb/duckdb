@@ -39,7 +39,6 @@ private:
 	Executor *executor = nullptr;
 #ifndef DUCKDB_NO_THREADS
 	std::thread progress_bar_thread;
-	std::atomic<bool> valid_percentage;
 	std::condition_variable c;
 	std::mutex m;
 #endif

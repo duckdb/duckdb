@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+set -e
+
 source scripts/install_node.sh $1
 cd tools/nodejs
 make clean
