@@ -13,7 +13,8 @@ string PragmaShowTables(ClientContext &context, const FunctionParameters &parame
 }
 
 string PragmaAllProfiling(ClientContext &context, const FunctionParameters &parameters) {
-    return "SELECT * FROM pragma_last_profiling_output() JOIN pragma_detailed_profiling_output() ON (pragma_last_profiling_output.operator_id);";
+	return "SELECT * FROM pragma_last_profiling_output() JOIN pragma_detailed_profiling_output() ON "
+	       "(pragma_last_profiling_output.operator_id);";
 }
 
 string PragmaDatabaseList(ClientContext &context, const FunctionParameters &parameters) {
@@ -71,8 +72,7 @@ void PragmaQueries::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(PragmaFunction::PragmaStatement("database_size", PragmaDatabaseSize));
 	set.AddFunction(PragmaFunction::PragmaStatement("functions", PragmaFunctionsQuery));
 	set.AddFunction(PragmaFunction::PragmaCall("import_database", PragmaImportDatabase, {LogicalType::VARCHAR}));
-    set.AddFunction(PragmaFunction::PragmaStatement("all_profiling_output", PragmaAllProfiling));
-
+	set.AddFunction(PragmaFunction::PragmaStatement("all_profiling_output", PragmaAllProfiling));
 }
 
 } // namespace duckdb

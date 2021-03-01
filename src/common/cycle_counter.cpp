@@ -3,7 +3,15 @@
 
 namespace duckdb {
 
+inline uint64_t ChronoNow() {
+	return std::chrono::duration_cast<std::chrono::milliseconds>(
+	           std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now())
+	               .time_since_epoch())
+	    .count();
+}
+
 inline uint64_t Now() {
+#if defined(RDTSC)
 #if defined(__i386__)
 	uint64_t ret;
 	__asm__ volatile("rdtsc" : "=A"(ret));
@@ -50,10 +58,13 @@ inline uint64_t Now() {
 		}
 	}
 #endif
-	return std::chrono::system_clock::now();
+	return ChronoNow();
 #else
-	return std::chrono::system_clock::now();
+	return ChronoNow();
 #endif
+#else  // not defined(RDTSC)
+	return ChronoNow();
+#endif // defined(RDTSC)
 }
 uint64_t CycleCounter::Tick() const {
 	return Now();

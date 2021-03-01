@@ -1,4 +1,4 @@
-# name: test/sql/pragma/test_table_info.test
+# name: test/sql/pragma/test_pragma_output.test
 # description: Test last_profiling_output, detailed_profiling_output and all_profiling_output pragma
 # group: [pragma]
 
@@ -9,7 +9,7 @@ statement ok
 SELECT * FROM pragma_last_profiling_output()
 
 statement ok
-SELECT * FROM detailed_profiling_output()
+SELECT * FROM pragma_detailed_profiling_output()
 
 statement ok
-PRAGMA all_profiling_output()
+PRAGMA all_profiling_output

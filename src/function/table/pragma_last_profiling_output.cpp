@@ -28,11 +28,11 @@ static unique_ptr<FunctionData> PragmaLastProfilingOutputBind(ClientContext &con
 	names.emplace_back("TIME");
 	return_types.push_back(LogicalType::DOUBLE);
 
-    names.emplace_back("CARDINALITY");
-    return_types.push_back(LogicalType::BIGINT);
+	names.emplace_back("CARDINALITY");
+	return_types.push_back(LogicalType::BIGINT);
 
-    names.emplace_back("DESCRIPTION");
-    return_types.push_back(LogicalType::VARCHAR);
+	names.emplace_back("DESCRIPTION");
+	return_types.push_back(LogicalType::VARCHAR);
 
 	return make_unique<TableFunctionData>();
 }
@@ -43,13 +43,13 @@ unique_ptr<FunctionOperatorData> PragmaLastProfilingOutputInit(ClientContext &co
 	return make_unique<PragmaLastProfilingOutputData>(1024);
 }
 
-static void SetValue(DataChunk &output, int index, int op_id, string name, double time, int64_t car, string description) {
+static void SetValue(DataChunk &output, int index, int op_id, string name, double time, int64_t car,
+                     string description) {
 	output.SetValue(0, index, op_id);
 	output.SetValue(1, index, move(name));
-    output.SetValue(2, index, time);
-    output.SetValue(3, index, car);
+	output.SetValue(2, index, time);
+	output.SetValue(3, index, car);
 	output.SetValue(4, index, move(description));
-
 }
 
 static void PragmaLastProfilingOutputFunction(ClientContext &context, const FunctionData *bind_data_p,
@@ -58,10 +58,11 @@ static void PragmaLastProfilingOutputFunction(ClientContext &context, const Func
 	if (state.rows > 0) {
 		int total_counter = 0;
 		int operator_counter = 1;
-//		SetValue(output, total_counter++, 0, "Query: " + context.prev_profiler.query,
-//		         context.prev_profiler.main_query.Elapsed(), 0, "");
+		//		SetValue(output, total_counter++, 0, "Query: " + context.prev_profiler.query,
+		//		         context.prev_profiler.main_query.Elapsed(), 0, "");
 		for (auto op : context.prev_profiler.tree_map) {
-			SetValue(output, total_counter++, operator_counter++, op.second->name, op.second->info.time, op.second->info.elements, " ");
+			SetValue(output, total_counter++, operator_counter++, op.second->name, op.second->info.time,
+			         op.second->info.elements, " ");
 		}
 		state.rows = 0;
 		output.SetCardinality(total_counter);
