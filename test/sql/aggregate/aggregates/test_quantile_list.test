@@ -24,3 +24,21 @@ query I
 SELECT quantile(r, LIST_VALUE(0.1, 0.5, 0.9)) from quantiles
 ----
 [999, 4999, 8999]
+
+statement error
+SELECT quantile(r, LIST_VALUE(-0.1, 0.5, 0.9)) FROM quantiles
+
+statement error
+SELECT quantile(r, (0.1, 0.5, 1.1)) FROM quantiles
+
+statement error
+SELECT quantile(r, LIST_VALUE(0.1, 0.5, NULL)) FROM quantiles
+
+statement error
+SELECT quantile(r, LIST_VALUE(0.1, 0.5, "string")) FROM quantiles
+
+statement error
+SELECT quantile(r::string, LIST_VALUE(0.1, 0.5, 0.9)) FROM quantiles
+
+statement error
+SELECT quantile(r, LIST_VALUE(0.1, 0.5, 0.9), 50) FROM quantiles
