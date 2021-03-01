@@ -7,7 +7,7 @@
 namespace duckdb {
 
 static inline map<char, idx_t> GetSet(string_t str) {
-	auto  map_of_chars = map<char, idx_t>{};
+	auto map_of_chars = map<char, idx_t> {};
 	idx_t str_len = str.GetSize();
 	auto s = str.GetDataUnsafe();
 	for (idx_t pos = 0; pos < str_len; pos++) {
@@ -21,7 +21,7 @@ static inline map<char, idx_t> TabulateCharacters(map<char, idx_t> str, map<char
 		str.swap(txt);
 	}
 
-	for (auto const &achar: str) {
+	for (auto const &achar : str) {
 		++txt[achar.first];
 	}
 
@@ -30,14 +30,14 @@ static inline map<char, idx_t> TabulateCharacters(map<char, idx_t> str, map<char
 
 static double JaccardSimilarity(const string_t &str, const string_t &txt) {
 	if (str.GetSize() < 1 || txt.GetSize() < 1) {
-			throw InvalidInputException("Jaccard Function: An argument too short!");
-		}
+		throw InvalidInputException("Jaccard Function: An argument too short!");
+	}
 
-	map<char, idx_t> mu = TabulateCharacters(GetSet(str), GetSet(txt)); 
+	map<char, idx_t> mu = TabulateCharacters(GetSet(str), GetSet(txt));
 
 	idx_t size_union = mu.size();
 	idx_t size_intersect = 0;
-	for (const auto &apair: mu) {
+	for (const auto &apair : mu) {
 		if (apair.second > 1) {
 			size_intersect++;
 		}
