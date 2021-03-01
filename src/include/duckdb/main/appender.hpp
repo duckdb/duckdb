@@ -101,6 +101,14 @@ void DUCKDB_API Appender::Append(int32_t value);
 template <>
 void DUCKDB_API Appender::Append(int64_t value);
 template <>
+void DUCKDB_API Appender::Append(uint8_t value);
+template <>
+void DUCKDB_API Appender::Append(uint16_t value);
+template <>
+void DUCKDB_API Appender::Append(uint32_t value);
+template <>
+void DUCKDB_API Appender::Append(uint64_t value);
+template <>
 void DUCKDB_API Appender::Append(float value);
 template <>
 void DUCKDB_API Appender::Append(double value);

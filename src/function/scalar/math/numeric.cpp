@@ -38,14 +38,18 @@ static scalar_function_t GetScalarIntegerUnaryFunctionFixedReturn(const LogicalT
 
 struct UnaryDoubleWrapper {
 	template <class FUNC, class OP, class INPUT_TYPE, class RESULT_TYPE>
-	static inline RESULT_TYPE Operation(FUNC fun, INPUT_TYPE input, nullmask_t &nullmask, idx_t idx) {
+	static inline RESULT_TYPE Operation(FUNC fun, INPUT_TYPE input, ValidityMask &mask, idx_t idx) {
 		RESULT_TYPE result = OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input);
 		if (std::isnan(result) || std::isinf(result) || errno != 0) {
 			errno = 0;
-			nullmask[idx] = true;
+			mask.SetInvalid(idx);
 			return 0;
 		}
 		return result;
+	}
+
+	static bool AddsNulls() {
+		return true;
 	}
 };
 
@@ -53,19 +57,23 @@ template <class T, class OP>
 static void UnaryDoubleFunctionWrapper(DataChunk &input, ExpressionState &state, Vector &result) {
 	D_ASSERT(input.ColumnCount() >= 1);
 	errno = 0;
-	UnaryExecutor::Execute<T, T, OP, true, UnaryDoubleWrapper>(input.data[0], result, input.size());
+	UnaryExecutor::Execute<T, T, OP, UnaryDoubleWrapper>(input.data[0], result, input.size());
 }
 
 struct BinaryDoubleWrapper {
 	template <class FUNC, class OP, class TA, class TB, class TR>
-	static inline TR Operation(FUNC fun, TA left, TB right, nullmask_t &nullmask, idx_t idx) {
+	static inline TR Operation(FUNC fun, TA left, TB right, ValidityMask &mask, idx_t idx) {
 		TR result = OP::template Operation<TA, TB, TR>(left, right);
 		if (std::isnan(result) || std::isinf(result) || errno != 0) {
 			errno = 0;
-			nullmask[idx] = true;
+			mask.SetInvalid(idx);
 			return 0;
 		}
 		return result;
+	}
+
+	static bool AddsNulls() {
+		return true;
 	}
 };
 
@@ -73,7 +81,7 @@ template <class T, class OP>
 static void BinaryDoubleFunctionWrapper(DataChunk &input, ExpressionState &state, Vector &result) {
 	D_ASSERT(input.ColumnCount() >= 2);
 	errno = 0;
-	BinaryExecutor::Execute<T, T, T, OP, true, BinaryDoubleWrapper>(input.data[0], input.data[1], result, input.size());
+	BinaryExecutor::Execute<T, T, T, OP, BinaryDoubleWrapper>(input.data[0], input.data[1], result, input.size());
 }
 
 //===--------------------------------------------------------------------===//

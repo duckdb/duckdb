@@ -15,7 +15,7 @@ StringSegment::StringSegment(DatabaseInstance &db, idx_t row_start, block_id_t b
     : UncompressedSegment(db, PhysicalType::VARCHAR, row_start) {
 	this->max_vector_count = 0;
 	// the vector_size is given in the size of the dictionary offsets
-	this->vector_size = STANDARD_VECTOR_SIZE * sizeof(int32_t) + sizeof(nullmask_t);
+	this->vector_size = STANDARD_VECTOR_SIZE * sizeof(int32_t) + ValidityMask::STANDARD_MASK_SIZE;
 	this->string_updates = nullptr;
 
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
@@ -48,8 +48,8 @@ StringSegment::~StringSegment() {
 
 void StringSegment::ExpandStringSegment(data_ptr_t baseptr) {
 	// clear the nullmask for this vector
-	auto mask = (nullmask_t *)(baseptr + (max_vector_count * vector_size));
-	mask->reset();
+	ValidityMask mask(baseptr + (max_vector_count * vector_size));
+	mask.SetAllValid(STANDARD_VECTOR_SIZE);
 
 	max_vector_count++;
 	if (versions) {
@@ -109,34 +109,34 @@ void StringSegment::Select(ColumnScanState &state, Vector &result, SelectionVect
 	auto baseptr = handle->node->buffer;
 	// fetch the data from the base segment
 	auto base = baseptr + state.vector_index * vector_size;
-	auto base_data = (int32_t *)(base + sizeof(nullmask_t));
-	auto base_nullmask = (nullmask_t *)base;
+	auto base_data = (int32_t *)(base + ValidityMask::STANDARD_MASK_SIZE);
+	ValidityMask base_mask(base);
 
 	if (table_filter.size() == 1) {
 		switch (table_filter[0].comparison_type) {
 		case ExpressionType::COMPARE_EQUAL: {
 			Select_String<Equals>(result, baseptr, base_data, sel, table_filter[0].constant.str_value,
-			                      approved_tuple_count, base_nullmask, vector_index);
+			                      approved_tuple_count, base_mask, vector_index);
 			break;
 		}
 		case ExpressionType::COMPARE_LESSTHAN: {
 			Select_String<LessThan>(result, baseptr, base_data, sel, table_filter[0].constant.str_value,
-			                        approved_tuple_count, base_nullmask, vector_index);
+			                        approved_tuple_count, base_mask, vector_index);
 			break;
 		}
 		case ExpressionType::COMPARE_GREATERTHAN: {
 			Select_String<GreaterThan>(result, baseptr, base_data, sel, table_filter[0].constant.str_value,
-			                           approved_tuple_count, base_nullmask, vector_index);
+			                           approved_tuple_count, base_mask, vector_index);
 			break;
 		}
 		case ExpressionType::COMPARE_LESSTHANOREQUALTO: {
 			Select_String<LessThanEquals>(result, baseptr, base_data, sel, table_filter[0].constant.str_value,
-			                              approved_tuple_count, base_nullmask, vector_index);
+			                              approved_tuple_count, base_mask, vector_index);
 			break;
 		}
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO: {
 			Select_String<GreaterThanEquals>(result, baseptr, base_data, sel, table_filter[0].constant.str_value,
-			                                 approved_tuple_count, base_nullmask, vector_index);
+			                                 approved_tuple_count, base_mask, vector_index);
 
 			break;
 		}
@@ -152,21 +152,21 @@ void StringSegment::Select(ColumnScanState &state, Vector &result, SelectionVect
 			if (less.comparison_type == ExpressionType::COMPARE_LESSTHAN) {
 				Select_String_Between<GreaterThan, LessThan>(result, baseptr, base_data, sel,
 				                                             greater.constant.str_value, less.constant.str_value,
-				                                             approved_tuple_count, base_nullmask, vector_index);
+				                                             approved_tuple_count, base_mask, vector_index);
 			} else {
 				Select_String_Between<GreaterThan, LessThanEquals>(result, baseptr, base_data, sel,
 				                                                   greater.constant.str_value, less.constant.str_value,
-				                                                   approved_tuple_count, base_nullmask, vector_index);
+				                                                   approved_tuple_count, base_mask, vector_index);
 			}
 		} else {
 			if (less.comparison_type == ExpressionType::COMPARE_LESSTHAN) {
 				Select_String_Between<GreaterThanEquals, LessThan>(result, baseptr, base_data, sel,
 				                                                   greater.constant.str_value, less.constant.str_value,
-				                                                   approved_tuple_count, base_nullmask, vector_index);
+				                                                   approved_tuple_count, base_mask, vector_index);
 			} else {
 				Select_String_Between<GreaterThanEquals, LessThanEquals>(
 				    result, baseptr, base_data, sel, greater.constant.str_value, less.constant.str_value,
-				    approved_tuple_count, base_nullmask, vector_index);
+				    approved_tuple_count, base_mask, vector_index);
 			}
 		}
 	}
@@ -187,8 +187,13 @@ void StringSegment::FetchBaseData(ColumnScanState &state, data_ptr_t baseptr, id
                                   idx_t count) {
 	auto base = baseptr + vector_index * vector_size;
 
-	auto &base_nullmask = *((nullmask_t *)base);
-	auto base_data = (int32_t *)(base + sizeof(nullmask_t));
+	auto &result_mask = FlatVector::Validity(result);
+	ValidityMask base_mask(base);
+	if (!base_mask.CheckAllValid(count)) {
+		result_mask.Copy(base_mask, count);
+	}
+
+	auto base_data = (int32_t *)(base + ValidityMask::STANDARD_MASK_SIZE);
 	auto result_data = FlatVector::GetData<string_t>(result);
 
 	if (string_updates && string_updates[vector_index]) {
@@ -211,7 +216,6 @@ void StringSegment::FetchBaseData(ColumnScanState &state, data_ptr_t baseptr, id
 			result_data[i] = FetchStringFromDict(result, baseptr, base_data[i]);
 		}
 	}
-	FlatVector::SetNullmask(result, base_nullmask);
 }
 
 void StringSegment::FilterFetchBaseData(ColumnScanState &state, Vector &result, SelectionVector &sel,
@@ -221,17 +225,19 @@ void StringSegment::FilterFetchBaseData(ColumnScanState &state, Vector &result, 
 	auto baseptr = handle->node->buffer;
 	// fetch the data from the base segment
 	auto base = baseptr + state.vector_index * vector_size;
-	auto &base_nullmask = *((nullmask_t *)base);
-	auto base_data = (int32_t *)(base + sizeof(nullmask_t));
+	ValidityMask base_mask(base);
+	auto &result_mask = FlatVector::Validity(result);
+
+	auto base_data = (int32_t *)(base + ValidityMask::STANDARD_MASK_SIZE);
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::GetData<string_t>(result);
-	nullmask_t result_nullmask;
+
 	idx_t update_idx = 0;
-	if (base_nullmask.any()) {
+	if (!base_mask.AllValid()) {
 		for (idx_t i = 0; i < approved_tuple_count; i++) {
 			idx_t src_idx = sel.get_index(i);
-			if (base_nullmask[src_idx]) {
-				result_nullmask.set(i, true);
+			if (!base_mask.RowIsValid(src_idx)) {
+				result_mask.SetInvalid(i);
 				ReadString(result_data, result, baseptr, base_data, src_idx, i, update_idx, state.vector_index);
 			} else {
 				ReadString(result_data, result, baseptr, base_data, src_idx, i, update_idx, state.vector_index);
@@ -243,7 +249,6 @@ void StringSegment::FilterFetchBaseData(ColumnScanState &state, Vector &result, 
 			ReadString(result_data, result, baseptr, base_data, src_idx, i, update_idx, state.vector_index);
 		}
 	}
-	FlatVector::SetNullmask(result, result_nullmask);
 }
 
 //===--------------------------------------------------------------------===//
@@ -255,13 +260,14 @@ void StringSegment::FetchUpdateData(ColumnScanState &state, transaction_t start_
 	auto handle = state.primary_handle.get();
 
 	auto result_data = FlatVector::GetData<string_t>(result);
-	auto &result_mask = FlatVector::Nullmask(result);
+	auto &result_mask = FlatVector::Validity(result);
 	UpdateInfo::UpdatesForTransaction(info, start_time, transaction_id, [&](UpdateInfo *current) {
 		auto info_data = (string_location_t *)current->tuple_data;
+		ValidityMask current_mask(current->validity);
 		for (idx_t i = 0; i < current->N; i++) {
 			auto string = FetchString(result, handle->node->buffer, info_data[i]);
 			result_data[current->tuples[i]] = string;
-			result_mask[current->tuples[i]] = current->nullmask[current->tuples[i]];
+			result_mask.Set(current->tuples[i], current_mask.RowIsValidUnsafe(current->tuples[i]));
 		}
 	});
 }
@@ -272,7 +278,7 @@ void StringSegment::FetchUpdateData(ColumnScanState &state, transaction_t start_
 void StringSegment::FetchStringLocations(data_ptr_t baseptr, row_t *ids, idx_t vector_index, idx_t vector_offset,
                                          idx_t count, string_location_t result[]) {
 	auto base = baseptr + vector_index * vector_size;
-	auto base_data = (int32_t *)(base + sizeof(nullmask_t));
+	auto base_data = (int32_t *)(base + ValidityMask::STANDARD_MASK_SIZE);
 
 	if (string_updates && string_updates[vector_index]) {
 		// there are updates: merge them in
@@ -372,10 +378,10 @@ void StringSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, 
 	}
 
 	auto base = baseptr + vector_index * vector_size;
-	auto &base_nullmask = *((nullmask_t *)base);
-	auto base_data = (int32_t *)(base + sizeof(nullmask_t));
+	ValidityMask base_mask(base);
+	auto base_data = (int32_t *)(base + ValidityMask::STANDARD_MASK_SIZE);
 	auto result_data = FlatVector::GetData<string_t>(result);
-	auto &result_mask = FlatVector::Nullmask(result);
+	auto &result_mask = FlatVector::Validity(result);
 
 	bool found_data = false;
 	// first see if there is any updated version of this tuple we must fetch
@@ -384,12 +390,13 @@ void StringSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, 
 		    versions[vector_index], transaction.start_time, transaction.transaction_id, [&](UpdateInfo *current) {
 			    auto info_data = (string_location_t *)current->tuple_data;
 			    // loop over the tuples in this UpdateInfo
+			    ValidityMask current_mask(current->validity);
 			    for (idx_t i = 0; i < current->N; i++) {
 				    if (current->tuples[i] == row_id) {
 					    // found the relevant tuple
 					    found_data = true;
 					    result_data[result_idx] = FetchString(result, baseptr, info_data[i]);
-					    result_mask[result_idx] = current->nullmask[current->tuples[i]];
+					    result_mask.Set(result_idx, current_mask.RowIsValidUnsafe(current->tuples[i]));
 					    break;
 				    } else if (current->tuples[i] > row_id) {
 					    // tuples are sorted: so if the current tuple is > row_id we will not find it anymore
@@ -416,7 +423,7 @@ void StringSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, 
 		// no version was found yet: fetch base table version
 		result_data[result_idx] = FetchStringFromDict(result, baseptr, base_data[id_in_vector]);
 	}
-	result_mask[result_idx] = base_nullmask[id_in_vector];
+	result_mask.Set(result_idx, base_mask.RowIsValid(id_in_vector));
 }
 
 //===--------------------------------------------------------------------===//
@@ -472,17 +479,17 @@ void StringSegment::AppendData(BufferHandle &handle, SegmentStatistics &stats, d
 	source.Orrify(count, adata);
 
 	auto sdata = (string_t *)adata.data;
-	auto &result_nullmask = *((nullmask_t *)target);
-	auto result_data = (int32_t *)(target + sizeof(nullmask_t));
+	ValidityMask result_mask(target);
+	auto result_data = (int32_t *)(target + ValidityMask::STANDARD_MASK_SIZE);
 
 	idx_t remaining_strings = STANDARD_VECTOR_SIZE - (this->tuple_count % STANDARD_VECTOR_SIZE);
 	for (idx_t i = 0; i < count; i++) {
 		auto source_idx = adata.sel->get_index(offset + i);
 		auto target_idx = target_offset + i;
-		if ((*adata.nullmask)[source_idx]) {
+		if (!adata.validity.RowIsValid(source_idx)) {
 			// null value is stored as -1
 			result_data[target_idx] = 0;
-			result_nullmask[target_idx] = true;
+			result_mask.SetInvalid(target_idx);
 			stats.statistics->has_null = true;
 		} else {
 			auto dictionary_offset = GetDictionaryOffset(handle);
@@ -663,11 +670,11 @@ string_update_info_t StringSegment::CreateStringUpdate(SegmentStatistics &stats,
 	auto info = make_unique<StringUpdateInfo>();
 	info->count = count;
 	auto strings = FlatVector::GetData<string_t>(update);
-	auto &update_nullmask = FlatVector::Nullmask(update);
+	auto &update_mask = FlatVector::Validity(update);
 	for (idx_t i = 0; i < count; i++) {
 		info->ids[i] = ids[i] - vector_offset;
 		// copy the string into the block
-		if (!update_nullmask[i]) {
+		if (update_mask.RowIsValid(i)) {
 			UpdateStringStats(stats, strings[i]);
 			WriteString(strings[i], info->block_ids[i], info->offsets[i]);
 		} else {
@@ -686,16 +693,16 @@ string_update_info_t StringSegment::MergeStringUpdate(SegmentStatistics &stats, 
 
 	// perform a merge between the new and old indexes
 	auto strings = FlatVector::GetData<string_t>(update);
-	auto &update_nullmask = FlatVector::Nullmask(update);
+	auto &update_mask = FlatVector::Validity(update);
 	//! Check if we need to update the segment's nullmask
 	for (idx_t i = 0; i < update_count; i++) {
-		if (!update_nullmask[i]) {
+		if (update_mask.RowIsValid(i)) {
 			UpdateStringStats(stats, strings[i]);
 		}
 	}
 	auto pick_new = [&](idx_t id, idx_t idx, idx_t count) {
 		info->ids[count] = id;
-		if (!update_nullmask[idx]) {
+		if (update_mask.RowIsValid(idx)) {
 			WriteString(strings[idx], info->block_ids[count], info->offsets[count]);
 		} else {
 			stats.statistics->has_null = true;
@@ -723,7 +730,7 @@ string_update_info_t StringSegment::MergeStringUpdate(SegmentStatistics &stats, 
 // Update Info
 //===--------------------------------------------------------------------===//
 void StringSegment::MergeUpdateInfo(UpdateInfo *node, row_t *ids, idx_t update_count, idx_t vector_offset,
-                                    string_location_t base_data[], nullmask_t base_nullmask) {
+                                    string_location_t base_data[], ValidityMask &base_mask) {
 	auto info_data = (string_location_t *)node->tuple_data;
 
 	// first we copy the old update info into a temporary structure
@@ -740,11 +747,12 @@ void StringSegment::MergeUpdateInfo(UpdateInfo *node, row_t *ids, idx_t update_c
 		info_data[count] = old_data[bidx];
 		node->tuples[count] = id;
 	};
+	ValidityMask node_mask(node->validity);
 	auto pick_new = [&](idx_t id, idx_t aidx, idx_t count) {
 		// new_id comes before the old id, insert the base table data into the update info
 		D_ASSERT(base_data[aidx].IsValid());
 		info_data[count] = base_data[aidx];
-		node->nullmask[id] = base_nullmask[aidx];
+		node_mask.Set(id, base_mask.RowIsValid(aidx));
 
 		node->tuples[count] = id;
 	};
@@ -773,11 +781,13 @@ void StringSegment::Update(ColumnData &column_data, SegmentStatistics &stats, Tr
 	auto handle = buffer_manager.Pin(block);
 	auto baseptr = handle->node->buffer;
 	auto base = baseptr + vector_index * vector_size;
-	auto &base_nullmask = *((nullmask_t *)base);
+	ValidityMask base_mask(base);
 
 	// fetch the original string locations and copy the original nullmask
 	string_location_t string_locations[STANDARD_VECTOR_SIZE];
-	nullmask_t original_nullmask = base_nullmask;
+	validity_t original_validity[ValidityMask::STANDARD_ENTRY_COUNT];
+	memcpy(original_validity, base, ValidityMask::STANDARD_ENTRY_COUNT * sizeof(validity_t));
+
 	FetchStringLocations(baseptr, ids, vector_index, vector_offset, count, string_locations);
 
 	string_update_info_t new_update_info;
@@ -791,9 +801,9 @@ void StringSegment::Update(ColumnData &column_data, SegmentStatistics &stats, Tr
 	}
 
 	// now update the original nullmask
-	auto &update_nullmask = FlatVector::Nullmask(update);
+	auto &update_mask = FlatVector::Validity(update);
 	for (idx_t i = 0; i < count; i++) {
-		base_nullmask[ids[i] - vector_offset] = update_nullmask[i];
+		base_mask.Set(ids[i] - vector_offset, update_mask.RowIsValid(i));
 	}
 
 	// now that the original strings are placed in the undo buffer and the updated strings are placed in the base table
@@ -804,11 +814,12 @@ void StringSegment::Update(ColumnData &column_data, SegmentStatistics &stats, Tr
 		                        sizeof(string_location_t));
 
 		// copy the string location data into the undo buffer
-		node->nullmask = original_nullmask;
+		memcpy(node->validity, original_validity, ValidityMask::STANDARD_ENTRY_COUNT * sizeof(validity_t));
 		memcpy(node->tuple_data, string_locations, sizeof(string_location_t) * count);
 	} else {
 		// node in the update info already exists, merge the new updates in
-		MergeUpdateInfo(node, ids, count, vector_offset, string_locations, original_nullmask);
+		ValidityMask original_mask(original_validity);
+		MergeUpdateInfo(node, ids, count, vector_offset, string_locations, original_mask);
 	}
 	// finally move the string updates in place
 	string_updates[vector_index] = move(new_update_info);
@@ -827,9 +838,10 @@ void StringSegment::RollbackUpdate(UpdateInfo *info) {
 	auto handle = buffer_manager.Pin(block);
 	auto baseptr = handle->node->buffer;
 	auto base = baseptr + info->vector_index * vector_size;
-	auto &base_nullmask = *((nullmask_t *)base);
+	ValidityMask base_mask(base);
+	ValidityMask info_mask(info->validity);
 	for (idx_t i = 0; i < info->N; i++) {
-		base_nullmask[info->tuples[i]] = info->nullmask[info->tuples[i]];
+		base_mask.Set(info->tuples[i], info_mask.RowIsValidUnsafe(info->tuples[i]));
 	}
 
 	// now put the original values back into the update info

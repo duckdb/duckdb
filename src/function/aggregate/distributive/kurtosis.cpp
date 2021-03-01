@@ -21,18 +21,15 @@ struct KurtosisOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask,
+	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask,
 	                              idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
-			Operation<INPUT_TYPE, STATE, OP>(state, bind_data, input, nullmask, 0);
+			Operation<INPUT_TYPE, STATE, OP>(state, bind_data, input, mask, 0);
 		}
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *data, nullmask_t &nullmask, idx_t idx) {
-		if (nullmask[idx]) {
-			return;
-		}
+	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *data, ValidityMask &mask, idx_t idx) {
 		state->n++;
 		state->sum += data[idx];
 		state->sum_sqr += pow(data[idx], 2);
@@ -53,11 +50,11 @@ struct KurtosisOperation {
 	}
 
 	template <class TARGET_TYPE, class STATE>
-	static void Finalize(Vector &result, FunctionData *bind_data, STATE *state, TARGET_TYPE *target,
-	                     nullmask_t &nullmask, idx_t idx) {
+	static void Finalize(Vector &result, FunctionData *bind_data, STATE *state, TARGET_TYPE *target, ValidityMask &mask,
+	                     idx_t idx) {
 		auto n = (double)state->n;
-		if (n == 0) {
-			nullmask[idx] = true;
+		if (n <= 3) {
+			mask.SetInvalid(idx);
 			return;
 		}
 		double temp = 1 / n;
@@ -65,7 +62,7 @@ struct KurtosisOperation {
 		long double temp_aux = 1 / n;
 		if (state->sum_sqr - state->sum * state->sum * temp == 0 ||
 		    state->sum_sqr - state->sum * state->sum * temp_aux == 0) {
-			nullmask[idx] = true;
+			mask.SetInvalid(idx);
 			return;
 		}
 		double m4 =
@@ -74,16 +71,16 @@ struct KurtosisOperation {
 
 		double m2 = temp * (state->sum_sqr - state->sum * state->sum * temp);
 		if (((m2 * m2) - 3 * (n - 1)) == 0 || ((n - 2) * (n - 3)) == 0) {
-			nullmask[idx] = true;
+			mask.SetInvalid(idx);
 		}
 		target[idx] = (n - 1) * ((n + 1) * m4 / (m2 * m2) - 3 * (n - 1)) / ((n - 2) * (n - 3));
 		if (!Value::DoubleIsValid(target[idx])) {
-			nullmask[idx] = true;
+			mask.SetInvalid(idx);
 		}
 	}
 
 	static bool IgnoreNull() {
-		return false;
+		return true;
 	}
 };
 

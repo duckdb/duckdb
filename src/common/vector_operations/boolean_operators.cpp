@@ -38,14 +38,15 @@ static void TemplatedBooleanNullmask(Vector &left, Vector &right, Vector &result
 		auto left_data = (uint8_t *)ldata.data; // we use uint8 to avoid load of gunk bools
 		auto right_data = (uint8_t *)rdata.data;
 		auto result_data = FlatVector::GetData<bool>(result);
-		auto &result_mask = FlatVector::Nullmask(result);
-		if (ldata.nullmask->any() || rdata.nullmask->any()) {
+		auto &result_mask = FlatVector::Validity(result);
+		if (!ldata.validity.AllValid() || !rdata.validity.AllValid()) {
 			for (idx_t i = 0; i < count; i++) {
 				auto lidx = ldata.sel->get_index(i);
 				auto ridx = rdata.sel->get_index(i);
-				bool is_null = OP::Operation(left_data[lidx] > 0, right_data[ridx] > 0, (*ldata.nullmask)[lidx],
-				                             (*rdata.nullmask)[ridx], result_data[i]);
-				result_mask[i] = is_null;
+				bool is_null =
+				    OP::Operation(left_data[lidx] > 0, right_data[ridx] > 0, !ldata.validity.RowIsValid(lidx),
+				                  !rdata.validity.RowIsValid(ridx), result_data[i]);
+				result_mask.Set(i, !is_null);
 			}
 		} else {
 			for (idx_t i = 0; i < count; i++) {

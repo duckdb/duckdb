@@ -20,12 +20,12 @@ struct RegrSXYOperation {
 	}
 
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, FunctionData *bind_data, A_TYPE *x_data, B_TYPE *y_data, nullmask_t &anullmask,
-	                      nullmask_t &bnullmask, idx_t xidx, idx_t yidx) {
-		RegrCountFunction::Operation<A_TYPE, B_TYPE, size_t, OP>(&state->count, bind_data, y_data, x_data, bnullmask,
-		                                                         anullmask, yidx, xidx);
-		CovarOperation::Operation<A_TYPE, B_TYPE, CovarState, OP>(&state->cov_pop, bind_data, x_data, y_data, anullmask,
-		                                                          bnullmask, xidx, yidx);
+	static void Operation(STATE *state, FunctionData *bind_data, A_TYPE *x_data, B_TYPE *y_data, ValidityMask &amask,
+	                      ValidityMask &bmask, idx_t xidx, idx_t yidx) {
+		RegrCountFunction::Operation<A_TYPE, B_TYPE, size_t, OP>(&state->count, bind_data, y_data, x_data, bmask, amask,
+		                                                         yidx, xidx);
+		CovarOperation::Operation<A_TYPE, B_TYPE, CovarState, OP>(&state->cov_pop, bind_data, x_data, y_data, amask,
+		                                                          bmask, xidx, yidx);
 	}
 
 	template <class STATE, class OP>
@@ -35,10 +35,10 @@ struct RegrSXYOperation {
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *fd, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
-		CovarPopOperation::Finalize<T, CovarState>(result, fd, &state->cov_pop, target, nullmask, idx);
+	static void Finalize(Vector &result, FunctionData *fd, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
+		CovarPopOperation::Finalize<T, CovarState>(result, fd, &state->cov_pop, target, mask, idx);
 		auto cov_pop = target[idx];
-		RegrCountFunction::Finalize<T, size_t>(result, fd, &state->count, target, nullmask, idx);
+		RegrCountFunction::Finalize<T, size_t>(result, fd, &state->count, target, mask, idx);
 		target[idx] *= cov_pop;
 	}
 

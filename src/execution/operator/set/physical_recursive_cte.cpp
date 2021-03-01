@@ -159,4 +159,14 @@ unique_ptr<PhysicalOperatorState> PhysicalRecursiveCTE::GetOperatorState() {
 	return (move(state));
 }
 
+void PhysicalRecursiveCTE::FinalizeOperatorState(PhysicalOperatorState &state_p, ExecutionContext &context) {
+	auto &state = reinterpret_cast<PhysicalRecursiveCTEState &>(state_p);
+	if (!children.empty() && state.top_state) {
+		children[0]->FinalizeOperatorState(*state.top_state, context);
+	}
+	if (!children.empty() && state.bottom_state) {
+		children[1]->FinalizeOperatorState(*state.bottom_state, context);
+	}
+}
+
 } // namespace duckdb

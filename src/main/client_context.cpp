@@ -167,7 +167,7 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 
 	if (enable_optimizer) {
 		profiler.StartPhase("optimizer");
-		Optimizer optimizer(planner.binder, *this);
+		Optimizer optimizer(*planner.binder, *this);
 		plan = optimizer.Optimize(move(plan));
 		D_ASSERT(plan);
 		profiler.EndPhase();
@@ -747,8 +747,8 @@ void ClientContext::Append(TableDescription &description, DataChunk &chunk) {
 void ClientContext::TryBindRelation(Relation &relation, vector<ColumnDefinition> &result_columns) {
 	RunFunctionInTransaction([&]() {
 		// bind the expressions
-		Binder binder(*this);
-		auto result = relation.Bind(binder);
+		auto binder = Binder::CreateBinder(*this);
+		auto result = relation.Bind(*binder);
 		D_ASSERT(result.names.size() == result.types.size());
 		for (idx_t i = 0; i < result.names.size(); i++) {
 			result_columns.emplace_back(result.names[i], result.types[i]);

@@ -110,21 +110,21 @@ struct ToMicroSecondsOperator {
 void ToIntervalFun::RegisterFunction(BuiltinFunctions &set) {
 	// register the individual operators
 	set.AddFunction(ScalarFunction("to_years", {LogicalType::INTEGER}, LogicalType::INTERVAL,
-	                               ScalarFunction::UnaryFunction<int32_t, interval_t, ToYearsOperator, true>));
+	                               ScalarFunction::UnaryFunction<int32_t, interval_t, ToYearsOperator>));
 	set.AddFunction(ScalarFunction("to_months", {LogicalType::INTEGER}, LogicalType::INTERVAL,
-	                               ScalarFunction::UnaryFunction<int32_t, interval_t, ToMonthsOperator, true>));
+	                               ScalarFunction::UnaryFunction<int32_t, interval_t, ToMonthsOperator>));
 	set.AddFunction(ScalarFunction("to_days", {LogicalType::INTEGER}, LogicalType::INTERVAL,
-	                               ScalarFunction::UnaryFunction<int32_t, interval_t, ToDaysOperator, true>));
+	                               ScalarFunction::UnaryFunction<int32_t, interval_t, ToDaysOperator>));
 	set.AddFunction(ScalarFunction("to_hours", {LogicalType::BIGINT}, LogicalType::INTERVAL,
-	                               ScalarFunction::UnaryFunction<int64_t, interval_t, ToHoursOperator, true>));
+	                               ScalarFunction::UnaryFunction<int64_t, interval_t, ToHoursOperator>));
 	set.AddFunction(ScalarFunction("to_minutes", {LogicalType::BIGINT}, LogicalType::INTERVAL,
-	                               ScalarFunction::UnaryFunction<int64_t, interval_t, ToMinutesOperator, true>));
+	                               ScalarFunction::UnaryFunction<int64_t, interval_t, ToMinutesOperator>));
 	set.AddFunction(ScalarFunction("to_seconds", {LogicalType::BIGINT}, LogicalType::INTERVAL,
-	                               ScalarFunction::UnaryFunction<int64_t, interval_t, ToSecondsOperator, true>));
+	                               ScalarFunction::UnaryFunction<int64_t, interval_t, ToSecondsOperator>));
 	set.AddFunction(ScalarFunction("to_milliseconds", {LogicalType::BIGINT}, LogicalType::INTERVAL,
-	                               ScalarFunction::UnaryFunction<int64_t, interval_t, ToMilliSecondsOperator, true>));
+	                               ScalarFunction::UnaryFunction<int64_t, interval_t, ToMilliSecondsOperator>));
 	set.AddFunction(ScalarFunction("to_microseconds", {LogicalType::BIGINT}, LogicalType::INTERVAL,
-	                               ScalarFunction::UnaryFunction<int64_t, interval_t, ToMicroSecondsOperator, true>));
+	                               ScalarFunction::UnaryFunction<int64_t, interval_t, ToMicroSecondsOperator>));
 }
 
 } // namespace duckdb

@@ -1,7 +1,8 @@
 #include "duckdb/execution/expression_executor.hpp"
-
+#include "duckdb/execution/execution_context.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/parallel/thread_context.hpp"
 
 namespace duckdb {
 
@@ -43,9 +44,19 @@ void ExpressionExecutor::Execute(DataChunk *input, DataChunk &result) {
 	D_ASSERT(!expressions.empty());
 	for (idx_t i = 0; i < expressions.size(); i++) {
 		ExecuteExpression(i, result.data[i]);
+		if (current_count >= next_sample) {
+			next_sample = 50 + rand() % 100;
+			++sample_count;
+			sample_tuples_count += input->size();
+			current_count = 0;
+		} else {
+			++current_count;
+		}
 	}
 	result.SetCardinality(input ? input->size() : 1);
 	result.Verify();
+	++total_count;
+	tuples_count += input->size();
 }
 
 void ExpressionExecutor::ExecuteExpression(DataChunk &input, Vector &result) {
@@ -124,6 +135,9 @@ void ExpressionExecutor::Execute(Expression &expr, ExpressionState *state, const
 	if (count == 0) {
 		return;
 	}
+	if (current_count >= next_sample) {
+		state->profiler.Start();
+	}
 	switch (expr.expression_class) {
 	case ExpressionClass::BOUND_BETWEEN:
 		Execute((BoundBetweenExpression &)expr, state, sel, count, result);
@@ -159,6 +173,10 @@ void ExpressionExecutor::Execute(Expression &expr, ExpressionState *state, const
 		throw NotImplementedException("Attempting to execute expression of unknown type!");
 	}
 	Verify(expr, result, count);
+	if (current_count >= next_sample) {
+		state->profiler.End();
+		state->time += state->profiler.Elapsed();
+	}
 }
 
 idx_t ExpressionExecutor::Select(Expression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
@@ -181,14 +199,14 @@ idx_t ExpressionExecutor::Select(Expression &expr, ExpressionState *state, const
 }
 
 template <bool NO_NULL, bool HAS_TRUE_SEL, bool HAS_FALSE_SEL>
-static inline idx_t DefaultSelectLoop(const SelectionVector *bsel, uint8_t *__restrict bdata, nullmask_t &nullmask,
+static inline idx_t DefaultSelectLoop(const SelectionVector *bsel, uint8_t *__restrict bdata, ValidityMask &mask,
                                       const SelectionVector *sel, idx_t count, SelectionVector *true_sel,
                                       SelectionVector *false_sel) {
 	idx_t true_count = 0, false_count = 0;
 	for (idx_t i = 0; i < count; i++) {
 		auto bidx = bsel->get_index(i);
 		auto result_idx = sel->get_index(i);
-		if (bdata[bidx] > 0 && (NO_NULL || !nullmask[bidx])) {
+		if (bdata[bidx] > 0 && (NO_NULL || mask.RowIsValid(bidx))) {
 			if (HAS_TRUE_SEL) {
 				true_sel->set_index(true_count++, result_idx);
 			}
@@ -209,14 +227,14 @@ template <bool NO_NULL>
 static inline idx_t DefaultSelectSwitch(VectorData &idata, const SelectionVector *sel, idx_t count,
                                         SelectionVector *true_sel, SelectionVector *false_sel) {
 	if (true_sel && false_sel) {
-		return DefaultSelectLoop<NO_NULL, true, true>(idata.sel, (uint8_t *)idata.data, *idata.nullmask, sel, count,
+		return DefaultSelectLoop<NO_NULL, true, true>(idata.sel, (uint8_t *)idata.data, idata.validity, sel, count,
 		                                              true_sel, false_sel);
 	} else if (true_sel) {
-		return DefaultSelectLoop<NO_NULL, true, false>(idata.sel, (uint8_t *)idata.data, *idata.nullmask, sel, count,
+		return DefaultSelectLoop<NO_NULL, true, false>(idata.sel, (uint8_t *)idata.data, idata.validity, sel, count,
 		                                               true_sel, false_sel);
 	} else {
 		D_ASSERT(false_sel);
-		return DefaultSelectLoop<NO_NULL, false, true>(idata.sel, (uint8_t *)idata.data, *idata.nullmask, sel, count,
+		return DefaultSelectLoop<NO_NULL, false, true>(idata.sel, (uint8_t *)idata.data, idata.validity, sel, count,
 		                                               true_sel, false_sel);
 	}
 }
@@ -235,11 +253,15 @@ idx_t ExpressionExecutor::DefaultSelect(Expression &expr, ExpressionState *state
 	if (!sel) {
 		sel = &FlatVector::INCREMENTAL_SELECTION_VECTOR;
 	}
-	if (idata.nullmask->any()) {
+	if (!idata.validity.AllValid()) {
 		return DefaultSelectSwitch<false>(idata, sel, count, true_sel, false_sel);
 	} else {
 		return DefaultSelectSwitch<true>(idata, sel, count, true_sel, false_sel);
 	}
+}
+
+vector<unique_ptr<ExpressionExecutorState>> &ExpressionExecutor::GetStates() {
+	return states;
 }
 
 } // namespace duckdb

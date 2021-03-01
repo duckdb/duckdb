@@ -429,12 +429,13 @@ idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint
 			if (result_offset >= num_values) { // we ran out of output space
 				break;
 			}
-			if (child_defines_ptr[child_idx] >=
-			    max_define) { // value has been defined down the stack, hence its NOT NULL
+			if (child_defines_ptr[child_idx] >= max_define) {
+				// value has been defined down the stack, hence its NOT NULL
 				result_ptr[result_offset].offset = child_idx + current_chunk_offset;
 				result_ptr[result_offset].length = 1;
-			} else { // value is NULL somewhere up the stack
-				FlatVector::Nullmask(result_out)[result_offset] = true;
+			} else {
+				// value is NULL somewhere up the stack
+				FlatVector::SetNull(result_out, result_offset, true);
 				result_ptr[result_offset].offset = 0;
 				result_ptr[result_offset].length = 0;
 			}

@@ -18,7 +18,7 @@ struct AsciiOperator {
 
 void ASCII::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunction ascii("ascii", {LogicalType::VARCHAR}, LogicalType::INTEGER,
-	                     ScalarFunction::UnaryFunction<string_t, int32_t, AsciiOperator, true>);
+	                     ScalarFunction::UnaryFunction<string_t, int32_t, AsciiOperator>);
 	set.AddFunction(ascii);
 }
 

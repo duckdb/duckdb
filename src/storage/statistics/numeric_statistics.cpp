@@ -72,7 +72,7 @@ void NumericStatistics::TemplatedVerify(Vector &vector, idx_t count) {
 	auto data = (T *)vdata.data;
 	for (idx_t i = 0; i < count; i++) {
 		auto index = vdata.sel->get_index(i);
-		if ((*vdata.nullmask)[index]) {
+		if (!vdata.validity.RowIsValid(index)) {
 			continue;
 		}
 		if (!min.is_null && LessThan::Operation(data[index], min.GetValueUnsafe<T>())) {

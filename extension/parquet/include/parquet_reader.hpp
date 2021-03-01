@@ -79,7 +79,7 @@ private:
 	bool ScanInternal(ParquetReaderScanState &state, DataChunk &output);
 
 	const parquet::format::RowGroup &GetGroup(ParquetReaderScanState &state);
-	void PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t col_idx);
+	void PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t out_col_idx);
 
 	template <typename... Args>
 	std::runtime_error FormatException(const string fmt_str, Args... params) {

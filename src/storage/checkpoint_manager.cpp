@@ -264,8 +264,8 @@ void CheckpointManager::ReadTable(ClientContext &context, MetaBlockReader &reade
 	// deserialize the table meta data
 	auto info = TableCatalogEntry::Deserialize(reader);
 	// bind the info
-	Binder binder(context);
-	auto bound_info = binder.BindCreateTableInfo(move(info));
+	auto binder = Binder::CreateBinder(context);
+	auto bound_info = binder->BindCreateTableInfo(move(info));
 
 	// now read the actual table data and place it into the create table info
 	auto block_id = reader.Read<block_id_t>();

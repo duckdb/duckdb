@@ -15,7 +15,7 @@ static void EncodeFunction(DataChunk &args, ExpressionState &state, Vector &resu
 
 static void DecodeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	// decode is also a nop cast, but requires verification if the provided string is actually
-	UnaryExecutor::Execute<string_t, string_t, true>(args.data[0], result, args.size(), [&](string_t input) {
+	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, args.size(), [&](string_t input) {
 		auto input_data = input.GetDataUnsafe();
 		auto input_length = input.GetSize();
 		if (Utf8Proc::Analyze(input_data, input_length) == UnicodeType::INVALID) {

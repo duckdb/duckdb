@@ -15,16 +15,14 @@
 #include "duckdb/common/enums/vector_type.hpp"
 #include "duckdb/common/types/vector_buffer.hpp"
 #include "duckdb/common/vector_size.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
 
 namespace duckdb {
-
-//! Type used for nullmasks
-typedef bitset<STANDARD_VECTOR_SIZE> nullmask_t;
 
 struct VectorData {
 	const SelectionVector *sel;
 	data_ptr_t data;
-	nullmask_t *nullmask;
+	ValidityMask validity;
 };
 
 class VectorStructBuffer;
@@ -117,10 +115,6 @@ public:
 	//! Deserializes a blob back into a Vector
 	void Deserialize(idx_t count, Deserializer &source);
 
-	bool nullmask_all_set() {
-		return nullmask.all();
-	}
-
 	// Getters
 	inline VectorType GetVectorType() const {
 		return buffer->GetVectorType();
@@ -148,8 +142,8 @@ public:
 protected:
 	//! A pointer to the data.
 	data_ptr_t data;
-	//! The nullmask of the vector
-	nullmask_t nullmask;
+	//! The validity mask of the vector
+	ValidityMask validity;
 	//! The main buffer holding the data of the vector
 	buffer_ptr<VectorBuffer> buffer;
 	//! The buffer holding auxiliary data of the vector
@@ -179,15 +173,15 @@ struct ConstantVector {
 	}
 	static inline bool IsNull(const Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
-		return vector.nullmask[0];
+		return !vector.validity.RowIsValid(0);
 	}
 	static inline void SetNull(Vector &vector, bool is_null) {
 		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
-		vector.nullmask[0] = is_null;
+		vector.validity.Set(0, !is_null);
 	}
-	static inline nullmask_t &Nullmask(Vector &vector) {
+	static inline ValidityMask &Validity(Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
-		return vector.nullmask;
+		return vector.validity;
 	}
 
 	static const sel_t ZERO_VECTOR[STANDARD_VECTOR_SIZE];
@@ -222,21 +216,21 @@ struct FlatVector {
 		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
 		return FlatVector::GetData<T>(vector)[idx];
 	}
-	static inline nullmask_t &Nullmask(Vector &vector) {
+	static inline ValidityMask &Validity(Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
-		return vector.nullmask;
+		return vector.validity;
 	}
-	static inline void SetNullmask(Vector &vector, nullmask_t new_mask) {
+	static inline void SetValidity(Vector &vector, ValidityMask &new_validity) {
 		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
-		vector.nullmask = move(new_mask);
+		vector.validity.Initialize(new_validity);
 	}
-	static inline void SetNull(Vector &vector, idx_t idx, bool value) {
+	static inline void SetNull(Vector &vector, idx_t idx, bool is_null) {
 		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
-		vector.nullmask[idx] = value;
+		vector.validity.Set(idx, !is_null);
 	}
 	static inline bool IsNull(const Vector &vector, idx_t idx) {
 		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
-		return vector.nullmask[idx];
+		return !vector.validity.RowIsValid(idx);
 	}
 
 	static const sel_t INCREMENTAL_VECTOR[STANDARD_VECTOR_SIZE];

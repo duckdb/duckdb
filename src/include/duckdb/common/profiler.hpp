@@ -14,6 +14,7 @@
 namespace duckdb {
 
 //! The profiler can be used to measure elapsed time
+template <typename T>
 class Profiler {
 public:
 	//! Starts the timer
@@ -36,11 +37,11 @@ public:
 	}
 
 private:
-	time_point<system_clock> Tick() const {
-		return system_clock::now();
+	time_point<T> Tick() const {
+		return T::now();
 	}
-	time_point<system_clock> start;
-	time_point<system_clock> end;
+	time_point<T> start;
+	time_point<T> end;
 	bool finished = false;
 };
 } // namespace duckdb

@@ -12,7 +12,7 @@ static void AgeFunctionStandard(DataChunk &input, ExpressionState &state, Vector
 	D_ASSERT(input.ColumnCount() == 1);
 	auto current_timestamp = Timestamp::GetCurrentTimestamp();
 
-	UnaryExecutor::Execute<timestamp_t, interval_t, true>(input.data[0], result, input.size(), [&](timestamp_t input) {
+	UnaryExecutor::Execute<timestamp_t, interval_t>(input.data[0], result, input.size(), [&](timestamp_t input) {
 		return Interval::GetDifference(current_timestamp, input);
 	});
 }
@@ -20,7 +20,7 @@ static void AgeFunctionStandard(DataChunk &input, ExpressionState &state, Vector
 static void AgeFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	D_ASSERT(input.ColumnCount() == 2);
 
-	BinaryExecutor::Execute<timestamp_t, timestamp_t, interval_t, true>(
+	BinaryExecutor::Execute<timestamp_t, timestamp_t, interval_t>(
 	    input.data[0], input.data[1], result, input.size(),
 	    [&](timestamp_t input1, timestamp_t input2) { return Interval::GetDifference(input1, input2); });
 }

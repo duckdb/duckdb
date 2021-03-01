@@ -17,7 +17,7 @@ struct BaseCountFunction {
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		target[idx] = *state;
 	}
 };
@@ -36,12 +36,12 @@ struct CountStarFunction : public BaseCountFunction {
 
 struct CountFunction : public BaseCountFunction {
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
+	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
 		*state += 1;
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, nullmask_t &nullmask,
+	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask,
 	                              idx_t count) {
 		*state += count;
 	}
