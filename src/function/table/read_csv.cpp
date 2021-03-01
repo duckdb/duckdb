@@ -169,7 +169,7 @@ static void ReadCSVFunction(ClientContext &context, const FunctionData *bind_dat
 	auto &data = (ReadCSVOperatorData &)*operator_state;
 	do {
 		data.csv_reader->ParseCSV(output);
-		bind_data.bytes_read= data.csv_reader->bytes_in_chunk;
+		bind_data.bytes_read = data.csv_reader->bytes_in_chunk;
 		if (output.size() == 0 && data.file_index < bind_data.files.size()) {
 			// exhausted this file, but we have more files we can read
 			// open the next file and increment the counter
@@ -208,7 +208,7 @@ static void ReadCSVAddNamedParameters(TableFunction &table_function) {
 
 int CSVReaderProgress(ClientContext &context, const FunctionData *bind_data_p) {
 	auto &bind_data = (ReadCSVData &)*bind_data_p;
-	if (bind_data.file_size == 0 ) {
+	if (bind_data.file_size == 0) {
 		return 100;
 	}
 	auto percentage = bind_data.bytes_read * 100 / bind_data.file_size;
