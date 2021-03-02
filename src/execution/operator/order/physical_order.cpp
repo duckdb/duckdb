@@ -254,11 +254,17 @@ public:
 		RowDataBlock *write_block = nullptr;
 		unique_ptr<BufferHandle> write_handle;
 		data_ptr_t write_ptr;
+		unique_ptr<BufferHandle> write_positions_handle = nullptr;
+		idx_t *write_positions;
 
 		if (!target.blocks.empty()) {
 			write_block = &target.blocks.back();
 			write_handle = state.buffer_manager.Pin(write_block->block);
 			write_ptr = write_handle->node->buffer + write_block->byte_offset;
+			if (!sorting_state.CONSTANT_ENTRY_SIZE) {
+				write_positions_handle = state.buffer_manager.Pin(write_block->entry_positions);
+				write_positions = ((idx_t *)write_positions_handle->node->buffer) + write_block->count;
+			}
 		}
 
 		// flush data of last block(s)
@@ -270,9 +276,19 @@ public:
 				write_block = &target.blocks.back();
 				write_handle = state.buffer_manager.Pin(write_block->block);
 				write_ptr = write_handle->node->buffer;
+				if (!sorting_state.CONSTANT_ENTRY_SIZE) {
+					write_positions_handle = state.buffer_manager.Pin(write_block->entry_positions);
+					write_positions = (idx_t *)write_positions_handle->node->buffer;
+					*write_positions = 0;
+					write_positions++;
+				}
 			}
 			memcpy(write_ptr, DataPtr(), EntrySize());
 			write_block->byte_offset += EntrySize();
+			if (!sorting_state.CONSTANT_ENTRY_SIZE) {
+				*write_positions = write_block->byte_offset;
+				write_positions++;
+			}
 			write_ptr += EntrySize();
 			write_block->count++;
 			Advance();
@@ -357,14 +373,14 @@ static int32_t CompareValue(const data_ptr_t &l_validitymask, const data_ptr_t &
 		l_size = GetTypeIdSize(state.SORTING_P_TYPES[sort_idx]);
 		r_size = GetTypeIdSize(state.SORTING_P_TYPES[sort_idx]);
 	} else {
-        switch (state.SORTING_P_TYPES[sort_idx]) {
-        case PhysicalType::VARCHAR: {
-            l_size = string_t::PREFIX_LENGTH + Load<idx_t>(l_val);
-            r_size = string_t::PREFIX_LENGTH + Load<idx_t>(r_val);
+		switch (state.SORTING_P_TYPES[sort_idx]) {
+		case PhysicalType::VARCHAR: {
+			l_size = string_t::PREFIX_LENGTH + Load<idx_t>(l_val);
+			r_size = string_t::PREFIX_LENGTH + Load<idx_t>(r_val);
 			break;
-        }
-        default:
-            throw NotImplementedException("Type for comparison");
+		}
+		default:
+			throw NotImplementedException("Type for comparison");
 		}
 	}
 
@@ -404,7 +420,7 @@ static int32_t CompareValue(const data_ptr_t &l_validitymask, const data_ptr_t &
 		return TemplatedCompareValue<interval_t>(l_val, r_val);
 	case PhysicalType::VARCHAR: {
 		auto l_str_size = l_size - string_t::PREFIX_LENGTH;
-        auto r_str_size = r_size - string_t::PREFIX_LENGTH;
+		auto r_str_size = r_size - string_t::PREFIX_LENGTH;
 		l_val += string_t::PREFIX_LENGTH;
 		r_val += string_t::PREFIX_LENGTH;
 		auto result = strncmp((const char *)l_val, (const char *)r_val, MinValue(l_str_size, r_str_size));
@@ -533,8 +549,8 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &state, 
 	lstate.row_chunk.Build(input.size(), lstate.validitymask_locations, lstate.entry_sizes,
 	                       sorting_state.CONSTANT_ENTRY_SIZE, sorting_state.POSITIONS_BLOCKSIZE);
 	for (idx_t i = 0; i < sort.size(); i++) {
-		// initialize validitymasks to 0 and initialize key locations
-		memset(lstate.validitymask_locations[i], 0, sorting_state.VALIDITYMASK_SIZE);
+		// initialize validitymasks to 1 and initialize key locations
+		memset(lstate.validitymask_locations[i], -1, sorting_state.VALIDITYMASK_SIZE);
 		lstate.key_locations[i] = lstate.validitymask_locations[i] + sorting_state.VALIDITYMASK_SIZE;
 	}
 	// serialize sorting columns to row-wise format
@@ -569,7 +585,7 @@ void PhysicalOrder::Combine(ExecutionContext &context, GlobalOperatorState &stat
 		return;
 	}
 
-	ContinuousBlock *unsorted_block = nullptr;
+	ContinuousBlock *unsorted_block;
 	{
 		// append to global state. this initializes gstate RowChunks if empty
 		lock_guard<mutex> glock(gstate.lock);
@@ -927,7 +943,6 @@ void PhysicalOrder::ScheduleMergeTasks(Pipeline &pipeline, ClientContext &contex
 void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> state) {
 	this->sink_state = move(state);
 	auto &sink = (OrderGlobalState &)*this->sink_state;
-	D_ASSERT(!sink.intermediate.empty());
 
 	if (sink.intermediate.capacity() == 1) {
 		// special case: only one block arrived, it was sorted but not re-ordered
@@ -1024,28 +1039,25 @@ void PhysicalOrder::GetChunkInternal(ExecutionContext &context, DataChunk &chunk
 		tuples += next;
 		state->entry_idx += next;
 	}
-    chunk.SetCardinality(tuples);
+	chunk.SetCardinality(tuples);
 
-    // deserialize sorting columns (if needed)
-    for (idx_t sort_idx = 0; sort_idx < sink.sorting_p_types.size(); sort_idx++) {
-        if (sink.s_to_p.find(sort_idx) == sink.s_to_p.end()) {
-            // sorting column does not need to be output
-            idx_t size = GetTypeIdSize(sink.sorting_p_types[sort_idx]);
-            for (idx_t i = 0; i < tuples; i++) {
-                state->key_locations[i] += size;
-            }
-        } else {
-            // sorting column needs to be output
-            RowChunk::DeserializeIntoVector(chunk.data[sink.s_to_p[sort_idx]], tuples, sort_idx, state->key_locations,
-                                            state->validitymask_locations);
-        }
-    }
-    // deserialize payload columns
-    for (idx_t payl_idx = 0; payl_idx < sink.payload_p_types.size(); payl_idx++) {
-        RowChunk::DeserializeIntoVector(chunk.data[sink.p_to_p[payl_idx]], tuples,
-                                        sink.sorting_p_types.size() + payl_idx, state->key_locations,
-                                        state->validitymask_locations);
-    }
+	// deserialize sorting columns (if needed)
+	for (idx_t sort_idx = 0; sort_idx < sink.sorting_p_types.size(); sort_idx++) {
+		if (sink.s_to_p.find(sort_idx) == sink.s_to_p.end()) {
+			// sorting column does not need to be output, move pointers
+			RowChunk::SkipOverType(sink.sorting_p_types[sort_idx], tuples, state->key_locations);
+		} else {
+			// sorting column needs to be output
+			RowChunk::DeserializeIntoVector(chunk.data[sink.s_to_p[sort_idx]], tuples, sort_idx, state->key_locations,
+			                                state->validitymask_locations);
+		}
+	}
+	// deserialize payload columns
+	for (idx_t payl_idx = 0; payl_idx < sink.payload_p_types.size(); payl_idx++) {
+		RowChunk::DeserializeIntoVector(chunk.data[sink.p_to_p[payl_idx]], tuples,
+		                                sink.sorting_p_types.size() + payl_idx, state->key_locations,
+		                                state->validitymask_locations);
+	}
 	chunk.Verify();
 }
 

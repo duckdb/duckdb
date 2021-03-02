@@ -3,20 +3,32 @@
 # group: [order]
 
 statement ok
-CREATE TABLE test AS (SELECT range r, random() rand FROM range(100000))
-
-statement ok
 PRAGMA threads=1
 
-#statement ok
-#CREATE TABLE test2 AS (SELECT * FROM test ORDER BY rand)
-#
-#query T
-#SELECT count(*) FROM test2
-#----
-#100000000
+statement ok
+CREATE TABLE test AS (SELECT range r, random() rand FROM range(100000000))
 
 query T
-SELECT count(*) FROM (SELECT * FROM test ORDER BY cast(rand AS VARCHAR)) sq
+SELECT count(*) FROM (SELECT * FROM test ORDER BY rand) sq
 ----
-100000
+100000000
+
+#statement ok
+#CREATE TABLE test (s VARCHAR)
+#
+#statement ok
+#INSERT INTO test VALUES ('123'), ('123456'), ('123456789')
+
+#query T
+#SELECT * FROM test ORDER BY s
+#----
+#123
+#123456
+#123456789
+
+#query T
+#SELECT * FROM test ORDER BY cast(s AS VARCHAR)
+#----
+#123
+#123456
+#123456789
