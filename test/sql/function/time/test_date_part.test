@@ -1,0 +1,100 @@
+# name: test/sql/function/time/test_date_part.test
+# description: DATE_PART test
+# group: [time]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE times(d TIME, s VARCHAR);
+
+statement ok
+INSERT INTO times VALUES ('00:01:20', 'hour'), ('20:08:10.998', 'minute'), ('20:08:10.33', 'second'),
+('20:08:10.001', 'millisecond');
+
+# test date_part with different combinations of constant/non-constant columns
+query I
+SELECT date_part(NULL::VARCHAR, NULL::TIME) FROM times;
+----
+NULL
+NULL
+NULL
+NULL
+
+query I
+SELECT date_part(s, NULL::TIME) FROM times;
+----
+NULL
+NULL
+NULL
+NULL
+
+# times
+query I
+SELECT date_part(NULL, d) FROM times;
+----
+NULL
+NULL
+NULL
+NULL
+
+query I
+SELECT date_part(s, TIME '14:28:50.447') FROM times;
+----
+14
+28
+50
+50447
+
+query I
+SELECT date_part('hour', d) FROM times;
+----
+0
+20
+20
+20
+
+query I
+SELECT date_part(s, d) FROM times;
+----
+0
+8
+10
+10001
+
+# time gives errors for date-only parts
+statement error
+SELECT year(i) FROM times
+
+statement error
+SELECT month(i) FROM times
+
+statement error
+SELECT day(i) FROM times
+
+statement error
+SELECT decade(i) FROM times
+
+statement error
+SELECT century(i) FROM times
+
+statement error
+SELECT millenium(i) FROM times
+
+statement error
+SELECT quarter(i) FROM times
+
+statement error
+SELECT dayofweek(i) FROM times
+
+statement error
+SELECT isodow(i) FROM times
+
+statement error
+SELECT dayofyear(i) FROM times
+
+statement error
+SELECT week(i) FROM times
+
+statement error
+SELECT yearweek(i) FROM times

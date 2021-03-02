@@ -1,0 +1,273 @@
+# name: test/sql/function/string/test_levenshtein.test
+# description: Test levenshtein function
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+
+# normal queries
+query I
+SELECT levenshtein('hallo', 'hallo')
+----
+0
+
+query I
+SELECT levenshtein('hallo', 'hello')
+----
+1
+
+query I
+SELECT levenshtein('hello', 'hallo')
+----
+1
+
+query I
+SELECT levenshtein('lawn', 'flaw')
+----
+2
+
+query I
+SELECT levenshtein('flaw', 'lawn')
+----
+2
+
+query I
+SELECT levenshtein('kitten', 'sitting')
+----
+3
+
+query I
+SELECT levenshtein('sitting', 'kitten')
+----
+3
+
+query I
+SELECT levenshtein('hallo', 'hoi')
+----
+4
+
+query I
+SELECT levenshtein('hoi', 'hallo')
+----
+4
+
+query I
+SELECT levenshtein(NULL, 'hi')
+----
+NULL
+
+query I
+SELECT levenshtein('hi', NULL)
+----
+NULL
+
+query I
+SELECT levenshtein(NULL, NULL)
+----
+NULL
+
+statement ok
+SELECT mismatches('', NULL) 
+
+statement ok
+SELECT mismatches(NULL, '') 
+
+
+# incorrect usage
+statement error
+SELECT mismatches('', 'hi') 
+
+statement error
+SELECT mismatches('hi', '') 
+
+statement error
+SELECT mismatches('', '') 
+
+
+
+statement ok
+CREATE TABLE strings(s VARCHAR)
+
+statement ok
+INSERT INTO strings VALUES ('hello'), ('hallo'), ('aloha'), ('fello'), ('fellow'), ('ducks')
+
+query I
+SELECT levenshtein(s, 'hallo') FROM strings ORDER BY s
+----
+4
+5
+2
+3
+0
+1
+
+query I
+SELECT levenshtein('hallo', s) FROM strings ORDER BY s
+----
+4
+5
+2
+3
+0
+1
+
+query I
+SELECT levenshtein(NULL, s) FROM strings 
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+
+query I
+SELECT levenshtein(NULL, s) FROM strings 
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+
+statement error
+SELECT mismatches('', s) FROM strings
+
+statement error
+SELECT mismatches(s, '')  FROM strings
+
+
+statement ok
+DROP TABLE strings
+
+statement ok
+CREATE TABLE strings(s VARCHAR)
+
+statement ok
+INSERT INTO strings VALUES (NULL)
+
+query I
+SELECT levenshtein(s, NULL) from strings
+----
+NULL
+
+query I
+SELECT levenshtein(NULL, s) from strings
+----
+NULL
+
+query I
+SELECT levenshtein('hi', s) from strings
+----
+NULL
+
+query I
+SELECT levenshtein(s, 'hi') from strings
+----
+NULL
+
+query I
+SELECT mismatches('', s)  FROM strings
+----
+NULL
+
+query I
+SELECT mismatches(s, '')  FROM strings
+----
+NULL
+
+
+statement ok
+DROP TABLE strings
+
+statement ok
+CREATE TABLE strings(s VARCHAR)
+
+statement ok
+INSERT INTO strings VALUES ('')
+
+query I
+SELECT mismatches(NULL, s)  FROM strings
+----
+NULL
+
+query I
+SELECT mismatches(s, NULL)  FROM strings
+----
+NULL
+
+statement error
+SELECT mismatches(s, '')  FROM strings
+
+statement error
+SELECT mismatches('', s)  FROM strings
+
+statement error
+SELECT mismatches(s, 'hi')  FROM strings
+
+statement error
+SELECT mismatches('hi', s)  FROM strings
+
+
+
+# editdist3
+query I
+SELECT editdist3('hallo', 'hello')
+----
+1
+
+statement error
+SELECT editdist3(s, 'hello') FROM strings
+
+
+# Comparing fields from two columns row wise
+
+statement ok
+DROP TABLE strings
+
+statement ok
+CREATE TABLE strings(s VARCHAR, t VARCHAR)
+
+statement ok
+INSERT INTO strings VALUES 	('hello', 'hello'), ('hello', 'hallo'), ('flaw', 'lawn'),
+							('sitting', 'kitten'), ('hallo', 'aloha'), ('hello', 'aloha'), 
+							(NULL, NULL), ('', ''), 
+							(NULL, 'bora'), ('bora', NULL), 
+							('hi', ''), ('', 'hi'), 
+							(NULL, ''), ('', NULL)
+
+
+query I
+SELECT levenshtein(s, t) ld FROM strings WHERE length(s) > 1 AND length(t) > 0 AND s is not NULL and t is not NULL
+----
+0
+1
+2
+3
+4
+5
+
+# NULL inserts result in empty string
+
+statement error
+SELECT levenshtein(s, t)  FROM strings
+
+statement error
+SELECT s, t, levenshtein(s, t) ld FROM strings WHERE length(s) > 1 AND s is not NULL and t is not NULL
+
+statement error
+SELECT levenshtein(s, t)  FROM strings WHERE length(s) < 1
+
+statement error
+SELECT levenshtein(t, s)  FROM strings WHERE length(s) < 1
+
+statement error
+SELECT levenshtein(s, t)  FROM strings WHERE length(t) < 1
+
+statement error
+SELECT levenshtein(t, s)  FROM strings WHERE length(t) < 1
+
+statement error
+SELECT levenshtein(s, t)  FROM strings WHERE rowid > 5

@@ -102,6 +102,12 @@ public:
 		return make_unique<PhysicalOperatorState>(*this, children.size() == 0 ? nullptr : children[0].get());
 	}
 
+	virtual void FinalizeOperatorState(PhysicalOperatorState &state, ExecutionContext &context) {
+		if (!children.empty() && state.child_state) {
+			children[0]->FinalizeOperatorState(*state.child_state, context);
+		}
+	}
+
 	virtual bool IsSink() const {
 		return false;
 	}

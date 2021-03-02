@@ -1,0 +1,189 @@
+# name: test/sql/function/interval/test_extract.test
+# description: Extract function
+# group: [interval]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE intervals(i INTERVAL)
+
+statement ok
+INSERT INTO intervals VALUES ('2 years'), ('16 months'), ('42 days'), ('2066343400 microseconds'), (NULL)
+
+# extract various parts of the intervals
+query I
+SELECT EXTRACT(year FROM i) FROM intervals
+----
+2
+1
+0
+0
+NULL
+
+query I
+SELECT EXTRACT(month FROM i) FROM intervals
+----
+0
+4
+0
+0
+NULL
+
+query I
+SELECT EXTRACT(day FROM i) FROM intervals
+----
+0
+0
+42
+0
+NULL
+
+query I
+SELECT EXTRACT(decade FROM i) FROM intervals
+----
+0
+0
+0
+0
+NULL
+
+query I
+SELECT EXTRACT(century FROM i) FROM intervals
+----
+0
+0
+0
+0
+NULL
+
+query I
+SELECT EXTRACT(millennium FROM i) FROM intervals
+----
+0
+0
+0
+0
+NULL
+
+query I
+SELECT EXTRACT(quarter FROM i) FROM intervals
+----
+1
+2
+1
+1
+NULL
+
+statement error
+SELECT EXTRACT(dayofweek FROM i) FROM intervals
+
+statement error
+SELECT EXTRACT(isodow FROM i) FROM intervals
+
+statement error
+SELECT EXTRACT(dayofyear FROM i) FROM intervals
+
+statement error
+SELECT EXTRACT(week FROM i) FROM intervals
+
+query I
+SELECT EXTRACT(epoch FROM i) FROM intervals
+----
+62208000
+41472000
+3628800
+2066
+NULL
+
+query I
+SELECT EXTRACT(microsecond FROM i) FROM intervals
+----
+0
+0
+0
+2066343400
+NULL
+
+query I
+SELECT EXTRACT(millisecond FROM i) FROM intervals
+----
+0
+0
+0
+2066343
+NULL
+
+query I
+SELECT EXTRACT(second FROM i) FROM intervals
+----
+0
+0
+0
+2066
+NULL
+
+query I
+SELECT EXTRACT(minute FROM i) FROM intervals
+----
+0
+0
+0
+34
+NULL
+
+query I
+SELECT EXTRACT(hour FROM i) FROM intervals
+----
+0
+0
+0
+0
+NULL
+
+# negative intervals with months are strange in Postgres
+query I
+SELECT EXTRACT(year FROM interval '14 months ago')
+----
+-1
+
+query I
+SELECT EXTRACT(month FROM interval '14 months ago')
+----
+-2
+
+query I
+SELECT EXTRACT(day FROM interval '157 days ago')
+----
+-157
+
+query I
+SELECT EXTRACT(decade FROM interval '140 months ago')
+----
+-1
+
+query I
+SELECT EXTRACT(century FROM interval '1400 months ago')
+----
+-1
+
+query I
+SELECT EXTRACT(millennium FROM interval '14000 months ago')
+----
+-1
+
+query I
+SELECT EXTRACT(quarter FROM interval '14 months ago')
+----
+1
+
+query I
+SELECT EXTRACT(quarter FROM interval '21 months ago')
+----
+-2
+
+query I
+SELECT EXTRACT(epoch FROM interval '6 months ago')
+----
+-15552000
+
