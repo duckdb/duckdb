@@ -41,7 +41,7 @@ static double JaccardSimilarity(const string_t &str, const string_t &txt) {
 			size_intersect++;
 		}
 	}
-	
+
 	return (double)size_intersect / (double)m_txt.size();
 }
 
