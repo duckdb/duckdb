@@ -120,7 +120,7 @@ SELECT quantile(42, 0.5)
 ----
 42
 
-
+# single GROUP
 query III
 SELECT quantile(r, 0.1), quantile(r, 0.5), quantile(r, 0.9) from quantile
 ----
@@ -128,12 +128,42 @@ SELECT quantile(r, 0.1), quantile(r, 0.5), quantile(r, 0.9) from quantile
 4999
 8999
 
+# multiple groups
+query II
+SELECT mod(r,10) as g, quantile(r, 0.1) FROM quantile GROUP BY 1 ORDER BY 1
+----
+NULL	NULL
+0	990
+1	991
+2	992
+3	993
+4	994
+5	995
+6	996
+7	997
+8	998
+9	999
+
+# constant input
+query I
+SELECT quantile(1, 0.1) FROM quantile
+----
+1
+
+# empty input
+query I
+SELECT quantile(r, 0.1) FROM quantile WHERE 1=0
+----
+NULL
 
 statement error
 SELECT quantile(r, -0.1) FROM quantile
 
 statement error
 SELECT quantile(r, 1.1) FROM quantile
+
+statement error
+SELECT quantile(r, "string") FROM quantile
 
 statement error
 SELECT quantile(r, NULL) FROM quantile
@@ -154,9 +184,39 @@ pragma threads=4
 statement ok
 PRAGMA force_parallelism
 
+# single GROUP
 query III
 SELECT quantile(r, 0.1), quantile(r, 0.5), quantile(r, 0.9) from quantile
 ----
 999
 4999
 8999
+
+# multiple groups
+query II
+SELECT mod(r,10) as g, quantile(r, 0.1) FROM quantile GROUP BY 1 ORDER BY 1
+----
+NULL	NULL
+0	990
+1	991
+2	992
+3	993
+4	994
+5	995
+6	996
+7	997
+8	998
+9	999
+
+# constant input
+query I
+SELECT quantile(1, 0.1) FROM quantile
+----
+1
+
+# empty input
+query I
+SELECT quantile(r, 0.1) FROM quantile WHERE 1=0
+----
+NULL
+
