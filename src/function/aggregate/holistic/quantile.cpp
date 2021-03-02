@@ -148,24 +148,25 @@ AggregateFunction GetQuantileAggregateFunction(PhysicalType type) {
 	}
 }
 
-template <class STATE_TYPE, class INPUT_TYPE>
-static idx_t QuantileListFinalize(DataChunk &chunk, FunctionData *bind_data_p, STATE_TYPE *state, ValidityMask &mask,
-                                  idx_t idx) {
+template <class STATE_TYPE, class INPUT_TYPE, class TARGET_TYPE>
+static void QuantileListFinalize(DataChunk &chunk, ChunkCollection &cc, FunctionData *bind_data_p, STATE_TYPE *state,
+                                 TARGET_TYPE *target, ValidityMask &mask, idx_t idx) {
 	if (state->pos == 0) {
 		mask.SetInvalid(idx);
-		return 0;
+		return;
 	}
 	D_ASSERT(state->v);
 	D_ASSERT(bind_data_p);
 	auto bind_data = (QuantileBindData *)bind_data_p;
-	chunk.SetCardinality(bind_data->quantiles.size());
+	target[idx].offset = cc.Count();
 	auto v_t = (INPUT_TYPE *)state->v;
 	for (idx_t q = 0; q < bind_data->quantiles.size(); ++q) {
 		auto offset = (idx_t)((double)(state->pos - 1) * bind_data->quantiles[q]);
 		std::nth_element(v_t, v_t + offset, v_t + state->pos);
-		chunk.SetValue(0, q, Value::CreateValue(v_t[offset]));
+		chunk.SetValue(0, 0, Value::CreateValue(v_t[offset]));
+		cc.Append(chunk);
 	}
-	return bind_data->quantiles.size();
+	target[idx].length = bind_data->quantiles.size();
 }
 
 template <class STATE_TYPE, class INPUT_TYPE, class RESULT_TYPE>
@@ -174,10 +175,12 @@ static void ExecuteQuantileListFinalize(Vector &states, FunctionData *bind_data,
 	D_ASSERT(result.GetType().child_types().size() == 1);
 
 	auto list_child = make_unique<ChunkCollection>();
+	auto &cc = *list_child;
 
 	DataChunk chunk;
 	vector<LogicalType> types {result.GetType().child_types()[0].second};
 	chunk.Initialize(types);
+	chunk.SetCardinality(1);
 
 	if (states.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -185,9 +188,7 @@ static void ExecuteQuantileListFinalize(Vector &states, FunctionData *bind_data,
 		auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
 		auto rdata = ConstantVector::GetData<RESULT_TYPE>(result);
 		auto &mask = ConstantVector::Validity(result);
-		rdata[0].offset = list_child->Count();
-		rdata[0].length = QuantileListFinalize<STATE_TYPE, INPUT_TYPE>(chunk, bind_data, sdata[0], mask, 0);
-		list_child->Append(chunk);
+		QuantileListFinalize<STATE_TYPE, INPUT_TYPE, RESULT_TYPE>(chunk, cc, bind_data, sdata[0], rdata, mask, 0);
 	} else {
 		D_ASSERT(states.GetVectorType() == VectorType::FLAT_VECTOR);
 		result.SetVectorType(VectorType::FLAT_VECTOR);
@@ -196,9 +197,7 @@ static void ExecuteQuantileListFinalize(Vector &states, FunctionData *bind_data,
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
 		auto &mask = FlatVector::Validity(result);
 		for (idx_t i = 0; i < count; i++) {
-			rdata[i].offset = list_child->Count();
-			rdata[i].length = QuantileListFinalize<STATE_TYPE, INPUT_TYPE>(chunk, bind_data, sdata[i], mask, i);
-			list_child->Append(chunk);
+			QuantileListFinalize<STATE_TYPE, INPUT_TYPE, RESULT_TYPE>(chunk, cc, bind_data, sdata[i], rdata, mask, i);
 		}
 	}
 
@@ -207,7 +206,7 @@ static void ExecuteQuantileListFinalize(Vector &states, FunctionData *bind_data,
 }
 
 template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>
-static AggregateFunction QuantileListAggregate(LogicalType input_type) {
+static AggregateFunction QuantileListAggregate(const LogicalType &input_type) {
 	LogicalType result_type(LogicalTypeId::LIST, {{"", input_type}});
 	return AggregateFunction(
 	    {input_type}, result_type, AggregateFunction::StateSize<STATE>, AggregateFunction::StateInitialize<STATE, OP>,
@@ -217,7 +216,7 @@ static AggregateFunction QuantileListAggregate(LogicalType input_type) {
 }
 
 template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>
-static AggregateFunction QuantileListAggregateDestructor(LogicalType input_type) {
+static AggregateFunction QuantileListAggregateDestructor(const LogicalType &input_type) {
 	auto aggregate = QuantileListAggregate<STATE, INPUT_TYPE, RESULT_TYPE, OP>(input_type);
 	aggregate.destructor = AggregateFunction::StateDestroy<STATE, OP>;
 	return aggregate;
