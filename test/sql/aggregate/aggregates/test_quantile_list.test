@@ -1,7 +1,6 @@
-# group: [aggregates]
 # name: test/sql/aggregate/aggregates/test_quantile_list.test
 # description: Test QUANTILE operator with LIST quantiles
-# GROUP: [aggregates]
+# group: [aggregates]
 
 statement ok
 PRAGMA enable_verification
