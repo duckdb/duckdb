@@ -11,7 +11,7 @@ static inline map<char, idx_t> GetSet(string_t str) {
 	idx_t str_len = str.GetSize();
 	auto s = str.GetDataUnsafe();
 	for (idx_t pos = 0; pos < str_len; pos++) {
-		map_of_chars.insert(make_pair(s[pos], 1));
+		map_of_chars.insert(std::make_pair(s[pos], 1));
 	}
 	return map_of_chars;
 }
