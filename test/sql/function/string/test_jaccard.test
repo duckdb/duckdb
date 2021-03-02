@@ -39,7 +39,7 @@ SELECT jaccard('aabb', 'ab')
 query I
 SELECT jaccard('ab', 'cd')
 ----
-0.5
+0.0
 
 query I
 SELECT jaccard('cd', 'ab')
