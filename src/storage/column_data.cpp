@@ -63,7 +63,7 @@ void ColumnData::FilterScan(Transaction &transaction, ColumnScanState &state, Ve
 	// perform a scan of this segment
 	state.current->FilterScan(state, result, sel, approved_tuple_count);
 	if (state.updates->HasUpdates()) {
-		throw NotImplementedException("FIXME: merge updates");
+		throw NotImplementedException("FIXME: merge updates in filter scan");
 	}
 	// move over to the next vector
 	state.Next();
@@ -78,7 +78,7 @@ void ColumnData::Select(Transaction &transaction, ColumnScanState &state, Vector
 	// perform a scan of this segment
 	state.current->Select(state, result, sel, approved_tuple_count, table_filter);
 	if (state.updates->HasUpdates()) {
-		throw NotImplementedException("FIXME: merge updates");
+		throw NotImplementedException("FIXME: merge updates in select");
 	}
 	// move over to the next vector
 	state.Next();

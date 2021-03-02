@@ -3,6 +3,7 @@
 #include "duckdb/storage/column_data.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/transaction/transaction.hpp"
+#include "duckdb/storage/statistics/string_statistics.hpp"
 
 namespace duckdb {
 
@@ -14,6 +15,8 @@ constexpr const idx_t UpdateSegment::MORSEL_LAYER_SIZE;
 static UpdateSegment::initialize_update_function_t GetInitializeUpdateFunction(PhysicalType type);
 static UpdateSegment::fetch_update_function_t GetFetchUpdateFunction(PhysicalType type);
 static UpdateSegment::merge_update_function_t GetMergeUpdateFunction(PhysicalType type);
+static UpdateSegment::rollback_update_function_t GetRollbackUpdateFunction(PhysicalType type);
+static UpdateSegment::statistics_update_function_t GetStatisticsUpdateFunction(PhysicalType type);
 
 UpdateSegment::UpdateSegment(ColumnData &column_data, idx_t start, idx_t count) :
     SegmentBase(start, count), column_data(column_data), stats(column_data.type, GetTypeIdSize(column_data.type.InternalType())) {
@@ -24,10 +27,11 @@ UpdateSegment::UpdateSegment(ColumnData &column_data, idx_t start, idx_t count) 
 	this->initialize_update_function = GetInitializeUpdateFunction(physical_type);
 	this->fetch_update_function = GetFetchUpdateFunction(physical_type);
 	this->merge_update_function = GetMergeUpdateFunction(physical_type);
+	this->rollback_update_function = GetRollbackUpdateFunction(physical_type);
+	this->statistics_update_function = GetStatisticsUpdateFunction(physical_type);
 }
 
 UpdateSegment::~UpdateSegment() {
-
 }
 
 //===--------------------------------------------------------------------===//
@@ -74,6 +78,8 @@ static UpdateSegment::fetch_update_function_t GetFetchUpdateFunction(PhysicalTyp
 		return UpdateMergeFetch<double>;
 	case PhysicalType::INTERVAL:
 		return UpdateMergeFetch<interval_t>;
+	case PhysicalType::VARCHAR:
+		return UpdateMergeFetch<string_t>;
 	default:
 		throw NotImplementedException("Unimplemented type for update segment");
 	}
@@ -95,62 +101,69 @@ void UpdateSegment::FetchUpdates(Transaction &transaction, idx_t vector_index, V
 //===--------------------------------------------------------------------===//
 // Rollback update
 //===--------------------------------------------------------------------===//
-// template <class T>
-// static void RollbackUpdate(UpdateSegment *segment, UpdateInfo *info) {
-// 	ValidityMask mask(base);
-// 	auto info_data = (T *)info->tuple_data;
+template <class T>
+static void RollbackUpdate(UpdateInfo *base_info, UpdateInfo *rollback_info) {
+	auto base_data = (T *)base_info->tuple_data;
+	auto rollback_data = (T *)rollback_info->tuple_data;
+	ValidityMask base_mask(base_info->validity);
+	ValidityMask rollback_mask(rollback_info->validity);
 
-// 	ValidityMask info_mask(info->validity);
-// 	for (idx_t i = 0; i < info->N; i++) {
-// 		base_data[info->tuples[i]] = info_data[i];
-// 		mask.Set(info->tuples[i], info_mask.RowIsValidUnsafe(info->tuples[i]));
-// 	}
-// }
+	idx_t base_offset = 0;
+	for(idx_t i = 0; i < rollback_info->N; i++) {
+		auto id = rollback_info->tuples[i];
+		while(base_info->tuples[base_offset] < id) {
+			base_offset++;
+			D_ASSERT(base_offset < base_info->N);
+		}
+		base_data[base_offset] = rollback_data[i];
+		base_mask.Set(base_offset, rollback_mask.RowIsValid(i));
+	}
+}
 
-// static UpdateSegment::rollback_update_function_t GetRollbackUpdateFunction(PhysicalType type) {
-// 	switch (type) {
-// 	case PhysicalType::BOOL:
-// 	case PhysicalType::INT8:
-// 		return RollbackUpdate<int8_t>;
-// 	case PhysicalType::INT16:
-// 		return RollbackUpdate<int16_t>;
-// 	case PhysicalType::INT32:
-// 		return RollbackUpdate<int32_t>;
-// 	case PhysicalType::INT64:
-// 		return RollbackUpdate<int64_t>;
-// 	case PhysicalType::UINT8:
-// 		return RollbackUpdate<uint8_t>;
-// 	case PhysicalType::UINT16:
-// 		return RollbackUpdate<uint16_t>;
-// 	case PhysicalType::UINT32:
-// 		return RollbackUpdate<uint32_t>;
-// 	case PhysicalType::UINT64:
-// 		return RollbackUpdate<uint64_t>;
-// 	case PhysicalType::INT128:
-// 		return RollbackUpdate<hugeint_t>;
-// 	case PhysicalType::FLOAT:
-// 		return RollbackUpdate<float>;
-// 	case PhysicalType::DOUBLE:
-// 		return RollbackUpdate<double>;
-// 	case PhysicalType::INTERVAL:
-// 		return RollbackUpdate<interval_t>;
-// 	default:
-// 		throw NotImplementedException("Unimplemented type for uncompressed segment");
-// 	}
-// }
+static UpdateSegment::rollback_update_function_t GetRollbackUpdateFunction(PhysicalType type) {
+	switch (type) {
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
+		return RollbackUpdate<int8_t>;
+	case PhysicalType::INT16:
+		return RollbackUpdate<int16_t>;
+	case PhysicalType::INT32:
+		return RollbackUpdate<int32_t>;
+	case PhysicalType::INT64:
+		return RollbackUpdate<int64_t>;
+	case PhysicalType::UINT8:
+		return RollbackUpdate<uint8_t>;
+	case PhysicalType::UINT16:
+		return RollbackUpdate<uint16_t>;
+	case PhysicalType::UINT32:
+		return RollbackUpdate<uint32_t>;
+	case PhysicalType::UINT64:
+		return RollbackUpdate<uint64_t>;
+	case PhysicalType::INT128:
+		return RollbackUpdate<hugeint_t>;
+	case PhysicalType::FLOAT:
+		return RollbackUpdate<float>;
+	case PhysicalType::DOUBLE:
+		return RollbackUpdate<double>;
+	case PhysicalType::INTERVAL:
+		return RollbackUpdate<interval_t>;
+	case PhysicalType::VARCHAR:
+		return RollbackUpdate<string_t>;
+	default:
+		throw NotImplementedException("Unimplemented type for uncompressed segment");
+	}
+}
 
 void UpdateSegment::RollbackUpdate(UpdateInfo *info) {
 	// obtain an exclusive lock
 	auto lock_handle = lock.GetExclusiveLock();
 
-	// move the data from the UpdateInfo back into the base table
-	// rollback_update(info);
+	// move the data from the UpdateInfo back into the base info
+	D_ASSERT(root->info[info->vector_index]);
+	rollback_update_function(root->info[info->vector_index]->info.get(), info);
+
+	// clean up the update chain
 	CleanupUpdateInternal(*lock_handle, info);
-
-	// FIXME: this doesn't really work with merged updates
-	throw NotImplementedException("FIXME: actually roll back values by writing them from update_info to base_info");
-	root->info[info->vector_index].reset();
-
 }
 
 //===--------------------------------------------------------------------===//
@@ -232,12 +245,6 @@ static void InitializeUpdateDataNull(T *__restrict tuple_data, T *__restrict new
 		bool is_valid = tuple_mask.RowIsValid(i);
 		tuple_mask.Set(i, is_valid);
 		tuple_data[i] = new_data[i];
-		// update the min max with the new data
-		if (is_valid) {
-			NumericStatistics::Update<T>(stats, new_data[i]);
-		} else {
-			stats.statistics->has_null = true;
-		}
 	}
 }
 
@@ -245,8 +252,6 @@ template <class T>
 static void InitializeUpdateDataNoNull(T *__restrict tuple_data, T *__restrict new_data, idx_t count, SegmentStatistics &stats) {
 	for (idx_t i = 0; i < count; i++) {
 		tuple_data[i] = new_data[i];
-		// update the min max with the new data
-		NumericStatistics::Update<T>(stats, new_data[i]);
 	}
 }
 
@@ -291,6 +296,8 @@ static UpdateSegment::initialize_update_function_t GetInitializeUpdateFunction(P
 		return InitializeUpdateData<double>;
 	case PhysicalType::INTERVAL:
 		return InitializeUpdateData<interval_t>;
+	case PhysicalType::VARCHAR:
+		return InitializeUpdateData<string_t>;
 	default:
 		throw NotImplementedException("Unimplemented type for update segment");
 	}
@@ -362,11 +369,6 @@ static void MergeUpdateLoop(SegmentStatistics &stats, UpdateInfo *base_info, Vec
 	auto &update_vector_mask = FlatVector::Validity(update);
 	ValidityMask base_info_mask(base_info->validity);
 	ValidityMask update_info_mask(update_info->validity);
-
-	// first update some statistics
-	for (idx_t i = 0; i < count; i++) {
-		NumericStatistics::Update<T>(stats, update_vector_data[i]);
-	}
 
 	// we first do the merging of the old values
 	// what we are trying to do here is update the "update_info" of this transaction with all the old data we require
@@ -479,11 +481,88 @@ static UpdateSegment::merge_update_function_t GetMergeUpdateFunction(PhysicalTyp
 		return MergeUpdateLoop<double>;
 	case PhysicalType::INTERVAL:
 		return MergeUpdateLoop<interval_t>;
+	case PhysicalType::VARCHAR:
+		return MergeUpdateLoop<string_t>;
 	default:
 		throw NotImplementedException("Unimplemented type for uncompressed segment");
 	}
 }
 
+//===--------------------------------------------------------------------===//
+// Update statistics
+//===--------------------------------------------------------------------===//
+template<class T>
+void TemplatedUpdateNumericStatistics(UpdateSegment *segment, SegmentStatistics &stats, Vector &update, idx_t count) {
+	auto update_data = FlatVector::GetData<T>(update);
+	auto &mask = FlatVector::Validity(update);
+	if (mask.AllValid()) {
+		for (idx_t i = 0; i < count; i++) {
+			NumericStatistics::Update<T>(stats, update_data[i]);
+		}
+	} else {
+		for (idx_t i = 0; i < count; i++) {
+			if (mask.RowIsValid(i)) {
+				NumericStatistics::Update<T>(stats, update_data[i]);
+			} else {
+				stats.statistics->has_null = true;
+			}
+		}
+	}
+}
+
+void UpdateStringStatistics(UpdateSegment *segment, SegmentStatistics &stats, Vector &update, idx_t count) {
+	auto update_data = FlatVector::GetData<string_t>(update);
+	auto &mask = FlatVector::Validity(update);
+	if (mask.AllValid()) {
+		for (idx_t i = 0; i < count; i++) {
+			((StringStatistics &) *stats.statistics).Update(update_data[i]);
+			update_data[i] = segment->GetStringHeap().AddString(update_data[i]);
+		}
+	} else {
+		for (idx_t i = 0; i < count; i++) {
+			if (mask.RowIsValid(i)) {
+				((StringStatistics &) *stats.statistics).Update(update_data[i]);
+				update_data[i] = segment->GetStringHeap().AddString(update_data[i]);
+			} else {
+				stats.statistics->has_null = true;
+			}
+		}
+	}
+}
+
+UpdateSegment::statistics_update_function_t GetStatisticsUpdateFunction(PhysicalType type) {
+	switch (type) {
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
+		return TemplatedUpdateNumericStatistics<int8_t>;
+	case PhysicalType::INT16:
+		return TemplatedUpdateNumericStatistics<int16_t>;
+	case PhysicalType::INT32:
+		return TemplatedUpdateNumericStatistics<int32_t>;
+	case PhysicalType::INT64:
+		return TemplatedUpdateNumericStatistics<int64_t>;
+	case PhysicalType::UINT8:
+		return TemplatedUpdateNumericStatistics<uint8_t>;
+	case PhysicalType::UINT16:
+		return TemplatedUpdateNumericStatistics<uint16_t>;
+	case PhysicalType::UINT32:
+		return TemplatedUpdateNumericStatistics<uint32_t>;
+	case PhysicalType::UINT64:
+		return TemplatedUpdateNumericStatistics<uint64_t>;
+	case PhysicalType::INT128:
+		return TemplatedUpdateNumericStatistics<hugeint_t>;
+	case PhysicalType::FLOAT:
+		return TemplatedUpdateNumericStatistics<float>;
+	case PhysicalType::DOUBLE:
+		return TemplatedUpdateNumericStatistics<double>;
+	case PhysicalType::INTERVAL:
+		return TemplatedUpdateNumericStatistics<interval_t>;
+	case PhysicalType::VARCHAR:
+		return UpdateStringStatistics;
+	default:
+		throw NotImplementedException("Unimplemented type for uncompressed segment");
+	}
+}
 
 //===--------------------------------------------------------------------===//
 // Update
