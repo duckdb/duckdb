@@ -291,10 +291,6 @@ unique_ptr<FunctionData> BindQuantile(ClientContext &context, AggregateFunction 
 		}
 	}
 
-	if (quantiles.size() >= STANDARD_VECTOR_SIZE) {
-		throw BinderException("QUANTILE can only take up to %d parameters", int(STANDARD_VECTOR_SIZE));
-	}
-
 	arguments.pop_back();
 	return make_unique<QuantileBindData>(quantiles);
 }
