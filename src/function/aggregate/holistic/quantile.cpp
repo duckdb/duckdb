@@ -96,12 +96,11 @@ struct QuantileOperation {
 		D_ASSERT(state->v);
 		D_ASSERT(bind_data_p);
 		auto bind_data = (QuantileBindData *)bind_data_p;
+		D_ASSERT(bind_data->quantiles.size() == 1);
 		auto v_t = (T *)state->v;
-		for (const auto &quantile : bind_data->quantiles) {
-			auto offset = (idx_t)((double)(state->pos - 1) * quantile);
-			std::nth_element(v_t, v_t + offset, v_t + state->pos);
-			target[idx] = v_t[offset];
-		}
+		auto offset = (idx_t)((double)(state->pos - 1) * bind_data->quantiles[0]);
+		std::nth_element(v_t, v_t + offset, v_t + state->pos);
+		target[idx] = v_t[offset];
 	}
 
 	template <class STATE>
@@ -160,8 +159,8 @@ static void QuantileListFinalize(DataChunk &chunk, ChunkCollection &cc, Function
 	auto bind_data = (QuantileBindData *)bind_data_p;
 	target[idx].offset = cc.Count();
 	auto v_t = (INPUT_TYPE *)state->v;
-	for (idx_t q = 0; q < bind_data->quantiles.size(); ++q) {
-		auto offset = (idx_t)((double)(state->pos - 1) * bind_data->quantiles[q]);
+	for (const auto &quantile : bind_data->quantiles) {
+		auto offset = (idx_t)((double)(state->pos - 1) * quantile);
 		std::nth_element(v_t, v_t + offset, v_t + state->pos);
 		chunk.SetValue(0, 0, Value::CreateValue(v_t[offset]));
 		cc.Append(chunk);
