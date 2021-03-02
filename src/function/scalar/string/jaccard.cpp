@@ -6,44 +6,43 @@
 
 namespace duckdb {
 
-static inline map<char, idx_t> GetSet(string_t str) {
+static inline map<char, idx_t> GetSet(const string_t &str) {
 	auto map_of_chars = map<char, idx_t> {};
 	idx_t str_len = str.GetSize();
 	auto s = str.GetDataUnsafe();
+
 	for (idx_t pos = 0; pos < str_len; pos++) {
 		map_of_chars.insert(std::make_pair(s[pos], 1));
 	}
 	return map_of_chars;
 }
 
-static inline map<char, idx_t> TabulateCharacters(map<char, idx_t> str, map<char, idx_t> txt) {
-	if (str.size() > txt.size()) {
-		str.swap(txt);
-	}
-
-	for (auto const &achar : str) {
-		++txt[achar.first];
-	}
-
-	return txt;
-}
-
 static double JaccardSimilarity(const string_t &str, const string_t &txt) {
 	if (str.GetSize() < 1 || txt.GetSize() < 1) {
 		throw InvalidInputException("Jaccard Function: An argument too short!");
 	}
+	map<char, idx_t> m_str, m_txt;
 
-	map<char, idx_t> mu = TabulateCharacters(GetSet(str), GetSet(txt));
+	m_str = GetSet(str);
+	m_txt = GetSet(txt);
 
-	idx_t size_union = mu.size();
+	if (m_str.size() > m_txt.size()) {
+		m_str.swap(m_txt);
+	}
+
+	for (auto const &achar : m_str) {
+		++m_txt[achar.first];
+	}
+	// m_txt.size is now size of union.
+
 	idx_t size_intersect = 0;
-	for (const auto &apair : mu) {
+	for (const auto &apair : m_txt) {
 		if (apair.second > 1) {
 			size_intersect++;
 		}
 	}
-
-	return (double)size_intersect / (double)size_union;
+	
+	return (double)size_intersect / (double)m_txt.size();
 }
 
 static double JaccardScalarFunction(Vector &result, const string_t str, string_t tgt) {
