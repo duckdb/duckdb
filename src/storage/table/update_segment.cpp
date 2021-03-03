@@ -17,6 +17,7 @@ static UpdateSegment::fetch_update_function_t GetFetchUpdateFunction(PhysicalTyp
 static UpdateSegment::merge_update_function_t GetMergeUpdateFunction(PhysicalType type);
 static UpdateSegment::rollback_update_function_t GetRollbackUpdateFunction(PhysicalType type);
 static UpdateSegment::statistics_update_function_t GetStatisticsUpdateFunction(PhysicalType type);
+static UpdateSegment::fetch_row_function_t GetFetchRowFunction(PhysicalType type);
 
 Value UpdateInfo::GetValue(idx_t index) {
 	auto &type = segment->column_data.type;
@@ -58,6 +59,7 @@ UpdateSegment::UpdateSegment(ColumnData &column_data, idx_t start, idx_t count) 
 
 	this->initialize_update_function = GetInitializeUpdateFunction(physical_type);
 	this->fetch_update_function = GetFetchUpdateFunction(physical_type);
+	this->fetch_row_function = GetFetchRowFunction(physical_type);
 	this->merge_update_function = GetMergeUpdateFunction(physical_type);
 	this->rollback_update_function = GetRollbackUpdateFunction(physical_type);
 	this->statistics_update_function = GetStatisticsUpdateFunction(physical_type);
@@ -128,6 +130,74 @@ void UpdateSegment::FetchUpdates(Transaction &transaction, idx_t vector_index, V
 	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 
 	fetch_update_function(transaction.start_time, transaction.transaction_id, root->info[vector_index]->info.get(), result);
+}
+
+//===--------------------------------------------------------------------===//
+// Fetch Row
+//===--------------------------------------------------------------------===//
+template <class T>
+static void TemplatedFetchRow(transaction_t start_time, transaction_t transaction_id, UpdateInfo *info, idx_t row_idx, Vector &result, idx_t result_idx) {
+	auto result_data = FlatVector::GetData<T>(result);
+	auto &result_mask = FlatVector::Validity(result);
+	UpdateInfo::UpdatesForTransaction(info, start_time, transaction_id, [&](UpdateInfo *current) {
+		ValidityMask current_mask(current->validity);
+		auto info_data = (T *)current->tuple_data;
+		// FIXME: we could do a binary search in here
+		for (idx_t i = 0; i < current->N; i++) {
+			if (current->tuples[i] == row_idx) {
+				result_data[result_idx] = info_data[i];
+				result_mask.Set(result_idx, current_mask.RowIsValidUnsafe(i));
+			} else if (current->tuples[i] > row_idx) {
+				return;
+			}
+		}
+	});
+}
+
+static UpdateSegment::fetch_row_function_t GetFetchRowFunction(PhysicalType type) {
+	switch (type) {
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
+		return TemplatedFetchRow<int8_t>;
+	case PhysicalType::INT16:
+		return TemplatedFetchRow<int16_t>;
+	case PhysicalType::INT32:
+		return TemplatedFetchRow<int32_t>;
+	case PhysicalType::INT64:
+		return TemplatedFetchRow<int64_t>;
+	case PhysicalType::UINT8:
+		return TemplatedFetchRow<uint8_t>;
+	case PhysicalType::UINT16:
+		return TemplatedFetchRow<uint16_t>;
+	case PhysicalType::UINT32:
+		return TemplatedFetchRow<uint32_t>;
+	case PhysicalType::UINT64:
+		return TemplatedFetchRow<uint64_t>;
+	case PhysicalType::INT128:
+		return TemplatedFetchRow<hugeint_t>;
+	case PhysicalType::FLOAT:
+		return TemplatedFetchRow<float>;
+	case PhysicalType::DOUBLE:
+		return TemplatedFetchRow<double>;
+	case PhysicalType::INTERVAL:
+		return TemplatedFetchRow<interval_t>;
+	case PhysicalType::VARCHAR:
+		return TemplatedFetchRow<string_t>;
+	default:
+		throw NotImplementedException("Unimplemented type for update segment fetch row");
+	}
+}
+
+void UpdateSegment::FetchRow(Transaction &transaction, idx_t row_id, Vector &result, idx_t result_idx) {
+	if (!root) {
+		return;
+	}
+	idx_t vector_index = (row_id - start) / STANDARD_VECTOR_SIZE;
+	if (!root->info[vector_index]) {
+		return;
+	}
+	idx_t row_in_vector = row_id - vector_index * STANDARD_VECTOR_SIZE;
+	fetch_row_function(transaction.start_time, transaction.transaction_id, root->info[vector_index]->info.get(), row_in_vector, result, result_idx);
 }
 
 //===--------------------------------------------------------------------===//

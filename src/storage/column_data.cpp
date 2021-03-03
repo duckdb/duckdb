@@ -300,9 +300,11 @@ void ColumnData::FetchRow(ColumnFetchState &state, Transaction &transaction, row
                           idx_t result_idx) {
 	// find the segment the row belongs to
 	auto segment = (ColumnSegment *)data.GetSegment(row_id);
+	auto update_segment = (UpdateSegment *)updates.GetSegment(row_id);
 	// now perform the fetch within the segment
 	segment->FetchRow(state, row_id, result, result_idx);
-	throw NotImplementedException("FIXME: merge updates in fetch row");
+	// fetch any (potential) updates
+	update_segment->FetchRow(transaction, row_id, result, result_idx);
 }
 
 void ColumnData::AppendTransientSegment(idx_t start_row) {

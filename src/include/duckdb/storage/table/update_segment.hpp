@@ -37,6 +37,7 @@ public:
 
 	void FetchUpdates(Transaction &transaction, idx_t vector_index, Vector &result);
 	void Update(Transaction &transaction, Vector &update, row_t *ids, idx_t count, Vector &base_data);
+	void FetchRow(Transaction &transaction, idx_t row_id, Vector &result, idx_t result_idx);
 
 	void RollbackUpdate(UpdateInfo *info);
 	void CleanupUpdateInternal(const StorageLockKey &lock, UpdateInfo *info);
@@ -64,12 +65,14 @@ public:
 	typedef void (*initialize_update_function_t)(SegmentStatistics &stats, UpdateInfo *base_info, Vector &base_data, UpdateInfo *update_info, Vector &update);
 	typedef void (*merge_update_function_t)(SegmentStatistics &stats, UpdateInfo *base_info, Vector &base_data, UpdateInfo *update_info, Vector &update, row_t *ids, idx_t count);
 	typedef void (*fetch_update_function_t)(transaction_t start_time, transaction_t transaction_id, UpdateInfo *info, Vector &result);
+	typedef void (*fetch_row_function_t)(transaction_t start_time, transaction_t transaction_id, UpdateInfo *info, idx_t row_idx, Vector &result, idx_t result_idx);
 	typedef void (*rollback_update_function_t)(UpdateInfo *base_info, UpdateInfo *rollback_info);
 	typedef void (*statistics_update_function_t)(UpdateSegment *segment, SegmentStatistics &stats, Vector &update, idx_t count);
 private:
 	initialize_update_function_t initialize_update_function;
 	merge_update_function_t merge_update_function;
 	fetch_update_function_t fetch_update_function;
+	fetch_row_function_t fetch_row_function;
 	rollback_update_function_t rollback_update_function;
 	statistics_update_function_t statistics_update_function;
 

@@ -56,76 +56,31 @@ public:
 
 	template <class T>
 	static inline void Update(SegmentStatistics &stats, T new_value);
-
-	template <>
-	inline void Update<int8_t>(SegmentStatistics &stats, int8_t new_value) {
-		auto &nstats = (NumericStatistics &)*stats.statistics;
-		UpdateValue<int8_t>(new_value, nstats.min.value_.tinyint, nstats.max.value_.tinyint);
-	}
-
-	template <>
-	inline void Update<int16_t>(SegmentStatistics &stats, int16_t new_value) {
-		auto &nstats = (NumericStatistics &)*stats.statistics;
-		UpdateValue<int16_t>(new_value, nstats.min.value_.smallint, nstats.max.value_.smallint);
-	}
-
-	template <>
-	inline void Update<int32_t>(SegmentStatistics &stats, int32_t new_value) {
-		auto &nstats = (NumericStatistics &)*stats.statistics;
-		UpdateValue<int32_t>(new_value, nstats.min.value_.integer, nstats.max.value_.integer);
-	}
-
-	template <>
-	inline void Update<int64_t>(SegmentStatistics &stats, int64_t new_value) {
-		auto &nstats = (NumericStatistics &)*stats.statistics;
-		UpdateValue<int64_t>(new_value, nstats.min.value_.bigint, nstats.max.value_.bigint);
-	}
-
-	template <>
-	inline void Update<uint8_t>(SegmentStatistics &stats, uint8_t new_value) {
-		auto &nstats = (NumericStatistics &)*stats.statistics;
-		UpdateValue<uint8_t>(new_value, nstats.min.value_.utinyint, nstats.max.value_.utinyint);
-	}
-
-	template <>
-	inline void Update<uint16_t>(SegmentStatistics &stats, uint16_t new_value) {
-		auto &nstats = (NumericStatistics &)*stats.statistics;
-		UpdateValue<uint16_t>(new_value, nstats.min.value_.usmallint, nstats.max.value_.usmallint);
-	}
-
-	template <>
-	inline void Update<uint32_t>(SegmentStatistics &stats, uint32_t new_value) {
-		auto &nstats = (NumericStatistics &)*stats.statistics;
-		UpdateValue<uint32_t>(new_value, nstats.min.value_.uinteger, nstats.max.value_.uinteger);
-	}
-
-	template <>
-	inline void Update<uint64_t>(SegmentStatistics &stats, uint64_t new_value) {
-		auto &nstats = (NumericStatistics &)*stats.statistics;
-		UpdateValue<uint64_t>(new_value, nstats.min.value_.ubigint, nstats.max.value_.ubigint);
-	}
-
-	template <>
-	inline void Update<hugeint_t>(SegmentStatistics &stats, hugeint_t new_value) {
-		auto &nstats = (NumericStatistics &)*stats.statistics;
-		UpdateValue<hugeint_t>(new_value, nstats.min.value_.hugeint, nstats.max.value_.hugeint);
-	}
-
-	template <>
-	inline void Update<float>(SegmentStatistics &stats, float new_value) {
-		auto &nstats = (NumericStatistics &)*stats.statistics;
-		UpdateValue<float>(new_value, nstats.min.value_.float_, nstats.max.value_.float_);
-	}
-
-	template <>
-	inline void Update<double>(SegmentStatistics &stats, double new_value) {
-		auto &nstats = (NumericStatistics &)*stats.statistics;
-		UpdateValue<double>(new_value, nstats.min.value_.double_, nstats.max.value_.double_);
-	}
-
-	template <>
-	void Update<interval_t>(SegmentStatistics &stats, interval_t new_value) {
-	}
 };
+
+template <>
+void NumericStatistics::Update<int8_t>(SegmentStatistics &stats, int8_t new_value);
+template <>
+void NumericStatistics::Update<int16_t>(SegmentStatistics &stats, int16_t new_value);
+template <>
+void NumericStatistics::Update<int32_t>(SegmentStatistics &stats, int32_t new_value);
+template <>
+void NumericStatistics::Update<int64_t>(SegmentStatistics &stats, int64_t new_value);
+template <>
+void NumericStatistics::Update<uint8_t>(SegmentStatistics &stats, uint8_t new_value);
+template <>
+void NumericStatistics::Update<uint16_t>(SegmentStatistics &stats, uint16_t new_value);
+template <>
+void NumericStatistics::Update<uint32_t>(SegmentStatistics &stats, uint32_t new_value);
+template <>
+void NumericStatistics::Update<uint64_t>(SegmentStatistics &stats, uint64_t new_value);
+template <>
+void NumericStatistics::Update<hugeint_t>(SegmentStatistics &stats, hugeint_t new_value);
+template <>
+void NumericStatistics::Update<float>(SegmentStatistics &stats, float new_value);
+template <>
+void NumericStatistics::Update<double>(SegmentStatistics &stats, double new_value);
+template <>
+void NumericStatistics::Update<interval_t>(SegmentStatistics &stats, interval_t new_value);
 
 } // namespace duckdb
