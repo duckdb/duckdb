@@ -12,7 +12,7 @@ void ProgressBar::ProgressBarThread() {
 		supported = executor->GetPipelinesProgress(new_percentage);
 		current_percentage = new_percentage;
 		if (supported && current_percentage > -1 && executor->context.print_progress_bar) {
-		        Printer::PrintProgress(current_percentage, PROGRESS_BAR_STRING.c_str(), PROGRESS_BAR_WIDTH);
+			Printer::PrintProgress(current_percentage, PROGRESS_BAR_STRING.c_str(), PROGRESS_BAR_WIDTH);
 		}
 		WaitFor(std::chrono::milliseconds(time_update_bar));
 	}
