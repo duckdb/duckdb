@@ -6,12 +6,12 @@ statement ok
 PRAGMA threads=1
 
 statement ok
-CREATE TABLE test AS (SELECT range r, random() rand FROM range(1000000))
+CREATE TABLE test AS (SELECT range r, random() rand FROM range(10000000))
 
 query T
 SELECT count(*) FROM (SELECT * FROM test ORDER BY rand) sq
 ----
-1000000
+10000000
 
 #statement ok
 #CREATE TABLE test (s VARCHAR)

@@ -5,6 +5,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
 
@@ -18,10 +19,12 @@ PhysicalOrder::PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode>
 struct SortingState {
 	SortingState(const vector<PhysicalType> &sorting_p_types, const vector<OrderByNullType> &null_orders,
 	             const idx_t &validitymask_size, const idx_t &constant_entry_size, const idx_t &block_capacity,
-	             const idx_t &positions_blocksize, const vector<int8_t> &is_asc, const vector<int8_t> &nulls_first)
+	             const idx_t &positions_blocksize, const vector<int8_t> &is_asc, const vector<int8_t> &nulls_first,
+	             const vector<bool> &sorting_nulls)
 	    : SORTING_P_TYPES(sorting_p_types), NULL_ORDERS(null_orders), VALIDITYMASK_SIZE(validitymask_size),
 	      CONSTANT_ENTRY_SIZE(constant_entry_size), BLOCK_CAPACITY(block_capacity),
-	      POSITIONS_BLOCKSIZE(positions_blocksize), IS_ASC(is_asc), NULLS_FIRST(nulls_first) {
+	      POSITIONS_BLOCKSIZE(positions_blocksize), IS_ASC(is_asc), NULLS_FIRST(nulls_first),
+	      SORTING_NULLS(sorting_nulls) {
 	}
 	const vector<PhysicalType> SORTING_P_TYPES;
 	const vector<OrderByNullType> NULL_ORDERS;
@@ -34,18 +37,25 @@ struct SortingState {
 	const uint8_t VALID_BITS[8] = {1, 2, 4, 8, 16, 32, 64, 128};
 	const vector<int8_t> IS_ASC;
 	const vector<int8_t> NULLS_FIRST;
+	const vector<bool> SORTING_NULLS;
 };
 
 class OrderGlobalState : public GlobalOperatorState {
 public:
 	OrderGlobalState(PhysicalOrder &op, BufferManager &buffer_manager)
-	    : op(op), buffer_manager(buffer_manager), merge_path(false) {
+	    : op(op), buffer_manager(buffer_manager), total_size(0), external(false), row_chunk(buffer_manager),
+	      merge_path(false) {
 	}
 	PhysicalOrder &op;
 	BufferManager &buffer_manager;
 
 	//! The lock for updating the global order state
 	mutex lock;
+
+	//! Keep track of whether we have to do an external sort
+	idx_t total_size;
+	bool external;
+	RowChunk row_chunk;
 
 	//! To execute the expressions that are sorted
 	ExpressionExecutor executor;
@@ -69,9 +79,11 @@ public:
 
 	void InitializeSortingState(const vector<idx_t> &sorting_p_sizes, const vector<OrderByNullType> &null_orders,
 	                            const idx_t &constant_entry_size, const idx_t &positions_blocksize,
-	                            const vector<int8_t> &is_asc, const vector<int8_t> &nulls_first) {
-		sorting_state = make_unique<SortingState>(sorting_p_types, null_orders, validitymask_size, constant_entry_size,
-		                                          block_capacity, positions_blocksize, is_asc, nulls_first);
+	                            const vector<int8_t> &is_asc, const vector<int8_t> &nulls_first,
+	                            const vector<bool> &sorting_nulls) {
+		sorting_state =
+		    make_unique<SortingState>(sorting_p_types, null_orders, validitymask_size, constant_entry_size,
+		                              block_capacity, positions_blocksize, is_asc, nulls_first, sorting_nulls);
 	}
 
 	//! Bunch of const for speed during sorting
@@ -116,6 +128,7 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 	vector<OrderType> order_types;
 	vector<int8_t> is_asc;
 	vector<int8_t> nulls_first;
+	vector<bool> sorting_nulls;
 	for (idx_t i = 0; i < orders.size(); i++) {
 		null_orders.push_back(orders[i].null_order);
 		order_types.push_back(orders[i].type);
@@ -130,6 +143,11 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 			auto &ref = (BoundReferenceExpression &)expr;
 			state->s_to_p[i] = ref.index;
 			state->p_to_s[ref.index] = i;
+		}
+		if (expr.stats) {
+			sorting_nulls.push_back(expr.stats->has_null);
+		} else {
+			sorting_nulls.push_back(false);
 		}
 	}
 	for (idx_t i = 0; i < children[0]->types.size(); i++) {
@@ -155,11 +173,12 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 	}
 	if (constant) {
 		state->InitializeSortingState(sorting_p_sizes, null_orders, entry_size + state->validitymask_size, 0, is_asc,
-		                              nulls_first);
+		                              nulls_first, sorting_nulls);
 	} else {
 		idx_t positions_blocksize =
 		    MaxValue((idx_t)Storage::BLOCK_ALLOC_SIZE, ((SORTING_BLOCK_SIZE / entry_size) + 1) * sizeof(idx_t));
-		state->InitializeSortingState(sorting_p_sizes, null_orders, 0, positions_blocksize, is_asc, nulls_first);
+		state->InitializeSortingState(sorting_p_sizes, null_orders, 0, positions_blocksize, is_asc, nulls_first,
+		                              sorting_nulls);
 	}
 
 	return state;
@@ -363,12 +382,7 @@ static int8_t TemplatedCompareValue(data_ptr_t &l_val, data_ptr_t &r_val) {
 
 static int32_t CompareValue(const data_ptr_t &l_validitymask, const data_ptr_t &r_validitymask, data_ptr_t &l_val,
                             data_ptr_t &r_val, const idx_t &sort_idx, const SortingState &state, idx_t &l_size,
-                            idx_t &r_size) {
-	auto byte_offset = sort_idx / 8;
-	auto offset_in_byte = sort_idx % 8;
-	auto left_valid = *(l_validitymask + byte_offset) & state.VALID_BITS[offset_in_byte];
-	auto right_valid = *(r_validitymask + byte_offset) & state.VALID_BITS[offset_in_byte];
-
+                            idx_t &r_size, const bool &sorting_nulls) {
 	if (TypeIsConstantSize(state.SORTING_P_TYPES[sort_idx])) {
 		l_size = GetTypeIdSize(state.SORTING_P_TYPES[sort_idx]);
 		r_size = GetTypeIdSize(state.SORTING_P_TYPES[sort_idx]);
@@ -384,12 +398,19 @@ static int32_t CompareValue(const data_ptr_t &l_validitymask, const data_ptr_t &
 		}
 	}
 
-	if (!left_valid && !right_valid) {
-		return 0;
-	} else if (!right_valid) {
-		return state.NULLS_FIRST[sort_idx];
-	} else if (!left_valid) {
-		return -state.NULLS_FIRST[sort_idx];
+	if (sorting_nulls) {
+		auto byte_offset = sort_idx / 8;
+		auto offset_in_byte = sort_idx % 8;
+		auto left_valid = *(l_validitymask + byte_offset) & state.VALID_BITS[offset_in_byte];
+		auto right_valid = *(r_validitymask + byte_offset) & state.VALID_BITS[offset_in_byte];
+
+		if (!left_valid && !right_valid) {
+			return 0;
+		} else if (!right_valid) {
+			return state.NULLS_FIRST[sort_idx];
+		} else if (!left_valid) {
+			return -state.NULLS_FIRST[sort_idx];
+		}
 	}
 
 	switch (state.SORTING_P_TYPES[sort_idx]) {
@@ -439,7 +460,7 @@ static int CompareTuple(const data_ptr_t &l_start, const data_ptr_t &r_start, co
 	idx_t l_size = 0;
 	idx_t r_size = 0;
 	for (idx_t i = 0; i < state.SORTING_P_TYPES.size(); i++) {
-		auto comp_res = CompareValue(l_start, r_start, l_val, r_val, i, state, l_size, r_size);
+		auto comp_res = CompareValue(l_start, r_start, l_val, r_val, i, state, l_size, r_size, state.SORTING_NULLS[i]);
 		if (comp_res == 0) {
 			l_val += l_size;
 			r_val += r_size;
@@ -450,7 +471,7 @@ static int CompareTuple(const data_ptr_t &l_start, const data_ptr_t &r_start, co
 	return 0;
 }
 
-static void Sort(ContinuousBlock &cb, OrderGlobalState &state) {
+static void SortBlock(ContinuousBlock &cb, OrderGlobalState &state) {
 	D_ASSERT(cb.blocks.size() == 1);
 	auto &block = cb.blocks[0];
 	cb.end = block.count;
@@ -545,7 +566,7 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &state, 
 	}
 
 	// build the block
-	const idx_t block_count_before = lstate.row_chunk.Size();
+	idx_t n_blocks_before = lstate.row_chunk.blocks.size();
 	lstate.row_chunk.Build(input.size(), lstate.validitymask_locations, lstate.entry_sizes,
 	                       sorting_state.CONSTANT_ENTRY_SIZE, sorting_state.POSITIONS_BLOCKSIZE);
 	for (idx_t i = 0; i < sort.size(); i++) {
@@ -568,12 +589,21 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &state, 
 		                                 gstate.p_to_p[i] + sort.size(), lstate.key_locations,
 		                                 lstate.validitymask_locations);
 	}
-	// sort the block if it is full
-	if (block_count_before != 0 && lstate.row_chunk.Size() > block_count_before) {
-		lstate.continuous.push_back(make_unique<ContinuousBlock>(gstate));
-		auto &new_cb = *lstate.continuous.back();
-		new_cb.blocks.push_back(lstate.row_chunk.blocks[lstate.row_chunk.Size() - 2]);
-		Sort(new_cb, gstate);
+	if (gstate.external) {
+		// we already know we have to do an external sort
+		return;
+	}
+	if (lstate.row_chunk.blocks.size() > n_blocks_before) {
+		// increase total size if a block was added
+		lock_guard<mutex> lock(gstate.lock);
+		for (idx_t i = n_blocks_before; i < lstate.row_chunk.blocks.size(); i++) {
+			gstate.total_size += lstate.row_chunk.blocks[i].byte_capacity;
+			gstate.total_size += lstate.row_chunk.blocks[i].entry_capacity;
+		}
+		// if too much memory is being used, resort to external sorting
+		if (gstate.total_size > BufferManager::GetBufferManager(context.client).GetMaxMemory()) {
+			gstate.external = true;
+		}
 	}
 }
 
@@ -585,22 +615,26 @@ void PhysicalOrder::Combine(ExecutionContext &context, GlobalOperatorState &stat
 		return;
 	}
 
-	ContinuousBlock *unsorted_block;
-	{
-		// append to global state. this initializes gstate RowChunks if empty
-		lock_guard<mutex> glock(gstate.lock);
-		for (auto &c : lstate.continuous) {
-			gstate.intermediate.emplace_back();
-			gstate.intermediate.back().push_back(move(c));
+	if (gstate.external) {
+		for (auto &b : lstate.row_chunk.blocks) {
+			ContinuousBlock *unsorted_block;
+			{
+				lock_guard<mutex> lock(gstate.lock);
+				gstate.intermediate.emplace_back();
+				gstate.intermediate.back().push_back(make_unique<ContinuousBlock>(gstate));
+				unsorted_block = gstate.intermediate.back().back().get();
+			}
+			unsorted_block->blocks.push_back(b);
+			SortBlock(*unsorted_block, gstate);
 		}
-		// last block of each local state is always unsorted
-		gstate.intermediate.emplace_back();
-		gstate.intermediate.back().push_back(make_unique<ContinuousBlock>(gstate));
-		unsorted_block = gstate.intermediate.back().back().get();
-		unsorted_block->blocks.push_back(lstate.row_chunk.blocks.back());
+		return;
 	}
 
-	Sort(*unsorted_block, gstate);
+	// we can do an in-memory sort
+	lock_guard<mutex> lock(gstate.lock);
+	for (auto &b : lstate.row_chunk.blocks) {
+		gstate.row_chunk.blocks.push_back(move(b));
+	}
 }
 
 class CBScanState {
@@ -940,20 +974,92 @@ void PhysicalOrder::ScheduleMergeTasks(Pipeline &pipeline, ClientContext &contex
 	}
 }
 
+static void SortSingleThreaded(OrderGlobalState &state) {
+	const auto &sorting_state = *state.sorting_state;
+	auto &buffer_manager = state.buffer_manager;
+
+	idx_t count = 0;
+	for (auto &b : state.row_chunk.blocks) {
+		count += b.count;
+	}
+
+	idx_t i = 0;
+	auto idxs = unique_ptr<idx_t[]>(new idx_t[count]);
+	auto key_locations = unique_ptr<data_ptr_t[]>(new data_ptr_t[count]);
+	vector<unique_ptr<BufferHandle>> handles;
+	for (auto &b : state.row_chunk.blocks) {
+		auto handle = state.buffer_manager.Pin(b.block);
+		data_ptr_t dataptr = handle->node->buffer;
+		if (sorting_state.CONSTANT_ENTRY_SIZE) {
+			for (idx_t entry_idx = 0; entry_idx < b.count; entry_idx++) {
+				idxs[i] = i;
+				key_locations[i] = dataptr;
+				dataptr += sorting_state.CONSTANT_ENTRY_SIZE;
+				i++;
+			}
+		} else {
+			// TODO: variable length
+		}
+		handles.push_back(move(handle));
+	}
+
+	idx_t *start = idxs.get();
+	BlockQuickSort::Sort(start, start + count, [&key_locations, &sorting_state](const idx_t &l, const idx_t &r) {
+		return CompareTuple(key_locations[l], key_locations[r], sorting_state) <= 0;
+	});
+
+	state.continuous.push_back(make_unique<ContinuousBlock>(state));
+	auto &result = *state.continuous.back();
+
+	idx_t offset = 0;
+	if (sorting_state.CONSTANT_ENTRY_SIZE) {
+		// copy the data in order
+		while (offset < count) {
+			// initialize block to write to
+			result.blocks.emplace_back(buffer_manager, sorting_state.BLOCK_CAPACITY, sorting_state.CONSTANT_ENTRY_SIZE,
+			                           sorting_state.POSITIONS_BLOCKSIZE);
+			auto write_block = &result.blocks.back();
+			auto write_handle = buffer_manager.Pin(write_block->block);
+			data_ptr_t write_ptr = write_handle->node->buffer;
+
+			// fill the block
+			idx_t next = MinValue(count - offset, sorting_state.BLOCK_CAPACITY / sorting_state.CONSTANT_ENTRY_SIZE);
+			write_block->count = next;
+			for (i = offset; i < offset + next; i++) {
+				memcpy(write_ptr, key_locations[i], sorting_state.CONSTANT_ENTRY_SIZE);
+				write_ptr += sorting_state.CONSTANT_ENTRY_SIZE;
+			}
+			offset += next;
+		}
+	}
+}
+
+void PhysicalOrder::SortInMemory(Pipeline &pipeline, ClientContext &context, GlobalOperatorState &state) {
+	auto &sink = (OrderGlobalState &)state;
+	auto &ts = TaskScheduler::GetScheduler(context);
+
+	if (ts.NumberOfThreads() == 1) {
+		SortSingleThreaded(sink);
+	}
+}
+
 void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> state) {
 	this->sink_state = move(state);
 	auto &sink = (OrderGlobalState &)*this->sink_state;
 
-	if (sink.intermediate.capacity() == 1) {
-		// special case: only one block arrived, it was sorted but not re-ordered
-		auto single_block = sink.intermediate.back().back().get();
-		sink.continuous.push_back(make_unique<ContinuousBlock>(sink));
-		single_block->PinBlock();
-		single_block->FlushData(*sink.continuous.back());
-		return;
+	if (sink.external) {
+		if (sink.intermediate.capacity() == 1) {
+			// special case: only one block arrived, it was sorted but not re-ordered
+			auto single_block = sink.intermediate.back().back().get();
+			sink.continuous.push_back(make_unique<ContinuousBlock>(sink));
+			single_block->PinBlock();
+			single_block->FlushData(*sink.continuous.back());
+			return;
+		}
+		ScheduleMergeTasks(pipeline, context, sink);
+	} else {
+		SortInMemory(pipeline, context, sink);
 	}
-
-	ScheduleMergeTasks(pipeline, context, sink);
 }
 
 //===--------------------------------------------------------------------===//
