@@ -207,7 +207,7 @@ unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(ClientContextLoc
 	statement.Bind(move(bound_values));
 
 	bool create_stream_result = statement.allow_stream_result && allow_stream_result;
-	if (enable_progress_bar && !create_stream_result) {
+	if (enable_progress_bar) {
 		if (progress_bar) {
 			progress_bar.reset();
 		}
@@ -222,6 +222,9 @@ unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(ClientContextLoc
 	D_ASSERT(types == statement.types);
 
 	if (create_stream_result) {
+	    if (progress_bar) {
+		progress_bar->Stop();
+	}
 		// successfully compiled SELECT clause and it is the last statement
 		// return a StreamQueryResult so the client can call Fetch() on it and stream the result
 		return make_unique<StreamQueryResult>(statement.statement_type, shared_from_this(), statement.types,

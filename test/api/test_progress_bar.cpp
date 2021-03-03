@@ -42,7 +42,6 @@ public:
 };
 
 TEST_CASE("Test Progress Bar", "[api]") {
-	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 	TestProgressBar test_progress(con.context.get());
@@ -70,6 +69,13 @@ TEST_CASE("Test Progress Bar", "[api]") {
 	REQUIRE_NO_FAIL(con.Query("select count(*) from tbl where a = (select min(b) from tbl)"));
 	test_progress.End();
 
+	// Stream result
+	test_progress.Start();
+	auto result = con.SendQuery("select count(*) from tbl inner join tbl_2 on (tbl.a = tbl_2.a)");
+	test_progress.End();
+    REQUIRE_NO_FAIL(*result);
+
+
 	//! Test Multiple threads
 	REQUIRE_NO_FAIL(con.Query("PRAGMA threads=4"));
 	REQUIRE_NO_FAIL(con.Query("PRAGMA force_parallelism"));
@@ -92,10 +98,15 @@ TEST_CASE("Test Progress Bar", "[api]") {
 	test_progress.Start();
 	REQUIRE_NO_FAIL(con.Query("select count(*) from tbl where a = (select min(b) from tbl)"));
 	test_progress.End();
+
+	// Stream result
+	test_progress.Start();
+	result = con.SendQuery("select count(*) from tbl inner join tbl_2 on (tbl.a = tbl_2.a)");
+	test_progress.End();
+    REQUIRE_NO_FAIL(*result);
 }
 
 TEST_CASE("Test Progress Bar CSV", "[api]") {
-	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 
