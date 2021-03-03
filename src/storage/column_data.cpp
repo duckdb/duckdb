@@ -40,7 +40,12 @@ void ColumnData::Initialize(vector<unique_ptr<PersistentSegment>> &segments) {
 		persistent_rows += segment->count;
 		data.AppendSegment(move(segment));
 	}
-	throw NotImplementedException("FIXME: append empty update segments here");
+	idx_t row_count = 0;
+	while(row_count < persistent_rows) {
+		idx_t next = MinValue<idx_t>(row_count + UpdateSegment::MORSEL_SIZE, persistent_rows);
+		AppendUpdateSegment(row_count, next - row_count);
+		row_count = next;
+	}
 }
 
 void ColumnData::InitializeScan(ColumnScanState &state) {
@@ -312,8 +317,8 @@ void ColumnData::AppendTransientSegment(idx_t start_row) {
 	data.AppendSegment(move(new_segment));
 }
 
-void ColumnData::AppendUpdateSegment(idx_t start_row) {
-	auto new_segment = make_unique<UpdateSegment>(*this, start_row, 0);
+void ColumnData::AppendUpdateSegment(idx_t start_row, idx_t count) {
+	auto new_segment = make_unique<UpdateSegment>(*this, start_row, count);
 	updates.AppendSegment(move(new_segment));
 }
 

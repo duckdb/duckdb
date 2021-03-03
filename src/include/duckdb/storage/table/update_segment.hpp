@@ -34,8 +34,13 @@ public:
 	ColumnData &column_data;
 public:
 	bool HasUpdates();
+	bool HasUpdates(idx_t vector_index);
+	bool HasUpdates(idx_t start_vector_index, idx_t end_vector_index);
+	UpdateSegment *FindSegment(idx_t end_vector_index);
+	void ClearUpdates();
 
 	void FetchUpdates(Transaction &transaction, idx_t vector_index, Vector &result);
+	void FetchCommitted(idx_t vector_index, Vector &result);
 	void Update(Transaction &transaction, Vector &update, row_t *ids, idx_t count, Vector &base_data);
 	void FetchRow(Transaction &transaction, idx_t row_id, Vector &result, idx_t result_idx);
 

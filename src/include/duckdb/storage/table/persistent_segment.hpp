@@ -30,8 +30,6 @@ public:
 	unique_ptr<UncompressedSegment> data;
 
 public:
-	bool HasChanges();
-
 	void InitializeScan(ColumnScanState &state) override;
 	//! Scan one vector from this persistent segment
 	void Scan(ColumnScanState &state, idx_t vector_index, Vector &result) override;

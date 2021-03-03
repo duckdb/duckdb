@@ -19,6 +19,32 @@ static UpdateSegment::rollback_update_function_t GetRollbackUpdateFunction(Physi
 static UpdateSegment::statistics_update_function_t GetStatisticsUpdateFunction(PhysicalType type);
 static UpdateSegment::fetch_row_function_t GetFetchRowFunction(PhysicalType type);
 
+UpdateSegment::UpdateSegment(ColumnData &column_data, idx_t start, idx_t count) :
+    SegmentBase(start, count), column_data(column_data), stats(column_data.type, GetTypeIdSize(column_data.type.InternalType())) {
+	auto physical_type = column_data.type.InternalType();
+
+	this->type_size = GetTypeIdSize(physical_type);
+
+	this->initialize_update_function = GetInitializeUpdateFunction(physical_type);
+	this->fetch_update_function = GetFetchUpdateFunction(physical_type);
+	this->fetch_row_function = GetFetchRowFunction(physical_type);
+	this->merge_update_function = GetMergeUpdateFunction(physical_type);
+	this->rollback_update_function = GetRollbackUpdateFunction(physical_type);
+	this->statistics_update_function = GetStatisticsUpdateFunction(physical_type);
+}
+
+UpdateSegment::~UpdateSegment() {
+}
+
+void UpdateSegment::ClearUpdates() {
+	stats.Reset();
+	root.reset();
+	heap.Destroy();
+}
+
+//===--------------------------------------------------------------------===//
+// Update Info Helpers
+//===--------------------------------------------------------------------===//
 Value UpdateInfo::GetValue(idx_t index) {
 	auto &type = segment->column_data.type;
 
@@ -51,21 +77,12 @@ string UpdateInfo::ToString() {
 	return result;
 }
 
-UpdateSegment::UpdateSegment(ColumnData &column_data, idx_t start, idx_t count) :
-    SegmentBase(start, count), column_data(column_data), stats(column_data.type, GetTypeIdSize(column_data.type.InternalType())) {
-	auto physical_type = column_data.type.InternalType();
-
-	this->type_size = GetTypeIdSize(physical_type);
-
-	this->initialize_update_function = GetInitializeUpdateFunction(physical_type);
-	this->fetch_update_function = GetFetchUpdateFunction(physical_type);
-	this->fetch_row_function = GetFetchRowFunction(physical_type);
-	this->merge_update_function = GetMergeUpdateFunction(physical_type);
-	this->rollback_update_function = GetRollbackUpdateFunction(physical_type);
-	this->statistics_update_function = GetStatisticsUpdateFunction(physical_type);
-}
-
-UpdateSegment::~UpdateSegment() {
+void UpdateInfo::Verify() {
+#ifdef DEBUG
+	for(idx_t i = 1; i < N; i++) {
+		D_ASSERT(tuples[i] > tuples[i - 1] && tuples[i] < STANDARD_VECTOR_SIZE);
+	}
+#endif
 }
 
 //===--------------------------------------------------------------------===//
@@ -130,6 +147,19 @@ void UpdateSegment::FetchUpdates(Transaction &transaction, idx_t vector_index, V
 	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 
 	fetch_update_function(transaction.start_time, transaction.transaction_id, root->info[vector_index]->info.get(), result);
+}
+
+void UpdateSegment::FetchCommitted(idx_t vector_index, Vector &result) {
+	if (!root) {
+		return;
+	}
+	if (!root->info[vector_index]) {
+		return;
+	}
+	// FIXME: normalify if this is not the case... need to pass in count?
+	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
+
+	fetch_update_function(0, (transaction_t) -1, root->info[vector_index]->info.get(), result);
 }
 
 //===--------------------------------------------------------------------===//
@@ -460,15 +490,6 @@ static idx_t merge_loop(row_t a[], sel_t b[], idx_t acount, idx_t bcount, idx_t 
 		count++;
 	}
 	return count;
-}
-
-void UpdateInfo::Verify() {
-#ifdef DEBUG
-	for(idx_t i = 1; i < N; i++) {
-		D_ASSERT(tuples[i] > tuples[i - 1] && tuples[i] < STANDARD_VECTOR_SIZE);
-	}
-#endif
-
 }
 
 template <class T>
@@ -806,5 +827,42 @@ void UpdateSegment::Update(Transaction &transaction, Vector &update, row_t *ids,
 bool UpdateSegment::HasUpdates() {
 	return root.get() != nullptr;
 }
+
+bool UpdateSegment::HasUpdates(idx_t vector_index) {
+	if (!HasUpdates()) {
+		return false;
+	}
+	return root->info[vector_index].get();
+}
+
+bool UpdateSegment::HasUpdates(idx_t start_vector_index, idx_t end_vector_index) {
+	idx_t base_vector_index = start / STANDARD_VECTOR_SIZE;
+	D_ASSERT(start_vector_index >= base_vector_index);
+	auto segment = this;
+	for(idx_t i = start_vector_index; i < end_vector_index; i++) {
+		idx_t vector_index = i - base_vector_index;
+		while (vector_index >= UpdateSegment::MORSEL_VECTOR_COUNT) {
+			segment = (UpdateSegment*) next.get();
+			base_vector_index = segment->start / STANDARD_VECTOR_SIZE;
+			vector_index -= UpdateSegment::MORSEL_VECTOR_COUNT;
+		}
+		if (segment->HasUpdates(vector_index)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+UpdateSegment *UpdateSegment::FindSegment(idx_t end_vector_index) {
+	idx_t base_vector_index = start / STANDARD_VECTOR_SIZE;
+	D_ASSERT(end_vector_index >= base_vector_index);
+	auto segment = this;
+	while(end_vector_index >= base_vector_index + UpdateSegment::MORSEL_VECTOR_COUNT) {
+		segment = (UpdateSegment *) next.get();
+		base_vector_index += UpdateSegment::MORSEL_VECTOR_COUNT;
+	}
+	return segment;
+}
+
 
 }

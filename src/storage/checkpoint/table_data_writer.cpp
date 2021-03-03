@@ -11,6 +11,7 @@
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/persistent_segment.hpp"
 #include "duckdb/storage/table/transient_segment.hpp"
+#include "duckdb/storage/table/update_segment.hpp"
 #include "duckdb/storage/column_data.hpp"
 #include "duckdb/storage/table/morsel_info.hpp"
 
@@ -93,11 +94,16 @@ void TableDataWriter::CheckpointColumn(ColumnData &col_data, idx_t col_idx) {
 
 	auto owned_segment = move(col_data.data.root_node);
 	auto segment = (ColumnSegment *)owned_segment.get();
+	auto update_segment = (UpdateSegment *)col_data.updates.root_node.get();
+	idx_t update_vector_index = 0;
 	while (segment) {
 		if (segment->segment_type == ColumnSegmentType::PERSISTENT) {
 			auto &persistent = (PersistentSegment &)*segment;
-			// persistent segment; check if there were changes made to the segment
-			if (!persistent.HasChanges()) {
+			// persistent segment; check if there were any updates in this segment
+			idx_t start_vector_index = persistent.start / STANDARD_VECTOR_SIZE;
+			idx_t end_vector_index = (persistent.start + persistent.count) / STANDARD_VECTOR_SIZE;
+			bool has_updates = update_segment->HasUpdates(start_vector_index, end_vector_index);
+			if (!has_updates) {
 				// unchanged persistent segment: no need to write the data
 
 				// flush any segments preceding this persistent segment
@@ -125,6 +131,10 @@ void TableDataWriter::CheckpointColumn(ColumnData &col_data, idx_t col_idx) {
 				// move to the next segment in the list
 				owned_segment = move(segment->next);
 				segment = (ColumnSegment *)owned_segment.get();
+
+				// move the update segment forward
+				update_vector_index = end_vector_index;
+				update_segment = update_segment->FindSegment(end_vector_index);
 				continue;
 			}
 		}
@@ -133,13 +143,21 @@ void TableDataWriter::CheckpointColumn(ColumnData &col_data, idx_t col_idx) {
 		segment->InitializeScan(state);
 
 		Vector scan_vector(col_data.type);
+		idx_t base_update_index = update_segment->start / STANDARD_VECTOR_SIZE;
 		for (idx_t vector_index = 0; vector_index * STANDARD_VECTOR_SIZE < segment->count; vector_index++) {
 			scan_vector.Reference(intermediate);
 
 			idx_t count = MinValue<idx_t>(segment->count - vector_index * STANDARD_VECTOR_SIZE, STANDARD_VECTOR_SIZE);
-			throw NotImplementedException("FIXME: scan updates as well");
-			// segment->Scan(state, vector_index, scan_vector);
+
+			segment->Scan(state, vector_index, scan_vector);
+			update_segment->FetchCommitted(update_vector_index - base_update_index, scan_vector);
+
 			AppendData(new_tree, col_idx, scan_vector, count);
+			update_vector_index++;
+			if (update_vector_index - base_update_index >= UpdateSegment::MORSEL_VECTOR_COUNT) {
+				base_update_index += UpdateSegment::MORSEL_VECTOR_COUNT;
+				update_segment = (UpdateSegment *) update_segment->next.get();
+			}
 		}
 		// move to the next segment in the list
 		owned_segment = move(segment->next);
@@ -149,6 +167,13 @@ void TableDataWriter::CheckpointColumn(ColumnData &col_data, idx_t col_idx) {
 	FlushSegment(new_tree, col_idx);
 	// replace the old tree with the new one
 	col_data.data.Replace(new_tree);
+
+	// reset all the updates
+	update_segment = (UpdateSegment *)col_data.updates.root_node.get();
+	while(update_segment) {
+		update_segment->ClearUpdates();
+		update_segment = (UpdateSegment *) update_segment->next.get();
+	}
 }
 
 void TableDataWriter::CheckpointDeletes(MorselInfo *morsel_info) {

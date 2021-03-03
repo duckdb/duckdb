@@ -53,8 +53,4 @@ void PersistentSegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &
 	data->FetchRow(state, row_id - this->start, result, result_idx);
 }
 
-bool PersistentSegment::HasChanges() {
-	return block_id != data->block->BlockId();
-}
-
 } // namespace duckdb

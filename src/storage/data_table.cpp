@@ -1064,9 +1064,7 @@ void DataTable::CommitDropColumn(idx_t index) {
 	while (segment) {
 		if (segment->segment_type == ColumnSegmentType::PERSISTENT) {
 			auto &persistent = (PersistentSegment &)*segment;
-			if (!persistent.HasChanges()) {
-				block_manager.MarkBlockAsModified(persistent.block_id);
-			}
+			block_manager.MarkBlockAsModified(persistent.block_id);
 		}
 		segment = (ColumnSegment *)segment->next.get();
 	}
