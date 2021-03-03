@@ -686,6 +686,9 @@ void UpdateSegment::Update(Transaction &transaction, Vector &update, row_t *ids,
 
 			// insert the new node into the chain
 			node->next = base_info->next;
+			if (node->next) {
+				node->next->prev = node;
+			}
 			node->prev = base_info;
 			base_info->next = node;
 		}
