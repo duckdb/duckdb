@@ -43,6 +43,8 @@ public:
 	unique_ptr<BaseStatistics> statistics;
 
 public:
+	bool CheckZonemap(ColumnScanState &state, TableFilter &filter);
+
 	//! Set up the column data with the set of persistent segments
 	void Initialize(vector<unique_ptr<PersistentSegment>> &segments);
 	//! Initialize a scan of the column

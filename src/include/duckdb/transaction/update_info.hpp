@@ -51,6 +51,11 @@ struct UpdateInfo {
 			current = current->next;
 		}
 	}
+
+	Value GetValue(idx_t index);
+	string ToString();
+	void Print();
+	void Verify();
 };
 
 } // namespace duckdb

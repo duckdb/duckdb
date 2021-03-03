@@ -18,6 +18,8 @@ class TransientSegment;
 struct ColumnAppendState {
 	//! The current segment of the append
 	TransientSegment *current;
+	//! The update segment to append to
+	UpdateSegment *updates;
 	//! The write lock that is held by the append
 	unique_ptr<StorageLockKey> lock;
 };

@@ -6,12 +6,33 @@
 #include "duckdb/storage/data_pointer.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
+#include "duckdb/planner/table_filter.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 namespace duckdb {
 
 ColumnData::ColumnData(DatabaseInstance &db, DataTableInfo &table_info, LogicalType type, idx_t column_idx)
     : table_info(table_info), type(move(type)), db(db), column_idx(column_idx), persistent_rows(0) {
 	statistics = BaseStatistics::CreateEmpty(type);
+}
+
+bool ColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
+	if (!state.segment_checked) {
+		state.segment_checked = true;
+		if (!state.current) {
+			return true;
+		}
+		if (state.current->stats.CheckZonemap(filter)) {
+			return true;
+		}
+		if (state.updates) {
+			return state.updates->GetStatistics().CheckZonemap(filter);
+		} else {
+			return false;
+		}
+	} else {
+		return true;
+	}
 }
 
 void ColumnData::Initialize(vector<unique_ptr<PersistentSegment>> &segments) {
@@ -61,24 +82,59 @@ void ColumnData::FilterScan(Transaction &transaction, ColumnScanState &state, Ve
 		state.initialized = true;
 	}
 	// perform a scan of this segment
-	state.current->FilterScan(state, result, sel, approved_tuple_count);
-	if (state.updates->HasUpdates()) {
-		throw NotImplementedException("FIXME: merge updates in filter scan");
+	if (!state.updates->HasUpdates()) {
+		state.current->FilterScan(state, result, sel, approved_tuple_count);
+	} else {
+		Scan(transaction, state, result);
+		result.Slice(sel, approved_tuple_count);
 	}
 	// move over to the next vector
 	state.Next();
 }
 
 void ColumnData::Select(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
-                        idx_t &approved_tuple_count, vector<TableFilter> &table_filter) {
+                        idx_t &approved_tuple_count, vector<TableFilter> &table_filters) {
 	if (!state.initialized) {
 		state.current->InitializeScan(state);
 		state.initialized = true;
 	}
-	// perform a scan of this segment
-	state.current->Select(state, result, sel, approved_tuple_count, table_filter);
-	if (state.updates->HasUpdates()) {
-		throw NotImplementedException("FIXME: merge updates in select");
+	if (!state.updates->HasUpdates()) {
+		// no updates: filter in the scan
+		state.current->Select(state, result, sel, approved_tuple_count, table_filters);
+	} else {
+		// updates: first scan the full vector (including merged updates)
+		// and then apply the filter
+		Scan(transaction, state, result);
+
+		for (auto &filter : table_filters) {
+			SelectionVector new_sel(STANDARD_VECTOR_SIZE);
+			idx_t new_count;
+			Vector constant(filter.constant);
+			switch(filter.comparison_type) {
+			case ExpressionType::COMPARE_EQUAL:
+				new_count = VectorOperations::Equals(result, constant, &sel, approved_tuple_count, &new_sel, nullptr);
+				break;
+			case ExpressionType::COMPARE_NOTEQUAL:
+				new_count = VectorOperations::NotEquals(result, constant, &sel, approved_tuple_count, &new_sel, nullptr);
+				break;
+			case ExpressionType::COMPARE_LESSTHAN:
+				new_count = VectorOperations::GreaterThan(result, constant, &sel, approved_tuple_count, &new_sel, nullptr);
+				break;
+			case ExpressionType::COMPARE_GREATERTHAN:
+				new_count = VectorOperations::GreaterThanEquals(result, constant, &sel, approved_tuple_count, &new_sel, nullptr);
+				break;
+			case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+				new_count = VectorOperations::LessThan(result, constant, &sel, approved_tuple_count, &new_sel, nullptr);
+				break;
+			case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+				new_count = VectorOperations::LessThanEquals(result, constant, &sel, approved_tuple_count, &new_sel, nullptr);
+				break;
+			default:
+				throw NotImplementedException("Unsupported type for ColumnData::Select");
+			}
+			approved_tuple_count = new_count;
+			sel = new_sel;
+		}
 	}
 	// move over to the next vector
 	state.Next();
@@ -141,11 +197,24 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 		segment = (ColumnSegment *)data.GetLastSegment();
 	}
 	state.current = (TransientSegment *)segment;
+	state.updates = (UpdateSegment *) updates.nodes.back().node;
 	D_ASSERT(state.current->segment_type == ColumnSegmentType::TRANSIENT);
 	state.current->InitializeAppend(state);
 }
 
 void ColumnData::Append(ColumnAppendState &state, Vector &vector, idx_t count) {
+	// append to update segments
+	idx_t remaining_update_count = count;
+	while(remaining_update_count > 0) {
+		idx_t to_append_elements = MinValue<idx_t>(remaining_update_count, UpdateSegment::MORSEL_SIZE - state.updates->count);
+		state.updates->count += to_append_elements;
+		if (to_append_elements != remaining_update_count) {
+			// have to append a new segment
+			AppendUpdateSegment(state.updates->start + state.updates->count);
+			state.updates = (UpdateSegment *) updates.nodes.back().node;
+		}
+		remaining_update_count -= to_append_elements;
+	}
 	idx_t offset = 0;
 	while (true) {
 		// append the data from the vector
@@ -188,6 +257,17 @@ void ColumnData::RevertAppend(row_t start_row) {
 	}
 	segment->next = nullptr;
 	transient.RevertAppend(start_row);
+
+	// do the same with the update segments
+	idx_t update_segment_idx = updates.GetSegmentIndex(start_row);
+	auto update_segment = updates.nodes[update_segment_idx].node;
+	// remove any segments AFTER this segment
+	if (update_segment_idx < updates.nodes.size() - 1) {
+		updates.nodes.erase(updates.nodes.begin() + update_segment_idx + 1, updates.nodes.end());
+	}
+	// truncate this segment
+	update_segment->next = nullptr;
+	update_segment->count = start_row - update_segment->start;
 }
 
 void ColumnData::Update(Transaction &transaction, Vector &update_vector, Vector &row_ids, idx_t count) {
@@ -231,7 +311,7 @@ void ColumnData::AppendTransientSegment(idx_t start_row) {
 }
 
 void ColumnData::AppendUpdateSegment(idx_t start_row) {
-	auto new_segment = make_unique<UpdateSegment>(*this, start_row, UpdateSegment::MORSEL_SIZE);
+	auto new_segment = make_unique<UpdateSegment>(*this, start_row, 0);
 	updates.AppendSegment(move(new_segment));
 }
 

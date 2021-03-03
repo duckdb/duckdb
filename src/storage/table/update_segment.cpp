@@ -18,6 +18,38 @@ static UpdateSegment::merge_update_function_t GetMergeUpdateFunction(PhysicalTyp
 static UpdateSegment::rollback_update_function_t GetRollbackUpdateFunction(PhysicalType type);
 static UpdateSegment::statistics_update_function_t GetStatisticsUpdateFunction(PhysicalType type);
 
+Value UpdateInfo::GetValue(idx_t index) {
+	auto &type = segment->column_data.type;
+
+	ValidityMask mask(validity);
+	if (!mask.RowIsValid(index)) {
+		// null
+		return Value(type);
+	}
+	switch(type.id()) {
+	case LogicalTypeId::INTEGER:
+		return Value::INTEGER(((int32_t *) tuple_data)[index]);
+	default:
+		throw NotImplementedException("Unimplemented type for UpdateInfo::GetValue");
+	}
+}
+
+void UpdateInfo::Print() {
+	Printer::Print(ToString());
+}
+
+string UpdateInfo::ToString() {
+	auto &type = segment->column_data.type;
+	string result = "Update Info [" + type.ToString() + ", Count: " + to_string(N) + ", Transaction Id: " +  to_string(version_number) + "]\n";
+	for(idx_t i = 0; i < N; i++) {
+		result += to_string(tuples[i]) + ": " + GetValue(i).ToString() + "\n";
+	}
+	if (next) {
+		result += "\nChild Segment: " + next->ToString();
+	}
+	return result;
+}
+
 UpdateSegment::UpdateSegment(ColumnData &column_data, idx_t start, idx_t count) :
     SegmentBase(start, count), column_data(column_data), stats(column_data.type, GetTypeIdSize(column_data.type.InternalType())) {
 	auto physical_type = column_data.type.InternalType();
@@ -46,7 +78,7 @@ static void UpdateMergeFetch(transaction_t start_time, transaction_t transaction
 		auto info_data = (T *)current->tuple_data;
 		for (idx_t i = 0; i < current->N; i++) {
 			result_data[current->tuples[i]] = info_data[i];
-			result_mask.Set(current->tuples[i], current_mask.RowIsValidUnsafe(current->tuples[i]));
+			result_mask.Set(current->tuples[i], current_mask.RowIsValidUnsafe(i));
 		}
 	});
 }
@@ -116,7 +148,7 @@ static void RollbackUpdate(UpdateInfo *base_info, UpdateInfo *rollback_info) {
 			D_ASSERT(base_offset < base_info->N);
 		}
 		base_data[base_offset] = rollback_data[i];
-		base_mask.Set(base_offset, rollback_mask.RowIsValid(i));
+		base_mask.Set(base_offset, rollback_mask.RowIsValidUnsafe(i));
 	}
 }
 
@@ -256,16 +288,36 @@ static void InitializeUpdateDataNoNull(T *__restrict tuple_data, T *__restrict n
 }
 
 template <class T>
-static void InitializeUpdateData(SegmentStatistics &stats, UpdateInfo *info, Vector &update) {
+static void InitializeUpdateData(SegmentStatistics &stats, UpdateInfo *base_info, Vector &base_data, UpdateInfo *update_info, Vector &update) {
 	auto update_data = FlatVector::GetData<T>(update);
 	auto &update_mask = FlatVector::Validity(update);
-	auto tuple_data = (T *)info->tuple_data;
+	auto tuple_data = (T *)update_info->tuple_data;
 
 	if (!update_mask.AllValid()) {
-		ValidityMask info_mask(info->validity);
-		InitializeUpdateDataNull(tuple_data, update_data, info_mask, update_mask, info->N, stats);
+		ValidityMask info_mask(update_info->validity);
+		for (idx_t i = 0; i < update_info->N; i++) {
+			tuple_data[i] = update_data[i];
+			info_mask.Set(i, update_mask.RowIsValidUnsafe(i));
+		}
 	} else {
-		InitializeUpdateDataNoNull(tuple_data, update_data, info->N, stats);
+		for (idx_t i = 0; i < update_info->N; i++) {
+			tuple_data[i] = update_data[i];
+		}
+	}
+
+	auto base_array_data = FlatVector::GetData<T>(base_data);
+	auto &base_mask = FlatVector::Validity(base_data);
+	auto base_tuple_data = (T *)base_info->tuple_data;
+	ValidityMask base_tuple_mask(base_info->validity);
+	if (!base_mask.AllValid()) {
+		for(idx_t i = 0; i < base_info->N; i++) {
+			base_tuple_data[i] = base_array_data[base_info->tuples[i]];
+			base_tuple_mask.Set(i, base_mask.RowIsValidUnsafe(base_info->tuples[i]));
+		}
+	} else {
+		for(idx_t i = 0; i < base_info->N; i++) {
+			base_tuple_data[i] = base_array_data[base_info->tuples[i]];
+		}
 	}
 }
 
@@ -340,18 +392,22 @@ static idx_t merge_loop(row_t a[], sel_t b[], idx_t acount, idx_t bcount, idx_t 
 	return count;
 }
 
+void UpdateInfo::Verify() {
+#ifdef DEBUG
+	for(idx_t i = 1; i < N; i++) {
+		D_ASSERT(tuples[i] > tuples[i - 1] && tuples[i] < STANDARD_VECTOR_SIZE);
+	}
+#endif
+
+}
+
 template <class T>
 static void MergeUpdateLoop(SegmentStatistics &stats, UpdateInfo *base_info, Vector &base_data, UpdateInfo *update_info, Vector &update, row_t *ids, idx_t count) {
+	auto base_id = base_info->segment->start + base_info->vector_index * STANDARD_VECTOR_SIZE;
 #ifdef DEBUG
 	// all of these should be sorted, otherwise the below algorithm does not work
 	for(idx_t i = 1; i < count; i++) {
-		D_ASSERT(ids[i] > ids[i - 1] && ids[i] < STANDARD_VECTOR_SIZE);
-	}
-	for(idx_t i = 1; i < base_info->N; i++) {
-		D_ASSERT(base_info->tuples[i] > base_info->tuples[i - 1] && base_info->tuples[i] < STANDARD_VECTOR_SIZE);
-	}
-	for(idx_t i = 1; i < update_info->N; i++) {
-		D_ASSERT(update_info->tuples[i] > update_info->tuples[i - 1] && update_info->tuples[i] < STANDARD_VECTOR_SIZE);
+		D_ASSERT(ids[i] > ids[i - 1] && ids[i] >= row_t(base_id) && ids[i] < row_t(base_id + STANDARD_VECTOR_SIZE));
 	}
 #endif
 
@@ -386,7 +442,7 @@ static void MergeUpdateLoop(SegmentStatistics &stats, UpdateInfo *base_info, Vec
 	idx_t result_offset = 0;
 	for(idx_t i = 0; i < count; i++) {
 		// we have to merge the info for "ids[i]"
-		auto update_id = ids[i];
+		auto update_id = ids[i] - base_id;
 
 		while(update_info_offset < update_info->N && update_info->tuples[update_info_offset] < update_id) {
 			// old id comes before the current id: write it
@@ -397,8 +453,12 @@ static void MergeUpdateLoop(SegmentStatistics &stats, UpdateInfo *base_info, Vec
 		}
 		// write the new id
 		if (update_info_offset < update_info->N && update_info->tuples[update_info_offset] == update_id) {
-			// we have an id that is equivalent in the current update info: overwrite it
+			// we have an id that is equivalent in the current update info: write the update info
+			result_values[result_offset] = update_info_data[update_info_offset];
+			result_mask.Set(result_offset, update_info_mask.RowIsValidUnsafe(update_info_offset));
+			result_ids[result_offset++] = update_info->tuples[update_info_offset];
 			update_info_offset++;
+			continue;
 		}
 
 		/// now check if we have the current update_id in the base_info, or if we should fetch it from the base data
@@ -407,13 +467,12 @@ static void MergeUpdateLoop(SegmentStatistics &stats, UpdateInfo *base_info, Vec
 		}
 		if (base_info_offset < base_info->N && base_info->tuples[base_info_offset] == update_id) {
 			// it is! we have to move the tuple from base_info->ids[base_info_offset] to update_info
-			auto id = base_info->tuples[base_info_offset];
-			result_values[result_offset] = base_info_data[id];
-			result_mask.Set(result_offset, base_info_mask.RowIsValidUnsafe(id));
+			result_values[result_offset] = base_info_data[base_info_offset];
+			result_mask.Set(result_offset, base_info_mask.RowIsValidUnsafe(base_info_offset));
 		} else {
 			// it is not! we have to move base_table_data[update_id] to update_info
 			result_values[result_offset] = base_table_data[update_id];
-			result_mask.Set(result_offset, base_table_mask.RowIsValidUnsafe(update_id));
+			result_mask.Set(result_offset, base_table_mask.RowIsValid(update_id));
 		}
 		result_ids[result_offset++] = update_id;
 	}
@@ -425,15 +484,16 @@ static void MergeUpdateLoop(SegmentStatistics &stats, UpdateInfo *base_info, Vec
 		update_info_offset++;
 	}
 	// now copy them back
+	update_info->N = result_offset;
 	memcpy(update_info_data, result_values, result_offset * sizeof(T));
-	memcpy(update_info->validity, result_validity, result_offset * sizeof(sel_t));
+	memcpy(update_info->validity, result_validity, ValidityMask::STANDARD_ENTRY_COUNT * sizeof(validity_t));
 	memcpy(update_info->tuples, result_ids, result_offset * sizeof(sel_t));
 
 	// now we merge the new values into the base_info
 	result_offset = 0;
 	auto pick_new = [&](idx_t id, idx_t aidx, idx_t count) {
 		result_values[result_offset] = update_vector_data[aidx];
-		result_mask.Set(result_offset, update_vector_mask.RowIsValidUnsafe(aidx));
+		result_mask.Set(result_offset, update_vector_mask.RowIsValid(aidx));
 		result_ids[result_offset] = id;
 		result_offset++;
 	};
@@ -447,10 +507,11 @@ static void MergeUpdateLoop(SegmentStatistics &stats, UpdateInfo *base_info, Vec
 	auto merge = [&](idx_t id, idx_t aidx, idx_t bidx, idx_t count) {
 		pick_new(id, aidx, count);
 	};
-	merge_loop(ids, base_info->tuples, count, base_info->N, 0, merge, pick_new, pick_old);
+	merge_loop(ids, base_info->tuples, count, base_info->N, base_id, merge, pick_new, pick_old);
 
+	base_info->N = result_offset;
 	memcpy(base_info_data, result_values, result_offset * sizeof(T));
-	memcpy(base_info->validity, result_validity, result_offset * sizeof(sel_t));
+	memcpy(base_info->validity, result_validity, ValidityMask::STANDARD_ENTRY_COUNT * sizeof(validity_t));
 	memcpy(base_info->tuples, result_ids, result_offset * sizeof(sel_t));
 }
 
@@ -522,7 +583,9 @@ void UpdateStringStatistics(UpdateSegment *segment, SegmentStatistics &stats, Ve
 		for (idx_t i = 0; i < count; i++) {
 			if (mask.RowIsValid(i)) {
 				((StringStatistics &) *stats.statistics).Update(update_data[i]);
-				update_data[i] = segment->GetStringHeap().AddString(update_data[i]);
+				if (!update_data[i].IsInlined()) {
+					update_data[i] = segment->GetStringHeap().AddString(update_data[i]);
+				}
 			} else {
 				stats.statistics->has_null = true;
 			}
@@ -571,6 +634,9 @@ void UpdateSegment::Update(Transaction &transaction, Vector &update, row_t *ids,
 	// obtain an exclusive lock
 	auto write_lock = lock.GetExclusiveLock();
 
+	// update statistics
+	statistics_update_function(this, stats, update, count);
+
 #ifdef DEBUG
 	// verify that the ids are sorted and there are no duplicates
 	for (idx_t i = 1; i < count; i++) {
@@ -609,27 +675,35 @@ void UpdateSegment::Update(Transaction &transaction, Vector &update, row_t *ids,
 				// it has! use this node
 				break;
 			}
+			node = node->next;
 		}
 		if (!node) {
 			// no updates made yet by this transaction: initially the update info to empty
 			node = transaction.CreateUpdateInfo(type_size, count);
-			InitializeUpdateInfo(*node, ids, count, vector_index, vector_offset);
+			node->segment = this;
+			node->vector_index = vector_index;
+			node->N = 0;
 
 			// insert the new node into the chain
 			node->next = base_info->next;
 			node->prev = base_info;
 			base_info->next = node;
 		}
+		base_info->Verify();
+		node->Verify();
 
 		// now we are going to perform the merge
 		merge_update_function(stats, base_info, base_data, node, update, ids, count);
+
+		base_info->Verify();
+		node->Verify();
 	} else {
 		// there is no version info yet: create the top level update info and fill it with the updates
 		auto result = make_unique<UpdateNodeData>();
 
 		result->info = make_unique<UpdateInfo>();
-		result->tuples = unique_ptr<sel_t[]>(new sel_t[count]);
-		result->tuple_data = unique_ptr<data_t[]>(new data_t[count * type_size]);
+		result->tuples = unique_ptr<sel_t[]>(new sel_t[STANDARD_VECTOR_SIZE]);
+		result->tuple_data = unique_ptr<data_t[]>(new data_t[STANDARD_VECTOR_SIZE * type_size]);
 		result->info->tuples = result->tuples.get();
 		result->info->tuple_data = result->tuple_data.get();
 		result->info->version_number = TRANSACTION_ID_START - 1;
@@ -642,13 +716,15 @@ void UpdateSegment::Update(Transaction &transaction, Vector &update, row_t *ids,
 		InitializeUpdateInfo(*transaction_node, ids, count, vector_index, vector_offset);
 
 		// we write the updates in the
-		initialize_update_function(stats, result->info.get(), update);
-		initialize_update_function(stats, transaction_node, base_data);
+		initialize_update_function(stats, transaction_node, base_data, result->info.get(), update);
 
 		result->info->next = transaction_node;
 		result->info->prev = nullptr;
 		transaction_node->next = nullptr;
 		transaction_node->prev = result->info.get();
+
+		transaction_node->Verify();
+		result->info->Verify();
 
 		root->info[vector_index] = move(result);
 	}
