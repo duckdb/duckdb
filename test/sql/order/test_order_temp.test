@@ -5,13 +5,35 @@
 statement ok
 PRAGMA threads=1
 
+#statement ok
+#PRAGMA memory_limit='10GB'
+
+#statement ok
+#CREATE TABLE test (i int)
+#
+#statement ok
+#INSERT INTO test VALUES (3), (1), (2)
+
 statement ok
-CREATE TABLE test AS (SELECT range r, random() rand FROM range(10000000))
+CREATE TABLE test (i bool)
+
+statement ok
+INSERT INTO test VALUES (1), (0), (1)
 
 query T
-SELECT count(*) FROM (SELECT * FROM test ORDER BY rand) sq
+SELECT * FROM test ORDER BY i
 ----
-10000000
+1
+2
+3
+
+#statement ok
+#CREATE TABLE test AS (SELECT range r, random() rand FROM range(10000000))
+#
+#query T
+#SELECT count(*) FROM (SELECT * FROM test ORDER BY rand) sq
+#----
+#10000000
 
 #statement ok
 #CREATE TABLE test (s VARCHAR)

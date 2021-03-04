@@ -16,8 +16,6 @@
 
 namespace duckdb {
 
-struct ContinuousBlock;
-
 //! Represents a physical ordering of the data. Note that this will not change
 //! the data but only add a selection vector.
 class PhysicalOrder : public PhysicalSink {
@@ -28,15 +26,9 @@ public:
 	vector<BoundOrderByNode> orders;
 
 public:
-	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_p,
+	void Sink(ExecutionContext &context, GlobalOperatorState &gstate_p, LocalSinkState &lstate_p,
 	          DataChunk &input) override;
-	void Combine(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_p) override;
-	void Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> state) override;
-
-	static void ScheduleMergeTasks(Pipeline &pipeline, ClientContext &context, GlobalOperatorState &state);
-	static void ScheduleMergePathTasks(Pipeline &pipeline, ClientContext &context, GlobalOperatorState &state);
-
-	void SortInMemory(Pipeline &pipeline, ClientContext &context, GlobalOperatorState &state);
+	void Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> gstate_p) override;
 
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) override;
 	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;
