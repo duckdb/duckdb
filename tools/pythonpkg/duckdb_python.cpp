@@ -171,7 +171,7 @@ struct StringConvert {
 	}
 #else
 	template <class DUCKDB_T, class NUMPY_T>
-	static PyObject *convert_value(string_t val) {
+	static PyObject *ConvertValue(string_t val) {
 		return py::str(val.GetString()).release().ptr();
 	}
 #endif
@@ -1034,7 +1034,7 @@ struct PandasScanFunction : public TableFunction {
 					auto size = PyString_GET_SIZE(val);
 					// string object: directly pass the data
 					if (Utf8Proc::Analyze(dataptr, size) == UnicodeType::INVALID) {
-						throw runtime_error("String does contains invalid UTF8! Please encode as UTF8 first");
+						throw std::runtime_error("String does contains invalid UTF8! Please encode as UTF8 first");
 					}
 					tgt_ptr[row] = string_t(dataptr, uint32_t(size));
 				} else if (PyUnicode_CheckExact(val)) {
