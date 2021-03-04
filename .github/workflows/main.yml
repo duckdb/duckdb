@@ -75,7 +75,7 @@ jobs:
         fetch-depth: 0
 
     - name: Install
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-tidy
+      run: sudo apt-get update -y -qq && sudo apt-get install python-pybind11 && sudo apt-get install -y -qq ninja-build clang-tidy
 
     - name: Tidy Check
       run: make tidy-check
