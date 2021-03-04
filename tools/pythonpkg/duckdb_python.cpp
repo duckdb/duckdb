@@ -1465,7 +1465,7 @@ struct DuckDBPyConnection {
 	unique_ptr<DuckDBPyRelation> FromDF(py::object value) {
 		if (!connection) {
 			throw std::runtime_error("connection closed");
-		};
+		}
 		string name = "df_" + random_string::Generate();
 		registered_dfs[name] = value;
 		vector<Value> params;
@@ -1476,7 +1476,7 @@ struct DuckDBPyConnection {
 	unique_ptr<DuckDBPyRelation> FromCsvAuto(const string &filename) {
 		if (!connection) {
 			throw std::runtime_error("connection closed");
-		};
+		}
 		vector<Value> params;
 		params.emplace_back(filename);
 		return make_unique<DuckDBPyRelation>(connection->TableFunction("read_csv_auto", params)->Alias(filename));
@@ -1485,7 +1485,7 @@ struct DuckDBPyConnection {
 	unique_ptr<DuckDBPyRelation> FromParquet(const string &filename) {
 		if (!connection) {
 			throw std::runtime_error("connection closed");
-		};
+		}
 		vector<Value> params;
 		params.emplace_back(filename);
 		return make_unique<DuckDBPyRelation>(connection->TableFunction("parquet_scan", params)->Alias(filename));
