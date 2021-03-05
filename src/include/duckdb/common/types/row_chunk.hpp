@@ -61,8 +61,7 @@ public:
 
 public:
 	void SerializeVectorSortable(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count,
-	                             data_ptr_t key_locations[], bool has_null, bool invert);
-	static void SerializeIndices(data_ptr_t key_locations[], idx_t start, idx_t added_count);
+	                             data_ptr_t key_locations[], bool desc, bool has_null, bool invert);
 
 	void SerializeVectorData(VectorData &vdata, PhysicalType type, const SelectionVector &sel, idx_t ser_count,
 	                         idx_t col_idx, data_ptr_t key_locations[], data_ptr_t validitymask_locations[]);
@@ -70,7 +69,7 @@ public:
 	                     data_ptr_t key_locations[], data_ptr_t validitymask_locations[]);
 	idx_t AppendToBlock(RowDataBlock &block, BufferHandle &handle, vector<BlockAppendEntry> &append_entries,
 	                    idx_t remaining);
-	idx_t Build(idx_t added_count, data_ptr_t key_locations[]);
+	void Build(idx_t added_count, data_ptr_t key_locations[]);
 
 	static void DeserializeIntoVectorData(Vector &v, PhysicalType type, idx_t vcount, idx_t col_idx,
 	                                      data_ptr_t key_locations[], data_ptr_t validitymask_locations[]);
@@ -86,36 +85,36 @@ private:
 
 	template <class T>
 	void TemplatedSerializeVectorSortable(VectorData &vdata, const SelectionVector &sel, idx_t count,
-	                                      data_ptr_t key_locations[], bool has_null, bool invert);
+	                                      data_ptr_t key_locations[], bool desc, bool has_null, bool invert);
 };
 
 template <>
-void RowChunk::EncodeData(data_t *data, bool value);
+void RowChunk::EncodeData(data_ptr_t dataptr, bool value);
 template <>
-void RowChunk::EncodeData(data_t *data, int8_t value);
+void RowChunk::EncodeData(data_ptr_t dataptr, int8_t value);
 template <>
-void RowChunk::EncodeData(data_t *data, int16_t value);
+void RowChunk::EncodeData(data_ptr_t dataptr, int16_t value);
 template <>
-void RowChunk::EncodeData(data_t *data, int32_t value);
+void RowChunk::EncodeData(data_ptr_t dataptr, int32_t value);
 template <>
-void RowChunk::EncodeData(data_t *data, int64_t value);
+void RowChunk::EncodeData(data_ptr_t dataptr, int64_t value);
 template <>
-void RowChunk::EncodeData(data_t *data, uint8_t value);
+void RowChunk::EncodeData(data_ptr_t dataptr, uint8_t value);
 template <>
-void RowChunk::EncodeData(data_t *data, uint16_t value);
+void RowChunk::EncodeData(data_ptr_t dataptr, uint16_t value);
 template <>
-void RowChunk::EncodeData(data_t *data, uint32_t value);
+void RowChunk::EncodeData(data_ptr_t dataptr, uint32_t value);
 template <>
-void RowChunk::EncodeData(data_t *data, uint64_t value);
+void RowChunk::EncodeData(data_ptr_t dataptr, uint64_t value);
 template <>
-void RowChunk::EncodeData(data_t *data, hugeint_t value);
+void RowChunk::EncodeData(data_ptr_t dataptr, hugeint_t value);
 template <>
-void RowChunk::EncodeData(data_t *data, float value);
+void RowChunk::EncodeData(data_ptr_t dataptr, float value);
 template <>
-void RowChunk::EncodeData(data_t *data, double value);
+void RowChunk::EncodeData(data_ptr_t dataptr, double value);
 template <>
-void RowChunk::EncodeData(data_t *data, string_t value);
+void RowChunk::EncodeData(data_ptr_t dataptr, string_t value);
 template <>
-void RowChunk::EncodeData(data_t *data, const char *value);
+void RowChunk::EncodeData(data_ptr_t dataptr, const char *value);
 
 } // namespace duckdb

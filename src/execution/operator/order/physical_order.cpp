@@ -1,7 +1,6 @@
 #include "duckdb/execution/operator/order/physical_order.hpp"
 
 #include "blockquicksort_wrapper.hpp"
-#include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
@@ -32,7 +31,7 @@ struct PayloadState {
 
 class OrderGlobalState : public GlobalOperatorState {
 public:
-	OrderGlobalState(BufferManager &buffer_manager) : buffer_manager(buffer_manager) {
+	explicit OrderGlobalState(BufferManager &buffer_manager) : buffer_manager(buffer_manager) {
 	}
 	//! The lock for updating the global order state
 	mutex lock;
@@ -89,7 +88,7 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 		}
 
 		// compute entry size
-		if (expr.stats && expr.stats->has_null) {
+		if (!expr.stats || expr.stats->has_null) {
 			entry_size++;
 		}
 		auto physical_type = expr.return_type.InternalType();
@@ -107,8 +106,8 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 
 	state->sorting_state =
 	    unique_ptr<SortingState>(new SortingState {entry_size, order_types, order_by_null_types, types, stats});
-	idx_t vectors_per_block = (SORTING_BLOCK_SIZE / entry_size + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE;
-	vectors_per_block = MaxValue(vectors_per_block, SORTING_BLOCK_SIZE / entry_size / STANDARD_VECTOR_SIZE);
+	idx_t vectors_per_block =
+	    (Storage::BLOCK_ALLOC_SIZE / entry_size + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE;
 	state->sorting_block = make_unique<RowChunk>(buffer_manager, vectors_per_block * STANDARD_VECTOR_SIZE, entry_size);
 
 	// init payload state and payload block
@@ -127,8 +126,7 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 		}
 	}
 	state->payload_state = unique_ptr<PayloadState>(new PayloadState {nullmask_size, entry_size});
-	vectors_per_block = (SORTING_BLOCK_SIZE / entry_size + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE;
-	vectors_per_block = MaxValue(vectors_per_block, SORTING_BLOCK_SIZE / entry_size / STANDARD_VECTOR_SIZE);
+	vectors_per_block = (Storage::BLOCK_ALLOC_SIZE / entry_size + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE;
 	state->payload_block = make_unique<RowChunk>(buffer_manager, vectors_per_block * STANDARD_VECTOR_SIZE, entry_size);
 
 	return state;
@@ -162,25 +160,19 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &gstate_
 	gstate.executor.Execute(input, sort);
 
 	// build and serialize sorting data
-	idx_t start = lstate.sorting_block->Build(sort.size(), lstate.key_locations);
+	lstate.sorting_block->Build(sort.size(), lstate.key_locations);
 	for (idx_t sort_col = 0; sort_col < sort.data.size(); sort_col++) {
-		bool has_null;
-		bool invert = false;
-		if (sorting_state.STATS[sort_col]) {
-			has_null = sorting_state.STATS[sort_col]->has_null;
-			invert = sorting_state.ORDER_BY_NULL_TYPES[sort_col] == OrderByNullType::NULLS_LAST;
-		} else {
-			has_null = false;
-		}
+		bool has_null = sorting_state.STATS[sort_col] ? sorting_state.STATS[sort_col]->has_null : true;
+		bool nulls_first = sorting_state.ORDER_BY_NULL_TYPES[sort_col] == OrderByNullType::NULLS_FIRST;
+		bool desc = sorting_state.ORDER_TYPES[sort_col] == OrderType::DESCENDING;
 		lstate.sorting_block->SerializeVectorSortable(sort.data[sort_col], sort.size(), *lstate.sel_ptr, sort.size(),
-		                                              lstate.key_locations, has_null, invert);
+		                                              lstate.key_locations, desc, has_null, nulls_first);
 	}
-	RowChunk::SerializeIndices(lstate.key_locations, start, sort.size());
 
 	// build and serialize payload data
 	gstate.payload_block->Build(input.size(), lstate.key_locations);
 	for (idx_t i = 0; i < input.size(); i++) {
-		memset(lstate.key_locations[i], 0, payload_state.NULLMASK_SIZE);
+		memset(lstate.key_locations[i], -1, payload_state.NULLMASK_SIZE);
 		lstate.validitymask_locations[i] = lstate.key_locations[i];
 		lstate.key_locations[i] += payload_state.NULLMASK_SIZE;
 	}
@@ -249,7 +241,15 @@ static void SortInMemory(Pipeline &pipeline, ClientContext &context, OrderGlobal
 	auto handle = buffer_manager.Pin(block.block);
 	auto dataptr = handle->node->buffer;
 
+	// assign an index to each row
 	const idx_t sorting_size = sorting_state.ENTRY_SIZE - sizeof(idx_t);
+	data_ptr_t idx_dataptr = dataptr + sorting_size;
+	for (idx_t i = 0; i < block.count; i++) {
+		Store<idx_t>(i, idx_dataptr);
+		idx_dataptr += sorting_state.ENTRY_SIZE;
+	}
+
+	// now sort the data
 	RadixSort(buffer_manager, dataptr, block.count, 0, sorting_size, sorting_state);
 }
 
@@ -258,6 +258,7 @@ void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 	auto &state = (OrderGlobalState &)*this->sink_state;
 	const auto &sorting_state = *state.sorting_state;
 	const auto &payload_state = *state.payload_state;
+	D_ASSERT(state.sorting_block->count == state.payload_block->count);
 
 	idx_t total_size = state.payload_block->count * payload_state.ENTRY_SIZE;
 	if (total_size > state.buffer_manager.GetMaxMemory() / 2) {
@@ -266,9 +267,9 @@ void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 
 	if (state.sorting_block->blocks.size() > 1) {
 		// copy all of the sorting data to one big block
-		idx_t capacity =
-		    MaxValue(Storage::BLOCK_ALLOC_SIZE / sorting_state.ENTRY_SIZE + 1, total_size / sorting_state.ENTRY_SIZE);
+		idx_t capacity = MaxValue(Storage::BLOCK_ALLOC_SIZE / sorting_state.ENTRY_SIZE + 1, state.sorting_block->count);
 		RowDataBlock new_block(state.buffer_manager, capacity, sorting_state.ENTRY_SIZE);
+		new_block.count = state.sorting_block->count;
 		auto new_block_handle = state.buffer_manager.Pin(new_block.block);
 		data_ptr_t new_block_ptr = new_block_handle->node->buffer;
 		for (auto &block : state.sorting_block->blocks) {
@@ -284,9 +285,9 @@ void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 
 	if (state.payload_block->blocks.size() > 1) {
 		// same for the payload data
-		idx_t capacity =
-		    MaxValue(Storage::BLOCK_ALLOC_SIZE / payload_state.ENTRY_SIZE + 1, total_size / payload_state.ENTRY_SIZE);
+		idx_t capacity = MaxValue(Storage::BLOCK_ALLOC_SIZE / payload_state.ENTRY_SIZE + 1, state.payload_block->count);
 		RowDataBlock new_block(state.buffer_manager, capacity, payload_state.ENTRY_SIZE);
+		new_block.count = state.payload_block->count;
 		auto new_block_handle = state.buffer_manager.Pin(new_block.block);
 		data_ptr_t new_block_ptr = new_block_handle->node->buffer;
 		for (auto &block : state.payload_block->blocks) {

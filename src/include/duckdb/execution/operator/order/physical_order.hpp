@@ -38,10 +38,6 @@ public:
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 
 	string ParamsToString() const override;
-
-private:
-	//! 2 << 17 (256KB)
-	const static idx_t SORTING_BLOCK_SIZE = 2097152;
 };
 
 } // namespace duckdb
