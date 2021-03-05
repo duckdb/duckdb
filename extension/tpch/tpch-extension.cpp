@@ -73,7 +73,6 @@ void TPCHExtension::Load(DuckDB &db) {
 
 	// create the dbgen function
 	auto &catalog = Catalog::GetCatalog(*con.context);
-	;
 	catalog.CreateTableFunction(*con.context, &dbgen_info);
 
 	// create the TPCH pragma that allows us to run the query

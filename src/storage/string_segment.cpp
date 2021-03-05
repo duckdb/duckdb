@@ -222,6 +222,7 @@ void StringSegment::FetchStringLocations(data_ptr_t baseptr, row_t *ids, idx_t v
 }
 
 string_location_t StringSegment::FetchStringLocation(data_ptr_t baseptr, int32_t dict_offset) {
+	D_ASSERT(dict_offset >= 0 && dict_offset <= Storage::BLOCK_ALLOC_SIZE);
 	if (dict_offset == 0) {
 		return string_location_t(INVALID_BLOCK, 0);
 	}

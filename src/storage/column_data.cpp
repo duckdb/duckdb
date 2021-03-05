@@ -90,7 +90,9 @@ void ColumnData::FilterScan(Transaction &transaction, ColumnScanState &state, Ve
 	if (!state.updates->HasUpdates()) {
 		state.current->FilterScan(state, result, sel, approved_tuple_count);
 	} else {
-		Scan(transaction, state, result);
+		state.current->Scan(state, state.vector_index, result);
+		state.updates->FetchUpdates(transaction, state.vector_index_updates, result);
+
 		result.Slice(sel, approved_tuple_count);
 	}
 	// move over to the next vector
@@ -98,18 +100,24 @@ void ColumnData::FilterScan(Transaction &transaction, ColumnScanState &state, Ve
 }
 
 void ColumnData::Select(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
-                        idx_t &approved_tuple_count, vector<TableFilter> &table_filters) {
+                        idx_t &approved_tuple_count, vector<TableFilter> &table_filters, idx_t max_count) {
 	if (!state.initialized) {
 		state.current->InitializeScan(state);
 		state.initialized = true;
 	}
+	D_ASSERT(state.vector_index * STANDARD_VECTOR_SIZE + max_count <= state.current->count);
+
 	if (!state.updates->HasUpdates()) {
 		// no updates: filter in the scan
 		state.current->Select(state, result, sel, approved_tuple_count, table_filters);
 	} else {
 		// updates: first scan the full vector (including merged updates)
 		// and then apply the filter
-		Scan(transaction, state, result);
+		state.current->Scan(state, state.vector_index, result);
+
+		// merge the updates into the result
+		state.updates->FetchUpdates(transaction, state.vector_index_updates, result);
+
 
 		for (auto &filter : table_filters) {
 			SelectionVector new_sel(STANDARD_VECTOR_SIZE);
