@@ -18,12 +18,13 @@ namespace duckdb {
 
 struct RowDataBlock {
 	RowDataBlock(BufferManager &buffer_manager, const idx_t &capacity, const idx_t &entry_size)
-	    : CAPACITY(capacity), count(0) {
+	    : CAPACITY(capacity), count(0), byte_offset(0) {
 		block = buffer_manager.RegisterMemory(capacity * entry_size, false);
 	}
 	shared_ptr<BlockHandle> block;
 	const idx_t CAPACITY;
 	idx_t count;
+	idx_t byte_offset;
 };
 
 struct BlockAppendEntry {
@@ -47,7 +48,7 @@ public:
 	idx_t count;
 	//! The number of entries per block
 	idx_t block_capacity;
-	//! Size of entries in the blocks (0 if variable length)
+	//! Size of entries in the blocks
 	idx_t entry_size;
 	//! The blocks holding the main data
 	vector<RowDataBlock> blocks;
@@ -68,14 +69,13 @@ public:
 	void SerializeVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count, idx_t col_idx,
 	                     data_ptr_t key_locations[], data_ptr_t validitymask_locations[]);
 	idx_t AppendToBlock(RowDataBlock &block, BufferHandle &handle, vector<BlockAppendEntry> &append_entries,
-	                    idx_t remaining);
-	void Build(idx_t added_count, data_ptr_t key_locations[]);
+	                    idx_t remaining, idx_t entry_sizes[]);
+	void Build(idx_t added_count, data_ptr_t key_locations[], idx_t entry_sizes[]);
 
 	static void DeserializeIntoVectorData(Vector &v, PhysicalType type, idx_t vcount, idx_t col_idx,
 	                                      data_ptr_t key_locations[], data_ptr_t validitymask_locations[]);
 	static void DeserializeIntoVector(Vector &v, const idx_t &vcount, const idx_t &col_idx, data_ptr_t key_locations[],
 	                                  data_ptr_t validitymask_locations[]);
-	static void SkipOverType(PhysicalType &type, idx_t &vcount, data_ptr_t key_locations[]);
 
 private:
 	template <class T>

@@ -381,15 +381,29 @@ void RowChunk::SerializeVector(Vector &v, idx_t vcount, const SelectionVector &s
 }
 
 idx_t RowChunk::AppendToBlock(RowDataBlock &block, BufferHandle &handle, vector<BlockAppendEntry> &append_entries,
-                              idx_t remaining) {
-	idx_t append_count = MinValue<idx_t>(remaining, block.CAPACITY - block.count);
-	auto dataptr = handle.node->buffer + block.count * entry_size;
-	append_entries.emplace_back(dataptr, append_count);
-	block.count += append_count;
+                              idx_t remaining, idx_t entry_sizes[]) {
+	idx_t append_count = 0;
+	data_ptr_t dataptr;
+	if (entry_sizes) {
+		// compute how many entries fit if entry size if variable
+        dataptr = handle.node->buffer + block.byte_offset;
+        for (idx_t i = 0; i < remaining; i++) {
+			if (block.byte_offset + entry_sizes[i] > block_capacity) {
+				break;
+			}
+			append_count++;
+			block.byte_offset += entry_sizes[i];
+		}
+	} else {
+		append_count = MinValue<idx_t>(remaining, block.CAPACITY - block.count);
+		dataptr = handle.node->buffer + block.count * entry_size;
+	}
+    append_entries.emplace_back(dataptr, append_count);
+    block.count += append_count;
 	return append_count;
 }
 
-void RowChunk::Build(idx_t added_count, data_ptr_t key_locations[]) {
+void RowChunk::Build(idx_t added_count, data_ptr_t key_locations[], idx_t entry_sizes[]) {
 	vector<unique_ptr<BufferHandle>> handles;
 	vector<BlockAppendEntry> append_entries;
 
@@ -405,7 +419,7 @@ void RowChunk::Build(idx_t added_count, data_ptr_t key_locations[]) {
 				// last block has space: pin the buffer of this block
 				auto handle = buffer_manager.Pin(last_block.block);
 				// now append to the block
-				idx_t append_count = AppendToBlock(last_block, *handle, append_entries, remaining);
+				idx_t append_count = AppendToBlock(last_block, *handle, append_entries, remaining, entry_sizes);
 				remaining -= append_count;
 				handles.push_back(move(handle));
 			}
@@ -415,7 +429,7 @@ void RowChunk::Build(idx_t added_count, data_ptr_t key_locations[]) {
 			RowDataBlock new_block(buffer_manager, block_capacity, entry_size);
 			auto handle = buffer_manager.Pin(new_block.block);
 
-			idx_t append_count = AppendToBlock(new_block, *handle, append_entries, remaining);
+			idx_t append_count = AppendToBlock(new_block, *handle, append_entries, remaining, entry_sizes);
 			remaining -= append_count;
 
 			blocks.push_back(move(new_block));
@@ -426,9 +440,16 @@ void RowChunk::Build(idx_t added_count, data_ptr_t key_locations[]) {
 	idx_t append_idx = 0;
 	for (auto &append_entry : append_entries) {
 		idx_t next = append_idx + append_entry.count;
-		for (; append_idx < next; append_idx++) {
-			key_locations[append_idx] = append_entry.baseptr;
-			append_entry.baseptr += entry_size;
+		if (entry_sizes) {
+            for (; append_idx < next; append_idx++) {
+                key_locations[append_idx] = append_entry.baseptr;
+                append_entry.baseptr += entry_sizes[append_idx];
+            }
+		} else {
+			for (; append_idx < next; append_idx++) {
+				key_locations[append_idx] = append_entry.baseptr;
+				append_entry.baseptr += entry_size;
+			}
 		}
 	}
 }
@@ -516,26 +537,6 @@ void RowChunk::DeserializeIntoVectorData(Vector &v, PhysicalType type, idx_t vco
 void RowChunk::DeserializeIntoVector(Vector &v, const idx_t &vcount, const idx_t &col_idx, data_ptr_t key_locations[],
                                      data_ptr_t validitymask_locations[]) {
 	DeserializeIntoVectorData(v, v.GetType().InternalType(), vcount, col_idx, key_locations, validitymask_locations);
-}
-
-void RowChunk::SkipOverType(PhysicalType &type, idx_t &vcount, data_ptr_t key_locations[]) {
-	if (TypeIsConstantSize(type)) {
-		const idx_t size = GetTypeIdSize(type);
-		for (idx_t i = 0; i < vcount; i++) {
-			key_locations[i] += size;
-		}
-	} else {
-		switch (type) {
-		case PhysicalType::VARCHAR: {
-			for (idx_t i = 0; i < vcount; i++) {
-				key_locations[i] += string_t::PREFIX_LENGTH + Load<uint32_t>(key_locations[i]);
-			}
-			break;
-		}
-		default:
-			throw NotImplementedException("FIXME: unimplemented SkipOverType");
-		}
-	}
 }
 
 } // namespace duckdb
