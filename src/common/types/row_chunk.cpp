@@ -30,6 +30,11 @@ RowChunk::RowChunk(BufferManager &buffer_manager, idx_t block_capacity, idx_t en
 	}
 }
 
+RowChunk::RowChunk(RowChunk &other)
+    : buffer_manager(other.buffer_manager), count(0), block_capacity(other.block_capacity),
+      entry_size(other.entry_size), is_little_endian(other.is_little_endian) {
+}
+
 static uint8_t FlipSign(uint8_t key_byte) {
 	return key_byte ^ 128;
 }
@@ -248,7 +253,7 @@ void RowChunk::SerializeVectorSortable(Vector &v, idx_t vcount, const SelectionV
 }
 
 void RowChunk::SerializeIndices(data_ptr_t key_locations[], idx_t start, idx_t added_count) {
-    for (idx_t i = 0; i < added_count; i++) {
+	for (idx_t i = 0; i < added_count; i++) {
 		Store(start + i, key_locations[i]);
 	}
 }

@@ -28,6 +28,7 @@ public:
 public:
 	void Sink(ExecutionContext &context, GlobalOperatorState &gstate_p, LocalSinkState &lstate_p,
 	          DataChunk &input) override;
+	void Combine(ExecutionContext &context, GlobalOperatorState &gstate_p, LocalSinkState &lstate_p) override;
 	void Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> gstate_p) override;
 
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) override;

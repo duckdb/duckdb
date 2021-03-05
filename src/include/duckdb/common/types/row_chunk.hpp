@@ -37,6 +37,8 @@ class RowChunk {
 public:
 	RowChunk(BufferManager &buffer_manager, idx_t block_capacity, idx_t entry_size);
 
+	RowChunk(RowChunk &other);
+
 	std::mutex rc_lock;
 
 	//! BufferManager
@@ -60,18 +62,18 @@ public:
 public:
 	void SerializeVectorSortable(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count,
 	                             data_ptr_t key_locations[], bool has_null, bool invert);
-    static void SerializeIndices(data_ptr_t key_locations[], idx_t start, idx_t added_count);
+	static void SerializeIndices(data_ptr_t key_locations[], idx_t start, idx_t added_count);
 
 	void SerializeVectorData(VectorData &vdata, PhysicalType type, const SelectionVector &sel, idx_t ser_count,
-	                         idx_t col_idx, data_ptr_t key_locations[], data_ptr_t nullmask_locations[]);
+	                         idx_t col_idx, data_ptr_t key_locations[], data_ptr_t validitymask_locations[]);
 	void SerializeVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count, idx_t col_idx,
-	                     data_ptr_t key_locations[], data_ptr_t nullmask_locations[]);
+	                     data_ptr_t key_locations[], data_ptr_t validitymask_locations[]);
 	idx_t AppendToBlock(RowDataBlock &block, BufferHandle &handle, vector<BlockAppendEntry> &append_entries,
 	                    idx_t remaining);
 	idx_t Build(idx_t added_count, data_ptr_t key_locations[]);
 
 	static void DeserializeIntoVectorData(Vector &v, PhysicalType type, idx_t vcount, idx_t col_idx,
-	                                      data_ptr_t key_locations[], data_ptr_t nullmask_locations[]);
+	                                      data_ptr_t key_locations[], data_ptr_t validitymask_locations[]);
 	static void DeserializeIntoVector(Vector &v, const idx_t &vcount, const idx_t &col_idx, data_ptr_t key_locations[],
 	                                  data_ptr_t validitymask_locations[]);
 	static void SkipOverType(PhysicalType &type, idx_t &vcount, data_ptr_t key_locations[]);

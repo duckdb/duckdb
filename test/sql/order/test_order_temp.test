@@ -8,17 +8,11 @@ PRAGMA threads=1
 #statement ok
 #PRAGMA memory_limit='10GB'
 
-#statement ok
-#CREATE TABLE test (i int)
-#
-#statement ok
-#INSERT INTO test VALUES (3), (1), (2)
+statement ok
+CREATE TABLE test (i int)
 
 statement ok
-CREATE TABLE test (i bool)
-
-statement ok
-INSERT INTO test VALUES (1), (0), (1)
+INSERT INTO test VALUES (3), (1), (2)
 
 query T
 SELECT * FROM test ORDER BY i
