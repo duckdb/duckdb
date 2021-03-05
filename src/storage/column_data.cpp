@@ -100,12 +100,11 @@ void ColumnData::FilterScan(Transaction &transaction, ColumnScanState &state, Ve
 }
 
 void ColumnData::Select(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
-                        idx_t &approved_tuple_count, vector<TableFilter> &table_filters, idx_t max_count) {
+                        idx_t &approved_tuple_count, vector<TableFilter> &table_filters) {
 	if (!state.initialized) {
 		state.current->InitializeScan(state);
 		state.initialized = true;
 	}
-	D_ASSERT(state.vector_index * STANDARD_VECTOR_SIZE + max_count <= state.current->count);
 
 	if (!state.updates->HasUpdates()) {
 		// no updates: filter in the scan
@@ -204,12 +203,19 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 	}
 	auto segment = (ColumnSegment *)data.GetLastSegment();
 	if (segment->segment_type == ColumnSegmentType::PERSISTENT) {
-		// cannot append to persistent segment
-		// append a new transient segment
-		AppendTransientSegment(persistent_rows);
-		segment = (ColumnSegment *)data.GetLastSegment();
+		// cannot append to persistent segment, convert the last segment into a transient segment
+		auto transient = make_unique<TransientSegment>((PersistentSegment &)*segment);
+		state.current = (TransientSegment *)transient.get();
+		data.nodes.back().node = (SegmentBase *)transient.get();
+		if (data.root_node.get() == segment) {
+			data.root_node = move(transient);
+		} else {
+			D_ASSERT(data.nodes.size() >= 2);
+			data.nodes[data.nodes.size() - 2].node->next = move(transient);
+		}
+	} else {
+		state.current = (TransientSegment *)segment;
 	}
-	state.current = (TransientSegment *)segment;
 	state.updates = (UpdateSegment *) updates.nodes.back().node;
 	D_ASSERT(state.current->segment_type == ColumnSegmentType::TRANSIENT);
 	state.current->InitializeAppend(state);

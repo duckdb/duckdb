@@ -535,4 +535,9 @@ void StringSegment::ReadStringMarker(data_ptr_t target, block_id_t &block_id, in
 	memcpy(&offset, target, sizeof(int32_t));
 }
 
+void StringSegment::ToTemporary() {
+	ToTemporaryInternal();
+	this->max_vector_count = (this->tuple_count + (STANDARD_VECTOR_SIZE - 1)) / STANDARD_VECTOR_SIZE;
+}
+
 } // namespace duckdb

@@ -65,6 +65,7 @@ public:
 	//! full.
 	idx_t Append(SegmentStatistics &stats, Vector &data, idx_t offset, idx_t count) override;
 
+	void ToTemporary() override;
 protected:
 	void Select(ColumnScanState &state, Vector &result, SelectionVector &sel, idx_t &approved_tuple_count,
 	            vector<TableFilter> &table_filter) override;

@@ -19,6 +19,17 @@ TransientSegment::TransientSegment(DatabaseInstance &db, const LogicalType &type
 	}
 }
 
+TransientSegment::TransientSegment(PersistentSegment &segment)
+    : ColumnSegment(segment.type, ColumnSegmentType::TRANSIENT, segment.start), db(segment.db) {
+	if (segment.block_id == segment.data->block->BlockId()) {
+		segment.data->ToTemporary();
+	}
+	data = move(segment.data);
+	stats = move(segment.stats);
+	count = segment.count;
+	D_ASSERT(!segment.next);
+}
+
 void TransientSegment::InitializeScan(ColumnScanState &state) {
 	data->InitializeScan(state);
 }

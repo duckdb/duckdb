@@ -70,6 +70,11 @@ public:
 	//! full.
 	virtual idx_t Append(SegmentStatistics &stats, Vector &data, idx_t offset, idx_t count) = 0;
 
+	//! Convert a persistently backed uncompressed segment (i.e. one where block_id refers to an on-disk block) to a
+	//! temporary in-memory one
+	virtual void ToTemporary();
+	void ToTemporaryInternal();
+
 	//! Get the amount of tuples in a vector
 	idx_t GetVectorCount(idx_t vector_index) {
 		D_ASSERT(vector_index < max_vector_count);
