@@ -99,79 +99,80 @@ void RowChunk::EncodeData(data_ptr_t dataptr, bool value) {
 template <>
 void RowChunk::EncodeData(data_ptr_t dataptr, int8_t value) {
 	Store<uint8_t>(value, dataptr);
-    dataptr[0] = FlipSign(dataptr[0]);
+	dataptr[0] = FlipSign(dataptr[0]);
 }
 
 template <>
 void RowChunk::EncodeData(data_ptr_t dataptr, int16_t value) {
-    Store<uint16_t>(is_little_endian ? BSWAP16(value) : value, dataptr);
-    dataptr[0] = FlipSign(dataptr[0]);
+	Store<uint16_t>(is_little_endian ? BSWAP16(value) : value, dataptr);
+	dataptr[0] = FlipSign(dataptr[0]);
 }
 
 template <>
 void RowChunk::EncodeData(data_ptr_t dataptr, int32_t value) {
-    Store<uint32_t>(is_little_endian ? BSWAP32(value) : value, dataptr);
-    dataptr[0] = FlipSign(dataptr[0]);
+	Store<uint32_t>(is_little_endian ? BSWAP32(value) : value, dataptr);
+	dataptr[0] = FlipSign(dataptr[0]);
 }
 
 template <>
 void RowChunk::EncodeData(data_ptr_t dataptr, int64_t value) {
-    Store<uint64_t>(is_little_endian ? BSWAP64(value) : value, dataptr);
-    dataptr[0] = FlipSign(dataptr[0]);
+	Store<uint64_t>(is_little_endian ? BSWAP64(value) : value, dataptr);
+	dataptr[0] = FlipSign(dataptr[0]);
 }
 
 template <>
 void RowChunk::EncodeData(data_ptr_t dataptr, uint8_t value) {
-    Store<uint8_t>(value, dataptr);
+	Store<uint8_t>(value, dataptr);
 }
 
 template <>
 void RowChunk::EncodeData(data_ptr_t dataptr, uint16_t value) {
-    Store<uint16_t>(is_little_endian ? BSWAP16(value) : value, dataptr);
+	Store<uint16_t>(is_little_endian ? BSWAP16(value) : value, dataptr);
 }
 
 template <>
 void RowChunk::EncodeData(data_ptr_t dataptr, uint32_t value) {
-    Store<uint32_t>(is_little_endian ? BSWAP32(value) : value, dataptr);
+	Store<uint32_t>(is_little_endian ? BSWAP32(value) : value, dataptr);
 }
 
 template <>
 void RowChunk::EncodeData(data_ptr_t dataptr, uint64_t value) {
-    Store<uint64_t>(is_little_endian ? BSWAP64(value) : value, dataptr);
+	Store<uint64_t>(is_little_endian ? BSWAP64(value) : value, dataptr);
 }
 
 template <>
 void RowChunk::EncodeData(data_ptr_t dataptr, hugeint_t value) {
-    throw NotImplementedException("hugeint_t encoding not implemented");
+	throw NotImplementedException("hugeint_t encoding not implemented");
 }
 
 template <>
 void RowChunk::EncodeData(data_ptr_t dataptr, float value) {
-    uint32_t converted_value = EncodeFloat(value);
-    Store<uint32_t>(is_little_endian ? BSWAP32(converted_value) : converted_value, dataptr);
+	uint32_t converted_value = EncodeFloat(value);
+	Store<uint32_t>(is_little_endian ? BSWAP32(converted_value) : converted_value, dataptr);
 }
 
 template <>
 void RowChunk::EncodeData(data_ptr_t dataptr, double value) {
-    uint64_t converted_value = EncodeDouble(value);
-    Store<uint64_t>(is_little_endian ? BSWAP64(converted_value) : converted_value, dataptr);
+	uint64_t converted_value = EncodeDouble(value);
+	Store<uint64_t>(is_little_endian ? BSWAP64(converted_value) : converted_value, dataptr);
 }
 
 template <>
 void RowChunk::EncodeData(data_ptr_t dataptr, string_t value) {
-    idx_t len = value.GetSize() + 1;
-    memcpy(dataptr, value.GetDataUnsafe(), len - 1);
-    dataptr[len - 1] = '\0';
+	idx_t len = value.GetSize() + 1;
+	memcpy(dataptr, value.GetDataUnsafe(), len - 1);
+	dataptr[len - 1] = '\0';
 }
 
 template <>
 void RowChunk::EncodeData(data_ptr_t dataptr, const char *value) {
-    EncodeData(dataptr, string_t(value, strlen(value)));
+	EncodeData(dataptr, string_t(value, strlen(value)));
 }
 
 template <class T>
 void RowChunk::TemplatedSerializeVectorSortable(VectorData &vdata, const SelectionVector &sel, idx_t add_count,
-                                                data_ptr_t key_locations[], const bool desc, const bool has_null, const bool nulls_first) {
+                                                data_ptr_t key_locations[], const bool desc, const bool has_null,
+                                                const bool nulls_first) {
 	auto source = (T *)vdata.data;
 	if (has_null) {
 		auto &validity = vdata.validity;
@@ -184,19 +185,19 @@ void RowChunk::TemplatedSerializeVectorSortable(VectorData &vdata, const Selecti
 			// write validity and according value
 			if (validity.RowIsValid(source_idx)) {
 				key_locations[i][0] = valid;
-                key_locations[i]++;
-                EncodeData(key_locations[i], source[source_idx]);
+				key_locations[i]++;
+				EncodeData(key_locations[i], source[source_idx]);
 			} else {
-                key_locations[i][0] = invalid;
-                key_locations[i]++;
+				key_locations[i][0] = invalid;
+				key_locations[i]++;
 				memset(key_locations[i], 0, sizeof(T));
 			}
 			// invert bits if desc
-            if (desc) {
-                for (idx_t s = 0; s < sizeof(T); s++) {
-                    *(key_locations[i] + s) = ~*(key_locations[i] + s);
-                }
-            }
+			if (desc) {
+				for (idx_t s = 0; s < sizeof(T); s++) {
+					*(key_locations[i] + s) = ~*(key_locations[i] + s);
+				}
+			}
 			key_locations[i] += sizeof(T);
 		}
 	} else {
