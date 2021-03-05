@@ -328,7 +328,14 @@ void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 		return;
 	}
 
-	idx_t total_size = state.payload_block->count * payload_state.ENTRY_SIZE;
+	idx_t total_size = 0;
+	if (payload_state.HAS_VARIABLE_SIZE) {
+		for (auto &block : state.payload_block->blocks) {
+			total_size += block.byte_offset;
+		}
+	} else {
+		total_size = state.payload_block->count * payload_state.ENTRY_SIZE;
+	}
 	if (total_size > state.buffer_manager.GetMaxMemory() / 2) {
 		throw NotImplementedException("External sort");
 	}
@@ -349,8 +356,12 @@ void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 	state.sorting_block->block_capacity = s_capacity;
 	state.sorting_block->blocks.push_back(move(s_block));
 
-	// same for the payload data
-	idx_t p_capacity = MaxValue(Storage::BLOCK_ALLOC_SIZE / payload_state.ENTRY_SIZE + 1, state.payload_block->count);
+	// same for the payload data, beware of variable entry size
+	idx_t p_capacity =
+	    payload_state.HAS_VARIABLE_SIZE
+	        ? MaxValue(Storage::BLOCK_ALLOC_SIZE / payload_state.ENTRY_SIZE + 1,
+	                   total_size / payload_state.ENTRY_SIZE + 1)
+	        : MaxValue(Storage::BLOCK_ALLOC_SIZE / payload_state.ENTRY_SIZE + 1, state.payload_block->count);
 	RowDataBlock p_block(state.buffer_manager, p_capacity, payload_state.ENTRY_SIZE);
 	p_block.count = state.payload_block->count;
 	auto p_block_handle = state.buffer_manager.Pin(p_block.block);

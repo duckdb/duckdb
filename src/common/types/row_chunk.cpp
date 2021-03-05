@@ -429,7 +429,10 @@ void RowChunk::Build(idx_t added_count, data_ptr_t key_locations[], idx_t entry_
 			RowDataBlock new_block(buffer_manager, block_capacity, entry_size);
 			auto handle = buffer_manager.Pin(new_block.block);
 
-			idx_t append_count = AppendToBlock(new_block, *handle, append_entries, remaining, entry_sizes);
+			// offset the entry sizes array if we have added entries already
+			idx_t *offset_entry_sizes = entry_sizes ? entry_sizes + added_count - remaining : nullptr;
+
+			idx_t append_count = AppendToBlock(new_block, *handle, append_entries, remaining, offset_entry_sizes);
 			remaining -= append_count;
 
 			blocks.push_back(move(new_block));

@@ -8,18 +8,29 @@ PRAGMA threads=1
 #statement ok
 #PRAGMA memory_limit='10GB'
 
-statement ok
-create table test (i int, s varchar);
+#statement ok
+#create table test (i int, s varchar);
+#
+#statement ok
+#insert into test values (3, 'somereallylongstring'), (1, 'shortstring'), (2, 'shorter');
+#
+#query II
+#select * from test order by i;
+#----
+#1	shortstring
+#2	shorter
+#3	somereallylongstring
 
 statement ok
-insert into test values (3, 'somereallylongstring'), (1, 'shortstring'), (2, 'shorter');
+CREATE TABLE test AS (SELECT cast(range as varchar) r, random() rand FROM range(10000000))
 
-query II
-select * from test order by i;
+statement ok
+CREATE TABLE test2 AS (SELECT * FROM test ORDER BY rand)
+
+query T
+SELECT count(*) FROM test2
 ----
-1	shortstring
-2	shorter
-3	somereallylongstring
+10000000
 
 #statement ok
 #CREATE TABLE test AS (SELECT range r, random() rand FROM range(100000))
@@ -28,23 +39,3 @@ select * from test order by i;
 #SELECT count(*) FROM (SELECT * FROM test ORDER BY rand) sq
 #----
 #100000
-
-#statement ok
-#CREATE TABLE test (s VARCHAR)
-#
-#statement ok
-#INSERT INTO test VALUES ('123'), ('123456'), ('123456789')
-
-#query T
-#SELECT * FROM test ORDER BY s
-#----
-#123
-#123456
-#123456789
-
-#query T
-#SELECT * FROM test ORDER BY cast(s AS VARCHAR)
-#----
-#123
-#123456
-#123456789
