@@ -1264,18 +1264,18 @@ ConstTypename:
  * constants for them.
  */
 GenericType:
-			type_function_name opt_type_modifiers
+			type_name_token opt_type_modifiers
 				{
 					$$ = makeTypeName($1);
 					$$->typmods = $2;
 					$$->location = @1;
 				}
-			| type_function_name attrs opt_type_modifiers
-				{
-					$$ = makeTypeNameFromNameList(lcons(makeString($1), $2));
-					$$->typmods = $3;
-					$$->location = @1;
-				}
+			// | type_name_token attrs opt_type_modifiers
+			// 	{
+			// 		$$ = makeTypeNameFromNameList(lcons(makeString($1), $2));
+			// 		$$->typmods = $3;
+			// 		$$->location = @1;
+			// 	}
 		;
 
 opt_type_modifiers: '(' expr_list ')'				{ $$ = $2; }
@@ -3244,9 +3244,10 @@ attr_name:	ColLabel								{ $$ = $1; };
  * may contain subscripts, and reject that case in the C code.  (If we
  * ever implement SQL99-like methods, such syntax may actually become legal!)
  */
-func_name:	type_function_name
+func_name:	function_name_token
 					{ $$ = list_make1(makeString($1)); }
-			| ColId indirection
+			|
+			ColId indirection
 					{
 						$$ = check_func_name(lcons(makeString($1), $2),
 											 yyscanner);
@@ -3377,11 +3378,22 @@ ColIdOrString:	ColId											{ $$ = $1; }
 				| SCONST										{ $$ = $1; }
 		;
 
+
 /* Type/function identifier --- names that can be type or function names.
  */
 type_function_name:	IDENT							{ $$ = $1; }
 			| unreserved_keyword					{ $$ = pstrdup($1); }
 			| type_func_name_keyword				{ $$ = pstrdup($1); }
+		;
+
+function_name_token:	IDENT						{ $$ = $1; }
+			| unreserved_keyword					{ $$ = pstrdup($1); }
+			| func_name_keyword						{ $$ = pstrdup($1); }
+		;
+
+type_name_token:	IDENT						{ $$ = $1; }
+			| unreserved_keyword					{ $$ = pstrdup($1); }
+			| type_name_keyword						{ $$ = pstrdup($1); }
 		;
 
 any_name:	ColId						{ $$ = list_make1(makeString($1)); }
@@ -3408,9 +3420,8 @@ param_name:	type_function_name
  * This presently includes *all* Postgres keywords.
  */
 ColLabel:	IDENT									{ $$ = $1; }
+			| other_keyword							{ $$ = pstrdup($1); }
 			| unreserved_keyword					{ $$ = pstrdup($1); }
-			| col_name_keyword						{ $$ = pstrdup($1); }
-			| type_func_name_keyword				{ $$ = pstrdup($1); }
 			| reserved_keyword						{ $$ = pstrdup($1); }
 		;
 
