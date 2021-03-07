@@ -290,6 +290,9 @@ unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(LogicalType &type, colu
 
 	for (auto &row_group : file_meta_data->row_groups) {
 		auto chunk_stats = column_reader->Stats(row_group.columns);
+		if (!chunk_stats) {
+			return nullptr;
+		}
 		if (!column_stats) {
 			column_stats = move(chunk_stats);
 		} else {
