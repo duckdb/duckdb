@@ -10,50 +10,51 @@
 
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/function_set.hpp"
+#include "duckdb/common/arch.h"
 
 namespace duckdb {
 
-struct AddFun {
+struct SET_ARCH(AddFun) {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct SubtractFun {
+struct SET_ARCH(SubtractFun) {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct MultiplyFun {
+struct SET_ARCH(MultiplyFun) {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct DivideFun {
+struct SET_ARCH(DivideFun) {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct ModFun {
+struct SET_ARCH(ModFun) {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct LeftShiftFun {
+struct SET_ARCH(LeftShiftFun) {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct RightShiftFun {
+struct SET_ARCH(RightShiftFun) {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct BitwiseAndFun {
+struct SET_ARCH(BitwiseAndFun) {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct BitwiseOrFun {
+struct SET_ARCH(BitwiseOrFun) {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct BitwiseXorFun {
+struct SET_ARCH(BitwiseXorFun) {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct BitwiseNotFun {
+struct SET_ARCH(BitwiseNotFun) {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

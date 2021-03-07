@@ -87,7 +87,7 @@ struct BitwiseANDOperator {
 	}
 };
 
-void BitwiseAndFun::RegisterFunction(BuiltinFunctions &set) {
+void SET_ARCH(BitwiseAndFun)::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("&");
 	for (auto &type : LogicalType::INTEGRAL) {
 		functions.AddFunction(
@@ -106,7 +106,7 @@ struct BitwiseOROperator {
 	}
 };
 
-void BitwiseOrFun::RegisterFunction(BuiltinFunctions &set) {
+void SET_ARCH(BitwiseOrFun)::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("|");
 	for (auto &type : LogicalType::INTEGRAL) {
 		functions.AddFunction(
@@ -125,7 +125,7 @@ struct BitwiseXOROperator {
 	}
 };
 
-void BitwiseXorFun::RegisterFunction(BuiltinFunctions &set) {
+void SET_ARCH(BitwiseXorFun)::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("#");
 	for (auto &type : LogicalType::INTEGRAL) {
 		functions.AddFunction(
@@ -149,7 +149,7 @@ struct BitwiseShiftLeftOperator {
 	}
 };
 
-void LeftShiftFun::RegisterFunction(BuiltinFunctions &set) {
+void SET_ARCH(LeftShiftFun)::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("<<");
 	for (auto &type : LogicalType::INTEGRAL) {
 		functions.AddFunction(
@@ -168,7 +168,7 @@ struct BitwiseShiftRightOperator {
 	}
 };
 
-void RightShiftFun::RegisterFunction(BuiltinFunctions &set) {
+void SET_ARCH(RightShiftFun)::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions(">>");
 	for (auto &type : LogicalType::INTEGRAL) {
 		functions.AddFunction(
@@ -187,7 +187,7 @@ struct BitwiseNotOperator {
 	}
 };
 
-void BitwiseNotFun::RegisterFunction(BuiltinFunctions &set) {
+void SET_ARCH(BitwiseNotFun)::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("~");
 	for (auto &type : LogicalType::INTEGRAL) {
 		functions.AddFunction(ScalarFunction({type}, type, GetScalarIntegerUnaryFunction<BitwiseNotOperator>(type)));

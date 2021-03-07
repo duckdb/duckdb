@@ -39,7 +39,7 @@ void BuiltinFunctions::Initialize() {
 	RegisterDateFunctions();
 	RegisterGenericFunctions();
 	RegisterMathFunctions();
-	RegisterOperators();
+	RegisterOperators_AVX2();
 	RegisterSequenceFunctions();
 	RegisterStringFunctions();
 	RegisterNestedFunctions();

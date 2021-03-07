@@ -5,7 +5,7 @@
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/value.hpp"
-
+#include "duckdb/common/arch.h"
 #include <limits>
 
 namespace duckdb {
@@ -14,7 +14,7 @@ namespace duckdb {
 // - [subtract]
 //===--------------------------------------------------------------------===//
 template <>
-float SubtractOperator::Operation(float left, float right) {
+float SET_ARCH(SubtractOperator)::Operation(float left, float right) {
 	auto result = left - right;
 	if (!Value::FloatIsValid(result)) {
 		throw OutOfRangeException("Overflow in subtraction of float!");
@@ -23,7 +23,7 @@ float SubtractOperator::Operation(float left, float right) {
 }
 
 template <>
-double SubtractOperator::Operation(double left, double right) {
+double SET_ARCH(SubtractOperator)::Operation(double left, double right) {
 	auto result = left - right;
 	if (!Value::DoubleIsValid(result)) {
 		throw OutOfRangeException("Overflow in subtraction of double!");
@@ -32,7 +32,7 @@ double SubtractOperator::Operation(double left, double right) {
 }
 
 template <>
-interval_t SubtractOperator::Operation(interval_t left, interval_t right) {
+interval_t SET_ARCH(SubtractOperator)::Operation(interval_t left, interval_t right) {
 	interval_t result;
 	result.months = left.months - right.months;
 	result.days = left.days - right.days;
@@ -41,23 +41,23 @@ interval_t SubtractOperator::Operation(interval_t left, interval_t right) {
 }
 
 template <>
-date_t SubtractOperator::Operation(date_t left, interval_t right) {
+date_t SET_ARCH(SubtractOperator)::Operation(date_t left, interval_t right) {
 	right.months = -right.months;
 	right.days = -right.days;
 	right.micros = -right.micros;
-	return AddOperator::Operation<date_t, interval_t, date_t>(left, right);
+	return SET_ARCH(AddOperator)::Operation<date_t, interval_t, date_t>(left, right);
 }
 
 template <>
-timestamp_t SubtractOperator::Operation(timestamp_t left, interval_t right) {
+timestamp_t SET_ARCH(SubtractOperator)::Operation(timestamp_t left, interval_t right) {
 	right.months = -right.months;
 	right.days = -right.days;
 	right.micros = -right.micros;
-	return AddOperator::Operation<timestamp_t, interval_t, timestamp_t>(left, right);
+	return SET_ARCH(AddOperator)::Operation<timestamp_t, interval_t, timestamp_t>(left, right);
 }
 
 template <>
-interval_t SubtractOperator::Operation(timestamp_t left, timestamp_t right) {
+interval_t SET_ARCH(SubtractOperator)::Operation(timestamp_t left, timestamp_t right) {
 	return Interval::GetDifference(left, right);
 }
 
@@ -67,7 +67,7 @@ interval_t SubtractOperator::Operation(timestamp_t left, timestamp_t right) {
 struct OverflowCheckedSubtract {
 	template <class SRCTYPE, class UTYPE>
 	static inline bool Operation(SRCTYPE left, SRCTYPE right, SRCTYPE &result) {
-		UTYPE uresult = SubtractOperator::Operation<UTYPE, UTYPE, UTYPE>(UTYPE(left), UTYPE(right));
+		UTYPE uresult = SET_ARCH(SubtractOperator)::Operation<UTYPE, UTYPE, UTYPE>(UTYPE(left), UTYPE(right));
 		if (uresult < NumericLimits<SRCTYPE>::Minimum() || uresult > NumericLimits<SRCTYPE>::Maximum()) {
 			return false;
 		}
@@ -77,7 +77,7 @@ struct OverflowCheckedSubtract {
 };
 
 template <>
-bool TrySubtractOperator::Operation(uint8_t left, uint8_t right, uint8_t &result) {
+bool SET_ARCH(TrySubtractOperator)::Operation(uint8_t left, uint8_t right, uint8_t &result) {
 	if (right > left) {
 		return false;
 	}
@@ -85,7 +85,7 @@ bool TrySubtractOperator::Operation(uint8_t left, uint8_t right, uint8_t &result
 }
 
 template <>
-bool TrySubtractOperator::Operation(uint16_t left, uint16_t right, uint16_t &result) {
+bool SET_ARCH(TrySubtractOperator)::Operation(uint16_t left, uint16_t right, uint16_t &result) {
 	if (right > left) {
 		return false;
 	}
@@ -93,7 +93,7 @@ bool TrySubtractOperator::Operation(uint16_t left, uint16_t right, uint16_t &res
 }
 
 template <>
-bool TrySubtractOperator::Operation(uint32_t left, uint32_t right, uint32_t &result) {
+bool SET_ARCH(TrySubtractOperator)::Operation(uint32_t left, uint32_t right, uint32_t &result) {
 	if (right > left) {
 		return false;
 	}
@@ -101,7 +101,7 @@ bool TrySubtractOperator::Operation(uint32_t left, uint32_t right, uint32_t &res
 }
 
 template <>
-bool TrySubtractOperator::Operation(uint64_t left, uint64_t right, uint64_t &result) {
+bool SET_ARCH(TrySubtractOperator)::Operation(uint64_t left, uint64_t right, uint64_t &result) {
 	if (right > left) {
 		return false;
 	}
@@ -109,22 +109,22 @@ bool TrySubtractOperator::Operation(uint64_t left, uint64_t right, uint64_t &res
 }
 
 template <>
-bool TrySubtractOperator::Operation(int8_t left, int8_t right, int8_t &result) {
+bool SET_ARCH(TrySubtractOperator)::Operation(int8_t left, int8_t right, int8_t &result) {
 	return OverflowCheckedSubtract::Operation<int8_t, int16_t>(left, right, result);
 }
 
 template <>
-bool TrySubtractOperator::Operation(int16_t left, int16_t right, int16_t &result) {
+bool SET_ARCH(TrySubtractOperator)::Operation(int16_t left, int16_t right, int16_t &result) {
 	return OverflowCheckedSubtract::Operation<int16_t, int32_t>(left, right, result);
 }
 
 template <>
-bool TrySubtractOperator::Operation(int32_t left, int32_t right, int32_t &result) {
+bool SET_ARCH(TrySubtractOperator)::Operation(int32_t left, int32_t right, int32_t &result) {
 	return OverflowCheckedSubtract::Operation<int32_t, int64_t>(left, right, result);
 }
 
 template <>
-bool TrySubtractOperator::Operation(int64_t left, int64_t right, int64_t &result) {
+bool SET_ARCH(TrySubtractOperator)::Operation(int64_t left, int64_t right, int64_t &result) {
 #if (__GNUC__ >= 5) || defined(__clang__)
 	if (__builtin_sub_overflow(left, right, &result)) {
 		return false;
@@ -167,22 +167,22 @@ bool TryDecimalSubtractTemplated(T left, T right, T &result) {
 }
 
 template <>
-bool TryDecimalSubtract::Operation(int16_t left, int16_t right, int16_t &result) {
+bool SET_ARCH(TryDecimalSubtract)::Operation(int16_t left, int16_t right, int16_t &result) {
 	return TryDecimalSubtractTemplated<int16_t, -9999, 9999>(left, right, result);
 }
 
 template <>
-bool TryDecimalSubtract::Operation(int32_t left, int32_t right, int32_t &result) {
+bool SET_ARCH(TryDecimalSubtract)::Operation(int32_t left, int32_t right, int32_t &result) {
 	return TryDecimalSubtractTemplated<int32_t, -999999999, 999999999>(left, right, result);
 }
 
 template <>
-bool TryDecimalSubtract::Operation(int64_t left, int64_t right, int64_t &result) {
+bool SET_ARCH(TryDecimalSubtract)::Operation(int64_t left, int64_t right, int64_t &result) {
 	return TryDecimalSubtractTemplated<int64_t, -999999999999999999, 999999999999999999>(left, right, result);
 }
 
 template <>
-bool TryDecimalSubtract::Operation(hugeint_t left, hugeint_t right, hugeint_t &result) {
+bool SET_ARCH(TryDecimalSubtract)::Operation(hugeint_t left, hugeint_t right, hugeint_t &result) {
 	result = left - right;
 	if (result <= -Hugeint::POWERS_OF_TEN[38] || result >= Hugeint::POWERS_OF_TEN[38]) {
 		return false;
@@ -191,9 +191,9 @@ bool TryDecimalSubtract::Operation(hugeint_t left, hugeint_t right, hugeint_t &r
 }
 
 template <>
-hugeint_t DecimalSubtractOverflowCheck::Operation(hugeint_t left, hugeint_t right) {
+hugeint_t SET_ARCH(DecimalSubtractOverflowCheck)::Operation(hugeint_t left, hugeint_t right) {
 	hugeint_t result;
-	if (!TryDecimalSubtract::Operation(left, right, result)) {
+	if (!SET_ARCH(TryDecimalSubtract)::Operation(left, right, result)) {
 		throw OutOfRangeException("Overflow in subtract of DECIMAL(38) (%s - %s);", left.ToString(), right.ToString());
 	}
 	return result;
@@ -203,9 +203,9 @@ hugeint_t DecimalSubtractOverflowCheck::Operation(hugeint_t left, hugeint_t righ
 // subtract time operator
 //===--------------------------------------------------------------------===//
 template <>
-dtime_t SubtractTimeOperator::Operation(dtime_t left, interval_t right) {
+dtime_t SET_ARCH(SubtractTimeOperator)::Operation(dtime_t left, interval_t right) {
 	right.micros = -right.micros;
-	return AddTimeOperator::Operation<dtime_t, interval_t, dtime_t>(left, right);
+	return SET_ARCH(AddTimeOperator)::Operation<dtime_t, interval_t, dtime_t>(left, right);
 }
 
 } // namespace duckdb

@@ -15,7 +15,6 @@ add_library_unity(
   string_functions.cpp
   nested_functions.cpp
   math_functions.cpp
-  operators.cpp
   pragma_functions.cpp
   sequence_functions.cpp
   trigonometrics_functions.cpp)
