@@ -4,7 +4,6 @@ var assert = require('assert');
 describe('unicode', function() {
     var first_values = [],
         trailing_values = [],
-        chars = [],
         subranges = new Array(2),
         len = subranges.length,
         db,
