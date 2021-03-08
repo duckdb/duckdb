@@ -68,7 +68,7 @@ statement ok
 SELECT test_macro(1, 2);
 
 # test_sequence should be created in the test schema
-# TODO: Keep all functions in main schema
+# TODO: Keep all functions in main schema?
 statement ok
 CREATE SEQUENCE test_sequence;
 
@@ -80,3 +80,84 @@ SELECT main.nextval('test.test_sequence');
 
 statement ok
 SELECT main.nextval('test_sequence');
+
+# test_temp_table should *not* be created in the test schema, but in the temp schema
+statement ok
+CREATE TEMP TABLE test_temp_table(i INTEGER);
+
+statement error
+SELECT * FROM main.test_temp_table;
+
+statement error
+SELECT * FROM test.test_temp_table;
+
+statement ok
+SELECT * FROM test_temp_table;
+
+# DML and DDL statements should find test_table in the test schema
+statement error
+INSERT INTO main.test_table (i) VALUES (1);
+
+statement ok
+INSERT INTO test_table (i) VALUES (2);
+
+statement ok
+INSERT INTO test.test_table (i) VALUES (3), (4);
+
+statement ok
+INSERT INTO main.main_table (i) VALUES (5), (6);
+
+statement error
+DELETE FROM main.test_table WHERE i=4;
+
+statement ok
+DELETE FROM test_table WHERE i=4;
+
+statement error
+UPDATE main.test_table SET i=5 WHERE i=3;
+
+statement ok
+UPDATE test_table SET i=5 WHERE i=3;
+
+statement error
+ALTER TABLE main.test_table RENAME i TO j;
+
+statement ok
+ALTER TABLE test_table RENAME i TO j;
+
+query I
+SELECT j FROM test_table;
+----
+2
+5
+
+# query across multiple schemas should work as expected
+query II
+SELECT * FROM test_table INNER JOIN main.main_table ON (i = j);
+----
+5	5
+
+# function-binding for columns should work as expected
+query I
+SELECT main.abs(j) FROM test_table;
+----
+2
+5
+
+# aggregates should work as expected
+query I
+SELECT main.sum(j) FROM test_table;
+----
+7
+
+statement error
+DROP VIEW main.test_view;
+
+statement ok
+DROP VIEW test_view;
+
+statement error
+DROP TABLE main.test_table;
+
+statement ok
+DROP TABLE test_table;
