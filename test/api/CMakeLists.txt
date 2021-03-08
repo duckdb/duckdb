@@ -11,8 +11,7 @@ set(TEST_API_OBJECTS
     test_relation_api.cpp
     test_query_profiler.cpp
     test_dbdir.cpp
-    test_progress_bar.cpp
-    test_default_schema.cpp)
+    test_progress_bar.cpp)
 
 if(NOT WIN32)
   set(TEST_API_OBJECTS ${TEST_API_OBJECTS} test_read_only.cpp)

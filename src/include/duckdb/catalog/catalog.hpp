@@ -12,8 +12,8 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/parser/query_error_context.hpp"
 
-#include <functional>
 #include <atomic>
+#include <functional>
 
 namespace duckdb {
 struct CreateSchemaInfo;
@@ -111,7 +111,7 @@ public:
 	void DropEntry(ClientContext &context, DropInfo *info);
 
 	//! Returns the schema object with the specified name, or throws an exception if it does not exist
-	SchemaCatalogEntry *GetSchema(ClientContext &context, const string &name = DEFAULT_SCHEMA,
+	SchemaCatalogEntry *GetSchema(ClientContext &context, const string &name = INVALID_SCHEMA,
 	                              QueryErrorContext error_context = QueryErrorContext());
 	//! Scans all the schemas in the system one-by-one, invoking the callback for each entry
 	void ScanSchemas(ClientContext &context, std::function<void(CatalogEntry *)> callback);

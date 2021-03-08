@@ -1,27 +1,26 @@
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/catalog/catalog_set.hpp"
 
 #include "duckdb/catalog/catalog_entry/list.hpp"
+#include "duckdb/catalog/catalog_set.hpp"
+#include "duckdb/catalog/default/default_schemas.hpp"
+#include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
-#include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_collation_info.hpp"
+#include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_index_info.hpp"
+#include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
-#include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
-#include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/parsed_data/drop_info.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
-#include "duckdb/main/database.hpp"
-#include "duckdb/catalog/dependency_manager.hpp"
-
-#include "duckdb/catalog/default/default_schemas.hpp"
 
 namespace duckdb {
 
@@ -173,15 +172,16 @@ void Catalog::DropEntry(ClientContext &context, DropInfo *info) {
 
 SchemaCatalogEntry *Catalog::GetSchema(ClientContext &context, const string &schema_name,
                                        QueryErrorContext error_context) {
-	if (schema_name.empty()) {
-		throw CatalogException("Schema not specified");
+	string resolved_schema_name = schema_name;
+	if (schema_name.empty() || schema_name == INVALID_SCHEMA) {
+		resolved_schema_name = context.default_schema;
 	}
 	if (schema_name == TEMP_SCHEMA) {
 		return context.temporary_objects.get();
 	}
-	auto entry = schemas->GetEntry(context, schema_name);
+	auto entry = schemas->GetEntry(context, resolved_schema_name);
 	if (!entry) {
-		throw CatalogException(error_context.FormatError("Schema with name %s does not exist!", schema_name));
+		throw CatalogException(error_context.FormatError("Schema with name %s does not exist!", resolved_schema_name));
 	}
 	return (SchemaCatalogEntry *)entry;
 }

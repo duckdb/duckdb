@@ -1,8 +1,8 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
@@ -10,7 +10,6 @@
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
-#include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/expression_binder/aggregate_binder.hpp"
 #include "duckdb/planner/expression_binder/index_binder.hpp"
 #include "duckdb/planner/expression_binder/select_binder.hpp"
@@ -20,13 +19,14 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/parsed_data/bound_create_function_info.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
+#include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/tableref/bound_basetableref.hpp"
 
 namespace duckdb {
 
 SchemaCatalogEntry *Binder::BindSchema(CreateInfo &info) {
-	if (info.schema.empty()) {
-		info.schema = info.temporary ? TEMP_SCHEMA : DEFAULT_SCHEMA;
+	if (info.schema.empty() || info.schema == INVALID_SCHEMA) {
+		info.schema = info.temporary ? TEMP_SCHEMA : context.default_schema;
 	}
 
 	if (!info.temporary) {

@@ -1,0 +1,82 @@
+# name: test/sql/catalog/test_default_schema.test
+# description: Test various operations with default schemas
+# group: [catalog]
+
+# schema does not exist
+statement error
+PRAGMA default_schema=test;
+
+# cannot set the default schema to null
+statement error
+PRAGMA default_schema=NULL;
+
+statement ok
+CREATE SCHEMA test;
+
+# create a table in the main schema
+statement ok
+CREATE TABLE main_table(i INTEGER);
+
+statement ok
+PRAGMA default_schema=test;
+
+# cannot access main_table in main schema since default is now test
+statement error
+SELECT * FROM main_table;
+
+# main_table can be accessed by explicitly specifying the schema name
+statement ok
+SELECT * FROM main.main_table;
+
+# test_table should be created in the test schema
+statement ok
+CREATE TABLE test_table(i INTEGER);
+
+statement error
+SELECT * FROM main.test_table;
+
+statement ok
+SELECT * FROM test.test_table;
+
+statement ok
+SELECT * FROM test_table;
+
+# test_view should be created in the test schema
+statement ok
+CREATE VIEW test_view AS SELECT * FROM test_table;
+
+statement error
+SELECT * FROM main.test_view;
+
+statement ok
+SELECT * FROM test.test_view;
+
+statement ok
+SELECT * FROM test_view;
+
+# test_macro should be created in the test schema
+statement ok 
+CREATE MACRO test_macro(a, b) AS a + b;
+
+statement error
+SELECT main.test_macro(1, 2);
+
+statement ok
+SELECT test.test_macro(1, 2);
+
+statement ok
+SELECT test_macro(1, 2);
+
+# test_sequence should be created in the test schema
+# TODO: Keep all functions in main schema
+statement ok
+CREATE SEQUENCE test_sequence;
+
+statement error
+SELECT main.nextval('main.test_sequence');
+
+statement ok
+SELECT main.nextval('test.test_sequence');
+
+statement ok
+SELECT main.nextval('test_sequence');

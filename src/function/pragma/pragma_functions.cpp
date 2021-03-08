@@ -1,5 +1,6 @@
 #include "duckdb/function/pragma/pragma_functions.hpp"
 
+#include "duckdb/common/enums/output_type.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
@@ -7,7 +8,7 @@
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
-#include "duckdb/common/enums/output_type.hpp"
+
 #include <cctype>
 
 namespace duckdb {
@@ -212,7 +213,10 @@ static void PragmaDebugCheckpointAbort(ClientContext &context, const FunctionPar
 }
 
 static void PragmaSetDefaultSchema(ClientContext &context, const FunctionParameters &parameters) {
-	context.default_schema = StringUtil::Lower(parameters.values[0].ToString());
+	string schema = StringUtil::Lower(parameters.values[0].ToString());
+	// Ensure that the schema exists. This will throw an error otherwise.
+	Catalog::GetCatalog(context).GetSchema(context, schema);
+	context.default_schema = schema;
 }
 
 void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
