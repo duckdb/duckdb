@@ -388,7 +388,7 @@ idx_t RowChunk::AppendToBlock(RowDataBlock &block, BufferHandle &handle, vector<
 		// compute how many entries fit if entry size if variable
         dataptr = handle.node->buffer + block.byte_offset;
         for (idx_t i = 0; i < remaining; i++) {
-			if (block.byte_offset + entry_sizes[i] > block_capacity) {
+			if (block.byte_offset + entry_sizes[i] > block_capacity * entry_size) {
 				break;
 			}
 			append_count++;
