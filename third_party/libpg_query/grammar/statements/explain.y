@@ -64,8 +64,7 @@ ExplainableStmt:
 
 NonReservedWord:	IDENT							{ $$ = $1; }
 			| unreserved_keyword					{ $$ = pstrdup($1); }
-			| col_name_keyword						{ $$ = pstrdup($1); }
-			| type_func_name_keyword				{ $$ = pstrdup($1); }
+			| other_keyword						{ $$ = pstrdup($1); }
 		;
 
 

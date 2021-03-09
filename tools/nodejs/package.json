@@ -1,16 +1,13 @@
 {
   "name": "duckdb",
   "main": "./lib/duckdb.js",
-  "version": "0.2.2-999",
+  "version": "0.2.4",
   "description": "DuckDB node.js API",
   "gypfile": true,
   "dependencies": {
-    "aws-sdk": "^2.790.0",
-    "bindings": "*",
-    "mocha": "^8.1.3",
+    "@mapbox/node-pre-gyp": "^1.0.0",
     "node-addon-api": "*",
-    "node-gyp": "^7.1.2",
-    "node-pre-gyp": "^0.15.0"
+    "node-gyp": "^7.1.2"
   },
   "binary": {
     "module_name": "duckdb",
@@ -27,7 +24,10 @@
     "lib": "lib",
     "test": "test"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "mocha": "^8.3.0",
+    "aws-sdk": "^2.790.0"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/cwida/duckdb.git"

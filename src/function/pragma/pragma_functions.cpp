@@ -122,6 +122,14 @@ static void PragmaDisableProgressBar(ClientContext &context, const FunctionParam
 	context.enable_progress_bar = false;
 }
 
+static void PragmaEnablePrintProgressBar(ClientContext &context, const FunctionParameters &parameters) {
+	context.print_progress_bar = true;
+}
+
+static void PragmaDisablePrintProgressBar(ClientContext &context, const FunctionParameters &parameters) {
+	context.print_progress_bar = false;
+}
+
 static void PragmaEnableVerification(ClientContext &context, const FunctionParameters &parameters) {
 	context.query_verification_enabled = true;
 }
@@ -268,9 +276,13 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(PragmaFunction::PragmaStatement("force_checkpoint", PragmaForceCheckpoint));
 
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_progress_bar", PragmaEnableProgressBar));
+	set.AddFunction(PragmaFunction::PragmaStatement("disable_progress_bar", PragmaDisableProgressBar));
+
+	set.AddFunction(PragmaFunction::PragmaStatement("enable_print_progress_bar", PragmaEnablePrintProgressBar));
+	set.AddFunction(PragmaFunction::PragmaStatement("disable_print_progress_bar", PragmaDisablePrintProgressBar));
+
 	set.AddFunction(
 	    PragmaFunction::PragmaAssignment("set_progress_bar_time", PragmaSetProgressBarWaitTime, LogicalType::INTEGER));
-	set.AddFunction(PragmaFunction::PragmaStatement("disable_progress_bar", PragmaDisableProgressBar));
 
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_checkpoint_on_shutdown", PragmaEnableCheckpointOnShutdown));
 	set.AddFunction(
