@@ -19,7 +19,8 @@
 #include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/main/table_description.hpp"
 #include "duckdb/transaction/transaction_context.hpp"
-
+#include "duckdb/common/pair.hpp"
+#include "duckdb/common/deque.h"
 #include <random>
 #include "duckdb/common/progress_bar.hpp"
 
@@ -42,8 +43,10 @@ public:
 	DUCKDB_API explicit ClientContext(shared_ptr<DatabaseInstance> db);
 	DUCKDB_API ~ClientContext();
 
-	//! Previous Query profiler
-	QueryProfiler prev_profiler;
+	//! Previous Query profilers
+	deque<pair<transaction_t, QueryProfiler>> prev_profilers;
+	//! Previous Query profilers size
+	uint64_t prev_profilers_size = 20;
 	//! Query profiler
 	QueryProfiler profiler;
 	//! The database that this client is connected to
@@ -151,6 +154,10 @@ public:
 	//! Same as RunFunctionInTransaction, but does not obtain a lock on the client context or check for validation
 	DUCKDB_API void RunFunctionInTransactionInternal(ClientContextLock &lock, const std::function<void(void)> &fun,
 	                                                 bool requires_valid_transaction = true);
+
+	void SetPrevProfilersSize(uint64_t size) {
+		this->prev_profilers_size = size;
+	}
 
 private:
 	//! Parse statements from a query

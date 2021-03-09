@@ -1,3 +1,7 @@
+// This file is licensed under Apache License 2.0
+// Source code taken from https://github.com/google/benchmark
+// It is highly modified
+
 #include "duckdb/common/cycle_counter.hpp"
 #include "duckdb/common/chrono.hpp"
 
@@ -62,7 +66,7 @@ inline uint64_t Now() {
 #else
 	return ChronoNow();
 #endif
-#else  // not defined(RDTSC)
+#else
 	return ChronoNow();
 #endif // defined(RDTSC)
 }

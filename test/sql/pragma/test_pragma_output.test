@@ -13,3 +13,6 @@ SELECT * FROM pragma_detailed_profiling_output()
 
 statement ok
 PRAGMA all_profiling_output
+
+statement ok
+PRAGMA set_profiler_size = 5

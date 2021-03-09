@@ -96,13 +96,15 @@ unique_ptr<DataChunk> ClientContext::Fetch() {
 
 string ClientContext::FinalizeQuery(ClientContextLock &lock, bool success) {
 	profiler.EndQuery();
-	prev_profiler = move(profiler);
-
 	executor.Reset();
 
 	string error;
 	if (transaction.HasActiveTransaction()) {
 		ActiveTransaction().active_query = MAXIMUM_QUERY_ID;
+		prev_profilers.emplace_back(transaction.ActiveTransaction().active_query, move(profiler));
+		if (prev_profilers.size() >= prev_profilers_size) {
+			prev_profilers.pop_front();
+		}
 		try {
 			if (transaction.IsAutoCommit()) {
 				if (success) {

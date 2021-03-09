@@ -71,7 +71,7 @@ static void PragmaDetailedProfilingOutputFunction(ClientContext &context, const 
 		int operator_counter = 1;
 		//        SetValue(output, total_counter++, 0, 0, "Query: " + context.prev_profiler.query,
 		//                 context.prev_profiler.main_query.Elapsed());
-		for (auto op : context.prev_profiler.tree_map) {
+		for (auto op : context.prev_profilers.back().second.tree_map) {
 			int function_counter = 1;
 			if (op.second->info.has_executor) {
 				for (auto &info : op.second->info.executors_info->roots) {
