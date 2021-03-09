@@ -86,6 +86,7 @@ void TableDataWriter::CheckpointColumn(ColumnData &col_data, idx_t col_idx) {
 	if (!col_data.data.root_node) {
 		return;
 	}
+	auto &block_manager = BlockManager::GetBlockManager(db);
 	Vector intermediate(col_data.type);
 
 	// scan the segments of the column data
@@ -103,7 +104,10 @@ void TableDataWriter::CheckpointColumn(ColumnData &col_data, idx_t col_idx) {
 			idx_t start_vector_index = persistent.start / STANDARD_VECTOR_SIZE;
 			idx_t end_vector_index = (persistent.start + persistent.count) / STANDARD_VECTOR_SIZE;
 			bool has_updates = update_segment->HasUpdates(start_vector_index, end_vector_index);
-			if (!has_updates) {
+			if (has_updates) {
+				// persistent segment has updates: mark it as modified and rewrite the block with the merged updates
+				block_manager.MarkBlockAsModified(persistent.block_id);
+			} else {
 				// unchanged persistent segment: no need to write the data
 
 				// flush any segments preceding this persistent segment

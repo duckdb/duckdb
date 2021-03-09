@@ -39,6 +39,24 @@ void UncompressedSegment::Fetch(ColumnScanState &state, idx_t vector_index, Vect
 	FetchBaseData(state, vector_index, result);
 }
 
+void UncompressedSegment::Select(Vector &result, vector<TableFilter> &table_filters,
+                                 SelectionVector &sel, idx_t &approved_tuple_count, ColumnScanState &state) {
+	//! Select the data from the base table
+	Select(state, result, sel, approved_tuple_count, table_filters);
+}
+
+//===--------------------------------------------------------------------===//
+// Scan
+//===--------------------------------------------------------------------===//
+void UncompressedSegment::Scan(ColumnScanState &state, idx_t vector_index, Vector &result) {
+	FetchBaseData(state, vector_index, result);
+}
+
+void UncompressedSegment::FilterScan(ColumnScanState &state, Vector &result,
+                                     SelectionVector &sel, idx_t &approved_tuple_count) {
+	FilterFetchBaseData(state, result, sel, approved_tuple_count);
+}
+
 //===--------------------------------------------------------------------===//
 // Filter
 //===--------------------------------------------------------------------===//
@@ -180,6 +198,13 @@ void UncompressedSegment::FilterSelection(SelectionVector &sel, Vector &result, 
 		FilterSelectionSwitch<int64_t>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type, mask);
 		break;
 	}
+	case PhysicalType::INT128: {
+		auto result_flat = FlatVector::GetData<hugeint_t>(result);
+		Vector predicate_vector(filter.constant);
+		auto predicate = FlatVector::GetData<hugeint_t>(predicate_vector);
+		FilterSelectionSwitch<hugeint_t>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type, mask);
+		break;
+	}
 	case PhysicalType::FLOAT: {
 		auto result_flat = FlatVector::GetData<float>(result);
 		Vector predicate_vector(filter.constant);
@@ -212,24 +237,6 @@ void UncompressedSegment::FilterSelection(SelectionVector &sel, Vector &result, 
 	default:
 		throw InvalidTypeException(result.GetType(), "Invalid type for filter pushed down to table comparison");
 	}
-}
-
-void UncompressedSegment::Select(Vector &result, vector<TableFilter> &table_filters,
-                                 SelectionVector &sel, idx_t &approved_tuple_count, ColumnScanState &state) {
-	//! Select the data from the base table
-	Select(state, result, sel, approved_tuple_count, table_filters);
-}
-
-//===--------------------------------------------------------------------===//
-// Scan
-//===--------------------------------------------------------------------===//
-void UncompressedSegment::Scan(ColumnScanState &state, idx_t vector_index, Vector &result) {
-	FetchBaseData(state, vector_index, result);
-}
-
-void UncompressedSegment::FilterScan(ColumnScanState &state, Vector &result,
-                                     SelectionVector &sel, idx_t &approved_tuple_count) {
-	FilterFetchBaseData(state, result, sel, approved_tuple_count);
 }
 
 //===--------------------------------------------------------------------===//

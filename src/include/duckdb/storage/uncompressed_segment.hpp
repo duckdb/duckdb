@@ -52,8 +52,7 @@ public:
 	//! Scan the next vector from the column and apply a selection vector to filter the data
 	void FilterScan(ColumnScanState &state, Vector &result, SelectionVector &sel,
 	                idx_t &approved_tuple_count);
-	//! Fetch the vector at index "vector_index" from the uncompressed segment, throwing an exception if there are any
-	//! outstanding updates
+
 	static void FilterSelection(SelectionVector &sel, Vector &result, const TableFilter &filter,
 	                            idx_t &approved_tuple_count, ValidityMask &mask);
 	//! Executes the filters directly in the table's data
@@ -69,6 +68,7 @@ public:
 	//! in the process. Returns the amount of tuples appended. If this is less than `count`, the uncompressed segment is
 	//! full.
 	virtual idx_t Append(SegmentStatistics &stats, Vector &data, idx_t offset, idx_t count) = 0;
+
 
 	//! Convert a persistently backed uncompressed segment (i.e. one where block_id refers to an on-disk block) to a
 	//! temporary in-memory one

@@ -117,35 +117,8 @@ void ColumnData::Select(Transaction &transaction, ColumnScanState &state, Vector
 		// merge the updates into the result
 		state.updates->FetchUpdates(transaction, state.vector_index_updates, result);
 
-
-		for (auto &filter : table_filters) {
-			SelectionVector new_sel(STANDARD_VECTOR_SIZE);
-			idx_t new_count;
-			Vector constant(filter.constant);
-			switch(filter.comparison_type) {
-			case ExpressionType::COMPARE_EQUAL:
-				new_count = VectorOperations::Equals(result, constant, &sel, approved_tuple_count, &new_sel, nullptr);
-				break;
-			case ExpressionType::COMPARE_NOTEQUAL:
-				new_count = VectorOperations::NotEquals(result, constant, &sel, approved_tuple_count, &new_sel, nullptr);
-				break;
-			case ExpressionType::COMPARE_LESSTHAN:
-				new_count = VectorOperations::GreaterThan(result, constant, &sel, approved_tuple_count, &new_sel, nullptr);
-				break;
-			case ExpressionType::COMPARE_GREATERTHAN:
-				new_count = VectorOperations::GreaterThanEquals(result, constant, &sel, approved_tuple_count, &new_sel, nullptr);
-				break;
-			case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-				new_count = VectorOperations::LessThan(result, constant, &sel, approved_tuple_count, &new_sel, nullptr);
-				break;
-			case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-				new_count = VectorOperations::LessThanEquals(result, constant, &sel, approved_tuple_count, &new_sel, nullptr);
-				break;
-			default:
-				throw NotImplementedException("Unsupported type for ColumnData::Select");
-			}
-			approved_tuple_count = new_count;
-			sel = new_sel;
+		for(auto &filter : table_filters) {
+			UncompressedSegment::FilterSelection(sel, result, filter, approved_tuple_count, FlatVector::Validity(result));
 		}
 	}
 	// move over to the next vector
@@ -159,9 +132,10 @@ void ColumnData::IndexScan(ColumnScanState &state, Vector &result) {
 	}
 	// // perform a scan of this segment
 	state.current->Scan(state, state.vector_index, result);
-	if (state.updates->HasUpdates()) {
+	if (state.updates->HasUncommittedUpdates(state.vector_index)) {
 		throw TransactionException("Cannot create index with outstanding updates");
 	}
+	state.updates->FetchCommitted(state.vector_index_updates, result);
 	// move over to the next vector
 	state.Next();
 }
@@ -313,6 +287,10 @@ void ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
 	auto vector_index = (row_id - segment->start) / STANDARD_VECTOR_SIZE;
 	// now perform the fetch within the segment
 	segment->Fetch(state, vector_index, result);
+	// merge any updates
+	// auto update_segment = (UpdateSegment *)updates.GetSegment(row_id);
+	// auto update_vector_index = (row_id - update_segment->start) / STANDARD_VECTOR_SIZE;
+	// update_segment->FetchCommitted(update_vector_index, result);
 }
 
 void ColumnData::FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result,

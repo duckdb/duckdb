@@ -890,6 +890,18 @@ bool UpdateSegment::HasUpdates(idx_t vector_index) const {
 	return root->info[vector_index].get();
 }
 
+bool UpdateSegment::HasUncommittedUpdates(idx_t vector_index) {
+	if (!HasUpdates(vector_index)) {
+		return false;
+	}
+	auto read_lock = lock.GetSharedLock();
+	auto entry = root->info[vector_index].get();
+	if (entry->info->next) {
+		return true;
+	}
+	return false;
+}
+
 bool UpdateSegment::HasUpdates(idx_t start_vector_index, idx_t end_vector_index) const {
 	idx_t base_vector_index = start / STANDARD_VECTOR_SIZE;
 	D_ASSERT(start_vector_index >= base_vector_index);

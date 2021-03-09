@@ -34,6 +34,7 @@ public:
 	ColumnData &column_data;
 public:
 	bool HasUpdates() const;
+	bool HasUncommittedUpdates(idx_t vector_index);
 	bool HasUpdates(idx_t vector_index) const;
 	bool HasUpdates(idx_t start_vector_index, idx_t end_vector_index) const;
 	UpdateSegment *FindSegment(idx_t end_vector_index) const;
