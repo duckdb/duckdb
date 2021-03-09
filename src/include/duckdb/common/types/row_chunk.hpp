@@ -53,16 +53,13 @@ public:
 	//! The blocks holding the main data
 	vector<RowDataBlock> blocks;
 
-	//! Whether the system is little endian
-	bool is_little_endian;
-
 	idx_t Size() {
 		return blocks.size();
 	}
 
 public:
 	void SerializeVectorSortable(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count,
-	                             data_ptr_t key_locations[], bool desc, bool has_null, bool invert);
+	                             data_ptr_t key_locations[], bool desc, bool has_null, bool invert, idx_t prefix_len);
 
 	void SerializeVectorData(VectorData &vdata, PhysicalType type, const SelectionVector &sel, idx_t ser_count,
 	                         idx_t col_idx, data_ptr_t key_locations[], data_ptr_t validitymask_locations[]);
@@ -82,10 +79,17 @@ private:
 	void EncodeData(data_t *data, T value) {
 		throw NotImplementedException("Cannot create data from this type");
 	}
+	void EncodeStringData(data_ptr_t dataptr, string_t value, idx_t prefix_len);
 
 	template <class T>
 	void TemplatedSerializeVectorSortable(VectorData &vdata, const SelectionVector &sel, idx_t count,
 	                                      data_ptr_t key_locations[], bool desc, bool has_null, bool invert);
+	void SerializeStringVectorSortable(VectorData &vdata, const SelectionVector &sel, idx_t add_count,
+	                                   data_ptr_t key_locations[], const bool desc, const bool has_null,
+	                                   const bool nulls_first, const idx_t prefix_len);
+
+    //! Whether the system is little endian
+    bool is_little_endian;
 };
 
 template <>
@@ -112,9 +116,5 @@ template <>
 void RowChunk::EncodeData(data_ptr_t dataptr, float value);
 template <>
 void RowChunk::EncodeData(data_ptr_t dataptr, double value);
-template <>
-void RowChunk::EncodeData(data_ptr_t dataptr, string_t value);
-template <>
-void RowChunk::EncodeData(data_ptr_t dataptr, const char *value);
 
 } // namespace duckdb

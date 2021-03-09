@@ -1,7 +1,6 @@
 #include "duckdb/common/types/row_chunk.hpp"
 
 #include <cfloat>
-#include <cstring> // strlen() on Solaris
 #include <limits.h>
 
 namespace duckdb {
@@ -142,7 +141,8 @@ void RowChunk::EncodeData(data_ptr_t dataptr, uint64_t value) {
 
 template <>
 void RowChunk::EncodeData(data_ptr_t dataptr, hugeint_t value) {
-	throw NotImplementedException("hugeint_t encoding not implemented");
+	EncodeData(dataptr, value.upper);
+	EncodeData(dataptr + sizeof(value.upper), value.lower);
 }
 
 template <>
@@ -157,16 +157,12 @@ void RowChunk::EncodeData(data_ptr_t dataptr, double value) {
 	Store<uint64_t>(is_little_endian ? BSWAP64(converted_value) : converted_value, dataptr);
 }
 
-template <>
-void RowChunk::EncodeData(data_ptr_t dataptr, string_t value) {
-	idx_t len = value.GetSize() + 1;
-	memcpy(dataptr, value.GetDataUnsafe(), len - 1);
-	dataptr[len - 1] = '\0';
-}
-
-template <>
-void RowChunk::EncodeData(data_ptr_t dataptr, const char *value) {
-	EncodeData(dataptr, string_t(value, strlen(value)));
+void RowChunk::EncodeStringData(data_ptr_t dataptr, string_t value, idx_t prefix_len) {
+	idx_t len = value.GetSize();
+	memcpy(dataptr, value.GetDataUnsafe(), MinValue(len, prefix_len));
+	if (len < prefix_len) {
+		memset(dataptr + len, '\0', prefix_len - len);
+	}
 }
 
 template <class T>
@@ -217,8 +213,55 @@ void RowChunk::TemplatedSerializeVectorSortable(VectorData &vdata, const Selecti
 	}
 }
 
+void RowChunk::SerializeStringVectorSortable(VectorData &vdata, const SelectionVector &sel, idx_t add_count,
+                                             data_ptr_t key_locations[], const bool desc, const bool has_null,
+                                             const bool nulls_first, const idx_t prefix_len) {
+	auto source = (string_t *)vdata.data;
+	if (has_null) {
+		auto &validity = vdata.validity;
+		const data_t valid = nulls_first ? 1 : 0;
+		const data_t invalid = nulls_first ? 0 : 1;
+
+		for (idx_t i = 0; i < add_count; i++) {
+			auto idx = sel.get_index(i);
+			auto source_idx = vdata.sel->get_index(idx);
+			// write validity and according value
+			if (validity.RowIsValid(source_idx)) {
+				key_locations[i][0] = valid;
+				key_locations[i]++;
+				EncodeStringData(key_locations[i], source[source_idx], prefix_len);
+			} else {
+				key_locations[i][0] = invalid;
+				key_locations[i]++;
+				memset(key_locations[i], '\0', prefix_len);
+			}
+			// invert bits if desc
+			if (desc) {
+				for (idx_t s = 0; s < prefix_len; s++) {
+					*(key_locations[i] + s) = ~*(key_locations[i] + s);
+				}
+			}
+			key_locations[i] += prefix_len;
+		}
+	} else {
+		for (idx_t i = 0; i < add_count; i++) {
+			auto idx = sel.get_index(i);
+			auto source_idx = vdata.sel->get_index(idx);
+			// write value
+			EncodeStringData(key_locations[i], source[source_idx], prefix_len);
+			// invert bits if desc
+			if (desc) {
+				for (idx_t s = 0; s < prefix_len; s++) {
+					*(key_locations[i] + s) = ~*(key_locations[i] + s);
+				}
+			}
+			key_locations[i] += prefix_len;
+		}
+	}
+}
+
 void RowChunk::SerializeVectorSortable(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count,
-                                       data_ptr_t key_locations[], bool desc, bool has_null, bool nulls_first) {
+                                       data_ptr_t key_locations[], bool desc, bool has_null, bool nulls_first, idx_t prefix_len) {
 	VectorData vdata;
 	v.Orrify(vcount, vdata);
 	switch (v.GetType().InternalType()) {
@@ -262,9 +305,9 @@ void RowChunk::SerializeVectorSortable(Vector &v, idx_t vcount, const SelectionV
 	case PhysicalType::INTERVAL:
 		TemplatedSerializeVectorSortable<interval_t>(vdata, sel, ser_count, key_locations, desc, has_null, nulls_first);
 		break;
-	case PhysicalType::VARCHAR: {
-		// TODO
-	}
+	case PhysicalType::VARCHAR:
+		SerializeStringVectorSortable(vdata, sel, ser_count, key_locations, desc, has_null, nulls_first, prefix_len);
+		break;
 	default:
 		throw NotImplementedException("FIXME: unimplemented deserialize");
 	}
@@ -386,8 +429,8 @@ idx_t RowChunk::AppendToBlock(RowDataBlock &block, BufferHandle &handle, vector<
 	data_ptr_t dataptr;
 	if (entry_sizes) {
 		// compute how many entries fit if entry size if variable
-        dataptr = handle.node->buffer + block.byte_offset;
-        for (idx_t i = 0; i < remaining; i++) {
+		dataptr = handle.node->buffer + block.byte_offset;
+		for (idx_t i = 0; i < remaining; i++) {
 			if (block.byte_offset + entry_sizes[i] > block_capacity * entry_size) {
 				break;
 			}
@@ -398,8 +441,8 @@ idx_t RowChunk::AppendToBlock(RowDataBlock &block, BufferHandle &handle, vector<
 		append_count = MinValue<idx_t>(remaining, block.CAPACITY - block.count);
 		dataptr = handle.node->buffer + block.count * entry_size;
 	}
-    append_entries.emplace_back(dataptr, append_count);
-    block.count += append_count;
+	append_entries.emplace_back(dataptr, append_count);
+	block.count += append_count;
 	return append_count;
 }
 
@@ -444,10 +487,10 @@ void RowChunk::Build(idx_t added_count, data_ptr_t key_locations[], idx_t entry_
 	for (auto &append_entry : append_entries) {
 		idx_t next = append_idx + append_entry.count;
 		if (entry_sizes) {
-            for (; append_idx < next; append_idx++) {
-                key_locations[append_idx] = append_entry.baseptr;
-                append_entry.baseptr += entry_sizes[append_idx];
-            }
+			for (; append_idx < next; append_idx++) {
+				key_locations[append_idx] = append_entry.baseptr;
+				append_entry.baseptr += entry_sizes[append_idx];
+			}
 		} else {
 			for (; append_idx < next; append_idx++) {
 				key_locations[append_idx] = append_entry.baseptr;
