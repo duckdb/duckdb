@@ -46,7 +46,7 @@ public:
 	DUCKDB_API idx_t size() const {
 		return count;
 	}
-	DUCKDB_API DUCKDB_API idx_t ColumnCount() const {
+	DUCKDB_API idx_t ColumnCount() const {
 		return data.size();
 	}
 	void SetCardinality(idx_t count) {
@@ -73,7 +73,7 @@ public:
 	//! Append the other DataChunk to this one. The column count and types of
 	//! the two DataChunks have to match exactly. Throws an exception if there
 	//! is not enough space in the chunk.
-	DUCKDB_API DUCKDB_API void Append(DataChunk &other);
+	DUCKDB_API void Append(DataChunk &other);
 	//! Destroy all data and columns owned by this DataChunk
 	DUCKDB_API void Destroy();
 
@@ -112,7 +112,7 @@ public:
 
 	//! Verify that the DataChunk is in a consistent, not corrupt state. DEBUG
 	//! FUNCTION ONLY!
-	DUCKDB_API DUCKDB_API void Verify();
+	DUCKDB_API void Verify();
 
 	//! export data chunk as a arrow struct array that can be imported as arrow record batch
 	DUCKDB_API void ToArrowArray(ArrowArray *out_array);
