@@ -15,4 +15,4 @@ statement ok
 PRAGMA all_profiling_output
 
 statement ok
-PRAGMA set_profiler_size = 5
+PRAGMA set_profiler_history_size = 5

@@ -71,17 +71,18 @@ static void PragmaDetailedProfilingOutputFunction(ClientContext &context, const 
 		int operator_counter = 1;
 		//        SetValue(output, total_counter++, 0, 0, "Query: " + context.prev_profiler.query,
 		//                 context.prev_profiler.main_query.Elapsed());
-		for (auto op : context.prev_profilers.back().second.tree_map) {
-			int function_counter = 1;
-			if (op.second->info.has_executor) {
-				for (auto &info : op.second->info.executors_info->roots) {
-					ExtractExpressions(*info, output, total_counter, operator_counter, function_counter,
-					                   op.second->info.executors_info->sample_tuples_count);
+		if (!context.prev_profilers.empty()) {
+			for (auto op : context.prev_profilers.back().second.tree_map) {
+				int function_counter = 1;
+				if (op.second->info.has_executor) {
+					for (auto &info : op.second->info.executors_info->roots) {
+						ExtractExpressions(*info, output, total_counter, operator_counter, function_counter,
+						                   op.second->info.executors_info->sample_tuples_count);
+					}
 				}
+				operator_counter++;
 			}
-			operator_counter++;
 		}
-
 		state.rows = 0;
 		output.SetCardinality(total_counter);
 	} else {

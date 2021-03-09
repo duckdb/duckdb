@@ -29,12 +29,12 @@ static void PragmaSetProfilingModeStatement(ClientContext &context, const Functi
 	}
 }
 
-static void PragmaSetProfilerSize(ClientContext &context, const FunctionParameters &parameters) {
+static void PragmaSetProfilerHistorySize(ClientContext &context, const FunctionParameters &parameters) {
 	auto size = parameters.values[0].GetValue<int64_t>();
 	if (size <= 0) {
 		throw ParserException("Size should be larger than 0");
 	}
-	context.SetPrevProfilersSize(size);
+	context.SetProfilerHistorySize(size);
 }
 
 static void PragmaEnableProfilingAssignment(ClientContext &context, const FunctionParameters &parameters) {
@@ -244,7 +244,8 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 
 	set.AddFunction(
 	    PragmaFunction::PragmaAssignment("profiling_mode", PragmaSetProfilingModeStatement, LogicalType::VARCHAR));
-	set.AddFunction(PragmaFunction::PragmaAssignment("set_profiler_size", PragmaSetProfilerSize, LogicalType::BIGINT));
+	set.AddFunction(PragmaFunction::PragmaAssignment("set_profiler_history_size", PragmaSetProfilerHistorySize,
+	                                                 LogicalType::BIGINT));
 
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_profile", PragmaDisableProfiling));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_profiling", PragmaDisableProfiling));

@@ -155,7 +155,7 @@ public:
 	DUCKDB_API void RunFunctionInTransactionInternal(ClientContextLock &lock, const std::function<void(void)> &fun,
 	                                                 bool requires_valid_transaction = true);
 
-	void SetPrevProfilersSize(uint64_t size) {
+	void SetProfilerHistorySize(uint64_t size) {
 		this->prev_profilers_size = size;
 	}
 

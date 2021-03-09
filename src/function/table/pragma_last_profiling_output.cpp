@@ -60,9 +60,11 @@ static void PragmaLastProfilingOutputFunction(ClientContext &context, const Func
 		int operator_counter = 1;
 		//		SetValue(output, total_counter++, 0, "Query: " + context.prev_profiler.query,
 		//		         context.prev_profiler.main_query.Elapsed(), 0, "");
-		for (auto op : context.prev_profilers.back().second.tree_map) {
-			SetValue(output, total_counter++, operator_counter++, op.second->name, op.second->info.time,
-			         op.second->info.elements, " ");
+		if (!context.prev_profilers.empty()) {
+			for (auto op : context.prev_profilers.back().second.tree_map) {
+				SetValue(output, total_counter++, operator_counter++, op.second->name, op.second->info.time,
+				         op.second->info.elements, " ");
+			}
 		}
 		state.rows = 0;
 		output.SetCardinality(total_counter);
