@@ -124,7 +124,7 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 
 		// compute column sizes
 		auto physical_type = expr.return_type.InternalType();
-		idx_t size = GetTypeIdSize(expr.return_type.InternalType());
+		idx_t col_size = GetTypeIdSize(expr.return_type.InternalType());
 		if (expr.stats) {
 			// TODO: test this statistics thing
 			has_null.push_back(expr.stats->has_null);
@@ -132,16 +132,16 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 				auto num_stats = (NumericStatistics &)*expr.stats;
 				switch (physical_type) {
 				case PhysicalType::INT16:
-					size = TemplatedGetSize<int16_t>(num_stats.min, num_stats.max);
+                    col_size = TemplatedGetSize<int16_t>(num_stats.min, num_stats.max);
 					break;
 				case PhysicalType::INT32:
-					size = TemplatedGetSize<int32_t>(num_stats.min, num_stats.max);
+                    col_size = TemplatedGetSize<int32_t>(num_stats.min, num_stats.max);
 					break;
 				case PhysicalType::INT64:
-					size = TemplatedGetSize<int64_t>(num_stats.min, num_stats.max);
+                    col_size = TemplatedGetSize<int64_t>(num_stats.min, num_stats.max);
 					break;
 				case PhysicalType::INT128:
-					size = TemplatedGetSize<hugeint_t>(num_stats.min, num_stats.max);
+                    col_size = TemplatedGetSize<hugeint_t>(num_stats.min, num_stats.max);
 					break;
 				default:
 					// have to use full size for floating point numbers
@@ -149,18 +149,27 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 				}
 			} else if (expr.return_type == LogicalType::VARCHAR) {
 				auto str_stats = (StringStatistics &)*expr.stats;
-				size = MinValue(str_stats.max_string_length, StringStatistics::MAX_STRING_MINMAX_SIZE);
+                col_size = MinValue(str_stats.max_string_length, StringStatistics::MAX_STRING_MINMAX_SIZE);
 			}
 		} else {
 			has_null.push_back(true);
+			if (!TypeIsConstantSize(physical_type)) {
+				switch (physical_type) {
+				case PhysicalType::VARCHAR:
+                    col_size = StringStatistics::MAX_STRING_MINMAX_SIZE;
+				default:
+					// do nothing
+					break;
+				}
+			}
 		}
 
 		// increment entry size with the column size
 		if (has_null.back()) {
 			entry_size++;
 		}
-		entry_size += size;
-		size_in_bytes.push_back(size);
+		entry_size += col_size;
+		size_in_bytes.push_back(col_size);
 
 		// create RowChunks for variable size sorting columns in order to resolve
 		if (TypeIsConstantSize(physical_type)) {
