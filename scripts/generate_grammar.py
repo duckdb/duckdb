@@ -29,7 +29,8 @@ def read_list_from_file(fname):
 kwdir = os.path.join(base_dir, 'keywords')
 unreserved_keywords = read_list_from_file(os.path.join(kwdir, 'unreserved_keywords.list'))
 colname_keywords = read_list_from_file(os.path.join(kwdir, 'column_name_keywords.list'))
-type_func_keywords = read_list_from_file(os.path.join(kwdir, 'type_func_name_keywords.list'))
+func_name_keywords = read_list_from_file(os.path.join(kwdir, 'func_name_keywords.list'))
+type_name_keywords = read_list_from_file(os.path.join(kwdir, 'type_name_keywords.list'))
 reserved_keywords = read_list_from_file(os.path.join(kwdir, 'reserved_keywords.list'))
 
 def strip_p(x):
@@ -40,7 +41,8 @@ def strip_p(x):
 
 unreserved_keywords.sort(key=lambda x: strip_p(x))
 colname_keywords.sort(key=lambda x: strip_p(x))
-type_func_keywords.sort(key=lambda x: strip_p(x))
+func_name_keywords.sort(key=lambda x: strip_p(x))
+type_name_keywords.sort(key=lambda x: strip_p(x))
 reserved_keywords.sort(key=lambda x: strip_p(x))
 
 statements = read_list_from_file(os.path.join(base_dir, 'statements.list'))
@@ -51,17 +53,22 @@ if len(statements) < 0:
 
 # verify there are no duplicate keywords and create big sorted list of keywords
 kwdict = {}
-for kw in zip(unreserved_keywords, colname_keywords, type_func_keywords, reserved_keywords):
-    if kw in kwdict:
-        print("Duplicate keyword: " + kw)
-        exit(1)
-    kwdict[kw] = True
+for kw in unreserved_keywords:
+    kwdict[kw] = 'UNRESERVED_KEYWORD'
 
-kwlist = []
-kwlist += [(x, 'UNRESERVED_KEYWORD') for x in unreserved_keywords]
-kwlist += [(x, 'COL_NAME_KEYWORD') for x in colname_keywords]
-kwlist += [(x, 'TYPE_FUNC_NAME_KEYWORD') for x in type_func_keywords]
-kwlist += [(x, 'RESERVED_KEYWORD') for x in reserved_keywords]
+for kw in colname_keywords:
+    kwdict[kw] = 'COL_NAME_KEYWORD'
+
+for kw in func_name_keywords:
+    kwdict[kw] = 'TYPE_FUNC_NAME_KEYWORD'
+
+for kw in type_name_keywords:
+    kwdict[kw] = 'TYPE_FUNC_NAME_KEYWORD'
+
+for kw in reserved_keywords:
+    kwdict[kw] = 'RESERVED_KEYWORD'
+
+kwlist = [(x, kwdict[x]) for x in kwdict.keys()]
 kwlist.sort(key=lambda x: strip_p(x[0]))
 
 # now generate kwlist.h
@@ -117,9 +124,67 @@ stmt_list = "stmt: " + "\n\t| ".join(statements) + "\n\t| /*EMPTY*/\n\t{ $$ = NU
 text = text.replace("{{{ STATEMENTS }}}", stmt_list)
 
 # keywords
+# keywords can EITHER be reserved, unreserved, or some combination of (col_name, type_name, func_name)
+# that means duplicates are ONLY allowed between (col_name, type_name and func_name)
+# having a keyword be both reserved and unreserved is an error
+# as is having a keyword both reserved and col_name, for example
+# verify that this is the case
+reserved_dict = {}
+unreserved_dict = {}
+other_dict = {}
+for r in reserved_keywords:
+    if r in reserved_dict:
+        print("Duplicate keyword " + r + " in reserved keywords")
+        exit(1)
+    reserved_dict[r] = True
+
+for ur in unreserved_keywords:
+    if ur in unreserved_dict:
+        print("Duplicate keyword " + ur + " in unreserved keywords")
+        exit(1)
+    if ur in reserved_dict:
+        print("Keyword " + ur + " is marked as both unreserved and reserved")
+        exit(1)
+    unreserved_dict[ur] = True
+
+def add_to_other_keywords(kw, list_name):
+    global unreserved_dict
+    global reserved_dict
+    if kw in unreserved_dict:
+        print("Keyword " + kw + " is marked as both unreserved and " + list_name)
+        exit(1)
+    if kw in reserved_dict:
+        print("Keyword " + kw + " is marked as both reserved and " + list_name)
+        exit(1)
+    other_dict[cr] = True
+
+for cr in colname_keywords:
+    add_to_other_keywords(cr, "colname")
+
+type_func_name_dict = {}
+for tr in type_name_keywords:
+    add_to_other_keywords(tr, "typename")
+    type_func_name_dict[tr] = True
+
+for fr in func_name_keywords:
+    add_to_other_keywords(fr, "funcname")
+    type_func_name_dict[fr] = True
+
+type_func_name_keywords = list(type_func_name_dict.keys())
+type_func_name_keywords.sort()
+
+all_keywords = list(reserved_dict.keys()) + list(unreserved_dict.keys()) + list(other_dict.keys())
+all_keywords.sort()
+
+other_keyword = list(other_dict.keys())
+other_keyword.sort()
+
 kw_definitions = "unreserved_keyword: " + " | ".join(unreserved_keywords) + "\n"
 kw_definitions += "col_name_keyword: " + " | ".join(colname_keywords) + "\n"
-kw_definitions += "type_func_name_keyword: " + " | ".join(type_func_keywords) + "\n"
+kw_definitions += "func_name_keyword: " + " | ".join(func_name_keywords) + "\n"
+kw_definitions += "type_name_keyword: " + " | ".join(type_name_keywords) + "\n"
+kw_definitions += "other_keyword: " + " | ".join(other_keyword) + "\n"
+kw_definitions += "type_func_name_keyword: " + " | ".join(type_func_name_keywords) + "\n"
 kw_definitions += "reserved_keyword: " + " | ".join(reserved_keywords) + "\n"
 text = text.replace("{{{ KEYWORD_DEFINITIONS }}}", kw_definitions)
 

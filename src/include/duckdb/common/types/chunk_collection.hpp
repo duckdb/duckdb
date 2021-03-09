@@ -10,6 +10,7 @@
 
 #include "duckdb/common/enums/order_type.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/winapi.hpp"
 
 namespace duckdb {
 
@@ -27,70 +28,70 @@ public:
 	}
 
 	//! The amount of columns in the ChunkCollection
-	vector<LogicalType> &Types() {
+	DUCKDB_API vector<LogicalType> &Types() {
 		return types;
 	}
 
 	//! The amount of rows in the ChunkCollection
-	const idx_t &Count() {
+	DUCKDB_API const idx_t &Count() {
 		return count;
 	}
 
 	//! The amount of columns in the ChunkCollection
-	idx_t ColumnCount() {
+	DUCKDB_API idx_t ColumnCount() {
 		return types.size();
 	}
 
 	//! Append a new DataChunk directly to this ChunkCollection
-	void Append(DataChunk &new_chunk);
+	DUCKDB_API void Append(DataChunk &new_chunk);
 
 	//! Append another ChunkCollection directly to this ChunkCollection
-	void Append(ChunkCollection &other);
+	DUCKDB_API void Append(ChunkCollection &other);
 
 	//! Merge is like Append but messes up the order and destroys the other collection
-	void Merge(ChunkCollection &other);
+	DUCKDB_API void Merge(ChunkCollection &other);
 
-	void Verify();
+	DUCKDB_API void Verify();
 
 	//! Gets the value of the column at the specified index
-	Value GetValue(idx_t column, idx_t index);
+	DUCKDB_API Value GetValue(idx_t column, idx_t index);
 	//! Sets the value of the column at the specified index
-	void SetValue(idx_t column, idx_t index, const Value &value);
+	DUCKDB_API void SetValue(idx_t column, idx_t index, const Value &value);
 
-	vector<Value> GetRow(idx_t index);
+	DUCKDB_API vector<Value> GetRow(idx_t index);
 
-	string ToString() const {
+	DUCKDB_API string ToString() const {
 		return chunks.size() == 0 ? "ChunkCollection [ 0 ]"
 		                          : "ChunkCollection [ " + std::to_string(count) + " ]: \n" + chunks[0]->ToString();
 	}
-	void Print();
+	DUCKDB_API void Print();
 
 	//! Gets a reference to the chunk at the given index
-	DataChunk &GetChunkForRow(idx_t row_index) {
+	DUCKDB_API DataChunk &GetChunkForRow(idx_t row_index) {
 		return *chunks[LocateChunk(row_index)];
 	}
 
 	//! Gets a reference to the chunk at the given index
-	DataChunk &GetChunk(idx_t chunk_index) {
+	DUCKDB_API DataChunk &GetChunk(idx_t chunk_index) {
 		D_ASSERT(chunk_index < chunks.size());
 		return *chunks[chunk_index];
 	}
 
-	const vector<unique_ptr<DataChunk>> &Chunks() {
+	DUCKDB_API const vector<unique_ptr<DataChunk>> &Chunks() {
 		return chunks;
 	}
 
-	idx_t ChunkCount() {
+	DUCKDB_API idx_t ChunkCount() {
 		return chunks.size();
 	}
 
-	void Reset() {
+	DUCKDB_API void Reset() {
 		count = 0;
 		chunks.clear();
 		types.clear();
 	}
 
-	unique_ptr<DataChunk> Fetch() {
+	DUCKDB_API unique_ptr<DataChunk> Fetch() {
 		if (ChunkCount() == 0) {
 			return nullptr;
 		}
@@ -100,24 +101,24 @@ public:
 		return res;
 	}
 
-	void Sort(vector<OrderType> &desc, vector<OrderByNullType> &null_order, idx_t result[]);
+	DUCKDB_API void Sort(vector<OrderType> &desc, vector<OrderByNullType> &null_order, idx_t result[]);
 	//! Reorders the rows in the collection according to the given indices. NB: order is changed!
-	void Reorder(idx_t order[]);
+	DUCKDB_API void Reorder(idx_t order[]);
 
-	void MaterializeSortedChunk(DataChunk &target, idx_t order[], idx_t start_offset);
+	DUCKDB_API void MaterializeSortedChunk(DataChunk &target, idx_t order[], idx_t start_offset);
 
 	//! Returns true if the ChunkCollections are equivalent
-	bool Equals(ChunkCollection &other);
+	DUCKDB_API bool Equals(ChunkCollection &other);
 
 	//! Locates the chunk that belongs to the specific index
-	idx_t LocateChunk(idx_t index) {
+	DUCKDB_API idx_t LocateChunk(idx_t index) {
 		idx_t result = index / STANDARD_VECTOR_SIZE;
 		D_ASSERT(result < chunks.size());
 		return result;
 	}
 
-	void Heap(vector<OrderType> &desc, vector<OrderByNullType> &null_order, idx_t heap[], idx_t heap_size);
-	idx_t MaterializeHeapChunk(DataChunk &target, idx_t order[], idx_t start_offset, idx_t heap_size);
+	DUCKDB_API void Heap(vector<OrderType> &desc, vector<OrderByNullType> &null_order, idx_t heap[], idx_t heap_size);
+	DUCKDB_API idx_t MaterializeHeapChunk(DataChunk &target, idx_t order[], idx_t start_offset, idx_t heap_size);
 
 private:
 	//! The total amount of elements in the collection

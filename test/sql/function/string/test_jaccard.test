@@ -1,0 +1,144 @@
+# name: test/sql/function/string/test_jaccard.test
+# description: Test jaccard function
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+# jaccard
+query I
+SELECT jaccard('hello', 'hello')
+----
+1
+
+query I
+SELECT jaccard('hello', NULL)
+----
+NULL
+
+query I
+SELECT jaccard(NULL, 'hello')
+----
+NULL
+
+query I
+SELECT jaccard(NULL, NULL)
+----
+NULL
+
+query I
+SELECT jaccard('ab', 'aabb')
+----
+1.0
+
+query I
+SELECT jaccard('aabb', 'ab')
+----
+1.0
+
+query I
+SELECT jaccard('ab', 'cd')
+----
+0.0
+
+query I
+SELECT jaccard('cd', 'ab')
+----
+0.0
+
+query I
+SELECT round(jaccard('ab', 'aabbcc'), 3)
+----
+0.667
+
+query I
+SELECT round(jaccard('aabbcc', 'ab'), 3)
+----
+0.667
+
+query I
+SELECT round(jaccard('aabbccddeeff', 'ab'), 3)
+----
+0.333
+
+query I
+SELECT round(jaccard('ab', 'aabbccddeeff'), 3)
+----
+0.333
+
+query I
+SELECT round(jaccard('aabbccddeeffg', 'ab'), 3)
+----
+0.286
+
+query I
+SELECT round(jaccard('ab', 'aaaabbbccddeeffgabcccc'), 3)
+----
+0.286
+
+query I
+SELECT round(jaccard('ababababababba', 'aaaabbbccddeeffgabcccc'), 3)
+----
+0.286
+
+statement error
+SELECT jaccard('hello', '')
+
+statement error
+SELECT jaccard('', 'hello')
+
+statement error
+SELECT jaccard('', '')
+
+
+statement ok
+CREATE TABLE strings(s VARCHAR, t VARCHAR)
+
+statement ok
+INSERT INTO strings VALUES ('hello', 'hallo'), ('aloha', 'fello'), ('fellow', 'ducks'), (NULL, NULL)
+
+query I
+select round(jaccard(s, t), 1) from strings
+----
+0.6
+0.3
+0.0
+NULL
+
+query I
+select round(jaccard(s, 'hallo'), 1) from strings
+----
+0.6
+1.0
+0.3
+NULL
+
+query I
+select round(jaccard('hallo', t), 1) from strings
+----
+1.0
+0.3
+0.0
+NULL
+
+query I
+select round(jaccard(NULL, t), 1) from strings
+----
+NULL
+NULL
+NULL
+NULL
+
+query I
+select round(jaccard(s, NULL), 1) from strings
+----
+NULL
+NULL
+NULL
+NULL
+
+statement error
+select round(jaccard('', t), 1) from strings
+
+statement error
+select round(jaccard(s, ''), 1) from strings

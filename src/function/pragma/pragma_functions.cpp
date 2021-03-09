@@ -17,6 +17,18 @@ static void PragmaEnableProfilingStatement(ClientContext &context, const Functio
 	context.profiler.Enable();
 }
 
+static void PragmaSetProfilingModeStatement(ClientContext &context, const FunctionParameters &parameters) {
+	// this is either profiling_mode = standard, or profiling_mode = detailed
+	string mode = StringUtil::Lower(parameters.values[0].ToString());
+	if (mode == "standard") {
+		context.profiler.Enable();
+	} else if (mode == "detailed") {
+		context.profiler.DetailedEnable();
+	} else {
+		throw ParserException("Unrecognized print format %s, supported formats: [standard, detailed]", mode);
+	}
+}
+
 static void PragmaEnableProfilingAssignment(ClientContext &context, const FunctionParameters &parameters) {
 	// this is either enable_profiling = json, or enable_profiling = query_tree
 	string assignment = parameters.values[0].ToString();
@@ -108,6 +120,14 @@ static void PragmaSetProgressBarWaitTime(ClientContext &context, const FunctionP
 
 static void PragmaDisableProgressBar(ClientContext &context, const FunctionParameters &parameters) {
 	context.enable_progress_bar = false;
+}
+
+static void PragmaEnablePrintProgressBar(ClientContext &context, const FunctionParameters &parameters) {
+	context.print_progress_bar = true;
+}
+
+static void PragmaDisablePrintProgressBar(ClientContext &context, const FunctionParameters &parameters) {
+	context.print_progress_bar = false;
 }
 
 static void PragmaEnableVerification(ClientContext &context, const FunctionParameters &parameters) {
@@ -214,6 +234,9 @@ static void PragmaDebugCheckpointAbort(ClientContext &context, const FunctionPar
 void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	RegisterEnableProfiling(set);
 
+	set.AddFunction(
+	    PragmaFunction::PragmaAssignment("profiling_mode", PragmaSetProfilingModeStatement, LogicalType::VARCHAR));
+
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_profile", PragmaDisableProfiling));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_profiling", PragmaDisableProfiling));
 
@@ -253,9 +276,13 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(PragmaFunction::PragmaStatement("force_checkpoint", PragmaForceCheckpoint));
 
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_progress_bar", PragmaEnableProgressBar));
+	set.AddFunction(PragmaFunction::PragmaStatement("disable_progress_bar", PragmaDisableProgressBar));
+
+	set.AddFunction(PragmaFunction::PragmaStatement("enable_print_progress_bar", PragmaEnablePrintProgressBar));
+	set.AddFunction(PragmaFunction::PragmaStatement("disable_print_progress_bar", PragmaDisablePrintProgressBar));
+
 	set.AddFunction(
 	    PragmaFunction::PragmaAssignment("set_progress_bar_time", PragmaSetProgressBarWaitTime, LogicalType::INTEGER));
-	set.AddFunction(PragmaFunction::PragmaStatement("disable_progress_bar", PragmaDisableProgressBar));
 
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_checkpoint_on_shutdown", PragmaEnableCheckpointOnShutdown));
 	set.AddFunction(

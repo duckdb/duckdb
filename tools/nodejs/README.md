@@ -1,22 +1,29 @@
-This package provides a node.js API for DuckDB, the "SQLite for Analytics". The API for this client is somewhat compliant to the SQLite node.js client for easier transition (and transition you must eventually).
+# DuckDB Node Bindings
+
+This package provides a node.js API for [DuckDB](https://github.com/cwida/duckdb), the "SQLite for Analytics". The API for this client is somewhat compliant to the SQLite node.js client for easier transition (and transition you must eventually).
 
 Load the package and create a database object:
-````JavaScript
+
+```js
 var duckdb = require('duckdb');
 
 var db = new duckdb.Database(':memory:'); // or a file name for a persistent DB
-````
+```
+
 Then you can run a query:
-````JavaScript
+
+```js
 db.all('SELECT 42 AS fortytwo', function(err, res) {
   if (err) {
     throw err;
   }
   console.log(res[0].fortytwo)
 });
-````
+```
+
 Other available methods are `each`, where the callback is invoked for each row, `run` to execute a single statement without results and `exec`, which can execute several SQL commands at once but also does not return results. All those commands can work with prepared statements, taking the values for the parameters as additional arguments. For example like so:
-````JavaScript
+
+```js
 db.all('SELECT ?::INTEGER AS fortytwo, ?::STRING as hello', 42, 'Hello, World', function(err, res) {
   if (err) {
     throw err;
@@ -24,43 +31,48 @@ db.all('SELECT ?::INTEGER AS fortytwo, ?::STRING as hello', 42, 'Hello, World', 
   console.log(res[0].fortytwo)
   console.log(res[0].hello)
 });
-````
+```
 
 However, these are all shorthands for something much more elegant. A database can have multiple `Connection`s, those are created using `db.connect()`.
-````JavaScript
+
+```js
 var con = db.connect();
-````
+```
+
 You can create multiple connections, each with their own transaction context.
 
 
 `Connection` objects also contain shorthands to directly call `run()`, `all()` and `each()` with parameters and callbacks, respectively, for example:
-````JavaScript
+
+```js
 con.all('SELECT 42 AS fortytwo', function(err, res) {
   if (err) {
     throw err;
   }
   console.log(res[0].fortytwo)
 });
-````
+```
 
 From connections, you can create prepared statements (and only that) using `con.prepare()`:
 
-````JavaScript
+```js
 var stmt = con.prepare('select ?::INTEGER as fortytwo');
-```` 
+``` 
 
 To execute this statement, you can call for example `all()` on the `stmt` object:
-````JavaScript
+
+```js
 stmt.all(42, function(err, res) {
   if (err) {
     throw err;
   }
   console.log(res[0].fortytwo)
 });
-````
+```
 
 You can also execute the prepared statement multiple times. This is for example useful to fill a table with data:
-````JavaScript
+
+```js
 con.run('CREATE TABLE a (i INTEGER)');
 var stmt = con.prepare('INSERT INTO a VALUES (?)');
 for (var i = 0; i < 10; i++) {
@@ -73,10 +85,11 @@ con.all('SELECT * FROM a', function(err, res) {
   }
   console.log(res)
 });
-````
+```
 
 `prepare()` can also take a callback which gets the prepared statement as an argument:
-````JavaScript
+
+```js
 var stmt = con.prepare('select ?::INTEGER as fortytwo', function(err, stmt) {
   stmt.all(42, function(err, res) {
     if (err) {
@@ -85,4 +98,4 @@ var stmt = con.prepare('select ?::INTEGER as fortytwo', function(err, stmt) {
     console.log(res[0].fortytwo)
   });
 });
-````
+```

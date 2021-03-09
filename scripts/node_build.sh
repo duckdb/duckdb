@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+set -e
+
 source scripts/install_node.sh $1
 cd tools/nodejs
 make clean
@@ -7,7 +9,7 @@ make clean
 
 npm install --build-from-source
 npm test
-export PATH=node_modules/node-pre-gyp/bin:$PATH
+export PATH=$(npm bin):$PATH
 node-pre-gyp package testpackage testbinary
 if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ ]] ; then
   node-pre-gyp publish

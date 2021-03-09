@@ -423,7 +423,10 @@ endif()
 
 add_subdirectory(src)
 
+add_subdirectory(tools)
+
 add_subdirectory(extension)
+
 if(NOT CLANG_TIDY)
   if(${BUILD_UNITTESTS})
     add_subdirectory(test)
@@ -433,9 +436,7 @@ if(NOT CLANG_TIDY)
       add_subdirectory(benchmark)
     endif()
   endif()
-
   add_subdirectory(third_party)
-  add_subdirectory(tools)
 endif()
 
 # Write the export set for build and install tree
@@ -472,3 +473,4 @@ if(EXISTS ${CMAKE_CONFIG_TEMPLATE} AND EXISTS ${CMAKE_CONFIG_VERSION_TEMPLATE})
           "${PROJECT_BINARY_DIR}/DuckDBConfigVersion.cmake"
     DESTINATION "${INSTALL_CMAKE_DIR}")
 endif()
+

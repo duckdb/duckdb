@@ -30,8 +30,6 @@ public:
 	void Stop();
 	//! Gets current percentage
 	int GetCurrentPercentage();
-	//! If all values in the percentage were valid
-	bool IsPercentageValid();
 
 private:
 	const string PROGRESS_BAR_STRING = "||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||";
@@ -39,7 +37,6 @@ private:
 	Executor *executor = nullptr;
 #ifndef DUCKDB_NO_THREADS
 	std::thread progress_bar_thread;
-	std::atomic<bool> valid_percentage;
 	std::condition_variable c;
 	std::mutex m;
 #endif

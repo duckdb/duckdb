@@ -37,10 +37,22 @@ public:
 };
 
 struct TreeRendererConfig {
+
+	void enable_detailed() {
+		MAX_EXTRA_LINES = 1000;
+		detailed = true;
+	}
+
+	void enable_standard() {
+		MAX_EXTRA_LINES = 30;
+		detailed = false;
+	}
+
 	idx_t MAXIMUM_RENDER_WIDTH = 240;
 	idx_t NODE_RENDER_WIDTH = 29;
 	idx_t MINIMUM_RENDER_WIDTH = 15;
 	idx_t MAX_EXTRA_LINES = 30;
+	bool detailed = false;
 
 	const char *LTCORNER = "┌";
 	const char *RTCORNER = "┐";
@@ -87,6 +99,13 @@ public:
 
 	void ToStream(RenderTree &root, std::ostream &ss);
 
+	void EnableDetailed() {
+		config.enable_detailed();
+	}
+	void EnableStandard() {
+		config.enable_standard();
+	}
+
 private:
 	unique_ptr<RenderTree> CreateTree(const LogicalOperator &op);
 	unique_ptr<RenderTree> CreateTree(const PhysicalOperator &op);
@@ -118,6 +137,7 @@ private:
 
 	template <class T>
 	unique_ptr<RenderTree> CreateRenderTree(const T &op);
+	string ExtractExpressionsRecursive(ExpressionInformation &states);
 };
 
 } // namespace duckdb

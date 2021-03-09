@@ -150,6 +150,8 @@ static unique_ptr<FunctionOperatorData> ReadCSVInit(ClientContext &context, cons
 		bind_data.options.file_path = bind_data.files[0];
 		result->csv_reader = make_unique<BufferedCSVReader>(context, bind_data.options, bind_data.sql_types);
 	}
+	bind_data.bytes_read = 0;
+	bind_data.file_size = result->csv_reader->file_size;
 	result->file_index = 1;
 	return move(result);
 }
@@ -167,6 +169,7 @@ static void ReadCSVFunction(ClientContext &context, const FunctionData *bind_dat
 	auto &data = (ReadCSVOperatorData &)*operator_state;
 	do {
 		data.csv_reader->ParseCSV(output);
+		bind_data.bytes_read = data.csv_reader->bytes_in_chunk;
 		if (output.size() == 0 && data.file_index < bind_data.files.size()) {
 			// exhausted this file, but we have more files we can read
 			// open the next file and increment the counter
@@ -203,8 +206,18 @@ static void ReadCSVAddNamedParameters(TableFunction &table_function) {
 	table_function.named_parameters["filename"] = LogicalType::BOOLEAN;
 }
 
+int CSVReaderProgress(ClientContext &context, const FunctionData *bind_data_p) {
+	auto &bind_data = (ReadCSVData &)*bind_data_p;
+	if (bind_data.file_size == 0) {
+		return 100;
+	}
+	auto percentage = bind_data.bytes_read * 100 / bind_data.file_size;
+	return percentage;
+}
+
 TableFunction ReadCSVTableFunction::GetFunction() {
 	TableFunction read_csv("read_csv", {LogicalType::VARCHAR}, ReadCSVFunction, ReadCSVBind, ReadCSVInit);
+	read_csv.table_scan_progress = CSVReaderProgress;
 	ReadCSVAddNamedParameters(read_csv);
 	return read_csv;
 }
@@ -213,6 +226,7 @@ void ReadCSVTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ReadCSVTableFunction::GetFunction());
 
 	TableFunction read_csv_auto("read_csv_auto", {LogicalType::VARCHAR}, ReadCSVFunction, ReadCSVAutoBind, ReadCSVInit);
+	read_csv_auto.table_scan_progress = CSVReaderProgress;
 	ReadCSVAddNamedParameters(read_csv_auto);
 	set.AddFunction(read_csv_auto);
 }
