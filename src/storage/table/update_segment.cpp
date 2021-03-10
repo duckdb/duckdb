@@ -530,7 +530,7 @@ static UpdateSegment::initialize_update_function_t GetInitializeUpdateFunction(P
 // Merge update info
 //===--------------------------------------------------------------------===//
 template <class F1, class F2, class F3>
-static idx_t merge_loop(row_t a[], sel_t b[], idx_t acount, idx_t bcount, idx_t aoffset, F1 merge, F2 pick_a,
+static idx_t MergeLoop(row_t a[], sel_t b[], idx_t acount, idx_t bcount, idx_t aoffset, F1 merge, F2 pick_a,
                         F3 pick_b) {
 	idx_t aidx = 0, bidx = 0;
 	idx_t count = 0;
@@ -670,7 +670,7 @@ static void MergeUpdateLoop(SegmentStatistics &stats, UpdateInfo *base_info, Vec
 	auto merge = [&](idx_t id, idx_t aidx, idx_t bidx, idx_t count) {
 		pick_new(id, aidx, count);
 	};
-	merge_loop(ids, base_info->tuples, count, base_info->N, base_id, merge, pick_new, pick_old);
+	MergeLoop(ids, base_info->tuples, count, base_info->N, base_id, merge, pick_new, pick_old);
 
 	base_info->N = result_offset;
 	memcpy(base_info_data, result_values, result_offset * sizeof(T));
