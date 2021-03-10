@@ -433,8 +433,7 @@ void NumericSegment::FilterFetchBaseData(ColumnScanState &state, Vector &result,
 //===--------------------------------------------------------------------===//
 // Fetch
 //===--------------------------------------------------------------------===//
-void NumericSegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &result,
-                              idx_t result_idx) {
+void NumericSegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	auto handle = buffer_manager.Pin(block);
 

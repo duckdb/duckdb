@@ -13,6 +13,7 @@
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 
 namespace duckdb {
+class UpdateSegment;
 class TransientSegment;
 
 struct ColumnAppendState {

@@ -168,7 +168,8 @@ private:
 
 	//! The CreateIndexScan is a special scan that is used to create an index on the table, it keeps locks on the table
 	void InitializeCreateIndexScan(CreateIndexScanState &state, const vector<column_t> &column_ids);
-	void CreateIndexScan(CreateIndexScanState &structure, const vector<column_t> &column_ids, DataChunk &result, bool allow_pending_updates = false);
+	void CreateIndexScan(CreateIndexScanState &structure, const vector<column_t> &column_ids, DataChunk &result,
+	                     bool allow_pending_updates = false);
 
 private:
 	//! Lock for appending entries to the table

@@ -265,8 +265,7 @@ string_t StringSegment::FetchString(Vector &result, data_ptr_t baseptr, string_l
 	}
 }
 
-void StringSegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &result,
-                             idx_t result_idx) {
+void StringSegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
 	idx_t vector_index = row_id / STANDARD_VECTOR_SIZE;
 	idx_t id_in_vector = row_id - vector_index * STANDARD_VECTOR_SIZE;
 	D_ASSERT(vector_index < max_vector_count);

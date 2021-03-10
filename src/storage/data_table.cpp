@@ -309,7 +309,8 @@ bool DataTable::CheckZonemap(TableScanState &state, TableFilterSet *table_filter
 	}
 	for (auto &table_filter : table_filters->filters) {
 		for (auto &predicate_constant : table_filter.second) {
-			bool read_segment = columns[predicate_constant.column_index]->CheckZonemap(state.column_scans[predicate_constant.column_index], predicate_constant);
+			bool read_segment = columns[predicate_constant.column_index]->CheckZonemap(
+			    state.column_scans[predicate_constant.column_index], predicate_constant);
 			if (!read_segment) {
 				//! We can skip this partition
 				idx_t vectors_to_skip =
@@ -954,7 +955,8 @@ void DataTable::InitializeCreateIndexScan(CreateIndexScanState &state, const vec
 	InitializeScan(state, column_ids);
 }
 
-void DataTable::CreateIndexScan(CreateIndexScanState &state, const vector<column_t> &column_ids, DataChunk &result, bool allow_pending_updates) {
+void DataTable::CreateIndexScan(CreateIndexScanState &state, const vector<column_t> &column_ids, DataChunk &result,
+                                bool allow_pending_updates) {
 	// scan the persistent segments
 	if (ScanCreateIndex(state, column_ids, result, state.current_row, state.max_row, allow_pending_updates)) {
 		return;

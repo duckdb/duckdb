@@ -17,6 +17,7 @@ namespace duckdb {
 class ColumnData;
 class DataTable;
 class Vector;
+struct UpdateInfo;
 struct UpdateNode;
 
 class UpdateSegment : public SegmentBase {
@@ -32,6 +33,7 @@ public:
 	~UpdateSegment();
 
 	ColumnData &column_data;
+
 public:
 	bool HasUpdates() const;
 	bool HasUncommittedUpdates(idx_t vector_index);
@@ -55,6 +57,7 @@ public:
 	StringHeap &GetStringHeap() {
 		return heap;
 	}
+
 private:
 	//! The lock for the update segment
 	StorageLock lock;
@@ -68,13 +71,19 @@ private:
 	StringHeap heap;
 
 public:
-	typedef void (*initialize_update_function_t)(SegmentStatistics &stats, UpdateInfo *base_info, Vector &base_data, UpdateInfo *update_info, Vector &update);
-	typedef void (*merge_update_function_t)(SegmentStatistics &stats, UpdateInfo *base_info, Vector &base_data, UpdateInfo *update_info, Vector &update, row_t *ids, idx_t count);
-	typedef void (*fetch_update_function_t)(transaction_t start_time, transaction_t transaction_id, UpdateInfo *info, Vector &result);
+	typedef void (*initialize_update_function_t)(SegmentStatistics &stats, UpdateInfo *base_info, Vector &base_data,
+	                                             UpdateInfo *update_info, Vector &update);
+	typedef void (*merge_update_function_t)(SegmentStatistics &stats, UpdateInfo *base_info, Vector &base_data,
+	                                        UpdateInfo *update_info, Vector &update, row_t *ids, idx_t count);
+	typedef void (*fetch_update_function_t)(transaction_t start_time, transaction_t transaction_id, UpdateInfo *info,
+	                                        Vector &result);
 	typedef void (*fetch_committed_function_t)(UpdateInfo *info, Vector &result);
-	typedef void (*fetch_row_function_t)(transaction_t start_time, transaction_t transaction_id, UpdateInfo *info, idx_t row_idx, Vector &result, idx_t result_idx);
+	typedef void (*fetch_row_function_t)(transaction_t start_time, transaction_t transaction_id, UpdateInfo *info,
+	                                     idx_t row_idx, Vector &result, idx_t result_idx);
 	typedef void (*rollback_update_function_t)(UpdateInfo *base_info, UpdateInfo *rollback_info);
-	typedef void (*statistics_update_function_t)(UpdateSegment *segment, SegmentStatistics &stats, Vector &update, idx_t count);
+	typedef void (*statistics_update_function_t)(UpdateSegment *segment, SegmentStatistics &stats, Vector &update,
+	                                             idx_t count);
+
 private:
 	initialize_update_function_t initialize_update_function;
 	merge_update_function_t merge_update_function;

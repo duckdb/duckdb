@@ -77,6 +77,7 @@ public:
 	void SetStatistics(unique_ptr<BaseStatistics> new_stats);
 	void MergeStatistics(BaseStatistics &other);
 	unique_ptr<BaseStatistics> GetStatistics();
+
 private:
 	//! Append a transient segment
 	void AppendTransientSegment(idx_t start_row);

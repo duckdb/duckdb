@@ -54,13 +54,12 @@ public:
 	virtual void FilterScan(ColumnScanState &state, Vector &result, SelectionVector &sel,
 	                        idx_t &approved_tuple_count) = 0;
 	//! Executes filter in this column
-	virtual void Select(ColumnScanState &state, Vector &result, SelectionVector &sel,
-	                    idx_t &approved_tuple_count, vector<TableFilter> &table_filter) = 0;
+	virtual void Select(ColumnScanState &state, Vector &result, SelectionVector &sel, idx_t &approved_tuple_count,
+	                    vector<TableFilter> &table_filter) = 0;
 	//! Fetch the base table vector index that belongs to this row
 	virtual void Fetch(ColumnScanState &state, idx_t vector_index, Vector &result) = 0;
 	//! Fetch a value of the specific row id and append it to the result
-	virtual void FetchRow(ColumnFetchState &state, row_t row_id, Vector &result,
-	                      idx_t result_idx) = 0;
+	virtual void FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) = 0;
 };
 
 } // namespace duckdb

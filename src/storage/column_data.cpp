@@ -41,7 +41,7 @@ void ColumnData::Initialize(vector<unique_ptr<PersistentSegment>> &segments) {
 		data.AppendSegment(move(segment));
 	}
 	idx_t row_count = 0;
-	while(row_count < persistent_rows) {
+	while (row_count < persistent_rows) {
 		idx_t next = MinValue<idx_t>(row_count + UpdateSegment::MORSEL_SIZE, persistent_rows);
 		AppendUpdateSegment(row_count, next - row_count);
 		row_count = next;
@@ -50,7 +50,7 @@ void ColumnData::Initialize(vector<unique_ptr<PersistentSegment>> &segments) {
 
 void ColumnData::InitializeScan(ColumnScanState &state) {
 	state.current = (ColumnSegment *)data.GetRootSegment();
-	state.updates = (UpdateSegment *) updates.GetRootSegment();
+	state.updates = (UpdateSegment *)updates.GetRootSegment();
 	state.vector_index = 0;
 	state.vector_index_updates = 0;
 	state.initialized = false;
@@ -59,7 +59,7 @@ void ColumnData::InitializeScan(ColumnScanState &state) {
 void ColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t vector_idx) {
 	idx_t row_idx = vector_idx * STANDARD_VECTOR_SIZE;
 	state.current = (ColumnSegment *)data.GetSegment(row_idx);
-	state.updates = (UpdateSegment *) updates.GetSegment(row_idx);
+	state.updates = (UpdateSegment *)updates.GetSegment(row_idx);
 	state.vector_index = (row_idx - state.current->start) / STANDARD_VECTOR_SIZE;
 	state.vector_index_updates = (row_idx - state.updates->start) / STANDARD_VECTOR_SIZE;
 	state.initialized = false;
@@ -117,8 +117,9 @@ void ColumnData::Select(Transaction &transaction, ColumnScanState &state, Vector
 		// merge the updates into the result
 		state.updates->FetchUpdates(transaction, state.vector_index_updates, result);
 
-		for(auto &filter : table_filters) {
-			UncompressedSegment::FilterSelection(sel, result, filter, approved_tuple_count, FlatVector::Validity(result));
+		for (auto &filter : table_filters) {
+			UncompressedSegment::FilterSelection(sel, result, filter, approved_tuple_count,
+			                                     FlatVector::Validity(result));
 		}
 	}
 	// move over to the next vector
@@ -154,7 +155,7 @@ void ColumnScanState::Next() {
 	}
 	vector_index_updates++;
 	if (vector_index_updates >= MorselInfo::MORSEL_VECTOR_COUNT) {
-		updates = (UpdateSegment *) updates->next.get();
+		updates = (UpdateSegment *)updates->next.get();
 		vector_index_updates = 0;
 	}
 }
@@ -190,7 +191,7 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 	} else {
 		state.current = (TransientSegment *)segment;
 	}
-	state.updates = (UpdateSegment *) updates.nodes.back().node;
+	state.updates = (UpdateSegment *)updates.nodes.back().node;
 	D_ASSERT(state.current->segment_type == ColumnSegmentType::TRANSIENT);
 	state.current->InitializeAppend(state);
 }
@@ -198,13 +199,14 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 void ColumnData::Append(ColumnAppendState &state, Vector &vector, idx_t count) {
 	// append to update segments
 	idx_t remaining_update_count = count;
-	while(remaining_update_count > 0) {
-		idx_t to_append_elements = MinValue<idx_t>(remaining_update_count, UpdateSegment::MORSEL_SIZE - state.updates->count);
+	while (remaining_update_count > 0) {
+		idx_t to_append_elements =
+		    MinValue<idx_t>(remaining_update_count, UpdateSegment::MORSEL_SIZE - state.updates->count);
 		state.updates->count += to_append_elements;
 		if (to_append_elements != remaining_update_count) {
 			// have to append a new segment
 			AppendUpdateSegment(state.updates->start + state.updates->count);
-			state.updates = (UpdateSegment *) updates.nodes.back().node;
+			state.updates = (UpdateSegment *)updates.nodes.back().node;
 		}
 		remaining_update_count -= to_append_elements;
 	}

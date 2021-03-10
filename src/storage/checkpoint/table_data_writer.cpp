@@ -160,7 +160,7 @@ void TableDataWriter::CheckpointColumn(ColumnData &col_data, idx_t col_idx) {
 			update_vector_index++;
 			if (update_vector_index - base_update_index >= UpdateSegment::MORSEL_VECTOR_COUNT) {
 				base_update_index += UpdateSegment::MORSEL_VECTOR_COUNT;
-				update_segment = (UpdateSegment *) update_segment->next.get();
+				update_segment = (UpdateSegment *)update_segment->next.get();
 			}
 		}
 		// move to the next segment in the list
@@ -174,9 +174,9 @@ void TableDataWriter::CheckpointColumn(ColumnData &col_data, idx_t col_idx) {
 
 	// reset all the updates
 	update_segment = (UpdateSegment *)col_data.updates.root_node.get();
-	while(update_segment) {
+	while (update_segment) {
 		update_segment->ClearUpdates();
-		update_segment = (UpdateSegment *) update_segment->next.get();
+		update_segment = (UpdateSegment *)update_segment->next.get();
 	}
 }
 
