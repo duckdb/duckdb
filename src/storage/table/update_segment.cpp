@@ -531,7 +531,7 @@ static UpdateSegment::initialize_update_function_t GetInitializeUpdateFunction(P
 //===--------------------------------------------------------------------===//
 template <class F1, class F2, class F3>
 static idx_t MergeLoop(row_t a[], sel_t b[], idx_t acount, idx_t bcount, idx_t aoffset, F1 merge, F2 pick_a,
-                        F3 pick_b) {
+                       F3 pick_b) {
 	idx_t aidx = 0, bidx = 0;
 	idx_t count = 0;
 	while (aidx < acount && bidx < bcount) {
