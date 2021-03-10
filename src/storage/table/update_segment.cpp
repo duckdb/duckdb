@@ -95,8 +95,6 @@ template<class T>
 static void MergeUpdateInfo(UpdateInfo *current, T *result_data, ValidityMask &result_mask) {
 	ValidityMask current_mask(current->validity);
 	auto info_data = (T *)current->tuple_data;
-
-	auto info_data = (T *)current->tuple_data;
 	if (current->N == STANDARD_VECTOR_SIZE) {
 		// special case: update touches ALL tuples of this vector
 		// in this case we can just memcpy the data
