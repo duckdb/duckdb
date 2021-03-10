@@ -55,7 +55,7 @@ public:
 	void FilterScan(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
 	                idx_t &approved_tuple_count);
 	//! Scan the next vector from the column, throwing an exception if there are any outstanding updates
-	void IndexScan(ColumnScanState &state, Vector &result);
+	void IndexScan(ColumnScanState &state, Vector &result, bool allow_pending_updates);
 	//! Executes the filters directly in the table's data
 	void Select(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
 	            idx_t &approved_tuple_count, vector<TableFilter> &table_filter);

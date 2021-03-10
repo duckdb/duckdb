@@ -125,14 +125,14 @@ void ColumnData::Select(Transaction &transaction, ColumnScanState &state, Vector
 	state.Next();
 }
 
-void ColumnData::IndexScan(ColumnScanState &state, Vector &result) {
+void ColumnData::IndexScan(ColumnScanState &state, Vector &result, bool allow_pending_updates) {
 	if (!state.initialized) {
 		state.current->InitializeScan(state);
 		state.initialized = true;
 	}
 	// // perform a scan of this segment
 	state.current->Scan(state, state.vector_index, result);
-	if (state.updates->HasUncommittedUpdates(state.vector_index)) {
+	if (!allow_pending_updates && state.updates->HasUncommittedUpdates(state.vector_index)) {
 		throw TransactionException("Cannot create index with outstanding updates");
 	}
 	state.updates->FetchCommitted(state.vector_index_updates, result);

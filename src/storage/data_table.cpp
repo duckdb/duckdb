@@ -630,7 +630,7 @@ void DataTable::ScanTableSegment(idx_t row_start, idx_t count, const std::functi
 
 	while (true) {
 		idx_t current_row = state.current_row;
-		CreateIndexScan(state, column_ids, chunk);
+		CreateIndexScan(state, column_ids, chunk, true);
 		if (chunk.size() == 0) {
 			break;
 		}
@@ -954,15 +954,15 @@ void DataTable::InitializeCreateIndexScan(CreateIndexScanState &state, const vec
 	InitializeScan(state, column_ids);
 }
 
-void DataTable::CreateIndexScan(CreateIndexScanState &state, const vector<column_t> &column_ids, DataChunk &result) {
+void DataTable::CreateIndexScan(CreateIndexScanState &state, const vector<column_t> &column_ids, DataChunk &result, bool allow_pending_updates) {
 	// scan the persistent segments
-	if (ScanCreateIndex(state, column_ids, result, state.current_row, state.max_row)) {
+	if (ScanCreateIndex(state, column_ids, result, state.current_row, state.max_row, allow_pending_updates)) {
 		return;
 	}
 }
 
 bool DataTable::ScanCreateIndex(CreateIndexScanState &state, const vector<column_t> &column_ids, DataChunk &result,
-                                idx_t &current_row, idx_t max_row) {
+                                idx_t &current_row, idx_t max_row, bool allow_pending_updates) {
 	if (current_row >= max_row) {
 		return false;
 	}
@@ -979,7 +979,7 @@ bool DataTable::ScanCreateIndex(CreateIndexScanState &state, const vector<column
 			result.data[i].Sequence(current_row, 1);
 		} else {
 			// scan actual base column
-			columns[column]->IndexScan(state.column_scans[i], result.data[i]);
+			columns[column]->IndexScan(state.column_scans[i], result.data[i], allow_pending_updates);
 		}
 	}
 	result.SetCardinality(count);
