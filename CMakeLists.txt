@@ -194,6 +194,36 @@ if(${BUILD_RDTSC})
   add_compile_definitions(RDTSC)
 endif()
 
+# Detect cpu architecture
+set(detect_arch "
+#if defined(__arm__)
+    #error arm
+#elif defined(__x86_64) || defined(__x86_64__) || defined(__amd64) || defined(_M_X64)
+    #error x86_64
+#endif
+#error fallback
+")
+
+file(WRITE "${CMAKE_BINARY_DIR}/arch.cpp" "${detect_arch}")
+try_run(run_result
+        compile_result
+        "${CMAKE_BINARY_DIR}"
+        "${CMAKE_BINARY_DIR}/arch.cpp"
+        COMPILE_OUTPUT_VARIABLE ARCH
+)
+
+string(REGEX MATCH "error: ([a-zA-Z0-9_]+)" ARCH "${ARCH}")
+string(REPLACE "error: " "" ARCH "${ARCH}")
+
+if(${ARCH} STREQUAL "x86_64")
+  add_compile_definitions(DUCKDB_X86_64)
+elseif(${ARCH} STREQUAL "arm")
+  add_compile_definitions(DUCKDB_ARM)
+else()
+  add_compile_definitions(DUCKDB_FALLBACK)
+endif()
+
+
 if(BUILD_PYTHON
    OR BUILD_R
    OR JDBC_DRIVER)
@@ -499,4 +529,3 @@ if(EXISTS ${CMAKE_CONFIG_TEMPLATE} AND EXISTS ${CMAKE_CONFIG_VERSION_TEMPLATE})
           "${PROJECT_BINARY_DIR}/DuckDBConfigVersion.cmake"
     DESTINATION "${INSTALL_CMAKE_DIR}")
 endif()
-
