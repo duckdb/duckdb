@@ -212,7 +212,7 @@ void ColumnData::Append(ColumnAppendState &state, Vector &vector, idx_t count) {
 	while (true) {
 		// append the data from the vector
 		idx_t copied_elements = state.current->Append(state, vector, offset, count);
-		statistics->Merge(*state.current->stats.statistics);
+		MergeStatistics(*state.current->stats.statistics);
 		if (copied_elements == count) {
 			// finished copying everything
 			break;
@@ -278,7 +278,6 @@ void ColumnData::Update(Transaction &transaction, Vector &update_vector, Vector 
 	auto segment = (UpdateSegment *)updates.GetSegment(first_id);
 	// now perform the update within the segment
 	segment->Update(transaction, update_vector, FlatVector::GetData<row_t>(row_ids), count, base_data);
-	statistics->Merge(*segment->GetStatistics().statistics);
 }
 
 void ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
@@ -312,6 +311,21 @@ void ColumnData::AppendTransientSegment(idx_t start_row) {
 void ColumnData::AppendUpdateSegment(idx_t start_row, idx_t count) {
 	auto new_segment = make_unique<UpdateSegment>(*this, start_row, count);
 	updates.AppendSegment(move(new_segment));
+}
+
+void ColumnData::SetStatistics(unique_ptr<BaseStatistics> new_stats) {
+	lock_guard<mutex> slock(stats_lock);
+	this->statistics = move(new_stats);
+}
+
+void ColumnData::MergeStatistics(BaseStatistics &other) {
+	lock_guard<mutex> slock(stats_lock);
+	statistics->Merge(other);
+}
+
+unique_ptr<BaseStatistics> ColumnData::GetStatistics() {
+	lock_guard<mutex> slock(stats_lock);
+	return statistics->Copy();
 }
 
 } // namespace duckdb

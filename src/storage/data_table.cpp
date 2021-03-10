@@ -31,7 +31,7 @@ DataTable::DataTable(DatabaseInstance &db, const string &schema, const string &t
 	// initialize the table with the existing data from disk, if any
 	if (data && !data->table_data[0].empty()) {
 		for (idx_t i = 0; i < types.size(); i++) {
-			columns[i]->statistics = move(data->column_stats[i]);
+			columns[i]->SetStatistics(move(data->column_stats[i]));
 		}
 		// first append all the segments to the set of column segments
 		for (idx_t i = 0; i < types.size(); i++) {
@@ -1039,7 +1039,7 @@ unique_ptr<BaseStatistics> DataTable::GetStatistics(ClientContext &context, colu
 		return nullptr;
 	}
 	// FIXME: potentially merge with transaction local shtuff
-	return columns[column_id]->statistics->Copy();
+	return columns[column_id]->GetStatistics();
 }
 
 //===--------------------------------------------------------------------===//

@@ -148,6 +148,7 @@ void UpdateSegment::FetchUpdates(Transaction &transaction, idx_t vector_index, V
 	if (!root) {
 		return;
 	}
+	auto lock_handle = lock.GetSharedLock();
 	if (!root->info[vector_index]) {
 		return;
 	}
@@ -877,6 +878,7 @@ void UpdateSegment::Update(Transaction &transaction, Vector &update, row_t *ids,
 
 		root->info[vector_index] = move(result);
 	}
+	column_data.MergeStatistics(*GetStatistics().statistics);
 }
 
 bool UpdateSegment::HasUpdates() const {

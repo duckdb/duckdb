@@ -39,8 +39,6 @@ public:
 	SegmentTree updates;
 	//! The amount of persistent rows
 	idx_t persistent_rows;
-	//! The statistics of the column
-	unique_ptr<BaseStatistics> statistics;
 
 public:
 	bool CheckZonemap(ColumnScanState &state, TableFilter &filter);
@@ -76,11 +74,19 @@ public:
 	//! Fetch a specific row id and append it to the vector
 	void FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result, idx_t result_idx);
 
+	void SetStatistics(unique_ptr<BaseStatistics> new_stats);
+	void MergeStatistics(BaseStatistics &other);
+	unique_ptr<BaseStatistics> GetStatistics();
 private:
 	//! Append a transient segment
 	void AppendTransientSegment(idx_t start_row);
 	//! Append an update segment segment
 	void AppendUpdateSegment(idx_t start_row, idx_t count = 0);
+
+private:
+	mutex stats_lock;
+	//! The statistics of the column
+	unique_ptr<BaseStatistics> statistics;
 };
 
 } // namespace duckdb
