@@ -129,7 +129,7 @@ string(REGEX REPLACE "v[0-9]+.([0-9]+).[0-9]+" "\\1" DUCKDB_MINOR_VERSION "${GIT
 string(REGEX REPLACE "v[0-9]+.[0-9]+.([0-9]+)" "\\1" DUCKDB_PATCH_VERSION "${GIT_LAST_TAG}")
 string(REGEX REPLACE ".*-([0-9]+)-.*" "\\1" DUCKDB_DEV_ITERATION "${GIT_ITERATION}")
 
-if(${DUCKDB_DEV_ITERATION} EQUAL 0)
+if("${DUCKDB_DEV_ITERATION}" EQUAL 0)
   # on a tag; directly use the version
   set(DUCKDB_VERSION "${GIT_LAST_TAG}")
 else()
