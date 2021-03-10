@@ -1,5 +1,4 @@
 #include "duckdb/common/cpu_info.hpp"
-#include "iostream"
 #include "duckdb/common/types.hpp"
 
 namespace duckdb {
@@ -95,6 +94,8 @@ const vector<CPUFeature> &CpuInfo::GetAvailInstructionSets() const {
 	return avail_features;
 }
 void CpuInfo::Initialize() {
+	// to make sure CpuFeatureCheck used at least once
+    CpuFeatureCheck(DUCKDB_CPU_FALLBACK);
     best_feature = DUCKDB_CPU_FALLBACK;
     avail_features.push_back(DUCKDB_CPU_FALLBACK);
 

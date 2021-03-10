@@ -1,5 +1,4 @@
 #include "duckdb/main/client_context.hpp"
-
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/serializer/buffered_deserializer.hpp"
 #include "duckdb/common/serializer/buffered_serializer.hpp"
@@ -12,9 +11,7 @@
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/statement/drop_statement.hpp"
-#include "duckdb/parser/statement/execute_statement.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
-#include "duckdb/parser/statement/prepare_statement.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/planner/operator/logical_execute.hpp"
 #include "duckdb/planner/planner.hpp"
@@ -27,7 +24,6 @@
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/planner/pragma_handler.hpp"
-#include "duckdb/common/to_string.hpp"
 
 namespace duckdb {
 

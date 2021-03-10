@@ -1,4 +1,4 @@
-if(${ARCH} STREQUAL "x86_64")
+if(ARCH STREQUAL "x86_64")
 add_library(
         avx2
         OBJECT
@@ -32,7 +32,7 @@ LIST(APPEND ALL_OBJECT_FILES
      ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:avx512>)
 
 
-elseif(${CMAKE_TARGET_ARCHITECTURES} STREQUAL "arm")
+elseif(ARCH STREQUAL "arm")
 endif()
 
 

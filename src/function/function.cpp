@@ -53,7 +53,7 @@ void BuiltinFunctions::Initialize() {
 	AddCollation("noaccent", StripAccentsFun::GetFunction());
 	AddCollation("nfc", NFCNormalizeFun::GetFunction());
 
-	switch (context.CpuInfo.GetBestFeature()) {
+	switch (context.cpu_info.GetBestFeature()) {
 #ifdef DUCKDB_X86_64
 	case CPUFeature::DUCKDB_CPU_FEATURE_X86_AVX2:
 		RegisterOperators_AVX2();

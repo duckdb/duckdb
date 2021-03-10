@@ -204,6 +204,7 @@ set(detect_arch "
 #error fallback
 ")
 
+set(ARCH "FALLBACK")
 file(WRITE "${CMAKE_BINARY_DIR}/arch.cpp" "${detect_arch}")
 try_run(run_result
         compile_result
@@ -215,9 +216,9 @@ try_run(run_result
 string(REGEX MATCH "error: ([a-zA-Z0-9_]+)" ARCH "${ARCH}")
 string(REPLACE "error: " "" ARCH "${ARCH}")
 
-if(${ARCH} STREQUAL "x86_64")
+if(ARCH STREQUAL "x86_64")
   add_compile_definitions(DUCKDB_X86_64)
-elseif(${ARCH} STREQUAL "arm")
+elseif(ARCH STREQUAL "arm")
   add_compile_definitions(DUCKDB_ARM)
 else()
   add_compile_definitions(DUCKDB_FALLBACK)
@@ -529,3 +530,5 @@ if(EXISTS ${CMAKE_CONFIG_TEMPLATE} AND EXISTS ${CMAKE_CONFIG_VERSION_TEMPLATE})
           "${PROJECT_BINARY_DIR}/DuckDBConfigVersion.cmake"
     DESTINATION "${INSTALL_CMAKE_DIR}")
 endif()
+
+

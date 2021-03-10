@@ -701,8 +701,8 @@ bool ApproxEqual(double ldecimal, double rdecimal) {
 	return std::fabs(ldecimal - rdecimal) <= epsilon;
 }
 
-string ArchitectureToString(Architecture Arch) {
-	switch (Arch) {
+string ArchitectureToString(Architecture arch) {
+	switch (arch) {
 	case Architecture::FALLBACK:
 		return "FALLBACK";
 	case Architecture::X86:
