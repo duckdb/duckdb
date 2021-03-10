@@ -429,4 +429,18 @@ bool IsIntegerType() {
 bool ApproxEqual(float l, float r);
 bool ApproxEqual(double l, double r);
 
+
+//===--------------------------------------------------------------------===//
+// Instruction Sets
+//===--------------------------------------------------------------------===//
+enum class Architecture : uint8_t {
+    FALLBACK = 0,
+	X86 = 1,
+	X86_64 = 2,
+    ARM = 4
+};
+
+string ArchitectureToString(Architecture arch);
+
+
 } // namespace duckdb

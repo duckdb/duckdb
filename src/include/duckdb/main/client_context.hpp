@@ -22,7 +22,7 @@
 #include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/main/table_description.hpp"
 #include "duckdb/transaction/transaction_context.hpp"
-
+#include "duckdb/common/cpu_info.hpp"
 #include <random>
 
 namespace duckdb {
@@ -32,7 +32,6 @@ class DatabaseInstance;
 class PreparedStatementData;
 class Relation;
 class BufferedFileWriter;
-
 class ClientContextLock;
 
 //! The ClientContext holds information relevant to the current client session
@@ -89,6 +88,7 @@ public:
 	//! The random generator used by random(). Its seed value can be set by setseed().
 	std::mt19937 random_engine;
 
+	CpuInfo CpuInfo;
 public:
 	DUCKDB_API Transaction &ActiveTransaction() {
 		return transaction.ActiveTransaction();

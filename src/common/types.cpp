@@ -701,4 +701,19 @@ bool ApproxEqual(double ldecimal, double rdecimal) {
 	return std::fabs(ldecimal - rdecimal) <= epsilon;
 }
 
+string ArchitectureToString(Architecture Arch) {
+	switch (Arch) {
+	case Architecture::FALLBACK:
+		return "FALLBACK";
+	case Architecture::X86:
+		return "X86";
+	case Architecture::X86_64:
+		return "X86_64";
+	case Architecture::ARM:
+		return "ARM";
+	default:
+		return "UNDEFINED";
+	}
+}
+
 } // namespace duckdb
