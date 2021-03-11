@@ -17,6 +17,11 @@ CREATE TEMPORARY TABLE asdf.integersy(i INTEGER)
 statement ok
 CREATE TEMPORARY TABLE s1 AS SELECT 42
 
+query I
+SELECT * FROM temp.s1
+----
+42
+
 statement error
 CREATE TABLE temp.integersy(i INTEGER)
 
