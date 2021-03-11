@@ -5,12 +5,10 @@
 
 namespace duckdb {
 
-
 unique_ptr<ParsedExpression> Transformer::TransformArrayAccess(duckdb_libpgquery::PGAIndirection *indirection_node) {
 	// transform the source expression
 	unique_ptr<ParsedExpression> result;
 	result = TransformExpression(indirection_node->arg);
-
 
 	// now go over the indices
 	// note that a single indirection node can contain multiple indices
@@ -20,16 +18,18 @@ unique_ptr<ParsedExpression> Transformer::TransformArrayAccess(duckdb_libpgquery
 		if (!target) {
 			break;
 		}
-		switch(target->type) {
+		switch (target->type) {
 		case duckdb_libpgquery::T_PGAIndices: {
 			// index access (either slice or extract)
-			auto index = (duckdb_libpgquery::PGAIndices *) target;
+			auto index = (duckdb_libpgquery::PGAIndices *)target;
 			vector<unique_ptr<ParsedExpression>> children;
 			children.push_back(move(result));
 			if (index->is_slice) {
 				// slice
-				children.push_back(!index->lidx ? make_unique<ConstantExpression>(Value()) : TransformExpression(index->lidx));
-				children.push_back(!index->uidx ? make_unique<ConstantExpression>(Value()) : TransformExpression(index->uidx));
+				children.push_back(!index->lidx ? make_unique<ConstantExpression>(Value())
+				                                : TransformExpression(index->lidx));
+				children.push_back(!index->uidx ? make_unique<ConstantExpression>(Value())
+				                                : TransformExpression(index->uidx));
 				result = make_unique<FunctionExpression>("array_slice", children);
 			} else {
 				// array access
@@ -41,7 +41,7 @@ unique_ptr<ParsedExpression> Transformer::TransformArrayAccess(duckdb_libpgquery
 			break;
 		}
 		case duckdb_libpgquery::T_PGString: {
-			auto val = (duckdb_libpgquery::PGValue *) target;
+			auto val = (duckdb_libpgquery::PGValue *)target;
 			vector<unique_ptr<ParsedExpression>> children;
 			children.push_back(move(result));
 			children.push_back(TransformValue(*val));
@@ -56,4 +56,4 @@ unique_ptr<ParsedExpression> Transformer::TransformArrayAccess(duckdb_libpgquery
 	return result;
 }
 
-}
+} // namespace duckdb
