@@ -9,3 +9,14 @@ PRAGMA enable_verification
 statement error
 SELECT TRY_CAST('hello' as INTEGER)
 
+# not a reserved keyword
+statement ok
+CREATE TABLE try_cast(try_cast INTEGER);
+
+statement ok
+INSERT INTO try_cast VALUES (3);
+
+query I
+SELECT try_cast FROM try_cast;
+----
+3
