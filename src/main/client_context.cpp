@@ -102,6 +102,7 @@ string ClientContext::FinalizeQuery(ClientContextLock &lock, bool success) {
 	if (transaction.HasActiveTransaction()) {
 		ActiveTransaction().active_query = MAXIMUM_QUERY_ID;
 		prev_profilers.emplace_back(transaction.ActiveTransaction().active_query, move(profiler));
+		profiler.save_location = prev_profilers.back().second.save_location;
 		if (prev_profilers.size() >= prev_profilers_size) {
 			prev_profilers.pop_front();
 		}
