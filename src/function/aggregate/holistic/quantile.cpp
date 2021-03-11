@@ -2,12 +2,9 @@
 #include "duckdb/function/aggregate/holistic_functions.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
-#include "pcg_random.hpp"
 
 #include <algorithm>
-#include <cmath>
 #include <queue>
-#include <random>
 #include <stdlib.h>
 #include <utility>
 

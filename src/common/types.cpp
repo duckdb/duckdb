@@ -92,6 +92,8 @@ PhysicalType LogicalType::GetInternalType() {
 		return PhysicalType::STRUCT;
 	case LogicalTypeId::LIST:
 		return PhysicalType::LIST;
+	case LogicalTypeId::MAP:
+		return PhysicalType::MAP;
 	case LogicalTypeId::HASH:
 		return PhysicalType::HASH;
 	case LogicalTypeId::POINTER:
@@ -134,6 +136,7 @@ const LogicalType LogicalType::INTERVAL = LogicalType(LogicalTypeId::INTERVAL);
 // TODO these are incomplete and should maybe not exist as such
 const LogicalType LogicalType::STRUCT = LogicalType(LogicalTypeId::STRUCT);
 const LogicalType LogicalType::LIST = LogicalType(LogicalTypeId::LIST);
+const LogicalType LogicalType::MAP = LogicalType(LogicalTypeId::MAP);
 
 const LogicalType LogicalType::ANY = LogicalType(LogicalTypeId::ANY);
 
@@ -194,6 +197,8 @@ string TypeIdToString(PhysicalType type) {
 		return "STRUCT<?>";
 	case PhysicalType::LIST:
 		return "LIST<?>";
+	case PhysicalType::MAP:
+		return "MAP<?>";
 	case PhysicalType::INVALID:
 		return "INVALID";
 	default:
@@ -237,8 +242,11 @@ idx_t GetTypeIdSize(PhysicalType type) {
 		return sizeof(interval_t);
 	case PhysicalType::STRUCT:
 		return 0; // no own payload
+	case PhysicalType::MAP:
+		return 42; // FIXME there is no way to create this type yet
 	case PhysicalType::LIST:
 		return 16; // offset + len
+
 	default:
 		throw ConversionException("Invalid PhysicalType %s", type);
 	}
@@ -337,6 +345,8 @@ string LogicalTypeIdToString(LogicalTypeId id) {
 		return "STRUCT<?>";
 	case LogicalTypeId::LIST:
 		return "LIST<?>";
+	case LogicalTypeId::MAP:
+		return "MAP<?>";
 	case LogicalTypeId::HASH:
 		return "HASH";
 	case LogicalTypeId::POINTER:
@@ -370,6 +380,15 @@ string LogicalType::ToString() const {
 			throw Exception("List needs a single child element");
 		}
 		return "LIST<" + child_types_[0].second.ToString() + ">";
+	}
+	case LogicalTypeId::MAP: {
+		if (child_types_.empty()) {
+			return "MAP<?>";
+		}
+		if (child_types_.size() != 2) {
+			throw Exception("Map needs exactly two child elements");
+		}
+		return "MAP<" + child_types_[0].second.ToString() + ", " + child_types_[1].second.ToString() + ">";
 	}
 	case LogicalTypeId::DECIMAL: {
 		if (width_ == 0) {
@@ -419,6 +438,8 @@ LogicalType TransformStringToLogicalType(const string &str) {
 		return LogicalType::HUGEINT;
 	} else if (lower_str == "struct" || lower_str == "row") {
 		return LogicalType::STRUCT;
+	} else if (lower_str == "map") {
+		return LogicalType::MAP;
 	} else if (lower_str == "utinyint") {
 		return LogicalType::UTINYINT;
 	} else if (lower_str == "usmallint") {

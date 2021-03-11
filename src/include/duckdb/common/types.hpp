@@ -84,7 +84,7 @@ template <class T>
 using buffer_ptr = single_thread_ptr<T>;
 
 template <class T, typename... Args>
-buffer_ptr<T> make_buffer(Args &&... args) {
+buffer_ptr<T> make_buffer(Args &&...args) {
 	return single_thread_make_shared<T>(std::forward<Args>(args)...);
 }
 
@@ -255,7 +255,8 @@ enum class LogicalTypeId : uint8_t {
 	HASH = 52,
 
 	STRUCT = 100,
-	LIST = 101
+	LIST = 101,
+	MAP = 102
 };
 
 struct LogicalType {
@@ -342,6 +343,7 @@ public:
 	static const LogicalType TIME;
 	static const LogicalType VARCHAR;
 	static const LogicalType STRUCT;
+	static const LogicalType MAP;
 	static const LogicalType LIST;
 	static const LogicalType ANY;
 	static const LogicalType BLOB;

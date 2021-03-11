@@ -1229,7 +1229,7 @@ struct inside_out : private baseclass {
 
 
 template <bitcount_t table_pow2, bitcount_t advance_pow2, typename baseclass, typename extvalclass, bool kdd = true>
-class extended : public baseclass {
+class pcg_extended : public baseclass {
 public:
     typedef typename baseclass::state_type  state_type;
     typedef typename baseclass::result_type result_type;
@@ -1319,13 +1319,13 @@ public:
         advance(distance, false);
     }
 
-    extended(const result_type* data)
+	pcg_extended(const result_type* data)
         : baseclass()
     {
         datainit(data);
     }
 
-    extended(const result_type* data, state_type seed)
+	pcg_extended(const result_type* data, state_type seed)
         : baseclass(seed)
     {
         datainit(data);
@@ -1335,20 +1335,20 @@ public:
     // to use SFINAE; users don't have to worry about its template-ness.
 
     template <typename bc = baseclass>
-    extended(const result_type* data, state_type seed,
+	pcg_extended(const result_type* data, state_type seed,
             typename bc::stream_state stream_seed)
         : baseclass(seed, stream_seed)
     {
         datainit(data);
     }
 
-    extended()
+	pcg_extended()
         : baseclass()
     {
         selfinit();
     }
 
-    extended(state_type seed)
+	pcg_extended(state_type seed)
         : baseclass(seed)
     {
         selfinit();
@@ -1358,7 +1358,7 @@ public:
     // to use SFINAE; users don't have to worry about its template-ness.
 
     template <typename bc = baseclass>
-    extended(state_type seed, typename bc::stream_state stream_seed)
+	pcg_extended(state_type seed, typename bc::stream_state stream_seed)
         : baseclass(seed, stream_seed)
     {
         selfinit();
@@ -1372,8 +1372,8 @@ public:
 
     template<typename SeedSeq, typename = typename std::enable_if<
            !std::is_convertible<SeedSeq, result_type>::value
-        && !std::is_convertible<SeedSeq, extended>::value>::type>
-    extended(SeedSeq&& seedSeq)
+        && !std::is_convertible<SeedSeq, pcg_extended>::value>::type>
+	pcg_extended(SeedSeq&& seedSeq)
         : baseclass(seedSeq)
     {
         generate_to<table_size>(seedSeq, data_);
@@ -1382,14 +1382,14 @@ public:
     template<typename... Args>
     void seed(Args&&... args)
     {
-        new (this) extended(std::forward<Args>(args)...);
+        new (this) pcg_extended(std::forward<Args>(args)...);
     }
 
     template <bitcount_t table_pow2_, bitcount_t advance_pow2_,
               typename baseclass_, typename extvalclass_, bool kdd_>
-    friend bool operator==(const extended<table_pow2_, advance_pow2_,
+    friend bool operator==(const pcg_extended<table_pow2_, advance_pow2_,
                                               baseclass_, extvalclass_, kdd_>&,
-                           const extended<table_pow2_, advance_pow2_,
+                           const pcg_extended<table_pow2_, advance_pow2_,
                                               baseclass_, extvalclass_, kdd_>&);
 
     template <typename CharT, typename Traits,
@@ -1397,7 +1397,7 @@ public:
               typename baseclass_, typename extvalclass_, bool kdd_>
     friend std::basic_ostream<CharT,Traits>&
     operator<<(std::basic_ostream<CharT,Traits>& out,
-               const extended<table_pow2_, advance_pow2_,
+               const pcg_extended<table_pow2_, advance_pow2_,
                               baseclass_, extvalclass_, kdd_>&);
 
     template <typename CharT, typename Traits,
@@ -1405,7 +1405,7 @@ public:
               typename baseclass_, typename extvalclass_, bool kdd_>
     friend std::basic_istream<CharT,Traits>&
     operator>>(std::basic_istream<CharT,Traits>& in,
-               extended<table_pow2_, advance_pow2_,
+	           pcg_extended<table_pow2_, advance_pow2_,
                         baseclass_, extvalclass_, kdd_>&);
 
 };
@@ -1413,7 +1413,7 @@ public:
 
 template <bitcount_t table_pow2, bitcount_t advance_pow2,
           typename baseclass, typename extvalclass, bool kdd>
-void extended<table_pow2,advance_pow2,baseclass,extvalclass,kdd>::datainit(
+void pcg_extended<table_pow2,advance_pow2,baseclass,extvalclass,kdd>::datainit(
          const result_type* data)
 {
     for (size_t i = 0; i < table_size; ++i)
@@ -1422,9 +1422,9 @@ void extended<table_pow2,advance_pow2,baseclass,extvalclass,kdd>::datainit(
 
 template <bitcount_t table_pow2, bitcount_t advance_pow2,
           typename baseclass, typename extvalclass, bool kdd>
-void extended<table_pow2,advance_pow2,baseclass,extvalclass,kdd>::selfinit()
+void pcg_extended<table_pow2,advance_pow2,baseclass,extvalclass,kdd>::selfinit()
 {
-    // We need to fill the extended table with something, and we have
+    // We need to fill the pcg_extended table with something, and we have
     // very little provided data, so we use the base generator to
     // produce values.  Although not ideal (use a seed sequence, folks!),
     // unexpected correlations are mitigated by
@@ -1444,9 +1444,9 @@ void extended<table_pow2,advance_pow2,baseclass,extvalclass,kdd>::selfinit()
 
 template <bitcount_t table_pow2, bitcount_t advance_pow2,
           typename baseclass, typename extvalclass, bool kdd>
-bool operator==(const extended<table_pow2, advance_pow2,
+bool operator==(const pcg_extended<table_pow2, advance_pow2,
                                baseclass, extvalclass, kdd>& lhs,
-                const extended<table_pow2, advance_pow2,
+                const pcg_extended<table_pow2, advance_pow2,
                                baseclass, extvalclass, kdd>& rhs)
 {
     auto& base_lhs = static_cast<const baseclass&>(lhs);
@@ -1460,9 +1460,9 @@ bool operator==(const extended<table_pow2, advance_pow2,
 
 template <bitcount_t table_pow2, bitcount_t advance_pow2,
           typename baseclass, typename extvalclass, bool kdd>
-inline bool operator!=(const extended<table_pow2, advance_pow2,
+inline bool operator!=(const pcg_extended<table_pow2, advance_pow2,
                                       baseclass, extvalclass, kdd>& lhs,
-                       const extended<table_pow2, advance_pow2,
+                       const pcg_extended<table_pow2, advance_pow2,
                                       baseclass, extvalclass, kdd>& rhs)
 {
     return !operator==(lhs, rhs);
@@ -1473,7 +1473,7 @@ template <typename CharT, typename Traits,
           typename baseclass, typename extvalclass, bool kdd>
 std::basic_ostream<CharT,Traits>&
 operator<<(std::basic_ostream<CharT,Traits>& out,
-           const extended<table_pow2, advance_pow2,
+           const pcg_extended<table_pow2, advance_pow2,
                           baseclass, extvalclass, kdd>& rng)
 {
     auto orig_flags = out.flags(std::ios_base::dec | std::ios_base::left);
@@ -1497,10 +1497,10 @@ template <typename CharT, typename Traits,
           typename baseclass, typename extvalclass, bool kdd>
 std::basic_istream<CharT,Traits>&
 operator>>(std::basic_istream<CharT,Traits>& in,
-           extended<table_pow2, advance_pow2,
+           pcg_extended<table_pow2, advance_pow2,
                     baseclass, extvalclass, kdd>& rng)
 {
-    extended<table_pow2, advance_pow2, baseclass, extvalclass> new_rng;
+	pcg_extended<table_pow2, advance_pow2, baseclass, extvalclass> new_rng;
     auto& base_rng = static_cast<baseclass&>(new_rng);
     in >> base_rng;
 
@@ -1526,8 +1526,7 @@ bail:
 
 template <bitcount_t table_pow2, bitcount_t advance_pow2,
           typename baseclass, typename extvalclass, bool kdd>
-void
-extended<table_pow2,advance_pow2,baseclass,extvalclass,kdd>::advance_table()
+void pcg_extended<table_pow2,advance_pow2,baseclass,extvalclass,kdd>::advance_table()
 {
     bool carry = false;
     for (size_t i = 0; i < table_size; ++i) {
@@ -1541,8 +1540,7 @@ extended<table_pow2,advance_pow2,baseclass,extvalclass,kdd>::advance_table()
 
 template <bitcount_t table_pow2, bitcount_t advance_pow2,
           typename baseclass, typename extvalclass, bool kdd>
-void
-extended<table_pow2,advance_pow2,baseclass,extvalclass,kdd>::advance_table(
+void pcg_extended<table_pow2,advance_pow2,baseclass,extvalclass,kdd>::advance_table(
         state_type delta, bool isForwards)
 {
     typedef typename baseclass::state_type   base_state_t;
@@ -1568,7 +1566,7 @@ extended<table_pow2,advance_pow2,baseclass,extvalclass,kdd>::advance_table(
 
 template <bitcount_t table_pow2, bitcount_t advance_pow2,
           typename baseclass, typename extvalclass, bool kdd>
-void extended<table_pow2,advance_pow2,baseclass,extvalclass,kdd>::advance(
+void pcg_extended<table_pow2,advance_pow2,baseclass,extvalclass,kdd>::advance(
     state_type distance, bool forwards)
 {
     static_assert(kdd,
@@ -1810,22 +1808,22 @@ typedef setseq_base<pcg128_t, pcg128_t, xsl_rr_rr_mixin, true, cheap_multiplier>
 
 template <bitcount_t table_pow2, bitcount_t advance_pow2,
           typename BaseRNG, bool kdd = true>
-using ext_std8 = extended<table_pow2, advance_pow2, BaseRNG,
+using ext_std8 = pcg_extended<table_pow2, advance_pow2, BaseRNG,
                           oneseq_rxs_m_xs_8_8, kdd>;
 
 template <bitcount_t table_pow2, bitcount_t advance_pow2,
           typename BaseRNG, bool kdd = true>
-using ext_std16 = extended<table_pow2, advance_pow2, BaseRNG,
+using ext_std16 = pcg_extended<table_pow2, advance_pow2, BaseRNG,
                            oneseq_rxs_m_xs_16_16, kdd>;
 
 template <bitcount_t table_pow2, bitcount_t advance_pow2,
           typename BaseRNG, bool kdd = true>
-using ext_std32 = extended<table_pow2, advance_pow2, BaseRNG,
+using ext_std32 = pcg_extended<table_pow2, advance_pow2, BaseRNG,
                            oneseq_rxs_m_xs_32_32, kdd>;
 
 template <bitcount_t table_pow2, bitcount_t advance_pow2,
           typename BaseRNG, bool kdd = true>
-using ext_std64 = extended<table_pow2, advance_pow2, BaseRNG,
+using ext_std64 = pcg_extended<table_pow2, advance_pow2, BaseRNG,
                            oneseq_rxs_m_xs_64_64, kdd>;
 
 

@@ -30,26 +30,34 @@ INSERT INTO test VALUES (1), (2), (3)
 statement ok con1
 BEGIN TRANSACTION
 
-statement ok updater
+query I updater
 UPDATE test SET a=NULL WHERE a=1
+----
+1
 
 statement ok con2
 BEGIN TRANSACTION
 
-statement ok updater
+query I updater
 UPDATE test SET a=NULL WHERE a=2
+----
+1
 
 statement ok con3
 BEGIN TRANSACTION
 
-statement ok updater
+query I updater
 UPDATE test SET a=NULL WHERE a=3
+----
+1
 
 statement ok con4
 BEGIN TRANSACTION
 
-statement ok updater
+query I updater
 UPDATE test SET a=99 WHERE a IS NULL
+----
+3
 
 statement ok con5
 BEGIN TRANSACTION

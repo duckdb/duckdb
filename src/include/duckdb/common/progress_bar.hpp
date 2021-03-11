@@ -30,8 +30,6 @@ public:
 	void Stop();
 	//! Gets current percentage
 	int GetCurrentPercentage();
-	//! If all values in the percentage were valid
-	bool IsPercentageValid();
 
 private:
 	const string PROGRESS_BAR_STRING = "||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||";

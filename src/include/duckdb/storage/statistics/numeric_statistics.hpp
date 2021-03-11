@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/storage/statistics/segment_statistics.hpp"
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/exception.hpp"
@@ -41,6 +42,45 @@ public:
 private:
 	template <class T>
 	void TemplatedVerify(Vector &vector, idx_t count);
+
+public:
+	template <class T>
+	static inline void UpdateValue(T new_value, T &min, T &max) {
+		if (LessThan::Operation(new_value, min)) {
+			min = new_value;
+		}
+		if (GreaterThan::Operation(new_value, max)) {
+			max = new_value;
+		}
+	}
+
+	template <class T>
+	static inline void Update(SegmentStatistics &stats, T new_value);
 };
+
+template <>
+void NumericStatistics::Update<int8_t>(SegmentStatistics &stats, int8_t new_value);
+template <>
+void NumericStatistics::Update<int16_t>(SegmentStatistics &stats, int16_t new_value);
+template <>
+void NumericStatistics::Update<int32_t>(SegmentStatistics &stats, int32_t new_value);
+template <>
+void NumericStatistics::Update<int64_t>(SegmentStatistics &stats, int64_t new_value);
+template <>
+void NumericStatistics::Update<uint8_t>(SegmentStatistics &stats, uint8_t new_value);
+template <>
+void NumericStatistics::Update<uint16_t>(SegmentStatistics &stats, uint16_t new_value);
+template <>
+void NumericStatistics::Update<uint32_t>(SegmentStatistics &stats, uint32_t new_value);
+template <>
+void NumericStatistics::Update<uint64_t>(SegmentStatistics &stats, uint64_t new_value);
+template <>
+void NumericStatistics::Update<hugeint_t>(SegmentStatistics &stats, hugeint_t new_value);
+template <>
+void NumericStatistics::Update<float>(SegmentStatistics &stats, float new_value);
+template <>
+void NumericStatistics::Update<double>(SegmentStatistics &stats, double new_value);
+template <>
+void NumericStatistics::Update<interval_t>(SegmentStatistics &stats, interval_t new_value);
 
 } // namespace duckdb

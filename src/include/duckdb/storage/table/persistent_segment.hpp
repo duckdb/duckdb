@@ -30,29 +30,18 @@ public:
 	unique_ptr<UncompressedSegment> data;
 
 public:
-	bool HasChanges();
-
 	void InitializeScan(ColumnScanState &state) override;
 	//! Scan one vector from this persistent segment
-	void Scan(Transaction &transaction, ColumnScanState &state, idx_t vector_index, Vector &result) override;
-	//! Scan one vector of committed data from this persistent segment
-	void ScanCommitted(ColumnScanState &state, idx_t vector_index, Vector &result) override;
-	//! Scan one vector from this persistent segment, throwing an exception if there are any outstanding updates
-	void IndexScan(ColumnScanState &state, Vector &result) override;
+	void Scan(ColumnScanState &state, idx_t vector_index, Vector &result) override;
 	//! Scan the next vector from the column and apply a selection vector to filter the data
-	void FilterScan(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
-	                idx_t &approved_tuple_count) override;
+	void FilterScan(ColumnScanState &state, Vector &result, SelectionVector &sel, idx_t &approved_tuple_count) override;
 	//! Executes the filters directly in the table's data
-	void Select(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
-	            idx_t &approved_tuple_count, vector<TableFilter> &table_filter) override;
+	void Select(ColumnScanState &state, Vector &result, SelectionVector &sel, idx_t &approved_tuple_count,
+	            vector<TableFilter> &table_filter) override;
 	//! Fetch the base table vector index that belongs to this row
 	void Fetch(ColumnScanState &state, idx_t vector_index, Vector &result) override;
 	//! Fetch a value of the specific row id and append it to the result
-	void FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result,
-	              idx_t result_idx) override;
-
-	//! Perform an update within the segment
-	void Update(ColumnData &column_data, Transaction &transaction, Vector &updates, row_t *ids, idx_t count) override;
+	void FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) override;
 };
 
 } // namespace duckdb

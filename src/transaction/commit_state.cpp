@@ -9,6 +9,7 @@
 #include "duckdb/catalog/catalog_set.hpp"
 #include "duckdb/common/serializer/buffered_deserializer.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
+#include "duckdb/storage/table/update_segment.hpp"
 
 #include "duckdb/storage/table/chunk_info.hpp"
 
@@ -134,27 +135,26 @@ void CommitState::WriteDelete(DeleteInfo *info) {
 void CommitState::WriteUpdate(UpdateInfo *info) {
 	D_ASSERT(log);
 	// switch to the current table, if necessary
-	SwitchTable(&info->column_data->table_info, UndoFlags::UPDATE_TUPLE);
+	auto &column_data = info->segment->column_data;
+	SwitchTable(&column_data.table_info, UndoFlags::UPDATE_TUPLE);
 
 	update_chunk = make_unique<DataChunk>();
-	vector<LogicalType> update_types = {info->column_data->type, LOGICAL_ROW_TYPE};
+	vector<LogicalType> update_types = {column_data.type, LOGICAL_ROW_TYPE};
 	update_chunk->Initialize(update_types);
 
-	// fetch the updated values from the base table
-	ColumnScanState state;
-	info->segment->InitializeScan(state);
-	info->segment->Fetch(state, info->vector_index, update_chunk->data[0]);
+	// fetch the updated values from the base segment
+	info->segment->FetchCommitted(info->vector_index, update_chunk->data[0]);
 
 	// write the row ids into the chunk
 	auto row_ids = FlatVector::GetData<row_t>(update_chunk->data[1]);
-	idx_t start = info->segment->row_start + info->vector_index * STANDARD_VECTOR_SIZE;
+	idx_t start = info->segment->start + info->vector_index * STANDARD_VECTOR_SIZE;
 	for (idx_t i = 0; i < info->N; i++) {
 		row_ids[info->tuples[i]] = start + info->tuples[i];
 	}
 	SelectionVector sel(info->tuples);
 	update_chunk->Slice(sel, info->N);
 
-	log->WriteUpdate(*update_chunk, info->column_data->column_idx);
+	log->WriteUpdate(*update_chunk, column_data.column_idx);
 }
 
 template <bool HAS_LOG>
@@ -197,7 +197,7 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::UPDATE_TUPLE: {
 		// update:
 		auto info = (UpdateInfo *)data;
-		if (HAS_LOG && !info->column_data->table_info.IsTemporary()) {
+		if (HAS_LOG && !info->segment->column_data.table_info.IsTemporary()) {
 			WriteUpdate(info);
 		}
 		info->version_number = commit_id;

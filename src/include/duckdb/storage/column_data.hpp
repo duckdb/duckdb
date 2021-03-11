@@ -35,12 +35,14 @@ public:
 	idx_t column_idx;
 	//! The segments holding the data of the column
 	SegmentTree data;
+	//! The segments holding the updates of the column
+	SegmentTree updates;
 	//! The amount of persistent rows
 	idx_t persistent_rows;
-	//! The statistics of the column
-	unique_ptr<BaseStatistics> statistics;
 
 public:
+	bool CheckZonemap(ColumnScanState &state, TableFilter &filter);
+
 	//! Set up the column data with the set of persistent segments
 	void Initialize(vector<unique_ptr<PersistentSegment>> &segments);
 	//! Initialize a scan of the column
@@ -53,7 +55,7 @@ public:
 	void FilterScan(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
 	                idx_t &approved_tuple_count);
 	//! Scan the next vector from the column, throwing an exception if there are any outstanding updates
-	void IndexScan(ColumnScanState &state, Vector &result);
+	void IndexScan(ColumnScanState &state, Vector &result, bool allow_pending_updates);
 	//! Executes the filters directly in the table's data
 	void Select(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
 	            idx_t &approved_tuple_count, vector<TableFilter> &table_filter);
@@ -72,9 +74,20 @@ public:
 	//! Fetch a specific row id and append it to the vector
 	void FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result, idx_t result_idx);
 
+	void SetStatistics(unique_ptr<BaseStatistics> new_stats);
+	void MergeStatistics(BaseStatistics &other);
+	unique_ptr<BaseStatistics> GetStatistics();
+
 private:
 	//! Append a transient segment
 	void AppendTransientSegment(idx_t start_row);
+	//! Append an update segment segment
+	void AppendUpdateSegment(idx_t start_row, idx_t count = 0);
+
+private:
+	mutex stats_lock;
+	//! The statistics of the column
+	unique_ptr<BaseStatistics> statistics;
 };
 
 } // namespace duckdb

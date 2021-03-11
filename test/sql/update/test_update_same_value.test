@@ -2,6 +2,9 @@
 # description: Update the same value multiple times in one transaction
 # group: [update]
 
+statement ok
+PRAGMA enable_verification
+
 # create a table
 statement ok con1
 CREATE TABLE test (a INTEGER);
@@ -77,6 +80,18 @@ SELECT * FROM test ORDER BY a
 # now perform updates one by one
 statement ok con1
 BEGIN TRANSACTION
+
+query I con1
+SELECT * FROM test
+----
+3
+4
+5
+
+query I con1
+SELECT * FROM test WHERE a=5
+----
+5
 
 # 5 => 9
 statement ok con1

@@ -7,8 +7,8 @@ defaults:
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
   TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
-  node_pre_gyp_accessKeyId: AKIAVBLKPL2ZW2T7TYFQ
-  node_pre_gyp_secretAccessKey: ${{ secrets.NODE_PRE_GYP_SECRETACCESSKEY }}
+  AWS_ACCESS_KEY_ID: AKIAVBLKPL2ZW2T7TYFQ
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.NODE_PRE_GYP_SECRETACCESSKEY }}
   NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
 
 jobs:
@@ -75,7 +75,7 @@ jobs:
         fetch-depth: 0
 
     - name: Install
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-tidy
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-tidy && sudo pip3 install pybind11[global]
 
     - name: Tidy Check
       run: make tidy-check
