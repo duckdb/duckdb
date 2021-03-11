@@ -88,7 +88,8 @@ void ColumnData::FilterScan(Transaction &transaction, ColumnScanState &state, Ve
 	}
 	// perform a scan of this segment
 	if (!state.updates->HasUpdates()) {
-		state.current->FilterScan(state, result, sel, approved_tuple_count);
+		throw NotImplementedException("FIXME: fetch validity mask and pass to filter scan");
+		// state.current->FilterScan(state, result, sel, approved_tuple_count);
 	} else {
 		state.current->Scan(state, state.vector_index, result);
 		state.updates->FetchUpdates(transaction, state.vector_index_updates, result);
@@ -108,7 +109,8 @@ void ColumnData::Select(Transaction &transaction, ColumnScanState &state, Vector
 
 	if (!state.updates->HasUpdates()) {
 		// no updates: filter in the scan
-		state.current->Select(state, result, sel, approved_tuple_count, table_filters);
+		throw NotImplementedException("FIXME: fetch validity mask and pass to filter scan");
+		// state.current->Select(state, result, sel, approved_tuple_count, table_filters);
 	} else {
 		// updates: first scan the full vector (including merged updates)
 		// and then apply the filter

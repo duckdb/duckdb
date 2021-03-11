@@ -15,7 +15,7 @@ StringSegment::StringSegment(DatabaseInstance &db, idx_t row_start, block_id_t b
     : UncompressedSegment(db, PhysicalType::VARCHAR, row_start) {
 	this->max_vector_count = 0;
 	// the vector_size is given in the size of the dictionary offsets
-	this->vector_size = STANDARD_VECTOR_SIZE * sizeof(int32_t) + ValidityMask::STANDARD_MASK_SIZE;
+	this->vector_size = STANDARD_VECTOR_SIZE * sizeof(int32_t);
 
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	if (block_id == INVALID_BLOCK) {
@@ -47,9 +47,6 @@ StringSegment::~StringSegment() {
 
 void StringSegment::ExpandStringSegment(data_ptr_t baseptr) {
 	// clear the nullmask for this vector
-	ValidityMask mask(baseptr + (max_vector_count * vector_size));
-	mask.SetAllValid(STANDARD_VECTOR_SIZE);
-
 	max_vector_count++;
 }
 
@@ -70,7 +67,7 @@ void StringSegment::ReadString(string_t *result_data, Vector &result, data_ptr_t
 	result_data[res_idx] = FetchStringFromDict(result, baseptr, dict_offset[src_idx]);
 }
 
-void StringSegment::Select(ColumnScanState &state, Vector &result, SelectionVector &sel, idx_t &approved_tuple_count,
+void StringSegment::Select(ColumnScanState &state, ValidityMask &base_mask, Vector &result, SelectionVector &sel, idx_t &approved_tuple_count,
                            vector<TableFilter> &table_filter) {
 	auto vector_index = state.vector_index;
 	D_ASSERT(vector_index < max_vector_count);
@@ -78,10 +75,7 @@ void StringSegment::Select(ColumnScanState &state, Vector &result, SelectionVect
 
 	auto handle = state.primary_handle.get();
 	auto baseptr = handle->node->buffer;
-	// fetch the data from the base segment
-	auto base = baseptr + state.vector_index * vector_size;
-	auto base_data = (int32_t *)(base + ValidityMask::STANDARD_MASK_SIZE);
-	ValidityMask base_mask(base);
+	auto base_data = (int32_t *) baseptr;
 
 	if (table_filter.size() == 1) {
 		switch (table_filter[0].comparison_type) {
@@ -158,13 +152,7 @@ void StringSegment::FetchBaseData(ColumnScanState &state, data_ptr_t baseptr, id
                                   idx_t count) {
 	auto base = baseptr + vector_index * vector_size;
 
-	auto &result_mask = FlatVector::Validity(result);
-	ValidityMask base_mask(base);
-	if (!base_mask.CheckAllValid(count)) {
-		result_mask.Copy(base_mask, count);
-	}
-
-	auto base_data = (int32_t *)(base + ValidityMask::STANDARD_MASK_SIZE);
+	auto base_data = (int32_t *) base;
 	auto result_data = FlatVector::GetData<string_t>(result);
 
 	// no updates: fetch only from the string dictionary
@@ -173,17 +161,16 @@ void StringSegment::FetchBaseData(ColumnScanState &state, data_ptr_t baseptr, id
 	}
 }
 
-void StringSegment::FilterFetchBaseData(ColumnScanState &state, Vector &result, SelectionVector &sel,
+void StringSegment::FilterFetchBaseData(ColumnScanState &state, ValidityMask &base_mask, Vector &result, SelectionVector &sel,
                                         idx_t &approved_tuple_count) {
 	// clear any previously locked buffers and get the primary buffer handle
 	auto handle = state.primary_handle.get();
 	auto baseptr = handle->node->buffer;
 	// fetch the data from the base segment
 	auto base = baseptr + state.vector_index * vector_size;
-	ValidityMask base_mask(base);
+	auto base_data = (int32_t *) base;
 	auto &result_mask = FlatVector::Validity(result);
 
-	auto base_data = (int32_t *)(base + ValidityMask::STANDARD_MASK_SIZE);
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::GetData<string_t>(result);
 
@@ -212,7 +199,7 @@ void StringSegment::FilterFetchBaseData(ColumnScanState &state, Vector &result, 
 void StringSegment::FetchStringLocations(data_ptr_t baseptr, row_t *ids, idx_t vector_index, idx_t vector_offset,
                                          idx_t count, string_location_t result[]) {
 	auto base = baseptr + vector_index * vector_size;
-	auto base_data = (int32_t *)(base + ValidityMask::STANDARD_MASK_SIZE);
+	auto base_data = (int32_t *) base;
 
 	// no updates: fetch strings from base vector
 	for (idx_t i = 0; i < count; i++) {
@@ -289,13 +276,10 @@ void StringSegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &resu
 	}
 
 	auto base = baseptr + vector_index * vector_size;
-	ValidityMask base_mask(base);
-	auto base_data = (int32_t *)(base + ValidityMask::STANDARD_MASK_SIZE);
+	auto base_data = (int32_t *) base;
 	auto result_data = FlatVector::GetData<string_t>(result);
-	auto &result_mask = FlatVector::Validity(result);
 
 	result_data[result_idx] = FetchStringFromDict(result, baseptr, base_data[id_in_vector]);
-	result_mask.Set(result_idx, base_mask.RowIsValid(id_in_vector));
 }
 
 //===--------------------------------------------------------------------===//
@@ -351,8 +335,7 @@ void StringSegment::AppendData(BufferHandle &handle, SegmentStatistics &stats, d
 	source.Orrify(count, adata);
 
 	auto sdata = (string_t *)adata.data;
-	ValidityMask result_mask(target);
-	auto result_data = (int32_t *)(target + ValidityMask::STANDARD_MASK_SIZE);
+	auto result_data = (int32_t *) target;
 
 	idx_t remaining_strings = STANDARD_VECTOR_SIZE - (this->tuple_count % STANDARD_VECTOR_SIZE);
 	for (idx_t i = 0; i < count; i++) {
@@ -361,7 +344,6 @@ void StringSegment::AppendData(BufferHandle &handle, SegmentStatistics &stats, d
 		if (!adata.validity.RowIsValid(source_idx)) {
 			// null value is stored as -1
 			result_data[target_idx] = 0;
-			result_mask.SetInvalid(target_idx);
 			stats.statistics->has_null = true;
 		} else {
 			auto dictionary_offset = GetDictionaryOffset(handle);

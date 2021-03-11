@@ -21,19 +21,13 @@ NumericSegment::NumericSegment(DatabaseInstance &db, PhysicalType type, idx_t ro
 
 	// figure out how many vectors we want to store in this block
 	this->type_size = GetTypeIdSize(type);
-	this->vector_size = ValidityMask::STANDARD_MASK_SIZE + type_size * STANDARD_VECTOR_SIZE;
+	this->vector_size = type_size * STANDARD_VECTOR_SIZE;
 	this->max_vector_count = Storage::BLOCK_SIZE / vector_size;
 
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	if (block_id == INVALID_BLOCK) {
 		// no block id specified: allocate a buffer for the uncompressed segment
 		this->block = buffer_manager.RegisterMemory(Storage::BLOCK_ALLOC_SIZE, false);
-		auto handle = buffer_manager.Pin(block);
-		// initialize masks to 1 for all vectors
-		for (idx_t i = 0; i < max_vector_count; i++) {
-			ValidityMask mask(handle->node->buffer + (i * vector_size));
-			mask.SetAllValid(STANDARD_VECTOR_SIZE);
-		}
 	} else {
 		this->block = buffer_manager.RegisterBlock(block_id);
 	}
@@ -227,7 +221,7 @@ static void TemplatedSelectOperationBetween(SelectionVector &sel, Vector &result
 	}
 }
 
-void NumericSegment::Select(ColumnScanState &state, Vector &result, SelectionVector &sel, idx_t &approved_tuple_count,
+void NumericSegment::Select(ColumnScanState &state, ValidityMask &source_mask, Vector &result, SelectionVector &sel, idx_t &approved_tuple_count,
                             vector<TableFilter> &table_filter) {
 	auto vector_index = state.vector_index;
 	D_ASSERT(vector_index < max_vector_count);
@@ -238,9 +232,7 @@ void NumericSegment::Select(ColumnScanState &state, Vector &result, SelectionVec
 	auto handle = buffer_manager.Pin(block);
 	auto data = handle->node->buffer;
 	auto offset = vector_index * vector_size;
-	auto source_mask_ptr = (data_ptr_t)(data + offset);
-	ValidityMask source_mask(source_mask_ptr);
-	auto source_data = data + offset + ValidityMask::STANDARD_MASK_SIZE;
+	auto source_data = data + offset;
 
 	if (table_filter.size() == 1) {
 		switch (table_filter[0].comparison_type) {
@@ -323,13 +315,7 @@ void NumericSegment::FetchBaseData(ColumnScanState &state, idx_t vector_index, V
 
 	idx_t count = GetVectorCount(vector_index);
 
-	auto &result_mask = FlatVector::Validity(result);
-	ValidityMask source_mask(data + offset);
-	if (!source_mask.CheckAllValid(count)) {
-		result_mask.Copy(source_mask, STANDARD_VECTOR_SIZE);
-	}
-
-	auto source_data = data + offset + ValidityMask::STANDARD_MASK_SIZE;
+	auto source_data = data + offset;
 
 	// fetch the nullmask and copy the data from the base table
 	result.SetVectorType(VectorType::FLAT_VECTOR);
@@ -356,7 +342,7 @@ static void TemplatedAssignment(SelectionVector &sel, data_ptr_t source, data_pt
 	}
 }
 
-void NumericSegment::FilterFetchBaseData(ColumnScanState &state, Vector &result, SelectionVector &sel,
+void NumericSegment::FilterFetchBaseData(ColumnScanState &state, ValidityMask &source_mask, Vector &result, SelectionVector &sel,
                                          idx_t &approved_tuple_count) {
 	auto vector_index = state.vector_index;
 	D_ASSERT(vector_index < max_vector_count);
@@ -366,10 +352,8 @@ void NumericSegment::FilterFetchBaseData(ColumnScanState &state, Vector &result,
 	auto data = state.primary_handle->node->buffer;
 
 	auto offset = vector_index * vector_size;
-	auto source_mask_ptr = (data_ptr_t)(data + offset);
-	auto source_data = data + offset + ValidityMask::STANDARD_MASK_SIZE;
+	auto source_data = (data_ptr_t)(data + offset);
 
-	ValidityMask source_mask(source_mask_ptr);
 	// fetch the nullmask and copy the data from the base table
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::GetData(result);
@@ -443,12 +427,8 @@ void NumericSegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &res
 	D_ASSERT(vector_index < max_vector_count);
 
 	// first fetch the data from the base table
-	auto data = handle->node->buffer + vector_index * vector_size;
-	auto vector_ptr = data + ValidityMask::STANDARD_MASK_SIZE;
+	auto vector_ptr = handle->node->buffer + vector_index * vector_size;
 
-	ValidityMask source_mask(data);
-
-	FlatVector::SetNull(result, result_idx, !source_mask.RowIsValid(id_in_vector));
 	memcpy(FlatVector::GetData(result) + result_idx * type_size, vector_ptr + id_in_vector * type_size, type_size);
 }
 
@@ -487,20 +467,17 @@ idx_t NumericSegment::Append(SegmentStatistics &stats, Vector &data, idx_t offse
 template <class T>
 static void AppendLoop(SegmentStatistics &stats, data_ptr_t target, idx_t target_offset, Vector &source, idx_t offset,
                        idx_t count) {
-	ValidityMask mask(target);
-
 	VectorData adata;
 	source.Orrify(count, adata);
 
 	auto sdata = (T *)adata.data;
-	auto tdata = (T *)(target + ValidityMask::STANDARD_MASK_SIZE);
+	auto tdata = (T *)target;
 	if (!adata.validity.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
 			auto source_idx = adata.sel->get_index(offset + i);
 			auto target_idx = target_offset + i;
 			bool is_null = !adata.validity.RowIsValid(source_idx);
 			if (is_null) {
-				mask.SetInvalidUnsafe(target_idx);
 				stats.statistics->has_null = true;
 			} else {
 				NumericStatistics::Update<T>(stats, sdata[source_idx]);

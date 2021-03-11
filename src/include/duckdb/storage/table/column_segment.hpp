@@ -51,10 +51,10 @@ public:
 	//! Scan one vector from this segment
 	virtual void Scan(ColumnScanState &state, idx_t vector_index, Vector &result) = 0;
 	//! Scan the next vector from the column and apply a selection vector to filter the data
-	virtual void FilterScan(ColumnScanState &state, Vector &result, SelectionVector &sel,
+	virtual void FilterScan(ColumnScanState &state, ValidityMask &mask, Vector &result, SelectionVector &sel,
 	                        idx_t &approved_tuple_count) = 0;
 	//! Executes filter in this column
-	virtual void Select(ColumnScanState &state, Vector &result, SelectionVector &sel, idx_t &approved_tuple_count,
+	virtual void Select(ColumnScanState &state, ValidityMask &mask, Vector &result, SelectionVector &sel, idx_t &approved_tuple_count,
 	                    vector<TableFilter> &table_filter) = 0;
 	//! Fetch the base table vector index that belongs to this row
 	virtual void Fetch(ColumnScanState &state, idx_t vector_index, Vector &result) = 0;

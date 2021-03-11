@@ -39,10 +39,10 @@ void UncompressedSegment::Fetch(ColumnScanState &state, idx_t vector_index, Vect
 	FetchBaseData(state, vector_index, result);
 }
 
-void UncompressedSegment::Select(Vector &result, vector<TableFilter> &table_filters, SelectionVector &sel,
-                                 idx_t &approved_tuple_count, ColumnScanState &state) {
+void UncompressedSegment::Select(ColumnScanState &state, ValidityMask &mask, Vector &result, vector<TableFilter> &table_filters, SelectionVector &sel,
+                                 idx_t &approved_tuple_count) {
 	//! Select the data from the base table
-	Select(state, result, sel, approved_tuple_count, table_filters);
+	Select(state, mask, result, sel, approved_tuple_count, table_filters);
 }
 
 //===--------------------------------------------------------------------===//
@@ -52,9 +52,9 @@ void UncompressedSegment::Scan(ColumnScanState &state, idx_t vector_index, Vecto
 	FetchBaseData(state, vector_index, result);
 }
 
-void UncompressedSegment::FilterScan(ColumnScanState &state, Vector &result, SelectionVector &sel,
+void UncompressedSegment::FilterScan(ColumnScanState &state, ValidityMask &mask, Vector &result, SelectionVector &sel,
                                      idx_t &approved_tuple_count) {
-	FilterFetchBaseData(state, result, sel, approved_tuple_count);
+	FilterFetchBaseData(state, mask, result, sel, approved_tuple_count);
 }
 
 //===--------------------------------------------------------------------===//

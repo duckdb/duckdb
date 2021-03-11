@@ -32,10 +32,10 @@ public:
 	idx_t Append(SegmentStatistics &stats, Vector &data, idx_t offset, idx_t count) override;
 
 protected:
-	void Select(ColumnScanState &state, Vector &result, SelectionVector &sel, idx_t &approved_tuple_count,
+	void Select(ColumnScanState &state, ValidityMask &validity, Vector &result, SelectionVector &sel, idx_t &approved_tuple_count,
 	            vector<TableFilter> &table_filter) override;
 	void FetchBaseData(ColumnScanState &state, idx_t vector_index, Vector &result) override;
-	void FilterFetchBaseData(ColumnScanState &state, Vector &result, SelectionVector &sel,
+	void FilterFetchBaseData(ColumnScanState &state, ValidityMask &validity, Vector &result, SelectionVector &sel,
 	                         idx_t &approved_tuple_count) override;
 
 public:
