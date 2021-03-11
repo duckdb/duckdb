@@ -161,7 +161,7 @@ public:
 		return tree_map.size();
 	}
 
-public:
+private:
 	//! Whether or not query profiling is enabled
 	bool enabled;
 	//! Whether or not detailed query profiling is enabled
@@ -181,6 +181,11 @@ public:
 	//! A map of a Physical Operator pointer to a tree node
 	unordered_map<PhysicalOperator *, TreeNode *> tree_map;
 
+public:
+    const unordered_map<PhysicalOperator *, TreeNode *>& GetTreeMap() const {
+        return tree_map;
+    }
+private:
 	//! The timer used to time the individual phases of the planning process
 	Profiler<system_clock> phase_profiler;
 	//! A mapping of the phase names to the timings
