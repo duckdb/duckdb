@@ -9,11 +9,20 @@
 #include "duckdb/common/limits.hpp"
 namespace duckdb {
 
-struct PragmaDetailedProfilingOutputData : public FunctionOperatorData {
-	explicit PragmaDetailedProfilingOutputData(idx_t rows) : rows(rows) {
+struct PragmaDetailedProfilingOutputOperatorData : public FunctionOperatorData {
+	explicit PragmaDetailedProfilingOutputOperatorData() : offset(0), initialized(false) {
 	}
-	idx_t rows;
+	idx_t offset;
+	bool initialized;
 };
+
+struct PragmaDetailedProfilingOutputData : public TableFunctionData {
+	explicit PragmaDetailedProfilingOutputData(vector<LogicalType> &types) : types(types) {
+	}
+	unique_ptr<ChunkCollection> collection;
+	vector<LogicalType> types;
+};
+
 
 static unique_ptr<FunctionData> PragmaDetailedProfilingOutputBind(ClientContext &context, vector<Value> &inputs,
                                                                   unordered_map<string, Value> &named_parameters,
@@ -31,14 +40,14 @@ static unique_ptr<FunctionData> PragmaDetailedProfilingOutputBind(ClientContext 
 	names.emplace_back("TIME");
 	return_types.push_back(LogicalType::DOUBLE);
 
-	return make_unique<TableFunctionData>();
+	return make_unique<PragmaDetailedProfilingOutputData>(return_types);
 }
 
 unique_ptr<FunctionOperatorData> PragmaDetailedProfilingOutputInit(ClientContext &context,
                                                                    const FunctionData *bind_data,
                                                                    vector<column_t> &column_ids,
                                                                    TableFilterCollection *filters) {
-	return make_unique<PragmaDetailedProfilingOutputData>(1024);
+	return make_unique<PragmaDetailedProfilingOutputOperatorData>();
 }
 
 static void SetValue(DataChunk &output, int index, int op_id, int fun_id, string name, double time) {
@@ -48,26 +57,37 @@ static void SetValue(DataChunk &output, int index, int op_id, int fun_id, string
 	output.SetValue(3, index, time);
 }
 
-static void ExtractExpressions(ExpressionInformation &info, DataChunk &output, int &index, int op_id, int &fun_id,
+static void ExtractExpressions(ChunkCollection &collection, ExpressionInformation &info, DataChunk &chunk, int op_id, int &fun_id,
                                int sample_tuples_count) {
 	if (info.hasfunction) {
-		SetValue(output, index++, op_id, fun_id++, info.function_name, double(info.time) / sample_tuples_count);
+		SetValue(chunk, chunk.size(), op_id, fun_id++, info.function_name, double(info.time) / sample_tuples_count);
+        chunk.SetCardinality(chunk.size() + 1);
+        if (chunk.size() == STANDARD_VECTOR_SIZE) {
+            collection.Append(chunk);
+            chunk.Reset();
+        }
 	}
 	if (info.children.empty()) {
 		return;
 	}
 	// extract the children of this node
 	for (auto &child : info.children) {
-		ExtractExpressions(*child, output, index, op_id, fun_id, sample_tuples_count);
+		ExtractExpressions(collection, *child, chunk, op_id, fun_id, sample_tuples_count);
 	}
 	return;
 }
 
 static void PragmaDetailedProfilingOutputFunction(ClientContext &context, const FunctionData *bind_data_p,
                                                   FunctionOperatorData *operator_state, DataChunk &output) {
-	auto &state = (PragmaDetailedProfilingOutputData &)*operator_state;
-	if (state.rows > 0) {
-		int total_counter = 0;
+	auto &state = (PragmaDetailedProfilingOutputOperatorData &)*operator_state;
+	auto &data = (PragmaDetailedProfilingOutputData &)*bind_data_p;
+	if (!state.initialized) {
+		// create a ChunkCollection
+		auto collection = make_unique<ChunkCollection>();
+
+		DataChunk chunk;
+		chunk.Initialize(data.types);
+
 		int operator_counter = 1;
 		//        SetValue(output, total_counter++, 0, 0, "Query: " + context.prev_profiler.query,
 		//                 context.prev_profiler.main_query.Elapsed());
@@ -76,18 +96,24 @@ static void PragmaDetailedProfilingOutputFunction(ClientContext &context, const 
 				int function_counter = 1;
 				if (op.second->info.has_executor) {
 					for (auto &info : op.second->info.executors_info->roots) {
-						ExtractExpressions(*info, output, total_counter, operator_counter, function_counter,
-						                   op.second->info.executors_info->sample_tuples_count);
+						ExtractExpressions(*collection, *info, chunk, operator_counter,
+						                   function_counter, op.second->info.executors_info->sample_tuples_count);
 					}
 				}
 				operator_counter++;
 			}
 		}
-		state.rows = 0;
-		output.SetCardinality(total_counter);
-	} else {
-		output.SetCardinality(0);
+		collection->Append(chunk);
+		data.collection = move(collection);
+		state.initialized = true;
 	}
+
+	if (state.offset >= data.collection->Count()) {
+		output.SetCardinality(0);
+		return;
+	}
+	output.Reference(data.collection->GetChunkForRow(state.offset));
+	state.offset += output.size();
 }
 
 void PragmaDetailedProfilingOutput::RegisterFunction(BuiltinFunctions &set) {
@@ -96,3 +122,7 @@ void PragmaDetailedProfilingOutput::RegisterFunction(BuiltinFunctions &set) {
 }
 
 } // namespace duckdb
+
+
+
+
