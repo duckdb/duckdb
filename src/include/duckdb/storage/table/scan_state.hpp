@@ -19,6 +19,7 @@ namespace duckdb {
 class LocalTableStorage;
 class Index;
 class MorselInfo;
+class UpdateSegment;
 class PersistentSegment;
 class TransientSegment;
 struct TableFilterSet;
@@ -43,6 +44,10 @@ struct ColumnScanState {
 	bool initialized = false;
 	//! If this segment has already been checked for skipping puorposes
 	bool segment_checked = false;
+	//! The update segment of the current column
+	UpdateSegment *updates;
+	//! The vector index within the current update segment
+	idx_t vector_index_updates;
 
 public:
 	//! Move on to the next vector in the scan
