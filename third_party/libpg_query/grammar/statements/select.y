@@ -1666,7 +1666,7 @@ opt_interval:
 a_expr:		c_expr									{ $$ = $1; }
 			|
 			a_expr TYPECAST Typename
-					{ $$ = makeTypeCast($1, $3, @2); }
+					{ $$ = makeTypeCast($1, $3, 0, @2); }
 			| a_expr COLLATE any_name
 				{
 					PGCollateClause *n = makeNode(PGCollateClause);
@@ -2093,7 +2093,7 @@ a_expr:		c_expr									{ $$ = $1; }
 b_expr:		c_expr
 				{ $$ = $1; }
 			| b_expr TYPECAST Typename
-				{ $$ = makeTypeCast($1, $3, @2); }
+				{ $$ = makeTypeCast($1, $3, 0, @2); }
 			| '+' b_expr					%prec UMINUS
 				{ $$ = (PGNode *) makeSimpleAExpr(PG_AEXPR_OP, "+", NULL, $2, @1); }
 			| '-' b_expr					%prec UMINUS
@@ -2437,7 +2437,9 @@ func_expr_common_subexpr:
 					$$ = makeSQLValueFunction(PG_SVFOP_CURRENT_SCHEMA, -1, @1);
 				}
 			| CAST '(' a_expr AS Typename ')'
-				{ $$ = makeTypeCast($3, $5, @1); }
+				{ $$ = makeTypeCast($3, $5, 0, @1); }
+			| TRY_CAST '(' a_expr AS Typename ')'
+				{ $$ = makeTypeCast($3, $5, 1, @1); }
 			| EXTRACT '(' extract_list ')'
 				{
 					$$ = (PGNode *) makeFuncCall(SystemFuncName("date_part"), $3, @1);
@@ -2979,7 +2981,7 @@ substr_list:
 					 */
 					$$ = list_make3($1, makeIntConst(1, -1),
 									makeTypeCast($2,
-												 SystemTypeName("int4"), -1));
+												 SystemTypeName("int4"), 0, -1));
 				}
 			| expr_list
 				{
