@@ -40,9 +40,14 @@ SELECT a[b] FROM (VALUES (LIST_VALUE(42), 0)) tbl(a, b)
 ----
 42
 
-# doing it directly on the function requires brackets
+# doing it directly on the function does not require brackets
 query I
 SELECT (LIST_VALUE(42))[0]
+----
+42
+
+query I
+SELECT LIST_VALUE(42)[0]
 ----
 42
 
