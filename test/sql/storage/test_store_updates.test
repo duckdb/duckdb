@@ -11,11 +11,22 @@ CREATE TABLE test (a INTEGER, b INTEGER);
 statement ok
 INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)
 
-statement ok
+query I
 UPDATE test SET b=b+1 WHERE a=11
+----
+1
 
-statement ok
+query II
+SELECT a, b FROM test ORDER BY a
+----
+11	23
+12	21
+13	22
+
+query I
 UPDATE test SET b=b+1 WHERE a=11
+----
+1
 
 query II
 SELECT a, b FROM test ORDER BY a

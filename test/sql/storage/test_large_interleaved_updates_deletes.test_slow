@@ -74,8 +74,30 @@ SELECT a, b, COUNT(*) FROM test GROUP BY a, b ORDER BY a, b
 13	24	218983
 14	27	218983
 
-statement error con1
+statement ok con1
 COMMIT
 
-statement error con2
+statement ok con2
 COMMIT
+
+query III
+SELECT a, b, COUNT(*) FROM test GROUP BY a, b ORDER BY a, b
+----
+10	33	218983
+11	30	138345
+12	21	138345
+13	22	138345
+13	24	218983
+14	27	218983
+
+restart
+
+query III
+SELECT a, b, COUNT(*) FROM test GROUP BY a, b ORDER BY a, b
+----
+10	33	218983
+11	30	138345
+12	21	138345
+13	22	138345
+13	24	218983
+14	27	218983

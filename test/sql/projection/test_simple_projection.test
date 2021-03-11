@@ -9,6 +9,11 @@ PRAGMA enable_verification
 statement ok
 CREATE TABLE a (i integer, j integer);
 
+# scan empty table
+query II
+SELECT * FROM a;
+----
+
 # insertion: 1 affected row
 statement ok
 INSERT INTO a VALUES (42, 84);

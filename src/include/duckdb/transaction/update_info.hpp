@@ -11,18 +11,16 @@
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
+#include <atomic>
 
 namespace duckdb {
-class ColumnData;
-class UncompressedSegment;
+class UpdateSegment;
 
 struct UpdateInfo {
-	//! The base ColumnData that this update affects
-	ColumnData *column_data;
-	//! The uncompressed segment that this update info affects
-	UncompressedSegment *segment;
+	//! The update segment that this update info affects
+	UpdateSegment *segment;
 	//! The version number
-	transaction_t version_number;
+	std::atomic<transaction_t> version_number;
 	//! The vector index within the uncompressed segment
 	idx_t vector_index;
 	//! The amount of updated tuples
@@ -54,6 +52,11 @@ struct UpdateInfo {
 			current = current->next;
 		}
 	}
+
+	Value GetValue(idx_t index);
+	string ToString();
+	void Print();
+	void Verify();
 };
 
 } // namespace duckdb

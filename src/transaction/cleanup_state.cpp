@@ -8,6 +8,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/storage/table/chunk_info.hpp"
+#include "duckdb/storage/table/update_segment.hpp"
 
 namespace duckdb {
 
@@ -51,7 +52,6 @@ void CleanupState::CleanupEntry(UndoFlags type, data_ptr_t data) {
 void CleanupState::CleanupUpdate(UpdateInfo *info) {
 	// remove the update info from the update chain
 	// first obtain an exclusive lock on the segment
-	auto lock = info->segment->lock.GetExclusiveLock();
 	info->segment->CleanupUpdate(info);
 }
 

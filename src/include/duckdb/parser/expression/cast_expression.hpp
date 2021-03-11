@@ -16,12 +16,14 @@ namespace duckdb {
 //! CastExpression represents a type cast from one SQL type to another SQL type
 class CastExpression : public ParsedExpression {
 public:
-	CastExpression(LogicalType target, unique_ptr<ParsedExpression> child);
+	CastExpression(LogicalType target, unique_ptr<ParsedExpression> child, bool try_cast = false);
 
 	//! The child of the cast expression
 	unique_ptr<ParsedExpression> child;
 	//! The type to cast to
 	LogicalType cast_type;
+	//! Whether or not this is a try_cast expression
+	bool try_cast;
 
 public:
 	string ToString() const override;

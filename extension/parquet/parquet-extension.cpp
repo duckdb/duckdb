@@ -27,6 +27,8 @@ struct ParquetReadBindData : public FunctionData {
 	shared_ptr<ParquetReader> initial_reader;
 	vector<string> files;
 	vector<column_t> column_ids;
+	std::atomic<idx_t> chunk_count;
+	idx_t cur_file;
 };
 
 struct ParquetReadOperatorData : public FunctionOperatorData {
@@ -52,9 +54,8 @@ public:
 	                    ParquetScanInit, /* statistics */ ParquetScanStats, /* cleanup */ nullptr,
 	                    /* dependency */ nullptr, ParquetCardinality,
 	                    /* pushdown_complex_filter */ nullptr, /* to_string */ nullptr, ParquetScanMaxThreads,
-	                    ParquetInitParallelState, ParquetScanParallelInit, ParquetParallelStateNext) {
-		projection_pushdown = true;
-		filter_pushdown = true;
+	                    ParquetInitParallelState, ParquetScanParallelInit, ParquetParallelStateNext, true, true,
+	                    ParquetProgress) {
 	}
 
 	static unique_ptr<FunctionData> ParquetReadBind(ClientContext &context, CopyInfo &info,
@@ -149,7 +150,8 @@ public:
 	                                                        vector<column_t> &column_ids,
 	                                                        TableFilterCollection *filters) {
 		auto &bind_data = (ParquetReadBindData &)*bind_data_p;
-
+		bind_data.chunk_count = 0;
+		bind_data.cur_file = 0;
 		auto result = make_unique<ParquetReadOperatorData>();
 		result->column_ids = column_ids;
 
@@ -164,6 +166,17 @@ public:
 		result->reader = bind_data.initial_reader;
 		result->reader->Initialize(result->scan_state, column_ids, move(group_ids), filters->table_filters);
 		return move(result);
+	}
+
+	static int ParquetProgress(ClientContext &context, const FunctionData *bind_data_p) {
+		auto &bind_data = (ParquetReadBindData &)*bind_data_p;
+		if (bind_data.initial_reader->NumRows() == 0) {
+			return (100 * (bind_data.cur_file + 1)) / bind_data.files.size();
+		}
+		auto percentage = (bind_data.chunk_count * STANDARD_VECTOR_SIZE * 100 / bind_data.initial_reader->NumRows()) /
+		                  bind_data.files.size();
+		percentage += 100 * bind_data.cur_file / bind_data.files.size();
+		return percentage;
 	}
 
 	static unique_ptr<FunctionOperatorData>
@@ -182,13 +195,18 @@ public:
 	static void ParquetScanImplementation(ClientContext &context, const FunctionData *bind_data_p,
 	                                      FunctionOperatorData *operator_state, DataChunk &output) {
 		auto &data = (ParquetReadOperatorData &)*operator_state;
+		auto &bind_data = (ParquetReadBindData &)*bind_data_p;
+
 		do {
 			data.reader->Scan(data.scan_state, output);
+			bind_data.chunk_count++;
 			if (output.size() == 0 && !data.is_parallel) {
 				auto &bind_data = (ParquetReadBindData &)*bind_data_p;
 				// check if there is another file
 				if (data.file_index + 1 < bind_data.files.size()) {
 					data.file_index++;
+					bind_data.cur_file++;
+					bind_data.chunk_count = 0;
 					string file = bind_data.files[data.file_index];
 					// move to the next file
 					data.reader =

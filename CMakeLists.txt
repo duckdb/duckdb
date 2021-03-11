@@ -65,6 +65,7 @@ if(${FORCE_COLORED_OUTPUT})
 endif()
 
 option(ENABLE_SANITIZER "Enable address sanitizer." TRUE)
+option(ENABLE_THREAD_SANITIZER "Enable thread sanitizer." FALSE)
 option(ENABLE_UBSAN "Enable undefined behavior sanitizer." TRUE)
 option(
   FORCE_SANITIZER
@@ -88,12 +89,32 @@ if((BUILD_PYTHON OR BUILD_R)
     set(ENABLE_UBSAN FALSE)
   endif()
 endif()
-if(${ENABLE_SANITIZER})
-  set(CXX_EXTRA_DEBUG "${CXX_EXTRA_DEBUG} -fsanitize=address")
+if(${ENABLE_THREAD_SANITIZER})
+  if(${ENABLE_SANITIZER})
+    message(
+      WARNING
+        "Both thread and address sanitizers are enabled. This is not supported by clang. The address sanitizer will be disabled, and we will run with only the thread sanitizer."
+    )
+  endif()
+  if(FORCE_ASSERT)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=thread")
+  else()
+    set(CXX_EXTRA_DEBUG "${CXX_EXTRA_DEBUG} -fsanitize=thread")
+  endif()
+elseif(${ENABLE_SANITIZER})
+  if(FORCE_ASSERT)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address")
+  else()
+    set(CXX_EXTRA_DEBUG "${CXX_EXTRA_DEBUG} -fsanitize=address")
+  endif()
 endif()
 
 if(${ENABLE_UBSAN})
-  set(CXX_EXTRA_DEBUG "${CXX_EXTRA_DEBUG} -fsanitize=undefined")
+  if(FORCE_ASSERT)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=undefined")
+  else()
+    set(CXX_EXTRA_DEBUG "${CXX_EXTRA_DEBUG} -fsanitize=undefined")
+  endif()
 endif()
 
 option(EXPLICIT_EXCEPTIONS "Explicitly enable C++ exceptions." FALSE)
@@ -423,7 +444,10 @@ endif()
 
 add_subdirectory(src)
 
+add_subdirectory(tools)
+
 add_subdirectory(extension)
+
 if(NOT CLANG_TIDY)
   if(${BUILD_UNITTESTS})
     add_subdirectory(test)
@@ -433,9 +457,7 @@ if(NOT CLANG_TIDY)
       add_subdirectory(benchmark)
     endif()
   endif()
-
   add_subdirectory(third_party)
-  add_subdirectory(tools)
 endif()
 
 # Write the export set for build and install tree

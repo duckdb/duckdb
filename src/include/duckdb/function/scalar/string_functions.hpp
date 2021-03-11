@@ -179,4 +179,8 @@ struct LevenshteinFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct JaccardFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 } // namespace duckdb
