@@ -54,16 +54,6 @@ unique_ptr<ParsedExpression> Transformer::TransformArrayAccess(duckdb_libpgquery
 		}
 	}
 	return result;
-
-	// indirection_node->indirection->head
-	// TransformExpressionList(node->indirection, children);
-	// if (children.size() == 2) {
-	// 	return make_unique<FunctionExpression>("list_extract", children);
-	// } else if (children.size() == 3) {
-	// 	return make_unique<FunctionExpression>("list_slice", children);
-	// } else {
-	// 	throw NotImplementedException("Unimplemented indirection: too many children");
-	// }
 }
 
 }

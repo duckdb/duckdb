@@ -30,6 +30,16 @@ SELECT a[0] FROM (VALUES (LIST_VALUE(42))) tbl(a)
 ----
 42
 
+query I
+SELECT a[0+1-1] FROM (VALUES (LIST_VALUE(42))) tbl(a)
+----
+42
+
+query I
+SELECT a[b] FROM (VALUES (LIST_VALUE(42), 0)) tbl(a, b)
+----
+42
+
 # doing it directly on the function requires brackets
 query I
 SELECT (LIST_VALUE(42))[0]
