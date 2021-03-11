@@ -47,13 +47,13 @@ void BuiltinFunctions::Initialize() {
 
 	RegisterPragmaFunctions();
 
-
 	// initialize collations
 	AddCollation("nocase", LowerFun::GetFunction(), true);
 	AddCollation("noaccent", StripAccentsFun::GetFunction());
 	AddCollation("nfc", NFCNormalizeFun::GetFunction());
 
 	switch (context.cpu_info.GetBestFeature()) {
+
 #ifdef DUCKDB_X86_64
 	case CPUFeature::DUCKDB_CPU_FEATURE_X86_AVX2:
 		RegisterOperators_AVX2();
@@ -64,7 +64,7 @@ void BuiltinFunctions::Initialize() {
 #elif defined(DUCKDB_ARM)
 #endif
 	default:
-        RegisterOperators();
+		RegisterOperators();
 		break;
 	}
 }

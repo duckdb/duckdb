@@ -24,6 +24,7 @@
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/planner/pragma_handler.hpp"
+#include "duckdb/common/progress_bar.hpp"
 
 namespace duckdb {
 

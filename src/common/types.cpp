@@ -4,7 +4,6 @@
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/decimal.hpp"
 

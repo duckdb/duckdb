@@ -27,7 +27,8 @@ add_library_unity(
   types.cpp
   fstream_util.cpp
   cycle_counter.cpp
-cpu_info.cpp)
+  cpu_info.cpp
+  cpu_feature.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_common>
     PARENT_SCOPE)

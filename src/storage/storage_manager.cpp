@@ -3,17 +3,13 @@
 #include "duckdb/storage/in_memory_block_manager.hpp"
 #include "duckdb/storage/single_file_block_manager.hpp"
 #include "duckdb/storage/object_cache.hpp"
-
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/common/file_system.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
-#include "duckdb/common/serializer/buffered_file_reader.hpp"
-#include "duckdb/storage/checkpoint_manager.hpp"
 
 namespace duckdb {
 
@@ -64,11 +60,9 @@ void StorageManager::Initialize() {
 	catalog.CreateSchema(*con.context, &info);
 
 	// initialize default functions
-	auto builtin = make_shared<BuiltinFunctions>(*con.context, catalog);
-	builtin->Initialize();
+	BuiltinFunctions builtin(*con.context, catalog);
+	builtin.Initialize();
 
-	//
-	con.context->cpu_info.builtin_functions = builtin;
 	// commit transactions
 	con.Commit();
 

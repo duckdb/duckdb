@@ -24,7 +24,7 @@ enum class OnCreateConflict : uint8_t {
 
 struct CreateInfo : public ParseInfo {
 	explicit CreateInfo(CatalogType type, string schema = DEFAULT_SCHEMA)
-	    : type(type), schema(schema), on_conflict(OnCreateConflict::ERROR_ON_CONFLICT), temporary(false),
+	    : type(type), schema(schema), on_conflict(OnCreateConflict::REPLACE_ON_CONFLICT), temporary(false),
 	      internal(false) {
 	}
 	~CreateInfo() override {

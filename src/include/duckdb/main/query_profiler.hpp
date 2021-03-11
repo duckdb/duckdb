@@ -17,8 +17,8 @@
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/execution/expression_executor_state.hpp"
-#include <stack>
-#include <unordered_map>
+#include "duckdb/common/stack.hpp"
+#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/deque.hpp"
 
@@ -88,7 +88,7 @@ private:
 	//! The timer used to time the execution time of the individual Physical Operators
 	Profiler<system_clock> op;
 	//! The stack of Physical Operators that are currently active
-	std::stack<PhysicalOperator *> execution_stack;
+	stack<PhysicalOperator *> execution_stack;
 	//! A mapping of physical operators to recorded timings
 	unordered_map<PhysicalOperator *, OperatorTimingInformation> timings;
 };

@@ -8,6 +8,9 @@
 
 #pragma once
 
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/unordered_map.hpp"
+
 namespace duckdb {
 enum CPUFeature {
 	DUCKDB_CPU_FALLBACK = 0,
@@ -17,15 +20,15 @@ enum CPUFeature {
 	DUCKDB_CPU_FEATURE_ARM = 0x04000000,
 
 	/* x86 CPU features are constructed as:
-     *
-     *   (DUCKDB_CPU_FEATURE_X86 | (eax << 16) | (ret_reg << 8) | (bit_position)
-     *
-     * For example, SSE3 is determined by the fist bit in the ECX
-     * register for a CPUID call with EAX=1, so we get:
-     *
-     *   DUCKDB_CPU_FEATURE_X86 | (1 << 16) | (2 << 8) | (0) = 0x01010200
-     *
-     * We should have information for inputs of EAX=0-7 w/ ECX=0.
+	 *
+	 *   (DUCKDB_CPU_FEATURE_X86 | (eax << 16) | (ret_reg << 8) | (bit_position)
+	 *
+	 * For example, SSE3 is determined by the fist bit in the ECX
+	 * register for a CPUID call with EAX=1, so we get:
+	 *
+	 *   DUCKDB_CPU_FEATURE_X86 | (1 << 16) | (2 << 8) | (0) = 0x01010200
+	 *
+	 * We should have information for inputs of EAX=0-7 w/ ECX=0.
 	 */
 	DUCKDB_CPU_FEATURE_X86_FPU = 0x01010300,
 	DUCKDB_CPU_FEATURE_X86_VME = 0x01010301,
@@ -163,23 +166,10 @@ enum CPUFeature {
 	DUCKDB_CPU_FEATURE_ARM_CRC32 = DUCKDB_CPU_FEATURE_ARM | 0x0100 | 5
 };
 
-static std::unordered_map<std::string, CPUFeature> const table = {
-    {"DUCKDB_CPU_FEATURE_X86_AVX2", DUCKDB_CPU_FEATURE_X86_AVX2},
-    {"DUCKDB_CPU_FEATURE_X86_AVX512F", DUCKDB_CPU_FEATURE_X86_AVX512F},
-    {"DUCKDB_CPU_FALLBACK", DUCKDB_CPU_FALLBACK}
-};
+unordered_map<string, CPUFeature> const table = {{"DUCKDB_CPU_FEATURE_X86_AVX2", DUCKDB_CPU_FEATURE_X86_AVX2},
+                                                 {"DUCKDB_CPU_FEATURE_X86_AVX512F", DUCKDB_CPU_FEATURE_X86_AVX512F},
+                                                 {"DUCKDB_CPU_FALLBACK", DUCKDB_CPU_FALLBACK}};
 
-static string CPUFeatureToString(CPUFeature feature) {
-    switch (feature) {
-	case CPUFeature::DUCKDB_CPU_FALLBACK:
-        return "DUCKDB_CPU_FALLBACK";
-	case CPUFeature::DUCKDB_CPU_FEATURE_X86_AVX2:
-        return "DUCKDB_CPU_FEATURE_X86_AVX2";
-    case CPUFeature::DUCKDB_CPU_FEATURE_X86_AVX512F:
-        return "DUCKDB_CPU_FEATURE_X86_AVX512F";
-    default:
-        return "UNDEFINED";
-    }
-}
+string CPUFeatureToString(CPUFeature feature);
 
 } // namespace duckdb

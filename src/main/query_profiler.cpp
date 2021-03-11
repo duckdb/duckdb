@@ -1,5 +1,4 @@
 #include "duckdb/main/query_profiler.hpp"
-#include "duckdb/common/to_string.hpp"
 #include "duckdb/common/fstream.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"

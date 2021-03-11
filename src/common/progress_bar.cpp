@@ -1,6 +1,7 @@
 #include "duckdb/common/progress_bar.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/execution/executor.hpp"
 
 namespace duckdb {
 

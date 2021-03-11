@@ -248,7 +248,6 @@ private:
 	void RegisterOperators_AVX2();
 	void RegisterOperators_AVX512f();
 #endif
-
 };
 
 } // namespace duckdb

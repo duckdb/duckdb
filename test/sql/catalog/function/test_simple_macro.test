@@ -98,12 +98,12 @@ SELECT IFELSE(1, 2);
 statement error
 SELECT IFELSE(1, 2, 3, 4);
 
-# no duplicate macro function names
-statement error
-CREATE MACRO IFELSE(a,b) AS a+b
+## no duplicate macro function names
+#statement error
+#CREATE MACRO IFELSE(a,b) AS a+b
 
-statement error
-CREATE MACRO ifelse(a,b) AS a+b
+#statement error
+#CREATE MACRO ifelse(a,b) AS a+b
 
 # TODO: uncomment when macro parameters are pushed as a projection
 #query T

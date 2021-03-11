@@ -12,17 +12,16 @@
 namespace duckdb {
 
 static void PragmaSetCPUFeature(ClientContext &context, const FunctionParameters &parameters) {
-    string feature_s = StringUtil::Upper(parameters.values[0].ToString());
-    CPUFeature feature = DUCKDB_CPU_FALLBACK;
-    if( table.find(feature_s) != table.end()) {
+	string feature_s = StringUtil::Upper(parameters.values[0].ToString());
+	CPUFeature feature = DUCKDB_CPU_FALLBACK;
+	if (table.find(feature_s) != table.end()) {
 		feature = table.find(feature_s)->second;
 		if (context.cpu_info.HasFeature(feature)) {
-			context.cpu_info.SetFeature(feature);
+			context.cpu_info.SetFeature(context, feature);
 		}
+	} else {
+		throw ParserException("%s is not supported", feature);
 	}
-	else {
-        throw ParserException("%s is not supported", feature);
-    }
 }
 
 static void PragmaEnableProfilingStatement(ClientContext &context, const FunctionParameters &parameters) {
@@ -255,8 +254,7 @@ static void PragmaDebugCheckpointAbort(ClientContext &context, const FunctionPar
 void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	RegisterEnableProfiling(set);
 
-    set.AddFunction(
-        PragmaFunction::PragmaAssignment("set_cpu_feature", PragmaSetCPUFeature, LogicalType::VARCHAR));
+	set.AddFunction(PragmaFunction::PragmaAssignment("set_cpu_feature", PragmaSetCPUFeature, LogicalType::VARCHAR));
 
 	set.AddFunction(
 	    PragmaFunction::PragmaAssignment("profiling_mode", PragmaSetProfilingModeStatement, LogicalType::VARCHAR));

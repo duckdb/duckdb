@@ -14,9 +14,10 @@
 #endif
 
 #include "duckdb.h"
-#include "duckdb/execution/executor.hpp"
+#include "duckdb/common/string.hpp"
 
 namespace duckdb {
+class Executor;
 class ProgressBar {
 public:
 	explicit ProgressBar(Executor *executor, idx_t show_progress_after, idx_t time_update_bar = 100)
