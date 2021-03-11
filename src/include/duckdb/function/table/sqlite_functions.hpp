@@ -28,6 +28,10 @@ struct PragmaLastProfilingOutput {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct PragmaCpuFeaturesOutput {
+    static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct PragmaDetailedProfilingOutput {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
