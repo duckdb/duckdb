@@ -1,5 +1,6 @@
 #include "duckdb/common/cpu_info.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/function/function.hpp"
 
 namespace duckdb {
 
@@ -90,7 +91,7 @@ CpuInfo::CpuInfo() {
 	Initialize();
 }
 
-const vector<CPUFeature> &CpuInfo::GetAvailInstructionSets() const {
+const vector<CPUFeature> &CpuInfo::GetAvailFeatures() const {
 	return avail_features;
 }
 void CpuInfo::Initialize() {
@@ -118,5 +119,26 @@ CPUFeature CpuInfo::GetBestFeature() const {
 	return best_feature;
 }
 
+bool CpuInfo::HasFeature(CPUFeature feature) {
+	return CpuFeatureCheck(feature);
+}
+
+bool CpuInfo::HasFeature(const string& feature) {
+	auto feature_s = table.find(feature);
+	if( feature_s != table.end()){
+		return HasFeature(feature_s->second);
+	}
+	else {
+		throw ParserException("undefined");
+	}
+}
+void CpuInfo::SetBestFeature(CPUFeature best_feature) {
+	this->best_feature = best_feature;
+}
+
+void CpuInfo::SetFeature(CPUFeature feature) {
+	SetBestFeature(feature);
+
+}
 
 } // namespace duckdb

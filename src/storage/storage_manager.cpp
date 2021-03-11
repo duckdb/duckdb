@@ -64,9 +64,11 @@ void StorageManager::Initialize() {
 	catalog.CreateSchema(*con.context, &info);
 
 	// initialize default functions
-	BuiltinFunctions builtin(*con.context, catalog);
-	builtin.Initialize();
+	auto builtin = make_shared<BuiltinFunctions>(*con.context, catalog);
+	builtin->Initialize();
 
+	//
+	con.context->cpu_info.builtin_functions = builtin;
 	// commit transactions
 	con.Commit();
 

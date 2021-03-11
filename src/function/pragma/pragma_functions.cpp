@@ -8,9 +8,22 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/common/enums/output_type.hpp"
-#include <cctype>
 
 namespace duckdb {
+
+static void PragmaSetCPUFeature(ClientContext &context, const FunctionParameters &parameters) {
+    string feature_s = StringUtil::Upper(parameters.values[0].ToString());
+    CPUFeature feature = DUCKDB_CPU_FALLBACK;
+    if( table.find(feature_s) != table.end()) {
+		feature = table.find(feature_s)->second;
+		if (context.cpu_info.HasFeature(feature)) {
+			context.cpu_info.SetFeature(feature);
+		}
+	}
+	else {
+        throw ParserException("%s is not supported", feature);
+    }
+}
 
 static void PragmaEnableProfilingStatement(ClientContext &context, const FunctionParameters &parameters) {
 	context.profiler.automatic_print_format = ProfilerPrintFormat::QUERY_TREE;
@@ -241,6 +254,9 @@ static void PragmaDebugCheckpointAbort(ClientContext &context, const FunctionPar
 
 void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	RegisterEnableProfiling(set);
+
+    set.AddFunction(
+        PragmaFunction::PragmaAssignment("set_cpu_feature", PragmaSetCPUFeature, LogicalType::VARCHAR));
 
 	set.AddFunction(
 	    PragmaFunction::PragmaAssignment("profiling_mode", PragmaSetProfilingModeStatement, LogicalType::VARCHAR));
