@@ -253,6 +253,7 @@ typedef struct PGTypeCast {
 	PGNodeTag type;
 	PGNode *arg;          /* the expression being casted */
 	PGTypeName *typeName; /* the target type */
+	int tryCast;          /* TRY_CAST or CAST */
 	int location;         /* token location, or -1 if unknown */
 } PGTypeCast;
 
