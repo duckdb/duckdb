@@ -23,7 +23,6 @@ struct PragmaDetailedProfilingOutputData : public TableFunctionData {
 	vector<LogicalType> types;
 };
 
-
 static unique_ptr<FunctionData> PragmaDetailedProfilingOutputBind(ClientContext &context, vector<Value> &inputs,
                                                                   unordered_map<string, Value> &named_parameters,
                                                                   vector<LogicalType> &return_types,
@@ -57,15 +56,15 @@ static void SetValue(DataChunk &output, int index, int op_id, int fun_id, string
 	output.SetValue(3, index, time);
 }
 
-static void ExtractExpressions(ChunkCollection &collection, ExpressionInformation &info, DataChunk &chunk, int op_id, int &fun_id,
-                               int sample_tuples_count) {
+static void ExtractExpressions(ChunkCollection &collection, ExpressionInformation &info, DataChunk &chunk, int op_id,
+                               int &fun_id, int sample_tuples_count) {
 	if (info.hasfunction) {
 		SetValue(chunk, chunk.size(), op_id, fun_id++, info.function_name, double(info.time) / sample_tuples_count);
-        chunk.SetCardinality(chunk.size() + 1);
-        if (chunk.size() == STANDARD_VECTOR_SIZE) {
-            collection.Append(chunk);
-            chunk.Reset();
-        }
+		chunk.SetCardinality(chunk.size() + 1);
+		if (chunk.size() == STANDARD_VECTOR_SIZE) {
+			collection.Append(chunk);
+			chunk.Reset();
+		}
 	}
 	if (info.children.empty()) {
 		return;
@@ -96,8 +95,8 @@ static void PragmaDetailedProfilingOutputFunction(ClientContext &context, const 
 				int function_counter = 1;
 				if (op.second->info.has_executor) {
 					for (auto &info : op.second->info.executors_info->roots) {
-						ExtractExpressions(*collection, *info, chunk, operator_counter,
-						                   function_counter, op.second->info.executors_info->sample_tuples_count);
+						ExtractExpressions(*collection, *info, chunk, operator_counter, function_counter,
+						                   op.second->info.executors_info->sample_tuples_count);
 					}
 				}
 				operator_counter++;
@@ -122,7 +121,3 @@ void PragmaDetailedProfilingOutput::RegisterFunction(BuiltinFunctions &set) {
 }
 
 } // namespace duckdb
-
-
-
-

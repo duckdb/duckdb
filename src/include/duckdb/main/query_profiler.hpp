@@ -182,9 +182,10 @@ private:
 	unordered_map<PhysicalOperator *, TreeNode *> tree_map;
 
 public:
-    const unordered_map<PhysicalOperator *, TreeNode *>& GetTreeMap() const {
-        return tree_map;
-    }
+	const unordered_map<PhysicalOperator *, TreeNode *> &GetTreeMap() const {
+		return tree_map;
+	}
+
 private:
 	//! The timer used to time the individual phases of the planning process
 	Profiler<system_clock> phase_profiler;
