@@ -2197,8 +2197,18 @@ c_expr:		columnref								{ $$ = $1; }
 				}
 			| case_expr
 				{ $$ = $1; }
-			| func_expr
-				{ $$ = $1; }
+			| func_expr opt_indirection
+				{
+					if ($2) {
+						PGAIndirection *n = makeNode(PGAIndirection);
+						n->arg = $1;
+						n->indirection = check_indirection($2, yyscanner);
+						$$ = (PGNode *)n;
+					}
+					else {
+						$$ = $1;
+					}
+				}
 			| select_with_parens			%prec UMINUS
 				{
 					PGSubLink *n = makeNode(PGSubLink);
