@@ -3206,7 +3206,7 @@ qualified_name_list:
  * which may contain subscripts, and reject that case in the C code.
  */
 qualified_name:
-			ColId
+			ColIdOrString
 				{
 					$$ = makeRangeVar(NULL, $1, @1);
 				}
