@@ -29,7 +29,7 @@ public:
 	//! Append a part of a vector to the uncompressed segment with the given append state, updating the provided stats
 	//! in the process. Returns the amount of tuples appended. If this is less than `count`, the uncompressed segment is
 	//! full.
-	idx_t Append(SegmentStatistics &stats, Vector &data, idx_t offset, idx_t count) override;
+	idx_t Append(SegmentStatistics &stats, VectorData &data, idx_t offset, idx_t count) override;
 
 protected:
 	void Select(ColumnScanState &state, ValidityMask &validity, Vector &result, SelectionVector &sel, idx_t &approved_tuple_count,
@@ -39,7 +39,7 @@ protected:
 	                         idx_t &approved_tuple_count) override;
 
 public:
-	typedef void (*append_function_t)(SegmentStatistics &stats, data_ptr_t target, idx_t target_offset, Vector &source,
+	typedef void (*append_function_t)(SegmentStatistics &stats, data_ptr_t target, idx_t target_offset, VectorData &source,
 	                                  idx_t offset, idx_t count);
 
 private:

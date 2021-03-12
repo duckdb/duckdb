@@ -435,8 +435,7 @@ void NumericSegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &res
 //===--------------------------------------------------------------------===//
 // Append
 //===--------------------------------------------------------------------===//
-idx_t NumericSegment::Append(SegmentStatistics &stats, Vector &data, idx_t offset, idx_t count) {
-	D_ASSERT(data.GetType().InternalType() == type);
+idx_t NumericSegment::Append(SegmentStatistics &stats, VectorData &data, idx_t offset, idx_t count) {
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	auto handle = buffer_manager.Pin(block);
 
@@ -465,11 +464,8 @@ idx_t NumericSegment::Append(SegmentStatistics &stats, Vector &data, idx_t offse
 // Append
 //===--------------------------------------------------------------------===//
 template <class T>
-static void AppendLoop(SegmentStatistics &stats, data_ptr_t target, idx_t target_offset, Vector &source, idx_t offset,
+static void AppendLoop(SegmentStatistics &stats, data_ptr_t target, idx_t target_offset, VectorData &adata, idx_t offset,
                        idx_t count) {
-	VectorData adata;
-	source.Orrify(count, adata);
-
 	auto sdata = (T *)adata.data;
 	auto tdata = (T *)target;
 	if (!adata.validity.AllValid()) {

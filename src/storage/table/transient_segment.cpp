@@ -59,7 +59,7 @@ void TransientSegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &r
 void TransientSegment::InitializeAppend(ColumnAppendState &state) {
 }
 
-idx_t TransientSegment::Append(ColumnAppendState &state, Vector &append_data, idx_t offset, idx_t count) {
+idx_t TransientSegment::Append(ColumnAppendState &state, VectorData &append_data, idx_t offset, idx_t count) {
 	idx_t appended = data->Append(stats, append_data, offset, count);
 	this->count += appended;
 	return appended;

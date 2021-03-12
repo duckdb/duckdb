@@ -285,8 +285,7 @@ void StringSegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &resu
 //===--------------------------------------------------------------------===//
 // Append
 //===--------------------------------------------------------------------===//
-idx_t StringSegment::Append(SegmentStatistics &stats, Vector &data, idx_t offset, idx_t count) {
-	D_ASSERT(data.GetType().InternalType() == PhysicalType::VARCHAR);
+idx_t StringSegment::Append(SegmentStatistics &stats, VectorData &data, idx_t offset, idx_t count) {
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	auto handle = buffer_manager.Pin(block);
 	idx_t initial_count = tuple_count;
@@ -330,10 +329,7 @@ static inline void UpdateStringStats(SegmentStatistics &stats, const string_t &n
 }
 
 void StringSegment::AppendData(BufferHandle &handle, SegmentStatistics &stats, data_ptr_t target, data_ptr_t end,
-                               idx_t target_offset, Vector &source, idx_t offset, idx_t count) {
-	VectorData adata;
-	source.Orrify(count, adata);
-
+                               idx_t target_offset, VectorData &adata, idx_t offset, idx_t count) {
 	auto sdata = (string_t *)adata.data;
 	auto result_data = (int32_t *) target;
 

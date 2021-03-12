@@ -15,12 +15,15 @@
 namespace duckdb {
 class UpdateSegment;
 class TransientSegment;
+class ValiditySegment;
 
 struct ColumnAppendState {
 	//! The current segment of the append
 	TransientSegment *current;
 	//! The update segment to append to
 	UpdateSegment *updates;
+	//! The validity segment to append to
+	ValiditySegment *validity;
 	//! The write lock that is held by the append
 	unique_ptr<StorageLockKey> lock;
 };

@@ -85,6 +85,8 @@ private:
 	void AppendTransientSegment(idx_t start_row);
 	//! Append an update segment segment
 	void AppendUpdateSegment(idx_t start_row, idx_t count = 0);
+	//! Append an update segment segment
+	void AppendValiditySegment(idx_t start_row);
 
 private:
 	mutex stats_lock;

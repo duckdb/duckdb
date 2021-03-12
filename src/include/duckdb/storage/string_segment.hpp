@@ -62,7 +62,7 @@ public:
 	//! Append a part of a vector to the uncompressed segment with the given append state, updating the provided stats
 	//! in the process. Returns the amount of tuples appended. If this is less than `count`, the uncompressed segment is
 	//! full.
-	idx_t Append(SegmentStatistics &stats, Vector &data, idx_t offset, idx_t count) override;
+	idx_t Append(SegmentStatistics &stats, VectorData &data, idx_t offset, idx_t count) override;
 
 	void ToTemporary() override;
 
@@ -77,7 +77,7 @@ protected:
 
 private:
 	void AppendData(BufferHandle &handle, SegmentStatistics &stats, data_ptr_t target, data_ptr_t end,
-	                idx_t target_offset, Vector &source, idx_t offset, idx_t count);
+	                idx_t target_offset, VectorData &source, idx_t offset, idx_t count);
 
 	//! Fetch all the strings of a vector from the base table and place their locations in the result vector
 	void FetchBaseData(ColumnScanState &state, data_ptr_t base_data, idx_t vector_index, Vector &result, idx_t count);

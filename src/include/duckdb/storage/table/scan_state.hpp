@@ -22,6 +22,7 @@ class MorselInfo;
 class UpdateSegment;
 class PersistentSegment;
 class TransientSegment;
+class ValiditySegment;
 struct TableFilterSet;
 
 struct IndexScanState {
@@ -46,8 +47,13 @@ struct ColumnScanState {
 	bool segment_checked = false;
 	//! The update segment of the current column
 	UpdateSegment *updates;
+	//! FIXME: all these vector offsets should be merged into a single row_index
 	//! The vector index within the current update segment
 	idx_t vector_index_updates;
+	//! The validity segment of the current column
+	ValiditySegment *validity;
+	//! The vector index within the validity segment
+	idx_t vector_index_validity;
 
 public:
 	//! Move on to the next vector in the scan

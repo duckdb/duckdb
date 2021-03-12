@@ -210,9 +210,12 @@ void TableDataWriter::CheckpointDeletes(MorselInfo *morsel_info) {
 }
 
 void TableDataWriter::AppendData(SegmentTree &new_tree, idx_t col_idx, Vector &data, idx_t count) {
+	VectorData vdata;
+	data.Orrify(count, vdata);
+
 	idx_t offset = 0;
 	while (count > 0) {
-		idx_t appended = segments[col_idx]->Append(*stats[col_idx], data, offset, count);
+		idx_t appended = segments[col_idx]->Append(*stats[col_idx], vdata, offset, count);
 		if (appended == count) {
 			// appended everything: finished
 			return;

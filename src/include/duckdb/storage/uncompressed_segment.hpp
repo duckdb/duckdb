@@ -64,7 +64,7 @@ public:
 	//! Append a part of a vector to the uncompressed segment with the given append state, updating the provided stats
 	//! in the process. Returns the amount of tuples appended. If this is less than `count`, the uncompressed segment is
 	//! full.
-	virtual idx_t Append(SegmentStatistics &stats, Vector &data, idx_t offset, idx_t count) = 0;
+	virtual idx_t Append(SegmentStatistics &stats, VectorData &data, idx_t offset, idx_t count) = 0;
 
 	//! Convert a persistently backed uncompressed segment (i.e. one where block_id refers to an on-disk block) to a
 	//! temporary in-memory one
