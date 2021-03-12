@@ -67,12 +67,14 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 	if (ref.schema_name.empty()) {
 		if (StringUtil::EndsWith(ref.table_name, ".parquet")) {
 			alternative_function = "parquet_scan";
-		} else if (StringUtil::EndsWith(ref.table_name, ".csv") || StringUtil::EndsWith(ref.table_name, ".tsv") || StringUtil::EndsWith(ref.table_name, ".csv.gz")) {
+		} else if (StringUtil::EndsWith(ref.table_name, ".csv") || StringUtil::EndsWith(ref.table_name, ".tsv") ||
+		           StringUtil::EndsWith(ref.table_name, ".csv.gz")) {
 			alternative_function = "read_csv_auto";
 		}
 	}
-	auto table_or_view = Catalog::GetCatalog(context).GetEntry(context, CatalogType::TABLE_ENTRY, ref.schema_name,
-	                                                           ref.table_name, alternative_function.empty() ? false : true, error_context);
+	auto table_or_view =
+	    Catalog::GetCatalog(context).GetEntry(context, CatalogType::TABLE_ENTRY, ref.schema_name, ref.table_name,
+	                                          alternative_function.empty() ? false : true, error_context);
 	if (!table_or_view) {
 		D_ASSERT(!alternative_function.empty());
 		TableFunctionRef table_function;
