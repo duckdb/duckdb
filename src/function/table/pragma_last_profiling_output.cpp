@@ -8,9 +8,9 @@
 namespace duckdb {
 
 struct PragmaLastProfilingOutputOperatorData : public FunctionOperatorData {
-	PragmaLastProfilingOutputOperatorData() : offset(0), initialized(false) {
+	PragmaLastProfilingOutputOperatorData() : chunk_index(0), initialized(false) {
 	}
-	idx_t offset;
+	idx_t chunk_index;
 	bool initialized;
 };
 
@@ -69,10 +69,8 @@ static void PragmaLastProfilingOutputFunction(ClientContext &context, const Func
 		DataChunk chunk;
 		chunk.Initialize(data.types);
 		int operator_counter = 1;
-		//		SetValue(output, total_counter++, 0, "Query: " + context.prev_profiler.query,
-		//		         context.prev_profiler.main_query.Elapsed(), 0, "");
-		if (!context.prev_profilers.empty()) {
-			for (auto op : context.prev_profilers.back().second.GetTreeMap()) {
+		if (!context.query_profiler_history.GetPrevProfilers().empty()) {
+			for (auto op : context.query_profiler_history.GetPrevProfilers().back().second.GetTreeMap()) {
 				SetValue(chunk, chunk.size(), operator_counter++, op.second->name, op.second->info.time,
 				         op.second->info.elements, " ");
 				chunk.SetCardinality(chunk.size() + 1);
@@ -87,12 +85,11 @@ static void PragmaLastProfilingOutputFunction(ClientContext &context, const Func
 		state.initialized = true;
 	}
 
-	if (state.offset >= data.collection->Count()) {
+	if (state.chunk_index >= data.collection->ChunkCount()) {
 		output.SetCardinality(0);
 		return;
 	}
-	output.Reference(data.collection->GetChunkForRow(state.offset));
-	state.offset += output.size();
+	output.Reference(data.collection->GetChunk(state.chunk_index++));
 }
 
 void PragmaLastProfilingOutput::RegisterFunction(BuiltinFunctions &set) {

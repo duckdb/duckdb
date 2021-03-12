@@ -10,9 +10,9 @@
 namespace duckdb {
 
 struct PragmaDetailedProfilingOutputOperatorData : public FunctionOperatorData {
-	explicit PragmaDetailedProfilingOutputOperatorData() : offset(0), initialized(false) {
+	explicit PragmaDetailedProfilingOutputOperatorData() : chunk_index(0), initialized(false) {
 	}
-	idx_t offset;
+	idx_t chunk_index;
 	bool initialized;
 };
 
@@ -73,7 +73,6 @@ static void ExtractExpressions(ChunkCollection &collection, ExpressionInformatio
 	for (auto &child : info.children) {
 		ExtractExpressions(collection, *child, chunk, op_id, fun_id, sample_tuples_count);
 	}
-	return;
 }
 
 static void PragmaDetailedProfilingOutputFunction(ClientContext &context, const FunctionData *bind_data_p,
@@ -88,10 +87,8 @@ static void PragmaDetailedProfilingOutputFunction(ClientContext &context, const 
 		chunk.Initialize(data.types);
 
 		int operator_counter = 1;
-		//        SetValue(output, total_counter++, 0, 0, "Query: " + context.prev_profiler.query,
-		//                 context.prev_profiler.main_query.Elapsed());
-		if (!context.prev_profilers.empty()) {
-			for (auto op : context.prev_profilers.back().second.GetTreeMap()) {
+		if (!context.query_profiler_history.GetPrevProfilers().empty()) {
+			for (auto op : context.query_profiler_history.GetPrevProfilers().back().second.GetTreeMap()) {
 				int function_counter = 1;
 				if (op.second->info.has_executor) {
 					for (auto &info : op.second->info.executors_info->roots) {
@@ -107,12 +104,11 @@ static void PragmaDetailedProfilingOutputFunction(ClientContext &context, const 
 		state.initialized = true;
 	}
 
-	if (state.offset >= data.collection->Count()) {
+	if (state.chunk_index >= data.collection->ChunkCount()) {
 		output.SetCardinality(0);
 		return;
 	}
-	output.Reference(data.collection->GetChunkForRow(state.offset));
-	state.offset += output.size();
+	output.Reference(data.collection->GetChunk(state.chunk_index++));
 }
 
 void PragmaDetailedProfilingOutput::RegisterFunction(BuiltinFunctions &set) {

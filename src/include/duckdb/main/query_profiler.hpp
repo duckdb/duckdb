@@ -19,6 +19,8 @@
 #include "duckdb/execution/expression_executor_state.hpp"
 #include <stack>
 #include <unordered_map>
+#include "duckdb/common/pair.hpp"
+#include "duckdb/common/deque.hpp"
 
 namespace duckdb {
 class ExpressionExecutor;
@@ -202,5 +204,31 @@ private:
 	//! Check whether or not an operator type requires query profiling. If none of the ops in a query require profiling
 	//! no profiling information is output.
 	bool OperatorRequiresProfiling(PhysicalOperatorType op_type);
+};
+
+//! The QueryProfilerHistory can be used to access the profiler of previous queries
+class QueryProfilerHistory {
+private:
+	//! Previous Query profilers
+	deque<pair<transaction_t, QueryProfiler>> prev_profilers;
+	//! Previous Query profilers size
+	uint64_t prev_profilers_size = 20;
+
+public:
+	deque<pair<transaction_t, QueryProfiler>> &GetPrevProfilers() {
+		return prev_profilers;
+	}
+
+	void SetPrevProfilersSize(uint64_t prevProfilersSize) {
+		prev_profilers_size = prevProfilersSize;
+	}
+	uint64_t GetPrevProfilersSize() const {
+		return prev_profilers_size;
+	}
+
+public:
+	void SetProfilerHistorySize(uint64_t size) {
+		this->prev_profilers_size = size;
+	}
 };
 } // namespace duckdb

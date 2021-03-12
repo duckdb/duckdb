@@ -43,13 +43,10 @@ class ClientContext : public std::enable_shared_from_this<ClientContext> {
 public:
 	DUCKDB_API explicit ClientContext(shared_ptr<DatabaseInstance> db);
 	DUCKDB_API ~ClientContext();
-
-	//! Previous Query profilers
-	deque<pair<transaction_t, QueryProfiler>> prev_profilers;
-	//! Previous Query profilers size
-	uint64_t prev_profilers_size = 20;
 	//! Query profiler
 	QueryProfiler profiler;
+	//! QueryProfiler History
+	QueryProfilerHistory query_profiler_history;
 	//! The database that this client is connected to
 	shared_ptr<DatabaseInstance> db;
 	//! Data for the currently running transaction
@@ -155,10 +152,6 @@ public:
 	//! Same as RunFunctionInTransaction, but does not obtain a lock on the client context or check for validation
 	DUCKDB_API void RunFunctionInTransactionInternal(ClientContextLock &lock, const std::function<void(void)> &fun,
 	                                                 bool requires_valid_transaction = true);
-
-	void SetProfilerHistorySize(uint64_t size) {
-		this->prev_profilers_size = size;
-	}
 
 private:
 	//! Parse statements from a query

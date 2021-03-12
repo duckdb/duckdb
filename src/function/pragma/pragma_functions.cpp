@@ -34,7 +34,7 @@ static void PragmaSetProfilerHistorySize(ClientContext &context, const FunctionP
 	if (size <= 0) {
 		throw ParserException("Size should be larger than 0");
 	}
-	context.SetProfilerHistorySize(size);
+	context.query_profiler_history.SetProfilerHistorySize(size);
 }
 
 static void PragmaEnableProfilingAssignment(ClientContext &context, const FunctionParameters &parameters) {
