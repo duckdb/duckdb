@@ -43,7 +43,7 @@ TEST_CASE("Single thread update", "[interquery][.]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {sum + 2 * CONCURRENT_UPDATE_TOTAL_ACCOUNTS}));
 }
 
-static volatile bool finished_updating = false;
+atomic<bool> finished_updating;
 static void read_total_balance(DuckDB *db, bool *read_correct) {
 	*read_correct = true;
 	Connection con(*db);

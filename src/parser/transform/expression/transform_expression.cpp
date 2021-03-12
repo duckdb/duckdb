@@ -71,6 +71,8 @@ unique_ptr<ParsedExpression> Transformer::TransformExpression(duckdb_libpgquery:
 		return TransformInterval(reinterpret_cast<duckdb_libpgquery::PGIntervalConstant *>(node));
 	case duckdb_libpgquery::T_PGLambdaFunction:
 		return TransformLambda(reinterpret_cast<duckdb_libpgquery::PGLambdaFunction *>(node));
+	case duckdb_libpgquery::T_PGAIndirection:
+		return TransformArrayAccess(reinterpret_cast<duckdb_libpgquery::PGAIndirection *>(node));
 	default:
 		throw NotImplementedException("Expr of type %d not implemented\n", (int)node->type);
 	}

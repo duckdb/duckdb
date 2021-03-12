@@ -9,6 +9,7 @@
 #include "duckdb/catalog/catalog_entry.hpp"
 #include "duckdb/catalog/catalog_set.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/storage/table/update_segment.hpp"
 
 namespace duckdb {
 

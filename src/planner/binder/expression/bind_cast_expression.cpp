@@ -11,6 +11,9 @@ BindResult ExpressionBinder::BindExpression(CastExpression &expr, idx_t depth) {
 	if (!error.empty()) {
 		return BindResult(error);
 	}
+	if (expr.try_cast) {
+		throw NotImplementedException("TRY_CAST not implemented yet in binder");
+	}
 	// the children have been successfully resolved
 	auto &child = (BoundExpression &)*expr.child;
 	if (child.expr->type == ExpressionType::VALUE_PARAMETER) {

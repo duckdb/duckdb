@@ -16,7 +16,6 @@ StringSegment::StringSegment(DatabaseInstance &db, idx_t row_start, block_id_t b
 	this->max_vector_count = 0;
 	// the vector_size is given in the size of the dictionary offsets
 	this->vector_size = STANDARD_VECTOR_SIZE * sizeof(int32_t) + ValidityMask::STANDARD_MASK_SIZE;
-	this->string_updates = nullptr;
 
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	if (block_id == INVALID_BLOCK) {
@@ -52,21 +51,6 @@ void StringSegment::ExpandStringSegment(data_ptr_t baseptr) {
 	mask.SetAllValid(STANDARD_VECTOR_SIZE);
 
 	max_vector_count++;
-	if (versions) {
-		auto new_versions = unique_ptr<UpdateInfo *[]>(new UpdateInfo *[max_vector_count]);
-		memcpy(new_versions.get(), versions.get(), (max_vector_count - 1) * sizeof(UpdateInfo *));
-		new_versions[max_vector_count - 1] = nullptr;
-		versions = move(new_versions);
-	}
-
-	if (string_updates) {
-		auto new_string_updates = unique_ptr<string_update_info_t[]>(new string_update_info_t[max_vector_count]);
-		for (idx_t i = 0; i < max_vector_count - 1; i++) {
-			new_string_updates[i] = move(string_updates[i]);
-		}
-		new_string_updates[max_vector_count - 1] = nullptr;
-		string_updates = move(new_string_updates);
-	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -83,20 +67,7 @@ void StringSegment::InitializeScan(ColumnScanState &state) {
 //===--------------------------------------------------------------------===//
 void StringSegment::ReadString(string_t *result_data, Vector &result, data_ptr_t baseptr, int32_t *dict_offset,
                                idx_t src_idx, idx_t res_idx, idx_t &update_idx, size_t vector_index) {
-	if (string_updates && string_updates[vector_index]) {
-		auto &info = *string_updates[vector_index];
-		while (update_idx < STANDARD_VECTOR_SIZE && info.ids[update_idx] < src_idx) {
-			//! We need to catch the update_idx up to the src_idx
-			update_idx++;
-		}
-		if (update_idx < info.count && info.ids[update_idx] == src_idx) {
-			result_data[res_idx] = ReadString(result, info.block_ids[update_idx], info.offsets[update_idx]);
-		} else {
-			result_data[res_idx] = FetchStringFromDict(result, baseptr, dict_offset[src_idx]);
-		}
-	} else {
-		result_data[res_idx] = FetchStringFromDict(result, baseptr, dict_offset[src_idx]);
-	}
+	result_data[res_idx] = FetchStringFromDict(result, baseptr, dict_offset[src_idx]);
 }
 
 void StringSegment::Select(ColumnScanState &state, Vector &result, SelectionVector &sel, idx_t &approved_tuple_count,
@@ -196,25 +167,9 @@ void StringSegment::FetchBaseData(ColumnScanState &state, data_ptr_t baseptr, id
 	auto base_data = (int32_t *)(base + ValidityMask::STANDARD_MASK_SIZE);
 	auto result_data = FlatVector::GetData<string_t>(result);
 
-	if (string_updates && string_updates[vector_index]) {
-		// there are updates: merge them in
-		auto &info = *string_updates[vector_index];
-		idx_t update_idx = 0;
-		for (idx_t i = 0; i < count; i++) {
-			if (update_idx < info.count && info.ids[update_idx] == i) {
-				// use update info
-				result_data[i] = ReadString(result, info.block_ids[update_idx], info.offsets[update_idx]);
-				update_idx++;
-			} else {
-				// use base table info
-				result_data[i] = FetchStringFromDict(result, baseptr, base_data[i]);
-			}
-		}
-	} else {
-		// no updates: fetch only from the string dictionary
-		for (idx_t i = 0; i < count; i++) {
-			result_data[i] = FetchStringFromDict(result, baseptr, base_data[i]);
-		}
+	// no updates: fetch only from the string dictionary
+	for (idx_t i = 0; i < count; i++) {
+		result_data[i] = FetchStringFromDict(result, baseptr, base_data[i]);
 	}
 }
 
@@ -252,27 +207,6 @@ void StringSegment::FilterFetchBaseData(ColumnScanState &state, Vector &result, 
 }
 
 //===--------------------------------------------------------------------===//
-// Fetch update data
-//===--------------------------------------------------------------------===//
-void StringSegment::FetchUpdateData(ColumnScanState &state, transaction_t start_time, transaction_t transaction_id,
-                                    UpdateInfo *info, Vector &result) {
-	// fetch data from updates
-	auto handle = state.primary_handle.get();
-
-	auto result_data = FlatVector::GetData<string_t>(result);
-	auto &result_mask = FlatVector::Validity(result);
-	UpdateInfo::UpdatesForTransaction(info, start_time, transaction_id, [&](UpdateInfo *current) {
-		auto info_data = (string_location_t *)current->tuple_data;
-		ValidityMask current_mask(current->validity);
-		for (idx_t i = 0; i < current->N; i++) {
-			auto string = FetchString(result, handle->node->buffer, info_data[i]);
-			result_data[current->tuples[i]] = string;
-			result_mask.Set(current->tuples[i], current_mask.RowIsValidUnsafe(current->tuples[i]));
-		}
-	});
-}
-
-//===--------------------------------------------------------------------===//
 // Fetch strings
 //===--------------------------------------------------------------------===//
 void StringSegment::FetchStringLocations(data_ptr_t baseptr, row_t *ids, idx_t vector_index, idx_t vector_offset,
@@ -280,35 +214,15 @@ void StringSegment::FetchStringLocations(data_ptr_t baseptr, row_t *ids, idx_t v
 	auto base = baseptr + vector_index * vector_size;
 	auto base_data = (int32_t *)(base + ValidityMask::STANDARD_MASK_SIZE);
 
-	if (string_updates && string_updates[vector_index]) {
-		// there are updates: merge them in
-		auto &info = *string_updates[vector_index];
-		idx_t update_idx = 0;
-		for (idx_t i = 0; i < count; i++) {
-			auto id = ids[i] - vector_offset;
-			while (update_idx < info.count && info.ids[update_idx] < id) {
-				update_idx++;
-			}
-			if (update_idx < info.count && info.ids[update_idx] == id) {
-				// use update info
-				result[i].block_id = info.block_ids[update_idx];
-				result[i].offset = info.offsets[update_idx];
-				update_idx++;
-			} else {
-				// use base table info
-				result[i] = FetchStringLocation(baseptr, base_data[id]);
-			}
-		}
-	} else {
-		// no updates: fetch strings from base vector
-		for (idx_t i = 0; i < count; i++) {
-			auto id = ids[i] - vector_offset;
-			result[i] = FetchStringLocation(baseptr, base_data[id]);
-		}
+	// no updates: fetch strings from base vector
+	for (idx_t i = 0; i < count; i++) {
+		auto id = ids[i] - vector_offset;
+		result[i] = FetchStringLocation(baseptr, base_data[id]);
 	}
 }
 
 string_location_t StringSegment::FetchStringLocation(data_ptr_t baseptr, int32_t dict_offset) {
+	D_ASSERT(dict_offset >= 0 && dict_offset <= Storage::BLOCK_ALLOC_SIZE);
 	if (dict_offset == 0) {
 		return string_location_t(INVALID_BLOCK, 0);
 	}
@@ -351,10 +265,7 @@ string_t StringSegment::FetchString(Vector &result, data_ptr_t baseptr, string_l
 	}
 }
 
-void StringSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result,
-                             idx_t result_idx) {
-	auto read_lock = lock.GetSharedLock();
-
+void StringSegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
 	idx_t vector_index = row_id / STANDARD_VECTOR_SIZE;
 	idx_t id_in_vector = row_id - vector_index * STANDARD_VECTOR_SIZE;
 	D_ASSERT(vector_index < max_vector_count);
@@ -383,46 +294,7 @@ void StringSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, 
 	auto result_data = FlatVector::GetData<string_t>(result);
 	auto &result_mask = FlatVector::Validity(result);
 
-	bool found_data = false;
-	// first see if there is any updated version of this tuple we must fetch
-	if (versions && versions[vector_index]) {
-		UpdateInfo::UpdatesForTransaction(
-		    versions[vector_index], transaction.start_time, transaction.transaction_id, [&](UpdateInfo *current) {
-			    auto info_data = (string_location_t *)current->tuple_data;
-			    // loop over the tuples in this UpdateInfo
-			    ValidityMask current_mask(current->validity);
-			    for (idx_t i = 0; i < current->N; i++) {
-				    if (current->tuples[i] == row_id) {
-					    // found the relevant tuple
-					    found_data = true;
-					    result_data[result_idx] = FetchString(result, baseptr, info_data[i]);
-					    result_mask.Set(result_idx, current_mask.RowIsValidUnsafe(current->tuples[i]));
-					    break;
-				    } else if (current->tuples[i] > row_id) {
-					    // tuples are sorted: so if the current tuple is > row_id we will not find it anymore
-					    break;
-				    }
-			    }
-		    });
-	}
-	if (!found_data && string_updates && string_updates[vector_index]) {
-		// there are updates: check if we should use them
-		auto &info = *string_updates[vector_index];
-		for (idx_t i = 0; i < info.count; i++) {
-			if (info.ids[i] == id_in_vector) {
-				// use the update
-				result_data[result_idx] = ReadString(result, info.block_ids[i], info.offsets[i]);
-				found_data = true;
-				break;
-			} else if (info.ids[i] > id_in_vector) {
-				break;
-			}
-		}
-	}
-	if (!found_data) {
-		// no version was found yet: fetch base table version
-		result_data[result_idx] = FetchStringFromDict(result, baseptr, base_data[id_in_vector]);
-	}
+	result_data[result_idx] = FetchStringFromDict(result, baseptr, base_data[id_in_vector]);
 	result_mask.Set(result_idx, base_mask.RowIsValid(id_in_vector));
 }
 
@@ -662,224 +534,7 @@ void StringSegment::ReadStringMarker(data_ptr_t target, block_id_t &block_id, in
 	memcpy(&offset, target, sizeof(int32_t));
 }
 
-//===--------------------------------------------------------------------===//
-// String Update
-//===--------------------------------------------------------------------===//
-string_update_info_t StringSegment::CreateStringUpdate(SegmentStatistics &stats, Vector &update, row_t *ids,
-                                                       idx_t count, idx_t vector_offset) {
-	auto info = make_unique<StringUpdateInfo>();
-	info->count = count;
-	auto strings = FlatVector::GetData<string_t>(update);
-	auto &update_mask = FlatVector::Validity(update);
-	for (idx_t i = 0; i < count; i++) {
-		info->ids[i] = ids[i] - vector_offset;
-		// copy the string into the block
-		if (update_mask.RowIsValid(i)) {
-			UpdateStringStats(stats, strings[i]);
-			WriteString(strings[i], info->block_ids[i], info->offsets[i]);
-		} else {
-			stats.statistics->has_null = true;
-			info->block_ids[i] = INVALID_BLOCK;
-			info->offsets[i] = 0;
-		}
-	}
-	return info;
-}
-
-string_update_info_t StringSegment::MergeStringUpdate(SegmentStatistics &stats, Vector &update, row_t *ids,
-                                                      idx_t update_count, idx_t vector_offset,
-                                                      StringUpdateInfo &update_info) {
-	auto info = make_unique<StringUpdateInfo>();
-
-	// perform a merge between the new and old indexes
-	auto strings = FlatVector::GetData<string_t>(update);
-	auto &update_mask = FlatVector::Validity(update);
-	//! Check if we need to update the segment's nullmask
-	for (idx_t i = 0; i < update_count; i++) {
-		if (update_mask.RowIsValid(i)) {
-			UpdateStringStats(stats, strings[i]);
-		}
-	}
-	auto pick_new = [&](idx_t id, idx_t idx, idx_t count) {
-		info->ids[count] = id;
-		if (update_mask.RowIsValid(idx)) {
-			WriteString(strings[idx], info->block_ids[count], info->offsets[count]);
-		} else {
-			stats.statistics->has_null = true;
-			info->block_ids[count] = INVALID_BLOCK;
-			info->offsets[count] = 0;
-		}
-	};
-	auto merge = [&](idx_t id, idx_t aidx, idx_t bidx, idx_t count) {
-		// merge: only pick new entry
-		pick_new(id, aidx, count);
-	};
-	auto pick_old = [&](idx_t id, idx_t bidx, idx_t count) {
-		// pick old entry
-		info->ids[count] = id;
-		info->block_ids[count] = update_info.block_ids[bidx];
-		info->offsets[count] = update_info.offsets[bidx];
-	};
-
-	info->count =
-	    merge_loop(ids, update_info.ids, update_count, update_info.count, vector_offset, merge, pick_new, pick_old);
-	return info;
-}
-
-//===--------------------------------------------------------------------===//
-// Update Info
-//===--------------------------------------------------------------------===//
-void StringSegment::MergeUpdateInfo(UpdateInfo *node, row_t *ids, idx_t update_count, idx_t vector_offset,
-                                    string_location_t base_data[], ValidityMask &base_mask) {
-	auto info_data = (string_location_t *)node->tuple_data;
-
-	// first we copy the old update info into a temporary structure
-	sel_t old_ids[STANDARD_VECTOR_SIZE];
-	string_location_t old_data[STANDARD_VECTOR_SIZE];
-
-	memcpy(old_ids, node->tuples, node->N * sizeof(sel_t));
-	memcpy(old_data, node->tuple_data, node->N * sizeof(string_location_t));
-
-	// now we perform a merge of the new ids with the old ids
-	auto merge = [&](idx_t id, idx_t aidx, idx_t bidx, idx_t count) {
-		// new_id and old_id are the same, insert the old data in the UpdateInfo
-		D_ASSERT(old_data[bidx].IsValid());
-		info_data[count] = old_data[bidx];
-		node->tuples[count] = id;
-	};
-	ValidityMask node_mask(node->validity);
-	auto pick_new = [&](idx_t id, idx_t aidx, idx_t count) {
-		// new_id comes before the old id, insert the base table data into the update info
-		D_ASSERT(base_data[aidx].IsValid());
-		info_data[count] = base_data[aidx];
-		node_mask.Set(id, base_mask.RowIsValid(aidx));
-
-		node->tuples[count] = id;
-	};
-	auto pick_old = [&](idx_t id, idx_t bidx, idx_t count) {
-		// old_id comes before new_id, insert the old data
-		D_ASSERT(old_data[bidx].IsValid());
-		info_data[count] = old_data[bidx];
-		node->tuples[count] = id;
-	};
-	// perform the merge
-	node->N = merge_loop(ids, old_ids, update_count, node->N, vector_offset, merge, pick_new, pick_old);
-}
-
-//===--------------------------------------------------------------------===//
-// Update
-//===--------------------------------------------------------------------===//
-void StringSegment::Update(ColumnData &column_data, SegmentStatistics &stats, Transaction &transaction, Vector &update,
-                           row_t *ids, idx_t count, idx_t vector_index, idx_t vector_offset, UpdateInfo *node) {
-	if (!string_updates) {
-		string_updates = unique_ptr<string_update_info_t[]>(new string_update_info_t[max_vector_count]);
-	}
-
-	auto &buffer_manager = BufferManager::GetBufferManager(db);
-
-	// first pin the base block
-	auto handle = buffer_manager.Pin(block);
-	auto baseptr = handle->node->buffer;
-	auto base = baseptr + vector_index * vector_size;
-	ValidityMask base_mask(base);
-
-	// fetch the original string locations and copy the original nullmask
-	string_location_t string_locations[STANDARD_VECTOR_SIZE];
-	validity_t original_validity[ValidityMask::STANDARD_ENTRY_COUNT];
-	memcpy(original_validity, base, ValidityMask::STANDARD_ENTRY_COUNT * sizeof(validity_t));
-
-	FetchStringLocations(baseptr, ids, vector_index, vector_offset, count, string_locations);
-
-	string_update_info_t new_update_info;
-	// next up: create the updates
-	if (!string_updates[vector_index]) {
-		// no string updates yet, allocate a block and place the updates there
-		new_update_info = CreateStringUpdate(stats, update, ids, count, vector_offset);
-	} else {
-		// string updates already exist, merge the string updates together
-		new_update_info = MergeStringUpdate(stats, update, ids, count, vector_offset, *string_updates[vector_index]);
-	}
-
-	// now update the original nullmask
-	auto &update_mask = FlatVector::Validity(update);
-	for (idx_t i = 0; i < count; i++) {
-		base_mask.Set(ids[i] - vector_offset, update_mask.RowIsValid(i));
-	}
-
-	// now that the original strings are placed in the undo buffer and the updated strings are placed in the base table
-	// create the update node
-	if (!node) {
-		// create a new node in the undo buffer for this update
-		node = CreateUpdateInfo(column_data, transaction, ids, count, vector_index, vector_offset,
-		                        sizeof(string_location_t));
-
-		// copy the string location data into the undo buffer
-		memcpy(node->validity, original_validity, ValidityMask::STANDARD_ENTRY_COUNT * sizeof(validity_t));
-		memcpy(node->tuple_data, string_locations, sizeof(string_location_t) * count);
-	} else {
-		// node in the update info already exists, merge the new updates in
-		ValidityMask original_mask(original_validity);
-		MergeUpdateInfo(node, ids, count, vector_offset, string_locations, original_mask);
-	}
-	// finally move the string updates in place
-	string_updates[vector_index] = move(new_update_info);
-}
-
-void StringSegment::RollbackUpdate(UpdateInfo *info) {
-	auto lock_handle = lock.GetExclusiveLock();
-
-	idx_t new_count = 0;
-	auto &update_info = *string_updates[info->vector_index];
-	auto string_locations = (string_location_t *)info->tuple_data;
-
-	auto &buffer_manager = BufferManager::GetBufferManager(db);
-
-	// put the previous NULL values back
-	auto handle = buffer_manager.Pin(block);
-	auto baseptr = handle->node->buffer;
-	auto base = baseptr + info->vector_index * vector_size;
-	ValidityMask base_mask(base);
-	ValidityMask info_mask(info->validity);
-	for (idx_t i = 0; i < info->N; i++) {
-		base_mask.Set(info->tuples[i], info_mask.RowIsValidUnsafe(info->tuples[i]));
-	}
-
-	// now put the original values back into the update info
-	idx_t old_idx = 0;
-	for (idx_t i = 0; i < update_info.count; i++) {
-		if (old_idx >= info->N || update_info.ids[i] != info->tuples[old_idx]) {
-			D_ASSERT(old_idx >= info->N || update_info.ids[i] < info->tuples[old_idx]);
-			// this entry is not rolled back: insert entry directly
-			update_info.ids[new_count] = update_info.ids[i];
-			update_info.block_ids[new_count] = update_info.block_ids[i];
-			update_info.offsets[new_count] = update_info.offsets[i];
-			new_count++;
-		} else {
-			// this entry is being rolled back
-			auto &old_location = string_locations[old_idx];
-			if (old_location.block_id != INVALID_BLOCK) {
-				// not rolled back to base table: insert entry again
-				update_info.ids[new_count] = update_info.ids[i];
-				update_info.block_ids[new_count] = old_location.block_id;
-				update_info.offsets[new_count] = old_location.offset;
-				new_count++;
-			}
-			old_idx++;
-		}
-	}
-
-	if (new_count == 0) {
-		// all updates are rolled back: delete the string update vector
-		string_updates[info->vector_index].reset();
-	} else {
-		// set the count of the new string update vector
-		update_info.count = new_count;
-	}
-	CleanupUpdate(info);
-}
-
 void StringSegment::ToTemporary() {
-	auto write_lock = lock.GetExclusiveLock();
 	ToTemporaryInternal();
 	this->max_vector_count = (this->tuple_count + (STANDARD_VECTOR_SIZE - 1)) / STANDARD_VECTOR_SIZE;
 }

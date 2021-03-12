@@ -2,14 +2,10 @@
 #include "duckdb/execution/reservoir_sample.hpp"
 #include "duckdb/function/aggregate/holistic_functions.hpp"
 #include "duckdb/planner/expression.hpp"
-#include "pcg_random.hpp"
 
 #include <algorithm>
-#include <cmath>
 #include <queue>
-#include <random>
 #include <stdlib.h>
-#include <utility>
 
 namespace duckdb {
 

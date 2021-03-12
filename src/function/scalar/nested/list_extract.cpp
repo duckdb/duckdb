@@ -154,6 +154,8 @@ void ListExtractFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(fun);
 	fun.name = "list_element";
 	set.AddFunction(fun);
+	fun.name = "array_extract";
+	set.AddFunction(fun);
 }
 
 } // namespace duckdb
