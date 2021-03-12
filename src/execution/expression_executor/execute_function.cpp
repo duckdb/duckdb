@@ -40,8 +40,14 @@ void ExpressionExecutor::Execute(BoundFunctionExpression &expr, ExpressionState 
 		arguments.Verify();
 	}
 	arguments.SetCardinality(count);
+	if (current_count >= next_sample) {
+		state->profiler.Start();
+	}
 	expr.function.function(arguments, *state, result);
-
+	if (current_count >= next_sample) {
+		state->profiler.End();
+		state->time += state->profiler.Elapsed();
+	}
 	if (result.GetType() != expr.return_type) {
 		throw TypeMismatchException(expr.return_type, result.GetType(),
 		                            "expected function to return the former "

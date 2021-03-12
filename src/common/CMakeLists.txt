@@ -25,7 +25,8 @@ add_library_unity(
   symbols.cpp
   tree_renderer.cpp
   types.cpp
-  fstream_util.cpp)
+  fstream_util.cpp
+  cycle_counter.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_common>
     PARENT_SCOPE)
