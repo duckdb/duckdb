@@ -122,7 +122,7 @@ void PhysicalUnnest::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 					auto &child_cc = ListVector::GetEntry(v);
 					for (i = 0; i < MinValue<idx_t>(this_chunk_len, list_entry.length - state->list_position); i++) {
 						chunk.data[target_col].SetValue(
-						    i, child_cc.GetValue(0, list_entry.offset + i + state->list_position));
+						    i, child_cc.GetValue( list_entry.offset + i + state->list_position));
 					}
 				}
 			}

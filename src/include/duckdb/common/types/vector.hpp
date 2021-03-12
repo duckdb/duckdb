@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include <utility>
+
 #include "duckdb/common/bitset.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
@@ -82,6 +84,8 @@ public:
 	//! is currently in the vector is destroyed.
 	void Initialize(const LogicalType &new_type = LogicalType::INVALID, bool zero_data = false);
 
+//	void InitializeList(const LogicalType &new_type);
+
 	//! Converts this Vector to a printable string representation
 	string ToString(idx_t count) const;
 	void Print(idx_t count);
@@ -110,10 +114,16 @@ public:
 	//! Sets the [index] element of the Vector to the specified Value.
 	void SetValue(idx_t index, const Value &val);
 
+	void SetAuxiliary(buffer_ptr<VectorBuffer> new_buffer){
+	    auxiliary = std::move(new_buffer);
+	};
+
 	//! Serializes a Vector to a stand-alone binary blob
 	void Serialize(idx_t count, Serializer &serializer);
 	//! Deserializes a blob back into a Vector
 	void Deserialize(idx_t count, Deserializer &source);
+
+	void CreateInnerListBuffer(LogicalType type);
 
 	// Getters
 	inline VectorType GetVectorType() const {
@@ -128,6 +138,12 @@ public:
 	inline data_ptr_t GetData() {
 		return data;
 	}
+
+
+	buffer_ptr<VectorBuffer> GetAuxiliary(){
+        return auxiliary;
+	}
+
 	// Setters
 	inline void SetVectorType(VectorType vector_type) {
 		buffer->SetVectorType(vector_type);
@@ -238,9 +254,11 @@ struct FlatVector {
 };
 
 struct ListVector {
-	static ChunkCollection &GetEntry(const Vector &vector);
+	static Vector &GetEntry(const Vector &vector);
+	static idx_t GetListSize(const Vector &vector);
 	static bool HasEntry(const Vector &vector);
-	static void SetEntry(Vector &vector, unique_ptr<ChunkCollection> entry);
+	static void SetEntry(Vector &vector, unique_ptr<Vector> entry);
+	static void Append(Vector& target, Vector& source, idx_t source_size);
 };
 
 struct StringVector {

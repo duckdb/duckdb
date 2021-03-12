@@ -19,13 +19,14 @@ void ListExtractTemplate(idx_t count, Vector &list, Vector &offsets, Vector &res
 	auto result_data = FlatVector::GetData<T>(result);
 	auto &result_mask = FlatVector::Validity(result);
 
-	auto &list_child_collection = ListVector::GetEntry(list);
+	auto &vec = ListVector::GetEntry(list);
 	// heap-ref once
 	if (HEAP_REF) {
-		for (auto &chunk : list_child_collection.Chunks()) {
-			D_ASSERT(chunk->data.size() == 1);
-			StringVector::AddHeapReference(result, chunk->data[0]);
-		}
+	    StringVector::AddHeapReference(result,vec);
+//		for (auto &chunk : list_child_collection.Chunks()) {
+//			D_ASSERT(chunk->data.size() == 1);
+//			StringVector::AddHeapReference(result, chunk->data[0]);
+//		}
 	}
 
 	// this is lifted from ExecuteGenericLoop because we can't push the list child data into this otherwise
@@ -50,12 +51,12 @@ void ListExtractTemplate(idx_t count, Vector &list, Vector &offsets, Vector &res
 				}
 				child_offset = list_entry.offset + offsets_entry;
 			}
-			D_ASSERT(child_offset < list_child_collection.Count());
-			auto &child_chunk = list_child_collection.GetChunkForRow(child_offset);
-			D_ASSERT(child_chunk.data.size() == 1);
-			auto &child_vector = child_chunk.data[0];
+//			D_ASSERT(child_offset < list_child_collection.Count());
+//			auto &child_chunk = list_child_collection.GetChunkForRow(child_offset);
+//			D_ASSERT(child_chunk.data.size() == 1);
+//			auto &child_vector = child_chunk.data[0];
 			auto child_index = child_offset % STANDARD_VECTOR_SIZE;
-			child_vector.Orrify(child_chunk.size(), child_data);
+//			vec.Orrify(((VectorListBuffer&) vec.GetBuffer()).size, child_data);
 			auto child_index_sel = child_data.sel->get_index(child_index);
 			if (child_data.validity.RowIsValid(child_index_sel)) {
 				result_data[i] = ((T *)child_data.data)[child_index_sel];

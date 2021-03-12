@@ -223,8 +223,9 @@ static void StringSplitExecutor(DataChunk &args, ExpressionState &state, Vector 
 
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 	auto list_struct_data = FlatVector::GetData<list_entry_t>(result);
-
-	auto list_child = make_unique<ChunkCollection>();
+//    auto &list_buffer = (VectorListBuffer&) result.GetBuffer();
+//    list_buffer.InitializeList();
+//	auto list_child = make_unique<Vector>();
 	vector<LogicalType> types = {LogicalType::VARCHAR};
 	DataChunk append_chunk;
 	append_chunk.Initialize(types);
@@ -253,15 +254,15 @@ static void StringSplitExecutor(DataChunk &args, ExpressionState &state, Vector 
 		list_struct_data[i].length = split_input->Count();
 		list_struct_data[i].offset = total_len;
 		total_len += split_input->Count();
-		list_child->Append(*split_input);
+//		list_buffer.Append(split_input.,split_input->Count());
 	}
 
-	D_ASSERT(list_child->Count() == total_len);
+//	D_ASSERT(list_child->Count() == total_len);
 	if (args.data[0].GetVectorType() == VectorType::CONSTANT_VECTOR &&
 	    args.data[1].GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
-	ListVector::SetEntry(result, move(list_child));
+//	ListVector::SetEntry(result, move(list_child));
 }
 
 static void StringSplitFunction(DataChunk &args, ExpressionState &state, Vector &result) {

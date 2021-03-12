@@ -157,30 +157,37 @@ void VectorOperations::Copy(Vector &source, Vector &target, const SelectionVecto
 	}
 	case PhysicalType::LIST: {
 		D_ASSERT(target.GetType().InternalType() == PhysicalType::LIST);
-		if (ListVector::HasEntry(source)) {
+
+//		if (ListVector::HasEntry(source)) {
 			// if the source has list offsets, we need to append them to the target
-			if (!ListVector::HasEntry(target)) {
-				auto new_target_child = make_unique<ChunkCollection>();
-				ListVector::SetEntry(target, move(new_target_child));
-			}
+//			if (!ListVector::HasEntry(target)) {
+//				auto new_target_child = make_unique<ChunkCollection>();
+//				ListVector::SetEntry(target, move(new_target_child));
+//			}
 			auto &source_child = ListVector::GetEntry(source);
-			auto &target_child = ListVector::GetEntry(target);
-			idx_t old_target_child_len = target_child.Count();
+//			target.InitializeList(source_child.GetType());
+			auto source_child_size = ListVector::GetListSize(source);
+			auto target_child = make_unique<Vector>(target.GetType().child_types()[0].second);
+	        ListVector::SetEntry(target, move(target_child));
+//			auto &target_child = ListVector::GetEntry(target);
+//			idx_t old_target_child_len = target_child.Count();
 
 			// append to list itself
-			target_child.Append(source_child);
-			// now write the list offsets
-			auto ldata = FlatVector::GetData<list_entry_t>(source);
-			auto tdata = FlatVector::GetData<list_entry_t>(target);
-			for (idx_t i = 0; i < copy_count; i++) {
-				auto source_idx = sel.get_index(source_offset + i);
-				auto &source_entry = ldata[source_idx];
-				auto &target_entry = tdata[target_offset + i];
-
-				target_entry.length = source_entry.length;
-				target_entry.offset = old_target_child_len + source_entry.offset;
-			}
-		}
+			ListVector::Append(target,source_child,source_child_size);
+//			target_child.Append(source_child);
+//
+//			// now write the list offsets
+//			auto ldata = FlatVector::GetData<list_entry_t>(source);
+//			auto tdata = FlatVector::GetData<list_entry_t>(target);
+//			for (idx_t i = 0; i < copy_count; i++) {
+//				auto source_idx = sel.get_index(source_offset + i);
+//				auto &source_entry = ldata[source_idx];
+//				auto &target_entry = tdata[target_offset + i];
+//
+//				target_entry.length = source_entry.length;
+//				target_entry.offset = old_target_child_len + source_entry.offset;
+//			}
+//		}
 		break;
 	}
 	default:

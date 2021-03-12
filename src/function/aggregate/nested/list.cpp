@@ -6,19 +6,19 @@
 namespace duckdb {
 
 struct ListAggState {
-	ChunkCollection *cc;
+	Vector *list_vector;
 };
 
 struct ListFunction {
 	template <class STATE>
 	static void Initialize(STATE *state) {
-		state->cc = nullptr;
+		state->list_vector = nullptr;
 	}
 
 	template <class STATE>
 	static void Destroy(STATE *state) {
-		if (state->cc) {
-			delete state->cc;
+		if (state->list_vector) {
+			delete state->list_vector;
 		}
 	}
 	static bool IgnoreNull() {
@@ -33,23 +33,29 @@ static void ListUpdateFunction(Vector inputs[], FunctionData *, idx_t input_coun
 	VectorData sdata;
 	state_vector.Orrify(count, sdata);
 
-	DataChunk insert_chunk;
+//	DataChunk insert_chunk;
 
-	vector<LogicalType> chunk_types;
-	chunk_types.push_back(input.GetType());
-	insert_chunk.Initialize(chunk_types);
-	insert_chunk.SetCardinality(1);
+//	vector<LogicalType> chunk_types;
+//	chunk_types.push_back(input.GetType());
+//	insert_chunk.Initialize(chunk_types);
+//	insert_chunk.SetCardinality(1);
+    child_list_t<LogicalType> child_types;
+    child_types.push_back({"",input.GetType()});
+    LogicalType list_vector_type(LogicalType::LIST.id(),child_types);
 
 	auto states = (ListAggState **)sdata.data;
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
 	for (idx_t i = 0; i < count; i++) {
 		auto state = states[sdata.sel->get_index(i)];
-		if (!state->cc) {
-			state->cc = new ChunkCollection();
+		if (!state->list_vector) {
+			state->list_vector = new Vector(list_vector_type);
+			auto list_child = make_unique<Vector>(input.GetType());
+	        ListVector::SetEntry(*state->list_vector, move(list_child));
 		}
-		sel.set_index(0, i);
-		insert_chunk.data[0].Slice(input, sel, 1);
-		state->cc->Append(insert_chunk);
+//		sel.set_index(0, i);
+//		insert_chunk.data[0].Slice(input, sel, 1);
+//		auto& list_buffer = (VectorListBuffer&) state->list_vector->GetBuffer();
+        ListVector::Append(*state->list_vector,input,1);
 	}
 }
 
@@ -60,14 +66,14 @@ static void ListCombineFunction(Vector &state, Vector &combined, idx_t count) {
 
 	auto combined_ptr = FlatVector::GetData<ListAggState *>(combined);
 
-	for (idx_t i = 0; i < count; i++) {
-		auto state = states_ptr[sdata.sel->get_index(i)];
-		D_ASSERT(state->cc);
-		if (!combined_ptr[i]->cc) {
-			combined_ptr[i]->cc = new ChunkCollection();
-		}
-		combined_ptr[i]->cc->Append(*state->cc);
-	}
+//	for (idx_t i = 0; i < count; i++) {
+//		auto state = states_ptr[sdata.sel->get_index(i)];
+//		D_ASSERT(state->cc);
+//		if (!combined_ptr[i]->cc) {
+//			combined_ptr[i]->cc = new ChunkCollection();
+//		}
+//		combined_ptr[i]->cc->Append(*state->cc);
+//	}
 }
 
 static void ListFinalize(Vector &state_vector, FunctionData *, Vector &result, idx_t count) {
@@ -77,36 +83,41 @@ static void ListFinalize(Vector &state_vector, FunctionData *, Vector &result, i
 
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 	result.Initialize(result.GetType()); // deals with constants
-	auto list_struct_data = FlatVector::GetData<list_entry_t>(result);
-	auto &mask = FlatVector::Validity(result);
-
-	size_t total_len = 0;
-	for (idx_t i = 0; i < count; i++) {
-		auto state = states[sdata.sel->get_index(i)];
-		if (!state->cc) {
-			mask.SetInvalid(i);
-			continue;
-		}
-		D_ASSERT(state->cc);
-		auto &state_cc = *state->cc;
-		D_ASSERT(state_cc.Types().size() == 1);
-		list_struct_data[i].length = state_cc.Count();
-		list_struct_data[i].offset = total_len;
-		total_len += state_cc.Count();
-	}
-
-	auto list_child = make_unique<ChunkCollection>();
-	for (idx_t i = 0; i < count; i++) {
-		auto state = states[sdata.sel->get_index(i)];
-		if (!state->cc) {
-			continue;
-		}
-		auto &state_cc = *state->cc;
-		D_ASSERT(state_cc.GetChunk(0).ColumnCount() == 1);
-		list_child->Append(state_cc);
-	}
-	D_ASSERT(list_child->Count() == total_len);
-	ListVector::SetEntry(result, move(list_child));
+	auto list_buffer =  states[0]->list_vector->GetAuxiliary();
+//	auto list_struct_data = FlatVector::GetData<list_entry_t>(result);
+//	auto &mask = FlatVector::Validity(result);
+//
+//	size_t total_len = 0;
+//	for (idx_t i = 0; i < count; i++) {
+//		auto state = states[sdata.sel->get_index(i)];
+//		if (!state->cc) {
+//			mask.SetInvalid(i);
+//			continue;
+//		}
+//		D_ASSERT(state->cc);
+//		auto &state_cc = *state->cc;
+//		D_ASSERT(state_cc.Types().size() == 1);
+//		list_struct_data[i].length = state_cc.Count();
+//		list_struct_data[i].offset = total_len;
+//		total_len += state_cc.Count();
+//	}
+//
+//	auto list_child = make_unique<ChunkCollection>();
+//	for (idx_t i = 0; i < count; i++) {
+//		auto state = states[sdata.sel->get_index(i)];
+//		if (!state->cc) {
+//			continue;
+//		}
+//		auto &state_cc = *state->cc;
+//		D_ASSERT(state_cc.GetChunk(0).ColumnCount() == 1);
+//		list_child->Append(state_cc);
+//	}
+//	D_ASSERT(list_child->Count() == total_len);
+    //auto result_ptr = unique_ptr<Vector>(states[0]->list_vector);
+    //states[0]->list_vector = nullptr;
+    result.SetAuxiliary(list_buffer);
+//    result.Print(2);
+	//ListVector::SetEntry(result, move(list_buffer.));
 }
 
 unique_ptr<FunctionData> ListBindFunction(ClientContext &context, AggregateFunction &function,

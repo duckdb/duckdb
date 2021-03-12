@@ -135,7 +135,7 @@ static void HistogramFinalize(Vector &state_vector, FunctionData *, Vector &resu
 	}
 	insert_chunk.SetCardinality(total_len);
 	list_child->Append(insert_chunk);
-	ListVector::SetEntry(result, move(list_child));
+//	ListVector::SetEntry(result, move(list_child));
 }
 
 unique_ptr<FunctionData> HistogramBindFunction(ClientContext &context, AggregateFunction &function,

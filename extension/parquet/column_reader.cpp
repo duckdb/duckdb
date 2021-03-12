@@ -380,7 +380,7 @@ void StringParquetValueConversion::PlainSkip(ByteBuffer &plain_data, ColumnReade
 idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
                              Vector &result_out) {
 	if (!ListVector::HasEntry(result_out)) {
-		auto list_child = make_unique<ChunkCollection>();
+		auto list_child = make_unique<Vector>();
 		ListVector::SetEntry(result_out, move(list_child));
 	}
 
@@ -413,8 +413,8 @@ idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint
 		append_chunk.SetCardinality(child_actual_num_values);
 		append_chunk.Verify();
 
-		idx_t current_chunk_offset = list_cc.Count();
-		list_cc.Append(append_chunk);
+//		idx_t current_chunk_offset = list_cc.Count();
+//		list_cc.Append(append_chunk);
 
 		// hard-won piece of code this, modify at your own risk
 		// the intuition is that we have to only collapse values into lists that are repeated *on this level*
@@ -431,7 +431,7 @@ idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint
 			}
 			if (child_defines_ptr[child_idx] >= max_define) {
 				// value has been defined down the stack, hence its NOT NULL
-				result_ptr[result_offset].offset = child_idx + current_chunk_offset;
+//				result_ptr[result_offset].offset = child_idx + current_chunk_offset;
 				result_ptr[result_offset].length = 1;
 			} else {
 				// value is NULL somewhere up the stack

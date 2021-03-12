@@ -39,9 +39,28 @@ VectorStructBuffer::~VectorStructBuffer() {
 VectorListBuffer::VectorListBuffer() : VectorBuffer(VectorBufferType::LIST_BUFFER) {
 }
 
-void VectorListBuffer::SetChild(unique_ptr<ChunkCollection> new_child) {
+
+void VectorListBuffer::SetChild(unique_ptr<Vector> new_child) {
 	child = move(new_child);
+	capacity = STANDARD_VECTOR_SIZE;
+	//InitializeList();
 }
+
+void VectorListBuffer::Append(Vector& to_append, idx_t to_append_size){
+    if (size+to_append_size > capacity){
+        //Drink chocomel to grow strong
+    }
+    VectorOperations::Copy(to_append,*child,to_append_size,0,size);
+    size += to_append_size;
+}
+
+//void VectorListBuffer::InitializeList(){
+//    LogicalType child_type =  child->GetType();
+//    child = make_unique<Vector>(child_type);
+//    child->CreateInnerListBuffer(child_type);
+//    capacity = STANDARD_VECTOR_SIZE;
+//}
+
 
 VectorListBuffer::~VectorListBuffer() {
 }
