@@ -76,8 +76,10 @@ public:
 		if (ptr && ref_count) {
 			if (--(*ref_count) == 0) {
 				delete ptr;
+				delete ref_count;
 			}
 		}
+		ref_count = nullptr;
 		ptr = nullptr;
 	}
 
@@ -123,10 +125,11 @@ public:
 template <class T>
 struct _object_and_block {
 	T object;
-	uint32_t pn = 1;
+	uint32_t *pn;
 
 	template <class... Args>
 	explicit _object_and_block(Args &&...args) : object(std::forward<Args>(args)...) {
+		pn = new uint32_t(1);
 	}
 };
 
@@ -159,6 +162,6 @@ inline bool operator!=(std::nullptr_t, const single_thread_ptr<T> &sp) noexcept 
 template <class T, class... Args>
 single_thread_ptr<T> single_thread_make_shared(Args &&...args) {
 	auto tmp_object = new _object_and_block<T>(std::forward<Args>(args)...);
-	return single_thread_ptr<T>(&tmp_object->pn, &(tmp_object->object));
+	return single_thread_ptr<T>(tmp_object->pn, &(tmp_object->object));
 }
 } // namespace duckdb
