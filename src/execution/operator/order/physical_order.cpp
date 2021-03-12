@@ -26,6 +26,7 @@ struct SortingState {
 	const vector<BaseStatistics *> STATS;
 
 	const vector<bool> HAS_NULL;
+	const vector<bool> CONSTANT_SIZE;
 	const vector<idx_t> SIZE_IN_BYTES;
 };
 
@@ -106,6 +107,7 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 	vector<LogicalType> types;
 	vector<BaseStatistics *> stats;
 	vector<bool> has_null;
+	vector<bool> constant_size;
 	vector<idx_t> size_in_bytes;
 	for (auto &order : orders) {
 		// global state ExpressionExecutor
@@ -124,6 +126,7 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 
 		// compute column sizes
 		auto physical_type = expr.return_type.InternalType();
+		constant_size.push_back(TypeIsConstantSize(physical_type));
 		idx_t col_size = GetTypeIdSize(expr.return_type.InternalType());
 		if (expr.stats) {
 			// TODO: test this statistics thing
@@ -132,16 +135,16 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 				auto num_stats = (NumericStatistics &)*expr.stats;
 				switch (physical_type) {
 				case PhysicalType::INT16:
-                    col_size = TemplatedGetSize<int16_t>(num_stats.min, num_stats.max);
+					col_size = TemplatedGetSize<int16_t>(num_stats.min, num_stats.max);
 					break;
 				case PhysicalType::INT32:
-                    col_size = TemplatedGetSize<int32_t>(num_stats.min, num_stats.max);
+					col_size = TemplatedGetSize<int32_t>(num_stats.min, num_stats.max);
 					break;
 				case PhysicalType::INT64:
-                    col_size = TemplatedGetSize<int64_t>(num_stats.min, num_stats.max);
+					col_size = TemplatedGetSize<int64_t>(num_stats.min, num_stats.max);
 					break;
 				case PhysicalType::INT128:
-                    col_size = TemplatedGetSize<hugeint_t>(num_stats.min, num_stats.max);
+					col_size = TemplatedGetSize<hugeint_t>(num_stats.min, num_stats.max);
 					break;
 				default:
 					// have to use full size for floating point numbers
@@ -149,14 +152,14 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 				}
 			} else if (expr.return_type == LogicalType::VARCHAR) {
 				auto str_stats = (StringStatistics &)*expr.stats;
-                col_size = MinValue(str_stats.max_string_length, StringStatistics::MAX_STRING_MINMAX_SIZE);
+				col_size = MinValue(str_stats.max_string_length, StringStatistics::MAX_STRING_MINMAX_SIZE);
 			}
 		} else {
 			has_null.push_back(true);
 			if (!TypeIsConstantSize(physical_type)) {
 				switch (physical_type) {
 				case PhysicalType::VARCHAR:
-                    col_size = StringStatistics::MAX_STRING_MINMAX_SIZE;
+					col_size = StringStatistics::MAX_STRING_MINMAX_SIZE;
 				default:
 					// do nothing
 					break;
@@ -186,8 +189,8 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 	// make room for an 'index' column at the end
 	entry_size += sizeof(idx_t);
 
-	state->sorting_state = unique_ptr<SortingState>(
-	    new SortingState {entry_size, order_types, order_by_null_types, types, stats, has_null, size_in_bytes});
+	state->sorting_state = unique_ptr<SortingState>(new SortingState {
+	    entry_size, order_types, order_by_null_types, types, stats, has_null, constant_size, size_in_bytes});
 	idx_t vectors_per_block =
 	    (Storage::BLOCK_ALLOC_SIZE / entry_size + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE;
 	state->sorting_block = make_unique<RowChunk>(buffer_manager, vectors_per_block * STANDARD_VECTOR_SIZE, entry_size);
@@ -424,6 +427,17 @@ static void RadixSort(BufferManager &buffer_manager, data_ptr_t dataptr, const i
 	}
 }
 
+static void BreakTies(BufferManager &buffer_manager, OrderGlobalState &state, data_ptr_t dataptr, const idx_t &count,
+                      const SortingState &sorting_state, const idx_t &col_idx) {
+	auto var_block_handle = buffer_manager.Pin(state.var_sorting_blocks[col_idx]->blocks[0].block);
+	auto var_sizes_handle = buffer_manager.Pin(state.var_sorting_sizes[col_idx]->blocks[0].block);
+	data_ptr_t var_dataptr = var_block_handle->node->buffer;
+	idx_t *offsets = (idx_t *)var_sizes_handle->node->buffer;
+
+	const idx_t comp_size = sorting_state.SIZE_IN_BYTES[col_idx];
+	
+}
+
 static void SortInMemory(Pipeline &pipeline, ClientContext &context, OrderGlobalState &state) {
 	const auto &sorting_state = *state.sorting_state;
 	auto &buffer_manager = BufferManager::GetBufferManager(context);
@@ -433,15 +447,36 @@ static void SortInMemory(Pipeline &pipeline, ClientContext &context, OrderGlobal
 	auto dataptr = handle->node->buffer;
 
 	// assign an index to each row
-	const idx_t sorting_size = sorting_state.ENTRY_SIZE - sizeof(idx_t);
+	idx_t sorting_size = sorting_state.ENTRY_SIZE - sizeof(idx_t);
 	data_ptr_t idx_dataptr = dataptr + sorting_size;
 	for (idx_t i = 0; i < block.count; i++) {
 		Store<idx_t>(i, idx_dataptr);
 		idx_dataptr += sorting_state.ENTRY_SIZE;
 	}
 
-	// now sort the data
-	RadixSort(buffer_manager, dataptr, block.count, 0, sorting_size, sorting_state);
+	if (sorting_state.CONSTANT_SIZE.size() == 1 ||
+	    std::all_of(sorting_state.CONSTANT_SIZE.begin(), sorting_state.CONSTANT_SIZE.end() - 1,
+	                [](bool x) { return x; })) {
+		// if the first n - 1 columns are all constant size, we can radix sort on all columns
+		RadixSort(buffer_manager, dataptr, block.count, 0, sorting_size, sorting_state);
+		if (!sorting_state.CONSTANT_SIZE[sorting_state.CONSTANT_SIZE.size() - 1]) {
+			// TODO: tie-break on the last column
+		}
+	} else {
+		idx_t col_offset = 0;
+		sorting_size = 0;
+		for (idx_t i = 0; i < sorting_state.CONSTANT_SIZE.size(); i++) {
+			sorting_size += sorting_state.SIZE_IN_BYTES[i];
+			if (!sorting_state.CONSTANT_SIZE[i]) {
+				// TODO: sub-sort here if needed
+				RadixSort(buffer_manager, dataptr, block.count, col_offset, sorting_size, sorting_state);
+				// TODO: tie-break, and mark where we need to sub-sort the rest (if we are not on the last column
+				// already)
+				col_offset = sorting_size;
+				sorting_size = 0;
+			}
+		}
+	}
 }
 
 void ConcatenateBlocks(BufferManager &buffer_manager, RowChunk &row_chunk, idx_t capacity, bool variable_entry_size) {
