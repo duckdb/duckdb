@@ -1,0 +1,21 @@
+# name: benchmark/micro/simd/auto-vectorization.benchmark
+# description: benchmark if the code could be auto-vectorized
+# group: [simd]
+
+load
+CREATE TABLE tbl AS SELECT (i % 2)::INT i FROM range(1024 * 1024 * 1024) tbl(i);
+
+run
+SELECT  min(i + i + i + i + i + i + i + i + i + i +
+	                            i + i + i + i + i + i + i + i + i + i +
+                                i + i + i + i + i + i + i + i + i + i +
+	                            i + i + i + i + i + i + i + i + i + i +
+                                i + i + i + i + i + i + i + i + i + i +
+                                i + i + i + i + i + i + i + i + i + i +
+                                i + i + i + i + i + i + i + i + i + i +
+	                            i + i + i + i + i + i + i + i + i + i +
+	                            i + i + i + i + i + i + i + i + i + i +
+	                            i + i + i + i + i + i + i + i + i + i )
+                                FROM tbl;
+
+

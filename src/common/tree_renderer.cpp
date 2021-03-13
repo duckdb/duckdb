@@ -402,7 +402,7 @@ unique_ptr<RenderTreeNode> TreeRenderer::CreateNode(const PhysicalOperator &op) 
 string TreeRenderer::ExtractExpressionsRecursive(ExpressionInformation &state) {
 	string result = "\n[INFOSEPARATOR]";
 	result += "\n" + state.name;
-	result += "\n" + StringUtil::Format("%.9f", state.time);
+	result += "\n" + StringUtil::Format("%.9f", double(state.time));
 	if (state.children.empty()) {
 		return result;
 	}
