@@ -48,6 +48,7 @@ void VectorListBuffer::SetChild(unique_ptr<Vector> new_child) {
 
 void VectorListBuffer::Append(Vector& to_append, idx_t to_append_size){
     if (size+to_append_size > capacity){
+        assert(0);
         //Drink chocomel to grow strong
     }
     VectorOperations::Copy(to_append,*child,to_append_size,0,size);

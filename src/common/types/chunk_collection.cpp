@@ -5,6 +5,7 @@
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/assert.hpp"
+#include "../../../third_party/zstd/common/bitstream.h"
 
 #include <algorithm>
 #include <cstring>
@@ -76,7 +77,8 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 			if (new_types[i] != types[i]) {
 				throw TypeMismatchException(new_types[i], types[i], "Type mismatch when combining rows");
 			}
-//			if (types[i].InternalType() == PhysicalType::LIST) {
+			if (types[i].InternalType() == PhysicalType::LIST) {
+			    assert(0);
 //				for (auto &chunk :
 //				     chunks) { // need to check all the chunks because they can have only-null list entries
 //					auto &chunk_vec = chunk->data[i];
@@ -92,7 +94,7 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 //						}
 //					}
 //				}
-//			}
+			}
 			// TODO check structs, too
 		}
 
@@ -188,7 +190,6 @@ static int32_t CompareValue(Vector &left_vec, Vector &right_vec, idx_t vector_id
 	default:
 		throw NotImplementedException("Type for comparison");
 	}
-	return false;
 }
 
 static int CompareTuple(ChunkCollection *sort_by, vector<OrderType> &desc, vector<OrderByNullType> &null_order,

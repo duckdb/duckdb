@@ -258,17 +258,30 @@ void Vector::SetValue(idx_t index, const Value &val) {
 
 	case LogicalTypeId::LIST: {
 		if (!auxiliary) {
-			auto vec_list = make_unique<Vector>();
+			auto vec_list = make_unique<Vector>(val.list_value[0].type());
 			ListVector::SetEntry(*this, move(vec_list));
 		}
+//		assert(0);
 //		auto &child_cc = ListVector::GetEntry(*this);
-		// TODO optimization: in-place update if fits
-//		auto offset = child_cc.Count();
-//		if (!val.list_value.empty()) {
+		 //!TODO optimization: in-place update if fits
+		auto offset = ListVector::GetListSize(*this);
+		if (!val.list_value.empty()) {
+//		    child_list_t<LogicalType> child_types;
+//            child_types.push_back({"",val.list_value[0].type()});
+//            LogicalType list_vector_type(LogicalType::LIST.id(),child_types);
+            Vector to_append(val.list_value[0].type());
+//			auto list_child = make_unique<Vector>(val.list_value[0].type());
+//	        ListVector::SetEntry(to_append, move(list_child));
+	        for (idx_t i = 0; i < val.list_value.size(); i ++){
+	            to_append.SetValue(i,val.list_value[i]);
+	        }
+	        ListVector::Append(*this,to_append,val.list_value.size());
+        }
+//		}
 //			idx_t append_idx = 0;
 //			while (append_idx < val.list_value.size()) {
 //				idx_t this_append_len = MinValue<idx_t>(STANDARD_VECTOR_SIZE, val.list_value.size() - append_idx);
-//
+
 //				DataChunk child_append_chunk;
 //				child_append_chunk.SetCardinality(this_append_len);
 //				vector<LogicalType> types;
@@ -281,10 +294,10 @@ void Vector::SetValue(idx_t index, const Value &val) {
 //				append_idx += this_append_len;
 //			}
 //		}
-		// now set the pointer
-//		auto &entry = ((list_entry_t *)data)[index];
-//		entry.length = val.list_value.size();
-//		entry.offset = offset;
+		//! now set the pointer
+		auto &entry = ((list_entry_t *)data)[index];
+		entry.length = val.list_value.size();
+		entry.offset = offset;
 	} break;
 	default:
 		throw NotImplementedException("Unimplemented type for Vector::SetValue");

@@ -16,18 +16,18 @@ SELECT LIST(a) l1 FROM (VALUES (1), (2), (3)) AS t1 (a)
 ----
 [1, 2, 3]
 
-#query I
-#SELECT UNNEST(l1) FROM (SELECT LIST(a) l1 FROM (VALUES (1), (2), (3)) AS t1 (a)) t1
-#----
-#1
-#2
-#3
-#
-#query TT
-#SELECT * FROM (SELECT LIST(a) l1 FROM (VALUES (1), (2), (3)) AS t1 (a)) t1, (SELECT LIST(b) l2 FROM (VALUES (4), (5), (6), (7)) AS t2 (b)) t2
-#----
-#[1, 2, 3]	[4, 5, 6, 7]
-#
+query I
+SELECT UNNEST(l1) FROM (SELECT LIST(a) l1 FROM (VALUES (1), (2), (3)) AS t1 (a)) t1
+----
+1
+2
+3
+
+query TT
+SELECT * FROM (SELECT LIST(a) l1 FROM (VALUES (1), (2), (3)) AS t1 (a)) t1, (SELECT LIST(b) l2 FROM (VALUES (4), (5), (6), (7)) AS t2 (b)) t2
+----
+[1, 2, 3]	[4, 5, 6, 7]
+
 #query II
 #SELECT UNNEST(l1) u1, UNNEST(l2) u2 FROM (SELECT LIST(a) l1 FROM (VALUES (1), (2), (3)) AS t1 (a)) t1, (SELECT LIST(b) l2 FROM (VALUES (4), (5), (6), (7)) AS t2 (b)) t2
 #----
@@ -35,7 +35,7 @@ SELECT LIST(a) l1 FROM (VALUES (1), (2), (3)) AS t1 (a)
 #2	5
 #3	6
 #NULL	7
-#
+
 #query IT
 #SELECT UNNEST(l1), l2 FROM (SELECT LIST(a) l1 FROM (VALUES (1), (2), (3)) AS t1 (a)) t1, 	(SELECT LIST(b) l2 FROM (VALUES (4), (5), (6), (7)) AS t2 (b)) t2
 #----
