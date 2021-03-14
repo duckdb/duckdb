@@ -487,8 +487,7 @@ ExpressionExecutorInformation::ExpressionExecutorInformation(ExpressionExecutor 
     : total_count(executor.total_count), current_count(executor.current_count), sample_count(executor.sample_count),
       sample_tuples_count(executor.sample_tuples_count), tuples_count(executor.tuples_count) {
 	for (auto &state : executor.GetStates()) {
-		auto expression_info_p =
-		    make_unique<ExpressionInformation>(state.get()->root_state->name);
+		auto expression_info_p = make_unique<ExpressionInformation>(state.get()->root_state->name);
 		expression_info_p->time = state->time;
 		if (state->root_state->expr.expression_class == ExpressionClass::BOUND_FUNCTION) {
 			expression_info_p->hasfunction = true;

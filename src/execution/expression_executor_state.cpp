@@ -18,6 +18,6 @@ ExpressionState::ExpressionState(Expression &expr, ExpressionExecutorState &root
     : expr(expr), root(root), name(expr.ToString()) {
 }
 
-ExpressionExecutorState::ExpressionExecutorState(const string &name) : profiler() , name(name){
+ExpressionExecutorState::ExpressionExecutorState(const string &name) : profiler(), name(name) {
 }
 } // namespace duckdb

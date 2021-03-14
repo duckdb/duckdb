@@ -42,11 +42,11 @@ void ExpressionExecutor::Execute(DataChunk *input, DataChunk &result) {
 	D_ASSERT(!expressions.empty());
 
 	for (idx_t i = 0; i < expressions.size(); i++) {
-        if (current_count >= next_sample) {
+		if (current_count >= next_sample) {
 			states[i]->profiler.Start();
 		}
 		ExecuteExpression(i, result.data[i]);
-        if (current_count >= next_sample) {
+		if (current_count >= next_sample) {
 			states[i]->profiler.End();
 			states[i]->time += states[i]->profiler.Elapsed();
 		}
