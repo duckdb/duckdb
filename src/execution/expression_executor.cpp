@@ -26,7 +26,7 @@ ExpressionExecutor::ExpressionExecutor(vector<unique_ptr<Expression>> &exprs) : 
 
 void ExpressionExecutor::AddExpression(Expression &expr) {
 	expressions.push_back(&expr);
-	auto state = make_unique<ExpressionExecutorState>();
+	auto state = make_unique<ExpressionExecutorState>(expr.ToString());
 	Initialize(expr, *state);
 	states.push_back(move(state));
 }
@@ -38,11 +38,18 @@ void ExpressionExecutor::Initialize(Expression &expression, ExpressionExecutorSt
 
 void ExpressionExecutor::Execute(DataChunk *input, DataChunk &result) {
 	SetChunk(input);
-
 	D_ASSERT(expressions.size() == result.ColumnCount());
 	D_ASSERT(!expressions.empty());
+
 	for (idx_t i = 0; i < expressions.size(); i++) {
+        if (current_count >= next_sample) {
+			states[i]->profiler.Start();
+		}
 		ExecuteExpression(i, result.data[i]);
+        if (current_count >= next_sample) {
+			states[i]->profiler.End();
+			states[i]->time += states[i]->profiler.Elapsed();
+		}
 		if (current_count >= next_sample) {
 			next_sample = 50 + random.NextRandomInteger() % 100;
 			++sample_count;

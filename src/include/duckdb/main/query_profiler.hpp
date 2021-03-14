@@ -28,14 +28,15 @@ class PhysicalOperator;
 class SQLStatement;
 
 struct ExpressionInformation {
-	ExpressionInformation(string &name, double time) : name(name), time(time) {
+	explicit ExpressionInformation(string &name) : name(name) {
 	}
 	void ExtractExpressionsRecursive(unique_ptr<ExpressionState> &state);
 	vector<unique_ptr<ExpressionInformation>> children;
 	bool hasfunction = false;
 	string name;
 	string function_name;
-	double time = 0;
+	uint64_t function_time = 0;
+	uint64_t time = 0;
 };
 
 struct ExpressionExecutorInformation {

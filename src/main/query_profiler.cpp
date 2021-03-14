@@ -472,7 +472,7 @@ void ExpressionInformation::ExtractExpressionsRecursive(unique_ptr<ExpressionSta
 	}
 	// extract the children of this node
 	for (auto &child : state->child_states) {
-		auto expression_info_p = make_unique<ExpressionInformation>(child.get()->name, child.get()->time);
+		auto expression_info_p = make_unique<ExpressionInformation>(child.get()->name);
 		if (child->expr.expression_class == ExpressionClass::BOUND_FUNCTION) {
 			expression_info_p->hasfunction = true;
 			expression_info_p->function_name = ((BoundFunctionExpression &)child->expr).function.name;
@@ -488,7 +488,8 @@ ExpressionExecutorInformation::ExpressionExecutorInformation(ExpressionExecutor 
       sample_tuples_count(executor.sample_tuples_count), tuples_count(executor.tuples_count) {
 	for (auto &state : executor.GetStates()) {
 		auto expression_info_p =
-		    make_unique<ExpressionInformation>(state.get()->root_state->name, state.get()->root_state.get()->time);
+		    make_unique<ExpressionInformation>(state.get()->root_state->name);
+		expression_info_p->time = state->time;
 		if (state->root_state->expr.expression_class == ExpressionClass::BOUND_FUNCTION) {
 			expression_info_p->hasfunction = true;
 			expression_info_p->function_name = ((BoundFunctionExpression &)state->root_state->expr).function.name;
