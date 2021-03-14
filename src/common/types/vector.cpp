@@ -1030,7 +1030,15 @@ void ListVector::SetEntry(Vector &vector, unique_ptr<Vector> cc) {
 
 void ListVector::Append(Vector& target, Vector& source, idx_t source_size){
     auto &target_buffer = (VectorListBuffer &)*target.auxiliary;
+    auto target_offset = ListVector::GetListSize(target);
     target_buffer.Append(source,source_size);
+    auto src_validity_mask = source.validity;
+    if (!src_validity_mask.AllValid()) {
+        auto target_validity_mask = ListVector::GetEntry(target).validity;
+        for (size_t i = 0; i < source_size; i++){
+            target_validity_mask.Set(target_offset++,src_validity_mask.RowIsValidUnsafe(i));
+        }
+    }
 }
 
 } // namespace duckdb

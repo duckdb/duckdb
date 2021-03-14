@@ -100,22 +100,21 @@ void PhysicalUnnest::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 		}
 
 		// FIXME do not use GetValue/SetValue here
-		// TODO now that list entries are chunk collections, simply scan them!
 		for (idx_t col_idx = 0; col_idx < state->list_data.ColumnCount(); col_idx++) {
 			auto target_col = col_idx + state->child_chunk.ColumnCount();
 			auto &v = state->list_data.data[col_idx];
-
+            auto vec_size = ListVector::GetListSize(v);
 			idx_t i = 0;
-			if (state->list_length > (int64_t )state->list_position) {
+			if (vec_size > state->list_position) {
 				if (unnest_null) {
-					for (i = 0; i < MinValue<idx_t>(this_chunk_len, state->list_length - state->list_position); i++) {
+					for (i = 0; i < MinValue<idx_t>(this_chunk_len, vec_size - state->list_position); i++) {
 						FlatVector::SetNull(chunk.data[target_col], i, true);
 					}
 				} else {
-					auto &child_cc = ListVector::GetEntry(v);
-					for (i = 0; i < MinValue<idx_t>(this_chunk_len, state->list_length - state->list_position); i++) {
+					auto &child_vector = ListVector::GetEntry(v);
+					for (i = 0; i < MinValue<idx_t>(this_chunk_len, vec_size - state->list_position); i++) {
 						chunk.data[target_col].SetValue(
-						    i, child_cc.GetValue( i + state->list_position));
+                                i, child_vector.GetValue(i + state->list_position));
 					}
 				}
 			}

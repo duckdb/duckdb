@@ -84,8 +84,6 @@ public:
 	//! is currently in the vector is destroyed.
 	void Initialize(const LogicalType &new_type = LogicalType::INVALID, bool zero_data = false);
 
-//	void InitializeList(const LogicalType &new_type);
-
 	//! Converts this Vector to a printable string representation
 	string ToString(idx_t count) const;
 	void Print(idx_t count);

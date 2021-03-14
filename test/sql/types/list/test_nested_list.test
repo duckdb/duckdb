@@ -2,8 +2,8 @@
 # description: Test filter and projection of nested lists
 # group: [list]
 
-statement ok
-PRAGMA enable_verification
+#statement ok
+#PRAGMA enable_verification
 
 statement ok
 CREATE TABLE list_data (g INTEGER, e INTEGER)
@@ -28,29 +28,29 @@ SELECT * FROM (SELECT LIST(a) l1 FROM (VALUES (1), (2), (3)) AS t1 (a)) t1, (SEL
 ----
 [1, 2, 3]	[4, 5, 6, 7]
 
-#query II
-#SELECT UNNEST(l1) u1, UNNEST(l2) u2 FROM (SELECT LIST(a) l1 FROM (VALUES (1), (2), (3)) AS t1 (a)) t1, (SELECT LIST(b) l2 FROM (VALUES (4), (5), (6), (7)) AS t2 (b)) t2
-#----
-#1	4
-#2	5
-#3	6
-#NULL	7
+query II
+SELECT UNNEST(l1) u1, UNNEST(l2) u2 FROM (SELECT LIST(a) l1 FROM (VALUES (1), (2), (3)) AS t1 (a)) t1, (SELECT LIST(b) l2 FROM (VALUES (4), (5), (6), (7)) AS t2 (b)) t2
+----
+1	4
+2	5
+3	6
+NULL	7
 
-#query IT
-#SELECT UNNEST(l1), l2 FROM (SELECT LIST(a) l1 FROM (VALUES (1), (2), (3)) AS t1 (a)) t1, 	(SELECT LIST(b) l2 FROM (VALUES (4), (5), (6), (7)) AS t2 (b)) t2
-#----
-#1	[4, 5, 6, 7]
-#2	[4, 5, 6, 7]
-#3	[4, 5, 6, 7]
-#
-#query TI
-#SELECT l1, UNNEST(l2) FROM (SELECT LIST(a) l1 FROM (VALUES (1), (2), (3)) AS t1 (a)) t1, (SELECT LIST(b) l2 FROM (VALUES (4), (5), (6), (7)) AS t2 (b)) t2
-#----
-#[1, 2, 3]	4
-#[1, 2, 3]	5
-#[1, 2, 3]	6
-#[1, 2, 3]	7
-#
+query IT
+SELECT UNNEST(l1), l2 FROM (SELECT LIST(a) l1 FROM (VALUES (1), (2), (3)) AS t1 (a)) t1, 	(SELECT LIST(b) l2 FROM (VALUES (4), (5), (6), (7)) AS t2 (b)) t2
+----
+1	[4, 5, 6, 7]
+2	[4, 5, 6, 7]
+3	[4, 5, 6, 7]
+
+query TI
+SELECT l1, UNNEST(l2) FROM (SELECT LIST(a) l1 FROM (VALUES (1), (2), (3)) AS t1 (a)) t1, (SELECT LIST(b) l2 FROM (VALUES (4), (5), (6), (7)) AS t2 (b)) t2
+----
+[1, 2, 3]	4
+[1, 2, 3]	5
+[1, 2, 3]	6
+[1, 2, 3]	7
+
 #query IT
 #SELECT UNNEST(LIST(e)) ue, LIST(g) from list_data ORDER BY 1 NULLS LAST
 #----
