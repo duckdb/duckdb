@@ -37,8 +37,12 @@ public:
 };
 
 struct ExpressionExecutorState {
+	explicit ExpressionExecutorState(const string &name);
 	unique_ptr<ExpressionState> root_state;
 	ExpressionExecutor *executor;
+    string name;
+    CycleCounter profiler;
+    double time;
 };
 
 } // namespace duckdb
