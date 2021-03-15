@@ -307,8 +307,13 @@ void ColumnData::RevertAppend(row_t start_row) {
 void ColumnData::Update(Transaction &transaction, Vector &update_vector, Vector &row_ids, idx_t count) {
 	idx_t first_id = FlatVector::GetValue<row_t>(row_ids, 0);
 
-	// fetch the raw base data for this segment
+	// fetch the validity data for this segment
 	Vector base_data(type);
+	auto validity_segment = (ValiditySegment *)validity.GetSegment(first_id);
+	auto segment_in_validity = (first_id - validity_segment->start) / STANDARD_VECTOR_SIZE;
+	validity_segment->Fetch(segment_in_validity, FlatVector::Validity(base_data));
+
+	// fetch the raw base data for this segment
 	auto column_segment = (ColumnSegment *)data.GetSegment(first_id);
 	auto vector_index = (first_id - column_segment->start) / STANDARD_VECTOR_SIZE;
 	// now perform the fetch within the segment

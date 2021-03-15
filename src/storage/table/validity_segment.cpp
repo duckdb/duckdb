@@ -20,7 +20,6 @@ ValiditySegment::ValiditySegment(DatabaseInstance &db, idx_t start, idx_t count,
 }
 
 ValiditySegment::~ValiditySegment() {
-
 }
 
 
