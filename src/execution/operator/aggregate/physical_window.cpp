@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/aggregate/physical_window.hpp"
 
+#include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -105,13 +106,53 @@ private:
 	size_t count;
 };
 
-template <typename W>
-static void MaskColumn(BitArray<W> &mask, ChunkCollection &sort_collection, const idx_t c) {
-	//	TODO: Templatise this on physical types for performance
+template <typename INPUT_TYPE>
+struct ChunkIterator {
+
+	ChunkIterator(ChunkCollection &collection, const idx_t col_idx)
+	    : collection(collection), col_idx(col_idx), chunk_begin(0), chunk_end(0), ch_idx(0), data(nullptr),
+	      validity(nullptr) {
+		Update(0);
+	}
+
+	void Update(idx_t r) {
+		if (r >= chunk_end) {
+			ch_idx = collection.LocateChunk(r);
+			auto &ch = collection.GetChunk(ch_idx);
+			chunk_begin = ch_idx * STANDARD_VECTOR_SIZE;
+			chunk_end = chunk_begin + ch.size();
+			auto &vector = ch.data[col_idx];
+			data = FlatVector::GetData<INPUT_TYPE>(vector);
+			validity = &FlatVector::Validity(vector);
+		}
+	}
+
+	bool IsValid(idx_t r) {
+		return validity->RowIsValid(r - chunk_begin);
+	}
+
+	INPUT_TYPE GetValue(idx_t r) {
+		return data[r - chunk_begin];
+	}
+
+private:
+	ChunkCollection &collection;
+	const idx_t col_idx;
+	idx_t chunk_begin;
+	idx_t chunk_end;
+	idx_t ch_idx;
+	const INPUT_TYPE *data;
+	ValidityMask *validity;
+};
+
+template <typename MASK_TYPE, typename INPUT_TYPE>
+static void MaskTypedColumn(MASK_TYPE &mask, ChunkCollection &sort_collection, const idx_t c) {
+	ChunkIterator<INPUT_TYPE> ci(sort_collection, c);
 
 	//	Record the first value
 	idx_t r = 0;
-	Value prev = sort_collection.GetValue(c, r++);
+	auto prev_valid = ci.IsValid(r);
+	auto prev = ci.GetValue(r);
 
 	//	Process complete blocks
 	const auto row_count = sort_collection.Count();
@@ -126,34 +167,96 @@ static void MaskColumn(BitArray<W> &mask, ChunkCollection &sort_collection, cons
 			continue;
 		}
 
+		//	Update the chunk for this row
+		ci.Update(r);
+
 		//	Scan the rows in the complete block
 		for (unsigned shift = mask.Shift(r); shift < mask.BITS_PER_WORD; ++shift, ++r) {
-			Value curr = sort_collection.GetValue(c, r);
+			auto curr_valid = ci.IsValid(r);
+			auto curr = ci.GetValue(r);
 			if (!mask.TestBit(block, shift)) {
-				if (curr != prev) {
+				if (curr_valid != prev_valid || (curr_valid && !Equals::Operation(curr, prev))) {
 					block = mask.SetBit(block, shift);
 				}
-				prev = curr;
 			}
+			prev_valid = curr_valid;
+			prev = curr;
 		}
 		mask.SetBlock(b, block);
 	}
 
 	//	Finish last ragged block
 	if (r < row_count) {
+		//	Update the chunk for this row
+		ci.Update(r);
+
 		auto block = mask.GetBlock(complete_block_count);
 		if (block != mask.ONES) {
 			for (unsigned shift = mask.Shift(r); r < row_count; ++shift, ++r) {
-				Value curr = sort_collection.GetValue(c, r);
+				auto curr_valid = ci.IsValid(r);
+				auto curr = ci.GetValue(r);
 				if (!mask.TestBit(block, shift)) {
-					if (curr != prev) {
+					if (curr_valid != prev_valid || (curr_valid && !Equals::Operation(curr, prev))) {
 						block = mask.SetBit(block, shift);
 					}
 				}
+				prev_valid = curr_valid;
 				prev = curr;
 			}
 			mask.SetBlock(complete_block_count, block);
 		}
+	}
+}
+
+template <typename W>
+static void MaskColumn(BitArray<W> &mask, ChunkCollection &sort_collection, const idx_t c) {
+	using MASK_TYPE = BitArray<W>;
+
+	auto &vector = sort_collection.GetChunk(0).data[c];
+	switch (vector.GetType().InternalType()) {
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
+		MaskTypedColumn<MASK_TYPE, int8_t>(mask, sort_collection, c);
+		break;
+	case PhysicalType::INT16:
+		MaskTypedColumn<MASK_TYPE, int16_t>(mask, sort_collection, c);
+		break;
+	case PhysicalType::INT32:
+		MaskTypedColumn<MASK_TYPE, int32_t>(mask, sort_collection, c);
+		break;
+	case PhysicalType::INT64:
+		MaskTypedColumn<MASK_TYPE, int64_t>(mask, sort_collection, c);
+		break;
+	case PhysicalType::UINT8:
+		MaskTypedColumn<MASK_TYPE, uint8_t>(mask, sort_collection, c);
+		break;
+	case PhysicalType::UINT16:
+		MaskTypedColumn<MASK_TYPE, uint16_t>(mask, sort_collection, c);
+		break;
+	case PhysicalType::UINT32:
+		MaskTypedColumn<MASK_TYPE, uint32_t>(mask, sort_collection, c);
+		break;
+	case PhysicalType::UINT64:
+		MaskTypedColumn<MASK_TYPE, uint64_t>(mask, sort_collection, c);
+		break;
+	case PhysicalType::INT128:
+		MaskTypedColumn<MASK_TYPE, hugeint_t>(mask, sort_collection, c);
+		break;
+	case PhysicalType::FLOAT:
+		MaskTypedColumn<MASK_TYPE, float>(mask, sort_collection, c);
+		break;
+	case PhysicalType::DOUBLE:
+		MaskTypedColumn<MASK_TYPE, double>(mask, sort_collection, c);
+		break;
+	case PhysicalType::VARCHAR:
+		MaskTypedColumn<MASK_TYPE, string_t>(mask, sort_collection, c);
+		break;
+	case PhysicalType::INTERVAL:
+		MaskTypedColumn<MASK_TYPE, interval_t>(mask, sort_collection, c);
+		break;
+	default:
+		throw NotImplementedException("Type for comparison");
+		break;
 	}
 }
 
