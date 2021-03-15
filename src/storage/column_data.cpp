@@ -247,7 +247,7 @@ void ColumnData::Append(ColumnAppendState &state, Vector &vector, idx_t count) {
 	idx_t remaining_validity_count = count;
 	while(remaining_validity_count > 0) {
 		idx_t to_append = state.validity->Append(adata, count - remaining_validity_count, remaining_validity_count);
-		if (remaining_validity_count != remaining_validity_count) {
+		if (to_append != remaining_validity_count) {
 			AppendValiditySegment(state.validity->start + state.validity->count);
 			state.validity = (ValiditySegment *) validity.nodes.back().node;
 		}
