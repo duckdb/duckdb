@@ -27,6 +27,12 @@ Vector::Vector(const LogicalType &type, bool create_data, bool zero_data) : data
 Vector::Vector(const LogicalType &type) : Vector(type, true, false) {
 }
 
+Vector::Vector (const child_list_t<LogicalType>& child_list): Vector({LogicalType::LIST.id(),child_list}, true, false){
+    D_ASSERT(child_list.size() == 1);
+    auto child_vector = make_unique<Vector>(child_list[0].second);
+    ListVector::SetEntry(*this,move(child_vector));
+
+}
 
 Vector::Vector(const LogicalType &type, data_ptr_t dataptr) : data(dataptr) {
 	buffer = make_buffer<VectorBuffer>(VectorType::FLAT_VECTOR, type);
@@ -145,6 +151,14 @@ void Vector::Initialize(const LogicalType &new_type, bool zero_data) {
 	} else {
 		buffer = VectorBuffer::CreateStandardVector(VectorType::FLAT_VECTOR, GetType());
 	}
+}
+
+void Vector::Resize(idx_t cur_size){
+    data = buffer->GetData();
+    auto new_data = unique_ptr<data_t[]>(new data_t[cur_size * 2 * GetTypeIdSize(GetType().InternalType())]);
+    memcpy(new_data.get(), data, cur_size  * GetTypeIdSize(GetType().InternalType()) * sizeof(data_t));
+    buffer->SetData(move(new_data));
+    data = buffer->GetData();
 }
 
 void Vector::SetValue(idx_t index, const Value &val) {
@@ -400,10 +414,9 @@ Value Vector::GetValue(idx_t index) const {
 	case LogicalTypeId::LIST: {
 		Value ret(GetType());
 		ret.is_null = false;
-//		auto offlen = ((list_entry_t *)data)[index];
+		auto offlen = ((list_entry_t *)data)[index];
 		auto &child_vec = ListVector::GetEntry(*this);
-		idx_t list_size = ListVector::GetListSize(*this);
-		for (idx_t i = 0; i < list_size; i++) {
+		for (idx_t i = offlen.offset; i < offlen.offset + offlen.length; i++) {
 			ret.list_value.push_back(child_vec.GetValue(i));
 		}
 		return ret;
@@ -997,7 +1010,7 @@ bool ListVector::HasEntry(const Vector &vector) {
 	}
 	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR ||
 	         vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
-	return vector.auxiliary != nullptr;
+	return vector.auxiliary != nullptr && ListVector::GetListSize(vector) != 0;
 }
 
 Vector &ListVector::GetEntry(const Vector &vector) {
@@ -1017,6 +1030,10 @@ idx_t ListVector::GetListSize( const Vector &vec){
     return ((VectorListBuffer &) *vec.auxiliary).size;
 }
 
+void ListVector::SetListSize( const Vector &vec, idx_t size){
+    ((VectorListBuffer &) *vec.auxiliary).size = size;
+}
+
 void ListVector::SetEntry(Vector &vector, unique_ptr<Vector> cc) {
 	D_ASSERT(vector.GetType().id() == LogicalTypeId::LIST);
 	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR ||
@@ -1028,17 +1045,30 @@ void ListVector::SetEntry(Vector &vector, unique_ptr<Vector> cc) {
 
 }
 
-void ListVector::Append(Vector& target, Vector& source, idx_t source_size){
+void ListVector::Append(Vector& target, Vector& source, idx_t source_size, idx_t source_offset){
     auto &target_buffer = (VectorListBuffer &)*target.auxiliary;
     auto target_offset = ListVector::GetListSize(target);
-    target_buffer.Append(source,source_size);
+    target_buffer.Append(source,source_size,source_offset);
     auto src_validity_mask = source.validity;
     if (!src_validity_mask.AllValid()) {
         auto target_validity_mask = ListVector::GetEntry(target).validity;
-        for (size_t i = 0; i < source_size; i++){
+        for (size_t i = source_offset; i < source_size; i++){
             target_validity_mask.Set(target_offset++,src_validity_mask.RowIsValidUnsafe(i));
         }
     }
+}
+
+void ListVector::PushBack(Vector& target, Value& insert){
+    auto &target_buffer = (VectorListBuffer &)*target.auxiliary;
+    target_buffer.PushBack(insert);
+//    target_buffer.Append(source,source_size,source_offset);
+//    auto src_validity_mask = source.validity;
+//    if (!src_validity_mask.AllValid()) {
+//        auto target_validity_mask = ListVector::GetEntry(target).validity;
+//        for (size_t i = source_offset; i < source_size; i++){
+//            target_validity_mask.Set(target_offset++,src_validity_mask.RowIsValidUnsafe(i));
+//        }
+//    }
 }
 
 } // namespace duckdb

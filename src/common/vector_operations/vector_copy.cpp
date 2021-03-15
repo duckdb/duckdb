@@ -55,7 +55,6 @@ void VectorOperations::Copy(Vector &source, Vector &target, const SelectionVecto
 	}
 
 	idx_t copy_count = source_count - source_offset;
-	D_ASSERT(target_offset + copy_count <= STANDARD_VECTOR_SIZE);
 	if (copy_count == 0) {
 		return;
 	}

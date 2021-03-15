@@ -43,25 +43,27 @@ VectorListBuffer::VectorListBuffer() : VectorBuffer(VectorBufferType::LIST_BUFFE
 void VectorListBuffer::SetChild(unique_ptr<Vector> new_child) {
 	child = move(new_child);
 	capacity = STANDARD_VECTOR_SIZE;
-	//InitializeList();
 }
 
-void VectorListBuffer::Append(Vector& to_append, idx_t to_append_size){
-    if (size+to_append_size > capacity){
-        assert(0);
+void VectorListBuffer::Append(Vector& to_append, idx_t to_append_size, idx_t source_offset){
+    if (size+to_append_size-source_offset > capacity){
         //Drink chocomel to grow strong
+        child->Resize(capacity);
+        capacity*=2;
     }
-    VectorOperations::Copy(to_append,*child,to_append_size,0,size);
-    size += to_append_size;
+    VectorOperations::Copy(to_append,*child,to_append_size,source_offset,size);
+
+    size += to_append_size-source_offset;
 }
 
-//void VectorListBuffer::InitializeList(){
-//    LogicalType child_type =  child->GetType();
-//    child = make_unique<Vector>(child_type);
-//    child->CreateInnerListBuffer(child_type);
-//    capacity = STANDARD_VECTOR_SIZE;
-//}
-
+void VectorListBuffer::PushBack(Value &insert){
+    if (size+1 > capacity){
+        //Drink chocomel to grow strong
+         child->Resize(capacity);
+         capacity*=2;
+    }
+    FlatVector::GetData<string_t>(*child)[size++] = insert.str_value;
+}
 
 VectorListBuffer::~VectorListBuffer() {
 }

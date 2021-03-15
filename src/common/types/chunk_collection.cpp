@@ -78,6 +78,7 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 				throw TypeMismatchException(new_types[i], types[i], "Type mismatch when combining rows");
 			}
 			if (types[i].InternalType() == PhysicalType::LIST) {
+			    int a = 0;
 			    assert(0);
 //				for (auto &chunk :
 //				     chunks) { // need to check all the chunks because they can have only-null list entries

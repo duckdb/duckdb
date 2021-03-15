@@ -72,6 +72,9 @@ public:
 	data_ptr_t GetData() {
 		return data.get();
 	}
+	void SetData(unique_ptr<data_t[]> new_data) {
+		data = move(new_data);
+	}
 
 	static buffer_ptr<VectorBuffer> CreateStandardVector(PhysicalType type);
 	static buffer_ptr<VectorBuffer> CreateConstantVector(PhysicalType type);
@@ -200,9 +203,9 @@ public:
 	}
 	void SetChild(unique_ptr<Vector> new_child);
 
-	void InitializeList();
+	void Append(Vector& to_append, idx_t size, idx_t source_offset = 0);
 
-	void Append(Vector& to_append, idx_t size);
+	void PushBack(Value &insert);
 
     idx_t capacity = 0;
 	idx_t size = 0;
