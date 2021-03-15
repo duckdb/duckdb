@@ -22,7 +22,6 @@ ValiditySegment::ValiditySegment(DatabaseInstance &db, idx_t start, idx_t count,
 ValiditySegment::~ValiditySegment() {
 }
 
-
 void ValiditySegment::Fetch(idx_t vector_index, ValidityMask &result) {
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	auto handle = buffer_manager.Pin(block);
@@ -33,7 +32,6 @@ void ValiditySegment::Fetch(idx_t vector_index, ValidityMask &result) {
 		result.Copy(vector_mask, STANDARD_VECTOR_SIZE);
 	}
 }
-
 
 idx_t ValiditySegment::Append(VectorData &data, idx_t offset, idx_t vcount) {
 	idx_t append_count = MinValue<idx_t>(vcount, max_vector_count * STANDARD_VECTOR_SIZE - this->count);
