@@ -406,7 +406,7 @@ function(add_extension_dependencies LIBRARY)
     add_dependencies(${LIBRARY} fts_extension)
   endif()
 
-  if(${BUILD_FTS_EXTENSION})
+  if(${BUILD_HTTPFS_EXTENSION})
     add_dependencies(${LIBRARY} httpfs_extension)
   endif()
 endfunction()
