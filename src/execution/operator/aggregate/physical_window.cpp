@@ -294,7 +294,7 @@ static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, const idx_t inp
 
 			// find end of partition
 			bounds.partition_end = input_size;
-			if (wexpr->partitions.size() > 0) {
+			if (!wexpr->partitions.empty()) {
 				bounds.partition_end = FindNextStart(partition_mask, bounds.partition_start + 1, input_size);
 			}
 
@@ -304,7 +304,7 @@ static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, const idx_t inp
 
 		if (wexpr->end == WindowBoundary::CURRENT_ROW_RANGE || wexpr->type == ExpressionType::WINDOW_CUME_DIST) {
 			bounds.peer_end = bounds.partition_end;
-			if (wexpr->orders.size() > 0) {
+			if (!wexpr->orders.empty()) {
 				bounds.peer_end = FindNextStart(order_mask, bounds.peer_start + 1, bounds.partition_end);
 			}
 		}
