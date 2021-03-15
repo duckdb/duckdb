@@ -112,6 +112,31 @@ static void MaterializeExpression(Expression *expr, ChunkCollection &input, Chun
 	MaterializeExpressions(&expr, 1, input, output, scalar);
 }
 
+static bool CompatibleSorts(const BoundWindowExpression *a, const BoundWindowExpression *b) {
+	// check if the partitions are equivalent
+	if (a->partitions.size() != b->partitions.size()) {
+		return false;
+	}
+	for (idx_t i = 0; i < a->partitions.size(); i++) {
+		if (!a->partitions[i]->Equals(b->partitions[i].get())) {
+			return false;
+		}
+	}
+	// check if the orderings are equivalent
+	if (a->orders.size() != b->orders.size()) {
+		return false;
+	}
+	for (idx_t i = 0; i < a->orders.size(); i++) {
+		if (a->orders[i].type != b->orders[i].type) {
+			return false;
+		}
+		if (!a->orders[i].expression->Equals(b->orders[i].expression.get())) {
+			return false;
+		}
+	}
+	return true;
+}
+
 static void SortCollectionForWindow(BoundWindowExpression *wexpr, ChunkCollection &input, ChunkCollection &output,
                                     ChunkCollection &sort_collection) {
 	vector<LogicalType> sort_types;
@@ -293,14 +318,8 @@ static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, ChunkCollection
 	}
 }
 
-static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollection &input, ChunkCollection &output,
-                                    idx_t output_idx) {
-
-	ChunkCollection sort_collection;
-	bool needs_sorting = wexpr->partitions.size() + wexpr->orders.size() > 0;
-	if (needs_sorting) {
-		SortCollectionForWindow(wexpr, input, output, sort_collection);
-	}
+static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollection &input,
+                                    ChunkCollection &output, ChunkCollection &sort_collection, idx_t output_idx) {
 
 	// TODO we could evaluate those expressions in parallel
 
@@ -350,7 +369,7 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 	WindowBoundariesState bounds;
 	uint64_t dense_rank = 1, rank_equal = 0, rank = 1;
 
-	if (needs_sorting) {
+	if (sort_collection.Count() > 0) {
 		bounds.row_prev = sort_collection.GetRow(0);
 	}
 
@@ -566,13 +585,34 @@ void PhysicalWindow::Finalize(Pipeline &pipeline, ClientContext &context, unique
 	}
 
 	D_ASSERT(window_results.ColumnCount() == select_list.size());
-	idx_t window_output_idx = 0;
 	// we can have multiple window functions
-	for (idx_t expr_idx = 0; expr_idx < select_list.size(); expr_idx++) {
-		D_ASSERT(select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
+
+	// Process the window functions by sharing the partition/order definitions
+	vector<idx_t> remaining(select_list.size());
+	std::iota(remaining.begin(), remaining.end(), 0);
+	while (!remaining.empty()) {
+		// sort by the partitioning of the first remaining expression
+		const auto over_idx = remaining[0];
+		D_ASSERT(select_list[over_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
 		// sort by partition and order clause in window def
-		auto wexpr = reinterpret_cast<BoundWindowExpression *>(select_list[expr_idx].get());
-		ComputeWindowExpression(wexpr, big_data, window_results, window_output_idx++);
+		auto over_expr = reinterpret_cast<BoundWindowExpression *>(select_list[over_idx].get());
+		ChunkCollection sort_collection;
+		bool needs_sorting = over_expr->partitions.size() + over_expr->orders.size() > 0;
+		if (needs_sorting) {
+			SortCollectionForWindow(over_expr, big_data, window_results, sort_collection);
+		}
+		vector<idx_t> unprocessed;
+		for (const auto& expr_idx : remaining) {
+			D_ASSERT(select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
+			auto wexpr = reinterpret_cast<BoundWindowExpression *>(select_list[expr_idx].get());
+			if (!CompatibleSorts(over_expr, wexpr)) {
+				unprocessed.emplace_back(expr_idx);
+				continue;
+			}
+			// reuse partition and order clause in window def
+			ComputeWindowExpression(wexpr, big_data, window_results, sort_collection, expr_idx);
+		}
+		remaining.swap(unprocessed);
 	}
 }
 
