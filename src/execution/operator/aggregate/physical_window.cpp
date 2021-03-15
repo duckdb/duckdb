@@ -689,12 +689,25 @@ void PhysicalWindow::Finalize(Pipeline &pipeline, ClientContext &context, unique
 	vector<idx_t> remaining(select_list.size());
 	std::iota(remaining.begin(), remaining.end(), 0);
 	while (!remaining.empty()) {
-		// sort by the partitioning of the first remaining expression
+		// Find all functions that share the partitioning of the first remaining expression
 		const auto over_idx = remaining[0];
 		D_ASSERT(select_list[over_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
+		auto over_expr = reinterpret_cast<BoundWindowExpression *>(select_list[over_idx].get());
+
+		vector<idx_t> matching;
+		vector<idx_t> unprocessed;
+		for (const auto &expr_idx : remaining) {
+			D_ASSERT(select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
+			auto wexpr = reinterpret_cast<BoundWindowExpression *>(select_list[expr_idx].get());
+			if (CompatibleSorts(over_expr, wexpr)) {
+				matching.emplace_back(expr_idx);
+			} else {
+				unprocessed.emplace_back(expr_idx);
+			}
+		}
+		remaining.swap(unprocessed);
 
 		// sort by partition and order clause in window def
-		auto over_expr = reinterpret_cast<BoundWindowExpression *>(select_list[over_idx].get());
 		ChunkCollection sort_collection;
 		const auto sort_col_count = over_expr->partitions.size() + over_expr->orders.size();
 		if (sort_col_count > 0) {
@@ -710,25 +723,20 @@ void PhysicalWindow::Finalize(Pipeline &pipeline, ClientContext &context, unique
 			MaskColumn(partition_mask, sort_collection, c);
 		}
 
-		//	Set bits for the start of each peer group. Partitions also break peer groups, so start with the partition
-		//bits.
+		//	Set bits for the start of each peer group.
+		//	Partitions also break peer groups, so start with the partition bits.
 		BitArray<uint64_t> order_mask(partition_mask);
 		for (idx_t c = over_expr->partitions.size(); c < sort_col_count; ++c) {
 			MaskColumn(order_mask, sort_collection, c);
 		}
 
-		vector<idx_t> unprocessed;
-		for (const auto &expr_idx : remaining) {
+		//	Compute the functions with matching sorts
+		for (const auto &expr_idx : matching) {
 			D_ASSERT(select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
 			auto wexpr = reinterpret_cast<BoundWindowExpression *>(select_list[expr_idx].get());
-			if (!CompatibleSorts(over_expr, wexpr)) {
-				unprocessed.emplace_back(expr_idx);
-				continue;
-			}
 			// reuse partition and order clause in window def
 			ComputeWindowExpression(wexpr, big_data, window_results, partition_mask, order_mask, expr_idx);
 		}
-		remaining.swap(unprocessed);
 	}
 }
 
