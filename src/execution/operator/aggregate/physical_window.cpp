@@ -9,6 +9,7 @@
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 
 #include <cmath>
+#include <numeric>
 
 namespace duckdb {
 

@@ -1,4 +1,4 @@
-# name: test/sql/window/test_over_grouping.test
+# name: test/sql/window/test_over_grouping.test_slow
 # description: Grouping OVER clauses to reduce unnecessary sorting
 # group: [window]
 
@@ -6,7 +6,7 @@
 #PRAGMA enable_verification
 
 statement ok
-create table image (
+create table image  (
     id          smallint primary key,
     width       int not null,
     height      integer not null
