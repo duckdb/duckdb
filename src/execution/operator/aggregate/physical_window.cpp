@@ -408,13 +408,13 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 	if (partition_mask.Count() > 0) {
 		partition_mask.SetBlock(0, 1); //	Special case: first row is start of new partition/peer group.
 	}
-	for (id_t c = 0; c < wexpr->partitions.size(); ++c) {
+	for (idx_t c = 0; c < wexpr->partitions.size(); ++c) {
 		MaskColumn(partition_mask, sort_collection, c);
 	}
 
 	//	Set bits for the start of each peer group. Partitions also break peer groups, so start with the partition bits.
 	BitArray<uint64_t> order_mask(partition_mask);
-	for (id_t c = wexpr->partitions.size(); c < sort_col_count; ++c) {
+	for (idx_t c = wexpr->partitions.size(); c < sort_col_count; ++c) {
 		MaskColumn(order_mask, sort_collection, c);
 	}
 
