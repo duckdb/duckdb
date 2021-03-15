@@ -47,36 +47,141 @@ PhysicalWindow::PhysicalWindow(vector<LogicalType> types, vector<unique_ptr<Expr
     : PhysicalSink(type, move(types), estimated_cardinality), select_list(move(select_list)) {
 }
 
-static bool EqualsSubset(vector<Value> &a, vector<Value> &b, idx_t start, idx_t end) {
-	D_ASSERT(start <= end);
-	for (idx_t i = start; i < end; i++) {
-		if (a[i] != b[i]) {
-			return false;
-		}
-	}
-	return true;
-}
+template <typename W>
+class bit_array {
+public:
+	using bits_t = std::vector<W>;
 
-static idx_t BinarySearchRightmost(ChunkCollection &input, vector<Value> row, idx_t l, idx_t r, idx_t comp_cols) {
-	if (comp_cols == 0) {
-		return r - 1;
+	static const auto BITS_PER_WORD = std::numeric_limits<W>::digits;
+	static const auto ZEROS = std::numeric_limits<W>::min();
+	static const auto ONES = std::numeric_limits<W>::max();
+
+	static size_t block(const size_t &pos) {
+		return pos / BITS_PER_WORD;
 	}
-	while (l < r) {
-		idx_t m = std::floor((l + r) / 2);
-		bool less_than_equals = true;
-		for (idx_t i = 0; i < comp_cols; i++) {
-			if (input.GetRow(m)[i] > row[i]) {
-				less_than_equals = false;
-				break;
+
+	static unsigned shift(const size_t &pos) {
+		return pos % BITS_PER_WORD;
+	}
+
+	static bool test_bit(W w, unsigned s) {
+		return (w >> s) & 0x01;
+	}
+
+	static W set_bit(W w, unsigned s) {
+		return w | (W(1) << s);
+	}
+
+	static W clear_bit(W w, unsigned s) {
+		return w & ~(W(1) << s);
+	}
+
+	explicit bit_array(const size_t &count, const W &init = 0)
+	    : bits(count ? block(count - 1) + 1 : 0, init), count(count) {
+	}
+
+	size_t size() const {
+		return count;
+	}
+
+	size_t capacity() const {
+		return bits.capacity() * BITS_PER_WORD;
+	}
+
+	const W &get_block(size_t b) const {
+		return bits[b];
+	}
+
+	W &get_block(size_t b) {
+		return bits[b];
+	}
+
+	void set_block(size_t b, const W &block) {
+		get_block(b) = block;
+	}
+
+	bool operator[](size_t pos) const {
+		return test_bit(get_block(block(pos)), shift(pos));
+	}
+
+private:
+	bits_t bits;
+	size_t count;
+};
+
+template <typename W>
+static void MaskColumn(bit_array<W> &mask, ChunkCollection &sort_collection, const idx_t c) {
+	//	TODO: Templatise this on physical types for performance
+
+	//	Record the first value
+	idx_t r = 0;
+	Value prev = sort_collection.GetValue(c, r++);
+
+	//	Process complete blocks
+	const auto row_count = sort_collection.Count();
+	const auto complete_block_count = mask.block(row_count);
+	for (idx_t b = mask.block(r); b < complete_block_count; ++b) {
+		auto block = mask.get_block(b);
+
+		//	Skip the block if it is all boundaries.
+		if (block == mask.ONES) {
+			r -= (r % mask.BITS_PER_WORD);
+			r += mask.BITS_PER_WORD;
+			continue;
+		}
+
+		//	Scan the rows in the complete block
+		for (unsigned shift = mask.shift(r); shift < mask.BITS_PER_WORD; ++shift, ++r) {
+			Value curr = sort_collection.GetValue(c, r);
+			if (!mask.test_bit(block, shift)) {
+				if (curr != prev) {
+					block = mask.set_bit(block, shift);
+				}
+				prev = curr;
 			}
 		}
-		if (less_than_equals) {
-			l = m + 1;
-		} else {
-			r = m;
+		mask.set_block(b, block);
+	}
+
+	//	Finish last ragged block
+	if (r < row_count) {
+		auto block = mask.get_block(complete_block_count);
+		if (block != mask.ONES) {
+			for (unsigned shift = mask.shift(r); r < row_count; ++shift, ++r) {
+				Value curr = sort_collection.GetValue(c, r);
+				if (!mask.test_bit(block, shift)) {
+					if (curr != prev) {
+						block = mask.set_bit(block, shift);
+					}
+				}
+				prev = curr;
+			}
+			mask.set_block(complete_block_count, block);
 		}
 	}
-	return l - 1;
+}
+
+template <typename W>
+static idx_t FindNextStart(const bit_array<W> &mask, idx_t l, idx_t r) {
+	while (l < r) {
+		//	If l is aligned with the start of a block, and the block is blank, then skip forward one block.
+		const auto block = mask.get_block(mask.block(l));
+		auto shift = mask.shift(l);
+		if (!block && !shift) {
+			l += mask.BITS_PER_WORD;
+			continue;
+		}
+
+		// Loop over the block
+		for (; shift < mask.BITS_PER_WORD; ++shift, ++l) {
+			if (mask.test_bit(block, shift)) {
+				return std::min(l, r);
+			}
+		}
+	}
+
+	//	Didn't find a start so return the end of the range
+	return r;
 }
 
 static void MaterializeExpressions(Expression **exprs, idx_t expr_count, ChunkCollection &input,
@@ -168,7 +273,6 @@ struct WindowBoundariesState {
 	int64_t window_end = -1;
 	bool is_same_partition = false;
 	bool is_peer = false;
-	vector<Value> row_prev;
 };
 
 static bool WindowNeedsRank(BoundWindowExpression *wexpr) {
@@ -176,36 +280,37 @@ static bool WindowNeedsRank(BoundWindowExpression *wexpr) {
 	       wexpr->type == ExpressionType::WINDOW_RANK_DENSE || wexpr->type == ExpressionType::WINDOW_CUME_DIST;
 }
 
-static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, ChunkCollection &input, idx_t input_size,
-                                   idx_t row_idx, ChunkCollection &boundary_start_collection,
-                                   ChunkCollection &boundary_end_collection, WindowBoundariesState &bounds) {
+static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, const idx_t input_size, const idx_t row_idx,
+                                   ChunkCollection &boundary_start_collection, ChunkCollection &boundary_end_collection,
+                                   const bit_array<uint64_t> &partition_mask, const bit_array<uint64_t> &order_mask,
+                                   WindowBoundariesState &bounds) {
 
-	if (input.ColumnCount() > 0) {
-		vector<Value> row_cur = input.GetRow(row_idx);
-		idx_t sort_col_count = wexpr->partitions.size() + wexpr->orders.size();
+	if (wexpr->partitions.size() + wexpr->orders.size() > 0) {
 
 		// determine partition and peer group boundaries to ultimately figure out window size
-		bounds.is_same_partition = EqualsSubset(bounds.row_prev, row_cur, 0, wexpr->partitions.size());
-		bounds.is_peer = bounds.is_same_partition &&
-		                 EqualsSubset(bounds.row_prev, row_cur, wexpr->partitions.size(), sort_col_count);
-		bounds.row_prev = row_cur;
+		bounds.is_same_partition = !partition_mask[row_idx];
+		bounds.is_peer = !order_mask[row_idx];
 
 		// when the partition changes, recompute the boundaries
-		if (!bounds.is_same_partition || row_idx == 0) { // special case for first row, need to init
+		if (!bounds.is_same_partition) {
 			bounds.partition_start = row_idx;
 			bounds.peer_start = row_idx;
 
 			// find end of partition
-			bounds.partition_end =
-			    BinarySearchRightmost(input, row_cur, bounds.partition_start, input.Count(), wexpr->partitions.size()) +
-			    1;
+			bounds.partition_end = input_size;
+			if (wexpr->partitions.size()) {
+				bounds.partition_end = FindNextStart(partition_mask, bounds.partition_start + 1, input_size);
+			}
 
 		} else if (!bounds.is_peer) {
 			bounds.peer_start = row_idx;
 		}
 
 		if (wexpr->end == WindowBoundary::CURRENT_ROW_RANGE || wexpr->type == ExpressionType::WINDOW_CUME_DIST) {
-			bounds.peer_end = BinarySearchRightmost(input, row_cur, row_idx, bounds.partition_end, sort_col_count) + 1;
+			bounds.peer_end = bounds.partition_end;
+			if (wexpr->orders.size()) {
+				bounds.peer_end = FindNextStart(order_mask, bounds.peer_start + 1, bounds.partition_end);
+			}
 		}
 	} else {
 		bounds.is_same_partition = false;
@@ -297,9 +402,24 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
                                     idx_t output_idx) {
 
 	ChunkCollection sort_collection;
-	bool needs_sorting = wexpr->partitions.size() + wexpr->orders.size() > 0;
-	if (needs_sorting) {
+	const auto sort_col_count = wexpr->partitions.size() + wexpr->orders.size();
+	if (sort_col_count > 0) {
 		SortCollectionForWindow(wexpr, input, output, sort_collection);
+	}
+
+	//	Set bits for the start of each partition
+	bit_array<uint64_t> partition_mask(sort_collection.Count());
+	if (partition_mask.size()) {
+		partition_mask.set_block(0, 1); //	Special case: first row is start of new partition/peer group.
+	}
+	for (id_t c = 0; c < wexpr->partitions.size(); ++c) {
+		MaskColumn(partition_mask, sort_collection, c);
+	}
+
+	//	Set bits for the start of each peer group. Partitions also break peer groups, so start with the partition bits.
+	bit_array<uint64_t> order_mask(partition_mask);
+	for (id_t c = wexpr->partitions.size(); c < sort_col_count; ++c) {
+		MaskColumn(order_mask, sort_collection, c);
 	}
 
 	// TODO we could evaluate those expressions in parallel
@@ -350,15 +470,11 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 	WindowBoundariesState bounds;
 	uint64_t dense_rank = 1, rank_equal = 0, rank = 1;
 
-	if (needs_sorting) {
-		bounds.row_prev = sort_collection.GetRow(0);
-	}
-
 	// this is the main loop, go through all sorted rows and compute window function result
 	for (idx_t row_idx = 0; row_idx < input.Count(); row_idx++) {
 		// special case, OVER (), aggregate over everything
-		UpdateWindowBoundaries(wexpr, sort_collection, input.Count(), row_idx, boundary_start_collection,
-		                       boundary_end_collection, bounds);
+		UpdateWindowBoundaries(wexpr, input.Count(), row_idx, boundary_start_collection, boundary_end_collection,
+		                       partition_mask, order_mask, bounds);
 		if (WindowNeedsRank(wexpr)) {
 			if (!bounds.is_same_partition || row_idx == 0) { // special case for first row, need to init
 				dense_rank = 1;
