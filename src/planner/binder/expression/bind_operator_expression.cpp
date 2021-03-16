@@ -57,7 +57,7 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 	}
 	// all children bound successfully
 	string function_name;
-	switch(op.type) {
+	switch (op.type) {
 	case ExpressionType::ARRAY_EXTRACT:
 		function_name = "array_extract";
 		break;

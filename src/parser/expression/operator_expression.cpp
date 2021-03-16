@@ -17,8 +17,8 @@ OperatorExpression::OperatorExpression(ExpressionType type, unique_ptr<ParsedExp
 	}
 }
 
-OperatorExpression::OperatorExpression(ExpressionType type, vector<unique_ptr<ParsedExpression>> children) :
-	ParsedExpression(type, ExpressionClass::OPERATOR), children(move(children)) {
+OperatorExpression::OperatorExpression(ExpressionType type, vector<unique_ptr<ParsedExpression>> children)
+    : ParsedExpression(type, ExpressionClass::OPERATOR), children(move(children)) {
 }
 
 string OperatorExpression::ToString() const {
