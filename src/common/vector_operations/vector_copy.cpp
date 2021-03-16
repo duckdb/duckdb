@@ -156,7 +156,6 @@ void VectorOperations::Copy(Vector &source, Vector &target, const SelectionVecto
 	}
 	case PhysicalType::LIST: {
 		D_ASSERT(target.GetType().InternalType() == PhysicalType::LIST);
-
 		if (ListVector::HasEntry(source)) {
 			 //! if the source has list offsets, we need to append them to the target
 			if (!ListVector::HasEntry(target)) {

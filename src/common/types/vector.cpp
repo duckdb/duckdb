@@ -272,42 +272,17 @@ void Vector::SetValue(idx_t index, const Value &val) {
 
 	case LogicalTypeId::LIST: {
 		if (!auxiliary) {
-			auto vec_list = make_unique<Vector>(val.list_value[0].type());
+			auto vec_list = make_unique<Vector>(GetType().child_types()[0].second);
 			ListVector::SetEntry(*this, move(vec_list));
 		}
-//		assert(0);
-//		auto &child_cc = ListVector::GetEntry(*this);
-		 //!TODO optimization: in-place update if fits
 		auto offset = ListVector::GetListSize(*this);
 		if (!val.list_value.empty()) {
-//		    child_list_t<LogicalType> child_types;
-//            child_types.push_back({"",val.list_value[0].type()});
-//            LogicalType list_vector_type(LogicalType::LIST.id(),child_types);
             Vector to_append(val.list_value[0].type());
-//			auto list_child = make_unique<Vector>(val.list_value[0].type());
-//	        ListVector::SetEntry(to_append, move(list_child));
 	        for (idx_t i = 0; i < val.list_value.size(); i ++){
 	            to_append.SetValue(i,val.list_value[i]);
 	        }
 	        ListVector::Append(*this,to_append,val.list_value.size());
         }
-//		}
-//			idx_t append_idx = 0;
-//			while (append_idx < val.list_value.size()) {
-//				idx_t this_append_len = MinValue<idx_t>(STANDARD_VECTOR_SIZE, val.list_value.size() - append_idx);
-
-//				DataChunk child_append_chunk;
-//				child_append_chunk.SetCardinality(this_append_len);
-//				vector<LogicalType> types;
-//				types.push_back(val.list_value[0].type());
-//				child_append_chunk.Initialize(types);
-//				for (idx_t i = 0; i < this_append_len; i++) {
-//					child_append_chunk.data[0].SetValue(i, val.list_value[i + append_idx]);
-//				}
-//				child_cc.Append(child_append_chunk);
-//				append_idx += this_append_len;
-//			}
-//		}
 		//! now set the pointer
 		auto &entry = ((list_entry_t *)data)[index];
 		entry.length = val.list_value.size();
@@ -1010,7 +985,7 @@ bool ListVector::HasEntry(const Vector &vector) {
 	}
 	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR ||
 	         vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
-	return vector.auxiliary != nullptr && ListVector::GetListSize(vector) != 0;
+	return vector.auxiliary != nullptr;
 }
 
 Vector &ListVector::GetEntry(const Vector &vector) {

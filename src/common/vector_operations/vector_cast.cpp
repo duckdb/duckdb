@@ -526,39 +526,41 @@ static void ValueStringCastSwitch(Vector &source, Vector &result, idx_t count) {
 
 static void ListCastSwitch(Vector &source, Vector &result, idx_t count) {
 	switch (result.GetType().id()) {
-//	case LogicalTypeId::LIST: {
-//		// only handle constant and flat vectors here for now
-//		if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-//			result.SetVectorType(source.GetVectorType());
-//			ConstantVector::SetNull(result, ConstantVector::IsNull(source));
-//		} else {
-//			source.Normalify(count);
-//			result.SetVectorType(VectorType::FLAT_VECTOR);
-//			FlatVector::SetValidity(result, FlatVector::Validity(source));
-//		}
-//		auto list_child = make_unique<ChunkCollection>();
-//		if (ListVector::HasEntry(source)) {
-//			auto &source_cc = ListVector::GetEntry(source);
+	case LogicalTypeId::LIST: {
+		// only handle constant and flat vectors here for now
+		if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+			result.SetVectorType(source.GetVectorType());
+			ConstantVector::SetNull(result, ConstantVector::IsNull(source));
+		} else {
+			source.Normalify(count);
+			result.SetVectorType(VectorType::FLAT_VECTOR);
+			FlatVector::SetValidity(result, FlatVector::Validity(source));
+		}
+		auto list_child = make_unique<Vector>(result.GetType().child_types()[0].second);
+		ListVector::SetEntry(result, move(list_child));
+		if (ListVector::HasEntry(source)) {
+			auto &source_cc = ListVector::GetEntry(source);
+			Vector append_vector(result.GetType().child_types()[0].second);
 //			auto &target_cc = *list_child;
-//			// convert the entire chunk collection
+			// convert the entire chunk collection
 //			vector<LogicalType> result_types;
 //			result_types.push_back(result.GetType().child_types()[0].second);
 //			DataChunk append_chunk;
 //			append_chunk.Initialize(result_types);
 //			for (auto &chunk : source_cc.Chunks()) {
-//				VectorOperations::Cast(chunk->data[0], append_chunk.data[0], chunk->size());
+            VectorOperations::Cast(source_cc, append_vector, count);
 //				append_chunk.SetCardinality(chunk->size());
-//				target_cc.Append(append_chunk);
+            ListVector::Append(result,append_vector,count);
 //			}
-//		}
-//		ListVector::SetEntry(result, move(list_child));
-//		auto ldata = FlatVector::GetData<list_entry_t>(source);
-//		auto tdata = FlatVector::GetData<list_entry_t>(result);
-//		for (idx_t i = 0; i < count; i++) {
-//			tdata[i] = ldata[i];
-//		}
-//		break;
-//	}
+		}
+
+		auto ldata = FlatVector::GetData<list_entry_t>(source);
+		auto tdata = FlatVector::GetData<list_entry_t>(result);
+		for (idx_t i = 0; i < count; i++) {
+			tdata[i] = ldata[i];
+		}
+		break;
+	}
 	default:
 		ValueStringCastSwitch(source, result, count);
 		break;

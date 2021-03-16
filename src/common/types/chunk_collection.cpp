@@ -78,23 +78,21 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 				throw TypeMismatchException(new_types[i], types[i], "Type mismatch when combining rows");
 			}
 			if (types[i].InternalType() == PhysicalType::LIST) {
-			    int a = 0;
-			    assert(0);
-//				for (auto &chunk :
-//				     chunks) { // need to check all the chunks because they can have only-null list entries
-//					auto &chunk_vec = chunk->data[i];
-//					auto &new_vec = new_chunk.data[i];
-//					if (ListVector::HasEntry(chunk_vec) && ListVector::HasEntry(new_vec)) {
-//						auto &chunk_types = ListVector::GetEntry(chunk_vec).types;
-//						auto &new_types = ListVector::GetEntry(new_vec).types;
-//						D_ASSERT(new_types.size() <= 1);
-//						D_ASSERT(chunk_types.size() <= 1);
-//						if (!chunk_types.empty() && !new_types.empty() && chunk_types != new_types) {
-//							throw TypeMismatchException(chunk_types[0], new_types[0],
-//							                            "Type mismatch when combining lists");
-//						}
-//					}
-//				}
+				for (auto &chunk :
+				     chunks) { // need to check all the chunks because they can have only-null list entries
+					auto &chunk_vec = chunk->data[i];
+					auto &new_vec = new_chunk.data[i];
+					auto new_vec_child = make_unique<Vector>(new_vec.GetType().child_types()[0].second);
+					ListVector::SetEntry(new_vec,move(new_vec_child));
+					if (ListVector::HasEntry(chunk_vec) && ListVector::HasEntry(new_vec)) {
+						auto &chunk_types = ListVector::GetEntry(chunk_vec).GetType();
+						auto &new_types = ListVector::GetEntry(new_vec).GetType();
+						if (chunk_types != new_types) {
+							throw TypeMismatchException(chunk_types, new_types,
+							                            "Type mismatch when combining lists");
+						}
+					}
+				}
 			}
 			// TODO check structs, too
 		}

@@ -38,6 +38,9 @@ static void ListUpdateFunction(Vector inputs[], FunctionData *, idx_t input_coun
 
 	auto states = (ListAggState **)sdata.data;
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
+	if (input.GetVectorType() == VectorType::SEQUENCE_VECTOR){
+	    input.Normalify(count);
+	}
 	for (idx_t i = 0; i < count; i++) {
 		auto state = states[sdata.sel->get_index(i)];
 		if (!state->list_vector) {
@@ -73,11 +76,15 @@ static void ListFinalize(Vector &state_vector, FunctionData *, Vector &result, i
 
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 	result.Initialize(result.GetType()); // deals with constants
-
+    auto &mask = FlatVector::Validity(result);
 	size_t total_len = 0;
 	for (idx_t i = 0; i < count; i++) {
 		auto state = states[sdata.sel->get_index(i)];
-		auto list_buffer =  state->list_vector->GetAuxiliary();
+        if (!state->list_vector) {
+			mask.SetInvalid(i);
+			continue;
+		}
+		D_ASSERT(state->list_vector);
 	    auto list_struct_data = FlatVector::GetData<list_entry_t>(result);
 		auto &state_lv = *state->list_vector;
 		auto state_lv_count = ListVector::GetListSize(state_lv);

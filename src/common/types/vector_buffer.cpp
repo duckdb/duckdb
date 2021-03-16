@@ -46,7 +46,7 @@ void VectorListBuffer::SetChild(unique_ptr<Vector> new_child) {
 }
 
 void VectorListBuffer::Append(Vector& to_append, idx_t to_append_size, idx_t source_offset){
-    if (size+to_append_size-source_offset > capacity){
+    while (size+to_append_size-source_offset > capacity){
         //Drink chocomel to grow strong
         child->Resize(capacity);
         capacity*=2;
