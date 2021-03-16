@@ -11,6 +11,8 @@
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/common/arch.h"
+#include "duckdb/function/functions.hpp"
+
 
 namespace duckdb {
 

@@ -1,6 +1,5 @@
 #include "duckdb/function/scalar/operators.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/function/functions.hpp"
 
 namespace duckdb {
 
