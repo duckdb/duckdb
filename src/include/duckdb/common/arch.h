@@ -13,6 +13,4 @@
 #else
 #define SET_ARCH(x)       x
 #define SET_ARCH_FRONT(x) x
-#define INCLUDE(x) "duckdb/function/functions.hpp"
-#include INCLUDE()
 #endif
