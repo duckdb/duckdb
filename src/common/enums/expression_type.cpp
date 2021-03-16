@@ -82,6 +82,12 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "NULLIF";
 	case ExpressionType::OPERATOR_COALESCE:
 		return "COALESCE";
+	case ExpressionType::ARRAY_EXTRACT:
+		return "ARRAY_EXTRACT";
+	case ExpressionType::ARRAY_SLICE:
+		return "ARRAY_SLICE";
+	case ExpressionType::STRUCT_EXTRACT:
+		return "STRUCT_EXTRACT";
 	case ExpressionType::SUBQUERY:
 		return "SUBQUERY";
 	case ExpressionType::STAR:
