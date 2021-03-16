@@ -2,23 +2,22 @@
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
-#include "duckdb/parallel/thread_context.hpp"
 
 namespace duckdb {
 
-ExpressionExecutor::ExpressionExecutor() {
+ExpressionExecutor::ExpressionExecutor() : random(0) {
 }
 
-ExpressionExecutor::ExpressionExecutor(Expression *expression) {
+ExpressionExecutor::ExpressionExecutor(Expression *expression) : ExpressionExecutor() {
 	D_ASSERT(expression);
 	AddExpression(*expression);
 }
 
-ExpressionExecutor::ExpressionExecutor(Expression &expression) {
+ExpressionExecutor::ExpressionExecutor(Expression &expression) : ExpressionExecutor() {
 	AddExpression(expression);
 }
 
-ExpressionExecutor::ExpressionExecutor(vector<unique_ptr<Expression>> &exprs) {
+ExpressionExecutor::ExpressionExecutor(vector<unique_ptr<Expression>> &exprs) : ExpressionExecutor() {
 	D_ASSERT(exprs.size() > 0);
 	for (auto &expr : exprs) {
 		AddExpression(*expr);
@@ -45,7 +44,7 @@ void ExpressionExecutor::Execute(DataChunk *input, DataChunk &result) {
 	for (idx_t i = 0; i < expressions.size(); i++) {
 		ExecuteExpression(i, result.data[i]);
 		if (current_count >= next_sample) {
-			next_sample = 50 + rand() % 100;
+			next_sample = 50 + random.NextRandomInteger() % 100;
 			++sample_count;
 			sample_tuples_count += input->size();
 			current_count = 0;
