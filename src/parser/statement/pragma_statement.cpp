@@ -2,7 +2,8 @@
 
 namespace duckdb {
 
-PragmaStatement::PragmaStatement() : SQLStatement(StatementType::PRAGMA_STATEMENT), info(make_unique<PragmaInfo>()) {};
+PragmaStatement::PragmaStatement() : SQLStatement(StatementType::PRAGMA_STATEMENT), info(make_unique<PragmaInfo>()) {
+}
 
 unique_ptr<SQLStatement> PragmaStatement::Copy() const {
 	auto result = make_unique<PragmaStatement>();
