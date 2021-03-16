@@ -168,11 +168,11 @@ static void MaskTypedColumn(MASK_TYPE &mask, ChunkCollection &sort_collection, c
 			continue;
 		}
 
-		//	Update the chunk for this row
-		ci.Update(r);
-
 		//	Scan the rows in the complete block
 		for (unsigned shift = mask.Shift(r); shift < mask.BITS_PER_WORD; ++shift, ++r) {
+			//	Update the chunk for this row
+			ci.Update(r);
+
 			auto curr_valid = ci.IsValid(r);
 			auto curr = ci.GetValue(r);
 			if (!mask.TestBit(block, shift)) {
@@ -188,12 +188,12 @@ static void MaskTypedColumn(MASK_TYPE &mask, ChunkCollection &sort_collection, c
 
 	//	Finish last ragged block
 	if (r < row_count) {
-		//	Update the chunk for this row
-		ci.Update(r);
-
 		auto block = mask.GetBlock(complete_block_count);
 		if (block != mask.ONES) {
 			for (unsigned shift = mask.Shift(r); r < row_count; ++shift, ++r) {
+				//	Update the chunk for this row
+				ci.Update(r);
+
 				auto curr_valid = ci.IsValid(r);
 				auto curr = ci.GetValue(r);
 				if (!mask.TestBit(block, shift)) {
