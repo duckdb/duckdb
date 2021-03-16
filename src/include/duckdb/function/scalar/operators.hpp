@@ -13,7 +13,6 @@
 #include "duckdb/common/arch.h"
 #include "duckdb/function/functions.hpp"
 
-
 namespace duckdb {
 
 struct SET_ARCH(AddFun) {
