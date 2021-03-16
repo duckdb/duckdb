@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/common/cpu_feature.hpp"
+#include "cpu_feature.hpp"
 #include "duckdb/common/vector.hpp"
 
 namespace duckdb {

@@ -24,14 +24,28 @@ try_run(run_result
 string(REGEX MATCH "error: ([a-zA-Z0-9_]+)" ARCH "${ARCH}")
 string(REPLACE "error: " "" ARCH "${ARCH}")
 
+
+
+message(STATUS ${SIMD_OBJECT_FILES})
+message("before")
+
 if(ARCH STREQUAL "x86_64")
     add_compile_definitions(DUCKDB_X86_64)
+    add_subdirectory(x86_64/avx2)
+    add_subdirectory(x86_64/avx512f)
 elseif(ARCH STREQUAL "arm")
     add_compile_definitions(DUCKDB_ARM)
 else()
     add_compile_definitions(DUCKDB_FALLBACK)
 endif()
 
-include_directories(include)
+message(STATUS ${SIMD_OBJECT_FILES})
+message("after")
 
-add_library(simd_extension STATIC simd-extension.cpp)
+
+include_directories(include)
+include_directories(x86_64/avx2/include)
+include_directories(x86_64/avx512f/include)
+
+
+add_library(simd_extension STATIC simd-extension.cpp cpu_feature.cpp cpu_info.cpp cpu_arch.cpp ${SIMD_OBJECT_FILES})

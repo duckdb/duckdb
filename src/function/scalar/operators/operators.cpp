@@ -3,7 +3,7 @@
 
 namespace duckdb {
 
-void BuiltinFunctions::SET_ARCH(RegisterOperators)() {
+void BuiltinFunctions::RegisterOperators() {
 	Register<SET_ARCH(AddFun)>();
 	Register<SET_ARCH(SubtractFun)>();
 	Register<SET_ARCH(MultiplyFun)>();

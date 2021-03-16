@@ -22,7 +22,6 @@
 #include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/main/table_description.hpp"
 #include "duckdb/transaction/transaction_context.hpp"
-#include "duckdb/common/cpu_info.hpp"
 #include <random>
 
 namespace duckdb {
@@ -88,8 +87,6 @@ public:
 	ExplainOutputType explain_output_type = ExplainOutputType::PHYSICAL_ONLY;
 	//! The random generator used by random(). Its seed value can be set by setseed().
 	std::mt19937 random_engine;
-
-	CpuInfo cpu_info;
 
 public:
 	DUCKDB_API Transaction &ActiveTransaction() {

@@ -195,4 +195,11 @@ void SET_ARCH(BitwiseNotFun)::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(functions);
 }
 
+ScalarFunctionSet SET_ARCH_FRONT(Functions)::GetFunctions() {
+	ScalarFunctionSet functions("~");
+	for (auto &type : LogicalType::INTEGRAL) {
+		functions.AddFunction(ScalarFunction({type}, type, GetScalarIntegerUnaryFunction<BitwiseNotOperator>(type)));
+	}
+	return functions;
+}
 } // namespace duckdb

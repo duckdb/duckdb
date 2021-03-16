@@ -1,6 +1,13 @@
-#include "duckdb/common/cpu_info.hpp"
-#include "duckdb/common/cpu_feature.hpp"
+#include "cpu_info.hpp"
+
+#include "cpu_feature.hpp"
 #include "duckdb/main/client_context.hpp"
+
+#include <avx2_functions.hpp>
+#include <avx512f_functions.hpp>
+#include <duckdb.hpp>
+#include <duckdb/function/functions.hpp>
+#include <duckdb/parser/parsed_data/drop_info.hpp>
 
 namespace duckdb {
 
@@ -140,10 +147,29 @@ void CpuInfo::SetBestFeature(CPUFeature best_feature) {
 }
 
 void CpuInfo::SetFeature(ClientContext &client_context, CPUFeature feature) {
-	SetBestFeature(feature);
-	auto &catalog = Catalog::GetCatalog(client_context);
-	BuiltinFunctions builtin(client_context, catalog);
-	builtin.Initialize();
+    Connection con(*client_context.db);
+    con.BeginTransaction();
+    auto &catalog = Catalog::GetCatalog(*con.context);
+
+    SetBestFeature(feature);
+	switch (feature) {
+    case CPUFeature::DUCKDB_CPU_FEATURE_X86_AVX2: {
+    }
+    case CPUFeature::DUCKDB_CPU_FEATURE_X86_AVX512F:
+        AVX512fFunctions::GetFunctions();
+        break;
+    default:
+        CreateScalarFunctionInfo info(Functions::GetAddFunctions());
+        DropInfo dropInfo;
+        dropInfo.name = "+";
+        dropInfo.schema = "main";
+        dropInfo.type = CatalogType::SCALAR_FUNCTION_ENTRY;
+        catalog.DropEntry(*con.context, &dropInfo);
+        catalog.CreateFunction(*con.context, &info);
+        break;
+    }
+
+    con.Commit();
 }
 
 } // namespace duckdb

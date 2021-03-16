@@ -243,11 +243,6 @@ private:
 
 	// pragmas
 	void RegisterPragmaFunctions();
-
-#ifdef DUCKDB_X86_64
-	void RegisterOperators_AVX2();
-	void RegisterOperators_AVX512f();
-#endif
 };
 
 } // namespace duckdb

@@ -1,4 +1,4 @@
-#include "duckdb/common/cpu_feature.hpp"
+#include "cpu_feature.hpp"
 namespace duckdb {
 
 string CPUFeatureToString(CPUFeature feature) {
