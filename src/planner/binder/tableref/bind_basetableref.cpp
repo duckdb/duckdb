@@ -9,6 +9,10 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/function/table/table_scan.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
 
 namespace duckdb {
 
@@ -58,8 +62,29 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 	}
 	// not a CTE
 	// extract a table or view from the catalog
-	auto table_or_view = Catalog::GetCatalog(context).GetEntry(context, CatalogType::TABLE_ENTRY, ref.schema_name,
-	                                                           ref.table_name, false, error_context);
+	// check if the table name ends with a specific extension
+	string alternative_function;
+	if (ref.schema_name.empty()) {
+		if (StringUtil::EndsWith(ref.table_name, ".parquet")) {
+			alternative_function = "parquet_scan";
+		} else if (StringUtil::EndsWith(ref.table_name, ".csv") || StringUtil::EndsWith(ref.table_name, ".tsv") ||
+		           StringUtil::EndsWith(ref.table_name, ".csv.gz")) {
+			alternative_function = "read_csv_auto";
+		}
+	}
+	auto table_or_view =
+	    Catalog::GetCatalog(context).GetEntry(context, CatalogType::TABLE_ENTRY, ref.schema_name, ref.table_name,
+	                                          alternative_function.empty() ? false : true, error_context);
+	if (!table_or_view) {
+		D_ASSERT(!alternative_function.empty());
+		TableFunctionRef table_function;
+		table_function.alias = ref.alias;
+		table_function.column_name_alias = ref.column_name_alias;
+		vector<unique_ptr<ParsedExpression>> children;
+		children.push_back(make_unique<ConstantExpression>(Value(ref.table_name)));
+		table_function.function = make_unique<FunctionExpression>(alternative_function, children);
+		return Bind(table_function);
+	}
 	switch (table_or_view->type) {
 	case CatalogType::TABLE_ENTRY: {
 		// base table: create the BoundBaseTableRef node

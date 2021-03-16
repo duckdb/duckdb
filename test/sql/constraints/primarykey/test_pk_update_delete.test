@@ -27,11 +27,31 @@ SELECT * FROM test;
 statement ok
 DELETE FROM test WHERE a=11
 
+query II
+SELECT * FROM test ORDER BY a;
+----
+12	2
+13	2
+
 statement ok
 INSERT INTO test VALUES (11, 1);
 
+query II
+SELECT * FROM test ORDER BY a;
+----
+11	1
+12	2
+13	2
+
 statement error
 INSERT INTO test VALUES (11, 1);
+
+query II
+SELECT * FROM test ORDER BY a;
+----
+11	1
+12	2
+13	2
 
 statement ok
 UPDATE test SET a=4 WHERE b=1;

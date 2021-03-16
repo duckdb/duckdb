@@ -245,8 +245,9 @@ void TransactionManager::RemoveTransaction(Transaction *transaction) noexcept {
 		if (active_transactions[i].get() == transaction) {
 			t_index = i;
 		} else {
+			transaction_t active_query = active_transactions[i]->active_query;
 			lowest_start_time = MinValue(lowest_start_time, active_transactions[i]->start_time);
-			lowest_active_query = MinValue(lowest_active_query, active_transactions[i]->active_query);
+			lowest_active_query = MinValue(lowest_active_query, active_query);
 		}
 	}
 	transaction_t lowest_stored_query = lowest_start_time;

@@ -1,7 +1,13 @@
 include_directories(src)
 
-find_package(PythonLibs REQUIRED)
-find_package(pybind11 REQUIRED)
+find_package(PythonLibs)
+find_package(pybind11)
+if(NOT pybind11_FOUND)
+  return()
+endif()
+if(NOT PythonLibs_FOUND)
+  return()
+endif()
 include_directories(../../)
 
 add_library(python_duckdb duckdb_python.cpp)

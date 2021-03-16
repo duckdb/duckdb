@@ -23,9 +23,10 @@ unique_ptr<ParsedExpression> Transformer::TransformTypeCast(duckdb_libpgquery::P
 	}
 	// transform the expression node
 	auto expression = TransformExpression(root->arg);
+	bool try_cast = root->tryCast;
 
 	// now create a cast operation
-	return make_unique<CastExpression>(target_type, move(expression));
+	return make_unique<CastExpression>(target_type, move(expression), try_cast);
 }
 
 } // namespace duckdb

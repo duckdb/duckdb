@@ -8,12 +8,30 @@
 
 #pragma once
 
+class RefCounter {
+public:
+	uint32_t pn;
+	RefCounter() : pn(1) {
+	}
+	void inc() {
+		++pn;
+	}
+	void dec() {
+		--pn;
+	}
+	uint32_t getPn() const {
+		return pn;
+	}
+	virtual ~RefCounter() {
+	}
+};
+
 namespace duckdb {
 template <typename T>
 class single_thread_ptr {
 public:
-	T *ptr;              // contained pointer
-	uint32_t *ref_count; // reference counter
+	T *ptr;                // contained pointer
+	RefCounter *ref_count; // reference counter
 
 public:
 	// Default constructor, constructs an empty single_thread_ptr.
@@ -24,13 +42,13 @@ public:
 	}
 	// Construct a single_thread_ptr that wraps raw pointer.
 
-	single_thread_ptr(uint32_t *r, T *p) {
+	single_thread_ptr(RefCounter *r, T *p) {
 		ptr = p;
 		ref_count = r;
 	}
 
 	template <class U>
-	single_thread_ptr(uint32_t *r, U *p) {
+	single_thread_ptr(RefCounter *r, U *p) {
 		ptr = p;
 		ref_count = r;
 	}
@@ -40,7 +58,7 @@ public:
 		if (sp.ptr) {
 			ptr = sp.ptr;
 			ref_count = sp.ref_count;
-			++(*ref_count);
+			ref_count->inc();
 		}
 	}
 
@@ -50,7 +68,7 @@ public:
 		if (sp.ptr) {
 			ptr = sp.ptr;
 			ref_count = sp.ref_count;
-			++(*ref_count);
+			ref_count->inc();
 		}
 	}
 
@@ -74,10 +92,12 @@ public:
 
 	void release() {
 		if (ptr && ref_count) {
-			if (--(*ref_count) == 0) {
-				delete ptr;
+			ref_count->dec();
+			if ((ref_count->getPn()) == 0) {
+				delete ref_count;
 			}
 		}
+		ref_count = nullptr;
 		ptr = nullptr;
 	}
 
@@ -104,7 +124,7 @@ public:
 	// Return use count (use count == 0 if single_thread_ptr is empty).
 	long use_count() const noexcept {
 		if (ptr)
-			return *ref_count;
+			return ref_count->getPn();
 		else
 			return 0;
 	}
@@ -121,12 +141,11 @@ public:
 };
 
 template <class T>
-struct _object_and_block {
+struct _object_and_block : public RefCounter {
 	T object;
-	uint32_t pn = 1;
 
 	template <class... Args>
-	explicit _object_and_block(Args &&... args) : object(std::forward<Args>(args)...) {
+	explicit _object_and_block(Args &&...args) : object(std::forward<Args>(args)...) {
 	}
 };
 
@@ -157,8 +176,8 @@ inline bool operator!=(std::nullptr_t, const single_thread_ptr<T> &sp) noexcept 
 }
 
 template <class T, class... Args>
-single_thread_ptr<T> single_thread_make_shared(Args &&... args) {
+single_thread_ptr<T> single_thread_make_shared(Args &&...args) {
 	auto tmp_object = new _object_and_block<T>(std::forward<Args>(args)...);
-	return single_thread_ptr<T>(&tmp_object->pn, &(tmp_object->object));
+	return single_thread_ptr<T>(tmp_object, &(tmp_object->object));
 }
 } // namespace duckdb

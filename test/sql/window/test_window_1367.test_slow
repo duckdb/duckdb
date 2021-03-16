@@ -1,0 +1,25 @@
+# name: test/sql/window/test_window_1367.test_slow
+# description: Performance test from Issue #1367
+# group: [window]
+
+require vector_size 512
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table data(id integer, value integer, primary key(id));
+
+statement ok
+insert into data (id, value)
+    select id, random() * 100000 as value
+    from (select range as id from range(0, 1000000)) ids;
+
+query I
+select count(*)
+from (
+    select value, row_number() over(order by id)
+    from data
+    ) w;
+----
+1000000

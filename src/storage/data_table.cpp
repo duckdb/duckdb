@@ -31,7 +31,7 @@ DataTable::DataTable(DatabaseInstance &db, const string &schema, const string &t
 	// initialize the table with the existing data from disk, if any
 	if (data && !data->table_data[0].empty()) {
 		for (idx_t i = 0; i < types.size(); i++) {
-			columns[i]->statistics = move(data->column_stats[i]);
+			columns[i]->SetStatistics(move(data->column_stats[i]));
 		}
 		// first append all the segments to the set of column segments
 		for (idx_t i = 0; i < types.size(); i++) {
@@ -309,16 +309,8 @@ bool DataTable::CheckZonemap(TableScanState &state, TableFilterSet *table_filter
 	}
 	for (auto &table_filter : table_filters->filters) {
 		for (auto &predicate_constant : table_filter.second) {
-			bool read_segment = true;
-
-			if (!state.column_scans[predicate_constant.column_index].segment_checked) {
-				state.column_scans[predicate_constant.column_index].segment_checked = true;
-				if (!state.column_scans[predicate_constant.column_index].current) {
-					return true;
-				}
-				read_segment =
-				    state.column_scans[predicate_constant.column_index].current->stats.CheckZonemap(predicate_constant);
-			}
+			bool read_segment = columns[predicate_constant.column_index]->CheckZonemap(
+			    state.column_scans[predicate_constant.column_index], predicate_constant);
 			if (!read_segment) {
 				//! We can skip this partition
 				idx_t vectors_to_skip =
@@ -639,7 +631,7 @@ void DataTable::ScanTableSegment(idx_t row_start, idx_t count, const std::functi
 
 	while (true) {
 		idx_t current_row = state.current_row;
-		CreateIndexScan(state, column_ids, chunk);
+		CreateIndexScan(state, column_ids, chunk, true);
 		if (chunk.size() == 0) {
 			break;
 		}
@@ -963,15 +955,16 @@ void DataTable::InitializeCreateIndexScan(CreateIndexScanState &state, const vec
 	InitializeScan(state, column_ids);
 }
 
-void DataTable::CreateIndexScan(CreateIndexScanState &state, const vector<column_t> &column_ids, DataChunk &result) {
+void DataTable::CreateIndexScan(CreateIndexScanState &state, const vector<column_t> &column_ids, DataChunk &result,
+                                bool allow_pending_updates) {
 	// scan the persistent segments
-	if (ScanCreateIndex(state, column_ids, result, state.current_row, state.max_row)) {
+	if (ScanCreateIndex(state, column_ids, result, state.current_row, state.max_row, allow_pending_updates)) {
 		return;
 	}
 }
 
 bool DataTable::ScanCreateIndex(CreateIndexScanState &state, const vector<column_t> &column_ids, DataChunk &result,
-                                idx_t &current_row, idx_t max_row) {
+                                idx_t &current_row, idx_t max_row, bool allow_pending_updates) {
 	if (current_row >= max_row) {
 		return false;
 	}
@@ -988,7 +981,7 @@ bool DataTable::ScanCreateIndex(CreateIndexScanState &state, const vector<column
 			result.data[i].Sequence(current_row, 1);
 		} else {
 			// scan actual base column
-			columns[column]->IndexScan(state.column_scans[i], result.data[i]);
+			columns[column]->IndexScan(state.column_scans[i], result.data[i], allow_pending_updates);
 		}
 	}
 	result.SetCardinality(count);
@@ -1048,7 +1041,7 @@ unique_ptr<BaseStatistics> DataTable::GetStatistics(ClientContext &context, colu
 		return nullptr;
 	}
 	// FIXME: potentially merge with transaction local shtuff
-	return columns[column_id]->statistics->Copy();
+	return columns[column_id]->GetStatistics();
 }
 
 //===--------------------------------------------------------------------===//
@@ -1073,9 +1066,7 @@ void DataTable::CommitDropColumn(idx_t index) {
 	while (segment) {
 		if (segment->segment_type == ColumnSegmentType::PERSISTENT) {
 			auto &persistent = (PersistentSegment &)*segment;
-			if (!persistent.HasChanges()) {
-				block_manager.MarkBlockAsModified(persistent.block_id);
-			}
+			block_manager.MarkBlockAsModified(persistent.block_id);
 		}
 		segment = (ColumnSegment *)segment->next.get();
 	}

@@ -134,9 +134,6 @@ void ExpressionExecutor::Execute(Expression &expr, ExpressionState *state, const
 	if (count == 0) {
 		return;
 	}
-	if (current_count >= next_sample) {
-		state->profiler.Start();
-	}
 	switch (expr.expression_class) {
 	case ExpressionClass::BOUND_BETWEEN:
 		Execute((BoundBetweenExpression &)expr, state, sel, count, result);
@@ -172,10 +169,6 @@ void ExpressionExecutor::Execute(Expression &expr, ExpressionState *state, const
 		throw NotImplementedException("Attempting to execute expression of unknown type!");
 	}
 	Verify(expr, result, count);
-	if (current_count >= next_sample) {
-		state->profiler.End();
-		state->time += state->profiler.Elapsed();
-	}
 }
 
 idx_t ExpressionExecutor::Select(Expression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
