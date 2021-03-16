@@ -154,7 +154,7 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 				col_size = MinValue(str_stats.max_string_length, StringStatistics::MAX_STRING_MINMAX_SIZE);
 			}
 			// null handling
-            has_null.push_back(expr.stats->has_null);
+			has_null.push_back(expr.stats->has_null);
 		} else {
 			if (!TypeIsConstantSize(physical_type)) {
 				switch (physical_type) {
@@ -165,7 +165,7 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 					break;
 				}
 			}
-            has_null.push_back(true);
+			has_null.push_back(true);
 		}
 
 		// increment entry size with the column size
@@ -502,7 +502,7 @@ static void BreakTies(BufferManager &buffer_manager, OrderGlobalState &global_st
                       const idx_t &count, const idx_t &tie_col, const SortingState &sorting_state) {
 	bool any_ties = false;
 	for (idx_t i = 0; i < count; i++) {
-        any_ties = any_ties || ties[i];
+		any_ties = any_ties || ties[i];
 	}
 	if (!any_ties) {
 		return;

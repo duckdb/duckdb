@@ -88,8 +88,8 @@ private:
 	                                   data_ptr_t key_locations[], const bool desc, const bool has_null,
 	                                   const bool nulls_first, const idx_t prefix_len);
 
-    //! Whether the system is little endian
-    bool is_little_endian;
+	//! Whether the system is little endian
+	bool is_little_endian;
 };
 
 template <>

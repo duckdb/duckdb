@@ -261,7 +261,8 @@ void RowChunk::SerializeStringVectorSortable(VectorData &vdata, const SelectionV
 }
 
 void RowChunk::SerializeVectorSortable(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count,
-                                       data_ptr_t key_locations[], bool desc, bool has_null, bool nulls_first, idx_t prefix_len) {
+                                       data_ptr_t key_locations[], bool desc, bool has_null, bool nulls_first,
+                                       idx_t prefix_len) {
 	VectorData vdata;
 	v.Orrify(vcount, vdata);
 	switch (v.GetType().InternalType()) {
