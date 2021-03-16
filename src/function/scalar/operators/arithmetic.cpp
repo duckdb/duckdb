@@ -12,7 +12,6 @@
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/time.hpp"
-#include "duckdb/common/types/timestamp.hpp"
 
 namespace duckdb {
 
