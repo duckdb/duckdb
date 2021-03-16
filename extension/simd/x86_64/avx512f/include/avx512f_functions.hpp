@@ -4,6 +4,6 @@ namespace duckdb {
 class AVX512fFunctions {
 public:
 	static ScalarFunctionSet GetFunctions();
-    static ScalarFunctionSet GetAddFunctions();
+	static ScalarFunctionSet GetAddFunctions();
 };
-}
+} // namespace duckdb

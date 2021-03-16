@@ -58,5 +58,4 @@ struct SET_ARCH(BitwiseNotFun) {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-
 } // namespace duckdb

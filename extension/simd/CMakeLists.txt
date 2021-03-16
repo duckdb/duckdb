@@ -3,7 +3,8 @@ cmake_minimum_required(VERSION 2.8.12)
 project(SIMDExtension)
 
 # Detect cpu architecture
-set(detect_arch "
+set(detect_arch
+    "
 #if defined(__arm__)
     #error arm
 #elif defined(__x86_64) || defined(__x86_64__) || defined(__amd64) || defined(_M_X64)
@@ -14,38 +15,32 @@ set(detect_arch "
 
 set(ARCH "FALLBACK")
 file(WRITE "${CMAKE_BINARY_DIR}/arch.cpp" "${detect_arch}")
-try_run(run_result
-        compile_result
-        "${CMAKE_BINARY_DIR}"
-        "${CMAKE_BINARY_DIR}/arch.cpp"
-        COMPILE_OUTPUT_VARIABLE ARCH
-        )
+try_run(run_result compile_result "${CMAKE_BINARY_DIR}"
+        "${CMAKE_BINARY_DIR}/arch.cpp" COMPILE_OUTPUT_VARIABLE ARCH)
 
 string(REGEX MATCH "error: ([a-zA-Z0-9_]+)" ARCH "${ARCH}")
 string(REPLACE "error: " "" ARCH "${ARCH}")
-
-
 
 message(STATUS ${SIMD_OBJECT_FILES})
 message("before")
 
 if(ARCH STREQUAL "x86_64")
-    add_compile_definitions(DUCKDB_X86_64)
-    add_subdirectory(x86_64/avx2)
-    add_subdirectory(x86_64/avx512f)
+  add_compile_definitions(DUCKDB_X86_64)
+  add_subdirectory(x86_64/avx2)
+  add_subdirectory(x86_64/avx512f)
 elseif(ARCH STREQUAL "arm")
-    add_compile_definitions(DUCKDB_ARM)
+  add_compile_definitions(DUCKDB_ARM)
 else()
-    add_compile_definitions(DUCKDB_FALLBACK)
+  add_compile_definitions(DUCKDB_FALLBACK)
 endif()
 
 message(STATUS ${SIMD_OBJECT_FILES})
 message("after")
 
-
 include_directories(include)
 include_directories(x86_64/avx2/include)
 include_directories(x86_64/avx512f/include)
 
-
-add_library(simd_extension STATIC simd-extension.cpp cpu_feature.cpp cpu_info.cpp cpu_arch.cpp ${SIMD_OBJECT_FILES})
+add_library(
+  simd_extension STATIC simd-extension.cpp cpu_feature.cpp cpu_info.cpp
+                        cpu_arch.cpp ${SIMD_OBJECT_FILES})

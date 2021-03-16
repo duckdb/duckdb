@@ -284,63 +284,63 @@ void SET_ARCH(AddFun)::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(functions);
 }
 
-ScalarFunctionSet SET_ARCH_FRONT(Functions)::GetAddFunctions(){
-    ScalarFunctionSet functions("+");
-    // binary add function adds two numbers together
-    for (auto &type : LogicalType::NUMERIC) {
-        if (type.id() == LogicalTypeId::DECIMAL) {
-            functions.AddFunction(ScalarFunction({type, type}, type, nullptr, false,
-                                                 SET_ARCH(BindDecimalAddSubtract) < SET_ARCH(AddOperator),
-                                                     SET_ARCH(DecimalAddOverflowCheck) >));
-        } else if (TypeIsIntegral(type.InternalType()) && type.id() != LogicalTypeId::HUGEINT) {
-            functions.AddFunction(ScalarFunction(
-                {type, type}, type, GetScalarIntegerFunction<AddOperatorOverflowCheck>(type.InternalType()), false,
-                nullptr, nullptr,
-                PropagateNumericStats<SET_ARCH(TryAddOperator), AddPropagateStatistics, SET_ARCH(AddOperator)>));
-        } else {
-            functions.AddFunction(ScalarFunction({type, type}, type,
-                                                 GetScalarBinaryFunction<SET_ARCH(AddOperator)>(type.InternalType())));
-        }
-    }
-    // we can add integers to dates
-    functions.AddFunction(ScalarFunction({LogicalType::DATE, LogicalType::INTEGER}, LogicalType::DATE,
-                                         GetScalarBinaryFunction<SET_ARCH(AddOperator)>(PhysicalType::INT32)));
-    functions.AddFunction(ScalarFunction({LogicalType::INTEGER, LogicalType::DATE}, LogicalType::DATE,
-                                         GetScalarBinaryFunction<SET_ARCH(AddOperator)>(PhysicalType::INT32)));
-    // we can add intervals together
-    functions.AddFunction(
-        ScalarFunction({LogicalType::INTERVAL, LogicalType::INTERVAL}, LogicalType::INTERVAL,
-                       ScalarFunction::BinaryFunction<interval_t, interval_t, interval_t, SET_ARCH(AddOperator)>));
-    // we can add intervals to dates/times/timestamps
-    functions.AddFunction(
-        ScalarFunction({LogicalType::DATE, LogicalType::INTERVAL}, LogicalType::DATE,
-                       ScalarFunction::BinaryFunction<date_t, interval_t, date_t, SET_ARCH(AddOperator)>));
-    functions.AddFunction(
-        ScalarFunction({LogicalType::INTERVAL, LogicalType::DATE}, LogicalType::DATE,
-                       ScalarFunction::BinaryFunction<interval_t, date_t, date_t, SET_ARCH(AddOperator)>));
+ScalarFunctionSet SET_ARCH_FRONT(Functions)::GetAddFunctions() {
+	ScalarFunctionSet functions("+");
+	// binary add function adds two numbers together
+	for (auto &type : LogicalType::NUMERIC) {
+		if (type.id() == LogicalTypeId::DECIMAL) {
+			functions.AddFunction(ScalarFunction({type, type}, type, nullptr, false,
+			                                     SET_ARCH(BindDecimalAddSubtract) < SET_ARCH(AddOperator),
+			                                     SET_ARCH(DecimalAddOverflowCheck) >));
+		} else if (TypeIsIntegral(type.InternalType()) && type.id() != LogicalTypeId::HUGEINT) {
+			functions.AddFunction(ScalarFunction(
+			    {type, type}, type, GetScalarIntegerFunction<AddOperatorOverflowCheck>(type.InternalType()), false,
+			    nullptr, nullptr,
+			    PropagateNumericStats<SET_ARCH(TryAddOperator), AddPropagateStatistics, SET_ARCH(AddOperator)>));
+		} else {
+			functions.AddFunction(ScalarFunction({type, type}, type,
+			                                     GetScalarBinaryFunction<SET_ARCH(AddOperator)>(type.InternalType())));
+		}
+	}
+	// we can add integers to dates
+	functions.AddFunction(ScalarFunction({LogicalType::DATE, LogicalType::INTEGER}, LogicalType::DATE,
+	                                     GetScalarBinaryFunction<SET_ARCH(AddOperator)>(PhysicalType::INT32)));
+	functions.AddFunction(ScalarFunction({LogicalType::INTEGER, LogicalType::DATE}, LogicalType::DATE,
+	                                     GetScalarBinaryFunction<SET_ARCH(AddOperator)>(PhysicalType::INT32)));
+	// we can add intervals together
+	functions.AddFunction(
+	    ScalarFunction({LogicalType::INTERVAL, LogicalType::INTERVAL}, LogicalType::INTERVAL,
+	                   ScalarFunction::BinaryFunction<interval_t, interval_t, interval_t, SET_ARCH(AddOperator)>));
+	// we can add intervals to dates/times/timestamps
+	functions.AddFunction(
+	    ScalarFunction({LogicalType::DATE, LogicalType::INTERVAL}, LogicalType::DATE,
+	                   ScalarFunction::BinaryFunction<date_t, interval_t, date_t, SET_ARCH(AddOperator)>));
+	functions.AddFunction(
+	    ScalarFunction({LogicalType::INTERVAL, LogicalType::DATE}, LogicalType::DATE,
+	                   ScalarFunction::BinaryFunction<interval_t, date_t, date_t, SET_ARCH(AddOperator)>));
 
-    functions.AddFunction(
-        ScalarFunction({LogicalType::TIME, LogicalType::INTERVAL}, LogicalType::TIME,
-                       ScalarFunction::BinaryFunction<dtime_t, interval_t, dtime_t, SET_ARCH(AddTimeOperator)>));
-    functions.AddFunction(
-        ScalarFunction({LogicalType::INTERVAL, LogicalType::TIME}, LogicalType::TIME,
-                       ScalarFunction::BinaryFunction<interval_t, dtime_t, dtime_t, SET_ARCH(AddTimeOperator)>));
+	functions.AddFunction(
+	    ScalarFunction({LogicalType::TIME, LogicalType::INTERVAL}, LogicalType::TIME,
+	                   ScalarFunction::BinaryFunction<dtime_t, interval_t, dtime_t, SET_ARCH(AddTimeOperator)>));
+	functions.AddFunction(
+	    ScalarFunction({LogicalType::INTERVAL, LogicalType::TIME}, LogicalType::TIME,
+	                   ScalarFunction::BinaryFunction<interval_t, dtime_t, dtime_t, SET_ARCH(AddTimeOperator)>));
 
-    functions.AddFunction(
-        ScalarFunction({LogicalType::TIMESTAMP, LogicalType::INTERVAL}, LogicalType::TIMESTAMP,
-                       ScalarFunction::BinaryFunction<timestamp_t, interval_t, timestamp_t, SET_ARCH(AddOperator)>));
-    functions.AddFunction(
-        ScalarFunction({LogicalType::INTERVAL, LogicalType::TIMESTAMP}, LogicalType::TIMESTAMP,
-                       ScalarFunction::BinaryFunction<interval_t, timestamp_t, timestamp_t, SET_ARCH(AddOperator)>));
-    // unary add function is a nop, but only exists for numeric types
-    for (auto &type : LogicalType::NUMERIC) {
-        if (type.id() == LogicalTypeId::DECIMAL) {
-            functions.AddFunction(
-                ScalarFunction({type}, type, ScalarFunction::NopFunction, false, SET_ARCH(NopDecimalBind)));
-        } else {
-            functions.AddFunction(ScalarFunction({type}, type, ScalarFunction::NopFunction));
-        }
-    }
+	functions.AddFunction(
+	    ScalarFunction({LogicalType::TIMESTAMP, LogicalType::INTERVAL}, LogicalType::TIMESTAMP,
+	                   ScalarFunction::BinaryFunction<timestamp_t, interval_t, timestamp_t, SET_ARCH(AddOperator)>));
+	functions.AddFunction(
+	    ScalarFunction({LogicalType::INTERVAL, LogicalType::TIMESTAMP}, LogicalType::TIMESTAMP,
+	                   ScalarFunction::BinaryFunction<interval_t, timestamp_t, timestamp_t, SET_ARCH(AddOperator)>));
+	// unary add function is a nop, but only exists for numeric types
+	for (auto &type : LogicalType::NUMERIC) {
+		if (type.id() == LogicalTypeId::DECIMAL) {
+			functions.AddFunction(
+			    ScalarFunction({type}, type, ScalarFunction::NopFunction, false, SET_ARCH(NopDecimalBind)));
+		} else {
+			functions.AddFunction(ScalarFunction({type}, type, ScalarFunction::NopFunction));
+		}
+	}
 	return functions;
 }
 

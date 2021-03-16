@@ -70,46 +70,40 @@ public:
 			// parquet extension required but not build: skip this test
 			return ExtensionLoadResult::NOT_LOADED;
 #endif
-		}
-		else if (extension == "icu") {
+		} else if (extension == "icu") {
 #ifdef BUILD_ICU_EXTENSION
 			db.LoadExtension<ICUExtension>();
 #else
 			// icu extension required but not build: skip this test
 			return ExtensionLoadResult::NOT_LOADED;
 #endif
-		}
-		else if (extension == "tpch") {
+		} else if (extension == "tpch") {
 #ifdef BUILD_TPCH_EXTENSION
 			db.LoadExtension<TPCHExtension>();
 #else
 			// icu extension required but not build: skip this test
 			return ExtensionLoadResult::NOT_LOADED;
 #endif
-		}
-		else if (extension == "fts") {
+		} else if (extension == "fts") {
 #ifdef BUILD_FTS_EXTENSION
 			db.LoadExtension<FTSExtension>();
 #else
 			// fts extension required but not build: skip this test
 			return ExtensionLoadResult::NOT_LOADED;
 #endif
-		}
-		else if (extension == "httpfs") {
+		} else if (extension == "httpfs") {
 #ifdef BUILD_HTTPFS_EXTENSION
 			db.LoadExtension<HTTPFsExtension>();
 #else
 			return ExtensionLoadResult::NOT_LOADED;
 #endif
-        }
-		else if (extension == "simd") {
+		} else if (extension == "simd") {
 #ifdef BUILD_SIMD_EXTENSION
-            db.LoadExtension<SIMDExtension>();
+			db.LoadExtension<SIMDExtension>();
 #else
-            return ExtensionLoadResult::NOT_LOADED;
+			return ExtensionLoadResult::NOT_LOADED;
 #endif
-		}
-		else {
+		} else {
 			// unknown extension
 			return ExtensionLoadResult::EXTENSION_UNKNOWN;
 		}

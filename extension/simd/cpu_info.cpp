@@ -147,29 +147,29 @@ void CpuInfo::SetBestFeature(CPUFeature best_feature) {
 }
 
 void CpuInfo::SetFeature(ClientContext &client_context, CPUFeature feature) {
-    Connection con(*client_context.db);
-    con.BeginTransaction();
-    auto &catalog = Catalog::GetCatalog(*con.context);
+	Connection con(*client_context.db);
+	con.BeginTransaction();
+	auto &catalog = Catalog::GetCatalog(*con.context);
 
-    SetBestFeature(feature);
+	SetBestFeature(feature);
 	switch (feature) {
-    case CPUFeature::DUCKDB_CPU_FEATURE_X86_AVX2: {
-    }
-    case CPUFeature::DUCKDB_CPU_FEATURE_X86_AVX512F:
-        AVX512fFunctions::GetFunctions();
-        break;
-    default:
-        CreateScalarFunctionInfo info(Functions::GetAddFunctions());
-        DropInfo dropInfo;
-        dropInfo.name = "+";
-        dropInfo.schema = "main";
-        dropInfo.type = CatalogType::SCALAR_FUNCTION_ENTRY;
-        catalog.DropEntry(*con.context, &dropInfo);
-        catalog.CreateFunction(*con.context, &info);
-        break;
-    }
+	case CPUFeature::DUCKDB_CPU_FEATURE_X86_AVX2: {
+	}
+	case CPUFeature::DUCKDB_CPU_FEATURE_X86_AVX512F:
+		AVX512fFunctions::GetFunctions();
+		break;
+	default:
+		CreateScalarFunctionInfo info(Functions::GetAddFunctions());
+		DropInfo dropInfo;
+		dropInfo.name = "+";
+		dropInfo.schema = "main";
+		dropInfo.type = CatalogType::SCALAR_FUNCTION_ENTRY;
+		catalog.DropEntry(*con.context, &dropInfo);
+		catalog.CreateFunction(*con.context, &info);
+		break;
+	}
 
-    con.Commit();
+	con.Commit();
 }
 
 } // namespace duckdb

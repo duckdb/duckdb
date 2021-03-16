@@ -44,7 +44,7 @@ void BuiltinFunctions::Initialize() {
 	RegisterStringFunctions();
 	RegisterNestedFunctions();
 	RegisterTrigonometricsFunctions();
-    RegisterOperators();
+	RegisterOperators();
 	RegisterPragmaFunctions();
 
 	// initialize collations

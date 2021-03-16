@@ -1,9 +1,9 @@
 #include "duckdb/function/function_set.hpp"
 namespace duckdb {
-class Functions{
+class Functions {
 public:
-    static ScalarFunctionSet GetFunctions();
-    static ScalarFunctionSet GetAddFunctions();
+	static ScalarFunctionSet GetFunctions();
+	static ScalarFunctionSet GetAddFunctions();
 };
 
-}
+} // namespace duckdb

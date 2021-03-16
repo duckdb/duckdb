@@ -15,4 +15,4 @@ string ArchitectureToString(Architecture arch) {
 		return "UNDEFINED";
 	}
 }
-}
+} // namespace duckdb
