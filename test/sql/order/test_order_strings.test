@@ -1,0 +1,47 @@
+# name: test/sql/order/test_order_strings.test
+# description: Test ORDER BY keyword (variable size sorting/payload columns)
+# group: [order]
+
+statement ok
+PRAGMA threads=1
+
+statement ok
+create table test1 (s varchar);
+
+# strings longer than the initial 8 character prefix
+statement ok
+insert into test1 values ('2'), ('300000003'), ('1'), ('10'), ('300000002'), ('300000001');
+
+query I
+select * from test1 order by s;
+----
+1
+10
+2
+300000001
+300000002
+300000003
+
+# sort on 10000 strings
+statement ok
+CREATE TABLE test2 AS (SELECT cast(range as varchar) r, random() rand FROM range(10000))
+
+statement ok
+CREATE TABLE test2_1 AS (SELECT * FROM test2 ORDER BY r)
+
+query T
+SELECT count(*) FROM test2_1
+----
+10000
+
+# string payload
+statement ok
+CREATE TABLE test3 AS (SELECT cast(range as varchar) r, random() rand FROM range(10000))
+
+statement ok
+CREATE TABLE test3_1 AS (SELECT * FROM test3 ORDER BY rand)
+
+query T
+SELECT count(*) FROM test3_1
+----
+10000

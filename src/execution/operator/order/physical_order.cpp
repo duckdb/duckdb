@@ -108,7 +108,7 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 	vector<BaseStatistics *> stats;
 	vector<bool> has_null;
 	vector<bool> constant_size;
-	vector<idx_t> size_in_bytes;
+	vector<idx_t> col_sizes;
 	for (auto &order : orders) {
 		// global state ExpressionExecutor
 		auto &expr = *order.expression;
@@ -130,7 +130,6 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 		idx_t col_size = GetTypeIdSize(expr.return_type.InternalType());
 		if (expr.stats) {
 			// TODO: test this statistics thing
-			has_null.push_back(expr.stats->has_null);
 			if (expr.return_type.IsNumeric()) {
 				auto num_stats = (NumericStatistics &)*expr.stats;
 				switch (physical_type) {
@@ -154,8 +153,9 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 				auto str_stats = (StringStatistics &)*expr.stats;
 				col_size = MinValue(str_stats.max_string_length, StringStatistics::MAX_STRING_MINMAX_SIZE);
 			}
+			// null handling
+            has_null.push_back(expr.stats->has_null);
 		} else {
-			has_null.push_back(true);
 			if (!TypeIsConstantSize(physical_type)) {
 				switch (physical_type) {
 				case PhysicalType::VARCHAR:
@@ -165,14 +165,15 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 					break;
 				}
 			}
+            has_null.push_back(true);
 		}
 
 		// increment entry size with the column size
 		if (has_null.back()) {
-			entry_size++;
+			col_size++;
 		}
 		entry_size += col_size;
-		size_in_bytes.push_back(col_size);
+		col_sizes.push_back(col_size);
 
 		// create RowChunks for variable size sorting columns in order to resolve
 		if (TypeIsConstantSize(physical_type)) {
@@ -190,7 +191,7 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 	entry_size += sizeof(idx_t);
 
 	state->sorting_state = unique_ptr<SortingState>(new SortingState {
-	    entry_size, order_types, order_by_null_types, types, stats, has_null, constant_size, size_in_bytes});
+	    entry_size, order_types, order_by_null_types, types, stats, has_null, constant_size, col_sizes});
 	idx_t vectors_per_block =
 	    (Storage::BLOCK_ALLOC_SIZE / entry_size + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE;
 	state->sorting_block = make_unique<RowChunk>(buffer_manager, vectors_per_block * STANDARD_VECTOR_SIZE, entry_size);
@@ -306,12 +307,12 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &gstate_
 		bool has_null = sorting_state.HAS_NULL[sort_col];
 		bool nulls_first = sorting_state.ORDER_BY_NULL_TYPES[sort_col] == OrderByNullType::NULLS_FIRST;
 		bool desc = sorting_state.ORDER_TYPES[sort_col] == OrderType::DESCENDING;
-		idx_t size_in_bytes = sorting_state.COL_SIZE[sort_col];
+		idx_t size_in_bytes = StringStatistics::MAX_STRING_MINMAX_SIZE; // TODO: compute this
 		lstate.sorting_block->SerializeVectorSortable(sort.data[sort_col], sort.size(), *lstate.sel_ptr, sort.size(),
 		                                              lstate.key_locations, desc, has_null, nulls_first, size_in_bytes);
 	}
 
-	// also serialize variable size columns in full
+	// also fully serialize variable size sorting columns
 	for (idx_t sort_col = 0; sort_col < sort.data.size(); sort_col++) {
 		if (TypeIsConstantSize(sort.data[sort_col].GetType().InternalType())) {
 			continue;
@@ -319,10 +320,16 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &gstate_
 		auto &var_sizes = *lstate.var_sorting_sizes[sort_col];
 		auto &var_block = *lstate.var_sorting_blocks[sort_col];
 		// compute entry sizes
-		std::fill_n(lstate.entry_sizes, input.size(), 0);
+		switch (sort.data[sort_col].GetType().InternalType()) {
+		case PhysicalType::VARCHAR:
+			std::fill_n(lstate.entry_sizes, input.size(), (idx_t)string_t::PREFIX_LENGTH);
+			break;
+		default:
+			throw NotImplementedException("Sorting variable length type");
+		}
 		ComputeEntrySizes(sort.data[sort_col], sort.size(), lstate.entry_sizes);
 		// build and serialize entry sizes
-		var_sizes.Build(sort.size(), lstate.key_locations, lstate.entry_sizes);
+		var_sizes.Build(sort.size(), lstate.key_locations, nullptr);
 		for (idx_t i = 0; i < input.size(); i++) {
 			Store<idx_t>(lstate.entry_sizes[i], lstate.key_locations[i]);
 		}
@@ -427,29 +434,77 @@ static void RadixSort(BufferManager &buffer_manager, data_ptr_t dataptr, const i
 	}
 }
 
-static unique_ptr<bool[]> ComputeTiesConstant(data_ptr_t dataptr, const idx_t &count, const idx_t &tie_col,
-                                              const SortingState &sorting_state) {
-	auto ties = unique_ptr<bool[]>(new bool[count]);
-	idx_t tie_size =
-	    std::accumulate(sorting_state.COL_SIZE.begin(), sorting_state.COL_SIZE.begin() + tie_col + 1, (idx_t)0);
-	for (idx_t i = 0; i < count - 1; i++) {
+static void ComputeTies(data_ptr_t dataptr, const idx_t &start, const idx_t &end, const idx_t &tie_col, bool ties[],
+                        const SortingState &sorting_state) {
+	idx_t tie_size = 0;
+	for (idx_t col_idx = 0; col_idx <= tie_col; col_idx++) {
+		tie_size += sorting_state.COL_SIZE[col_idx];
+	}
+	for (idx_t i = start; i < end - 1; i++) {
 		ties[i] = memcmp(dataptr, dataptr + sorting_state.ENTRY_SIZE, tie_size) == 0;
 		dataptr += sorting_state.ENTRY_SIZE;
 	}
-	return ties;
+	ties[end - 1] = false;
 }
 
-static void BreakStringTies(data_ptr_t dataptr, bool ties[], const idx_t &start, const idx_t &end,
-                            data_ptr_t var_dataptr, data_ptr_t sizes_ptr, const SortingState &sorting_state) {
-	// TODO: sort i to j (not including j)
-//	auto indices = unique_ptr<idx_t[]>
-	// TODO: determine if there are still ties
+static void BreakStringTies(const data_ptr_t dataptr, const idx_t &start, const idx_t &end, const idx_t &tie_col,
+                            bool ties[], data_ptr_t var_dataptr, data_ptr_t sizes_ptr,
+                            const SortingState &sorting_state) {
+	auto entry_ptrs = unique_ptr<data_ptr_t[]>(new data_ptr_t[end - start]);
+	for (idx_t i = start; i < end; i++) {
+		entry_ptrs[i - start] = dataptr + i * sorting_state.ENTRY_SIZE;
+	}
+
+	// slow pointer-based sorting
+	const int order = sorting_state.ORDER_TYPES[tie_col] == OrderType::DESCENDING ? -1 : 1;
+	idx_t *sizes = (idx_t *)sizes_ptr;
+	BlockQuickSort::Sort(entry_ptrs.get(), entry_ptrs.get() + (end - start),
+	                     [&var_dataptr, &sizes, &order, &sorting_state](const data_ptr_t l, const data_ptr_t r) {
+		                     idx_t left_idx = Load<idx_t>(l + sorting_state.ENTRY_SIZE - sizeof(idx_t));
+		                     idx_t right_idx = Load<idx_t>(r + sorting_state.ENTRY_SIZE - sizeof(idx_t));
+		                     data_ptr_t left = var_dataptr + sizes[left_idx];
+		                     data_ptr_t right = var_dataptr + sizes[right_idx];
+		                     return order * strncmp((const char *)left + sizeof(idx_t),
+		                                            (const char *)right + sizeof(idx_t),
+		                                            MinValue(Load<idx_t>(left), Load<idx_t>(right)));
+	                     });
+
+	// re-order
+	auto temp = unique_ptr<data_t[]>(new data_t[(end - start) * sorting_state.ENTRY_SIZE]);
+	data_ptr_t temp_ptr = temp.get();
+	for (idx_t i = 0; i < end - start; i++) {
+		memcpy(temp_ptr, entry_ptrs[i], sorting_state.ENTRY_SIZE);
+		temp_ptr += sorting_state.ENTRY_SIZE;
+	}
+	memcpy(dataptr + start * sorting_state.ENTRY_SIZE, temp.get(), (end - start) * sorting_state.ENTRY_SIZE);
+
+	// determine if there are still ties (if needed)
+	if (tie_col < sorting_state.ORDER_TYPES.size() - 1) {
+		idx_t current_idx = Load<idx_t>(dataptr + (start + sorting_state.ENTRY_SIZE) - sizeof(idx_t));
+		idx_t current_size = Load<idx_t>(var_dataptr + sizes[current_idx]);
+		idx_t next_idx, next_size;
+		for (idx_t i = start; i < end - 1; i++) {
+			next_idx = Load<idx_t>(dataptr + (i + sorting_state.ENTRY_SIZE) - sizeof(idx_t));
+			next_size = Load<idx_t>(var_dataptr + sizes[next_idx]);
+			if (current_size == next_size) {
+				ties[i] = memcmp(var_dataptr + sizes[current_idx] + sizeof(idx_t),
+				                 var_dataptr + sizes[next_idx] + sizeof(idx_t), current_size) == 0;
+			} else {
+				ties[i] = false;
+			}
+			current_idx = next_idx;
+			current_size = next_size;
+		}
+	}
 }
 
 static void BreakTies(BufferManager &buffer_manager, OrderGlobalState &global_state, bool ties[], data_ptr_t dataptr,
                       const idx_t &count, const idx_t &tie_col, const SortingState &sorting_state) {
-	if (std::none_of(ties, ties + count, [](bool x) { return x; })) {
-		// no ties
+	bool any_ties = false;
+	for (idx_t i = 0; i < count; i++) {
+        any_ties = any_ties || ties[i];
+	}
+	if (!any_ties) {
 		return;
 	}
 
@@ -470,12 +525,12 @@ static void BreakTies(BufferManager &buffer_manager, OrderGlobalState &global_st
 		}
 		switch (sorting_state.TYPES[tie_col].InternalType()) {
 		case PhysicalType::VARCHAR:
-			BreakStringTies();
+			BreakStringTies(dataptr, i, j + 1, tie_col, ties, var_dataptr, sizes_ptr, sorting_state);
 			break;
 		default:
 			throw NotImplementedException("Sorting of this variable size type");
 		}
-		i = j - 1;
+		i = j;
 	}
 }
 
@@ -495,14 +550,16 @@ static void SortInMemory(Pipeline &pipeline, ClientContext &context, OrderGlobal
 		idx_dataptr += sorting_state.ENTRY_SIZE;
 	}
 
-	if (sorting_state.CONSTANT_SIZE.size() == 1 ||
-	    std::all_of(sorting_state.CONSTANT_SIZE.begin(), sorting_state.CONSTANT_SIZE.end() - 1,
-	                [](bool x) { return x; })) {
+	const idx_t num_cols = sorting_state.CONSTANT_SIZE.size();
+	if (num_cols == 1 || std::all_of(sorting_state.CONSTANT_SIZE.begin(), sorting_state.CONSTANT_SIZE.end() - 1,
+	                                 [](bool x) { return x; })) {
 		// if the first n - 1 columns are all constant size, we can radix sort on all columns
 		RadixSort(buffer_manager, dataptr, block.count, 0, sorting_size, sorting_state);
-		if (!sorting_state.CONSTANT_SIZE[sorting_state.CONSTANT_SIZE.size() - 1]) {
+		if (!sorting_state.CONSTANT_SIZE[num_cols - 1]) {
 			// if the final column is not constant size, we have to tie-break
-			// TODO: tie-break on the last column
+			auto ties = unique_ptr<bool[]>(new bool[block.count]);
+			ComputeTies(dataptr, 0, block.count, num_cols - 1, ties.get(), sorting_state);
+			BreakTies(buffer_manager, state, ties.get(), dataptr, block.count, num_cols - 1, sorting_state);
 		}
 	} else {
 		idx_t col_offset = 0;
@@ -604,20 +661,20 @@ void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 			continue;
 		}
 		auto &row_chunk = *state.var_sorting_blocks[i];
-		if (row_chunk.blocks.size() > 1) {
-			idx_t var_block_size = 0;
-			for (auto &block : row_chunk.blocks) {
-				var_block_size += block.byte_offset;
-			}
-			// variable size data
-			idx_t capacity = MaxValue(Storage::BLOCK_ALLOC_SIZE / row_chunk.entry_size + 1,
-			                          var_block_size / row_chunk.entry_size + 1);
-			ConcatenateBlocks(state.buffer_manager, row_chunk, capacity, true);
-			// offsets
-			auto &sizes_chunk = *state.var_sorting_sizes[i];
-			capacity = MaxValue(Storage::BLOCK_ALLOC_SIZE / sizes_chunk.entry_size + 1, sizes_chunk.count + 1);
-			SizesToOffsets(state.buffer_manager, sizes_chunk, capacity);
+		idx_t var_block_size = 0;
+		for (auto &block : row_chunk.blocks) {
+			var_block_size += block.byte_offset;
 		}
+		// variable size data
+		idx_t capacity =
+		    MaxValue(Storage::BLOCK_ALLOC_SIZE / row_chunk.entry_size + 1, var_block_size / row_chunk.entry_size + 1);
+		if (row_chunk.blocks.size() > 1) {
+			ConcatenateBlocks(state.buffer_manager, row_chunk, capacity, true);
+		}
+		// offsets
+		auto &sizes_chunk = *state.var_sorting_sizes[i];
+		capacity = MaxValue(Storage::BLOCK_ALLOC_SIZE / sizes_chunk.entry_size + 1, sizes_chunk.count + 1);
+		SizesToOffsets(state.buffer_manager, sizes_chunk, capacity);
 	}
 
 	if (state.payload_block->blocks.size() > 1) {
