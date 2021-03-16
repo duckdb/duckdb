@@ -138,7 +138,7 @@ struct ChunkIterator {
 
 private:
 	ChunkCollection &collection;
-	const idx_t col_idx;
+	idx_t col_idx;
 	idx_t chunk_begin;
 	idx_t chunk_end;
 	idx_t ch_idx;
