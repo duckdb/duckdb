@@ -38,16 +38,6 @@ void TransientSegment::Scan(ColumnScanState &state, idx_t vector_index, Vector &
 	data->Scan(state, vector_index, result);
 }
 
-void TransientSegment::FilterScan(ColumnScanState &state, ValidityMask &mask, Vector &result, SelectionVector &sel,
-                                  idx_t &approved_tuple_count) {
-	data->FilterScan(state, mask, result, sel, approved_tuple_count);
-}
-
-void TransientSegment::Select(ColumnScanState &state, ValidityMask &mask, Vector &result, SelectionVector &sel, idx_t &approved_tuple_count,
-                              vector<TableFilter> &table_filter) {
-	return data->Select(state, mask, result, table_filter, sel, approved_tuple_count);
-}
-
 void TransientSegment::Fetch(ColumnScanState &state, idx_t vector_index, Vector &result) {
 	data->Fetch(state, vector_index, result);
 }

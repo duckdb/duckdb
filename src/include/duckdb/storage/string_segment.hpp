@@ -67,13 +67,7 @@ public:
 	void ToTemporary() override;
 
 protected:
-	void Select(ColumnScanState &state, ValidityMask &validity, Vector &result, SelectionVector &sel, idx_t &approved_tuple_count,
-	            vector<TableFilter> &table_filter) override;
-
 	void FetchBaseData(ColumnScanState &state, idx_t vector_index, Vector &result) override;
-
-	void FilterFetchBaseData(ColumnScanState &state, ValidityMask &source_mask, Vector &result, SelectionVector &sel,
-	                         idx_t &approved_tuple_count) override;
 
 private:
 	void AppendData(BufferHandle &handle, SegmentStatistics &stats, data_ptr_t target, data_ptr_t end,
@@ -109,67 +103,6 @@ private:
 
 	void ReadString(string_t *result_data, Vector &result, data_ptr_t baseptr, int32_t *dict_offset, idx_t src_idx,
 	                idx_t res_idx, idx_t &update_idx, size_t vector_index);
-	template <class OP>
-	void Select_String(Vector &result, data_ptr_t baseptr, int32_t *dict_offset, SelectionVector &sel,
-	                   const string &constant, idx_t &approved_tuple_count, ValidityMask &source, size_t vector_index) {
-		result.SetVectorType(VectorType::FLAT_VECTOR);
-		auto result_data = FlatVector::GetData<string_t>(result);
-		SelectionVector new_sel(approved_tuple_count);
-		idx_t result_count = 0;
-		idx_t update_idx = 0;
-		if (!source.AllValid()) {
-			for (idx_t i = 0; i < approved_tuple_count; i++) {
-				idx_t src_idx = sel.get_index(i);
-				ReadString(result_data, result, baseptr, dict_offset, src_idx, src_idx, update_idx, vector_index);
-				if (source.RowIsValid(src_idx) && OP::Operation(result_data[src_idx].GetString(), constant)) {
-					new_sel.set_index(result_count++, src_idx);
-				}
-			}
-		} else {
-			for (idx_t i = 0; i < approved_tuple_count; i++) {
-				idx_t src_idx = sel.get_index(i);
-				ReadString(result_data, result, baseptr, dict_offset, src_idx, src_idx, update_idx, vector_index);
-				if (OP::Operation(result_data[src_idx].GetString(), constant)) {
-					new_sel.set_index(result_count++, src_idx);
-				}
-			}
-		}
-		sel.Initialize(new_sel);
-		approved_tuple_count = result_count;
-	}
-
-	template <class OPL, class OPR>
-	void Select_String_Between(Vector &result, data_ptr_t baseptr, int32_t *dict_offset, SelectionVector &sel,
-	                           string constant_left, string constant_right, idx_t &approved_tuple_count,
-	                           ValidityMask &source_mask, size_t vector_index) {
-		result.SetVectorType(VectorType::FLAT_VECTOR);
-		auto result_data = FlatVector::GetData<string_t>(result);
-		SelectionVector new_sel(approved_tuple_count);
-		idx_t result_count = 0;
-		idx_t update_idx = 0;
-		if (!source_mask.AllValid()) {
-			for (idx_t i = 0; i < approved_tuple_count; i++) {
-				idx_t src_idx = sel.get_index(i);
-				ReadString(result_data, result, baseptr, dict_offset, src_idx, src_idx, update_idx, vector_index);
-				if (source_mask.RowIsValid(src_idx) &&
-				    OPL::Operation(result_data[src_idx].GetString(), constant_left) &&
-				    OPR::Operation(result_data[src_idx].GetString(), constant_right)) {
-					new_sel.set_index(result_count++, src_idx);
-				}
-			}
-		} else {
-			for (idx_t i = 0; i < approved_tuple_count; i++) {
-				idx_t src_idx = sel.get_index(i);
-				ReadString(result_data, result, baseptr, dict_offset, src_idx, src_idx, update_idx, vector_index);
-				if (OPL::Operation(result_data[src_idx].GetString(), constant_left) &&
-				    OPR::Operation(result_data[src_idx].GetString(), constant_right)) {
-					new_sel.set_index(result_count++, src_idx);
-				}
-			}
-		}
-		sel.Initialize(new_sel);
-		approved_tuple_count = result_count;
-	}
 
 	void SetDictionaryOffset(BufferHandle &handle, idx_t offset);
 	idx_t GetDictionaryOffset(BufferHandle &handle);

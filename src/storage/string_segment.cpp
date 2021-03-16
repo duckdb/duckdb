@@ -67,76 +67,6 @@ void StringSegment::ReadString(string_t *result_data, Vector &result, data_ptr_t
 	result_data[res_idx] = FetchStringFromDict(result, baseptr, dict_offset[src_idx]);
 }
 
-void StringSegment::Select(ColumnScanState &state, ValidityMask &base_mask, Vector &result, SelectionVector &sel, idx_t &approved_tuple_count,
-                           vector<TableFilter> &table_filter) {
-	auto vector_index = state.vector_index;
-	D_ASSERT(vector_index < max_vector_count);
-	D_ASSERT(vector_index * STANDARD_VECTOR_SIZE <= tuple_count);
-
-	auto handle = state.primary_handle.get();
-	auto baseptr = handle->node->buffer;
-	auto base_data = (int32_t *) baseptr;
-
-	if (table_filter.size() == 1) {
-		switch (table_filter[0].comparison_type) {
-		case ExpressionType::COMPARE_EQUAL: {
-			Select_String<Equals>(result, baseptr, base_data, sel, table_filter[0].constant.str_value,
-			                      approved_tuple_count, base_mask, vector_index);
-			break;
-		}
-		case ExpressionType::COMPARE_LESSTHAN: {
-			Select_String<LessThan>(result, baseptr, base_data, sel, table_filter[0].constant.str_value,
-			                        approved_tuple_count, base_mask, vector_index);
-			break;
-		}
-		case ExpressionType::COMPARE_GREATERTHAN: {
-			Select_String<GreaterThan>(result, baseptr, base_data, sel, table_filter[0].constant.str_value,
-			                           approved_tuple_count, base_mask, vector_index);
-			break;
-		}
-		case ExpressionType::COMPARE_LESSTHANOREQUALTO: {
-			Select_String<LessThanEquals>(result, baseptr, base_data, sel, table_filter[0].constant.str_value,
-			                              approved_tuple_count, base_mask, vector_index);
-			break;
-		}
-		case ExpressionType::COMPARE_GREATERTHANOREQUALTO: {
-			Select_String<GreaterThanEquals>(result, baseptr, base_data, sel, table_filter[0].constant.str_value,
-			                                 approved_tuple_count, base_mask, vector_index);
-
-			break;
-		}
-		default:
-			throw NotImplementedException("Unknown comparison type for filter pushed down to table!");
-		}
-	} else {
-		bool is_first_greater = table_filter[0].comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
-		                        table_filter[0].comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO;
-		auto less = is_first_greater ? table_filter[1] : table_filter[0];
-		auto greater = is_first_greater ? table_filter[0] : table_filter[1];
-		if (greater.comparison_type == ExpressionType::COMPARE_GREATERTHAN) {
-			if (less.comparison_type == ExpressionType::COMPARE_LESSTHAN) {
-				Select_String_Between<GreaterThan, LessThan>(result, baseptr, base_data, sel,
-				                                             greater.constant.str_value, less.constant.str_value,
-				                                             approved_tuple_count, base_mask, vector_index);
-			} else {
-				Select_String_Between<GreaterThan, LessThanEquals>(result, baseptr, base_data, sel,
-				                                                   greater.constant.str_value, less.constant.str_value,
-				                                                   approved_tuple_count, base_mask, vector_index);
-			}
-		} else {
-			if (less.comparison_type == ExpressionType::COMPARE_LESSTHAN) {
-				Select_String_Between<GreaterThanEquals, LessThan>(result, baseptr, base_data, sel,
-				                                                   greater.constant.str_value, less.constant.str_value,
-				                                                   approved_tuple_count, base_mask, vector_index);
-			} else {
-				Select_String_Between<GreaterThanEquals, LessThanEquals>(
-				    result, baseptr, base_data, sel, greater.constant.str_value, less.constant.str_value,
-				    approved_tuple_count, base_mask, vector_index);
-			}
-		}
-	}
-}
-
 //===--------------------------------------------------------------------===//
 // Fetch base data
 //===--------------------------------------------------------------------===//
@@ -158,38 +88,6 @@ void StringSegment::FetchBaseData(ColumnScanState &state, data_ptr_t baseptr, id
 	// no updates: fetch only from the string dictionary
 	for (idx_t i = 0; i < count; i++) {
 		result_data[i] = FetchStringFromDict(result, baseptr, base_data[i]);
-	}
-}
-
-void StringSegment::FilterFetchBaseData(ColumnScanState &state, ValidityMask &base_mask, Vector &result, SelectionVector &sel,
-                                        idx_t &approved_tuple_count) {
-	// clear any previously locked buffers and get the primary buffer handle
-	auto handle = state.primary_handle.get();
-	auto baseptr = handle->node->buffer;
-	// fetch the data from the base segment
-	auto base = baseptr + state.vector_index * vector_size;
-	auto base_data = (int32_t *) base;
-	auto &result_mask = FlatVector::Validity(result);
-
-	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto result_data = FlatVector::GetData<string_t>(result);
-
-	idx_t update_idx = 0;
-	if (!base_mask.AllValid()) {
-		for (idx_t i = 0; i < approved_tuple_count; i++) {
-			idx_t src_idx = sel.get_index(i);
-			if (!base_mask.RowIsValid(src_idx)) {
-				result_mask.SetInvalid(i);
-				ReadString(result_data, result, baseptr, base_data, src_idx, i, update_idx, state.vector_index);
-			} else {
-				ReadString(result_data, result, baseptr, base_data, src_idx, i, update_idx, state.vector_index);
-			}
-		}
-	} else {
-		for (idx_t i = 0; i < approved_tuple_count; i++) {
-			idx_t src_idx = sel.get_index(i);
-			ReadString(result_data, result, baseptr, base_data, src_idx, i, update_idx, state.vector_index);
-		}
 	}
 }
 

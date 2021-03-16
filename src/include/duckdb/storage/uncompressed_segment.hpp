@@ -49,13 +49,9 @@ public:
 	//! Fetch the vector at index "vector_index" from the uncompressed segment, storing it in the result vector
 	void Scan(ColumnScanState &state, idx_t vector_index, Vector &result);
 
-	//! Scan the next vector from the column and apply a selection vector to filter the data
-	void FilterScan(ColumnScanState &state, ValidityMask &mask, Vector &result, SelectionVector &sel, idx_t &approved_tuple_count);
-
 	static void FilterSelection(SelectionVector &sel, Vector &result, const TableFilter &filter,
 	                            idx_t &approved_tuple_count, ValidityMask &mask);
-	//! Executes the filters directly in the table's data
-	void Select(ColumnScanState &state, ValidityMask &mask, Vector &result, vector<TableFilter> &table_filters, SelectionVector &sel, idx_t &approved_tuple_count);
+
 	//! Fetch a single vector from the base table
 	void Fetch(ColumnScanState &state, idx_t vector_index, Vector &result);
 	//! Fetch a single value and append it to the vector
@@ -81,12 +77,6 @@ public:
 	virtual void Verify();
 
 protected:
-	//! Executes the filters directly in the table's data
-	virtual void Select(ColumnScanState &state, ValidityMask &validity, Vector &result, SelectionVector &sel, idx_t &approved_tuple_count,
-	                    vector<TableFilter> &table_filter) = 0;
-	//! Fetch the base data and apply a filter to it
-	virtual void FilterFetchBaseData(ColumnScanState &state, ValidityMask &source_mask, Vector &result, SelectionVector &sel,
-	                                 idx_t &approved_tuple_count) = 0;
 	//! Fetch base table data
 	virtual void FetchBaseData(ColumnScanState &state, idx_t vector_index, Vector &result) = 0;
 };

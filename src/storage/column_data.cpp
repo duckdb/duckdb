@@ -94,23 +94,16 @@ void ColumnData::FilterScan(Transaction &transaction, ColumnScanState &state, Ve
 		state.current->InitializeScan(state);
 		state.initialized = true;
 	}
-	// perform a scan of this segment
-	if (!state.updates->HasUpdates()) {
-		// fetch validity mask and pass to filter scan
-		ValidityMask mask(STANDARD_VECTOR_SIZE);
-		state.validity->Fetch(state.vector_index_validity, mask);
 
-		state.current->FilterScan(state, mask, result, sel, approved_tuple_count);
-	} else {
-		// fetch validity mask
-		state.validity->Fetch(state.vector_index_validity, FlatVector::Validity(result));
-		// fetch actual data
-		state.current->Scan(state, state.vector_index, result);
-		// merge in any updates
-		state.updates->FetchUpdates(transaction, state.vector_index_updates, result);
+	// fetch validity mask
+	state.validity->Fetch(state.vector_index_validity, FlatVector::Validity(result));
+	// fetch actual data
+	state.current->Scan(state, state.vector_index, result);
+	// merge in any updates
+	state.updates->FetchUpdates(transaction, state.vector_index_updates, result);
 
-		result.Slice(sel, approved_tuple_count);
-	}
+	result.Slice(sel, approved_tuple_count);
+
 	// move over to the next vector
 	state.Next();
 }
@@ -122,27 +115,19 @@ void ColumnData::Select(Transaction &transaction, ColumnScanState &state, Vector
 		state.initialized = true;
 	}
 
-	if (!state.updates->HasUpdates()) {
-		// no updates: filter in the scan
-		// fetch validity mask and pass to scan
-		ValidityMask mask(STANDARD_VECTOR_SIZE);
-		state.validity->Fetch(state.vector_index_validity, mask);
+	// first scan the full vector (including merged updates)
+	// and then apply the filter
+	state.validity->Fetch(state.vector_index_validity, FlatVector::Validity(result));
+	state.current->Scan(state, state.vector_index, result);
 
-		state.current->Select(state, mask, result, sel, approved_tuple_count, table_filters);
-	} else {
-		// updates: first scan the full vector (including merged updates)
-		// and then apply the filter
-		state.validity->Fetch(state.vector_index_validity, FlatVector::Validity(result));
-		state.current->Scan(state, state.vector_index, result);
+	// merge the updates into the result
+	state.updates->FetchUpdates(transaction, state.vector_index_updates, result);
 
-		// merge the updates into the result
-		state.updates->FetchUpdates(transaction, state.vector_index_updates, result);
-
-		for (auto &filter : table_filters) {
-			UncompressedSegment::FilterSelection(sel, result, filter, approved_tuple_count,
-			                                     FlatVector::Validity(result));
-		}
+	for (auto &filter : table_filters) {
+		UncompressedSegment::FilterSelection(sel, result, filter, approved_tuple_count,
+												FlatVector::Validity(result));
 	}
+
 	// move over to the next vector
 	state.Next();
 }

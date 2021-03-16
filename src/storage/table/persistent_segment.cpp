@@ -34,16 +34,6 @@ void PersistentSegment::Scan(ColumnScanState &state, idx_t vector_index, Vector 
 	data->Scan(state, vector_index, result);
 }
 
-void PersistentSegment::FilterScan(ColumnScanState &state, ValidityMask &mask, Vector &result, SelectionVector &sel,
-                                   idx_t &approved_tuple_count) {
-	data->FilterScan(state, mask, result, sel, approved_tuple_count);
-}
-
-void PersistentSegment::Select(ColumnScanState &state, ValidityMask &mask, Vector &result, SelectionVector &sel,
-                               idx_t &approved_tuple_count, vector<TableFilter> &table_filter) {
-	data->Select(state, mask, result, table_filter, sel, approved_tuple_count);
-}
-
 void PersistentSegment::Fetch(ColumnScanState &state, idx_t vector_index, Vector &result) {
 	data->Fetch(state, vector_index, result);
 }
