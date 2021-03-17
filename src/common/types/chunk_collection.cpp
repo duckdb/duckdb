@@ -235,10 +235,10 @@ struct QuicksortInfo {
 static int64_t QuicksortInitial(ChunkCollection *sort_by, const QuicksortInfo &info, vector<OrderType> &desc,
                                 vector<OrderByNullType> &null_order, idx_t *result) {
 	// select pivot
-	int64_t pivot = 0;
+	int64_t pivot = info.left;
 	int64_t low = info.left, high = info.right;
 	// now insert elements
-	for (int64_t i = 1; i <= info.right; i++) {
+	for (int64_t i = info.left + 1; i <= info.right; i++) {
 		if (CompareTuple(sort_by, desc, null_order, i, pivot) <= 0) {
 			result[low++] = i;
 		} else {
