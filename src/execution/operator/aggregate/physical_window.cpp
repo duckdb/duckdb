@@ -154,7 +154,7 @@ static void MaskTypedColumn(MASK_TYPE &mask, ChunkCollection &over_collection, c
 	idx_t r = 0;
 	auto prev_valid = ci.IsValid(r);
 	auto prev = ci.GetValue(r);
-    ++r;
+	++r;
 
 	//	Process complete blocks
 	const auto row_count = over_collection.Count();
@@ -374,10 +374,10 @@ static void PartitionChunk(counts_t &counts, Vector &hash_vector, DataChunk &sor
 static void SortPartitionedCollectionForWindow(BoundWindowExpression *wexpr, ChunkCollection &input,
                                                ChunkCollection &output, ChunkCollection &over_collection,
                                                const idx_t begin, const idx_t end) {
-    if (begin == end) {
-        return;
-    }
-    vector<OrderType> orders;
+	if (begin == end) {
+		return;
+	}
+	vector<OrderType> orders;
 	vector<OrderByNullType> null_order_types;
 
 	// we sort by both 1) partition by expression list and 2) order by expressions
