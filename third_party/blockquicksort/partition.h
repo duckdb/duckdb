@@ -2644,4 +2644,4 @@ inline void lomuto_2_partition(iter begin, iter end, iter* pivot_positions, Comp
 	};
 
 */
-};
+}
