@@ -190,20 +190,18 @@ void RowChunk::TemplatedSerializeVectorSortable(VectorData &vdata, const Selecti
 			// write validity and according value
 			if (validity.RowIsValid(source_idx)) {
 				key_locations[i][0] = valid;
-				key_locations[i]++;
-				EncodeData(key_locations[i], source[source_idx]);
+				EncodeData(key_locations[i] + 1, source[source_idx]);
 			} else {
 				key_locations[i][0] = invalid;
-				key_locations[i]++;
-				memset(key_locations[i], 0, sizeof(T));
+				memset(key_locations[i] + 1, 0, sizeof(T));
 			}
 			// invert bits if desc
 			if (desc) {
-				for (idx_t s = 0; s < sizeof(T); s++) {
+				for (idx_t s = 0; s < sizeof(T) + 1; s++) {
 					*(key_locations[i] + s) = ~*(key_locations[i] + s);
 				}
 			}
-			key_locations[i] += sizeof(T);
+			key_locations[i] += sizeof(T) + 1;
 		}
 	} else {
 		for (idx_t i = 0; i < add_count; i++) {
@@ -237,20 +235,18 @@ void RowChunk::SerializeStringVectorSortable(VectorData &vdata, const SelectionV
 			// write validity and according value
 			if (validity.RowIsValid(source_idx)) {
 				key_locations[i][0] = valid;
-				key_locations[i]++;
-				EncodeStringData(key_locations[i], source[source_idx], prefix_len);
+				EncodeStringData(key_locations[i] + 1, source[source_idx], prefix_len);
 			} else {
 				key_locations[i][0] = invalid;
-				key_locations[i]++;
-				memset(key_locations[i], '\0', prefix_len);
+				memset(key_locations[i] + 1, '\0', prefix_len);
 			}
 			// invert bits if desc
 			if (desc) {
-				for (idx_t s = 0; s < prefix_len; s++) {
+				for (idx_t s = 0; s < prefix_len + 1; s++) {
 					*(key_locations[i] + s) = ~*(key_locations[i] + s);
 				}
 			}
-			key_locations[i] += prefix_len;
+			key_locations[i] += prefix_len + 1;
 		}
 	} else {
 		for (idx_t i = 0; i < add_count; i++) {
