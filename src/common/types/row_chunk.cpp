@@ -157,6 +157,15 @@ void RowChunk::EncodeData(data_ptr_t dataptr, double value) {
 	Store<uint64_t>(is_little_endian ? BSWAP64(converted_value) : converted_value, dataptr);
 }
 
+template <>
+void RowChunk::EncodeData(data_ptr_t dataptr, interval_t value) {
+	EncodeData(dataptr, value.months);
+	dataptr += sizeof(value.months);
+	EncodeData(dataptr, value.days);
+	dataptr += sizeof(value.days);
+	EncodeData(dataptr, value.micros);
+}
+
 void RowChunk::EncodeStringData(data_ptr_t dataptr, string_t value, idx_t prefix_len) {
 	idx_t len = value.GetSize();
 	memcpy(dataptr, value.GetDataUnsafe(), MinValue(len, prefix_len));
@@ -339,7 +348,7 @@ static void TemplatedSerializeVData(VectorData &vdata, const SelectionVector &se
 			key_locations[i] += sizeof(T);
 
 			// set the validitymask
-			if (!vdata.validity.RowIsValid(i)) {
+			if (!vdata.validity.RowIsValid(source_idx)) {
 				*(validitymask_locations[i] + byte_offset) &= ~(1UL << offset_in_byte);
 			}
 		}
@@ -394,18 +403,21 @@ void RowChunk::SerializeVectorData(VectorData &vdata, PhysicalType type, const S
 		auto byte_offset = col_idx / 8;
 		auto offset_in_byte = col_idx % 8;
 		for (idx_t i = 0; i < ser_count; i++) {
-			auto &string_entry = strings[vdata.sel->get_index(i)];
+			auto idx = sel.get_index(i);
+			auto source_idx = vdata.sel->get_index(idx);
+
+			auto &string_entry = strings[source_idx];
 
 			// store string size
 			Store<uint32_t>(string_entry.GetSize(), key_locations[i]);
 			key_locations[i] += string_t::PREFIX_LENGTH;
 
-			// store the string
-			memcpy(key_locations[i], string_entry.GetDataUnsafe(), string_entry.GetSize());
-			key_locations[i] += string_entry.GetSize();
-
-			// set the validitymask
-			if (!vdata.validity.RowIsValid(i)) {
+			if (vdata.validity.RowIsValid(source_idx)) {
+				// store the string
+				memcpy(key_locations[i], string_entry.GetDataUnsafe(), string_entry.GetSize());
+				key_locations[i] += string_entry.GetSize();
+			} else {
+				// set the validitymask
 				*(validitymask_locations[i] + byte_offset) &= ~(1UL << offset_in_byte);
 			}
 		}
@@ -420,8 +432,65 @@ void RowChunk::SerializeVector(Vector &v, idx_t vcount, const SelectionVector &s
                                data_ptr_t key_locations[], data_ptr_t validitymask_locations[]) {
 	VectorData vdata;
 	v.Orrify(vcount, vdata);
-	SerializeVectorData(vdata, v.GetType().InternalType(), sel, ser_count, col_idx, key_locations,
-	                    validitymask_locations);
+
+	// nested types
+	switch (v.GetType().InternalType()) {
+	case PhysicalType::STRUCT: {
+		child_list_t<unique_ptr<Vector>> *children;
+		vector<Vector> struct_vectors;
+		if (v.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+			auto &child = DictionaryVector::Child(v);
+			auto &dict_sel = DictionaryVector::SelVector(v);
+			children = &StructVector::GetEntries(child);
+			for (auto &struct_child : *children) {
+				Vector struct_vector;
+				struct_vector.Slice(*struct_child.second, dict_sel, vcount);
+				struct_vectors.push_back(move(struct_vector));
+			}
+		} else {
+			children = &StructVector::GetEntries(v);
+			for (auto &struct_child : *children) {
+				Vector struct_vector;
+				struct_vector.Reference(*struct_child.second);
+				struct_vectors.push_back(move(struct_vector));
+			}
+		}
+
+		// the whole struct itself can be NULL
+		auto byte_offset = col_idx / 8;
+		auto offset_in_byte = col_idx % 8;
+
+		// struct must have a validitymask for its fields
+		const idx_t struct_validitymask_size = (children->size() + 7) / 8;
+		data_ptr_t struct_key_locations[STANDARD_VECTOR_SIZE];
+		for (idx_t i = 0; i < ser_count; i++) {
+			// use key_locations as the validitymask, and create struct_key_locations
+			memset(key_locations[i], -1, struct_validitymask_size);
+			struct_key_locations[i] = key_locations[i] + struct_validitymask_size;
+
+			// set whether the whole struct is null
+			auto idx = sel.get_index(i);
+			auto source_idx = vdata.sel->get_index(idx);
+			if (!vdata.validity.RowIsValid(source_idx)) {
+				*(validitymask_locations[i] + byte_offset) &= ~(1UL << offset_in_byte);
+			}
+		}
+
+		// now serialize the struct vectors
+		for (idx_t i = 0; i < struct_vectors.size(); i++) {
+			auto &struct_vector = struct_vectors[i];
+			SerializeVector(struct_vector, vcount, sel, ser_count, i, struct_key_locations, key_locations);
+		}
+		break;
+	}
+	case PhysicalType::LIST: {
+		throw NotImplementedException("List serialization for ORDER BY");
+	}
+	default:
+		// non-nested types
+		SerializeVectorData(vdata, v.GetType().InternalType(), sel, ser_count, col_idx, key_locations,
+		                    validitymask_locations);
+	}
 }
 
 idx_t RowChunk::AppendToBlock(RowDataBlock &block, BufferHandle &handle, vector<BlockAppendEntry> &append_entries,
@@ -565,18 +634,58 @@ void RowChunk::DeserializeIntoVectorData(Vector &v, PhysicalType type, idx_t vco
 		auto offset_in_byte = col_idx % 8;
 		auto &validity = FlatVector::Validity(v);
 		for (idx_t i = 0; i < vcount; i++) {
+			bool valid = *(validitymask_locations[i] + byte_offset) & (1 << offset_in_byte);
 			// deserialize string length
-			len = Load<uint32_t>(key_locations[i]);
+			len = valid ? Load<uint32_t>(key_locations[i]) : 0;
 			key_locations[i] += string_t::PREFIX_LENGTH;
 			// deserialize string
 			target[i] = StringVector::AddString(v, (const char *)key_locations[i], len);
 			key_locations[i] += len;
 			// set validitymask
-			validity.Set(i, *(validitymask_locations[i] + byte_offset) & (1 << offset_in_byte));
+			validity.Set(i, valid);
+		}
+		break;
+	}
+	case PhysicalType::STRUCT: {
+		ValidityMask *validity;
+		switch (v.GetVectorType()) {
+		case VectorType::FLAT_VECTOR:
+			validity = &FlatVector::Validity(v);
+			break;
+		case VectorType::CONSTANT_VECTOR:
+			validity = &ConstantVector::Validity(v);
+			break;
+		default:
+			throw NotImplementedException("FIXME: cannot deserialize struct vector with this vectortype");
+		}
+
+		// the whole struct itself can be NULL
+		auto byte_offset = col_idx / 8;
+		auto offset_in_byte = col_idx % 8;
+
+		// struct must have a validitymask for its fields
+		auto &child_types = v.GetType().child_types();
+		const idx_t struct_validitymask_size = (child_types.size() + 7) / 8;
+		data_ptr_t struct_key_locations[STANDARD_VECTOR_SIZE];
+		for (idx_t i = 0; i < vcount; i++) {
+			// use key_locations as the validitymask, and create struct_key_locations
+			struct_key_locations[i] = key_locations[i] + struct_validitymask_size;
+
+			// set whether the whole struct is null
+			bool valid = *(validitymask_locations[i] + byte_offset) & (1 << offset_in_byte);
+			validity->Set(i, valid);
+		}
+
+		// now deserialize into the struct vectors
+		for (idx_t i = 0; i < child_types.size(); i++) {
+			auto new_child = make_unique<Vector>(child_types[i].second);
+			DeserializeIntoVector(*new_child, vcount, i, struct_key_locations, key_locations);
+			StructVector::AddEntry(v, child_types[i].first, move(new_child));
 		}
 		break;
 	}
 	default:
+		// TODO: list
 		throw NotImplementedException("FIXME: unimplemented deserialize");
 	}
 }

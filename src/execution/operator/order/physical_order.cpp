@@ -212,6 +212,9 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 			case PhysicalType::VARCHAR:
 				entry_size += string_t::PREFIX_LENGTH;
 				break;
+			case PhysicalType::STRUCT:
+				// TODO: maybe add something here?
+				break;
 			default:
 				throw NotImplementedException("Variable size payload type");
 			}
@@ -242,13 +245,57 @@ unique_ptr<LocalSinkState> PhysicalOrder::GetLocalSinkState(ExecutionContext &co
 }
 
 static void ComputeEntrySizes(Vector &v, idx_t count, idx_t entry_sizes[]) {
+	auto physical_type = v.GetType().InternalType();
+	if (TypeIsConstantSize(physical_type)) {
+		const auto type_size = GetTypeIdSize(physical_type);
+		for (idx_t i = 0; i < count; i++) {
+			entry_sizes[i] += type_size;
+		}
+		return;
+	}
+
 	VectorData vdata;
 	v.Orrify(count, vdata);
-	switch (v.GetType().InternalType()) {
+	switch (physical_type) {
 	case PhysicalType::VARCHAR: {
 		auto strings = (string_t *)vdata.data;
 		for (idx_t i = 0; i < count; i++) {
-			entry_sizes[i] += strings[vdata.sel->get_index(i)].GetSize();
+			idx_t str_idx = vdata.sel->get_index(i);
+			if (vdata.validity.RowIsValid(str_idx)) {
+				entry_sizes[i] += strings[str_idx].GetSize();
+			}
+		}
+		break;
+	}
+	case PhysicalType::STRUCT: {
+		// obtain child vectors
+		child_list_t<unique_ptr<Vector>> *children;
+		vector<Vector> struct_vectors;
+		if (v.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+			auto &child = DictionaryVector::Child(v);
+			auto &dict_sel = DictionaryVector::SelVector(v);
+			children = &StructVector::GetEntries(child);
+			for (auto &struct_child : *children) {
+				Vector struct_vector;
+				struct_vector.Slice(*struct_child.second, dict_sel, count);
+				struct_vectors.push_back(move(struct_vector));
+			}
+		} else {
+			children = &StructVector::GetEntries(v);
+			for (auto &struct_child : *children) {
+				Vector struct_vector;
+				struct_vector.Reference(*struct_child.second);
+				struct_vectors.push_back(move(struct_vector));
+			}
+		}
+		// add validitymask size
+		const idx_t struct_validitymask_size = (children->size() + 7) / 8;
+		for (idx_t i = 0; i < count; i++) {
+			entry_sizes[i] += struct_validitymask_size;
+		}
+		// compute size of child vectors
+		for (auto &struct_vector : struct_vectors) {
+			ComputeEntrySizes(struct_vector, count, entry_sizes);
 		}
 		break;
 	}
@@ -335,6 +382,11 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &gstate_
 		}
 		// build and serialize variable size entries
 		var_block.Build(sort.size(), lstate.key_locations, lstate.entry_sizes);
+		for (idx_t i = 0; i < input.size(); i++) {
+			memset(lstate.key_locations[i], -1, 1);
+			lstate.validitymask_locations[i] = lstate.key_locations[i];
+			lstate.key_locations[i] += 1;
+		}
 		var_block.SerializeVector(sort.data[sort_col], sort.size(), *lstate.sel_ptr, input.size(), 0,
 		                          lstate.key_locations, lstate.validitymask_locations);
 	}
@@ -366,7 +418,10 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &gstate_
 void PhysicalOrder::Combine(ExecutionContext &context, GlobalOperatorState &gstate_p, LocalSinkState &lstate_p) {
 	auto &gstate = (OrderGlobalState &)gstate_p;
 	auto &lstate = (OrderLocalState &)lstate_p;
-	const auto &payload_state = *gstate.payload_state;
+
+	if (!lstate.sorting_block) {
+		return;
+	}
 
 	lock_guard<mutex> append_lock(gstate.lock);
 	for (auto &block : lstate.sorting_block->blocks) {
@@ -388,6 +443,8 @@ void PhysicalOrder::Combine(ExecutionContext &context, GlobalOperatorState &gsta
 		gstate.payload_block->count += block.count;
 		gstate.payload_block->blocks.push_back(move(block));
 	}
+
+	const auto &payload_state = *gstate.payload_state;
 	if (payload_state.HAS_VARIABLE_SIZE) {
 		for (auto &block : lstate.sizes_block->blocks) {
 			gstate.sizes_block->count += block.count;
@@ -434,22 +491,59 @@ static void RadixSort(BufferManager &buffer_manager, data_ptr_t dataptr, const i
 	}
 }
 
-static void ComputeTies(data_ptr_t dataptr, const idx_t &start, const idx_t &end, const idx_t &tie_col, bool ties[],
+static void SubSortTiedTuples(BufferManager &buffer_manager, const data_ptr_t dataptr, const idx_t &count,
+                              const idx_t &col_offset, const idx_t &sorting_size, bool ties[],
+                              const SortingState &sorting_state) {
+	for (idx_t i = 0; i < count; i++) {
+		if (!ties[i]) {
+			continue;
+		}
+		idx_t j;
+		for (j = i; j < count; j++) {
+			if (!ties[j]) {
+				break;
+			}
+		}
+		RadixSort(buffer_manager, dataptr + i * sorting_state.ENTRY_SIZE, j + 1, col_offset, sorting_size,
+		          sorting_state);
+		i = j;
+	}
+}
+
+static void ComputeTies(data_ptr_t dataptr, const idx_t &count, const idx_t &tie_col, bool ties[],
                         const SortingState &sorting_state) {
 	idx_t tie_size = 0;
 	for (idx_t col_idx = 0; col_idx <= tie_col; col_idx++) {
 		tie_size += sorting_state.COL_SIZE[col_idx];
 	}
-	for (idx_t i = start; i < end - 1; i++) {
-		ties[i] = memcmp(dataptr, dataptr + sorting_state.ENTRY_SIZE, tie_size) == 0;
+	for (idx_t i = 0; i < count - 1; i++) {
+		if (ties[i]) {
+			ties[i] = memcmp(dataptr, dataptr + sorting_state.ENTRY_SIZE, tie_size) == 0;
+		}
 		dataptr += sorting_state.ENTRY_SIZE;
 	}
-	ties[end - 1] = false;
+	ties[count - 1] = false;
 }
 
 static void BreakStringTies(const data_ptr_t dataptr, const idx_t &start, const idx_t &end, const idx_t &tie_col,
                             bool ties[], data_ptr_t var_dataptr, data_ptr_t sizes_ptr,
                             const SortingState &sorting_state) {
+	idx_t tie_col_offset = 0;
+	for (idx_t i = 0; i < tie_col; i++) {
+		tie_col_offset += sorting_state.COL_SIZE[i];
+	}
+	if (sorting_state.HAS_NULL[tie_col]) {
+		tie_col_offset++;
+	}
+	// if the tied strings are smaller than the prefix size (contain '\0'), we don't need to break the ties
+	char *prefix_chars = (char *)dataptr + tie_col_offset;
+	for (idx_t i = 0; i < StringStatistics::MAX_STRING_MINMAX_SIZE; i++) {
+		if (prefix_chars[i] == '\0') {
+			return;
+		}
+	}
+
+	// fill pointer array for sorting
 	auto entry_ptrs = unique_ptr<data_ptr_t[]>(new data_ptr_t[end - start]);
 	for (idx_t i = start; i < end; i++) {
 		entry_ptrs[i - start] = dataptr + i * sorting_state.ENTRY_SIZE;
@@ -457,16 +551,17 @@ static void BreakStringTies(const data_ptr_t dataptr, const idx_t &start, const 
 
 	// slow pointer-based sorting
 	const int order = sorting_state.ORDER_TYPES[tie_col] == OrderType::DESCENDING ? -1 : 1;
+	const idx_t sorting_size = sorting_state.ENTRY_SIZE - sizeof(idx_t);
 	idx_t *sizes = (idx_t *)sizes_ptr;
 	BlockQuickSort::Sort(entry_ptrs.get(), entry_ptrs.get() + (end - start),
-	                     [&var_dataptr, &sizes, &order, &sorting_state](const data_ptr_t l, const data_ptr_t r) {
-		                     idx_t left_idx = Load<idx_t>(l + sorting_state.ENTRY_SIZE - sizeof(idx_t));
-		                     idx_t right_idx = Load<idx_t>(r + sorting_state.ENTRY_SIZE - sizeof(idx_t));
+	                     [&var_dataptr, &sizes, &order, &sorting_size](const data_ptr_t l, const data_ptr_t r) {
+		                     idx_t left_idx = Load<idx_t>(l + sorting_size);
+		                     idx_t right_idx = Load<idx_t>(r + sorting_size);
 		                     data_ptr_t left = var_dataptr + sizes[left_idx];
 		                     data_ptr_t right = var_dataptr + sizes[right_idx];
-		                     return order * strncmp((const char *)left + sizeof(idx_t),
-		                                            (const char *)right + sizeof(idx_t),
-		                                            MinValue(Load<idx_t>(left), Load<idx_t>(right)));
+		                     return order * strncmp((const char *)left + string_t::PREFIX_LENGTH,
+		                                            (const char *)right + string_t::PREFIX_LENGTH,
+		                                            MinValue(Load<uint32_t>(left), Load<uint32_t>(right)));
 	                     });
 
 	// re-order
@@ -480,15 +575,16 @@ static void BreakStringTies(const data_ptr_t dataptr, const idx_t &start, const 
 
 	// determine if there are still ties (if needed)
 	if (tie_col < sorting_state.ORDER_TYPES.size() - 1) {
-		idx_t current_idx = Load<idx_t>(dataptr + (start + sorting_state.ENTRY_SIZE) - sizeof(idx_t));
-		idx_t current_size = Load<idx_t>(var_dataptr + sizes[current_idx]);
-		idx_t next_idx, next_size;
-		for (idx_t i = start; i < end - 1; i++) {
-			next_idx = Load<idx_t>(dataptr + (i + sorting_state.ENTRY_SIZE) - sizeof(idx_t));
-			next_size = Load<idx_t>(var_dataptr + sizes[next_idx]);
+		idx_t current_idx = Load<idx_t>(dataptr + (start * sorting_state.ENTRY_SIZE) + sorting_size);
+		uint32_t current_size = Load<uint32_t>(var_dataptr + sizes[current_idx]);
+		idx_t next_idx;
+		uint32_t next_size;
+		for (idx_t i = start + 1; i < end - 1; i++) {
+			next_idx = Load<idx_t>(dataptr + (i * sorting_state.ENTRY_SIZE) + sorting_size);
+			next_size = Load<uint32_t>(var_dataptr + sizes[next_idx]);
 			if (current_size == next_size) {
-				ties[i] = memcmp(var_dataptr + sizes[current_idx] + sizeof(idx_t),
-				                 var_dataptr + sizes[next_idx] + sizeof(idx_t), current_size) == 0;
+				ties[i] = memcmp(var_dataptr + sizes[current_idx] + string_t::PREFIX_LENGTH,
+				                 var_dataptr + sizes[next_idx] + string_t::PREFIX_LENGTH, current_size) == 0;
 			} else {
 				ties[i] = false;
 			}
@@ -500,14 +596,6 @@ static void BreakStringTies(const data_ptr_t dataptr, const idx_t &start, const 
 
 static void BreakTies(BufferManager &buffer_manager, OrderGlobalState &global_state, bool ties[], data_ptr_t dataptr,
                       const idx_t &count, const idx_t &tie_col, const SortingState &sorting_state) {
-	bool any_ties = false;
-	for (idx_t i = 0; i < count; i++) {
-		any_ties = any_ties || ties[i];
-	}
-	if (!any_ties) {
-		return;
-	}
-
 	auto var_block_handle = buffer_manager.Pin(global_state.var_sorting_blocks[tie_col]->blocks[0].block);
 	auto var_sizes_handle = buffer_manager.Pin(global_state.var_sorting_sizes[tie_col]->blocks[0].block);
 	const data_ptr_t var_dataptr = var_block_handle->node->buffer;
@@ -534,6 +622,14 @@ static void BreakTies(BufferManager &buffer_manager, OrderGlobalState &global_st
 	}
 }
 
+static bool AnyTies(bool ties[], const idx_t &count) {
+	bool any_ties = false;
+	for (idx_t i = 0; i < count; i++) {
+		any_ties = any_ties || ties[i];
+	}
+	return any_ties;
+}
+
 static void SortInMemory(Pipeline &pipeline, ClientContext &context, OrderGlobalState &state) {
 	const auto &sorting_state = *state.sorting_state;
 	auto &buffer_manager = BufferManager::GetBufferManager(context);
@@ -550,31 +646,53 @@ static void SortInMemory(Pipeline &pipeline, ClientContext &context, OrderGlobal
 		idx_dataptr += sorting_state.ENTRY_SIZE;
 	}
 
-	const idx_t num_cols = sorting_state.CONSTANT_SIZE.size();
-	if (num_cols == 1 || std::all_of(sorting_state.CONSTANT_SIZE.begin(), sorting_state.CONSTANT_SIZE.end() - 1,
-	                                 [](bool x) { return x; })) {
-		// if the first n - 1 columns are all constant size, we can radix sort on all columns
+	bool all_constant = true;
+	for (idx_t i = 0; i < sorting_state.CONSTANT_SIZE.size(); i++) {
+		all_constant = all_constant && sorting_state.CONSTANT_SIZE[i];
+	}
+
+	if (all_constant) {
 		RadixSort(buffer_manager, dataptr, block.count, 0, sorting_size, sorting_state);
-		if (!sorting_state.CONSTANT_SIZE[num_cols - 1]) {
-			// if the final column is not constant size, we have to tie-break
-			auto ties = unique_ptr<bool[]>(new bool[block.count]);
-			ComputeTies(dataptr, 0, block.count, num_cols - 1, ties.get(), sorting_state);
-			BreakTies(buffer_manager, state, ties.get(), dataptr, block.count, num_cols - 1, sorting_state);
+		return;
+	}
+
+	sorting_size = 0;
+	idx_t col_offset = 0;
+	unique_ptr<bool[]> ties = nullptr;
+	const idx_t num_cols = sorting_state.CONSTANT_SIZE.size();
+	for (idx_t i = 0; i < num_cols; i++) {
+		// add columns to the sort until we reach a variable size column
+		sorting_size += sorting_state.COL_SIZE[i];
+		if (sorting_state.CONSTANT_SIZE[i] && i < num_cols - 1) {
+			continue;
 		}
-	} else {
-		idx_t col_offset = 0;
+
+		if (!ties) {
+			// this is the first sort
+			RadixSort(buffer_manager, dataptr, block.count, col_offset, sorting_size, sorting_state);
+			ties = unique_ptr<bool[]>(new bool[block.count]);
+			std::fill_n(ties.get(), block.count, true);
+		} else {
+			// for subsequent sorts, we subsort the tied tuples
+			SubSortTiedTuples(buffer_manager, dataptr, block.count, col_offset, sorting_size, ties.get(),
+			                  sorting_state);
+		}
+
+		ComputeTies(dataptr, block.count, i, ties.get(), sorting_state);
+		if (!AnyTies(ties.get(), block.count)) {
+			// if there weren't any ties, we can stop sorting here
+			break;
+		}
+
+		// break the ties
+		BreakTies(buffer_manager, state, ties.get(), dataptr, block.count, i, sorting_state);
+		if (!AnyTies(ties.get(), block.count)) {
+			// no more ties after tie-breaking
+			break;
+		}
+
+		col_offset += sorting_size;
 		sorting_size = 0;
-		for (idx_t i = 0; i < sorting_state.CONSTANT_SIZE.size(); i++) {
-			sorting_size += sorting_state.COL_SIZE[i];
-			if (!sorting_state.CONSTANT_SIZE[i]) {
-				// TODO: sub-sort here if needed
-				RadixSort(buffer_manager, dataptr, block.count, col_offset, sorting_size, sorting_state);
-				// TODO: tie-break, and mark where we need to sub-sort the rest (if we are not on the last column
-				// already)
-				col_offset = sorting_size;
-				sorting_size = 0;
-			}
-		}
 	}
 }
 
@@ -695,6 +813,25 @@ void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 	}
 
 	SortInMemory(pipeline, context, state);
+
+	// cleanup
+	auto &buffer_manager = BufferManager::GetBufferManager(context);
+	for (idx_t i = 0; i < state.var_sorting_blocks.size(); i++) {
+		if (!state.var_sorting_blocks[i]) {
+			continue;
+		}
+		for (auto &block : state.var_sorting_blocks[i]->blocks) {
+			buffer_manager.UnregisterBlock(block.block->BlockId(), true);
+		}
+	}
+	for (idx_t i = 0; i < state.var_sorting_sizes.size(); i++) {
+		if (!state.var_sorting_sizes[i]) {
+			continue;
+		}
+		for (auto &block : state.var_sorting_sizes[i]->blocks) {
+			buffer_manager.UnregisterBlock(block.block->BlockId(), true);
+		}
+	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -728,6 +865,18 @@ void PhysicalOrder::GetChunkInternal(ExecutionContext &context, DataChunk &chunk
 
 	if (gstate.sorting_block->blocks.empty() || state.entry_idx >= state.count) {
 		state.finished = true;
+		auto &buffer_manager = BufferManager::GetBufferManager(context.client);
+		for (auto &block : gstate.sorting_block->blocks) {
+			buffer_manager.UnregisterBlock(block.block->BlockId(), true);
+		}
+		for (auto &block : gstate.payload_block->blocks) {
+			buffer_manager.UnregisterBlock(block.block->BlockId(), true);
+		}
+		if (gstate.sizes_block) {
+			for (auto &block : gstate.sizes_block->blocks) {
+				buffer_manager.UnregisterBlock(block.block->BlockId(), true);
+			}
+		}
 		return;
 	}
 

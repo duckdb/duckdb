@@ -116,5 +116,7 @@ template <>
 void RowChunk::EncodeData(data_ptr_t dataptr, float value);
 template <>
 void RowChunk::EncodeData(data_ptr_t dataptr, double value);
+template <>
+void RowChunk::EncodeData(data_ptr_t dataptr, interval_t value);
 
 } // namespace duckdb

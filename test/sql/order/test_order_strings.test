@@ -5,43 +5,74 @@
 statement ok
 PRAGMA threads=1
 
-statement ok
-create table test1 (s varchar);
+#statement ok
+#CREATE TABLE test1 (s VARCHAR)
+#
+## strings longer than the initial 8 character prefix
+#statement ok
+#INSERT INTO test1 VALUES ('2'), ('300000003'), ('1'), ('10'), ('300000002'), ('300000001')
+#
+#query I
+#SELECT * FROM test1 ORDER BY s
+#----
+#1
+#10
+#2
+#300000001
+#300000002
+#300000003
+#
+## sort on 10000 strings
+#statement ok
+#CREATE TABLE test2 AS (SELECT CAST(range AS VARCHAR) r, random() rand FROM range(10000))
+#
+#statement ok
+#CREATE TABLE test2_1 AS (SELECT * FROM test2 ORDER BY r)
+#
+#query T
+#SELECT count(*) FROM test2_1
+#----
+#10000
+#
+## string payload
+#statement ok
+#CREATE TABLE test3 AS (SELECT CAST(range AS VARCHAR) r, random() rand FROM range(10000))
+#
+#statement ok
+#CREATE TABLE test3_1 AS (SELECT * FROM test3 ORDER BY rand)
+#
+#query T
+#SELECT count(*) FROM test3_1
+#----
+#10000
 
-# strings longer than the initial 8 character prefix
+# multiple columns
 statement ok
-insert into test1 values ('2'), ('300000003'), ('1'), ('10'), ('300000002'), ('300000001');
+CREATE TABLE test4 (i INT, j INT)
 
-query I
-select * from test1 order by s;
+statement ok
+INSERT INTO test4 VALUES (3, 3), (2, 3), (2, 2), (3, 2)
+
+query II
+SELECT * FROM test4 ORDER BY cast(i AS VARCHAR), j
 ----
-1
-10
-2
-300000001
-300000002
-300000003
+2	2
+2	3
+3	2
+3	3
 
-# sort on 10000 strings
-statement ok
-CREATE TABLE test2 AS (SELECT cast(range as varchar) r, random() rand FROM range(10000))
-
-statement ok
-CREATE TABLE test2_1 AS (SELECT * FROM test2 ORDER BY r)
-
-query T
-SELECT count(*) FROM test2_1
+query II
+SELECT * FROM test4 ORDER BY i, cast(j AS VARCHAR)
 ----
-10000
+2	2
+2	3
+3	2
+3	3
 
-# string payload
-statement ok
-CREATE TABLE test3 AS (SELECT cast(range as varchar) r, random() rand FROM range(10000))
-
-statement ok
-CREATE TABLE test3_1 AS (SELECT * FROM test3 ORDER BY rand)
-
-query T
-SELECT count(*) FROM test3_1
+query II
+SELECT * FROM test4 ORDER BY cast(i AS VARCHAR), cast(j AS VARCHAR)
 ----
-10000
+2	2
+2	3
+3	2
+3	3
