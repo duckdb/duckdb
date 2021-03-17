@@ -462,7 +462,7 @@ if(NOT CLANG_TIDY)
       add_subdirectory(benchmark)
     endif()
   endif()
-  add_subdirectory(third_party)
+  add_subdirectory(third_party EXCLUDE_FROM_ALL)
 endif()
 
 # Write the export set for build and install tree
