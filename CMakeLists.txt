@@ -226,7 +226,7 @@ if(NOT MSVC)
   set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELEASE} -g")
 
   set(CXX_EXTRA_DEBUG
-      "${CXX_EXTRA_DEBUG} -Wunused-variable -Wunused-const-variable -Werror=vla -Wnarrowing"
+      "${CXX_EXTRA_DEBUG} -Wunused-variable -Wunused-const-variable -Werror=vla -Wnarrowing  -Wnarrowing -pedantic"
   )
   if(TREAT_WARNINGS_AS_ERRORS)
     set(CXX_EXTRA_DEBUG "${CXX_EXTRA_DEBUG} -Werror")
@@ -302,7 +302,7 @@ function(enable_unity_build UB_SUFFIX SOURCE_VARIABLE_NAME)
   foreach(source_file ${files})
     file(
       APPEND ${temp_unit_build_file}
-      "#line 0 \"${source_file}\"\n#include <${CMAKE_CURRENT_SOURCE_DIR}/${source_file}>\n"
+      "#include <${CMAKE_CURRENT_SOURCE_DIR}/${source_file}>\n"
     )
   endforeach(source_file)
 
@@ -327,7 +327,7 @@ function(enable_unity_build UB_SUFFIX SOURCE_VARIABLE_NAME)
     foreach(source_file ${files})
       file(
         APPEND ${unit_build_file}
-        "#line 0 \"${source_file}\"\n#include <${CMAKE_CURRENT_SOURCE_DIR}/${source_file}>\n"
+        "#include <${CMAKE_CURRENT_SOURCE_DIR}/${source_file}>\n"
       )
     endforeach(source_file)
   endif()
