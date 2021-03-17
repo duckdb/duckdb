@@ -19,6 +19,8 @@
 #include "duckdb/execution/expression_executor_state.hpp"
 #include <stack>
 #include <unordered_map>
+#include "duckdb/common/pair.hpp"
+#include "duckdb/common/deque.hpp"
 
 namespace duckdb {
 class ExpressionExecutor;
@@ -30,8 +32,10 @@ struct ExpressionInformation {
 	}
 	void ExtractExpressionsRecursive(unique_ptr<ExpressionState> &state);
 	vector<unique_ptr<ExpressionInformation>> children;
+	bool hasfunction = false;
 	string name;
-	double time;
+	string function_name;
+	uint64_t time = 0;
 };
 
 struct ExpressionExecutorInformation {
@@ -155,6 +159,10 @@ public:
 	//! console)
 	string save_location;
 
+	idx_t OperatorSize() {
+		return tree_map.size();
+	}
+
 private:
 	//! Whether or not query profiling is enabled
 	bool enabled;
@@ -175,6 +183,12 @@ private:
 	//! A map of a Physical Operator pointer to a tree node
 	unordered_map<PhysicalOperator *, TreeNode *> tree_map;
 
+public:
+	const unordered_map<PhysicalOperator *, TreeNode *> &GetTreeMap() const {
+		return tree_map;
+	}
+
+private:
 	//! The timer used to time the individual phases of the planning process
 	Profiler<system_clock> phase_profiler;
 	//! A mapping of the phase names to the timings
@@ -190,5 +204,31 @@ private:
 	//! Check whether or not an operator type requires query profiling. If none of the ops in a query require profiling
 	//! no profiling information is output.
 	bool OperatorRequiresProfiling(PhysicalOperatorType op_type);
+};
+
+//! The QueryProfilerHistory can be used to access the profiler of previous queries
+class QueryProfilerHistory {
+private:
+	//! Previous Query profilers
+	deque<pair<transaction_t, QueryProfiler>> prev_profilers;
+	//! Previous Query profilers size
+	uint64_t prev_profilers_size = 20;
+
+public:
+	deque<pair<transaction_t, QueryProfiler>> &GetPrevProfilers() {
+		return prev_profilers;
+	}
+
+	void SetPrevProfilersSize(uint64_t prevProfilersSize) {
+		prev_profilers_size = prevProfilersSize;
+	}
+	uint64_t GetPrevProfilersSize() const {
+		return prev_profilers_size;
+	}
+
+public:
+	void SetProfilerHistorySize(uint64_t size) {
+		this->prev_profilers_size = size;
+	}
 };
 } // namespace duckdb

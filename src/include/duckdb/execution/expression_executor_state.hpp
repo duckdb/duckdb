@@ -10,7 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/common/profiler.hpp"
+#include "duckdb/common/cycle_counter.hpp"
 
 namespace duckdb {
 class Expression;
@@ -29,7 +29,7 @@ struct ExpressionState {
 	DataChunk intermediate_chunk;
 	string name;
 	double time;
-	Profiler<high_resolution_clock> profiler;
+	CycleCounter profiler;
 
 public:
 	void AddChild(Expression *expr);

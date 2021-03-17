@@ -815,13 +815,13 @@ static void refreshMultiLine(struct linenoiseState *l) {
 
 	/* Now for every row clear it, go up. */
 	for (j = 0; j < old_rows - 1; j++) {
-		lndebug("clear+up");
+		lndebug("clear+up", 0);
 		snprintf(seq, 64, "\r\x1b[0K\x1b[1A");
 		abAppend(&ab, seq, strlen(seq));
 	}
 
 	/* Clean the top line. */
-	lndebug("clear");
+	lndebug("clear", 0);
 	snprintf(seq, 64, "\r\x1b[0K");
 	abAppend(&ab, seq, strlen(seq));
 
@@ -835,7 +835,7 @@ static void refreshMultiLine(struct linenoiseState *l) {
 	/* If we are at the very end of the screen with our prompt, we need to
 	 * emit a newline and move the prompt to the first column. */
 	if (l->pos && l->pos == l->len && (l->pos + plen) % l->cols == 0) {
-		lndebug("<newline>");
+		lndebug("<newline>", 0);
 		abAppend(&ab, "\n", 1);
 		snprintf(seq, 64, "\r");
 		abAppend(&ab, seq, strlen(seq));
@@ -864,7 +864,7 @@ static void refreshMultiLine(struct linenoiseState *l) {
 		snprintf(seq, 64, "\r");
 	abAppend(&ab, seq, strlen(seq));
 
-	lndebug("\n");
+	lndebug("\n", 0);
 	l->oldpos = l->pos;
 
 	if (write(fd, ab.b, ab.len) == -1) {

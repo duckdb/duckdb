@@ -141,6 +141,7 @@ protected:
 private:
 	//! The states of the expression executor; this holds any intermediates and temporary states of expressions
 	vector<unique_ptr<ExpressionExecutorState>> states;
+	//! the random number generator used for adaptive expression reordering
 	RandomEngine random;
 };
 } // namespace duckdb
