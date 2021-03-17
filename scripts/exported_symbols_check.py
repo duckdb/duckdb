@@ -33,6 +33,8 @@ for symbol in res.stdout.decode('utf-8').split('\n'):
 		continue
 	if 'duckdb_hll::' in symbol:
 		continue
+	if 'duckdb_moodycamel::' in symbol:
+		continue
 	if symbol.startswith('_duckdb_'):
 		continue
 	if symbol.startswith('duckdb_'):
