@@ -52,6 +52,7 @@ if(FORCE_32_BIT)
   set(M32_FLAG " -m32 ")
 endif()
 
+
 option(DISABLE_UNITY "Disable unity builds." FALSE)
 
 option(FORCE_COLORED_OUTPUT
@@ -187,7 +188,11 @@ option(FORCE_ASSERT "Enable checking of assertions, even in release mode" FALSE)
 
 option(TREAT_WARNINGS_AS_ERRORS "Treat warnings as errors" FALSE)
 option(EXPORT_DLL_SYMBOLS "Export dll symbols on Windows, else import" TRUE)
+option(BUILD_RDTSC "Enable the rdtsc instruction." FALSE)
 
+if(${BUILD_RDTSC})
+  add_compile_definitions(RDTSC)
+endif()
 
 if(BUILD_PYTHON
    OR BUILD_R
@@ -221,7 +226,7 @@ if(NOT MSVC)
   set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELEASE} -g")
 
   set(CXX_EXTRA_DEBUG
-      "${CXX_EXTRA_DEBUG} -Wunused-variable -Wunused-const-variable -Werror=vla -Wnarrowing"
+      "${CXX_EXTRA_DEBUG} -Wunused-variable -Wunused-const-variable -Werror=vla -Wnarrowing  -Wnarrowing -pedantic"
   )
   if(TREAT_WARNINGS_AS_ERRORS)
     set(CXX_EXTRA_DEBUG "${CXX_EXTRA_DEBUG} -Werror")
@@ -297,7 +302,7 @@ function(enable_unity_build UB_SUFFIX SOURCE_VARIABLE_NAME)
   foreach(source_file ${files})
     file(
       APPEND ${temp_unit_build_file}
-      "#line 0 \"${source_file}\"\n#include <${CMAKE_CURRENT_SOURCE_DIR}/${source_file}>\n"
+      "#include <${CMAKE_CURRENT_SOURCE_DIR}/${source_file}>\n"
     )
   endforeach(source_file)
 
@@ -322,7 +327,7 @@ function(enable_unity_build UB_SUFFIX SOURCE_VARIABLE_NAME)
     foreach(source_file ${files})
       file(
         APPEND ${unit_build_file}
-        "#line 0 \"${source_file}\"\n#include <${CMAKE_CURRENT_SOURCE_DIR}/${source_file}>\n"
+        "#include <${CMAKE_CURRENT_SOURCE_DIR}/${source_file}>\n"
       )
     endforeach(source_file)
   endif()
@@ -401,7 +406,7 @@ function(add_extension_dependencies LIBRARY)
     add_dependencies(${LIBRARY} fts_extension)
   endif()
 
-  if(${BUILD_FTS_EXTENSION})
+  if(${BUILD_HTTPFS_EXTENSION})
     add_dependencies(${LIBRARY} httpfs_extension)
   endif()
 endfunction()

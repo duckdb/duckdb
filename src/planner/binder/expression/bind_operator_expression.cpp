@@ -2,6 +2,7 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_case_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 
 namespace duckdb {
@@ -55,7 +56,26 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 	if (!error.empty()) {
 		return BindResult(error);
 	}
-	// all children bound successfully, extract them
+	// all children bound successfully
+	string function_name;
+	switch (op.type) {
+	case ExpressionType::ARRAY_EXTRACT:
+		function_name = "array_extract";
+		break;
+	case ExpressionType::ARRAY_SLICE:
+		function_name = "array_slice";
+		break;
+	case ExpressionType::STRUCT_EXTRACT:
+		function_name = "struct_extract";
+		break;
+	default:
+		break;
+	}
+	if (!function_name.empty()) {
+		auto function = make_unique<FunctionExpression>(function_name, op.children);
+		return BindExpression(*function, depth, nullptr);
+	}
+
 	vector<BoundExpression *> children;
 	for (idx_t i = 0; i < op.children.size(); i++) {
 		D_ASSERT(op.children[i]->expression_class == ExpressionClass::BOUND_EXPRESSION);
