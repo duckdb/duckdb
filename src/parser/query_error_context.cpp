@@ -3,7 +3,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/to_string.hpp"
 
-#include "utf8proc_wrapper.h"
+#include "utf8proc_wrapper.hpp"
 
 namespace duckdb {
 
@@ -39,14 +39,14 @@ string QueryErrorContext::Format(const string &query, const string &error_messag
 	idx_t len = end_pos - start_pos;
 	vector<idx_t> render_widths;
 	vector<idx_t> positions;
-	if (utf8proc_is_valid(buf, len)) {
+	if (Utf8Proc::IsValid(buf, len)) {
 		// for unicode awareness, we traverse the graphemes of the current line and keep track of their render widths
 		// and of their position in the string
 		for (idx_t cpos = 0; cpos < len;) {
-			auto char_render_width = utf8proc_render_width(buf, len, cpos);
+			auto char_render_width = Utf8Proc::RenderWidth(buf, len, cpos);
 			positions.push_back(cpos);
 			render_widths.push_back(char_render_width);
-			cpos = utf8proc_next_grapheme_cluster(buf, len, cpos);
+			cpos = Utf8Proc::NextGraphemeCluster(buf, len, cpos);
 		}
 	} else {
 		// invalid utf-8, we can't do much at this point

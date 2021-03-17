@@ -116,7 +116,7 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 #include "linenoise.h"
-#include "utf8proc_wrapper.h"
+#include "utf8proc_wrapper.hpp"
 
 #if defined(_WIN32) || defined(__WIN32__) || defined(WIN32)
 // disable highlighting on windows (for now?)
@@ -545,13 +545,13 @@ void refreshShowHints(struct abuf *ab, struct linenoiseState *l, int plen) {
 }
 
 size_t linenoiseComputeRenderWidth(const char *buf, size_t len) {
-	if (utf8proc_is_valid(buf, len)) {
+	if (duckdb::Utf8Proc::IsValid(buf, len)) {
 		// utf8 in prompt, get render width
 		size_t cpos = 0;
 		size_t render_width = 0;
 		while (cpos < len) {
-			size_t char_render_width = utf8proc_render_width(buf, len, cpos);
-			cpos = utf8proc_next_grapheme_cluster(buf, len, cpos);
+			size_t char_render_width = duckdb::Utf8Proc::RenderWidth(buf, len, cpos);
+			cpos = duckdb::Utf8Proc::NextGraphemeCluster(buf, len, cpos);
 			render_width += char_render_width;
 		}
 		return render_width;
@@ -562,17 +562,17 @@ size_t linenoiseComputeRenderWidth(const char *buf, size_t len) {
 }
 
 int linenoiseGetRenderPosition(const char *buf, size_t len, int max_width, int *n) {
-	if (utf8proc_is_valid(buf, len)) {
+	if (duckdb::Utf8Proc::IsValid(buf, len)) {
 		// utf8 in prompt, get render width
 		size_t cpos = 0;
 		size_t render_width = 0;
 		while (cpos < len) {
-			size_t char_render_width = utf8proc_render_width(buf, len, cpos);
+			size_t char_render_width = duckdb::Utf8Proc::RenderWidth(buf, len, cpos);
 			if (int(render_width + char_render_width) > max_width) {
 				*n = render_width;
 				return cpos;
 			}
-			cpos = utf8proc_next_grapheme_cluster(buf, len, cpos);
+			cpos = duckdb::Utf8Proc::NextGraphemeCluster(buf, len, cpos);
 			render_width += char_render_width;
 		}
 		*n = render_width;
@@ -708,7 +708,7 @@ static void refreshSingleLine(struct linenoiseState *l) {
 	std::string highlight_buffer;
 #endif
 
-	if (utf8proc_is_valid(l->buf, l->len)) {
+	if (duckdb::Utf8Proc::IsValid(l->buf, l->len)) {
 		// utf8 in prompt, handle rendering
 		size_t remaining_render_width = l->cols - plen - 1;
 		size_t start_pos = 0;
@@ -716,9 +716,9 @@ static void refreshSingleLine(struct linenoiseState *l) {
 		size_t prev_pos = 0;
 		size_t total_render_width = 0;
 		while (cpos < len) {
-			size_t char_render_width = utf8proc_render_width(buf, len, cpos);
+			size_t char_render_width = duckdb::Utf8Proc::RenderWidth(buf, len, cpos);
 			prev_pos = cpos;
-			cpos = utf8proc_next_grapheme_cluster(buf, len, cpos);
+			cpos = duckdb::Utf8Proc::NextGraphemeCluster(buf, len, cpos);
 			total_render_width += cpos - prev_pos;
 			if (total_render_width >= remaining_render_width) {
 				// character does not fit anymore! we need to figure something out
@@ -729,8 +729,8 @@ static void refreshSingleLine(struct linenoiseState *l) {
 				} else {
 					// we did not pass the cursor yet! remove characters from the start until it fits again
 					while (total_render_width >= remaining_render_width) {
-						size_t start_char_width = utf8proc_render_width(buf, len, start_pos);
-						size_t new_start = utf8proc_next_grapheme_cluster(buf, len, start_pos);
+						size_t start_char_width = duckdb::Utf8Proc::RenderWidth(buf, len, start_pos);
+						size_t new_start = duckdb::Utf8Proc::NextGraphemeCluster(buf, len, start_pos);
 						total_render_width -= new_start - start_pos;
 						start_pos = new_start;
 						render_pos -= start_char_width;
@@ -913,11 +913,11 @@ int linenoiseEditInsert(struct linenoiseState *l, char c) {
 }
 
 static size_t prev_char(struct linenoiseState *l) {
-	return utf8proc_prev_grapheme_cluster(l->buf, l->len, l->pos);
+	return duckdb::Utf8Proc::PreviousGraphemeCluster(l->buf, l->len, l->pos);
 }
 
 static size_t next_char(struct linenoiseState *l) {
-	return utf8proc_next_grapheme_cluster(l->buf, l->len, l->pos);
+	return duckdb::Utf8Proc::NextGraphemeCluster(l->buf, l->len, l->pos);
 }
 
 /* Move cursor on the left. */

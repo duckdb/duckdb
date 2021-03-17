@@ -39,7 +39,7 @@ struct QueueProducerToken {
 	explicit QueueProducerToken(ConcurrentQueue &queue) : queue_token(queue.q) {
 	}
 
-    duckdb_moodycamel::ProducerToken queue_token;
+	duckdb_moodycamel::ProducerToken queue_token;
 };
 
 void ConcurrentQueue::Enqueue(ProducerToken &token, unique_ptr<Task> task) {

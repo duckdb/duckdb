@@ -19,6 +19,8 @@ for symbol in res.stdout.decode('utf-8').split('\n'):
 		continue
 	if '@@CXXABI' in symbol:
 		continue
+	if '__gnu_cxx::' in symbol:
+		continue
 	if symbol.endswith(' U'): # undefined because dynamic linker
 		continue
 	if symbol.endswith(' U 0 0'): # undefined because dynamic linker
@@ -38,9 +40,6 @@ for symbol in res.stdout.decode('utf-8').split('\n'):
 	if symbol.startswith('_duckdb_'):
 		continue
 	if symbol.startswith('duckdb_'):
-		continue
-	# not so sure about that one
-	if 'utf8proc_' in symbol:
 		continue
 
 	culprits.append(symbol)

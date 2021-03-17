@@ -5,7 +5,7 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/to_string.hpp"
 
-#include "utf8proc_wrapper.h"
+#include "utf8proc_wrapper.hpp"
 
 #include <sstream>
 
@@ -94,8 +94,8 @@ string AdjustTextForRendering(string source, idx_t max_render_width) {
 	idx_t render_width = 0;
 	vector<pair<idx_t, idx_t>> render_widths;
 	while (cpos < source.size()) {
-		idx_t char_render_width = utf8proc_render_width(source.c_str(), source.size(), cpos);
-		cpos = utf8proc_next_grapheme_cluster(source.c_str(), source.size(), cpos);
+		idx_t char_render_width = Utf8Proc::RenderWidth(source.c_str(), source.size(), cpos);
+		cpos = Utf8Proc::NextGraphemeCluster(source.c_str(), source.size(), cpos);
 		render_width += char_render_width;
 		render_widths.emplace_back(cpos, render_width);
 		if (render_width > max_render_width) {
@@ -293,8 +293,8 @@ void TreeRenderer::SplitStringBuffer(const string &source, vector<string> &resul
 		if (CanSplitOnThisChar(source[cpos])) {
 			last_possible_split = cpos;
 		}
-		size_t char_render_width = utf8proc_render_width(source.c_str(), source.size(), cpos);
-		idx_t next_cpos = utf8proc_next_grapheme_cluster(source.c_str(), source.size(), cpos);
+		size_t char_render_width = Utf8Proc::RenderWidth(source.c_str(), source.size(), cpos);
+		idx_t next_cpos = Utf8Proc::NextGraphemeCluster(source.c_str(), source.size(), cpos);
 		if (render_width + char_render_width > max_line_render_size) {
 			if (last_possible_split <= start_pos + 8) {
 				last_possible_split = cpos;
