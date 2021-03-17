@@ -15,7 +15,7 @@
 #include <chrono>
 #include <ctime>
 
-namespace moodycamel
+namespace duckdb_moodycamel
 {
 // This is a blocking version of the queue. It has an almost identical interface to
 // the normal non-blocking version, with the addition of various wait_dequeue() methods
@@ -24,8 +24,8 @@ template<typename T, typename Traits = ConcurrentQueueDefaultTraits>
 class BlockingConcurrentQueue
 {
 private:
-	typedef ::moodycamel::ConcurrentQueue<T, Traits> ConcurrentQueue;
-	typedef ::moodycamel::LightweightSemaphore LightweightSemaphore;
+	typedef ::duckdb_moodycamelmoodycamel::ConcurrentQueue<T, Traits> ConcurrentQueue;
+	typedef ::duckdb_moodycamelmoodycamel::LightweightSemaphore LightweightSemaphore;
 
 public:
 	typedef typename ConcurrentQueue::producer_token_t producer_token_t;

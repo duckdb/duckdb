@@ -14,7 +14,7 @@
 #include <deque>
 #include <queue>
 
-namespace moodycamel {
+namespace duckdb_moodycamel {
 
 template <typename T>
 class ConcurrentQueue;
@@ -68,6 +68,6 @@ public:
 	}
 };
 
-} // namespace moodycamel
+} // namespace duckdb_moodycamel
 
 #endif

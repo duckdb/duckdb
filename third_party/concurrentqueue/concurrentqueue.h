@@ -55,7 +55,7 @@
 #include <thread>		// partly for __WINPTHREADS_VERSION if on MinGW-w64 w/ POSIX threading
 
 // Platform-specific definitions of a numeric thread ID type and an invalid value
-namespace moodycamel { namespace details {
+namespace duckdb_moodycamel { namespace details {
 	template<typename thread_id_t> struct thread_id_converter {
 		typedef thread_id_t thread_id_numeric_size_t;
 		typedef thread_id_t thread_id_hash_t;
@@ -63,7 +63,7 @@ namespace moodycamel { namespace details {
 	};
 } }
 #if defined(MCDBGQ_USE_RELACY)
-namespace moodycamel { namespace details {
+namespace duckdb_moodycamel { namespace details {
 	typedef std::uint32_t thread_id_t;
 	static const thread_id_t invalid_thread_id  = 0xFFFFFFFFU;
 	static const thread_id_t invalid_thread_id2 = 0xFFFFFFFEU;
@@ -73,7 +73,7 @@ namespace moodycamel { namespace details {
 // No sense pulling in windows.h in a header, we'll manually declare the function
 // we use and rely on backwards-compatibility for this not to break
 extern "C" __declspec(dllimport) unsigned long __stdcall GetCurrentThreadId(void);
-namespace moodycamel { namespace details {
+namespace duckdb_moodycamel { namespace details {
 	static_assert(sizeof(unsigned long) == sizeof(std::uint32_t), "Expected size of unsigned long to be 32 bits on Windows");
 	typedef std::uint32_t thread_id_t;
 	static const thread_id_t invalid_thread_id  = 0;			// See http://blogs.msdn.com/b/oldnewthing/archive/2004/02/23/78395.aspx
@@ -81,7 +81,7 @@ namespace moodycamel { namespace details {
 	static inline thread_id_t thread_id() { return static_cast<thread_id_t>(::GetCurrentThreadId()); }
 } }
 #elif defined(__arm__) || defined(_M_ARM) || defined(__aarch64__) || (defined(__APPLE__) && TARGET_OS_IPHONE)
-namespace moodycamel { namespace details {
+namespace duckdb_moodycamel { namespace details {
 	static_assert(sizeof(std::thread::id) == 4 || sizeof(std::thread::id) == 8, "std::thread::id is expected to be either 4 or 8 bytes");
 	
 	typedef std::thread::id thread_id_t;
@@ -126,7 +126,7 @@ namespace moodycamel { namespace details {
 // Assume C++11 compliant compiler
 #define MOODYCAMEL_THREADLOCAL thread_local
 #endif
-namespace moodycamel { namespace details {
+namespace duckdb_moodycamel { namespace details {
 	typedef std::uintptr_t thread_id_t;
 	static const thread_id_t invalid_thread_id  = 0;		// Address can't be nullptr
 #ifdef MOODYCAMEL_CPP11_THREAD_LOCAL_SUPPORTED
@@ -225,7 +225,7 @@ namespace moodycamel { namespace details {
 
 
 // Compiler-specific likely/unlikely hints
-namespace moodycamel { namespace details {
+namespace duckdb_moodycamel { namespace details {
 #if defined(__GNUC__)
 	static inline bool (likely)(bool x) { return __builtin_expect((x), true); }
 	static inline bool (unlikely)(bool x) { return __builtin_expect((x), false); }
@@ -235,7 +235,7 @@ namespace moodycamel { namespace details {
 #endif
 } }
 
-namespace moodycamel {
+namespace duckdb_moodycamel {
 namespace details {
 	template<typename T>
 	struct const_numeric_max {
@@ -689,8 +689,8 @@ template<typename T, typename Traits = ConcurrentQueueDefaultTraits>
 class ConcurrentQueue
 {
 public:
-	typedef ::moodycamel::ProducerToken producer_token_t;
-	typedef ::moodycamel::ConsumerToken consumer_token_t;
+	typedef ::duckdb_moodycamel::ProducerToken producer_token_t;
+	typedef ::duckdb_moodycamel::ConsumerToken consumer_token_t;
 	
 	typedef typename Traits::index_t index_t;
 	typedef typename Traits::size_t size_t;
@@ -3240,7 +3240,7 @@ private:
 	};
 	
 	template<typename XT, typename XTraits>
-	friend void moodycamel::swap(typename ConcurrentQueue<XT, XTraits>::ImplicitProducerKVP&, typename ConcurrentQueue<XT, XTraits>::ImplicitProducerKVP&) MOODYCAMEL_NOEXCEPT;
+	friend void duckdb_moodycamel::swap(typename ConcurrentQueue<XT, XTraits>::ImplicitProducerKVP&, typename ConcurrentQueue<XT, XTraits>::ImplicitProducerKVP&) MOODYCAMEL_NOEXCEPT;
 	
 	struct ImplicitProducerHash
 	{
