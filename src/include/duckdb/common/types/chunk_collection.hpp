@@ -101,9 +101,13 @@ public:
 		return res;
 	}
 
+	using slice_t = std::pair<idx_t, idx_t>;
+	DUCKDB_API void SortSlice(const slice_t slice, vector<OrderType> &desc, vector<OrderByNullType> &null_order,
+	                          idx_t result[]);
 	DUCKDB_API void Sort(vector<OrderType> &desc, vector<OrderByNullType> &null_order, idx_t result[]);
-	//! Reorders the rows in the collection according to the given indices. NB: order is changed!
-	DUCKDB_API void Reorder(idx_t order[]);
+	//! Reorders the rows in the collection according to the given indices.
+	DUCKDB_API void ReorderSlice(const slice_t slice, const idx_t *order);
+	DUCKDB_API void Reorder(const idx_t *order);
 
 	DUCKDB_API void MaterializeSortedChunk(DataChunk &target, idx_t order[], idx_t start_offset);
 
