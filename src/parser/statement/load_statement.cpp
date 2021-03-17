@@ -2,11 +2,13 @@
 
 namespace duckdb {
 
-LoadStatement::LoadStatement(std::string file_p) : SQLStatement(StatementType::LOAD_STATEMENT), file(move(file_p)) {
+LoadStatement::LoadStatement() : SQLStatement(StatementType::LOAD_STATEMENT) {
 }
 
 unique_ptr<SQLStatement> LoadStatement::Copy() const {
-	return make_unique<LoadStatement>(file);
+	auto result = make_unique<LoadStatement>();
+	result->info = info->Copy();
+	return move(result);
 }
 
 } // namespace duckdb

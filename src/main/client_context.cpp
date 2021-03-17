@@ -676,7 +676,7 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 void ClientContext::RegisterFunction(CreateFunctionInfo *info) {
 	RunFunctionInTransaction([&]() {
 		auto &catalog = Catalog::GetCatalog(*this);
-		catalog.CreateFunction(*this, temporary_objects.get(), info);
+		catalog.CreateFunction(*this, info);
 	});
 }
 

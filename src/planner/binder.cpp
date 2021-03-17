@@ -67,6 +67,8 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 		return Bind((ExportStatement &)statement);
 	case StatementType::SET_STATEMENT:
 		return Bind((SetStatement &)statement);
+	case StatementType::LOAD_STATEMENT:
+		return Bind((LoadStatement &)statement);
 	default:
 		throw NotImplementedException("Unimplemented statement type \"%s\" for Bind",
 		                              StatementTypeToString(statement.type));
