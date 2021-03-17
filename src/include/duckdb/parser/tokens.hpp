@@ -34,6 +34,7 @@ class ExportStatement;
 class VacuumStatement;
 class RelationStatement;
 class SetStatement;
+class LoadStatement;
 
 //===--------------------------------------------------------------------===//
 // Query Node
