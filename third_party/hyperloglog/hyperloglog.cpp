@@ -29,6 +29,9 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "hyperloglog.hpp"
+#include "sds.hpp"
+
 #include <assert.h>
 #include <stdint.h>
 #include <math.h>
@@ -36,8 +39,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-#include "hyperloglog.hpp"
-#include "sds.hpp"
+
 
 namespace duckdb_hll {
 

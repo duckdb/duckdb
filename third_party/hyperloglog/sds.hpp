@@ -33,7 +33,6 @@
 #ifndef __SDS_H
 #define __SDS_H
 
-namespace duckdb_hll {
 
 #ifdef _MSC_VER
 #define __attribute__(A)
@@ -45,6 +44,9 @@ namespace duckdb_hll {
 #include <sys/types.h>
 #include <stdarg.h>
 #include <stdint.h>
+
+namespace duckdb_hll {
+
 
 typedef char *sds;
 
