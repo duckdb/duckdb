@@ -17,6 +17,7 @@ class OperatorExpression : public ParsedExpression {
 public:
 	explicit OperatorExpression(ExpressionType type, unique_ptr<ParsedExpression> left = nullptr,
 	                            unique_ptr<ParsedExpression> right = nullptr);
+	OperatorExpression(ExpressionType type, vector<unique_ptr<ParsedExpression>> children);
 
 	vector<unique_ptr<ParsedExpression>> children;
 

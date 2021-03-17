@@ -644,7 +644,7 @@ void Statement::Execute() {
 		if (result) {
 			result->Print();
 		}
-		FAIL_LINE(file_name, query_line);
+		FAIL_LINE(file_name, query_line, 0);
 	}
 	REQUIRE(!error);
 }
@@ -657,7 +657,7 @@ void Query::ColumnCountMismatch(MaterializedQueryResult &result, int expected_co
 	print_sql(sql_query);
 	print_line_sep();
 	print_result_error(result, values, expected_column_count, row_wise);
-	FAIL_LINE(file_name, query_line);
+	FAIL_LINE(file_name, query_line, 0);
 }
 
 vector<string> Query::LoadResultFromFile(string fname, vector<string> names) {
@@ -679,7 +679,7 @@ vector<string> Query::LoadResultFromFile(string fname, vector<string> names) {
 	if (!csv_result->success) {
 		string error = StringUtil::Format("Could not read CSV File \"%s\": %s", fname, csv_result->error);
 		print_error_header(error.c_str(), file_name.c_str(), query_line);
-		FAIL_LINE(file_name, query_line);
+		FAIL_LINE(file_name, query_line, 0);
 	}
 	expected_column_count = csv_result->ColumnCount();
 
@@ -717,7 +717,7 @@ void Query::Execute() {
 		print_line_sep();
 		print_header("Actual result:");
 		result->Print();
-		FAIL_LINE(file_name, query_line);
+		FAIL_LINE(file_name, query_line, 0);
 	}
 	idx_t row_count = result->collection.Count();
 	idx_t column_count = result->ColumnCount();
@@ -867,7 +867,7 @@ void Query::Execute() {
 			fprintf(stderr, "Expected %d columns, but %d values were supplied\n", (int)expected_column_count,
 			        (int)comparison_values.size());
 			fprintf(stderr, "This is not cleanly divisible (i.e. the last row does not have enough values)\n");
-			FAIL_LINE(file_name, query_line);
+			FAIL_LINE(file_name, query_line, 0);
 		}
 		if (expected_rows != result->collection.Count()) {
 			if (column_count_mismatch) {
@@ -880,7 +880,7 @@ void Query::Execute() {
 			print_sql(sql_query);
 			print_line_sep();
 			print_result_error(*result, comparison_values, expected_column_count, row_wise);
-			FAIL_LINE(file_name, query_line);
+			FAIL_LINE(file_name, query_line, 0);
 		}
 
 		if (row_wise) {
@@ -903,14 +903,14 @@ void Query::Execute() {
 					print_line_sep();
 					print_sql(sql_query);
 					print_line_sep();
-					FAIL_LINE(file_name, query_line);
+					FAIL_LINE(file_name, query_line, 0);
 				}
 				for (idx_t c = 0; c < splits.size(); c++) {
 					bool success = compare_values(*result, azResult[current_row * expected_column_count + c], splits[c],
 					                              file_name, query_line, sql_query, current_row, c, comparison_values,
 					                              expected_column_count, row_wise);
 					if (!success) {
-						FAIL_LINE(file_name, query_line);
+						FAIL_LINE(file_name, query_line, 0);
 					}
 					// we do this just to increment the assertion counter
 					REQUIRE(success);
@@ -924,7 +924,7 @@ void Query::Execute() {
 				                              comparison_values[i], file_name, query_line, sql_query, current_row,
 				                              current_column, comparison_values, expected_column_count, row_wise);
 				if (!success) {
-					FAIL_LINE(file_name, query_line);
+					FAIL_LINE(file_name, query_line, 0);
 				}
 				// we do this just to increment the assertion counter
 				REQUIRE(success);
@@ -951,7 +951,7 @@ void Query::Execute() {
 			          << string(result->ColumnCount(), 'I') << termcolor::reset << termcolor::bold << "\""
 			          << termcolor::reset << std::endl;
 			print_line_sep();
-			FAIL_LINE(file_name, query_line);
+			FAIL_LINE(file_name, query_line, 0);
 		}
 	} else {
 		bool hash_compare_error = false;
@@ -969,7 +969,7 @@ void Query::Execute() {
 			if (values.size() <= 0) {
 				print_error_header("Error in test: attempting to compare hash but no hash found!", file_name,
 				                   query_line);
-				FAIL_LINE(file_name, query_line);
+				FAIL_LINE(file_name, query_line, 0);
 			}
 			hash_compare_error = strcmp(values[0].c_str(), zHash) != 0;
 		}
@@ -988,7 +988,7 @@ void Query::Execute() {
 			print_header("Actual result:");
 			print_line_sep();
 			result->Print();
-			FAIL_LINE(file_name, query_line);
+			FAIL_LINE(file_name, query_line, 0);
 		}
 		REQUIRE(!hash_compare_error);
 	}
