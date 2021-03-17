@@ -12,34 +12,23 @@ if res.returncode != 0:
 
 culprits = []
 
+whitelist = ['@@GLIBC', '@@CXXABI', '__gnu_cxx::', 'std::', 
+'N6duckdb', 'duckdb::', 'duckdb_miniz::', 'duckdb_fmt::', 'duckdb_hll::', 'duckdb_moodycamel::', 'duckdb_',
+'RefCounter', 'registerTMCloneTable', 'RegisterClasses', 'Unwind_Resume', '__gmon_start', '_fini', '_init', '_end', '_edata', '__bss_start']
+
 for symbol in res.stdout.decode('utf-8').split('\n'):
 	if len(symbol.strip()) == 0:
-		continue
-	if '@@GLIBC' in symbol:
-		continue
-	if '@@CXXABI' in symbol:
-		continue
-	if '__gnu_cxx::' in symbol:
 		continue
 	if symbol.endswith(' U'): # undefined because dynamic linker
 		continue
 	if symbol.endswith(' U 0 0'): # undefined because dynamic linker
 		continue
-	if 'duckdb::' in symbol:
-		continue
-	if 'std::' in symbol:
-		continue
-	if 'duckdb_miniz::' in symbol:
-		continue
-	if 'duckdb_fmt::' in symbol:
-		continue
-	if 'duckdb_hll::' in symbol:
-		continue
-	if 'duckdb_moodycamel::' in symbol:
-		continue
-	if symbol.startswith('_duckdb_'):
-		continue
-	if symbol.startswith('duckdb_'):
+
+	is_whitelisted = False
+	for entry in whitelist:
+		if entry in symbol:
+			is_whitelisted = True
+	if is_whitelisted:
 		continue
 
 	culprits.append(symbol)
