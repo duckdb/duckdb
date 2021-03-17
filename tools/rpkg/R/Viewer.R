@@ -1,5 +1,5 @@
-#' Functions used to connect to Connections Pane in Rstudio
-#' Implementing connections contract: https://rstudio.github.io/rstudio-extensions/connections-contract.html
+# Functions used to connect to Connections Pane in Rstudio
+# Implementing connections contract: https://rstudio.github.io/rstudio-extensions/connections-contract.html
 duckdb_ListObjectTypes <- function(con) {
   object_types <- list(table = list(contains="data"))
 
