@@ -63,7 +63,7 @@ namespace duckdb_moodycamel { namespace details {
 	};
 } }
 #if defined(MCDBGQ_USE_RELACY)
-namespace moodycamel { namespace details {
+namespace duckdb_moodycamel { namespace details {
 	typedef std::uint32_t thread_id_t;
 	static const thread_id_t invalid_thread_id  = 0xFFFFFFFFU;
 	static const thread_id_t invalid_thread_id2 = 0xFFFFFFFEU;
@@ -73,7 +73,7 @@ namespace moodycamel { namespace details {
 // No sense pulling in windows.h in a header, we'll manually declare the function
 // we use and rely on backwards-compatibility for this not to break
 extern "C" __declspec(dllimport) unsigned long __stdcall GetCurrentThreadId(void);
-namespace moodycamel { namespace details {
+namespace duckdb_moodycamel { namespace details {
 	static_assert(sizeof(unsigned long) == sizeof(std::uint32_t), "Expected size of unsigned long to be 32 bits on Windows");
 	typedef std::uint32_t thread_id_t;
 	static const thread_id_t invalid_thread_id  = 0;			// See http://blogs.msdn.com/b/oldnewthing/archive/2004/02/23/78395.aspx
