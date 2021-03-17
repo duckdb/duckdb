@@ -548,9 +548,12 @@ static void ListCastSwitch(Vector &source, Vector &result, idx_t count) {
 //			DataChunk append_chunk;
 //			append_chunk.Initialize(result_types);
 //			for (auto &chunk : source_cc.Chunks()) {
-            VectorOperations::Cast(source_cc, append_vector, count);
+            if (source_cc.GetData()){
+                VectorOperations::Cast(source_cc, append_vector, count);
 //				append_chunk.SetCardinality(chunk->size());
-            ListVector::Append(result,append_vector,count);
+                ListVector::Append(result,append_vector,count);
+            }
+
 //			}
 		}
 

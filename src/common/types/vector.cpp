@@ -830,20 +830,20 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 //		D_ASSERT(GetType().child_types().size() == 1);
 //		if (GetVectorType() == VectorType::CONSTANT_VECTOR) {
 //			if (!ConstantVector::IsNull(*this)) {
-//				ListVector::GetEntry(*this).Verify();
+//				ListVector::GetEntry(*this).Verify(ListVector::GetListSize(*this));
 //				auto le = ConstantVector::GetData<list_entry_t>(*this);
-//				D_ASSERT(le->offset + le->length <= ListVector::GetEntry(*this).Count());
+//				D_ASSERT(le->offset + le->length <= ListVector::GetListSize(*this));
 //			}
 //		} else if (GetVectorType() == VectorType::FLAT_VECTOR) {
 //			if (ListVector::HasEntry(*this)) {
-//				ListVector::GetEntry(*this).Verify();
+//				ListVector::GetEntry(*this).Verify(ListVector::GetListSize(*this));
 //			}
 //			auto list_data = FlatVector::GetData<list_entry_t>(*this);
 //			for (idx_t i = 0; i < count; i++) {
 //				auto idx = sel.get_index(i);
 //				auto &le = list_data[idx];
 //				if (validity.RowIsValid(idx)) {
-//					D_ASSERT(le.offset + le.length <= ListVector::GetEntry(*this).Count());
+//					D_ASSERT(le.offset + le.length <= ListVector::GetListSize(*this));
 //				}
 //			}
 //		}
@@ -1021,6 +1021,10 @@ void ListVector::SetEntry(Vector &vector, unique_ptr<Vector> cc) {
 }
 
 void ListVector::Append(Vector& target, Vector& source, idx_t source_size, idx_t source_offset){
+    if (source_size-source_offset == 0){
+        //! Nothing to add
+        return;
+    }
     auto &target_buffer = (VectorListBuffer &)*target.auxiliary;
     auto target_offset = ListVector::GetListSize(target);
     target_buffer.Append(source,source_size,source_offset);

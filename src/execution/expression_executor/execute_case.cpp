@@ -130,48 +130,46 @@ void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &
 		StringVector::AddHeapReference(result, res_true);
 		StringVector::AddHeapReference(result, res_false);
 		break;
-//	case PhysicalType::LIST: {
-//		auto result_cc = make_unique<ChunkCollection>();
-//		ListVector::SetEntry(result, move(result_cc));
-//
-//		auto &result_child = ListVector::GetEntry(result);
-//		idx_t offset = 0;
-//		if (ListVector::HasEntry(res_true)) {
-//			auto &true_child = ListVector::GetEntry(res_true);
-//			D_ASSERT(true_child.Types().size() == 1);
-//			offset += true_child.Count();
-//			result_child.Append(true_child);
-//		}
-//		if (ListVector::HasEntry(res_false)) {
-//			auto &false_child = ListVector::GetEntry(res_false);
-//			D_ASSERT(false_child.Types().size() == 1);
-//			result_child.Append(false_child);
-//		}
-//
-//		// all the false offsets need to be incremented by true_child.count
-//		TemplatedFillLoop<list_entry_t>(res_true, result, tside, tcount);
-//
-//		// FIXME the nullmask here is likely borked
-//		// TODO uuugly
-//		VectorData fdata;
-//		res_false.Orrify(fcount, fdata);
-//
-//		auto data = (list_entry_t *)fdata.data;
-//		auto res = FlatVector::GetData<list_entry_t>(result);
-//		auto &mask = FlatVector::Validity(result);
-//
-//		for (idx_t i = 0; i < fcount; i++) {
-//			auto fidx = fdata.sel->get_index(i);
-//			auto res_idx = fside.get_index(i);
-//			auto list_entry = data[fidx];
-//			list_entry.offset += offset;
-//			res[res_idx] = list_entry;
-//			mask.Set(res_idx, fdata.validity.RowIsValid(fidx));
-//		}
-//
-//		result.Verify(tcount + fcount);
-//		break;
-//	}
+	case PhysicalType::LIST: {
+		auto result_vector = make_unique<Vector>(result.GetType().child_types()[0].second);
+		ListVector::SetEntry(result, move(result_vector));
+
+		idx_t offset = 0;
+		if (ListVector::HasEntry(res_true)) {
+			auto &true_child = ListVector::GetEntry(res_true);
+			offset += ListVector::GetListSize(res_true);
+			ListVector::Append(result,true_child,ListVector::GetListSize(res_true));
+		}
+		if (ListVector::HasEntry(res_false)) {
+		    auto &false_child = ListVector::GetEntry(res_false);
+
+            ListVector::Append(result,false_child,ListVector::GetListSize(res_false));
+		}
+
+		// all the false offsets need to be incremented by true_child.count
+		TemplatedFillLoop<list_entry_t>(res_true, result, tside, tcount);
+
+		// FIXME the nullmask here is likely borked
+		// TODO uuugly
+		VectorData fdata;
+		res_false.Orrify(fcount, fdata);
+
+		auto data = (list_entry_t *)fdata.data;
+		auto res = FlatVector::GetData<list_entry_t>(result);
+		auto &mask = FlatVector::Validity(ListVector::GetEntry(result));
+
+		for (idx_t i = 0; i < fcount; i++) {
+			auto fidx = fdata.sel->get_index(i);
+			auto res_idx = fside.get_index(i);
+			auto list_entry = data[fidx];
+			list_entry.offset += offset;
+			res[res_idx] = list_entry;
+			mask.Set(res_idx, fdata.validity.RowIsValid(fidx));
+		}
+
+		//result.Verify(tcount + fcount);
+		break;
+	}
 	default:
 		throw NotImplementedException("Unimplemented type for case expression: %s", result.GetType().ToString());
 	}

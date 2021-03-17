@@ -61,28 +61,32 @@ unique_ptr<FunctionOperatorData> PragmaFunctionsInit(ClientContext &context, con
 void AddFunction(BaseScalarFunction &f, idx_t &count, DataChunk &output, bool is_aggregate) {
 	output.SetValue(0, count, Value(f.name));
 	output.SetValue(1, count, Value(is_aggregate ? "AGGREGATE" : "SCALAR"));
-//	if (!ListVector::HasEntry(output.data[2])) {
-//		ListVector::SetEntry(output.data[2], make_unique<ChunkCollection>());
-//	}
-//	auto &cc = ListVector::GetEntry(output.data[2]);
-//	auto result_data = FlatVector::GetData<list_entry_t>(output.data[2]);
-//	result_data[count].offset = cc.Count();
-//	result_data[count].length = f.arguments.size();
-//	string parameters;
+	if (!ListVector::HasEntry(output.data[2])) {
+		ListVector::SetEntry(output.data[2], make_unique<Vector>(output.data[2].GetType().child_types()[0].second));
+	}
+//	auto &vec = ListVector::GetEntry(output.data[2]);
+	auto result_data = FlatVector::GetData<list_entry_t>(output.data[2]);
+	result_data[count].offset = ListVector::GetListSize(output.data[2]);
+	result_data[count].length = f.arguments.size();
+	string parameters;
 //	vector<LogicalType> types {LogicalType::VARCHAR};
 //	DataChunk chunk;
 //	chunk.Initialize(types);
-//	for (idx_t i = 0; i < f.arguments.size(); i++) {
-//		chunk.data[0].SetValue(chunk.size(), Value(f.arguments[i].ToString()));
+    Vector append_vector({{"",LogicalType::VARCHAR}});
+	for (idx_t i = 0; i < f.arguments.size(); i++) {
+	    auto val = Value(f.arguments[i].ToString());
+	    ListVector::PushBack(append_vector, val);
+//		append_vector.SetValue(chunk.size(),);
 //		chunk.SetCardinality(chunk.size() + 1);
 //		if (chunk.size() == STANDARD_VECTOR_SIZE) {
-//			cc.Append(chunk);
+//			vec.Append(chunk);
 //			chunk.Reset();
 //		}
-//	}
-//	if (chunk.size() > 0) {
-//		cc.Append(chunk);
-//	}
+	}
+	if (ListVector::GetListSize(append_vector) > 0) {
+	    ListVector::Append(output.data[2],ListVector::GetEntry(append_vector),ListVector::GetListSize(append_vector));
+//		vec.Append(chunk);
+	}
 	output.SetValue(3, count, f.varargs.id() != LogicalTypeId::INVALID ? Value(f.varargs.ToString()) : Value());
 	output.SetValue(4, count, f.return_type.ToString());
 	output.SetValue(5, count, Value::BOOLEAN(f.has_side_effects));
