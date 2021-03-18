@@ -60,6 +60,38 @@ public:
 	static const auto ZEROS = std::numeric_limits<W>::min();
 	static const auto ONES = std::numeric_limits<W>::max();
 
+	class reference {
+	public:
+		reference &operator=(bool x) noexcept {
+			auto b = parent.Block(pos);
+			auto s = parent.Shift(pos);
+			auto w = parent.GetBlock(b);
+			if (parent.TestBit(w, s) != x) {
+				parent.SetBlock(b, parent.FlipBit(w, s));
+			}
+			return *this;
+		}
+
+		reference &operator=(const reference &r) noexcept {
+			return *this = bool(r);
+		}
+
+		operator bool() const noexcept {
+			return parent[pos];
+		}
+
+		bool operator~() const noexcept {
+			return !parent[pos];
+		}
+
+	private:
+		explicit reference(BitArray &parent_p, size_t pos_p) : parent(parent_p), pos(pos_p) {
+		}
+
+		BitArray &parent;
+		size_t pos;
+	};
+
 	static size_t Block(const size_t &pos) {
 		return pos / BITS_PER_WORD;
 	}
@@ -78,6 +110,10 @@ public:
 
 	static W ClearBit(W w, unsigned s) {
 		return w & ~(W(1) << s);
+	}
+
+	static W FlipBit(W w, unsigned s) {
+		return w ^ ~(W(1) << s);
 	}
 
 	explicit BitArray(const size_t &count, const W &init = 0)
@@ -102,6 +138,10 @@ public:
 
 	bool operator[](size_t pos) const {
 		return TestBit(GetBlock(Block(pos)), Shift(pos));
+	}
+
+	reference operator[](size_t pos) {
+		return reference(*this, pos);
 	}
 
 private:
@@ -362,6 +402,21 @@ static counts_t OffsetsFromCounts(const counts_t &counts) {
 	}
 
 	return offsets;
+}
+
+using slices_t = std::vector<Slice>;
+static slices_t SlicesFromCounts(const counts_t &counts) {
+	slices_t slices;
+	Slice::first_type begin = 0;
+	for (const auto &count : counts) {
+		if (count) {
+			auto end = begin + count;
+			slices.emplace_back(Slice(begin, end));
+			begin = end;
+		}
+	}
+
+	return slices;
 }
 
 static void PartitionChunk(counts_t &counts, Vector &hash_vector, DataChunk &sort_chunk, const idx_t partition_cols,
@@ -957,13 +1012,17 @@ void PhysicalWindow::Finalize(Pipeline &pipeline, ClientContext &context, unique
 			MaskColumn(order_mask, over_collection, c);
 		}
 
+		//	Go through the counts and convert them to non-empty partition ranges.
+		const auto ranges = SlicesFromCounts(counts);
+
 		//	Compute the functions with matching sorts
 		for (const auto &expr_idx : matching) {
 			D_ASSERT(select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
 			auto wexpr = reinterpret_cast<BoundWindowExpression *>(select_list[expr_idx].get());
 			// reuse partition and order clause in window def
-			Slice range {0, big_data.Count()};
-			ComputeWindowExpression(wexpr, big_data, window_results, partition_mask, order_mask, expr_idx, range);
+			for (const auto &range : ranges) {
+				ComputeWindowExpression(wexpr, big_data, window_results, partition_mask, order_mask, expr_idx, range);
+			}
 		}
 	}
 }
