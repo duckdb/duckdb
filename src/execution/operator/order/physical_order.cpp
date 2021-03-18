@@ -234,120 +234,6 @@ unique_ptr<LocalSinkState> PhysicalOrder::GetLocalSinkState(ExecutionContext &co
 	return result;
 }
 
-static void ComputeEntrySizes(Vector &v, idx_t entry_sizes[], idx_t count, idx_t offset = 0) {
-	auto physical_type = v.GetType().InternalType();
-	if (TypeIsConstantSize(physical_type)) {
-		const auto type_size = GetTypeIdSize(physical_type);
-		for (idx_t i = 0; i < count; i++) {
-			entry_sizes[i] += type_size;
-		}
-		return;
-	}
-
-	VectorData vdata;
-	v.Orrify(count, vdata);
-
-	switch (physical_type) {
-	case PhysicalType::VARCHAR: {
-		auto strings = (string_t *)vdata.data;
-		for (idx_t i = 0; i < count; i++) {
-			idx_t str_idx = vdata.sel->get_index(i + offset);
-			if (vdata.validity.RowIsValid(str_idx)) {
-				entry_sizes[i] += string_t::PREFIX_LENGTH + strings[str_idx].GetSize();
-			}
-		}
-		break;
-	}
-	case PhysicalType::STRUCT: {
-		// obtain child vectors
-		child_list_t<unique_ptr<Vector>> *children;
-		vector<Vector> struct_vectors;
-		if (v.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-			auto &child = DictionaryVector::Child(v);
-			auto &dict_sel = DictionaryVector::SelVector(v);
-			children = &StructVector::GetEntries(child);
-			for (auto &struct_child : *children) {
-				Vector struct_vector;
-				struct_vector.Slice(*struct_child.second, dict_sel, count);
-				struct_vectors.push_back(move(struct_vector));
-			}
-		} else {
-			children = &StructVector::GetEntries(v);
-			for (auto &struct_child : *children) {
-				Vector struct_vector;
-				struct_vector.Reference(*struct_child.second);
-				struct_vectors.push_back(move(struct_vector));
-			}
-		}
-		// add struct validitymask size
-		const idx_t struct_validitymask_size = (children->size() + 7) / 8;
-		for (idx_t i = 0; i < count; i++) {
-			entry_sizes[i] += struct_validitymask_size;
-		}
-		// compute size of child vectors
-		for (auto &struct_vector : struct_vectors) {
-			ComputeEntrySizes(struct_vector, entry_sizes, count, offset);
-		}
-		break;
-	}
-	case PhysicalType::LIST: {
-		auto list_data = FlatVector::GetData<list_entry_t>(v);
-		auto &child_cc = ListVector::GetEntry(v);
-		for (idx_t i = 0; i < count; i++) {
-			idx_t idx = vdata.sel->get_index(i + offset);
-			if (vdata.validity.RowIsValid(idx)) {
-				auto list_entry = list_data[idx];
-
-				// add size of list length and list nullmask
-				entry_sizes[i] += sizeof(list_entry.length);
-				entry_sizes[i] += (list_entry.length + 7) / 8;
-
-				// compute size of each the elements in list_entry and sum them
-				idx_t list_entry_sizes[STANDARD_VECTOR_SIZE];
-				auto entry_remaining = list_entry.length;
-				auto entry_offset = list_entry.offset;
-				while (entry_remaining > 0) {
-					std::fill_n(list_entry_sizes, STANDARD_VECTOR_SIZE, 0);
-
-					// the list entry can span multiple vectors
-					auto &chunk = child_cc.GetChunkForRow(entry_offset);
-					auto offset_in_chunk = entry_offset % STANDARD_VECTOR_SIZE;
-					auto next = MinValue(chunk.size() - offset_in_chunk, entry_remaining);
-
-					// compute and add to the total
-					ComputeEntrySizes(chunk.data[0], list_entry_sizes, next, offset_in_chunk);
-					for (idx_t size_idx = 0; size_idx < next; size_idx++) {
-						entry_sizes[i] += list_entry_sizes[size_idx];
-					}
-
-					// update for next iteration
-					entry_remaining -= next;
-					entry_offset += next;
-				}
-			}
-		}
-		break;
-	}
-	default:
-		throw NotImplementedException("Variable size payload type not implemented for sorting!");
-	}
-}
-
-static void ComputeEntrySizes(DataChunk &input, idx_t entry_sizes[], idx_t entry_size) {
-	// fill array with constant portion of payload entry size
-	std::fill_n(entry_sizes, input.size(), entry_size);
-
-	// compute size of the constant portion of the payload columns
-	VectorData vdata;
-	for (idx_t col_idx = 0; col_idx < input.data.size(); col_idx++) {
-		auto physical_type = input.data[col_idx].GetType().InternalType();
-		if (TypeIsConstantSize(physical_type)) {
-			continue;
-		}
-		ComputeEntrySizes(input.data[col_idx], entry_sizes, input.size());
-	}
-}
-
 void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &gstate_p, LocalSinkState &lstate_p,
                          DataChunk &input) {
 	auto &gstate = (OrderGlobalState &)gstate_p;
@@ -397,7 +283,7 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &gstate_
 		auto &var_block = *lstate.var_sorting_blocks[sort_col];
 		// compute entry sizes
 		std::fill_n(lstate.entry_sizes, input.size(), 0);
-		ComputeEntrySizes(sort.data[sort_col], lstate.entry_sizes, sort.size());
+		RowChunk::ComputeEntrySizes(sort.data[sort_col], lstate.entry_sizes, sort.size());
 		// build and serialize entry sizes
 		var_sizes.Build(sort.size(), lstate.key_locations, nullptr);
 		for (idx_t i = 0; i < input.size(); i++) {
@@ -411,7 +297,7 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &gstate_
 
 	// compute entry sizes of payload columns if there are variable size columns
 	if (payload_state.HAS_VARIABLE_SIZE) {
-		ComputeEntrySizes(input, lstate.entry_sizes, payload_state.ENTRY_SIZE);
+		RowChunk::ComputeEntrySizes(input, lstate.entry_sizes, payload_state.ENTRY_SIZE);
 		lstate.sizes_block->Build(input.size(), lstate.key_locations, nullptr);
 		for (idx_t i = 0; i < input.size(); i++) {
 			Store<idx_t>(lstate.entry_sizes[i], lstate.key_locations[i]);

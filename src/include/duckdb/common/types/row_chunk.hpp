@@ -61,16 +61,18 @@ public:
 	void SerializeVectorSortable(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count,
 	                             data_ptr_t key_locations[], bool desc, bool has_null, bool invert, idx_t prefix_len);
 
+	static void ComputeEntrySizes(Vector &v, idx_t entry_sizes[], idx_t vcount, idx_t offset = 0);
+	static void ComputeEntrySizes(DataChunk &input, idx_t entry_sizes[], idx_t entry_size);
+
 	void SerializeVectorData(VectorData &vdata, PhysicalType type, const SelectionVector &sel, idx_t ser_count,
-	                         idx_t col_idx, data_ptr_t key_locations[], data_ptr_t validitymask_locations[]);
+	                         idx_t col_idx, data_ptr_t key_locations[], data_ptr_t validitymask_locations[],
+	                         idx_t offset = 0);
 	void SerializeVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count, idx_t col_idx,
-	                     data_ptr_t key_locations[], data_ptr_t validitymask_locations[]);
+	                     data_ptr_t key_locations[], data_ptr_t validitymask_locations[], idx_t offset = 0);
 	idx_t AppendToBlock(RowDataBlock &block, BufferHandle &handle, vector<BlockAppendEntry> &append_entries,
 	                    idx_t remaining, idx_t entry_sizes[]);
 	void Build(idx_t added_count, data_ptr_t key_locations[], idx_t entry_sizes[]);
 
-	static void DeserializeIntoVectorData(Vector &v, PhysicalType type, idx_t vcount, idx_t col_idx,
-	                                      data_ptr_t key_locations[], data_ptr_t validitymask_locations[]);
 	static void DeserializeIntoVector(Vector &v, const idx_t &vcount, const idx_t &col_idx, data_ptr_t key_locations[],
 	                                  data_ptr_t validitymask_locations[]);
 

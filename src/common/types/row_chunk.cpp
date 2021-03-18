@@ -319,13 +319,127 @@ void RowChunk::SerializeVectorSortable(Vector &v, idx_t vcount, const SelectionV
 	}
 }
 
+void RowChunk::ComputeEntrySizes(Vector &v, idx_t entry_sizes[], idx_t vcount, idx_t offset) {
+	auto physical_type = v.GetType().InternalType();
+	if (TypeIsConstantSize(physical_type)) {
+		const auto type_size = GetTypeIdSize(physical_type);
+		for (idx_t i = 0; i < vcount; i++) {
+			entry_sizes[i] += type_size;
+		}
+		return;
+	}
+
+	VectorData vdata;
+	v.Orrify(vcount, vdata);
+
+	switch (physical_type) {
+	case PhysicalType::VARCHAR: {
+		auto strings = (string_t *)vdata.data;
+		for (idx_t i = 0; i < vcount; i++) {
+			idx_t str_idx = vdata.sel->get_index(i + offset);
+			if (vdata.validity.RowIsValid(str_idx)) {
+				entry_sizes[i] += string_t::PREFIX_LENGTH + strings[str_idx].GetSize();
+			}
+		}
+		break;
+	}
+	case PhysicalType::STRUCT: {
+		// obtain child vectors
+		child_list_t<unique_ptr<Vector>> *children;
+		vector<Vector> struct_vectors;
+		if (v.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+			auto &child = DictionaryVector::Child(v);
+			auto &dict_sel = DictionaryVector::SelVector(v);
+			children = &StructVector::GetEntries(child);
+			for (auto &struct_child : *children) {
+				Vector struct_vector;
+				struct_vector.Slice(*struct_child.second, dict_sel, vcount);
+				struct_vectors.push_back(move(struct_vector));
+			}
+		} else {
+			children = &StructVector::GetEntries(v);
+			for (auto &struct_child : *children) {
+				Vector struct_vector;
+				struct_vector.Reference(*struct_child.second);
+				struct_vectors.push_back(move(struct_vector));
+			}
+		}
+		// add struct validitymask size
+		const idx_t struct_validitymask_size = (children->size() + 7) / 8;
+		for (idx_t i = 0; i < vcount; i++) {
+			entry_sizes[i] += struct_validitymask_size;
+		}
+		// compute size of child vectors
+		for (auto &struct_vector : struct_vectors) {
+			ComputeEntrySizes(struct_vector, entry_sizes, vcount, offset);
+		}
+		break;
+	}
+	case PhysicalType::LIST: {
+		auto list_data = FlatVector::GetData<list_entry_t>(v);
+		auto &child_cc = ListVector::GetEntry(v);
+		for (idx_t i = 0; i < vcount; i++) {
+			idx_t idx = vdata.sel->get_index(i + offset);
+			if (vdata.validity.RowIsValid(idx)) {
+				auto list_entry = list_data[idx];
+
+				// add size of list length and list nullmask
+				entry_sizes[i] += sizeof(list_entry.length);
+				entry_sizes[i] += (list_entry.length + 7) / 8;
+
+				// compute size of each the elements in list_entry and sum them
+				idx_t list_entry_sizes[STANDARD_VECTOR_SIZE];
+				auto entry_remaining = list_entry.length;
+				auto entry_offset = list_entry.offset;
+				while (entry_remaining > 0) {
+					std::fill_n(list_entry_sizes, STANDARD_VECTOR_SIZE, 0);
+
+					// the list entry can span multiple vectors
+					auto &chunk = child_cc.GetChunkForRow(entry_offset);
+					auto offset_in_chunk = entry_offset % STANDARD_VECTOR_SIZE;
+					auto next = MinValue(chunk.size() - offset_in_chunk, entry_remaining);
+
+					// compute and add to the total
+					ComputeEntrySizes(chunk.data[0], list_entry_sizes, next, offset_in_chunk);
+					for (idx_t size_idx = 0; size_idx < next; size_idx++) {
+						entry_sizes[i] += list_entry_sizes[size_idx];
+					}
+
+					// update for next iteration
+					entry_remaining -= next;
+					entry_offset += next;
+				}
+			}
+		}
+		break;
+	}
+	default:
+		throw NotImplementedException("Variable size payload type not implemented for sorting!");
+	}
+}
+
+void RowChunk::ComputeEntrySizes(DataChunk &input, idx_t entry_sizes[], idx_t entry_size) {
+	// fill array with constant portion of payload entry size
+	std::fill_n(entry_sizes, input.size(), entry_size);
+
+	// compute size of the constant portion of the payload columns
+	VectorData vdata;
+	for (idx_t col_idx = 0; col_idx < input.data.size(); col_idx++) {
+		auto physical_type = input.data[col_idx].GetType().InternalType();
+		if (TypeIsConstantSize(physical_type)) {
+			continue;
+		}
+		ComputeEntrySizes(input.data[col_idx], entry_sizes, input.size());
+	}
+}
+
 template <class T>
 static void TemplatedSerializeVData(VectorData &vdata, const SelectionVector &sel, idx_t count, idx_t col_idx,
-                                    data_ptr_t *key_locations, data_ptr_t *validitymask_locations) {
+                                    data_ptr_t *key_locations, data_ptr_t *validitymask_locations, idx_t offset) {
 	auto source = (T *)vdata.data;
 	if (!validitymask_locations) {
 		for (idx_t i = 0; i < count; i++) {
-			auto idx = sel.get_index(i);
+			auto idx = sel.get_index(i + offset);
 			auto source_idx = vdata.sel->get_index(idx);
 
 			auto target = (T *)key_locations[i];
@@ -336,7 +450,7 @@ static void TemplatedSerializeVData(VectorData &vdata, const SelectionVector &se
 		auto byte_offset = col_idx / 8;
 		auto offset_in_byte = col_idx % 8;
 		for (idx_t i = 0; i < count; i++) {
-			auto idx = sel.get_index(i);
+			auto idx = sel.get_index(i + offset);
 			auto source_idx = vdata.sel->get_index(idx);
 
 			auto target = (T *)key_locations[i];
@@ -352,53 +466,59 @@ static void TemplatedSerializeVData(VectorData &vdata, const SelectionVector &se
 }
 
 void RowChunk::SerializeVectorData(VectorData &vdata, PhysicalType type, const SelectionVector &sel, idx_t ser_count,
-                                   idx_t col_idx, data_ptr_t key_locations[], data_ptr_t validitymask_locations[]) {
+                                   idx_t col_idx, data_ptr_t key_locations[], data_ptr_t validitymask_locations[],
+                                   idx_t offset) {
 	switch (type) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
-		TemplatedSerializeVData<int8_t>(vdata, sel, ser_count, col_idx, key_locations, validitymask_locations);
+		TemplatedSerializeVData<int8_t>(vdata, sel, ser_count, col_idx, key_locations, validitymask_locations, offset);
 		break;
 	case PhysicalType::INT16:
-		TemplatedSerializeVData<int16_t>(vdata, sel, ser_count, col_idx, key_locations, validitymask_locations);
+		TemplatedSerializeVData<int16_t>(vdata, sel, ser_count, col_idx, key_locations, validitymask_locations, offset);
 		break;
 	case PhysicalType::INT32:
-		TemplatedSerializeVData<int32_t>(vdata, sel, ser_count, col_idx, key_locations, validitymask_locations);
+		TemplatedSerializeVData<int32_t>(vdata, sel, ser_count, col_idx, key_locations, validitymask_locations, offset);
 		break;
 	case PhysicalType::INT64:
-		TemplatedSerializeVData<int64_t>(vdata, sel, ser_count, col_idx, key_locations, validitymask_locations);
+		TemplatedSerializeVData<int64_t>(vdata, sel, ser_count, col_idx, key_locations, validitymask_locations, offset);
 		break;
 	case PhysicalType::UINT8:
-		TemplatedSerializeVData<uint8_t>(vdata, sel, ser_count, col_idx, key_locations, validitymask_locations);
+		TemplatedSerializeVData<uint8_t>(vdata, sel, ser_count, col_idx, key_locations, validitymask_locations, offset);
 		break;
 	case PhysicalType::UINT16:
-		TemplatedSerializeVData<uint16_t>(vdata, sel, ser_count, col_idx, key_locations, validitymask_locations);
+		TemplatedSerializeVData<uint16_t>(vdata, sel, ser_count, col_idx, key_locations, validitymask_locations,
+		                                  offset);
 		break;
 	case PhysicalType::UINT32:
-		TemplatedSerializeVData<uint32_t>(vdata, sel, ser_count, col_idx, key_locations, validitymask_locations);
+		TemplatedSerializeVData<uint32_t>(vdata, sel, ser_count, col_idx, key_locations, validitymask_locations,
+		                                  offset);
 		break;
 	case PhysicalType::UINT64:
-		TemplatedSerializeVData<uint64_t>(vdata, sel, ser_count, col_idx, key_locations, validitymask_locations);
+		TemplatedSerializeVData<uint64_t>(vdata, sel, ser_count, col_idx, key_locations, validitymask_locations,
+		                                  offset);
 		break;
 	case PhysicalType::INT128:
-		TemplatedSerializeVData<hugeint_t>(vdata, sel, ser_count, col_idx, key_locations, validitymask_locations);
+		TemplatedSerializeVData<hugeint_t>(vdata, sel, ser_count, col_idx, key_locations, validitymask_locations,
+		                                   offset);
 		break;
 	case PhysicalType::FLOAT:
-		TemplatedSerializeVData<float>(vdata, sel, ser_count, col_idx, key_locations, validitymask_locations);
+		TemplatedSerializeVData<float>(vdata, sel, ser_count, col_idx, key_locations, validitymask_locations, offset);
 		break;
 	case PhysicalType::DOUBLE:
-		TemplatedSerializeVData<double>(vdata, sel, ser_count, col_idx, key_locations, validitymask_locations);
+		TemplatedSerializeVData<double>(vdata, sel, ser_count, col_idx, key_locations, validitymask_locations, offset);
 		break;
 	case PhysicalType::HASH:
-		TemplatedSerializeVData<hash_t>(vdata, sel, ser_count, col_idx, key_locations, validitymask_locations);
+		TemplatedSerializeVData<hash_t>(vdata, sel, ser_count, col_idx, key_locations, validitymask_locations, offset);
 		break;
 	case PhysicalType::INTERVAL:
-		TemplatedSerializeVData<interval_t>(vdata, sel, ser_count, col_idx, key_locations, validitymask_locations);
+		TemplatedSerializeVData<interval_t>(vdata, sel, ser_count, col_idx, key_locations, validitymask_locations,
+		                                    offset);
 		break;
 	case PhysicalType::VARCHAR: {
 		auto strings = (string_t *)vdata.data;
 		if (!validitymask_locations) {
 			for (idx_t i = 0; i < ser_count; i++) {
-				auto idx = sel.get_index(i);
+				auto idx = sel.get_index(i + offset);
 				auto source_idx = vdata.sel->get_index(idx);
 				auto &string_entry = strings[source_idx];
 
@@ -414,7 +534,7 @@ void RowChunk::SerializeVectorData(VectorData &vdata, PhysicalType type, const S
 			auto byte_offset = col_idx / 8;
 			auto offset_in_byte = col_idx % 8;
 			for (idx_t i = 0; i < ser_count; i++) {
-				auto idx = sel.get_index(i);
+				auto idx = sel.get_index(i + offset);
 				auto source_idx = vdata.sel->get_index(idx);
 				auto &string_entry = strings[source_idx];
 
@@ -440,7 +560,7 @@ void RowChunk::SerializeVectorData(VectorData &vdata, PhysicalType type, const S
 }
 
 void RowChunk::SerializeVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count, idx_t col_idx,
-                               data_ptr_t key_locations[], data_ptr_t validitymask_locations[]) {
+                               data_ptr_t key_locations[], data_ptr_t validitymask_locations[], idx_t offset) {
 	VectorData vdata;
 	v.Orrify(vcount, vdata);
 
@@ -480,7 +600,7 @@ void RowChunk::SerializeVector(Vector &v, idx_t vcount, const SelectionVector &s
 			struct_key_locations[i] = key_locations[i] + struct_validitymask_size;
 
 			// set whether the whole struct is null
-			auto idx = sel.get_index(i);
+			auto idx = sel.get_index(i + offset);
 			auto source_idx = vdata.sel->get_index(idx);
 			if (validitymask_locations && !vdata.validity.RowIsValid(source_idx)) {
 				*(validitymask_locations[i] + byte_offset) &= ~(1UL << offset_in_byte);
@@ -495,12 +615,75 @@ void RowChunk::SerializeVector(Vector &v, idx_t vcount, const SelectionVector &s
 		break;
 	}
 	case PhysicalType::LIST: {
-		throw NotImplementedException("List serialization for ORDER BY");
+		auto list_data = FlatVector::GetData<list_entry_t>(v);
+		auto &child_cc = ListVector::GetEntry(v);
+		for (idx_t i = 0; i < ser_count; i++) {
+			idx_t idx = vdata.sel->get_index(i + offset);
+			if (vdata.validity.RowIsValid(idx)) {
+				auto list_entry = list_data[idx];
+
+				// store list length
+				Store<uint64_t>(list_entry.length, key_locations[i]);
+				key_locations[i] += sizeof(list_entry.length);
+
+				// make room for the validitymask
+				data_ptr_t validitymask_location = key_locations[i];
+				idx_t offset_in_byte = 0;
+				idx_t validitymask_size = (list_entry.length + 7) / 8;
+				memset(validitymask_location, -1, validitymask_size);
+				key_locations[i] += validitymask_size;
+
+				idx_t list_entry_sizes[STANDARD_VECTOR_SIZE];
+				data_ptr_t list_entry_locations[STANDARD_VECTOR_SIZE];
+				auto entry_remaining = list_entry.length;
+				auto entry_offset = list_entry.offset;
+				while (entry_remaining > 0) {
+					std::fill_n(list_entry_sizes, STANDARD_VECTOR_SIZE, 0);
+
+					// the list entry can span multiple vectors
+					auto &chunk = child_cc.GetChunkForRow(entry_offset);
+					auto offset_in_chunk = entry_offset % STANDARD_VECTOR_SIZE;
+					auto next = MinValue(chunk.size() - offset_in_chunk, entry_remaining);
+
+					// serialize validity
+					VectorData list_vdata;
+					chunk.data[0].Orrify(chunk.size(), list_vdata);
+					for (idx_t entry_idx = 0; entry_idx < next; entry_idx++) {
+						if (!list_vdata.validity.RowIsValid(offset_in_chunk + entry_idx)) {
+							*(validitymask_location) &= ~(1UL << offset_in_byte);
+						}
+						if (++offset_in_byte == 8) {
+							validitymask_location++;
+							offset_in_byte = 0;
+						}
+					}
+
+					// compute entry sizes and set locations where the list entries will be serialized
+					ComputeEntrySizes(chunk.data[0], list_entry_sizes, next, offset_in_chunk);
+					list_entry_locations[0] = key_locations[i];
+					for (idx_t entry_idx = 0; entry_idx < next; entry_idx++) {
+						list_entry_locations[entry_idx + 1] =
+						    list_entry_locations[entry_idx] + list_entry_sizes[entry_idx];
+						key_locations[i] += list_entry_sizes[entry_idx];
+					}
+					key_locations[i] += list_entry_sizes[next - 1];
+
+					// now serialize to the locations
+					SerializeVector(chunk.data[0], chunk.size(), sel, next, 0, list_entry_locations, nullptr,
+					                entry_offset);
+
+					// update for next iteration
+					entry_remaining -= next;
+					entry_offset += next;
+				}
+			}
+		}
+		break;
 	}
 	default:
 		// non-nested types
 		SerializeVectorData(vdata, v.GetType().InternalType(), sel, ser_count, col_idx, key_locations,
-		                    validitymask_locations);
+		                    validitymask_locations, offset);
 	}
 }
 
@@ -588,122 +771,149 @@ static void TemplatedDeserializeIntoVector(Vector &v, idx_t count, idx_t col_idx
 	auto byte_offset = col_idx / 8;
 	auto offset_in_byte = col_idx % 8;
 	auto &validity = FlatVector::Validity(v);
-	for (idx_t i = 0; i < count; i++) {
-		target[i] = Load<T>(key_locations[i]);
-		key_locations[i] += sizeof(T);
-		validity.Set(i, *(validitymask_locations[i] + byte_offset) & (1 << offset_in_byte));
-	}
-}
-
-void RowChunk::DeserializeIntoVectorData(Vector &v, PhysicalType type, idx_t vcount, idx_t col_idx,
-                                         data_ptr_t key_locations[], data_ptr_t validitymask_locations[]) {
-	switch (type) {
-	case PhysicalType::BOOL:
-	case PhysicalType::INT8:
-		TemplatedDeserializeIntoVector<int8_t>(v, vcount, col_idx, key_locations, validitymask_locations);
-		break;
-	case PhysicalType::INT16:
-		TemplatedDeserializeIntoVector<int16_t>(v, vcount, col_idx, key_locations, validitymask_locations);
-		break;
-	case PhysicalType::INT32:
-		TemplatedDeserializeIntoVector<int32_t>(v, vcount, col_idx, key_locations, validitymask_locations);
-		break;
-	case PhysicalType::INT64:
-		TemplatedDeserializeIntoVector<int64_t>(v, vcount, col_idx, key_locations, validitymask_locations);
-		break;
-	case PhysicalType::UINT8:
-		TemplatedDeserializeIntoVector<uint8_t>(v, vcount, col_idx, key_locations, validitymask_locations);
-		break;
-	case PhysicalType::UINT16:
-		TemplatedDeserializeIntoVector<uint16_t>(v, vcount, col_idx, key_locations, validitymask_locations);
-		break;
-	case PhysicalType::UINT32:
-		TemplatedDeserializeIntoVector<uint32_t>(v, vcount, col_idx, key_locations, validitymask_locations);
-		break;
-	case PhysicalType::UINT64:
-		TemplatedDeserializeIntoVector<uint64_t>(v, vcount, col_idx, key_locations, validitymask_locations);
-		break;
-	case PhysicalType::INT128:
-		TemplatedDeserializeIntoVector<hugeint_t>(v, vcount, col_idx, key_locations, validitymask_locations);
-		break;
-	case PhysicalType::FLOAT:
-		TemplatedDeserializeIntoVector<float>(v, vcount, col_idx, key_locations, validitymask_locations);
-		break;
-	case PhysicalType::DOUBLE:
-		TemplatedDeserializeIntoVector<double>(v, vcount, col_idx, key_locations, validitymask_locations);
-		break;
-	case PhysicalType::HASH:
-		TemplatedDeserializeIntoVector<hash_t>(v, vcount, col_idx, key_locations, validitymask_locations);
-		break;
-	case PhysicalType::INTERVAL:
-		TemplatedDeserializeIntoVector<interval_t>(v, vcount, col_idx, key_locations, validitymask_locations);
-		break;
-	case PhysicalType::VARCHAR: {
-		idx_t len;
-		auto target = FlatVector::GetData<string_t>(v);
-		auto byte_offset = col_idx / 8;
-		auto offset_in_byte = col_idx % 8;
-		auto &validity = FlatVector::Validity(v);
-		for (idx_t i = 0; i < vcount; i++) {
-			bool valid = *(validitymask_locations[i] + byte_offset) & (1 << offset_in_byte);
-			// deserialize string length
-			len = valid ? Load<uint32_t>(key_locations[i]) : 0;
-			key_locations[i] += string_t::PREFIX_LENGTH;
-			// deserialize string
-			target[i] = StringVector::AddString(v, (const char *)key_locations[i], len);
-			key_locations[i] += len;
-			// set validitymask
-			validity.Set(i, valid);
+	if (validitymask_locations) {
+		for (idx_t i = 0; i < count; i++) {
+			target[i] = Load<T>(key_locations[i]);
+			key_locations[i] += sizeof(T);
+			validity.Set(i, *(validitymask_locations[i] + byte_offset) & (1 << offset_in_byte));
 		}
-		break;
-	}
-	case PhysicalType::STRUCT: {
-		ValidityMask *validity;
-		switch (v.GetVectorType()) {
-		case VectorType::FLAT_VECTOR:
-			validity = &FlatVector::Validity(v);
-			break;
-		case VectorType::CONSTANT_VECTOR:
-			validity = &ConstantVector::Validity(v);
-			break;
-		default:
-			throw NotImplementedException("FIXME: cannot deserialize struct vector with this vectortype");
+	} else {
+		for (idx_t i = 0; i < count; i++) {
+			target[i] = Load<T>(key_locations[i]);
+			key_locations[i] += sizeof(T);
 		}
-
-		// the whole struct itself can be NULL
-		auto byte_offset = col_idx / 8;
-		auto offset_in_byte = col_idx % 8;
-
-		// struct must have a validitymask for its fields
-		auto &child_types = v.GetType().child_types();
-		const idx_t struct_validitymask_size = (child_types.size() + 7) / 8;
-		data_ptr_t struct_key_locations[STANDARD_VECTOR_SIZE];
-		for (idx_t i = 0; i < vcount; i++) {
-			// use key_locations as the validitymask, and create struct_key_locations
-			struct_key_locations[i] = key_locations[i] + struct_validitymask_size;
-
-			// set whether the whole struct is null
-			bool valid = *(validitymask_locations[i] + byte_offset) & (1 << offset_in_byte);
-			validity->Set(i, valid);
-		}
-
-		// now deserialize into the struct vectors
-		for (idx_t i = 0; i < child_types.size(); i++) {
-			auto new_child = make_unique<Vector>(child_types[i].second);
-			DeserializeIntoVector(*new_child, vcount, i, struct_key_locations, key_locations);
-			StructVector::AddEntry(v, child_types[i].first, move(new_child));
-		}
-		break;
-	}
-	default:
-		// TODO: list
-		throw NotImplementedException("FIXME: unimplemented deserialize");
 	}
 }
 
 void RowChunk::DeserializeIntoVector(Vector &v, const idx_t &vcount, const idx_t &col_idx, data_ptr_t key_locations[],
                                      data_ptr_t validitymask_locations[]) {
-	DeserializeIntoVectorData(v, v.GetType().InternalType(), vcount, col_idx, key_locations, validitymask_locations);
+	auto type = v.GetType().InternalType();
+    switch (type) {
+    case PhysicalType::BOOL:
+    case PhysicalType::INT8:
+        TemplatedDeserializeIntoVector<int8_t>(v, vcount, col_idx, key_locations, validitymask_locations);
+        break;
+    case PhysicalType::INT16:
+        TemplatedDeserializeIntoVector<int16_t>(v, vcount, col_idx, key_locations, validitymask_locations);
+        break;
+    case PhysicalType::INT32:
+        TemplatedDeserializeIntoVector<int32_t>(v, vcount, col_idx, key_locations, validitymask_locations);
+        break;
+    case PhysicalType::INT64:
+        TemplatedDeserializeIntoVector<int64_t>(v, vcount, col_idx, key_locations, validitymask_locations);
+        break;
+    case PhysicalType::UINT8:
+        TemplatedDeserializeIntoVector<uint8_t>(v, vcount, col_idx, key_locations, validitymask_locations);
+        break;
+    case PhysicalType::UINT16:
+        TemplatedDeserializeIntoVector<uint16_t>(v, vcount, col_idx, key_locations, validitymask_locations);
+        break;
+    case PhysicalType::UINT32:
+        TemplatedDeserializeIntoVector<uint32_t>(v, vcount, col_idx, key_locations, validitymask_locations);
+        break;
+    case PhysicalType::UINT64:
+        TemplatedDeserializeIntoVector<uint64_t>(v, vcount, col_idx, key_locations, validitymask_locations);
+        break;
+    case PhysicalType::INT128:
+        TemplatedDeserializeIntoVector<hugeint_t>(v, vcount, col_idx, key_locations, validitymask_locations);
+        break;
+    case PhysicalType::FLOAT:
+        TemplatedDeserializeIntoVector<float>(v, vcount, col_idx, key_locations, validitymask_locations);
+        break;
+    case PhysicalType::DOUBLE:
+        TemplatedDeserializeIntoVector<double>(v, vcount, col_idx, key_locations, validitymask_locations);
+        break;
+    case PhysicalType::HASH:
+        TemplatedDeserializeIntoVector<hash_t>(v, vcount, col_idx, key_locations, validitymask_locations);
+        break;
+    case PhysicalType::INTERVAL:
+        TemplatedDeserializeIntoVector<interval_t>(v, vcount, col_idx, key_locations, validitymask_locations);
+        break;
+    case PhysicalType::VARCHAR: {
+        idx_t len;
+        auto target = FlatVector::GetData<string_t>(v);
+        auto &validity = FlatVector::Validity(v);
+
+        if (validitymask_locations) {
+            // deserialize with validity mask
+            auto byte_offset = col_idx / 8;
+            auto offset_in_byte = col_idx % 8;
+            for (idx_t i = 0; i < vcount; i++) {
+                bool valid = *(validitymask_locations[i] + byte_offset) & (1 << offset_in_byte);
+                // deserialize string length
+                len = valid ? Load<uint32_t>(key_locations[i]) : 0;
+                key_locations[i] += string_t::PREFIX_LENGTH;
+                // deserialize string
+                target[i] = StringVector::AddString(v, (const char *)key_locations[i], len);
+                key_locations[i] += len;
+                // set validitymask
+                validity.Set(i, valid);
+            }
+        } else {
+            // validity mask is already set
+            for (idx_t i = 0; i < vcount; i++) {
+                if (!validity.RowIsValid(i)) {
+                    continue;
+                }
+                len = Load<uint32_t>(key_locations[i]);
+                key_locations[i] += string_t::PREFIX_LENGTH;
+                target[i] = StringVector::AddString(v, (const char *)key_locations[i], len);
+                key_locations[i] += len;
+            }
+        }
+        break;
+    }
+    case PhysicalType::STRUCT: {
+        // struct must have a validitymask for its fields
+        auto &child_types = v.GetType().child_types();
+        const idx_t struct_validitymask_size = (child_types.size() + 7) / 8;
+        data_ptr_t struct_key_locations[STANDARD_VECTOR_SIZE];
+        for (idx_t i = 0; i < vcount; i++) {
+            // use key_locations as the validitymask, and create struct_key_locations
+            struct_key_locations[i] = key_locations[i] + struct_validitymask_size;
+        }
+
+        if (validitymask_locations) {
+            // validitymask is not yet set
+            ValidityMask *validity;
+            switch (v.GetVectorType()) {
+            case VectorType::FLAT_VECTOR:
+                validity = &FlatVector::Validity(v);
+                break;
+            case VectorType::CONSTANT_VECTOR:
+                validity = &ConstantVector::Validity(v);
+                break;
+            default:
+                throw NotImplementedException("FIXME: cannot deserialize struct vector with this vectortype");
+            }
+
+            // the whole struct itself can be NULL
+            auto byte_offset = col_idx / 8;
+            auto offset_in_byte = col_idx % 8;
+            for (idx_t i = 0; i < vcount; i++) {
+                // set whether the whole struct is null
+                bool valid = *(validitymask_locations[i] + byte_offset) & (1 << offset_in_byte);
+                validity->Set(i, valid);
+            }
+        }
+
+        // now deserialize into the struct vectors
+        for (idx_t i = 0; i < child_types.size(); i++) {
+            auto new_child = make_unique<Vector>(child_types[i].second);
+            DeserializeIntoVector(*new_child, vcount, i, struct_key_locations, key_locations);
+            StructVector::AddEntry(v, child_types[i].first, move(new_child));
+        }
+        break;
+    }
+    case PhysicalType::LIST: {
+        // TODO: list
+        auto &child_type = v.GetType().child_types()[0];
+
+        break;
+    }
+    default:
+        throw NotImplementedException("FIXME: unimplemented deserialize");
+    }
 }
 
 } // namespace duckdb
