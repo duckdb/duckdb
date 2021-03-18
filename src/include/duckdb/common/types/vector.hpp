@@ -52,7 +52,7 @@ public:
 	//! Create an empty standard vector with a type, equivalent to calling Vector(type, true, false)
 	explicit Vector(const LogicalType &type);
 	//! Vector List
-	Vector (const child_list_t<LogicalType>& child_list);
+	Vector(const child_list_t<LogicalType> &child_list);
 	//! Create a non-owning vector that references the specified data
 	Vector(const LogicalType &type, data_ptr_t dataptr);
 	//! Create an owning vector that holds at most STANDARD_VECTOR_SIZE entries.
@@ -114,8 +114,8 @@ public:
 	//! Sets the [index] element of the Vector to the specified Value.
 	void SetValue(idx_t index, const Value &val);
 
-	void SetAuxiliary(buffer_ptr<VectorBuffer> new_buffer){
-	    auxiliary = std::move(new_buffer);
+	void SetAuxiliary(buffer_ptr<VectorBuffer> new_buffer) {
+		auxiliary = std::move(new_buffer);
 	};
 
 	//! This functions resizes the vector
@@ -125,8 +125,6 @@ public:
 	void Serialize(idx_t count, Serializer &serializer);
 	//! Deserializes a blob back into a Vector
 	void Deserialize(idx_t count, Deserializer &source);
-
-	void CreateInnerListBuffer(LogicalType type);
 
 	// Getters
 	inline VectorType GetVectorType() const {
@@ -142,9 +140,8 @@ public:
 		return data;
 	}
 
-
-	buffer_ptr<VectorBuffer> GetAuxiliary(){
-        return auxiliary;
+	buffer_ptr<VectorBuffer> GetAuxiliary() {
+		return auxiliary;
 	}
 
 	// Setters
@@ -259,11 +256,11 @@ struct FlatVector {
 struct ListVector {
 	static Vector &GetEntry(const Vector &vector);
 	static idx_t GetListSize(const Vector &vector);
-	static void SetListSize( const Vector &vec, idx_t size);
+	static void SetListSize(const Vector &vec, idx_t size);
 	static bool HasEntry(const Vector &vector);
 	static void SetEntry(Vector &vector, unique_ptr<Vector> entry);
-	static void Append(Vector& target, Vector& source, idx_t source_size, idx_t source_offset = 0);
-	static void PushBack(Vector& target, Value &insert);
+	static void Append(Vector &target, Vector &source, idx_t source_size, idx_t source_offset = 0);
+	static void PushBack(Vector &target, Value &insert);
 };
 
 struct StringVector {

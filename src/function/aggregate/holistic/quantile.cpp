@@ -148,8 +148,8 @@ AggregateFunction GetQuantileAggregateFunction(PhysicalType type) {
 }
 
 template <class STATE_TYPE, class INPUT_TYPE, class TARGET_TYPE>
-static void QuantileListFinalize(Vector &result_list, FunctionData *bind_data_p, STATE_TYPE *state,
-                                 TARGET_TYPE *target, ValidityMask &mask, idx_t idx) {
+static void QuantileListFinalize(Vector &result_list, FunctionData *bind_data_p, STATE_TYPE *state, TARGET_TYPE *target,
+                                 ValidityMask &mask, idx_t idx) {
 	if (state->pos == 0) {
 		mask.SetInvalid(idx);
 		return;
@@ -163,7 +163,7 @@ static void QuantileListFinalize(Vector &result_list, FunctionData *bind_data_p,
 		auto offset = (idx_t)((double)(state->pos - 1) * quantile);
 		std::nth_element(v_t, v_t + offset, v_t + state->pos);
 		auto val = Value::CreateValue(v_t[offset]);
-		ListVector::PushBack(result_list,val);
+		ListVector::PushBack(result_list, val);
 	}
 	target[idx].length = bind_data->quantiles.size();
 }
@@ -194,7 +194,6 @@ static void ExecuteQuantileListFinalize(Vector &states, FunctionData *bind_data,
 			QuantileListFinalize<STATE_TYPE, INPUT_TYPE, RESULT_TYPE>(result, bind_data, sdata[i], rdata, mask, i);
 		}
 	}
-
 
 	result.Verify(count);
 }

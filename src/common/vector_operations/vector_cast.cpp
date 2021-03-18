@@ -540,21 +540,13 @@ static void ListCastSwitch(Vector &source, Vector &result, idx_t count) {
 		ListVector::SetEntry(result, move(list_child));
 		if (ListVector::HasEntry(source)) {
 			auto &source_cc = ListVector::GetEntry(source);
+			auto source_size = ListVector::GetListSize(source);
 			Vector append_vector(result.GetType().child_types()[0].second);
-//			auto &target_cc = *list_child;
-			// convert the entire chunk collection
-//			vector<LogicalType> result_types;
-//			result_types.push_back(result.GetType().child_types()[0].second);
-//			DataChunk append_chunk;
-//			append_chunk.Initialize(result_types);
-//			for (auto &chunk : source_cc.Chunks()) {
-            if (source_cc.GetData()){
-                VectorOperations::Cast(source_cc, append_vector, count);
-//				append_chunk.SetCardinality(chunk->size());
-                ListVector::Append(result,append_vector,count);
-            }
+			if (source_cc.GetData()) {
+				VectorOperations::Cast(source_cc, append_vector, source_size);
+				ListVector::Append(result, append_vector, source_size);
+			}
 
-//			}
 		}
 
 		auto ldata = FlatVector::GetData<list_entry_t>(source);

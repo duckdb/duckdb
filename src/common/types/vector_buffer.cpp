@@ -2,6 +2,7 @@
 #include "duckdb/common/types/vector_buffer.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 #include "duckdb/common/assert.hpp"
 
@@ -39,30 +40,29 @@ VectorStructBuffer::~VectorStructBuffer() {
 VectorListBuffer::VectorListBuffer() : VectorBuffer(VectorBufferType::LIST_BUFFER) {
 }
 
-
 void VectorListBuffer::SetChild(unique_ptr<Vector> new_child) {
 	child = move(new_child);
 	capacity = STANDARD_VECTOR_SIZE;
 }
 
-void VectorListBuffer::Append(Vector& to_append, idx_t to_append_size, idx_t source_offset){
-    while (size+to_append_size-source_offset > capacity){
-        //Drink chocomel to grow strong
-        child->Resize(capacity);
-        capacity*=2;
-    }
-    VectorOperations::Copy(to_append,*child,to_append_size,source_offset,size);
+void VectorListBuffer::Append(Vector &to_append, idx_t to_append_size, idx_t source_offset) {
+	while (size + to_append_size - source_offset > capacity) {
+		// Drink chocomel to grow strong
+		child->Resize(capacity);
+		capacity *= 2;
+	}
+	VectorOperations::Copy(to_append, *child, to_append_size, source_offset, size);
 
-    size += to_append_size-source_offset;
+	size += to_append_size - source_offset;
 }
 
-void VectorListBuffer::PushBack(Value &insert){
-    if (size+1 > capacity){
-        //Drink chocomel to grow strong
-         child->Resize(capacity);
-         capacity*=2;
-    }
-    child->SetValue(size++,insert);
+void VectorListBuffer::PushBack(Value &insert) {
+	if (size + 1 > capacity) {
+		// Drink chocomel to grow strong
+		child->Resize(capacity);
+		capacity *= 2;
+	}
+	child->SetValue(size++, insert);
 }
 
 VectorListBuffer::~VectorListBuffer() {

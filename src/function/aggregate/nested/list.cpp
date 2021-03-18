@@ -32,41 +32,41 @@ static void ListUpdateFunction(Vector inputs[], FunctionData *, idx_t input_coun
 	auto &input = inputs[0];
 	VectorData sdata;
 	state_vector.Orrify(count, sdata);
-    child_list_t<LogicalType> child_types;
-    child_types.push_back({"",input.GetType()});
-    LogicalType list_vector_type(LogicalType::LIST.id(),child_types);
+	child_list_t<LogicalType> child_types;
+	child_types.push_back({"", input.GetType()});
+	LogicalType list_vector_type(LogicalType::LIST.id(), child_types);
 
 	auto states = (ListAggState **)sdata.data;
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
-	if (input.GetVectorType() == VectorType::SEQUENCE_VECTOR){
-	    input.Normalify(count);
+	if (input.GetVectorType() == VectorType::SEQUENCE_VECTOR) {
+		input.Normalify(count);
 	}
 	for (idx_t i = 0; i < count; i++) {
 		auto state = states[sdata.sel->get_index(i)];
 		if (!state->list_vector) {
 			state->list_vector = new Vector(list_vector_type);
 			auto list_child = make_unique<Vector>(input.GetType());
-	        ListVector::SetEntry(*state->list_vector, move(list_child));
+			ListVector::SetEntry(*state->list_vector, move(list_child));
 		}
-        ListVector::Append(*state->list_vector,input,i+1,i);
+		ListVector::Append(*state->list_vector, input, i + 1, i);
 	}
 }
 
 static void ListCombineFunction(Vector &state, Vector &combined, idx_t count) {
 	VectorData sdata;
 	state.Orrify(count, sdata);
-//	auto states_ptr = (ListAggState **)sdata.data;
-//
-//	auto combined_ptr = FlatVector::GetData<ListAggState *>(combined);
+	//	auto states_ptr = (ListAggState **)sdata.data;
+	//
+	//	auto combined_ptr = FlatVector::GetData<ListAggState *>(combined);
 
-//	for (idx_t i = 0; i < count; i++) {
-//		auto state = states_ptr[sdata.sel->get_index(i)];
-//		D_ASSERT(state->cc);
-//		if (!combined_ptr[i]->cc) {
-//			combined_ptr[i]->cc = new ChunkCollection();
-//		}
-//		combined_ptr[i]->cc->Append(*state->cc);
-//	}
+	//	for (idx_t i = 0; i < count; i++) {
+	//		auto state = states_ptr[sdata.sel->get_index(i)];
+	//		D_ASSERT(state->cc);
+	//		if (!combined_ptr[i]->cc) {
+	//			combined_ptr[i]->cc = new ChunkCollection();
+	//		}
+	//		combined_ptr[i]->cc->Append(*state->cc);
+	//	}
 }
 
 static void ListFinalize(Vector &state_vector, FunctionData *, Vector &result, idx_t count) {
@@ -76,16 +76,16 @@ static void ListFinalize(Vector &state_vector, FunctionData *, Vector &result, i
 
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 	result.Initialize(result.GetType()); // deals with constants
-    auto &mask = FlatVector::Validity(result);
+	auto &mask = FlatVector::Validity(result);
 	size_t total_len = 0;
 	for (idx_t i = 0; i < count; i++) {
 		auto state = states[sdata.sel->get_index(i)];
-        if (!state->list_vector) {
+		if (!state->list_vector) {
 			mask.SetInvalid(i);
 			continue;
 		}
 		D_ASSERT(state->list_vector);
-	    auto list_struct_data = FlatVector::GetData<list_entry_t>(result);
+		auto list_struct_data = FlatVector::GetData<list_entry_t>(result);
 		auto &state_lv = *state->list_vector;
 		auto state_lv_count = ListVector::GetListSize(state_lv);
 		list_struct_data[i].length = state_lv_count;
@@ -102,7 +102,7 @@ static void ListFinalize(Vector &state_vector, FunctionData *, Vector &result, i
 		}
 		auto &list_vec = *state->list_vector;
 		auto &list_vec_to_append = ListVector::GetEntry(list_vec);
-        ListVector::Append(result,list_vec_to_append,ListVector::GetListSize(list_vec));
+		ListVector::Append(result, list_vec_to_append, ListVector::GetListSize(list_vec));
 	}
 }
 

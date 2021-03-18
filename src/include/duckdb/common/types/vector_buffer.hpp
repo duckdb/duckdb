@@ -203,12 +203,13 @@ public:
 	}
 	void SetChild(unique_ptr<Vector> new_child);
 
-	void Append(Vector& to_append, idx_t size, idx_t source_offset = 0);
+	void Append(Vector &to_append, idx_t size, idx_t source_offset = 0);
 
 	void PushBack(Value &insert);
 
-    idx_t capacity = 0;
+	idx_t capacity = 0;
 	idx_t size = 0;
+
 private:
 	//! child vectors used for nested data
 	unique_ptr<Vector> child;

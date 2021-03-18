@@ -157,7 +157,7 @@ void VectorOperations::Copy(Vector &source, Vector &target, const SelectionVecto
 	case PhysicalType::LIST: {
 		D_ASSERT(target.GetType().InternalType() == PhysicalType::LIST);
 		if (ListVector::HasEntry(source)) {
-			 //! if the source has list offsets, we need to append them to the target
+			//! if the source has list offsets, we need to append them to the target
 			if (!ListVector::HasEntry(target)) {
 				auto target_child = make_unique<Vector>(target.GetType().child_types()[0].second);
 				ListVector::SetEntry(target, move(target_child));
@@ -168,7 +168,7 @@ void VectorOperations::Copy(Vector &source, Vector &target, const SelectionVecto
 			idx_t old_target_child_len = ListVector::GetListSize(target);
 
 			//! append to list itself
-			ListVector::Append(target,source_child,source_child_size);
+			ListVector::Append(target, source_child, source_child_size);
 
 			//! now write the list offsets
 			auto ldata = FlatVector::GetData<list_entry_t>(source);
@@ -206,18 +206,16 @@ void VectorOperations::Copy(Vector &source, Vector &target, idx_t source_count, 
 		break;
 	default:
 		source.Normalify(source_count);
-		if (target_offset + source_count - source_offset > STANDARD_VECTOR_SIZE){
-		    idx_t sel_vec_size = target_offset + source_count - source_offset;
-		    SelectionVector selection_vector(sel_vec_size);
-		    for (size_t i = 0; i < sel_vec_size; i++){
-		        selection_vector.set_index(i,i);
-		    }
-		    VectorOperations::Copy(source, target, selection_vector, source_count, source_offset,
-		                       target_offset);
-		}
-		else{
-		    VectorOperations::Copy(source, target, FlatVector::INCREMENTAL_SELECTION_VECTOR, source_count, source_offset,
-		                       target_offset);
+		if (target_offset + source_count - source_offset > STANDARD_VECTOR_SIZE) {
+			idx_t sel_vec_size = target_offset + source_count - source_offset;
+			SelectionVector selection_vector(sel_vec_size);
+			for (size_t i = 0; i < sel_vec_size; i++) {
+				selection_vector.set_index(i, i);
+			}
+			VectorOperations::Copy(source, target, selection_vector, source_count, source_offset, target_offset);
+		} else {
+			VectorOperations::Copy(source, target, FlatVector::INCREMENTAL_SELECTION_VECTOR, source_count,
+			                       source_offset, target_offset);
 		}
 		break;
 	}

@@ -105,7 +105,7 @@ static void HistogramFinalize(Vector &state_vector, FunctionData *, Vector &resu
 	auto list_struct_data = FlatVector::GetData<list_entry_t>(result);
 	auto list_child = make_unique<Vector>(result.GetType().child_types()[0].second);
 	size_t old_len = 0;
-    ListVector::SetEntry(result, move(list_child));
+	ListVector::SetEntry(result, move(list_child));
 	auto &mask = FlatVector::Validity(result);
 	for (idx_t i = 0; i < count; i++) {
 		auto state = states[sdata.sel->get_index(i)];
@@ -118,7 +118,7 @@ static void HistogramFinalize(Vector &state_vector, FunctionData *, Vector &resu
 			struct_values.push_back({"bucket", Value::CreateValue(entry.first)});
 			struct_values.push_back({"count", Value::UBIGINT(entry.second)});
 			auto val = Value::STRUCT(struct_values);
-			ListVector::PushBack(result,val);
+			ListVector::PushBack(result, val);
 		}
 		list_struct_data[i].length = ListVector::GetListSize(result) - old_len;
 		list_struct_data[i].offset = old_len;

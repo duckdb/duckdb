@@ -11,11 +11,9 @@ namespace duckdb {
 static void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 	D_ASSERT(result.GetType().child_types().size() == 1);
-    auto child_type = result.GetType().child_types()[0].second;
+	auto child_type = result.GetType().child_types()[0].second;
 	auto list_child = make_unique<Vector>(child_type);
 	ListVector::SetEntry(result, move(list_child));
-
-	Vector append_vals(child_type);
 
 	result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	for (idx_t i = 0; i < args.ColumnCount(); i++) {
@@ -28,8 +26,8 @@ static void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &r
 	for (idx_t i = 0; i < args.size(); i++) {
 		result_data[i].offset = ListVector::GetListSize(result);
 		for (idx_t col_idx = 0; col_idx < args.ColumnCount(); col_idx++) {
-			append_vals.SetValue(0, args.GetValue(col_idx, i).CastAs(child_type)); // FIXME evil pattern
-			ListVector::Append(result,append_vals,1);
+			auto val = args.GetValue(col_idx, i).CastAs(child_type);
+			ListVector::PushBack(result, val);
 		}
 		result_data[i].length = args.ColumnCount();
 	}

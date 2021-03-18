@@ -27,11 +27,11 @@ Vector::Vector(const LogicalType &type, bool create_data, bool zero_data) : data
 Vector::Vector(const LogicalType &type) : Vector(type, true, false) {
 }
 
-Vector::Vector (const child_list_t<LogicalType>& child_list): Vector({LogicalType::LIST.id(),child_list}, true, false){
-    D_ASSERT(child_list.size() == 1);
-    auto child_vector = make_unique<Vector>(child_list[0].second);
-    ListVector::SetEntry(*this,move(child_vector));
-
+Vector::Vector(const child_list_t<LogicalType> &child_list)
+    : Vector({LogicalType::LIST.id(), child_list}, true, false) {
+	D_ASSERT(child_list.size() == 1);
+	auto child_vector = make_unique<Vector>(child_list[0].second);
+	ListVector::SetEntry(*this, move(child_vector));
 }
 
 Vector::Vector(const LogicalType &type, data_ptr_t dataptr) : data(dataptr) {
@@ -129,16 +129,16 @@ void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
 	}
 }
 
-//void Vector::InitializeList(const LogicalType &new_type){
+// void Vector::InitializeList(const LogicalType &new_type){
 //    buffer = make_buffer<VectorListBuffer>(new_type);
 //}
 void Vector::Initialize(const LogicalType &new_type, bool zero_data) {
 	if (new_type.id() != LogicalTypeId::INVALID) {
 		SetType(new_type);
 	}
-	if (new_type == LogicalType::LIST){
-	    buffer = make_buffer<VectorListBuffer>();
-	    return;
+	if (new_type == LogicalType::LIST) {
+		buffer = make_buffer<VectorListBuffer>();
+		return;
 	}
 	auxiliary.reset();
 	validity.Reset();
@@ -153,12 +153,12 @@ void Vector::Initialize(const LogicalType &new_type, bool zero_data) {
 	}
 }
 
-void Vector::Resize(idx_t cur_size){
-    data = buffer->GetData();
-    auto new_data = unique_ptr<data_t[]>(new data_t[cur_size * 2 * GetTypeIdSize(GetType().InternalType())]);
-    memcpy(new_data.get(), data, cur_size  * GetTypeIdSize(GetType().InternalType()) * sizeof(data_t));
-    buffer->SetData(move(new_data));
-    data = buffer->GetData();
+void Vector::Resize(idx_t cur_size) {
+	data = buffer->GetData();
+	auto new_data = unique_ptr<data_t[]>(new data_t[cur_size * 2 * GetTypeIdSize(GetType().InternalType())]);
+	memcpy(new_data.get(), data, cur_size * GetTypeIdSize(GetType().InternalType()) * sizeof(data_t));
+	buffer->SetData(move(new_data));
+	data = buffer->GetData();
 }
 
 void Vector::SetValue(idx_t index, const Value &val) {
@@ -277,12 +277,12 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		}
 		auto offset = ListVector::GetListSize(*this);
 		if (!val.list_value.empty()) {
-            Vector to_append(val.list_value[0].type());
-	        for (idx_t i = 0; i < val.list_value.size(); i ++){
-	            to_append.SetValue(i,val.list_value[i]);
-	        }
-	        ListVector::Append(*this,to_append,val.list_value.size());
-        }
+			Vector to_append(val.list_value[0].type());
+			for (idx_t i = 0; i < val.list_value.size(); i++) {
+				to_append.SetValue(i, val.list_value[i]);
+			}
+			ListVector::Append(*this, to_append, val.list_value.size());
+		}
 		//! now set the pointer
 		auto &entry = ((list_entry_t *)data)[index];
 		entry.length = val.list_value.size();
@@ -680,10 +680,6 @@ void Vector::Serialize(idx_t count, Serializer &serializer) {
 	}
 }
 
-void Vector::CreateInnerListBuffer(LogicalType type){
-        this->buffer = VectorBuffer::CreateStandardVector(VectorType::FLAT_VECTOR, type);
-        data = buffer->GetData();
-}
 
 void Vector::Deserialize(idx_t count, Deserializer &source) {
 	auto &type = GetType();
@@ -710,7 +706,6 @@ void Vector::Deserialize(idx_t count, Deserializer &source) {
 		}
 	}
 }
-
 
 void Vector::UTFVerify(const SelectionVector &sel, idx_t count) {
 #ifdef DEBUG
@@ -1001,12 +996,12 @@ Vector &ListVector::GetEntry(const Vector &vector) {
 	return ((VectorListBuffer *)vector.auxiliary.get())->GetChild();
 }
 
-idx_t ListVector::GetListSize( const Vector &vec){
-    return ((VectorListBuffer &) *vec.auxiliary).size;
+idx_t ListVector::GetListSize(const Vector &vec) {
+	return ((VectorListBuffer &)*vec.auxiliary).size;
 }
 
-void ListVector::SetListSize( const Vector &vec, idx_t size){
-    ((VectorListBuffer &) *vec.auxiliary).size = size;
+void ListVector::SetListSize(const Vector &vec, idx_t size) {
+	((VectorListBuffer &)*vec.auxiliary).size = size;
 }
 
 void ListVector::SetEntry(Vector &vector, unique_ptr<Vector> cc) {
@@ -1017,37 +1012,36 @@ void ListVector::SetEntry(Vector &vector, unique_ptr<Vector> cc) {
 	D_ASSERT(vector.auxiliary);
 	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::LIST_BUFFER);
 	((VectorListBuffer *)vector.auxiliary.get())->SetChild(move(cc));
-
 }
 
-void ListVector::Append(Vector& target, Vector& source, idx_t source_size, idx_t source_offset){
-    if (source_size-source_offset == 0){
-        //! Nothing to add
-        return;
-    }
-    auto &target_buffer = (VectorListBuffer &)*target.auxiliary;
-    auto target_offset = ListVector::GetListSize(target);
-    target_buffer.Append(source,source_size,source_offset);
-    auto src_validity_mask = source.validity;
-    if (!src_validity_mask.AllValid()) {
-        auto target_validity_mask = ListVector::GetEntry(target).validity;
-        for (size_t i = source_offset; i < source_size; i++){
-            target_validity_mask.Set(target_offset++,src_validity_mask.RowIsValidUnsafe(i));
-        }
-    }
+void ListVector::Append(Vector &target, Vector &source, idx_t source_size, idx_t source_offset) {
+	if (source_size - source_offset == 0) {
+		//! Nothing to add
+		return;
+	}
+	auto &target_buffer = (VectorListBuffer &)*target.auxiliary;
+	auto target_offset = ListVector::GetListSize(target);
+	target_buffer.Append(source, source_size, source_offset);
+	auto src_validity_mask = source.validity;
+	if (!src_validity_mask.AllValid()) {
+		auto target_validity_mask = ListVector::GetEntry(target).validity;
+		for (size_t i = source_offset; i < source_size; i++) {
+			target_validity_mask.Set(target_offset++, src_validity_mask.RowIsValidUnsafe(i));
+		}
+	}
 }
 
-void ListVector::PushBack(Vector& target, Value& insert){
-    auto &target_buffer = (VectorListBuffer &)*target.auxiliary;
-    target_buffer.PushBack(insert);
-//    target_buffer.Append(source,source_size,source_offset);
-//    auto src_validity_mask = source.validity;
-//    if (!src_validity_mask.AllValid()) {
-//        auto target_validity_mask = ListVector::GetEntry(target).validity;
-//        for (size_t i = source_offset; i < source_size; i++){
-//            target_validity_mask.Set(target_offset++,src_validity_mask.RowIsValidUnsafe(i));
-//        }
-//    }
+void ListVector::PushBack(Vector &target, Value &insert) {
+	auto &target_buffer = (VectorListBuffer &)*target.auxiliary;
+	target_buffer.PushBack(insert);
+	//    target_buffer.Append(source,source_size,source_offset);
+	//    auto src_validity_mask = source.validity;
+	//    if (!src_validity_mask.AllValid()) {
+	//        auto target_validity_mask = ListVector::GetEntry(target).validity;
+	//        for (size_t i = source_offset; i < source_size; i++){
+	//            target_validity_mask.Set(target_offset++,src_validity_mask.RowIsValidUnsafe(i));
+	//        }
+	//    }
 }
 
 } // namespace duckdb

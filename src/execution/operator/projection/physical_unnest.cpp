@@ -108,19 +108,19 @@ void PhysicalUnnest::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 		for (idx_t col_idx = 0; col_idx < state->list_data.ColumnCount(); col_idx++) {
 			auto target_col = col_idx + state->child_chunk.ColumnCount();
 			auto &v = state->list_data.data[col_idx];
-            auto list_data = FlatVector::GetData<list_entry_t>(v);
-            auto list_entry = list_data[state->parent_position];
+			auto list_data = FlatVector::GetData<list_entry_t>(v);
+			auto list_entry = list_data[state->parent_position];
 			idx_t i = 0;
 			if (list_entry.length > state->list_position) {
 				if (unnest_null) {
-					for (i = 0; i < MinValue<idx_t>(this_chunk_len, list_entry.length  - state->list_position); i++) {
+					for (i = 0; i < MinValue<idx_t>(this_chunk_len, list_entry.length - state->list_position); i++) {
 						FlatVector::SetNull(chunk.data[target_col], i, true);
 					}
 				} else {
 					auto &child_vector = ListVector::GetEntry(v);
-					for (i = 0; i < MinValue<idx_t>(this_chunk_len, list_entry.length  - state->list_position); i++) {
+					for (i = 0; i < MinValue<idx_t>(this_chunk_len, list_entry.length - state->list_position); i++) {
 						chunk.data[target_col].SetValue(
-                                i, child_vector.GetValue(list_entry.offset+ i + state->list_position));
+						    i, child_vector.GetValue(list_entry.offset + i + state->list_position));
 					}
 				}
 			}

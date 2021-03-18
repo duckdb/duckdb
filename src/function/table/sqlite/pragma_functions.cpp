@@ -64,28 +64,28 @@ void AddFunction(BaseScalarFunction &f, idx_t &count, DataChunk &output, bool is
 	if (!ListVector::HasEntry(output.data[2])) {
 		ListVector::SetEntry(output.data[2], make_unique<Vector>(output.data[2].GetType().child_types()[0].second));
 	}
-//	auto &vec = ListVector::GetEntry(output.data[2]);
+	//	auto &vec = ListVector::GetEntry(output.data[2]);
 	auto result_data = FlatVector::GetData<list_entry_t>(output.data[2]);
 	result_data[count].offset = ListVector::GetListSize(output.data[2]);
 	result_data[count].length = f.arguments.size();
 	string parameters;
-//	vector<LogicalType> types {LogicalType::VARCHAR};
-//	DataChunk chunk;
-//	chunk.Initialize(types);
-    Vector append_vector({{"",LogicalType::VARCHAR}});
+	//	vector<LogicalType> types {LogicalType::VARCHAR};
+	//	DataChunk chunk;
+	//	chunk.Initialize(types);
+	Vector append_vector({{"", LogicalType::VARCHAR}});
 	for (idx_t i = 0; i < f.arguments.size(); i++) {
-	    auto val = Value(f.arguments[i].ToString());
-	    ListVector::PushBack(append_vector, val);
-//		append_vector.SetValue(chunk.size(),);
-//		chunk.SetCardinality(chunk.size() + 1);
-//		if (chunk.size() == STANDARD_VECTOR_SIZE) {
-//			vec.Append(chunk);
-//			chunk.Reset();
-//		}
+		auto val = Value(f.arguments[i].ToString());
+		ListVector::PushBack(append_vector, val);
+		//		append_vector.SetValue(chunk.size(),);
+		//		chunk.SetCardinality(chunk.size() + 1);
+		//		if (chunk.size() == STANDARD_VECTOR_SIZE) {
+		//			vec.Append(chunk);
+		//			chunk.Reset();
+		//		}
 	}
 	if (ListVector::GetListSize(append_vector) > 0) {
-	    ListVector::Append(output.data[2],ListVector::GetEntry(append_vector),ListVector::GetListSize(append_vector));
-//		vec.Append(chunk);
+		ListVector::Append(output.data[2], ListVector::GetEntry(append_vector), ListVector::GetListSize(append_vector));
+		//		vec.Append(chunk);
 	}
 	output.SetValue(3, count, f.varargs.id() != LogicalTypeId::INVALID ? Value(f.varargs.ToString()) : Value());
 	output.SetValue(4, count, f.return_type.ToString());

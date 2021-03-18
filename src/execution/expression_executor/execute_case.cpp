@@ -138,12 +138,11 @@ void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &
 		if (ListVector::HasEntry(res_true)) {
 			auto &true_child = ListVector::GetEntry(res_true);
 			offset += ListVector::GetListSize(res_true);
-			ListVector::Append(result,true_child,ListVector::GetListSize(res_true));
+			ListVector::Append(result, true_child, ListVector::GetListSize(res_true));
 		}
 		if (ListVector::HasEntry(res_false)) {
-		    auto &false_child = ListVector::GetEntry(res_false);
-
-            ListVector::Append(result,false_child,ListVector::GetListSize(res_false));
+			auto &false_child = ListVector::GetEntry(res_false);
+			ListVector::Append(result, false_child, ListVector::GetListSize(res_false));
 		}
 
 		// all the false offsets need to be incremented by true_child.count
@@ -167,7 +166,7 @@ void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &
 			mask.Set(res_idx, fdata.validity.RowIsValid(fidx));
 		}
 
-		//result.Verify(tcount + fcount);
+		 result.Verify(tcount + fcount);
 		break;
 	}
 	default:
