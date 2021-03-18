@@ -148,7 +148,7 @@ AggregateFunction GetQuantileAggregateFunction(PhysicalType type) {
 }
 
 template <class STATE_TYPE, class INPUT_TYPE, class TARGET_TYPE>
-static void QuantileListFinalize(DataChunk &chunk, ChunkCollection &cc, FunctionData *bind_data_p, STATE_TYPE *state,
+static void QuantileListFinalize(Vector &result_list, FunctionData *bind_data_p, STATE_TYPE *state,
                                  TARGET_TYPE *target, ValidityMask &mask, idx_t idx) {
 	if (state->pos == 0) {
 		mask.SetInvalid(idx);
@@ -157,13 +157,13 @@ static void QuantileListFinalize(DataChunk &chunk, ChunkCollection &cc, Function
 	D_ASSERT(state->v);
 	D_ASSERT(bind_data_p);
 	auto bind_data = (QuantileBindData *)bind_data_p;
-	target[idx].offset = cc.Count();
+	target[idx].offset = ListVector::GetListSize(result_list);
 	auto v_t = (INPUT_TYPE *)state->v;
 	for (const auto &quantile : bind_data->quantiles) {
 		auto offset = (idx_t)((double)(state->pos - 1) * quantile);
 		std::nth_element(v_t, v_t + offset, v_t + state->pos);
-		chunk.SetValue(0, 0, Value::CreateValue(v_t[offset]));
-		cc.Append(chunk);
+		auto val = Value::CreateValue(v_t[offset]);
+		ListVector::PushBack(result_list,val);
 	}
 	target[idx].length = bind_data->quantiles.size();
 }
@@ -173,13 +173,8 @@ static void ExecuteQuantileListFinalize(Vector &states, FunctionData *bind_data,
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 	D_ASSERT(result.GetType().child_types().size() == 1);
 
-	auto list_child = make_unique<Vector>();
-	auto &vec = *list_child;
-
-	DataChunk chunk;
-	vector<LogicalType> types {result.GetType().child_types()[0].second};
-	chunk.Initialize(types);
-	chunk.SetCardinality(1);
+	auto list_child = make_unique<Vector>(result.GetType().child_types()[0].second);
+	ListVector::SetEntry(result, move(list_child));
 
 	if (states.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -187,7 +182,7 @@ static void ExecuteQuantileListFinalize(Vector &states, FunctionData *bind_data,
 		auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
 		auto rdata = ConstantVector::GetData<RESULT_TYPE>(result);
 		auto &mask = ConstantVector::Validity(result);
-//		QuantileListFinalize<STATE_TYPE, INPUT_TYPE, RESULT_TYPE>(chunk, vec, bind_data, sdata[0], rdata, mask, 0);
+		QuantileListFinalize<STATE_TYPE, INPUT_TYPE, RESULT_TYPE>(result, bind_data, sdata[0], rdata, mask, 0);
 	} else {
 		D_ASSERT(states.GetVectorType() == VectorType::FLAT_VECTOR);
 		result.SetVectorType(VectorType::FLAT_VECTOR);
@@ -196,11 +191,11 @@ static void ExecuteQuantileListFinalize(Vector &states, FunctionData *bind_data,
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
 		auto &mask = FlatVector::Validity(result);
 		for (idx_t i = 0; i < count; i++) {
-//			QuantileListFinalize<STATE_TYPE, INPUT_TYPE, RESULT_TYPE>(chunk, vec, bind_data, sdata[i], rdata, mask, i);
+			QuantileListFinalize<STATE_TYPE, INPUT_TYPE, RESULT_TYPE>(result, bind_data, sdata[i], rdata, mask, i);
 		}
 	}
 
-	ListVector::SetEntry(result, move(list_child));
+
 	result.Verify(count);
 }
 

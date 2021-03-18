@@ -62,7 +62,7 @@ void VectorListBuffer::PushBack(Value &insert){
          child->Resize(capacity);
          capacity*=2;
     }
-    FlatVector::GetData<string_t>(*child)[size++] = insert.str_value;
+    child->SetValue(size++,insert);
 }
 
 VectorListBuffer::~VectorListBuffer() {

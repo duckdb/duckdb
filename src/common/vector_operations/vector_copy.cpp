@@ -206,8 +206,19 @@ void VectorOperations::Copy(Vector &source, Vector &target, idx_t source_count, 
 		break;
 	default:
 		source.Normalify(source_count);
-		VectorOperations::Copy(source, target, FlatVector::INCREMENTAL_SELECTION_VECTOR, source_count, source_offset,
+		if (target_offset + source_count - source_offset > STANDARD_VECTOR_SIZE){
+		    idx_t sel_vec_size = target_offset + source_count - source_offset;
+		    SelectionVector selection_vector(sel_vec_size);
+		    for (size_t i = 0; i < sel_vec_size; i++){
+		        selection_vector.set_index(i,i);
+		    }
+		    VectorOperations::Copy(source, target, selection_vector, source_count, source_offset,
 		                       target_offset);
+		}
+		else{
+		    VectorOperations::Copy(source, target, FlatVector::INCREMENTAL_SELECTION_VECTOR, source_count, source_offset,
+		                       target_offset);
+		}
 		break;
 	}
 }
