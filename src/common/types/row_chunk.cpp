@@ -396,25 +396,40 @@ void RowChunk::SerializeVectorData(VectorData &vdata, PhysicalType type, const S
 		break;
 	case PhysicalType::VARCHAR: {
 		auto strings = (string_t *)vdata.data;
-		auto byte_offset = col_idx / 8;
-		auto offset_in_byte = col_idx % 8;
-		for (idx_t i = 0; i < ser_count; i++) {
-			auto idx = sel.get_index(i);
-			auto source_idx = vdata.sel->get_index(idx);
+		if (!validitymask_locations) {
+			for (idx_t i = 0; i < ser_count; i++) {
+				auto idx = sel.get_index(i);
+				auto source_idx = vdata.sel->get_index(idx);
+				auto &string_entry = strings[source_idx];
 
-			auto &string_entry = strings[source_idx];
+				// store string size
+				Store<uint32_t>(string_entry.GetSize(), key_locations[i]);
+				key_locations[i] += string_t::PREFIX_LENGTH;
 
-			// store string size
-			Store<uint32_t>(string_entry.GetSize(), key_locations[i]);
-			key_locations[i] += string_t::PREFIX_LENGTH;
-
-			if (vdata.validity.RowIsValid(source_idx)) {
 				// store the string
 				memcpy(key_locations[i], string_entry.GetDataUnsafe(), string_entry.GetSize());
 				key_locations[i] += string_entry.GetSize();
-			} else {
-				// set the validitymask
-				*(validitymask_locations[i] + byte_offset) &= ~(1UL << offset_in_byte);
+			}
+		} else {
+			auto byte_offset = col_idx / 8;
+			auto offset_in_byte = col_idx % 8;
+			for (idx_t i = 0; i < ser_count; i++) {
+				auto idx = sel.get_index(i);
+				auto source_idx = vdata.sel->get_index(idx);
+				auto &string_entry = strings[source_idx];
+
+				// store string size
+				Store<uint32_t>(string_entry.GetSize(), key_locations[i]);
+				key_locations[i] += string_t::PREFIX_LENGTH;
+
+				if (vdata.validity.RowIsValid(source_idx)) {
+					// store the string
+					memcpy(key_locations[i], string_entry.GetDataUnsafe(), string_entry.GetSize());
+					key_locations[i] += string_entry.GetSize();
+				} else {
+					// set the validitymask
+					*(validitymask_locations[i] + byte_offset) &= ~(1UL << offset_in_byte);
+				}
 			}
 		}
 		break;
@@ -467,7 +482,7 @@ void RowChunk::SerializeVector(Vector &v, idx_t vcount, const SelectionVector &s
 			// set whether the whole struct is null
 			auto idx = sel.get_index(i);
 			auto source_idx = vdata.sel->get_index(idx);
-			if (!vdata.validity.RowIsValid(source_idx)) {
+			if (validitymask_locations && !vdata.validity.RowIsValid(source_idx)) {
 				*(validitymask_locations[i] + byte_offset) &= ~(1UL << offset_in_byte);
 			}
 		}

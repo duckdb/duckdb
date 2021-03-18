@@ -207,21 +207,11 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 			entry_size += GetTypeIdSize(physical_type);
 		} else {
 			variable_payload_size = true;
-			// we keep track of the 'base size' of variable size payload entries
-			switch (physical_type) {
-			case PhysicalType::VARCHAR:
-				entry_size += string_t::PREFIX_LENGTH;
-				break;
-			case PhysicalType::STRUCT:
-				// TODO: maybe add something here?
-				break;
-			default:
-				throw NotImplementedException("Variable size payload type");
-			}
 		}
 	}
 	state->payload_state =
 	    unique_ptr<PayloadState>(new PayloadState {variable_payload_size, nullmask_size, entry_size});
+	entry_size = entry_size == 0 ? 32 : entry_size; // avoid divide by 0 in case no nulls and all variable columns
 	vectors_per_block = (Storage::BLOCK_ALLOC_SIZE / entry_size + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE;
 	state->payload_block = make_unique<RowChunk>(buffer_manager, vectors_per_block * STANDARD_VECTOR_SIZE, entry_size);
 
@@ -244,7 +234,7 @@ unique_ptr<LocalSinkState> PhysicalOrder::GetLocalSinkState(ExecutionContext &co
 	return result;
 }
 
-static void ComputeEntrySizes(Vector &v, idx_t count, idx_t entry_sizes[]) {
+static void ComputeEntrySizes(Vector &v, idx_t entry_sizes[], idx_t count, idx_t offset = 0) {
 	auto physical_type = v.GetType().InternalType();
 	if (TypeIsConstantSize(physical_type)) {
 		const auto type_size = GetTypeIdSize(physical_type);
@@ -256,13 +246,14 @@ static void ComputeEntrySizes(Vector &v, idx_t count, idx_t entry_sizes[]) {
 
 	VectorData vdata;
 	v.Orrify(count, vdata);
+
 	switch (physical_type) {
 	case PhysicalType::VARCHAR: {
 		auto strings = (string_t *)vdata.data;
 		for (idx_t i = 0; i < count; i++) {
-			idx_t str_idx = vdata.sel->get_index(i);
+			idx_t str_idx = vdata.sel->get_index(i + offset);
 			if (vdata.validity.RowIsValid(str_idx)) {
-				entry_sizes[i] += strings[str_idx].GetSize();
+				entry_sizes[i] += string_t::PREFIX_LENGTH + strings[str_idx].GetSize();
 			}
 		}
 		break;
@@ -288,19 +279,57 @@ static void ComputeEntrySizes(Vector &v, idx_t count, idx_t entry_sizes[]) {
 				struct_vectors.push_back(move(struct_vector));
 			}
 		}
-		// add validitymask size
+		// add struct validitymask size
 		const idx_t struct_validitymask_size = (children->size() + 7) / 8;
 		for (idx_t i = 0; i < count; i++) {
 			entry_sizes[i] += struct_validitymask_size;
 		}
 		// compute size of child vectors
 		for (auto &struct_vector : struct_vectors) {
-			ComputeEntrySizes(struct_vector, count, entry_sizes);
+			ComputeEntrySizes(struct_vector, entry_sizes, count, offset);
+		}
+		break;
+	}
+	case PhysicalType::LIST: {
+		auto list_data = FlatVector::GetData<list_entry_t>(v);
+		auto &child_cc = ListVector::GetEntry(v);
+		for (idx_t i = 0; i < count; i++) {
+			idx_t idx = vdata.sel->get_index(i + offset);
+			if (vdata.validity.RowIsValid(idx)) {
+				auto list_entry = list_data[idx];
+
+				// add size of list length and list nullmask
+				entry_sizes[i] += sizeof(list_entry.length);
+				entry_sizes[i] += (list_entry.length + 7) / 8;
+
+				// compute size of each the elements in list_entry and sum them
+				idx_t list_entry_sizes[STANDARD_VECTOR_SIZE];
+				auto entry_remaining = list_entry.length;
+				auto entry_offset = list_entry.offset;
+				while (entry_remaining > 0) {
+					std::fill_n(list_entry_sizes, STANDARD_VECTOR_SIZE, 0);
+
+					// the list entry can span multiple vectors
+					auto &chunk = child_cc.GetChunkForRow(entry_offset);
+					auto offset_in_chunk = entry_offset % STANDARD_VECTOR_SIZE;
+					auto next = MinValue(chunk.size() - offset_in_chunk, entry_remaining);
+
+					// compute and add to the total
+					ComputeEntrySizes(chunk.data[0], list_entry_sizes, next, offset_in_chunk);
+					for (idx_t size_idx = 0; size_idx < next; size_idx++) {
+						entry_sizes[i] += list_entry_sizes[size_idx];
+					}
+
+					// update for next iteration
+					entry_remaining -= next;
+					entry_offset += next;
+				}
+			}
 		}
 		break;
 	}
 	default:
-		throw NotImplementedException("Variable size type not implemented for sorting!");
+		throw NotImplementedException("Variable size payload type not implemented for sorting!");
 	}
 }
 
@@ -315,7 +344,7 @@ static void ComputeEntrySizes(DataChunk &input, idx_t entry_sizes[], idx_t entry
 		if (TypeIsConstantSize(physical_type)) {
 			continue;
 		}
-		ComputeEntrySizes(input.data[col_idx], input.size(), entry_sizes);
+		ComputeEntrySizes(input.data[col_idx], entry_sizes, input.size());
 	}
 }
 
@@ -367,14 +396,8 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &gstate_
 		auto &var_sizes = *lstate.var_sorting_sizes[sort_col];
 		auto &var_block = *lstate.var_sorting_blocks[sort_col];
 		// compute entry sizes
-		switch (sort.data[sort_col].GetType().InternalType()) {
-		case PhysicalType::VARCHAR:
-			std::fill_n(lstate.entry_sizes, input.size(), (idx_t)string_t::PREFIX_LENGTH);
-			break;
-		default:
-			throw NotImplementedException("Sorting variable length type");
-		}
-		ComputeEntrySizes(sort.data[sort_col], sort.size(), lstate.entry_sizes);
+		std::fill_n(lstate.entry_sizes, input.size(), 0);
+		ComputeEntrySizes(sort.data[sort_col], lstate.entry_sizes, sort.size());
 		// build and serialize entry sizes
 		var_sizes.Build(sort.size(), lstate.key_locations, nullptr);
 		for (idx_t i = 0; i < input.size(); i++) {
@@ -382,13 +405,8 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &gstate_
 		}
 		// build and serialize variable size entries
 		var_block.Build(sort.size(), lstate.key_locations, lstate.entry_sizes);
-		for (idx_t i = 0; i < input.size(); i++) {
-			memset(lstate.key_locations[i], -1, 1);
-			lstate.validitymask_locations[i] = lstate.key_locations[i];
-			lstate.key_locations[i] += 1;
-		}
 		var_block.SerializeVector(sort.data[sort_col], sort.size(), *lstate.sel_ptr, input.size(), 0,
-		                          lstate.key_locations, lstate.validitymask_locations);
+		                          lstate.key_locations, nullptr);
 	}
 
 	// compute entry sizes of payload columns if there are variable size columns
@@ -525,6 +543,32 @@ static void ComputeTies(data_ptr_t dataptr, const idx_t &count, const idx_t &tie
 	ties[count - 1] = false;
 }
 
+static bool CompareStrings(const data_ptr_t &l, const data_ptr_t &r, const data_ptr_t &var_dataptr, idx_t sizes[],
+                           const int &order, const idx_t &sorting_size) {
+	// use indices to find strings in blob
+	idx_t left_idx = Load<idx_t>(l + sorting_size);
+	idx_t right_idx = Load<idx_t>(r + sorting_size);
+	data_ptr_t left_ptr = var_dataptr + sizes[left_idx];
+	data_ptr_t right_ptr = var_dataptr + sizes[right_idx];
+	// read string lengths
+	uint32_t left_size = Load<uint32_t>(left_ptr);
+	uint32_t right_size = Load<uint32_t>(right_ptr);
+	left_ptr += string_t::PREFIX_LENGTH;
+	right_ptr += string_t::PREFIX_LENGTH;
+	// construct strings
+	string_t left_val((const char *)left_ptr, left_size);
+	string_t right_val((const char *)right_ptr, right_size);
+
+	int comp_res = 1;
+	if (Equals::Operation<string_t>(left_val, right_val)) {
+		comp_res = 0;
+	}
+	if (LessThan::Operation<string_t>(left_val, right_val)) {
+		comp_res = -1;
+	}
+	return order * comp_res < 0;
+}
+
 static void BreakStringTies(const data_ptr_t dataptr, const idx_t &start, const idx_t &end, const idx_t &tie_col,
                             bool ties[], data_ptr_t var_dataptr, data_ptr_t sizes_ptr,
                             const SortingState &sorting_state) {
@@ -536,7 +580,7 @@ static void BreakStringTies(const data_ptr_t dataptr, const idx_t &start, const 
 		tie_col_offset++;
 	}
 	// if the tied strings are smaller than the prefix size (contain '\0'), we don't need to break the ties
-	char *prefix_chars = (char *)dataptr + tie_col_offset;
+	char *prefix_chars = (char *)dataptr + start * sorting_state.ENTRY_SIZE + tie_col_offset;
 	for (idx_t i = 0; i < StringStatistics::MAX_STRING_MINMAX_SIZE; i++) {
 		if (prefix_chars[i] == '\0') {
 			return;
@@ -555,13 +599,7 @@ static void BreakStringTies(const data_ptr_t dataptr, const idx_t &start, const 
 	idx_t *sizes = (idx_t *)sizes_ptr;
 	BlockQuickSort::Sort(entry_ptrs.get(), entry_ptrs.get() + (end - start),
 	                     [&var_dataptr, &sizes, &order, &sorting_size](const data_ptr_t l, const data_ptr_t r) {
-		                     idx_t left_idx = Load<idx_t>(l + sorting_size);
-		                     idx_t right_idx = Load<idx_t>(r + sorting_size);
-		                     data_ptr_t left = var_dataptr + sizes[left_idx];
-		                     data_ptr_t right = var_dataptr + sizes[right_idx];
-		                     return order * strncmp((const char *)left + string_t::PREFIX_LENGTH,
-		                                            (const char *)right + string_t::PREFIX_LENGTH,
-		                                            MinValue(Load<uint32_t>(left), Load<uint32_t>(right)));
+		                     return CompareStrings(l, r, var_dataptr, sizes, order, sorting_size);
 	                     });
 
 	// re-order
