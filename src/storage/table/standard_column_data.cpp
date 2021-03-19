@@ -133,30 +133,23 @@ void StandardColumnData::Update(Transaction &transaction, Vector &update_vector,
 
 void StandardColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
 	// fetch validity mask
+	if (state.child_states.empty()) {
+		ColumnScanState child_state;
+		state.child_states.push_back(move(child_state));
+	}
 	validity.Fetch(state.child_states[0], row_id, result);
-
-	// perform the fetch within the segment
-	auto segment = (ColumnSegment *)data.GetSegment(row_id);
-	auto vector_index = (row_id - segment->start) / STANDARD_VECTOR_SIZE;
-	segment->Fetch(state, vector_index, result);
-
-	// merge any updates
-	auto update_segment = (UpdateSegment *)updates.GetSegment(row_id);
-	auto update_vector_index = (row_id - update_segment->start) / STANDARD_VECTOR_SIZE;
-	update_segment->FetchCommitted(update_vector_index, result);
+	ColumnData::Fetch(state, row_id, result);
 }
 
 void StandardColumnData::FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result,
                           idx_t result_idx) {
 	// find the segment the row belongs to
+	if (state.child_states.empty()) {
+		ColumnFetchState child_state;
+		state.child_states.push_back(move(child_state));
+	}
 	validity.FetchRow(state.child_states[0], transaction, row_id, result, result_idx);
-	auto segment = (ColumnSegment *)data.GetSegment(row_id);
-	auto update_segment = (UpdateSegment *)updates.GetSegment(row_id);
-
-	// now perform the fetch within the segment
-	segment->FetchRow(state, row_id, result, result_idx);
-	// fetch any (potential) updates
-	update_segment->FetchRow(transaction, row_id, result, result_idx);
+	ColumnData::FetchRow(state, transaction, row_id, result, result_idx);
 }
 
 }

@@ -181,6 +181,29 @@ void ColumnData::RevertAppend(row_t start_row) {
 	update_segment->count = start_row - update_segment->start;
 }
 
+void ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
+	// perform the fetch within the segment
+	auto segment = (ColumnSegment *)data.GetSegment(row_id);
+	auto vector_index = (row_id - segment->start) / STANDARD_VECTOR_SIZE;
+	segment->Fetch(state, vector_index, result);
+
+	// merge any updates
+	auto update_segment = (UpdateSegment *)updates.GetSegment(row_id);
+	auto update_vector_index = (row_id - update_segment->start) / STANDARD_VECTOR_SIZE;
+	update_segment->FetchCommitted(update_vector_index, result);
+}
+
+
+void ColumnData::FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result, idx_t result_idx) {
+	auto segment = (ColumnSegment *)data.GetSegment(row_id);
+	auto update_segment = (UpdateSegment *)updates.GetSegment(row_id);
+
+	// now perform the fetch within the segment
+	segment->FetchRow(state, row_id, result, result_idx);
+	// fetch any (potential) updates
+	update_segment->FetchRow(transaction, row_id, result, result_idx);
+}
+
 void ColumnData::AppendTransientSegment(idx_t start_row) {
 	auto new_segment = make_unique<TransientSegment>(db, type, start_row);
 	data.AppendSegment(move(new_segment));

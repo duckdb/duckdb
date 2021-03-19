@@ -52,12 +52,10 @@ void UpdateSegment::ClearUpdates() {
 Value UpdateInfo::GetValue(idx_t index) {
 	auto &type = segment->column_data.type;
 
-	ValidityMask mask(validity);
-	if (!mask.RowIsValid(index)) {
-		// null
-		return Value(type);
-	}
 	switch (type.id()) {
+	case LogicalTypeId::VALIDITY:
+	case LogicalTypeId::BOOLEAN:
+		return Value::BOOLEAN(((bool *)tuple_data)[index]);
 	case LogicalTypeId::INTEGER:
 		return Value::INTEGER(((int32_t *)tuple_data)[index]);
 	default:
@@ -251,7 +249,6 @@ static void FetchRowValidity(transaction_t start_time, transaction_t transaction
                               Vector &result, idx_t result_idx) {
 	auto &result_mask = FlatVector::Validity(result);
 	UpdateInfo::UpdatesForTransaction(info, start_time, transaction_id, [&](UpdateInfo *current) {
-		ValidityMask current_mask(current->validity);
 		auto info_data = (bool *)current->tuple_data;
 		// FIXME: we could do a binary search in here
 		for (idx_t i = 0; i < current->N; i++) {
@@ -270,7 +267,6 @@ static void TemplatedFetchRow(transaction_t start_time, transaction_t transactio
                               Vector &result, idx_t result_idx) {
 	auto result_data = FlatVector::GetData<T>(result);
 	UpdateInfo::UpdatesForTransaction(info, start_time, transaction_id, [&](UpdateInfo *current) {
-		ValidityMask current_mask(current->validity);
 		auto info_data = (T *)current->tuple_data;
 		// FIXME: we could do a binary search in here
 		for (idx_t i = 0; i < current->N; i++) {
@@ -484,20 +480,19 @@ static void InitializeUpdateValidity(SegmentStatistics &stats, UpdateInfo *base_
 		}
 	} else {
 		for (idx_t i = 0; i < update_info->N; i++) {
-			tuple_data[i] = false;
+			tuple_data[i] = true;
 		}
 	}
 
 	auto &base_mask = FlatVector::Validity(base_data);
 	auto base_tuple_data = (bool *)base_info->tuple_data;
-	ValidityMask base_tuple_mask(base_info->validity);
 	if (!base_mask.AllValid()) {
 		for (idx_t i = 0; i < base_info->N; i++) {
 			base_tuple_data[i] = base_mask.RowIsValidUnsafe(base_info->tuples[i]);
 		}
 	} else {
 		for (idx_t i = 0; i < base_info->N; i++) {
-			base_tuple_data[i] = false;
+			base_tuple_data[i] = true;
 		}
 	}
 }
@@ -592,9 +587,23 @@ static idx_t MergeLoop(row_t a[], sel_t b[], idx_t acount, idx_t bcount, idx_t a
 	return count;
 }
 
-template <class T>
-static void MergeUpdateLoopInternal(SegmentStatistics &stats, UpdateInfo *base_info, T *base_table_data, UpdateInfo *update_info,
-                            T *update_vector_data, row_t *ids, idx_t count) {
+struct ExtractStandardEntry {
+	template<class T, class V>
+	static T Extract(V *data, idx_t entry) {
+		return data[entry];
+	}
+};
+
+struct ExtractValidityEntry {
+	template<class T, class V>
+	static T Extract(V *data, idx_t entry) {
+		return data->RowIsValid(entry);
+	}
+};
+
+template <class T, class V, class OP = ExtractStandardEntry>
+static void MergeUpdateLoopInternal(SegmentStatistics &stats, UpdateInfo *base_info, V *base_table_data, UpdateInfo *update_info,
+                            V *update_vector_data, row_t *ids, idx_t count) {
 	auto base_id = base_info->segment->start + base_info->vector_index * STANDARD_VECTOR_SIZE;
 #ifdef DEBUG
 	// all of these should be sorted, otherwise the below algorithm does not work
@@ -651,7 +660,7 @@ static void MergeUpdateLoopInternal(SegmentStatistics &stats, UpdateInfo *base_i
 			result_values[result_offset] = base_info_data[base_info_offset];
 		} else {
 			// it is not! we have to move base_table_data[update_id] to update_info
-			result_values[result_offset] = base_table_data[update_id];
+			result_values[result_offset] = OP::template Extract<T, V>(base_table_data, update_id);
 		}
 		result_ids[result_offset++] = update_id;
 	}
@@ -669,7 +678,7 @@ static void MergeUpdateLoopInternal(SegmentStatistics &stats, UpdateInfo *base_i
 	// now we merge the new values into the base_info
 	result_offset = 0;
 	auto pick_new = [&](idx_t id, idx_t aidx, idx_t count) {
-		result_values[result_offset] = update_vector_data[aidx];
+		result_values[result_offset] = OP::template Extract<T, V>(update_vector_data, aidx);
 		result_ids[result_offset] = id;
 		result_offset++;
 	};
@@ -691,9 +700,9 @@ static void MergeUpdateLoopInternal(SegmentStatistics &stats, UpdateInfo *base_i
 
 static void MergeValidityLoop(SegmentStatistics &stats, UpdateInfo *base_info, Vector &base_data, UpdateInfo *update_info,
                             Vector &update, row_t *ids, idx_t count) {
-	// auto &base_validity = FlatVector::Validity(base_data);
-	// auto &update_validity = FlatVector::Validity(update);
-	throw NotImplementedException("FIXME: merge validity loop");
+	auto &base_validity = FlatVector::Validity(base_data);
+	auto &update_validity = FlatVector::Validity(update);
+	MergeUpdateLoopInternal<bool, ValidityMask, ExtractValidityEntry>(stats, base_info, &base_validity, update_info, &update_validity, ids, count);
 }
 
 template <class T>
@@ -701,7 +710,7 @@ static void MergeUpdateLoop(SegmentStatistics &stats, UpdateInfo *base_info, Vec
                             Vector &update, row_t *ids, idx_t count) {
 	auto base_table_data = FlatVector::GetData<T>(base_data);
 	auto update_vector_data = FlatVector::GetData<T>(update);
-	MergeUpdateLoopInternal(stats, base_info, base_table_data, update_info, update_vector_data, ids, count);
+	MergeUpdateLoopInternal<T, T>(stats, base_info, base_table_data, update_info, update_vector_data, ids, count);
 }
 
 static UpdateSegment::merge_update_function_t GetMergeUpdateFunction(PhysicalType type) {
@@ -744,6 +753,15 @@ static UpdateSegment::merge_update_function_t GetMergeUpdateFunction(PhysicalTyp
 // Update statistics
 //===--------------------------------------------------------------------===//
 void UpdateValidityStatistics(UpdateSegment *segment, SegmentStatistics &stats, Vector &update, idx_t count) {
+	auto &mask = FlatVector::Validity(update);
+	if (!mask.AllValid() && !stats.statistics->has_null) {
+		for (idx_t i = 0; i < count; i++) {
+			if (!mask.RowIsValid(i)) {
+				stats.statistics->has_null = true;
+				break;
+			}
+		}
+	}
 }
 
 template <class T>
@@ -908,8 +926,6 @@ void UpdateSegment::Update(Transaction &transaction, Vector &update, row_t *ids,
 		result->info->tuples = result->tuples.get();
 		result->info->tuple_data = result->tuple_data.get();
 		result->info->version_number = TRANSACTION_ID_START - 1;
-		ValidityMask result_mask(result->info->validity);
-		result_mask.SetAllValid(STANDARD_VECTOR_SIZE);
 		InitializeUpdateInfo(*result->info, ids, count, vector_index, vector_offset);
 
 		// now create the transaction level update info in the undo log

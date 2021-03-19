@@ -52,17 +52,21 @@ void ValidityColumnData::IndexScan(ColumnScanState &state, Vector &result, bool 
 	state.updates->FetchCommitted(state.vector_index_updates, result);
 }
 
-void ValidityColumnData::Update(Transaction &transaction, Vector &updates, Vector &row_ids, idx_t count) {
-	throw NotImplementedException("FIXME: validity update");
-}
+void ValidityColumnData::Update(Transaction &transaction, Vector &update_vector, Vector &row_ids, idx_t count) {
+	idx_t first_id = FlatVector::GetValue<row_t>(row_ids, 0);
 
-void ValidityColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
-	throw NotImplementedException("FIXME: validity fetch");
-}
+	// fetch the validity data for this segment
+	Vector base_data(LogicalType::BOOLEAN, nullptr);
+	auto column_segment = (ColumnSegment *)data.GetSegment(first_id);
+	auto vector_index = (first_id - column_segment->start) / STANDARD_VECTOR_SIZE;
+	// now perform the fetch within the segment
+	ColumnScanState state;
+	column_segment->Fetch(state, vector_index, base_data);
 
-void ValidityColumnData::FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result, idx_t result_idx) {
-	throw NotImplementedException("FIXME: validity fetch row");
+	// first find the segment that the update belongs to
+	auto segment = (UpdateSegment *)updates.GetSegment(first_id);
+	// now perform the update within the segment
+	segment->Update(transaction, update_vector, FlatVector::GetData<row_t>(row_ids), count, base_data);
 }
-
 
 }

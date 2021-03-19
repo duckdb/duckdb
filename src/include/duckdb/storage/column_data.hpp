@@ -69,9 +69,9 @@ public:
 	virtual void Update(Transaction &transaction, Vector &updates, Vector &row_ids, idx_t count) = 0;
 
 	//! Fetch the vector from the column data that belongs to this specific row
-	virtual void Fetch(ColumnScanState &state, row_t row_id, Vector &result) = 0;
+	virtual void Fetch(ColumnScanState &state, row_t row_id, Vector &result);
 	//! Fetch a specific row id and append it to the vector
-	virtual void FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result, idx_t result_idx) = 0;
+	virtual void FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result, idx_t result_idx);
 
 	void SetStatistics(unique_ptr<BaseStatistics> new_stats);
 	void MergeStatistics(BaseStatistics &other);
