@@ -10,7 +10,7 @@ CREATE TABLE test1 (s VARCHAR)
 
 # strings longer than the initial 8 character prefix
 statement ok
-INSERT INTO test1 VALUES ('2'), ('355555552'), ('1'), ('10'), ('355555553'), ('355555551'), (NULL)
+INSERT INTO test1 VALUES ('2'), (NULL), ('355555552'), ('1'), ('10'), ('355555553'), ('355555551')
 
 query I
 SELECT * FROM test1 ORDER BY s
@@ -78,4 +78,4 @@ SELECT * FROM test4 ORDER BY cast(i AS VARCHAR), cast(j AS VARCHAR)
 3	2
 3	3
 
-# TODO: sort with nested list payload, and with multiple var-size sort columns and NULLS
+# TODO: sort with nested list payload (also with count > 1024), and with multiple var-size sort columns and NULLS
