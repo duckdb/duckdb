@@ -51,14 +51,15 @@ struct ModeFunction {
 			mask.SetInvalid(idx);
 			return;
 		}
-		T h_freq;
-		size_t freq = 0;
-
-		for (auto &val : *state->frequency_map) {
-			if (val.second > freq) {
-				h_freq = val.first;
-				freq = val.second;
+		auto val = state->frequency_map->begin();
+		T h_freq = val->first;
+		size_t freq = val->second;
+		while (val != state->frequency_map->end()) {
+			if (val->second > freq) {
+				h_freq = val->first;
+				freq = val->second;
 			}
+			val++;
 		}
 		target[idx] = h_freq;
 	}
