@@ -39,8 +39,8 @@ struct ColumnScanState {
 	idx_t vector_index;
 	//! The primary buffer handle
 	unique_ptr<BufferHandle> primary_handle;
-	//! The locks that are held during the scan, only used by the index scan
-	vector<unique_ptr<StorageLockKey>> locks;
+	//! Child states of the vector
+	vector<ColumnScanState> child_states;
 	//! Whether or not InitializeState has been called for this segment
 	bool initialized = false;
 	//! If this segment has already been checked for skipping puorposes
@@ -50,10 +50,6 @@ struct ColumnScanState {
 	//! FIXME: all these vector offsets should be merged into a single row_index
 	//! The vector index within the current update segment
 	idx_t vector_index_updates;
-	//! The validity segment of the current column
-	ValiditySegment *validity;
-	//! The vector index within the validity segment
-	idx_t vector_index_validity;
 
 public:
 	//! Move on to the next vector in the scan
@@ -63,6 +59,8 @@ public:
 struct ColumnFetchState {
 	//! The set of pinned block handles for this set of fetches
 	buffer_handle_set_t handles;
+	//! Any child states of the fetch
+	vector<ColumnFetchState> child_states;
 };
 
 struct LocalScanState {

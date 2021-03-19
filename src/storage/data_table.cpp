@@ -15,6 +15,8 @@
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
+#include "duckdb/storage/table/standard_column_data.hpp"
+
 #include "duckdb/common/chrono.hpp"
 
 namespace duckdb {
@@ -24,7 +26,7 @@ DataTable::DataTable(DatabaseInstance &db, const string &schema, const string &t
     : info(make_shared<DataTableInfo>(schema, table)), types(move(types_p)), db(db), total_rows(0), is_root(true) {
 	// set up the segment trees for the column segments
 	for (idx_t i = 0; i < types.size(); i++) {
-		auto column_data = make_shared<ColumnData>(db, *info, types[i], i);
+		auto column_data = make_shared<StandardColumnData>(db, *info, types[i], i);
 		columns.push_back(move(column_data));
 	}
 
@@ -34,12 +36,13 @@ DataTable::DataTable(DatabaseInstance &db, const string &schema, const string &t
 			columns[i]->SetStatistics(move(data->column_stats[i]));
 		}
 		// first append all the segments to the set of column segments
-		for (idx_t i = 0; i < types.size(); i++) {
-			columns[i]->Initialize(data->table_data[i]);
-			if (columns[i]->persistent_rows != columns[0]->persistent_rows) {
-				throw Exception("Column length mismatch in table load!");
-			}
-		}
+		throw NotImplementedException("FIXME: persistent load");
+		// for (idx_t i = 0; i < types.size(); i++) {
+		// 	columns[i]->Initialize(data->table_data[i]);
+		// 	if (columns[i]->persistent_rows != columns[0]->persistent_rows) {
+		// 		throw Exception("Column length mismatch in table load!");
+		// 	}
+		// }
 		total_rows = columns[0]->persistent_rows;
 		versions = move(data->versions);
 	} else {
@@ -60,7 +63,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 	idx_t new_column_idx = columns.size();
 
 	types.push_back(new_column_type);
-	auto column_data = make_shared<ColumnData>(db, *info, new_column_type, new_column_idx);
+	auto column_data = make_shared<StandardColumnData>(db, *info, new_column_type, new_column_idx);
 	columns.push_back(move(column_data));
 
 	// fill the column with its DEFAULT value, or NULL if none is specified
@@ -138,7 +141,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 	types[changed_idx] = target_type;
 
 	// construct a new column data for this type
-	auto column_data = make_shared<ColumnData>(db, *info, target_type, changed_idx);
+	auto column_data = make_shared<StandardColumnData>(db, *info, target_type, changed_idx);
 
 	ColumnAppendState append_state;
 	column_data->InitializeAppend(append_state);

@@ -41,9 +41,8 @@ unique_ptr<BaseStatistics> BaseStatistics::CreateEmpty(LogicalType type) {
 	case PhysicalType::VARCHAR:
 		return make_unique<StringStatistics>(move(type));
 	case PhysicalType::INTERVAL:
-		return make_unique<BaseStatistics>(move(type));
 	default:
-		return nullptr;
+		return make_unique<BaseStatistics>(move(type));
 	}
 }
 

@@ -9,6 +9,7 @@
 
 #include "duckdb/storage/numeric_segment.hpp"
 #include "duckdb/storage/string_segment.hpp"
+#include "duckdb/storage/table/validity_segment.hpp"
 
 namespace duckdb {
 
@@ -20,6 +21,8 @@ PersistentSegment::PersistentSegment(DatabaseInstance &db, block_id_t id, idx_t 
 	if (type.InternalType() == PhysicalType::VARCHAR) {
 		data = make_unique<StringSegment>(db, start, id);
 		data->max_vector_count = count / STANDARD_VECTOR_SIZE + (count % STANDARD_VECTOR_SIZE == 0 ? 0 : 1);
+	} else if (type.InternalType() == PhysicalType::BIT) {
+		data = make_unique<ValiditySegment>(db, start, id);
 	} else {
 		data = make_unique<NumericSegment>(db, type.InternalType(), start, id);
 	}

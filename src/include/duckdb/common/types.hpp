@@ -256,6 +256,7 @@ enum class LogicalTypeId : uint8_t {
 	HUGEINT = 50,
 	POINTER = 51,
 	HASH = 52,
+	VALIDITY = 53,
 
 	STRUCT = 100,
 	LIST = 101,

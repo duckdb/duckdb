@@ -22,8 +22,8 @@ struct ColumnAppendState {
 	TransientSegment *current;
 	//! The update segment to append to
 	UpdateSegment *updates;
-	//! The validity segment to append to
-	ValiditySegment *validity;
+	//! Child append states
+	vector<ColumnAppendState> child_appends;
 	//! The write lock that is held by the append
 	unique_ptr<StorageLockKey> lock;
 };

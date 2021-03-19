@@ -1,0 +1,162 @@
+#include "duckdb/storage/table/standard_column_data.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/storage/table/update_segment.hpp"
+#include "duckdb/storage/table/append_state.hpp"
+#include "duckdb/storage/table/persistent_segment.hpp"
+#include "duckdb/storage/table/transient_segment.hpp"
+
+namespace duckdb {
+
+StandardColumnData::StandardColumnData(DatabaseInstance &db, DataTableInfo &table_info, LogicalType type, idx_t column_idx) :
+	ColumnData(db, table_info, type, column_idx), validity(db, table_info, column_idx) {}
+
+bool StandardColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
+	if (!state.segment_checked) {
+		state.segment_checked = true;
+		if (!state.current) {
+			return true;
+		}
+		if (state.current->stats.CheckZonemap(filter)) {
+			return true;
+		}
+		if (state.updates) {
+			return state.updates->GetStatistics().CheckZonemap(filter);
+		} else {
+			return false;
+		}
+	} else {
+		return true;
+	}
+}
+
+void StandardColumnData::InitializeScan(ColumnScanState &state) {
+	// initialize the current segment
+	state.current = (ColumnSegment *)data.GetRootSegment();
+	state.updates = (UpdateSegment *)updates.GetRootSegment();
+	state.vector_index = 0;
+	state.vector_index_updates = 0;
+	state.initialized = false;
+
+	// initialize the validity segment
+	ColumnScanState child_state;
+	validity.InitializeScan(child_state);
+	state.child_states.push_back(move(child_state));
+}
+
+void StandardColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t vector_idx) {
+	idx_t row_idx = vector_idx * STANDARD_VECTOR_SIZE;
+	state.current = (ColumnSegment *)data.GetSegment(row_idx);
+	state.updates = (UpdateSegment *)updates.GetSegment(row_idx);
+	state.vector_index = (row_idx - state.current->start) / STANDARD_VECTOR_SIZE;
+	state.vector_index_updates = (row_idx - state.updates->start) / STANDARD_VECTOR_SIZE;
+	state.initialized = false;
+
+	// initialize the validity segment
+	ColumnScanState child_state;
+	validity.InitializeScanWithOffset(child_state, vector_idx);
+	state.child_states.push_back(move(child_state));
+}
+
+void StandardColumnData::Scan(Transaction &transaction, ColumnScanState &state, Vector &result) {
+	if (!state.initialized) {
+		state.current->InitializeScan(state);
+		state.initialized = true;
+	}
+	// fetch validity data
+	validity.Scan(transaction, state.child_states[0], result);
+
+	// perform a scan of this segment
+	state.current->Scan(state, state.vector_index, result);
+
+	// merge the updates into the result
+	state.updates->FetchUpdates(transaction, state.vector_index_updates, result);
+
+	// move over to the next vector
+	state.Next();
+}
+
+void StandardColumnData::IndexScan(ColumnScanState &state, Vector &result, bool allow_pending_updates) {
+	if (!state.initialized) {
+		state.current->InitializeScan(state);
+		state.initialized = true;
+	}
+	// // perform a scan of this segment
+	validity.IndexScan(state, result, allow_pending_updates);
+
+	state.current->Scan(state, state.vector_index, result);
+	if (!allow_pending_updates && state.updates->HasUncommittedUpdates(state.vector_index)) {
+		throw TransactionException("Cannot create index with outstanding updates");
+	}
+	state.updates->FetchCommitted(state.vector_index_updates, result);
+	// move over to the next vector
+	state.Next();
+}
+
+void StandardColumnData::InitializeAppend(ColumnAppendState &state) {
+	ColumnData::InitializeAppend(state);
+
+	ColumnAppendState child_append;
+	validity.InitializeAppend(child_append);
+	state.child_appends.push_back(move(child_append));
+}
+
+void StandardColumnData::AppendData(ColumnAppendState &state, VectorData &vdata, idx_t count) {
+	ColumnData::AppendData(state, vdata, count);
+
+	validity.AppendData(state.child_appends[0], vdata, count);
+}
+
+void StandardColumnData::RevertAppend(row_t start_row) {
+	ColumnData::RevertAppend(start_row);
+
+	validity.RevertAppend(start_row);
+}
+
+void StandardColumnData::Update(Transaction &transaction, Vector &update_vector, Vector &row_ids, idx_t count) {
+	idx_t first_id = FlatVector::GetValue<row_t>(row_ids, 0);
+
+	// fetch the validity data for this segment
+	Vector base_data(type);
+	auto column_segment = (ColumnSegment *)data.GetSegment(first_id);
+	auto vector_index = (first_id - column_segment->start) / STANDARD_VECTOR_SIZE;
+	// now perform the fetch within the segment
+	ColumnScanState state;
+	column_segment->Fetch(state, vector_index, base_data);
+
+	// first find the segment that the update belongs to
+	auto segment = (UpdateSegment *)updates.GetSegment(first_id);
+	// now perform the update within the segment
+	segment->Update(transaction, update_vector, FlatVector::GetData<row_t>(row_ids), count, base_data);
+
+	validity.Update(transaction, update_vector, row_ids, count);
+}
+
+void StandardColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
+	// fetch validity mask
+	validity.Fetch(state.child_states[0], row_id, result);
+
+	// perform the fetch within the segment
+	auto segment = (ColumnSegment *)data.GetSegment(row_id);
+	auto vector_index = (row_id - segment->start) / STANDARD_VECTOR_SIZE;
+	segment->Fetch(state, vector_index, result);
+
+	// merge any updates
+	auto update_segment = (UpdateSegment *)updates.GetSegment(row_id);
+	auto update_vector_index = (row_id - update_segment->start) / STANDARD_VECTOR_SIZE;
+	update_segment->FetchCommitted(update_vector_index, result);
+}
+
+void StandardColumnData::FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result,
+                          idx_t result_idx) {
+	// find the segment the row belongs to
+	validity.FetchRow(state.child_states[0], transaction, row_id, result, result_idx);
+	auto segment = (ColumnSegment *)data.GetSegment(row_id);
+	auto update_segment = (UpdateSegment *)updates.GetSegment(row_id);
+
+	// now perform the fetch within the segment
+	segment->FetchRow(state, row_id, result, result_idx);
+	// fetch any (potential) updates
+	update_segment->FetchRow(transaction, row_id, result, result_idx);
+}
+
+}

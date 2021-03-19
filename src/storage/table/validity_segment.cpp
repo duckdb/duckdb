@@ -4,9 +4,12 @@
 
 namespace duckdb {
 
-ValiditySegment::ValiditySegment(DatabaseInstance &db, idx_t start, idx_t count, block_id_t block_id) :
-	SegmentBase(start, count), db(db) {
-	this->max_vector_count = Storage::BLOCK_SIZE / ValidityMask::STANDARD_MASK_SIZE;
+ValiditySegment::ValiditySegment(DatabaseInstance &db, idx_t row_start, block_id_t block_id) :
+	UncompressedSegment(db, PhysicalType::BIT, row_start) {
+	// figure out how many vectors we want to store in this block
+
+	this->vector_size = ValidityMask::STANDARD_MASK_SIZE;
+	this->max_vector_count = Storage::BLOCK_SIZE / vector_size;
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	if (block_id == INVALID_BLOCK) {
 		// no block id specified: allocate a buffer for the uncompressed segment
@@ -22,22 +25,25 @@ ValiditySegment::ValiditySegment(DatabaseInstance &db, idx_t start, idx_t count,
 ValiditySegment::~ValiditySegment() {
 }
 
-void ValiditySegment::Fetch(idx_t vector_index, ValidityMask &result) {
+void ValiditySegment::InitializeScan(ColumnScanState &state) {
+	auto &buffer_manager = BufferManager::GetBufferManager(db);
+	state.primary_handle = buffer_manager.Pin(block);
+}
+
+void ValiditySegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	auto handle = buffer_manager.Pin(block);
-
-	auto vector_ptr = handle->node->buffer + vector_index * ValidityMask::STANDARD_MASK_SIZE;
-	ValidityMask vector_mask(vector_ptr);
-	if (!vector_mask.CheckAllValid(STANDARD_VECTOR_SIZE)) {
-		result.Copy(vector_mask, STANDARD_VECTOR_SIZE);
+	ValidityMask mask((validity_t *) handle->node->buffer);
+	if (!mask.RowIsValidUnsafe(row_id - this->row_start)) {
+		FlatVector::SetNull(result, result_idx, true);
 	}
 }
 
-idx_t ValiditySegment::Append(VectorData &data, idx_t offset, idx_t vcount) {
-	idx_t append_count = MinValue<idx_t>(vcount, max_vector_count * STANDARD_VECTOR_SIZE - this->count);
+idx_t ValiditySegment::Append(SegmentStatistics &stats, VectorData &data, idx_t offset, idx_t vcount) {
+	idx_t append_count = MinValue<idx_t>(vcount, max_vector_count * STANDARD_VECTOR_SIZE - tuple_count);
 	if (data.validity.AllValid()) {
 		// no null values: skip append
-		this->count += append_count;
+		tuple_count += append_count;
 		return append_count;
 	}
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
@@ -47,19 +53,19 @@ idx_t ValiditySegment::Append(VectorData &data, idx_t offset, idx_t vcount) {
 	for(idx_t i = 0; i < append_count; i++) {
 		auto idx = data.sel->get_index(i);
 		if (!data.validity.RowIsValidUnsafe(idx)) {
-			mask.SetInvalidUnsafe(count + i);
+			mask.SetInvalidUnsafe(tuple_count + i);
 		}
 	}
-	this->count += append_count;
+	tuple_count += append_count;
 	return append_count;
 }
 
-bool ValiditySegment::IsValid(idx_t row_index) {
-	auto &buffer_manager = BufferManager::GetBufferManager(db);
-	auto handle = buffer_manager.Pin(block);
-	ValidityMask mask((validity_t *) handle->node->buffer);
-	return mask.RowIsValidUnsafe(row_index - this->start);
+void ValiditySegment::FetchBaseData(ColumnScanState &state, idx_t vector_index, Vector &result) {
+	auto vector_ptr = state.primary_handle->node->buffer + vector_index * ValidityMask::STANDARD_MASK_SIZE;
+	ValidityMask vector_mask(vector_ptr);
+	if (!vector_mask.CheckAllValid(STANDARD_VECTOR_SIZE)) {
+		FlatVector::Validity(result).Copy(vector_mask, STANDARD_VECTOR_SIZE);
+	}
 }
-
 
 }

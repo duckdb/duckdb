@@ -17,135 +17,33 @@ ColumnData::ColumnData(DatabaseInstance &db, DataTableInfo &table_info, LogicalT
 	statistics = BaseStatistics::CreateEmpty(type);
 }
 
-bool ColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
-	if (!state.segment_checked) {
-		state.segment_checked = true;
-		if (!state.current) {
-			return true;
-		}
-		if (state.current->stats.CheckZonemap(filter)) {
-			return true;
-		}
-		if (state.updates) {
-			return state.updates->GetStatistics().CheckZonemap(filter);
-		} else {
-			return false;
-		}
-	} else {
-		return true;
-	}
-}
-
-void ColumnData::Initialize(vector<unique_ptr<PersistentSegment>> &segments) {
-	for (auto &segment : segments) {
-		persistent_rows += segment->count;
-		data.AppendSegment(move(segment));
-	}
-	idx_t row_count = 0;
-	while (row_count < persistent_rows) {
-		idx_t next = MinValue<idx_t>(row_count + UpdateSegment::MORSEL_SIZE, persistent_rows);
-		AppendUpdateSegment(row_count, next - row_count);
-		row_count = next;
-	}
-	throw NotImplementedException("FIXME: reconstruct validity segments as well");
-}
-
-void ColumnData::InitializeScan(ColumnScanState &state) {
-	state.current = (ColumnSegment *)data.GetRootSegment();
-	state.updates = (UpdateSegment *)updates.GetRootSegment();
-	state.validity = (ValiditySegment *) validity.GetRootSegment();
-	state.vector_index = 0;
-	state.vector_index_updates = 0;
-	state.vector_index_validity = 0;
-	state.initialized = false;
-}
-
-void ColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t vector_idx) {
-	idx_t row_idx = vector_idx * STANDARD_VECTOR_SIZE;
-	state.current = (ColumnSegment *)data.GetSegment(row_idx);
-	state.updates = (UpdateSegment *)updates.GetSegment(row_idx);
-	state.validity = (ValiditySegment *) validity.GetSegment(row_idx);
-	state.vector_index = (row_idx - state.current->start) / STANDARD_VECTOR_SIZE;
-	state.vector_index_updates = (row_idx - state.updates->start) / STANDARD_VECTOR_SIZE;
-	state.vector_index_validity = (row_idx - state.validity->start) / STANDARD_VECTOR_SIZE;
-	state.initialized = false;
-}
-
-void ColumnData::Scan(Transaction &transaction, ColumnScanState &state, Vector &result) {
-	if (!state.initialized) {
-		state.current->InitializeScan(state);
-		state.initialized = true;
-	}
-	// fetch validity data
-	state.validity->Fetch(state.vector_index_validity, FlatVector::Validity(result));
-	// perform a scan of this segment
-	state.current->Scan(state, state.vector_index, result);
-
-	// merge the updates into the result
-	state.updates->FetchUpdates(transaction, state.vector_index_updates, result);
-
-	// move over to the next vector
-	state.Next();
-}
+// void ColumnData::Initialize(vector<unique_ptr<PersistentSegment>> &segments) {
+// 	for (auto &segment : segments) {
+// 		persistent_rows += segment->count;
+// 		data.AppendSegment(move(segment));
+// 	}
+// 	idx_t row_count = 0;
+// 	while (row_count < persistent_rows) {
+// 		idx_t next = MinValue<idx_t>(row_count + UpdateSegment::MORSEL_SIZE, persistent_rows);
+// 		AppendUpdateSegment(row_count, next - row_count);
+// 		row_count = next;
+// 	}
+// 	throw NotImplementedException("FIXME: reconstruct validity segments as well");
+// }
 
 void ColumnData::FilterScan(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
                             idx_t &approved_tuple_count) {
-	if (!state.initialized) {
-		state.current->InitializeScan(state);
-		state.initialized = true;
-	}
-
-	// fetch validity mask
-	state.validity->Fetch(state.vector_index_validity, FlatVector::Validity(result));
-	// fetch actual data
-	state.current->Scan(state, state.vector_index, result);
-	// merge in any updates
-	state.updates->FetchUpdates(transaction, state.vector_index_updates, result);
-
+	Scan(transaction, state, result);
 	result.Slice(sel, approved_tuple_count);
-
-	// move over to the next vector
-	state.Next();
 }
 
 void ColumnData::Select(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
                         idx_t &approved_tuple_count, vector<TableFilter> &table_filters) {
-	if (!state.initialized) {
-		state.current->InitializeScan(state);
-		state.initialized = true;
-	}
-
-	// first scan the full vector (including merged updates)
-	// and then apply the filter
-	state.validity->Fetch(state.vector_index_validity, FlatVector::Validity(result));
-	state.current->Scan(state, state.vector_index, result);
-
-	// merge the updates into the result
-	state.updates->FetchUpdates(transaction, state.vector_index_updates, result);
-
+	Scan(transaction, state, result);
 	for (auto &filter : table_filters) {
 		UncompressedSegment::FilterSelection(sel, result, filter, approved_tuple_count,
 												FlatVector::Validity(result));
 	}
-
-	// move over to the next vector
-	state.Next();
-}
-
-void ColumnData::IndexScan(ColumnScanState &state, Vector &result, bool allow_pending_updates) {
-	if (!state.initialized) {
-		state.current->InitializeScan(state);
-		state.initialized = true;
-	}
-	// // perform a scan of this segment
-	state.validity->Fetch(state.vector_index_validity, FlatVector::Validity(result));
-	state.current->Scan(state, state.vector_index, result);
-	if (!allow_pending_updates && state.updates->HasUncommittedUpdates(state.vector_index)) {
-		throw TransactionException("Cannot create index with outstanding updates");
-	}
-	state.updates->FetchCommitted(state.vector_index_updates, result);
-	// move over to the next vector
-	state.Next();
 }
 
 void ColumnScanState::Next() {
@@ -165,10 +63,8 @@ void ColumnScanState::Next() {
 		updates = (UpdateSegment *)updates->next.get();
 		vector_index_updates = 0;
 	}
-	vector_index_validity++;
-	if (vector_index_validity >= validity->max_vector_count) {
-		validity = (ValiditySegment *) validity->next.get();
-		vector_index_validity = 0;
+	for(auto &child_state : child_states) {
+		child_state.Next();
 	}
 }
 
@@ -179,6 +75,12 @@ void TableScanState::NextVector() {
 	}
 }
 
+void ColumnData::Append(ColumnAppendState &state, Vector &vector, idx_t count) {
+	VectorData vdata;
+	vector.Orrify(count, vdata);
+	AppendData(state, vdata, count);
+}
+
 void ColumnData::InitializeAppend(ColumnAppendState &state) {
 	lock_guard<mutex> tree_lock(data.node_lock);
 	if (data.nodes.empty()) {
@@ -187,9 +89,6 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 	}
 	if (updates.nodes.empty()) {
 		AppendUpdateSegment(0);
-	}
-	if (validity.nodes.empty()) {
-		AppendValiditySegment(0);
 	}
 	auto segment = (ColumnSegment *)data.GetLastSegment();
 	if (segment->segment_type == ColumnSegmentType::PERSISTENT) {
@@ -207,15 +106,12 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 		state.current = (TransientSegment *)segment;
 	}
 	state.updates = (UpdateSegment *)updates.nodes.back().node;
-	state.validity = (ValiditySegment *) validity.nodes.back().node;
+
 	D_ASSERT(state.current->segment_type == ColumnSegmentType::TRANSIENT);
 	state.current->InitializeAppend(state);
 }
 
-void ColumnData::Append(ColumnAppendState &state, Vector &vector, idx_t count) {
-	VectorData adata;
-	vector.Orrify(count, adata);
-
+void ColumnData::AppendData(ColumnAppendState &state, VectorData &vdata, idx_t count) {
 	// append to update segments
 	idx_t remaining_update_count = count;
 	while (remaining_update_count > 0) {
@@ -229,19 +125,11 @@ void ColumnData::Append(ColumnAppendState &state, Vector &vector, idx_t count) {
 		}
 		remaining_update_count -= to_append_elements;
 	}
-	idx_t remaining_validity_count = count;
-	while(remaining_validity_count > 0) {
-		idx_t to_append = state.validity->Append(adata, count - remaining_validity_count, remaining_validity_count);
-		if (to_append != remaining_validity_count) {
-			AppendValiditySegment(state.validity->start + state.validity->count);
-			state.validity = (ValiditySegment *) validity.nodes.back().node;
-		}
-		remaining_validity_count -= to_append;
-	}
+
 	idx_t offset = 0;
 	while (true) {
 		// append the data from the vector
-		idx_t copied_elements = state.current->Append(state, adata, offset, count);
+		idx_t copied_elements = state.current->Append(state, vdata, offset, count);
 		MergeStatistics(*state.current->stats.statistics);
 		if (copied_elements == count) {
 			// finished copying everything
@@ -293,59 +181,6 @@ void ColumnData::RevertAppend(row_t start_row) {
 	update_segment->count = start_row - update_segment->start;
 }
 
-void ColumnData::Update(Transaction &transaction, Vector &update_vector, Vector &row_ids, idx_t count) {
-	idx_t first_id = FlatVector::GetValue<row_t>(row_ids, 0);
-
-	// fetch the validity data for this segment
-	Vector base_data(type);
-	auto validity_segment = (ValiditySegment *)validity.GetSegment(first_id);
-	auto segment_in_validity = (first_id - validity_segment->start) / STANDARD_VECTOR_SIZE;
-	validity_segment->Fetch(segment_in_validity, FlatVector::Validity(base_data));
-
-	// fetch the raw base data for this segment
-	auto column_segment = (ColumnSegment *)data.GetSegment(first_id);
-	auto vector_index = (first_id - column_segment->start) / STANDARD_VECTOR_SIZE;
-	// now perform the fetch within the segment
-	ColumnScanState state;
-	column_segment->Fetch(state, vector_index, base_data);
-
-	// first find the segment that the update belongs to
-	auto segment = (UpdateSegment *)updates.GetSegment(first_id);
-	// now perform the update within the segment
-	segment->Update(transaction, update_vector, FlatVector::GetData<row_t>(row_ids), count, base_data);
-}
-
-void ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
-	// fetch validity mask
-	auto validity_segment = (ValiditySegment *)validity.GetSegment(row_id);
-	auto validity_index = (row_id - validity_segment->start) / STANDARD_VECTOR_SIZE;
-	validity_segment->Fetch(validity_index, FlatVector::Validity(result));
-
-	// perform the fetch within the segment
-	auto segment = (ColumnSegment *)data.GetSegment(row_id);
-	auto vector_index = (row_id - segment->start) / STANDARD_VECTOR_SIZE;
-	segment->Fetch(state, vector_index, result);
-
-	// merge any updates
-	auto update_segment = (UpdateSegment *)updates.GetSegment(row_id);
-	auto update_vector_index = (row_id - update_segment->start) / STANDARD_VECTOR_SIZE;
-	update_segment->FetchCommitted(update_vector_index, result);
-}
-
-void ColumnData::FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result,
-                          idx_t result_idx) {
-	// find the segment the row belongs to
-	auto validity_segment = (ValiditySegment *)validity.GetSegment(row_id);
-	auto segment = (ColumnSegment *)data.GetSegment(row_id);
-	auto update_segment = (UpdateSegment *)updates.GetSegment(row_id);
-
-	FlatVector::SetNull(result, result_idx, !validity_segment->IsValid(row_id));
-	// now perform the fetch within the segment
-	segment->FetchRow(state, row_id, result, result_idx);
-	// fetch any (potential) updates
-	update_segment->FetchRow(transaction, row_id, result, result_idx);
-}
-
 void ColumnData::AppendTransientSegment(idx_t start_row) {
 	auto new_segment = make_unique<TransientSegment>(db, type, start_row);
 	data.AppendSegment(move(new_segment));
@@ -354,11 +189,6 @@ void ColumnData::AppendTransientSegment(idx_t start_row) {
 void ColumnData::AppendUpdateSegment(idx_t start_row, idx_t count) {
 	auto new_segment = make_unique<UpdateSegment>(*this, start_row, count);
 	updates.AppendSegment(move(new_segment));
-}
-
-void ColumnData::AppendValiditySegment(idx_t start_row) {
-	auto new_segment = make_unique<ValiditySegment>(db, start_row, 0);
-	validity.AppendSegment(move(new_segment));
 }
 
 void ColumnData::SetStatistics(unique_ptr<BaseStatistics> new_stats) {
