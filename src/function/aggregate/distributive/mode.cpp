@@ -51,17 +51,17 @@ struct ModeFunction {
 			mask.SetInvalid(idx);
 			return;
 		}
-		auto val = state->frequency_map->begin();
-		T h_freq = val->first;
-		size_t freq = val->second;
-		while (val != state->frequency_map->end()) {
-			if (val->second > freq) {
-				h_freq = val->first;
-				freq = val->second;
+		//! Initialize control variables to first variable of the frequency map
+		auto highest_frequency = state->frequency_map->begin();
+		auto iterator = state->frequency_map->begin();
+		iterator++;
+		while (iterator != state->frequency_map->end()) {
+			if (iterator->second > highest_frequency->second) {
+				highest_frequency = iterator;
 			}
-			val++;
+			iterator++;
 		}
-		target[idx] = h_freq;
+		target[idx] = highest_frequency->first;
 	}
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask,
