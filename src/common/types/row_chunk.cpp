@@ -324,7 +324,7 @@ static list_entry_t *GetListData(Vector &v) {
 		auto &child = DictionaryVector::Child(v);
 		return GetListData(child);
 	}
-    return FlatVector::GetData<list_entry_t>(v);
+	return FlatVector::GetData<list_entry_t>(v);
 }
 
 void RowChunk::ComputeEntrySizes(Vector &v, idx_t entry_sizes[], idx_t vcount, idx_t offset) {
@@ -531,15 +531,15 @@ void RowChunk::SerializeVectorData(VectorData &vdata, PhysicalType type, const S
 			for (idx_t i = 0; i < ser_count; i++) {
 				auto idx = sel.get_index(i + offset);
 				auto source_idx = vdata.sel->get_index(idx);
-                if (vdata.validity.RowIsValid(source_idx)) {
-                    auto &string_entry = strings[source_idx];
-                    // store string size
-                    Store<uint32_t>(string_entry.GetSize(), key_locations[i]);
-                    key_locations[i] += string_t::PREFIX_LENGTH;
-                    // store the string
-                    memcpy(key_locations[i], string_entry.GetDataUnsafe(), string_entry.GetSize());
-                    key_locations[i] += string_entry.GetSize();
-                }
+				if (vdata.validity.RowIsValid(source_idx)) {
+					auto &string_entry = strings[source_idx];
+					// store string size
+					Store<uint32_t>(string_entry.GetSize(), key_locations[i]);
+					key_locations[i] += string_t::PREFIX_LENGTH;
+					// store the string
+					memcpy(key_locations[i], string_entry.GetDataUnsafe(), string_entry.GetSize());
+					key_locations[i] += string_entry.GetSize();
+				}
 			}
 		} else {
 			auto byte_offset = col_idx / 8;
@@ -930,7 +930,7 @@ void RowChunk::DeserializeIntoVector(Vector &v, const idx_t &vcount, const idx_t
 		VectorData vdata;
 		v.Orrify(vcount, vdata);
 		auto list_data = GetListData(v);
-        data_ptr_t list_entry_locations[STANDARD_VECTOR_SIZE];
+		data_ptr_t list_entry_locations[STANDARD_VECTOR_SIZE];
 		auto child_cc = make_unique<ChunkCollection>();
 		vector<LogicalType> types = {v.GetType().child_types()[0].second};
 
