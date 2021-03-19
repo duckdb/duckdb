@@ -8,6 +8,7 @@
 
 #include "duckdb/storage/numeric_segment.hpp"
 #include "duckdb/storage/string_segment.hpp"
+#include "duckdb/storage/table/validity_segment.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/persistent_segment.hpp"
 #include "duckdb/storage/table/transient_segment.hpp"
@@ -16,30 +17,6 @@
 #include "duckdb/storage/table/morsel_info.hpp"
 
 namespace duckdb {
-
-class WriteOverflowStringsToDisk : public OverflowStringWriter {
-public:
-	explicit WriteOverflowStringsToDisk(DatabaseInstance &db);
-	~WriteOverflowStringsToDisk() override;
-
-	//! The checkpoint manager
-	DatabaseInstance &db;
-
-	//! Temporary buffer
-	unique_ptr<BufferHandle> handle;
-	//! The block on-disk to which we are writing
-	block_id_t block_id;
-	//! The offset within the current block
-	idx_t offset;
-
-	static constexpr idx_t STRING_SPACE = Storage::BLOCK_SIZE - sizeof(block_id_t);
-
-public:
-	void WriteString(string_t string, block_id_t &result_block, int32_t &result_offset) override;
-
-private:
-	void AllocateNewBlock(block_id_t new_block_id);
-};
 
 TableDataWriter::TableDataWriter(DatabaseInstance &db, TableCatalogEntry &table, MetaBlockWriter &meta_writer)
     : db(db), table(table), meta_writer(meta_writer) {
@@ -77,6 +54,8 @@ void TableDataWriter::CreateSegment(idx_t col_idx) {
 		auto string_segment = make_unique<StringSegment>(db, 0);
 		string_segment->overflow_writer = make_unique<WriteOverflowStringsToDisk>(db);
 		segments[col_idx] = move(string_segment);
+	} else if (type_id == PhysicalType::BIT) {
+		segments[col_idx] = make_unique<ValiditySegment>(db, 0);
 	} else {
 		segments[col_idx] = make_unique<NumericSegment>(db, type_id, 0);
 	}
@@ -319,67 +298,6 @@ void TableDataWriter::WriteDataPointers() {
 			data_pointer.statistics->Serialize(meta_writer);
 		}
 	}
-}
-
-WriteOverflowStringsToDisk::WriteOverflowStringsToDisk(DatabaseInstance &db)
-    : db(db), block_id(INVALID_BLOCK), offset(0) {
-}
-
-WriteOverflowStringsToDisk::~WriteOverflowStringsToDisk() {
-	auto &block_manager = BlockManager::GetBlockManager(db);
-	if (offset > 0) {
-		block_manager.Write(*handle->node, block_id);
-	}
-}
-
-void WriteOverflowStringsToDisk::WriteString(string_t string, block_id_t &result_block, int32_t &result_offset) {
-	auto &buffer_manager = BufferManager::GetBufferManager(db);
-	auto &block_manager = BlockManager::GetBlockManager(db);
-	if (!handle) {
-		handle = buffer_manager.Allocate(Storage::BLOCK_ALLOC_SIZE);
-	}
-	// first write the length of the string
-	if (block_id == INVALID_BLOCK || offset + sizeof(uint32_t) >= STRING_SPACE) {
-		AllocateNewBlock(block_manager.GetFreeBlockId());
-	}
-	result_block = block_id;
-	result_offset = offset;
-
-	// write the length field
-	auto string_length = string.GetSize();
-	Store<uint32_t>(string_length, handle->node->buffer + offset);
-	offset += sizeof(uint32_t);
-	// now write the remainder of the string
-	auto strptr = string.GetDataUnsafe();
-	uint32_t remaining = string_length;
-	while (remaining > 0) {
-		uint32_t to_write = MinValue<uint32_t>(remaining, STRING_SPACE - offset);
-		if (to_write > 0) {
-			memcpy(handle->node->buffer + offset, strptr, to_write);
-
-			remaining -= to_write;
-			offset += to_write;
-			strptr += to_write;
-		}
-		if (remaining > 0) {
-			// there is still remaining stuff to write
-			// first get the new block id and write it to the end of the previous block
-			auto new_block_id = block_manager.GetFreeBlockId();
-			Store<block_id_t>(new_block_id, handle->node->buffer + offset);
-			// now write the current block to disk and allocate a new block
-			AllocateNewBlock(new_block_id);
-		}
-	}
-}
-
-void WriteOverflowStringsToDisk::AllocateNewBlock(block_id_t new_block_id) {
-	auto &block_manager = BlockManager::GetBlockManager(db);
-	if (block_id != INVALID_BLOCK) {
-		// there is an old block, write it first
-		block_manager.Write(*handle->node, block_id);
-	}
-	offset = 0;
-	block_id = new_block_id;
 }
 
 } // namespace duckdb

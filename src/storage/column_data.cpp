@@ -10,6 +10,11 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/table/validity_segment.hpp"
 
+#include "duckdb/storage/numeric_segment.hpp"
+#include "duckdb/storage/string_segment.hpp"
+#include "duckdb/storage/table/validity_segment.hpp"
+#include "duckdb/storage/checkpoint/write_overflow_strings_to_disk.hpp"
+
 namespace duckdb {
 
 ColumnData::ColumnData(DatabaseInstance &db, DataTableInfo &table_info, LogicalType type, idx_t column_idx)
@@ -227,6 +232,205 @@ void ColumnData::MergeStatistics(BaseStatistics &other) {
 unique_ptr<BaseStatistics> ColumnData::GetStatistics() {
 	lock_guard<mutex> slock(stats_lock);
 	return statistics->Copy();
+}
+
+unique_ptr<ColumnCheckpointState> ColumnData::CreateCheckpointState(TableDataWriter &writer) {
+	return make_unique<ColumnCheckpointState>(*this, writer);
+}
+
+ColumnCheckpointState::ColumnCheckpointState(ColumnData &column_data, TableDataWriter &writer) :
+	column_data(column_data), writer(writer) {}
+
+ColumnCheckpointState::~ColumnCheckpointState() {}
+
+void ColumnCheckpointState::CreateEmptySegment() {
+	auto type_id = column_data.type.InternalType();
+	if (type_id == PhysicalType::VARCHAR) {
+		auto string_segment = make_unique<StringSegment>(column_data.db, 0);
+		string_segment->overflow_writer = make_unique<WriteOverflowStringsToDisk>(column_data.db);
+		current_segment = move(string_segment);
+	} else if (type_id == PhysicalType::BIT) {
+		current_segment = make_unique<ValiditySegment>(column_data.db, 0);
+	} else {
+		current_segment = make_unique<NumericSegment>(column_data.db, type_id, 0);
+	}
+	segment_stats = make_unique<SegmentStatistics>(column_data.type, GetTypeIdSize(type.InternalType()));
+}
+
+void ColumnCheckpointState::AppendData(Vector &data, idx_t count) {
+	VectorData vdata;
+	data.Orrify(count, vdata);
+
+	idx_t offset = 0;
+	while (count > 0) {
+		idx_t appended = current_segment->Append(*segment_stats, vdata, offset, count);
+		if (appended == count) {
+			// appended everything: finished
+			return;
+		}
+		// the segment is full: flush it to disk
+		FlushSegment();
+
+		// now create a new segment and continue appending
+		CreateEmptySegment();
+		offset += appended;
+		count -= appended;
+	}
+}
+
+void ColumnCheckpointState::FlushSegment() {
+	auto tuple_count = current_segment->tuple_count;
+	if (tuple_count == 0) {
+		return;
+	}
+
+	// get the buffer of the segment and pin it
+	auto &buffer_manager = BufferManager::GetBufferManager(column_data.db);
+	auto &block_manager = BlockManager::GetBlockManager(column_data.db);
+
+	auto handle = buffer_manager.Pin(current_segment->block);
+
+	// get a free block id to write to
+	auto block_id = block_manager.GetFreeBlockId();
+
+	// construct the data pointer
+	uint32_t offset_in_block = 0;
+
+	DataPointer data_pointer;
+	data_pointer.block_id = block_id;
+	data_pointer.offset = offset_in_block;
+	data_pointer.row_start = 0;
+	if (!data_pointers.empty()) {
+		auto &last_pointer = data_pointers.back();
+		data_pointer.row_start = last_pointer.row_start + last_pointer.tuple_count;
+	}
+	data_pointer.tuple_count = tuple_count;
+	data_pointer.statistics = segment_stats->statistics->Copy();
+
+	// construct a persistent segment that points to this block, and append it to the new segment tree
+	auto persistent_segment = make_unique<PersistentSegment>(column_data.db, block_id, offset_in_block, column_data.type,
+	                                                         data_pointer.row_start, data_pointer.tuple_count,
+	                                                         segment_stats->statistics->Copy());
+	new_tree.AppendSegment(move(persistent_segment));
+
+	data_pointers.push_back(move(data_pointer));
+	// write the block to disk
+	block_manager.Write(*handle->node, block_id);
+
+	// merge the segment stats into the global stats
+	global_stats->Merge(*segment_stats->statistics);
+	handle.reset();
+
+	current_segment.reset();
+	segment_stats.reset();
+
+}
+
+void ColumnData::Checkpoint(TableDataWriter &writer) {
+	if (!data.root_node) {
+		return;
+	}
+	auto &block_manager = BlockManager::GetBlockManager(db);
+	Vector intermediate(type);
+
+	// scan the segments of the column data
+	// set up the checkpoint state
+	auto checkpoint_state = CreateCheckpointState(writer);
+	checkpoint_state->global_stats = BaseStatistics::CreateEmpty(type);
+	checkpoint_state->CreateEmptySegment();
+
+	// we create a new segment tree with all the new segments
+	// we do this by scanning the current segments of the column and checking for changes
+	// if there are any changes (e.g. updates or appends) we write the new changes
+	// otherwise we simply write out the current data pointers
+	auto owned_segment = move(data.root_node);
+	auto segment = (ColumnSegment *)owned_segment.get();
+	auto update_segment = (UpdateSegment *)updates.root_node.get();
+	idx_t update_vector_index = 0;
+	while (segment) {
+		if (segment->segment_type == ColumnSegmentType::PERSISTENT) {
+			auto &persistent = (PersistentSegment &)*segment;
+			// persistent segment; check if there were any updates in this segment
+			idx_t start_vector_index = persistent.start / STANDARD_VECTOR_SIZE;
+			idx_t end_vector_index = (persistent.start + persistent.count) / STANDARD_VECTOR_SIZE;
+			bool has_updates = update_segment->HasUpdates(start_vector_index, end_vector_index);
+			if (has_updates) {
+				// persistent segment has updates: mark it as modified and rewrite the block with the merged updates
+				block_manager.MarkBlockAsModified(persistent.block_id);
+			} else {
+				// unchanged persistent segment: no need to write the data
+
+				// flush any segments preceding this persistent segment
+				if (checkpoint_state->current_segment->tuple_count > 0) {
+					checkpoint_state->FlushSegment();
+					checkpoint_state->CreateEmptySegment();
+				}
+
+				// set up the data pointer directly using the data from the persistent segment
+				DataPointer pointer;
+				pointer.block_id = persistent.block_id;
+				pointer.offset = 0;
+				pointer.row_start = segment->start;
+				pointer.tuple_count = persistent.count;
+				pointer.statistics = persistent.stats.statistics->Copy();
+
+				// merge the persistent stats into the global column stats
+				checkpoint_state->global_stats->Merge(*persistent.stats.statistics);
+
+				// directly append the current segment to the new tree
+				checkpoint_state->new_tree.AppendSegment(move(owned_segment));
+
+				checkpoint_state->data_pointers.push_back(move(pointer));
+
+				// move to the next segment in the list
+				owned_segment = move(segment->next);
+				segment = (ColumnSegment *)owned_segment.get();
+
+				// move the update segment forward
+				update_vector_index = end_vector_index;
+				update_segment = update_segment->FindSegment(end_vector_index);
+				continue;
+			}
+		}
+		// not persisted yet: scan the segment and write it to disk
+		ColumnScanState state;
+		segment->InitializeScan(state);
+
+		Vector scan_vector(type);
+		idx_t base_update_index = update_segment->start / STANDARD_VECTOR_SIZE;
+		for (idx_t vector_index = 0; vector_index * STANDARD_VECTOR_SIZE < segment->count; vector_index++) {
+			scan_vector.Reference(intermediate);
+
+			idx_t count = MinValue<idx_t>(segment->count - vector_index * STANDARD_VECTOR_SIZE, STANDARD_VECTOR_SIZE);
+
+			segment->Scan(state, vector_index, scan_vector);
+			update_segment->FetchCommitted(update_vector_index - base_update_index, scan_vector);
+
+			checkpoint_state->AppendData(scan_vector, count);
+			update_vector_index++;
+			if (update_vector_index - base_update_index >= UpdateSegment::MORSEL_VECTOR_COUNT) {
+				base_update_index += UpdateSegment::MORSEL_VECTOR_COUNT;
+				update_segment = (UpdateSegment *)update_segment->next.get();
+			}
+		}
+		// move to the next segment in the list
+		owned_segment = move(segment->next);
+		segment = (ColumnSegment *)owned_segment.get();
+	}
+	// flush the final segment
+	checkpoint_state->FlushSegment();
+	// replace the old tree with the new one
+	data.Replace(checkpoint_state->new_tree);
+
+	// FIXME: flush data_pointers and stats to disk
+	throw NotImplementedException("FIXME: flush data pointers and stats to disk");
+
+	// reset all the updates: they have been persisted to disk and included in the new segments
+	update_segment = (UpdateSegment *)updates.root_node.get();
+	while (update_segment) {
+		update_segment->ClearUpdates();
+		update_segment = (UpdateSegment *)update_segment->next.get();
+	}
 }
 
 } // namespace duckdb

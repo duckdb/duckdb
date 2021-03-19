@@ -15,12 +15,32 @@
 #include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
+class ColumnData;
 class DatabaseInstance;
 class TableDataWriter;
 class PersistentSegment;
 class Transaction;
 
 struct DataTableInfo;
+
+struct ColumnCheckpointState {
+	ColumnCheckpointState(ColumnData &column_data, TableDataWriter &writer);
+	virtual ~ColumnCheckpointState();
+
+	ColumnData &column_data;
+	TableDataWriter &writer;
+	SegmentTree new_tree;
+	vector<DataPointer> data_pointers;
+	unique_ptr<BaseStatistics> global_stats;
+
+	unique_ptr<UncompressedSegment> current_segment;
+	unique_ptr<SegmentStatistics> segment_stats;
+
+public:
+	virtual void CreateEmptySegment();
+	virtual void FlushSegment();
+	virtual void AppendData(Vector &data, idx_t count);
+};
 
 class ColumnData {
 public:
@@ -76,6 +96,9 @@ public:
 	void SetStatistics(unique_ptr<BaseStatistics> new_stats);
 	void MergeStatistics(BaseStatistics &other);
 	unique_ptr<BaseStatistics> GetStatistics();
+
+	virtual unique_ptr<ColumnCheckpointState> CreateCheckpointState(TableDataWriter &writer);
+	virtual void Checkpoint(TableDataWriter &writer);
 
 protected:
 	//! Append a transient segment

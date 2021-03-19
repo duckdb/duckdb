@@ -1053,7 +1053,7 @@ unique_ptr<BaseStatistics> DataTable::GetStatistics(ClientContext &context, colu
 void DataTable::Checkpoint(TableDataWriter &writer) {
 	// checkpoint each individual column
 	for (size_t i = 0; i < columns.size(); i++) {
-		writer.CheckpointColumn(*columns[i], i);
+		columns[i]->Checkpoint(writer);
 	}
 }
 
