@@ -60,7 +60,7 @@ public:
 	static const auto ZEROS = std::numeric_limits<W>::min();
 	static const auto ONES = std::numeric_limits<W>::max();
 
-	class reference {
+	class reference { // NOLINT
 	public:
 		reference &operator=(bool x) noexcept {
 			auto b = parent.Block(pos);
@@ -76,7 +76,7 @@ public:
 			return *this = bool(r);
 		}
 
-		operator bool() const noexcept {
+		explicit operator bool() const noexcept {
 			return parent[pos];
 		}
 
@@ -548,7 +548,7 @@ static void MaterializeOverCollectionForWindow(BoundWindowExpression *wexpr, Chu
 static counts_t SortCollectionForWindow(BoundWindowExpression *wexpr, ChunkCollection &input, ChunkCollection &output,
                                         ChunkCollection &over_collection, const unsigned partition_bits = 10) {
 	MaterializeOverCollectionForWindow(wexpr, input, output, over_collection);
-	const auto counts = DistributePartitionsForWindow(wexpr, input, output, over_collection, partition_bits);
+	auto counts = DistributePartitionsForWindow(wexpr, input, output, over_collection, partition_bits);
 
 	//	Sort the partitions independently
 	idx_t begin = 0;
@@ -780,7 +780,7 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 
 		switch (wexpr->type) {
 		case ExpressionType::WINDOW_AGGREGATE: {
-			res = segment_tree->Compute(bounds.window_start, bounds.window_end);
+			res = segment_tree->Compute(bounds.window_start - local_delta, bounds.window_end - local_delta);
 			break;
 		}
 		case ExpressionType::WINDOW_ROW_NUMBER: {
