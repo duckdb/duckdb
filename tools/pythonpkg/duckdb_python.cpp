@@ -1268,7 +1268,9 @@ public:
 				}
 			} else {
 				auto chunk = result->FetchRaw();
-				conversion.Append(*chunk);
+				if (chunk && chunk->size() > 0) {
+					conversion.Append(*chunk);
+				}
 			}
 		}
 
