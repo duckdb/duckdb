@@ -144,6 +144,10 @@ public:
 		return auxiliary;
 	}
 
+	buffer_ptr<VectorBuffer> GetBuffer() {
+		return buffer;
+	}
+
 	// Setters
 	inline void SetVectorType(VectorType vector_type) {
 		buffer->SetVectorType(vector_type);

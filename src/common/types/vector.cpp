@@ -153,12 +153,63 @@ void Vector::Initialize(const LogicalType &new_type, bool zero_data) {
 	}
 }
 
+struct DataArrays{
+    Vector &vec;
+    data_ptr_t data;
+    VectorBuffer* buffer;
+    idx_t type_size;
+    DataArrays(Vector &vec,data_ptr_t data,VectorBuffer* buffer,idx_t type_size): vec(vec), data(data),buffer(buffer),type_size(type_size){};
+};
+
+void FindChildren(std::vector<DataArrays>&  to_resize, VectorBuffer&auxiliary){
+    if (auxiliary.GetBufferType() == VectorBufferType::LIST_BUFFER){
+        auto& buffer = (VectorListBuffer&) auxiliary;
+        auto& child = buffer.GetChild();
+        auto data = child.GetData();
+        if (!data){
+            //! Nested type
+            FindChildren(to_resize,*child.GetAuxiliary());
+        }
+        else{
+            DataArrays arrays (child,data, child.GetBuffer().get() ,GetTypeIdSize(child.GetType().InternalType()));
+            to_resize.emplace_back(arrays);
+        }
+    }
+    else if (auxiliary.GetBufferType() == VectorBufferType::STRUCT_BUFFER){
+        auto& buffer = (VectorStructBuffer&) auxiliary;
+        auto& children = buffer.GetChildren();
+        for (auto& child: children){
+            auto data = child.second->GetData();
+            if (!data){
+                //! Nested type
+                FindChildren(to_resize,*child.second->GetAuxiliary());
+            }
+            else{
+                 DataArrays arrays (*child.second,data, child.second->GetBuffer().get(),GetTypeIdSize(child.second->GetType().InternalType()));
+	             to_resize.emplace_back(arrays);
+            }
+        }
+    }
+}
 void Vector::Resize(idx_t cur_size) {
+    std::vector<DataArrays>  to_resize;
 	data = buffer->GetData();
-	auto new_data = unique_ptr<data_t[]>(new data_t[cur_size * 2 * GetTypeIdSize(GetType().InternalType())]);
-	memcpy(new_data.get(), data, cur_size * GetTypeIdSize(GetType().InternalType()) * sizeof(data_t));
-	buffer->SetData(move(new_data));
-	data = buffer->GetData();
+	if (!data){
+	    //! this is a nested structure
+	    FindChildren(to_resize,*auxiliary);
+	}
+	else{
+	    DataArrays arrays (*this,data, buffer.get(),GetTypeIdSize(GetType().InternalType()));
+	    to_resize.emplace_back(arrays);
+	}
+	for (auto& data_to_resize: to_resize){
+	    auto new_data = unique_ptr<data_t[]>(new data_t[cur_size * 2 * data_to_resize.type_size]);
+        memcpy(new_data.get(), data_to_resize.data, cur_size * data_to_resize.type_size * sizeof(data_t));
+        data_to_resize.buffer->SetData(move(new_data));
+        data_to_resize.vec.data = data_to_resize.buffer->GetData();
+        data_to_resize.vec.validity.Resize(cur_size,cur_size*2);
+	}
+
 }
 
 void Vector::SetValue(idx_t index, const Value &val) {

@@ -82,6 +82,8 @@ public:
 		validity_data.reset();
 	}
 
+	void Resize(idx_t old_size, idx_t new_size);
+
 	static inline idx_t EntryCount(idx_t count) {
 		return ValidityData::EntryCount(count);
 	}

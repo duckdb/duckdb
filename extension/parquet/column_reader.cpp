@@ -386,7 +386,6 @@ idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint
 
 	idx_t result_offset = 0;
 	auto result_ptr = FlatVector::GetData<list_entry_t>(result_out);
-	//	auto &list_cc = ListVector::GetEntry(result_out);
 
 	while (result_offset < num_values) {
 		auto child_req_num_values = MinValue<idx_t>(STANDARD_VECTOR_SIZE, child_column_reader->GroupRowsAvailable());
