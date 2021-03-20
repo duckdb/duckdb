@@ -895,6 +895,65 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 	}
 }
 
+class TaskCounter {
+public:
+	TaskCounter(TaskScheduler &scheduler_p)
+	    : scheduler(scheduler_p), token(scheduler_p.CreateProducer()), task_count(0), tasks_completed(0) {
+	}
+
+	void AddTask(unique_ptr<Task> task) {
+		++task_count;
+		scheduler.ScheduleTask(*token, move(task));
+	}
+
+	void FinishTask() const {
+		++tasks_completed;
+	}
+
+	void Finish() {
+		while (tasks_completed < task_count) {
+			unique_ptr<Task> task;
+			if (scheduler.GetTaskFromProducer(*token, task)) {
+				task->Execute();
+				task.reset();
+			}
+		}
+	}
+
+private:
+	TaskScheduler &scheduler;
+	unique_ptr<ProducerToken> token;
+	size_t task_count;
+	mutable std::atomic<size_t> tasks_completed;
+};
+
+class ComputeWindowExpressionTask : public Task {
+public:
+	using Mask = BitArray<uint64_t>;
+
+	ComputeWindowExpressionTask(TaskCounter &parent_p, BoundWindowExpression *wexpr_p, ChunkCollection &input_p,
+	                            ChunkCollection &output_p, const Mask &partition_mask_p, const Mask &order_mask_p,
+	                            const idx_t output_col_p, const Slice range_p)
+	    : parent(parent_p), wexpr(wexpr_p), input(input_p), output(output_p), partition_mask(partition_mask_p),
+	      order_mask(order_mask_p), output_col(output_col_p), range(range_p) {
+	}
+
+	void Execute() override {
+		ComputeWindowExpression(wexpr, input, output, partition_mask, order_mask, output_col, range);
+		parent.FinishTask();
+	}
+
+private:
+	TaskCounter &parent;
+	BoundWindowExpression *wexpr;
+	ChunkCollection &input;
+	ChunkCollection &output;
+	const Mask &partition_mask;
+	const Mask &order_mask;
+	const idx_t output_col;
+	const Slice range;
+};
+
 void PhysicalWindow::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
 	auto state = reinterpret_cast<PhysicalWindowOperatorState *>(state_p);
 
@@ -976,6 +1035,8 @@ void PhysicalWindow::Finalize(Pipeline &pipeline, ClientContext &context, unique
 	D_ASSERT(window_results.ColumnCount() == select_list.size());
 	// we can have multiple window functions
 
+	auto &scheduler = TaskScheduler::GetScheduler(context);
+
 	// Process the window functions by sharing the partition/order definitions
 	vector<idx_t> remaining(select_list.size());
 	std::iota(remaining.begin(), remaining.end(), 0);
@@ -1029,15 +1090,19 @@ void PhysicalWindow::Finalize(Pipeline &pipeline, ClientContext &context, unique
 		//	Go through the counts and convert them to non-empty partition ranges.
 		const auto ranges = SlicesFromCounts(counts);
 
-		//	Compute the functions with matching sorts
+		//	Compute the functions with matching sorts in parallel
+		TaskCounter tasks(scheduler);
 		for (const auto &expr_idx : matching) {
 			D_ASSERT(select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
 			auto wexpr = reinterpret_cast<BoundWindowExpression *>(select_list[expr_idx].get());
 			// reuse partition and order clause in window def
 			for (const auto &range : ranges) {
-				ComputeWindowExpression(wexpr, big_data, window_results, partition_mask, order_mask, expr_idx, range);
+				auto task = make_unique<ComputeWindowExpressionTask>(tasks, wexpr, big_data, window_results,
+				                                                     partition_mask, order_mask, expr_idx, range);
+				tasks.AddTask(move(task));
 			}
 		}
+		tasks.Finish();
 	}
 }
 
