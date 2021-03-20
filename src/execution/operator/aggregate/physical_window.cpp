@@ -62,6 +62,8 @@ public:
 
 	class reference { // NOLINT
 	public:
+		friend BitArray;
+
 		reference &operator=(bool x) noexcept {
 			auto b = parent.Block(pos);
 			auto s = parent.Shift(pos);
@@ -113,7 +115,7 @@ public:
 	}
 
 	static W FlipBit(W w, unsigned s) {
-		return w ^ ~(W(1) << s);
+		return w ^ (W(1) << s);
 	}
 
 	explicit BitArray(const size_t &count, const W &init = 0)
@@ -404,19 +406,27 @@ static counts_t OffsetsFromCounts(const counts_t &counts) {
 	return offsets;
 }
 
-using slices_t = std::vector<Slice>;
-static slices_t SlicesFromCounts(const counts_t &counts) {
-	slices_t slices;
-	Slice::first_type begin = 0;
+static std::vector<Slice> SlicesFromCounts(const counts_t &counts, const idx_t page_size = STANDARD_VECTOR_SIZE) {
+	std::vector<Slice> result;
+
+	Slice slice(0, 0);
 	for (const auto &count : counts) {
 		if (count) {
-			auto end = begin + count;
-			slices.emplace_back(Slice(begin, end));
-			begin = end;
+			slice.second += count;
+			//	Emit a slice when it is either big enough or ends on a page boundary
+			if ((slice.second - slice.first) >= page_size || (0 == slice.second % page_size)) {
+				result.emplace_back(slice);
+				slice.first = slice.second;
+			}
 		}
 	}
 
-	return slices;
+	//	Finish any ragged slices
+	if (slice.first != slice.second) {
+		result.emplace_back(slice);
+	}
+
+	return result;
 }
 
 static void PartitionChunk(counts_t &counts, Vector &hash_vector, DataChunk &sort_chunk, const idx_t partition_cols,
@@ -999,7 +1009,11 @@ void PhysicalWindow::Finalize(Pipeline &pipeline, ClientContext &context, unique
 		//	Set bits for the start of each partition
 		BitArray<uint64_t> partition_mask(over_collection.Count());
 		if (partition_mask.Count() > 0) {
-			partition_mask.SetBlock(0, 1); //	Special case: first row is start of new partition/peer group.
+			//	Pre-populate with the hash boundaries
+			const auto ranges = SlicesFromCounts(counts, 1);
+			for (const auto &range : ranges) {
+				partition_mask[range.first] = true;
+			}
 		}
 		for (idx_t c = 0; c < over_expr->partitions.size(); ++c) {
 			MaskColumn(partition_mask, over_collection, c);
