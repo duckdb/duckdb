@@ -55,7 +55,7 @@ else()
   add_subdirectory(transaction)
 
   set(DUCKDB_LINK_LIBS
-      dl
+      ${CMAKE_DL_LIBS}
       fmt
       pg_query
       duckdb_re2
