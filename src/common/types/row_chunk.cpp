@@ -619,7 +619,7 @@ void RowChunk::SerializeVector(Vector &v, idx_t vcount, const SelectionVector &s
 		// now serialize the struct vectors
 		for (idx_t i = 0; i < struct_vectors.size(); i++) {
 			auto &struct_vector = struct_vectors[i];
-			SerializeVector(struct_vector, vcount, sel, ser_count, i, struct_key_locations, key_locations);
+			SerializeVector(struct_vector, vcount, sel, ser_count, i, struct_key_locations, key_locations, offset);
 		}
 		break;
 	}
