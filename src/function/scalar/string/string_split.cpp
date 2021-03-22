@@ -149,32 +149,21 @@ protected:
 };
 
 void BaseStringSplitFunction(const char *input, StringSplitIterator &iter, Vector &result) {
-	//	DataChunk append_chunk;
-	//	vector<LogicalType> types = {LogicalType::VARCHAR};
-	//	append_chunk.Initialize(types);
 	child_list_t<LogicalType> child_type {{"", LogicalType::VARCHAR}};
-	Vector append_vector {child_type};
+    Vector append_vector ({LogicalTypeId::LIST, child_type});
 	// special case: empty string
 	if (iter.size == 0) {
-		FlatVector::GetData<string_t>(append_vector)[ListVector::GetListSize(append_vector)] =
-		    StringVector::AddString(ListVector::GetEntry(append_vector), &input[0], 0);
-		ListVector::Append(result, append_vector, ListVector::GetListSize(append_vector));
+	    Value val =  StringVector::AddString(ListVector::GetEntry(append_vector), &input[0], 0);
+	    ListVector::PushBack(result,val);
 		return;
 	}
 
 	while (iter.HasNext()) {
-		//		if (append_chunk.size() == STANDARD_VECTOR_SIZE) {
-		//			result.Append(append_chunk);
-		//			append_chunk.SetCardinality(0);
-		//		}
-
 		idx_t start = iter.Start();
 		idx_t end = iter.Next(input);
 		size_t length = end - start;
 		Value to_insert(StringVector::AddString(ListVector::GetEntry(append_vector), &input[start], length));
 		ListVector::PushBack(append_vector, to_insert);
-		//		FlatVector::GetData<string_t>(ListVector::GetEntry(append_vector))[ListVector::GetListSize(append_vector)]
-		//= 		    StringVector::AddString(ListVector::GetEntry(append_vector), &input[start], length);
 	}
 	if (ListVector::GetListSize(append_vector) > 0) {
 		ListVector::Append(result, ListVector::GetEntry(append_vector), ListVector::GetListSize(append_vector));
@@ -191,7 +180,8 @@ unique_ptr<Vector> BaseStringSplitFunction(string_t input, string_t delim, const
 	bool ascii_only = Utf8Proc::Analyze(input_data, input_size) == UnicodeType::ASCII;
 
 	child_list_t<LogicalType> child_type {{"", LogicalType::VARCHAR}};
-	auto output = make_unique<Vector>(child_type);
+	LogicalType list = {LogicalTypeId::LIST, child_type};
+	auto output = make_unique<Vector>(list);
 	unique_ptr<StringSplitIterator> iter;
 	if (regex) {
 		auto re = make_unique<RE2>(duckdb_re2::StringPiece(delim_data, delim_size));
@@ -229,10 +219,6 @@ static void StringSplitExecutor(DataChunk &args, ExpressionState &state, Vector 
 	child_types.push_back({"", varchar});
 	LogicalType list_vector_type(LogicalType::LIST.id(), child_types);
 
-	Vector list_append_vector(list_vector_type);
-	auto child = make_unique<Vector>(varchar);
-	ListVector::SetEntry(list_append_vector, move(child));
-
 	size_t total_len = 0;
 	for (idx_t i = 0; i < args.size(); i++) {
 		if (!input_data.validity.RowIsValid(input_data.sel->get_index(i))) {
@@ -245,12 +231,10 @@ static void StringSplitExecutor(DataChunk &args, ExpressionState &state, Vector 
 		if (!delim_data.validity.RowIsValid(delim_data.sel->get_index(i))) {
 			// special case: delimiter is NULL
 			split_input = make_unique<Vector>(list_vector_type);
-			child = make_unique<Vector>(varchar);
+			auto child = make_unique<Vector>(varchar);
 			ListVector::SetEntry(*split_input, move(child));
-
-			FlatVector::GetData<string_t>(list_append_vector)[ListVector::GetListSize(list_append_vector)] =
-			    StringVector::AddString(list_append_vector, input);
-			ListVector::Append(*split_input, list_append_vector, ListVector::GetListSize(list_append_vector));
+			Value val (input);
+			ListVector::PushBack(*split_input,val);
 		} else {
 			string_t delim = delims[delim_data.sel->get_index(i)];
 			split_input = BaseStringSplitFunction(input, delim, regex);
@@ -261,7 +245,7 @@ static void StringSplitExecutor(DataChunk &args, ExpressionState &state, Vector 
 		ListVector::Append(result, ListVector::GetEntry(*split_input), ListVector::GetListSize(*split_input));
 	}
 
-	//	D_ASSERT(list_child->Count() == total_len);
+		D_ASSERT(ListVector::GetListSize(result) == total_len);
 	if (args.data[0].GetVectorType() == VectorType::CONSTANT_VECTOR &&
 	    args.data[1].GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);

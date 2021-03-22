@@ -27,13 +27,6 @@ Vector::Vector(const LogicalType &type, bool create_data, bool zero_data) : data
 Vector::Vector(const LogicalType &type) : Vector(type, true, false) {
 }
 
-Vector::Vector(const child_list_t<LogicalType> &child_list)
-    : Vector({LogicalType::LIST.id(), child_list}, true, false) {
-	D_ASSERT(child_list.size() == 1);
-	auto child_vector = make_unique<Vector>(child_list[0].second);
-	ListVector::SetEntry(*this, move(child_vector));
-}
-
 Vector::Vector(const LogicalType &type, data_ptr_t dataptr) : data(dataptr) {
 	buffer = make_buffer<VectorBuffer>(VectorType::FLAT_VECTOR, type);
 	if (dataptr && type.id() == LogicalTypeId::INVALID) {
@@ -136,10 +129,10 @@ void Vector::Initialize(const LogicalType &new_type, bool zero_data) {
 	if (new_type.id() != LogicalTypeId::INVALID) {
 		SetType(new_type);
 	}
-	if (new_type == LogicalType::LIST) {
-		buffer = make_buffer<VectorListBuffer>();
-		return;
-	}
+//	if (new_type == LogicalType::LIST) {
+//		buffer = make_buffer<VectorListBuffer>();
+//		return;
+//	}
 	auxiliary.reset();
 	validity.Reset();
 	if (GetTypeIdSize(GetType().InternalType()) > 0) {
@@ -193,7 +186,6 @@ void FindChildren(std::vector<DataArrays>&  to_resize, VectorBuffer&auxiliary){
 }
 void Vector::Resize(idx_t cur_size) {
     std::vector<DataArrays>  to_resize;
-	data = buffer->GetData();
 	if (!data){
 	    //! this is a nested structure
 	    FindChildren(to_resize,*auxiliary);
@@ -328,11 +320,13 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		}
 		auto offset = ListVector::GetListSize(*this);
 		if (!val.list_value.empty()) {
-			Vector to_append(val.list_value[0].type());
+//			Vector to_append(val.list_value[0].type());
 			for (idx_t i = 0; i < val.list_value.size(); i++) {
-				to_append.SetValue(i, val.list_value[i]);
+			    Value v (val.list_value[i]);
+			    ListVector::PushBack(*this,v);
+//				to_append.SetValue(i, val.list_value[i]);
 			}
-			ListVector::Append(*this, to_append, val.list_value.size());
+//			ListVector::Append(*this, to_append, val.list_value.size());
 		}
 		//! now set the pointer
 		auto &entry = ((list_entry_t *)data)[index];

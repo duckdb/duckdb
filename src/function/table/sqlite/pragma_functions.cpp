@@ -72,7 +72,9 @@ void AddFunction(BaseScalarFunction &f, idx_t &count, DataChunk &output, bool is
 	//	vector<LogicalType> types {LogicalType::VARCHAR};
 	//	DataChunk chunk;
 	//	chunk.Initialize(types);
-	Vector append_vector({{"", LogicalType::VARCHAR}});
+	child_list_t<LogicalType> child_type {{"", LogicalType::VARCHAR}};
+	LogicalType list = {LogicalTypeId::LIST, child_type};
+	Vector append_vector(list);
 	for (idx_t i = 0; i < f.arguments.size(); i++) {
 		auto val = Value(f.arguments[i].ToString());
 		ListVector::PushBack(append_vector, val);
