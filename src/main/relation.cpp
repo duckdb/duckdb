@@ -202,10 +202,10 @@ void Relation::Insert(const string &table_name) {
 
 void Relation::Insert(const string &schema_name, const string &table_name) {
 	auto insert = make_shared<InsertRelation>(shared_from_this(), schema_name, table_name);
-    auto res = insert->Execute();
-    if (!res->success) {
-        throw Exception("Failed to insert into table '" + table_name + "': " + res->error);
-    }
+	auto res = insert->Execute();
+	if (!res->success) {
+		throw Exception("Failed to insert into table '" + table_name + "': " + res->error);
+	}
 }
 
 void Relation::Insert(const vector<vector<Value>> &values) {
@@ -221,29 +221,30 @@ void Relation::Create(const string &table_name) {
 void Relation::Create(const string &schema_name, const string &table_name) {
 	auto create = make_shared<CreateTableRelation>(shared_from_this(), schema_name, table_name);
 	auto res = create->Execute();
-    if (!res->success) {
-        throw Exception("Failed to create table '" + table_name + "': " + res->error);
-    }
+	if (!res->success) {
+		throw Exception("Failed to create table '" + table_name + "': " + res->error);
+	}
 }
 
 void Relation::WriteCSV(const string &csv_file) {
 	auto write_csv = make_shared<WriteCSVRelation>(shared_from_this(), csv_file);
-    auto res = write_csv->Execute();
-    if (!res->success) {
-        throw Exception("Failed to write '" + csv_file + "': " + res->error);
-    }}
+	auto res = write_csv->Execute();
+	if (!res->success) {
+		throw Exception("Failed to write '" + csv_file + "': " + res->error);
+	}
+}
 
 void Relation::Head(idx_t limit) {
 	auto limit_node = Limit(limit);
 	limit_node->Execute()->Print();
 }
 
-shared_ptr<Relation> Relation::CreateView(const string &name, bool replace) {
-	auto view = make_shared<CreateViewRelation>(shared_from_this(), name, replace);
+shared_ptr<Relation> Relation::CreateView(const string &name, bool replace, bool temporary) {
+	auto view = make_shared<CreateViewRelation>(shared_from_this(), name, replace, temporary);
 	auto res = view->Execute();
 	if (!res->success) {
-        throw Exception("Failed to create view '" + name + "': " + res->error);
-    }
+		throw Exception("Failed to create view '" + name + "': " + res->error);
+	}
 	return shared_from_this();
 }
 

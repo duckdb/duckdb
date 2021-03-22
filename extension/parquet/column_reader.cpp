@@ -312,9 +312,9 @@ void ColumnReader::Skip(idx_t num_values) {
 	// TODO this can be optimized, for example we dont actually have to bitunpack offsets
 	auto values_read =
 	    Read(num_values, none_filter, (uint8_t *)dummy_define.ptr, (uint8_t *)dummy_repeat.ptr, dummy_result);
-	if(values_read != num_values) {
-        throw std::runtime_error("Row count mismatch when skipping rows");
-    }
+	if (values_read != num_values) {
+		throw std::runtime_error("Row count mismatch when skipping rows");
+	}
 }
 
 void StringColumnReader::VerifyString(const char *str_data, idx_t str_len) {
