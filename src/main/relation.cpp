@@ -202,7 +202,10 @@ void Relation::Insert(const string &table_name) {
 
 void Relation::Insert(const string &schema_name, const string &table_name) {
 	auto insert = make_shared<InsertRelation>(shared_from_this(), schema_name, table_name);
-	insert->Execute();
+    auto res = insert->Execute();
+    if (!res->success) {
+        throw Exception("Failed to insert into table '" + table_name + "': " + res->error);
+    }
 }
 
 void Relation::Insert(const vector<vector<Value>> &values) {
@@ -217,13 +220,18 @@ void Relation::Create(const string &table_name) {
 
 void Relation::Create(const string &schema_name, const string &table_name) {
 	auto create = make_shared<CreateTableRelation>(shared_from_this(), schema_name, table_name);
-	create->Execute();
+	auto res = create->Execute();
+    if (!res->success) {
+        throw Exception("Failed to create table '" + table_name + "': " + res->error);
+    }
 }
 
 void Relation::WriteCSV(const string &csv_file) {
 	auto write_csv = make_shared<WriteCSVRelation>(shared_from_this(), csv_file);
-	write_csv->Execute();
-}
+    auto res = write_csv->Execute();
+    if (!res->success) {
+        throw Exception("Failed to write '" + csv_file + "': " + res->error);
+    }}
 
 void Relation::Head(idx_t limit) {
 	auto limit_node = Limit(limit);
@@ -232,7 +240,10 @@ void Relation::Head(idx_t limit) {
 
 shared_ptr<Relation> Relation::CreateView(const string &name, bool replace) {
 	auto view = make_shared<CreateViewRelation>(shared_from_this(), name, replace);
-	view->Execute();
+	auto res = view->Execute();
+	if (!res->success) {
+        throw Exception("Failed to create view '" + name + "': " + res->error);
+    }
 	return shared_from_this();
 }
 
