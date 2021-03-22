@@ -1018,6 +1018,8 @@ string SQLLogicTestRunner::ReplaceKeywords(string input) {
 	FileSystem fs;
 	input = StringUtil::Replace(input, "__TEST_DIR__", TestDirectoryPath());
 	input = StringUtil::Replace(input, "__WORKING_DIRECTORY__", fs.GetWorkingDirectory());
+	input = StringUtil::Replace(input, "__BUILD_DIRECTORY__", DUCKDB_BUILD_DIRECTORY);
+
 	return input;
 }
 

@@ -14,7 +14,7 @@ void loadable_extension_demo_init(duckdb::DatabaseInstance &db) {
 	con.Commit();
 }
 
-// void loadable_extension_demo_version() {
-// return DUCKDB_VERSION;
-//}
+const char *loadable_extension_demo_version() {
+	return DuckDB::LibraryVersion();
+}
 };
