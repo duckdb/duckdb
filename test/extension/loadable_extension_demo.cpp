@@ -17,4 +17,4 @@ void loadable_extension_demo_init(duckdb::DatabaseInstance &db) {
 const char *loadable_extension_demo_version() {
 	return DuckDB::LibraryVersion();
 }
-};
+}

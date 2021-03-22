@@ -1,6 +1,6 @@
 #include "duckdb/parser/statement/load_statement.hpp"
 #include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/operator/logical_set.hpp"
+#include "duckdb/planner/operator/logical_simple.hpp"
 #include <algorithm>
 
 namespace duckdb {
