@@ -24,9 +24,8 @@
 #include <utility>
 #include <vector>
 
-//#include "glog/logging.h"
 
-namespace tdigest {
+namespace duckdb_tdigest {
 
 using Value = double;
 using Weight = double;

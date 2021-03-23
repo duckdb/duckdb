@@ -45,6 +45,9 @@
 #include <stdarg.h>
 #include <stdint.h>
 
+namespace duckdb_hll {
+
+
 typedef char *sds;
 
 /* Note: sdshdr5 is never used, we just access the flags byte directly.
@@ -275,5 +278,7 @@ void sds_free(void *ptr);
 #ifdef REDIS_TEST
 int sdsTest(int argc, char *argv[]);
 #endif
+}
+
 
 #endif

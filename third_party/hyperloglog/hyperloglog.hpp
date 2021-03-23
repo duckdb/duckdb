@@ -8,16 +8,14 @@
 
 #pragma once
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include <string.h>
 #include <stdint.h>
 
+namespace duckdb_hll {
+
 /* Error codes */
-#define C_OK                    0
-#define C_ERR                   -1
+#define HLL_C_OK                    0
+#define HLL_C_ERR                   -1
 
 typedef struct {
     void *ptr;
@@ -36,6 +34,4 @@ robj *hll_merge(robj **hlls, size_t hll_count);
 
 uint64_t MurmurHash64A (const void * key, int len, unsigned int seed);
 
-#ifdef __cplusplus
 }
-#endif

@@ -38,6 +38,8 @@
 #include <limits.h>
 #include "sds.hpp"
 
+namespace duckdb_hll {
+
 static inline int sdsHdrSize(char type) {
     switch(type&SDS_TYPE_MASK) {
         case SDS_TYPE_5:
@@ -1109,3 +1111,5 @@ sds sdsjoinsds(sds *argv, int argc, const char *sep, size_t seplen) {
 void *sdmalloc(size_t size) { return malloc(size); }
 void *sdrealloc(void *ptr, size_t size) { return realloc(ptr,size); }
 void sdfree(void *ptr) { free(ptr); }
+
+}

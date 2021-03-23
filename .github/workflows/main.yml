@@ -292,6 +292,9 @@ jobs:
     - name: Test
       run: make allunit
 
+    - name: Symbol Leakage Test
+      run: python scripts/exported_symbols_check.py build/release/src/libduckdb*.so
+
     - name: Tools Tests
       run: |
         python tools/shell/shell-test.py build/release/duckdb
