@@ -14,6 +14,8 @@
 #include "duckdb/storage/string_segment.hpp"
 #include "duckdb/storage/table/validity_segment.hpp"
 #include "duckdb/storage/checkpoint/write_overflow_strings_to_disk.hpp"
+#include "duckdb/storage/table/validity_column_data.hpp"
+#include "duckdb/storage/table/standard_column_data.hpp"
 
 namespace duckdb {
 
@@ -21,20 +23,6 @@ ColumnData::ColumnData(DatabaseInstance &db, DataTableInfo &table_info, LogicalT
     : table_info(table_info), type(move(type)), db(db), column_idx(column_idx), persistent_rows(0) {
 	statistics = BaseStatistics::CreateEmpty(type);
 }
-
-// void ColumnData::Initialize(vector<unique_ptr<PersistentSegment>> &segments) {
-// 	for (auto &segment : segments) {
-// 		persistent_rows += segment->count;
-// 		data.AppendSegment(move(segment));
-// 	}
-// 	idx_t row_count = 0;
-// 	while (row_count < persistent_rows) {
-// 		idx_t next = MinValue<idx_t>(row_count + UpdateSegment::MORSEL_SIZE, persistent_rows);
-// 		AppendUpdateSegment(row_count, next - row_count);
-// 		row_count = next;
-// 	}
-// 	throw NotImplementedException("FIXME: reconstruct validity segments as well");
-// }
 
 void ColumnData::FilterScan(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
                             idx_t &approved_tuple_count) {
@@ -254,7 +242,7 @@ void ColumnCheckpointState::CreateEmptySegment() {
 	} else {
 		current_segment = make_unique<NumericSegment>(column_data.db, type_id, 0);
 	}
-	segment_stats = make_unique<SegmentStatistics>(column_data.type, GetTypeIdSize(type.InternalType()));
+	segment_stats = make_unique<SegmentStatistics>(column_data.type, GetTypeIdSize(type_id));
 }
 
 void ColumnCheckpointState::AppendData(Vector &data, idx_t count) {
@@ -323,8 +311,26 @@ void ColumnCheckpointState::FlushSegment() {
 
 	current_segment.reset();
 	segment_stats.reset();
-
 }
+
+void ColumnCheckpointState::FlushToDisk() {
+	auto &meta_writer = writer.GetMetaWriter();
+
+	// serialize the global stats of the column
+	global_stats->Serialize(meta_writer);
+
+	meta_writer.Write<idx_t>(data_pointers.size());
+	// then write the data pointers themselves
+	for (idx_t k = 0; k < data_pointers.size(); k++) {
+		auto &data_pointer = data_pointers[k];
+		meta_writer.Write<idx_t>(data_pointer.row_start);
+		meta_writer.Write<idx_t>(data_pointer.tuple_count);
+		meta_writer.Write<block_id_t>(data_pointer.block_id);
+		meta_writer.Write<uint32_t>(data_pointer.offset);
+		data_pointer.statistics->Serialize(meta_writer);
+	}
+}
+
 
 void ColumnData::Checkpoint(TableDataWriter &writer) {
 	if (!data.root_node) {
@@ -422,14 +428,72 @@ void ColumnData::Checkpoint(TableDataWriter &writer) {
 	// replace the old tree with the new one
 	data.Replace(checkpoint_state->new_tree);
 
-	// FIXME: flush data_pointers and stats to disk
-	throw NotImplementedException("FIXME: flush data pointers and stats to disk");
+	// flush the meta information/data pointers to disk
+	checkpoint_state->FlushToDisk();
 
 	// reset all the updates: they have been persisted to disk and included in the new segments
 	update_segment = (UpdateSegment *)updates.root_node.get();
 	while (update_segment) {
 		update_segment->ClearUpdates();
 		update_segment = (UpdateSegment *)update_segment->next.get();
+	}
+}
+
+void ColumnData::Initialize(PersistentColumnData &column_data) {
+	// set up statistics
+	SetStatistics(move(column_data.stats));
+
+	persistent_rows = column_data.total_rows;
+	// load persistent segments
+	idx_t segment_rows = 0;
+	for (auto &segment : column_data.segments) {
+		segment_rows += segment->count;
+		data.AppendSegment(move(segment));
+	}
+	if (segment_rows != persistent_rows) {
+		throw Exception("Segment rows does not match total rows stored in column...");
+	}
+
+	// set up the (empty) update segments
+	idx_t row_count = 0;
+	while (row_count < persistent_rows) {
+		idx_t next = MinValue<idx_t>(row_count + UpdateSegment::MORSEL_SIZE, persistent_rows);
+		AppendUpdateSegment(row_count, next - row_count);
+		row_count = next;
+	}
+}
+
+void ColumnData::BaseDeserialize(DatabaseInstance &db, Deserializer &source, LogicalType type, PersistentColumnData &result) {
+	// load the column statistics
+	result.stats = BaseStatistics::Deserialize(source, type);
+	result.total_rows = 0;
+
+	// load the data pointers for the column
+	idx_t data_pointer_count = source.Read<idx_t>();
+	for (idx_t data_ptr = 0; data_ptr < data_pointer_count; data_ptr++) {
+		// read the data pointer
+		DataPointer data_pointer;
+		data_pointer.row_start = source.Read<idx_t>();
+		data_pointer.tuple_count = source.Read<idx_t>();
+		data_pointer.block_id = source.Read<block_id_t>();
+		data_pointer.offset = source.Read<uint32_t>();
+		data_pointer.statistics = BaseStatistics::Deserialize(source, type);
+
+		result.total_rows += data_pointer.tuple_count;
+		// create a persistent segment
+		auto segment = make_unique<PersistentSegment>(db, data_pointer.block_id, data_pointer.offset, type,
+														data_pointer.row_start, data_pointer.tuple_count,
+														move(data_pointer.statistics));
+		result.segments.push_back(move(segment));
+	}
+}
+
+unique_ptr<PersistentColumnData> ColumnData::Deserialize(DatabaseInstance &db, Deserializer &source, LogicalType type) {
+	switch(type.id()) {
+	case LogicalTypeId::VALIDITY:
+		return ValidityColumnData::Deserialize(db, source);
+	default:
+		return StandardColumnData::Deserialize(db, source, type);
 	}
 }
 

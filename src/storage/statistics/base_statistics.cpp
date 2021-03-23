@@ -72,6 +72,7 @@ unique_ptr<BaseStatistics> BaseStatistics::Deserialize(Deserializer &source, Log
 		result = StringStatistics::Deserialize(source, move(type));
 		break;
 	case PhysicalType::INTERVAL:
+	case PhysicalType::BIT:
 		result = make_unique<BaseStatistics>(move(type));
 		break;
 	default:

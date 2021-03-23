@@ -69,4 +69,10 @@ void ValidityColumnData::Update(Transaction &transaction, Vector &update_vector,
 	segment->Update(transaction, update_vector, FlatVector::GetData<row_t>(row_ids), count, base_data);
 }
 
+unique_ptr<PersistentColumnData> ValidityColumnData::Deserialize(DatabaseInstance &db, Deserializer &source) {
+	auto result = make_unique<PersistentColumnData>();
+	BaseDeserialize(db, source, LogicalType(LogicalTypeId::VALIDITY), *result);
+	return result;
+}
+
 }

@@ -152,4 +152,22 @@ void StandardColumnData::FetchRow(ColumnFetchState &state, Transaction &transact
 	ColumnData::FetchRow(state, transaction, row_id, result, result_idx);
 }
 
+void StandardColumnData::Checkpoint(TableDataWriter &writer) {
+	ColumnData::Checkpoint(writer);
+	validity.Checkpoint(writer);
+}
+
+void StandardColumnData::Initialize(PersistentColumnData &column_data) {
+	auto &persistent = (StandardPersistentColumnData &) column_data;
+	ColumnData::Initialize(column_data);
+	validity.Initialize(*persistent.validity);
+}
+
+unique_ptr<PersistentColumnData> StandardColumnData::Deserialize(DatabaseInstance &db, Deserializer &source, LogicalType type) {
+	auto result = make_unique<StandardPersistentColumnData>();
+	BaseDeserialize(db, source, type, *result);
+	result->validity = ValidityColumnData::Deserialize(db, source);
+	return result;
+}
+
 }

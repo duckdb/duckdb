@@ -33,6 +33,10 @@ public:
 	void Update(Transaction &transaction, Vector &updates, Vector &row_ids, idx_t count) override;
 	void Fetch(ColumnScanState &state, row_t row_id, Vector &result) override;
 	void FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result, idx_t result_idx) override;
+
+	void Initialize(PersistentColumnData &column_data) override;
+	void Checkpoint(TableDataWriter &writer) override;
+	static unique_ptr<PersistentColumnData> Deserialize(DatabaseInstance &db, Deserializer &source, LogicalType type);
 };
 
 }

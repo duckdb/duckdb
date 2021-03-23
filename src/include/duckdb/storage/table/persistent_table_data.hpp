@@ -18,8 +18,16 @@ class PersistentSegment;
 
 class PersistentColumnData {
 public:
+	virtual ~PersistentColumnData();
+
+	vector<unique_ptr<PersistentSegment>> segments;
 	unique_ptr<BaseStatistics> stats;
-	vector<unique_ptr<PersistentSegment>> data;
+	idx_t total_rows = 0;
+};
+
+class StandardPersistentColumnData : public PersistentColumnData {
+public:
+	unique_ptr<PersistentColumnData> validity;
 };
 
 class PersistentTableData {
@@ -27,7 +35,7 @@ public:
 	explicit PersistentTableData(idx_t column_count);
 	~PersistentTableData();
 
-	vector<PersistentColumnData> column_data;
+	vector<unique_ptr<PersistentColumnData>> column_data;
 	shared_ptr<SegmentTree> versions;
 };
 

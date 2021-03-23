@@ -31,18 +31,11 @@ DataTable::DataTable(DatabaseInstance &db, const string &schema, const string &t
 	}
 
 	// initialize the table with the existing data from disk, if any
-	if (data && !data->table_data[0].empty()) {
+	if (data && !data->column_data.empty()) {
+		D_ASSERT(data->column_data.size() == types.size());
 		for (idx_t i = 0; i < types.size(); i++) {
-			columns[i]->SetStatistics(move(data->column_stats[i]));
+			columns[i]->Initialize(*data->column_data[i]);
 		}
-		// first append all the segments to the set of column segments
-		throw NotImplementedException("FIXME: persistent load");
-		// for (idx_t i = 0; i < types.size(); i++) {
-		// 	columns[i]->Initialize(data->table_data[i]);
-		// 	if (columns[i]->persistent_rows != columns[0]->persistent_rows) {
-		// 		throw Exception("Column length mismatch in table load!");
-		// 	}
-		// }
 		total_rows = columns[0]->persistent_rows;
 		versions = move(data->versions);
 	} else {

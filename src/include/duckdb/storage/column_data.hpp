@@ -13,12 +13,15 @@
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table/persistent_segment.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/storage/data_pointer.hpp"
+#include "duckdb/storage/table/persistent_table_data.hpp"
 
 namespace duckdb {
 class ColumnData;
 class DatabaseInstance;
 class TableDataWriter;
 class PersistentSegment;
+class PersistentColumnData;
 class Transaction;
 
 struct DataTableInfo;
@@ -40,6 +43,7 @@ public:
 	virtual void CreateEmptySegment();
 	virtual void FlushSegment();
 	virtual void AppendData(Vector &data, idx_t count);
+	virtual void FlushToDisk();
 };
 
 class ColumnData {
@@ -99,6 +103,11 @@ public:
 
 	virtual unique_ptr<ColumnCheckpointState> CreateCheckpointState(TableDataWriter &writer);
 	virtual void Checkpoint(TableDataWriter &writer);
+
+	virtual void Initialize(PersistentColumnData &column_data);
+
+	static void BaseDeserialize(DatabaseInstance &db, Deserializer &source, LogicalType type, PersistentColumnData &result);
+	static unique_ptr<PersistentColumnData> Deserialize(DatabaseInstance &db, Deserializer &source, LogicalType type);
 
 protected:
 	//! Append a transient segment
