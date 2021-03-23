@@ -337,6 +337,7 @@ static void *duckdb_altrep_strings_dataptr(SEXP x, Rboolean writeable) {
 			}
 			dest_offset += STANDARD_VECTOR_SIZE;
 		}
+		wrapper->vectors.clear();
 	}
 	return CHARACTER_POINTER(R_altrep_data2(x));
 }
@@ -1141,7 +1142,7 @@ SEXP duckdb_register_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 		Rf_error("duckdb_register_R: Need at least one-column data frame parameter for value");
 	}
 	try {
-		conn->TableFunction("r_dataframe_scan", {Value::POINTER((uintptr_t)valuesexp)})->CreateView(name, true);
+		conn->TableFunction("r_dataframe_scan", {Value::POINTER((uintptr_t)valuesexp)})->CreateView(name, true, true);
 		auto key = Rf_install(("_registered_df_" + name).c_str());
 		Rf_setAttrib(connsexp, key, valuesexp);
 	} catch (exception &e) {
