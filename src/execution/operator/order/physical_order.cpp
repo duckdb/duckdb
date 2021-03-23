@@ -127,45 +127,18 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 		auto physical_type = expr.return_type.InternalType();
 		constant_size.push_back(TypeIsConstantSize(physical_type));
 		idx_t col_size = GetTypeIdSize(expr.return_type.InternalType());
-		if (expr.stats) {
-			// TODO: test this statistics thing
-			if (expr.return_type.IsNumeric()) {
-				auto num_stats = (NumericStatistics &)*expr.stats;
-				switch (physical_type) {
-				case PhysicalType::INT16:
-					col_size = TemplatedGetSize<int16_t>(num_stats.min, num_stats.max);
-					break;
-				case PhysicalType::INT32:
-					col_size = TemplatedGetSize<int32_t>(num_stats.min, num_stats.max);
-					break;
-				case PhysicalType::INT64:
-					col_size = TemplatedGetSize<int64_t>(num_stats.min, num_stats.max);
-					break;
-				case PhysicalType::INT128:
-					col_size = TemplatedGetSize<hugeint_t>(num_stats.min, num_stats.max);
-					break;
-				default:
-					// have to use full size for floating point numbers
-					break;
-				}
-			} else if (expr.return_type == LogicalType::VARCHAR) {
-				auto str_stats = (StringStatistics &)*expr.stats;
-				col_size = MinValue(str_stats.max_string_length, StringStatistics::MAX_STRING_MINMAX_SIZE);
+
+		// TODO: make use of statistics
+		if (!TypeIsConstantSize(physical_type)) {
+			switch (physical_type) {
+			case PhysicalType::VARCHAR:
+				col_size = StringStatistics::MAX_STRING_MINMAX_SIZE;
+			default:
+				// do nothing
+				break;
 			}
-			// null handling
-			has_null.push_back(expr.stats->has_null);
-		} else {
-			if (!TypeIsConstantSize(physical_type)) {
-				switch (physical_type) {
-				case PhysicalType::VARCHAR:
-					col_size = StringStatistics::MAX_STRING_MINMAX_SIZE;
-				default:
-					// do nothing
-					break;
-				}
-			}
-			has_null.push_back(true);
 		}
+		has_null.push_back(true);
 
 		// increment entry size with the column size
 		if (has_null.back()) {
@@ -197,8 +170,8 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 
 	// init payload state
 	entry_size = 0;
-	idx_t nullmask_size = (children.size() + 7) / 8;
-	entry_size += nullmask_size;
+	idx_t validitymask_size = (children[0]->types.size() + 7) / 8;
+	entry_size += validitymask_size;
 	bool variable_payload_size = false;
 	for (auto &type : children[0]->types) {
 		auto physical_type = type.InternalType();
@@ -209,7 +182,7 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 		}
 	}
 	state->payload_state =
-	    unique_ptr<PayloadState>(new PayloadState {variable_payload_size, nullmask_size, entry_size});
+	    unique_ptr<PayloadState>(new PayloadState {variable_payload_size, validitymask_size, entry_size});
 	entry_size = entry_size == 0 ? 32 : entry_size; // avoid divide by 0 in case no nulls and all variable columns
 	vectors_per_block = (Storage::BLOCK_ALLOC_SIZE / entry_size + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE;
 	state->payload_block = make_unique<RowChunk>(buffer_manager, vectors_per_block * STANDARD_VECTOR_SIZE, entry_size);
@@ -364,7 +337,7 @@ static void RadixSort(BufferManager &buffer_manager, data_ptr_t dataptr, const i
 	bool swap = false;
 
 	idx_t counts[256];
-	u_int8_t byte;
+	uint8_t byte;
 	for (idx_t offset = col_offset + sorting_size - 1; offset + 1 > col_offset; offset--) {
 		// init to 0
 		memset(counts, 0, sizeof(counts));

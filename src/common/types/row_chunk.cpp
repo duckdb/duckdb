@@ -393,7 +393,7 @@ void RowChunk::ComputeEntrySizes(Vector &v, idx_t entry_sizes[], idx_t vcount, i
 			if (vdata.validity.RowIsValid(idx)) {
 				auto list_entry = list_data[idx];
 
-				// make room for list length, list nullmask, and list entry sizes (if non-constant size)
+				// make room for list length, list validitymask, and list entry sizes (if non-constant size)
 				entry_sizes[i] += sizeof(list_entry.length);
 				entry_sizes[i] += (list_entry.length + 7) / 8;
 				if (!TypeIsConstantSize(v.GetType().child_types()[0].second.InternalType())) {
@@ -797,8 +797,7 @@ void RowChunk::Build(idx_t added_count, data_ptr_t key_locations[], idx_t entry_
 }
 
 template <class T>
-static void TemplatedDeserializeIntoVector(Vector &v, idx_t count, idx_t col_idx, data_ptr_t *key_locations,
-                                           data_ptr_t *validitymask_locations) {
+static void TemplatedDeserializeIntoVector(Vector &v, idx_t count, idx_t col_idx, data_ptr_t *key_locations) {
 	auto target = FlatVector::GetData<T>(v);
 	for (idx_t i = 0; i < count; i++) {
 		target[i] = Load<T>(key_locations[i]);
@@ -835,43 +834,43 @@ void RowChunk::DeserializeIntoVector(Vector &v, const idx_t &vcount, const idx_t
 	switch (type) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
-		TemplatedDeserializeIntoVector<int8_t>(v, vcount, col_idx, key_locations, validitymask_locations);
+		TemplatedDeserializeIntoVector<int8_t>(v, vcount, col_idx, key_locations);
 		break;
 	case PhysicalType::INT16:
-		TemplatedDeserializeIntoVector<int16_t>(v, vcount, col_idx, key_locations, validitymask_locations);
+		TemplatedDeserializeIntoVector<int16_t>(v, vcount, col_idx, key_locations);
 		break;
 	case PhysicalType::INT32:
-		TemplatedDeserializeIntoVector<int32_t>(v, vcount, col_idx, key_locations, validitymask_locations);
+		TemplatedDeserializeIntoVector<int32_t>(v, vcount, col_idx, key_locations);
 		break;
 	case PhysicalType::INT64:
-		TemplatedDeserializeIntoVector<int64_t>(v, vcount, col_idx, key_locations, validitymask_locations);
+		TemplatedDeserializeIntoVector<int64_t>(v, vcount, col_idx, key_locations);
 		break;
 	case PhysicalType::UINT8:
-		TemplatedDeserializeIntoVector<uint8_t>(v, vcount, col_idx, key_locations, validitymask_locations);
+		TemplatedDeserializeIntoVector<uint8_t>(v, vcount, col_idx, key_locations);
 		break;
 	case PhysicalType::UINT16:
-		TemplatedDeserializeIntoVector<uint16_t>(v, vcount, col_idx, key_locations, validitymask_locations);
+		TemplatedDeserializeIntoVector<uint16_t>(v, vcount, col_idx, key_locations);
 		break;
 	case PhysicalType::UINT32:
-		TemplatedDeserializeIntoVector<uint32_t>(v, vcount, col_idx, key_locations, validitymask_locations);
+		TemplatedDeserializeIntoVector<uint32_t>(v, vcount, col_idx, key_locations);
 		break;
 	case PhysicalType::UINT64:
-		TemplatedDeserializeIntoVector<uint64_t>(v, vcount, col_idx, key_locations, validitymask_locations);
+		TemplatedDeserializeIntoVector<uint64_t>(v, vcount, col_idx, key_locations);
 		break;
 	case PhysicalType::INT128:
-		TemplatedDeserializeIntoVector<hugeint_t>(v, vcount, col_idx, key_locations, validitymask_locations);
+		TemplatedDeserializeIntoVector<hugeint_t>(v, vcount, col_idx, key_locations);
 		break;
 	case PhysicalType::FLOAT:
-		TemplatedDeserializeIntoVector<float>(v, vcount, col_idx, key_locations, validitymask_locations);
+		TemplatedDeserializeIntoVector<float>(v, vcount, col_idx, key_locations);
 		break;
 	case PhysicalType::DOUBLE:
-		TemplatedDeserializeIntoVector<double>(v, vcount, col_idx, key_locations, validitymask_locations);
+		TemplatedDeserializeIntoVector<double>(v, vcount, col_idx, key_locations);
 		break;
 	case PhysicalType::HASH:
-		TemplatedDeserializeIntoVector<hash_t>(v, vcount, col_idx, key_locations, validitymask_locations);
+		TemplatedDeserializeIntoVector<hash_t>(v, vcount, col_idx, key_locations);
 		break;
 	case PhysicalType::INTERVAL:
-		TemplatedDeserializeIntoVector<interval_t>(v, vcount, col_idx, key_locations, validitymask_locations);
+		TemplatedDeserializeIntoVector<interval_t>(v, vcount, col_idx, key_locations);
 		break;
 	case PhysicalType::VARCHAR: {
 		idx_t len;

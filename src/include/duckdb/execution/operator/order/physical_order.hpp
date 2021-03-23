@@ -16,8 +16,7 @@
 
 namespace duckdb {
 
-//! Represents a physical ordering of the data. Note that this will not change
-//! the data but only add a selection vector.
+//! Physically re-orders the input data
 class PhysicalOrder : public PhysicalSink {
 public:
 	PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode> orders, idx_t estimated_cardinality);
