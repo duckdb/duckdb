@@ -1,18 +1,19 @@
 #include "duckdb/common/types/row_chunk.hpp"
 
+#include "duckdb/common/types/chunk_collection.hpp"
 #include <cfloat>
 #include <limits.h>
 
 namespace duckdb {
 
 //! these are optimized and assume a particular byte order
-#define BSWAP16(x) ((uint16_t)((((uint16_t)(x)&0xff00) >> 8) | (((uint16_t)(x)&0x00ff) << 8)))
+#define RC_BSWAP16(x) ((uint16_t)((((uint16_t)(x)&0xff00) >> 8) | (((uint16_t)(x)&0x00ff) << 8)))
 
-#define BSWAP32(x)                                                                                                     \
+#define RC_BSWAP32(x)                                                                                                  \
 	((uint32_t)((((uint32_t)(x)&0xff000000) >> 24) | (((uint32_t)(x)&0x00ff0000) >> 8) |                               \
 	            (((uint32_t)(x)&0x0000ff00) << 8) | (((uint32_t)(x)&0x000000ff) << 24)))
 
-#define BSWAP64(x)                                                                                                     \
+#define RC_BSWAP64(x)                                                                                                  \
 	((uint64_t)((((uint64_t)(x)&0xff00000000000000ull) >> 56) | (((uint64_t)(x)&0x00ff000000000000ull) >> 40) |        \
 	            (((uint64_t)(x)&0x0000ff0000000000ull) >> 24) | (((uint64_t)(x)&0x000000ff00000000ull) >> 8) |         \
 	            (((uint64_t)(x)&0x00000000ff000000ull) << 8) | (((uint64_t)(x)&0x0000000000ff0000ull) << 24) |         \
@@ -34,11 +35,11 @@ RowChunk::RowChunk(RowChunk &other)
       entry_size(other.entry_size), is_little_endian(other.is_little_endian) {
 }
 
-static uint8_t FlipSign(uint8_t key_byte) {
+uint8_t RowChunk::FlipSign(uint8_t key_byte) {
 	return key_byte ^ 128;
 }
 
-static uint32_t EncodeFloat(float x) {
+uint32_t RowChunk::EncodeFloat(float x) {
 	uint64_t buff;
 
 	//! zero
@@ -65,7 +66,7 @@ static uint32_t EncodeFloat(float x) {
 	return buff;
 }
 
-static uint64_t EncodeDouble(double x) {
+uint64_t RowChunk::EncodeDouble(double x) {
 	uint64_t buff;
 	//! zero
 	if (x == 0) {
@@ -103,19 +104,19 @@ void RowChunk::EncodeData(data_ptr_t dataptr, int8_t value) {
 
 template <>
 void RowChunk::EncodeData(data_ptr_t dataptr, int16_t value) {
-	Store<uint16_t>(is_little_endian ? BSWAP16(value) : value, dataptr);
+	Store<uint16_t>(is_little_endian ? RC_BSWAP16(value) : value, dataptr);
 	dataptr[0] = FlipSign(dataptr[0]);
 }
 
 template <>
 void RowChunk::EncodeData(data_ptr_t dataptr, int32_t value) {
-	Store<uint32_t>(is_little_endian ? BSWAP32(value) : value, dataptr);
+	Store<uint32_t>(is_little_endian ? RC_BSWAP32(value) : value, dataptr);
 	dataptr[0] = FlipSign(dataptr[0]);
 }
 
 template <>
 void RowChunk::EncodeData(data_ptr_t dataptr, int64_t value) {
-	Store<uint64_t>(is_little_endian ? BSWAP64(value) : value, dataptr);
+	Store<uint64_t>(is_little_endian ? RC_BSWAP64(value) : value, dataptr);
 	dataptr[0] = FlipSign(dataptr[0]);
 }
 
@@ -126,17 +127,17 @@ void RowChunk::EncodeData(data_ptr_t dataptr, uint8_t value) {
 
 template <>
 void RowChunk::EncodeData(data_ptr_t dataptr, uint16_t value) {
-	Store<uint16_t>(is_little_endian ? BSWAP16(value) : value, dataptr);
+	Store<uint16_t>(is_little_endian ? RC_BSWAP16(value) : value, dataptr);
 }
 
 template <>
 void RowChunk::EncodeData(data_ptr_t dataptr, uint32_t value) {
-	Store<uint32_t>(is_little_endian ? BSWAP32(value) : value, dataptr);
+	Store<uint32_t>(is_little_endian ? RC_BSWAP32(value) : value, dataptr);
 }
 
 template <>
 void RowChunk::EncodeData(data_ptr_t dataptr, uint64_t value) {
-	Store<uint64_t>(is_little_endian ? BSWAP64(value) : value, dataptr);
+	Store<uint64_t>(is_little_endian ? RC_BSWAP64(value) : value, dataptr);
 }
 
 template <>
@@ -148,13 +149,13 @@ void RowChunk::EncodeData(data_ptr_t dataptr, hugeint_t value) {
 template <>
 void RowChunk::EncodeData(data_ptr_t dataptr, float value) {
 	uint32_t converted_value = EncodeFloat(value);
-	Store<uint32_t>(is_little_endian ? BSWAP32(converted_value) : converted_value, dataptr);
+	Store<uint32_t>(is_little_endian ? RC_BSWAP32(converted_value) : converted_value, dataptr);
 }
 
 template <>
 void RowChunk::EncodeData(data_ptr_t dataptr, double value) {
 	uint64_t converted_value = EncodeDouble(value);
-	Store<uint64_t>(is_little_endian ? BSWAP64(converted_value) : converted_value, dataptr);
+	Store<uint64_t>(is_little_endian ? RC_BSWAP64(converted_value) : converted_value, dataptr);
 }
 
 template <>
@@ -676,7 +677,7 @@ void RowChunk::SerializeVector(Vector &v, idx_t vcount, const SelectionVector &s
 					}
 					if (++entry_offset_in_byte == 8) {
 						validitymask_location++;
-                        entry_offset_in_byte = 0;
+						entry_offset_in_byte = 0;
 					}
 				}
 

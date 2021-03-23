@@ -77,6 +77,10 @@ public:
 	                                  data_ptr_t validitymask_locations[]);
 
 private:
+	static uint8_t FlipSign(uint8_t key_byte);
+	static uint32_t EncodeFloat(float x);
+	static uint64_t EncodeDouble(double x);
+
 	template <class T>
 	void EncodeData(data_t *data, T value) {
 		throw NotImplementedException("Cannot create data from this type");

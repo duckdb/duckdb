@@ -1,6 +1,5 @@
 #include "duckdb/execution/operator/order/physical_order.hpp"
 
-#include "blockquicksort_wrapper.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
@@ -221,7 +220,7 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 		    make_unique<RowChunk>(buffer_manager, (idx_t)Storage::BLOCK_ALLOC_SIZE / sizeof(idx_t) + 1, sizeof(idx_t));
 	}
 
-	return state;
+	return move(state);
 }
 
 unique_ptr<LocalSinkState> PhysicalOrder::GetLocalSinkState(ExecutionContext &context) {
@@ -231,7 +230,7 @@ unique_ptr<LocalSinkState> PhysicalOrder::GetLocalSinkState(ExecutionContext &co
 		types.push_back(order.expression->return_type);
 	}
 	result->sort.Initialize(types);
-	return result;
+	return move(result);
 }
 
 void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &gstate_p, LocalSinkState &lstate_p,
@@ -359,10 +358,9 @@ void PhysicalOrder::Combine(ExecutionContext &context, GlobalOperatorState &gsta
 
 static void RadixSort(BufferManager &buffer_manager, data_ptr_t dataptr, const idx_t &count, const idx_t &col_offset,
                       const idx_t &sorting_size, const SortingState &sorting_state) {
-	auto temp_block = buffer_manager.RegisterMemory(
-	    MaxValue(count * sorting_state.ENTRY_SIZE, (idx_t)Storage::BLOCK_ALLOC_SIZE), false);
-	auto handle = buffer_manager.Pin(temp_block);
-	data_ptr_t temp = handle->node->buffer;
+	auto temp_block =
+	    buffer_manager.Allocate(MaxValue(count * sorting_state.ENTRY_SIZE, (idx_t)Storage::BLOCK_ALLOC_SIZE));
+	data_ptr_t temp = temp_block->node->buffer;
 	bool swap = false;
 
 	idx_t counts[256];
@@ -389,12 +387,10 @@ static void RadixSort(BufferManager &buffer_manager, data_ptr_t dataptr, const i
 		std::swap(dataptr, temp);
 		swap = !swap;
 	}
-    // move data back to original buffer (if it was swapped)
+	// move data back to original buffer (if it was swapped)
 	if (swap) {
 		memcpy(temp, dataptr, count * sorting_state.ENTRY_SIZE);
 	}
-	// unregister temp block
-	buffer_manager.UnregisterBlock(temp_block->BlockId(), true);
 }
 
 static void SubSortTiedTuples(BufferManager &buffer_manager, const data_ptr_t dataptr, const idx_t &count,
@@ -457,9 +453,9 @@ static bool CompareStrings(const data_ptr_t &l, const data_ptr_t &r, const data_
 	return order * comp_res < 0;
 }
 
-static void BreakStringTies(const data_ptr_t dataptr, const idx_t &start, const idx_t &end, const idx_t &tie_col,
-                            bool ties[], data_ptr_t var_dataptr, data_ptr_t sizes_ptr,
-                            const SortingState &sorting_state) {
+static void BreakStringTies(BufferManager &buffer_manager, const data_ptr_t dataptr, const idx_t &start,
+                            const idx_t &end, const idx_t &tie_col, bool ties[], data_ptr_t var_dataptr,
+                            data_ptr_t sizes_ptr, const SortingState &sorting_state) {
 	idx_t tie_col_offset = 0;
 	for (idx_t i = 0; i < tie_col; i++) {
 		tie_col_offset += sorting_state.COL_SIZE[i];
@@ -476,7 +472,9 @@ static void BreakStringTies(const data_ptr_t dataptr, const idx_t &start, const 
 	}
 
 	// fill pointer array for sorting
-	auto entry_ptrs = unique_ptr<data_ptr_t[]>(new data_ptr_t[end - start]);
+	auto ptr_block =
+	    buffer_manager.Allocate(MaxValue((end - start) * sizeof(data_ptr_t), (idx_t)Storage::BLOCK_ALLOC_SIZE));
+	auto entry_ptrs = (data_ptr_t *)ptr_block->node->buffer;
 	for (idx_t i = start; i < end; i++) {
 		entry_ptrs[i - start] = dataptr + i * sorting_state.ENTRY_SIZE;
 	}
@@ -485,19 +483,21 @@ static void BreakStringTies(const data_ptr_t dataptr, const idx_t &start, const 
 	const int order = sorting_state.ORDER_TYPES[tie_col] == OrderType::DESCENDING ? -1 : 1;
 	const idx_t sorting_size = sorting_state.ENTRY_SIZE - sizeof(idx_t);
 	idx_t *sizes = (idx_t *)sizes_ptr;
-	BlockQuickSort::Sort(entry_ptrs.get(), entry_ptrs.get() + (end - start),
-	                     [&var_dataptr, &sizes, &order, &sorting_size](const data_ptr_t l, const data_ptr_t r) {
-		                     return CompareStrings(l, r, var_dataptr, sizes, order, sorting_size);
-	                     });
+	std::sort(entry_ptrs, entry_ptrs + end - start,
+	          [&var_dataptr, &sizes, &order, &sorting_size](const data_ptr_t l, const data_ptr_t r) {
+		          return CompareStrings(l, r, var_dataptr, sizes, order, sorting_size);
+	          });
 
 	// re-order
-	auto temp = unique_ptr<data_t[]>(new data_t[(end - start) * sorting_state.ENTRY_SIZE]);
-	data_ptr_t temp_ptr = temp.get();
+	auto temp_block =
+	    buffer_manager.Allocate(MaxValue((end - start) * sorting_state.ENTRY_SIZE, (idx_t)Storage::BLOCK_ALLOC_SIZE));
+	data_ptr_t temp_ptr = temp_block->node->buffer;
 	for (idx_t i = 0; i < end - start; i++) {
 		memcpy(temp_ptr, entry_ptrs[i], sorting_state.ENTRY_SIZE);
 		temp_ptr += sorting_state.ENTRY_SIZE;
 	}
-	memcpy(dataptr + start * sorting_state.ENTRY_SIZE, temp.get(), (end - start) * sorting_state.ENTRY_SIZE);
+	memcpy(dataptr + start * sorting_state.ENTRY_SIZE, temp_block->node->buffer,
+	       (end - start) * sorting_state.ENTRY_SIZE);
 
 	// determine if there are still ties (if needed)
 	if (tie_col < sorting_state.ORDER_TYPES.size() - 1) {
@@ -539,7 +539,7 @@ static void BreakTies(BufferManager &buffer_manager, OrderGlobalState &global_st
 		}
 		switch (sorting_state.TYPES[tie_col].InternalType()) {
 		case PhysicalType::VARCHAR:
-			BreakStringTies(dataptr, i, j + 1, tie_col, ties, var_dataptr, sizes_ptr, sorting_state);
+			BreakStringTies(buffer_manager, dataptr, i, j + 1, tie_col, ties, var_dataptr, sizes_ptr, sorting_state);
 			break;
 		default:
 			throw NotImplementedException("Sorting of this variable size type");
@@ -584,7 +584,8 @@ static void SortInMemory(Pipeline &pipeline, ClientContext &context, OrderGlobal
 
 	sorting_size = 0;
 	idx_t col_offset = 0;
-	unique_ptr<bool[]> ties = nullptr;
+	unique_ptr<BufferHandle> ties_handle = nullptr;
+	bool *ties = nullptr;
 	const idx_t num_cols = sorting_state.CONSTANT_SIZE.size();
 	for (idx_t i = 0; i < num_cols; i++) {
 		// add columns to the sort until we reach a variable size column
@@ -596,12 +597,12 @@ static void SortInMemory(Pipeline &pipeline, ClientContext &context, OrderGlobal
 		if (!ties) {
 			// this is the first sort
 			RadixSort(buffer_manager, dataptr, block.count, col_offset, sorting_size, sorting_state);
-			ties = unique_ptr<bool[]>(new bool[block.count]);
-			std::fill_n(ties.get(), block.count, true);
+			ties_handle = buffer_manager.Allocate(MaxValue(block.count, (idx_t)Storage::BLOCK_ALLOC_SIZE));
+			ties = (bool *)ties_handle->node->buffer;
+			std::fill_n(ties, block.count, true);
 		} else {
 			// for subsequent sorts, we subsort the tied tuples
-			SubSortTiedTuples(buffer_manager, dataptr, block.count, col_offset, sorting_size, ties.get(),
-			                  sorting_state);
+			SubSortTiedTuples(buffer_manager, dataptr, block.count, col_offset, sorting_size, ties, sorting_state);
 		}
 
 		if (sorting_state.CONSTANT_SIZE[i] && i == num_cols - 1) {
@@ -609,15 +610,15 @@ static void SortInMemory(Pipeline &pipeline, ClientContext &context, OrderGlobal
 			break;
 		}
 
-		ComputeTies(dataptr, block.count, i, ties.get(), sorting_state);
-		if (!AnyTies(ties.get(), block.count)) {
+		ComputeTies(dataptr, block.count, i, ties, sorting_state);
+		if (!AnyTies(ties, block.count)) {
 			// no ties, or this is the last column, so we stop sorting
 			break;
 		}
 
 		// break the ties
-		BreakTies(buffer_manager, state, ties.get(), dataptr, block.count, i, sorting_state);
-		if (!AnyTies(ties.get(), block.count)) {
+		BreakTies(buffer_manager, state, ties, dataptr, block.count, i, sorting_state);
+		if (!AnyTies(ties, block.count)) {
 			// no more ties after tie-breaking
 			break;
 		}
@@ -689,10 +690,10 @@ void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 	idx_t payload_size = 0;
 	if (payload_state.HAS_VARIABLE_SIZE) {
 		for (auto &block : state.payload_block->blocks) {
-            payload_size += block.byte_offset;
+			payload_size += block.byte_offset;
 		}
 	} else {
-        payload_size = state.payload_block->count * payload_state.ENTRY_SIZE;
+		payload_size = state.payload_block->count * payload_state.ENTRY_SIZE;
 	}
 	if (payload_size > state.buffer_manager.GetMaxMemory() / 2) {
 		throw NotImplementedException("External sort");
@@ -731,7 +732,7 @@ void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 		idx_t capacity =
 		    payload_state.HAS_VARIABLE_SIZE
 		        ? MaxValue(Storage::BLOCK_ALLOC_SIZE / payload_state.ENTRY_SIZE + 1,
-                           payload_size / payload_state.ENTRY_SIZE + 1)
+		                   payload_size / payload_state.ENTRY_SIZE + 1)
 		        : MaxValue(Storage::BLOCK_ALLOC_SIZE / payload_state.ENTRY_SIZE + 1, state.payload_block->count);
 		ConcatenateBlocks(state.buffer_manager, *state.payload_block, capacity, payload_state.HAS_VARIABLE_SIZE);
 	}
