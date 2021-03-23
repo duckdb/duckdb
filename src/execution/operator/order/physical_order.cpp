@@ -389,10 +389,12 @@ static void RadixSort(BufferManager &buffer_manager, data_ptr_t dataptr, const i
 		std::swap(dataptr, temp);
 		swap = !swap;
 	}
-
+    // move data back to original buffer (if it was swapped)
 	if (swap) {
 		memcpy(temp, dataptr, count * sorting_state.ENTRY_SIZE);
 	}
+	// unregister temp block
+	buffer_manager.UnregisterBlock(temp_block->BlockId(), true);
 }
 
 static void SubSortTiedTuples(BufferManager &buffer_manager, const data_ptr_t dataptr, const idx_t &count,
@@ -403,12 +405,12 @@ static void SubSortTiedTuples(BufferManager &buffer_manager, const data_ptr_t da
 			continue;
 		}
 		idx_t j;
-		for (j = i; j < count; j++) {
+		for (j = i + 1; j < count; j++) {
 			if (!ties[j]) {
 				break;
 			}
 		}
-		RadixSort(buffer_manager, dataptr + i * sorting_state.ENTRY_SIZE, j + 1, col_offset, sorting_size,
+		RadixSort(buffer_manager, dataptr + i * sorting_state.ENTRY_SIZE, j - i + 1, col_offset, sorting_size,
 		          sorting_state);
 		i = j;
 	}
@@ -602,9 +604,14 @@ static void SortInMemory(Pipeline &pipeline, ClientContext &context, OrderGlobal
 			                  sorting_state);
 		}
 
+		if (sorting_state.CONSTANT_SIZE[i] && i == num_cols - 1) {
+			// all columns are sorted, no ties to break because last column is constant size
+			break;
+		}
+
 		ComputeTies(dataptr, block.count, i, ties.get(), sorting_state);
 		if (!AnyTies(ties.get(), block.count)) {
-			// if there weren't any ties, we can stop sorting here
+			// no ties, or this is the last column, so we stop sorting
 			break;
 		}
 
@@ -679,15 +686,15 @@ void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 		return;
 	}
 
-	idx_t total_size = 0;
+	idx_t payload_size = 0;
 	if (payload_state.HAS_VARIABLE_SIZE) {
 		for (auto &block : state.payload_block->blocks) {
-			total_size += block.byte_offset;
+            payload_size += block.byte_offset;
 		}
 	} else {
-		total_size = state.payload_block->count * payload_state.ENTRY_SIZE;
+        payload_size = state.payload_block->count * payload_state.ENTRY_SIZE;
 	}
-	if (total_size > state.buffer_manager.GetMaxMemory() / 2) {
+	if (payload_size > state.buffer_manager.GetMaxMemory() / 2) {
 		throw NotImplementedException("External sort");
 	}
 
@@ -724,7 +731,7 @@ void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 		idx_t capacity =
 		    payload_state.HAS_VARIABLE_SIZE
 		        ? MaxValue(Storage::BLOCK_ALLOC_SIZE / payload_state.ENTRY_SIZE + 1,
-		                   total_size / payload_state.ENTRY_SIZE + 1)
+                           payload_size / payload_state.ENTRY_SIZE + 1)
 		        : MaxValue(Storage::BLOCK_ALLOC_SIZE / payload_state.ENTRY_SIZE + 1, state.payload_block->count);
 		ConcatenateBlocks(state.buffer_manager, *state.payload_block, capacity, payload_state.HAS_VARIABLE_SIZE);
 	}

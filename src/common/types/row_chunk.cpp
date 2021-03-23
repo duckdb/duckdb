@@ -624,83 +624,89 @@ void RowChunk::SerializeVector(Vector &v, idx_t vcount, const SelectionVector &s
 		break;
 	}
 	case PhysicalType::LIST: {
+		auto byte_offset = col_idx / 8;
+		auto offset_in_byte = col_idx % 8;
 		auto list_data = GetListData(v);
 		auto &child_cc = ListVector::GetEntry(v);
 		for (idx_t i = 0; i < ser_count; i++) {
 			idx_t idx = vdata.sel->get_index(i + offset);
-			if (vdata.validity.RowIsValid(idx)) {
-				auto list_entry = list_data[idx];
+			// set the validitymask
+			if (!vdata.validity.RowIsValid(idx)) {
+				*(validitymask_locations[i] + byte_offset) &= ~(1UL << offset_in_byte);
+				continue;
+			}
 
-				// store list length
-				Store<uint64_t>(list_entry.length, key_locations[i]);
-				key_locations[i] += sizeof(list_entry.length);
+			auto list_entry = list_data[idx];
 
-				// make room for the validitymask
-				data_ptr_t validitymask_location = key_locations[i];
-				idx_t offset_in_byte = 0;
-				idx_t validitymask_size = (list_entry.length + 7) / 8;
-				memset(validitymask_location, -1, validitymask_size);
-				key_locations[i] += validitymask_size;
+			// store list length
+			Store<uint64_t>(list_entry.length, key_locations[i]);
+			key_locations[i] += sizeof(list_entry.length);
 
-				// store size of each entry (if variable size)
-				auto child_type = v.GetType().child_types()[0].second.InternalType();
-				data_ptr_t var_entry_size_ptr = nullptr;
-				if (!TypeIsConstantSize(child_type)) {
-					var_entry_size_ptr = key_locations[i];
-					key_locations[i] += list_entry.length * sizeof(idx_t);
+			// make room for the validitymask
+			data_ptr_t validitymask_location = key_locations[i];
+			idx_t entry_offset_in_byte = 0;
+			idx_t validitymask_size = (list_entry.length + 7) / 8;
+			memset(validitymask_location, -1, validitymask_size);
+			key_locations[i] += validitymask_size;
+
+			// store size of each entry (if variable size)
+			auto child_type = v.GetType().child_types()[0].second.InternalType();
+			data_ptr_t var_entry_size_ptr = nullptr;
+			if (!TypeIsConstantSize(child_type)) {
+				var_entry_size_ptr = key_locations[i];
+				key_locations[i] += list_entry.length * sizeof(idx_t);
+			}
+
+			idx_t list_entry_sizes[STANDARD_VECTOR_SIZE];
+			data_ptr_t list_entry_locations[STANDARD_VECTOR_SIZE];
+			auto entry_remaining = list_entry.length;
+			auto entry_offset = list_entry.offset;
+			while (entry_remaining > 0) {
+				// the list entry can span multiple vectors
+				auto &chunk = child_cc.GetChunkForRow(entry_offset);
+				auto offset_in_chunk = entry_offset % STANDARD_VECTOR_SIZE;
+				auto next = MinValue(chunk.size() - offset_in_chunk, entry_remaining);
+
+				// serialize validity
+				VectorData list_vdata;
+				chunk.data[0].Orrify(chunk.size(), list_vdata);
+				for (idx_t entry_idx = 0; entry_idx < next; entry_idx++) {
+					if (!list_vdata.validity.RowIsValid(offset_in_chunk + entry_idx)) {
+						*(validitymask_location) &= ~(1UL << entry_offset_in_byte);
+					}
+					if (++entry_offset_in_byte == 8) {
+						validitymask_location++;
+                        entry_offset_in_byte = 0;
+					}
 				}
 
-				idx_t list_entry_sizes[STANDARD_VECTOR_SIZE];
-				data_ptr_t list_entry_locations[STANDARD_VECTOR_SIZE];
-				auto entry_remaining = list_entry.length;
-				auto entry_offset = list_entry.offset;
-				while (entry_remaining > 0) {
-					// the list entry can span multiple vectors
-					auto &chunk = child_cc.GetChunkForRow(entry_offset);
-					auto offset_in_chunk = entry_offset % STANDARD_VECTOR_SIZE;
-					auto next = MinValue(chunk.size() - offset_in_chunk, entry_remaining);
-
-					// serialize validity
-					VectorData list_vdata;
-					chunk.data[0].Orrify(chunk.size(), list_vdata);
+				// compute entry sizes and set locations where the list entries will be serialized
+				std::fill_n(list_entry_sizes, STANDARD_VECTOR_SIZE, 0);
+				ComputeEntrySizes(chunk.data[0], list_entry_sizes, next, offset_in_chunk);
+				if (TypeIsConstantSize(child_type)) {
+					// constant size list entries
+					const idx_t type_size = GetTypeIdSize(child_type);
 					for (idx_t entry_idx = 0; entry_idx < next; entry_idx++) {
-						if (!list_vdata.validity.RowIsValid(offset_in_chunk + entry_idx)) {
-							*(validitymask_location) &= ~(1UL << offset_in_byte);
-						}
-						if (++offset_in_byte == 8) {
-							validitymask_location++;
-							offset_in_byte = 0;
-						}
+						list_entry_locations[entry_idx] = key_locations[i];
+						key_locations[i] += type_size;
 					}
-
-					// compute entry sizes and set locations where the list entries will be serialized
-					std::fill_n(list_entry_sizes, STANDARD_VECTOR_SIZE, 0);
-					ComputeEntrySizes(chunk.data[0], list_entry_sizes, next, offset_in_chunk);
-					if (TypeIsConstantSize(child_type)) {
-						// constant size list entries
-						const idx_t type_size = GetTypeIdSize(child_type);
-						for (idx_t entry_idx = 0; entry_idx < next; entry_idx++) {
-							list_entry_locations[entry_idx] = key_locations[i];
-							key_locations[i] += type_size;
-						}
-					} else {
-						// variable size list entries
-						for (idx_t entry_idx = 0; entry_idx < next; entry_idx++) {
-							list_entry_locations[entry_idx] = key_locations[i];
-							key_locations[i] += list_entry_sizes[entry_idx];
-							Store<idx_t>(list_entry_sizes[entry_idx], var_entry_size_ptr);
-							var_entry_size_ptr += sizeof(idx_t);
-						}
+				} else {
+					// variable size list entries
+					for (idx_t entry_idx = 0; entry_idx < next; entry_idx++) {
+						list_entry_locations[entry_idx] = key_locations[i];
+						key_locations[i] += list_entry_sizes[entry_idx];
+						Store<idx_t>(list_entry_sizes[entry_idx], var_entry_size_ptr);
+						var_entry_size_ptr += sizeof(idx_t);
 					}
-
-					// now serialize to the locations
-					SerializeVector(chunk.data[0], chunk.size(), sel, next, 0, list_entry_locations, nullptr,
-					                offset_in_chunk);
-
-					// update for next iteration
-					entry_remaining -= next;
-					entry_offset += next;
 				}
+
+				// now serialize to the locations
+				SerializeVector(chunk.data[0], chunk.size(), sel, next, 0, list_entry_locations, nullptr,
+				                offset_in_chunk);
+
+				// update for next iteration
+				entry_remaining -= next;
+				entry_offset += next;
 			}
 		}
 		break;
@@ -792,16 +798,6 @@ void RowChunk::Build(idx_t added_count, data_ptr_t key_locations[], idx_t entry_
 template <class T>
 static void TemplatedDeserializeIntoVector(Vector &v, idx_t count, idx_t col_idx, data_ptr_t *key_locations,
                                            data_ptr_t *validitymask_locations) {
-	auto byte_offset = col_idx / 8;
-	auto offset_in_byte = col_idx % 8;
-	auto &validity = FlatVector::Validity(v);
-	if (validitymask_locations) {
-		// validity mask is not yet set: deserialize it
-		for (idx_t i = 0; i < count; i++) {
-			validity.Set(i, *(validitymask_locations[i] + byte_offset) & (1 << offset_in_byte));
-		}
-	}
-	// now deserialize the data
 	auto target = FlatVector::GetData<T>(v);
 	for (idx_t i = 0; i < count; i++) {
 		target[i] = Load<T>(key_locations[i]);
@@ -824,6 +820,16 @@ static ValidityMask &GetValidity(Vector &v) {
 
 void RowChunk::DeserializeIntoVector(Vector &v, const idx_t &vcount, const idx_t &col_idx, data_ptr_t key_locations[],
                                      data_ptr_t validitymask_locations[]) {
+	auto &validity = FlatVector::Validity(v);
+	if (validitymask_locations) {
+		// validity mask is not yet set: deserialize it
+		auto byte_offset = col_idx / 8;
+		auto offset_in_byte = col_idx % 8;
+		for (idx_t i = 0; i < vcount; i++) {
+			validity.Set(i, *(validitymask_locations[i] + byte_offset) & (1 << offset_in_byte));
+		}
+	}
+
 	auto type = v.GetType().InternalType();
 	switch (type) {
 	case PhysicalType::BOOL:
@@ -867,15 +873,6 @@ void RowChunk::DeserializeIntoVector(Vector &v, const idx_t &vcount, const idx_t
 		TemplatedDeserializeIntoVector<interval_t>(v, vcount, col_idx, key_locations, validitymask_locations);
 		break;
 	case PhysicalType::VARCHAR: {
-		auto &validity = FlatVector::Validity(v);
-		if (validitymask_locations) {
-			// validity mask is not yet set: deserialize it
-			auto byte_offset = col_idx / 8;
-			auto offset_in_byte = col_idx % 8;
-			for (idx_t i = 0; i < vcount; i++) {
-				validity.Set(i, *(validitymask_locations[i] + byte_offset) & (1 << offset_in_byte));
-			}
-		}
 		idx_t len;
 		auto target = FlatVector::GetData<string_t>(v);
 		for (idx_t i = 0; i < vcount; i++) {
@@ -884,7 +881,7 @@ void RowChunk::DeserializeIntoVector(Vector &v, const idx_t &vcount, const idx_t
 			}
 			len = Load<uint32_t>(key_locations[i]);
 			key_locations[i] += string_t::PREFIX_LENGTH;
-			target[i] = StringVector::AddString(v, (const char *)key_locations[i], len);
+			target[i] = StringVector::AddStringOrBlob(v, string_t((const char *)key_locations[i], len));
 			key_locations[i] += len;
 		}
 		break;
@@ -899,16 +896,6 @@ void RowChunk::DeserializeIntoVector(Vector &v, const idx_t &vcount, const idx_t
 			struct_key_locations[i] = key_locations[i] + struct_validitymask_size;
 		}
 
-		if (validitymask_locations) {
-			// validity mask is not yet set: deserialize it
-			auto &validity = GetValidity(v);
-			auto byte_offset = col_idx / 8;
-			auto offset_in_byte = col_idx % 8;
-			for (idx_t i = 0; i < vcount; i++) {
-				validity.Set(i, *(validitymask_locations[i] + byte_offset) & (1 << offset_in_byte));
-			}
-		}
-
 		// now deserialize into the struct vectors
 		for (idx_t i = 0; i < child_types.size(); i++) {
 			auto new_child = make_unique<Vector>(child_types[i].second);
@@ -918,17 +905,6 @@ void RowChunk::DeserializeIntoVector(Vector &v, const idx_t &vcount, const idx_t
 		break;
 	}
 	case PhysicalType::LIST: {
-		if (validitymask_locations) {
-			// validity mask is not yet set: deserialize it
-			auto &validity = GetValidity(v);
-			auto byte_offset = col_idx / 8;
-			auto offset_in_byte = col_idx % 8;
-			for (idx_t i = 0; i < vcount; i++) {
-				validity.Set(i, *(validitymask_locations[i] + byte_offset) & (1 << offset_in_byte));
-			}
-		}
-		VectorData vdata;
-		v.Orrify(vcount, vdata);
 		auto list_data = GetListData(v);
 		data_ptr_t list_entry_locations[STANDARD_VECTOR_SIZE];
 		auto child_cc = make_unique<ChunkCollection>();
@@ -936,7 +912,7 @@ void RowChunk::DeserializeIntoVector(Vector &v, const idx_t &vcount, const idx_t
 
 		uint64_t entry_offset = 0;
 		for (idx_t i = 0; i < vcount; i++) {
-			if (!vdata.validity.RowIsValid(i)) {
+			if (!validity.RowIsValid(i)) {
 				continue;
 			}
 			// read list length
@@ -963,9 +939,9 @@ void RowChunk::DeserializeIntoVector(Vector &v, const idx_t &vcount, const idx_t
 				auto next = MinValue(entry_remaining, (idx_t)STANDARD_VECTOR_SIZE);
 
 				// read validity
-				auto &validity = GetValidity(chunk.data[0]);
+				auto &chunk_validity = GetValidity(chunk.data[0]);
 				for (idx_t entry_idx = 0; entry_idx < next; entry_idx++) {
-					validity.Set(entry_idx, *(validitymask_location) & (1 << offset_in_byte));
+					chunk_validity.Set(entry_idx, *(validitymask_location) & (1 << offset_in_byte));
 					if (++offset_in_byte == 8) {
 						validitymask_location++;
 						offset_in_byte = 0;
