@@ -39,6 +39,10 @@
 #include <string.h>
 #include <stdlib.h>
 
+
+
+namespace duckdb_hll {
+
 #define HLL_SPARSE_MAX_BYTES 3000
 
 /* The Redis HyperLogLog implementation is based on the following ideas:
@@ -594,7 +598,7 @@ int hllSparseToDense(robj *o) {
 
     /* If the representation is already the right one return ASAP. */
     hdr = (struct hllhdr*) sparse;
-    if (hdr->encoding == HLL_DENSE) return C_OK;
+    if (hdr->encoding == HLL_DENSE) return HLL_C_OK;
 
     /* Create a string of the right size filled with zero bytes.
      * Note that the cached cardinality is set to 0 as a side effect
@@ -631,13 +635,13 @@ int hllSparseToDense(robj *o) {
      * set to HLL_REGISTERS. */
     if (idx != HLL_REGISTERS) {
         sdsfree(dense);
-        return C_ERR;
+        return HLL_C_ERR;
     }
 
     /* Free the old representation and set the new one. */
     sdsfree((sds) o->ptr);
     o->ptr = dense;
-    return C_OK;
+    return HLL_C_OK;
 }
 
 /* Low level function to set the sparse HLL register at 'index' to the
@@ -888,7 +892,7 @@ updated: {
     return 1;
 }
 promote: /* Promote to dense representation. */
-    if (hllSparseToDense(o) == C_ERR) return -1; /* Corrupted HLL. */
+    if (hllSparseToDense(o) == HLL_C_ERR) return -1; /* Corrupted HLL. */
     hdr = (struct hllhdr *) o->ptr;
 
     /* We need to call hllDenseAdd() to perform the operation after the
@@ -1114,9 +1118,9 @@ int hllMerge(uint8_t *max, robj *hll) {
                 p++;
             }
         }
-        if (i != HLL_REGISTERS) return C_ERR;
+        if (i != HLL_REGISTERS) return HLL_C_ERR;
     }
-    return C_OK;
+    return HLL_C_OK;
 }
 
 /* ========================== robj creation ========================== */
@@ -1179,7 +1183,7 @@ void hll_destroy(robj *obj) {
 int hll_count(robj *o, size_t *result) {
 	int invalid = 0;
 	*result = hllCount((struct hllhdr*) o->ptr, &invalid);
-	return invalid == 0 ? C_OK : C_ERR;
+	return invalid == 0 ? HLL_C_OK : HLL_C_ERR;
 }
 
 robj *hll_merge(robj **hlls, size_t hll_count) {
@@ -1205,7 +1209,7 @@ robj *hll_merge(robj **hlls, size_t hll_count) {
 
         /* Merge with this HLL with our 'max' HHL by setting max[i]
          * to MAX(max[i],hll[i]). */
-        if (hllMerge(max, o) == C_ERR) {
+        if (hllMerge(max, o) == HLL_C_ERR) {
             return NULL;
         }
     }
@@ -1218,7 +1222,7 @@ robj *hll_merge(robj **hlls, size_t hll_count) {
 
     /* Convert the destination object to dense representation if at least
      * one of the inputs was dense. */
-    if (use_dense && hllSparseToDense(result) == C_ERR) {
+    if (use_dense && hllSparseToDense(result) == HLL_C_ERR) {
 		hll_destroy(result);
         return NULL;
     }
@@ -1234,4 +1238,5 @@ robj *hll_merge(robj **hlls, size_t hll_count) {
         }
     }
 	return result;
+}
 }
