@@ -459,8 +459,8 @@ static void TemplatedSerializeVData(VectorData &vdata, const SelectionVector &se
 			key_locations[i] += sizeof(T);
 		}
 	} else {
-		auto byte_offset = col_idx / 8;
-		auto offset_in_byte = col_idx % 8;
+		const auto byte_offset = col_idx / 8;
+		const auto bit = ~(1UL << (col_idx % 8));
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = sel.get_index(i + offset);
 			auto source_idx = vdata.sel->get_index(idx);
@@ -471,7 +471,7 @@ static void TemplatedSerializeVData(VectorData &vdata, const SelectionVector &se
 
 			// set the validitymask
 			if (!vdata.validity.RowIsValid(source_idx)) {
-				*(validitymask_locations[i] + byte_offset) &= ~(1UL << offset_in_byte);
+				*(validitymask_locations[i] + byte_offset) &= bit;
 			}
 		}
 	}
@@ -544,7 +544,7 @@ void RowChunk::SerializeVectorData(VectorData &vdata, PhysicalType type, const S
 			}
 		} else {
 			auto byte_offset = col_idx / 8;
-			auto offset_in_byte = col_idx % 8;
+            const auto bit = ~(1UL << (col_idx % 8));
 			for (idx_t i = 0; i < ser_count; i++) {
 				auto idx = sel.get_index(i + offset);
 				auto source_idx = vdata.sel->get_index(idx);
@@ -558,7 +558,7 @@ void RowChunk::SerializeVectorData(VectorData &vdata, PhysicalType type, const S
 					key_locations[i] += string_entry.GetSize();
 				} else {
 					// set the validitymask
-					*(validitymask_locations[i] + byte_offset) &= ~(1UL << offset_in_byte);
+					*(validitymask_locations[i] + byte_offset) &= bit;
 				}
 			}
 		}
@@ -599,7 +599,7 @@ void RowChunk::SerializeVector(Vector &v, idx_t vcount, const SelectionVector &s
 
 		// the whole struct itself can be NULL
 		auto byte_offset = col_idx / 8;
-		auto offset_in_byte = col_idx % 8;
+        const auto bit = ~(1UL << (col_idx % 8));
 
 		// struct must have a validitymask for its fields
 		const idx_t struct_validitymask_size = (children->size() + 7) / 8;
@@ -613,7 +613,7 @@ void RowChunk::SerializeVector(Vector &v, idx_t vcount, const SelectionVector &s
 			auto idx = sel.get_index(i + offset);
 			auto source_idx = vdata.sel->get_index(idx);
 			if (validitymask_locations && !vdata.validity.RowIsValid(source_idx)) {
-				*(validitymask_locations[i] + byte_offset) &= ~(1UL << offset_in_byte);
+				*(validitymask_locations[i] + byte_offset) &= bit;
 			}
 		}
 
@@ -626,14 +626,14 @@ void RowChunk::SerializeVector(Vector &v, idx_t vcount, const SelectionVector &s
 	}
 	case PhysicalType::LIST: {
 		auto byte_offset = col_idx / 8;
-		auto offset_in_byte = col_idx % 8;
+        const auto bit = ~(1UL << (col_idx % 8));
 		auto list_data = GetListData(v);
 		auto &child_cc = ListVector::GetEntry(v);
 		for (idx_t i = 0; i < ser_count; i++) {
 			idx_t idx = vdata.sel->get_index(i + offset);
 			// set the validitymask
 			if (!vdata.validity.RowIsValid(idx)) {
-				*(validitymask_locations[i] + byte_offset) &= ~(1UL << offset_in_byte);
+				*(validitymask_locations[i] + byte_offset) &= bit;
 				continue;
 			}
 
@@ -799,7 +799,14 @@ void RowChunk::Build(idx_t added_count, data_ptr_t key_locations[], idx_t entry_
 template <class T>
 static void TemplatedDeserializeIntoVector(Vector &v, idx_t count, idx_t col_idx, data_ptr_t *key_locations) {
 	auto target = FlatVector::GetData<T>(v);
-	for (idx_t i = 0; i < count; i++) {
+	idx_t i;
+    for (i = 0; i + 8 < count; i += 8) {
+		for (idx_t j = 0; j < 8; j++) {
+			target[i] = Load<T>(key_locations[i + j]);
+			key_locations[i + j] += sizeof(T);
+		}
+    }
+	for (; i < count; i++) {
 		target[i] = Load<T>(key_locations[i]);
 		key_locations[i] += sizeof(T);
 	}
@@ -823,10 +830,21 @@ void RowChunk::DeserializeIntoVector(Vector &v, const idx_t &vcount, const idx_t
 	auto &validity = FlatVector::Validity(v);
 	if (validitymask_locations) {
 		// validity mask is not yet set: deserialize it
-		auto byte_offset = col_idx / 8;
-		auto offset_in_byte = col_idx % 8;
-		for (idx_t i = 0; i < vcount; i++) {
-			validity.Set(i, *(validitymask_locations[i] + byte_offset) & (1 << offset_in_byte));
+		const auto byte_offset = col_idx / 8;
+		const auto bit = 1 << (col_idx % 8);
+
+		// fixed-size inner loop to allow unrolling
+		idx_t i;
+        for (i = 0; i + 8 < vcount; i += 8) {
+			for (idx_t j = 0; j < 8; j++) {
+				bool valid = *(validitymask_locations[i + j] + byte_offset) & bit;
+                validity.Set(i + j, valid);
+			}
+		}
+
+		// finishing up
+		for (i = 0; i < vcount; i++) {
+            validity.Set(i, *(validitymask_locations[i] + byte_offset) & bit);
 		}
 	}
 

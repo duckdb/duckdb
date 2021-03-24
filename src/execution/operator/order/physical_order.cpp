@@ -241,7 +241,7 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &gstate_
 		bool has_null = sorting_state.HAS_NULL[sort_col];
 		bool nulls_first = sorting_state.ORDER_BY_NULL_TYPES[sort_col] == OrderByNullType::NULLS_FIRST;
 		bool desc = sorting_state.ORDER_TYPES[sort_col] == OrderType::DESCENDING;
-		idx_t size_in_bytes = StringStatistics::MAX_STRING_MINMAX_SIZE; // TODO: compute this
+		idx_t size_in_bytes = StringStatistics::MAX_STRING_MINMAX_SIZE; // TODO: use actual string statistics
 		lstate.sorting_block->SerializeVectorSortable(sort.data[sort_col], sort.size(), *lstate.sel_ptr, sort.size(),
 		                                              lstate.key_locations, desc, has_null, nulls_first, size_in_bytes);
 	}
@@ -308,12 +308,14 @@ void PhysicalOrder::Combine(ExecutionContext &context, GlobalOperatorState &gsta
 		if (!lstate.var_sorting_blocks[i]) {
 			continue;
 		}
-		for (idx_t b = 0; b < lstate.var_sorting_blocks[i]->blocks.size(); b++) {
-			gstate.var_sorting_blocks[i]->count += lstate.var_sorting_blocks[i]->count;
-			gstate.var_sorting_sizes[i]->count += lstate.var_sorting_sizes[i]->count;
-			gstate.var_sorting_blocks[i]->blocks.push_back(move(lstate.var_sorting_blocks[i]->blocks[b]));
-			gstate.var_sorting_sizes[i]->blocks.push_back(move(lstate.var_sorting_sizes[i]->blocks[b]));
+		for (auto &block : lstate.var_sorting_blocks[i]->blocks) {
+			gstate.var_sorting_blocks[i]->count += block.count;
+			gstate.var_sorting_blocks[i]->blocks.push_back(move(block));
 		}
+        for (auto &block : lstate.var_sorting_sizes[i]->blocks) {
+            gstate.var_sorting_sizes[i]->count += block.count;
+            gstate.var_sorting_sizes[i]->blocks.push_back(move(block));
+        }
 	}
 	for (auto &block : lstate.payload_block->blocks) {
 		gstate.payload_block->count += block.count;
@@ -717,6 +719,7 @@ void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 		SizesToOffsets(state.buffer_manager, *state.sizes_block, capacity);
 	}
 
+	// now perform the actual sort
 	SortInMemory(pipeline, context, state);
 
 	// cleanup
