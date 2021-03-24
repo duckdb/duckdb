@@ -6,7 +6,8 @@
 #ifndef _WIN32
 #include <dlfcn.h>
 #else
-#include <libloaderapi.h>
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
 #endif
 
 namespace duckdb {
