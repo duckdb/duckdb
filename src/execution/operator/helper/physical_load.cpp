@@ -22,6 +22,8 @@ void *dlsym(void *handle, const char *name) {
 	D_ASSERT(handle);
 	return (void *)GetProcAddress((HINSTANCE)handle, name);
 }
+#define RTLD_LAZY 0
+#define RTLD_LOCAL 0
 
 #endif
 
