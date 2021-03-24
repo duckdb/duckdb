@@ -312,10 +312,10 @@ void PhysicalOrder::Combine(ExecutionContext &context, GlobalOperatorState &gsta
 			gstate.var_sorting_blocks[i]->count += block.count;
 			gstate.var_sorting_blocks[i]->blocks.push_back(move(block));
 		}
-        for (auto &block : lstate.var_sorting_sizes[i]->blocks) {
-            gstate.var_sorting_sizes[i]->count += block.count;
-            gstate.var_sorting_sizes[i]->blocks.push_back(move(block));
-        }
+		for (auto &block : lstate.var_sorting_sizes[i]->blocks) {
+			gstate.var_sorting_sizes[i]->count += block.count;
+			gstate.var_sorting_sizes[i]->blocks.push_back(move(block));
+		}
 	}
 	for (auto &block : lstate.payload_block->blocks) {
 		gstate.payload_block->count += block.count;
