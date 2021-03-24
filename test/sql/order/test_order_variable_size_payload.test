@@ -6,6 +6,22 @@ statement ok
 PRAGMA threads=1
 
 statement ok
+CREATE TABLE test0(job VARCHAR, name VARCHAR)
+
+statement ok
+INSERT INTO test0 VALUES ('Shipping and Receiving Supervisor', 'Ackerman'), ('Shipping and Receiving Clerk', 'Berndt'), ('Shipping and Receiving Clerk', 'Kuppa'), ('Production Supervisor - WC60', 'Brown'), ('Production Supervisor - WC60', 'Campbell'), ('Production Supervisor - WC40', 'Dsa')
+
+query TT
+SELECT * FROM test0 ORDER BY job, name
+----
+Production Supervisor - WC40	Dsa
+Production Supervisor - WC60	Brown
+Production Supervisor - WC60	Campbell
+Shipping and Receiving Clerk	Berndt
+Shipping and Receiving Clerk	Kuppa
+Shipping and Receiving Supervisor	Ackerman
+
+statement ok
 CREATE TABLE test1 (s VARCHAR)
 
 # strings longer than the initial 8 character prefix
@@ -93,43 +109,6 @@ A	F	3774200	5320753880.69	5054096266.6828	5256751331.449234	25.537587116854997	3
 N	F	95257	133737795.84	127132372.6512	132286291.229445	25.30066401062417	35521.32691633466	0.04939442231075697	3765
 N	O	7459297	10512270008.90	9986238338.3847	10385578376.585467	25.545537671232875	36000.9246880137	0.05009595890410959	292000
 R	F	3785523	5337950526.47	5071818532.9420	5274405503.049367	25.5259438574251	35994.029214030925	0.04998927856184382	148301
-
-
-# TPC-DS order by example
-statement ok
-create table store_sales ( ss_sold_date_sk integer , ss_sold_time_sk integer , ss_item_sk integer not null, ss_customer_sk integer , ss_cdemo_sk integer , ss_hdemo_sk integer , ss_addr_sk integer , ss_store_sk integer , ss_promo_sk integer , ss_ticket_number integer not null, ss_quantity integer , ss_wholesale_cost decimal(7,2) , ss_list_price decimal(7,2) , ss_sales_price decimal(7,2) , ss_ext_discount_amt decimal(7,2) , ss_ext_sales_price decimal(7,2) , ss_ext_wholesale_cost decimal(7,2) , ss_ext_list_price decimal(7,2) , ss_ext_tax decimal(7,2) , ss_coupon_amt decimal(7,2) , ss_net_paid decimal(7,2) , ss_net_paid_inc_tax decimal(7,2) , ss_net_profit decimal(7,2) , primary key (ss_item_sk, ss_ticket_number) );
-
-statement ok
-insert into store_sales values
-(2451813,65495,12,67006,591617,3428,24839,10,161,1,79,0.11,0.18,0.02,0.99,2.21,9.01,14.78,0.06,0.99,1.21,1.27,-7.79),
-(2451814,65495,14,67006,591617,3428,24839,10,154,1,37,0.63,1.01,0.41,0.46,15.34,23.54,37.43,0.59,0.46,14.88,15.47,-8.65),
-(2451815,65495,31,67006,591617,3428,24839,10,172,1,99,0.80,1.37,0.83,0.00,83.14,79.71,136.30,0.00,0.00,83.14,83.14,3.42),
-(2451816,65495,92,67006,591617,3428,24839,10,280,1,14,0.57,0.76,0.06,0.00,0.85,8.03,10.68,0.00,0.00,0.85,0.85,-7.17),
-(2451817,65495,93,67006,591617,3428,24839,10,236,1,100,0.25,0.36,0.00,0.00,0.73,25.08,36.86,0.06,0.00,0.73,0.79,-24.35);
-
-statement ok
-create table item ( i_item_sk integer not null, i_item_id char(16) not null, i_rec_start_date date , i_rec_end_date date , i_item_desc varchar(200) , i_current_price decimal(7,2) , i_wholesale_cost decimal(7,2) , i_brand_id integer , i_brand char(50) , i_class_id integer , i_class char(50) , i_category_id integer , i_category char(50) , i_manufact_id integer , i_manufact char(50) , i_size char(20) , i_formulation char(20) , i_color char(20) , i_units char(10) , i_container char(10) , i_manager_id integer , i_product_name char(50) , primary key (i_item_sk) );
-
-statement ok
-insert into item values
-(14,'AAAAAAAAOAAAAAAA','1999-03-01','1999-03-02','Important grounds rip there just big vehicles. Journalists w',0.01,0.00,8007005,'brandnameless #5',7,'hockey',8,'Sports',460,'barcallyese','N/A','168948lace2402718887','red','Dram','Unknown',6,'eseought'),
-(31,'AAAAAAAAPBAAAAAA','1999-03-01','1999-03-02','Bright advisers explain i',0.08,0.03,8015002,'scholarmaxi #2',15,'fishing',8,'Sports',167,'ationcallyought','N/A','26402843046832linen0','lawn','Each','Unknown',98,'oughtpri'), (64,'AAAAAAAAAEAAAAAA','1997-10-27','1999-10-27','Public, annual h',0.02,0.01,8009005,'maxinameless #5',9,'optics',8,'Sports',322,'ableablepri','N/A','999239frosted3654937','maroon','Tbl','Unknown',14,'esecally'),
-(92,'AAAAAAAAMFAAAAAA','1999-03-01','1999-03-02','New, quick observations merge too worth a children; shares could live there crucial mountains. Simply eastern pounds shall crush immediately married long wives. Corporate, import',0.04,0.02,8009003,'maxinameless #3',9,'optics',8,'Sports',547,'ationeseanti','N/A','95992mint72303710820','indian','N/A','Unknown',12,'ablen st'),
-(93,'AAAAAAAAMFAAAAAA','1999-03-01','1999-03-02','New, quick observations merge too worth a children; shares could live there crucial mountains. Simply eastern pounds shall crush immediately married long wives. Corporate, import',0.01,0.00,8015004,'scholarmaxi #4',15,'fishing',8,'Sports',290,'barn stable','N/A','77252895wheat0214342','cyan','Lb','Unknown',90,'prin st');
-
-statement ok
-create table date_dim ( d_date_sk integer not null, d_date_id char(16) not null, d_date date , d_month_seq integer , d_week_seq integer , d_quarter_seq integer , d_year integer , d_dow integer , d_moy integer , d_dom integer , d_qoy integer , d_fy_year integer , d_fy_quarter_seq integer , d_fy_week_seq integer , d_day_name char(9) , d_quarter_name char(6) , d_holiday char(1) , d_weekend char(1) , d_following_holiday char(1) , d_first_dom integer , d_last_dom integer , d_same_day_ly integer , d_same_day_lq integer , d_current_day char(1) , d_current_week char(1) , d_current_month char(1) , d_current_quarter char(1) , d_current_year char(1) , primary key (d_date_sk) );
-
-statement ok
-insert into date_dim values
-(2451813,'AAAAAAAAOKJNECAA','1999-03-01',0,1,1,1900,1,1,2,1,1900,1,1,'Monday','1900Q1',false,false,true,2415021,2415020,2414657,2414930,false,false,false,false,false),
-(2451814,'AAAAAAAAPKJNECAA','1999-03-01',0,1,1,1900,2,1,3,1,1900,1,1,'Tuesday','1900Q1',false,false,false,2415021,2415020,2414658,2414931,false,false,false,false,false),
-(2451815,'AAAAAAAAALJNECAA','1999-03-01',0,1,1,1900,3,1,4,1,1900,1,1,'Wednesday','1900Q1',false,false,false,2415021,2415020,2414659,2414932,false,false,false,false,false),
-(2451816,'AAAAAAAABLJNECAA','1999-03-01',0,1,1,1900,4,1,5,1,1900,1,1,'Thursday','1900Q1',false,false,false,2415021,2415020,2414660,2414933,false,false,false,false,false),
-(2451817,'AAAAAAAACLJNECAA','1999-03-01',0,1,1,1900,5,1,6,1,1900,1,1,'Friday','1900Q1',false,true,false,2415021,2415020,2414661,2414934,false,false,false,false,false);
-
-statement ok
-SELECT i_item_id , i_item_desc, i_category, i_class, i_current_price , sum(ss_ext_sales_price) AS itemrevenue, sum(ss_ext_sales_price)*100.0000/sum(sum(ss_ext_sales_price)) OVER (PARTITION BY i_class) AS revenueratio FROM store_sales , item, date_dim WHERE ss_item_sk = i_item_sk AND i_category IN ('Sports', 'Books', 'Home') AND ss_sold_date_sk = d_date_sk AND d_date BETWEEN cast('1999-02-22' AS date) AND cast('1999-03-24' AS date) GROUP BY i_item_id , i_item_desc, i_category , i_class , i_current_price ORDER BY i_category , i_class , i_item_id , i_item_desc , revenueratio;
 
 # TODO: sort with nested list payload (also with count > 1024), and with multiple var-size sort columns and NULLS
 statement ok

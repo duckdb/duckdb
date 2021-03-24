@@ -476,21 +476,27 @@ static void BreakStringTies(BufferManager &buffer_manager, const data_ptr_t data
 
 	// determine if there are still ties (if needed)
 	if (tie_col < sorting_state.ORDER_TYPES.size() - 1) {
-		idx_t current_idx = Load<idx_t>(dataptr + (start * sorting_state.ENTRY_SIZE) + sorting_size);
-		uint32_t current_size = Load<uint32_t>(var_dataptr + sizes[current_idx]);
-		idx_t next_idx;
-		uint32_t next_size;
-		for (idx_t i = start + 1; i < end - 1; i++) {
-			next_idx = Load<idx_t>(dataptr + (i * sorting_state.ENTRY_SIZE) + sorting_size);
-			next_size = Load<uint32_t>(var_dataptr + sizes[next_idx]);
-			if (current_size == next_size) {
-				ties[i] = memcmp(var_dataptr + sizes[current_idx] + string_t::PREFIX_LENGTH,
-				                 var_dataptr + sizes[next_idx] + string_t::PREFIX_LENGTH, current_size) == 0;
-			} else {
-				ties[i] = false;
-			}
+        idx_t current_idx = Load<idx_t>(entry_ptrs[0] + sorting_size);
+        data_ptr_t current_ptr = var_dataptr + sizes[current_idx];
+        uint32_t current_size = Load<uint32_t>(current_ptr);
+        current_ptr += string_t::PREFIX_LENGTH;
+		string_t current_val((const char *)current_ptr, current_size);
+        for (idx_t i = 0; i < end - start - 1; i++) {
+			// load next entry
+            idx_t next_idx = Load<idx_t>(entry_ptrs[i + 1] + sorting_size);
+            data_ptr_t next_ptr = var_dataptr + sizes[next_idx];
+            uint32_t next_size = Load<uint32_t>(next_ptr);
+            next_ptr += string_t::PREFIX_LENGTH;
+            string_t next_val((const char *)next_ptr, next_size);
+
+			// compare
+			ties[start + i] = Equals::Operation<string_t>(current_val, next_val);
+
+			// set for next iteration
 			current_idx = next_idx;
+			current_ptr = next_ptr;
 			current_size = next_size;
+			current_val = next_val;
 		}
 	}
 }
