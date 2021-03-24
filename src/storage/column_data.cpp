@@ -222,6 +222,18 @@ unique_ptr<BaseStatistics> ColumnData::GetStatistics() {
 	return statistics->Copy();
 }
 
+void ColumnData::CommitDropColumn() {
+	auto &block_manager = BlockManager::GetBlockManager(db);
+	auto segment = (ColumnSegment *) data.GetRootSegment();
+	while (segment) {
+		if (segment->segment_type == ColumnSegmentType::PERSISTENT) {
+			auto &persistent = (PersistentSegment &)*segment;
+			block_manager.MarkBlockAsModified(persistent.block_id);
+		}
+		segment = (ColumnSegment *)segment->next.get();
+	}
+}
+
 unique_ptr<ColumnCheckpointState> ColumnData::CreateCheckpointState(TableDataWriter &writer) {
 	return make_unique<ColumnCheckpointState>(*this, writer);
 }

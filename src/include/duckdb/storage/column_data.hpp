@@ -101,6 +101,8 @@ public:
 	void MergeStatistics(BaseStatistics &other);
 	unique_ptr<BaseStatistics> GetStatistics();
 
+	virtual void CommitDropColumn();
+
 	virtual unique_ptr<ColumnCheckpointState> CreateCheckpointState(TableDataWriter &writer);
 	virtual void Checkpoint(TableDataWriter &writer);
 

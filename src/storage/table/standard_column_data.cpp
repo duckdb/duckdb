@@ -152,6 +152,11 @@ void StandardColumnData::FetchRow(ColumnFetchState &state, Transaction &transact
 	ColumnData::FetchRow(state, transaction, row_id, result, result_idx);
 }
 
+void StandardColumnData::CommitDropColumn() {
+	ColumnData::CommitDropColumn();
+	validity.CommitDropColumn();
+}
+
 void StandardColumnData::Checkpoint(TableDataWriter &writer) {
 	ColumnData::Checkpoint(writer);
 	validity.Checkpoint(writer);

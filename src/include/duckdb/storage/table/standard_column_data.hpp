@@ -34,6 +34,7 @@ public:
 	void Fetch(ColumnScanState &state, row_t row_id, Vector &result) override;
 	void FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result, idx_t result_idx) override;
 
+	void CommitDropColumn() override;
 	void Initialize(PersistentColumnData &column_data) override;
 	void Checkpoint(TableDataWriter &writer) override;
 	static unique_ptr<PersistentColumnData> Deserialize(DatabaseInstance &db, Deserializer &source, LogicalType type);
