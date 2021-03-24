@@ -13,8 +13,9 @@
 #define R_NO_REMAP
 
 #include <Rdefines.h>
+#include <R_ext/Altrep.h>
+
 #include <algorithm>
-#include <sstream>
 
 using namespace duckdb;
 using namespace std;
@@ -289,6 +290,98 @@ static RType detect_rtype(SEXP v) {
 		return RType::STRING;
 	}
 	return RType::UNKNOWN;
+}
+
+static R_altrep_class_t duckdb_altrep_string_class;
+
+struct DuckDBAltrepStringWrapper {
+	vector<Vector> vectors;
+	idx_t length;
+};
+
+static DuckDBAltrepStringWrapper *duckdb_altrep_wrapper(SEXP x) {
+	auto wrapper = (DuckDBAltrepStringWrapper *)R_ExternalPtrAddr(R_altrep_data1(x));
+	if (!wrapper) {
+		Rf_error("This looks like it has been freed");
+	}
+	return wrapper;
+}
+
+static R_xlen_t duckdb_altrep_strings_length(SEXP x) {
+	return duckdb_altrep_wrapper(x)->length;
+}
+
+static Rboolean duckdb_altrep_strings_inspect(SEXP x, int pre, int deep, int pvec,
+                                              void (*inspect_subtree)(SEXP, int, int, int)) {
+	Rprintf("DUCKDB_STRING_COLUMN %llu\n", duckdb_altrep_strings_length(x));
+	return TRUE;
+}
+
+static void *duckdb_altrep_strings_dataptr(SEXP x, Rboolean writeable) {
+	auto *wrapper = duckdb_altrep_wrapper(x);
+	if (R_altrep_data2(x) == R_NilValue) {
+		R_set_altrep_data2(x, NEW_STRING(wrapper->length));
+		idx_t dest_offset = 0;
+		for (auto &vec : wrapper->vectors) {
+			auto src_ptr = FlatVector::GetData<string_t>(vec);
+			auto &mask = FlatVector::Validity(vec);
+			for (size_t row_idx = 0; row_idx < MinValue<idx_t>(STANDARD_VECTOR_SIZE, wrapper->length - dest_offset);
+			     row_idx++) {
+				if (!mask.RowIsValid(row_idx)) {
+					SET_STRING_ELT(R_altrep_data2(x), dest_offset + row_idx, NA_STRING);
+				} else {
+					SET_STRING_ELT(
+					    R_altrep_data2(x), dest_offset + row_idx,
+					    Rf_mkCharLenCE(src_ptr[row_idx].GetDataUnsafe(), src_ptr[row_idx].GetSize(), CE_UTF8));
+				}
+			}
+			dest_offset += STANDARD_VECTOR_SIZE;
+		}
+		wrapper->vectors.clear();
+	}
+	return CHARACTER_POINTER(R_altrep_data2(x));
+}
+
+static const void *duckdb_altrep_strings_dataptr_or_null(SEXP x) {
+	return nullptr;
+}
+
+static SEXP duckdb_altrep_strings_elt(SEXP x, R_xlen_t i) {
+	auto *wrapper = duckdb_altrep_wrapper(x);
+	if (R_altrep_data2(x) != R_NilValue) {
+		return STRING_ELT(R_altrep_data2(x), i);
+	}
+	auto &vec = wrapper->vectors[i / STANDARD_VECTOR_SIZE];
+	auto src_ptr = FlatVector::GetData<string_t>(vec);
+	auto &mask = FlatVector::Validity(vec);
+	auto vec_idx = i % STANDARD_VECTOR_SIZE;
+	if (!mask.RowIsValid(vec_idx)) {
+		return NA_STRING;
+	}
+	return Rf_mkCharLenCE(src_ptr[vec_idx].GetDataUnsafe(), src_ptr[vec_idx].GetSize(), CE_UTF8);
+}
+
+static void duckdb_altrep_strings_set_elt(SEXP x, R_xlen_t i, SEXP val) {
+	duckdb_altrep_strings_dataptr(x, TRUE);
+	SET_STRING_ELT(R_altrep_data2(x), i, val);
+}
+
+static int duckdb_altrep_strings_is_sorted(SEXP x) {
+	// we don't know
+	return 0;
+}
+
+static int duckdb_altrep_strings_no_na(SEXP x) {
+	// we kinda know but it matters little
+	return 0;
+}
+
+static void duckdb_altrep_strings_finalizer(SEXP x) {
+	auto *wrapper = (DuckDBAltrepStringWrapper *)R_ExternalPtrAddr(x);
+	if (wrapper) {
+		R_ClearExternalPtr(x);
+		delete wrapper;
+	}
 }
 
 extern "C" {
@@ -583,9 +676,18 @@ SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 		case LogicalTypeId::TIME:
 			varvalue = r_varvalue.Protect(NEW_NUMERIC(nrows));
 			break;
-		case LogicalTypeId::VARCHAR:
-			varvalue = r_varvalue.Protect(NEW_STRING(nrows));
+		case LogicalTypeId::VARCHAR: {
+			auto wrapper = new DuckDBAltrepStringWrapper();
+			wrapper->length = nrows;
+			wrapper->vectors.resize(result->collection.Chunks().size());
+
+			auto ptr = PROTECT(R_MakeExternalPtr((void *)wrapper, R_NilValue, R_NilValue));
+			R_RegisterCFinalizer(ptr, duckdb_altrep_strings_finalizer);
+			varvalue = r_varvalue.Protect(R_new_altrep(duckdb_altrep_string_class, ptr, R_NilValue));
+			UNPROTECT(1);
 			break;
+		}
+
 		case LogicalTypeId::BLOB:
 			varvalue = r_varvalue.Protect(NEW_LIST(nrows));
 			break;
@@ -603,11 +705,13 @@ SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 
 	// step 3: set values from chunks
 	uint64_t dest_offset = 0;
+	idx_t chunk_idx = 0;
 	while (true) {
 		auto chunk = result->Fetch();
 		if (!chunk || chunk->size() == 0) {
 			break;
 		}
+
 		D_ASSERT(chunk->ColumnCount() == ncols);
 		D_ASSERT(chunk->ColumnCount() == (idx_t)Rf_length(retlist));
 		for (size_t col_idx = 0; col_idx < chunk->ColumnCount(); col_idx++) {
@@ -733,17 +837,8 @@ SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 				                            NA_REAL);
 				break;
 			case LogicalTypeId::VARCHAR: {
-				auto src_ptr = FlatVector::GetData<string_t>(chunk->data[col_idx]);
-				auto &mask = FlatVector::Validity(chunk->data[col_idx]);
-				for (size_t row_idx = 0; row_idx < chunk->size(); row_idx++) {
-					if (!mask.RowIsValid(row_idx)) {
-						SET_STRING_ELT(dest, dest_offset + row_idx, NA_STRING);
-					} else {
-						SET_STRING_ELT(
-						    dest, dest_offset + row_idx,
-						    Rf_mkCharLenCE(src_ptr[row_idx].GetDataUnsafe(), src_ptr[row_idx].GetSize(), CE_UTF8));
-					}
-				}
+				auto wrapper = (DuckDBAltrepStringWrapper *)R_ExternalPtrAddr(R_altrep_data1(dest));
+				wrapper->vectors[chunk_idx].Reference(chunk->data[col_idx]);
 				break;
 			}
 			case LogicalTypeId::BLOB: {
@@ -770,6 +865,7 @@ SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 			}
 		}
 		dest_offset += chunk->size();
+		chunk_idx++;
 	}
 
 	D_ASSERT(dest_offset == nrows);
@@ -1046,7 +1142,7 @@ SEXP duckdb_register_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 		Rf_error("duckdb_register_R: Need at least one-column data frame parameter for value");
 	}
 	try {
-		conn->TableFunction("r_dataframe_scan", {Value::POINTER((uintptr_t)valuesexp)})->CreateView(name, true);
+		conn->TableFunction("r_dataframe_scan", {Value::POINTER((uintptr_t)valuesexp)})->CreateView(name, true, true);
 		auto key = Rf_install(("_registered_df_" + name).c_str());
 		Rf_setAttrib(connsexp, key, valuesexp);
 	} catch (exception &e) {
@@ -1140,5 +1236,23 @@ static const R_CallMethodDef R_CallDef[] = {CALLDEF(duckdb_startup_R, 2),
 void R_init_duckdb(DllInfo *dll) {
 	x R_registerRoutines(dll, NULL, R_CallDef, NULL, NULL);
 	R_useDynamicSymbols(dll, FALSE);
+
+	duckdb_altrep_string_class = R_make_altstring_class("duckdb_strings", "duckdb", dll);
+
+	/* override ALTREP methods */
+	R_set_altrep_Inspect_method(duckdb_altrep_string_class, duckdb_altrep_strings_inspect);
+	R_set_altrep_Length_method(duckdb_altrep_string_class, duckdb_altrep_strings_length);
+
+	/* override ALTVEC methods */
+	R_set_altvec_Dataptr_method(duckdb_altrep_string_class, duckdb_altrep_strings_dataptr);
+	R_set_altvec_Dataptr_or_null_method(duckdb_altrep_string_class, duckdb_altrep_strings_dataptr_or_null);
+
+	/* override ALTSTRING methods */
+	R_set_altstring_Elt_method(duckdb_altrep_string_class, duckdb_altrep_strings_elt);
+	R_set_altstring_Is_sorted_method(duckdb_altrep_string_class, duckdb_altrep_strings_is_sorted);
+	R_set_altstring_No_NA_method(duckdb_altrep_string_class, duckdb_altrep_strings_no_na);
+	R_set_altstring_Set_elt_method(duckdb_altrep_string_class, duckdb_altrep_strings_set_elt);
+
+	// TODO implement SEXP (*R_altvec_Extract_subset_method_t)(SEXP, SEXP, SEXP);
 }
 }
