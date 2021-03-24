@@ -238,7 +238,6 @@ void StringSegment::AppendData(BufferHandle &handle, SegmentStatistics &stats, d
 		if (!adata.validity.RowIsValid(source_idx)) {
 			// null value is stored as -1
 			result_data[target_idx] = 0;
-			stats.statistics->has_null = true;
 		} else {
 			auto dictionary_offset = GetDictionaryOffset(handle);
 			D_ASSERT(dictionary_offset < Storage::BLOCK_SIZE);

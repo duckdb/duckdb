@@ -229,6 +229,10 @@ void UncompressedSegment::FilterSelection(SelectionVector &sel, Vector &result, 
 	}
 }
 
+void UncompressedSegment::RevertAppend(idx_t start_row) {
+	tuple_count = start_row - this->row_start;
+}
+
 //===--------------------------------------------------------------------===//
 // ToTemporary
 //===--------------------------------------------------------------------===//

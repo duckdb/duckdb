@@ -760,10 +760,11 @@ static UpdateSegment::merge_update_function_t GetMergeUpdateFunction(PhysicalTyp
 //===--------------------------------------------------------------------===//
 idx_t UpdateValidityStatistics(UpdateSegment *segment, SegmentStatistics &stats, Vector &update, idx_t count, SelectionVector &sel) {
 	auto &mask = FlatVector::Validity(update);
-	if (!mask.AllValid() && !stats.statistics->has_null) {
+	auto &validity = (ValidityStatistics &) *stats.statistics;
+	if (!mask.AllValid() && !validity.has_null) {
 		for (idx_t i = 0; i < count; i++) {
 			if (!mask.RowIsValid(i)) {
-				stats.statistics->has_null = true;
+				validity.has_null = true;
 				break;
 			}
 		}
@@ -790,8 +791,6 @@ idx_t TemplatedUpdateNumericStatistics(UpdateSegment *segment, SegmentStatistics
 			if (mask.RowIsValid(i)) {
 				sel.set_index(not_null_count++, i);
 				NumericStatistics::Update<T>(stats, update_data[i]);
-			} else {
-				stats.statistics->has_null = true;
 			}
 		}
 		return not_null_count;
@@ -820,8 +819,6 @@ idx_t UpdateStringStatistics(UpdateSegment *segment, SegmentStatistics &stats, V
 				if (!update_data[i].IsInlined()) {
 					update_data[i] = segment->GetStringHeap().AddString(update_data[i]);
 				}
-			} else {
-				stats.statistics->has_null = true;
 			}
 		}
 		return not_null_count;

@@ -120,9 +120,7 @@ static void AppendLoop(SegmentStatistics &stats, data_ptr_t target, idx_t target
 			auto source_idx = adata.sel->get_index(offset + i);
 			auto target_idx = target_offset + i;
 			bool is_null = !adata.validity.RowIsValid(source_idx);
-			if (is_null) {
-				stats.statistics->has_null = true;
-			} else {
+			if (!is_null) {
 				NumericStatistics::Update<T>(stats, sdata[source_idx]);
 				tdata[target_idx] = sdata[source_idx];
 			}

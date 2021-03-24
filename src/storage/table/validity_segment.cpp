@@ -1,6 +1,7 @@
 #include "duckdb/storage/table/validity_segment.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/storage/statistics/validity_statistics.hpp"
 
 namespace duckdb {
 
@@ -49,11 +50,13 @@ idx_t ValiditySegment::Append(SegmentStatistics &stats, VectorData &data, idx_t 
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	auto handle = buffer_manager.Pin(block);
 
+	auto &validity_stats = (ValidityStatistics &) *stats.statistics;
 	ValidityMask mask((validity_t *) handle->node->buffer);
 	for(idx_t i = 0; i < append_count; i++) {
 		auto idx = data.sel->get_index(i);
 		if (!data.validity.RowIsValidUnsafe(idx)) {
 			mask.SetInvalidUnsafe(tuple_count + i);
+			validity_stats.has_null = true;
 		}
 	}
 	tuple_count += append_count;
@@ -67,5 +70,31 @@ void ValiditySegment::FetchBaseData(ColumnScanState &state, idx_t vector_index, 
 		FlatVector::Validity(result).Copy(vector_mask, STANDARD_VECTOR_SIZE);
 	}
 }
+
+void ValiditySegment::RevertAppend(idx_t start_row) {
+	idx_t start_bit = start_row - this->row_start;
+	UncompressedSegment::RevertAppend(start_row);
+
+	auto &buffer_manager = BufferManager::GetBufferManager(db);
+	auto handle = buffer_manager.Pin(block);
+	idx_t revert_start;
+	if (start_bit % 8 != 0) {
+		// handle sub-bit stuff (yay)
+		idx_t byte_pos = start_bit / 8;
+		idx_t byte_start = byte_pos * 8;
+		idx_t byte_end = (byte_pos + 1) * 8;
+		ValidityMask mask(handle->node->buffer + byte_pos);
+		for(idx_t i = start_bit; i < byte_end; i++) {
+			mask.SetValid(i - byte_start);
+		}
+		revert_start = byte_end;
+	} else {
+		revert_start = start_bit / 8;
+	}
+	// for the rest, we just memset
+	memset(handle->node->buffer + revert_start, 0xFF, Storage::BLOCK_SIZE - revert_start);
+
+}
+
 
 }

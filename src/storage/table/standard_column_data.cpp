@@ -152,6 +152,13 @@ void StandardColumnData::FetchRow(ColumnFetchState &state, Transaction &transact
 	ColumnData::FetchRow(state, transaction, row_id, result, result_idx);
 }
 
+unique_ptr<BaseStatistics> StandardColumnData::GetStatistics() {
+	auto base_stats = ColumnData::GetStatistics();
+	base_stats->validity_stats = validity.GetStatistics();
+	return base_stats;
+}
+
+
 void StandardColumnData::CommitDropColumn() {
 	ColumnData::CommitDropColumn();
 	validity.CommitDropColumn();

@@ -99,7 +99,7 @@ public:
 
 	void SetStatistics(unique_ptr<BaseStatistics> new_stats);
 	void MergeStatistics(BaseStatistics &other);
-	unique_ptr<BaseStatistics> GetStatistics();
+	virtual unique_ptr<BaseStatistics> GetStatistics();
 
 	virtual void CommitDropColumn();
 

@@ -59,7 +59,7 @@ idx_t TransientSegment::Append(ColumnAppendState &state, VectorData &append_data
 }
 
 void TransientSegment::RevertAppend(idx_t start_row) {
-	data->tuple_count = start_row - this->start;
+	data->RevertAppend(start_row);
 	this->count = start_row - this->start;
 }
 

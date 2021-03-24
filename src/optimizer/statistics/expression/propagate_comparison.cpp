@@ -30,7 +30,7 @@ FilterPropagateResult StatisticsPropagator::PropagateComparison(BaseStatistics &
 	}
 	// the result of the propagation depend on whether or not either side has null values
 	// if there are null values present, we cannot say whether or not
-	bool has_null = lstats.has_null || rstats.has_null;
+	bool has_null = lstats.CanHaveNull() || rstats.CanHaveNull();
 	switch (comparison) {
 	case ExpressionType::COMPARE_EQUAL:
 		// l = r, if l.min > r.max or r.min > l.max equality is not possible
