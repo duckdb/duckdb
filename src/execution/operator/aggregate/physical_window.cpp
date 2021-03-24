@@ -819,7 +819,7 @@ public:
 	    : TaskCounter(scheduler_p), gstate(gstate_p) {
 	}
 
-	virtual void Finish() override;
+	void Finish() override;
 
 	WindowGlobalState &gstate;
 };
@@ -1071,7 +1071,7 @@ void PhysicalWindow::Finalize(Pipeline &pipeline, ClientContext &context, unique
 		counts_t counts;
 		if (sort_col_count > 0) {
 			MaterializeOverCollectionForWindow(over_expr, big_data, window_results, over_collection);
-			if (over_expr->partitions.size() > 0) {
+			if (!over_expr->partitions.empty()) {
 				HashCollectionForWindow(over_expr, over_collection, hash_collection, counts);
 			}
 		}
