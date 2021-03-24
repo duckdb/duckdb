@@ -224,21 +224,13 @@ static int CompareTuple(ChunkCollection *sort_by, vector<OrderType> &desc, vecto
 	return 0;
 }
 
-struct QuicksortInfo {
-	QuicksortInfo(int64_t left_p, int64_t right_p) : left(left_p), right(right_p) {
-	}
-
-	int64_t left;
-	int64_t right;
-};
-
-static int64_t QuicksortInitial(ChunkCollection *sort_by, const QuicksortInfo &info, vector<OrderType> &desc,
-                                vector<OrderByNullType> &null_order, idx_t *result) {
+static int64_t QuicksortInitial(ChunkCollection *sort_by, vector<OrderType> &desc, vector<OrderByNullType> &null_order,
+                                idx_t *result) {
 	// select pivot
 	int64_t pivot = 0;
-	int64_t low = info.left, high = info.right;
+	int64_t low = 0, high = sort_by->Count() - 1;
 	// now insert elements
-	for (int64_t i = 1; i <= info.right; i++) {
+	for (idx_t i = 1; i < sort_by->Count(); i++) {
 		if (CompareTuple(sort_by, desc, null_order, i, pivot) <= 0) {
 			result[low++] = i;
 		} else {
@@ -249,6 +241,14 @@ static int64_t QuicksortInitial(ChunkCollection *sort_by, const QuicksortInfo &i
 	result[low] = pivot;
 	return low;
 }
+
+struct QuicksortInfo {
+	QuicksortInfo(int64_t left_p, int64_t right_p) : left(left_p), right(right_p) {
+	}
+
+	int64_t left;
+	int64_t right;
+};
 
 struct QuicksortStack {
 	std::queue<QuicksortInfo> info_queue;
@@ -319,42 +319,30 @@ static void QuicksortInPlace(ChunkCollection *sort_by, vector<OrderType> &desc, 
 	stack.Enqueue(part + 1, right);
 }
 
-void ChunkCollection::SortSlice(const slice_t slice, vector<OrderType> &desc, vector<OrderByNullType> &null_order,
-                                idx_t result[]) {
+void ChunkCollection::Sort(vector<OrderType> &desc, vector<OrderByNullType> &null_order, idx_t result[]) {
 	D_ASSERT(result);
-	if (slice.first >= slice.second) {
+	if (count == 0) {
 		return;
 	}
-	// align the result to the start of the slice
-	result -= slice.first;
 	// start off with an initial quicksort
-	QuicksortInfo info(slice.first, slice.second - 1);
-	int64_t part = QuicksortInitial(this, info, desc, null_order, result);
+	int64_t part = QuicksortInitial(this, desc, null_order, result);
 
 	// now continuously perform
 	QuicksortStack stack;
-	stack.Enqueue(info.left, part);
-	stack.Enqueue(part + 1, info.right);
+	stack.Enqueue(0, part);
+	stack.Enqueue(part + 1, count - 1);
 	while (!stack.IsEmpty()) {
 		auto element = stack.Pop();
 		QuicksortInPlace(this, desc, null_order, result, element, stack);
 	}
 }
 
-void ChunkCollection::Sort(vector<OrderType> &desc, vector<OrderByNullType> &null_order, idx_t result[]) {
-	SortSlice({0, count}, desc, null_order, result);
-}
-
 // FIXME make this more efficient by not using the Value API
 // just use memcpy in the vectors
 // assert that there is no selection list
-void ChunkCollection::ReorderSlice(const slice_t slice, const idx_t *order_org) {
-	const auto slice_rows = slice.second - slice.first;
-	auto order_copy = unique_ptr<idx_t[]>(new idx_t[slice_rows]);
-	memcpy(order_copy.get(), order_org, sizeof(idx_t) * slice_rows);
-
-	// align the order to the start of the slice
-	auto order = order_copy.get() - slice.first;
+void ChunkCollection::Reorder(idx_t order_org[]) {
+	auto order = unique_ptr<idx_t[]>(new idx_t[count]);
+	memcpy(order.get(), order_org, sizeof(idx_t) * count);
 
 	// adapted from https://stackoverflow.com/a/7366196/2652376
 
@@ -362,7 +350,7 @@ void ChunkCollection::ReorderSlice(const slice_t slice, const idx_t *order_org) 
 	val_buf.resize(ColumnCount());
 
 	idx_t j, k;
-	for (idx_t i = slice.first; i < slice.second; i++) {
+	for (idx_t i = 0; i < count; i++) {
 		for (idx_t col_idx = 0; col_idx < ColumnCount(); col_idx++) {
 			val_buf[col_idx] = GetValue(col_idx, i);
 		}
@@ -382,10 +370,6 @@ void ChunkCollection::ReorderSlice(const slice_t slice, const idx_t *order_org) 
 			SetValue(col_idx, j, val_buf[col_idx]);
 		}
 	}
-}
-
-void ChunkCollection::Reorder(const idx_t *order_org) {
-	ReorderSlice({0, count}, order_org);
 }
 
 template <class TYPE>
