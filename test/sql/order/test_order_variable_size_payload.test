@@ -5,12 +5,6 @@
 statement ok
 PRAGMA threads=1
 
-#statement ok
-#CREATE TABLE test AS (SELECT cast(random() * 99999999 as int) i FROM range(100000000))
-#
-#statement ok
-#CREATE TABLE test2 AS (SELECT CAST(i AS VARCHAR) FROM test ORDER BY i)
-
 statement ok
 CREATE TABLE test1 (s VARCHAR)
 
@@ -139,15 +133,71 @@ SELECT i_item_id , i_item_desc, i_category, i_class, i_current_price , sum(ss_ex
 
 # TODO: sort with nested list payload (also with count > 1024), and with multiple var-size sort columns and NULLS
 statement ok
-create table test (i int, s varchar);
+create table test5 (i int, s varchar);
 
 statement ok
-insert into test values (3, 'ababa'), (1, 'babab'), (NULL, 'abbab'), (2, NULL);
+insert into test5 values (3, 'ababa'), (1, 'babab'), (NULL, 'abbab'), (2, NULL);
 
-query T
-select struct_pack(i:=i, s:=s) from test order by i;
+query TT
+select i, list(string_split(s, 'b')) from test5 group by i order by i;
+----
+NULL	[[a, , a, ]]
+1	[[, a, a, ]]
+2	[NULL]
+3	[[a, a, a]]
+
+query TT
+select i, struct_pack(i:=i, s:=s) from test5 order by i;
 ----
 NULL	<i: NULL, s: abbab>
 1	<i: 1, s: babab>
 2	<i: 2, s: NULL>
 3	<i: 3, s: ababa>
+
+query TT
+select i, struct_pack(i:=i, s:=string_split(s, 'b')) from test5 order by i;
+----
+NULL	<i: NULL, s: [a, , a, ]>
+1	<i: 1, s: [, a, a, ]>
+2	<i: 2, s: NULL>
+3	<i: 3, s: [a, a, a]>
+
+query TT
+select i, struct_pack(i:=i, s:=UNNEST(string_split(s, 'b'))) from test5 order by i;
+----
+NULL	<i: NULL, s: a>
+NULL	<i: NULL, s: >
+NULL	<i: NULL, s: a>
+NULL	<i: NULL, s: >
+1	<i: 1, s: >
+1	<i: 1, s: a>
+1	<i: 1, s: a>
+1	<i: 1, s: >
+2	<i: 2, s: NULL>
+3	<i: 3, s: a>
+3	<i: 3, s: a>
+3	<i: 3, s: a>
+
+query TT
+select i, struct_pack(i:=i, s:=list(s)) from test5 group by i order by i;
+----
+NULL	<i: NULL, s: [abbab]>
+1	<i: 1, s: [babab]>
+2	<i: 2, s: [NULL]>
+3	<i: 3, s: [ababa]>
+
+query TT
+select i, struct_pack(i:=i, s:=s) from test5 order by s;
+----
+2	<i: 2, s: NULL>
+3	<i: 3, s: ababa>
+NULL	<i: NULL, s: abbab>
+1	<i: 1, s: babab>
+
+query TT
+select i, struct_pack(i:=i, s:=list(string_split(s, 'b'))) from test5 group by i order by i;
+----
+NULL	<i: NULL, s: [[a, , a, ]]>
+1	<i: 1, s: [[, a, a, ]]>
+2	<i: 2, s: [NULL]>
+3	<i: 3, s: [[a, a, a]]>

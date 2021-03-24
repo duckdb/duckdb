@@ -606,11 +606,12 @@ void RowChunk::SerializeVector(Vector &v, idx_t vcount, const SelectionVector &s
 
 		// struct must have a validitymask for its fields
 		const idx_t struct_validitymask_size = (children->size() + 7) / 8;
-		data_ptr_t struct_key_locations[STANDARD_VECTOR_SIZE];
+		data_ptr_t struct_validitymask_locations[STANDARD_VECTOR_SIZE];
 		for (idx_t i = 0; i < ser_count; i++) {
-			// use key_locations as the validitymask, and create struct_key_locations
-			memset(key_locations[i], -1, struct_validitymask_size);
-			struct_key_locations[i] = key_locations[i] + struct_validitymask_size;
+			// initialize the struct validity mask
+			struct_validitymask_locations[i] = key_locations[i];
+			memset(struct_validitymask_locations[i], -1, struct_validitymask_size);
+			key_locations[i] += struct_validitymask_size;
 
 			// set whether the whole struct is null
 			auto idx = sel.get_index(i + offset);
@@ -623,7 +624,8 @@ void RowChunk::SerializeVector(Vector &v, idx_t vcount, const SelectionVector &s
 		// now serialize the struct vectors
 		for (idx_t i = 0; i < struct_vectors.size(); i++) {
 			auto &struct_vector = struct_vectors[i];
-			SerializeVector(struct_vector, vcount, sel, ser_count, i, struct_key_locations, key_locations, offset);
+			SerializeVector(struct_vector, vcount, sel, ser_count, i, key_locations, struct_validitymask_locations,
+			                offset);
 		}
 		break;
 	}
@@ -634,9 +636,11 @@ void RowChunk::SerializeVector(Vector &v, idx_t vcount, const SelectionVector &s
 		auto &child_cc = ListVector::GetEntry(v);
 		for (idx_t i = 0; i < ser_count; i++) {
 			idx_t idx = vdata.sel->get_index(i + offset);
-			// set the validitymask
 			if (!vdata.validity.RowIsValid(idx)) {
-				*(validitymask_locations[i] + byte_offset) &= bit;
+				if (validitymask_locations) {
+					// set the validitymask
+					*(validitymask_locations[i] + byte_offset) &= bit;
+				}
 				continue;
 			}
 
@@ -647,10 +651,10 @@ void RowChunk::SerializeVector(Vector &v, idx_t vcount, const SelectionVector &s
 			key_locations[i] += sizeof(list_entry.length);
 
 			// make room for the validitymask
-			data_ptr_t validitymask_location = key_locations[i];
+			data_ptr_t list_validitymask_location = key_locations[i];
 			idx_t entry_offset_in_byte = 0;
 			idx_t validitymask_size = (list_entry.length + 7) / 8;
-			memset(validitymask_location, -1, validitymask_size);
+			memset(list_validitymask_location, -1, validitymask_size);
 			key_locations[i] += validitymask_size;
 
 			// store size of each entry (if variable size)
@@ -676,10 +680,10 @@ void RowChunk::SerializeVector(Vector &v, idx_t vcount, const SelectionVector &s
 				chunk.data[0].Orrify(chunk.size(), list_vdata);
 				for (idx_t entry_idx = 0; entry_idx < next; entry_idx++) {
 					if (!list_vdata.validity.RowIsValid(offset_in_chunk + entry_idx)) {
-						*(validitymask_location) &= ~(1UL << entry_offset_in_byte);
+						*(list_validitymask_location) &= ~(1UL << entry_offset_in_byte);
 					}
 					if (++entry_offset_in_byte == 8) {
-						validitymask_location++;
+						list_validitymask_location++;
 						entry_offset_in_byte = 0;
 					}
 				}
@@ -927,16 +931,17 @@ void RowChunk::DeserializeIntoVector(Vector &v, const idx_t &vcount, const idx_t
 		// struct must have a validitymask for its fields
 		auto &child_types = v.GetType().child_types();
 		const idx_t struct_validitymask_size = (child_types.size() + 7) / 8;
-		data_ptr_t struct_key_locations[STANDARD_VECTOR_SIZE];
+		data_ptr_t struct_validitymask_locations[STANDARD_VECTOR_SIZE];
 		for (idx_t i = 0; i < vcount; i++) {
 			// use key_locations as the validitymask, and create struct_key_locations
-			struct_key_locations[i] = key_locations[i] + struct_validitymask_size;
+			struct_validitymask_locations[i] = key_locations[i];
+			key_locations[i] += struct_validitymask_size;
 		}
 
 		// now deserialize into the struct vectors
 		for (idx_t i = 0; i < child_types.size(); i++) {
 			auto new_child = make_unique<Vector>(child_types[i].second);
-			DeserializeIntoVector(*new_child, vcount, i, struct_key_locations, key_locations);
+			DeserializeIntoVector(*new_child, vcount, i, key_locations, struct_validitymask_locations);
 			StructVector::AddEntry(v, child_types[i].first, move(new_child));
 		}
 		break;
