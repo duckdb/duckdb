@@ -803,8 +803,18 @@ void PhysicalOrder::GetChunkInternal(ExecutionContext &context, DataChunk &chunk
 	                          sorting_state.ENTRY_SIZE - sizeof(idx_t);
 	const data_ptr_t payl_dataptr = state.payload_handle->node->buffer;
 	if (payload_state.HAS_VARIABLE_SIZE) {
-		idx_t *offsets = (idx_t *)state.offsets_handle->node->buffer;
-		for (idx_t i = 0; i < next; i++) {
+		const idx_t *offsets = (idx_t *)state.offsets_handle->node->buffer;
+		// fixed-size inner loop to allow unrolling
+		idx_t i;
+		for (i = 0; i + 7 < next; i += 8) {
+			for (idx_t j = 0; j < 8; j++) {
+				state.validitymask_locations[i + j] = payl_dataptr + offsets[Load<idx_t>(sort_dataptr)];
+				state.key_locations[i + j] = state.validitymask_locations[i + j] + payload_state.VALIDITYMASK_SIZE;
+				sort_dataptr += sorting_state.ENTRY_SIZE;
+			}
+		}
+		// finishing up
+		for (; i < next; i++) {
 			state.validitymask_locations[i] = payl_dataptr + offsets[Load<idx_t>(sort_dataptr)];
 			state.key_locations[i] = state.validitymask_locations[i] + payload_state.VALIDITYMASK_SIZE;
 			sort_dataptr += sorting_state.ENTRY_SIZE;

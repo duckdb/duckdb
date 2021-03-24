@@ -1,6 +1,7 @@
 #include "duckdb/common/types/row_chunk.hpp"
 
 #include "duckdb/common/types/chunk_collection.hpp"
+
 #include <cfloat>
 #include <limits.h>
 
@@ -343,11 +344,12 @@ void RowChunk::ComputeEntrySizes(Vector &v, idx_t entry_sizes[], idx_t vcount, i
 
 	switch (physical_type) {
 	case PhysicalType::VARCHAR: {
+		const idx_t string_prefix_len = string_t::PREFIX_LENGTH;
 		auto strings = (string_t *)vdata.data;
 		for (idx_t i = 0; i < vcount; i++) {
 			idx_t str_idx = vdata.sel->get_index(i + offset);
 			if (vdata.validity.RowIsValid(str_idx)) {
-				entry_sizes[i] += string_t::PREFIX_LENGTH + strings[str_idx].GetSize();
+				entry_sizes[i] += string_prefix_len + strings[str_idx].GetSize();
 			}
 		}
 		break;
@@ -527,6 +529,7 @@ void RowChunk::SerializeVectorData(VectorData &vdata, PhysicalType type, const S
 		                                    offset);
 		break;
 	case PhysicalType::VARCHAR: {
+		const idx_t string_prefix_len = string_t::PREFIX_LENGTH;
 		auto strings = (string_t *)vdata.data;
 		if (!validitymask_locations) {
 			for (idx_t i = 0; i < ser_count; i++) {
@@ -536,7 +539,7 @@ void RowChunk::SerializeVectorData(VectorData &vdata, PhysicalType type, const S
 					auto &string_entry = strings[source_idx];
 					// store string size
 					Store<uint32_t>(string_entry.GetSize(), key_locations[i]);
-					key_locations[i] += string_t::PREFIX_LENGTH;
+					key_locations[i] += string_prefix_len;
 					// store the string
 					memcpy(key_locations[i], string_entry.GetDataUnsafe(), string_entry.GetSize());
 					key_locations[i] += string_entry.GetSize();
@@ -552,7 +555,7 @@ void RowChunk::SerializeVectorData(VectorData &vdata, PhysicalType type, const S
 					auto &string_entry = strings[source_idx];
 					// store string size
 					Store<uint32_t>(string_entry.GetSize(), key_locations[i]);
-					key_locations[i] += string_t::PREFIX_LENGTH;
+					key_locations[i] += string_prefix_len;
 					// store the string
 					memcpy(key_locations[i], string_entry.GetDataUnsafe(), string_entry.GetSize());
 					key_locations[i] += string_entry.GetSize();
@@ -799,13 +802,15 @@ void RowChunk::Build(idx_t added_count, data_ptr_t key_locations[], idx_t entry_
 template <class T>
 static void TemplatedDeserializeIntoVector(Vector &v, idx_t count, idx_t col_idx, data_ptr_t *key_locations) {
 	auto target = FlatVector::GetData<T>(v);
+	// fixed-size inner loop to allow unrolling
 	idx_t i;
-	for (i = 0; i + 8 < count; i += 8) {
+	for (i = 0; i + 7 < count; i += 8) {
 		for (idx_t j = 0; j < 8; j++) {
-			target[i] = Load<T>(key_locations[i + j]);
+			target[i + j] = Load<T>(key_locations[i + j]);
 			key_locations[i + j] += sizeof(T);
 		}
 	}
+	// finishing up
 	for (; i < count; i++) {
 		target[i] = Load<T>(key_locations[i]);
 		key_locations[i] += sizeof(T);
@@ -835,7 +840,7 @@ void RowChunk::DeserializeIntoVector(Vector &v, const idx_t &vcount, const idx_t
 
 		// fixed-size inner loop to allow unrolling
 		idx_t i;
-		for (i = 0; i + 8 < vcount; i += 8) {
+		for (i = 0; i + 7 < vcount; i += 8) {
 			for (idx_t j = 0; j < 8; j++) {
 				bool valid = *(validitymask_locations[i + j] + byte_offset) & bit;
 				validity.Set(i + j, valid);
@@ -844,7 +849,8 @@ void RowChunk::DeserializeIntoVector(Vector &v, const idx_t &vcount, const idx_t
 
 		// finishing up
 		for (i = 0; i < vcount; i++) {
-			validity.Set(i, *(validitymask_locations[i] + byte_offset) & bit);
+			bool valid = *(validitymask_locations[i] + byte_offset) & bit;
+			validity.Set(i, valid);
 		}
 	}
 
@@ -891,14 +897,27 @@ void RowChunk::DeserializeIntoVector(Vector &v, const idx_t &vcount, const idx_t
 		TemplatedDeserializeIntoVector<interval_t>(v, vcount, col_idx, key_locations);
 		break;
 	case PhysicalType::VARCHAR: {
-		idx_t len;
+		const idx_t string_prefix_len = string_t::PREFIX_LENGTH;
 		auto target = FlatVector::GetData<string_t>(v);
-		for (idx_t i = 0; i < vcount; i++) {
+		// fixed size inner loop to allow unrolling
+		idx_t i = 0;
+		if (validity.AllValid()) {
+			for (; i + 7 < vcount; i += 8) {
+				for (idx_t j = 0; j < 8; j++) {
+					auto len = Load<uint32_t>(key_locations[i + j]);
+					key_locations[i + j] += string_prefix_len;
+					target[i + j] = StringVector::AddStringOrBlob(v, string_t((const char *)key_locations[i + j], len));
+					key_locations[i + j] += len;
+				}
+			}
+		}
+		// finishing up
+		for (; i < vcount; i++) {
 			if (!validity.RowIsValid(i)) {
 				continue;
 			}
-			len = Load<uint32_t>(key_locations[i]);
-			key_locations[i] += string_t::PREFIX_LENGTH;
+			auto len = Load<uint32_t>(key_locations[i]);
+			key_locations[i] += string_prefix_len;
 			target[i] = StringVector::AddStringOrBlob(v, string_t((const char *)key_locations[i], len));
 			key_locations[i] += len;
 		}
