@@ -5,6 +5,7 @@
 statement ok
 PRAGMA threads=1
 
+# strings longer than the 8 character prefix
 statement ok
 CREATE TABLE test0(job VARCHAR, name VARCHAR)
 
@@ -24,7 +25,6 @@ Shipping and Receiving Supervisor	Ackerman
 statement ok
 CREATE TABLE test1 (s VARCHAR)
 
-# strings longer than the initial 8 character prefix
 statement ok
 INSERT INTO test1 VALUES ('2'), (NULL), ('355555552'), ('1'), ('35555556'), ('10'), ('355555553'), ('355555551')
 
