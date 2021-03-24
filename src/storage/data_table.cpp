@@ -40,6 +40,8 @@ DataTable::DataTable(DatabaseInstance &db, const string &schema, const string &t
 		versions = move(data->versions);
 	} else {
 		versions = make_shared<SegmentTree>();
+	}
+	if (total_rows == 0) {
 		// append one (empty) morsel to the table
 		auto segment = make_unique<MorselInfo>(0, MorselInfo::MORSEL_SIZE);
 		versions->AppendSegment(move(segment));

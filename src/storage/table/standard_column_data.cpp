@@ -81,7 +81,7 @@ void StandardColumnData::IndexScan(ColumnScanState &state, Vector &result, bool 
 		state.initialized = true;
 	}
 	// // perform a scan of this segment
-	validity.IndexScan(state, result, allow_pending_updates);
+	validity.IndexScan(state.child_states[0], result, allow_pending_updates);
 
 	state.current->Scan(state, state.vector_index, result);
 	if (!allow_pending_updates && state.updates->HasUncommittedUpdates(state.vector_index)) {

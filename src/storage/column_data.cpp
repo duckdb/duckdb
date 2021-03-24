@@ -343,20 +343,21 @@ void ColumnCheckpointState::FlushToDisk() {
 	}
 }
 
-
 void ColumnData::Checkpoint(TableDataWriter &writer) {
-	if (!data.root_node) {
-		return;
-	}
-	auto &block_manager = BlockManager::GetBlockManager(db);
-	Vector intermediate(type);
-
 	// scan the segments of the column data
 	// set up the checkpoint state
 	auto checkpoint_state = CreateCheckpointState(writer);
 	checkpoint_state->global_stats = BaseStatistics::CreateEmpty(type);
-	checkpoint_state->CreateEmptySegment();
 
+	if (!data.root_node) {
+		// empty table: flush the empty list
+		checkpoint_state->FlushToDisk();
+		return;
+	}
+
+	auto &block_manager = BlockManager::GetBlockManager(db);
+	checkpoint_state->CreateEmptySegment();
+	Vector intermediate(type);
 	// we create a new segment tree with all the new segments
 	// we do this by scanning the current segments of the column and checking for changes
 	// if there are any changes (e.g. updates or appends) we write the new changes
