@@ -44,5 +44,4 @@ private:
 	mutable std::atomic<size_t> tasks_completed;
 };
 
-
 } // namespace duckdb
