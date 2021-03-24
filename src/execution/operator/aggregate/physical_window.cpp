@@ -5,7 +5,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/window_segment_tree.hpp"
-#include "duckdb/parallel/task_scheduler.hpp"
+#include "duckdb/parallel/task_counter.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 
@@ -13,8 +13,6 @@
 #include <numeric>
 
 namespace duckdb {
-
-using Slice = ChunkCollection::slice_t;
 
 class WindowGlobalState : public GlobalOperatorState {
 public:
@@ -330,16 +328,11 @@ static idx_t FindNextStart(const BitArray<W> &mask, idx_t l, idx_t r) {
 	return r;
 }
 
-static idx_t MaterializeExpressions(Expression **exprs, idx_t expr_count, ChunkCollection &input,
-                                    ChunkCollection &output, const Slice range, bool scalar = false) {
-	const auto begin_chunk = input.LocateChunk(range.first);
-	const auto result = begin_chunk * STANDARD_VECTOR_SIZE;
-
+static void MaterializeExpressions(Expression **exprs, idx_t expr_count, ChunkCollection &input,
+                                   ChunkCollection &output, bool scalar = false) {
 	if (expr_count == 0) {
-		return result;
+		return;
 	}
-
-	const auto end_chunk = input.LocateChunk(range.second - 1) + 1;
 
 	vector<LogicalType> types;
 	ExpressionExecutor executor;
@@ -348,7 +341,7 @@ static idx_t MaterializeExpressions(Expression **exprs, idx_t expr_count, ChunkC
 		executor.AddExpression(*exprs[expr_idx]);
 	}
 
-	for (auto i = begin_chunk; i < end_chunk; i++) {
+	for (idx_t i = 0; i < input.ChunkCount(); i++) {
 		DataChunk chunk;
 		chunk.Initialize(types);
 
@@ -361,13 +354,11 @@ static idx_t MaterializeExpressions(Expression **exprs, idx_t expr_count, ChunkC
 			break;
 		}
 	}
-
-	return result;
 }
 
-static idx_t MaterializeExpression(Expression *expr, ChunkCollection &input, ChunkCollection &output, const Slice range,
-                                   bool scalar = false) {
-	return MaterializeExpressions(&expr, 1, input, output, range, scalar);
+static void MaterializeExpression(Expression *expr, ChunkCollection &input, ChunkCollection &output,
+                                  bool scalar = false) {
+	MaterializeExpressions(&expr, 1, input, output, scalar);
 }
 
 static bool CompatibleSorts(const BoundWindowExpression *a, const BoundWindowExpression *b) {
@@ -395,61 +386,9 @@ static bool CompatibleSorts(const BoundWindowExpression *a, const BoundWindowExp
 	return true;
 }
 
-using counts_t = std::vector<size_t>;
-
-static counts_t OffsetsFromCounts(const counts_t &counts) {
-	counts_t offsets(1, 0);
-	offsets.reserve(counts.size() + 1);
-	for (size_t i = 1; i <= counts.size(); ++i) {
-		offsets.emplace_back(offsets[i - 1] + counts[i - 1]);
-	}
-
-	return offsets;
-}
-
-static std::vector<Slice> SlicesFromCounts(const counts_t &counts, const idx_t page_size = STANDARD_VECTOR_SIZE) {
-	std::vector<Slice> result;
-
-	Slice slice(0, 0);
-	for (const auto &count : counts) {
-		if (count) {
-			slice.second += count;
-			//	Emit a slice when it is either big enough or ends on a page boundary
-			if ((slice.second - slice.first) >= page_size || (0 == slice.second % page_size)) {
-				result.emplace_back(slice);
-				slice.first = slice.second;
-			}
-		}
-	}
-
-	//	Finish any ragged slices
-	if (slice.first != slice.second) {
-		result.emplace_back(slice);
-	}
-
-	return result;
-}
-
-static void PartitionChunk(counts_t &counts, Vector &hash_vector, DataChunk &sort_chunk, const idx_t partition_cols,
-                           const hash_t partition_mask) {
-	D_ASSERT(hash_vector.GetType().id() == LogicalTypeId::HASH);
-	const auto count = sort_chunk.size();
-	VectorOperations::Hash(sort_chunk.data[0], hash_vector, count);
-	for (idx_t prt_idx = 1; prt_idx < partition_cols; ++prt_idx) {
-		VectorOperations::CombineHash(hash_vector, sort_chunk.data[prt_idx], count);
-	}
-
-	auto hashes = FlatVector::GetData<hash_t>(hash_vector);
-	for (idx_t i = 0; i < count; ++i) {
-		const auto bin = (hashes[i] & partition_mask);
-		++counts[bin];
-	}
-}
-
-static void SortPartitionedCollectionForWindow(BoundWindowExpression *wexpr, ChunkCollection &input,
-                                               ChunkCollection &output, ChunkCollection &over_collection,
-                                               const idx_t begin, const idx_t end) {
-	if (begin == end) {
+static void SortCollectionForWindow(BoundWindowExpression *wexpr, ChunkCollection &input, ChunkCollection &output,
+                                    ChunkCollection &sort_collection) {
+	if (input.Count() == 0) {
 		return;
 	}
 	vector<OrderType> orders;
@@ -466,60 +405,59 @@ static void SortPartitionedCollectionForWindow(BoundWindowExpression *wexpr, Chu
 		null_order_types.push_back(wexpr->orders[ord_idx].null_order);
 	}
 
-	const Slice slice {begin, end};
-	auto sorted_vector = unique_ptr<idx_t[]>(new idx_t[end - begin]);
-	over_collection.SortSlice(slice, orders, null_order_types, sorted_vector.get());
+	auto sorted_vector = unique_ptr<idx_t[]>(new idx_t[input.Count()]);
+	sort_collection.Sort(orders, null_order_types, sorted_vector.get());
 
-	input.ReorderSlice(slice, sorted_vector.get());
-	output.ReorderSlice(slice, sorted_vector.get());
-	over_collection.ReorderSlice(slice, sorted_vector.get());
+	input.Reorder(sorted_vector.get());
+	output.Reorder(sorted_vector.get());
+	sort_collection.Reorder(sorted_vector.get());
 }
 
-static counts_t DistributePartitionsForWindow(BoundWindowExpression *wexpr, ChunkCollection &input,
-                                              ChunkCollection &output, ChunkCollection &over_collection,
-                                              const unsigned partition_bits = 10) {
+using counts_t = std::vector<size_t>;
+
+static void HashChunk(counts_t &counts, Vector &hash_vector, DataChunk &sort_chunk, const idx_t partition_cols,
+                      const hash_t partition_mask) {
+	D_ASSERT(hash_vector.GetType().id() == LogicalTypeId::HASH);
+	const auto count = sort_chunk.size();
+	VectorOperations::Hash(sort_chunk.data[0], hash_vector, count);
+	for (idx_t prt_idx = 1; prt_idx < partition_cols; ++prt_idx) {
+		VectorOperations::CombineHash(hash_vector, sort_chunk.data[prt_idx], count);
+	}
+
+	auto hashes = FlatVector::GetData<hash_t>(hash_vector);
+	for (idx_t i = 0; i < count; ++i) {
+		const auto bin = (hashes[i] & partition_mask);
+		++counts[bin];
+	}
+}
+
+static void HashCollectionForWindow(BoundWindowExpression *wexpr, ChunkCollection &over_collection,
+                                    ChunkCollection &hash_collection, counts_t &counts,
+                                    const unsigned partition_bits = 10) {
+	counts.clear();
+
 	//	If there are no partition columns, then there is one partition
 	const auto partition_cols = wexpr->partitions.size();
 	const auto num_rows = over_collection.Count();
 	if (partition_cols == 0) {
-		return counts_t(1, num_rows);
+		counts.emplace_back(num_rows);
+		return;
 	}
 
 	//	Radix sort the partitions
 	const auto partition_count = size_t(1) << partition_bits;
-	counts_t counts(partition_count, 0);
+	counts.resize(partition_count, 0);
 
 	//	First pass: hash and count the partition sizes
 	const auto partition_mask = hash_t(partition_count - 1);
-	ChunkCollection hash_collection;
 	vector<LogicalType> hash_types(1, LogicalTypeId::HASH);
 	for (const auto &sort_chunk : over_collection.Chunks()) {
 		DataChunk hash_chunk;
 		hash_chunk.Initialize(hash_types);
 		hash_chunk.SetCardinality(*sort_chunk);
-		PartitionChunk(counts, hash_chunk.data[0], *sort_chunk, partition_cols, partition_mask);
+		HashChunk(counts, hash_chunk.data[0], *sort_chunk, partition_cols, partition_mask);
 		hash_collection.Append(hash_chunk);
 	}
-	auto offsets = OffsetsFromCounts(counts);
-
-	//	Second pass: Compute the reordering
-	auto order_vector = unique_ptr<idx_t[]>(new idx_t[over_collection.Count()]);
-	auto order = order_vector.get();
-	idx_t r = 0;
-	for (const auto &hash_chunk : hash_collection.Chunks()) {
-		const auto hashes = FlatVector::GetData<hash_t>(hash_chunk->data[0]);
-		for (idx_t i = 0; i < hash_chunk->size(); ++i, ++r) {
-			const auto bin = (hashes[i] & partition_mask);
-			order[offsets[bin]++] = r;
-		}
-	}
-
-	//	Reorder all the collections into the bins
-	input.Reorder(order);
-	over_collection.Reorder(order);
-	output.Reorder(order);
-
-	return counts;
 }
 
 static void MaterializeOverCollectionForWindow(BoundWindowExpression *wexpr, ChunkCollection &input,
@@ -556,22 +494,6 @@ static void MaterializeOverCollectionForWindow(BoundWindowExpression *wexpr, Chu
 	D_ASSERT(input.Count() == over_collection.Count());
 }
 
-static counts_t SortCollectionForWindow(BoundWindowExpression *wexpr, ChunkCollection &input, ChunkCollection &output,
-                                        ChunkCollection &over_collection, const unsigned partition_bits = 10) {
-	MaterializeOverCollectionForWindow(wexpr, input, output, over_collection);
-	auto counts = DistributePartitionsForWindow(wexpr, input, output, over_collection, partition_bits);
-
-	//	Sort the partitions independently
-	idx_t begin = 0;
-	for (size_t i = 0; i < counts.size(); ++i) {
-		auto end = begin + counts[i];
-		SortPartitionedCollectionForWindow(wexpr, input, output, over_collection, begin, end);
-		begin = end;
-	}
-
-	return counts;
-}
-
 struct WindowBoundariesState {
 	idx_t partition_start = 0;
 	idx_t partition_end = 0;
@@ -588,10 +510,10 @@ static bool WindowNeedsRank(BoundWindowExpression *wexpr) {
 	       wexpr->type == ExpressionType::WINDOW_RANK_DENSE || wexpr->type == ExpressionType::WINDOW_CUME_DIST;
 }
 
-static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, const Slice range, const idx_t row_idx,
-                                   const idx_t local_row, ChunkCollection &boundary_start_collection,
-                                   ChunkCollection &boundary_end_collection, const BitArray<uint64_t> &partition_mask,
-                                   const BitArray<uint64_t> &order_mask, WindowBoundariesState &bounds) {
+static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, const idx_t input_size, const idx_t row_idx,
+                                   ChunkCollection &boundary_start_collection, ChunkCollection &boundary_end_collection,
+                                   const BitArray<uint64_t> &partition_mask, const BitArray<uint64_t> &order_mask,
+                                   WindowBoundariesState &bounds) {
 
 	if (wexpr->partitions.size() + wexpr->orders.size() > 0) {
 
@@ -605,9 +527,9 @@ static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, const Slice ran
 			bounds.peer_start = row_idx;
 
 			// find end of partition
-			bounds.partition_end = range.second;
+			bounds.partition_end = input_size;
 			if (!wexpr->partitions.empty()) {
-				bounds.partition_end = FindNextStart(partition_mask, bounds.partition_start + 1, range.second);
+				bounds.partition_end = FindNextStart(partition_mask, bounds.partition_start + 1, input_size);
 			}
 
 		} else if (!bounds.is_peer) {
@@ -623,7 +545,7 @@ static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, const Slice ran
 	} else {
 		bounds.is_same_partition = false;
 		bounds.is_peer = true;
-		bounds.partition_end = range.second;
+		bounds.partition_end = input_size;
 		bounds.peer_end = bounds.partition_end;
 	}
 
@@ -648,14 +570,14 @@ static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, const Slice ran
 		D_ASSERT(boundary_start_collection.ColumnCount() > 0);
 		bounds.window_start =
 		    (int64_t)row_idx -
-		    boundary_start_collection.GetValue(0, wexpr->start_expr->IsScalar() ? 0 : local_row).GetValue<int64_t>();
+		    boundary_start_collection.GetValue(0, wexpr->start_expr->IsScalar() ? 0 : row_idx).GetValue<int64_t>();
 		break;
 	}
 	case WindowBoundary::EXPR_FOLLOWING: {
 		D_ASSERT(boundary_start_collection.ColumnCount() > 0);
 		bounds.window_start =
 		    row_idx +
-		    boundary_start_collection.GetValue(0, wexpr->start_expr->IsScalar() ? 0 : local_row).GetValue<int64_t>();
+		    boundary_start_collection.GetValue(0, wexpr->start_expr->IsScalar() ? 0 : row_idx).GetValue<int64_t>();
 		break;
 	}
 
@@ -680,13 +602,13 @@ static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, const Slice ran
 		D_ASSERT(boundary_end_collection.ColumnCount() > 0);
 		bounds.window_end =
 		    (int64_t)row_idx -
-		    boundary_end_collection.GetValue(0, wexpr->end_expr->IsScalar() ? 0 : local_row).GetValue<int64_t>() + 1;
+		    boundary_end_collection.GetValue(0, wexpr->end_expr->IsScalar() ? 0 : row_idx).GetValue<int64_t>() + 1;
 		break;
 	case WindowBoundary::EXPR_FOLLOWING:
 		D_ASSERT(boundary_end_collection.ColumnCount() > 0);
 		bounds.window_end =
 		    row_idx +
-		    boundary_end_collection.GetValue(0, wexpr->end_expr->IsScalar() ? 0 : local_row).GetValue<int64_t>() + 1;
+		    boundary_end_collection.GetValue(0, wexpr->end_expr->IsScalar() ? 0 : row_idx).GetValue<int64_t>() + 1;
 
 		break;
 	default:
@@ -708,7 +630,7 @@ static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, const Slice ran
 
 static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollection &input, ChunkCollection &output,
                                     const BitArray<uint64_t> &partition_mask, const BitArray<uint64_t> &order_mask,
-                                    const idx_t output_col, const Slice range) {
+                                    const idx_t output_col) {
 
 	// TODO we could evaluate those expressions in parallel
 
@@ -719,19 +641,17 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 		exprs.push_back(child.get());
 	}
 	// TODO: child may be a scalar, don't need to materialize the whole collection then
-	// We only need to evaluate local data (payloads, boundaries, etc.) on the [range) range,
-	// so we need to know the delta between the computed row index and the operator index.
-	const auto local_delta = MaterializeExpressions(exprs.data(), exprs.size(), input, payload_collection, range);
+	MaterializeExpressions(exprs.data(), exprs.size(), input, payload_collection);
 
 	ChunkCollection leadlag_offset_collection;
 	ChunkCollection leadlag_default_collection;
 	if (wexpr->type == ExpressionType::WINDOW_LEAD || wexpr->type == ExpressionType::WINDOW_LAG) {
 		if (wexpr->offset_expr) {
-			MaterializeExpression(wexpr->offset_expr.get(), input, leadlag_offset_collection, range,
+			MaterializeExpression(wexpr->offset_expr.get(), input, leadlag_offset_collection,
 			                      wexpr->offset_expr->IsScalar());
 		}
 		if (wexpr->default_expr) {
-			MaterializeExpression(wexpr->default_expr.get(), input, leadlag_default_collection, range,
+			MaterializeExpression(wexpr->default_expr.get(), input, leadlag_default_collection,
 			                      wexpr->default_expr->IsScalar());
 		}
 	}
@@ -740,14 +660,12 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 	ChunkCollection boundary_start_collection;
 	if (wexpr->start_expr &&
 	    (wexpr->start == WindowBoundary::EXPR_PRECEDING || wexpr->start == WindowBoundary::EXPR_FOLLOWING)) {
-		MaterializeExpression(wexpr->start_expr.get(), input, boundary_start_collection, range,
-		                      wexpr->start_expr->IsScalar());
+		MaterializeExpression(wexpr->start_expr.get(), input, boundary_start_collection, wexpr->start_expr->IsScalar());
 	}
 	ChunkCollection boundary_end_collection;
 	if (wexpr->end_expr &&
 	    (wexpr->end == WindowBoundary::EXPR_PRECEDING || wexpr->end == WindowBoundary::EXPR_FOLLOWING)) {
-		MaterializeExpression(wexpr->end_expr.get(), input, boundary_end_collection, range,
-		                      wexpr->end_expr->IsScalar());
+		MaterializeExpression(wexpr->end_expr.get(), input, boundary_end_collection, wexpr->end_expr->IsScalar());
 	}
 
 	// build a segment tree for frame-adhering aggregates
@@ -763,10 +681,9 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 	uint64_t dense_rank = 1, rank_equal = 0, rank = 1;
 
 	// this is the main loop, go through all sorted rows and compute window function result
-	for (idx_t row_idx = range.first; row_idx < range.second; row_idx++) {
-		const auto local_row = row_idx - local_delta;
+	for (idx_t row_idx = 0; row_idx < input.Count(); row_idx++) {
 		// special case, OVER (), aggregate over everything
-		UpdateWindowBoundaries(wexpr, range, row_idx, local_row, boundary_start_collection, boundary_end_collection,
+		UpdateWindowBoundaries(wexpr, input.Count(), row_idx, boundary_start_collection, boundary_end_collection,
 		                       partition_mask, order_mask, bounds);
 		if (WindowNeedsRank(wexpr)) {
 			if (!bounds.is_same_partition || row_idx == 0) { // special case for first row, need to init
@@ -791,7 +708,7 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 
 		switch (wexpr->type) {
 		case ExpressionType::WINDOW_AGGREGATE: {
-			res = segment_tree->Compute(bounds.window_start - local_delta, bounds.window_end - local_delta);
+			res = segment_tree->Compute(bounds.window_start, bounds.window_end);
 			break;
 		}
 		case ExpressionType::WINDOW_ROW_NUMBER: {
@@ -822,7 +739,7 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 			if (payload_collection.ColumnCount() != 1) {
 				throw Exception("NTILE needs a parameter");
 			}
-			auto n_param = payload_collection.GetValue(0, local_row).GetValue<int64_t>();
+			auto n_param = payload_collection.GetValue(0, row_idx).GetValue<int64_t>();
 			// With thanks from SQLite's ntileValueFunc()
 			int64_t n_total = bounds.partition_end - bounds.partition_start;
 			if (n_param > n_total) {
@@ -856,23 +773,23 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 			Value def_val = Value(wexpr->return_type);
 			idx_t offset = 1;
 			if (wexpr->offset_expr) {
-				offset = leadlag_offset_collection.GetValue(0, wexpr->offset_expr->IsScalar() ? 0 : local_row)
+				offset = leadlag_offset_collection.GetValue(0, wexpr->offset_expr->IsScalar() ? 0 : row_idx)
 				             .GetValue<int64_t>();
 			}
 			if (wexpr->default_expr) {
-				def_val = leadlag_default_collection.GetValue(0, wexpr->default_expr->IsScalar() ? 0 : local_row);
+				def_val = leadlag_default_collection.GetValue(0, wexpr->default_expr->IsScalar() ? 0 : row_idx);
 			}
 			if (wexpr->type == ExpressionType::WINDOW_LEAD) {
 				auto lead_idx = row_idx + offset;
 				if (lead_idx < bounds.partition_end) {
-					res = payload_collection.GetValue(0, lead_idx - local_delta);
+					res = payload_collection.GetValue(0, lead_idx);
 				} else {
 					res = def_val;
 				}
 			} else {
 				int64_t lag_idx = (int64_t)row_idx - offset;
 				if (lag_idx >= 0 && (idx_t)lag_idx >= bounds.partition_start) {
-					res = payload_collection.GetValue(0, lag_idx - local_delta);
+					res = payload_collection.GetValue(0, lag_idx);
 				} else {
 					res = def_val;
 				}
@@ -881,11 +798,11 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 			break;
 		}
 		case ExpressionType::WINDOW_FIRST_VALUE: {
-			res = payload_collection.GetValue(0, bounds.window_start - local_delta);
+			res = payload_collection.GetValue(0, bounds.window_start);
 			break;
 		}
 		case ExpressionType::WINDOW_LAST_VALUE: {
-			res = payload_collection.GetValue(0, bounds.window_end - 1 - local_delta);
+			res = payload_collection.GetValue(0, bounds.window_end - 1);
 			break;
 		}
 		default:
@@ -896,64 +813,143 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 	}
 }
 
-class TaskCounter {
+class WindowPartitionTaskManager : public TaskCounter {
 public:
-	explicit TaskCounter(TaskScheduler &scheduler_p)
-	    : scheduler(scheduler_p), token(scheduler_p.CreateProducer()), task_count(0), tasks_completed(0) {
+	WindowPartitionTaskManager(TaskScheduler &scheduler_p, WindowGlobalState &gstate_p)
+	    : TaskCounter(scheduler_p), gstate(gstate_p) {
 	}
 
-	void AddTask(unique_ptr<Task> task) {
-		++task_count;
-		scheduler.ScheduleTask(*token, move(task));
-	}
+	virtual void Finish() override;
 
-	void FinishTask() const {
-		++tasks_completed;
-	}
-
-	void Finish() {
-		while (tasks_completed < task_count) {
-			unique_ptr<Task> task;
-			if (scheduler.GetTaskFromProducer(*token, task)) {
-				task->Execute();
-				task.reset();
-			}
-		}
-	}
-
-private:
-	TaskScheduler &scheduler;
-	unique_ptr<ProducerToken> token;
-	size_t task_count;
-	mutable std::atomic<size_t> tasks_completed;
+	WindowGlobalState &gstate;
 };
 
-class ComputeWindowExpressionTask : public Task {
+void WindowPartitionTaskManager::Finish() {
+	TaskCounter::Finish();
+
+	//	Replace the operator collection with our accumulated versions
+	auto &ostate = (WindowGlobalState &)*gstate.op.sink_state;
+
+	ostate.chunks.Reset();
+	ostate.chunks.Merge(gstate.chunks);
+
+	ostate.window_results.Reset();
+	ostate.window_results.Merge(gstate.window_results);
+}
+
+class WindowPartitionTask : public Task {
 public:
+	using WindowExpressions = vector<BoundWindowExpression *>;
 	using Mask = BitArray<uint64_t>;
 
-	ComputeWindowExpressionTask(TaskCounter &parent_p, BoundWindowExpression *wexpr_p, ChunkCollection &input_p,
-	                            ChunkCollection &output_p, const Mask &partition_mask_p, const Mask &order_mask_p,
-	                            const idx_t output_col_p, const Slice range_p)
-	    : parent(parent_p), wexpr(wexpr_p), input(input_p), output(output_p), partition_mask(partition_mask_p),
-	      order_mask(order_mask_p), output_col(output_col_p), range(range_p) {
+	WindowPartitionTask(WindowPartitionTaskManager &manager_p, WindowExpressions &window_exprs_p,
+	                    const vector<idx_t> &matching_p, const ChunkCollection &input_p,
+	                    const ChunkCollection &output_p, const ChunkCollection &over_p, const ChunkCollection &hashes_p,
+	                    const hash_t hash_bin_p, const hash_t hash_mask_p)
+	    : manager(manager_p), window_exprs(window_exprs_p), matching(matching_p), input(input_p), output(output_p),
+	      over(over_p), hashes(hashes_p), hash_bin(hash_bin_p), hash_mask(hash_mask_p) {
 	}
 
-	void Execute() override {
-		ComputeWindowExpression(wexpr, input, output, partition_mask, order_mask, output_col, range);
-		parent.FinishTask();
-	}
+	static void ComputeExpressions(WindowExpressions &window_exprs, const vector<idx_t> &matching,
+	                               ChunkCollection &big_data, ChunkCollection &window_results,
+	                               ChunkCollection &over_collection);
+	void Execute() override;
 
 private:
-	TaskCounter &parent;
-	BoundWindowExpression *wexpr;
-	ChunkCollection &input;
-	ChunkCollection &output;
-	const Mask &partition_mask;
-	const Mask &order_mask;
-	const idx_t output_col;
-	const Slice range;
+	WindowPartitionTaskManager &manager;
+	WindowExpressions &window_exprs;
+	const vector<idx_t> &matching;
+	const ChunkCollection &input;
+	const ChunkCollection &output;
+	const ChunkCollection &over;
+	const ChunkCollection &hashes;
+	const hash_t hash_bin;
+	const hash_t hash_mask;
 };
+
+void WindowPartitionTask::ComputeExpressions(WindowExpressions &window_exprs, const vector<idx_t> &matching,
+                                             ChunkCollection &big_data, ChunkCollection &window_results,
+                                             ChunkCollection &over_collection) {
+	//	Idempotency
+	if (big_data.Count() == 0) {
+		return;
+	}
+	//	Pick out a function for the OVER clause
+	auto over_expr = window_exprs[matching[0]];
+
+	//	Sort the partition
+	const auto sort_col_count = over_expr->partitions.size() + over_expr->orders.size();
+	if (sort_col_count > 0) {
+		SortCollectionForWindow(over_expr, big_data, window_results, over_collection);
+	}
+
+	//	Set bits for the start of each partition
+	Mask partition_bits(big_data.Count());
+	partition_bits[0] = true;
+
+	for (idx_t c = 0; c < over_expr->partitions.size(); ++c) {
+		MaskColumn(partition_bits, over_collection, c);
+	}
+
+	//	Set bits for the start of each peer group.
+	//	Partitions also break peer groups, so start with the partition bits.
+	auto order_bits = partition_bits;
+	for (idx_t c = over_expr->partitions.size(); c < sort_col_count; ++c) {
+		MaskColumn(order_bits, over_collection, c);
+	}
+
+	//	Compute the functions with matching sorts
+	for (const auto &expr_idx : matching) {
+		ComputeWindowExpression(window_exprs[expr_idx], big_data, window_results, partition_bits, order_bits, expr_idx);
+	}
+}
+
+static void AppendCollection(const ChunkCollection &source, ChunkCollection &target, SelectionVector &sel,
+                             const idx_t source_count, const idx_t chunk_idx) {
+
+	DataChunk chunk;
+	chunk.Initialize(source.Types());
+	source.GetChunk(chunk_idx).Copy(chunk, sel, source_count);
+	target.Append(chunk);
+}
+
+void WindowPartitionTask::Execute() {
+	//	Copy the partition data so we can work with it on this thread
+	ChunkCollection chunks;
+	ChunkCollection window_results;
+	ChunkCollection over_collection;
+	SelectionVector sel;
+	for (idx_t chunk_idx = 0; chunk_idx < hashes.ChunkCount(); ++chunk_idx) {
+		//	Build a selection vector of matching hashes
+		auto &hash_chunk = hashes.GetChunk(chunk_idx);
+		auto hash_size = hash_chunk.size();
+		auto hash_data = FlatVector::GetData<hash_t>(hash_chunk.data[0]);
+		sel.Initialize(hash_size);
+		idx_t bin_size = 0;
+		for (idx_t i = 0; i < hash_size; ++i) {
+			if ((hash_data[i] & hash_mask) == hash_bin) {
+				sel.set_index(bin_size++, i);
+			}
+		}
+
+		//	Copy the data for each collection
+		if (bin_size == 0) {
+			continue;
+		}
+
+		AppendCollection(input, chunks, sel, bin_size, chunk_idx);
+		AppendCollection(output, window_results, sel, bin_size, chunk_idx);
+		AppendCollection(over, over_collection, sel, bin_size, chunk_idx);
+	}
+
+	ComputeExpressions(window_exprs, matching, chunks, window_results, over_collection);
+
+	lock_guard<mutex> glock(manager.gstate.lock);
+	manager.gstate.chunks.Merge(chunks);
+	manager.gstate.window_results.Merge(window_results);
+
+	manager.FinishTask();
+}
 
 void PhysicalWindow::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
 	auto state = reinterpret_cast<PhysicalWindowOperatorState *>(state_p);
@@ -1036,9 +1032,17 @@ void PhysicalWindow::Finalize(Pipeline &pipeline, ClientContext &context, unique
 	D_ASSERT(window_results.ColumnCount() == select_list.size());
 	// we can have multiple window functions
 
+	//	Track parallel tasks
 	auto &scheduler = TaskScheduler::GetScheduler(context);
 
 	// Process the window functions by sharing the partition/order definitions
+	WindowPartitionTask::WindowExpressions window_exprs;
+	for (idx_t expr_idx = 0; expr_idx < select_list.size(); ++expr_idx) {
+		D_ASSERT(select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
+		auto wexpr = reinterpret_cast<BoundWindowExpression *>(select_list[expr_idx].get());
+		window_exprs.emplace_back(wexpr);
+	}
+
 	vector<idx_t> remaining(select_list.size());
 	std::iota(remaining.begin(), remaining.end(), 0);
 	while (!remaining.empty()) {
@@ -1062,48 +1066,33 @@ void PhysicalWindow::Finalize(Pipeline &pipeline, ClientContext &context, unique
 
 		// sort by partition and order clause in window def
 		ChunkCollection over_collection;
+		ChunkCollection hash_collection;
 		const auto sort_col_count = over_expr->partitions.size() + over_expr->orders.size();
-		counts_t counts(1, big_data.Count());
+		counts_t counts;
 		if (sort_col_count > 0) {
-			counts = SortCollectionForWindow(over_expr, big_data, window_results, over_collection);
-		}
-
-		//	Set bits for the start of each partition
-		BitArray<uint64_t> partition_mask(over_collection.Count());
-		if (partition_mask.Count() > 0) {
-			//	Pre-populate with the hash boundaries
-			const auto ranges = SlicesFromCounts(counts, 1);
-			for (const auto &range : ranges) {
-				partition_mask[range.first] = true;
+			MaterializeOverCollectionForWindow(over_expr, big_data, window_results, over_collection);
+			if (over_expr->partitions.size() > 0) {
+				HashCollectionForWindow(over_expr, over_collection, hash_collection, counts);
 			}
 		}
-		for (idx_t c = 0; c < over_expr->partitions.size(); ++c) {
-			MaskColumn(partition_mask, over_collection, c);
-		}
 
-		//	Set bits for the start of each peer group.
-		//	Partitions also break peer groups, so start with the partition bits.
-		BitArray<uint64_t> order_mask(partition_mask);
-		for (idx_t c = over_expr->partitions.size(); c < sort_col_count; ++c) {
-			MaskColumn(order_mask, over_collection, c);
-		}
-
-		//	Go through the counts and convert them to non-empty partition ranges.
-		const auto ranges = SlicesFromCounts(counts);
-
-		//	Compute the functions with matching sorts in parallel
-		TaskCounter tasks(scheduler);
-		for (const auto &expr_idx : matching) {
-			D_ASSERT(select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
-			auto wexpr = reinterpret_cast<BoundWindowExpression *>(select_list[expr_idx].get());
-			// reuse partition and order clause in window def
-			for (const auto &range : ranges) {
-				auto task = make_unique<ComputeWindowExpressionTask>(tasks, wexpr, big_data, window_results,
-				                                                     partition_mask, order_mask, expr_idx, range);
-				tasks.AddTask(move(task));
+		if (!counts.empty()) {
+			WindowGlobalState pstate(*this, context);
+			WindowPartitionTaskManager task_manager(scheduler, pstate);
+			const auto hash_mask = hash_t(counts.size() - 1);
+			for (hash_t hash_key = 0; hash_key < counts.size(); ++hash_key) {
+				if (counts[hash_key] > 0) {
+					auto task =
+					    make_unique<WindowPartitionTask>(task_manager, window_exprs, matching, big_data, window_results,
+					                                     over_collection, hash_collection, hash_key, hash_mask);
+					task_manager.AddTask(move(task));
+					// task->Execute();
+				}
 			}
+			task_manager.Finish();
+		} else {
+			WindowPartitionTask::ComputeExpressions(window_exprs, matching, big_data, window_results, over_collection);
 		}
-		tasks.Finish();
 	}
 }
 
