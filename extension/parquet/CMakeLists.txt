@@ -44,3 +44,8 @@ if(NOT CLANG_TIDY)
 endif()
 
 add_library(parquet_extension STATIC ${PARQUET_EXTENSION_FILES})
+
+
+add_executable(parquetcli parquetcli.cpp)
+target_link_libraries(parquetcli parquet_extension)
+target_link_libraries(parquetcli duckdb_static)
