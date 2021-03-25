@@ -23,6 +23,12 @@ NumericSegment::NumericSegment(DatabaseInstance &db, PhysicalType type, idx_t ro
 	this->type_size = GetTypeIdSize(type);
 	this->vector_size = type_size * STANDARD_VECTOR_SIZE;
 	this->max_vector_count = Storage::BLOCK_SIZE / vector_size;
+	// FIXME: this is a fix for test/sql/storage/checkpointed_self_append_tinyint.test
+	// it is only required because of ToTemporary()
+	// this should be removed when ToTemporary() is removed
+	if (max_vector_count > 80) {
+		max_vector_count = 80;
+	}
 
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	if (block_id == INVALID_BLOCK) {
