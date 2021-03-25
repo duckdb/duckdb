@@ -567,12 +567,12 @@ static idx_t MergeLoop(row_t a[], sel_t b[], idx_t acount, idx_t bcount, idx_t a
 		auto a_id = a[a_index] - aoffset;
 		auto b_id = b[bidx];
 		if (a_id == b_id) {
-			merge(a_id, aidx, bidx, count);
+			merge(a_id, a_index, bidx, count);
 			aidx++;
 			bidx++;
 			count++;
 		} else if (a_id < b_id) {
-			pick_a(a_id, aidx, count);
+			pick_a(a_id, a_index, count);
 			aidx++;
 			count++;
 		} else {
@@ -614,7 +614,9 @@ static void MergeUpdateLoopInternal(SegmentStatistics &stats, UpdateInfo *base_i
 #ifdef DEBUG
 	// all of these should be sorted, otherwise the below algorithm does not work
 	for (idx_t i = 1; i < count; i++) {
-		D_ASSERT(ids[i] > ids[i - 1] && ids[i] >= row_t(base_id) && ids[i] < row_t(base_id + STANDARD_VECTOR_SIZE));
+		auto prev_idx = sel.get_index(i - 1);
+		auto idx = sel.get_index(i);
+		D_ASSERT(ids[idx] > ids[prev_idx] && ids[idx] >= row_t(base_id) && ids[idx] < row_t(base_id + STANDARD_VECTOR_SIZE));
 	}
 #endif
 
@@ -639,8 +641,9 @@ static void MergeUpdateLoopInternal(SegmentStatistics &stats, UpdateInfo *base_i
 	idx_t update_info_offset = 0;
 	idx_t result_offset = 0;
 	for (idx_t i = 0; i < count; i++) {
+		auto idx = sel.get_index(i);
 		// we have to merge the info for "ids[i]"
-		auto update_id = ids[i] - base_id;
+		auto update_id = ids[idx] - base_id;
 
 		while (update_info_offset < update_info->N && update_info->tuples[update_info_offset] < update_id) {
 			// old id comes before the current id: write it
