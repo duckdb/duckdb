@@ -2,7 +2,8 @@
 
 namespace duckdb {
 
-CallStatement::CallStatement() : SQLStatement(StatementType::CALL_STATEMENT) {};
+CallStatement::CallStatement() : SQLStatement(StatementType::CALL_STATEMENT) {
+}
 
 unique_ptr<SQLStatement> CallStatement::Copy() const {
 	auto result = make_unique<CallStatement>();

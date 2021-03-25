@@ -111,6 +111,9 @@ enum class ExpressionType : uint8_t {
 	CASE_EXPR = 150,
 	OPERATOR_NULLIF = 151,
 	OPERATOR_COALESCE = 152,
+	ARRAY_EXTRACT = 153,
+	ARRAY_SLICE = 154,
+	STRUCT_EXTRACT = 155,
 
 	// -----------------------------
 	// Subquery IN/EXISTS

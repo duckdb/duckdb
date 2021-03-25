@@ -63,7 +63,7 @@ void DataChunk::Reference(DataChunk &chunk) {
 	}
 }
 
-void DataChunk::Copy(DataChunk &other, idx_t offset) {
+void DataChunk::Copy(DataChunk &other, idx_t offset) const {
 	D_ASSERT(ColumnCount() == other.ColumnCount());
 	D_ASSERT(other.size() == 0);
 
@@ -74,7 +74,7 @@ void DataChunk::Copy(DataChunk &other, idx_t offset) {
 	other.SetCardinality(size() - offset);
 }
 
-void DataChunk::Append(DataChunk &other) {
+void DataChunk::Append(const DataChunk &other) {
 	if (other.size() == 0) {
 		return;
 	}

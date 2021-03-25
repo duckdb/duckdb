@@ -12,3 +12,7 @@ SELECT COUNT(*) FROM voters;
 ----
 5300
 
+query I
+SELECT COUNT(*) FROM "test/sql/copy/csv/data/real/voter.tsv";
+----
+5300

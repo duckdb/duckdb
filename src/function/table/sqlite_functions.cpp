@@ -16,6 +16,8 @@ void BuiltinFunctions::RegisterSQLiteFunctions() {
 	SQLiteMaster::RegisterFunction(*this);
 	PragmaDatabaseSize::RegisterFunction(*this);
 	PragmaDatabaseList::RegisterFunction(*this);
+	PragmaLastProfilingOutput::RegisterFunction(*this);
+	PragmaDetailedProfilingOutput::RegisterFunction(*this);
 
 	// CreateViewInfo info;
 	// info.schema = DEFAULT_SCHEMA;

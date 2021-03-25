@@ -94,6 +94,36 @@ static idx_t TemplatedSelectOperation(Vector &left, Vector &right, const Selecti
 	}
 }
 
+idx_t VectorOperations::Equals(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+                               SelectionVector *true_sel, SelectionVector *false_sel) {
+	return TemplatedSelectOperation<duckdb::Equals>(left, right, sel, count, true_sel, false_sel);
+}
+
+idx_t VectorOperations::NotEquals(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+                                  SelectionVector *true_sel, SelectionVector *false_sel) {
+	return TemplatedSelectOperation<duckdb::NotEquals>(left, right, sel, count, true_sel, false_sel);
+}
+
+idx_t VectorOperations::GreaterThan(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+                                    SelectionVector *true_sel, SelectionVector *false_sel) {
+	return TemplatedSelectOperation<duckdb::LessThan>(left, right, sel, count, true_sel, false_sel);
+}
+
+idx_t VectorOperations::GreaterThanEquals(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+                                          SelectionVector *true_sel, SelectionVector *false_sel) {
+	return TemplatedSelectOperation<duckdb::GreaterThan>(left, right, sel, count, true_sel, false_sel);
+}
+
+idx_t VectorOperations::LessThan(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+                                 SelectionVector *true_sel, SelectionVector *false_sel) {
+	return TemplatedSelectOperation<duckdb::LessThanEquals>(left, right, sel, count, true_sel, false_sel);
+}
+
+idx_t VectorOperations::LessThanEquals(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+                                       SelectionVector *true_sel, SelectionVector *false_sel) {
+	return TemplatedSelectOperation<duckdb::GreaterThanEquals>(left, right, sel, count, true_sel, false_sel);
+}
+
 idx_t ExpressionExecutor::Select(BoundComparisonExpression &expr, ExpressionState *state, const SelectionVector *sel,
                                  idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
 	// resolve the children
@@ -106,17 +136,17 @@ idx_t ExpressionExecutor::Select(BoundComparisonExpression &expr, ExpressionStat
 
 	switch (expr.type) {
 	case ExpressionType::COMPARE_EQUAL:
-		return TemplatedSelectOperation<duckdb::Equals>(left, right, sel, count, true_sel, false_sel);
+		return VectorOperations::Equals(left, right, sel, count, true_sel, false_sel);
 	case ExpressionType::COMPARE_NOTEQUAL:
-		return TemplatedSelectOperation<duckdb::NotEquals>(left, right, sel, count, true_sel, false_sel);
+		return VectorOperations::NotEquals(left, right, sel, count, true_sel, false_sel);
 	case ExpressionType::COMPARE_LESSTHAN:
-		return TemplatedSelectOperation<duckdb::LessThan>(left, right, sel, count, true_sel, false_sel);
+		return VectorOperations::GreaterThan(left, right, sel, count, true_sel, false_sel);
 	case ExpressionType::COMPARE_GREATERTHAN:
-		return TemplatedSelectOperation<duckdb::GreaterThan>(left, right, sel, count, true_sel, false_sel);
+		return VectorOperations::GreaterThanEquals(left, right, sel, count, true_sel, false_sel);
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		return TemplatedSelectOperation<duckdb::LessThanEquals>(left, right, sel, count, true_sel, false_sel);
+		return VectorOperations::LessThan(left, right, sel, count, true_sel, false_sel);
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		return TemplatedSelectOperation<duckdb::GreaterThanEquals>(left, right, sel, count, true_sel, false_sel);
+		return VectorOperations::LessThanEquals(left, right, sel, count, true_sel, false_sel);
 	case ExpressionType::COMPARE_DISTINCT_FROM:
 		return VectorOperations::SelectDistinctFrom(left, right, sel, count, true_sel, false_sel);
 	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:

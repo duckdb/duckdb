@@ -13,7 +13,7 @@
 namespace duckdb {
 
 template <class T>
-static void TemplatedCopy(Vector &source, const SelectionVector &sel, Vector &target, idx_t source_offset,
+static void TemplatedCopy(const Vector &source, const SelectionVector &sel, Vector &target, idx_t source_offset,
                           idx_t target_offset, idx_t copy_count) {
 	auto ldata = FlatVector::GetData<T>(source);
 	auto tdata = FlatVector::GetData<T>(target);
@@ -23,7 +23,7 @@ static void TemplatedCopy(Vector &source, const SelectionVector &sel, Vector &ta
 	}
 }
 
-void VectorOperations::Copy(Vector &source, Vector &target, const SelectionVector &sel, idx_t source_count,
+void VectorOperations::Copy(const Vector &source, Vector &target, const SelectionVector &sel, idx_t source_count,
                             idx_t source_offset, idx_t target_offset) {
 	D_ASSERT(source_offset <= source_count);
 	D_ASSERT(target.GetVectorType() == VectorType::FLAT_VECTOR);
@@ -123,7 +123,6 @@ void VectorOperations::Copy(Vector &source, Vector &target, const SelectionVecto
 	case PhysicalType::VARCHAR: {
 		auto ldata = FlatVector::GetData<string_t>(source);
 		auto tdata = FlatVector::GetData<string_t>(target);
-		auto &tmask = FlatVector::Validity(target);
 		for (idx_t i = 0; i < copy_count; i++) {
 			auto source_idx = sel.get_index(source_offset + i);
 			auto target_idx = target_offset + i;
@@ -193,7 +192,7 @@ void VectorOperations::Copy(Vector &source, Vector &target, const SelectionVecto
 	}
 }
 
-void VectorOperations::Copy(Vector &source, Vector &target, idx_t source_count, idx_t source_offset,
+void VectorOperations::Copy(const Vector &source, Vector &target, idx_t source_count, idx_t source_offset,
                             idx_t target_offset) {
 	switch (source.GetVectorType()) {
 	case VectorType::DICTIONARY_VECTOR: {
@@ -207,8 +206,7 @@ void VectorOperations::Copy(Vector &source, Vector &target, idx_t source_count, 
 		VectorOperations::Copy(source, target, ConstantVector::ZERO_SELECTION_VECTOR, source_count, source_offset,
 		                       target_offset);
 		break;
-	default:
-		source.Normalify(source_count);
+	case VectorType::FLAT_VECTOR:
 		if (target_offset + source_count - source_offset > STANDARD_VECTOR_SIZE) {
 			idx_t sel_vec_size = target_offset + source_count - source_offset;
 			SelectionVector selection_vector(sel_vec_size);
@@ -221,6 +219,18 @@ void VectorOperations::Copy(Vector &source, Vector &target, idx_t source_count, 
 			                       source_offset, target_offset);
 		}
 		break;
+	case VectorType::SEQUENCE_VECTOR: {
+		int64_t start, increment;
+		SequenceVector::GetSequence(source, start, increment);
+		Vector flattened(source.GetType());
+		VectorOperations::GenerateSequence(flattened, source_count, start, increment);
+
+		VectorOperations::Copy(flattened, target, FlatVector::INCREMENTAL_SELECTION_VECTOR, source_count, source_offset,
+		                       target_offset);
+		break;
+	}
+	default:
+		throw NotImplementedException("FIXME: unimplemented vector type for VectorOperations::Copy");
 	}
 }
 

@@ -70,6 +70,21 @@ struct VectorOperations {
 	// result = A == B with nulls being equal
 	static void NotDistinctFrom(Vector &left, Vector &right, Vector &result, idx_t count);
 
+	//===--------------------------------------------------------------------===//
+	// Select Comparisons
+	//===--------------------------------------------------------------------===//
+	static idx_t Equals(Vector &left, Vector &right, const SelectionVector *sel, idx_t count, SelectionVector *true_sel,
+	                    SelectionVector *false_sel);
+	static idx_t NotEquals(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+	                       SelectionVector *true_sel, SelectionVector *false_sel);
+	static idx_t GreaterThan(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+	                         SelectionVector *true_sel, SelectionVector *false_sel);
+	static idx_t GreaterThanEquals(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+	                               SelectionVector *true_sel, SelectionVector *false_sel);
+	static idx_t LessThan(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+	                      SelectionVector *true_sel, SelectionVector *false_sel);
+	static idx_t LessThanEquals(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+	                            SelectionVector *true_sel, SelectionVector *false_sel);
 	// result = A != B with nulls being equal
 	static idx_t SelectDistinctFrom(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
 	                                SelectionVector *true_sel, SelectionVector *false_sel);
@@ -110,8 +125,9 @@ struct VectorOperations {
 	static void Cast(Vector &source, Vector &result, idx_t count, bool strict = false);
 
 	// Copy the data of <source> to the target vector
-	static void Copy(Vector &source, Vector &target, idx_t source_count, idx_t source_offset, idx_t target_offset);
-	static void Copy(Vector &source, Vector &target, const SelectionVector &sel, idx_t source_count,
+	static void Copy(const Vector &source, Vector &target, idx_t source_count, idx_t source_offset,
+	                 idx_t target_offset);
+	static void Copy(const Vector &source, Vector &target, const SelectionVector &sel, idx_t source_count,
 	                 idx_t source_offset, idx_t target_offset);
 
 	// Copy the data of <source> to the target location, setting null values to

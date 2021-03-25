@@ -28,6 +28,7 @@ public:
 	static int CodepointLength(int cp);
 	//! Transform a UTF8 string to a codepoint; returns the codepoint and writes the length of the codepoint (in UTF8) to sz
 	static int32_t UTF8ToCodepoint(const char *c, int &sz);
+    static size_t RenderWidth(const char *s, size_t len, size_t pos);
 
 };
 

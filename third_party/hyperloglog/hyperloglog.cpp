@@ -39,6 +39,10 @@
 #include <string.h>
 #include <stdlib.h>
 
+
+
+namespace duckdb_hll {
+
 #define HLL_SPARSE_MAX_BYTES 3000
 
 /* The Redis HyperLogLog implementation is based on the following ideas:
@@ -191,7 +195,7 @@ struct hllhdr {
     uint8_t encoding;   /* HLL_DENSE or HLL_SPARSE. */
     uint8_t notused[3]; /* Reserved for future use, must be zero. */
     uint8_t card[8];    /* Cached cardinality, little endian. */
-    uint8_t registers[]; /* Data bytes. */
+    uint8_t registers[1]; /* Data bytes. */
 };
 
 /* The cached cardinality MSB is used to signal validity of the cached value. */
@@ -594,7 +598,7 @@ int hllSparseToDense(robj *o) {
 
     /* If the representation is already the right one return ASAP. */
     hdr = (struct hllhdr*) sparse;
-    if (hdr->encoding == HLL_DENSE) return C_OK;
+    if (hdr->encoding == HLL_DENSE) return HLL_C_OK;
 
     /* Create a string of the right size filled with zero bytes.
      * Note that the cached cardinality is set to 0 as a side effect
@@ -620,7 +624,7 @@ int hllSparseToDense(robj *o) {
             runlen = HLL_SPARSE_VAL_LEN(p);
             regval = HLL_SPARSE_VAL_VALUE(p);
             while(runlen--) {
-                HLL_DENSE_SET_REGISTER(hdr->registers,idx,regval);
+                HLL_DENSE_SET_REGISTER(hdr->registers + 1,idx,regval);
                 idx++;
             }
             p++;
@@ -631,13 +635,13 @@ int hllSparseToDense(robj *o) {
      * set to HLL_REGISTERS. */
     if (idx != HLL_REGISTERS) {
         sdsfree(dense);
-        return C_ERR;
+        return HLL_C_ERR;
     }
 
     /* Free the old representation and set the new one. */
     sdsfree((sds) o->ptr);
     o->ptr = dense;
-    return C_OK;
+    return HLL_C_OK;
 }
 
 /* Low level function to set the sparse HLL register at 'index' to the
@@ -888,7 +892,7 @@ updated: {
     return 1;
 }
 promote: /* Promote to dense representation. */
-    if (hllSparseToDense(o) == C_ERR) return -1; /* Corrupted HLL. */
+    if (hllSparseToDense(o) == HLL_C_ERR) return -1; /* Corrupted HLL. */
     hdr = (struct hllhdr *) o->ptr;
 
     /* We need to call hllDenseAdd() to perform the operation after the
@@ -898,7 +902,7 @@ promote: /* Promote to dense representation. */
      * Note that this in turn means that PFADD will make sure the command
      * is propagated to slaves / AOF, so if there is a sparse -> dense
      * conversion, it will be performed in all the slaves as well. */
-    int dense_retval = hllDenseSet(hdr->registers,index,count);
+    int dense_retval = hllDenseSet(hdr->registers + 1,index,count);
     assert(dense_retval == 1);
     return dense_retval;
 }
@@ -1034,12 +1038,12 @@ uint64_t hllCount(struct hllhdr *hdr, int *invalid) {
 
     /* Compute register histogram */
     if (hdr->encoding == HLL_DENSE) {
-        hllDenseRegHisto(hdr->registers,reghisto);
+        hllDenseRegHisto(hdr->registers + 1,reghisto);
     } else if (hdr->encoding == HLL_SPARSE) {
-        hllSparseRegHisto(hdr->registers,
+        hllSparseRegHisto(hdr->registers + 1,
                          sdslen((sds)hdr)-HLL_HDR_SIZE,invalid,reghisto);
     } else if (hdr->encoding == HLL_RAW) {
-        hllRawRegHisto(hdr->registers,reghisto);
+        hllRawRegHisto(hdr->registers + 1,reghisto);
     } else {
 		*invalid = 1;
 		return 0;
@@ -1064,7 +1068,7 @@ uint64_t hllCount(struct hllhdr *hdr, int *invalid) {
 int hll_add(robj *o, unsigned char *ele, size_t elesize) {
     struct hllhdr *hdr = (struct hllhdr *) o->ptr;
     switch(hdr->encoding) {
-    case HLL_DENSE: return hllDenseAdd(hdr->registers,ele,elesize);
+    case HLL_DENSE: return hllDenseAdd(hdr->registers + 1,ele,elesize);
     case HLL_SPARSE: return hllSparseAdd(o,ele,elesize);
     default: return -1; /* Invalid representation. */
     }
@@ -1086,7 +1090,7 @@ int hllMerge(uint8_t *max, robj *hll) {
         uint8_t val;
 
         for (i = 0; i < HLL_REGISTERS; i++) {
-            HLL_DENSE_GET_REGISTER(val,hdr->registers,i);
+            HLL_DENSE_GET_REGISTER(val,hdr->registers + 1,i);
             if (val > max[i]) max[i] = val;
         }
     } else {
@@ -1114,9 +1118,9 @@ int hllMerge(uint8_t *max, robj *hll) {
                 p++;
             }
         }
-        if (i != HLL_REGISTERS) return C_ERR;
+        if (i != HLL_REGISTERS) return HLL_C_ERR;
     }
-    return C_OK;
+    return HLL_C_OK;
 }
 
 /* ========================== robj creation ========================== */
@@ -1179,7 +1183,7 @@ void hll_destroy(robj *obj) {
 int hll_count(robj *o, size_t *result) {
 	int invalid = 0;
 	*result = hllCount((struct hllhdr*) o->ptr, &invalid);
-	return invalid == 0 ? C_OK : C_ERR;
+	return invalid == 0 ? HLL_C_OK : HLL_C_ERR;
 }
 
 robj *hll_merge(robj **hlls, size_t hll_count) {
@@ -1205,7 +1209,7 @@ robj *hll_merge(robj **hlls, size_t hll_count) {
 
         /* Merge with this HLL with our 'max' HHL by setting max[i]
          * to MAX(max[i],hll[i]). */
-        if (hllMerge(max, o) == C_ERR) {
+        if (hllMerge(max, o) == HLL_C_ERR) {
             return NULL;
         }
     }
@@ -1218,7 +1222,7 @@ robj *hll_merge(robj **hlls, size_t hll_count) {
 
     /* Convert the destination object to dense representation if at least
      * one of the inputs was dense. */
-    if (use_dense && hllSparseToDense(result) == C_ERR) {
+    if (use_dense && hllSparseToDense(result) == HLL_C_ERR) {
 		hll_destroy(result);
         return NULL;
     }
@@ -1229,9 +1233,10 @@ robj *hll_merge(robj **hlls, size_t hll_count) {
         if (max[j] == 0) continue;
         hdr = (struct hllhdr *) result->ptr;
         switch(hdr->encoding) {
-        case HLL_DENSE: hllDenseSet(hdr->registers,j,max[j]); break;
+        case HLL_DENSE: hllDenseSet(hdr->registers + 1,j,max[j]); break;
         case HLL_SPARSE: hllSparseSet(result,j,max[j]); break;
         }
     }
 	return result;
+}
 }

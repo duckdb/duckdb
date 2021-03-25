@@ -182,10 +182,19 @@ public:
 };
 
 struct ConstantVector {
+	static inline const_data_ptr_t GetData(const Vector &vector) {
+		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR ||
+		         vector.GetVectorType() == VectorType::FLAT_VECTOR);
+		return vector.data;
+	}
 	static inline data_ptr_t GetData(Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR ||
 		         vector.GetVectorType() == VectorType::FLAT_VECTOR);
 		return vector.data;
+	}
+	template <class T>
+	static inline const T *GetData(const Vector &vector) {
+		return (const T *)ConstantVector::GetData(vector);
 	}
 	template <class T>
 	static inline T *GetData(Vector &vector) {
@@ -224,6 +233,10 @@ struct FlatVector {
 		return ConstantVector::GetData(vector);
 	}
 	template <class T>
+	static inline const T *GetData(const Vector &vector) {
+		return ConstantVector::GetData<T>(vector);
+	}
+	template <class T>
 	static inline T *GetData(Vector &vector) {
 		return ConstantVector::GetData<T>(vector);
 	}
@@ -235,6 +248,10 @@ struct FlatVector {
 	static inline T GetValue(Vector &vector, idx_t idx) {
 		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
 		return FlatVector::GetData<T>(vector)[idx];
+	}
+	static inline const ValidityMask &Validity(const Vector &vector) {
+		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
+		return vector.validity;
 	}
 	static inline ValidityMask &Validity(Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);

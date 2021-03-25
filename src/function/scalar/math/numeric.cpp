@@ -340,14 +340,14 @@ struct RoundOperatorPrecision {
 	static inline TR Operation(TA input, TB precision) {
 		double rounded_value;
 		if (precision < 0) {
-			double modifier = pow(10, -precision);
-			rounded_value = (round(input / modifier)) * modifier;
+			double modifier = std::pow(10, -precision);
+			rounded_value = (std::round(input / modifier)) * modifier;
 			if (std::isinf(rounded_value) || std::isnan(rounded_value)) {
 				return 0;
 			}
 		} else {
-			double modifier = pow(10, precision);
-			rounded_value = (round(input * modifier)) / modifier;
+			double modifier = std::pow(10, precision);
+			rounded_value = (std::round(input * modifier)) / modifier;
 			if (std::isinf(rounded_value) || std::isnan(rounded_value)) {
 				return input;
 			}

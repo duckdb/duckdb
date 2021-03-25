@@ -43,7 +43,7 @@ bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const
 }
 
 string BoundCastExpression::ToString() const {
-	return "CAST[" + return_type.ToString() + "](" + child->GetName() + ")";
+	return "CAST(" + child->GetName() + " AS " + return_type.ToString() + ")";
 }
 
 bool BoundCastExpression::Equals(const BaseExpression *other_p) const {

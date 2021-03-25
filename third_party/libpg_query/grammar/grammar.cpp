@@ -89,11 +89,12 @@ makeColumnRef(char *colname, PGList *indirection,
 }
 
 static PGNode *
-makeTypeCast(PGNode *arg, PGTypeName *tpname, int location)
+makeTypeCast(PGNode *arg, PGTypeName *tpname, int trycast, int location)
 {
 	PGTypeCast *n = makeNode(PGTypeCast);
 	n->arg = arg;
 	n->typeName = tpname;
+	n->tryCast = trycast;
 	n->location = location;
 	return (PGNode *) n;
 }
@@ -115,7 +116,7 @@ makeStringConstCast(char *str, int location, PGTypeName *tpname)
 {
 	PGNode *s = makeStringConst(str, location);
 
-	return makeTypeCast(s, tpname, -1);
+	return makeTypeCast(s, tpname, 0, -1);
 }
 
 static PGNode *
@@ -260,7 +261,7 @@ makeBoolAConst(bool state, int location)
 	n->val.val.str = (state ? (char*) "t" : (char*) "f");
 	n->location = location;
 
-	return makeTypeCast((PGNode *)n, SystemTypeName("bool"), -1);
+	return makeTypeCast((PGNode *)n, SystemTypeName("bool"), 0, -1);
 }
 
 /* check_qualified_name --- check the result of qualified_name production
@@ -334,7 +335,7 @@ static PGNode *
 makeParamRefCast(int number, int location, PGTypeName *tpname)
 {
 	PGNode *p = makeParamRef(number, location);
-	return makeTypeCast(p, tpname, -1);
+	return makeTypeCast(p, tpname, 0, -1);
 }
 
 /* insertSelectOptions()
