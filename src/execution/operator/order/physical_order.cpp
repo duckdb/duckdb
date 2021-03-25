@@ -153,8 +153,9 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 			state->var_sorting_sizes.push_back(nullptr);
 		} else {
 			// besides the prefix, variable size sorting columns are also fully serialized, along with offsets
-			state->var_sorting_blocks.push_back(
-			    make_unique<RowChunk>(buffer_manager, Storage::BLOCK_ALLOC_SIZE / 8, 8));
+			// we have to assume a large variable size, otherwise a single large variable entry may not fit in a block
+			// 1 << 23 = 8MB
+			state->var_sorting_blocks.push_back(make_unique<RowChunk>(buffer_manager, (1 << 23) / 8, 8));
 			state->var_sorting_sizes.push_back(make_unique<RowChunk>(
 			    buffer_manager, (idx_t)Storage::BLOCK_ALLOC_SIZE / sizeof(idx_t) + 1, sizeof(idx_t)));
 		}
@@ -173,24 +174,30 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 	idx_t validitymask_size = (children[0]->types.size() + 7) / 8;
 	entry_size += validitymask_size;
 	bool variable_payload_size = false;
+	idx_t var_columns = 0;
 	for (auto &type : children[0]->types) {
 		auto physical_type = type.InternalType();
 		if (TypeIsConstantSize(physical_type)) {
 			entry_size += GetTypeIdSize(physical_type);
 		} else {
 			variable_payload_size = true;
+			var_columns++;
 		}
 	}
 	state->payload_state =
 	    unique_ptr<PayloadState>(new PayloadState {variable_payload_size, validitymask_size, entry_size});
 	entry_size = entry_size == 0 ? 32 : entry_size; // avoid divide by 0 in case no nulls and all variable columns
-	vectors_per_block = (Storage::BLOCK_ALLOC_SIZE / entry_size + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE;
-	state->payload_block = make_unique<RowChunk>(buffer_manager, vectors_per_block * STANDARD_VECTOR_SIZE, entry_size);
 
 	if (variable_payload_size) {
 		// if payload entry size is not constant, we keep track of entry sizes
 		state->sizes_block =
 		    make_unique<RowChunk>(buffer_manager, (idx_t)Storage::BLOCK_ALLOC_SIZE / sizeof(idx_t) + 1, sizeof(idx_t));
+		// again, we have to assume a large variable size
+		state->payload_block = make_unique<RowChunk>(buffer_manager, (entry_size + var_columns * (1 << 23)) / 32, 32);
+	} else {
+		vectors_per_block = (Storage::BLOCK_ALLOC_SIZE / entry_size + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE;
+		state->payload_block =
+		    make_unique<RowChunk>(buffer_manager, vectors_per_block * STANDARD_VECTOR_SIZE, entry_size);
 	}
 
 	return move(state);
