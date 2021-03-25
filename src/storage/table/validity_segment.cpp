@@ -81,19 +81,18 @@ void ValiditySegment::RevertAppend(idx_t start_row) {
 	if (start_bit % 8 != 0) {
 		// handle sub-bit stuff (yay)
 		idx_t byte_pos = start_bit / 8;
-		idx_t byte_start = byte_pos * 8;
-		idx_t byte_end = (byte_pos + 1) * 8;
+		idx_t bit_start = byte_pos * 8;
+		idx_t bit_end = (byte_pos + 1) * 8;
 		ValidityMask mask(handle->node->buffer + byte_pos);
-		for(idx_t i = start_bit; i < byte_end; i++) {
-			mask.SetValid(i - byte_start);
+		for(idx_t i = start_bit; i < bit_end; i++) {
+			mask.SetValid(i - bit_start);
 		}
-		revert_start = byte_end;
+		revert_start = bit_end / 8;
 	} else {
 		revert_start = start_bit / 8;
 	}
 	// for the rest, we just memset
 	memset(handle->node->buffer + revert_start, 0xFF, Storage::BLOCK_SIZE - revert_start);
-
 }
 
 
