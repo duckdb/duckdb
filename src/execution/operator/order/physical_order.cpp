@@ -387,12 +387,10 @@ static void SubSortTiedTuples(BufferManager &buffer_manager, const data_ptr_t da
 	}
 }
 
-static void ComputeTies(data_ptr_t dataptr, const idx_t &count, const idx_t &tie_col, bool ties[],
-                        const SortingState &sorting_state) {
-	idx_t tie_size = 0;
-	for (idx_t col_idx = 0; col_idx <= tie_col; col_idx++) {
-		tie_size += sorting_state.COL_SIZE[col_idx];
-	}
+static void ComputeTies(data_ptr_t dataptr, const idx_t &count, const idx_t &col_offset, const idx_t &tie_size,
+                        bool ties[], const SortingState &sorting_state) {
+	// align dataptr
+	dataptr += col_offset;
 	for (idx_t i = 0; i < count - 1; i++) {
 		if (ties[i]) {
 			ties[i] = memcmp(dataptr, dataptr + sorting_state.ENTRY_SIZE, tie_size) == 0;
@@ -474,27 +472,33 @@ static void BreakStringTies(BufferManager &buffer_manager, const data_ptr_t data
 	memcpy(dataptr + start * sorting_state.ENTRY_SIZE, temp_block->node->buffer,
 	       (end - start) * sorting_state.ENTRY_SIZE);
 
-	// determine if there are still ties (if needed)
+	// determine if there are still ties (if this is not the last column)
 	if (tie_col < sorting_state.ORDER_TYPES.size() - 1) {
-		idx_t current_idx = Load<idx_t>(entry_ptrs[0] + sorting_size);
+		data_ptr_t idx_ptr = dataptr + start * sorting_state.ENTRY_SIZE + sorting_size;
+
+		idx_t current_idx = Load<idx_t>(idx_ptr);
 		data_ptr_t current_ptr = var_dataptr + sizes[current_idx];
 		uint32_t current_size = Load<uint32_t>(current_ptr);
 		current_ptr += string_t::PREFIX_LENGTH;
 		string_t current_val((const char *)current_ptr, current_size);
 		for (idx_t i = 0; i < end - start - 1; i++) {
+			idx_ptr += sorting_state.ENTRY_SIZE;
+
 			// load next entry
-			idx_t next_idx = Load<idx_t>(entry_ptrs[i + 1] + sorting_size);
+			idx_t next_idx = Load<idx_t>(idx_ptr);
 			data_ptr_t next_ptr = var_dataptr + sizes[next_idx];
 			uint32_t next_size = Load<uint32_t>(next_ptr);
 			next_ptr += string_t::PREFIX_LENGTH;
 			string_t next_val((const char *)next_ptr, next_size);
 
-			// compare
-			ties[start + i] = Equals::Operation<string_t>(current_val, next_val);
+			if (current_size != next_size) {
+				// quick comparison: different length
+				ties[start + i] = false;
+			} else {
+				// equal length: full comparison
+				ties[start + i] = Equals::Operation<string_t>(current_val, next_val);
+			}
 
-			// set for next iteration
-			current_idx = next_idx;
-			current_ptr = next_ptr;
 			current_size = next_size;
 			current_val = next_val;
 		}
@@ -569,9 +573,9 @@ static void SortInMemory(Pipeline &pipeline, ClientContext &context, OrderGlobal
 	bool *ties = nullptr;
 	const idx_t num_cols = sorting_state.CONSTANT_SIZE.size();
 	for (idx_t i = 0; i < num_cols; i++) {
-		// add columns to the sort until we reach a variable size column
 		sorting_size += sorting_state.COL_SIZE[i];
 		if (sorting_state.CONSTANT_SIZE[i] && i < num_cols - 1) {
+			// add columns to the sort until we reach a variable size column, or the last column
 			continue;
 		}
 
@@ -591,13 +595,12 @@ static void SortInMemory(Pipeline &pipeline, ClientContext &context, OrderGlobal
 			break;
 		}
 
-		ComputeTies(dataptr, block.count, i, ties, sorting_state);
+		ComputeTies(dataptr, block.count, col_offset, sorting_size, ties, sorting_state);
 		if (!AnyTies(ties, block.count)) {
-			// no ties, or this is the last column, so we stop sorting
+			// no ties, so we stop sorting
 			break;
 		}
 
-		// break the ties
 		BreakTies(buffer_manager, state, ties, dataptr, block.count, i, sorting_state);
 		if (!AnyTies(ties, block.count)) {
 			// no more ties after tie-breaking

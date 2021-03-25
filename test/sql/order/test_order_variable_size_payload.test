@@ -180,3 +180,166 @@ NULL	<i: NULL, s: [[a, , a, ]]>
 1	<i: 1, s: [[, a, a, ]]>
 2	<i: 2, s: [NULL]>
 3	<i: 3, s: [[a, a, a]]>
+
+# sorting by a mix of variable size and constant size columns
+statement ok
+CREATE TABLE test6 (i1 INT, s1 VARCHAR, i2 int, s2 VARCHAR)
+
+statement ok
+INSERT INTO test6 VALUES
+(6, '0reallylongstring1', 3, '1reallylongstring8'),
+(6, '0reallylongstring1', 3, '1reallylongstring7'),
+(6, '0reallylongstring1', 4, '1reallylongstring8'),
+(6, '0reallylongstring1', 4, '1reallylongstring7'),
+(6, '0reallylongstring2', 3, '1reallylongstring8'),
+(6, '0reallylongstring2', 3, '1reallylongstring7'),
+(6, '0reallylongstring2', 4, '1reallylongstring8'),
+(6, '0reallylongstring2', 4, '1reallylongstring7'),
+(5, '0reallylongstring1', 3, '1reallylongstring8'),
+(5, '0reallylongstring1', 3, '1reallylongstring7'),
+(5, '0reallylongstring1', 4, '1reallylongstring8'),
+(5, '0reallylongstring1', 4, '1reallylongstring7'),
+(5, '0reallylongstring2', 3, '1reallylongstring8'),
+(5, '0reallylongstring2', 3, '1reallylongstring7'),
+(5, '0reallylongstring2', 4, '1reallylongstring8'),
+(5, '0reallylongstring2', 4, '1reallylongstring7')
+
+query IIII
+SELECT i1, s1, i2, s2 FROM test6 ORDER BY i1, s1, i2, s2
+----
+5	0reallylongstring1	3	1reallylongstring7
+5	0reallylongstring1	3	1reallylongstring8
+5	0reallylongstring1	4	1reallylongstring7
+5	0reallylongstring1	4	1reallylongstring8
+5	0reallylongstring2	3	1reallylongstring7
+5	0reallylongstring2	3	1reallylongstring8
+5	0reallylongstring2	4	1reallylongstring7
+5	0reallylongstring2	4	1reallylongstring8
+6	0reallylongstring1	3	1reallylongstring7
+6	0reallylongstring1	3	1reallylongstring8
+6	0reallylongstring1	4	1reallylongstring7
+6	0reallylongstring1	4	1reallylongstring8
+6	0reallylongstring2	3	1reallylongstring7
+6	0reallylongstring2	3	1reallylongstring8
+6	0reallylongstring2	4	1reallylongstring7
+6	0reallylongstring2	4	1reallylongstring8
+
+query IIII
+SELECT s1, i1, i2, s2 FROM test6 ORDER BY s1, i1, i2, s2
+----
+0reallylongstring1	5	3	1reallylongstring7
+0reallylongstring1	5	3	1reallylongstring8
+0reallylongstring1	5	4	1reallylongstring7
+0reallylongstring1	5	4	1reallylongstring8
+0reallylongstring1	6	3	1reallylongstring7
+0reallylongstring1	6	3	1reallylongstring8
+0reallylongstring1	6	4	1reallylongstring7
+0reallylongstring1	6	4	1reallylongstring8
+0reallylongstring2	5	3	1reallylongstring7
+0reallylongstring2	5	3	1reallylongstring8
+0reallylongstring2	5	4	1reallylongstring7
+0reallylongstring2	5	4	1reallylongstring8
+0reallylongstring2	6	3	1reallylongstring7
+0reallylongstring2	6	3	1reallylongstring8
+0reallylongstring2	6	4	1reallylongstring7
+0reallylongstring2	6	4	1reallylongstring8
+
+query IIII
+SELECT s1, i1, s2, i2 FROM test6 ORDER BY s1, i1, s2, i2
+----
+0reallylongstring1	5	1reallylongstring7	3
+0reallylongstring1	5	1reallylongstring7	4
+0reallylongstring1	5	1reallylongstring8	3
+0reallylongstring1	5	1reallylongstring8	4
+0reallylongstring1	6	1reallylongstring7	3
+0reallylongstring1	6	1reallylongstring7	4
+0reallylongstring1	6	1reallylongstring8	3
+0reallylongstring1	6	1reallylongstring8	4
+0reallylongstring2	5	1reallylongstring7	3
+0reallylongstring2	5	1reallylongstring7	4
+0reallylongstring2	5	1reallylongstring8	3
+0reallylongstring2	5	1reallylongstring8	4
+0reallylongstring2	6	1reallylongstring7	3
+0reallylongstring2	6	1reallylongstring7	4
+0reallylongstring2	6	1reallylongstring8	3
+0reallylongstring2	6	1reallylongstring8	4
+
+query IIII
+SELECT s1, s2, i1, i2 FROM test6 ORDER BY s1, s2, i1, i2
+----
+0reallylongstring1	1reallylongstring7	5	3
+0reallylongstring1	1reallylongstring7	5	4
+0reallylongstring1	1reallylongstring7	6	3
+0reallylongstring1	1reallylongstring7	6	4
+0reallylongstring1	1reallylongstring8	5	3
+0reallylongstring1	1reallylongstring8	5	4
+0reallylongstring1	1reallylongstring8	6	3
+0reallylongstring1	1reallylongstring8	6	4
+0reallylongstring2	1reallylongstring7	5	3
+0reallylongstring2	1reallylongstring7	5	4
+0reallylongstring2	1reallylongstring7	6	3
+0reallylongstring2	1reallylongstring7	6	4
+0reallylongstring2	1reallylongstring8	5	3
+0reallylongstring2	1reallylongstring8	5	4
+0reallylongstring2	1reallylongstring8	6	3
+0reallylongstring2	1reallylongstring8	6	4
+
+query IIII
+SELECT i1, i2, s1, s2 FROM test6 ORDER BY i1, i2, s1, s2
+----
+5	3	0reallylongstring1	1reallylongstring7
+5	3	0reallylongstring1	1reallylongstring8
+5	3	0reallylongstring2	1reallylongstring7
+5	3	0reallylongstring2	1reallylongstring8
+5	4	0reallylongstring1	1reallylongstring7
+5	4	0reallylongstring1	1reallylongstring8
+5	4	0reallylongstring2	1reallylongstring7
+5	4	0reallylongstring2	1reallylongstring8
+6	3	0reallylongstring1	1reallylongstring7
+6	3	0reallylongstring1	1reallylongstring8
+6	3	0reallylongstring2	1reallylongstring7
+6	3	0reallylongstring2	1reallylongstring8
+6	4	0reallylongstring1	1reallylongstring7
+6	4	0reallylongstring1	1reallylongstring8
+6	4	0reallylongstring2	1reallylongstring7
+6	4	0reallylongstring2	1reallylongstring8
+
+query IIII
+SELECT s1, s2, i1, i2 FROM test6 ORDER BY i2 DESC, s1, s2, i1
+----
+0reallylongstring1	1reallylongstring7	5	4
+0reallylongstring1	1reallylongstring7	6	4
+0reallylongstring1	1reallylongstring8	5	4
+0reallylongstring1	1reallylongstring8	6	4
+0reallylongstring2	1reallylongstring7	5	4
+0reallylongstring2	1reallylongstring7	6	4
+0reallylongstring2	1reallylongstring8	5	4
+0reallylongstring2	1reallylongstring8	6	4
+0reallylongstring1	1reallylongstring7	5	3
+0reallylongstring1	1reallylongstring7	6	3
+0reallylongstring1	1reallylongstring8	5	3
+0reallylongstring1	1reallylongstring8	6	3
+0reallylongstring2	1reallylongstring7	5	3
+0reallylongstring2	1reallylongstring7	6	3
+0reallylongstring2	1reallylongstring8	5	3
+0reallylongstring2	1reallylongstring8	6	3
+
+# snippet from tpch q16
+statement ok
+create table test7 (p_brand VARCHAR, p_type VARCHAR, p_size INT, supplier_cnt BIGINT)
+
+statement ok
+insert into test7 values ('Brand#11', 'ECONOMY BRUSHED COPPER', 3, 4), ('Brand#11', 'ECONOMY BRUSHED COPPER', 9, 4), ('Brand#11', 'ECONOMY BRUSHED STEEL', 36, 4), ('Brand#11', 'ECONOMY BRUSHED STEEL', 9, 4), ('Brand#11', 'ECONOMY BURNISHED BRASS', 36, 4), ('Brand#11', 'ECONOMY BURNISHED COPPER', 49, 4), ('Brand#11', 'ECONOMY BURNISHED COPPER', 9, 4), ('Brand#11', 'ECONOMY BURNISHED NICKEL', 14, 4), ('Brand#11', 'ECONOMY BURNISHED NICKEL', 49, 4)
+
+query IIII
+SELECT p_brand, p_type, p_size, supplier_cnt FROM test7 ORDER BY supplier_cnt DESC, p_brand, p_type, p_size
+----
+Brand#11	ECONOMY BRUSHED COPPER	3	4
+Brand#11	ECONOMY BRUSHED COPPER	9	4
+Brand#11	ECONOMY BRUSHED STEEL	9	4
+Brand#11	ECONOMY BRUSHED STEEL	36	4
+Brand#11	ECONOMY BURNISHED BRASS	36	4
+Brand#11	ECONOMY BURNISHED COPPER	9	4
+Brand#11	ECONOMY BURNISHED COPPER	49	4
+Brand#11	ECONOMY BURNISHED NICKEL	14	4
+Brand#11	ECONOMY BURNISHED NICKEL	49	4
