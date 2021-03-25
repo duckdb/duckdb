@@ -38,10 +38,11 @@ void ValiditySegment::InitializeScan(ColumnScanState &state) {
 }
 
 void ValiditySegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
+	D_ASSERT(row_id >= 0 && row_id < row_t(this->tuple_count));
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	auto handle = buffer_manager.Pin(block);
 	ValidityMask mask((validity_t *) handle->node->buffer);
-	if (!mask.RowIsValidUnsafe(row_id - this->row_start)) {
+	if (!mask.RowIsValidUnsafe(row_id)) {
 		FlatVector::SetNull(result, result_idx, true);
 	}
 }
