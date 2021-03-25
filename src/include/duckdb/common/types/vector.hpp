@@ -52,7 +52,7 @@ public:
 	//! Create an empty standard vector with a type, equivalent to calling Vector(type, true, false)
 	explicit Vector(const LogicalType &type);
 	//! Vector List
-//	Vector(const child_list_t<LogicalType> &child_list);
+	//	Vector(const child_list_t<LogicalType> &child_list);
 	//! Create a non-owning vector that references the specified data
 	Vector(const LogicalType &type, data_ptr_t dataptr);
 	//! Create an owning vector that holds at most STANDARD_VECTOR_SIZE entries.
@@ -259,12 +259,13 @@ struct FlatVector {
 
 struct ListVector {
 	static Vector &GetEntry(const Vector &vector);
-	static idx_t GetListSize(const Vector &vector);
-	static void SetListSize(const Vector &vec, idx_t size);
+	static idx_t GetListSize(Vector &vector);
+	static void SetListSize(Vector &vec, idx_t size);
 	static bool HasEntry(const Vector &vector);
 	static void SetEntry(Vector &vector, unique_ptr<Vector> entry);
 	static void Append(Vector &target, Vector &source, idx_t source_size, idx_t source_offset = 0);
 	static void PushBack(Vector &target, Value &insert);
+	static void Initialize(Vector &vec);
 };
 
 struct StringVector {

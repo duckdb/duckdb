@@ -166,7 +166,7 @@ void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &
 			mask.Set(res_idx, fdata.validity.RowIsValid(fidx));
 		}
 
-		 result.Verify(tcount + fcount);
+		result.Verify(tcount + fcount);
 		break;
 	}
 	default:

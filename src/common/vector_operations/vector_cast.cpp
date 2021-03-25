@@ -546,7 +546,6 @@ static void ListCastSwitch(Vector &source, Vector &result, idx_t count) {
 				VectorOperations::Cast(source_cc, append_vector, source_size);
 				ListVector::Append(result, append_vector, source_size);
 			}
-
 		}
 
 		auto ldata = FlatVector::GetData<list_entry_t>(source);

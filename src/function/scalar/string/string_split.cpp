@@ -149,26 +149,23 @@ protected:
 };
 
 void BaseStringSplitFunction(const char *input, StringSplitIterator &iter, Vector &result) {
-	child_list_t<LogicalType> child_type {{"", LogicalType::VARCHAR}};
-    Vector append_vector ({LogicalTypeId::LIST, child_type});
+	if (!ListVector::HasEntry(result)) {
+		auto result_child = make_unique<Vector>(LogicalType::VARCHAR);
+		ListVector::SetEntry(result, move(result_child));
+	}
 	// special case: empty string
 	if (iter.size == 0) {
-	    Value val =  StringVector::AddString(ListVector::GetEntry(append_vector), &input[0], 0);
-	    ListVector::PushBack(result,val);
+		Value val = StringVector::AddString(ListVector::GetEntry(result), &input[0], 0);
+		ListVector::PushBack(result, val);
 		return;
 	}
-
 	while (iter.HasNext()) {
 		idx_t start = iter.Start();
 		idx_t end = iter.Next(input);
 		size_t length = end - start;
-		Value to_insert(StringVector::AddString(ListVector::GetEntry(append_vector), &input[start], length));
-		ListVector::PushBack(append_vector, to_insert);
+		Value to_insert(StringVector::AddString(ListVector::GetEntry(result), &input[start], length));
+		ListVector::PushBack(result, to_insert);
 	}
-	if (ListVector::GetListSize(append_vector) > 0) {
-		ListVector::Append(result, ListVector::GetEntry(append_vector), ListVector::GetListSize(append_vector));
-	}
-	//	result.Verify();
 }
 
 unique_ptr<Vector> BaseStringSplitFunction(string_t input, string_t delim, const bool regex) {
@@ -233,8 +230,8 @@ static void StringSplitExecutor(DataChunk &args, ExpressionState &state, Vector 
 			split_input = make_unique<Vector>(list_vector_type);
 			auto child = make_unique<Vector>(varchar);
 			ListVector::SetEntry(*split_input, move(child));
-			Value val (input);
-			ListVector::PushBack(*split_input,val);
+			Value val(input);
+			ListVector::PushBack(*split_input, val);
 		} else {
 			string_t delim = delims[delim_data.sel->get_index(i)];
 			split_input = BaseStringSplitFunction(input, delim, regex);
@@ -245,7 +242,7 @@ static void StringSplitExecutor(DataChunk &args, ExpressionState &state, Vector 
 		ListVector::Append(result, ListVector::GetEntry(*split_input), ListVector::GetListSize(*split_input));
 	}
 
-		D_ASSERT(ListVector::GetListSize(result) == total_len);
+	D_ASSERT(ListVector::GetListSize(result) == total_len);
 	if (args.data[0].GetVectorType() == VectorType::CONSTANT_VECTOR &&
 	    args.data[1].GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);

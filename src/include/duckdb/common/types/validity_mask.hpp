@@ -198,6 +198,8 @@ public:
 	void Combine(const ValidityMask &other, idx_t count);
 	string ToString(idx_t count) const;
 
+	bool IsMaskSet();
+
 public:
 	void Initialize(validity_t *validity) {
 		validity_data.reset();

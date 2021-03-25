@@ -129,10 +129,10 @@ void Vector::Initialize(const LogicalType &new_type, bool zero_data) {
 	if (new_type.id() != LogicalTypeId::INVALID) {
 		SetType(new_type);
 	}
-//	if (new_type == LogicalType::LIST) {
-//		buffer = make_buffer<VectorListBuffer>();
-//		return;
-//	}
+	//	if (new_type == LogicalType::LIST) {
+	//		buffer = make_buffer<VectorListBuffer>();
+	//		return;
+	//	}
 	auxiliary.reset();
 	validity.Reset();
 	if (GetTypeIdSize(GetType().InternalType()) > 0) {
@@ -146,62 +146,71 @@ void Vector::Initialize(const LogicalType &new_type, bool zero_data) {
 	}
 }
 
-struct DataArrays{
-    Vector &vec;
-    data_ptr_t data;
-    VectorBuffer* buffer;
-    idx_t type_size;
-    DataArrays(Vector &vec,data_ptr_t data,VectorBuffer* buffer,idx_t type_size): vec(vec), data(data),buffer(buffer),type_size(type_size){};
+struct DataArrays {
+	Vector &vec;
+	data_ptr_t data;
+	VectorBuffer *buffer;
+	idx_t type_size;
+	bool is_nested;
+	DataArrays(Vector &vec, data_ptr_t data, VectorBuffer *buffer, idx_t type_size, bool is_nested)
+	    : vec(vec), data(data), buffer(buffer), type_size(type_size), is_nested(is_nested) {};
 };
 
-void FindChildren(std::vector<DataArrays>&  to_resize, VectorBuffer&auxiliary){
-    if (auxiliary.GetBufferType() == VectorBufferType::LIST_BUFFER){
-        auto& buffer = (VectorListBuffer&) auxiliary;
-        auto& child = buffer.GetChild();
-        auto data = child.GetData();
-        if (!data){
-            //! Nested type
-            FindChildren(to_resize,*child.GetAuxiliary());
-        }
-        else{
-            DataArrays arrays (child,data, child.GetBuffer().get() ,GetTypeIdSize(child.GetType().InternalType()));
-            to_resize.emplace_back(arrays);
-        }
-    }
-    else if (auxiliary.GetBufferType() == VectorBufferType::STRUCT_BUFFER){
-        auto& buffer = (VectorStructBuffer&) auxiliary;
-        auto& children = buffer.GetChildren();
-        for (auto& child: children){
-            auto data = child.second->GetData();
-            if (!data){
-                //! Nested type
-                FindChildren(to_resize,*child.second->GetAuxiliary());
-            }
-            else{
-                 DataArrays arrays (*child.second,data, child.second->GetBuffer().get(),GetTypeIdSize(child.second->GetType().InternalType()));
-	             to_resize.emplace_back(arrays);
-            }
-        }
-    }
+void FindChildren(std::vector<DataArrays> &to_resize, VectorBuffer &auxiliary) {
+	if (auxiliary.GetBufferType() == VectorBufferType::LIST_BUFFER) {
+		auto &buffer = (VectorListBuffer &)auxiliary;
+		auto &child = buffer.GetChild();
+		auto data = child.GetData();
+		if (!data) {
+			//! Nested type
+			DataArrays arrays(child, data, child.GetBuffer().get(), GetTypeIdSize(child.GetType().InternalType()),
+			                  true);
+			to_resize.emplace_back(arrays);
+			FindChildren(to_resize, *child.GetAuxiliary());
+		} else {
+			DataArrays arrays(child, data, child.GetBuffer().get(), GetTypeIdSize(child.GetType().InternalType()),
+			                  false);
+			to_resize.emplace_back(arrays);
+		}
+	} else if (auxiliary.GetBufferType() == VectorBufferType::STRUCT_BUFFER) {
+		auto &buffer = (VectorStructBuffer &)auxiliary;
+		auto &children = buffer.GetChildren();
+		for (auto &child : children) {
+			auto data = child.second->GetData();
+			if (!data) {
+				//! Nested type
+				DataArrays arrays(*child.second, data, child.second->GetBuffer().get(),
+				                  GetTypeIdSize(child.second->GetType().InternalType()), true);
+				to_resize.emplace_back(arrays);
+				FindChildren(to_resize, *child.second->GetAuxiliary());
+			} else {
+				DataArrays arrays(*child.second, data, child.second->GetBuffer().get(),
+				                  GetTypeIdSize(child.second->GetType().InternalType()), false);
+				to_resize.emplace_back(arrays);
+			}
+		}
+	}
 }
 void Vector::Resize(idx_t cur_size) {
-    std::vector<DataArrays>  to_resize;
-	if (!data){
-	    //! this is a nested structure
-	    FindChildren(to_resize,*auxiliary);
+	std::vector<DataArrays> to_resize;
+	if (!data) {
+		//! this is a nested structure
+		DataArrays arrays(*this, data, buffer.get(), GetTypeIdSize(GetType().InternalType()), true);
+		to_resize.emplace_back(arrays);
+		FindChildren(to_resize, *auxiliary);
+	} else {
+		DataArrays arrays(*this, data, buffer.get(), GetTypeIdSize(GetType().InternalType()), false);
+		to_resize.emplace_back(arrays);
 	}
-	else{
-	    DataArrays arrays (*this,data, buffer.get(),GetTypeIdSize(GetType().InternalType()));
-	    to_resize.emplace_back(arrays);
+	for (auto &data_to_resize : to_resize) {
+		if (!data_to_resize.is_nested) {
+			auto new_data = unique_ptr<data_t[]>(new data_t[cur_size * 2 * data_to_resize.type_size]);
+			memcpy(new_data.get(), data_to_resize.data, cur_size * data_to_resize.type_size * sizeof(data_t));
+			data_to_resize.buffer->SetData(move(new_data));
+			data_to_resize.vec.data = data_to_resize.buffer->GetData();
+		}
+		data_to_resize.vec.validity.Resize(cur_size, cur_size * 2);
 	}
-	for (auto& data_to_resize: to_resize){
-	    auto new_data = unique_ptr<data_t[]>(new data_t[cur_size * 2 * data_to_resize.type_size]);
-        memcpy(new_data.get(), data_to_resize.data, cur_size * data_to_resize.type_size * sizeof(data_t));
-        data_to_resize.buffer->SetData(move(new_data));
-        data_to_resize.vec.data = data_to_resize.buffer->GetData();
-        data_to_resize.vec.validity.Resize(cur_size,cur_size*2);
-	}
-
 }
 
 void Vector::SetValue(idx_t index, const Value &val) {
@@ -215,12 +224,14 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		SetValue(index, val.CastAs(GetType()));
 		return;
 	}
-
-	validity.EnsureWritable();
-	validity.Set(index, !val.is_null);
-	if (val.is_null) {
-		return;
+	if (GetType().id() != LogicalTypeId::STRUCT) {
+		validity.EnsureWritable();
+		validity.Set(index, !val.is_null);
+		if (val.is_null) {
+			return;
+		}
 	}
+
 	switch (GetType().id()) {
 	case LogicalTypeId::BOOLEAN:
 		((bool *)data)[index] = val.value_.boolean;
@@ -320,13 +331,13 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		}
 		auto offset = ListVector::GetListSize(*this);
 		if (!val.list_value.empty()) {
-//			Vector to_append(val.list_value[0].type());
+			//			Vector to_append(val.list_value[0].type());
 			for (idx_t i = 0; i < val.list_value.size(); i++) {
-			    Value v (val.list_value[i]);
-			    ListVector::PushBack(*this,v);
-//				to_append.SetValue(i, val.list_value[i]);
+				Value v(val.list_value[i]);
+				ListVector::PushBack(*this, v);
+				//				to_append.SetValue(i, val.list_value[i]);
 			}
-//			ListVector::Append(*this, to_append, val.list_value.size());
+			//			ListVector::Append(*this, to_append, val.list_value.size());
 		}
 		//! now set the pointer
 		auto &entry = ((list_entry_t *)data)[index];
@@ -725,7 +736,6 @@ void Vector::Serialize(idx_t count, Serializer &serializer) {
 	}
 }
 
-
 void Vector::Deserialize(idx_t count, Deserializer &source) {
 	auto &type = GetType();
 	if (TypeIsConstantSize(type.InternalType())) {
@@ -1041,11 +1051,19 @@ Vector &ListVector::GetEntry(const Vector &vector) {
 	return ((VectorListBuffer *)vector.auxiliary.get())->GetChild();
 }
 
-idx_t ListVector::GetListSize(const Vector &vec) {
+void ListVector::Initialize(Vector &vec) {
+	if (!ListVector::HasEntry(vec)) {
+		auto vec_child = make_unique<Vector>(vec.GetType().child_types()[0].second);
+		ListVector::SetEntry(vec, move(vec_child));
+	}
+}
+idx_t ListVector::GetListSize(Vector &vec) {
+	ListVector::Initialize(vec);
 	return ((VectorListBuffer &)*vec.auxiliary).size;
 }
 
-void ListVector::SetListSize(const Vector &vec, idx_t size) {
+void ListVector::SetListSize(Vector &vec, idx_t size) {
+	ListVector::Initialize(vec);
 	((VectorListBuffer &)*vec.auxiliary).size = size;
 }
 
@@ -1060,33 +1078,19 @@ void ListVector::SetEntry(Vector &vector, unique_ptr<Vector> cc) {
 }
 
 void ListVector::Append(Vector &target, Vector &source, idx_t source_size, idx_t source_offset) {
+	ListVector::Initialize(target);
 	if (source_size - source_offset == 0) {
 		//! Nothing to add
 		return;
 	}
 	auto &target_buffer = (VectorListBuffer &)*target.auxiliary;
-	auto target_offset = ListVector::GetListSize(target);
 	target_buffer.Append(source, source_size, source_offset);
-	auto src_validity_mask = source.validity;
-	if (!src_validity_mask.AllValid()) {
-		auto target_validity_mask = ListVector::GetEntry(target).validity;
-		for (size_t i = source_offset; i < source_size; i++) {
-			target_validity_mask.Set(target_offset++, src_validity_mask.RowIsValidUnsafe(i));
-		}
-	}
 }
 
 void ListVector::PushBack(Vector &target, Value &insert) {
+	ListVector::Initialize(target);
 	auto &target_buffer = (VectorListBuffer &)*target.auxiliary;
 	target_buffer.PushBack(insert);
-	//    target_buffer.Append(source,source_size,source_offset);
-	//    auto src_validity_mask = source.validity;
-	//    if (!src_validity_mask.AllValid()) {
-	//        auto target_validity_mask = ListVector::GetEntry(target).validity;
-	//        for (size_t i = source_offset; i < source_size; i++){
-	//            target_validity_mask.Set(target_offset++,src_validity_mask.RowIsValidUnsafe(i));
-	//        }
-	//    }
 }
 
 } // namespace duckdb

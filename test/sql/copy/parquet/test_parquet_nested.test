@@ -1,45 +1,45 @@
-# name: test/sql/copy/parquet/test_parquet_nested.test
-# description: Test basic parquet reading
-# group: [parquet]
-
-require parquet
-
-
-query II
-select struct_extract(h, 'key'), struct_extract(h, 'value') from (SELECT unlist(raw_header) h FROM parquet_scan('test/sql/copy/parquet/data/map.parquet')) sq limit 30;
-----
-Content-Encoding	gzip
-X-Frame-Options	SAMEORIGIN
-Connection	keep-alive
-Via	1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf)
-X-Xss-Protection	1; mode=block
-Content-Type	text/html;charset=utf-8
-Date	Sat, 30 Jan 2021 16:19:57 GMT
-X-Cache	MISS from ip-10-1-1-216.ec2.internal
-Vary	Accept-Encoding
-Server	nginx/1.10.3
-X-Cache-Lookup	HIT from ip-10-1-1-216.ec2.internal:3128
-X-Content-Type-Options	nosniff
-Content-Length	921
-Content-Encoding	gzip
-X-Frame-Options	SAMEORIGIN
-Connection	keep-alive
-Via	1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf)
-X-Xss-Protection	1; mode=block
-Content-Type	text/html;charset=utf-8
-Date	Sat, 30 Jan 2021 16:19:59 GMT
-X-Cache	MISS from ip-10-1-1-216.ec2.internal
-Vary	Accept-Encoding
-Server	nginx/1.10.3
-X-Cache-Lookup	HIT from ip-10-1-1-216.ec2.internal:3128
-X-Content-Type-Options	nosniff
-Content-Length	922
-Content-Encoding	gzip
-X-Frame-Options	SAMEORIGIN
-Connection	keep-alive
-Via	1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf)
-
-
+## name: test/sql/copy/parquet/test_parquet_nested.test
+## description: Test basic parquet reading
+## group: [parquet]
+#
+#require parquet
+#
+#
+#query II
+#select struct_extract(h, 'key'), struct_extract(h, 'value') from (SELECT unlist(raw_header) h FROM parquet_scan('test/sql/copy/parquet/data/map.parquet')) sq limit 30;
+#----
+#Content-Encoding	gzip
+#X-Frame-Options	SAMEORIGIN
+#Connection	keep-alive
+#Via	1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf)
+#X-Xss-Protection	1; mode=block
+#Content-Type	text/html;charset=utf-8
+#Date	Sat, 30 Jan 2021 16:19:57 GMT
+#X-Cache	MISS from ip-10-1-1-216.ec2.internal
+#Vary	Accept-Encoding
+#Server	nginx/1.10.3
+#X-Cache-Lookup	HIT from ip-10-1-1-216.ec2.internal:3128
+#X-Content-Type-Options	nosniff
+#Content-Length	921
+#Content-Encoding	gzip
+#X-Frame-Options	SAMEORIGIN
+#Connection	keep-alive
+#Via	1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf)
+#X-Xss-Protection	1; mode=block
+#Content-Type	text/html;charset=utf-8
+#Date	Sat, 30 Jan 2021 16:19:59 GMT
+#X-Cache	MISS from ip-10-1-1-216.ec2.internal
+#Vary	Accept-Encoding
+#Server	nginx/1.10.3
+#X-Cache-Lookup	HIT from ip-10-1-1-216.ec2.internal:3128
+#X-Content-Type-Options	nosniff
+#Content-Length	922
+#Content-Encoding	gzip
+#X-Frame-Options	SAMEORIGIN
+#Connection	keep-alive
+#Via	1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf)
+#
+#
 ## this was a hard one
 #query II
 #SELECT * FROM parquet_scan('test/sql/copy/parquet/data/nested_lists.snappy.parquet')
@@ -187,4 +187,4 @@ Via	1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf)
 #53e997a6b7602d9701f7ffb0	R R Walters	53f43b0edabfaee0d9b91d40
 #53e99813b7602d970202f0a1	Sean Milmo	53f45f64dabfaee4dc832b5f
 #
-
+#

@@ -69,9 +69,11 @@ void VectorOperations::Copy(Vector &source, Vector &target, const SelectionVecto
 		}
 	} else {
 		auto &smask = FlatVector::Validity(source);
-		for (idx_t i = 0; i < copy_count; i++) {
-			auto idx = sel.get_index(source_offset + i);
-			tmask.Set(target_offset + i, smask.RowIsValid(idx));
+		if (smask.IsMaskSet()) {
+			for (idx_t i = 0; i < copy_count; i++) {
+				auto idx = sel.get_index(source_offset + i);
+				tmask.Set(target_offset + i, smask.RowIsValid(idx));
+			}
 		}
 	}
 
@@ -121,6 +123,7 @@ void VectorOperations::Copy(Vector &source, Vector &target, const SelectionVecto
 	case PhysicalType::VARCHAR: {
 		auto ldata = FlatVector::GetData<string_t>(source);
 		auto tdata = FlatVector::GetData<string_t>(target);
+		auto &tmask = FlatVector::Validity(target);
 		for (idx_t i = 0; i < copy_count; i++) {
 			auto source_idx = sel.get_index(source_offset + i);
 			auto target_idx = target_offset + i;

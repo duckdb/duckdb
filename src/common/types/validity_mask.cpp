@@ -56,23 +56,28 @@ string ValidityMask::ToString(idx_t count) const {
 	return result;
 }
 
-void ValidityMask::Resize(idx_t old_size, idx_t new_size){
-    if (validity_mask){
-        auto new_size_count = EntryCount(new_size);
-        auto old_size_count = EntryCount(old_size);
-        auto new_owned_data = unique_ptr<validity_t[]>(new validity_t[new_size_count]);
-        for (idx_t entry_idx = 0; entry_idx < old_size_count; entry_idx++) {
-            new_owned_data[entry_idx] = validity_mask[entry_idx];
-        }
-        for (idx_t entry_idx = old_size_count; entry_idx < new_size_count; entry_idx++) {
-            new_owned_data[entry_idx] = ValidityData::MAX_ENTRY;
-        }
-        validity_data->owned_data = move(new_owned_data);
-        validity_mask = validity_data->owned_data.get();
-    }
+bool ValidityMask::IsMaskSet() {
+	if (validity_mask) {
+		return true;
+	}
+	return false;
+};
 
+void ValidityMask::Resize(idx_t old_size, idx_t new_size) {
+	if (validity_mask) {
+		auto new_size_count = EntryCount(new_size);
+		auto old_size_count = EntryCount(old_size);
+		auto new_owned_data = unique_ptr<validity_t[]>(new validity_t[new_size_count]);
+		for (idx_t entry_idx = 0; entry_idx < old_size_count; entry_idx++) {
+			new_owned_data[entry_idx] = validity_mask[entry_idx];
+		}
+		for (idx_t entry_idx = old_size_count; entry_idx < new_size_count; entry_idx++) {
+			new_owned_data[entry_idx] = ValidityData::MAX_ENTRY;
+		}
+		validity_data->owned_data = move(new_owned_data);
+		validity_mask = validity_data->owned_data.get();
+	}
 }
-
 
 void ValidityMask::Slice(const ValidityMask &other, idx_t offset) {
 	if (other.AllValid()) {
