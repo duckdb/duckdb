@@ -67,7 +67,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 	if (!table_or_view) {
 		// table could not be found: try to bind a replacement scan
 		auto &config = DBConfig::GetConfig(context);
-		for(auto &scan : config.replacement_scans) {
+		for (auto &scan : config.replacement_scans) {
 			auto replacement_function = scan.function(ref.table_name, scan.data);
 			if (replacement_function) {
 				replacement_function->alias = ref.alias;
@@ -76,9 +76,8 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 			}
 		}
 		// could not find an alternative: bind again to get the error
-		table_or_view =
-			Catalog::GetCatalog(context).GetEntry(context, CatalogType::TABLE_ENTRY, ref.schema_name, ref.table_name,
-												false, error_context);
+		table_or_view = Catalog::GetCatalog(context).GetEntry(context, CatalogType::TABLE_ENTRY, ref.schema_name,
+		                                                      ref.table_name, false, error_context);
 	}
 	switch (table_or_view->type) {
 	case CatalogType::TABLE_ENTRY: {
