@@ -11,6 +11,6 @@ endif()
 include_directories(../../)
 include_directories(src/include/duckdb_python)
 
-add_library(python_duckdb duckdb_python.cpp src/array_wrapper.cpp)
+add_library(python_duckdb duckdb_python.cpp src/array_wrapper.cpp src/pandas_scan.cpp)
 target_include_directories(python_duckdb PRIVATE ${PYTHON_INCLUDE_DIRS})
 target_link_libraries(python_duckdb duckdb_static ${PYTHON_LIBRARIES})
