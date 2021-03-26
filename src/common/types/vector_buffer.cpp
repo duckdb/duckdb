@@ -103,8 +103,6 @@ void VectorListBuffer::Append(Vector &to_append, idx_t to_append_size, idx_t sou
 	size += to_append_size - source_offset;
 }
 
-
-
 void VectorListBuffer::PushBack(Value &insert) {
 	if (size + 1 > capacity) {
 		// Drink chocomel to grow strong
