@@ -191,7 +191,7 @@ void FindChildren(std::vector<DataArrays> &to_resize, VectorBuffer &auxiliary) {
 		}
 	}
 }
-void Vector::Resize(idx_t cur_size) {
+void Vector::Resize(idx_t cur_size, idx_t new_size) {
 	std::vector<DataArrays> to_resize;
 	if (!data) {
 		//! this is a nested structure
@@ -204,12 +204,12 @@ void Vector::Resize(idx_t cur_size) {
 	}
 	for (auto &data_to_resize : to_resize) {
 		if (!data_to_resize.is_nested) {
-			auto new_data = unique_ptr<data_t[]>(new data_t[cur_size * 2 * data_to_resize.type_size]);
+			auto new_data = unique_ptr<data_t[]>(new data_t[new_size * data_to_resize.type_size]);
 			memcpy(new_data.get(), data_to_resize.data, cur_size * data_to_resize.type_size * sizeof(data_t));
 			data_to_resize.buffer->SetData(move(new_data));
 			data_to_resize.vec.data = data_to_resize.buffer->GetData();
 		}
-		data_to_resize.vec.validity.Resize(cur_size, cur_size * 2);
+		data_to_resize.vec.validity.Resize(cur_size, new_size);
 	}
 }
 

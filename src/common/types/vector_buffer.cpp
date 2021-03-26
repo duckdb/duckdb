@@ -85,7 +85,9 @@ void FindChildren(std::vector<CopyArrays> &to_copy, VectorBuffer &from_auxiliary
 
 void VectorListBuffer::Append(Vector &to_append, idx_t to_append_size, idx_t source_offset) {
 
-	while (size + to_append_size - source_offset > capacity) {
+	if (size + to_append_size - source_offset > capacity) {
+		idx_t new_capacity =  (size + to_append_size - source_offset)/STANDARD_VECTOR_SIZE + ((size + to_append_size - source_offset) % STANDARD_VECTOR_SIZE != 0);
+		new_capacity *= STANDARD_VECTOR_SIZE;
 		if (child->GetType().id() == LogicalTypeId::STRUCT && size == 0) {
 			// Empty struct, gotta initialize it first
 			auto &source_children = StructVector::GetEntries(to_append);
@@ -94,9 +96,8 @@ void VectorListBuffer::Append(Vector &to_append, idx_t to_append_size, idx_t sou
 				StructVector::AddEntry(*child, src_child.first, move(child_copy));
 			}
 		}
-		// Drink chocomel to grow strong
-		child->Resize(capacity);
-		capacity *= 2;
+		child->Resize(capacity, new_capacity);
+		capacity = new_capacity;
 	}
 	VectorOperations::Copy(to_append, *child, to_append_size, source_offset, size);
 
@@ -105,8 +106,7 @@ void VectorListBuffer::Append(Vector &to_append, idx_t to_append_size, idx_t sou
 
 void VectorListBuffer::PushBack(Value &insert) {
 	if (size + 1 > capacity) {
-		// Drink chocomel to grow strong
-		child->Resize(capacity);
+		child->Resize(capacity, capacity*2);
 		capacity *= 2;
 	}
 	child->SetValue(size++, insert);

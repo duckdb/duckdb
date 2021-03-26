@@ -119,7 +119,7 @@ public:
 	};
 
 	//! This functions resizes the vector
-	void Resize(idx_t cur_size);
+	void Resize(idx_t cur_size, idx_t new_size);
 
 	//! Serializes a Vector to a stand-alone binary blob
 	void Serialize(idx_t count, Serializer &serializer);
