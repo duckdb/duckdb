@@ -5,7 +5,6 @@
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/assert.hpp"
-#include "../../../third_party/zstd/common/bitstream.h"
 
 #include <algorithm>
 #include <cstring>
