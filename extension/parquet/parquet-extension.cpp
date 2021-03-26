@@ -425,7 +425,7 @@ void ParquetExtension::Load(DuckDB &db) {
 	con.Commit();
 
 	auto &config = DBConfig::GetConfig(*db.instance);
-	config.replacement_scans.push_back(ReplacementScan(ParquetScanReplacement));
+	config.replacement_scans.emplace_back(ParquetScanReplacement);
 }
 
 } // namespace duckdb

@@ -253,7 +253,7 @@ void BuiltinFunctions::RegisterReadFunctions() {
 	ReadCSVTableFunction::RegisterFunction(*this);
 
 	auto &config = DBConfig::GetConfig(context);
-	config.replacement_scans.push_back(ReplacementScan(ReadCSVReplacement));
+	config.replacement_scans.emplace_back(ReadCSVReplacement);
 }
 
 } // namespace duckdb
