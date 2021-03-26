@@ -9,7 +9,7 @@ if(NOT PythonLibs_FOUND)
   return()
 endif()
 include_directories(../../)
-include_directories(src/include/duckdb_python)
+include_directories(src/include)
 
 # this is used for clang-tidy checks
 add_library(
