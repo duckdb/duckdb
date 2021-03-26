@@ -44,6 +44,11 @@ void Transformer::TransformWindowDef(duckdb_libpgquery::PGWindowDef *window_spec
 	// next: partitioning/ordering expressions
 	TransformExpressionList(window_spec->partitionClause, expr->partitions);
 	TransformOrderBy(window_spec->orderClause, expr->orders);
+}
+
+void Transformer::TransformWindowFrame(duckdb_libpgquery::PGWindowDef *window_spec, WindowExpression *expr) {
+	D_ASSERT(window_spec);
+	D_ASSERT(expr);
 
 	// finally: specifics of bounds
 	expr->start_expr = TransformExpression(window_spec->startOffset);
@@ -162,7 +167,17 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 			window_spec = it->second;
 			D_ASSERT(window_spec);
 		}
-		TransformWindowDef(window_spec, expr.get());
+		auto window_ref = window_spec;
+		if (window_ref->refname) {
+			auto it = window_clauses.find(StringUtil::Lower(string(window_spec->refname)));
+			if (it == window_clauses.end()) {
+				throw ParserException("window \"%s\" does not exist", window_spec->refname);
+			}
+			window_ref = it->second;
+			D_ASSERT(window_ref);
+		}
+		TransformWindowDef(window_ref, expr.get());
+		TransformWindowFrame(window_spec, expr.get());
 
 		return move(expr);
 	}
