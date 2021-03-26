@@ -198,7 +198,7 @@ public:
 	void Combine(const ValidityMask &other, idx_t count);
 	string ToString(idx_t count) const;
 
-	bool IsMaskSet();
+	bool IsMaskSet() const;
 
 public:
 	void Initialize(validity_t *validity) {

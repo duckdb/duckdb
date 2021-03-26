@@ -276,7 +276,7 @@ struct FlatVector {
 
 struct ListVector {
 	static Vector &GetEntry(const Vector &vector);
-	static idx_t GetListSize(Vector &vector);
+	static idx_t GetListSize(const Vector &vector);
 	static void SetListSize(Vector &vec, idx_t size);
 	static bool HasEntry(const Vector &vector);
 	static void SetEntry(Vector &vector, unique_ptr<Vector> entry);

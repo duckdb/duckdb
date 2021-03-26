@@ -103,28 +103,7 @@ void VectorListBuffer::Append(Vector &to_append, idx_t to_append_size, idx_t sou
 	size += to_append_size - source_offset;
 }
 
-// void VectorListBuffer::Append(Vector &to_append, idx_t to_append_size, idx_t source_offset) {
-//    D_ASSERT(child->GetType() == to_append.GetType());
-//    std::vector<CopyArrays> to_copy_vectors;
-//	while (size + to_append_size - source_offset > capacity) {
-//		// Drink chocomel to grow strong
-//		child->Resize(capacity);
-//		capacity *= 2;
-//	}
-//	auto child_data = child->GetData();
-//	if (!child_data && size > 0){
-//	    //! this child is a nested structure
-//	    FindChildren(to_copy_vectors, *to_append.GetAuxiliary(), *child->GetAuxiliary());
-//	}
-//	else{
-//	    CopyArrays ar (to_append,*child);
-//	    to_copy_vectors.emplace_back(ar);
-//	}
-//	for (auto&to_copy_vector : to_copy_vectors ){
-//	    VectorOperations::Copy(to_copy_vector.from, to_copy_vector.to, to_append_size, source_offset, size);
-//	}
-//	size += to_append_size - source_offset;
-//}
+
 
 void VectorListBuffer::PushBack(Value &insert) {
 	if (size + 1 > capacity) {

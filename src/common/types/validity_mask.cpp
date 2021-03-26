@@ -56,12 +56,12 @@ string ValidityMask::ToString(idx_t count) const {
 	return result;
 }
 
-bool ValidityMask::IsMaskSet() {
+bool ValidityMask::IsMaskSet() const {
 	if (validity_mask) {
 		return true;
 	}
 	return false;
-};
+}
 
 void ValidityMask::Resize(idx_t old_size, idx_t new_size) {
 	if (validity_mask) {

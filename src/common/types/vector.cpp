@@ -1057,8 +1057,7 @@ void ListVector::Initialize(Vector &vec) {
 		ListVector::SetEntry(vec, move(vec_child));
 	}
 }
-idx_t ListVector::GetListSize(Vector &vec) {
-	ListVector::Initialize(vec);
+idx_t ListVector::GetListSize(const Vector &vec) {
 	return ((VectorListBuffer &)*vec.auxiliary).size;
 }
 

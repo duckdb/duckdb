@@ -415,7 +415,7 @@ idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint
 		append_chunk.Verify();
 
 		idx_t current_chunk_offset = ListVector::GetListSize(result_out);
-
+        ListVector::Append(result_out, append_chunk.data[0], append_chunk.size());
 		// hard-won piece of code this, modify at your own risk
 		// the intuition is that we have to only collapse values into lists that are repeated *on this level*
 		// the rest is pretty much handed up as-is as a single-valued list or NULL
@@ -435,7 +435,8 @@ idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint
 				result_ptr[result_offset].length = 1;
 			} else {
 				// value is NULL somewhere up the stack
-				FlatVector::SetNull(append_chunk.data[0], result_offset, true);
+				FlatVector::SetNull(result_out, result_offset, true);
+				//FlatVector::SetNull(append_chunk.data[0], result_offset, true);
 				result_ptr[result_offset].offset = 0;
 				result_ptr[result_offset].length = 0;
 			}
@@ -445,7 +446,7 @@ idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint
 
 			result_offset++;
 		}
-		ListVector::Append(result_out, append_chunk.data[0], append_chunk.size());
+		//ListVector::Append(result_out, append_chunk.data[0], append_chunk.size());
 
 		// we have read more values from the child reader than we can fit into the result for this read
 		// we have to pass everything from child_idx to child_actual_num_values into the next call
