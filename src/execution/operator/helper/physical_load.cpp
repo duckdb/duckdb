@@ -6,8 +6,8 @@
 #ifndef _WIN32
 #include <dlfcn.h>
 #else
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
+#define _AMD64_ // hack alert
+#include <libloaderapi.h>
 #endif
 
 namespace duckdb {
@@ -22,7 +22,7 @@ void *dlsym(void *handle, const char *name) {
 	D_ASSERT(handle);
 	return (void *)GetProcAddress((HINSTANCE)handle, name);
 }
-#define RTLD_LAZY 0
+#define RTLD_LAZY  0
 #define RTLD_LOCAL 0
 
 #endif

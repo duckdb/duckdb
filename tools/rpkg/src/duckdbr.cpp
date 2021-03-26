@@ -1234,7 +1234,7 @@ static const R_CallMethodDef R_CallDef[] = {CALLDEF(duckdb_startup_R, 2),
                                             {NULL, NULL, 0}};
 
 void R_init_duckdb(DllInfo *dll) {
-	x R_registerRoutines(dll, NULL, R_CallDef, NULL, NULL);
+	R_registerRoutines(dll, NULL, R_CallDef, NULL, NULL);
 	R_useDynamicSymbols(dll, FALSE);
 
 	duckdb_altrep_string_class = R_make_altstring_class("duckdb_strings", "duckdb", dll);
