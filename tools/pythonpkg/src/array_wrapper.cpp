@@ -5,8 +5,6 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "utf8proc_wrapper.hpp"
 
-namespace py = pybind11;
-
 namespace duckdb {
 
 namespace duckdb_py_convert {

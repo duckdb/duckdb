@@ -8,9 +8,7 @@
 
 #pragma once
 
-#include <pybind11/pybind11.h>
-#include <pybind11/numpy.h>
-
+#include "duckdb_python/pybind_wrapper.hpp"
 #include "duckdb.hpp"
 
 namespace duckdb {
@@ -18,7 +16,7 @@ namespace duckdb {
 struct RawArrayWrapper {
 	explicit RawArrayWrapper(const LogicalType &type);
 
-	pybind11::array array;
+	py::array array;
 	data_ptr_t data;
 	LogicalType type;
 	idx_t type_width;
@@ -41,7 +39,7 @@ public:
 	void Initialize(idx_t capacity);
 	void Resize(idx_t new_capacity);
 	void Append(idx_t current_offset, Vector &input, idx_t count);
-	pybind11::object ToArray(idx_t count) const;
+	py::object ToArray(idx_t count) const;
 };
 
 class NumpyResultConversion {
@@ -50,7 +48,7 @@ public:
 
 	void Append(DataChunk &chunk);
 
-	pybind11::object ToArray(idx_t col_idx) {
+	py::object ToArray(idx_t col_idx) {
 		return owned_data[col_idx].ToArray(count);
 	}
 

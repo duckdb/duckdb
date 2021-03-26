@@ -5,8 +5,6 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 
-namespace py = pybind11;
-
 namespace duckdb {
 
 enum class PandasType : uint8_t {
