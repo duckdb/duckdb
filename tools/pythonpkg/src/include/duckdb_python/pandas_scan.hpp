@@ -16,6 +16,7 @@ namespace duckdb {
 struct PandasScanFunction : public TableFunction {
 public:
 	static constexpr idx_t PANDAS_PARTITION_COUNT = 50 * STANDARD_VECTOR_SIZE;
+
 public:
 	PandasScanFunction();
 
@@ -50,4 +51,4 @@ public:
 	static unique_ptr<NodeStatistics> PandasScanCardinality(ClientContext &context, const FunctionData *bind_data);
 };
 
-}
+} // namespace duckdb

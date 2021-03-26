@@ -195,7 +195,6 @@ double IntegralConvert::ConvertValue(hugeint_t val) {
 
 } // namespace duckdb_py_convert
 
-
 template <class DUCKDB_T, class NUMPY_T, class CONVERT>
 static bool ConvertColumn(idx_t target_offset, data_ptr_t target_data, bool *target_mask, VectorData &idata,
                           idx_t count) {
@@ -553,4 +552,4 @@ void NumpyResultConversion::Append(DataChunk &chunk) {
 #endif
 }
 
-}
+} // namespace duckdb

@@ -259,5 +259,4 @@ void DuckDBPyResult::Close() {
 	result = nullptr;
 }
 
-
-}
+} // namespace duckdb

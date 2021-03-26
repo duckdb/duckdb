@@ -19,6 +19,7 @@ public:
 	explicit DuckDBPyRelation(shared_ptr<Relation> rel);
 
 	shared_ptr<Relation> rel;
+
 public:
 	static void Initialize(py::handle &m);
 
@@ -98,4 +99,4 @@ public:
 	py::object Getattr(const py::str &key);
 };
 
-}
+} // namespace duckdb

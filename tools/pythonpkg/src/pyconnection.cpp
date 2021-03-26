@@ -22,55 +22,52 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::default_connection = nullptr;
 
 void DuckDBPyConnection::Initialize(py::handle &m) {
 	py::class_<DuckDBPyConnection, shared_ptr<DuckDBPyConnection>>(m, "DuckDBPyConnection")
-		.def("cursor", &DuckDBPyConnection::Cursor, "Create a duplicate of the current connection")
-		.def("duplicate", &DuckDBPyConnection::Cursor, "Create a duplicate of the current connection")
-		.def("execute", &DuckDBPyConnection::Execute,
-				"Execute the given SQL query, optionally using prepared statements with parameters set",
-				py::arg("query"), py::arg("parameters") = py::list(), py::arg("multiple_parameter_sets") = false)
-		.def("executemany", &DuckDBPyConnection::ExecuteMany,
-				"Execute the given prepared statement multiple times using the list of parameter sets in parameters",
-				py::arg("query"), py::arg("parameters") = py::list())
-		.def("close", &DuckDBPyConnection::Close, "Close the connection")
-		.def("fetchone", &DuckDBPyConnection::FetchOne, "Fetch a single row from a result following execute")
-		.def("fetchall", &DuckDBPyConnection::FetchAll, "Fetch all rows from a result following execute")
-		.def("fetchnumpy", &DuckDBPyConnection::FetchNumpy,
-				"Fetch a result as list of NumPy arrays following execute")
-		.def("fetchdf", &DuckDBPyConnection::FetchDF, "Fetch a result as Data.Frame following execute()")
-		.def("fetch_df", &DuckDBPyConnection::FetchDF, "Fetch a result as Data.Frame following execute()")
-		.def("fetch_df_chunk", &DuckDBPyConnection::FetchDFChunk,
-				"Fetch a chunk of the result as Data.Frame following execute()")
-		.def("df", &DuckDBPyConnection::FetchDF, "Fetch a result as Data.Frame following execute()")
-		.def("fetch_arrow_table", &DuckDBPyConnection::FetchArrow,
-				"Fetch a result as Arrow table following execute()")
-		.def("arrow", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()")
-		.def("begin", &DuckDBPyConnection::Begin, "Start a new transaction")
-		.def("commit", &DuckDBPyConnection::Commit, "Commit changes performed within a transaction")
-		.def("rollback", &DuckDBPyConnection::Rollback, "Roll back changes performed within a transaction")
-		.def("append", &DuckDBPyConnection::Append, "Append the passed Data.Frame to the named table",
-				py::arg("table_name"), py::arg("df"))
-		.def("register", &DuckDBPyConnection::RegisterDF,
-				"Register the passed Data.Frame value for querying with a view", py::arg("view_name"), py::arg("df"))
-		.def("unregister", &DuckDBPyConnection::UnregisterDF, "Unregister the view name", py::arg("view_name"))
-		.def("table", &DuckDBPyConnection::Table, "Create a relation object for the name'd table",
-				py::arg("table_name"))
-		.def("view", &DuckDBPyConnection::View, "Create a relation object for the name'd view",
-				py::arg("view_name"))
-		.def("values", &DuckDBPyConnection::Values, "Create a relation object from the passed values",
-				py::arg("values"))
-		.def("table_function", &DuckDBPyConnection::TableFunction,
-				"Create a relation object from the name'd table function with given parameters", py::arg("name"),
-				py::arg("parameters") = py::list())
-		.def("from_df", &DuckDBPyConnection::FromDF, "Create a relation object from the Data.Frame in df",
-				py::arg("df") = py::none())
-		.def("from_arrow_table", &DuckDBPyConnection::FromArrowTable,
-				"Create a relation object from an Arrow table", py::arg("table"))
-		.def("df", &DuckDBPyConnection::FromDF,
-				"Create a relation object from the Data.Frame in df (alias of from_df)", py::arg("df"))
-		.def("from_csv_auto", &DuckDBPyConnection::FromCsvAuto,
-				"Create a relation object from the CSV file in file_name", py::arg("file_name"))
-		.def("from_parquet", &DuckDBPyConnection::FromParquet,
-				"Create a relation object from the Parquet file in file_name", py::arg("file_name"))
-		.def("__getattr__", &DuckDBPyConnection::GetAttr, "Get result set attributes, mainly column names");
+	    .def("cursor", &DuckDBPyConnection::Cursor, "Create a duplicate of the current connection")
+	    .def("duplicate", &DuckDBPyConnection::Cursor, "Create a duplicate of the current connection")
+	    .def("execute", &DuckDBPyConnection::Execute,
+	         "Execute the given SQL query, optionally using prepared statements with parameters set", py::arg("query"),
+	         py::arg("parameters") = py::list(), py::arg("multiple_parameter_sets") = false)
+	    .def("executemany", &DuckDBPyConnection::ExecuteMany,
+	         "Execute the given prepared statement multiple times using the list of parameter sets in parameters",
+	         py::arg("query"), py::arg("parameters") = py::list())
+	    .def("close", &DuckDBPyConnection::Close, "Close the connection")
+	    .def("fetchone", &DuckDBPyConnection::FetchOne, "Fetch a single row from a result following execute")
+	    .def("fetchall", &DuckDBPyConnection::FetchAll, "Fetch all rows from a result following execute")
+	    .def("fetchnumpy", &DuckDBPyConnection::FetchNumpy, "Fetch a result as list of NumPy arrays following execute")
+	    .def("fetchdf", &DuckDBPyConnection::FetchDF, "Fetch a result as Data.Frame following execute()")
+	    .def("fetch_df", &DuckDBPyConnection::FetchDF, "Fetch a result as Data.Frame following execute()")
+	    .def("fetch_df_chunk", &DuckDBPyConnection::FetchDFChunk,
+	         "Fetch a chunk of the result as Data.Frame following execute()")
+	    .def("df", &DuckDBPyConnection::FetchDF, "Fetch a result as Data.Frame following execute()")
+	    .def("fetch_arrow_table", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()")
+	    .def("arrow", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()")
+	    .def("begin", &DuckDBPyConnection::Begin, "Start a new transaction")
+	    .def("commit", &DuckDBPyConnection::Commit, "Commit changes performed within a transaction")
+	    .def("rollback", &DuckDBPyConnection::Rollback, "Roll back changes performed within a transaction")
+	    .def("append", &DuckDBPyConnection::Append, "Append the passed Data.Frame to the named table",
+	         py::arg("table_name"), py::arg("df"))
+	    .def("register", &DuckDBPyConnection::RegisterDF,
+	         "Register the passed Data.Frame value for querying with a view", py::arg("view_name"), py::arg("df"))
+	    .def("unregister", &DuckDBPyConnection::UnregisterDF, "Unregister the view name", py::arg("view_name"))
+	    .def("table", &DuckDBPyConnection::Table, "Create a relation object for the name'd table",
+	         py::arg("table_name"))
+	    .def("view", &DuckDBPyConnection::View, "Create a relation object for the name'd view", py::arg("view_name"))
+	    .def("values", &DuckDBPyConnection::Values, "Create a relation object from the passed values",
+	         py::arg("values"))
+	    .def("table_function", &DuckDBPyConnection::TableFunction,
+	         "Create a relation object from the name'd table function with given parameters", py::arg("name"),
+	         py::arg("parameters") = py::list())
+	    .def("from_df", &DuckDBPyConnection::FromDF, "Create a relation object from the Data.Frame in df",
+	         py::arg("df") = py::none())
+	    .def("from_arrow_table", &DuckDBPyConnection::FromArrowTable, "Create a relation object from an Arrow table",
+	         py::arg("table"))
+	    .def("df", &DuckDBPyConnection::FromDF, "Create a relation object from the Data.Frame in df (alias of from_df)",
+	         py::arg("df"))
+	    .def("from_csv_auto", &DuckDBPyConnection::FromCsvAuto,
+	         "Create a relation object from the CSV file in file_name", py::arg("file_name"))
+	    .def("from_parquet", &DuckDBPyConnection::FromParquet,
+	         "Create a relation object from the Parquet file in file_name", py::arg("file_name"))
+	    .def("__getattr__", &DuckDBPyConnection::GetAttr, "Get result set attributes, mainly column names");
 
 	PyDateTime_IMPORT;
 }
@@ -123,7 +120,7 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 	for (pybind11::handle single_query_params : params_set) {
 		if (prep->n_param != py::len(single_query_params)) {
 			throw std::runtime_error("Prepared statement needs " + to_string(prep->n_param) + " parameters, " +
-										to_string(py::len(single_query_params)) + " given");
+			                         to_string(py::len(single_query_params)) + " given");
 		}
 		auto args = DuckDBPyConnection::TransformPythonParamList(single_query_params);
 		auto res = make_unique<DuckDBPyResult>();
@@ -154,8 +151,7 @@ static string PtrToString(void const *ptr) {
 
 DuckDBPyConnection *DuckDBPyConnection::RegisterDF(const string &name, py::object value) {
 	// hack alert: put the pointer address into the function call as a string
-	Execute("CREATE OR REPLACE VIEW \"" + name + "\" AS SELECT * FROM pandas_scan('" + PtrToString(value.ptr()) +
-			"')");
+	Execute("CREATE OR REPLACE VIEW \"" + name + "\" AS SELECT * FROM pandas_scan('" + PtrToString(value.ptr()) + "')");
 
 	// try to bind
 	Execute("SELECT * FROM \"" + name + "\" WHERE FALSE");
@@ -193,9 +189,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::TableFunction(const string &fna
 	}
 
 	return make_unique<DuckDBPyRelation>(
-		connection->TableFunction(fname, DuckDBPyConnection::TransformPythonParamList(std::move(params))));
+	    connection->TableFunction(fname, DuckDBPyConnection::TransformPythonParamList(std::move(params))));
 }
-
 
 static std::string GenerateRandomName() {
 	std::random_device rd;
@@ -326,7 +321,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrowTable(const py::object
 	auto my_arrow_table = new PythonTableArrowArrayStream(table);
 	string name = "arrow_table_" + PtrToString((void *)my_arrow_table);
 	return make_unique<DuckDBPyRelation>(
-		connection->TableFunction("arrow_scan", {Value::POINTER((uintptr_t)my_arrow_table)})->Alias(name));
+	    connection->TableFunction("arrow_scan", {Value::POINTER((uintptr_t)my_arrow_table)})->Alias(name));
 }
 
 DuckDBPyConnection *DuckDBPyConnection::UnregisterDF(const string &name) {
@@ -506,4 +501,4 @@ void DuckDBPyConnection::Cleanup() {
 	default_connection.reset();
 }
 
-}
+} // namespace duckdb

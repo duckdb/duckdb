@@ -34,7 +34,6 @@ public:
 
 	DuckDBPyConnection *ExecuteMany(const string &query, py::object params = py::list());
 
-
 	DuckDBPyConnection *Execute(const string &query, py::object params = py::list(), bool many = false);
 
 	DuckDBPyConnection *Append(const string &name, py::object value);
@@ -88,10 +87,9 @@ public:
 
 	static vector<Value> TransformPythonParamList(py::handle params);
 
-
 private:
 	//! Default connection to an in-memory database
 	static shared_ptr<DuckDBPyConnection> default_connection;
 };
 
-}
+} // namespace duckdb

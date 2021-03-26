@@ -240,7 +240,7 @@ string DuckDBPyRelation::Print() {
 	}
 
 	return rel->ToString() + "\n---------------------\n-- Result Preview  --\n---------------------\n" +
-			rel_res_string + "\n";
+	       rel_res_string + "\n";
 }
 
 py::object DuckDBPyRelation::Getattr(const py::str &key) {
@@ -265,4 +265,4 @@ py::object DuckDBPyRelation::Getattr(const py::str &key) {
 	return py::none();
 }
 
-}
+} // namespace duckdb

@@ -68,10 +68,10 @@ struct ParallelPandasScanState : public ParallelState {
 };
 
 PandasScanFunction::PandasScanFunction()
-	: TableFunction("pandas_scan", {LogicalType::VARCHAR}, PandasScanFunc, PandasScanBind, PandasScanInit, nullptr,
-					nullptr, nullptr, PandasScanCardinality, nullptr, nullptr, PandasScanMaxThreads,
-					PandasScanInitParallelState, PandasScanParallelInit, PandasScanParallelStateNext, true, false,
-					PandasProgress) {
+    : TableFunction("pandas_scan", {LogicalType::VARCHAR}, PandasScanFunc, PandasScanBind, PandasScanInit, nullptr,
+                    nullptr, nullptr, PandasScanCardinality, nullptr, nullptr, PandasScanMaxThreads,
+                    PandasScanInitParallelState, PandasScanParallelInit, PandasScanParallelStateNext, true, false,
+                    PandasProgress) {
 }
 
 static void ConvertPandasType(const string &col_type, LogicalType &duckdb_col_type, PandasType &pandas_type) {
@@ -118,8 +118,8 @@ static void ConvertPandasType(const string &col_type, LogicalType &duckdb_col_ty
 }
 
 unique_ptr<FunctionData> PandasScanFunction::PandasScanBind(ClientContext &context, vector<Value> &inputs,
-												unordered_map<string, Value> &named_parameters,
-												vector<LogicalType> &return_types, vector<string> &names) {
+                                                            unordered_map<string, Value> &named_parameters,
+                                                            vector<LogicalType> &return_types, vector<string> &names) {
 	// Hey, it works (TM)
 	py::gil_scoped_acquire acquire;
 	py::handle df((PyObject *)std::stoull(inputs[0].GetValue<string>(), nullptr, 16));
@@ -129,7 +129,7 @@ unique_ptr<FunctionData> PandasScanFunction::PandasScanBind(ClientContext &conte
 	auto df_class = pandas_mod.attr("DataFrame");
 
 	if (!df.get_type().is(df_class)) {
-		throw Exception("parameter is not a DataFrame");
+	    throw Exception("parameter is not a DataFrame");
 	} */
 
 	auto df_columns = py::list(df.attr("columns"));
@@ -150,8 +150,7 @@ unique_ptr<FunctionData> PandasScanFunction::PandasScanBind(ClientContext &conte
 			// numeric object
 			// fetch the internal data and mask array
 			bind_data.numpy_col = get_fun(df_columns[col_idx]).attr("array").attr("_data");
-			bind_data.mask =
-				make_unique<NumPyArrayWrapper>(get_fun(df_columns[col_idx]).attr("array").attr("_mask"));
+			bind_data.mask = make_unique<NumPyArrayWrapper>(get_fun(df_columns[col_idx]).attr("array").attr("_mask"));
 			ConvertPandasType(col_type, duckdb_col_type, bind_data.pandas_type);
 		} else if (StringUtil::StartsWith(col_type, "datetime64[ns") || col_type == "<M8[ns]") {
 			// timestamp type
@@ -181,9 +180,10 @@ unique_ptr<FunctionData> PandasScanFunction::PandasScanBind(ClientContext &conte
 	return make_unique<PandasScanFunctionData>(df, row_count, move(pandas_bind_data), return_types);
 }
 
-unique_ptr<FunctionOperatorData> PandasScanFunction::PandasScanInit(ClientContext &context, const FunctionData *bind_data_p,
-														vector<column_t> &column_ids,
-														TableFilterCollection *filters) {
+unique_ptr<FunctionOperatorData> PandasScanFunction::PandasScanInit(ClientContext &context,
+                                                                    const FunctionData *bind_data_p,
+                                                                    vector<column_t> &column_ids,
+                                                                    TableFilterCollection *filters) {
 	auto &bind_data = (const PandasScanFunctionData &)*bind_data_p;
 	auto result = make_unique<PandasScanState>(0, bind_data.row_count);
 	result->column_ids = column_ids;
@@ -196,14 +196,15 @@ idx_t PandasScanFunction::PandasScanMaxThreads(ClientContext &context, const Fun
 }
 
 unique_ptr<ParallelState> PandasScanFunction::PandasScanInitParallelState(ClientContext &context,
-																const FunctionData *bind_data_p) {
+                                                                          const FunctionData *bind_data_p) {
 	return make_unique<ParallelPandasScanState>();
 }
 
 unique_ptr<FunctionOperatorData> PandasScanFunction::PandasScanParallelInit(ClientContext &context,
-																const FunctionData *bind_data_p,
-																ParallelState *state, vector<column_t> &column_ids,
-																TableFilterCollection *filters) {
+                                                                            const FunctionData *bind_data_p,
+                                                                            ParallelState *state,
+                                                                            vector<column_t> &column_ids,
+                                                                            TableFilterCollection *filters) {
 	auto result = make_unique<PandasScanState>(0, 0);
 	result->column_ids = column_ids;
 	if (!PandasScanParallelStateNext(context, bind_data_p, result.get(), state)) {
@@ -213,7 +214,8 @@ unique_ptr<FunctionOperatorData> PandasScanFunction::PandasScanParallelInit(Clie
 }
 
 bool PandasScanFunction::PandasScanParallelStateNext(ClientContext &context, const FunctionData *bind_data_p,
-										FunctionOperatorData *operator_state, ParallelState *parallel_state_p) {
+                                                     FunctionOperatorData *operator_state,
+                                                     ParallelState *parallel_state_p) {
 	auto &bind_data = (const PandasScanFunctionData &)*bind_data_p;
 	auto &parallel_state = (ParallelPandasScanState &)*parallel_state_p;
 	auto &state = (PandasScanState &)*operator_state;
@@ -308,7 +310,7 @@ static string_t DecodePythonUnicode(T *codepoints, idx_t codepoint_count, Vector
 }
 
 static void ConvertVector(PandasColumnBindData &bind_data, py::array &numpy_col, idx_t count, idx_t offset,
-							Vector &out) {
+                          Vector &out) {
 	switch (bind_data.pandas_type) {
 	case PandasType::BOOLEAN:
 		ScanPandasColumn<bool>(numpy_col, count, offset, out);
@@ -388,15 +390,15 @@ static void ConvertVector(PandasColumnBindData &bind_data, py::array &numpy_col,
 					switch (kind) {
 					case PyUnicode_1BYTE_KIND:
 						tgt_ptr[row] =
-							DecodePythonUnicode<Py_UCS1>(PyUnicode_1BYTE_DATA(val), PyUnicode_GET_LENGTH(val), out);
+						    DecodePythonUnicode<Py_UCS1>(PyUnicode_1BYTE_DATA(val), PyUnicode_GET_LENGTH(val), out);
 						break;
 					case PyUnicode_2BYTE_KIND:
 						tgt_ptr[row] =
-							DecodePythonUnicode<Py_UCS2>(PyUnicode_2BYTE_DATA(val), PyUnicode_GET_LENGTH(val), out);
+						    DecodePythonUnicode<Py_UCS2>(PyUnicode_2BYTE_DATA(val), PyUnicode_GET_LENGTH(val), out);
 						break;
 					case PyUnicode_4BYTE_KIND:
 						tgt_ptr[row] =
-							DecodePythonUnicode<Py_UCS4>(PyUnicode_4BYTE_DATA(val), PyUnicode_GET_LENGTH(val), out);
+						    DecodePythonUnicode<Py_UCS4>(PyUnicode_4BYTE_DATA(val), PyUnicode_GET_LENGTH(val), out);
 						break;
 					default:
 						throw std::runtime_error("Unsupported typekind for Python Unicode Compact decode");
@@ -436,7 +438,7 @@ static void ConvertVector(PandasColumnBindData &bind_data, py::array &numpy_col,
 //! The main pandas scan function: note that this can be called in parallel without the GIL
 //! hence this needs to be GIL-safe, i.e. no methods that create Python objects are allowed
 void PandasScanFunction::PandasScanFunc(ClientContext &context, const FunctionData *bind_data,
-							FunctionOperatorData *operator_state, DataChunk &output) {
+                                        FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &data = (PandasScanFunctionData &)*bind_data;
 	auto &state = (PandasScanState &)*operator_state;
 
@@ -451,16 +453,17 @@ void PandasScanFunction::PandasScanFunc(ClientContext &context, const FunctionDa
 			output.data[idx].Sequence(state.start, this_count);
 		} else {
 			ConvertVector(data.pandas_bind_data[col_idx], data.pandas_bind_data[col_idx].numpy_col, this_count,
-							state.start, output.data[idx]);
+			              state.start, output.data[idx]);
 		}
 	}
 	state.start += this_count;
 	data.lines_read += this_count;
 }
 
-unique_ptr<NodeStatistics> PandasScanFunction::PandasScanCardinality(ClientContext &context, const FunctionData *bind_data) {
+unique_ptr<NodeStatistics> PandasScanFunction::PandasScanCardinality(ClientContext &context,
+                                                                     const FunctionData *bind_data) {
 	auto &data = (PandasScanFunctionData &)*bind_data;
 	return make_unique<NodeStatistics>(data.row_count, data.row_count);
 }
 
-}
+} // namespace duckdb

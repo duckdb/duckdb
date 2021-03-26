@@ -40,4 +40,4 @@ public:
 	void Close();
 };
 
-}
+} // namespace duckdb

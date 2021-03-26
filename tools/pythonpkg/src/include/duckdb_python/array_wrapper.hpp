@@ -61,4 +61,4 @@ private:
 	idx_t capacity;
 };
 
-}
+} // namespace duckdb
