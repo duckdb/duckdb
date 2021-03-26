@@ -55,18 +55,19 @@ static void ListUpdateFunction(Vector inputs[], FunctionData *, idx_t input_coun
 static void ListCombineFunction(Vector &state, Vector &combined, idx_t count) {
 	VectorData sdata;
 	state.Orrify(count, sdata);
-	//	auto states_ptr = (ListAggState **)sdata.data;
-	//
-	//	auto combined_ptr = FlatVector::GetData<ListAggState *>(combined);
+	auto states_ptr = (ListAggState **)sdata.data;
 
-	//	for (idx_t i = 0; i < count; i++) {
-	//		auto state = states_ptr[sdata.sel->get_index(i)];
-	//		D_ASSERT(state->cc);
-	//		if (!combined_ptr[i]->cc) {
-	//			combined_ptr[i]->cc = new ChunkCollection();
-	//		}
-	//		combined_ptr[i]->cc->Append(*state->cc);
-	//	}
+	auto combined_ptr = FlatVector::GetData<ListAggState *>(combined);
+
+	for (idx_t i = 0; i < count; i++) {
+		auto state = states_ptr[sdata.sel->get_index(i)];
+		D_ASSERT(state->list_vector);
+		if (!combined_ptr[i]->list_vector) {
+			combined_ptr[i]->list_vector = new Vector(state->list_vector->GetType());
+		}
+		ListVector::Append(*combined_ptr[i]->list_vector, ListVector::GetEntry(*state->list_vector),
+		                   ListVector::GetListSize(*state->list_vector));
+	}
 }
 
 static void ListFinalize(Vector &state_vector, FunctionData *, Vector &result, idx_t count) {

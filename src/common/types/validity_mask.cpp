@@ -76,6 +76,8 @@ void ValidityMask::Resize(idx_t old_size, idx_t new_size) {
 		}
 		validity_data->owned_data = move(new_owned_data);
 		validity_mask = validity_data->owned_data.get();
+	} else {
+		Initialize(new_size);
 	}
 }
 
