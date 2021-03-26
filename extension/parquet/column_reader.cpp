@@ -131,13 +131,10 @@ void ColumnReader::PrepareRead(parquet_filter_t &filter) {
 }
 
 void ColumnReader::PreparePage(idx_t compressed_page_size, idx_t uncompressed_page_size) {
-	auto trans = (ThriftFileTransport *)protocol->getTransport().get();
+	auto &trans = (ThriftFileTransport &)*protocol->getTransport();
 
 	block = make_shared<ResizeableBuffer>(compressed_page_size + 1);
-	trans->read((uint8_t *)block->ptr, compressed_page_size);
-
-	//			page_hdr.printTo(std::cout);
-	//			std::cout << '\n';
+	trans.read((uint8_t *)block->ptr, compressed_page_size);
 
 	shared_ptr<ResizeableBuffer> unpacked_block;
 	if (chunk->meta_data.codec != CompressionCodec::UNCOMPRESSED) {
@@ -249,8 +246,8 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
                          Vector &result) {
 	// we need to reset the location because multiple column readers share the same protocol
-	auto trans = (ThriftFileTransport *)protocol->getTransport().get();
-	trans->SetLocation(chunk_read_offset);
+	auto &trans = (ThriftFileTransport &)*protocol->getTransport();
+	trans.SetLocation(chunk_read_offset);
 
 	idx_t result_offset = 0;
 	auto to_read = num_values;
@@ -300,7 +297,7 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t 
 		to_read -= read_now;
 	}
 	group_rows_available -= num_values;
-	chunk_read_offset = trans->GetLocation();
+	chunk_read_offset = trans.GetLocation();
 
 	return num_values;
 }

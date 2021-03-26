@@ -8,11 +8,11 @@ namespace duckdb {
 
 class ThriftFileTransport : public apache::thrift::transport::TVirtualTransport<ThriftFileTransport> {
 public:
-	ThriftFileTransport(unique_ptr<FileHandle> handle_p) : handle(move(handle_p)), location(0) {
+	ThriftFileTransport(FileHandle &handle_p) : handle(handle_p), location(0) {
 	}
 
 	uint32_t read(uint8_t *buf, uint32_t len) {
-		handle->Read(buf, len, location);
+		handle.Read(buf, len, location);
 		location += len;
 		return len;
 	}
@@ -24,9 +24,12 @@ public:
 	idx_t GetLocation() {
 		return location;
 	}
+	idx_t GetSize() {
+		return handle.file_system.GetFileSize(handle);
+	}
 
 private:
-	unique_ptr<duckdb::FileHandle> handle;
+	duckdb::FileHandle &handle;
 	duckdb::idx_t location;
 };
 

@@ -33,11 +33,41 @@ using parquet::format::SchemaElement;
 using parquet::format::Statistics;
 using parquet::format::Type;
 
-static shared_ptr<ParquetFileMetadataCache> LoadMetaData(apache::thrift::protocol::TProtocol &proto, idx_t read_pos) {
+static unique_ptr<apache::thrift::protocol::TProtocol> create_thrift_protocol(FileHandle &file_handle) {
+	shared_ptr<ThriftFileTransport> trans(new ThriftFileTransport(file_handle));
+	return make_unique<apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(trans);
+}
+
+static shared_ptr<ParquetFileMetadataCache> load_metadata(FileHandle &file_handle) {
 	auto current_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+
+	auto proto = create_thrift_protocol(file_handle);
+	auto &transport = ((ThriftFileTransport &)*proto->getTransport());
+	auto file_size = transport.GetSize();
+	if (file_size < 12) {
+		throw InvalidInputException("File '%s' too small to be a Parquet file", file_handle.path);
+	}
+
+	ResizeableBuffer buf;
+	buf.resize(8);
+	buf.zero();
+
+	transport.SetLocation(file_size - 8);
+	transport.read((uint8_t *)buf.ptr, 8);
+
+	if (strncmp(buf.ptr + 4, "PAR1", 4) != 0) {
+		throw InvalidInputException("No magic bytes found at end of file '%s'", file_handle.path);
+	}
+	// read four-byte footer length from just before the end magic bytes
+	auto footer_len = *(uint32_t *)buf.ptr;
+	if (footer_len <= 0 || file_size < 12 + footer_len) {
+		throw InvalidInputException("Footer length error in file '%s'", file_handle.path);
+	}
+	auto metadata_pos = file_size - (footer_len + 8);
+	transport.SetLocation(metadata_pos);
+
 	auto metadata = make_unique<FileMetaData>();
-	((ThriftFileTransport *)proto.getTransport().get())->SetLocation(read_pos);
-	metadata->read(&proto);
+	metadata->read(proto.get());
 	return make_shared<ParquetFileMetadataCache>(move(metadata), current_time);
 }
 
@@ -166,6 +196,7 @@ static unique_ptr<ColumnReader> CreateReaderRecursive(const FileMetaData *file_m
 	}
 }
 
+// TODO we don't need readers for columns we are not going to read ay
 static unique_ptr<ColumnReader> CreateReader(const FileMetaData *file_meta_data) {
 	idx_t next_schema_idx = 0;
 	idx_t next_file_idx = 0;
@@ -176,67 +207,7 @@ static unique_ptr<ColumnReader> CreateReader(const FileMetaData *file_meta_data)
 	return ret;
 }
 
-ParquetReader::ParquetReader(ClientContext &context, string file_name_p, vector<LogicalType> expected_types,
-                             const string &initial_filename)
-    : file_name(move(file_name_p)), context(context) {
-	auto &fs = FileSystem::GetFileSystem(context);
-
-	// todo move this gunk to separate function so this is cleaned up a bit
-	auto handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ);
-
-	ResizeableBuffer buf;
-	buf.resize(8);
-	memset(buf.ptr, '\0', 8);
-	// this check at the beginning is a pretty unneccessary iop
-	/*
-	#ifdef DEBUG // this is a pretty unnecessary io op
-	    // check for magic bytes at start of file
-	    fs.Read(*handle, buf.ptr, 4);
-	    if (strncmp(buf.ptr, "PAR1", 4) != 0) {
-	        throw FormatException("Missing magic bytes in front of Parquet file");
-	    }
-	#endif
-	*/
-	// check for magic bytes at end of file
-	auto file_size_signed = fs.GetFileSize(*handle);
-	if (file_size_signed < 12) {
-		throw FormatException("File too small to be a Parquet file");
-	}
-	auto file_size = (uint64_t)file_size_signed;
-	fs.Read(*handle, buf.ptr, 8, file_size - 8);
-	if (strncmp(buf.ptr + 4, "PAR1", 4) != 0) {
-		throw FormatException("No magic bytes found at end of file");
-	}
-	// read four-byte footer length from just before the end magic bytes
-	auto footer_len = *(uint32_t *)buf.ptr;
-	if (footer_len <= 0) {
-		throw FormatException("Footer length can't be 0");
-	}
-	if (file_size < 12 + footer_len) {
-		throw FormatException("Footer length %d is too big for the file of size %d", footer_len, file_size);
-	}
-
-	auto last_modify_time = fs.GetLastModifiedTime(*handle);
-	// centrally create thrift transport/protocol to reduce allocation
-	// TODO this is duplicated in Initialize()
-	shared_ptr<ThriftFileTransport> trans(new ThriftFileTransport(move(handle)));
-	auto thrift_file_proto = make_unique<apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(trans);
-
-	// If object cached is disabled
-	// or if this file has cached metadata
-	// or if the cached version already expired
-	auto metadata_pos = file_size - (footer_len + 8);
-	if (!ObjectCache::ObjectCacheEnabled(context)) {
-		metadata = LoadMetaData(*thrift_file_proto, metadata_pos);
-	} else {
-		metadata =
-		    std::dynamic_pointer_cast<ParquetFileMetadataCache>(ObjectCache::GetObjectCache(context).Get(file_name));
-		if (!metadata || (last_modify_time + 10 >= metadata->read_time)) {
-			metadata = LoadMetaData(*thrift_file_proto, metadata_pos);
-			ObjectCache::GetObjectCache(context).Put(file_name, metadata);
-		}
-	}
-
+void ParquetReader::InitializeSchema(const vector<LogicalType> &expected_types_p, const string &initial_filename_p) {
 	auto file_meta_data = GetFileMetadata();
 
 	if (file_meta_data->__isset.encryption_algorithm) {
@@ -247,22 +218,23 @@ ParquetReader::ParquetReader(ClientContext &context, string file_name_p, vector<
 		throw FormatException("Need at least one non-root column in the file");
 	}
 
-	bool has_expected_types = !expected_types.empty();
+	bool has_expected_types = !expected_types_p.empty();
 	auto root_reader = CreateReader(file_meta_data);
 
 	auto root_type = root_reader->Type();
 	D_ASSERT(root_type.id() == LogicalTypeId::STRUCT);
 	idx_t col_idx = 0;
 	for (auto &type_pair : root_type.child_types()) {
-		if (has_expected_types && expected_types[col_idx] != type_pair.second) {
-			if (initial_filename.empty()) {
+		if (has_expected_types && expected_types_p[col_idx] != type_pair.second) {
+			if (initial_filename_p.empty()) {
 				throw FormatException("column \"%d\" in parquet file is of type %s, could not auto cast to "
 				                      "expected type %s for this column",
-				                      col_idx, type_pair.second, expected_types[col_idx].ToString());
+				                      col_idx, type_pair.second, expected_types_p[col_idx].ToString());
 			} else {
 				throw FormatException("schema mismatch in Parquet glob: column \"%d\" in parquet file is of type "
 				                      "%s, but in the original file \"%s\" this column is of type \"%s\"",
-				                      col_idx, type_pair.second, initial_filename, expected_types[col_idx].ToString());
+				                      col_idx, type_pair.second, initial_filename_p,
+				                      expected_types_p[col_idx].ToString());
 			}
 		} else {
 			names.push_back(type_pair.first);
@@ -270,6 +242,40 @@ ParquetReader::ParquetReader(ClientContext &context, string file_name_p, vector<
 		}
 		col_idx++;
 	}
+	D_ASSERT(!names.empty());
+	D_ASSERT(!return_types.empty());
+}
+
+ParquetReader::ParquetReader(unique_ptr<FileHandle> file_handle_p, const vector<LogicalType> &expected_types_p,
+                             const string &initial_filename_p) {
+	file_name = file_handle_p->path;
+	file_handle = move(file_handle_p);
+	metadata = load_metadata(*file_handle);
+	InitializeSchema(expected_types_p, initial_filename_p);
+}
+
+ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, const vector<LogicalType> &expected_types_p,
+                             const string &initial_filename_p) {
+	auto &fs = FileSystem::GetFileSystem(context_p);
+	file_name = file_name_p;
+	file_handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ);
+	// If object cached is disabled
+	// or if this file has cached metadata
+	// or if the cached version already expired
+
+	auto last_modify_time = fs.GetLastModifiedTime(*file_handle);
+	if (!ObjectCache::ObjectCacheEnabled(context_p)) {
+		metadata = load_metadata(*file_handle);
+	} else {
+		metadata = std::dynamic_pointer_cast<ParquetFileMetadataCache>(
+		    ObjectCache::GetObjectCache(context_p).Get(file_name_p));
+		if (!metadata || (last_modify_time + 10 >= metadata->read_time)) {
+			metadata = load_metadata(*file_handle);
+			ObjectCache::GetObjectCache(context_p).Put(file_name_p, metadata);
+		}
+	}
+
+	InitializeSchema(expected_types_p, initial_filename_p);
 }
 
 ParquetReader::~ParquetReader() {
@@ -374,8 +380,8 @@ idx_t ParquetReader::NumRowGroups() {
 	return GetFileMetadata()->row_groups.size();
 }
 
-void ParquetReader::Initialize(ParquetReaderScanState &state, vector<column_t> column_ids, vector<idx_t> groups_to_read,
-                               TableFilterSet *filters) {
+void ParquetReader::InitializeScan(ParquetReaderScanState &state, vector<column_t> column_ids,
+                                   vector<idx_t> groups_to_read, TableFilterSet *filters) {
 	state.current_group = -1;
 	state.finished = false;
 	state.column_ids = move(column_ids);
@@ -383,10 +389,8 @@ void ParquetReader::Initialize(ParquetReaderScanState &state, vector<column_t> c
 	state.group_idx_list = move(groups_to_read);
 	state.filters = filters;
 	state.sel.Initialize(STANDARD_VECTOR_SIZE);
-
-	auto handle = FileSystem::GetFileSystem(context).OpenFile(file_name, FileFlags::FILE_FLAGS_READ);
-	shared_ptr<ThriftFileTransport> trans(new ThriftFileTransport(move(handle)));
-	state.thrift_file_proto = make_unique<apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(trans);
+	state.file_handle = file_handle->file_system.OpenFile(file_handle->path, FileFlags::FILE_FLAGS_READ);
+	state.thrift_file_proto = create_thrift_protocol(*state.file_handle);
 	state.root_reader = CreateReader(GetFileMetadata());
 
 	state.define_buf.resize(STANDARD_VECTOR_SIZE);
