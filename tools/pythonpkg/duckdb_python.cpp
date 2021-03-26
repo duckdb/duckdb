@@ -24,6 +24,11 @@
 #include <random>
 #include <stdlib.h>
 
+#include "duckdb/main/config.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
+
 namespace py = pybind11;
 
 namespace duckdb {
@@ -1664,12 +1669,45 @@ struct DuckDBPyConnection {
 		return result->FetchArrowTable();
 	}
 
+	static unique_ptr<TableFunctionRef> TryPandasReplacement(py::dict &dict, py::str &table_name) {
+		if (!dict.contains(table_name)) {
+			// not present in the globals
+			return nullptr;
+		}
+		auto entry = dict[table_name];
+
+		// check if there is a local or global variable
+		auto table_function = make_unique<TableFunctionRef>();
+		vector<unique_ptr<ParsedExpression>> children;
+		children.push_back(make_unique<ConstantExpression>(Value(PtrToString(entry.ptr()))));
+		table_function->function = make_unique<FunctionExpression>("pandas_scan", children);
+		return table_function;
+	}
+
+	static unique_ptr<TableFunctionRef> PandasScanReplacement(const string &table_name, void *data) {
+		// look in the locals first
+		PyObject *p = PyEval_GetLocals();
+		auto py_table_name = py::str(table_name);
+		if (p) {
+			auto local_dict = py::reinterpret_borrow<py::dict>(p);
+			auto result = TryPandasReplacement(local_dict, py_table_name);
+			if (result) {
+				return result;
+			}
+		}
+		// otherwise look in the globals
+		auto global_dict = py::globals();
+		return TryPandasReplacement(global_dict, py_table_name);
+	}
+
 	static shared_ptr<DuckDBPyConnection> Connect(const string &database, bool read_only) {
 		auto res = make_shared<DuckDBPyConnection>();
 		DBConfig config;
 		if (read_only) {
 			config.access_mode = AccessMode::READ_ONLY;
 		}
+		config.replacement_scans.push_back(ReplacementScan(PandasScanReplacement));
+
 		res->database = make_unique<DuckDB>(database, &config);
 		ExtensionHelper::LoadAllExtensions(*res->database);
 		res->connection = make_unique<Connection>(*res->database);

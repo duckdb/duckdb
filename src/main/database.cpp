@@ -180,6 +180,7 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 	config.default_order_type = new_config.default_order_type;
 	config.default_null_order = new_config.default_null_order;
 	config.enable_copy = new_config.enable_copy;
+	config.replacement_scans = move(new_config.replacement_scans);
 }
 
 DBConfig &DBConfig::GetConfig(ClientContext &context) {
