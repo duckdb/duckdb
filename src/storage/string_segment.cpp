@@ -82,7 +82,7 @@ void StringSegment::FetchBaseData(ColumnScanState &state, data_ptr_t baseptr, id
                                   idx_t count) {
 	auto base = baseptr + vector_index * vector_size;
 
-	auto base_data = (int32_t *) base;
+	auto base_data = (int32_t *)base;
 	auto result_data = FlatVector::GetData<string_t>(result);
 
 	// no updates: fetch only from the string dictionary
@@ -97,7 +97,7 @@ void StringSegment::FetchBaseData(ColumnScanState &state, data_ptr_t baseptr, id
 void StringSegment::FetchStringLocations(data_ptr_t baseptr, row_t *ids, idx_t vector_index, idx_t vector_offset,
                                          idx_t count, string_location_t result[]) {
 	auto base = baseptr + vector_index * vector_size;
-	auto base_data = (int32_t *) base;
+	auto base_data = (int32_t *)base;
 
 	// no updates: fetch strings from base vector
 	for (idx_t i = 0; i < count; i++) {
@@ -174,7 +174,7 @@ void StringSegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &resu
 	}
 
 	auto base = baseptr + vector_index * vector_size;
-	auto base_data = (int32_t *) base;
+	auto base_data = (int32_t *)base;
 	auto result_data = FlatVector::GetData<string_t>(result);
 
 	result_data[result_idx] = FetchStringFromDict(result, baseptr, base_data[id_in_vector]);
@@ -229,7 +229,7 @@ static inline void UpdateStringStats(SegmentStatistics &stats, const string_t &n
 void StringSegment::AppendData(BufferHandle &handle, SegmentStatistics &stats, data_ptr_t target, data_ptr_t end,
                                idx_t target_offset, VectorData &adata, idx_t offset, idx_t count) {
 	auto sdata = (string_t *)adata.data;
-	auto result_data = (int32_t *) target;
+	auto result_data = (int32_t *)target;
 
 	idx_t remaining_strings = STANDARD_VECTOR_SIZE - (this->tuple_count % STANDARD_VECTOR_SIZE);
 	for (idx_t i = 0; i < count; i++) {

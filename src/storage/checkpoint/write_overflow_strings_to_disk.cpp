@@ -63,4 +63,4 @@ void WriteOverflowStringsToDisk::AllocateNewBlock(block_id_t new_block_id) {
 	block_id = new_block_id;
 }
 
-}
+} // namespace duckdb

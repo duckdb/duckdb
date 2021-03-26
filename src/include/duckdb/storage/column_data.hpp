@@ -49,7 +49,8 @@ public:
 class ColumnData {
 public:
 	ColumnData(DatabaseInstance &db, DataTableInfo &table_info, LogicalType type, idx_t column_idx);
-	virtual ~ColumnData(){}
+	virtual ~ColumnData() {
+	}
 
 	DataTableInfo &table_info;
 	//! The type of the column
@@ -75,7 +76,8 @@ public:
 	//! Scan the next vector from the column
 	virtual void Scan(Transaction &transaction, ColumnScanState &state, Vector &result) = 0;
 	//! Scan the next vector from the column and apply a selection vector to filter the data
-	void FilterScan(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel, idx_t &approved_tuple_count);
+	void FilterScan(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
+	                idx_t &approved_tuple_count);
 	//! Scan the next vector from the column, throwing an exception if there are any outstanding updates
 	virtual void IndexScan(ColumnScanState &state, Vector &result, bool allow_pending_updates) = 0;
 	//! Executes the filters directly in the table's data
@@ -95,7 +97,8 @@ public:
 	//! Fetch the vector from the column data that belongs to this specific row
 	virtual void Fetch(ColumnScanState &state, row_t row_id, Vector &result);
 	//! Fetch a specific row id and append it to the vector
-	virtual void FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result, idx_t result_idx);
+	virtual void FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result,
+	                      idx_t result_idx);
 
 	void SetStatistics(unique_ptr<BaseStatistics> new_stats);
 	void MergeStatistics(BaseStatistics &other);
@@ -108,7 +111,8 @@ public:
 
 	virtual void Initialize(PersistentColumnData &column_data);
 
-	static void BaseDeserialize(DatabaseInstance &db, Deserializer &source, LogicalType type, PersistentColumnData &result);
+	static void BaseDeserialize(DatabaseInstance &db, Deserializer &source, LogicalType type,
+	                            PersistentColumnData &result);
 	static unique_ptr<PersistentColumnData> Deserialize(DatabaseInstance &db, Deserializer &source, LogicalType type);
 
 protected:

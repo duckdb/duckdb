@@ -28,4 +28,4 @@ public:
 	static unique_ptr<PersistentColumnData> Deserialize(DatabaseInstance &db, Deserializer &source);
 };
 
-}
+} // namespace duckdb

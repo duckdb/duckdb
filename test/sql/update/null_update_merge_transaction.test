@@ -1,4 +1,4 @@
-# name: test/sql/update/null_update_merge.test
+# name: test/sql/update/null_update_merge_transaction.test
 # description: Test repeated updates that change the nullness of values
 # group: [update]
 

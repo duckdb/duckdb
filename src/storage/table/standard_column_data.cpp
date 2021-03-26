@@ -7,8 +7,10 @@
 
 namespace duckdb {
 
-StandardColumnData::StandardColumnData(DatabaseInstance &db, DataTableInfo &table_info, LogicalType type, idx_t column_idx) :
-	ColumnData(db, table_info, type, column_idx), validity(db, table_info, column_idx) {}
+StandardColumnData::StandardColumnData(DatabaseInstance &db, DataTableInfo &table_info, LogicalType type,
+                                       idx_t column_idx)
+    : ColumnData(db, table_info, type, column_idx), validity(db, table_info, column_idx) {
+}
 
 bool StandardColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
 	if (!state.segment_checked) {
@@ -142,7 +144,7 @@ void StandardColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &res
 }
 
 void StandardColumnData::FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result,
-                          idx_t result_idx) {
+                                  idx_t result_idx) {
 	// find the segment the row belongs to
 	if (state.child_states.empty()) {
 		ColumnFetchState child_state;
@@ -158,7 +160,6 @@ unique_ptr<BaseStatistics> StandardColumnData::GetStatistics() {
 	return base_stats;
 }
 
-
 void StandardColumnData::CommitDropColumn() {
 	ColumnData::CommitDropColumn();
 	validity.CommitDropColumn();
@@ -170,16 +171,17 @@ void StandardColumnData::Checkpoint(TableDataWriter &writer) {
 }
 
 void StandardColumnData::Initialize(PersistentColumnData &column_data) {
-	auto &persistent = (StandardPersistentColumnData &) column_data;
+	auto &persistent = (StandardPersistentColumnData &)column_data;
 	ColumnData::Initialize(column_data);
 	validity.Initialize(*persistent.validity);
 }
 
-unique_ptr<PersistentColumnData> StandardColumnData::Deserialize(DatabaseInstance &db, Deserializer &source, LogicalType type) {
+unique_ptr<PersistentColumnData> StandardColumnData::Deserialize(DatabaseInstance &db, Deserializer &source,
+                                                                 LogicalType type) {
 	auto result = make_unique<StandardPersistentColumnData>();
 	BaseDeserialize(db, source, type, *result);
 	result->validity = ValidityColumnData::Deserialize(db, source);
 	return result;
 }
 
-}
+} // namespace duckdb

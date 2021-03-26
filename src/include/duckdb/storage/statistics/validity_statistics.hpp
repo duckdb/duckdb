@@ -29,7 +29,8 @@ public:
 	static unique_ptr<BaseStatistics> Deserialize(Deserializer &source);
 	void Verify(Vector &vector, idx_t count) override;
 
-	static unique_ptr<BaseStatistics> Combine(const unique_ptr<BaseStatistics> &lstats, const unique_ptr<BaseStatistics> &rstats);
+	static unique_ptr<BaseStatistics> Combine(const unique_ptr<BaseStatistics> &lstats,
+	                                          const unique_ptr<BaseStatistics> &rstats);
 
 	string ToString() override;
 };

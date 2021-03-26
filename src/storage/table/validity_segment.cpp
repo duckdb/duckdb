@@ -5,8 +5,8 @@
 
 namespace duckdb {
 
-ValiditySegment::ValiditySegment(DatabaseInstance &db, idx_t row_start, block_id_t block_id) :
-	UncompressedSegment(db, PhysicalType::BIT, row_start) {
+ValiditySegment::ValiditySegment(DatabaseInstance &db, idx_t row_start, block_id_t block_id)
+    : UncompressedSegment(db, PhysicalType::BIT, row_start) {
 	// figure out how many vectors we want to store in this block
 
 	this->vector_size = ValidityMask::STANDARD_MASK_SIZE;
@@ -41,7 +41,7 @@ void ValiditySegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &re
 	D_ASSERT(row_id >= 0 && row_id < row_t(this->tuple_count));
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	auto handle = buffer_manager.Pin(block);
-	ValidityMask mask((validity_t *) handle->node->buffer);
+	ValidityMask mask((validity_t *)handle->node->buffer);
 	if (!mask.RowIsValidUnsafe(row_id)) {
 		FlatVector::SetNull(result, result_idx, true);
 	}
@@ -57,9 +57,9 @@ idx_t ValiditySegment::Append(SegmentStatistics &stats, VectorData &data, idx_t 
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	auto handle = buffer_manager.Pin(block);
 
-	auto &validity_stats = (ValidityStatistics &) *stats.statistics;
-	ValidityMask mask((validity_t *) handle->node->buffer);
-	for(idx_t i = 0; i < append_count; i++) {
+	auto &validity_stats = (ValidityStatistics &)*stats.statistics;
+	ValidityMask mask((validity_t *)handle->node->buffer);
+	for (idx_t i = 0; i < append_count; i++) {
 		auto idx = data.sel->get_index(i);
 		if (!data.validity.RowIsValidUnsafe(idx)) {
 			mask.SetInvalidUnsafe(tuple_count + i);
@@ -91,7 +91,7 @@ void ValiditySegment::RevertAppend(idx_t start_row) {
 		idx_t bit_start = byte_pos * 8;
 		idx_t bit_end = (byte_pos + 1) * 8;
 		ValidityMask mask(handle->node->buffer + byte_pos);
-		for(idx_t i = start_bit; i < bit_end; i++) {
+		for (idx_t i = start_bit; i < bit_end; i++) {
 			mask.SetValid(i - bit_start);
 		}
 		revert_start = bit_end / 8;
@@ -102,5 +102,4 @@ void ValiditySegment::RevertAppend(idx_t start_row) {
 	memset(handle->node->buffer + revert_start, 0xFF, Storage::BLOCK_SIZE - revert_start);
 }
 
-
-}
+} // namespace duckdb

@@ -36,4 +36,4 @@ private:
 	void AllocateNewBlock(block_id_t new_block_id);
 };
 
-}
+} // namespace duckdb

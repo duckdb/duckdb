@@ -34,5 +34,4 @@ protected:
 	void FetchBaseData(ColumnScanState &state, idx_t vector_index, Vector &result) override;
 };
 
-
 } // namespace duckdb

@@ -20,7 +20,7 @@ bool BaseStatistics::CanHaveNull() {
 		// solid maybe
 		return true;
 	}
-	return ((ValidityStatistics &) *validity_stats).has_null;
+	return ((ValidityStatistics &)*validity_stats).has_null;
 }
 
 unique_ptr<BaseStatistics> BaseStatistics::Copy() {

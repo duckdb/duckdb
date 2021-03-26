@@ -92,17 +92,17 @@ void UpdateInfo::Verify() {
 // Update Fetch
 //===--------------------------------------------------------------------===//
 static void MergeValidity(UpdateInfo *current, ValidityMask &result_mask) {
-	auto info_data = (bool *) current->tuple_data;
+	auto info_data = (bool *)current->tuple_data;
 	for (idx_t i = 0; i < current->N; i++) {
 		result_mask.Set(current->tuples[i], info_data[i]);
 	}
 }
 
-static void UpdateMergeValidity(transaction_t start_time, transaction_t transaction_id, UpdateInfo *info, Vector &result) {
+static void UpdateMergeValidity(transaction_t start_time, transaction_t transaction_id, UpdateInfo *info,
+                                Vector &result) {
 	auto &result_mask = FlatVector::Validity(result);
-	UpdateInfo::UpdatesForTransaction(info, start_time, transaction_id, [&](UpdateInfo *current) {
-		MergeValidity(current, result_mask);
-	});
+	UpdateInfo::UpdatesForTransaction(info, start_time, transaction_id,
+	                                  [&](UpdateInfo *current) { MergeValidity(current, result_mask); });
 }
 
 template <class T>
@@ -123,9 +123,8 @@ static void MergeUpdateInfo(UpdateInfo *current, T *result_data) {
 template <class T>
 static void UpdateMergeFetch(transaction_t start_time, transaction_t transaction_id, UpdateInfo *info, Vector &result) {
 	auto result_data = FlatVector::GetData<T>(result);
-	UpdateInfo::UpdatesForTransaction(info, start_time, transaction_id, [&](UpdateInfo *current) {
-		MergeUpdateInfo<T>(current, result_data);
-	});
+	UpdateInfo::UpdatesForTransaction(info, start_time, transaction_id,
+	                                  [&](UpdateInfo *current) { MergeUpdateInfo<T>(current, result_data); });
 }
 
 static UpdateSegment::fetch_update_function_t GetFetchUpdateFunction(PhysicalType type) {
@@ -246,7 +245,7 @@ void UpdateSegment::FetchCommitted(idx_t vector_index, Vector &result) {
 // Fetch Row
 //===--------------------------------------------------------------------===//
 static void FetchRowValidity(transaction_t start_time, transaction_t transaction_id, UpdateInfo *info, idx_t row_idx,
-                              Vector &result, idx_t result_idx) {
+                             Vector &result, idx_t result_idx) {
 	auto &result_mask = FlatVector::Validity(result);
 	UpdateInfo::UpdatesForTransaction(info, start_time, transaction_id, [&](UpdateInfo *current) {
 		auto info_data = (bool *)current->tuple_data;
@@ -417,8 +416,8 @@ void UpdateSegment::CleanupUpdate(UpdateInfo *info) {
 //===--------------------------------------------------------------------===//
 // Check for conflicts in update
 //===--------------------------------------------------------------------===//
-static void CheckForConflicts(UpdateInfo *info, Transaction &transaction, row_t *ids, const SelectionVector &sel, idx_t count, row_t offset,
-                              UpdateInfo *&node) {
+static void CheckForConflicts(UpdateInfo *info, Transaction &transaction, row_t *ids, const SelectionVector &sel,
+                              idx_t count, row_t offset, UpdateInfo *&node) {
 	if (!info) {
 		return;
 	}
@@ -454,8 +453,8 @@ static void CheckForConflicts(UpdateInfo *info, Transaction &transaction, row_t 
 //===--------------------------------------------------------------------===//
 // Initialize update info
 //===--------------------------------------------------------------------===//
-void UpdateSegment::InitializeUpdateInfo(UpdateInfo &info, row_t *ids, const SelectionVector &sel, idx_t count, idx_t vector_index,
-                                         idx_t vector_offset) {
+void UpdateSegment::InitializeUpdateInfo(UpdateInfo &info, row_t *ids, const SelectionVector &sel, idx_t count,
+                                         idx_t vector_index, idx_t vector_offset) {
 	info.segment = this;
 	info.vector_index = vector_index;
 	info.prev = nullptr;
@@ -472,7 +471,7 @@ void UpdateSegment::InitializeUpdateInfo(UpdateInfo &info, row_t *ids, const Sel
 }
 
 static void InitializeUpdateValidity(SegmentStatistics &stats, UpdateInfo *base_info, Vector &base_data,
-                                 UpdateInfo *update_info, Vector &update, const SelectionVector &sel) {
+                                     UpdateInfo *update_info, Vector &update, const SelectionVector &sel) {
 	auto &update_mask = FlatVector::Validity(update);
 	auto tuple_data = (bool *)update_info->tuple_data;
 
@@ -558,8 +557,8 @@ static UpdateSegment::initialize_update_function_t GetInitializeUpdateFunction(P
 // Merge update info
 //===--------------------------------------------------------------------===//
 template <class F1, class F2, class F3>
-static idx_t MergeLoop(row_t a[], sel_t b[], idx_t acount, idx_t bcount, idx_t aoffset, F1 merge, F2 pick_a,
-                       F3 pick_b, const SelectionVector &asel) {
+static idx_t MergeLoop(row_t a[], sel_t b[], idx_t acount, idx_t bcount, idx_t aoffset, F1 merge, F2 pick_a, F3 pick_b,
+                       const SelectionVector &asel) {
 	idx_t aidx = 0, bidx = 0;
 	idx_t count = 0;
 	while (aidx < acount && bidx < bcount) {
@@ -594,29 +593,31 @@ static idx_t MergeLoop(row_t a[], sel_t b[], idx_t acount, idx_t bcount, idx_t a
 }
 
 struct ExtractStandardEntry {
-	template<class T, class V>
+	template <class T, class V>
 	static T Extract(V *data, idx_t entry) {
 		return data[entry];
 	}
 };
 
 struct ExtractValidityEntry {
-	template<class T, class V>
+	template <class T, class V>
 	static T Extract(V *data, idx_t entry) {
 		return data->RowIsValid(entry);
 	}
 };
 
 template <class T, class V, class OP = ExtractStandardEntry>
-static void MergeUpdateLoopInternal(SegmentStatistics &stats, UpdateInfo *base_info, V *base_table_data, UpdateInfo *update_info,
-                            V *update_vector_data, row_t *ids, idx_t count, const SelectionVector &sel) {
+static void MergeUpdateLoopInternal(SegmentStatistics &stats, UpdateInfo *base_info, V *base_table_data,
+                                    UpdateInfo *update_info, V *update_vector_data, row_t *ids, idx_t count,
+                                    const SelectionVector &sel) {
 	auto base_id = base_info->segment->start + base_info->vector_index * STANDARD_VECTOR_SIZE;
 #ifdef DEBUG
 	// all of these should be sorted, otherwise the below algorithm does not work
 	for (idx_t i = 1; i < count; i++) {
 		auto prev_idx = sel.get_index(i - 1);
 		auto idx = sel.get_index(i);
-		D_ASSERT(ids[idx] > ids[prev_idx] && ids[idx] >= row_t(base_id) && ids[idx] < row_t(base_id + STANDARD_VECTOR_SIZE));
+		D_ASSERT(ids[idx] > ids[prev_idx] && ids[idx] >= row_t(base_id) &&
+		         ids[idx] < row_t(base_id + STANDARD_VECTOR_SIZE));
 	}
 #endif
 
@@ -707,11 +708,13 @@ static void MergeUpdateLoopInternal(SegmentStatistics &stats, UpdateInfo *base_i
 	memcpy(base_info->tuples, result_ids, result_offset * sizeof(sel_t));
 }
 
-static void MergeValidityLoop(SegmentStatistics &stats, UpdateInfo *base_info, Vector &base_data, UpdateInfo *update_info,
-                            Vector &update, row_t *ids, idx_t count, const SelectionVector &sel) {
+static void MergeValidityLoop(SegmentStatistics &stats, UpdateInfo *base_info, Vector &base_data,
+                              UpdateInfo *update_info, Vector &update, row_t *ids, idx_t count,
+                              const SelectionVector &sel) {
 	auto &base_validity = FlatVector::Validity(base_data);
 	auto &update_validity = FlatVector::Validity(update);
-	MergeUpdateLoopInternal<bool, ValidityMask, ExtractValidityEntry>(stats, base_info, &base_validity, update_info, &update_validity, ids, count, sel);
+	MergeUpdateLoopInternal<bool, ValidityMask, ExtractValidityEntry>(stats, base_info, &base_validity, update_info,
+	                                                                  &update_validity, ids, count, sel);
 }
 
 template <class T>
@@ -761,9 +764,10 @@ static UpdateSegment::merge_update_function_t GetMergeUpdateFunction(PhysicalTyp
 //===--------------------------------------------------------------------===//
 // Update statistics
 //===--------------------------------------------------------------------===//
-idx_t UpdateValidityStatistics(UpdateSegment *segment, SegmentStatistics &stats, Vector &update, idx_t count, SelectionVector &sel) {
+idx_t UpdateValidityStatistics(UpdateSegment *segment, SegmentStatistics &stats, Vector &update, idx_t count,
+                               SelectionVector &sel) {
 	auto &mask = FlatVector::Validity(update);
-	auto &validity = (ValidityStatistics &) *stats.statistics;
+	auto &validity = (ValidityStatistics &)*stats.statistics;
 	if (!mask.AllValid() && !validity.has_null) {
 		for (idx_t i = 0; i < count; i++) {
 			if (!mask.RowIsValid(i)) {
@@ -777,7 +781,8 @@ idx_t UpdateValidityStatistics(UpdateSegment *segment, SegmentStatistics &stats,
 }
 
 template <class T>
-idx_t TemplatedUpdateNumericStatistics(UpdateSegment *segment, SegmentStatistics &stats, Vector &update, idx_t count, SelectionVector &sel) {
+idx_t TemplatedUpdateNumericStatistics(UpdateSegment *segment, SegmentStatistics &stats, Vector &update, idx_t count,
+                                       SelectionVector &sel) {
 	auto update_data = FlatVector::GetData<T>(update);
 	auto &mask = FlatVector::Validity(update);
 
@@ -800,7 +805,8 @@ idx_t TemplatedUpdateNumericStatistics(UpdateSegment *segment, SegmentStatistics
 	}
 }
 
-idx_t UpdateStringStatistics(UpdateSegment *segment, SegmentStatistics &stats, Vector &update, idx_t count, SelectionVector &sel) {
+idx_t UpdateStringStatistics(UpdateSegment *segment, SegmentStatistics &stats, Vector &update, idx_t count,
+                             SelectionVector &sel) {
 	auto update_data = FlatVector::GetData<string_t>(update);
 	auto &mask = FlatVector::Validity(update);
 	if (mask.AllValid()) {
@@ -878,7 +884,8 @@ void UpdateSegment::Update(Transaction &transaction, Vector &update, row_t *ids,
 	D_ASSERT(vector_index < MORSEL_VECTOR_COUNT);
 
 	if (column_data.type.id() == LogicalTypeId::VALIDITY) {
-		if ((!root || !root->info[vector_index]) && FlatVector::Validity(update).AllValid() && FlatVector::Validity(base_data).AllValid()) {
+		if ((!root || !root->info[vector_index]) && FlatVector::Validity(update).AllValid() &&
+		    FlatVector::Validity(base_data).AllValid()) {
 			// fast path: updating a validity segment, and both the base data and the update data have no null values
 			// in this case we can skip the entire update (null-ness will not change)
 			// this happens when we do an update that does not affect null-ness (e.g. i = i + 1)

@@ -32,7 +32,8 @@ public:
 	void RevertAppend(row_t start_row) override;
 	void Update(Transaction &transaction, Vector &updates, Vector &row_ids, idx_t count) override;
 	void Fetch(ColumnScanState &state, row_t row_id, Vector &result) override;
-	void FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result, idx_t result_idx) override;
+	void FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result,
+	              idx_t result_idx) override;
 
 	unique_ptr<BaseStatistics> GetStatistics() override;
 
@@ -42,4 +43,4 @@ public:
 	static unique_ptr<PersistentColumnData> Deserialize(DatabaseInstance &db, Deserializer &source, LogicalType type);
 };
 
-}
+} // namespace duckdb

@@ -94,7 +94,7 @@ public:
 		}
 	}
 
-	template <class T, class RETURN_TYPE=T>
+	template <class T, class RETURN_TYPE = T>
 	unique_ptr<RETURN_TYPE> ReadOptional() {
 		auto has_entry = Read<bool>();
 		if (has_entry) {

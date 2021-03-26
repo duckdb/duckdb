@@ -34,8 +34,7 @@ void ColumnData::Select(Transaction &transaction, ColumnScanState &state, Vector
                         idx_t &approved_tuple_count, vector<TableFilter> &table_filters) {
 	Scan(transaction, state, result);
 	for (auto &filter : table_filters) {
-		UncompressedSegment::FilterSelection(sel, result, filter, approved_tuple_count,
-												FlatVector::Validity(result));
+		UncompressedSegment::FilterSelection(sel, result, filter, approved_tuple_count, FlatVector::Validity(result));
 	}
 }
 
@@ -56,7 +55,7 @@ void ColumnScanState::Next() {
 		updates = (UpdateSegment *)updates->next.get();
 		vector_index_updates = 0;
 	}
-	for(auto &child_state : child_states) {
+	for (auto &child_state : child_states) {
 		child_state.Next();
 	}
 }
@@ -186,8 +185,8 @@ void ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
 	update_segment->FetchCommitted(update_vector_index, result);
 }
 
-
-void ColumnData::FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result, idx_t result_idx) {
+void ColumnData::FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result,
+                          idx_t result_idx) {
 	auto segment = (ColumnSegment *)data.GetSegment(row_id);
 	auto update_segment = (UpdateSegment *)updates.GetSegment(row_id);
 
@@ -224,7 +223,7 @@ unique_ptr<BaseStatistics> ColumnData::GetStatistics() {
 
 void ColumnData::CommitDropColumn() {
 	auto &block_manager = BlockManager::GetBlockManager(db);
-	auto segment = (ColumnSegment *) data.GetRootSegment();
+	auto segment = (ColumnSegment *)data.GetRootSegment();
 	while (segment) {
 		if (segment->segment_type == ColumnSegmentType::PERSISTENT) {
 			auto &persistent = (PersistentSegment &)*segment;
@@ -238,10 +237,12 @@ unique_ptr<ColumnCheckpointState> ColumnData::CreateCheckpointState(TableDataWri
 	return make_unique<ColumnCheckpointState>(*this, writer);
 }
 
-ColumnCheckpointState::ColumnCheckpointState(ColumnData &column_data, TableDataWriter &writer) :
-	column_data(column_data), writer(writer) {}
+ColumnCheckpointState::ColumnCheckpointState(ColumnData &column_data, TableDataWriter &writer)
+    : column_data(column_data), writer(writer) {
+}
 
-ColumnCheckpointState::~ColumnCheckpointState() {}
+ColumnCheckpointState::~ColumnCheckpointState() {
+}
 
 void ColumnCheckpointState::CreateEmptySegment() {
 	auto type_id = column_data.type.InternalType();
@@ -308,9 +309,9 @@ void ColumnCheckpointState::FlushSegment() {
 	data_pointer.statistics = segment_stats->statistics->Copy();
 
 	// construct a persistent segment that points to this block, and append it to the new segment tree
-	auto persistent_segment = make_unique<PersistentSegment>(column_data.db, block_id, offset_in_block, column_data.type,
-	                                                         data_pointer.row_start, data_pointer.tuple_count,
-	                                                         segment_stats->statistics->Copy());
+	auto persistent_segment = make_unique<PersistentSegment>(
+	    column_data.db, block_id, offset_in_block, column_data.type, data_pointer.row_start, data_pointer.tuple_count,
+	    segment_stats->statistics->Copy());
 	new_tree.AppendSegment(move(persistent_segment));
 
 	data_pointers.push_back(move(data_pointer));
@@ -476,7 +477,8 @@ void ColumnData::Initialize(PersistentColumnData &column_data) {
 	}
 }
 
-void ColumnData::BaseDeserialize(DatabaseInstance &db, Deserializer &source, LogicalType type, PersistentColumnData &result) {
+void ColumnData::BaseDeserialize(DatabaseInstance &db, Deserializer &source, LogicalType type,
+                                 PersistentColumnData &result) {
 	// load the column statistics
 	result.stats = BaseStatistics::Deserialize(source, type);
 	result.total_rows = 0;
@@ -494,15 +496,15 @@ void ColumnData::BaseDeserialize(DatabaseInstance &db, Deserializer &source, Log
 
 		result.total_rows += data_pointer.tuple_count;
 		// create a persistent segment
-		auto segment = make_unique<PersistentSegment>(db, data_pointer.block_id, data_pointer.offset, type,
-														data_pointer.row_start, data_pointer.tuple_count,
-														move(data_pointer.statistics));
+		auto segment =
+		    make_unique<PersistentSegment>(db, data_pointer.block_id, data_pointer.offset, type, data_pointer.row_start,
+		                                   data_pointer.tuple_count, move(data_pointer.statistics));
 		result.segments.push_back(move(segment));
 	}
 }
 
 unique_ptr<PersistentColumnData> ColumnData::Deserialize(DatabaseInstance &db, Deserializer &source, LogicalType type) {
-	switch(type.id()) {
+	switch (type.id()) {
 	case LogicalTypeId::VALIDITY:
 		return ValidityColumnData::Deserialize(db, source);
 	default:

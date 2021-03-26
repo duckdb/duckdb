@@ -4,8 +4,9 @@
 
 namespace duckdb {
 
-ValidityColumnData::ValidityColumnData(DatabaseInstance &db, DataTableInfo &table_info, idx_t column_idx) :
-	ColumnData(db, table_info, LogicalType(LogicalTypeId::VALIDITY), column_idx) {}
+ValidityColumnData::ValidityColumnData(DatabaseInstance &db, DataTableInfo &table_info, idx_t column_idx)
+    : ColumnData(db, table_info, LogicalType(LogicalTypeId::VALIDITY), column_idx) {
+}
 
 bool ValidityColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
 	return true;
@@ -75,4 +76,4 @@ unique_ptr<PersistentColumnData> ValidityColumnData::Deserialize(DatabaseInstanc
 	return result;
 }
 
-}
+} // namespace duckdb

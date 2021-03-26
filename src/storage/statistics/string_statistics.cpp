@@ -149,10 +149,9 @@ static idx_t GetValidMinMaxSubstring(data_ptr_t data) {
 string StringStatistics::ToString() {
 	idx_t min_len = GetValidMinMaxSubstring(min);
 	idx_t max_len = GetValidMinMaxSubstring(max);
-	return StringUtil::Format(
-	    "String Statistics %s[Min: %s, Max: %s, Has Unicode: %s, Max String Length: %lld]",
-	    validity_stats ? validity_stats->ToString() : "", string((const char *)min, min_len), string((const char *)max, max_len),
-	    has_unicode ? "true" : "false", max_string_length);
+	return StringUtil::Format("String Statistics %s[Min: %s, Max: %s, Has Unicode: %s, Max String Length: %lld]",
+	                          validity_stats ? validity_stats->ToString() : "", string((const char *)min, min_len),
+	                          string((const char *)max, max_len), has_unicode ? "true" : "false", max_string_length);
 }
 
 void StringStatistics::Verify(Vector &vector, idx_t count) {

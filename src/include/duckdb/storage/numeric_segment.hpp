@@ -35,8 +35,8 @@ protected:
 	void FetchBaseData(ColumnScanState &state, idx_t vector_index, Vector &result) override;
 
 public:
-	typedef void (*append_function_t)(SegmentStatistics &stats, data_ptr_t target, idx_t target_offset, VectorData &source,
-	                                  idx_t offset, idx_t count);
+	typedef void (*append_function_t)(SegmentStatistics &stats, data_ptr_t target, idx_t target_offset,
+	                                  VectorData &source, idx_t offset, idx_t count);
 
 private:
 	append_function_t append_function;

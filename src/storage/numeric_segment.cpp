@@ -117,8 +117,8 @@ idx_t NumericSegment::Append(SegmentStatistics &stats, VectorData &data, idx_t o
 // Append
 //===--------------------------------------------------------------------===//
 template <class T>
-static void AppendLoop(SegmentStatistics &stats, data_ptr_t target, idx_t target_offset, VectorData &adata, idx_t offset,
-                       idx_t count) {
+static void AppendLoop(SegmentStatistics &stats, data_ptr_t target, idx_t target_offset, VectorData &adata,
+                       idx_t offset, idx_t count) {
 	auto sdata = (T *)adata.data;
 	auto tdata = (T *)target;
 	if (!adata.validity.AllValid()) {

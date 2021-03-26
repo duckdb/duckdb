@@ -1,4 +1,4 @@
-# name: test/sql/storage/commit_abort_large.test_slow
+# name: test/sql/storage/commit_abort_medium.test
 # description: Test abort of commit with many values
 # group: [storage]
 

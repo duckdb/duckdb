@@ -30,9 +30,10 @@ public:
 	void CheckpointColumn(ColumnData &col_data, idx_t col_idx);
 	void CheckpointDeletes(MorselInfo *info);
 
-	MetaBlockWriter& GetMetaWriter() {
+	MetaBlockWriter &GetMetaWriter() {
 		return meta_writer;
 	}
+
 private:
 	DatabaseInstance &db;
 	TableCatalogEntry &table;
