@@ -122,17 +122,10 @@ void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
 	}
 }
 
-// void Vector::InitializeList(const LogicalType &new_type){
-//    buffer = make_buffer<VectorListBuffer>(new_type);
-//}
 void Vector::Initialize(const LogicalType &new_type, bool zero_data) {
 	if (new_type.id() != LogicalTypeId::INVALID) {
 		SetType(new_type);
 	}
-	//	if (new_type == LogicalType::LIST) {
-	//		buffer = make_buffer<VectorListBuffer>();
-	//		return;
-	//	}
 	auxiliary.reset();
 	validity.Reset();
 	if (GetTypeIdSize(GetType().InternalType()) > 0) {
@@ -331,13 +324,10 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		}
 		auto offset = ListVector::GetListSize(*this);
 		if (!val.list_value.empty()) {
-			//			Vector to_append(val.list_value[0].type());
 			for (idx_t i = 0; i < val.list_value.size(); i++) {
 				Value v(val.list_value[i]);
 				ListVector::PushBack(*this, v);
-				//				to_append.SetValue(i, val.list_value[i]);
 			}
-			//			ListVector::Append(*this, to_append, val.list_value.size());
 		}
 		//! now set the pointer
 		auto &entry = ((list_entry_t *)data)[index];

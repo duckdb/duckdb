@@ -436,7 +436,6 @@ idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint
 			} else {
 				// value is NULL somewhere up the stack
 				FlatVector::SetNull(result_out, result_offset, true);
-				// FlatVector::SetNull(append_chunk.data[0], result_offset, true);
 				result_ptr[result_offset].offset = 0;
 				result_ptr[result_offset].length = 0;
 			}
@@ -446,7 +445,6 @@ idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint
 
 			result_offset++;
 		}
-		// ListVector::Append(result_out, append_chunk.data[0], append_chunk.size());
 
 		// we have read more values from the child reader than we can fit into the result for this read
 		// we have to pass everything from child_idx to child_actual_num_values into the next call

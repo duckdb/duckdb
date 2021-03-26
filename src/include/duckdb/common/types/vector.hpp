@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include <utility>
-
 #include "duckdb/common/bitset.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
@@ -51,8 +49,6 @@ public:
 	explicit Vector(const Value &value);
 	//! Create an empty standard vector with a type, equivalent to calling Vector(type, true, false)
 	explicit Vector(const LogicalType &type);
-	//! Vector List
-	//	Vector(const child_list_t<LogicalType> &child_list);
 	//! Create a non-owning vector that references the specified data
 	Vector(const LogicalType &type, data_ptr_t dataptr);
 	//! Create an owning vector that holds at most STANDARD_VECTOR_SIZE entries.

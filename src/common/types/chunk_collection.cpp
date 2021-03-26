@@ -81,8 +81,6 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 				     chunks) { // need to check all the chunks because they can have only-null list entries
 					auto &chunk_vec = chunk->data[i];
 					auto &new_vec = new_chunk.data[i];
-					// auto new_vec_child = make_unique<Vector>(new_vec.GetType().child_types()[0].second);
-					// ListVector::SetEntry(new_vec,move(new_vec_child));
 					if (ListVector::HasEntry(chunk_vec) && ListVector::HasEntry(new_vec)) {
 						auto &chunk_type = chunk_vec.GetType();
 						auto &new_type = new_vec.GetType();
