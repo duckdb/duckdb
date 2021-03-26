@@ -192,7 +192,8 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 		// if payload entry size is not constant, we keep track of entry sizes
 		state->sizes_block =
 		    make_unique<RowChunk>(buffer_manager, (idx_t)Storage::BLOCK_ALLOC_SIZE / sizeof(idx_t) + 1, sizeof(idx_t));
-		// again, we have to assume a large variable size TODO: overflow large strings into separate buffermanaged blocks
+		// again, we have to assume a large variable size TODO: overflow large strings into separate buffermanaged
+		// blocks
 		state->payload_block = make_unique<RowChunk>(buffer_manager, (entry_size + var_columns * (1 << 23)) / 32, 32);
 	} else {
 		vectors_per_block = (Storage::BLOCK_ALLOC_SIZE / entry_size + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE;
@@ -397,7 +398,7 @@ static void SubSortTiedTuples(BufferManager &buffer_manager, const data_ptr_t da
 
 static void ComputeTies(data_ptr_t dataptr, const idx_t &count, const idx_t &col_offset, const idx_t &tie_size,
                         bool ties[], const SortingState &sorting_state) {
-    D_ASSERT(!ties[count - 1]);
+	D_ASSERT(!ties[count - 1]);
 	D_ASSERT(col_offset + tie_size <= sorting_state.ENTRY_SIZE - sizeof(idx_t));
 	// align dataptr
 	dataptr += col_offset;
@@ -410,8 +411,8 @@ static void ComputeTies(data_ptr_t dataptr, const idx_t &count, const idx_t &col
 		}
 	}
 	for (; i < count - 1; i++) {
-        ties[i] = ties[i] && memcmp(dataptr, dataptr + sorting_state.ENTRY_SIZE, tie_size) == 0;
-        dataptr += sorting_state.ENTRY_SIZE;
+		ties[i] = ties[i] && memcmp(dataptr, dataptr + sorting_state.ENTRY_SIZE, tie_size) == 0;
+		dataptr += sorting_state.ENTRY_SIZE;
 	}
 	ties[count - 1] = false;
 }
@@ -523,7 +524,7 @@ static void BreakStringTies(BufferManager &buffer_manager, const data_ptr_t data
 
 static void BreakTies(BufferManager &buffer_manager, OrderGlobalState &global_state, bool ties[], data_ptr_t dataptr,
                       const idx_t &count, const idx_t &tie_col, const SortingState &sorting_state) {
-    D_ASSERT(!ties[count - 1]);
+	D_ASSERT(!ties[count - 1]);
 	auto var_block_handle = buffer_manager.Pin(global_state.var_sorting_blocks[tie_col]->blocks[0].block);
 	auto var_sizes_handle = buffer_manager.Pin(global_state.var_sorting_sizes[tie_col]->blocks[0].block);
 	const data_ptr_t var_dataptr = var_block_handle->node->buffer;
@@ -551,7 +552,7 @@ static void BreakTies(BufferManager &buffer_manager, OrderGlobalState &global_st
 }
 
 static bool AnyTies(bool ties[], const idx_t &count) {
-    D_ASSERT(!ties[count - 1]);
+	D_ASSERT(!ties[count - 1]);
 	bool any_ties = false;
 	for (idx_t i = 0; i < count - 1; i++) {
 		any_ties = any_ties || ties[i];
