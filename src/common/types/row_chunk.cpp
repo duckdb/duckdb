@@ -169,7 +169,7 @@ void RowChunk::EncodeData(data_ptr_t dataptr, interval_t value) {
 }
 
 void RowChunk::EncodeStringData(data_ptr_t dataptr, string_t value, idx_t prefix_len) {
-	idx_t len = value.GetSize();
+	auto len = value.GetSize();
 	memcpy(dataptr, value.GetDataUnsafe(), MinValue(len, prefix_len));
 	if (len < prefix_len) {
 		memset(dataptr + len, '\0', prefix_len - len);
@@ -193,15 +193,15 @@ void RowChunk::TemplatedSerializeVectorSortable(VectorData &vdata, const Selecti
 			if (validity.RowIsValid(source_idx)) {
 				key_locations[i][0] = valid;
 				EncodeData(key_locations[i] + 1, source[source_idx]);
+                // invert bits if desc
+                if (desc) {
+                    for (idx_t s = 0; s < sizeof(T) + 1; s++) {
+                        *(key_locations[i] + s) = ~*(key_locations[i] + s);
+                    }
+                }
 			} else {
 				key_locations[i][0] = invalid;
-				memset(key_locations[i] + 1, 0, sizeof(T));
-			}
-			// invert bits if desc
-			if (desc) {
-				for (idx_t s = 0; s < sizeof(T) + 1; s++) {
-					*(key_locations[i] + s) = ~*(key_locations[i] + s);
-				}
+				memset(key_locations[i] + 1, '\0', sizeof(T));
 			}
 			key_locations[i] += sizeof(T) + 1;
 		}
@@ -238,15 +238,15 @@ void RowChunk::SerializeStringVectorSortable(VectorData &vdata, const SelectionV
 			if (validity.RowIsValid(source_idx)) {
 				key_locations[i][0] = valid;
 				EncodeStringData(key_locations[i] + 1, source[source_idx], prefix_len);
+                // invert bits if desc
+                if (desc) {
+                    for (idx_t s = 0; s < prefix_len + 1; s++) {
+                        *(key_locations[i] + s) = ~*(key_locations[i] + s);
+                    }
+                }
 			} else {
 				key_locations[i][0] = invalid;
 				memset(key_locations[i] + 1, '\0', prefix_len);
-			}
-			// invert bits if desc
-			if (desc) {
-				for (idx_t s = 0; s < prefix_len + 1; s++) {
-					*(key_locations[i] + s) = ~*(key_locations[i] + s);
-				}
 			}
 			key_locations[i] += prefix_len + 1;
 		}

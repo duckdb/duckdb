@@ -192,7 +192,7 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 		// if payload entry size is not constant, we keep track of entry sizes
 		state->sizes_block =
 		    make_unique<RowChunk>(buffer_manager, (idx_t)Storage::BLOCK_ALLOC_SIZE / sizeof(idx_t) + 1, sizeof(idx_t));
-		// again, we have to assume a large variable size TODO: overflow large strings into separate buffermanaged
+		// again, we have to assume a large variable size TODO: overflow large strings into separate buffermanaged blocks
 		// blocks
 		state->payload_block = make_unique<RowChunk>(buffer_manager, (entry_size + var_columns * (1 << 23)) / 32, 32);
 	} else {
@@ -417,7 +417,7 @@ static void ComputeTies(data_ptr_t dataptr, const idx_t &count, const idx_t &col
 	ties[count - 1] = false;
 }
 
-static bool CompareStrings(const data_ptr_t &l, const data_ptr_t &r, const data_ptr_t &var_dataptr, idx_t sizes[],
+static bool CompareStrings(const data_ptr_t &l, const data_ptr_t &r, const data_ptr_t &var_dataptr, const idx_t sizes[],
                            const int &order, const idx_t &sorting_size) {
 	// use indices to find strings in blob
 	idx_t left_idx = Load<idx_t>(l + sorting_size);
@@ -444,8 +444,8 @@ static bool CompareStrings(const data_ptr_t &l, const data_ptr_t &r, const data_
 }
 
 static void BreakStringTies(BufferManager &buffer_manager, const data_ptr_t dataptr, const idx_t &start,
-                            const idx_t &end, const idx_t &tie_col, bool ties[], data_ptr_t var_dataptr,
-                            data_ptr_t sizes_ptr, const SortingState &sorting_state) {
+                            const idx_t &end, const idx_t &tie_col, bool ties[], const data_ptr_t var_dataptr,
+                            const data_ptr_t sizes_ptr, const SortingState &sorting_state) {
 	idx_t tie_col_offset = 0;
 	for (idx_t i = 0; i < tie_col; i++) {
 		tie_col_offset += sorting_state.COL_SIZE[i];
@@ -453,7 +453,7 @@ static void BreakStringTies(BufferManager &buffer_manager, const data_ptr_t data
 	if (sorting_state.HAS_NULL[tie_col]) {
 		tie_col_offset++;
 	}
-	// if the tied strings are smaller than the prefix size (contain '\0'), we don't need to break the ties
+	// if the tied strings are smaller than the prefix size, or are NULL, we don't need to break the ties
 	char *prefix_chars = (char *)dataptr + start * sorting_state.ENTRY_SIZE + tie_col_offset;
 	for (idx_t i = 0; i < StringStatistics::MAX_STRING_MINMAX_SIZE; i++) {
 		if (prefix_chars[i] == '\0') {
@@ -472,7 +472,7 @@ static void BreakStringTies(BufferManager &buffer_manager, const data_ptr_t data
 	// slow pointer-based sorting
 	const int order = sorting_state.ORDER_TYPES[tie_col] == OrderType::DESCENDING ? -1 : 1;
 	const idx_t sorting_size = sorting_state.ENTRY_SIZE - sizeof(idx_t);
-	idx_t *sizes = (idx_t *)sizes_ptr;
+	const idx_t *sizes = (idx_t *)sizes_ptr;
 	std::sort(entry_ptrs, entry_ptrs + end - start,
 	          [&var_dataptr, &sizes, &order, &sorting_size](const data_ptr_t l, const data_ptr_t r) {
 		          return CompareStrings(l, r, var_dataptr, sizes, order, sorting_size);
