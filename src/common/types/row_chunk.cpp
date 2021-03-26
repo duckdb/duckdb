@@ -193,12 +193,12 @@ void RowChunk::TemplatedSerializeVectorSortable(VectorData &vdata, const Selecti
 			if (validity.RowIsValid(source_idx)) {
 				key_locations[i][0] = valid;
 				EncodeData(key_locations[i] + 1, source[source_idx]);
-                // invert bits if desc
-                if (desc) {
-                    for (idx_t s = 0; s < sizeof(T) + 1; s++) {
-                        *(key_locations[i] + s) = ~*(key_locations[i] + s);
-                    }
-                }
+				// invert bits if desc
+				if (desc) {
+					for (idx_t s = 0; s < sizeof(T) + 1; s++) {
+						*(key_locations[i] + s) = ~*(key_locations[i] + s);
+					}
+				}
 			} else {
 				key_locations[i][0] = invalid;
 				memset(key_locations[i] + 1, '\0', sizeof(T));
@@ -238,12 +238,12 @@ void RowChunk::SerializeStringVectorSortable(VectorData &vdata, const SelectionV
 			if (validity.RowIsValid(source_idx)) {
 				key_locations[i][0] = valid;
 				EncodeStringData(key_locations[i] + 1, source[source_idx], prefix_len);
-                // invert bits if desc
-                if (desc) {
-                    for (idx_t s = 0; s < prefix_len + 1; s++) {
-                        *(key_locations[i] + s) = ~*(key_locations[i] + s);
-                    }
-                }
+				// invert bits if desc
+				if (desc) {
+					for (idx_t s = 0; s < prefix_len + 1; s++) {
+						*(key_locations[i] + s) = ~*(key_locations[i] + s);
+					}
+				}
 			} else {
 				key_locations[i][0] = invalid;
 				memset(key_locations[i] + 1, '\0', prefix_len);
