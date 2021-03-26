@@ -6,13 +6,21 @@
 #ifndef _WIN32
 #include <dlfcn.h>
 #else
-#define _AMD64_ // hack alert
-#include <libloaderapi.h>
+// we copy a trick from concurrentqueue, this is brilliant:
+// No sense pulling in windows.h for this, we'll manually declare the functions
+// we use and rely on backwards-compatibility for this not to break
+extern "C" __declspec(dllimport) void *__stdcall LoadLibrary(const char *);
+extern "C" __declspec(dllimport) void *__stdcall LoadLibrary(void *, const char *);
+
+#define RTLD_LAZY  0
+#define RTLD_LOCAL 0
 #endif
 
 namespace duckdb {
 
 #ifdef _WIN32
+
+
 void *dlopen(const char *file, int mode) {
 	D_ASSERT(file);
 	return (void *)LoadLibrary(file);
@@ -22,9 +30,6 @@ void *dlsym(void *handle, const char *name) {
 	D_ASSERT(handle);
 	return (void *)GetProcAddress((HINSTANCE)handle, name);
 }
-#define RTLD_LAZY  0
-#define RTLD_LOCAL 0
-
 #endif
 
 void PhysicalLoad::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
