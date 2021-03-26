@@ -49,7 +49,7 @@ public:
 	DUCKDB_API void Print();
 	DUCKDB_API void Head(idx_t limit = 10);
 
-	DUCKDB_API shared_ptr<Relation> CreateView(const string &name, bool replace = true);
+	DUCKDB_API shared_ptr<Relation> CreateView(const string &name, bool replace = true, bool temporary = false);
 	DUCKDB_API unique_ptr<QueryResult> Query(const string &sql);
 	DUCKDB_API unique_ptr<QueryResult> Query(const string &name, const string &sql);
 

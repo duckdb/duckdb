@@ -412,7 +412,9 @@ public:
 			auto child_read = make_unique<Vector>();
 			child_read->Initialize(Type().child_types()[i].second);
 			auto child_num_values = child_readers[i]->Read(num_values, filter, define_out, repeat_out, *child_read);
-			D_ASSERT(child_num_values == num_values);
+			if (child_num_values != num_values) {
+				throw std::runtime_error("Struct child row count mismatch");
+			}
 			StructVector::AddEntry(result, Type().child_types()[i].first, move(child_read));
 		}
 

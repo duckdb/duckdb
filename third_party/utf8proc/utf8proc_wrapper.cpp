@@ -1,5 +1,4 @@
 #include "utf8proc_wrapper.hpp"
-#include "utf8proc_wrapper.h"
 #include "utf8proc.hpp"
 
 using namespace std;
@@ -93,23 +92,11 @@ int32_t Utf8Proc::UTF8ToCodepoint(const char *c, int &sz) {
 	return utf8proc_codepoint(c, sz);
 }
 
+size_t Utf8Proc::RenderWidth(const char *s, size_t len, size_t pos) {
+    int sz;
+    auto codepoint = duckdb::utf8proc_codepoint(s + pos, sz);
+    auto properties = duckdb::utf8proc_get_property(codepoint);
+    return properties->charwidth;
 }
 
-size_t utf8proc_next_grapheme_cluster(const char *s, size_t len, size_t pos) {
-	return duckdb::Utf8Proc::NextGraphemeCluster(s, len, pos);
-}
-
-size_t utf8proc_prev_grapheme_cluster(const char *s, size_t len, size_t pos) {
-	return duckdb::Utf8Proc::PreviousGraphemeCluster(s, len, pos);
-}
-
-size_t utf8proc_render_width(const char *s, size_t len, size_t pos) {
-	int sz;
-	auto codepoint = duckdb::utf8proc_codepoint(s + pos, sz);
-	auto properties = duckdb::utf8proc_get_property(codepoint);
-	return properties->charwidth;
-}
-
-int utf8proc_is_valid(const char *s, size_t len) {
-	return duckdb::Utf8Proc::IsValid(s, len) ? 1 : 0;
 }

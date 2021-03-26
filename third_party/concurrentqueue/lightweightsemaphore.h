@@ -29,7 +29,7 @@ extern "C" {
 #include <chrono>
 #endif
 
-namespace moodycamel
+namespace duckdb_moodycamel
 {
 namespace details
 {
@@ -426,4 +426,4 @@ public:
 	}
 };
 
-}   // end namespace moodycamel
+}   // end namespace duckdb_moodycamel

@@ -124,7 +124,7 @@ struct BufferEvictionNode {
 	}
 };
 
-typedef moodycamel::ConcurrentQueue<unique_ptr<BufferEvictionNode>> eviction_queue_t;
+typedef duckdb_moodycamel::ConcurrentQueue<unique_ptr<BufferEvictionNode>> eviction_queue_t;
 
 struct EvictionQueue {
 	eviction_queue_t q;

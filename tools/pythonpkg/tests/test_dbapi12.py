@@ -24,6 +24,7 @@ class TestRelationApi(object):
             cmp_df = pd.DataFrame.from_dict({"i":[1, 2, 3], "cj":[1, 1, 1]})
             pd.testing.assert_frame_equal(res2.to_df(), cmp_df)
 
+            duckdb_cursor.execute('DROP TABLE IF EXISTS a2')
             rel.create('a2')
             rel_a2 = duckdb_cursor.table('a2').project('CAST(i as BIGINT) i, j').to_df()
             pd.testing.assert_frame_equal(rel_a2, test_df)
