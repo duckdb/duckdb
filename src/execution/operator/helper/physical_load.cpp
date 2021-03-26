@@ -20,7 +20,6 @@ namespace duckdb {
 
 #ifdef _WIN32
 
-
 void *dlopen(const char *file, int mode) {
 	D_ASSERT(file);
 	return (void *)LoadLibrary(file);
