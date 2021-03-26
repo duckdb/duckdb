@@ -4,6 +4,7 @@
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include <atomic>
 
 namespace duckdb {
 

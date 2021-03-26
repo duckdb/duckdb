@@ -258,11 +258,12 @@ struct PythonTableArrowArrayStream {
 			my_stream->last_error = "stream was released";
 			return -1;
 		}
-		auto export_to_c = my_stream->arrow_table.attr("schema").attr("_export_to_c");
-		if (!export_to_c) {
+		auto schema = my_stream->arrow_table.attr("schema");
+		if (!py::hasattr(schema, "_export_to_c")) {
 			my_stream->last_error = "failed to acquire export_to_c function";
 			return -1;
 		}
+		auto export_to_c = schema.attr("_export_to_c");
 		export_to_c((uint64_t)out);
 		return 0;
 	}
@@ -278,11 +279,12 @@ struct PythonTableArrowArrayStream {
 			out->release = nullptr;
 			return 0;
 		}
-		auto export_to_c = my_stream->batches[my_stream->batch_idx++].attr("_export_to_c");
-		if (!export_to_c) {
+		auto stream_batch = my_stream->batches[my_stream->batch_idx++];
+		if (!py::hasattr(stream_batch, "_export_to_c")) {
 			my_stream->last_error = "failed to acquire export_to_c function";
 			return -1;
 		}
+		auto export_to_c = stream_batch.attr("_export_to_c");
 		export_to_c((uint64_t)out);
 		return 0;
 	}
