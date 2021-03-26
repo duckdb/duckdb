@@ -891,6 +891,9 @@ void UpdateSegment::Update(Transaction &transaction, Vector &update, row_t *ids,
 	// update statistics
 	SelectionVector sel;
 	count = statistics_update_function(this, stats, update, count, sel);
+	if (count == 0) {
+		return;
+	}
 
 #ifdef DEBUG
 	// verify that the ids are sorted and there are no duplicates
