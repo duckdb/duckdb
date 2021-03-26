@@ -192,7 +192,7 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 		// if payload entry size is not constant, we keep track of entry sizes
 		state->sizes_block =
 		    make_unique<RowChunk>(buffer_manager, (idx_t)Storage::BLOCK_ALLOC_SIZE / sizeof(idx_t) + 1, sizeof(idx_t));
-		// again, we have to assume a large variable size
+		// again, we have to assume a large variable size TODO: overflow large strings into separate buffermanaged blocks
 		state->payload_block = make_unique<RowChunk>(buffer_manager, (entry_size + var_columns * (1 << 23)) / 32, 32);
 	} else {
 		vectors_per_block = (Storage::BLOCK_ALLOC_SIZE / entry_size + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE;
@@ -378,6 +378,7 @@ static void RadixSort(BufferManager &buffer_manager, data_ptr_t dataptr, const i
 static void SubSortTiedTuples(BufferManager &buffer_manager, const data_ptr_t dataptr, const idx_t &count,
                               const idx_t &col_offset, const idx_t &sorting_size, bool ties[],
                               const SortingState &sorting_state) {
+	D_ASSERT(!ties[count - 1]);
 	for (idx_t i = 0; i < count; i++) {
 		if (!ties[i]) {
 			continue;
@@ -396,13 +397,21 @@ static void SubSortTiedTuples(BufferManager &buffer_manager, const data_ptr_t da
 
 static void ComputeTies(data_ptr_t dataptr, const idx_t &count, const idx_t &col_offset, const idx_t &tie_size,
                         bool ties[], const SortingState &sorting_state) {
+    D_ASSERT(!ties[count - 1]);
+	D_ASSERT(col_offset + tie_size <= sorting_state.ENTRY_SIZE - sizeof(idx_t));
 	// align dataptr
 	dataptr += col_offset;
-	for (idx_t i = 0; i < count - 1; i++) {
-		if (ties[i]) {
-			ties[i] = memcmp(dataptr, dataptr + sorting_state.ENTRY_SIZE, tie_size) == 0;
+	idx_t i = 0;
+	for (; i + 7 < count - 1; i += 8) {
+		// fixed size inner loop to allow unrolling
+		for (idx_t j = 0; j < 8; j++) {
+			ties[i + j] = ties[i + j] && memcmp(dataptr, dataptr + sorting_state.ENTRY_SIZE, tie_size) == 0;
+			dataptr += sorting_state.ENTRY_SIZE;
 		}
-		dataptr += sorting_state.ENTRY_SIZE;
+	}
+	for (; i < count - 1; i++) {
+        ties[i] = ties[i] && memcmp(dataptr, dataptr + sorting_state.ENTRY_SIZE, tie_size) == 0;
+        dataptr += sorting_state.ENTRY_SIZE;
 	}
 	ties[count - 1] = false;
 }
@@ -514,6 +523,7 @@ static void BreakStringTies(BufferManager &buffer_manager, const data_ptr_t data
 
 static void BreakTies(BufferManager &buffer_manager, OrderGlobalState &global_state, bool ties[], data_ptr_t dataptr,
                       const idx_t &count, const idx_t &tie_col, const SortingState &sorting_state) {
+    D_ASSERT(!ties[count - 1]);
 	auto var_block_handle = buffer_manager.Pin(global_state.var_sorting_blocks[tie_col]->blocks[0].block);
 	auto var_sizes_handle = buffer_manager.Pin(global_state.var_sorting_sizes[tie_col]->blocks[0].block);
 	const data_ptr_t var_dataptr = var_block_handle->node->buffer;
@@ -541,8 +551,9 @@ static void BreakTies(BufferManager &buffer_manager, OrderGlobalState &global_st
 }
 
 static bool AnyTies(bool ties[], const idx_t &count) {
+    D_ASSERT(!ties[count - 1]);
 	bool any_ties = false;
-	for (idx_t i = 0; i < count; i++) {
+	for (idx_t i = 0; i < count - 1; i++) {
 		any_ties = any_ties || ties[i];
 	}
 	return any_ties;
@@ -553,13 +564,14 @@ static void SortInMemory(Pipeline &pipeline, ClientContext &context, OrderGlobal
 	auto &buffer_manager = BufferManager::GetBufferManager(context);
 
 	auto &block = state.sorting_block->blocks.back();
+	const auto &count = block.count;
 	auto handle = buffer_manager.Pin(block.block);
-	auto dataptr = handle->node->buffer;
+	const auto dataptr = handle->node->buffer;
 
 	// assign an index to each row
 	idx_t sorting_size = sorting_state.ENTRY_SIZE - sizeof(idx_t);
 	data_ptr_t idx_dataptr = dataptr + sorting_size;
-	for (idx_t i = 0; i < block.count; i++) {
+	for (idx_t i = 0; i < count; i++) {
 		Store<idx_t>(i, idx_dataptr);
 		idx_dataptr += sorting_state.ENTRY_SIZE;
 	}
@@ -570,7 +582,7 @@ static void SortInMemory(Pipeline &pipeline, ClientContext &context, OrderGlobal
 	}
 
 	if (all_constant) {
-		RadixSort(buffer_manager, dataptr, block.count, 0, sorting_size, sorting_state);
+		RadixSort(buffer_manager, dataptr, count, 0, sorting_size, sorting_state);
 		return;
 	}
 
@@ -588,13 +600,14 @@ static void SortInMemory(Pipeline &pipeline, ClientContext &context, OrderGlobal
 
 		if (!ties) {
 			// this is the first sort
-			RadixSort(buffer_manager, dataptr, block.count, col_offset, sorting_size, sorting_state);
-			ties_handle = buffer_manager.Allocate(MaxValue(block.count, (idx_t)Storage::BLOCK_ALLOC_SIZE));
+			RadixSort(buffer_manager, dataptr, count, col_offset, sorting_size, sorting_state);
+			ties_handle = buffer_manager.Allocate(MaxValue(count, (idx_t)Storage::BLOCK_ALLOC_SIZE));
 			ties = (bool *)ties_handle->node->buffer;
-			std::fill_n(ties, block.count, true);
+			std::fill_n(ties, count - 1, true);
+			ties[count - 1] = false;
 		} else {
 			// for subsequent sorts, we subsort the tied tuples
-			SubSortTiedTuples(buffer_manager, dataptr, block.count, col_offset, sorting_size, ties, sorting_state);
+			SubSortTiedTuples(buffer_manager, dataptr, count, col_offset, sorting_size, ties, sorting_state);
 		}
 
 		if (sorting_state.CONSTANT_SIZE[i] && i == num_cols - 1) {
@@ -602,14 +615,14 @@ static void SortInMemory(Pipeline &pipeline, ClientContext &context, OrderGlobal
 			break;
 		}
 
-		ComputeTies(dataptr, block.count, col_offset, sorting_size, ties, sorting_state);
-		if (!AnyTies(ties, block.count)) {
+		ComputeTies(dataptr, count, col_offset, sorting_size, ties, sorting_state);
+		if (!AnyTies(ties, count)) {
 			// no ties, so we stop sorting
 			break;
 		}
 
-		BreakTies(buffer_manager, state, ties, dataptr, block.count, i, sorting_state);
-		if (!AnyTies(ties, block.count)) {
+		BreakTies(buffer_manager, state, ties, dataptr, count, i, sorting_state);
+		if (!AnyTies(ties, count)) {
 			// no more ties after tie-breaking
 			break;
 		}
