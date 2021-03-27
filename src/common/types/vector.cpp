@@ -892,17 +892,15 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 }
 
 void Vector::Verify(idx_t count) {
-	if (count > STANDARD_VECTOR_SIZE){
+	if (count > STANDARD_VECTOR_SIZE) {
 		SelectionVector selection_vector(count);
 		for (size_t i = 0; i < count; i++) {
 			selection_vector.set_index(i, i);
 		}
 		Verify(selection_vector, count);
-	}
-	else{
+	} else {
 		Verify(FlatVector::INCREMENTAL_SELECTION_VECTOR, count);
 	}
-
 }
 
 string_t StringVector::AddString(Vector &vector, const char *data, idx_t len) {

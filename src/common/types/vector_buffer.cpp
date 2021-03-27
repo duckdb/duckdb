@@ -86,7 +86,8 @@ void FindChildren(std::vector<CopyArrays> &to_copy, VectorBuffer &from_auxiliary
 void VectorListBuffer::Append(Vector &to_append, idx_t to_append_size, idx_t source_offset) {
 
 	if (size + to_append_size - source_offset > capacity) {
-		idx_t new_capacity =  (size + to_append_size - source_offset)/STANDARD_VECTOR_SIZE + ((size + to_append_size - source_offset) % STANDARD_VECTOR_SIZE != 0);
+		idx_t new_capacity = (size + to_append_size - source_offset) / STANDARD_VECTOR_SIZE +
+		                     ((size + to_append_size - source_offset) % STANDARD_VECTOR_SIZE != 0);
 		new_capacity *= STANDARD_VECTOR_SIZE;
 		if (child->GetType().id() == LogicalTypeId::STRUCT && size == 0) {
 			// Empty struct, gotta initialize it first
@@ -106,7 +107,7 @@ void VectorListBuffer::Append(Vector &to_append, idx_t to_append_size, idx_t sou
 
 void VectorListBuffer::PushBack(Value &insert) {
 	if (size + 1 > capacity) {
-		child->Resize(capacity, capacity*2);
+		child->Resize(capacity, capacity * 2);
 		capacity *= 2;
 	}
 	child->SetValue(size++, insert);

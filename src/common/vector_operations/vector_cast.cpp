@@ -542,6 +542,9 @@ static void ListCastSwitch(Vector &source, Vector &result, idx_t count) {
 			auto &source_cc = ListVector::GetEntry(source);
 			auto source_size = ListVector::GetListSize(source);
 			Vector append_vector(result.GetType().child_types()[0].second);
+			if (source_size > STANDARD_VECTOR_SIZE) {
+				append_vector.Resize(STANDARD_VECTOR_SIZE, source_size);
+			}
 			if (source_cc.GetData()) {
 				VectorOperations::Cast(source_cc, append_vector, source_size);
 				ListVector::Append(result, append_vector, source_size);

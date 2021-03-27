@@ -23,7 +23,6 @@ void ListExtractTemplate(idx_t count, Vector &list, Vector &offsets, Vector &res
 	// heap-ref once
 	if (HEAP_REF) {
 		StringVector::AddHeapReference(result, vec);
-		StringVector::AddHeapReference(result, vec);
 	}
 
 	// this is lifted from ExecuteGenericLoop because we can't push the list child data into this otherwise
