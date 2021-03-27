@@ -47,11 +47,9 @@ void ListExtractTemplate(idx_t count, Vector &list, Vector &offsets, Vector &res
 				}
 				child_offset = list_entry.offset + offsets_entry;
 			}
-			auto child_index = child_offset % STANDARD_VECTOR_SIZE;
 			vec.Orrify(ListVector::GetListSize(list), child_data);
-			auto child_index_sel = child_data.sel->get_index(child_index);
-			if (child_data.validity.RowIsValid(child_index_sel)) {
-				result_data[i] = ((T *)child_data.data)[child_index_sel];
+			if (child_data.validity.RowIsValid(child_offset)) {
+				result_data[i] = ((T *)child_data.data)[child_offset];
 			} else {
 				result_mask.SetInvalid(i);
 			}
