@@ -184,7 +184,7 @@ void RowChunk::TemplatedSerializeVectorSortable(VectorData &vdata, const Selecti
 	if (has_null) {
 		auto &validity = vdata.validity;
 		const data_t valid = nulls_first ? 1 : 0;
-		const data_t invalid = nulls_first ? 0 : 1;
+		const data_t invalid = 1 - valid;
 
 		for (idx_t i = 0; i < add_count; i++) {
 			auto idx = sel.get_index(i);
@@ -195,7 +195,7 @@ void RowChunk::TemplatedSerializeVectorSortable(VectorData &vdata, const Selecti
 				EncodeData(key_locations[i] + 1, source[source_idx]);
 				// invert bits if desc
 				if (desc) {
-					for (idx_t s = 0; s < sizeof(T) + 1; s++) {
+					for (idx_t s = 1; s < sizeof(T) + 1; s++) {
 						*(key_locations[i] + s) = ~*(key_locations[i] + s);
 					}
 				}
@@ -213,7 +213,7 @@ void RowChunk::TemplatedSerializeVectorSortable(VectorData &vdata, const Selecti
 			EncodeData(key_locations[i], source[source_idx]);
 			// invert bits if desc
 			if (desc) {
-				for (idx_t s = 0; s < sizeof(T); s++) {
+				for (idx_t s = 1; s < sizeof(T); s++) {
 					*(key_locations[i] + s) = ~*(key_locations[i] + s);
 				}
 			}
@@ -229,7 +229,7 @@ void RowChunk::SerializeStringVectorSortable(VectorData &vdata, const SelectionV
 	if (has_null) {
 		auto &validity = vdata.validity;
 		const data_t valid = nulls_first ? 1 : 0;
-		const data_t invalid = nulls_first ? 0 : 1;
+		const data_t invalid = 1 - valid;
 
 		for (idx_t i = 0; i < add_count; i++) {
 			auto idx = sel.get_index(i);
@@ -240,7 +240,7 @@ void RowChunk::SerializeStringVectorSortable(VectorData &vdata, const SelectionV
 				EncodeStringData(key_locations[i] + 1, source[source_idx], prefix_len);
 				// invert bits if desc
 				if (desc) {
-					for (idx_t s = 0; s < prefix_len + 1; s++) {
+					for (idx_t s = 1; s < prefix_len + 1; s++) {
 						*(key_locations[i] + s) = ~*(key_locations[i] + s);
 					}
 				}
@@ -258,7 +258,7 @@ void RowChunk::SerializeStringVectorSortable(VectorData &vdata, const SelectionV
 			EncodeStringData(key_locations[i], source[source_idx], prefix_len);
 			// invert bits if desc
 			if (desc) {
-				for (idx_t s = 0; s < prefix_len; s++) {
+				for (idx_t s = 1; s < prefix_len; s++) {
 					*(key_locations[i] + s) = ~*(key_locations[i] + s);
 				}
 			}
