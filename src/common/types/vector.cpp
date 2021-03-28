@@ -139,6 +139,73 @@ void Vector::Initialize(const LogicalType &new_type, bool zero_data) {
 	}
 }
 
+struct DataArrays {
+	Vector &vec;
+	data_ptr_t data;
+	VectorBuffer *buffer;
+	idx_t type_size;
+	bool is_nested;
+	DataArrays(Vector &vec, data_ptr_t data, VectorBuffer *buffer, idx_t type_size, bool is_nested)
+	    : vec(vec), data(data), buffer(buffer), type_size(type_size), is_nested(is_nested) {};
+};
+
+void FindChildren(std::vector<DataArrays> &to_resize, VectorBuffer &auxiliary) {
+	if (auxiliary.GetBufferType() == VectorBufferType::LIST_BUFFER) {
+		auto &buffer = (VectorListBuffer &)auxiliary;
+		auto &child = buffer.GetChild();
+		auto data = child.GetData();
+		if (!data) {
+			//! Nested type
+			DataArrays arrays(child, data, child.GetBuffer().get(), GetTypeIdSize(child.GetType().InternalType()),
+			                  true);
+			to_resize.emplace_back(arrays);
+			FindChildren(to_resize, *child.GetAuxiliary());
+		} else {
+			DataArrays arrays(child, data, child.GetBuffer().get(), GetTypeIdSize(child.GetType().InternalType()),
+			                  false);
+			to_resize.emplace_back(arrays);
+		}
+	} else if (auxiliary.GetBufferType() == VectorBufferType::STRUCT_BUFFER) {
+		auto &buffer = (VectorStructBuffer &)auxiliary;
+		auto &children = buffer.GetChildren();
+		for (auto &child : children) {
+			auto data = child.second->GetData();
+			if (!data) {
+				//! Nested type
+				DataArrays arrays(*child.second, data, child.second->GetBuffer().get(),
+				                  GetTypeIdSize(child.second->GetType().InternalType()), true);
+				to_resize.emplace_back(arrays);
+				FindChildren(to_resize, *child.second->GetAuxiliary());
+			} else {
+				DataArrays arrays(*child.second, data, child.second->GetBuffer().get(),
+				                  GetTypeIdSize(child.second->GetType().InternalType()), false);
+				to_resize.emplace_back(arrays);
+			}
+		}
+	}
+}
+void Vector::Resize(idx_t cur_size, idx_t new_size) {
+	std::vector<DataArrays> to_resize;
+	if (!data) {
+		//! this is a nested structure
+		DataArrays arrays(*this, data, buffer.get(), GetTypeIdSize(GetType().InternalType()), true);
+		to_resize.emplace_back(arrays);
+		FindChildren(to_resize, *auxiliary);
+	} else {
+		DataArrays arrays(*this, data, buffer.get(), GetTypeIdSize(GetType().InternalType()), false);
+		to_resize.emplace_back(arrays);
+	}
+	for (auto &data_to_resize : to_resize) {
+		if (!data_to_resize.is_nested) {
+			auto new_data = unique_ptr<data_t[]>(new data_t[new_size * data_to_resize.type_size]);
+			memcpy(new_data.get(), data_to_resize.data, cur_size * data_to_resize.type_size * sizeof(data_t));
+			data_to_resize.buffer->SetData(move(new_data));
+			data_to_resize.vec.data = data_to_resize.buffer->GetData();
+		}
+		data_to_resize.vec.validity.Resize(cur_size, new_size);
+	}
+}
+
 void Vector::SetValue(idx_t index, const Value &val) {
 	if (GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		// dictionary: apply dictionary and forward to child
@@ -150,12 +217,14 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		SetValue(index, val.CastAs(GetType()));
 		return;
 	}
-
-	validity.EnsureWritable();
-	validity.Set(index, !val.is_null);
-	if (val.is_null) {
-		return;
+	if (GetType().id() != LogicalTypeId::STRUCT) {
+		validity.EnsureWritable();
+		validity.Set(index, !val.is_null);
+		if (val.is_null) {
+			return;
+		}
 	}
+
 	switch (GetType().id()) {
 	case LogicalTypeId::BOOLEAN:
 		((bool *)data)[index] = val.value_.boolean;
@@ -250,30 +319,17 @@ void Vector::SetValue(idx_t index, const Value &val) {
 
 	case LogicalTypeId::LIST: {
 		if (!auxiliary) {
-			auto cc = make_unique<ChunkCollection>();
-			ListVector::SetEntry(*this, move(cc));
+			auto vec_list = make_unique<Vector>(GetType().child_types()[0].second);
+			ListVector::SetEntry(*this, move(vec_list));
 		}
-		auto &child_cc = ListVector::GetEntry(*this);
-		// TODO optimization: in-place update if fits
-		auto offset = child_cc.Count();
+		auto offset = ListVector::GetListSize(*this);
 		if (!val.list_value.empty()) {
-			idx_t append_idx = 0;
-			while (append_idx < val.list_value.size()) {
-				idx_t this_append_len = MinValue<idx_t>(STANDARD_VECTOR_SIZE, val.list_value.size() - append_idx);
-
-				DataChunk child_append_chunk;
-				child_append_chunk.SetCardinality(this_append_len);
-				vector<LogicalType> types;
-				types.push_back(val.list_value[0].type());
-				child_append_chunk.Initialize(types);
-				for (idx_t i = 0; i < this_append_len; i++) {
-					child_append_chunk.data[0].SetValue(i, val.list_value[i + append_idx]);
-				}
-				child_cc.Append(child_append_chunk);
-				append_idx += this_append_len;
+			for (idx_t i = 0; i < val.list_value.size(); i++) {
+				Value v(val.list_value[i]);
+				ListVector::PushBack(*this, v);
 			}
 		}
-		// now set the pointer
+		//! now set the pointer
 		auto &entry = ((list_entry_t *)data)[index];
 		entry.length = val.list_value.size();
 		entry.offset = offset;
@@ -380,9 +436,9 @@ Value Vector::GetValue(idx_t index) const {
 		Value ret(GetType());
 		ret.is_null = false;
 		auto offlen = ((list_entry_t *)data)[index];
-		auto &child_cc = ListVector::GetEntry(*this);
+		auto &child_vec = ListVector::GetEntry(*this);
 		for (idx_t i = offlen.offset; i < offlen.offset + offlen.length; i++) {
-			ret.list_value.push_back(child_cc.GetValue(0, i));
+			ret.list_value.push_back(child_vec.GetValue(i));
 		}
 		return ret;
 	}
@@ -814,30 +870,37 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 		D_ASSERT(GetType().child_types().size() == 1);
 		if (GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			if (!ConstantVector::IsNull(*this)) {
-				ListVector::GetEntry(*this).Verify();
+				ListVector::GetEntry(*this).Verify(ListVector::GetListSize(*this));
 				auto le = ConstantVector::GetData<list_entry_t>(*this);
-				D_ASSERT(le->offset + le->length <= ListVector::GetEntry(*this).Count());
+				D_ASSERT(le->offset + le->length <= ListVector::GetListSize(*this));
 			}
 		} else if (GetVectorType() == VectorType::FLAT_VECTOR) {
 			if (ListVector::HasEntry(*this)) {
-				ListVector::GetEntry(*this).Verify();
+				ListVector::GetEntry(*this).Verify(ListVector::GetListSize(*this));
 			}
 			auto list_data = FlatVector::GetData<list_entry_t>(*this);
 			for (idx_t i = 0; i < count; i++) {
 				auto idx = sel.get_index(i);
 				auto &le = list_data[idx];
 				if (validity.RowIsValid(idx)) {
-					D_ASSERT(le.offset + le.length <= ListVector::GetEntry(*this).Count());
+					D_ASSERT(le.offset + le.length <= ListVector::GetListSize(*this));
 				}
 			}
 		}
 	}
-// TODO verify list and struct
 #endif
 }
 
 void Vector::Verify(idx_t count) {
-	Verify(FlatVector::INCREMENTAL_SELECTION_VECTOR, count);
+	if (count > STANDARD_VECTOR_SIZE) {
+		SelectionVector selection_vector(count);
+		for (size_t i = 0; i < count; i++) {
+			selection_vector.set_index(i, i);
+		}
+		Verify(selection_vector, count);
+	} else {
+		Verify(FlatVector::INCREMENTAL_SELECTION_VECTOR, count);
+	}
 }
 
 string_t StringVector::AddString(Vector &vector, const char *data, idx_t len) {
@@ -972,7 +1035,7 @@ bool ListVector::HasEntry(const Vector &vector) {
 	return vector.auxiliary != nullptr;
 }
 
-ChunkCollection &ListVector::GetEntry(const Vector &vector) {
+Vector &ListVector::GetEntry(const Vector &vector) {
 	D_ASSERT(vector.GetType().id() == LogicalTypeId::LIST);
 	if (vector.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		auto &child = DictionaryVector::Child(vector);
@@ -985,7 +1048,22 @@ ChunkCollection &ListVector::GetEntry(const Vector &vector) {
 	return ((VectorListBuffer *)vector.auxiliary.get())->GetChild();
 }
 
-void ListVector::SetEntry(Vector &vector, unique_ptr<ChunkCollection> cc) {
+void ListVector::Initialize(Vector &vec) {
+	if (!ListVector::HasEntry(vec)) {
+		auto vec_child = make_unique<Vector>(vec.GetType().child_types()[0].second);
+		ListVector::SetEntry(vec, move(vec_child));
+	}
+}
+idx_t ListVector::GetListSize(const Vector &vec) {
+	return ((VectorListBuffer &)*vec.auxiliary).size;
+}
+
+void ListVector::SetListSize(Vector &vec, idx_t size) {
+	ListVector::Initialize(vec);
+	((VectorListBuffer &)*vec.auxiliary).size = size;
+}
+
+void ListVector::SetEntry(Vector &vector, unique_ptr<Vector> cc) {
 	D_ASSERT(vector.GetType().id() == LogicalTypeId::LIST);
 	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR ||
 	         vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
@@ -993,6 +1071,22 @@ void ListVector::SetEntry(Vector &vector, unique_ptr<ChunkCollection> cc) {
 	D_ASSERT(vector.auxiliary);
 	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::LIST_BUFFER);
 	((VectorListBuffer *)vector.auxiliary.get())->SetChild(move(cc));
+}
+
+void ListVector::Append(Vector &target, Vector &source, idx_t source_size, idx_t source_offset) {
+	ListVector::Initialize(target);
+	if (source_size - source_offset == 0) {
+		//! Nothing to add
+		return;
+	}
+	auto &target_buffer = (VectorListBuffer &)*target.auxiliary;
+	target_buffer.Append(source, source_size, source_offset);
+}
+
+void ListVector::PushBack(Vector &target, Value &insert) {
+	ListVector::Initialize(target);
+	auto &target_buffer = (VectorListBuffer &)*target.auxiliary;
+	target_buffer.PushBack(insert);
 }
 
 } // namespace duckdb
