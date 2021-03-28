@@ -103,39 +103,27 @@ static void HistogramFinalize(Vector &state_vector, FunctionData *, Vector &resu
 	auto states = (HistogramAggState<T> **)sdata.data;
 	result.Initialize(result.GetType());
 	auto list_struct_data = FlatVector::GetData<list_entry_t>(result);
-	auto list_child = make_unique<ChunkCollection>();
-	size_t total_len = 0, old_len = 0;
-	DataChunk insert_chunk;
-	vector<LogicalType> chunk_types;
-	chunk_types.emplace_back(result.GetType().child_types()[0].second);
-	insert_chunk.Initialize(chunk_types);
+	auto list_child = make_unique<Vector>(result.GetType().child_types()[0].second);
+	size_t old_len = 0;
+	ListVector::SetEntry(result, move(list_child));
 	auto &mask = FlatVector::Validity(result);
 	for (idx_t i = 0; i < count; i++) {
 		auto state = states[sdata.sel->get_index(i)];
-		size_t chunk_idx = 0;
 		if (!state->hist) {
 			mask.SetInvalid(i);
 			continue;
 		}
 		for (auto &entry : *state->hist) {
 			child_list_t<Value> struct_values;
-			struct_values.push_back({"k", Value::CreateValue(entry.first)});
-			struct_values.push_back({"v", Value::UBIGINT(entry.second)});
-			insert_chunk.SetValue(0, total_len++, Value::STRUCT(struct_values));
-			chunk_idx++;
-			if (total_len == STANDARD_VECTOR_SIZE) {
-				insert_chunk.SetCardinality(total_len);
-				list_child->Append(insert_chunk);
-				total_len = 0;
-			}
+			struct_values.push_back({"bucket", Value::CreateValue(entry.first)});
+			struct_values.push_back({"count", Value::UBIGINT(entry.second)});
+			auto val = Value::STRUCT(struct_values);
+			ListVector::PushBack(result, val);
 		}
-		list_struct_data[i].length = chunk_idx;
+		list_struct_data[i].length = ListVector::GetListSize(result) - old_len;
 		list_struct_data[i].offset = old_len;
-		old_len += chunk_idx;
+		old_len = list_struct_data[i].length;
 	}
-	insert_chunk.SetCardinality(total_len);
-	list_child->Append(insert_chunk);
-	ListVector::SetEntry(result, move(list_child));
 }
 
 unique_ptr<FunctionData> HistogramBindFunction(ClientContext &context, AggregateFunction &function,

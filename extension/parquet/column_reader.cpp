@@ -382,13 +382,12 @@ void StringParquetValueConversion::PlainSkip(ByteBuffer &plain_data, ColumnReade
 idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
                              Vector &result_out) {
 	if (!ListVector::HasEntry(result_out)) {
-		auto list_child = make_unique<ChunkCollection>();
+		auto list_child = make_unique<Vector>(result_out.GetType().child_types()[0].second);
 		ListVector::SetEntry(result_out, move(list_child));
 	}
 
 	idx_t result_offset = 0;
 	auto result_ptr = FlatVector::GetData<list_entry_t>(result_out);
-	auto &list_cc = ListVector::GetEntry(result_out);
 
 	while (result_offset < num_values) {
 		auto child_req_num_values = MinValue<idx_t>(STANDARD_VECTOR_SIZE, child_column_reader->GroupRowsAvailable());
@@ -415,9 +414,8 @@ idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint
 		append_chunk.SetCardinality(child_actual_num_values);
 		append_chunk.Verify();
 
-		idx_t current_chunk_offset = list_cc.Count();
-		list_cc.Append(append_chunk);
-
+		idx_t current_chunk_offset = ListVector::GetListSize(result_out);
+		ListVector::Append(result_out, append_chunk.data[0], append_chunk.size());
 		// hard-won piece of code this, modify at your own risk
 		// the intuition is that we have to only collapse values into lists that are repeated *on this level*
 		// the rest is pretty much handed up as-is as a single-valued list or NULL
