@@ -45,44 +45,6 @@ void VectorListBuffer::SetChild(unique_ptr<Vector> new_child) {
 	capacity = STANDARD_VECTOR_SIZE;
 }
 
-struct CopyArrays {
-	Vector &from;
-	Vector &to;
-
-	CopyArrays(Vector &from, Vector &to) : from(from), to(to) {};
-};
-
-void FindChildren(std::vector<CopyArrays> &to_copy, VectorBuffer &from_auxiliary, VectorBuffer &to_auxiliary) {
-	if (from_auxiliary.GetBufferType() == VectorBufferType::LIST_BUFFER) {
-		auto &from_buffer = (VectorListBuffer &)from_auxiliary;
-		auto &from_child = from_buffer.GetChild();
-		auto from_data = from_child.GetData();
-		auto &to_buffer = (VectorListBuffer &)to_auxiliary;
-		auto &to_child = to_buffer.GetChild();
-		if (!from_data) {
-			//! Nested type
-			FindChildren(to_copy, *from_child.GetAuxiliary(), *to_child.GetAuxiliary());
-		} else {
-			to_copy.emplace_back(from_child, to_child);
-		}
-	} else if (from_auxiliary.GetBufferType() == VectorBufferType::STRUCT_BUFFER) {
-		auto &from_buffer = (VectorStructBuffer &)from_auxiliary;
-		auto &from_children = from_buffer.GetChildren();
-		auto &to_buffer = (VectorStructBuffer &)to_auxiliary;
-		auto &to_children = to_buffer.GetChildren();
-		for (size_t i = 0; i < from_children.size(); i++) {
-			auto from_data = from_children[i].second->GetData();
-			if (!from_data) {
-				//! Nested type
-				FindChildren(to_copy, *from_children[i].second->GetAuxiliary(), *to_children[i].second->GetAuxiliary());
-			} else {
-				CopyArrays ar(*from_children[i].second, *to_children[i].second);
-				to_copy.emplace_back(ar);
-			}
-		}
-	}
-}
-
 void VectorListBuffer::Append(Vector &to_append, idx_t to_append_size, idx_t source_offset) {
 
 	if (size + to_append_size - source_offset > capacity) {
