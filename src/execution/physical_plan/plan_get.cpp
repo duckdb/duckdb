@@ -42,7 +42,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 		auto node = make_unique<PhysicalTableInOutFunction>(op.returned_types, op.function, move(op.bind_data),
 		                                                    op.column_ids, op.estimated_cardinality);
 		node->children.push_back(CreatePlan(move(op.children[0])));
-		return node;
+		return move(node);
 	}
 
 	unique_ptr<TableFilterSet> table_filters;

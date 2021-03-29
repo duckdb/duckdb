@@ -14,11 +14,11 @@ static unique_ptr<FunctionData> SummaryFunctionBind(ClientContext &context, vect
                                                     vector<LogicalType> &return_types, vector<string> &names) {
 
 	return_types.push_back(LogicalType::VARCHAR);
-	names.push_back("summary");
+	names.emplace_back("summary");
 
 	for (idx_t i = 0; i < input_table_types.size(); i++) {
 		return_types.push_back(input_table_types[i]);
-		names.push_back(input_table_names[i]);
+		names.emplace_back(input_table_names[i]);
 	}
 
 	return make_unique<TableFunctionData>();

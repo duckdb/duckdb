@@ -18,8 +18,8 @@ public:
 PhysicalTableInOutFunction::PhysicalTableInOutFunction(vector<LogicalType> types, TableFunction function_p,
                                                        unique_ptr<FunctionData> bind_data_p,
                                                        vector<column_t> column_ids_p, idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::INOUT_FUNCTION, move(types), estimated_cardinality), function(function_p),
-      bind_data(move(bind_data_p)), column_ids(move(column_ids_p)) {
+    : PhysicalOperator(PhysicalOperatorType::INOUT_FUNCTION, move(types), estimated_cardinality),
+      function(move(function_p)), bind_data(move(bind_data_p)), column_ids(move(column_ids_p)) {
 }
 
 void PhysicalTableInOutFunction::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
