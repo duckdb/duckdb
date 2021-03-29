@@ -67,7 +67,6 @@ void PhysicalTableScan::GetChunkInternal(ExecutionContext &context, DataChunk &c
 			return;
 		}
 	} else {
-		D_ASSERT(false); // TODO
 		// parallel scan
 		do {
 			function.function(context.client, bind_data.get(), state.operator_data.get(), nullptr, chunk);
