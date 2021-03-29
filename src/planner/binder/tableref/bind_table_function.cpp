@@ -8,10 +8,10 @@
 #include "duckdb/planner/expression_binder/select_binder.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/tableref/bound_table_function.hpp"
+#include "duckdb/planner/tableref/bound_subqueryref.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/common/algorithm.hpp"
-#include "duckdb/common/to_string.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
 
 namespace duckdb {
