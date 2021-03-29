@@ -16,6 +16,7 @@ namespace duckdb {
 
 static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, vector<Value> &inputs,
                                             unordered_map<string, Value> &named_parameters,
+                                            vector<LogicalType> &input_table_types, vector<string> &input_table_names,
                                             vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_unique<ReadCSVData>();
 	auto &options = result->options;
@@ -163,13 +164,15 @@ static unique_ptr<FunctionOperatorData> ReadCSVInit(ClientContext &context, cons
 
 static unique_ptr<FunctionData> ReadCSVAutoBind(ClientContext &context, vector<Value> &inputs,
                                                 unordered_map<string, Value> &named_parameters,
-                                                vector<LogicalType> &return_types, vector<string> &names) {
+                                                vector<LogicalType> &input_table_types,
+                                                vector<string> &input_table_names, vector<LogicalType> &return_types,
+                                                vector<string> &names) {
 	named_parameters["auto_detect"] = Value::BOOLEAN(true);
-	return ReadCSVBind(context, inputs, named_parameters, return_types, names);
+	return ReadCSVBind(context, inputs, named_parameters, input_table_types, input_table_names, return_types, names);
 }
 
 static void ReadCSVFunction(ClientContext &context, const FunctionData *bind_data_p,
-                            FunctionOperatorData *operator_state, DataChunk &output) {
+                            FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
 	auto &bind_data = (ReadCSVData &)*bind_data_p;
 	auto &data = (ReadCSVOperatorData &)*operator_state;
 	do {
