@@ -71,11 +71,20 @@ idx_t ValiditySegment::Append(SegmentStatistics &stats, VectorData &data, idx_t 
 }
 
 void ValiditySegment::FetchBaseData(ColumnScanState &state, idx_t vector_index, Vector &result) {
+#if STANDARD_VECTOR_SIZE >= 64
 	auto vector_ptr = state.primary_handle->node->buffer + vector_index * ValidityMask::STANDARD_MASK_SIZE;
 	ValidityMask vector_mask(vector_ptr);
 	if (!vector_mask.CheckAllValid(STANDARD_VECTOR_SIZE)) {
 		FlatVector::Validity(result).Copy(vector_mask, STANDARD_VECTOR_SIZE);
 	}
+#else
+	idx_t base_tuple = vector_index * STANDARD_VECTOR_SIZE;
+	ValidityMask source_mask(state.primary_handle->node->buffer);
+	auto &target = FlatVector::Validity(result);
+	for(idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
+		target.Set(i, source_mask.RowIsValid(base_tuple + i));
+	}
+#endif
 }
 
 void ValiditySegment::RevertAppend(idx_t start_row) {
