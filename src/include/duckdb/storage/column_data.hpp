@@ -111,9 +111,9 @@ public:
 
 	virtual void Initialize(PersistentColumnData &column_data);
 
-	static void BaseDeserialize(DatabaseInstance &db, Deserializer &source, LogicalType type,
+	static void BaseDeserialize(DatabaseInstance &db, Deserializer &source, const LogicalType &type,
 	                            PersistentColumnData &result);
-	static unique_ptr<PersistentColumnData> Deserialize(DatabaseInstance &db, Deserializer &source, LogicalType type);
+	static unique_ptr<PersistentColumnData> Deserialize(DatabaseInstance &db, Deserializer &source, const LogicalType &type);
 
 protected:
 	//! Append a transient segment

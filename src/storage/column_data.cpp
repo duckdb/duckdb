@@ -477,7 +477,7 @@ void ColumnData::Initialize(PersistentColumnData &column_data) {
 	}
 }
 
-void ColumnData::BaseDeserialize(DatabaseInstance &db, Deserializer &source, LogicalType type,
+void ColumnData::BaseDeserialize(DatabaseInstance &db, Deserializer &source, const LogicalType &type,
                                  PersistentColumnData &result) {
 	// load the column statistics
 	result.stats = BaseStatistics::Deserialize(source, type);
@@ -503,7 +503,7 @@ void ColumnData::BaseDeserialize(DatabaseInstance &db, Deserializer &source, Log
 	}
 }
 
-unique_ptr<PersistentColumnData> ColumnData::Deserialize(DatabaseInstance &db, Deserializer &source, LogicalType type) {
+unique_ptr<PersistentColumnData> ColumnData::Deserialize(DatabaseInstance &db, Deserializer &source, const LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::VALIDITY:
 		return ValidityColumnData::Deserialize(db, source);

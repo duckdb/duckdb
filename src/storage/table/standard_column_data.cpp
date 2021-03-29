@@ -9,7 +9,7 @@ namespace duckdb {
 
 StandardColumnData::StandardColumnData(DatabaseInstance &db, DataTableInfo &table_info, LogicalType type,
                                        idx_t column_idx)
-    : ColumnData(db, table_info, type, column_idx), validity(db, table_info, column_idx) {
+    : ColumnData(db, table_info, move(type), column_idx), validity(db, table_info, column_idx) {
 }
 
 bool StandardColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
@@ -177,7 +177,7 @@ void StandardColumnData::Initialize(PersistentColumnData &column_data) {
 }
 
 unique_ptr<PersistentColumnData> StandardColumnData::Deserialize(DatabaseInstance &db, Deserializer &source,
-                                                                 LogicalType type) {
+                                                                 const LogicalType &type) {
 	auto result = make_unique<StandardPersistentColumnData>();
 	BaseDeserialize(db, source, type, *result);
 	result->validity = ValidityColumnData::Deserialize(db, source);
