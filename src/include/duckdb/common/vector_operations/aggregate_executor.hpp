@@ -51,6 +51,7 @@ private:
 					}
 				} else if (ValidityMask::NoneValid(validity_entry)) {
 					// nothing valid: skip all
+					base_idx = next;
 					continue;
 				} else {
 					// partially valid: need to check individual elements for validity

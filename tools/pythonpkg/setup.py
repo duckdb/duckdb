@@ -78,10 +78,13 @@ extra_files = []
 header_files = []
 
 script_path = os.path.dirname(os.path.abspath(__file__))
-include_directories = [get_numpy_include(), get_pybind_include(), get_pybind_include(user=True)]
+main_include_path = os.path.join(script_path, 'src', 'include')
+main_source_path = os.path.join(script_path, 'src')
+main_source_files = ['duckdb_python.cpp'] + [os.path.join('src', x) for x in os.listdir(main_source_path) if '.cpp' in x]
+include_directories = [main_include_path, get_numpy_include(), get_pybind_include(), get_pybind_include(user=True)]
 if len(existing_duckdb_dir) == 0:
     # no existing library supplied: compile everything from source
-    source_files = ['duckdb_python.cpp']
+    source_files = main_source_files
 
     # check if amalgamation exists
     if os.path.isfile(os.path.join(script_path, '..', '..', 'scripts', 'amalgamation.py')):
@@ -144,7 +147,7 @@ else:
 
     libduckdb = Extension('duckdb',
         include_dirs=include_directories,
-        sources=['duckdb_python.cpp'],
+        sources=main_source_files,
         extra_compile_args=toolchain_args,
         extra_link_args=toolchain_args,
         libraries=libnames,

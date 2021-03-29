@@ -24,8 +24,8 @@ struct SchedulerThread {
 };
 
 #ifndef DUCKDB_NO_THREADS
-typedef moodycamel::ConcurrentQueue<unique_ptr<Task>> concurrent_queue_t;
-typedef moodycamel::LightweightSemaphore lightweight_semaphore_t;
+typedef duckdb_moodycamel::ConcurrentQueue<unique_ptr<Task>> concurrent_queue_t;
+typedef duckdb_moodycamel::LightweightSemaphore lightweight_semaphore_t;
 
 struct ConcurrentQueue {
 	concurrent_queue_t q;
@@ -39,7 +39,7 @@ struct QueueProducerToken {
 	explicit QueueProducerToken(ConcurrentQueue &queue) : queue_token(queue.q) {
 	}
 
-	moodycamel::ProducerToken queue_token;
+	duckdb_moodycamel::ProducerToken queue_token;
 };
 
 void ConcurrentQueue::Enqueue(ProducerToken &token, unique_ptr<Task> task) {

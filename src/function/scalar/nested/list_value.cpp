@@ -9,23 +9,12 @@
 namespace duckdb {
 
 static void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	//	auto &func_expr = (BoundFunctionExpression &)state.expr;
-	//	auto &info = (VariableReturnBindData &)*func_expr.bind_info;
-
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 	D_ASSERT(result.GetType().child_types().size() == 1);
-
-	auto list_child = make_unique<ChunkCollection>();
+	auto child_type = result.GetType().child_types()[0].second;
+	auto list_child = make_unique<Vector>(child_type);
 	ListVector::SetEntry(result, move(list_child));
 
-	auto &cc = ListVector::GetEntry(result);
-	DataChunk append_vals;
-	vector<LogicalType> types;
-	if (args.ColumnCount() > 0) {
-		types.push_back(args.GetTypes()[0]);
-		append_vals.Initialize(types);
-		append_vals.SetCardinality(1);
-	}
 	result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	for (idx_t i = 0; i < args.ColumnCount(); i++) {
 		if (args.data[i].GetVectorType() != VectorType::CONSTANT_VECTOR) {
@@ -35,10 +24,10 @@ static void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &r
 
 	auto result_data = FlatVector::GetData<list_entry_t>(result);
 	for (idx_t i = 0; i < args.size(); i++) {
-		result_data[i].offset = cc.Count();
+		result_data[i].offset = ListVector::GetListSize(result);
 		for (idx_t col_idx = 0; col_idx < args.ColumnCount(); col_idx++) {
-			append_vals.SetValue(0, 0, args.GetValue(col_idx, i).CastAs(types[0])); // FIXME evil pattern
-			cc.Append(append_vals);
+			auto val = args.GetValue(col_idx, i).CastAs(child_type);
+			ListVector::PushBack(result, val);
 		}
 		result_data[i].length = args.ColumnCount();
 	}

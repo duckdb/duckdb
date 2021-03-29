@@ -44,4 +44,5 @@ private:
 	time_point<T> end;
 	bool finished = false;
 };
+
 } // namespace duckdb

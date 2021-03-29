@@ -10,7 +10,10 @@
 
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_set.hpp"
+#include "duckdb/common/deque.hpp"
 #include "duckdb/common/enums/output_type.hpp"
+#include "duckdb/common/pair.hpp"
+#include "duckdb/common/progress_bar.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/execution/executor.hpp"
@@ -21,7 +24,6 @@
 #include "duckdb/transaction/transaction_context.hpp"
 
 #include <random>
-#include "duckdb/common/progress_bar.hpp"
 
 namespace duckdb {
 class Appender;
@@ -41,9 +43,10 @@ class ClientContext : public std::enable_shared_from_this<ClientContext> {
 public:
 	DUCKDB_API explicit ClientContext(shared_ptr<DatabaseInstance> db);
 	DUCKDB_API ~ClientContext();
-
 	//! Query profiler
 	QueryProfiler profiler;
+	//! QueryProfiler History
+	QueryProfilerHistory query_profiler_history;
 	//! The database that this client is connected to
 	shared_ptr<DatabaseInstance> db;
 	//! Data for the currently running transaction

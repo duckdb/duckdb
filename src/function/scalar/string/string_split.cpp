@@ -148,43 +148,27 @@ protected:
 	bool ascii_only;
 };
 
-void BaseStringSplitFunction(const char *input, StringSplitIterator &iter, ChunkCollection &result) {
-	DataChunk append_chunk;
-	vector<LogicalType> types = {LogicalType::VARCHAR};
-	append_chunk.Initialize(types);
-
+void BaseStringSplitFunction(const char *input, StringSplitIterator &iter, Vector &result) {
+	if (!ListVector::HasEntry(result)) {
+		auto result_child = make_unique<Vector>(LogicalType::VARCHAR);
+		ListVector::SetEntry(result, move(result_child));
+	}
 	// special case: empty string
 	if (iter.size == 0) {
-		FlatVector::GetData<string_t>(append_chunk.data[0])[append_chunk.size()] =
-		    StringVector::AddString(append_chunk.data[0], &input[0], 0);
-		append_chunk.SetCardinality(append_chunk.size() + 1);
-		result.Append(append_chunk);
-
-		result.Verify();
+		Value val = StringVector::AddString(ListVector::GetEntry(result), &input[0], 0);
+		ListVector::PushBack(result, val);
 		return;
 	}
-
 	while (iter.HasNext()) {
-		if (append_chunk.size() == STANDARD_VECTOR_SIZE) {
-			result.Append(append_chunk);
-			append_chunk.SetCardinality(0);
-		}
-
 		idx_t start = iter.Start();
 		idx_t end = iter.Next(input);
 		size_t length = end - start;
-
-		FlatVector::GetData<string_t>(append_chunk.data[0])[append_chunk.size()] =
-		    StringVector::AddString(append_chunk.data[0], &input[start], length);
-		append_chunk.SetCardinality(append_chunk.size() + 1);
+		Value to_insert(StringVector::AddString(ListVector::GetEntry(result), &input[start], length));
+		ListVector::PushBack(result, to_insert);
 	}
-	if (append_chunk.size() > 0) {
-		result.Append(append_chunk);
-	}
-	result.Verify();
 }
 
-unique_ptr<ChunkCollection> BaseStringSplitFunction(string_t input, string_t delim, const bool regex) {
+unique_ptr<Vector> BaseStringSplitFunction(string_t input, string_t delim, const bool regex) {
 	const char *input_data = input.GetDataUnsafe();
 	size_t input_size = input.GetSize();
 	const char *delim_data = delim.GetDataUnsafe();
@@ -192,9 +176,9 @@ unique_ptr<ChunkCollection> BaseStringSplitFunction(string_t input, string_t del
 
 	bool ascii_only = Utf8Proc::Analyze(input_data, input_size) == UnicodeType::ASCII;
 
-	auto output = make_unique<ChunkCollection>();
-	vector<LogicalType> types = {LogicalType::VARCHAR};
-
+	child_list_t<LogicalType> child_type {{"", LogicalType::VARCHAR}};
+	LogicalType list = {LogicalTypeId::LIST, child_type};
+	auto output = make_unique<Vector>(list);
 	unique_ptr<StringSplitIterator> iter;
 	if (regex) {
 		auto re = make_unique<RE2>(duckdb_re2::StringPiece(delim_data, delim_size));
@@ -224,10 +208,13 @@ static void StringSplitExecutor(DataChunk &args, ExpressionState &state, Vector 
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 	auto list_struct_data = FlatVector::GetData<list_entry_t>(result);
 
-	auto list_child = make_unique<ChunkCollection>();
-	vector<LogicalType> types = {LogicalType::VARCHAR};
-	DataChunk append_chunk;
-	append_chunk.Initialize(types);
+	LogicalType varchar = LogicalType::VARCHAR;
+	auto list_child = make_unique<Vector>(varchar);
+	ListVector::SetEntry(result, move(list_child));
+
+	child_list_t<LogicalType> child_types;
+	child_types.push_back({"", varchar});
+	LogicalType list_vector_type(LogicalType::LIST.id(), child_types);
 
 	size_t total_len = 0;
 	for (idx_t i = 0; i < args.size(); i++) {
@@ -237,31 +224,29 @@ static void StringSplitExecutor(DataChunk &args, ExpressionState &state, Vector 
 		}
 		string_t input = inputs[input_data.sel->get_index(i)];
 
-		unique_ptr<ChunkCollection> split_input;
+		unique_ptr<Vector> split_input;
 		if (!delim_data.validity.RowIsValid(delim_data.sel->get_index(i))) {
 			// special case: delimiter is NULL
-			split_input = make_unique<ChunkCollection>();
-
-			FlatVector::GetData<string_t>(append_chunk.data[0])[append_chunk.size()] =
-			    StringVector::AddString(append_chunk.data[0], input);
-			append_chunk.SetCardinality(1);
-			split_input->Append(append_chunk);
+			split_input = make_unique<Vector>(list_vector_type);
+			auto child = make_unique<Vector>(varchar);
+			ListVector::SetEntry(*split_input, move(child));
+			Value val(input);
+			ListVector::PushBack(*split_input, val);
 		} else {
 			string_t delim = delims[delim_data.sel->get_index(i)];
 			split_input = BaseStringSplitFunction(input, delim, regex);
 		}
-		list_struct_data[i].length = split_input->Count();
+		list_struct_data[i].length = ListVector::GetListSize(*split_input);
 		list_struct_data[i].offset = total_len;
-		total_len += split_input->Count();
-		list_child->Append(*split_input);
+		total_len += ListVector::GetListSize(*split_input);
+		ListVector::Append(result, ListVector::GetEntry(*split_input), ListVector::GetListSize(*split_input));
 	}
 
-	D_ASSERT(list_child->Count() == total_len);
+	D_ASSERT(ListVector::GetListSize(result) == total_len);
 	if (args.data[0].GetVectorType() == VectorType::CONSTANT_VECTOR &&
 	    args.data[1].GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
-	ListVector::SetEntry(result, move(list_child));
 }
 
 static void StringSplitFunction(DataChunk &args, ExpressionState &state, Vector &result) {

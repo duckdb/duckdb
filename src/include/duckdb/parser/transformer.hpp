@@ -143,6 +143,8 @@ private:
 	unique_ptr<ParsedExpression> TransformInterval(duckdb_libpgquery::PGIntervalConstant *root);
 	//! Transform a Postgres lambda node [e.g. (x, y) -> x + y] into a lambda expression
 	unique_ptr<ParsedExpression> TransformLambda(duckdb_libpgquery::PGLambdaFunction *node);
+	//! Transform a Postgres array access node (e.g. x[1] or x[1:3])
+	unique_ptr<ParsedExpression> TransformArrayAccess(duckdb_libpgquery::PGAIndirection *node);
 
 	//! Transform a Postgres constant value into an Expression
 	unique_ptr<ParsedExpression> TransformConstant(duckdb_libpgquery::PGAConst *c);
@@ -216,7 +218,10 @@ private:
 	//! Transform a Postgres SELECT clause into a list of Expressions
 	bool TransformExpressionList(duckdb_libpgquery::PGList *list, vector<unique_ptr<ParsedExpression>> &result);
 
+	//! Transform a Postgres PARTITION BY/ORDER BY specification into lists of expressions
 	void TransformWindowDef(duckdb_libpgquery::PGWindowDef *window_spec, WindowExpression *expr);
+	//! Transform a Postgres window frame specification into frame expressions
+	void TransformWindowFrame(duckdb_libpgquery::PGWindowDef *window_spec, WindowExpression *expr);
 
 	unique_ptr<SampleOptions> TransformSampleOptions(duckdb_libpgquery::PGNode *options);
 };

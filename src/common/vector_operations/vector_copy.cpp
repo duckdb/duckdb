@@ -13,7 +13,7 @@
 namespace duckdb {
 
 template <class T>
-static void TemplatedCopy(Vector &source, const SelectionVector &sel, Vector &target, idx_t source_offset,
+static void TemplatedCopy(const Vector &source, const SelectionVector &sel, Vector &target, idx_t source_offset,
                           idx_t target_offset, idx_t copy_count) {
 	auto ldata = FlatVector::GetData<T>(source);
 	auto tdata = FlatVector::GetData<T>(target);
@@ -23,7 +23,7 @@ static void TemplatedCopy(Vector &source, const SelectionVector &sel, Vector &ta
 	}
 }
 
-void VectorOperations::Copy(Vector &source, Vector &target, const SelectionVector &sel, idx_t source_count,
+void VectorOperations::Copy(const Vector &source, Vector &target, const SelectionVector &sel, idx_t source_count,
                             idx_t source_offset, idx_t target_offset) {
 	D_ASSERT(source_offset <= source_count);
 	D_ASSERT(target.GetVectorType() == VectorType::FLAT_VECTOR);
@@ -55,7 +55,6 @@ void VectorOperations::Copy(Vector &source, Vector &target, const SelectionVecto
 	}
 
 	idx_t copy_count = source_count - source_offset;
-	D_ASSERT(target_offset + copy_count <= STANDARD_VECTOR_SIZE);
 	if (copy_count == 0) {
 		return;
 	}
@@ -70,9 +69,11 @@ void VectorOperations::Copy(Vector &source, Vector &target, const SelectionVecto
 		}
 	} else {
 		auto &smask = FlatVector::Validity(source);
-		for (idx_t i = 0; i < copy_count; i++) {
-			auto idx = sel.get_index(source_offset + i);
-			tmask.Set(target_offset + i, smask.RowIsValid(idx));
+		if (smask.IsMaskSet()) {
+			for (idx_t i = 0; i < copy_count; i++) {
+				auto idx = sel.get_index(source_offset + i);
+				tmask.Set(target_offset + i, smask.RowIsValid(idx));
+			}
 		}
 	}
 
@@ -158,18 +159,20 @@ void VectorOperations::Copy(Vector &source, Vector &target, const SelectionVecto
 	case PhysicalType::LIST: {
 		D_ASSERT(target.GetType().InternalType() == PhysicalType::LIST);
 		if (ListVector::HasEntry(source)) {
-			// if the source has list offsets, we need to append them to the target
+			//! if the source has list offsets, we need to append them to the target
 			if (!ListVector::HasEntry(target)) {
-				auto new_target_child = make_unique<ChunkCollection>();
-				ListVector::SetEntry(target, move(new_target_child));
+				auto target_child = make_unique<Vector>(target.GetType().child_types()[0].second);
+				ListVector::SetEntry(target, move(target_child));
 			}
 			auto &source_child = ListVector::GetEntry(source);
-			auto &target_child = ListVector::GetEntry(target);
-			idx_t old_target_child_len = target_child.Count();
+			auto source_child_size = ListVector::GetListSize(source);
 
-			// append to list itself
-			target_child.Append(source_child);
-			// now write the list offsets
+			idx_t old_target_child_len = ListVector::GetListSize(target);
+
+			//! append to list itself
+			ListVector::Append(target, source_child, source_child_size);
+
+			//! now write the list offsets
 			auto ldata = FlatVector::GetData<list_entry_t>(source);
 			auto tdata = FlatVector::GetData<list_entry_t>(target);
 			for (idx_t i = 0; i < copy_count; i++) {
@@ -189,7 +192,7 @@ void VectorOperations::Copy(Vector &source, Vector &target, const SelectionVecto
 	}
 }
 
-void VectorOperations::Copy(Vector &source, Vector &target, idx_t source_count, idx_t source_offset,
+void VectorOperations::Copy(const Vector &source, Vector &target, idx_t source_count, idx_t source_offset,
                             idx_t target_offset) {
 	switch (source.GetVectorType()) {
 	case VectorType::DICTIONARY_VECTOR: {
@@ -203,11 +206,31 @@ void VectorOperations::Copy(Vector &source, Vector &target, idx_t source_count, 
 		VectorOperations::Copy(source, target, ConstantVector::ZERO_SELECTION_VECTOR, source_count, source_offset,
 		                       target_offset);
 		break;
-	default:
-		source.Normalify(source_count);
-		VectorOperations::Copy(source, target, FlatVector::INCREMENTAL_SELECTION_VECTOR, source_count, source_offset,
+	case VectorType::FLAT_VECTOR:
+		if (target_offset + source_count - source_offset > STANDARD_VECTOR_SIZE) {
+			idx_t sel_vec_size = target_offset + source_count - source_offset;
+			SelectionVector selection_vector(sel_vec_size);
+			for (size_t i = 0; i < sel_vec_size; i++) {
+				selection_vector.set_index(i, i);
+			}
+			VectorOperations::Copy(source, target, selection_vector, source_count, source_offset, target_offset);
+		} else {
+			VectorOperations::Copy(source, target, FlatVector::INCREMENTAL_SELECTION_VECTOR, source_count,
+			                       source_offset, target_offset);
+		}
+		break;
+	case VectorType::SEQUENCE_VECTOR: {
+		int64_t start, increment;
+		SequenceVector::GetSequence(source, start, increment);
+		Vector flattened(source.GetType());
+		VectorOperations::GenerateSequence(flattened, source_count, start, increment);
+
+		VectorOperations::Copy(flattened, target, FlatVector::INCREMENTAL_SELECTION_VECTOR, source_count, source_offset,
 		                       target_offset);
 		break;
+	}
+	default:
+		throw NotImplementedException("FIXME: unimplemented vector type for VectorOperations::Copy");
 	}
 }
 

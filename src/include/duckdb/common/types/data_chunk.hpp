@@ -73,12 +73,12 @@ public:
 	//! Append the other DataChunk to this one. The column count and types of
 	//! the two DataChunks have to match exactly. Throws an exception if there
 	//! is not enough space in the chunk.
-	DUCKDB_API void Append(DataChunk &other);
+	DUCKDB_API void Append(const DataChunk &other);
 	//! Destroy all data and columns owned by this DataChunk
 	DUCKDB_API void Destroy();
 
 	//! Copies the data from this vector to another vector.
-	DUCKDB_API void Copy(DataChunk &other, idx_t offset = 0);
+	DUCKDB_API void Copy(DataChunk &other, idx_t offset = 0) const;
 
 	//! Turn all the vectors from the chunk into flat vectors
 	DUCKDB_API void Normalify();

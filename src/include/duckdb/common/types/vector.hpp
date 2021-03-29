@@ -110,6 +110,13 @@ public:
 	//! Sets the [index] element of the Vector to the specified Value.
 	void SetValue(idx_t index, const Value &val);
 
+	void SetAuxiliary(buffer_ptr<VectorBuffer> new_buffer) {
+		auxiliary = std::move(new_buffer);
+	};
+
+	//! This functions resizes the vector
+	void Resize(idx_t cur_size, idx_t new_size);
+
 	//! Serializes a Vector to a stand-alone binary blob
 	void Serialize(idx_t count, Serializer &serializer);
 	//! Deserializes a blob back into a Vector
@@ -128,6 +135,15 @@ public:
 	inline data_ptr_t GetData() {
 		return data;
 	}
+
+	buffer_ptr<VectorBuffer> GetAuxiliary() {
+		return auxiliary;
+	}
+
+	buffer_ptr<VectorBuffer> GetBuffer() {
+		return buffer;
+	}
+
 	// Setters
 	inline void SetVectorType(VectorType vector_type) {
 		buffer->SetVectorType(vector_type);
@@ -162,10 +178,19 @@ public:
 };
 
 struct ConstantVector {
+	static inline const_data_ptr_t GetData(const Vector &vector) {
+		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR ||
+		         vector.GetVectorType() == VectorType::FLAT_VECTOR);
+		return vector.data;
+	}
 	static inline data_ptr_t GetData(Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR ||
 		         vector.GetVectorType() == VectorType::FLAT_VECTOR);
 		return vector.data;
+	}
+	template <class T>
+	static inline const T *GetData(const Vector &vector) {
+		return (const T *)ConstantVector::GetData(vector);
 	}
 	template <class T>
 	static inline T *GetData(Vector &vector) {
@@ -204,6 +229,10 @@ struct FlatVector {
 		return ConstantVector::GetData(vector);
 	}
 	template <class T>
+	static inline const T *GetData(const Vector &vector) {
+		return ConstantVector::GetData<T>(vector);
+	}
+	template <class T>
 	static inline T *GetData(Vector &vector) {
 		return ConstantVector::GetData<T>(vector);
 	}
@@ -215,6 +244,10 @@ struct FlatVector {
 	static inline T GetValue(Vector &vector, idx_t idx) {
 		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
 		return FlatVector::GetData<T>(vector)[idx];
+	}
+	static inline const ValidityMask &Validity(const Vector &vector) {
+		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
+		return vector.validity;
 	}
 	static inline ValidityMask &Validity(Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
@@ -238,9 +271,14 @@ struct FlatVector {
 };
 
 struct ListVector {
-	static ChunkCollection &GetEntry(const Vector &vector);
+	static Vector &GetEntry(const Vector &vector);
+	static idx_t GetListSize(const Vector &vector);
+	static void SetListSize(Vector &vec, idx_t size);
 	static bool HasEntry(const Vector &vector);
-	static void SetEntry(Vector &vector, unique_ptr<ChunkCollection> entry);
+	static void SetEntry(Vector &vector, unique_ptr<Vector> entry);
+	static void Append(Vector &target, Vector &source, idx_t source_size, idx_t source_offset = 0);
+	static void PushBack(Vector &target, Value &insert);
+	static void Initialize(Vector &vec);
 };
 
 struct StringVector {

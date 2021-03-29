@@ -2,7 +2,8 @@
 
 namespace duckdb {
 
-ShowStatement::ShowStatement() : SQLStatement(StatementType::SHOW_STATEMENT), info(make_unique<ShowSelectInfo>()) {};
+ShowStatement::ShowStatement() : SQLStatement(StatementType::SHOW_STATEMENT), info(make_unique<ShowSelectInfo>()) {
+}
 
 unique_ptr<SQLStatement> ShowStatement::Copy() const {
 	auto result = make_unique<ShowStatement>();

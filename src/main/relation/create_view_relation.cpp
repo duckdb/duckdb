@@ -6,9 +6,10 @@
 
 namespace duckdb {
 
-CreateViewRelation::CreateViewRelation(shared_ptr<Relation> child_p, string view_name, bool replace)
-    : Relation(child_p->context, RelationType::CREATE_VIEW_RELATION), child(move(child_p)), view_name(move(view_name)),
-      replace(replace) {
+CreateViewRelation::CreateViewRelation(shared_ptr<Relation> child_p, string view_name_p, bool replace_p,
+                                       bool temporary_p)
+    : Relation(child_p->context, RelationType::CREATE_VIEW_RELATION), child(move(child_p)),
+      view_name(move(view_name_p)), replace(replace_p), temporary(temporary_p) {
 	context.TryBindRelation(*this, this->columns);
 }
 
@@ -24,6 +25,8 @@ BoundStatement CreateViewRelation::Bind(Binder &binder) {
 	auto info = make_unique<CreateViewInfo>();
 	info->query = move(select);
 	info->view_name = view_name;
+	info->temporary = temporary;
+	info->schema = "";
 	info->on_conflict = replace ? OnCreateConflict::REPLACE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 	stmt.info = move(info);
 	return binder.Bind((SQLStatement &)stmt);

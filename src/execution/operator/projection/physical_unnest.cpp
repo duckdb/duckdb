@@ -28,7 +28,7 @@ PhysicalUnnest::PhysicalUnnest(vector<LogicalType> types, vector<unique_ptr<Expr
                                idx_t estimated_cardinality, PhysicalOperatorType type)
     : PhysicalOperator(type, move(types), estimated_cardinality), select_list(std::move(select_list)) {
 
-	D_ASSERT(this->select_list.size() > 0);
+	D_ASSERT(!this->select_list.empty());
 }
 
 void PhysicalUnnest::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
@@ -105,13 +105,11 @@ void PhysicalUnnest::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 		}
 
 		// FIXME do not use GetValue/SetValue here
-		// TODO now that list entries are chunk collections, simply scan them!
 		for (idx_t col_idx = 0; col_idx < state->list_data.ColumnCount(); col_idx++) {
 			auto target_col = col_idx + state->child_chunk.ColumnCount();
 			auto &v = state->list_data.data[col_idx];
 			auto list_data = FlatVector::GetData<list_entry_t>(v);
 			auto list_entry = list_data[state->parent_position];
-
 			idx_t i = 0;
 			if (list_entry.length > state->list_position) {
 				if (unnest_null) {
@@ -119,10 +117,10 @@ void PhysicalUnnest::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 						FlatVector::SetNull(chunk.data[target_col], i, true);
 					}
 				} else {
-					auto &child_cc = ListVector::GetEntry(v);
+					auto &child_vector = ListVector::GetEntry(v);
 					for (i = 0; i < MinValue<idx_t>(this_chunk_len, list_entry.length - state->list_position); i++) {
 						chunk.data[target_col].SetValue(
-						    i, child_cc.GetValue(0, list_entry.offset + i + state->list_position));
+						    i, child_vector.GetValue(list_entry.offset + i + state->list_position));
 					}
 				}
 			}

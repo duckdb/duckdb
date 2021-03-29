@@ -1319,13 +1319,13 @@ public:
         advance(distance, false);
     }
 
-	pcg_extended(const result_type* data)
+    pcg_extended(const result_type* data)
         : baseclass()
     {
         datainit(data);
     }
 
-	pcg_extended(const result_type* data, state_type seed)
+    pcg_extended(const result_type* data, state_type seed)
         : baseclass(seed)
     {
         datainit(data);
@@ -1335,20 +1335,20 @@ public:
     // to use SFINAE; users don't have to worry about its template-ness.
 
     template <typename bc = baseclass>
-	pcg_extended(const result_type* data, state_type seed,
+    pcg_extended(const result_type* data, state_type seed,
             typename bc::stream_state stream_seed)
         : baseclass(seed, stream_seed)
     {
         datainit(data);
     }
 
-	pcg_extended()
+    pcg_extended()
         : baseclass()
     {
         selfinit();
     }
 
-	pcg_extended(state_type seed)
+    pcg_extended(state_type seed)
         : baseclass(seed)
     {
         selfinit();
@@ -1358,7 +1358,7 @@ public:
     // to use SFINAE; users don't have to worry about its template-ness.
 
     template <typename bc = baseclass>
-	pcg_extended(state_type seed, typename bc::stream_state stream_seed)
+    pcg_extended(state_type seed, typename bc::stream_state stream_seed)
         : baseclass(seed, stream_seed)
     {
         selfinit();
@@ -1373,7 +1373,7 @@ public:
     template<typename SeedSeq, typename = typename std::enable_if<
            !std::is_convertible<SeedSeq, result_type>::value
         && !std::is_convertible<SeedSeq, pcg_extended>::value>::type>
-	pcg_extended(SeedSeq&& seedSeq)
+    pcg_extended(SeedSeq&& seedSeq)
         : baseclass(seedSeq)
     {
         generate_to<table_size>(seedSeq, data_);
@@ -1405,7 +1405,7 @@ public:
               typename baseclass_, typename extvalclass_, bool kdd_>
     friend std::basic_istream<CharT,Traits>&
     operator>>(std::basic_istream<CharT,Traits>& in,
-	           pcg_extended<table_pow2_, advance_pow2_,
+               pcg_extended<table_pow2_, advance_pow2_,
                         baseclass_, extvalclass_, kdd_>&);
 
 };
@@ -1424,7 +1424,7 @@ template <bitcount_t table_pow2, bitcount_t advance_pow2,
           typename baseclass, typename extvalclass, bool kdd>
 void pcg_extended<table_pow2,advance_pow2,baseclass,extvalclass,kdd>::selfinit()
 {
-    // We need to fill the pcg_extended table with something, and we have
+    // We need to fill the extended table with something, and we have
     // very little provided data, so we use the base generator to
     // produce values.  Although not ideal (use a seed sequence, folks!),
     // unexpected correlations are mitigated by
@@ -1500,7 +1500,7 @@ operator>>(std::basic_istream<CharT,Traits>& in,
            pcg_extended<table_pow2, advance_pow2,
                     baseclass, extvalclass, kdd>& rng)
 {
-	pcg_extended<table_pow2, advance_pow2, baseclass, extvalclass> new_rng;
+    pcg_extended<table_pow2, advance_pow2, baseclass, extvalclass> new_rng;
     auto& base_rng = static_cast<baseclass&>(new_rng);
     in >> base_rng;
 
@@ -1526,7 +1526,8 @@ bail:
 
 template <bitcount_t table_pow2, bitcount_t advance_pow2,
           typename baseclass, typename extvalclass, bool kdd>
-void pcg_extended<table_pow2,advance_pow2,baseclass,extvalclass,kdd>::advance_table()
+void
+pcg_extended<table_pow2,advance_pow2,baseclass,extvalclass,kdd>::advance_table()
 {
     bool carry = false;
     for (size_t i = 0; i < table_size; ++i) {
@@ -1540,7 +1541,8 @@ void pcg_extended<table_pow2,advance_pow2,baseclass,extvalclass,kdd>::advance_ta
 
 template <bitcount_t table_pow2, bitcount_t advance_pow2,
           typename baseclass, typename extvalclass, bool kdd>
-void pcg_extended<table_pow2,advance_pow2,baseclass,extvalclass,kdd>::advance_table(
+void
+pcg_extended<table_pow2,advance_pow2,baseclass,extvalclass,kdd>::advance_table(
         state_type delta, bool isForwards)
 {
     typedef typename baseclass::state_type   base_state_t;

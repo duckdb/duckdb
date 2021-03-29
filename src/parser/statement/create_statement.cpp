@@ -2,7 +2,8 @@
 
 namespace duckdb {
 
-CreateStatement::CreateStatement() : SQLStatement(StatementType::CREATE_STATEMENT) {};
+CreateStatement::CreateStatement() : SQLStatement(StatementType::CREATE_STATEMENT) {
+}
 
 unique_ptr<SQLStatement> CreateStatement::Copy() const {
 	auto result = make_unique<CreateStatement>();
