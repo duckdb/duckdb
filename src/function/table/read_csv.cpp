@@ -5,6 +5,11 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 
+#include "duckdb/main/config.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
+
 #include <limits>
 
 namespace duckdb {
@@ -231,9 +236,24 @@ void ReadCSVTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(read_csv_auto);
 }
 
+unique_ptr<TableFunctionRef> ReadCSVReplacement(const string &table_name, void *data) {
+	if (!StringUtil::EndsWith(table_name, ".csv") && !StringUtil::EndsWith(table_name, ".tsv") &&
+	    !StringUtil::EndsWith(table_name, ".csv.gz")) {
+		return nullptr;
+	}
+	auto table_function = make_unique<TableFunctionRef>();
+	vector<unique_ptr<ParsedExpression>> children;
+	children.push_back(make_unique<ConstantExpression>(Value(table_name)));
+	table_function->function = make_unique<FunctionExpression>("read_csv_auto", children);
+	return table_function;
+}
+
 void BuiltinFunctions::RegisterReadFunctions() {
 	CSVCopyFunction::RegisterFunction(*this);
 	ReadCSVTableFunction::RegisterFunction(*this);
+
+	auto &config = DBConfig::GetConfig(context);
+	config.replacement_scans.emplace_back(ReadCSVReplacement);
 }
 
 } // namespace duckdb

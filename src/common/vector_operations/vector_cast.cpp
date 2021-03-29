@@ -331,7 +331,7 @@ static void NumericCastSwitch(Vector &source, Vector &result, idx_t count) {
 		break;
 	}
 	case LogicalTypeId::LIST: {
-		auto list_child = make_unique<ChunkCollection>();
+		auto list_child = make_unique<Vector>();
 		ListVector::SetEntry(result, move(list_child));
 		VectorNullCast(source, result, count);
 		break;
@@ -536,22 +536,21 @@ static void ListCastSwitch(Vector &source, Vector &result, idx_t count) {
 			result.SetVectorType(VectorType::FLAT_VECTOR);
 			FlatVector::SetValidity(result, FlatVector::Validity(source));
 		}
-		auto list_child = make_unique<ChunkCollection>();
+		auto list_child = make_unique<Vector>(result.GetType().child_types()[0].second);
+		ListVector::SetEntry(result, move(list_child));
 		if (ListVector::HasEntry(source)) {
 			auto &source_cc = ListVector::GetEntry(source);
-			auto &target_cc = *list_child;
-			// convert the entire chunk collection
-			vector<LogicalType> result_types;
-			result_types.push_back(result.GetType().child_types()[0].second);
-			DataChunk append_chunk;
-			append_chunk.Initialize(result_types);
-			for (auto &chunk : source_cc.Chunks()) {
-				VectorOperations::Cast(chunk->data[0], append_chunk.data[0], chunk->size());
-				append_chunk.SetCardinality(chunk->size());
-				target_cc.Append(append_chunk);
+			auto source_size = ListVector::GetListSize(source);
+			Vector append_vector(result.GetType().child_types()[0].second);
+			if (source_size > STANDARD_VECTOR_SIZE) {
+				append_vector.Resize(STANDARD_VECTOR_SIZE, source_size);
+			}
+			if (source_cc.GetData()) {
+				VectorOperations::Cast(source_cc, append_vector, source_size);
+				ListVector::Append(result, append_vector, source_size);
 			}
 		}
-		ListVector::SetEntry(result, move(list_child));
+
 		auto ldata = FlatVector::GetData<list_entry_t>(source);
 		auto tdata = FlatVector::GetData<list_entry_t>(result);
 		for (idx_t i = 0; i < count; i++) {

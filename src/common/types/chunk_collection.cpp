@@ -82,13 +82,10 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 					auto &chunk_vec = chunk->data[i];
 					auto &new_vec = new_chunk.data[i];
 					if (ListVector::HasEntry(chunk_vec) && ListVector::HasEntry(new_vec)) {
-						auto &chunk_types = ListVector::GetEntry(chunk_vec).types;
-						auto &new_types = ListVector::GetEntry(new_vec).types;
-						D_ASSERT(new_types.size() <= 1);
-						D_ASSERT(chunk_types.size() <= 1);
-						if (!chunk_types.empty() && !new_types.empty() && chunk_types != new_types) {
-							throw TypeMismatchException(chunk_types[0], new_types[0],
-							                            "Type mismatch when combining lists");
+						auto &chunk_type = chunk_vec.GetType();
+						auto &new_type = new_vec.GetType();
+						if (chunk_type != new_type) {
+							throw TypeMismatchException(chunk_type, new_type, "Type mismatch when combining lists");
 						}
 					}
 				}
@@ -188,7 +185,6 @@ static int32_t CompareValue(Vector &left_vec, Vector &right_vec, idx_t vector_id
 	default:
 		throw NotImplementedException("Type for comparison");
 	}
-	return false;
 }
 
 static int CompareTuple(ChunkCollection *sort_by, vector<OrderType> &desc, vector<OrderByNullType> &null_order,

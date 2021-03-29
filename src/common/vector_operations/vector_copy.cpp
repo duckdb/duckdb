@@ -55,7 +55,6 @@ void VectorOperations::Copy(const Vector &source, Vector &target, const Selectio
 	}
 
 	idx_t copy_count = source_count - source_offset;
-	D_ASSERT(target_offset + copy_count <= STANDARD_VECTOR_SIZE);
 	if (copy_count == 0) {
 		return;
 	}
@@ -70,9 +69,11 @@ void VectorOperations::Copy(const Vector &source, Vector &target, const Selectio
 		}
 	} else {
 		auto &smask = FlatVector::Validity(source);
-		for (idx_t i = 0; i < copy_count; i++) {
-			auto idx = sel.get_index(source_offset + i);
-			tmask.Set(target_offset + i, smask.RowIsValid(idx));
+		if (smask.IsMaskSet()) {
+			for (idx_t i = 0; i < copy_count; i++) {
+				auto idx = sel.get_index(source_offset + i);
+				tmask.Set(target_offset + i, smask.RowIsValid(idx));
+			}
 		}
 	}
 
@@ -158,18 +159,20 @@ void VectorOperations::Copy(const Vector &source, Vector &target, const Selectio
 	case PhysicalType::LIST: {
 		D_ASSERT(target.GetType().InternalType() == PhysicalType::LIST);
 		if (ListVector::HasEntry(source)) {
-			// if the source has list offsets, we need to append them to the target
+			//! if the source has list offsets, we need to append them to the target
 			if (!ListVector::HasEntry(target)) {
-				auto new_target_child = make_unique<ChunkCollection>();
-				ListVector::SetEntry(target, move(new_target_child));
+				auto target_child = make_unique<Vector>(target.GetType().child_types()[0].second);
+				ListVector::SetEntry(target, move(target_child));
 			}
 			auto &source_child = ListVector::GetEntry(source);
-			auto &target_child = ListVector::GetEntry(target);
-			idx_t old_target_child_len = target_child.Count();
+			auto source_child_size = ListVector::GetListSize(source);
 
-			// append to list itself
-			target_child.Append(source_child);
-			// now write the list offsets
+			idx_t old_target_child_len = ListVector::GetListSize(target);
+
+			//! append to list itself
+			ListVector::Append(target, source_child, source_child_size);
+
+			//! now write the list offsets
 			auto ldata = FlatVector::GetData<list_entry_t>(source);
 			auto tdata = FlatVector::GetData<list_entry_t>(target);
 			for (idx_t i = 0; i < copy_count; i++) {
@@ -204,8 +207,17 @@ void VectorOperations::Copy(const Vector &source, Vector &target, idx_t source_c
 		                       target_offset);
 		break;
 	case VectorType::FLAT_VECTOR:
-		VectorOperations::Copy(source, target, FlatVector::INCREMENTAL_SELECTION_VECTOR, source_count, source_offset,
-		                       target_offset);
+		if (target_offset + source_count - source_offset > STANDARD_VECTOR_SIZE) {
+			idx_t sel_vec_size = target_offset + source_count - source_offset;
+			SelectionVector selection_vector(sel_vec_size);
+			for (size_t i = 0; i < sel_vec_size; i++) {
+				selection_vector.set_index(i, i);
+			}
+			VectorOperations::Copy(source, target, selection_vector, source_count, source_offset, target_offset);
+		} else {
+			VectorOperations::Copy(source, target, FlatVector::INCREMENTAL_SELECTION_VECTOR, source_count,
+			                       source_offset, target_offset);
+		}
 		break;
 	case VectorType::SEQUENCE_VECTOR: {
 		int64_t start, increment;
