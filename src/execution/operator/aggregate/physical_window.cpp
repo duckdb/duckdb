@@ -7,6 +7,7 @@
 #include "duckdb/execution/window_segment_tree.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
+#include "duckdb/common/windows_undefs.hpp"
 
 #include <cmath>
 #include <numeric>

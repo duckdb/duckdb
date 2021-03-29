@@ -173,7 +173,7 @@ static void ArrowScanFunction(ClientContext &context, const FunctionData *bind_d
 	}
 
 	output.SetCardinality(
-	    std::min((int64_t)STANDARD_VECTOR_SIZE, (int64_t)(data.current_chunk_root.length - data.chunk_offset)));
+	    MinValue<int64_t>(STANDARD_VECTOR_SIZE, data.current_chunk_root.length - data.chunk_offset));
 
 	for (idx_t col_idx = 0; col_idx < output.ColumnCount(); col_idx++) {
 		auto &array = *data.current_chunk_root.children[col_idx];
