@@ -341,10 +341,10 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 	}
 	// second, scan the version chunk manager to figure out which tuples to load for this transaction
 	SelectionVector valid_sel(STANDARD_VECTOR_SIZE);
-	if (vector_offset >= MorselInfo::MORSEL_VECTOR_COUNT) {
+	while (vector_offset >= MorselInfo::MORSEL_VECTOR_COUNT) {
 		state.version_info = (MorselInfo *)state.version_info->next.get();
 		state.base_row += MorselInfo::MORSEL_SIZE;
-		vector_offset = 0;
+		vector_offset -= MorselInfo::MORSEL_VECTOR_COUNT;
 	}
 	idx_t count = state.version_info->GetSelVector(transaction, vector_offset, valid_sel, max_count);
 	if (count == 0) {

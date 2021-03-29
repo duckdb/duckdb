@@ -110,7 +110,7 @@ void ColumnData::AppendData(ColumnAppendState &state, VectorData &vdata, idx_t c
 		idx_t to_append_elements =
 		    MinValue<idx_t>(remaining_update_count, UpdateSegment::MORSEL_SIZE - state.updates->count);
 		state.updates->count += to_append_elements;
-		if (to_append_elements != remaining_update_count) {
+		if (state.updates->count == UpdateSegment::MORSEL_SIZE) {
 			// have to append a new segment
 			AppendUpdateSegment(state.updates->start + state.updates->count);
 			state.updates = (UpdateSegment *)updates.nodes.back().node;
@@ -474,6 +474,9 @@ void ColumnData::Initialize(PersistentColumnData &column_data) {
 		idx_t next = MinValue<idx_t>(row_count + UpdateSegment::MORSEL_SIZE, persistent_rows);
 		AppendUpdateSegment(row_count, next - row_count);
 		row_count = next;
+	}
+	if (row_count % UpdateSegment::MORSEL_SIZE == 0) {
+		AppendUpdateSegment(row_count, 0);
 	}
 }
 
