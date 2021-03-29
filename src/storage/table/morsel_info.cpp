@@ -99,7 +99,8 @@ void MorselInfo::RevertAppend(idx_t morsel_start) {
 	if (!root) {
 		return;
 	}
-	idx_t start_vector_idx = (morsel_start + (STANDARD_VECTOR_SIZE - 1)) / STANDARD_VECTOR_SIZE;
+	idx_t start_row = morsel_start - this->start;
+	idx_t start_vector_idx = (start_row + (STANDARD_VECTOR_SIZE - 1)) / STANDARD_VECTOR_SIZE;
 	for (idx_t vector_idx = start_vector_idx; vector_idx < MorselInfo::MORSEL_VECTOR_COUNT; vector_idx++) {
 		root->info[vector_idx].reset();
 	}
