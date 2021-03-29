@@ -136,6 +136,7 @@ BufferedCSVReader::BufferedCSVReader(BufferedCSVReaderOptions options_p, const v
 }
 
 void BufferedCSVReader::Initialize(const vector<LogicalType> &requested_types) {
+	PrepareComplexParser();
 	if (options.auto_detect) {
 		sql_types = SniffCSV(requested_types);
 		if (cached_chunks.empty()) {
@@ -145,8 +146,6 @@ void BufferedCSVReader::Initialize(const vector<LogicalType> &requested_types) {
 		sql_types = requested_types;
 		JumpToBeginning(options.skip_rows, options.header);
 	}
-
-	PrepareComplexParser();
 	InitParseChunk(sql_types.size());
 }
 
