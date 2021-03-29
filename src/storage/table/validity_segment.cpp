@@ -81,7 +81,7 @@ void ValiditySegment::FetchBaseData(ColumnScanState &state, idx_t vector_index, 
 	idx_t base_tuple = vector_index * STANDARD_VECTOR_SIZE;
 	ValidityMask source_mask(state.primary_handle->node->buffer);
 	auto &target = FlatVector::Validity(result);
-	for(idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
+	for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
 		target.Set(i, source_mask.RowIsValid(base_tuple + i));
 	}
 #endif

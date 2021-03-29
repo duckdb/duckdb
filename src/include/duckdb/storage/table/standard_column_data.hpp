@@ -40,7 +40,8 @@ public:
 	void CommitDropColumn() override;
 	void Initialize(PersistentColumnData &column_data) override;
 	void Checkpoint(TableDataWriter &writer) override;
-	static unique_ptr<PersistentColumnData> Deserialize(DatabaseInstance &db, Deserializer &source, const LogicalType &type);
+	static unique_ptr<PersistentColumnData> Deserialize(DatabaseInstance &db, Deserializer &source,
+	                                                    const LogicalType &type);
 };
 
 } // namespace duckdb

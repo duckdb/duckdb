@@ -1,4 +1,4 @@
-# name: test/sql/storage/checkpoint_with_pending_updates.test
+# name: test/sql/storage/checkpoint_with_pending_updates.test_slow
 # description: Test checkpoint with pending updates
 # group: [storage]
 

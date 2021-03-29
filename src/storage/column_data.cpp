@@ -506,7 +506,8 @@ void ColumnData::BaseDeserialize(DatabaseInstance &db, Deserializer &source, con
 	}
 }
 
-unique_ptr<PersistentColumnData> ColumnData::Deserialize(DatabaseInstance &db, Deserializer &source, const LogicalType &type) {
+unique_ptr<PersistentColumnData> ColumnData::Deserialize(DatabaseInstance &db, Deserializer &source,
+                                                         const LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::VALIDITY:
 		return ValidityColumnData::Deserialize(db, source);

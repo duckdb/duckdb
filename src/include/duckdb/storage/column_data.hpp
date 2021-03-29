@@ -113,7 +113,8 @@ public:
 
 	static void BaseDeserialize(DatabaseInstance &db, Deserializer &source, const LogicalType &type,
 	                            PersistentColumnData &result);
-	static unique_ptr<PersistentColumnData> Deserialize(DatabaseInstance &db, Deserializer &source, const LogicalType &type);
+	static unique_ptr<PersistentColumnData> Deserialize(DatabaseInstance &db, Deserializer &source,
+	                                                    const LogicalType &type);
 
 protected:
 	//! Append a transient segment

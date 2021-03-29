@@ -1,4 +1,4 @@
-# name: test/sql/storage/checkpoint_exactly_morsel_size.test
+# name: test/sql/storage/checkpoint_exactly_morsel_size.test_slow
 # description: Run a checkpoint on a table that is exactly morsel size
 # group: [storage]
 
