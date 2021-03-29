@@ -181,7 +181,7 @@ unique_ptr<PersistentColumnData> StandardColumnData::Deserialize(DatabaseInstanc
 	auto result = make_unique<StandardPersistentColumnData>();
 	BaseDeserialize(db, source, type, *result);
 	result->validity = ValidityColumnData::Deserialize(db, source);
-	return result;
+	return move(result);
 }
 
 } // namespace duckdb
