@@ -482,7 +482,6 @@ public:
 
 	HashChunkRangeTask(HashTaskManager &manager_p, Range range_p) : manager(manager_p), range(range_p) {
 		D_ASSERT(range.first < range.second);
-		D_ASSERT(range.first >= 0);
 		D_ASSERT(range.second <= manager.over_collection.ChunkCount());
 
 		counts.resize(manager.counts.size(), 0);
