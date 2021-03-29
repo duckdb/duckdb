@@ -1018,7 +1018,10 @@ bool UpdateSegment::HasUpdates(idx_t start_vector_index, idx_t end_vector_index)
 	for (idx_t i = start_vector_index; i <= end_vector_index; i++) {
 		idx_t vector_index = i - base_vector_index;
 		while (vector_index >= UpdateSegment::MORSEL_VECTOR_COUNT) {
-			segment = (UpdateSegment *)next.get();
+			segment = (UpdateSegment *)segment->next.get();
+			if (!segment) {
+				return false;
+			}
 			base_vector_index = segment->start / STANDARD_VECTOR_SIZE;
 			vector_index -= UpdateSegment::MORSEL_VECTOR_COUNT;
 		}
@@ -1034,7 +1037,7 @@ UpdateSegment *UpdateSegment::FindSegment(idx_t end_vector_index) const {
 	D_ASSERT(end_vector_index >= base_vector_index);
 	auto segment = this;
 	while (end_vector_index >= base_vector_index + UpdateSegment::MORSEL_VECTOR_COUNT) {
-		segment = (UpdateSegment *)next.get();
+		segment = (UpdateSegment *)segment->next.get();
 		base_vector_index += UpdateSegment::MORSEL_VECTOR_COUNT;
 	}
 	return (UpdateSegment *)segment;
