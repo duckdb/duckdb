@@ -172,8 +172,7 @@ static void ArrowScanFunction(ClientContext &context, const FunctionData *bind_d
 		throw InvalidInputException("arrow_scan: array column count mismatch");
 	}
 
-	output.SetCardinality(
-	    MinValue<int64_t>(STANDARD_VECTOR_SIZE, data.current_chunk_root.length - data.chunk_offset));
+	output.SetCardinality(MinValue<int64_t>(STANDARD_VECTOR_SIZE, data.current_chunk_root.length - data.chunk_offset));
 
 	for (idx_t col_idx = 0; col_idx < output.ColumnCount(); col_idx++) {
 		auto &array = *data.current_chunk_root.children[col_idx];
