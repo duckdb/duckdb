@@ -322,8 +322,7 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(const string &query) {
 		if (statements.size() > 1) {
 			throw Exception("Cannot prepare multiple statements at once!");
 		}
-		auto statement = move(statements[0]);
-		return PrepareInternal(*lock, move(statement));
+		return PrepareInternal(*lock, move(statements[0]));
 	} catch (std::exception &ex) {
 		return make_unique<PreparedStatement>(ex.what());
 	}
@@ -337,7 +336,6 @@ unique_ptr<QueryResult> ClientContext::Execute(const string &query, shared_ptr<P
 	} catch (std::exception &ex) {
 		return make_unique<MaterializedQueryResult>(ex.what());
 	}
-	LogQueryInternal(*lock, query);
 	return RunStatementOrPreparedStatement(*lock, query, nullptr, prepared, &values, allow_stream_result);
 }
 
@@ -465,9 +463,6 @@ unique_ptr<QueryResult> ClientContext::RunStatements(ClientContextLock &lock, co
 }
 
 void ClientContext::LogQueryInternal(ClientContextLock &, const string &query) {
-#ifdef DUCKDB_PRINT_ALL_QUERIES
-	Printer::Print(query);
-#endif
 	if (!log_query_writer) {
 		return;
 	}
@@ -479,7 +474,9 @@ void ClientContext::LogQueryInternal(ClientContextLock &, const string &query) {
 
 unique_ptr<QueryResult> ClientContext::Query(unique_ptr<SQLStatement> statement, bool allow_stream_result) {
 	auto lock = LockContext();
-	LogQueryInternal(*lock, statement->query.substr(statement->stmt_location, statement->stmt_length));
+	if (log_query_writer) {
+		LogQueryInternal(*lock, statement->query.substr(statement->stmt_location, statement->stmt_length));
+	}
 
 	vector<unique_ptr<SQLStatement>> statements;
 	statements.push_back(move(statement));

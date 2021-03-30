@@ -41,6 +41,7 @@ if(AMALGAMATION_BUILD)
           DESTINATION "${INSTALL_INCLUDE_DIR}/duckdb/common")
 
 else()
+
   add_subdirectory(optimizer)
   add_subdirectory(planner)
   add_subdirectory(parser)
