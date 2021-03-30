@@ -615,7 +615,7 @@ jobs:
     - name: Test
       run: |
         cp build/reldebug/tools/jdbc/duckdb_jdbc.jar sqlancer/target/lib/duckdb_jdbc-*.jar
-        java -jar sqlancer/target/sqlancer-*.jar --num-threads 2 --random-seed 0 --timeout-seconds 600 duckdb
+        python3 scripts/run_sqlancer.py
 
 
   sqlancer_persistent:
@@ -646,7 +646,7 @@ jobs:
     - name: Test
       run: |
         cp build/reldebug/tools/jdbc/duckdb_jdbc.jar sqlancer/target/lib/duckdb_jdbc-*.jar
-        java -Dduckdb.database.file=/tmp/lancer_duckdb_db -jar sqlancer/target/sqlancer-*.jar --num-threads 1 --random-seed 0 --timeout-seconds 600 duckdb
+        python3 scripts/run_sqlancer.py --persistent
 
 
   jdbc:
@@ -982,7 +982,7 @@ jobs:
       run: ./scripts/node_build.sh 15
 
   linux-wasm-release:
-    name: WebAssembly Release 
+    name: WebAssembly Release
     runs-on: ubuntu-20.04
     needs: linux-debug
 
