@@ -624,6 +624,7 @@ jobs:
     needs: linux-debug
 
     env:
+      PRINT_ALL_QUERIES: 1
       BUILD_JDBC: 1
       GEN: ninja
 

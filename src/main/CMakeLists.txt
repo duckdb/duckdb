@@ -1,5 +1,9 @@
 add_subdirectory(relation)
 
+if (PRINT_ALL_QUERIES)
+  add_definitions(-DDUCKDB_PRINT_ALL_QUERIES)
+endif()
+
 set(DUCKDB_MAIN_FILES
     appender.cpp
     client_context.cpp
