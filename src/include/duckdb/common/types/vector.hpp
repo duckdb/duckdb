@@ -276,7 +276,9 @@ struct ListVector {
 	static void SetListSize(Vector &vec, idx_t size);
 	static bool HasEntry(const Vector &vector);
 	static void SetEntry(Vector &vector, unique_ptr<Vector> entry);
-	static void Append(Vector &target, Vector &source, idx_t source_size, idx_t source_offset = 0);
+	static void Append(Vector &target, const Vector &source, idx_t source_size, idx_t source_offset = 0);
+	static void Append(Vector &target, const Vector &source, const SelectionVector &sel, idx_t source_size,
+	                   idx_t source_offset = 0);
 	static void PushBack(Vector &target, Value &insert);
 	static void Initialize(Vector &vec);
 };
