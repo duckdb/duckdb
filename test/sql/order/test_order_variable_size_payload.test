@@ -2,113 +2,143 @@
 # description: Test ORDER BY keyword (variable size sorting/payload columns)
 # group: [order]
 
-statement ok
-PRAGMA threads=1
+#statement ok
+#PRAGMA enable_verification
 
-# strings longer than the 8 character prefix
-statement ok
-CREATE TABLE test0(job VARCHAR, name VARCHAR)
+## strings longer than the 8 character prefix
+#statement ok
+#CREATE TABLE test0(job VARCHAR, name VARCHAR)
+#
+#statement ok
+#INSERT INTO test0 VALUES ('Shipping and Receiving Supervisor', 'Ackerman'), ('Shipping and Receiving Clerk', 'Berndt'), ('Shipping and Receiving Clerk', 'Kuppa'), ('Production Supervisor - WC60', 'Brown'), ('Production Supervisor - WC60', 'Campbell'), ('Production Supervisor - WC40', 'Dsa')
+#
+#query TT
+#SELECT * FROM test0 ORDER BY job, name
+#----
+#Production Supervisor - WC40	Dsa
+#Production Supervisor - WC60	Brown
+#Production Supervisor - WC60	Campbell
+#Shipping and Receiving Clerk	Berndt
+#Shipping and Receiving Clerk	Kuppa
+#Shipping and Receiving Supervisor	Ackerman
+#
+#statement ok
+#CREATE TABLE test1 (s VARCHAR)
+#
+#statement ok
+#INSERT INTO test1 VALUES ('2'), (NULL), ('355555552'), ('1'), ('35555556'), ('10'), ('355555553'), ('355555551')
+#
+#query I
+#SELECT * FROM test1 ORDER BY s
+#----
+#NULL
+#1
+#10
+#2
+#355555551
+#355555552
+#355555553
+#35555556
+#
+## sort on 10000 strings
+#statement ok
+#CREATE TABLE test2 AS (SELECT CAST(range AS VARCHAR) r, random() rand FROM range(10000))
+#
+#statement ok
+#CREATE TABLE test2_1 AS (SELECT * FROM test2 ORDER BY r)
+#
+#query T
+#SELECT count(*) FROM test2_1
+#----
+#10000
+#
+## string payload
+#statement ok
+#CREATE TABLE test3 AS (SELECT CAST(range AS VARCHAR) r, random() rand FROM range(10000))
+#
+#statement ok
+#CREATE TABLE test3_1 AS (SELECT * FROM test3 ORDER BY rand)
+#
+#query T
+#SELECT count(*) FROM test3_1
+#----
+#10000
+#
+## multiple columns
+#statement ok
+#CREATE TABLE test4 (i INT, j INT)
+#
+#statement ok
+#INSERT INTO test4 VALUES (3, 3), (2, 3), (2, 2), (3, 2)
+#
+#query II
+#SELECT * FROM test4 ORDER BY cast(i AS VARCHAR), j
+#----
+#2	2
+#2	3
+#3	2
+#3	3
+#
+#query II
+#SELECT * FROM test4 ORDER BY i, cast(j AS VARCHAR)
+#----
+#2	2
+#2	3
+#3	2
+#3	3
+#
+#query II
+#SELECT * FROM test4 ORDER BY cast(i AS VARCHAR), cast(j AS VARCHAR)
+#----
+#2	2
+#2	3
+#3	2
+#3	3
+#
+## many payload columns
+#statement ok
+#CREATE TABLE tpch_q1_agg (l_returnflag VARCHAR, l_linestatus VARCHAR, sum_qty INT, sum_base_price DOUBLE, sum_disc_price DOUBLE, sum_charge DOUBLE, avg_qty DOUBLE, avg_price DOUBLE, avg_disc DOUBLE, count_order BIGINT);
+#
+#statement ok
+#INSERT INTO tpch_q1_agg VALUES ('N', 'O', 7459297, 10512270008.90, 9986238338.3847, 10385578376.585467, 25.545537671232875, 36000.9246880137, 0.05009595890410959, 292000), ('R', 'F', 3785523, 5337950526.47, 5071818532.9420, 5274405503.049367, 25.5259438574251, 35994.029214030925, 0.04998927856184382, 148301), ('A', 'F', 3774200, 5320753880.69, 5054096266.6828, 5256751331.449234, 25.537587116854997, 36002.12382901414, 0.05014459706340077, 147790), ('N', 'F', 95257, 133737795.84, 127132372.6512, 132286291.229445, 25.30066401062417, 35521.32691633466, 0.04939442231075697, 3765);
+#
+#query TTTTTTTTTT
+#SELECT * FROM tpch_q1_agg ORDER BY l_returnflag, l_linestatus;
+#----
+#A	F	3774200	5320753880.69	5054096266.6828	5256751331.449234	25.537587116854997	36002.12382901414	0.05014459706340077	147790
+#N	F	95257	133737795.84	127132372.6512	132286291.229445	25.30066401062417	35521.32691633466	0.04939442231075697	3765
+#N	O	7459297	10512270008.90	9986238338.3847	10385578376.585467	25.545537671232875	36000.9246880137	0.05009595890410959	292000
+#R	F	3785523	5337950526.47	5071818532.9420	5274405503.049367	25.5259438574251	35994.029214030925	0.04998927856184382	148301
 
 statement ok
-INSERT INTO test0 VALUES ('Shipping and Receiving Supervisor', 'Ackerman'), ('Shipping and Receiving Clerk', 'Berndt'), ('Shipping and Receiving Clerk', 'Kuppa'), ('Production Supervisor - WC60', 'Brown'), ('Production Supervisor - WC60', 'Campbell'), ('Production Supervisor - WC40', 'Dsa')
+create table test8 (i int, s varchar)
+
+statement ok
+insert into test8 values (3, 'aabaa'), (1, 'ccbcc'), (NULL, 'ddbdd'), (2, NULL);
+
+#query TT
+#select i, string_split(s, 'b') from test8 order by i;
+#----
+#NULL	[dd, dd]
+#1	[cc, cc, cc]
+#2	NULL
+#3	[aa, aa]
+#
+#query TT
+#select i, list(s) from test8 group by i order by i;
+#----
+#NULL	[ddbdd]
+#1	[ccbccbcc]
+#2	[NULL]
+#3	[aabaa]
 
 query TT
-SELECT * FROM test0 ORDER BY job, name
+select i, list(string_split(s, 'b')) from test8 group by i order by i;
 ----
-Production Supervisor - WC40	Dsa
-Production Supervisor - WC60	Brown
-Production Supervisor - WC60	Campbell
-Shipping and Receiving Clerk	Berndt
-Shipping and Receiving Clerk	Kuppa
-Shipping and Receiving Supervisor	Ackerman
-
-statement ok
-CREATE TABLE test1 (s VARCHAR)
-
-statement ok
-INSERT INTO test1 VALUES ('2'), (NULL), ('355555552'), ('1'), ('35555556'), ('10'), ('355555553'), ('355555551')
-
-query I
-SELECT * FROM test1 ORDER BY s
-----
-NULL
-1
-10
-2
-355555551
-355555552
-355555553
-35555556
-
-# sort on 10000 strings
-statement ok
-CREATE TABLE test2 AS (SELECT CAST(range AS VARCHAR) r, random() rand FROM range(10000))
-
-statement ok
-CREATE TABLE test2_1 AS (SELECT * FROM test2 ORDER BY r)
-
-query T
-SELECT count(*) FROM test2_1
-----
-10000
-
-# string payload
-statement ok
-CREATE TABLE test3 AS (SELECT CAST(range AS VARCHAR) r, random() rand FROM range(10000))
-
-statement ok
-CREATE TABLE test3_1 AS (SELECT * FROM test3 ORDER BY rand)
-
-query T
-SELECT count(*) FROM test3_1
-----
-10000
-
-# multiple columns
-statement ok
-CREATE TABLE test4 (i INT, j INT)
-
-statement ok
-INSERT INTO test4 VALUES (3, 3), (2, 3), (2, 2), (3, 2)
-
-query II
-SELECT * FROM test4 ORDER BY cast(i AS VARCHAR), j
-----
-2	2
-2	3
-3	2
-3	3
-
-query II
-SELECT * FROM test4 ORDER BY i, cast(j AS VARCHAR)
-----
-2	2
-2	3
-3	2
-3	3
-
-query II
-SELECT * FROM test4 ORDER BY cast(i AS VARCHAR), cast(j AS VARCHAR)
-----
-2	2
-2	3
-3	2
-3	3
-
-# many payload columns
-statement ok
-CREATE TABLE tpch_q1_agg (l_returnflag VARCHAR, l_linestatus VARCHAR, sum_qty INT, sum_base_price DOUBLE, sum_disc_price DOUBLE, sum_charge DOUBLE, avg_qty DOUBLE, avg_price DOUBLE, avg_disc DOUBLE, count_order BIGINT);
-
-statement ok
-INSERT INTO tpch_q1_agg VALUES ('N', 'O', 7459297, 10512270008.90, 9986238338.3847, 10385578376.585467, 25.545537671232875, 36000.9246880137, 0.05009595890410959, 292000), ('R', 'F', 3785523, 5337950526.47, 5071818532.9420, 5274405503.049367, 25.5259438574251, 35994.029214030925, 0.04998927856184382, 148301), ('A', 'F', 3774200, 5320753880.69, 5054096266.6828, 5256751331.449234, 25.537587116854997, 36002.12382901414, 0.05014459706340077, 147790), ('N', 'F', 95257, 133737795.84, 127132372.6512, 132286291.229445, 25.30066401062417, 35521.32691633466, 0.04939442231075697, 3765);
-
-query TTTTTTTTTT
-SELECT * FROM tpch_q1_agg ORDER BY l_returnflag, l_linestatus;
-----
-A	F	3774200	5320753880.69	5054096266.6828	5256751331.449234	25.537587116854997	36002.12382901414	0.05014459706340077	147790
-N	F	95257	133737795.84	127132372.6512	132286291.229445	25.30066401062417	35521.32691633466	0.04939442231075697	3765
-N	O	7459297	10512270008.90	9986238338.3847	10385578376.585467	25.545537671232875	36000.9246880137	0.05009595890410959	292000
-R	F	3785523	5337950526.47	5071818532.9420	5274405503.049367	25.5259438574251	35994.029214030925	0.04998927856184382	148301
+NULL	[[dd,dd]]
+1	[[cc, cc, cc]]
+2	[NULL]
+3	[[aa, aa]]
 
 # TODO: sort with nested list payload (also with count > 1024), and with multiple var-size sort columns and NULLS
 statement ok

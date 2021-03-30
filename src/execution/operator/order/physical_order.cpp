@@ -455,8 +455,9 @@ static void BreakStringTies(BufferManager &buffer_manager, const data_ptr_t data
 	}
 	// if the tied strings are smaller than the prefix size, or are NULL, we don't need to break the ties
 	char *prefix_chars = (char *)dataptr + start * sorting_state.ENTRY_SIZE + tie_col_offset;
+	const char null_char = sorting_state.ORDER_TYPES[tie_col] == OrderType::ASCENDING ? 0 : -1;
 	for (idx_t i = 0; i < StringStatistics::MAX_STRING_MINMAX_SIZE; i++) {
-		if (prefix_chars[i] == '\0') {
+		if (prefix_chars[i] == null_char) {
 			return;
 		}
 	}
