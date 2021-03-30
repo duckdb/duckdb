@@ -566,7 +566,8 @@ static void ListCastSwitch(Vector &source, Vector &result, idx_t count) {
 
 static void StructCastSwitch(Vector &source, Vector &result, idx_t count) {
 	switch (result.GetType().id()) {
-	case LogicalTypeId::STRUCT: {
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::MAP: {
 		if (source.GetType().child_types().size() != result.GetType().child_types().size()) {
 			throw TypeMismatchException(source.GetType(), result.GetType(), "Cannot cast STRUCTs of different size");
 		}
@@ -680,6 +681,7 @@ void VectorOperations::Cast(Vector &source, Vector &result, idx_t count, bool st
 		ConstantVector::SetNull(result, true);
 		break;
 	}
+	case LogicalTypeId::MAP:
 	case LogicalTypeId::STRUCT:
 		StructCastSwitch(source, result, count);
 		break;

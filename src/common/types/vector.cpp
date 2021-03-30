@@ -217,7 +217,7 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		SetValue(index, val.CastAs(GetType()));
 		return;
 	}
-	if (GetType().id() != LogicalTypeId::STRUCT) {
+	if (GetType().id() != LogicalTypeId::STRUCT || GetType().id() != LogicalTypeId::MAP) {
 		validity.EnsureWritable();
 		validity.Set(index, !val.is_null);
 		if (val.is_null) {
@@ -295,6 +295,7 @@ void Vector::SetValue(idx_t index, const Value &val) {
 	case LogicalTypeId::BLOB:
 		((string_t *)data)[index] = StringVector::AddStringOrBlob(*this, val.str_value);
 		break;
+	case LogicalTypeId::MAP:
 	case LogicalTypeId::STRUCT: {
 		if (!auxiliary || StructVector::GetEntries(*this).empty()) {
 			for (size_t i = 0; i < val.struct_value.size(); i++) {
@@ -423,6 +424,7 @@ Value Vector::GetValue(idx_t index) const {
 		auto str = ((string_t *)data)[index];
 		return Value::BLOB((const_data_ptr_t)str.GetDataUnsafe(), str.GetSize());
 	}
+	case LogicalTypeId::MAP:
 	case LogicalTypeId::STRUCT: {
 		Value ret(GetType());
 		ret.is_null = false;
@@ -609,6 +611,7 @@ void Vector::Normalify(idx_t count) {
 			TemplatedFlattenConstantVector<list_entry_t>(data, old_data, count);
 			break;
 		}
+		case PhysicalType::MAP:
 		case PhysicalType::STRUCT: {
 			for (auto &child : StructVector::GetEntries(*this)) {
 				D_ASSERT(child.second->GetVectorType() == VectorType::CONSTANT_VECTOR);
@@ -855,13 +858,15 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 		}
 	}
 
-	if (GetType().InternalType() == PhysicalType::STRUCT) {
-		D_ASSERT(GetType().child_types().size() > 0);
+	if (GetType().InternalType() == PhysicalType::STRUCT || GetType().InternalType() == PhysicalType::MAP) {
+		D_ASSERT(!GetType().child_types().empty());
 		if (GetVectorType() == VectorType::FLAT_VECTOR || GetVectorType() == VectorType::CONSTANT_VECTOR) {
-			auto &children = StructVector::GetEntries(*this);
-			D_ASSERT(children.size() > 0);
-			for (auto &child : children) {
-				child.second->Verify(sel, count);
+			if (StructVector::HasEntries(*this)) {
+				auto &children = StructVector::GetEntries(*this);
+				D_ASSERT(!children.empty());
+				for (auto &child : children) {
+					child.second->Verify(sel, count);
+				}
 			}
 		}
 	}
@@ -882,7 +887,7 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 			for (idx_t i = 0; i < count; i++) {
 				auto idx = sel.get_index(i);
 				auto &le = list_data[idx];
-				if (validity.RowIsValid(idx)) {
+				if (validity.RowIsValid(idx) && ListVector::HasEntry(*this)) {
 					D_ASSERT(le.offset + le.length <= ListVector::GetListSize(*this));
 				}
 			}
@@ -995,7 +1000,7 @@ void StringVector::AddHeapReference(Vector &vector, Vector &other) {
 }
 
 bool StructVector::HasEntries(const Vector &vector) {
-	D_ASSERT(vector.GetType().id() == LogicalTypeId::STRUCT);
+	D_ASSERT(vector.GetType().id() == LogicalTypeId::STRUCT || vector.GetType().id() == LogicalTypeId::MAP);
 	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR ||
 	         vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
 	D_ASSERT(vector.auxiliary == nullptr || vector.auxiliary->GetBufferType() == VectorBufferType::STRUCT_BUFFER);
@@ -1003,7 +1008,7 @@ bool StructVector::HasEntries(const Vector &vector) {
 }
 
 child_list_t<unique_ptr<Vector>> &StructVector::GetEntries(const Vector &vector) {
-	D_ASSERT(vector.GetType().id() == LogicalTypeId::STRUCT);
+	D_ASSERT(vector.GetType().id() == LogicalTypeId::STRUCT || vector.GetType().id() == LogicalTypeId::MAP);
 	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR ||
 	         vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
 	D_ASSERT(vector.auxiliary);
@@ -1013,7 +1018,7 @@ child_list_t<unique_ptr<Vector>> &StructVector::GetEntries(const Vector &vector)
 
 void StructVector::AddEntry(Vector &vector, const string &name, unique_ptr<Vector> entry) {
 	// TODO asser that an entry with this name does not already exist
-	D_ASSERT(vector.GetType().id() == LogicalTypeId::STRUCT);
+	D_ASSERT(vector.GetType().id() == LogicalTypeId::STRUCT || vector.GetType().id() == LogicalTypeId::MAP);
 	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR ||
 	         vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
 	if (!vector.auxiliary) {

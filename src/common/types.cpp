@@ -240,10 +240,9 @@ idx_t GetTypeIdSize(PhysicalType type) {
 		return sizeof(string_t);
 	case PhysicalType::INTERVAL:
 		return sizeof(interval_t);
+	case PhysicalType::MAP:
 	case PhysicalType::STRUCT:
 		return 0; // no own payload
-	case PhysicalType::MAP:
-		return 42; // FIXME there is no way to create this type yet
 	case PhysicalType::LIST:
 		return 16; // offset + len
 
