@@ -301,7 +301,8 @@ void DataTable::Scan(Transaction &transaction, DataChunk &result, TableScanState
 	transaction.storage.Scan(state.local_state, column_ids, result);
 }
 
-bool DataTable::CheckZonemap(TableScanState &state, const vector<column_t> &column_ids, TableFilterSet *table_filters, idx_t &current_row) {
+bool DataTable::CheckZonemap(TableScanState &state, const vector<column_t> &column_ids, TableFilterSet *table_filters,
+                             idx_t &current_row) {
 	if (!table_filters) {
 		return true;
 	}
