@@ -8,7 +8,7 @@
 #else
 #include <windows.h>
 
-#define RTLD_LAZY 0
+#define RTLD_LAZY  0
 #define RTLD_LOCAL 0
 
 #endif
