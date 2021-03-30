@@ -28,6 +28,7 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 	int min = 3;
 	int ERROR = min;
 	int max = min + ERROR;
+	any_distinct = max > 100 || any_distinct;
 	// get a list of all aggregates to be computed
 	// fake a single group with a constant value for aggregation without groups
 	if (this->groups.empty()) {
