@@ -110,6 +110,8 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, vector<Value
 			options.compression = kv.second.str_value;
 		} else if (kv.first == "filename") {
 			result->include_file_name = kv.second.value_.boolean;
+		} else if (kv.first == "skip") {
+			options.skip_rows = kv.second.GetValue<int64_t>();
 		}
 	}
 	if (!options.auto_detect && return_types.empty()) {
@@ -209,6 +211,7 @@ static void ReadCSVAddNamedParameters(TableFunction &table_function) {
 	table_function.named_parameters["timestampformat"] = LogicalType::VARCHAR;
 	table_function.named_parameters["compression"] = LogicalType::VARCHAR;
 	table_function.named_parameters["filename"] = LogicalType::BOOLEAN;
+	table_function.named_parameters["skip"] = LogicalType::BIGINT;
 }
 
 int CSVReaderProgress(ClientContext &context, const FunctionData *bind_data_p) {
