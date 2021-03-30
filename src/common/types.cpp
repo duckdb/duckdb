@@ -387,7 +387,8 @@ string LogicalType::ToString() const {
 		if (child_types_.size() != 2) {
 			throw Exception("Map needs exactly two child elements");
 		}
-		return "MAP<" + child_types_[0].second.ToString() + ", " + child_types_[1].second.ToString() + ">";
+		return "MAP<" + child_types_[0].second.child_types()[0].second.ToString() + ", " +
+		       child_types_[1].second.child_types()[0].second.ToString() + ">";
 	}
 	case LogicalTypeId::DECIMAL: {
 		if (width_ == 0) {
