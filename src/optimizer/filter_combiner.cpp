@@ -416,7 +416,7 @@ vector<TableFilter> FilterCombiner::GenerateTableScanFilters(vector<idx_t> &colu
 		}
 	}
 	//! Here we look for LIKE or IN filters
-	for (size_t rem_fil_idx {}; rem_fil_idx < remaining_filters.size(); rem_fil_idx++) {
+	for (idx_t rem_fil_idx = 0; rem_fil_idx < remaining_filters.size(); rem_fil_idx++) {
 		auto &remaining_filter = remaining_filters[rem_fil_idx];
 		if (remaining_filter->expression_class == ExpressionClass::BOUND_FUNCTION) {
 			auto &func = (BoundFunctionExpression &)*remaining_filter;
@@ -500,7 +500,7 @@ vector<TableFilter> FilterCombiner::GenerateTableScanFilters(vector<idx_t> &colu
 				continue;
 			}
 
-			for (size_t i {1}; i < func.children.size(); i++) {
+			for (idx_t i = 1; i < func.children.size(); i++) {
 				auto &const_value_expr = (BoundConstantExpression &)*func.children[i].get();
 				in_values.push_back(const_value_expr.value);
 			}
@@ -509,7 +509,7 @@ vector<TableFilter> FilterCombiner::GenerateTableScanFilters(vector<idx_t> &colu
 			sort(in_values.begin(), in_values.end());
 
 			bool is_consecutive = true;
-			for (size_t in_val_idx {1}; in_val_idx < in_values.size(); in_val_idx++) {
+			for (idx_t in_val_idx = 1; in_val_idx < in_values.size(); in_val_idx++) {
 				if (in_values[in_val_idx] - in_values[in_val_idx - 1] > one || in_values[in_val_idx - 1].is_null) {
 					is_consecutive = false;
 				}

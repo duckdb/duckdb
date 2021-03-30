@@ -301,13 +301,15 @@ void DataTable::Scan(Transaction &transaction, DataChunk &result, TableScanState
 	transaction.storage.Scan(state.local_state, column_ids, result);
 }
 
-bool DataTable::CheckZonemap(TableScanState &state, TableFilterSet *table_filters, idx_t &current_row) {
+bool DataTable::CheckZonemap(TableScanState &state, const vector<column_t> &column_ids, TableFilterSet *table_filters, idx_t &current_row) {
 	if (!table_filters) {
 		return true;
 	}
 	for (auto &table_filter : table_filters->filters) {
 		for (auto &predicate_constant : table_filter.second) {
-			bool read_segment = columns[predicate_constant.column_index]->CheckZonemap(
+			D_ASSERT(predicate_constant.column_index < column_ids.size());
+			auto base_column_idx = column_ids[predicate_constant.column_index];
+			bool read_segment = columns[base_column_idx]->CheckZonemap(
 			    state.column_scans[predicate_constant.column_index], predicate_constant);
 			if (!read_segment) {
 				//! We can skip this partition
@@ -336,7 +338,7 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 	auto max_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, max_row - current_row);
 	idx_t vector_offset = (current_row - state.base_row) / STANDARD_VECTOR_SIZE;
 	//! first check the zonemap if we have to scan this partition
-	if (!CheckZonemap(state, state.table_filters, current_row)) {
+	if (!CheckZonemap(state, column_ids, state.table_filters, current_row)) {
 		return true;
 	}
 	// second, scan the version chunk manager to figure out which tuples to load for this transaction
