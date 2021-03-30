@@ -73,7 +73,7 @@ void TopNHeap::Combine(TopNHeap &other) {
 }
 
 void TopNHeap::Reduce() {
-	heap_size = (heap_data.Count() > offset) ? std::min(limit + offset, heap_data.Count()) : 0;
+	heap_size = (heap_data.Count() > offset) ? MinValue(limit + offset, heap_data.Count()) : 0;
 	if (heap_size == 0) {
 		return;
 	}
