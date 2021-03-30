@@ -88,6 +88,8 @@ static bool ParseBaseOption(BufferedCSVReaderOptions &options, string &loption, 
 		      options.compression.empty())) {
 			throw BinderException("read_csv currently only supports 'gzip' compression.");
 		}
+	} else if (loption == "skip") {
+		options.skip_rows = ParseInteger(set);
 	} else {
 		// unrecognized option in base CSV
 		return false;
