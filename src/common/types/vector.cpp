@@ -1002,13 +1002,13 @@ bool StructVector::HasEntries(const Vector &vector) {
 	return vector.auxiliary != nullptr;
 }
 
-child_list_t<unique_ptr<Vector>> &StructVector::GetEntries(const Vector &vector) {
+const child_list_t<unique_ptr<Vector>> &StructVector::GetEntries(const Vector &vector) {
 	D_ASSERT(vector.GetType().id() == LogicalTypeId::STRUCT);
 	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR ||
 	         vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
 	D_ASSERT(vector.auxiliary);
 	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::STRUCT_BUFFER);
-	return ((VectorStructBuffer *)vector.auxiliary.get())->GetChildren();
+	return ((const VectorStructBuffer *)vector.auxiliary.get())->GetChildren();
 }
 
 void StructVector::AddEntry(Vector &vector, const string &name, unique_ptr<Vector> entry) {
@@ -1035,7 +1035,7 @@ bool ListVector::HasEntry(const Vector &vector) {
 	return vector.auxiliary != nullptr;
 }
 
-Vector &ListVector::GetEntry(const Vector &vector) {
+const Vector &ListVector::GetEntry(const Vector &vector) {
 	D_ASSERT(vector.GetType().id() == LogicalTypeId::LIST);
 	if (vector.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		auto &child = DictionaryVector::Child(vector);
@@ -1046,6 +1046,11 @@ Vector &ListVector::GetEntry(const Vector &vector) {
 	D_ASSERT(vector.auxiliary);
 	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::LIST_BUFFER);
 	return ((VectorListBuffer *)vector.auxiliary.get())->GetChild();
+}
+
+Vector &ListVector::GetEntry(Vector &vector) {
+	const Vector &cvector = vector;
+	return const_cast<Vector &>(ListVector::GetEntry(cvector));
 }
 
 void ListVector::Initialize(Vector &vec) {
@@ -1073,7 +1078,7 @@ void ListVector::SetEntry(Vector &vector, unique_ptr<Vector> cc) {
 	((VectorListBuffer *)vector.auxiliary.get())->SetChild(move(cc));
 }
 
-void ListVector::Append(Vector &target, Vector &source, idx_t source_size, idx_t source_offset) {
+void ListVector::Append(Vector &target, const Vector &source, idx_t source_size, idx_t source_offset) {
 	ListVector::Initialize(target);
 	if (source_size - source_offset == 0) {
 		//! Nothing to add
