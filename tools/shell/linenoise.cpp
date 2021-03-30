@@ -956,7 +956,7 @@ void linenoiseEditMoveWordLeft(struct linenoiseState *l) {
 	}
 	do {
 		l->pos = prev_char(l);
-	} while(l->pos > 0 && !characterIsWordBoundary(l->buf[l->pos]));
+	} while (l->pos > 0 && !characterIsWordBoundary(l->buf[l->pos]));
 	refreshLine(l);
 }
 
@@ -967,7 +967,7 @@ void linenoiseEditMoveWordRight(struct linenoiseState *l) {
 	}
 	do {
 		l->pos = next_char(l);
-	} while(l->pos != l->len && !characterIsWordBoundary(l->buf[l->pos]));
+	} while (l->pos != l->len && !characterIsWordBoundary(l->buf[l->pos]));
 	refreshLine(l);
 }
 
