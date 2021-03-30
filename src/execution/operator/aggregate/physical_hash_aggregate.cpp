@@ -24,11 +24,6 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
                                              PhysicalOperatorType type)
     : PhysicalSink(type, move(types), estimated_cardinality), groups(move(groups_p)), all_combinable(true),
       any_distinct(false) {
-	// FIXME: added to test windows.h breakage
-	int min = 3;
-	int ERROR = min;
-	int max = min + ERROR;
-	any_distinct = max > 100 || any_distinct;
 	// get a list of all aggregates to be computed
 	// fake a single group with a constant value for aggregation without groups
 	if (this->groups.empty()) {
