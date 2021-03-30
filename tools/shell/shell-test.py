@@ -180,14 +180,29 @@ test('.stats', err="sqlite3_status64")
 test('.stats on')
 test('.stats off')
 
-# FIXME
-test('.schema', err="subquery in FROM must have an alias")
-
-# FIXME need sqlite3_strlike for this
 test('''
-CREATE TABLE asdf (i INTEGER);
-.schema as%
-''', err="subquery in FROM must have an alias")
+create table test (a int, b varchar);
+insert into test values (1, 'hello');
+.schema test
+''', out="CREATE TABLE test(a INTEGER, b VARCHAR);")
+
+test('''
+create table test (a int, b varchar);
+insert into test values (1, 'hello');
+.schema tes%
+''', out="CREATE TABLE test(a INTEGER, b VARCHAR);")
+
+test('''
+create table test (a int, b varchar);
+insert into test values (1, 'hello');
+.schema tes*
+''', out="CREATE TABLE test(a INTEGER, b VARCHAR);")
+
+test('''
+create table test (a int, b varchar);
+CREATE TABLE test2(a INTEGER, b VARCHAR);
+.schema
+''', out="CREATE TABLE test2(a INTEGER, b VARCHAR);")
 
 test('.fullschema', 'No STAT tables available', '')
 

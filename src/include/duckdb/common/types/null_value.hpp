@@ -12,6 +12,7 @@
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/windows_undefs.hpp"
 
 #include <limits>
 #include <cstring>

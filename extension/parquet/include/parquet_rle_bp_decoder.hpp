@@ -21,12 +21,12 @@ public:
 
 		while (values_read < batch_size) {
 			if (repeat_count_ > 0) {
-				int repeat_batch = std::min(batch_size - values_read, static_cast<uint32_t>(repeat_count_));
+				int repeat_batch = MinValue(batch_size - values_read, static_cast<uint32_t>(repeat_count_));
 				std::fill(values + values_read, values + values_read + repeat_batch, static_cast<T>(current_value_));
 				repeat_count_ -= repeat_batch;
 				values_read += repeat_batch;
 			} else if (literal_count_ > 0) {
-				uint32_t literal_batch = std::min(batch_size - values_read, static_cast<uint32_t>(literal_count_));
+				uint32_t literal_batch = MinValue(batch_size - values_read, static_cast<uint32_t>(literal_count_));
 				uint32_t actual_read = BitUnpack<T>(values + values_read, literal_batch);
 				if (literal_batch != actual_read) {
 					throw std::runtime_error("Did not find enough values");

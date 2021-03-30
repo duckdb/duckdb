@@ -54,7 +54,6 @@ SELECT * FROM parquet_scan('test/sql/copy/parquet/data/nested_lists.snappy.parqu
 #1       [[[a, b], [c, d]], [None, [e]]]  1
 #2  [[[a, b], [c, d], [e]], [None, [f]]]  1
 
-
 query I
 SELECT unnest(a) FROM parquet_scan('test/sql/copy/parquet/data/nested_lists.snappy.parquet')
 ----

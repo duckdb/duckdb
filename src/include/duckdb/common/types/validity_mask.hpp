@@ -82,6 +82,8 @@ public:
 		validity_data.reset();
 	}
 
+	void Resize(idx_t old_size, idx_t new_size);
+
 	static inline idx_t EntryCount(idx_t count) {
 		return ValidityData::EntryCount(count);
 	}
@@ -195,6 +197,8 @@ public:
 	void Slice(const ValidityMask &other, idx_t offset);
 	void Combine(const ValidityMask &other, idx_t count);
 	string ToString(idx_t count) const;
+
+	bool IsMaskSet() const;
 
 public:
 	void Initialize(validity_t *validity) {

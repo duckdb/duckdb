@@ -72,6 +72,9 @@ public:
 	data_ptr_t GetData() {
 		return data.get();
 	}
+	void SetData(unique_ptr<data_t[]> new_data) {
+		data = move(new_data);
+	}
 
 	static buffer_ptr<VectorBuffer> CreateStandardVector(PhysicalType type);
 	static buffer_ptr<VectorBuffer> CreateConstantVector(PhysicalType type);
@@ -192,18 +195,24 @@ private:
 class VectorListBuffer : public VectorBuffer {
 public:
 	VectorListBuffer();
-
 	~VectorListBuffer() override;
 
 public:
-	ChunkCollection &GetChild() {
+	Vector &GetChild() {
 		return *child;
 	}
-	void SetChild(unique_ptr<ChunkCollection> new_child);
+	void SetChild(unique_ptr<Vector> new_child);
+
+	void Append(Vector &to_append, idx_t size, idx_t source_offset = 0);
+
+	void PushBack(Value &insert);
+
+	idx_t capacity = 0;
+	idx_t size = 0;
 
 private:
 	//! child vectors used for nested data
-	unique_ptr<ChunkCollection> child;
+	unique_ptr<Vector> child;
 };
 
 //! The ManagedVectorBuffer holds a buffer handle

@@ -24,9 +24,16 @@
 #include <utility>
 #include <vector>
 
-//#include "glog/logging.h"
+#ifdef min
+#undef min
+#endif
 
-namespace tdigest {
+#ifdef max
+#undef max
+#endif
+
+
+namespace duckdb_tdigest {
 
 using Value = double;
 using Weight = double;
