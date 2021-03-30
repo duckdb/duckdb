@@ -13,9 +13,12 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/function/replacement_scan.hpp"
 
 namespace duckdb {
 class ClientContext;
+class TableFunctionRef;
 
 enum class AccessMode : uint8_t { UNDEFINED = 0, AUTOMATIC = 1, READ_ONLY = 2, READ_WRITE = 3 };
 enum class CheckpointAbort : uint8_t { NO_ABORT = 0, DEBUG_ABORT_BEFORE_TRUNCATE = 1, DEBUG_ABORT_BEFORE_HEADER = 2 };
@@ -61,6 +64,8 @@ public:
 	bool checkpoint_on_shutdown = true;
 	//! Debug flag that decides when a checkpoing should be aborted. Only used for testing purposes.
 	CheckpointAbort checkpoint_abort = CheckpointAbort::NO_ABORT;
+	//! Replacement table scans are automatically attempted when a table name cannot be found in the schema
+	vector<ReplacementScan> replacement_scans;
 
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);

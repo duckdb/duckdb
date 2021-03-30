@@ -1,6 +1,7 @@
 #include "duckdb/common/limits.hpp"
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/windows_undefs.hpp"
 #include <limits>
 
 namespace duckdb {

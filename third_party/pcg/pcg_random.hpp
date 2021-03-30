@@ -100,6 +100,14 @@
     #define PCG_ALWAYS_INLINE inline
 #endif
 
+#ifdef min
+#undef min
+#endif
+
+#ifdef max
+#undef max
+#endif
+
 /*
  * The pcg_extras namespace contains some support code that is likley to
  * be useful for a variety of RNGs, including:

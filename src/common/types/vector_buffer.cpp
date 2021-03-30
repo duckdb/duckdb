@@ -2,6 +2,7 @@
 #include "duckdb/common/types/vector_buffer.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 #include "duckdb/common/assert.hpp"
 
@@ -39,8 +40,39 @@ VectorStructBuffer::~VectorStructBuffer() {
 VectorListBuffer::VectorListBuffer() : VectorBuffer(VectorBufferType::LIST_BUFFER) {
 }
 
-void VectorListBuffer::SetChild(unique_ptr<ChunkCollection> new_child) {
+void VectorListBuffer::SetChild(unique_ptr<Vector> new_child) {
 	child = move(new_child);
+	capacity = STANDARD_VECTOR_SIZE;
+}
+
+void VectorListBuffer::Append(Vector &to_append, idx_t to_append_size, idx_t source_offset) {
+
+	if (size + to_append_size - source_offset > capacity) {
+		idx_t new_capacity = (size + to_append_size - source_offset) / STANDARD_VECTOR_SIZE +
+		                     ((size + to_append_size - source_offset) % STANDARD_VECTOR_SIZE != 0);
+		new_capacity *= STANDARD_VECTOR_SIZE;
+		if (child->GetType().id() == LogicalTypeId::STRUCT && size == 0) {
+			// Empty struct, gotta initialize it first
+			auto &source_children = StructVector::GetEntries(to_append);
+			for (auto &src_child : source_children) {
+				auto child_copy = make_unique<Vector>(src_child.second->GetType());
+				StructVector::AddEntry(*child, src_child.first, move(child_copy));
+			}
+		}
+		child->Resize(capacity, new_capacity);
+		capacity = new_capacity;
+	}
+	VectorOperations::Copy(to_append, *child, to_append_size, source_offset, size);
+
+	size += to_append_size - source_offset;
+}
+
+void VectorListBuffer::PushBack(Value &insert) {
+	if (size + 1 > capacity) {
+		child->Resize(capacity, capacity * 2);
+		capacity *= 2;
+	}
+	child->SetValue(size++, insert);
 }
 
 VectorListBuffer::~VectorListBuffer() {
