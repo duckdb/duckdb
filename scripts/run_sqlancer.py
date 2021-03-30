@@ -32,7 +32,7 @@ out = subprocess.stdout.read()
 if subprocess.returncode != 0:
 	print('--------------------- SQLANCER LOGS ----------------------')
 	try:
-		print(out.decode('utf8')))
+		print(out.decode('utf8'))
 	except:
 		print(out)
 	exit(1)
