@@ -60,7 +60,7 @@ struct ColumnFetchState {
 	//! The set of pinned block handles for this set of fetches
 	buffer_handle_set_t handles;
 	//! Any child states of the fetch
-	vector<ColumnFetchState> child_states;
+	vector<unique_ptr<ColumnFetchState>> child_states;
 };
 
 struct LocalScanState {

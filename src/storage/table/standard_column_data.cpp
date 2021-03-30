@@ -147,10 +147,10 @@ void StandardColumnData::FetchRow(ColumnFetchState &state, Transaction &transact
                                   idx_t result_idx) {
 	// find the segment the row belongs to
 	if (state.child_states.empty()) {
-		ColumnFetchState child_state;
+		auto child_state = make_unique<ColumnFetchState>();
 		state.child_states.push_back(move(child_state));
 	}
-	validity.FetchRow(state.child_states[0], transaction, row_id, result, result_idx);
+	validity.FetchRow(*state.child_states[0], transaction, row_id, result, result_idx);
 	ColumnData::FetchRow(state, transaction, row_id, result, result_idx);
 }
 
