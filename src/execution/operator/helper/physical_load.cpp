@@ -6,14 +6,7 @@
 #ifndef _WIN32
 #include <dlfcn.h>
 #else
-// we copy a trick from concurrentqueue, this is brilliant:
-// No sense pulling in windows.h for this, we'll manually declare the functions
-// we use and rely on backwards-compatibility for this not to break
-extern "C" __declspec(dllimport) void *__stdcall LoadLibrary(const char *);
-extern "C" __declspec(dllimport) void *__stdcall LoadLibrary(void *, const char *);
-
-#define RTLD_LAZY  0
-#define RTLD_LOCAL 0
+#include <windows.h>
 #endif
 
 namespace duckdb {
