@@ -32,11 +32,11 @@ WindowSegmentTree::~WindowSegmentTree() {
 		return;
 	}
 	// call the destructor for all the intermediate states
-	uint64_t address_data[STANDARD_VECTOR_SIZE];
+	data_ptr_t address_data[STANDARD_VECTOR_SIZE];
 	Vector addresses(LogicalType::POINTER, (data_ptr_t)address_data);
 	idx_t count = 0;
 	for (idx_t i = 0; i < internal_nodes; i++) {
-		address_data[count++] = uint64_t(levels_flat_native.get() + i * state.size());
+		address_data[count++] = data_ptr_t(levels_flat_native.get() + i * state.size());
 		if (count == STANDARD_VECTOR_SIZE) {
 			aggregate.destructor(addresses, count);
 			count = 0;
