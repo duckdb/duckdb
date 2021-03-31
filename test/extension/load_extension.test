@@ -12,7 +12,7 @@ statement error
 LOAD NULL;
 
 statement ok
-LOAD '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
+LOAD '__BUILD_DIRECTORY__/test/extension/Debug/loadable_extension_demo.duckdb_extension';
 
 query I
 SELECT hello('World');
