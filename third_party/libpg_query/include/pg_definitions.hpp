@@ -10,6 +10,10 @@
 #include <stdio.h>
 #include <string>
 
+#ifdef ERROR
+#undef ERROR
+#endif
+
 typedef uintptr_t PGDatum;
 typedef uint64_t PGSize;
 

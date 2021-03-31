@@ -745,7 +745,7 @@ static char *one_input_line(FILE *in, char *zPrior, int isContinuation){
 #else
     free(zPrior);
     zResult = shell_readline(zPrompt);
-    if( zResult && *zResult ) shell_add_history(zResult);
+    if( zResult && *zResult && *zResult != '\3' ) shell_add_history(zResult);
 #endif
   }
   return zResult;
@@ -20023,7 +20023,7 @@ static int process_input(ShellState *p){
   int rc;                   /* Error code */
   int errCnt = 0;           /* Number of errors seen */
   int startline = 0;        /* Line number for start of current input */
-
+  int numCtrlC = 0;
   p->lineno = 0;
   while( errCnt==0 || !bail_on_error || (p->in==0 && stdin_is_interactive) ){
     fflush(p->out);
@@ -20032,6 +20032,21 @@ static int process_input(ShellState *p){
       /* End of input */
       if( p->in==0 && stdin_is_interactive ) printf("\n");
       break;
+    }
+    if (*zLine == '\3') {
+      // ctrl c: reset sql statement
+      if (nSql == 0 && zLine[1] == '\0' && stdin_is_interactive) {
+        // if in interactive mode and we press ctrl c twice
+        // on an empty line, we exit
+        numCtrlC++;
+        if (numCtrlC >= 2) {
+          break;
+        }
+      }
+      nSql = 0;
+      continue;
+    } else {
+      numCtrlC = 0;
     }
     if( seenInterrupt ){
       if( p->in!=0 ) break;

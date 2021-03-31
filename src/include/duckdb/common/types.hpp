@@ -256,7 +256,8 @@ enum class LogicalTypeId : uint8_t {
 
 	STRUCT = 100,
 	LIST = 101,
-	MAP = 102
+	MAP = 102,
+	TABLE = 103
 };
 
 struct LogicalType {
@@ -351,6 +352,7 @@ public:
 	static const LogicalType HUGEINT;
 	static const LogicalType HASH;
 	static const LogicalType POINTER;
+	static const LogicalType TABLE;
 	static const LogicalType INVALID;
 
 	//! A list of all NUMERIC types (integral and floating point types)

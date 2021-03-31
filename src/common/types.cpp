@@ -98,6 +98,7 @@ PhysicalType LogicalType::GetInternalType() {
 		return PhysicalType::HASH;
 	case LogicalTypeId::POINTER:
 		return PhysicalType::POINTER;
+	case LogicalTypeId::TABLE:
 	case LogicalTypeId::ANY:
 	case LogicalTypeId::INVALID:
 	case LogicalTypeId::UNKNOWN:
@@ -137,6 +138,7 @@ const LogicalType LogicalType::INTERVAL = LogicalType(LogicalTypeId::INTERVAL);
 const LogicalType LogicalType::STRUCT = LogicalType(LogicalTypeId::STRUCT);
 const LogicalType LogicalType::LIST = LogicalType(LogicalTypeId::LIST);
 const LogicalType LogicalType::MAP = LogicalType(LogicalTypeId::MAP);
+const LogicalType LogicalType::TABLE = LogicalType(LogicalTypeId::TABLE);
 
 const LogicalType LogicalType::ANY = LogicalType(LogicalTypeId::ANY);
 
@@ -351,6 +353,8 @@ string LogicalTypeIdToString(LogicalTypeId id) {
 		return "HASH";
 	case LogicalTypeId::POINTER:
 		return "POINTER";
+	case LogicalTypeId::TABLE:
+		return "TABLE";
 	case LogicalTypeId::INVALID:
 		return "INVALID";
 	case LogicalTypeId::UNKNOWN:

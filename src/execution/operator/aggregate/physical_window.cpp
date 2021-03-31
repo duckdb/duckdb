@@ -8,6 +8,7 @@
 #include "duckdb/parallel/task_counter.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
+#include "duckdb/common/windows_undefs.hpp"
 
 #include <cmath>
 #include <numeric>
@@ -619,7 +620,13 @@ static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, const idx_t inp
 	if (bounds.window_start < (int64_t)bounds.partition_start) {
 		bounds.window_start = bounds.partition_start;
 	}
-	if ((idx_t)bounds.window_end > bounds.partition_end) {
+	if (bounds.window_start > (int64_t)bounds.partition_end) {
+		bounds.window_start = bounds.partition_end;
+	}
+	if (bounds.window_end < (int64_t)bounds.partition_start) {
+		bounds.window_end = bounds.partition_start;
+	}
+	if (bounds.window_end > (int64_t)bounds.partition_end) {
 		bounds.window_end = bounds.partition_end;
 	}
 

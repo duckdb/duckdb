@@ -55,6 +55,7 @@ struct ArrowScanFunctionData : public TableFunctionData {
 
 static unique_ptr<FunctionData> ArrowScanBind(ClientContext &context, vector<Value> &inputs,
                                               unordered_map<string, Value> &named_parameters,
+                                              vector<LogicalType> &input_table_types, vector<string> &input_table_names,
                                               vector<LogicalType> &return_types, vector<string> &names) {
 
 	auto res = make_unique<ArrowScanFunctionData>();
@@ -145,7 +146,7 @@ static unique_ptr<FunctionOperatorData> ArrowScanInit(ClientContext &context, co
 }
 
 static void ArrowScanFunction(ClientContext &context, const FunctionData *bind_data,
-                              FunctionOperatorData *operator_state, DataChunk &output) {
+                              FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
 	auto &data = (ArrowScanFunctionData &)*bind_data;
 	if (!data.stream->release) {
 		// no more chunks
@@ -172,8 +173,7 @@ static void ArrowScanFunction(ClientContext &context, const FunctionData *bind_d
 		throw InvalidInputException("arrow_scan: array column count mismatch");
 	}
 
-	output.SetCardinality(
-	    std::min((int64_t)STANDARD_VECTOR_SIZE, (int64_t)(data.current_chunk_root.length - data.chunk_offset)));
+	output.SetCardinality(MinValue<int64_t>(STANDARD_VECTOR_SIZE, data.current_chunk_root.length - data.chunk_offset));
 
 	for (idx_t col_idx = 0; col_idx < output.ColumnCount(); col_idx++) {
 		auto &array = *data.current_chunk_root.children[col_idx];
