@@ -134,6 +134,8 @@ public:
 
 	static unique_ptr<FunctionData> ParquetScanBind(ClientContext &context, vector<Value> &inputs,
 	                                                unordered_map<string, Value> &named_parameters,
+	                                                vector<LogicalType> &input_table_types,
+	                                                vector<string> &input_table_names,
 	                                                vector<LogicalType> &return_types, vector<string> &names) {
 		auto file_name = inputs[0].GetValue<string>();
 		auto result = make_unique<ParquetReadBindData>();
@@ -198,7 +200,7 @@ public:
 	}
 
 	static void ParquetScanImplementation(ClientContext &context, const FunctionData *bind_data_p,
-	                                      FunctionOperatorData *operator_state, DataChunk &output) {
+	                                      FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
 		auto &data = (ParquetReadOperatorData &)*operator_state;
 		auto &bind_data = (ParquetReadBindData &)*bind_data_p;
 
