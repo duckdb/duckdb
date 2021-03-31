@@ -16,6 +16,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/common/windows_undefs.hpp"
 
 namespace duckdb {
 

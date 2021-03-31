@@ -33,6 +33,8 @@ struct TableFilterCollection {
 
 typedef unique_ptr<FunctionData> (*table_function_bind_t)(ClientContext &context, vector<Value> &inputs,
                                                           unordered_map<string, Value> &named_parameters,
+                                                          vector<LogicalType> &input_table_types,
+                                                          vector<string> &input_table_names,
                                                           vector<LogicalType> &return_types, vector<string> &names);
 typedef unique_ptr<FunctionOperatorData> (*table_function_init_t)(ClientContext &context, const FunctionData *bind_data,
                                                                   vector<column_t> &column_ids,
@@ -40,7 +42,7 @@ typedef unique_ptr<FunctionOperatorData> (*table_function_init_t)(ClientContext 
 typedef unique_ptr<BaseStatistics> (*table_statistics_t)(ClientContext &context, const FunctionData *bind_data,
                                                          column_t column_index);
 typedef void (*table_function_t)(ClientContext &context, const FunctionData *bind_data,
-                                 FunctionOperatorData *operator_state, DataChunk &output);
+                                 FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output);
 typedef void (*table_function_cleanup_t)(ClientContext &context, const FunctionData *bind_data,
                                          FunctionOperatorData *operator_state);
 typedef idx_t (*table_function_max_threads_t)(ClientContext &context, const FunctionData *bind_data);

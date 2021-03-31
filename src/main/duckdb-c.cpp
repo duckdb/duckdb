@@ -14,6 +14,10 @@
 #define strdup _strdup
 #endif
 
+#ifdef GetCValue
+#undef GetCValue
+#endif
+
 using namespace duckdb;
 
 static duckdb_type ConvertCPPTypeToC(LogicalType type);

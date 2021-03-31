@@ -136,6 +136,7 @@ BufferedCSVReader::BufferedCSVReader(BufferedCSVReaderOptions options_p, const v
 }
 
 void BufferedCSVReader::Initialize(const vector<LogicalType> &requested_types) {
+	PrepareComplexParser();
 	if (options.auto_detect) {
 		sql_types = SniffCSV(requested_types);
 		if (cached_chunks.empty()) {
@@ -145,8 +146,6 @@ void BufferedCSVReader::Initialize(const vector<LogicalType> &requested_types) {
 		sql_types = requested_types;
 		JumpToBeginning(options.skip_rows, options.header);
 	}
-
-	PrepareComplexParser();
 	InitParseChunk(sql_types.size());
 }
 
@@ -430,7 +429,7 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 					options = sniff_info;
 					PrepareComplexParser();
 
-					JumpToBeginning();
+					JumpToBeginning(original_options.skip_rows);
 					sniffed_column_counts.clear();
 					try {
 						ParseCSV(ParserMode::SNIFFING_DIALECT);
@@ -438,7 +437,7 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 						continue;
 					}
 
-					idx_t start_row = 0;
+					idx_t start_row = original_options.skip_rows;
 					idx_t consistent_rows = 0;
 					idx_t num_cols = 0;
 
@@ -447,7 +446,7 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 							consistent_rows++;
 						} else {
 							num_cols = sniffed_column_counts[row];
-							start_row = row;
+							start_row = row + original_options.skip_rows;
 							consistent_rows = 1;
 						}
 					}
@@ -455,7 +454,8 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 					// some logic
 					bool more_values = (consistent_rows > best_consistent_rows && num_cols >= best_num_cols);
 					bool single_column_before = best_num_cols < 2 && num_cols > best_num_cols;
-					bool rows_consistent = start_row + consistent_rows == sniffed_column_counts.size();
+					bool rows_consistent =
+					    start_row + consistent_rows - original_options.skip_rows == sniffed_column_counts.size();
 					bool more_than_one_row = (consistent_rows > 1);
 					bool more_than_one_column = (num_cols > 1);
 					bool start_good = !info_candidates.empty() && (start_row <= info_candidates.front().skip_rows);

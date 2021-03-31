@@ -119,6 +119,8 @@ static void ConvertPandasType(const string &col_type, LogicalType &duckdb_col_ty
 
 unique_ptr<FunctionData> PandasScanFunction::PandasScanBind(ClientContext &context, vector<Value> &inputs,
                                                             unordered_map<string, Value> &named_parameters,
+                                                            vector<LogicalType> &input_table_types,
+                                                            vector<string> &input_table_names,
                                                             vector<LogicalType> &return_types, vector<string> &names) {
 	// Hey, it works (TM)
 	py::gil_scoped_acquire acquire;
@@ -438,7 +440,7 @@ static void ConvertVector(PandasColumnBindData &bind_data, py::array &numpy_col,
 //! The main pandas scan function: note that this can be called in parallel without the GIL
 //! hence this needs to be GIL-safe, i.e. no methods that create Python objects are allowed
 void PandasScanFunction::PandasScanFunc(ClientContext &context, const FunctionData *bind_data,
-                                        FunctionOperatorData *operator_state, DataChunk &output) {
+                                        FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
 	auto &data = (PandasScanFunctionData &)*bind_data;
 	auto &state = (PandasScanState &)*operator_state;
 
