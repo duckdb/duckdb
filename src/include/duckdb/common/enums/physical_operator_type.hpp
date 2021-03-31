@@ -93,6 +93,7 @@ enum class PhysicalOperatorType : uint8_t {
 	PREPARE,
 	VACUUM,
 	EXPORT,
+	INOUT_FUNCTION,
 	SET
 };
 
