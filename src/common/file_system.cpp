@@ -696,6 +696,29 @@ string FileSystem::JoinPath(const string &a, const string &b) {
 	return a + PathSeparator() + b;
 }
 
+string FileSystem::ConvertSeparators(const string &path) {
+	auto separator_str = PathSeparator();
+	char separator = separator_str[0];
+	if (separator == '/') {
+		// on unix-based systems we only accept / as a separator
+		return path;
+	}
+	// on windows-based systems we accept both
+	string result = path;
+	for(idx_t i = 0; i < result.size(); i++) {
+		if (result[i] == '/') {
+			result[i] = separator;
+		}
+	}
+	return result;
+}
+
+string FileSystem::ExtractBaseName(const string &path) {
+	auto sep = PathSeparator();
+	auto vec = StringUtil::Split(StringUtil::Split(path, sep).back(), ".");
+	return vec[0];
+}
+
 void FileHandle::Read(void *buffer, idx_t nr_bytes, idx_t location) {
 	file_system.Read(*this, buffer, nr_bytes, location);
 }
