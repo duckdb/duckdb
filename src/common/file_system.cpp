@@ -705,7 +705,7 @@ string FileSystem::ConvertSeparators(const string &path) {
 	}
 	// on windows-based systems we accept both
 	string result = path;
-	for(idx_t i = 0; i < result.size(); i++) {
+	for (idx_t i = 0; i < result.size(); i++) {
 		if (result[i] == '/') {
 			result[i] = separator;
 		}

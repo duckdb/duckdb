@@ -48,8 +48,7 @@ void PhysicalLoad::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
 
 	*(void **)(&init_fun) = dlsym(lib_hdl, init_fun_name.c_str());
 	if (init_fun == nullptr) {
-		throw InvalidInputException("File %s did not contain initialization function %s", filename,
-		                            init_fun_name);
+		throw InvalidInputException("File %s did not contain initialization function %s", filename, init_fun_name);
 	}
 
 	*(void **)(&version_fun) = dlsym(lib_hdl, version_fun_name.c_str());
