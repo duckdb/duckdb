@@ -45,7 +45,7 @@ bool Binder::BindFunctionParameters(vector<unique_ptr<ParsedExpression>> &expres
 			auto node = binder->BindNode(*se.subquery->node);
 			subquery = make_unique<BoundSubqueryRef>(move(binder), move(node));
 			seen_subquery = true;
-			arguments.push_back(LogicalTypeId::TABLE);
+			arguments.emplace_back(LogicalTypeId::TABLE);
 			continue;
 		}
 		ConstantBinder binder(*this, context, "TABLE FUNCTION parameter");
@@ -62,8 +62,8 @@ bool Binder::BindFunctionParameters(vector<unique_ptr<ParsedExpression>> &expres
 				error = "Unnamed parameters cannot come after named parameters";
 				return false;
 			}
-			arguments.push_back(sql_type);
-			parameters.push_back(move(constant));
+			arguments.emplace_back(sql_type);
+			parameters.emplace_back(move(constant));
 		} else {
 			named_parameters[parameter_name] = move(constant);
 		}
