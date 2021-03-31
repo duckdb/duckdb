@@ -257,7 +257,8 @@ enum class LogicalTypeId : uint8_t {
 
 	STRUCT = 100,
 	LIST = 101,
-	MAP = 102
+	MAP = 102,
+	TABLE = 103
 };
 
 struct LogicalType {
@@ -352,6 +353,7 @@ public:
 	DUCKDB_API static const LogicalType HUGEINT;
 	DUCKDB_API static const LogicalType HASH;
 	DUCKDB_API static const LogicalType POINTER;
+	DUCKDB_API static const LogicalType TABLE;
 	DUCKDB_API static const LogicalType INVALID;
 
 	//! A list of all NUMERIC types (integral and floating point types)

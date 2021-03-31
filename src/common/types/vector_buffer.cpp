@@ -45,7 +45,7 @@ void VectorListBuffer::SetChild(unique_ptr<Vector> new_child) {
 	capacity = STANDARD_VECTOR_SIZE;
 }
 
-void VectorListBuffer::Append(Vector &to_append, idx_t to_append_size, idx_t source_offset) {
+void VectorListBuffer::Append(const Vector &to_append, idx_t to_append_size, idx_t source_offset) {
 
 	if (size + to_append_size - source_offset > capacity) {
 		idx_t new_capacity = (size + to_append_size - source_offset) / STANDARD_VECTOR_SIZE +
