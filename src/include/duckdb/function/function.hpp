@@ -82,10 +82,10 @@ public:
 	DUCKDB_API static string CallToString(const string &name, const vector<LogicalType> &arguments);
 	//! Returns the formatted string name(arg1, arg2..) -> return_type
 	DUCKDB_API static string CallToString(const string &name, const vector<LogicalType> &arguments,
-	                           const LogicalType &return_type);
+	                                      const LogicalType &return_type);
 	//! Returns the formatted string name(arg1, arg2.., np1=a, np2=b, ...)
 	DUCKDB_API static string CallToString(const string &name, const vector<LogicalType> &arguments,
-	                           const unordered_map<string, LogicalType> &named_parameters);
+	                                      const unordered_map<string, LogicalType> &named_parameters);
 
 	//! Bind a scalar function from the set of functions and input arguments. Returns the index of the chosen function,
 	//! returns INVALID_INDEX and sets error if none could be found
@@ -111,7 +111,8 @@ public:
 
 class SimpleFunction : public Function {
 public:
-	SimpleFunction(string name, vector<LogicalType> arguments, LogicalType varargs = LogicalType(LogicalTypeId::INVALID))
+	SimpleFunction(string name, vector<LogicalType> arguments,
+	               LogicalType varargs = LogicalType(LogicalTypeId::INVALID))
 	    : Function(name), arguments(move(arguments)), varargs(varargs) {
 	}
 	~SimpleFunction() override {
@@ -135,7 +136,8 @@ public:
 
 class SimpleNamedParameterFunction : public SimpleFunction {
 public:
-	SimpleNamedParameterFunction(string name, vector<LogicalType> arguments, LogicalType varargs = LogicalType(LogicalTypeId::INVALID))
+	SimpleNamedParameterFunction(string name, vector<LogicalType> arguments,
+	                             LogicalType varargs = LogicalType(LogicalTypeId::INVALID))
 	    : SimpleFunction(name, move(arguments), varargs) {
 	}
 	~SimpleNamedParameterFunction() override {

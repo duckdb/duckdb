@@ -39,7 +39,8 @@ public:
 
 		const std::size_t num_template_types = sizeof...(Args);
 		if (num_template_types != args.size()) {
-			throw std::runtime_error("The number of templated types should be the same quantity of the LogicalType arguments.");
+			throw std::runtime_error(
+			    "The number of templated types should be the same quantity of the LogicalType arguments.");
 		}
 
 		switch (num_template_types) {
@@ -56,7 +57,7 @@ public:
 
 	template <typename TR, typename... Args>
 	static void RegisterFunction(const string &name, scalar_function_t udf_function, ClientContext &context,
-	                             LogicalType varargs =  LogicalType(LogicalTypeId::INVALID)) {
+	                             LogicalType varargs = LogicalType(LogicalTypeId::INVALID)) {
 		vector<LogicalType> arguments;
 		GetArgumentTypesRecursive<Args...>(arguments);
 
@@ -66,8 +67,8 @@ public:
 	}
 
 	DUCKDB_API static void RegisterFunction(string name, vector<LogicalType> args, LogicalType ret_type,
-	                             scalar_function_t udf_function, ClientContext &context,
-	                             LogicalType varargs =  LogicalType(LogicalTypeId::INVALID));
+	                                        scalar_function_t udf_function, ClientContext &context,
+	                                        LogicalType varargs = LogicalType(LogicalTypeId::INVALID));
 
 	//--------------------------------- Aggregate UDFs ------------------------------------//
 	template <typename UDF_OP, typename STATE, typename TR, typename TA>
@@ -126,7 +127,7 @@ public:
 	}
 
 	DUCKDB_API static void RegisterAggrFunction(AggregateFunction aggr_function, ClientContext &context,
-	                                 LogicalType varargs = LogicalType(LogicalTypeId::INVALID));
+	                                            LogicalType varargs = LogicalType(LogicalTypeId::INVALID));
 
 private:
 	//-------------------------------- Templated functions --------------------------------//
