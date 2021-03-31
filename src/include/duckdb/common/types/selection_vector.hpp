@@ -75,7 +75,7 @@ public:
 		sel_vector[j] = tmp;
 	}
 	idx_t get_index(idx_t idx) const {
-		return sel_vector[idx];
+		return sel_vector ? sel_vector[idx] : idx;
 	}
 	sel_t *data() {
 		return sel_vector;
