@@ -207,8 +207,8 @@ void VectorOperations::Copy(const Vector &source, Vector &target, idx_t source_c
 		                       target_offset);
 		break;
 	case VectorType::FLAT_VECTOR: {
-		SelectionVector selection_vector;
-		VectorOperations::Copy(source, target, selection_vector, source_count, source_offset, target_offset);
+		VectorOperations::Copy(source, target, FlatVector::INCREMENTAL_SELECTION_VECTOR, source_count, source_offset,
+		                       target_offset);
 		break;
 	}
 	case VectorType::SEQUENCE_VECTOR: {
