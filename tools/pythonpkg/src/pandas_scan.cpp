@@ -68,7 +68,7 @@ struct ParallelPandasScanState : public ParallelState {
 };
 
 PandasScanFunction::PandasScanFunction()
-    : TableFunction("pandas_scan", {LogicalType::VARCHAR}, PandasScanFunc, PandasScanBind, PandasScanInit, nullptr,
+    : TableFunction("pandas_scan", {LogicalType::POINTER}, PandasScanFunc, PandasScanBind, PandasScanInit, nullptr,
                     nullptr, nullptr, PandasScanCardinality, nullptr, nullptr, PandasScanMaxThreads,
                     PandasScanInitParallelState, PandasScanParallelInit, PandasScanParallelStateNext, true, false,
                     PandasProgress) {
@@ -122,17 +122,8 @@ unique_ptr<FunctionData> PandasScanFunction::PandasScanBind(ClientContext &conte
                                                             vector<LogicalType> &input_table_types,
                                                             vector<string> &input_table_names,
                                                             vector<LogicalType> &return_types, vector<string> &names) {
-	// Hey, it works (TM)
 	py::gil_scoped_acquire acquire;
-	py::handle df((PyObject *)std::stoull(inputs[0].GetValue<string>(), nullptr, 16));
-
-	/* TODO this fails on Python2 for some reason
-	auto pandas_mod = py::module::import("pandas.core.frame");
-	auto df_class = pandas_mod.attr("DataFrame");
-
-	if (!df.get_type().is(df_class)) {
-	    throw Exception("parameter is not a DataFrame");
-	} */
+	py::handle df((PyObject *)(inputs[0].GetValue<uintptr_t>()));
 
 	auto df_columns = py::list(df.attr("columns"));
 	auto df_types = py::list(df.attr("dtypes"));
