@@ -118,6 +118,8 @@ public:
 	//! Delete from a table, can only be used on a TableRelation
 	DUCKDB_API virtual void Delete(const string &condition = string());
 
+	DUCKDB_API shared_ptr<Relation> TableFunction(std::string fname, vector<Value> values);
+
 public:
 	//! Whether or not the relation inherits column bindings from its child or not, only relevant for binding
 	DUCKDB_API virtual bool InheritsColumnBindings() {

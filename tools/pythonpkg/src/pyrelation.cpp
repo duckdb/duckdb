@@ -234,7 +234,8 @@ void DuckDBPyRelation::Create(const string &table) {
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Map(py::function fun) {
-	return make_unique<DuckDBPyRelation>(rel);
+	return make_unique<DuckDBPyRelation>(
+	    rel->TableFunction("python_map_function", {Value::POINTER((uintptr_t)fun.ptr())}));
 }
 
 string DuckDBPyRelation::Print() {

@@ -2,6 +2,7 @@
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb_python/pyrelation.hpp"
 #include "duckdb_python/pandas_scan.hpp"
+#include "duckdb_python/map.hpp"
 
 #include "duckdb/common/arrow.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
@@ -464,12 +465,17 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 	res->connection = make_unique<Connection>(*res->database);
 
 	PandasScanFunction scan_fun;
-	CreateTableFunctionInfo info(scan_fun);
+	CreateTableFunctionInfo scan_info(scan_fun);
+
+	MapFunction map_fun;
+	CreateTableFunctionInfo map_info(map_fun);
 
 	auto &context = *res->connection->context;
 	auto &catalog = Catalog::GetCatalog(context);
 	context.transaction.BeginTransaction();
-	catalog.CreateTableFunction(context, &info);
+	catalog.CreateTableFunction(context, &scan_info);
+	catalog.CreateTableFunction(context, &map_info);
+
 	context.transaction.Commit();
 
 	return res;

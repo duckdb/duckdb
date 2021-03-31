@@ -104,9 +104,11 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	BindNamedParameters(table_function.named_parameters, named_parameters, error_context, table_function.name);
 
 	// cast the parameters to the type of the function
+	idx_t p_idx = 0;
 	for (idx_t i = 0; i < arguments.size(); i++) {
 		if (table_function.arguments[i] != LogicalType::ANY && table_function.arguments[i] != LogicalType::TABLE) {
-			parameters[i] = parameters[i].CastAs(table_function.arguments[i]);
+			parameters[p_idx] = parameters[p_idx].CastAs(table_function.arguments[i]);
+			p_idx++;
 		}
 	}
 
