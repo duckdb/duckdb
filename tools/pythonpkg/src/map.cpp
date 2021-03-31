@@ -30,11 +30,9 @@ unique_ptr<FunctionData> MapFunction::MapFunctionBind(ClientContext &context, ve
 void MapFunction::MapFunctionExec(ClientContext &context, const FunctionData *bind_data,
                                   FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
 
-	// py::gil_scoped_acquire acquire;
-
-	input->Print();
-	//	auto &data = (MapFunctionData &)*bind_data;
-	//	output.Reference(*input);
+	py::gil_scoped_acquire acquire;
+	auto &data = (MapFunctionData &)*bind_data;
+	output.Reference(*input);
 }
 
 } // namespace duckdb
