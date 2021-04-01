@@ -451,6 +451,14 @@ static void BreakStringTies(BufferManager &buffer_manager, const data_ptr_t data
 		tie_col_offset += sorting_state.COL_SIZE[i];
 	}
 	if (sorting_state.HAS_NULL[tie_col]) {
+        char *validity = (char *)dataptr + start * sorting_state.ENTRY_SIZE + tie_col_offset;
+		if (sorting_state.ORDER_BY_NULL_TYPES[tie_col] == OrderByNullType::NULLS_FIRST && *validity == 0) {
+			// NULLS_FIRST, therefore null is encoded as 0 - we can't break null ties
+			return;
+		} else if (sorting_state.ORDER_BY_NULL_TYPES[tie_col] == OrderByNullType::NULLS_LAST && *validity == 1) {
+            // NULLS_LAST, therefore null is encoded as 1 - we can't break null ties
+			return;
+		}
 		tie_col_offset++;
 	}
 	// if the tied strings are smaller than the prefix size, or are NULL, we don't need to break the ties
@@ -546,7 +554,7 @@ static void BreakTies(BufferManager &buffer_manager, OrderGlobalState &global_st
 			BreakStringTies(buffer_manager, dataptr, i, j + 1, tie_col, ties, var_dataptr, sizes_ptr, sorting_state);
 			break;
 		default:
-			throw NotImplementedException("Sorting of this variable size type");
+			throw NotImplementedException("Cannot sort variable size column with type %s", sorting_state.TYPES[tie_col].ToString());
 		}
 		i = j;
 	}

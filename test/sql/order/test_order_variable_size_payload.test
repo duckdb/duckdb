@@ -2,8 +2,26 @@
 # description: Test ORDER BY keyword (variable size sorting/payload columns)
 # group: [order]
 
+#statement ok
+#PRAGMA enable_verification
+
+# weird one from SQLancer
 statement ok
-PRAGMA enable_verification
+create table t0 (c0 varchar);
+
+statement ok
+insert into t0 values ('a'), (NULL), (NULL), (NULL), (NULL), (NULL), (NULL);
+
+query T
+SELECT * FROM t0 ORDER BY t0.c0 DESC;
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+a
 
 # strings longer than the 8 character prefix
 statement ok
