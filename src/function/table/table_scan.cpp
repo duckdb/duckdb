@@ -65,7 +65,7 @@ static unique_ptr<FunctionOperatorData> TableScanParallelInit(ClientContext &con
 }
 
 static void TableScanFunc(ClientContext &context, const FunctionData *bind_data_p, FunctionOperatorData *operator_state,
-                          DataChunk &output) {
+                          DataChunk *, DataChunk &output) {
 	auto &bind_data = (TableScanBindData &)*bind_data_p;
 	auto &state = (TableScanOperatorData &)*operator_state;
 	auto &transaction = Transaction::GetTransaction(context);
@@ -159,7 +159,7 @@ static unique_ptr<FunctionOperatorData> IndexScanInit(ClientContext &context, co
 }
 
 static void IndexScanFunction(ClientContext &context, const FunctionData *bind_data_p,
-                              FunctionOperatorData *operator_state, DataChunk &output) {
+                              FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
 	auto &bind_data = (const TableScanBindData &)*bind_data_p;
 	auto &state = (IndexScanOperatorData &)*operator_state;
 	auto &transaction = Transaction::GetTransaction(context);

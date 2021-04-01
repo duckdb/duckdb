@@ -22,7 +22,9 @@ public:
 
 	static unique_ptr<FunctionData> PandasScanBind(ClientContext &context, vector<Value> &inputs,
 	                                               unordered_map<string, Value> &named_parameters,
-	                                               vector<LogicalType> &return_types, vector<string> &names);
+	                                               vector<LogicalType> &input_table_types,
+	                                               vector<string> &input_table_names, vector<LogicalType> &return_types,
+	                                               vector<string> &names);
 
 	static unique_ptr<FunctionOperatorData> PandasScanInit(ClientContext &context, const FunctionData *bind_data_p,
 	                                                       vector<column_t> &column_ids,
@@ -46,7 +48,7 @@ public:
 	//! The main pandas scan function: note that this can be called in parallel without the GIL
 	//! hence this needs to be GIL-safe, i.e. no methods that create Python objects are allowed
 	static void PandasScanFunc(ClientContext &context, const FunctionData *bind_data,
-	                           FunctionOperatorData *operator_state, DataChunk &output);
+	                           FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output);
 
 	static unique_ptr<NodeStatistics> PandasScanCardinality(ClientContext &context, const FunctionData *bind_data);
 };
