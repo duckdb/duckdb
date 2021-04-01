@@ -134,6 +134,9 @@ public:
 	DictionaryBuffer(buffer_ptr<SelectionData> data, LogicalType type, VectorType vector_type)
 	    : VectorBuffer(VectorBufferType::DICTIONARY_BUFFER, type, vector_type), sel_vector(move(data)) {
 	}
+	const SelectionVector &GetSelVector() const {
+		return sel_vector;
+	}
 	SelectionVector &GetSelVector() {
 		return sel_vector;
 	}
@@ -180,6 +183,9 @@ public:
 	~VectorStructBuffer() override;
 
 public:
+	const child_list_t<unique_ptr<Vector>> &GetChildren() const {
+		return children;
+	}
 	child_list_t<unique_ptr<Vector>> &GetChildren() {
 		return children;
 	}
@@ -203,7 +209,8 @@ public:
 	}
 	void SetChild(unique_ptr<Vector> new_child);
 
-	void Append(Vector &to_append, idx_t size, idx_t source_offset = 0);
+	void Append(const Vector &to_append, idx_t to_append_size, idx_t source_offset = 0);
+	void Append(const Vector &to_append, const SelectionVector &sel, idx_t to_append_size, idx_t source_offset = 0);
 
 	void PushBack(Value &insert);
 
@@ -211,6 +218,8 @@ public:
 	idx_t size = 0;
 
 private:
+	void Reserve(const Vector &to_append, idx_t to_reserve);
+
 	//! child vectors used for nested data
 	unique_ptr<Vector> child;
 };

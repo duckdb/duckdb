@@ -214,11 +214,19 @@ struct ConstantVector {
 };
 
 struct DictionaryVector {
-	static inline SelectionVector &SelVector(const Vector &vector) {
+	static inline const SelectionVector &SelVector(const Vector &vector) {
+		D_ASSERT(vector.GetVectorType() == VectorType::DICTIONARY_VECTOR);
+		return ((const DictionaryBuffer &)*vector.buffer).GetSelVector();
+	}
+	static inline SelectionVector &SelVector(Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::DICTIONARY_VECTOR);
 		return ((DictionaryBuffer &)*vector.buffer).GetSelVector();
 	}
-	static inline Vector &Child(const Vector &vector) {
+	static inline const Vector &Child(const Vector &vector) {
+		D_ASSERT(vector.GetVectorType() == VectorType::DICTIONARY_VECTOR);
+		return ((const VectorChildBuffer &)*vector.auxiliary).data;
+	}
+	static inline Vector &Child(Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::DICTIONARY_VECTOR);
 		return ((VectorChildBuffer &)*vector.auxiliary).data;
 	}
@@ -271,12 +279,15 @@ struct FlatVector {
 };
 
 struct ListVector {
-	static Vector &GetEntry(const Vector &vector);
+	static const Vector &GetEntry(const Vector &vector);
+	static Vector &GetEntry(Vector &vector);
 	static idx_t GetListSize(const Vector &vector);
 	static void SetListSize(Vector &vec, idx_t size);
 	static bool HasEntry(const Vector &vector);
 	static void SetEntry(Vector &vector, unique_ptr<Vector> entry);
-	static void Append(Vector &target, Vector &source, idx_t source_size, idx_t source_offset = 0);
+	static void Append(Vector &target, const Vector &source, idx_t source_size, idx_t source_offset = 0);
+	static void Append(Vector &target, const Vector &source, const SelectionVector &sel, idx_t source_size,
+	                   idx_t source_offset = 0);
 	static void PushBack(Vector &target, Value &insert);
 	static void Initialize(Vector &vec);
 };
@@ -306,7 +317,7 @@ struct StringVector {
 
 struct StructVector {
 	static bool HasEntries(const Vector &vector);
-	static child_list_t<unique_ptr<Vector>> &GetEntries(const Vector &vector);
+	static const child_list_t<unique_ptr<Vector>> &GetEntries(const Vector &vector);
 	static void AddEntry(Vector &vector, const string &name, unique_ptr<Vector> entry);
 };
 

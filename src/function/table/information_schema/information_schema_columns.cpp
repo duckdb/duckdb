@@ -22,6 +22,8 @@ struct InformationSchemaColumnsData : public FunctionOperatorData {
 
 static unique_ptr<FunctionData> InformationSchemaColumnsBind(ClientContext &context, vector<Value> &inputs,
                                                              unordered_map<string, Value> &named_parameters,
+                                                             vector<LogicalType> &input_table_types,
+                                                             vector<string> &input_table_names,
                                                              vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("table_catalog");
 	return_types.push_back(LogicalType::VARCHAR);
@@ -275,7 +277,7 @@ void ColumnHelper::WriteColumns(idx_t start_index, idx_t start_col, idx_t end_co
 } // anonymous namespace
 
 void InformationSchemaColumnsFunction(ClientContext &context, const FunctionData *bind_data,
-                                      FunctionOperatorData *operator_state, DataChunk &output) {
+                                      FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
 	auto &data = (InformationSchemaColumnsData &)*operator_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values

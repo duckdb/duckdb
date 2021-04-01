@@ -25,6 +25,8 @@ struct PragmaDetailedProfilingOutputData : public TableFunctionData {
 
 static unique_ptr<FunctionData> PragmaDetailedProfilingOutputBind(ClientContext &context, vector<Value> &inputs,
                                                                   unordered_map<string, Value> &named_parameters,
+                                                                  vector<LogicalType> &input_table_types,
+                                                                  vector<string> &input_table_names,
                                                                   vector<LogicalType> &return_types,
                                                                   vector<string> &names) {
 	names.emplace_back("OPERATOR_ID");
@@ -76,7 +78,8 @@ static void ExtractExpressions(ChunkCollection &collection, ExpressionInformatio
 }
 
 static void PragmaDetailedProfilingOutputFunction(ClientContext &context, const FunctionData *bind_data_p,
-                                                  FunctionOperatorData *operator_state, DataChunk &output) {
+                                                  FunctionOperatorData *operator_state, DataChunk *input,
+                                                  DataChunk &output) {
 	auto &state = (PragmaDetailedProfilingOutputOperatorData &)*operator_state;
 	auto &data = (PragmaDetailedProfilingOutputData &)*bind_data_p;
 	if (!state.initialized) {
