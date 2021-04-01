@@ -341,13 +341,24 @@ void RowChunk::ComputeEntrySizes(Vector &v, idx_t entry_sizes[], idx_t vcount, i
 
 	VectorData vdata;
 	v.Orrify(vcount, vdata);
+//	SelectionVector selection_vector;
+//    selection_vector.Initialize(*vdata.sel);
+//	if (vcount > STANDARD_VECTOR_SIZE) {
+//		selection_vector.Initialize(vcount);
+//		for (idx_t i = 0; i < vcount; i++) {
+//            selection_vector.set_index(i, i);
+//		}
+//	} else {
+//        selection_vector.Initialize(*vdata.sel);
+//	}
+//	const auto &sel = selection_vector;
 
 	switch (physical_type) {
 	case PhysicalType::VARCHAR: {
 		const idx_t string_prefix_len = string_t::PREFIX_LENGTH;
 		auto strings = (string_t *)vdata.data;
 		for (idx_t i = 0; i < vcount; i++) {
-			idx_t str_idx = vdata.sel->get_index(i + offset);
+			idx_t str_idx = vdata.sel->get_index(i) + offset;
 			if (vdata.validity.RowIsValid(str_idx)) {
 				entry_sizes[i] += string_prefix_len + strings[str_idx].GetSize();
 			}
@@ -392,7 +403,7 @@ void RowChunk::ComputeEntrySizes(Vector &v, idx_t entry_sizes[], idx_t vcount, i
 		auto &child_vector = ListVector::GetEntry(v);
 		idx_t list_entry_sizes[STANDARD_VECTOR_SIZE];
 		for (idx_t i = 0; i < vcount; i++) {
-			idx_t idx = vdata.sel->get_index(i + offset);
+			idx_t idx = vdata.sel->get_index(i) + offset;
 			if (vdata.validity.RowIsValid(idx)) {
 				auto list_entry = list_data[idx];
 
@@ -453,8 +464,8 @@ static void TemplatedSerializeVData(VectorData &vdata, const SelectionVector &se
 	auto source = (T *)vdata.data;
 	if (!validitymask_locations) {
 		for (idx_t i = 0; i < count; i++) {
-			auto idx = sel.get_index(i + offset);
-			auto source_idx = vdata.sel->get_index(idx);
+			auto idx = sel.get_index(i);
+			auto source_idx = vdata.sel->get_index(idx) + offset;
 
 			auto target = (T *)key_locations[i];
 			Store<T>(source[source_idx], (data_ptr_t)target);
@@ -464,8 +475,8 @@ static void TemplatedSerializeVData(VectorData &vdata, const SelectionVector &se
 		const auto byte_offset = col_idx / 8;
 		const auto bit = ~(1UL << (col_idx % 8));
 		for (idx_t i = 0; i < count; i++) {
-			auto idx = sel.get_index(i + offset);
-			auto source_idx = vdata.sel->get_index(idx);
+			auto idx = sel.get_index(i);
+			auto source_idx = vdata.sel->get_index(idx) + offset;
 
 			auto target = (T *)key_locations[i];
 			Store<T>(source[source_idx], (data_ptr_t)target);
@@ -533,8 +544,8 @@ void RowChunk::SerializeVectorData(VectorData &vdata, PhysicalType type, const S
 		auto strings = (string_t *)vdata.data;
 		if (!validitymask_locations) {
 			for (idx_t i = 0; i < ser_count; i++) {
-				auto idx = sel.get_index(i + offset);
-				auto source_idx = vdata.sel->get_index(idx);
+				auto idx = sel.get_index(i);
+				auto source_idx = vdata.sel->get_index(idx) + offset;
 				if (vdata.validity.RowIsValid(source_idx)) {
 					auto &string_entry = strings[source_idx];
 					// store string size
@@ -549,8 +560,8 @@ void RowChunk::SerializeVectorData(VectorData &vdata, PhysicalType type, const S
 			auto byte_offset = col_idx / 8;
 			const auto bit = ~(1UL << (col_idx % 8));
 			for (idx_t i = 0; i < ser_count; i++) {
-				auto idx = sel.get_index(i + offset);
-				auto source_idx = vdata.sel->get_index(idx);
+				auto idx = sel.get_index(i);
+				auto source_idx = vdata.sel->get_index(idx) + offset;
 				if (vdata.validity.RowIsValid(source_idx)) {
 					auto &string_entry = strings[source_idx];
 					// store string size
@@ -614,8 +625,8 @@ void RowChunk::SerializeVector(Vector &v, idx_t vcount, const SelectionVector &s
 			key_locations[i] += struct_validitymask_size;
 
 			// set whether the whole struct is null
-			auto idx = sel.get_index(i + offset);
-			auto source_idx = vdata.sel->get_index(idx);
+			auto idx = sel.get_index(i);
+			auto source_idx = vdata.sel->get_index(idx) + offset;
 			if (validitymask_locations && !vdata.validity.RowIsValid(source_idx)) {
 				*(validitymask_locations[i] + byte_offset) &= bit;
 			}
@@ -644,8 +655,8 @@ void RowChunk::SerializeVector(Vector &v, idx_t vcount, const SelectionVector &s
 		data_ptr_t list_entry_locations[STANDARD_VECTOR_SIZE];
 
 		for (idx_t i = 0; i < ser_count; i++) {
-			auto idx = sel.get_index(i + offset);
-			auto source_idx = vdata.sel->get_index(idx);
+			auto idx = sel.get_index(i);
+			auto source_idx = vdata.sel->get_index(idx) + offset;
 			if (!vdata.validity.RowIsValid(source_idx)) {
 				if (validitymask_locations) {
 					// set the validitymask
@@ -681,7 +692,7 @@ void RowChunk::SerializeVector(Vector &v, idx_t vcount, const SelectionVector &s
 
 				// serialize list validity
 				for (idx_t entry_idx = 0; entry_idx < next; entry_idx++) {
-					auto list_idx = list_vdata.sel->get_index(entry_offset + entry_idx);
+					auto list_idx = list_vdata.sel->get_index(entry_idx) + entry_offset;
 					if (!list_vdata.validity.RowIsValid(list_idx)) {
 						*(list_validitymask_location) &= ~(1UL << entry_offset_in_byte);
 					}
@@ -711,7 +722,7 @@ void RowChunk::SerializeVector(Vector &v, idx_t vcount, const SelectionVector &s
 				}
 
 				// now serialize to the locations
-				SerializeVector(child_vector, ListVector::GetListSize(v), sel, next, 0, list_entry_locations, nullptr,
+				SerializeVector(child_vector, ListVector::GetListSize(v), *vdata.sel, next, 0, list_entry_locations, nullptr,
 				                entry_offset);
 
 				// update for next iteration
@@ -1012,7 +1023,12 @@ void RowChunk::DeserializeIntoVector(Vector &v, const idx_t &vcount, const idx_t
 				}
 
 				// now deserialize and add to listvector
+//                Vector append_vector(v.GetType());
+//                append_vector.SetVectorType(v.GetVectorType());
+//				ListVector::Initialize(append_vector);
+//                auto &list_vec_to_append = ListVector::GetEntry(append_vector);
 				DeserializeIntoVector(child_vector, next, 0, list_entry_locations, nullptr, entry_offset);
+//				ListVector::Append(v, list_vec_to_append, next);
 
 				// update for next iteration
 				entry_remaining -= next;

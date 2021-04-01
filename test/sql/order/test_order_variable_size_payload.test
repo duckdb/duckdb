@@ -5,9 +5,18 @@
 statement ok
 PRAGMA enable_verification
 
+statement ok
+CREATE TABLE test9 AS (SELECT range % 4 i, range j FROM range(5000));
+
+statement ok
+INSERT INTO test9 VALUES (0, NULL), (1, NULL), (2, NULL), (3, NULL)
+
+query TT
+SELECT i, list(j) FROM test9 GROUP BY i ORDER BY i;
+
 # strings longer than the 8 character prefix
 statement ok
-CREATE TABLE test0(job VARCHAR, name VARCHAR)
+CREATE TABLE test0 (job VARCHAR, name VARCHAR)
 
 statement ok
 INSERT INTO test0 VALUES ('Shipping and Receiving Supervisor', 'Ackerman'), ('Shipping and Receiving Clerk', 'Berndt'), ('Shipping and Receiving Clerk', 'Kuppa'), ('Production Supervisor - WC60', 'Brown'), ('Production Supervisor - WC60', 'Campbell'), ('Production Supervisor - WC40', 'Dsa')
