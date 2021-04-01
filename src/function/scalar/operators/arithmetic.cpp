@@ -294,6 +294,7 @@ unique_ptr<FunctionData> DecimalNegateBind(ClientContext &context, ScalarFunctio
 		D_ASSERT(decimal_type.width() <= Decimal::MAX_WIDTH_INT128);
 		bound_function.function = ScalarFunction::GetScalarUnaryFunction<NegateOperator>(LogicalTypeId::HUGEINT);
 	}
+	decimal_type.Verify();
 	bound_function.arguments[0] = decimal_type;
 	bound_function.return_type = decimal_type;
 	return nullptr;
@@ -463,7 +464,7 @@ unique_ptr<FunctionData> BindDecimalMultiply(ClientContext &context, ScalarFunct
 		    result_scale, Decimal::MAX_WIDTH_DECIMAL);
 	}
 	bool check_overflow = false;
-	if (result_width > Decimal::MAX_WIDTH_INT64 && max_width <= Decimal::MAX_WIDTH_INT64) {
+	if (result_width > Decimal::MAX_WIDTH_INT64 && max_width <= Decimal::MAX_WIDTH_INT64 && result_scale < Decimal::MAX_WIDTH_INT64) {
 		check_overflow = true;
 		result_width = Decimal::MAX_WIDTH_INT64;
 	}
@@ -482,6 +483,7 @@ unique_ptr<FunctionData> BindDecimalMultiply(ClientContext &context, ScalarFunct
 			bound_function.arguments[i] = LogicalType(LogicalTypeId::DECIMAL, result_width, argument_type.scale());
 		}
 	}
+	result_type.Verify();
 	bound_function.return_type = result_type;
 	// now select the physical function to execute
 	if (check_overflow) {
