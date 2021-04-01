@@ -1,6 +1,6 @@
-# name: test/sql/types/list/test_list_extract.test
+# name: test/sql/types/map/test_map_extract.test
 # description: Test scalar lists
-# group: [list]
+# group: [map]
 
 statement ok
 PRAGMA enable_verification

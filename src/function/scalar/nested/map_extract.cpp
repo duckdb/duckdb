@@ -4,10 +4,10 @@
 //#include "duckdb/function/scalar/nested_functions.hpp"
 //#include "duckdb/common/types/data_chunk.hpp"
 //
-//namespace duckdb {
+// namespace duckdb {
 //
-//template <class T, bool HEAP_REF = false>
-//void MapExtractTemplate(idx_t count, Vector &list, Vector &offsets, Vector &result) {
+// template <class T, bool HEAP_REF = false>
+// void MapExtractTemplate(idx_t count, Vector &list, Vector &offsets, Vector &result) {
 //	int a = 0;
 ////	VectorData list_data, offsets_data, child_data;
 ////
@@ -61,7 +61,7 @@
 ////	}
 //}
 //
-//static void MapExtractFunFun(DataChunk &args, ExpressionState &state, Vector &result) {
+// static void MapExtractFunFun(DataChunk &args, ExpressionState &state, Vector &result) {
 //	D_ASSERT(args.data.size() == 2);
 //	D_ASSERT(args.data[0].GetType().id() == LogicalTypeId::MAP);
 //
@@ -126,7 +126,7 @@
 //	result.Verify(args.size());
 //}
 //
-//static unique_ptr<FunctionData> MapExtractBind(ClientContext &context, ScalarFunction &bound_function,
+// static unique_ptr<FunctionData> MapExtractBind(ClientContext &context, ScalarFunction &bound_function,
 //                                                vector<unique_ptr<Expression>> &arguments) {
 //	if (arguments[0]->return_type.id() != LogicalTypeId::MAP) {
 //		throw BinderException("MAP_EXTRACT can only operate on LISTs");
@@ -134,7 +134,7 @@
 //	return make_unique<VariableReturnBindData>(bound_function.return_type);
 //}
 //
-//void MapExtractFun::RegisterFunction(BuiltinFunctions &set) {
+// void MapExtractFun::RegisterFunction(BuiltinFunctions &set) {
 //	ScalarFunction fun("map_extract", {LogicalType::ANY, LogicalType::ANY}, LogicalType::UBIGINT, MapExtractFunFun,
 //	                   false, MapExtractBind);
 //	fun.varargs = LogicalType::ANY;
