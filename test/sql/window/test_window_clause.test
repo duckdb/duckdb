@@ -19,7 +19,7 @@ select max(base), max(referenced), sum(refined), sum(unrefined) from (
     	sum(i % 4) over (w rows between 1 preceding and 1 following) AS refined,
     	sum(i % 4) over (rows between 1 preceding and 1 following) AS unrefined
     from integers
-    WINDOW w AS (partition by i / 4)
+    WINDOW w AS (partition by i / 4 order by i % 4)
 ) q;
 ----
-4	4	62	72
+4	4	60	69

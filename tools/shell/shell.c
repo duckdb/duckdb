@@ -19933,13 +19933,13 @@ static int _all_whitespace(const char *z){
 */
 static int line_is_command_terminator(const char *zLine){
   while( IsSpace(zLine[0]) ){ zLine++; };
-  if( zLine[0]=='/' && _all_whitespace(&zLine[1]) ){
-    return 1;  /* Oracle */
-  }
-  if( ToLower(zLine[0])=='g' && ToLower(zLine[1])=='o'
-         && _all_whitespace(&zLine[2]) ){
-    return 1;  /* SQL Server */
-  }
+  // if( zLine[0]=='/' && _all_whitespace(&zLine[1]) ){
+  //   return 1;  /* Oracle */
+  // }
+  // if( ToLower(zLine[0])=='g' && ToLower(zLine[1])=='o'
+  //        && _all_whitespace(&zLine[2]) ){
+  //   return 1;  /* SQL Server */
+  // }
   return 0;
 }
 
