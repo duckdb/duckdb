@@ -1096,6 +1096,17 @@ void ListVector::Append(Vector &target, const Vector &source, idx_t source_size,
 	target_buffer.Append(source, source_size, source_offset);
 }
 
+void ListVector::Append(Vector &target, const Vector &source, const SelectionVector &sel, idx_t source_size,
+                        idx_t source_offset) {
+	ListVector::Initialize(target);
+	if (source_size - source_offset == 0) {
+		//! Nothing to add
+		return;
+	}
+	auto &target_buffer = (VectorListBuffer &)*target.auxiliary;
+	target_buffer.Append(source, sel, source_size, source_offset);
+}
+
 void ListVector::PushBack(Vector &target, Value &insert) {
 	ListVector::Initialize(target);
 	auto &target_buffer = (VectorListBuffer &)*target.auxiliary;

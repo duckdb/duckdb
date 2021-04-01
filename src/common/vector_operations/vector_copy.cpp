@@ -164,24 +164,41 @@ void VectorOperations::Copy(const Vector &source, Vector &target, const Selectio
 				auto target_child = make_unique<Vector>(target.GetType().child_types()[0].second);
 				ListVector::SetEntry(target, move(target_child));
 			}
+
+			//! build a selection vector for the copied child elements
+			auto sdata = FlatVector::GetData<list_entry_t>(source);
+			vector<sel_t> child_rows;
+			for (idx_t i = 0; i < copy_count; ++i) {
+				if (tmask.RowIsValid(target_offset + i)) {
+					auto source_idx = sel.get_index(source_offset + i);
+					auto &source_entry = sdata[source_idx];
+					for (idx_t j = 0; j < source_entry.length; ++j) {
+						child_rows.emplace_back(source_entry.offset + j);
+					}
+				}
+			}
+			idx_t source_child_size = child_rows.size();
+			SelectionVector child_sel(child_rows.data());
+
 			auto &source_child = ListVector::GetEntry(source);
-			auto source_child_size = ListVector::GetListSize(source);
 
 			idx_t old_target_child_len = ListVector::GetListSize(target);
 
 			//! append to list itself
-			ListVector::Append(target, source_child, source_child_size);
+			ListVector::Append(target, source_child, child_sel, source_child_size);
 
 			//! now write the list offsets
-			auto ldata = FlatVector::GetData<list_entry_t>(source);
 			auto tdata = FlatVector::GetData<list_entry_t>(target);
 			for (idx_t i = 0; i < copy_count; i++) {
 				auto source_idx = sel.get_index(source_offset + i);
-				auto &source_entry = ldata[source_idx];
+				auto &source_entry = sdata[source_idx];
 				auto &target_entry = tdata[target_offset + i];
 
 				target_entry.length = source_entry.length;
-				target_entry.offset = old_target_child_len + source_entry.offset;
+				target_entry.offset = old_target_child_len;
+				if (tmask.RowIsValid(target_offset + i)) {
+					old_target_child_len += target_entry.length;
+				}
 			}
 		}
 		break;
