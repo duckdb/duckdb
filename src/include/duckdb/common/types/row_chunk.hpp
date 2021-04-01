@@ -74,7 +74,7 @@ public:
 	void Build(idx_t added_count, data_ptr_t key_locations[], idx_t entry_sizes[]);
 
 	static void DeserializeIntoVector(Vector &v, const idx_t &vcount, const idx_t &col_idx, data_ptr_t key_locations[],
-	                                  data_ptr_t validitymask_locations[], idx_t offset = 0);
+	                                  data_ptr_t validitymask_locations[]);
 
 private:
 	static uint8_t FlipSign(uint8_t key_byte);

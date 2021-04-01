@@ -317,7 +317,7 @@ void RowChunk::SerializeVectorSortable(Vector &v, idx_t vcount, const SelectionV
 		SerializeStringVectorSortable(vdata, sel, ser_count, key_locations, desc, has_null, nulls_first, prefix_len);
 		break;
 	default:
-		throw NotImplementedException("FIXME: unimplemented deserialize");
+		throw NotImplementedException("Cannot ORDER BY column with type %s", v.GetType().ToString());
 	}
 }
 
@@ -341,17 +341,6 @@ void RowChunk::ComputeEntrySizes(Vector &v, idx_t entry_sizes[], idx_t vcount, i
 
 	VectorData vdata;
 	v.Orrify(vcount, vdata);
-//	SelectionVector selection_vector;
-//    selection_vector.Initialize(*vdata.sel);
-//	if (vcount > STANDARD_VECTOR_SIZE) {
-//		selection_vector.Initialize(vcount);
-//		for (idx_t i = 0; i < vcount; i++) {
-//            selection_vector.set_index(i, i);
-//		}
-//	} else {
-//        selection_vector.Initialize(*vdata.sel);
-//	}
-//	const auto &sel = selection_vector;
 
 	switch (physical_type) {
 	case PhysicalType::VARCHAR: {
@@ -367,27 +356,29 @@ void RowChunk::ComputeEntrySizes(Vector &v, idx_t entry_sizes[], idx_t vcount, i
 	}
 	case PhysicalType::STRUCT: {
 		// obtain child vectors
-		child_list_t<unique_ptr<Vector>> *children;
+		idx_t num_children;
 		vector<Vector> struct_vectors;
 		if (v.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 			auto &child = DictionaryVector::Child(v);
 			auto &dict_sel = DictionaryVector::SelVector(v);
-			children = &StructVector::GetEntries(child);
-			for (auto &struct_child : *children) {
+			auto &children = StructVector::GetEntries(child);
+			num_children = children.size();
+			for (auto &struct_child : children) {
 				Vector struct_vector;
 				struct_vector.Slice(*struct_child.second, dict_sel, vcount);
 				struct_vectors.push_back(move(struct_vector));
 			}
 		} else {
-			children = &StructVector::GetEntries(v);
-			for (auto &struct_child : *children) {
+			auto &children = StructVector::GetEntries(v);
+            num_children = children.size();
+			for (auto &struct_child : children) {
 				Vector struct_vector;
 				struct_vector.Reference(*struct_child.second);
 				struct_vectors.push_back(move(struct_vector));
 			}
 		}
 		// add struct validitymask size
-		const idx_t struct_validitymask_size = (children->size() + 7) / 8;
+		const idx_t struct_validitymask_size = (num_children + 7) / 8;
 		for (idx_t i = 0; i < vcount; i++) {
 			// FIXME: don't serialize if the struct is NULL?
 			entry_sizes[i] += struct_validitymask_size;
@@ -439,7 +430,7 @@ void RowChunk::ComputeEntrySizes(Vector &v, idx_t entry_sizes[], idx_t vcount, i
 		break;
 	}
 	default:
-		throw NotImplementedException("Variable size payload type not implemented for sorting!");
+		throw NotImplementedException("Column with variable size type %s cannot be serialized to row-format", v.GetType().ToString());
 	}
 }
 
@@ -579,7 +570,7 @@ void RowChunk::SerializeVectorData(VectorData &vdata, PhysicalType type, const S
 		break;
 	}
 	default:
-		throw NotImplementedException("FIXME: unimplemented serialize");
+        throw NotImplementedException("FIXME: unimplemented serialize to row-format");
 	}
 }
 
@@ -591,20 +582,22 @@ void RowChunk::SerializeVector(Vector &v, idx_t vcount, const SelectionVector &s
 	// nested types
 	switch (v.GetType().InternalType()) {
 	case PhysicalType::STRUCT: {
-		child_list_t<unique_ptr<Vector>> *children;
+		idx_t num_children;
 		vector<Vector> struct_vectors;
 		if (v.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 			auto &child = DictionaryVector::Child(v);
 			auto &dict_sel = DictionaryVector::SelVector(v);
-			children = &StructVector::GetEntries(child);
-			for (auto &struct_child : *children) {
+			auto &children = StructVector::GetEntries(child);
+			num_children = children.size();
+			for (auto &struct_child : children) {
 				Vector struct_vector;
 				struct_vector.Slice(*struct_child.second, dict_sel, vcount);
 				struct_vectors.push_back(move(struct_vector));
 			}
 		} else {
-			children = &StructVector::GetEntries(v);
-			for (auto &struct_child : *children) {
+			auto &children = StructVector::GetEntries(v);
+            num_children = children.size();
+			for (auto &struct_child : children) {
 				Vector struct_vector;
 				struct_vector.Reference(*struct_child.second);
 				struct_vectors.push_back(move(struct_vector));
@@ -616,7 +609,7 @@ void RowChunk::SerializeVector(Vector &v, idx_t vcount, const SelectionVector &s
 		const auto bit = ~(1UL << (col_idx % 8));
 
 		// struct must have a validitymask for its fields
-		const idx_t struct_validitymask_size = (children->size() + 7) / 8;
+		const idx_t struct_validitymask_size = (num_children + 7) / 8;
 		data_ptr_t struct_validitymask_locations[STANDARD_VECTOR_SIZE];
 		for (idx_t i = 0; i < ser_count; i++) {
 			// initialize the struct validity mask
@@ -722,7 +715,7 @@ void RowChunk::SerializeVector(Vector &v, idx_t vcount, const SelectionVector &s
 				}
 
 				// now serialize to the locations
-				SerializeVector(child_vector, ListVector::GetListSize(v), *vdata.sel, next, 0, list_entry_locations, nullptr,
+				SerializeVector(child_vector, ListVector::GetListSize(v), sel, next, 0, list_entry_locations, nullptr,
 				                entry_offset);
 
 				// update for next iteration
@@ -817,20 +810,19 @@ void RowChunk::Build(idx_t added_count, data_ptr_t key_locations[], idx_t entry_
 }
 
 template <class T>
-static void TemplatedDeserializeIntoVector(Vector &v, idx_t count, idx_t col_idx, data_ptr_t *key_locations,
-                                           idx_t offset) {
+static void TemplatedDeserializeIntoVector(Vector &v, idx_t count, idx_t col_idx, data_ptr_t *key_locations) {
 	auto target = FlatVector::GetData<T>(v);
 	// fixed-size inner loop to allow unrolling
 	idx_t i;
 	for (i = 0; i + 7 < count; i += 8) {
 		for (idx_t j = 0; j < 8; j++) {
-			target[i + j + offset] = Load<T>(key_locations[i + j]);
+			target[i + j] = Load<T>(key_locations[i + j]);
 			key_locations[i + j] += sizeof(T);
 		}
 	}
 	// finishing up
 	for (; i < count; i++) {
-		target[i + offset] = Load<T>(key_locations[i]);
+		target[i] = Load<T>(key_locations[i]);
 		key_locations[i] += sizeof(T);
 	}
 }
@@ -849,7 +841,7 @@ static ValidityMask &GetValidity(Vector &v) {
 }
 
 void RowChunk::DeserializeIntoVector(Vector &v, const idx_t &vcount, const idx_t &col_idx, data_ptr_t key_locations[],
-                                     data_ptr_t validitymask_locations[], idx_t offset) {
+                                     data_ptr_t validitymask_locations[]) {
 	auto &validity = FlatVector::Validity(v);
 	if (validitymask_locations) {
 		// validity mask is not yet set: deserialize it
@@ -861,14 +853,14 @@ void RowChunk::DeserializeIntoVector(Vector &v, const idx_t &vcount, const idx_t
 		for (i = 0; i + 7 < vcount; i += 8) {
 			for (idx_t j = 0; j < 8; j++) {
 				bool valid = *(validitymask_locations[i + j] + byte_offset) & bit;
-				validity.Set(i + j + offset, valid);
+				validity.Set(i + j, valid);
 			}
 		}
 
 		// finishing up
 		for (i = 0; i < vcount; i++) {
 			bool valid = *(validitymask_locations[i] + byte_offset) & bit;
-			validity.Set(i + offset, valid);
+			validity.Set(i, valid);
 		}
 	}
 
@@ -876,43 +868,43 @@ void RowChunk::DeserializeIntoVector(Vector &v, const idx_t &vcount, const idx_t
 	switch (type) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
-		TemplatedDeserializeIntoVector<int8_t>(v, vcount, col_idx, key_locations, offset);
+		TemplatedDeserializeIntoVector<int8_t>(v, vcount, col_idx, key_locations);
 		break;
 	case PhysicalType::INT16:
-		TemplatedDeserializeIntoVector<int16_t>(v, vcount, col_idx, key_locations, offset);
+		TemplatedDeserializeIntoVector<int16_t>(v, vcount, col_idx, key_locations);
 		break;
 	case PhysicalType::INT32:
-		TemplatedDeserializeIntoVector<int32_t>(v, vcount, col_idx, key_locations, offset);
+		TemplatedDeserializeIntoVector<int32_t>(v, vcount, col_idx, key_locations);
 		break;
 	case PhysicalType::INT64:
-		TemplatedDeserializeIntoVector<int64_t>(v, vcount, col_idx, key_locations, offset);
+		TemplatedDeserializeIntoVector<int64_t>(v, vcount, col_idx, key_locations);
 		break;
 	case PhysicalType::UINT8:
-		TemplatedDeserializeIntoVector<uint8_t>(v, vcount, col_idx, key_locations, offset);
+		TemplatedDeserializeIntoVector<uint8_t>(v, vcount, col_idx, key_locations);
 		break;
 	case PhysicalType::UINT16:
-		TemplatedDeserializeIntoVector<uint16_t>(v, vcount, col_idx, key_locations, offset);
+		TemplatedDeserializeIntoVector<uint16_t>(v, vcount, col_idx, key_locations);
 		break;
 	case PhysicalType::UINT32:
-		TemplatedDeserializeIntoVector<uint32_t>(v, vcount, col_idx, key_locations, offset);
+		TemplatedDeserializeIntoVector<uint32_t>(v, vcount, col_idx, key_locations);
 		break;
 	case PhysicalType::UINT64:
-		TemplatedDeserializeIntoVector<uint64_t>(v, vcount, col_idx, key_locations, offset);
+		TemplatedDeserializeIntoVector<uint64_t>(v, vcount, col_idx, key_locations);
 		break;
 	case PhysicalType::INT128:
-		TemplatedDeserializeIntoVector<hugeint_t>(v, vcount, col_idx, key_locations, offset);
+		TemplatedDeserializeIntoVector<hugeint_t>(v, vcount, col_idx, key_locations);
 		break;
 	case PhysicalType::FLOAT:
-		TemplatedDeserializeIntoVector<float>(v, vcount, col_idx, key_locations, offset);
+		TemplatedDeserializeIntoVector<float>(v, vcount, col_idx, key_locations);
 		break;
 	case PhysicalType::DOUBLE:
-		TemplatedDeserializeIntoVector<double>(v, vcount, col_idx, key_locations, offset);
+		TemplatedDeserializeIntoVector<double>(v, vcount, col_idx, key_locations);
 		break;
 	case PhysicalType::HASH:
-		TemplatedDeserializeIntoVector<hash_t>(v, vcount, col_idx, key_locations, offset);
+		TemplatedDeserializeIntoVector<hash_t>(v, vcount, col_idx, key_locations);
 		break;
 	case PhysicalType::INTERVAL:
-		TemplatedDeserializeIntoVector<interval_t>(v, vcount, col_idx, key_locations, offset);
+		TemplatedDeserializeIntoVector<interval_t>(v, vcount, col_idx, key_locations);
 		break;
 	case PhysicalType::VARCHAR: {
 		const idx_t string_prefix_len = string_t::PREFIX_LENGTH;
@@ -924,7 +916,7 @@ void RowChunk::DeserializeIntoVector(Vector &v, const idx_t &vcount, const idx_t
 				for (idx_t j = 0; j < 8; j++) {
 					auto len = Load<uint32_t>(key_locations[i + j]);
 					key_locations[i + j] += string_prefix_len;
-					target[i + j + offset] =
+					target[i + j] =
 					    StringVector::AddStringOrBlob(v, string_t((const char *)key_locations[i + j], len));
 					key_locations[i + j] += len;
 				}
@@ -932,12 +924,12 @@ void RowChunk::DeserializeIntoVector(Vector &v, const idx_t &vcount, const idx_t
 		}
 		// finishing up
 		for (; i < vcount; i++) {
-			if (!validity.RowIsValid(i + offset)) {
+			if (!validity.RowIsValid(i)) {
 				continue;
 			}
 			auto len = Load<uint32_t>(key_locations[i]);
 			key_locations[i] += string_prefix_len;
-			target[i + offset] = StringVector::AddStringOrBlob(v, string_t((const char *)key_locations[i], len));
+			target[i] = StringVector::AddStringOrBlob(v, string_t((const char *)key_locations[i], len));
 			key_locations[i] += len;
 		}
 		break;
@@ -966,20 +958,18 @@ void RowChunk::DeserializeIntoVector(Vector &v, const idx_t &vcount, const idx_t
 		auto list_data = GetListData(v);
 		data_ptr_t list_entry_locations[STANDARD_VECTOR_SIZE];
 
-		ListVector::Initialize(v);
-		auto &child_vector = ListVector::GetEntry(v);
-
+        ListVector::Initialize(v);
 		uint64_t entry_offset = ListVector::GetListSize(v);
 		for (idx_t i = 0; i < vcount; i++) {
-			if (!validity.RowIsValid(i + offset)) {
+			if (!validity.RowIsValid(i)) {
 				continue;
 			}
 			// read list length
 			auto entry_remaining = Load<uint64_t>(key_locations[i]);
 			key_locations[i] += sizeof(uint64_t);
 			// set list entry attributes
-			list_data[i + offset].length = entry_remaining;
-			list_data[i + offset].offset = entry_offset;
+			list_data[i].length = entry_remaining;
+			list_data[i].offset = entry_offset;
 			// skip over the validity mask
 			data_ptr_t validitymask_location = key_locations[i];
 			idx_t offset_in_byte = 0;
@@ -993,12 +983,18 @@ void RowChunk::DeserializeIntoVector(Vector &v, const idx_t &vcount, const idx_t
 
 			// now read the list data
 			while (entry_remaining > 0) {
-				auto next = MinValue(entry_remaining, (idx_t)STANDARD_VECTOR_SIZE);
+                auto next = MinValue(entry_remaining, (idx_t)STANDARD_VECTOR_SIZE);
+
+				// initialize a new vector to append
+                Vector append_vector(v.GetType());
+                append_vector.SetVectorType(v.GetVectorType());
+                ListVector::Initialize(append_vector);
+                auto &list_vec_to_append = ListVector::GetEntry(append_vector);
 
 				// set validity
-				auto &child_validity = GetValidity(child_vector);
+				auto &append_validity = GetValidity(list_vec_to_append);
 				for (idx_t entry_idx = 0; entry_idx < next; entry_idx++) {
-					child_validity.Set(entry_offset + entry_idx, *(validitymask_location) & (1 << offset_in_byte));
+                    append_validity.Set(entry_idx, *(validitymask_location) & (1 << offset_in_byte));
 					if (++offset_in_byte == 8) {
 						validitymask_location++;
 						offset_in_byte = 0;
@@ -1023,23 +1019,18 @@ void RowChunk::DeserializeIntoVector(Vector &v, const idx_t &vcount, const idx_t
 				}
 
 				// now deserialize and add to listvector
-//                Vector append_vector(v.GetType());
-//                append_vector.SetVectorType(v.GetVectorType());
-//				ListVector::Initialize(append_vector);
-//                auto &list_vec_to_append = ListVector::GetEntry(append_vector);
-				DeserializeIntoVector(child_vector, next, 0, list_entry_locations, nullptr, entry_offset);
-//				ListVector::Append(v, list_vec_to_append, next);
+				DeserializeIntoVector(list_vec_to_append, next, 0, list_entry_locations, nullptr);
+				ListVector::Append(v, list_vec_to_append, next);
 
 				// update for next iteration
 				entry_remaining -= next;
 				entry_offset += next;
-				ListVector::SetListSize(v, entry_offset);
 			}
 		}
 		break;
 	}
 	default:
-		throw NotImplementedException("FIXME: unimplemented deserialize");
+		throw NotImplementedException("FIXME: unimplemented deserialize from row-format");
 	}
 }
 
