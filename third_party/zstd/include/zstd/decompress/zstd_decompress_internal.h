@@ -19,8 +19,8 @@
 /*-*******************************************************
  *  Dependencies
  *********************************************************/
-#include "../common/mem.h"             /* BYTE, U16, U32 */
-#include "../common/zstd_internal.h"   /* ZSTD_seqSymbol */
+#include "zstd/common/mem.h"             /* BYTE, U16, U32 */
+#include "zstd/common/zstd_internal.h"   /* ZSTD_seqSymbol */
 
 namespace duckdb_zstd {
 

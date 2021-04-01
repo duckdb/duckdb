@@ -14,7 +14,7 @@
 /*-*************************************
 *  Dependencies
 ***************************************/
-#include "../common/zstd_internal.h"
+#include "zstd/common/zstd_internal.h"
 
 /*-*************************************
 *  Constants

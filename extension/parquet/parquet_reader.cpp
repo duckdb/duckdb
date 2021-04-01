@@ -7,14 +7,16 @@
 
 #include "parquet_file_metadata_cache.hpp"
 
+#include "duckdb.hpp"
+#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/planner/table_filter.hpp"
-
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/pair.hpp"
 
 #include "duckdb/storage/object_cache.hpp"
+#endif
 
 #include <sstream>
 #include <cassert>

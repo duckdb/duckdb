@@ -23,10 +23,10 @@
 /*-****************************************
 *  Dependencies
 ******************************************/
-#include "mem.h"            /* unaligned access routines */
-#include "compiler.h"       /* UNLIKELY() */
-#include "debug.h"          /* assert(), DEBUGLOG(), RAWLOG() */
-#include "error_private.h"  /* error codes and messages */
+#include "zstd/common/mem.h"            /* unaligned access routines */
+#include "zstd/common/compiler.h"       /* UNLIKELY() */
+#include "zstd/common/debug.h"          /* assert(), DEBUGLOG(), RAWLOG() */
+#include "zstd/common/error_private.h"  /* error codes and messages */
 
 
 /*=========================================

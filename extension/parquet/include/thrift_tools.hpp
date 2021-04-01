@@ -2,7 +2,11 @@
 
 #include "thrift/protocol/TCompactProtocol.h"
 #include "thrift/transport/TBufferTransports.h"
+
+#include "duckdb.hpp"
+#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/file_system.hpp"
+#endif
 
 namespace duckdb {
 

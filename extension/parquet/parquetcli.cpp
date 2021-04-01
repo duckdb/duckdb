@@ -1,9 +1,38 @@
+
+#include "duckdb.hpp"
+#ifndef DUCKDB_AMALGAMATION
 #include "parquet_reader.hpp"
 #include "duckdb/planner/table_filter.hpp"
+#else
+#include "parquet-amalgamation.hpp"
+#endif
+
+#include <algorithm>
+#include <unordered_map>
+
+/* COMPILATION:
+python3 scripts/amalgamation.py --extended
+python3 scripts/parquet_amalgamation.py
+clang++ -std=c++11 -Isrc/amalgamation src/amalgamation/parquet-amalgamation.cpp src/amalgamation/duckdb.cpp extension/parquet/parquetcli.cpp
+*/
 
 using namespace duckdb;
+void print_usage() {
+	printf("Usage: parquetcli [filename.parquet] [column,names,to,read] ([x=y])");
+	exit(1);
+}
+
 int main(int argc, const char **argv) {
+	if (argc < 3) {
+		print_usage();
+	}
 	auto filename = std::string(argv[1]);
+
+	bool read_all_columns = false;
+	if (string(argv[2]) == "--all") {
+		read_all_columns = true;
+	}
+	auto column_names = StringUtil::Split(argv[2], ",");
 
 	// the db instance and client context are not really required so we may remove them
 
@@ -13,12 +42,19 @@ int main(int argc, const char **argv) {
 	// only return columns first_name and last_name
 	std::vector<column_t> column_ids;
 	std::vector<LogicalType> return_types;
+	std::unordered_map<std::string, int> name_map;
 	for (idx_t col_idx = 0; col_idx < reader.names.size(); col_idx++) {
 		auto &colname = reader.names[col_idx];
-		if (colname == "first_name" || colname == "last_name" || colname == "country") {
+		if (read_all_columns || std::find(column_names.begin(), column_names.end(), colname) != column_names.end()) {
+			printf("%s\n", colname.c_str());
+			name_map[colname] = column_ids.size();
 			column_ids.push_back(col_idx);
 			return_types.push_back(reader.return_types[col_idx]);
 		}
+	}
+	if (column_ids.empty()) {
+		printf("No columns found that matched the filter. Alternatively, use --all to read all columns");
+		print_usage();
 	}
 
 	// read all row groups
@@ -27,10 +63,20 @@ int main(int argc, const char **argv) {
 		groups.push_back(i);
 	}
 
-	// filter so we only return rows where country (column 8) == China
+	// apply filter if any are specified
 	TableFilterSet filters;
-	TableFilter filter(Value("China"), ExpressionType::COMPARE_EQUAL, 2);
-	filters.filters[2].push_back(filter);
+	if (argc >= 4) {
+		auto splits = StringUtil::Split(argv[3], "=");
+		auto entry = name_map.find(splits[0]);
+		if (entry == name_map.end()) {
+			printf("Invalid filter: name not found");
+			print_usage();
+		}
+		auto idx = entry->second;
+		TableFilter filter(Value(splits[1]).CastAs(return_types[idx]), ExpressionType::COMPARE_EQUAL, idx);
+		filters.filters[idx].push_back(filter);
+	}
+
 
 	ParquetReaderScanState state;
 	// nullptr here gets the filters

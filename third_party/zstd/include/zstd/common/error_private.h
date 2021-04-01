@@ -17,7 +17,7 @@
 *  Dependencies
 ******************************************/
 #include <stddef.h>        /* size_t */
-#include "zstd_errors.h"  /* enum list */
+#include "zstd/common/zstd_errors.h"  /* enum list */
 
 namespace duckdb_zstd {
 /* ****************************************

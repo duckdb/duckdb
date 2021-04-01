@@ -11,7 +11,7 @@
 #ifndef ZSTD_LAZY_H
 #define ZSTD_LAZY_H
 
-#include "zstd_compress_internal.h"
+#include "zstd/compress/zstd_compress_internal.h"
 
 namespace duckdb_zstd {
 

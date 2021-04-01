@@ -155,11 +155,19 @@
  * and clang, please do.
  */
 #if defined(__GNUC__)
+#ifndef LIKELY
 #define LIKELY(x) (__builtin_expect((x), 1))
+#endif
+#ifndef UNLIKELY
 #define UNLIKELY(x) (__builtin_expect((x), 0))
+#endif
 #else
+#ifndef LIKELY
 #define LIKELY(x) (x)
+#endif
+#ifndef UNLIKELY
 #define UNLIKELY(x) (x)
+#endif
 #endif
 
 #endif /* ZSTD_COMPILER_H */

@@ -7,7 +7,10 @@
 #include "zstd.h"
 #include <iostream>
 
+#include "duckdb.hpp"
+#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/types/chunk_collection.hpp"
+#endif
 
 namespace duckdb {
 

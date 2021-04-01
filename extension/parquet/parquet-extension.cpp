@@ -8,6 +8,8 @@
 #include "parquet_writer.hpp"
 
 #include "duckdb.hpp"
+#ifndef DUCKDB_AMALGAMATION
+#include "duckdb.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/table_function.hpp"
@@ -20,6 +22,7 @@
 
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/catalog/catalog.hpp"
+#endif
 
 namespace duckdb {
 

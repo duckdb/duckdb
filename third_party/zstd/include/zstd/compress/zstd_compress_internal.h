@@ -18,11 +18,11 @@
 /*-*************************************
 *  Dependencies
 ***************************************/
-#include "../common/zstd_internal.h"
-#include "zstd_cwksp.h"
-#ifdef ZSTD_MULTITHREAD
-#  include "zstdmt_compress.h"
-#endif
+#include "zstd/common/zstd_internal.h"
+#include "zstd/compress/zstd_cwksp.h"
+// #ifdef ZSTD_MULTITHREAD
+// #  include "zstdmt_compress.h"
+// #endif
 
 /*-*************************************
 *  Constants

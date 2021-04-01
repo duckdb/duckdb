@@ -8,10 +8,13 @@
 
 #pragma once
 
+#include "duckdb.hpp"
+#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
+#endif
 #include "resizable_buffer.hpp"
 #include "column_reader.hpp"
 

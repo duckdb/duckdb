@@ -4,7 +4,7 @@ project(ParquetExtension)
 
 include_directories(
   include ../../third_party/parquet ../../third_party/snappy
-  ../../third_party/miniz ../../third_party/thrift ../../third_party/zstd)
+  ../../third_party/miniz ../../third_party/thrift ../../third_party/zstd/include)
 
 set(PARQUET_EXTENSION_FILES
     parquet-extension.cpp parquet_reader.cpp parquet_timestamp.cpp
