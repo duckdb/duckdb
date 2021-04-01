@@ -2,8 +2,8 @@
 # description: Test ORDER BY keyword (variable size sorting/payload columns)
 # group: [order]
 
-#statement ok
-#PRAGMA enable_verification
+statement ok
+PRAGMA enable_verification
 
 # weird one from SQLancer
 statement ok
