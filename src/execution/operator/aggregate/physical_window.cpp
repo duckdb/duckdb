@@ -362,31 +362,6 @@ static void MaterializeExpression(Expression *expr, ChunkCollection &input, Chun
 	MaterializeExpressions(&expr, 1, input, output, scalar);
 }
 
-static bool CompatibleSorts(const BoundWindowExpression *a, const BoundWindowExpression *b) {
-	// check if the partitions are equivalent
-	if (a->partitions.size() != b->partitions.size()) {
-		return false;
-	}
-	for (idx_t i = 0; i < a->partitions.size(); i++) {
-		if (!a->partitions[i]->Equals(b->partitions[i].get())) {
-			return false;
-		}
-	}
-	// check if the orderings are equivalent
-	if (a->orders.size() != b->orders.size()) {
-		return false;
-	}
-	for (idx_t i = 0; i < a->orders.size(); i++) {
-		if (a->orders[i].type != b->orders[i].type) {
-			return false;
-		}
-		if (!a->orders[i].expression->Equals(b->orders[i].expression.get())) {
-			return false;
-		}
-	}
-	return true;
-}
-
 static void SortCollectionForWindow(BoundWindowExpression *wexpr, ChunkCollection &input, ChunkCollection &output,
                                     ChunkCollection &sort_collection) {
 	if (input.Count() == 0) {
@@ -545,7 +520,7 @@ static void HashCollectionForWindow(TaskScheduler &scheduler, ChunkCollection &o
 }
 
 static void MaterializeOverCollectionForWindow(BoundWindowExpression *wexpr, ChunkCollection &input,
-                                               ChunkCollection &output, ChunkCollection &over_collection) {
+                                               ChunkCollection &over_collection) {
 	vector<LogicalType> over_types;
 	ExpressionExecutor executor;
 
@@ -933,22 +908,19 @@ public:
 	using Mask = BitArray<uint64_t>;
 
 	WindowPartitionTask(WindowPartitionTaskManager &manager_p, WindowExpressions &window_exprs_p,
-	                    const vector<idx_t> &matching_p, const ChunkCollection &input_p,
-	                    const ChunkCollection &output_p, const ChunkCollection &over_p, const ChunkCollection &hashes_p,
-	                    const hash_t hash_bin_p, const hash_t hash_mask_p)
-	    : manager(manager_p), window_exprs(window_exprs_p), matching(matching_p), input(input_p), output(output_p),
-	      over(over_p), hashes(hashes_p), hash_bin(hash_bin_p), hash_mask(hash_mask_p) {
+	                    const ChunkCollection &input_p, const ChunkCollection &output_p, const ChunkCollection &over_p,
+	                    const ChunkCollection &hashes_p, const hash_t hash_bin_p, const hash_t hash_mask_p)
+	    : manager(manager_p), window_exprs(window_exprs_p), input(input_p), output(output_p), over(over_p),
+	      hashes(hashes_p), hash_bin(hash_bin_p), hash_mask(hash_mask_p) {
 	}
 
-	static void ComputeExpressions(WindowExpressions &window_exprs, const vector<idx_t> &matching,
-	                               ChunkCollection &big_data, ChunkCollection &window_results,
-	                               ChunkCollection &over_collection);
+	static void ComputeExpressions(WindowExpressions &window_exprs, ChunkCollection &big_data,
+	                               ChunkCollection &window_results, ChunkCollection &over_collection);
 	void Execute() override;
 
 private:
 	WindowPartitionTaskManager &manager;
 	WindowExpressions &window_exprs;
-	const vector<idx_t> &matching;
 	const ChunkCollection &input;
 	const ChunkCollection &output;
 	const ChunkCollection &over;
@@ -957,15 +929,14 @@ private:
 	const hash_t hash_mask;
 };
 
-void WindowPartitionTask::ComputeExpressions(WindowExpressions &window_exprs, const vector<idx_t> &matching,
-                                             ChunkCollection &big_data, ChunkCollection &window_results,
-                                             ChunkCollection &over_collection) {
+void WindowPartitionTask::ComputeExpressions(WindowExpressions &window_exprs, ChunkCollection &big_data,
+                                             ChunkCollection &window_results, ChunkCollection &over_collection) {
 	//	Idempotency
 	if (big_data.Count() == 0) {
 		return;
 	}
 	//	Pick out a function for the OVER clause
-	auto over_expr = window_exprs[matching[0]];
+	auto over_expr = window_exprs[0];
 
 	//	Sort the partition
 	const auto sort_col_count = over_expr->partitions.size() + over_expr->orders.size();
@@ -988,8 +959,8 @@ void WindowPartitionTask::ComputeExpressions(WindowExpressions &window_exprs, co
 		MaskColumn(order_bits, over_collection, c);
 	}
 
-	//	Compute the functions with matching sorts
-	for (const auto &expr_idx : matching) {
+	//	Compute the functions
+	for (idx_t expr_idx = 0; expr_idx < window_exprs.size(); ++expr_idx) {
 		ComputeWindowExpression(window_exprs[expr_idx], big_data, window_results, partition_bits, order_bits, expr_idx);
 	}
 }
@@ -1032,7 +1003,7 @@ void WindowPartitionTask::Execute() {
 		AppendCollection(over, over_collection, sel, bin_size, chunk_idx);
 	}
 
-	ComputeExpressions(window_exprs, matching, chunks, window_results, over_collection);
+	ComputeExpressions(window_exprs, chunks, window_results, over_collection);
 
 	lock_guard<mutex> glock(manager.gstate.lock);
 	manager.gstate.chunks.Merge(chunks);
@@ -1120,7 +1091,6 @@ void PhysicalWindow::Finalize(Pipeline &pipeline, ClientContext &context, unique
 	}
 
 	D_ASSERT(window_results.ColumnCount() == select_list.size());
-	// we can have multiple window functions
 
 	//	Track parallel tasks
 	auto &scheduler = TaskScheduler::GetScheduler(context);
@@ -1133,57 +1103,36 @@ void PhysicalWindow::Finalize(Pipeline &pipeline, ClientContext &context, unique
 		window_exprs.emplace_back(wexpr);
 	}
 
-	vector<idx_t> remaining(select_list.size());
-	std::iota(remaining.begin(), remaining.end(), 0);
-	while (!remaining.empty()) {
-		// Find all functions that share the partitioning of the first remaining expression
-		const auto over_idx = remaining[0];
-		D_ASSERT(select_list[over_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
-		auto over_expr = reinterpret_cast<BoundWindowExpression *>(select_list[over_idx].get());
+	const auto over_idx = 0;
+	auto over_expr = reinterpret_cast<BoundWindowExpression *>(select_list[over_idx].get());
 
-		vector<idx_t> matching;
-		vector<idx_t> unprocessed;
-		for (const auto &expr_idx : remaining) {
-			D_ASSERT(select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
-			auto wexpr = reinterpret_cast<BoundWindowExpression *>(select_list[expr_idx].get());
-			if (CompatibleSorts(over_expr, wexpr)) {
-				matching.emplace_back(expr_idx);
-			} else {
-				unprocessed.emplace_back(expr_idx);
+	// sort by partition and order clause in window def
+	ChunkCollection over_collection;
+	ChunkCollection hash_collection;
+	const auto sort_col_count = over_expr->partitions.size() + over_expr->orders.size();
+	counts_t counts;
+	if (sort_col_count > 0) {
+		MaterializeOverCollectionForWindow(over_expr, big_data, over_collection);
+		if (!over_expr->partitions.empty()) {
+			HashCollectionForWindow(scheduler, over_collection, hash_collection, over_expr->partitions.size(), counts);
+		}
+	}
+
+	if (!counts.empty()) {
+		WindowGlobalState pstate(*this, context);
+		WindowPartitionTaskManager task_manager(scheduler, pstate);
+		const auto hash_mask = hash_t(counts.size() - 1);
+		for (hash_t hash_key = 0; hash_key < counts.size(); ++hash_key) {
+			if (counts[hash_key] > 0) {
+				auto task = make_unique<WindowPartitionTask>(task_manager, window_exprs, big_data, window_results,
+				                                             over_collection, hash_collection, hash_key, hash_mask);
+				task_manager.AddTask(move(task));
+				// task->Execute();
 			}
 		}
-		remaining.swap(unprocessed);
-
-		// sort by partition and order clause in window def
-		ChunkCollection over_collection;
-		ChunkCollection hash_collection;
-		const auto sort_col_count = over_expr->partitions.size() + over_expr->orders.size();
-		counts_t counts;
-		if (sort_col_count > 0) {
-			MaterializeOverCollectionForWindow(over_expr, big_data, window_results, over_collection);
-			if (!over_expr->partitions.empty()) {
-				HashCollectionForWindow(scheduler, over_collection, hash_collection, over_expr->partitions.size(),
-				                        counts);
-			}
-		}
-
-		if (!counts.empty()) {
-			WindowGlobalState pstate(*this, context);
-			WindowPartitionTaskManager task_manager(scheduler, pstate);
-			const auto hash_mask = hash_t(counts.size() - 1);
-			for (hash_t hash_key = 0; hash_key < counts.size(); ++hash_key) {
-				if (counts[hash_key] > 0) {
-					auto task =
-					    make_unique<WindowPartitionTask>(task_manager, window_exprs, matching, big_data, window_results,
-					                                     over_collection, hash_collection, hash_key, hash_mask);
-					task_manager.AddTask(move(task));
-					// task->Execute();
-				}
-			}
-			task_manager.Finish();
-		} else {
-			WindowPartitionTask::ComputeExpressions(window_exprs, matching, big_data, window_results, over_collection);
-		}
+		task_manager.Finish();
+	} else {
+		WindowPartitionTask::ComputeExpressions(window_exprs, big_data, window_results, over_collection);
 	}
 }
 
