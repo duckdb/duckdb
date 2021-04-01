@@ -79,7 +79,7 @@ require vector_size 512
 
 query I
 select bool_or(d > '2021-02-09') over (partition by d)
-    from t;
+    from t order by d;
 ----
 NULL
 0
@@ -87,7 +87,7 @@ NULL
 
 query I
 select bool_and(d > '2021-02-09') over (partition by d)
-    from t;
+    from t order by d;
 ----
 NULL
 0
