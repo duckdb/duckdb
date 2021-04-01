@@ -370,7 +370,7 @@ void RowChunk::ComputeEntrySizes(Vector &v, idx_t entry_sizes[], idx_t vcount, i
 			}
 		} else {
 			auto &children = StructVector::GetEntries(v);
-            num_children = children.size();
+			num_children = children.size();
 			for (auto &struct_child : children) {
 				Vector struct_vector;
 				struct_vector.Reference(*struct_child.second);
@@ -430,7 +430,8 @@ void RowChunk::ComputeEntrySizes(Vector &v, idx_t entry_sizes[], idx_t vcount, i
 		break;
 	}
 	default:
-		throw NotImplementedException("Column with variable size type %s cannot be serialized to row-format", v.GetType().ToString());
+		throw NotImplementedException("Column with variable size type %s cannot be serialized to row-format",
+		                              v.GetType().ToString());
 	}
 }
 
@@ -570,7 +571,7 @@ void RowChunk::SerializeVectorData(VectorData &vdata, PhysicalType type, const S
 		break;
 	}
 	default:
-        throw NotImplementedException("FIXME: unimplemented serialize to row-format");
+		throw NotImplementedException("FIXME: unimplemented serialize to row-format");
 	}
 }
 
@@ -596,7 +597,7 @@ void RowChunk::SerializeVector(Vector &v, idx_t vcount, const SelectionVector &s
 			}
 		} else {
 			auto &children = StructVector::GetEntries(v);
-            num_children = children.size();
+			num_children = children.size();
 			for (auto &struct_child : children) {
 				Vector struct_vector;
 				struct_vector.Reference(*struct_child.second);
@@ -916,8 +917,7 @@ void RowChunk::DeserializeIntoVector(Vector &v, const idx_t &vcount, const idx_t
 				for (idx_t j = 0; j < 8; j++) {
 					auto len = Load<uint32_t>(key_locations[i + j]);
 					key_locations[i + j] += string_prefix_len;
-					target[i + j] =
-					    StringVector::AddStringOrBlob(v, string_t((const char *)key_locations[i + j], len));
+					target[i + j] = StringVector::AddStringOrBlob(v, string_t((const char *)key_locations[i + j], len));
 					key_locations[i + j] += len;
 				}
 			}
@@ -958,7 +958,7 @@ void RowChunk::DeserializeIntoVector(Vector &v, const idx_t &vcount, const idx_t
 		auto list_data = GetListData(v);
 		data_ptr_t list_entry_locations[STANDARD_VECTOR_SIZE];
 
-        ListVector::Initialize(v);
+		ListVector::Initialize(v);
 		uint64_t entry_offset = ListVector::GetListSize(v);
 		for (idx_t i = 0; i < vcount; i++) {
 			if (!validity.RowIsValid(i)) {
@@ -983,18 +983,18 @@ void RowChunk::DeserializeIntoVector(Vector &v, const idx_t &vcount, const idx_t
 
 			// now read the list data
 			while (entry_remaining > 0) {
-                auto next = MinValue(entry_remaining, (idx_t)STANDARD_VECTOR_SIZE);
+				auto next = MinValue(entry_remaining, (idx_t)STANDARD_VECTOR_SIZE);
 
 				// initialize a new vector to append
-                Vector append_vector(v.GetType());
-                append_vector.SetVectorType(v.GetVectorType());
-                ListVector::Initialize(append_vector);
-                auto &list_vec_to_append = ListVector::GetEntry(append_vector);
+				Vector append_vector(v.GetType());
+				append_vector.SetVectorType(v.GetVectorType());
+				ListVector::Initialize(append_vector);
+				auto &list_vec_to_append = ListVector::GetEntry(append_vector);
 
 				// set validity
 				auto &append_validity = GetValidity(list_vec_to_append);
 				for (idx_t entry_idx = 0; entry_idx < next; entry_idx++) {
-                    append_validity.Set(entry_idx, *(validitymask_location) & (1 << offset_in_byte));
+					append_validity.Set(entry_idx, *(validitymask_location) & (1 << offset_in_byte));
 					if (++offset_in_byte == 8) {
 						validitymask_location++;
 						offset_in_byte = 0;

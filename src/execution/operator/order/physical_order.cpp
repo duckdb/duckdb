@@ -701,7 +701,7 @@ void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 	} else {
 		payload_size = state.payload_block->count * payload_state.ENTRY_SIZE;
 	}
-	if (payload_size > state.buffer_manager.GetMaxMemory() / 2) {
+	if (payload_size > state.buffer_manager.GetMaxMemory()) {
 		throw NotImplementedException("External sort");
 	}
 

@@ -1061,8 +1061,8 @@ void ListVector::Initialize(Vector &vec) {
 }
 idx_t ListVector::GetListSize(const Vector &vec) {
 	if (vec.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-        auto &child = DictionaryVector::Child(vec);
-        return ListVector::GetListSize(child);
+		auto &child = DictionaryVector::Child(vec);
+		return ListVector::GetListSize(child);
 	}
 	return ((VectorListBuffer &)*vec.auxiliary).size;
 }
@@ -1070,8 +1070,8 @@ idx_t ListVector::GetListSize(const Vector &vec) {
 void ListVector::SetListSize(Vector &vec, idx_t size) {
 	ListVector::Initialize(vec);
 	if (vec.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-        auto &child = DictionaryVector::Child(vec);
-        ListVector::SetListSize(child, size);
+		auto &child = DictionaryVector::Child(vec);
+		ListVector::SetListSize(child, size);
 	}
 	((VectorListBuffer &)*vec.auxiliary).size = size;
 }
