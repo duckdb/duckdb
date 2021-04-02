@@ -77,8 +77,6 @@ public:
 	                                  data_ptr_t validitymask_locations[]);
 
 private:
-	void EncodeStringData(data_ptr_t dataptr, string_t value, idx_t prefix_len);
-
 	template <class T>
 	void TemplatedSerializeVectorSortable(VectorData &vdata, const SelectionVector &sel, idx_t count,
 	                                      data_ptr_t key_locations[], bool desc, bool has_null, bool invert);
