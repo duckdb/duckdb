@@ -5,12 +5,11 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/map.hpp"
 #include "duckdb/common/types/vector.hpp"
-#include "duckdb/common/types/chunk_collection.hpp"
 
 namespace duckdb {
 template <class T>
 struct HistogramAggState {
-	map<T, size_t> *hist;
+	map<T, idx_t> *hist;
 };
 
 struct HistogramFunction {
@@ -47,7 +46,7 @@ static void HistogramUpdateFunction(Vector inputs[], FunctionData *, idx_t input
 		if (input_data.validity.RowIsValid(input_data.sel->get_index(i))) {
 			auto state = states[sdata.sel->get_index(i)];
 			if (!state->hist) {
-				state->hist = new map<T, size_t>();
+				state->hist = new map<T, idx_t>();
 			}
 			auto value = (T *)input_data.data;
 			(*state->hist)[value[input_data.sel->get_index(i)]]++;
@@ -70,7 +69,7 @@ static void HistogramUpdateFunctionString(Vector inputs[], FunctionData *, idx_t
 		if (input_data.validity.RowIsValid(input_data.sel->get_index(i))) {
 			auto state = states[sdata.sel->get_index(i)];
 			if (!state->hist) {
-				state->hist = new map<string, size_t>();
+				state->hist = new map<string, idx_t>();
 			}
 			auto value = (string_t *)input_data.data;
 			(*state->hist)[value[input_data.sel->get_index(i)].GetString()]++;
@@ -89,7 +88,7 @@ static void HistogramCombineFunction(Vector &state, Vector &combined, idx_t coun
 	for (idx_t i = 0; i < count; i++) {
 		auto state = states_ptr[sdata.sel->get_index(i)];
 		if (!combined_ptr[i]->hist) {
-			combined_ptr[i]->hist = new map<T, size_t>();
+			combined_ptr[i]->hist = new map<T, idx_t>();
 		}
 		for (auto &entry : *state->hist) {
 			(*combined_ptr[i]->hist)[entry.first] += entry.second;
@@ -108,7 +107,7 @@ static void HistogramFinalize(Vector &state_vector, FunctionData *, Vector &resu
 	child_list_t<LogicalType> bucket_type, count_type;
 	bucket_type.push_back({"", result.GetType().child_types()[0].second.child_types()[0].second});
 	count_type.push_back({"", LogicalType::UBIGINT});
-	size_t old_len = 0;
+	idx_t old_len = 0;
 
 	auto &mask = FlatVector::Validity(result);
 
