@@ -99,6 +99,9 @@ public:
 	string Print();
 
 	py::object Getattr(const py::str &key);
+
+private:
+	py::object map_function;
 };
 
 } // namespace duckdb
