@@ -347,7 +347,7 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 		} else if (aggr.filter) {
 			UpdateAggregate(aggr, payload, addresses, input_count, payload_idx);
 		} else {
-			aggr.function.update(input_count == 0 ? nullptr : &payload.data[payload_idx], nullptr, input_count,
+			aggr.function.update(input_count == 0 ? nullptr : &payload.data[payload_idx], aggr.bind_data, input_count,
 			                     addresses, payload.size());
 		}
 
