@@ -64,11 +64,11 @@ public:
 	static void ComputeEntrySizes(Vector &v, idx_t entry_sizes[], idx_t vcount, idx_t offset = 0);
 	static void ComputeEntrySizes(DataChunk &input, idx_t entry_sizes[], idx_t entry_size);
 
-	void SerializeVectorData(VectorData &vdata, PhysicalType type, const SelectionVector &sel, idx_t ser_count,
-	                         idx_t col_idx, data_ptr_t key_locations[], data_ptr_t validitymask_locations[],
-	                         idx_t offset = 0);
-	void SerializeVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count, idx_t col_idx,
-	                     data_ptr_t key_locations[], data_ptr_t validitymask_locations[], idx_t offset = 0);
+	static void SerializeVectorData(VectorData &vdata, PhysicalType type, const SelectionVector &sel, idx_t ser_count,
+	                                idx_t col_idx, data_ptr_t key_locations[], data_ptr_t validitymask_locations[],
+	                                idx_t offset = 0);
+	static void SerializeVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count, idx_t col_idx,
+	                            data_ptr_t key_locations[], data_ptr_t validitymask_locations[], idx_t offset = 0);
 	idx_t AppendToBlock(RowDataBlock &block, BufferHandle &handle, vector<BlockAppendEntry> &append_entries,
 	                    idx_t remaining, idx_t entry_sizes[]);
 	void Build(idx_t added_count, data_ptr_t key_locations[], idx_t entry_sizes[]);
@@ -77,14 +77,6 @@ public:
 	                                  data_ptr_t validitymask_locations[]);
 
 private:
-	static uint8_t FlipSign(uint8_t key_byte);
-	static uint32_t EncodeFloat(float x);
-	static uint64_t EncodeDouble(double x);
-
-	template <class T>
-	void EncodeData(data_t *data, T value) {
-		throw NotImplementedException("Cannot create data from this type");
-	}
 	void EncodeStringData(data_ptr_t dataptr, string_t value, idx_t prefix_len);
 
 	template <class T>
@@ -94,35 +86,28 @@ private:
 	                                   data_ptr_t key_locations[], const bool desc, const bool has_null,
 	                                   const bool nulls_first, const idx_t prefix_len);
 
-	//! Whether the system is little endian
-	bool is_little_endian;
-};
+	static void ComputeStringEntrySizes(Vector &v, idx_t entry_sizes[], idx_t vcount, idx_t offset);
+	static void ComputeStructEntrySizes(Vector &v, idx_t entry_sizes[], idx_t vcount, idx_t offset);
+	static void ComputeListEntrySizes(Vector &v, idx_t entry_sizes[], idx_t vcount, idx_t offset);
 
-template <>
-void RowChunk::EncodeData(data_ptr_t dataptr, bool value);
-template <>
-void RowChunk::EncodeData(data_ptr_t dataptr, int8_t value);
-template <>
-void RowChunk::EncodeData(data_ptr_t dataptr, int16_t value);
-template <>
-void RowChunk::EncodeData(data_ptr_t dataptr, int32_t value);
-template <>
-void RowChunk::EncodeData(data_ptr_t dataptr, int64_t value);
-template <>
-void RowChunk::EncodeData(data_ptr_t dataptr, uint8_t value);
-template <>
-void RowChunk::EncodeData(data_ptr_t dataptr, uint16_t value);
-template <>
-void RowChunk::EncodeData(data_ptr_t dataptr, uint32_t value);
-template <>
-void RowChunk::EncodeData(data_ptr_t dataptr, uint64_t value);
-template <>
-void RowChunk::EncodeData(data_ptr_t dataptr, hugeint_t value);
-template <>
-void RowChunk::EncodeData(data_ptr_t dataptr, float value);
-template <>
-void RowChunk::EncodeData(data_ptr_t dataptr, double value);
-template <>
-void RowChunk::EncodeData(data_ptr_t dataptr, interval_t value);
+	static void SerializeStringVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count,
+	                                  idx_t col_idx, data_ptr_t key_locations[], data_ptr_t validitymask_locations[],
+	                                  idx_t offset);
+	static void SerializeStructVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count,
+	                                  idx_t col_idx, data_ptr_t key_locations[], data_ptr_t validitymask_locations[],
+	                                  idx_t offset);
+	static void SerializeListVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count, idx_t col_idx,
+	                                data_ptr_t key_locations[], data_ptr_t validitymask_locations[], idx_t offset);
+
+	static void DeserializeIntoStringVector(Vector &v, const idx_t &vcount, const idx_t &col_idx,
+	                                        data_ptr_t *key_locations, data_ptr_t *validitymask_locations);
+	static void DeserializeIntoStructVector(Vector &v, const idx_t &vcount, const idx_t &col_idx,
+	                                        data_ptr_t *key_locations, data_ptr_t *validitymask_locations);
+	static void DeserializeIntoListVector(Vector &v, const idx_t &vcount, const idx_t &col_idx,
+	                                      data_ptr_t *key_locations, data_ptr_t *validitymask_locations);
+
+	//! Whether the system is little endian
+	const bool is_little_endian;
+};
 
 } // namespace duckdb

@@ -361,9 +361,9 @@ static void RadixSort(BufferManager &buffer_manager, data_ptr_t dataptr, const i
 			counts[val] = counts[val] + counts[val - 1];
 		}
 		// re-order the data in temporary array
-		for (int i = count - 1; i >= 0; i--) {
-			byte = *(dataptr + i * sorting_state.ENTRY_SIZE + offset);
-			memcpy(temp + (counts[byte] - 1) * sorting_state.ENTRY_SIZE, dataptr + i * sorting_state.ENTRY_SIZE,
+		for (idx_t i = count; i > 0; i--) {
+			byte = *(dataptr + (i - 1) * sorting_state.ENTRY_SIZE + offset);
+			memcpy(temp + (counts[byte] - 1) * sorting_state.ENTRY_SIZE, dataptr + (i - 1) * sorting_state.ENTRY_SIZE,
 			       sorting_state.ENTRY_SIZE);
 			counts[byte]--;
 		}
