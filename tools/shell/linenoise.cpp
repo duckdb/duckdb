@@ -806,10 +806,10 @@ static void refreshMultiLine(struct linenoiseState *l) {
 	int total_len = linenoiseComputeRenderWidth(l->buf, l->len);
 	int cursor_old_pos = linenoiseComputeRenderWidth(l->buf, l->oldpos);
 	int cursor_pos = linenoiseComputeRenderWidth(l->buf, l->pos);
-	int rows = (plen + total_len + l->cols - 1) / l->cols; /* rows used by current buf. */
-	int rpos = (plen + cursor_old_pos + l->cols) / l->cols;  /* cursor relative row. */
-	int rpos2;                                          /* rpos after refresh. */
-	int col;                                            /* colum position, zero-based. */
+	int rows = (plen + total_len + l->cols - 1) / l->cols;  /* rows used by current buf. */
+	int rpos = (plen + cursor_old_pos + l->cols) / l->cols; /* cursor relative row. */
+	int rpos2;                                              /* rpos after refresh. */
+	int col;                                                /* colum position, zero-based. */
 	int old_rows = l->maxrows;
 	int fd = l->ofd, j;
 	struct abuf ab;
