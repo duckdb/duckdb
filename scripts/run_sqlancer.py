@@ -26,10 +26,19 @@ command_prefix += ['-jar', os.path.join(targetdir, found_filename)]
 
 command = '--num-threads 2 --random-seed 0 --log-each-select=true --print-statements=true --timeout-seconds 600 duckdb'.split(' ')
 
-subprocess = subprocess.Popen(command_prefix + command, stdout=subprocess.PIPE)
+subprocess = subprocess.Popen(command_prefix + command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 out = subprocess.stdout.read()
+err = subprocess.stderr.read()
+subprocess.wait()
 
 if subprocess.returncode != 0:
+	print('--------------------- SQLANCER FAILURE ----------------------')
+	print('SQLANCER EXITED WITH CODE ' + subprocess.returncode)
+	print('--------------------- SQLANCER ERROR LOG ----------------------')
+	try:
+		print(err.decode('utf8'))
+	except:
+		print(err)
 	print('--------------------- SQLANCER LOGS ----------------------')
 	try:
 		print(out.decode('utf8'))
