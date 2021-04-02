@@ -14,6 +14,7 @@
 namespace duckdb {
 
 //! PhysicalWindow implements window functions
+//! It assumes that all functions have a common partitioning and ordering
 class PhysicalWindow : public PhysicalSink {
 public:
 	PhysicalWindow(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list, idx_t estimated_cardinality,
