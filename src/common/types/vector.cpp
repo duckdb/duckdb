@@ -1059,6 +1059,42 @@ void ListVector::Initialize(Vector &vec) {
 		ListVector::SetEntry(vec, move(vec_child));
 	}
 }
+
+template <class T>
+void Search(Vector &list, T key, vector<idx_t> &offsets) {
+	auto data = (T *)ListVector::GetEntry(list).GetData();
+	for (idx_t i = 0; i < ListVector::GetListSize(list); i++) {
+		if (key == data[i]) {
+			offsets.push_back(i);
+		}
+	}
+}
+
+vector<idx_t> ListVector::Search(Vector &list, Value &key) {
+	vector<idx_t> offsets;
+	if (!ListVector::HasEntry(list)) {
+		return offsets;
+	}
+	switch (key.type().id()) {
+	case LogicalTypeId::INTEGER:
+		::duckdb::Search<int32_t>(list, key.value_.integer, offsets);
+		break;
+	default:
+		throw InvalidTypeException(key.type().id(), "Invalid type for List Vector Search");
+	}
+	return offsets;
+}
+
+Value ListVector::GetValuesFromOffsets(Vector &list, vector<idx_t> &offsets) {
+	Value ret(list.GetType().child_types()[0].second);
+	ret.is_null = false;
+	auto &child_vec = ListVector::GetEntry(list);
+	for (auto &offset : offsets) {
+		ret.list_value.push_back(child_vec.GetValue(offset));
+	}
+	return ret;
+}
+
 idx_t ListVector::GetListSize(const Vector &vec) {
 	return ((VectorListBuffer &)*vec.auxiliary).size;
 }

@@ -59,9 +59,16 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 	// all children bound successfully
 	string function_name;
 	switch (op.type) {
-	case ExpressionType::ARRAY_EXTRACT:
-		function_name = "array_extract";
+	case ExpressionType::ARRAY_EXTRACT: {
+		D_ASSERT(op.children[0]->expression_class == ExpressionClass::BOUND_EXPRESSION);
+		auto &b_exp = (BoundExpression &)*op.children[0];
+		if (b_exp.expr->return_type.id() == LogicalTypeId::MAP) {
+			function_name = "map_extract";
+		} else {
+			function_name = "array_extract";
+		}
 		break;
+	}
 	case ExpressionType::ARRAY_SLICE:
 		function_name = "array_slice";
 		break;

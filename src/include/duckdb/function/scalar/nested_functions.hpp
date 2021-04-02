@@ -36,6 +36,9 @@ struct MapFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct MapExtractFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
 struct ListExtractFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };

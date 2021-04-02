@@ -279,6 +279,8 @@ struct ListVector {
 	static void Append(Vector &target, Vector &source, idx_t source_size, idx_t source_offset = 0);
 	static void PushBack(Vector &target, Value &insert);
 	static void Initialize(Vector &vec);
+	static vector<idx_t> Search(Vector &list, Value &key);
+	static Value GetValuesFromOffsets(Vector &list, vector<idx_t> &offsets);
 };
 
 struct StringVector {
