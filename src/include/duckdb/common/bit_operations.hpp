@@ -56,6 +56,8 @@ void EncodeData(data_ptr_t dataptr, uint32_t value, bool is_little_endian);
 template <>
 void EncodeData(data_ptr_t dataptr, uint64_t value, bool is_little_endian);
 template <>
+void EncodeData(data_ptr_t dataptr, hugeint_t value, bool is_little_endian);
+template <>
 void EncodeData(data_ptr_t dataptr, double value, bool is_little_endian);
 template <>
 void EncodeData(data_ptr_t dataptr, float value, bool is_little_endian);

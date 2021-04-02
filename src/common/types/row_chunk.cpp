@@ -31,7 +31,7 @@ void RowChunk::TemplatedSerializeVectorSortable(VectorData &vdata, const Selecti
 			// write validity and according value
 			if (validity.RowIsValid(source_idx)) {
 				key_locations[i][0] = valid;
-				EncodeData(key_locations[i] + 1, source[source_idx], is_little_endian);
+				EncodeData<T>(key_locations[i] + 1, source[source_idx], is_little_endian);
 				// invert bits if desc
 				if (desc) {
 					for (idx_t s = 1; s < sizeof(T) + 1; s++) {
@@ -49,7 +49,7 @@ void RowChunk::TemplatedSerializeVectorSortable(VectorData &vdata, const Selecti
 			auto idx = sel.get_index(i);
 			auto source_idx = vdata.sel->get_index(idx);
 			// write value
-			EncodeData(key_locations[i], source[source_idx], is_little_endian);
+			EncodeData<T>(key_locations[i], source[source_idx], is_little_endian);
 			// invert bits if desc
 			if (desc) {
 				for (idx_t s = 1; s < sizeof(T); s++) {

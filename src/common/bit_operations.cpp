@@ -122,8 +122,8 @@ void EncodeData(data_ptr_t dataptr, uint64_t value, bool is_little_endian) {
 
 template <>
 void EncodeData(data_ptr_t dataptr, hugeint_t value, bool is_little_endian) {
-	EncodeData(dataptr, value.upper, is_little_endian);
-	EncodeData(dataptr + sizeof(value.upper), value.lower, is_little_endian);
+	EncodeData<int64_t>(dataptr, value.upper, is_little_endian);
+	EncodeData<uint64_t>(dataptr + sizeof(value.upper), value.lower, is_little_endian);
 }
 
 template <>
@@ -140,11 +140,11 @@ void EncodeData(data_ptr_t dataptr, double value, bool is_little_endian) {
 
 template <>
 void EncodeData(data_ptr_t dataptr, interval_t value, bool is_little_endian) {
-	EncodeData(dataptr, value.months, is_little_endian);
+	EncodeData<int32_t>(dataptr, value.months, is_little_endian);
 	dataptr += sizeof(value.months);
-	EncodeData(dataptr, value.days, is_little_endian);
+	EncodeData<int32_t>(dataptr, value.days, is_little_endian);
 	dataptr += sizeof(value.days);
-	EncodeData(dataptr, value.micros, is_little_endian);
+	EncodeData<int32_t>(dataptr, value.micros, is_little_endian);
 }
 
 void EncodeStringDataPrefix(data_ptr_t dataptr, string_t value, idx_t prefix_len) {
