@@ -14,5 +14,3 @@ unique_ptr<ParsedExpression> Transformer::TransformPositionalReference(duckdb_li
 }
 
 } // namespace duckdb
-
-

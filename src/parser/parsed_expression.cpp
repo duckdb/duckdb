@@ -79,7 +79,8 @@ bool ParsedExpression::Equals(const BaseExpression *other) const {
 	case ExpressionClass::PARAMETER:
 		return true;
 	case ExpressionClass::POSITIONAL_REFERENCE:
-		return PositionalReferenceExpression::Equals((PositionalReferenceExpression *)this, (PositionalReferenceExpression *)other);
+		return PositionalReferenceExpression::Equals((PositionalReferenceExpression *)this,
+		                                             (PositionalReferenceExpression *)other);
 	case ExpressionClass::STAR:
 		return true;
 	case ExpressionClass::TABLE_STAR:

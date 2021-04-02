@@ -15,7 +15,8 @@ string PositionalReferenceExpression::ToString() const {
 	return "#" + to_string(index);
 }
 
-bool PositionalReferenceExpression::Equals(const PositionalReferenceExpression *a, const PositionalReferenceExpression *b) {
+bool PositionalReferenceExpression::Equals(const PositionalReferenceExpression *a,
+                                           const PositionalReferenceExpression *b) {
 	return a->index == b->index;
 }
 
@@ -40,4 +41,4 @@ unique_ptr<ParsedExpression> PositionalReferenceExpression::Deserialize(Expressi
 	return move(expression);
 }
 
-}
+} // namespace duckdb
