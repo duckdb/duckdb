@@ -33,7 +33,7 @@ subprocess.wait()
 
 if subprocess.returncode != 0:
 	print('--------------------- SQLANCER FAILURE ----------------------')
-	print('SQLANCER EXITED WITH CODE ' + subprocess.returncode)
+	print('SQLANCER EXITED WITH CODE ' + str(subprocess.returncode))
 	print('--------------------- SQLANCER ERROR LOG ----------------------')
 	try:
 		print(err.decode('utf8'))
