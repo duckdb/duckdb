@@ -15,6 +15,8 @@
 
 namespace duckdb {
 
+using counts_t = std::vector<size_t>;
+
 class WindowGlobalState : public GlobalOperatorState {
 public:
 	WindowGlobalState(PhysicalWindow &op_p, ClientContext &context) : op(op_p) {
@@ -23,16 +25,24 @@ public:
 	PhysicalWindow &op;
 	std::mutex lock;
 	ChunkCollection chunks;
+	ChunkCollection over_collection;
+	ChunkCollection hash_collection;
 	ChunkCollection window_results;
+	counts_t counts;
 };
 
 class WindowLocalState : public LocalSinkState {
 public:
-	explicit WindowLocalState(PhysicalWindow &op_p) : op(op_p) {
+	explicit WindowLocalState(PhysicalWindow &op_p, const unsigned partition_bits = 10)
+	    : op(op_p), partition_count(size_t(1) << partition_bits) {
 	}
 
 	PhysicalWindow &op;
 	ChunkCollection chunks;
+	ChunkCollection over_collection;
+	ChunkCollection hash_collection;
+	const size_t partition_count;
+	counts_t counts;
 };
 
 //! The operator state of the window
@@ -362,8 +372,8 @@ static void MaterializeExpression(Expression *expr, ChunkCollection &input, Chun
 	MaterializeExpressions(&expr, 1, input, output, scalar);
 }
 
-static void SortCollectionForWindow(BoundWindowExpression *wexpr, ChunkCollection &input, ChunkCollection &output,
-                                    ChunkCollection &sort_collection) {
+static void SortCollectionForPartition(BoundWindowExpression *wexpr, ChunkCollection &input, ChunkCollection &output,
+                                       ChunkCollection &sort_collection) {
 	if (input.Count() == 0) {
 		return;
 	}
@@ -389,10 +399,12 @@ static void SortCollectionForWindow(BoundWindowExpression *wexpr, ChunkCollectio
 	sort_collection.Reorder(sorted_vector.get());
 }
 
-using counts_t = std::vector<size_t>;
+static void HashChunk(counts_t &counts, DataChunk &hash_chunk, DataChunk &sort_chunk, const idx_t partition_cols) {
+	const vector<LogicalType> hash_types(1, LogicalTypeId::HASH);
+	hash_chunk.Initialize(hash_types);
+	hash_chunk.SetCardinality(sort_chunk);
+	auto &hash_vector = hash_chunk.data[0];
 
-static void HashChunk(counts_t &counts, Vector &hash_vector, DataChunk &sort_chunk, const idx_t partition_cols) {
-	D_ASSERT(hash_vector.GetType().id() == LogicalTypeId::HASH);
 	const auto count = sort_chunk.size();
 	VectorOperations::Hash(sort_chunk.data[0], hash_vector, count);
 	for (idx_t prt_idx = 1; prt_idx < partition_cols; ++prt_idx) {
@@ -407,120 +419,7 @@ static void HashChunk(counts_t &counts, Vector &hash_vector, DataChunk &sort_chu
 	}
 }
 
-class HashTaskManager : public TaskCounter {
-public:
-	//	ChunkCollection isn't set up for pre-allocation
-	using ChunkVector = vector<unique_ptr<DataChunk>>;
-
-	HashTaskManager(TaskScheduler &scheduler_p, ChunkCollection &over_collection_p, ChunkCollection &hash_collection_p,
-	                counts_t &counts_p, const idx_t partition_cols_p, const unsigned partition_bits)
-	    : TaskCounter(scheduler_p), over_collection(over_collection_p), hash_collection(hash_collection_p),
-	      partition_cols(partition_cols_p), hash_chunks(over_collection.ChunkCount()),
-	      hash_types(1, LogicalTypeId::HASH), counts(counts_p) {
-		D_ASSERT(0 < partition_cols);
-		D_ASSERT(partition_cols <= over_collection.ColumnCount());
-
-		const auto partition_count = size_t(1) << partition_bits;
-		counts.clear();
-		counts.resize(partition_count, 0);
-	}
-
-	void Finish() override;
-
-private:
-	friend class HashChunkRangeTask;
-
-	ChunkCollection &over_collection;
-	ChunkCollection &hash_collection;
-	const idx_t partition_cols;
-
-	ChunkVector hash_chunks;
-	const vector<LogicalType> hash_types;
-
-	std::mutex lock;
-	counts_t &counts;
-};
-
-void HashTaskManager::Finish() {
-	TaskCounter::Finish();
-
-	//	Copy the chunks over in order into a real collection
-	for (auto &chunk : hash_chunks) {
-		hash_collection.Append(*chunk);
-		chunk.reset();
-	}
-}
-
-class HashChunkRangeTask : public Task {
-public:
-	using Range = std::pair<idx_t, idx_t>;
-	using ChunkVector = HashTaskManager::ChunkVector;
-
-	HashChunkRangeTask(HashTaskManager &manager_p, Range range_p) : manager(manager_p), range(range_p) {
-		D_ASSERT(range.first < range.second);
-		D_ASSERT(range.second <= manager.over_collection.ChunkCount());
-
-		counts.resize(manager.counts.size(), 0);
-	}
-
-	void Execute() override;
-
-private:
-	HashTaskManager &manager;
-	const Range range;
-	counts_t counts;
-};
-
-void HashChunkRangeTask::Execute() {
-	//	Hash the range of blocks
-	for (idx_t chunk_index = range.first; chunk_index < range.second; ++chunk_index) {
-		auto &over_chunk = manager.over_collection.GetChunk(chunk_index);
-		auto hash_chunk = make_unique<DataChunk>();
-		hash_chunk->Initialize(manager.hash_types);
-		hash_chunk->SetCardinality(over_chunk);
-		HashChunk(counts, hash_chunk->data[0], over_chunk, manager.partition_cols);
-		manager.hash_chunks[chunk_index] = move(hash_chunk);
-	}
-
-	//	Merge the counts into the master
-	lock_guard<mutex> locked(manager.lock);
-	for (size_t i = 0; i < counts.size(); ++i) {
-		manager.counts[i] += counts[i];
-	}
-
-	manager.FinishTask();
-}
-
-static void HashCollectionForWindow(TaskScheduler &scheduler, ChunkCollection &over_collection,
-                                    ChunkCollection &hash_collection, const idx_t partition_cols, counts_t &counts,
-                                    const unsigned partition_bits = 10) {
-	counts.clear();
-
-	//	If there are no partition columns, then there is one partition
-	const auto num_rows = over_collection.Count();
-	if (partition_cols == 0) {
-		counts.emplace_back(num_rows);
-		return;
-	}
-
-	//	Hash the blocks vertically in parallel
-	HashTaskManager task_manager(scheduler, over_collection, hash_collection, counts, partition_cols, partition_bits);
-
-	const auto threads = idx_t(scheduler.NumberOfThreads());
-	const auto chunks = over_collection.ChunkCount();
-	const idx_t stride = (chunks + threads - 1) / threads;
-	for (idx_t chunk_index = 0; chunk_index < over_collection.ChunkCount(); chunk_index += stride) {
-		using Range = HashChunkRangeTask::Range;
-		Range range(chunk_index, MinValue<idx_t>(chunk_index + stride, over_collection.ChunkCount()));
-		auto task = make_unique<HashChunkRangeTask>(task_manager, range);
-		task_manager.AddTask(move(task));
-	}
-
-	task_manager.Finish();
-}
-
-static void MaterializeOverCollectionForWindow(BoundWindowExpression *wexpr, ChunkCollection &input,
-                                               ChunkCollection &over_collection) {
+static void MaterializeOverForWindow(BoundWindowExpression *wexpr, DataChunk &input_chunk, DataChunk &over_chunk) {
 	vector<LogicalType> over_types;
 	ExpressionExecutor executor;
 
@@ -539,18 +438,10 @@ static void MaterializeOverCollectionForWindow(BoundWindowExpression *wexpr, Chu
 
 	D_ASSERT(over_types.size() > 0);
 
-	// create a ChunkCollection for the results of the expressions in the window definitions
-	for (idx_t i = 0; i < input.ChunkCount(); i++) {
-		DataChunk over_chunk;
-		over_chunk.Initialize(over_types);
+	over_chunk.Initialize(over_types);
+	executor.Execute(input_chunk, over_chunk);
 
-		executor.Execute(input.GetChunk(i), over_chunk);
-
-		over_chunk.Verify();
-		over_collection.Append(over_chunk);
-	}
-
-	D_ASSERT(input.Count() == over_collection.Count());
+	over_chunk.Verify();
 }
 
 struct WindowBoundariesState {
@@ -941,7 +832,7 @@ void WindowPartitionTask::ComputeExpressions(WindowExpressions &window_exprs, Ch
 	//	Sort the partition
 	const auto sort_col_count = over_expr->partitions.size() + over_expr->orders.size();
 	if (sort_col_count > 0) {
-		SortCollectionForWindow(over_expr, big_data, window_results, over_collection);
+		SortCollectionForPartition(over_expr, big_data, window_results, over_collection);
 	}
 
 	//	Set bits for the start of each partition
@@ -1052,13 +943,50 @@ void PhysicalWindow::Sink(ExecutionContext &context, GlobalOperatorState &state,
                           DataChunk &input) {
 	auto &lstate = (WindowLocalState &)lstate_p;
 	lstate.chunks.Append(input);
+
+	// Compute the over columns and the hash values for this block (if any)
+	const auto over_idx = 0;
+	auto over_expr = reinterpret_cast<BoundWindowExpression *>(select_list[over_idx].get());
+
+	const auto sort_col_count = over_expr->partitions.size() + over_expr->orders.size();
+	if (sort_col_count > 0) {
+		DataChunk over_chunk;
+		MaterializeOverForWindow(over_expr, input, over_chunk);
+
+		if (!over_expr->partitions.empty()) {
+			if (lstate.counts.empty()) {
+				lstate.counts.resize(lstate.partition_count, 0);
+			}
+
+			DataChunk hash_chunk;
+			HashChunk(lstate.counts, hash_chunk, over_chunk, over_expr->partitions.size());
+			lstate.hash_collection.Append(hash_chunk);
+			D_ASSERT(lstate.chunks.Count() == lstate.hash_collection.Count());
+		}
+
+		lstate.over_collection.Append(over_chunk);
+		D_ASSERT(lstate.chunks.Count() == lstate.over_collection.Count());
+	}
 }
 
 void PhysicalWindow::Combine(ExecutionContext &context, GlobalOperatorState &gstate_p, LocalSinkState &lstate_p) {
-	auto &gstate = (WindowGlobalState &)gstate_p;
 	auto &lstate = (WindowLocalState &)lstate_p;
+	if (lstate.chunks.Count() == 0) {
+		return;
+	}
+	auto &gstate = (WindowGlobalState &)gstate_p;
 	lock_guard<mutex> glock(gstate.lock);
 	gstate.chunks.Merge(lstate.chunks);
+	gstate.over_collection.Merge(lstate.over_collection);
+	gstate.hash_collection.Merge(lstate.hash_collection);
+	if (gstate.counts.empty()) {
+		gstate.counts = lstate.counts;
+	} else {
+		D_ASSERT(gstate.counts.size() == lstate.counts.size());
+		for (idx_t i = 0; i < gstate.counts.size(); ++i) {
+			gstate.counts[i] += lstate.counts[i];
+		}
+	}
 }
 
 void PhysicalWindow::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> gstate_p) {
@@ -1103,21 +1031,10 @@ void PhysicalWindow::Finalize(Pipeline &pipeline, ClientContext &context, unique
 		window_exprs.emplace_back(wexpr);
 	}
 
-	const auto over_idx = 0;
-	auto over_expr = reinterpret_cast<BoundWindowExpression *>(select_list[over_idx].get());
-
 	// sort by partition and order clause in window def
-	ChunkCollection over_collection;
-	ChunkCollection hash_collection;
-	const auto sort_col_count = over_expr->partitions.size() + over_expr->orders.size();
-	counts_t counts;
-	if (sort_col_count > 0) {
-		MaterializeOverCollectionForWindow(over_expr, big_data, over_collection);
-		if (!over_expr->partitions.empty()) {
-			HashCollectionForWindow(scheduler, over_collection, hash_collection, over_expr->partitions.size(), counts);
-		}
-	}
-
+	ChunkCollection &over_collection = gstate.over_collection;
+	const ChunkCollection &hash_collection = gstate.hash_collection;
+	const auto &counts = gstate.counts;
 	if (!counts.empty()) {
 		WindowGlobalState pstate(*this, context);
 		WindowPartitionTaskManager task_manager(scheduler, pstate);
