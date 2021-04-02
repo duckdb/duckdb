@@ -1,4 +1,4 @@
-# name: test/sql/join/test_cross_product_parallelism.test
+# name: test/sql/join/test_cross_product_parallelism.test_slow
 # description: Test cross product with parallelism
 # group: [join]
 

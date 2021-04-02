@@ -156,7 +156,8 @@ private:
 
 	void InitializeScanWithOffset(TableScanState &state, const vector<column_t> &column_ids,
 	                              TableFilterSet *table_filters, idx_t start_row, idx_t end_row);
-	bool CheckZonemap(TableScanState &state, TableFilterSet *table_filters, idx_t &current_row);
+	bool CheckZonemap(TableScanState &state, const vector<column_t> &column_ids, TableFilterSet *table_filters,
+	                  idx_t &current_row);
 	bool ScanBaseTable(Transaction &transaction, DataChunk &result, TableScanState &state,
 	                   const vector<column_t> &column_ids, idx_t &current_row, idx_t max_row);
 	bool ScanCreateIndex(CreateIndexScanState &state, const vector<column_t> &column_ids, DataChunk &result,
