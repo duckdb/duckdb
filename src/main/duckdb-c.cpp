@@ -49,7 +49,7 @@ duckdb_state duckdb_open(const char *path, duckdb_database *out) {
 
 void duckdb_close(duckdb_database *database) {
 	if (*database) {
-		auto wrapper = (DatabaseData *)*database;
+		auto wrapper = (DatabaseData *)database;
 		delete wrapper;
 		*database = nullptr;
 	}
