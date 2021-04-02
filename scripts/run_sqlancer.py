@@ -24,7 +24,7 @@ if persistent:
 	command_prefix += ['-Dduckdb.database.file=/tmp/lancer_duckdb_db']
 command_prefix += ['-jar', os.path.join(targetdir, found_filename)]
 
-command = '--num-threads 2 --random-seed 0 --log-each-select=true --print-statements=true --timeout-seconds 600 duckdb'.split(' ')
+command = '--num-threads 1 --random-seed 0 --log-each-select=true --print-statements=true --timeout-seconds 600 duckdb'.split(' ')
 
 subprocess = subprocess.Popen(command_prefix + command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 out = subprocess.stdout.read()
