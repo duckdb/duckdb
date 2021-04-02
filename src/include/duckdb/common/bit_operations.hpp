@@ -34,10 +34,9 @@ uint64_t EncodeDouble(double x);
 
 template <class T>
 void EncodeData(data_t *data, T value, bool is_little_endian) {
-    throw NotImplementedException("Cannot create data from this type");
+	throw NotImplementedException("Cannot create data from this type");
 }
 
 void EncodeStringDataPrefix(data_ptr_t dataptr, string_t value, idx_t prefix_len);
 
 } // namespace duckdb
-

@@ -452,7 +452,7 @@ static unique_ptr<Key> CreateKey(ART &art, PhysicalType type, Value &value) {
 	case PhysicalType::UINT64:
 		return Key::CreateKey<uint64_t>(value.value_.ubigint, art.is_little_endian);
 	case PhysicalType::INT128:
-        return Key::CreateKey<hugeint_t>(value.value_.hugeint, art.is_little_endian);
+		return Key::CreateKey<hugeint_t>(value.value_.hugeint, art.is_little_endian);
 	case PhysicalType::FLOAT:
 		return Key::CreateKey<float>(value.value_.float_, art.is_little_endian);
 	case PhysicalType::DOUBLE:
