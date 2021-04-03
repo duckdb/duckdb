@@ -188,21 +188,6 @@ unique_ptr<std::istream> BufferedCSVReader::OpenCSV(ClientContext &context, cons
 	return result;
 }
 
-void BufferedCSVReader::SkipRowsAndReadHeader(idx_t skip_rows, bool skip_header) {
-	for (idx_t i = 0; i < skip_rows; i++) {
-		// ignore skip rows
-		string read_line;
-		getline(*source, read_line);
-		linenr++;
-	}
-
-	if (skip_header) {
-		// ignore the first line as a header line
-		InitParseChunk(sql_types.size());
-		ParseCSV(ParserMode::PARSING_HEADER);
-	}
-}
-
 // Helper function to generate column names
 static string GenerateColumnName(const idx_t total_cols, const idx_t col_number, const string &prefix = "column") {
 	int max_digits = NumericHelper::UnsignedLength(total_cols - 1);
@@ -254,8 +239,32 @@ void BufferedCSVReader::InitParseChunk(idx_t num_cols) {
 void BufferedCSVReader::JumpToBeginning(idx_t skip_rows = 0, bool skip_header = false) {
 	ResetBuffer();
 	ResetStream();
+	SkipBOM();
 	SkipRowsAndReadHeader(skip_rows, skip_header);
 	sample_chunk_idx = 0;
+}
+
+void BufferedCSVReader::SkipBOM() {
+	char bom_buffer[3];
+	source->read(bom_buffer, 3);
+	if (bom_buffer[0] != '\xEF' || bom_buffer[1] != '\xBB' || bom_buffer[2] != '\xBF') {
+		ResetStream();
+	}
+}
+
+void BufferedCSVReader::SkipRowsAndReadHeader(idx_t skip_rows, bool skip_header) {
+	for (idx_t i = 0; i < skip_rows; i++) {
+		// ignore skip rows
+		string read_line;
+		getline(*source, read_line);
+		linenr++;
+	}
+
+	if (skip_header) {
+		// ignore the first line as a header line
+		InitParseChunk(sql_types.size());
+		ParseCSV(ParserMode::PARSING_HEADER);
+	}
 }
 
 bool BufferedCSVReader::JumpToNextSample() {
