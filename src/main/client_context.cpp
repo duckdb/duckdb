@@ -336,6 +336,7 @@ unique_ptr<QueryResult> ClientContext::Execute(const string &query, shared_ptr<P
 	} catch (std::exception &ex) {
 		return make_unique<MaterializedQueryResult>(ex.what());
 	}
+	LogQueryInternal(*lock, query);
 	return RunStatementOrPreparedStatement(*lock, query, nullptr, prepared, &values, allow_stream_result);
 }
 
@@ -474,9 +475,7 @@ void ClientContext::LogQueryInternal(ClientContextLock &, const string &query) {
 
 unique_ptr<QueryResult> ClientContext::Query(unique_ptr<SQLStatement> statement, bool allow_stream_result) {
 	auto lock = LockContext();
-	if (log_query_writer) {
-		LogQueryInternal(*lock, statement->query.substr(statement->stmt_location, statement->stmt_length));
-	}
+	LogQueryInternal(*lock, statement->query.substr(statement->stmt_location, statement->stmt_length));
 
 	vector<unique_ptr<SQLStatement>> statements;
 	statements.push_back(move(statement));

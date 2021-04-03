@@ -152,7 +152,7 @@ static unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, 
 		expr.function.function = GetScalarIntegerFunction<BASEOP>(expr.return_type.InternalType());
 	}
 	auto stats = make_unique<NumericStatistics>(expr.return_type, move(new_min), move(new_max));
-	stats->has_null = lstats.has_null || rstats.has_null;
+	stats->validity_stats = ValidityStatistics::Combine(lstats.validity_stats, rstats.validity_stats);
 	return move(stats);
 }
 
@@ -294,6 +294,7 @@ unique_ptr<FunctionData> DecimalNegateBind(ClientContext &context, ScalarFunctio
 		D_ASSERT(decimal_type.width() <= Decimal::MAX_WIDTH_INT128);
 		bound_function.function = ScalarFunction::GetScalarUnaryFunction<NegateOperator>(LogicalTypeId::HUGEINT);
 	}
+	decimal_type.Verify();
 	bound_function.arguments[0] = decimal_type;
 	bound_function.return_type = decimal_type;
 	return nullptr;
@@ -338,7 +339,9 @@ static unique_ptr<BaseStatistics> NegateBindStatistics(ClientContext &context, B
 		}
 	}
 	auto stats = make_unique<NumericStatistics>(expr.return_type, move(new_min), move(new_max));
-	stats->has_null = istats.has_null;
+	if (istats.validity_stats) {
+		stats->validity_stats = istats.validity_stats->Copy();
+	}
 	return move(stats);
 }
 
@@ -461,7 +464,8 @@ unique_ptr<FunctionData> BindDecimalMultiply(ClientContext &context, ScalarFunct
 		    result_scale, Decimal::MAX_WIDTH_DECIMAL);
 	}
 	bool check_overflow = false;
-	if (result_width > Decimal::MAX_WIDTH_INT64 && max_width <= Decimal::MAX_WIDTH_INT64) {
+	if (result_width > Decimal::MAX_WIDTH_INT64 && max_width <= Decimal::MAX_WIDTH_INT64 &&
+	    result_scale < Decimal::MAX_WIDTH_INT64) {
 		check_overflow = true;
 		result_width = Decimal::MAX_WIDTH_INT64;
 	}
@@ -480,6 +484,7 @@ unique_ptr<FunctionData> BindDecimalMultiply(ClientContext &context, ScalarFunct
 			bound_function.arguments[i] = LogicalType(LogicalTypeId::DECIMAL, result_width, argument_type.scale());
 		}
 	}
+	result_type.Verify();
 	bound_function.return_type = result_type;
 	// now select the physical function to execute
 	if (check_overflow) {

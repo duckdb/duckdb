@@ -138,8 +138,15 @@ void CommitState::WriteUpdate(UpdateInfo *info) {
 	auto &column_data = info->segment->column_data;
 	SwitchTable(&column_data.table_info, UndoFlags::UPDATE_TUPLE);
 
+	vector<LogicalType> update_types;
+	if (column_data.type.id() == LogicalTypeId::VALIDITY) {
+		update_types.push_back(LogicalType::BOOLEAN);
+	} else {
+		update_types.push_back(column_data.type);
+	}
+	update_types.push_back(LOGICAL_ROW_TYPE);
+
 	update_chunk = make_unique<DataChunk>();
-	vector<LogicalType> update_types = {column_data.type, LOGICAL_ROW_TYPE};
 	update_chunk->Initialize(update_types);
 
 	// fetch the updated values from the base segment

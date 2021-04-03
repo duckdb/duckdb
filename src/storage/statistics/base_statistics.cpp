@@ -3,28 +3,48 @@
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/storage/statistics/validity_statistics.hpp"
+#include "duckdb/common/types/vector.hpp"
 
 namespace duckdb {
 
-BaseStatistics::BaseStatistics(LogicalType type) : type(move(type)), has_null(false) {
+BaseStatistics::BaseStatistics(LogicalType type) : type(move(type)) {
 }
 
 BaseStatistics::~BaseStatistics() {
 }
 
+bool BaseStatistics::CanHaveNull() {
+	if (!validity_stats) {
+		// we don't know
+		// solid maybe
+		return true;
+	}
+	return ((ValidityStatistics &)*validity_stats).has_null;
+}
+
 unique_ptr<BaseStatistics> BaseStatistics::Copy() {
 	auto statistics = make_unique<BaseStatistics>(type);
-	statistics->has_null = has_null;
+	if (validity_stats) {
+		statistics->validity_stats = validity_stats->Copy();
+	}
 	return statistics;
 }
 
 void BaseStatistics::Merge(const BaseStatistics &other) {
-	has_null = has_null || other.has_null;
+	if (other.validity_stats) {
+		if (validity_stats) {
+			validity_stats->Merge(*other.validity_stats);
+		} else {
+			validity_stats = other.validity_stats->Copy();
+		}
+	}
 }
 
 unique_ptr<BaseStatistics> BaseStatistics::CreateEmpty(LogicalType type) {
 	switch (type.InternalType()) {
+	case PhysicalType::BIT:
+		return make_unique<ValidityStatistics>();
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 	case PhysicalType::INT16:
@@ -41,20 +61,21 @@ unique_ptr<BaseStatistics> BaseStatistics::CreateEmpty(LogicalType type) {
 	case PhysicalType::VARCHAR:
 		return make_unique<StringStatistics>(move(type));
 	case PhysicalType::INTERVAL:
-		return make_unique<BaseStatistics>(move(type));
 	default:
-		return nullptr;
+		return make_unique<BaseStatistics>(move(type));
 	}
 }
 
 void BaseStatistics::Serialize(Serializer &serializer) {
-	serializer.Write<bool>(has_null);
+	serializer.Write<bool>(CanHaveNull());
 }
 
 unique_ptr<BaseStatistics> BaseStatistics::Deserialize(Deserializer &source, LogicalType type) {
-	auto has_null = source.Read<bool>();
+	bool can_have_null = source.Read<bool>();
 	unique_ptr<BaseStatistics> result;
 	switch (type.InternalType()) {
+	case PhysicalType::BIT:
+		return ValidityStatistics::Deserialize(source);
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 	case PhysicalType::INT16:
@@ -78,22 +99,20 @@ unique_ptr<BaseStatistics> BaseStatistics::Deserialize(Deserializer &source, Log
 	default:
 		throw InternalException("Unimplemented type for statistics deserialization");
 	}
-	result->has_null = has_null;
+	if (!can_have_null) {
+		result->validity_stats = make_unique<ValidityStatistics>(can_have_null);
+	}
 	return result;
 }
 
 string BaseStatistics::ToString() {
-	return StringUtil::Format("Base Statistics [Has Null: %s]", has_null ? "true" : "false");
+	return StringUtil::Format("Base Statistics %s", validity_stats ? validity_stats->ToString() : "[]");
 }
 
 void BaseStatistics::Verify(Vector &vector, idx_t count) {
 	D_ASSERT(vector.GetType() == this->type);
-	if (!has_null) {
-		if (VectorOperations::HasNull(vector, count)) {
-			throw InternalException(
-			    "Statistics mismatch: vector labeled as not having NULL values, but vector contains null values: %s",
-			    vector.ToString(count));
-		}
+	if (!validity_stats) {
+		validity_stats->Verify(vector, count);
 	}
 }
 

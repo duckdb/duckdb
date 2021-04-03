@@ -16,12 +16,12 @@ unique_ptr<BaseStatistics> StatisticsPropagator::StatisticsFromValue(const Value
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE: {
 		auto result = make_unique<NumericStatistics>(input.type(), input, input);
-		result->has_null = input.is_null;
+		result->validity_stats = make_unique<ValidityStatistics>(input.is_null);
 		return move(result);
 	}
 	case PhysicalType::VARCHAR: {
 		auto result = make_unique<StringStatistics>(input.type());
-		result->has_null = input.is_null;
+		result->validity_stats = make_unique<ValidityStatistics>(input.is_null);
 		string_t str(input.str_value.c_str(), input.str_value.size());
 		result->Update(str);
 		return move(result);
