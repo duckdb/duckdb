@@ -11,6 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/bit_operations.hpp"
 
 namespace duckdb {
 
@@ -44,7 +45,11 @@ public:
 
 private:
 	template <class T>
-	static unique_ptr<data_t[]> CreateData(T value, bool is_little_endian);
+	static unique_ptr<data_t[]> CreateData(T value, bool is_little_endian) {
+		auto data = unique_ptr<data_t[]>(new data_t[sizeof(value)]);
+		EncodeData<T>(data.get(), value, is_little_endian);
+		return data;
+	}
 };
 
 template <>

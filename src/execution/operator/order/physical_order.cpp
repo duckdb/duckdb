@@ -165,8 +165,7 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 
 	state->sorting_state = unique_ptr<SortingState>(new SortingState {
 	    entry_size, order_types, order_by_null_types, types, stats, has_null, constant_size, col_sizes});
-	idx_t vectors_per_block =
-	    (Storage::BLOCK_ALLOC_SIZE / entry_size + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE;
+	idx_t vectors_per_block = (Storage::BLOCK_ALLOC_SIZE / entry_size + STANDARD_VECTOR_SIZE) / STANDARD_VECTOR_SIZE;
 	state->sorting_block = make_unique<RowChunk>(buffer_manager, vectors_per_block * STANDARD_VECTOR_SIZE, entry_size);
 
 	// init payload state
@@ -196,7 +195,7 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 		// TODO: overflow large strings into separate buffermanaged blocks
 		state->payload_block = make_unique<RowChunk>(buffer_manager, (entry_size + var_columns * (1 << 23)) / 32, 32);
 	} else {
-		vectors_per_block = (Storage::BLOCK_ALLOC_SIZE / entry_size + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE;
+		vectors_per_block = (Storage::BLOCK_ALLOC_SIZE / entry_size + STANDARD_VECTOR_SIZE) / STANDARD_VECTOR_SIZE;
 		state->payload_block =
 		    make_unique<RowChunk>(buffer_manager, vectors_per_block * STANDARD_VECTOR_SIZE, entry_size);
 	}

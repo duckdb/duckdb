@@ -61,6 +61,8 @@ template <>
 void EncodeData(data_ptr_t dataptr, double value, bool is_little_endian);
 template <>
 void EncodeData(data_ptr_t dataptr, float value, bool is_little_endian);
+template <>
+void EncodeData(data_ptr_t dataptr, interval_t value, bool is_little_endian);
 
 void EncodeStringDataPrefix(data_ptr_t dataptr, string_t value, idx_t prefix_len);
 

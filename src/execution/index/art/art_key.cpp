@@ -1,18 +1,10 @@
 #include "duckdb/execution/index/art/art_key.hpp"
 
 #include "duckdb/execution/index/art/art.hpp"
-#include "duckdb/common/bit_operations.hpp"
 
 namespace duckdb {
 
 Key::Key(unique_ptr<data_t[]> data, idx_t len) : len(len), data(move(data)) {
-}
-
-template <class T>
-unique_ptr<data_t[]> Key::CreateData(T value, bool is_little_endian) {
-	auto data = unique_ptr<data_t[]>(new data_t[sizeof(value)]);
-	EncodeData<T>(data.get(), value, is_little_endian);
-	return data;
 }
 
 template <>

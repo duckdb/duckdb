@@ -8,6 +8,7 @@ namespace duckdb {
 RowChunk::RowChunk(BufferManager &buffer_manager, idx_t block_capacity, idx_t entry_size)
     : buffer_manager(buffer_manager), count(0), block_capacity(block_capacity), entry_size(entry_size),
       is_little_endian(IsLittleEndian()) {
+	D_ASSERT(block_capacity * entry_size >= Storage::BLOCK_ALLOC_SIZE);
 }
 
 RowChunk::RowChunk(RowChunk &other)
