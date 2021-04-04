@@ -49,14 +49,9 @@ public:
 	//! Fetch the vector at index "vector_index" from the uncompressed segment, storing it in the result vector
 	void Scan(ColumnScanState &state, idx_t vector_index, Vector &result);
 
-	//! Scan the next vector from the column and apply a selection vector to filter the data
-	void FilterScan(ColumnScanState &state, Vector &result, SelectionVector &sel, idx_t &approved_tuple_count);
-
 	static void FilterSelection(SelectionVector &sel, Vector &result, const TableFilter &filter,
 	                            idx_t &approved_tuple_count, ValidityMask &mask);
-	//! Executes the filters directly in the table's data
-	void Select(Vector &result, vector<TableFilter> &table_filters, SelectionVector &sel, idx_t &approved_tuple_count,
-	            ColumnScanState &state);
+
 	//! Fetch a single vector from the base table
 	void Fetch(ColumnScanState &state, idx_t vector_index, Vector &result);
 	//! Fetch a single value and append it to the vector
@@ -65,7 +60,9 @@ public:
 	//! Append a part of a vector to the uncompressed segment with the given append state, updating the provided stats
 	//! in the process. Returns the amount of tuples appended. If this is less than `count`, the uncompressed segment is
 	//! full.
-	virtual idx_t Append(SegmentStatistics &stats, Vector &data, idx_t offset, idx_t count) = 0;
+	virtual idx_t Append(SegmentStatistics &stats, VectorData &data, idx_t offset, idx_t count) = 0;
+	//! Truncate a previous append
+	virtual void RevertAppend(idx_t start_row);
 
 	//! Convert a persistently backed uncompressed segment (i.e. one where block_id refers to an on-disk block) to a
 	//! temporary in-memory one
@@ -82,12 +79,6 @@ public:
 	virtual void Verify();
 
 protected:
-	//! Executes the filters directly in the table's data
-	virtual void Select(ColumnScanState &state, Vector &result, SelectionVector &sel, idx_t &approved_tuple_count,
-	                    vector<TableFilter> &table_filter) = 0;
-	//! Fetch the base data and apply a filter to it
-	virtual void FilterFetchBaseData(ColumnScanState &state, Vector &result, SelectionVector &sel,
-	                                 idx_t &approved_tuple_count) = 0;
 	//! Fetch base table data
 	virtual void FetchBaseData(ColumnScanState &state, idx_t vector_index, Vector &result) = 0;
 };

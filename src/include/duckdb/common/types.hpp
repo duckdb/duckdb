@@ -106,7 +106,7 @@ enum class PhysicalType : uint8_t {
 	/// A NULL type having no physical storage
 	NA = 0,
 
-	/// Boolean as 1 bit, LSB bit-packed ordering
+	/// Boolean as 8 bit "bool" value
 	BOOL = 1,
 
 	/// Unsigned 8-bit little-endian integer
@@ -219,6 +219,9 @@ enum class PhysicalType : uint8_t {
 	HASH = 203,
 	INT128 = 204, // 128-bit integers
 
+	/// Boolean as 1 bit, LSB bit-packed ordering
+	BIT = 205,
+
 	INVALID = 255
 };
 
@@ -253,6 +256,7 @@ enum class LogicalTypeId : uint8_t {
 	HUGEINT = 50,
 	POINTER = 51,
 	HASH = 52,
+	VALIDITY = 53,
 
 	STRUCT = 100,
 	LIST = 101,

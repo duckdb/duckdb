@@ -39,22 +39,11 @@ void UncompressedSegment::Fetch(ColumnScanState &state, idx_t vector_index, Vect
 	FetchBaseData(state, vector_index, result);
 }
 
-void UncompressedSegment::Select(Vector &result, vector<TableFilter> &table_filters, SelectionVector &sel,
-                                 idx_t &approved_tuple_count, ColumnScanState &state) {
-	//! Select the data from the base table
-	Select(state, result, sel, approved_tuple_count, table_filters);
-}
-
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
 void UncompressedSegment::Scan(ColumnScanState &state, idx_t vector_index, Vector &result) {
 	FetchBaseData(state, vector_index, result);
-}
-
-void UncompressedSegment::FilterScan(ColumnScanState &state, Vector &result, SelectionVector &sel,
-                                     idx_t &approved_tuple_count) {
-	FilterFetchBaseData(state, result, sel, approved_tuple_count);
 }
 
 //===--------------------------------------------------------------------===//
@@ -238,6 +227,10 @@ void UncompressedSegment::FilterSelection(SelectionVector &sel, Vector &result, 
 	default:
 		throw InvalidTypeException(result.GetType(), "Invalid type for filter pushed down to table comparison");
 	}
+}
+
+void UncompressedSegment::RevertAppend(idx_t start_row) {
+	tuple_count = start_row - this->row_start;
 }
 
 //===--------------------------------------------------------------------===//

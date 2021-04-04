@@ -14,4 +14,8 @@ endif()
 if(BUILD_PYTHON_PKG)
   add_subdirectory(pythonpkg)
 endif()
-# just to make CLion happier add_subdirectory(nodejs)
+
+# Just to make CLion aware of the python package for development purposes
+if(BUILD_R)
+  add_subdirectory(rpkg)
+endif()
