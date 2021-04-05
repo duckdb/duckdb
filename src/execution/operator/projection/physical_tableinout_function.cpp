@@ -4,7 +4,8 @@ namespace duckdb {
 
 class PhysicalTableInOutFunctionState : public PhysicalOperatorState {
 public:
-	PhysicalTableInOutFunctionState(PhysicalOperator &op, PhysicalOperator *child) : PhysicalOperatorState(op, child) {
+	PhysicalTableInOutFunctionState(PhysicalOperator &op, PhysicalOperator *child)
+	    : PhysicalOperatorState(op, child), initialized(false) {
 		D_ASSERT(child);
 	}
 
@@ -34,6 +35,7 @@ void PhysicalTableInOutFunction::GetChunkInternal(ExecutionContext &context, Dat
 	}
 
 	D_ASSERT(children.size() == 1);
+	state.child_chunk.Reset();
 	children[0]->GetChunkInternal(context, state.child_chunk, state.child_state.get());
 	function.function(context.client, bind_data.get(), state.operator_data.get(), &state.child_chunk, chunk);
 }
