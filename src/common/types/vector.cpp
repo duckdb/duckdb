@@ -1063,6 +1063,17 @@ idx_t ListVector::GetListSize(const Vector &vec) {
 	return ((VectorListBuffer &)*vec.auxiliary).size;
 }
 
+void ListVector::ReferenceEntry(Vector &vector, Vector &other) {
+	D_ASSERT(vector.GetType().id() == LogicalTypeId::LIST);
+	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR ||
+	         vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
+	D_ASSERT(other.GetType().id() == LogicalTypeId::LIST);
+	D_ASSERT(other.GetVectorType() == VectorType::FLAT_VECTOR || other.GetVectorType() == VectorType::CONSTANT_VECTOR);
+	D_ASSERT(other.auxiliary);
+	D_ASSERT(other.auxiliary->GetBufferType() == VectorBufferType::LIST_BUFFER);
+	vector.auxiliary = other.auxiliary;
+}
+
 void ListVector::SetListSize(Vector &vec, idx_t size) {
 	ListVector::Initialize(vec);
 	((VectorListBuffer &)*vec.auxiliary).size = size;

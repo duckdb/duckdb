@@ -24,6 +24,10 @@ struct VariableReturnBindData : public FunctionData {
 	}
 };
 
+struct ArraySliceFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct StructPackFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
