@@ -71,6 +71,8 @@ public:
 
 	unique_ptr<DuckDBPyRelation> Intersect(DuckDBPyRelation *other);
 
+	unique_ptr<DuckDBPyRelation> Map(py::function fun);
+
 	unique_ptr<DuckDBPyRelation> Join(DuckDBPyRelation *other, const string &condition);
 
 	void WriteCsv(const string &file);
@@ -97,6 +99,9 @@ public:
 	string Print();
 
 	py::object Getattr(const py::str &key);
+
+private:
+	py::object map_function;
 };
 
 } // namespace duckdb

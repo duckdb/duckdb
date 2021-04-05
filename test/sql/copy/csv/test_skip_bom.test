@@ -1,0 +1,29 @@
+# name: test/sql/copy/csv/test_skip_bom.test
+# description: Test read CSV function
+# group: [csv]
+
+# read csv with UTF-8 BOM
+statement ok
+CREATE TABLE people AS SELECT * FROM read_csv('test/sql/copy/csv/data/people.csv', columns=STRUCT_PACK(a := 'VARCHAR', b := 'VARCHAR'), sep=',', auto_detect='false');
+
+query TT
+SELECT * FROM people
+----
+Person	Region
+Anna Andreadi	West
+Chuck Magee	East
+Kelly Williams	Central
+Cassandra Brandow	South
+
+# read csv auto with UTF-8 BOM
+statement ok
+CREATE TABLE people2 AS SELECT * FROM read_csv_auto('test/sql/copy/csv/data/people.csv');
+
+query TT
+SELECT * FROM people2
+----
+Person	Region
+Anna Andreadi	West
+Chuck Magee	East
+Kelly Williams	Central
+Cassandra Brandow	South

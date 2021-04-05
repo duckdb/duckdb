@@ -83,7 +83,9 @@ static unique_ptr<BaseStatistics> PropagateDatePartStatistics(vector<unique_ptr<
 	auto min_part = OP::template Operation<T, int64_t>(min);
 	auto max_part = OP::template Operation<T, int64_t>(max);
 	auto result = make_unique<NumericStatistics>(LogicalType::BIGINT, Value::BIGINT(min_part), Value::BIGINT(max_part));
-	result->has_null = child_stats[0]->has_null;
+	if (child_stats[0]->validity_stats) {
+		result->validity_stats = child_stats[0]->validity_stats->Copy();
+	}
 	return move(result);
 }
 
@@ -94,9 +96,9 @@ static unique_ptr<BaseStatistics> PropagateSimpleDatePartStatistics(vector<uniqu
 	auto result = make_unique<NumericStatistics>(LogicalType::BIGINT, Value::BIGINT(MIN), Value::BIGINT(MAX));
 	if (!child_stats[0]) {
 		// if there are no child stats, we don't know
-		result->has_null = true;
-	} else {
-		result->has_null = child_stats[0]->has_null;
+		result->validity_stats = make_unique<ValidityStatistics>(true);
+	} else if (child_stats[0]->validity_stats) {
+		result->validity_stats = child_stats[0]->validity_stats->Copy();
 	}
 	return move(result);
 }

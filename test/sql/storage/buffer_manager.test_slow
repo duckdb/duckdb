@@ -1,4 +1,4 @@
-# name: test/sql/storage/buffer_manager.test
+# name: test/sql/storage/buffer_manager.test_slow
 # description: Test that the buffer manager correctly frees any memory we use
 # group: [storage]
 

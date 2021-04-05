@@ -1,0 +1,27 @@
+# name: test/issues/rigger/instr_crash.test
+# description: SQLancer bug that found a crash in the instr implementation
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+CREATE TABLE t96(c0 DATE, c1 BOOLEAN, c2 DATE, PRIMARY KEY(c2));
+
+statement ok
+INSERT INTO t96 VALUES('1970-01-10',true,'1969-12-31');
+
+statement ok
+CREATE TABLE t0(c0 DOUBLE, c1 DOUBLE);;
+
+statement ok
+INSERT INTO t0 VALUES(611790088.0,1873546286.9999999999);
+
+statement ok
+COMMIT;
+
+statement error
+SELECT t96.c0, t0.rowid, t0.c1, t96.c2 FROM t0, t96 WHERE (TIMESTAMP '1969-12-28 13:59:01' LIKE INSTR(t0.c1, t96.c0) ESCAPE RTRIM(DATE '1969-12-23')) UNION ALL SELECT t96.c0, t0.rowid, t0.c1, t96.c2 FROM t0, t96 WHERE (NOT (TIMESTAMP '1969-12-28 13:59:01' LIKE INSTR(t0.c1, t96.c0) ESCAPE RTRIM(DATE '1969-12-23'))) UNION ALL SELECT t96.c0, t0.rowid, t0.c1, t96.c2 FROM t0, t96 WHERE (((TIMESTAMP '1969-12-28 13:59:01' LIKE INSTR(t0.c1, t96.c0) ESCAPE RTRIM(DATE '1969-12-23'))) IS NULL);

@@ -1,5 +1,5 @@
-# name: test/sql/storage/test_reclaim_space_alter_type.test
-# description: Test that we reclaim space when altering the type of a column
+# name: test/sql/storage/test_reclaim_space_update.test_slow
+# description: Test that we reclaim space when updating the values of a column
 # group: [storage]
 
 load __TEST_DIR__/test_reclaim_space.db
@@ -24,7 +24,7 @@ SELECT MIN(i), MAX(i), COUNT(*) FROM integers
 loop i 0 10
 
 statement ok
-ALTER TABLE integers ALTER i SET DATA TYPE BIGINT;
+UPDATE integers SET i=i;
 
 statement ok
 CHECKPOINT;
@@ -35,7 +35,7 @@ SELECT MIN(i), MAX(i), COUNT(*) FROM integers
 0	999999	1000000
 
 statement ok
-ALTER TABLE integers ALTER i SET DATA TYPE INTEGER;
+UPDATE integers SET i=i;
 
 statement ok
 CHECKPOINT;
