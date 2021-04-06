@@ -84,7 +84,7 @@ template <class T>
 using buffer_ptr = single_thread_ptr<T>;
 
 template <class T, typename... Args>
-buffer_ptr<T> make_buffer(Args &&... args) {
+buffer_ptr<T> make_buffer(Args &&...args) {
 	return single_thread_make_shared<T>(std::forward<Args>(args)...);
 }
 

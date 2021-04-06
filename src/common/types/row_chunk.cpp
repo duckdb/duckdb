@@ -622,7 +622,7 @@ idx_t RowChunk::AppendToBlock(RowDataBlock &block, BufferHandle &handle, vector<
 			if (block.byte_offset + entry_sizes[i] > block_capacity * entry_size) {
 				while (entry_sizes[i] > block_capacity * entry_size) {
 					// if an entry does not fit, increase entry size until it does
-					entry_size *=2;
+					entry_size *= 2;
 				}
 				break;
 			}
