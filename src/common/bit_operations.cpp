@@ -144,7 +144,7 @@ void EncodeData(data_ptr_t dataptr, interval_t value, bool is_little_endian) {
 	dataptr += sizeof(value.months);
 	EncodeData<int32_t>(dataptr, value.days, is_little_endian);
 	dataptr += sizeof(value.days);
-	EncodeData<int32_t>(dataptr, value.micros, is_little_endian);
+	EncodeData<int64_t>(dataptr, value.micros, is_little_endian);
 }
 
 void EncodeStringDataPrefix(data_ptr_t dataptr, string_t value, idx_t prefix_len) {
