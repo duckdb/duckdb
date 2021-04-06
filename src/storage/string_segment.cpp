@@ -355,8 +355,4 @@ void StringSegment::ReadStringMarker(data_ptr_t target, block_id_t &block_id, in
 	memcpy(&offset, target, sizeof(int32_t));
 }
 
-void StringSegment::ToTemporary() {
-	ToTemporaryInternal();
-}
-
 } // namespace duckdb

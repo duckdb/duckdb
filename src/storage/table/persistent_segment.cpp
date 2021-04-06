@@ -15,7 +15,7 @@ namespace duckdb {
 
 PersistentSegment::PersistentSegment(DatabaseInstance &db, block_id_t id, idx_t offset, const LogicalType &type_p,
                                      idx_t start, idx_t count, unique_ptr<BaseStatistics> statistics)
-    : ColumnSegment(type_p, ColumnSegmentType::PERSISTENT, start, count, move(statistics)), db(db), block_id(id),
+    : ColumnSegment(db, type_p, ColumnSegmentType::PERSISTENT, start, count, move(statistics)), block_id(id),
       offset(offset) {
 	D_ASSERT(offset == 0);
 	if (type.InternalType() == PhysicalType::VARCHAR) {
@@ -26,24 +26,6 @@ PersistentSegment::PersistentSegment(DatabaseInstance &db, block_id_t id, idx_t 
 		data = make_unique<NumericSegment>(db, type.InternalType(), start, id);
 	}
 	data->tuple_count = count;
-}
-
-void PersistentSegment::InitializeScan(ColumnScanState &state) {
-	data->InitializeScan(state);
-}
-
-void PersistentSegment::Scan(ColumnScanState &state, idx_t row_index, Vector &result) {
-	D_ASSERT(row_index >= start && row_index < start + count);
-	data->Scan(state, row_index - start, result);
-}
-
-void PersistentSegment::Fetch(ColumnScanState &state, idx_t row_index, Vector &result) {
-	D_ASSERT(row_index >= start && row_index < start + count);
-	data->Fetch(state, row_index - start, result);
-}
-
-void PersistentSegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
-	data->FetchRow(state, row_id - this->start, result, result_idx);
 }
 
 } // namespace duckdb

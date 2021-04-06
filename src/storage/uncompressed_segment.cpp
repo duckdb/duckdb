@@ -234,31 +234,4 @@ void UncompressedSegment::RevertAppend(idx_t start_row) {
 	tuple_count = start_row - this->row_start;
 }
 
-//===--------------------------------------------------------------------===//
-// ToTemporary
-//===--------------------------------------------------------------------===//
-void UncompressedSegment::ToTemporary() {
-	ToTemporaryInternal();
-}
-
-void UncompressedSegment::ToTemporaryInternal() {
-	if (block->BlockId() >= MAXIMUM_BLOCK) {
-		// conversion has already been performed by a different thread
-		return;
-	}
-	auto &block_manager = BlockManager::GetBlockManager(db);
-	block_manager.MarkBlockAsModified(block->BlockId());
-
-	// pin the current block
-	auto &buffer_manager = BufferManager::GetBufferManager(db);
-	auto current = buffer_manager.Pin(block);
-
-	// now allocate a new block from the buffer manager
-	auto new_block = buffer_manager.RegisterMemory(Storage::BLOCK_ALLOC_SIZE, false);
-	auto handle = buffer_manager.Pin(new_block);
-	// now copy the data over and switch to using the new block id
-	memcpy(handle->node->buffer, current->node->buffer, Storage::BLOCK_SIZE);
-	this->block = move(new_block);
-}
-
 } // namespace duckdb

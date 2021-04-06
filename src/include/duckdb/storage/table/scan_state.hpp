@@ -11,11 +11,11 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/storage/storage_lock.hpp"
-#include "duckdb/storage/table/column_segment.hpp"
 
 #include "duckdb/execution/adaptive_filter.hpp"
 
 namespace duckdb {
+class ColumnSegment;
 class LocalTableStorage;
 class Index;
 class MorselInfo;

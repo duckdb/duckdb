@@ -14,11 +14,13 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/statistics/segment_statistics.hpp"
+#include "duckdb/storage/uncompressed_segment.hpp"
 
 namespace duckdb {
 class BlockManager;
 class ColumnSegment;
 class ColumnData;
+class DatabaseInstance;
 class Transaction;
 class BaseStatistics;
 struct TableFilter;
@@ -30,13 +32,15 @@ enum class ColumnSegmentType : uint8_t { TRANSIENT, PERSISTENT };
 class ColumnSegment : public SegmentBase {
 public:
 	//! Initialize an empty column segment of the specified type
-	ColumnSegment(LogicalType type, ColumnSegmentType segment_type, idx_t start, idx_t count = 0);
+	ColumnSegment(DatabaseInstance &db, LogicalType type, ColumnSegmentType segment_type, idx_t start, idx_t count = 0);
 
-	ColumnSegment(LogicalType type, ColumnSegmentType segment_type, idx_t start, idx_t count,
+	ColumnSegment(DatabaseInstance &db, LogicalType type, ColumnSegmentType segment_type, idx_t start, idx_t count,
 	              unique_ptr<BaseStatistics> statistics);
 
 	~ColumnSegment() override = default;
 
+	//! The database instance
+	DatabaseInstance &db;
 	//! The type stored in the column
 	LogicalType type;
 	//! The size of the type
@@ -45,15 +49,16 @@ public:
 	ColumnSegmentType segment_type;
 	//! The statistics for the segment
 	SegmentStatistics stats;
-
+	//! The uncompressed segment holding the data
+	unique_ptr<UncompressedSegment> data;
 public:
-	virtual void InitializeScan(ColumnScanState &state) = 0;
+	void InitializeScan(ColumnScanState &state);
 	//! Scan one vector from this segment
-	virtual void Scan(ColumnScanState &state, idx_t row_index, Vector &result) = 0;
+	void Scan(ColumnScanState &state, idx_t row_index, Vector &result);
 	//! Fetch the base table vector index that belongs to this row
-	virtual void Fetch(ColumnScanState &state, idx_t row_index, Vector &result) = 0;
+	void Fetch(ColumnScanState &state, idx_t row_index, Vector &result);
 	//! Fetch a value of the specific row id and append it to the result
-	virtual void FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) = 0;
+	void FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx);
 };
 
 } // namespace duckdb

@@ -63,11 +63,6 @@ public:
 	//! Truncate a previous append
 	virtual void RevertAppend(idx_t start_row);
 
-	//! Convert a persistently backed uncompressed segment (i.e. one where block_id refers to an on-disk block) to a
-	//! temporary in-memory one
-	virtual void ToTemporary();
-	void ToTemporaryInternal();
-
 	virtual void Verify();
 
 	bool RowIdIsValid(idx_t row_id) const;

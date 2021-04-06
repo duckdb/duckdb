@@ -73,7 +73,7 @@ void ColumnData::Append(ColumnAppendState &state, Vector &vector, idx_t count) {
 void ColumnData::InitializeAppend(ColumnAppendState &state) {
 	lock_guard<mutex> tree_lock(data.node_lock);
 	if (data.nodes.empty()) {
-		// no transient segments yet, append one
+		// no segments yet, append an empty segment
 		AppendTransientSegment(persistent_rows);
 	}
 	if (updates.nodes.empty()) {
@@ -81,16 +81,9 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 	}
 	auto segment = (ColumnSegment *)data.GetLastSegment();
 	if (segment->segment_type == ColumnSegmentType::PERSISTENT) {
-		// cannot append to persistent segment, convert the last segment into a transient segment
-		auto transient = make_unique<TransientSegment>((PersistentSegment &)*segment);
-		state.current = (TransientSegment *)transient.get();
-		data.nodes.back().node = (SegmentBase *)transient.get();
-		if (data.root_node.get() == segment) {
-			data.root_node = move(transient);
-		} else {
-			D_ASSERT(data.nodes.size() >= 2);
-			data.nodes[data.nodes.size() - 2].node->next = move(transient);
-		}
+		// no transient segments yet
+		AppendTransientSegment(persistent_rows);
+		state.current = (TransientSegment *)data.GetLastSegment();
 	} else {
 		state.current = (TransientSegment *)segment;
 	}
@@ -171,6 +164,7 @@ void ColumnData::RevertAppend(row_t start_row) {
 }
 
 void ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
+	throw NotImplementedException("FIXME: throw");
 	// perform the fetch within the segment
 	auto segment = (ColumnSegment *)data.GetSegment(row_id);
 	auto vector_index = (row_id - segment->start) / STANDARD_VECTOR_SIZE;

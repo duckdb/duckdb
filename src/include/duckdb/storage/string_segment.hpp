@@ -70,8 +70,6 @@ public:
 	//! full.
 	idx_t Append(SegmentStatistics &stats, VectorData &data, idx_t offset, idx_t count) override;
 
-	void ToTemporary() override;
-
 private:
 	string_location_t FetchStringLocation(data_ptr_t baseptr, int32_t dict_offset);
 	string_t FetchString(Vector &result, data_ptr_t baseptr, string_location_t location);
