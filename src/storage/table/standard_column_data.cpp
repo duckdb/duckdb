@@ -114,13 +114,14 @@ void StandardColumnData::RevertAppend(row_t start_row) {
 
 void StandardColumnData::Update(Transaction &transaction, Vector &update_vector, Vector &row_ids, idx_t count) {
 	idx_t first_id = FlatVector::GetValue<row_t>(row_ids, 0);
+	auto base_vector_id = first_id / STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE;
 
 	// fetch the validity data for this segment
 	Vector base_data(type);
-	auto column_segment = (ColumnSegment *)data.GetSegment(first_id);
+	auto column_segment = (ColumnSegment *)data.GetSegment(base_vector_id);
 	// now perform the fetch within the segment
 	ColumnScanState state;
-	column_segment->Fetch(state, first_id, base_data);
+	column_segment->Fetch(state, base_vector_id, base_data);
 
 	// first find the segment that the update belongs to
 	auto segment = (UpdateSegment *)updates.GetSegment(first_id);

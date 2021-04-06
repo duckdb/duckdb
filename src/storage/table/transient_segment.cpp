@@ -39,12 +39,12 @@ void TransientSegment::InitializeScan(ColumnScanState &state) {
 
 void TransientSegment::Scan(ColumnScanState &state, idx_t row_index, Vector &result) {
 	D_ASSERT(row_index >= start && row_index < start + count);
-	data->Scan(state, (row_index - start) / STANDARD_VECTOR_SIZE, result);
+	data->Scan(state, row_index - start, result);
 }
 
 void TransientSegment::Fetch(ColumnScanState &state, idx_t row_index, Vector &result) {
 	D_ASSERT(row_index >= start && row_index < start + count);
-	data->Fetch(state, (row_index - start) / STANDARD_VECTOR_SIZE, result);
+	data->Fetch(state, row_index - start, result);
 }
 
 void TransientSegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
