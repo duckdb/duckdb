@@ -105,7 +105,7 @@ private:
 private:
 	bool GetProgress(ClientContext &context, PhysicalOperator *op, int &current_percentage);
 	void ScheduleSequentialTask();
-    bool LaunchScanTasks(PhysicalOperator *op, idx_t max_threads, unique_ptr<ParallelState> parallel_state);
+	bool LaunchScanTasks(PhysicalOperator *op, idx_t max_threads, unique_ptr<ParallelState> parallel_state);
 	bool ScheduleOperator(PhysicalOperator *op);
 };
 

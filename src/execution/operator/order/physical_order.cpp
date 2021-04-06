@@ -40,7 +40,7 @@ public:
 	explicit OrderGlobalState(BufferManager &buffer_manager) : buffer_manager(buffer_manager) {
 	}
 	//! The lock for updating the order global state
-	mutex lock;
+	std::mutex lock;
 	//! The buffer manager
 	BufferManager &buffer_manager;
 
@@ -212,7 +212,7 @@ unique_ptr<LocalSinkState> PhysicalOrder::GetLocalSinkState(ExecutionContext &co
 	vector<LogicalType> types;
 	for (auto &order : orders) {
 		types.push_back(order.expression->return_type);
-        result->executor.AddExpression(*order.expression);
+		result->executor.AddExpression(*order.expression);
 	}
 	result->sort.Initialize(types);
 	return move(result);
@@ -292,9 +292,9 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &gstate_
 		for (idx_t i = 0; i < input.size(); i++) {
 			Store<idx_t>(lstate.entry_sizes[i], lstate.key_locations[i]);
 		}
-		gstate.payload_block->Build(input.size(), lstate.key_locations, lstate.entry_sizes);
+		lstate.payload_block->Build(input.size(), lstate.key_locations, lstate.entry_sizes);
 	} else {
-		gstate.payload_block->Build(input.size(), lstate.key_locations, nullptr);
+		lstate.payload_block->Build(input.size(), lstate.key_locations, nullptr);
 	}
 
 	// serialize payload data
@@ -784,9 +784,9 @@ void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 		}
 	}
 	for (idx_t i = 0; i < state.var_sorting_sizes.size(); i++) {
-        if (sorting_state.CONSTANT_SIZE[i]) {
-            continue;
-        }
+		if (sorting_state.CONSTANT_SIZE[i]) {
+			continue;
+		}
 		for (auto &block : state.var_sorting_sizes[i]->blocks) {
 			buffer_manager.UnregisterBlock(block.block->BlockId(), true);
 		}
@@ -876,8 +876,8 @@ static void Scan(ClientContext &context, DataChunk &chunk, PhysicalOrderOperator
 		RowChunk::DeserializeIntoVector(chunk.data[payl_col], next, payl_col, state.key_locations,
 		                                state.validitymask_locations);
 	}
-    chunk.SetCardinality(next);
-    chunk.Verify();
+	chunk.SetCardinality(next);
+	chunk.Verify();
 }
 
 static void CleanUp(ClientContext &context, OrderGlobalState &gstate) {
@@ -897,9 +897,9 @@ static void CleanUp(ClientContext &context, OrderGlobalState &gstate) {
 
 void PhysicalOrder::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
 	auto &state = *reinterpret_cast<PhysicalOrderOperatorState *>(state_p);
-    auto &gstate = (OrderGlobalState &)*this->sink_state;
-    const auto &sorting_state = *gstate.sorting_state;
-    const auto &payload_state = *gstate.payload_state;
+	auto &gstate = (OrderGlobalState &)*this->sink_state;
+	const auto &sorting_state = *gstate.sorting_state;
+	const auto &payload_state = *gstate.payload_state;
 
 	if (!state.initialized) {
 		// initialize operator state
@@ -924,30 +924,29 @@ void PhysicalOrder::GetChunkInternal(ExecutionContext &context, DataChunk &chunk
 		state.initialized = true;
 	}
 
-//	if (!state.parallel_state) {
-	if (true) {
+	if (!state.parallel_state) {
 		// sequential scan
-        const idx_t next = MinValue((idx_t)STANDARD_VECTOR_SIZE, state.count - state.entry_idx);
+		const idx_t next = MinValue((idx_t)STANDARD_VECTOR_SIZE, state.count - state.entry_idx);
 		Scan(context.client, chunk, state, sorting_state, payload_state, state.entry_idx, next);
-        state.entry_idx += STANDARD_VECTOR_SIZE;
+		state.entry_idx += STANDARD_VECTOR_SIZE;
 		if (chunk.size() != 0) {
 			return;
 		}
 	} else {
 		// parallel scan
-        auto &parallel_state = *reinterpret_cast<OrderParallelState *>(state.parallel_state);
+		auto &parallel_state = *reinterpret_cast<OrderParallelState *>(state.parallel_state);
 		do {
 			idx_t offset;
 			idx_t next;
-            {
-                lock_guard<mutex> parallel_lock(parallel_state.lock);
+			{
+				lock_guard<mutex> parallel_lock(parallel_state.lock);
 				offset = parallel_state.entry_idx;
-                next = MinValue((idx_t)STANDARD_VECTOR_SIZE, state.count - offset);
+				next = MinValue((idx_t)STANDARD_VECTOR_SIZE, state.count - offset);
 				parallel_state.entry_idx += next;
 			}
 			Scan(context.client, chunk, state, sorting_state, payload_state, offset, next);
 			if (chunk.size() == 0) {
-                break;
+				break;
 			} else {
 				return;
 			}

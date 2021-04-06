@@ -37,8 +37,8 @@ public:
 	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 
-    idx_t MaxThreads(ClientContext &context);
-    unique_ptr<ParallelState> GetParallelState();
+	idx_t MaxThreads(ClientContext &context);
+	unique_ptr<ParallelState> GetParallelState();
 
 	string ParamsToString() const override;
 };

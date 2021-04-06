@@ -1,4 +1,4 @@
-# name: test/sql/order/test_parallel_order.test
+# name: test/sql/order/test_order_parallel.test
 # description: Test ORDER BY keyword with multiple threads
 # group: [order]
 
@@ -12,7 +12,14 @@ statement ok
 PRAGMA threads=4
 
 statement ok
-create table test as (select cast(random() * 99999999 as int) i from range(1000000));
+create table test as (select range i from range(1000000));
+
+mode output_hash
 
 statement ok
-create table test2 as (select * from test order by i);
+create table test2 as (select * from test order by i desc);
+
+query T
+SELECT * FROM test2;
+----
+1000000 values hashing to b4050481afb2aaf1fcc2a5407798619e
