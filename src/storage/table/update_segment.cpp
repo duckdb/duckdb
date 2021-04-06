@@ -46,6 +46,11 @@ void UpdateSegment::ClearUpdates() {
 	heap.Destroy();
 }
 
+idx_t UpdateSegment::VectorIndex(idx_t row_index) const {
+	D_ASSERT(row_index >= start && row_index < start + count);
+	return (row_index - start) / STANDARD_VECTOR_SIZE;
+}
+
 //===--------------------------------------------------------------------===//
 // Update Info Helpers
 //===--------------------------------------------------------------------===//
@@ -232,6 +237,7 @@ void UpdateSegment::FetchCommitted(idx_t vector_index, Vector &result) {
 	if (!root) {
 		return;
 	}
+	D_ASSERT(vector_index < MorselInfo::MORSEL_VECTOR_COUNT);
 	if (!root->info[vector_index]) {
 		return;
 	}

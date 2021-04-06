@@ -35,8 +35,8 @@ typedef unordered_map<block_id_t, unique_ptr<BufferHandle>> buffer_handle_set_t;
 struct ColumnScanState {
 	//! The column segment that is currently being scanned
 	ColumnSegment *current;
-	//! The vector index of the transient segment
-	idx_t vector_index;
+	//! The current row index of the scan
+	idx_t row_index;
 	//! The primary buffer handle
 	unique_ptr<BufferHandle> primary_handle;
 	//! Child states of the vector
@@ -47,9 +47,6 @@ struct ColumnScanState {
 	bool segment_checked = false;
 	//! The update segment of the current column
 	UpdateSegment *updates;
-	//! FIXME: all these vector offsets should be merged into a single row_index
-	//! The vector index within the current update segment
-	idx_t vector_index_updates;
 
 public:
 	//! Move on to the next vector in the scan

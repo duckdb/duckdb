@@ -49,9 +49,9 @@ public:
 public:
 	virtual void InitializeScan(ColumnScanState &state) = 0;
 	//! Scan one vector from this segment
-	virtual void Scan(ColumnScanState &state, idx_t vector_index, Vector &result) = 0;
+	virtual void Scan(ColumnScanState &state, idx_t row_index, Vector &result) = 0;
 	//! Fetch the base table vector index that belongs to this row
-	virtual void Fetch(ColumnScanState &state, idx_t vector_index, Vector &result) = 0;
+	virtual void Fetch(ColumnScanState &state, idx_t row_index, Vector &result) = 0;
 	//! Fetch a value of the specific row id and append it to the result
 	virtual void FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) = 0;
 };

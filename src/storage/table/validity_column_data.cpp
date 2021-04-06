@@ -15,8 +15,7 @@ bool ValidityColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filte
 void ValidityColumnData::InitializeScan(ColumnScanState &state) {
 	state.current = (ColumnSegment *)data.GetRootSegment();
 	state.updates = (UpdateSegment *)updates.GetRootSegment();
-	state.vector_index = 0;
-	state.vector_index_updates = 0;
+	state.row_index = 0;
 	state.initialized = false;
 }
 
@@ -24,8 +23,7 @@ void ValidityColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t 
 	idx_t row_idx = vector_idx * STANDARD_VECTOR_SIZE;
 	state.current = (ColumnSegment *)data.GetSegment(row_idx);
 	state.updates = (UpdateSegment *)updates.GetSegment(row_idx);
-	state.vector_index = (row_idx - state.current->start) / STANDARD_VECTOR_SIZE;
-	state.vector_index_updates = (row_idx - state.updates->start) / STANDARD_VECTOR_SIZE;
+	state.row_index = row_idx;
 	state.initialized = false;
 }
 
@@ -35,10 +33,10 @@ void ValidityColumnData::Scan(Transaction &transaction, ColumnScanState &state, 
 		state.initialized = true;
 	}
 	// perform a scan of this segment
-	state.current->Scan(state, state.vector_index, result);
+	state.current->Scan(state, state.row_index, result);
 
 	// merge the updates into the result
-	state.updates->FetchUpdates(transaction, state.vector_index_updates, result);
+	state.updates->FetchUpdates(transaction, state.updates->VectorIndex(state.row_index), result);
 }
 
 void ValidityColumnData::IndexScan(ColumnScanState &state, Vector &result, bool allow_pending_updates) {
@@ -46,11 +44,11 @@ void ValidityColumnData::IndexScan(ColumnScanState &state, Vector &result, bool 
 		state.current->InitializeScan(state);
 		state.initialized = true;
 	}
-	state.current->Scan(state, state.vector_index, result);
-	if (!allow_pending_updates && state.updates->HasUncommittedUpdates(state.vector_index)) {
+	state.current->Scan(state, state.row_index, result);
+	if (!allow_pending_updates && state.updates->HasUncommittedUpdates(state.updates->VectorIndex(state.row_index))) {
 		throw TransactionException("Cannot create index with outstanding updates");
 	}
-	state.updates->FetchCommitted(state.vector_index_updates, result);
+	state.updates->FetchCommitted(state.updates->VectorIndex(state.row_index), result);
 }
 
 void ValidityColumnData::Update(Transaction &transaction, Vector &update_vector, Vector &row_ids, idx_t count) {
@@ -59,10 +57,9 @@ void ValidityColumnData::Update(Transaction &transaction, Vector &update_vector,
 	// fetch the validity data for this segment
 	Vector base_data(LogicalType::BOOLEAN, nullptr);
 	auto column_segment = (ColumnSegment *)data.GetSegment(first_id);
-	auto vector_index = (first_id - column_segment->start) / STANDARD_VECTOR_SIZE;
 	// now perform the fetch within the segment
 	ColumnScanState state;
-	column_segment->Fetch(state, vector_index, base_data);
+	column_segment->Fetch(state, first_id, base_data);
 
 	// first find the segment that the update belongs to
 	auto segment = (UpdateSegment *)updates.GetSegment(first_id);

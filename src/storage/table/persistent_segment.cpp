@@ -33,12 +33,14 @@ void PersistentSegment::InitializeScan(ColumnScanState &state) {
 	data->InitializeScan(state);
 }
 
-void PersistentSegment::Scan(ColumnScanState &state, idx_t vector_index, Vector &result) {
-	data->Scan(state, vector_index, result);
+void PersistentSegment::Scan(ColumnScanState &state, idx_t row_index, Vector &result) {
+	D_ASSERT(row_index >= start && row_index < start + count);
+	data->Scan(state, (row_index - start) / STANDARD_VECTOR_SIZE, result);
 }
 
-void PersistentSegment::Fetch(ColumnScanState &state, idx_t vector_index, Vector &result) {
-	data->Fetch(state, vector_index, result);
+void PersistentSegment::Fetch(ColumnScanState &state, idx_t row_index, Vector &result) {
+	D_ASSERT(row_index >= start && row_index < start + count);
+	data->Fetch(state, (row_index - start) / STANDARD_VECTOR_SIZE, result);
 }
 
 void PersistentSegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {

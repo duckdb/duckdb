@@ -35,6 +35,7 @@ public:
 	ColumnData &column_data;
 
 public:
+	idx_t VectorIndex(idx_t row_index) const;
 	bool HasUpdates() const;
 	bool HasUncommittedUpdates(idx_t vector_index);
 	bool HasUpdates(idx_t vector_index) const;

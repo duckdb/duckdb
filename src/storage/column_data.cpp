@@ -43,17 +43,14 @@ void ColumnScanState::Next() {
 	if (!current) {
 		return;
 	}
-	vector_index++;
-	if (vector_index * STANDARD_VECTOR_SIZE >= current->count) {
+	row_index += STANDARD_VECTOR_SIZE;
+	if (row_index >= current->start + current->count) {
 		current = (ColumnSegment *)current->next.get();
-		vector_index = 0;
 		initialized = false;
 		segment_checked = false;
 	}
-	vector_index_updates++;
-	if (vector_index_updates >= MorselInfo::MORSEL_VECTOR_COUNT) {
+	if (row_index >= updates->start + MorselInfo::MORSEL_SIZE) {
 		updates = (UpdateSegment *)updates->next.get();
-		vector_index_updates = 0;
 	}
 	for (auto &child_state : child_states) {
 		child_state.Next();
@@ -366,7 +363,6 @@ void ColumnData::Checkpoint(TableDataWriter &writer) {
 	auto owned_segment = move(data.root_node);
 	auto segment = (ColumnSegment *)owned_segment.get();
 	auto update_segment = (UpdateSegment *)updates.root_node.get();
-	idx_t update_vector_index = 0;
 	while (segment) {
 		if (segment->segment_type == ColumnSegmentType::PERSISTENT) {
 			auto &persistent = (PersistentSegment &)*segment;
@@ -407,7 +403,6 @@ void ColumnData::Checkpoint(TableDataWriter &writer) {
 				segment = (ColumnSegment *)owned_segment.get();
 
 				// move the update segment forward
-				update_vector_index = end_vector_index;
 				update_segment = update_segment->FindSegment(end_vector_index);
 				continue;
 			}
@@ -417,21 +412,19 @@ void ColumnData::Checkpoint(TableDataWriter &writer) {
 		segment->InitializeScan(state);
 
 		Vector scan_vector(type);
-		idx_t base_update_index = update_segment->start / STANDARD_VECTOR_SIZE;
-		for (idx_t vector_index = 0; vector_index * STANDARD_VECTOR_SIZE < segment->count; vector_index++) {
+		for (idx_t base_row_index = 0; base_row_index < segment->count; base_row_index += STANDARD_VECTOR_SIZE) {
 			scan_vector.Reference(intermediate);
 
-			idx_t count = MinValue<idx_t>(segment->count - vector_index * STANDARD_VECTOR_SIZE, STANDARD_VECTOR_SIZE);
-
-			segment->Scan(state, vector_index, scan_vector);
-			update_segment->FetchCommitted(update_vector_index - base_update_index, scan_vector);
-
-			checkpoint_state->AppendData(scan_vector, count);
-			update_vector_index++;
-			if (update_vector_index - base_update_index >= UpdateSegment::MORSEL_VECTOR_COUNT) {
-				base_update_index += UpdateSegment::MORSEL_VECTOR_COUNT;
+			idx_t count = MinValue<idx_t>(segment->count - base_row_index, STANDARD_VECTOR_SIZE);
+			idx_t row_index = segment->start + base_row_index;
+			if (row_index >= update_segment->start + UpdateSegment::MORSEL_SIZE) {
 				update_segment = (UpdateSegment *)update_segment->next.get();
 			}
+
+			segment->Scan(state, row_index, scan_vector);
+			update_segment->FetchCommitted(update_segment->VectorIndex(row_index), scan_vector);
+
+			checkpoint_state->AppendData(scan_vector, count);
 		}
 		// move to the next segment in the list
 		owned_segment = move(segment->next);

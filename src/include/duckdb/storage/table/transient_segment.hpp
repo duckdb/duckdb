@@ -30,9 +30,9 @@ public:
 public:
 	void InitializeScan(ColumnScanState &state) override;
 	//! Scan one vector from this transient segment
-	void Scan(ColumnScanState &state, idx_t vector_index, Vector &result) override;
+	void Scan(ColumnScanState &state, idx_t row_index, Vector &result) override;
 	//! Fetch the base table vector index that belongs to this row
-	void Fetch(ColumnScanState &state, idx_t vector_index, Vector &result) override;
+	void Fetch(ColumnScanState &state, idx_t row_index, Vector &result) override;
 	//! Fetch a value of the specific row id and append it to the result
 	void FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) override;
 
