@@ -1,7 +1,7 @@
 #include "duckdb/execution/operator/order/physical_order.hpp"
 
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/parallel/pipeline.hpp"
+#include "duckdb/parallel/task_context.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
@@ -53,9 +53,6 @@ public:
 	unique_ptr<RowChunk> payload_block;
 	unique_ptr<RowChunk> sizes_block;
 
-	//! To execute the expressions that are sorted
-	ExpressionExecutor executor;
-
 	//! Constants concerning sorting and/or payload data
 	unique_ptr<SortingState> sorting_state;
 	unique_ptr<PayloadState> payload_state;
@@ -63,6 +60,15 @@ public:
 
 class OrderLocalState : public LocalSinkState {
 public:
+	OrderLocalState() : initialized(false) {
+	}
+
+	//! Whether this local state has been initialized
+	bool initialized;
+
+	//! Local copy of the executor
+	ExpressionExecutor executor;
+
 	//! Holds a vector of incoming sorting columns
 	DataChunk sort;
 
@@ -111,7 +117,6 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 	for (auto &order : orders) {
 		// global state ExpressionExecutor
 		auto &expr = *order.expression;
-		state->executor.AddExpression(expr);
 
 		// sorting state
 		order_types.push_back(order.type);
@@ -192,7 +197,6 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 		state->sizes_block =
 		    make_unique<RowChunk>(buffer_manager, (idx_t)Storage::BLOCK_ALLOC_SIZE / sizeof(idx_t) + 1, sizeof(idx_t));
 		// again, we have to assume a large variable size
-		// TODO: overflow large strings into separate buffermanaged blocks
 		state->payload_block = make_unique<RowChunk>(buffer_manager, (entry_size + var_columns * (1 << 23)) / 32, 32);
 	} else {
 		vectors_per_block = (Storage::BLOCK_ALLOC_SIZE / entry_size + STANDARD_VECTOR_SIZE) / STANDARD_VECTOR_SIZE;
@@ -208,6 +212,7 @@ unique_ptr<LocalSinkState> PhysicalOrder::GetLocalSinkState(ExecutionContext &co
 	vector<LogicalType> types;
 	for (auto &order : orders) {
 		types.push_back(order.expression->return_type);
+        result->executor.AddExpression(*order.expression);
 	}
 	result->sort.Initialize(types);
 	return move(result);
@@ -215,12 +220,16 @@ unique_ptr<LocalSinkState> PhysicalOrder::GetLocalSinkState(ExecutionContext &co
 
 void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &gstate_p, LocalSinkState &lstate_p,
                          DataChunk &input) {
+	if (input.size() == 0) {
+		return;
+	}
+
 	auto &gstate = (OrderGlobalState &)gstate_p;
 	auto &lstate = (OrderLocalState &)lstate_p;
 	const auto &sorting_state = *gstate.sorting_state;
 	const auto &payload_state = *gstate.payload_state;
 
-	if (!lstate.sorting_block) {
+	if (!lstate.initialized) {
 		// init using gstate if not initialized yet
 		lstate.sorting_block = make_unique<RowChunk>(*gstate.sorting_block);
 		lstate.payload_block = make_unique<RowChunk>(*gstate.payload_block);
@@ -236,15 +245,16 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &gstate_
 				lstate.var_sorting_sizes.push_back(nullptr);
 			}
 		}
+		lstate.initialized = true;
 	}
 
 	// obtain sorting columns
 	auto &sort = lstate.sort;
-	gstate.executor.Execute(input, sort);
+	lstate.executor.Execute(input, sort);
 
 	// build and serialize sorting data
 	lstate.sorting_block->Build(sort.size(), lstate.key_locations, nullptr);
-	for (idx_t sort_col = 0; sort_col < sort.data.size(); sort_col++) {
+	for (idx_t sort_col = 0; sort_col < sort.ColumnCount(); sort_col++) {
 		bool has_null = sorting_state.HAS_NULL[sort_col];
 		bool nulls_first = sorting_state.ORDER_BY_NULL_TYPES[sort_col] == OrderByNullType::NULLS_FIRST;
 		bool desc = sorting_state.ORDER_TYPES[sort_col] == OrderType::DESCENDING;
@@ -254,7 +264,7 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &gstate_
 	}
 
 	// also fully serialize variable size sorting columns
-	for (idx_t sort_col = 0; sort_col < sort.data.size(); sort_col++) {
+	for (idx_t sort_col = 0; sort_col < sort.ColumnCount(); sort_col++) {
 		if (TypeIsConstantSize(sort.data[sort_col].GetType().InternalType())) {
 			continue;
 		}
@@ -273,6 +283,7 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &gstate_
 		var_block.SerializeVector(sort.data[sort_col], sort.size(), *lstate.sel_ptr, input.size(), 0,
 		                          lstate.key_locations, nullptr);
 	}
+	lstate.sort.Reset();
 
 	// compute entry sizes of payload columns if there are variable size columns
 	if (payload_state.HAS_VARIABLE_SIZE) {
@@ -292,7 +303,7 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &gstate_
 		lstate.validitymask_locations[i] = lstate.key_locations[i];
 		lstate.key_locations[i] += payload_state.VALIDITYMASK_SIZE;
 	}
-	for (idx_t payl_col = 0; payl_col < input.data.size(); payl_col++) {
+	for (idx_t payl_col = 0; payl_col < input.ColumnCount(); payl_col++) {
 		lstate.payload_block->SerializeVector(input.data[payl_col], input.size(), *lstate.sel_ptr, input.size(),
 		                                      payl_col, lstate.key_locations, lstate.validitymask_locations);
 	}
@@ -301,6 +312,7 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &gstate_
 void PhysicalOrder::Combine(ExecutionContext &context, GlobalOperatorState &gstate_p, LocalSinkState &lstate_p) {
 	auto &gstate = (OrderGlobalState &)gstate_p;
 	auto &lstate = (OrderLocalState &)lstate_p;
+	auto &sorting_state = *gstate.sorting_state;
 
 	if (!lstate.sorting_block) {
 		return;
@@ -312,7 +324,7 @@ void PhysicalOrder::Combine(ExecutionContext &context, GlobalOperatorState &gsta
 		gstate.sorting_block->blocks.push_back(move(block));
 	}
 	for (idx_t i = 0; i < lstate.var_sorting_blocks.size(); i++) {
-		if (!lstate.var_sorting_blocks[i]) {
+		if (sorting_state.CONSTANT_SIZE[i]) {
 			continue;
 		}
 		for (auto &block : lstate.var_sorting_blocks[i]->blocks) {
@@ -764,7 +776,7 @@ void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 	// cleanup
 	auto &buffer_manager = BufferManager::GetBufferManager(context);
 	for (idx_t i = 0; i < state.var_sorting_blocks.size(); i++) {
-		if (!state.var_sorting_blocks[i]) {
+		if (sorting_state.CONSTANT_SIZE[i]) {
 			continue;
 		}
 		for (auto &block : state.var_sorting_blocks[i]->blocks) {
@@ -772,9 +784,9 @@ void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 		}
 	}
 	for (idx_t i = 0; i < state.var_sorting_sizes.size(); i++) {
-		if (!state.var_sorting_sizes[i]) {
-			continue;
-		}
+        if (sorting_state.CONSTANT_SIZE[i]) {
+            continue;
+        }
 		for (auto &block : state.var_sorting_sizes[i]->blocks) {
 			buffer_manager.UnregisterBlock(block.block->BlockId(), true);
 		}
@@ -784,11 +796,32 @@ void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 //===--------------------------------------------------------------------===//
 // GetChunkInternal
 //===--------------------------------------------------------------------===//
+idx_t PhysicalOrder::MaxThreads(ClientContext &context) {
+	auto &state = (OrderGlobalState &)*this->sink_state;
+	return state.payload_block->count / STANDARD_VECTOR_SIZE + 1;
+}
+
+class OrderParallelState : public ParallelState {
+public:
+	OrderParallelState() : entry_idx(0) {
+	}
+	idx_t entry_idx;
+	std::mutex lock;
+};
+
+unique_ptr<ParallelState> PhysicalOrder::GetParallelState() {
+	auto result = make_unique<OrderParallelState>();
+	return move(result);
+}
+
 class PhysicalOrderOperatorState : public PhysicalOperatorState {
 public:
 	PhysicalOrderOperatorState(PhysicalOperator &op, PhysicalOperator *child)
-	    : PhysicalOperatorState(op, child), entry_idx(0), count(-1) {
+	    : PhysicalOperatorState(op, child), initialized(false), entry_idx(0), count(-1) {
 	}
+	ParallelState *parallel_state;
+	bool initialized;
+
 	unique_ptr<BufferHandle> sorting_handle = nullptr;
 	unique_ptr<BufferHandle> payload_handle;
 	unique_ptr<BufferHandle> offsets_handle;
@@ -804,41 +837,13 @@ unique_ptr<PhysicalOperatorState> PhysicalOrder::GetOperatorState() {
 	return make_unique<PhysicalOrderOperatorState>(*this, children[0].get());
 }
 
-void PhysicalOrder::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
-	auto &state = *reinterpret_cast<PhysicalOrderOperatorState *>(state_p);
-	auto &gstate = (OrderGlobalState &)*this->sink_state;
-	const auto &sorting_state = *gstate.sorting_state;
-	const auto &payload_state = *gstate.payload_state;
-
-	if (gstate.sorting_block->blocks.empty() || state.entry_idx >= state.count) {
-		state.finished = true;
-		auto &buffer_manager = BufferManager::GetBufferManager(context.client);
-		for (auto &block : gstate.sorting_block->blocks) {
-			buffer_manager.UnregisterBlock(block.block->BlockId(), true);
-		}
-		for (auto &block : gstate.payload_block->blocks) {
-			buffer_manager.UnregisterBlock(block.block->BlockId(), true);
-		}
-		if (gstate.sizes_block) {
-			for (auto &block : gstate.sizes_block->blocks) {
-				buffer_manager.UnregisterBlock(block.block->BlockId(), true);
-			}
-		}
+static void Scan(ClientContext &context, DataChunk &chunk, PhysicalOrderOperatorState &state,
+                 const SortingState &sorting_state, const PayloadState &payload_state, const idx_t offset,
+                 const idx_t next) {
+	if (offset >= state.count) {
 		return;
 	}
-
-	if (!state.sorting_handle) {
-		state.sorting_handle = gstate.buffer_manager.Pin(gstate.sorting_block->blocks[0].block);
-		state.payload_handle = gstate.buffer_manager.Pin(gstate.payload_block->blocks[0].block);
-		state.count = gstate.sorting_block->count;
-		if (payload_state.HAS_VARIABLE_SIZE) {
-			state.offsets_handle = gstate.buffer_manager.Pin(gstate.sizes_block->blocks[0].block);
-		}
-	}
-
-	// fetch the next batch of pointers from the block
-	const idx_t next = MinValue((idx_t)STANDARD_VECTOR_SIZE, state.count - state.entry_idx);
-	data_ptr_t sort_dataptr = state.sorting_handle->node->buffer + (state.entry_idx * sorting_state.ENTRY_SIZE) +
+	data_ptr_t sort_dataptr = state.sorting_handle->node->buffer + (offset * sorting_state.ENTRY_SIZE) +
 	                          sorting_state.ENTRY_SIZE - sizeof(idx_t);
 	const data_ptr_t payl_dataptr = state.payload_handle->node->buffer;
 	if (payload_state.HAS_VARIABLE_SIZE) {
@@ -867,13 +872,89 @@ void PhysicalOrder::GetChunkInternal(ExecutionContext &context, DataChunk &chunk
 	}
 
 	// deserialize the payload data
-	for (idx_t payl_col = 0; payl_col < chunk.data.size(); payl_col++) {
+	for (idx_t payl_col = 0; payl_col < chunk.ColumnCount(); payl_col++) {
 		RowChunk::DeserializeIntoVector(chunk.data[payl_col], next, payl_col, state.key_locations,
 		                                state.validitymask_locations);
 	}
-	state.entry_idx += STANDARD_VECTOR_SIZE;
-	chunk.SetCardinality(next);
-	chunk.Verify();
+    chunk.SetCardinality(next);
+    chunk.Verify();
+}
+
+static void CleanUp(ClientContext &context, OrderGlobalState &gstate) {
+	auto &buffer_manager = BufferManager::GetBufferManager(context);
+	for (auto &block : gstate.sorting_block->blocks) {
+		buffer_manager.UnregisterBlock(block.block->BlockId(), true);
+	}
+	for (auto &block : gstate.payload_block->blocks) {
+		buffer_manager.UnregisterBlock(block.block->BlockId(), true);
+	}
+	if (gstate.payload_state->HAS_VARIABLE_SIZE) {
+		for (auto &block : gstate.sizes_block->blocks) {
+			buffer_manager.UnregisterBlock(block.block->BlockId(), true);
+		}
+	}
+}
+
+void PhysicalOrder::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
+	auto &state = *reinterpret_cast<PhysicalOrderOperatorState *>(state_p);
+    auto &gstate = (OrderGlobalState &)*this->sink_state;
+    const auto &sorting_state = *gstate.sorting_state;
+    const auto &payload_state = *gstate.payload_state;
+
+	if (!state.initialized) {
+		// initialize operator state
+		state.count = gstate.payload_block->count;
+		if (state.count > 0) {
+			state.sorting_handle = gstate.buffer_manager.Pin(gstate.sorting_block->blocks[0].block);
+			state.payload_handle = gstate.buffer_manager.Pin(gstate.payload_block->blocks[0].block);
+			if (payload_state.HAS_VARIABLE_SIZE) {
+				state.offsets_handle = gstate.buffer_manager.Pin(gstate.sizes_block->blocks[0].block);
+			}
+		}
+		// initialize parallel state (if any)
+		state.parallel_state = nullptr;
+		auto &task = context.task;
+		// check if there is any parallel state to fetch
+		state.parallel_state = nullptr;
+		auto task_info = task.task_info.find(this);
+		if (task_info != task.task_info.end()) {
+			// parallel scan init
+			state.parallel_state = task_info->second;
+		}
+		state.initialized = true;
+	}
+
+//	if (!state.parallel_state) {
+	if (true) {
+		// sequential scan
+        const idx_t next = MinValue((idx_t)STANDARD_VECTOR_SIZE, state.count - state.entry_idx);
+		Scan(context.client, chunk, state, sorting_state, payload_state, state.entry_idx, next);
+        state.entry_idx += STANDARD_VECTOR_SIZE;
+		if (chunk.size() != 0) {
+			return;
+		}
+	} else {
+		// parallel scan
+        auto &parallel_state = *reinterpret_cast<OrderParallelState *>(state.parallel_state);
+		do {
+			idx_t offset;
+			idx_t next;
+            {
+                lock_guard<mutex> parallel_lock(parallel_state.lock);
+				offset = parallel_state.entry_idx;
+                next = MinValue((idx_t)STANDARD_VECTOR_SIZE, state.count - offset);
+				parallel_state.entry_idx += next;
+			}
+			Scan(context.client, chunk, state, sorting_state, payload_state, offset, next);
+			if (chunk.size() == 0) {
+                break;
+			} else {
+				return;
+			}
+		} while (true);
+	}
+	D_ASSERT(chunk.size() == 0);
+	CleanUp(context.client, gstate);
 }
 
 string PhysicalOrder::ParamsToString() const {

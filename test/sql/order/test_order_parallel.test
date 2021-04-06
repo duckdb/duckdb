@@ -1,0 +1,18 @@
+# name: test/sql/order/test_parallel_order.test
+# description: Test ORDER BY keyword with multiple threads
+# group: [order]
+
+statement ok
+PRAGMA force_parallelism
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA threads=4
+
+statement ok
+create table test as (select cast(random() * 99999999 as int) i from range(1000000));
+
+statement ok
+create table test2 as (select * from test order by i);

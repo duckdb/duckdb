@@ -13,6 +13,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/physical_sink.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
+#include "duckdb/parallel/pipeline.hpp"
 
 namespace duckdb {
 
@@ -35,6 +36,9 @@ public:
 
 	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
+
+    idx_t MaxThreads(ClientContext &context);
+    unique_ptr<ParallelState> GetParallelState();
 
 	string ParamsToString() const override;
 };
