@@ -23,11 +23,12 @@ static void TemplatedCopy(const Vector &source, const SelectionVector &sel, Vect
 	}
 }
 
-void VectorOperations::Copy(const Vector &source, Vector &target, const SelectionVector &sel, idx_t source_count,
+void VectorOperations::Copy(const Vector &source, Vector &target, const SelectionVector &sel_p, idx_t source_count,
                             idx_t source_offset, idx_t target_offset) {
 	D_ASSERT(source_offset <= source_count);
 	D_ASSERT(target.GetVectorType() == VectorType::FLAT_VECTOR);
 	D_ASSERT(source.GetType() == target.GetType());
+	SelectionVector sel = sel_p;
 	switch (source.GetVectorType()) {
 	case VectorType::DICTIONARY_VECTOR: {
 		// dictionary vector: merge selection vectors
@@ -48,6 +49,7 @@ void VectorOperations::Copy(const Vector &source, Vector &target, const Selectio
 		return;
 	}
 	case VectorType::CONSTANT_VECTOR:
+		sel = ConstantVector::ZERO_SELECTION_VECTOR;
 	case VectorType::FLAT_VECTOR:
 		break;
 	default:
@@ -149,7 +151,6 @@ void VectorOperations::Copy(const Vector &source, Vector &target, const Selectio
 			auto &source_children = StructVector::GetEntries(source);
 			for (auto &child : source_children) {
 				auto child_copy = make_unique<Vector>(child.second->GetType());
-
 				VectorOperations::Copy(*child.second, *child_copy, sel, source_count, source_offset, target_offset);
 				StructVector::AddEntry(target, child.first, move(child_copy));
 			}
