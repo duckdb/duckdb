@@ -18,11 +18,12 @@ namespace duckdb {
 
 struct RowDataBlock {
 	RowDataBlock(BufferManager &buffer_manager, const idx_t &capacity, const idx_t &entry_size)
-	    : CAPACITY(capacity), count(0), byte_offset(0) {
+	    : CAPACITY(capacity), ENTRY_SIZE(entry_size), count(0), byte_offset(0) {
 		block = buffer_manager.RegisterMemory(capacity * entry_size, false);
 	}
 	shared_ptr<BlockHandle> block;
 	const idx_t CAPACITY;
+	const idx_t ENTRY_SIZE;
 	idx_t count;
 	idx_t byte_offset;
 };
