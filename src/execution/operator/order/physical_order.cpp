@@ -701,20 +701,58 @@ void SizesToOffsets(BufferManager &buffer_manager, RowChunk &row_chunk, idx_t ca
 struct ContinuousBlock {
 public:
 	ContinuousBlock(BufferManager &buffer_manager, const SortingState &sorting_state, const PayloadState &payload_state)
-	    : block_idx(0), buffer_manager(buffer_manager), sorting_state(sorting_state),
-	      payload_state(payload_state) {
+	    : block_idx(0), buffer_manager(buffer_manager), sorting_state(sorting_state), payload_state(payload_state) {
 	}
 
 	data_ptr_t &SortingPtr() {
 		return sorting_ptr;
 	}
 
-	data_ptr_t &PayloadPtr() {
-		return payload_ptr;
+	data_ptr_t VarSortingColPtr(idx_t col_idx) {
+		return var_sorting_ptrs[col_idx] + var_sorting_offsets[col_idx][payload_idx];
+	}
+
+	idx_t VarSortingColEntrySize(idx_t col_idx) {
+		return var_sorting_offsets[col_idx][payload_idx + 1] - var_sorting_offsets[col_idx][payload_idx];
+	}
+
+	data_ptr_t PayloadPtr() {
+		if (!payload_state.HAS_VARIABLE_SIZE) {
+			return payload_ptr + payload_idx * payload_state.ENTRY_SIZE;
+		} else {
+			return payload_ptr + payload_offsets[payload_idx];
+		}
+	}
+
+	idx_t PayloadEntrySize() {
+		if (!payload_state.HAS_VARIABLE_SIZE) {
+			return payload_state.ENTRY_SIZE;
+		} else {
+			return payload_offsets[payload_idx + 1] - payload_offsets[payload_idx];
+		}
 	}
 
 	bool Done() {
 		return block_idx >= sorting_blocks.size();
+	}
+
+	void PinBlock() {
+		entry_idx = 0;
+		sorting_handle = buffer_manager.Pin(sorting_blocks[block_idx].block);
+		sorting_ptr = sorting_handle->node->buffer;
+		for (idx_t col_idx = 0; col_idx < sorting_state.CONSTANT_SIZE.size(); col_idx++) {
+			if (!sorting_state.CONSTANT_SIZE[col_idx]) {
+				var_sorting_handles[col_idx] = buffer_manager.Pin(var_sorting_blocks[col_idx][block_idx].block);
+				var_sorting_ptrs[col_idx] = var_sorting_handles[col_idx]->node->buffer;
+				var_sorting_offset_handles[col_idx] =
+				    buffer_manager.Pin(var_sorting_offset_blocks[col_idx][block_idx].block);
+				var_sorting_offsets[col_idx] = (idx_t *)var_sorting_handles[col_idx]->node->buffer;
+			}
+		}
+		payload_handle = buffer_manager.Pin(payload_blocks[block_idx].block);
+		payload_ptr = payload_handle->node->buffer;
+		payload_offset_handle = buffer_manager.Pin(payload_offset_blocks[block_idx].block);
+		payload_offsets = (idx_t *)payload_offset_handle->node->buffer;
 	}
 
 	void Advance() {
@@ -724,29 +762,42 @@ public:
 			payload_idx = Load<idx_t>(sorting_ptr + sorting_state.ENTRY_SIZE - sizeof(idx_t));
 		} else if (block_idx < sorting_blocks.size() - 1) {
 			block_idx++;
-			// TODO: pin block
+			PinBlock();
 		} else if (block_idx < sorting_blocks.size()) {
 			// done
 			block_idx++;
 		}
 	}
 
-	void PinBlock() {
-		entry_idx = 0;
-		sorting_handle = buffer_manager.Pin(sorting_blocks[block_idx].block);
-		sorting_ptr = sorting_handle->node->buffer;
-		for (idx_t i = 0; i < sorting_state.CONSTANT_SIZE.size(); i++) {
-			if (!sorting_state.CONSTANT_SIZE[i]) {
-				var_sorting_handles[i] = buffer_manager.Pin(var_sorting_blocks[i][block_idx].block);
-				var_sorting_ptrs[i] = var_sorting_handles[i]->node->buffer;
-				var_sorting_offset_handles[i] = buffer_manager.Pin(var_sorting_offset_blocks[i][block_idx].block);
-				var_sorting_offsets[i] = (idx_t *)var_sorting_handles[i]->node->buffer;
+	void CopyEntryToTarget(ContinuousBlock &target) {
+		// TODO: allocate new block to write to (if needed)
+		const idx_t &target_entry_idx = target.entry_idx;
+		// fixed-size sorting column and entry idx
+		memcpy(target.sorting_ptr, sorting_ptr, sorting_state.ENTRY_SIZE - sizeof(idx_t));
+		target.sorting_ptr += sorting_state.ENTRY_SIZE;
+		Store<idx_t>(target_entry_idx, target.sorting_ptr - sizeof(idx_t));
+		// variable size sorting columns and their offsets
+		for (idx_t col_idx = 0; col_idx < sorting_state.CONSTANT_SIZE.size(); col_idx++) {
+			if (!sorting_state.CONSTANT_SIZE[col_idx]) {
+				if (target_entry_idx == 0) {
+					// TODO: move this code to somewhere else
+					target.var_sorting_offsets[col_idx][0] = 0;
+				}
+				const idx_t entry_size = VarSortingColEntrySize(col_idx);
+				memcpy(target.VarSortingColPtr(col_idx), VarSortingColPtr(col_idx), entry_size);
+				target.var_sorting_offsets[col_idx][target_entry_idx + 1] =
+				    target.var_sorting_offsets[col_idx][target_entry_idx] + entry_size;
 			}
 		}
-		payload_handle = buffer_manager.Pin(payload_blocks[block_idx].block);
-		payload_ptr = payload_handle->node->buffer;
-		payload_offset_handle = buffer_manager.Pin(payload_offset_blocks[block_idx].block);
-		payload_offsets = (idx_t *)payload_offset_handle->node->buffer;
+		// payload columns and their offsets
+        if (target_entry_idx == 0) {
+            // TODO: move this code to somewhere else
+            target.payload_offsets[0] = 0;
+        }
+		const idx_t entry_size = PayloadEntrySize();
+		memcpy(target.PayloadPtr(), PayloadPtr(), entry_size);
+		target.payload_offsets[target_entry_idx + 1] = target.payload_offsets[target_entry_idx] + entry_size;
+		target.entry_idx++;
 	}
 
 private:
