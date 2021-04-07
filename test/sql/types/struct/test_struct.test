@@ -175,3 +175,9 @@ SELECT STRUCT_EXTRACT(STRUCT_PACK(xx := e, yy := g), '42') FROM struct_data
 
 statement error
 CREATE TABLE test AS SELECT e, STRUCT_PACK(e) FROM struct_data
+
+statement ok
+SELECT STRUCT_PACK(i := range, j := 'asdf') FROM range(2);
+
+statement ok
+SELECT STRUCT_PACK(i := range, j := 42) FROM range(2);
