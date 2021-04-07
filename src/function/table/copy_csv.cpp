@@ -8,6 +8,7 @@
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/common/windows_undefs.hpp"
 #include <limits>
 
 namespace duckdb {
@@ -87,6 +88,8 @@ static bool ParseBaseOption(BufferedCSVReaderOptions &options, string &loption, 
 		      options.compression.empty())) {
 			throw BinderException("read_csv currently only supports 'gzip' compression.");
 		}
+	} else if (loption == "skip") {
+		options.skip_rows = ParseInteger(set);
 	} else {
 		// unrecognized option in base CSV
 		return false;

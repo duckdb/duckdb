@@ -226,6 +226,9 @@ FILE *lndebug_fp = NULL;
 /* Set if to use or not the multi line mode. */
 void linenoiseSetMultiLine(int ml) {
 	mlmode = ml;
+	if (ml) {
+		keyword = "\033[32m";
+	}
 }
 
 /* Return true if the terminal name is in the list of terminals we know are
@@ -545,20 +548,22 @@ void refreshShowHints(struct abuf *ab, struct linenoiseState *l, int plen) {
 }
 
 size_t linenoiseComputeRenderWidth(const char *buf, size_t len) {
-	if (duckdb::Utf8Proc::IsValid(buf, len)) {
-		// utf8 in prompt, get render width
-		size_t cpos = 0;
-		size_t render_width = 0;
-		while (cpos < len) {
-			size_t char_render_width = duckdb::Utf8Proc::RenderWidth(buf, len, cpos);
-			cpos = duckdb::Utf8Proc::NextGraphemeCluster(buf, len, cpos);
-			render_width += char_render_width;
+	// utf8 in prompt, get render width
+	size_t cpos = 0;
+	size_t render_width = 0;
+	int sz;
+	while (cpos < len) {
+		if (duckdb::Utf8Proc::UTF8ToCodepoint(buf + cpos, sz) < 0) {
+			cpos++;
+			render_width++;
+			continue;
 		}
-		return render_width;
-	} else {
-		// invalid utf8 in prompt, use length in bytes
-		return len;
+
+		size_t char_render_width = duckdb::Utf8Proc::RenderWidth(buf, len, cpos);
+		cpos = duckdb::Utf8Proc::NextGraphemeCluster(buf, len, cpos);
+		render_width += char_render_width;
 	}
+	return render_width;
 }
 
 int linenoiseGetRenderPosition(const char *buf, size_t len, int max_width, int *n) {
@@ -647,6 +652,12 @@ int linenoiseParseOption(const char **azArg, int nArg, const char **out_error) {
 			return 1;
 		}
 		*out_error = "Expected usage: .constantcode [terminal_code]";
+		return 1;
+	} else if (strcmp(azArg[0], "multiline") == 0) {
+		linenoiseSetMultiLine(1);
+		return 1;
+	} else if (strcmp(azArg[0], "singleline") == 0) {
+		linenoiseSetMultiLine(0);
 		return 1;
 	}
 #endif
@@ -791,18 +802,35 @@ static void refreshSingleLine(struct linenoiseState *l) {
  * cursor position, and number of columns of the terminal. */
 static void refreshMultiLine(struct linenoiseState *l) {
 	char seq[64];
-	int plen = strlen(l->prompt);
-	int rows = (plen + l->len + l->cols - 1) / l->cols; /* rows used by current buf. */
-	int rpos = (plen + l->oldpos + l->cols) / l->cols;  /* cursor relative row. */
-	int rpos2;                                          /* rpos after refresh. */
-	int col;                                            /* colum position, zero-based. */
+	int plen = linenoiseComputeRenderWidth(l->prompt, strlen(l->prompt));
+	int total_len = linenoiseComputeRenderWidth(l->buf, l->len);
+	int cursor_old_pos = linenoiseComputeRenderWidth(l->buf, l->oldpos);
+	int cursor_pos = linenoiseComputeRenderWidth(l->buf, l->pos);
+	int rows = (plen + total_len + l->cols - 1) / l->cols;  /* rows used by current buf. */
+	int rpos = (plen + cursor_old_pos + l->cols) / l->cols; /* cursor relative row. */
+	int rpos2;                                              /* rpos after refresh. */
+	int col;                                                /* colum position, zero-based. */
 	int old_rows = l->maxrows;
 	int fd = l->ofd, j;
 	struct abuf ab;
+	std::string highlight_buffer;
+	auto buf = l->buf;
+	auto len = l->len;
 
 	/* Update maxrows if needed. */
-	if (rows > (int)l->maxrows)
+	if (rows > (int)l->maxrows) {
 		l->maxrows = rows;
+	}
+
+	if (duckdb::Utf8Proc::IsValid(l->buf, l->len)) {
+#ifndef DISABLE_HIGHLIGHT
+		if (enableHighlighting) {
+			highlight_buffer = highlightText(buf, len, 0, len);
+			buf = (char *)highlight_buffer.c_str();
+			len = highlight_buffer.size();
+		}
+#endif
+	}
 
 	/* First step: clear all the lines used before. To do so start by
 	 * going to the last row. */
@@ -827,14 +855,14 @@ static void refreshMultiLine(struct linenoiseState *l) {
 
 	/* Write the prompt and the current buffer content */
 	abAppend(&ab, l->prompt, strlen(l->prompt));
-	abAppend(&ab, l->buf, l->len);
+	abAppend(&ab, buf, len);
 
-	/* Show hits if any. */
+	/* Show hints if any. */
 	refreshShowHints(&ab, l, plen);
 
 	/* If we are at the very end of the screen with our prompt, we need to
 	 * emit a newline and move the prompt to the first column. */
-	if (l->pos && l->pos == l->len && (l->pos + plen) % l->cols == 0) {
+	if (l->pos && l->pos == len && (cursor_pos + plen) % l->cols == 0) {
 		lndebug("<newline>", 0);
 		abAppend(&ab, "\n", 1);
 		snprintf(seq, 64, "\r");
@@ -845,7 +873,7 @@ static void refreshMultiLine(struct linenoiseState *l) {
 	}
 
 	/* Move cursor to right position. */
-	rpos2 = (plen + l->pos + l->cols) / l->cols; /* current cursor relative row. */
+	rpos2 = (plen + cursor_pos + l->cols) / l->cols; /* current cursor relative row. */
 	lndebug("rpos2 %d", rpos2);
 
 	/* Go up till we reach the expected positon. */
@@ -856,7 +884,7 @@ static void refreshMultiLine(struct linenoiseState *l) {
 	}
 
 	/* Set column. */
-	col = (plen + (int)l->pos) % (int)l->cols;
+	col = (plen + (int)cursor_pos) % (int)l->cols;
 	lndebug("set col %d", 1 + col);
 	if (col)
 		snprintf(seq, 64, "\r\x1b[%dC", col);
@@ -936,6 +964,41 @@ void linenoiseEditMoveRight(struct linenoiseState *l) {
 	}
 }
 
+bool characterIsWordBoundary(char c) {
+	if (c >= 'a' && c <= 'z') {
+		return false;
+	}
+	if (c >= 'A' && c <= 'Z') {
+		return false;
+	}
+	if (c >= '0' && c <= '9') {
+		return false;
+	}
+	return true;
+}
+
+/* Move cursor to the next left word. */
+void linenoiseEditMoveWordLeft(struct linenoiseState *l) {
+	if (l->pos == 0) {
+		return;
+	}
+	do {
+		l->pos = prev_char(l);
+	} while (l->pos > 0 && !characterIsWordBoundary(l->buf[l->pos]));
+	refreshLine(l);
+}
+
+/* Move cursor on the right. */
+void linenoiseEditMoveWordRight(struct linenoiseState *l) {
+	if (l->pos == l->len) {
+		return;
+	}
+	do {
+		l->pos = next_char(l);
+	} while (l->pos != l->len && !characterIsWordBoundary(l->buf[l->pos]));
+	refreshLine(l);
+}
+
 /* Move cursor to the start of the line. */
 void linenoiseEditMoveHome(struct linenoiseState *l) {
 	if (l->pos != 0) {
@@ -1004,7 +1067,7 @@ void linenoiseEditBackspace(struct linenoiseState *l) {
 	}
 }
 
-/* Delete the previosu word, maintaining the cursor at the start of the
+/* Delete the previous word, maintaining the cursor at the start of the
  * current word. */
 void linenoiseEditDeletePrevWord(struct linenoiseState *l) {
 	size_t old_pos = l->pos;
@@ -1058,7 +1121,7 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 	while (1) {
 		char c;
 		int nread;
-		char seq[3];
+		char seq[5];
 
 		nread = read(l.ifd, &c, 1);
 		if (nread <= 0)
@@ -1082,8 +1145,9 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 		case ENTER: /* enter */
 			history_len--;
 			free(history[history_len]);
-			if (mlmode)
+			if (mlmode) {
 				linenoiseEditMoveEnd(&l);
+			}
 			if (hintsCallback) {
 				/* Force a refresh without hints to leave the previous
 				 * line as the user typed it after a newline. */
@@ -1093,9 +1157,23 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 				hintsCallback = hc;
 			}
 			return (int)l.len;
-		case CTRL_C: /* ctrl-c */
-			errno = EAGAIN;
-			return -1;
+		case CTRL_C: /* ctrl-c */ {
+			l.buf[0] = '\3';
+			// we keep track of whether or not the line was empty by writing \3 to the second position of the line
+			// this is because at a higher level we might want to know if we pressed ctrl c to clear the line
+			// or to exit the process
+			if (l.len > 0) {
+				l.buf[1] = '\3';
+				l.buf[2] = '\0';
+				l.pos = 2;
+				l.len = 2;
+			} else {
+				l.buf[1] = '\0';
+				l.pos = 1;
+				l.len = 1;
+			}
+			return (int)l.len;
+		}
 		case BACKSPACE: /* backspace */
 		case 8:         /* ctrl-h */
 			linenoiseEditBackspace(&l);
@@ -1156,6 +1234,17 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 						case '3': /* Delete key. */
 							linenoiseEditDelete(&l);
 							break;
+						}
+					} else if (seq[2] == ';') {
+						// read 2 extra bytes
+						if (read(l.ifd, seq + 3, 2) == -1)
+							break;
+						if (memcmp(seq, "[1;5C", 5) == 0) {
+							// [1;5C: move word right
+							linenoiseEditMoveWordRight(&l);
+						} else if (memcmp(seq, "[1;5D", 5) == 0) {
+							// [1;5D: move word left
+							linenoiseEditMoveWordLeft(&l);
 						}
 					}
 				} else {
@@ -1218,8 +1307,9 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 			linenoiseEditDeletePrevWord(&l);
 			break;
 		default:
-			if (linenoiseEditInsert(&l, c))
+			if (linenoiseEditInsert(&l, c)) {
 				return -1;
+			}
 			break;
 		}
 	}

@@ -20,7 +20,7 @@ void SelectionVector::Print(idx_t count) const {
 	Printer::Print(ToString(count));
 }
 
-buffer_ptr<SelectionData> SelectionVector::Slice(const SelectionVector &sel, idx_t count) {
+buffer_ptr<SelectionData> SelectionVector::Slice(const SelectionVector &sel, idx_t count) const {
 	auto data = make_buffer<SelectionData>(count);
 	auto result_ptr = data->owned_data.get();
 	// for every element, we perform result[i] = target[new[i]]

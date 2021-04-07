@@ -83,7 +83,7 @@ public:
 	buffer_ptr<SelectionData> sel_data() {
 		return selection_data;
 	}
-	buffer_ptr<SelectionData> Slice(const SelectionVector &sel, idx_t count);
+	buffer_ptr<SelectionData> Slice(const SelectionVector &sel, idx_t count) const;
 
 	string ToString(idx_t count = 0) const;
 	void Print(idx_t count = 0) const;

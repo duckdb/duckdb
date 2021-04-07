@@ -84,8 +84,8 @@ NumericStatistics::NumericStatistics(LogicalType type_p, Value min_p, Value max_
 }
 
 void NumericStatistics::Merge(const BaseStatistics &other_p) {
+	BaseStatistics::Merge(other_p);
 	auto &other = (const NumericStatistics &)other_p;
-	has_null = has_null || other.has_null;
 	if (other.min < min) {
 		min = other.min;
 	}
@@ -113,7 +113,9 @@ bool NumericStatistics::CheckZonemap(ExpressionType comparison_type, const Value
 
 unique_ptr<BaseStatistics> NumericStatistics::Copy() {
 	auto stats = make_unique<NumericStatistics>(type, min, max);
-	stats->has_null = has_null;
+	if (validity_stats) {
+		stats->validity_stats = validity_stats->Copy();
+	}
 	return move(stats);
 }
 
@@ -130,8 +132,8 @@ unique_ptr<BaseStatistics> NumericStatistics::Deserialize(Deserializer &source, 
 }
 
 string NumericStatistics::ToString() {
-	return StringUtil::Format("Numeric Statistics<%s> [Has Null: %s, Min: %s, Max: %s]", type.ToString(),
-	                          has_null ? "true" : "false", min.ToString(), max.ToString());
+	return StringUtil::Format("Numeric Statistics<%s> %s[Min: %s, Max: %s]", type.ToString(),
+	                          validity_stats ? validity_stats->ToString() : "", min.ToString(), max.ToString());
 }
 
 template <class T>

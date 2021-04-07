@@ -1,4 +1,4 @@
-# name: test/sql/storage/checkpoint_abort.test
+# name: test/sql/storage/checkpoint_abort.test_slow
 # description: Test correct behavior if we unexpectedly abort during a checkpoint
 # group: [storage]
 

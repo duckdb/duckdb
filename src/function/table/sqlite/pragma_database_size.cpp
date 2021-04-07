@@ -16,6 +16,8 @@ struct PragmaDatabaseSizeData : public FunctionOperatorData {
 
 static unique_ptr<FunctionData> PragmaDatabaseSizeBind(ClientContext &context, vector<Value> &inputs,
                                                        unordered_map<string, Value> &named_parameters,
+                                                       vector<LogicalType> &input_table_types,
+                                                       vector<string> &input_table_names,
                                                        vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("database_size");
 	return_types.push_back(LogicalType::VARCHAR);
@@ -72,7 +74,7 @@ static string BytesToHumanReadableString(idx_t bytes) {
 }
 
 void PragmaDatabaseSizeFunction(ClientContext &context, const FunctionData *bind_data,
-                                FunctionOperatorData *operator_state, DataChunk &output) {
+                                FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
 	auto &data = (PragmaDatabaseSizeData &)*operator_state;
 	if (data.finished) {
 		return;

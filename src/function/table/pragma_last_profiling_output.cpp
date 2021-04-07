@@ -23,6 +23,8 @@ struct PragmaLastProfilingOutputData : public TableFunctionData {
 
 static unique_ptr<FunctionData> PragmaLastProfilingOutputBind(ClientContext &context, vector<Value> &inputs,
                                                               unordered_map<string, Value> &named_parameters,
+                                                              vector<LogicalType> &input_table_types,
+                                                              vector<string> &input_table_names,
                                                               vector<LogicalType> &return_types,
                                                               vector<string> &names) {
 	names.emplace_back("OPERATOR_ID");
@@ -59,7 +61,8 @@ unique_ptr<FunctionOperatorData> PragmaLastProfilingOutputInit(ClientContext &co
 }
 
 static void PragmaLastProfilingOutputFunction(ClientContext &context, const FunctionData *bind_data_p,
-                                              FunctionOperatorData *operator_state, DataChunk &output) {
+                                              FunctionOperatorData *operator_state, DataChunk *input,
+                                              DataChunk &output) {
 	auto &state = (PragmaLastProfilingOutputOperatorData &)*operator_state;
 	auto &data = (PragmaLastProfilingOutputData &)*bind_data_p;
 	if (!state.initialized) {

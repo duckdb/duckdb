@@ -19,14 +19,14 @@ namespace duckdb {
 DataChunk::DataChunk() : count(0) {
 }
 
-void DataChunk::InitializeEmpty(vector<LogicalType> &types) {
+void DataChunk::InitializeEmpty(const vector<LogicalType> &types) {
 	D_ASSERT(types.size() > 0);
 	for (idx_t i = 0; i < types.size(); i++) {
 		data.emplace_back(Vector(types[i], nullptr));
 	}
 }
 
-void DataChunk::Initialize(vector<LogicalType> &types) {
+void DataChunk::Initialize(const vector<LogicalType> &types) {
 	D_ASSERT(types.size() > 0);
 	InitializeEmpty(types);
 	for (idx_t i = 0; i < types.size(); i++) {
@@ -63,7 +63,7 @@ void DataChunk::Reference(DataChunk &chunk) {
 	}
 }
 
-void DataChunk::Copy(DataChunk &other, idx_t offset) {
+void DataChunk::Copy(DataChunk &other, idx_t offset) const {
 	D_ASSERT(ColumnCount() == other.ColumnCount());
 	D_ASSERT(other.size() == 0);
 
@@ -74,7 +74,19 @@ void DataChunk::Copy(DataChunk &other, idx_t offset) {
 	other.SetCardinality(size() - offset);
 }
 
-void DataChunk::Append(DataChunk &other) {
+void DataChunk::Copy(DataChunk &other, const SelectionVector &sel, const idx_t source_count, const idx_t offset) const {
+	D_ASSERT(ColumnCount() == other.ColumnCount());
+	D_ASSERT(other.size() == 0);
+	D_ASSERT((offset + source_count) <= size());
+
+	for (idx_t i = 0; i < ColumnCount(); i++) {
+		D_ASSERT(other.data[i].GetVectorType() == VectorType::FLAT_VECTOR);
+		VectorOperations::Copy(data[i], other.data[i], sel, source_count, offset, 0);
+	}
+	other.SetCardinality(source_count - offset);
+}
+
+void DataChunk::Append(const DataChunk &other) {
 	if (other.size() == 0) {
 		return;
 	}

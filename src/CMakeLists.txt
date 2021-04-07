@@ -42,6 +42,8 @@ if(AMALGAMATION_BUILD)
 
 else()
 
+  add_definitions(-DDUCKDB_MAIN_LIBRARY)
+
   add_subdirectory(optimizer)
   add_subdirectory(planner)
   add_subdirectory(parser)

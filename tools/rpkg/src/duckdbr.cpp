@@ -909,6 +909,8 @@ struct DataFrameScanFunction : public TableFunction {
 
 	static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, vector<Value> &inputs,
 	                                                    unordered_map<string, Value> &named_parameters,
+	                                                    vector<LogicalType> &input_table_types,
+	                                                    vector<string> &input_table_names,
 	                                                    vector<LogicalType> &return_types, vector<string> &names) {
 		RProtector r;
 		SEXP df((SEXP)inputs[0].GetValue<uintptr_t>());
@@ -965,7 +967,7 @@ struct DataFrameScanFunction : public TableFunction {
 	}
 
 	static void dataframe_scan_function(ClientContext &context, const FunctionData *bind_data,
-	                                    FunctionOperatorData *operator_state, DataChunk &output) {
+	                                    FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
 		auto &data = (DataFrameScanFunctionData &)*bind_data;
 		auto &state = (DataFrameScanState &)*operator_state;
 		if (state.position >= data.row_count) {

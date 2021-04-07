@@ -72,6 +72,9 @@ public:
 	data_ptr_t GetData() {
 		return data.get();
 	}
+	void SetData(unique_ptr<data_t[]> new_data) {
+		data = move(new_data);
+	}
 
 	static buffer_ptr<VectorBuffer> CreateStandardVector(PhysicalType type);
 	static buffer_ptr<VectorBuffer> CreateConstantVector(PhysicalType type);
@@ -131,6 +134,9 @@ public:
 	DictionaryBuffer(buffer_ptr<SelectionData> data, LogicalType type, VectorType vector_type)
 	    : VectorBuffer(VectorBufferType::DICTIONARY_BUFFER, type, vector_type), sel_vector(move(data)) {
 	}
+	const SelectionVector &GetSelVector() const {
+		return sel_vector;
+	}
 	SelectionVector &GetSelVector() {
 		return sel_vector;
 	}
@@ -177,6 +183,9 @@ public:
 	~VectorStructBuffer() override;
 
 public:
+	const child_list_t<unique_ptr<Vector>> &GetChildren() const {
+		return children;
+	}
 	child_list_t<unique_ptr<Vector>> &GetChildren() {
 		return children;
 	}
@@ -192,18 +201,27 @@ private:
 class VectorListBuffer : public VectorBuffer {
 public:
 	VectorListBuffer();
-
 	~VectorListBuffer() override;
 
 public:
-	ChunkCollection &GetChild() {
+	Vector &GetChild() {
 		return *child;
 	}
-	void SetChild(unique_ptr<ChunkCollection> new_child);
+	void SetChild(unique_ptr<Vector> new_child);
+
+	void Append(const Vector &to_append, idx_t to_append_size, idx_t source_offset = 0);
+	void Append(const Vector &to_append, const SelectionVector &sel, idx_t to_append_size, idx_t source_offset = 0);
+
+	void PushBack(Value &insert);
+
+	idx_t capacity = 0;
+	idx_t size = 0;
 
 private:
+	void Reserve(const Vector &to_append, idx_t to_reserve);
+
 	//! child vectors used for nested data
-	unique_ptr<ChunkCollection> child;
+	unique_ptr<Vector> child;
 };
 
 //! The ManagedVectorBuffer holds a buffer handle

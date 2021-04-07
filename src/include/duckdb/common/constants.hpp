@@ -51,7 +51,7 @@ typedef int64_t dtime_t;
 //! Type used to represent timestamps (microseconds since 1970-01-01)
 typedef int64_t timestamp_t;
 //! Type used for the selection vector
-typedef uint16_t sel_t;
+typedef uint32_t sel_t;
 //! Type used for transaction timestamps
 typedef idx_t transaction_t;
 

@@ -16,6 +16,11 @@
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 
+#include "duckdb/main/config.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
+
 #include "duckdb/storage/statistics/base_statistics.hpp"
 
 #include "duckdb/main/client_context.hpp"
@@ -129,6 +134,8 @@ public:
 
 	static unique_ptr<FunctionData> ParquetScanBind(ClientContext &context, vector<Value> &inputs,
 	                                                unordered_map<string, Value> &named_parameters,
+	                                                vector<LogicalType> &input_table_types,
+	                                                vector<string> &input_table_names,
 	                                                vector<LogicalType> &return_types, vector<string> &names) {
 		auto file_name = inputs[0].GetValue<string>();
 		auto result = make_unique<ParquetReadBindData>();
@@ -193,7 +200,7 @@ public:
 	}
 
 	static void ParquetScanImplementation(ClientContext &context, const FunctionData *bind_data_p,
-	                                      FunctionOperatorData *operator_state, DataChunk &output) {
+	                                      FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
 		auto &data = (ParquetReadOperatorData &)*operator_state;
 		auto &bind_data = (ParquetReadBindData &)*bind_data_p;
 
@@ -379,6 +386,17 @@ unique_ptr<LocalFunctionData> ParquetWriteInitializeLocal(ClientContext &context
 	return make_unique<ParquetWriteLocalState>();
 }
 
+unique_ptr<TableFunctionRef> ParquetScanReplacement(const string &table_name, void *data) {
+	if (!StringUtil::EndsWith(table_name, ".parquet")) {
+		return nullptr;
+	}
+	auto table_function = make_unique<TableFunctionRef>();
+	vector<unique_ptr<ParsedExpression>> children;
+	children.push_back(make_unique<ConstantExpression>(Value(table_name)));
+	table_function->function = make_unique<FunctionExpression>("parquet_scan", children);
+	return table_function;
+}
+
 void ParquetExtension::Load(DuckDB &db) {
 	ParquetScanFunction scan_fun;
 	CreateTableFunctionInfo cinfo(scan_fun);
@@ -407,6 +425,9 @@ void ParquetExtension::Load(DuckDB &db) {
 	catalog.CreateTableFunction(context, &cinfo);
 	catalog.CreateTableFunction(context, &pq_scan);
 	con.Commit();
+
+	auto &config = DBConfig::GetConfig(*db.instance);
+	config.replacement_scans.emplace_back(ParquetScanReplacement);
 }
 
 } // namespace duckdb

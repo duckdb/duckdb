@@ -78,16 +78,16 @@ select histogram(name) from names;
 
 require vector_size 512
 
-query II
+query II rowsort
 select g,histogram(g) over (partition by g%2)
     from hist_data;
 ----
-2	[<bucket: 2, count: 3>]
-2	[<bucket: 2, count: 3>]
-2	[<bucket: 2, count: 3>]
 1	[<bucket: 1, count: 2>, <bucket: 3, count: 1>, <bucket: 5, count: 1>]
 1	[<bucket: 1, count: 2>, <bucket: 3, count: 1>, <bucket: 5, count: 1>]
-5	[<bucket: 1, count: 2>, <bucket: 3, count: 1>, <bucket: 5, count: 1>]
+2	[<bucket: 2, count: 3>]
+2	[<bucket: 2, count: 3>]
+2	[<bucket: 2, count: 3>]
 3	[<bucket: 1, count: 2>, <bucket: 3, count: 1>, <bucket: 5, count: 1>]
+5	[<bucket: 1, count: 2>, <bucket: 3, count: 1>, <bucket: 5, count: 1>]
 
 

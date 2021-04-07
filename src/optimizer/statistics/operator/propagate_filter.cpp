@@ -31,13 +31,13 @@ void StatisticsPropagator::SetStatisticsNotNull(ColumnBinding binding) {
 	if (entry == statistics_map.end()) {
 		return;
 	}
-	entry->second->has_null = false;
+	entry->second->validity_stats = make_unique<ValidityStatistics>(false);
 }
 
 void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &stats, ExpressionType comparison_type,
                                                   const Value &constant) {
 	// any comparison filter removes all null values
-	stats.has_null = false;
+	stats.validity_stats = make_unique<ValidityStatistics>(false);
 	if (!stats.type.IsNumeric()) {
 		// don't handle non-numeric columns here (yet)
 		return;
@@ -74,8 +74,8 @@ void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &stats, Express
 void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &lstats, BaseStatistics &rstats,
                                                   ExpressionType comparison_type) {
 	// any comparison filter removes all null values
-	lstats.has_null = false;
-	rstats.has_null = false;
+	lstats.validity_stats = make_unique<ValidityStatistics>(false);
+	rstats.validity_stats = make_unique<ValidityStatistics>(false);
 	D_ASSERT(lstats.type == rstats.type);
 	if (!lstats.type.IsNumeric()) {
 		// don't handle non-numeric columns here (yet)
