@@ -12,14 +12,9 @@ statement ok
 PRAGMA threads=4
 
 statement ok
-create table test as (select range i from range(1000000));
-
-mode output_hash
-
-statement ok
-create table test2 as (select * from test order by i desc);
+create table test as (select range i from range(100000));
 
 query T
-SELECT * FROM test2;
+select * from test order by i desc;
 ----
-1000000 values hashing to b4050481afb2aaf1fcc2a5407798619e
+100000 values hashing to 6a720b227e361303445c41f7ff4a8109
