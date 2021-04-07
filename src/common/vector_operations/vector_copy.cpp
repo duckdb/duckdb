@@ -50,6 +50,7 @@ void VectorOperations::Copy(const Vector &source, Vector &target, const Selectio
 	}
 	case VectorType::CONSTANT_VECTOR:
 		sel = ConstantVector::ZERO_SELECTION_VECTOR;
+		break; // carry on with below code
 	case VectorType::FLAT_VECTOR:
 		break;
 	default:
