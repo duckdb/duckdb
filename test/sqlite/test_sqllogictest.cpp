@@ -1512,7 +1512,7 @@ struct AutoRegTests {
 						return;
 					}
 				}
-				REGISTER_TEST_CASE(testRunner, path, "[sqlitelogic][.]");
+				REGISTER_TEST_CASE(testRunner, StringUtil::Replace(path, "\\", "/"), "[sqlitelogic][.]");
 			}
 		});
 		listFiles(fs, "test", [excludes](const string &path) {
@@ -1523,7 +1523,7 @@ struct AutoRegTests {
 					}
 				}
 				// parse the name / group from the test
-				REGISTER_TEST_CASE(testRunner, path, ParseGroupFromPath(path));
+				REGISTER_TEST_CASE(testRunner, StringUtil::Replace(path, "\\", "/"), ParseGroupFromPath(path));
 			}
 		});
 	}

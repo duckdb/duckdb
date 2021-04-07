@@ -1,10 +1,5 @@
+#define DUCKDB_BUILD_LOADABLE_EXTENSION
 #include "duckdb.hpp"
-
-#ifdef _WIN32
-#define DEMO_API __declspec(dllexport)
-#else
-#define DEMO_API
-#endif
 
 using namespace duckdb;
 
@@ -13,7 +8,7 @@ inline string_t hello_fun(string_t what) {
 }
 
 extern "C" {
-DEMO_API void loadable_extension_demo_init(duckdb::DatabaseInstance &db) {
+DUCKDB_EXTENSION_API void loadable_extension_demo_init(duckdb::DatabaseInstance &db) {
 	Connection con(db);
 	con.BeginTransaction();
 	con.CreateScalarFunction<string_t, string_t>("hello", {LogicalType(LogicalTypeId::VARCHAR)},
@@ -21,7 +16,7 @@ DEMO_API void loadable_extension_demo_init(duckdb::DatabaseInstance &db) {
 	con.Commit();
 }
 
-DEMO_API const char *loadable_extension_demo_version() {
+DUCKDB_EXTENSION_API const char *loadable_extension_demo_version() {
 	return DuckDB::LibraryVersion();
 }
 }
