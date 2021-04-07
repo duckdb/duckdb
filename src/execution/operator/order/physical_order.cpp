@@ -698,6 +698,95 @@ void SizesToOffsets(BufferManager &buffer_manager, RowChunk &row_chunk, idx_t ca
 	row_chunk.blocks.push_back(move(new_block));
 }
 
+struct ContinuousBlock {
+public:
+	ContinuousBlock(BufferManager &buffer_manager, const SortingState &sorting_state, const PayloadState &payload_state)
+	    : block_idx(0), buffer_manager(buffer_manager), sorting_state(sorting_state),
+	      payload_state(payload_state) {
+	}
+
+	data_ptr_t &SortingPtr() {
+		return sorting_ptr;
+	}
+
+	data_ptr_t &PayloadPtr() {
+		return payload_ptr;
+	}
+
+	bool Done() {
+		return block_idx >= sorting_blocks.size();
+	}
+
+	void Advance() {
+		if (entry_idx < sorting_blocks[block_idx].count - 1) {
+			entry_idx++;
+			sorting_ptr += sorting_state.ENTRY_SIZE;
+			payload_idx = Load<idx_t>(sorting_ptr + sorting_state.ENTRY_SIZE - sizeof(idx_t));
+		} else if (block_idx < sorting_blocks.size() - 1) {
+			block_idx++;
+			// TODO: pin block
+		} else if (block_idx < sorting_blocks.size()) {
+			// done
+			block_idx++;
+		}
+	}
+
+	void PinBlock() {
+		entry_idx = 0;
+		sorting_handle = buffer_manager.Pin(sorting_blocks[block_idx].block);
+		sorting_ptr = sorting_handle->node->buffer;
+		for (idx_t i = 0; i < sorting_state.CONSTANT_SIZE.size(); i++) {
+			if (!sorting_state.CONSTANT_SIZE[i]) {
+				var_sorting_handles[i] = buffer_manager.Pin(var_sorting_blocks[i][block_idx].block);
+				var_sorting_ptrs[i] = var_sorting_handles[i]->node->buffer;
+				var_sorting_offset_handles[i] = buffer_manager.Pin(var_sorting_offset_blocks[i][block_idx].block);
+				var_sorting_offsets[i] = (idx_t *)var_sorting_handles[i]->node->buffer;
+			}
+		}
+		payload_handle = buffer_manager.Pin(payload_blocks[block_idx].block);
+		payload_ptr = payload_handle->node->buffer;
+		payload_offset_handle = buffer_manager.Pin(payload_offset_blocks[block_idx].block);
+		payload_offsets = (idx_t *)payload_offset_handle->node->buffer;
+	}
+
+private:
+	idx_t block_idx;
+	idx_t entry_idx;
+	idx_t payload_idx;
+
+	idx_t start;
+	idx_t end;
+
+private:
+	//! Buffer manager
+	BufferManager &buffer_manager;
+
+	//! The sorting and payload state constants
+	const SortingState &sorting_state;
+	const PayloadState &payload_state;
+
+	//! Memcmp-able representation of sorting columns
+	vector<RowDataBlock> sorting_blocks;
+	unique_ptr<BufferHandle> sorting_handle;
+	data_ptr_t sorting_ptr;
+
+	//! Variable size sorting columns and their offsets
+	vector<vector<RowDataBlock>> var_sorting_blocks;
+	vector<unique_ptr<BufferHandle>> var_sorting_handles;
+	vector<data_ptr_t> var_sorting_ptrs;
+	vector<vector<RowDataBlock>> var_sorting_offset_blocks;
+	vector<unique_ptr<BufferHandle>> var_sorting_offset_handles;
+	vector<idx_t *> var_sorting_offsets;
+
+	//! Payload columns and their offsets
+	vector<RowDataBlock> payload_blocks;
+	unique_ptr<BufferHandle> payload_handle;
+	data_ptr_t payload_ptr;
+	vector<RowDataBlock> payload_offset_blocks;
+	unique_ptr<BufferHandle> payload_offset_handle;
+	idx_t *payload_offsets;
+};
+
 void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> state_p) {
 	this->sink_state = move(state_p);
 	auto &state = (OrderGlobalState &)*this->sink_state;
