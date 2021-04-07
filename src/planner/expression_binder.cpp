@@ -1,6 +1,7 @@
 #include "duckdb/planner/expression_binder.hpp"
 
 #include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/positional_reference_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -60,6 +61,8 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> *expr, 
 		return BindExpression((SubqueryExpression &)expr_ref, depth);
 	case ExpressionClass::PARAMETER:
 		return BindExpression((ParameterExpression &)expr_ref, depth);
+	case ExpressionClass::POSITIONAL_REFERENCE:
+		return BindExpression((PositionalReferenceExpression &)expr_ref, depth);
 	default:
 		throw NotImplementedException("Unimplemented expression class");
 	}
@@ -180,6 +183,15 @@ void ExpressionBinder::BindTableNames(Binder &binder, ParsedExpression &expr, un
 			}
 		}
 		binder.bind_context.BindColumn(colref, 0);
+	} else if (expr.type == ExpressionType::POSITIONAL_REFERENCE) {
+		auto &ref = (PositionalReferenceExpression &)expr;
+		if (ref.alias.empty()) {
+			string table_name, column_name;
+			auto error = binder.bind_context.BindColumn(ref, table_name, column_name);
+			if (error.empty()) {
+				ref.alias = column_name;
+			}
+		}
 	}
 	ParsedExpressionIterator::EnumerateChildren(
 	    expr, [&](const ParsedExpression &child) { BindTableNames(binder, (ParsedExpression &)child, alias_map); });

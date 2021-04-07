@@ -12,7 +12,7 @@ public:
 	unique_ptr<PhysicalOperatorState> child_state;
 	DataChunk child_chunk;
 	unique_ptr<FunctionOperatorData> operator_data;
-	bool initialized;
+	bool initialized = false;
 };
 
 // this implements a sorted window functions variant
