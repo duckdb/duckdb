@@ -138,6 +138,7 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 			switch (physical_type) {
 			case PhysicalType::VARCHAR:
 				col_size = StringStatistics::MAX_STRING_MINMAX_SIZE;
+				break;
 			default:
 				// do nothing
 				break;
