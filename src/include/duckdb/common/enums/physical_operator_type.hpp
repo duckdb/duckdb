@@ -94,8 +94,8 @@ enum class PhysicalOperatorType : uint8_t {
 	VACUUM,
 	EXPORT,
 	SET,
-    LOAD,
-    INOUT_FUNCTION
+	LOAD,
+	INOUT_FUNCTION
 };
 
 string PhysicalOperatorToString(PhysicalOperatorType type);
