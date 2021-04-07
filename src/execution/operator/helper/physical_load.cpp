@@ -6,14 +6,11 @@
 #ifndef _WIN32
 #include <dlfcn.h>
 #else
-// we copy a trick from concurrentqueue, this is brilliant:
-// No sense pulling in windows.h for this, we'll manually declare the functions
-// we use and rely on backwards-compatibility for this not to break
-extern "C" __declspec(dllimport) void *__stdcall LoadLibrary(const char *);
-extern "C" __declspec(dllimport) void *__stdcall LoadLibrary(void *, const char *);
+#include <windows.h>
 
 #define RTLD_LAZY  0
 #define RTLD_LOCAL 0
+
 #endif
 
 namespace duckdb {
@@ -32,25 +29,17 @@ void *dlsym(void *handle, const char *name) {
 #endif
 
 void PhysicalLoad::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
-	if (!FileSystem::GetFileSystem(context.client).FileExists(info->filename)) {
-		throw InvalidInputException("File %s not found", info->filename);
+	auto &fs = FileSystem::GetFileSystem(context.client);
+	auto filename = fs.ConvertSeparators(info->filename);
+	if (!fs.FileExists(filename)) {
+		throw InvalidInputException("File %s not found", filename);
 	}
-	auto lib_hdl = dlopen(info->filename.c_str(), RTLD_LAZY | RTLD_LOCAL);
-	if (lib_hdl == nullptr) {
-		throw InvalidInputException("File %s could not be loaded", info->filename);
-	}
-
-	std::string sep = "";
-	if (StringUtil::Contains(info->filename, "/") && !StringUtil::Contains(info->filename, "\\")) {
-		sep = "/";
-	} else if (StringUtil::Contains(info->filename, "\\") && !StringUtil::Contains(info->filename, "/")) {
-		sep = "\\";
-	} else {
-		sep = FileSystem::GetFileSystem(context.client).PathSeparator();
+	auto lib_hdl = dlopen(filename.c_str(), RTLD_LAZY | RTLD_LOCAL);
+	if (!lib_hdl) {
+		throw InvalidInputException("File %s could not be loaded", filename);
 	}
 
-	auto vec = StringUtil::Split(StringUtil::Split(info->filename, sep).back(), ".");
-	auto basename = vec[0];
+	auto basename = fs.ExtractBaseName(filename);
 	auto init_fun_name = basename + "_init";
 	auto version_fun_name = basename + "_version";
 
@@ -59,18 +48,17 @@ void PhysicalLoad::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
 
 	*(void **)(&init_fun) = dlsym(lib_hdl, init_fun_name.c_str());
 	if (init_fun == nullptr) {
-		throw InvalidInputException("File %s did not contain initialization function %s", info->filename,
-		                            init_fun_name);
+		throw InvalidInputException("File %s did not contain initialization function %s", filename, init_fun_name);
 	}
 
 	*(void **)(&version_fun) = dlsym(lib_hdl, version_fun_name.c_str());
 	if (init_fun == nullptr) {
-		throw InvalidInputException("File %s did not contain version function %s", info->filename, version_fun_name);
+		throw InvalidInputException("File %s did not contain version function %s", filename, version_fun_name);
 	}
 	auto extension_version = std::string((*version_fun)());
 	auto engine_version = DuckDB::LibraryVersion();
 	if (extension_version != engine_version) {
-		throw InvalidInputException("Extension %s version (%s) does not match DuckDB version (%s)", info->filename,
+		throw InvalidInputException("Extension %s version (%s) does not match DuckDB version (%s)", filename,
 		                            extension_version, engine_version);
 	}
 
@@ -78,7 +66,7 @@ void PhysicalLoad::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
 		(*init_fun)(*context.client.db);
 	} catch (Exception &e) {
 		throw InvalidInputException("Initialization function %s from file %s threw an exception: %s", init_fun_name,
-		                            info->filename, e.what());
+		                            filename, e.what());
 	}
 	state->finished = true;
 }
