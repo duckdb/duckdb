@@ -211,8 +211,6 @@ FILE *lndebug_fp = NULL;
 	do {                                                                                                               \
 		if (lndebug_fp == NULL) {                                                                                      \
 			lndebug_fp = fopen("/tmp/lndebug.txt", "a");                                                               \
-			fprintf(lndebug_fp, "[%d %d %d] p: %d, rows: %d, rpos: %d, max: %d, oldmax: %d\n", (int)l->len,            \
-			        (int)l->pos, (int)l->oldpos, plen, rows, rpos, (int)l->maxrows, old_rows);                         \
 		}                                                                                                              \
 		fprintf(lndebug_fp, ", " __VA_ARGS__);                                                                         \
 		fflush(lndebug_fp);                                                                                            \
@@ -1140,6 +1138,7 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 				continue;
 		}
 
+		lndebug("%d\n", (int) c);
 		switch (c) {
 		case 10:
 		case ENTER: /* enter */
@@ -1220,8 +1219,17 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 			 * chars at different times. */
 			if (read(l.ifd, seq, 1) == -1)
 				break;
+			if (seq[0] == 'b') {
+				linenoiseEditMoveWordLeft(&l);
+				break;
+			} else if (seq[0] == 'f') {
+				linenoiseEditMoveWordRight(&l);
+				break;
+			}
+			// lndebug("seq0: %d\n", seq[0]);
 			if (read(l.ifd, seq + 1, 1) == -1)
 				break;
+			// lndebug("seq1: %d\n", seq[1]);
 
 			/* ESC [ sequences. */
 			if (seq[0] == '[') {
@@ -1231,8 +1239,20 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 						break;
 					if (seq[2] == '~') {
 						switch (seq[1]) {
+						case '1':
+							linenoiseEditMoveHome(&l);
+							break;
 						case '3': /* Delete key. */
 							linenoiseEditDelete(&l);
+							break;
+						case '4':
+							linenoiseEditMoveEnd(&l);
+							break;
+						case '8':
+							linenoiseEditMoveEnd(&l);
+							break;
+						default:
+							lndebug("unrecognized escape sequence (~) %d", seq[1]);
 							break;
 						}
 					} else if (seq[2] == ';') {
@@ -1245,7 +1265,13 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 						} else if (memcmp(seq, "[1;5D", 5) == 0) {
 							// [1;5D: move word left
 							linenoiseEditMoveWordLeft(&l);
+						} else {
+							lndebug("unrecognized escape sequence (;) %d", seq[1]);
 						}
+					} else if (seq[1] == '5' && seq[2] == 'C') {
+						linenoiseEditMoveWordRight(&l);
+					} else if (seq[1] == '5' && seq[2] == 'D') {
+						linenoiseEditMoveWordLeft(&l);
 					}
 				} else {
 					switch (seq[1]) {
@@ -1267,10 +1293,12 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 					case 'F': /* End*/
 						linenoiseEditMoveEnd(&l);
 						break;
+					default:
+						lndebug("unrecognized escape sequence (seq[1]) %d", seq[1]);
+						break;
 					}
 				}
 			}
-
 			/* ESC O sequences. */
 			else if (seq[0] == 'O') {
 				switch (seq[1]) {
@@ -1279,6 +1307,15 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 					break;
 				case 'F': /* End*/
 					linenoiseEditMoveEnd(&l);
+					break;
+				case 'c':
+					linenoiseEditMoveWordRight(&l);
+					break;
+				case 'd':
+					linenoiseEditMoveWordLeft(&l);
+					break;
+				default:
+					lndebug("unrecognized escape sequence (O) %d", seq[1]);
 					break;
 				}
 			}
@@ -1306,11 +1343,12 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 		case CTRL_W: /* ctrl+w, delete previous word */
 			linenoiseEditDeletePrevWord(&l);
 			break;
-		default:
+		default: {
 			if (linenoiseEditInsert(&l, c)) {
 				return -1;
 			}
 			break;
+		}
 		}
 	}
 	return l.len;
