@@ -942,7 +942,8 @@ void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 	this->sink_state = move(state_p);
 	auto &state = (OrderGlobalState &)*this->sink_state;
 
-	D_ASSERT(state.sorting_block->count == state.payload_block->count);
+	const idx_t &count = state.sorting_block->count;
+	D_ASSERT(count == state.payload_block->count);
 	if (state.sorting_block->count == 0) {
 		return;
 	}
@@ -950,19 +951,14 @@ void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 	const auto &sorting_state = *state.sorting_state;
 	const auto &payload_state = *state.payload_state;
 
-	idx_t payload_size = 0;
-	if (payload_state.HAS_VARIABLE_SIZE) {
-		for (auto &block : state.payload_block->blocks) {
-			payload_size += block.byte_offset;
-		}
-	} else {
-		payload_size = state.payload_block->count * payload_state.ENTRY_SIZE;
-	}
-	if (payload_size > state.buffer_manager.GetMaxMemory()) {
-		throw NotImplementedException("External sort");
+    const idx_t tuples_per_thread = SORTING_BLOCK_SIZE / sorting_state.ENTRY_SIZE + 1;
+	for (idx_t partition_idx = 0; partition_idx * tuples_per_thread < count; partition_idx++) {
+		const idx_t offset = partition_idx * tuples_per_thread;
+		const idx_t tuples_this_thread = MinValue(tuples_per_thread, count - offset);
+		
 	}
 
-	// copy all data the to ContinuousBlocks
+	// copy all data to ContinuousBlocks
 	auto &buffer_manager = BufferManager::GetBufferManager(context);
 	auto cb = make_unique<ContinuousBlock>(buffer_manager, sorting_state);
 	// fixed-size sorting data
@@ -1117,6 +1113,10 @@ void PhysicalOrder::GetChunkInternal(ExecutionContext &context, DataChunk &chunk
 	auto &gstate = (OrderGlobalState &)*this->sink_state;
 	const auto &sorting_state = *gstate.sorting_state;
 	const auto &payload_state = *gstate.payload_state;
+
+	if (gstate.sorted_blocks.empty()) {
+		return;
+	}
 
 	if (!state.initialized) {
 		// initialize operator state
