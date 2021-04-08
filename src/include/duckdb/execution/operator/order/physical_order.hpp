@@ -45,7 +45,7 @@ public:
 	string ParamsToString() const override;
 
 private:
-    constexpr static int SORTING_BLOCK_SIZE = 524288;
+	constexpr static int SORTING_BLOCK_SIZE = 524288;
 };
 
 } // namespace duckdb
