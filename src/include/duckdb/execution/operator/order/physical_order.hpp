@@ -17,6 +17,8 @@
 
 namespace duckdb {
 
+struct ContinuousBlock;
+
 //! Physically re-orders the input data
 class PhysicalOrder : public PhysicalSink {
 public:
@@ -41,6 +43,9 @@ public:
 	unique_ptr<ParallelState> GetParallelState();
 
 	string ParamsToString() const override;
+
+private:
+    constexpr static int SORTING_BLOCK_SIZE = 524288;
 };
 
 } // namespace duckdb
