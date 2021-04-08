@@ -73,6 +73,8 @@ unique_ptr<ParsedExpression> Transformer::TransformExpression(duckdb_libpgquery:
 		return TransformLambda(reinterpret_cast<duckdb_libpgquery::PGLambdaFunction *>(node));
 	case duckdb_libpgquery::T_PGAIndirection:
 		return TransformArrayAccess(reinterpret_cast<duckdb_libpgquery::PGAIndirection *>(node));
+	case duckdb_libpgquery::T_PGPositionalReference:
+		return TransformPositionalReference(reinterpret_cast<duckdb_libpgquery::PGPositionalReference *>(node));
 	default:
 		throw NotImplementedException("Expr of type %d not implemented\n", (int)node->type);
 	}

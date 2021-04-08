@@ -10,6 +10,7 @@
 
 #include "duckdb/execution/operator/aggregate/physical_simple_aggregate.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
+#include "duckdb/execution/operator/order/physical_order.hpp"
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
 
@@ -136,6 +137,30 @@ void Pipeline::ScheduleSequentialTask() {
 	scheduler.ScheduleTask(*executor.producer, move(task));
 }
 
+bool Pipeline::LaunchScanTasks(PhysicalOperator *op, idx_t max_threads, unique_ptr<ParallelState> pstate) {
+	// split the scan up into parts and schedule the parts
+	auto &scheduler = TaskScheduler::GetScheduler(executor.context);
+	if (max_threads > executor.context.db->NumberOfThreads()) {
+		max_threads = executor.context.db->NumberOfThreads();
+	}
+	if (max_threads <= 1) {
+		// too small to parallelize
+		return false;
+	}
+
+	this->parallel_node = op;
+	this->parallel_state = move(pstate);
+
+	// launch a task for every thread
+	this->total_tasks = max_threads;
+	for (idx_t i = 0; i < max_threads; i++) {
+		auto task = make_unique<PipelineTask>(this);
+		scheduler.ScheduleTask(*executor.producer, move(task));
+	}
+
+	return true;
+}
+
 bool Pipeline::ScheduleOperator(PhysicalOperator *op) {
 	switch (op->type) {
 	case PhysicalOperatorType::UNNEST:
@@ -148,8 +173,6 @@ bool Pipeline::ScheduleOperator(PhysicalOperator *op) {
 		// filter, projection or hash probe: continue in children
 		return ScheduleOperator(op->children[0].get());
 	case PhysicalOperatorType::TABLE_SCAN: {
-		// we reached a scan: split it up into parts and schedule the parts
-		auto &scheduler = TaskScheduler::GetScheduler(executor.context);
 		auto &get = (PhysicalTableScan &)*op;
 		if (!get.function.max_threads) {
 			// table function cannot be parallelized
@@ -158,23 +181,14 @@ bool Pipeline::ScheduleOperator(PhysicalOperator *op) {
 		D_ASSERT(get.function.init_parallel_state);
 		D_ASSERT(get.function.parallel_state_next);
 		idx_t max_threads = get.function.max_threads(executor.context, get.bind_data.get());
-		if (max_threads > executor.context.db->NumberOfThreads()) {
-			max_threads = executor.context.db->NumberOfThreads();
-		}
-		if (max_threads <= 1) {
-			// table is too small to parallelize
-			return false;
-		}
-		this->parallel_state = get.function.init_parallel_state(executor.context, get.bind_data.get());
-		this->parallel_node = op;
-
-		// launch a task for every thread
-		this->total_tasks = max_threads;
-		for (idx_t i = 0; i < max_threads; i++) {
-			auto task = make_unique<PipelineTask>(this);
-			scheduler.ScheduleTask(*executor.producer, move(task));
-		}
-		return true;
+		auto pstate = get.function.init_parallel_state(executor.context, get.bind_data.get());
+		return LaunchScanTasks(op, max_threads, move(pstate));
+	}
+	case PhysicalOperatorType::ORDER_BY: {
+		auto &ord = (PhysicalOrder &)*op;
+		idx_t max_threads = ord.MaxThreads(executor.context);
+		auto pstate = ord.GetParallelState();
+		return LaunchScanTasks(op, max_threads, move(pstate));
 	}
 	case PhysicalOperatorType::HASH_GROUP_BY: {
 		// FIXME: parallelize scan of GROUP_BY HT

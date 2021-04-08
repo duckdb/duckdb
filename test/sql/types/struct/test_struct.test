@@ -96,13 +96,13 @@ SELECT e, STRUCT_EXTRACT(STRUCT_PACK(xx := e/2), 'xx')*2 as s FROM struct_data W
 query II
 SELECT e, STRUCT_EXTRACT(STRUCT_PACK(xx := e, yy := g), 'xx') as ee FROM struct_data ORDER BY e DESC
 ----
+NULL	NULL
 6	6
 5	5
 4	4
 3	3
 2	2
 1	1
-NULL	NULL
 
 query II
 SELECT e, STRUCT_EXTRACT(STRUCT_PACK(a := e, b := ROWID, c := 42), 'c') as ee FROM struct_data ORDER BY ROWID
@@ -175,3 +175,9 @@ SELECT STRUCT_EXTRACT(STRUCT_PACK(xx := e, yy := g), '42') FROM struct_data
 
 statement error
 CREATE TABLE test AS SELECT e, STRUCT_PACK(e) FROM struct_data
+
+statement ok
+SELECT STRUCT_PACK(i := range, j := 'asdf') FROM range(2);
+
+statement ok
+SELECT STRUCT_PACK(i := range, j := 42) FROM range(2);
