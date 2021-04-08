@@ -1138,7 +1138,7 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 				continue;
 		}
 
-		lndebug("%d\n", (int) c);
+		lndebug("%d\n", (int)c);
 		switch (c) {
 		case 10:
 		case ENTER: /* enter */
