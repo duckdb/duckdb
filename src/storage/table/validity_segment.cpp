@@ -64,21 +64,8 @@ idx_t ValiditySegment::Append(SegmentStatistics &stats, VectorData &data, idx_t 
 	return append_count;
 }
 
-void ValiditySegment::Scan(ColumnScanState &state, idx_t start, Vector &result) {
-	D_ASSERT(start % STANDARD_VECTOR_SIZE == 0);
-#if STANDARD_VECTOR_SIZE >= 64
-	idx_t vector_index = start / STANDARD_VECTOR_SIZE;
-	auto vector_ptr = state.primary_handle->node->buffer + vector_index * ValidityMask::STANDARD_MASK_SIZE;
-	ValidityMask vector_mask(vector_ptr);
-	if (!vector_mask.CheckAllValid(STANDARD_VECTOR_SIZE)) {
-		FlatVector::Validity(result).Copy(vector_mask, STANDARD_VECTOR_SIZE);
-	}
-#else
-	Scan(state, start, STANDARD_VECTOR_SIZE, result, 0);
-#endif
-}
-
 void ValiditySegment::Scan(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset) {
+	// FIXME: this should be optimized and use shifts/masks to copy multiple values at once
 	idx_t base_tuple = start;
 	ValidityMask source_mask(state.primary_handle->node->buffer);
 	auto &target = FlatVector::Validity(result);

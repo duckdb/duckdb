@@ -56,8 +56,6 @@ public:
 public:
 	void InitializeScan(ColumnScanState &state) override;
 
-	//! Scans a vector of STANDARD_VECTOR_SIZE starting at position "start" and store it in the result
-	void Scan(ColumnScanState &state, idx_t start, Vector &result) override;
 	//! Scans a vector of "scan_count" entries starting at position "start"
 	//! Store it in result with offset "result_offset"
 	void Scan(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset) override;

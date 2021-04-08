@@ -27,7 +27,6 @@ public:
 	idx_t max_tuples;
 public:
 	void InitializeScan(ColumnScanState &state) override;
-	void Scan(ColumnScanState &state, idx_t start, Vector &result) override;
 	void Scan(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset) override;
 	void FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) override;
 	idx_t Append(SegmentStatistics &stats, VectorData &data, idx_t offset, idx_t count) override;

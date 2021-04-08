@@ -54,9 +54,7 @@ public:
 public:
 	void InitializeScan(ColumnScanState &state);
 	//! Scan one vector from this segment
-	void Scan(ColumnScanState &state, idx_t row_index, Vector &result);
-	//! Fetch the base table vector index that belongs to this row
-	void Fetch(ColumnScanState &state, idx_t row_index, Vector &result);
+	void Scan(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset);
 	//! Fetch a value of the specific row id and append it to the result
 	void FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx);
 };

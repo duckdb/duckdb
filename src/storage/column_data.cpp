@@ -24,6 +24,27 @@ ColumnData::ColumnData(DatabaseInstance &db, DataTableInfo &table_info, LogicalT
 	statistics = BaseStatistics::CreateEmpty(type);
 }
 
+void ColumnData::ScanBaseVector(ColumnScanState &state, Vector &result) {
+	idx_t row_index = state.row_index;
+	idx_t remaining = STANDARD_VECTOR_SIZE;
+	while(remaining > 0) {
+		D_ASSERT(row_index >= state.current->start && row_index <= state.current->start + state.current->count);
+		idx_t scan_count = MinValue<idx_t>(remaining, state.current->start + state.current->count - row_index);
+		idx_t start = row_index - state.current->start;
+		state.current->Scan(state, start, scan_count, result, STANDARD_VECTOR_SIZE - remaining);
+
+		row_index += scan_count;
+		remaining -= scan_count;
+		if (remaining > 0) {
+			if (!state.current->next) {
+				break;
+			}
+			state.current = (ColumnSegment*) state.current->next.get();
+			state.current->InitializeScan(state);
+		}
+	}
+}
+
 void ColumnData::FilterScan(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
                             idx_t &approved_tuple_count) {
 	Scan(transaction, state, result);
@@ -44,10 +65,13 @@ void ColumnScanState::Next() {
 		return;
 	}
 	row_index += STANDARD_VECTOR_SIZE;
-	if (row_index >= current->start + current->count) {
+	while (row_index >= current->start + current->count) {
 		current = (ColumnSegment *)current->next.get();
 		initialized = false;
 		segment_checked = false;
+		if (!current) {
+			break;
+		}
 	}
 	if (row_index >= updates->start + MorselInfo::MORSEL_SIZE) {
 		updates = (UpdateSegment *)updates->next.get();
@@ -164,16 +188,16 @@ void ColumnData::RevertAppend(row_t start_row) {
 }
 
 void ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
-	throw NotImplementedException("FIXME: throw");
-	// perform the fetch within the segment
-	auto segment = (ColumnSegment *)data.GetSegment(row_id);
-	auto vector_index = (row_id - segment->start) / STANDARD_VECTOR_SIZE;
-	segment->Fetch(state, vector_index, result);
+	throw NotImplementedException("FIXME: fetch");
+	// // perform the fetch within the segment
+	// auto segment = (ColumnSegment *)data.GetSegment(row_id);
+	// auto vector_index = (row_id - segment->start) / STANDARD_VECTOR_SIZE;
+	// segment->Scan(state, vector_index, result);
 
-	// merge any updates
-	auto update_segment = (UpdateSegment *)updates.GetSegment(row_id);
-	auto update_vector_index = (row_id - update_segment->start) / STANDARD_VECTOR_SIZE;
-	update_segment->FetchCommitted(update_vector_index, result);
+	// // merge any updates
+	// auto update_segment = (UpdateSegment *)updates.GetSegment(row_id);
+	// auto update_vector_index = (row_id - update_segment->start) / STANDARD_VECTOR_SIZE;
+	// update_segment->FetchCommitted(update_vector_index, result);
 }
 
 void ColumnData::FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result,
@@ -403,6 +427,7 @@ void ColumnData::Checkpoint(TableDataWriter &writer) {
 		}
 		// not persisted yet: scan the segment and write it to disk
 		ColumnScanState state;
+		state.current = segment;
 		segment->InitializeScan(state);
 
 		Vector scan_vector(type);
@@ -415,7 +440,8 @@ void ColumnData::Checkpoint(TableDataWriter &writer) {
 				update_segment = (UpdateSegment *)update_segment->next.get();
 			}
 
-			segment->Scan(state, row_index, scan_vector);
+			state.row_index = row_index;
+			ScanBaseVector(state, scan_vector);
 			update_segment->FetchCommitted(update_segment->VectorIndex(row_index), scan_vector);
 
 			checkpoint_state->AppendData(scan_vector, count);

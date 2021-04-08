@@ -70,3 +70,14 @@ NULL	NULL
 12	21
 13	22
 14	23
+
+restart
+
+query II
+SELECT * FROM test ORDER BY a
+----
+NULL	NULL
+11	22
+12	21
+13	22
+14	23

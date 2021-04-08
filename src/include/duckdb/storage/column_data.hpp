@@ -69,6 +69,8 @@ public:
 public:
 	virtual bool CheckZonemap(ColumnScanState &state, TableFilter &filter) = 0;
 
+	void ScanBaseVector(ColumnScanState &state, Vector &result);
+
 	//! Initialize a scan of the column
 	virtual void InitializeScan(ColumnScanState &state) = 0;
 	//! Initialize a scan starting at the specified offset

@@ -42,11 +42,6 @@ bool UncompressedSegment::RowRangeIsValid(idx_t row_id, idx_t count) const {
 	return row_id <= tuple_count && row_id + count <= tuple_count;
 }
 
-void UncompressedSegment::Fetch(ColumnScanState &state, idx_t row_index, Vector &result) {
-	InitializeScan(state);
-	Scan(state, row_index, result);
-}
-
 //===--------------------------------------------------------------------===//
 // Filter
 //===--------------------------------------------------------------------===//

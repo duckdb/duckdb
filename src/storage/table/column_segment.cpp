@@ -20,14 +20,9 @@ void ColumnSegment::InitializeScan(ColumnScanState &state) {
 	data->InitializeScan(state);
 }
 
-void ColumnSegment::Scan(ColumnScanState &state, idx_t row_index, Vector &result) {
-	D_ASSERT(row_index >= start && row_index < start + count);
-	data->Scan(state, row_index - start, result);
-}
-
-void ColumnSegment::Fetch(ColumnScanState &state, idx_t row_index, Vector &result) {
-	D_ASSERT(row_index >= start && row_index < start + count);
-	data->Fetch(state, row_index - start, result);
+void ColumnSegment::Scan(ColumnScanState &state, idx_t start_row, idx_t scan_count, Vector &result, idx_t result_offset) {
+	D_ASSERT(start_row + scan_count <= this->count);
+	data->Scan(state, start_row, scan_count, result, result_offset);
 }
 
 void ColumnSegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {

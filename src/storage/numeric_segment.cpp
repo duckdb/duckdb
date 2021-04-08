@@ -44,19 +44,6 @@ void NumericSegment::InitializeScan(ColumnScanState &state) {
 //===--------------------------------------------------------------------===//
 // Scan base data
 //===--------------------------------------------------------------------===//
-void NumericSegment::Scan(ColumnScanState &state, idx_t start, Vector &result) {
-	D_ASSERT(start <= tuple_count);
-	idx_t scan_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, tuple_count - start);
-
-	auto data = state.primary_handle->node->buffer;
-	auto source_data = data + start * type_size;
-
-	// copy the data from the base table
-	// FIXME: this can just be a pointer assignment if this is a persistent segment
-	result.SetVectorType(VectorType::FLAT_VECTOR);
-	memcpy(FlatVector::GetData(result), source_data, scan_count * type_size);
-}
-
 void NumericSegment::Scan(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset) {
 	D_ASSERT(start <= tuple_count);
 	D_ASSERT(start + scan_count <= tuple_count);

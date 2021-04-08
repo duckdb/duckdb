@@ -42,8 +42,6 @@ public:
 public:
 	virtual void InitializeScan(ColumnScanState &state) {
 	}
-	//! Scans a vector of STANDARD_VECTOR_SIZE starting at position "start" and store it in the result
-	virtual void Scan(ColumnScanState &state, idx_t start, Vector &result) = 0;
 	//! Scans a vector of "scan_count" entries starting at position "start"
 	//! Store it in result with offset "result_offset"
 	virtual void Scan(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset) = 0;
@@ -51,8 +49,6 @@ public:
 	static void FilterSelection(SelectionVector &sel, Vector &result, const TableFilter &filter,
 	                            idx_t &approved_tuple_count, ValidityMask &mask);
 
-	//! Fetch a single vector from the base table
-	void Fetch(ColumnScanState &state, idx_t row_id, Vector &result);
 	//! Fetch a single value and append it to the vector
 	virtual void FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) = 0;
 

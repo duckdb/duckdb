@@ -59,12 +59,6 @@ void StringSegment::ReadString(string_t *result_data, Vector &result, data_ptr_t
 //===--------------------------------------------------------------------===//
 // Scan base data
 //===--------------------------------------------------------------------===//
-void StringSegment::Scan(ColumnScanState &state, idx_t start, Vector &result) {
-	D_ASSERT(start <= tuple_count);
-	idx_t scan_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, tuple_count - start);
-	Scan(state, start, scan_count, result, 0);
-}
-
 void StringSegment::Scan(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset) {
 	D_ASSERT(RowRangeIsValid(start, scan_count));
 
