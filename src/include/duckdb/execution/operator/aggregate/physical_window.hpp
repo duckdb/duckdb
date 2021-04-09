@@ -10,6 +10,7 @@
 
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/execution/physical_sink.hpp"
+#include "duckdb/parallel/pipeline.hpp"
 
 namespace duckdb {
 
@@ -30,6 +31,9 @@ public:
 
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) override;
 	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;
+
+	idx_t MaxThreads(ClientContext &context);
+	unique_ptr<ParallelState> GetParallelState();
 
 	string ParamsToString() const override;
 

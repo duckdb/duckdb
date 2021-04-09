@@ -5,6 +5,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/window_segment_tree.hpp"
+#include "duckdb/parallel/task_context.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/common/windows_undefs.hpp"
@@ -16,9 +17,10 @@ namespace duckdb {
 
 using counts_t = std::vector<size_t>;
 
+//	Global sink state
 class WindowGlobalState : public GlobalOperatorState {
 public:
-	WindowGlobalState(PhysicalWindow &op_p, ClientContext &context) : op(op_p), total(0) {
+	WindowGlobalState(PhysicalWindow &op_p, ClientContext &context) : op(op_p) {
 	}
 
 	PhysicalWindow &op;
@@ -28,11 +30,9 @@ public:
 	ChunkCollection hash_collection;
 	ChunkCollection window_results;
 	counts_t counts;
-
-	//! The number of chunks. Needed because we will destroy the collections before reading
-	idx_t total;
 };
 
+//	Per-thread sink state
 class WindowLocalState : public LocalSinkState {
 public:
 	explicit WindowLocalState(PhysicalWindow &op_p, const unsigned partition_bits = 10)
@@ -45,25 +45,6 @@ public:
 	ChunkCollection hash_collection;
 	const size_t partition_count;
 	counts_t counts;
-};
-
-//! The operator state of the window
-class PhysicalWindowOperatorState : public PhysicalOperatorState {
-public:
-	PhysicalWindowOperatorState(PhysicalOperator &op, PhysicalOperator *child)
-	    : PhysicalOperatorState(op, child), position(0), completed(0), next_part(0) {
-	}
-
-	//! The output read position (in chunks).
-	std::atomic<idx_t> position;
-	//! The partition write position (in chunks).
-	std::atomic<idx_t> completed;
-	//! The next partition to process
-	std::atomic<size_t> next_part;
-	//! The generated input chunks
-	ChunkCollection chunks;
-	//! The generated output chunks
-	ChunkCollection window_results;
 };
 
 // this implements a sorted window functions variant
@@ -424,9 +405,14 @@ static void HashChunk(counts_t &counts, DataChunk &hash_chunk, DataChunk &sort_c
 
 	const auto partition_mask = hash_t(counts.size() - 1);
 	auto hashes = FlatVector::GetData<hash_t>(hash_vector);
-	for (idx_t i = 0; i < count; ++i) {
-		const auto bin = (hashes[i] & partition_mask);
-		++counts[bin];
+	if (hash_vector.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		const auto bin = (hashes[0] & partition_mask);
+		counts[bin] += count;
+	} else {
+		for (idx_t i = 0; i < count; ++i) {
+			const auto bin = (hashes[i] & partition_mask);
+			++counts[bin];
+		}
 	}
 }
 
@@ -857,68 +843,115 @@ static void ExtractPartition(WindowGlobalState &gstate, ChunkCollection &chunks,
 	}
 }
 
-void PhysicalWindow::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
-	auto state = reinterpret_cast<PhysicalWindowOperatorState *>(state_p);
-	auto &gstate = (WindowGlobalState &)*sink_state;
+//===--------------------------------------------------------------------===//
+// GetChunkInternal
+//===--------------------------------------------------------------------===//
+idx_t PhysicalWindow::MaxThreads(ClientContext &context) {
+	// Recursive CTE can cause us to be called befor Finalize,
+	// so we have to check and fall back to the cardinality estimate
+	// in that case
+	if (!this->sink_state.get()) {
+		return (estimated_cardinality + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE + 1;
+	}
+	auto &state = (WindowGlobalState &)*this->sink_state;
 
+	// If there is only one partition, we have to process it on one thread.
+	if (state.counts.empty()) {
+		return 1;
+	}
+
+	idx_t max_threads = 0;
+	for (const auto count : state.counts) {
+		max_threads += int(count > 0);
+	}
+
+	return max_threads;
+}
+
+//	Global read state
+class WindowParallelState : public ParallelState {
+public:
+	WindowParallelState() : next_part(0) {
+	}
+	//! The output read position.
+	std::atomic<idx_t> next_part;
+};
+
+unique_ptr<ParallelState> PhysicalWindow::GetParallelState() {
+	auto result = make_unique<WindowParallelState>();
+	return move(result);
+}
+
+// Per-thread read state
+class PhysicalWindowOperatorState : public PhysicalOperatorState {
+public:
+	PhysicalWindowOperatorState(PhysicalOperator &op, PhysicalOperator *child)
+	    : PhysicalOperatorState(op, child), parallel_state(nullptr), initialized(false) {
+	}
+
+	ParallelState *parallel_state;
+	bool initialized;
+
+	//! The number of partitions to process (0 if there is no partitioning)
+	size_t partitions;
+	//! The output read position.
+	size_t next_part;
+	//! The generated input chunks
+	ChunkCollection chunks;
+	//! The generated output chunks
+	ChunkCollection window_results;
+	//! The read cursor
+	idx_t position;
+};
+
+unique_ptr<PhysicalOperatorState> PhysicalWindow::GetOperatorState() {
+	return make_unique<PhysicalWindowOperatorState>(*this, children[0].get());
+}
+
+static void GeneratePartition(PhysicalWindowOperatorState &state, WindowGlobalState &gstate, const idx_t hash_bin) {
+	auto &op = (PhysicalWindow &)gstate.op;
 	WindowExpressions window_exprs;
-	for (idx_t expr_idx = 0; expr_idx < select_list.size(); ++expr_idx) {
-		D_ASSERT(select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
-		auto wexpr = reinterpret_cast<BoundWindowExpression *>(select_list[expr_idx].get());
+	for (idx_t expr_idx = 0; expr_idx < op.select_list.size(); ++expr_idx) {
+		D_ASSERT(op.select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
+		auto wexpr = reinterpret_cast<BoundWindowExpression *>(op.select_list[expr_idx].get());
 		window_exprs.emplace_back(wexpr);
 	}
 
-	// If we are out of completed chunks look for an unprocessed partition
-	while (state->completed <= state->position && state->position < gstate.total) {
-		//	Can we process another partition?
-		const auto hash_bin = state->next_part++;
-		if (gstate.counts.empty() && hash_bin == 0) {
-			ChunkCollection &big_data = gstate.chunks;
-			ChunkCollection &window_results = gstate.window_results;
-			ChunkCollection &over_collection = gstate.over_collection;
-			ComputeWindowExpressions(window_exprs, big_data, window_results, over_collection);
-			{
-				lock_guard<mutex> locked(gstate.lock);
-				state->chunks.Merge(big_data);
-				state->window_results.Merge(window_results);
-				state->completed = state->chunks.ChunkCount();
-			}
-		} else if (hash_bin < gstate.counts.size() && gstate.counts[hash_bin] > 0) {
-			ChunkCollection input;
-			ChunkCollection output;
-			ChunkCollection over;
-			const auto hash_mask = hash_t(gstate.counts.size() - 1);
-			ExtractPartition(gstate, input, output, over, hash_bin, hash_mask);
-			ComputeWindowExpressions(window_exprs, input, output, over);
-			{
-				lock_guard<mutex> locked(gstate.lock);
-				state->chunks.Append(input);
-				state->window_results.Append(output);
-				// Don't emit partial blocks until the end
-				state->completed = (state->chunks.Count() / STANDARD_VECTOR_SIZE);
-			}
-		} else if (hash_bin >= gstate.counts.size()) {
-			state->completed = state->chunks.ChunkCount();
-		}
+	//	Get rid of any stale data
+	state.chunks.Reset();
+	state.window_results.Reset();
+	state.position = 0;
+
+	if (gstate.counts.empty() && hash_bin == 0) {
+		ChunkCollection &big_data = gstate.chunks;
+		ChunkCollection &window_results = gstate.window_results;
+		ChunkCollection &over_collection = gstate.over_collection;
+		ComputeWindowExpressions(window_exprs, big_data, window_results, over_collection);
+		state.chunks.Merge(big_data);
+		state.window_results.Merge(window_results);
+	} else if (hash_bin < gstate.counts.size() && gstate.counts[hash_bin] > 0) {
+		ChunkCollection input;
+		ChunkCollection output;
+		ChunkCollection over;
+		const auto hash_mask = hash_t(gstate.counts.size() - 1);
+		ExtractPartition(gstate, input, output, over, hash_bin, hash_mask);
+		ComputeWindowExpressions(window_exprs, input, output, over);
+		state.chunks.Merge(input);
+		state.window_results.Merge(output);
 	}
+}
 
-	// We have to lock because the chunk array might get resized underneath us.
-	lock_guard<mutex> locked(gstate.lock);
+static void Scan(PhysicalWindowOperatorState &state, DataChunk &chunk) {
+	ChunkCollection &big_data = state.chunks;
+	ChunkCollection &window_results = state.window_results;
 
-	ChunkCollection &big_data = state->chunks;
-	ChunkCollection &window_results = state->window_results;
-
-	if (big_data.Count() == 0) {
-		return;
-	}
-
-	if (state->position >= big_data.ChunkCount()) {
+	if (state.position >= big_data.Count()) {
 		return;
 	}
 
 	// just return what was computed before, appending the result cols of the window expressions at the end
-	auto &proj_ch = big_data.GetChunk(state->position);
-	auto &wind_ch = window_results.GetChunk(state->position);
+	auto &proj_ch = big_data.GetChunkForRow(state.position);
+	auto &wind_ch = window_results.GetChunkForRow(state.position);
 
 	idx_t out_idx = 0;
 	D_ASSERT(proj_ch.size() == wind_ch.size());
@@ -929,11 +962,69 @@ void PhysicalWindow::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 	for (idx_t col_idx = 0; col_idx < wind_ch.ColumnCount(); col_idx++) {
 		chunk.data[out_idx++].Reference(wind_ch.data[col_idx]);
 	}
-	++state->position;
+	chunk.Verify();
+
+	state.position += STANDARD_VECTOR_SIZE;
 }
 
-unique_ptr<PhysicalOperatorState> PhysicalWindow::GetOperatorState() {
-	return make_unique<PhysicalWindowOperatorState>(*this, children[0].get());
+void PhysicalWindow::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
+	auto &state = *reinterpret_cast<PhysicalWindowOperatorState *>(state_p);
+	auto &gstate = (WindowGlobalState &)*sink_state;
+
+	if (!state.initialized) {
+		// initialize thread-local operator state
+		state.partitions = gstate.counts.size();
+		state.next_part = 0;
+		// record parallel state (if any)
+		state.parallel_state = nullptr;
+		auto &task = context.task;
+		// check if there is any parallel state to fetch
+		state.parallel_state = nullptr;
+		auto task_info = task.task_info.find(this);
+		if (task_info != task.task_info.end()) {
+			// parallel scan init
+			state.parallel_state = task_info->second;
+		}
+		state.initialized = true;
+	}
+
+	if (!state.parallel_state) {
+		// sequential scan
+		if (state.position >= state.chunks.Count()) {
+			auto hash_bin = state.next_part++;
+			for (; hash_bin < state.partitions; hash_bin = state.next_part++) {
+				if (gstate.counts[hash_bin] > 0) {
+					break;
+				}
+			}
+			GeneratePartition(state, gstate, hash_bin);
+		}
+		Scan(state, chunk);
+		if (chunk.size() != 0) {
+			return;
+		}
+	} else {
+		// parallel scan
+		auto &parallel_state = *reinterpret_cast<WindowParallelState *>(state.parallel_state);
+		do {
+			if (state.position >= state.chunks.Count()) {
+				auto hash_bin = parallel_state.next_part++;
+				for (; hash_bin < state.partitions; hash_bin = parallel_state.next_part++) {
+					if (gstate.counts[hash_bin] > 0) {
+						break;
+					}
+				}
+				GeneratePartition(state, gstate, hash_bin);
+			}
+			Scan(state, chunk);
+			if (chunk.size() != 0) {
+				return;
+			} else {
+				break;
+			}
+		} while (true);
+	}
+	D_ASSERT(chunk.size() == 0);
 }
 
 void PhysicalWindow::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_p,
@@ -1016,9 +1107,6 @@ void PhysicalWindow::Finalize(Pipeline &pipeline, ClientContext &context, unique
 	}
 
 	D_ASSERT(window_results.ColumnCount() == select_list.size());
-
-	// Partitions will be generated in parallel by GetChunkInternal
-	gstate.total = big_data.ChunkCount();
 }
 
 unique_ptr<LocalSinkState> PhysicalWindow::GetLocalSinkState(ExecutionContext &context) {
