@@ -167,6 +167,12 @@ idx_t StringSegment::Append(SegmentStatistics &stats, VectorData &data, idx_t of
 	for (idx_t i = 0; i < count; i++) {
 		auto source_idx = data.sel->get_index(offset + i);
 		auto target_idx = tuple_count;
+		idx_t remaining_space = RemainingSpace(*handle);
+		if (remaining_space < sizeof(int32_t)) {
+			// string index does not fit in the block at all
+			return i;
+		}
+		remaining_space -= sizeof(int32_t);
 		if (!data.validity.RowIsValid(source_idx)) {
 			// null value is stored as -1
 			result_data[target_idx] = 0;
@@ -175,13 +181,12 @@ idx_t StringSegment::Append(SegmentStatistics &stats, VectorData &data, idx_t of
 			D_ASSERT(dictionary_offset < Storage::BLOCK_SIZE);
 			// non-null value, check if we can fit it within the block
 			idx_t string_length = source_data[source_idx].GetSize();
-			idx_t total_length = string_length + sizeof(uint16_t);
+			idx_t dictionary_length = string_length + sizeof(uint16_t);
 
 			// determine whether or not we have space in the block for this string
-			idx_t remaining_space = RemainingSpace(*handle);
-			idx_t required_space = total_length;
 			bool use_overflow_block = false;
-			if (total_length >= STRING_BLOCK_LIMIT) {
+			idx_t required_space = dictionary_length;
+			if (required_space >= STRING_BLOCK_LIMIT) {
 				// string exceeds block limit, store in overflow block and only write a marker here
 				required_space = BIG_STRING_MARKER_SIZE;
 				use_overflow_block = true;
@@ -207,7 +212,7 @@ idx_t StringSegment::Append(SegmentStatistics &stats, VectorData &data, idx_t of
 			} else {
 				// string fits in block, append to dictionary and increment dictionary position
 				D_ASSERT(string_length < NumericLimits<uint16_t>::Maximum());
-				dictionary_offset += total_length;
+				dictionary_offset += required_space;
 				auto dict_pos = end - dictionary_offset; // first write the length as u16
 				Store<uint16_t>(string_length, dict_pos);
 				// now write the actual string data into the dictionary

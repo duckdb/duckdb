@@ -25,6 +25,10 @@ ColumnData::ColumnData(DatabaseInstance &db, DataTableInfo &table_info, LogicalT
 }
 
 void ColumnData::ScanBaseVector(ColumnScanState &state, Vector &result) {
+	if (!state.initialized) {
+		state.current->InitializeScan(state);
+		state.initialized = true;
+	}
 	idx_t row_index = state.row_index;
 	idx_t remaining = STANDARD_VECTOR_SIZE;
 	while(remaining > 0) {
@@ -188,16 +192,15 @@ void ColumnData::RevertAppend(row_t start_row) {
 }
 
 void ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
-	throw NotImplementedException("FIXME: fetch");
-	// // perform the fetch within the segment
-	// auto segment = (ColumnSegment *)data.GetSegment(row_id);
-	// auto vector_index = (row_id - segment->start) / STANDARD_VECTOR_SIZE;
-	// segment->Scan(state, vector_index, result);
+	// perform the fetch within the segment
+	state.current = (ColumnSegment *)data.GetSegment(row_id);
+	state.row_index = row_id / STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE;
+	ScanBaseVector(state, result);
 
-	// // merge any updates
-	// auto update_segment = (UpdateSegment *)updates.GetSegment(row_id);
-	// auto update_vector_index = (row_id - update_segment->start) / STANDARD_VECTOR_SIZE;
-	// update_segment->FetchCommitted(update_vector_index, result);
+	// merge any updates
+	auto update_segment = (UpdateSegment *)updates.GetSegment(row_id);
+	auto update_vector_index = (row_id - update_segment->start) / STANDARD_VECTOR_SIZE;
+	update_segment->FetchCommitted(update_vector_index, result);
 }
 
 void ColumnData::FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result,
