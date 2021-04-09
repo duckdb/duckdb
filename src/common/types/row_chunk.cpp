@@ -670,8 +670,12 @@ void RowChunk::Build(idx_t added_count, data_ptr_t key_locations[], idx_t entry_
 			idx_t append_count = AppendToBlock(new_block, *handle, append_entries, remaining, offset_entry_sizes);
 			remaining -= append_count;
 
-			blocks.push_back(move(new_block));
-			handles.push_back(move(handle));
+            if (new_block.count > 0) {
+				// it can be that no tuples fit the block (huge entry e.g. large string)
+				// in this case we do not add them
+				blocks.push_back(move(new_block));
+				handles.push_back(move(handle));
+			}
 		}
 	}
 	// now set up the key_locations based on the append entries

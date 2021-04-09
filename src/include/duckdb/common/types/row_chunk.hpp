@@ -54,10 +54,6 @@ public:
 	//! The blocks holding the main data
 	vector<RowDataBlock> blocks;
 
-	idx_t Size() {
-		return blocks.size();
-	}
-
 public:
 	void SerializeVectorSortable(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count,
 	                             data_ptr_t key_locations[], bool desc, bool has_null, bool invert, idx_t prefix_len);
