@@ -28,6 +28,7 @@ public:
 
 	//! Input data
 	vector<BoundOrderByNode> orders;
+
 public:
 	void Sink(ExecutionContext &context, GlobalOperatorState &gstate_p, LocalSinkState &lstate_p,
 	          DataChunk &input) override;
@@ -50,7 +51,7 @@ private:
 	constexpr static idx_t SORTING_BLOCK_SIZE = 524288;
 
 	//! ?
-    void SortLocalState(ClientContext &context, OrderLocalState &lstate, OrderGlobalState &gstate);
+	void SortLocalState(ClientContext &context, OrderLocalState &lstate, OrderGlobalState &gstate);
 };
 
 } // namespace duckdb
