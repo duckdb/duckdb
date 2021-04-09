@@ -45,6 +45,7 @@ public:
 
 	void FetchUpdates(Transaction &transaction, idx_t vector_index, Vector &result);
 	void FetchCommitted(idx_t vector_index, Vector &result);
+	void FetchCommitted(idx_t start, idx_t count, Vector &result);
 	void Update(Transaction &transaction, Vector &update, row_t *ids, idx_t count, Vector &base_data);
 	void FetchRow(Transaction &transaction, idx_t row_id, Vector &result, idx_t result_idx);
 
@@ -80,6 +81,7 @@ public:
 	typedef void (*fetch_update_function_t)(transaction_t start_time, transaction_t transaction_id, UpdateInfo *info,
 	                                        Vector &result);
 	typedef void (*fetch_committed_function_t)(UpdateInfo *info, Vector &result);
+	typedef void (*fetch_committed_range_function_t)(idx_t start, idx_t count, UpdateInfo *info, Vector &result, idx_t result_offset);
 	typedef void (*fetch_row_function_t)(transaction_t start_time, transaction_t transaction_id, UpdateInfo *info,
 	                                     idx_t row_idx, Vector &result, idx_t result_idx);
 	typedef void (*rollback_update_function_t)(UpdateInfo *base_info, UpdateInfo *rollback_info);
@@ -91,6 +93,7 @@ private:
 	merge_update_function_t merge_update_function;
 	fetch_update_function_t fetch_update_function;
 	fetch_committed_function_t fetch_committed_function;
+	fetch_committed_range_function_t fetch_committed_range_function;
 	fetch_row_function_t fetch_row_function;
 	rollback_update_function_t rollback_update_function;
 	statistics_update_function_t statistics_update_function;

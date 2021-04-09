@@ -15,6 +15,7 @@ constexpr const idx_t UpdateSegment::MORSEL_LAYER_SIZE;
 static UpdateSegment::initialize_update_function_t GetInitializeUpdateFunction(PhysicalType type);
 static UpdateSegment::fetch_update_function_t GetFetchUpdateFunction(PhysicalType type);
 static UpdateSegment::fetch_committed_function_t GetFetchCommittedFunction(PhysicalType type);
+static UpdateSegment::fetch_committed_range_function_t GetFetchCommittedRangeFunction(PhysicalType type);
 
 static UpdateSegment::merge_update_function_t GetMergeUpdateFunction(PhysicalType type);
 static UpdateSegment::rollback_update_function_t GetRollbackUpdateFunction(PhysicalType type);
@@ -31,6 +32,7 @@ UpdateSegment::UpdateSegment(ColumnData &column_data, idx_t start, idx_t count)
 	this->initialize_update_function = GetInitializeUpdateFunction(physical_type);
 	this->fetch_update_function = GetFetchUpdateFunction(physical_type);
 	this->fetch_committed_function = GetFetchCommittedFunction(physical_type);
+	this->fetch_committed_range_function = GetFetchCommittedRangeFunction(physical_type);
 	this->fetch_row_function = GetFetchRowFunction(physical_type);
 	this->merge_update_function = GetMergeUpdateFunction(physical_type);
 	this->rollback_update_function = GetRollbackUpdateFunction(physical_type);
@@ -103,6 +105,20 @@ static void MergeValidity(UpdateInfo *current, ValidityMask &result_mask) {
 	}
 }
 
+static void MergeValidityRange(idx_t start, idx_t count, UpdateInfo *current, Vector &result, idx_t result_offset) {
+	auto info_data = (bool *)current->tuple_data;
+	auto &result_mask = FlatVector::Validity(result);
+	for (idx_t i = 0; i < current->N; i++) {
+		if (current->tuples[i] > start + count) {
+			// finished merging this segment
+			break;
+		}
+		if (current->tuples[i] >= start) {
+			result_mask.Set(result_offset + (current->tuples[i] - start), info_data[i]);
+		}
+	}
+}
+
 static void UpdateMergeValidity(transaction_t start_time, transaction_t transaction_id, UpdateInfo *info,
                                 Vector &result) {
 	auto &result_mask = FlatVector::Validity(result);
@@ -121,6 +137,21 @@ static void MergeUpdateInfo(UpdateInfo *current, T *result_data) {
 	} else {
 		for (idx_t i = 0; i < current->N; i++) {
 			result_data[current->tuples[i]] = info_data[i];
+		}
+	}
+}
+
+template <class T>
+static void MergeUpdateInfoRange(idx_t start, idx_t count, UpdateInfo *current, Vector &result, idx_t result_offset) {
+	auto info_data = (T *)current->tuple_data;
+	auto result_data = FlatVector::GetData<T>(result);
+	for (idx_t i = 0; i < current->N; i++) {
+		if (current->tuples[i] > start + count) {
+			// finished merging this segment
+			break;
+		}
+		if (current->tuples[i] >= start) {
+			result_data[result_offset + (current->tuples[i] - start)] = info_data[i];
 		}
 	}
 }
@@ -245,6 +276,74 @@ void UpdateSegment::FetchCommitted(idx_t vector_index, Vector &result) {
 	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 
 	fetch_committed_function(root->info[vector_index]->info.get(), result);
+}
+
+//===--------------------------------------------------------------------===//
+// Fetch Committed Range
+//===--------------------------------------------------------------------===//
+static UpdateSegment::fetch_committed_range_function_t GetFetchCommittedRangeFunction(PhysicalType type) {
+	switch (type) {
+	case PhysicalType::BIT:
+		return MergeValidityRange;
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
+		return MergeUpdateInfoRange<int8_t>;
+	case PhysicalType::INT16:
+		return MergeUpdateInfoRange<int16_t>;
+	case PhysicalType::INT32:
+		return MergeUpdateInfoRange<int32_t>;
+	case PhysicalType::INT64:
+		return MergeUpdateInfoRange<int64_t>;
+	case PhysicalType::UINT8:
+		return MergeUpdateInfoRange<uint8_t>;
+	case PhysicalType::UINT16:
+		return MergeUpdateInfoRange<uint16_t>;
+	case PhysicalType::UINT32:
+		return MergeUpdateInfoRange<uint32_t>;
+	case PhysicalType::UINT64:
+		return MergeUpdateInfoRange<uint64_t>;
+	case PhysicalType::INT128:
+		return MergeUpdateInfoRange<hugeint_t>;
+	case PhysicalType::FLOAT:
+		return MergeUpdateInfoRange<float>;
+	case PhysicalType::DOUBLE:
+		return MergeUpdateInfoRange<double>;
+	case PhysicalType::INTERVAL:
+		return MergeUpdateInfoRange<interval_t>;
+	case PhysicalType::VARCHAR:
+		return MergeUpdateInfoRange<string_t>;
+	default:
+		throw NotImplementedException("Unimplemented type for update segment");
+	}
+}
+
+void UpdateSegment::FetchCommitted(idx_t start, idx_t count, Vector &result) {
+	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
+
+	idx_t current_vector = VectorIndex(start);
+	idx_t remaining = count;
+	UpdateSegment *current_segment = this;
+	while(remaining > 0) {
+		idx_t vector_end = current_vector * STANDARD_VECTOR_SIZE + STANDARD_VECTOR_SIZE;
+		idx_t current_count = MinValue<idx_t>(vector_end - start, remaining);
+		if (current_segment->root) {
+			if (current_segment->root->info[current_vector]) {
+				fetch_committed_range_function(start - current_vector * STANDARD_VECTOR_SIZE, current_count, current_segment->root->info[current_vector]->info.get(), result, count - remaining);
+			}
+		}
+		remaining -= current_count;
+		if (remaining > 0) {
+			// we fetched this segment but more remains
+			// move to the next vector
+			current_vector++;
+			if (current_vector >= UpdateSegment::MORSEL_VECTOR_COUNT) {
+				// we ran out of vectors in this segment, move to the next segment
+				current_segment = (UpdateSegment*) current_segment->next.get();
+				current_vector = 0;
+			}
+			start = current_vector * STANDARD_VECTOR_SIZE;
+		}
+	}
 }
 
 //===--------------------------------------------------------------------===//

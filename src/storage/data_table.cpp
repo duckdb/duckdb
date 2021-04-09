@@ -34,9 +34,13 @@ DataTable::DataTable(DatabaseInstance &db, const string &schema, const string &t
 	if (data && !data->column_data.empty()) {
 		D_ASSERT(data->column_data.size() == types.size());
 		for (idx_t i = 0; i < types.size(); i++) {
+			if (i == 0) {
+				total_rows = data->column_data[i]->total_rows;
+			} else {
+				D_ASSERT(total_rows == data->column_data[i]->total_rows);
+			}
 			columns[i]->Initialize(*data->column_data[i]);
 		}
-		total_rows = columns[0]->persistent_rows;
 		versions = move(data->versions);
 	} else {
 		versions = make_shared<SegmentTree>();

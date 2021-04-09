@@ -20,7 +20,7 @@
 namespace duckdb {
 
 ColumnData::ColumnData(DatabaseInstance &db, DataTableInfo &table_info, LogicalType type, idx_t column_idx)
-    : table_info(table_info), type(move(type)), db(db), column_idx(column_idx), persistent_rows(0) {
+    : table_info(table_info), type(move(type)), db(db), column_idx(column_idx) {
 	statistics = BaseStatistics::CreateEmpty(type);
 }
 
@@ -45,6 +45,7 @@ void ColumnData::ScanBaseVector(ColumnScanState &state, Vector &result) {
 			}
 			state.current = (ColumnSegment*) state.current->next.get();
 			state.current->InitializeScan(state);
+			D_ASSERT(row_index >= state.current->start && row_index <= state.current->start + state.current->count);
 		}
 	}
 }
@@ -102,7 +103,7 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 	lock_guard<mutex> tree_lock(data.node_lock);
 	if (data.nodes.empty()) {
 		// no segments yet, append an empty segment
-		AppendTransientSegment(persistent_rows);
+		AppendTransientSegment(0);
 	}
 	if (updates.nodes.empty()) {
 		AppendUpdateSegment(0);
@@ -110,7 +111,8 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 	auto segment = (ColumnSegment *)data.GetLastSegment();
 	if (segment->segment_type == ColumnSegmentType::PERSISTENT) {
 		// no transient segments yet
-		AppendTransientSegment(persistent_rows);
+		auto total_rows = segment->start + segment->count;
+		AppendTransientSegment(total_rows);
 		state.current = (TransientSegment *)data.GetLastSegment();
 	} else {
 		state.current = (TransientSegment *)segment;
@@ -445,7 +447,7 @@ void ColumnData::Checkpoint(TableDataWriter &writer) {
 
 			state.row_index = row_index;
 			ScanBaseVector(state, scan_vector);
-			update_segment->FetchCommitted(update_segment->VectorIndex(row_index), scan_vector);
+			update_segment->FetchCommitted(row_index, count, scan_vector);
 
 			checkpoint_state->AppendData(scan_vector, count);
 		}
@@ -473,21 +475,20 @@ void ColumnData::Initialize(PersistentColumnData &column_data) {
 	// set up statistics
 	SetStatistics(move(column_data.stats));
 
-	persistent_rows = column_data.total_rows;
 	// load persistent segments
 	idx_t segment_rows = 0;
 	for (auto &segment : column_data.segments) {
 		segment_rows += segment->count;
 		data.AppendSegment(move(segment));
 	}
-	if (segment_rows != persistent_rows) {
+	if (segment_rows != column_data.total_rows) {
 		throw Exception("Segment rows does not match total rows stored in column...");
 	}
 
 	// set up the (empty) update segments
 	idx_t row_count = 0;
-	while (row_count < persistent_rows) {
-		idx_t next = MinValue<idx_t>(row_count + UpdateSegment::MORSEL_SIZE, persistent_rows);
+	while (row_count < column_data.total_rows) {
+		idx_t next = MinValue<idx_t>(row_count + UpdateSegment::MORSEL_SIZE, column_data.total_rows);
 		AppendUpdateSegment(row_count, next - row_count);
 		row_count = next;
 	}

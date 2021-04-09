@@ -63,8 +63,6 @@ public:
 	SegmentTree data;
 	//! The segments holding the updates of the column
 	SegmentTree updates;
-	//! The amount of persistent rows
-	idx_t persistent_rows;
 
 public:
 	virtual bool CheckZonemap(ColumnScanState &state, TableFilter &filter) = 0;
