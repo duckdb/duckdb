@@ -45,6 +45,7 @@ public:
 	string ParamsToString() const override;
 
 private:
+	//! Size of blocks that are sorted - must be bigger than Storage::BLOCK_ALLOC_SIZE
 	constexpr static idx_t SORTING_BLOCK_SIZE = 524288;
 };
 
