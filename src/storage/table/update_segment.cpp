@@ -325,11 +325,12 @@ void UpdateSegment::FetchCommitted(idx_t start_row, idx_t scan_count, Vector &re
 	idx_t remaining = scan_count;
 	UpdateSegment *current_segment = this;
 	while(remaining > 0) {
-		idx_t vector_end = current_vector * STANDARD_VECTOR_SIZE + STANDARD_VECTOR_SIZE;
+		idx_t vector_begin = this->start + current_vector * STANDARD_VECTOR_SIZE;
+		idx_t vector_end = vector_begin + STANDARD_VECTOR_SIZE;
 		idx_t current_count = MinValue<idx_t>(vector_end - start_row, remaining);
 		if (current_segment->root) {
 			if (current_segment->root->info[current_vector]) {
-				fetch_committed_range_function(start_row - current_vector * STANDARD_VECTOR_SIZE - this->start, current_count, current_segment->root->info[current_vector]->info.get(), result, scan_count - remaining);
+				fetch_committed_range_function(start_row - vector_begin, current_count, current_segment->root->info[current_vector]->info.get(), result, scan_count - remaining);
 			}
 		}
 		remaining -= current_count;
@@ -342,7 +343,7 @@ void UpdateSegment::FetchCommitted(idx_t start_row, idx_t scan_count, Vector &re
 				current_segment = (UpdateSegment*) current_segment->next.get();
 				current_vector = 0;
 			}
-			start_row = current_vector * STANDARD_VECTOR_SIZE;
+			start_row = vector_begin + STANDARD_VECTOR_SIZE;
 		}
 	}
 }
