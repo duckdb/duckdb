@@ -1,5 +1,5 @@
 # name: test/sql/copy/parquet/parquet_1554.test
-# description: Test basic globbing of parquet files
+# description: Unclear what went wrong here in the past, but its fixed, and let's make sure it never happens again
 # group: [parquet]
 
 require parquet
