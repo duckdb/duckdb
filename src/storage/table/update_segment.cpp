@@ -317,18 +317,19 @@ static UpdateSegment::fetch_committed_range_function_t GetFetchCommittedRangeFun
 	}
 }
 
-void UpdateSegment::FetchCommitted(idx_t start, idx_t count, Vector &result) {
+void UpdateSegment::FetchCommitted(idx_t start_row, idx_t scan_count, Vector &result) {
+	D_ASSERT(start_row >= this->start && start_row <= this->start + this->count);
 	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 
-	idx_t current_vector = VectorIndex(start);
-	idx_t remaining = count;
+	idx_t current_vector = VectorIndex(start_row);
+	idx_t remaining = scan_count;
 	UpdateSegment *current_segment = this;
 	while(remaining > 0) {
 		idx_t vector_end = current_vector * STANDARD_VECTOR_SIZE + STANDARD_VECTOR_SIZE;
-		idx_t current_count = MinValue<idx_t>(vector_end - start, remaining);
+		idx_t current_count = MinValue<idx_t>(vector_end - start_row, remaining);
 		if (current_segment->root) {
 			if (current_segment->root->info[current_vector]) {
-				fetch_committed_range_function(start - current_vector * STANDARD_VECTOR_SIZE, current_count, current_segment->root->info[current_vector]->info.get(), result, count - remaining);
+				fetch_committed_range_function(start_row - current_vector * STANDARD_VECTOR_SIZE - this->start, current_count, current_segment->root->info[current_vector]->info.get(), result, scan_count - remaining);
 			}
 		}
 		remaining -= current_count;
@@ -341,7 +342,7 @@ void UpdateSegment::FetchCommitted(idx_t start, idx_t count, Vector &result) {
 				current_segment = (UpdateSegment*) current_segment->next.get();
 				current_vector = 0;
 			}
-			start = current_vector * STANDARD_VECTOR_SIZE;
+			start_row = current_vector * STANDARD_VECTOR_SIZE;
 		}
 	}
 }

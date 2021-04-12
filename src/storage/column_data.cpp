@@ -222,6 +222,7 @@ void ColumnData::AppendTransientSegment(idx_t start_row) {
 }
 
 void ColumnData::AppendUpdateSegment(idx_t start_row, idx_t count) {
+	D_ASSERT(start_row % UpdateSegment::MORSEL_SIZE == 0);
 	auto new_segment = make_unique<UpdateSegment>(*this, start_row, count);
 	updates.AppendSegment(move(new_segment));
 }
@@ -441,7 +442,7 @@ void ColumnData::Checkpoint(TableDataWriter &writer) {
 
 			idx_t count = MinValue<idx_t>(segment->count - base_row_index, STANDARD_VECTOR_SIZE);
 			idx_t row_index = segment->start + base_row_index;
-			if (row_index >= update_segment->start + UpdateSegment::MORSEL_SIZE) {
+			while (row_index >= update_segment->start + UpdateSegment::MORSEL_SIZE) {
 				update_segment = (UpdateSegment *)update_segment->next.get();
 			}
 
