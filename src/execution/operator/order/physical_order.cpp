@@ -753,9 +753,9 @@ void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 		// same for the payload data, beware of variable entry size
 		idx_t capacity =
 		    payload_state.HAS_VARIABLE_SIZE
-		        ? MaxValue(Storage::BLOCK_ALLOC_SIZE / payload_state.ENTRY_SIZE + 1,
+		        ? MaxValue(Storage::BLOCK_ALLOC_SIZE / state.payload_block->entry_size + 1,
 		                   payload_size / payload_state.ENTRY_SIZE + 1)
-		        : MaxValue(Storage::BLOCK_ALLOC_SIZE / payload_state.ENTRY_SIZE + 1, state.payload_block->count);
+		        : MaxValue(Storage::BLOCK_ALLOC_SIZE / state.payload_block->entry_size + 1, state.payload_block->count);
 		ConcatenateBlocks(state.buffer_manager, *state.payload_block, capacity, payload_state.HAS_VARIABLE_SIZE);
 	}
 
@@ -793,8 +793,12 @@ void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 // GetChunkInternal
 //===--------------------------------------------------------------------===//
 idx_t PhysicalOrder::MaxThreads(ClientContext &context) {
-	auto &state = (OrderGlobalState &)*this->sink_state;
-	return state.payload_block->count / STANDARD_VECTOR_SIZE + 1;
+	if (this->sink_state) {
+		auto &state = (OrderGlobalState &)*this->sink_state;
+		return state.payload_block->count / STANDARD_VECTOR_SIZE + 1;
+	} else {
+		return estimated_cardinality / STANDARD_VECTOR_SIZE + 1;
+	}
 }
 
 class OrderParallelState : public ParallelState {
