@@ -307,31 +307,32 @@ void DataTable::Scan(Transaction &transaction, DataChunk &result, TableScanState
 
 bool DataTable::CheckZonemap(TableScanState &state, const vector<column_t> &column_ids, TableFilterSet *table_filters,
                              idx_t &current_row) {
-	if (!table_filters) {
-		return true;
-	}
-	for (auto &table_filter : table_filters->filters) {
-		for (auto &predicate_constant : table_filter.second) {
-			D_ASSERT(predicate_constant.column_index < column_ids.size());
-			auto base_column_idx = column_ids[predicate_constant.column_index];
-			bool read_segment = columns[base_column_idx]->CheckZonemap(
-			    state.column_scans[predicate_constant.column_index], predicate_constant);
-			if (!read_segment) {
-				//! We can skip this partition
-				idx_t vectors_to_skip =
-				    ceil((double)(state.column_scans[predicate_constant.column_index].current->count +
-				                  state.column_scans[predicate_constant.column_index].current->start - current_row) /
-				         STANDARD_VECTOR_SIZE);
-				for (idx_t i = 0; i < vectors_to_skip; ++i) {
-					state.NextVector();
-					current_row += STANDARD_VECTOR_SIZE;
-				}
-				return false;
-			}
-		}
-	}
-
 	return true;
+	// if (!table_filters) {
+	// 	return true;
+	// }
+	// for (auto &table_filter : table_filters->filters) {
+	// 	for (auto &predicate_constant : table_filter.second) {
+	// 		D_ASSERT(predicate_constant.column_index < column_ids.size());
+	// 		auto base_column_idx = column_ids[predicate_constant.column_index];
+	// 		bool read_segment = columns[base_column_idx]->CheckZonemap(
+	// 		    state.column_scans[predicate_constant.column_index], predicate_constant);
+	// 		if (!read_segment) {
+	// 			//! We can skip this partition
+	// 			idx_t vectors_to_skip =
+	// 			    ceil((double)(state.column_scans[predicate_constant.column_index].current->count +
+	// 			                  state.column_scans[predicate_constant.column_index].current->start - current_row) /
+	// 			         STANDARD_VECTOR_SIZE);
+	// 			for (idx_t i = 0; i < vectors_to_skip; ++i) {
+	// 				state.NextVector();
+	// 				current_row += STANDARD_VECTOR_SIZE;
+	// 			}
+	// 			return false;
+	// 		}
+	// 	}
+	// }
+
+	// return true;
 }
 
 bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, TableScanState &state,
