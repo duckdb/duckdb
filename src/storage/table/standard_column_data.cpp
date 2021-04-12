@@ -21,11 +21,12 @@ bool StandardColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filte
 		if (state.current->stats.CheckZonemap(filter)) {
 			return true;
 		}
-		if (state.updates) {
-			return state.updates->GetStatistics().CheckZonemap(filter);
-		} else {
-			return false;
-		}
+		return false;
+		// if (state.updates) {
+		// 	return state.updates->GetStatistics().CheckZonemap(filter);
+		// } else {
+		// 	return false;
+		// }
 	} else {
 		return true;
 	}
@@ -34,7 +35,6 @@ bool StandardColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filte
 void StandardColumnData::InitializeScan(ColumnScanState &state) {
 	// initialize the current segment
 	state.current = (ColumnSegment *)data.GetRootSegment();
-	state.updates = (UpdateSegment *)updates.GetRootSegment();
 	state.row_index = 0;
 	state.initialized = false;
 
@@ -47,7 +47,6 @@ void StandardColumnData::InitializeScan(ColumnScanState &state) {
 void StandardColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t vector_idx) {
 	idx_t row_idx = vector_idx * STANDARD_VECTOR_SIZE;
 	state.current = (ColumnSegment *)data.GetSegment(row_idx);
-	state.updates = (UpdateSegment *)updates.GetSegment(row_idx);
 	state.row_index = row_idx;
 	state.initialized = false;
 
@@ -66,10 +65,7 @@ void StandardColumnData::Scan(Transaction &transaction, ColumnScanState &state, 
 	validity.Scan(transaction, state.child_states[0], result);
 
 	// perform a scan of this segment
-	ScanBaseVector(state, result);
-
-	// merge the updates into the result
-	state.updates->FetchUpdates(transaction, state.updates->VectorIndex(state.row_index), result);
+	ScanVector(transaction, state, result);
 
 	// move over to the next vector
 	state.Next();
@@ -83,11 +79,11 @@ void StandardColumnData::IndexScan(ColumnScanState &state, Vector &result, bool 
 	// // perform a scan of this segment
 	validity.IndexScan(state.child_states[0], result, allow_pending_updates);
 
-	ScanBaseVector(state, result);
-	if (!allow_pending_updates && state.updates->HasUncommittedUpdates(state.updates->VectorIndex(state.row_index))) {
+	if (!allow_pending_updates && state.current->updates && state.current->updates->HasUncommittedUpdates(state.row_index)) {
 		throw TransactionException("Cannot create index with outstanding updates");
 	}
-	state.updates->FetchCommitted(state.updates->VectorIndex(state.row_index), result);
+	ScanCommitted(state, result);
+
 	// move over to the next vector
 	state.Next();
 }
@@ -113,22 +109,24 @@ void StandardColumnData::RevertAppend(row_t start_row) {
 }
 
 void StandardColumnData::Update(Transaction &transaction, Vector &update_vector, Vector &row_ids, idx_t count) {
-	idx_t first_id = FlatVector::GetValue<row_t>(row_ids, 0);
+	throw NotImplementedException("FIXME: update and non-aligned update?");
+	// idx_t first_id = FlatVector::GetValue<row_t>(row_ids, 0);
 
-	// fetch the validity data for this segment
-	Vector base_data(type);
-	ColumnScanState state;
-	state.row_index = first_id / STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE;
-	state.current = (ColumnSegment *)data.GetSegment(state.row_index);
-	// now perform the fetch within the segment
-	ScanBaseVector(state, base_data);
+	// // fetch the validity data for this segment
+	// Vector base_data(type);
+	// ColumnScanState state;
+	// state.row_index = first_id / STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE;
+	// state.current = (ColumnSegment *)data.GetSegment(state.row_index);
 
-	// first find the segment that the update belongs to
-	auto segment = (UpdateSegment *)updates.GetSegment(first_id);
-	// now perform the update within the segment
-	segment->Update(transaction, update_vector, FlatVector::GetData<row_t>(row_ids), count, base_data);
+	// // now perform the fetch within the segment
+	// ScanBaseVector(state, base_data);
 
-	validity.Update(transaction, update_vector, row_ids, count);
+	// // first find the segment that the update belongs to
+	// auto segment = (UpdateSegment *)updates.GetSegment(first_id);
+	// // now perform the update within the segment
+	// segment->Update(transaction, update_vector, FlatVector::GetData<row_t>(row_ids), count, base_data);
+
+	// validity.Update(transaction, update_vector, row_ids, count);
 }
 
 void StandardColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {

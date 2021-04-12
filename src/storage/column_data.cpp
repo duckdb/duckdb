@@ -24,7 +24,8 @@ ColumnData::ColumnData(DatabaseInstance &db, DataTableInfo &table_info, LogicalT
 	statistics = BaseStatistics::CreateEmpty(type);
 }
 
-void ColumnData::ScanBaseVector(ColumnScanState &state, Vector &result) {
+template<bool SCAN_COMMITTED>
+void ColumnData::TemplatedScanVector(Transaction *transaction, ColumnScanState &state, Vector &result) {
 	if (!state.initialized) {
 		state.current->InitializeScan(state);
 		state.initialized = true;
@@ -35,7 +36,13 @@ void ColumnData::ScanBaseVector(ColumnScanState &state, Vector &result) {
 		D_ASSERT(row_index >= state.current->start && row_index <= state.current->start + state.current->count);
 		idx_t scan_count = MinValue<idx_t>(remaining, state.current->start + state.current->count - row_index);
 		idx_t start = row_index - state.current->start;
-		state.current->Scan(state, start, scan_count, result, STANDARD_VECTOR_SIZE - remaining);
+		idx_t result_offset = STANDARD_VECTOR_SIZE - remaining;
+		state.current->Scan(state, start, scan_count, result, result_offset);
+		if (SCAN_COMMITTED) {
+			state.current->MergeCommitted(start, scan_count, result, result_offset);
+		} else {
+			state.current->MergeUpdates(*transaction, start, scan_count, result, result_offset);
+		}
 
 		row_index += scan_count;
 		remaining -= scan_count;
@@ -48,6 +55,14 @@ void ColumnData::ScanBaseVector(ColumnScanState &state, Vector &result) {
 			D_ASSERT(row_index >= state.current->start && row_index <= state.current->start + state.current->count);
 		}
 	}
+}
+
+void ColumnData::ScanVector(Transaction &transaction, ColumnScanState &state, Vector &result) {
+	TemplatedScanVector<false>(&transaction, state, result);
+}
+
+void ColumnData::ScanCommitted(ColumnScanState &state, Vector &result) {
+	TemplatedScanVector<true>(nullptr, state, result);
 }
 
 void ColumnData::FilterScan(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
@@ -78,9 +93,6 @@ void ColumnScanState::Next() {
 			break;
 		}
 	}
-	if (row_index >= updates->start + MorselInfo::MORSEL_SIZE) {
-		updates = (UpdateSegment *)updates->next.get();
-	}
 	for (auto &child_state : child_states) {
 		child_state.Next();
 	}
@@ -105,9 +117,6 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 		// no segments yet, append an empty segment
 		AppendTransientSegment(0);
 	}
-	if (updates.nodes.empty()) {
-		AppendUpdateSegment(0);
-	}
 	auto segment = (ColumnSegment *)data.GetLastSegment();
 	if (segment->segment_type == ColumnSegmentType::PERSISTENT) {
 		// no transient segments yet
@@ -117,27 +126,12 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 	} else {
 		state.current = (TransientSegment *)segment;
 	}
-	state.updates = (UpdateSegment *)updates.nodes.back().node;
 
 	D_ASSERT(state.current->segment_type == ColumnSegmentType::TRANSIENT);
 	state.current->InitializeAppend(state);
 }
 
 void ColumnData::AppendData(ColumnAppendState &state, VectorData &vdata, idx_t count) {
-	// append to update segments
-	idx_t remaining_update_count = count;
-	while (remaining_update_count > 0) {
-		idx_t to_append_elements =
-		    MinValue<idx_t>(remaining_update_count, UpdateSegment::MORSEL_SIZE - state.updates->count);
-		state.updates->count += to_append_elements;
-		if (state.updates->count == UpdateSegment::MORSEL_SIZE) {
-			// have to append a new segment
-			AppendUpdateSegment(state.updates->start + state.updates->count);
-			state.updates = (UpdateSegment *)updates.nodes.back().node;
-		}
-		remaining_update_count -= to_append_elements;
-	}
-
 	idx_t offset = 0;
 	while (true) {
 		// append the data from the vector
@@ -180,51 +174,27 @@ void ColumnData::RevertAppend(row_t start_row) {
 	}
 	segment->next = nullptr;
 	transient.RevertAppend(start_row);
-
-	// do the same with the update segments
-	idx_t update_segment_idx = updates.GetSegmentIndex(start_row);
-	auto update_segment = updates.nodes[update_segment_idx].node;
-	// remove any segments AFTER this segment
-	if (update_segment_idx < updates.nodes.size() - 1) {
-		updates.nodes.erase(updates.nodes.begin() + update_segment_idx + 1, updates.nodes.end());
-	}
-	// truncate this segment
-	update_segment->next = nullptr;
-	update_segment->count = start_row - update_segment->start;
 }
 
 void ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
 	// perform the fetch within the segment
 	state.row_index = row_id / STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE;
 	state.current = (ColumnSegment *)data.GetSegment(state.row_index);
-	ScanBaseVector(state, result);
-
-	// merge any updates
-	auto update_segment = (UpdateSegment *)updates.GetSegment(row_id);
-	auto update_vector_index = (row_id - update_segment->start) / STANDARD_VECTOR_SIZE;
-	update_segment->FetchCommitted(update_vector_index, result);
+	ScanCommitted(state, result);
 }
 
 void ColumnData::FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result,
                           idx_t result_idx) {
 	auto segment = (ColumnSegment *)data.GetSegment(row_id);
-	auto update_segment = (UpdateSegment *)updates.GetSegment(row_id);
 
 	// now perform the fetch within the segment
 	segment->FetchRow(state, row_id, result, result_idx);
-	// fetch any (potential) updates
-	update_segment->FetchRow(transaction, row_id, result, result_idx);
+	segment->MergeRowUpdate(transaction, row_id, result, result_idx);
 }
 
 void ColumnData::AppendTransientSegment(idx_t start_row) {
 	auto new_segment = make_unique<TransientSegment>(db, type, start_row);
 	data.AppendSegment(move(new_segment));
-}
-
-void ColumnData::AppendUpdateSegment(idx_t start_row, idx_t count) {
-	D_ASSERT(start_row % UpdateSegment::MORSEL_SIZE == 0);
-	auto new_segment = make_unique<UpdateSegment>(*this, start_row, count);
-	updates.AppendSegment(move(new_segment));
 }
 
 void ColumnData::SetStatistics(unique_ptr<BaseStatistics> new_stats) {
@@ -386,14 +356,11 @@ void ColumnData::Checkpoint(TableDataWriter &writer) {
 	// otherwise we simply write out the current data pointers
 	auto owned_segment = move(data.root_node);
 	auto segment = (ColumnSegment *)owned_segment.get();
-	auto update_segment = (UpdateSegment *)updates.root_node.get();
 	while (segment) {
 		if (segment->segment_type == ColumnSegmentType::PERSISTENT) {
 			auto &persistent = (PersistentSegment &)*segment;
 			// persistent segment; check if there were any updates in this segment
-			idx_t start_vector_index = persistent.start / STANDARD_VECTOR_SIZE;
-			idx_t end_vector_index = (persistent.start + persistent.count) / STANDARD_VECTOR_SIZE;
-			bool has_updates = update_segment->HasUpdates(start_vector_index, end_vector_index);
+			bool has_updates = segment->updates && segment->updates->HasUpdates();
 			if (has_updates) {
 				// persistent segment has updates: mark it as modified and rewrite the block with the merged updates
 				block_manager.MarkBlockAsModified(persistent.block_id);
@@ -425,9 +392,6 @@ void ColumnData::Checkpoint(TableDataWriter &writer) {
 				// move to the next segment in the list
 				owned_segment = move(segment->next);
 				segment = (ColumnSegment *)owned_segment.get();
-
-				// move the update segment forward
-				update_segment = update_segment->FindSegment(end_vector_index);
 				continue;
 			}
 		}
@@ -441,14 +405,8 @@ void ColumnData::Checkpoint(TableDataWriter &writer) {
 			scan_vector.Reference(intermediate);
 
 			idx_t count = MinValue<idx_t>(segment->count - base_row_index, STANDARD_VECTOR_SIZE);
-			idx_t row_index = segment->start + base_row_index;
-			while (row_index >= update_segment->start + UpdateSegment::MORSEL_SIZE) {
-				update_segment = (UpdateSegment *)update_segment->next.get();
-			}
-
-			state.row_index = row_index;
-			ScanBaseVector(state, scan_vector);
-			update_segment->FetchCommitted(row_index, count, scan_vector);
+			state.row_index = segment->start + base_row_index;
+			ScanCommitted(state, scan_vector);
 
 			checkpoint_state->AppendData(scan_vector, count);
 		}
@@ -463,13 +421,6 @@ void ColumnData::Checkpoint(TableDataWriter &writer) {
 
 	// flush the meta information/data pointers to disk
 	checkpoint_state->FlushToDisk();
-
-	// reset all the updates: they have been persisted to disk and included in the new segments
-	update_segment = (UpdateSegment *)updates.root_node.get();
-	while (update_segment) {
-		update_segment->ClearUpdates();
-		update_segment = (UpdateSegment *)update_segment->next.get();
-	}
 }
 
 void ColumnData::Initialize(PersistentColumnData &column_data) {
@@ -484,17 +435,6 @@ void ColumnData::Initialize(PersistentColumnData &column_data) {
 	}
 	if (segment_rows != column_data.total_rows) {
 		throw Exception("Segment rows does not match total rows stored in column...");
-	}
-
-	// set up the (empty) update segments
-	idx_t row_count = 0;
-	while (row_count < column_data.total_rows) {
-		idx_t next = MinValue<idx_t>(row_count + UpdateSegment::MORSEL_SIZE, column_data.total_rows);
-		AppendUpdateSegment(row_count, next - row_count);
-		row_count = next;
-	}
-	if (row_count % UpdateSegment::MORSEL_SIZE == 0) {
-		AppendUpdateSegment(row_count, 0);
 	}
 }
 

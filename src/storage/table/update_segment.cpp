@@ -4,13 +4,9 @@
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/storage/statistics/string_statistics.hpp"
+#include "duckdb/storage/table/column_segment.hpp"
 
 namespace duckdb {
-
-constexpr const idx_t UpdateSegment::MORSEL_VECTOR_COUNT;
-constexpr const idx_t UpdateSegment::MORSEL_SIZE;
-constexpr const idx_t UpdateSegment::MORSEL_LAYER_COUNT;
-constexpr const idx_t UpdateSegment::MORSEL_LAYER_SIZE;
 
 static UpdateSegment::initialize_update_function_t GetInitializeUpdateFunction(PhysicalType type);
 static UpdateSegment::fetch_update_function_t GetFetchUpdateFunction(PhysicalType type);
@@ -22,8 +18,8 @@ static UpdateSegment::rollback_update_function_t GetRollbackUpdateFunction(Physi
 static UpdateSegment::statistics_update_function_t GetStatisticsUpdateFunction(PhysicalType type);
 static UpdateSegment::fetch_row_function_t GetFetchRowFunction(PhysicalType type);
 
-UpdateSegment::UpdateSegment(ColumnData &column_data, idx_t start, idx_t count)
-    : SegmentBase(start, count), column_data(column_data),
+UpdateSegment::UpdateSegment(ColumnData &column_data, ColumnSegment &parent)
+    : column_data(column_data), parent(parent),
       stats(column_data.type, GetTypeIdSize(column_data.type.InternalType())) {
 	auto physical_type = column_data.type.InternalType();
 
@@ -46,11 +42,6 @@ void UpdateSegment::ClearUpdates() {
 	stats.Reset();
 	root.reset();
 	heap.Destroy();
-}
-
-idx_t UpdateSegment::VectorIndex(idx_t row_index) const {
-	D_ASSERT(row_index >= start && row_index < start + count);
-	return (row_index - start) / STANDARD_VECTOR_SIZE;
 }
 
 //===--------------------------------------------------------------------===//
@@ -317,15 +308,21 @@ static UpdateSegment::fetch_committed_range_function_t GetFetchCommittedRangeFun
 	}
 }
 
+idx_t UpdateSegment::VectorIndex(idx_t row_index) const {
+	D_ASSERT(row_index >= parent.start && row_index < parent.start + parent.count);
+	return (row_index - parent.start) / STANDARD_VECTOR_SIZE;
+}
+
+
+
 void UpdateSegment::FetchCommitted(idx_t start_row, idx_t scan_count, Vector &result) {
-	D_ASSERT(start_row >= this->start && start_row <= this->start + this->count);
 	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 
 	idx_t current_vector = VectorIndex(start_row);
 	idx_t remaining = scan_count;
 	UpdateSegment *current_segment = this;
 	while(remaining > 0) {
-		idx_t vector_begin = this->start + current_vector * STANDARD_VECTOR_SIZE;
+		idx_t vector_begin = parent.start + current_vector * STANDARD_VECTOR_SIZE;
 		idx_t vector_end = vector_begin + STANDARD_VECTOR_SIZE;
 		idx_t current_count = MinValue<idx_t>(vector_end - start_row, remaining);
 		if (current_segment->root) {
@@ -338,11 +335,6 @@ void UpdateSegment::FetchCommitted(idx_t start_row, idx_t scan_count, Vector &re
 			// we fetched this segment but more remains
 			// move to the next vector
 			current_vector++;
-			if (current_vector >= UpdateSegment::MORSEL_VECTOR_COUNT) {
-				// we ran out of vectors in this segment, move to the next segment
-				current_segment = (UpdateSegment*) current_segment->next.get();
-				current_vector = 0;
-			}
 			start_row = vector_begin + STANDARD_VECTOR_SIZE;
 		}
 	}
@@ -426,7 +418,7 @@ void UpdateSegment::FetchRow(Transaction &transaction, idx_t row_id, Vector &res
 	if (!root) {
 		return;
 	}
-	idx_t vector_index = (row_id - start) / STANDARD_VECTOR_SIZE;
+	idx_t vector_index = (row_id - parent.start) / STANDARD_VECTOR_SIZE;
 	if (!root->info[vector_index]) {
 		return;
 	}
@@ -717,7 +709,7 @@ template <class T, class V, class OP = ExtractStandardEntry>
 static void MergeUpdateLoopInternal(SegmentStatistics &stats, UpdateInfo *base_info, V *base_table_data,
                                     UpdateInfo *update_info, V *update_vector_data, row_t *ids, idx_t count,
                                     const SelectionVector &sel) {
-	auto base_id = base_info->segment->start + base_info->vector_index * STANDARD_VECTOR_SIZE;
+	auto base_id = base_info->segment->parent.start + base_info->vector_index * STANDARD_VECTOR_SIZE;
 #ifdef DEBUG
 	// all of these should be sorted, otherwise the below algorithm does not work
 	for (idx_t i = 1; i < count; i++) {
@@ -984,11 +976,10 @@ void UpdateSegment::Update(Transaction &transaction, Vector &update, row_t *ids,
 	// get the vector index based on the first id
 	// we assert that all updates must be part of the same vector
 	auto first_id = ids[0];
-	idx_t vector_index = (first_id - this->start) / STANDARD_VECTOR_SIZE;
-	idx_t vector_offset = this->start + vector_index * STANDARD_VECTOR_SIZE;
+	idx_t vector_index = (first_id - parent.start) / STANDARD_VECTOR_SIZE;
+	idx_t vector_offset = parent.start + vector_index * STANDARD_VECTOR_SIZE;
 
-	D_ASSERT(idx_t(first_id) >= this->start);
-	D_ASSERT(vector_index < MORSEL_VECTOR_COUNT);
+	D_ASSERT(idx_t(first_id) >= parent.start);
 
 	if (column_data.type.id() == LogicalTypeId::VALIDITY) {
 		if ((!root || !root->info[vector_index]) && FlatVector::Validity(update).AllValid() &&
@@ -1119,34 +1110,23 @@ bool UpdateSegment::HasUncommittedUpdates(idx_t vector_index) {
 }
 
 bool UpdateSegment::HasUpdates(idx_t start_vector_index, idx_t end_vector_index) const {
-	idx_t base_vector_index = start / STANDARD_VECTOR_SIZE;
-	D_ASSERT(start_vector_index >= base_vector_index);
-	auto segment = this;
-	for (idx_t i = start_vector_index; i <= end_vector_index; i++) {
-		idx_t vector_index = i - base_vector_index;
-		while (vector_index >= UpdateSegment::MORSEL_VECTOR_COUNT) {
-			segment = (UpdateSegment *)segment->next.get();
-			D_ASSERT(segment);
-			base_vector_index = segment->start / STANDARD_VECTOR_SIZE;
-			vector_index -= UpdateSegment::MORSEL_VECTOR_COUNT;
-		}
-		if (segment->HasUpdates(vector_index)) {
-			return true;
-		}
-	}
+	throw NotImplementedException("FIXME: HasUpdates");
+	// idx_t base_vector_index = parent.start / STANDARD_VECTOR_SIZE;
+	// D_ASSERT(start_vector_index >= base_vector_index);
+	// auto segment = this;
+	// for (idx_t i = start_vector_index; i <= end_vector_index; i++) {
+	// 	idx_t vector_index = i - base_vector_index;
+	// 	while (vector_index >= UpdateSegment::MORSEL_VECTOR_COUNT) {
+	// 		segment = (UpdateSegment *)segment->next.get();
+	// 		D_ASSERT(segment);
+	// 		base_vector_index = segment->start / STANDARD_VECTOR_SIZE;
+	// 		vector_index -= UpdateSegment::MORSEL_VECTOR_COUNT;
+	// 	}
+	// 	if (segment->HasUpdates(vector_index)) {
+	// 		return true;
+	// 	}
+	// }
 	return false;
-}
-
-UpdateSegment *UpdateSegment::FindSegment(idx_t end_vector_index) const {
-	idx_t base_vector_index = start / STANDARD_VECTOR_SIZE;
-	D_ASSERT(end_vector_index >= base_vector_index);
-	auto segment = this;
-	while (end_vector_index >= base_vector_index + UpdateSegment::MORSEL_VECTOR_COUNT) {
-		segment = (UpdateSegment *)segment->next.get();
-		D_ASSERT(segment);
-		base_vector_index += UpdateSegment::MORSEL_VECTOR_COUNT;
-	}
-	return (UpdateSegment *)segment;
 }
 
 } // namespace duckdb

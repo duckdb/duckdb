@@ -8,31 +8,25 @@
 
 #pragma once
 
-#include "duckdb/storage/table/morsel_info.hpp"
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/storage/statistics/segment_statistics.hpp"
 #include "duckdb/common/types/string_heap.hpp"
 
 namespace duckdb {
 class ColumnData;
+class ColumnSegment;
 class DataTable;
 class Vector;
 struct UpdateInfo;
 struct UpdateNode;
 
-class UpdateSegment : public SegmentBase {
+class UpdateSegment {
 public:
-	static constexpr const idx_t MORSEL_VECTOR_COUNT = MorselInfo::MORSEL_VECTOR_COUNT;
-	static constexpr const idx_t MORSEL_SIZE = MorselInfo::MORSEL_SIZE;
-
-	static constexpr const idx_t MORSEL_LAYER_COUNT = MorselInfo::MORSEL_LAYER_COUNT;
-	static constexpr const idx_t MORSEL_LAYER_SIZE = MorselInfo::MORSEL_LAYER_SIZE;
-
-public:
-	UpdateSegment(ColumnData &column_data, idx_t start, idx_t count);
+	UpdateSegment(ColumnData &column_data, ColumnSegment &parent);
 	~UpdateSegment();
 
 	ColumnData &column_data;
+	ColumnSegment &parent;
 
 public:
 	idx_t VectorIndex(idx_t row_index) const;
@@ -40,7 +34,6 @@ public:
 	bool HasUncommittedUpdates(idx_t vector_index);
 	bool HasUpdates(idx_t vector_index) const;
 	bool HasUpdates(idx_t start_vector_index, idx_t end_vector_index) const;
-	UpdateSegment *FindSegment(idx_t end_vector_index) const;
 	void ClearUpdates();
 
 	void FetchUpdates(Transaction &transaction, idx_t vector_index, Vector &result);
@@ -110,7 +103,7 @@ struct UpdateNodeData {
 };
 
 struct UpdateNode {
-	unique_ptr<UpdateNodeData> info[UpdateSegment::MORSEL_VECTOR_COUNT];
+	vector<unique_ptr<UpdateNodeData>> info;
 };
 
 } // namespace duckdb

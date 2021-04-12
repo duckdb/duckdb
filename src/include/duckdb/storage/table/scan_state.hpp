@@ -45,8 +45,6 @@ struct ColumnScanState {
 	bool initialized = false;
 	//! If this segment has already been checked for skipping puorposes
 	bool segment_checked = false;
-	//! The update segment of the current column
-	UpdateSegment *updates;
 
 public:
 	//! Move on to the next vector in the scan

@@ -154,7 +154,7 @@ void CommitState::WriteUpdate(UpdateInfo *info) {
 
 	// write the row ids into the chunk
 	auto row_ids = FlatVector::GetData<row_t>(update_chunk->data[1]);
-	idx_t start = info->segment->start + info->vector_index * STANDARD_VECTOR_SIZE;
+	idx_t start = info->segment->parent.start + info->vector_index * STANDARD_VECTOR_SIZE;
 	for (idx_t i = 0; i < info->N; i++) {
 		row_ids[info->tuples[i]] = start + info->tuples[i];
 	}

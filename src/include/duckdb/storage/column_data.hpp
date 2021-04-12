@@ -61,13 +61,12 @@ public:
 	idx_t column_idx;
 	//! The segments holding the data of the column
 	SegmentTree data;
-	//! The segments holding the updates of the column
-	SegmentTree updates;
 
 public:
 	virtual bool CheckZonemap(ColumnScanState &state, TableFilter &filter) = 0;
 
-	void ScanBaseVector(ColumnScanState &state, Vector &result);
+	void ScanVector(Transaction &transaction, ColumnScanState &state, Vector &result);
+	void ScanCommitted(ColumnScanState &state, Vector &result);
 
 	//! Initialize a scan of the column
 	virtual void InitializeScan(ColumnScanState &state) = 0;
@@ -119,9 +118,9 @@ public:
 protected:
 	//! Append a transient segment
 	void AppendTransientSegment(idx_t start_row);
-	//! Append an update segment segment
-	void AppendUpdateSegment(idx_t start_row, idx_t count = 0);
 
+	template<bool SCAN_COMMITTED>
+	void TemplatedScanVector(Transaction *transaction, ColumnScanState &state, Vector &result);
 protected:
 	mutex stats_lock;
 	//! The statistics of the column

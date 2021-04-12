@@ -14,7 +14,6 @@ bool ValidityColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filte
 
 void ValidityColumnData::InitializeScan(ColumnScanState &state) {
 	state.current = (ColumnSegment *)data.GetRootSegment();
-	state.updates = (UpdateSegment *)updates.GetRootSegment();
 	state.row_index = 0;
 	state.initialized = false;
 }
@@ -22,7 +21,6 @@ void ValidityColumnData::InitializeScan(ColumnScanState &state) {
 void ValidityColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t vector_idx) {
 	idx_t row_idx = vector_idx * STANDARD_VECTOR_SIZE;
 	state.current = (ColumnSegment *)data.GetSegment(row_idx);
-	state.updates = (UpdateSegment *)updates.GetSegment(row_idx);
 	state.row_index = row_idx;
 	state.initialized = false;
 }
@@ -33,10 +31,7 @@ void ValidityColumnData::Scan(Transaction &transaction, ColumnScanState &state, 
 		state.initialized = true;
 	}
 	// perform a scan of this segment
-	ScanBaseVector(state, result);
-
-	// merge the updates into the result
-	state.updates->FetchUpdates(transaction, state.updates->VectorIndex(state.row_index), result);
+	ScanVector(transaction, state, result);
 }
 
 void ValidityColumnData::IndexScan(ColumnScanState &state, Vector &result, bool allow_pending_updates) {
@@ -44,29 +39,29 @@ void ValidityColumnData::IndexScan(ColumnScanState &state, Vector &result, bool 
 		state.current->InitializeScan(state);
 		state.initialized = true;
 	}
-	ScanBaseVector(state, result);
-	if (!allow_pending_updates && state.updates->HasUncommittedUpdates(state.updates->VectorIndex(state.row_index))) {
+	if (!allow_pending_updates && state.current->updates && state.current->updates->HasUncommittedUpdates(state.row_index)) {
 		throw TransactionException("Cannot create index with outstanding updates");
 	}
-	state.updates->FetchCommitted(state.updates->VectorIndex(state.row_index), result);
+	ScanCommitted(state, result);
 }
 
 void ValidityColumnData::Update(Transaction &transaction, Vector &update_vector, Vector &row_ids, idx_t count) {
-	idx_t first_id = FlatVector::GetValue<row_t>(row_ids, 0);
+	throw NotImplementedException("FIXME; update");
+	// idx_t first_id = FlatVector::GetValue<row_t>(row_ids, 0);
 
-	// fetch the validity data for this segment
-	Vector base_data(LogicalType::BOOLEAN, nullptr);
-	// now perform the fetch within the segment
-	ColumnScanState state;
-	state.row_index = first_id / STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE;
-	state.current = (ColumnSegment *)data.GetSegment(state.row_index);
-	// now perform the fetch within the segment
-	ScanBaseVector(state, base_data);
+	// // fetch the validity data for this segment
+	// Vector base_data(LogicalType::BOOLEAN, nullptr);
+	// // now perform the fetch within the segment
+	// ColumnScanState state;
+	// state.row_index = first_id / STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE;
+	// state.current = (ColumnSegment *)data.GetSegment(state.row_index);
+	// // now perform the fetch within the segment
+	// ScanBaseVector(state, base_data);
 
-	// first find the segment that the update belongs to
-	auto segment = (UpdateSegment *)updates.GetSegment(first_id);
-	// now perform the update within the segment
-	segment->Update(transaction, update_vector, FlatVector::GetData<row_t>(row_ids), count, base_data);
+	// // first find the segment that the update belongs to
+	// auto segment = (UpdateSegment *)updates.GetSegment(first_id);
+	// // now perform the update within the segment
+	// segment->Update(transaction, update_vector, FlatVector::GetData<row_t>(row_ids), count, base_data);
 }
 
 unique_ptr<PersistentColumnData> ValidityColumnData::Deserialize(DatabaseInstance &db, Deserializer &source) {
