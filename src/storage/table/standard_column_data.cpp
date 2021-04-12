@@ -109,23 +109,41 @@ void StandardColumnData::RevertAppend(row_t start_row) {
 }
 
 void StandardColumnData::Update(Transaction &transaction, Vector &update_vector, Vector &row_ids, idx_t count) {
-	throw NotImplementedException("FIXME: update and non-aligned update?");
-	// idx_t first_id = FlatVector::GetValue<row_t>(row_ids, 0);
+	auto ids = FlatVector::GetData<row_t>(row_ids);
+	idx_t index = 0;
+	idx_t offset = 0;
+	while(index < count) {
+		// figure out the current segment for the update
+		auto current_id = ids[index];
 
-	// // fetch the validity data for this segment
-	// Vector base_data(type);
-	// ColumnScanState state;
-	// state.row_index = first_id / STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE;
-	// state.current = (ColumnSegment *)data.GetSegment(state.row_index);
+		// fetch the base segment, and the data from the base segment
+		ColumnScanState state;
+		state.row_index = current_id;
+		state.current = (ColumnSegment *)data.GetSegment(state.row_index);
 
-	// // now perform the fetch within the segment
-	// ScanBaseVector(state, base_data);
+		Vector base_data(type);
+		idx_t start_idx = state.row_index - state.current->start;
+		idx_t vector_index = start_idx / STANDARD_VECTOR_SIZE;
+		idx_t scan_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, state.current->count - start_idx);
+		state.current->InitializeScan(state);
+		state.current->Scan(state, start_idx, scan_count, base_data, 0);
 
-	// // first find the segment that the update belongs to
-	// auto segment = (UpdateSegment *)updates.GetSegment(first_id);
-	// // now perform the update within the segment
-	// segment->Update(transaction, update_vector, FlatVector::GetData<row_t>(row_ids), count, base_data);
+		// now figure out: how many tuples fit within this exact vector segment for the update
+		idx_t vector_end = (vector_index + 1) * STANDARD_VECTOR_SIZE;
+		for(index++; index < count; index++) {
+			if (ids[index] < row_t(vector_end)) {
+				index++;
+			}
+		}
 
+		if (!state.current->updates) {
+			// no updates yet for this segment: create it
+			state.current->updates = make_unique<UpdateSegment>(*this, *state.current);
+		}
+		state.current->updates->Update(transaction, update_vector, ids + offset, index - offset, base_data);
+
+		offset = index;
+	}
 	// validity.Update(transaction, update_vector, row_ids, count);
 }
 

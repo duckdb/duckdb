@@ -46,7 +46,7 @@ void ValidityColumnData::IndexScan(ColumnScanState &state, Vector &result, bool 
 }
 
 void ValidityColumnData::Update(Transaction &transaction, Vector &update_vector, Vector &row_ids, idx_t count) {
-	throw NotImplementedException("FIXME; update");
+	throw NotImplementedException("FIXME; update validity");
 	// idx_t first_id = FlatVector::GetValue<row_t>(row_ids, 0);
 
 	// // fetch the validity data for this segment

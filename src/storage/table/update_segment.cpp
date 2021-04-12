@@ -9,8 +9,7 @@
 namespace duckdb {
 
 static UpdateSegment::initialize_update_function_t GetInitializeUpdateFunction(PhysicalType type);
-static UpdateSegment::fetch_update_function_t GetFetchUpdateFunction(PhysicalType type);
-static UpdateSegment::fetch_committed_function_t GetFetchCommittedFunction(PhysicalType type);
+static UpdateSegment::fetch_update_range_function_t GetFetchUpdateRangeFunction(PhysicalType type);
 static UpdateSegment::fetch_committed_range_function_t GetFetchCommittedRangeFunction(PhysicalType type);
 
 static UpdateSegment::merge_update_function_t GetMergeUpdateFunction(PhysicalType type);
@@ -26,8 +25,7 @@ UpdateSegment::UpdateSegment(ColumnData &column_data, ColumnSegment &parent)
 	this->type_size = GetTypeIdSize(physical_type);
 
 	this->initialize_update_function = GetInitializeUpdateFunction(physical_type);
-	this->fetch_update_function = GetFetchUpdateFunction(physical_type);
-	this->fetch_committed_function = GetFetchCommittedFunction(physical_type);
+	this->fetch_update_range_function = GetFetchUpdateRangeFunction(physical_type);
 	this->fetch_committed_range_function = GetFetchCommittedRangeFunction(physical_type);
 	this->fetch_row_function = GetFetchRowFunction(physical_type);
 	this->merge_update_function = GetMergeUpdateFunction(physical_type);
@@ -89,13 +87,6 @@ void UpdateInfo::Verify() {
 //===--------------------------------------------------------------------===//
 // Update Fetch
 //===--------------------------------------------------------------------===//
-static void MergeValidity(UpdateInfo *current, ValidityMask &result_mask) {
-	auto info_data = (bool *)current->tuple_data;
-	for (idx_t i = 0; i < current->N; i++) {
-		result_mask.Set(current->tuples[i], info_data[i]);
-	}
-}
-
 static void MergeValidityRange(idx_t start, idx_t count, UpdateInfo *current, Vector &result, idx_t result_offset) {
 	auto info_data = (bool *)current->tuple_data;
 	auto &result_mask = FlatVector::Validity(result);
@@ -110,26 +101,9 @@ static void MergeValidityRange(idx_t start, idx_t count, UpdateInfo *current, Ve
 	}
 }
 
-static void UpdateMergeValidity(transaction_t start_time, transaction_t transaction_id, UpdateInfo *info,
-                                Vector &result) {
-	auto &result_mask = FlatVector::Validity(result);
+static void UpdateMergeValidity(transaction_t start_time, transaction_t transaction_id, idx_t start, idx_t count, UpdateInfo *info, Vector &result, idx_t result_offset) {
 	UpdateInfo::UpdatesForTransaction(info, start_time, transaction_id,
-	                                  [&](UpdateInfo *current) { MergeValidity(current, result_mask); });
-}
-
-template <class T>
-static void MergeUpdateInfo(UpdateInfo *current, T *result_data) {
-	auto info_data = (T *)current->tuple_data;
-	if (current->N == STANDARD_VECTOR_SIZE) {
-		// special case: update touches ALL tuples of this vector
-		// in this case we can just memcpy the data
-		// since the layout of the update info is guaranteed to be [0, 1, 2, 3, ...]
-		memcpy(result_data, info_data, sizeof(T) * current->N);
-	} else {
-		for (idx_t i = 0; i < current->N; i++) {
-			result_data[current->tuples[i]] = info_data[i];
-		}
-	}
+	                                  [&](UpdateInfo *current) { MergeValidityRange(start, count, current, result, result_offset); });
 }
 
 template <class T>
@@ -148,13 +122,12 @@ static void MergeUpdateInfoRange(idx_t start, idx_t count, UpdateInfo *current, 
 }
 
 template <class T>
-static void UpdateMergeFetch(transaction_t start_time, transaction_t transaction_id, UpdateInfo *info, Vector &result) {
-	auto result_data = FlatVector::GetData<T>(result);
+static void UpdateMergeFetch(transaction_t start_time, transaction_t transaction_id, idx_t start, idx_t count, UpdateInfo *info, Vector &result, idx_t result_offset) {
 	UpdateInfo::UpdatesForTransaction(info, start_time, transaction_id,
-	                                  [&](UpdateInfo *current) { MergeUpdateInfo<T>(current, result_data); });
+	                                  [&](UpdateInfo *current) { MergeUpdateInfoRange<T>(start, count, current, result, result_offset); });
 }
 
-static UpdateSegment::fetch_update_function_t GetFetchUpdateFunction(PhysicalType type) {
+static UpdateSegment::fetch_update_range_function_t GetFetchUpdateRangeFunction(PhysicalType type) {
 	switch (type) {
 	case PhysicalType::BIT:
 		return UpdateMergeValidity;
@@ -188,85 +161,6 @@ static UpdateSegment::fetch_update_function_t GetFetchUpdateFunction(PhysicalTyp
 	default:
 		throw NotImplementedException("Unimplemented type for update segment");
 	}
-}
-
-void UpdateSegment::FetchUpdates(Transaction &transaction, idx_t vector_index, Vector &result) {
-	if (!root) {
-		return;
-	}
-	auto lock_handle = lock.GetSharedLock();
-	if (!root->info[vector_index]) {
-		return;
-	}
-	// FIXME: normalify if this is not the case... need to pass in count?
-	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
-
-	fetch_update_function(transaction.start_time, transaction.transaction_id, root->info[vector_index]->info.get(),
-	                      result);
-}
-
-//===--------------------------------------------------------------------===//
-// Fetch Committed
-//===--------------------------------------------------------------------===//
-static void FetchValidity(UpdateInfo *info, Vector &result) {
-	auto &result_mask = FlatVector::Validity(result);
-	MergeValidity(info, result_mask);
-}
-
-template <class T>
-static void TemplatedFetchCommitted(UpdateInfo *info, Vector &result) {
-	auto result_data = FlatVector::GetData<T>(result);
-	MergeUpdateInfo<T>(info, result_data);
-}
-
-static UpdateSegment::fetch_committed_function_t GetFetchCommittedFunction(PhysicalType type) {
-	switch (type) {
-	case PhysicalType::BIT:
-		return FetchValidity;
-	case PhysicalType::BOOL:
-	case PhysicalType::INT8:
-		return TemplatedFetchCommitted<int8_t>;
-	case PhysicalType::INT16:
-		return TemplatedFetchCommitted<int16_t>;
-	case PhysicalType::INT32:
-		return TemplatedFetchCommitted<int32_t>;
-	case PhysicalType::INT64:
-		return TemplatedFetchCommitted<int64_t>;
-	case PhysicalType::UINT8:
-		return TemplatedFetchCommitted<uint8_t>;
-	case PhysicalType::UINT16:
-		return TemplatedFetchCommitted<uint16_t>;
-	case PhysicalType::UINT32:
-		return TemplatedFetchCommitted<uint32_t>;
-	case PhysicalType::UINT64:
-		return TemplatedFetchCommitted<uint64_t>;
-	case PhysicalType::INT128:
-		return TemplatedFetchCommitted<hugeint_t>;
-	case PhysicalType::FLOAT:
-		return TemplatedFetchCommitted<float>;
-	case PhysicalType::DOUBLE:
-		return TemplatedFetchCommitted<double>;
-	case PhysicalType::INTERVAL:
-		return TemplatedFetchCommitted<interval_t>;
-	case PhysicalType::VARCHAR:
-		return TemplatedFetchCommitted<string_t>;
-	default:
-		throw NotImplementedException("Unimplemented type for update segment");
-	}
-}
-
-void UpdateSegment::FetchCommitted(idx_t vector_index, Vector &result) {
-	if (!root) {
-		return;
-	}
-	D_ASSERT(vector_index < MorselInfo::MORSEL_VECTOR_COUNT);
-	if (!root->info[vector_index]) {
-		return;
-	}
-	// FIXME: normalify if this is not the case... need to pass in count?
-	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
-
-	fetch_committed_function(root->info[vector_index]->info.get(), result);
 }
 
 //===--------------------------------------------------------------------===//
@@ -313,21 +207,28 @@ idx_t UpdateSegment::VectorIndex(idx_t row_index) const {
 	return (row_index - parent.start) / STANDARD_VECTOR_SIZE;
 }
 
-
-
-void UpdateSegment::FetchCommitted(idx_t start_row, idx_t scan_count, Vector &result) {
+template<bool SCAN_COMMITTED>
+void UpdateSegment::TemplatedScanUpdates(Transaction *transaction, idx_t start_row, idx_t scan_count, Vector &result, idx_t result_offset) {
 	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 
+	auto lock_handle = lock.GetSharedLock();
 	idx_t current_vector = VectorIndex(start_row);
 	idx_t remaining = scan_count;
-	UpdateSegment *current_segment = this;
 	while(remaining > 0) {
 		idx_t vector_begin = parent.start + current_vector * STANDARD_VECTOR_SIZE;
 		idx_t vector_end = vector_begin + STANDARD_VECTOR_SIZE;
 		idx_t current_count = MinValue<idx_t>(vector_end - start_row, remaining);
-		if (current_segment->root) {
-			if (current_segment->root->info[current_vector]) {
-				fetch_committed_range_function(start_row - vector_begin, current_count, current_segment->root->info[current_vector]->info.get(), result, scan_count - remaining);
+		if (root) {
+			auto entry = root->info.find(current_vector);
+			if (entry != root->info.end()) {
+				idx_t start_in_vector = start_row - vector_begin;
+				idx_t current_result_offset = result_offset + scan_count - remaining;
+				if (SCAN_COMMITTED) {
+					fetch_committed_range_function(start_in_vector, current_count, entry->second->info.get(), result, current_result_offset);
+				} else {
+					D_ASSERT(transaction);
+					fetch_update_range_function(transaction->start_time, transaction->transaction_id, start_in_vector, current_count, entry->second->info.get(), result, current_result_offset);
+				}
 			}
 		}
 		remaining -= current_count;
@@ -338,6 +239,14 @@ void UpdateSegment::FetchCommitted(idx_t start_row, idx_t scan_count, Vector &re
 			start_row = vector_begin + STANDARD_VECTOR_SIZE;
 		}
 	}
+}
+
+void UpdateSegment::FetchCommitted(idx_t start_row, idx_t scan_count, Vector &result, idx_t result_offset) {
+	TemplatedScanUpdates<true>(nullptr, start_row, scan_count, result, result_offset);
+}
+
+void UpdateSegment::FetchUpdates(Transaction &transaction, idx_t start_row, idx_t scan_count, Vector &result, idx_t result_offset) {
+	TemplatedScanUpdates<false>(&transaction, start_row, scan_count, result, result_offset);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1015,10 +924,11 @@ void UpdateSegment::Update(Transaction &transaction, Vector &update, row_t *ids,
 	// first check the version chain
 	UpdateInfo *node = nullptr;
 
-	if (root->info[vector_index]) {
+	auto entry = root->info.find(vector_index);
+	if (entry != root->info.end()) {
 		// there is already a version here, check if there are any conflicts and search for the node that belongs to
 		// this transaction in the version chain
-		auto base_info = root->info[vector_index]->info.get();
+		auto base_info = entry->second->info.get();
 		CheckForConflicts(base_info->next, transaction, ids, sel, count, vector_offset, node);
 
 		// there are no conflicts
@@ -1094,7 +1004,7 @@ bool UpdateSegment::HasUpdates(idx_t vector_index) const {
 	if (!HasUpdates()) {
 		return false;
 	}
-	return root->info[vector_index].get();
+	return root->info.find(vector_index) != root->info.end();
 }
 
 bool UpdateSegment::HasUncommittedUpdates(idx_t vector_index) {
@@ -1102,8 +1012,8 @@ bool UpdateSegment::HasUncommittedUpdates(idx_t vector_index) {
 		return false;
 	}
 	auto read_lock = lock.GetSharedLock();
-	auto entry = root->info[vector_index].get();
-	if (entry->info->next) {
+	auto entry = root->info.find(vector_index);
+	if (entry != root->info.end() && entry->second->info->next) {
 		return true;
 	}
 	return false;

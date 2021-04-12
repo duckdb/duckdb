@@ -36,22 +36,21 @@ void ColumnSegment::MergeUpdates(Transaction &transaction, idx_t start, idx_t sc
 	if (!updates) {
 		return;
 	}
-	throw NotImplementedException("FIXME: merge updates");
+	updates->FetchUpdates(transaction, start, scan_count, result, result_offset);
 }
 
 void ColumnSegment::MergeCommitted(idx_t start, idx_t scan_count, Vector &result, idx_t result_offset) {
 	if (!updates) {
 		return;
 	}
-	throw NotImplementedException("FIXME: merge committed");
+	updates->FetchCommitted(start, scan_count, result, result_offset);
 }
 
 void ColumnSegment::MergeRowUpdate(Transaction &transaction, row_t row_id, Vector &result, idx_t result_idx) {
 	if (!updates) {
 		return;
 	}
-	throw NotImplementedException("FIXME: merge row update");
-	// updates->FetchRow(transaction, row_id, result, result_idx);
+	updates->FetchRow(transaction, row_id, result, result_idx);
 }
 
 } // namespace duckdb

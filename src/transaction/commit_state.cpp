@@ -150,7 +150,7 @@ void CommitState::WriteUpdate(UpdateInfo *info) {
 	update_chunk->Initialize(update_types);
 
 	// fetch the updated values from the base segment
-	info->segment->FetchCommitted(info->vector_index, update_chunk->data[0]);
+	info->segment->FetchCommitted(info->vector_index * STANDARD_VECTOR_SIZE, STANDARD_VECTOR_SIZE, update_chunk->data[0], 0);
 
 	// write the row ids into the chunk
 	auto row_ids = FlatVector::GetData<row_t>(update_chunk->data[1]);
