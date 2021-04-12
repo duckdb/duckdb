@@ -9,7 +9,7 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-PRAGMA threads=4
+PRAGMA threads=1
 
 statement ok
 create table test as (select range i from range(100000));

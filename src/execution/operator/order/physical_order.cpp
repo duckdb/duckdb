@@ -93,9 +93,14 @@ public:
 			}
 		}
 		// payload block
-		payload_block = make_unique<RowChunk>(buffer_manager, payload_state.ROWCHUNK_INIT_SIZE / 32, 32);
-		sizes_block =
-		    make_unique<RowChunk>(buffer_manager, (idx_t)Storage::BLOCK_ALLOC_SIZE / sizeof(idx_t) + 1, sizeof(idx_t));
+		if (payload_state.HAS_VARIABLE_SIZE) {
+			payload_block = make_unique<RowChunk>(buffer_manager, payload_state.ROWCHUNK_INIT_SIZE / 32, 32);
+			sizes_block = make_unique<RowChunk>(buffer_manager, (idx_t)Storage::BLOCK_ALLOC_SIZE / sizeof(idx_t) + 1,
+			                                    sizeof(idx_t));
+		} else {
+			payload_block = make_unique<RowChunk>(
+			    buffer_manager, payload_state.ROWCHUNK_INIT_SIZE / payload_state.ENTRY_SIZE, payload_state.ENTRY_SIZE);
+		}
 		initialized = true;
 	}
 
@@ -117,19 +122,6 @@ public:
 	data_ptr_t validitymask_locations[STANDARD_VECTOR_SIZE];
 	idx_t entry_sizes[STANDARD_VECTOR_SIZE];
 };
-
-template <class T>
-static idx_t TemplatedGetSize(Value min, Value max) {
-	T min_val = min.GetValue<T>();
-	T max_val = max.GetValue<T>();
-	idx_t size = sizeof(T);
-	T max_in_size = (1 << ((size - 1) * 8 - 1)) - 1;
-	while (max_val < max_in_size && min_val > -max_in_size) {
-		size--;
-		max_in_size = (1 << ((size - 1) * 8 - 1)) - 1;
-	}
-	return size;
-}
 
 unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &context) {
 	auto &buffer_manager = BufferManager::GetBufferManager(context);
@@ -219,7 +211,9 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 	if (variable_payload_size) {
 		rowchunk_init_size = entry_size + var_columns * (1 << 23);
 	} else {
-		rowchunk_init_size = entry_size;
+		idx_t vectors_per_block =
+		    (Storage::BLOCK_ALLOC_SIZE / entry_size + STANDARD_VECTOR_SIZE) / STANDARD_VECTOR_SIZE;
+		rowchunk_init_size = vectors_per_block * STANDARD_VECTOR_SIZE * entry_size;
 	}
 	state->payload_state = unique_ptr<PayloadState>(
 	    new PayloadState {variable_payload_size, validitymask_size, entry_size, rowchunk_init_size});
@@ -333,7 +327,7 @@ void PhysicalOrder::Combine(ExecutionContext &context, GlobalOperatorState &gsta
 struct ContinuousChunk {
 public:
 	ContinuousChunk(BufferManager &buffer_manager, bool constant_size, idx_t entry_size = 0)
-	    : buffer_manager(buffer_manager), CONSTANT_SIZE(constant_size), ENTRY_SIZE(entry_size) {
+	    : CONSTANT_SIZE(constant_size), ENTRY_SIZE(entry_size), buffer_manager(buffer_manager) {
 	}
 
 	data_ptr_t DataPtr() {
@@ -438,11 +432,12 @@ public:
 	vector<RowDataBlock> data_blocks;
 	vector<RowDataBlock> offset_blocks;
 
+	const bool CONSTANT_SIZE;
+	const idx_t ENTRY_SIZE;
+
 private:
 	//! Buffer manager and constants
 	BufferManager &buffer_manager;
-	const bool CONSTANT_SIZE;
-	const idx_t ENTRY_SIZE;
 
 	//! Data
 	unique_ptr<BufferHandle> data_handle;
@@ -918,6 +913,76 @@ static void SortInMemory(BufferManager &buffer_manager, ContinuousBlock &cb, con
 	}
 }
 
+static void ReOrder(BufferManager &buffer_manager, ContinuousChunk &cc, data_ptr_t sorting_ptr,
+                    const SortingState &sorting_state) {
+	const idx_t &count = cc.data_blocks.back().count;
+
+	auto &unordered_data_block = cc.data_blocks.back();
+	auto unordered_data_handle = buffer_manager.Pin(unordered_data_block.block);
+	const data_ptr_t unordered_data_ptr = unordered_data_handle->node->buffer;
+
+	RowDataBlock reordered_data_block(buffer_manager, unordered_data_block.CAPACITY, unordered_data_block.ENTRY_SIZE);
+	reordered_data_block.count = count;
+	auto ordered_data_handle = buffer_manager.Pin(reordered_data_block.block);
+	data_ptr_t ordered_data_ptr = ordered_data_handle->node->buffer;
+
+	if (cc.CONSTANT_SIZE) {
+		for (idx_t i = 0; i < count; i++) {
+			memcpy(ordered_data_ptr, unordered_data_ptr + Load<idx_t>(sorting_ptr) * sorting_state.ENTRY_SIZE,
+			       cc.ENTRY_SIZE);
+			ordered_data_ptr += cc.ENTRY_SIZE;
+			sorting_ptr += sorting_state.ENTRY_SIZE;
+		}
+	} else {
+		// variable size data: we need offsets too
+		reordered_data_block.byte_offset = unordered_data_block.byte_offset;
+		auto &unordered_offset_block = cc.offset_blocks.back();
+		auto unordered_offset_handle = buffer_manager.Pin(unordered_offset_block.block);
+		idx_t *unordered_offsets = (idx_t *)unordered_offset_handle->node->buffer;
+
+		RowDataBlock reordered_offset_block(buffer_manager, unordered_offset_block.CAPACITY,
+		                                    unordered_offset_block.ENTRY_SIZE);
+		reordered_offset_block.count = count;
+		auto reordered_offset_handle = buffer_manager.Pin(reordered_offset_block.block);
+		idx_t *reordered_offsets = (idx_t *)reordered_offset_handle->node->buffer;
+		reordered_offsets[0] = 0;
+
+		for (idx_t i = 0; i < count; i++) {
+			idx_t index = Load<idx_t>(sorting_ptr);
+			idx_t size = unordered_offsets[index + 1] - unordered_offsets[index];
+			memcpy(ordered_data_ptr, unordered_data_ptr + unordered_offsets[index], size);
+			ordered_data_ptr += size;
+			reordered_offsets[i + 1] = reordered_offsets[i] + size;
+			sorting_ptr += sorting_state.ENTRY_SIZE;
+		}
+		// replace offset block
+		buffer_manager.UnregisterBlock(unordered_offset_block.block->BlockId(), true);
+		cc.offset_blocks.clear();
+		cc.offset_blocks.push_back(move(reordered_offset_block));
+	}
+	// replace data block
+	buffer_manager.UnregisterBlock(unordered_data_block.block->BlockId(), true);
+	cc.data_blocks.clear();
+	cc.data_blocks.push_back(move(reordered_data_block));
+}
+
+//! Use the ordered sorting data to re-order the rest of the data
+static void ReOrder(ClientContext &context, ContinuousBlock &cb, const SortingState &sorting_state,
+                    const PayloadState &payload_state) {
+	auto &buffer_manager = BufferManager::GetBufferManager(context);
+	auto sorting_handle = buffer_manager.Pin(cb.sorting_blocks.back().block);
+	const data_ptr_t sorting_ptr = sorting_handle->node->buffer + sorting_state.ENTRY_SIZE - sizeof(idx_t);
+
+	// re-order variable size sorting columns
+	for (idx_t col_idx = 0; col_idx < sorting_state.CONSTANT_SIZE.size(); col_idx++) {
+		if (!sorting_state.CONSTANT_SIZE[col_idx]) {
+			ReOrder(buffer_manager, *cb.var_sorting_chunks[col_idx], sorting_ptr, sorting_state);
+		}
+	}
+	// and the payload
+	ReOrder(buffer_manager, *cb.payload_chunk, sorting_ptr, sorting_state);
+}
+
 void PhysicalOrder::SortLocalState(ClientContext &context, OrderLocalState &lstate, const SortingState &sorting_state,
                                    const PayloadState &payload_state) {
 	const idx_t &count = lstate.sorting_block->count;
@@ -960,7 +1025,8 @@ void PhysicalOrder::SortLocalState(ClientContext &context, OrderLocalState &lsta
 	// now perform the actual sort
 	SortInMemory(buffer_manager, *cb, sorting_state);
 
-	// TODO: re-order
+	// re-order before the merge sort
+	ReOrder(context, *cb, sorting_state, payload_state);
 
 	// add the sorted block to the global state
 	lstate.sorted_blocks.push_back(move(cb));
@@ -1033,21 +1099,18 @@ static void Scan(ClientContext &context, DataChunk &chunk, PhysicalOrderOperator
 	if (offset >= state.count) {
 		return;
 	}
-	data_ptr_t sort_dataptr = state.sorting_handle->node->buffer + (offset * sorting_state.ENTRY_SIZE) +
-	                          sorting_state.ENTRY_SIZE - sizeof(idx_t);
+
 	const data_ptr_t payl_dataptr = state.payload_handle->node->buffer;
 	if (payload_state.HAS_VARIABLE_SIZE) {
 		const idx_t *offsets = (idx_t *)state.offsets_handle->node->buffer;
 		for (idx_t i = 0; i < next; i++) {
-			state.validitymask_locations[i] = payl_dataptr + offsets[Load<idx_t>(sort_dataptr)];
+			state.validitymask_locations[i] = payl_dataptr + offsets[i];
 			state.key_locations[i] = state.validitymask_locations[i] + payload_state.VALIDITYMASK_SIZE;
-			sort_dataptr += sorting_state.ENTRY_SIZE;
 		}
 	} else {
 		for (idx_t i = 0; i < next; i++) {
-			state.validitymask_locations[i] = payl_dataptr + Load<idx_t>(sort_dataptr) * payload_state.ENTRY_SIZE;
+			state.validitymask_locations[i] = payl_dataptr;
 			state.key_locations[i] = state.validitymask_locations[i] + payload_state.VALIDITYMASK_SIZE;
-			sort_dataptr += sorting_state.ENTRY_SIZE;
 		}
 	}
 
@@ -1077,7 +1140,6 @@ void PhysicalOrder::GetChunkInternal(ExecutionContext &context, DataChunk &chunk
 
 		auto &buffer_manager = BufferManager::GetBufferManager(context.client);
 		if (state.count > 0) {
-			state.sorting_handle = buffer_manager.Pin(cb.sorting_blocks.back().block);
 			state.payload_handle = buffer_manager.Pin(cb.payload_chunk->data_blocks.back().block);
 			if (payload_state.HAS_VARIABLE_SIZE) {
 				state.offsets_handle = buffer_manager.Pin(cb.payload_chunk->offset_blocks.back().block);
