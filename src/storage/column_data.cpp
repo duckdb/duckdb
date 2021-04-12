@@ -195,8 +195,8 @@ void ColumnData::RevertAppend(row_t start_row) {
 
 void ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
 	// perform the fetch within the segment
-	state.current = (ColumnSegment *)data.GetSegment(row_id);
 	state.row_index = row_id / STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE;
+	state.current = (ColumnSegment *)data.GetSegment(state.row_index);
 	ScanBaseVector(state, result);
 
 	// merge any updates

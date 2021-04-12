@@ -146,7 +146,7 @@ static void MergeUpdateInfoRange(idx_t start, idx_t count, UpdateInfo *current, 
 	auto info_data = (T *)current->tuple_data;
 	auto result_data = FlatVector::GetData<T>(result);
 	for (idx_t i = 0; i < current->N; i++) {
-		if (current->tuples[i] > start + count) {
+		if (current->tuples[i] >= start + count) {
 			// finished merging this segment
 			break;
 		}
