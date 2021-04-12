@@ -11,11 +11,6 @@ RowChunk::RowChunk(BufferManager &buffer_manager, idx_t block_capacity, idx_t en
 	D_ASSERT(block_capacity * entry_size >= Storage::BLOCK_ALLOC_SIZE);
 }
 
-RowChunk::RowChunk(RowChunk &other)
-    : buffer_manager(other.buffer_manager), count(0), block_capacity(other.block_capacity),
-      entry_size(other.entry_size), is_little_endian(other.is_little_endian) {
-}
-
 template <class T>
 void RowChunk::TemplatedSerializeVectorSortable(VectorData &vdata, const SelectionVector &sel, idx_t add_count,
                                                 data_ptr_t key_locations[], const bool desc, const bool has_null,

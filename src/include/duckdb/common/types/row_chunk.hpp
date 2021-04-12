@@ -39,8 +39,6 @@ class RowChunk {
 public:
 	RowChunk(BufferManager &buffer_manager, idx_t block_capacity, idx_t entry_size);
 
-	RowChunk(RowChunk &other);
-
 	std::mutex rc_lock;
 
 	//! BufferManager

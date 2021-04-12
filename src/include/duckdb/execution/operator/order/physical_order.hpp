@@ -17,8 +17,9 @@
 
 namespace duckdb {
 
+struct SortingState;
+struct PayloadState;
 struct ContinuousBlock;
-class OrderGlobalState;
 class OrderLocalState;
 
 //! Physically re-orders the input data
@@ -51,7 +52,7 @@ private:
 	constexpr static idx_t SORTING_BLOCK_SIZE = 524288;
 
 	//! ?
-	void SortLocalState(ClientContext &context, OrderLocalState &lstate, OrderGlobalState &gstate);
+	void SortLocalState(ClientContext &context, OrderLocalState &lstate, const SortingState &sorting_state, const PayloadState &payload_state);
 };
 
 } // namespace duckdb
