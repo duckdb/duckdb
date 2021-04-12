@@ -52,7 +52,8 @@ private:
 	constexpr static idx_t SORTING_BLOCK_SIZE = 524288;
 
 	//! ?
-	void SortLocalState(ClientContext &context, OrderLocalState &lstate, const SortingState &sorting_state, const PayloadState &payload_state);
+	void SortLocalState(ClientContext &context, OrderLocalState &lstate, const SortingState &sorting_state,
+	                    const PayloadState &payload_state);
 };
 
 } // namespace duckdb
