@@ -1,5 +1,5 @@
-# name: test/sql/copy/parquet/parquet_1558.test
-# description: Test basic globbing of parquet files
+# name: test/sql/copy/parquet/parquet_1588.test
+# description: Test boolean filters
 # group: [parquet]
 
 require parquet

@@ -136,9 +136,6 @@ void ColumnReader::PreparePage(idx_t compressed_page_size, idx_t uncompressed_pa
 	block = make_shared<ResizeableBuffer>(compressed_page_size + 1);
 	trans->read((uint8_t *)block->ptr, compressed_page_size);
 
-	//			page_hdr.printTo(std::cout);
-	//			std::cout << '\n';
-
 	shared_ptr<ResizeableBuffer> unpacked_block;
 	if (chunk->meta_data.codec != CompressionCodec::UNCOMPRESSED) {
 		unpacked_block = make_shared<ResizeableBuffer>(uncompressed_page_size + 1);
@@ -209,8 +206,9 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 	                                                          : page_hdr.data_page_header_v2.encoding;
 
 	if (HasRepeats()) {
-		// TODO there seems to be some confusion whether this is in the bytes for v2
-		uint32_t rep_length = block->read<uint32_t>();
+		uint32_t rep_length = page_hdr.type == PageType::DATA_PAGE
+		                          ? block->read<uint32_t>()
+		                          : page_hdr.data_page_header_v2.repetition_levels_byte_length;
 		block->available(rep_length);
 		repeated_decoder =
 		    make_unique<RleBpDecoder>((const uint8_t *)block->ptr, rep_length, ComputeBitWidth(max_repeat));
@@ -218,8 +216,9 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 	}
 
 	if (HasDefines()) {
-		// TODO there seems to be some confusion whether this is in the bytes for v2
-		uint32_t def_length = block->read<uint32_t>();
+		uint32_t def_length = page_hdr.type == PageType::DATA_PAGE
+		                          ? block->read<uint32_t>()
+		                          : page_hdr.data_page_header_v2.definition_levels_byte_length;
 		block->available(def_length);
 		defined_decoder =
 		    make_unique<RleBpDecoder>((const uint8_t *)block->ptr, def_length, ComputeBitWidth(max_define));
