@@ -1032,6 +1032,7 @@ void PhysicalOrder::SortLocalState(ClientContext &context, OrderLocalState &lsta
 	lstate.sorted_blocks.push_back(move(cb));
 }
 
+
 void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> state_p) {
 	this->sink_state = move(state_p);
 	auto &state = (OrderGlobalState &)*this->sink_state;
@@ -1053,8 +1054,12 @@ void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 // GetChunkInternal
 //===--------------------------------------------------------------------===//
 idx_t PhysicalOrder::MaxThreads(ClientContext &context) {
-	auto &state = (OrderGlobalState &)*this->sink_state;
-	return state.total_count / STANDARD_VECTOR_SIZE + 1;
+	if (this->sink_state) {
+		auto &state = (OrderGlobalState &)*this->sink_state;
+		return state.sorted_blocks.back()->payload_chunk->data_blocks.back().count / STANDARD_VECTOR_SIZE + 1;
+	} else {
+		return estimated_cardinality / STANDARD_VECTOR_SIZE + 1;
+	}
 }
 
 class OrderParallelState : public ParallelState {
