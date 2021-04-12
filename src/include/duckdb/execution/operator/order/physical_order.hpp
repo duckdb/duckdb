@@ -12,8 +12,8 @@
 #include "duckdb/common/types/row_chunk.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/physical_sink.hpp"
-#include "duckdb/planner/bound_query_node.hpp"
 #include "duckdb/parallel/pipeline.hpp"
+#include "duckdb/planner/bound_query_node.hpp"
 
 namespace duckdb {
 
@@ -21,6 +21,7 @@ struct SortingState;
 struct PayloadState;
 struct ContinuousBlock;
 class OrderLocalState;
+class OrderGlobalState;
 
 //! Physically re-orders the input data
 class PhysicalOrder : public PhysicalSink {
@@ -47,13 +48,19 @@ public:
 
 	string ParamsToString() const override;
 
-private:
-	//! Size of blocks that are sorted - must be bigger than Storage::BLOCK_ALLOC_SIZE
-	constexpr static idx_t SORTING_BLOCK_SIZE = 524288;
+    //! Tuples are merged in strides of size MERGE_STRIDE
+    constexpr static idx_t MERGE_STRIDE = STANDARD_VECTOR_SIZE;
 
-	//! ?
+    //! TODO: document this
+    static void ScheduleMergeTasks(Pipeline &pipeline, ClientContext &context, OrderGlobalState &state);
+
+private:
+	//! Sort and re-order local state data when the local state has aggregated SORTING_BLOCK_SIZE data
 	void SortLocalState(ClientContext &context, OrderLocalState &lstate, const SortingState &sorting_state,
 	                    const PayloadState &payload_state);
+
+    //! Size of blocks that are sorted - must be bigger than Storage::BLOCK_ALLOC_SIZE
+    constexpr static idx_t SORTING_BLOCK_SIZE = 524288;
 };
 
 } // namespace duckdb
