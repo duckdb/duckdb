@@ -21,7 +21,7 @@ NumericSegment::NumericSegment(DatabaseInstance &db, PhysicalType type, idx_t ro
 
 	// figure out how many vectors we want to store in this block
 	this->type_size = GetTypeIdSize(type);
-	this->max_tuple_count = (Storage::BLOCK_SIZE / type_size) / STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE;
+	this->max_tuple_count = Storage::BLOCK_SIZE / type_size;
 
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	if (block_id == INVALID_BLOCK) {

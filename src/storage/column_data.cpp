@@ -210,7 +210,13 @@ void ColumnData::Update(Transaction &transaction, Vector &update_vector, Vector 
 			// no updates yet for this segment: create it
 			state.current->updates = make_unique<UpdateSegment>(*this, *state.current);
 		}
-		state.current->updates->Update(transaction, update_vector, ids + offset, index - offset, base_data);
+		if (offset > 0) {
+			Vector update_slice(type);
+			update_slice.Slice(update_vector, offset);
+			state.current->updates->Update(transaction, update_slice, ids + offset, index - offset, base_data);
+		} else {
+			state.current->updates->Update(transaction, update_vector, ids + offset, index - offset, base_data);
+		}
 
 		offset = index;
 	}

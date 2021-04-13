@@ -3,12 +3,12 @@
 # group: [update]
 
 statement ok
-CREATE TABLE test AS SELECT * FROM range (0, 31745, 1) t1(i);
+CREATE TABLE test AS SELECT * FROM range (0, 50000, 1) t1(i);
 
 query II
 SELECT COUNT(i), SUM(i) FROM test
 ----
-31745	503856640
+50000	1249975000
 
 statement ok
 UPDATE test SET i=i+1
@@ -16,7 +16,7 @@ UPDATE test SET i=i+1
 query II
 SELECT COUNT(i), SUM(i) FROM test
 ----
-31745	503888385
+50000	1250025000
 
 statement ok
 UPDATE test SET i=i+1
@@ -24,4 +24,28 @@ UPDATE test SET i=i+1
 query II
 SELECT COUNT(i), SUM(i) FROM test
 ----
-31745	503920130
+50000	1250075000
+
+statement ok
+INSERT INTO test SELECT * FROM test;
+
+query II
+SELECT COUNT(i), SUM(i) FROM test
+----
+100000	2500150000
+
+statement ok
+UPDATE test SET i=i+1
+
+query II
+SELECT COUNT(i), SUM(i) FROM test
+----
+100000	2500250000
+
+statement ok
+UPDATE test SET i=i+1
+
+query II
+SELECT COUNT(i), SUM(i) FROM test
+----
+100000	2500350000
