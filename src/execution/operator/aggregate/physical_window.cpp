@@ -5,7 +5,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/window_segment_tree.hpp"
-#include "duckdb/parallel/task_counter.hpp"
+#include "duckdb/parallel/task_context.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/common/windows_undefs.hpp"
@@ -15,6 +15,9 @@
 
 namespace duckdb {
 
+using counts_t = std::vector<size_t>;
+
+//	Global sink state
 class WindowGlobalState : public GlobalOperatorState {
 public:
 	WindowGlobalState(PhysicalWindow &op_p, ClientContext &context) : op(op_p) {
@@ -23,26 +26,25 @@ public:
 	PhysicalWindow &op;
 	std::mutex lock;
 	ChunkCollection chunks;
+	ChunkCollection over_collection;
+	ChunkCollection hash_collection;
 	ChunkCollection window_results;
+	counts_t counts;
 };
 
+//	Per-thread sink state
 class WindowLocalState : public LocalSinkState {
 public:
-	explicit WindowLocalState(PhysicalWindow &op_p) : op(op_p) {
+	explicit WindowLocalState(PhysicalWindow &op_p, const unsigned partition_bits = 10)
+	    : op(op_p), partition_count(size_t(1) << partition_bits) {
 	}
 
 	PhysicalWindow &op;
 	ChunkCollection chunks;
-};
-
-//! The operator state of the window
-class PhysicalWindowOperatorState : public PhysicalOperatorState {
-public:
-	PhysicalWindowOperatorState(PhysicalOperator &op, PhysicalOperator *child)
-	    : PhysicalOperatorState(op, child), position(0) {
-	}
-
-	idx_t position;
+	ChunkCollection over_collection;
+	ChunkCollection hash_collection;
+	const size_t partition_count;
+	counts_t counts;
 };
 
 // this implements a sorted window functions variant
@@ -362,33 +364,8 @@ static void MaterializeExpression(Expression *expr, ChunkCollection &input, Chun
 	MaterializeExpressions(&expr, 1, input, output, scalar);
 }
 
-static bool CompatibleSorts(const BoundWindowExpression *a, const BoundWindowExpression *b) {
-	// check if the partitions are equivalent
-	if (a->partitions.size() != b->partitions.size()) {
-		return false;
-	}
-	for (idx_t i = 0; i < a->partitions.size(); i++) {
-		if (!a->partitions[i]->Equals(b->partitions[i].get())) {
-			return false;
-		}
-	}
-	// check if the orderings are equivalent
-	if (a->orders.size() != b->orders.size()) {
-		return false;
-	}
-	for (idx_t i = 0; i < a->orders.size(); i++) {
-		if (a->orders[i].type != b->orders[i].type) {
-			return false;
-		}
-		if (!a->orders[i].expression->Equals(b->orders[i].expression.get())) {
-			return false;
-		}
-	}
-	return true;
-}
-
-static void SortCollectionForWindow(BoundWindowExpression *wexpr, ChunkCollection &input, ChunkCollection &output,
-                                    ChunkCollection &sort_collection) {
+static void SortCollectionForPartition(BoundWindowExpression *wexpr, ChunkCollection &input, ChunkCollection &output,
+                                       ChunkCollection &sort_collection) {
 	if (input.Count() == 0) {
 		return;
 	}
@@ -414,55 +391,32 @@ static void SortCollectionForWindow(BoundWindowExpression *wexpr, ChunkCollectio
 	sort_collection.Reorder(sorted_vector.get());
 }
 
-using counts_t = std::vector<size_t>;
+static void HashChunk(counts_t &counts, DataChunk &hash_chunk, DataChunk &sort_chunk, const idx_t partition_cols) {
+	const vector<LogicalType> hash_types(1, LogicalTypeId::HASH);
+	hash_chunk.Initialize(hash_types);
+	hash_chunk.SetCardinality(sort_chunk);
+	auto &hash_vector = hash_chunk.data[0];
 
-static void HashChunk(counts_t &counts, Vector &hash_vector, DataChunk &sort_chunk, const idx_t partition_cols,
-                      const hash_t partition_mask) {
-	D_ASSERT(hash_vector.GetType().id() == LogicalTypeId::HASH);
 	const auto count = sort_chunk.size();
 	VectorOperations::Hash(sort_chunk.data[0], hash_vector, count);
 	for (idx_t prt_idx = 1; prt_idx < partition_cols; ++prt_idx) {
 		VectorOperations::CombineHash(hash_vector, sort_chunk.data[prt_idx], count);
 	}
 
+	const auto partition_mask = hash_t(counts.size() - 1);
 	auto hashes = FlatVector::GetData<hash_t>(hash_vector);
-	for (idx_t i = 0; i < count; ++i) {
-		const auto bin = (hashes[i] & partition_mask);
-		++counts[bin];
+	if (hash_vector.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		const auto bin = (hashes[0] & partition_mask);
+		counts[bin] += count;
+	} else {
+		for (idx_t i = 0; i < count; ++i) {
+			const auto bin = (hashes[i] & partition_mask);
+			++counts[bin];
+		}
 	}
 }
 
-static void HashCollectionForWindow(BoundWindowExpression *wexpr, ChunkCollection &over_collection,
-                                    ChunkCollection &hash_collection, counts_t &counts,
-                                    const unsigned partition_bits = 10) {
-	counts.clear();
-
-	//	If there are no partition columns, then there is one partition
-	const auto partition_cols = wexpr->partitions.size();
-	const auto num_rows = over_collection.Count();
-	if (partition_cols == 0) {
-		counts.emplace_back(num_rows);
-		return;
-	}
-
-	//	Radix sort the partitions
-	const auto partition_count = size_t(1) << partition_bits;
-	counts.resize(partition_count, 0);
-
-	//	First pass: hash and count the partition sizes
-	const auto partition_mask = hash_t(partition_count - 1);
-	vector<LogicalType> hash_types(1, LogicalTypeId::HASH);
-	for (const auto &sort_chunk : over_collection.Chunks()) {
-		DataChunk hash_chunk;
-		hash_chunk.Initialize(hash_types);
-		hash_chunk.SetCardinality(*sort_chunk);
-		HashChunk(counts, hash_chunk.data[0], *sort_chunk, partition_cols, partition_mask);
-		hash_collection.Append(hash_chunk);
-	}
-}
-
-static void MaterializeOverCollectionForWindow(BoundWindowExpression *wexpr, ChunkCollection &input,
-                                               ChunkCollection &output, ChunkCollection &over_collection) {
+static void MaterializeOverForWindow(BoundWindowExpression *wexpr, DataChunk &input_chunk, DataChunk &over_chunk) {
 	vector<LogicalType> over_types;
 	ExpressionExecutor executor;
 
@@ -481,18 +435,10 @@ static void MaterializeOverCollectionForWindow(BoundWindowExpression *wexpr, Chu
 
 	D_ASSERT(over_types.size() > 0);
 
-	// create a ChunkCollection for the results of the expressions in the window definitions
-	for (idx_t i = 0; i < input.ChunkCount(); i++) {
-		DataChunk over_chunk;
-		over_chunk.Initialize(over_types);
+	over_chunk.Initialize(over_types);
+	executor.Execute(input_chunk, over_chunk);
 
-		executor.Execute(input.GetChunk(i), over_chunk);
-
-		over_chunk.Verify();
-		over_collection.Append(over_chunk);
-	}
-
-	D_ASSERT(input.Count() == over_collection.Count());
+	over_chunk.Verify();
 }
 
 struct WindowBoundariesState {
@@ -820,78 +766,25 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 	}
 }
 
-class WindowPartitionTaskManager : public TaskCounter {
-public:
-	WindowPartitionTaskManager(TaskScheduler &scheduler_p, WindowGlobalState &gstate_p)
-	    : TaskCounter(scheduler_p), gstate(gstate_p) {
-	}
+using WindowExpressions = vector<BoundWindowExpression *>;
 
-	void Finish() override;
-
-	WindowGlobalState &gstate;
-};
-
-void WindowPartitionTaskManager::Finish() {
-	TaskCounter::Finish();
-
-	//	Replace the operator collection with our accumulated versions
-	auto &ostate = (WindowGlobalState &)*gstate.op.sink_state;
-
-	ostate.chunks.Reset();
-	ostate.chunks.Merge(gstate.chunks);
-
-	ostate.window_results.Reset();
-	ostate.window_results.Merge(gstate.window_results);
-}
-
-class WindowPartitionTask : public Task {
-public:
-	using WindowExpressions = vector<BoundWindowExpression *>;
-	using Mask = BitArray<uint64_t>;
-
-	WindowPartitionTask(WindowPartitionTaskManager &manager_p, WindowExpressions &window_exprs_p,
-	                    const vector<idx_t> &matching_p, const ChunkCollection &input_p,
-	                    const ChunkCollection &output_p, const ChunkCollection &over_p, const ChunkCollection &hashes_p,
-	                    const hash_t hash_bin_p, const hash_t hash_mask_p)
-	    : manager(manager_p), window_exprs(window_exprs_p), matching(matching_p), input(input_p), output(output_p),
-	      over(over_p), hashes(hashes_p), hash_bin(hash_bin_p), hash_mask(hash_mask_p) {
-	}
-
-	static void ComputeExpressions(WindowExpressions &window_exprs, const vector<idx_t> &matching,
-	                               ChunkCollection &big_data, ChunkCollection &window_results,
-	                               ChunkCollection &over_collection);
-	void Execute() override;
-
-private:
-	WindowPartitionTaskManager &manager;
-	WindowExpressions &window_exprs;
-	const vector<idx_t> &matching;
-	const ChunkCollection &input;
-	const ChunkCollection &output;
-	const ChunkCollection &over;
-	const ChunkCollection &hashes;
-	const hash_t hash_bin;
-	const hash_t hash_mask;
-};
-
-void WindowPartitionTask::ComputeExpressions(WindowExpressions &window_exprs, const vector<idx_t> &matching,
-                                             ChunkCollection &big_data, ChunkCollection &window_results,
-                                             ChunkCollection &over_collection) {
+static void ComputeWindowExpressions(WindowExpressions &window_exprs, ChunkCollection &big_data,
+                                     ChunkCollection &window_results, ChunkCollection &over_collection) {
 	//	Idempotency
 	if (big_data.Count() == 0) {
 		return;
 	}
 	//	Pick out a function for the OVER clause
-	auto over_expr = window_exprs[matching[0]];
+	auto over_expr = window_exprs[0];
 
 	//	Sort the partition
 	const auto sort_col_count = over_expr->partitions.size() + over_expr->orders.size();
 	if (sort_col_count > 0) {
-		SortCollectionForWindow(over_expr, big_data, window_results, over_collection);
+		SortCollectionForPartition(over_expr, big_data, window_results, over_collection);
 	}
 
 	//	Set bits for the start of each partition
-	Mask partition_bits(big_data.Count());
+	BitArray<uint64_t> partition_bits(big_data.Count());
 	partition_bits[0] = true;
 
 	for (idx_t c = 0; c < over_expr->partitions.size(); ++c) {
@@ -905,8 +798,8 @@ void WindowPartitionTask::ComputeExpressions(WindowExpressions &window_exprs, co
 		MaskColumn(order_bits, over_collection, c);
 	}
 
-	//	Compute the functions with matching sorts
-	for (const auto &expr_idx : matching) {
+	//	Compute the functions
+	for (idx_t expr_idx = 0; expr_idx < window_exprs.size(); ++expr_idx) {
 		ComputeWindowExpression(window_exprs[expr_idx], big_data, window_results, partition_bits, order_bits, expr_idx);
 	}
 }
@@ -920,11 +813,11 @@ static void AppendCollection(const ChunkCollection &source, ChunkCollection &tar
 	target.Append(chunk);
 }
 
-void WindowPartitionTask::Execute() {
+static void ExtractPartition(WindowGlobalState &gstate, ChunkCollection &chunks, ChunkCollection &window_results,
+                             ChunkCollection &over_collection, const hash_t hash_bin, const hash_t hash_mask) {
+
 	//	Copy the partition data so we can work with it on this thread
-	ChunkCollection chunks;
-	ChunkCollection window_results;
-	ChunkCollection over_collection;
+	ChunkCollection &hashes = gstate.hash_collection;
 	SelectionVector sel;
 	for (idx_t chunk_idx = 0; chunk_idx < hashes.ChunkCount(); ++chunk_idx) {
 		//	Build a selection vector of matching hashes
@@ -944,39 +837,121 @@ void WindowPartitionTask::Execute() {
 			continue;
 		}
 
-		AppendCollection(input, chunks, sel, bin_size, chunk_idx);
-		AppendCollection(output, window_results, sel, bin_size, chunk_idx);
-		AppendCollection(over, over_collection, sel, bin_size, chunk_idx);
+		AppendCollection(gstate.chunks, chunks, sel, bin_size, chunk_idx);
+		AppendCollection(gstate.window_results, window_results, sel, bin_size, chunk_idx);
+		AppendCollection(gstate.over_collection, over_collection, sel, bin_size, chunk_idx);
 	}
-
-	ComputeExpressions(window_exprs, matching, chunks, window_results, over_collection);
-
-	lock_guard<mutex> glock(manager.gstate.lock);
-	manager.gstate.chunks.Merge(chunks);
-	manager.gstate.window_results.Merge(window_results);
-
-	manager.FinishTask();
 }
 
-void PhysicalWindow::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
-	auto state = reinterpret_cast<PhysicalWindowOperatorState *>(state_p);
+//===--------------------------------------------------------------------===//
+// GetChunkInternal
+//===--------------------------------------------------------------------===//
+idx_t PhysicalWindow::MaxThreads(ClientContext &context) {
+	// Recursive CTE can cause us to be called befor Finalize,
+	// so we have to check and fall back to the cardinality estimate
+	// in that case
+	if (!this->sink_state.get()) {
+		return (estimated_cardinality + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE + 1;
+	}
+	auto &state = (WindowGlobalState &)*this->sink_state;
 
-	auto &gstate = (WindowGlobalState &)*sink_state;
-
-	ChunkCollection &big_data = gstate.chunks;
-	ChunkCollection &window_results = gstate.window_results;
-
-	if (big_data.Count() == 0) {
-		return;
+	// If there is only one partition, we have to process it on one thread.
+	if (state.counts.empty()) {
+		return 1;
 	}
 
-	if (state->position >= big_data.Count()) {
+	idx_t max_threads = 0;
+	for (const auto count : state.counts) {
+		max_threads += int(count > 0);
+	}
+
+	return max_threads;
+}
+
+//	Global read state
+class WindowParallelState : public ParallelState {
+public:
+	WindowParallelState() : next_part(0) {
+	}
+	//! The output read position.
+	std::atomic<idx_t> next_part;
+};
+
+unique_ptr<ParallelState> PhysicalWindow::GetParallelState() {
+	auto result = make_unique<WindowParallelState>();
+	return move(result);
+}
+
+// Per-thread read state
+class PhysicalWindowOperatorState : public PhysicalOperatorState {
+public:
+	PhysicalWindowOperatorState(PhysicalOperator &op, PhysicalOperator *child)
+	    : PhysicalOperatorState(op, child), parallel_state(nullptr), initialized(false) {
+	}
+
+	ParallelState *parallel_state;
+	bool initialized;
+
+	//! The number of partitions to process (0 if there is no partitioning)
+	size_t partitions;
+	//! The output read position.
+	size_t next_part;
+	//! The generated input chunks
+	ChunkCollection chunks;
+	//! The generated output chunks
+	ChunkCollection window_results;
+	//! The read cursor
+	idx_t position;
+};
+
+unique_ptr<PhysicalOperatorState> PhysicalWindow::GetOperatorState() {
+	return make_unique<PhysicalWindowOperatorState>(*this, children[0].get());
+}
+
+static void GeneratePartition(PhysicalWindowOperatorState &state, WindowGlobalState &gstate, const idx_t hash_bin) {
+	auto &op = (PhysicalWindow &)gstate.op;
+	WindowExpressions window_exprs;
+	for (idx_t expr_idx = 0; expr_idx < op.select_list.size(); ++expr_idx) {
+		D_ASSERT(op.select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
+		auto wexpr = reinterpret_cast<BoundWindowExpression *>(op.select_list[expr_idx].get());
+		window_exprs.emplace_back(wexpr);
+	}
+
+	//	Get rid of any stale data
+	state.chunks.Reset();
+	state.window_results.Reset();
+	state.position = 0;
+
+	if (gstate.counts.empty() && hash_bin == 0) {
+		ChunkCollection &big_data = gstate.chunks;
+		ChunkCollection &window_results = gstate.window_results;
+		ChunkCollection &over_collection = gstate.over_collection;
+		ComputeWindowExpressions(window_exprs, big_data, window_results, over_collection);
+		state.chunks.Merge(big_data);
+		state.window_results.Merge(window_results);
+	} else if (hash_bin < gstate.counts.size() && gstate.counts[hash_bin] > 0) {
+		ChunkCollection input;
+		ChunkCollection output;
+		ChunkCollection over;
+		const auto hash_mask = hash_t(gstate.counts.size() - 1);
+		ExtractPartition(gstate, input, output, over, hash_bin, hash_mask);
+		ComputeWindowExpressions(window_exprs, input, output, over);
+		state.chunks.Merge(input);
+		state.window_results.Merge(output);
+	}
+}
+
+static void Scan(PhysicalWindowOperatorState &state, DataChunk &chunk) {
+	ChunkCollection &big_data = state.chunks;
+	ChunkCollection &window_results = state.window_results;
+
+	if (state.position >= big_data.Count()) {
 		return;
 	}
 
 	// just return what was computed before, appending the result cols of the window expressions at the end
-	auto &proj_ch = big_data.GetChunkForRow(state->position);
-	auto &wind_ch = window_results.GetChunkForRow(state->position);
+	auto &proj_ch = big_data.GetChunkForRow(state.position);
+	auto &wind_ch = window_results.GetChunkForRow(state.position);
 
 	idx_t out_idx = 0;
 	D_ASSERT(proj_ch.size() == wind_ch.size());
@@ -987,24 +962,119 @@ void PhysicalWindow::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 	for (idx_t col_idx = 0; col_idx < wind_ch.ColumnCount(); col_idx++) {
 		chunk.data[out_idx++].Reference(wind_ch.data[col_idx]);
 	}
-	state->position += STANDARD_VECTOR_SIZE;
+	chunk.Verify();
+
+	state.position += STANDARD_VECTOR_SIZE;
 }
 
-unique_ptr<PhysicalOperatorState> PhysicalWindow::GetOperatorState() {
-	return make_unique<PhysicalWindowOperatorState>(*this, children[0].get());
+void PhysicalWindow::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
+	auto &state = *reinterpret_cast<PhysicalWindowOperatorState *>(state_p);
+	auto &gstate = (WindowGlobalState &)*sink_state;
+
+	if (!state.initialized) {
+		// initialize thread-local operator state
+		state.partitions = gstate.counts.size();
+		state.next_part = 0;
+		// record parallel state (if any)
+		state.parallel_state = nullptr;
+		auto &task = context.task;
+		// check if there is any parallel state to fetch
+		state.parallel_state = nullptr;
+		auto task_info = task.task_info.find(this);
+		if (task_info != task.task_info.end()) {
+			// parallel scan init
+			state.parallel_state = task_info->second;
+		}
+		state.initialized = true;
+	}
+
+	if (!state.parallel_state) {
+		// sequential scan
+		if (state.position >= state.chunks.Count()) {
+			auto hash_bin = state.next_part++;
+			for (; hash_bin < state.partitions; hash_bin = state.next_part++) {
+				if (gstate.counts[hash_bin] > 0) {
+					break;
+				}
+			}
+			GeneratePartition(state, gstate, hash_bin);
+		}
+		Scan(state, chunk);
+		if (chunk.size() != 0) {
+			return;
+		}
+	} else {
+		// parallel scan
+		auto &parallel_state = *reinterpret_cast<WindowParallelState *>(state.parallel_state);
+		do {
+			if (state.position >= state.chunks.Count()) {
+				auto hash_bin = parallel_state.next_part++;
+				for (; hash_bin < state.partitions; hash_bin = parallel_state.next_part++) {
+					if (gstate.counts[hash_bin] > 0) {
+						break;
+					}
+				}
+				GeneratePartition(state, gstate, hash_bin);
+			}
+			Scan(state, chunk);
+			if (chunk.size() != 0) {
+				return;
+			} else {
+				break;
+			}
+		} while (true);
+	}
+	D_ASSERT(chunk.size() == 0);
 }
 
 void PhysicalWindow::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_p,
                           DataChunk &input) {
 	auto &lstate = (WindowLocalState &)lstate_p;
 	lstate.chunks.Append(input);
+
+	// Compute the over columns and the hash values for this block (if any)
+	const auto over_idx = 0;
+	auto over_expr = reinterpret_cast<BoundWindowExpression *>(select_list[over_idx].get());
+
+	const auto sort_col_count = over_expr->partitions.size() + over_expr->orders.size();
+	if (sort_col_count > 0) {
+		DataChunk over_chunk;
+		MaterializeOverForWindow(over_expr, input, over_chunk);
+
+		if (!over_expr->partitions.empty()) {
+			if (lstate.counts.empty()) {
+				lstate.counts.resize(lstate.partition_count, 0);
+			}
+
+			DataChunk hash_chunk;
+			HashChunk(lstate.counts, hash_chunk, over_chunk, over_expr->partitions.size());
+			lstate.hash_collection.Append(hash_chunk);
+			D_ASSERT(lstate.chunks.Count() == lstate.hash_collection.Count());
+		}
+
+		lstate.over_collection.Append(over_chunk);
+		D_ASSERT(lstate.chunks.Count() == lstate.over_collection.Count());
+	}
 }
 
 void PhysicalWindow::Combine(ExecutionContext &context, GlobalOperatorState &gstate_p, LocalSinkState &lstate_p) {
-	auto &gstate = (WindowGlobalState &)gstate_p;
 	auto &lstate = (WindowLocalState &)lstate_p;
+	if (lstate.chunks.Count() == 0) {
+		return;
+	}
+	auto &gstate = (WindowGlobalState &)gstate_p;
 	lock_guard<mutex> glock(gstate.lock);
 	gstate.chunks.Merge(lstate.chunks);
+	gstate.over_collection.Merge(lstate.over_collection);
+	gstate.hash_collection.Merge(lstate.hash_collection);
+	if (gstate.counts.empty()) {
+		gstate.counts = lstate.counts;
+	} else {
+		D_ASSERT(gstate.counts.size() == lstate.counts.size());
+		for (idx_t i = 0; i < gstate.counts.size(); ++i) {
+			gstate.counts[i] += lstate.counts[i];
+		}
+	}
 }
 
 void PhysicalWindow::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> gstate_p) {
@@ -1037,70 +1107,6 @@ void PhysicalWindow::Finalize(Pipeline &pipeline, ClientContext &context, unique
 	}
 
 	D_ASSERT(window_results.ColumnCount() == select_list.size());
-	// we can have multiple window functions
-
-	//	Track parallel tasks
-	auto &scheduler = TaskScheduler::GetScheduler(context);
-
-	// Process the window functions by sharing the partition/order definitions
-	WindowPartitionTask::WindowExpressions window_exprs;
-	for (idx_t expr_idx = 0; expr_idx < select_list.size(); ++expr_idx) {
-		D_ASSERT(select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
-		auto wexpr = reinterpret_cast<BoundWindowExpression *>(select_list[expr_idx].get());
-		window_exprs.emplace_back(wexpr);
-	}
-
-	vector<idx_t> remaining(select_list.size());
-	std::iota(remaining.begin(), remaining.end(), 0);
-	while (!remaining.empty()) {
-		// Find all functions that share the partitioning of the first remaining expression
-		const auto over_idx = remaining[0];
-		D_ASSERT(select_list[over_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
-		auto over_expr = reinterpret_cast<BoundWindowExpression *>(select_list[over_idx].get());
-
-		vector<idx_t> matching;
-		vector<idx_t> unprocessed;
-		for (const auto &expr_idx : remaining) {
-			D_ASSERT(select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
-			auto wexpr = reinterpret_cast<BoundWindowExpression *>(select_list[expr_idx].get());
-			if (CompatibleSorts(over_expr, wexpr)) {
-				matching.emplace_back(expr_idx);
-			} else {
-				unprocessed.emplace_back(expr_idx);
-			}
-		}
-		remaining.swap(unprocessed);
-
-		// sort by partition and order clause in window def
-		ChunkCollection over_collection;
-		ChunkCollection hash_collection;
-		const auto sort_col_count = over_expr->partitions.size() + over_expr->orders.size();
-		counts_t counts;
-		if (sort_col_count > 0) {
-			MaterializeOverCollectionForWindow(over_expr, big_data, window_results, over_collection);
-			if (!over_expr->partitions.empty()) {
-				HashCollectionForWindow(over_expr, over_collection, hash_collection, counts);
-			}
-		}
-
-		if (!counts.empty()) {
-			WindowGlobalState pstate(*this, context);
-			WindowPartitionTaskManager task_manager(scheduler, pstate);
-			const auto hash_mask = hash_t(counts.size() - 1);
-			for (hash_t hash_key = 0; hash_key < counts.size(); ++hash_key) {
-				if (counts[hash_key] > 0) {
-					auto task =
-					    make_unique<WindowPartitionTask>(task_manager, window_exprs, matching, big_data, window_results,
-					                                     over_collection, hash_collection, hash_key, hash_mask);
-					task_manager.AddTask(move(task));
-					// task->Execute();
-				}
-			}
-			task_manager.Finish();
-		} else {
-			WindowPartitionTask::ComputeExpressions(window_exprs, matching, big_data, window_results, over_collection);
-		}
-	}
 }
 
 unique_ptr<LocalSinkState> PhysicalWindow::GetLocalSinkState(ExecutionContext &context) {
