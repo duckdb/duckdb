@@ -203,31 +203,31 @@ static UpdateSegment::fetch_committed_range_function_t GetFetchCommittedRangeFun
 }
 
 idx_t UpdateSegment::VectorIndex(idx_t row_index) const {
-	D_ASSERT(row_index >= parent.start && row_index < parent.start + parent.count);
-	return (row_index - parent.start) / STANDARD_VECTOR_SIZE;
+	return row_index / STANDARD_VECTOR_SIZE;
 }
 
 template<bool SCAN_COMMITTED>
 void UpdateSegment::TemplatedScanUpdates(Transaction *transaction, idx_t start_row, idx_t scan_count, Vector &result, idx_t result_offset) {
 	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
+	D_ASSERT(start_row <= parent.count);
+	D_ASSERT(start_row + scan_count <= parent.count);
 
 	auto lock_handle = lock.GetSharedLock();
 	idx_t current_vector = VectorIndex(start_row);
 	idx_t remaining = scan_count;
 	while(remaining > 0) {
-		idx_t vector_begin = parent.start + current_vector * STANDARD_VECTOR_SIZE;
+		idx_t vector_begin = current_vector * STANDARD_VECTOR_SIZE;
 		idx_t vector_end = vector_begin + STANDARD_VECTOR_SIZE;
 		idx_t current_count = MinValue<idx_t>(vector_end - start_row, remaining);
 		if (root) {
-			auto entry = root->info.find(current_vector);
-			if (entry != root->info.end()) {
+			if (current_vector < root->info.size() && root->info[current_vector]) {
 				idx_t start_in_vector = start_row - vector_begin;
 				idx_t current_result_offset = result_offset + scan_count - remaining;
 				if (SCAN_COMMITTED) {
-					fetch_committed_range_function(start_in_vector, current_count, entry->second->info.get(), result, current_result_offset);
+					fetch_committed_range_function(start_in_vector, current_count, root->info[current_vector]->info.get(), result, current_result_offset);
 				} else {
 					D_ASSERT(transaction);
-					fetch_update_range_function(transaction->start_time, transaction->transaction_id, start_in_vector, current_count, entry->second->info.get(), result, current_result_offset);
+					fetch_update_range_function(transaction->start_time, transaction->transaction_id, start_in_vector, current_count, root->info[current_vector]->info.get(), result, current_result_offset);
 				}
 			}
 		}
@@ -328,7 +328,7 @@ void UpdateSegment::FetchRow(Transaction &transaction, idx_t row_id, Vector &res
 		return;
 	}
 	idx_t vector_index = (row_id - parent.start) / STANDARD_VECTOR_SIZE;
-	if (!root->info[vector_index]) {
+	if (vector_index >= root->info.size() || !root->info[vector_index]) {
 		return;
 	}
 	idx_t row_in_vector = row_id - vector_index * STANDARD_VECTOR_SIZE;
@@ -890,15 +890,16 @@ void UpdateSegment::Update(Transaction &transaction, Vector &update, row_t *ids,
 
 	D_ASSERT(idx_t(first_id) >= parent.start);
 
-	if (column_data.type.id() == LogicalTypeId::VALIDITY) {
-		if ((!root || !root->info[vector_index]) && FlatVector::Validity(update).AllValid() &&
-		    FlatVector::Validity(base_data).AllValid()) {
-			// fast path: updating a validity segment, and both the base data and the update data have no null values
-			// in this case we can skip the entire update (null-ness will not change)
-			// this happens when we do an update that does not affect null-ness (e.g. i = i + 1)
-			return;
-		}
-	}
+	// if (column_data.type.id() == LogicalTypeId::VALIDITY) {
+	// 	bool no_updates = !root || vector_index >= root->info.size() || !root->info[vector_index];
+	// 	if (no_updates && FlatVector::Validity(update).AllValid() &&
+	// 	    FlatVector::Validity(base_data).AllValid()) {
+	// 		// fast path: updating a validity segment, and both the base data and the update data have no null values
+	// 		// in this case we can skip the entire update (null-ness will not change)
+	// 		// this happens when we do an update that does not affect null-ness (e.g. i = i + 1)
+	// 		return;
+	// 	}
+	// }
 	// obtain an exclusive lock
 	auto write_lock = lock.GetExclusiveLock();
 
@@ -924,11 +925,14 @@ void UpdateSegment::Update(Transaction &transaction, Vector &update, row_t *ids,
 	// first check the version chain
 	UpdateInfo *node = nullptr;
 
-	auto entry = root->info.find(vector_index);
-	if (entry != root->info.end()) {
+	if (vector_index >= root->info.size()) {
+		root->info.resize(vector_index + 1);
+	}
+
+	if (root->info[vector_index]) {
 		// there is already a version here, check if there are any conflicts and search for the node that belongs to
 		// this transaction in the version chain
-		auto base_info = entry->second->info.get();
+		auto base_info = root->info[vector_index]->info.get();
 		CheckForConflicts(base_info->next, transaction, ids, sel, count, vector_offset, node);
 
 		// there are no conflicts
@@ -1004,7 +1008,7 @@ bool UpdateSegment::HasUpdates(idx_t vector_index) const {
 	if (!HasUpdates()) {
 		return false;
 	}
-	return root->info.find(vector_index) != root->info.end();
+	return vector_index < root->info.size() && root->info[vector_index];
 }
 
 bool UpdateSegment::HasUncommittedUpdates(idx_t vector_index) {
@@ -1012,8 +1016,7 @@ bool UpdateSegment::HasUncommittedUpdates(idx_t vector_index) {
 		return false;
 	}
 	auto read_lock = lock.GetSharedLock();
-	auto entry = root->info.find(vector_index);
-	if (entry != root->info.end() && entry->second->info->next) {
+	if (root->info[vector_index]->info->next) {
 		return true;
 	}
 	return false;

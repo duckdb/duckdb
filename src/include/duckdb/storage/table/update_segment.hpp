@@ -103,7 +103,7 @@ struct UpdateNodeData {
 };
 
 struct UpdateNode {
-	unordered_map<idx_t, unique_ptr<UpdateNodeData>> info;
+	vector<unique_ptr<UpdateNodeData>> info;
 };
 
 } // namespace duckdb

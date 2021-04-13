@@ -91,7 +91,7 @@ public:
 	virtual void RevertAppend(row_t start_row);
 
 	//! Update the specified row identifiers
-	virtual void Update(Transaction &transaction, Vector &updates, Vector &row_ids, idx_t count) = 0;
+	virtual void Update(Transaction &transaction, Vector &updates, Vector &row_ids, idx_t count);
 
 	//! Fetch the vector from the column data that belongs to this specific row
 	virtual void Fetch(ColumnScanState &state, row_t row_id, Vector &result);

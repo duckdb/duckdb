@@ -109,42 +109,8 @@ void StandardColumnData::RevertAppend(row_t start_row) {
 }
 
 void StandardColumnData::Update(Transaction &transaction, Vector &update_vector, Vector &row_ids, idx_t count) {
-	auto ids = FlatVector::GetData<row_t>(row_ids);
-	idx_t index = 0;
-	idx_t offset = 0;
-	while(index < count) {
-		// figure out the current segment for the update
-		auto current_id = ids[index];
-
-		// fetch the base segment, and the data from the base segment
-		ColumnScanState state;
-		state.row_index = current_id;
-		state.current = (ColumnSegment *)data.GetSegment(state.row_index);
-
-		Vector base_data(type);
-		idx_t start_idx = state.row_index - state.current->start;
-		idx_t vector_index = start_idx / STANDARD_VECTOR_SIZE;
-		idx_t scan_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, state.current->count - start_idx);
-		state.current->InitializeScan(state);
-		state.current->Scan(state, start_idx, scan_count, base_data, 0);
-
-		// now figure out: how many tuples fit within this exact vector segment for the update
-		idx_t vector_end = (vector_index + 1) * STANDARD_VECTOR_SIZE;
-		for(index++; index < count; index++) {
-			if (ids[index] < row_t(vector_end)) {
-				index++;
-			}
-		}
-
-		if (!state.current->updates) {
-			// no updates yet for this segment: create it
-			state.current->updates = make_unique<UpdateSegment>(*this, *state.current);
-		}
-		state.current->updates->Update(transaction, update_vector, ids + offset, index - offset, base_data);
-
-		offset = index;
-	}
-	// validity.Update(transaction, update_vector, row_ids, count);
+	ColumnData::Update(transaction, update_vector, row_ids, count);
+	validity.Update(transaction, update_vector, row_ids, count);
 }
 
 void StandardColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {

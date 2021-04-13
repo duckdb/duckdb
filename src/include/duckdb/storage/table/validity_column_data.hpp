@@ -23,7 +23,6 @@ public:
 	void InitializeScanWithOffset(ColumnScanState &state, idx_t vector_idx) override;
 	void Scan(Transaction &transaction, ColumnScanState &state, Vector &result) override;
 	void IndexScan(ColumnScanState &state, Vector &result, bool allow_pending_updates) override;
-	void Update(Transaction &transaction, Vector &updates, Vector &row_ids, idx_t count) override;
 
 	static unique_ptr<PersistentColumnData> Deserialize(DatabaseInstance &db, Deserializer &source);
 };
