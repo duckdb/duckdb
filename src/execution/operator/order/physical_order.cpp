@@ -363,9 +363,9 @@ public:
 		// advance data
 		if (data_entry_idx < data_blocks[data_block_idx].count - 1) {
 			data_entry_idx++;
-            if (CONSTANT_SIZE) {
-                data_ptr += ENTRY_SIZE;
-            }
+			if (CONSTANT_SIZE) {
+				data_ptr += ENTRY_SIZE;
+			}
 		} else if (data_block_idx < data_blocks.size() - 1) {
 			data_block_idx++;
 			PinDataBlock();
@@ -390,12 +390,13 @@ public:
 	void CopyEntryFrom(const ContinuousChunk &source) {
 		if (CONSTANT_SIZE) {
 			if (data_blocks.empty() || data_blocks.back().count == data_blocks.back().CAPACITY) {
-				InitializeWriteBlock(source.data_blocks.back());
+				CreateDataBlock(source.data_blocks.back());
 			}
 			memcpy(data_ptr, source.data_ptr, ENTRY_SIZE);
 			data_ptr += ENTRY_SIZE;
 			data_blocks.back().count++;
 		} else {
+			auto next_entry_size = source.ENTRY_SIZE;
 			// TODO: variable length data
 		}
 	}
@@ -443,11 +444,15 @@ private:
 		offsets = (idx_t *)offset_handle->node->buffer;
 	}
 
-	void InitializeWriteBlock(const RowDataBlock &other_data_block) {
+	// TODO: use a proper capacity/entry size instead of copying from this other dude
+	void CreateDataBlock(const RowDataBlock &other_data_block) {
 		data_blocks.emplace_back(buffer_manager, other_data_block.CAPACITY, other_data_block.ENTRY_SIZE);
 		data_handle = buffer_manager.Pin(data_blocks.back().block);
 		data_ptr = data_handle->node->buffer;
 		// TODO: variable size
+	}
+
+	void CreateOffsetBlock(const RowDataBlock &other_offset_block) {
 	}
 };
 
