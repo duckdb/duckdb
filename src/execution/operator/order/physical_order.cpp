@@ -335,78 +335,66 @@ void PhysicalOrder::Combine(ExecutionContext &context, GlobalOperatorState &gsta
 struct ContinuousChunk {
 public:
 	ContinuousChunk(BufferManager &buffer_manager, bool constant_size, idx_t entry_size = 0)
-	    : CONSTANT_SIZE(constant_size), ENTRY_SIZE(entry_size), buffer_manager(buffer_manager) {
+	    : CONSTANT_SIZE(constant_size), ENTRY_SIZE(entry_size), buffer_manager(buffer_manager), data_block_idx(0),
+	      offset_block_idx(0) {
 	}
 
 	data_ptr_t DataPtr() const {
-		if (CONSTANT_SIZE) {
-			return data_ptr + data_entry_idx * ENTRY_SIZE;
-		} else {
-			return data_ptr + offsets[offset_entry_idx];
-		}
+		return data_ptr + offsets[offset_entry_idx];
 	}
 
 	idx_t EntrySize() const {
-		if (CONSTANT_SIZE) {
-			return ENTRY_SIZE;
-		} else {
-			return offsets[offset_entry_idx + 1] - offsets[offset_entry_idx];
-		}
+		return offsets[offset_entry_idx + 1] - offsets[offset_entry_idx];
 	}
 
-	void Initialize() {
-		data_block_idx = 0;
-		PinDataBlock();
-		if (CONSTANT_SIZE) {
-			return;
+	idx_t Count() {
+		idx_t count = std::accumulate(data_blocks.begin(), data_blocks.end(), 0,
+		                              [](idx_t a, const RowDataBlock &b) { return a + b.count; });
+#ifdef DEBUG
+		if (!CONSTANT_SIZE) {
+			D_ASSERT(count == std::accumulate(offset_blocks.begin(), offset_blocks.end(), (idx_t)0,
+			                                  [](idx_t a, const RowDataBlock &b) { return a + b.count; }));
 		}
-		offset_block_idx = 0;
-		PinOffsetBlock();
+#endif
+		return count;
 	}
 
 	void Advance() {
 		// advance data
 		if (data_entry_idx < data_blocks[data_block_idx].count - 1) {
 			data_entry_idx++;
+            if (CONSTANT_SIZE) {
+                data_ptr += ENTRY_SIZE;
+            }
 		} else if (data_block_idx < data_blocks.size() - 1) {
 			data_block_idx++;
 			PinDataBlock();
 		}
-		// advance offsets (if needed)
-		if (CONSTANT_SIZE) {
-			return;
-		}
-		if (offset_entry_idx < offset_blocks[offset_block_idx].count - 1) {
-			offset_entry_idx++;
-		} else if (offset_entry_idx < offset_blocks.size() - 1) {
-			offset_block_idx++;
-			PinOffsetBlock();
+		if (!CONSTANT_SIZE) {
+			// advance offsets
+			if (offset_entry_idx < offset_blocks[offset_block_idx].count - 1) {
+				offset_entry_idx++;
+			} else if (offset_entry_idx < offset_blocks.size() - 1) {
+				offset_block_idx++;
+				PinOffsetBlock();
+			}
 		}
 	}
 
-	void PinDataBlock() {
-		data_entry_idx = 0;
-		data_handle = buffer_manager.Pin(data_blocks[data_block_idx].block);
-		data_ptr = data_handle->node->buffer;
-	}
-
-	void PinOffsetBlock() {
-		offset_entry_idx = 0;
-		offset_handle = buffer_manager.Pin(offset_blocks[offset_block_idx].block);
-		offsets = (idx_t *)offset_handle->node->buffer;
+	void Initialize() {
+		data_block_idx = 0;
+		offset_block_idx = 0;
+		PinBlock();
 	}
 
 	void CopyEntryFrom(const ContinuousChunk &source) {
-		D_ASSERT(CONSTANT_SIZE == source.CONSTANT_SIZE);
-		D_ASSERT(ENTRY_SIZE == source.ENTRY_SIZE);
 		if (CONSTANT_SIZE) {
 			if (data_blocks.empty() || data_blocks.back().count == data_blocks.back().CAPACITY) {
 				InitializeWriteBlock(source.data_blocks.back());
 			}
-			auto &last_data_block = data_blocks[data_block_idx];
-			memcpy(DataPtr(), source.DataPtr(), ENTRY_SIZE);
-			last_data_block.count++;
-			data_entry_idx++;
+			memcpy(data_ptr, source.data_ptr, ENTRY_SIZE);
+			data_ptr += ENTRY_SIZE;
+			data_blocks.back().count++;
 		} else {
 			// TODO: variable length data
 		}
@@ -436,12 +424,30 @@ private:
 	idx_t offset_block_idx;
 	idx_t offset_entry_idx;
 
+	void PinBlock() {
+		PinDataBlock();
+		if (!CONSTANT_SIZE) {
+			PinOffsetBlock();
+		}
+	}
+
+	void PinDataBlock() {
+		data_entry_idx = 0;
+		data_handle = buffer_manager.Pin(data_blocks[data_block_idx].block);
+		data_ptr = data_handle->node->buffer;
+	}
+
+	void PinOffsetBlock() {
+		offset_entry_idx = 0;
+		offset_handle = buffer_manager.Pin(offset_blocks[offset_block_idx].block);
+		offsets = (idx_t *)offset_handle->node->buffer;
+	}
+
 	void InitializeWriteBlock(const RowDataBlock &other_data_block) {
 		data_blocks.emplace_back(buffer_manager, other_data_block.CAPACITY, other_data_block.ENTRY_SIZE);
 		data_handle = buffer_manager.Pin(data_blocks.back().block);
 		data_ptr = data_handle->node->buffer;
-		data_entry_idx = 0;
-		// TODO: offsets
+		// TODO: variable size
 	}
 };
 
@@ -465,39 +471,47 @@ public:
 		return memcmp(sorting_ptr, other.sorting_ptr, sorting_state.COMP_SIZE) < 0;
 	}
 
+	idx_t Count() {
+		idx_t count = std::accumulate(sorting_blocks.begin(), sorting_blocks.end(), 0,
+		                              [](idx_t a, const RowDataBlock &b) { return a + b.count; });
+#ifdef DEBUG
+		if (!sorting_state.ALL_CONSTANT) {
+			vector<idx_t> counts;
+			counts.push_back(count);
+			for (idx_t col_idx = 0; col_idx < sorting_state.CONSTANT_SIZE.size(); col_idx++) {
+				if (!sorting_state.CONSTANT_SIZE[col_idx]) {
+					counts.push_back(var_sorting_chunks[col_idx]->Count());
+				}
+			}
+			counts.push_back(payload_chunk->Count());
+			D_ASSERT(std::equal(counts.begin() + 1, counts.end(), counts.begin()));
+		}
+#endif
+		return count;
+	}
+
 	bool Done() {
 		return block_idx >= sorting_blocks.size();
 	}
 
-	void PinBlock() {
-		entry_idx = 0;
-		sorting_handle = buffer_manager.Pin(sorting_blocks[block_idx].block);
-		sorting_ptr = sorting_handle->node->buffer;
+	void Initialize() {
+		block_idx = 0;
+		PinBlock();
 		if (payload_state.HAS_VARIABLE_SIZE) {
 			for (idx_t col_idx = 0; col_idx < sorting_state.CONSTANT_SIZE.size(); col_idx++) {
 				if (!sorting_state.CONSTANT_SIZE[col_idx]) {
-					var_sorting_chunks[col_idx]->PinDataBlock();
-					var_sorting_chunks[col_idx]->PinOffsetBlock();
+					var_sorting_chunks[col_idx]->Initialize();
 				}
 			}
 		}
-		payload_chunk->PinDataBlock();
-		if (payload_state.HAS_VARIABLE_SIZE) {
-			payload_chunk->PinOffsetBlock();
-		}
+		payload_chunk->Initialize();
 	}
 
 	void Advance() {
+		// advance fixed-size sorting data
 		if (entry_idx < sorting_blocks[block_idx].count - 1) {
 			entry_idx++;
 			sorting_ptr += sorting_state.ENTRY_SIZE;
-			if (!sorting_state.ALL_CONSTANT) {
-				for (idx_t col_idx = 0; col_idx < sorting_state.CONSTANT_SIZE.size(); col_idx++) {
-					if (!sorting_state.CONSTANT_SIZE[col_idx]) {
-						var_sorting_chunks[col_idx]->Advance();
-					}
-				}
-			}
 		} else if (block_idx < sorting_blocks.size() - 1) {
 			block_idx++;
 			PinBlock();
@@ -505,6 +519,16 @@ public:
 			// done
 			block_idx++;
 		}
+		// variable size sorting data
+		if (!sorting_state.ALL_CONSTANT) {
+			for (idx_t col_idx = 0; col_idx < sorting_state.CONSTANT_SIZE.size(); col_idx++) {
+				if (!sorting_state.CONSTANT_SIZE[col_idx]) {
+					var_sorting_chunks[col_idx]->Advance();
+				}
+			}
+		}
+		// payload data
+		payload_chunk->Advance();
 	}
 
 	void CopyEntryFrom(const ContinuousBlock &source) {
@@ -514,6 +538,7 @@ public:
 		// fixed-size sorting column and entry idx
 		memcpy(sorting_ptr, source.sorting_ptr, sorting_state.ENTRY_SIZE);
 		sorting_ptr += sorting_state.ENTRY_SIZE;
+		sorting_blocks.back().count++;
 		// variable size sorting columns and their offsets
 		if (!sorting_state.ALL_CONSTANT) {
 			for (idx_t col_idx = 0; col_idx < sorting_state.CONSTANT_SIZE.size(); col_idx++) {
@@ -538,6 +563,12 @@ public:
 private:
 	idx_t block_idx;
 	idx_t entry_idx;
+
+	void PinBlock() {
+		entry_idx = 0;
+		sorting_handle = buffer_manager.Pin(sorting_blocks[block_idx].block);
+		sorting_ptr = sorting_handle->node->buffer;
+	}
 
 	void InitializeWriteBlock(const RowDataBlock &other) {
 		sorting_blocks.emplace_back(buffer_manager, other.CAPACITY, other.ENTRY_SIZE);
@@ -1064,26 +1095,15 @@ public:
 		const auto &sorting_state = *state.sorting_state;
 		const auto &payload_state = *state.payload_state;
 
-		left.PinBlock();
-		right.PinBlock();
+		left.Initialize();
+		right.Initialize();
 		auto result = make_unique<ContinuousBlock>(buffer_manager, sorting_state, payload_state);
 
 		idx_t next;
 		bool left_smaller[PhysicalOrder::MERGE_STRIDE];
 
 		while (!left.Done() || !right.Done()) {
-			// compute the merge, while copying the sorting data
-			if (left.Done()) {
-				for (next = 0; !right.Done() && next < PhysicalOrder::MERGE_STRIDE; next++) {
-					left_smaller[next] = false;
-					result->CopyEntryFrom(right);
-				}
-			} else if (right.Done()) {
-				for (next = 0; !left.Done() && next < PhysicalOrder::MERGE_STRIDE; next++) {
-					left_smaller[next] = true;
-					result->CopyEntryFrom(left);
-				}
-			} else {
+			if (!right.Done() && !left.Done()) {
 				for (next = 0; !left.Done() && !right.Done() && next < PhysicalOrder::MERGE_STRIDE; next++) {
 					if (left.LessThan(right)) {
 						left_smaller[next] = true;
@@ -1095,17 +1115,33 @@ public:
 						right.Advance();
 					}
 				}
+			} else if (!left.Done()) {
+				for (next = 0; !left.Done() && next < PhysicalOrder::MERGE_STRIDE; next++) {
+					left_smaller[next] = true;
+					result->CopyEntryFrom(left);
+					left.Advance();
+				}
+			} else {
+				for (next = 0; !right.Done() && next < PhysicalOrder::MERGE_STRIDE; next++) {
+					left_smaller[next] = false;
+					result->CopyEntryFrom(right);
+					right.Advance();
+				}
 			}
-			// TODO: use the merge stride thing to copy more efficiently (e.g. SIMDizable loops)
+			// TODO: use the merge stride thing to copy more efficiently (HOT loops)
 		}
+		D_ASSERT(result->Count() == left.Count() + right.Count());
+
 		lock_guard<mutex> glock(state.lock);
 		state.sorted_blocks_temp.push_back(move(result));
 		parent.finished_tasks++;
 		if (parent.total_tasks == parent.finished_tasks) {
+			// TODO: cleanup
 			state.sorted_blocks.clear();
 			for (auto &block : state.sorted_blocks_temp) {
 				state.sorted_blocks.push_back(move(block));
 			}
+			state.sorted_blocks_temp.clear();
 			PhysicalOrder::ScheduleMergeTasks(parent, context, state);
 		}
 	}
@@ -1127,22 +1163,26 @@ void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 		return;
 	}
 
-	auto &cb = *state.sorted_blocks.back();
-	const idx_t &count = cb.sorting_blocks.back().count;
-	D_ASSERT(count == cb.payload_chunk->data_blocks.back().count);
+	idx_t count = 0;
+	for (auto &sb : state.sorted_blocks) {
+		count += sb->sorting_blocks[0].count;
+	}
 	state.total_count = count;
 
 	if (state.sorted_blocks.size() > 1) {
 		PhysicalOrder::ScheduleMergeTasks(pipeline, context, state);
 	}
+	// TODO: else cleanup
 }
 
 void PhysicalOrder::ScheduleMergeTasks(Pipeline &pipeline, ClientContext &context, OrderGlobalState &state) {
 	if (state.sorted_blocks.size() == 1) {
+		// TODO: cleanup
 		pipeline.Finish();
 		return;
 	}
 
+	std::random_shuffle(state.sorted_blocks.begin(), state.sorted_blocks.end());
 	if (state.sorted_blocks.size() % 2 == 1) {
 		state.sorted_blocks_temp.push_back(move(state.sorted_blocks.back()));
 		state.sorted_blocks.pop_back();
@@ -1171,9 +1211,18 @@ idx_t PhysicalOrder::MaxThreads(ClientContext &context) {
 
 class OrderParallelState : public ParallelState {
 public:
-	OrderParallelState() : entry_idx(0) {
+	OrderParallelState()
+	    : global_entry_idx(0), data_block_idx(0), data_entry_idx(0), offset_block_idx(0), offset_entry_idx(0) {
 	}
-	idx_t entry_idx;
+
+	idx_t global_entry_idx;
+
+	idx_t data_block_idx;
+	idx_t data_entry_idx;
+
+	idx_t offset_block_idx;
+	idx_t offset_entry_idx;
+
 	std::mutex lock;
 };
 
@@ -1185,62 +1234,134 @@ unique_ptr<ParallelState> PhysicalOrder::GetParallelState() {
 class PhysicalOrderOperatorState : public PhysicalOperatorState {
 public:
 	PhysicalOrderOperatorState(PhysicalOperator &op, PhysicalOperator *child)
-	    : PhysicalOperatorState(op, child), initialized(false), entry_idx(0), count(-1) {
+	    : PhysicalOperatorState(op, child), initialized(false), global_entry_idx(0), data_block_idx(0),
+	      data_entry_idx(0), offset_block_idx(0), offset_entry_idx(0) {
 	}
-	ParallelState *parallel_state;
 	bool initialized;
+	ParallelState *parallel_state;
 
-	unique_ptr<BufferHandle> sorting_handle = nullptr;
-	unique_ptr<BufferHandle> payload_handle;
-	unique_ptr<BufferHandle> offsets_handle;
+	ContinuousChunk *payload_chunk;
 
 	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
 	data_ptr_t validitymask_locations[STANDARD_VECTOR_SIZE];
 
-	idx_t entry_idx;
-	idx_t count;
+	idx_t global_entry_idx;
+
+	idx_t data_block_idx;
+	idx_t data_entry_idx;
+
+	idx_t offset_block_idx;
+	idx_t offset_entry_idx;
+
+	void InitNextIndices() {
+		auto &p_state = *reinterpret_cast<OrderParallelState *>(parallel_state);
+		global_entry_idx = p_state.global_entry_idx;
+		data_block_idx = p_state.data_block_idx;
+		data_entry_idx = p_state.data_entry_idx;
+		offset_block_idx = p_state.offset_block_idx;
+		offset_entry_idx = p_state.offset_entry_idx;
+	}
 };
 
 unique_ptr<PhysicalOperatorState> PhysicalOrder::GetOperatorState() {
 	return make_unique<PhysicalOrderOperatorState>(*this, children[0].get());
 }
 
-static void Scan(ClientContext &context, DataChunk &chunk, PhysicalOrderOperatorState &state,
-                 const SortingState &sorting_state, const PayloadState &payload_state, const idx_t offset,
-                 const idx_t next) {
-	if (offset >= state.count) {
-		return;
+static void UpdateStateIndices(const idx_t &next, const ContinuousChunk &payload_chunk,
+                               OrderParallelState &parallel_state) {
+	parallel_state.global_entry_idx += next;
+
+	idx_t remaining = next;
+	while (remaining > 0) {
+		auto &data_block = payload_chunk.data_blocks[parallel_state.data_block_idx];
+		if (parallel_state.data_entry_idx + remaining > data_block.count) {
+			remaining -= data_block.count - parallel_state.data_entry_idx;
+			parallel_state.data_block_idx++;
+			parallel_state.data_entry_idx = 0;
+		} else {
+			parallel_state.data_entry_idx += remaining;
+			remaining = 0;
+		}
 	}
 
-	if (payload_state.HAS_VARIABLE_SIZE) {
-		const data_ptr_t payl_dataptr = state.payload_handle->node->buffer;
-		const idx_t *offsets = (idx_t *)state.offsets_handle->node->buffer;
-		for (idx_t i = 0; i < next; i++) {
-			state.validitymask_locations[i] = payl_dataptr + offsets[i];
-			state.key_locations[i] = state.validitymask_locations[i] + payload_state.VALIDITYMASK_SIZE;
-		}
-	} else {
-		data_ptr_t payl_dataptr = state.payload_handle->node->buffer;
-		for (idx_t i = 0; i < next; i++) {
-			state.validitymask_locations[i] = payl_dataptr;
-			state.key_locations[i] = state.validitymask_locations[i] + payload_state.VALIDITYMASK_SIZE;
-			payl_dataptr += payload_state.ENTRY_SIZE;
+	if (!payload_chunk.CONSTANT_SIZE) {
+		remaining = next;
+		while (remaining > 0) {
+			auto &offset_block = payload_chunk.offset_blocks[parallel_state.offset_block_idx];
+			if (parallel_state.offset_entry_idx + remaining > offset_block.count) {
+				remaining -= offset_block.count - parallel_state.offset_entry_idx;
+				parallel_state.offset_block_idx++;
+				parallel_state.offset_entry_idx = 0;
+			} else {
+				parallel_state.offset_entry_idx += remaining;
+				remaining = 0;
+			}
 		}
 	}
+}
+
+static void Scan(ClientContext &context, DataChunk &chunk, PhysicalOrderOperatorState &state,
+                 const PayloadState &payload_state, const idx_t &scan_count) {
+	auto &buffer_manager = BufferManager::GetBufferManager(context);
+	auto &payload_chunk = *state.payload_chunk;
+
+	vector<unique_ptr<BufferHandle>> handles;
+
+	// set up a batch of pointers to scan data from
+	idx_t count = 0;
+	while (count < scan_count) {
+		auto &data_block = payload_chunk.data_blocks[state.data_block_idx];
+		auto data_handle = buffer_manager.Pin(data_block.block);
+		idx_t next = MinValue(data_block.count - state.data_entry_idx, scan_count - count);
+		if (payload_state.HAS_VARIABLE_SIZE) {
+			auto &offset_block = payload_chunk.offset_blocks[state.offset_block_idx];
+			auto offset_handle = buffer_manager.Pin(offset_block.block);
+			next = MinValue(next, offset_block.count - state.offset_entry_idx);
+
+			const data_ptr_t payl_dataptr = data_handle->node->buffer;
+			const idx_t *offsets = (idx_t *)offset_handle->node->buffer;
+			for (idx_t i = 0; i < next; i++) {
+				state.validitymask_locations[count + i] = payl_dataptr + offsets[state.offset_entry_idx + i];
+				state.key_locations[count + i] =
+				    state.validitymask_locations[count + i] + payload_state.VALIDITYMASK_SIZE;
+			}
+
+			state.offset_entry_idx += next;
+			if (state.offset_entry_idx == offset_block.count) {
+				state.offset_block_idx++;
+				state.offset_entry_idx = 0;
+			}
+		} else {
+			data_ptr_t payl_dataptr = data_handle->node->buffer + state.data_entry_idx * payload_state.ENTRY_SIZE;
+			for (idx_t i = 0; i < next; i++) {
+				state.validitymask_locations[count + i] = payl_dataptr;
+				state.key_locations[count + i] = payl_dataptr + payload_state.VALIDITYMASK_SIZE;
+				payl_dataptr += payload_state.ENTRY_SIZE;
+			}
+		}
+		state.data_entry_idx += next;
+		if (state.data_entry_idx == data_block.count) {
+			state.data_block_idx++;
+			state.data_entry_idx = 0;
+		}
+		count += next;
+		handles.push_back(move(data_handle));
+	}
+	D_ASSERT(count == scan_count);
+	state.global_entry_idx += scan_count;
 
 	// deserialize the payload data
 	for (idx_t payl_col = 0; payl_col < chunk.ColumnCount(); payl_col++) {
-		RowChunk::DeserializeIntoVector(chunk.data[payl_col], next, payl_col, state.key_locations,
+		RowChunk::DeserializeIntoVector(chunk.data[payl_col], scan_count, payl_col, state.key_locations,
 		                                state.validitymask_locations);
 	}
-	chunk.SetCardinality(next);
+	chunk.SetCardinality(scan_count);
 	chunk.Verify();
 }
 
 void PhysicalOrder::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
 	auto &state = *reinterpret_cast<PhysicalOrderOperatorState *>(state_p);
 	auto &gstate = (OrderGlobalState &)*this->sink_state;
-	const auto &sorting_state = *gstate.sorting_state;
 	const auto &payload_state = *gstate.payload_state;
 
 	if (gstate.sorted_blocks.empty()) {
@@ -1248,17 +1369,7 @@ void PhysicalOrder::GetChunkInternal(ExecutionContext &context, DataChunk &chunk
 	}
 
 	if (!state.initialized) {
-		// initialize operator state
-		auto &cb = *gstate.sorted_blocks.back();
-		state.count = cb.sorting_blocks.back().count;
-
-		auto &buffer_manager = BufferManager::GetBufferManager(context.client);
-		if (state.count > 0) {
-			state.payload_handle = buffer_manager.Pin(cb.payload_chunk->data_blocks.back().block);
-			if (payload_state.HAS_VARIABLE_SIZE) {
-				state.offsets_handle = buffer_manager.Pin(cb.payload_chunk->offset_blocks.back().block);
-			}
-		}
+		state.payload_chunk = gstate.sorted_blocks.back()->payload_chunk.get();
 		// initialize parallel state (if any)
 		state.parallel_state = nullptr;
 		auto &task = context.task;
@@ -1274,9 +1385,8 @@ void PhysicalOrder::GetChunkInternal(ExecutionContext &context, DataChunk &chunk
 
 	if (!state.parallel_state) {
 		// sequential scan
-		const idx_t next = MinValue((idx_t)STANDARD_VECTOR_SIZE, state.count - state.entry_idx);
-		Scan(context.client, chunk, state, sorting_state, payload_state, state.entry_idx, next);
-		state.entry_idx += STANDARD_VECTOR_SIZE;
+		auto next = MinValue((idx_t)STANDARD_VECTOR_SIZE, gstate.total_count - state.global_entry_idx);
+		Scan(context.client, chunk, state, payload_state, next);
 		if (chunk.size() != 0) {
 			return;
 		}
@@ -1284,15 +1394,17 @@ void PhysicalOrder::GetChunkInternal(ExecutionContext &context, DataChunk &chunk
 		// parallel scan
 		auto &parallel_state = *reinterpret_cast<OrderParallelState *>(state.parallel_state);
 		do {
-			idx_t offset;
 			idx_t next;
 			{
 				lock_guard<mutex> parallel_lock(parallel_state.lock);
-				offset = parallel_state.entry_idx;
-				next = MinValue((idx_t)STANDARD_VECTOR_SIZE, state.count - offset);
-				parallel_state.entry_idx += next;
+				next = MinValue((idx_t)STANDARD_VECTOR_SIZE, gstate.total_count - parallel_state.global_entry_idx);
+				// init local state using parallel state
+				state.InitNextIndices();
+				// update parallel state for the next scan
+				UpdateStateIndices(next, *state.payload_chunk, parallel_state);
 			}
-			Scan(context.client, chunk, state, sorting_state, payload_state, offset, next);
+			// now we scan using the local state
+			Scan(context.client, chunk, state, payload_state, next);
 			if (chunk.size() == 0) {
 				break;
 			} else {
@@ -1300,6 +1412,7 @@ void PhysicalOrder::GetChunkInternal(ExecutionContext &context, DataChunk &chunk
 			}
 		} while (true);
 	}
+	// TODO: cleanup?
 	D_ASSERT(chunk.size() == 0);
 }
 

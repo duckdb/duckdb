@@ -59,8 +59,8 @@ private:
 	void SortLocalState(ClientContext &context, OrderLocalState &lstate, const SortingState &sorting_state,
 	                    const PayloadState &payload_state);
 
-	//! Size of blocks that are sorted - must be bigger than Storage::BLOCK_ALLOC_SIZE
-	constexpr static idx_t SORTING_BLOCK_SIZE = 524288;
+	//! Size of blocks that are sorted - must be >= Storage::BLOCK_ALLOC_SIZE
+	constexpr static idx_t SORTING_BLOCK_SIZE = 262144;
 };
 
 } // namespace duckdb
