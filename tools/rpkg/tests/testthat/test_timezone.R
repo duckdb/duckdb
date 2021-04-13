@@ -26,6 +26,7 @@ test_that("timezone_out works with a specified timezone", {
 })
 
 test_that("timezone_out works with '' and converts to local timezime", {
+  unlockBinding(".sys.timezone", baseenv())
   withr::local_timezone("Pacific/Tahiti")
   con <- dbConnect(duckdb(), timezone_out = "")
   on.exit(dbDisconnect(con, shutdown = TRUE))
@@ -36,6 +37,7 @@ test_that("timezone_out works with '' and converts to local timezime", {
 })
 
 test_that("timezone_out works with Sys.timezone", {
+  unlockBinding(".sys.timezone", baseenv())
   withr::local_timezone("Pacific/Tahiti")
   con <- dbConnect(duckdb(), timezone_out = Sys.timezone())
   on.exit(dbDisconnect(con, shutdown = TRUE))
@@ -64,6 +66,7 @@ test_that("timezone_out works with a specified timezone and tz_out_convert = 'fo
 })
 
 test_that("timezone_out works with '' and tz_out_convert = 'force': forces local timezime", {
+  unlockBinding(".sys.timezone", baseenv())
   withr::local_timezone("Pacific/Tahiti")
   con <- dbConnect(duckdb(), timezone_out = "", tz_out_convert = 'force')
   on.exit(dbDisconnect(con, shutdown = TRUE))
@@ -74,6 +77,7 @@ test_that("timezone_out works with '' and tz_out_convert = 'force': forces local
 })
 
 test_that("timezone_out works with a specified local timezone and tz_out_convert = 'force': forces local timezime", {
+  unlockBinding(".sys.timezone", baseenv())
   withr::local_timezone("Pacific/Tahiti")
   con <- dbConnect(duckdb(), timezone_out = Sys.timezone(), tz_out_convert = 'force')
   on.exit(dbDisconnect(con, shutdown = TRUE))
