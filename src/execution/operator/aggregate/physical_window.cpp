@@ -5,6 +5,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/window_segment_tree.hpp"
+#include "duckdb/parallel/task_counter.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/common/windows_undefs.hpp"
@@ -59,6 +60,40 @@ public:
 	static const auto ZEROS = std::numeric_limits<W>::min();
 	static const auto ONES = std::numeric_limits<W>::max();
 
+	class reference { // NOLINT
+	public:
+		friend BitArray;
+
+		reference &operator=(bool x) noexcept {
+			auto b = parent.Block(pos);
+			auto s = parent.Shift(pos);
+			auto w = parent.GetBlock(b);
+			if (parent.TestBit(w, s) != x) {
+				parent.SetBlock(b, parent.FlipBit(w, s));
+			}
+			return *this;
+		}
+
+		reference &operator=(const reference &r) noexcept {
+			return *this = bool(r);
+		}
+
+		explicit operator bool() const noexcept {
+			return parent[pos];
+		}
+
+		bool operator~() const noexcept {
+			return !parent[pos];
+		}
+
+	private:
+		explicit reference(BitArray &parent_p, size_t pos_p) : parent(parent_p), pos(pos_p) {
+		}
+
+		BitArray &parent;
+		size_t pos;
+	};
+
 	static size_t Block(const size_t &pos) {
 		return pos / BITS_PER_WORD;
 	}
@@ -77,6 +112,10 @@ public:
 
 	static W ClearBit(W w, unsigned s) {
 		return w & ~(W(1) << s);
+	}
+
+	static W FlipBit(W w, unsigned s) {
+		return w ^ (W(1) << s);
 	}
 
 	explicit BitArray(const size_t &count, const W &init = 0)
@@ -101,6 +140,10 @@ public:
 
 	bool operator[](size_t pos) const {
 		return TestBit(GetBlock(Block(pos)), Shift(pos));
+	}
+
+	reference operator[](size_t pos) {
+		return reference(*this, pos);
 	}
 
 private:
@@ -148,16 +191,17 @@ private:
 };
 
 template <typename MASK_TYPE, typename INPUT_TYPE>
-static void MaskTypedColumn(MASK_TYPE &mask, ChunkCollection &sort_collection, const idx_t c) {
-	ChunkIterator<INPUT_TYPE> ci(sort_collection, c);
+static void MaskTypedColumn(MASK_TYPE &mask, ChunkCollection &over_collection, const idx_t c) {
+	ChunkIterator<INPUT_TYPE> ci(over_collection, c);
 
 	//	Record the first value
 	idx_t r = 0;
 	auto prev_valid = ci.IsValid(r);
 	auto prev = ci.GetValue(r);
+	++r;
 
 	//	Process complete blocks
-	const auto row_count = sort_collection.Count();
+	const auto row_count = over_collection.Count();
 	const auto complete_block_count = mask.Block(row_count);
 	for (idx_t b = mask.Block(r); b < complete_block_count; ++b) {
 		auto block = mask.GetBlock(b);
@@ -211,50 +255,50 @@ static void MaskTypedColumn(MASK_TYPE &mask, ChunkCollection &sort_collection, c
 }
 
 template <typename W>
-static void MaskColumn(BitArray<W> &mask, ChunkCollection &sort_collection, const idx_t c) {
+static void MaskColumn(BitArray<W> &mask, ChunkCollection &over_collection, const idx_t c) {
 	using MASK_TYPE = BitArray<W>;
 
-	auto &vector = sort_collection.GetChunk(0).data[c];
+	auto &vector = over_collection.GetChunk(0).data[c];
 	switch (vector.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
-		MaskTypedColumn<MASK_TYPE, int8_t>(mask, sort_collection, c);
+		MaskTypedColumn<MASK_TYPE, int8_t>(mask, over_collection, c);
 		break;
 	case PhysicalType::INT16:
-		MaskTypedColumn<MASK_TYPE, int16_t>(mask, sort_collection, c);
+		MaskTypedColumn<MASK_TYPE, int16_t>(mask, over_collection, c);
 		break;
 	case PhysicalType::INT32:
-		MaskTypedColumn<MASK_TYPE, int32_t>(mask, sort_collection, c);
+		MaskTypedColumn<MASK_TYPE, int32_t>(mask, over_collection, c);
 		break;
 	case PhysicalType::INT64:
-		MaskTypedColumn<MASK_TYPE, int64_t>(mask, sort_collection, c);
+		MaskTypedColumn<MASK_TYPE, int64_t>(mask, over_collection, c);
 		break;
 	case PhysicalType::UINT8:
-		MaskTypedColumn<MASK_TYPE, uint8_t>(mask, sort_collection, c);
+		MaskTypedColumn<MASK_TYPE, uint8_t>(mask, over_collection, c);
 		break;
 	case PhysicalType::UINT16:
-		MaskTypedColumn<MASK_TYPE, uint16_t>(mask, sort_collection, c);
+		MaskTypedColumn<MASK_TYPE, uint16_t>(mask, over_collection, c);
 		break;
 	case PhysicalType::UINT32:
-		MaskTypedColumn<MASK_TYPE, uint32_t>(mask, sort_collection, c);
+		MaskTypedColumn<MASK_TYPE, uint32_t>(mask, over_collection, c);
 		break;
 	case PhysicalType::UINT64:
-		MaskTypedColumn<MASK_TYPE, uint64_t>(mask, sort_collection, c);
+		MaskTypedColumn<MASK_TYPE, uint64_t>(mask, over_collection, c);
 		break;
 	case PhysicalType::INT128:
-		MaskTypedColumn<MASK_TYPE, hugeint_t>(mask, sort_collection, c);
+		MaskTypedColumn<MASK_TYPE, hugeint_t>(mask, over_collection, c);
 		break;
 	case PhysicalType::FLOAT:
-		MaskTypedColumn<MASK_TYPE, float>(mask, sort_collection, c);
+		MaskTypedColumn<MASK_TYPE, float>(mask, over_collection, c);
 		break;
 	case PhysicalType::DOUBLE:
-		MaskTypedColumn<MASK_TYPE, double>(mask, sort_collection, c);
+		MaskTypedColumn<MASK_TYPE, double>(mask, over_collection, c);
 		break;
 	case PhysicalType::VARCHAR:
-		MaskTypedColumn<MASK_TYPE, string_t>(mask, sort_collection, c);
+		MaskTypedColumn<MASK_TYPE, string_t>(mask, over_collection, c);
 		break;
 	case PhysicalType::INTERVAL:
-		MaskTypedColumn<MASK_TYPE, interval_t>(mask, sort_collection, c);
+		MaskTypedColumn<MASK_TYPE, interval_t>(mask, over_collection, c);
 		break;
 	default:
 		throw NotImplementedException("Type for comparison");
@@ -345,42 +389,22 @@ static bool CompatibleSorts(const BoundWindowExpression *a, const BoundWindowExp
 
 static void SortCollectionForWindow(BoundWindowExpression *wexpr, ChunkCollection &input, ChunkCollection &output,
                                     ChunkCollection &sort_collection) {
-	vector<LogicalType> sort_types;
+	if (input.Count() == 0) {
+		return;
+	}
 	vector<OrderType> orders;
 	vector<OrderByNullType> null_order_types;
-	ExpressionExecutor executor;
 
 	// we sort by both 1) partition by expression list and 2) order by expressions
 	for (idx_t prt_idx = 0; prt_idx < wexpr->partitions.size(); prt_idx++) {
-		auto &pexpr = wexpr->partitions[prt_idx];
-		sort_types.push_back(pexpr->return_type);
 		orders.push_back(OrderType::ASCENDING);
 		null_order_types.push_back(OrderByNullType::NULLS_FIRST);
-		executor.AddExpression(*pexpr);
 	}
 
 	for (idx_t ord_idx = 0; ord_idx < wexpr->orders.size(); ord_idx++) {
-		auto &oexpr = wexpr->orders[ord_idx].expression;
-		sort_types.push_back(oexpr->return_type);
 		orders.push_back(wexpr->orders[ord_idx].type);
 		null_order_types.push_back(wexpr->orders[ord_idx].null_order);
-		executor.AddExpression(*oexpr);
 	}
-
-	D_ASSERT(sort_types.size() > 0);
-
-	// create a chunkcollection for the results of the expressions in the window definitions
-	for (idx_t i = 0; i < input.ChunkCount(); i++) {
-		DataChunk sort_chunk;
-		sort_chunk.Initialize(sort_types);
-
-		executor.Execute(input.GetChunk(i), sort_chunk);
-
-		sort_chunk.Verify();
-		sort_collection.Append(sort_chunk);
-	}
-
-	D_ASSERT(input.Count() == sort_collection.Count());
 
 	auto sorted_vector = unique_ptr<idx_t[]>(new idx_t[input.Count()]);
 	sort_collection.Sort(orders, null_order_types, sorted_vector.get());
@@ -388,6 +412,87 @@ static void SortCollectionForWindow(BoundWindowExpression *wexpr, ChunkCollectio
 	input.Reorder(sorted_vector.get());
 	output.Reorder(sorted_vector.get());
 	sort_collection.Reorder(sorted_vector.get());
+}
+
+using counts_t = std::vector<size_t>;
+
+static void HashChunk(counts_t &counts, Vector &hash_vector, DataChunk &sort_chunk, const idx_t partition_cols,
+                      const hash_t partition_mask) {
+	D_ASSERT(hash_vector.GetType().id() == LogicalTypeId::HASH);
+	const auto count = sort_chunk.size();
+	VectorOperations::Hash(sort_chunk.data[0], hash_vector, count);
+	for (idx_t prt_idx = 1; prt_idx < partition_cols; ++prt_idx) {
+		VectorOperations::CombineHash(hash_vector, sort_chunk.data[prt_idx], count);
+	}
+
+	auto hashes = FlatVector::GetData<hash_t>(hash_vector);
+	for (idx_t i = 0; i < count; ++i) {
+		const auto bin = (hashes[i] & partition_mask);
+		++counts[bin];
+	}
+}
+
+static void HashCollectionForWindow(BoundWindowExpression *wexpr, ChunkCollection &over_collection,
+                                    ChunkCollection &hash_collection, counts_t &counts,
+                                    const unsigned partition_bits = 10) {
+	counts.clear();
+
+	//	If there are no partition columns, then there is one partition
+	const auto partition_cols = wexpr->partitions.size();
+	const auto num_rows = over_collection.Count();
+	if (partition_cols == 0) {
+		counts.emplace_back(num_rows);
+		return;
+	}
+
+	//	Radix sort the partitions
+	const auto partition_count = size_t(1) << partition_bits;
+	counts.resize(partition_count, 0);
+
+	//	First pass: hash and count the partition sizes
+	const auto partition_mask = hash_t(partition_count - 1);
+	vector<LogicalType> hash_types(1, LogicalTypeId::HASH);
+	for (const auto &sort_chunk : over_collection.Chunks()) {
+		DataChunk hash_chunk;
+		hash_chunk.Initialize(hash_types);
+		hash_chunk.SetCardinality(*sort_chunk);
+		HashChunk(counts, hash_chunk.data[0], *sort_chunk, partition_cols, partition_mask);
+		hash_collection.Append(hash_chunk);
+	}
+}
+
+static void MaterializeOverCollectionForWindow(BoundWindowExpression *wexpr, ChunkCollection &input,
+                                               ChunkCollection &output, ChunkCollection &over_collection) {
+	vector<LogicalType> over_types;
+	ExpressionExecutor executor;
+
+	// we sort by both 1) partition by expression list and 2) order by expressions
+	for (idx_t prt_idx = 0; prt_idx < wexpr->partitions.size(); prt_idx++) {
+		auto &pexpr = wexpr->partitions[prt_idx];
+		over_types.push_back(pexpr->return_type);
+		executor.AddExpression(*pexpr);
+	}
+
+	for (idx_t ord_idx = 0; ord_idx < wexpr->orders.size(); ord_idx++) {
+		auto &oexpr = wexpr->orders[ord_idx].expression;
+		over_types.push_back(oexpr->return_type);
+		executor.AddExpression(*oexpr);
+	}
+
+	D_ASSERT(over_types.size() > 0);
+
+	// create a ChunkCollection for the results of the expressions in the window definitions
+	for (idx_t i = 0; i < input.ChunkCount(); i++) {
+		DataChunk over_chunk;
+		over_chunk.Initialize(over_types);
+
+		executor.Execute(input.GetChunk(i), over_chunk);
+
+		over_chunk.Verify();
+		over_collection.Append(over_chunk);
+	}
+
+	D_ASSERT(input.Count() == over_collection.Count());
 }
 
 struct WindowBoundariesState {
@@ -532,7 +637,7 @@ static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, const idx_t inp
 
 static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollection &input, ChunkCollection &output,
                                     const BitArray<uint64_t> &partition_mask, const BitArray<uint64_t> &order_mask,
-                                    idx_t output_idx) {
+                                    const idx_t output_col) {
 
 	// TODO we could evaluate those expressions in parallel
 
@@ -604,7 +709,7 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 
 		// if no values are read for window, result is NULL
 		if (bounds.window_start >= bounds.window_end) {
-			output.SetValue(output_idx, row_idx, res);
+			output.SetValue(output_col, row_idx, res);
 			continue;
 		}
 
@@ -711,8 +816,146 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 			throw NotImplementedException("Window aggregate type %s", ExpressionTypeToString(wexpr->type));
 		}
 
-		output.SetValue(output_idx, row_idx, res);
+		output.SetValue(output_col, row_idx, res);
 	}
+}
+
+class WindowPartitionTaskManager : public TaskCounter {
+public:
+	WindowPartitionTaskManager(TaskScheduler &scheduler_p, WindowGlobalState &gstate_p)
+	    : TaskCounter(scheduler_p), gstate(gstate_p) {
+	}
+
+	void Finish() override;
+
+	WindowGlobalState &gstate;
+};
+
+void WindowPartitionTaskManager::Finish() {
+	TaskCounter::Finish();
+
+	//	Replace the operator collection with our accumulated versions
+	auto &ostate = (WindowGlobalState &)*gstate.op.sink_state;
+
+	ostate.chunks.Reset();
+	ostate.chunks.Merge(gstate.chunks);
+
+	ostate.window_results.Reset();
+	ostate.window_results.Merge(gstate.window_results);
+}
+
+class WindowPartitionTask : public Task {
+public:
+	using WindowExpressions = vector<BoundWindowExpression *>;
+	using Mask = BitArray<uint64_t>;
+
+	WindowPartitionTask(WindowPartitionTaskManager &manager_p, WindowExpressions &window_exprs_p,
+	                    const vector<idx_t> &matching_p, const ChunkCollection &input_p,
+	                    const ChunkCollection &output_p, const ChunkCollection &over_p, const ChunkCollection &hashes_p,
+	                    const hash_t hash_bin_p, const hash_t hash_mask_p)
+	    : manager(manager_p), window_exprs(window_exprs_p), matching(matching_p), input(input_p), output(output_p),
+	      over(over_p), hashes(hashes_p), hash_bin(hash_bin_p), hash_mask(hash_mask_p) {
+	}
+
+	static void ComputeExpressions(WindowExpressions &window_exprs, const vector<idx_t> &matching,
+	                               ChunkCollection &big_data, ChunkCollection &window_results,
+	                               ChunkCollection &over_collection);
+	void Execute() override;
+
+private:
+	WindowPartitionTaskManager &manager;
+	WindowExpressions &window_exprs;
+	const vector<idx_t> &matching;
+	const ChunkCollection &input;
+	const ChunkCollection &output;
+	const ChunkCollection &over;
+	const ChunkCollection &hashes;
+	const hash_t hash_bin;
+	const hash_t hash_mask;
+};
+
+void WindowPartitionTask::ComputeExpressions(WindowExpressions &window_exprs, const vector<idx_t> &matching,
+                                             ChunkCollection &big_data, ChunkCollection &window_results,
+                                             ChunkCollection &over_collection) {
+	//	Idempotency
+	if (big_data.Count() == 0) {
+		return;
+	}
+	//	Pick out a function for the OVER clause
+	auto over_expr = window_exprs[matching[0]];
+
+	//	Sort the partition
+	const auto sort_col_count = over_expr->partitions.size() + over_expr->orders.size();
+	if (sort_col_count > 0) {
+		SortCollectionForWindow(over_expr, big_data, window_results, over_collection);
+	}
+
+	//	Set bits for the start of each partition
+	Mask partition_bits(big_data.Count());
+	partition_bits[0] = true;
+
+	for (idx_t c = 0; c < over_expr->partitions.size(); ++c) {
+		MaskColumn(partition_bits, over_collection, c);
+	}
+
+	//	Set bits for the start of each peer group.
+	//	Partitions also break peer groups, so start with the partition bits.
+	auto order_bits = partition_bits;
+	for (idx_t c = over_expr->partitions.size(); c < sort_col_count; ++c) {
+		MaskColumn(order_bits, over_collection, c);
+	}
+
+	//	Compute the functions with matching sorts
+	for (const auto &expr_idx : matching) {
+		ComputeWindowExpression(window_exprs[expr_idx], big_data, window_results, partition_bits, order_bits, expr_idx);
+	}
+}
+
+static void AppendCollection(const ChunkCollection &source, ChunkCollection &target, SelectionVector &sel,
+                             const idx_t source_count, const idx_t chunk_idx) {
+
+	DataChunk chunk;
+	chunk.Initialize(source.Types());
+	source.GetChunk(chunk_idx).Copy(chunk, sel, source_count);
+	target.Append(chunk);
+}
+
+void WindowPartitionTask::Execute() {
+	//	Copy the partition data so we can work with it on this thread
+	ChunkCollection chunks;
+	ChunkCollection window_results;
+	ChunkCollection over_collection;
+	SelectionVector sel;
+	for (idx_t chunk_idx = 0; chunk_idx < hashes.ChunkCount(); ++chunk_idx) {
+		//	Build a selection vector of matching hashes
+		auto &hash_chunk = hashes.GetChunk(chunk_idx);
+		auto hash_size = hash_chunk.size();
+		auto hash_data = FlatVector::GetData<hash_t>(hash_chunk.data[0]);
+		sel.Initialize(hash_size);
+		idx_t bin_size = 0;
+		for (idx_t i = 0; i < hash_size; ++i) {
+			if ((hash_data[i] & hash_mask) == hash_bin) {
+				sel.set_index(bin_size++, i);
+			}
+		}
+
+		//	Copy the data for each collection
+		if (bin_size == 0) {
+			continue;
+		}
+
+		AppendCollection(input, chunks, sel, bin_size, chunk_idx);
+		AppendCollection(output, window_results, sel, bin_size, chunk_idx);
+		AppendCollection(over, over_collection, sel, bin_size, chunk_idx);
+	}
+
+	ComputeExpressions(window_exprs, matching, chunks, window_results, over_collection);
+
+	lock_guard<mutex> glock(manager.gstate.lock);
+	manager.gstate.chunks.Merge(chunks);
+	manager.gstate.window_results.Merge(window_results);
+
+	manager.FinishTask();
 }
 
 void PhysicalWindow::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
@@ -796,7 +1039,17 @@ void PhysicalWindow::Finalize(Pipeline &pipeline, ClientContext &context, unique
 	D_ASSERT(window_results.ColumnCount() == select_list.size());
 	// we can have multiple window functions
 
+	//	Track parallel tasks
+	auto &scheduler = TaskScheduler::GetScheduler(context);
+
 	// Process the window functions by sharing the partition/order definitions
+	WindowPartitionTask::WindowExpressions window_exprs;
+	for (idx_t expr_idx = 0; expr_idx < select_list.size(); ++expr_idx) {
+		D_ASSERT(select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
+		auto wexpr = reinterpret_cast<BoundWindowExpression *>(select_list[expr_idx].get());
+		window_exprs.emplace_back(wexpr);
+	}
+
 	vector<idx_t> remaining(select_list.size());
 	std::iota(remaining.begin(), remaining.end(), 0);
 	while (!remaining.empty()) {
@@ -819,34 +1072,33 @@ void PhysicalWindow::Finalize(Pipeline &pipeline, ClientContext &context, unique
 		remaining.swap(unprocessed);
 
 		// sort by partition and order clause in window def
-		ChunkCollection sort_collection;
+		ChunkCollection over_collection;
+		ChunkCollection hash_collection;
 		const auto sort_col_count = over_expr->partitions.size() + over_expr->orders.size();
+		counts_t counts;
 		if (sort_col_count > 0) {
-			SortCollectionForWindow(over_expr, big_data, window_results, sort_collection);
+			MaterializeOverCollectionForWindow(over_expr, big_data, window_results, over_collection);
+			if (!over_expr->partitions.empty()) {
+				HashCollectionForWindow(over_expr, over_collection, hash_collection, counts);
+			}
 		}
 
-		//	Set bits for the start of each partition
-		BitArray<uint64_t> partition_mask(sort_collection.Count());
-		if (partition_mask.Count() > 0) {
-			partition_mask.SetBlock(0, 1); //	Special case: first row is start of new partition/peer group.
-		}
-		for (idx_t c = 0; c < over_expr->partitions.size(); ++c) {
-			MaskColumn(partition_mask, sort_collection, c);
-		}
-
-		//	Set bits for the start of each peer group.
-		//	Partitions also break peer groups, so start with the partition bits.
-		BitArray<uint64_t> order_mask(partition_mask);
-		for (idx_t c = over_expr->partitions.size(); c < sort_col_count; ++c) {
-			MaskColumn(order_mask, sort_collection, c);
-		}
-
-		//	Compute the functions with matching sorts
-		for (const auto &expr_idx : matching) {
-			D_ASSERT(select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
-			auto wexpr = reinterpret_cast<BoundWindowExpression *>(select_list[expr_idx].get());
-			// reuse partition and order clause in window def
-			ComputeWindowExpression(wexpr, big_data, window_results, partition_mask, order_mask, expr_idx);
+		if (!counts.empty()) {
+			WindowGlobalState pstate(*this, context);
+			WindowPartitionTaskManager task_manager(scheduler, pstate);
+			const auto hash_mask = hash_t(counts.size() - 1);
+			for (hash_t hash_key = 0; hash_key < counts.size(); ++hash_key) {
+				if (counts[hash_key] > 0) {
+					auto task =
+					    make_unique<WindowPartitionTask>(task_manager, window_exprs, matching, big_data, window_results,
+					                                     over_collection, hash_collection, hash_key, hash_mask);
+					task_manager.AddTask(move(task));
+					// task->Execute();
+				}
+			}
+			task_manager.Finish();
+		} else {
+			WindowPartitionTask::ComputeExpressions(window_exprs, matching, big_data, window_results, over_collection);
 		}
 	}
 }

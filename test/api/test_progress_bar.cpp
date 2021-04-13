@@ -41,7 +41,7 @@ public:
 	}
 };
 
-TEST_CASE("Test Progress Bar", "[api]") {
+TEST_CASE("Test Progress Bar", "[api][.]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	TestProgressBar test_progress(con.context.get());
@@ -105,7 +105,7 @@ TEST_CASE("Test Progress Bar", "[api]") {
 	REQUIRE_NO_FAIL(*result);
 }
 
-TEST_CASE("Test Progress Bar CSV", "[api]") {
+TEST_CASE("Test Progress Bar CSV", "[api][.]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 

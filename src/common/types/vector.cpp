@@ -1060,11 +1060,19 @@ void ListVector::Initialize(Vector &vec) {
 	}
 }
 idx_t ListVector::GetListSize(const Vector &vec) {
+	if (vec.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+		auto &child = DictionaryVector::Child(vec);
+		return ListVector::GetListSize(child);
+	}
 	return ((VectorListBuffer &)*vec.auxiliary).size;
 }
 
 void ListVector::SetListSize(Vector &vec, idx_t size) {
 	ListVector::Initialize(vec);
+	if (vec.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+		auto &child = DictionaryVector::Child(vec);
+		ListVector::SetListSize(child, size);
+	}
 	((VectorListBuffer &)*vec.auxiliary).size = size;
 }
 
@@ -1086,6 +1094,17 @@ void ListVector::Append(Vector &target, const Vector &source, idx_t source_size,
 	}
 	auto &target_buffer = (VectorListBuffer &)*target.auxiliary;
 	target_buffer.Append(source, source_size, source_offset);
+}
+
+void ListVector::Append(Vector &target, const Vector &source, const SelectionVector &sel, idx_t source_size,
+                        idx_t source_offset) {
+	ListVector::Initialize(target);
+	if (source_size - source_offset == 0) {
+		//! Nothing to add
+		return;
+	}
+	auto &target_buffer = (VectorListBuffer &)*target.auxiliary;
+	target_buffer.Append(source, sel, source_size, source_offset);
 }
 
 void ListVector::PushBack(Vector &target, Value &insert) {

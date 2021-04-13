@@ -1,5 +1,5 @@
-# name: test/sql/storage/test_reclaim_space_update.test
-# description: Test that we reclaim space when updating the values of a column
+# name: test/sql/storage/test_reclaim_space_drop_column.test_slow
+# description: Test that we reclaim space when dropping and adding columns
 # group: [storage]
 
 load __TEST_DIR__/test_reclaim_space.db
@@ -8,7 +8,7 @@ statement ok
 PRAGMA force_checkpoint;
 
 statement ok
-CREATE TABLE integers AS SELECT i FROM range(1000000) tbl(i);
+CREATE TABLE integers AS SELECT i, i j FROM range(1000000) tbl(i);
 
 statement ok
 CHECKPOINT;
@@ -17,31 +17,23 @@ statement ok
 CHECKPOINT;
 
 query III
-SELECT MIN(i), MAX(i), COUNT(*) FROM integers
+SELECT MIN(j), MAX(j), COUNT(*) FROM integers
 ----
 0	999999	1000000
 
 loop i 0 10
 
 statement ok
-UPDATE integers SET i=i;
+ALTER TABLE integers DROP COLUMN j;
 
 statement ok
-CHECKPOINT;
+ALTER TABLE integers ADD COLUMN j INTEGER;
+
+statement ok
+UPDATE integers SET j=i;
 
 query III
-SELECT MIN(i), MAX(i), COUNT(*) FROM integers
-----
-0	999999	1000000
-
-statement ok
-UPDATE integers SET i=i;
-
-statement ok
-CHECKPOINT;
-
-query III
-SELECT MIN(i), MAX(i), COUNT(*) FROM integers
+SELECT MIN(j), MAX(j), COUNT(*) FROM integers
 ----
 0	999999	1000000
 

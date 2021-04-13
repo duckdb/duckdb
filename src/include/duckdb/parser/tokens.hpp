@@ -60,6 +60,7 @@ class FunctionExpression;
 class LambdaExpression;
 class OperatorExpression;
 class ParameterExpression;
+class PositionalReferenceExpression;
 class StarExpression;
 class SubqueryExpression;
 class WindowExpression;

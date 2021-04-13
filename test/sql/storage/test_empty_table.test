@@ -23,3 +23,18 @@ SELECT COUNT(*) FROM test
 ----
 0
 
+# insert into empty table
+statement ok
+INSERT INTO test VALUES (1, 2)
+
+query I
+SELECT COUNT(*) FROM test
+----
+1
+
+restart
+
+query I
+SELECT COUNT(*) FROM test
+----
+1
