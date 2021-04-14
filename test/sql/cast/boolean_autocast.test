@@ -1,0 +1,135 @@
+# name: test/sql/cast/boolean_autocast.test
+# description: Test boolean auto casts
+# group: [cast]
+
+statement ok
+PRAGMA enable_verification
+
+# boolean <-> integer
+query T
+SELECT true=1;
+----
+true
+
+query T
+SELECT true=0;
+----
+false
+
+query T
+SELECT false=0;
+----
+true
+
+query T
+SELECT false=1;
+----
+false
+
+query T
+SELECT 1=true;
+----
+true
+
+query T
+SELECT 0=true;
+----
+false
+
+query T
+SELECT 0=false;
+----
+true
+
+query T
+SELECT 1=false;
+----
+false
+
+# boolean <-> string
+query T
+SELECT true='1';
+----
+true
+
+query T
+SELECT true='0';
+----
+false
+
+query T
+SELECT false='0';
+----
+true
+
+query T
+SELECT false='1';
+----
+false
+
+query T
+SELECT true='true';
+----
+true
+
+query T
+SELECT true='false';
+----
+false
+
+query T
+SELECT false='false';
+----
+true
+
+query T
+SELECT false='true';
+----
+false
+
+query T
+SELECT '1'=true;
+----
+true
+
+query T
+SELECT '0'=true;
+----
+false
+
+query T
+SELECT '0'=false;
+----
+true
+
+query T
+SELECT '1'=false;
+----
+false
+
+query T
+SELECT true='true';
+----
+true
+
+query T
+SELECT true='false';
+----
+false
+
+query T
+SELECT false='false';
+----
+true
+
+query T
+SELECT false='true';
+----
+false
+
+# failed to auto cast
+statement error
+SELECT false='unknownbool';
+
+statement error
+SELECT 'unknownbool'=false;
