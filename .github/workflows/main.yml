@@ -254,9 +254,10 @@ jobs:
 
     - name: Amalgamation
       run: |
-        python scripts/amalgamation.py
+        python scripts/amalgamation.py --extended
+        python scripts/parquet_amalgamation.py
         cd src/amalgamation
-        clang++ -std=c++11 -emit-llvm -S duckdb.cpp
+        clang++ -std=c++11 -emit-llvm -S duckdb.cpp parquet-amalgamation.cpp
 
 
   linux-release-64:
@@ -984,7 +985,7 @@ jobs:
       run: ./scripts/node_build.sh 15
 
   linux-wasm-release:
-    name: WebAssembly Release 
+    name: WebAssembly Release
     runs-on: ubuntu-20.04
     needs: linux-debug
 
