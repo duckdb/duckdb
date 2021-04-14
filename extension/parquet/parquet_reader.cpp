@@ -35,15 +35,15 @@ using parquet::format::SchemaElement;
 using parquet::format::Statistics;
 using parquet::format::Type;
 
-static unique_ptr<apache::thrift::protocol::TProtocol> create_thrift_protocol(FileHandle &file_handle) {
+static unique_ptr<apache::thrift::protocol::TProtocol> CreateThriftProtocol(FileHandle &file_handle) {
 	shared_ptr<ThriftFileTransport> trans(new ThriftFileTransport(file_handle));
 	return make_unique<apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(trans);
 }
 
-static shared_ptr<ParquetFileMetadataCache> load_metadata(FileHandle &file_handle) {
+static shared_ptr<ParquetFileMetadataCache> LoadMetadata(FileHandle &file_handle) {
 	auto current_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 
-	auto proto = create_thrift_protocol(file_handle);
+	auto proto = CreateThriftProtocol(file_handle);
 	auto &transport = ((ThriftFileTransport &)*proto->getTransport());
 	auto file_size = transport.GetSize();
 	if (file_size < 12) {
@@ -252,14 +252,14 @@ ParquetReader::ParquetReader(unique_ptr<FileHandle> file_handle_p, const vector<
                              const string &initial_filename_p) {
 	file_name = file_handle_p->path;
 	file_handle = move(file_handle_p);
-	metadata = load_metadata(*file_handle);
+	metadata = LoadMetadata(*file_handle);
 	InitializeSchema(expected_types_p, initial_filename_p);
 }
 
 ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, const vector<LogicalType> &expected_types_p,
                              const string &initial_filename_p) {
 	auto &fs = FileSystem::GetFileSystem(context_p);
-	file_name = file_name_p;
+	file_name = move(file_name_p);
 	file_handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ);
 	// If object cached is disabled
 	// or if this file has cached metadata
@@ -267,13 +267,13 @@ ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, const
 
 	auto last_modify_time = fs.GetLastModifiedTime(*file_handle);
 	if (!ObjectCache::ObjectCacheEnabled(context_p)) {
-		metadata = load_metadata(*file_handle);
+		metadata = LoadMetadata(*file_handle);
 	} else {
 		metadata = std::dynamic_pointer_cast<ParquetFileMetadataCache>(
-		    ObjectCache::GetObjectCache(context_p).Get(file_name_p));
+		    ObjectCache::GetObjectCache(context_p).Get(file_name));
 		if (!metadata || (last_modify_time + 10 >= metadata->read_time)) {
-			metadata = load_metadata(*file_handle);
-			ObjectCache::GetObjectCache(context_p).Put(file_name_p, metadata);
+			metadata = LoadMetadata(*file_handle);
+			ObjectCache::GetObjectCache(context_p).Put(file_name, metadata);
 		}
 	}
 
@@ -392,7 +392,7 @@ void ParquetReader::InitializeScan(ParquetReaderScanState &state, vector<column_
 	state.filters = filters;
 	state.sel.Initialize(STANDARD_VECTOR_SIZE);
 	state.file_handle = file_handle->file_system.OpenFile(file_handle->path, FileFlags::FILE_FLAGS_READ);
-	state.thrift_file_proto = create_thrift_protocol(*state.file_handle);
+	state.thrift_file_proto = CreateThriftProtocol(*state.file_handle);
 	state.root_reader = CreateReader(GetFileMetadata());
 
 	state.define_buf.resize(STANDARD_VECTOR_SIZE);

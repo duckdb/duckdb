@@ -19,14 +19,14 @@ extension/parquet/parquetcli.cpp
 */
 
 using namespace duckdb;
-void print_usage() {
+void PrintUsage() {
 	printf("Usage: parquetcli [filename.parquet] [column,names,to,read] ([x=y])");
 	exit(1);
 }
 
 int main(int argc, const char **argv) {
 	if (argc < 3) {
-		print_usage();
+		PrintUsage();
 	}
 	auto filename = std::string(argv[1]);
 
@@ -56,7 +56,7 @@ int main(int argc, const char **argv) {
 	}
 	if (column_ids.empty()) {
 		printf("No columns found that matched the filter. Alternatively, use --all to read all columns");
-		print_usage();
+		PrintUsage();
 	}
 
 	// read all row groups
@@ -72,7 +72,7 @@ int main(int argc, const char **argv) {
 		auto entry = name_map.find(splits[0]);
 		if (entry == name_map.end()) {
 			printf("Invalid filter: name not found");
-			print_usage();
+			PrintUsage();
 		}
 		auto idx = entry->second;
 		TableFilter filter(Value(splits[1]).CastAs(return_types[idx]), ExpressionType::COMPARE_EQUAL, idx);
