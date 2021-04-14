@@ -9,6 +9,7 @@
 #include "duckdb/main/database.hpp"
 
 #include "duckdb/execution/operator/aggregate/physical_simple_aggregate.hpp"
+#include "duckdb/execution/operator/aggregate/physical_window.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 #include "duckdb/execution/operator/order/physical_order.hpp"
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
@@ -188,6 +189,12 @@ bool Pipeline::ScheduleOperator(PhysicalOperator *op) {
 		auto &ord = (PhysicalOrder &)*op;
 		idx_t max_threads = ord.MaxThreads(executor.context);
 		auto pstate = ord.GetParallelState();
+		return LaunchScanTasks(op, max_threads, move(pstate));
+	}
+	case PhysicalOperatorType::WINDOW: {
+		auto &win = (PhysicalWindow &)*op;
+		idx_t max_threads = win.MaxThreads(executor.context);
+		auto pstate = win.GetParallelState();
 		return LaunchScanTasks(op, max_threads, move(pstate));
 	}
 	case PhysicalOperatorType::HASH_GROUP_BY: {
