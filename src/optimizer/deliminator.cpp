@@ -208,7 +208,7 @@ bool Deliminator::RemoveCandidate(unique_ptr<LogicalOperator> *op_ptr, Deliminat
 			unique_ptr<Expression> filter_expression;
 			for (auto &expr : nulls_are_not_equal_exprs) {
 				auto is_not_null_expr =
-					make_unique<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
+				    make_unique<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
 				is_not_null_expr->children.push_back(expr->Copy());
 				if (filter_expression) {
 					auto and_expr = make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
