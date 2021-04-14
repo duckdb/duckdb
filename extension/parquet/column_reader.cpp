@@ -137,7 +137,7 @@ void ColumnReader::PreparePage(idx_t compressed_page_size, idx_t uncompressed_pa
 	auto &trans = (ThriftFileTransport &)*protocol->getTransport();
 
 	block = make_shared<ResizeableBuffer>(compressed_page_size + 1);
-	trans->read((uint8_t *)block->ptr, compressed_page_size);
+	trans.read((uint8_t *)block->ptr, compressed_page_size);
 
 	shared_ptr<ResizeableBuffer> unpacked_block;
 	if (chunk->meta_data.codec != CompressionCodec::UNCOMPRESSED) {
