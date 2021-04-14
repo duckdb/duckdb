@@ -63,7 +63,8 @@ public:
 
 	ParquetReader(ClientContext &context, string file_name, const vector<LogicalType> &expected_types_p,
 	              const string &initial_filename = string());
-	ParquetReader(ClientContext &context, string file_name) : ParquetReader(context, move(file_name), vector<LogicalType>()) {
+	ParquetReader(ClientContext &context, string file_name)
+	    : ParquetReader(context, move(file_name), vector<LogicalType>()) {
 	}
 	~ParquetReader();
 
