@@ -1,6 +1,7 @@
 #include "duckdb/optimizer/deliminator.hpp"
 
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_delim_join.hpp"
@@ -204,12 +205,20 @@ bool Deliminator::RemoveCandidate(unique_ptr<LogicalOperator> *op_ptr, Deliminat
 		auto filter_op = make_unique<LogicalFilter>();
 		if (!nulls_are_not_equal_exprs.empty()) {
 			// add an IS NOT NULL filter that was implicitly in JoinCondition::null_values_are_equal
-			auto is_not_null_expr =
-			    make_unique<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
+			unique_ptr<Expression> filter_expression;
 			for (auto &expr : nulls_are_not_equal_exprs) {
+				auto is_not_null_expr =
+					make_unique<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
 				is_not_null_expr->children.push_back(expr->Copy());
+				if (filter_expression) {
+					auto and_expr = make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
+					and_expr->children.push_back(move(filter_expression));
+					and_expr->children.push_back(move(is_not_null_expr));
+					filter_expression = move(and_expr);
+				} else {
+					filter_expression = move(is_not_null_expr);
+				}
 			}
-			filter_op->expressions.push_back(move(is_not_null_expr));
 		}
 		if (filter != nullptr) {
 			for (auto &expr : filter->expressions) {
