@@ -22,28 +22,26 @@
 #ifdef __aarch64__
 #include <arm_neon.h>
 #endif
-#include "compiler.h"
-#include "mem.h"
-#include "debug.h"                 /* assert, DEBUGLOG, RAWLOG, g_debuglevel */
-#include "error_private.h"
-#define ZSTD_STATIC_LINKING_ONLY
-#include "../zstd.h"
-#define FSE_STATIC_LINKING_ONLY
-#include "fse.h"
-#define HUF_STATIC_LINKING_ONLY
-#include "huf.h"
-#ifndef XXH_STATIC_LINKING_ONLY
-#  define XXH_STATIC_LINKING_ONLY  /* XXH64_state_t */
-#endif
-#include "xxhash.h"                /* XXH_reset, update, digest */
+#include "zstd/common/compiler.h"
+#include "zstd/common/mem.h"
+#include "zstd/common/debug.h"                 /* assert, DEBUGLOG, RAWLOG, g_debuglevel */
+#include "zstd/common/error_private.h"
+#include "zstd.h"
+#include "zstd_static.h"
+#include "zstd/common/fse.h"
+#include "zstd/common/fse_static.h"
+#include "zstd/common/huf.h"
+#include "zstd/common/huf_static.h"
+#include "zstd/common/xxhash.h"                /* XXH_reset, update, digest */
+#include "zstd/common/xxhash_static.h"                /* XXH_reset, update, digest */
 
 namespace duckdb_zstd {
 
 /* ---- static assert (debug) --- */
 #define ZSTD_STATIC_ASSERT(c) DEBUG_STATIC_ASSERT(c)
 #define ZSTD_isError ERR_isError   /* for inlining */
-#define FSE_isError  ERR_isError
-#define HUF_isError  ERR_isError
+// #define FSE_isError  ERR_isError
+// #define HUF_isError  ERR_isError
 
 
 /*-*************************************

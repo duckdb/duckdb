@@ -11,7 +11,7 @@
 #ifndef ZSTD_COMPRESS_LITERALS_H
 #define ZSTD_COMPRESS_LITERALS_H
 
-#include "zstd_compress_internal.h" /* ZSTD_hufCTables_t, ZSTD_minGain() */
+#include "zstd/compress/zstd_compress_internal.h" /* ZSTD_hufCTables_t, ZSTD_minGain() */
 
 namespace duckdb_zstd {
 

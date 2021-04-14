@@ -255,9 +255,10 @@ jobs:
 
     - name: Amalgamation
       run: |
-        python scripts/amalgamation.py
+        python scripts/amalgamation.py --extended
+        python scripts/parquet_amalgamation.py
         cd src/amalgamation
-        clang++ -std=c++11 -emit-llvm -S duckdb.cpp
+        clang++ -std=c++11 -emit-llvm -S duckdb.cpp parquet-amalgamation.cpp
 
 
   linux-release-64:

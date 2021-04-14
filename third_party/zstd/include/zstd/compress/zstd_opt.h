@@ -11,7 +11,7 @@
 #ifndef ZSTD_OPT_H
 #define ZSTD_OPT_H
 
-#include "zstd_compress_internal.h"
+#include "zstd/compress/zstd_compress_internal.h"
 
 namespace duckdb_zstd {
 

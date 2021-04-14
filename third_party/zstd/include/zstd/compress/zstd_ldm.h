@@ -11,8 +11,8 @@
 #ifndef ZSTD_LDM_H
 #define ZSTD_LDM_H
 
-#include "zstd_compress_internal.h"   /* ldmParams_t, U32 */
-#include "../zstd.h"   /* ZSTD_CCtx, size_t */
+#include "zstd/compress/zstd_compress_internal.h"   /* ldmParams_t, U32 */
+#include "zstd.h"   /* ZSTD_CCtx, size_t */
 
 /*-*************************************
 *  Long distance matching

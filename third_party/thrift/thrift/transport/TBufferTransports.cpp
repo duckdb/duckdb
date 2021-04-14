@@ -19,9 +19,9 @@
 
 #include <cassert>
 #include <algorithm>
-#include <thrift/thrift_export.h>
+#include "thrift/thrift_export.h"
 
-#include <thrift/transport/TBufferTransports.h>
+#include "thrift/transport/TBufferTransports.h"
 
 using std::string;
 

@@ -15,7 +15,7 @@
 *  Dependencies
 ***************************************/
 
-#include "../zstd.h" /* ZSTD_CCtx */
+#include "zstd.h" /* ZSTD_CCtx */
 
 namespace duckdb_zstd {
 /*-*************************************
