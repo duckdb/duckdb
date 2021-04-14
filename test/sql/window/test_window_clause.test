@@ -1,0 +1,25 @@
+# name: test/sql/window/test_window_clause.test
+# description: Most basic window function
+# group: [window]
+
+require vector_size 512
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table integers as select range i from range(0,16);
+
+# if a window clause is not being read, these would return 16
+query IIII
+select max(base), max(referenced), sum(refined), sum(unrefined) from (
+    select
+    	row_number() over w AS base,
+    	row_number() over (w) as referenced,
+    	sum(i % 4) over (w rows between 1 preceding and 1 following) AS refined,
+    	sum(i % 4) over (rows between 1 preceding and 1 following) AS unrefined
+    from integers
+    WINDOW w AS (partition by i / 4 order by i % 4)
+) q;
+----
+4	4	60	69

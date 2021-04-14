@@ -137,7 +137,7 @@ void ColumnReader::PreparePage(idx_t compressed_page_size, idx_t uncompressed_pa
 	auto &trans = (ThriftFileTransport &)*protocol->getTransport();
 
 	block = make_shared<ResizeableBuffer>(compressed_page_size + 1);
-	trans.read((uint8_t *)block->ptr, compressed_page_size);
+	trans->read((uint8_t *)block->ptr, compressed_page_size);
 
 	shared_ptr<ResizeableBuffer> unpacked_block;
 	if (chunk->meta_data.codec != CompressionCodec::UNCOMPRESSED) {
@@ -209,8 +209,9 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 	                                                          : page_hdr.data_page_header_v2.encoding;
 
 	if (HasRepeats()) {
-		// TODO there seems to be some confusion whether this is in the bytes for v2
-		uint32_t rep_length = block->read<uint32_t>();
+		uint32_t rep_length = page_hdr.type == PageType::DATA_PAGE
+		                          ? block->read<uint32_t>()
+		                          : page_hdr.data_page_header_v2.repetition_levels_byte_length;
 		block->available(rep_length);
 		repeated_decoder =
 		    make_unique<RleBpDecoder>((const uint8_t *)block->ptr, rep_length, ComputeBitWidth(max_repeat));
@@ -218,8 +219,9 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 	}
 
 	if (HasDefines()) {
-		// TODO there seems to be some confusion whether this is in the bytes for v2
-		uint32_t def_length = block->read<uint32_t>();
+		uint32_t def_length = page_hdr.type == PageType::DATA_PAGE
+		                          ? block->read<uint32_t>()
+		                          : page_hdr.data_page_header_v2.definition_levels_byte_length;
 		block->available(def_length);
 		defined_decoder =
 		    make_unique<RleBpDecoder>((const uint8_t *)block->ptr, def_length, ComputeBitWidth(max_define));
@@ -382,13 +384,12 @@ void StringParquetValueConversion::PlainSkip(ByteBuffer &plain_data, ColumnReade
 idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
                              Vector &result_out) {
 	if (!ListVector::HasEntry(result_out)) {
-		auto list_child = make_unique<ChunkCollection>();
+		auto list_child = make_unique<Vector>(result_out.GetType().child_types()[0].second);
 		ListVector::SetEntry(result_out, move(list_child));
 	}
 
 	idx_t result_offset = 0;
 	auto result_ptr = FlatVector::GetData<list_entry_t>(result_out);
-	auto &list_cc = ListVector::GetEntry(result_out);
 
 	while (result_offset < num_values) {
 		auto child_req_num_values = MinValue<idx_t>(STANDARD_VECTOR_SIZE, child_column_reader->GroupRowsAvailable());
@@ -415,9 +416,8 @@ idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint
 		append_chunk.SetCardinality(child_actual_num_values);
 		append_chunk.Verify();
 
-		idx_t current_chunk_offset = list_cc.Count();
-		list_cc.Append(append_chunk);
-
+		idx_t current_chunk_offset = ListVector::GetListSize(result_out);
+		ListVector::Append(result_out, append_chunk.data[0], append_chunk.size());
 		// hard-won piece of code this, modify at your own risk
 		// the intuition is that we have to only collapse values into lists that are repeated *on this level*
 		// the rest is pretty much handed up as-is as a single-valued list or NULL

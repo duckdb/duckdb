@@ -20,6 +20,8 @@ struct PragmaFunctionsData : public FunctionOperatorData {
 
 static unique_ptr<FunctionData> PragmaFunctionsBind(ClientContext &context, vector<Value> &inputs,
                                                     unordered_map<string, Value> &named_parameters,
+                                                    vector<LogicalType> &input_table_types,
+                                                    vector<string> &input_table_names,
                                                     vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("name");
 	return_types.push_back(LogicalType::VARCHAR);
@@ -61,28 +63,16 @@ unique_ptr<FunctionOperatorData> PragmaFunctionsInit(ClientContext &context, con
 void AddFunction(BaseScalarFunction &f, idx_t &count, DataChunk &output, bool is_aggregate) {
 	output.SetValue(0, count, Value(f.name));
 	output.SetValue(1, count, Value(is_aggregate ? "AGGREGATE" : "SCALAR"));
-	if (!ListVector::HasEntry(output.data[2])) {
-		ListVector::SetEntry(output.data[2], make_unique<ChunkCollection>());
-	}
-	auto &cc = ListVector::GetEntry(output.data[2]);
+	ListVector::Initialize(output.data[2]);
 	auto result_data = FlatVector::GetData<list_entry_t>(output.data[2]);
-	result_data[count].offset = cc.Count();
+	result_data[count].offset = ListVector::GetListSize(output.data[2]);
 	result_data[count].length = f.arguments.size();
 	string parameters;
-	vector<LogicalType> types {LogicalType::VARCHAR};
-	DataChunk chunk;
-	chunk.Initialize(types);
 	for (idx_t i = 0; i < f.arguments.size(); i++) {
-		chunk.data[0].SetValue(chunk.size(), Value(f.arguments[i].ToString()));
-		chunk.SetCardinality(chunk.size() + 1);
-		if (chunk.size() == STANDARD_VECTOR_SIZE) {
-			cc.Append(chunk);
-			chunk.Reset();
-		}
+		auto val = Value(f.arguments[i].ToString());
+		ListVector::PushBack(output.data[2], val);
 	}
-	if (chunk.size() > 0) {
-		cc.Append(chunk);
-	}
+
 	output.SetValue(3, count, f.varargs.id() != LogicalTypeId::INVALID ? Value(f.varargs.ToString()) : Value());
 	output.SetValue(4, count, f.return_type.ToString());
 	output.SetValue(5, count, Value::BOOLEAN(f.has_side_effects));
@@ -91,7 +81,7 @@ void AddFunction(BaseScalarFunction &f, idx_t &count, DataChunk &output, bool is
 }
 
 static void PragmaFunctionsFunction(ClientContext &context, const FunctionData *bind_data,
-                                    FunctionOperatorData *operator_state, DataChunk &output) {
+                                    FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
 	auto &data = (PragmaFunctionsData &)*operator_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values

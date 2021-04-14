@@ -340,7 +340,7 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t o
 			case LogicalTypeId::FLOAT:
 			case LogicalTypeId::TIMESTAMP:
 			case LogicalTypeId::DOUBLE: {
-				auto num_stats = (NumericStatistics &)*stats;
+				auto &num_stats = (NumericStatistics &)*stats;
 				for (auto &filter : filter_entry->second) {
 					skip_chunk = !num_stats.CheckZonemap(filter.comparison_type, filter.constant);
 					if (skip_chunk) {
@@ -351,7 +351,7 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t o
 			}
 			case LogicalTypeId::BLOB:
 			case LogicalTypeId::VARCHAR: {
-				auto str_stats = (StringStatistics &)*stats;
+				auto &str_stats = (StringStatistics &)*stats;
 				for (auto &filter : filter_entry->second) {
 					skip_chunk = !str_stats.CheckZonemap(filter.comparison_type, filter.constant.str_value);
 					if (skip_chunk) {

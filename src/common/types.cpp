@@ -98,6 +98,9 @@ PhysicalType LogicalType::GetInternalType() {
 		return PhysicalType::HASH;
 	case LogicalTypeId::POINTER:
 		return PhysicalType::POINTER;
+	case LogicalTypeId::VALIDITY:
+		return PhysicalType::BIT;
+	case LogicalTypeId::TABLE:
 	case LogicalTypeId::ANY:
 	case LogicalTypeId::INVALID:
 	case LogicalTypeId::UNKNOWN:
@@ -137,6 +140,7 @@ const LogicalType LogicalType::INTERVAL = LogicalType(LogicalTypeId::INTERVAL);
 const LogicalType LogicalType::STRUCT = LogicalType(LogicalTypeId::STRUCT);
 const LogicalType LogicalType::LIST = LogicalType(LogicalTypeId::LIST);
 const LogicalType LogicalType::MAP = LogicalType(LogicalTypeId::MAP);
+const LogicalType LogicalType::TABLE = LogicalType(LogicalTypeId::TABLE);
 
 const LogicalType LogicalType::ANY = LogicalType(LogicalTypeId::ANY);
 
@@ -201,6 +205,8 @@ string TypeIdToString(PhysicalType type) {
 		return "MAP<?>";
 	case PhysicalType::INVALID:
 		return "INVALID";
+	case PhysicalType::BIT:
+		return "BIT";
 	default:
 		throw ConversionException("Invalid PhysicalType %s", type);
 	}
@@ -208,6 +214,7 @@ string TypeIdToString(PhysicalType type) {
 
 idx_t GetTypeIdSize(PhysicalType type) {
 	switch (type) {
+	case PhysicalType::BIT:
 	case PhysicalType::BOOL:
 		return sizeof(bool);
 	case PhysicalType::INT8:
@@ -341,6 +348,8 @@ string LogicalTypeIdToString(LogicalTypeId id) {
 		return "NULL";
 	case LogicalTypeId::ANY:
 		return "ANY";
+	case LogicalTypeId::VALIDITY:
+		return "VALIDITY";
 	case LogicalTypeId::STRUCT:
 		return "STRUCT<?>";
 	case LogicalTypeId::LIST:
@@ -351,6 +360,8 @@ string LogicalTypeIdToString(LogicalTypeId id) {
 		return "HASH";
 	case LogicalTypeId::POINTER:
 		return "POINTER";
+	case LogicalTypeId::TABLE:
+		return "TABLE";
 	case LogicalTypeId::INVALID:
 		return "INVALID";
 	case LogicalTypeId::UNKNOWN:

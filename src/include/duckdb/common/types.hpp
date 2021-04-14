@@ -84,7 +84,7 @@ template <class T>
 using buffer_ptr = single_thread_ptr<T>;
 
 template <class T, typename... Args>
-buffer_ptr<T> make_buffer(Args &&... args) {
+buffer_ptr<T> make_buffer(Args &&...args) {
 	return single_thread_make_shared<T>(std::forward<Args>(args)...);
 }
 
@@ -106,7 +106,7 @@ enum class PhysicalType : uint8_t {
 	/// A NULL type having no physical storage
 	NA = 0,
 
-	/// Boolean as 1 bit, LSB bit-packed ordering
+	/// Boolean as 8 bit "bool" value
 	BOOL = 1,
 
 	/// Unsigned 8-bit little-endian integer
@@ -219,6 +219,9 @@ enum class PhysicalType : uint8_t {
 	HASH = 203,
 	INT128 = 204, // 128-bit integers
 
+	/// Boolean as 1 bit, LSB bit-packed ordering
+	BIT = 205,
+
 	INVALID = 255
 };
 
@@ -253,10 +256,12 @@ enum class LogicalTypeId : uint8_t {
 	HUGEINT = 50,
 	POINTER = 51,
 	HASH = 52,
+	VALIDITY = 53,
 
 	STRUCT = 100,
 	LIST = 101,
-	MAP = 102
+	MAP = 102,
+	TABLE = 103
 };
 
 struct LogicalType {
@@ -351,6 +356,7 @@ public:
 	static const LogicalType HUGEINT;
 	static const LogicalType HASH;
 	static const LogicalType POINTER;
+	static const LogicalType TABLE;
 	static const LogicalType INVALID;
 
 	//! A list of all NUMERIC types (integral and floating point types)

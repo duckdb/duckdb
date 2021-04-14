@@ -118,6 +118,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "EXPORT";
 	case PhysicalOperatorType::SET:
 		return "SET";
+	case PhysicalOperatorType::INOUT_FUNCTION:
+		return "INOUT_FUNCTION";
 	}
 	return "UNDEFINED";
 }

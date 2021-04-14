@@ -167,9 +167,9 @@ unique_ptr<BaseStatistics> ParquetTransformColumnStatistics(const SchemaElement 
 	// null count is generic
 	if (row_group_stats) {
 		if (parquet_stats.__isset.null_count) {
-			row_group_stats->has_null = parquet_stats.null_count != 0;
+			row_group_stats->validity_stats = make_unique<ValidityStatistics>(parquet_stats.null_count != 0);
 		} else {
-			row_group_stats->has_null = true;
+			row_group_stats->validity_stats = make_unique<ValidityStatistics>(true);
 		}
 	} else {
 		// if stats are missing from any row group we know squat

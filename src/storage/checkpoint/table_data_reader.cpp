@@ -24,40 +24,14 @@ void TableDataReader::ReadTableData() {
 	auto &columns = info.Base().columns;
 	D_ASSERT(columns.size() > 0);
 
-	// load the column statistics
-	for (idx_t col = 0; col < columns.size(); col++) {
-		auto &column = columns[col];
-		info.data->column_stats[col] = BaseStatistics::Deserialize(reader, column.type);
-	}
-
-	// load the data pointers for the table
 	idx_t table_count = 0;
 	for (idx_t col = 0; col < columns.size(); col++) {
 		auto &column = columns[col];
-		idx_t column_count = 0;
-		idx_t data_pointer_count = reader.Read<idx_t>();
-		for (idx_t data_ptr = 0; data_ptr < data_pointer_count; data_ptr++) {
-			// read the data pointer
-			DataPointer data_pointer;
-			data_pointer.row_start = reader.Read<idx_t>();
-			data_pointer.tuple_count = reader.Read<idx_t>();
-			data_pointer.block_id = reader.Read<block_id_t>();
-			data_pointer.offset = reader.Read<uint32_t>();
-			data_pointer.statistics = BaseStatistics::Deserialize(reader, column.type);
-
-			column_count += data_pointer.tuple_count;
-			// create a persistent segment
-			auto segment = make_unique<PersistentSegment>(db, data_pointer.block_id, data_pointer.offset, column.type,
-			                                              data_pointer.row_start, data_pointer.tuple_count,
-			                                              move(data_pointer.statistics));
-			info.data->table_data[col].push_back(move(segment));
-		}
+		info.data->column_data[col] = ColumnData::Deserialize(db, reader, column.type);
 		if (col == 0) {
-			table_count = column_count;
-		} else {
-			if (table_count != column_count) {
-				throw Exception("Column length mismatch in table load!");
-			}
+			table_count = info.data->column_data[col]->total_rows;
+		} else if (table_count != info.data->column_data[col]->total_rows) {
+			throw Exception("Column length mismatch in table load!");
 		}
 	}
 	auto total_rows = table_count;

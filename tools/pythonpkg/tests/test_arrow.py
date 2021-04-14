@@ -11,7 +11,6 @@ except:
 
 class TestArrow(object):
     def test_arrow(self, duckdb_cursor):
-
         if not can_run:
             return
 
@@ -53,7 +52,7 @@ class TestArrow(object):
         pyarrow.parquet.write_table(tbl, parquet_filename)
 
         cols = 'a, b, c, d'
-      
+
         unsigned_parquet_table = pyarrow.parquet.read_table(parquet_filename)
         unsigned_parquet_table.validate(full=True)
         rel_from_arrow = duckdb.arrow(unsigned_parquet_table).project(cols).arrow()
@@ -61,7 +60,7 @@ class TestArrow(object):
 
         rel_from_duckdb = duckdb.from_parquet(parquet_filename).project(cols).arrow()
         rel_from_duckdb.validate(full=True)
-        
+
         assert rel_from_arrow.equals(rel_from_duckdb, check_metadata=True)
 
         con = duckdb.connect()
@@ -76,4 +75,3 @@ class TestArrow(object):
 
         assert round_tripping.equals(arrow_result, check_metadata=True)
 
-    

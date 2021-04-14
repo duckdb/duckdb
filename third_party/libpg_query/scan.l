@@ -46,16 +46,6 @@
 
 /* LCOV_EXCL_START */
 
-/* Avoid exit() on fatal scanner errors (a bit ugly -- see yy_fatal_error) */
-// #undef fprintf
-// #define fprintf(file, fmt, msg)  fprintf_to_ereport(fmt, msg)
-
-// static void
-// fprintf_to_ereport(const char *fmt, const char *msg)
-// {
-// 	ereport(ERROR, (errmsg_internal("%s", msg)));
-// }
-
 /*
  * GUC variables.  This is a DIRECT violation of the warning given at the
  * head of gram.y, ie flex/bison code must not depend on any GUC variables;
@@ -370,7 +360,7 @@ not_equals		"!="
  * rule for "operator"!
  */
 self			[,()\[\].;\:\+\-\*\/\%\^\<\>\=]
-op_chars		[\~\!\@\#\^\&\|\`\+\-\*\/\%\<\>\=]
+op_chars		[\~\!\@\^\&\|\`\+\-\*\/\%\<\>\=]
 operator		{op_chars}+
 
 /* we no longer allow unary minus in numbers.
@@ -907,7 +897,7 @@ other			.
 
 						for (ic = nchars - 2; ic >= 0; ic--)
 						{
-							if (strchr("~!@#^&|`?%", yytext[ic]))
+							if (strchr("~!@^&|`?%", yytext[ic]))
 								break;
 						}
 						if (ic >= 0)
@@ -926,7 +916,7 @@ other			.
 					*/
 					if (yytext[0] == '?' &&
 						strcmp(yytext, "?|") != 0 && strcmp(yytext, "?&") != 0 &&
-						strcmp(yytext, "?#") != 0 && strcmp(yytext, "?-") != 0 &&
+						strcmp(yytext, "?-") != 0 &&
 						strcmp(yytext, "?-|") != 0 && strcmp(yytext, "?||") != 0) {
 						nchars = 1;
 					}

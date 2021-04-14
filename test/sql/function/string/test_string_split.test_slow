@@ -49,7 +49,7 @@ SELECT UNNEST(string_split_regex(string_agg(range, 'DUCK '), '\s')) AS s, mod(ra
 100000 values hashing to 4df57751b24295162836fcb48d04aa04
 
 query T
-SELECT UNNEST(string_split('üüüüü', '◌̈')) 
+SELECT UNNEST(string_split('üüüüü', '◌̈'))
 ----
 üüüüü
 
@@ -59,7 +59,7 @@ SELECT UNNEST(string_split('üüüüü', '◌'))
 üüüüü
 
 query T
-SELECT UNNEST(string_split_regex('üüüüü', '◌̈')) 
+SELECT UNNEST(string_split_regex('üüüüü', '◌̈'))
 ----
 üüüüü
 

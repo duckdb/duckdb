@@ -13,6 +13,10 @@
 
 #include "fmt/ostream.h"
 
+#ifdef min
+#undef min
+#endif
+
 FMT_BEGIN_NAMESPACE
 namespace internal {
 

@@ -110,6 +110,13 @@ public:
 	//! Sets the [index] element of the Vector to the specified Value.
 	void SetValue(idx_t index, const Value &val);
 
+	void SetAuxiliary(buffer_ptr<VectorBuffer> new_buffer) {
+		auxiliary = std::move(new_buffer);
+	};
+
+	//! This functions resizes the vector
+	void Resize(idx_t cur_size, idx_t new_size);
+
 	//! Serializes a Vector to a stand-alone binary blob
 	void Serialize(idx_t count, Serializer &serializer);
 	//! Deserializes a blob back into a Vector
@@ -128,6 +135,15 @@ public:
 	inline data_ptr_t GetData() {
 		return data;
 	}
+
+	buffer_ptr<VectorBuffer> GetAuxiliary() {
+		return auxiliary;
+	}
+
+	buffer_ptr<VectorBuffer> GetBuffer() {
+		return buffer;
+	}
+
 	// Setters
 	inline void SetVectorType(VectorType vector_type) {
 		buffer->SetVectorType(vector_type);
@@ -198,11 +214,19 @@ struct ConstantVector {
 };
 
 struct DictionaryVector {
-	static inline SelectionVector &SelVector(const Vector &vector) {
+	static inline const SelectionVector &SelVector(const Vector &vector) {
+		D_ASSERT(vector.GetVectorType() == VectorType::DICTIONARY_VECTOR);
+		return ((const DictionaryBuffer &)*vector.buffer).GetSelVector();
+	}
+	static inline SelectionVector &SelVector(Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::DICTIONARY_VECTOR);
 		return ((DictionaryBuffer &)*vector.buffer).GetSelVector();
 	}
-	static inline Vector &Child(const Vector &vector) {
+	static inline const Vector &Child(const Vector &vector) {
+		D_ASSERT(vector.GetVectorType() == VectorType::DICTIONARY_VECTOR);
+		return ((const VectorChildBuffer &)*vector.auxiliary).data;
+	}
+	static inline Vector &Child(Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::DICTIONARY_VECTOR);
 		return ((VectorChildBuffer &)*vector.auxiliary).data;
 	}
@@ -255,9 +279,17 @@ struct FlatVector {
 };
 
 struct ListVector {
-	static ChunkCollection &GetEntry(const Vector &vector);
+	static const Vector &GetEntry(const Vector &vector);
+	static Vector &GetEntry(Vector &vector);
+	static idx_t GetListSize(const Vector &vector);
+	static void SetListSize(Vector &vec, idx_t size);
 	static bool HasEntry(const Vector &vector);
-	static void SetEntry(Vector &vector, unique_ptr<ChunkCollection> entry);
+	static void SetEntry(Vector &vector, unique_ptr<Vector> entry);
+	static void Append(Vector &target, const Vector &source, idx_t source_size, idx_t source_offset = 0);
+	static void Append(Vector &target, const Vector &source, const SelectionVector &sel, idx_t source_size,
+	                   idx_t source_offset = 0);
+	static void PushBack(Vector &target, Value &insert);
+	static void Initialize(Vector &vec);
 };
 
 struct StringVector {
@@ -285,7 +317,7 @@ struct StringVector {
 
 struct StructVector {
 	static bool HasEntries(const Vector &vector);
-	static child_list_t<unique_ptr<Vector>> &GetEntries(const Vector &vector);
+	static const child_list_t<unique_ptr<Vector>> &GetEntries(const Vector &vector);
 	static void AddEntry(Vector &vector, const string &name, unique_ptr<Vector> entry);
 };
 
