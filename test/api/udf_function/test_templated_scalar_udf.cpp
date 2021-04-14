@@ -137,20 +137,6 @@ TEST_CASE("UDF functions with template", "[udf_function][.]") {
 			}
 		}
 	}
-	SECTION("Cheking if the UDF functions are temporary") {
-		Connection con_test(db);
-		con_test.EnableQueryVerification();
-		for (LogicalType sql_type : sql_templated_types) {
-			table_name = StringUtil::Lower(LogicalTypeIdToString(sql_type.id()));
-			func_name = table_name;
-
-			REQUIRE_FAIL(con_test.Query("SELECT " + func_name + "_1(a) FROM " + table_name));
-
-			REQUIRE_FAIL(con_test.Query("SELECT " + func_name + "_2(a, b) FROM " + table_name));
-
-			REQUIRE_FAIL(con_test.Query("SELECT " + func_name + "_3(a, b, c) FROM " + table_name));
-		}
-	}
 
 	SECTION("Checking NULLs with UDF functions") {
 		for (LogicalType sql_type : sql_templated_types) {
