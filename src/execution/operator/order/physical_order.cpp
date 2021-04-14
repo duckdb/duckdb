@@ -60,6 +60,13 @@ public:
 
 	//! Total count - set after PhysicalOrder::Finalize is called
 	idx_t total_count;
+
+	//! Capacity/entry sizes used to initialize blocks
+	idx_t sorting_block_capacity;
+	vector<std::pair<idx_t, idx_t>> var_sorting_data_block_dims;
+	vector<idx_t> var_sorting_offset_block_capacity;
+	std::pair<idx_t, idx_t> payload_data_block_dims;
+	idx_t payload_offset_block_capacity;
 };
 
 class OrderLocalState : public LocalSinkState {
@@ -335,16 +342,8 @@ void PhysicalOrder::Combine(ExecutionContext &context, GlobalOperatorState &gsta
 struct ContinuousChunk {
 public:
 	ContinuousChunk(BufferManager &buffer_manager, bool constant_size, idx_t entry_size = 0)
-	    : CONSTANT_SIZE(constant_size), ENTRY_SIZE(entry_size), buffer_manager(buffer_manager), data_block_idx(0),
-	      offset_block_idx(0) {
-	}
-
-	data_ptr_t DataPtr() const {
-		return data_ptr + offsets[offset_entry_idx];
-	}
-
-	idx_t EntrySize() const {
-		return offsets[offset_entry_idx + 1] - offsets[offset_entry_idx];
+	    : buffer_manager(buffer_manager), CONSTANT_SIZE(constant_size), ENTRY_SIZE(entry_size), data_block_idx(0),
+	      data_entry_idx(0), offset_block_idx(0), offset_entry_idx(0) {
 	}
 
 	idx_t Count() {
@@ -358,108 +357,50 @@ public:
 #endif
 		return count;
 	}
-
-	void Advance() {
-		// advance data
-		if (data_entry_idx < data_blocks[data_block_idx].count - 1) {
-			data_entry_idx++;
-			if (CONSTANT_SIZE) {
-				data_ptr += ENTRY_SIZE;
-			}
-		} else if (data_block_idx < data_blocks.size() - 1) {
-			data_block_idx++;
-			PinDataBlock();
-		}
-		if (!CONSTANT_SIZE) {
-			// advance offsets
-			if (offset_entry_idx < offset_blocks[offset_block_idx].count - 1) {
-				offset_entry_idx++;
-			} else if (offset_entry_idx < offset_blocks.size() - 1) {
-				offset_block_idx++;
-				PinOffsetBlock();
-			}
-		}
+	void InitializeWrite(const std::pair<idx_t, idx_t> dims_p, const idx_t offset_capacity_p) {
+		data_dims = dims_p;
+		offset_capacity = offset_capacity_p;
+		CreateDataBlock();
 	}
 
-	void Initialize() {
-		data_block_idx = 0;
-		offset_block_idx = 0;
-		PinBlock();
+	// TODO: use a proper capacity/entry size instead of copying from this other dude
+	void CreateDataBlock() {
+		data_blocks.emplace_back(buffer_manager, data_dims.first, data_dims.second);
 	}
 
-	void CopyEntryFrom(const ContinuousChunk &source) {
-		if (CONSTANT_SIZE) {
-			if (data_blocks.empty() || data_blocks.back().count == data_blocks.back().CAPACITY) {
-				CreateDataBlock(source.data_blocks.back());
-			}
-			memcpy(data_ptr, source.data_ptr, ENTRY_SIZE);
-			data_ptr += ENTRY_SIZE;
-			data_blocks.back().count++;
-		} else {
-			auto next_entry_size = source.ENTRY_SIZE;
-			// TODO: variable length data
-		}
+	void CreateOffsetBlock() {
+		offset_blocks.emplace_back(buffer_manager, offset_capacity, sizeof(idx_t));
 	}
+
+private:
+    //! Buffer manager and constants
+    BufferManager &buffer_manager;
+
+    std::pair<idx_t, idx_t> data_dims;
+    idx_t offset_capacity;
 
 public:
+    const bool CONSTANT_SIZE;
+    const idx_t ENTRY_SIZE;
+
 	//! Data and offset blocks
 	vector<RowDataBlock> data_blocks;
 	vector<RowDataBlock> offset_blocks;
 
-	const bool CONSTANT_SIZE;
-	const idx_t ENTRY_SIZE;
-
-private:
-	//! Buffer manager and constants
-	BufferManager &buffer_manager;
-
 	//! Data
-	unique_ptr<BufferHandle> data_handle;
-	data_ptr_t data_ptr;
 	idx_t data_block_idx;
 	idx_t data_entry_idx;
 
 	//! Offsets (if any)
-	unique_ptr<BufferHandle> offset_handle;
-	idx_t *offsets;
 	idx_t offset_block_idx;
 	idx_t offset_entry_idx;
-
-	void PinBlock() {
-		PinDataBlock();
-		if (!CONSTANT_SIZE) {
-			PinOffsetBlock();
-		}
-	}
-
-	void PinDataBlock() {
-		data_entry_idx = 0;
-		data_handle = buffer_manager.Pin(data_blocks[data_block_idx].block);
-		data_ptr = data_handle->node->buffer;
-	}
-
-	void PinOffsetBlock() {
-		offset_entry_idx = 0;
-		offset_handle = buffer_manager.Pin(offset_blocks[offset_block_idx].block);
-		offsets = (idx_t *)offset_handle->node->buffer;
-	}
-
-	// TODO: use a proper capacity/entry size instead of copying from this other dude
-	void CreateDataBlock(const RowDataBlock &other_data_block) {
-		data_blocks.emplace_back(buffer_manager, other_data_block.CAPACITY, other_data_block.ENTRY_SIZE);
-		data_handle = buffer_manager.Pin(data_blocks.back().block);
-		data_ptr = data_handle->node->buffer;
-		// TODO: variable size
-	}
-
-	void CreateOffsetBlock(const RowDataBlock &other_offset_block) {
-	}
 };
 
 struct ContinuousBlock {
 public:
 	ContinuousBlock(BufferManager &buffer_manager, const SortingState &sorting_state, const PayloadState &payload_state)
-	    : block_idx(0), buffer_manager(buffer_manager), sorting_state(sorting_state), payload_state(payload_state) {
+	    : block_idx(0), entry_idx(0), buffer_manager(buffer_manager), sorting_state(sorting_state),
+	      payload_state(payload_state) {
 		for (idx_t col_idx = 0; col_idx < sorting_state.CONSTANT_SIZE[col_idx]; col_idx++) {
 			if (!sorting_state.CONSTANT_SIZE[col_idx]) {
 				var_sorting_chunks.push_back(make_unique<ContinuousChunk>(buffer_manager, false));
@@ -495,91 +436,53 @@ public:
 		return count;
 	}
 
+	idx_t Remaining() {
+		idx_t remaining = 0;
+		if (Done()) {
+			return remaining;
+		}
+		remaining += sorting_blocks[block_idx].count - entry_idx;
+		for (idx_t i = block_idx + 1; i < sorting_blocks.size(); i++) {
+			remaining += sorting_blocks[i].count;
+		}
+		return remaining;
+	}
+
 	bool Done() {
 		return block_idx >= sorting_blocks.size();
 	}
 
-	void Initialize() {
-		block_idx = 0;
-		PinBlock();
-		if (payload_state.HAS_VARIABLE_SIZE) {
-			for (idx_t col_idx = 0; col_idx < sorting_state.CONSTANT_SIZE.size(); col_idx++) {
-				if (!sorting_state.CONSTANT_SIZE[col_idx]) {
-					var_sorting_chunks[col_idx]->Initialize();
-				}
-			}
-		}
-		payload_chunk->Initialize();
-	}
+	void InitializeWrite(const OrderGlobalState &state) {
+		capacity = state.sorting_block_capacity;
+		CreateBlock();
 
-	void Advance() {
-		// advance fixed-size sorting data
-		if (entry_idx < sorting_blocks[block_idx].count - 1) {
-			entry_idx++;
-			sorting_ptr += sorting_state.ENTRY_SIZE;
-		} else if (block_idx < sorting_blocks.size() - 1) {
-			block_idx++;
-			PinBlock();
-		} else if (block_idx < sorting_blocks.size()) {
-			// done
-			block_idx++;
-		}
-		// variable size sorting data
 		if (!sorting_state.ALL_CONSTANT) {
 			for (idx_t col_idx = 0; col_idx < sorting_state.CONSTANT_SIZE.size(); col_idx++) {
 				if (!sorting_state.CONSTANT_SIZE[col_idx]) {
-					var_sorting_chunks[col_idx]->Advance();
+					var_sorting_chunks[col_idx]->InitializeWrite(state.var_sorting_data_block_dims[col_idx],
+					                                             state.var_sorting_offset_block_capacity[col_idx]);
 				}
 			}
 		}
-		// payload data
-		payload_chunk->Advance();
+
+		payload_chunk->InitializeWrite(state.payload_data_block_dims, state.payload_offset_block_capacity);
 	}
 
-	void CopyEntryFrom(const ContinuousBlock &source) {
-		if (sorting_blocks.empty() || sorting_blocks.back().count == sorting_blocks.back().CAPACITY) {
-			InitializeWriteBlock(source.sorting_blocks.back());
-		}
-		// fixed-size sorting column and entry idx
-		memcpy(sorting_ptr, source.sorting_ptr, sorting_state.ENTRY_SIZE);
-		sorting_ptr += sorting_state.ENTRY_SIZE;
-		sorting_blocks.back().count++;
-		// variable size sorting columns and their offsets
-		if (!sorting_state.ALL_CONSTANT) {
-			for (idx_t col_idx = 0; col_idx < sorting_state.CONSTANT_SIZE.size(); col_idx++) {
-				if (!sorting_state.CONSTANT_SIZE[col_idx]) {
-					var_sorting_chunks[col_idx]->CopyEntryFrom(*source.var_sorting_chunks[col_idx]);
-				}
-			}
-		}
-		payload_chunk->CopyEntryFrom(*source.payload_chunk);
+	void CreateBlock() {
+		sorting_blocks.emplace_back(buffer_manager, capacity, sorting_state.ENTRY_SIZE);
 	}
 
 public:
 	//! Memcmp-able representation of sorting columns
 	vector<RowDataBlock> sorting_blocks;
+	idx_t block_idx;
+	idx_t entry_idx;
 
 	//! Variable size sorting columns
 	vector<unique_ptr<ContinuousChunk>> var_sorting_chunks;
 
 	//! Payload columns and their offsets
 	unique_ptr<ContinuousChunk> payload_chunk;
-
-private:
-	idx_t block_idx;
-	idx_t entry_idx;
-
-	void PinBlock() {
-		entry_idx = 0;
-		sorting_handle = buffer_manager.Pin(sorting_blocks[block_idx].block);
-		sorting_ptr = sorting_handle->node->buffer;
-	}
-
-	void InitializeWriteBlock(const RowDataBlock &other) {
-		sorting_blocks.emplace_back(buffer_manager, other.CAPACITY, other.ENTRY_SIZE);
-		sorting_handle = buffer_manager.Pin(sorting_blocks.back().block);
-		sorting_ptr = sorting_handle->node->buffer;
-	}
 
 private:
 	//! Buffer manager, and sorting state constants
@@ -590,6 +493,8 @@ private:
 	//! Handle and ptr for sorting_blocks
 	unique_ptr<BufferHandle> sorting_handle;
 	data_ptr_t sorting_ptr;
+
+	idx_t capacity;
 };
 
 static void ComputeCountAndCapacity(RowChunk &row_chunk, bool variable_entry_size, idx_t &count, idx_t &capacity) {
@@ -1092,48 +997,33 @@ class PhysicalOrderMergeTask : public Task {
 public:
 	PhysicalOrderMergeTask(Pipeline &parent_p, ClientContext &context_p, OrderGlobalState &state_p,
 	                       ContinuousBlock &left_p, ContinuousBlock &right_p)
-	    : parent(parent_p), context(context_p), state(state_p), left(left_p), right(right_p) {
+	    : parent(parent_p), context(context_p), buffer_manager(BufferManager::GetBufferManager(context_p)),
+	      state(state_p), sorting_state(*state_p.sorting_state), payload_state(*state_p.payload_state), left(left_p),
+	      right(right_p) {
+		result = make_unique<ContinuousBlock>(buffer_manager, sorting_state, payload_state);
 	}
 
 	void Execute() override {
-		auto &buffer_manager = state.buffer_manager;
-		const auto &sorting_state = *state.sorting_state;
-		const auto &payload_state = *state.payload_state;
-
-		left.Initialize();
-		right.Initialize();
-		auto result = make_unique<ContinuousBlock>(buffer_manager, sorting_state, payload_state);
-
-		idx_t next;
+		result->InitializeWrite(state);
 		bool left_smaller[PhysicalOrder::MERGE_STRIDE];
-
-		while (!left.Done() || !right.Done()) {
-			if (!right.Done() && !left.Done()) {
-				for (next = 0; !left.Done() && !right.Done() && next < PhysicalOrder::MERGE_STRIDE; next++) {
-					if (left.LessThan(right)) {
-						left_smaller[next] = true;
-						result->CopyEntryFrom(left);
-						left.Advance();
-					} else {
-						left_smaller[next] = false;
-						result->CopyEntryFrom(right);
-						right.Advance();
+		while (true) {
+			auto l_remaining = left.Remaining();
+			auto r_remaining = right.Remaining();
+			if (l_remaining + r_remaining == 0) {
+				break;
+			}
+			const idx_t next = MinValue(l_remaining + r_remaining, PhysicalOrder::MERGE_STRIDE);
+			ComputeNextMerge(next, left_smaller);
+			MergeNext(next, left_smaller);
+			if (!sorting_state.ALL_CONSTANT) {
+				for (idx_t col_idx = 0; col_idx < sorting_state.CONSTANT_SIZE.size(); col_idx++) {
+					if (!sorting_state.CONSTANT_SIZE[col_idx]) {
+						MergeNext(*result->var_sorting_chunks[col_idx], *left.var_sorting_chunks[col_idx],
+						          *right.var_sorting_chunks[col_idx], next, left_smaller);
 					}
 				}
-			} else if (!left.Done()) {
-				for (next = 0; !left.Done() && next < PhysicalOrder::MERGE_STRIDE; next++) {
-					left_smaller[next] = true;
-					result->CopyEntryFrom(left);
-					left.Advance();
-				}
-			} else {
-				for (next = 0; !right.Done() && next < PhysicalOrder::MERGE_STRIDE; next++) {
-					left_smaller[next] = false;
-					result->CopyEntryFrom(right);
-					right.Advance();
-				}
 			}
-			// TODO: use the merge stride thing to copy more efficiently (HOT loops)
+			MergeNext(*result->payload_chunk, *left.payload_chunk, *right.payload_chunk, next, left_smaller);
 		}
 		D_ASSERT(result->Count() == left.Count() + right.Count());
 
@@ -1151,13 +1041,280 @@ public:
 		}
 	}
 
+	void ComputeNextMerge(const idx_t &count, bool left_smaller[]) {
+		idx_t l_block_idx = left.block_idx;
+		idx_t r_block_idx = right.block_idx;
+		idx_t l_entry_idx = left.entry_idx;
+		idx_t r_entry_idx = right.entry_idx;
+
+		RowDataBlock *left_block = nullptr;
+		RowDataBlock *right_block = nullptr;
+		unique_ptr<BufferHandle> l_block_handle;
+		unique_ptr<BufferHandle> r_block_handle;
+		data_ptr_t l_ptr;
+		data_ptr_t r_ptr;
+
+		idx_t compared = 0;
+		while (compared < count) {
+			// move to the next block (if needed)
+			if (l_block_idx < left.sorting_blocks.size() && l_entry_idx == left.sorting_blocks[l_block_idx].count) {
+				l_block_idx++;
+				l_entry_idx = 0;
+			}
+			if (r_block_idx < right.sorting_blocks.size() && r_entry_idx == right.sorting_blocks[r_block_idx].count) {
+				r_block_idx++;
+				r_entry_idx = 0;
+			}
+			// pin the blocks
+			if (l_block_idx < left.sorting_blocks.size()) {
+				left_block = &left.sorting_blocks[l_block_idx];
+				l_block_handle = buffer_manager.Pin(left_block->block);
+				l_ptr = l_block_handle->node->buffer;
+			}
+			if (r_block_idx < right.sorting_blocks.size()) {
+				right_block = &right.sorting_blocks[r_block_idx];
+				r_block_handle = buffer_manager.Pin(right_block->block);
+				r_ptr = r_block_handle->node->buffer;
+			}
+			const idx_t &l_count = left_block ? left_block->count : 0;
+			const idx_t &r_count = right_block ? right_block->count : 0;
+			// fill left_smaller array and copy sorting data
+			if (sorting_state.ALL_CONSTANT) {
+				// all sorting columns are constant size
+				if (l_block_idx < left.sorting_blocks.size() && r_block_idx < right.sorting_blocks.size()) {
+					// neither left or right side is exhausted - compare in loop
+					for (; compared < count && l_entry_idx < l_count && r_entry_idx < r_count; compared++) {
+						// compare
+						const bool l_smaller = memcmp(l_ptr, r_ptr, sorting_state.COMP_SIZE) < 0;
+						left_smaller[compared] = l_smaller;
+						// use comparison bool (0 or 1) to increment entries and pointers
+						l_entry_idx += l_smaller;
+						r_entry_idx += one - l_smaller;
+						l_ptr += l_smaller * sorting_state.ENTRY_SIZE;
+						r_ptr += (one - l_smaller) * sorting_state.ENTRY_SIZE;
+					}
+				} else if (r_block_idx == right.sorting_blocks.size()) {
+					// right side is exhausted
+					std::fill_n(left_smaller + compared, count - compared, true);
+					compared = count;
+				} else {
+					// left side is exhausted
+					std::fill_n(left_smaller + compared, count - compared, false);
+					compared = count;
+				}
+			} else {
+				// TODO: variable size stuff
+			}
+		}
+	}
+
+	void MergeNext(const idx_t &count, const bool left_smaller[]) {
+		idx_t l_block_idx = left.block_idx;
+		idx_t l_entry_idx = left.entry_idx;
+		idx_t r_block_idx = right.block_idx;
+		idx_t r_entry_idx = right.entry_idx;
+
+		RowDataBlock *left_block = nullptr;
+		RowDataBlock *right_block = nullptr;
+		unique_ptr<BufferHandle> l_block_handle;
+		unique_ptr<BufferHandle> r_block_handle;
+		data_ptr_t l_ptr;
+		data_ptr_t r_ptr;
+
+		RowDataBlock *result_block = &result->sorting_blocks.back();
+		auto result_handle = buffer_manager.Pin(result_block->block);
+		data_ptr_t result_ptr = result_handle->node->buffer;
+
+		idx_t copied = 0;
+		while (copied < count) {
+			// move to the next block (if needed)
+			if (l_block_idx < left.sorting_blocks.size() && l_entry_idx == left.sorting_blocks[l_block_idx].count) {
+				l_block_idx++;
+				l_entry_idx = 0;
+			}
+			if (r_block_idx < right.sorting_blocks.size() && r_entry_idx == right.sorting_blocks[r_block_idx].count) {
+				r_block_idx++;
+				r_entry_idx = 0;
+			}
+			// pin the blocks
+			if (l_block_idx < left.sorting_blocks.size()) {
+				left_block = &left.sorting_blocks[l_block_idx];
+				l_block_handle = buffer_manager.Pin(left_block->block);
+				l_ptr = l_block_handle->node->buffer;
+			}
+			if (r_block_idx < right.sorting_blocks.size()) {
+				right_block = &right.sorting_blocks[r_block_idx];
+				r_block_handle = buffer_manager.Pin(right_block->block);
+				r_ptr = r_block_handle->node->buffer;
+			}
+			const idx_t &l_count = left_block ? left_block->count : 0;
+			const idx_t &r_count = right_block ? right_block->count : 0;
+			// create new result block (if needed)
+			if (result_block->count == result_block->CAPACITY) {
+				result->CreateBlock();
+				result_block = &result->sorting_blocks.back();
+				result_handle = buffer_manager.Pin(result_block->block);
+				result_ptr = result_handle->node->buffer;
+			}
+			const idx_t next = MinValue(count - copied, result_block->CAPACITY - result_block->count);
+			// copy using computed merge
+			idx_t i;
+			if (l_block_idx < left.sorting_blocks.size() && r_block_idx < right.sorting_blocks.size()) {
+				// neither left or right side is exhausted
+				for (i = 0; i < next && l_entry_idx < l_count && r_entry_idx < r_count; i++) {
+					const bool l_smaller = left_smaller[copied + i];
+					// use comparison bool (0 or 1) to copy an entry from either side
+					memcpy(result_ptr, l_ptr, l_smaller * sorting_state.ENTRY_SIZE);
+					memcpy(result_ptr, r_ptr, (one - l_smaller) * sorting_state.ENTRY_SIZE);
+					result_ptr += sorting_state.ENTRY_SIZE;
+					result_block->count++;
+					// use the comparison bool to increment entries and pointers
+					l_entry_idx += l_smaller;
+					r_entry_idx += one - l_smaller;
+					l_ptr += l_smaller * sorting_state.COMP_SIZE;
+					r_ptr += (one - l_smaller) * sorting_state.COMP_SIZE;
+				}
+			} else if (r_block_idx == right.sorting_blocks.size()) {
+				// right side is exhausted
+				const idx_t l_next = MinValue(next, l_count - l_entry_idx);
+				for (i = 0; i < l_next; i++) {
+					memcpy(result_ptr, l_ptr, sorting_state.ENTRY_SIZE);
+					result_ptr += sorting_state.ENTRY_SIZE;
+					result_block->count++;
+					l_ptr += sorting_state.ENTRY_SIZE;
+					l_entry_idx++;
+				}
+			} else {
+				// left side is exhausted
+				const idx_t r_next = MinValue(next, r_count - r_entry_idx);
+				for (i = 0; i < r_next; i++) {
+					memcpy(result_ptr, r_ptr, sorting_state.ENTRY_SIZE);
+					result_ptr += sorting_state.ENTRY_SIZE;
+					result_block->count++;
+					r_ptr += sorting_state.ENTRY_SIZE;
+					r_entry_idx++;
+				}
+			}
+			copied += i;
+		}
+
+		left.block_idx = l_block_idx;
+		left.entry_idx = l_entry_idx;
+		right.block_idx = r_block_idx;
+		right.entry_idx = r_entry_idx;
+	}
+
+	void MergeNext(ContinuousChunk &result_cc, ContinuousChunk &left_cc, ContinuousChunk &right_cc, const idx_t &count,
+	               const bool left_smaller[]) {
+		idx_t l_block_idx = left_cc.data_block_idx;
+		idx_t l_entry_idx = left_cc.data_entry_idx;
+		idx_t r_block_idx = right_cc.data_block_idx;
+		idx_t r_entry_idx = right_cc.data_entry_idx;
+
+		RowDataBlock *left_block = nullptr;
+		RowDataBlock *right_block = nullptr;
+		unique_ptr<BufferHandle> l_block_handle;
+		unique_ptr<BufferHandle> r_block_handle;
+		data_ptr_t l_ptr;
+		data_ptr_t r_ptr;
+
+		RowDataBlock *result_block = &result_cc.data_blocks.back();
+		auto result_handle = buffer_manager.Pin(result_block->block);
+		data_ptr_t result_ptr = result_handle->node->buffer;
+
+		idx_t copied = 0;
+		while (copied < count) {
+			// move to the next block (if needed)
+			if (l_block_idx < left_cc.data_blocks.size() && l_entry_idx == left_cc.data_blocks[l_block_idx].count) {
+				l_block_idx++;
+				l_entry_idx = 0;
+			}
+			if (r_block_idx < right_cc.data_blocks.size() && r_entry_idx == right_cc.data_blocks[r_block_idx].count) {
+				r_block_idx++;
+				r_entry_idx = 0;
+			}
+			// pin the blocks
+			if (l_block_idx < left_cc.data_blocks.size()) {
+				left_block = &left_cc.data_blocks[l_block_idx];
+				l_block_handle = buffer_manager.Pin(left_block->block);
+				l_ptr = l_block_handle->node->buffer;
+			}
+			if (r_block_idx < right_cc.data_blocks.size()) {
+				right_block = &right_cc.data_blocks[r_block_idx];
+				r_block_handle = buffer_manager.Pin(right_block->block);
+				r_ptr = r_block_handle->node->buffer;
+			}
+			const idx_t &l_count = left_block ? left_block->count : 0;
+			const idx_t &r_count = right_block ? right_block->count : 0;
+			// TODO: the copying
+			idx_t i;
+			if (result_cc.CONSTANT_SIZE) {
+				// create new result block (if needed)
+				if (result_block->count == result_block->CAPACITY) {
+					result_cc.CreateDataBlock();
+					result_block = &result_cc.data_blocks.back();
+					result_handle = buffer_manager.Pin(result_block->block);
+					result_ptr = result_handle->node->buffer;
+				}
+                const idx_t next = MinValue(count - copied, result_block->CAPACITY - result_block->count);
+				const idx_t entry_size = result_cc.ENTRY_SIZE;
+				if (l_block_idx < left_cc.data_blocks.size() && r_block_idx < right_cc.data_blocks.size()) {
+					// neither left or right side is exhausted
+					for (i = 0; i < next && l_entry_idx < l_count && r_entry_idx < r_count; i++) {
+						const bool l_smaller = left_smaller[copied + i];
+						// use comparison bool (0 or 1) to copy an entry from either side
+						memcpy(result_ptr, l_ptr, l_smaller * entry_size);
+						memcpy(result_ptr, r_ptr, (one - l_smaller) * entry_size);
+						result_ptr += entry_size;
+						result_block->count++;
+						// use the comparison bool to increment entries and pointers
+						l_entry_idx += l_smaller;
+						r_entry_idx += one - l_smaller;
+						l_ptr += l_smaller * entry_size;
+						r_ptr += (one - l_smaller) * entry_size;
+					}
+				} else if (r_block_idx == right_cc.data_blocks.size()) {
+					// right side is exhausted
+					const idx_t l_next = MinValue(next, l_count - l_entry_idx);
+					for (i = 0; i < l_next; i++) {
+						memcpy(result_ptr, l_ptr, entry_size);
+						result_ptr += entry_size;
+						result_block->count++;
+						l_ptr += entry_size;
+						l_entry_idx++;
+					}
+				} else {
+					// left side is exhausted
+					const idx_t r_next = MinValue(next, r_count - r_entry_idx);
+					for (i = 0; i < r_next; i++) {
+						memcpy(result_ptr, r_ptr, entry_size);
+						result_ptr += entry_size;
+						result_block->count++;
+						r_ptr += entry_size;
+						r_entry_idx++;
+					}
+				}
+			} else {
+				// TODO: init new block
+				i = 0;
+			}
+			copied += i;
+		}
+	}
+
 private:
 	Pipeline &parent;
 	ClientContext &context;
+	BufferManager &buffer_manager;
 	OrderGlobalState &state;
+	const SortingState &sorting_state;
+	const PayloadState &payload_state;
 
 	ContinuousBlock &left;
 	ContinuousBlock &right;
+	unique_ptr<ContinuousBlock> result;
+
+	const uint8_t one = 1;
 };
 
 void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> state_p) {
@@ -1169,10 +1326,64 @@ void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 	}
 
 	idx_t count = 0;
+	idx_t sorting_block_capacity = 0;
 	for (auto &sb : state.sorted_blocks) {
-		count += sb->sorting_blocks[0].count;
+		const auto &sorting_block = sb->sorting_blocks.back();
+		count += sorting_block.count;
+		if (sorting_block.CAPACITY > sorting_block_capacity) {
+			sorting_block_capacity = sorting_block.CAPACITY;
+		}
 	}
 	state.total_count = count;
+	state.sorting_block_capacity = sorting_block_capacity;
+
+	const auto &sorting_state = *state.sorting_state;
+	if (!sorting_state.ALL_CONSTANT) {
+		for (idx_t col_idx = 0; col_idx < sorting_state.CONSTANT_SIZE.size(); col_idx++) {
+			idx_t var_data_capacity = 0;
+			idx_t var_data_entry_size = 0;
+			idx_t var_offset_capacity = 0;
+			if (sorting_state.CONSTANT_SIZE[col_idx]) {
+				for (auto &sb : state.sorted_blocks) {
+					const auto &data_block = sb->var_sorting_chunks[col_idx]->data_blocks.back();
+					if (data_block.CAPACITY > var_data_capacity) {
+						var_data_capacity = data_block.CAPACITY;
+					}
+					if (data_block.ENTRY_SIZE > var_data_entry_size) {
+						var_data_entry_size = data_block.ENTRY_SIZE;
+					}
+					const auto &offset_block = sb->var_sorting_chunks[col_idx]->offset_blocks.back();
+					if (offset_block.CAPACITY > var_offset_capacity) {
+						var_offset_capacity = offset_block.CAPACITY;
+					}
+				}
+			}
+			state.var_sorting_data_block_dims.emplace_back(var_data_capacity, var_data_entry_size);
+			state.var_sorting_offset_block_capacity.push_back(var_offset_capacity);
+		}
+	}
+
+    const auto &payload_state = *state.payload_state;
+	idx_t payload_capacity = 0;
+	idx_t payload_entry_size = 0;
+	idx_t payload_offset_capacity = 0;
+	for (auto &sb : state.sorted_blocks) {
+		auto &data_block = sb->payload_chunk->data_blocks.back();
+		if (data_block.CAPACITY > payload_capacity) {
+			payload_capacity = data_block.CAPACITY;
+		}
+		if (data_block.ENTRY_SIZE > payload_entry_size) {
+			payload_entry_size = data_block.ENTRY_SIZE;
+		}
+		if (payload_state.HAS_VARIABLE_SIZE) {
+			auto &offset_block = sb->payload_chunk->offset_blocks.back();
+			if (offset_block.CAPACITY > payload_offset_capacity) {
+				payload_capacity = offset_block.CAPACITY;
+			}
+		}
+	}
+	state.payload_data_block_dims = make_pair(payload_capacity, payload_entry_size);
+	state.payload_offset_block_capacity = payload_offset_capacity;
 
 	if (state.sorted_blocks.size() > 1) {
 		PhysicalOrder::ScheduleMergeTasks(pipeline, context, state);
