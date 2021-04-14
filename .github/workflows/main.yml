@@ -99,6 +99,7 @@ jobs:
         python scripts/windows_ci.py
         cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_REST=1 -DJDBC_DRIVER=1
         cmake --build . --config Release
+        cmake --build . --target shell --config Release
 
     - name: Test
       run: test/Release/unittest.exe
@@ -148,6 +149,7 @@ jobs:
       run: |
         cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=Win32 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DJDBC_DRIVER=1
         cmake --build . --config Release
+        cmake --build . --target shell --config Release
 
     - name: Test
       run: test/Release/unittest.exe
