@@ -13,7 +13,8 @@
 /* COMPILATION:
 python3 scripts/amalgamation.py --extended
 python3 scripts/parquet_amalgamation.py
-clang++ -std=c++11 -Isrc/amalgamation src/amalgamation/parquet-amalgamation.cpp src/amalgamation/duckdb.cpp extension/parquet/parquetcli.cpp
+clang++ -std=c++11 -Isrc/amalgamation src/amalgamation/parquet-amalgamation.cpp src/amalgamation/duckdb.cpp
+extension/parquet/parquetcli.cpp
 ./a.out test/sql/copy/parquet/data/zstd.parquet --all two=bar
 */
 
@@ -77,7 +78,6 @@ int main(int argc, const char **argv) {
 		TableFilter filter(Value(splits[1]).CastAs(return_types[idx]), ExpressionType::COMPARE_EQUAL, idx);
 		filters.filters[idx].push_back(filter);
 	}
-
 
 	ParquetReaderScanState state;
 	// nullptr here gets the filters
