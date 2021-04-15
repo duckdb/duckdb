@@ -99,10 +99,14 @@ static unique_ptr<FunctionData> StructExtractBind(ClientContext &context, Scalar
 	return make_unique<StructExtractBindData>(key, key_index, return_type);
 }
 
+ScalarFunction StructExtractFun::GetFunction() {
+	return ScalarFunction("struct_extract", {LogicalType::STRUCT, LogicalType::VARCHAR}, LogicalType::ANY,
+	                      StructExtractFunction, false, StructExtractBind);
+}
+
 void StructExtractFun::RegisterFunction(BuiltinFunctions &set) {
 	// the arguments and return types are actually set in the binder function
-	ScalarFunction fun("struct_extract", {LogicalType::STRUCT, LogicalType::VARCHAR}, LogicalType::ANY,
-	                   StructExtractFunction, false, StructExtractBind);
+	auto fun = GetFunction();
 	set.AddFunction(fun);
 }
 
