@@ -91,7 +91,7 @@ static void MergeValidityRange(idx_t start, idx_t count, UpdateInfo *current, Ve
 	auto info_data = (bool *)current->tuple_data;
 	auto &result_mask = FlatVector::Validity(result);
 	for (idx_t i = 0; i < current->N; i++) {
-		if (current->tuples[i] > start + count) {
+		if (current->tuples[i] >= start + count) {
 			// finished merging this segment
 			break;
 		}
