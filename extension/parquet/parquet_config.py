@@ -1,6 +1,6 @@
 import os
 # list all include directories
-include_directories = [os.path.sep.join(x.split('/')) for x in ['extension/parquet/include', 'third_party/parquet', 'third_party/snappy', 'third_party/thrift', 'third_party/zstd']]
+include_directories = [os.path.sep.join(x.split('/')) for x in ['extension/parquet/include', 'third_party/parquet', 'third_party/snappy', 'third_party/thrift', 'third_party/zstd/include']]
 # source files
 source_files = [os.path.sep.join(x.split('/')) for x in ['extension/parquet/parquet-extension.cpp', 'third_party/parquet/parquet_constants.cpp',  'third_party/parquet/parquet_types.cpp',  'third_party/thrift/thrift/protocol/TProtocol.cpp',  'third_party/thrift/thrift/transport/TTransportException.cpp',  'third_party/thrift/thrift/transport/TBufferTransports.cpp',  'third_party/snappy/snappy.cc',  'third_party/snappy/snappy-sinksource.cc']]
 # zstd

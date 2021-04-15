@@ -297,6 +297,7 @@ docs
 
 # tests
 test/test.sql
+duckdb_benchmark_data/
 
 # SQLite logic tests
 test/evidence/

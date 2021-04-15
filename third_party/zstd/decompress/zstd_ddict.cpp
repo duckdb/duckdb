@@ -15,17 +15,17 @@
 *  Dependencies
 *********************************************************/
 #include <string.h>      /* memcpy, memmove, memset */
-#include "../common/mem.h"         /* low level memory routines */
-#define FSE_STATIC_LINKING_ONLY
-#include "../common/fse.h"
-#define HUF_STATIC_LINKING_ONLY
-#include "../common/huf.h"
-#include "zstd_decompress_internal.h"
-#include "zstd_ddict.h"
+#include "zstd/common/mem.h"         /* low level memory routines */
+#include "zstd/common/fse.h"
+#include "zstd/common/fse_static.h"
+#include "zstd/common/huf.h"
+#include "zstd/common/huf_static.h"
+#include "zstd/decompress/zstd_decompress_internal.h"
+#include "zstd/decompress/zstd_ddict.h"
 
-#if defined(ZSTD_LEGACY_SUPPORT) && (ZSTD_LEGACY_SUPPORT>=1)
-#  include "../legacy/zstd_legacy.h"
-#endif
+// #if defined(ZSTD_LEGACY_SUPPORT) && (ZSTD_LEGACY_SUPPORT>=1)
+// #  include "../legacy/zstd_legacy.h"
+// #endif
 
 namespace duckdb_zstd {
 

@@ -78,6 +78,9 @@ bool ParsedExpression::Equals(const BaseExpression *other) const {
 		return OperatorExpression::Equals((OperatorExpression *)this, (OperatorExpression *)other);
 	case ExpressionClass::PARAMETER:
 		return true;
+	case ExpressionClass::POSITIONAL_REFERENCE:
+		return PositionalReferenceExpression::Equals((PositionalReferenceExpression *)this,
+		                                             (PositionalReferenceExpression *)other);
 	case ExpressionClass::STAR:
 		return true;
 	case ExpressionClass::TABLE_STAR:
@@ -145,6 +148,9 @@ unique_ptr<ParsedExpression> ParsedExpression::Deserialize(Deserializer &source)
 		break;
 	case ExpressionClass::PARAMETER:
 		result = ParameterExpression::Deserialize(type, source);
+		break;
+	case ExpressionClass::POSITIONAL_REFERENCE:
+		result = PositionalReferenceExpression::Deserialize(type, source);
 		break;
 	case ExpressionClass::STAR:
 		result = StarExpression::Deserialize(type, source);

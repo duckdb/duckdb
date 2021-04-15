@@ -7,7 +7,10 @@
 #include "zstd.h"
 #include <iostream>
 
+#include "duckdb.hpp"
+#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/types/chunk_collection.hpp"
+#endif
 
 namespace duckdb {
 
@@ -131,13 +134,10 @@ void ColumnReader::PrepareRead(parquet_filter_t &filter) {
 }
 
 void ColumnReader::PreparePage(idx_t compressed_page_size, idx_t uncompressed_page_size) {
-	auto trans = (ThriftFileTransport *)protocol->getTransport().get();
+	auto &trans = (ThriftFileTransport &)*protocol->getTransport();
 
 	block = make_shared<ResizeableBuffer>(compressed_page_size + 1);
-	trans->read((uint8_t *)block->ptr, compressed_page_size);
-
-	//			page_hdr.printTo(std::cout);
-	//			std::cout << '\n';
+	trans.read((uint8_t *)block->ptr, compressed_page_size);
 
 	shared_ptr<ResizeableBuffer> unpacked_block;
 	if (chunk->meta_data.codec != CompressionCodec::UNCOMPRESSED) {
@@ -209,8 +209,9 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 	                                                          : page_hdr.data_page_header_v2.encoding;
 
 	if (HasRepeats()) {
-		// TODO there seems to be some confusion whether this is in the bytes for v2
-		uint32_t rep_length = block->read<uint32_t>();
+		uint32_t rep_length = page_hdr.type == PageType::DATA_PAGE
+		                          ? block->read<uint32_t>()
+		                          : page_hdr.data_page_header_v2.repetition_levels_byte_length;
 		block->available(rep_length);
 		repeated_decoder =
 		    make_unique<RleBpDecoder>((const uint8_t *)block->ptr, rep_length, ComputeBitWidth(max_repeat));
@@ -218,8 +219,9 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 	}
 
 	if (HasDefines()) {
-		// TODO there seems to be some confusion whether this is in the bytes for v2
-		uint32_t def_length = block->read<uint32_t>();
+		uint32_t def_length = page_hdr.type == PageType::DATA_PAGE
+		                          ? block->read<uint32_t>()
+		                          : page_hdr.data_page_header_v2.definition_levels_byte_length;
 		block->available(def_length);
 		defined_decoder =
 		    make_unique<RleBpDecoder>((const uint8_t *)block->ptr, def_length, ComputeBitWidth(max_define));
@@ -249,8 +251,8 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
                          Vector &result) {
 	// we need to reset the location because multiple column readers share the same protocol
-	auto trans = (ThriftFileTransport *)protocol->getTransport().get();
-	trans->SetLocation(chunk_read_offset);
+	auto &trans = (ThriftFileTransport &)*protocol->getTransport();
+	trans.SetLocation(chunk_read_offset);
 
 	idx_t result_offset = 0;
 	auto to_read = num_values;
@@ -300,7 +302,7 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t 
 		to_read -= read_now;
 	}
 	group_rows_available -= num_values;
-	chunk_read_offset = trans->GetLocation();
+	chunk_read_offset = trans.GetLocation();
 
 	return num_values;
 }

@@ -8,8 +8,8 @@
  * You may select, at your option, one of the above-listed licenses.
  */
 
-#include "zstd_compress_internal.h"
-#include "zstd_lazy.h"
+#include "zstd/compress/zstd_compress_internal.h"
+#include "zstd/compress/zstd_lazy.h"
 
 
 /*-*************************************

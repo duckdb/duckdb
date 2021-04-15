@@ -8,11 +8,11 @@
  * You may select, at your option, one of the above-listed licenses.
  */
 
-#include "zstd_ldm.h"
+#include "zstd/compress/zstd_ldm.h"
 
-#include "../common/debug.h"
-#include "zstd_fast.h"          /* ZSTD_fillHashTable() */
-#include "zstd_double_fast.h"   /* ZSTD_fillDoubleHashTable() */
+#include "zstd/common/debug.h"
+#include "zstd/compress/zstd_fast.h"          /* ZSTD_fillHashTable() */
+#include "zstd/compress/zstd_double_fast.h"   /* ZSTD_fillDoubleHashTable() */
 
 #define LDM_BUCKET_SIZE_LOG 3
 #define LDM_MIN_MATCH_LENGTH 64

@@ -34,6 +34,7 @@ class ExportStatement;
 class VacuumStatement;
 class RelationStatement;
 class SetStatement;
+class LoadStatement;
 
 //===--------------------------------------------------------------------===//
 // Query Node
@@ -60,6 +61,7 @@ class FunctionExpression;
 class LambdaExpression;
 class OperatorExpression;
 class ParameterExpression;
+class PositionalReferenceExpression;
 class StarExpression;
 class SubqueryExpression;
 class WindowExpression;

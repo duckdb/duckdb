@@ -20,9 +20,9 @@
 #ifndef _THRIFT_THRIFT_H_
 #define _THRIFT_THRIFT_H_ 1
 
-#include <thrift/transport/PlatformSocket.h>
+#include "thrift/transport/PlatformSocket.h"
 
-#include <thrift/thrift-config.h>
+#include "thrift/thrift-config.h"
 
 #include <stdio.h>
 #include <assert.h>
@@ -42,7 +42,7 @@
 #include <exception>
 #include <typeinfo>
 
-#include <thrift/TLogging.h>
+#include "thrift/TLogging.h"
 //#include <thrift/TOutput.h>
 
 #define THRIFT_UNUSED_VARIABLE(x) ((void)(x))
