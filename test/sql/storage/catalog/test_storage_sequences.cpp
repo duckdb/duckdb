@@ -21,9 +21,9 @@ TEST_CASE("Use sequences over different runs without checkpointing", "[storage]"
 		REQUIRE(CHECK_COLUMN(result, 0, {1}));
 		result = con.Query("SELECT currval('seq')");
 		REQUIRE(CHECK_COLUMN(result, 0, {1}));
-		result = con.Query("SELECT nextval('seq_cycle')");
-		REQUIRE(CHECK_COLUMN(result, 0, {2}));
 		result = con.Query("SELECT currval('seq')");
+		REQUIRE(CHECK_COLUMN(result, 0, {1}));
+		result = con.Query("SELECT nextval('seq_cycle')");
 		REQUIRE(CHECK_COLUMN(result, 0, {2}));
 	}
 	// reload the database from disk twice
@@ -36,7 +36,11 @@ TEST_CASE("Use sequences over different runs without checkpointing", "[storage]"
 		Connection con(db);
 		result = con.Query("SELECT nextval('seq')");
 		REQUIRE(CHECK_COLUMN(result, 0, {2}));
+		result = con.Query("SELECT currval('seq')");
+		REQUIRE(CHECK_COLUMN(result, 0, {2}));
 		result = con.Query("SELECT nextval('seq_cycle')");
+		REQUIRE(CHECK_COLUMN(result, 0, {3}));
+		result = con.Query("SELECT currval('seq_cycle')");
 		REQUIRE(CHECK_COLUMN(result, 0, {3}));
 	}
 	// reload again
@@ -48,6 +52,10 @@ TEST_CASE("Use sequences over different runs without checkpointing", "[storage]"
 		REQUIRE(CHECK_COLUMN(result, 1, {4}));
 		result = con.Query("SELECT nextval('seq_cycle')");
 		REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+		result = con.Query("SELECT currval('seq'), currval('seq_cycle')");
+		REQUIRE(CHECK_COLUMN(result, 0, {4}));
+		REQUIRE(CHECK_COLUMN(result, 1, {1}));
 
 		// drop sequence
 		REQUIRE_NO_FAIL(con.Query("DROP SEQUENCE seq;"));
