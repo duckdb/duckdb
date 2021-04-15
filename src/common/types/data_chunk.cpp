@@ -250,7 +250,7 @@ void DataChunk::ToArrowArray(ArrowArray *out_array) {
 	out_array->length = size();
 	out_array->n_children = ColumnCount();
 	out_array->n_buffers = 1;
-	out_array->buffers = { nullptr }; // there is no actual buffer there since we don't have NULLs
+	out_array->buffers = root_holder->buffers.data(); // there is no actual buffer there since we don't have NULLs
 	out_array->offset = 0;
 	out_array->null_count = 0; // needs to be 0
 	out_array->dictionary = nullptr;
@@ -264,7 +264,7 @@ void DataChunk::ToArrowArray(ArrowArray *out_array) {
 		vector.Reference(data[col_idx]);
 
 		child.private_data = nullptr;
-		child.release = nullptr;
+		child.release = ReleaseDuckDBArrowArray;
 		child.n_children = 0;
 		child.null_count = -1; // unknown
 		child.offset = 0;

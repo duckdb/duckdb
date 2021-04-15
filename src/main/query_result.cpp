@@ -133,7 +133,7 @@ void QueryResult::ToArrowSchema(ArrowSchema *out_schema) {
 
 		// Child is cleaned up by parent
 		child.private_data = nullptr;
-		child.release = nullptr;	
+		child.release = ReleaseDuckDBArrowSchema;	
 
 		// Store the child schema
 		child.flags = ARROW_FLAG_NULLABLE;
