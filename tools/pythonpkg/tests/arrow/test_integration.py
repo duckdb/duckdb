@@ -1,11 +1,19 @@
 import duckdb
-import pyarrow
-import pyarrow.parquet
 import os
 import sys
+try:
+    import pyarrow
+    import pyarrow.parquet
+    import urllib.request
+
+    can_run = True
+except:
+    can_run = False
 
 class TestArrowIntegration(object):
     def test_parquet_roundtrip(self, duckdb_cursor):
+        if not can_run:
+            return
         parquet_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)),'data','userdata1.parquet')
         cols = 'id, first_name, last_name, email, gender, ip_address, cc, country, birthdate, salary, title, comments'
 
@@ -31,6 +39,8 @@ class TestArrowIntegration(object):
             assert rel_from_arrow.equals(rel_from_duckdb, check_metadata=True)
 
     def test_unsigned_roundtrip(self,duckdb_cursor):
+        if not can_run:
+            return
         parquet_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)),'data','unsigned.parquet')
         data = (pyarrow.array([1,2,3,4,5,255], type=pyarrow.uint8()),pyarrow.array([1,2,3,4,5,65535], \
             type=pyarrow.uint16()),pyarrow.array([1,2,3,4,5,4294967295], type=pyarrow.uint32()),\
