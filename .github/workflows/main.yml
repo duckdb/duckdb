@@ -701,6 +701,11 @@ jobs:
       with:
         python-version: '3.7'
 
+    - name: Setup cmake
+      uses: jwlawson/actions-setup-cmake@v1.8
+      with:
+        cmake-version: '3.2'
+
     - name: Install
       run: pip install cibuildwheel twine
 
