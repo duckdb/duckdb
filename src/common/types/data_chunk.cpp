@@ -210,7 +210,7 @@ void DataChunk::Print() {
 struct DuckDBArrowArrayChildHolder {
 	ArrowArray array;
 	// need max three pointers for strings
-	duckdb::array<const void *, 3> buffers = {nullptr, nullptr, nullptr};
+	duckdb::array<const void *, 3> buffers = {{nullptr, nullptr, nullptr}};
 	Vector vector = {};
 	unique_ptr<data_t[]> string_offsets = nullptr;
 	unique_ptr<data_t[]> string_data = nullptr;
@@ -219,7 +219,7 @@ struct DuckDBArrowArrayChildHolder {
 struct DuckDBArrowArrayHolder {
 	vector<DuckDBArrowArrayChildHolder> children = {};
 	vector<ArrowArray *> children_ptrs = {};
-	array<const void *, 1> buffers = {nullptr};
+	array<const void *, 1> buffers = {{nullptr}};
 };
 
 static void ReleaseDuckDBArrowArray(ArrowArray *array) {
