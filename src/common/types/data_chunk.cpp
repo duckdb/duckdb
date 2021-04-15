@@ -1,5 +1,6 @@
 #include "duckdb/common/types/data_chunk.hpp"
 
+#include "duckdb/common/array.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/printer.hpp"
@@ -13,7 +14,6 @@
 #include "duckdb/common/arrow.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/to_string.hpp"
-#include <array>
 
 namespace duckdb {
 
@@ -210,16 +210,16 @@ void DataChunk::Print() {
 struct DuckDBArrowArrayChildHolder {
 	ArrowArray array;
 	// need max three pointers for strings
-	std::array<const void *, 3> buffers = {nullptr, nullptr, nullptr};
+	duckdb::array<const void *, 3> buffers = {nullptr, nullptr, nullptr};
 	Vector vector = {};
 	unique_ptr<data_t[]> string_offsets = nullptr;
 	unique_ptr<data_t[]> string_data = nullptr;
 };
 
 struct DuckDBArrowArrayHolder {
-	std::vector<DuckDBArrowArrayChildHolder> children = {};
-	std::vector<ArrowArray *> children_ptrs = {};
-	std::array<const void *, 1> buffers = {nullptr};
+	vector<DuckDBArrowArrayChildHolder> children = {};
+	vector<ArrowArray *> children_ptrs = {};
+	array<const void *, 1> buffers = {nullptr};
 };
 
 static void ReleaseDuckDBArrowArray(ArrowArray *array) {

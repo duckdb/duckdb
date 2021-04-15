@@ -1,6 +1,7 @@
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/arrow.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 
@@ -91,9 +92,9 @@ string QueryResult::HeaderToString() {
 
 struct DuckDBArrowSchemaHolder {
 	// unused in children
-	std::vector<ArrowSchema> children = {};
+	vector<ArrowSchema> children = {};
 	// unused in children
-	std::vector<ArrowSchema *> children_ptrs = {};
+	vector<ArrowSchema *> children_ptrs = {};
 };
 
 static void ReleaseDuckDBArrowSchema(ArrowSchema *schema) {
