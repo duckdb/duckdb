@@ -29,9 +29,9 @@ static int64_t CurrSequenceValue(Transaction &transaction, SequenceCatalogEntry 
 	lock_guard<mutex> seqlock(seq->lock);
 	int64_t result;
 	if (seq->usage_count == 0u) {
-		throw SequenceException("currval: sequence has not been used yet.");
+		throw SequenceException("currval: sequence is not yet defined in this session");
 	}
-	result = seq->counter - seq->increment;
+	result = seq->last_value;
 	return result;
 }
 
