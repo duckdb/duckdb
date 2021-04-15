@@ -8,8 +8,8 @@
 namespace duckdb {
 
 StandardColumnData::StandardColumnData(DatabaseInstance &db, DataTableInfo &table_info, LogicalType type,
-                                       idx_t column_idx)
-    : ColumnData(db, table_info, move(type), column_idx), validity(db, table_info, column_idx) {
+                                       idx_t column_idx, ColumnData *parent)
+    : ColumnData(db, table_info, move(type), column_idx, parent), validity(db, table_info, column_idx, this) {
 }
 
 bool StandardColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
@@ -44,15 +44,14 @@ void StandardColumnData::InitializeScan(ColumnScanState &state) {
 	state.child_states.push_back(move(child_state));
 }
 
-void StandardColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t vector_idx) {
-	idx_t row_idx = vector_idx * STANDARD_VECTOR_SIZE;
+void StandardColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) {
 	state.current = (ColumnSegment *)data.GetSegment(row_idx);
 	state.row_index = row_idx;
 	state.initialized = false;
 
 	// initialize the validity segment
 	ColumnScanState child_state;
-	validity.InitializeScanWithOffset(child_state, vector_idx);
+	validity.InitializeScanWithOffset(child_state, row_idx);
 	state.child_states.push_back(move(child_state));
 }
 
@@ -108,9 +107,9 @@ void StandardColumnData::RevertAppend(row_t start_row) {
 	validity.RevertAppend(start_row);
 }
 
-void StandardColumnData::Update(Transaction &transaction, Vector &update_vector, Vector &row_ids, idx_t count) {
-	ColumnData::Update(transaction, update_vector, row_ids, count);
+void StandardColumnData::Update(Transaction &transaction, Vector &update_vector, Vector &row_ids, idx_t count, bool is_root) {
 	validity.Update(transaction, update_vector, row_ids, count);
+	ColumnData::Update(transaction, update_vector, row_ids, count, is_root);
 }
 
 void StandardColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {

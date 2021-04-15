@@ -132,36 +132,36 @@ void CommitState::WriteDelete(DeleteInfo *info) {
 	log->WriteDelete(*delete_chunk);
 }
 
-void CommitState::WriteUpdate(UpdateInfo *info) {
+void CommitState::WriteUpdate(WALUpdateInfo *info) {
+	D_ASSERT(info->count > 0);
 	D_ASSERT(log);
+	auto &column_data = *info->column;
 	// switch to the current table, if necessary
-	auto &column_data = info->segment->column_data;
 	SwitchTable(&column_data.table_info, UndoFlags::UPDATE_TUPLE);
 
-	vector<LogicalType> update_types;
-	if (column_data.type.id() == LogicalTypeId::VALIDITY) {
-		update_types.push_back(LogicalType::BOOLEAN);
-	} else {
-		update_types.push_back(column_data.type);
-	}
-	update_types.push_back(LOGICAL_ROW_TYPE);
+	vector<LogicalType> update_types {
+		column_data.RootType(),
+		LOGICAL_ROW_TYPE
+	};
 
 	update_chunk = make_unique<DataChunk>();
 	update_chunk->Initialize(update_types);
 
 	// fetch the updated values from the base segment
-	idx_t base_idx = info->vector_index * STANDARD_VECTOR_SIZE;
-	idx_t count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, info->segment->parent.count - base_idx);
-	info->segment->FetchCommitted(base_idx, count, update_chunk->data[0], 0);
+	ColumnScanState state;
+	auto first_id = info->rows[0];
+	column_data.InitializeScanWithOffset(state, first_id);
+	column_data.IndexScan(state, update_chunk->data[0], true);
 
 	// write the row ids into the chunk
+	SelectionVector sel(STANDARD_VECTOR_SIZE);
 	auto row_ids = FlatVector::GetData<row_t>(update_chunk->data[1]);
-	idx_t start = info->segment->parent.start + info->vector_index * STANDARD_VECTOR_SIZE;
-	for (idx_t i = 0; i < info->N; i++) {
-		row_ids[info->tuples[i]] = start + info->tuples[i];
+	for (idx_t i = 0; i < info->count; i++) {
+		auto idx = info->rows[i] - first_id;
+		sel.set_index(i, idx);
+		row_ids[idx] = info->rows[i];
 	}
-	SelectionVector sel(info->tuples);
-	update_chunk->Slice(sel, info->N);
+	update_chunk->Slice(sel, info->count);
 
 	log->WriteUpdate(*update_chunk, column_data.column_idx);
 }
@@ -206,10 +206,16 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::UPDATE_TUPLE: {
 		// update:
 		auto info = (UpdateInfo *)data;
-		if (HAS_LOG && !info->segment->column_data.table_info.IsTemporary()) {
-			WriteUpdate(info);
-		}
 		info->version_number = commit_id;
+		break;
+	}
+	case UndoFlags::WAL_UPDATE: {
+		auto info = (WALUpdateInfo *)data;
+		if (!HAS_LOG) {
+			break;
+		}
+		D_ASSERT(!info->column->table_info.IsTemporary());
+		WriteUpdate(info);
 		break;
 	}
 	default:
@@ -250,6 +256,8 @@ void CommitState::RevertCommit(UndoFlags type, data_ptr_t data) {
 		info->version_number = transaction_id;
 		break;
 	}
+	case UndoFlags::WAL_UPDATE:
+		break;
 	default:
 		throw NotImplementedException("UndoBuffer - don't know how to revert commit of this type!");
 	}

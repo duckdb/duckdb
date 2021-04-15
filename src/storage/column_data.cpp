@@ -16,12 +16,20 @@
 #include "duckdb/storage/checkpoint/write_overflow_strings_to_disk.hpp"
 #include "duckdb/storage/table/validity_column_data.hpp"
 #include "duckdb/storage/table/standard_column_data.hpp"
+#include "duckdb/transaction/transaction.hpp"
 
 namespace duckdb {
 
-ColumnData::ColumnData(DatabaseInstance &db, DataTableInfo &table_info, LogicalType type, idx_t column_idx)
-    : table_info(table_info), type(move(type)), db(db), column_idx(column_idx) {
+ColumnData::ColumnData(DatabaseInstance &db, DataTableInfo &table_info, LogicalType type, idx_t column_idx, ColumnData *parent)
+    : table_info(table_info), type(move(type)), db(db), column_idx(column_idx), parent(parent) {
 	statistics = BaseStatistics::CreateEmpty(type);
+}
+
+const LogicalType &ColumnData::RootType() const {
+	if (parent) {
+		return parent->RootType();
+	}
+	return type;
 }
 
 template<bool SCAN_COMMITTED>
@@ -176,7 +184,7 @@ void ColumnData::RevertAppend(row_t start_row) {
 	transient.RevertAppend(start_row);
 }
 
-void ColumnData::Update(Transaction &transaction, Vector &update_vector, Vector &row_ids, idx_t count) {
+void ColumnData::Update(Transaction &transaction, Vector &update_vector, Vector &row_ids, idx_t count, bool is_root) {
 	auto ids = FlatVector::GetData<row_t>(row_ids);
 	idx_t index = 0;
 	idx_t offset = 0;
@@ -216,6 +224,9 @@ void ColumnData::Update(Transaction &transaction, Vector &update_vector, Vector 
 			state.current->updates->Update(transaction, update_slice, ids + offset, index - offset, base_data);
 		} else {
 			state.current->updates->Update(transaction, update_vector, ids + offset, index - offset, base_data);
+		}
+		if (is_root) {
+			transaction.PushWALUpdate(*this, ids + offset, index - offset);
 		}
 
 		offset = index;

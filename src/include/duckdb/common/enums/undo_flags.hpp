@@ -17,7 +17,8 @@ enum class UndoFlags : uint32_t { // far to big but aligned (TM)
 	CATALOG_ENTRY = 1,
 	INSERT_TUPLE = 2,
 	DELETE_TUPLE = 3,
-	UPDATE_TUPLE = 4
+	UPDATE_TUPLE = 4,
+	WAL_UPDATE = 5
 };
 
 } // namespace duckdb

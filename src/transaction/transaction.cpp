@@ -12,6 +12,8 @@
 #include "duckdb/transaction/delete_info.hpp"
 #include "duckdb/transaction/update_info.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/storage/column_data.hpp"
 
 #include <cstring>
 
@@ -65,6 +67,23 @@ UpdateInfo *Transaction::CreateUpdateInfo(idx_t type_size, idx_t entries) {
 	update_info->tuple_data = ((data_ptr_t)update_info) + sizeof(UpdateInfo) + sizeof(sel_t) * update_info->max;
 	update_info->version_number = transaction_id;
 	return update_info;
+}
+
+void Transaction::PushWALUpdate(ColumnData &column, row_t rows[], idx_t count) {
+	auto &storage = StorageManager::GetStorageManager(column.db);
+	if (storage.InMemory()) {
+		return;
+	}
+	if (column.table_info.IsTemporary()) {
+		return;
+	}
+	auto undo_data = undo_buffer.CreateEntry(
+	    UndoFlags::WAL_UPDATE, sizeof(WALUpdateInfo) + sizeof(row_t) * count);
+	auto update_info = (WALUpdateInfo *) undo_data;
+	update_info->column = &column;
+	update_info->count = count;
+	update_info->rows = (row_t *) (undo_data + sizeof(WALUpdateInfo));
+	memcpy(update_info->rows, &rows[0], sizeof(row_t) * count);
 }
 
 bool Transaction::ChangesMade() {

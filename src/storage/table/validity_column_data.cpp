@@ -4,8 +4,8 @@
 
 namespace duckdb {
 
-ValidityColumnData::ValidityColumnData(DatabaseInstance &db, DataTableInfo &table_info, idx_t column_idx)
-    : ColumnData(db, table_info, LogicalType(LogicalTypeId::VALIDITY), column_idx) {
+ValidityColumnData::ValidityColumnData(DatabaseInstance &db, DataTableInfo &table_info, idx_t column_idx, ColumnData *parent)
+    : ColumnData(db, table_info, LogicalType(LogicalTypeId::VALIDITY), column_idx, parent) {
 }
 
 bool ValidityColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
@@ -18,8 +18,7 @@ void ValidityColumnData::InitializeScan(ColumnScanState &state) {
 	state.initialized = false;
 }
 
-void ValidityColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t vector_idx) {
-	idx_t row_idx = vector_idx * STANDARD_VECTOR_SIZE;
+void ValidityColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) {
 	state.current = (ColumnSegment *)data.GetSegment(row_idx);
 	state.row_index = row_idx;
 	state.initialized = false;

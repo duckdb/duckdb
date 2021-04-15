@@ -48,7 +48,7 @@ public:
 
 class ColumnData {
 public:
-	ColumnData(DatabaseInstance &db, DataTableInfo &table_info, LogicalType type, idx_t column_idx);
+	ColumnData(DatabaseInstance &db, DataTableInfo &table_info, LogicalType type, idx_t column_idx, ColumnData *parent);
 	virtual ~ColumnData() {
 	}
 
@@ -61,9 +61,14 @@ public:
 	idx_t column_idx;
 	//! The segments holding the data of the column
 	SegmentTree data;
+	//! The parent column (if any)
+	ColumnData *parent;
 
 public:
 	virtual bool CheckZonemap(ColumnScanState &state, TableFilter &filter) = 0;
+
+	//! The root type of the column
+	const LogicalType &RootType() const;
 
 	void ScanVector(Transaction &transaction, ColumnScanState &state, Vector &result);
 	void ScanCommitted(ColumnScanState &state, Vector &result);
@@ -71,7 +76,7 @@ public:
 	//! Initialize a scan of the column
 	virtual void InitializeScan(ColumnScanState &state) = 0;
 	//! Initialize a scan starting at the specified offset
-	virtual void InitializeScanWithOffset(ColumnScanState &state, idx_t vector_idx) = 0;
+	virtual void InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) = 0;
 	//! Scan the next vector from the column
 	virtual void Scan(Transaction &transaction, ColumnScanState &state, Vector &result) = 0;
 	//! Scan the next vector from the column and apply a selection vector to filter the data
@@ -91,7 +96,12 @@ public:
 	virtual void RevertAppend(row_t start_row);
 
 	//! Update the specified row identifiers
-	virtual void Update(Transaction &transaction, Vector &updates, Vector &row_ids, idx_t count);
+	//! The "is_root" marker determines if we should write the updates to the WAL
+	//! This is set separately because a single column can contain multiple child columns
+	//! Yet we only want to write the update to the WAL once (for the root column)
+	//! For example, for an INTEGER column, the main integer column has "is_root" set to true
+	//! Whereas the child validity column has "is_root" set to false
+	virtual void Update(Transaction &transaction, Vector &updates, Vector &row_ids, idx_t count, bool is_root = false);
 
 	//! Fetch the vector from the column data that belongs to this specific row
 	virtual void Fetch(ColumnScanState &state, row_t row_id, Vector &result);

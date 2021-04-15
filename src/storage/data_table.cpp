@@ -222,13 +222,12 @@ void DataTable::InitializeScanWithOffset(TableScanState &state, const vector<col
                                          TableFilterSet *table_filters, idx_t start_row, idx_t end_row) {
 	D_ASSERT(start_row % STANDARD_VECTOR_SIZE == 0);
 	D_ASSERT(end_row > start_row);
-	idx_t vector_offset = start_row / STANDARD_VECTOR_SIZE;
 	// initialize a column scan state for each column
 	state.column_scans = unique_ptr<ColumnScanState[]>(new ColumnScanState[column_ids.size()]);
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto column = column_ids[i];
 		if (column != COLUMN_IDENTIFIER_ROW_ID) {
-			columns[column]->InitializeScanWithOffset(state.column_scans[i], vector_offset);
+			columns[column]->InitializeScanWithOffset(state.column_scans[i], start_row);
 		} else {
 			state.column_scans[i].current = nullptr;
 		}
@@ -945,8 +944,9 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto column = column_ids[i];
 		D_ASSERT(column != COLUMN_IDENTIFIER_ROW_ID);
+		D_ASSERT(columns[column]->type.id() == updates.data[i].GetType().id());
 
-		columns[column]->Update(transaction, updates.data[i], row_ids, updates.size());
+		columns[column]->Update(transaction, updates.data[i], row_ids, updates.size(), true);
 	}
 }
 

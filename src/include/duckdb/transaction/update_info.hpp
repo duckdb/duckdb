@@ -57,4 +57,10 @@ struct UpdateInfo {
 	void Verify();
 };
 
+struct WALUpdateInfo {
+	ColumnData *column;
+	idx_t count;
+	row_t *rows;
+};
+
 } // namespace duckdb
