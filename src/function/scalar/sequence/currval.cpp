@@ -32,8 +32,6 @@ static int64_t CurrSequenceValue(Transaction &transaction, SequenceCatalogEntry 
 		throw SequenceException("currval: sequence has not been used yet.");
 	}
 	result = seq->counter - seq->increment;
-	seq->usage_count++; // should this be incremented?
-	transaction.sequence_usage[seq] = SequenceValue(seq->usage_count, seq->counter);
 	return result;
 }
 
