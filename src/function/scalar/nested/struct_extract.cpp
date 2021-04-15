@@ -101,7 +101,7 @@ static unique_ptr<FunctionData> StructExtractBind(ClientContext &context, Scalar
 
 ScalarFunction StructExtractFun::GetFunction() {
 	return ScalarFunction("struct_extract", {LogicalType::STRUCT, LogicalType::VARCHAR}, LogicalType::ANY,
-	                   StructExtractFunction, false, StructExtractBind);
+	                      StructExtractFunction, false, StructExtractBind);
 }
 
 void StructExtractFun::RegisterFunction(BuiltinFunctions &set) {
