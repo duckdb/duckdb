@@ -284,7 +284,7 @@ struct PythonTableArrowArrayStream {
 	}
 
 	static void MyStreamRelease(struct ArrowArrayStream *stream) {
-	    py::gil_scoped_acquire acquire;
+		py::gil_scoped_acquire acquire;
 		if (!stream->release) {
 			return;
 		}
@@ -293,7 +293,7 @@ struct PythonTableArrowArrayStream {
 	}
 
 	static const char *MyStreamGetLastError(struct ArrowArrayStream *stream) {
-	    py::gil_scoped_acquire acquire;
+		py::gil_scoped_acquire acquire;
 		if (!stream->release) {
 			return "stream was released";
 		}
