@@ -210,7 +210,7 @@ void DataChunk::Print() {
 struct DuckDBArrowArrayChildHolder {
 	ArrowArray array;
 	// need max three pointers for strings
-	std::array<const void*, 3> buffers = { nullptr, nullptr, nullptr }; 
+	std::array<const void *, 3> buffers = { nullptr, nullptr, nullptr }; 
 	Vector vector = {};
 	unique_ptr<data_t[]> string_offsets = nullptr;
 	unique_ptr<data_t[]> string_data = nullptr;
@@ -218,8 +218,8 @@ struct DuckDBArrowArrayChildHolder {
 
 struct DuckDBArrowArrayHolder {
 	std::vector<DuckDBArrowArrayChildHolder> children = {};
-	std::vector<ArrowArray*> children_ptrs = {};
-	std::array<const void*, 1> buffers = { nullptr };
+	std::vector<ArrowArray *> children_ptrs = {};
+	std::array<const void *, 1> buffers = {nullptr};
 };
 
 static void ReleaseDuckDBArrowArray(ArrowArray *array) {
@@ -227,7 +227,7 @@ static void ReleaseDuckDBArrowArray(ArrowArray *array) {
 		return;
 	}
 	array->release = nullptr;
-	auto holder = static_cast<DuckDBArrowArrayHolder*>(array->private_data);
+	auto holder = static_cast<DuckDBArrowArrayHolder *>(array->private_data);
 	delete holder;
 }
 
@@ -241,7 +241,7 @@ void DataChunk::ToArrowArray(ArrowArray *out_array) {
 	// Allocate the children
 	root_holder->children.resize(ColumnCount());
 	root_holder->children_ptrs.resize(ColumnCount(), nullptr);
-	for (size_t i = 0; i <  ColumnCount(); ++i) {
+	for (size_t i = 0; i < ColumnCount(); ++i) {
 		root_holder->children_ptrs[i] = &root_holder->children[i].array;
 	}
 	out_array->children = root_holder->children_ptrs.data();
@@ -378,7 +378,6 @@ void DataChunk::ToArrowArray(ArrowArray *out_array) {
 	// Release ownership to caller
 	out_array->private_data = root_holder.release();
 	out_array->release = ReleaseDuckDBArrowArray;
-
 }
 
 } // namespace duckdb

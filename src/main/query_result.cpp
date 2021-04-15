@@ -93,7 +93,7 @@ struct DuckDBArrowSchemaHolder {
 	// unused in children
 	std::vector<ArrowSchema> children = {};
 	// unused in children
-	std::vector<ArrowSchema*> children_ptrs = {};
+	std::vector<ArrowSchema *> children_ptrs = {};
 };
 
 static void ReleaseDuckDBArrowSchema(ArrowSchema *schema) {
@@ -101,7 +101,7 @@ static void ReleaseDuckDBArrowSchema(ArrowSchema *schema) {
 		return;
 	}
 	schema->release = nullptr;
-	auto holder = static_cast<DuckDBArrowSchemaHolder*>(schema->private_data);
+	auto holder = static_cast<DuckDBArrowSchemaHolder *>(schema->private_data);
 	delete holder;
 }
 
@@ -114,13 +114,13 @@ void QueryResult::ToArrowSchema(ArrowSchema *out_schema) {
 	// Allocate the children
 	root_holder->children.resize(ColumnCount());
 	root_holder->children_ptrs.resize(ColumnCount(), nullptr);
-	for (size_t i = 0; i <  ColumnCount(); ++i) {
+	for (size_t i = 0; i < ColumnCount(); ++i) {
 		root_holder->children_ptrs[i] = &root_holder->children[i];
 	}
 	out_schema->children = root_holder->children_ptrs.data();
 	out_schema->n_children = ColumnCount();
 
-	// Store the schema 
+	// Store the schema
 	out_schema->format = "+s"; // struct apparently
 	out_schema->flags = 0;
 	out_schema->metadata = nullptr;
@@ -129,11 +129,11 @@ void QueryResult::ToArrowSchema(ArrowSchema *out_schema) {
 
 	// Configure all child schemas
 	for (idx_t col_idx = 0; col_idx < ColumnCount(); col_idx++) {
-		auto& child = root_holder->children[col_idx];
+		auto &child = root_holder->children[col_idx];
 
 		// Child is cleaned up by parent
 		child.private_data = nullptr;
-		child.release = ReleaseDuckDBArrowSchema;	
+		child.release = ReleaseDuckDBArrowSchema;
 
 		// Store the child schema
 		child.flags = ARROW_FLAG_NULLABLE;
