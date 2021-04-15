@@ -13,6 +13,7 @@
 #include "duckdb/common/arrow.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/to_string.hpp"
+#include <array>
 
 namespace duckdb {
 
