@@ -472,3 +472,9 @@ INSERT INTO strings VALUES ('nonexistant_seq')
 statement error
 SELECT s, nextval(s) FROM strings
 
+# currval causes error for new sequence
+statement ok
+CREATE SEQUENCE fresh;
+
+statement error
+select currval('fresh');

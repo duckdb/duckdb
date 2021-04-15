@@ -15,7 +15,7 @@ SELECT nextval('seq')
 1
 
 statement ok
-CREATE TABLE test (a INTEGER DEFAULT nextval('seq'), b INTEGER, c INTEGER DEFUALT currval('seq'));
+CREATE TABLE test (a INTEGER DEFAULT nextval('seq'), b INTEGER, c INTEGER DEFAULT currval('seq'));
 
 statement ok
 INSERT INTO test (b) VALUES (11)
@@ -26,7 +26,9 @@ restart
 query III
 SELECT * FROM test ORDER BY b
 ----
-2	11 2
+2
+11
+2
 
 # verify that the sequence was used during the append
 statement ok
@@ -35,9 +37,15 @@ INSERT INTO test (b) VALUES (12), (13)
 query III
 SELECT * FROM test ORDER BY b
 ----
-2	11 2
-3	12 3
-4	13 4
+2
+11
+2
+3
+12
+3
+4
+13
+4
 
 # restart and insert one more time
 restart
@@ -45,11 +53,21 @@ restart
 statement ok
 INSERT INTO test (b) VALUES (14), (15)
 
-query II
+query III
 SELECT * FROM test ORDER BY b
 ----
-2	11 2
-3	12 3
-4	13 4
-5	14 5
-6	15 6
+2
+11
+2
+3
+12
+3
+4
+13
+4
+5
+14
+5
+6
+15
+6

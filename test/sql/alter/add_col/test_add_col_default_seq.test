@@ -17,8 +17,12 @@ ALTER TABLE test ADD COLUMN m INTEGER DEFAULT nextval('seq')
 query III
 SELECT * FROM test
 ----
-1 1 1
-2 2 2
+1 
+1 
+1
+2 
+2 
+2
 
 statement ok
 ALTER TABLE test ADD COLUMN n INTEGER DEFAULT currval('seq')
@@ -26,5 +30,11 @@ ALTER TABLE test ADD COLUMN n INTEGER DEFAULT currval('seq')
 query IIII
 SELECT * FROM test
 ----
-1 1 1 2
-2 2 2 2
+1 
+1 
+1 
+2
+2 
+2 
+2 
+2
