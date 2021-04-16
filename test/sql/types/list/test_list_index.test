@@ -77,17 +77,12 @@ SELECT a[-3:-1] FROM (VALUES (LIST_VALUE(42, 43, 44))) tbl(a)
 ----
 [42, 43]
 
-statement error
+query T
 SELECT a[-5:] FROM (VALUES (LIST_VALUE(42, 43, 44))) tbl(a)
 ----
-[42, 43]
+NULL
 
-statement error
-SELECT a[-5:] FROM (VALUES (LIST_VALUE(42, 43, 44))) tbl(a)
-----
-[42, 43]
-
-statement error
+query T
 SELECT a[:5] FROM (VALUES (LIST_VALUE(42, 43, 44))) tbl(a)
 ----
-[42, 43]
+NULL
