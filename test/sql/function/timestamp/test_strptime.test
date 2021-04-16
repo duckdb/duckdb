@@ -6,6 +6,37 @@ statement ok
 PRAGMA enable_verification
 
 query I
+select strptime('2020-12-31 21:25:58.745232', '%Y-%m-%d %H:%M:%S.%f');
+----
+2020-12-31 21:25:58.745232
+
+query I
+select strptime('2020-12-31 21:25:58.745232', '%Y-%m-%d %H:%M:%S.%f');
+----
+2020-12-31 21:25:58.745232
+
+query I
+select strptime('2020-12-31 21:25:58.745232+00', '%Y-%m-%d %H:%M:%S.%f%z');
+----
+2020-12-31 21:25:58.745232
+
+query I
+select strptime('2020-12-31 21:25:58.745232+0000', '%Y-%m-%d %H:%M:%S.%f%z');
+----
+2020-12-31 21:25:58.745232
+
+query I
+select strptime('2020-12-31 21:25:58.745232+02', '%Y-%m-%d %H:%M:%S.%f%z');
+----
+2020-12-31 19:25:58.745232
+
+query I
+select strptime('2020-12-31 21:25:58.745232+0215', '%Y-%m-%d %H:%M:%S.%f%z');
+----
+2020-12-31 19:10:58.745232
+
+
+query I
 SELECT strptime('21 June, 2018', '%d %B, %Y')
 ----
 2018-06-21 00:00:00
@@ -87,6 +118,37 @@ query I
 SELECT strptime('', NULL)
 ----
 NULL
+
+# UTC offset
+query I
+select strptime('2020-12-31 21:25:58.745232', '%Y-%m-%d %H:%M:%S.%f');
+----
+2020-12-31 21:25:58.745232
+
+query I
+select strptime('2020-12-31 21:25:58.745232', '%Y-%m-%d %H:%M:%S.%f');
+----
+2020-12-31 21:25:58.745232
+
+query I
+select strptime('2020-12-31 21:25:58.745232+00', '%Y-%m-%d %H:%M:%S.%f%z');
+----
+2020-12-31 21:25:58.745232
+
+query I
+select strptime('2020-12-31 21:25:58.745232+0000', '%Y-%m-%d %H:%M:%S.%f%z');
+----
+2020-12-31 21:25:58.745232
+
+query I
+select strptime('2020-12-31 21:25:58.745232+02', '%Y-%m-%d %H:%M:%S.%f%z');
+----
+2020-12-31 19:25:58.745232
+
+query I
+select strptime('2020-12-31 21:25:58.745232+0215', '%Y-%m-%d %H:%M:%S.%f%z');
+----
+2020-12-31 19:10:58.745232
 
 # different errors
 # month out of range

@@ -91,6 +91,8 @@ idx_t StrfTimeFormat::GetSpecifierLength(StrTimeSpecifier specifier, date_t date
 		return len;
 	}
 	case StrTimeSpecifier::UTC_OFFSET:
+		// +00
+		return 3;
 	case StrTimeSpecifier::TZ_NAME:
 		// empty for now
 		return 0;
@@ -318,6 +320,10 @@ char *StrfTimeFormat::WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t
 		target = WritePadded3(target, data[6] / 1000);
 		break;
 	case StrTimeSpecifier::UTC_OFFSET:
+		*target++ = '+';
+		*target++ = '0';
+		*target++ = '0';
+		break;
 	case StrTimeSpecifier::TZ_NAME:
 		// always empty for now, FIXME when we have timestamp with tz
 		break;
@@ -931,6 +937,35 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 				result_data[1] = month + 1;
 				break;
 			}
+			case StrTimeSpecifier::UTC_OFFSET: {
+				// parse the next 2 characters
+				if (pos + 3 > size) {
+					// no characters left to parse
+					error_message = "Expected AM/PM";
+					error_position = pos;
+					return false;
+				}
+				char pa_char = char(std::tolower(data[pos]));
+				char m_char = char(std::tolower(data[pos + 1]));
+				if (m_char != 'm') {
+					error_message = "Expected AM/PM";
+					error_position = pos;
+					return false;
+				}
+				if (pa_char == 'p') {
+					ampm = TimeSpecifierAMOrPM::TIME_SPECIFIER_PM;
+				} else if (pa_char == 'a') {
+					ampm = TimeSpecifierAMOrPM::TIME_SPECIFIER_AM;
+				} else {
+					error_message = "Expected AM/PM";
+					error_position = pos;
+					return false;
+				}
+				pos += 2;
+				break;
+			}
+
+
 			default:
 				throw NotImplementedException("Unsupported specifier for strptime");
 			}
