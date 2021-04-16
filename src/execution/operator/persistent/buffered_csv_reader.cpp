@@ -519,7 +519,7 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 	std::map<LogicalTypeId, vector<const char *>> format_template_candidates = {
 	    {LogicalTypeId::DATE, {"%m-%d-%Y", "%m-%d-%y", "%d-%m-%Y", "%d-%m-%y", "%Y-%m-%d", "%y-%m-%d"}},
 	    {LogicalTypeId::TIMESTAMP,
-	     {"%m-%d-%Y %I:%M:%S %p", "%m-%d-%y %I:%M:%S %p", "%d-%m-%Y %H:%M:%S", "%d-%m-%y %H:%M:%S", "%Y-%m-%d %H:%M:%S",
+	     {"%Y-%m-%d %H:%M:%S.%f%z", "%Y-%m-%d %H:%M:%S.%f", "%m-%d-%Y %I:%M:%S %p", "%m-%d-%y %I:%M:%S %p", "%d-%m-%Y %H:%M:%S", "%d-%m-%y %H:%M:%S", "%Y-%m-%d %H:%M:%S",
 	      "%y-%m-%d %H:%M:%S"}},
 	};
 
@@ -583,7 +583,7 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 							for (const auto &t : format_template_candidates[sql_type.id()]) {
 								const auto format_string = GenerateDateFormat(separator, t);
 								// don't parse ISO 8601
-								if (format_string.find("%Y-%m-%d") == string::npos) {
+								if (format_string.find("%Y-%m-%d") == string::npos || format_string.find("%z") != string::npos) {
 									type_format_candidates.emplace_back(format_string);
 								}
 							}
