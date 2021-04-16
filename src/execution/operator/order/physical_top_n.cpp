@@ -29,7 +29,8 @@ public:
 			auto &expr = order.expression;
 			sort_types.push_back(expr->return_type);
 			order_types.push_back(order.type);
-			null_order_types.push_back(order.type == OrderType::DESCENDING ? FlipNullOrder(order.null_order) : order.null_order);
+			null_order_types.push_back(order.type == OrderType::DESCENDING ? FlipNullOrder(order.null_order)
+			                                                               : order.null_order);
 			executor.AddExpression(*expr);
 		}
 		// preallocate the heap
