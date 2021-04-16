@@ -15,6 +15,8 @@
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
+#include "duckdb/storage/table/standard_column_data.hpp"
+
 #include "duckdb/common/chrono.hpp"
 
 namespace duckdb {
@@ -24,26 +26,22 @@ DataTable::DataTable(DatabaseInstance &db, const string &schema, const string &t
     : info(make_shared<DataTableInfo>(schema, table)), types(move(types_p)), db(db), total_rows(0), is_root(true) {
 	// set up the segment trees for the column segments
 	for (idx_t i = 0; i < types.size(); i++) {
-		auto column_data = make_shared<ColumnData>(db, *info, types[i], i);
+		auto column_data = make_shared<StandardColumnData>(db, *info, types[i], i);
 		columns.push_back(move(column_data));
 	}
 
 	// initialize the table with the existing data from disk, if any
-	if (data && !data->table_data[0].empty()) {
+	if (data && !data->column_data.empty()) {
+		D_ASSERT(data->column_data.size() == types.size());
 		for (idx_t i = 0; i < types.size(); i++) {
-			columns[i]->SetStatistics(move(data->column_stats[i]));
-		}
-		// first append all the segments to the set of column segments
-		for (idx_t i = 0; i < types.size(); i++) {
-			columns[i]->Initialize(data->table_data[i]);
-			if (columns[i]->persistent_rows != columns[0]->persistent_rows) {
-				throw Exception("Column length mismatch in table load!");
-			}
+			columns[i]->Initialize(*data->column_data[i]);
 		}
 		total_rows = columns[0]->persistent_rows;
 		versions = move(data->versions);
 	} else {
 		versions = make_shared<SegmentTree>();
+	}
+	if (total_rows == 0) {
 		// append one (empty) morsel to the table
 		auto segment = make_unique<MorselInfo>(0, MorselInfo::MORSEL_SIZE);
 		versions->AppendSegment(move(segment));
@@ -60,7 +58,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 	idx_t new_column_idx = columns.size();
 
 	types.push_back(new_column_type);
-	auto column_data = make_shared<ColumnData>(db, *info, new_column_type, new_column_idx);
+	auto column_data = make_shared<StandardColumnData>(db, *info, new_column_type, new_column_idx);
 	columns.push_back(move(column_data));
 
 	// fill the column with its DEFAULT value, or NULL if none is specified
@@ -138,7 +136,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 	types[changed_idx] = target_type;
 
 	// construct a new column data for this type
-	auto column_data = make_shared<ColumnData>(db, *info, target_type, changed_idx);
+	auto column_data = make_shared<StandardColumnData>(db, *info, target_type, changed_idx);
 
 	ColumnAppendState append_state;
 	column_data->InitializeAppend(append_state);
@@ -303,13 +301,16 @@ void DataTable::Scan(Transaction &transaction, DataChunk &result, TableScanState
 	transaction.storage.Scan(state.local_state, column_ids, result);
 }
 
-bool DataTable::CheckZonemap(TableScanState &state, TableFilterSet *table_filters, idx_t &current_row) {
+bool DataTable::CheckZonemap(TableScanState &state, const vector<column_t> &column_ids, TableFilterSet *table_filters,
+                             idx_t &current_row) {
 	if (!table_filters) {
 		return true;
 	}
 	for (auto &table_filter : table_filters->filters) {
 		for (auto &predicate_constant : table_filter.second) {
-			bool read_segment = columns[predicate_constant.column_index]->CheckZonemap(
+			D_ASSERT(predicate_constant.column_index < column_ids.size());
+			auto base_column_idx = column_ids[predicate_constant.column_index];
+			bool read_segment = columns[base_column_idx]->CheckZonemap(
 			    state.column_scans[predicate_constant.column_index], predicate_constant);
 			if (!read_segment) {
 				//! We can skip this partition
@@ -338,15 +339,15 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 	auto max_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, max_row - current_row);
 	idx_t vector_offset = (current_row - state.base_row) / STANDARD_VECTOR_SIZE;
 	//! first check the zonemap if we have to scan this partition
-	if (!CheckZonemap(state, state.table_filters, current_row)) {
+	if (!CheckZonemap(state, column_ids, state.table_filters, current_row)) {
 		return true;
 	}
 	// second, scan the version chunk manager to figure out which tuples to load for this transaction
 	SelectionVector valid_sel(STANDARD_VECTOR_SIZE);
-	if (vector_offset >= MorselInfo::MORSEL_VECTOR_COUNT) {
+	while (vector_offset >= MorselInfo::MORSEL_VECTOR_COUNT) {
 		state.version_info = (MorselInfo *)state.version_info->next.get();
 		state.base_row += MorselInfo::MORSEL_SIZE;
-		vector_offset = 0;
+		vector_offset -= MorselInfo::MORSEL_VECTOR_COUNT;
 	}
 	idx_t count = state.version_info->GetSelVector(transaction, vector_offset, valid_sel, max_count);
 	if (count == 0) {
@@ -1050,7 +1051,7 @@ unique_ptr<BaseStatistics> DataTable::GetStatistics(ClientContext &context, colu
 void DataTable::Checkpoint(TableDataWriter &writer) {
 	// checkpoint each individual column
 	for (size_t i = 0; i < columns.size(); i++) {
-		writer.CheckpointColumn(*columns[i], i);
+		columns[i]->Checkpoint(writer);
 	}
 }
 
@@ -1061,15 +1062,7 @@ void DataTable::CheckpointDeletes(TableDataWriter &writer) {
 }
 
 void DataTable::CommitDropColumn(idx_t index) {
-	auto &block_manager = BlockManager::GetBlockManager(db);
-	auto segment = (ColumnSegment *)columns[index]->data.GetRootSegment();
-	while (segment) {
-		if (segment->segment_type == ColumnSegmentType::PERSISTENT) {
-			auto &persistent = (PersistentSegment &)*segment;
-			block_manager.MarkBlockAsModified(persistent.block_id);
-		}
-		segment = (ColumnSegment *)segment->next.get();
-	}
+	columns[index]->CommitDropColumn();
 }
 
 idx_t DataTable::GetTotalRows() {

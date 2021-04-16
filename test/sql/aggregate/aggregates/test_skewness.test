@@ -67,7 +67,7 @@ require vector_size 512
 
 query I
 select skewness(v2) over (partition by v)
-    from aggr;
+    from aggr order by v;
 ----
 -0.423273
 -0.423273

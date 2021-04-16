@@ -40,6 +40,10 @@ bool BoundWindowExpression::Equals(const BaseExpression *other_p) const {
 		return false;
 	}
 
+	return KeysAreCompatible(other);
+}
+
+bool BoundWindowExpression::KeysAreCompatible(const BoundWindowExpression *other) const {
 	// check if the partitions are equivalent
 	if (partitions.size() != other->partitions.size()) {
 		return false;

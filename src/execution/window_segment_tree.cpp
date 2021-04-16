@@ -77,7 +77,7 @@ void WindowSegmentTree::WindowSegmentValue(idx_t l_idx, idx_t begin, idx_t end) 
 	idx_t start_in_vector = begin % STANDARD_VECTOR_SIZE;
 	if (l_idx == 0) {
 		const auto input_count = input_ref->ColumnCount();
-		if (start_in_vector + inputs.size() < STANDARD_VECTOR_SIZE) {
+		if (start_in_vector + inputs.size() <= STANDARD_VECTOR_SIZE) {
 			auto &chunk = input_ref->GetChunkForRow(begin);
 			for (idx_t i = 0; i < input_count; ++i) {
 				auto &v = inputs.data[i];

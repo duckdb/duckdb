@@ -87,9 +87,9 @@ LogicalType BoundComparisonExpression::BindComparison(LogicalType left_type, Log
 	}
 	case LogicalTypeId::VARCHAR:
 		// for comparison with strings, we prefer to bind to the numeric types
-		if (left_type.IsNumeric()) {
+		if (left_type.IsNumeric() || left_type.id() == LogicalTypeId::BOOLEAN) {
 			return left_type;
-		} else if (right_type.IsNumeric()) {
+		} else if (right_type.IsNumeric() || right_type.id() == LogicalTypeId::BOOLEAN) {
 			return right_type;
 		} else {
 			// else: check if collations are compatible
