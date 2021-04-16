@@ -951,8 +951,7 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 					return false;
 				}
 				pos++;
-				if (!StringUtil::CharacterIsDigit(data[pos]) ||
-				    !StringUtil::CharacterIsDigit(data[pos + 1])) {
+				if (!StringUtil::CharacterIsDigit(data[pos]) || !StringUtil::CharacterIsDigit(data[pos + 1])) {
 					error_message = "Expected +HH[MM] or -HH[MM]";
 					error_position = pos;
 					return false;
@@ -963,8 +962,7 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 				}
 				result_data[3] -= hour_offset;
 				pos += 2;
-				if (pos + 2 > size ||
-				    !StringUtil::CharacterIsDigit(data[pos]) ||
+				if (pos + 2 > size || !StringUtil::CharacterIsDigit(data[pos]) ||
 				    !StringUtil::CharacterIsDigit(data[pos + 1])) {
 					// no MM specifier
 					break;
@@ -978,7 +976,6 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 				pos += 2;
 				break;
 			}
-
 
 			default:
 				throw NotImplementedException("Unsupported specifier for strptime");
