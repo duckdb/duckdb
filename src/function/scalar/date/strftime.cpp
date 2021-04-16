@@ -320,9 +320,8 @@ char *StrfTimeFormat::WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t
 		target = WritePadded3(target, data[6] / 1000);
 		break;
 	case StrTimeSpecifier::UTC_OFFSET:
-		*target++ = '+';
-		*target++ = '0';
-		*target++ = '0';
+		memcpy(target, "+00", 3);
+		target += 3;
 		break;
 	case StrTimeSpecifier::TZ_NAME:
 		// always empty for now, FIXME when we have timestamp with tz
