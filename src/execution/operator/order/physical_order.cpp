@@ -398,11 +398,13 @@ public:
 	ContinuousBlock(BufferManager &buffer_manager, const SortingState &sorting_state, const PayloadState &payload_state)
 	    : block_idx(0), entry_idx(0), buffer_manager(buffer_manager), sorting_state(sorting_state),
 	      payload_state(payload_state) {
-		for (idx_t col_idx = 0; col_idx < sorting_state.CONSTANT_SIZE[col_idx]; col_idx++) {
-			if (!sorting_state.CONSTANT_SIZE[col_idx]) {
-				var_sorting_chunks.push_back(make_unique<ContinuousChunk>(buffer_manager, false));
-			} else {
-				var_sorting_chunks.push_back(nullptr);
+		if (!sorting_state.ALL_CONSTANT) {
+			for (idx_t col_idx = 0; col_idx < sorting_state.CONSTANT_SIZE.size(); col_idx++) {
+				if (!sorting_state.CONSTANT_SIZE[col_idx]) {
+					var_sorting_chunks.push_back(make_unique<ContinuousChunk>(buffer_manager, false));
+				} else {
+					var_sorting_chunks.push_back(nullptr);
+				}
 			}
 		}
 		payload_chunk =
@@ -627,6 +629,8 @@ static void BreakStringTies(BufferManager &buffer_manager, const data_ptr_t data
 	for (idx_t i = 0; i < tie_col; i++) {
 		tie_col_offset += sorting_state.COL_SIZE[i];
 	}
+
+	// if the strings are tied because they are NULL we don't need to break to tie
 	if (sorting_state.HAS_NULL[tie_col]) {
 		char *validity = (char *)dataptr + start * sorting_state.ENTRY_SIZE + tie_col_offset;
 		if (sorting_state.ORDER_BY_NULL_TYPES[tie_col] == OrderByNullType::NULLS_FIRST && *validity == 0) {
@@ -638,7 +642,7 @@ static void BreakStringTies(BufferManager &buffer_manager, const data_ptr_t data
 		}
 		tie_col_offset++;
 	}
-	// if the tied strings are smaller than the prefix size, or are NULL, we don't need to break the ties
+	// if the tied strings are smaller than the prefix size, we don't need to break the ties
 	char *prefix_chars = (char *)dataptr + start * sorting_state.ENTRY_SIZE + tie_col_offset;
 	const char null_char = sorting_state.ORDER_TYPES[tie_col] == OrderType::ASCENDING ? 0 : -1;
 	for (idx_t i = 0; i < StringStatistics::MAX_STRING_MINMAX_SIZE; i++) {
@@ -897,6 +901,7 @@ static void SortInMemory(BufferManager &buffer_manager, ContinuousBlock &cb, con
 
 static void ReOrder(BufferManager &buffer_manager, ContinuousChunk &cc, data_ptr_t sorting_ptr,
                     const SortingState &sorting_state) {
+	// TODO: copy over COMP_SIZE rather than ENTRY_SIZE and re-adjust the merge
 	const idx_t &count = cc.data_blocks.back().count;
 
 	auto &unordered_data_block = cc.data_blocks.back();
@@ -1010,6 +1015,39 @@ void PhysicalOrder::SortLocalState(ClientContext &context, OrderLocalState &lsta
 	lstate.sorted_blocks.push_back(move(cb));
 }
 
+int CompareVarCol(const idx_t &col_idx, const data_ptr_t &l_ptr, const data_ptr_t &r_ptr, const data_ptr_t &l_var_ptr,
+                  const data_ptr_t &r_var_ptr, const SortingState &sorting_state) {
+	if (sorting_state.HAS_NULL[col_idx]) {
+		// check if the var col is tie because they are NULL
+		const char validity = *l_ptr;
+		if (sorting_state.ORDER_BY_NULL_TYPES[col_idx] == OrderByNullType::NULLS_FIRST && validity == 0) {
+			// NULLS_FIRST, therefore null is encoded as 0 - we can't break null ties
+			return 0;
+		} else if (sorting_state.ORDER_BY_NULL_TYPES[col_idx] == OrderByNullType::NULLS_LAST && validity == 1) {
+			// NULLS_LAST, therefore null is encoded as 1 - we can't break null ties
+			return 0;
+		}
+	}
+	switch (sorting_state.TYPES[col_idx].InternalType()) {
+	case PhysicalType::VARCHAR: {
+		string_t left_val((const char *)l_var_ptr + string_t::PREFIX_LENGTH, Load<uint32_t>(l_var_ptr));
+		string_t right_val((const char *)r_var_ptr + string_t::PREFIX_LENGTH, Load<uint32_t>(r_var_ptr));
+		int comp_res = 1;
+		if (Equals::Operation<string_t>(left_val, right_val)) {
+			comp_res = 0;
+		}
+		if (LessThan::Operation<string_t>(left_val, right_val)) {
+			comp_res = -1;
+		}
+		const int order = sorting_state.ORDER_TYPES[col_idx] == OrderType::DESCENDING ? -1 : 1;
+		return order * comp_res;
+		break;
+	}
+	default:
+		throw NotImplementedException("Unimplemented compare for type %s", sorting_state.TYPES[col_idx].ToString());
+	}
+}
+
 class PhysicalOrderMergeTask : public Task {
 public:
 	PhysicalOrderMergeTask(Pipeline &parent_p, ClientContext &context_p, OrderGlobalState &state_p,
@@ -1022,6 +1060,27 @@ public:
 
 	void Execute() override {
 		result->InitializeWrite(state);
+		// if there are var size sorting columns, we pre-compute the memcmp sizes
+		vector<idx_t> comp_sizes;
+		vector<idx_t> tie_cols;
+		vector<bool> must_break_tie;
+		if (!sorting_state.ALL_CONSTANT) {
+			idx_t comp_size = 0;
+			for (idx_t col_idx = 0; col_idx < sorting_state.COL_SIZE.size(); col_idx++) {
+				comp_size += sorting_state.COL_SIZE[col_idx];
+				if (!sorting_state.CONSTANT_SIZE[col_idx]) {
+					comp_sizes.push_back(comp_size);
+					tie_cols.push_back(col_idx);
+					must_break_tie.push_back(true);
+					comp_size = 0;
+				} else if (col_idx == sorting_state.COL_SIZE.size() - 1) {
+					comp_sizes.push_back(comp_size);
+					tie_cols.push_back(col_idx);
+					must_break_tie.push_back(false);
+					comp_size = 0;
+				}
+			}
+		}
 		bool left_smaller[PhysicalOrder::MERGE_STRIDE];
 		idx_t next_entry_sizes[PhysicalOrder::MERGE_STRIDE];
 		while (true) {
@@ -1031,7 +1090,7 @@ public:
 				break;
 			}
 			const idx_t next = MinValue(l_remaining + r_remaining, PhysicalOrder::MERGE_STRIDE);
-			ComputeNextMerge(next, left_smaller);
+			ComputeNextMerge(next, left_smaller, comp_sizes, tie_cols, must_break_tie, comp_sizes.size());
 			MergeNext(next, left_smaller);
 			if (!sorting_state.ALL_CONSTANT) {
 				for (idx_t col_idx = 0; col_idx < sorting_state.CONSTANT_SIZE.size(); col_idx++) {
@@ -1064,7 +1123,8 @@ public:
 	}
 
 	//! Computes how the next 'count' tuples should be merged
-	void ComputeNextMerge(const idx_t &count, bool left_smaller[]) {
+	void ComputeNextMerge(const idx_t &count, bool left_smaller[], const vector<idx_t> &comp_sizes,
+	                      const vector<idx_t> &tie_cols, const vector<bool> &must_break_tie, const idx_t &comp_rounds) {
 		idx_t l_block_idx = left.block_idx;
 		idx_t r_block_idx = right.block_idx;
 		idx_t l_entry_idx = left.entry_idx;
@@ -1079,19 +1139,19 @@ public:
 		data_ptr_t r_ptr;
 
 		// these are only used for variable size sorting data
-		vector<RowDataBlock *> l_var_data_blocks;
-		vector<RowDataBlock *> r_var_data_blocks;
-		vector<unique_ptr<BufferHandle>> l_var_data_handles;
-		vector<unique_ptr<BufferHandle>> r_var_data_handles;
-		vector<data_ptr_t> l_var_ptrs;
-		vector<data_ptr_t> r_var_ptrs;
+		vector<RowDataBlock *> l_var_data_blocks(left.var_sorting_chunks.size());
+		vector<RowDataBlock *> r_var_data_blocks(right.var_sorting_chunks.size());
+		vector<unique_ptr<BufferHandle>> l_var_data_handles(left.var_sorting_chunks.size());
+		vector<unique_ptr<BufferHandle>> r_var_data_handles(right.var_sorting_chunks.size());
+		vector<data_ptr_t> l_var_ptrs(left.var_sorting_chunks.size());
+		vector<data_ptr_t> r_var_ptrs(right.var_sorting_chunks.size());
 
-		vector<RowDataBlock *> l_var_offset_blocks(left.var_sorting_chunks.size(), nullptr);
-		vector<RowDataBlock *> r_var_offset_blocks(right.var_sorting_chunks.size(), nullptr);
-		vector<unique_ptr<BufferHandle>> l_var_offset_handles; //(left.var_sorting_chunks.size(), nullptr);
-		vector<unique_ptr<BufferHandle>> r_var_offset_handles; //(right.var_sorting_chunks.size(), nullptr);
-		vector<idx_t *> l_offsets(left.var_sorting_chunks.size(), nullptr);
-		vector<idx_t *> r_offsets(right.var_sorting_chunks.size(), nullptr);
+		vector<RowDataBlock *> l_var_offset_blocks(left.var_sorting_chunks.size());
+		vector<RowDataBlock *> r_var_offset_blocks(right.var_sorting_chunks.size());
+		vector<unique_ptr<BufferHandle>> l_var_offset_handles(left.var_sorting_chunks.size());
+		vector<unique_ptr<BufferHandle>> r_var_offset_handles(right.var_sorting_chunks.size());
+		vector<idx_t *> l_offsets(left.var_sorting_chunks.size());
+		vector<idx_t *> r_offsets(right.var_sorting_chunks.size());
 
 		idx_t compared = 0;
 		while (compared < count) {
@@ -1128,18 +1188,7 @@ public:
 					// either left or right side is exhausted, we don't have to compute the path
 					compared = count;
 				}
-				// move to the next block (if needed)
-				if (l_block_idx < left.sorting_blocks.size() && l_entry_idx == left.sorting_blocks[l_block_idx].count) {
-					l_block_idx++;
-					l_entry_idx = 0;
-				}
-				if (r_block_idx < right.sorting_blocks.size() &&
-				    r_entry_idx == right.sorting_blocks[r_block_idx].count) {
-					r_block_idx++;
-					r_entry_idx = 0;
-				}
 			} else {
-				// TODO: variable size stuff
 				// pin the var offset and data blocks
 				if (l_block_idx < left.sorting_blocks.size()) {
 					for (idx_t col_idx = 0; col_idx < sorting_state.CONSTANT_SIZE.size(); col_idx++) {
@@ -1172,9 +1221,42 @@ public:
 				// now compute the merge
 				if (l_block_idx < left.sorting_blocks.size() && r_block_idx < right.sorting_blocks.size()) {
 					for (; compared < count && l_entry_idx < l_count && r_entry_idx < r_count; compared++) {
-						// TODO: compute comp_size and iterate over comp columns
+						int comp_res;
+						// compare the columns in multiple rounds
+						idx_t comp_offset = 0;
+						for (idx_t comp_round = 0; comp_round < comp_rounds; comp_round++) {
+							comp_res = memcmp(l_ptr + comp_offset, r_ptr + comp_offset, comp_sizes[comp_round]);
+							if (comp_res == 0 && must_break_tie[comp_round]) {
+								// we have a tie, and we must break it
+								const auto &tie_col = tie_cols[comp_round];
+								comp_res = CompareVarCol(
+								    tie_col, l_ptr, r_ptr, l_var_ptrs[tie_col] + l_offsets[l_entry_idx][r_entry_idx],
+								    r_var_ptrs[tie_col] + r_offsets[tie_col][r_entry_idx], sorting_state);
+							} else {
+								break;
+							}
+						}
+						// update for next iteration using the comparison bool
+						const bool l_smaller = comp_res < 0;
+						left_smaller[compared] = l_smaller;
+						const bool r_smaller = one - l_smaller;
+						l_entry_idx += l_smaller;
+						r_entry_idx += r_smaller;
+						l_ptr += l_smaller * sorting_state.ENTRY_SIZE;
+						r_ptr += r_smaller * sorting_state.ENTRY_SIZE;
 					}
+				} else {
+					compared = count;
 				}
+			}
+			// move to the next block (if needed)
+			if (l_block_idx < left.sorting_blocks.size() && l_entry_idx == left.sorting_blocks[l_block_idx].count) {
+				l_block_idx++;
+				l_entry_idx = 0;
+			}
+			if (r_block_idx < right.sorting_blocks.size() && r_entry_idx == right.sorting_blocks[r_block_idx].count) {
+				r_block_idx++;
+				r_entry_idx = 0;
 			}
 		}
 	}
@@ -1577,7 +1659,7 @@ void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 			idx_t var_data_capacity = 0;
 			idx_t var_data_entry_size = 0;
 			idx_t var_offset_capacity = 0;
-			if (sorting_state.CONSTANT_SIZE[col_idx]) {
+			if (!sorting_state.CONSTANT_SIZE[col_idx]) {
 				for (auto &sb : state.sorted_blocks) {
 					const auto &data_block = sb->var_sorting_chunks[col_idx]->data_blocks.back();
 					if (data_block.CAPACITY > var_data_capacity) {

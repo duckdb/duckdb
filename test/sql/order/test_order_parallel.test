@@ -23,3 +23,7 @@ query T
 select cast(i as varchar) from test order by i desc;
 ----
 100000 values hashing to 6a720b227e361303445c41f7ff4a8109
+
+#query T
+#select i from test order by cast(i as varchar) desc;
+#----
