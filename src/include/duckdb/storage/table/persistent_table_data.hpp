@@ -16,13 +16,26 @@ namespace duckdb {
 class BaseStatistics;
 class PersistentSegment;
 
+class PersistentColumnData {
+public:
+	virtual ~PersistentColumnData();
+
+	vector<unique_ptr<PersistentSegment>> segments;
+	unique_ptr<BaseStatistics> stats;
+	idx_t total_rows = 0;
+};
+
+class StandardPersistentColumnData : public PersistentColumnData {
+public:
+	unique_ptr<PersistentColumnData> validity;
+};
+
 class PersistentTableData {
 public:
 	explicit PersistentTableData(idx_t column_count);
 	~PersistentTableData();
 
-	vector<unique_ptr<BaseStatistics>> column_stats;
-	vector<vector<unique_ptr<PersistentSegment>>> table_data;
+	vector<unique_ptr<PersistentColumnData>> column_data;
 	shared_ptr<SegmentTree> versions;
 };
 

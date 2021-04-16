@@ -40,6 +40,7 @@ void MetaBlockReader::ReadNewBlock(block_id_t id) {
 	handle = buffer_manager.Pin(block);
 
 	next_block = Load<block_id_t>(handle->node->buffer);
+	D_ASSERT(next_block >= -1);
 	offset = sizeof(block_id_t);
 }
 

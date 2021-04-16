@@ -49,6 +49,7 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	    .def("arrow", &DuckDBPyRelation::ToArrowTable, "Transforms the relation object into a Arrow table")
 	    .def("to_df", &DuckDBPyRelation::ToDF, "Transforms the relation object into a Data.Frame")
 	    .def("df", &DuckDBPyRelation::ToDF, "Transforms the relation object into a Data.Frame")
+	    .def("map", &DuckDBPyRelation::Map, py::arg("map_function"), "Calls the passed function on the relation")
 	    .def("__str__", &DuckDBPyRelation::Print)
 	    .def("__repr__", &DuckDBPyRelation::Print)
 	    .def("__getattr__", &DuckDBPyRelation::Getattr);
@@ -230,6 +231,14 @@ void DuckDBPyRelation::Insert(py::object params) {
 
 void DuckDBPyRelation::Create(const string &table) {
 	rel->Create(table);
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Map(py::function fun) {
+	vector<Value> params;
+	params.emplace_back(Value::POINTER((uintptr_t)fun.ptr()));
+	auto res = make_unique<DuckDBPyRelation>(rel->TableFunction("python_map_function", params));
+	res->map_function = fun;
+	return res;
 }
 
 string DuckDBPyRelation::Print() {

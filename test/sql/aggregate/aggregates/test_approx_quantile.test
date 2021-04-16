@@ -156,3 +156,17 @@ SELECT reservoir_quantile(r, 0.9)  from quantile
 
 statement ok
 SELECT reservoir_quantile(r, 0.9,1000)  from quantile
+
+statement ok
+SELECT RESERVOIR_QUANTILE(b, 0.5)
+FROM (SELECT 'a' AS a, 1.0 AS b) y
+GROUP BY a
+
+statement ok
+SELECT APPROX_QUANTILE(b, 0.5)
+FROM (
+    SELECT 'a' AS a, 1.0 AS b
+    UNION ALL SELECT 'a' AS a, 1.0 AS b
+    UNION ALL SELECT 'b' AS a, 1.0 AS b
+    ) y
+GROUP BY a

@@ -9,6 +9,9 @@ statement ok
 PRAGMA disable_checkpoint_on_shutdown
 
 statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+statement ok
 CREATE TABLE test (a INTEGER, b INTEGER);
 
 statement ok
@@ -31,6 +34,9 @@ restart
 
 statement ok
 PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
 
 query II
 SELECT a, b FROM test ORDER BY a

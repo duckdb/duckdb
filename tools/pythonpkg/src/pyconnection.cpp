@@ -2,6 +2,7 @@
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb_python/pyrelation.hpp"
 #include "duckdb_python/pandas_scan.hpp"
+#include "duckdb_python/map.hpp"
 
 #include "duckdb/common/arrow.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
@@ -147,19 +148,11 @@ DuckDBPyConnection *DuckDBPyConnection::Append(const string &name, py::object va
 	return Execute("INSERT INTO \"" + name + "\" SELECT * FROM __append_df");
 }
 
-static string PtrToString(void const *ptr) {
-	std::ostringstream address;
-	address << ptr;
-	return address.str();
-}
-
 DuckDBPyConnection *DuckDBPyConnection::RegisterDF(const string &name, py::object value) {
-	// hack alert: put the pointer address into the function call as a string
-	Execute("CREATE OR REPLACE VIEW \"" + name + "\" AS SELECT * FROM pandas_scan('" + PtrToString(value.ptr()) + "')");
-
-	// try to bind
-	Execute("SELECT * FROM \"" + name + "\" WHERE FALSE");
-
+	if (!connection) {
+		throw std::runtime_error("connection closed");
+	}
+	connection->TableFunction("pandas_scan", {Value::POINTER((uintptr_t)value.ptr())})->CreateView(name, true, true);
 	// keep a reference
 	registered_dfs[name] = value;
 	return this;
@@ -217,7 +210,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromDF(py::object value) {
 	string name = "df_" + GenerateRandomName();
 	registered_dfs[name] = value;
 	vector<Value> params;
-	params.emplace_back(PtrToString(value.ptr()));
+	params.emplace_back(Value::POINTER((uintptr_t)value.ptr()));
 	return make_unique<DuckDBPyRelation>(connection->TableFunction("pandas_scan", params)->Alias(name));
 }
 
@@ -311,6 +304,12 @@ struct PythonTableArrowArrayStream {
 	py::list batches;
 	idx_t batch_idx = 0;
 };
+
+static string PtrToString(void const *ptr) {
+	std::ostringstream address;
+	address << ptr;
+	return address.str();
+}
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrowTable(const py::object &table) {
 	if (!connection) {
@@ -432,7 +431,7 @@ static unique_ptr<TableFunctionRef> TryPandasReplacement(py::dict &dict, py::str
 	// check if there is a local or global variable
 	auto table_function = make_unique<TableFunctionRef>();
 	vector<unique_ptr<ParsedExpression>> children;
-	children.push_back(make_unique<ConstantExpression>(Value(PtrToString(entry.ptr()))));
+	children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)entry.ptr())));
 	table_function->function = make_unique<FunctionExpression>("pandas_scan", children);
 	return table_function;
 }
@@ -466,12 +465,17 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 	res->connection = make_unique<Connection>(*res->database);
 
 	PandasScanFunction scan_fun;
-	CreateTableFunctionInfo info(scan_fun);
+	CreateTableFunctionInfo scan_info(scan_fun);
+
+	MapFunction map_fun;
+	CreateTableFunctionInfo map_info(map_fun);
 
 	auto &context = *res->connection->context;
 	auto &catalog = Catalog::GetCatalog(context);
 	context.transaction.BeginTransaction();
-	catalog.CreateTableFunction(context, &info);
+	catalog.CreateTableFunction(context, &scan_info);
+	catalog.CreateTableFunction(context, &map_info);
+
 	context.transaction.Commit();
 
 	return res;

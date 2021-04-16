@@ -189,7 +189,7 @@ void LocalStorage::Append(DataTable *table, DataChunk &chunk) {
 	}
 	//! Append to the chunk
 	storage->collection.Append(chunk);
-	if (storage->active_scans == 0 && storage->collection.Count() >= MorselInfo::MORSEL_SIZE) {
+	if (storage->active_scans == 0 && storage->collection.Count() >= MorselInfo::MORSEL_SIZE * 2) {
 		// flush to base storage
 		Flush(*table, *storage);
 	}

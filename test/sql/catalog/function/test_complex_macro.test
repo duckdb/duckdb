@@ -282,7 +282,7 @@ require vector_size 512
 statement ok
 CREATE MACRO mywindow(k,v) AS SUM(v) OVER (PARTITION BY k)
 
-query II
+query II rowsort
 WITH grouped AS (SELECT mod(range, 3) AS grp, range AS val FROM RANGE(500))
 SELECT DISTINCT grp, mywindow(grp, val) FROM grouped
 ----
