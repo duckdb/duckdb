@@ -8,11 +8,14 @@
 
 #pragma once
 
+#include "duckdb.hpp"
+#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
+#endif
 
 #include "parquet_types.h"
 #include "thrift/protocol/TCompactProtocol.h"

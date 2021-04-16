@@ -154,6 +154,7 @@ char *StrfTimeFormat::WriteString(char *target, const string_t &str) {
 
 // write a value in the range of 0..99 unpadded (e.g. "1", "2", ... "98", "99")
 char *StrfTimeFormat::Write2(char *target, uint8_t value) {
+	D_ASSERT(value < 100);
 	if (value >= 10) {
 		return WritePadded2(target, value);
 	} else {
@@ -164,6 +165,7 @@ char *StrfTimeFormat::Write2(char *target, uint8_t value) {
 
 // write a value in the range of 0..99 padded to 2 digits
 char *StrfTimeFormat::WritePadded2(char *target, int32_t value) {
+	D_ASSERT(value < 100);
 	auto index = static_cast<unsigned>(value * 2);
 	*target++ = duckdb_fmt::internal::data::digits[index];
 	*target++ = duckdb_fmt::internal::data::digits[index + 1];
@@ -172,6 +174,7 @@ char *StrfTimeFormat::WritePadded2(char *target, int32_t value) {
 
 // write a value in the range of 0..999 padded
 char *StrfTimeFormat::WritePadded3(char *target, uint32_t value) {
+	D_ASSERT(value < 1000);
 	if (value >= 100) {
 		WritePadded2(target + 1, value % 100);
 		*target = char(uint8_t('0') + value / 100);
@@ -309,10 +312,10 @@ char *StrfTimeFormat::WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t
 		target = WritePadded2(target, data[5]);
 		break;
 	case StrTimeSpecifier::MICROSECOND_PADDED:
-		target = WritePadded(target, data[6] * 1000, 6);
+		target = WritePadded(target, data[6], 6);
 		break;
 	case StrTimeSpecifier::MILLISECOND_PADDED:
-		target = WritePadded3(target, data[6]);
+		target = WritePadded3(target, data[6] / 1000);
 		break;
 	case StrTimeSpecifier::UTC_OFFSET:
 	case StrTimeSpecifier::TZ_NAME:
@@ -850,7 +853,7 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 					return false;
 				}
 				// milliseconds
-				result_data[6] = int32_t(number * 1000);
+				result_data[6] = number;
 				break;
 			case StrTimeSpecifier::MILLISECOND_PADDED:
 				if (number >= 1000ULL) {
@@ -859,7 +862,7 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 					return false;
 				}
 				// milliseconds
-				result_data[6] = number;
+				result_data[6] = number * 1000;
 				break;
 			default:
 				throw NotImplementedException("Unsupported specifier for strptime");

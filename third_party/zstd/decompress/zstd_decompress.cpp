@@ -56,19 +56,19 @@
 *  Dependencies
 *********************************************************/
 #include <string.h>      /* memcpy, memmove, memset */
-#include "../common/mem.h"         /* low level memory routines */
-#define FSE_STATIC_LINKING_ONLY
-#include "../common/fse.h"
-#define HUF_STATIC_LINKING_ONLY
-#include "../common/huf.h"
-#include "../common/zstd_internal.h"  /* blockProperties_t */
-#include "zstd_decompress_internal.h"   /* ZSTD_DCtx */
-#include "zstd_ddict.h"  /* ZSTD_DDictDictContent */
-#include "zstd_decompress_block.h"   /* ZSTD_decompressBlock_internal */
+#include "zstd/common/mem.h"         /* low level memory routines */
+#include "zstd/common/fse.h"
+#include "zstd/common/fse_static.h"
+#include "zstd/common/huf.h"
+#include "zstd/common/huf_static.h"
+#include "zstd/common/zstd_internal.h"  /* blockProperties_t */
+#include "zstd/decompress/zstd_decompress_internal.h"   /* ZSTD_DCtx */
+#include "zstd/decompress/zstd_ddict.h"  /* ZSTD_DDictDictContent */
+#include "zstd/decompress/zstd_decompress_block.h"   /* ZSTD_decompressBlock_internal */
 
-#if defined(ZSTD_LEGACY_SUPPORT) && (ZSTD_LEGACY_SUPPORT>=1)
-#  include "../legacy/zstd_legacy.h"
-#endif
+// #if defined(ZSTD_LEGACY_SUPPORT) && (ZSTD_LEGACY_SUPPORT>=1)
+// #  include "../legacy/zstd_legacy.h"
+// #endif
 namespace duckdb_zstd {
 const U32 ZSTDConstants::LL_base[MaxLL+1] = {
                 0,    1,    2,     3,     4,     5,     6,      7,

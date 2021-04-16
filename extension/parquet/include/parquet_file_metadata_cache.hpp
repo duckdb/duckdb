@@ -7,8 +7,11 @@
 //===----------------------------------------------------------------------===//
 #pragma once
 
-#include "duckdb/storage/object_cache.hpp" // ObjectCache
-#include "parquet_types.h"                 // parquet::format::FileMetaData
+#include "duckdb.hpp"
+#ifndef DUCKDB_AMALGAMATION
+#include "duckdb/storage/object_cache.hpp"
+#endif
+#include "parquet_types.h"
 
 namespace duckdb {
 

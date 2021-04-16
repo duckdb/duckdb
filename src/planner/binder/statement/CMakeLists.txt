@@ -10,6 +10,7 @@ add_library_unity(
   bind_explain.cpp
   bind_export.cpp
   bind_insert.cpp
+  bind_load.cpp
   bind_pragma.cpp
   bind_relation.cpp
   bind_select.cpp

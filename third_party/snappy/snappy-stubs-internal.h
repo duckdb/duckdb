@@ -31,9 +31,9 @@
 #ifndef THIRD_PARTY_SNAPPY_OPENSOURCE_SNAPPY_STUBS_INTERNAL_H_
 #define THIRD_PARTY_SNAPPY_OPENSOURCE_SNAPPY_STUBS_INTERNAL_H_
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
+// #ifdef HAVE_CONFIG_H
+// #include "config.h"
+// #endif
 
 #include <string>
 
