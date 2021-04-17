@@ -178,7 +178,7 @@ static unique_ptr<FunctionData> ArraySliceBind(ClientContext &context, ScalarFun
 		bound_function.return_type = arguments[0]->return_type;
 		break;
 	default:
-		throw BinderException("ARRAY_SLICE can only operate on LISTs snd VARCHARs");
+		throw BinderException("ARRAY_SLICE can only operate on LISTs and VARCHARs");
 	}
 
 	return make_unique<VariableReturnBindData>(bound_function.return_type);
