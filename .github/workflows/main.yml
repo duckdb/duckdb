@@ -685,9 +685,9 @@ jobs:
 
     env:
       CIBW_BUILD: 'cp36-* cp37-* cp38-* cp39-*'
-      CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3" "pyarrow>=3.0.0"'
+      CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
       CIBW_TEST_REQUIRES: 'pytest'
-      CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" "pyarrow>=3.0.0"'
+      CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" && (pip install --prefer-binary pyarrow>=3.0.0" || true)'
       CIBW_TEST_COMMAND: 'python -m pytest {project}/tests'
       SETUPTOOLS_SCM_NO_LOCAL: 'yes'
       TWINE_USERNAME: 'hfmuehleisen'
@@ -700,11 +700,6 @@ jobs:
     - uses: actions/setup-python@v2
       with:
         python-version: '3.7'
-
-    - name: Setup cmake
-      uses: jwlawson/actions-setup-cmake@v1.8
-      with:
-        cmake-version: '3.2'
 
     - name: Install
       run: pip install cibuildwheel twine
