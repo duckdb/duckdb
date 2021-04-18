@@ -100,7 +100,7 @@ if(BUILD_PYTHON OR BUILD_R)
   get_target_property(duckdb_libs duckdb LINK_LIBRARIES)
 
   if(BUILD_PYTHON)
-    if (USER_SPACE)
+    if(USER_SPACE)
       add_custom_target(
         duckdb_python ALL
         COMMAND python3 setup.py install --user --binary-dir=${CMAKE_BINARY_DIR}
@@ -111,13 +111,13 @@ if(BUILD_PYTHON OR BUILD_R)
         Python package)
     else()
       add_custom_target(
-          duckdb_python ALL
-          COMMAND python3 setup.py install --user --binary-dir=${CMAKE_BINARY_DIR}
-                  --compile-flags=${ALL_COMPILE_FLAGS} --libs="${duckdb_libs}"
-          DEPENDS duckdb
-          WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/pythonpkg
-          COMMENT Build
-          Python package)
+        duckdb_python ALL
+        COMMAND python3 setup.py install --user --binary-dir=${CMAKE_BINARY_DIR}
+                --compile-flags=${ALL_COMPILE_FLAGS} --libs="${duckdb_libs}"
+        DEPENDS duckdb
+        WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/pythonpkg
+        COMMENT Build
+        Python package)
     endif()
     add_extension_dependencies(duckdb_python)
   endif()
