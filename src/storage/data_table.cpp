@@ -973,6 +973,11 @@ bool DataTable::ScanCreateIndex(CreateIndexScanState &state, const vector<column
 	}
 	idx_t count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, max_row - current_row);
 	idx_t vector_offset = (current_row - state.base_row) / STANDARD_VECTOR_SIZE;
+	while (vector_offset >= MorselInfo::MORSEL_VECTOR_COUNT) {
+		state.version_info = (MorselInfo *)state.version_info->next.get();
+		state.base_row += MorselInfo::MORSEL_SIZE;
+		vector_offset -= MorselInfo::MORSEL_VECTOR_COUNT;
+	}
 	idx_t del_count = 0;
 
 	// scan the base columns to fetch the actual data
