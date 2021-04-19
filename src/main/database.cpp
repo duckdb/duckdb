@@ -9,6 +9,8 @@
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/main/connection_manager.hpp"
 
+#include <thread> // for hardware_concurrency()
+
 namespace duckdb {
 
 DBConfig::~DBConfig() {
@@ -108,6 +110,7 @@ void DatabaseInstance::Initialize(const char *path, DBConfig *new_config) {
 	catalog = make_unique<Catalog>(*this);
 	transaction_manager = make_unique<TransactionManager>(*this);
 	scheduler = make_unique<TaskScheduler>();
+	scheduler->SetThreads(config.maximum_threads);
 	object_cache = make_unique<ObjectCache>();
 	connection_manager = make_unique<ConnectionManager>();
 
@@ -172,6 +175,11 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 		config.maximum_memory = config.file_system->GetAvailableMemory() * 8 / 10;
 	} else {
 		config.maximum_memory = new_config.maximum_memory;
+	}
+	if (new_config.maximum_threads == (idx_t)-1) {
+		config.maximum_threads = std::thread::hardware_concurrency();
+	} else {
+		config.maximum_threads = new_config.maximum_threads;
 	}
 	config.checkpoint_wal_size = new_config.checkpoint_wal_size;
 	config.use_direct_io = new_config.use_direct_io;

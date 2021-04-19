@@ -1,0 +1,29 @@
+#include "catch.hpp"
+#include "test_helpers.hpp"
+
+#include <thread>
+
+using namespace duckdb;
+using namespace std;
+
+TEST_CASE("Test database maximum_threads argument", "[api]") {
+	// default is number of hw threads
+	{
+		DuckDB db(nullptr);
+		REQUIRE(db.NumberOfThreads() == std::thread::hardware_concurrency());
+	}
+	// but we can set another value
+	{
+		DBConfig config;
+		config.maximum_threads = 42;
+		DuckDB db(nullptr, &config);
+		REQUIRE(db.NumberOfThreads() == 42);
+	}
+	// zero is not erlaubt
+	{
+		DBConfig config;
+		config.maximum_threads = 0;
+		DuckDB db;
+		REQUIRE_THROWS(db = DuckDB(nullptr, &config));
+	}
+}
