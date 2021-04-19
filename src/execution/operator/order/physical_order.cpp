@@ -1249,6 +1249,7 @@ public:
 								comp_res =
 								    CompareVarCol(tie_col, l_ptr, r_ptr, left.var_sorting_chunks[tie_col]->DataPtr(),
 								                  right.var_sorting_chunks[tie_col]->DataPtr(), sorting_state);
+								comp_offset += comp_sizes[comp_round];
 							} else {
 								break;
 							}

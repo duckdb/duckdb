@@ -6,25 +6,59 @@ statement ok
 PRAGMA force_parallelism
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 PRAGMA threads=4
 
 statement ok
 create table test as (select range i from range(100000));
 
+# all fixed-size
 query T
 select * from test order by i desc;
 ----
 100000 values hashing to 6a720b227e361303445c41f7ff4a8109
 
+# fixed size sorting, variable payload
 query T
 select cast(i as varchar) from test order by i desc;
 ----
 100000 values hashing to 6a720b227e361303445c41f7ff4a8109
 
+# variable size sorting
 query T
 select i from test order by cast(i as varchar) desc;
 ----
 100000 values hashing to 14d85a71bc549aeb80f7e77766a9fc93
+
+# complex sort orders, combining var and fixed-size sorting columns
+statement ok
+insert into test values (NULL);
+
+query T
+select * from test order by cast(i as varchar) nulls first
+----
+100001 values hashing to f57dcbb7ed54aa1427f8f0aa71095c66
+
+query T
+select * from test order by i % 1000, cast(i as varchar)
+----
+100001 values hashing to db08584e7a34b96d570b41a479456f07
+
+query T
+select * from test order by cast(i % 100 as varchar), i
+----
+100001 values hashing to efaa49f6b8ffee5266512e6ba3418577
+
+query T
+select * from test order by cast(i % 100 as varchar), i % 1000, cast(i as varchar) nulls first
+----
+100001 values hashing to bd4113c074803a4b82f55ef73ec247cc
+
+query T
+select * from test order by cast(i % 100 as varchar), i % 1000, cast(i % 5000 as varchar), i
+----
+100001 values hashing to b1f8273b3f95293a3f177cf581cd0e3f
+
+query T
+select * from test order by i % 1000, cast(i % 5000 as varchar), cast(i as varchar)
+----
+100001 values hashing to e867386f39ce483474ef0e7bcfcaf630
