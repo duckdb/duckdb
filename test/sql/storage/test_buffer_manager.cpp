@@ -118,6 +118,7 @@ TEST_CASE("Test appending and checkpointing a table that exceeds buffer manager 
 
 	// maximum memory is 10MB
 	config->maximum_memory = 10000000;
+	config->maximum_threads = 1;
 
 	// create a table of size 10 times the buffer pool size
 	uint64_t size = 0, size_a, sum_a, sum_b;
