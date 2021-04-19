@@ -9,7 +9,9 @@
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/main/connection_manager.hpp"
 
-#include <thread> // for hardware_concurrency()
+#ifndef DUCKDB_NO_THREADS
+#include "duckdb/common/thread.hpp"
+#endif
 
 namespace duckdb {
 
@@ -177,7 +179,11 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 		config.maximum_memory = new_config.maximum_memory;
 	}
 	if (new_config.maximum_threads == (idx_t)-1) {
+#ifndef DUCKDB_NO_THREADS
 		config.maximum_threads = std::thread::hardware_concurrency();
+#else
+		config.maximum_threads = 1;
+#endif
 	} else {
 		config.maximum_threads = new_config.maximum_threads;
 	}
