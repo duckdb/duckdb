@@ -342,8 +342,8 @@ void PhysicalOrder::Combine(ExecutionContext &context, GlobalOperatorState &gsta
 struct ContinuousChunk {
 public:
 	ContinuousChunk(BufferManager &buffer_manager, bool constant_size, idx_t entry_size = 0)
-	    : buffer_manager(buffer_manager), CONSTANT_SIZE(constant_size), ENTRY_SIZE(entry_size), data_block_idx(0),
-	      data_entry_idx(0) {
+	    : buffer_manager(buffer_manager), CONSTANT_SIZE(constant_size), ENTRY_SIZE(entry_size), block_idx(0),
+	      entry_idx(0) {
 	}
 
 	idx_t Count() {
@@ -373,12 +373,49 @@ public:
 		}
 	}
 
+	data_ptr_t DataPtr() {
+		return dataptr + offsets[entry_idx];
+	}
+
+	void Pin() {
+		if (block_idx == data_blocks.size()) {
+			return;
+		}
+		data_handle = buffer_manager.Pin(data_blocks[block_idx].block);
+		offset_handle = buffer_manager.Pin(offset_blocks[block_idx].block);
+		dataptr = data_handle->Ptr();
+		offsets = (idx_t *)offset_handle->Ptr();
+	}
+
+	void Advance() {
+		if (entry_idx < data_blocks[block_idx].count - 1) {
+			entry_idx++;
+		} else if (block_idx < data_blocks.size() - 1) {
+			block_idx++;
+			entry_idx = 0;
+			Pin();
+		}
+	}
+
+	void UnpinAndReset(const idx_t &block_idx_to, const idx_t &entry_idx_to) {
+		data_handle.reset();
+		offset_handle.reset();
+		block_idx = block_idx_to;
+		entry_idx = entry_idx_to;
+	}
+
 private:
 	//! Buffer manager and constants
 	BufferManager &buffer_manager;
 
 	std::pair<idx_t, idx_t> data_dims;
 	idx_t offset_capacity;
+
+	unique_ptr<BufferHandle> data_handle;
+	unique_ptr<BufferHandle> offset_handle;
+
+	data_ptr_t dataptr;
+	idx_t *offsets;
 
 public:
 	const bool CONSTANT_SIZE;
@@ -389,8 +426,8 @@ public:
 	vector<RowDataBlock> offset_blocks;
 
 	//! Data
-	idx_t data_block_idx;
-	idx_t data_entry_idx;
+	idx_t block_idx;
+	idx_t entry_idx;
 };
 
 struct ContinuousBlock {
@@ -1139,19 +1176,22 @@ public:
 		data_ptr_t r_ptr;
 
 		// these are only used for variable size sorting data
-		vector<RowDataBlock *> l_var_data_blocks(left.var_sorting_chunks.size());
-		vector<RowDataBlock *> r_var_data_blocks(right.var_sorting_chunks.size());
-		vector<unique_ptr<BufferHandle>> l_var_data_handles(left.var_sorting_chunks.size());
-		vector<unique_ptr<BufferHandle>> r_var_data_handles(right.var_sorting_chunks.size());
-		vector<data_ptr_t> l_var_ptrs(left.var_sorting_chunks.size());
-		vector<data_ptr_t> r_var_ptrs(right.var_sorting_chunks.size());
+		vector<idx_t> l_var_block_idxs(left.var_sorting_chunks.size());
+		vector<idx_t> r_var_block_idxs(right.var_sorting_chunks.size());
+		vector<idx_t> l_var_entry_idxs(left.var_sorting_chunks.size());
+		vector<idx_t> r_var_entry_idxs(right.var_sorting_chunks.size());
+		for (idx_t col_idx = 0; col_idx < sorting_state.CONSTANT_SIZE.size(); col_idx++) {
+			if (!sorting_state.CONSTANT_SIZE[col_idx]) {
+				// save indices
+				l_var_block_idxs[col_idx] = left.var_sorting_chunks[col_idx]->block_idx;
+				r_var_block_idxs[col_idx] = right.var_sorting_chunks[col_idx]->block_idx;
+				l_var_entry_idxs[col_idx] = left.var_sorting_chunks[col_idx]->entry_idx;
+				r_var_entry_idxs[col_idx] = right.var_sorting_chunks[col_idx]->entry_idx;
 
-		vector<RowDataBlock *> l_var_offset_blocks(left.var_sorting_chunks.size());
-		vector<RowDataBlock *> r_var_offset_blocks(right.var_sorting_chunks.size());
-		vector<unique_ptr<BufferHandle>> l_var_offset_handles(left.var_sorting_chunks.size());
-		vector<unique_ptr<BufferHandle>> r_var_offset_handles(right.var_sorting_chunks.size());
-		vector<idx_t *> l_offsets(left.var_sorting_chunks.size());
-		vector<idx_t *> r_offsets(right.var_sorting_chunks.size());
+				left.var_sorting_chunks[col_idx]->Pin();
+				right.var_sorting_chunks[col_idx]->Pin();
+			}
+		}
 
 		idx_t compared = 0;
 		while (compared < count) {
@@ -1190,32 +1230,10 @@ public:
 				}
 			} else {
 				// pin the var offset and data blocks
-				if (l_block_idx < left.sorting_blocks.size()) {
-					for (idx_t col_idx = 0; col_idx < sorting_state.CONSTANT_SIZE.size(); col_idx++) {
-						if (!sorting_state.CONSTANT_SIZE[col_idx]) {
-							l_var_offset_blocks[col_idx] =
-							    &left.var_sorting_chunks[col_idx]->offset_blocks[l_block_idx];
-							l_var_offset_handles[col_idx] = buffer_manager.Pin(l_var_offset_blocks[col_idx]->block);
-							l_offsets[col_idx] = (idx_t *)l_var_offset_handles[col_idx]->Ptr();
-
-							l_var_data_blocks[col_idx] = &left.var_sorting_chunks[col_idx]->data_blocks[l_block_idx];
-							l_var_data_handles[col_idx] = buffer_manager.Pin(l_var_data_blocks[col_idx]->block);
-							l_var_ptrs[col_idx] = l_var_data_handles[col_idx]->Ptr();
-						}
-					}
-				}
-				if (r_block_idx < right.sorting_blocks.size()) {
-					for (idx_t col_idx = 0; col_idx < sorting_state.CONSTANT_SIZE.size(); col_idx++) {
-						if (!sorting_state.CONSTANT_SIZE[col_idx]) {
-							r_var_offset_blocks[col_idx] =
-							    &right.var_sorting_chunks[col_idx]->offset_blocks[r_block_idx];
-							r_var_offset_handles[col_idx] = buffer_manager.Pin(r_var_offset_blocks[col_idx]->block);
-							r_offsets[col_idx] = (idx_t *)r_var_offset_handles[col_idx]->Ptr();
-
-							r_var_data_blocks[col_idx] = &right.var_sorting_chunks[col_idx]->data_blocks[r_block_idx];
-							r_var_data_handles[col_idx] = buffer_manager.Pin(r_var_data_blocks[col_idx]->block);
-							r_var_ptrs[col_idx] = r_var_data_handles[col_idx]->Ptr();
-						}
+				for (idx_t col_idx = 0; col_idx < sorting_state.CONSTANT_SIZE.size(); col_idx++) {
+					if (!sorting_state.CONSTANT_SIZE[col_idx]) {
+						left.var_sorting_chunks[col_idx]->Pin();
+						right.var_sorting_chunks[col_idx]->Pin();
 					}
 				}
 				// now compute the merge
@@ -1229,9 +1247,9 @@ public:
 							if (comp_res == 0 && must_break_tie[comp_round]) {
 								// we have a tie, and we must break it
 								const auto &tie_col = tie_cols[comp_round];
-								comp_res = CompareVarCol(
-								    tie_col, l_ptr, r_ptr, l_var_ptrs[tie_col] + l_offsets[l_entry_idx][r_entry_idx],
-								    r_var_ptrs[tie_col] + r_offsets[tie_col][r_entry_idx], sorting_state);
+								comp_res =
+								    CompareVarCol(tie_col, l_ptr, r_ptr, left.var_sorting_chunks[tie_col]->DataPtr(),
+								                  right.var_sorting_chunks[tie_col]->DataPtr(), sorting_state);
 							} else {
 								break;
 							}
@@ -1244,6 +1262,13 @@ public:
 						r_entry_idx += r_smaller;
 						l_ptr += l_smaller * sorting_state.ENTRY_SIZE;
 						r_ptr += r_smaller * sorting_state.ENTRY_SIZE;
+						// and the var sorting columns
+						for (idx_t col_idx = 0; col_idx < sorting_state.CONSTANT_SIZE.size(); col_idx++) {
+							if (!sorting_state.CONSTANT_SIZE[col_idx]) {
+								left.var_sorting_chunks[col_idx]->Advance();
+								right.var_sorting_chunks[col_idx]->Advance();
+							}
+						}
 					}
 				} else {
 					compared = count;
@@ -1257,6 +1282,13 @@ public:
 			if (r_block_idx < right.sorting_blocks.size() && r_entry_idx == right.sorting_blocks[r_block_idx].count) {
 				r_block_idx++;
 				r_entry_idx = 0;
+			}
+		}
+		// reset blocks before the actual merge
+		for (idx_t col_idx = 0; col_idx < sorting_state.CONSTANT_SIZE.size(); col_idx++) {
+			if (!sorting_state.CONSTANT_SIZE[col_idx]) {
+				left.var_sorting_chunks[col_idx]->UnpinAndReset(l_var_block_idxs[col_idx], l_var_entry_idxs[col_idx]);
+				right.var_sorting_chunks[col_idx]->UnpinAndReset(r_var_block_idxs[col_idx], r_var_entry_idxs[col_idx]);
 			}
 		}
 	}
@@ -1362,10 +1394,10 @@ public:
 	void MergeNext(ContinuousChunk &result_cc, ContinuousChunk &left_cc, ContinuousChunk &right_cc, const idx_t &count,
 	               const bool left_smaller[], idx_t next_entry_sizes[]) {
 		// these are always used
-		idx_t l_block_idx = left_cc.data_block_idx;
-		idx_t l_entry_idx = left_cc.data_entry_idx;
-		idx_t r_block_idx = right_cc.data_block_idx;
-		idx_t r_entry_idx = right_cc.data_entry_idx;
+		idx_t l_block_idx = left_cc.block_idx;
+		idx_t l_entry_idx = left_cc.entry_idx;
+		idx_t r_block_idx = right_cc.block_idx;
+		idx_t r_entry_idx = right_cc.entry_idx;
 
 		RowDataBlock *l_data_block = nullptr;
 		RowDataBlock *r_data_block = nullptr;
@@ -1612,10 +1644,13 @@ public:
 			result_data_block->count += i;
 			copied += i;
 		}
-		left_cc.data_block_idx = l_block_idx;
-		left_cc.data_entry_idx = l_entry_idx;
-		right_cc.data_block_idx = r_block_idx;
-		right_cc.data_entry_idx = r_entry_idx;
+		left_cc.block_idx = l_block_idx;
+		left_cc.entry_idx = l_entry_idx;
+		right_cc.block_idx = r_block_idx;
+		right_cc.entry_idx = r_entry_idx;
+		if (!result_cc.CONSTANT_SIZE) {
+			D_ASSERT(result_cc.data_blocks.size() == result_cc.offset_blocks.size());
+		}
 	}
 
 private:
