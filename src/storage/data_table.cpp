@@ -984,34 +984,34 @@ bool DataTable::ScanCreateIndex(CreateIndexScanState &state, const vector<column
 			// scan row id
 			D_ASSERT(result.data[i].GetType().InternalType() == ROW_TYPE);
 			result.data[i].Sequence(current_row, 1);
-        } else {
-            if (!state.deselect_deleted) {
-                // scan actual base column
-                columns[column]->IndexScan(state.column_scans[i], result.data[i], allow_pending_updates);
-                continue;
-            }
-            SelectionVector del_vec(STANDARD_VECTOR_SIZE);
-            auto dels = state.version_info->GetDelVector(vector_offset, del_vec, count);
-            if (dels == count) {
-                D_ASSERT((del_count == 0) || (del_count == dels));
-                del_count = dels;
-                break;
-            }
+		} else {
+			if (!state.deselect_deleted) {
+				// scan actual base column
+				columns[column]->IndexScan(state.column_scans[i], result.data[i], allow_pending_updates);
+				continue;
+			}
+			SelectionVector del_vec(STANDARD_VECTOR_SIZE);
+			auto dels = state.version_info->GetDelVector(vector_offset, del_vec, count);
+			if (dels == count) {
+				D_ASSERT((del_count == 0) || (del_count == dels));
+				del_count = dels;
+				break;
+			}
 
-            // scan actual base column
-            columns[column]->IndexScan(state.column_scans[i], result.data[i], allow_pending_updates);
+			// scan actual base column
+			columns[column]->IndexScan(state.column_scans[i], result.data[i], allow_pending_updates);
 
-            if (dels > 0) {
-                D_ASSERT((del_count == 0) || (del_count == dels));
-                del_count = dels;
-                auto &result_mask = FlatVector::Validity(result.data[i]);
-                for (idx_t i = 0; i < del_count; i++) {
-                    result_mask.SetInvalid(del_vec.get_index(i));
-                }
-            }
-        }
-    }
-    result.SetCardinality(count);
+			if (dels > 0) {
+				D_ASSERT((del_count == 0) || (del_count == dels));
+				del_count = dels;
+				auto &result_mask = FlatVector::Validity(result.data[i]);
+				for (idx_t i = 0; i < del_count; i++) {
+					result_mask.SetInvalid(del_vec.get_index(i));
+				}
+			}
+		}
+	}
+	result.SetCardinality(count);
 
 	current_row += STANDARD_VECTOR_SIZE;
 	return count > 0;
@@ -1034,7 +1034,7 @@ void DataTable::AddIndex(unique_ptr<Index> index, vector<unique_ptr<Expression>>
 	// initialize an index scan
 	CreateIndexScanState state;
 	InitializeCreateIndexScan(state, column_ids);
-    state.deselect_deleted = true;
+	state.deselect_deleted = true;
 
 	if (!is_root) {
 		throw TransactionException("Transaction conflict: cannot add an index to a table that has been altered!");

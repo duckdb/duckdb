@@ -38,18 +38,18 @@ ChunkConstantInfo::ChunkConstantInfo(idx_t start, MorselInfo &morsel)
 }
 
 idx_t ChunkConstantInfo::GetDelVector(SelectionVector &sel_vector, idx_t max_count) {
-    if (delete_id == NOT_DELETED_ID) {
-        return 0;
-    }
-    return max_count;
+	if (delete_id == NOT_DELETED_ID) {
+		return 0;
+	}
+	return max_count;
 }
 
-idx_t ChunkConstantInfo::GetSelVector(transaction_t start_time, transaction_t transaction_id, SelectionVector &sel_vector,
-                                    idx_t max_count) {
-    if (UseVersion(start_time, transaction_id, insert_id) && !UseVersion(start_time, transaction_id, delete_id)) {
-        return max_count;
-    }
-    return 0;
+idx_t ChunkConstantInfo::GetSelVector(transaction_t start_time, transaction_t transaction_id,
+                                      SelectionVector &sel_vector, idx_t max_count) {
+	if (UseVersion(start_time, transaction_id, insert_id) && !UseVersion(start_time, transaction_id, delete_id)) {
+		return max_count;
+	}
+	return 0;
 }
 
 bool ChunkConstantInfo::Fetch(Transaction &transaction, row_t row) {
@@ -93,17 +93,17 @@ ChunkVectorInfo::ChunkVectorInfo(idx_t start, MorselInfo &morsel)
 }
 
 idx_t ChunkVectorInfo::GetDelVector(SelectionVector &sel_vector, idx_t max_count) {
-    idx_t count = 0;
-    if (!any_deleted) {
-        return 0;
-    }
-    for (idx_t i = 0; i < max_count; i++) {
-        if (deleted[i] != NOT_DELETED_ID) {
-            sel_vector.set_index(count++, i);
-        }
-    }
+	idx_t count = 0;
+	if (!any_deleted) {
+		return 0;
+	}
+	for (idx_t i = 0; i < max_count; i++) {
+		if (deleted[i] != NOT_DELETED_ID) {
+			sel_vector.set_index(count++, i);
+		}
+	}
 
-    return count;
+	return count;
 }
 
 idx_t ChunkVectorInfo::GetSelVector(transaction_t start_time, transaction_t transaction_id, SelectionVector &sel_vector,

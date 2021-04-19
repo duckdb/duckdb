@@ -37,7 +37,7 @@ public:
 	//! with the tuples
 	idx_t GetSelVector(Transaction &transaction, SelectionVector &sel_vector, idx_t max_count);
 	virtual idx_t GetSelVector(transaction_t start_time, transaction_t transaction_id, SelectionVector &sel_vector,
-	                   idx_t max_count) = 0;
+	                           idx_t max_count) = 0;
 	virtual idx_t GetDelVector(SelectionVector &sel_vector, idx_t max_count) = 0;
 	//! Returns whether or not a single row in the ChunkInfo should be used or not for the given transaction
 	virtual bool Fetch(Transaction &transaction, row_t row) = 0;
