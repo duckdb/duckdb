@@ -115,11 +115,19 @@ static LogicalType DeriveLogicalType(const SchemaElement &s_ele) {
 		return LogicalType::FLOAT;
 	case Type::DOUBLE:
 		return LogicalType::DOUBLE;
-		//			case parquet::format::Type::FIXED_LEN_BYTE_ARRAY: {
-		// TODO some decimals yuck
 	case Type::BYTE_ARRAY:
+	case Type::FIXED_LEN_BYTE_ARRAY:
+		if (s_ele.type == Type::FIXED_LEN_BYTE_ARRAY && !s_ele.__isset.type_length) {
+			return LogicalType::INVALID;
+		}
 		if (s_ele.__isset.converted_type) {
 			switch (s_ele.converted_type) {
+			case ConvertedType::DECIMAL:
+				if (s_ele.type == Type::FIXED_LEN_BYTE_ARRAY && s_ele.__isset.scale && s_ele.__isset.type_length) {
+					return LogicalType(LogicalTypeId::DECIMAL, s_ele.precision, s_ele.scale);
+				}
+				return LogicalType::INVALID;
+
 			case ConvertedType::UTF8:
 				return LogicalType::VARCHAR;
 			default:
@@ -127,12 +135,6 @@ static LogicalType DeriveLogicalType(const SchemaElement &s_ele) {
 			}
 		}
 		return LogicalType::BLOB;
-	case Type::FIXED_LEN_BYTE_ARRAY:
-		if (s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::DECIMAL && s_ele.__isset.scale &&
-		    s_ele.__isset.scale && s_ele.__isset.type_length) {
-			// habemus decimal
-			return LogicalType(LogicalTypeId::DECIMAL, s_ele.precision, s_ele.scale);
-		}
 	default:
 		return LogicalType::INVALID;
 	}
