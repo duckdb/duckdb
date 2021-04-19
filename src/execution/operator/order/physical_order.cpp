@@ -938,7 +938,6 @@ static void SortInMemory(BufferManager &buffer_manager, ContinuousBlock &cb, con
 
 static void ReOrder(BufferManager &buffer_manager, ContinuousChunk &cc, data_ptr_t sorting_ptr,
                     const SortingState &sorting_state) {
-	// TODO: copy over COMP_SIZE rather than ENTRY_SIZE and re-adjust the merge
 	const idx_t &count = cc.data_blocks.back().count;
 
 	auto &unordered_data_block = cc.data_blocks.back();
