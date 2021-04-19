@@ -7,17 +7,17 @@ require parquet
 query I
 select struct_extract("inner", 'f64_field') from parquet_scan('test/sql/copy/parquet/data/struct.parquet');
 ----
-1.23
 NULL
+1.23
 
 query I
 select ("inner")."f64_field" from parquet_scan('test/sql/copy/parquet/data/struct.parquet');
 ----
-1.23
 NULL
+1.23
 
 query I
 select "inner"['f64_field'] from parquet_scan('test/sql/copy/parquet/data/struct.parquet');
 ----
-1.23
 NULL
+1.23
