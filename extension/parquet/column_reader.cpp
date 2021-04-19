@@ -367,7 +367,8 @@ string_t StringParquetValueConversion::DictRead(ByteBuffer &dict, uint32_t &offs
 }
 
 string_t StringParquetValueConversion::PlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
-	uint32_t str_len = plain_data.read<uint32_t>();
+	auto &scr = ((StringColumnReader &)reader);
+	uint32_t str_len = scr.fixed_width_string_length == 0 ? plain_data.read<uint32_t>() : scr.fixed_width_string_length;
 	plain_data.available(str_len);
 	((StringColumnReader &)reader).VerifyString(plain_data.ptr, str_len);
 	auto ret_str = string_t(plain_data.ptr, str_len);
@@ -376,7 +377,8 @@ string_t StringParquetValueConversion::PlainRead(ByteBuffer &plain_data, ColumnR
 }
 
 void StringParquetValueConversion::PlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
-	uint32_t str_len = plain_data.read<uint32_t>();
+	auto &scr = ((StringColumnReader &)reader);
+	uint32_t str_len = scr.fixed_width_string_length == 0 ? plain_data.read<uint32_t>() : scr.fixed_width_string_length;
 	plain_data.available(str_len);
 	plain_data.inc(str_len);
 }
