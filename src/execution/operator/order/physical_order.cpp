@@ -1540,7 +1540,10 @@ public:
 					// compute entry sizes, and how many entries we can fit until a next block must be fetched
 					idx_t l_entry_idx_temp = l_entry_idx;
 					idx_t r_entry_idx_temp = r_entry_idx;
-					for (next = 0; copied + next < count && l_entry_idx_temp < l_count && r_entry_idx_temp < r_count;
+					const idx_t &result_offset_count = result_offset_block->count;
+					const idx_t &result_offset_capacity = result_offset_block->CAPACITY;
+					for (next = 0; copied + next < count && l_entry_idx_temp < l_count && r_entry_idx_temp < r_count &&
+					               result_offset_count + next < result_offset_capacity;
 					     next++) {
 						const bool &l_smaller = left_smaller[copied + next];
 						const bool r_smaller = one - l_smaller;
