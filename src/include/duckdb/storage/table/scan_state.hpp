@@ -91,6 +91,7 @@ public:
 	unique_ptr<AdaptiveFilter> adaptive_filter;
 	LocalScanState local_state;
 	MorselInfo *version_info;
+	bool deselect_deleted = false;
 
 	//! Move to the next vector
 	void NextVector();

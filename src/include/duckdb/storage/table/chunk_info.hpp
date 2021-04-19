@@ -35,7 +35,10 @@ public:
 public:
 	//! Gets up to max_count entries from the chunk info. If the ret is 0>ret>max_count, the selection vector is filled
 	//! with the tuples
-	virtual idx_t GetSelVector(Transaction &transaction, SelectionVector &sel_vector, idx_t max_count) = 0;
+	idx_t GetSelVector(Transaction &transaction, SelectionVector &sel_vector, idx_t max_count);
+	virtual idx_t GetSelVector(transaction_t start_time, transaction_t transaction_id, SelectionVector &sel_vector,
+	                   idx_t max_count) = 0;
+	virtual idx_t GetDelVector(SelectionVector &sel_vector, idx_t max_count) = 0;
 	//! Returns whether or not a single row in the ChunkInfo should be used or not for the given transaction
 	virtual bool Fetch(Transaction &transaction, row_t row) = 0;
 	virtual void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) = 0;
@@ -52,7 +55,9 @@ public:
 	transaction_t delete_id;
 
 public:
-	idx_t GetSelVector(Transaction &transaction, SelectionVector &sel_vector, idx_t max_count) override;
+	idx_t GetSelVector(transaction_t start_time, transaction_t transaction_id, SelectionVector &sel_vector,
+	                   idx_t max_count) override;
+	idx_t GetDelVector(SelectionVector &sel_vector, idx_t max_count) override;
 	bool Fetch(Transaction &transaction, row_t row) override;
 	void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) override;
 
@@ -75,8 +80,8 @@ public:
 
 public:
 	idx_t GetSelVector(transaction_t start_time, transaction_t transaction_id, SelectionVector &sel_vector,
-	                   idx_t max_count);
-	idx_t GetSelVector(Transaction &transaction, SelectionVector &sel_vector, idx_t max_count) override;
+	                   idx_t max_count) override;
+	idx_t GetDelVector(SelectionVector &sel_vector, idx_t max_count) override;
 	bool Fetch(Transaction &transaction, row_t row) override;
 	void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) override;
 

@@ -34,6 +34,7 @@ public:
 
 public:
 	idx_t GetSelVector(Transaction &transaction, idx_t vector_idx, SelectionVector &sel_vector, idx_t max_count);
+	idx_t GetDelVector(idx_t vector_idx, SelectionVector &sel_vector, idx_t max_count);
 
 	//! For a specific row, returns true if it should be used for the transaction and false otherwise.
 	bool Fetch(Transaction &transaction, idx_t row);

@@ -17,6 +17,16 @@ ChunkInfo *MorselInfo::GetChunkInfo(idx_t vector_idx) {
 	return root->info[vector_idx].get();
 }
 
+idx_t MorselInfo::GetDelVector(idx_t vector_idx, SelectionVector &sel_vector, idx_t max_count) {
+	lock_guard<mutex> lock(morsel_lock);
+
+	auto info = GetChunkInfo(vector_idx);
+	if (!info) {
+		return max_count;
+	}
+	return info->GetDelVector(sel_vector, max_count);
+}
+
 idx_t MorselInfo::GetSelVector(Transaction &transaction, idx_t vector_idx, SelectionVector &sel_vector,
                                idx_t max_count) {
 	lock_guard<mutex> lock(morsel_lock);

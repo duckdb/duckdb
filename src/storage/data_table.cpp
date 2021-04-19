@@ -18,6 +18,7 @@
 #include "duckdb/storage/table/standard_column_data.hpp"
 
 #include "duckdb/common/chrono.hpp"
+#include "duckdb/common/constants.hpp"
 
 namespace duckdb {
 
@@ -122,6 +123,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 
 	// prevent any new tuples from being added to the parent
 	CreateIndexScanState scan_state;
+	scan_state.deselect_deleted = true;
 	parent.InitializeCreateIndexScan(scan_state, bound_columns);
 
 	// first check if there are any indexes that exist that point to the changed column
@@ -970,6 +972,7 @@ bool DataTable::ScanCreateIndex(CreateIndexScanState &state, const vector<column
 		return false;
 	}
 	idx_t count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, max_row - current_row);
+	idx_t del_count = 0;
 
 	// scan the base columns to fetch the actual data
 	// note that we insert all data into the index, even if it is marked as deleted
@@ -980,12 +983,36 @@ bool DataTable::ScanCreateIndex(CreateIndexScanState &state, const vector<column
 			// scan row id
 			D_ASSERT(result.data[i].GetType().InternalType() == ROW_TYPE);
 			result.data[i].Sequence(current_row, 1);
-		} else {
-			// scan actual base column
-			columns[column]->IndexScan(state.column_scans[i], result.data[i], allow_pending_updates);
-		}
-	}
-	result.SetCardinality(count);
+        } else {
+            if (!state.deselect_deleted) {
+                // scan actual base column
+                columns[column]->IndexScan(state.column_scans[i], result.data[i], allow_pending_updates);
+                continue;
+            }
+            SelectionVector del_vec(STANDARD_VECTOR_SIZE);
+            auto dels = state.version_info->GetDelVector(current_row, del_vec, count);
+            if (dels == count) {
+                D_ASSERT((del_count == 0) || (del_count == dels));
+                del_count = dels;
+                break;
+            }
+
+            // scan actual base column
+            columns[column]->IndexScan(state.column_scans[i], result.data[i], allow_pending_updates);
+
+            if (dels > 0) {
+                D_ASSERT((del_count == 0) || (del_count == dels));
+                del_count = dels;
+                /* del_vec.Print(del_count); */
+                auto &result_mask = FlatVector::Validity(result.data[i]);
+                for (idx_t i = 0; i < del_count; i++) {
+                    result_mask.SetInvalid(del_vec.get_index(i));
+                }
+                /* result.data[i].Slice(del_vec, count - del_count); */
+            }
+        }
+    }
+    result.SetCardinality(count);
 
 	current_row += STANDARD_VECTOR_SIZE;
 	return count > 0;
@@ -1008,6 +1035,7 @@ void DataTable::AddIndex(unique_ptr<Index> index, vector<unique_ptr<Expression>>
 	// initialize an index scan
 	CreateIndexScanState state;
 	InitializeCreateIndexScan(state, column_ids);
+    state.deselect_deleted = true;
 
 	if (!is_root) {
 		throw TransactionException("Transaction conflict: cannot add an index to a table that has been altered!");

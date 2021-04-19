@@ -12,6 +12,10 @@ static bool UseVersion(Transaction &transaction, transaction_t id) {
 	return UseVersion(transaction.start_time, transaction.transaction_id, id);
 }
 
+idx_t ChunkInfo::GetSelVector(Transaction &transaction, SelectionVector &sel_vector, idx_t max_count) {
+	return GetSelVector(transaction.start_time, transaction.transaction_id, sel_vector, max_count);
+}
+
 unique_ptr<ChunkInfo> ChunkInfo::Deserialize(MorselInfo &morsel, Deserializer &source) {
 	auto type = source.Read<ChunkInfoType>();
 	switch (type) {
@@ -33,11 +37,19 @@ ChunkConstantInfo::ChunkConstantInfo(idx_t start, MorselInfo &morsel)
     : ChunkInfo(start, morsel, ChunkInfoType::CONSTANT_INFO), insert_id(0), delete_id(NOT_DELETED_ID) {
 }
 
-idx_t ChunkConstantInfo::GetSelVector(Transaction &transaction, SelectionVector &sel_vector, idx_t max_count) {
-	if (UseVersion(transaction, insert_id) && !UseVersion(transaction, delete_id)) {
-		return max_count;
-	}
-	return 0;
+idx_t ChunkConstantInfo::GetDelVector(SelectionVector &sel_vector, idx_t max_count) {
+    if (delete_id == NOT_DELETED_ID) {
+        return 0;
+    }
+    return max_count;
+}
+
+idx_t ChunkConstantInfo::GetSelVector(transaction_t start_time, transaction_t transaction_id, SelectionVector &sel_vector,
+                                    idx_t max_count) {
+    if (UseVersion(start_time, transaction_id, insert_id) && !UseVersion(start_time, transaction_id, delete_id)) {
+        return max_count;
+    }
+    return 0;
 }
 
 bool ChunkConstantInfo::Fetch(Transaction &transaction, row_t row) {
@@ -80,8 +92,18 @@ ChunkVectorInfo::ChunkVectorInfo(idx_t start, MorselInfo &morsel)
 	}
 }
 
-idx_t ChunkVectorInfo::GetSelVector(Transaction &transaction, SelectionVector &sel_vector, idx_t max_count) {
-	return GetSelVector(transaction.start_time, transaction.transaction_id, sel_vector, max_count);
+idx_t ChunkVectorInfo::GetDelVector(SelectionVector &sel_vector, idx_t max_count) {
+    idx_t count = 0;
+    if (!any_deleted) {
+        return 0;
+    }
+    for (idx_t i = 0; i < max_count; i++) {
+        if (deleted[i] != NOT_DELETED_ID) {
+            sel_vector.set_index(count++, i);
+        }
+    }
+
+    return count;
 }
 
 idx_t ChunkVectorInfo::GetSelVector(transaction_t start_time, transaction_t transaction_id, SelectionVector &sel_vector,
