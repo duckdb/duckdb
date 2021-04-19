@@ -98,7 +98,7 @@ bool Timestamp::TryParseUTCOffset(const char *str, idx_t &pos, idx_t len, int &h
 		curpos++;
 	}
 	if (curpos + 2 > len || !StringUtil::CharacterIsDigit(str[curpos]) ||
-		!StringUtil::CharacterIsDigit(str[curpos + 1])) {
+	    !StringUtil::CharacterIsDigit(str[curpos + 1])) {
 		// no MM specifier
 		pos = curpos;
 		return true;
