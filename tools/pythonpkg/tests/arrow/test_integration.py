@@ -1,5 +1,6 @@
 import duckdb
-
+import os
+import sys
 try:
     import pyarrow
     import pyarrow.parquet
@@ -9,21 +10,17 @@ try:
 except:
     can_run = False
 
-class TestArrow(object):
-    def test_arrow(self, duckdb_cursor):
+class TestArrowIntegration(object):
+    def test_parquet_roundtrip(self, duckdb_cursor):
         if not can_run:
             return
-
-        parquet_filename = 'userdata1.parquet'
-        urllib.request.urlretrieve('https://github.com/cwida/duckdb-data/releases/download/v1.0/userdata1.parquet', parquet_filename)
-
+        parquet_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)),'data','userdata1.parquet')
         cols = 'id, first_name, last_name, email, gender, ip_address, cc, country, birthdate, salary, title, comments'
 
         # TODO timestamp
 
         userdata_parquet_table = pyarrow.parquet.read_table(parquet_filename)
         userdata_parquet_table.validate(full=True)
-
         rel_from_arrow = duckdb.arrow(userdata_parquet_table).project(cols).arrow()
         rel_from_arrow.validate(full=True)
 
@@ -41,13 +38,14 @@ class TestArrow(object):
             assert rel_from_arrow.equals(rel_from_arrow2, check_metadata=True)
             assert rel_from_arrow.equals(rel_from_duckdb, check_metadata=True)
 
-    def test_arrow_unsigned(self,duckdb_cursor):
+    def test_unsigned_roundtrip(self,duckdb_cursor):
         if not can_run:
             return
-        parquet_filename = 'unsigned.parquet'
+        parquet_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)),'data','unsigned.parquet')
         data = (pyarrow.array([1,2,3,4,5,255], type=pyarrow.uint8()),pyarrow.array([1,2,3,4,5,65535], \
             type=pyarrow.uint16()),pyarrow.array([1,2,3,4,5,4294967295], type=pyarrow.uint32()),\
                 pyarrow.array([1,2,3,4,5,18446744073709551615], type=pyarrow.uint64()))
+
         tbl = pyarrow.Table.from_arrays([data[0],data[1],data[2],data[3]],['a','b','c','d'])
         pyarrow.parquet.write_table(tbl, parquet_filename)
 
