@@ -1073,8 +1073,6 @@ void ListVector::ReferenceEntry(Vector &vector, Vector &other) {
 	         vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
 	D_ASSERT(other.GetType().id() == LogicalTypeId::LIST);
 	D_ASSERT(other.GetVectorType() == VectorType::FLAT_VECTOR || other.GetVectorType() == VectorType::CONSTANT_VECTOR);
-	D_ASSERT(other.auxiliary);
-	D_ASSERT(other.auxiliary->GetBufferType() == VectorBufferType::LIST_BUFFER);
 	vector.auxiliary = other.auxiliary;
 }
 

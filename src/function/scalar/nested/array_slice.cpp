@@ -42,7 +42,7 @@ bool ClampIndex(INDEX_TYPE &index, const INPUT_TYPE &value) {
 		if (-index > length) {
 			return false;
 		}
-		index = offset + length + index;
+		index = length + index;
 	} else if (index > length) {
 		return false;
 	}
