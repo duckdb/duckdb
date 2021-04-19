@@ -972,6 +972,7 @@ bool DataTable::ScanCreateIndex(CreateIndexScanState &state, const vector<column
 		return false;
 	}
 	idx_t count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, max_row - current_row);
+	idx_t vector_offset = (current_row - state.base_row) / STANDARD_VECTOR_SIZE;
 	idx_t del_count = 0;
 
 	// scan the base columns to fetch the actual data
@@ -990,7 +991,7 @@ bool DataTable::ScanCreateIndex(CreateIndexScanState &state, const vector<column
                 continue;
             }
             SelectionVector del_vec(STANDARD_VECTOR_SIZE);
-            auto dels = state.version_info->GetDelVector(current_row, del_vec, count);
+            auto dels = state.version_info->GetDelVector(vector_offset, del_vec, count);
             if (dels == count) {
                 D_ASSERT((del_count == 0) || (del_count == dels));
                 del_count = dels;
@@ -1003,12 +1004,10 @@ bool DataTable::ScanCreateIndex(CreateIndexScanState &state, const vector<column
             if (dels > 0) {
                 D_ASSERT((del_count == 0) || (del_count == dels));
                 del_count = dels;
-                /* del_vec.Print(del_count); */
                 auto &result_mask = FlatVector::Validity(result.data[i]);
                 for (idx_t i = 0; i < del_count; i++) {
                     result_mask.SetInvalid(del_vec.get_index(i));
                 }
-                /* result.data[i].Slice(del_vec, count - del_count); */
             }
         }
     }

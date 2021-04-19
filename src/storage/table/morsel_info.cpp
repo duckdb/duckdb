@@ -22,7 +22,7 @@ idx_t MorselInfo::GetDelVector(idx_t vector_idx, SelectionVector &sel_vector, id
 
 	auto info = GetChunkInfo(vector_idx);
 	if (!info) {
-		return max_count;
+		return 0;
 	}
 	return info->GetDelVector(sel_vector, max_count);
 }
