@@ -36,7 +36,6 @@ int64_t ValueLength(const string_t &value) {
 
 template <typename INPUT_TYPE, typename INDEX_TYPE>
 bool ClampIndex(INDEX_TYPE &index, const INPUT_TYPE &value) {
-	const auto offset = ValueOffset<INPUT_TYPE, INDEX_TYPE>(value);
 	const auto length = ValueLength<INPUT_TYPE, INDEX_TYPE>(value);
 	if (index < 0) {
 		if (-index > length) {
