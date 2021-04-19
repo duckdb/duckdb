@@ -91,6 +91,8 @@ idx_t StrfTimeFormat::GetSpecifierLength(StrTimeSpecifier specifier, date_t date
 		return len;
 	}
 	case StrTimeSpecifier::UTC_OFFSET:
+		// +00
+		return 3;
 	case StrTimeSpecifier::TZ_NAME:
 		// empty for now
 		return 0;
@@ -318,6 +320,10 @@ char *StrfTimeFormat::WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t
 		target = WritePadded3(target, data[6] / 1000);
 		break;
 	case StrTimeSpecifier::UTC_OFFSET:
+		*target++ = '+';
+		*target++ = '0';
+		*target++ = '0';
+		break;
 	case StrTimeSpecifier::TZ_NAME:
 		// always empty for now, FIXME when we have timestamp with tz
 		break;
@@ -931,6 +937,47 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 				result_data[1] = month + 1;
 				break;
 			}
+			case StrTimeSpecifier::UTC_OFFSET: {
+				// parse the next 3 characters
+				if (pos + 3 > size) {
+					// no characters left to parse
+					error_message = "Expected +HH[MM] or -HH[MM]";
+					error_position = pos;
+					return false;
+				}
+				char sign_char = data[pos];
+				if (sign_char != '+' && sign_char != '-') {
+					error_message = "Expected +HH[MM] or -HH[MM]";
+					error_position = pos;
+					return false;
+				}
+				pos++;
+				if (!StringUtil::CharacterIsDigit(data[pos]) || !StringUtil::CharacterIsDigit(data[pos + 1])) {
+					error_message = "Expected +HH[MM] or -HH[MM]";
+					error_position = pos;
+					return false;
+				}
+				int hour_offset = (data[pos] - '0') * 10 + (data[pos + 1] - '0');
+				if (sign_char == '-') {
+					hour_offset = -hour_offset;
+				}
+				result_data[3] -= hour_offset;
+				pos += 2;
+				if (pos + 2 > size || !StringUtil::CharacterIsDigit(data[pos]) ||
+				    !StringUtil::CharacterIsDigit(data[pos + 1])) {
+					// no MM specifier
+					break;
+				}
+				// we have an MM specifier: parse it
+				int minute_offset = (data[pos] - '0') * 10 + (data[pos + 1] - '0');
+				if (sign_char == '-') {
+					minute_offset = -minute_offset;
+				}
+				result_data[4] -= minute_offset;
+				pos += 2;
+				break;
+			}
+
 			default:
 				throw NotImplementedException("Unsupported specifier for strptime");
 			}
