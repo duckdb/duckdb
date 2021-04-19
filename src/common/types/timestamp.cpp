@@ -16,7 +16,6 @@ namespace duckdb {
 // T may be a space
 // Z is optional
 // ISO 8601
-
 timestamp_t Timestamp::FromCString(const char *str, idx_t len) {
 	idx_t pos;
 	date_t date;
@@ -41,11 +40,17 @@ timestamp_t Timestamp::FromCString(const char *str, idx_t len) {
 		                          string(str, len));
 	}
 	pos += time_pos;
+	auto timestamp = Timestamp::FromDatetime(date, time);
 	if (pos < len) {
 		// skip a "Z" at the end (as per the ISO8601 specs)
 		if (str[pos] == 'Z') {
 			pos++;
 		}
+		int hour_offset, minute_offset;
+		if (Timestamp::TryParseUTCOffset(str, pos, len, hour_offset, minute_offset)) {
+			timestamp -= hour_offset * Interval::MICROS_PER_HOUR + minute_offset * Interval::MICROS_PER_MINUTE;
+		}
+
 		// skip any spaces at the end
 		while (pos < len && StringUtil::CharacterIsSpace(str[pos])) {
 			pos++;
@@ -56,7 +61,55 @@ timestamp_t Timestamp::FromCString(const char *str, idx_t len) {
 			                          string(str, len));
 		}
 	}
-	return Timestamp::FromDatetime(date, time);
+	return timestamp;
+}
+
+bool Timestamp::TryParseUTCOffset(const char *str, idx_t &pos, idx_t len, int &hour_offset, int &minute_offset) {
+	minute_offset = 0;
+	idx_t curpos = pos;
+	// parse the next 3 characters
+	if (curpos + 3 > len) {
+		// no characters left to parse
+		return false;
+	}
+	char sign_char = str[curpos];
+	if (sign_char != '+' && sign_char != '-') {
+		// expected either + or -
+		return false;
+	}
+	curpos++;
+	if (!StringUtil::CharacterIsDigit(str[curpos]) || !StringUtil::CharacterIsDigit(str[curpos + 1])) {
+		// expected +HH or -HH
+		return false;
+	}
+	hour_offset = (str[curpos] - '0') * 10 + (str[curpos + 1] - '0');
+	if (sign_char == '-') {
+		hour_offset = -hour_offset;
+	}
+	curpos += 2;
+
+	// optional minute specifier: expected either "MM" or ":MM"
+	if (curpos >= len) {
+		// done, nothing left
+		pos = curpos;
+		return true;
+	}
+	if (str[curpos] == ':') {
+		curpos++;
+	}
+	if (curpos + 2 > len || !StringUtil::CharacterIsDigit(str[curpos]) ||
+	    !StringUtil::CharacterIsDigit(str[curpos + 1])) {
+		// no MM specifier
+		pos = curpos;
+		return true;
+	}
+	// we have an MM specifier: parse it
+	minute_offset = (str[curpos] - '0') * 10 + (str[curpos + 1] - '0');
+	if (sign_char == '-') {
+		minute_offset = -minute_offset;
+	}
+	pos = curpos + 2;
+	return true;
 }
 
 timestamp_t Timestamp::FromString(const string &str) {
