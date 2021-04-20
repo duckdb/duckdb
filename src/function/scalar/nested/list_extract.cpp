@@ -1,7 +1,9 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/pair.hpp"
@@ -62,13 +64,9 @@ void ListExtractTemplate(idx_t count, Vector &list, Vector &offsets, Vector &res
 	}
 }
 
-static void ListExtractFunFun(DataChunk &args, ExpressionState &state, Vector &result) {
-	D_ASSERT(args.data.size() == 2);
-	D_ASSERT(args.data[0].GetType().id() == LogicalTypeId::LIST);
-
-	auto &list = args.data[0];
-	auto &offsets = args.data[1];
-	auto count = args.size();
+static void ListExtractFunction(Vector &result, Vector &list, Vector &offsets, const idx_t count) {
+	D_ASSERT(list.GetType().id() == LogicalTypeId::LIST);
+	D_ASSERT(list.GetType().child_types().size() == 1);
 
 	switch (result.GetType().id()) {
 	case LogicalTypeId::UTINYINT:
@@ -124,28 +122,70 @@ static void ListExtractFunFun(DataChunk &args, ExpressionState &state, Vector &r
 		throw NotImplementedException("Unimplemented type for LIST_EXTRACT");
 	}
 
-	result.Verify(args.size());
+	result.Verify(count);
 }
 
-static unique_ptr<FunctionData> ListExtractBind(ClientContext &context, ScalarFunction &bound_function,
-                                                vector<unique_ptr<Expression>> &arguments) {
-	if (arguments[0]->return_type.id() != LogicalTypeId::LIST) {
-		throw BinderException("LIST_EXTRACT can only operate on LISTs");
+static void StringExtractFunction(Vector &result, Vector &input_vector, Vector &subscript_vector, const idx_t count) {
+	BinaryExecutor::Execute<string_t, int32_t, string_t>(
+	    input_vector, subscript_vector, result, count, [&](string_t input_string, int32_t subscript) {
+		    return SubstringFun::SubstringScalarFunction(result, input_string, subscript + int32_t(subscript >= 0), 1);
+	    });
+}
+
+static void ArrayExtractFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	D_ASSERT(args.ColumnCount() == 2);
+	auto count = args.size();
+
+	result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	for (idx_t i = 0; i < args.ColumnCount(); i++) {
+		if (args.data[i].GetVectorType() != VectorType::CONSTANT_VECTOR) {
+			result.SetVectorType(VectorType::FLAT_VECTOR);
+		}
 	}
-	// list extract returns the child type of the list as return type
-	bound_function.return_type = arguments[0]->return_type.child_types()[0].second;
+
+	Vector &base = args.data[0];
+	Vector &subscript = args.data[1];
+
+	switch (base.GetType().id()) {
+	case LogicalTypeId::LIST:
+		// Share the value dictionary as we are just going to slice it
+		ListExtractFunction(result, base, subscript, count);
+		break;
+	case LogicalTypeId::VARCHAR:
+		StringExtractFunction(result, base, subscript, count);
+		break;
+	default:
+		throw NotImplementedException("Specifier type not implemented");
+	}
+}
+
+static unique_ptr<FunctionData> ArrayExtractBind(ClientContext &context, ScalarFunction &bound_function,
+                                                 vector<unique_ptr<Expression>> &arguments) {
+	switch (arguments[0]->return_type.id()) {
+	case LogicalTypeId::LIST:
+		// list extract returns the child type of the list as return type
+		bound_function.return_type = arguments[0]->return_type.child_types()[0].second;
+		break;
+	case LogicalTypeId::VARCHAR:
+		// string extract returns a string, but can only accept 32 bit integers
+		bound_function.return_type = arguments[0]->return_type;
+		bound_function.arguments[1] = LogicalType::INTEGER;
+		break;
+	default:
+		throw BinderException("ARRAY_EXTRACT can only operate on LISTs and VARCHARs");
+	}
 	return make_unique<VariableReturnBindData>(bound_function.return_type);
 }
 
 void ListExtractFun::RegisterFunction(BuiltinFunctions &set) {
-	// return type is set in bind, unknown at this point
-	ScalarFunction fun("list_extract", {LogicalType::ANY, LogicalType::BIGINT}, LogicalType::ANY, ListExtractFunFun,
-	                   false, ListExtractBind);
+	// the arguments and return types are actually set in the binder function
+	ScalarFunction fun("array_extract", {LogicalType::ANY, LogicalType::BIGINT}, LogicalType::ANY, ArrayExtractFunction,
+	                   false, ArrayExtractBind);
 	fun.varargs = LogicalType::ANY;
 	set.AddFunction(fun);
 	fun.name = "list_element";
 	set.AddFunction(fun);
-	fun.name = "array_extract";
+	fun.name = "list_extract";
 	set.AddFunction(fun);
 }
 
