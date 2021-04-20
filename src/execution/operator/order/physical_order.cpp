@@ -393,7 +393,6 @@ public:
 		} else if (block_idx < data_blocks.size() - 1) {
 			block_idx++;
 			entry_idx = 0;
-			Pin();
 		}
 	}
 
@@ -1186,9 +1185,6 @@ public:
 				r_var_block_idxs[col_idx] = right.var_sorting_chunks[col_idx]->block_idx;
 				l_var_entry_idxs[col_idx] = left.var_sorting_chunks[col_idx]->entry_idx;
 				r_var_entry_idxs[col_idx] = right.var_sorting_chunks[col_idx]->entry_idx;
-
-				left.var_sorting_chunks[col_idx]->Pin();
-				right.var_sorting_chunks[col_idx]->Pin();
 			}
 		}
 
@@ -1249,6 +1245,9 @@ public:
 								comp_res =
 								    CompareVarCol(tie_col, l_ptr, r_ptr, left.var_sorting_chunks[tie_col]->DataPtr(),
 								                  right.var_sorting_chunks[tie_col]->DataPtr(), sorting_state);
+								if (comp_res != 0) {
+									break;
+								}
 								comp_offset += comp_sizes[comp_round];
 							} else {
 								break;
@@ -1263,10 +1262,17 @@ public:
 						l_ptr += l_smaller * sorting_state.ENTRY_SIZE;
 						r_ptr += r_smaller * sorting_state.ENTRY_SIZE;
 						// and the var sorting columns
-						for (idx_t col_idx = 0; col_idx < sorting_state.CONSTANT_SIZE.size(); col_idx++) {
-							if (!sorting_state.CONSTANT_SIZE[col_idx]) {
-								left.var_sorting_chunks[col_idx]->Advance();
-								right.var_sorting_chunks[col_idx]->Advance();
+						if (l_smaller) {
+							for (idx_t col_idx = 0; col_idx < sorting_state.CONSTANT_SIZE.size(); col_idx++) {
+								if (!sorting_state.CONSTANT_SIZE[col_idx]) {
+									left.var_sorting_chunks[col_idx]->Advance();
+								}
+							}
+						} else {
+							for (idx_t col_idx = 0; col_idx < sorting_state.CONSTANT_SIZE.size(); col_idx++) {
+								if (!sorting_state.CONSTANT_SIZE[col_idx]) {
+									right.var_sorting_chunks[col_idx]->Advance();
+								}
 							}
 						}
 					}
