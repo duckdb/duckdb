@@ -20,6 +20,7 @@
 #include "datetime.h" // from Python
 
 #include <random>
+#include "include/duckdb_python/arrow_array_stream.hpp"
 
 namespace duckdb {
 
@@ -232,82 +233,6 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquet(const string &filen
 	return make_unique<DuckDBPyRelation>(connection->TableFunction("parquet_scan", params)->Alias(filename));
 }
 
-struct PythonTableArrowArrayStream {
-	explicit PythonTableArrowArrayStream(const py::object &arrow_table) : arrow_table(arrow_table) {
-		stream.get_schema = PythonTableArrowArrayStream::MyStreamGetSchema;
-		stream.get_next = PythonTableArrowArrayStream::MyStreamGetNext;
-		stream.release = PythonTableArrowArrayStream::MyStreamRelease;
-		stream.get_last_error = PythonTableArrowArrayStream::MyStreamGetLastError;
-		stream.private_data = this;
-
-		batches = arrow_table.attr("to_batches")();
-	}
-
-	static int MyStreamGetSchema(struct ArrowArrayStream *stream, struct ArrowSchema *out) {
-		D_ASSERT(stream->private_data);
-		py::gil_scoped_acquire acquire;
-		auto my_stream = (PythonTableArrowArrayStream *)stream->private_data;
-		if (!stream->release) {
-			my_stream->last_error = "stream was released";
-			return -1;
-		}
-		auto schema = my_stream->arrow_table.attr("schema");
-		if (!py::hasattr(schema, "_export_to_c")) {
-			my_stream->last_error = "failed to acquire export_to_c function";
-			return -1;
-		}
-		auto export_to_c = schema.attr("_export_to_c");
-		export_to_c((uint64_t)out);
-		return 0;
-	}
-
-	static int MyStreamGetNext(struct ArrowArrayStream *stream, struct ArrowArray *out) {
-		D_ASSERT(stream->private_data);
-		py::gil_scoped_acquire acquire;
-		auto my_stream = (PythonTableArrowArrayStream *)stream->private_data;
-		if (!stream->release) {
-			my_stream->last_error = "stream was released";
-			return -1;
-		}
-		if (my_stream->batch_idx >= py::len(my_stream->batches)) {
-			out->release = nullptr;
-			return 0;
-		}
-		auto stream_batch = my_stream->batches[my_stream->batch_idx++];
-		if (!py::hasattr(stream_batch, "_export_to_c")) {
-			my_stream->last_error = "failed to acquire export_to_c function";
-			return -1;
-		}
-		auto export_to_c = stream_batch.attr("_export_to_c");
-		export_to_c((uint64_t)out);
-		return 0;
-	}
-
-	static void MyStreamRelease(struct ArrowArrayStream *stream) {
-		py::gil_scoped_acquire acquire;
-		if (!stream->release) {
-			return;
-		}
-		stream->release = nullptr;
-		delete (PythonTableArrowArrayStream *)stream->private_data;
-	}
-
-	static const char *MyStreamGetLastError(struct ArrowArrayStream *stream) {
-		py::gil_scoped_acquire acquire;
-		if (!stream->release) {
-			return "stream was released";
-		}
-		D_ASSERT(stream->private_data);
-		auto my_stream = (PythonTableArrowArrayStream *)stream->private_data;
-		return my_stream->last_error.c_str();
-	}
-
-	ArrowArrayStream stream;
-	string last_error;
-	py::object arrow_table;
-	py::list batches;
-	idx_t batch_idx = 0;
-};
 
 static string PtrToString(void const *ptr) {
 	std::ostringstream address;
@@ -324,11 +249,12 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrowTable(const py::object
 	if (table.is_none() || string(py::str(table.get_type().attr("__name__"))) != "Table") {
 		throw std::runtime_error("Only arrow tables supported");
 	}
-
-	auto my_arrow_table = new PythonTableArrowArrayStream(table);
-	string name = "arrow_table_" + PtrToString((void *)my_arrow_table);
+	auto test = PythonTableArrowArrayStream::PythonTableArrowArrayStreamFactory((uintptr_t )(void *)&table);
+    auto cp_table = new py::object(table);
+	string name = "arrow_table_" + PtrToString((void *)&cp_table);
+    ArrowArrayStream* (*stream_factory)(uintptr_t arrow_table) = PythonTableArrowArrayStream::PythonTableArrowArrayStreamFactory;
 	return make_unique<DuckDBPyRelation>(
-	    connection->TableFunction("arrow_scan", {Value::POINTER((uintptr_t)my_arrow_table)})->Alias(name));
+	    connection->TableFunction("arrow_scan", {Value::POINTER((uintptr_t)(void *)&(*cp_table)),Value::POINTER((uintptr_t)stream_factory)})->Alias(name));
 }
 
 DuckDBPyConnection *DuckDBPyConnection::UnregisterDF(const string &name) {
