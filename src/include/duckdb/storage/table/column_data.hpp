@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/storage/column_data.hpp
+// duckdb/storage/table/column_data.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -15,10 +15,12 @@
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/data_pointer.hpp"
 #include "duckdb/storage/table/persistent_table_data.hpp"
+#include "duckdb/storage/statistics/segment_statistics.hpp"
 
 namespace duckdb {
 class ColumnData;
 class DatabaseInstance;
+class Morsel;
 class TableDataWriter;
 class PersistentSegment;
 class PersistentColumnData;
@@ -48,44 +50,39 @@ public:
 
 class ColumnData {
 public:
-	ColumnData(DatabaseInstance &db, DataTableInfo &table_info, LogicalType type, idx_t column_idx, ColumnData *parent);
-	virtual ~ColumnData() {
-	}
+	ColumnData(Morsel &morsel, LogicalType type, idx_t column_idx, ColumnData *parent);
+	virtual ~ColumnData();
 
-	DataTableInfo &table_info;
+	//! The morsel this column chunk belongs to
+	Morsel &morsel;
 	//! The type of the column
 	LogicalType type;
-	//! The database
-	DatabaseInstance &db;
 	//! The column index of the column
 	idx_t column_idx;
-	//! The segments holding the data of the column
-	SegmentTree data;
 	//! The parent column (if any)
 	ColumnData *parent;
 
 public:
 	virtual bool CheckZonemap(ColumnScanState &state, TableFilter &filter) = 0;
 
+	DatabaseInstance &GetDatabase() const;
+
 	//! The root type of the column
 	const LogicalType &RootType() const;
 
-	void ScanVector(Transaction &transaction, ColumnScanState &state, Vector &result);
-	void ScanCommitted(ColumnScanState &state, Vector &result);
+	void ScanVector(ColumnScanState &state, Vector &result);
 
 	//! Initialize a scan of the column
 	virtual void InitializeScan(ColumnScanState &state) = 0;
 	//! Initialize a scan starting at the specified offset
 	virtual void InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) = 0;
 	//! Scan the next vector from the column
-	virtual void Scan(Transaction &transaction, ColumnScanState &state, Vector &result) = 0;
+	virtual void Scan(ColumnScanState &state, Vector &result) = 0;
 	//! Scan the next vector from the column and apply a selection vector to filter the data
-	void FilterScan(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
+	void FilterScan(ColumnScanState &state, Vector &result, SelectionVector &sel,
 	                idx_t &approved_tuple_count);
-	//! Scan the next vector from the column, throwing an exception if there are any outstanding updates
-	virtual void IndexScan(ColumnScanState &state, Vector &result, bool allow_pending_updates) = 0;
 	//! Executes the filters directly in the table's data
-	void Select(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
+	void Select(ColumnScanState &state, Vector &result, SelectionVector &sel,
 	            idx_t &approved_tuple_count, vector<TableFilter> &table_filter);
 	//! Initialize an appending phase for this column
 	virtual void InitializeAppend(ColumnAppendState &state);
@@ -95,19 +92,10 @@ public:
 	//! Revert a set of appends to the ColumnData
 	virtual void RevertAppend(row_t start_row);
 
-	//! Update the specified row identifiers
-	//! The "is_root" marker determines if we should write the updates to the WAL
-	//! This is set separately because a single column can contain multiple child columns
-	//! Yet we only want to write the update to the WAL once (for the root column)
-	//! For example, for an INTEGER column, the main integer column has "is_root" set to true
-	//! Whereas the child validity column has "is_root" set to false
-	virtual void Update(Transaction &transaction, Vector &updates, Vector &row_ids, idx_t count, bool is_root = false);
-
 	//! Fetch the vector from the column data that belongs to this specific row
 	virtual void Fetch(ColumnScanState &state, row_t row_id, Vector &result);
 	//! Fetch a specific row id and append it to the vector
-	virtual void FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result,
-	                      idx_t result_idx);
+	virtual void FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx);
 
 	void SetStatistics(unique_ptr<BaseStatistics> new_stats);
 	void MergeStatistics(BaseStatistics &other);
@@ -129,10 +117,10 @@ protected:
 	//! Append a transient segment
 	void AppendTransientSegment(idx_t start_row);
 
-	template<bool SCAN_COMMITTED>
-	void TemplatedScanVector(Transaction *transaction, ColumnScanState &state, Vector &result);
 protected:
 	mutex stats_lock;
+	//! The segments holding the data of this column segment
+	SegmentTree data;
 	//! The statistics of the column
 	unique_ptr<BaseStatistics> statistics;
 };

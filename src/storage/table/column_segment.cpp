@@ -32,25 +32,4 @@ void ColumnSegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &resu
 	data->FetchRow(state, row_id - this->start, result, result_idx);
 }
 
-void ColumnSegment::MergeUpdates(Transaction &transaction, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset) {
-	if (!updates) {
-		return;
-	}
-	updates->FetchUpdates(transaction, start, scan_count, result, result_offset);
-}
-
-void ColumnSegment::MergeCommitted(idx_t start, idx_t scan_count, Vector &result, idx_t result_offset) {
-	if (!updates) {
-		return;
-	}
-	updates->FetchCommitted(start, scan_count, result, result_offset);
-}
-
-void ColumnSegment::MergeRowUpdate(Transaction &transaction, row_t row_id, Vector &result, idx_t result_idx) {
-	if (!updates) {
-		return;
-	}
-	updates->FetchRow(transaction, row_id, result, result_idx);
-}
-
 } // namespace duckdb

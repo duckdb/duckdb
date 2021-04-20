@@ -1,6 +1,6 @@
 #include "duckdb/storage/table/update_segment.hpp"
 #include "duckdb/transaction/update_info.hpp"
-#include "duckdb/storage/column_data.hpp"
+#include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/storage/statistics/string_statistics.hpp"

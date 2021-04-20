@@ -13,7 +13,7 @@
 #include "duckdb/transaction/update_info.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/storage/storage_manager.hpp"
-#include "duckdb/storage/column_data.hpp"
+#include "duckdb/storage/table/column_data.hpp"
 
 #include <cstring>
 
@@ -70,20 +70,21 @@ UpdateInfo *Transaction::CreateUpdateInfo(idx_t type_size, idx_t entries) {
 }
 
 void Transaction::PushWALUpdate(ColumnData &column, row_t rows[], idx_t count) {
-	auto &storage = StorageManager::GetStorageManager(column.db);
-	if (storage.InMemory()) {
-		return;
-	}
-	if (column.table_info.IsTemporary()) {
-		return;
-	}
-	auto undo_data = undo_buffer.CreateEntry(
-	    UndoFlags::WAL_UPDATE, sizeof(WALUpdateInfo) + sizeof(row_t) * count);
-	auto update_info = (WALUpdateInfo *) undo_data;
-	update_info->column = &column;
-	update_info->count = count;
-	update_info->rows = (row_t *) (undo_data + sizeof(WALUpdateInfo));
-	memcpy(update_info->rows, &rows[0], sizeof(row_t) * count);
+	throw NotImplementedException("FIXME: push wal update??");
+	// auto &storage = StorageManager::GetStorageManager(column.db);
+	// if (storage.InMemory()) {
+	// 	return;
+	// }
+	// if (column.table_info.IsTemporary()) {
+	// 	return;
+	// }
+	// auto undo_data = undo_buffer.CreateEntry(
+	//     UndoFlags::WAL_UPDATE, sizeof(WALUpdateInfo) + sizeof(row_t) * count);
+	// auto update_info = (WALUpdateInfo *) undo_data;
+	// update_info->column = &column;
+	// update_info->count = count;
+	// update_info->rows = (row_t *) (undo_data + sizeof(WALUpdateInfo));
+	// memcpy(update_info->rows, &rows[0], sizeof(row_t) * count);
 }
 
 bool Transaction::ChangesMade() {

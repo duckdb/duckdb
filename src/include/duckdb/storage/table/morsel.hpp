@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/storage/table/morsel_info.hpp
+// duckdb/storage/table/morsel.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -14,11 +14,14 @@
 #include "duckdb/common/mutex.hpp"
 
 namespace duckdb {
+class ColumnData;
+class DatabaseInstance;
 class DataTable;
+struct DataTableInfo;
 class Vector;
 struct VersionNode;
 
-class MorselInfo : public SegmentBase {
+class Morsel : public SegmentBase {
 public:
 	static constexpr const idx_t MORSEL_VECTOR_COUNT = 100;
 	static constexpr const idx_t MORSEL_SIZE = STANDARD_VECTOR_SIZE * MORSEL_VECTOR_COUNT;
@@ -27,10 +30,17 @@ public:
 	static constexpr const idx_t MORSEL_LAYER_SIZE = MORSEL_SIZE / MORSEL_LAYER_COUNT;
 
 public:
-	MorselInfo(idx_t start, idx_t count) : SegmentBase(start, count) {
-	}
+	Morsel(DatabaseInstance &db, DataTableInfo &table_info, idx_t start, idx_t count);
+	~Morsel();
 
-	unique_ptr<VersionNode> root;
+	//! The database instance
+	DatabaseInstance &db;
+	//! The table info of this morsel
+	DataTableInfo &table_info;
+	//! The version info of the morsel (inserted and deleted tuple info)
+	shared_ptr<VersionNode> version_info;
+	//! The column data of the morsel
+	vector<shared_ptr<ColumnData>> columns;
 
 public:
 	idx_t GetSelVector(Transaction &transaction, idx_t vector_idx, SelectionVector &sel_vector, idx_t max_count);
@@ -56,7 +66,7 @@ private:
 };
 
 struct VersionNode {
-	unique_ptr<ChunkInfo> info[MorselInfo::MORSEL_VECTOR_COUNT];
+	unique_ptr<ChunkInfo> info[Morsel::MORSEL_VECTOR_COUNT];
 };
 
 } // namespace duckdb

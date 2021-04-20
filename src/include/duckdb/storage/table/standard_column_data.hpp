@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/storage/column_data.hpp"
+#include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/validity_column_data.hpp"
 
 namespace duckdb {
@@ -16,7 +16,7 @@ namespace duckdb {
 //! Standard column data represents a regular flat column (e.g. a column of type INTEGER or STRING)
 class StandardColumnData : public ColumnData {
 public:
-	StandardColumnData(DatabaseInstance &db, DataTableInfo &table_info, LogicalType type, idx_t column_idx, ColumnData *parent = nullptr);
+	StandardColumnData(Morsel &morsel, LogicalType type, idx_t column_idx, ColumnData *parent = nullptr);
 
 	//! The validity column data
 	ValidityColumnData validity;
@@ -25,15 +25,12 @@ public:
 	bool CheckZonemap(ColumnScanState &state, TableFilter &filter) override;
 	void InitializeScan(ColumnScanState &state) override;
 	void InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) override;
-	void Scan(Transaction &transaction, ColumnScanState &state, Vector &result) override;
-	void IndexScan(ColumnScanState &state, Vector &result, bool allow_pending_updates) override;
+	void Scan(ColumnScanState &state, Vector &result) override;
 	void InitializeAppend(ColumnAppendState &state) override;
 	void AppendData(ColumnAppendState &state, VectorData &vdata, idx_t count) override;
 	void RevertAppend(row_t start_row) override;
-	void Update(Transaction &transaction, Vector &updates, Vector &row_ids, idx_t count, bool is_root = false) override;
 	void Fetch(ColumnScanState &state, row_t row_id, Vector &result) override;
-	void FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result,
-	              idx_t result_idx) override;
+	void FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) override;
 
 	unique_ptr<BaseStatistics> GetStatistics() override;
 

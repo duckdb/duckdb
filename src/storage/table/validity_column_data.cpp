@@ -4,8 +4,8 @@
 
 namespace duckdb {
 
-ValidityColumnData::ValidityColumnData(DatabaseInstance &db, DataTableInfo &table_info, idx_t column_idx, ColumnData *parent)
-    : ColumnData(db, table_info, LogicalType(LogicalTypeId::VALIDITY), column_idx, parent) {
+ValidityColumnData::ValidityColumnData(Morsel &morsel, idx_t column_idx, ColumnData *parent)
+    : ColumnData(morsel, LogicalType(LogicalTypeId::VALIDITY), column_idx, parent) {
 }
 
 bool ValidityColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
@@ -24,24 +24,13 @@ void ValidityColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t 
 	state.initialized = false;
 }
 
-void ValidityColumnData::Scan(Transaction &transaction, ColumnScanState &state, Vector &result) {
+void ValidityColumnData::Scan(ColumnScanState &state, Vector &result) {
 	if (!state.initialized) {
 		state.current->InitializeScan(state);
 		state.initialized = true;
 	}
 	// perform a scan of this segment
-	ScanVector(transaction, state, result);
-}
-
-void ValidityColumnData::IndexScan(ColumnScanState &state, Vector &result, bool allow_pending_updates) {
-	if (!state.initialized) {
-		state.current->InitializeScan(state);
-		state.initialized = true;
-	}
-	if (!allow_pending_updates && state.current->updates && state.current->updates->HasUncommittedUpdates(state.row_index)) {
-		throw TransactionException("Cannot create index with outstanding updates");
-	}
-	ScanCommitted(state, result);
+	ScanVector(state, result);
 }
 
 unique_ptr<PersistentColumnData> ValidityColumnData::Deserialize(DatabaseInstance &db, Deserializer &source) {

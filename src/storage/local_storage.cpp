@@ -4,7 +4,7 @@
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/uncompressed_segment.hpp"
-#include "duckdb/storage/table/morsel_info.hpp"
+#include "duckdb/storage/table/morsel.hpp"
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/planner/table_filter.hpp"
 
@@ -189,7 +189,7 @@ void LocalStorage::Append(DataTable *table, DataChunk &chunk) {
 	}
 	//! Append to the chunk
 	storage->collection.Append(chunk);
-	if (storage->active_scans == 0 && storage->collection.Count() >= MorselInfo::MORSEL_SIZE * 2) {
+	if (storage->active_scans == 0 && storage->collection.Count() >= Morsel::MORSEL_SIZE * 2) {
 		// flush to base storage
 		Flush(*table, *storage);
 	}

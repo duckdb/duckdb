@@ -27,6 +27,7 @@ class UpdateSegment;
 struct TableFilter;
 struct ColumnFetchState;
 struct ColumnScanState;
+
 enum class ColumnSegmentType : uint8_t { TRANSIENT, PERSISTENT };
 //! TableFilter represents a filter pushed down into the table scan.
 
@@ -51,21 +52,13 @@ public:
 	SegmentStatistics stats;
 	//! The uncompressed segment holding the data
 	unique_ptr<UncompressedSegment> data;
-	//! Update segments
-	unique_ptr<UpdateSegment> updates;
+
 public:
 	void InitializeScan(ColumnScanState &state);
 	//! Scan one vector from this segment
 	void Scan(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset);
 	//! Fetch a value of the specific row id and append it to the result
 	void FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx);
-
-	//! Merge updates for the specific transaction into the result vector
-	void MergeUpdates(Transaction &transaction, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset);
-	//! Merge committed updates for the specific transaction into the result vector
-	void MergeCommitted(idx_t start, idx_t scan_count, Vector &result, idx_t result_offset);
-	//! Merge a single row update into the vector at the specified index
-	void MergeRowUpdate(Transaction &transaction, row_t row_id, Vector &result, idx_t result_idx);
 };
 
 } // namespace duckdb

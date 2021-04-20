@@ -13,8 +13,8 @@
 #include "duckdb/storage/table/persistent_segment.hpp"
 #include "duckdb/storage/table/transient_segment.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
-#include "duckdb/storage/column_data.hpp"
-#include "duckdb/storage/table/morsel_info.hpp"
+#include "duckdb/storage/table/column_data.hpp"
+#include "duckdb/storage/table/morsel.hpp"
 
 namespace duckdb {
 
@@ -33,22 +33,22 @@ void TableDataWriter::WriteTableData() {
 	table.storage->CheckpointDeletes(*this);
 }
 
-void TableDataWriter::CheckpointDeletes(MorselInfo *morsel_info) {
+void TableDataWriter::CheckpointDeletes(Morsel *morsel_info) {
 	// deletes! write them after the data pointers
 	while (morsel_info) {
-		if (morsel_info->root) {
+		if (morsel_info->version_info) {
 			// first count how many ChunkInfo's we need to deserialize
 			idx_t chunk_info_count = 0;
-			for (idx_t vector_idx = 0; vector_idx < MorselInfo::MORSEL_VECTOR_COUNT; vector_idx++) {
-				auto chunk_info = morsel_info->root->info[vector_idx].get();
+			for (idx_t vector_idx = 0; vector_idx < Morsel::MORSEL_VECTOR_COUNT; vector_idx++) {
+				auto chunk_info = morsel_info->version_info->info[vector_idx].get();
 				if (!chunk_info) {
 					continue;
 				}
 				chunk_info_count++;
 			}
 			meta_writer.Write<idx_t>(chunk_info_count);
-			for (idx_t vector_idx = 0; vector_idx < MorselInfo::MORSEL_VECTOR_COUNT; vector_idx++) {
-				auto chunk_info = morsel_info->root->info[vector_idx].get();
+			for (idx_t vector_idx = 0; vector_idx < Morsel::MORSEL_VECTOR_COUNT; vector_idx++) {
+				auto chunk_info = morsel_info->version_info->info[vector_idx].get();
 				if (!chunk_info) {
 					continue;
 				}
@@ -58,7 +58,7 @@ void TableDataWriter::CheckpointDeletes(MorselInfo *morsel_info) {
 		} else {
 			meta_writer.Write<idx_t>(0);
 		}
-		morsel_info = (MorselInfo *)morsel_info->next.get();
+		morsel_info = (Morsel *)morsel_info->next.get();
 	}
 }
 

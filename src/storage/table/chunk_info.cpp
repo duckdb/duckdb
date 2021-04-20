@@ -12,7 +12,7 @@ static bool UseVersion(Transaction &transaction, transaction_t id) {
 	return UseVersion(transaction.start_time, transaction.transaction_id, id);
 }
 
-unique_ptr<ChunkInfo> ChunkInfo::Deserialize(MorselInfo &morsel, Deserializer &source) {
+unique_ptr<ChunkInfo> ChunkInfo::Deserialize(Morsel &morsel, Deserializer &source) {
 	auto type = source.Read<ChunkInfoType>();
 	switch (type) {
 	case ChunkInfoType::EMPTY_INFO:
@@ -29,7 +29,7 @@ unique_ptr<ChunkInfo> ChunkInfo::Deserialize(MorselInfo &morsel, Deserializer &s
 //===--------------------------------------------------------------------===//
 // Constant info
 //===--------------------------------------------------------------------===//
-ChunkConstantInfo::ChunkConstantInfo(idx_t start, MorselInfo &morsel)
+ChunkConstantInfo::ChunkConstantInfo(idx_t start, Morsel &morsel)
     : ChunkInfo(start, morsel, ChunkInfoType::CONSTANT_INFO), insert_id(0), delete_id(NOT_DELETED_ID) {
 }
 
@@ -60,7 +60,7 @@ void ChunkConstantInfo::Serialize(Serializer &serializer) {
 	serializer.Write<idx_t>(start);
 }
 
-unique_ptr<ChunkInfo> ChunkConstantInfo::Deserialize(MorselInfo &morsel, Deserializer &source) {
+unique_ptr<ChunkInfo> ChunkConstantInfo::Deserialize(Morsel &morsel, Deserializer &source) {
 	auto start = source.Read<idx_t>();
 
 	auto info = make_unique<ChunkConstantInfo>(start, morsel);
@@ -72,7 +72,7 @@ unique_ptr<ChunkInfo> ChunkConstantInfo::Deserialize(MorselInfo &morsel, Deseria
 //===--------------------------------------------------------------------===//
 // Vector info
 //===--------------------------------------------------------------------===//
-ChunkVectorInfo::ChunkVectorInfo(idx_t start, MorselInfo &morsel)
+ChunkVectorInfo::ChunkVectorInfo(idx_t start, Morsel &morsel)
     : ChunkInfo(start, morsel, ChunkInfoType::VECTOR_INFO), insert_id(0), same_inserted_id(true), any_deleted(false) {
 	for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
 		inserted[i] = 0;
@@ -202,7 +202,7 @@ void ChunkVectorInfo::Serialize(Serializer &serializer) {
 	serializer.WriteData((data_ptr_t)deleted_tuples, sizeof(bool) * STANDARD_VECTOR_SIZE);
 }
 
-unique_ptr<ChunkInfo> ChunkVectorInfo::Deserialize(MorselInfo &morsel, Deserializer &source) {
+unique_ptr<ChunkInfo> ChunkVectorInfo::Deserialize(Morsel &morsel, Deserializer &source) {
 	auto start = source.Read<idx_t>();
 
 	auto result = make_unique<ChunkVectorInfo>(start, morsel);

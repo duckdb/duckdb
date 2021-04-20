@@ -133,37 +133,38 @@ void CommitState::WriteDelete(DeleteInfo *info) {
 }
 
 void CommitState::WriteUpdate(WALUpdateInfo *info) {
-	D_ASSERT(info->count > 0);
-	D_ASSERT(log);
-	auto &column_data = *info->column;
-	// switch to the current table, if necessary
-	SwitchTable(&column_data.table_info, UndoFlags::UPDATE_TUPLE);
+	throw NotImplementedException("FIXME: write update");
+	// D_ASSERT(info->count > 0);
+	// D_ASSERT(log);
+	// auto &column_data = *info->column;
+	// // switch to the current table, if necessary
+	// SwitchTable(&column_data.table_info, UndoFlags::UPDATE_TUPLE);
 
-	vector<LogicalType> update_types {
-		column_data.RootType(),
-		LOGICAL_ROW_TYPE
-	};
+	// vector<LogicalType> update_types {
+	// 	column_data.RootType(),
+	// 	LOGICAL_ROW_TYPE
+	// };
 
-	update_chunk = make_unique<DataChunk>();
-	update_chunk->Initialize(update_types);
+	// update_chunk = make_unique<DataChunk>();
+	// update_chunk->Initialize(update_types);
 
-	// fetch the updated values from the base segment
-	ColumnScanState state;
-	auto first_id = info->rows[0];
-	column_data.InitializeScanWithOffset(state, first_id);
-	column_data.IndexScan(state, update_chunk->data[0], true);
+	// // fetch the updated values from the base segment
+	// ColumnScanState state;
+	// auto first_id = info->rows[0];
+	// column_data.InitializeScanWithOffset(state, first_id);
+	// column_data.IndexScan(state, update_chunk->data[0], true);
 
-	// write the row ids into the chunk
-	SelectionVector sel(STANDARD_VECTOR_SIZE);
-	auto row_ids = FlatVector::GetData<row_t>(update_chunk->data[1]);
-	for (idx_t i = 0; i < info->count; i++) {
-		auto idx = info->rows[i] - first_id;
-		sel.set_index(i, idx);
-		row_ids[idx] = info->rows[i];
-	}
-	update_chunk->Slice(sel, info->count);
+	// // write the row ids into the chunk
+	// SelectionVector sel(STANDARD_VECTOR_SIZE);
+	// auto row_ids = FlatVector::GetData<row_t>(update_chunk->data[1]);
+	// for (idx_t i = 0; i < info->count; i++) {
+	// 	auto idx = info->rows[i] - first_id;
+	// 	sel.set_index(i, idx);
+	// 	row_ids[idx] = info->rows[i];
+	// }
+	// update_chunk->Slice(sel, info->count);
 
-	log->WriteUpdate(*update_chunk, column_data.column_idx);
+	// log->WriteUpdate(*update_chunk, column_data.column_idx);
 }
 
 template <bool HAS_LOG>
@@ -210,12 +211,13 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 		break;
 	}
 	case UndoFlags::WAL_UPDATE: {
-		auto info = (WALUpdateInfo *)data;
-		if (!HAS_LOG) {
-			break;
-		}
-		D_ASSERT(!info->column->table_info.IsTemporary());
-		WriteUpdate(info);
+		throw NotImplementedException("FIXME: write update");
+		// auto info = (WALUpdateInfo *)data;
+		// if (!HAS_LOG) {
+		// 	break;
+		// }
+		// D_ASSERT(!info->column->table_info.IsTemporary());
+		// WriteUpdate(info);
 		break;
 	}
 	default:

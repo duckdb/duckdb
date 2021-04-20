@@ -12,7 +12,7 @@
 #include "duckdb/common/vector_size.hpp"
 
 namespace duckdb {
-class MorselInfo;
+class Morsel;
 struct SelectionVector;
 class Transaction;
 
@@ -20,7 +20,7 @@ enum class ChunkInfoType : uint8_t { CONSTANT_INFO, VECTOR_INFO, EMPTY_INFO };
 
 class ChunkInfo {
 public:
-	ChunkInfo(idx_t start, MorselInfo &morsel, ChunkInfoType type) : start(start), morsel(morsel), type(type) {
+	ChunkInfo(idx_t start, Morsel &morsel, ChunkInfoType type) : start(start), morsel(morsel), type(type) {
 	}
 	virtual ~ChunkInfo() {
 	}
@@ -28,7 +28,7 @@ public:
 	//! The row index of the first row
 	idx_t start;
 	//! The morsel the chunk info belongs to
-	MorselInfo &morsel;
+	Morsel &morsel;
 	//! The ChunkInfo type
 	ChunkInfoType type;
 
@@ -41,12 +41,12 @@ public:
 	virtual void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) = 0;
 
 	virtual void Serialize(Serializer &serialize) = 0;
-	static unique_ptr<ChunkInfo> Deserialize(MorselInfo &morsel, Deserializer &source);
+	static unique_ptr<ChunkInfo> Deserialize(Morsel &morsel, Deserializer &source);
 };
 
 class ChunkConstantInfo : public ChunkInfo {
 public:
-	ChunkConstantInfo(idx_t start, MorselInfo &morsel);
+	ChunkConstantInfo(idx_t start, Morsel &morsel);
 
 	transaction_t insert_id;
 	transaction_t delete_id;
@@ -57,12 +57,12 @@ public:
 	void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) override;
 
 	void Serialize(Serializer &serialize) override;
-	static unique_ptr<ChunkInfo> Deserialize(MorselInfo &morsel, Deserializer &source);
+	static unique_ptr<ChunkInfo> Deserialize(Morsel &morsel, Deserializer &source);
 };
 
 class ChunkVectorInfo : public ChunkInfo {
 public:
-	ChunkVectorInfo(idx_t start, MorselInfo &morsel);
+	ChunkVectorInfo(idx_t start, Morsel &morsel);
 
 	//! The transaction ids of the transactions that inserted the tuples (if any)
 	transaction_t inserted[STANDARD_VECTOR_SIZE];
@@ -85,7 +85,7 @@ public:
 	void CommitDelete(transaction_t commit_id, row_t rows[], idx_t count);
 
 	void Serialize(Serializer &serialize) override;
-	static unique_ptr<ChunkInfo> Deserialize(MorselInfo &morsel, Deserializer &source);
+	static unique_ptr<ChunkInfo> Deserialize(Morsel &morsel, Deserializer &source);
 };
 
 } // namespace duckdb

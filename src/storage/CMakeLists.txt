@@ -8,7 +8,6 @@ add_library_unity(
   OBJECT
   buffer_manager.cpp
   checkpoint_manager.cpp
-  column_data.cpp
   block.cpp
   data_table.cpp
   index.cpp

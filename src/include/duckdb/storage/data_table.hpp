@@ -13,7 +13,6 @@
 #include "duckdb/storage/index.hpp"
 #include "duckdb/storage/table_statistics.hpp"
 #include "duckdb/storage/block.hpp"
-#include "duckdb/storage/column_data.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/persistent_segment.hpp"
 #include "duckdb/transaction/local_storage.hpp"
@@ -175,12 +174,10 @@ private:
 private:
 	//! Lock for appending entries to the table
 	std::mutex append_lock;
-	//! The segment tree holding the persistent versions
-	shared_ptr<SegmentTree> versions;
 	//! The number of rows in the table
 	idx_t total_rows;
-	//! The physical columns of the table
-	vector<shared_ptr<ColumnData>> columns;
+	//! The segment trees holding the various morsels of the table
+	vector<shared_ptr<SegmentTree>> morsels;
 	//! Whether or not the data table is the root DataTable for this table; the root DataTable is the newest version
 	//! that can be appended to
 	bool is_root;

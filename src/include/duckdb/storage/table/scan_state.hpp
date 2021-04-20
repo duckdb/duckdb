@@ -18,7 +18,7 @@ namespace duckdb {
 class ColumnSegment;
 class LocalTableStorage;
 class Index;
-class MorselInfo;
+class Morsel;
 class UpdateSegment;
 class PersistentSegment;
 class TransientSegment;
@@ -78,15 +78,23 @@ private:
 class TableScanState {
 public:
 	TableScanState() {};
-	idx_t current_row, max_row;
-	idx_t base_row;
-	unique_ptr<ColumnScanState[]> column_scans;
-	idx_t column_count;
-	TableFilterSet *table_filters = nullptr;
-	unique_ptr<AdaptiveFilter> adaptive_filter;
-	LocalScanState local_state;
-	MorselInfo *version_info;
 
+	//! The current morsel we are scanning
+	Morsel *morsel;
+	//! The vector index within the morsel
+	idx_t vector_index;
+	//! Child column scans
+	unique_ptr<ColumnScanState[]> column_scans;
+	//! The number of column scans
+	idx_t column_count;
+	//! The table filters (if any)
+	TableFilterSet *table_filters = nullptr;
+	//! Adaptive filter info (if any)
+	unique_ptr<AdaptiveFilter> adaptive_filter;
+	//! Transaction-local scan state
+	LocalScanState local_state;
+
+public:
 	//! Move to the next vector
 	void NextVector();
 };
