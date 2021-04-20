@@ -938,43 +938,14 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 				break;
 			}
 			case StrTimeSpecifier::UTC_OFFSET: {
-				// parse the next 3 characters
-				if (pos + 3 > size) {
-					// no characters left to parse
+				int hour_offset, minute_offset;
+				if (!Timestamp::TryParseUTCOffset(data, pos, size, hour_offset, minute_offset)) {
 					error_message = "Expected +HH[MM] or -HH[MM]";
 					error_position = pos;
 					return false;
-				}
-				char sign_char = data[pos];
-				if (sign_char != '+' && sign_char != '-') {
-					error_message = "Expected +HH[MM] or -HH[MM]";
-					error_position = pos;
-					return false;
-				}
-				pos++;
-				if (!StringUtil::CharacterIsDigit(data[pos]) || !StringUtil::CharacterIsDigit(data[pos + 1])) {
-					error_message = "Expected +HH[MM] or -HH[MM]";
-					error_position = pos;
-					return false;
-				}
-				int hour_offset = (data[pos] - '0') * 10 + (data[pos + 1] - '0');
-				if (sign_char == '-') {
-					hour_offset = -hour_offset;
 				}
 				result_data[3] -= hour_offset;
-				pos += 2;
-				if (pos + 2 > size || !StringUtil::CharacterIsDigit(data[pos]) ||
-				    !StringUtil::CharacterIsDigit(data[pos + 1])) {
-					// no MM specifier
-					break;
-				}
-				// we have an MM specifier: parse it
-				int minute_offset = (data[pos] - '0') * 10 + (data[pos + 1] - '0');
-				if (sign_char == '-') {
-					minute_offset = -minute_offset;
-				}
 				result_data[4] -= minute_offset;
-				pos += 2;
 				break;
 			}
 

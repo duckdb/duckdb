@@ -1,0 +1,56 @@
+# name: test/sql/types/timestamp/utc_offset.test
+# description: Test UTC offset in timestamp parsing
+# group: [timestamp]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+select timestamp '2020-12-31 21:25:58.745232';
+----
+2020-12-31 21:25:58.745232
+
+query I
+select timestamp '2020-12-31 21:25:58.745232';
+----
+2020-12-31 21:25:58.745232
+
+query I
+select timestamp '2020-12-31 21:25:58.745232+00';
+----
+2020-12-31 21:25:58.745232
+
+query I
+select timestamp '2020-12-31 21:25:58.745232+0000';
+----
+2020-12-31 21:25:58.745232
+
+query I
+select timestamp '2020-12-31 21:25:58.745232+02';
+----
+2020-12-31 19:25:58.745232
+
+query I
+select timestamp '2020-12-31 21:25:58.745232-02';
+----
+2020-12-31 23:25:58.745232
+
+query I
+select timestamp '2020-12-31 21:25:58.745232+0215';
+----
+2020-12-31 19:10:58.745232
+
+query I
+select timestamp '2020-12-31 21:25:58.745232+02:15';
+----
+2020-12-31 19:10:58.745232
+
+query I
+select timestamp '2020-12-31 21:25:58.745232-0215';
+----
+2020-12-31 23:40:58.745232
+
+query I
+select timestamp '2020-12-31 21:25:58+02:15';
+----
+2020-12-31 19:10:58
