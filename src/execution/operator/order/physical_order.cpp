@@ -1763,7 +1763,7 @@ void PhysicalOrder::ScheduleMergeTasks(Pipeline &pipeline, ClientContext &contex
 		return;
 	}
 
-	std::random_shuffle(state.sorted_blocks.begin(), state.sorted_blocks.end());
+	// uneven amount of blocks
 	if (state.sorted_blocks.size() % 2 == 1) {
 		state.sorted_blocks_temp.push_back(move(state.sorted_blocks.back()));
 		state.sorted_blocks.pop_back();
