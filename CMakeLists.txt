@@ -68,6 +68,7 @@ endif()
 option(ENABLE_SANITIZER "Enable address sanitizer." TRUE)
 option(ENABLE_THREAD_SANITIZER "Enable thread sanitizer." FALSE)
 option(ENABLE_UBSAN "Enable undefined behavior sanitizer." TRUE)
+option(DISABLE_VPTR_SANITIZER "Disable vptr sanitizer; work-around for sanitizer false positive on Macbook M1" FALSE)
 option(
   FORCE_SANITIZER
   "Forces building with sanitizers even if the Python and R modules are enabled."
@@ -113,8 +114,14 @@ endif()
 if(${ENABLE_UBSAN})
   if(FORCE_ASSERT)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=undefined")
+    if (${DISABLE_VPTR_SANITIZER})
+      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-sanitize=vptr")
+    endif()
   else()
     set(CXX_EXTRA_DEBUG "${CXX_EXTRA_DEBUG} -fsanitize=undefined")
+    if (${DISABLE_VPTR_SANITIZER})
+      set(CXX_EXTRA_DEBUG "${CXX_EXTRA_DEBUG} -fno-sanitize=vptr")
+    endif()
   endif()
 endif()
 
