@@ -1,0 +1,115 @@
+# name: test/sql/function/string/test_subscript.test
+# description: Substring test
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE strings(s VARCHAR, off INTEGER);
+
+statement ok
+INSERT INTO strings VALUES ('hello', 0), ('world', 1), ('b', 0), (NULL, 1)
+
+# test direct subscript
+statement error
+SELECT '🦆ab'[0], 'abc'[1]
+
+# constant offset/length
+# normal array_extract
+query T
+SELECT s[1] FROM strings
+----
+e
+o
+(empty)
+NULL
+
+# array_extract out of range
+query T
+SELECT s[2] FROM strings
+----
+l
+r
+(empty)
+NULL
+
+# variable length offset/length
+query T
+SELECT s[off] FROM strings
+----
+h
+o
+b
+NULL
+
+query T
+SELECT s[1] FROM strings
+----
+e
+o
+(empty)
+NULL
+
+statement error
+SELECT 'hello'[off] FROM strings
+
+# test substrings with constant nulls in different places
+statement error
+SELECT NULL::VARCHAR[off] FROM strings
+
+statement error
+SELECT 'hello'[NULL] FROM strings
+
+statement error
+SELECT NULL::VARCHAR[NULL] FROM strings
+
+statement error
+SELECT NULL::VARCHAR[off] FROM strings
+
+statement error
+SELECT NULL::VARCHAR[NULL] FROM strings
+
+# negative offset
+query T
+SELECT s[-1] FROM strings
+----
+o
+d
+b
+NULL
+
+# zero offset
+query T
+SELECT s[0] FROM strings
+----
+h
+w
+b
+NULL
+
+# length 0
+query T
+SELECT s[5] FROM strings
+----
+(empty)
+(empty)
+(empty)
+NULL
+
+# very large offset and length
+query T
+SELECT s[2147483646] FROM strings
+----
+(empty)
+(empty)
+(empty)
+NULL
+
+query T
+SELECT s[-2147483647] FROM strings
+----
+h
+w
+b
+NULL
