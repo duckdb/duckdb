@@ -30,8 +30,8 @@ int64_t ValueLength(const list_entry_t &value) {
 }
 
 template <>
-int64_t ValueLength(const string_t &value) {
-	return LengthFun::Length<string_t, int64_t>(value);
+int32_t ValueLength(const string_t &value) {
+	return LengthFun::Length<string_t, int32_t>(value);
 }
 
 template <typename INPUT_TYPE, typename INDEX_TYPE>
@@ -74,7 +74,7 @@ list_entry_t SliceValue(Vector &result, list_entry_t input, int64_t begin, int64
 }
 
 template <>
-string_t SliceValue(Vector &result, string_t input, int64_t begin, int64_t end) {
+string_t SliceValue(Vector &result, string_t input, int32_t begin, int32_t end) {
 	// one-based - zero has strange semantics
 	return SubstringFun::SubstringScalarFunction(result, input, begin + 1, end - begin);
 }
@@ -160,7 +160,7 @@ static void ArraySliceFunction(DataChunk &args, ExpressionState &state, Vector &
 		ExecuteSlice<list_entry_t, int64_t>(result, s, b, e, count);
 		break;
 	case LogicalTypeId::VARCHAR:
-		ExecuteSlice<string_t, int64_t>(result, s, b, e, count);
+		ExecuteSlice<string_t, int32_t>(result, s, b, e, count);
 		break;
 	default:
 		throw NotImplementedException("Specifier type not implemented");
@@ -169,12 +169,17 @@ static void ArraySliceFunction(DataChunk &args, ExpressionState &state, Vector &
 
 static unique_ptr<FunctionData> ArraySliceBind(ClientContext &context, ScalarFunction &bound_function,
                                                vector<unique_ptr<Expression>> &arguments) {
-
+	D_ASSERT(bound_function.arguments.size() == 3);
 	switch (arguments[0]->return_type.id()) {
 	case LogicalTypeId::LIST:
-	case LogicalTypeId::VARCHAR:
 		// The result is the same type
 		bound_function.return_type = arguments[0]->return_type;
+		break;
+	case LogicalTypeId::VARCHAR:
+		// string slice returns a string, but can only accept 32 bit integers
+		bound_function.return_type = arguments[0]->return_type;
+		bound_function.arguments[1] = LogicalType::INTEGER;
+		bound_function.arguments[2] = LogicalType::INTEGER;
 		break;
 	default:
 		throw BinderException("ARRAY_SLICE can only operate on LISTs and VARCHARs");

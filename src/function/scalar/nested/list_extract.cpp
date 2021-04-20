@@ -161,6 +161,7 @@ static void ArrayExtractFunction(DataChunk &args, ExpressionState &state, Vector
 
 static unique_ptr<FunctionData> ArrayExtractBind(ClientContext &context, ScalarFunction &bound_function,
                                                  vector<unique_ptr<Expression>> &arguments) {
+	D_ASSERT(bound_function.arguments.size() == 2);
 	switch (arguments[0]->return_type.id()) {
 	case LogicalTypeId::LIST:
 		// list extract returns the child type of the list as return type
