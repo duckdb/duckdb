@@ -7,7 +7,10 @@
 #include "zstd.h"
 #include <iostream>
 
+#include "duckdb.hpp"
+#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/types/chunk_collection.hpp"
+#endif
 
 namespace duckdb {
 
@@ -131,10 +134,10 @@ void ColumnReader::PrepareRead(parquet_filter_t &filter) {
 }
 
 void ColumnReader::PreparePage(idx_t compressed_page_size, idx_t uncompressed_page_size) {
-	auto trans = (ThriftFileTransport *)protocol->getTransport().get();
+	auto &trans = (ThriftFileTransport &)*protocol->getTransport();
 
 	block = make_shared<ResizeableBuffer>(compressed_page_size + 1);
-	trans->read((uint8_t *)block->ptr, compressed_page_size);
+	trans.read((uint8_t *)block->ptr, compressed_page_size);
 
 	shared_ptr<ResizeableBuffer> unpacked_block;
 	if (chunk->meta_data.codec != CompressionCodec::UNCOMPRESSED) {
@@ -248,8 +251,8 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
                          Vector &result) {
 	// we need to reset the location because multiple column readers share the same protocol
-	auto trans = (ThriftFileTransport *)protocol->getTransport().get();
-	trans->SetLocation(chunk_read_offset);
+	auto &trans = (ThriftFileTransport &)*protocol->getTransport();
+	trans.SetLocation(chunk_read_offset);
 
 	idx_t result_offset = 0;
 	auto to_read = num_values;
@@ -299,7 +302,7 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t 
 		to_read -= read_now;
 	}
 	group_rows_available -= num_values;
-	chunk_read_offset = trans->GetLocation();
+	chunk_read_offset = trans.GetLocation();
 
 	return num_values;
 }
@@ -364,7 +367,8 @@ string_t StringParquetValueConversion::DictRead(ByteBuffer &dict, uint32_t &offs
 }
 
 string_t StringParquetValueConversion::PlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
-	uint32_t str_len = plain_data.read<uint32_t>();
+	auto &scr = ((StringColumnReader &)reader);
+	uint32_t str_len = scr.fixed_width_string_length == 0 ? plain_data.read<uint32_t>() : scr.fixed_width_string_length;
 	plain_data.available(str_len);
 	((StringColumnReader &)reader).VerifyString(plain_data.ptr, str_len);
 	auto ret_str = string_t(plain_data.ptr, str_len);
@@ -373,7 +377,8 @@ string_t StringParquetValueConversion::PlainRead(ByteBuffer &plain_data, ColumnR
 }
 
 void StringParquetValueConversion::PlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
-	uint32_t str_len = plain_data.read<uint32_t>();
+	auto &scr = ((StringColumnReader &)reader);
+	uint32_t str_len = scr.fixed_width_string_length == 0 ? plain_data.read<uint32_t>() : scr.fixed_width_string_length;
 	plain_data.available(str_len);
 	plain_data.inc(str_len);
 }

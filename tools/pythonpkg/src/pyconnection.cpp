@@ -245,6 +245,7 @@ struct PythonTableArrowArrayStream {
 
 	static int MyStreamGetSchema(struct ArrowArrayStream *stream, struct ArrowSchema *out) {
 		D_ASSERT(stream->private_data);
+		py::gil_scoped_acquire acquire;
 		auto my_stream = (PythonTableArrowArrayStream *)stream->private_data;
 		if (!stream->release) {
 			my_stream->last_error = "stream was released";
@@ -262,6 +263,7 @@ struct PythonTableArrowArrayStream {
 
 	static int MyStreamGetNext(struct ArrowArrayStream *stream, struct ArrowArray *out) {
 		D_ASSERT(stream->private_data);
+		py::gil_scoped_acquire acquire;
 		auto my_stream = (PythonTableArrowArrayStream *)stream->private_data;
 		if (!stream->release) {
 			my_stream->last_error = "stream was released";
@@ -282,6 +284,7 @@ struct PythonTableArrowArrayStream {
 	}
 
 	static void MyStreamRelease(struct ArrowArrayStream *stream) {
+		py::gil_scoped_acquire acquire;
 		if (!stream->release) {
 			return;
 		}
@@ -290,6 +293,7 @@ struct PythonTableArrowArrayStream {
 	}
 
 	static const char *MyStreamGetLastError(struct ArrowArrayStream *stream) {
+		py::gil_scoped_acquire acquire;
 		if (!stream->release) {
 			return "stream was released";
 		}

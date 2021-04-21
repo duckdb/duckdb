@@ -88,6 +88,74 @@ SELECT strptime('', NULL)
 ----
 NULL
 
+# UTC offset
+query I
+select strptime('2020-12-31 21:25:58.745232', '%Y-%m-%d %H:%M:%S.%f');
+----
+2020-12-31 21:25:58.745232
+
+query I
+select strptime('2020-12-31 21:25:58.745232', '%Y-%m-%d %H:%M:%S.%f');
+----
+2020-12-31 21:25:58.745232
+
+query I
+select strptime('2020-12-31 21:25:58.745232+00', '%Y-%m-%d %H:%M:%S.%f%z');
+----
+2020-12-31 21:25:58.745232
+
+query I
+select strptime('2020-12-31 21:25:58.745232+0000', '%Y-%m-%d %H:%M:%S.%f%z');
+----
+2020-12-31 21:25:58.745232
+
+query I
+select strptime('2020-12-31 21:25:58.745232+02', '%Y-%m-%d %H:%M:%S.%f%z');
+----
+2020-12-31 19:25:58.745232
+
+query I
+select strptime('2020-12-31 21:25:58.745232-02', '%Y-%m-%d %H:%M:%S.%f%z');
+----
+2020-12-31 23:25:58.745232
+
+query I
+select strptime('2020-12-31 21:25:58.745232+0215', '%Y-%m-%d %H:%M:%S.%f%z');
+----
+2020-12-31 19:10:58.745232
+
+query I
+select strptime('2020-12-31 21:25:58.745232-0215', '%Y-%m-%d %H:%M:%S.%f%z');
+----
+2020-12-31 23:40:58.745232
+
+# on the boundaries
+query I
+select strptime('2020-12-31 03:25:58.745232+04', '%Y-%m-%d %H:%M:%S.%f%z');
+----
+2020-12-30 23:25:58.745232
+
+query I
+select strptime('2020-12-30 23:25:58.745232-04', '%Y-%m-%d %H:%M:%S.%f%z');
+----
+2020-12-31 03:25:58.745232
+
+# incorrect usage
+statement error
+select strptime('2020-12-31 21:25:58.745232+0', '%Y-%m-%d %H:%M:%S.%f%z');
+
+statement error
+select strptime('2020-12-31 21:25:58.745232+0X', '%Y-%m-%d %H:%M:%S.%f%z');
+
+statement error
+select strptime('2020-12-31 21:25:58.745232+X0', '%Y-%m-%d %H:%M:%S.%f%z');
+
+statement error
+select strptime('2020-12-31 21:25:58.745232+000', '%Y-%m-%d %H:%M:%S.%f%z');
+
+statement error
+select strptime('2020-12-31 21:25:58.745232X00', '%Y-%m-%d %H:%M:%S.%f%z');
+
 # different errors
 # month out of range
 statement error

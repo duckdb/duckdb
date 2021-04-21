@@ -249,10 +249,10 @@ query I
 SELECT strftime(d, '%z') FROM timestamps ORDER BY d;
 ----
 NULL
-(empty)
-(empty)
-(empty)
-(empty)
++00
++00
++00
++00
 
 # %Z - Time zone name.
 query I

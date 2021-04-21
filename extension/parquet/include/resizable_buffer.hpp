@@ -7,7 +7,7 @@
 //===----------------------------------------------------------------------===//
 #pragma once
 
-#include "duckdb/common/common.hpp"
+#include "duckdb.hpp"
 
 #include <exception>
 

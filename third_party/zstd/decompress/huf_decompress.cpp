@@ -16,12 +16,12 @@
 *  Dependencies
 ****************************************************************/
 #include <string.h>     /* memcpy, memset */
-#include "../common/compiler.h"
-#include "../common/bitstream.h"  /* BIT_* */
-#include "../common/fse.h"        /* to compress headers */
-#define HUF_STATIC_LINKING_ONLY
-#include "../common/huf.h"
-#include "../common/error_private.h"
+#include "zstd/common/compiler.h"
+#include "zstd/common/bitstream.h"  /* BIT_* */
+#include "zstd/common/fse.h"        /* to compress headers */
+#include "zstd/common/huf.h"
+#include "zstd/common/huf_static.h"
+#include "zstd/common/error_private.h"
 
 namespace duckdb_zstd {
 /* **************************************************************
@@ -41,7 +41,7 @@ namespace duckdb_zstd {
 /* **************************************************************
 *  Error Management
 ****************************************************************/
-#define HUF_isError ERR_isError
+// #define HUF_isError ERR_isError
 
 
 /* **************************************************************
