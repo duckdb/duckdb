@@ -149,7 +149,7 @@ static unique_ptr<ColumnReader> CreateReaderRecursive(const FileMetaData *file_m
 
 	if (s_ele.__isset.repetition_type) {
 		if (s_ele.repetition_type != FieldRepetitionType::REQUIRED) {
-			max_define = depth;
+			max_define++;
 		}
 		if (s_ele.repetition_type == FieldRepetitionType::REPEATED) {
 			max_repeat++;
