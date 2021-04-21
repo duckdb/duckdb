@@ -1034,6 +1034,7 @@ void DataTable::AddIndex(unique_ptr<Index> index, vector<unique_ptr<Expression>>
 			throw ConstraintException("Cant create unique index, table contains duplicate data on indexed column(s)");
 		}
 	}
+	lock_guard<mutex> index_lock(info->indexes_lock);
 	info->indexes.push_back(move(index));
 }
 

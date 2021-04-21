@@ -15,9 +15,9 @@ TEST_CASE("Test database maximum_threads argument", "[api]") {
 	// but we can set another value
 	{
 		DBConfig config;
-		config.maximum_threads = 42;
+		config.maximum_threads = 10;
 		DuckDB db(nullptr, &config);
-		REQUIRE(db.NumberOfThreads() == 42);
+		REQUIRE(db.NumberOfThreads() == 10);
 	}
 	// zero is not erlaubt
 	{

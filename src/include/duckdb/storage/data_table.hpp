@@ -44,6 +44,7 @@ struct DataTableInfo {
 	// name of the table
 	string table;
 	//! Indexes associated with the current table
+	mutex indexes_lock;
 	vector<unique_ptr<Index>> indexes;
 
 	bool IsTemporary() {

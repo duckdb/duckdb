@@ -21,9 +21,10 @@ namespace duckdb {
 class ProgressBar {
 public:
 	explicit ProgressBar(Executor *executor, idx_t show_progress_after, idx_t time_update_bar = 100)
-	    : executor(executor), show_progress_after(show_progress_after), time_update_bar(time_update_bar) {
+	    : executor(executor), show_progress_after(show_progress_after), time_update_bar(time_update_bar),
+	      current_percentage(-1), stop(false) {
 
-	                                                                    };
+	                              };
 
 	//! Starts the thread
 	void Start();
@@ -43,8 +44,8 @@ private:
 #endif
 	idx_t show_progress_after;
 	idx_t time_update_bar;
-	int current_percentage = -1;
-	bool stop = false;
+	atomic<int> current_percentage;
+	atomic<bool> stop;
 	//! In case our progress bar tries to use a scan operator that is not implemented we don't print anything
 	bool supported = true;
 	//! Starts the Progress Bar Thread that prints the progress bar
@@ -54,7 +55,7 @@ private:
 	template <class DURATION>
 	bool WaitFor(DURATION duration) {
 		unique_lock<mutex> l(m);
-		return !c.wait_for(l, duration, [this]() { return stop; });
+		return !c.wait_for(l, duration, [this]() { return stop.load(); });
 	}
 #endif
 };

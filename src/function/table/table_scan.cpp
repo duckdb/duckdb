@@ -202,6 +202,7 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 	if (bind_data.is_index_scan) {
 		return;
 	}
+	lock_guard<mutex> index_lock(storage.info->indexes_lock);
 	if (filters.empty() || storage.info->indexes.empty()) {
 		// no indexes or no filters: skip the pushdown
 		return;

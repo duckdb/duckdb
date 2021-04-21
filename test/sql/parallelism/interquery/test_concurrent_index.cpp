@@ -12,7 +12,7 @@ using namespace std;
 
 atomic<bool> is_finished;
 
-#define CONCURRENT_INDEX_THREAD_COUNT 20
+#define CONCURRENT_INDEX_THREAD_COUNT 10
 #define CONCURRENT_INDEX_INSERT_COUNT 2000
 
 static void read_from_integers(DuckDB *db, bool *correct, idx_t threadnr) {

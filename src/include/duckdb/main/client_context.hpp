@@ -61,7 +61,7 @@ public:
 	Executor executor;
 
 	//! The Progress Bar
-	unique_ptr<ProgressBar> progress_bar;
+	shared_ptr<ProgressBar> progress_bar;
 	//! If the progress bar is enabled or not.
 	bool enable_progress_bar = false;
 	//! If the print of the progress bar is enabled
