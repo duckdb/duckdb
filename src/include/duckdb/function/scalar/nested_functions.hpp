@@ -41,6 +41,7 @@ struct ListExtractFun {
 };
 
 struct StructExtractFun {
+	static ScalarFunction GetFunction();
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

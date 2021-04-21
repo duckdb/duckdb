@@ -17,7 +17,7 @@
  * under the License.
  */
 
-#include <thrift/protocol/TProtocol.h>
+#include "thrift/protocol/TProtocol.h"
 
 namespace apache {
 namespace thrift {

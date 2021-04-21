@@ -18,17 +18,17 @@
 ****************************************************************/
 #include <stdlib.h>     /* malloc, free, qsort */
 #include <string.h>     /* memcpy, memset */
-#include "bitstream.h"
-#include "compiler.h"
-#define FSE_STATIC_LINKING_ONLY
-#include "fse.h"
-#include "error_private.h"
+#include "zstd/common/bitstream.h"
+#include "zstd/common/compiler.h"
+#include "zstd/common/fse.h"
+#include "zstd/common/fse_static.h"
+#include "zstd/common/error_private.h"
 
 
 /* **************************************************************
 *  Error Management
 ****************************************************************/
-#define FSE_isError ERR_isError
+// #define FSE_isError ERR_isError
 #define FSE_STATIC_ASSERT(c) DEBUG_STATIC_ASSERT(c)   /* use only *after* variable declarations */
 
 

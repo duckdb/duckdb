@@ -83,10 +83,8 @@
 /* for memcpy() */
 #include <string.h>
 
-#ifndef XXH_STATIC_LINKING_ONLY
-#  define XXH_STATIC_LINKING_ONLY
-#endif
-#include "xxhash.h"
+#include "zstd/common/xxhash.h"
+#include "zstd/common/xxhash_static.h"
 
 /* *************************************
 *  Compiler Specific Options

@@ -165,6 +165,7 @@ private:
 	BoundStatement Bind(CallStatement &stmt);
 	BoundStatement Bind(ExportStatement &stmt);
 	BoundStatement Bind(SetStatement &stmt);
+	BoundStatement Bind(LoadStatement &stmt);
 
 	unique_ptr<BoundQueryNode> BindNode(SelectNode &node);
 	unique_ptr<BoundQueryNode> BindNode(SetOperationNode &node);

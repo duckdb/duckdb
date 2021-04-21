@@ -180,14 +180,17 @@ static unique_ptr<FunctionData> ArrayExtractBind(ClientContext &context, ScalarF
 
 void ListExtractFun::RegisterFunction(BuiltinFunctions &set) {
 	// the arguments and return types are actually set in the binder function
-	ScalarFunction fun("array_extract", {LogicalType::ANY, LogicalType::BIGINT}, LogicalType::ANY, ArrayExtractFunction,
+	ScalarFunction fun("list_extract", {LogicalType::ANY, LogicalType::BIGINT}, LogicalType::ANY, ArrayExtractFunction,
 	                   false, ArrayExtractBind);
 	fun.varargs = LogicalType::ANY;
 	set.AddFunction(fun);
 	fun.name = "list_element";
 	set.AddFunction(fun);
-	fun.name = "list_extract";
-	set.AddFunction(fun);
+
+	ScalarFunctionSet array_extract("array_extract");
+	array_extract.AddFunction(fun);
+	array_extract.AddFunction(StructExtractFun::GetFunction());
+	set.AddFunction(array_extract);
 }
 
 } // namespace duckdb

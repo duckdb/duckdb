@@ -20,7 +20,7 @@
 #ifndef _THRIFT_TLOGGING_H_
 #define _THRIFT_TLOGGING_H_ 1
 
-#include <thrift/thrift-config.h>
+#include "thrift/thrift-config.h"
 
 /**
  * Contains utility macros for debugging and logging.

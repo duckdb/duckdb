@@ -1,9 +1,12 @@
 #include "parquet_statistics.hpp"
 #include "parquet_timestamp.hpp"
 
+#include "duckdb.hpp"
+#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/storage/statistics/string_statistics.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
+#endif
 
 namespace duckdb {
 

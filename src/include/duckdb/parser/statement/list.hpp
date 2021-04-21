@@ -8,6 +8,7 @@
 #include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb/parser/statement/export_statement.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
+#include "duckdb/parser/statement/load_statement.hpp"
 #include "duckdb/parser/statement/pragma_statement.hpp"
 #include "duckdb/parser/statement/prepare_statement.hpp"
 #include "duckdb/parser/statement/relation_statement.hpp"

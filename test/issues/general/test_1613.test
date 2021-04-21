@@ -1,0 +1,26 @@
+# name: test/issues/general/test_1613.test
+# description: Issue 1613: Millisecond format specifier in strftime, %g , doesn't work for most of the timestamp values and returns invalid UTF8
+# group: [general]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+select strftime(timestamp '2021-04-15 14:55:17.915', '%Y-%m-%d %H:%M:%S.%g')
+----
+2021-04-15 14:55:17.915
+
+query I
+select strftime(timestamp '2021-04-15 14:55:17.915', '%Y-%m-%d %H:%M:%S.%f')
+----
+2021-04-15 14:55:17.915000
+
+query I
+select strptime('2021-04-15 14:55:17.915', '%Y-%m-%d %H:%M:%S.%g')
+----
+2021-04-15 14:55:17.915
+
+query I
+select strptime('2021-04-15 14:55:17.915000', '%Y-%m-%d %H:%M:%S.%f')
+----
+2021-04-15 14:55:17.915
