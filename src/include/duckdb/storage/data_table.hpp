@@ -19,8 +19,8 @@
 #include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/storage/table/persistent_table_data.hpp"
 
-#include <atomic>
-#include <mutex>
+#include "duckdb/common/atomic.hpp"
+#include "duckdb/common/mutex.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -38,7 +38,7 @@ struct DataTableInfo {
 
 	//! The amount of elements in the table. Note that this number signifies the amount of COMMITTED entries in the
 	//! table. It can be inaccurate inside of transactions. More work is needed to properly support that.
-	std::atomic<idx_t> cardinality;
+	atomic<idx_t> cardinality;
 	// schema of the table
 	string schema;
 	// name of the table
@@ -174,7 +174,7 @@ private:
 
 private:
 	//! Lock for appending entries to the table
-	std::mutex append_lock;
+	mutex append_lock;
 	//! The segment tree holding the persistent versions
 	shared_ptr<SegmentTree> versions;
 	//! The number of rows in the table

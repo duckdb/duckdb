@@ -75,7 +75,7 @@ static void TableScanFunc(ClientContext &context, const FunctionData *bind_data_
 
 struct ParallelTableFunctionScanState : public ParallelState {
 	ParallelTableScanState state;
-	std::mutex lock;
+	mutex lock;
 };
 
 idx_t TableScanMaxThreads(ClientContext &context, const FunctionData *bind_data_p) {

@@ -9,12 +9,13 @@
 #pragma once
 
 #ifndef DUCKDB_NO_THREADS
-#include <thread>
+#include "duckdb/common/thread.hpp"
 #include <future>
 #endif
 
 #include "duckdb.h"
 #include "duckdb/execution/executor.hpp"
+#include "duckdb/common/mutex.hpp"
 
 namespace duckdb {
 class ProgressBar {
@@ -36,9 +37,9 @@ private:
 	static constexpr const idx_t PROGRESS_BAR_WIDTH = 60;
 	Executor *executor = nullptr;
 #ifndef DUCKDB_NO_THREADS
-	std::thread progress_bar_thread;
+	thread progress_bar_thread;
 	std::condition_variable c;
-	std::mutex m;
+	mutex m;
 #endif
 	idx_t show_progress_after;
 	idx_t time_update_bar;
@@ -52,7 +53,7 @@ private:
 #ifndef DUCKDB_NO_THREADS
 	template <class DURATION>
 	bool WaitFor(DURATION duration) {
-		std::unique_lock<std::mutex> l(m);
+		unique_lock<mutex> l(m);
 		return !c.wait_for(l, duration, [this]() { return stop; });
 	}
 #endif

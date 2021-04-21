@@ -40,7 +40,7 @@ public:
 
 	RowChunk(RowChunk &other);
 
-	std::mutex rc_lock;
+	mutex rc_lock;
 
 	//! BufferManager
 	BufferManager &buffer_manager;

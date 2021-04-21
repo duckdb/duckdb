@@ -19,7 +19,7 @@ public:
 	CrossProductGlobalState() {
 	}
 	ChunkCollection rhs_materialized;
-	std::mutex rhs_lock;
+	mutex rhs_lock;
 };
 
 unique_ptr<GlobalOperatorState> PhysicalCrossProduct::GetGlobalState(ClientContext &context) {

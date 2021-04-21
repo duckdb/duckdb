@@ -16,7 +16,7 @@ public:
 	UpdateGlobalState() : updated_count(0) {
 	}
 
-	std::mutex lock;
+	mutex lock;
 	idx_t updated_count;
 };
 

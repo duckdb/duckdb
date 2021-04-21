@@ -20,7 +20,7 @@ public:
 	CreateTableAsGlobalState() {
 		inserted_count = 0;
 	}
-	std::mutex append_lock;
+	mutex append_lock;
 	TableCatalogEntry *table;
 	int64_t inserted_count;
 };
