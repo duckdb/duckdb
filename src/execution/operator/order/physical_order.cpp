@@ -887,6 +887,7 @@ static void CleanUp(ClientContext &context, OrderGlobalState &gstate) {
 
 void PhysicalOrder::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
 	auto &state = *reinterpret_cast<PhysicalOrderOperatorState *>(state_p);
+	D_ASSERT(this->sink_state);
 	auto &gstate = (OrderGlobalState &)*this->sink_state;
 	const auto &sorting_state = *gstate.sorting_state;
 	const auto &payload_state = *gstate.payload_state;

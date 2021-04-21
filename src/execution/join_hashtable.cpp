@@ -5,7 +5,6 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 
 namespace duckdb {
@@ -294,7 +293,6 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	if (added_count == 0) {
 		return;
 	}
-	count += added_count;
 
 	vector<unique_ptr<BufferHandle>> handles;
 	vector<BlockAppendEntry> append_entries;
@@ -304,6 +302,8 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	{
 		// first append to the last block (if any)
 		lock_guard<mutex> append_lock(ht_lock);
+		count += added_count;
+
 		if (!blocks.empty()) {
 			auto &last_block = blocks.back();
 			if (last_block.count < last_block.capacity) {
