@@ -5,7 +5,7 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb_python/vector_conversion.hpp"
 
-#include <atomic>
+#include "duckdb/common/atomic.hpp"
 
 namespace duckdb {
 
@@ -17,7 +17,7 @@ struct PandasScanFunctionData : public TableFunctionData {
 	}
 	py::handle df;
 	idx_t row_count;
-	std::atomic<idx_t> lines_read;
+	atomic<idx_t> lines_read;
 	vector<PandasColumnBindData> pandas_bind_data;
 	vector<LogicalType> sql_types;
 };

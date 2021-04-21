@@ -3,7 +3,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/storage/data_table.hpp"
 
-#include <atomic>
+#include "duckdb/common/atomic.hpp"
 
 namespace duckdb {
 
@@ -15,7 +15,7 @@ public:
 	DeleteGlobalState() : deleted_count(0) {
 	}
 
-	std::atomic<idx_t> deleted_count;
+	atomic<idx_t> deleted_count;
 };
 
 void PhysicalDelete::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,

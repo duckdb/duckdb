@@ -65,7 +65,7 @@ public:
 	}
 
 	//! The lock for updating the global aggregate state
-	std::mutex lock;
+	mutex lock;
 	//! The global aggregate hash table
 	unique_ptr<PerfectAggregateHashTable> ht;
 };

@@ -13,7 +13,7 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/transaction/undo_buffer.hpp"
 #include "duckdb/transaction/local_storage.hpp"
-#include <atomic>
+#include "duckdb/common/atomic.hpp"
 
 namespace duckdb {
 class SequenceCatalogEntry;
@@ -52,7 +52,7 @@ public:
 	transaction_t highest_active_query;
 	//! The current active query for the transaction. Set to MAXIMUM_QUERY_ID if
 	//! no query is active.
-	std::atomic<transaction_t> active_query;
+	atomic<transaction_t> active_query;
 	//! The timestamp when the transaction started
 	timestamp_t start_timestamp;
 	//! The catalog version when the transaction was started

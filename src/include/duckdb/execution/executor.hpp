@@ -67,7 +67,7 @@ private:
 	vector<string> exceptions;
 
 	//! The amount of completed pipelines of the query
-	std::atomic<idx_t> completed_pipelines;
+	atomic<idx_t> completed_pipelines;
 	//! The total amount of pipelines in the query
 	idx_t total_pipelines;
 

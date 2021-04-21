@@ -1,5 +1,4 @@
 #include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/common/to_string.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 
 #include "duckdb/common/exception.hpp"

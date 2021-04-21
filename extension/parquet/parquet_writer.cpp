@@ -167,7 +167,7 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 	if (buffer.Count() == 0) {
 		return;
 	}
-	std::lock_guard<std::mutex> glock(lock);
+	lock_guard<mutex> glock(lock);
 
 	// set up a new row group for this chunk collection
 	RowGroup row_group;

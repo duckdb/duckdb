@@ -30,7 +30,7 @@ public:
 	virtual ~Index() = default;
 
 	//! Lock used for updating the index
-	std::mutex lock;
+	mutex lock;
 	//! The type of the index
 	IndexType type;
 	//! Column identifiers to extract from the base table

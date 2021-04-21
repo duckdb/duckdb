@@ -24,6 +24,7 @@
 #include "duckdb/transaction/transaction_context.hpp"
 
 #include <random>
+#include "duckdb/common/atomic.hpp"
 
 namespace duckdb {
 class Appender;
@@ -52,7 +53,7 @@ public:
 	//! Data for the currently running transaction
 	TransactionContext transaction;
 	//! Whether or not the query is interrupted
-	bool interrupted;
+	atomic<bool> interrupted;
 	//! The current query being executed by the client context
 	string query;
 
@@ -196,7 +197,7 @@ private:
 	//! The currently opened StreamQueryResult (if any)
 	StreamQueryResult *open_result = nullptr;
 	//! Lock on using the ClientContext in parallel
-	std::mutex context_lock;
+	mutex context_lock;
 };
 
 } // namespace duckdb

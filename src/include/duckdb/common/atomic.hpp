@@ -1,17 +1,15 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/mutex.hpp
+// duckdb/common/atomic.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include <mutex>
+#include <atomic>
 
 namespace duckdb {
-using std::lock_guard;
-using std::mutex;
-using std::unique_lock;
-} // namespace duckdb
+using std::atomic;
+}

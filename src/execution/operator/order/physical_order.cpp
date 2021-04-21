@@ -40,7 +40,7 @@ public:
 	explicit OrderGlobalState(BufferManager &buffer_manager) : buffer_manager(buffer_manager) {
 	}
 	//! The lock for updating the order global state
-	std::mutex lock;
+	mutex lock;
 	//! The buffer manager
 	BufferManager &buffer_manager;
 
@@ -806,7 +806,7 @@ public:
 	OrderParallelState() : entry_idx(0) {
 	}
 	idx_t entry_idx;
-	std::mutex lock;
+	mutex lock;
 };
 
 unique_ptr<ParallelState> PhysicalOrder::GetParallelState() {

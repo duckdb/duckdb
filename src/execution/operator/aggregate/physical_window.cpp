@@ -24,7 +24,7 @@ public:
 	}
 
 	PhysicalWindow &op;
-	std::mutex lock;
+	mutex lock;
 	ChunkCollection chunks;
 	ChunkCollection over_collection;
 	ChunkCollection hash_collection;
@@ -874,7 +874,7 @@ public:
 	WindowParallelState() : next_part(0) {
 	}
 	//! The output read position.
-	std::atomic<idx_t> next_part;
+	atomic<idx_t> next_part;
 };
 
 unique_ptr<ParallelState> PhysicalWindow::GetParallelState() {

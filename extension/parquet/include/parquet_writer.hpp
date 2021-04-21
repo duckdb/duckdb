@@ -41,7 +41,7 @@ private:
 	unique_ptr<BufferedFileWriter> writer;
 	shared_ptr<apache::thrift::protocol::TProtocol> protocol;
 	parquet::format::FileMetaData file_meta_data;
-	std::mutex lock;
+	mutex lock;
 };
 
 } // namespace duckdb
