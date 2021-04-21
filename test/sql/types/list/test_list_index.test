@@ -51,12 +51,38 @@ SELECT LIST_VALUE(42)[0]
 ----
 42
 
-# slicing: supported in parser but not yet in engine
-statement error
+# slicing
+query T
 SELECT a[1:] FROM (VALUES (LIST_VALUE(42, 43, 44))) tbl(a)
+----
+[43, 44]
 
-statement error
+query T
 SELECT a[:1] FROM (VALUES (LIST_VALUE(42, 43, 44))) tbl(a)
+----
+[42]
 
-statement error
+query T
 SELECT a[0:1] FROM (VALUES (LIST_VALUE(42, 43, 44))) tbl(a)
+----
+[42]
+
+query T
+SELECT a[0:-1] FROM (VALUES (LIST_VALUE(42, 43, 44))) tbl(a)
+----
+[42, 43]
+
+query T
+SELECT a[-3:-1] FROM (VALUES (LIST_VALUE(42, 43, 44))) tbl(a)
+----
+[42, 43]
+
+query T
+SELECT a[-5:] FROM (VALUES (LIST_VALUE(42, 43, 44))) tbl(a)
+----
+NULL
+
+query T
+SELECT a[:5] FROM (VALUES (LIST_VALUE(42, 43, 44))) tbl(a)
+----
+NULL
