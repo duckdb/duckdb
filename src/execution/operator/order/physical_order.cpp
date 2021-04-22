@@ -7,6 +7,8 @@
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/storage/statistics/string_statistics.hpp"
 
+#include <numeric>
+
 namespace duckdb {
 
 PhysicalOrder::PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode> orders, idx_t estimated_cardinality)
@@ -29,8 +31,6 @@ struct SortingState {
 	const vector<bool> HAS_NULL;
 	const vector<bool> CONSTANT_SIZE;
 	const vector<idx_t> COL_SIZE;
-
-	const vector<idx_t> ROWCHUNK_INIT_SIZES;
 };
 
 struct PayloadState {
@@ -96,15 +96,14 @@ public:
 				var_sorting_blocks.push_back(nullptr);
 				var_sorting_sizes.push_back(nullptr);
 			} else {
-				var_sorting_blocks.push_back(
-				    make_unique<RowChunk>(buffer_manager, sorting_state.ROWCHUNK_INIT_SIZES[i] / 8, 8));
+				var_sorting_blocks.push_back(make_unique<RowChunk>(buffer_manager, Storage::BLOCK_ALLOC_SIZE / 8, 8));
 				var_sorting_sizes.push_back(make_unique<RowChunk>(
 				    buffer_manager, (idx_t)Storage::BLOCK_ALLOC_SIZE / sizeof(idx_t) + 1, sizeof(idx_t)));
 			}
 		}
 		// payload block
 		if (payload_state.HAS_VARIABLE_SIZE) {
-			payload_block = make_unique<RowChunk>(buffer_manager, payload_state.ROWCHUNK_INIT_SIZE / 32, 32);
+			payload_block = make_unique<RowChunk>(buffer_manager, payload_state.ROWCHUNK_INIT_SIZE / 8, 8);
 			sizes_block = make_unique<RowChunk>(buffer_manager, (idx_t)Storage::BLOCK_ALLOC_SIZE / sizeof(idx_t) + 1,
 			                                    sizeof(idx_t));
 		} else {
@@ -131,6 +130,9 @@ public:
 	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
 	data_ptr_t validitymask_locations[STANDARD_VECTOR_SIZE];
 	idx_t entry_sizes[STANDARD_VECTOR_SIZE];
+
+	vector<idx_t> max_var_offset_counts;
+	idx_t max_payload_offset_count = 0;
 };
 
 unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &context) {
@@ -146,7 +148,6 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 	vector<bool> has_null;
 	vector<bool> constant_size;
 	vector<idx_t> col_sizes;
-	vector<idx_t> rowchunk_init_sizes;
 	for (auto &order : orders) {
 		// global state ExpressionExecutor
 		auto &expr = *order.expression;
@@ -185,16 +186,6 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 		}
 		entry_size += col_size;
 		col_sizes.push_back(col_size);
-
-		// create RowChunks for variable size sorting columns in order to resolve
-		if (TypeIsConstantSize(physical_type)) {
-			rowchunk_init_sizes.push_back(0);
-		} else {
-			// besides the prefix, variable size sorting columns are also fully serialized, along with offsets
-			// we have to assume a large variable size, otherwise a single large variable entry may not fit in a block
-			// 1 << 23 = 8MB
-			rowchunk_init_sizes.push_back((1 << 23) / 8);
-		}
 	}
 	// make room for an 'index' column at the end
 	idx_t comp_size = entry_size;
@@ -203,9 +194,9 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 	for (auto constant : constant_size) {
 		all_constant = all_constant && constant;
 	}
-	state->sorting_state = unique_ptr<SortingState>(
-	    new SortingState {entry_size, comp_size, all_constant, order_types, order_by_null_types, order_l_types, stats,
-	                      has_null, constant_size, col_sizes, rowchunk_init_sizes});
+	state->sorting_state = unique_ptr<SortingState>(new SortingState {entry_size, comp_size, all_constant, order_types,
+	                                                                  order_by_null_types, order_l_types, stats,
+	                                                                  has_null, constant_size, col_sizes});
 
 	// init payload state
 	entry_size = 0;
@@ -222,10 +213,8 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 			var_columns++;
 		}
 	}
-	idx_t rowchunk_init_size;
-	if (variable_payload_size) {
-		rowchunk_init_size = entry_size + var_columns * (1 << 23);
-	} else {
+	idx_t rowchunk_init_size = Storage::BLOCK_ALLOC_SIZE;
+	if (!variable_payload_size) {
 		idx_t vectors_per_block =
 		    (Storage::BLOCK_ALLOC_SIZE / entry_size + STANDARD_VECTOR_SIZE) / STANDARD_VECTOR_SIZE;
 		rowchunk_init_size = vectors_per_block * STANDARD_VECTOR_SIZE * entry_size;
@@ -326,6 +315,7 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &gstate_
 void PhysicalOrder::Combine(ExecutionContext &context, GlobalOperatorState &gstate_p, LocalSinkState &lstate_p) {
 	auto &gstate = (OrderGlobalState &)gstate_p;
 	auto &lstate = (OrderLocalState &)lstate_p;
+	const auto &sorting_state = *gstate.sorting_state;
 
 	if (!lstate.sorting_block) {
 		return;
@@ -341,7 +331,7 @@ void PhysicalOrder::Combine(ExecutionContext &context, GlobalOperatorState &gsta
 
 struct ContinuousChunk {
 public:
-	ContinuousChunk(BufferManager &buffer_manager, bool constant_size, idx_t entry_size = 0)
+	ContinuousChunk(BufferManager &buffer_manager, bool constant_size, idx_t entry_size)
 	    : buffer_manager(buffer_manager), CONSTANT_SIZE(constant_size), ENTRY_SIZE(entry_size), block_idx(0),
 	      entry_idx(0) {
 	}
@@ -369,7 +359,8 @@ public:
 	void CreateBlock() {
 		data_blocks.emplace_back(buffer_manager, data_dims.first, data_dims.second);
 		if (!CONSTANT_SIZE) {
-			offset_blocks.emplace_back(buffer_manager, offset_capacity, sizeof(idx_t), true);
+			// offset blocks need 1 more capacity to store the size of the final entry
+			offset_blocks.emplace_back(buffer_manager, offset_capacity, sizeof(idx_t), 1);
 		}
 	}
 
@@ -441,7 +432,7 @@ public:
 		if (!sorting_state.ALL_CONSTANT) {
 			for (idx_t col_idx = 0; col_idx < sorting_state.CONSTANT_SIZE.size(); col_idx++) {
 				if (!sorting_state.CONSTANT_SIZE[col_idx]) {
-					var_sorting_chunks.push_back(make_unique<ContinuousChunk>(buffer_manager, false));
+					var_sorting_chunks.push_back(make_unique<ContinuousChunk>(buffer_manager, false, 0));
 				} else {
 					var_sorting_chunks.push_back(nullptr);
 				}
@@ -608,6 +599,9 @@ static RowDataBlock SizesToOffsets(BufferManager &buffer_manager, RowChunk &row_
 	idx_t total_count;
 	idx_t capacity;
 	ComputeCountAndCapacity(row_chunk, false, total_count, capacity);
+
+	// offsets block must store the size of the final entry, therefore needing 1 more capacity
+	capacity++;
 
 	const idx_t &entry_size = row_chunk.entry_size;
 	RowDataBlock new_block(buffer_manager, capacity, entry_size);
@@ -1693,18 +1687,16 @@ void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 	}
 
 	idx_t count = 0;
-	idx_t sorting_block_capacity = 0;
 	for (auto &sb : state.sorted_blocks) {
 		const auto &sorting_block = sb->sorting_blocks.back();
 		count += sorting_block.count;
-		if (sorting_block.CAPACITY > sorting_block_capacity) {
-			sorting_block_capacity = sorting_block.CAPACITY;
-		}
 	}
 	state.total_count = count;
-	state.sorting_block_capacity = sorting_block_capacity;
 
+	// compute merging blocksizes using the data we have
 	const auto &sorting_state = *state.sorting_state;
+	state.sorting_block_capacity = PhysicalOrder::SORTING_BLOCK_SIZE / sorting_state.ENTRY_SIZE + 1;
+
 	if (!sorting_state.ALL_CONSTANT) {
 		for (idx_t col_idx = 0; col_idx < sorting_state.CONSTANT_SIZE.size(); col_idx++) {
 			idx_t var_data_capacity = 0;
@@ -1713,16 +1705,11 @@ void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 			if (!sorting_state.CONSTANT_SIZE[col_idx]) {
 				for (auto &sb : state.sorted_blocks) {
 					const auto &data_block = sb->var_sorting_chunks[col_idx]->data_blocks.back();
-					if (data_block.CAPACITY > var_data_capacity) {
-						var_data_capacity = data_block.CAPACITY;
-					}
-					if (data_block.ENTRY_SIZE > var_data_entry_size) {
-						var_data_entry_size = data_block.ENTRY_SIZE;
-					}
+					var_data_capacity = MaxValue(var_data_capacity, data_block.CAPACITY);
+					var_data_entry_size = MaxValue(var_data_entry_size, data_block.ENTRY_SIZE);
+
 					const auto &offset_block = sb->var_sorting_chunks[col_idx]->offset_blocks.back();
-					if (offset_block.CAPACITY > var_offset_capacity) {
-						var_offset_capacity = offset_block.CAPACITY;
-					}
+					var_offset_capacity = MaxValue(var_offset_capacity, offset_block.CAPACITY);
 				}
 			}
 			state.var_sorting_data_block_dims.emplace_back(var_data_capacity, var_data_entry_size);
@@ -1736,22 +1723,18 @@ void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 	idx_t payload_offset_capacity = 0;
 	for (auto &sb : state.sorted_blocks) {
 		auto &data_block = sb->payload_chunk->data_blocks.back();
-		if (data_block.CAPACITY > payload_capacity) {
-			payload_capacity = data_block.CAPACITY;
-		}
-		if (data_block.ENTRY_SIZE > payload_entry_size) {
-			payload_entry_size = data_block.ENTRY_SIZE;
-		}
+		payload_capacity = MaxValue(payload_capacity, data_block.CAPACITY);
+		payload_entry_size = data_block.ENTRY_SIZE;
+
 		if (payload_state.HAS_VARIABLE_SIZE) {
 			auto &offset_block = sb->payload_chunk->offset_blocks.back();
-			if (offset_block.CAPACITY > payload_offset_capacity) {
-				payload_offset_capacity = offset_block.CAPACITY;
-			}
+			payload_offset_capacity = MaxValue(payload_offset_capacity, offset_block.CAPACITY);
 		}
 	}
 	state.payload_data_block_dims = make_pair(payload_capacity, payload_entry_size);
 	state.payload_offset_block_capacity = payload_offset_capacity;
 
+	// clean up
 	if (state.sorted_blocks.size() > 1) {
 		PhysicalOrder::ScheduleMergeTasks(pipeline, context, state);
 	} else {

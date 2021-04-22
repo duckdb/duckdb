@@ -8,6 +8,10 @@ PRAGMA force_parallelism
 statement ok
 PRAGMA threads=4
 
+# make sure this does not use too much memory
+statement ok
+PRAGMA memory_limit='100MB'
+
 statement ok
 create table test as (select range i from range(100000));
 
