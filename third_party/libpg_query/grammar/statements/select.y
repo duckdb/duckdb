@@ -3285,9 +3285,17 @@ AexprConst: Iconst
 				{
 					$$ = makeFloatConst($1, @1);
 				}
-			| Sconst
+			| Sconst opt_indirection
 				{
-					$$ = makeStringConst($1, @1);
+					if ($2)
+					{
+						PGAIndirection *n = makeNode(PGAIndirection);
+						n->arg = makeStringConst($1, @1);
+						n->indirection = check_indirection($2, yyscanner);
+						$$ = (PGNode *) n;
+					}
+					else
+						$$ = makeStringConst($1, @1);
 				}
 			| BCONST
 				{
