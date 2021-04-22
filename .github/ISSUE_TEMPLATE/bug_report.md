@@ -11,17 +11,16 @@ assignees: ''
 A short, clear and concise description of what the bug is.
 
 **What should happen?**
+Describe what you expect DuckDB to do instead.
 
 **To Reproduce**
 Steps to reproduce the behavior. Bonus points if those are only SQL queries.
-1. Go to '...'
-2. Click on '....'
-3. Scroll down to '....'
-4. See error
+1. 
+2.
+3. 
 
 **Environment (please complete the following information):**
  - OS: [e.g. iOS]
- - Browser [e.g. chrome, safari]
  - DuckDB Version [e.g. 22]
 
 **Before submitting**
