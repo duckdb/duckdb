@@ -156,7 +156,7 @@ void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &
 
 		auto data = (list_entry_t *)fdata.data;
 		auto res = FlatVector::GetData<list_entry_t>(result);
-		auto &mask = FlatVector::Validity(ListVector::GetEntry(result));
+		auto &mask = FlatVector::Validity(result);
 
 		for (idx_t i = 0; i < fcount; i++) {
 			auto fidx = fdata.sel->get_index(i);
@@ -167,7 +167,8 @@ void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &
 			mask.Set(res_idx, fdata.validity.RowIsValid(fidx));
 		}
 
-		result.Verify(tcount + fcount);
+		result.Verify(tside, tcount);
+		result.Verify(fside, fcount);
 		break;
 	}
 	default:
