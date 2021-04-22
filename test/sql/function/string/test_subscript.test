@@ -17,6 +17,27 @@ SELECT '🦆ab'[0], 'abc'[1]
 ----
 🦆	b
 
+# test grapheme clusters
+query I
+SELECT '🤦🏼‍♂️ L🤦🏼‍♂️R 🤦🏼‍♂️'[3]
+----
+🤦🏼‍♂️
+
+query I
+SELECT 'S̈a'[1]
+----
+a
+
+query I
+SELECT 'MotörHead'[3]
+----
+ö
+
+query I
+SELECT 'Z͑ͫ̓ͪ̂ͫ̽͏̴̙̤̞͉͚̯̞̠͍A̴̵̜̰͔ͫ͗͢'[1]
+----
+A̴̵̜̰͔ͫ͗͢
+
 # constant offset/length
 # normal array_extract
 query T
