@@ -33,7 +33,7 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 	// plan any tables from the various using clauses
 	if (stmt.using_clauses.size() > 0) {
 		unique_ptr<LogicalOperator> child_operator;
-		for(auto &using_clause : stmt.using_clauses) {
+		for (auto &using_clause : stmt.using_clauses) {
 			// bind the using clause
 			auto bound_node = Bind(*using_clause);
 			auto op = CreatePlan(*bound_node);
