@@ -315,7 +315,6 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &gstate_
 void PhysicalOrder::Combine(ExecutionContext &context, GlobalOperatorState &gstate_p, LocalSinkState &lstate_p) {
 	auto &gstate = (OrderGlobalState &)gstate_p;
 	auto &lstate = (OrderLocalState &)lstate_p;
-	const auto &sorting_state = *gstate.sorting_state;
 
 	if (!lstate.sorting_block) {
 		return;
