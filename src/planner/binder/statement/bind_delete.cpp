@@ -31,7 +31,7 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 	}
 
 	// plan any tables from the various using clauses
-	if (stmt.using_clauses.size() > 0) {
+	if (!stmt.using_clauses.empty()) {
 		unique_ptr<LogicalOperator> child_operator;
 		for (auto &using_clause : stmt.using_clauses) {
 			// bind the using clause
