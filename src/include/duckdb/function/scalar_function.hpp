@@ -36,7 +36,7 @@ public:
 	ScalarFunction(string name, vector<LogicalType> arguments, LogicalType return_type, scalar_function_t function,
 	               bool has_side_effects = false, bind_scalar_function_t bind = nullptr,
 	               dependency_function_t dependency = nullptr, function_statistics_t statistics = nullptr,
-	               LogicalType varargs = LogicalType::INVALID)
+	               LogicalType varargs = LogicalType(LogicalTypeId::INVALID))
 	    : BaseScalarFunction(name, arguments, return_type, has_side_effects, varargs), function(function), bind(bind),
 	      dependency(dependency), statistics(statistics) {
 	}
@@ -44,7 +44,7 @@ public:
 	ScalarFunction(vector<LogicalType> arguments, LogicalType return_type, scalar_function_t function,
 	               bool has_side_effects = false, bind_scalar_function_t bind = nullptr,
 	               dependency_function_t dependency = nullptr, function_statistics_t statistics = nullptr,
-	               LogicalType varargs = LogicalType::INVALID)
+	               LogicalType varargs = LogicalType(LogicalTypeId::INVALID))
 	    : ScalarFunction(string(), arguments, return_type, function, has_side_effects, bind, dependency, statistics,
 	                     varargs) {
 	}

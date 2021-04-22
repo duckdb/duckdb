@@ -56,7 +56,14 @@ else()
   add_subdirectory(storage)
   add_subdirectory(transaction)
 
-  set(DUCKDB_LINK_LIBS fmt pg_query duckdb_re2 miniz utf8proc hyperloglog)
+  set(DUCKDB_LINK_LIBS
+      ${CMAKE_DL_LIBS}
+      fmt
+      pg_query
+      duckdb_re2
+      miniz
+      utf8proc
+      hyperloglog)
 
   add_library(duckdb SHARED ${ALL_OBJECT_FILES})
   target_link_libraries(duckdb ${DUCKDB_LINK_LIBS})
@@ -100,14 +107,25 @@ if(BUILD_PYTHON OR BUILD_R)
   get_target_property(duckdb_libs duckdb LINK_LIBRARIES)
 
   if(BUILD_PYTHON)
-    add_custom_target(
-      duckdb_python ALL
-      COMMAND python3 setup.py install --binary-dir=${CMAKE_BINARY_DIR}
-              --compile-flags=${ALL_COMPILE_FLAGS} --libs="${duckdb_libs}"
-      DEPENDS duckdb
-      WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/pythonpkg
-      COMMENT Build
-      Python package)
+    if(USER_SPACE)
+      add_custom_target(
+        duckdb_python ALL
+        COMMAND python3 setup.py install --user --binary-dir=${CMAKE_BINARY_DIR}
+                --compile-flags=${ALL_COMPILE_FLAGS} --libs="${duckdb_libs}"
+        DEPENDS duckdb
+        WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/pythonpkg
+        COMMENT Build
+        Python package)
+    else()
+      add_custom_target(
+        duckdb_python ALL
+        COMMAND python3 setup.py install --user --binary-dir=${CMAKE_BINARY_DIR}
+                --compile-flags=${ALL_COMPILE_FLAGS} --libs="${duckdb_libs}"
+        DEPENDS duckdb
+        WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/pythonpkg
+        COMMENT Build
+        Python package)
+    endif()
     add_extension_dependencies(duckdb_python)
   endif()
   if(BUILD_R)

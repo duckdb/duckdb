@@ -48,6 +48,8 @@ string StatementTypeToString(StatementType type) {
 		return "CALL";
 	case StatementType::SET_STATEMENT:
 		return "SET";
+	case StatementType::LOAD_STATEMENT:
+		return "LOAD";
 	case StatementType::INVALID_STATEMENT:
 		return "INVALID";
 	}

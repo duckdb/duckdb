@@ -13,6 +13,7 @@ void UDFWrapper::RegisterFunction(string name, vector<LogicalType> args, Logical
 	ScalarFunction scalar_function(move(name), move(args), move(ret_type), move(udf_function));
 	scalar_function.varargs = move(varargs);
 	CreateScalarFunctionInfo info(scalar_function);
+	info.schema = DEFAULT_SCHEMA;
 	context.RegisterFunction(&info);
 }
 

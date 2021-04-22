@@ -13,21 +13,21 @@
 ***************************************/
 #include <limits.h>         /* INT_MAX */
 #include <string.h>         /* memset */
-#include "../common/mem.h"
-#include "hist.h"           /* HIST_countFast_wksp */
-#define FSE_STATIC_LINKING_ONLY   /* FSE_encodeSymbol */
-#include "../common/fse.h"
-#define HUF_STATIC_LINKING_ONLY
-#include "../common/huf.h"
-#include "zstd_compress_internal.h"
-#include "zstd_compress_sequences.h"
-#include "zstd_compress_literals.h"
-#include "zstd_fast.h"
-#include "zstd_double_fast.h"
-#include "zstd_lazy.h"
-#include "zstd_opt.h"
-#include "zstd_ldm.h"
-#include "zstd_compress_superblock.h"
+#include "zstd/common/mem.h"
+#include "zstd/compress/hist.h"           /* HIST_countFast_wksp */
+#include "zstd/common/fse.h"
+#include "zstd/common/fse_static.h"
+#include "zstd/common/huf.h"
+#include "zstd/common/huf_static.h"
+#include "zstd/compress/zstd_compress_internal.h"
+#include "zstd/compress/zstd_compress_sequences.h"
+#include "zstd/compress/zstd_compress_literals.h"
+#include "zstd/compress/zstd_fast.h"
+#include "zstd/compress/zstd_double_fast.h"
+#include "zstd/compress/zstd_lazy.h"
+#include "zstd/compress/zstd_opt.h"
+#include "zstd/compress/zstd_ldm.h"
+#include "zstd/compress/zstd_compress_superblock.h"
 
 
 namespace duckdb_zstd {

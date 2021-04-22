@@ -4792,7 +4792,7 @@ mz_zip_reader_extract_iter_state* mz_zip_reader_extract_iter_new(mz_zip_archive 
         if (!((flags & MZ_ZIP_FLAG_COMPRESSED_DATA) || (!pState->file_stat.m_method)))
         {
             /* Decompression required, therefore intermediate read buffer required */
-            pState->read_buf_size = MZ_MIN(pState->file_stat.m_comp_size, MZ_ZIP_MAX_IO_BUF_SIZE);
+            pState->read_buf_size = MZ_MIN(pState->file_stat.m_comp_size, int(MZ_ZIP_MAX_IO_BUF_SIZE));
             if (NULL == (pState->pRead_buf = pZip->m_pAlloc(pZip->m_pAlloc_opaque, 1, (size_t)pState->read_buf_size)))
             {
                 mz_zip_set_error(pZip, MZ_ZIP_ALLOC_FAILED);
