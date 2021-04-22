@@ -202,6 +202,12 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		// everything can be cast to VARCHAR, but this cast has a high cost
 		return TargetTypeCost(to);
 	}
+	if (from.id() == LogicalTypeId::LIST && to.id() == LogicalTypeId::LIST) {
+		// Lists can be cast if their child types can be cast
+		D_ASSERT(!from.child_types().empty());
+		D_ASSERT(!to.child_types().empty());
+		return ImplicitCast(from.child_types()[0].second, to.child_types()[0].second);
+	}
 	switch (from.id()) {
 	case LogicalTypeId::TINYINT:
 		return ImplicitCastTinyint(to);

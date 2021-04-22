@@ -64,7 +64,7 @@ void ListExtractTemplate(idx_t count, Vector &list, Vector &offsets, Vector &res
 	}
 }
 
-static void ListExtractFunction(Vector &result, Vector &list, Vector &offsets, const idx_t count) {
+static void ExecuteListExtract(Vector &result, Vector &list, Vector &offsets, const idx_t count) {
 	D_ASSERT(list.GetType().id() == LogicalTypeId::LIST);
 	D_ASSERT(list.GetType().child_types().size() == 1);
 
@@ -125,14 +125,14 @@ static void ListExtractFunction(Vector &result, Vector &list, Vector &offsets, c
 	result.Verify(count);
 }
 
-static void StringExtractFunction(Vector &result, Vector &input_vector, Vector &subscript_vector, const idx_t count) {
+static void ExecuteStringExtract(Vector &result, Vector &input_vector, Vector &subscript_vector, const idx_t count) {
 	BinaryExecutor::Execute<string_t, int32_t, string_t>(
 	    input_vector, subscript_vector, result, count, [&](string_t input_string, int32_t subscript) {
 		    return SubstringFun::SubstringScalarFunction(result, input_string, subscript + int32_t(subscript >= 0), 1);
 	    });
 }
 
-static void ArrayExtractFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+static void ListExtractFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 2);
 	auto count = args.size();
 
@@ -148,47 +148,48 @@ static void ArrayExtractFunction(DataChunk &args, ExpressionState &state, Vector
 
 	switch (base.GetType().id()) {
 	case LogicalTypeId::LIST:
-		// Share the value dictionary as we are just going to slice it
-		ListExtractFunction(result, base, subscript, count);
+		ExecuteListExtract(result, base, subscript, count);
 		break;
 	case LogicalTypeId::VARCHAR:
-		StringExtractFunction(result, base, subscript, count);
+		ExecuteStringExtract(result, base, subscript, count);
 		break;
 	default:
 		throw NotImplementedException("Specifier type not implemented");
 	}
 }
 
-static unique_ptr<FunctionData> ArrayExtractBind(ClientContext &context, ScalarFunction &bound_function,
-                                                 vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> ListExtractBind(ClientContext &context, ScalarFunction &bound_function,
+                                                vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(bound_function.arguments.size() == 2);
-	switch (arguments[0]->return_type.id()) {
-	case LogicalTypeId::LIST:
-		// list extract returns the child type of the list as return type
-		bound_function.return_type = arguments[0]->return_type.child_types()[0].second;
-		break;
-	case LogicalTypeId::VARCHAR:
-		// string extract returns a string, but can only accept 32 bit integers
-		bound_function.return_type = arguments[0]->return_type;
-		bound_function.arguments[1] = LogicalType::INTEGER;
-		break;
-	default:
-		throw BinderException("ARRAY_EXTRACT can only operate on LISTs and VARCHARs");
-	}
+	D_ASSERT(LogicalTypeId::LIST == arguments[0]->return_type.id());
+	// list extract returns the child type of the list as return type
+	bound_function.return_type = arguments[0]->return_type.child_types()[0].second;
+
 	return make_unique<VariableReturnBindData>(bound_function.return_type);
 }
 
 void ListExtractFun::RegisterFunction(BuiltinFunctions &set) {
 	// the arguments and return types are actually set in the binder function
-	ScalarFunction fun("list_extract", {LogicalType::ANY, LogicalType::BIGINT}, LogicalType::ANY, ArrayExtractFunction,
-	                   false, ArrayExtractBind);
-	fun.varargs = LogicalType::ANY;
-	set.AddFunction(fun);
-	fun.name = "list_element";
-	set.AddFunction(fun);
+	LogicalType list_of_any(LogicalTypeId::LIST, {make_pair("", LogicalTypeId::ANY)});
+	ScalarFunction lfun({list_of_any, LogicalType::BIGINT}, LogicalType::ANY, ListExtractFunction, false,
+	                    ListExtractBind);
+
+	ScalarFunction sfun({LogicalType::VARCHAR, LogicalType::INTEGER}, LogicalType::VARCHAR, ListExtractFunction, false,
+	                    nullptr);
+
+	ScalarFunctionSet list_extract("list_extract");
+	list_extract.AddFunction(lfun);
+	list_extract.AddFunction(sfun);
+	set.AddFunction(list_extract);
+
+	ScalarFunctionSet list_element("list_element");
+	list_element.AddFunction(lfun);
+	list_element.AddFunction(sfun);
+	set.AddFunction(list_element);
 
 	ScalarFunctionSet array_extract("array_extract");
-	array_extract.AddFunction(fun);
+	array_extract.AddFunction(lfun);
+	array_extract.AddFunction(sfun);
 	array_extract.AddFunction(StructExtractFun::GetFunction());
 	set.AddFunction(array_extract);
 }
