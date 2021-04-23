@@ -19,7 +19,7 @@ namespace duckdb {
 
 struct SortingState;
 struct PayloadState;
-struct ContinuousBlock;
+struct SortedBlock;
 class OrderLocalState;
 class OrderGlobalState;
 
