@@ -2,7 +2,7 @@
 
 namespace duckdb {
 
-static idx_t partition_info_n_partitions(const idx_t n_partitions_upper_bound) {
+static idx_t PartitionInfoNPartitions(const idx_t n_partitions_upper_bound) {
 	idx_t n_partitions = 1;
 	while (n_partitions <= n_partitions_upper_bound / 2) {
 		n_partitions *= 2;
@@ -13,7 +13,7 @@ static idx_t partition_info_n_partitions(const idx_t n_partitions_upper_bound) {
 	return n_partitions;
 }
 
-static idx_t partition_info_radix_bits(const idx_t n_partitions) {
+static idx_t PartitionInfoRadixBits(const idx_t n_partitions) {
 	idx_t radix_bits = 0;
 	auto radix_partitions_copy = n_partitions;
 	while (radix_partitions_copy - 1) {
@@ -23,7 +23,7 @@ static idx_t partition_info_radix_bits(const idx_t n_partitions) {
 	return radix_bits;
 }
 
-static hash_t partition_info_radix_mask(const idx_t radix_bits, const idx_t radix_shift) {
+static hash_t PartitionInfoRadixMask(const idx_t radix_bits, const idx_t radix_shift) {
 	hash_t radix_mask = 0;
 	// we use the fifth byte of the 64 bit hash as radix source
 	for (idx_t i = 0; i < radix_bits; i++) {
@@ -34,9 +34,8 @@ static hash_t partition_info_radix_mask(const idx_t radix_bits, const idx_t radi
 }
 
 RadixPartitionInfo::RadixPartitionInfo(const idx_t n_partitions_upper_bound)
-    : n_partitions(partition_info_n_partitions(n_partitions_upper_bound)),
-      radix_bits(partition_info_radix_bits(n_partitions)),
-      radix_mask(partition_info_radix_mask(radix_bits, RADIX_SHIFT)) {
+    : n_partitions(PartitionInfoNPartitions(n_partitions_upper_bound)),
+      radix_bits(PartitionInfoRadixBits(n_partitions)), radix_mask(PartitionInfoRadixMask(radix_bits, RADIX_SHIFT)) {
 
 	// finalize_threads needs to be a power of 2
 	D_ASSERT(n_partitions > 0);
