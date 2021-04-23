@@ -1,0 +1,154 @@
+# name: test/sql/aggregate/aggregates/test_quantile_cont.test
+# description: Test QUANTILE_CONT aggregate
+# group: [aggregates]
+
+statement ok
+PRAGMA enable_verification
+
+# Get around 1% approximately equal for R
+statement ok
+create table quantile as select range r, random() from range(0,1000000,100) union all values (NULL, 0.1), (NULL, 0.5), (NULL, 0.9) order by 2;
+
+statement error
+SELECT quantile_cont(r, NULL) FROM quantile
+
+query R
+SELECT quantile_cont(r, 0.5) FROM quantile
+----
+499950
+
+query R
+SELECT quantile_cont(r::decimal(10,2), 0.5) FROM quantile
+----
+499950
+
+query R
+SELECT quantile_cont(r, 1.0) FROM quantile
+----
+999900
+
+query R
+SELECT quantile_cont(r, 0.0) FROM quantile
+----
+0
+
+query R
+SELECT quantile_cont(NULL, 0.5) FROM quantile
+----
+NULL
+
+query R
+SELECT quantile_cont(42, 0.5) FROM quantile
+----
+42
+
+query R
+SELECT quantile_cont(NULL, 0.5)
+----
+NULL
+
+query R
+SELECT quantile_cont(42, 0.5)
+----
+42
+
+# single GROUP
+query RRR
+SELECT quantile_cont(r, 0.25), quantile_cont(r, 0.5), quantile_cont(r, 0.75) from quantile
+----
+249975
+499950
+749925
+
+# multiple groups
+query RR
+SELECT mod(r,1000) as g, quantile_cont(r, 0.25) FROM quantile GROUP BY 1 ORDER BY 1
+----
+NULL	NULL
+0	249750
+100	249850
+200	249950
+300	250050
+400	250150
+500	250250
+600	250350
+700	250450
+800	250550
+900	250650
+
+# constant input
+query R
+SELECT quantile_cont(1, 0.1) FROM quantile
+----
+1
+
+# empty input
+query R
+SELECT quantile_cont(r, 0.1) FROM quantile WHERE 1=0
+----
+NULL
+
+statement error
+SELECT quantile_cont(r, -0.1) FROM quantile
+
+statement error
+SELECT quantile_cont(r, 1.1) FROM quantile
+
+statement error
+SELECT quantile_cont(r, "string") FROM quantile
+
+statement error
+SELECT quantile_cont(r, NULL) FROM quantile
+
+statement error
+SELECT quantile_cont(r::string, 0.5) FROM quantile
+
+statement error
+SELECT quantile_cont(r) FROM quantile
+
+statement error
+SELECT quantile_cont(r, 0.1, 50) FROM quantile
+
+
+statement ok
+pragma threads=4
+
+statement ok
+PRAGMA force_parallelism
+
+# single GROUP
+query RRR
+SELECT quantile_cont(r, 0.25), quantile_cont(r, 0.5), quantile_cont(r, 0.75) from quantile
+----
+249975
+499950
+749925
+
+# multiple groups
+query RR
+SELECT mod(r,1000) as g, quantile_cont(r, 0.25) FROM quantile GROUP BY 1 ORDER BY 1
+----
+NULL	NULL
+0	249750
+100	249850
+200	249950
+300	250050
+400	250150
+500	250250
+600	250350
+700	250450
+800	250550
+900	250650
+
+# constant input
+query R
+SELECT quantile_cont(1, 0.1) FROM quantile
+----
+1
+
+# empty input
+query R
+SELECT quantile_cont(r, 0.1) FROM quantile WHERE 1=0
+----
+NULL
+
