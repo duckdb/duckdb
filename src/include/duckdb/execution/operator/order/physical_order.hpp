@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/common/types/chunk_collection.hpp"
-#include "duckdb/common/types/row_chunk.hpp"
+#include "duckdb/common/types/row_data_collection.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/physical_sink.hpp"
 #include "duckdb/parallel/pipeline.hpp"

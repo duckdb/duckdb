@@ -18,13 +18,13 @@ namespace duckdb {
 
 struct RowDataBlock {
 	RowDataBlock(BufferManager &buffer_manager, idx_t capacity, idx_t entry_size, idx_t added_capacity = 0)
-	    : CAPACITY(capacity), ENTRY_SIZE(entry_size), count(0), byte_offset(0) {
+	    : capacity(capacity), entry_size(entry_size), count(0), byte_offset(0) {
 		capacity += added_capacity;
 		block = buffer_manager.RegisterMemory(capacity * entry_size, false);
 	}
 	shared_ptr<BlockHandle> block;
-	const idx_t CAPACITY;
-	const idx_t ENTRY_SIZE;
+	const idx_t capacity;
+	const idx_t entry_size;
 	idx_t count;
 	idx_t byte_offset;
 };
@@ -36,9 +36,9 @@ struct BlockAppendEntry {
 	idx_t count;
 };
 
-class RowChunk {
+class RowDataCollection {
 public:
-	RowChunk(BufferManager &buffer_manager, idx_t block_capacity, idx_t entry_size);
+	RowDataCollection(BufferManager &buffer_manager, idx_t block_capacity, idx_t entry_size);
 
 	std::mutex rc_lock;
 
