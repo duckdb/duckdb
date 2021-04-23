@@ -59,16 +59,15 @@ static unique_ptr<FunctionData> ArrowScanBind(ClientContext &context, vector<Val
 
 	auto res = make_unique<ArrowScanFunctionData>();
 	auto &data = *res;
-	data.stream = (ArrowArrayStream *)inputs[0].GetValue<uintptr_t>();
-//	uintptr_t  arrow_table = inputs[0].GetValue<uintptr_t>();
-//	ArrowArrayStream* (*stream_factory)(uintptr_t arrow_table);
-//	stream_factory = (ArrowArrayStream* (*)(uintptr_t arrow_table))inputs[1].GetValue<uintptr_t>();
-//	data.stream = stream_factory(arrow_table);
+    auto stream_factory_ptr = inputs[0].GetValue<uintptr_t>();
+    ArrowArrayStream* (*stream_factory_produce)(uintptr_t stream_factory_ptr);
+    stream_factory_produce = (ArrowArrayStream* (*)(uintptr_t stream_factory_ptr))inputs[1].GetValue<uintptr_t>();
+	data.stream = stream_factory_produce(stream_factory_ptr);
 	if (!data.stream) {
 		throw InvalidInputException("arrow_scan: NULL pointer passed");
 	}
 
-//    D_ASSERT(data.stream->get_schema);
+    D_ASSERT(data.stream->get_schema);
 	if (data.stream->get_schema(data.stream, &data.schema_root)) {
 		throw InvalidInputException("arrow_scan: get_schema failed(): %s",
 		                            string(data.stream->get_last_error(data.stream)));
