@@ -49,7 +49,7 @@ public:
 	string ParamsToString() const override;
 
 	//! Tuples are merged in strides of size MERGE_STRIDE
-	constexpr static idx_t MERGE_STRIDE = STANDARD_VECTOR_SIZE;
+	constexpr static idx_t MERGE_STRIDE = 1024;
 
 	//! Schedule merge tasks until all blocks are merged
 	static void ScheduleMergeTasks(Pipeline &pipeline, ClientContext &context, OrderGlobalState &state);
@@ -59,8 +59,8 @@ private:
 	void SortLocalState(ClientContext &context, OrderLocalState &lstate, const SortingState &sorting_state,
 	                    const PayloadState &payload_state);
 
-	//! Size of blocks that are sorted - must be >= Storage::BLOCK_ALLOC_SIZE
-	constexpr static idx_t SORTING_BLOCK_SIZE = 262144;
+	//! Size of blocks that are sorted - value must be >= Storage::BLOCK_ALLOC_SIZE
+	constexpr static idx_t SORTING_BLOCK_SIZE = 16777216;
 };
 
 } // namespace duckdb

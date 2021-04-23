@@ -43,7 +43,9 @@ struct PayloadState {
 
 class OrderGlobalState : public GlobalOperatorState {
 public:
-	explicit OrderGlobalState(BufferManager &buffer_manager) : buffer_manager(buffer_manager) {
+	explicit OrderGlobalState(BufferManager &buffer_manager)
+	    : buffer_manager(buffer_manager), total_count(0), sorting_block_capacity(0),
+	      payload_data_block_dims(std::make_pair(0, 0)), payload_offset_block_capacity(0) {
 	}
 
 	~OrderGlobalState() override;
@@ -175,8 +177,7 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 				col_size = StringStatistics::MAX_STRING_MINMAX_SIZE;
 				break;
 			default:
-				// do nothing
-				break;
+				throw NotImplementedException("Unable to order column with type %s", expr.return_type.ToString());
 			}
 		}
 		has_null.push_back(true);
@@ -316,7 +317,6 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &gstate_
 void PhysicalOrder::Combine(ExecutionContext &context, GlobalOperatorState &gstate_p, LocalSinkState &lstate_p) {
 	auto &gstate = (OrderGlobalState &)gstate_p;
 	auto &lstate = (OrderLocalState &)lstate_p;
-
 	if (!lstate.sorting_block) {
 		return;
 	}
@@ -348,7 +348,7 @@ public:
 		return count;
 	}
 
-	//! Make ready for writing to
+	//! Initialize this to write data to during the merge
 	void InitializeWrite(const std::pair<idx_t, idx_t> dims_p, const idx_t offset_capacity_p) {
 		data_dims = dims_p;
 		offset_capacity = offset_capacity_p;
@@ -473,7 +473,7 @@ public:
 		return remaining;
 	}
 
-	//! Make ready for writing to
+	//! Initialize this block to write data to
 	void InitializeWrite(const OrderGlobalState &state) {
 		capacity = state.sorting_block_capacity;
 		CreateBlock();
@@ -550,7 +550,6 @@ private:
 
 OrderGlobalState::~OrderGlobalState() {
 	std::lock_guard<mutex> glock(lock);
-	// clean up
 	for (auto &sb : sorted_blocks) {
 		sb->UnregisterPayloadBlocks();
 	}
@@ -609,8 +608,7 @@ static RowDataBlock SizesToOffsets(BufferManager &buffer_manager, RowDataCollect
 	idx_t total_count;
 	idx_t capacity;
 	ComputeCountAndCapacity(row_data, false, total_count, capacity);
-
-	// offsets block must store the size of the final entry, therefore needing 1 more capacity
+	// offsets block must store the size of the final entry, therefore need 1 more capacity
 	capacity++;
 
 	const idx_t &entry_size = row_data.entry_size;
@@ -649,7 +647,7 @@ static int CompareStrings(data_ptr_t &left_ptr, data_ptr_t &right_ptr, const int
 	// construct strings
 	string_t left_val((const char *)left_ptr, left_size);
 	string_t right_val((const char *)right_ptr, right_size);
-
+	// do the comparison
 	int comp_res;
 	if (Equals::Operation<string_t>(left_val, right_val)) {
 		comp_res = 0;
@@ -668,7 +666,6 @@ static void BreakStringTies(BufferManager &buffer_manager, const data_ptr_t data
 	for (idx_t i = 0; i < tie_col; i++) {
 		tie_col_offset += sorting_state.col_size[i];
 	}
-
 	// if the strings are tied because they are NULL we don't need to break to tie
 	if (sorting_state.has_null[tie_col]) {
 		char *validity = (char *)dataptr + start * sorting_state.entry_size + tie_col_offset;
@@ -681,6 +678,7 @@ static void BreakStringTies(BufferManager &buffer_manager, const data_ptr_t data
 		}
 		tie_col_offset++;
 	}
+
 	// if the tied strings are smaller than the prefix size, we don't need to break the ties
 	char *prefix_chars = (char *)dataptr + start * sorting_state.entry_size + tie_col_offset;
 	const char null_char = sorting_state.order_types[tie_col] == OrderType::ASCENDING ? 0 : -1;
@@ -697,7 +695,6 @@ static void BreakStringTies(BufferManager &buffer_manager, const data_ptr_t data
 	for (idx_t i = start; i < end; i++) {
 		entry_ptrs[i - start] = dataptr + i * sorting_state.entry_size;
 	}
-
 	// slow pointer-based sorting
 	const int order = sorting_state.order_types[tie_col] == OrderType::DESCENDING ? -1 : 1;
 	const idx_t sorting_size = sorting_state.comp_size;
@@ -711,7 +708,6 @@ static void BreakStringTies(BufferManager &buffer_manager, const data_ptr_t data
 		          data_ptr_t right_ptr = var_dataptr + offsets[right_idx];
 		          return CompareStrings(left_ptr, right_ptr, order) < 0;
 	          });
-
 	// re-order
 	auto temp_block =
 	    buffer_manager.Allocate(MaxValue((end - start) * sorting_state.entry_size, (idx_t)Storage::BLOCK_ALLOC_SIZE));
@@ -741,14 +737,7 @@ static void BreakStringTies(BufferManager &buffer_manager, const data_ptr_t data
 			next_ptr += string_t::PREFIX_LENGTH;
 			string_t next_val((const char *)next_ptr, next_size);
 
-			if (current_size != next_size) {
-				// quick comparison: different length
-				ties[start + i] = false;
-			} else {
-				// equal length: full comparison
-				ties[start + i] = Equals::Operation<string_t>(current_val, next_val);
-			}
-
+			ties[start + i] = Equals::Operation<string_t>(current_val, next_val);
 			current_size = next_size;
 			current_val = next_val;
 		}
@@ -817,6 +806,7 @@ static void ComputeTies(data_ptr_t dataptr, const idx_t &count, const idx_t &col
 	ties[count - 1] = false;
 }
 
+//! Textbook LSD radix sort
 static void RadixSort(BufferManager &buffer_manager, data_ptr_t dataptr, const idx_t &count, const idx_t &col_offset,
                       const idx_t &sorting_size, const SortingState &sorting_state) {
 	auto temp_block =
@@ -917,7 +907,7 @@ static void SortInMemory(BufferManager &buffer_manager, SortedBlock &cb, const S
 			std::fill_n(ties, count - 1, true);
 			ties[count - 1] = false;
 		} else {
-			// for subsequent sorts, we subsort the tied tuples
+			// for subsequent sorts, we only have to subsort the tied tuples
 			SubSortTiedTuples(buffer_manager, dataptr, count, col_offset, sorting_size, ties, sorting_state);
 		}
 
@@ -943,11 +933,11 @@ static void SortInMemory(BufferManager &buffer_manager, SortedBlock &cb, const S
 	}
 }
 
-static void ReOrder(BufferManager &buffer_manager, SortedData &cc, data_ptr_t sorting_ptr,
+static void ReOrder(BufferManager &buffer_manager, SortedData &sd, data_ptr_t sorting_ptr,
                     const SortingState &sorting_state) {
-	const idx_t &count = cc.data_blocks.back().count;
+	const idx_t &count = sd.data_blocks.back().count;
 
-	auto &unordered_data_block = cc.data_blocks.back();
+	auto &unordered_data_block = sd.data_blocks.back();
 	auto unordered_data_handle = buffer_manager.Pin(unordered_data_block.block);
 	const data_ptr_t unordered_data_ptr = unordered_data_handle->Ptr();
 
@@ -956,7 +946,7 @@ static void ReOrder(BufferManager &buffer_manager, SortedData &cc, data_ptr_t so
 	auto ordered_data_handle = buffer_manager.Pin(reordered_data_block.block);
 	data_ptr_t ordered_data_ptr = ordered_data_handle->Ptr();
 
-	if (cc.constant_size) {
+	if (sd.constant_size) {
 		const idx_t entry_size = unordered_data_block.entry_size;
 		for (idx_t i = 0; i < count; i++) {
 			idx_t index = Load<idx_t>(sorting_ptr);
@@ -967,7 +957,7 @@ static void ReOrder(BufferManager &buffer_manager, SortedData &cc, data_ptr_t so
 	} else {
 		// variable size data: we need offsets too
 		reordered_data_block.byte_offset = unordered_data_block.byte_offset;
-		auto &unordered_offset_block = cc.offset_blocks.back();
+		auto &unordered_offset_block = sd.offset_blocks.back();
 		auto unordered_offset_handle = buffer_manager.Pin(unordered_offset_block.block);
 		idx_t *unordered_offsets = (idx_t *)unordered_offset_handle->Ptr();
 
@@ -988,30 +978,30 @@ static void ReOrder(BufferManager &buffer_manager, SortedData &cc, data_ptr_t so
 		}
 		// replace offset block
 		buffer_manager.UnregisterBlock(unordered_offset_block.block->BlockId(), true);
-		cc.offset_blocks.clear();
-		cc.offset_blocks.push_back(move(reordered_offset_block));
+		sd.offset_blocks.clear();
+		sd.offset_blocks.push_back(move(reordered_offset_block));
 	}
 	// replace data block
 	buffer_manager.UnregisterBlock(unordered_data_block.block->BlockId(), true);
-	cc.data_blocks.clear();
-	cc.data_blocks.push_back(move(reordered_data_block));
+	sd.data_blocks.clear();
+	sd.data_blocks.push_back(move(reordered_data_block));
 }
 
 //! Use the ordered sorting data to re-order the rest of the data
-static void ReOrder(ClientContext &context, SortedBlock &cb, const SortingState &sorting_state,
+static void ReOrder(ClientContext &context, SortedBlock &sb, const SortingState &sorting_state,
                     const PayloadState &payload_state) {
 	auto &buffer_manager = BufferManager::GetBufferManager(context);
-	auto sorting_handle = buffer_manager.Pin(cb.sorting_blocks.back().block);
+	auto sorting_handle = buffer_manager.Pin(sb.sorting_blocks.back().block);
 	const data_ptr_t sorting_ptr = sorting_handle->Ptr() + sorting_state.comp_size;
 
 	// re-order variable size sorting columns
 	for (idx_t col_idx = 0; col_idx < sorting_state.constant_size.size(); col_idx++) {
 		if (!sorting_state.constant_size[col_idx]) {
-			ReOrder(buffer_manager, *cb.var_sorting_cols[col_idx], sorting_ptr, sorting_state);
+			ReOrder(buffer_manager, *sb.var_sorting_cols[col_idx], sorting_ptr, sorting_state);
 		}
 	}
 	// and the payload
-	ReOrder(buffer_manager, *cb.payload_data, sorting_ptr, sorting_state);
+	ReOrder(buffer_manager, *sb.payload_data, sorting_ptr, sorting_state);
 }
 
 void PhysicalOrder::SortLocalState(ClientContext &context, OrderLocalState &lstate, const SortingState &sorting_state,
@@ -1031,13 +1021,13 @@ void PhysicalOrder::SortLocalState(ClientContext &context, OrderLocalState &lsta
 	// variable size sorting columns
 	for (idx_t i = 0; i < lstate.var_sorting_blocks.size(); i++) {
 		if (!sorting_state.constant_size[i]) {
-			auto &cc = sb->var_sorting_cols[i];
+			auto &sd = sb->var_sorting_cols[i];
 			auto &row_data = *lstate.var_sorting_blocks[i];
 			auto new_block = ConcatenateBlocks(buffer_manager, row_data, true);
 			auto &sizes_data = *lstate.var_sorting_sizes[i];
 			auto offsets_block = SizesToOffsets(buffer_manager, sizes_data);
-			cc->data_blocks.push_back(move(new_block));
-			cc->offset_blocks.push_back(move(offsets_block));
+			sd->data_blocks.push_back(move(new_block));
+			sd->offset_blocks.push_back(move(offsets_block));
 		}
 	}
 	// payload data
@@ -1193,11 +1183,11 @@ public:
 				if (l_block_idx < left.sorting_blocks.size() && r_block_idx < right.sorting_blocks.size()) {
 					// neither left or right side is exhausted - compare in loop
 					for (; compared < count && l_entry_idx < l_count && r_entry_idx < r_count; compared++) {
-						// compare
-						const bool l_smaller = memcmp(l_ptr, r_ptr, sorting_state.comp_size) < 0;
+						left_smaller[compared] = memcmp(l_ptr, r_ptr, sorting_state.comp_size) < 0;
+						const bool &l_smaller = left_smaller[compared];
+						const bool r_smaller = !l_smaller;
 						left_smaller[compared] = l_smaller;
 						// use comparison bool (0 or 1) to increment entries and pointers
-						const bool r_smaller = !l_smaller;
 						l_entry_idx += l_smaller;
 						r_entry_idx += r_smaller;
 						l_ptr += l_smaller * sorting_state.entry_size;
@@ -1205,8 +1195,7 @@ public:
 					}
 				}
 			} else {
-				// there are variable sized sorting columns
-				// pin the var blocks
+				// there are variable sized sorting columns, pin the var blocks
 				if (l_block_idx < left.sorting_blocks.size()) {
 					for (idx_t col_idx = 0; col_idx < num_cols; col_idx++) {
 						if (!sorting_state.constant_size[col_idx]) {
@@ -1241,8 +1230,8 @@ public:
 							r_ptr_offset += sorting_state.col_size[col_idx];
 						}
 						// update for next iteration using the comparison bool
-						const bool l_smaller = comp_res < 0;
-						left_smaller[compared] = l_smaller;
+						left_smaller[compared] = comp_res < 0;
+						const bool &l_smaller = left_smaller[compared];
 						const bool r_smaller = !l_smaller;
 						l_entry_idx += l_smaller;
 						r_entry_idx += r_smaller;
@@ -1351,7 +1340,7 @@ public:
 		}
 	}
 
-	//! Merges variable size sorting blocks and the payload
+	//! Merges fixed/variable size SortedData
 	void Merge(SortedData &result_data, SortedData &l_data, SortedData &r_data, const idx_t &count,
 	           const bool *left_smaller, idx_t *next_entry_sizes) {
 		// these are always used
@@ -1379,7 +1368,6 @@ public:
 		RowDataBlock *result_offset_block;
 		unique_ptr<BufferHandle> result_offset_handle;
 		idx_t *result_offsets;
-
 		if (!result_data.constant_size) {
 			result_offset_block = &result_data.offset_blocks.back();
 			result_offset_handle = buffer_manager.Pin(result_offset_block->block);
@@ -1484,11 +1472,10 @@ public:
 					}
 					// now we copy
 					const idx_t const_next = next;
-					idx_t i;
-					for (i = 0; i < const_next; i++) {
-						const bool &l_smaller = left_smaller[copied + i];
+					for (next = 0; next < const_next; next++) {
+						const bool &l_smaller = left_smaller[copied + next];
 						const bool r_smaller = !l_smaller;
-						const idx_t &entry_size = next_entry_sizes[copied + i];
+						const idx_t &entry_size = next_entry_sizes[copied + next];
 						// use comparison bool (0 or 1) to copy an entry from either side
 						memcpy(result_ptr, l_ptr, l_smaller * entry_size);
 						memcpy(result_ptr, r_ptr, r_smaller * entry_size);
@@ -1499,13 +1486,13 @@ public:
 						l_ptr += l_smaller * entry_size;
 						r_ptr += r_smaller * entry_size;
 						// store offset
-						result_offsets[result_offset_count + i + 1] =
-						    result_offsets[result_offset_count + i] + entry_size;
+						result_offsets[result_offset_count + next + 1] =
+						    result_offsets[result_offset_count + next] + entry_size;
 					}
 					result_data_block->byte_offset += copy_bytes;
-					result_offset_block->count += i;
-					result_data_block->count += i;
-					copied += i;
+					result_offset_block->count += next;
+					result_data_block->count += next;
+					copied += next;
 				} else if (r_data.block_idx == r_data.data_blocks.size()) {
 					// right side is exhausted
 					FlushVariableSize(l_ptr, l_offsets, l_data.entry_idx, l_count, result_data_block, result_ptr,
@@ -1553,6 +1540,7 @@ public:
 			l_ptr += l_smaller * entry_size;
 			r_ptr += r_smaller * entry_size;
 		}
+		// update counts
 		target_block->count += i;
 		copied += i;
 	}
@@ -1597,7 +1585,7 @@ public:
 			copy_bytes += entry_size;
 			next_entry_sizes[copied + next] = entry_size;
 		}
-		// now copy
+		// copy them all in a single memcpy
 		memcpy(target_ptr, source_ptr, copy_bytes);
 		source_ptr += copy_bytes;
 		target_ptr += copy_bytes;
@@ -1630,63 +1618,59 @@ private:
 void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> state_p) {
 	this->sink_state = move(state_p);
 	auto &state = (OrderGlobalState &)*this->sink_state;
-
 	if (state.sorted_blocks.empty()) {
 		return;
 	}
-
-	idx_t count = 0;
+	// compute total count
 	for (auto &sb : state.sorted_blocks) {
-		const auto &sorting_block = sb->sorting_blocks.back();
-		count += sorting_block.count;
+		state.total_count += sb->sorting_blocks.back().count;
 	}
-	state.total_count = count;
 
-	// compute merging blocksizes using the data we have
+	// use the data that we have to determine which block sizes to use during the merge
 	const auto &sorting_state = *state.sorting_state;
-	state.sorting_block_capacity = PhysicalOrder::SORTING_BLOCK_SIZE / sorting_state.entry_size + 1;
+	for (auto &sb : state.sorted_blocks) {
+		auto &block = sb->sorting_blocks.back();
+		state.sorting_block_capacity = MaxValue(state.sorting_block_capacity, block.capacity);
+	}
 
 	if (!sorting_state.all_constant) {
-		for (idx_t col_idx = 0; col_idx < sorting_state.constant_size.size(); col_idx++) {
-			idx_t var_data_capacity = 0;
-			idx_t var_data_entry_size = 0;
-			idx_t var_offset_capacity = 0;
+		const idx_t num_cols = sorting_state.constant_size.size();
+		state.var_sorting_data_block_dims = vector<std::pair<idx_t, idx_t>>(num_cols, std::make_pair(0, 0));
+		state.var_sorting_offset_block_capacity = vector<idx_t>(num_cols, 0);
+		for (idx_t col_idx = 0; col_idx < num_cols; col_idx++) {
+			idx_t &var_data_capacity = state.var_sorting_data_block_dims[col_idx].first;
+			idx_t &var_data_entry_size = state.var_sorting_data_block_dims[col_idx].second;
+			idx_t &var_offset_capacity = state.var_sorting_offset_block_capacity[col_idx];
 			if (!sorting_state.constant_size[col_idx]) {
 				for (auto &sb : state.sorted_blocks) {
 					const auto &data_block = sb->var_sorting_cols[col_idx]->data_blocks.back();
 					var_data_capacity = MaxValue(var_data_capacity, data_block.capacity);
 					var_data_entry_size = MaxValue(var_data_entry_size, data_block.entry_size);
-
 					const auto &offset_block = sb->var_sorting_cols[col_idx]->offset_blocks.back();
 					var_offset_capacity = MaxValue(var_offset_capacity, offset_block.capacity);
 				}
 			}
-			state.var_sorting_data_block_dims.emplace_back(var_data_capacity, var_data_entry_size);
-			state.var_sorting_offset_block_capacity.push_back(var_offset_capacity);
 		}
 	}
 
 	const auto &payload_state = *state.payload_state;
-	idx_t payload_capacity = 0;
-	idx_t payload_entry_size = 0;
-	idx_t payload_offset_capacity = 0;
+	idx_t &payload_capacity = state.payload_data_block_dims.first;
+	idx_t &payload_entry_size = state.payload_data_block_dims.second;
 	for (auto &sb : state.sorted_blocks) {
 		auto &data_block = sb->payload_data->data_blocks.back();
 		payload_capacity = MaxValue(payload_capacity, data_block.capacity);
 		payload_entry_size = data_block.entry_size;
-
 		if (payload_state.has_variable_size) {
 			auto &offset_block = sb->payload_data->offset_blocks.back();
-			payload_offset_capacity = MaxValue(payload_offset_capacity, offset_block.capacity);
+			state.payload_offset_block_capacity = MaxValue(state.payload_offset_block_capacity, offset_block.capacity);
 		}
 	}
-	state.payload_data_block_dims = make_pair(payload_capacity, payload_entry_size);
-	state.payload_offset_block_capacity = payload_offset_capacity;
 
-	// clean up
 	if (state.sorted_blocks.size() > 1) {
+		// more than one block - merge
 		PhysicalOrder::ScheduleMergeTasks(pipeline, context, state);
 	} else {
+		// clean up sorting data - payload is sorted
 		for (auto &sb : state.sorted_blocks) {
 			sb->UnregisterSortingBlocks();
 		}
