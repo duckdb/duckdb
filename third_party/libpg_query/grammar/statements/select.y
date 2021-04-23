@@ -2079,7 +2079,7 @@ a_expr:		c_expr									{ $$ = $1; }
 					n->location = @1;
 					$$ = (PGNode *)n;
 				}
-			| ARRAY '[' expr_list ']' {
+			| ARRAY '[' opt_expr_list ']' {
 				PGList *func_name = list_make1(makeString("list_value"));
 				PGFuncCall *n = makeFuncCall(func_name, $3, @1);
 				$$ = (PGNode *) n;
@@ -2871,6 +2871,18 @@ expr_list:	a_expr
 					$$ = lappend($1, $3);
 				}
 		;
+
+opt_expr_list:
+			expr_list
+				{
+					$$ = $1;
+				}
+			| /* empty */
+				{
+					$$ = NULL;
+				}
+		;
+
 
 /* function arguments can have names */
 func_arg_list:  func_arg_expr
