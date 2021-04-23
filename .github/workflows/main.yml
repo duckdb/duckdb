@@ -466,6 +466,33 @@ jobs:
     - name: Test
       run: build/relassert/test/unittest "*"
 
+  release-assert:
+    name: Thread Sanitizer
+    runs-on: ubuntu-20.04
+    needs: linux-debug
+
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+      BUILD_ICU: 1
+      BUILD_TPCH: 1
+      BUILD_FTS: 1
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Install
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+    - name: Build
+      run: THREADSAN=1 make reldebug
+
+    - name: Test
+      run: build/reldebug/test/unittest "*"
+
 
   valgrind:
     name: Valgrind
