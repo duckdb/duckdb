@@ -466,7 +466,8 @@ jobs:
     - name: Test
       run: build/relassert/test/unittest "*"
 
-  release-assert:
+
+  threadsan:
     name: Thread Sanitizer
     runs-on: ubuntu-20.04
     needs: linux-debug
