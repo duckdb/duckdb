@@ -98,6 +98,12 @@ void Morsel::Scan(Transaction &transaction, MorselScanState &state, DataChunk &r
 					result.data[table_filter.first].Slice(sel, approved_tuple_count);
 				}
 			}
+			if (approved_tuple_count == 0) {
+				result.Reset();
+				state.vector_index++;
+				continue;
+			}
+
 			//! Now we use the selection vector to fetch data for the other columns.
 			for (idx_t i = 0; i < column_ids.size(); i++) {
 				if (!table_filters || table_filters->filters.find(i) == table_filters->filters.end()) {
@@ -121,7 +127,7 @@ void Morsel::Scan(Transaction &transaction, MorselScanState &state, DataChunk &r
 					duration_cast<duration<double>>(end_time - start_time).count());
 			}
 		}
-
+		D_ASSERT(approved_tuple_count > 0);
 		result.SetCardinality(approved_tuple_count);
 		state.vector_index++;
 		break;

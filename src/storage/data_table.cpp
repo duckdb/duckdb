@@ -745,25 +745,24 @@ void DataTable::RemoveFromIndexes(Vector &row_identifiers, idx_t count) {
 // Delete
 //===--------------------------------------------------------------------===//
 void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector &row_identifiers, idx_t count) {
-	throw NotImplementedException("FIXME: delete");
-	// D_ASSERT(row_identifiers.GetType().InternalType() == ROW_TYPE);
-	// if (count == 0) {
-	// 	return;
-	// }
+	D_ASSERT(row_identifiers.GetType().InternalType() == ROW_TYPE);
+	if (count == 0) {
+		return;
+	}
 
-	// auto &transaction = Transaction::GetTransaction(context);
+	auto &transaction = Transaction::GetTransaction(context);
 
-	// row_identifiers.Normalify(count);
-	// auto ids = FlatVector::GetData<row_t>(row_identifiers);
-	// auto first_id = ids[0];
+	row_identifiers.Normalify(count);
+	auto ids = FlatVector::GetData<row_t>(row_identifiers);
+	auto first_id = ids[0];
 
-	// if (first_id >= MAX_ROW_ID) {
-	// 	// deletion is in transaction-local storage: push delete into local chunk collection
-	// 	transaction.storage.Delete(this, row_identifiers, count);
-	// } else {
-	// 	auto morsel = (MorselInfo *)versions->GetSegment(first_id);
-	// 	morsel->Delete(transaction, this, row_identifiers, count);
-	// }
+	if (first_id >= MAX_ROW_ID) {
+		// deletion is in transaction-local storage: push delete into local chunk collection
+		transaction.storage.Delete(this, row_identifiers, count);
+	} else {
+		auto morsel = (Morsel *) morsels->GetSegment(first_id);
+		morsel->Delete(transaction, this, row_identifiers, count);
+	}
 }
 
 //===--------------------------------------------------------------------===//
