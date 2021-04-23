@@ -34,7 +34,6 @@ struct IndexLock {
 
 struct TableAppendState {
 	unique_lock<mutex> append_lock;
-	unique_ptr<IndexLock[]> index_locks;
 	unique_ptr<ColumnAppendState[]> states;
 	row_t row_start;
 	row_t current_row;

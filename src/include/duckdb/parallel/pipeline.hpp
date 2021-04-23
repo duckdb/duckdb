@@ -75,7 +75,7 @@ public:
 	//! The current threads working on the pipeline
 	atomic<idx_t> finished_tasks;
 	//! The maximum amount of threads that can work on the pipeline
-	idx_t total_tasks;
+	atomic<idx_t> total_tasks;
 
 private:
 	//! The child from which to pull chunks

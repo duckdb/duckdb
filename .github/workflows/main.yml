@@ -492,7 +492,7 @@ jobs:
       run: THREADSAN=1 make reldebug
 
     - name: Test
-      run: build/reldebug/test/unittest "*"
+      run: build/reldebug/test/unittest
 
 
   valgrind:

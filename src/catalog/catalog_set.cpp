@@ -206,6 +206,20 @@ bool CatalogSet::DropEntry(ClientContext &context, const string &name, bool casc
 	return true;
 }
 
+void CatalogSet::CleanupEntry(CatalogEntry *catalog_entry) {
+
+	// destroy the backed up entry: it is no longer required
+	D_ASSERT(catalog_entry->parent);
+	if (catalog_entry->parent->type != CatalogType::UPDATED_ENTRY) {
+		if (!catalog_entry->deleted) {
+			// delete the entry from the dependency manager, if it is not deleted yet
+			catalog_entry->catalog->dependency_manager->EraseObject(catalog_entry);
+		}
+		lock_guard<mutex> lock(catalog_lock);
+		catalog_entry->parent->child = move(catalog_entry->child);
+	}
+}
+
 idx_t CatalogSet::GetEntryIndex(CatalogEntry *entry) {
 	D_ASSERT(mapping.find(entry->name) != mapping.end());
 	return mapping[entry->name]->index;

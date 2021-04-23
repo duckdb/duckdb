@@ -52,6 +52,8 @@ public:
 
 	bool DropEntry(ClientContext &context, const string &name, bool cascade);
 
+	void CleanupEntry(CatalogEntry *catalog_entry);
+
 	//! Returns the entry with the specified name
 	CatalogEntry *GetEntry(ClientContext &context, const string &name);
 

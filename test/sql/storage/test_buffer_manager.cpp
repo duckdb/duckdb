@@ -169,6 +169,7 @@ TEST_CASE("Modifying the buffer manager limit at runtime for an in-memory databa
 
 	DuckDB db(nullptr);
 	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("PRAGMA threads=1"));
 
 	// initialize an in-memory database of size 10MB
 	uint64_t table_size = (1000 * 1000) / sizeof(int);

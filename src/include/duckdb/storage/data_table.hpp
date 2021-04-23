@@ -32,6 +32,50 @@ class Transaction;
 class WriteAheadLog;
 class TableDataWriter;
 
+class TableIndexList {
+public:
+	//! Scan the catalog set, invoking the callback method for every entry
+	template <class T>
+	void Scan(T &&callback) {
+		// lock the catalog set
+		lock_guard<mutex> lock(indexes_lock);
+		for (auto &index : indexes) {
+			if (callback(*index)) {
+				break;
+			}
+		}
+	}
+
+	void AddIndex(unique_ptr<Index> index) {
+		D_ASSERT(index);
+		lock_guard<mutex> lock(indexes_lock);
+		indexes.push_back(move(index));
+	}
+
+	void RemoveIndex(Index *index) {
+		D_ASSERT(index);
+		lock_guard<mutex> lock(indexes_lock);
+
+		for (idx_t index_idx = 0; index_idx < indexes.size(); index_idx++) {
+			auto &index_entry = indexes[index_idx];
+			if (index_entry.get() == index) {
+				indexes.erase(indexes.begin() + index_idx);
+				break;
+			}
+		}
+	}
+
+	bool Empty() {
+		lock_guard<mutex> lock(indexes_lock);
+		return indexes.empty();
+	}
+
+private:
+	//! Indexes associated with the current table
+	mutex indexes_lock;
+	vector<unique_ptr<Index>> indexes;
+};
+
 struct DataTableInfo {
 	DataTableInfo(string schema, string table) : cardinality(0), schema(move(schema)), table(move(table)) {
 	}
@@ -43,9 +87,8 @@ struct DataTableInfo {
 	string schema;
 	// name of the table
 	string table;
-	//! Indexes associated with the current table
-	mutex indexes_lock;
-	vector<unique_ptr<Index>> indexes;
+
+	TableIndexList indexes;
 
 	bool IsTemporary() {
 		return schema == TEMP_SCHEMA;
@@ -179,11 +222,11 @@ private:
 	//! The segment tree holding the persistent versions
 	shared_ptr<SegmentTree> versions;
 	//! The number of rows in the table
-	idx_t total_rows;
+	atomic<idx_t> total_rows;
 	//! The physical columns of the table
 	vector<shared_ptr<ColumnData>> columns;
 	//! Whether or not the data table is the root DataTable for this table; the root DataTable is the newest version
 	//! that can be appended to
-	bool is_root;
+	atomic<bool> is_root;
 };
 } // namespace duckdb
