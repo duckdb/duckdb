@@ -119,7 +119,7 @@ if(BUILD_PYTHON OR BUILD_R)
     else()
       add_custom_target(
         duckdb_python ALL
-        COMMAND python3 setup.py install --user --binary-dir=${CMAKE_BINARY_DIR}
+        COMMAND python3 setup.py install --binary-dir=${CMAKE_BINARY_DIR}
                 --compile-flags=${ALL_COMPILE_FLAGS} --libs="${duckdb_libs}"
         DEPENDS duckdb
         WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/pythonpkg
