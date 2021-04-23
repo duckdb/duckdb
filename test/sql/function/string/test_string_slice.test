@@ -11,33 +11,54 @@ CREATE TABLE strings(s VARCHAR, off INTEGER, length INTEGER);
 statement ok
 INSERT INTO strings VALUES ('hello', 0, 2), ('world', 1, 3), ('b', 0, 1), (NULL, 1, 2)
 
-# Slicing string constants is not supported
-statement ok
-CREATE TABLE ducks(d VARCHAR);
-
-statement ok
-INSERT INTO ducks VALUES ('🦆ab'), ('abc')
-
-statement ok
-CREATE TABLE hello(hello VARCHAR);
-
-statement ok
-INSERT INTO hello VALUES ('hello')
-
-
+# Slicing NULLs is not supported
 statement ok
 CREATE TABLE nulltable(n VARCHAR);
 
 statement ok
 INSERT INTO nulltable VALUES (NULL)
 
+statement error
+SELECT NULL::VARCHAR[off:length+off] FROM strings
+
+statement error
+SELECT NULL::VARCHAR[NULL:length+NULL] FROM strings
+
+statement error
+SELECT NULL::VARCHAR[off:NULL+off] FROM strings
+
+statement error
+SELECT NULL::VARCHAR[off:NULL+off] FROM strings
+
+statement error
+SELECT NULL::VARCHAR[NULL:NULL+NULL] FROM strings
 
 # test zero length
-query T
-SELECT d[0:0] FROM ducks
+query II
+SELECT '🦆ab'[0:0], 'abc'[0:0]
 ----
-(empty)
-(empty)
+(empty)	(empty)
+
+# test grapheme clusters
+query I
+SELECT '🤦🏼‍♂️ L🤦🏼‍♂️R 🤦🏼‍♂️'[2:5]
+----
+L🤦🏼‍♂️R
+
+query I
+SELECT 'S̈a'[1:2]
+----
+a
+
+query I
+SELECT 'MotörHead'[:5]
+----
+Motör
+
+query I
+SELECT 'Z͑ͫ̓ͪ̂ͫ̽͏̴̙̤̞͉͚̯̞̠͍A̴̵̜̰͔ͫ͗͢'[1:]
+----
+A̴̵̜̰͔ͫ͗͢
 
 # constant offset/length
 # normal slice
@@ -84,7 +105,7 @@ b
 NULL
 
 query T
-SELECT hello[off:length+off] FROM strings, hello
+SELECT 'hello'[off:length+off] FROM strings
 ----
 he
 ell
@@ -101,7 +122,7 @@ NULL
 NULL
 
 query T
-SELECT hello[NULL:length+NULL] FROM strings, hello
+SELECT 'hello'[NULL:length+NULL] FROM strings
 ----
 hello
 hello
@@ -109,7 +130,7 @@ hello
 hello
 
 query T
-SELECT hello[off:NULL+off] FROM strings, hello
+SELECT 'hello'[off:NULL+off] FROM strings
 ----
 hello
 ello
@@ -125,7 +146,7 @@ NULL
 NULL
 
 query T
-SELECT hello[NULL:NULL+NULL] FROM strings, hello
+SELECT 'hello'[NULL:NULL+NULL] FROM strings
 ----
 hello
 hello

@@ -18,6 +18,16 @@ unique_ptr<Expression> BoundCastExpression::AddCastToType(unique_ptr<Expression>
 		auto &def = (BoundDefaultExpression &)*expr;
 		def.return_type = target_type;
 	} else if (expr->return_type != target_type) {
+		auto &expr_type = expr->return_type;
+		if (target_type.id() == LogicalTypeId::LIST && expr_type.id() == LogicalTypeId::LIST) {
+			D_ASSERT(!target_type.child_types().empty());
+			D_ASSERT(!expr_type.child_types().empty());
+			auto &target_list = target_type.child_types()[0].second;
+			auto &expr_list = expr_type.child_types()[0].second;
+			if (target_list.id() == LogicalTypeId::ANY || expr_list == target_list) {
+				return expr;
+			}
+		}
 		return make_unique<BoundCastExpression>(move(expr), target_type);
 	}
 	return expr;
