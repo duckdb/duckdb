@@ -14,6 +14,7 @@ TEST_CASE("Test scanning a table and computing an aggregate over a table that ex
 
 	// set the maximum memory to 10MB
 	config->maximum_memory = 10000000;
+	config->maximum_threads = 1;
 
 	int64_t expected_sum;
 	Value sum;
@@ -52,6 +53,7 @@ TEST_CASE("Test storing a big string that exceeds buffer manager size", "[storag
 	unique_ptr<MaterializedQueryResult> result;
 	auto storage_database = TestCreatePath("storage_test");
 	auto config = GetTestConfig();
+	config->maximum_threads = 1;
 
 	uint64_t string_length = 64;
 	uint64_t desired_size = 10000000; // desired size is 10MB
