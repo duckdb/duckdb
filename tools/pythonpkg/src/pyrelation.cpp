@@ -49,6 +49,8 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	    .def("arrow", &DuckDBPyRelation::ToArrowTable, "Transforms the relation object into a Arrow table")
 	    .def("to_df", &DuckDBPyRelation::ToDF, "Transforms the relation object into a Data.Frame")
 	    .def("df", &DuckDBPyRelation::ToDF, "Transforms the relation object into a Data.Frame")
+	    .def("fetchone", &DuckDBPyRelation::Fetchone, "Execute and fetch a single row")
+	    .def("fetchall", &DuckDBPyRelation::Fetchall, "Execute and fetch all rows")
 	    .def("map", &DuckDBPyRelation::Map, py::arg("map_function"), "Calls the passed function on the relation")
 	    .def("__str__", &DuckDBPyRelation::Print)
 	    .def("__repr__", &DuckDBPyRelation::Print)
@@ -64,6 +66,10 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromDf(py::object df) {
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Values(py::object values) {
 	return DuckDBPyConnection::DefaultConnection()->Values(std::move(values));
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromQuery(const string &query, const string &alias) {
+	return DuckDBPyConnection::DefaultConnection()->FromQuery(query, alias);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromCsvAuto(const string &filename) {
@@ -147,6 +153,30 @@ py::object DuckDBPyRelation::ToDF() {
 		throw std::runtime_error(res->result->error);
 	}
 	return res->FetchDF();
+}
+
+py::object DuckDBPyRelation::Fetchone() {
+	auto res = make_unique<DuckDBPyResult>();
+	{
+		py::gil_scoped_release release;
+		res->result = rel->Execute();
+	}
+	if (!res->result->success) {
+		throw std::runtime_error(res->result->error);
+	}
+	return res->Fetchone();
+}
+
+py::object DuckDBPyRelation::Fetchall() {
+	auto res = make_unique<DuckDBPyResult>();
+	{
+		py::gil_scoped_release release;
+		res->result = rel->Execute();
+	}
+	if (!res->result->success) {
+		throw std::runtime_error(res->result->error);
+	}
+	return res->Fetchall();
 }
 
 py::object DuckDBPyRelation::ToArrowTable() {
