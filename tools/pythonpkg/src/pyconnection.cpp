@@ -333,6 +333,9 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrowTable(const py::object
 
 DuckDBPyConnection *DuckDBPyConnection::UnregisterDF(const string &name) {
 	registered_dfs[name] = py::none();
+	if (connection) {
+		connection->Query("DROP VIEW \"" + name + "\"");
+	}
 	return this;
 }
 
