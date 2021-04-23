@@ -45,6 +45,9 @@ class OrderGlobalState : public GlobalOperatorState {
 public:
 	explicit OrderGlobalState(BufferManager &buffer_manager) : buffer_manager(buffer_manager) {
 	}
+
+	~OrderGlobalState() override;
+
 	//! The lock for updating the order global state
 	std::mutex lock;
 	//! The buffer manager
@@ -546,6 +549,14 @@ private:
 
 	idx_t capacity;
 };
+
+OrderGlobalState::~OrderGlobalState() {
+	std::lock_guard<mutex> glock(lock);
+	// clean up
+	for (auto &sb : sorted_blocks) {
+		sb->UnregisterPayloadBlocks();
+	}
+}
 
 static void ComputeCountAndCapacity(RowChunk &row_chunk, bool variable_entry_size, idx_t &count, idx_t &capacity) {
 	const idx_t &entry_size = row_chunk.entry_size;
@@ -1753,16 +1764,18 @@ void PhysicalOrder::ScheduleMergeTasks(Pipeline &pipeline, ClientContext &contex
 	}
 
 	// uneven amount of blocks
-	if (state.sorted_blocks.size() % 2 == 1) {
+	auto num_blocks = state.sorted_blocks.size();
+	if (num_blocks % 2 == 1) {
 		state.sorted_blocks_temp.push_back(move(state.sorted_blocks.back()));
 		state.sorted_blocks.pop_back();
+		num_blocks--;
 	}
 
 	auto &ts = TaskScheduler::GetScheduler(context);
-	for (idx_t i = 0; i < state.sorted_blocks.size(); i += 2) {
+	pipeline.total_tasks += num_blocks / 2;
+	for (idx_t i = 0; i < num_blocks; i += 2) {
 		auto new_task = make_unique<PhysicalOrderMergeTask>(pipeline, context, state, *state.sorted_blocks[i],
 		                                                    *state.sorted_blocks[i + 1]);
-		pipeline.total_tasks++;
 		ts.ScheduleTask(pipeline.token, move(new_task));
 	}
 }
@@ -1983,10 +1996,6 @@ void PhysicalOrder::GetChunkInternal(ExecutionContext &context, DataChunk &chunk
 		} while (true);
 	}
 	D_ASSERT(chunk.size() == 0);
-	// clean up
-	for (auto &sb : gstate.sorted_blocks) {
-		sb->UnregisterPayloadBlocks();
-	}
 }
 
 string PhysicalOrder::ParamsToString() const {
