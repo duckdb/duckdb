@@ -21,6 +21,7 @@ class Index;
 class Morsel;
 class UpdateSegment;
 class PersistentSegment;
+class TableScanState;
 class TransientSegment;
 class ValiditySegment;
 struct TableFilterSet;
@@ -75,18 +76,33 @@ private:
 	LocalTableStorage *storage = nullptr;
 };
 
-class TableScanState {
+class MorselScanState {
 public:
-	TableScanState() {};
+	MorselScanState(TableScanState &parent_p) :
+		parent(parent_p) {}
 
+	//! The parent scan state
+	TableScanState &parent;
 	//! The current morsel we are scanning
 	Morsel *morsel;
 	//! The vector index within the morsel
 	idx_t vector_index;
+	//! The maximum row index of this morsel scan
+	idx_t max_row;
 	//! Child column scans
 	unique_ptr<ColumnScanState[]> column_scans;
-	//! The number of column scans
-	idx_t column_count;
+};
+
+class TableScanState {
+public:
+	TableScanState() : morsel_scan_state(*this) {};
+
+	//! The morsel scan state
+	MorselScanState morsel_scan_state;
+	//! The total maximum row index
+	idx_t max_row;
+	//! The column identifiers of the scan
+	vector<column_t> column_ids;
 	//! The table filters (if any)
 	TableFilterSet *table_filters = nullptr;
 	//! Adaptive filter info (if any)

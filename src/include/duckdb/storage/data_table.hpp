@@ -17,6 +17,7 @@
 #include "duckdb/storage/table/persistent_segment.hpp"
 #include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/storage/table/persistent_table_data.hpp"
+#include "duckdb/storage/table/morsel.hpp"
 
 #include <atomic>
 #include <mutex>
@@ -147,6 +148,9 @@ public:
 
 	idx_t GetTotalRows();
 
+	//! Appends an empty morsel to the table
+	void AppendMorsel(idx_t start_row);
+
 private:
 	//! Verify constraints with a chunk from the Append containing all columns of the table
 	void VerifyAppendConstraints(TableCatalogEntry &table, DataChunk &chunk);
@@ -158,7 +162,7 @@ private:
 	bool CheckZonemap(TableScanState &state, const vector<column_t> &column_ids, TableFilterSet *table_filters,
 	                  idx_t &current_row);
 	bool ScanBaseTable(Transaction &transaction, DataChunk &result, TableScanState &state,
-	                   const vector<column_t> &column_ids, idx_t &current_row, idx_t max_row);
+	                   const vector<column_t> &column_ids);
 	bool ScanCreateIndex(CreateIndexScanState &state, const vector<column_t> &column_ids, DataChunk &result,
 	                     idx_t &current_row, idx_t max_row, bool allow_pending_updates = false);
 
@@ -177,7 +181,9 @@ private:
 	//! The number of rows in the table
 	idx_t total_rows;
 	//! The segment trees holding the various morsels of the table
-	vector<shared_ptr<SegmentTree>> morsels;
+	shared_ptr<SegmentTree> morsels;
+	//! Column statistics
+	vector<unique_ptr<BaseStatistics>> column_stats;
 	//! Whether or not the data table is the root DataTable for this table; the root DataTable is the newest version
 	//! that can be appended to
 	bool is_root;

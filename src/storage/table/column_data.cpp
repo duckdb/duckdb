@@ -101,9 +101,10 @@ void ColumnScanState::Next() {
 
 void TableScanState::NextVector() {
 	//! nothing to scan for this vector, skip the entire vector
-	for (idx_t j = 0; j < column_count; j++) {
-		column_scans[j].Next();
-	}
+	throw NotImplementedException("FIXME: next vector");
+	// for (idx_t j = 0; j < column_ids.size(); j++) {
+	// 	column_scans[j].Next();
+	// }
 }
 
 void ColumnData::Append(ColumnAppendState &state, Vector &vector, idx_t count) {

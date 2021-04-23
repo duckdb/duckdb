@@ -11,6 +11,8 @@
 #include "duckdb/common/vector_size.hpp"
 #include "duckdb/storage/table/segment_base.hpp"
 #include "duckdb/storage/table/chunk_info.hpp"
+#include "duckdb/storage/table/append_state.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/common/mutex.hpp"
 
 namespace duckdb {
@@ -43,20 +45,27 @@ public:
 	vector<shared_ptr<ColumnData>> columns;
 
 public:
+	//! Initialize a scan over this morsel
+	void InitializeScan(MorselScanState &state);
+	void Scan(Transaction &transaction, MorselScanState &state, DataChunk &result);
+
 	idx_t GetSelVector(Transaction &transaction, idx_t vector_idx, SelectionVector &sel_vector, idx_t max_count);
 
 	//! For a specific row, returns true if it should be used for the transaction and false otherwise.
 	bool Fetch(Transaction &transaction, idx_t row);
 
-	//! Append count rows to the morsel info
-	void Append(Transaction &transaction, idx_t start, idx_t count, transaction_t commit_id);
-
+	//! Append count rows to the version info
+	void AppendVersionInfo(Transaction &transaction, idx_t start, idx_t count, transaction_t commit_id);
+	//! Commit a previous append made by Morsel::AppendVersionInfo
 	void CommitAppend(transaction_t commit_id, idx_t start, idx_t count);
+	//! Revert a previous append made by Morsel::AppendVersionInfo
+	void RevertAppend(idx_t start);
 
 	//! Delete the given set of rows in the version manager
 	void Delete(Transaction &transaction, DataTable *table, Vector &row_ids, idx_t count);
 
-	void RevertAppend(idx_t start);
+	void InitializeAppend(Transaction &transaction, MorselAppendState &append_state, idx_t remaining_append_count);
+	void Append(MorselAppendState &append_state, DataChunk &chunk, idx_t append_count);
 
 private:
 	ChunkInfo *GetChunkInfo(idx_t vector_idx);
