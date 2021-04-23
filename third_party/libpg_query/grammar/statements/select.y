@@ -2079,6 +2079,11 @@ a_expr:		c_expr									{ $$ = $1; }
 					n->location = @1;
 					$$ = (PGNode *)n;
 				}
+			| ARRAY '[' expr_list ']' {
+				PGList *func_name = list_make1(makeString("list_value"));
+				PGFuncCall *n = makeFuncCall(func_name, $3, @1);
+				$$ = (PGNode *) n;
+			}
 		;
 
 /*
