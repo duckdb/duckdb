@@ -27,6 +27,8 @@ public:
 
 	static unique_ptr<DuckDBPyRelation> Values(py::object values = py::list());
 
+	static unique_ptr<DuckDBPyRelation> FromQuery(const string &query, const string &alias);
+
 	static unique_ptr<DuckDBPyRelation> FromCsvAuto(const string &filename);
 
 	static unique_ptr<DuckDBPyRelation> FromParquet(const string &filename);
@@ -62,6 +64,10 @@ public:
 	static unique_ptr<DuckDBPyRelation> DistinctDF(py::object df);
 
 	py::object ToDF();
+
+	py::object Fetchone();
+
+	py::object Fetchall();
 
 	py::object ToArrowTable();
 
