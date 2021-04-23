@@ -2,6 +2,9 @@
 # description: Test ARRAY syntax
 # group: [list]
 
+statement ok
+PRAGMA enable_verification
+
 # scalar array syntax
 query IIII
 SELECT ARRAY[1,2], ARRAY[NULL], ARRAY['hello', 'world'], ARRAY[]
