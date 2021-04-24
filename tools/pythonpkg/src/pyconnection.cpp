@@ -233,7 +233,6 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquet(const string &filen
 	return make_unique<DuckDBPyRelation>(connection->TableFunction("parquet_scan", params)->Alias(filename));
 }
 
-
 static string PtrToString(void const *ptr) {
 	std::ostringstream address;
 	address << ptr;
@@ -250,11 +249,17 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrowTable(const py::object
 		throw std::runtime_error("Only arrow tables supported");
 	}
 
-    auto stream_factory = new PythonTableArrowArrayStreamFactory(table);
+	unique_ptr<PythonTableArrowArrayStreamFactory> stream_factory =
+	    make_unique<PythonTableArrowArrayStreamFactory>(table);
 	string name = "arrow_table_" + PtrToString((void *)&table);
-	ArrowArrayStream* (*stream_factory_produce)(uintptr_t factory) = PythonTableArrowArrayStreamFactory::Produce;
-	return make_unique<DuckDBPyRelation>(
-	    connection->TableFunction("arrow_scan", {Value::POINTER((uintptr_t)stream_factory),Value::POINTER((uintptr_t)stream_factory_produce)})->Alias(name));
+	ArrowArrayStream *(*stream_factory_produce)(uintptr_t factory) = PythonTableArrowArrayStreamFactory::Produce;
+	auto rel = make_unique<DuckDBPyRelation>(
+	    connection
+	        ->TableFunction("arrow_scan", {Value::POINTER((uintptr_t)stream_factory.get()),
+	                                       Value::POINTER((uintptr_t)stream_factory_produce)})
+	        ->Alias(name));
+	rel->arrow_stream_factory = move(stream_factory);
+	return rel;
 }
 
 DuckDBPyConnection *DuckDBPyConnection::UnregisterDF(const string &name) {

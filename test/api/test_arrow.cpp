@@ -11,11 +11,11 @@ struct MyArrowArrayStream {
 		stream.private_data = this;
 	}
 
-	  static void InitializeFunctionPointers(ArrowArrayStream *stream){
-	    stream->get_schema = MyStreamGetschema;
-        stream->get_next = MyStreamGetnext;
-        stream->release = MyStreamRelease;
-        stream->get_last_error = MyStreamGetlasterror;
+	static void InitializeFunctionPointers(ArrowArrayStream *stream) {
+		stream->get_schema = MyStreamGetschema;
+		stream->get_next = MyStreamGetnext;
+		stream->release = MyStreamRelease;
+		stream->get_last_error = MyStreamGetlasterror;
 	};
 
 	static int MyStreamGetschema(struct ArrowArrayStream *stream, struct ArrowSchema *out) {
@@ -74,9 +74,11 @@ static void TestArrowRoundTrip(string q) {
 	auto result = con.Query(q);
 	REQUIRE(result->success);
 	auto my_stream = new MyArrowArrayStream(move(result));
-	void (*initialize_stream)(ArrowArrayStream *stream) = MyArrowArrayStream::InitializeFunctionPointers;
+	void (*initialize_stream)(ArrowArrayStream * stream) = MyArrowArrayStream::InitializeFunctionPointers;
 
-	auto result2 = con.TableFunction("arrow_scan", {Value::POINTER((uintptr_t)&my_stream->stream),Value::POINTER((uintptr_t)initialize_stream)})->Execute();
+	auto result2 = con.TableFunction("arrow_scan", {Value::POINTER((uintptr_t)&my_stream->stream),
+	                                                Value::POINTER((uintptr_t)initialize_stream)})
+	                   ->Execute();
 
 	idx_t column_count = result2->ColumnCount();
 	vector<vector<Value>> values;
@@ -112,10 +114,9 @@ TEST_CASE("Test Arrow API round trip", "[arrow]") {
 
 TEST_CASE("Test Arrow API unsigned", "[arrow]") {
 	// all unsigned types
-	TestArrowRoundTrip(
-	    "select (c%128)::utinyint c_utinyint ,c::usmallint*1000 c_usmallint, "
-	    "c::uinteger*100000 c_uinteger, c::ubigint*1000000000000 c_ubigint from (select case when range "
-	    "% 2 == 0 then range else null end as c from range(0, 100)) sq");
+	TestArrowRoundTrip("select (c%128)::utinyint c_utinyint ,c::usmallint*1000 c_usmallint, "
+	                   "c::uinteger*100000 c_uinteger, c::ubigint*1000000000000 c_ubigint from (select case when range "
+	                   "% 2 == 0 then range else null end as c from range(0, 100)) sq");
 	// big result set
 	TestArrowRoundTrip("select i from range(0, 2000) sq(i)");
 }
