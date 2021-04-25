@@ -259,7 +259,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrowTable(const py::object
 	                                       Value::POINTER((uintptr_t)stream_factory_produce)})
 	        ->Alias(name));
 	registered_arrow_factory[PtrToString((void *)&table)] = move(stream_factory);
-//	rel->arrow_stream_factory = move(stream_factory);
+	//	rel->arrow_stream_factory = move(stream_factory);
 	return rel;
 }
 

@@ -214,7 +214,7 @@ py::object DuckDBPyResult::FetchArrowTable() {
 	if (!result) {
 		throw std::runtime_error("result closed");
 	}
-    py::gil_scoped_acquire acquire;
+	py::gil_scoped_acquire acquire;
 	auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");
 
 	auto batch_import_func = pyarrow_lib_module.attr("RecordBatch").attr("_import_from_c");

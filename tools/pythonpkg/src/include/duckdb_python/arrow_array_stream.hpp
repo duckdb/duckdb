@@ -18,6 +18,7 @@ public:
 	explicit PythonTableArrowArrayStreamFactory(const py::object &arrow_table) : arrow_table(arrow_table) {};
 	static ArrowArrayStream *Produce(uintptr_t factory);
 	py::object arrow_table;
+	ArrowArrayStream *stream = nullptr;
 };
 class PythonTableArrowArrayStream {
 public:
