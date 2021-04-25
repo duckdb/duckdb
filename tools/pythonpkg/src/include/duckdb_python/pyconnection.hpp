@@ -8,8 +8,9 @@
 
 #pragma once
 
-#include "duckdb_python/pybind_wrapper.hpp"
+#include "arrow_array_stream.hpp"
 #include "duckdb.hpp"
+#include "duckdb_python/pybind_wrapper.hpp"
 
 namespace duckdb {
 
@@ -23,6 +24,7 @@ public:
 	shared_ptr<DuckDB> database;
 	unique_ptr<Connection> connection;
 	unordered_map<string, py::object> registered_dfs;
+	unordered_map<string, unique_ptr<PythonTableArrowArrayStreamFactory>> registered_arrow_factory;
 	unique_ptr<DuckDBPyResult> result;
 	vector<shared_ptr<DuckDBPyConnection>> cursors;
 

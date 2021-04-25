@@ -6,7 +6,6 @@ namespace duckdb {
 PythonTableArrowArrayStream::PythonTableArrowArrayStream(const py::object &arrow_table) : arrow_table(arrow_table) {
 	InitializeFunctionPointers(&stream);
 	stream.private_data = this;
-	py::gil_scoped_acquire acquire;
 	batches = arrow_table.attr("to_batches")();
 }
 
@@ -18,6 +17,7 @@ void PythonTableArrowArrayStream::InitializeFunctionPointers(ArrowArrayStream *s
 }
 
 ArrowArrayStream *PythonTableArrowArrayStreamFactory::Produce(uintptr_t factory_ptr) {
+	py::gil_scoped_acquire acquire;
 	PythonTableArrowArrayStreamFactory *factory = (PythonTableArrowArrayStreamFactory *)factory_ptr;
 	auto table_stream = new PythonTableArrowArrayStream(factory->arrow_table);
 	return &table_stream->stream;
