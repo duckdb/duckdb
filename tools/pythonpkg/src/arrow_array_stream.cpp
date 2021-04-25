@@ -3,7 +3,9 @@
 
 namespace duckdb {
 
-PythonTableArrowArrayStream::PythonTableArrowArrayStream(const py::object &arrow_table) : arrow_table(arrow_table) {
+PythonTableArrowArrayStream::PythonTableArrowArrayStream(const py::object &arrow_table,
+                                                         PythonTableArrowArrayStreamFactory *factory)
+    : arrow_table(arrow_table), factory(factory) {
 	InitializeFunctionPointers(&stream);
 	stream.private_data = this;
 	batches = arrow_table.attr("to_batches")();
@@ -20,13 +22,8 @@ ArrowArrayStream *PythonTableArrowArrayStreamFactory::Produce(uintptr_t factory_
 	py::gil_scoped_acquire acquire;
 	PythonTableArrowArrayStreamFactory *factory = (PythonTableArrowArrayStreamFactory *)factory_ptr;
 	if (!factory->stream) {
-		auto table_stream = new PythonTableArrowArrayStream(factory->arrow_table);
+		auto table_stream = new PythonTableArrowArrayStream(factory->arrow_table, factory);
 		factory->stream = &table_stream->stream;
-	} else {
-		if (!factory->stream->release) {
-			auto table_stream = new PythonTableArrowArrayStream(factory->arrow_table);
-			factory->stream = &table_stream->stream;
-		}
 	}
 	return factory->stream;
 }
@@ -78,11 +75,12 @@ void PythonTableArrowArrayStream::MyStreamRelease(struct ArrowArrayStream *strea
 		return;
 	}
 	stream->release = nullptr;
+	auto private_data = (PythonTableArrowArrayStream *)stream->private_data;
+	private_data->factory->stream = nullptr;
 	delete (PythonTableArrowArrayStream *)stream->private_data;
 }
 
 const char *PythonTableArrowArrayStream::MyStreamGetLastError(struct ArrowArrayStream *stream) {
-	py::gil_scoped_acquire acquire;
 	if (!stream->release) {
 		return "stream was released";
 	}

@@ -22,9 +22,10 @@ public:
 };
 class PythonTableArrowArrayStream {
 public:
-	explicit PythonTableArrowArrayStream(const py::object &arrow_table);
+	explicit PythonTableArrowArrayStream(const py::object &arrow_table, PythonTableArrowArrayStreamFactory *factory);
 	static void InitializeFunctionPointers(ArrowArrayStream *stream);
 	ArrowArrayStream stream;
+	PythonTableArrowArrayStreamFactory *factory;
 
 private:
 	static int MyStreamGetSchema(ArrowArrayStream *stream, struct ArrowSchema *out);
