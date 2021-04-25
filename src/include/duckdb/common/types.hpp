@@ -19,6 +19,32 @@ namespace duckdb {
 class Serializer;
 class Deserializer;
 
+//! Type used to represent dates (days since 1970-01-01)
+struct date_t {
+    date_t() = default;
+    explicit date_t(int32_t days_p) : days(days_p) {}
+    int32_t days;
+
+    // explicit conversion
+    explicit inline operator int32_t() const {return days;}
+
+    // comparison operators
+    inline bool operator==(const date_t &rhs) const {return days == rhs.days;};
+    inline bool operator!=(const date_t &rhs) const {return days != rhs.days;};
+    inline bool operator<=(const date_t &rhs) const {return days <= rhs.days;};
+    inline bool operator<(const date_t &rhs) const {return days < rhs.days;};
+    inline bool operator>(const date_t &rhs) const {return days > rhs.days;};
+    inline bool operator>=(const date_t &rhs) const {return days >= rhs.days;};
+
+    // arithmetic operators
+    inline date_t operator+(const int32_t &days) const {return date_t(this->days + days);};
+    inline date_t operator-(const int32_t &days) const {return date_t(this->days - days);};
+
+    // in-place operators
+    inline date_t &operator+=(const int32_t &days) {this->days += days; return *this;};
+    inline date_t &operator-=(const int32_t &days) {this->days -= days; return *this;};
+};
+
 struct interval_t {
 	int32_t months;
 	int32_t days;

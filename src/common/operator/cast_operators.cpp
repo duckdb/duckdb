@@ -1343,6 +1343,25 @@ string_t CastToBlob::Operation(string_t input, Vector &vector) {
 }
 
 //===--------------------------------------------------------------------===//
+// Cast To Date
+//===--------------------------------------------------------------------===//
+template <>
+bool TryCast::Operation(string_t input, date_t &result, bool strict) {
+	idx_t pos;
+	return Date::TryConvertDate(input.GetDataUnsafe(), input.GetSize(), pos, result, strict);
+}
+
+template <>
+date_t StrictCast::Operation(string_t input) {
+	return TryStrictCastString<date_t>(input);
+}
+
+template <>
+date_t Cast::Operation(string_t input) {
+	return TryCastString<date_t>(input);
+}
+
+//===--------------------------------------------------------------------===//
 // Cast From Interval
 //===--------------------------------------------------------------------===//
 template <>
@@ -1616,6 +1635,14 @@ bool TryCast::Operation(hugeint_t input, int32_t &result, bool strict) {
 }
 
 template <>
+bool TryCast::Operation(hugeint_t input, date_t &result, bool strict) {
+	int32_t days;
+	auto success = Hugeint::TryCast<int32_t>(input, days);
+	result = date_t(days);
+	return success;
+}
+
+template <>
 bool TryCast::Operation(hugeint_t input, int64_t &result, bool strict) {
 	return Hugeint::TryCast<int64_t>(input, result);
 }
@@ -1708,6 +1735,11 @@ float Cast::Operation(hugeint_t input) {
 template <>
 double Cast::Operation(hugeint_t input) {
 	return HugeintCastToNumeric<double>(input);
+}
+
+template <>
+date_t Cast::Operation(hugeint_t input) {
+	return date_t(HugeintCastToNumeric<int32_t>(input));
 }
 
 template <>

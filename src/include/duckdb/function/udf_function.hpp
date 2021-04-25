@@ -301,6 +301,7 @@ private:
 		case LogicalTypeId::SMALLINT:
 			return std::is_same<T, int16_t>();
 		case LogicalTypeId::DATE:
+			return std::is_same<T, date_t>();
 		case LogicalTypeId::INTEGER:
 			return std::is_same<T, int32_t>();
 		case LogicalTypeId::BIGINT:

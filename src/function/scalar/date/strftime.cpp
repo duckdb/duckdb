@@ -217,17 +217,17 @@ bool StrfTimeFormat::IsDateSpecifier(StrTimeSpecifier specifier) {
 char *StrfTimeFormat::WriteDateSpecifier(StrTimeSpecifier specifier, date_t date, char *target) {
 	switch (specifier) {
 	case StrTimeSpecifier::ABBREVIATED_WEEKDAY_NAME: {
-		date_t dow = Date::ExtractISODayOfTheWeek(date);
+		auto dow = Date::ExtractISODayOfTheWeek(date);
 		target = WriteString(target, Date::DAY_NAMES_ABBREVIATED[dow % 7]);
 		break;
 	}
 	case StrTimeSpecifier::FULL_WEEKDAY_NAME: {
-		date_t dow = Date::ExtractISODayOfTheWeek(date);
+		auto dow = Date::ExtractISODayOfTheWeek(date);
 		target = WriteString(target, Date::DAY_NAMES[dow % 7]);
 		break;
 	}
 	case StrTimeSpecifier::WEEKDAY_DECIMAL: {
-		date_t dow = Date::ExtractISODayOfTheWeek(date);
+		auto dow = Date::ExtractISODayOfTheWeek(date);
 		*target = char('0' + uint8_t(dow % 7));
 		target++;
 		break;

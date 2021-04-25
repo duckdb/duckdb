@@ -454,6 +454,8 @@ template <>
 bool TryCast::Operation(hugeint_t input, float &result, bool strict);
 template <>
 bool TryCast::Operation(hugeint_t input, double &result, bool strict);
+template <>
+bool TryCast::Operation(hugeint_t input, date_t &result, bool strict);
 
 template <>
 bool Cast::Operation(hugeint_t input);
@@ -477,6 +479,8 @@ template <>
 float Cast::Operation(hugeint_t input);
 template <>
 double Cast::Operation(hugeint_t input);
+template <>
+date_t Cast::Operation(hugeint_t input);
 // nop cast
 template <>
 bool TryCast::Operation(hugeint_t input, hugeint_t &result, bool strict);
@@ -484,7 +488,16 @@ template <>
 hugeint_t Cast::Operation(hugeint_t input);
 
 //===--------------------------------------------------------------------===//
-// Interval -> String Casts
+// String -> Date Casts
+//===--------------------------------------------------------------------===//
+template <>
+bool TryCast::Operation(string_t input, date_t &result, bool strict);
+template <>
+date_t StrictCast::Operation(string_t input);
+template <>
+date_t Cast::Operation(string_t input);
+//===--------------------------------------------------------------------===//
+// String -> Interval Casts
 //===--------------------------------------------------------------------===//
 template <>
 bool TryCast::Operation(string_t input, interval_t &result, bool strict);
