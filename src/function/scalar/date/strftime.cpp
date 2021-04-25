@@ -596,7 +596,7 @@ static void StrfTimeFunctionDate(DataChunk &args, ExpressionState &state, Vector
 		return;
 	}
 
-	dtime_t time = 0;
+	dtime_t time(0);
 	UnaryExecutor::Execute<date_t, string_t>(args.data[0], result, args.size(), [&](date_t date) {
 		idx_t len = info.format.GetLength(date, time);
 		string_t target = StringVector::EmptyString(result, len);

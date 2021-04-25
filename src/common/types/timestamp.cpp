@@ -27,7 +27,7 @@ timestamp_t Timestamp::FromCString(const char *str, idx_t len) {
 	}
 	if (pos == len) {
 		// no time: only a date
-		return Timestamp::FromDatetime(date, 0);
+		return Timestamp::FromDatetime(date, dtime_t(0));
 	}
 	// try to parse a time field
 	if (str[pos] == ' ' || str[pos] == 'T') {
@@ -129,16 +129,16 @@ date_t Timestamp::GetDate(timestamp_t timestamp) {
 
 dtime_t Timestamp::GetTime(timestamp_t timestamp) {
 	date_t date = Timestamp::GetDate(timestamp);
-	return timestamp - (int64_t(date.days) * int64_t(Interval::MICROS_PER_DAY));
+	return dtime_t(timestamp - (int64_t(date.days) * int64_t(Interval::MICROS_PER_DAY)));
 }
 
 timestamp_t Timestamp::FromDatetime(date_t date, dtime_t time) {
-	return date.days * Interval::MICROS_PER_DAY + time;
+	return date.days * Interval::MICROS_PER_DAY + time.micros;
 }
 
 void Timestamp::Convert(timestamp_t timestamp, date_t &out_date, dtime_t &out_time) {
 	out_date = GetDate(timestamp);
-	out_time = timestamp - (int64_t(out_date.days) * int64_t(Interval::MICROS_PER_DAY));
+	out_time = dtime_t(timestamp - (int64_t(out_date.days) * int64_t(Interval::MICROS_PER_DAY)));
 	D_ASSERT(timestamp == Timestamp::FromDatetime(out_date, out_time));
 }
 

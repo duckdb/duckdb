@@ -1362,6 +1362,25 @@ date_t Cast::Operation(string_t input) {
 }
 
 //===--------------------------------------------------------------------===//
+// Cast To Time
+//===--------------------------------------------------------------------===//
+template <>
+bool TryCast::Operation(string_t input, dtime_t &result, bool strict) {
+	idx_t pos;
+	return Time::TryConvertTime(input.GetDataUnsafe(), input.GetSize(), pos, result, strict);
+}
+
+template <>
+dtime_t StrictCast::Operation(string_t input) {
+	return TryStrictCastString<dtime_t>(input);
+}
+
+template <>
+dtime_t Cast::Operation(string_t input) {
+	return TryCastString<dtime_t>(input);
+}
+
+//===--------------------------------------------------------------------===//
 // Cast From Interval
 //===--------------------------------------------------------------------===//
 template <>
@@ -1740,6 +1759,11 @@ double Cast::Operation(hugeint_t input) {
 template <>
 date_t Cast::Operation(hugeint_t input) {
 	return date_t(HugeintCastToNumeric<int32_t>(input));
+}
+
+template <>
+dtime_t Cast::Operation(hugeint_t input) {
+	return dtime_t(HugeintCastToNumeric<int64_t>(input));
 }
 
 template <>

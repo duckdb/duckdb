@@ -114,7 +114,7 @@ TEST_CASE("Test dates/times/timestamps", "[api]") {
 		int32_t hour, minute, second, milisecond;
 
 		auto date = row.GetValue<date_t>(0);
-		auto time = row.GetValue<int64_t>(1);
+		auto time = row.GetValue<dtime_t>(1);
 		auto timestamp = row.GetValue<int64_t>(2);
 		Date::Convert(date, year, month, day);
 		REQUIRE(year == 1992);

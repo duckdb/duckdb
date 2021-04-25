@@ -285,7 +285,7 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 				auto *ptr = FlatVector::GetData<date_t>(input_column);
 				for (idx_t r = 0; r < input.size(); r++) {
 					if (mask.RowIsValid(r)) {
-						auto ts = Timestamp::FromDatetime(ptr[r], 0);
+						auto ts = Timestamp::FromDatetime(ptr[r], dtime_t(0));
 						temp_writer.Write<Int96>(TimestampToImpalaTimestamp(ts));
 					}
 				}

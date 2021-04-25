@@ -218,6 +218,7 @@ public:
 		uintptr_t pointer;
 		uint64_t hash;
 		date_t date;
+		dtime_t time;
 		interval_t interval;
 	} value_;
 
@@ -266,6 +267,8 @@ Value DUCKDB_API Value::CreateValue(hugeint_t value);
 template <>
 Value DUCKDB_API Value::CreateValue(date_t value);
 template <>
+Value DUCKDB_API Value::CreateValue(dtime_t value);
+template <>
 Value DUCKDB_API Value::CreateValue(const char *value);
 template <>
 Value DUCKDB_API Value::CreateValue(string value);
@@ -295,8 +298,6 @@ DUCKDB_API uint16_t Value::GetValue() const;
 template <>
 DUCKDB_API hugeint_t Value::GetValue() const;
 template <>
-DUCKDB_API date_t Value::GetValue() const;
-template <>
 DUCKDB_API string Value::GetValue() const;
 template <>
 DUCKDB_API float Value::GetValue() const;
@@ -304,6 +305,10 @@ template <>
 DUCKDB_API double Value::GetValue() const;
 template <>
 DUCKDB_API uintptr_t Value::GetValue() const;
+template <>
+DUCKDB_API date_t Value::GetValue() const;
+template <>
+DUCKDB_API dtime_t Value::GetValue() const;
 
 template <>
 DUCKDB_API int8_t &Value::GetValueUnsafe();
@@ -315,8 +320,6 @@ template <>
 DUCKDB_API int64_t &Value::GetValueUnsafe();
 template <>
 DUCKDB_API hugeint_t &Value::GetValueUnsafe();
-template <>
-DUCKDB_API date_t &Value::GetValueUnsafe();
 template <>
 DUCKDB_API uint8_t &Value::GetValueUnsafe();
 template <>
@@ -331,6 +334,10 @@ template <>
 DUCKDB_API float &Value::GetValueUnsafe();
 template <>
 DUCKDB_API double &Value::GetValueUnsafe();
+template <>
+DUCKDB_API date_t &Value::GetValueUnsafe();
+template <>
+DUCKDB_API dtime_t &Value::GetValueUnsafe();
 template <>
 DUCKDB_API interval_t &Value::GetValueUnsafe();
 

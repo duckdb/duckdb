@@ -181,6 +181,11 @@ void Appender::Append(date_t value) {
 }
 
 template <>
+void Appender::Append(dtime_t value) {
+	AppendValueInternal<int64_t>(value.micros);
+}
+
+template <>
 void Appender::Append(Value value) { // NOLINT: template shtuff
 	if (column >= chunk.ColumnCount()) {
 		throw InvalidInputException("Too many appends for chunk!");

@@ -44,8 +44,6 @@ typedef uint8_t data_t;
 typedef data_t *data_ptr_t;
 typedef const data_t *const_data_ptr_t;
 
-//! Type used to represent time (microseconds)
-typedef int64_t dtime_t;
 //! Type used to represent timestamps (microseconds since 1970-01-01)
 typedef int64_t timestamp_t;
 //! Type used for the selection vector

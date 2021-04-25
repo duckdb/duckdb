@@ -255,7 +255,7 @@ static void ArrowScanFunction(ClientContext &context, const FunctionData *bind_d
 			auto tgt_ptr = (dtime_t *)FlatVector::GetData(output.data[col_idx]);
 			for (idx_t row = 0; row < output.size(); row++) {
 				auto source_idx = data.chunk_offset + row;
-				tgt_ptr[row] = dtime_t(src_ptr[source_idx]) * 1000;
+				tgt_ptr[row] = dtime_t(int64_t(src_ptr[source_idx]) * 1000);
 			}
 			break;
 		}
