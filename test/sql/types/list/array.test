@@ -1,0 +1,46 @@
+# name: test/sql/types/list/array.test
+# description: Test ARRAY syntax
+# group: [list]
+
+statement ok
+PRAGMA enable_verification
+
+# scalar array syntax
+query IIII
+SELECT ARRAY[1,2], ARRAY[NULL], ARRAY['hello', 'world'], ARRAY[]
+----
+[1, 2]	[NULL]	[hello, world]	[]
+
+# nested usage
+query II
+SELECT ARRAY[ARRAY[1,2]], ARRAY[ARRAY[ARRAY[1, 2], ARRAY[2, 3]], ARRAY[ARRAY[5], ARRAY[3, 4]]];
+----
+[[1, 2]]	[[[1, 2], [2, 3]], [[5], [3, 4]]]
+
+# many elements
+query I
+SELECT ARRAY[1,2,3,4,5,6,7,8,9,10,NULL]
+----
+[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, NULL]
+
+# non-constant elements
+query I
+SELECT ARRAY[1, i] FROM range(3) tbl(i) ORDER BY i
+----
+[1, 0]
+[1, 1]
+[1, 2]
+
+# use in WHERE clause
+query I
+SELECT ARRAY[i] FROM range(3) tbl(i) WHERE (ARRAY[i])[0] == 1
+----
+[1]
+
+# conversion failure (mixed types)
+statement error
+SELECT ARRAY[i, 'hello'] FROM range(3) tbl(i) WHERE (ARRAY[i])[0] == 1
+
+# conversion failure (nested mixed types)
+statement error
+SELECT ARRAY[ARRAY[1], ARRAY['hello']]

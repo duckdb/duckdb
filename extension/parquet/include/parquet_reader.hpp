@@ -8,10 +8,13 @@
 
 #pragma once
 
+#include "duckdb.hpp"
+#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
+#endif
 #include "resizable_buffer.hpp"
 #include "column_reader.hpp"
 
@@ -38,6 +41,7 @@ struct ParquetReaderScanState {
 	int64_t current_group;
 	vector<column_t> column_ids;
 	idx_t group_offset;
+	unique_ptr<FileHandle> file_handle;
 	unique_ptr<ColumnReader> root_reader;
 	unique_ptr<apache::thrift::protocol::TProtocol> thrift_file_proto;
 
@@ -51,9 +55,16 @@ struct ParquetReaderScanState {
 
 class ParquetReader {
 public:
-	ParquetReader(ClientContext &context, string file_name, vector<LogicalType> expected_types,
+	ParquetReader(unique_ptr<FileHandle> file_handle_p, const vector<LogicalType> &expected_types_p,
+	              const string &initial_filename_p = string());
+	ParquetReader(unique_ptr<FileHandle> file_handle_p)
+	    : ParquetReader(move(file_handle_p), vector<LogicalType>(), string()) {
+	}
+
+	ParquetReader(ClientContext &context, string file_name, const vector<LogicalType> &expected_types_p,
 	              const string &initial_filename = string());
-	ParquetReader(ClientContext &context, string file_name) : ParquetReader(context, file_name, vector<LogicalType>()) {
+	ParquetReader(ClientContext &context, string file_name)
+	    : ParquetReader(context, move(file_name), vector<LogicalType>()) {
 	}
 	~ParquetReader();
 
@@ -63,8 +74,8 @@ public:
 	shared_ptr<ParquetFileMetadataCache> metadata;
 
 public:
-	void Initialize(ParquetReaderScanState &state, vector<column_t> column_ids, vector<idx_t> groups_to_read,
-	                TableFilterSet *table_filters);
+	void InitializeScan(ParquetReaderScanState &state, vector<column_t> column_ids, vector<idx_t> groups_to_read,
+	                    TableFilterSet *table_filters);
 	void Scan(ParquetReaderScanState &state, DataChunk &output);
 
 	idx_t NumRows();
@@ -76,6 +87,7 @@ public:
 	                                                 const parquet::format::FileMetaData *file_meta_data);
 
 private:
+	void InitializeSchema(const vector<LogicalType> &expected_types_p, const string &initial_filename_p);
 	bool ScanInternal(ParquetReaderScanState &state, DataChunk &output);
 
 	const parquet::format::RowGroup &GetGroup(ParquetReaderScanState &state);
@@ -88,7 +100,7 @@ private:
 	}
 
 private:
-	ClientContext &context;
+	unique_ptr<FileHandle> file_handle;
 };
 
 } // namespace duckdb

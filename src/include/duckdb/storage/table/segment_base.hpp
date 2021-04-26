@@ -17,6 +17,10 @@ public:
 	SegmentBase(idx_t start, idx_t count) : start(start), count(count) {
 	}
 	virtual ~SegmentBase() {
+		// destroy the chain of segments iteratively (rather than recursively)
+		while (next && next->next) {
+			next = move(next->next);
+		}
 	}
 
 	//! The start row id of this chunk

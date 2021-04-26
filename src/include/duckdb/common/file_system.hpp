@@ -116,6 +116,10 @@ public:
 	virtual string PathSeparator();
 	//! Join two paths together
 	virtual string JoinPath(const string &a, const string &path);
+	//! Convert separators in a path to the local separators (e.g. convert "/" into \\ on windows)
+	virtual string ConvertSeparators(const string &path);
+	//! Extract the base name of a file (e.g. if the input is lib/example.dll the base name is example)
+	virtual string ExtractBaseName(const string &path);
 	//! Sync a file handle to disk
 	virtual void FileSync(FileHandle &handle);
 

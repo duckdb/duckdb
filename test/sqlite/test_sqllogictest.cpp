@@ -1018,6 +1018,8 @@ string SQLLogicTestRunner::ReplaceKeywords(string input) {
 	FileSystem fs;
 	input = StringUtil::Replace(input, "__TEST_DIR__", TestDirectoryPath());
 	input = StringUtil::Replace(input, "__WORKING_DIRECTORY__", fs.GetWorkingDirectory());
+	input = StringUtil::Replace(input, "__BUILD_DIRECTORY__", DUCKDB_BUILD_DIRECTORY);
+
 	return input;
 }
 
@@ -1510,7 +1512,7 @@ struct AutoRegTests {
 						return;
 					}
 				}
-				REGISTER_TEST_CASE(testRunner, path, "[sqlitelogic][.]");
+				REGISTER_TEST_CASE(testRunner, StringUtil::Replace(path, "\\", "/"), "[sqlitelogic][.]");
 			}
 		});
 		listFiles(fs, "test", [excludes](const string &path) {
@@ -1521,7 +1523,7 @@ struct AutoRegTests {
 					}
 				}
 				// parse the name / group from the test
-				REGISTER_TEST_CASE(testRunner, path, ParseGroupFromPath(path));
+				REGISTER_TEST_CASE(testRunner, StringUtil::Replace(path, "\\", "/"), ParseGroupFromPath(path));
 			}
 		});
 	}

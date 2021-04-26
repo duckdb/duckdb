@@ -111,6 +111,8 @@ public:
 	//! Reads CSV file
 	DUCKDB_API shared_ptr<Relation> ReadCSV(const string &csv_file);
 	DUCKDB_API shared_ptr<Relation> ReadCSV(const string &csv_file, const vector<string> &columns);
+	//! Returns a relation from a query
+	DUCKDB_API shared_ptr<Relation> RelationFromQuery(string query, string alias = "queryrelation");
 
 	DUCKDB_API void BeginTransaction();
 	DUCKDB_API void Commit();

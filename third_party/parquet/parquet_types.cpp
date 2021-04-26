@@ -9,7 +9,7 @@
 #include <algorithm>
 #include <ostream>
 
-#include <thrift/TToString.h>
+#include "thrift/TToString.h"
 
 namespace parquet { namespace format {
 

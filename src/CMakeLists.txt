@@ -56,7 +56,14 @@ else()
   add_subdirectory(storage)
   add_subdirectory(transaction)
 
-  set(DUCKDB_LINK_LIBS fmt pg_query duckdb_re2 miniz utf8proc hyperloglog)
+  set(DUCKDB_LINK_LIBS
+      ${CMAKE_DL_LIBS}
+      fmt
+      pg_query
+      duckdb_re2
+      miniz
+      utf8proc
+      hyperloglog)
 
   add_library(duckdb SHARED ${ALL_OBJECT_FILES})
   target_link_libraries(duckdb ${DUCKDB_LINK_LIBS})

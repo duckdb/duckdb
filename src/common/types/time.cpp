@@ -80,7 +80,8 @@ bool Time::TryConvertTime(const char *buf, idx_t len, idx_t &pos, dtime_t &resul
 	}
 
 	micros = 0;
-	if (pos < len && buf[pos++] == '.') {
+	if (pos < len && buf[pos] == '.') {
+		pos++;
 		// we expect some microseconds
 		int32_t mult = 100000;
 		for (; pos < len && StringUtil::CharacterIsDigit(buf[pos]); pos++, mult /= 10) {
