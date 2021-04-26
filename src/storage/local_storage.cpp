@@ -417,6 +417,7 @@ void LocalStorage::AddColumn(DataTable *old_dt, DataTable *new_dt, ColumnDefinit
 		} else {
 			FlatVector::Validity(result).SetAllInvalid(chunk.size());
 		}
+		result.Normalify(chunk.size());
 		chunk.data.push_back(move(result));
 	}
 

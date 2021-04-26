@@ -16,8 +16,7 @@ setClass("duckdb_driver", contains = "DBIDriver", slots = list(database_ref = "e
 #' @export
 setClass("duckdb_connection",
   contains = "DBIConnection",
-  slots = list(dbdir = "character",
-               conn_ref = "externalptr",
+  slots = list(conn_ref = "externalptr",
                driver = "duckdb_driver",
                debug = "logical",
                timezone_out = "character",
@@ -298,9 +297,10 @@ setMethod(
 setMethod(
   "dbGetInfo", "duckdb_connection",
   function(dbObj, ...) {
+    info <- dbGetInfo(dbObj@driver)
     list(
-      dbname = dbObj@dbdir,
-      db.version = NA,
+      dbname = info$dbname,
+      db.version = info$driver.version,
       username = NA,
       host = NA,
       port = NA

@@ -66,6 +66,10 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	    .def("table_function", &DuckDBPyConnection::TableFunction,
 	         "Create a relation object from the name'd table function with given parameters", py::arg("name"),
 	         py::arg("parameters") = py::list())
+	    .def("from_query", &DuckDBPyConnection::FromQuery, "Create a relation object from the given SQL query",
+	         py::arg("query"), py::arg("alias") = "query_relation")
+	    .def("query", &DuckDBPyConnection::FromQuery, "Create a relation object from the given SQL query",
+	         py::arg("query"), py::arg("alias") = "query_relation")
 	    .def("from_df", &DuckDBPyConnection::FromDF, "Create a relation object from the Data.Frame in df",
 	         py::arg("df") = py::none())
 	    .def("from_arrow_table", &DuckDBPyConnection::FromArrowTable, "Create a relation object from an Arrow table",
@@ -179,6 +183,13 @@ DuckDBPyConnection *DuckDBPyConnection::RegisterArrow(const string &name, py::ob
 	return this;
 }
 
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromQuery(const string &query, const string &alias) {
+	if (!connection) {
+		throw std::runtime_error("connection closed");
+	}
+	return make_unique<DuckDBPyRelation>(connection->RelationFromQuery(query, alias));
+}
+
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::Table(const string &tname) {
 	if (!connection) {
 		throw std::runtime_error("connection closed");
@@ -283,6 +294,9 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrowTable(const py::object
 
 DuckDBPyConnection *DuckDBPyConnection::UnregisterDF(const string &name) {
 	registered_dfs[name] = py::none();
+	if (connection) {
+		connection->Query("DROP VIEW \"" + name + "\"");
+	}
 	return this;
 }
 

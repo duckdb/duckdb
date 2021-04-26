@@ -210,4 +210,7 @@ statement ok
 COMMIT;
 
 statement ok
+SELECT * FROM t0 WHERE (('NN')<((t0.rowid NOT IN (t0.c1)))::VARCHAR);
+
+statement error
 SELECT * FROM t0 WHERE (('NN')<((t0.rowid NOT IN (t0.c1))));

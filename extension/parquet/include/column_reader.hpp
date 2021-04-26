@@ -7,12 +7,15 @@
 #include "parquet_rle_bp_decoder.hpp"
 #include "parquet_statistics.hpp"
 
+#include "duckdb.hpp"
+#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/storage/statistics/string_statistics.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#endif
 
 namespace duckdb {
 
@@ -22,6 +25,7 @@ using parquet::format::ColumnChunk;
 using parquet::format::FieldRepetitionType;
 using parquet::format::PageHeader;
 using parquet::format::SchemaElement;
+using parquet::format::Type;
 
 typedef std::bitset<STANDARD_VECTOR_SIZE> parquet_filter_t;
 
@@ -242,12 +246,19 @@ public:
 	StringColumnReader(LogicalType type_p, const SchemaElement &schema_p, idx_t schema_idx_p, idx_t max_define_p,
 	                   idx_t max_repeat_p)
 	    : TemplatedColumnReader<string_t, StringParquetValueConversion>(type_p, schema_p, schema_idx_p, max_define_p,
-	                                                                    max_repeat_p) {};
+	                                                                    max_repeat_p) {
+		fixed_width_string_length = 0;
+		if (schema_p.type == Type::FIXED_LEN_BYTE_ARRAY) {
+			D_ASSERT(schema_p.__isset.type_length);
+			fixed_width_string_length = schema_p.type_length;
+		}
+	};
 
 	void Dictionary(shared_ptr<ByteBuffer> dictionary_data, idx_t num_entries) override;
 
 	unique_ptr<string_t[]> dict_strings;
 	void VerifyString(const char *str_data, idx_t str_len);
+	idx_t fixed_width_string_length;
 
 protected:
 	void DictReference(Vector &result) override;
@@ -359,6 +370,11 @@ public:
 	      byte_pos(0) {};
 
 	uint8_t byte_pos;
+
+	void IntializeRead(const std::vector<ColumnChunk> &columns, TProtocol &protocol_p) override {
+		byte_pos = 0;
+		TemplatedColumnReader<bool, BooleanParquetValueConversion>::IntializeRead(columns, protocol_p);
+	}
 };
 
 struct BooleanParquetValueConversion {

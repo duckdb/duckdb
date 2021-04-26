@@ -285,7 +285,7 @@ select  regr_count(v, v2) over (partition by k)
 3
 3
 
-query I
+query I rowsort
 select  regr_slope(v, v2) over (partition by k)
     from aggr;
 ----

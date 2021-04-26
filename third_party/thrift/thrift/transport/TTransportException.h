@@ -22,7 +22,7 @@
 
 // FUCK OFF #include <boost/numeric/conversion/cast.hpp>
 #include <string>
-#include <thrift/Thrift.h>
+#include "thrift/Thrift.h"
 
 namespace apache {
 namespace thrift {

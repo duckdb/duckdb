@@ -80,7 +80,7 @@ public:
 
 	//! Creates the data of this vector with the specified type. Any data that
 	//! is currently in the vector is destroyed.
-	void Initialize(const LogicalType &new_type = LogicalType::INVALID, bool zero_data = false);
+	void Initialize(const LogicalType &new_type = LogicalType(LogicalTypeId::INVALID), bool zero_data = false);
 
 	//! Converts this Vector to a printable string representation
 	string ToString(idx_t count) const;
@@ -90,10 +90,10 @@ public:
 	void Print();
 
 	//! Flatten the vector, removing any compression and turning it into a FLAT_VECTOR
-	void Normalify(idx_t count);
-	void Normalify(const SelectionVector &sel, idx_t count);
+	DUCKDB_API void Normalify(idx_t count);
+	DUCKDB_API void Normalify(const SelectionVector &sel, idx_t count);
 	//! Obtains a selection vector and data pointer through which the data of this vector can be accessed
-	void Orrify(idx_t count, VectorData &data);
+	DUCKDB_API void Orrify(idx_t count, VectorData &data);
 
 	//! Turn the vector into a sequence vector
 	void Sequence(int64_t start, int64_t increment);
@@ -290,6 +290,8 @@ struct ListVector {
 	                   idx_t source_offset = 0);
 	static void PushBack(Vector &target, Value &insert);
 	static void Initialize(Vector &vec);
+	//! Share the entry of the other list vector
+	static void ReferenceEntry(Vector &vector, Vector &other);
 };
 
 struct StringVector {

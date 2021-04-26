@@ -17,20 +17,20 @@
 ****************************************************************/
 #include <stdlib.h>     /* malloc, free, qsort */
 #include <string.h>     /* memcpy, memset */
-#include "../common/compiler.h"
-#include "../common/mem.h"        /* U32, U16, etc. */
-#include "../common/debug.h"      /* assert, DEBUGLOG */
-#include "hist.h"       /* HIST_count_wksp */
-#include "../common/bitstream.h"
-#define FSE_STATIC_LINKING_ONLY
-#include "../common/fse.h"
-#include "../common/error_private.h"
+#include "zstd/common/compiler.h"
+#include "zstd/common/mem.h"        /* U32, U16, etc. */
+#include "zstd/common/debug.h"      /* assert, DEBUGLOG */
+#include "zstd/compress/hist.h"       /* HIST_count_wksp */
+#include "zstd/common/bitstream.h"
+#include "zstd/common/fse.h"
+#include "zstd/common/fse_static.h"
+#include "zstd/common/error_private.h"
 
 
 /* **************************************************************
 *  Error Management
 ****************************************************************/
-#define FSE_isError ERR_isError
+// #define FSE_isError ERR_isError
 
 
 /* **************************************************************

@@ -8,6 +8,8 @@
 #include "parquet_writer.hpp"
 
 #include "duckdb.hpp"
+#ifndef DUCKDB_AMALGAMATION
+#include "duckdb.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/table_function.hpp"
@@ -25,6 +27,7 @@
 
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/catalog/catalog.hpp"
+#endif
 
 namespace duckdb {
 
@@ -171,7 +174,7 @@ public:
 			group_ids.push_back(i);
 		}
 		result->reader = bind_data.initial_reader;
-		result->reader->Initialize(result->scan_state, column_ids, move(group_ids), filters->table_filters);
+		result->reader->InitializeScan(result->scan_state, column_ids, move(group_ids), filters->table_filters);
 		return move(result);
 	}
 
@@ -222,7 +225,7 @@ public:
 					for (idx_t i = 0; i < data.reader->NumRowGroups(); i++) {
 						group_ids.push_back(i);
 					}
-					data.reader->Initialize(data.scan_state, data.column_ids, move(group_ids), data.table_filters);
+					data.reader->InitializeScan(data.scan_state, data.column_ids, move(group_ids), data.table_filters);
 				} else {
 					// exhausted all the files: done
 					break;
@@ -263,8 +266,8 @@ public:
 			// groups remain in the current parquet file: read the next group
 			scan_data.reader = parallel_state.current_reader;
 			vector<idx_t> group_indexes {parallel_state.row_group_index};
-			scan_data.reader->Initialize(scan_data.scan_state, scan_data.column_ids, group_indexes,
-			                             scan_data.table_filters);
+			scan_data.reader->InitializeScan(scan_data.scan_state, scan_data.column_ids, group_indexes,
+			                                 scan_data.table_filters);
 			parallel_state.row_group_index++;
 			return true;
 		} else {
@@ -281,8 +284,8 @@ public:
 				// set up the scan state to read the first group
 				scan_data.reader = parallel_state.current_reader;
 				vector<idx_t> group_indexes {0};
-				scan_data.reader->Initialize(scan_data.scan_state, scan_data.column_ids, group_indexes,
-				                             scan_data.table_filters);
+				scan_data.reader->InitializeScan(scan_data.scan_state, scan_data.column_ids, group_indexes,
+				                                 scan_data.table_filters);
 				parallel_state.row_group_index = 1;
 				return true;
 			}

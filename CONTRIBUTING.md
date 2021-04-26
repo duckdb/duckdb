@@ -16,11 +16,12 @@ This project and everyone participating in it is governed by a [Code of Conduct]
 * Open a new GitHub pull request with the patch.
 * Ensure the PR description clearly describes the problem and solution. Include the relevant issue number if applicable.
 
-## Branches
-* Do not commit/push directly to the master branch. Instead, create a feature branch/fork and file a merge request.
+## Pull Requests
+* Do not commit/push directly to the master branch. Instead, create a fork and file a pull request.
 * When maintaining a branch, merge frequently with the master.
-* When maintaining a branch, submit merge requests to the master frequently.
+* When maintaining a branch, submit pull requests to the master frequently.
 * If you are working on a bigger issue try to split it up into several smaller issues.
+* Please do not use "Draft" pull requests, they clutter our world view. Rather, use issues to discuss whatever needs discussing.
 
 ## Building
 * To build the project, run `make`.

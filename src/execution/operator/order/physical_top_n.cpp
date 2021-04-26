@@ -14,13 +14,23 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 class TopNHeap {
 public:
+	static OrderByNullType FlipNullOrder(OrderByNullType order) {
+		if (order == OrderByNullType::NULLS_FIRST) {
+			return OrderByNullType::NULLS_LAST;
+		} else if (order == OrderByNullType::NULLS_LAST) {
+			return OrderByNullType::NULLS_FIRST;
+		}
+		return order;
+	}
+
 	TopNHeap(const vector<BoundOrderByNode> &orders, idx_t limit, idx_t offset)
 	    : limit(limit), offset(offset), heap_size(0) {
 		for (auto &order : orders) {
 			auto &expr = order.expression;
 			sort_types.push_back(expr->return_type);
 			order_types.push_back(order.type);
-			null_order_types.push_back(order.null_order);
+			null_order_types.push_back(order.type == OrderType::DESCENDING ? FlipNullOrder(order.null_order)
+			                                                               : order.null_order);
 			executor.AddExpression(*expr);
 		}
 		// preallocate the heap
