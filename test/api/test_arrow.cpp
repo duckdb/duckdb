@@ -89,8 +89,7 @@ static void TestArrowRoundTrip(string q) {
 	// query that creates a bunch of values across the types
 	auto result = con.Query(q);
 	REQUIRE(result->success);
-	auto stream_factory =
-	    make_unique<MyPythonTableArrowArrayStreamFactory>(move(result));
+	auto stream_factory = make_unique<MyPythonTableArrowArrayStreamFactory>(move(result));
 	ArrowArrayStream *(*stream_factory_produce)(uintptr_t factory) = MyPythonTableArrowArrayStreamFactory::Produce;
 
 	auto result2 = con.TableFunction("arrow_scan", {Value::POINTER((uintptr_t)stream_factory.get()),

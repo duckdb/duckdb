@@ -42,6 +42,8 @@ public:
 
 	DuckDBPyConnection *RegisterDF(const string &name, py::object value);
 
+	DuckDBPyConnection *RegisterArrow(const string &name, py::object value);
+
 	unique_ptr<DuckDBPyRelation> Table(const string &tname);
 
 	unique_ptr<DuckDBPyRelation> Values(py::object params = py::list());
@@ -59,6 +61,8 @@ public:
 	unique_ptr<DuckDBPyRelation> FromArrowTable(const py::object &table);
 
 	DuckDBPyConnection *UnregisterDF(const string &name);
+
+	DuckDBPyConnection *UnregisterArrow(const string &name);
 
 	DuckDBPyConnection *Begin();
 

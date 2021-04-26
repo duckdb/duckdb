@@ -55,6 +55,9 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	    .def("register", &DuckDBPyConnection::RegisterDF,
 	         "Register the passed Data.Frame value for querying with a view", py::arg("view_name"), py::arg("df"))
 	    .def("unregister", &DuckDBPyConnection::UnregisterDF, "Unregister the view name", py::arg("view_name"))
+	    .def("register_arrow", &DuckDBPyConnection::RegisterArrow,
+	         "Register the passed Arrow Table for querying with a view", py::arg("view_name"), py::arg("arrow_table"))
+	    .def("unregister_arrow", &DuckDBPyConnection::UnregisterArrow, "Unregister the view name", py::arg("view_name"))
 	    .def("table", &DuckDBPyConnection::Table, "Create a relation object for the name'd table",
 	         py::arg("table_name"))
 	    .def("view", &DuckDBPyConnection::View, "Create a relation object for the name'd view", py::arg("view_name"))
@@ -159,6 +162,23 @@ DuckDBPyConnection *DuckDBPyConnection::RegisterDF(const string &name, py::objec
 	return this;
 }
 
+DuckDBPyConnection *DuckDBPyConnection::RegisterArrow(const string &name, py::object table) {
+	if (!connection) {
+		throw std::runtime_error("connection closed");
+	}
+	if (table.is_none() || string(py::str(table.get_type().attr("__name__"))) != "Table") {
+		throw std::runtime_error("Only arrow tables supported");
+	}
+	auto stream_factory = make_unique<PythonTableArrowArrayStreamFactory>(table);
+	ArrowArrayStream *(*stream_factory_produce)(uintptr_t factory) = PythonTableArrowArrayStreamFactory::Produce;
+	connection
+	    ->TableFunction("arrow_scan", {Value::POINTER((uintptr_t)stream_factory.get()),
+	                                   Value::POINTER((uintptr_t)stream_factory_produce)})
+	    ->CreateView(name, true, true);
+	registered_arrow_factory[name] = move(stream_factory);
+	return this;
+}
+
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::Table(const string &tname) {
 	if (!connection) {
 		throw std::runtime_error("connection closed");
@@ -249,8 +269,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrowTable(const py::object
 		throw std::runtime_error("Only arrow tables supported");
 	}
 
-	auto stream_factory =
-	    make_unique<PythonTableArrowArrayStreamFactory>(table);
+	auto stream_factory = make_unique<PythonTableArrowArrayStreamFactory>(table);
 	string name = "arrow_table_" + PtrToString((void *)&table);
 	ArrowArrayStream *(*stream_factory_produce)(uintptr_t factory) = PythonTableArrowArrayStreamFactory::Produce;
 	auto rel = make_unique<DuckDBPyRelation>(
@@ -264,6 +283,16 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrowTable(const py::object
 
 DuckDBPyConnection *DuckDBPyConnection::UnregisterDF(const string &name) {
 	registered_dfs[name] = py::none();
+	return this;
+}
+
+DuckDBPyConnection *DuckDBPyConnection::UnregisterArrow(const string &name) {
+	if (registered_arrow_factory[name]) {
+		registered_arrow_factory[name]->arrow_table = py::none();
+	}
+	if (connection) {
+		connection->Query("DROP VIEW \"" + name + "\"");
+	}
 	return this;
 }
 

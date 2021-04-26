@@ -16,6 +16,9 @@ namespace duckdb {
 class PythonTableArrowArrayStreamFactory {
 public:
 	explicit PythonTableArrowArrayStreamFactory(const py::object &arrow_table) : arrow_table(arrow_table) {};
+	~PythonTableArrowArrayStreamFactory() {
+		arrow_table = py::none();
+	}
 	static ArrowArrayStream *Produce(uintptr_t factory);
 	py::object arrow_table;
 	ArrowArrayStream *stream = nullptr;

@@ -21,6 +21,9 @@ void PythonTableArrowArrayStream::InitializeFunctionPointers(ArrowArrayStream *s
 ArrowArrayStream *PythonTableArrowArrayStreamFactory::Produce(uintptr_t factory_ptr) {
 	py::gil_scoped_acquire acquire;
 	PythonTableArrowArrayStreamFactory *factory = (PythonTableArrowArrayStreamFactory *)factory_ptr;
+	if (!factory->arrow_table) {
+		return nullptr;
+	}
 	if (!factory->stream) {
 		auto table_stream = new PythonTableArrowArrayStream(factory->arrow_table, factory);
 		factory->stream = &table_stream->stream;
@@ -29,7 +32,7 @@ ArrowArrayStream *PythonTableArrowArrayStreamFactory::Produce(uintptr_t factory_
 }
 
 int PythonTableArrowArrayStream::PythonTableArrowArrayStream::GetSchema(struct ArrowArrayStream *stream,
-                                                                                struct ArrowSchema *out) {
+                                                                        struct ArrowSchema *out) {
 	D_ASSERT(stream->private_data);
 	py::gil_scoped_acquire acquire;
 	auto my_stream = (PythonTableArrowArrayStream *)stream->private_data;
