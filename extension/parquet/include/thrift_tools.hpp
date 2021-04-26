@@ -10,7 +10,7 @@
 
 namespace duckdb {
 
-class ThriftFileTransport : public apache::thrift::transport::TVirtualTransport<ThriftFileTransport> {
+class ThriftFileTransport : public duckdb_apache::thrift::transport::TVirtualTransport<ThriftFileTransport> {
 public:
 	ThriftFileTransport(FileHandle &handle_p) : handle(handle_p), location(0) {
 	}

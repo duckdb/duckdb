@@ -15,6 +15,6 @@ class TestPandasTimestampTz(object):
         )
         print(df_in)
         print(df_expected_res)
-        df_out = duckdb.query(df_in, "data", "SELECT * FROM data").df()
+        df_out = duckdb.query_df(df_in, "data", "SELECT * FROM data").df()
         print(df_out)
         pd.testing.assert_frame_equal(df_expected_res, df_out)

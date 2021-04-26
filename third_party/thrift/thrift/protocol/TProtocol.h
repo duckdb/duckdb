@@ -164,11 +164,11 @@ static inline To bitwise_cast(From from) {
 # error "Can't define THRIFT_htonll or THRIFT_ntohll!"
 #endif
 
-namespace apache {
+namespace duckdb_apache {
 namespace thrift {
 namespace protocol {
 
-using apache::thrift::transport::TTransport;
+using duckdb_apache::thrift::transport::TTransport;
 
 /**
  * Enumerated definition of the types that the Thrift protocol supports.
@@ -759,6 +759,6 @@ uint32_t skip(Protocol_& prot, TType type) {
                            "invalid TType");
 }
 
-}}} // apache::thrift::protocol
+}}} // duckdb_apache::thrift::protocol
 
 #endif // #define _THRIFT_PROTOCOL_TPROTOCOL_H_ 1

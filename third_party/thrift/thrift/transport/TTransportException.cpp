@@ -24,7 +24,7 @@
 
 using std::string;
 
-namespace apache {
+namespace duckdb_apache {
 namespace thrift {
 namespace transport {
 
@@ -56,4 +56,4 @@ const char* TTransportException::what() const noexcept {
 }
 }
 }
-} // apache::thrift::transport
+} // duckdb_apache::thrift::transport

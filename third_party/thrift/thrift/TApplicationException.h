@@ -22,7 +22,7 @@
 
 #include "thrift/Thrift.h"
 
-namespace apache {
+namespace duckdb_apache {
 namespace thrift {
 
 namespace protocol {
@@ -110,6 +110,6 @@ protected:
   TApplicationExceptionType type_;
 };
 }
-} // apache::thrift
+} // duckdb_apache::thrift
 
 #endif // #ifndef _THRIFT_TAPPLICATIONEXCEPTION_H_
