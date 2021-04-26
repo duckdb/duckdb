@@ -12,9 +12,10 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
                                    unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
                                    const vector<idx_t> &left_projection_map,
                                    const vector<idx_t> &right_projection_map_p, vector<LogicalType> delim_types,
-                                   idx_t estimated_cardinality)
+                                   idx_t estimated_cardinality, bool has_small_build_side)
     : PhysicalComparisonJoin(op, PhysicalOperatorType::HASH_JOIN, move(cond), join_type, estimated_cardinality),
-      right_projection_map(right_projection_map_p), delim_types(move(delim_types)) {
+      right_projection_map(right_projection_map_p), delim_types(move(delim_types)),
+      has_small_build(has_small_build_side) {
 	children.push_back(move(left));
 	children.push_back(move(right));
 

@@ -22,7 +22,7 @@ public:
 	PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right,
 	                 vector<JoinCondition> cond, JoinType join_type, const vector<idx_t> &left_projection_map,
 	                 const vector<idx_t> &right_projection_map, vector<LogicalType> delim_types,
-	                 idx_t estimated_cardinality);
+	                 idx_t estimated_cardinality, bool has_small_build_side);
 	PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right,
 	                 vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality);
 
@@ -33,6 +33,8 @@ public:
 	vector<LogicalType> build_types;
 	//! Duplicate eliminated types; only used for delim_joins (i.e. correlated subqueries)
 	vector<LogicalType> delim_types;
+	//! Flag to track candidate perfect hash optmization
+	bool has_small_build {false};
 
 public:
 	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;
