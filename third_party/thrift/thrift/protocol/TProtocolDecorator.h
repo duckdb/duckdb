@@ -23,7 +23,7 @@
 #include "thrift/protocol/TProtocol.h"
 #include <memory>
 
-namespace apache {
+namespace duckdb_apache {
 namespace thrift {
 namespace protocol {
 using std::shared_ptr;
@@ -35,7 +35,7 @@ using std::shared_ptr;
  *
  * <p>See p.175 of Design Patterns (by Gamma et al.)</p>
  *
- * @see apache::thrift::protocol::TMultiplexedProtocol
+ * @see duckdb_apache::thrift::protocol::TMultiplexedProtocol
  */
 class TProtocolDecorator : public TProtocol {
 public:
