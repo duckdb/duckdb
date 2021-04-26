@@ -48,6 +48,9 @@ public:
 
 	string ParamsToString() const override;
 
+	//! Prefix size of strings in the memcmp-able sorting representation
+	constexpr static idx_t STRING_RADIX_SIZE = 8;
+
 	//! Tuples are merged in strides of size MERGE_STRIDE
 	constexpr static idx_t MERGE_STRIDE = 1024;
 
@@ -58,9 +61,6 @@ private:
 	//! Sort and re-order local state data when the local state has aggregated SORTING_BLOCK_SIZE data
 	void SortLocalState(ClientContext &context, OrderLocalState &lstate, const SortingState &sorting_state,
 	                    const PayloadState &payload_state);
-
-	//! Size of blocks that are sorted - value must be >= Storage::BLOCK_ALLOC_SIZE
-	constexpr static idx_t SORTING_BLOCK_SIZE = 16777216;
 };
 
 } // namespace duckdb
