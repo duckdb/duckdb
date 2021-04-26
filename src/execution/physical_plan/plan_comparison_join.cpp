@@ -115,14 +115,14 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 			                                      op.left_projection_map, op.right_projection_map, tbl_scan.column_ids,
 			                                      right_index, true, op.estimated_cardinality);
 		}
-		/* 	// equality join with dense keys: Make perfect hash table joins
-		    auto stats = reinterpret_cast<NumericStatistics *>(op.join_stats[0].get()); // lhs stats
-		    auto join_keys_range = stats->max - stats->min;                             // Join Keys Range
-		    if (join_keys_range < PERFECT_HASH_THRESHOLD) {
-		        return make_unique<PhysicalPerfectHashJoin>(op, move(left), move(right), move(op.conditions),
-		   op.join_type, op.left_projection_map, op.right_projection_map, move(op.delim_types),
-		   op.estimated_cardinality);
-		    } */
+		// equality join with dense keys: Make perfect hash table joins
+		auto stats = reinterpret_cast<NumericStatistics *>(op.join_stats[0].get()); // lhs stats
+		auto join_keys_range = stats->max - stats->min;                             // Join Keys Range
+		if (join_keys_range < PERFECT_HASH_THRESHOLD) {
+			return make_unique<PhysicalPerfectHashJoin>(op, move(left), move(right), move(op.conditions), op.join_type,
+			                                            op.left_projection_map, op.right_projection_map,
+			                                            move(op.delim_types), op.estimated_cardinality);
+		}
 
 		// equality join: use hash join
 		plan = make_unique<PhysicalHashJoin>(op, move(left), move(right), move(op.conditions), op.join_type,
