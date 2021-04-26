@@ -12,13 +12,13 @@ struct MyArrowArrayStream {
 	}
 
 	static void InitializeFunctionPointers(ArrowArrayStream *stream) {
-		stream->get_schema = MyStreamGetschema;
-		stream->get_next = MyStreamGetnext;
-		stream->release = MyStreamRelease;
-		stream->get_last_error = MyStreamGetlasterror;
+		stream->get_schema = GetSchema;
+		stream->get_next = GetNext;
+		stream->release = Release;
+		stream->get_last_error = GetLastError;
 	};
 
-	static int MyStreamGetschema(struct ArrowArrayStream *stream, struct ArrowSchema *out) {
+	static int GetSchema(struct ArrowArrayStream *stream, struct ArrowSchema *out) {
 		D_ASSERT(stream->private_data);
 		auto my_stream = (MyArrowArrayStream *)stream->private_data;
 		if (!stream->release) {
@@ -29,7 +29,7 @@ struct MyArrowArrayStream {
 		return 0;
 	}
 
-	static int MyStreamGetnext(struct ArrowArrayStream *stream, struct ArrowArray *out) {
+	static int GetNext(struct ArrowArrayStream *stream, struct ArrowArray *out) {
 		D_ASSERT(stream->private_data);
 		auto my_stream = (MyArrowArrayStream *)stream->private_data;
 		if (!stream->release) {
@@ -44,7 +44,7 @@ struct MyArrowArrayStream {
 		return 0;
 	}
 
-	static void MyStreamRelease(struct ArrowArrayStream *stream) {
+	static void Release(struct ArrowArrayStream *stream) {
 		if (!stream->release) {
 			return;
 		}
@@ -52,7 +52,7 @@ struct MyArrowArrayStream {
 		delete (MyArrowArrayStream *)stream->private_data;
 	}
 
-	static const char *MyStreamGetlasterror(struct ArrowArrayStream *stream) {
+	static const char *GetLastError(struct ArrowArrayStream *stream) {
 		if (!stream->release) {
 			return "stream was released";
 		}
@@ -89,7 +89,7 @@ static void TestArrowRoundTrip(string q) {
 	// query that creates a bunch of values across the types
 	auto result = con.Query(q);
 	REQUIRE(result->success);
-	unique_ptr<MyPythonTableArrowArrayStreamFactory> stream_factory =
+	auto stream_factory =
 	    make_unique<MyPythonTableArrowArrayStreamFactory>(move(result));
 	ArrowArrayStream *(*stream_factory_produce)(uintptr_t factory) = MyPythonTableArrowArrayStreamFactory::Produce;
 

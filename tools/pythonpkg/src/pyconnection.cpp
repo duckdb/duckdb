@@ -5,6 +5,7 @@
 #include "duckdb_python/map.hpp"
 
 #include "duckdb/common/arrow.hpp"
+#include "duckdb_python/arrow_array_stream.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
@@ -20,7 +21,6 @@
 #include "datetime.h" // from Python
 
 #include <random>
-#include "include/duckdb_python/arrow_array_stream.hpp"
 
 namespace duckdb {
 
@@ -249,7 +249,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrowTable(const py::object
 		throw std::runtime_error("Only arrow tables supported");
 	}
 
-	unique_ptr<PythonTableArrowArrayStreamFactory> stream_factory =
+	auto stream_factory =
 	    make_unique<PythonTableArrowArrayStreamFactory>(table);
 	string name = "arrow_table_" + PtrToString((void *)&table);
 	ArrowArrayStream *(*stream_factory_produce)(uintptr_t factory) = PythonTableArrowArrayStreamFactory::Produce;
@@ -259,7 +259,6 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrowTable(const py::object
 	                                       Value::POINTER((uintptr_t)stream_factory_produce)})
 	        ->Alias(name));
 	registered_arrow_factory[PtrToString((void *)&table)] = move(stream_factory);
-	//	rel->arrow_stream_factory = move(stream_factory);
 	return rel;
 }
 

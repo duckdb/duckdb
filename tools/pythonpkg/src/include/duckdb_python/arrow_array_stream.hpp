@@ -28,10 +28,10 @@ public:
 	PythonTableArrowArrayStreamFactory *factory;
 
 private:
-	static int MyStreamGetSchema(ArrowArrayStream *stream, struct ArrowSchema *out);
-	static int MyStreamGetNext(ArrowArrayStream *stream, struct ArrowArray *out);
-	static void MyStreamRelease(ArrowArrayStream *stream);
-	static const char *MyStreamGetLastError(ArrowArrayStream *stream);
+	static int GetSchema(ArrowArrayStream *stream, struct ArrowSchema *out);
+	static int GetNext(ArrowArrayStream *stream, struct ArrowArray *out);
+	static void Release(ArrowArrayStream *stream);
+	static const char *GetLastError(ArrowArrayStream *stream);
 
 	std::string last_error;
 	py::object arrow_table;
