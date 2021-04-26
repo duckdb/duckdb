@@ -2,7 +2,6 @@
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
 #include "duckdb/execution/operator/join/physical_index_join.hpp"
 #include "duckdb/execution/operator/join/physical_nested_loop_join.hpp"
-#include "duckdb/execution/operator/join/physical_perfect_hash_join.hpp"
 #include "duckdb/execution/operator/join/physical_piecewise_merge_join.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
