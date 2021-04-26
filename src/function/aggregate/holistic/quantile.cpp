@@ -234,15 +234,6 @@ AggregateFunction GetDiscreteQuantileAggregateFunction(const LogicalType &type) 
 		}
 		break;
 
-	case LogicalTypeId::UTINYINT:
-		return GetTypedDiscreteQuantileAggregateFunction<uint8_t>(type);
-	case LogicalTypeId::USMALLINT:
-		return GetTypedDiscreteQuantileAggregateFunction<uint16_t>(type);
-	case LogicalTypeId::UINTEGER:
-		return GetTypedDiscreteQuantileAggregateFunction<uint32_t>(type);
-	case LogicalTypeId::UBIGINT:
-		return GetTypedDiscreteQuantileAggregateFunction<uint64_t>(type);
-
 	case LogicalTypeId::DATE:
 		return GetTypedDiscreteQuantileAggregateFunction<date_t>(type);
 	case LogicalTypeId::TIMESTAMP:
@@ -319,15 +310,6 @@ AggregateFunction GetDiscreteQuantileListAggregateFunction(const LogicalType &ty
 			throw NotImplementedException("Unimplemented discrete quantile list aggregate");
 		}
 		break;
-
-	case LogicalTypeId::UTINYINT:
-		return GetTypedDiscreteQuantileListAggregateFunction<uint8_t>(type);
-	case LogicalTypeId::USMALLINT:
-		return GetTypedDiscreteQuantileListAggregateFunction<uint16_t>(type);
-	case LogicalTypeId::UINTEGER:
-		return GetTypedDiscreteQuantileListAggregateFunction<uint32_t>(type);
-	case LogicalTypeId::UBIGINT:
-		return GetTypedDiscreteQuantileListAggregateFunction<uint64_t>(type);
 
 	case LogicalTypeId::DATE:
 		return GetTypedDiscreteQuantileListAggregateFunction<date_t, DateValueCast>(type);
@@ -421,15 +403,6 @@ AggregateFunction GetContinuousQuantileAggregateFunction(const LogicalType &type
 		}
 		break;
 
-	case LogicalTypeId::UTINYINT:
-		return GetTypedContinuousQuantileAggregateFunction<uint8_t, double>(type, LogicalType::DOUBLE);
-	case LogicalTypeId::USMALLINT:
-		return GetTypedContinuousQuantileAggregateFunction<uint16_t, double>(type, LogicalType::DOUBLE);
-	case LogicalTypeId::UINTEGER:
-		return GetTypedContinuousQuantileAggregateFunction<uint32_t, double>(type, LogicalType::DOUBLE);
-	case LogicalTypeId::UBIGINT:
-		return GetTypedContinuousQuantileAggregateFunction<uint64_t, double>(type, LogicalType::DOUBLE);
-
 	case LogicalTypeId::DATE:
 		return GetTypedContinuousQuantileAggregateFunction<date_t, timestamp_t, TimestampCast>(type,
 		                                                                                       LogicalType::TIMESTAMP);
@@ -506,15 +479,6 @@ AggregateFunction GetContinuousQuantileListAggregateFunction(const LogicalType &
 			throw NotImplementedException("Unimplemented discrete quantile list aggregate");
 		}
 		break;
-
-	case LogicalTypeId::UTINYINT:
-		return GetTypedContinuousQuantileListAggregateFunction<uint8_t, double>(type, LogicalType::DOUBLE);
-	case LogicalTypeId::USMALLINT:
-		return GetTypedContinuousQuantileListAggregateFunction<uint16_t, double>(type, LogicalType::DOUBLE);
-	case LogicalTypeId::UINTEGER:
-		return GetTypedContinuousQuantileListAggregateFunction<uint32_t, double>(type, LogicalType::DOUBLE);
-	case LogicalTypeId::UBIGINT:
-		return GetTypedContinuousQuantileListAggregateFunction<uint64_t, double>(type, LogicalType::DOUBLE);
 
 	case LogicalTypeId::DATE:
 		return GetTypedContinuousQuantileListAggregateFunction<date_t, timestamp_t, TimestampCast, DateValueCast>(
@@ -631,6 +595,11 @@ AggregateFunction GetContinuousQuantileListAggregate(const LogicalType &type) {
 }
 
 void QuantileFun::RegisterFunction(BuiltinFunctions &set) {
+	const vector<LogicalType> QUANTILES = {LogicalType::TINYINT, LogicalType::SMALLINT, LogicalType::INTEGER,
+	                                       LogicalType::BIGINT,  LogicalType::HUGEINT,  LogicalType::FLOAT,
+	                                       LogicalType::DOUBLE,  LogicalType::DATE,     LogicalType::TIMESTAMP,
+	                                       LogicalType::TIME,    LogicalType::INTERVAL};
+
 	AggregateFunctionSet median("median");
 	median.AddFunction(AggregateFunction({LogicalType::DECIMAL}, LogicalType::DECIMAL, nullptr, nullptr, nullptr,
 	                                     nullptr, nullptr, nullptr, BindMedianDecimal));
@@ -645,17 +614,7 @@ void QuantileFun::RegisterFunction(BuiltinFunctions &set) {
 	                                            nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
 	                                            BindContinuousQuantileDecimal));
 
-	for (const auto &type : LogicalType::NUMERIC) {
-		if (type.id() != LogicalTypeId::DECIMAL) {
-			median.AddFunction(GetMedianAggregate(type));
-			quantile_disc.AddFunction(GetDiscreteQuantileAggregate(type));
-			quantile_disc.AddFunction(GetDiscreteQuantileListAggregate(type));
-			quantile_cont.AddFunction(GetContinuousQuantileAggregate(type));
-			quantile_cont.AddFunction(GetContinuousQuantileListAggregate(type));
-		}
-	}
-
-	for (const auto &type : LogicalType::TEMPORAL) {
+	for (const auto &type : QUANTILES) {
 		median.AddFunction(GetMedianAggregate(type));
 		quantile_disc.AddFunction(GetDiscreteQuantileAggregate(type));
 		quantile_disc.AddFunction(GetDiscreteQuantileListAggregate(type));
