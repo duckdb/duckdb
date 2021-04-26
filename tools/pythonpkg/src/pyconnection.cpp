@@ -166,7 +166,7 @@ DuckDBPyConnection *DuckDBPyConnection::RegisterDF(const string &name, py::objec
 	return this;
 }
 
-DuckDBPyConnection *DuckDBPyConnection::RegisterArrow(const string &name, py::object table) {
+DuckDBPyConnection *DuckDBPyConnection::RegisterArrow(const string &name, const py::object& table) {
 	if (!connection) {
 		throw std::runtime_error("connection closed");
 	}

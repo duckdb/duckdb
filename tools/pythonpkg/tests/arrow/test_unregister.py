@@ -13,6 +13,8 @@ except:
 
 class TestArrowUnregister(object):
     def test_arrow_unregister1(self, duckdb_cursor):
+        if not can_run:
+            return
         parquet_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)),'data','userdata1.parquet')
         cols = 'id, first_name, last_name, email, gender, ip_address, cc, country, birthdate, salary, title, comments'
 
@@ -29,6 +31,8 @@ class TestArrowUnregister(object):
         connection.execute("DROP VIEW IF EXISTS arrow_table;")
 
     def test_arrow_unregister2(self, duckdb_cursor):
+        if not can_run:
+            return
         fd, db = tempfile.mkstemp()
         os.close(fd)
         os.remove(db)
