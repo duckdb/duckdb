@@ -12,6 +12,8 @@
 
 namespace duckdb {
 
+static_assert(sizeof(dtime_t) == sizeof(int64_t), "dtime_t was padded");
+
 // string format is hh:mm:ss.microsecondsZ
 // microseconds and Z are optional
 // ISO 8601

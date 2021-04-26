@@ -13,6 +13,8 @@
 
 namespace duckdb {
 
+static_assert(sizeof(date_t) == sizeof(int32_t), "date_t was padded");
+
 const string_t Date::MONTH_NAMES_ABBREVIATED[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
                                                   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
 const string_t Date::MONTH_NAMES[] = {"January", "February", "March",     "April",   "May",      "June",

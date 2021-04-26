@@ -11,6 +11,8 @@
 
 namespace duckdb {
 
+static_assert(sizeof(timestamp_t) == sizeof(int64_t), "timestamp_t was padded");
+
 // timestamp/datetime uses 64 bits, high 32 bits for date and low 32 bits for time
 // string format is YYYY-MM-DDThh:mm:ssZ
 // T may be a space
