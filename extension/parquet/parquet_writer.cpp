@@ -27,7 +27,7 @@ using namespace duckdb_parquet;                   // NOLINT
 using namespace duckdb_apache::thrift;            // NOLINT
 using namespace duckdb_apache::thrift::protocol;  // NOLINT
 using namespace duckdb_apache::thrift::transport; // NOLINT
-using namespace duckdb_miniz;              // NOLINT
+using namespace duckdb_miniz;                     // NOLINT
 
 using duckdb_parquet::format::CompressionCodec;
 using duckdb_parquet::format::ConvertedType;
