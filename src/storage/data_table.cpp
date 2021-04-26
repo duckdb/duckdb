@@ -865,14 +865,9 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 		transaction.storage.Update(this, row_ids, column_ids, updates);
 		return;
 	}
-	throw NotImplementedException("FIXME: update");
-	// for (idx_t i = 0; i < column_ids.size(); i++) {
-	// 	auto column = column_ids[i];
-	// 	D_ASSERT(column != COLUMN_IDENTIFIER_ROW_ID);
-	// 	D_ASSERT(columns[column]->type.id() == updates.data[i].GetType().id());
-
-	// 	columns[column]->Update(transaction, updates.data[i], row_ids, updates.size(), true);
-	// }
+	// find the morsel this id belongs to
+	auto morsel = (Morsel *) morsels->GetSegment(first_id);
+	morsel->Update(transaction, updates, row_ids, column_ids);
 }
 
 //===--------------------------------------------------------------------===//

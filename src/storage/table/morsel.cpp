@@ -3,6 +3,7 @@
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/storage/table/column_data.hpp"
+#include "duckdb/storage/table/update_segment.hpp"
 
 namespace duckdb {
 
@@ -74,6 +75,9 @@ void Morsel::Scan(Transaction &transaction, MorselScanState &state, DataChunk &r
 					result.data[i].Sequence(current_row, 1);
 				} else {
 					columns[column]->Scan(state.column_scans[i], result.data[i]);
+					if (!updates.empty() && updates[column]) {
+						updates[column]->FetchUpdates(transaction, state.vector_index, result.data[i]);
+					}
 				}
 			}
 		} else {
@@ -253,6 +257,26 @@ void Morsel::Append(MorselAppendState &state, DataChunk &chunk, idx_t append_cou
 		columns[i]->Append(state.states[i], chunk.data[i], append_count);
 	}
 	state.offset_in_morsel += append_count;
+}
+
+void Morsel::Update(Transaction &transaction, DataChunk &update_chunk, Vector &row_ids, const vector<column_t> &column_ids) {
+	if (updates.empty()) {
+		updates.resize(columns.size());
+	}
+	auto ids = FlatVector::GetData<row_t>(row_ids);
+	for (idx_t i = 0; i < column_ids.size(); i++) {
+		auto column = column_ids[i];
+		D_ASSERT(column != COLUMN_IDENTIFIER_ROW_ID);
+		D_ASSERT(columns[column]->type.id() == update_chunk.data[i].GetType().id());
+		D_ASSERT(column < updates.size());
+		if (!updates[column]) {
+			updates[column] = make_shared<UpdateSegment>(*this, *columns[column]);
+		}
+		Vector base_vector(columns[column]->type);
+		ColumnScanState state;
+		columns[column]->Fetch(state, ids[0], base_vector);
+		updates[column]->Update(transaction, update_chunk.data[i], ids, update_chunk.size(), base_vector);
+	}
 }
 
 class VersionDeleteState {

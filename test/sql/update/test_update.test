@@ -2,6 +2,9 @@
 # description: Test standard update behavior
 # group: [update]
 
+statement ok
+PRAGMA enable_verification
+
 # create a table
 statement ok con1
 CREATE TABLE test (a INTEGER);

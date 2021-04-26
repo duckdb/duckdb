@@ -20,6 +20,7 @@ class ColumnData;
 class DatabaseInstance;
 class DataTable;
 struct DataTableInfo;
+class UpdateSegment;
 class Vector;
 struct VersionNode;
 
@@ -43,6 +44,8 @@ public:
 	shared_ptr<VersionNode> version_info;
 	//! The column data of the morsel
 	vector<shared_ptr<ColumnData>> columns;
+	//! The update data of the morsel
+	vector<shared_ptr<UpdateSegment>> updates;
 
 public:
 	//! Initialize a scan over this morsel
@@ -66,6 +69,8 @@ public:
 
 	void InitializeAppend(Transaction &transaction, MorselAppendState &append_state, idx_t remaining_append_count);
 	void Append(MorselAppendState &append_state, DataChunk &chunk, idx_t append_count);
+
+	void Update(Transaction &transaction, DataChunk &updates, Vector &row_ids, const vector<column_t> &column_ids);
 
 private:
 	ChunkInfo *GetChunkInfo(idx_t vector_idx);
