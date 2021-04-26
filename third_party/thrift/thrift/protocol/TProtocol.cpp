@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License. You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.duckdb_apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
@@ -19,15 +19,15 @@
 
 #include "thrift/protocol/TProtocol.h"
 
-namespace apache {
+namespace duckdb_apache {
 namespace thrift {
 namespace protocol {
 
 TProtocol::~TProtocol() = default;
 uint32_t TProtocol::skip_virt(TType type) {
-  return ::apache::thrift::protocol::skip(*this, type);
+  return ::duckdb_apache::thrift::protocol::skip(*this, type);
 }
 
 TProtocolFactory::~TProtocolFactory() = default;
 
-}}} // apache::thrift::protocol
+}}} // duckdb_apache::thrift::protocol

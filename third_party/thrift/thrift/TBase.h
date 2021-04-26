@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License. You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.duckdb_apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
@@ -23,7 +23,7 @@
 #include "thrift/Thrift.h"
 #include "thrift/protocol/TProtocol.h"
 
-namespace apache {
+namespace duckdb_apache {
 namespace thrift {
 
 class TBase {
@@ -33,6 +33,6 @@ public:
   virtual uint32_t write(protocol::TProtocol* oprot) const = 0;
 };
 }
-} // apache::thrift
+} // duckdb_apache::thrift
 
 #endif // #ifndef _THRIFT_TBASE_H_

@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License. You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.duckdb_apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
@@ -20,7 +20,7 @@
 #ifndef THRIFT_PROTOCOL_TPROTOCOLTYPES_H_
 #define THRIFT_PROTOCOL_TPROTOCOLTYPES_H_ 1
 
-namespace apache {
+namespace duckdb_apache {
 namespace thrift {
 namespace protocol {
 
@@ -31,6 +31,6 @@ enum PROTOCOL_TYPES {
 };
 }
 }
-} // apache::thrift::protocol
+} // duckdb_apache::thrift::protocol
 
 #endif // #define _THRIFT_PROTOCOL_TPROTOCOLTYPES_H_ 1

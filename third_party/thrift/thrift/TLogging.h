@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License. You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.duckdb_apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
@@ -119,14 +119,14 @@
  *                                      avoidable virtual call is made
  * T_GLOBAL_DEBUG_VIRTUAL = 2:          record detailed info that can be
  *                                      printed by calling
- *                                      apache::thrift::profile_print_info()
+ *                                      duckdb_apache::thrift::profile_print_info()
  */
 #if T_GLOBAL_DEBUG_VIRTUAL > 1
-#define T_VIRTUAL_CALL() ::apache::thrift::profile_virtual_call(typeid(*this))
+#define T_VIRTUAL_CALL() ::duckdb_apache::thrift::profile_virtual_call(typeid(*this))
 #define T_GENERIC_PROTOCOL(template_class, generic_prot, specific_prot)                            \
   do {                                                                                             \
     if (!(specific_prot)) {                                                                        \
-      ::apache::thrift::profile_generic_protocol(typeid(*template_class), typeid(*generic_prot));  \
+      ::duckdb_apache::thrift::profile_generic_protocol(typeid(*template_class), typeid(*generic_prot));  \
     }                                                                                              \
   } while (0)
 #elif T_GLOBAL_DEBUG_VIRTUAL == 1

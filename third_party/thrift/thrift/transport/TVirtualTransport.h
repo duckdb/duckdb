@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License. You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.duckdb_apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
@@ -22,7 +22,7 @@
 
 #include "thrift/transport/TTransport.h"
 
-namespace apache {
+namespace duckdb_apache {
 namespace thrift {
 namespace transport {
 
@@ -114,7 +114,7 @@ public:
    */
   uint32_t readAll(uint8_t* buf, uint32_t len) {
     auto* trans = static_cast<Transport_*>(this);
-    return ::apache::thrift::transport::readAll(*trans, buf, len);
+    return ::duckdb_apache::thrift::transport::readAll(*trans, buf, len);
   }
 
 protected:
@@ -135,6 +135,6 @@ protected:
 };
 }
 }
-} // apache::thrift::transport
+} // duckdb_apache::thrift::transport
 
 #endif // #ifndef _THRIFT_TRANSPORT_TVIRTUALTRANSPORT_H_

@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License. You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.duckdb_apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
@@ -25,7 +25,7 @@
 #include <memory>
 #include <string>
 
-namespace apache {
+namespace duckdb_apache {
 namespace thrift {
 namespace transport {
 
@@ -121,7 +121,7 @@ public:
     return readAll_virt(buf, len);
   }
   virtual uint32_t readAll_virt(uint8_t* buf, uint32_t len) {
-    return apache::thrift::transport::readAll(*this, buf, len);
+    return duckdb_apache::thrift::transport::readAll(*this, buf, len);
   }
 
   /**
@@ -266,6 +266,6 @@ public:
 };
 }
 }
-} // apache::thrift::transport
+} // duckdb_apache::thrift::transport
 
 #endif // #ifndef _THRIFT_TRANSPORT_TTRANSPORT_H_
