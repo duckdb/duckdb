@@ -458,6 +458,8 @@ template <>
 bool TryCast::Operation(hugeint_t input, date_t &result, bool strict);
 template <>
 bool TryCast::Operation(hugeint_t input, dtime_t &result, bool strict);
+template <>
+bool TryCast::Operation(hugeint_t input, timestamp_t &result, bool strict);
 
 template <>
 bool Cast::Operation(hugeint_t input);
@@ -485,6 +487,8 @@ template <>
 date_t Cast::Operation(hugeint_t input);
 template <>
 dtime_t Cast::Operation(hugeint_t input);
+template <>
+timestamp_t Cast::Operation(hugeint_t input);
 // nop cast
 template <>
 bool TryCast::Operation(hugeint_t input, hugeint_t &result, bool strict);
@@ -509,6 +513,15 @@ template <>
 dtime_t StrictCast::Operation(string_t input);
 template <>
 dtime_t Cast::Operation(string_t input);
+//===--------------------------------------------------------------------===//
+// String -> Time Casts
+//===--------------------------------------------------------------------===//
+template <>
+bool TryCast::Operation(string_t input, timestamp_t &result, bool strict);
+template <>
+timestamp_t StrictCast::Operation(string_t input);
+template <>
+timestamp_t Cast::Operation(string_t input);
 //===--------------------------------------------------------------------===//
 // String -> Interval Casts
 //===--------------------------------------------------------------------===//

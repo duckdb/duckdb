@@ -78,6 +78,30 @@ struct dtime_t {
 	inline dtime_t &operator+=(const dtime_t &other) {this->micros += other.micros; return *this;};
 };
 
+//! Type used to represent timestamps (microseconds since 1970-01-01)
+struct timestamp_t {
+    int64_t micros;
+
+	timestamp_t() = default;
+	explicit inline timestamp_t(int64_t micros_p) : micros(micros_p) {}
+	inline timestamp_t& operator=(int64_t micros_p) {micros = micros_p; return *this;}
+
+	// explicit conversion
+	explicit inline operator int64_t() const {return micros;}
+
+	// comparison operators
+	inline bool operator==(const timestamp_t &rhs) const {return micros == rhs.micros;};
+	inline bool operator!=(const timestamp_t &rhs) const {return micros != rhs.micros;};
+	inline bool operator<=(const timestamp_t &rhs) const {return micros <= rhs.micros;};
+	inline bool operator<(const timestamp_t &rhs) const {return micros < rhs.micros;};
+	inline bool operator>(const timestamp_t &rhs) const {return micros > rhs.micros;};
+	inline bool operator>=(const timestamp_t &rhs) const {return micros >= rhs.micros;};
+
+	// in-place operators
+	inline timestamp_t &operator+=(const int64_t &micros) {this->micros += micros; return *this;};
+	inline timestamp_t &operator-=(const int64_t &micros) {this->micros -= micros; return *this;};
+};
+
 struct interval_t {
 	int32_t months;
 	int32_t days;

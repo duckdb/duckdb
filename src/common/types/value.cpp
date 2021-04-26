@@ -92,7 +92,7 @@ Value Value::MinimumValue(const LogicalType &type) {
 	case LogicalTypeId::UBIGINT:
 		return Value::UBIGINT(NumericLimits<uint64_t>::Minimum());
 	case LogicalTypeId::TIMESTAMP:
-		return Value::TIMESTAMP(NumericLimits<int64_t>::Minimum());
+		return Value::TIMESTAMP(timestamp_t(NumericLimits<int64_t>::Minimum()));
 	case LogicalTypeId::HUGEINT:
 		return Value::HUGEINT(NumericLimits<hugeint_t>::Minimum());
 	case LogicalTypeId::FLOAT:
@@ -150,7 +150,7 @@ Value Value::MaximumValue(const LogicalType &type) {
 	case LogicalTypeId::UBIGINT:
 		return Value::UBIGINT(NumericLimits<uint64_t>::Maximum());
 	case LogicalTypeId::TIMESTAMP:
-		return Value::TIMESTAMP(NumericLimits<int64_t>::Maximum());
+		return Value::TIMESTAMP(timestamp_t(NumericLimits<int64_t>::Maximum()));
 	case LogicalTypeId::HUGEINT:
 		return Value::HUGEINT(NumericLimits<hugeint_t>::Maximum());
 	case LogicalTypeId::FLOAT:
@@ -363,16 +363,15 @@ Value Value::TIME(int32_t hour, int32_t min, int32_t sec, int32_t micros) {
 	return Value::TIME(Time::FromTime(hour, min, sec, micros));
 }
 
-Value Value::TIMESTAMP(timestamp_t timestamp) {
-	auto val = Value::BIGINT(timestamp);
-	val.type_ = LogicalType::TIMESTAMP;
-	return val;
+Value Value::TIMESTAMP(timestamp_t value) {
+	Value result(LogicalType::TIMESTAMP);
+	result.value_.timestamp = value;
+	result.is_null = false;
+	return result;
 }
 
 Value Value::TIMESTAMP(date_t date, dtime_t time) {
-	auto val = Value::BIGINT(Timestamp::FromDatetime(date, time));
-	val.type_ = LogicalType::TIMESTAMP;
-	return val;
+	return Value::TIMESTAMP(Timestamp::FromDatetime(date, time));
 }
 
 Value Value::TIMESTAMP(int32_t year, int32_t month, int32_t day, int32_t hour, int32_t min, int32_t sec,
@@ -494,6 +493,11 @@ Value Value::CreateValue(dtime_t value) {
 }
 
 template <>
+Value Value::CreateValue(timestamp_t value) {
+	return Value::TIMESTAMP(value);
+}
+
+template <>
 Value Value::CreateValue(const char *value) {
 	return Value(string(value));
 }
@@ -547,6 +551,8 @@ T Value::GetValueInternal() const {
 	case LogicalTypeId::DATE:
 		return Cast::Operation<int32_t, T>(value_.integer);
 	case LogicalTypeId::TIME:
+		return Cast::Operation<int64_t, T>(value_.bigint);
+	case LogicalTypeId::TIMESTAMP:
 		return Cast::Operation<int64_t, T>(value_.bigint);
 	case LogicalTypeId::UTINYINT:
 		return Cast::Operation<uint8_t, T>(value_.utinyint);
@@ -628,6 +634,10 @@ dtime_t Value::GetValue() const {
 	return GetValueInternal<dtime_t>();
 }
 template <>
+timestamp_t Value::GetValue() const {
+	return GetValueInternal<timestamp_t>();
+}
+template <>
 uintptr_t Value::GetValue() const {
 	D_ASSERT(type() == LogicalType::POINTER);
 	return value_.pointer;
@@ -664,7 +674,7 @@ Value Value::Numeric(const LogicalType &type, int64_t value) {
 	case LogicalTypeId::TIME:
 		return Value::TIME(dtime_t(value));
 	case LogicalTypeId::TIMESTAMP:
-		return Value::TIMESTAMP(value);
+		return Value::TIMESTAMP(timestamp_t(value));
 	default:
 		throw InvalidTypeException(type, "Numeric requires numeric type");
 	}
@@ -758,6 +768,12 @@ dtime_t &Value::GetValueUnsafe() {
 }
 
 template <>
+timestamp_t &Value::GetValueUnsafe() {
+	D_ASSERT(type_.InternalType() == PhysicalType::INT64);
+	return value_.timestamp;
+}
+
+template <>
 interval_t &Value::GetValueUnsafe() {
 	D_ASSERT(type_.InternalType() == PhysicalType::INTERVAL);
 	return value_.interval;
@@ -819,7 +835,7 @@ string Value::ToString() const {
 	case LogicalTypeId::TIME:
 		return Time::ToString(value_.time);
 	case LogicalTypeId::TIMESTAMP:
-		return Timestamp::ToString(value_.bigint);
+		return Timestamp::ToString(value_.timestamp);
 	case LogicalTypeId::INTERVAL:
 		return Interval::ToString(value_.interval);
 	case LogicalTypeId::VARCHAR:

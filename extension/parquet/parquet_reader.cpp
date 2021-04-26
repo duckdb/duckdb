@@ -462,7 +462,7 @@ static void FilterOperationSwitch(Vector &v, Value &constant, parquet_filter_t &
 		break;
 
 	case LogicalTypeId::TIMESTAMP:
-		TemplatedFilterOperation<timestamp_t, OP>(v, constant.value_.bigint, filter_mask, count);
+		TemplatedFilterOperation<timestamp_t, OP>(v, constant.value_.timestamp, filter_mask, count);
 		break;
 
 	case LogicalTypeId::BLOB:

@@ -219,6 +219,7 @@ public:
 		uint64_t hash;
 		date_t date;
 		dtime_t time;
+		timestamp_t timestamp;
 		interval_t interval;
 	} value_;
 
@@ -269,6 +270,8 @@ Value DUCKDB_API Value::CreateValue(date_t value);
 template <>
 Value DUCKDB_API Value::CreateValue(dtime_t value);
 template <>
+Value DUCKDB_API Value::CreateValue(timestamp_t value);
+template <>
 Value DUCKDB_API Value::CreateValue(const char *value);
 template <>
 Value DUCKDB_API Value::CreateValue(string value);
@@ -309,6 +312,8 @@ template <>
 DUCKDB_API date_t Value::GetValue() const;
 template <>
 DUCKDB_API dtime_t Value::GetValue() const;
+template <>
+DUCKDB_API timestamp_t Value::GetValue() const;
 
 template <>
 DUCKDB_API int8_t &Value::GetValueUnsafe();
@@ -338,6 +343,8 @@ template <>
 DUCKDB_API date_t &Value::GetValueUnsafe();
 template <>
 DUCKDB_API dtime_t &Value::GetValueUnsafe();
+template <>
+DUCKDB_API timestamp_t &Value::GetValueUnsafe();
 template <>
 DUCKDB_API interval_t &Value::GetValueUnsafe();
 
