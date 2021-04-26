@@ -173,3 +173,103 @@ SELECT quantile_cont(r, 0.1) FROM quantile WHERE 1=0
 ----
 NULL
 
+# TINYINT extremes
+query I
+SELECT quantile_cont(t, 0.5) FROM (VALUES (120::TINYINT), (122::TINYINT)) tbl(t)
+----
+121
+
+statement ok
+CREATE TABLE tinyints(t TINYINT);
+
+statement ok
+INSERT INTO tinyints VALUES (-127), (-127);
+
+query I
+SELECT quantile_cont(t, 0.5) FROM tinyints;
+----
+-127
+
+statement ok
+UPDATE tinyints SET t=-t;
+
+query I
+SELECT quantile_cont(t, 0.5) FROM tinyints;
+----
+127
+
+# SMALLINT extremes
+query I
+SELECT quantile_cont(t, 0.5) FROM (VALUES (32764::SMALLINT), (32766::SMALLINT)) tbl(t)
+----
+32765
+
+statement ok
+CREATE TABLE smallints(t SMALLINT);
+
+statement ok
+INSERT INTO smallints VALUES (-32767), (-32767);
+
+query I
+SELECT quantile_cont(t, 0.5) FROM smallints;
+----
+-32767
+
+statement ok
+UPDATE smallints SET t=-t;
+
+query I
+SELECT quantile_cont(t, 0.5) FROM smallints;
+----
+32767
+
+# INTEGER extremes
+query I
+SELECT quantile_cont(t, 0.5) FROM (VALUES (2147483642::INTEGER), (2147483644::INTEGER)) tbl(t)
+----
+2147483643
+
+statement ok
+CREATE TABLE integers(t INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (-2147483647), (-2147483647);
+
+query I
+SELECT quantile_cont(t, 0.5) FROM integers;
+----
+-2147483647
+
+statement ok
+UPDATE integers SET t=-t;
+
+query I
+SELECT quantile_cont(t, 0.5) FROM integers;
+----
+2147483647
+
+# BIGINT extremes
+query I
+SELECT quantile_cont(t, 0.5) FROM (VALUES (9223372036854775794::BIGINT), (9223372036854775796::BIGINT)) tbl(t)
+----
+9223372036854775795
+
+statement ok
+CREATE TABLE bigints(t BIGINT);
+
+statement ok
+INSERT INTO bigints VALUES (-9223372036854775800), (-9223372036854775800);
+
+query I
+SELECT quantile_cont(t, 0.5) FROM bigints;
+----
+-9223372036854775800
+
+statement ok
+UPDATE bigints SET t=-t;
+
+query I
+SELECT quantile_cont(t, 0.5) FROM bigints;
+----
+9223372036854775800
+
