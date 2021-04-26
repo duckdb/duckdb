@@ -1,9 +1,9 @@
+#include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
-#include "duckdb/planner/operator/logical_join.hpp"
+#include "duckdb/planner/operator/logical_any_join.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_cross_product.hpp"
-#include "duckdb/planner/operator/logical_any_join.hpp"
-#include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/planner/operator/logical_join.hpp"
 #include "duckdb/storage/statistics/validity_statistics.hpp"
 
 namespace duckdb {
@@ -20,6 +20,9 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 				continue;
 			}
 			auto prune_result = PropagateComparison(*stats_left, *stats_right, condition.comparison);
+			// Add stats to logical_join
+			join.join_stats.push_back(move(stats_left));
+			join.join_stats.push_back(move(stats_right));
 			switch (prune_result) {
 			case FilterPropagateResult::FILTER_FALSE_OR_NULL:
 			case FilterPropagateResult::FILTER_ALWAYS_FALSE:

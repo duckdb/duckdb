@@ -2,15 +2,18 @@
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
 #include "duckdb/execution/operator/join/physical_index_join.hpp"
 #include "duckdb/execution/operator/join/physical_nested_loop_join.hpp"
+#include "duckdb/execution/operator/join/physical_perfect_hash_join.hpp"
 #include "duckdb/execution/operator/join/physical_piecewise_merge_join.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/transaction/transaction.hpp"
 
 namespace duckdb {
+constexpr size_t PERFECT_HASH_THRESHOLD = 1 << 14;
 
 static bool CanPlanIndexJoin(Transaction &transaction, TableScanBindData *bind_data, PhysicalTableScan &scan) {
 	if (!bind_data) {
@@ -112,6 +115,15 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 			                                      op.left_projection_map, op.right_projection_map, tbl_scan.column_ids,
 			                                      right_index, true, op.estimated_cardinality);
 		}
+		/* 	// equality join with dense keys: Make perfect hash table joins
+		    auto stats = reinterpret_cast<NumericStatistics *>(op.join_stats[0].get()); // lhs stats
+		    auto join_keys_range = stats->max - stats->min;                             // Join Keys Range
+		    if (join_keys_range < PERFECT_HASH_THRESHOLD) {
+		        return make_unique<PhysicalPerfectHashJoin>(op, move(left), move(right), move(op.conditions),
+		   op.join_type, op.left_projection_map, op.right_projection_map, move(op.delim_types),
+		   op.estimated_cardinality);
+		    } */
+
 		// equality join: use hash join
 		plan = make_unique<PhysicalHashJoin>(op, move(left), move(right), move(op.conditions), op.join_type,
 		                                     op.left_projection_map, op.right_projection_map, move(op.delim_types),
