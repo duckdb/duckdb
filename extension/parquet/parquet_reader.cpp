@@ -26,18 +26,18 @@
 
 namespace duckdb {
 
-using parquet::format::ColumnChunk;
-using parquet::format::ConvertedType;
-using parquet::format::FieldRepetitionType;
-using parquet::format::FileMetaData;
-using parquet::format::RowGroup;
-using parquet::format::SchemaElement;
-using parquet::format::Statistics;
-using parquet::format::Type;
+using duckdb_parquet::format::ColumnChunk;
+using duckdb_parquet::format::ConvertedType;
+using duckdb_parquet::format::FieldRepetitionType;
+using duckdb_parquet::format::FileMetaData;
+using duckdb_parquet::format::RowGroup;
+using duckdb_parquet::format::SchemaElement;
+using duckdb_parquet::format::Statistics;
+using duckdb_parquet::format::Type;
 
-static unique_ptr<apache::thrift::protocol::TProtocol> CreateThriftProtocol(FileHandle &file_handle) {
+static unique_ptr<duckdb_apache::thrift::protocol::TProtocol> CreateThriftProtocol(FileHandle &file_handle) {
 	shared_ptr<ThriftFileTransport> trans(new ThriftFileTransport(file_handle));
-	return make_unique<apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(trans);
+	return make_unique<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(trans);
 }
 
 static shared_ptr<ParquetFileMetadataCache> LoadMetadata(FileHandle &file_handle) {

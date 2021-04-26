@@ -298,7 +298,7 @@ struct ParquetWriteBindData : public FunctionData {
 	vector<LogicalType> sql_types;
 	string file_name;
 	vector<string> column_names;
-	parquet::format::CompressionCodec::type codec = parquet::format::CompressionCodec::SNAPPY;
+	duckdb_parquet::format::CompressionCodec::type codec = duckdb_parquet::format::CompressionCodec::SNAPPY;
 };
 
 struct ParquetWriteGlobalState : public GlobalFunctionData {
@@ -322,16 +322,16 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyInfo &info
 			if (!option.second.empty()) {
 				auto roption = StringUtil::Lower(option.second[0].ToString());
 				if (roption == "uncompressed") {
-					bind_data->codec = parquet::format::CompressionCodec::UNCOMPRESSED;
+					bind_data->codec = duckdb_parquet::format::CompressionCodec::UNCOMPRESSED;
 					continue;
 				} else if (roption == "snappy") {
-					bind_data->codec = parquet::format::CompressionCodec::SNAPPY;
+					bind_data->codec = duckdb_parquet::format::CompressionCodec::SNAPPY;
 					continue;
 				} else if (roption == "gzip") {
-					bind_data->codec = parquet::format::CompressionCodec::GZIP;
+					bind_data->codec = duckdb_parquet::format::CompressionCodec::GZIP;
 					continue;
 				} else if (roption == "zstd") {
-					bind_data->codec = parquet::format::CompressionCodec::ZSTD;
+					bind_data->codec = duckdb_parquet::format::CompressionCodec::ZSTD;
 					continue;
 				}
 			}

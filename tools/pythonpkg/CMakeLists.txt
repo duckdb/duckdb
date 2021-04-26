@@ -21,6 +21,7 @@ add_library(
   src/pyrelation.cpp
   src/pyresult.cpp
   src/map.cpp
-  src/vector_conversion.cpp)
+  src/vector_conversion.cpp
+  src/arrow_array_stream.cpp)
 target_include_directories(python_duckdb PRIVATE ${PYTHON_INCLUDE_DIRS})
 target_link_libraries(python_duckdb duckdb_static ${PYTHON_LIBRARIES})

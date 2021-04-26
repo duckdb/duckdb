@@ -6,7 +6,7 @@
  */
 #include "parquet_constants.h"
 
-namespace parquet { namespace format {
+namespace duckdb_parquet { namespace format {
 
 const parquetConstants g_parquet_constants;
 

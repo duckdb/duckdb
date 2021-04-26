@@ -23,21 +23,21 @@
 
 namespace duckdb {
 
-using namespace parquet;                   // NOLINT
-using namespace apache::thrift;            // NOLINT
-using namespace apache::thrift::protocol;  // NOLINT
-using namespace apache::thrift::transport; // NOLINT
-using namespace duckdb_miniz;              // NOLINT
+using namespace duckdb_parquet;                   // NOLINT
+using namespace duckdb_apache::thrift;            // NOLINT
+using namespace duckdb_apache::thrift::protocol;  // NOLINT
+using namespace duckdb_apache::thrift::transport; // NOLINT
+using namespace duckdb_miniz;                     // NOLINT
 
-using parquet::format::CompressionCodec;
-using parquet::format::ConvertedType;
-using parquet::format::Encoding;
-using parquet::format::FieldRepetitionType;
-using parquet::format::FileMetaData;
-using parquet::format::PageHeader;
-using parquet::format::PageType;
-using parquet::format::RowGroup;
-using parquet::format::Type;
+using duckdb_parquet::format::CompressionCodec;
+using duckdb_parquet::format::ConvertedType;
+using duckdb_parquet::format::Encoding;
+using duckdb_parquet::format::FieldRepetitionType;
+using duckdb_parquet::format::FileMetaData;
+using duckdb_parquet::format::PageHeader;
+using duckdb_parquet::format::PageType;
+using duckdb_parquet::format::RowGroup;
+using duckdb_parquet::format::Type;
 
 class MyTransport : public TTransport {
 public:
