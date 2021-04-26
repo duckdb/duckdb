@@ -10,7 +10,7 @@ class TestCategory(object):
             'int': pd.Series([1, 2, 1], dtype="category")
         })
 
-        df_out = duckdb.query(df_in, "data", "SELECT * FROM data").df()
+        df_out = duckdb.query_df(df_in, "data", "SELECT * FROM data").df()
         assert numpy.all(df_out['float'] == numpy.array([1.0, 2.0, 1.0]))
         assert numpy.all(df_out['string'] == numpy.array(["foo", "bar", "foo"]))
         assert numpy.all(df_out['int'] == numpy.array([1, 2, 1]))
@@ -21,7 +21,7 @@ class TestCategory(object):
             'int': pd.Series([1, 2, None], dtype="category")
         })
 
-        df_out = duckdb.query(df_in, "data", "SELECT * FROM data").df()
+        df_out = duckdb.query_df(df_in, "data", "SELECT * FROM data").df()
         assert df_out['string'][0] == "foo"
         assert df_out['string'][1] == "bar"
         assert numpy.isnan(df_out['string'][2])

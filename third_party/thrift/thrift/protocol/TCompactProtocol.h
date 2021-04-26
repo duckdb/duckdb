@@ -25,7 +25,7 @@
 #include <stack>
 #include <memory>
 
-namespace apache {
+namespace duckdb_apache {
 namespace thrift {
 namespace protocol {
 
@@ -259,7 +259,7 @@ private:
 typedef TCompactProtocolFactoryT<TTransport> TCompactProtocolFactory;
 }
 }
-} // apache::thrift::protocol
+} // duckdb_apache::thrift::protocol
 
 #include "thrift/protocol/TCompactProtocol.tcc"
 

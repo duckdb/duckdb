@@ -28,7 +28,7 @@
 #include <string>
 #include <vector>
 
-namespace apache {
+namespace duckdb_apache {
 namespace thrift {
 
 template <typename T>
@@ -109,6 +109,6 @@ std::string to_string(const std::set<T>& s) {
   return o.str();
 }
 }
-} // apache::thrift
+} // duckdb_apache::thrift
 
 #endif // _THRIFT_TOSTRING_H_
