@@ -7,7 +7,7 @@
  * SPDX-License-Identifier: (Apache-2.0 OR MIT)
  *
  * Licensed under the Apache License, Version 2.0 (provided in
- * LICENSE-APACHE.txt and at http://www.duckdb_apache.org/licenses/LICENSE-2.0)
+ * LICENSE-APACHE.txt and at http://www.apache.org/licenses/LICENSE-2.0)
  * or under the MIT license (provided in LICENSE-MIT.txt and at
  * http://opensource.org/licenses/MIT), at your option. This file may not
  * be copied, modified, or distributed except according to those terms.
