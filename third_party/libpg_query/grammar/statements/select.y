@@ -2080,7 +2080,7 @@ a_expr:		c_expr									{ $$ = $1; }
 					$$ = (PGNode *)n;
 				}
 			| ARRAY '[' opt_expr_list ']' {
-				PGList *func_name = list_make1(makeString("list_value"));
+				PGList *func_name = list_make1(makeString("construct_array"));
 				PGFuncCall *n = makeFuncCall(func_name, $3, @1);
 				$$ = (PGNode *) n;
 			}
