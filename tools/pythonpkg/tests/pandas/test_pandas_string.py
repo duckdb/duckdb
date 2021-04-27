@@ -14,7 +14,7 @@ class TestPandasString(object):
         if hasattr(pd, 'StringDtype'):
             df_in['string'] = pd.Series(strings, dtype=pd.StringDtype())
 
-        df_out = duckdb.query(df_in, "data", "SELECT * FROM data").df()
+        df_out = duckdb.query_df(df_in, "data", "SELECT * FROM data").df()
 
         assert numpy.all(df_out['object'] == strings)
         if hasattr(pd, 'StringDtype'):

@@ -5,6 +5,16 @@
 statement ok
 PRAGMA enable_verification
 
+query I
+SELECT 'hello'[0:2]
+----
+he
+
+query I
+SELECT ('hello')[0:2]
+----
+he
+
 statement ok
 CREATE TABLE strings(s VARCHAR, off INTEGER, length INTEGER);
 

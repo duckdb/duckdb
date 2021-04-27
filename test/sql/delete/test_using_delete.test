@@ -1,0 +1,87 @@
+# name: test/sql/delete/test_using_delete.test
+# description: Test deletions with USING clause
+# group: [delete]
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+CREATE TABLE a(i INTEGER);
+
+statement ok
+INSERT INTO a VALUES (1), (2), (3);
+
+query I
+DELETE FROM a USING (values (1)) tbl(i) WHERE a.i=tbl.i;
+----
+1
+
+query I
+SELECT * FROM a;
+----
+2
+3
+
+# no condition?
+query I
+DELETE FROM a USING (values (1)) tbl(i);
+----
+2
+
+query I
+SELECT * FROM a;
+----
+
+statement ok
+INSERT INTO a VALUES (1), (2), (3);
+
+query I
+SELECT * FROM a;
+----
+1
+2
+3
+
+# multiple joins
+query I
+DELETE FROM a USING (values (1)) tbl(i), (values (1), (2)) tbl2(i) WHERE a.i=tbl.i AND a.i=tbl2.i;
+----
+1
+
+query I
+SELECT * FROM a;
+----
+2
+3
+
+# no matches
+query I
+DELETE FROM a USING (values (4)) tbl(i) WHERE a.i=tbl.i;
+----
+0
+
+query I
+SELECT * FROM a;
+----
+2
+3
+
+# self join
+query I
+DELETE FROM a USING a a2(i) WHERE a.i>a2.i;
+----
+1
+
+query I
+SELECT * FROM a;
+----
+2
+
+# binding errors
+# table does not exist
+statement error
+DELETE FROM a USING b WHERE a.i=b.i;
+
+# column does not exist
+statement error
+DELETE FROM a USING a b WHERE a.i=b.j;
