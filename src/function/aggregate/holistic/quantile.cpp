@@ -235,11 +235,11 @@ AggregateFunction GetDiscreteQuantileAggregateFunction(const LogicalType &type) 
 		break;
 
 	case LogicalTypeId::DATE:
-		return GetTypedDiscreteQuantileAggregateFunction<date_t>(type);
+		return GetTypedDiscreteQuantileAggregateFunction<int32_t>(type);
 	case LogicalTypeId::TIMESTAMP:
-		return GetTypedDiscreteQuantileAggregateFunction<timestamp_t>(type);
+		return GetTypedDiscreteQuantileAggregateFunction<int64_t>(type);
 	case LogicalTypeId::TIME:
-		return GetTypedDiscreteQuantileAggregateFunction<dtime_t>(type);
+		return GetTypedDiscreteQuantileAggregateFunction<int64_t>(type);
 	case LogicalTypeId::INTERVAL:
 		return GetTypedDiscreteQuantileAggregateFunction<interval_t>(type);
 

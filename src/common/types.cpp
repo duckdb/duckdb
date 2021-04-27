@@ -153,9 +153,6 @@ const vector<LogicalType> LogicalType::INTEGRAL = {LogicalType::TINYINT,   Logic
                                                    LogicalType::BIGINT,    LogicalType::HUGEINT,  LogicalType::UTINYINT,
                                                    LogicalType::USMALLINT, LogicalType::UINTEGER, LogicalType::UBIGINT};
 
-const vector<LogicalType> LogicalType::TEMPORAL = {LogicalType::DATE, LogicalType::TIMESTAMP, LogicalType::TIME,
-                                                   LogicalType::INTERVAL};
-
 const vector<LogicalType> LogicalType::ALL_TYPES = {
     LogicalType::BOOLEAN,   LogicalType::TINYINT,   LogicalType::SMALLINT, LogicalType::INTEGER, LogicalType::BIGINT,
     LogicalType::DATE,      LogicalType::TIMESTAMP, LogicalType::DOUBLE,   LogicalType::FLOAT,   LogicalType::VARCHAR,
