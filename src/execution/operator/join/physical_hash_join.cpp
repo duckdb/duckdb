@@ -12,10 +12,9 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
                                    unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
                                    const vector<idx_t> &left_projection_map,
                                    const vector<idx_t> &right_projection_map_p, vector<LogicalType> delim_types,
-                                   idx_t estimated_cardinality, bool has_small_build_side)
+                                   idx_t estimated_cardinality, PerfectHashJoinState join_state)
     : PhysicalComparisonJoin(op, PhysicalOperatorType::HASH_JOIN, move(cond), join_type, estimated_cardinality),
-      right_projection_map(right_projection_map_p), delim_types(move(delim_types)),
-      has_small_build(has_small_build_side) {
+      right_projection_map(right_projection_map_p), delim_types(move(delim_types)), perfect_join_state(join_state) {
 	children.push_back(move(left));
 	children.push_back(move(right));
 
@@ -32,9 +31,9 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
 
 PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
                                    unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
-                                   idx_t estimated_cardinality, bool has_small_build_side)
+                                   idx_t estimated_cardinality, PerfectHashJoinState perfect_join_state)
     : PhysicalHashJoin(op, move(left), move(right), move(cond), join_type, {}, {}, {}, estimated_cardinality,
-                       has_small_build_side) {
+                       perfect_join_state) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -186,6 +185,10 @@ void PhysicalHashJoin::GetChunkInternal(ExecutionContext &context, DataChunk &ch
 		// empty hash table with INNER or SEMI join means empty result set
 		return;
 	}
+	// We first try a join with a perfect hash table, otherwise we do the normal probe
+	if (IsInnerJoin(join_type) && IsPerfectHashJoin(chunk)) {
+		return;
+	}
 	do {
 		ProbeHashTable(context, chunk, state);
 		if (chunk.size() == 0) {
@@ -257,6 +260,12 @@ void PhysicalHashJoin::ProbeHashTable(ExecutionContext &context, DataChunk &chun
 		state->scan_structure = sink.hash_table->Probe(state->join_keys);
 		state->scan_structure->Next(state->join_keys, state->child_chunk, chunk);
 	} while (chunk.size() == 0);
+}
+
+bool PhysicalHashJoin::IsPerfectHashJoin(DataChunk &chunk) {
+	auto state = reinterpret_cast<HashJoinGlobalState *>(sink_state.get());
+
+	return state->hash_table->size() > 0;
 }
 
 } // namespace duckdb

@@ -31,6 +31,14 @@ static bool CanPlanIndexJoin(Transaction &transaction, TableScanBindData *bind_d
 	return true;
 }
 
+bool IsCandidateForPerfectHash(std::vector<std::unique_ptr<BaseStatistics>> &join_stats) {
+	if (join_stats.empty())
+		return false;
+	auto numeric_stats = reinterpret_cast<NumericStatistics *>(join_stats[0].get()); // lhs stats
+	auto join_keys_range = numeric_stats->max - numeric_stats->min;                  // Join Keys Range
+	return (join_keys_range < PERFECT_HASH_THRESHOLD);
+}
+
 void TransformIndexJoin(ClientContext &context, LogicalComparisonJoin &op, Index **left_index, Index **right_index,
                         PhysicalOperator *left, PhysicalOperator *right) {
 	auto &transaction = Transaction::GetTransaction(context);
@@ -115,17 +123,18 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 			                                      right_index, true, op.estimated_cardinality);
 		}
 		// equality join with small number of keys : possible perfect hash table optimization
-		bool has_small_build_side = false;
-		auto stats = reinterpret_cast<NumericStatistics *>(op.join_stats[0].get()); // lhs stats
-		auto join_keys_range = stats->max - stats->min;                             // Join Keys Range
-		if (join_keys_range < PERFECT_HASH_THRESHOLD) {
-			has_small_build_side = true;
+		PerfectHashJoinState join_state;
+		if (IsCandidateForPerfectHash(op.join_stats)) {
+			join_state.is_build_small = true;
+			auto numeric_stats = reinterpret_cast<NumericStatistics *>(op.join_stats[0].get());
+			join_state.minimum = numeric_stats->min;
+			join_state.maximum = numeric_stats->max;
 		}
 
 		// equality join: use hash join
 		plan = make_unique<PhysicalHashJoin>(op, move(left), move(right), move(op.conditions), op.join_type,
 		                                     op.left_projection_map, op.right_projection_map, move(op.delim_types),
-		                                     op.estimated_cardinality, has_small_build_side);
+		                                     op.estimated_cardinality, join_state);
 	} else {
 		D_ASSERT(!has_null_equal_conditions); // don't support this for anything but hash joins for now
 		if (op.conditions.size() == 1 && !has_inequality) {
