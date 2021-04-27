@@ -509,6 +509,139 @@ describe('prepare', function() {
             });
         });
 
+        describe('using aggregate functions', function() {
+            it("should aggregate string_agg(txt)", function (done) {
+                db.all("SELECT string_agg(txt, ',') as string_agg FROM foo WHERE num < 2", function (err, res) {
+                    assert.equal(res[0].string_agg, "String 0,String 1");
+                    done(err);
+                });
+            });
+
+            it("should aggregate min(flt)", function (done) {
+                db.all("SELECT min(flt) as min FROM foo WHERE flt > 0", function (err, res) {
+                    assert.equal(res[0].min, Math.PI);
+                    done(err);
+                });
+            });
+            it("should aggregate max(flt)", function (done) {
+                db.all("SELECT max(flt) as max FROM foo", function (err, res) {
+                    assert.equal(res[0].max, Math.PI * 999);
+                    done(err);
+                });
+            });
+            it("should aggregate avg(flt)", function (done) {
+                db.all("SELECT avg(flt) as avg FROM foo", function (err, res) {
+                    assert.equal(res[0].avg, 1569.2255304681016);
+                    done(err);
+                });
+            });
+            it("should aggregate first(flt)", function (done) {
+                db.all("SELECT first(flt) as first FROM foo WHERE flt > 0", function (err, res) {
+                    assert.equal(res[0].first, Math.PI);
+                    done(err);
+                });
+            });
+            it("should aggregate approx_count_distinct(flt)", function (done) {
+                db.all("SELECT approx_count_distinct(flt) as approx_count_distinct FROM foo", function (err, res) {
+                    assert.ok(res[0].approx_count_distinct >= 1000);
+                    done(err);
+                });
+            });
+            it("should aggregate sum(flt)", function (done) {
+                db.all("SELECT sum(flt) as sum FROM foo", function (err, res) {
+                    assert.equal(res[0].sum, 1569225.5304681016);
+                    done(err);
+                });
+            });
+
+
+            it("should aggregate min(num)", function (done) {
+                db.all("SELECT min(num) as min FROM foo WHERE num > 0", function (err, res) {
+                    assert.equal(res[0].min, 1);
+                    done(err);
+                });
+            });
+            it("should aggregate max(num)", function (done) {
+                db.all("SELECT max(num) as max FROM foo", function (err, res) {
+                    assert.equal(res[0].max, 999);
+                    done(err);
+                });
+            });
+            it("should aggregate count(num)", function (done) {
+                db.all("SELECT count(num) as count FROM foo", function (err, res) {
+                    assert.equal(res[0].count, 1000);
+                    done(err);
+                });
+            });
+            it("should aggregate avg(num)", function (done) {
+                db.all("SELECT avg(num) as avg FROM foo", function (err, res) {
+                    assert.equal(res[0].avg, 499.5);
+                    done(err);
+                });
+            });
+            it("should aggregate first(num)", function (done) {
+                db.all("SELECT first(num) as first FROM foo WHERE num > 0", function (err, res) {
+                    assert.equal(res[0].first, 1);
+                    done(err);
+                });
+            });
+            it("should aggregate approx_count_distinct(num)", function (done) {
+                db.all("SELECT approx_count_distinct(num) as approx_count_distinct FROM foo", function (err, res) {
+                    assert.ok(res[0].approx_count_distinct >= 1000);
+                    done(err);
+                });
+            });
+            it("should aggregate approx_quantile(num, 0.5)", function (done) {
+                db.all("SELECT approx_quantile(num, 0.5) as approx_quantile FROM foo", function (err, res) {
+                    assert.ok(res[0].approx_quantile >= 499);
+                    done(err);
+                });
+            });
+            it("should aggregate reservoir_quantile(num, 0.5, 10)", function (done) {
+                db.all("SELECT reservoir_quantile(num, 0.5, 10) as reservoir_quantile FROM foo", function (err, res) {
+                    assert.equal(res[0].reservoir_quantile, 4);
+                    done(err);
+                });
+            });
+            it("should aggregate var_samp(num)", function (done) {
+                db.all("SELECT var_samp(num) as var_samp FROM foo", function (err, res) {
+                    assert.equal(res[0].var_samp, 83416.66666666667);
+                    done(err);
+                });
+            });
+            it("should aggregate kurtosis(num)", function (done) {
+                db.all("SELECT kurtosis(num) as kurtosis FROM foo", function (err, res) {
+                    assert.equal(res[0].kurtosis, -1.1999999999999997);
+                    done(err);
+                });
+            });
+
+            it("should aggregate sum(num)", function (done) {
+                // Uncaught Error: Data type is not supported HUGEINT
+                db.all("SELECT sum(num) as sum FROM foo", function (err, res) {
+                    assert.equal(res[0].sum, 1);
+                    done(err);
+                });
+            });
+
+            it("should aggregate product(num)", function (done) {
+                // libc++abi.dylib: terminating with uncaught exception of type duckdb::OutOfRangeException: Out of Range Error: Invalid double value inf
+                db.all("SELECT product(num) as product FROM foo WHERE num > 0", function (err, res) {
+                    assert.equal(res[0].product, 1);
+                    done(err);
+                });
+            });
+
+            it("should aggregate product(flt)", function (done) {
+                db.all("SELECT product(flt) as product FROM foo WHERE flt > 0", function (err, res) {
+                    assert.equal(res[0].product, 1);
+                    done(err);
+                });
+            });
+
+
+        });
+
         after(function(done) { db.close(done); });
     });
 });
