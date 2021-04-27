@@ -364,6 +364,8 @@ public:
 	DUCKDB_API static const vector<LogicalType> NUMERIC;
 	//! A list of all INTEGRAL types
 	DUCKDB_API static const vector<LogicalType> INTEGRAL;
+	//! A list of all TEMPORAL types
+	DUCKDB_API static const vector<LogicalType> TEMPORAL;
 	//! A list of ALL SQL types
 	DUCKDB_API static const vector<LogicalType> ALL_TYPES;
 };
