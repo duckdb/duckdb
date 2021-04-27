@@ -10,12 +10,12 @@
 
 namespace duckdb {
 
-using parquet::format::ConvertedType;
-using parquet::format::Type;
+using duckdb_parquet::format::ConvertedType;
+using duckdb_parquet::format::Type;
 
 template <Value (*FUNC)(const_data_ptr_t input)>
 static unique_ptr<BaseStatistics> TemplatedGetNumericStats(const LogicalType &type,
-                                                           const parquet::format::Statistics &parquet_stats) {
+                                                           const duckdb_parquet::format::Statistics &parquet_stats) {
 	auto stats = make_unique<NumericStatistics>(type);
 
 	// for reasons unknown to science, Parquet defines *both* `min` and `min_value` as well as `max` and

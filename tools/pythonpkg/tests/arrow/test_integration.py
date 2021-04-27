@@ -4,8 +4,6 @@ import sys
 try:
     import pyarrow
     import pyarrow.parquet
-    import urllib.request
-
     can_run = True
 except:
     can_run = False

@@ -22,7 +22,7 @@
 
 #include <string>
 
-namespace apache {
+namespace duckdb_apache {
 namespace thrift {
 namespace protocol {
 
@@ -34,7 +34,7 @@ namespace protocol {
  * pipes etc.
  *
  */
-class TProtocolException : public apache::thrift::TException {
+class TProtocolException : public duckdb_apache::thrift::TException {
 public:
   /**
    * Error codes for the various types of exceptions.
@@ -49,15 +49,15 @@ public:
     DEPTH_LIMIT = 6
   };
 
-  TProtocolException() : apache::thrift::TException(), type_(UNKNOWN) {}
+  TProtocolException() : duckdb_apache::thrift::TException(), type_(UNKNOWN) {}
 
-  TProtocolException(TProtocolExceptionType type) : apache::thrift::TException(), type_(type) {}
+  TProtocolException(TProtocolExceptionType type) : duckdb_apache::thrift::TException(), type_(type) {}
 
   TProtocolException(const std::string& message)
-    : apache::thrift::TException(message), type_(UNKNOWN) {}
+    : duckdb_apache::thrift::TException(message), type_(UNKNOWN) {}
 
   TProtocolException(TProtocolExceptionType type, const std::string& message)
-    : apache::thrift::TException(message), type_(type) {}
+    : duckdb_apache::thrift::TException(message), type_(type) {}
 
   ~TProtocolException() noexcept override = default;
 
@@ -100,6 +100,6 @@ protected:
 };
 }
 }
-} // apache::thrift::protocol
+} // duckdb_apache::thrift::protocol
 
 #endif // #ifndef _THRIFT_PROTOCOL_TPROTOCOLEXCEPTION_H_

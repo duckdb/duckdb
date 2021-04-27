@@ -47,7 +47,7 @@
 
 #define THRIFT_UNUSED_VARIABLE(x) ((void)(x))
 
-namespace apache {
+namespace duckdb_apache {
 namespace thrift {
 
 class TEnumIterator
@@ -128,6 +128,6 @@ void profile_print_info();
 void profile_write_pprof(FILE* gen_calls_f, FILE* virtual_calls_f);
 #endif
 }
-} // apache::thrift
+} // duckdb_apache::thrift
 
 #endif // #ifndef _THRIFT_THRIFT_H_

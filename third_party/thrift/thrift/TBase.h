@@ -23,7 +23,7 @@
 #include "thrift/Thrift.h"
 #include "thrift/protocol/TProtocol.h"
 
-namespace apache {
+namespace duckdb_apache {
 namespace thrift {
 
 class TBase {
@@ -33,6 +33,6 @@ public:
   virtual uint32_t write(protocol::TProtocol* oprot) const = 0;
 };
 }
-} // apache::thrift
+} // duckdb_apache::thrift
 
 #endif // #ifndef _THRIFT_TBASE_H_

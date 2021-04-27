@@ -14,11 +14,11 @@
 
 namespace duckdb {
 
-using parquet::format::CompressionCodec;
-using parquet::format::ConvertedType;
-using parquet::format::Encoding;
-using parquet::format::PageType;
-using parquet::format::Type;
+using duckdb_parquet::format::CompressionCodec;
+using duckdb_parquet::format::ConvertedType;
+using duckdb_parquet::format::Encoding;
+using duckdb_parquet::format::PageType;
+using duckdb_parquet::format::Type;
 
 const uint32_t RleBpDecoder::BITPACK_MASKS[] = {
     0,       1,       3,        7,        15,       31,        63,        127,       255,        511,       1023,
