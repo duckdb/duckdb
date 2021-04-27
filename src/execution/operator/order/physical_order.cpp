@@ -146,8 +146,9 @@ public:
 		auto &task_scheduler = TaskScheduler::GetScheduler(context);
 		idx_t max_memory = buffer_manager.GetMaxMemory();
 		idx_t num_threads = task_scheduler.NumberOfThreads();
-		// should never use more than 60% of memory, divided over the threads
-		return size_in_bytes > (0.6 * max_memory / num_threads);
+		// memory usage per thread should scale with max mem / num threads
+		// we take 30% of the max memory, to be conservative
+		return size_in_bytes > (0.3 * max_memory / num_threads);
 	}
 
 	//! Sorting columns, and variable size sorting data (if any)
@@ -233,7 +234,7 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 
 	// init payload state
 	entry_size = 0;
-	idx_t validitymask_size = (orders.size() + 7) / 8;
+	idx_t validitymask_size = (types.size() + 7) / 8;
 	entry_size += validitymask_size;
 	all_constant = true;
 	idx_t var_columns = 0;
@@ -904,12 +905,7 @@ static void SortInMemory(BufferManager &buffer_manager, SortedBlock &cb, const S
 		idx_dataptr += sorting_state.entry_size;
 	}
 
-	bool all_constant = true;
-	for (idx_t i = 0; i < sorting_state.num_cols; i++) {
-		all_constant = all_constant && sorting_state.constant_size[i];
-	}
-
-	if (all_constant) {
+	if (sorting_state.all_constant) {
 		RadixSort(buffer_manager, dataptr, count, 0, sorting_state.comp_size, sorting_state);
 		return;
 	}
