@@ -154,7 +154,9 @@ void TaskScheduler::SetThreads(int32_t n) {
 	}
 	SetThreadsInternal(n);
 #else
-	throw NotImplementedException("DuckDB was compiled without threads! Setting threads is not allowed.");
+	if (n != 1) {
+		throw NotImplementedException("DuckDB was compiled without threads! Setting threads > 1 is not allowed.");
+	}
 #endif
 }
 
