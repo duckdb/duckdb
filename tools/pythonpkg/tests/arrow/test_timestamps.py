@@ -8,8 +8,8 @@ try:
 except:
     can_run = False
 
-class TestArrowReads(object):
-    def test_multiple_queries_same_relation(self, duckdb_cursor):
+class TestArrowTimestamps(object):
+    def test_timestamp_types(self, duckdb_cursor):
         if not can_run:
             return
         data = (pa.array([datetime.datetime.now()], type=pa.timestamp('ns')),pa.array([datetime.datetime.now()], type=pa.timestamp('us')),pa.array([datetime.datetime.now()], pa.timestamp('ms')),pa.array([datetime.datetime.now()], pa.timestamp('s')))
