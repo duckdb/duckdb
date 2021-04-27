@@ -242,7 +242,7 @@ interval_t Interval::GetDifference(timestamp_t timestamp_1, timestamp_t timestam
 	auto month_diff = month1 - month2;
 	auto day_diff = day1 - day2;
 
-	// and from time extract hours, minutes, seconds and miliseconds
+	// and from time extract hours, minutes, seconds and milliseconds
 	int32_t hour1, min1, sec1, micros1;
 	int32_t hour2, min2, sec2, micros2;
 	Time::Convert(time1, hour1, min1, sec1, micros1);

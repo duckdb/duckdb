@@ -18,6 +18,12 @@ LogicalType::LogicalType() : id_(LogicalTypeId::INVALID), width_(0), scale_(0), 
 LogicalType::LogicalType(LogicalTypeId id) : id_(id), width_(0), scale_(0), collation_(string()) {
 	physical_type_ = GetInternalType();
 }
+LogicalType::LogicalType(LogicalTypeId id, LogicalTimestampType timestamp_type)
+    : id_(id), width_(0), scale_(0), collation_(string()), timestamp_type_(timestamp_type) {
+	D_ASSERT(id == LogicalTypeId::TIMESTAMP);
+	physical_type_ = GetInternalType();
+}
+
 LogicalType::LogicalType(LogicalTypeId id, string collation)
     : id_(id), width_(0), scale_(0), collation_(move(collation)) {
 	physical_type_ = GetInternalType();
@@ -300,6 +306,20 @@ LogicalType LogicalType::Deserialize(Deserializer &source) {
 		children.push_back(make_pair(move(name), move(child_type)));
 	}
 	return LogicalType(id, width, scale, collation, move(children));
+}
+string LogicalTimestampTypeToString(LogicalTimestampType type) {
+	switch (type) {
+	case LogicalTimestampType::MILLI:
+		return "Milliseconds";
+	case LogicalTimestampType::NANO:
+		return "Nanoseconds";
+	case LogicalTimestampType::MICRO:
+		return "Microseconds";
+	case LogicalTimestampType::SECONDS:
+		return "Seconds";
+	default:
+		return "UNDEFINED";
+	}
 }
 
 string LogicalTypeIdToString(LogicalTypeId id) {

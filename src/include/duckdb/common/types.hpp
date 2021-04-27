@@ -265,9 +265,17 @@ enum class LogicalTypeId : uint8_t {
 	TABLE = 103
 };
 
+enum class LogicalTimestampType : uint8_t {
+    SECONDS=0, //! s
+    MILLI=1, //! ms
+    MICRO=2, //! us
+    NANO=3 //! ns
+};
+
 struct LogicalType {
 	DUCKDB_API LogicalType();
 	DUCKDB_API LogicalType(LogicalTypeId id); // NOLINT: Allow implicit conversion from `LogicalTypeId`
+	DUCKDB_API LogicalType(LogicalTypeId id, LogicalTimestampType timestamp_type);
 	DUCKDB_API LogicalType(LogicalTypeId id, string collation);
 	DUCKDB_API LogicalType(LogicalTypeId id, uint8_t width, uint8_t scale);
 	LogicalType(LogicalTypeId id, child_list_t<LogicalType> child_types);
@@ -276,6 +284,9 @@ struct LogicalType {
 
 	LogicalTypeId id() const {
 		return id_;
+	}
+	LogicalTimestampType GetTimestampType() const {
+		return timestamp_type_;
 	}
 	uint8_t width() const {
 		return width_;
@@ -323,7 +334,7 @@ private:
 	uint8_t width_;
 	uint8_t scale_;
 	string collation_;
-
+    LogicalTimestampType timestamp_type_ = LogicalTimestampType::MICRO;
 	child_list_t<LogicalType> child_types_;
 	PhysicalType physical_type_;
 
@@ -369,6 +380,8 @@ public:
 };
 
 string LogicalTypeIdToString(LogicalTypeId type);
+
+string LogicalTimestampTypeToString(LogicalTimestampType type);
 
 LogicalType TransformStringToLogicalType(const string &str);
 

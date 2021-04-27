@@ -296,7 +296,7 @@ void DataChunk::ToArrowArray(ArrowArray *out_array) {
 				child.buffers[1] = (void *)FlatVector::GetData(vector);
 				break;
 			case LogicalTypeId::TIME: {
-				// convert time from microseconds to miliseconds
+				// convert time from microseconds to milliseconds
 				child.n_buffers = 2;
 				child_holder.string_data = unique_ptr<data_t[]>(new data_t[sizeof(uint32_t) * (size() + 1)]);
 				child.buffers[1] = child_holder.string_data.get();
@@ -312,9 +312,36 @@ void DataChunk::ToArrowArray(ArrowArray *out_array) {
 				child.n_buffers = 2;
 				child.buffers[1] = (void *)FlatVector::GetData(vector);
 				auto target_ptr = (timestamp_t *)child.buffers[1];
-				for (idx_t row_idx = 0; row_idx < size(); row_idx++) {
-					target_ptr[row_idx] = Timestamp::GetEpochNanoSeconds(target_ptr[row_idx]);
+				switch (GetTypes()[col_idx].GetTimestampType()) {
+				case LogicalTimestampType::SECONDS: {
+					for (idx_t row_idx = 0; row_idx < size(); row_idx++) {
+						target_ptr[row_idx] = Timestamp::GetEpochSeconds(target_ptr[row_idx]);
+					}
+					break;
 				}
+				case LogicalTimestampType::MICRO: {
+					for (idx_t row_idx = 0; row_idx < size(); row_idx++) {
+						target_ptr[row_idx] = Timestamp::GetEpochMicroSeconds(target_ptr[row_idx]);
+					}
+					break;
+				}
+				case LogicalTimestampType::MILLI: {
+					for (idx_t row_idx = 0; row_idx < size(); row_idx++) {
+						target_ptr[row_idx] = Timestamp::GetEpochMs(target_ptr[row_idx]);
+					}
+					break;
+				}
+				case LogicalTimestampType::NANO: {
+					for (idx_t row_idx = 0; row_idx < size(); row_idx++) {
+						target_ptr[row_idx] = Timestamp::GetEpochNanoSeconds(target_ptr[row_idx]);
+					}
+					break;
+				}
+				default:
+					throw std::runtime_error("Unsupported Timestamp Type " +
+					                         LogicalTimestampTypeToString(GetTypes()[col_idx].GetTimestampType()));
+				}
+
 				break;
 			}
 
