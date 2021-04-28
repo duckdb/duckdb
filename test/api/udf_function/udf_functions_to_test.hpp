@@ -345,7 +345,7 @@ struct UDFAverageFunction {
 	template <class T, class STATE>
 	static void Finalize(Vector &result, FunctionData *bind_data, STATE *state, T *target, ValidityMask &mask,
 	                     idx_t idx) {
-		if (!Value::DoubleIsValid(state->sum)) {
+		if (!Value::DoubleIsValid(double(state->sum))) {
 			throw OutOfRangeException("AVG is out of range!");
 		} else if (state->count == 0) {
 			mask.SetInvalid(idx);
