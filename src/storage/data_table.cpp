@@ -128,65 +128,63 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_idx, const LogicalType &target_type,
                      vector<column_t> bound_columns, Expression &cast_expr)
     : info(parent.info), types(parent.types), db(parent.db), total_rows(parent.total_rows), is_root(true) {
-	throw NotImplementedException("FIXME: alter type");
-	// // prevent any new tuples from being added to the parent
-	// CreateIndexScanState scan_state;
-	// parent.InitializeCreateIndexScan(scan_state, bound_columns);
+	// prevent any tuples from being added to the parent
+	lock_guard<mutex> lock(append_lock);
 
-	// // first check if there are any indexes that exist that point to the changed column
-	// for (auto &index : info->indexes) {
-	// 	for (auto &column_id : index->column_ids) {
-	// 		if (column_id == changed_idx) {
-	// 			throw CatalogException("Cannot change the type of this column: an index depends on it!");
-	// 		}
-	// 	}
-	// }
-	// // change the type in this DataTable
-	// types[changed_idx] = target_type;
+	// first check if there are any indexes that exist that point to the changed column
+	for (auto &index : info->indexes) {
+		for (auto &column_id : index->column_ids) {
+			if (column_id == changed_idx) {
+				throw CatalogException("Cannot change the type of this column: an index depends on it!");
+			}
+		}
+	}
+	// change the type in this DataTable
+	types[changed_idx] = target_type;
 
-	// // construct a new column data for this type
-	// auto column_data = make_shared<StandardColumnData>(db, *info, target_type, changed_idx);
+	// set up the statistics for the table
+	// the column that had its type changed will have the new statistics computed during conversion
+	for(idx_t i = 0; i < types.size(); i++) {
+		if (i == changed_idx) {
+			column_stats.push_back(BaseStatistics::CreateEmpty(types[i]));
+		} else {
+			column_stats.push_back(parent.column_stats[i]->Copy());
+		}
+	}
 
-	// ColumnAppendState append_state;
-	// column_data->InitializeAppend(append_state);
+	// scan the original table, and fill the new column with the transformed value
+	auto &transaction = Transaction::GetTransaction(context);
 
-	// // scan the original table, and fill the new column with the transformed value
-	// auto &transaction = Transaction::GetTransaction(context);
+	vector<LogicalType> scan_types;
+	for (idx_t i = 0; i < bound_columns.size(); i++) {
+		if (bound_columns[i] == COLUMN_IDENTIFIER_ROW_ID) {
+			scan_types.push_back(LOGICAL_ROW_TYPE);
+		} else {
+			scan_types.push_back(parent.types[bound_columns[i]]);
+		}
+	}
+	DataChunk scan_chunk;
+	scan_chunk.Initialize(scan_types);
 
-	// vector<LogicalType> types;
-	// for (idx_t i = 0; i < bound_columns.size(); i++) {
-	// 	if (bound_columns[i] == COLUMN_IDENTIFIER_ROW_ID) {
-	// 		types.push_back(LOGICAL_ROW_TYPE);
-	// 	} else {
-	// 		types.push_back(parent.types[bound_columns[i]]);
-	// 	}
-	// }
+	ExpressionExecutor executor;
+	executor.AddExpression(cast_expr);
 
-	// DataChunk scan_chunk;
-	// scan_chunk.Initialize(types);
+	TableScanState scan_state;
+	scan_state.column_ids = move(bound_columns);
 
-	// ExpressionExecutor executor;
-	// executor.AddExpression(cast_expr);
+	// now alter the type of the column within all of the morsels individually
+	this->morsels = make_shared<SegmentTree>();
+	auto current_morsel = (Morsel *) parent.morsels->GetRootSegment();
+	while(current_morsel) {
+		auto new_morsel = current_morsel->AlterType(context, target_type, changed_idx, executor, scan_state, scan_chunk);
+		morsels->AppendSegment(move(new_morsel));
+		current_morsel = (Morsel *) current_morsel->next.get();
+	}
 
-	// Vector append_vector(target_type);
-	// while (true) {
-	// 	// scan the table
-	// 	scan_chunk.Reset();
-	// 	parent.CreateIndexScan(scan_state, bound_columns, scan_chunk);
-	// 	if (scan_chunk.size() == 0) {
-	// 		break;
-	// 	}
-	// 	// execute the expression
-	// 	executor.ExecuteExpression(scan_chunk, append_vector);
-	// 	column_data->Append(append_state, append_vector, scan_chunk.size());
-	// }
-	// // also add this column to client local storage
-	// transaction.storage.ChangeType(&parent, this, changed_idx, target_type, bound_columns, cast_expr);
+	transaction.storage.ChangeType(&parent, this, changed_idx, target_type, bound_columns, cast_expr);
 
-	// columns[changed_idx] = move(column_data);
-
-	// // this table replaces the previous table, hence the parent is no longer the root DataTable
-	// parent.is_root = false;
+	// this table replaces the previous table, hence the parent is no longer the root DataTable
+	parent.is_root = false;
 }
 
 //===--------------------------------------------------------------------===//
@@ -858,6 +856,10 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 	updates.Verify();
 	if (updates.size() == 0) {
 		return;
+	}
+
+	if (!is_root) {
+		throw TransactionException("Transaction conflict: cannot update a table that has been altered!");
 	}
 
 	// first verify that no constraints are violated

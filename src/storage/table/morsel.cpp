@@ -6,6 +6,7 @@
 #include "duckdb/storage/table/update_segment.hpp"
 #include "duckdb/common/chrono.hpp"
 #include "duckdb/planner/table_filter.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
 
@@ -24,7 +25,7 @@ void Morsel::InitializeEmpty(const vector<LogicalType> &types) {
 	// set up the segment trees for the column segments
 	for (idx_t i = 0; i < types.size(); i++) {
 		auto column_data = make_shared<StandardColumnData>(*this, types[i], i);
-		stats.emplace_back(types[i]);
+		stats.push_back(make_shared<SegmentStatistics>(types[i]));
 		columns.push_back(move(column_data));
 	}
 }
@@ -43,6 +44,50 @@ void Morsel::InitializeScan(MorselScanState &state) {
 			state.column_scans[i].current = nullptr;
 		}
 	}
+}
+
+unique_ptr<Morsel> Morsel::AlterType(ClientContext &context, const LogicalType &target_type, idx_t changed_idx, ExpressionExecutor &executor, TableScanState &scan_state, DataChunk &scan_chunk) {
+	// construct a new column data for this type
+	auto column_data = make_shared<StandardColumnData>(*this, target_type, changed_idx);
+
+	ColumnAppendState append_state;
+	column_data->InitializeAppend(append_state);
+
+	// scan the original table, and fill the new column with the transformed value
+	auto &transaction = Transaction::GetTransaction(context);
+
+	InitializeScan(scan_state.morsel_scan_state);
+
+	Vector append_vector(target_type);
+	auto altered_col_stats = make_shared<SegmentStatistics>(target_type);
+	while (true) {
+		// scan the table
+		scan_chunk.Reset();
+		Scan(transaction, scan_state.morsel_scan_state, scan_chunk);
+		if (scan_chunk.size() == 0) {
+			break;
+		}
+		// execute the expression
+		executor.ExecuteExpression(scan_chunk, append_vector);
+		column_data->Append(*altered_col_stats->statistics, append_state, append_vector, scan_chunk.size());
+	}
+
+	// set up the morsel based on this morsel
+	auto morsel = make_unique<Morsel>(db, table_info, this->start, this->count);
+	morsel->version_info = version_info;
+	morsel->updates = updates;
+	for(idx_t i = 0; i < columns.size(); i++) {
+		if (i == changed_idx) {
+			// this is the altered column: use the new column
+			morsel->columns.push_back(move(column_data));
+			morsel->stats.push_back(move(altered_col_stats));
+		} else {
+			// this column was not altered: use the data directly
+			morsel->columns.push_back(columns[i]);
+			morsel->stats.push_back(stats[i]);
+		}
+	}
+	return morsel;
 }
 
 void Morsel::Scan(Transaction &transaction, MorselScanState &state, DataChunk &result) {
@@ -246,7 +291,7 @@ void Morsel::InitializeAppend(Transaction &transaction, MorselAppendState &appen
 void Morsel::Append(MorselAppendState &state, DataChunk &chunk, idx_t append_count) {
 	// append to the current morsel
 	for (idx_t i = 0; i < columns.size(); i++) {
-		columns[i]->Append(*stats[i].statistics, state.states[i], chunk.data[i], append_count);
+		columns[i]->Append(*stats[i]->statistics, state.states[i], chunk.data[i], append_count);
 	}
 	state.offset_in_morsel += append_count;
 }
@@ -281,14 +326,14 @@ unique_ptr<BaseStatistics> Morsel::GetStatistics(idx_t column_idx) {
 	D_ASSERT(column_idx < stats.size());
 
 	lock_guard<mutex> slock(stats_lock);
-	return stats[column_idx].statistics->Copy();
+	return stats[column_idx]->statistics->Copy();
 }
 
 void Morsel::MergeStatistics(idx_t column_idx, BaseStatistics &other) {
 	D_ASSERT(column_idx < stats.size());
 
 	lock_guard<mutex> slock(stats_lock);
-	stats[column_idx].statistics->Merge(other);
+	stats[column_idx]->statistics->Merge(other);
 }
 
 class VersionDeleteState {

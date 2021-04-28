@@ -21,6 +21,7 @@ class ColumnData;
 class DatabaseInstance;
 class DataTable;
 struct DataTableInfo;
+class ExpressionExecutor;
 class UpdateSegment;
 class Vector;
 struct VersionNode;
@@ -51,12 +52,14 @@ private:
 	//! The update data of the morsel
 	vector<shared_ptr<UpdateSegment>> updates;
 	//! The segment statistics for each of the columns
-	vector<SegmentStatistics> stats;
+	vector<shared_ptr<SegmentStatistics>> stats;
 
 public:
 	DatabaseInstance &GetDatabase() {
 		return db;
 	}
+
+	unique_ptr<Morsel> AlterType(ClientContext &context, const LogicalType &target_type, idx_t changed_idx, ExpressionExecutor &executor, TableScanState &scan_state, DataChunk &scan_chunk);
 
 	void InitializeEmpty(const vector<LogicalType> &types);
 
