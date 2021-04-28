@@ -53,6 +53,18 @@ struct QuantileState {
 	data_ptr_t v;
 	idx_t len;
 	idx_t pos;
+
+	template <typename T>
+	void Resize(idx_t new_len) {
+		if (new_len <= len) {
+			return;
+		}
+		v = (data_ptr_t)realloc(v, new_len * sizeof(T));
+		if (!v) {
+			throw InternalException("Memory allocation failure");
+		}
+		len = new_len;
+	}
 };
 
 struct QuantileBindData : public FunctionData {
@@ -83,17 +95,6 @@ struct QuantileOperation {
 		state->pos = 0;
 	}
 
-	static void ResizeState(QuantileState *state, idx_t new_len) {
-		if (new_len <= state->len) {
-			return;
-		}
-		state->v = (data_ptr_t)realloc(state->v, new_len * sizeof(T));
-		if (!state->v) {
-			throw InternalException("Memory allocation failure");
-		}
-		state->len = new_len;
-	}
-
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask,
 	                              idx_t count) {
@@ -106,7 +107,7 @@ struct QuantileOperation {
 	static void Operation(STATE *state, FunctionData *bind_data_p, INPUT_TYPE *data, ValidityMask &mask, idx_t idx) {
 		if (state->pos == state->len) {
 			// growing conservatively here since we could be running this on many small groups
-			ResizeState(state, state->len == 0 ? 1 : state->len * 2);
+			state->template Resize<T>(state->len == 0 ? 1 : state->len * 2);
 		}
 		D_ASSERT(state->v);
 		((T *)state->v)[state->pos++] = data[idx];
@@ -117,7 +118,7 @@ struct QuantileOperation {
 		if (source.pos == 0) {
 			return;
 		}
-		ResizeState(target, target->pos + source.pos);
+		target->template Resize<T>(target->pos + source.pos);
 		memcpy(target->v + target->pos * sizeof(T), source.v, source.pos * sizeof(T));
 		target->pos += source.pos;
 	}
