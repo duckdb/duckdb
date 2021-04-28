@@ -72,6 +72,28 @@ NULL	NULL
 8	998
 9	999
 
+# temporal types
+query I
+SELECT quantile_disc('2021-01-01'::TIMESTAMP + interval (r) hour, 0.5) FROM quantile
+----
+2021-07-28 07:00:00
+
+query I
+SELECT quantile_disc('1990-01-01'::DATE + interval (r) day, 0.5) FROM quantile
+----
+2003-09-09
+
+query I
+SELECT quantile_disc('00:00:00'::TIME + interval (r) second, 0.5) FROM quantile
+----
+01:23:19
+
+query I
+SELECT quantile_disc(interval (r) second, 0.5) FROM quantile
+----
+01:23:19
+
+
 # constant input
 query I
 SELECT quantile_disc(1, 0.1) FROM quantile

@@ -9,6 +9,27 @@ PRAGMA enable_verification
 statement ok
 create table quantiles as select range r, random() FROM range(0,1000000,100) union all values (NULL, 0.25), (NULL, 0.5), (NULL, 0.75) order by 2;
 
+# temporal types
+query I
+SELECT quantile_cont('2021-01-01'::TIMESTAMP + interval (r/100) hour, LIST_VALUE(0.25, 0.5, 0.75)) FROM quantiles
+----
+[2021-04-15 03:45:00, 2021-07-28 07:30:00, 2021-11-09 11:15:00]
+
+query I
+SELECT quantile_cont('1990-01-01'::DATE + interval (r/100) day, LIST_VALUE(0.25, 0.5, 0.75)) FROM quantiles
+----
+[1996-11-04 18:00:00, 2003-09-09 12:00:00, 2010-07-14 06:00:00]
+
+query I
+SELECT quantile_cont('00:00:00'::TIME + interval (r/100) second, LIST_VALUE(0.25, 0.5, 0.75)) FROM quantiles
+----
+[00:41:39.75, 01:23:19.5, 02:04:59.25]
+
+statement error
+SELECT quantile_cont(interval (r/100) second, LIST_VALUE(0.25, 0.5, 0.75)) FROM quantiles
+----
+[00:16:39, 01:23:19, 02:29:59]
+
 # single GROUP
 query R
 SELECT quantile_cont(r, LIST_VALUE(0.25, 0.5, 0.75)) FROM quantiles
