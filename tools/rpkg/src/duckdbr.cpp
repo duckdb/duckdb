@@ -118,7 +118,7 @@ struct RDoubleType {
 
 struct RDateType : public RDoubleType {
 	static double Convert(double val) {
-		return (date_t)val;
+		return date_t((int32_t)val);
 	}
 };
 
@@ -129,37 +129,32 @@ struct RTimestampType : public RDoubleType {
 };
 
 struct RTimeSecondsType : public RDoubleType {
-	static timestamp_t Convert(double val) {
-		dtime_t time = (dtime_t)(val)*Interval::MICROS_PER_SEC;
-		return time;
+	static dtime_t Convert(double val) {
+		return dtime_t(int64_t(val * Interval::MICROS_PER_SEC));
 	}
 };
 
 struct RTimeMinutesType : public RDoubleType {
-	static timestamp_t Convert(double val) {
-		dtime_t time = (dtime_t)(val)*Interval::MICROS_PER_MINUTE;
-		return time;
+	static dtime_t Convert(double val) {
+		return dtime_t(int64_t(val * Interval::MICROS_PER_MINUTE));
 	}
 };
 
 struct RTimeHoursType : public RDoubleType {
-	static timestamp_t Convert(double val) {
-		dtime_t time = (dtime_t)(val)*Interval::MICROS_PER_HOUR;
-		return time;
+	static dtime_t Convert(double val) {
+		return dtime_t(int64_t(val * Interval::MICROS_PER_HOUR));
 	}
 };
 
 struct RTimeDaysType : public RDoubleType {
-	static timestamp_t Convert(double val) {
-		dtime_t time = (dtime_t)(val)*Interval::MICROS_PER_DAY;
-		return time;
+	static dtime_t Convert(double val) {
+		return dtime_t(int64_t(val * Interval::MICROS_PER_DAY));
 	}
 };
 
 struct RTimeWeeksType : public RDoubleType {
-	static timestamp_t Convert(double val) {
-		dtime_t time = (dtime_t)(val)*Interval::MICROS_PER_DAY * 7;
-		return time;
+	static dtime_t Convert(double val) {
+		return dtime_t(int64_t(val * Interval::MICROS_PER_DAY * 7));
 	}
 };
 
