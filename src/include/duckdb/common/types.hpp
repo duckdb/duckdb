@@ -68,9 +68,11 @@ struct dtime_t {
 
 	// arithmetic operators
 	inline dtime_t operator+(const int64_t &micros) const {return dtime_t(this->micros + micros);};
+	inline dtime_t operator+(const double &micros) const {return dtime_t(this->micros + int64_t(micros));};
 	inline dtime_t operator-(const int64_t &micros) const {return dtime_t(this->micros - micros);};
 	inline dtime_t operator*(const idx_t &copies) const {return dtime_t(this->micros * copies);};
 	inline dtime_t operator/(const idx_t &copies) const {return dtime_t(this->micros / copies);};
+	inline int64_t operator-(const dtime_t &other) const {return this->micros - other.micros;};
 
 	// in-place operators
 	inline dtime_t &operator+=(const int64_t &micros) {this->micros += micros; return *this;};
@@ -96,6 +98,10 @@ struct timestamp_t {
 	inline bool operator<(const timestamp_t &rhs) const {return micros < rhs.micros;};
 	inline bool operator>(const timestamp_t &rhs) const {return micros > rhs.micros;};
 	inline bool operator>=(const timestamp_t &rhs) const {return micros >= rhs.micros;};
+
+	// arithmetic operators
+	inline timestamp_t operator+(const double &micros) const {return timestamp_t(this->micros + int64_t(micros));};
+	inline int64_t operator-(const timestamp_t &other) const {return this->micros - other.micros;};
 
 	// in-place operators
 	inline timestamp_t &operator+=(const int64_t &micros) {this->micros += micros; return *this;};
