@@ -114,6 +114,7 @@ enum class ExpressionType : uint8_t {
 	ARRAY_EXTRACT = 153,
 	ARRAY_SLICE = 154,
 	STRUCT_EXTRACT = 155,
+	ARRAY_CONSTRUCTOR = 156,
 
 	// -----------------------------
 	// Subquery IN/EXISTS
