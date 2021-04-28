@@ -511,10 +511,10 @@ void DataTable::Append(Transaction &transaction, DataChunk &chunk, TableAppendSt
 
 	idx_t remaining = chunk.size();
 	while(true) {
+		auto current_morsel = state.morsel_append_state.morsel;
 		// check how much we can fit into the current morsel
 		idx_t append_count = MinValue<idx_t>(remaining, Morsel::MORSEL_SIZE - state.morsel_append_state.offset_in_morsel);
 		if (append_count > 0) {
-			auto current_morsel = state.morsel_append_state.morsel;
 			current_morsel->Append(state.morsel_append_state, chunk, append_count);
 			// merge the stats
 			for (idx_t i = 0; i < types.size(); i++) {
@@ -524,9 +524,22 @@ void DataTable::Append(Transaction &transaction, DataChunk &chunk, TableAppendSt
 		state.remaining_append_count -= append_count;
 		remaining -= append_count;
 		if (remaining > 0) {
-			throw NotImplementedException("FIXME: overflow into morsel");
-			// chunk.Slice();
-			//AppendMorsel(...);
+			// we expect max 1 iteration of this loop (i.e. a single chunk should never overflow more than one morsel)
+			D_ASSERT(chunk.size() == remaining + append_count);
+			// slice the input chunk
+			if (remaining < chunk.size()) {
+				SelectionVector sel(STANDARD_VECTOR_SIZE);
+				for(idx_t i = 0; i < remaining; i++) {
+					sel.set_index(i, append_count + i);
+				}
+				chunk.Slice(sel, remaining);
+			}
+			// append a new morsel
+			AppendMorsel(current_morsel->start + current_morsel->count);
+			// set up the append state for this morsel
+			lock_guard<mutex> morsel_lock(morsels->node_lock);
+			auto last_morsel = (Morsel *) morsels->GetLastSegment();
+			last_morsel->InitializeAppend(transaction, state.morsel_append_state, state.remaining_append_count);
 			continue;
 		} else {
 			break;

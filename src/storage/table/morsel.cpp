@@ -81,7 +81,7 @@ void Morsel::Scan(Transaction &transaction, MorselScanState &state, DataChunk &r
 			if (column == COLUMN_IDENTIFIER_ROW_ID) {
 				// scan row id
 				D_ASSERT(result.data[i].GetType().InternalType() == ROW_TYPE);
-				result.data[i].Sequence(current_row, 1);
+				result.data[i].Sequence(this->start + current_row, 1);
 			} else {
 				columns[column]->Scan(state.column_scans[i], result.data[i]);
 				if (!updates.empty() && updates[column]) {
@@ -256,6 +256,11 @@ void Morsel::Update(Transaction &transaction, DataChunk &update_chunk, Vector &r
 		updates.resize(columns.size());
 	}
 	auto ids = FlatVector::GetData<row_t>(row_ids);
+#ifdef DEBUG
+	for(size_t i = 0; i < update_chunk.size(); i++) {
+		D_ASSERT(ids[i] >= row_t(this->start) && ids[i] < row_t(this->start + this->count));
+	}
+#endif
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto column = column_ids[i];
 		D_ASSERT(column != COLUMN_IDENTIFIER_ROW_ID);

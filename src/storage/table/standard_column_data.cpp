@@ -35,7 +35,7 @@ bool StandardColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filte
 void StandardColumnData::InitializeScan(ColumnScanState &state) {
 	// initialize the current segment
 	state.current = (ColumnSegment *)data.GetRootSegment();
-	state.row_index = 0;
+	state.row_index = state.current ? state.current->start : 0;
 	state.initialized = false;
 
 	// initialize the validity segment

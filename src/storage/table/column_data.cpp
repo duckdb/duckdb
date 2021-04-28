@@ -116,7 +116,7 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 	lock_guard<mutex> tree_lock(data.node_lock);
 	if (data.nodes.empty()) {
 		// no segments yet, append an empty segment
-		AppendTransientSegment(0);
+		AppendTransientSegment(morsel.start);
 	}
 	auto segment = (ColumnSegment *)data.GetLastSegment();
 	if (segment->segment_type == ColumnSegmentType::PERSISTENT) {
