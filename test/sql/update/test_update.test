@@ -17,6 +17,11 @@ SELECT * FROM test
 ----
 3
 
+query I con1
+SELECT * FROM test WHERE a=3
+----
+3
+
 # test simple update
 statement ok con1
 BEGIN TRANSACTION
@@ -30,8 +35,18 @@ SELECT * FROM test
 ----
 1
 
+query I con1
+SELECT * FROM test WHERE a=1
+----
+1
+
 query I con2
 SELECT * FROM test
+----
+3
+
+query I con2
+SELECT * FROM test WHERE a=3
 ----
 3
 
@@ -72,6 +87,11 @@ ROLLBACK
 
 query I con1
 SELECT * FROM test
+----
+1
+
+query I con1
+SELECT * FROM test WHERE a=1
 ----
 1
 

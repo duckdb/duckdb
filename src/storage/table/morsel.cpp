@@ -4,6 +4,8 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
+#include "duckdb/common/chrono.hpp"
+#include "duckdb/planner/table_filter.hpp"
 
 namespace duckdb {
 
@@ -18,6 +20,14 @@ Morsel::Morsel(DatabaseInstance &db, DataTableInfo &table_info, idx_t start, idx
 
 Morsel::~Morsel() {}
 
+void Morsel::InitializeEmpty(const vector<LogicalType> &types) {
+	// set up the segment trees for the column segments
+	for (idx_t i = 0; i < types.size(); i++) {
+		auto column_data = make_shared<StandardColumnData>(*this, types[i], i);
+		stats.emplace_back(types[i]);
+		columns.push_back(move(column_data));
+	}
+}
 
 void Morsel::InitializeScan(MorselScanState &state) {
 	auto &column_ids = state.parent.column_ids;
@@ -65,24 +75,22 @@ void Morsel::Scan(Transaction &transaction, MorselScanState &state, DataChunk &r
 			continue;
 		}
 		idx_t approved_tuple_count = count;
-		if (count == max_count && !table_filters) {
-			//! If we don't have any deleted tuples or filters we can just run a regular scan
-			for (idx_t i = 0; i < column_ids.size(); i++) {
-				auto column = column_ids[i];
-				if (column == COLUMN_IDENTIFIER_ROW_ID) {
-					// scan row id
-					D_ASSERT(result.data[i].GetType().InternalType() == ROW_TYPE);
-					result.data[i].Sequence(current_row, 1);
-				} else {
-					columns[column]->Scan(state.column_scans[i], result.data[i]);
-					if (!updates.empty() && updates[column]) {
-						updates[column]->FetchUpdates(transaction, state.vector_index, result.data[i]);
-					}
+
+		for (idx_t i = 0; i < column_ids.size(); i++) {
+			auto column = column_ids[i];
+			if (column == COLUMN_IDENTIFIER_ROW_ID) {
+				// scan row id
+				D_ASSERT(result.data[i].GetType().InternalType() == ROW_TYPE);
+				result.data[i].Sequence(current_row, 1);
+			} else {
+				columns[column]->Scan(state.column_scans[i], result.data[i]);
+				if (!updates.empty() && updates[column]) {
+					updates[column]->FetchUpdates(transaction, state.vector_index, result.data[i]);
 				}
 			}
-		} else {
+		}
+		if (table_filters) {
 			SelectionVector sel;
-
 			if (count != max_count) {
 				sel.Initialize(valid_sel);
 			} else {
@@ -91,38 +99,11 @@ void Morsel::Scan(Transaction &transaction, MorselScanState &state, DataChunk &r
 			//! First, we scan the columns with filters, fetch their data and generate a selection vector.
 			//! get runtime statistics
 			auto start_time = high_resolution_clock::now();
-			if (table_filters) {
-				for (idx_t i = 0; i < table_filters->filters.size(); i++) {
-					auto tf_idx = adaptive_filter->permutation[i];
-					auto col_idx = column_ids[tf_idx];
-					columns[col_idx]->Select(state.column_scans[tf_idx], result.data[tf_idx], sel,
-											approved_tuple_count, table_filters->filters[tf_idx]);
-				}
-				for (auto &table_filter : table_filters->filters) {
-					result.data[table_filter.first].Slice(sel, approved_tuple_count);
-				}
-			}
-			if (approved_tuple_count == 0) {
-				result.Reset();
-				state.vector_index++;
-				continue;
-			}
-
-			//! Now we use the selection vector to fetch data for the other columns.
-			for (idx_t i = 0; i < column_ids.size(); i++) {
-				if (!table_filters || table_filters->filters.find(i) == table_filters->filters.end()) {
-					auto column = column_ids[i];
-					if (column == COLUMN_IDENTIFIER_ROW_ID) {
-						D_ASSERT(result.data[i].GetType().InternalType() == PhysicalType::INT64);
-						result.data[i].SetVectorType(VectorType::FLAT_VECTOR);
-						auto result_data = (int64_t *)FlatVector::GetData(result.data[i]);
-						for (size_t sel_idx = 0; sel_idx < approved_tuple_count; sel_idx++) {
-							result_data[sel_idx] = current_row + sel.get_index(sel_idx);
-						}
-					} else {
-						columns[column]->FilterScan(state.column_scans[i], result.data[i], sel,
-													approved_tuple_count);
-					}
+			for (idx_t i = 0; i < table_filters->filters.size(); i++) {
+				auto tf_idx = adaptive_filter->permutation[i];
+				auto col_idx = column_ids[tf_idx];
+				for(auto &filter : table_filters->filters[tf_idx]) {
+					UncompressedSegment::FilterSelection(sel, result.data[col_idx], filter, approved_tuple_count, FlatVector::Validity(result.data[col_idx]));
 				}
 			}
 			auto end_time = high_resolution_clock::now();
@@ -130,6 +111,17 @@ void Morsel::Scan(Transaction &transaction, MorselScanState &state, DataChunk &r
 				adaptive_filter->AdaptRuntimeStatistics(
 					duration_cast<duration<double>>(end_time - start_time).count());
 			}
+
+			if (approved_tuple_count == 0) {
+				result.Reset();
+				state.vector_index++;
+				continue;
+			}
+			if (approved_tuple_count != max_count) {
+				result.Slice(sel, approved_tuple_count);
+			}
+		} else if (count != max_count) {
+			result.Slice(valid_sel, count);
 		}
 		D_ASSERT(approved_tuple_count > 0);
 		result.SetCardinality(approved_tuple_count);
@@ -254,7 +246,7 @@ void Morsel::InitializeAppend(Transaction &transaction, MorselAppendState &appen
 void Morsel::Append(MorselAppendState &state, DataChunk &chunk, idx_t append_count) {
 	// append to the current morsel
 	for (idx_t i = 0; i < columns.size(); i++) {
-		columns[i]->Append(state.states[i], chunk.data[i], append_count);
+		columns[i]->Append(*stats[i].statistics, state.states[i], chunk.data[i], append_count);
 	}
 	state.offset_in_morsel += append_count;
 }
@@ -276,7 +268,22 @@ void Morsel::Update(Transaction &transaction, DataChunk &update_chunk, Vector &r
 		ColumnScanState state;
 		columns[column]->Fetch(state, ids[0], base_vector);
 		updates[column]->Update(transaction, update_chunk.data[i], ids, update_chunk.size(), base_vector);
+		MergeStatistics(column, *updates[column]->GetStatistics().statistics);
 	}
+}
+
+unique_ptr<BaseStatistics> Morsel::GetStatistics(idx_t column_idx) {
+	D_ASSERT(column_idx < stats.size());
+
+	lock_guard<mutex> slock(stats_lock);
+	return stats[column_idx].statistics->Copy();
+}
+
+void Morsel::MergeStatistics(idx_t column_idx, BaseStatistics &other) {
+	D_ASSERT(column_idx < stats.size());
+
+	lock_guard<mutex> slock(stats_lock);
+	stats[column_idx].statistics->Merge(other);
 }
 
 class VersionDeleteState {

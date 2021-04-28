@@ -23,13 +23,12 @@ namespace duckdb {
 
 ColumnData::ColumnData(Morsel &morsel, LogicalType type, idx_t column_idx, ColumnData *parent)
     : morsel(morsel), type(move(type)), column_idx(column_idx), parent(parent) {
-	statistics = BaseStatistics::CreateEmpty(type);
 }
 
 ColumnData::~ColumnData() {}
 
 DatabaseInstance &ColumnData::GetDatabase() const {
-	return morsel.db;
+	return morsel.GetDatabase();
 }
 
 const LogicalType &ColumnData::RootType() const {
@@ -107,10 +106,10 @@ void TableScanState::NextVector() {
 	// }
 }
 
-void ColumnData::Append(ColumnAppendState &state, Vector &vector, idx_t count) {
+void ColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count) {
 	VectorData vdata;
 	vector.Orrify(count, vdata);
-	AppendData(state, vdata, count);
+	AppendData(stats, state, vdata, count);
 }
 
 void ColumnData::InitializeAppend(ColumnAppendState &state) {
@@ -133,12 +132,12 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 	state.current->InitializeAppend(state);
 }
 
-void ColumnData::AppendData(ColumnAppendState &state, VectorData &vdata, idx_t count) {
+void ColumnData::AppendData(BaseStatistics &stats, ColumnAppendState &state, VectorData &vdata, idx_t count) {
 	idx_t offset = 0;
 	while (true) {
 		// append the data from the vector
 		idx_t copied_elements = state.current->Append(state, vdata, offset, count);
-		MergeStatistics(*state.current->stats.statistics);
+		stats.Merge(*state.current->stats.statistics);
 		if (copied_elements == count) {
 			// finished copying everything
 			break;
@@ -197,21 +196,6 @@ void ColumnData::AppendTransientSegment(idx_t start_row) {
 	data.AppendSegment(move(new_segment));
 }
 
-void ColumnData::SetStatistics(unique_ptr<BaseStatistics> new_stats) {
-	lock_guard<mutex> slock(stats_lock);
-	this->statistics = move(new_stats);
-}
-
-void ColumnData::MergeStatistics(BaseStatistics &other) {
-	lock_guard<mutex> slock(stats_lock);
-	statistics->Merge(other);
-}
-
-unique_ptr<BaseStatistics> ColumnData::GetStatistics() {
-	lock_guard<mutex> slock(stats_lock);
-	return statistics->Copy();
-}
-
 void ColumnData::CommitDropColumn() {
 	auto &block_manager = BlockManager::GetBlockManager(GetDatabase());
 	auto segment = (ColumnSegment *)data.GetRootSegment();
@@ -246,7 +230,7 @@ void ColumnCheckpointState::CreateEmptySegment() {
 	} else {
 		current_segment = make_unique<NumericSegment>(column_data.GetDatabase(), type_id, 0);
 	}
-	segment_stats = make_unique<SegmentStatistics>(column_data.type, GetTypeIdSize(type_id));
+	segment_stats = make_unique<SegmentStatistics>(column_data.type);
 }
 
 void ColumnCheckpointState::AppendData(Vector &data, idx_t count) {
@@ -425,9 +409,6 @@ void ColumnData::Checkpoint(TableDataWriter &writer) {
 }
 
 void ColumnData::Initialize(PersistentColumnData &column_data) {
-	// set up statistics
-	SetStatistics(move(column_data.stats));
-
 	// load persistent segments
 	idx_t segment_rows = 0;
 	for (auto &segment : column_data.segments) {

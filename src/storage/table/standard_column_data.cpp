@@ -78,10 +78,10 @@ void StandardColumnData::InitializeAppend(ColumnAppendState &state) {
 	state.child_appends.push_back(move(child_append));
 }
 
-void StandardColumnData::AppendData(ColumnAppendState &state, VectorData &vdata, idx_t count) {
-	ColumnData::AppendData(state, vdata, count);
+void StandardColumnData::AppendData(BaseStatistics &stats, ColumnAppendState &state, VectorData &vdata, idx_t count) {
+	ColumnData::AppendData(stats, state, vdata, count);
 
-	validity.AppendData(state.child_appends[0], vdata, count);
+	validity.AppendData(*stats.validity_stats, state.child_appends[0], vdata, count);
 }
 
 void StandardColumnData::RevertAppend(row_t start_row) {
@@ -108,12 +108,6 @@ void StandardColumnData::FetchRow(ColumnFetchState &state, row_t row_id, Vector 
 	}
 	validity.FetchRow(*state.child_states[0], row_id, result, result_idx);
 	ColumnData::FetchRow(state, row_id, result, result_idx);
-}
-
-unique_ptr<BaseStatistics> StandardColumnData::GetStatistics() {
-	auto base_stats = ColumnData::GetStatistics();
-	base_stats->validity_stats = validity.GetStatistics();
-	return base_stats;
 }
 
 void StandardColumnData::CommitDropColumn() {

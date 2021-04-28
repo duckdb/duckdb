@@ -36,29 +36,30 @@ void TableDataWriter::WriteTableData() {
 void TableDataWriter::CheckpointDeletes(Morsel *morsel_info) {
 	// deletes! write them after the data pointers
 	while (morsel_info) {
-		if (morsel_info->version_info) {
-			// first count how many ChunkInfo's we need to deserialize
-			idx_t chunk_info_count = 0;
-			for (idx_t vector_idx = 0; vector_idx < Morsel::MORSEL_VECTOR_COUNT; vector_idx++) {
-				auto chunk_info = morsel_info->version_info->info[vector_idx].get();
-				if (!chunk_info) {
-					continue;
-				}
-				chunk_info_count++;
-			}
-			meta_writer.Write<idx_t>(chunk_info_count);
-			for (idx_t vector_idx = 0; vector_idx < Morsel::MORSEL_VECTOR_COUNT; vector_idx++) {
-				auto chunk_info = morsel_info->version_info->info[vector_idx].get();
-				if (!chunk_info) {
-					continue;
-				}
-				meta_writer.Write<idx_t>(vector_idx);
-				chunk_info->Serialize(meta_writer);
-			}
-		} else {
-			meta_writer.Write<idx_t>(0);
-		}
-		morsel_info = (Morsel *)morsel_info->next.get();
+		throw NotImplementedException("FIXME: checkpoint deletes");
+		// if (morsel_info->version_info) {
+		// 	// first count how many ChunkInfo's we need to deserialize
+		// 	idx_t chunk_info_count = 0;
+		// 	for (idx_t vector_idx = 0; vector_idx < Morsel::MORSEL_VECTOR_COUNT; vector_idx++) {
+		// 		auto chunk_info = morsel_info->version_info->info[vector_idx].get();
+		// 		if (!chunk_info) {
+		// 			continue;
+		// 		}
+		// 		chunk_info_count++;
+		// 	}
+		// 	meta_writer.Write<idx_t>(chunk_info_count);
+		// 	for (idx_t vector_idx = 0; vector_idx < Morsel::MORSEL_VECTOR_COUNT; vector_idx++) {
+		// 		auto chunk_info = morsel_info->version_info->info[vector_idx].get();
+		// 		if (!chunk_info) {
+		// 			continue;
+		// 		}
+		// 		meta_writer.Write<idx_t>(vector_idx);
+		// 		chunk_info->Serialize(meta_writer);
+		// 	}
+		// } else {
+		// 	meta_writer.Write<idx_t>(0);
+		// }
+		// morsel_info = (Morsel *)morsel_info->next.get();
 	}
 }
 

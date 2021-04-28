@@ -87,8 +87,8 @@ public:
 	//! Initialize an appending phase for this column
 	virtual void InitializeAppend(ColumnAppendState &state);
 	//! Append a vector of type [type] to the end of the column
-	void Append(ColumnAppendState &state, Vector &vector, idx_t count);
-	virtual void AppendData(ColumnAppendState &state, VectorData &vdata, idx_t count);
+	void Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count);
+	virtual void AppendData(BaseStatistics &stats, ColumnAppendState &state, VectorData &vdata, idx_t count);
 	//! Revert a set of appends to the ColumnData
 	virtual void RevertAppend(row_t start_row);
 
@@ -96,10 +96,6 @@ public:
 	virtual void Fetch(ColumnScanState &state, row_t row_id, Vector &result);
 	//! Fetch a specific row id and append it to the vector
 	virtual void FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx);
-
-	void SetStatistics(unique_ptr<BaseStatistics> new_stats);
-	void MergeStatistics(BaseStatistics &other);
-	virtual unique_ptr<BaseStatistics> GetStatistics();
 
 	virtual void CommitDropColumn();
 
@@ -118,11 +114,8 @@ protected:
 	void AppendTransientSegment(idx_t start_row);
 
 protected:
-	mutex stats_lock;
 	//! The segments holding the data of this column segment
 	SegmentTree data;
-	//! The statistics of the column
-	unique_ptr<BaseStatistics> statistics;
 };
 
 } // namespace duckdb

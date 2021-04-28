@@ -4,6 +4,7 @@
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/storage/statistics/string_statistics.hpp"
+#include "duckdb/storage/statistics/validity_statistics.hpp"
 
 namespace duckdb {
 
@@ -18,7 +19,7 @@ static UpdateSegment::fetch_row_function_t GetFetchRowFunction(PhysicalType type
 
 UpdateSegment::UpdateSegment(Morsel &morsel, ColumnData &column_data)
     : morsel(morsel), column_data(column_data),
-      stats(column_data.type, GetTypeIdSize(column_data.type.InternalType())) {
+      stats(column_data.type) {
 	auto physical_type = column_data.type.InternalType();
 
 	this->type_size = GetTypeIdSize(physical_type);
@@ -723,8 +724,8 @@ void TemplatedUpdateNumericStatistics(UpdateSegment *segment, SegmentStatistics 
 			if (mask.RowIsValid(i)) {
 				NumericStatistics::Update<T>(stats, update_data[i]);
 			} else {
-				throw NotImplementedException("FIXME: update stats to include null");
-				// stats.statistics->has_null = true;
+				auto &validity_stats = (ValidityStatistics &) *stats.statistics->validity_stats;
+				validity_stats.has_null = true;
 			}
 		}
 	}
@@ -748,8 +749,8 @@ void UpdateStringStatistics(UpdateSegment *segment, SegmentStatistics &stats, Ve
 					update_data[i] = segment->GetStringHeap().AddString(update_data[i]);
 				}
 			} else {
-				throw NotImplementedException("FIXME: update stats to include null");
-				// stats.statistics->has_null = true;
+				auto &validity_stats = (ValidityStatistics &) *stats.statistics->validity_stats;
+				validity_stats.has_null = true;
 			}
 		}
 	}
@@ -893,7 +894,6 @@ void UpdateSegment::Update(Transaction &transaction, Vector &update, row_t *ids,
 
 		root->info[vector_index] = move(result);
 	}
-	column_data.MergeStatistics(*GetStatistics().statistics);
 }
 
 bool UpdateSegment::HasUpdates() const {

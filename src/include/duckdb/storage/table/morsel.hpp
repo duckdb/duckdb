@@ -13,6 +13,7 @@
 #include "duckdb/storage/table/chunk_info.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/storage/statistics/segment_statistics.hpp"
 #include "duckdb/common/mutex.hpp"
 
 namespace duckdb {
@@ -26,6 +27,8 @@ struct VersionNode;
 
 class Morsel : public SegmentBase {
 public:
+	friend class VersionDeleteState;
+public:
 	static constexpr const idx_t MORSEL_VECTOR_COUNT = 100;
 	static constexpr const idx_t MORSEL_SIZE = STANDARD_VECTOR_SIZE * MORSEL_VECTOR_COUNT;
 
@@ -36,6 +39,7 @@ public:
 	Morsel(DatabaseInstance &db, DataTableInfo &table_info, idx_t start, idx_t count);
 	~Morsel();
 
+private:
 	//! The database instance
 	DatabaseInstance &db;
 	//! The table info of this morsel
@@ -46,8 +50,16 @@ public:
 	vector<shared_ptr<ColumnData>> columns;
 	//! The update data of the morsel
 	vector<shared_ptr<UpdateSegment>> updates;
+	//! The segment statistics for each of the columns
+	vector<SegmentStatistics> stats;
 
 public:
+	DatabaseInstance &GetDatabase() {
+		return db;
+	}
+
+	void InitializeEmpty(const vector<LogicalType> &types);
+
 	//! Initialize a scan over this morsel
 	void InitializeScan(MorselScanState &state);
 	void Scan(Transaction &transaction, MorselScanState &state, DataChunk &result);
@@ -72,11 +84,14 @@ public:
 
 	void Update(Transaction &transaction, DataChunk &updates, Vector &row_ids, const vector<column_t> &column_ids);
 
+	void MergeStatistics(idx_t column_idx, BaseStatistics &other);
+	unique_ptr<BaseStatistics> GetStatistics(idx_t column_idx);
 private:
 	ChunkInfo *GetChunkInfo(idx_t vector_idx);
 
 private:
 	mutex morsel_lock;
+	mutex stats_lock;
 };
 
 struct VersionNode {

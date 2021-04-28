@@ -54,11 +54,7 @@ DataTable::DataTable(DatabaseInstance &db, const string &schema, const string &t
 
 void DataTable::AppendMorsel(idx_t start_row) {
 	auto new_morsel = make_unique<Morsel>(db, *info, start_row, 0);
-	// set up the segment trees for the column segments
-	for (idx_t i = 0; i < types.size(); i++) {
-		auto column_data = make_shared<StandardColumnData>(*new_morsel, types[i], i);
-		new_morsel->columns.push_back(move(column_data));
-	}
+	new_morsel->InitializeEmpty(types);
 	morsels->AppendSegment(move(new_morsel));
 }
 
@@ -522,7 +518,7 @@ void DataTable::Append(Transaction &transaction, DataChunk &chunk, TableAppendSt
 			current_morsel->Append(state.morsel_append_state, chunk, append_count);
 			// merge the stats
 			for (idx_t i = 0; i < types.size(); i++) {
-				column_stats[i]->Merge(*current_morsel->columns[i]->GetStatistics());
+				column_stats[i]->Merge(*current_morsel->GetStatistics(i));
 			}
 		}
 		state.remaining_append_count -= append_count;
@@ -868,6 +864,10 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 	// find the morsel this id belongs to
 	auto morsel = (Morsel *) morsels->GetSegment(first_id);
 	morsel->Update(transaction, updates, row_ids, column_ids);
+	for (idx_t i = 0; i < column_ids.size(); i++) {
+		auto column_id = column_ids[i];
+		column_stats[column_id]->Merge(*morsel->GetStatistics(column_id));
+	}
 }
 
 //===--------------------------------------------------------------------===//
