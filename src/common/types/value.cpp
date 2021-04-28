@@ -523,6 +523,11 @@ Value Value::CreateValue(double value) {
 }
 
 template <>
+Value Value::CreateValue(interval_t value) {
+	return Value::INTERVAL(value);
+}
+
+template <>
 Value Value::CreateValue(Value value) {
 	return value;
 }

@@ -282,6 +282,8 @@ Value DUCKDB_API Value::CreateValue(float value);
 template <>
 Value DUCKDB_API Value::CreateValue(double value);
 template <>
+Value DUCKDB_API Value::CreateValue(interval_t value);
+template <>
 Value DUCKDB_API Value::CreateValue(Value value);
 
 template <>
