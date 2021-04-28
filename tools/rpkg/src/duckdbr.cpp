@@ -117,7 +117,7 @@ struct RDoubleType {
 };
 
 struct RDateType : public RDoubleType {
-	static double Convert(double val) {
+	static date_t Convert(double val) {
 		return date_t((int32_t)val);
 	}
 };
@@ -753,7 +753,7 @@ SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 				auto &mask = FlatVector::Validity(src_vec);
 				double *dest_ptr = ((double *)NUMERIC_POINTER(dest)) + dest_offset;
 				for (size_t row_idx = 0; row_idx < chunk->size(); row_idx++) {
-					dest_ptr[row_idx] = !mask.RowIsValid(row_idx) ? NA_REAL : (double)(src_data[row_idx]);
+					dest_ptr[row_idx] = !mask.RowIsValid(row_idx) ? NA_REAL : (double)int32_t(src_data[row_idx]);
 				}
 
 				// some dresssup for R
@@ -771,7 +771,7 @@ SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 						dest_ptr[row_idx] = NA_REAL;
 					} else {
 						dtime_t n = src_data[row_idx];
-						dest_ptr[row_idx] = n / 1000000.0;
+						dest_ptr[row_idx] = n.micros / 1000000.0;
 					}
 				}
 
