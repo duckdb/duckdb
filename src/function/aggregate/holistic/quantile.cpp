@@ -45,7 +45,7 @@ double GenericCast::Cast(const hugeint_t &v) {
 struct TimestampCast {
 	template <class SRC, class DST>
 	static DST Cast(const SRC &v) {
-		return Timestamp::FromDatetime(v, 0);
+		return Timestamp::FromDatetime(v, dtime_t(0));
 	}
 };
 
