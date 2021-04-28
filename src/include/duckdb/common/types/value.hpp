@@ -91,6 +91,9 @@ public:
 	static Value TIMESTAMP(date_t date, dtime_t time);
 	//! Create a timestamp Value from a specified timestamp
 	static Value TIMESTAMP(timestamp_t timestamp);
+	static Value TIMESTAMP_NS(timestamp_t timestamp);
+	static Value TIMESTAMP_MS(timestamp_t timestamp);
+	static Value TIMESTAMP_SEC(timestamp_t timestamp);
 	//! Create a timestamp Value from a specified timestamp in separate values
 	static Value TIMESTAMP(int32_t year, int32_t month, int32_t day, int32_t hour, int32_t min, int32_t sec,
 	                       int32_t micros);

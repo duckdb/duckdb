@@ -18,11 +18,6 @@ LogicalType::LogicalType() : id_(LogicalTypeId::INVALID), width_(0), scale_(0), 
 LogicalType::LogicalType(LogicalTypeId id) : id_(id), width_(0), scale_(0), collation_(string()) {
 	physical_type_ = GetInternalType();
 }
-LogicalType::LogicalType(LogicalTypeId id, LogicalTimestampType timestamp_type)
-    : id_(id), width_(0), scale_(0), collation_(string()), timestamp_type_(timestamp_type) {
-	D_ASSERT(id == LogicalTypeId::TIMESTAMP);
-	physical_type_ = GetInternalType();
-}
 
 LogicalType::LogicalType(LogicalTypeId id, string collation)
     : id_(id), width_(0), scale_(0), collation_(move(collation)) {
@@ -67,6 +62,9 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::BIGINT:
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_MS:
 		return PhysicalType::INT64;
 	case LogicalTypeId::UBIGINT:
 		return PhysicalType::UINT64;
@@ -132,7 +130,12 @@ const LogicalType LogicalType::FLOAT = LogicalType(LogicalTypeId::FLOAT);
 const LogicalType LogicalType::DECIMAL = LogicalType(LogicalTypeId::DECIMAL);
 const LogicalType LogicalType::DOUBLE = LogicalType(LogicalTypeId::DOUBLE);
 const LogicalType LogicalType::DATE = LogicalType(LogicalTypeId::DATE);
+
 const LogicalType LogicalType::TIMESTAMP = LogicalType(LogicalTypeId::TIMESTAMP);
+const LogicalType LogicalType::TIMESTAMP_MS = LogicalType(LogicalTypeId::TIMESTAMP_MS);
+const LogicalType LogicalType::TIMESTAMP_NS = LogicalType(LogicalTypeId::TIMESTAMP_NS);
+const LogicalType LogicalType::TIMESTAMP_S = LogicalType(LogicalTypeId::TIMESTAMP_SEC);
+
 const LogicalType LogicalType::TIME = LogicalType(LogicalTypeId::TIME);
 const LogicalType LogicalType::HASH = LogicalType(LogicalTypeId::HASH);
 const LogicalType LogicalType::POINTER = LogicalType(LogicalTypeId::POINTER);
@@ -307,20 +310,6 @@ LogicalType LogicalType::Deserialize(Deserializer &source) {
 	}
 	return LogicalType(id, width, scale, collation, move(children));
 }
-string LogicalTimestampTypeToString(LogicalTimestampType type) {
-	switch (type) {
-	case LogicalTimestampType::MILLI:
-		return "Milliseconds";
-	case LogicalTimestampType::NANO:
-		return "Nanoseconds";
-	case LogicalTimestampType::MICRO:
-		return "Microseconds";
-	case LogicalTimestampType::SECONDS:
-		return "Seconds";
-	default:
-		return "UNDEFINED";
-	}
-}
 
 string LogicalTypeIdToString(LogicalTypeId id) {
 	switch (id) {
@@ -349,7 +338,13 @@ string LogicalTypeIdToString(LogicalTypeId id) {
 	case LogicalTypeId::TIME:
 		return "TIME";
 	case LogicalTypeId::TIMESTAMP:
-		return "TIMESTAMP";
+		return "TIMESTAMP (US)";
+	case LogicalTypeId::TIMESTAMP_MS:
+		return "TIMESTAMP (MS)";
+	case LogicalTypeId::TIMESTAMP_NS:
+		return "TIMESTAMP (NS)";
+	case LogicalTypeId::TIMESTAMP_SEC:
+		return "TIMESTAMP (S)";
 	case LogicalTypeId::FLOAT:
 		return "FLOAT";
 	case LogicalTypeId::DOUBLE:
@@ -447,8 +442,14 @@ LogicalType TransformStringToLogicalType(const string &str) {
 		return LogicalType::BIGINT;
 	} else if (lower_str == "int2" || lower_str == "smallint" || lower_str == "short" || lower_str == "int16") {
 		return LogicalType::SMALLINT;
-	} else if (lower_str == "timestamp" || lower_str == "datetime") {
+	} else if (lower_str == "timestamp" || lower_str == "datetime" || lower_str == "timestamp_us") {
 		return LogicalType::TIMESTAMP;
+	}else if (lower_str == "timestamp_ms") {
+		return LogicalType::TIMESTAMP_MS;
+	}else if (lower_str == "timestamp_ns") {
+		return LogicalType::TIMESTAMP_NS;
+	}else if (lower_str == "timestamp_s") {
+		return LogicalType::TIMESTAMP_S;
 	} else if (lower_str == "bool" || lower_str == "boolean" || lower_str == "logical") {
 		return LogicalType(LogicalTypeId::BOOLEAN);
 	} else if (lower_str == "real" || lower_str == "float4" || lower_str == "float") {
@@ -665,6 +666,9 @@ bool LogicalType::IsMoreGenericThan(LogicalType &other) const {
 	case LogicalTypeId::DATE:
 		return false;
 	case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::TIMESTAMP_NS:
+		    case LogicalTypeId::TIMESTAMP_MS:
+		        case LogicalTypeId::TIMESTAMP_SEC:
 		switch (other.id()) {
 		case LogicalTypeId::TIME:
 		case LogicalTypeId::DATE:

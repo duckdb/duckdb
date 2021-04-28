@@ -33,6 +33,30 @@ struct TimestampConvert {
 	}
 };
 
+struct TimestampConvertSec {
+	template <class DUCKDB_T, class NUMPY_T>
+	static int64_t ConvertValue(timestamp_t val) {
+		return Timestamp::GetEpochNanoSeconds(Timestamp::FromEpochSeconds(val));
+	}
+
+	template <class NUMPY_T>
+	static NUMPY_T NullValue() {
+		return 0;
+	}
+};
+
+struct TimestampConvertMilli {
+	template <class DUCKDB_T, class NUMPY_T>
+	static int64_t ConvertValue(timestamp_t val) {
+		return Timestamp::GetEpochNanoSeconds(Timestamp::FromEpochMs(val));
+	}
+
+	template <class NUMPY_T>
+	static NUMPY_T NullValue() {
+		return 0;
+	}
+};
+
 struct DateConvert {
 	template <class DUCKDB_T, class NUMPY_T>
 	static int64_t ConvertValue(date_t val) {
@@ -321,6 +345,9 @@ RawArrayWrapper::RawArrayWrapper(const LogicalType &type) : data(nullptr), type(
 		type_width = sizeof(double);
 		break;
 	case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::TIMESTAMP_SEC:
+		    case LogicalTypeId::TIMESTAMP_MS:
+		        case LogicalTypeId::TIMESTAMP_NS:
 		type_width = sizeof(int64_t);
 		break;
 	case LogicalTypeId::DATE:
@@ -379,8 +406,9 @@ void RawArrayWrapper::Initialize(idx_t capacity) {
 		dtype = "float64";
 		break;
 	case LogicalTypeId::TIMESTAMP:
-		dtype = "datetime64[ns]";
-		break;
+		case LogicalTypeId::TIMESTAMP_NS:
+		    case LogicalTypeId::TIMESTAMP_MS:
+		        case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::DATE:
 		dtype = "datetime64[ns]";
 		break;
@@ -470,6 +498,14 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 		break;
 	case LogicalTypeId::TIMESTAMP:
 		may_have_null = ConvertColumn<timestamp_t, int64_t, duckdb_py_convert::TimestampConvert>(
+		    current_offset, dataptr, maskptr, idata, count);
+		break;
+	case LogicalTypeId::TIMESTAMP_SEC:
+		may_have_null = ConvertColumn<timestamp_t, int64_t, duckdb_py_convert::TimestampConvertSec>(
+		    current_offset, dataptr, maskptr, idata, count);
+		break;
+	case LogicalTypeId::TIMESTAMP_MS:
+		may_have_null = ConvertColumn<timestamp_t, int64_t, duckdb_py_convert::TimestampConvertMilli>(
 		    current_offset, dataptr, maskptr, idata, count);
 		break;
 	case LogicalTypeId::DATE:

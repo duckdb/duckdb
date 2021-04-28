@@ -242,7 +242,7 @@ enum class LogicalTypeId : uint8_t {
 	BIGINT = 14,
 	DATE = 15,
 	TIME = 16,
-	TIMESTAMP = 17,
+	TIMESTAMP = 17, //! us
 	DECIMAL = 18,
 	FLOAT = 19,
 	DOUBLE = 20,
@@ -254,6 +254,10 @@ enum class LogicalTypeId : uint8_t {
 	USMALLINT = 27,
 	UINTEGER = 28,
 	UBIGINT = 29,
+	TIMESTAMP_SEC = 30,
+	TIMESTAMP_MS = 31,
+	TIMESTAMP_NS = 32,
+
 	HUGEINT = 50,
 	POINTER = 51,
 	HASH = 52,
@@ -265,17 +269,9 @@ enum class LogicalTypeId : uint8_t {
 	TABLE = 103
 };
 
-enum class LogicalTimestampType : uint8_t {
-    SECONDS=0, //! s
-    MILLI=1, //! ms
-    MICRO=2, //! us
-    NANO=3 //! ns
-};
-
 struct LogicalType {
 	DUCKDB_API LogicalType();
 	DUCKDB_API LogicalType(LogicalTypeId id); // NOLINT: Allow implicit conversion from `LogicalTypeId`
-	DUCKDB_API LogicalType(LogicalTypeId id, LogicalTimestampType timestamp_type);
 	DUCKDB_API LogicalType(LogicalTypeId id, string collation);
 	DUCKDB_API LogicalType(LogicalTypeId id, uint8_t width, uint8_t scale);
 	LogicalType(LogicalTypeId id, child_list_t<LogicalType> child_types);
@@ -284,9 +280,6 @@ struct LogicalType {
 
 	LogicalTypeId id() const {
 		return id_;
-	}
-	LogicalTimestampType GetTimestampType() const {
-		return timestamp_type_;
 	}
 	uint8_t width() const {
 		return width_;
@@ -334,7 +327,6 @@ private:
 	uint8_t width_;
 	uint8_t scale_;
 	string collation_;
-    LogicalTimestampType timestamp_type_ = LogicalTimestampType::MICRO;
 	child_list_t<LogicalType> child_types_;
 	PhysicalType physical_type_;
 
@@ -357,6 +349,9 @@ public:
 	DUCKDB_API static const LogicalType DECIMAL;
 	DUCKDB_API static const LogicalType DATE;
 	DUCKDB_API static const LogicalType TIMESTAMP;
+	DUCKDB_API static const LogicalType TIMESTAMP_S;
+	DUCKDB_API static const LogicalType TIMESTAMP_MS;
+	DUCKDB_API static const LogicalType TIMESTAMP_NS;
 	DUCKDB_API static const LogicalType TIME;
 	DUCKDB_API static const LogicalType VARCHAR;
 	DUCKDB_API static const LogicalType STRUCT;
@@ -380,8 +375,6 @@ public:
 };
 
 string LogicalTypeIdToString(LogicalTypeId type);
-
-string LogicalTimestampTypeToString(LogicalTimestampType type);
 
 LogicalType TransformStringToLogicalType(const string &str);
 

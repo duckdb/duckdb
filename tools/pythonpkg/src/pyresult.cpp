@@ -100,7 +100,10 @@ py::object DuckDBPyResult::Fetchone() {
 		case LogicalTypeId::BLOB:
 			res[col_idx] = py::bytes(val.GetValue<string>());
 			break;
-		case LogicalTypeId::TIMESTAMP: {
+		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::TIMESTAMP_MS:
+		case LogicalTypeId::TIMESTAMP_NS:
+		case LogicalTypeId::TIMESTAMP_SEC: {
 			D_ASSERT(result->types[col_idx].InternalType() == PhysicalType::INT64);
 
 			auto timestamp = val.GetValueUnsafe<int64_t>();

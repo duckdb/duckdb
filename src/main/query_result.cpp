@@ -192,23 +192,16 @@ void QueryResult::ToArrowSchema(ArrowSchema *out_schema) {
 			child.format = "ttm";
 			break;
 		case LogicalTypeId::TIMESTAMP:
-			switch (types[col_idx].GetTimestampType()) {
-			case LogicalTimestampType::MICRO:
-				child.format = "tsu:";
-				break;
-			case LogicalTimestampType::MILLI:
-				child.format = "tsm:";
-				break;
-			case LogicalTimestampType::NANO:
-				child.format = "tsn:";
-				break;
-			case LogicalTimestampType::SECONDS:
-				child.format = "tss:";
-				break;
-			default:
-				throw std::runtime_error("Unsupported Timestamp Type " +
-				                         LogicalTimestampTypeToString((types[col_idx].GetTimestampType())));
-			}
+			child.format = "tsu:";
+			break;
+		case LogicalTypeId::TIMESTAMP_SEC:
+			child.format = "tss:";
+			break;
+		case LogicalTypeId::TIMESTAMP_NS:
+			child.format = "tsn:";
+			break;
+		case LogicalTypeId::TIMESTAMP_MS:
+			child.format = "tsm:";
 			break;
 		default:
 			throw NotImplementedException("Unsupported Arrow type " + types[col_idx].ToString());

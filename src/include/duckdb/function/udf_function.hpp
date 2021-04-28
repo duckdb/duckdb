@@ -306,6 +306,9 @@ private:
 		case LogicalTypeId::BIGINT:
 		case LogicalTypeId::TIME:
 		case LogicalTypeId::TIMESTAMP:
+			case LogicalTypeId::TIMESTAMP_MS:
+			    case LogicalTypeId::TIMESTAMP_NS:
+			        case LogicalTypeId::TIMESTAMP_SEC:
 			return std::is_same<T, int64_t>();
 		case LogicalTypeId::FLOAT:
 			return std::is_same<T, float>();
