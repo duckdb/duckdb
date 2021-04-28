@@ -185,7 +185,7 @@ void PhysicalHashJoin::GetChunkInternal(ExecutionContext &context, DataChunk &ch
 		// empty hash table with INNER or SEMI join means empty result set
 		return;
 	}
-	// We first try a join with a perfect hash table, otherwise we do the normal probe
+	// We first try a probe with a perfect hash table, otherwise we do the normal probe
 	if (IsInnerJoin(join_type) && IsPerfectHashJoin(chunk)) {
 		return;
 	}
@@ -263,9 +263,15 @@ void PhysicalHashJoin::ProbeHashTable(ExecutionContext &context, DataChunk &chun
 }
 
 bool PhysicalHashJoin::IsPerfectHashJoin(DataChunk &chunk) {
+	if (!perfect_join_state.is_build_small)
+		return false;
 	auto state = reinterpret_cast<HashJoinGlobalState *>(sink_state.get());
+	auto hash_table_ptr = state->hash_table.get();
 
-	return state->hash_table->size() > 0;
+	DataChunk perfect_hash_table;
+	perfect_hash_table.Initialize(hash_table_ptr->build_types);
+
+	return hash_table_ptr->size() > 0;
 }
 
 } // namespace duckdb
