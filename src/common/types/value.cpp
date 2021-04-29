@@ -94,11 +94,11 @@ Value Value::MinimumValue(const LogicalType &type) {
 	case LogicalTypeId::TIMESTAMP:
 		return Value::TIMESTAMP(NumericLimits<int64_t>::Minimum());
 	case LogicalTypeId::TIMESTAMP_SEC:
-		return Value::TIMESTAMP_SEC(NumericLimits<int64_t>::Minimum());
+		return Value::TimestampSec(NumericLimits<int64_t>::Minimum());
 	case LogicalTypeId::TIMESTAMP_MS:
-		return Value::TIMESTAMP_MS(NumericLimits<int64_t>::Minimum());
+		return Value::TimestampMs(NumericLimits<int64_t>::Minimum());
 	case LogicalTypeId::TIMESTAMP_NS:
-		return Value::TIMESTAMP_NS(NumericLimits<int64_t>::Minimum());
+		return Value::TimestampNs(NumericLimits<int64_t>::Minimum());
 	case LogicalTypeId::HUGEINT:
 		return Value::HUGEINT(NumericLimits<hugeint_t>::Minimum());
 	case LogicalTypeId::FLOAT:
@@ -158,11 +158,11 @@ Value Value::MaximumValue(const LogicalType &type) {
 	case LogicalTypeId::TIMESTAMP:
 		return Value::TIMESTAMP(NumericLimits<int64_t>::Maximum());
 	case LogicalTypeId::TIMESTAMP_MS:
-		return Value::TIMESTAMP_MS(NumericLimits<int64_t>::Maximum());
+		return Value::TimestampMs(NumericLimits<int64_t>::Maximum());
 	case LogicalTypeId::TIMESTAMP_NS:
-		return Value::TIMESTAMP_NS(NumericLimits<int64_t>::Maximum());
+		return Value::TimestampNs(NumericLimits<int64_t>::Maximum());
 	case LogicalTypeId::TIMESTAMP_SEC:
-		return Value::TIMESTAMP_SEC(NumericLimits<int64_t>::Maximum());
+		return Value::TimestampSec(NumericLimits<int64_t>::Maximum());
 	case LogicalTypeId::HUGEINT:
 		return Value::HUGEINT(NumericLimits<hugeint_t>::Maximum());
 	case LogicalTypeId::FLOAT:
@@ -379,19 +379,19 @@ Value Value::TIMESTAMP(timestamp_t timestamp) {
 	return val;
 }
 
-Value Value::TIMESTAMP_NS(timestamp_t timestamp) {
+Value Value::TimestampNs(timestamp_t timestamp) {
 	auto val = Value::BIGINT(timestamp);
 	val.type_ = LogicalType::TIMESTAMP_NS;
 	return val;
 }
 
-Value Value::TIMESTAMP_MS(timestamp_t timestamp) {
+Value Value::TimestampMs(timestamp_t timestamp) {
 	auto val = Value::BIGINT(timestamp);
 	val.type_ = LogicalType::TIMESTAMP_MS;
 	return val;
 }
 
-Value Value::TIMESTAMP_SEC(timestamp_t timestamp) {
+Value Value::TimestampSec(timestamp_t timestamp) {
 	auto val = Value::BIGINT(timestamp);
 	val.type_ = LogicalType::TIMESTAMP_S;
 	return val;

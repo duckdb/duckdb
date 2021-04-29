@@ -338,13 +338,13 @@ string LogicalTypeIdToString(LogicalTypeId id) {
 	case LogicalTypeId::TIME:
 		return "TIME";
 	case LogicalTypeId::TIMESTAMP:
-	    return "TIMESTAMP_US";
+		return "TIMESTAMP";
 	case LogicalTypeId::TIMESTAMP_MS:
-	    return "TIMESTAMP_MS";
+		return "TIMESTAMP (MS)";
 	case LogicalTypeId::TIMESTAMP_NS:
-	    return "TIMESTAMP_NS";
+		return "TIMESTAMP (NS)";
 	case LogicalTypeId::TIMESTAMP_SEC:
-		return "TIMESTAMP_SEC";
+		return "TIMESTAMP (SEC)";
 	case LogicalTypeId::FLOAT:
 		return "FLOAT";
 	case LogicalTypeId::DOUBLE:

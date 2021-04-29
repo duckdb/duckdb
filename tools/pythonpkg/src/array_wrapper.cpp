@@ -57,6 +57,18 @@ struct TimestampConvertMilli {
 	}
 };
 
+struct TimestampConvertNano {
+	template <class DUCKDB_T, class NUMPY_T>
+	static int64_t ConvertValue(timestamp_t val) {
+		return val;
+	}
+
+	template <class NUMPY_T>
+	static NUMPY_T NullValue() {
+		return 0;
+	}
+};
+
 struct DateConvert {
 	template <class DUCKDB_T, class NUMPY_T>
 	static int64_t ConvertValue(date_t val) {
@@ -506,6 +518,10 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 		break;
 	case LogicalTypeId::TIMESTAMP_MS:
 		may_have_null = ConvertColumn<timestamp_t, int64_t, duckdb_py_convert::TimestampConvertMilli>(
+		    current_offset, dataptr, maskptr, idata, count);
+		break;
+	case LogicalTypeId::TIMESTAMP_NS:
+		may_have_null = ConvertColumn<timestamp_t, int64_t, duckdb_py_convert::TimestampConvertNano>(
 		    current_offset, dataptr, maskptr, idata, count);
 		break;
 	case LogicalTypeId::DATE:

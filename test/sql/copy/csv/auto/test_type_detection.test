@@ -50,7 +50,7 @@ SELECT a, b, t, d, ts FROM test ORDER BY a;
 query TTTTT
 SELECT typeof(a), typeof(b), typeof(t), typeof(d), typeof(ts) FROM test LIMIT 1;
 ----
-INTEGER	VARCHAR	TIME	DATE	TIMESTAMP_US
+INTEGER	VARCHAR	TIME	DATE	TIMESTAMP
 
 statement ok
 DROP TABLE test;
@@ -88,7 +88,7 @@ SELECT a, b, t, d, ts FROM test ORDER BY a;
 query TTTTT
 SELECT typeof(a), typeof(b), typeof(t), typeof(d), typeof(ts) FROM test LIMIT 1;
 ----
-INTEGER	VARCHAR	TIME	DATE	TIMESTAMP_US
+INTEGER	VARCHAR	TIME	DATE	TIMESTAMP
 
 statement ok
 DROP TABLE test;
@@ -107,7 +107,7 @@ SELECT a, b, t, d, ts FROM test ORDER BY a;
 query TTTTT
 SELECT typeof(a), typeof(b), typeof(t), typeof(d), typeof(ts) FROM test LIMIT 1;
 ----
-INTEGER	VARCHAR	TIME	DATE	TIMESTAMP_US
+INTEGER	VARCHAR	TIME	DATE	TIMESTAMP_
 
 statement ok
 DROP TABLE test;
@@ -126,7 +126,7 @@ SELECT a, b, t, d, ts FROM test ORDER BY a;
 query TTTTT
 SELECT typeof(a), typeof(b), typeof(t), typeof(d), typeof(ts) FROM test LIMIT 1;
 ----
-INTEGER	VARCHAR	TIME	DATE	TIMESTAMP_US
+INTEGER	VARCHAR	TIME	DATE	TIMESTAMP
 
 statement ok
 DROP TABLE test;
@@ -145,7 +145,7 @@ SELECT a, b, t, d, ts FROM test ORDER BY a;
 query TTTTT
 SELECT typeof(a), typeof(b), typeof(t), typeof(d), typeof(ts) FROM test LIMIT 1;
 ----
-INTEGER	VARCHAR	TIME	DATE	TIMESTAMP_US
+INTEGER	VARCHAR	TIME	DATE	TIMESTAMP
 
 statement ok
 DROP TABLE test;
@@ -165,7 +165,7 @@ SELECT a, b, t, d, ts FROM test ORDER BY a;
 query TTTTT
 SELECT typeof(a), typeof(b), typeof(t), typeof(d), typeof(ts) FROM test LIMIT 1;
 ----
-INTEGER	VARCHAR	TIME	DATE	TIMESTAMP_US
+INTEGER	VARCHAR	TIME	DATE	TIMESTAMP
 
 statement ok
 DROP TABLE test;
@@ -184,7 +184,7 @@ SELECT a, b, t, d, ts FROM test ORDER BY a;
 query TTTTT
 SELECT typeof(a), typeof(b), typeof(t), typeof(d), typeof(ts) FROM test LIMIT 1;
 ----
-INTEGER	VARCHAR	TIME	DATE	TIMESTAMP_US
+INTEGER	VARCHAR	TIME	DATE	TIMESTAMP
 
 statement ok
 DROP TABLE test;
