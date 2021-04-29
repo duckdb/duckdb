@@ -1,8 +1,6 @@
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/types/string_type.hpp"
 
-#include "duckdb/common/exception.hpp"
-
 #include <functional>
 
 namespace duckdb {

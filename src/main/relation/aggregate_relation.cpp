@@ -1,7 +1,6 @@
 #include "duckdb/main/relation/aggregate_relation.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
-#include "duckdb/parser/tableref/subqueryref.hpp"
 
 namespace duckdb {
 

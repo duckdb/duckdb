@@ -1,6 +1,5 @@
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
-#include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"

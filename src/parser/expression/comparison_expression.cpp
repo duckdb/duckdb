@@ -1,8 +1,5 @@
 #include "duckdb/parser/expression/comparison_expression.hpp"
-
-#include "duckdb/common/exception.hpp"
 #include "duckdb/common/serializer.hpp"
-#include "duckdb/parser/expression/cast_expression.hpp"
 
 namespace duckdb {
 

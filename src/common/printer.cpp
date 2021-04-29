@@ -1,5 +1,4 @@
 #include "duckdb/common/printer.hpp"
-#include "duckdb/common/progress_bar.hpp"
 #include <stdio.h>
 
 namespace duckdb {

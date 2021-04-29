@@ -1,6 +1,5 @@
 #include "duckdb/parser/expression/columnref_expression.hpp"
 
-#include "duckdb/common/exception.hpp"
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/types/hash.hpp"
 

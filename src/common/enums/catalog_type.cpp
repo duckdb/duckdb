@@ -1,7 +1,5 @@
 #include "duckdb/common/enums/catalog_type.hpp"
 
-#include "duckdb/common/exception.hpp"
-
 namespace duckdb {
 
 string CatalogTypeToString(CatalogType type) {

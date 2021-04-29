@@ -1,6 +1,5 @@
 #include "duckdb/parser/expression/positional_reference_expression.hpp"
 
-#include "duckdb/common/exception.hpp"
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/to_string.hpp"

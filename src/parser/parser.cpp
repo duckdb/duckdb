@@ -10,8 +10,6 @@
 #include "postgres_parser.hpp"
 #include "duckdb/parser/query_error_context.hpp"
 
-#include "parser/parser.hpp"
-
 namespace duckdb {
 
 Parser::Parser() {
