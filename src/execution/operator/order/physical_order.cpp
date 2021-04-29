@@ -1739,17 +1739,13 @@ idx_t PhysicalOrder::MaxThreads(ClientContext &context) {
 
 class OrderParallelState : public ParallelState {
 public:
-	OrderParallelState()
-	    : global_entry_idx(0), data_block_idx(0), data_entry_idx(0), offset_block_idx(0), offset_entry_idx(0) {
+	OrderParallelState() : global_entry_idx(0), block_idx(0), entry_idx(0) {
 	}
 
 	idx_t global_entry_idx;
 
-	idx_t data_block_idx;
-	idx_t data_entry_idx;
-
-	idx_t offset_block_idx;
-	idx_t offset_entry_idx;
+	idx_t block_idx;
+	idx_t entry_idx;
 
 	std::mutex lock;
 };
@@ -1762,8 +1758,7 @@ unique_ptr<ParallelState> PhysicalOrder::GetParallelState() {
 class PhysicalOrderOperatorState : public PhysicalOperatorState {
 public:
 	PhysicalOrderOperatorState(PhysicalOperator &op, PhysicalOperator *child)
-	    : PhysicalOperatorState(op, child), initialized(false), global_entry_idx(0), data_block_idx(0),
-	      data_entry_idx(0), offset_block_idx(0), offset_entry_idx(0) {
+	    : PhysicalOperatorState(op, child), initialized(false), global_entry_idx(0), block_idx(0), entry_idx(0) {
 	}
 	bool initialized;
 	ParallelState *parallel_state;
@@ -1775,19 +1770,14 @@ public:
 
 	idx_t global_entry_idx;
 
-	idx_t data_block_idx;
-	idx_t data_entry_idx;
-
-	idx_t offset_block_idx;
-	idx_t offset_entry_idx;
+	idx_t block_idx;
+	idx_t entry_idx;
 
 	void InitNextIndices() {
 		auto &p_state = *reinterpret_cast<OrderParallelState *>(parallel_state);
 		global_entry_idx = p_state.global_entry_idx;
-		data_block_idx = p_state.data_block_idx;
-		data_entry_idx = p_state.data_entry_idx;
-		offset_block_idx = p_state.offset_block_idx;
-		offset_entry_idx = p_state.offset_entry_idx;
+		block_idx = p_state.block_idx;
+		entry_idx = p_state.entry_idx;
 	}
 };
 
@@ -1800,29 +1790,14 @@ static void UpdateStateIndices(const idx_t &next, const SortedData &payload_data
 
 	idx_t remaining = next;
 	while (remaining > 0) {
-		auto &data_block = payload_data.data_blocks[parallel_state.data_block_idx];
-		if (parallel_state.data_entry_idx + remaining > data_block.count) {
-			remaining -= data_block.count - parallel_state.data_entry_idx;
-			parallel_state.data_block_idx++;
-			parallel_state.data_entry_idx = 0;
+		auto &data_block = payload_data.data_blocks[parallel_state.block_idx];
+		if (parallel_state.entry_idx + remaining > data_block.count) {
+			remaining -= data_block.count - parallel_state.entry_idx;
+			parallel_state.block_idx++;
+			parallel_state.entry_idx = 0;
 		} else {
-			parallel_state.data_entry_idx += remaining;
+			parallel_state.entry_idx += remaining;
 			remaining = 0;
-		}
-	}
-
-	if (!payload_data.constant_size) {
-		remaining = next;
-		while (remaining > 0) {
-			auto &offset_block = payload_data.offset_blocks[parallel_state.offset_block_idx];
-			if (parallel_state.offset_entry_idx + remaining > offset_block.count) {
-				remaining -= offset_block.count - parallel_state.offset_entry_idx;
-				parallel_state.offset_block_idx++;
-				parallel_state.offset_entry_idx = 0;
-			} else {
-				parallel_state.offset_entry_idx += remaining;
-				remaining = 0;
-			}
 		}
 	}
 }
@@ -1837,39 +1812,33 @@ static void Scan(ClientContext &context, DataChunk &chunk, PhysicalOrderOperator
 	// set up a batch of pointers to scan data from
 	idx_t count = 0;
 	while (count < scan_count) {
-		auto &data_block = payload_data.data_blocks[state.data_block_idx];
+		auto &data_block = payload_data.data_blocks[state.block_idx];
 		auto data_handle = buffer_manager.Pin(data_block.block);
-		idx_t next = MinValue(data_block.count - state.data_entry_idx, scan_count - count);
+		idx_t next = MinValue(data_block.count - state.entry_idx, scan_count - count);
 		if (payload_state.all_constant) {
-			data_ptr_t payl_dataptr = data_handle->Ptr() + state.data_entry_idx * payload_state.entry_size;
+			data_ptr_t payl_dataptr = data_handle->Ptr() + state.entry_idx * payload_state.entry_size;
 			for (idx_t i = 0; i < next; i++) {
 				state.validitymask_locations[count + i] = payl_dataptr;
 				state.key_locations[count + i] = payl_dataptr + payload_state.validitymask_size;
 				payl_dataptr += payload_state.entry_size;
 			}
 		} else {
-			auto &offset_block = payload_data.offset_blocks[state.offset_block_idx];
+			auto &offset_block = payload_data.offset_blocks[state.block_idx];
 			auto offset_handle = buffer_manager.Pin(offset_block.block);
-			next = MinValue(next, offset_block.count - state.offset_entry_idx);
+			next = MinValue(next, offset_block.count - state.entry_idx);
 
 			const data_ptr_t payl_dataptr = data_handle->Ptr();
 			const idx_t *offsets = (idx_t *)offset_handle->Ptr();
 			for (idx_t i = 0; i < next; i++) {
-				state.validitymask_locations[count + i] = payl_dataptr + offsets[state.offset_entry_idx + i];
+				state.validitymask_locations[count + i] = payl_dataptr + offsets[state.entry_idx + i];
 				state.key_locations[count + i] =
 				    state.validitymask_locations[count + i] + payload_state.validitymask_size;
 			}
-
-			state.offset_entry_idx += next;
-			if (state.offset_entry_idx == offset_block.count) {
-				state.offset_block_idx++;
-				state.offset_entry_idx = 0;
-			}
 		}
-		state.data_entry_idx += next;
-		if (state.data_entry_idx == data_block.count) {
-			state.data_block_idx++;
-			state.data_entry_idx = 0;
+		state.entry_idx += next;
+		if (state.entry_idx == data_block.count) {
+			state.block_idx++;
+			state.entry_idx = 0;
 		}
 		count += next;
 		handles.push_back(move(data_handle));
