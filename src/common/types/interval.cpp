@@ -106,7 +106,7 @@ interval_parse_number:
 interval_parse_time : {
 	// parse the remainder of the time as a Time type
 	dtime_t time = Time::FromCString(str + start_pos, len);
-	result.micros += time;
+	result.micros += time.micros;
 	found_any = true;
 	goto end_of_string;
 }
@@ -307,7 +307,7 @@ interval_t Interval::GetDifference(timestamp_t timestamp_1, timestamp_t timestam
 	interval_t interval;
 	interval.months = year_diff * MONTHS_PER_YEAR + month_diff;
 	interval.days = day_diff;
-	interval.micros = Time::FromTime(hour_diff, min_diff, sec_diff, micros_diff);
+	interval.micros = Time::FromTime(hour_diff, min_diff, sec_diff, micros_diff).micros;
 
 	return interval;
 }

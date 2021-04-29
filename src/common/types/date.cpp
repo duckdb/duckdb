@@ -13,6 +13,8 @@
 
 namespace duckdb {
 
+static_assert(sizeof(date_t) == sizeof(int32_t), "date_t was padded");
+
 const string_t Date::MONTH_NAMES_ABBREVIATED[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
                                                   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
 const string_t Date::MONTH_NAMES[] = {"January", "February", "March",     "April",   "May",      "June",
@@ -108,7 +110,8 @@ void Date::ExtractYearOffset(int32_t &n, int32_t &year, int32_t &year_offset) {
 	D_ASSERT(n >= Date::CUMULATIVE_YEAR_DAYS[year_offset]);
 }
 
-void Date::Convert(int32_t n, int32_t &year, int32_t &month, int32_t &day) {
+void Date::Convert(date_t d, int32_t &year, int32_t &month, int32_t &day) {
+	auto n = d.days;
 	int32_t year_offset;
 	Date::ExtractYearOffset(n, year, year_offset);
 
@@ -128,7 +131,7 @@ void Date::Convert(int32_t n, int32_t &year, int32_t &month, int32_t &day) {
 	D_ASSERT(month > 0 && month <= 12);
 }
 
-int32_t Date::FromDate(int32_t year, int32_t month, int32_t day) {
+date_t Date::FromDate(int32_t year, int32_t month, int32_t day) {
 	int32_t n = 0;
 	if (!Date::IsValid(year, month, day)) {
 		throw ConversionException("Date out of range: %d-%d-%d", year, month, day);
@@ -144,7 +147,7 @@ int32_t Date::FromDate(int32_t year, int32_t month, int32_t day) {
 	n += Date::CUMULATIVE_YEAR_DAYS[year - 1970];
 	n += Date::IsLeapYear(year) ? Date::CUMULATIVE_LEAP_DAYS[month - 1] : Date::CUMULATIVE_DAYS[month - 1];
 	n += day - 1;
-	return n;
+	return date_t(n);
 }
 
 bool Date::ParseDoubleDigit(const char *buf, idx_t len, idx_t &pos, int32_t &result) {
@@ -285,7 +288,7 @@ date_t Date::FromString(const string &str, bool strict) {
 	return Date::FromCString(str.c_str(), str.size(), strict);
 }
 
-string Date::ToString(int32_t date) {
+string Date::ToString(date_t date) {
 	int32_t date_units[3];
 	idx_t year_length;
 	bool add_bc;
@@ -323,22 +326,23 @@ date_t Date::EpochDaysToDate(int32_t epoch) {
 }
 
 int32_t Date::EpochDays(date_t date) {
-	return (int32_t)date;
+	return date.days;
 }
 
 date_t Date::EpochToDate(int64_t epoch) {
-	return (date_t)(epoch / Interval::SECS_PER_DAY);
+	return date_t(epoch / Interval::SECS_PER_DAY);
 }
 
 int64_t Date::Epoch(date_t date) {
-	return ((int64_t)date) * Interval::SECS_PER_DAY;
+	return ((int64_t)date.days) * Interval::SECS_PER_DAY;
 }
 
 int64_t Date::EpochNanoseconds(date_t date) {
-	return ((int64_t)date) * (Interval::MICROS_PER_DAY * 1000);
+	return ((int64_t)date.days) * (Interval::MICROS_PER_DAY * 1000);
 }
 
-int32_t Date::ExtractYear(date_t n, int32_t *last_year) {
+int32_t Date::ExtractYear(date_t d, int32_t *last_year) {
+	auto n = d.days;
 	// cached look up: check if year of this date is the same as the last one we looked up
 	// note that this only works for years in the range [1970, 2370]
 	if (n >= Date::CUMULATIVE_YEAR_DAYS[*last_year] && n < Date::CUMULATIVE_YEAR_DAYS[*last_year + 1]) {
@@ -353,9 +357,9 @@ int32_t Date::ExtractYear(timestamp_t ts, int32_t *last_year) {
 	return Date::ExtractYear(Timestamp::GetDate(ts), last_year);
 }
 
-int32_t Date::ExtractYear(date_t n) {
+int32_t Date::ExtractYear(date_t d) {
 	int32_t year, year_offset;
-	Date::ExtractYearOffset(n, year, year_offset);
+	Date::ExtractYearOffset(d.days, year, year_offset);
 	return year;
 }
 
@@ -373,8 +377,8 @@ int32_t Date::ExtractDay(date_t date) {
 
 int32_t Date::ExtractDayOfTheYear(date_t date) {
 	int32_t year, year_offset;
-	Date::ExtractYearOffset(date, year, year_offset);
-	return date - Date::CUMULATIVE_YEAR_DAYS[year_offset] + 1;
+	Date::ExtractYearOffset(date.days, year, year_offset);
+	return date.days - Date::CUMULATIVE_YEAR_DAYS[year_offset] + 1;
 }
 
 int32_t Date::ExtractISODayOfTheWeek(date_t date) {
@@ -394,12 +398,12 @@ int32_t Date::ExtractISODayOfTheWeek(date_t date) {
 	// 5  = 2
 	// 6  = 3
 	// 7  = 4
-	if (date < 0) {
+	if (date.days < 0) {
 		// negative date: start off at 4 and cycle downwards
-		return (7 - ((-date + 3) % 7));
+		return (7 - ((-date.days + 3) % 7));
 	} else {
 		// positive date: start off at 4 and cycle upwards
-		return ((date + 3) % 7) + 1;
+		return ((date.days + 3) % 7) + 1;
 	}
 }
 

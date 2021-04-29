@@ -95,6 +95,6 @@ private:
 	//! Eviction queue
 	unique_ptr<EvictionQueue> queue;
 	//! The temporary id used for managed buffers
-	block_id_t temporary_id;
+	std::atomic<block_id_t> temporary_id;
 };
 } // namespace duckdb
