@@ -44,17 +44,15 @@ struct PayloadState {
 
 class OrderGlobalState : public GlobalOperatorState {
 public:
-	explicit OrderGlobalState(BufferManager &buffer_manager)
-	    : buffer_manager(buffer_manager), total_count(0), sorting_block_capacity(0),
-	      payload_data_block_dims(std::make_pair(0, 0)), payload_offset_block_capacity(0) {
+	OrderGlobalState()
+	    : total_count(0), sorting_block_capacity(0), payload_data_block_dims(std::make_pair(0, 0)),
+	      payload_offset_block_capacity(0) {
 	}
 
 	~OrderGlobalState() override;
 
 	//! The lock for updating the order global state
 	std::mutex lock;
-	//! The buffer manager
-	BufferManager &buffer_manager;
 
 	//! Constants concerning sorting and/or payload data
 	unique_ptr<SortingState> sorting_state;
@@ -62,7 +60,7 @@ public:
 
 	//! Sorted data
 	vector<unique_ptr<SortedBlock>> sorted_blocks;
-	vector<unique_ptr<SortedBlock>> sorted_blocks_temp;
+	vector<vector<unique_ptr<SortedBlock>>> sorted_blocks_temp;
 
 	//! Total count - set after PhysicalOrder::Finalize is called
 	idx_t total_count;
@@ -172,7 +170,7 @@ public:
 
 unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &context) {
 	auto &buffer_manager = BufferManager::GetBufferManager(context);
-	auto state = make_unique<OrderGlobalState>(buffer_manager);
+	auto state = make_unique<OrderGlobalState>();
 
 	// init sorting state and sorting block
 	size_t entry_size = 0;
@@ -550,6 +548,44 @@ public:
 		if (!payload_state.all_constant) {
 			for (auto &block : payload_data->offset_blocks) {
 				buffer_manager.UnregisterBlock(block.block->BlockId(), true);
+			}
+		}
+	}
+
+	void AppendSortedBlocks(vector<unique_ptr<SortedBlock>> &sorted_blocks) {
+		D_ASSERT(Count() == 0);
+		for (auto &sb : sorted_blocks) {
+			for (auto &sorting_block : sb->sorting_blocks) {
+				sorting_blocks.push_back(move(sorting_block));
+			}
+			if (!sorting_state.all_constant) {
+				for (idx_t col_idx = 0; col_idx < sorting_state.num_cols; col_idx++) {
+					if (!sorting_state.constant_size[col_idx]) {
+						auto &source_data = sb->var_sorting_cols[col_idx]->data_blocks;
+						auto &target_data = var_sorting_cols[col_idx]->data_blocks;
+						for (auto &source_block : source_data) {
+							target_data.push_back(move(source_block));
+						}
+
+						auto &source_offsets = sb->var_sorting_cols[col_idx]->offset_blocks;
+						auto &target_offsets = var_sorting_cols[col_idx]->offset_blocks;
+						for (auto &source_block : source_offsets) {
+							target_offsets.push_back(move(source_block));
+						}
+					}
+				}
+			}
+			auto &source_data = sb->payload_data->data_blocks;
+			auto &target_data = payload_data->data_blocks;
+			for (auto &source_block : source_data) {
+				target_data.push_back(move(source_block));
+			}
+			if (!payload_state.all_constant) {
+				auto &source_offsets = sb->payload_data->offset_blocks;
+				auto &target_offsets = payload_data->offset_blocks;
+				for (auto &source_block : source_offsets) {
+					target_offsets.push_back(move(source_block));
+				}
 			}
 		}
 	}
@@ -1095,18 +1131,32 @@ int CompareVarCol(const idx_t &col_idx, const data_ptr_t &l_ptr, const data_ptr_
 	}
 }
 
+void CompleteMergeRound(BufferManager &buffer_manager, OrderGlobalState &state) {
+	// clean up old blocks
+	for (auto &sb : state.sorted_blocks) {
+		sb->UnregisterSortingBlocks();
+		sb->UnregisterPayloadBlocks();
+	}
+	state.sorted_blocks.clear();
+	// append new blocks that belong together into one
+	for (auto &sorted_block_vector : state.sorted_blocks_temp) {
+		state.sorted_blocks.push_back(
+		    make_unique<SortedBlock>(buffer_manager, *state.sorting_state, *state.payload_state));
+		state.sorted_blocks.back()->AppendSortedBlocks(sorted_block_vector);
+	}
+	state.sorted_blocks_temp.clear();
+}
+
 class PhysicalOrderMergeTask : public Task {
 public:
 	PhysicalOrderMergeTask(Pipeline &parent_p, ClientContext &context_p, OrderGlobalState &state_p, SortedBlock &left_p,
-	                       SortedBlock &right_p)
+	                       SortedBlock &right_p, SortedBlock &result)
 	    : parent(parent_p), context(context_p), buffer_manager(BufferManager::GetBufferManager(context_p)),
-	      state(state_p), sorting_state(*state_p.sorting_state), payload_state(*state_p.payload_state), left(left_p),
-	      right(right_p) {
-		result = make_unique<SortedBlock>(buffer_manager, sorting_state, payload_state);
+	      state(state_p), sorting_state(*state_p.sorting_state), left(left_p), right(right_p), result(result) {
 	}
 
 	void Execute() override {
-		result->InitializeWrite(state);
+		result.InitializeWrite(state);
 		bool left_smaller[PhysicalOrder::MERGE_STRIDE];
 		idx_t next_entry_sizes[PhysicalOrder::MERGE_STRIDE];
 		while (true) {
@@ -1124,28 +1174,19 @@ public:
 			if (!sorting_state.all_constant) {
 				for (idx_t col_idx = 0; col_idx < sorting_state.num_cols; col_idx++) {
 					if (!sorting_state.constant_size[col_idx]) {
-						Merge(*result->var_sorting_cols[col_idx], *left.var_sorting_cols[col_idx],
+						Merge(*result.var_sorting_cols[col_idx], *left.var_sorting_cols[col_idx],
 						      *right.var_sorting_cols[col_idx], next, left_smaller, next_entry_sizes);
 					}
 				}
 			}
-			Merge(*result->payload_data, *left.payload_data, *right.payload_data, next, left_smaller, next_entry_sizes);
+			Merge(*result.payload_data, *left.payload_data, *right.payload_data, next, left_smaller, next_entry_sizes);
 		}
-		D_ASSERT(result->Count() == left.Count() + right.Count());
+		D_ASSERT(result.Count() == left.Count() + right.Count());
 
 		lock_guard<mutex> glock(state.lock);
-		state.sorted_blocks_temp.push_back(move(result));
 		parent.finished_tasks++;
 		if (parent.total_tasks == parent.finished_tasks) {
-			for (auto &sb : state.sorted_blocks) {
-				sb->UnregisterSortingBlocks();
-				sb->UnregisterPayloadBlocks();
-			}
-			state.sorted_blocks.clear();
-			for (auto &block : state.sorted_blocks_temp) {
-				state.sorted_blocks.push_back(move(block));
-			}
-			state.sorted_blocks_temp.clear();
+			CompleteMergeRound(buffer_manager, state);
 			PhysicalOrder::ScheduleMergeTasks(parent, context, state);
 		}
 	}
@@ -1307,7 +1348,7 @@ public:
 		data_ptr_t l_ptr;
 		data_ptr_t r_ptr;
 
-		RowDataBlock *result_block = &result->sorting_blocks.back();
+		RowDataBlock *result_block = &result.sorting_blocks.back();
 		auto result_handle = buffer_manager.Pin(result_block->block);
 		data_ptr_t result_ptr = result_handle->Ptr() + result_block->count * sorting_state.entry_size;
 
@@ -1329,8 +1370,8 @@ public:
 
 			// create new result block (if needed)
 			if (result_block->count == result_block->capacity) {
-				result->CreateBlock();
-				result_block = &result->sorting_blocks.back();
+				result.CreateBlock();
+				result_block = &result.sorting_blocks.back();
 				result_handle = buffer_manager.Pin(result_block->block);
 				result_ptr = result_handle->Ptr();
 			}
@@ -1630,11 +1671,10 @@ private:
 	BufferManager &buffer_manager;
 	OrderGlobalState &state;
 	const SortingState &sorting_state;
-	const PayloadState &payload_state;
 
 	SortedBlock &left;
 	SortedBlock &right;
-	unique_ptr<SortedBlock> result;
+	SortedBlock &result;
 };
 
 void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> state_p) {
@@ -1711,17 +1751,29 @@ void PhysicalOrder::ScheduleMergeTasks(Pipeline &pipeline, ClientContext &contex
 	// uneven amount of blocks
 	auto num_blocks = state.sorted_blocks.size();
 	if (num_blocks % 2 == 1) {
-		state.sorted_blocks_temp.push_back(move(state.sorted_blocks.back()));
+		state.sorted_blocks_temp.emplace_back();
+		state.sorted_blocks_temp.back().push_back(move(state.sorted_blocks.back()));
 		state.sorted_blocks.pop_back();
 		num_blocks--;
 	}
 
 	auto &ts = TaskScheduler::GetScheduler(context);
-	pipeline.total_tasks += num_blocks / 2;
-	for (idx_t i = 0; i < num_blocks; i += 2) {
-		auto new_task = make_unique<PhysicalOrderMergeTask>(pipeline, context, state, *state.sorted_blocks[i],
-		                                                    *state.sorted_blocks[i + 1]);
-		ts.ScheduleTask(pipeline.token, move(new_task));
+	auto &buffer_manager = BufferManager::GetBufferManager(context);
+	idx_t num_threads = ts.NumberOfThreads();
+	if ((num_blocks / 2) > num_threads) {
+		// there are enough blocks to give 2 blocks to each thread
+		pipeline.total_tasks += num_blocks / 2;
+		for (idx_t i = 0; i < num_blocks; i += 2) {
+			state.sorted_blocks_temp.emplace_back();
+			state.sorted_blocks_temp.back().push_back(
+			    make_unique<SortedBlock>(buffer_manager, *state.sorting_state, *state.payload_state));
+			auto new_task = make_unique<PhysicalOrderMergeTask>(pipeline, context, state, *state.sorted_blocks[i],
+			                                                    *state.sorted_blocks[i + 1],
+			                                                    *state.sorted_blocks_temp.back().back());
+			ts.ScheduleTask(pipeline.token, move(new_task));
+		}
+	} else {
+		// need to balance the load to guarantee full parallelism
 	}
 }
 
