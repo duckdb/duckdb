@@ -393,11 +393,11 @@ Value Vector::GetValue(idx_t index) const {
 	case LogicalTypeId::TIMESTAMP:
 		return Value::TIMESTAMP(((timestamp_t *)data)[index]);
 	case LogicalTypeId::TIMESTAMP_NS:
-		return Value::TIMESTAMP_NS(((timestamp_t *)data)[index]);
+		return Value::TimestampNs(((timestamp_t *)data)[index]);
 	case LogicalTypeId::TIMESTAMP_MS:
-		return Value::TIMESTAMP_MS(((timestamp_t *)data)[index]);
+		return Value::TimestampMs(((timestamp_t *)data)[index]);
 	case LogicalTypeId::TIMESTAMP_SEC:
-		return Value::TIMESTAMP_SEC(((timestamp_t *)data)[index]);
+		return Value::TimestampSec(((timestamp_t *)data)[index]);
 	case LogicalTypeId::HUGEINT:
 		return Value::HUGEINT(((hugeint_t *)data)[index]);
 	case LogicalTypeId::DECIMAL: {
