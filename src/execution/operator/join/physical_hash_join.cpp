@@ -154,19 +154,6 @@ void PhysicalHashJoin::Finalize(Pipeline &pipeline, ClientContext &context, uniq
 //===--------------------------------------------------------------------===//
 // GetChunkInternal
 //===--------------------------------------------------------------------===//
-class PhysicalHashJoinState : public PhysicalOperatorState {
-public:
-	PhysicalHashJoinState(PhysicalOperator &op, PhysicalOperator *left, PhysicalOperator *right,
-	                      vector<JoinCondition> &conditions)
-	    : PhysicalOperatorState(op, left) {
-	}
-
-	DataChunk cached_chunk;
-	DataChunk join_keys;
-	ExpressionExecutor probe_executor;
-	unique_ptr<JoinHashTable::ScanStructure> scan_structure;
-};
-
 unique_ptr<PhysicalOperatorState> PhysicalHashJoin::GetOperatorState() {
 	auto state = make_unique<PhysicalHashJoinState>(*this, children[0].get(), children[1].get(), conditions);
 	state->cached_chunk.Initialize(types);
@@ -186,7 +173,7 @@ void PhysicalHashJoin::GetChunkInternal(ExecutionContext &context, DataChunk &ch
 		return;
 	}
 	// We first try a probe with a perfect hash table, otherwise we do the normal probe
-	if (IsInnerJoin(join_type) && IsPerfectHashJoin(chunk)) {
+	if (IsInnerJoin(join_type) && IsPerfectHashJoin(context, chunk, state)) {
 		return;
 	}
 	do {
@@ -262,14 +249,22 @@ void PhysicalHashJoin::ProbeHashTable(ExecutionContext &context, DataChunk &chun
 	} while (chunk.size() == 0);
 }
 
-bool PhysicalHashJoin::IsPerfectHashJoin(DataChunk &chunk) {
+bool PhysicalHashJoin::IsPerfectHashJoin(ExecutionContext &context, DataChunk &chunk,
+                                         PhysicalHashJoinState *physical_state) {
 	if (!perfect_join_state.is_build_small)
 		return false;
 	auto state = reinterpret_cast<HashJoinGlobalState *>(sink_state.get());
 	auto hash_table_ptr = state->hash_table.get();
-
-	DataChunk perfect_hash_table;
-	perfect_hash_table.Initialize(hash_table_ptr->build_types);
+	// fetch the chunk to join
+	children[0]->GetChunk(context, physical_state->child_chunk, physical_state->child_state.get());
+	hash_table_ptr->const SelectionVector *current_sel;
+	BinaryExecutor::Execute<timestamp_t, timestamp_t, interval_t>(
+	    input.data[0], input.data[1], result, input.size(),
+	    [&](TT input2) { return Interval::GetDifference(input1, input2); });
+	// check whether there are duplicates
+	// fetch left side
+	// fetch right side and go throw the indexes producing a selection vector
+	// for each column we produce a selection vector
 
 	return hash_table_ptr->size() > 0;
 }

@@ -23,6 +23,18 @@ struct PerfectHashJoinState {
 	bool is_probe_small {false};
 };
 
+class PhysicalHashJoinState : public PhysicalOperatorState {
+public:
+	PhysicalHashJoinState(PhysicalOperator &op, PhysicalOperator *left, PhysicalOperator *right,
+	                      vector<JoinCondition> &conditions)
+	    : PhysicalOperatorState(op, left) {
+	}
+
+	DataChunk cached_chunk;
+	DataChunk join_keys;
+	ExpressionExecutor probe_executor;
+	unique_ptr<JoinHashTable::ScanStructure> scan_structure;
+};
 //! PhysicalHashJoin represents a hash loop join between two tables
 class PhysicalHashJoin : public PhysicalComparisonJoin {
 public:
@@ -53,7 +65,7 @@ public:
 
 	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
-	bool IsPerfectHashJoin(DataChunk &chunk);
+	bool IsPerfectHashJoin(ExecutionContext &context, DataChunk &chunk, PhysicalHashJoinState *state);
 
 private:
 	void ProbeHashTable(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p);
