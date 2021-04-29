@@ -67,9 +67,9 @@ public:
 
 	//! Capacity/entry sizes used to initialize blocks
 	idx_t sorting_block_capacity;
-	vector<std::pair<idx_t, idx_t>> var_sorting_data_block_dims;
+	vector<pair<idx_t, idx_t>> var_sorting_data_block_dims;
 	vector<idx_t> var_sorting_offset_block_capacity;
-	std::pair<idx_t, idx_t> payload_data_block_dims;
+	pair<idx_t, idx_t> payload_data_block_dims;
 	idx_t payload_offset_block_capacity;
 };
 
@@ -169,7 +169,6 @@ public:
 };
 
 unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &context) {
-	auto &buffer_manager = BufferManager::GetBufferManager(context);
 	auto state = make_unique<OrderGlobalState>();
 
 	// init sorting state and sorting block
@@ -378,7 +377,7 @@ public:
 	}
 
 	//! Initialize this to write data to during the merge
-	void InitializeWrite(const std::pair<idx_t, idx_t> dims_p, const idx_t offset_capacity_p) {
+	void InitializeWrite(const pair<idx_t, idx_t> dims_p, const idx_t offset_capacity_p) {
 		data_dims = dims_p;
 		offset_capacity = offset_capacity_p;
 		CreateBlock();
@@ -427,11 +426,48 @@ public:
 		entry_idx = entry_idx_to;
 	}
 
+	void GlobalToLocalIndex(const idx_t &global_idx, idx_t &local_block_index, idx_t &local_entry_index) {
+		local_entry_index = global_idx;
+		for (local_block_index = 0; local_block_index < data_blocks.size(); local_block_index++) {
+			idx_t block_count = data_blocks[local_block_index].count;
+			if (local_entry_index > block_count) {
+				local_entry_index -= block_count;
+			} else {
+				break;
+			}
+		}
+	}
+
+	unique_ptr<SortedData> CreateSlice(const idx_t start, const idx_t end) {
+		// identify blocks/entry indices of this slice
+		idx_t start_block_index;
+		idx_t start_entry_index;
+		GlobalToLocalIndex(start, start_block_index, start_entry_index);
+		idx_t end_block_index;
+		idx_t end_entry_index;
+		GlobalToLocalIndex(end, end_block_index, end_entry_index);
+		// add the corresponding blocks to the result
+		auto result = make_unique<SortedData>(buffer_manager, constant_size, entry_size);
+		for (idx_t i = start_block_index; i <= end_block_index; i++) {
+			result->data_blocks.push_back(data_blocks[i]);
+			if (!constant_size) {
+				result->offset_blocks.push_back(offset_blocks[i]);
+			}
+		}
+		// use start and end entry indices to set the boundaries
+		result->entry_idx = start_block_index;
+		result->data_blocks.back().count = end_entry_index;
+		if (!constant_size) {
+			result->offset_blocks.back().count = end_entry_index;
+		}
+		return result;
+	}
+
 private:
 	//! Buffer manager and constants
 	BufferManager &buffer_manager;
 
-	std::pair<idx_t, idx_t> data_dims;
+	pair<idx_t, idx_t> data_dims;
 	idx_t offset_capacity;
 
 	unique_ptr<BufferHandle> data_handle = nullptr;
@@ -588,6 +624,47 @@ public:
 				}
 			}
 		}
+	}
+
+	void GlobalToLocalIndex(const idx_t &global_idx, idx_t &local_block_index, idx_t &local_entry_index) {
+		local_entry_index = global_idx;
+		for (local_block_index = 0; local_block_index < sorting_blocks.size(); local_block_index++) {
+			idx_t block_count = sorting_blocks[local_block_index].count;
+			if (local_entry_index > block_count) {
+				local_entry_index -= block_count;
+			} else {
+				break;
+			}
+		}
+	}
+
+	unique_ptr<SortedBlock> CreateSlice(const idx_t start, const idx_t end) {
+		// identify blocks/entry indices of this slice
+		idx_t start_block_index;
+		idx_t start_entry_index;
+		GlobalToLocalIndex(start, start_block_index, start_entry_index);
+		idx_t end_block_index;
+		idx_t end_entry_index;
+		GlobalToLocalIndex(end, end_block_index, end_entry_index);
+		// add the corresponding blocks to the result
+		auto result = make_unique<SortedBlock>(buffer_manager, sorting_state, payload_state);
+		for (idx_t i = start_block_index; i <= end_block_index; i++) {
+			result->sorting_blocks.push_back(sorting_blocks[i]);
+		}
+		// use start and end entry indices to set the boundaries
+		result->entry_idx = start_block_index;
+		result->sorting_blocks.back().count = end_entry_index;
+		// same for the var size sorting data
+		if (!sorting_state.all_constant) {
+			for (idx_t col_idx = 0; col_idx < sorting_state.num_cols; col_idx++) {
+				if (!sorting_state.constant_size[col_idx]) {
+					result->var_sorting_cols[col_idx] = var_sorting_cols[col_idx]->CreateSlice(start, end);
+				}
+			}
+		}
+		// and the payload data
+		result->payload_data = payload_data->CreateSlice(start, end);
+		return result;
 	}
 
 public:
@@ -1131,31 +1208,22 @@ int CompareVarCol(const idx_t &col_idx, const data_ptr_t &l_ptr, const data_ptr_
 	}
 }
 
-void CompleteMergeRound(BufferManager &buffer_manager, OrderGlobalState &state) {
-	// clean up old blocks
-	for (auto &sb : state.sorted_blocks) {
-		sb->UnregisterSortingBlocks();
-		sb->UnregisterPayloadBlocks();
-	}
-	state.sorted_blocks.clear();
-	// append new blocks that belong together into one
-	for (auto &sorted_block_vector : state.sorted_blocks_temp) {
-		state.sorted_blocks.push_back(
-		    make_unique<SortedBlock>(buffer_manager, *state.sorting_state, *state.payload_state));
-		state.sorted_blocks.back()->AppendSortedBlocks(sorted_block_vector);
-	}
-	state.sorted_blocks_temp.clear();
-}
-
 class PhysicalOrderMergeTask : public Task {
 public:
-	PhysicalOrderMergeTask(Pipeline &parent_p, ClientContext &context_p, OrderGlobalState &state_p, SortedBlock &left_p,
-	                       SortedBlock &right_p, SortedBlock &result)
+	PhysicalOrderMergeTask(Pipeline &parent_p, ClientContext &context_p, OrderGlobalState &state_p,
+	                       unique_ptr<SortedBlock> left_p, unique_ptr<SortedBlock> right_p, SortedBlock &result,
+	                       bool merge_path)
 	    : parent(parent_p), context(context_p), buffer_manager(BufferManager::GetBufferManager(context_p)),
-	      state(state_p), sorting_state(*state_p.sorting_state), left(left_p), right(right_p), result(result) {
+	      state(state_p), sorting_state(*state_p.sorting_state), left_block(move(left_p)), right_block(move(right_p)),
+	      result(result), merge_path(merge_path) {
 	}
 
 	void Execute() override {
+		auto &left = *left_block;
+		auto &right = *right_block;
+		auto l_count = left.Remaining();
+		auto r_count = right.Remaining();
+
 		result.InitializeWrite(state);
 		bool left_smaller[PhysicalOrder::MERGE_STRIDE];
 		idx_t next_entry_sizes[PhysicalOrder::MERGE_STRIDE];
@@ -1181,18 +1249,38 @@ public:
 			}
 			Merge(*result.payload_data, *left.payload_data, *right.payload_data, next, left_smaller, next_entry_sizes);
 		}
-		D_ASSERT(result.Count() == left.Count() + right.Count());
+		D_ASSERT(result.Count() == l_count + r_count);
+
+		if (!merge_path) {
+			left.UnregisterSortingBlocks();
+			right.UnregisterPayloadBlocks();
+		}
 
 		lock_guard<mutex> glock(state.lock);
 		parent.finished_tasks++;
 		if (parent.total_tasks == parent.finished_tasks) {
-			CompleteMergeRound(buffer_manager, state);
+			if (merge_path) {
+				for (auto &sb : state.sorted_blocks) {
+					sb->UnregisterSortingBlocks();
+					sb->UnregisterPayloadBlocks();
+				}
+			}
+			state.sorted_blocks.clear();
+			for (auto &sorted_block_vector : state.sorted_blocks_temp) {
+				state.sorted_blocks.push_back(
+				    make_unique<SortedBlock>(buffer_manager, *state.sorting_state, *state.payload_state));
+				state.sorted_blocks.back()->AppendSortedBlocks(sorted_block_vector);
+			}
+			state.sorted_blocks_temp.clear();
 			PhysicalOrder::ScheduleMergeTasks(parent, context, state);
 		}
 	}
 
 	//! Computes how the next 'count' tuples should be merged
 	void ComputeMerge(const idx_t &count, bool *left_smaller) {
+		auto &left = *left_block;
+		auto &right = *right_block;
+
 		idx_t l_block_idx = left.block_idx;
 		idx_t r_block_idx = right.block_idx;
 		idx_t l_entry_idx = left.entry_idx;
@@ -1341,6 +1429,9 @@ public:
 
 	//! Merges the fixed size sorting blocks
 	void Merge(const idx_t &count, const bool *left_smaller) {
+		auto &left = *left_block;
+		auto &right = *right_block;
+
 		RowDataBlock *l_block = nullptr;
 		RowDataBlock *r_block = nullptr;
 		unique_ptr<BufferHandle> l_block_handle;
@@ -1672,9 +1763,11 @@ private:
 	OrderGlobalState &state;
 	const SortingState &sorting_state;
 
-	SortedBlock &left;
-	SortedBlock &right;
+	unique_ptr<SortedBlock> left_block;
+	unique_ptr<SortedBlock> right_block;
 	SortedBlock &result;
+
+	const bool merge_path;
 };
 
 void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> state_p) {
@@ -1697,7 +1790,7 @@ void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 
 	if (!sorting_state.all_constant) {
 		const idx_t num_cols = sorting_state.num_cols;
-		state.var_sorting_data_block_dims = vector<std::pair<idx_t, idx_t>>(num_cols, std::make_pair(0, 0));
+		state.var_sorting_data_block_dims = vector<pair<idx_t, idx_t>>(num_cols, std::make_pair(0, 0));
 		state.var_sorting_offset_block_capacity = vector<idx_t>(num_cols, 0);
 		for (idx_t col_idx = 0; col_idx < num_cols; col_idx++) {
 			idx_t &var_data_capacity = state.var_sorting_data_block_dims[col_idx].first;
@@ -1739,6 +1832,120 @@ void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 	}
 }
 
+//! Compare values within SortedBlocks using a global index
+int GlobalCompare(BufferManager &buffer_manager, SortedBlock &l, SortedBlock &r, const idx_t l_idx, const idx_t r_idx,
+                  const SortingState &sorting_state) {
+	idx_t l_entry_idx;
+	idx_t l_block_idx;
+	l.GlobalToLocalIndex(l_idx, l_block_idx, l_entry_idx);
+
+	idx_t r_entry_idx;
+	idx_t r_block_idx;
+	r.GlobalToLocalIndex(r_idx, r_block_idx, r_entry_idx);
+
+	auto l_block_handle = buffer_manager.Pin(l.sorting_blocks[l_block_idx].block);
+	auto r_block_handle = buffer_manager.Pin(r.sorting_blocks[r_block_idx].block);
+	data_ptr_t l_ptr = l_block_handle->Ptr() + l_entry_idx * sorting_state.entry_size;
+	data_ptr_t r_ptr = r_block_handle->Ptr() + r_entry_idx * sorting_state.entry_size;
+
+	if (sorting_state.all_constant) {
+		return memcmp(l_ptr, r_ptr, sorting_state.comp_size);
+	} else {
+		// TODO: variable size
+		return 0;
+	}
+}
+
+void ComputeIntersection(BufferManager &buffer_manager, SortedBlock &l, SortedBlock &r, const idx_t sum, idx_t &l_idx,
+                         idx_t &r_idx, const SortingState &sorting_state) {
+	const idx_t l_count = l.Count();
+	const idx_t r_count = r.Count();
+	// cover some edge cases
+	if (sum >= l_count + r_count) {
+		l_idx = l_count;
+		r_idx = r_count;
+		return;
+	} else if (sum == 0) {
+		l_idx = 0;
+		r_idx = 0;
+		return;
+	} else if (l_count == 0) {
+		l_idx = 0;
+		r_idx = sum;
+		return;
+	} else if (r_count == 0) {
+		r_idx = 0;
+		l_idx = sum;
+		return;
+	}
+	// determine offsets for the binary search
+	const bool sum_greater_than_l = sum > l_count;
+	const bool sum_greater_than_r = sum > r_count;
+	const idx_t l_offset = !sum_greater_than_r ? 0 : sum - r_count;
+	const idx_t r_offset = !sum_greater_than_l ? 0 : sum - l_count;
+	// determine the size of the search space
+	idx_t search_space;
+	if (sum_greater_than_l && sum_greater_than_r) {
+		// sum is greater than both - space is bounded by the counts
+		search_space = l_count + r_count - sum;
+	} else if (sum_greater_than_l && !sum_greater_than_r) {
+		search_space = l_count;
+	} else if (sum_greater_than_r && !sum_greater_than_l) {
+		search_space = r_count;
+	} else {
+		search_space = sum;
+	}
+	// binary search
+	idx_t left = 0;
+	idx_t right = search_space;
+	idx_t middle;
+	while (left <= right) {
+		middle = (left + right) / 2;
+		l_idx = l_offset + search_space - middle;
+		r_idx = r_offset + middle;
+		// check stopping criteria
+		int l_min_one_comp_r = GlobalCompare(buffer_manager, l, r, l_idx - 1, r_idx, sorting_state);
+		if (l_idx >= l_count && l_min_one_comp_r < 0) {
+			// all elements in r are bigger than those in l
+			break;
+		}
+		int l_comp_r_min_one = GlobalCompare(buffer_manager, l, r, l_idx, r_idx - 1, sorting_state);
+		if (r_idx >= r_count && l_comp_r_min_one > 0) {
+			// all elements in l are bigger than those in r
+			break;
+		}
+		if (l_comp_r_min_one >= 0 && l_min_one_comp_r < 0) {
+			// we found the intersection with the merge path
+			break;
+		}
+		// continue binary search
+		if (l_idx == l_count || l_comp_r_min_one >= 0) {
+			left = middle + 1;
+		} else {
+			right = middle - 1;
+		}
+	}
+}
+
+void ComputeIntersections(BufferManager &buffer_manager, SortedBlock &left, SortedBlock &right, const idx_t &num_tasks,
+                          vector<idx_t> &left_intersections, vector<idx_t> &right_intersections,
+                          const SortingState &sorting_state) {
+	const idx_t l_count = left.Count();
+	const idx_t r_count = right.Count();
+	const idx_t tuples_per_task = (l_count + r_count) / num_tasks;
+
+	left_intersections.push_back(0);
+	right_intersections.push_back(0);
+	for (idx_t i = 1; i < num_tasks; i++) {
+		left_intersections.emplace_back();
+		right_intersections.emplace_back();
+		ComputeIntersection(buffer_manager, left, right, i * tuples_per_task, left_intersections.back(),
+		                    right_intersections.back(), sorting_state);
+	}
+	left_intersections.push_back(l_count);
+	right_intersections.push_back(r_count);
+}
+
 void PhysicalOrder::ScheduleMergeTasks(Pipeline &pipeline, ClientContext &context, OrderGlobalState &state) {
 	if (state.sorted_blocks.size() == 1) {
 		for (auto &sb : state.sorted_blocks) {
@@ -1759,21 +1966,56 @@ void PhysicalOrder::ScheduleMergeTasks(Pipeline &pipeline, ClientContext &contex
 
 	auto &ts = TaskScheduler::GetScheduler(context);
 	auto &buffer_manager = BufferManager::GetBufferManager(context);
-	idx_t num_threads = ts.NumberOfThreads();
-	if ((num_blocks / 2) > num_threads) {
+	const idx_t num_threads = ts.NumberOfThreads();
+	if ((num_blocks / 2) >= num_threads) {
 		// there are enough blocks to give 2 blocks to each thread
 		pipeline.total_tasks += num_blocks / 2;
 		for (idx_t i = 0; i < num_blocks; i += 2) {
 			state.sorted_blocks_temp.emplace_back();
 			state.sorted_blocks_temp.back().push_back(
 			    make_unique<SortedBlock>(buffer_manager, *state.sorting_state, *state.payload_state));
-			auto new_task = make_unique<PhysicalOrderMergeTask>(pipeline, context, state, *state.sorted_blocks[i],
-			                                                    *state.sorted_blocks[i + 1],
-			                                                    *state.sorted_blocks_temp.back().back());
+			auto new_task = make_unique<PhysicalOrderMergeTask>(pipeline, context, state, move(state.sorted_blocks[i]),
+			                                                    move(state.sorted_blocks[i + 1]),
+			                                                    *state.sorted_blocks_temp.back().back(), false);
 			ts.ScheduleTask(pipeline.token, move(new_task));
 		}
 	} else {
-		// need to balance the load to guarantee full parallelism
+		idx_t tasks_per_merge = 2;
+		while ((tasks_per_merge * num_blocks / 2) < num_threads) {
+			tasks_per_merge++;
+		}
+		pipeline.total_tasks += tasks_per_merge * num_blocks / 2;
+		for (idx_t i = 0; i < num_blocks; i += 2) {
+			state.sorted_blocks_temp.emplace_back();
+			auto &left = *state.sorted_blocks[i];
+			auto &right = *state.sorted_blocks[i + 1];
+			const idx_t l_count = left.Count();
+			const idx_t r_count = right.Count();
+			const idx_t tuples_per_task = (l_count + r_count) / tasks_per_merge;
+
+			idx_t l_start = 0;
+			idx_t r_start = 0;
+			for (idx_t task_num = 1; task_num < tasks_per_merge; task_num++) {
+				idx_t l_end;
+				idx_t r_end;
+				ComputeIntersection(buffer_manager, left, right, task_num * tuples_per_task, l_end, r_end,
+				                    *state.sorting_state);
+				state.sorted_blocks_temp.back().push_back(
+				    make_unique<SortedBlock>(buffer_manager, *state.sorting_state, *state.payload_state));
+				auto new_task = make_unique<PhysicalOrderMergeTask>(
+				    pipeline, context, state, left.CreateSlice(l_start, l_end), right.CreateSlice(r_start, r_end),
+				    *state.sorted_blocks_temp.back().back(), true);
+				ts.ScheduleTask(pipeline.token, move(new_task));
+				l_start = l_end;
+				r_start = r_end;
+			}
+			state.sorted_blocks_temp.back().push_back(
+			    make_unique<SortedBlock>(buffer_manager, *state.sorting_state, *state.payload_state));
+			auto new_task = make_unique<PhysicalOrderMergeTask>(
+			    pipeline, context, state, left.CreateSlice(l_start, l_count), right.CreateSlice(r_start, r_count),
+			    *state.sorted_blocks_temp.back().back(), true);
+			ts.ScheduleTask(pipeline.token, move(new_task));
+		}
 	}
 }
 
@@ -1917,6 +2159,7 @@ void PhysicalOrder::GetChunkInternal(ExecutionContext &context, DataChunk &chunk
 	}
 
 	if (!state.initialized) {
+		D_ASSERT(gstate.sorted_blocks.back()->Count() == gstate.total_count);
 		state.payload_data = gstate.sorted_blocks.back()->payload_data.get();
 		// initialize parallel state (if any)
 		state.parallel_state = nullptr;
