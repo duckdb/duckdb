@@ -15,48 +15,48 @@ struct MillenniumTruncOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
 		date_t date = Timestamp::GetDate(input);
-		return Timestamp::FromDatetime(Date::FromDate((Date::ExtractYear(date) / 1000) * 1000, 1, 1), 0);
+		return Timestamp::FromDatetime(Date::FromDate((Date::ExtractYear(date) / 1000) * 1000, 1, 1), dtime_t(0));
 	}
 };
 template <>
 timestamp_t MillenniumTruncOperator::Operation(date_t input) {
-	return MillenniumTruncOperator::Operation<timestamp_t, timestamp_t>(Timestamp::FromDatetime(input, 0));
+	return MillenniumTruncOperator::Operation<timestamp_t, timestamp_t>(Timestamp::FromDatetime(input, dtime_t(0)));
 }
 
 struct CenturyTruncOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
 		date_t date = Timestamp::GetDate(input);
-		return Timestamp::FromDatetime(Date::FromDate((Date::ExtractYear(date) / 100) * 100, 1, 1), 0);
+		return Timestamp::FromDatetime(Date::FromDate((Date::ExtractYear(date) / 100) * 100, 1, 1), dtime_t(0));
 	}
 };
 template <>
 timestamp_t CenturyTruncOperator::Operation(date_t input) {
-	return CenturyTruncOperator::Operation<timestamp_t, timestamp_t>(Timestamp::FromDatetime(input, 0));
+	return CenturyTruncOperator::Operation<timestamp_t, timestamp_t>(Timestamp::FromDatetime(input, dtime_t(0)));
 }
 
 struct DecadeTruncOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
 		date_t date = Timestamp::GetDate(input);
-		return Timestamp::FromDatetime(Date::FromDate((Date::ExtractYear(date) / 10) * 10, 1, 1), 0);
+		return Timestamp::FromDatetime(Date::FromDate((Date::ExtractYear(date) / 10) * 10, 1, 1), dtime_t(0));
 	}
 };
 template <>
 timestamp_t DecadeTruncOperator::Operation(date_t input) {
-	return DecadeTruncOperator::Operation<timestamp_t, timestamp_t>(Timestamp::FromDatetime(input, 0));
+	return DecadeTruncOperator::Operation<timestamp_t, timestamp_t>(Timestamp::FromDatetime(input, dtime_t(0)));
 }
 
 struct YearTruncOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
 		date_t date = Timestamp::GetDate(input);
-		return Timestamp::FromDatetime(Date::FromDate(Date::ExtractYear(date), 1, 1), 0);
+		return Timestamp::FromDatetime(Date::FromDate(Date::ExtractYear(date), 1, 1), dtime_t(0));
 	}
 };
 template <>
 timestamp_t YearTruncOperator::Operation(date_t input) {
-	return YearTruncOperator::Operation<timestamp_t, timestamp_t>(Timestamp::FromDatetime(input, 0));
+	return YearTruncOperator::Operation<timestamp_t, timestamp_t>(Timestamp::FromDatetime(input, dtime_t(0)));
 }
 
 struct QuarterTruncOperator {
@@ -66,24 +66,25 @@ struct QuarterTruncOperator {
 
 		int32_t month = Date::ExtractMonth(date);
 		month = 1 + (((month - 1) / 3) * 3);
-		return Timestamp::FromDatetime(Date::FromDate(Date::ExtractYear(date), month, 1), 0);
+		return Timestamp::FromDatetime(Date::FromDate(Date::ExtractYear(date), month, 1), dtime_t(0));
 	}
 };
 template <>
 timestamp_t QuarterTruncOperator::Operation(date_t input) {
-	return QuarterTruncOperator::Operation<timestamp_t, timestamp_t>(Timestamp::FromDatetime(input, 0));
+	return QuarterTruncOperator::Operation<timestamp_t, timestamp_t>(Timestamp::FromDatetime(input, dtime_t(0)));
 }
 
 struct MonthTruncOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
 		date_t date = Timestamp::GetDate(input);
-		return Timestamp::FromDatetime(Date::FromDate(Date::ExtractYear(date), Date::ExtractMonth(date), 1), 0);
+		return Timestamp::FromDatetime(Date::FromDate(Date::ExtractYear(date), Date::ExtractMonth(date), 1),
+		                               dtime_t(0));
 	}
 };
 template <>
 timestamp_t MonthTruncOperator::Operation(date_t input) {
-	return MonthTruncOperator::Operation<timestamp_t, timestamp_t>(Timestamp::FromDatetime(input, 0));
+	return MonthTruncOperator::Operation<timestamp_t, timestamp_t>(Timestamp::FromDatetime(input, dtime_t(0)));
 }
 
 struct WeekTruncOperator {
@@ -91,24 +92,24 @@ struct WeekTruncOperator {
 	static inline TR Operation(TA input) {
 		date_t date = Timestamp::GetDate(input);
 
-		return Timestamp::FromDatetime(Date::GetMondayOfCurrentWeek(date), 0);
+		return Timestamp::FromDatetime(Date::GetMondayOfCurrentWeek(date), dtime_t(0));
 	}
 };
 template <>
 timestamp_t WeekTruncOperator::Operation(date_t input) {
-	return WeekTruncOperator::Operation<timestamp_t, timestamp_t>(Timestamp::FromDatetime(input, 0));
+	return WeekTruncOperator::Operation<timestamp_t, timestamp_t>(Timestamp::FromDatetime(input, dtime_t(0)));
 }
 
 struct DayTruncOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
 		date_t date = Timestamp::GetDate(input);
-		return Timestamp::FromDatetime(date, 0);
+		return Timestamp::FromDatetime(date, dtime_t(0));
 	}
 };
 template <>
 timestamp_t DayTruncOperator::Operation(date_t input) {
-	return Timestamp::FromDatetime(input, 0);
+	return Timestamp::FromDatetime(input, dtime_t(0));
 }
 
 struct HourTruncOperator {
@@ -124,7 +125,7 @@ struct HourTruncOperator {
 };
 template <>
 timestamp_t HourTruncOperator::Operation(date_t input) {
-	return Timestamp::FromDatetime(input, 0);
+	return Timestamp::FromDatetime(input, dtime_t(0));
 }
 
 struct MinuteTruncOperator {
@@ -140,7 +141,7 @@ struct MinuteTruncOperator {
 };
 template <>
 timestamp_t MinuteTruncOperator::Operation(date_t input) {
-	return Timestamp::FromDatetime(input, 0);
+	return Timestamp::FromDatetime(input, dtime_t(0));
 }
 
 struct SecondsTruncOperator {
@@ -156,7 +157,7 @@ struct SecondsTruncOperator {
 };
 template <>
 timestamp_t SecondsTruncOperator::Operation(date_t input) {
-	return Timestamp::FromDatetime(input, 0);
+	return Timestamp::FromDatetime(input, dtime_t(0));
 }
 
 struct MilliSecondsTruncOperator {
@@ -167,7 +168,7 @@ struct MilliSecondsTruncOperator {
 };
 template <>
 timestamp_t MilliSecondsTruncOperator::Operation(date_t input) {
-	return Timestamp::FromDatetime(input, 0);
+	return Timestamp::FromDatetime(input, dtime_t(0));
 }
 
 template <class TA, class TR>
