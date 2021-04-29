@@ -95,7 +95,7 @@ public:
 
 		// We already parsed the metadata for the first file in a glob because we need some type info.
 		auto overall_stats =
-		    ParquetReader::ReadStatistics(bind_data.initial_reader->return_types[column_index], column_index,
+		    ParquetReader::ReadStatistics(*bind_data.initial_reader, bind_data.initial_reader->return_types[column_index], column_index,
 		                                  bind_data.initial_reader->metadata->metadata.get());
 
 		if (!overall_stats) {
@@ -121,7 +121,7 @@ public:
 					return nullptr;
 				}
 				// get and merge stats for file
-				auto file_stats = ParquetReader::ReadStatistics(bind_data.initial_reader->return_types[column_index],
+				auto file_stats = ParquetReader::ReadStatistics(*bind_data.initial_reader, bind_data.initial_reader->return_types[column_index],
 				                                                column_index, metadata->metadata.get());
 				if (!file_stats) {
 					return nullptr;
