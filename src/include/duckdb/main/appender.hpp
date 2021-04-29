@@ -113,6 +113,12 @@ void DUCKDB_API Appender::Append(float value);
 template <>
 void DUCKDB_API Appender::Append(double value);
 template <>
+void DUCKDB_API Appender::Append(date_t value);
+template <>
+void DUCKDB_API Appender::Append(dtime_t value);
+template <>
+void DUCKDB_API Appender::Append(timestamp_t value);
+template <>
 void DUCKDB_API Appender::Append(const char *value);
 template <>
 void DUCKDB_API Appender::Append(Value value);
