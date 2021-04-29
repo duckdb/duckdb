@@ -224,7 +224,8 @@ void Morsel::TemplatedScan(Transaction *transaction, MorselScanState &state, Dat
 				auto tf_idx = adaptive_filter->permutation[i];
 				auto col_idx = column_ids[tf_idx];
 				for(auto &filter : table_filters->filters[tf_idx]) {
-					UncompressedSegment::FilterSelection(sel, result.data[col_idx], filter, approved_tuple_count, FlatVector::Validity(result.data[col_idx]));
+					D_ASSERT(tf_idx < result.data.size());
+					UncompressedSegment::FilterSelection(sel, result.data[tf_idx], filter, approved_tuple_count, FlatVector::Validity(result.data[tf_idx]));
 				}
 			}
 			auto end_time = high_resolution_clock::now();
