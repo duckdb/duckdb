@@ -61,6 +61,7 @@ public:
 
 	unique_ptr<Morsel> AlterType(ClientContext &context, const LogicalType &target_type, idx_t changed_idx, ExpressionExecutor &executor, TableScanState &scan_state, DataChunk &scan_chunk);
 	unique_ptr<Morsel> AddColumn(ClientContext &context, ColumnDefinition &new_column, ExpressionExecutor &executor, Expression *default_value, Vector &intermediate);
+	unique_ptr<Morsel> RemoveColumn(idx_t removed_column);
 
 	void InitializeEmpty(const vector<LogicalType> &types);
 

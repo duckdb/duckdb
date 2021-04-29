@@ -126,6 +126,20 @@ unique_ptr<Morsel> Morsel::AddColumn(ClientContext &context, ColumnDefinition &n
 	return morsel;
 }
 
+unique_ptr<Morsel> Morsel::RemoveColumn(idx_t removed_column) {
+	D_ASSERT(removed_column < columns.size());
+
+	auto morsel = make_unique<Morsel>(db, table_info, this->start, this->count);
+	morsel->version_info = version_info;
+	morsel->updates = updates;
+	morsel->columns = columns;
+	morsel->stats = stats;
+	// now remove the column
+	morsel->columns.erase(morsel->columns.begin() + removed_column);
+	morsel->stats.erase(morsel->stats.begin() + removed_column);
+	return morsel;
+}
+
 void Morsel::Scan(Transaction &transaction, MorselScanState &state, DataChunk &result) {
 	auto &table_filters = state.parent.table_filters;
 	auto &column_ids = state.parent.column_ids;

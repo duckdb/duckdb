@@ -107,26 +107,38 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_column)
     : info(parent.info), types(parent.types), db(parent.db), total_rows(parent.total_rows), is_root(true) {
-	throw NotImplementedException("FIXME: remove column");
-	// // prevent any new tuples from being added to the parent
-	// lock_guard<mutex> parent_lock(parent.append_lock);
-	// // first check if there are any indexes that exist that point to the removed column
-	// for (auto &index : info->indexes) {
-	// 	for (auto &column_id : index->column_ids) {
-	// 		if (column_id == removed_column) {
-	// 			throw CatalogException("Cannot drop this column: an index depends on it!");
-	// 		} else if (column_id > removed_column) {
-	// 			throw CatalogException("Cannot drop this column: an index depends on a column after it!");
-	// 		}
-	// 	}
-	// }
-	// // erase the column from this DataTable
-	// D_ASSERT(removed_column < types.size());
-	// types.erase(types.begin() + removed_column);
-	// columns.erase(columns.begin() + removed_column);
+	// prevent any new tuples from being added to the parent
+	lock_guard<mutex> parent_lock(parent.append_lock);
+	// first check if there are any indexes that exist that point to the removed column
+	for (auto &index : info->indexes) {
+		for (auto &column_id : index->column_ids) {
+			if (column_id == removed_column) {
+				throw CatalogException("Cannot drop this column: an index depends on it!");
+			} else if (column_id > removed_column) {
+				throw CatalogException("Cannot drop this column: an index depends on a column after it!");
+			}
+		}
+	}
+	// erase the stats and type from this DataTable
+	D_ASSERT(removed_column < types.size());
+	types.erase(types.begin() + removed_column);
+	for(idx_t i = 0; i < parent.column_stats.size(); i++) {
+		if (i != removed_column) {
+			column_stats.push_back(parent.column_stats[i]->Copy());
+		}
+	}
 
-	// // this table replaces the previous table, hence the parent is no longer the root DataTable
-	// parent.is_root = false;
+	// alter the morsels and remove the column from each of them
+	this->morsels = make_shared<SegmentTree>();
+	auto current_morsel = (Morsel *) parent.morsels->GetRootSegment();
+	while(current_morsel) {
+		auto new_morsel = current_morsel->RemoveColumn(removed_column);
+		morsels->AppendSegment(move(new_morsel));
+		current_morsel = (Morsel *) current_morsel->next.get();
+	}
+
+	// this table replaces the previous table, hence the parent is no longer the root DataTable
+	parent.is_root = false;
 }
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_idx, const LogicalType &target_type,
