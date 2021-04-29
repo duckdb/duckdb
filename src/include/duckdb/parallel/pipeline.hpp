@@ -8,10 +8,10 @@
 
 #pragma once
 
-#include "duckdb/execution/physical_sink.hpp"
-#include "duckdb/parallel/parallel_state.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/execution/physical_sink.hpp"
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/parallel/parallel_state.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/common/atomic.hpp"
 

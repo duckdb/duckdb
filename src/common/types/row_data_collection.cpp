@@ -1,25 +1,20 @@
-#include "duckdb/common/types/row_chunk.hpp"
+#include "duckdb/common/types/row_data_collection.hpp"
 
 #include "duckdb/common/bit_operations.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 
 namespace duckdb {
 
-RowChunk::RowChunk(BufferManager &buffer_manager, idx_t block_capacity, idx_t entry_size)
+RowDataCollection::RowDataCollection(BufferManager &buffer_manager, idx_t block_capacity, idx_t entry_size)
     : buffer_manager(buffer_manager), count(0), block_capacity(block_capacity), entry_size(entry_size),
       is_little_endian(IsLittleEndian()) {
 	D_ASSERT(block_capacity * entry_size >= Storage::BLOCK_ALLOC_SIZE);
 }
 
-RowChunk::RowChunk(RowChunk &other)
-    : buffer_manager(other.buffer_manager), count(0), block_capacity(other.block_capacity),
-      entry_size(other.entry_size), is_little_endian(other.is_little_endian) {
-}
-
 template <class T>
-void RowChunk::TemplatedSerializeVectorSortable(VectorData &vdata, const SelectionVector &sel, idx_t add_count,
-                                                data_ptr_t key_locations[], const bool desc, const bool has_null,
-                                                const bool nulls_first) {
+void RowDataCollection::TemplatedSerializeVectorSortable(VectorData &vdata, const SelectionVector &sel, idx_t add_count,
+                                                         data_ptr_t key_locations[], const bool desc,
+                                                         const bool has_null, const bool nulls_first) {
 	auto source = (T *)vdata.data;
 	if (has_null) {
 		auto &validity = vdata.validity;
@@ -62,9 +57,9 @@ void RowChunk::TemplatedSerializeVectorSortable(VectorData &vdata, const Selecti
 	}
 }
 
-void RowChunk::SerializeStringVectorSortable(VectorData &vdata, const SelectionVector &sel, idx_t add_count,
-                                             data_ptr_t key_locations[], const bool desc, const bool has_null,
-                                             const bool nulls_first, const idx_t prefix_len) {
+void RowDataCollection::SerializeStringVectorSortable(VectorData &vdata, const SelectionVector &sel, idx_t add_count,
+                                                      data_ptr_t key_locations[], const bool desc, const bool has_null,
+                                                      const bool nulls_first, const idx_t prefix_len) {
 	auto source = (string_t *)vdata.data;
 	if (has_null) {
 		auto &validity = vdata.validity;
@@ -107,9 +102,9 @@ void RowChunk::SerializeStringVectorSortable(VectorData &vdata, const SelectionV
 	}
 }
 
-void RowChunk::SerializeVectorSortable(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count,
-                                       data_ptr_t key_locations[], bool desc, bool has_null, bool nulls_first,
-                                       idx_t prefix_len) {
+void RowDataCollection::SerializeVectorSortable(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count,
+                                                data_ptr_t key_locations[], bool desc, bool has_null, bool nulls_first,
+                                                idx_t prefix_len) {
 	VectorData vdata;
 	v.Orrify(vcount, vdata);
 	switch (v.GetType().InternalType()) {
@@ -161,7 +156,7 @@ void RowChunk::SerializeVectorSortable(Vector &v, idx_t vcount, const SelectionV
 	}
 }
 
-void RowChunk::ComputeStringEntrySizes(Vector &v, idx_t entry_sizes[], idx_t vcount, idx_t offset) {
+void RowDataCollection::ComputeStringEntrySizes(Vector &v, idx_t entry_sizes[], idx_t vcount, idx_t offset) {
 	VectorData vdata;
 	v.Orrify(vcount, vdata);
 
@@ -175,7 +170,7 @@ void RowChunk::ComputeStringEntrySizes(Vector &v, idx_t entry_sizes[], idx_t vco
 	}
 }
 
-void RowChunk::ComputeStructEntrySizes(Vector &v, idx_t entry_sizes[], idx_t vcount, idx_t offset) {
+void RowDataCollection::ComputeStructEntrySizes(Vector &v, idx_t entry_sizes[], idx_t vcount, idx_t offset) {
 	VectorData vdata;
 	v.Orrify(vcount, vdata);
 
@@ -221,7 +216,7 @@ static list_entry_t *GetListData(Vector &v) {
 	return FlatVector::GetData<list_entry_t>(v);
 }
 
-void RowChunk::ComputeListEntrySizes(Vector &v, idx_t entry_sizes[], idx_t vcount, idx_t offset) {
+void RowDataCollection::ComputeListEntrySizes(Vector &v, idx_t entry_sizes[], idx_t vcount, idx_t offset) {
 	VectorData vdata;
 	v.Orrify(vcount, vdata);
 
@@ -264,7 +259,7 @@ void RowChunk::ComputeListEntrySizes(Vector &v, idx_t entry_sizes[], idx_t vcoun
 	}
 }
 
-void RowChunk::ComputeEntrySizes(Vector &v, idx_t entry_sizes[], idx_t vcount, idx_t offset) {
+void RowDataCollection::ComputeEntrySizes(Vector &v, idx_t entry_sizes[], idx_t vcount, idx_t offset) {
 	auto physical_type = v.GetType().InternalType();
 	if (TypeIsConstantSize(physical_type)) {
 		const auto type_size = GetTypeIdSize(physical_type);
@@ -289,7 +284,7 @@ void RowChunk::ComputeEntrySizes(Vector &v, idx_t entry_sizes[], idx_t vcount, i
 	}
 }
 
-void RowChunk::ComputeEntrySizes(DataChunk &input, idx_t entry_sizes[], idx_t entry_size) {
+void RowDataCollection::ComputeEntrySizes(DataChunk &input, idx_t entry_sizes[], idx_t entry_size) {
 	// fill array with constant portion of payload entry size
 	std::fill_n(entry_sizes, input.size(), entry_size);
 
@@ -336,9 +331,9 @@ static void TemplatedSerializeVData(VectorData &vdata, const SelectionVector &se
 	}
 }
 
-void RowChunk::SerializeVectorData(VectorData &vdata, PhysicalType type, const SelectionVector &sel, idx_t ser_count,
-                                   idx_t col_idx, data_ptr_t key_locations[], data_ptr_t validitymask_locations[],
-                                   idx_t offset) {
+void RowDataCollection::SerializeVectorData(VectorData &vdata, PhysicalType type, const SelectionVector &sel,
+                                            idx_t ser_count, idx_t col_idx, data_ptr_t key_locations[],
+                                            data_ptr_t validitymask_locations[], idx_t offset) {
 	switch (type) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
@@ -390,9 +385,9 @@ void RowChunk::SerializeVectorData(VectorData &vdata, PhysicalType type, const S
 	}
 }
 
-void RowChunk::SerializeStringVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count,
-                                     idx_t col_idx, data_ptr_t key_locations[], data_ptr_t validitymask_locations[],
-                                     idx_t offset) {
+void RowDataCollection::SerializeStringVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count,
+                                              idx_t col_idx, data_ptr_t key_locations[],
+                                              data_ptr_t validitymask_locations[], idx_t offset) {
 	VectorData vdata;
 	v.Orrify(vcount, vdata);
 
@@ -434,9 +429,9 @@ void RowChunk::SerializeStringVector(Vector &v, idx_t vcount, const SelectionVec
 	}
 }
 
-void RowChunk::SerializeStructVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count,
-                                     idx_t col_idx, data_ptr_t key_locations[], data_ptr_t validitymask_locations[],
-                                     idx_t offset) {
+void RowDataCollection::SerializeStructVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count,
+                                              idx_t col_idx, data_ptr_t key_locations[],
+                                              data_ptr_t validitymask_locations[], idx_t offset) {
 	VectorData vdata;
 	v.Orrify(vcount, vdata);
 
@@ -490,8 +485,9 @@ void RowChunk::SerializeStructVector(Vector &v, idx_t vcount, const SelectionVec
 	}
 }
 
-void RowChunk::SerializeListVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count, idx_t col_idx,
-                                   data_ptr_t key_locations[], data_ptr_t validitymask_locations[], idx_t offset) {
+void RowDataCollection::SerializeListVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count,
+                                            idx_t col_idx, data_ptr_t key_locations[],
+                                            data_ptr_t validitymask_locations[], idx_t offset) {
 	VectorData vdata;
 	v.Orrify(vcount, vdata);
 
@@ -586,8 +582,9 @@ void RowChunk::SerializeListVector(Vector &v, idx_t vcount, const SelectionVecto
 	}
 }
 
-void RowChunk::SerializeVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count, idx_t col_idx,
-                               data_ptr_t key_locations[], data_ptr_t validitymask_locations[], idx_t offset) {
+void RowDataCollection::SerializeVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count,
+                                        idx_t col_idx, data_ptr_t key_locations[], data_ptr_t validitymask_locations[],
+                                        idx_t offset) {
 	if (TypeIsConstantSize(v.GetType().InternalType())) {
 		VectorData vdata;
 		v.Orrify(vcount, vdata);
@@ -611,8 +608,8 @@ void RowChunk::SerializeVector(Vector &v, idx_t vcount, const SelectionVector &s
 	}
 }
 
-idx_t RowChunk::AppendToBlock(RowDataBlock &block, BufferHandle &handle, vector<BlockAppendEntry> &append_entries,
-                              idx_t remaining, idx_t entry_sizes[]) {
+idx_t RowDataCollection::AppendToBlock(RowDataBlock &block, BufferHandle &handle,
+                                       vector<BlockAppendEntry> &append_entries, idx_t remaining, idx_t entry_sizes[]) {
 	idx_t append_count = 0;
 	data_ptr_t dataptr;
 	if (entry_sizes) {
@@ -630,7 +627,7 @@ idx_t RowChunk::AppendToBlock(RowDataBlock &block, BufferHandle &handle, vector<
 			block.byte_offset += entry_sizes[i];
 		}
 	} else {
-		append_count = MinValue<idx_t>(remaining, block.CAPACITY - block.count);
+		append_count = MinValue<idx_t>(remaining, block.capacity - block.count);
 		dataptr = handle.node->buffer + block.count * entry_size;
 	}
 	append_entries.emplace_back(dataptr, append_count);
@@ -638,7 +635,7 @@ idx_t RowChunk::AppendToBlock(RowDataBlock &block, BufferHandle &handle, vector<
 	return append_count;
 }
 
-void RowChunk::Build(idx_t added_count, data_ptr_t key_locations[], idx_t entry_sizes[]) {
+void RowDataCollection::Build(idx_t added_count, data_ptr_t key_locations[], idx_t entry_sizes[]) {
 	vector<unique_ptr<BufferHandle>> handles;
 	vector<BlockAppendEntry> append_entries;
 
@@ -650,7 +647,7 @@ void RowChunk::Build(idx_t added_count, data_ptr_t key_locations[], idx_t entry_
 		count += added_count;
 		if (!blocks.empty()) {
 			auto &last_block = blocks.back();
-			if (last_block.count < last_block.CAPACITY) {
+			if (last_block.count < last_block.capacity) {
 				// last block has space: pin the buffer of this block
 				auto handle = buffer_manager.Pin(last_block.block);
 				// now append to the block
@@ -670,8 +667,12 @@ void RowChunk::Build(idx_t added_count, data_ptr_t key_locations[], idx_t entry_
 			idx_t append_count = AppendToBlock(new_block, *handle, append_entries, remaining, offset_entry_sizes);
 			remaining -= append_count;
 
-			blocks.push_back(move(new_block));
-			handles.push_back(move(handle));
+			if (new_block.count > 0) {
+				// it can be that no tuples fit the block (huge entry e.g. large string)
+				// in this case we do not add them
+				blocks.push_back(move(new_block));
+				handles.push_back(move(handle));
+			}
 		}
 	}
 	// now set up the key_locations based on the append entries
@@ -723,8 +724,8 @@ static ValidityMask &GetValidity(Vector &v) {
 	}
 }
 
-void RowChunk::DeserializeIntoStringVector(Vector &v, const idx_t &vcount, const idx_t &col_idx,
-                                           data_ptr_t *key_locations, data_ptr_t *validitymask_locations) {
+void RowDataCollection::DeserializeIntoStringVector(Vector &v, const idx_t &vcount, const idx_t &col_idx,
+                                                    data_ptr_t *key_locations, data_ptr_t *validitymask_locations) {
 	const auto &validity = FlatVector::Validity(v);
 	const idx_t string_prefix_len = string_t::PREFIX_LENGTH;
 	auto target = FlatVector::GetData<string_t>(v);
@@ -752,8 +753,8 @@ void RowChunk::DeserializeIntoStringVector(Vector &v, const idx_t &vcount, const
 	}
 }
 
-void RowChunk::DeserializeIntoStructVector(Vector &v, const idx_t &vcount, const idx_t &col_idx,
-                                           data_ptr_t *key_locations, data_ptr_t *validitymask_locations) {
+void RowDataCollection::DeserializeIntoStructVector(Vector &v, const idx_t &vcount, const idx_t &col_idx,
+                                                    data_ptr_t *key_locations, data_ptr_t *validitymask_locations) {
 	// struct must have a validitymask for its fields
 	auto &child_types = v.GetType().child_types();
 	const idx_t struct_validitymask_size = (child_types.size() + 7) / 8;
@@ -772,8 +773,8 @@ void RowChunk::DeserializeIntoStructVector(Vector &v, const idx_t &vcount, const
 	}
 }
 
-void RowChunk::DeserializeIntoListVector(Vector &v, const idx_t &vcount, const idx_t &col_idx,
-                                         data_ptr_t *key_locations, data_ptr_t *validitymask_locations) {
+void RowDataCollection::DeserializeIntoListVector(Vector &v, const idx_t &vcount, const idx_t &col_idx,
+                                                  data_ptr_t *key_locations, data_ptr_t *validitymask_locations) {
 	const auto &validity = FlatVector::Validity(v);
 
 	auto child_type = v.GetType().child_types()[0].second;
@@ -851,8 +852,8 @@ void RowChunk::DeserializeIntoListVector(Vector &v, const idx_t &vcount, const i
 	}
 }
 
-void RowChunk::DeserializeIntoVector(Vector &v, const idx_t &vcount, const idx_t &col_idx, data_ptr_t key_locations[],
-                                     data_ptr_t validitymask_locations[]) {
+void RowDataCollection::DeserializeIntoVector(Vector &v, const idx_t &vcount, const idx_t &col_idx,
+                                              data_ptr_t key_locations[], data_ptr_t validitymask_locations[]) {
 	auto &validity = FlatVector::Validity(v);
 	if (validitymask_locations) {
 		// validity mask is not yet set: deserialize it

@@ -5,7 +5,8 @@
 statement ok
 PRAGMA enable_verification
 
-# payload string that is longer than the 8MB initial string size - this tests whether RowChunk dynamically increases block capacity
+# payload string that is longer than the 8MB initial string size - this tests whether RowDataCollection dynamically increases block capacity
+# TODO: test a mix of long and short strings
 statement ok
 select range % 2 i, string_agg('thisstringis200characterslong..........................................................................................................................................................................') s from range(100000) group by i order by i
 

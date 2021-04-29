@@ -1,7 +1,9 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/aggregate/holistic_functions.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 
 #include <algorithm>
 #include <queue>
@@ -9,6 +11,15 @@
 #include <utility>
 
 namespace duckdb {
+
+bool operator<(const interval_t &lhs, const interval_t &rhs) {
+	return LessThan::Operation(lhs, rhs);
+}
+
+template <>
+timestamp_t Cast::Operation(date_t date) {
+	return Timestamp::FromDatetime(date, dtime_t(0));
+}
 
 struct QuantileState {
 	data_ptr_t v;
@@ -157,36 +168,52 @@ struct DiscreteQuantileOperation : public QuantileOperation<INPUT_TYPE> {
 	}
 };
 
-AggregateFunction GetDiscreteQuantileAggregateFunction(PhysicalType type) {
-	switch (type) {
-	case PhysicalType::INT16:
-		return AggregateFunction::UnaryAggregateDestructor<QuantileState, int16_t, int16_t,
-		                                                   DiscreteQuantileOperation<int16_t>>(LogicalType::SMALLINT,
-		                                                                                       LogicalType::SMALLINT);
+template <typename INPUT_TYPE>
+AggregateFunction GetTypedDiscreteQuantileAggregateFunction(const LogicalType &type) {
+	return AggregateFunction::UnaryAggregateDestructor<QuantileState, INPUT_TYPE, INPUT_TYPE,
+	                                                   DiscreteQuantileOperation<INPUT_TYPE>>(type, type);
+}
 
-	case PhysicalType::INT32:
-		return AggregateFunction::UnaryAggregateDestructor<QuantileState, int32_t, int32_t,
-		                                                   DiscreteQuantileOperation<int32_t>>(LogicalType::INTEGER,
-		                                                                                       LogicalType::INTEGER);
+AggregateFunction GetDiscreteQuantileAggregateFunction(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::TINYINT:
+		return GetTypedDiscreteQuantileAggregateFunction<int8_t>(type);
+	case LogicalTypeId::SMALLINT:
+		return GetTypedDiscreteQuantileAggregateFunction<int16_t>(type);
+	case LogicalTypeId::INTEGER:
+		return GetTypedDiscreteQuantileAggregateFunction<int32_t>(type);
+	case LogicalTypeId::BIGINT:
+		return GetTypedDiscreteQuantileAggregateFunction<int64_t>(type);
+	case LogicalTypeId::HUGEINT:
+		return GetTypedDiscreteQuantileAggregateFunction<hugeint_t>(type);
 
-	case PhysicalType::INT64:
-		return AggregateFunction::UnaryAggregateDestructor<QuantileState, int64_t, int64_t,
-		                                                   DiscreteQuantileOperation<int64_t>>(LogicalType::BIGINT,
-		                                                                                       LogicalType::BIGINT);
+	case LogicalTypeId::FLOAT:
+		return GetTypedDiscreteQuantileAggregateFunction<float>(type);
+	case LogicalTypeId::DOUBLE:
+		return GetTypedDiscreteQuantileAggregateFunction<double>(type);
+	case LogicalTypeId::DECIMAL:
+		switch (type.InternalType()) {
+		case PhysicalType::INT16:
+			return GetTypedDiscreteQuantileAggregateFunction<int16_t>(type);
+		case PhysicalType::INT32:
+			return GetTypedDiscreteQuantileAggregateFunction<int32_t>(type);
+		case PhysicalType::INT64:
+			return GetTypedDiscreteQuantileAggregateFunction<int64_t>(type);
+		case PhysicalType::INT128:
+			return GetTypedDiscreteQuantileAggregateFunction<hugeint_t>(type);
+		default:
+			throw NotImplementedException("Unimplemented discrete quantile aggregate");
+		}
+		break;
 
-	case PhysicalType::INT128:
-		return AggregateFunction::UnaryAggregateDestructor<QuantileState, hugeint_t, hugeint_t,
-		                                                   DiscreteQuantileOperation<hugeint_t>>(LogicalType::HUGEINT,
-		                                                                                         LogicalType::HUGEINT);
-	case PhysicalType::FLOAT:
-		return AggregateFunction::UnaryAggregateDestructor<QuantileState, float, float,
-		                                                   DiscreteQuantileOperation<float>>(LogicalType::FLOAT,
-		                                                                                     LogicalType::FLOAT);
-
-	case PhysicalType::DOUBLE:
-		return AggregateFunction::UnaryAggregateDestructor<QuantileState, double, double,
-		                                                   DiscreteQuantileOperation<double>>(LogicalType::DOUBLE,
-		                                                                                      LogicalType::DOUBLE);
+	case LogicalTypeId::DATE:
+		return GetTypedDiscreteQuantileAggregateFunction<int32_t>(type);
+	case LogicalTypeId::TIMESTAMP:
+		return GetTypedDiscreteQuantileAggregateFunction<int64_t>(type);
+	case LogicalTypeId::TIME:
+		return GetTypedDiscreteQuantileAggregateFunction<int64_t>(type);
+	case LogicalTypeId::INTERVAL:
+		return GetTypedDiscreteQuantileAggregateFunction<interval_t>(type);
 
 	default:
 		throw NotImplementedException("Unimplemented discrete quantile aggregate");
@@ -218,44 +245,56 @@ struct DiscreteQuantileListOperation : public QuantileOperation<INPUT_TYPE> {
 	}
 };
 
-AggregateFunction GetDiscreteQuantileListAggregateFunction(PhysicalType type) {
-	switch (type) {
-	case PhysicalType::INT16:
-		return QuantileListAggregate<QuantileState, int16_t, list_entry_t, DiscreteQuantileListOperation<int16_t>>(
-		    LogicalType::SMALLINT, LogicalType::SMALLINT);
+template <typename INPUT_TYPE>
+AggregateFunction GetTypedDiscreteQuantileListAggregateFunction(const LogicalType &type) {
+	return QuantileListAggregate<QuantileState, INPUT_TYPE, list_entry_t, DiscreteQuantileListOperation<INPUT_TYPE>>(
+	    type, type);
+}
 
-	case PhysicalType::INT32:
-		return QuantileListAggregate<QuantileState, int32_t, list_entry_t, DiscreteQuantileListOperation<int32_t>>(
-		    LogicalType::INTEGER, LogicalType::INTEGER);
+AggregateFunction GetDiscreteQuantileListAggregateFunction(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::TINYINT:
+		return GetTypedDiscreteQuantileListAggregateFunction<int8_t>(type);
+	case LogicalTypeId::SMALLINT:
+		return GetTypedDiscreteQuantileListAggregateFunction<int16_t>(type);
+	case LogicalTypeId::INTEGER:
+		return GetTypedDiscreteQuantileListAggregateFunction<int32_t>(type);
+	case LogicalTypeId::BIGINT:
+		return GetTypedDiscreteQuantileListAggregateFunction<int64_t>(type);
+	case LogicalTypeId::HUGEINT:
+		return GetTypedDiscreteQuantileListAggregateFunction<hugeint_t>(type);
 
-	case PhysicalType::INT64:
-		return QuantileListAggregate<QuantileState, int64_t, list_entry_t, DiscreteQuantileListOperation<int64_t>>(
-		    LogicalType::BIGINT, LogicalType::BIGINT);
+	case LogicalTypeId::FLOAT:
+		return GetTypedDiscreteQuantileListAggregateFunction<float>(type);
+	case LogicalTypeId::DOUBLE:
+		return GetTypedDiscreteQuantileListAggregateFunction<double>(type);
+	case LogicalTypeId::DECIMAL:
+		switch (type.InternalType()) {
+		case PhysicalType::INT16:
+			return GetTypedDiscreteQuantileListAggregateFunction<int16_t>(type);
+		case PhysicalType::INT32:
+			return GetTypedDiscreteQuantileListAggregateFunction<int32_t>(type);
+		case PhysicalType::INT64:
+			return GetTypedDiscreteQuantileListAggregateFunction<int64_t>(type);
+		case PhysicalType::INT128:
+			return GetTypedDiscreteQuantileListAggregateFunction<hugeint_t>(type);
+		default:
+			throw NotImplementedException("Unimplemented discrete quantile list aggregate");
+		}
+		break;
 
-	case PhysicalType::INT128:
-		return QuantileListAggregate<QuantileState, hugeint_t, list_entry_t, DiscreteQuantileListOperation<hugeint_t>>(
-		    LogicalType::HUGEINT, LogicalType::HUGEINT);
-	case PhysicalType::FLOAT:
-		return QuantileListAggregate<QuantileState, float, list_entry_t, DiscreteQuantileListOperation<float>>(
-		    LogicalType::FLOAT, LogicalType::FLOAT);
-
-	case PhysicalType::DOUBLE:
-		return QuantileListAggregate<QuantileState, double, list_entry_t, DiscreteQuantileListOperation<double>>(
-		    LogicalType::DOUBLE, LogicalType::DOUBLE);
+	case LogicalTypeId::DATE:
+		return GetTypedDiscreteQuantileListAggregateFunction<date_t>(type);
+	case LogicalTypeId::TIMESTAMP:
+		return GetTypedDiscreteQuantileListAggregateFunction<timestamp_t>(type);
+	case LogicalTypeId::TIME:
+		return GetTypedDiscreteQuantileListAggregateFunction<dtime_t>(type);
+	case LogicalTypeId::INTERVAL:
+		return GetTypedDiscreteQuantileListAggregateFunction<interval_t>(type);
 
 	default:
 		throw NotImplementedException("Unimplemented discrete quantile list aggregate");
 	}
-}
-
-template <class INPUT_TYPE, class TARGET_TYPE>
-static TARGET_TYPE InterpolateCast(const INPUT_TYPE &v) {
-	return TARGET_TYPE(v);
-}
-
-template <>
-double InterpolateCast(const hugeint_t &v) {
-	return Hugeint::Cast<double>(v);
 }
 
 template <class INPUT_TYPE, class TARGET_TYPE>
@@ -266,12 +305,12 @@ static TARGET_TYPE Interpolate(INPUT_TYPE *v_t, const float q, const idx_t n) {
 
 	if (CRN == FRN) {
 		std::nth_element(v_t, v_t + FRN, v_t + n);
-		return InterpolateCast<INPUT_TYPE, TARGET_TYPE>(v_t[FRN]);
+		return Cast::Operation<INPUT_TYPE, TARGET_TYPE>(v_t[FRN]);
 	} else {
 		std::nth_element(v_t, v_t + FRN, v_t + n);
 		std::nth_element(v_t + FRN, v_t + CRN, v_t + n);
-		auto lo = InterpolateCast<INPUT_TYPE, TARGET_TYPE>(v_t[FRN]);
-		auto hi = InterpolateCast<INPUT_TYPE, TARGET_TYPE>(v_t[CRN]);
+		auto lo = Cast::Operation<INPUT_TYPE, TARGET_TYPE>(v_t[FRN]);
+		auto hi = Cast::Operation<INPUT_TYPE, TARGET_TYPE>(v_t[CRN]);
 		auto delta = hi - lo;
 		return lo + delta * (RN - FRN);
 	}
@@ -296,39 +335,55 @@ struct ContinuousQuantileOperation : public QuantileOperation<INPUT_TYPE> {
 	}
 };
 
-AggregateFunction GetContinuousQuantileAggregateFunction(PhysicalType type) {
-	switch (type) {
-	case PhysicalType::INT16:
-		return AggregateFunction::UnaryAggregateDestructor<QuantileState, int16_t, double,
-		                                                   ContinuousQuantileOperation<int16_t>>(LogicalType::SMALLINT,
-		                                                                                         LogicalType::DOUBLE);
+template <typename INPUT_TYPE, typename TARGET_TYPE>
+AggregateFunction GetTypedContinuousQuantileAggregateFunction(const LogicalType &input_type,
+                                                              const LogicalType &target_type) {
+	return AggregateFunction::UnaryAggregateDestructor<QuantileState, INPUT_TYPE, TARGET_TYPE,
+	                                                   ContinuousQuantileOperation<INPUT_TYPE>>(input_type,
+	                                                                                            target_type);
+}
 
-	case PhysicalType::INT32:
-		return AggregateFunction::UnaryAggregateDestructor<QuantileState, int32_t, double,
-		                                                   ContinuousQuantileOperation<int32_t>>(LogicalType::INTEGER,
-		                                                                                         LogicalType::DOUBLE);
+AggregateFunction GetContinuousQuantileAggregateFunction(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::TINYINT:
+		return GetTypedContinuousQuantileAggregateFunction<int8_t, double>(type, LogicalType::DOUBLE);
+	case LogicalTypeId::SMALLINT:
+		return GetTypedContinuousQuantileAggregateFunction<int16_t, double>(type, LogicalType::DOUBLE);
+	case LogicalTypeId::INTEGER:
+		return GetTypedContinuousQuantileAggregateFunction<int32_t, double>(type, LogicalType::DOUBLE);
+	case LogicalTypeId::BIGINT:
+		return GetTypedContinuousQuantileAggregateFunction<int64_t, double>(type, LogicalType::DOUBLE);
+	case LogicalTypeId::HUGEINT:
+		return GetTypedContinuousQuantileAggregateFunction<hugeint_t, double>(type, LogicalType::DOUBLE);
 
-	case PhysicalType::INT64:
-		return AggregateFunction::UnaryAggregateDestructor<QuantileState, int64_t, double,
-		                                                   ContinuousQuantileOperation<int64_t>>(LogicalType::BIGINT,
-		                                                                                         LogicalType::DOUBLE);
+	case LogicalTypeId::FLOAT:
+		return GetTypedContinuousQuantileAggregateFunction<float, float>(type, type);
+	case LogicalTypeId::DOUBLE:
+		return GetTypedContinuousQuantileAggregateFunction<double, double>(type, type);
+	case LogicalTypeId::DECIMAL:
+		switch (type.InternalType()) {
+		case PhysicalType::INT16:
+			return GetTypedContinuousQuantileAggregateFunction<int16_t, int16_t>(type, type);
+		case PhysicalType::INT32:
+			return GetTypedContinuousQuantileAggregateFunction<int32_t, int32_t>(type, type);
+		case PhysicalType::INT64:
+			return GetTypedContinuousQuantileAggregateFunction<int64_t, int64_t>(type, type);
+		case PhysicalType::INT128:
+			return GetTypedContinuousQuantileAggregateFunction<hugeint_t, hugeint_t>(type, type);
+		default:
+			throw NotImplementedException("Unimplemented discrete quantile list aggregate");
+		}
+		break;
 
-	case PhysicalType::INT128:
-		return AggregateFunction::UnaryAggregateDestructor<QuantileState, hugeint_t, double,
-		                                                   ContinuousQuantileOperation<hugeint_t>>(LogicalType::HUGEINT,
-		                                                                                           LogicalType::DOUBLE);
-	case PhysicalType::FLOAT:
-		return AggregateFunction::UnaryAggregateDestructor<QuantileState, float, float,
-		                                                   ContinuousQuantileOperation<float>>(LogicalType::FLOAT,
-		                                                                                       LogicalType::FLOAT);
-
-	case PhysicalType::DOUBLE:
-		return AggregateFunction::UnaryAggregateDestructor<QuantileState, double, double,
-		                                                   ContinuousQuantileOperation<double>>(LogicalType::DOUBLE,
-		                                                                                        LogicalType::DOUBLE);
+	case LogicalTypeId::DATE:
+		return GetTypedContinuousQuantileAggregateFunction<date_t, timestamp_t>(type, LogicalType::TIMESTAMP);
+	case LogicalTypeId::TIMESTAMP:
+		return GetTypedContinuousQuantileAggregateFunction<timestamp_t, timestamp_t>(type, type);
+	case LogicalTypeId::TIME:
+		return GetTypedContinuousQuantileAggregateFunction<dtime_t, dtime_t>(type, type);
 
 	default:
-		throw NotImplementedException("Unimplemented continuous quantile aggregate");
+		throw NotImplementedException("Unimplemented discrete quantile list aggregate");
 	}
 }
 
@@ -356,36 +411,51 @@ struct ContinuousQuantileListOperation : public QuantileOperation<INPUT_TYPE> {
 	}
 };
 
-AggregateFunction GetContinuousQuantileListAggregateFunction(PhysicalType type) {
-	switch (type) {
-	case PhysicalType::INT16:
-		return QuantileListAggregate<QuantileState, int16_t, list_entry_t,
-		                             ContinuousQuantileListOperation<int16_t, double>>(LogicalType::SMALLINT,
-		                                                                               LogicalType::DOUBLE);
+template <typename INPUT_TYPE, typename TARGET_TYPE>
+AggregateFunction GetTypedContinuousQuantileListAggregateFunction(const LogicalType &input_type,
+                                                                  const LogicalType &target_type) {
+	return QuantileListAggregate<QuantileState, INPUT_TYPE, list_entry_t,
+	                             ContinuousQuantileListOperation<INPUT_TYPE, TARGET_TYPE>>(input_type, target_type);
+}
 
-	case PhysicalType::INT32:
-		return QuantileListAggregate<QuantileState, int32_t, list_entry_t,
-		                             ContinuousQuantileListOperation<int32_t, double>>(LogicalType::INTEGER,
-		                                                                               LogicalType::DOUBLE);
+AggregateFunction GetContinuousQuantileListAggregateFunction(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::TINYINT:
+		return GetTypedContinuousQuantileListAggregateFunction<int8_t, double>(type, LogicalType::DOUBLE);
+	case LogicalTypeId::SMALLINT:
+		return GetTypedContinuousQuantileListAggregateFunction<int16_t, double>(type, LogicalType::DOUBLE);
+	case LogicalTypeId::INTEGER:
+		return GetTypedContinuousQuantileListAggregateFunction<int32_t, double>(type, LogicalType::DOUBLE);
+	case LogicalTypeId::BIGINT:
+		return GetTypedContinuousQuantileListAggregateFunction<int64_t, double>(type, LogicalType::DOUBLE);
+	case LogicalTypeId::HUGEINT:
+		return GetTypedContinuousQuantileListAggregateFunction<hugeint_t, double>(type, LogicalType::DOUBLE);
 
-	case PhysicalType::INT64:
-		return QuantileListAggregate<QuantileState, int64_t, list_entry_t,
-		                             ContinuousQuantileListOperation<int64_t, double>>(LogicalType::BIGINT,
-		                                                                               LogicalType::DOUBLE);
+	case LogicalTypeId::FLOAT:
+		return GetTypedContinuousQuantileListAggregateFunction<float, float>(type, type);
+	case LogicalTypeId::DOUBLE:
+		return GetTypedContinuousQuantileListAggregateFunction<double, double>(type, type);
+	case LogicalTypeId::DECIMAL:
+		switch (type.InternalType()) {
+		case PhysicalType::INT16:
+			return GetTypedContinuousQuantileListAggregateFunction<int16_t, double>(type, LogicalType::DOUBLE);
+		case PhysicalType::INT32:
+			return GetTypedContinuousQuantileListAggregateFunction<int32_t, double>(type, LogicalType::DOUBLE);
+		case PhysicalType::INT64:
+			return GetTypedContinuousQuantileListAggregateFunction<int64_t, double>(type, LogicalType::DOUBLE);
+		case PhysicalType::INT128:
+			return GetTypedContinuousQuantileListAggregateFunction<hugeint_t, double>(type, LogicalType::DOUBLE);
+		default:
+			throw NotImplementedException("Unimplemented discrete quantile list aggregate");
+		}
+		break;
 
-	case PhysicalType::INT128:
-		return QuantileListAggregate<QuantileState, hugeint_t, list_entry_t,
-		                             ContinuousQuantileListOperation<hugeint_t, double>>(LogicalType::HUGEINT,
-		                                                                                 LogicalType::DOUBLE);
-	case PhysicalType::FLOAT:
-		return QuantileListAggregate<QuantileState, float, list_entry_t,
-		                             ContinuousQuantileListOperation<float, double>>(LogicalType::FLOAT,
-		                                                                             LogicalType::DOUBLE);
-
-	case PhysicalType::DOUBLE:
-		return QuantileListAggregate<QuantileState, double, list_entry_t,
-		                             ContinuousQuantileListOperation<double, double>>(LogicalType::DOUBLE,
-		                                                                              LogicalType::DOUBLE);
+	case LogicalTypeId::DATE:
+		return GetTypedContinuousQuantileListAggregateFunction<date_t, timestamp_t>(type, LogicalType::TIMESTAMP);
+	case LogicalTypeId::TIMESTAMP:
+		return GetTypedContinuousQuantileListAggregateFunction<timestamp_t, timestamp_t>(type, type);
+	case LogicalTypeId::TIME:
+		return GetTypedContinuousQuantileListAggregateFunction<dtime_t, dtime_t>(type, type);
 
 	default:
 		throw NotImplementedException("Unimplemented discrete quantile list aggregate");
@@ -401,7 +471,7 @@ unique_ptr<FunctionData> BindMedianDecimal(ClientContext &context, AggregateFunc
                                            vector<unique_ptr<Expression>> &arguments) {
 	auto bind_data = BindMedian(context, function, arguments);
 
-	function = GetDiscreteQuantileAggregateFunction(arguments[0]->return_type.InternalType());
+	function = GetDiscreteQuantileAggregateFunction(arguments[0]->return_type);
 	function.name = "median";
 	return bind_data;
 }
@@ -438,7 +508,7 @@ unique_ptr<FunctionData> BindQuantile(ClientContext &context, AggregateFunction 
 unique_ptr<FunctionData> BindDiscreteQuantileDecimal(ClientContext &context, AggregateFunction &function,
                                                      vector<unique_ptr<Expression>> &arguments) {
 	auto bind_data = BindQuantile(context, function, arguments);
-	function = GetDiscreteQuantileAggregateFunction(arguments[0]->return_type.InternalType());
+	function = GetDiscreteQuantileAggregateFunction(arguments[0]->return_type);
 	function.name = "quantile_disc";
 	return bind_data;
 }
@@ -446,18 +516,18 @@ unique_ptr<FunctionData> BindDiscreteQuantileDecimal(ClientContext &context, Agg
 unique_ptr<FunctionData> BindContinuousQuantileDecimal(ClientContext &context, AggregateFunction &function,
                                                        vector<unique_ptr<Expression>> &arguments) {
 	auto bind_data = BindQuantile(context, function, arguments);
-	function = GetContinuousQuantileAggregateFunction(arguments[0]->return_type.InternalType());
+	function = GetContinuousQuantileAggregateFunction(arguments[0]->return_type);
 	function.name = "quantile_cont";
 	return bind_data;
 }
 
-AggregateFunction GetMedianAggregate(PhysicalType type) {
+AggregateFunction GetMedianAggregate(const LogicalType &type) {
 	auto fun = GetDiscreteQuantileAggregateFunction(type);
 	fun.bind = BindMedian;
 	return fun;
 }
 
-AggregateFunction GetDiscreteQuantileAggregate(PhysicalType type) {
+AggregateFunction GetDiscreteQuantileAggregate(const LogicalType &type) {
 	auto fun = GetDiscreteQuantileAggregateFunction(type);
 	fun.bind = BindQuantile;
 	// temporarily push an argument so we can bind the actual quantile
@@ -465,7 +535,7 @@ AggregateFunction GetDiscreteQuantileAggregate(PhysicalType type) {
 	return fun;
 }
 
-AggregateFunction GetDiscreteQuantileListAggregate(PhysicalType type) {
+AggregateFunction GetDiscreteQuantileListAggregate(const LogicalType &type) {
 	auto fun = GetDiscreteQuantileListAggregateFunction(type);
 	fun.bind = BindQuantile;
 	// temporarily push an argument so we can bind the actual quantile
@@ -474,7 +544,7 @@ AggregateFunction GetDiscreteQuantileListAggregate(PhysicalType type) {
 	return fun;
 }
 
-AggregateFunction GetContinuousQuantileAggregate(PhysicalType type) {
+AggregateFunction GetContinuousQuantileAggregate(const LogicalType &type) {
 	auto fun = GetContinuousQuantileAggregateFunction(type);
 	fun.bind = BindQuantile;
 	// temporarily push an argument so we can bind the actual quantile
@@ -482,7 +552,7 @@ AggregateFunction GetContinuousQuantileAggregate(PhysicalType type) {
 	return fun;
 }
 
-AggregateFunction GetContinuousQuantileListAggregate(PhysicalType type) {
+AggregateFunction GetContinuousQuantileListAggregate(const LogicalType &type) {
 	auto fun = GetContinuousQuantileListAggregateFunction(type);
 	fun.bind = BindQuantile;
 	// temporarily push an argument so we can bind the actual quantile
@@ -492,59 +562,41 @@ AggregateFunction GetContinuousQuantileListAggregate(PhysicalType type) {
 }
 
 void QuantileFun::RegisterFunction(BuiltinFunctions &set) {
+	const vector<LogicalType> QUANTILES = {LogicalType::TINYINT, LogicalType::SMALLINT, LogicalType::INTEGER,
+	                                       LogicalType::BIGINT,  LogicalType::HUGEINT,  LogicalType::FLOAT,
+	                                       LogicalType::DOUBLE,  LogicalType::DATE,     LogicalType::TIMESTAMP,
+	                                       LogicalType::TIME,    LogicalType::INTERVAL};
+
 	AggregateFunctionSet median("median");
 	median.AddFunction(AggregateFunction({LogicalType::DECIMAL}, LogicalType::DECIMAL, nullptr, nullptr, nullptr,
 	                                     nullptr, nullptr, nullptr, BindMedianDecimal));
-	median.AddFunction(GetMedianAggregate(PhysicalType::INT16));
-	median.AddFunction(GetMedianAggregate(PhysicalType::INT32));
-	median.AddFunction(GetMedianAggregate(PhysicalType::INT64));
-	median.AddFunction(GetMedianAggregate(PhysicalType::INT128));
-	median.AddFunction(GetMedianAggregate(PhysicalType::DOUBLE));
-
-	set.AddFunction(median);
 
 	AggregateFunctionSet quantile_disc("quantile_disc");
 	quantile_disc.AddFunction(AggregateFunction({LogicalType::DECIMAL, LogicalType::FLOAT}, LogicalType::DECIMAL,
 	                                            nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
 	                                            BindDiscreteQuantileDecimal));
 
-	quantile_disc.AddFunction(GetDiscreteQuantileAggregate(PhysicalType::INT16));
-	quantile_disc.AddFunction(GetDiscreteQuantileAggregate(PhysicalType::INT32));
-	quantile_disc.AddFunction(GetDiscreteQuantileAggregate(PhysicalType::INT64));
-	quantile_disc.AddFunction(GetDiscreteQuantileAggregate(PhysicalType::INT128));
-	quantile_disc.AddFunction(GetDiscreteQuantileAggregate(PhysicalType::DOUBLE));
-
-	// LIST variants
-	quantile_disc.AddFunction(GetDiscreteQuantileListAggregate(PhysicalType::INT16));
-	quantile_disc.AddFunction(GetDiscreteQuantileListAggregate(PhysicalType::INT32));
-	quantile_disc.AddFunction(GetDiscreteQuantileListAggregate(PhysicalType::INT64));
-	quantile_disc.AddFunction(GetDiscreteQuantileListAggregate(PhysicalType::INT128));
-	quantile_disc.AddFunction(GetDiscreteQuantileListAggregate(PhysicalType::DOUBLE));
-
-	set.AddFunction(quantile_disc);
-
-	quantile_disc.name = "quantile";
-	set.AddFunction(quantile_disc);
-
 	AggregateFunctionSet quantile_cont("quantile_cont");
 	quantile_cont.AddFunction(AggregateFunction({LogicalType::DECIMAL, LogicalType::FLOAT}, LogicalType::DECIMAL,
 	                                            nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
 	                                            BindContinuousQuantileDecimal));
 
-	quantile_cont.AddFunction(GetContinuousQuantileAggregate(PhysicalType::INT16));
-	quantile_cont.AddFunction(GetContinuousQuantileAggregate(PhysicalType::INT32));
-	quantile_cont.AddFunction(GetContinuousQuantileAggregate(PhysicalType::INT64));
-	quantile_cont.AddFunction(GetContinuousQuantileAggregate(PhysicalType::INT128));
-	quantile_cont.AddFunction(GetContinuousQuantileAggregate(PhysicalType::DOUBLE));
+	for (const auto &type : QUANTILES) {
+		median.AddFunction(GetMedianAggregate(type));
+		quantile_disc.AddFunction(GetDiscreteQuantileAggregate(type));
+		quantile_disc.AddFunction(GetDiscreteQuantileListAggregate(type));
+		if (type.id() != LogicalTypeId::INTERVAL) {
+			quantile_cont.AddFunction(GetContinuousQuantileAggregate(type));
+			quantile_cont.AddFunction(GetContinuousQuantileListAggregate(type));
+		}
+	}
 
-	// LIST variants
-	quantile_cont.AddFunction(GetContinuousQuantileListAggregate(PhysicalType::INT16));
-	quantile_cont.AddFunction(GetContinuousQuantileListAggregate(PhysicalType::INT32));
-	quantile_cont.AddFunction(GetContinuousQuantileListAggregate(PhysicalType::INT64));
-	quantile_cont.AddFunction(GetContinuousQuantileListAggregate(PhysicalType::INT128));
-	quantile_cont.AddFunction(GetContinuousQuantileListAggregate(PhysicalType::DOUBLE));
-
+	set.AddFunction(median);
+	set.AddFunction(quantile_disc);
 	set.AddFunction(quantile_cont);
+
+	quantile_disc.name = "quantile";
+	set.AddFunction(quantile_disc);
 }
 
 } // namespace duckdb
