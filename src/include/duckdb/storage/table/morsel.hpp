@@ -67,12 +67,16 @@ public:
 
 	//! Initialize a scan over this morsel
 	void InitializeScan(MorselScanState &state);
+	void InitializeScanWithOffset(MorselScanState &state, idx_t vector_offset);
 	void Scan(Transaction &transaction, MorselScanState &state, DataChunk &result);
+	void IndexScan(MorselScanState &state, DataChunk &result, bool allow_pending_updates);
 
 	idx_t GetSelVector(Transaction &transaction, idx_t vector_idx, SelectionVector &sel_vector, idx_t max_count);
 
 	//! For a specific row, returns true if it should be used for the transaction and false otherwise.
 	bool Fetch(Transaction &transaction, idx_t row);
+	//! Fetch a specific row from the morsel and insert it into the result at the specified index
+	void FetchRow(Transaction &transaction, ColumnFetchState &state, const vector<column_t> &column_ids, row_t row_id, DataChunk &result, idx_t result_idx);
 
 	//! Append count rows to the version info
 	void AppendVersionInfo(Transaction &transaction, idx_t start, idx_t count, transaction_t commit_id);
@@ -93,6 +97,9 @@ public:
 	unique_ptr<BaseStatistics> GetStatistics(idx_t column_idx);
 private:
 	ChunkInfo *GetChunkInfo(idx_t vector_idx);
+
+	template<bool SCAN_DELETES, bool SCAN_COMMITTED, bool ALLOW_UPDATES>
+	void TemplatedScan(Transaction *transaction, MorselScanState &state, DataChunk &result);
 
 private:
 	mutex morsel_lock;

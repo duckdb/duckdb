@@ -161,14 +161,8 @@ private:
 	                              TableFilterSet *table_filters, idx_t start_row, idx_t end_row);
 	bool CheckZonemap(TableScanState &state, const vector<column_t> &column_ids, TableFilterSet *table_filters,
 	                  idx_t &current_row);
-	bool ScanBaseTable(Transaction &transaction, DataChunk &result, TableScanState &state,
-	                   const vector<column_t> &column_ids);
-	bool ScanCreateIndex(CreateIndexScanState &state, const vector<column_t> &column_ids, DataChunk &result,
-	                     idx_t &current_row, idx_t max_row, bool allow_pending_updates = false);
-
-	//! Figure out which of the row ids to use for the given transaction by looking at inserted/deleted data. Returns
-	//! the amount of rows to use and places the row_ids in the result_rows array.
-	idx_t FetchRows(Transaction &transaction, Vector &row_identifiers, idx_t fetch_count, row_t result_rows[]);
+	bool ScanBaseTable(Transaction &transaction, DataChunk &result, TableScanState &state);
+	bool ScanCreateIndex(CreateIndexScanState &state, DataChunk &result, bool allow_pending_updates = false);
 
 	//! The CreateIndexScan is a special scan that is used to create an index on the table, it keeps locks on the table
 	void InitializeCreateIndexScan(CreateIndexScanState &state, const vector<column_t> &column_ids);

@@ -30,6 +30,22 @@ void Morsel::InitializeEmpty(const vector<LogicalType> &types) {
 	}
 }
 
+void Morsel::InitializeScanWithOffset(MorselScanState &state, idx_t vector_offset) {
+	auto &column_ids = state.parent.column_ids;
+	state.morsel = this;
+	state.vector_index = vector_offset;
+	state.max_row = this->count;
+	state.column_scans = unique_ptr<ColumnScanState[]>(new ColumnScanState[column_ids.size()]);
+	for (idx_t i = 0; i < column_ids.size(); i++) {
+		auto column = column_ids[i];
+		if (column != COLUMN_IDENTIFIER_ROW_ID) {
+			columns[column]->InitializeScanWithOffset(state.column_scans[i], vector_offset * STANDARD_VECTOR_SIZE);
+		} else {
+			state.column_scans[i].current = nullptr;
+		}
+	}
+}
+
 void Morsel::InitializeScan(MorselScanState &state) {
 	auto &column_ids = state.parent.column_ids;
 	state.morsel = this;
@@ -140,7 +156,8 @@ unique_ptr<Morsel> Morsel::RemoveColumn(idx_t removed_column) {
 	return morsel;
 }
 
-void Morsel::Scan(Transaction &transaction, MorselScanState &state, DataChunk &result) {
+template<bool SCAN_DELETES, bool SCAN_COMMITTED, bool ALLOW_UPDATES>
+void Morsel::TemplatedScan(Transaction *transaction, MorselScanState &state, DataChunk &result) {
 	auto &table_filters = state.parent.table_filters;
 	auto &column_ids = state.parent.column_ids;
 	auto &adaptive_filter = state.parent.adaptive_filter;
@@ -157,17 +174,18 @@ void Morsel::Scan(Transaction &transaction, MorselScanState &state, DataChunk &r
 		// 	return true;
 		// }
 		// // second, scan the version chunk manager to figure out which tuples to load for this transaction
+		idx_t count;
 		SelectionVector valid_sel(STANDARD_VECTOR_SIZE);
-		// while (vector_offset >= Morsel::MORSEL_VECTOR_COUNT) {
-		// 	state.version_info = (MorselInfo *)state.version_info->next.get();
-		// 	state.base_row += Morsel::MORSEL_SIZE;
-		// 	vector_offset -= Morsel::MORSEL_VECTOR_COUNT;
-		// }
-		idx_t count = state.morsel->GetSelVector(transaction, state.vector_index, valid_sel, max_count);
-		if (count == 0) {
-			// nothing to scan for this vector, skip the entire vector
-			state.vector_index++;
-			continue;
+		if (SCAN_DELETES) {
+			D_ASSERT(transaction);
+			count = state.morsel->GetSelVector(*transaction, state.vector_index, valid_sel, max_count);
+			if (count == 0) {
+				// nothing to scan for this vector, skip the entire vector
+				state.vector_index++;
+				continue;
+			}
+		} else {
+			count = max_count;
 		}
 		idx_t approved_tuple_count = count;
 
@@ -180,7 +198,15 @@ void Morsel::Scan(Transaction &transaction, MorselScanState &state, DataChunk &r
 			} else {
 				columns[column]->Scan(state.column_scans[i], result.data[i]);
 				if (!updates.empty() && updates[column]) {
-					updates[column]->FetchUpdates(transaction, state.vector_index, result.data[i]);
+					if (!ALLOW_UPDATES && updates[column]->HasUncommittedUpdates(state.vector_index)) {
+						throw TransactionException("Cannot create index with outstanding updates");
+					}
+					if (SCAN_COMMITTED) {
+						updates[column]->FetchCommitted(state.vector_index, result.data[i]);
+					} else {
+						D_ASSERT(transaction);
+						updates[column]->FetchUpdates(*transaction, state.vector_index, result.data[i]);
+					}
 				}
 			}
 		}
@@ -225,6 +251,17 @@ void Morsel::Scan(Transaction &transaction, MorselScanState &state, DataChunk &r
 	}
 }
 
+void Morsel::Scan(Transaction &transaction, MorselScanState &state, DataChunk &result) {
+	TemplatedScan<true, false, true>(&transaction, state, result);
+}
+
+void Morsel::IndexScan(MorselScanState &state, DataChunk &result, bool allow_pending_updates) {
+	if (allow_pending_updates) {
+		TemplatedScan<false, true, true>(nullptr, state, result);
+	} else {
+		TemplatedScan<false, true, false>(nullptr, state, result);
+	}
+}
 
 ChunkInfo *Morsel::GetChunkInfo(idx_t vector_idx) {
 	if (!version_info) {
@@ -254,6 +291,26 @@ bool Morsel::Fetch(Transaction &transaction, idx_t row) {
 		return true;
 	}
 	return info->Fetch(transaction, row - vector_index * STANDARD_VECTOR_SIZE);
+}
+
+void Morsel::FetchRow(Transaction &transaction, ColumnFetchState &state, const vector<column_t> &column_ids, row_t row_id, DataChunk &result, idx_t result_idx) {
+	for (idx_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
+		auto column = column_ids[col_idx];
+		if (column == COLUMN_IDENTIFIER_ROW_ID) {
+			// row id column: fill in the row ids
+			D_ASSERT(result.data[col_idx].GetType().InternalType() == PhysicalType::INT64);
+			result.data[col_idx].SetVectorType(VectorType::FLAT_VECTOR);
+			auto data = FlatVector::GetData<row_t>(result.data[col_idx]);
+			data[result_idx] = row_id;
+		} else {
+			// regular column: fetch data from the base column
+			columns[column]->FetchRow(state, row_id, result.data[col_idx], result_idx);
+			// merge any updates made to this row
+			if (column < updates.size() && updates[column]) {
+				updates[column]->FetchRow(transaction, row_id, result.data[col_idx], result_idx);
+			}
+		}
+	}
 }
 
 void Morsel::AppendVersionInfo(Transaction &transaction, idx_t morsel_start, idx_t count, transaction_t commit_id) {
