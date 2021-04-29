@@ -16,7 +16,8 @@ class ClientContext;
 class DatabaseInstance;
 
 struct PrivateAllocatorData {
-	virtual ~PrivateAllocatorData(){}
+	virtual ~PrivateAllocatorData() {
+	}
 };
 
 typedef data_ptr_t (*allocate_function_ptr_t)(PrivateAllocatorData *private_data, idx_t size);
@@ -34,6 +35,7 @@ public:
 		return pointer;
 	}
 	void reset();
+
 private:
 	Allocator &allocator;
 	data_ptr_t pointer;
@@ -42,7 +44,8 @@ private:
 class Allocator {
 public:
 	Allocator();
-	Allocator(allocate_function_ptr_t allocate_function_p, free_function_ptr_t free_function_p, unique_ptr<PrivateAllocatorData> private_data);
+	Allocator(allocate_function_ptr_t allocate_function_p, free_function_ptr_t free_function_p,
+	          unique_ptr<PrivateAllocatorData> private_data);
 
 	data_ptr_t AllocateData(idx_t size);
 	void FreeData(data_ptr_t pointer);
@@ -55,10 +58,11 @@ public:
 		return new data_t[size];
 	}
 	static void DefaultFree(PrivateAllocatorData *private_data, data_ptr_t pointer) {
-		delete [] pointer;
+		delete[] pointer;
 	}
 	static Allocator &Get(ClientContext &context);
 	static Allocator &Get(DatabaseInstance &db);
+
 private:
 	allocate_function_ptr_t allocate_function;
 	free_function_ptr_t free_function;
@@ -66,4 +70,4 @@ private:
 	unique_ptr<PrivateAllocatorData> private_data;
 };
 
-}
+} // namespace duckdb

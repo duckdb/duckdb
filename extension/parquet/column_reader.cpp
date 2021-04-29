@@ -36,11 +36,10 @@ const uint32_t RleBpDecoder::BITPACK_MASKS[] = {
 
 const uint8_t RleBpDecoder::BITPACK_DLEN = 8;
 
-
-ColumnReader::ColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p, idx_t max_define_p,
-				idx_t max_repeat_p)
-	: schema(schema_p), file_idx(file_idx_p), max_define(max_define_p), max_repeat(max_repeat_p), reader(reader),
-	    type(type_p), page_rows_available(0) {
+ColumnReader::ColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p,
+                           idx_t max_define_p, idx_t max_repeat_p)
+    : schema(schema_p), file_idx(file_idx_p), max_define(max_define_p), max_repeat(max_repeat_p), reader(reader),
+      type(type_p), page_rows_available(0) {
 
 	// dummies for Skip()
 	dummy_result.Initialize(Type());
@@ -52,8 +51,9 @@ ColumnReader::ColumnReader(ParquetReader &reader, LogicalType type_p, const Sche
 ColumnReader::~ColumnReader() {
 }
 
-unique_ptr<ColumnReader> ColumnReader::CreateReader(ParquetReader &reader, const LogicalType &type_p, const SchemaElement &schema_p,
-                                                    idx_t file_idx_p, idx_t max_define, idx_t max_repeat) {
+unique_ptr<ColumnReader> ColumnReader::CreateReader(ParquetReader &reader, const LogicalType &type_p,
+                                                    const SchemaElement &schema_p, idx_t file_idx_p, idx_t max_define,
+                                                    idx_t max_repeat) {
 	switch (type_p.id()) {
 	case LogicalTypeId::BOOLEAN:
 		return make_unique<BooleanColumnReader>(reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
@@ -102,8 +102,8 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(ParquetReader &reader, const
 		}
 		break;
 	case LogicalTypeId::DATE:
-		return make_unique<CallbackColumnReader<int32_t, date_t, ParquetIntToDate>>(reader, type_p, schema_p, file_idx_p,
-		                                                                            max_define, max_repeat);
+		return make_unique<CallbackColumnReader<int32_t, date_t, ParquetIntToDate>>(reader, type_p, schema_p,
+		                                                                            file_idx_p, max_define, max_repeat);
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR:
 		return make_unique<StringColumnReader>(reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
@@ -111,13 +111,17 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(ParquetReader &reader, const
 		// we have to figure out what kind of int we need
 		switch (type_p.InternalType()) {
 		case PhysicalType::INT16:
-			return make_unique<DecimalColumnReader<int16_t>>(reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+			return make_unique<DecimalColumnReader<int16_t>>(reader, type_p, schema_p, file_idx_p, max_define,
+			                                                 max_repeat);
 		case PhysicalType::INT32:
-			return make_unique<DecimalColumnReader<int32_t>>(reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+			return make_unique<DecimalColumnReader<int32_t>>(reader, type_p, schema_p, file_idx_p, max_define,
+			                                                 max_repeat);
 		case PhysicalType::INT64:
-			return make_unique<DecimalColumnReader<int64_t>>(reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+			return make_unique<DecimalColumnReader<int64_t>>(reader, type_p, schema_p, file_idx_p, max_define,
+			                                                 max_repeat);
 		case PhysicalType::INT128:
-			return make_unique<DecimalColumnReader<hugeint_t>>(reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+			return make_unique<DecimalColumnReader<hugeint_t>>(reader, type_p, schema_p, file_idx_p, max_define,
+			                                                   max_repeat);
 
 		default:
 			break;
@@ -490,11 +494,11 @@ idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint
 	return result_offset;
 }
 
-
-ListColumnReader::ListColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t schema_idx_p, idx_t max_define_p,
-					idx_t max_repeat_p, unique_ptr<ColumnReader> child_column_reader_p)
-	: ColumnReader(reader, type_p, schema_p, schema_idx_p, max_define_p, max_repeat_p),
-		child_column_reader(move(child_column_reader_p)), overflow_child_count(0) {
+ListColumnReader::ListColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p,
+                                   idx_t schema_idx_p, idx_t max_define_p, idx_t max_repeat_p,
+                                   unique_ptr<ColumnReader> child_column_reader_p)
+    : ColumnReader(reader, type_p, schema_p, schema_idx_p, max_define_p, max_repeat_p),
+      child_column_reader(move(child_column_reader_p)), overflow_child_count(0) {
 
 	child_defines.resize(reader.allocator, STANDARD_VECTOR_SIZE);
 	child_repeats.resize(reader.allocator, STANDARD_VECTOR_SIZE);

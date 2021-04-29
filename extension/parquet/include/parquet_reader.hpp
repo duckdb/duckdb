@@ -56,8 +56,8 @@ struct ParquetReaderScanState {
 
 class ParquetReader {
 public:
-	ParquetReader(Allocator &allocator, unique_ptr<FileHandle> file_handle_p, const vector<LogicalType> &expected_types_p,
-	              const string &initial_filename_p = string());
+	ParquetReader(Allocator &allocator, unique_ptr<FileHandle> file_handle_p,
+	              const vector<LogicalType> &expected_types_p, const string &initial_filename_p = string());
 	ParquetReader(Allocator &allocator, unique_ptr<FileHandle> file_handle_p)
 	    : ParquetReader(allocator, move(file_handle_p), vector<LogicalType>(), string()) {
 	}

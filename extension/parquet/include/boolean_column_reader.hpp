@@ -17,10 +17,10 @@ struct BooleanParquetValueConversion;
 
 class BooleanColumnReader : public TemplatedColumnReader<bool, BooleanParquetValueConversion> {
 public:
-	BooleanColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t schema_idx_p, idx_t max_define_p,
-	                    idx_t max_repeat_p)
-	    : TemplatedColumnReader<bool, BooleanParquetValueConversion>(reader, type_p, schema_p, schema_idx_p, max_define_p,
-	                                                                 max_repeat_p),
+	BooleanColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t schema_idx_p,
+	                    idx_t max_define_p, idx_t max_repeat_p)
+	    : TemplatedColumnReader<bool, BooleanParquetValueConversion>(reader, type_p, schema_p, schema_idx_p,
+	                                                                 max_define_p, max_repeat_p),
 	      byte_pos(0) {};
 
 	uint8_t byte_pos;
@@ -53,4 +53,4 @@ struct BooleanParquetValueConversion {
 	}
 };
 
-}
+} // namespace duckdb

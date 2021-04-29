@@ -148,8 +148,9 @@ static LogicalType DeriveLogicalType(const SchemaElement &s_ele) {
 	}
 }
 
-static unique_ptr<ColumnReader> CreateReaderRecursive(ParquetReader &reader, const FileMetaData *file_meta_data, idx_t depth, idx_t max_define,
-                                                      idx_t max_repeat, idx_t &next_schema_idx, idx_t &next_file_idx) {
+static unique_ptr<ColumnReader> CreateReaderRecursive(ParquetReader &reader, const FileMetaData *file_meta_data,
+                                                      idx_t depth, idx_t max_define, idx_t max_repeat,
+                                                      idx_t &next_schema_idx, idx_t &next_file_idx) {
 	D_ASSERT(file_meta_data);
 	D_ASSERT(next_schema_idx < file_meta_data->schema.size());
 	auto &s_ele = file_meta_data->schema[next_schema_idx];
@@ -199,12 +200,14 @@ static unique_ptr<ColumnReader> CreateReaderRecursive(ParquetReader &reader, con
 		}
 		if (s_ele.repetition_type == FieldRepetitionType::REPEATED) {
 			result_type = LogicalType(LogicalTypeId::LIST, {make_pair("", result_type)});
-			return make_unique<ListColumnReader>(reader, result_type, s_ele, this_idx, max_define, max_repeat, move(result));
+			return make_unique<ListColumnReader>(reader, result_type, s_ele, this_idx, max_define, max_repeat,
+			                                     move(result));
 		}
 		return result;
 	} else { // leaf node
 		// TODO check return value of derive type or should we only do this on read()
-		return ColumnReader::CreateReader(reader, DeriveLogicalType(s_ele), s_ele, next_file_idx++, max_define, max_repeat);
+		return ColumnReader::CreateReader(reader, DeriveLogicalType(s_ele), s_ele, next_file_idx++, max_define,
+		                                  max_repeat);
 	}
 }
 
@@ -258,8 +261,9 @@ void ParquetReader::InitializeSchema(const vector<LogicalType> &expected_types_p
 	D_ASSERT(!return_types.empty());
 }
 
-ParquetReader::ParquetReader(Allocator &allocator_p, unique_ptr<FileHandle> file_handle_p, const vector<LogicalType> &expected_types_p,
-                             const string &initial_filename_p) : allocator(allocator_p) {
+ParquetReader::ParquetReader(Allocator &allocator_p, unique_ptr<FileHandle> file_handle_p,
+                             const vector<LogicalType> &expected_types_p, const string &initial_filename_p)
+    : allocator(allocator_p) {
 	file_name = file_handle_p->path;
 	file_handle = move(file_handle_p);
 	metadata = LoadMetadata(allocator, *file_handle);
@@ -267,7 +271,8 @@ ParquetReader::ParquetReader(Allocator &allocator_p, unique_ptr<FileHandle> file
 }
 
 ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, const vector<LogicalType> &expected_types_p,
-                             const string &initial_filename_p) : allocator(Allocator::Get(context_p)) {
+                             const string &initial_filename_p)
+    : allocator(Allocator::Get(context_p)) {
 	auto &fs = FileSystem::GetFileSystem(context_p);
 	file_name = move(file_name_p);
 	file_handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ);
@@ -300,8 +305,8 @@ const FileMetaData *ParquetReader::GetFileMetadata() {
 }
 
 // TODO also somewhat ugly, perhaps this can be moved to the column reader too
-unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(ParquetReader &reader, LogicalType &type, column_t file_col_idx,
-                                                         const FileMetaData *file_meta_data) {
+unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(ParquetReader &reader, LogicalType &type,
+                                                         column_t file_col_idx, const FileMetaData *file_meta_data) {
 	unique_ptr<BaseStatistics> column_stats;
 	auto root_reader = CreateReader(reader, file_meta_data);
 	auto column_reader = ((StructColumnReader *)root_reader.get())->GetChildReader(file_col_idx);

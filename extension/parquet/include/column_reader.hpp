@@ -40,11 +40,12 @@ typedef std::bitset<STANDARD_VECTOR_SIZE> parquet_filter_t;
 
 class ColumnReader {
 public:
-	static unique_ptr<ColumnReader> CreateReader(ParquetReader &reader, const LogicalType &type_p, const SchemaElement &schema_p,
-	                                             idx_t schema_idx_p, idx_t max_define, idx_t max_repeat);
+	static unique_ptr<ColumnReader> CreateReader(ParquetReader &reader, const LogicalType &type_p,
+	                                             const SchemaElement &schema_p, idx_t schema_idx_p, idx_t max_define,
+	                                             idx_t max_repeat);
 
-	ColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p, idx_t max_define_p,
-	             idx_t max_repeat_p);
+	ColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p,
+	             idx_t max_define_p, idx_t max_repeat_p);
 
 	virtual void IntializeRead(const std::vector<ColumnChunk> &columns, TProtocol &protocol_p) {
 		D_ASSERT(file_idx < columns.size());

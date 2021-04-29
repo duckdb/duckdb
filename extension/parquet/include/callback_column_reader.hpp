@@ -21,11 +21,12 @@ class CallbackColumnReader
                                    CallbackParquetValueConversion<PARQUET_PHYSICAL_TYPE, DUCKDB_PHYSICAL_TYPE, FUNC>> {
 
 public:
-	CallbackColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p, idx_t max_define_p,
-	                     idx_t max_repeat_p)
+	CallbackColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p,
+	                     idx_t max_define_p, idx_t max_repeat_p)
 	    : TemplatedColumnReader<DUCKDB_PHYSICAL_TYPE,
 	                            CallbackParquetValueConversion<PARQUET_PHYSICAL_TYPE, DUCKDB_PHYSICAL_TYPE, FUNC>>(
-	          reader, type_p, schema_p, file_idx_p, max_define_p, max_repeat_p) {}
+	          reader, type_p, schema_p, file_idx_p, max_define_p, max_repeat_p) {
+	}
 
 protected:
 	void Dictionary(shared_ptr<ByteBuffer> dictionary_data, idx_t num_entries) {
@@ -37,4 +38,4 @@ protected:
 	}
 };
 
-}
+} // namespace duckdb

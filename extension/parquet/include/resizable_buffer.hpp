@@ -73,7 +73,7 @@ public:
 			allocated_data = allocator.Allocate(alloc_len);
 		}
 		len = new_size;
-		ptr = (char *) allocated_data->get();
+		ptr = (char *)allocated_data->get();
 	}
 
 private:
