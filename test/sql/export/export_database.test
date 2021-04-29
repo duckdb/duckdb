@@ -20,8 +20,22 @@ statement ok
 INSERT INTO strings VALUES ('NULL', DATE '1992-01-01'), (NULL, DATE '1993-01-01');
 
 statement ok
+CREATE TABLE "table.with-symbols"(i INTEGER)
+
+statement ok
+INSERT INTO "table.with-symbols" VALUES (1), (4), (NULL)
+
+statement ok
+CREATE TABLE "table ""." ( "col ""." TEXT)
+
+statement ok
+INSERT INTO "table ""." ("col "".") VALUES ('quote_escaped_quote_''')
+
+statement ok
 CREATE VIEW v1 AS SELECT * FROM integers WHERE i>3; --
 CREATE VIEW v2 AS SELECT * FROM integers WHERE i < 3;
+CREATE VIEW "view.with-symbols" AS SELECT * FROM "table.with-symbols" WHERE i < 3;
+CREATE VIEW "view ""." AS SELECT * FROM "table.with-symbols" WHERE i < 3;
 
 statement ok
 CREATE VIEW v3 AS SELECT * FROM integers WHERE i IS NULL --
@@ -68,6 +82,29 @@ SELECT * FROM v3 ORDER BY 1
 ----
 NULL	1
 
+query I
+SELECT * FROM "table.with-symbols" ORDER BY 1
+----
+NULL
+1
+4
+
+query I
+SELECT * FROM "view.with-symbols" ORDER BY 1
+----
+1
+
+
+query TT
+SELECT "table ""."."col "".", "col ""." FROM "table "".";
+----
+quote_escaped_quote_'	quote_escaped_quote_'
+
+query I
+SELECT * FROM "view ""." ORDER BY 1
+----
+1
+
 # now export the db
 statement ok
 EXPORT DATABASE '__TEST_DIR__/export_test' (FORMAT CSV)
@@ -112,6 +149,28 @@ query I
 SELECT nextval('seq')
 ----
 2
+
+query I
+SELECT * FROM "table.with-symbols" ORDER BY 1
+----
+NULL
+1
+4
+
+query I
+SELECT * FROM "view.with-symbols" ORDER BY 1
+----
+1
+
+query TT
+SELECT "table ""."."col "".", "col ""." FROM "table "".";
+----
+quote_escaped_quote_'	quote_escaped_quote_'
+
+query I
+SELECT * FROM "view ""." ORDER BY 1
+----
+1
 
 # verify that constraints are still there
 statement error

@@ -8,10 +8,35 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
+#include "duckdb/parser/parsed_data/exported_table_data.hpp"
 
 #include <algorithm>
 
 namespace duckdb {
+
+//! Sanitizes a string to have only low case chars and underscores
+string SanitizeExportIdentifier(const string &str) {
+	// Copy the original string to result
+	string result(str);
+
+	for (idx_t i = 0; i < str.length(); ++i) {
+		auto c = str.at(i);
+		if (c >= 'a' && c <= 'z') {
+			// If it is lower case just continue
+			continue;
+		}
+
+		if (c >= 'A' && c <= 'Z') {
+			// To lowercase
+			result.at(i) = tolower(c);
+		} else {
+			// Substitute to underscore
+			result.at(i) = '_';
+		}
+	}
+
+	return result;
+}
 
 BoundStatement Binder::Bind(ExportStatement &stmt) {
 	// COPY TO a file
@@ -44,6 +69,10 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	// now generate the COPY statements for each of the tables
 	auto &fs = FileSystem::GetFileSystem(context);
 	unique_ptr<LogicalOperator> child_operator;
+
+	vector<ExportedTableData> exported_tables(tables.size());
+
+	idx_t id = 0; // Id for table
 	for (auto &table : tables) {
 		auto info = make_unique<CopyInfo>();
 		// we copy the options supplied to the EXPORT
@@ -51,16 +80,23 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		info->options = stmt.info->options;
 		// set up the file name for the COPY TO
 		if (table->schema->name == DEFAULT_SCHEMA) {
-			info->file_path = fs.JoinPath(stmt.info->file_path,
-			                              StringUtil::Format("%s.%s", table->name, copy_function->function.extension));
-		} else {
 			info->file_path =
-			    fs.JoinPath(stmt.info->file_path, StringUtil::Format("%s.%s.%s", table->schema->name, table->name,
-			                                                         copy_function->function.extension));
+			    fs.JoinPath(stmt.info->file_path,
+			                StringUtil::Format("%s_%s.%s", to_string(id), SanitizeExportIdentifier(table->name),
+			                                   copy_function->function.extension));
+		} else {
+			info->file_path = fs.JoinPath(
+			    stmt.info->file_path,
+			    StringUtil::Format("%s_%s_%s.%s", SanitizeExportIdentifier(table->schema->name), to_string(id),
+			                       SanitizeExportIdentifier(table->name), copy_function->function.extension));
 		}
 		info->is_from = false;
 		info->schema = table->schema->name;
 		info->table = table->name;
+
+		exported_tables.at(id).file_path = info->file_path;
+		exported_tables.at(id).table_name = info->table;
+		id++;
 
 		// generate the copy statement and bind it
 		CopyStatement copy_stmt;
@@ -86,7 +122,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	}
 
 	// create the export node
-	auto export_node = make_unique<LogicalExport>(copy_function->function, move(stmt.info));
+	auto export_node = make_unique<LogicalExport>(copy_function->function, move(stmt.info), exported_tables);
 
 	if (child_operator) {
 		export_node->children.push_back(move(child_operator));
