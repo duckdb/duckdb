@@ -1298,16 +1298,16 @@ string_t CastFromTimestamp::Operation(timestamp_t input, Vector &vector) {
 	return result;
 }
 template <>
-duckdb::string_t CastFromTimestampNS::Operation(duckdb::timestamp_t input, Vector &result){
-	return CastFromTimestamp::Operation(Timestamp::FromEpochNanoSeconds(input),result);
+duckdb::string_t CastFromTimestampNS::Operation(duckdb::timestamp_t input, Vector &result) {
+	return CastFromTimestamp::Operation(Timestamp::FromEpochNanoSeconds(input), result);
 }
 template <>
-duckdb::string_t CastFromTimestampMS::Operation(duckdb::timestamp_t input, Vector &result){
-	return CastFromTimestamp::Operation(Timestamp::FromEpochMs(input),result);
+duckdb::string_t CastFromTimestampMS::Operation(duckdb::timestamp_t input, Vector &result) {
+	return CastFromTimestamp::Operation(Timestamp::FromEpochMs(input), result);
 }
 template <>
-duckdb::string_t CastFromTimestampSec::Operation(duckdb::timestamp_t input, Vector &result){
-	return CastFromTimestamp::Operation(Timestamp::FromEpochSeconds(input),result);
+duckdb::string_t CastFromTimestampSec::Operation(duckdb::timestamp_t input, Vector &result) {
+	return CastFromTimestamp::Operation(Timestamp::FromEpochSeconds(input), result);
 }
 
 template <>
@@ -1321,27 +1321,27 @@ dtime_t CastTimestampToTime::Operation(timestamp_t input) {
 }
 
 template <>
-timestamp_t CastTimestampUsToMs::Operation(timestamp_t input){
+timestamp_t CastTimestampUsToMs::Operation(timestamp_t input) {
 	return Timestamp::GetEpochMs(input);
 }
 template <>
-timestamp_t CastTimestampUsToNs::Operation(timestamp_t input){
+timestamp_t CastTimestampUsToNs::Operation(timestamp_t input) {
 	return Timestamp::GetEpochNanoSeconds(input);
 }
 template <>
-timestamp_t CastTimestampUsToSec::Operation(timestamp_t input){
+timestamp_t CastTimestampUsToSec::Operation(timestamp_t input) {
 	return Timestamp::GetEpochSeconds(input);
 }
 template <>
-timestamp_t CastTimestampMsToUs::Operation(timestamp_t input){
+timestamp_t CastTimestampMsToUs::Operation(timestamp_t input) {
 	return Timestamp::FromEpochMs(input);
 }
 template <>
-timestamp_t CastTimestampNsToUs::Operation(timestamp_t input){
+timestamp_t CastTimestampNsToUs::Operation(timestamp_t input) {
 	return Timestamp::FromEpochNanoSeconds(input);
 }
 template <>
-timestamp_t CastTimestampSecToUs::Operation(timestamp_t input){
+timestamp_t CastTimestampSecToUs::Operation(timestamp_t input) {
 	return Timestamp::FromEpochSeconds(input);
 }
 //===--------------------------------------------------------------------===//
@@ -1353,17 +1353,17 @@ timestamp_t CastToTimestamp::Operation(string_t input) {
 }
 
 template <>
-duckdb::timestamp_t CastToTimestampNS::Operation(string_t input){
+duckdb::timestamp_t CastToTimestampNS::Operation(string_t input) {
 	return Timestamp::GetEpochNanoSeconds(Timestamp::FromCString(input.GetDataUnsafe(), input.GetSize()));
 }
 
 template <>
-duckdb::timestamp_t CastToTimestampMS::Operation(string_t input){
+duckdb::timestamp_t CastToTimestampMS::Operation(string_t input) {
 	return Timestamp::GetEpochMs(Timestamp::FromCString(input.GetDataUnsafe(), input.GetSize()));
 }
 
 template <>
-duckdb::timestamp_t CastToTimestampSec::Operation(string_t input){
+duckdb::timestamp_t CastToTimestampSec::Operation(string_t input) {
 	return Timestamp::GetEpochSeconds(Timestamp::FromCString(input.GetDataUnsafe(), input.GetSize()));
 }
 

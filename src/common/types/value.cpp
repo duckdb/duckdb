@@ -157,11 +157,11 @@ Value Value::MaximumValue(const LogicalType &type) {
 		return Value::UBIGINT(NumericLimits<uint64_t>::Maximum());
 	case LogicalTypeId::TIMESTAMP:
 		return Value::TIMESTAMP(NumericLimits<int64_t>::Maximum());
-		case LogicalTypeId::TIMESTAMP_MS:
-		    return Value::TIMESTAMP_MS(NumericLimits<int64_t>::Maximum());
-		    case LogicalTypeId::TIMESTAMP_NS:
-		        return Value::TIMESTAMP_NS(NumericLimits<int64_t>::Maximum());
-		        case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_MS:
+		return Value::TIMESTAMP_MS(NumericLimits<int64_t>::Maximum());
+	case LogicalTypeId::TIMESTAMP_NS:
+		return Value::TIMESTAMP_NS(NumericLimits<int64_t>::Maximum());
+	case LogicalTypeId::TIMESTAMP_SEC:
 		return Value::TIMESTAMP_SEC(NumericLimits<int64_t>::Maximum());
 	case LogicalTypeId::HUGEINT:
 		return Value::HUGEINT(NumericLimits<hugeint_t>::Maximum());
@@ -604,9 +604,9 @@ int32_t Value::GetValue() const {
 }
 template <>
 int64_t Value::GetValue() const {
-	if (type_.id() == LogicalTypeId::TIMESTAMP || type_.id() == LogicalTypeId::TIME
-	    || type_.id() == LogicalTypeId::TIMESTAMP_SEC || type_.id() == LogicalTypeId::TIMESTAMP_NS
-	    || type_.id() == LogicalTypeId::TIMESTAMP_MS) {
+	if (type_.id() == LogicalTypeId::TIMESTAMP || type_.id() == LogicalTypeId::TIME ||
+	    type_.id() == LogicalTypeId::TIMESTAMP_SEC || type_.id() == LogicalTypeId::TIMESTAMP_NS ||
+	    type_.id() == LogicalTypeId::TIMESTAMP_MS) {
 		return value_.bigint;
 	}
 	return GetValueInternal<int64_t>();

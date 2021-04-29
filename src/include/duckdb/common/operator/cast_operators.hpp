@@ -908,7 +908,6 @@ struct CastToTimestampNS {
 	}
 };
 
-
 struct CastToTimestampMS {
 	template <class SRC, class DST>
 	static inline DST Operation(SRC input) {
@@ -922,7 +921,6 @@ struct CastToTimestampSec {
 		throw duckdb::NotImplementedException("Cast to timestamp could not be performed!");
 	}
 };
-
 
 struct CastFromTimestamp {
 	template <class SRC>
@@ -1007,8 +1005,6 @@ struct CastTimestampSecToUs {
 		throw duckdb::NotImplementedException("Cast to timestamp could not be performed!");
 	}
 };
-
-
 
 template <>
 duckdb::timestamp_t CastTimestampUsToMs::Operation(duckdb::timestamp_t input);

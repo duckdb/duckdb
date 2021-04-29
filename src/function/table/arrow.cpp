@@ -231,10 +231,10 @@ static void ArrowScanFunction(ClientContext &context, const FunctionData *bind_d
 		case LogicalTypeId::BIGINT:
 		case LogicalTypeId::HUGEINT:
 		case LogicalTypeId::DATE:
-			case LogicalTypeId::TIMESTAMP:
-			    case LogicalTypeId::TIMESTAMP_SEC:
-			        case LogicalTypeId::TIMESTAMP_MS:
-			            case LogicalTypeId::TIMESTAMP_NS:
+		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::TIMESTAMP_SEC:
+		case LogicalTypeId::TIMESTAMP_MS:
+		case LogicalTypeId::TIMESTAMP_NS:
 			FlatVector::SetData(output.data[col_idx], (data_ptr_t)array.buffers[1] +
 			                                              GetTypeIdSize(output.data[col_idx].GetType().InternalType()) *
 			                                                  (data.chunk_offset + array.offset));
@@ -271,45 +271,6 @@ static void ArrowScanFunction(ClientContext &context, const FunctionData *bind_d
 			}
 			break;
 		}
-//		case LogicalTypeId::TIMESTAMP: {
-//			auto src_ptr = (uint64_t *)array.buffers[1] + data.chunk_offset;
-//			auto tgt_ptr = (timestamp_t *)FlatVector::GetData(output.data[col_idx]);
-//			switch (output.data[col_idx].GetType().GetTimestampType()) {
-//			case LogicalTimestampType::SECONDS: {
-//				for (idx_t row = 0; row < output.size(); row++) {
-//					auto source_idx = data.chunk_offset + row;
-//					tgt_ptr[row] = Timestamp::FromEpochSeconds(src_ptr[source_idx]);
-//				}
-//				break;
-//			}
-//			case LogicalTimestampType::MICRO: {
-//				for (idx_t row = 0; row < output.size(); row++) {
-//					auto source_idx = data.chunk_offset + row;
-//					tgt_ptr[row] = Timestamp::FromEpochMicroSeconds(src_ptr[source_idx]);
-//				}
-//				break;
-//			}
-//			case LogicalTimestampType::MILLI: {
-//				for (idx_t row = 0; row < output.size(); row++) {
-//					auto source_idx = data.chunk_offset + row;
-//					tgt_ptr[row] = Timestamp::FromEpochMs(src_ptr[source_idx]);
-//				}
-//				break;
-//			}
-//			case LogicalTimestampType::NANO: {
-//				for (idx_t row = 0; row < output.size(); row++) {
-//					auto source_idx = data.chunk_offset + row;
-//					tgt_ptr[row] = Timestamp::FromEpochNanoSeconds(src_ptr[source_idx]);
-//				}
-//				break;
-//			}
-//			default:
-//				throw std::runtime_error(
-//				    "Unsupported Timestamp Type " +
-//				    LogicalTimestampTypeToString(output.data[col_idx].GetType().GetTimestampType()));
-//			}
-//			break;
-//		}
 		default:
 			throw std::runtime_error("Unsupported type " + output.data[col_idx].GetType().ToString());
 		}

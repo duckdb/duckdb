@@ -149,10 +149,18 @@ timestamp_t Timestamp::GetCurrentTimestamp() {
 }
 
 timestamp_t Timestamp::FromEpochSeconds(int64_t sec) {
+	auto max_int64 = std::numeric_limits<timestamp_t>::max();
+	if (max_int64 / Interval::MICROS_PER_MSEC < sec) {
+		throw ConversionException("Could not convert Timestamp(S) to Timestamp(US)");
+	}
 	return sec * Interval::MICROS_PER_SEC;
 }
 
 timestamp_t Timestamp::FromEpochMs(int64_t ms) {
+	auto max_int64 = std::numeric_limits<timestamp_t>::max();
+	if (max_int64 / Interval::MICROS_PER_MSEC < ms) {
+		throw ConversionException("Could not convert Timestamp(MS) to Timestamp(US)");
+	}
 	return ms * Interval::MICROS_PER_MSEC;
 }
 
@@ -177,6 +185,10 @@ int64_t Timestamp::GetEpochMicroSeconds(timestamp_t timestamp) {
 }
 
 int64_t Timestamp::GetEpochNanoSeconds(timestamp_t timestamp) {
+	auto max_int64 = std::numeric_limits<timestamp_t>::max();
+	if (max_int64 / 1000 < timestamp) {
+		throw ConversionException("Could not convert Timestamp(US) to Timestamp(NS)");
+	}
 	return timestamp * 1000;
 }
 

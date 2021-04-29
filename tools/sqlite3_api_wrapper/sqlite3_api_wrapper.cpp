@@ -391,9 +391,9 @@ int sqlite3_column_type(sqlite3_stmt *pStmt, int iCol) {
 	case LogicalTypeId::DATE:
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIMESTAMP:
-		case LogicalTypeId::TIMESTAMP_SEC:
-		    case LogicalTypeId::TIMESTAMP_MS:
-		        case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::LIST:
 	case LogicalTypeId::STRUCT:
@@ -1004,13 +1004,10 @@ const char *sqlite3_column_decltype(sqlite3_stmt *pStmt, int iCol) {
 	case LogicalTypeId::TIME:
 		return "TIME";
 	case LogicalTypeId::TIMESTAMP:
-		return "TIMESTAMP (us)";
-		case LogicalTypeId::TIMESTAMP_NS:
-		return "TIMESTAMP (ns)";
-		case LogicalTypeId::TIMESTAMP_MS:
-		return "TIMESTAMP (ms)";
-		case LogicalTypeId::TIMESTAMP_SEC:
-		return "TIMESTAMP (sec)";
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_SEC:
+		return "TIMESTAMP";
 	case LogicalTypeId::VARCHAR:
 		return "VARCHAR";
 	case LogicalTypeId::LIST:

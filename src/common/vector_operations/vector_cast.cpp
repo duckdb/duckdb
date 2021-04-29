@@ -538,8 +538,6 @@ static void TimestampSecCastSwitch(Vector &source, Vector &result, idx_t count) 
 	}
 }
 
-
-
 static void IntervalCastSwitch(Vector &source, Vector &result, idx_t count) {
 	// now switch on the result type
 	switch (result.GetType().id()) {

@@ -338,13 +338,13 @@ string LogicalTypeIdToString(LogicalTypeId id) {
 	case LogicalTypeId::TIME:
 		return "TIME";
 	case LogicalTypeId::TIMESTAMP:
-		return "TIMESTAMP (US)";
+	    return "TIMESTAMP_US";
 	case LogicalTypeId::TIMESTAMP_MS:
-		return "TIMESTAMP (MS)";
+	    return "TIMESTAMP_MS";
 	case LogicalTypeId::TIMESTAMP_NS:
-		return "TIMESTAMP (NS)";
+	    return "TIMESTAMP_NS";
 	case LogicalTypeId::TIMESTAMP_SEC:
-		return "TIMESTAMP (S)";
+		return "TIMESTAMP_SEC";
 	case LogicalTypeId::FLOAT:
 		return "FLOAT";
 	case LogicalTypeId::DOUBLE:
@@ -444,11 +444,11 @@ LogicalType TransformStringToLogicalType(const string &str) {
 		return LogicalType::SMALLINT;
 	} else if (lower_str == "timestamp" || lower_str == "datetime" || lower_str == "timestamp_us") {
 		return LogicalType::TIMESTAMP;
-	}else if (lower_str == "timestamp_ms") {
+	} else if (lower_str == "timestamp_ms") {
 		return LogicalType::TIMESTAMP_MS;
-	}else if (lower_str == "timestamp_ns") {
+	} else if (lower_str == "timestamp_ns") {
 		return LogicalType::TIMESTAMP_NS;
-	}else if (lower_str == "timestamp_s") {
+	} else if (lower_str == "timestamp_s") {
 		return LogicalType::TIMESTAMP_S;
 	} else if (lower_str == "bool" || lower_str == "boolean" || lower_str == "logical") {
 		return LogicalType(LogicalTypeId::BOOLEAN);
@@ -666,9 +666,9 @@ bool LogicalType::IsMoreGenericThan(LogicalType &other) const {
 	case LogicalTypeId::DATE:
 		return false;
 	case LogicalTypeId::TIMESTAMP:
-		case LogicalTypeId::TIMESTAMP_NS:
-		    case LogicalTypeId::TIMESTAMP_MS:
-		        case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_SEC:
 		switch (other.id()) {
 		case LogicalTypeId::TIME:
 		case LogicalTypeId::DATE:
