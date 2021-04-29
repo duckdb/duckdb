@@ -90,6 +90,42 @@ unique_ptr<Morsel> Morsel::AlterType(ClientContext &context, const LogicalType &
 	return morsel;
 }
 
+unique_ptr<Morsel> Morsel::AddColumn(ClientContext &context, ColumnDefinition &new_column, ExpressionExecutor &executor, Expression *default_value, Vector &result) {
+	// construct a new column data for the new column
+	auto added_column = make_shared<StandardColumnData>(*this, new_column.type, columns.size());
+
+	// scan the original table, and fill the new column with the transformed value
+	auto &transaction = Transaction::GetTransaction(context);
+
+	auto added_col_stats = make_shared<SegmentStatistics>(new_column.type);
+	idx_t rows_to_write = this->count;
+	if (rows_to_write > 0) {
+		DataChunk dummy_chunk;
+
+		ColumnAppendState state;
+		added_column->InitializeAppend(state);
+		for (idx_t i = 0; i < rows_to_write; i += STANDARD_VECTOR_SIZE) {
+			idx_t rows_in_this_vector = MinValue<idx_t>(rows_to_write - i, STANDARD_VECTOR_SIZE);
+			if (default_value) {
+				dummy_chunk.SetCardinality(rows_in_this_vector);
+				executor.ExecuteExpression(dummy_chunk, result);
+			}
+			added_column->Append(*added_col_stats->statistics, state, result, rows_in_this_vector);
+		}
+	}
+
+	// set up the morsel based on this morsel
+	auto morsel = make_unique<Morsel>(db, table_info, this->start, this->count);
+	morsel->version_info = version_info;
+	morsel->updates = updates;
+	morsel->columns = columns;
+	morsel->stats = stats;
+	// now add the new column
+	morsel->columns.push_back(move(added_column));
+	morsel->stats.push_back(move(added_col_stats));
+	return morsel;
+}
+
 void Morsel::Scan(Transaction &transaction, MorselScanState &state, DataChunk &result) {
 	auto &table_filters = state.parent.table_filters;
 	auto &column_ids = state.parent.column_ids;

@@ -60,45 +60,49 @@ void DataTable::AppendMorsel(idx_t start_row) {
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition &new_column, Expression *default_value)
     : info(parent.info), types(parent.types), db(parent.db), total_rows(parent.total_rows), is_root(true) {
-	throw NotImplementedException("FIXME: add column");
-	// // prevent any new tuples from being added to the parent
-	// lock_guard<mutex> parent_lock(parent.append_lock);
-	// // add the new column to this DataTable
-	// auto new_column_type = new_column.type;
-	// idx_t new_column_idx = columns.size();
+	// prevent any new tuples from being added to the parent
+	lock_guard<mutex> parent_lock(parent.append_lock);
+	// add the new column to this DataTable
+	auto new_column_type = new_column.type;
+	auto new_column_idx = parent.types.size();
 
-	// types.push_back(new_column_type);
-	// auto column_data = make_shared<StandardColumnData>(db, *info, new_column_type, new_column_idx);
-	// columns.push_back(move(column_data));
+	types.push_back(new_column_type);
 
-	// // fill the column with its DEFAULT value, or NULL if none is specified
-	// idx_t rows_to_write = total_rows;
-	// if (rows_to_write > 0) {
-	// 	ExpressionExecutor executor;
-	// 	DataChunk dummy_chunk;
-	// 	Vector result(new_column_type);
-	// 	if (!default_value) {
-	// 		FlatVector::Validity(result).SetAllInvalid(STANDARD_VECTOR_SIZE);
-	// 	} else {
-	// 		executor.AddExpression(*default_value);
-	// 	}
+	// set up the statistics
+	for(idx_t i = 0; i < parent.column_stats.size(); i++) {
+		column_stats.push_back(parent.column_stats[i]->Copy());
+	}
+	column_stats.push_back(BaseStatistics::CreateEmpty(new_column_type));
 
-	// 	ColumnAppendState state;
-	// 	columns[new_column_idx]->InitializeAppend(state);
-	// 	for (idx_t i = 0; i < rows_to_write; i += STANDARD_VECTOR_SIZE) {
-	// 		idx_t rows_in_this_vector = MinValue<idx_t>(rows_to_write - i, STANDARD_VECTOR_SIZE);
-	// 		if (default_value) {
-	// 			dummy_chunk.SetCardinality(rows_in_this_vector);
-	// 			executor.ExecuteExpression(dummy_chunk, result);
-	// 		}
-	// 		columns[new_column_idx]->Append(state, result, rows_in_this_vector);
-	// 	}
-	// }
-	// // also add this column to client local storage
-	// Transaction::GetTransaction(context).storage.AddColumn(&parent, this, new_column, default_value);
+	auto &transaction = Transaction::GetTransaction(context);
 
-	// // this table replaces the previous table, hence the parent is no longer the root DataTable
-	// parent.is_root = false;
+	ExpressionExecutor executor;
+	DataChunk dummy_chunk;
+	Vector result(new_column_type);
+	if (!default_value) {
+		FlatVector::Validity(result).SetAllInvalid(STANDARD_VECTOR_SIZE);
+	} else {
+		executor.AddExpression(*default_value);
+	}
+
+	// fill the column with its DEFAULT value, or NULL if none is specified
+	auto new_stats = make_unique<SegmentStatistics>(new_column.type);
+	this->morsels = make_shared<SegmentTree>();
+	auto current_morsel = (Morsel *) parent.morsels->GetRootSegment();
+	while(current_morsel) {
+		auto new_morsel = current_morsel->AddColumn(context, new_column, executor, default_value, result);
+		// merge in the statistics
+		column_stats[new_column_idx]->Merge(*new_morsel->GetStatistics(new_column_idx));
+
+		morsels->AppendSegment(move(new_morsel));
+		current_morsel = (Morsel *) current_morsel->next.get();
+	}
+
+	// also add this column to client local storage
+	transaction.storage.AddColumn(&parent, this, new_column, default_value);
+
+	// this table replaces the previous table, hence the parent is no longer the root DataTable
+	parent.is_root = false;
 }
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_column)
@@ -177,6 +181,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 	auto current_morsel = (Morsel *) parent.morsels->GetRootSegment();
 	while(current_morsel) {
 		auto new_morsel = current_morsel->AlterType(context, target_type, changed_idx, executor, scan_state, scan_chunk);
+		column_stats[changed_idx]->Merge(*new_morsel->GetStatistics(changed_idx));
 		morsels->AppendSegment(move(new_morsel));
 		current_morsel = (Morsel *) current_morsel->next.get();
 	}
