@@ -212,7 +212,7 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 	     from.id() == LogicalTypeId::TIMESTAMP_NS) &&
 	    to.id() == LogicalTypeId::TIMESTAMP) {
 		//! Any timestamp type can be converted to the default (us) type at low cost
-		return 100;
+		return 101;
 	}
 	if ((to.id() == LogicalTypeId::TIMESTAMP_SEC || to.id() == LogicalTypeId::TIMESTAMP_MS ||
 	     to.id() == LogicalTypeId::TIMESTAMP_NS) &&

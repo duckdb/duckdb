@@ -41,27 +41,6 @@ INSERT INTO timestamp VALUES ('2008-01-01 00:00:51','2008-01-01 00:00:01.894','2
 statement ok
 INSERT INTO timestamp VALUES ('2008-01-01 00:00:11','2008-01-01 00:00:01.794','2008-01-01 00:00:01.98926','2008-01-01 00:00:01.899268321' )
 
-# Test Order BY
-query T
-select sec from timestamp order by sec;
-----
-2008-01-01 00:00:01
-2008-01-01 00:00:11
-2008-01-01 00:00:51
-
-query T
-select milli from timestamp order by milli;
-----
-2008-01-01 00:00:01.594
-2008-01-01 00:00:01.794
-2008-01-01 00:00:01.894
-
-query T
-select nano from timestamp order by nano;
-----
-2008-01-01 00:00:01.889268
-2008-01-01 00:00:01.899268
-2008-01-01 00:00:01.999268
 
 # Overflow from US to NS
 statement error
@@ -107,3 +86,141 @@ select nano::TIMESTAMP_SEC from timestamp;
 
 statement error
 select nano::TIMESTAMP_MS from timestamp;
+
+#Sorting on the timestamps
+query T
+select sec from timestamp order by sec;
+----
+2008-01-01 00:00:01
+2008-01-01 00:00:11
+2008-01-01 00:00:51
+
+query T
+select milli from timestamp order by milli;
+----
+2008-01-01 00:00:01.594
+2008-01-01 00:00:01.794
+2008-01-01 00:00:01.894
+
+query T
+select nano from timestamp order by nano;
+----
+2008-01-01 00:00:01.889268
+2008-01-01 00:00:01.899268
+2008-01-01 00:00:01.999268
+
+#GROUP BY on each of these timestamp types
+statement ok
+INSERT INTO timestamp VALUES ('2008-01-01 00:00:51','2008-01-01 00:00:01.894','2008-01-01 00:00:01.99926','2008-01-01 00:00:01.999268321' )
+
+statement ok
+INSERT INTO timestamp VALUES ('2008-01-01 00:00:11','2008-01-01 00:00:01.794','2008-01-01 00:00:01.98926','2008-01-01 00:00:01.899268321' )
+
+query TT
+select count(*), nano from timestamp group by nano order by nano;
+----
+1	2008-01-01 00:00:01.889268
+2	2008-01-01 00:00:01.899268
+2	2008-01-01 00:00:01.999268
+
+query TT
+select count(*), sec from timestamp group by sec order by sec;
+----
+1	2008-01-01 00:00:01
+2	2008-01-01 00:00:11
+2	2008-01-01 00:00:51
+
+query TT
+select count(*), milli from timestamp group by milli order by milli;
+----
+1	2008-01-01 00:00:01.594
+2	2008-01-01 00:00:01.794
+2	2008-01-01 00:00:01.894
+
+#Joins on the timestamps
+statement ok
+CREATE TABLE IF NOT EXISTS timestamp_two (sec TIMESTAMP_S, milli TIMESTAMP_MS,micro TIMESTAMP_US, nano TIMESTAMP_NS );
+
+statement ok
+INSERT INTO timestamp_two VALUES ('2008-01-01 00:00:11','2008-01-01 00:00:01.794','2008-01-01 00:00:01.98926','2008-01-01 00:00:01.899268321' )
+
+query T
+select timestamp.sec from timestamp inner join  timestamp_two on (timestamp.sec = timestamp_two.sec);
+----
+2008-01-01 00:00:11
+2008-01-01 00:00:11
+
+query T
+select timestamp.milli from timestamp inner join  timestamp_two on (timestamp.milli = timestamp_two.milli);
+----
+2008-01-01 00:00:01.794
+2008-01-01 00:00:01.794
+
+query T
+select timestamp.nano from timestamp inner join  timestamp_two on (timestamp.nano = timestamp_two.nano);
+----
+2008-01-01 00:00:01.899268
+2008-01-01 00:00:01.899268
+
+#Comparisons between all the different timestamp types (e.g. TIMESTAMP = TIMESTAMP_MS, etc)
+query T
+select '2008-01-01 00:00:11'::TIMESTAMP_US = '2008-01-01 00:00:11'::TIMESTAMP_MS
+----
+true
+
+query T
+select '2008-01-01 00:00:11'::TIMESTAMP_US = '2008-01-01 00:00:11'::TIMESTAMP_NS
+----
+true
+
+query T
+select '2008-01-01 00:00:11'::TIMESTAMP_US = '2008-01-01 00:00:11'::TIMESTAMP_S
+----
+true
+
+query T
+select '2008-01-01 00:00:11'::TIMESTAMP_MS = '2008-01-01 00:00:11'::TIMESTAMP_NS
+----
+true
+
+query T
+select '2008-01-01 00:00:11'::TIMESTAMP_MS = '2008-01-01 00:00:11'::TIMESTAMP_S
+----
+true
+
+
+query T
+select '2008-01-01 00:00:11'::TIMESTAMP_NS = '2008-01-01 00:00:11'::TIMESTAMP_S
+----
+true
+
+
+query T
+select '2008-01-01 00:00:11.1'::TIMESTAMP_US = '2008-01-01 00:00:11'::TIMESTAMP_MS
+----
+false
+
+query T
+select '2008-01-01 00:00:11.1'::TIMESTAMP_US = '2008-01-01 00:00:11'::TIMESTAMP_NS
+----
+false
+
+query T
+select '2008-01-01 00:00:11.1'::TIMESTAMP_US = '2008-01-01 00:00:11'::TIMESTAMP_S
+----
+false
+
+query T
+select '2008-01-01 00:00:11.1'::TIMESTAMP_MS = '2008-01-01 00:00:11'::TIMESTAMP_NS
+----
+false
+
+query T
+select '2008-01-01 00:00:11.1'::TIMESTAMP_MS = '2008-01-01 00:00:11'::TIMESTAMP_S
+----
+false
+
+query T
+select '2008-01-01 00:00:11.1'::TIMESTAMP_NS = '2008-01-01 00:00:11'::TIMESTAMP_S
+----
+false

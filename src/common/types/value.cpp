@@ -714,10 +714,13 @@ Value Value::Numeric(const LogicalType &type, int64_t value) {
 	case LogicalTypeId::TIME:
 		return Value::TIME(dtime_t(value));
 	case LogicalTypeId::TIMESTAMP:
-	case LogicalTypeId::TIMESTAMP_NS:
-	case LogicalTypeId::TIMESTAMP_MS:
-	case LogicalTypeId::TIMESTAMP_SEC:
 		return Value::TIMESTAMP(timestamp_t(value));
+	case LogicalTypeId::TIMESTAMP_NS:
+		return Value::TimestampNs(timestamp_t(value));
+	case LogicalTypeId::TIMESTAMP_MS:
+		return Value::TimestampMs(timestamp_t(value));
+	case LogicalTypeId::TIMESTAMP_SEC:
+		return Value::TimestampSec(timestamp_t(value));
 	default:
 		throw InvalidTypeException(type, "Numeric requires numeric type");
 	}

@@ -151,19 +151,19 @@ timestamp_t Timestamp::GetCurrentTimestamp() {
 }
 
 timestamp_t Timestamp::FromEpochSeconds(int64_t sec) {
-	auto max_int64 = std::numeric_limits<int64_t>::max();
-	if (max_int64 / Interval::MICROS_PER_MSEC < sec) {
+	int64_t result;
+	if (!TryMultiplyOperator::Operation(sec, Interval::MICROS_PER_SEC, result)) {
 		throw ConversionException("Could not convert Timestamp(S) to Timestamp(US)");
 	}
-	return timestamp_t(sec * Interval::MICROS_PER_SEC);
+	return timestamp_t(result);
 }
 
 timestamp_t Timestamp::FromEpochMs(int64_t ms) {
-	auto max_int64 = std::numeric_limits<int64_t>::max();
-	if (max_int64 / Interval::MICROS_PER_MSEC < ms) {
+	int64_t result;
+	if (!TryMultiplyOperator::Operation(ms, Interval::MICROS_PER_MSEC, result)) {
 		throw ConversionException("Could not convert Timestamp(MS) to Timestamp(US)");
 	}
-	return timestamp_t(ms * Interval::MICROS_PER_MSEC);
+	return timestamp_t(result);
 }
 
 timestamp_t Timestamp::FromEpochMicroSeconds(int64_t micros) {
@@ -187,11 +187,12 @@ int64_t Timestamp::GetEpochMicroSeconds(timestamp_t timestamp) {
 }
 
 int64_t Timestamp::GetEpochNanoSeconds(timestamp_t timestamp) {
-	auto max_int64 = std::numeric_limits<int64_t>::max();
-	if (max_int64 / 1000 < timestamp.value) {
+	int64_t result;
+	int64_t ns_in_us = 1000;
+	if (!TryMultiplyOperator::Operation(timestamp.value, ns_in_us, result)) {
 		throw ConversionException("Could not convert Timestamp(US) to Timestamp(NS)");
 	}
-	return timestamp.value * 1000;
+	return result;
 }
 
 } // namespace duckdb

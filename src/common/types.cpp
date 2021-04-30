@@ -665,10 +665,17 @@ bool LogicalType::IsMoreGenericThan(LogicalType &other) const {
 		return false;
 	case LogicalTypeId::DATE:
 		return false;
-	case LogicalTypeId::TIMESTAMP:
-	case LogicalTypeId::TIMESTAMP_NS:
-	case LogicalTypeId::TIMESTAMP_MS:
-	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP: {
+		switch (other.id()) {
+		case LogicalTypeId::TIMESTAMP_NS:
+		case LogicalTypeId::TIME:
+		case LogicalTypeId::DATE:
+			return true;
+		default:
+			return false;
+		}
+	}
+	case LogicalTypeId::TIMESTAMP_NS: {
 		switch (other.id()) {
 		case LogicalTypeId::TIME:
 		case LogicalTypeId::DATE:
@@ -676,6 +683,31 @@ bool LogicalType::IsMoreGenericThan(LogicalType &other) const {
 		default:
 			return false;
 		}
+	}
+	case LogicalTypeId::TIMESTAMP_MS: {
+		switch (other.id()) {
+		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::TIMESTAMP_NS:
+		case LogicalTypeId::TIME:
+		case LogicalTypeId::DATE:
+			return true;
+		default:
+			return false;
+		}
+	}
+	case LogicalTypeId::TIMESTAMP_SEC: {
+		switch (other.id()) {
+		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::TIMESTAMP_NS:
+		case LogicalTypeId::TIMESTAMP_MS:
+		case LogicalTypeId::TIME:
+		case LogicalTypeId::DATE:
+			return true;
+		default:
+			return false;
+		}
+	}
+
 	case LogicalTypeId::VARCHAR:
 		return true;
 	default:

@@ -1356,20 +1356,20 @@ timestamp_t CastToTimestamp::Operation(string_t input) {
 }
 
 template <>
-duckdb::timestamp_t CastToTimestampNS::Operation(string_t input) {
+timestamp_t CastToTimestampNS::Operation(string_t input) {
 	timestamp_t cast_timestamp(
 	    Timestamp::GetEpochNanoSeconds(Timestamp::FromCString(input.GetDataUnsafe(), input.GetSize())));
 	return cast_timestamp;
 }
 
 template <>
-duckdb::timestamp_t CastToTimestampMS::Operation(string_t input) {
+timestamp_t CastToTimestampMS::Operation(string_t input) {
 	timestamp_t cast_timestamp(Timestamp::GetEpochMs(Timestamp::FromCString(input.GetDataUnsafe(), input.GetSize())));
 	return cast_timestamp;
 }
 
 template <>
-duckdb::timestamp_t CastToTimestampSec::Operation(string_t input) {
+timestamp_t CastToTimestampSec::Operation(string_t input) {
 	timestamp_t cast_timestamp(
 	    Timestamp::GetEpochSeconds(Timestamp::FromCString(input.GetDataUnsafe(), input.GetSize())));
 	return cast_timestamp;
