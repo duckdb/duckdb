@@ -9,7 +9,7 @@
 #include "duckdb/planner/constraints/list.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/storage_manager.hpp"
-#include "duckdb/storage/table/morsel.hpp"
+#include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/storage/table/persistent_table_data.hpp"
 #include "duckdb/storage/table/transient_segment.hpp"
 #include "duckdb/transaction/transaction.hpp"
@@ -42,7 +42,7 @@ DataTable::DataTable(DatabaseInstance &db, const string &schema, const string &t
 		D_ASSERT(total_rows == 0);
 		D_ASSERT(column_stats.empty());
 		this->morsels = make_shared<SegmentTree>();
-		AppendMorsel(0);
+		AppendRowGroup(0);
 
 		for(auto &type : types) {
 			column_stats.push_back(BaseStatistics::CreateEmpty(type));
@@ -52,8 +52,8 @@ DataTable::DataTable(DatabaseInstance &db, const string &schema, const string &t
 	}
 }
 
-void DataTable::AppendMorsel(idx_t start_row) {
-	auto new_morsel = make_unique<Morsel>(db, *info, start_row, 0);
+void DataTable::AppendRowGroup(idx_t start_row) {
+	auto new_morsel = make_unique<RowGroup>(db, *info, start_row, 0);
 	new_morsel->InitializeEmpty(types);
 	morsels->AppendSegment(move(new_morsel));
 }
@@ -88,14 +88,14 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 	// fill the column with its DEFAULT value, or NULL if none is specified
 	auto new_stats = make_unique<SegmentStatistics>(new_column.type);
 	this->morsels = make_shared<SegmentTree>();
-	auto current_morsel = (Morsel *) parent.morsels->GetRootSegment();
+	auto current_morsel = (RowGroup *) parent.morsels->GetRootSegment();
 	while(current_morsel) {
 		auto new_morsel = current_morsel->AddColumn(context, new_column, executor, default_value, result);
 		// merge in the statistics
 		column_stats[new_column_idx]->Merge(*new_morsel->GetStatistics(new_column_idx));
 
 		morsels->AppendSegment(move(new_morsel));
-		current_morsel = (Morsel *) current_morsel->next.get();
+		current_morsel = (RowGroup *) current_morsel->next.get();
 	}
 
 	// also add this column to client local storage
@@ -130,11 +130,11 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 
 	// alter the morsels and remove the column from each of them
 	this->morsels = make_shared<SegmentTree>();
-	auto current_morsel = (Morsel *) parent.morsels->GetRootSegment();
+	auto current_morsel = (RowGroup *) parent.morsels->GetRootSegment();
 	while(current_morsel) {
 		auto new_morsel = current_morsel->RemoveColumn(removed_column);
 		morsels->AppendSegment(move(new_morsel));
-		current_morsel = (Morsel *) current_morsel->next.get();
+		current_morsel = (RowGroup *) current_morsel->next.get();
 	}
 
 	// this table replaces the previous table, hence the parent is no longer the root DataTable
@@ -190,12 +190,12 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 
 	// now alter the type of the column within all of the morsels individually
 	this->morsels = make_shared<SegmentTree>();
-	auto current_morsel = (Morsel *) parent.morsels->GetRootSegment();
+	auto current_morsel = (RowGroup *) parent.morsels->GetRootSegment();
 	while(current_morsel) {
 		auto new_morsel = current_morsel->AlterType(context, target_type, changed_idx, executor, scan_state, scan_chunk);
 		column_stats[changed_idx]->Merge(*new_morsel->GetStatistics(changed_idx));
 		morsels->AppendSegment(move(new_morsel));
-		current_morsel = (Morsel *) current_morsel->next.get();
+		current_morsel = (RowGroup *) current_morsel->next.get();
 	}
 
 	transaction.storage.ChangeType(&parent, this, changed_idx, target_type, bound_columns, cast_expr);
@@ -211,7 +211,7 @@ void DataTable::InitializeScan(TableScanState &state, const vector<column_t> &co
                                TableFilterSet *table_filters) {
 	// initialize a column scan state for each column
 	// initialize the chunk scan state
-	auto morsel = (Morsel *) morsels->GetRootSegment();
+	auto morsel = (RowGroup *) morsels->GetRootSegment();
 	state.column_ids = column_ids;
 	state.max_row = total_rows;
 	state.table_filters = table_filters;
@@ -231,7 +231,7 @@ void DataTable::InitializeScan(Transaction &transaction, TableScanState &state, 
 void DataTable::InitializeScanWithOffset(TableScanState &state, const vector<column_t> &column_ids,
                                          TableFilterSet *table_filters, idx_t start_row, idx_t end_row) {
 
-	auto morsel = (Morsel *) morsels->GetSegment(start_row);
+	auto morsel = (RowGroup *) morsels->GetSegment(start_row);
 	state.column_ids = column_ids;
 	state.max_row = end_row;
 	state.table_filters = table_filters;
@@ -338,7 +338,7 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 		if (result.size() > 0) {
 			return true;
 		} else {
-			current_morsel = state.morsel_scan_state.morsel = (Morsel *) current_morsel->next.get();
+			current_morsel = state.morsel_scan_state.morsel = (RowGroup *) current_morsel->next.get();
 			if (current_morsel) {
 				current_morsel->InitializeScan(state.morsel_scan_state);
 			}
@@ -357,7 +357,7 @@ void DataTable::Fetch(Transaction &transaction, DataChunk &result, vector<column
 	idx_t count = 0;
 	for(idx_t i = 0; i < fetch_count; i++) {
 		auto row_id = row_ids[i];
-		auto morsel = (Morsel *) morsels->GetSegment(row_id);
+		auto morsel = (RowGroup *) morsels->GetSegment(row_id);
 		if (!morsel->Fetch(transaction, row_id)) {
 			continue;
 		}
@@ -464,7 +464,7 @@ void DataTable::InitializeAppend(Transaction &transaction, TableAppendState &sta
 
 	// start writing to the morsels
 	lock_guard<mutex> morsel_lock(morsels->node_lock);
-	auto last_morsel = (Morsel *) morsels->GetLastSegment();
+	auto last_morsel = (RowGroup *) morsels->GetLastSegment();
 	D_ASSERT(total_rows == last_morsel->start + last_morsel->count);
 	last_morsel->InitializeAppend(transaction, state.morsel_append_state, state.remaining_append_count);
 	total_rows += append_count;
@@ -479,7 +479,7 @@ void DataTable::Append(Transaction &transaction, DataChunk &chunk, TableAppendSt
 	while(true) {
 		auto current_morsel = state.morsel_append_state.morsel;
 		// check how much we can fit into the current morsel
-		idx_t append_count = MinValue<idx_t>(remaining, Morsel::MORSEL_SIZE - state.morsel_append_state.offset_in_morsel);
+		idx_t append_count = MinValue<idx_t>(remaining, RowGroup::ROW_GROUP_SIZE - state.morsel_append_state.offset_in_morsel);
 		if (append_count > 0) {
 			current_morsel->Append(state.morsel_append_state, chunk, append_count);
 			// merge the stats
@@ -501,10 +501,10 @@ void DataTable::Append(Transaction &transaction, DataChunk &chunk, TableAppendSt
 				chunk.Slice(sel, remaining);
 			}
 			// append a new morsel
-			AppendMorsel(current_morsel->start + current_morsel->count);
+			AppendRowGroup(current_morsel->start + current_morsel->count);
 			// set up the append state for this morsel
 			lock_guard<mutex> morsel_lock(morsels->node_lock);
-			auto last_morsel = (Morsel *) morsels->GetLastSegment();
+			auto last_morsel = (RowGroup *) morsels->GetLastSegment();
 			last_morsel->InitializeAppend(transaction, state.morsel_append_state, state.remaining_append_count);
 			continue;
 		} else {
@@ -563,7 +563,7 @@ void DataTable::WriteToLog(WriteAheadLog &log, idx_t row_start, idx_t count) {
 void DataTable::CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count) {
 	lock_guard<mutex> lock(append_lock);
 
-	auto morsel = (Morsel *) morsels->GetSegment(row_start);
+	auto morsel = (RowGroup *) morsels->GetSegment(row_start);
 	idx_t current_row = row_start;
 	idx_t remaining = count;
 	while (true) {
@@ -577,7 +577,7 @@ void DataTable::CommitAppend(transaction_t commit_id, idx_t row_start, idx_t cou
 		if (remaining == 0) {
 			break;
 		}
-		morsel = (Morsel *) morsel->next.get();
+		morsel = (RowGroup *) morsel->next.get();
 	}
 	info->cardinality += count;
 }
@@ -604,7 +604,7 @@ void DataTable::RevertAppendInternal(idx_t start_row, idx_t count) {
 	// find the segment index that the current row belongs to
 	idx_t segment_index = morsels->GetSegmentIndex(start_row);
 	auto segment = morsels->nodes[segment_index].node;
-	auto &info = (Morsel &)*segment;
+	auto &info = (RowGroup &)*segment;
 
 	// remove any segments AFTER this segment: they should be deleted entirely
 	if (segment_index < morsels->nodes.size() - 1) {
@@ -698,7 +698,7 @@ void DataTable::RemoveFromIndexes(Vector &row_identifiers, idx_t count) {
 	}
 
 	// figure out which morsel to fetch from
-	auto morsel = (Morsel *) morsels->GetSegment(row_ids[0]);
+	auto morsel = (RowGroup *) morsels->GetSegment(row_ids[0]);
 	auto morsel_vector_idx = (row_ids[0] - morsel->start) / STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE;
 
 	// now fetch the columns from that morsel
@@ -737,7 +737,7 @@ void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector 
 		// deletion is in transaction-local storage: push delete into local chunk collection
 		transaction.storage.Delete(this, row_identifiers, count);
 	} else {
-		auto morsel = (Morsel *) morsels->GetSegment(first_id);
+		auto morsel = (RowGroup *) morsels->GetSegment(first_id);
 		morsel->Delete(transaction, this, row_identifiers, count);
 	}
 }
@@ -847,7 +847,7 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 		return;
 	}
 	// find the morsel this id belongs to
-	auto morsel = (Morsel *) morsels->GetSegment(first_id);
+	auto morsel = (RowGroup *) morsels->GetSegment(first_id);
 	morsel->Update(transaction, updates, row_ids, column_ids);
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto column_id = column_ids[i];
@@ -881,7 +881,7 @@ bool DataTable::ScanCreateIndex(CreateIndexScanState &state, DataChunk &result, 
 		if (result.size() > 0) {
 			return true;
 		} else {
-			current_morsel = state.morsel_scan_state.morsel = (Morsel *) current_morsel->next.get();
+			current_morsel = state.morsel_scan_state.morsel = (RowGroup *) current_morsel->next.get();
 			if (current_morsel) {
 				current_morsel->InitializeScan(state.morsel_scan_state);
 			}
@@ -958,7 +958,7 @@ void DataTable::CheckpointDeletes(TableDataWriter &writer) {
 	throw NotImplementedException("FIXME: checkpoint deletes");
 	// // then we checkpoint the deleted tuples
 	// D_ASSERT(versions);
-	// writer.CheckpointDeletes(((MorselInfo *)versions->GetRootSegment()));
+	// writer.CheckpointDeletes(((RowGroupInfo *)versions->GetRootSegment()));
 }
 
 void DataTable::CommitDropColumn(idx_t index) {

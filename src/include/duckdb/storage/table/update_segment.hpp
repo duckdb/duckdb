@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/storage/table/morsel.hpp"
+#include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/storage/statistics/segment_statistics.hpp"
 #include "duckdb/common/types/string_heap.hpp"
@@ -22,10 +22,10 @@ struct UpdateNode;
 
 class UpdateSegment {
 public:
-	UpdateSegment(Morsel &morsel, ColumnData &column_data);
+	UpdateSegment(RowGroup &morsel, ColumnData &column_data);
 	~UpdateSegment();
 
-	Morsel &morsel;
+	RowGroup &morsel;
 	ColumnData &column_data;
 
 public:
@@ -98,7 +98,7 @@ struct UpdateNodeData {
 };
 
 struct UpdateNode {
-	unique_ptr<UpdateNodeData> info[Morsel::MORSEL_VECTOR_COUNT];
+	unique_ptr<UpdateNodeData> info[RowGroup::ROW_GROUP_VECTOR_COUNT];
 };
 
 } // namespace duckdb

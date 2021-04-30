@@ -11,7 +11,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/client_context.hpp"
 
-#include "duckdb/storage/table/morsel.hpp"
+#include "duckdb/storage/table/row_group.hpp"
 
 namespace duckdb {
 
@@ -39,8 +39,8 @@ void TableDataReader::ReadTableData() {
 
 	// // create the version tree
 	// info.data->versions = make_shared<SegmentTree>();
-	// for (idx_t i = 0; i < total_rows; i += Morsel::MORSEL_SIZE) {
-	// 	auto segment = make_unique<MorselInfo>(i, Morsel::MORSEL_SIZE);
+	// for (idx_t i = 0; i < total_rows; i += RowGroup::ROW_GROUP_SIZE) {
+	// 	auto segment = make_unique<RowGroupInfo>(i, RowGroup::ROW_GROUP_SIZE);
 	// 	// check how many chunk infos we need to read
 	// 	auto chunk_info_count = reader.Read<idx_t>();
 	// 	if (chunk_info_count > 0) {

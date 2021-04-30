@@ -17,7 +17,7 @@
 #include "duckdb/storage/table/persistent_segment.hpp"
 #include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/storage/table/persistent_table_data.hpp"
-#include "duckdb/storage/table/morsel.hpp"
+#include "duckdb/storage/table/row_group.hpp"
 
 #include <atomic>
 #include <mutex>
@@ -149,7 +149,7 @@ public:
 	idx_t GetTotalRows();
 
 	//! Appends an empty morsel to the table
-	void AppendMorsel(idx_t start_row);
+	void AppendRowGroup(idx_t start_row);
 
 private:
 	//! Verify constraints with a chunk from the Append containing all columns of the table

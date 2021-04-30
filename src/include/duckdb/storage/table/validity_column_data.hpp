@@ -15,7 +15,7 @@ namespace duckdb {
 //! Validity column data represents the validity data (i.e. which values are null)
 class ValidityColumnData : public ColumnData {
 public:
-	ValidityColumnData(Morsel &morsel, idx_t column_idx, ColumnData *parent);
+	ValidityColumnData(RowGroup &morsel, idx_t column_idx, ColumnData *parent);
 
 public:
 	bool CheckZonemap(ColumnScanState &state, TableFilter &filter) override;

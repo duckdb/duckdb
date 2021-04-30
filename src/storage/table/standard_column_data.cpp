@@ -7,7 +7,7 @@
 
 namespace duckdb {
 
-StandardColumnData::StandardColumnData(Morsel &morsel, LogicalType type,
+StandardColumnData::StandardColumnData(RowGroup &morsel, LogicalType type,
                                        idx_t column_idx, ColumnData *parent)
     : ColumnData(morsel, move(type), column_idx, parent), validity(morsel, column_idx, this) {
 }

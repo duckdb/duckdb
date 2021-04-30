@@ -17,11 +17,11 @@
 #include "duckdb/storage/table/validity_column_data.hpp"
 #include "duckdb/storage/table/standard_column_data.hpp"
 #include "duckdb/transaction/transaction.hpp"
-#include "duckdb/storage/table/morsel.hpp"
+#include "duckdb/storage/table/row_group.hpp"
 
 namespace duckdb {
 
-ColumnData::ColumnData(Morsel &morsel, LogicalType type, idx_t column_idx, ColumnData *parent)
+ColumnData::ColumnData(RowGroup &morsel, LogicalType type, idx_t column_idx, ColumnData *parent)
     : db(morsel.GetDatabase()), start(morsel.start), type(move(type)), column_idx(column_idx), parent(parent) {
 }
 

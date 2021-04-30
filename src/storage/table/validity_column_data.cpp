@@ -4,7 +4,7 @@
 
 namespace duckdb {
 
-ValidityColumnData::ValidityColumnData(Morsel &morsel, idx_t column_idx, ColumnData *parent)
+ValidityColumnData::ValidityColumnData(RowGroup &morsel, idx_t column_idx, ColumnData *parent)
     : ColumnData(morsel, LogicalType(LogicalTypeId::VALIDITY), column_idx, parent) {
 }
 

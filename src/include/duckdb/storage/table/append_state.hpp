@@ -15,7 +15,7 @@
 
 namespace duckdb {
 class DataTable;
-class Morsel;
+class RowGroup;
 class UpdateSegment;
 class TransientSegment;
 class ValiditySegment;
@@ -31,14 +31,14 @@ struct ColumnAppendState {
 	unique_ptr<StorageLockKey> lock;
 };
 
-struct MorselAppendState {
-	MorselAppendState(TableAppendState &parent_p) :
+struct RowGroupAppendState {
+	RowGroupAppendState(TableAppendState &parent_p) :
 		parent(parent_p) {}
 
 	//! The parent append state
 	TableAppendState &parent;
 	//! The current morsel we are appending to
-	Morsel *morsel;
+	RowGroup *morsel;
 	//! The column append states
 	unique_ptr<ColumnAppendState[]> states;
 	//! Offset within the morsel
@@ -53,7 +53,7 @@ struct IndexLock {
 struct TableAppendState {
 	TableAppendState() : morsel_append_state(*this) {}
 
-	MorselAppendState morsel_append_state;
+	RowGroupAppendState morsel_append_state;
 	std::unique_lock<std::mutex> append_lock;
 	unique_ptr<IndexLock[]> index_locks;
 	row_t row_start;

@@ -4,11 +4,11 @@ add_library_unity(
   chunk_info.cpp
   column_data.cpp
   column_segment.cpp
-  morsel.cpp
   update_segment.cpp
   persistent_table_data.cpp
   segment_tree.cpp
   persistent_segment.cpp
+  row_group.cpp
   standard_column_data.cpp
   transient_segment.cpp
   validity_column_data.cpp

@@ -13,7 +13,7 @@
 namespace duckdb {
 class ColumnData;
 class UncompressedSegment;
-class Morsel;
+class RowGroup;
 class BaseStatistics;
 class SegmentStatistics;
 
@@ -28,7 +28,7 @@ public:
 	void WriteTableData();
 
 	void CheckpointColumn(ColumnData &col_data, idx_t col_idx);
-	void CheckpointDeletes(Morsel *info);
+	void CheckpointDeletes(RowGroup *info);
 
 	MetaBlockWriter &GetMetaWriter() {
 		return meta_writer;

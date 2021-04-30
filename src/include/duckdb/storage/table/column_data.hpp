@@ -20,7 +20,7 @@
 namespace duckdb {
 class ColumnData;
 class DatabaseInstance;
-class Morsel;
+class RowGroup;
 class TableDataWriter;
 class PersistentSegment;
 class PersistentColumnData;
@@ -50,7 +50,7 @@ public:
 
 class ColumnData {
 public:
-	ColumnData(Morsel &morsel, LogicalType type, idx_t column_idx, ColumnData *parent);
+	ColumnData(RowGroup &morsel, LogicalType type, idx_t column_idx, ColumnData *parent);
 	virtual ~ColumnData();
 
 	//! The database instance this column belongs to

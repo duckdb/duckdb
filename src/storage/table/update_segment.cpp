@@ -17,7 +17,7 @@ static UpdateSegment::rollback_update_function_t GetRollbackUpdateFunction(Physi
 static UpdateSegment::statistics_update_function_t GetStatisticsUpdateFunction(PhysicalType type);
 static UpdateSegment::fetch_row_function_t GetFetchRowFunction(PhysicalType type);
 
-UpdateSegment::UpdateSegment(Morsel &morsel, ColumnData &column_data)
+UpdateSegment::UpdateSegment(RowGroup &morsel, ColumnData &column_data)
     : morsel(morsel), column_data(column_data),
       stats(column_data.type) {
 	auto physical_type = column_data.type.InternalType();
@@ -819,7 +819,7 @@ void UpdateSegment::Update(Transaction &transaction, Vector &update, row_t *ids,
 	idx_t vector_offset = morsel.start + vector_index * STANDARD_VECTOR_SIZE;
 
 	D_ASSERT(idx_t(first_id) >= morsel.start);
-	D_ASSERT(vector_index < Morsel::MORSEL_VECTOR_COUNT);
+	D_ASSERT(vector_index < RowGroup::ROW_GROUP_VECTOR_COUNT);
 
 	// first check the version chain
 	UpdateInfo *node = nullptr;
@@ -926,10 +926,10 @@ bool UpdateSegment::HasUpdates(idx_t start_vector_index, idx_t end_vector_index)
 	// auto segment = this;
 	// for (idx_t i = start_vector_index; i <= end_vector_index; i++) {
 	// 	idx_t vector_index = i - base_vector_index;
-	// 	while (vector_index >= Morsel::MORSEL_VECTOR_COUNT) {
+	// 	while (vector_index >= RowGroup::ROW_GROUP_VECTOR_COUNT) {
 	// 		segment = (UpdateSegment *)next.get();
 	// 		base_vector_index = segment->start / STANDARD_VECTOR_SIZE;
-	// 		vector_index -= Morsel::MORSEL_VECTOR_COUNT;
+	// 		vector_index -= RowGroup::ROW_GROUP_VECTOR_COUNT;
 	// 	}
 	// 	if (segment->HasUpdates(vector_index)) {
 	// 		return true;
@@ -943,9 +943,9 @@ UpdateSegment *UpdateSegment::FindSegment(idx_t end_vector_index) const {
 	// idx_t base_vector_index = start / STANDARD_VECTOR_SIZE;
 	// D_ASSERT(end_vector_index >= base_vector_index);
 	// auto segment = this;
-	// while (end_vector_index >= base_vector_index + Morsel::MORSEL_VECTOR_COUNT) {
+	// while (end_vector_index >= base_vector_index + RowGroup::ROW_GROUP_VECTOR_COUNT) {
 	// 	segment = (UpdateSegment *)next.get();
-	// 	base_vector_index += Morsel::MORSEL_VECTOR_COUNT;
+	// 	base_vector_index += RowGroup::ROW_GROUP_VECTOR_COUNT;
 	// }
 	// return (UpdateSegment *)segment;
 }

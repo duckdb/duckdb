@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/storage/table/morsel.hpp
+// duckdb/storage/table/row_group.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -26,19 +26,19 @@ class UpdateSegment;
 class Vector;
 struct VersionNode;
 
-class Morsel : public SegmentBase {
+class RowGroup : public SegmentBase {
 public:
 	friend class VersionDeleteState;
 public:
-	static constexpr const idx_t MORSEL_VECTOR_COUNT = 100;
-	static constexpr const idx_t MORSEL_SIZE = STANDARD_VECTOR_SIZE * MORSEL_VECTOR_COUNT;
+	static constexpr const idx_t ROW_GROUP_VECTOR_COUNT = 100;
+	static constexpr const idx_t ROW_GROUP_SIZE = STANDARD_VECTOR_SIZE * ROW_GROUP_VECTOR_COUNT;
 
-	static constexpr const idx_t MORSEL_LAYER_COUNT = 10;
-	static constexpr const idx_t MORSEL_LAYER_SIZE = MORSEL_SIZE / MORSEL_LAYER_COUNT;
+	static constexpr const idx_t ROW_GROUP_LAYER_COUNT = 10;
+	static constexpr const idx_t ROW_GROUP_LAYER_SIZE = ROW_GROUP_SIZE / ROW_GROUP_LAYER_COUNT;
 
 public:
-	Morsel(DatabaseInstance &db, DataTableInfo &table_info, idx_t start, idx_t count);
-	~Morsel();
+	RowGroup(DatabaseInstance &db, DataTableInfo &table_info, idx_t start, idx_t count);
+	~RowGroup();
 
 private:
 	//! The database instance
@@ -59,17 +59,17 @@ public:
 		return db;
 	}
 
-	unique_ptr<Morsel> AlterType(ClientContext &context, const LogicalType &target_type, idx_t changed_idx, ExpressionExecutor &executor, TableScanState &scan_state, DataChunk &scan_chunk);
-	unique_ptr<Morsel> AddColumn(ClientContext &context, ColumnDefinition &new_column, ExpressionExecutor &executor, Expression *default_value, Vector &intermediate);
-	unique_ptr<Morsel> RemoveColumn(idx_t removed_column);
+	unique_ptr<RowGroup> AlterType(ClientContext &context, const LogicalType &target_type, idx_t changed_idx, ExpressionExecutor &executor, TableScanState &scan_state, DataChunk &scan_chunk);
+	unique_ptr<RowGroup> AddColumn(ClientContext &context, ColumnDefinition &new_column, ExpressionExecutor &executor, Expression *default_value, Vector &intermediate);
+	unique_ptr<RowGroup> RemoveColumn(idx_t removed_column);
 
 	void InitializeEmpty(const vector<LogicalType> &types);
 
 	//! Initialize a scan over this morsel
-	void InitializeScan(MorselScanState &state);
-	void InitializeScanWithOffset(MorselScanState &state, idx_t vector_offset);
-	void Scan(Transaction &transaction, MorselScanState &state, DataChunk &result);
-	void IndexScan(MorselScanState &state, DataChunk &result, bool allow_pending_updates);
+	void InitializeScan(RowGroupScanState &state);
+	void InitializeScanWithOffset(RowGroupScanState &state, idx_t vector_offset);
+	void Scan(Transaction &transaction, RowGroupScanState &state, DataChunk &result);
+	void IndexScan(RowGroupScanState &state, DataChunk &result, bool allow_pending_updates);
 
 	idx_t GetSelVector(Transaction &transaction, idx_t vector_idx, SelectionVector &sel_vector, idx_t max_count);
 
@@ -80,16 +80,16 @@ public:
 
 	//! Append count rows to the version info
 	void AppendVersionInfo(Transaction &transaction, idx_t start, idx_t count, transaction_t commit_id);
-	//! Commit a previous append made by Morsel::AppendVersionInfo
+	//! Commit a previous append made by RowGroup::AppendVersionInfo
 	void CommitAppend(transaction_t commit_id, idx_t start, idx_t count);
-	//! Revert a previous append made by Morsel::AppendVersionInfo
+	//! Revert a previous append made by RowGroup::AppendVersionInfo
 	void RevertAppend(idx_t start);
 
 	//! Delete the given set of rows in the version manager
 	void Delete(Transaction &transaction, DataTable *table, Vector &row_ids, idx_t count);
 
-	void InitializeAppend(Transaction &transaction, MorselAppendState &append_state, idx_t remaining_append_count);
-	void Append(MorselAppendState &append_state, DataChunk &chunk, idx_t append_count);
+	void InitializeAppend(Transaction &transaction, RowGroupAppendState &append_state, idx_t remaining_append_count);
+	void Append(RowGroupAppendState &append_state, DataChunk &chunk, idx_t append_count);
 
 	void Update(Transaction &transaction, DataChunk &updates, Vector &row_ids, const vector<column_t> &column_ids);
 
@@ -99,7 +99,7 @@ private:
 	ChunkInfo *GetChunkInfo(idx_t vector_idx);
 
 	template<bool SCAN_DELETES, bool SCAN_COMMITTED, bool ALLOW_UPDATES>
-	void TemplatedScan(Transaction *transaction, MorselScanState &state, DataChunk &result);
+	void TemplatedScan(Transaction *transaction, RowGroupScanState &state, DataChunk &result);
 
 private:
 	mutex morsel_lock;
@@ -107,7 +107,7 @@ private:
 };
 
 struct VersionNode {
-	unique_ptr<ChunkInfo> info[Morsel::MORSEL_VECTOR_COUNT];
+	unique_ptr<ChunkInfo> info[RowGroup::ROW_GROUP_VECTOR_COUNT];
 };
 
 } // namespace duckdb

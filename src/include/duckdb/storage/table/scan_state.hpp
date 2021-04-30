@@ -18,7 +18,7 @@ namespace duckdb {
 class ColumnSegment;
 class LocalTableStorage;
 class Index;
-class Morsel;
+class RowGroup;
 class UpdateSegment;
 class PersistentSegment;
 class TableScanState;
@@ -76,15 +76,15 @@ private:
 	LocalTableStorage *storage = nullptr;
 };
 
-class MorselScanState {
+class RowGroupScanState {
 public:
-	MorselScanState(TableScanState &parent_p) :
+	RowGroupScanState(TableScanState &parent_p) :
 		parent(parent_p) {}
 
 	//! The parent scan state
 	TableScanState &parent;
 	//! The current morsel we are scanning
-	Morsel *morsel;
+	RowGroup *morsel;
 	//! The vector index within the morsel
 	idx_t vector_index;
 	//! The maximum row index of this morsel scan
@@ -98,7 +98,7 @@ public:
 	TableScanState() : morsel_scan_state(*this) {};
 
 	//! The morsel scan state
-	MorselScanState morsel_scan_state;
+	RowGroupScanState morsel_scan_state;
 	//! The total maximum row index
 	idx_t max_row;
 	//! The column identifiers of the scan
