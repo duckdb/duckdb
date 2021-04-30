@@ -112,12 +112,14 @@ void DatabaseInstance::Initialize(const char *path, DBConfig *new_config) {
 	catalog = make_unique<Catalog>(*this);
 	transaction_manager = make_unique<TransactionManager>(*this);
 	scheduler = make_unique<TaskScheduler>();
-	scheduler->SetThreads(config.maximum_threads);
 	object_cache = make_unique<ObjectCache>();
 	connection_manager = make_unique<ConnectionManager>();
 
 	// initialize the database
 	storage->Initialize();
+
+	// only increase thread count after storage init because we get races on catalog otherwise
+	scheduler->SetThreads(config.maximum_threads);
 }
 
 DuckDB::DuckDB(const char *path, DBConfig *new_config) : instance(make_shared<DatabaseInstance>()) {
