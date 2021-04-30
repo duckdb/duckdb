@@ -55,7 +55,7 @@ public:
 	DecimalColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p,
 	                    idx_t max_define_p, idx_t max_repeat_p)
 	    : TemplatedColumnReader<DUCKDB_PHYSICAL_TYPE, DecimalParquetValueConversion<DUCKDB_PHYSICAL_TYPE>>(
-	          reader, type_p, schema_p, file_idx_p, max_define_p, max_repeat_p) {};
+	          reader, move(type_p), schema_p, file_idx_p, max_define_p, max_repeat_p) {};
 
 protected:
 	void Dictionary(shared_ptr<ByteBuffer> dictionary_data, idx_t num_entries) {

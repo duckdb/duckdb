@@ -24,7 +24,7 @@ class StringColumnReader : public TemplatedColumnReader<string_t, StringParquetV
 public:
 	StringColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t schema_idx_p,
 	                   idx_t max_define_p, idx_t max_repeat_p)
-	    : TemplatedColumnReader<string_t, StringParquetValueConversion>(reader, type_p, schema_p, schema_idx_p,
+	    : TemplatedColumnReader<string_t, StringParquetValueConversion>(reader, move(type_p), schema_p, schema_idx_p,
 	                                                                    max_define_p, max_repeat_p) {
 		fixed_width_string_length = 0;
 		if (schema_p.type == Type::FIXED_LEN_BYTE_ARRAY) {

@@ -17,10 +17,10 @@ class StructColumnReader : public ColumnReader {
 public:
 	StructColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t schema_idx_p,
 	                   idx_t max_define_p, idx_t max_repeat_p, vector<unique_ptr<ColumnReader>> child_readers_p)
-	    : ColumnReader(reader, type_p, schema_p, schema_idx_p, max_define_p, max_repeat_p),
+	    : ColumnReader(reader, move(type_p), schema_p, schema_idx_p, max_define_p, max_repeat_p),
 	      child_readers(move(child_readers_p)) {
-		D_ASSERT(type_p.id() == LogicalTypeId::STRUCT);
-		D_ASSERT(!type_p.child_types().empty());
+		D_ASSERT(type.id() == LogicalTypeId::STRUCT);
+		D_ASSERT(!type.child_types().empty());
 	};
 
 	ColumnReader *GetChildReader(idx_t child_idx) {

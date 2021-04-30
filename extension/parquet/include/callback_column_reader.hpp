@@ -25,7 +25,7 @@ public:
 	                     idx_t max_define_p, idx_t max_repeat_p)
 	    : TemplatedColumnReader<DUCKDB_PHYSICAL_TYPE,
 	                            CallbackParquetValueConversion<PARQUET_PHYSICAL_TYPE, DUCKDB_PHYSICAL_TYPE, FUNC>>(
-	          reader, type_p, schema_p, file_idx_p, max_define_p, max_repeat_p) {
+	          reader, move(type_p), schema_p, file_idx_p, max_define_p, max_repeat_p) {
 	}
 
 protected:

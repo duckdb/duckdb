@@ -33,7 +33,7 @@ class TemplatedColumnReader : public ColumnReader {
 public:
 	TemplatedColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t schema_idx_p,
 	                      idx_t max_define_p, idx_t max_repeat_p)
-	    : ColumnReader(reader, type_p, schema_p, schema_idx_p, max_define_p, max_repeat_p) {};
+	    : ColumnReader(reader, move(type_p), schema_p, schema_idx_p, max_define_p, max_repeat_p) {};
 
 	shared_ptr<ByteBuffer> dict;
 
