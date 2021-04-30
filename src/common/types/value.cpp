@@ -383,21 +383,21 @@ Value Value::TIMESTAMP(timestamp_t value) {
 }
 
 Value Value::TimestampNs(timestamp_t timestamp) {
-    Value result(LogicalType::TIMESTAMP_NS);
+	Value result(LogicalType::TIMESTAMP_NS);
 	result.value_.timestamp = timestamp;
 	result.is_null = false;
 	return result;
 }
 
 Value Value::TimestampMs(timestamp_t timestamp) {
-    Value result(LogicalType::TIMESTAMP_MS);
+	Value result(LogicalType::TIMESTAMP_MS);
 	result.value_.timestamp = timestamp;
 	result.is_null = false;
 	return result;
 }
 
 Value Value::TimestampSec(timestamp_t timestamp) {
-    Value result(LogicalType::TIMESTAMP_S);
+	Value result(LogicalType::TIMESTAMP_S);
 	result.value_.timestamp = timestamp;
 	result.is_null = false;
 	return result;
@@ -717,7 +717,7 @@ Value Value::Numeric(const LogicalType &type, int64_t value) {
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_SEC:
-	    return Value::TIMESTAMP(timestamp_t(value));
+		return Value::TIMESTAMP(timestamp_t(value));
 	default:
 		throw InvalidTypeException(type, "Numeric requires numeric type");
 	}
@@ -880,11 +880,11 @@ string Value::ToString() const {
 	case LogicalTypeId::TIMESTAMP:
 		return Timestamp::ToString(value_.timestamp);
 	case LogicalTypeId::TIMESTAMP_SEC:
-		return Timestamp::ToString(Timestamp::FromEpochSeconds(value_.timestamp));
+		return Timestamp::ToString(Timestamp::FromEpochSeconds(value_.timestamp.value));
 	case LogicalTypeId::TIMESTAMP_MS:
-		return Timestamp::ToString(Timestamp::FromEpochMs(value_.timestamp));
+		return Timestamp::ToString(Timestamp::FromEpochMs(value_.timestamp.value));
 	case LogicalTypeId::TIMESTAMP_NS:
-		return Timestamp::ToString(Timestamp::FromEpochNanoSeconds(value_.timestamp));
+		return Timestamp::ToString(Timestamp::FromEpochNanoSeconds(value_.timestamp.value));
 	case LogicalTypeId::INTERVAL:
 		return Interval::ToString(value_.interval);
 	case LogicalTypeId::VARCHAR:

@@ -107,11 +107,11 @@ py::object DuckDBPyResult::Fetchone() {
 			D_ASSERT(result->types[col_idx].InternalType() == PhysicalType::INT64);
 			auto timestamp = val.GetValueUnsafe<timestamp_t>();
 			if (result->types[col_idx].id() == LogicalTypeId::TIMESTAMP_MS) {
-				timestamp = Timestamp::FromEpochMs(timestamp);
+				timestamp = Timestamp::FromEpochMs(timestamp.value);
 			} else if (result->types[col_idx].id() == LogicalTypeId::TIMESTAMP_NS) {
-				timestamp = Timestamp::FromEpochNanoSeconds(timestamp);
+				timestamp = Timestamp::FromEpochNanoSeconds(timestamp.value);
 			} else if (result->types[col_idx].id() == LogicalTypeId::TIMESTAMP_SEC) {
-				timestamp = Timestamp::FromEpochSeconds(timestamp);
+				timestamp = Timestamp::FromEpochSeconds(timestamp.value);
 			}
 			int32_t year, month, day, hour, min, sec, micros;
 			date_t date;
