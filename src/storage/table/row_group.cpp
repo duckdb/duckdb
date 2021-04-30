@@ -32,7 +32,7 @@ void RowGroup::InitializeEmpty(const vector<LogicalType> &types) {
 
 void RowGroup::InitializeScanWithOffset(RowGroupScanState &state, idx_t vector_offset) {
 	auto &column_ids = state.parent.column_ids;
-	state.morsel = this;
+	state.row_group = this;
 	state.vector_index = vector_offset;
 	state.max_row = this->count;
 	state.column_scans = unique_ptr<ColumnScanState[]>(new ColumnScanState[column_ids.size()]);
@@ -48,7 +48,7 @@ void RowGroup::InitializeScanWithOffset(RowGroupScanState &state, idx_t vector_o
 
 void RowGroup::InitializeScan(RowGroupScanState &state) {
 	auto &column_ids = state.parent.column_ids;
-	state.morsel = this;
+	state.row_group = this;
 	state.vector_index = 0;
 	state.max_row = this->count;
 	state.column_scans = unique_ptr<ColumnScanState[]>(new ColumnScanState[column_ids.size()]);
@@ -72,14 +72,14 @@ unique_ptr<RowGroup> RowGroup::AlterType(ClientContext &context, const LogicalTy
 	// scan the original table, and fill the new column with the transformed value
 	auto &transaction = Transaction::GetTransaction(context);
 
-	InitializeScan(scan_state.morsel_scan_state);
+	InitializeScan(scan_state.row_group_scan_state);
 
 	Vector append_vector(target_type);
 	auto altered_col_stats = make_shared<SegmentStatistics>(target_type);
 	while (true) {
 		// scan the table
 		scan_chunk.Reset();
-		Scan(transaction, scan_state.morsel_scan_state, scan_chunk);
+		Scan(transaction, scan_state.row_group_scan_state, scan_chunk);
 		if (scan_chunk.size() == 0) {
 			break;
 		}
@@ -88,22 +88,22 @@ unique_ptr<RowGroup> RowGroup::AlterType(ClientContext &context, const LogicalTy
 		column_data->Append(*altered_col_stats->statistics, append_state, append_vector, scan_chunk.size());
 	}
 
-	// set up the morsel based on this morsel
-	auto morsel = make_unique<RowGroup>(db, table_info, this->start, this->count);
-	morsel->version_info = version_info;
-	morsel->updates = updates;
+	// set up the row_group based on this row_group
+	auto row_group = make_unique<RowGroup>(db, table_info, this->start, this->count);
+	row_group->version_info = version_info;
+	row_group->updates = updates;
 	for(idx_t i = 0; i < columns.size(); i++) {
 		if (i == changed_idx) {
 			// this is the altered column: use the new column
-			morsel->columns.push_back(move(column_data));
-			morsel->stats.push_back(move(altered_col_stats));
+			row_group->columns.push_back(move(column_data));
+			row_group->stats.push_back(move(altered_col_stats));
 		} else {
 			// this column was not altered: use the data directly
-			morsel->columns.push_back(columns[i]);
-			morsel->stats.push_back(stats[i]);
+			row_group->columns.push_back(columns[i]);
+			row_group->stats.push_back(stats[i]);
 		}
 	}
-	return morsel;
+	return row_group;
 }
 
 unique_ptr<RowGroup> RowGroup::AddColumn(ClientContext &context, ColumnDefinition &new_column, ExpressionExecutor &executor, Expression *default_value, Vector &result) {
@@ -130,30 +130,30 @@ unique_ptr<RowGroup> RowGroup::AddColumn(ClientContext &context, ColumnDefinitio
 		}
 	}
 
-	// set up the morsel based on this morsel
-	auto morsel = make_unique<RowGroup>(db, table_info, this->start, this->count);
-	morsel->version_info = version_info;
-	morsel->updates = updates;
-	morsel->columns = columns;
-	morsel->stats = stats;
+	// set up the row_group based on this row_group
+	auto row_group = make_unique<RowGroup>(db, table_info, this->start, this->count);
+	row_group->version_info = version_info;
+	row_group->updates = updates;
+	row_group->columns = columns;
+	row_group->stats = stats;
 	// now add the new column
-	morsel->columns.push_back(move(added_column));
-	morsel->stats.push_back(move(added_col_stats));
-	return morsel;
+	row_group->columns.push_back(move(added_column));
+	row_group->stats.push_back(move(added_col_stats));
+	return row_group;
 }
 
 unique_ptr<RowGroup> RowGroup::RemoveColumn(idx_t removed_column) {
 	D_ASSERT(removed_column < columns.size());
 
-	auto morsel = make_unique<RowGroup>(db, table_info, this->start, this->count);
-	morsel->version_info = version_info;
-	morsel->updates = updates;
-	morsel->columns = columns;
-	morsel->stats = stats;
+	auto row_group = make_unique<RowGroup>(db, table_info, this->start, this->count);
+	row_group->version_info = version_info;
+	row_group->updates = updates;
+	row_group->columns = columns;
+	row_group->stats = stats;
 	// now remove the column
-	morsel->columns.erase(morsel->columns.begin() + removed_column);
-	morsel->stats.erase(morsel->stats.begin() + removed_column);
-	return morsel;
+	row_group->columns.erase(row_group->columns.begin() + removed_column);
+	row_group->stats.erase(row_group->stats.begin() + removed_column);
+	return row_group;
 }
 
 template<bool SCAN_DELETES, bool SCAN_COMMITTED, bool ALLOW_UPDATES>
@@ -178,7 +178,7 @@ void RowGroup::TemplatedScan(Transaction *transaction, RowGroupScanState &state,
 		SelectionVector valid_sel(STANDARD_VECTOR_SIZE);
 		if (SCAN_DELETES) {
 			D_ASSERT(transaction);
-			count = state.morsel->GetSelVector(*transaction, state.vector_index, valid_sel, max_count);
+			count = state.row_group->GetSelVector(*transaction, state.vector_index, valid_sel, max_count);
 			if (count == 0) {
 				// nothing to scan for this vector, skip the entire vector
 				state.vector_index++;
@@ -273,7 +273,7 @@ ChunkInfo *RowGroup::GetChunkInfo(idx_t vector_idx) {
 
 idx_t RowGroup::GetSelVector(Transaction &transaction, idx_t vector_idx, SelectionVector &sel_vector,
                                idx_t max_count) {
-	lock_guard<mutex> lock(morsel_lock);
+	lock_guard<mutex> lock(row_group_lock);
 
 	auto info = GetChunkInfo(vector_idx);
 	if (!info) {
@@ -284,7 +284,7 @@ idx_t RowGroup::GetSelVector(Transaction &transaction, idx_t vector_idx, Selecti
 
 bool RowGroup::Fetch(Transaction &transaction, idx_t row) {
 	D_ASSERT(row < RowGroup::ROW_GROUP_SIZE);
-	lock_guard<mutex> lock(morsel_lock);
+	lock_guard<mutex> lock(row_group_lock);
 
 	idx_t vector_index = row / STANDARD_VECTOR_SIZE;
 	auto info = GetChunkInfo(vector_index);
@@ -314,9 +314,9 @@ void RowGroup::FetchRow(Transaction &transaction, ColumnFetchState &state, const
 	}
 }
 
-void RowGroup::AppendVersionInfo(Transaction &transaction, idx_t morsel_start, idx_t count, transaction_t commit_id) {
-	idx_t morsel_end = morsel_start + count;
-	lock_guard<mutex> lock(morsel_lock);
+void RowGroup::AppendVersionInfo(Transaction &transaction, idx_t row_group_start, idx_t count, transaction_t commit_id) {
+	idx_t row_group_end = row_group_start + count;
+	lock_guard<mutex> lock(row_group_lock);
 
 	this->count += count;
 	D_ASSERT(this->count <= RowGroup::ROW_GROUP_SIZE);
@@ -325,12 +325,12 @@ void RowGroup::AppendVersionInfo(Transaction &transaction, idx_t morsel_start, i
 	if (!version_info) {
 		version_info = make_unique<VersionNode>();
 	}
-	idx_t start_vector_idx = morsel_start / STANDARD_VECTOR_SIZE;
-	idx_t end_vector_idx = (morsel_end - 1) / STANDARD_VECTOR_SIZE;
+	idx_t start_vector_idx = row_group_start / STANDARD_VECTOR_SIZE;
+	idx_t end_vector_idx = (row_group_end - 1) / STANDARD_VECTOR_SIZE;
 	for (idx_t vector_idx = start_vector_idx; vector_idx <= end_vector_idx; vector_idx++) {
-		idx_t start = vector_idx == start_vector_idx ? morsel_start - start_vector_idx * STANDARD_VECTOR_SIZE : 0;
+		idx_t start = vector_idx == start_vector_idx ? row_group_start - start_vector_idx * STANDARD_VECTOR_SIZE : 0;
 		idx_t end =
-		    vector_idx == end_vector_idx ? morsel_end - end_vector_idx * STANDARD_VECTOR_SIZE : STANDARD_VECTOR_SIZE;
+		    vector_idx == end_vector_idx ? row_group_end - end_vector_idx * STANDARD_VECTOR_SIZE : STANDARD_VECTOR_SIZE;
 		if (start == 0 && end == STANDARD_VECTOR_SIZE) {
 			// entire vector is encapsulated by append: append a single constant
 			auto constant_info = make_unique<ChunkConstantInfo>(this->start + vector_idx * STANDARD_VECTOR_SIZE, *this);
@@ -355,28 +355,28 @@ void RowGroup::AppendVersionInfo(Transaction &transaction, idx_t morsel_start, i
 	}
 }
 
-void RowGroup::CommitAppend(transaction_t commit_id, idx_t morsel_start, idx_t count) {
+void RowGroup::CommitAppend(transaction_t commit_id, idx_t row_group_start, idx_t count) {
 	D_ASSERT(version_info.get());
-	idx_t morsel_end = morsel_start + count;
-	lock_guard<mutex> lock(morsel_lock);
+	idx_t row_group_end = row_group_start + count;
+	lock_guard<mutex> lock(row_group_lock);
 
-	idx_t start_vector_idx = morsel_start / STANDARD_VECTOR_SIZE;
-	idx_t end_vector_idx = (morsel_end - 1) / STANDARD_VECTOR_SIZE;
+	idx_t start_vector_idx = row_group_start / STANDARD_VECTOR_SIZE;
+	idx_t end_vector_idx = (row_group_end - 1) / STANDARD_VECTOR_SIZE;
 	for (idx_t vector_idx = start_vector_idx; vector_idx <= end_vector_idx; vector_idx++) {
-		idx_t start = vector_idx == start_vector_idx ? morsel_start - start_vector_idx * STANDARD_VECTOR_SIZE : 0;
+		idx_t start = vector_idx == start_vector_idx ? row_group_start - start_vector_idx * STANDARD_VECTOR_SIZE : 0;
 		idx_t end =
-		    vector_idx == end_vector_idx ? morsel_end - end_vector_idx * STANDARD_VECTOR_SIZE : STANDARD_VECTOR_SIZE;
+		    vector_idx == end_vector_idx ? row_group_end - end_vector_idx * STANDARD_VECTOR_SIZE : STANDARD_VECTOR_SIZE;
 
 		auto info = version_info->info[vector_idx].get();
 		info->CommitAppend(commit_id, start, end);
 	}
 }
 
-void RowGroup::RevertAppend(idx_t morsel_start) {
+void RowGroup::RevertAppend(idx_t row_group_start) {
 	if (!version_info) {
 		return;
 	}
-	idx_t start_row = morsel_start - this->start;
+	idx_t start_row = row_group_start - this->start;
 	idx_t start_vector_idx = (start_row + (STANDARD_VECTOR_SIZE - 1)) / STANDARD_VECTOR_SIZE;
 	for (idx_t vector_idx = start_vector_idx; vector_idx < RowGroup::ROW_GROUP_VECTOR_COUNT; vector_idx++) {
 		version_info->info[vector_idx].reset();
@@ -384,24 +384,24 @@ void RowGroup::RevertAppend(idx_t morsel_start) {
 }
 
 void RowGroup::InitializeAppend(Transaction &transaction, RowGroupAppendState &append_state, idx_t remaining_append_count) {
-	append_state.morsel = this;
-	append_state.offset_in_morsel = this->count;
+	append_state.row_group = this;
+	append_state.offset_in_row_group = this->count;
 	// for each column, initialize the append state
 	append_state.states = unique_ptr<ColumnAppendState[]>(new ColumnAppendState[columns.size()]);
 	for (idx_t i = 0; i < columns.size(); i++) {
 		columns[i]->InitializeAppend(append_state.states[i]);
 	}
-	// append the version info for this morsel
+	// append the version info for this row_group
 	idx_t append_count = MinValue<idx_t>(remaining_append_count, RowGroup::ROW_GROUP_SIZE - this->count);
 	AppendVersionInfo(transaction, this->count, append_count, transaction.transaction_id);
 }
 
 void RowGroup::Append(RowGroupAppendState &state, DataChunk &chunk, idx_t append_count) {
-	// append to the current morsel
+	// append to the current row_group
 	for (idx_t i = 0; i < columns.size(); i++) {
 		columns[i]->Append(*stats[i]->statistics, state.states[i], chunk.data[i], append_count);
 	}
-	state.offset_in_morsel += append_count;
+	state.offset_in_row_group += append_count;
 }
 
 void RowGroup::Update(Transaction &transaction, DataChunk &update_chunk, Vector &row_ids, const vector<column_t> &column_ids) {
@@ -467,7 +467,7 @@ public:
 };
 
 void RowGroup::Delete(Transaction &transaction, DataTable *table, Vector &row_ids, idx_t count) {
-	lock_guard<mutex> lock(morsel_lock);
+	lock_guard<mutex> lock(row_group_lock);
 	VersionDeleteState del_state(*this, transaction, table, this->start);
 
 	VectorData rdata;

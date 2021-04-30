@@ -22,10 +22,10 @@ struct UpdateNode;
 
 class UpdateSegment {
 public:
-	UpdateSegment(RowGroup &morsel, ColumnData &column_data);
+	UpdateSegment(RowGroup &row_group, ColumnData &column_data);
 	~UpdateSegment();
 
-	RowGroup &morsel;
+	RowGroup &row_group;
 	ColumnData &column_data;
 
 public:

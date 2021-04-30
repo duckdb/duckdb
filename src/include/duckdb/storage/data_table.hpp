@@ -148,7 +148,7 @@ public:
 
 	idx_t GetTotalRows();
 
-	//! Appends an empty morsel to the table
+	//! Appends an empty row_group to the table
 	void AppendRowGroup(idx_t start_row);
 
 private:
@@ -174,8 +174,8 @@ private:
 	std::mutex append_lock;
 	//! The number of rows in the table
 	idx_t total_rows;
-	//! The segment trees holding the various morsels of the table
-	shared_ptr<SegmentTree> morsels;
+	//! The segment trees holding the various row_groups of the table
+	shared_ptr<SegmentTree> row_groups;
 	//! Column statistics
 	vector<unique_ptr<BaseStatistics>> column_stats;
 	//! Whether or not the data table is the root DataTable for this table; the root DataTable is the newest version

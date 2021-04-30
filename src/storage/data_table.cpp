@@ -41,7 +41,7 @@ DataTable::DataTable(DatabaseInstance &db, const string &schema, const string &t
 	if (total_rows == 0) {
 		D_ASSERT(total_rows == 0);
 		D_ASSERT(column_stats.empty());
-		this->morsels = make_shared<SegmentTree>();
+		this->row_groups = make_shared<SegmentTree>();
 		AppendRowGroup(0);
 
 		for(auto &type : types) {
@@ -53,9 +53,9 @@ DataTable::DataTable(DatabaseInstance &db, const string &schema, const string &t
 }
 
 void DataTable::AppendRowGroup(idx_t start_row) {
-	auto new_morsel = make_unique<RowGroup>(db, *info, start_row, 0);
-	new_morsel->InitializeEmpty(types);
-	morsels->AppendSegment(move(new_morsel));
+	auto new_row_group = make_unique<RowGroup>(db, *info, start_row, 0);
+	new_row_group->InitializeEmpty(types);
+	row_groups->AppendSegment(move(new_row_group));
 }
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition &new_column, Expression *default_value)
@@ -87,15 +87,15 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 
 	// fill the column with its DEFAULT value, or NULL if none is specified
 	auto new_stats = make_unique<SegmentStatistics>(new_column.type);
-	this->morsels = make_shared<SegmentTree>();
-	auto current_morsel = (RowGroup *) parent.morsels->GetRootSegment();
-	while(current_morsel) {
-		auto new_morsel = current_morsel->AddColumn(context, new_column, executor, default_value, result);
+	this->row_groups = make_shared<SegmentTree>();
+	auto current_row_group = (RowGroup *) parent.row_groups->GetRootSegment();
+	while(current_row_group) {
+		auto new_row_group = current_row_group->AddColumn(context, new_column, executor, default_value, result);
 		// merge in the statistics
-		column_stats[new_column_idx]->Merge(*new_morsel->GetStatistics(new_column_idx));
+		column_stats[new_column_idx]->Merge(*new_row_group->GetStatistics(new_column_idx));
 
-		morsels->AppendSegment(move(new_morsel));
-		current_morsel = (RowGroup *) current_morsel->next.get();
+		row_groups->AppendSegment(move(new_row_group));
+		current_row_group = (RowGroup *) current_row_group->next.get();
 	}
 
 	// also add this column to client local storage
@@ -128,13 +128,13 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 		}
 	}
 
-	// alter the morsels and remove the column from each of them
-	this->morsels = make_shared<SegmentTree>();
-	auto current_morsel = (RowGroup *) parent.morsels->GetRootSegment();
-	while(current_morsel) {
-		auto new_morsel = current_morsel->RemoveColumn(removed_column);
-		morsels->AppendSegment(move(new_morsel));
-		current_morsel = (RowGroup *) current_morsel->next.get();
+	// alter the row_groups and remove the column from each of them
+	this->row_groups = make_shared<SegmentTree>();
+	auto current_row_group = (RowGroup *) parent.row_groups->GetRootSegment();
+	while(current_row_group) {
+		auto new_row_group = current_row_group->RemoveColumn(removed_column);
+		row_groups->AppendSegment(move(new_row_group));
+		current_row_group = (RowGroup *) current_row_group->next.get();
 	}
 
 	// this table replaces the previous table, hence the parent is no longer the root DataTable
@@ -188,14 +188,14 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 	TableScanState scan_state;
 	scan_state.column_ids = move(bound_columns);
 
-	// now alter the type of the column within all of the morsels individually
-	this->morsels = make_shared<SegmentTree>();
-	auto current_morsel = (RowGroup *) parent.morsels->GetRootSegment();
-	while(current_morsel) {
-		auto new_morsel = current_morsel->AlterType(context, target_type, changed_idx, executor, scan_state, scan_chunk);
-		column_stats[changed_idx]->Merge(*new_morsel->GetStatistics(changed_idx));
-		morsels->AppendSegment(move(new_morsel));
-		current_morsel = (RowGroup *) current_morsel->next.get();
+	// now alter the type of the column within all of the row_groups individually
+	this->row_groups = make_shared<SegmentTree>();
+	auto current_row_group = (RowGroup *) parent.row_groups->GetRootSegment();
+	while(current_row_group) {
+		auto new_row_group = current_row_group->AlterType(context, target_type, changed_idx, executor, scan_state, scan_chunk);
+		column_stats[changed_idx]->Merge(*new_row_group->GetStatistics(changed_idx));
+		row_groups->AppendSegment(move(new_row_group));
+		current_row_group = (RowGroup *) current_row_group->next.get();
 	}
 
 	transaction.storage.ChangeType(&parent, this, changed_idx, target_type, bound_columns, cast_expr);
@@ -211,7 +211,7 @@ void DataTable::InitializeScan(TableScanState &state, const vector<column_t> &co
                                TableFilterSet *table_filters) {
 	// initialize a column scan state for each column
 	// initialize the chunk scan state
-	auto morsel = (RowGroup *) morsels->GetRootSegment();
+	auto row_group = (RowGroup *) row_groups->GetRootSegment();
 	state.column_ids = column_ids;
 	state.max_row = total_rows;
 	state.table_filters = table_filters;
@@ -219,7 +219,7 @@ void DataTable::InitializeScan(TableScanState &state, const vector<column_t> &co
 		D_ASSERT(table_filters->filters.size() > 0);
 		state.adaptive_filter = make_unique<AdaptiveFilter>(table_filters);
 	}
-	morsel->InitializeScan(state.morsel_scan_state);
+	row_group->InitializeScan(state.row_group_scan_state);
 }
 
 void DataTable::InitializeScan(Transaction &transaction, TableScanState &state, const vector<column_t> &column_ids,
@@ -231,7 +231,7 @@ void DataTable::InitializeScan(Transaction &transaction, TableScanState &state, 
 void DataTable::InitializeScanWithOffset(TableScanState &state, const vector<column_t> &column_ids,
                                          TableFilterSet *table_filters, idx_t start_row, idx_t end_row) {
 
-	auto morsel = (RowGroup *) morsels->GetSegment(start_row);
+	auto row_group = (RowGroup *) row_groups->GetSegment(start_row);
 	state.column_ids = column_ids;
 	state.max_row = end_row;
 	state.table_filters = table_filters;
@@ -239,8 +239,8 @@ void DataTable::InitializeScanWithOffset(TableScanState &state, const vector<col
 		D_ASSERT(table_filters->filters.size() > 0);
 		state.adaptive_filter = make_unique<AdaptiveFilter>(table_filters);
 	}
-	idx_t start_vector = (start_row - morsel->start) / STANDARD_VECTOR_SIZE;
-	morsel->InitializeScanWithOffset(state.morsel_scan_state, start_vector);
+	idx_t start_vector = (start_row - row_group->start) / STANDARD_VECTOR_SIZE;
+	row_group->InitializeScanWithOffset(state.row_group_scan_state, start_vector);
 }
 
 idx_t DataTable::MaxThreads(ClientContext &context) {
@@ -270,7 +270,7 @@ bool DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState 
 	// if (state.current_row < total_rows) {
 	// 	idx_t next = MinValue(state.current_row + parallel_scan_tuple_count, total_rows);
 
-	// 	// scan a morsel from the persistent rows
+	// 	// scan a row_group from the persistent rows
 	// 	InitializeScanWithOffset(scan_state, column_ids, scan_state.table_filters, state.current_row, next);
 
 	// 	state.current_row = next;
@@ -332,15 +332,15 @@ bool DataTable::CheckZonemap(TableScanState &state, const vector<column_t> &colu
 }
 
 bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, TableScanState &state) {
-	auto current_morsel = state.morsel_scan_state.morsel;
-	while(current_morsel) {
-		current_morsel->Scan(transaction, state.morsel_scan_state, result);
+	auto current_row_group = state.row_group_scan_state.row_group;
+	while(current_row_group) {
+		current_row_group->Scan(transaction, state.row_group_scan_state, result);
 		if (result.size() > 0) {
 			return true;
 		} else {
-			current_morsel = state.morsel_scan_state.morsel = (RowGroup *) current_morsel->next.get();
-			if (current_morsel) {
-				current_morsel->InitializeScan(state.morsel_scan_state);
+			current_row_group = state.row_group_scan_state.row_group = (RowGroup *) current_row_group->next.get();
+			if (current_row_group) {
+				current_row_group->InitializeScan(state.row_group_scan_state);
 			}
 		}
 	}
@@ -352,16 +352,16 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 //===--------------------------------------------------------------------===//
 void DataTable::Fetch(Transaction &transaction, DataChunk &result, vector<column_t> &column_ids,
                       Vector &row_identifiers, idx_t fetch_count, ColumnFetchState &state) {
-	// figure out which morsel to fetch from
+	// figure out which row_group to fetch from
 	auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
 	idx_t count = 0;
 	for(idx_t i = 0; i < fetch_count; i++) {
 		auto row_id = row_ids[i];
-		auto morsel = (RowGroup *) morsels->GetSegment(row_id);
-		if (!morsel->Fetch(transaction, row_id)) {
+		auto row_group = (RowGroup *) row_groups->GetSegment(row_id);
+		if (!row_group->Fetch(transaction, row_id)) {
 			continue;
 		}
-		morsel->FetchRow(transaction, state, column_ids, row_id, result, count);
+		row_group->FetchRow(transaction, state, column_ids, row_id, result, count);
 		count++;
 	}
 	result.SetCardinality(count);
@@ -462,11 +462,11 @@ void DataTable::InitializeAppend(Transaction &transaction, TableAppendState &sta
 	state.current_row = state.row_start;
 	state.remaining_append_count = append_count;
 
-	// start writing to the morsels
-	lock_guard<mutex> morsel_lock(morsels->node_lock);
-	auto last_morsel = (RowGroup *) morsels->GetLastSegment();
-	D_ASSERT(total_rows == last_morsel->start + last_morsel->count);
-	last_morsel->InitializeAppend(transaction, state.morsel_append_state, state.remaining_append_count);
+	// start writing to the row_groups
+	lock_guard<mutex> row_group_lock(row_groups->node_lock);
+	auto last_row_group = (RowGroup *) row_groups->GetLastSegment();
+	D_ASSERT(total_rows == last_row_group->start + last_row_group->count);
+	last_row_group->InitializeAppend(transaction, state.row_group_append_state, state.remaining_append_count);
 	total_rows += append_count;
 }
 
@@ -477,20 +477,20 @@ void DataTable::Append(Transaction &transaction, DataChunk &chunk, TableAppendSt
 
 	idx_t remaining = chunk.size();
 	while(true) {
-		auto current_morsel = state.morsel_append_state.morsel;
-		// check how much we can fit into the current morsel
-		idx_t append_count = MinValue<idx_t>(remaining, RowGroup::ROW_GROUP_SIZE - state.morsel_append_state.offset_in_morsel);
+		auto current_row_group = state.row_group_append_state.row_group;
+		// check how much we can fit into the current row_group
+		idx_t append_count = MinValue<idx_t>(remaining, RowGroup::ROW_GROUP_SIZE - state.row_group_append_state.offset_in_row_group);
 		if (append_count > 0) {
-			current_morsel->Append(state.morsel_append_state, chunk, append_count);
+			current_row_group->Append(state.row_group_append_state, chunk, append_count);
 			// merge the stats
 			for (idx_t i = 0; i < types.size(); i++) {
-				column_stats[i]->Merge(*current_morsel->GetStatistics(i));
+				column_stats[i]->Merge(*current_row_group->GetStatistics(i));
 			}
 		}
 		state.remaining_append_count -= append_count;
 		remaining -= append_count;
 		if (remaining > 0) {
-			// we expect max 1 iteration of this loop (i.e. a single chunk should never overflow more than one morsel)
+			// we expect max 1 iteration of this loop (i.e. a single chunk should never overflow more than one row_group)
 			D_ASSERT(chunk.size() == remaining + append_count);
 			// slice the input chunk
 			if (remaining < chunk.size()) {
@@ -500,12 +500,12 @@ void DataTable::Append(Transaction &transaction, DataChunk &chunk, TableAppendSt
 				}
 				chunk.Slice(sel, remaining);
 			}
-			// append a new morsel
-			AppendRowGroup(current_morsel->start + current_morsel->count);
-			// set up the append state for this morsel
-			lock_guard<mutex> morsel_lock(morsels->node_lock);
-			auto last_morsel = (RowGroup *) morsels->GetLastSegment();
-			last_morsel->InitializeAppend(transaction, state.morsel_append_state, state.remaining_append_count);
+			// append a new row_group
+			AppendRowGroup(current_row_group->start + current_row_group->count);
+			// set up the append state for this row_group
+			lock_guard<mutex> row_group_lock(row_groups->node_lock);
+			auto last_row_group = (RowGroup *) row_groups->GetLastSegment();
+			last_row_group->InitializeAppend(transaction, state.row_group_append_state, state.remaining_append_count);
 			continue;
 		} else {
 			break;
@@ -563,21 +563,21 @@ void DataTable::WriteToLog(WriteAheadLog &log, idx_t row_start, idx_t count) {
 void DataTable::CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count) {
 	lock_guard<mutex> lock(append_lock);
 
-	auto morsel = (RowGroup *) morsels->GetSegment(row_start);
+	auto row_group = (RowGroup *) row_groups->GetSegment(row_start);
 	idx_t current_row = row_start;
 	idx_t remaining = count;
 	while (true) {
-		idx_t start_in_morsel = current_row - morsel->start;
-		idx_t append_count = MinValue<idx_t>(morsel->count - start_in_morsel, remaining);
+		idx_t start_in_row_group = current_row - row_group->start;
+		idx_t append_count = MinValue<idx_t>(row_group->count - start_in_row_group, remaining);
 
-		morsel->CommitAppend(commit_id, start_in_morsel, append_count);
+		row_group->CommitAppend(commit_id, start_in_row_group, append_count);
 
 		current_row += append_count;
 		remaining -= append_count;
 		if (remaining == 0) {
 			break;
 		}
-		morsel = (RowGroup *) morsel->next.get();
+		row_group = (RowGroup *) row_group->next.get();
 	}
 	info->cardinality += count;
 }
@@ -599,16 +599,16 @@ void DataTable::RevertAppendInternal(idx_t start_row, idx_t count) {
 	info->cardinality = start_row;
 	total_rows = start_row;
 	D_ASSERT(is_root);
-	// revert appends made to morsels
-	lock_guard<mutex> tree_lock(morsels->node_lock);
+	// revert appends made to row_groups
+	lock_guard<mutex> tree_lock(row_groups->node_lock);
 	// find the segment index that the current row belongs to
-	idx_t segment_index = morsels->GetSegmentIndex(start_row);
-	auto segment = morsels->nodes[segment_index].node;
+	idx_t segment_index = row_groups->GetSegmentIndex(start_row);
+	auto segment = row_groups->nodes[segment_index].node;
 	auto &info = (RowGroup &)*segment;
 
 	// remove any segments AFTER this segment: they should be deleted entirely
-	if (segment_index < morsels->nodes.size() - 1) {
-		morsels->nodes.erase(morsels->nodes.begin() + segment_index + 1, morsels->nodes.end());
+	if (segment_index < row_groups->nodes.size() - 1) {
+		row_groups->nodes.erase(row_groups->nodes.begin() + segment_index + 1, row_groups->nodes.end());
 	}
 	info.next = nullptr;
 	info.RevertAppend(start_row);
@@ -697,11 +697,11 @@ void DataTable::RemoveFromIndexes(Vector &row_identifiers, idx_t count) {
 		sel.set_index(i, row_ids[i] % STANDARD_VECTOR_SIZE);
 	}
 
-	// figure out which morsel to fetch from
-	auto morsel = (RowGroup *) morsels->GetSegment(row_ids[0]);
-	auto morsel_vector_idx = (row_ids[0] - morsel->start) / STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE;
+	// figure out which row_group to fetch from
+	auto row_group = (RowGroup *) row_groups->GetSegment(row_ids[0]);
+	auto row_group_vector_idx = (row_ids[0] - row_group->start) / STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE;
 
-	// now fetch the columns from that morsel
+	// now fetch the columns from that row_group
 	// FIXME: we do not need to fetch all columns, only the columns required by the indices!
 	TableScanState state;
 	for(idx_t i = 0; i < types.size(); i++) {
@@ -710,8 +710,8 @@ void DataTable::RemoveFromIndexes(Vector &row_identifiers, idx_t count) {
 	DataChunk result;
 	result.Initialize(types);
 
-	morsel->InitializeScanWithOffset(state.morsel_scan_state, morsel_vector_idx);
-	morsel->IndexScan(state.morsel_scan_state, result, false);
+	row_group->InitializeScanWithOffset(state.row_group_scan_state, row_group_vector_idx);
+	row_group->IndexScan(state.row_group_scan_state, result, false);
 	result.Slice(sel, count);
 	for (auto &index : info->indexes) {
 		index->Delete(result, row_identifiers);
@@ -737,8 +737,8 @@ void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector 
 		// deletion is in transaction-local storage: push delete into local chunk collection
 		transaction.storage.Delete(this, row_identifiers, count);
 	} else {
-		auto morsel = (RowGroup *) morsels->GetSegment(first_id);
-		morsel->Delete(transaction, this, row_identifiers, count);
+		auto row_group = (RowGroup *) row_groups->GetSegment(first_id);
+		row_group->Delete(transaction, this, row_identifiers, count);
 	}
 }
 
@@ -846,12 +846,12 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 		transaction.storage.Update(this, row_ids, column_ids, updates);
 		return;
 	}
-	// find the morsel this id belongs to
-	auto morsel = (RowGroup *) morsels->GetSegment(first_id);
-	morsel->Update(transaction, updates, row_ids, column_ids);
+	// find the row_group this id belongs to
+	auto row_group = (RowGroup *) row_groups->GetSegment(first_id);
+	row_group->Update(transaction, updates, row_ids, column_ids);
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto column_id = column_ids[i];
-		column_stats[column_id]->Merge(*morsel->GetStatistics(column_id));
+		column_stats[column_id]->Merge(*row_group->GetStatistics(column_id));
 	}
 }
 
@@ -861,7 +861,7 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 void DataTable::InitializeCreateIndexScan(CreateIndexScanState &state, const vector<column_t> &column_ids) {
 	// we grab the append lock to make sure nothing is appended until AFTER we finish the index scan
 	state.append_lock = std::unique_lock<mutex>(append_lock);
-	state.delete_lock = std::unique_lock<mutex>(morsels->node_lock);
+	state.delete_lock = std::unique_lock<mutex>(row_groups->node_lock);
 
 	InitializeScan(state, column_ids);
 }
@@ -875,15 +875,15 @@ void DataTable::CreateIndexScan(CreateIndexScanState &state, const vector<column
 }
 
 bool DataTable::ScanCreateIndex(CreateIndexScanState &state, DataChunk &result, bool allow_pending_updates) {
-	auto current_morsel = state.morsel_scan_state.morsel;
-	while(current_morsel) {
-		current_morsel->IndexScan(state.morsel_scan_state, result, allow_pending_updates);
+	auto current_row_group = state.row_group_scan_state.row_group;
+	while(current_row_group) {
+		current_row_group->IndexScan(state.row_group_scan_state, result, allow_pending_updates);
 		if (result.size() > 0) {
 			return true;
 		} else {
-			current_morsel = state.morsel_scan_state.morsel = (RowGroup *) current_morsel->next.get();
-			if (current_morsel) {
-				current_morsel->InitializeScan(state.morsel_scan_state);
+			current_row_group = state.row_group_scan_state.row_group = (RowGroup *) current_row_group->next.get();
+			if (current_row_group) {
+				current_row_group->InitializeScan(state.row_group_scan_state);
 			}
 		}
 	}

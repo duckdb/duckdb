@@ -21,8 +21,8 @@
 
 namespace duckdb {
 
-ColumnData::ColumnData(RowGroup &morsel, LogicalType type, idx_t column_idx, ColumnData *parent)
-    : db(morsel.GetDatabase()), start(morsel.start), type(move(type)), column_idx(column_idx), parent(parent) {
+ColumnData::ColumnData(RowGroup &row_group, LogicalType type, idx_t column_idx, ColumnData *parent)
+    : db(row_group.GetDatabase()), start(row_group.start), type(move(type)), column_idx(column_idx), parent(parent) {
 }
 
 ColumnData::~ColumnData() {}

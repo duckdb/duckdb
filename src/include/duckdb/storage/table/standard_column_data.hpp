@@ -16,7 +16,7 @@ namespace duckdb {
 //! Standard column data represents a regular flat column (e.g. a column of type INTEGER or STRING)
 class StandardColumnData : public ColumnData {
 public:
-	StandardColumnData(RowGroup &morsel, LogicalType type, idx_t column_idx, ColumnData *parent = nullptr);
+	StandardColumnData(RowGroup &row_group, LogicalType type, idx_t column_idx, ColumnData *parent = nullptr);
 
 	//! The validity column data
 	ValidityColumnData validity;

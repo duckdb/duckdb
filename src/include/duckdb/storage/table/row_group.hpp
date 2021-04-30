@@ -43,13 +43,13 @@ public:
 private:
 	//! The database instance
 	DatabaseInstance &db;
-	//! The table info of this morsel
+	//! The table info of this row_group
 	DataTableInfo &table_info;
-	//! The version info of the morsel (inserted and deleted tuple info)
+	//! The version info of the row_group (inserted and deleted tuple info)
 	shared_ptr<VersionNode> version_info;
-	//! The column data of the morsel
+	//! The column data of the row_group
 	vector<shared_ptr<ColumnData>> columns;
-	//! The update data of the morsel
+	//! The update data of the row_group
 	vector<shared_ptr<UpdateSegment>> updates;
 	//! The segment statistics for each of the columns
 	vector<shared_ptr<SegmentStatistics>> stats;
@@ -65,7 +65,7 @@ public:
 
 	void InitializeEmpty(const vector<LogicalType> &types);
 
-	//! Initialize a scan over this morsel
+	//! Initialize a scan over this row_group
 	void InitializeScan(RowGroupScanState &state);
 	void InitializeScanWithOffset(RowGroupScanState &state, idx_t vector_offset);
 	void Scan(Transaction &transaction, RowGroupScanState &state, DataChunk &result);
@@ -75,7 +75,7 @@ public:
 
 	//! For a specific row, returns true if it should be used for the transaction and false otherwise.
 	bool Fetch(Transaction &transaction, idx_t row);
-	//! Fetch a specific row from the morsel and insert it into the result at the specified index
+	//! Fetch a specific row from the row_group and insert it into the result at the specified index
 	void FetchRow(Transaction &transaction, ColumnFetchState &state, const vector<column_t> &column_ids, row_t row_id, DataChunk &result, idx_t result_idx);
 
 	//! Append count rows to the version info
@@ -102,7 +102,7 @@ private:
 	void TemplatedScan(Transaction *transaction, RowGroupScanState &state, DataChunk &result);
 
 private:
-	mutex morsel_lock;
+	mutex row_group_lock;
 	mutex stats_lock;
 };
 

@@ -37,12 +37,12 @@ struct RowGroupAppendState {
 
 	//! The parent append state
 	TableAppendState &parent;
-	//! The current morsel we are appending to
-	RowGroup *morsel;
+	//! The current row_group we are appending to
+	RowGroup *row_group;
 	//! The column append states
 	unique_ptr<ColumnAppendState[]> states;
-	//! Offset within the morsel
-	idx_t offset_in_morsel;
+	//! Offset within the row_group
+	idx_t offset_in_row_group;
 };
 
 
@@ -51,9 +51,9 @@ struct IndexLock {
 };
 
 struct TableAppendState {
-	TableAppendState() : morsel_append_state(*this) {}
+	TableAppendState() : row_group_append_state(*this) {}
 
-	RowGroupAppendState morsel_append_state;
+	RowGroupAppendState row_group_append_state;
 	std::unique_lock<std::mutex> append_lock;
 	unique_ptr<IndexLock[]> index_locks;
 	row_t row_start;

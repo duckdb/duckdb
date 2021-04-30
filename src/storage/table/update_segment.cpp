@@ -17,8 +17,8 @@ static UpdateSegment::rollback_update_function_t GetRollbackUpdateFunction(Physi
 static UpdateSegment::statistics_update_function_t GetStatisticsUpdateFunction(PhysicalType type);
 static UpdateSegment::fetch_row_function_t GetFetchRowFunction(PhysicalType type);
 
-UpdateSegment::UpdateSegment(RowGroup &morsel, ColumnData &column_data)
-    : morsel(morsel), column_data(column_data),
+UpdateSegment::UpdateSegment(RowGroup &row_group, ColumnData &column_data)
+    : row_group(row_group), column_data(column_data),
       stats(column_data.type) {
 	auto physical_type = column_data.type.InternalType();
 
@@ -285,7 +285,7 @@ void UpdateSegment::FetchRow(Transaction &transaction, idx_t row_id, Vector &res
 	if (!root) {
 		return;
 	}
-	idx_t vector_index = (row_id - morsel.start) / STANDARD_VECTOR_SIZE;
+	idx_t vector_index = (row_id - row_group.start) / STANDARD_VECTOR_SIZE;
 	if (!root->info[vector_index]) {
 		return;
 	}
@@ -562,7 +562,7 @@ static idx_t MergeLoop(row_t a[], sel_t b[], idx_t acount, idx_t bcount, idx_t a
 template <class T>
 static void MergeUpdateLoop(SegmentStatistics &stats, UpdateInfo *base_info, Vector &base_data, UpdateInfo *update_info,
                             Vector &update, row_t *ids, idx_t count) {
-	auto base_id = base_info->segment->morsel.start + base_info->vector_index * STANDARD_VECTOR_SIZE;
+	auto base_id = base_info->segment->row_group.start + base_info->vector_index * STANDARD_VECTOR_SIZE;
 #ifdef DEBUG
 	// all of these should be sorted, otherwise the below algorithm does not work
 	for (idx_t i = 1; i < count; i++) {
@@ -815,10 +815,10 @@ void UpdateSegment::Update(Transaction &transaction, Vector &update, row_t *ids,
 	// get the vector index based on the first id
 	// we assert that all updates must be part of the same vector
 	auto first_id = ids[0];
-	idx_t vector_index = (first_id - morsel.start) / STANDARD_VECTOR_SIZE;
-	idx_t vector_offset = morsel.start + vector_index * STANDARD_VECTOR_SIZE;
+	idx_t vector_index = (first_id - row_group.start) / STANDARD_VECTOR_SIZE;
+	idx_t vector_offset = row_group.start + vector_index * STANDARD_VECTOR_SIZE;
 
-	D_ASSERT(idx_t(first_id) >= morsel.start);
+	D_ASSERT(idx_t(first_id) >= row_group.start);
 	D_ASSERT(vector_index < RowGroup::ROW_GROUP_VECTOR_COUNT);
 
 	// first check the version chain
@@ -921,7 +921,7 @@ bool UpdateSegment::HasUncommittedUpdates(idx_t vector_index) {
 
 bool UpdateSegment::HasUpdates(idx_t start_vector_index, idx_t end_vector_index) const {
 	throw NotImplementedException("FIXME: has updates");
-	// idx_t base_vector_index = morsel.start / STANDARD_VECTOR_SIZE;
+	// idx_t base_vector_index = row_group.start / STANDARD_VECTOR_SIZE;
 	// D_ASSERT(start_vector_index >= base_vector_index);
 	// auto segment = this;
 	// for (idx_t i = start_vector_index; i <= end_vector_index; i++) {

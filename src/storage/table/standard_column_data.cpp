@@ -7,9 +7,9 @@
 
 namespace duckdb {
 
-StandardColumnData::StandardColumnData(RowGroup &morsel, LogicalType type,
+StandardColumnData::StandardColumnData(RowGroup &row_group, LogicalType type,
                                        idx_t column_idx, ColumnData *parent)
-    : ColumnData(morsel, move(type), column_idx, parent), validity(morsel, column_idx, this) {
+    : ColumnData(row_group, move(type), column_idx, parent), validity(row_group, column_idx, this) {
 }
 
 bool StandardColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {

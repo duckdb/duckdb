@@ -4,8 +4,8 @@
 
 namespace duckdb {
 
-ValidityColumnData::ValidityColumnData(RowGroup &morsel, idx_t column_idx, ColumnData *parent)
-    : ColumnData(morsel, LogicalType(LogicalTypeId::VALIDITY), column_idx, parent) {
+ValidityColumnData::ValidityColumnData(RowGroup &row_group, idx_t column_idx, ColumnData *parent)
+    : ColumnData(row_group, LogicalType(LogicalTypeId::VALIDITY), column_idx, parent) {
 }
 
 bool ValidityColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {

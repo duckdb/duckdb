@@ -83,11 +83,11 @@ public:
 
 	//! The parent scan state
 	TableScanState &parent;
-	//! The current morsel we are scanning
-	RowGroup *morsel;
-	//! The vector index within the morsel
+	//! The current row_group we are scanning
+	RowGroup *row_group;
+	//! The vector index within the row_group
 	idx_t vector_index;
-	//! The maximum row index of this morsel scan
+	//! The maximum row index of this row_group scan
 	idx_t max_row;
 	//! Child column scans
 	unique_ptr<ColumnScanState[]> column_scans;
@@ -95,10 +95,10 @@ public:
 
 class TableScanState {
 public:
-	TableScanState() : morsel_scan_state(*this) {};
+	TableScanState() : row_group_scan_state(*this) {};
 
-	//! The morsel scan state
-	RowGroupScanState morsel_scan_state;
+	//! The row_group scan state
+	RowGroupScanState row_group_scan_state;
 	//! The total maximum row index
 	idx_t max_row;
 	//! The column identifiers of the scan

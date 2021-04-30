@@ -50,7 +50,7 @@ public:
 
 class ColumnData {
 public:
-	ColumnData(RowGroup &morsel, LogicalType type, idx_t column_idx, ColumnData *parent);
+	ColumnData(RowGroup &row_group, LogicalType type, idx_t column_idx, ColumnData *parent);
 	virtual ~ColumnData();
 
 	//! The database instance this column belongs to
