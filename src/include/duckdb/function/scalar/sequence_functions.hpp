@@ -17,4 +17,7 @@ struct NextvalFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct CurrvalFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
 } // namespace duckdb
