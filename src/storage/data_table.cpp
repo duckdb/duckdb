@@ -243,8 +243,21 @@ void DataTable::InitializeScanWithOffset(TableScanState &state, const vector<col
 	row_group->InitializeScanWithOffset(state.row_group_scan_state, start_vector);
 }
 
+void DataTable::InitializeScanInRowGroup(TableScanState &state, const vector<column_t> &column_ids,
+                                         TableFilterSet *table_filters, RowGroup *row_group, idx_t vector_index, idx_t max_row) {
+	state.column_ids = column_ids;
+	state.max_row = max_row;
+	state.table_filters = table_filters;
+	if (table_filters) {
+		D_ASSERT(table_filters->filters.size() > 0);
+		state.adaptive_filter = make_unique<AdaptiveFilter>(table_filters);
+	}
+	row_group->InitializeScanWithOffset(state.row_group_scan_state, vector_index);
+	state.row_group_scan_state.max_row = max_row;
+}
+
 idx_t DataTable::MaxThreads(ClientContext &context) {
-	idx_t parallel_scan_vector_count = 100;
+	idx_t parallel_scan_vector_count = RowGroup::ROW_GROUP_VECTOR_COUNT;
 	if (context.force_parallelism) {
 		parallel_scan_vector_count = 1;
 	}
@@ -254,40 +267,45 @@ idx_t DataTable::MaxThreads(ClientContext &context) {
 }
 
 void DataTable::InitializeParallelScan(ParallelTableScanState &state) {
-	state.current_row = 0;
+	state.current_row_group = (RowGroup *) row_groups->GetRootSegment();
 	state.transaction_local_data = false;
 }
 
 bool DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState &state, TableScanState &scan_state,
                                  const vector<column_t> &column_ids) {
-	throw NotImplementedException("FIXME: parallel scan");
-	// idx_t parallel_scan_vector_count = 100;
-	// if (context.force_parallelism) {
-	// 	parallel_scan_vector_count = 1;
-	// }
-	// idx_t parallel_scan_tuple_count = STANDARD_VECTOR_SIZE * parallel_scan_vector_count;
-
-	// if (state.current_row < total_rows) {
-	// 	idx_t next = MinValue(state.current_row + parallel_scan_tuple_count, total_rows);
-
-	// 	// scan a row_group from the persistent rows
-	// 	InitializeScanWithOffset(scan_state, column_ids, scan_state.table_filters, state.current_row, next);
-
-	// 	state.current_row = next;
-	// 	return true;
-	// } else if (!state.transaction_local_data) {
-	// 	auto &transaction = Transaction::GetTransaction(context);
-	// 	// create a task for scanning the local data
-	// 	scan_state.current_row = 0;
-	// 	scan_state.base_row = 0;
-	// 	scan_state.max_row = 0;
-	// 	transaction.storage.InitializeScan(this, scan_state.local_state, scan_state.table_filters);
-	// 	state.transaction_local_data = true;
-	// 	return true;
-	// } else {
-	// 	// finished all scans: no more scans remaining
-	// 	return false;
-	// }
+	if (state.current_row_group) {
+		idx_t vector_index;
+		idx_t max_row;
+		if (context.force_parallelism) {
+			vector_index = state.vector_index;
+			max_row = MinValue<idx_t>(state.current_row_group->count, STANDARD_VECTOR_SIZE * state.vector_index + STANDARD_VECTOR_SIZE);
+		} else {
+			vector_index = 0;
+			max_row = state.current_row_group->count;
+		}
+		InitializeScanInRowGroup(scan_state, column_ids, scan_state.table_filters, state.current_row_group, vector_index, max_row);
+		if (context.force_parallelism) {
+			state.vector_index++;
+			if (state.vector_index * STANDARD_VECTOR_SIZE >= state.current_row_group->count) {
+				state.current_row_group = (RowGroup *) state.current_row_group->next.get();
+				state.vector_index = 0;
+			}
+		} else {
+			state.current_row_group = (RowGroup *) state.current_row_group->next.get();
+		}
+		return true;
+	} else if (!state.transaction_local_data) {
+		auto &transaction = Transaction::GetTransaction(context);
+		// create a task for scanning the local data
+		scan_state.row_group_scan_state.max_row = 0;
+		scan_state.max_row = 0;
+		transaction.storage.InitializeScan(this, scan_state.local_state, scan_state.table_filters);
+		state.transaction_local_data = true;
+		return true;
+	} else {
+		// finished all scans: no more scans remaining
+		return false;
+	}
 }
 
 void DataTable::Scan(Transaction &transaction, DataChunk &result, TableScanState &state, vector<column_t> &column_ids) {

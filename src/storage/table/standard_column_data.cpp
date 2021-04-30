@@ -57,6 +57,7 @@ void StandardColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t 
 
 void StandardColumnData::Scan(ColumnScanState &state, Vector &result) {
 	if (!state.initialized) {
+		D_ASSERT(state.current);
 		state.current->InitializeScan(state);
 		state.initialized = true;
 	}
