@@ -23,7 +23,27 @@ SELECT nextval('seq')
 1
 
 query I
+SELECT currval('seq')
+----
+1
+
+query I
+SELECT currval('seq')
+----
+1
+
+query I
 SELECT nextval('seq')
+----
+2
+
+query I
+SELECT currval('seq')
+----
+2
+
+query I
+SELECT currval('seq')
 ----
 2
 
@@ -32,9 +52,14 @@ SELECT nextval('seq'), nextval('seq');
 ----
 3	4
 
-# NULL in nextval
+# NULL in nextval/currval
 query I
 SELECT nextval(NULL)
+----
+NULL
+
+query I
+SELECT currval(NULL)
 ----
 NULL
 
@@ -42,6 +67,13 @@ query I
 SELECT nextval(a) FROM (VALUES ('seq'), (NULL), ('seq')) tbl1(a)
 ----
 5
+NULL
+6
+
+query I
+SELECT currval(a) FROM (VALUES ('seq'), (NULL), ('seq')) tbl1(a)
+----
+6
 NULL
 6
 
@@ -72,6 +104,11 @@ SELECT nextval('seq')
 
 query I
 SELECT nextval('"seq"')
+----
+3
+
+query I
+SELECT currval('"seq"')
 ----
 3
 
@@ -130,9 +167,19 @@ SELECT nextval('seq')
 ----
 2
 
+query I
+SELECT currval('seq')
+----
+2
+
 # max value exceeded: cycle back
 query I
 SELECT nextval('seq')
+----
+1
+
+query I
+SELECT currval('seq')
 ----
 1
 
@@ -149,12 +196,27 @@ SELECT nextval('seq')
 4
 
 query I
+SELECT currval('seq')
+----
+4
+
+query I
 SELECT nextval('seq')
 ----
 5
 
 query I
+SELECT currval('seq')
+----
+5
+
+query I
 SELECT nextval('seq')
+----
+3
+
+query I
+SELECT currval('seq')
 ----
 3
 
@@ -180,8 +242,18 @@ SELECT nextval('seq')
 ----
 0
 
+query I
+SELECT currval('seq')
+----
+0
+
 statement error
 SELECT nextval('seq')
+
+query I
+SELECT currval('seq')
+----
+0
 
 statement ok
 DROP SEQUENCE seq;
@@ -302,9 +374,19 @@ SELECT nextval('a.seq'), nextval('b.seq');
 ----
 1	1
 
+query II
+SELECT currval('a.seq'), currval('b.seq');
+----
+1	1
+
 # with quotes
 query II
 SELECT nextval('"a"."seq"'), nextval('"b".seq');
+----
+2	2
+
+query II
+SELECT currval('"a"."seq"'), currval('"b".seq');
 ----
 2	2
 
@@ -364,9 +446,21 @@ SELECT s, nextval('seq') FROM strings
 seq	1
 seq2	2
 
+query TI
+SELECT s, currval('seq') FROM strings
+----
+seq	2
+seq2	2
+
 # we can also use the strings from the table as input to the sequence
 query TI
 SELECT s, nextval(s) FROM strings
+----
+seq	3
+seq2	1
+
+query TI
+SELECT s, currval(s) FROM strings
 ----
 seq	3
 seq2	1
@@ -378,3 +472,9 @@ INSERT INTO strings VALUES ('nonexistant_seq')
 statement error
 SELECT s, nextval(s) FROM strings
 
+# currval causes error for new sequence
+statement ok
+CREATE SEQUENCE fresh;
+
+statement error
+select currval('fresh');

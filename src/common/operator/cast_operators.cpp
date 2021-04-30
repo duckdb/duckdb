@@ -1394,6 +1394,67 @@ string_t CastToBlob::Operation(string_t input, Vector &vector) {
 }
 
 //===--------------------------------------------------------------------===//
+// Cast To Date
+//===--------------------------------------------------------------------===//
+template <>
+bool TryCast::Operation(string_t input, date_t &result, bool strict) {
+	idx_t pos;
+	return Date::TryConvertDate(input.GetDataUnsafe(), input.GetSize(), pos, result, strict);
+}
+
+template <>
+date_t StrictCast::Operation(string_t input) {
+	return TryStrictCastString<date_t>(input);
+}
+
+template <>
+date_t Cast::Operation(string_t input) {
+	return TryCastString<date_t>(input);
+}
+
+//===--------------------------------------------------------------------===//
+// Cast To Time
+//===--------------------------------------------------------------------===//
+template <>
+bool TryCast::Operation(string_t input, dtime_t &result, bool strict) {
+	idx_t pos;
+	return Time::TryConvertTime(input.GetDataUnsafe(), input.GetSize(), pos, result, strict);
+}
+
+template <>
+dtime_t StrictCast::Operation(string_t input) {
+	return TryStrictCastString<dtime_t>(input);
+}
+
+template <>
+dtime_t Cast::Operation(string_t input) {
+	return TryCastString<dtime_t>(input);
+}
+
+//===--------------------------------------------------------------------===//
+// Cast To Timestamp
+//===--------------------------------------------------------------------===//
+template <>
+bool TryCast::Operation(string_t input, timestamp_t &result, bool strict) {
+	try {
+		result = Timestamp::FromCString(input.GetDataUnsafe(), input.GetSize());
+		return true;
+	} catch (const ConversionException &) {
+		return false;
+	}
+}
+
+template <>
+timestamp_t StrictCast::Operation(string_t input) {
+	return TryStrictCastString<timestamp_t>(input);
+}
+
+template <>
+timestamp_t Cast::Operation(string_t input) {
+	return Timestamp::FromCString(input.GetDataUnsafe(), input.GetSize());
+}
+
+//===--------------------------------------------------------------------===//
 // Cast From Interval
 //===--------------------------------------------------------------------===//
 template <>
@@ -1667,6 +1728,30 @@ bool TryCast::Operation(hugeint_t input, int32_t &result, bool strict) {
 }
 
 template <>
+bool TryCast::Operation(hugeint_t input, date_t &result, bool strict) {
+	int32_t days;
+	auto success = Hugeint::TryCast<int32_t>(input, days);
+	result = date_t(days);
+	return success;
+}
+
+template <>
+bool TryCast::Operation(hugeint_t input, dtime_t &result, bool strict) {
+	int64_t micros;
+	auto success = Hugeint::TryCast<int64_t>(input, micros);
+	result = dtime_t(micros);
+	return success;
+}
+
+template <>
+bool TryCast::Operation(hugeint_t input, timestamp_t &result, bool strict) {
+	int64_t micros;
+	auto success = Hugeint::TryCast<int64_t>(input, micros);
+	result = timestamp_t(micros);
+	return success;
+}
+
+template <>
 bool TryCast::Operation(hugeint_t input, int64_t &result, bool strict) {
 	return Hugeint::TryCast<int64_t>(input, result);
 }
@@ -1759,6 +1844,21 @@ float Cast::Operation(hugeint_t input) {
 template <>
 double Cast::Operation(hugeint_t input) {
 	return HugeintCastToNumeric<double>(input);
+}
+
+template <>
+date_t Cast::Operation(hugeint_t input) {
+	return date_t(HugeintCastToNumeric<int32_t>(input));
+}
+
+template <>
+dtime_t Cast::Operation(hugeint_t input) {
+	return dtime_t(HugeintCastToNumeric<int64_t>(input));
+}
+
+template <>
+timestamp_t Cast::Operation(hugeint_t input) {
+	return timestamp_t(HugeintCastToNumeric<int64_t>(input));
 }
 
 template <>

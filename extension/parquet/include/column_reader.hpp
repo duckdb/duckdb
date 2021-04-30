@@ -19,13 +19,13 @@
 
 namespace duckdb {
 
-using apache::thrift::protocol::TProtocol;
+using duckdb_apache::thrift::protocol::TProtocol;
 
-using parquet::format::ColumnChunk;
-using parquet::format::FieldRepetitionType;
-using parquet::format::PageHeader;
-using parquet::format::SchemaElement;
-using parquet::format::Type;
+using duckdb_parquet::format::ColumnChunk;
+using duckdb_parquet::format::FieldRepetitionType;
+using duckdb_parquet::format::PageHeader;
+using duckdb_parquet::format::SchemaElement;
+using duckdb_parquet::format::Type;
 
 typedef std::bitset<STANDARD_VECTOR_SIZE> parquet_filter_t;
 
@@ -135,9 +135,9 @@ private:
 	void PrepareDataPage(PageHeader &page_hdr);
 
 	LogicalType type;
-	const parquet::format::ColumnChunk *chunk;
+	const duckdb_parquet::format::ColumnChunk *chunk;
 
-	apache::thrift::protocol::TProtocol *protocol;
+	duckdb_apache::thrift::protocol::TProtocol *protocol;
 	idx_t page_rows_available;
 	idx_t group_rows_available;
 	idx_t chunk_read_offset;

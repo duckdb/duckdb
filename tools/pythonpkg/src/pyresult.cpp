@@ -105,7 +105,7 @@ py::object DuckDBPyResult::Fetchone() {
 		case LogicalTypeId::TIMESTAMP_NS:
 		case LogicalTypeId::TIMESTAMP_SEC: {
 			D_ASSERT(result->types[col_idx].InternalType() == PhysicalType::INT64);
-			auto timestamp = val.GetValueUnsafe<int64_t>();
+			auto timestamp = val.GetValueUnsafe<timestamp_t>();
 			if (result->types[col_idx].id() == LogicalTypeId::TIMESTAMP_MS) {
 				timestamp = Timestamp::FromEpochMs(timestamp);
 			} else if (result->types[col_idx].id() == LogicalTypeId::TIMESTAMP_NS) {
@@ -126,7 +126,7 @@ py::object DuckDBPyResult::Fetchone() {
 			D_ASSERT(result->types[col_idx].InternalType() == PhysicalType::INT64);
 
 			int32_t hour, min, sec, microsec;
-			auto time = val.GetValueUnsafe<int64_t>();
+			auto time = val.GetValueUnsafe<dtime_t>();
 			duckdb::Time::Convert(time, hour, min, sec, microsec);
 			res[col_idx] = PyTime_FromTime(hour, min, sec, microsec);
 			break;
@@ -134,7 +134,7 @@ py::object DuckDBPyResult::Fetchone() {
 		case LogicalTypeId::DATE: {
 			D_ASSERT(result->types[col_idx].InternalType() == PhysicalType::INT32);
 
-			auto date = val.GetValueUnsafe<int32_t>();
+			auto date = val.GetValueUnsafe<date_t>();
 			int32_t year, month, day;
 			duckdb::Date::Convert(date, year, month, day);
 			res[col_idx] = PyDate_FromDate(year, month, day);

@@ -8,11 +8,12 @@
 
 #pragma once
 
-#include "duckdb/execution/physical_sink.hpp"
-#include "duckdb/parallel/parallel_state.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/execution/physical_sink.hpp"
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/parallel/parallel_state.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
+
 #include <atomic>
 
 namespace duckdb {
@@ -75,7 +76,7 @@ public:
 	//! The current threads working on the pipeline
 	std::atomic<idx_t> finished_tasks;
 	//! The maximum amount of threads that can work on the pipeline
-	idx_t total_tasks;
+	std::atomic<idx_t> total_tasks;
 
 private:
 	//! The child from which to pull chunks

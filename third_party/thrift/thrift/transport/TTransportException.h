@@ -24,7 +24,7 @@
 #include <string>
 #include "thrift/Thrift.h"
 
-namespace apache {
+namespace duckdb_apache {
 namespace thrift {
 namespace transport {
 
@@ -36,7 +36,7 @@ namespace transport {
  * pipes etc.
  *
  */
-class TTransportException : public apache::thrift::TException {
+class TTransportException : public duckdb_apache::thrift::TException {
 public:
   /**
    * Error codes for the various types of exceptions.
@@ -52,18 +52,18 @@ public:
     INTERNAL_ERROR = 7
   };
 
-  TTransportException() : apache::thrift::TException(), type_(UNKNOWN) {}
+  TTransportException() : duckdb_apache::thrift::TException(), type_(UNKNOWN) {}
 
-  TTransportException(TTransportExceptionType type) : apache::thrift::TException(), type_(type) {}
+  TTransportException(TTransportExceptionType type) : duckdb_apache::thrift::TException(), type_(type) {}
 
   TTransportException(const std::string& message)
-    : apache::thrift::TException(message), type_(UNKNOWN) {}
+    : duckdb_apache::thrift::TException(message), type_(UNKNOWN) {}
 
   TTransportException(TTransportExceptionType type, const std::string& message)
-    : apache::thrift::TException(message), type_(type) {}
+    : duckdb_apache::thrift::TException(message), type_(type) {}
 
   TTransportException(TTransportExceptionType type, const std::string& message, int errno_copy)
-    : apache::thrift::TException(message), type_(type) {}
+    : duckdb_apache::thrift::TException(message), type_(type) {}
 
   ~TTransportException() noexcept override = default;
 
@@ -101,6 +101,6 @@ protected:
 
 }
 }
-} // apache::thrift::transport
+} // duckdb_apache::thrift::transport
 
 #endif // #ifndef _THRIFT_TRANSPORT_TTRANSPORTEXCEPTION_H_

@@ -4,6 +4,7 @@ namespace duckdb {
 
 void BuiltinFunctions::RegisterSequenceFunctions() {
 	Register<NextvalFun>();
+	Register<CurrvalFun>();
 }
 
 } // namespace duckdb

@@ -307,7 +307,7 @@ void DataChunk::ToArrowArray(ArrowArray *out_array) {
 				auto source_ptr = FlatVector::GetData<dtime_t>(vector);
 				auto target_ptr = (uint32_t *)child.buffers[1];
 				for (idx_t row_idx = 0; row_idx < size(); row_idx++) {
-					target_ptr[row_idx] = uint32_t(source_ptr[row_idx] / 1000);
+					target_ptr[row_idx] = uint32_t(source_ptr[row_idx].micros / 1000);
 				}
 				break;
 			}

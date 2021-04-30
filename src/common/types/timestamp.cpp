@@ -11,6 +11,8 @@
 
 namespace duckdb {
 
+static_assert(sizeof(timestamp_t) == sizeof(int64_t), "timestamp_t was padded");
+
 // timestamp/datetime uses 64 bits, high 32 bits for date and low 32 bits for time
 // string format is YYYY-MM-DDThh:mm:ssZ
 // T may be a space
@@ -27,7 +29,7 @@ timestamp_t Timestamp::FromCString(const char *str, idx_t len) {
 	}
 	if (pos == len) {
 		// no time: only a date
-		return Timestamp::FromDatetime(date, 0);
+		return Timestamp::FromDatetime(date, dtime_t(0));
 	}
 	// try to parse a time field
 	if (str[pos] == ' ' || str[pos] == 'T') {
@@ -124,21 +126,21 @@ string Timestamp::ToString(timestamp_t timestamp) {
 }
 
 date_t Timestamp::GetDate(timestamp_t timestamp) {
-	return (timestamp + (timestamp < 0)) / Interval::MICROS_PER_DAY - (timestamp < 0);
+	return date_t((timestamp.micros + (timestamp.micros < 0)) / Interval::MICROS_PER_DAY - (timestamp.micros < 0));
 }
 
 dtime_t Timestamp::GetTime(timestamp_t timestamp) {
 	date_t date = Timestamp::GetDate(timestamp);
-	return timestamp - (int64_t(date) * int64_t(Interval::MICROS_PER_DAY));
+	return dtime_t(timestamp.micros - (int64_t(date.days) * int64_t(Interval::MICROS_PER_DAY)));
 }
 
 timestamp_t Timestamp::FromDatetime(date_t date, dtime_t time) {
-	return date * Interval::MICROS_PER_DAY + time;
+	return timestamp_t(date.days * Interval::MICROS_PER_DAY + time.micros);
 }
 
 void Timestamp::Convert(timestamp_t timestamp, date_t &out_date, dtime_t &out_time) {
 	out_date = GetDate(timestamp);
-	out_time = timestamp - (int64_t(out_date) * int64_t(Interval::MICROS_PER_DAY));
+	out_time = dtime_t(timestamp.micros - (int64_t(out_date.days) * int64_t(Interval::MICROS_PER_DAY)));
 	D_ASSERT(timestamp == Timestamp::FromDatetime(out_date, out_time));
 }
 
@@ -153,7 +155,7 @@ timestamp_t Timestamp::FromEpochSeconds(int64_t sec) {
 	if (max_int64 / Interval::MICROS_PER_MSEC < sec) {
 		throw ConversionException("Could not convert Timestamp(S) to Timestamp(US)");
 	}
-	return sec * Interval::MICROS_PER_SEC;
+	return timestamp_t(sec * Interval::MICROS_PER_SEC);
 }
 
 timestamp_t Timestamp::FromEpochMs(int64_t ms) {
@@ -161,27 +163,27 @@ timestamp_t Timestamp::FromEpochMs(int64_t ms) {
 	if (max_int64 / Interval::MICROS_PER_MSEC < ms) {
 		throw ConversionException("Could not convert Timestamp(MS) to Timestamp(US)");
 	}
-	return ms * Interval::MICROS_PER_MSEC;
+	return timestamp_t(ms * Interval::MICROS_PER_MSEC);
 }
 
 timestamp_t Timestamp::FromEpochMicroSeconds(int64_t micros) {
-	return micros;
+	return timestamp_t(micros);
 }
 
 timestamp_t Timestamp::FromEpochNanoSeconds(int64_t ns) {
-	return ns / 1000;
+	return timestamp_t(ns / 1000);
 }
 
 int64_t Timestamp::GetEpochSeconds(timestamp_t timestamp) {
-	return timestamp / Interval::MICROS_PER_SEC;
+	return timestamp.micros / Interval::MICROS_PER_SEC;
 }
 
 int64_t Timestamp::GetEpochMs(timestamp_t timestamp) {
-	return timestamp / Interval::MICROS_PER_MSEC;
+	return timestamp.micros / Interval::MICROS_PER_MSEC;
 }
 
 int64_t Timestamp::GetEpochMicroSeconds(timestamp_t timestamp) {
-	return timestamp;
+	return timestamp.micros;
 }
 
 int64_t Timestamp::GetEpochNanoSeconds(timestamp_t timestamp) {
@@ -189,7 +191,7 @@ int64_t Timestamp::GetEpochNanoSeconds(timestamp_t timestamp) {
 	if (max_int64 / 1000 < timestamp) {
 		throw ConversionException("Could not convert Timestamp(US) to Timestamp(NS)");
 	}
-	return timestamp * 1000;
+	return timestamp.micros * 1000;
 }
 
 } // namespace duckdb
