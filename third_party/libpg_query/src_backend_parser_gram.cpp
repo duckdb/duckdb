@@ -20364,7 +20364,7 @@ yyreduce:
   case 781:
 #line 2082 "third_party/libpg_query/grammar/statements/select.y"
     {
-				PGList *func_name = list_make1(makeString("list_value"));
+				PGList *func_name = list_make1(makeString("construct_array"));
 				PGFuncCall *n = makeFuncCall(func_name, (yyvsp[(3) - (4)].list), (yylsp[(1) - (4)]));
 				(yyval.node) = (PGNode *) n;
 			;}
