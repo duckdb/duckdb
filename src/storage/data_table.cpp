@@ -253,7 +253,6 @@ void DataTable::InitializeScanInRowGroup(TableScanState &state, const vector<col
 		state.adaptive_filter = make_unique<AdaptiveFilter>(table_filters);
 	}
 	row_group->InitializeScanWithOffset(state.row_group_scan_state, vector_index);
-	state.row_group_scan_state.max_row = max_row;
 }
 
 idx_t DataTable::MaxThreads(ClientContext &context) {
@@ -278,10 +277,10 @@ bool DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState 
 		idx_t max_row;
 		if (context.force_parallelism) {
 			vector_index = state.vector_index;
-			max_row = MinValue<idx_t>(state.current_row_group->count, STANDARD_VECTOR_SIZE * state.vector_index + STANDARD_VECTOR_SIZE);
+			max_row = state.current_row_group->start + MinValue<idx_t>(state.current_row_group->count, STANDARD_VECTOR_SIZE * state.vector_index + STANDARD_VECTOR_SIZE);
 		} else {
 			vector_index = 0;
-			max_row = state.current_row_group->count;
+			max_row = state.current_row_group->start + state.current_row_group->count;
 		}
 		InitializeScanInRowGroup(scan_state, column_ids, scan_state.table_filters, state.current_row_group, vector_index, max_row);
 		if (context.force_parallelism) {
@@ -709,6 +708,7 @@ void DataTable::RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, Vec
 void DataTable::RemoveFromIndexes(Vector &row_identifiers, idx_t count) {
 	D_ASSERT(is_root);
 	auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
+	D_ASSERT(row_ids[0] % STANDARD_VECTOR_SIZE == 0);
 	// create a selection vector from the row_ids
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
 	for (idx_t i = 0; i < count; i++) {
@@ -717,7 +717,7 @@ void DataTable::RemoveFromIndexes(Vector &row_identifiers, idx_t count) {
 
 	// figure out which row_group to fetch from
 	auto row_group = (RowGroup *) row_groups->GetSegment(row_ids[0]);
-	auto row_group_vector_idx = (row_ids[0] - row_group->start) / STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE;
+	auto row_group_vector_idx = (row_ids[0] - row_group->start) / STANDARD_VECTOR_SIZE;
 
 	// now fetch the columns from that row_group
 	// FIXME: we do not need to fetch all columns, only the columns required by the indices!

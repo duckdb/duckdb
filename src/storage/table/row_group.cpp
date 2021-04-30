@@ -33,8 +33,9 @@ void RowGroup::InitializeEmpty(const vector<LogicalType> &types) {
 void RowGroup::InitializeScanWithOffset(RowGroupScanState &state, idx_t vector_offset) {
 	auto &column_ids = state.parent.column_ids;
 	state.row_group = this;
+
 	state.vector_index = vector_offset;
-	state.max_row = this->count;
+	state.max_row = MinValue<idx_t>(this->count, state.parent.max_row - this->start);
 	state.column_scans = unique_ptr<ColumnScanState[]>(new ColumnScanState[column_ids.size()]);
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto column = column_ids[i];
@@ -50,7 +51,7 @@ void RowGroup::InitializeScan(RowGroupScanState &state) {
 	auto &column_ids = state.parent.column_ids;
 	state.row_group = this;
 	state.vector_index = 0;
-	state.max_row = this->count;
+	state.max_row = MinValue<idx_t>(this->count, state.parent.max_row - this->start);
 	state.column_scans = unique_ptr<ColumnScanState[]>(new ColumnScanState[column_ids.size()]);
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto column = column_ids[i];
@@ -381,6 +382,10 @@ void RowGroup::RevertAppend(idx_t row_group_start) {
 	for (idx_t vector_idx = start_vector_idx; vector_idx < RowGroup::ROW_GROUP_VECTOR_COUNT; vector_idx++) {
 		version_info->info[vector_idx].reset();
 	}
+	for(auto &column : columns) {
+		column->RevertAppend(row_group_start);
+	}
+	this->count = MinValue<idx_t>(row_group_start - this->start, this->count);
 }
 
 void RowGroup::InitializeAppend(Transaction &transaction, RowGroupAppendState &append_state, idx_t remaining_append_count) {
