@@ -34,7 +34,7 @@ public:
 	const_data_ptr_t get() const {
 		return pointer;
 	}
-	void reset();
+	void Reset();
 
 private:
 	Allocator &allocator;

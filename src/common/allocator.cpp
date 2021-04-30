@@ -5,10 +5,10 @@ namespace duckdb {
 AllocatedData::AllocatedData(Allocator &allocator, data_ptr_t pointer) : allocator(allocator), pointer(pointer) {
 }
 AllocatedData::~AllocatedData() {
-	reset();
+	Reset();
 }
 
-void AllocatedData::reset() {
+void AllocatedData::Reset() {
 	if (!pointer) {
 		return;
 	}
