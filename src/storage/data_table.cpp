@@ -532,7 +532,7 @@ void DataTable::ScanTableSegment(idx_t row_start, idx_t count, const std::functi
 	InitializeScanWithOffset(state, column_ids, nullptr, row_start_aligned, row_start + count);
 
 	while (true) {
-		throw NotImplementedException("Bla");
+		throw NotImplementedException("ScanTableSegment");
 		idx_t current_row = 0;
 		// idx_t current_row = state.vector_index * STANDARD_VECTOR_SIZE;
 		CreateIndexScan(state, column_ids, chunk, true);

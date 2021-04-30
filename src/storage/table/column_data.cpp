@@ -22,13 +22,13 @@
 namespace duckdb {
 
 ColumnData::ColumnData(Morsel &morsel, LogicalType type, idx_t column_idx, ColumnData *parent)
-    : morsel(morsel), type(move(type)), column_idx(column_idx), parent(parent) {
+    : db(morsel.GetDatabase()), start(morsel.start), type(move(type)), column_idx(column_idx), parent(parent) {
 }
 
 ColumnData::~ColumnData() {}
 
 DatabaseInstance &ColumnData::GetDatabase() const {
-	return morsel.GetDatabase();
+	return db;
 }
 
 const LogicalType &ColumnData::RootType() const {
@@ -116,7 +116,7 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 	lock_guard<mutex> tree_lock(data.node_lock);
 	if (data.nodes.empty()) {
 		// no segments yet, append an empty segment
-		AppendTransientSegment(morsel.start);
+		AppendTransientSegment(start);
 	}
 	auto segment = (ColumnSegment *)data.GetLastSegment();
 	if (segment->segment_type == ColumnSegmentType::PERSISTENT) {

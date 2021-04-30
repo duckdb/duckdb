@@ -53,8 +53,10 @@ public:
 	ColumnData(Morsel &morsel, LogicalType type, idx_t column_idx, ColumnData *parent);
 	virtual ~ColumnData();
 
-	//! The morsel this column chunk belongs to
-	Morsel &morsel;
+	//! The database instance this column belongs to
+	DatabaseInstance &db;
+	//! The start row
+	idx_t start;
 	//! The type of the column
 	LogicalType type;
 	//! The column index of the column
