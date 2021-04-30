@@ -249,18 +249,40 @@ void PhysicalHashJoin::ProbeHashTable(ExecutionContext &context, DataChunk &chun
 	} while (chunk.size() == 0);
 }
 
-bool PhysicalHashJoin::IsPerfectHashJoin(ExecutionContext &context, DataChunk &chunk,
+bool PhysicalHashJoin::IsPerfectHashJoin(ExecutionContext &context, DataChunk &result,
                                          PhysicalHashJoinState *physical_state) {
+	// We only do this optimization on small build sides < 10k tuples
 	if (!perfect_join_state.is_build_small)
 		return false;
-	auto state = reinterpret_cast<HashJoinGlobalState *>(sink_state.get());
-	auto hash_table_ptr = state->hash_table.get();
+	//
+	auto join_global_state = reinterpret_cast<HashJoinGlobalState *>(sink_state.get());
+	auto hash_table_ptr = join_global_state->hash_table.get();
+	auto range_build = perfect_join_state.maximum - perfect_join_state.minimum;
+
 	// fetch the chunk to join
 	children[0]->GetChunk(context, physical_state->child_chunk, physical_state->child_state.get());
-	hash_table_ptr->const SelectionVector *current_sel;
-	BinaryExecutor::Execute<timestamp_t, timestamp_t, interval_t>(
-	    input.data[0], input.data[1], result, input.size(),
-	    [&](TT input2) { return Interval::GetDifference(input1, input2); });
+	// fetch the  join keys
+	physical_state->probe_executor.Execute(physical_state->child_chunk, physical_state->join_keys);
+	// gets the data and selection vector
+	auto keys_data = physical_state->join_keys.Orrify();
+	auto probe_sel_vector = keys_data[0].sel;
+	// go trough the join_keys and fill the selection vector with the matches
+	SelectionVector *matches;
+
+	/* 	size_t sel_idx {0};
+	    for (size_t idx = 0; idx != physical_state->join_keys.size(); ++idx) {
+	        auto idx_value = join_keys->GetValue(0, idx) - perfect_join_state.minimum;
+	        if (idx_value > 0 && idx_value <= range_build) {
+	            matches->set_index(sel_idx++, idx);
+	        }
+	    } */
+	// get the selection vector with matches
+
+	// slice for the left side and copy to the right side
+
+	/* 	BinaryExecutor::Execute<timestamp_t, timestamp_t, interval_t>(
+	        input.data[0], input.data[1], result, input.size(),
+	        [&](TT input2) { return Interval::GetDifference(input1, input2); }); */
 	// check whether there are duplicates
 	// fetch left side
 	// fetch right side and go throw the indexes producing a selection vector
