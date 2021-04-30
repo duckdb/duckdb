@@ -25,6 +25,7 @@ struct JoinHTScanState {
 
 	idx_t position;
 	idx_t block_position;
+	mutex lock;
 };
 
 //! JoinHashTable is a linear probing HT that is used for computing joins
