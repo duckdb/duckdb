@@ -46,7 +46,7 @@ ColumnReader::ColumnReader(ParquetReader &reader, LogicalType type_p, const Sche
 	none_filter.none();
 	dummy_define.resize(reader.allocator, STANDARD_VECTOR_SIZE);
 	dummy_repeat.resize(reader.allocator, STANDARD_VECTOR_SIZE);
-};
+}
 
 ColumnReader::~ColumnReader() {
 }
