@@ -649,7 +649,6 @@ bool LogicalType::IsMoreGenericThan(LogicalType &other) const {
 		default:
 			return false;
 		}
-		return false;
 	case LogicalTypeId::DOUBLE:
 		switch (other.id()) {
 		case LogicalTypeId::BOOLEAN:
@@ -662,7 +661,6 @@ bool LogicalType::IsMoreGenericThan(LogicalType &other) const {
 		default:
 			return false;
 		}
-		return false;
 	case LogicalTypeId::DATE:
 		return false;
 	case LogicalTypeId::TIMESTAMP: {
@@ -677,6 +675,9 @@ bool LogicalType::IsMoreGenericThan(LogicalType &other) const {
 	}
 	case LogicalTypeId::TIMESTAMP_NS: {
 		switch (other.id()) {
+		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::TIMESTAMP_MS:
+		case LogicalTypeId::TIMESTAMP_SEC:
 		case LogicalTypeId::TIME:
 		case LogicalTypeId::DATE:
 			return true;
@@ -686,8 +687,8 @@ bool LogicalType::IsMoreGenericThan(LogicalType &other) const {
 	}
 	case LogicalTypeId::TIMESTAMP_MS: {
 		switch (other.id()) {
+		case LogicalTypeId::TIMESTAMP_SEC:
 		case LogicalTypeId::TIMESTAMP:
-		case LogicalTypeId::TIMESTAMP_NS:
 		case LogicalTypeId::TIME:
 		case LogicalTypeId::DATE:
 			return true;
@@ -697,9 +698,6 @@ bool LogicalType::IsMoreGenericThan(LogicalType &other) const {
 	}
 	case LogicalTypeId::TIMESTAMP_SEC: {
 		switch (other.id()) {
-		case LogicalTypeId::TIMESTAMP:
-		case LogicalTypeId::TIMESTAMP_NS:
-		case LogicalTypeId::TIMESTAMP_MS:
 		case LogicalTypeId::TIME:
 		case LogicalTypeId::DATE:
 			return true;
@@ -713,8 +711,6 @@ bool LogicalType::IsMoreGenericThan(LogicalType &other) const {
 	default:
 		return false;
 	}
-
-	return true;
 }
 
 LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalType &right) {
