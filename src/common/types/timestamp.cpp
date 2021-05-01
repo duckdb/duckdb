@@ -6,7 +6,7 @@
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/chrono.hpp"
-
+#include "duckdb/common/operator/multiply.hpp"
 #include <ctime>
 
 namespace duckdb {
