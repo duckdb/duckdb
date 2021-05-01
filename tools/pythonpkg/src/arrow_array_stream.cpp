@@ -7,8 +7,10 @@ PythonTableArrowArrayStream::PythonTableArrowArrayStream(const py::object &arrow
                                                          PythonTableArrowArrayStreamFactory *factory)
     : arrow_table(arrow_table), factory(factory) {
 	InitializeFunctionPointers(&stream);
-	stream.private_data = this;
+	py::gil_scoped_acquire acquire;
 	batches = arrow_table.attr("to_batches")();
+	stream.number_of_batches = py::len(batches);
+	stream.private_data = this;
 }
 
 void PythonTableArrowArrayStream::InitializeFunctionPointers(ArrowArrayStream *stream) {

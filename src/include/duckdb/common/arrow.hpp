@@ -53,6 +53,7 @@ struct ArrowArray {
 
 // EXPERIMENTAL
 struct ArrowArrayStream {
+    uint64_t number_of_batches =0;
 	// Callback to get the stream type
 	// (will be the same for all arrays in the stream).
 	// Return value: 0 if successful, an `errno`-compatible error code otherwise.

@@ -52,6 +52,14 @@ struct ArrowScanFunctionData : public TableFunctionData {
 	}
 };
 
+struct ParallelArrowScanState : public ParallelState {
+	ParallelArrowScanState() : position(0) {
+	}
+
+	std::mutex lock;
+	idx_t position;
+};
+
 static unique_ptr<FunctionData> ArrowScanBind(ClientContext &context, vector<Value> &inputs,
                                               unordered_map<string, Value> &named_parameters,
                                               vector<LogicalType> &input_table_types, vector<string> &input_table_names,
@@ -147,37 +155,8 @@ static unique_ptr<FunctionOperatorData> ArrowScanInit(ClientContext &context, co
 	return make_unique<FunctionOperatorData>();
 }
 
-static void ArrowScanFunction(ClientContext &context, const FunctionData *bind_data,
-                              FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
-	auto &data = (ArrowScanFunctionData &)*bind_data;
-	if (!data.stream->release) {
-		// no more chunks
-		return;
-	}
-
-	// have we run out of data on the current chunk? move to next one
-	if (data.chunk_offset >= (idx_t)data.current_chunk_root.length) {
-		data.chunk_offset = 0;
-		data.ReleaseArray();
-		if (data.stream->get_next(data.stream, &data.current_chunk_root)) {
-			throw InvalidInputException("arrow_scan: get_next failed(): %s",
-			                            string(data.stream->get_last_error(data.stream)));
-		}
-	}
-
-	// have we run out of chunks? we done
-	if (!data.current_chunk_root.release) {
-		data.stream->release(data.stream);
-		return;
-	}
-
-	if ((idx_t)data.current_chunk_root.n_children != output.ColumnCount()) {
-		throw InvalidInputException("arrow_scan: array column count mismatch");
-	}
-
-	output.SetCardinality(MinValue<int64_t>(STANDARD_VECTOR_SIZE, data.current_chunk_root.length - data.chunk_offset));
-
-	for (idx_t col_idx = 0; col_idx < output.ColumnCount(); col_idx++) {
+void ArrowToDuckDB(ArrowScanFunctionData & data, DataChunk &output) {
+    	for (idx_t col_idx = 0; col_idx < output.ColumnCount(); col_idx++) {
 		auto &array = *data.current_chunk_root.children[col_idx];
 		if (!array.release) {
 			throw InvalidInputException("arrow_scan: released array passed");
@@ -196,10 +175,10 @@ static void ArrowScanFunction(ClientContext &context, const FunctionData *bind_d
 
 			mask.EnsureWritable();
 			if (bit_offset % 8 == 0) {
-				// just memcpy nullmask
+				//! just memcpy nullmask
 				memcpy((void *)mask.GetData(), (uint8_t *)array.buffers[0] + bit_offset / 8, n_bitmask_bytes);
 			} else {
-				// need to re-align nullmask :/
+				//! need to re-align nullmask
 				bitset<STANDARD_VECTOR_SIZE + 8> temp_nullmask;
 				memcpy(&temp_nullmask, (uint8_t *)array.buffers[0] + bit_offset / 8, n_bitmask_bytes + 1);
 
@@ -207,8 +186,7 @@ static void ArrowScanFunction(ClientContext &context, const FunctionData *bind_d
 				memcpy((void *)mask.GetData(), (data_ptr_t)&temp_nullmask, n_bitmask_bytes);
 			}
 		}
-
-		switch (output.data[col_idx].GetType().id()) {
+switch (output.data[col_idx].GetType().id()) {
 		case LogicalTypeId::SQLNULL:
 			output.data[col_idx].Reference(Value());
 			break;
@@ -276,17 +254,110 @@ static void ArrowScanFunction(ClientContext &context, const FunctionData *bind_d
 			throw std::runtime_error("Unsupported type " + output.data[col_idx].GetType().ToString());
 		}
 	}
+
+
+}
+
+static void ArrowScanFunction(ClientContext &context, const FunctionData *bind_data,
+                              FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+	auto &data = (ArrowScanFunctionData &)*bind_data;
+	if (!data.stream->release) {
+		// no more chunks
+		return;
+	}
+
+	// have we run out of data on the current chunk? move to next one
+	if (data.chunk_offset >= (idx_t)data.current_chunk_root.length) {
+		data.chunk_offset = 0;
+		data.ReleaseArray();
+		if (data.stream->get_next(data.stream, &data.current_chunk_root)) {
+			throw InvalidInputException("arrow_scan: get_next failed(): %s",
+			                            string(data.stream->get_last_error(data.stream)));
+		}
+	}
+
+	// have we run out of chunks? we done
+	if (!data.current_chunk_root.release) {
+		data.stream->release(data.stream);
+		return;
+	}
+
+	if ((idx_t)data.current_chunk_root.n_children != output.ColumnCount()) {
+		throw InvalidInputException("arrow_scan: array column count mismatch");
+	}
+
+	output.SetCardinality(MinValue<int64_t>(STANDARD_VECTOR_SIZE, data.current_chunk_root.length - data.chunk_offset));
+	ArrowToDuckDB(data,output);
 	output.Verify();
 	data.chunk_offset += output.size();
 }
 
+unique_ptr<NodeStatistics> ArrowScanCardinality(ClientContext &context,
+                                                                     const FunctionData *bind_data) {
+	auto &data = (ArrowScanFunctionData &)*bind_data;
+	auto max_rows = data.stream->number_of_batches*data.current_chunk_root.length;
+	return make_unique<NodeStatistics>(max_rows, max_rows);
+}
+
+idx_t ArrowScanMaxThreads(ClientContext &context, const FunctionData *bind_data_p) {
+	auto &data = (const ArrowScanFunctionData &)*bind_data_p;
+	return data.stream->number_of_batches;
+}
+
+unique_ptr<ParallelState> ArrowScanInitParallelState(ClientContext &context,
+                                                                          const FunctionData *bind_data_p) {
+	return make_unique<ParallelArrowScanState>();
+}
+
+unique_ptr<FunctionOperatorData> ArrowScanParallelInit(ClientContext &context,
+                                                                            const FunctionData *bind_data_p,
+                                                                            ParallelState *state,
+                                                                            vector<column_t> &column_ids,
+                                                                            TableFilterCollection *filters) {
+    auto &data = (ArrowScanFunctionData &)*bind_data_p;
+	if (data.is_consumed) {
+		throw NotImplementedException("FIXME: Arrow streams can only be read once");
+	}
+	data.is_consumed = true;
+	return make_unique<FunctionOperatorData>();
+//	auto result = make_unique<ArrowScanState>(0, 0);
+//	result->column_ids = column_ids;
+//	if (!ArrowScanParallelStateNext(context, bind_data_p, result.get(), state)) {
+//		return nullptr;
+//	}
+//	return move(result);
+}
+
+bool ArrowScanParallelStateNext(ClientContext &context, const FunctionData *bind_data_p,
+                                                     FunctionOperatorData *operator_state,
+                                                     ParallelState *parallel_state_p) {
+	auto &bind_data = (const ArrowScanFunctionData &)*bind_data_p;
+	auto &parallel_state = (ParallelArrowScanState &)*parallel_state_p;
+	auto &state = (ArrowScanState &)*operator_state;
+
+	lock_guard<mutex> parallel_lock(parallel_state.lock);
+	if (parallel_state.position >= bind_data.row_count) {
+		return false;
+	}
+	state.start = parallel_state.position;
+	parallel_state.position += PANDAS_PARTITION_COUNT;
+	if (parallel_state.position > bind_data.row_count) {
+		parallel_state.position = bind_data.row_count;
+	}
+	state.end = parallel_state.position;
+	return true;
+}
+
 void ArrowTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunctionSet arrow("arrow_scan");
-
 	arrow.AddFunction(
-	    TableFunction({LogicalType::POINTER, LogicalType::POINTER}, ArrowScanFunction, ArrowScanBind, ArrowScanInit));
+	    TableFunction({LogicalType::POINTER, LogicalType::POINTER}, ArrowScanFunction, ArrowScanBind, ArrowScanInit,
+                      nullptr, nullptr, nullptr, ArrowScanCardinality, nullptr, nullptr, ArrowScanMaxThreads, ArrowScanInitParallelState,
+                      ArrowScanParallelInit,ArrowScanParallelStateNext));
 	set.AddFunction(arrow);
 }
+
+
 
 void BuiltinFunctions::RegisterArrowFunctions() {
 	ArrowTableFunction::RegisterFunction(*this);
