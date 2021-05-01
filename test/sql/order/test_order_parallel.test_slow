@@ -1,0 +1,115 @@
+# name: test/sql/order/test_order_parallel.test_slow
+# description: Test ORDER BY keyword with multiple threads
+# group: [order]
+
+statement ok
+PRAGMA force_parallelism
+
+statement ok
+PRAGMA threads=4
+
+# make sure this does not use too much memory
+statement ok
+PRAGMA memory_limit='50MB'
+
+statement ok
+create table test as (select range i from range(100000));
+
+# all fixed-size
+query T
+select * from test order by i desc;
+----
+100000 values hashing to 6a720b227e361303445c41f7ff4a8109
+
+# fixed size sorting, variable payload
+query T
+select cast(i as varchar) from test order by i desc;
+----
+100000 values hashing to 6a720b227e361303445c41f7ff4a8109
+
+# variable size sorting
+query T
+select i from test order by cast(i as varchar) desc;
+----
+100000 values hashing to 14d85a71bc549aeb80f7e77766a9fc93
+
+# the same, but with large prefix string so ties need to be broken
+query T
+select i from test order by cast(i + 100000000 as varchar) desc;
+----
+100000 values hashing to 6a720b227e361303445c41f7ff4a8109
+
+# complex sort orders, combining var and fixed-size sorting columns
+statement ok
+insert into test values (NULL);
+
+query T
+select * from test order by cast(i as varchar) nulls first
+----
+100001 values hashing to f57dcbb7ed54aa1427f8f0aa71095c66
+
+query T
+select * from test order by i % 10, cast(i as varchar)
+----
+100001 values hashing to 1d264864d6c6bd38863c743d4ad52940
+
+query T
+select * from test order by cast(i % 10 as varchar), i
+----
+100001 values hashing to 6860685f6aa75f5a1ca3c47174b3da65
+
+query T
+select * from test order by cast(i % 100 as varchar), i % 10, cast(i as varchar) nulls first
+----
+100001 values hashing to 483502102d833d8ea7ba404f341598c2
+
+query T
+select * from test order by cast(i % 1000 as varchar), i % 100, cast(i % 10 as varchar), i
+----
+100001 values hashing to 88c6de776107d78460a9f8c9e3644cd8
+
+query T
+select * from test order by i % 100, cast(i % 10 as varchar), cast(i as varchar)
+----
+100001 values hashing to 4074a204486baadfa789fd6a2d8ceb2e
+
+query T
+select * from test order by cast(i % 1000 as varchar), i % 100, i % 10, cast(i as varchar)
+----
+100001 values hashing to f7d8768d3c532caf7db4414cb3b2eea9
+
+# same complex sort orders but with many ties due to the large prefix
+query T
+select * from test order by cast(i + 100000000 as varchar) nulls first
+----
+100001 values hashing to 9642fae1704358551de522343cfbc99e
+
+query T
+select * from test order by i % 10, cast(i + 100000000 as varchar)
+----
+100001 values hashing to 6860685f6aa75f5a1ca3c47174b3da65
+
+query T
+select * from test order by cast(i % 10 + 100000000 as varchar), i
+----
+100001 values hashing to 6860685f6aa75f5a1ca3c47174b3da65
+
+query T
+select * from test order by cast(i % 100 + 100000000 as varchar), i % 10, cast(i + 100000000 as varchar) nulls first
+----
+100001 values hashing to fae9b116ca4c8e280da063f78b28e78f
+
+query T
+select * from test order by cast(i % 1000 + 100000000 as varchar), i % 100, cast(i % 10 + 100000000 as varchar), i
+----
+100001 values hashing to c694f8aa434f0617970c6f3540b20863
+
+query T
+select * from test order by i % 100, cast(i % 10 + 100000000 as varchar), cast(i + 100000000 as varchar)
+----
+100001 values hashing to fae9b116ca4c8e280da063f78b28e78f
+
+query T
+select * from test order by cast(i % 1000 + 100000000 as varchar), i % 100, i % 10, cast(i + 100000000 as varchar)
+----
+100001 values hashing to c694f8aa434f0617970c6f3540b20863

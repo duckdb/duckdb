@@ -869,8 +869,6 @@ void GroupedAggregateHashTable::Partition(vector<GroupedAggregateHashTable *> &p
 		total_count += partition_entry->Size();
 	}
 	D_ASSERT(total_count == entries);
-	// mark the ht as empty so finalizers are not run
-	entries = 0;
 }
 
 idx_t GroupedAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {

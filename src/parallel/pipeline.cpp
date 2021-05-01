@@ -185,12 +185,6 @@ bool Pipeline::ScheduleOperator(PhysicalOperator *op) {
 		auto pstate = get.function.init_parallel_state(executor.context, get.bind_data.get());
 		return LaunchScanTasks(op, max_threads, move(pstate));
 	}
-	case PhysicalOperatorType::ORDER_BY: {
-		auto &ord = (PhysicalOrder &)*op;
-		idx_t max_threads = ord.MaxThreads(executor.context);
-		auto pstate = ord.GetParallelState();
-		return LaunchScanTasks(op, max_threads, move(pstate));
-	}
 	case PhysicalOperatorType::WINDOW: {
 		auto &win = (PhysicalWindow &)*op;
 		idx_t max_threads = win.MaxThreads(executor.context);
