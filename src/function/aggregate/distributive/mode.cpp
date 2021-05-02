@@ -9,7 +9,31 @@
 
 #include "duckdb/common/unordered_map.hpp"
 
+#include <functional>
+
+namespace std {
+
+template <>
+struct hash<duckdb::interval_t> {
+	inline size_t operator()(const duckdb::interval_t &val) const {
+		return hash<int32_t> {}(val.days) ^ hash<int32_t> {}(val.months) ^ hash<int64_t> {}(val.micros);
+	}
+};
+
+template <>
+struct hash<duckdb::hugeint_t> {
+	inline size_t operator()(const duckdb::hugeint_t &val) const {
+		return hash<int64_t> {}(val.upper) ^ hash<int64_t> {}(val.lower);
+	}
+};
+
+}; // namespace std
+
 namespace duckdb {
+
+bool operator==(const interval_t &lhs, const interval_t &rhs) {
+	return lhs.days == rhs.days && lhs.months == rhs.months && lhs.micros == rhs.micros;
+}
 
 template <class KEY_TYPE>
 struct ModeState {
@@ -89,8 +113,11 @@ AggregateFunction GetTypedModeFunction(const LogicalType &type) {
 	                                                   ModeFunction<KEY_TYPE>>(type, type);
 }
 
-AggregateFunction GetModeFunction(const LogicalType &type) {
+AggregateFunction GetModeAggregate(const LogicalType &type) {
 	switch (type.InternalType()) {
+	case PhysicalType::INT8:
+	case PhysicalType::UINT8:
+		return GetTypedModeFunction<uint8_t, uint8_t>(type);
 	case PhysicalType::INT16:
 	case PhysicalType::UINT16:
 		return GetTypedModeFunction<uint16_t, uint16_t>(type);
@@ -100,11 +127,16 @@ AggregateFunction GetModeFunction(const LogicalType &type) {
 	case PhysicalType::INT64:
 	case PhysicalType::UINT64:
 		return GetTypedModeFunction<uint64_t, uint64_t>(type);
+	case PhysicalType::INT128:
+		return GetTypedModeFunction<hugeint_t, hugeint_t>(type);
 
 	case PhysicalType::FLOAT:
 		return GetTypedModeFunction<float, float>(type);
 	case PhysicalType::DOUBLE:
 		return GetTypedModeFunction<double, double>(type);
+
+	case PhysicalType::INTERVAL:
+		return GetTypedModeFunction<interval_t, interval_t>(type);
 
 	case PhysicalType::VARCHAR:
 		return GetTypedModeFunction<string_t, string>(type);
@@ -114,17 +146,33 @@ AggregateFunction GetModeFunction(const LogicalType &type) {
 	}
 }
 
+unique_ptr<FunctionData> BindModeDecimal(ClientContext &context, AggregateFunction &function,
+                                         vector<unique_ptr<Expression>> &arguments) {
+	function = GetModeAggregate(arguments[0]->return_type);
+	function.name = "mode";
+	return nullptr;
+}
+
 void ModeFun::RegisterFunction(BuiltinFunctions &set) {
-	AggregateFunctionSet fun("mode");
-	fun.AddFunction(GetModeFunction(LogicalType::USMALLINT));
-	fun.AddFunction(GetModeFunction(LogicalType::UINTEGER));
-	fun.AddFunction(GetModeFunction(LogicalType::UBIGINT));
-	fun.AddFunction(GetModeFunction(LogicalType::FLOAT));
-	fun.AddFunction(GetModeFunction(LogicalType::SMALLINT));
-	fun.AddFunction(GetModeFunction(LogicalType::INTEGER));
-	fun.AddFunction(GetModeFunction(LogicalType::BIGINT));
-	fun.AddFunction(GetModeFunction(LogicalType::DOUBLE));
-	fun.AddFunction(GetModeFunction(LogicalType::VARCHAR));
-	set.AddFunction(fun);
+	const vector<LogicalType> TEMPORAL = {LogicalType::DATE, LogicalType::TIMESTAMP, LogicalType::TIME,
+	                                      LogicalType::INTERVAL};
+
+	AggregateFunctionSet mode("mode");
+	mode.AddFunction(AggregateFunction({LogicalType::DECIMAL}, LogicalType::DECIMAL, nullptr, nullptr, nullptr, nullptr,
+	                                   nullptr, nullptr, BindModeDecimal));
+
+	for (const auto &type : LogicalType::NUMERIC) {
+		if (type.id() != LogicalTypeId::DECIMAL) {
+			mode.AddFunction(GetModeAggregate(type));
+		}
+	}
+
+	for (const auto &type : TEMPORAL) {
+		mode.AddFunction(GetModeAggregate(type));
+	}
+
+	mode.AddFunction(GetModeAggregate(LogicalType::VARCHAR));
+
+	set.AddFunction(mode);
 }
 } // namespace duckdb
