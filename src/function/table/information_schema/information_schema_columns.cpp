@@ -264,6 +264,9 @@ void ColumnHelper::WriteColumns(idx_t start_index, idx_t start_col, idx_t end_co
 		case LogicalTypeId::INTERVAL:
 		case LogicalTypeId::TIME:
 		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::TIMESTAMP_NS:
+		case LogicalTypeId::TIMESTAMP_MS:
+		case LogicalTypeId::TIMESTAMP_SEC:
 			// No fractional seconds are currently supported in DuckDB
 			datetime_precision = Value::INTEGER(0);
 			break;

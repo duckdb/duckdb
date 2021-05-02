@@ -187,7 +187,7 @@ void Appender::Append(dtime_t value) {
 
 template <>
 void Appender::Append(timestamp_t value) {
-	AppendValueInternal<int64_t>(value.micros);
+	AppendValueInternal<int64_t>(value.value);
 }
 
 template <>
