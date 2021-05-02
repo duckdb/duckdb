@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/types/chunk_collection.hpp"
+#include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/execution/join_hashtable.hpp"
 #include "duckdb/execution/operator/join/physical_comparison_join.hpp"
 #include "duckdb/execution/physical_operator.hpp"
@@ -65,7 +66,7 @@ public:
 
 	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
-	bool IsPerfectHashJoin(ExecutionContext &context, DataChunk &chunk, PhysicalHashJoinState *state);
+	bool ProbePerfectHashTable(ExecutionContext &context, DataChunk &chunk, PhysicalHashJoinState *state);
 
 private:
 	void ProbeHashTable(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p);

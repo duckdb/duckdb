@@ -173,7 +173,7 @@ void PhysicalHashJoin::GetChunkInternal(ExecutionContext &context, DataChunk &ch
 		return;
 	}
 	// We first try a probe with a perfect hash table, otherwise we do the normal probe
-	if (IsInnerJoin(join_type) && IsPerfectHashJoin(context, chunk, state)) {
+	if (IsInnerJoin(join_type) && ProbePerfectHashTable(context, chunk, state)) {
 		return;
 	}
 	do {
@@ -249,34 +249,44 @@ void PhysicalHashJoin::ProbeHashTable(ExecutionContext &context, DataChunk &chun
 	} while (chunk.size() == 0);
 }
 
-bool PhysicalHashJoin::IsPerfectHashJoin(ExecutionContext &context, DataChunk &result,
-                                         PhysicalHashJoinState *physical_state) {
+bool PhysicalHashJoin::ProbePerfectHashTable(ExecutionContext &context, DataChunk &result,
+                                             PhysicalHashJoinState *physical_state) {
 	// We only do this optimization on small build sides < 10k tuples
 	if (!perfect_join_state.is_build_small)
 		return false;
 	//
 	auto join_global_state = reinterpret_cast<HashJoinGlobalState *>(sink_state.get());
 	auto hash_table_ptr = join_global_state->hash_table.get();
-	auto range_build = perfect_join_state.maximum - perfect_join_state.minimum;
 
 	// fetch the chunk to join
 	children[0]->GetChunk(context, physical_state->child_chunk, physical_state->child_state.get());
 	// fetch the  join keys
 	physical_state->probe_executor.Execute(physical_state->child_chunk, physical_state->join_keys);
 	// gets the data and selection vector
-	auto keys_data = physical_state->join_keys.Orrify();
-	auto probe_sel_vector = keys_data[0].sel;
+	VectorData keys_data;
+	auto keys_size = physical_state->join_keys.size();
+	auto keys_vec = &physical_state->join_keys.data[0];
+	keys_vec->Orrify(keys_size, keys_data);
+	auto probe_sel_vector = keys_data.sel;
+	auto ldata = (int32_t *)keys_data.data;
 	// go trough the join_keys and fill the selection vector with the matches
-	SelectionVector *matches;
-
-	/* 	size_t sel_idx {0};
-	    for (size_t idx = 0; idx != physical_state->join_keys.size(); ++idx) {
-	        auto idx_value = join_keys->GetValue(0, idx) - perfect_join_state.minimum;
-	        if (idx_value > 0 && idx_value <= range_build) {
-	            matches->set_index(sel_idx++, idx);
-	        }
+	SelectionVector matches(STANDARD_VECTOR_SIZE);
+	size_t sel_idx {0};
+	auto min_value = perfect_join_state.minimum.GetValue<int32_t>();
+	auto max_value = perfect_join_state.maximum.GetValue<int32_t>();
+	for (idx_t idx = 0; idx != physical_state->join_keys.size(); ++idx) {
+		// if there is a match ldata is in the range
+		if (ldata[idx] >= min_value && ldata[idx] <= max_value) {
+			matches.set_index(sel_idx++, idx);
+		}
+	}
+	result.Slice(physical_state->child_chunk, matches, sel_idx - 1);
+	/* 	idx_t offset = hash_table_ptr->condition_size;
+	    for (idx_t i = 0; i < hash_table_ptr->build_types.size(); i++) {
+	        auto &vector = result.data[physical_state->child_chunk.ColumnCount() + i];
+	        D_ASSERT(vector.GetType() == hash_table_ptr->build_types[i]);
+	        hash_table_ptr->
 	    } */
-	// get the selection vector with matches
 
 	// slice for the left side and copy to the right side
 
@@ -288,7 +298,6 @@ bool PhysicalHashJoin::IsPerfectHashJoin(ExecutionContext &context, DataChunk &r
 	// fetch right side and go throw the indexes producing a selection vector
 	// for each column we produce a selection vector
 
-	return hash_table_ptr->size() > 0;
+	return true;
 }
-
 } // namespace duckdb
