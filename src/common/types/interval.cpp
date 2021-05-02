@@ -225,6 +225,27 @@ string Interval::ToString(interval_t interval) {
 	return string(buffer, length);
 }
 
+int64_t Interval::GetMilli(interval_t val) {
+	int64_t milli_month, milli_day, milli;
+	int64_t ns_in_us = 1000;
+	if (!TryMultiplyOperator::Operation((int64_t)val.months, Interval::MICROS_PER_MONTH, milli_month)) {
+		throw ConversionException("Could not convert Interval to Milliseconds");
+	}
+	if (!TryMultiplyOperator::Operation((int64_t)val.days, Interval::MICROS_PER_DAY, milli_day)) {
+		throw ConversionException("Could not convert Interval to Milliseconds");
+	}
+	if (!TryMultiplyOperator::Operation(val.micros, ns_in_us, milli)) {
+		throw ConversionException("Could not convert Interval to Milliseconds");
+	}
+	if (!TryAddOperator::Operation<int64_t, int64_t, int64_t>(milli, milli_month, milli)) {
+		throw ConversionException("Could not convert Interval to Milliseconds");
+	}
+	if (!TryAddOperator::Operation<int64_t, int64_t, int64_t>(milli, milli_day, milli)) {
+		throw ConversionException("Could not convert Interval to Milliseconds");
+	}
+	return milli;
+}
+
 interval_t Interval::GetDifference(timestamp_t timestamp_1, timestamp_t timestamp_2) {
 	date_t date1, date2;
 	dtime_t time1, time2;
@@ -242,7 +263,7 @@ interval_t Interval::GetDifference(timestamp_t timestamp_1, timestamp_t timestam
 	auto month_diff = month1 - month2;
 	auto day_diff = day1 - day2;
 
-	// and from time extract hours, minutes, seconds and miliseconds
+	// and from time extract hours, minutes, seconds and milliseconds
 	int32_t hour1, min1, sec1, micros1;
 	int32_t hour2, min2, sec2, micros2;
 	Time::Convert(time1, hour1, min1, sec1, micros1);

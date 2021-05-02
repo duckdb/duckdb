@@ -6,7 +6,7 @@
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/chrono.hpp"
-
+#include "duckdb/common/operator/multiply.hpp"
 #include <ctime>
 
 namespace duckdb {
@@ -126,12 +126,12 @@ string Timestamp::ToString(timestamp_t timestamp) {
 }
 
 date_t Timestamp::GetDate(timestamp_t timestamp) {
-	return date_t((timestamp.micros + (timestamp.micros < 0)) / Interval::MICROS_PER_DAY - (timestamp.micros < 0));
+	return date_t((timestamp.value + (timestamp.value < 0)) / Interval::MICROS_PER_DAY - (timestamp.value < 0));
 }
 
 dtime_t Timestamp::GetTime(timestamp_t timestamp) {
 	date_t date = Timestamp::GetDate(timestamp);
-	return dtime_t(timestamp.micros - (int64_t(date.days) * int64_t(Interval::MICROS_PER_DAY)));
+	return dtime_t(timestamp.value - (int64_t(date.days) * int64_t(Interval::MICROS_PER_DAY)));
 }
 
 timestamp_t Timestamp::FromDatetime(date_t date, dtime_t time) {
@@ -140,7 +140,7 @@ timestamp_t Timestamp::FromDatetime(date_t date, dtime_t time) {
 
 void Timestamp::Convert(timestamp_t timestamp, date_t &out_date, dtime_t &out_time) {
 	out_date = GetDate(timestamp);
-	out_time = dtime_t(timestamp.micros - (int64_t(out_date.days) * int64_t(Interval::MICROS_PER_DAY)));
+	out_time = dtime_t(timestamp.value - (int64_t(out_date.days) * int64_t(Interval::MICROS_PER_DAY)));
 	D_ASSERT(timestamp == Timestamp::FromDatetime(out_date, out_time));
 }
 
@@ -151,11 +151,19 @@ timestamp_t Timestamp::GetCurrentTimestamp() {
 }
 
 timestamp_t Timestamp::FromEpochSeconds(int64_t sec) {
-	return timestamp_t(sec * Interval::MICROS_PER_SEC);
+	int64_t result;
+	if (!TryMultiplyOperator::Operation(sec, Interval::MICROS_PER_SEC, result)) {
+		throw ConversionException("Could not convert Timestamp(S) to Timestamp(US)");
+	}
+	return timestamp_t(result);
 }
 
 timestamp_t Timestamp::FromEpochMs(int64_t ms) {
-	return timestamp_t(ms * Interval::MICROS_PER_MSEC);
+	int64_t result;
+	if (!TryMultiplyOperator::Operation(ms, Interval::MICROS_PER_MSEC, result)) {
+		throw ConversionException("Could not convert Timestamp(MS) to Timestamp(US)");
+	}
+	return timestamp_t(result);
 }
 
 timestamp_t Timestamp::FromEpochMicroSeconds(int64_t micros) {
@@ -167,19 +175,24 @@ timestamp_t Timestamp::FromEpochNanoSeconds(int64_t ns) {
 }
 
 int64_t Timestamp::GetEpochSeconds(timestamp_t timestamp) {
-	return timestamp.micros / Interval::MICROS_PER_SEC;
+	return timestamp.value / Interval::MICROS_PER_SEC;
 }
 
 int64_t Timestamp::GetEpochMs(timestamp_t timestamp) {
-	return timestamp.micros / Interval::MICROS_PER_MSEC;
+	return timestamp.value / Interval::MICROS_PER_MSEC;
 }
 
 int64_t Timestamp::GetEpochMicroSeconds(timestamp_t timestamp) {
-	return timestamp.micros;
+	return timestamp.value;
 }
 
 int64_t Timestamp::GetEpochNanoSeconds(timestamp_t timestamp) {
-	return timestamp.micros * 1000;
+	int64_t result;
+	int64_t ns_in_us = 1000;
+	if (!TryMultiplyOperator::Operation(timestamp.value, ns_in_us, result)) {
+		throw ConversionException("Could not convert Timestamp(US) to Timestamp(NS)");
+	}
+	return result;
 }
 
 } // namespace duckdb
