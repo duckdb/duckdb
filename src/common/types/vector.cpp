@@ -240,6 +240,9 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		((int32_t *)data)[index] = val.value_.integer;
 		break;
 	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::HASH:
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::BIGINT:
@@ -389,6 +392,12 @@ Value Vector::GetValue(idx_t index) const {
 		return Value::UBIGINT(((uint64_t *)data)[index]);
 	case LogicalTypeId::TIMESTAMP:
 		return Value::TIMESTAMP(((timestamp_t *)data)[index]);
+	case LogicalTypeId::TIMESTAMP_NS:
+		return Value::TimestampNs(((timestamp_t *)data)[index]);
+	case LogicalTypeId::TIMESTAMP_MS:
+		return Value::TimestampMs(((timestamp_t *)data)[index]);
+	case LogicalTypeId::TIMESTAMP_SEC:
+		return Value::TimestampSec(((timestamp_t *)data)[index]);
 	case LogicalTypeId::HUGEINT:
 		return Value::HUGEINT(((hugeint_t *)data)[index]);
 	case LogicalTypeId::DECIMAL: {

@@ -46,8 +46,14 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_FLOAT,
 	// double
 	DUCKDB_TYPE_DOUBLE,
-	// duckdb_timestamp
+	// duckdb_timestamp (us)
 	DUCKDB_TYPE_TIMESTAMP,
+	// duckdb_timestamp (s)
+	DUCKDB_TYPE_TIMESTAMP_S,
+	// duckdb_timestamp (ns)
+	DUCKDB_TYPE_TIMESTAMP_NS,
+	// duckdb_timestamp (ms)
+	DUCKDB_TYPE_TIMESTAMP_MS,
 	// duckdb_date
 	DUCKDB_TYPE_DATE,
 	// duckdb_time
