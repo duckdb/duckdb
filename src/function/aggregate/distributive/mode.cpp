@@ -27,7 +27,7 @@ struct hash<duckdb::hugeint_t> {
 	}
 };
 
-}; // namespace std
+} // namespace std
 
 namespace duckdb {
 
