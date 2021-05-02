@@ -4,6 +4,7 @@
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "utf8proc_wrapper.hpp"
+#include "duckdb/common/types/interval.hpp"
 
 namespace duckdb {
 
@@ -73,6 +74,18 @@ struct DateConvert {
 	template <class DUCKDB_T, class NUMPY_T>
 	static int64_t ConvertValue(date_t val) {
 		return Date::EpochNanoseconds(val);
+	}
+
+	template <class NUMPY_T>
+	static NUMPY_T NullValue() {
+		return 0;
+	}
+};
+
+struct IntervalConvert {
+	template <class DUCKDB_T, class NUMPY_T>
+	static int64_t ConvertValue(interval_t val) {
+		return Interval::GetMilli(val);
 	}
 
 	template <class NUMPY_T>
@@ -360,9 +373,8 @@ RawArrayWrapper::RawArrayWrapper(const LogicalType &type) : data(nullptr), type(
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_NS:
-		type_width = sizeof(int64_t);
-		break;
 	case LogicalTypeId::DATE:
+	case LogicalTypeId::INTERVAL:
 		type_width = sizeof(int64_t);
 		break;
 	case LogicalTypeId::TIME:
@@ -423,6 +435,9 @@ void RawArrayWrapper::Initialize(idx_t capacity) {
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::DATE:
 		dtype = "datetime64[ns]";
+		break;
+	case LogicalTypeId::INTERVAL:
+		dtype = "timedelta64[ns]";
 		break;
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::VARCHAR:
@@ -531,6 +546,10 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 	case LogicalTypeId::TIME:
 		may_have_null = ConvertColumn<dtime_t, PyObject *, duckdb_py_convert::TimeConvert>(current_offset, dataptr,
 		                                                                                   maskptr, idata, count);
+		break;
+	case LogicalTypeId::INTERVAL:
+		may_have_null = ConvertColumn<interval_t, int64_t, duckdb_py_convert::IntervalConvert>(current_offset, dataptr,
+		                                                                                       maskptr, idata, count);
 		break;
 	case LogicalTypeId::VARCHAR:
 		may_have_null = ConvertColumn<string_t, PyObject *, duckdb_py_convert::StringConvert>(current_offset, dataptr,
