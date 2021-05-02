@@ -11,11 +11,12 @@
 
 namespace duckdb {
 
-template <class T>
+template <class KEY_TYPE>
 struct ModeState {
-	unordered_map<T, size_t> *frequency_map;
+	unordered_map<KEY_TYPE, size_t> *frequency_map;
 };
 
+template <typename KEY_TYPE>
 struct ModeFunction {
 	template <class STATE>
 	static void Initialize(STATE *state) {
@@ -25,9 +26,10 @@ struct ModeFunction {
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
 		if (!state->frequency_map) {
-			state->frequency_map = new unordered_map<INPUT_TYPE, size_t>();
+			state->frequency_map = new unordered_map<KEY_TYPE, size_t>();
 		}
-		(*state->frequency_map)[input[idx]]++;
+		auto key = KEY_TYPE(input[idx]);
+		(*state->frequency_map)[key]++;
 	}
 
 	template <class STATE, class OP>
@@ -45,23 +47,21 @@ struct ModeFunction {
 		}
 	}
 
-	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
+	template <class INPUT_TYPE, class STATE>
+	static void Finalize(Vector &result, FunctionData *, STATE *state, INPUT_TYPE *target, ValidityMask &mask,
+	                     idx_t idx) {
 		if (!state->frequency_map) {
 			mask.SetInvalid(idx);
 			return;
 		}
 		//! Initialize control variables to first variable of the frequency map
 		auto highest_frequency = state->frequency_map->begin();
-		auto iterator = state->frequency_map->begin();
-		iterator++;
-		while (iterator != state->frequency_map->end()) {
-			if (iterator->second > highest_frequency->second) {
-				highest_frequency = iterator;
+		for (auto i = highest_frequency; i != state->frequency_map->end(); ++i) {
+			if (i->second > highest_frequency->second) {
+				highest_frequency = i;
 			}
-			iterator++;
 		}
-		target[idx] = highest_frequency->first;
+		target[idx] = INPUT_TYPE(highest_frequency->first);
 	}
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask,
@@ -83,103 +83,31 @@ struct ModeFunction {
 	}
 };
 
-struct ModeFunctionString {
-	template <class STATE>
-	static void Initialize(STATE *state) {
-		state->frequency_map = nullptr;
-	}
+template <typename INPUT_TYPE, typename KEY_TYPE>
+AggregateFunction GetTypedModeFunction(const LogicalType &type) {
+	return AggregateFunction::UnaryAggregateDestructor<ModeState<KEY_TYPE>, INPUT_TYPE, INPUT_TYPE,
+	                                                   ModeFunction<KEY_TYPE>>(type, type);
+}
 
-	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
-		if (!state->frequency_map) {
-			state->frequency_map = new unordered_map<string, size_t>();
-		}
-		auto value = input[idx].GetString();
-		(*state->frequency_map)[value]++;
-	}
-
-	template <class STATE, class OP>
-	static void Combine(STATE &source, STATE *target) {
-		if (!source.frequency_map) {
-			return;
-		}
-		if (!target->frequency_map) {
-			target->frequency_map = source.frequency_map;
-			source.frequency_map = nullptr;
-			return;
-		}
-		for (auto &val : *source.frequency_map) {
-			auto value = val.first;
-			(*target->frequency_map)[value] += val.second;
-		}
-	}
-
-	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
-		if (!state->frequency_map) {
-			mask.SetInvalid(idx);
-			return;
-		}
-		T h_freq;
-		size_t freq = 0;
-
-		for (auto &val : *state->frequency_map) {
-			if (val.second > freq) {
-				h_freq = val.first;
-				freq = val.second;
-			}
-		}
-		target[idx] = string_t(h_freq);
-	}
-	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask,
-	                              idx_t count) {
-		for (idx_t i = 0; i < count; i++) {
-			Operation<INPUT_TYPE, STATE, OP>(state, bind_data, input, mask, 0);
-		}
-	}
-
-	static bool IgnoreNull() {
-		return true;
-	}
-
-	template <class STATE>
-	static void Destroy(STATE *state) {
-		if (state->frequency_map) {
-			delete state->frequency_map;
-		}
-	}
-};
-
-AggregateFunction GetModeFunction(PhysicalType type) {
-	switch (type) {
-	case PhysicalType::UINT16:
-		return AggregateFunction::UnaryAggregateDestructor<ModeState<uint16_t>, uint16_t, uint16_t, ModeFunction>(
-		    LogicalType::UTINYINT, LogicalType::UTINYINT);
-	case PhysicalType::UINT32:
-		return AggregateFunction::UnaryAggregateDestructor<ModeState<uint32_t>, uint32_t, uint32_t, ModeFunction>(
-		    LogicalType::UINTEGER, LogicalType::UINTEGER);
-	case PhysicalType::UINT64:
-		return AggregateFunction::UnaryAggregateDestructor<ModeState<uint64_t>, uint64_t, uint64_t, ModeFunction>(
-		    LogicalType::UBIGINT, LogicalType::UBIGINT);
+AggregateFunction GetModeFunction(const LogicalType &type) {
+	switch (type.InternalType()) {
 	case PhysicalType::INT16:
-		return AggregateFunction::UnaryAggregateDestructor<ModeState<int16_t>, int16_t, int16_t, ModeFunction>(
-		    LogicalType::TINYINT, LogicalType::TINYINT);
+	case PhysicalType::UINT16:
+		return GetTypedModeFunction<uint16_t, uint16_t>(type);
 	case PhysicalType::INT32:
-		return AggregateFunction::UnaryAggregateDestructor<ModeState<int32_t>, int32_t, int32_t, ModeFunction>(
-		    LogicalType::INTEGER, LogicalType::INTEGER);
+	case PhysicalType::UINT32:
+		return GetTypedModeFunction<uint32_t, uint32_t>(type);
 	case PhysicalType::INT64:
-		return AggregateFunction::UnaryAggregateDestructor<ModeState<int64_t>, int64_t, int64_t, ModeFunction>(
-		    LogicalType::BIGINT, LogicalType::BIGINT);
+	case PhysicalType::UINT64:
+		return GetTypedModeFunction<uint64_t, uint64_t>(type);
+
 	case PhysicalType::FLOAT:
-		return AggregateFunction::UnaryAggregateDestructor<ModeState<float>, float, float, ModeFunction>(
-		    LogicalType::FLOAT, LogicalType::FLOAT);
+		return GetTypedModeFunction<float, float>(type);
 	case PhysicalType::DOUBLE:
-		return AggregateFunction::UnaryAggregateDestructor<ModeState<double>, double, double, ModeFunction>(
-		    LogicalType::DOUBLE, LogicalType::DOUBLE);
+		return GetTypedModeFunction<double, double>(type);
+
 	case PhysicalType::VARCHAR:
-		return AggregateFunction::UnaryAggregateDestructor<ModeState<string>, string_t, string_t, ModeFunctionString>(
-		    LogicalType::VARCHAR, LogicalType::VARCHAR);
+		return GetTypedModeFunction<string_t, string>(type);
 
 	default:
 		throw NotImplementedException("Unimplemented mode aggregate");
@@ -188,15 +116,15 @@ AggregateFunction GetModeFunction(PhysicalType type) {
 
 void ModeFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet fun("mode");
-	fun.AddFunction(GetModeFunction(PhysicalType::UINT16));
-	fun.AddFunction(GetModeFunction(PhysicalType::UINT32));
-	fun.AddFunction(GetModeFunction(PhysicalType::UINT64));
-	fun.AddFunction(GetModeFunction(PhysicalType::FLOAT));
-	fun.AddFunction(GetModeFunction(PhysicalType::INT16));
-	fun.AddFunction(GetModeFunction(PhysicalType::INT32));
-	fun.AddFunction(GetModeFunction(PhysicalType::INT64));
-	fun.AddFunction(GetModeFunction(PhysicalType::DOUBLE));
-	fun.AddFunction(GetModeFunction(PhysicalType::VARCHAR));
+	fun.AddFunction(GetModeFunction(LogicalType::USMALLINT));
+	fun.AddFunction(GetModeFunction(LogicalType::UINTEGER));
+	fun.AddFunction(GetModeFunction(LogicalType::UBIGINT));
+	fun.AddFunction(GetModeFunction(LogicalType::FLOAT));
+	fun.AddFunction(GetModeFunction(LogicalType::SMALLINT));
+	fun.AddFunction(GetModeFunction(LogicalType::INTEGER));
+	fun.AddFunction(GetModeFunction(LogicalType::BIGINT));
+	fun.AddFunction(GetModeFunction(LogicalType::DOUBLE));
+	fun.AddFunction(GetModeFunction(LogicalType::VARCHAR));
 	set.AddFunction(fun);
 }
 } // namespace duckdb
