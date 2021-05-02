@@ -255,46 +255,50 @@ bool PhysicalHashJoin::ProbePerfectHashTable(ExecutionContext &context, DataChun
 	if (!perfect_join_state.is_build_small)
 		return false;
 	//
-	auto join_global_state = reinterpret_cast<HashJoinGlobalState *>(sink_state.get());
-	auto hash_table_ptr = join_global_state->hash_table.get();
+	auto global_state = reinterpret_cast<HashJoinGlobalState *>(sink_state.get());
+	auto hash_table_ptr = global_state->hash_table.get();
 
 	// fetch the chunk to join
 	children[0]->GetChunk(context, physical_state->child_chunk, physical_state->child_state.get());
 	// fetch the  join keys
 	physical_state->probe_executor.Execute(physical_state->child_chunk, physical_state->join_keys);
+
 	// gets the data and selection vector
 	VectorData keys_data;
-	auto keys_size = physical_state->join_keys.size();
-	auto keys_vec = &physical_state->join_keys.data[0];
-	keys_vec->Orrify(keys_size, keys_data);
-	auto probe_sel_vector = keys_data.sel;
-	auto ldata = (int32_t *)keys_data.data;
+	auto keys_size = physical_state->join_keys.size();  // number of keys
+	auto keys_vec = &physical_state->join_keys.data[0]; // keys vector
+	keys_vec->Orrify(keys_size, keys_data);             // get the keys data (Decompress)
+	auto ldata = (int32_t *)keys_data.data;             // cast to a typed buffer
+
 	// go trough the join_keys and fill the selection vector with the matches
 	SelectionVector matches(STANDARD_VECTOR_SIZE);
 	size_t sel_idx {0};
 	auto min_value = perfect_join_state.minimum.GetValue<int32_t>();
 	auto max_value = perfect_join_state.maximum.GetValue<int32_t>();
 	for (idx_t idx = 0; idx != physical_state->join_keys.size(); ++idx) {
-		// if there is a match ldata is in the range
-		if (ldata[idx] >= min_value && ldata[idx] <= max_value) {
+		// a match means that ldata is in the range
+		if (min_value < ldata[idx] && ldata[idx] <= max_value) {
 			matches.set_index(sel_idx++, idx);
 		}
 	}
-	result.Slice(physical_state->child_chunk, matches, sel_idx - 1);
-	/* 	idx_t offset = hash_table_ptr->condition_size;
-	    for (idx_t i = 0; i < hash_table_ptr->build_types.size(); i++) {
-	        auto &vector = result.data[physical_state->child_chunk.ColumnCount() + i];
-	        D_ASSERT(vector.GetType() == hash_table_ptr->build_types[i]);
-	        hash_table_ptr->
-	    } */
+	auto result_count = sel_idx - 1;
+	// slice for the left side
+	result.Slice(physical_state->child_chunk, matches, result_count);
+	// set-up scan structure
+	auto scan_structure = make_unique<JoinHashTable::ScanStructure>(*hash_table_ptr);
+	scan_structure->found_match = unique_ptr<bool[]>(new bool[STANDARD_VECTOR_SIZE]);
+	memset(scan_structure->found_match.get(), 0, sizeof(bool) * STANDARD_VECTOR_SIZE);
+	scan_structure->count = result_count;
 
-	// slice for the left side and copy to the right side
+	idx_t offset = hash_table_ptr->condition_size;
+	for (idx_t i = 0; i < hash_table_ptr->build_types.size(); i++) {
+		auto &vector = result.data[physical_state->child_chunk.ColumnCount() + i];
+		D_ASSERT(vector.GetType() == hash_table_ptr->build_types[i]);
+		scan_structure->GatherResult(vector, matches, result_count, offset);
+	}
+	scan_structure->AdvancePointers();
 
-	/* 	BinaryExecutor::Execute<timestamp_t, timestamp_t, interval_t>(
-	        input.data[0], input.data[1], result, input.size(),
-	        [&](TT input2) { return Interval::GetDifference(input1, input2); }); */
 	// check whether there are duplicates
-	// fetch left side
 	// fetch right side and go throw the indexes producing a selection vector
 	// for each column we produce a selection vector
 

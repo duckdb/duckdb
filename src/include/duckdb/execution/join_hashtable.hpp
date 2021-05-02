@@ -61,9 +61,6 @@ public:
 		void Next(DataChunk &keys, DataChunk &left, DataChunk &result);
 
 	private:
-		void AdvancePointers();
-		void AdvancePointers(const SelectionVector &sel, idx_t sel_count);
-
 		//! Next operator for the inner join
 		void NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
 		//! Next operator for the semi join
@@ -91,6 +88,8 @@ public:
 		idx_t ResolvePredicates(DataChunk &keys, SelectionVector &match_sel, SelectionVector &no_match_sel);
 
 	public:
+		void AdvancePointers();
+		void AdvancePointers(const SelectionVector &sel, idx_t sel_count);
 		void GatherResult(Vector &result, const SelectionVector &result_vector, const SelectionVector &sel_vector,
 		                  idx_t count, idx_t &offset);
 		void GatherResult(Vector &result, const SelectionVector &sel_vector, idx_t count, idx_t &offset);
