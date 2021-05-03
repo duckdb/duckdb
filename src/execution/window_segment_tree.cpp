@@ -147,6 +147,11 @@ void WindowSegmentTree::ConstructTree() {
 		levels_flat_start.push_back(levels_flat_offset);
 		level_current++;
 	}
+
+	// Corner case: single element in the window
+	if (levels_flat_offset == 0) {
+		aggregate.initialize(levels_flat_native.get());
+	}
 }
 
 Value WindowSegmentTree::Compute(idx_t begin, idx_t end) {

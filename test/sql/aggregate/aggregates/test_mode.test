@@ -96,80 +96,191 @@ NULL
 
 # Temporal types
 statement ok
-create table dates (v date)
+create table dates (k int, v date)
 
 statement ok
 insert into dates values
-    ('2021-05-02'),
-    ('2021-05-02'),
-    ('2021-05-02'),
-    ('2020-02-29'),
-    ('2020-02-29'),
-    ('2004-09-01'),
-    (null);
+    (1, '2021-05-02'),
+    (1, '2021-05-02'),
+    (2, '2021-05-02'),
+    (2, '2020-02-29'),
+    (3, '2020-02-29'),
+    (4, '2004-09-01'),
+    (1, null);
 
 query I
 select mode(v) from dates;
 ----
 2021-05-02
 
-statement ok
-create table times (v time)
+query II
+select k, mode(v) from dates group by k;
+----
+1	2021-05-02
+2	2020-02-29
+3	2020-02-29
+4	2004-09-01
+
+query III
+select k, v, mode(v) over (partition by k)
+    from dates
+    order by k, v;
+----
+1	NULL	2021-05-02
+1	2021-05-02	2021-05-02
+1	2021-05-02	2021-05-02
+2	2020-02-29	2020-02-29
+2	2021-05-02	2020-02-29
+3	2020-02-29	2020-02-29
+4	2004-09-01	2004-09-01
 
 statement ok
-insert into times values ('12:11:49.5'), ('12:11:49.5'), ('12:11:49.5'),('06:30:00'),('06:30:00'),('21:15:22'),(null);
+create table times (k int, v time)
+
+statement ok
+insert into times values
+    (1, '12:11:49.5'),
+    (1, '12:11:49.5'),
+    (2, '12:11:49.5'),
+    (2, '06:30:00'),
+    (3, '06:30:00'),
+    (4, '21:15:22'),
+    (1, null);
 
 query I
 select mode(v) from times;
 ----
 12:11:49.5
 
+query II
+select k, mode(v) from times group by k;
+----
+1	12:11:49.5
+2	06:30:00
+3	06:30:00
+4	21:15:22
+
+query III
+select k, v, mode(v) over (partition by k)
+    from times
+    order by k, v;
+----
+1	NULL	12:11:49.5
+1	12:11:49.5	12:11:49.5
+1	12:11:49.5	12:11:49.5
+2	06:30:00	06:30:00
+2	12:11:49.5	06:30:00
+3	06:30:00	06:30:00
+4	21:15:22	21:15:22
+
 statement ok
-create table timestamps (v timestamp)
+create table timestamps (k int, v timestamp)
 
 statement ok
 insert into timestamps values
-    ('2021-05-02 12:11:49.5'),
-    ('2021-05-02 12:11:49.5'),
-    ('2021-05-02 12:11:49.5'),
-    ('2020-02-29 06:30:00'),
-    ('2020-02-29 06:30:00'),
-    ('2004-09-01 21:15:22'),
-    (null);
+    (1, '2021-05-02 12:11:49.5'),
+    (1, '2021-05-02 12:11:49.5'),
+    (2, '2021-05-02 12:11:49.5'),
+    (2,'2020-02-29 06:30:00'),
+    (3,'2020-02-29 06:30:00'),
+    (4,'2004-09-01 21:15:22'),
+    (1, null);
 
 query I
 select mode(v) from timestamps;
 ----
 2021-05-02 12:11:49.5
 
+query II
+select k, mode(v) from timestamps group by k;
+----
+1	2021-05-02 12:11:49.5
+2	2020-02-29 06:30:00
+3	2020-02-29 06:30:00
+4	2004-09-01 21:15:22
+
+query III
+select k, v, mode(v) over (partition by k)
+    from timestamps
+    order by k, v;
+----
+1	NULL	2021-05-02 12:11:49.5
+1	2021-05-02 12:11:49.5	2021-05-02 12:11:49.5
+1	2021-05-02 12:11:49.5	2021-05-02 12:11:49.5
+2	2020-02-29 06:30:00	2020-02-29 06:30:00
+2	2021-05-02 12:11:49.5	2020-02-29 06:30:00
+3	2020-02-29 06:30:00	2020-02-29 06:30:00
+4	2004-09-01 21:15:22	2004-09-01 21:15:22
+
 statement ok
-create table intervals (v interval)
+create table intervals (k int, v interval)
 
 statement ok
 insert into intervals values
-    (INTERVAL '5 months 2 days 12 hours 11 minutes 49 seconds'),
-    (INTERVAL '5 months 2 days 12 hours 11 minutes 49 seconds'),
-    (INTERVAL '5 months 2 days 12 hours 11 minutes 49 seconds'),
-    (INTERVAL '2 months 29 days 6 hours 30 minutes'),
-    (INTERVAL '2 months 29 days 6 hours 30 minutes'),
-    (INTERVAL '9 months 1 day 21 hours 15 minutes 22 seconds'),
-    (null);
+    (1, INTERVAL '5 months 2 days 12 hours 11 minutes 49 seconds'),
+    (1, INTERVAL '5 months 2 days 12 hours 11 minutes 49 seconds'),
+    (2, INTERVAL '5 months 2 days 12 hours 11 minutes 49 seconds'),
+    (2, INTERVAL '2 months 29 days 6 hours 30 minutes'),
+    (3, INTERVAL '2 months 29 days 6 hours 30 minutes'),
+    (4, INTERVAL '9 months 1 day 21 hours 15 minutes 22 seconds'),
+    (1, null);
 
 query I
 select mode(v) from intervals;
 ----
 5 months 2 days 12:11:49
 
+query II
+select k, mode(v) from intervals group by k;
+----
+1	5 months 2 days 12:11:49
+2	2 months 29 days 06:30:00
+3	2 months 29 days 06:30:00
+4	9 months 1 day 21:15:22
+
+query III
+select k, v, mode(v) over (partition by k)
+    from intervals
+    order by k, v;
+----
+1	NULL	5 months 2 days 12:11:49
+1	5 months 2 days 12:11:49	5 months 2 days 12:11:49
+1	5 months 2 days 12:11:49	5 months 2 days 12:11:49
+2	2 months 29 days 06:30:00	2 months 29 days 06:30:00
+2	5 months 2 days 12:11:49	2 months 29 days 06:30:00
+3	2 months 29 days 06:30:00	2 months 29 days 06:30:00
+4	9 months 1 day 21:15:22	9 months 1 day 21:15:22
+
 # Huge integers
 
 statement ok
-create table hugeints (v hugeint)
+create table hugeints (k int, v hugeint)
 
 statement ok
-insert into hugeints values (5), (5), (5), (2), (2), (1), (null);
+insert into hugeints values (1, 5), (1, 5), (2, 5), (2, 2), (3, 2), (4, 1), (1, null);
 
 query I
 select mode(v) from hugeints;
 ----
 5
 
+query II
+select k, mode(v) from hugeints group by k;
+----
+1	5
+2	2
+3	2
+4	1
+
+query III
+select k, v, mode(v) over (partition by k)
+    from hugeints
+    order by k, v;
+----
+1	NULL	5
+1	5	5
+1	5	5
+2	2	2
+2	5	2
+3	2	2
+4	1	1

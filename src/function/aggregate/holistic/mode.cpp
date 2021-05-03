@@ -31,10 +31,6 @@ struct hash<duckdb::hugeint_t> {
 
 namespace duckdb {
 
-bool operator==(const interval_t &lhs, const interval_t &rhs) {
-	return lhs.days == rhs.days && lhs.months == rhs.months && lhs.micros == rhs.micros;
-}
-
 template <class KEY_TYPE>
 struct ModeState {
 	unordered_map<KEY_TYPE, size_t> *frequency_map;
@@ -62,8 +58,8 @@ struct ModeFunction {
 			return;
 		}
 		if (!target->frequency_map) {
-			target->frequency_map = source.frequency_map;
-			source.frequency_map = nullptr;
+			// Copy - don't destroy! Otherwise windowing will break.
+			target->frequency_map = new unordered_map<KEY_TYPE, size_t>(*source.frequency_map);
 			return;
 		}
 		for (auto &val : *source.frequency_map) {
@@ -116,15 +112,19 @@ AggregateFunction GetTypedModeFunction(const LogicalType &type) {
 AggregateFunction GetModeAggregate(const LogicalType &type) {
 	switch (type.InternalType()) {
 	case PhysicalType::INT8:
+		return GetTypedModeFunction<int8_t, int8_t>(type);
 	case PhysicalType::UINT8:
 		return GetTypedModeFunction<uint8_t, uint8_t>(type);
 	case PhysicalType::INT16:
+		return GetTypedModeFunction<int16_t, int16_t>(type);
 	case PhysicalType::UINT16:
 		return GetTypedModeFunction<uint16_t, uint16_t>(type);
 	case PhysicalType::INT32:
+		return GetTypedModeFunction<int32_t, int32_t>(type);
 	case PhysicalType::UINT32:
 		return GetTypedModeFunction<uint32_t, uint32_t>(type);
 	case PhysicalType::INT64:
+		return GetTypedModeFunction<int64_t, int64_t>(type);
 	case PhysicalType::UINT64:
 		return GetTypedModeFunction<uint64_t, uint64_t>(type);
 	case PhysicalType::INT128:
