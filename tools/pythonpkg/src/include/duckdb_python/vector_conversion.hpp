@@ -27,6 +27,7 @@ enum class PandasType : uint8_t {
 	FLOAT,
 	DOUBLE,
 	TIMESTAMP,
+	INTERVAL,
 	VARCHAR
 };
 
