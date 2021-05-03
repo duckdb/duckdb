@@ -1024,24 +1024,27 @@ void DataTable::AddIndex(unique_ptr<Index> index, vector<unique_ptr<Expression>>
 	}
 
 	// now start incrementally building the index
-	IndexLock lock;
-	index->InitializeLock(lock);
-	ExpressionExecutor executor(expressions);
-	while (true) {
-		intermediate.Reset();
-		// scan a new chunk from the table to index
-		CreateIndexScan(state, column_ids, intermediate);
-		if (intermediate.size() == 0) {
-			// finished scanning for index creation
-			// release all locks
-			break;
-		}
-		// resolve the expressions for this chunk
-		executor.Execute(intermediate, result);
+	{
+		IndexLock lock;
+		index->InitializeLock(lock);
+		ExpressionExecutor executor(expressions);
+		while (true) {
+			intermediate.Reset();
+			// scan a new chunk from the table to index
+			CreateIndexScan(state, column_ids, intermediate);
+			if (intermediate.size() == 0) {
+				// finished scanning for index creation
+				// release all locks
+				break;
+			}
+			// resolve the expressions for this chunk
+			executor.Execute(intermediate, result);
 
-		// insert into the index
-		if (!index->Insert(lock, result, intermediate.data[intermediate.ColumnCount() - 1])) {
-			throw ConstraintException("Cant create unique index, table contains duplicate data on indexed column(s)");
+			// insert into the index
+			if (!index->Insert(lock, result, intermediate.data[intermediate.ColumnCount() - 1])) {
+				throw ConstraintException(
+				    "Cant create unique index, table contains duplicate data on indexed column(s)");
+			}
 		}
 	}
 	info->indexes.AddIndex(move(index));

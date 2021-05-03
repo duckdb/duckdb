@@ -94,7 +94,6 @@ void DependencyManager::AlterObject(ClientContext &context, CatalogEntry *old_ob
 
 void DependencyManager::EraseObject(CatalogEntry *object) {
 	// obtain the writing lock
-	lock_guard<mutex> write_lock(catalog.write_lock);
 	EraseObjectInternal(object);
 }
 

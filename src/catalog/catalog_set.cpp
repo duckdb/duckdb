@@ -398,6 +398,8 @@ CatalogEntry *CatalogSet::GetRootEntry(const string &name) {
 }
 
 void CatalogSet::Undo(CatalogEntry *entry) {
+	lock_guard<mutex> write_lock(catalog.write_lock);
+
 	lock_guard<mutex> lock(catalog_lock);
 
 	// entry has to be restored
