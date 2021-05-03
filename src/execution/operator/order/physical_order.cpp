@@ -1637,11 +1637,11 @@ private:
 	unique_ptr<SortedBlock> result;
 };
 
-void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> state_p) {
+bool PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> state_p) {
 	this->sink_state = move(state_p);
 	auto &state = (OrderGlobalState &)*this->sink_state;
 	if (state.sorted_blocks.empty()) {
-		return;
+		return true;
 	}
 	// compute total count
 	for (auto &sb : state.sorted_blocks) {
@@ -1691,11 +1691,13 @@ void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 	if (state.sorted_blocks.size() > 1) {
 		// more than one block - merge
 		PhysicalOrder::ScheduleMergeTasks(pipeline, context, state);
+		return false;
 	} else {
 		// clean up sorting data - payload is sorted
 		for (auto &sb : state.sorted_blocks) {
 			sb->UnregisterSortingBlocks();
 		}
+		return true;
 	}
 }
 

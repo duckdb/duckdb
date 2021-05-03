@@ -291,16 +291,16 @@ private:
 	idx_t radix;
 };
 
-void PhysicalHashAggregate::Finalize(Pipeline &pipeline, ClientContext &context,
+bool PhysicalHashAggregate::Finalize(Pipeline &pipeline, ClientContext &context,
                                      unique_ptr<GlobalOperatorState> state) {
-	FinalizeInternal(context, move(state), false, &pipeline);
+	return FinalizeInternal(context, move(state), false, &pipeline);
 }
 
 void PhysicalHashAggregate::FinalizeImmediate(ClientContext &context, unique_ptr<GlobalOperatorState> state) {
 	FinalizeInternal(context, move(state), true, nullptr);
 }
 
-void PhysicalHashAggregate::FinalizeInternal(ClientContext &context, unique_ptr<GlobalOperatorState> state,
+bool PhysicalHashAggregate::FinalizeInternal(ClientContext &context, unique_ptr<GlobalOperatorState> state,
                                              bool immediate, Pipeline *pipeline) {
 	this->sink_state = move(state);
 	auto &gstate = (HashAggregateGlobalState &)*this->sink_state;
@@ -309,7 +309,7 @@ void PhysicalHashAggregate::FinalizeInternal(ClientContext &context, unique_ptr<
 	// we have already aggreagted into a global shared HT that does not require any additional finalization steps
 	if (ForceSingleHT(gstate)) {
 		D_ASSERT(gstate.finalized_hts.size() <= 1);
-		return;
+		return true;
 	}
 
 	// we can have two cases now, non-partitioned for few groups and radix-partitioned for very many groups.
@@ -349,6 +349,7 @@ void PhysicalHashAggregate::FinalizeInternal(ClientContext &context, unique_ptr<
 				TaskScheduler::GetScheduler(context).ScheduleTask(pipeline->token, move(new_task));
 			}
 		}
+		return immediate;
 	} else { // in the non-partitioned case we immediately combine all the unpartitioned hts created by the threads.
 		     // TODO possible optimization, if total count < limit for 32 bit ht, use that one
 		     // create this ht here so finalize needs no lock on gstate
@@ -365,6 +366,7 @@ void PhysicalHashAggregate::FinalizeInternal(ClientContext &context, unique_ptr<
 			unpartitioned.clear();
 		}
 		gstate.finalized_hts[0]->Finalize();
+		return true;
 	}
 }
 
