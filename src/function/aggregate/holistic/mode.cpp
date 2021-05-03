@@ -4,7 +4,7 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/function/aggregate/holistic_functions.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 
 #include "duckdb/common/unordered_map.hpp"
