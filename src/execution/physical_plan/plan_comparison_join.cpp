@@ -123,6 +123,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 			                                      right_index, true, op.estimated_cardinality);
 		}
 		// equality join with small number of keys : possible perfect hash table optimization
+		// TODO: check whether the type of stats is numeric
 		PerfectHashJoinState join_state;
 		if (IsCandidateForPerfectHash(op.join_stats)) {
 			join_state.is_build_small = true;
