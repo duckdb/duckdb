@@ -476,6 +476,7 @@ void ExpressionInformation::ExtractExpressionsRecursive(unique_ptr<ExpressionSta
 		if (child->expr.expression_class == ExpressionClass::BOUND_FUNCTION) {
 			expression_info_p->hasfunction = true;
 			expression_info_p->function_name = ((BoundFunctionExpression &)child->expr).function.name;
+            expression_info_p->function_time = child->time;
 		}
 		expression_info_p->ExtractExpressionsRecursive(child);
 		children.push_back(move(expression_info_p));
@@ -492,7 +493,8 @@ ExpressionExecutorInformation::ExpressionExecutorInformation(ExpressionExecutor 
 		if (state->root_state->expr.expression_class == ExpressionClass::BOUND_FUNCTION) {
 			expression_info_p->hasfunction = true;
 			expression_info_p->function_name = ((BoundFunctionExpression &)state->root_state->expr).function.name;
-		}
+            expression_info_p->function_time = state->root_state->time;
+        }
 		expression_info_p->ExtractExpressionsRecursive(state.get()->root_state);
 		roots.push_back(move(expression_info_p));
 	}
