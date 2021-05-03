@@ -115,8 +115,9 @@ void Pipeline::Execute(TaskContext &task) {
 
 void Pipeline::FinishTask() {
 	D_ASSERT(finished_tasks < total_tasks);
+	idx_t current_tasks = total_tasks;
 	idx_t current_finished = ++finished_tasks;
-	if (current_finished == total_tasks) {
+	if (current_finished == current_tasks) {
 		try {
 			sink->Finalize(*this, executor.context, move(sink_state));
 		} catch (std::exception &ex) {
