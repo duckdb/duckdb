@@ -31,6 +31,7 @@ class FileMetaData;
 } // namespace duckdb_parquet
 
 namespace duckdb {
+class Allocator;
 class ClientContext;
 class ChunkCollection;
 class BaseStatistics;
@@ -55,10 +56,10 @@ struct ParquetReaderScanState {
 
 class ParquetReader {
 public:
-	ParquetReader(unique_ptr<FileHandle> file_handle_p, const vector<LogicalType> &expected_types_p,
-	              const string &initial_filename_p = string());
-	ParquetReader(unique_ptr<FileHandle> file_handle_p)
-	    : ParquetReader(move(file_handle_p), vector<LogicalType>(), string()) {
+	ParquetReader(Allocator &allocator, unique_ptr<FileHandle> file_handle_p,
+	              const vector<LogicalType> &expected_types_p, const string &initial_filename_p = string());
+	ParquetReader(Allocator &allocator, unique_ptr<FileHandle> file_handle_p)
+	    : ParquetReader(allocator, move(file_handle_p), vector<LogicalType>(), string()) {
 	}
 
 	ParquetReader(ClientContext &context, string file_name, const vector<LogicalType> &expected_types_p,
@@ -68,6 +69,7 @@ public:
 	}
 	~ParquetReader();
 
+	Allocator &allocator;
 	string file_name;
 	vector<LogicalType> return_types;
 	vector<string> names;
@@ -83,7 +85,7 @@ public:
 
 	const duckdb_parquet::format::FileMetaData *GetFileMetadata();
 
-	static unique_ptr<BaseStatistics> ReadStatistics(LogicalType &type, column_t column_index,
+	static unique_ptr<BaseStatistics> ReadStatistics(ParquetReader &reader, LogicalType &type, column_t column_index,
 	                                                 const duckdb_parquet::format::FileMetaData *file_meta_data);
 
 private:
