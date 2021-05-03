@@ -15,5 +15,7 @@ endif()
 
 if(WIN32)
   set_target_properties(loadable_extension_demo
-                        PROPERTIES LINK_FLAGS "/DELAYLOAD:duckdb.dll")
+                        PROPERTIES LINK_FLAGS_RELEASE "/DELAYLOAD:duckdb.dll")
+  set(CMAKE_EXE_LINKER_FLAGS_RELEASE
+      "${CMAKE_EXE_LINKER_FLAGS_RELEASE}  /DELAYLOAD:duckdb.dll")
 endif()
