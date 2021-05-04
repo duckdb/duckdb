@@ -25,23 +25,24 @@ DataTable::DataTable(DatabaseInstance &db, const string &schema, const string &t
                      unique_ptr<PersistentTableData> data)
     : info(make_shared<DataTableInfo>(schema, table)), types(move(types_p)), db(db), total_rows(0), is_root(true) {
 	// initialize the table with the existing data from disk, if any
-	if (data && !data->column_data.empty()) {
-		throw NotImplementedException("FIXME: persistent segment");
-		// D_ASSERT(data->column_data.size() == types.size());
-		// for (idx_t i = 0; i < types.size(); i++) {
-		// 	if (i == 0) {
-		// 		total_rows = data->column_data[i]->total_rows;
-		// 	} else {
-		// 		D_ASSERT(total_rows == data->column_data[i]->total_rows);
-		// 	}
-		// 	columns[i]->Initialize(*data->column_data[i]);
-		// }
-		// versions = move(data->versions);
+	this->row_groups = make_shared<SegmentTree>();
+	if (data && !data->row_groups.empty()) {
+		for(auto &row_group_pointer : data->row_groups) {
+			auto new_row_group = make_unique<RowGroup>(db, *info, types, row_group_pointer);
+			auto row_group_count = new_row_group->start + new_row_group->count;
+			if (row_group_count > total_rows) {
+				total_rows = row_group_count;
+			}
+			row_groups->AppendSegment(move(new_row_group));
+		}
+		column_stats = move(data->column_stats);
+		if (column_stats.size() != types.size()) {
+			throw IOException("Table statistics column count is not aligned with table column count. Corrupt file?");
+		}
 	}
 	if (total_rows == 0) {
 		D_ASSERT(total_rows == 0);
 		D_ASSERT(column_stats.empty());
-		this->row_groups = make_shared<SegmentTree>();
 		AppendRowGroup(0);
 
 		for(auto &type : types) {
@@ -532,6 +533,7 @@ void DataTable::Append(Transaction &transaction, DataChunk &chunk, TableAppendSt
 }
 
 void DataTable::ScanTableSegment(idx_t row_start, idx_t count, const std::function<void(DataChunk &chunk)> &function) {
+	D_ASSERT(row_start % STANDARD_VECTOR_SIZE == 0);
 	idx_t end = row_start + count;
 
 	vector<column_t> column_ids;
@@ -548,16 +550,13 @@ void DataTable::ScanTableSegment(idx_t row_start, idx_t count, const std::functi
 	idx_t row_start_aligned = row_start / STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE;
 	InitializeScanWithOffset(state, column_ids, nullptr, row_start_aligned, row_start + count);
 
+	idx_t current_row = row_start;
 	while (true) {
-		throw NotImplementedException("ScanTableSegment");
-		idx_t current_row = 0;
-		// idx_t current_row = state.vector_index * STANDARD_VECTOR_SIZE;
 		CreateIndexScan(state, column_ids, chunk, true);
 		if (chunk.size() == 0) {
 			break;
 		}
-		idx_t end_row = current_row;
-		// idx_t end_row = state.current_row;
+		idx_t end_row = current_row + chunk.size();
 		// figure out if we need to write the entire chunk or just part of it
 		idx_t chunk_start = current_row < row_start ? row_start : current_row;
 		idx_t chunk_end = end_row > end ? end : end_row;
@@ -569,6 +568,7 @@ void DataTable::ScanTableSegment(idx_t row_start, idx_t count, const std::functi
 		}
 		function(chunk);
 		chunk.Reset();
+		current_row = end_row;
 	}
 }
 
@@ -708,16 +708,19 @@ void DataTable::RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, Vec
 void DataTable::RemoveFromIndexes(Vector &row_identifiers, idx_t count) {
 	D_ASSERT(is_root);
 	auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
-	D_ASSERT(row_ids[0] % STANDARD_VECTOR_SIZE == 0);
-	// create a selection vector from the row_ids
-	SelectionVector sel(STANDARD_VECTOR_SIZE);
-	for (idx_t i = 0; i < count; i++) {
-		sel.set_index(i, row_ids[i] % STANDARD_VECTOR_SIZE);
-	}
 
 	// figure out which row_group to fetch from
 	auto row_group = (RowGroup *) row_groups->GetSegment(row_ids[0]);
 	auto row_group_vector_idx = (row_ids[0] - row_group->start) / STANDARD_VECTOR_SIZE;
+	auto base_row_id = row_group_vector_idx * STANDARD_VECTOR_SIZE;
+
+	// create a selection vector from the row_ids
+	SelectionVector sel(STANDARD_VECTOR_SIZE);
+	for (idx_t i = 0; i < count; i++) {
+		auto row_in_vector = row_ids[i] - base_row_id;
+		D_ASSERT(row_in_vector < STANDARD_VECTOR_SIZE);
+		sel.set_index(i, row_in_vector);
+	}
 
 	// now fetch the columns from that row_group
 	// FIXME: we do not need to fetch all columns, only the columns required by the indices!
@@ -964,19 +967,35 @@ unique_ptr<BaseStatistics> DataTable::GetStatistics(ClientContext &context, colu
 //===--------------------------------------------------------------------===//
 // Checkpoint
 //===--------------------------------------------------------------------===//
-void DataTable::Checkpoint(TableDataWriter &writer) {
-	throw NotImplementedException("FIXME: checkpoint");
-	// // checkpoint each individual column
-	// for (size_t i = 0; i < columns.size(); i++) {
-	// 	columns[i]->Checkpoint(writer);
-	// }
-}
+BlockPointer DataTable::Checkpoint(TableDataWriter &writer) {
+	// checkpoint each individual row group
+	// FIXME: we might want to combine adjacent row groups in case they have had deletions...
+	vector<unique_ptr<BaseStatistics>> global_stats;
+	for(idx_t i = 0; i < types.size(); i++) {
+		global_stats.push_back(BaseStatistics::CreateEmpty(types[i]));
+	}
 
-void DataTable::CheckpointDeletes(TableDataWriter &writer) {
-	throw NotImplementedException("FIXME: checkpoint deletes");
-	// // then we checkpoint the deleted tuples
-	// D_ASSERT(versions);
-	// writer.CheckpointDeletes(((RowGroupInfo *)versions->GetRootSegment()));
+	auto row_group = (RowGroup *) row_groups->GetRootSegment();
+	vector<RowGroupPointer> row_group_pointers;
+	while(row_group) {
+		auto pointer = row_group->Checkpoint(writer, global_stats);
+		row_group_pointers.push_back(move(pointer));
+		row_group = (RowGroup *) row_group->next.get();
+	}
+	// store the current position in the metadata writer
+	// this is where the row groups for this table start
+	auto &meta_writer = writer.GetMetaWriter();
+	auto pointer = meta_writer.GetBlockPointer();
+
+	for(auto &stats : global_stats) {
+		stats->Serialize(meta_writer);
+	}
+	// now start writing the row group pointers to disk
+	meta_writer.Write<uint64_t>(row_group_pointers.size());
+	for(auto &row_group_pointer : row_group_pointers) {
+		RowGroup::Serialize(row_group_pointer, meta_writer);
+	}
+	return pointer;
 }
 
 void DataTable::CommitDropColumn(idx_t index) {

@@ -28,7 +28,6 @@ struct EvictionQueue;
 class BufferManager {
 	friend class BufferHandle;
 	friend class BlockHandle;
-	friend class BlockPointer;
 
 public:
 	BufferManager(DatabaseInstance &db, string temp_directory, idx_t maximum_memory);
@@ -90,7 +89,7 @@ private:
 	string temp_directory;
 	//! The lock for the set of blocks
 	std::mutex manager_lock;
-	//! A mapping of block id -> BlockPointer
+	//! A mapping of block id -> BlockHandle
 	unordered_map<block_id_t, weak_ptr<BlockHandle>> blocks;
 	//! Eviction queue
 	unique_ptr<EvictionQueue> queue;

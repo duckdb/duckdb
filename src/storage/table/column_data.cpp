@@ -21,8 +21,8 @@
 
 namespace duckdb {
 
-ColumnData::ColumnData(RowGroup &row_group, LogicalType type, idx_t column_idx, ColumnData *parent)
-    : db(row_group.GetDatabase()), start(row_group.start), type(move(type)), column_idx(column_idx), parent(parent) {
+ColumnData::ColumnData(DatabaseInstance &db, idx_t start_row, LogicalType type, ColumnData *parent)
+    : db(db), start(start_row), type(move(type)), parent(parent) {
 }
 
 ColumnData::~ColumnData() {}
@@ -208,12 +208,12 @@ void ColumnData::CommitDropColumn() {
 	}
 }
 
-unique_ptr<ColumnCheckpointState> ColumnData::CreateCheckpointState(TableDataWriter &writer) {
-	return make_unique<ColumnCheckpointState>(*this, writer);
+unique_ptr<ColumnCheckpointState> ColumnData::CreateCheckpointState(RowGroup &row_group, TableDataWriter &writer) {
+	return make_unique<ColumnCheckpointState>(row_group, *this, writer);
 }
 
-ColumnCheckpointState::ColumnCheckpointState(ColumnData &column_data, TableDataWriter &writer)
-    : column_data(column_data), writer(writer) {
+ColumnCheckpointState::ColumnCheckpointState(RowGroup &row_group, ColumnData &column_data, TableDataWriter &writer)
+    : row_group(row_group), column_data(column_data), writer(writer) {
 }
 
 ColumnCheckpointState::~ColumnCheckpointState() {
@@ -222,13 +222,13 @@ ColumnCheckpointState::~ColumnCheckpointState() {
 void ColumnCheckpointState::CreateEmptySegment() {
 	auto type_id = column_data.type.InternalType();
 	if (type_id == PhysicalType::VARCHAR) {
-		auto string_segment = make_unique<StringSegment>(column_data.GetDatabase(), 0);
+		auto string_segment = make_unique<StringSegment>(column_data.GetDatabase(), row_group.start);
 		string_segment->overflow_writer = make_unique<WriteOverflowStringsToDisk>(column_data.GetDatabase());
 		current_segment = move(string_segment);
 	} else if (type_id == PhysicalType::BIT) {
-		current_segment = make_unique<ValiditySegment>(column_data.GetDatabase(), 0);
+		current_segment = make_unique<ValiditySegment>(column_data.GetDatabase(), row_group.start);
 	} else {
-		current_segment = make_unique<NumericSegment>(column_data.GetDatabase(), type_id, 0);
+		current_segment = make_unique<NumericSegment>(column_data.GetDatabase(), type_id, row_group.start);
 	}
 	segment_stats = make_unique<SegmentStatistics>(column_data.type);
 }
@@ -273,9 +273,9 @@ void ColumnCheckpointState::FlushSegment() {
 	uint32_t offset_in_block = 0;
 
 	DataPointer data_pointer;
-	data_pointer.block_id = block_id;
-	data_pointer.offset = offset_in_block;
-	data_pointer.row_start = 0;
+	data_pointer.block_pointer.block_id = block_id;
+	data_pointer.block_pointer.offset = offset_in_block;
+	data_pointer.row_start = row_group.start;
 	if (!data_pointers.empty()) {
 		auto &last_pointer = data_pointers.back();
 		data_pointer.row_start = last_pointer.row_start + last_pointer.tuple_count;
@@ -304,31 +304,27 @@ void ColumnCheckpointState::FlushSegment() {
 void ColumnCheckpointState::FlushToDisk() {
 	auto &meta_writer = writer.GetMetaWriter();
 
-	// serialize the global stats of the column
-	global_stats->Serialize(meta_writer);
-
 	meta_writer.Write<idx_t>(data_pointers.size());
 	// then write the data pointers themselves
 	for (idx_t k = 0; k < data_pointers.size(); k++) {
 		auto &data_pointer = data_pointers[k];
 		meta_writer.Write<idx_t>(data_pointer.row_start);
 		meta_writer.Write<idx_t>(data_pointer.tuple_count);
-		meta_writer.Write<block_id_t>(data_pointer.block_id);
-		meta_writer.Write<uint32_t>(data_pointer.offset);
+		meta_writer.Write<block_id_t>(data_pointer.block_pointer.block_id);
+		meta_writer.Write<uint32_t>(data_pointer.block_pointer.offset);
 		data_pointer.statistics->Serialize(meta_writer);
 	}
 }
 
-void ColumnData::Checkpoint(TableDataWriter &writer) {
+unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, TableDataWriter &writer, idx_t column_idx) {
 	// scan the segments of the column data
 	// set up the checkpoint state
-	auto checkpoint_state = CreateCheckpointState(writer);
+	auto checkpoint_state = CreateCheckpointState(row_group, writer);
 	checkpoint_state->global_stats = BaseStatistics::CreateEmpty(type);
 
 	if (!data.root_node) {
 		// empty table: flush the empty list
-		checkpoint_state->FlushToDisk();
-		return;
+		return checkpoint_state;
 	}
 
 	auto &block_manager = BlockManager::GetBlockManager(GetDatabase());
@@ -336,76 +332,81 @@ void ColumnData::Checkpoint(TableDataWriter &writer) {
 	Vector intermediate(type);
 	// we create a new segment tree with all the new segments
 	// we do this by scanning the current segments of the column and checking for changes
-	// if there are any changes (e.g. updates or appends) we write the new changes
+	// if there are any changes (e.g. updates or deletes) we write the new changes
 	// otherwise we simply write out the current data pointers
-	throw NotImplementedException("FIXME: checkpoint");
-	// auto owned_segment = move(data.root_node);
-	// auto segment = (ColumnSegment *)owned_segment.get();
-	// while (segment) {
-	// 	if (segment->segment_type == ColumnSegmentType::PERSISTENT) {
-	// 		auto &persistent = (PersistentSegment &)*segment;
-	// 		// persistent segment; check if there were any updates in this segment
-	// 		bool has_updates = segment->updates && segment->updates->HasUpdates();
-	// 		if (has_updates) {
-	// 			// persistent segment has updates: mark it as modified and rewrite the block with the merged updates
-	// 			block_manager.MarkBlockAsModified(persistent.block_id);
-	// 		} else {
-	// 			// unchanged persistent segment: no need to write the data
+	auto owned_segment = move(data.root_node);
+	auto segment = (ColumnSegment *)owned_segment.get();
+	while (segment) {
+		if (segment->segment_type == ColumnSegmentType::PERSISTENT) {
+			auto &persistent = (PersistentSegment &)*segment;
+			// persistent segment; check if there were any updates or deletions in this segment
+			idx_t start_vector_idx = (persistent.start - row_group.start) / STANDARD_VECTOR_SIZE;
+			idx_t end_vector_idx = start_vector_idx + (persistent.count + (STANDARD_VECTOR_SIZE - 1)) / STANDARD_VECTOR_SIZE;
+			bool has_changes = false;
+			if (!row_group.updates.empty() && column_idx < row_group.updates.size()) {
+				if (row_group.updates[column_idx]->HasUpdates(start_vector_idx, end_vector_idx)) {
+					has_changes = true;
+				}
+			}
+			if (has_changes) {
+				// persistent segment has updates: mark it as modified and rewrite the block with the merged updates
+				block_manager.MarkBlockAsModified(persistent.block_id);
+			} else {
+				// unchanged persistent segment: no need to write the data
 
-	// 			// flush any segments preceding this persistent segment
-	// 			if (checkpoint_state->current_segment->tuple_count > 0) {
-	// 				checkpoint_state->FlushSegment();
-	// 				checkpoint_state->CreateEmptySegment();
-	// 			}
+				// flush any segments preceding this persistent segment
+				if (checkpoint_state->current_segment->tuple_count > 0) {
+					checkpoint_state->FlushSegment();
+					checkpoint_state->CreateEmptySegment();
+				}
 
-	// 			// set up the data pointer directly using the data from the persistent segment
-	// 			DataPointer pointer;
-	// 			pointer.block_id = persistent.block_id;
-	// 			pointer.offset = 0;
-	// 			pointer.row_start = segment->start;
-	// 			pointer.tuple_count = persistent.count;
-	// 			pointer.statistics = persistent.stats.statistics->Copy();
+				// set up the data pointer directly using the data from the persistent segment
+				DataPointer pointer;
+				pointer.block_pointer.block_id = persistent.block_id;
+				pointer.block_pointer.offset = 0;
+				pointer.row_start = segment->start;
+				pointer.tuple_count = persistent.count;
+				pointer.statistics = persistent.stats.statistics->Copy();
 
-	// 			// merge the persistent stats into the global column stats
-	// 			checkpoint_state->global_stats->Merge(*persistent.stats.statistics);
+				// merge the persistent stats into the global column stats
+				checkpoint_state->global_stats->Merge(*persistent.stats.statistics);
 
-	// 			// directly append the current segment to the new tree
-	// 			checkpoint_state->new_tree.AppendSegment(move(owned_segment));
+				// directly append the current segment to the new tree
+				checkpoint_state->new_tree.AppendSegment(move(owned_segment));
 
-	// 			checkpoint_state->data_pointers.push_back(move(pointer));
+				checkpoint_state->data_pointers.push_back(move(pointer));
 
-	// 			// move to the next segment in the list
-	// 			owned_segment = move(segment->next);
-	// 			segment = (ColumnSegment *)owned_segment.get();
-	// 			continue;
-	// 		}
-	// 	}
-	// 	// not persisted yet: scan the segment and write it to disk
-	// 	ColumnScanState state;
-	// 	state.current = segment;
-	// 	segment->InitializeScan(state);
+				// move to the next segment in the list
+				owned_segment = move(segment->next);
+				segment = (ColumnSegment *)owned_segment.get();
+				continue;
+			}
+		}
+		// not persisted yet: scan the segment and write it to disk
+		ColumnScanState state;
+		state.current = segment;
+		segment->InitializeScan(state);
 
-	// 	Vector scan_vector(type);
-	// 	for (idx_t base_row_index = 0; base_row_index < segment->count; base_row_index += STANDARD_VECTOR_SIZE) {
-	// 		scan_vector.Reference(intermediate);
+		Vector scan_vector(type);
+		for (idx_t base_row_index = 0; base_row_index < segment->count; base_row_index += STANDARD_VECTOR_SIZE) {
+			scan_vector.Reference(intermediate);
 
-	// 		idx_t count = MinValue<idx_t>(segment->count - base_row_index, STANDARD_VECTOR_SIZE);
-	// 		state.row_index = segment->start + base_row_index;
-	// 		ScanCommitted(state, scan_vector);
+			idx_t count = MinValue<idx_t>(segment->count - base_row_index, STANDARD_VECTOR_SIZE);
+			state.row_index = segment->start + base_row_index;
+			segment->Scan(state, base_row_index, count, scan_vector, 0);
 
-	// 		checkpoint_state->AppendData(scan_vector, count);
-	// 	}
-	// 	// move to the next segment in the list
-	// 	owned_segment = move(segment->next);
-	// 	segment = (ColumnSegment *)owned_segment.get();
-	// }
-	// // flush the final segment
-	// checkpoint_state->FlushSegment();
-	// // replace the old tree with the new one
-	// data.Replace(checkpoint_state->new_tree);
+			checkpoint_state->AppendData(scan_vector, count);
+		}
+		// move to the next segment in the list
+		owned_segment = move(segment->next);
+		segment = (ColumnSegment *)owned_segment.get();
+	}
+	// flush the final segment
+	checkpoint_state->FlushSegment();
+	// replace the old tree with the new one
+	data.Replace(checkpoint_state->new_tree);
 
-	// // flush the meta information/data pointers to disk
-	// checkpoint_state->FlushToDisk();
+	return checkpoint_state;
 }
 
 void ColumnData::Initialize(PersistentColumnData &column_data) {
@@ -421,11 +422,7 @@ void ColumnData::Initialize(PersistentColumnData &column_data) {
 }
 
 void ColumnData::BaseDeserialize(DatabaseInstance &db, Deserializer &source, const LogicalType &type,
-                                 PersistentColumnData &result) {
-	// load the column statistics
-	result.stats = BaseStatistics::Deserialize(source, type);
-	result.total_rows = 0;
-
+                                 ColumnData &result) {
 	// load the data pointers for the column
 	idx_t data_pointer_count = source.Read<idx_t>();
 	for (idx_t data_ptr = 0; data_ptr < data_pointer_count; data_ptr++) {
@@ -433,27 +430,21 @@ void ColumnData::BaseDeserialize(DatabaseInstance &db, Deserializer &source, con
 		DataPointer data_pointer;
 		data_pointer.row_start = source.Read<idx_t>();
 		data_pointer.tuple_count = source.Read<idx_t>();
-		data_pointer.block_id = source.Read<block_id_t>();
-		data_pointer.offset = source.Read<uint32_t>();
+		data_pointer.block_pointer.block_id = source.Read<block_id_t>();
+		data_pointer.block_pointer.offset = source.Read<uint32_t>();
 		data_pointer.statistics = BaseStatistics::Deserialize(source, type);
 
-		result.total_rows += data_pointer.tuple_count;
 		// create a persistent segment
 		auto segment =
-		    make_unique<PersistentSegment>(db, data_pointer.block_id, data_pointer.offset, type, data_pointer.row_start,
+		    make_unique<PersistentSegment>(db, data_pointer.block_pointer.block_id, data_pointer.block_pointer.offset, type, data_pointer.row_start,
 		                                   data_pointer.tuple_count, move(data_pointer.statistics));
-		result.segments.push_back(move(segment));
+		result.data.AppendSegment(move(segment));
 	}
 }
 
-unique_ptr<PersistentColumnData> ColumnData::Deserialize(DatabaseInstance &db, Deserializer &source,
+shared_ptr<ColumnData> ColumnData::Deserialize(DatabaseInstance &db, idx_t start_row, Deserializer &source,
                                                          const LogicalType &type) {
-	switch (type.id()) {
-	case LogicalTypeId::VALIDITY:
-		return ValidityColumnData::Deserialize(db, source);
-	default:
-		return StandardColumnData::Deserialize(db, source, type);
-	}
+	return StandardColumnData::Deserialize(db, start_row, source, type);
 }
 
 } // namespace duckdb

@@ -143,8 +143,7 @@ public:
 	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id);
 
 	//! Checkpoint the table to the specified table data writer
-	void Checkpoint(TableDataWriter &writer);
-	void CheckpointDeletes(TableDataWriter &writer);
+	BlockPointer Checkpoint(TableDataWriter &writer);
 	void CommitDropTable();
 	void CommitDropColumn(idx_t index);
 

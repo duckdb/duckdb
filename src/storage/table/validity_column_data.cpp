@@ -4,8 +4,8 @@
 
 namespace duckdb {
 
-ValidityColumnData::ValidityColumnData(RowGroup &row_group, idx_t column_idx, ColumnData *parent)
-    : ColumnData(row_group, LogicalType(LogicalTypeId::VALIDITY), column_idx, parent) {
+ValidityColumnData::ValidityColumnData(DatabaseInstance &db, idx_t start_row, ColumnData *parent)
+    : ColumnData(db, start_row, LogicalType(LogicalTypeId::VALIDITY), parent) {
 }
 
 bool ValidityColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
@@ -31,12 +31,6 @@ void ValidityColumnData::Scan(ColumnScanState &state, Vector &result) {
 	}
 	// perform a scan of this segment
 	ScanVector(state, result);
-}
-
-unique_ptr<PersistentColumnData> ValidityColumnData::Deserialize(DatabaseInstance &db, Deserializer &source) {
-	auto result = make_unique<PersistentColumnData>();
-	BaseDeserialize(db, source, LogicalType(LogicalTypeId::VALIDITY), *result);
-	return result;
 }
 
 } // namespace duckdb

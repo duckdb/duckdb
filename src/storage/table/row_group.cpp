@@ -7,6 +7,8 @@
 #include "duckdb/common/chrono.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/storage/checkpoint/table_data_writer.hpp"
+#include "duckdb/storage/meta_block_reader.hpp"
 
 namespace duckdb {
 
@@ -19,12 +21,31 @@ RowGroup::RowGroup(DatabaseInstance &db, DataTableInfo &table_info, idx_t start,
     SegmentBase(start, count), db(db), table_info(table_info) {
 }
 
+RowGroup::RowGroup(DatabaseInstance &db, DataTableInfo &table_info, const vector<LogicalType> &types, RowGroupPointer &pointer) :
+	SegmentBase(pointer.row_start, pointer.tuple_count), db(db), table_info(table_info) {
+	// deserialize the columns
+	if (pointer.data_pointers.size() != types.size()) {
+		throw IOException("Row group column count is unaligned with table column count. Corrupt file?");
+	}
+	for(idx_t i = 0; i < pointer.data_pointers.size(); i++) {
+		auto &block_pointer = pointer.data_pointers[i];
+		MetaBlockReader column_data_reader(db, block_pointer.block_id);
+		column_data_reader.offset = block_pointer.offset;
+		this->columns.push_back(ColumnData::Deserialize(db, start, column_data_reader, types[i]));
+	}
+
+	// set up the statistics
+	for(auto &stats : pointer.statistics) {
+		this->stats.push_back(make_shared<SegmentStatistics>(stats->type, move(stats)));
+	}
+}
+
 RowGroup::~RowGroup() {}
 
 void RowGroup::InitializeEmpty(const vector<LogicalType> &types) {
 	// set up the segment trees for the column segments
 	for (idx_t i = 0; i < types.size(); i++) {
-		auto column_data = make_shared<StandardColumnData>(*this, types[i], i);
+		auto column_data = make_shared<StandardColumnData>(GetDatabase(), start, types[i]);
 		stats.push_back(make_shared<SegmentStatistics>(types[i]));
 		columns.push_back(move(column_data));
 	}
@@ -65,7 +86,7 @@ void RowGroup::InitializeScan(RowGroupScanState &state) {
 
 unique_ptr<RowGroup> RowGroup::AlterType(ClientContext &context, const LogicalType &target_type, idx_t changed_idx, ExpressionExecutor &executor, TableScanState &scan_state, DataChunk &scan_chunk) {
 	// construct a new column data for this type
-	auto column_data = make_shared<StandardColumnData>(*this, target_type, changed_idx);
+	auto column_data = make_shared<StandardColumnData>(GetDatabase(), start, target_type);
 
 	ColumnAppendState append_state;
 	column_data->InitializeAppend(append_state);
@@ -109,10 +130,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(ClientContext &context, const LogicalTy
 
 unique_ptr<RowGroup> RowGroup::AddColumn(ClientContext &context, ColumnDefinition &new_column, ExpressionExecutor &executor, Expression *default_value, Vector &result) {
 	// construct a new column data for the new column
-	auto added_column = make_shared<StandardColumnData>(*this, new_column.type, columns.size());
-
-	// scan the original table, and fill the new column with the transformed value
-	auto &transaction = Transaction::GetTransaction(context);
+	auto added_column = make_shared<StandardColumnData>(GetDatabase(), start, new_column.type);
 
 	auto added_col_stats = make_shared<SegmentStatistics>(new_column.type);
 	idx_t rows_to_write = this->count;
@@ -223,7 +241,6 @@ void RowGroup::TemplatedScan(Transaction *transaction, RowGroupScanState &state,
 			auto start_time = high_resolution_clock::now();
 			for (idx_t i = 0; i < table_filters->filters.size(); i++) {
 				auto tf_idx = adaptive_filter->permutation[i];
-				auto col_idx = column_ids[tf_idx];
 				for(auto &filter : table_filters->filters[tf_idx]) {
 					D_ASSERT(tf_idx < result.data.size());
 					UncompressedSegment::FilterSelection(sel, result.data[tf_idx], filter, approved_tuple_count, FlatVector::Validity(result.data[tf_idx]));
@@ -448,6 +465,75 @@ void RowGroup::MergeStatistics(idx_t column_idx, BaseStatistics &other) {
 	lock_guard<mutex> slock(stats_lock);
 	stats[column_idx]->statistics->Merge(other);
 }
+
+RowGroupPointer RowGroup::Checkpoint(TableDataWriter &writer, vector<unique_ptr<BaseStatistics>> &global_stats) {
+	vector<unique_ptr<ColumnCheckpointState>> states;
+	states.reserve(columns.size());
+
+	// checkpoint the individual columns of the row group
+	for(idx_t column_idx = 0; column_idx < columns.size(); column_idx++) {
+		auto &column = columns[column_idx];
+		auto checkpoint_state = column->Checkpoint(*this, writer, column_idx);
+		D_ASSERT(checkpoint_state);
+
+		global_stats[column_idx]->Merge(*checkpoint_state->global_stats);
+		states.push_back(move(checkpoint_state));
+	}
+
+	// construct the row group pointer and write the column meta data to disk
+	D_ASSERT(states.size() == columns.size());
+	RowGroupPointer row_group_pointer;
+	row_group_pointer.row_start = start;
+	row_group_pointer.tuple_count = count;
+	for(auto &state : states) {
+		// get the current position of the meta data writer
+		auto &meta_writer = writer.GetMetaWriter();
+		auto pointer = meta_writer.GetBlockPointer();
+
+		// store the stats and the data pointers in the row group pointers
+		row_group_pointer.data_pointers.push_back(pointer);
+		row_group_pointer.statistics.push_back(move(state->global_stats));
+
+		// now flush the actual column data to disk
+		state->FlushToDisk();
+	}
+	return row_group_pointer;
+}
+
+
+void RowGroup::Serialize(RowGroupPointer &pointer, Serializer &serializer) {
+	serializer.Write<uint64_t>(pointer.row_start);
+	serializer.Write<uint64_t>(pointer.tuple_count);
+	for(auto &stats : pointer.statistics) {
+		stats->Serialize(serializer);
+	}
+	for(auto &pointer : pointer.data_pointers) {
+		serializer.Write<block_id_t>(pointer.block_id);
+		serializer.Write<uint64_t>(pointer.offset);
+	}
+}
+
+RowGroupPointer RowGroup::Deserialize(Deserializer &source, const vector<ColumnDefinition> &columns) {
+	RowGroupPointer result;
+	result.row_start = source.Read<uint64_t>();
+	result.tuple_count = source.Read<uint64_t>();
+
+	result.data_pointers.reserve(columns.size());
+	result.statistics.reserve(columns.size());
+
+	for(idx_t i = 0; i < columns.size(); i++) {
+		auto stats = BaseStatistics::Deserialize(source, columns[i].type);
+		result.statistics.push_back(move(stats));
+	}
+	for(idx_t i = 0; i < columns.size(); i++) {
+		BlockPointer pointer;
+		pointer.block_id = source.Read<block_id_t>();
+		pointer.offset = source.Read<uint64_t>();
+		result.data_pointers.push_back(pointer);
+	}
+	return result;
+}
+
 
 class VersionDeleteState {
 public:

@@ -16,6 +16,7 @@
 #include "duckdb/storage/data_pointer.hpp"
 #include "duckdb/storage/table/persistent_table_data.hpp"
 #include "duckdb/storage/statistics/segment_statistics.hpp"
+#include "duckdb/storage/table/column_checkpoint_state.hpp"
 
 namespace duckdb {
 class ColumnData;
@@ -28,29 +29,9 @@ class Transaction;
 
 struct DataTableInfo;
 
-struct ColumnCheckpointState {
-	ColumnCheckpointState(ColumnData &column_data, TableDataWriter &writer);
-	virtual ~ColumnCheckpointState();
-
-	ColumnData &column_data;
-	TableDataWriter &writer;
-	SegmentTree new_tree;
-	vector<DataPointer> data_pointers;
-	unique_ptr<BaseStatistics> global_stats;
-
-	unique_ptr<UncompressedSegment> current_segment;
-	unique_ptr<SegmentStatistics> segment_stats;
-
-public:
-	virtual void CreateEmptySegment();
-	virtual void FlushSegment();
-	virtual void AppendData(Vector &data, idx_t count);
-	virtual void FlushToDisk();
-};
-
 class ColumnData {
 public:
-	ColumnData(RowGroup &row_group, LogicalType type, idx_t column_idx, ColumnData *parent);
+	ColumnData(DatabaseInstance &db, idx_t start_row, LogicalType type, ColumnData *parent);
 	virtual ~ColumnData();
 
 	//! The database instance this column belongs to
@@ -59,8 +40,6 @@ public:
 	idx_t start;
 	//! The type of the column
 	LogicalType type;
-	//! The column index of the column
-	idx_t column_idx;
 	//! The parent column (if any)
 	ColumnData *parent;
 
@@ -101,15 +80,14 @@ public:
 
 	virtual void CommitDropColumn();
 
-	virtual unique_ptr<ColumnCheckpointState> CreateCheckpointState(TableDataWriter &writer);
-	virtual void Checkpoint(TableDataWriter &writer);
+	virtual unique_ptr<ColumnCheckpointState> CreateCheckpointState(RowGroup &row_group, TableDataWriter &writer);
+	virtual unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, TableDataWriter &writer, idx_t column_idx);
 
 	virtual void Initialize(PersistentColumnData &column_data);
 
 	static void BaseDeserialize(DatabaseInstance &db, Deserializer &source, const LogicalType &type,
-	                            PersistentColumnData &result);
-	static unique_ptr<PersistentColumnData> Deserialize(DatabaseInstance &db, Deserializer &source,
-	                                                    const LogicalType &type);
+	                            ColumnData &result);
+	static shared_ptr<ColumnData> Deserialize(DatabaseInstance &db, idx_t start_row, Deserializer &source, const LogicalType &type);
 
 protected:
 	//! Append a transient segment

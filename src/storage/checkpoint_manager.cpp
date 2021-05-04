@@ -251,13 +251,13 @@ void CheckpointManager::ReadMacro(ClientContext &context, MetaBlockReader &reade
 void CheckpointManager::WriteTable(TableCatalogEntry &table) {
 	// write the table meta data
 	table.Serialize(*metadata_writer);
-	//! write the blockId for the table info
-	metadata_writer->Write<block_id_t>(tabledata_writer->block->id);
-	//! and the offset to where the info starts
-	metadata_writer->Write<uint64_t>(tabledata_writer->offset);
 	// now we need to write the table data
 	TableDataWriter writer(db, table, *tabledata_writer);
-	writer.WriteTableData();
+	auto pointer = writer.WriteTableData();
+
+	//! write the block pointer for the table info
+	metadata_writer->Write<block_id_t>(pointer.block_id);
+	metadata_writer->Write<uint64_t>(pointer.offset);
 }
 
 void CheckpointManager::ReadTable(ClientContext &context, MetaBlockReader &reader) {

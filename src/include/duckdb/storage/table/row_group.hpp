@@ -22,12 +22,15 @@ class DatabaseInstance;
 class DataTable;
 struct DataTableInfo;
 class ExpressionExecutor;
+class TableDataWriter;
 class UpdateSegment;
 class Vector;
+struct RowGroupPointer;
 struct VersionNode;
 
 class RowGroup : public SegmentBase {
 public:
+	friend class ColumnData;
 	friend class VersionDeleteState;
 public:
 	static constexpr const idx_t ROW_GROUP_VECTOR_COUNT = 100;
@@ -38,6 +41,7 @@ public:
 
 public:
 	RowGroup(DatabaseInstance &db, DataTableInfo &table_info, idx_t start, idx_t count);
+	RowGroup(DatabaseInstance &db, DataTableInfo &table_info, const vector<LogicalType> &types, RowGroupPointer &pointer);
 	~RowGroup();
 
 private:
@@ -87,6 +91,10 @@ public:
 
 	//! Delete the given set of rows in the version manager
 	void Delete(Transaction &transaction, DataTable *table, Vector &row_ids, idx_t count);
+
+	RowGroupPointer Checkpoint(TableDataWriter &writer, vector<unique_ptr<BaseStatistics>> &global_stats);
+	static void Serialize(RowGroupPointer &pointer, Serializer &serializer);
+	static RowGroupPointer Deserialize(Deserializer &source, const vector<ColumnDefinition> &columns);
 
 	void InitializeAppend(Transaction &transaction, RowGroupAppendState &append_state, idx_t remaining_append_count);
 	void Append(RowGroupAppendState &append_state, DataChunk &chunk, idx_t append_count);

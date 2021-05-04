@@ -25,10 +25,7 @@ public:
 	TableDataWriter(DatabaseInstance &db, TableCatalogEntry &table, MetaBlockWriter &meta_writer);
 	~TableDataWriter();
 
-	void WriteTableData();
-
-	void CheckpointColumn(ColumnData &col_data, idx_t col_idx);
-	void CheckpointDeletes(RowGroup *info);
+	BlockPointer WriteTableData();
 
 	MetaBlockWriter &GetMetaWriter() {
 		return meta_writer;

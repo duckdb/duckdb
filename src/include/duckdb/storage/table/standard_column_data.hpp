@@ -16,7 +16,7 @@ namespace duckdb {
 //! Standard column data represents a regular flat column (e.g. a column of type INTEGER or STRING)
 class StandardColumnData : public ColumnData {
 public:
-	StandardColumnData(RowGroup &row_group, LogicalType type, idx_t column_idx, ColumnData *parent = nullptr);
+	StandardColumnData(DatabaseInstance &db, idx_t start_row, LogicalType type, ColumnData *parent = nullptr);
 
 	//! The validity column data
 	ValidityColumnData validity;
@@ -34,9 +34,11 @@ public:
 
 	void CommitDropColumn() override;
 	void Initialize(PersistentColumnData &column_data) override;
-	void Checkpoint(TableDataWriter &writer) override;
-	static unique_ptr<PersistentColumnData> Deserialize(DatabaseInstance &db, Deserializer &source,
-	                                                    const LogicalType &type);
+
+	unique_ptr<ColumnCheckpointState> CreateCheckpointState(RowGroup &row_group, TableDataWriter &writer) override;
+	unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, TableDataWriter &writer, idx_t column_idx) override;
+	static shared_ptr<ColumnData> Deserialize(DatabaseInstance &db, idx_t start_row, Deserializer &source, const LogicalType &type);
+
 };
 
 } // namespace duckdb
