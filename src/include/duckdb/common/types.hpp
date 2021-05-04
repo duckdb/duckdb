@@ -112,6 +112,10 @@ struct interval_t {
 	int32_t months;
 	int32_t days;
 	int64_t micros;
+
+	inline bool operator==(const interval_t &rhs) const {
+		return this->days == rhs.days && this->months == rhs.months && this->micros == rhs.micros;
+	}
 };
 
 struct hugeint_t {
