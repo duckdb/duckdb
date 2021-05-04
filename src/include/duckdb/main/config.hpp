@@ -25,7 +25,7 @@ enum class AccessMode : uint8_t { UNDEFINED = 0, AUTOMATIC = 1, READ_ONLY = 2, R
 enum class CheckpointAbort : uint8_t { NO_ABORT = 0, DEBUG_ABORT_BEFORE_TRUNCATE = 1, DEBUG_ABORT_BEFORE_HEADER = 2 };
 
 // this is optional and only used in tests at the moment
-struct DBConfig {
+struct DUCKDB_API DBConfig {
 	friend class DatabaseInstance;
 	friend class StorageManager;
 

@@ -60,7 +60,7 @@ private:
 
 //! The database object. This object holds the catalog and all the
 //! database-specific meta information.
-class DuckDB {
+class DUCKDB_API DuckDB {
 public:
 	DUCKDB_API explicit DuckDB(const char *path = nullptr, DBConfig *config = nullptr);
 	DUCKDB_API explicit DuckDB(const string &path, DBConfig *config = nullptr);

@@ -30,7 +30,7 @@ typedef void (*warning_callback)(std::string);
 
 //! A connection to a database. This represents a (client) connection that can
 //! be used to query the database.
-class Connection {
+class DUCKDB_API Connection {
 public:
 	DUCKDB_API explicit Connection(DuckDB &database);
 	DUCKDB_API explicit Connection(DatabaseInstance &database);

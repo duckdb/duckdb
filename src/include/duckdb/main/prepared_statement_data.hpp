@@ -19,7 +19,7 @@ class CatalogEntry;
 class PhysicalOperator;
 class SQLStatement;
 
-class PreparedStatementData {
+class DUCKDB_API PreparedStatementData {
 public:
 	DUCKDB_API explicit PreparedStatementData(StatementType type);
 	DUCKDB_API ~PreparedStatementData();

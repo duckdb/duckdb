@@ -32,7 +32,7 @@ class ChunkCollection;
 struct SelCache;
 
 //!  Vector of values of a specified PhysicalType.
-class Vector {
+class DUCKDB_API Vector {
 	friend struct ConstantVector;
 	friend struct DictionaryVector;
 	friend struct FlatVector;

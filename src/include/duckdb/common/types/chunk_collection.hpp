@@ -22,7 +22,7 @@ namespace duckdb {
    iterator. It is also possible to iterate directly over the chunks for more
    direct access.
 */
-class ChunkCollection {
+class DUCKDB_API ChunkCollection {
 public:
 	ChunkCollection() : count(0) {
 	}

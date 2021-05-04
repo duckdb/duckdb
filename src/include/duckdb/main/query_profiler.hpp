@@ -67,7 +67,7 @@ struct OperatorTimingInformation {
 };
 
 //! The OperatorProfiler measures timings of individual operators
-class OperatorProfiler {
+class DUCKDB_API OperatorProfiler {
 	friend class QueryProfiler;
 
 public:

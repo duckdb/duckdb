@@ -20,7 +20,7 @@ class TableCatalogEntry;
 class Connection;
 
 //! The Appender class can be used to append elements to a table.
-class Appender {
+class DUCKDB_API Appender {
 	//! A reference to a database connection that created this appender
 	shared_ptr<ClientContext> context;
 	//! The table description (including column names)

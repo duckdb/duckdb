@@ -16,7 +16,7 @@ class ClientContext;
 class PreparedStatementData;
 
 //! A prepared statement
-class PreparedStatement {
+class DUCKDB_API PreparedStatement {
 public:
 	//! Create a successfully prepared prepared statement object with the given name
 	DUCKDB_API PreparedStatement(shared_ptr<ClientContext> context, shared_ptr<PreparedStatementData> data,

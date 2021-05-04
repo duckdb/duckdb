@@ -37,7 +37,7 @@ class ClientContextLock;
 
 //! The ClientContext holds information relevant to the current client session
 //! during execution
-class ClientContext : public std::enable_shared_from_this<ClientContext> {
+class DUCKDB_API ClientContext : public std::enable_shared_from_this<ClientContext> {
 	friend class TransactionManager;
 
 public:

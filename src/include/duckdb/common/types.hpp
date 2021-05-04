@@ -363,7 +363,7 @@ enum class LogicalTypeId : uint8_t {
 	TABLE = 103
 };
 
-struct LogicalType {
+struct DUCKDB_API LogicalType {
 	DUCKDB_API LogicalType();
 	DUCKDB_API LogicalType(LogicalTypeId id); // NOLINT: Allow implicit conversion from `LogicalTypeId`
 	DUCKDB_API LogicalType(LogicalTypeId id, string collation);
