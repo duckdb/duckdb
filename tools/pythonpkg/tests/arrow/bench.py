@@ -12,31 +12,36 @@ except:
 
 duckdb_conn = duckdb.connect()
 
-        
-data = (pyarrow.array(np.random.randint(800, size=100000000), type=pyarrow.int32()))
-tbl = pyarrow.Table.from_batches(pyarrow.Table.from_arrays([data],['a']).to_batches(1000000))
-rel = duckdb_conn.from_arrow_table(tbl)
-duckdb_conn.execute("PRAGMA threads=1")
+batch_sizes = [1024, 100000, 1000000]
 
-start_time = time.time()
-result = rel.aggregate("(count(a))::INT").execute().fetchone()[0]
+num_threads = [8,16,32,64,128]
 
-time_arrow_to_duck = time.time() - start_time
-# assert (result == 100000)
-print (result)
-print (time_arrow_to_duck)
+for batch in batch_sizes:
+    print ("Batch :" + str(batch))
+    print ("Thread : 1" )
+    data = (pyarrow.array(np.random.randint(800, size=100000000), type=pyarrow.int32()))
+    tbl = pyarrow.Table.from_batches(pyarrow.Table.from_arrays([data],['a']).to_batches(batch))
+    rel = duckdb_conn.from_arrow_table(tbl)
+    duckdb_conn.execute("PRAGMA threads=1")
 
-data = (pyarrow.array(np.random.randint(800, size=100000000), type=pyarrow.int32()))
-tbl = pyarrow.Table.from_batches(pyarrow.Table.from_arrays([data],['a']).to_batches(1000000))
-rel = duckdb_conn.from_arrow_table(tbl)
+    start_time = time.time()
+    result = rel.aggregate("(count(a))::INT").execute().fetchone()[0]
 
-duckdb_conn.execute("PRAGMA threads=8")
-duckdb_conn.execute("PRAGMA force_parallelism")
+    time_arrow_to_duck = time.time() - start_time
+        # assert (result == 100000)
+    print (time_arrow_to_duck)
+    for thread in num_threads:
+        print ("Thread : "+str(thread))
+        data = (pyarrow.array(np.random.randint(800, size=100000000), type=pyarrow.int32()))
+        tbl = pyarrow.Table.from_batches(pyarrow.Table.from_arrays([data],['a']).to_batches(batch))
+        rel = duckdb_conn.from_arrow_table(tbl)
 
-start_time = time.time()
-result = rel.aggregate("(count(a))::INT").execute().fetchone()[0]
-time_arrow_to_duck = time.time() - start_time
+        duckdb_conn.execute("PRAGMA threads="+str(thread))
+        duckdb_conn.execute("PRAGMA force_parallelism")
 
-print (time_arrow_to_duck)
-print (result)
+        start_time = time.time()
+        result = rel.aggregate("(count(a))::INT").execute().fetchone()[0]
+        time_arrow_to_duck = time.time() - start_time
+
+        print (time_arrow_to_duck)
 # assert (result == 100000)
