@@ -395,6 +395,8 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, Ta
 			state.row_index = segment->start + base_row_index;
 			segment->Scan(state, base_row_index, count, scan_vector, 0);
 
+			// FIXME: merge updates here...
+
 			checkpoint_state->AppendData(scan_vector, count);
 		}
 		// move to the next segment in the list

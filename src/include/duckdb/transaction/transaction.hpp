@@ -100,7 +100,6 @@ public:
 	void PushDelete(DataTable *table, ChunkVectorInfo *vinfo, row_t rows[], idx_t count, idx_t base_row);
 	void PushAppend(DataTable *table, idx_t row_start, idx_t row_count);
 	UpdateInfo *CreateUpdateInfo(idx_t type_size, idx_t entries);
-	void PushWALUpdate(ColumnData &column, row_t rows[], idx_t count);
 
 private:
 	//! The undo buffer is used to store old versions of rows that are updated

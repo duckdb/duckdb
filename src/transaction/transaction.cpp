@@ -71,24 +71,6 @@ UpdateInfo *Transaction::CreateUpdateInfo(idx_t type_size, idx_t entries) {
 	return update_info;
 }
 
-void Transaction::PushWALUpdate(ColumnData &column, row_t rows[], idx_t count) {
-	throw NotImplementedException("FIXME: push wal update??");
-	// auto &storage = StorageManager::GetStorageManager(column.db);
-	// if (storage.InMemory()) {
-	// 	return;
-	// }
-	// if (column.table_info.IsTemporary()) {
-	// 	return;
-	// }
-	// auto undo_data = undo_buffer.CreateEntry(
-	//     UndoFlags::WAL_UPDATE, sizeof(WALUpdateInfo) + sizeof(row_t) * count);
-	// auto update_info = (WALUpdateInfo *) undo_data;
-	// update_info->column = &column;
-	// update_info->count = count;
-	// update_info->rows = (row_t *) (undo_data + sizeof(WALUpdateInfo));
-	// memcpy(update_info->rows, &rows[0], sizeof(row_t) * count);
-}
-
 bool Transaction::ChangesMade() {
 	return undo_buffer.ChangesMade() || storage.ChangesMade();
 }

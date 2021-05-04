@@ -272,7 +272,7 @@ void CheckpointManager::ReadTable(ClientContext &context, MetaBlockReader &reade
 	auto offset = reader.Read<uint64_t>();
 	MetaBlockReader table_data_reader(db, block_id);
 	table_data_reader.offset = offset;
-	TableDataReader data_reader(db, table_data_reader, *bound_info);
+	TableDataReader data_reader(table_data_reader, *bound_info);
 	data_reader.ReadTableData();
 
 	// finally create the table in the catalog

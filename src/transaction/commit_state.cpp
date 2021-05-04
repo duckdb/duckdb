@@ -10,6 +10,8 @@
 #include "duckdb/common/serializer/buffered_deserializer.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
+#include "duckdb/storage/table/column_data.hpp"
+#include "duckdb/storage/table/row_group.hpp"
 
 #include "duckdb/storage/table/chunk_info.hpp"
 
@@ -132,39 +134,34 @@ void CommitState::WriteDelete(DeleteInfo *info) {
 	log->WriteDelete(*delete_chunk);
 }
 
-void CommitState::WriteUpdate(WALUpdateInfo *info) {
-	throw NotImplementedException("FIXME: write update");
-	// D_ASSERT(info->count > 0);
-	// D_ASSERT(log);
-	// auto &column_data = *info->column;
-	// // switch to the current table, if necessary
-	// SwitchTable(&column_data.table_info, UndoFlags::UPDATE_TUPLE);
+void CommitState::WriteUpdate(UpdateInfo *info) {
+	D_ASSERT(log);
+	// switch to the current table, if necessary
+	auto &column_data = info->segment->column_data;
+	auto &row_group = info->segment->row_group;
 
-	// vector<LogicalType> update_types {
-	// 	column_data.RootType(),
-	// 	LOGICAL_ROW_TYPE
-	// };
+	SwitchTable(&row_group.GetTableInfo(), UndoFlags::UPDATE_TUPLE);
 
-	// update_chunk = make_unique<DataChunk>();
-	// update_chunk->Initialize(update_types);
+	vector<LogicalType> update_types;
+	update_types.push_back(column_data.type);
+	update_types.push_back(LOGICAL_ROW_TYPE);
 
-	// // fetch the updated values from the base segment
-	// ColumnScanState state;
-	// auto first_id = info->rows[0];
-	// column_data.InitializeScanWithOffset(state, first_id);
-	// column_data.IndexScan(state, update_chunk->data[0], true);
+	update_chunk = make_unique<DataChunk>();
+	update_chunk->Initialize(update_types);
 
-	// // write the row ids into the chunk
-	// SelectionVector sel(STANDARD_VECTOR_SIZE);
-	// auto row_ids = FlatVector::GetData<row_t>(update_chunk->data[1]);
-	// for (idx_t i = 0; i < info->count; i++) {
-	// 	auto idx = info->rows[i] - first_id;
-	// 	sel.set_index(i, idx);
-	// 	row_ids[idx] = info->rows[i];
-	// }
-	// update_chunk->Slice(sel, info->count);
+	// fetch the updated values from the base segment
+	info->segment->FetchCommitted(info->vector_index, update_chunk->data[0]);
 
-	// log->WriteUpdate(*update_chunk, column_data.column_idx);
+	// write the row ids into the chunk
+	auto row_ids = FlatVector::GetData<row_t>(update_chunk->data[1]);
+	idx_t start = row_group.start + info->vector_index * STANDARD_VECTOR_SIZE;
+	for (idx_t i = 0; i < info->N; i++) {
+		row_ids[info->tuples[i]] = start + info->tuples[i];
+	}
+	SelectionVector sel(info->tuples);
+	update_chunk->Slice(sel, info->N);
+
+	log->WriteUpdate(*update_chunk, row_group.GetColumnIndex(&column_data));
 }
 
 template <bool HAS_LOG>
@@ -207,17 +204,10 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::UPDATE_TUPLE: {
 		// update:
 		auto info = (UpdateInfo *)data;
+		if (HAS_LOG && !info->segment->row_group.GetTableInfo().IsTemporary()) {
+			WriteUpdate(info);
+		}
 		info->version_number = commit_id;
-		break;
-	}
-	case UndoFlags::WAL_UPDATE: {
-		throw NotImplementedException("FIXME: write update");
-		// auto info = (WALUpdateInfo *)data;
-		// if (!HAS_LOG) {
-		// 	break;
-		// }
-		// D_ASSERT(!info->column->table_info.IsTemporary());
-		// WriteUpdate(info);
 		break;
 	}
 	default:

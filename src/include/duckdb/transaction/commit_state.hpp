@@ -19,7 +19,6 @@ class WriteAheadLog;
 struct DataTableInfo;
 struct DeleteInfo;
 struct UpdateInfo;
-struct WALUpdateInfo;
 
 class CommitState {
 public:
@@ -45,7 +44,7 @@ private:
 
 	void WriteCatalogEntry(CatalogEntry *entry, data_ptr_t extra_data);
 	void WriteDelete(DeleteInfo *info);
-	void WriteUpdate(WALUpdateInfo *info);
+	void WriteUpdate(UpdateInfo *info);
 
 	void AppendRowId(row_t rowid);
 };

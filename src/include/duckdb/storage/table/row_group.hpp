@@ -62,6 +62,17 @@ public:
 	DatabaseInstance &GetDatabase() {
 		return db;
 	}
+	DataTableInfo &GetTableInfo() {
+		return table_info;
+	}
+	idx_t GetColumnIndex(ColumnData *data) {
+		for(idx_t i = 0; i < columns.size(); i++) {
+			if (columns[i].get() == data) {
+				return i;
+			}
+		}
+		return 0;
+	}
 
 	unique_ptr<RowGroup> AlterType(ClientContext &context, const LogicalType &target_type, idx_t changed_idx, ExpressionExecutor &executor, TableScanState &scan_state, DataChunk &scan_chunk);
 	unique_ptr<RowGroup> AddColumn(ClientContext &context, ColumnDefinition &new_column, ExpressionExecutor &executor, Expression *default_value, Vector &intermediate);

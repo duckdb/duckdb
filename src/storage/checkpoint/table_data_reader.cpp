@@ -15,8 +15,8 @@
 
 namespace duckdb {
 
-TableDataReader::TableDataReader(DatabaseInstance &db, MetaBlockReader &reader, BoundCreateTableInfo &info)
-    : db(db), reader(reader), info(info) {
+TableDataReader::TableDataReader(MetaBlockReader &reader, BoundCreateTableInfo &info)
+    : reader(reader), info(info) {
 	info.data = make_unique<PersistentTableData>(info.Base().columns.size());
 }
 
