@@ -36,7 +36,7 @@ struct ArrowSchema {
 
 struct ArrowArray {
 	// Array data description
-	int64_t length;
+	int64_t length=0;
 	int64_t null_count;
 	int64_t offset;
 	int64_t n_buffers;
