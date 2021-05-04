@@ -31,9 +31,6 @@ FARPROC WINAPI duckdb_dllimport_delay_hook(unsigned dliNotify, PDelayLoadInfo pd
 
 	return NULL;
 }
-
-ExternC const PfnDliHook __pfnDliNotifyHook2 = duckdb_dllimport_delay_hook;
-ExternC const PfnDliHook __pfnDliFailureHook2 = duckdb_dllimport_delay_hook;
 }
 #endif
 #endif
