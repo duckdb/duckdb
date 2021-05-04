@@ -30,34 +30,4 @@ BlockPointer TableDataWriter::WriteTableData() {
 	return table.storage->Checkpoint(*this);
 }
 
-// void TableDataWriter::CheckpointDeletes(RowGroup *row_group_info) {
-// 	// deletes! write them after the data pointers
-// 	while (row_group_info) {
-// 		throw NotImplementedException("FIXME: checkpoint deletes");
-// 		// if (row_group_info->version_info) {
-// 		// 	// first count how many ChunkInfo's we need to deserialize
-// 		// 	idx_t chunk_info_count = 0;
-// 		// 	for (idx_t vector_idx = 0; vector_idx < RowGroup::ROW_GROUP_VECTOR_COUNT; vector_idx++) {
-// 		// 		auto chunk_info = row_group_info->version_info->info[vector_idx].get();
-// 		// 		if (!chunk_info) {
-// 		// 			continue;
-// 		// 		}
-// 		// 		chunk_info_count++;
-// 		// 	}
-// 		// 	meta_writer.Write<idx_t>(chunk_info_count);
-// 		// 	for (idx_t vector_idx = 0; vector_idx < RowGroup::ROW_GROUP_VECTOR_COUNT; vector_idx++) {
-// 		// 		auto chunk_info = row_group_info->version_info->info[vector_idx].get();
-// 		// 		if (!chunk_info) {
-// 		// 			continue;
-// 		// 		}
-// 		// 		meta_writer.Write<idx_t>(vector_idx);
-// 		// 		chunk_info->Serialize(meta_writer);
-// 		// 	}
-// 		// } else {
-// 		// 	meta_writer.Write<idx_t>(0);
-// 		// }
-// 		// row_group_info = (RowGroup *)row_group_info->next.get();
-// 	}
-// }
-
 } // namespace duckdb

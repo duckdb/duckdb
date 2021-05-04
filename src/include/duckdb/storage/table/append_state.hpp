@@ -20,6 +20,8 @@ class UpdateSegment;
 class TransientSegment;
 class ValiditySegment;
 
+struct TableAppendState;
+
 struct ColumnAppendState {
 	//! The current segment of the append
 	TransientSegment *current;

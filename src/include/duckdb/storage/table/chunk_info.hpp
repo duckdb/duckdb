@@ -20,15 +20,13 @@ enum class ChunkInfoType : uint8_t { CONSTANT_INFO, VECTOR_INFO, EMPTY_INFO };
 
 class ChunkInfo {
 public:
-	ChunkInfo(idx_t start, RowGroup &row_group, ChunkInfoType type) : start(start), row_group(row_group), type(type) {
+	ChunkInfo(idx_t start, ChunkInfoType type) : start(start), type(type) {
 	}
 	virtual ~ChunkInfo() {
 	}
 
 	//! The row index of the first row
 	idx_t start;
-	//! The row_group the chunk info belongs to
-	RowGroup &row_group;
 	//! The ChunkInfo type
 	ChunkInfoType type;
 
@@ -41,12 +39,12 @@ public:
 	virtual void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) = 0;
 
 	virtual void Serialize(Serializer &serialize) = 0;
-	static unique_ptr<ChunkInfo> Deserialize(RowGroup &row_group, Deserializer &source);
+	static unique_ptr<ChunkInfo> Deserialize(Deserializer &source);
 };
 
 class ChunkConstantInfo : public ChunkInfo {
 public:
-	ChunkConstantInfo(idx_t start, RowGroup &row_group);
+	ChunkConstantInfo(idx_t start);
 
 	transaction_t insert_id;
 	transaction_t delete_id;
@@ -57,12 +55,12 @@ public:
 	void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) override;
 
 	void Serialize(Serializer &serialize) override;
-	static unique_ptr<ChunkInfo> Deserialize(RowGroup &row_group, Deserializer &source);
+	static unique_ptr<ChunkInfo> Deserialize(Deserializer &source);
 };
 
 class ChunkVectorInfo : public ChunkInfo {
 public:
-	ChunkVectorInfo(idx_t start, RowGroup &row_group);
+	ChunkVectorInfo(idx_t start);
 
 	//! The transaction ids of the transactions that inserted the tuples (if any)
 	transaction_t inserted[STANDARD_VECTOR_SIZE];
@@ -85,7 +83,7 @@ public:
 	void CommitDelete(transaction_t commit_id, row_t rows[], idx_t count);
 
 	void Serialize(Serializer &serialize) override;
-	static unique_ptr<ChunkInfo> Deserialize(RowGroup &row_group, Deserializer &source);
+	static unique_ptr<ChunkInfo> Deserialize(Deserializer &source);
 };
 
 } // namespace duckdb

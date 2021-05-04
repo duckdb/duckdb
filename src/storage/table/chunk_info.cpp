@@ -12,15 +12,15 @@ static bool UseVersion(Transaction &transaction, transaction_t id) {
 	return UseVersion(transaction.start_time, transaction.transaction_id, id);
 }
 
-unique_ptr<ChunkInfo> ChunkInfo::Deserialize(RowGroup &row_group, Deserializer &source) {
+unique_ptr<ChunkInfo> ChunkInfo::Deserialize(Deserializer &source) {
 	auto type = source.Read<ChunkInfoType>();
 	switch (type) {
 	case ChunkInfoType::EMPTY_INFO:
 		return nullptr;
 	case ChunkInfoType::CONSTANT_INFO:
-		return ChunkConstantInfo::Deserialize(row_group, source);
+		return ChunkConstantInfo::Deserialize( source);
 	case ChunkInfoType::VECTOR_INFO:
-		return ChunkVectorInfo::Deserialize(row_group, source);
+		return ChunkVectorInfo::Deserialize( source);
 	default:
 		throw SerializationException("Could not deserialize Chunk Info Type: unrecognized type");
 	}
@@ -29,8 +29,8 @@ unique_ptr<ChunkInfo> ChunkInfo::Deserialize(RowGroup &row_group, Deserializer &
 //===--------------------------------------------------------------------===//
 // Constant info
 //===--------------------------------------------------------------------===//
-ChunkConstantInfo::ChunkConstantInfo(idx_t start, RowGroup &row_group)
-    : ChunkInfo(start, row_group, ChunkInfoType::CONSTANT_INFO), insert_id(0), delete_id(NOT_DELETED_ID) {
+ChunkConstantInfo::ChunkConstantInfo(idx_t start)
+    : ChunkInfo(start, ChunkInfoType::CONSTANT_INFO), insert_id(0), delete_id(NOT_DELETED_ID) {
 }
 
 idx_t ChunkConstantInfo::GetSelVector(Transaction &transaction, SelectionVector &sel_vector, idx_t max_count) {
@@ -60,10 +60,10 @@ void ChunkConstantInfo::Serialize(Serializer &serializer) {
 	serializer.Write<idx_t>(start);
 }
 
-unique_ptr<ChunkInfo> ChunkConstantInfo::Deserialize(RowGroup &row_group, Deserializer &source) {
+unique_ptr<ChunkInfo> ChunkConstantInfo::Deserialize(Deserializer &source) {
 	auto start = source.Read<idx_t>();
 
-	auto info = make_unique<ChunkConstantInfo>(start, row_group);
+	auto info = make_unique<ChunkConstantInfo>(start);
 	info->insert_id = 0;
 	info->delete_id = 0;
 	return move(info);
@@ -72,8 +72,8 @@ unique_ptr<ChunkInfo> ChunkConstantInfo::Deserialize(RowGroup &row_group, Deseri
 //===--------------------------------------------------------------------===//
 // Vector info
 //===--------------------------------------------------------------------===//
-ChunkVectorInfo::ChunkVectorInfo(idx_t start, RowGroup &row_group)
-    : ChunkInfo(start, row_group, ChunkInfoType::VECTOR_INFO), insert_id(0), same_inserted_id(true), any_deleted(false) {
+ChunkVectorInfo::ChunkVectorInfo(idx_t start)
+    : ChunkInfo(start, ChunkInfoType::VECTOR_INFO), insert_id(0), same_inserted_id(true), any_deleted(false) {
 	for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
 		inserted[i] = 0;
 		deleted[i] = NOT_DELETED_ID;
@@ -202,10 +202,10 @@ void ChunkVectorInfo::Serialize(Serializer &serializer) {
 	serializer.WriteData((data_ptr_t)deleted_tuples, sizeof(bool) * STANDARD_VECTOR_SIZE);
 }
 
-unique_ptr<ChunkInfo> ChunkVectorInfo::Deserialize(RowGroup &row_group, Deserializer &source) {
+unique_ptr<ChunkInfo> ChunkVectorInfo::Deserialize(Deserializer &source) {
 	auto start = source.Read<idx_t>();
 
-	auto result = make_unique<ChunkVectorInfo>(start, row_group);
+	auto result = make_unique<ChunkVectorInfo>(start);
 	result->any_deleted = true;
 	bool deleted_tuples[STANDARD_VECTOR_SIZE];
 	source.ReadData((data_ptr_t)deleted_tuples, sizeof(bool) * STANDARD_VECTOR_SIZE);

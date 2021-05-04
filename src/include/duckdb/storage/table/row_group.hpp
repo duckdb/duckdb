@@ -109,6 +109,9 @@ private:
 	template<bool SCAN_DELETES, bool SCAN_COMMITTED, bool ALLOW_UPDATES>
 	void TemplatedScan(Transaction *transaction, RowGroupScanState &state, DataChunk &result);
 
+	static void CheckpointDeletes(VersionNode *versions, Serializer &serializer);
+	static shared_ptr<VersionNode> DeserializeDeletes(Deserializer &source);
+
 private:
 	mutex row_group_lock;
 	mutex stats_lock;

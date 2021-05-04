@@ -37,34 +37,6 @@ void TableDataReader::ReadTableData() {
 		auto row_group_pointer = RowGroup::Deserialize(reader, columns);
 		info.data->row_groups.push_back(move(row_group_pointer));
 	}
-
-	// idx_t table_count = 0;
-	// for (idx_t col = 0; col < columns.size(); col++) {
-	// 	auto &column = columns[col];
-	// 	info.data->column_data[col] = ColumnData::Deserialize(db, reader, column.type);
-	// 	if (col == 0) {
-	// 		table_count = info.data->column_data[col]->total_rows;
-	// 	} else if (table_count != info.data->column_data[col]->total_rows) {
-	// 		throw Exception("Column length mismatch in table load!");
-	// 	}
-	// }
-	// auto total_rows = table_count;
-
-	// // create the version tree
-	// info.data->versions = make_shared<SegmentTree>();
-	// for (idx_t i = 0; i < total_rows; i += RowGroup::ROW_GROUP_SIZE) {
-	// 	auto segment = make_unique<RowGroupInfo>(i, RowGroup::ROW_GROUP_SIZE);
-	// 	// check how many chunk infos we need to read
-	// 	auto chunk_info_count = reader.Read<idx_t>();
-	// 	if (chunk_info_count > 0) {
-	// 		segment->root = make_unique<VersionNode>();
-	// 		for (idx_t i = 0; i < chunk_info_count; i++) {
-	// 			idx_t vector_index = reader.Read<idx_t>();
-	// 			segment->root->info[vector_index] = ChunkInfo::Deserialize(*segment, reader);
-	// 		}
-	// 	}
-	// 	info.data->versions->AppendSegment(move(segment));
-	// }
 }
 
 } // namespace duckdb

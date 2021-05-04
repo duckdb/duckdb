@@ -38,6 +38,7 @@ RowGroup::RowGroup(DatabaseInstance &db, DataTableInfo &table_info, const vector
 	for(auto &stats : pointer.statistics) {
 		this->stats.push_back(make_shared<SegmentStatistics>(stats->type, move(stats)));
 	}
+	this->version_info = move(pointer.versions);
 }
 
 RowGroup::~RowGroup() {}
@@ -351,7 +352,7 @@ void RowGroup::AppendVersionInfo(Transaction &transaction, idx_t row_group_start
 		    vector_idx == end_vector_idx ? row_group_end - end_vector_idx * STANDARD_VECTOR_SIZE : STANDARD_VECTOR_SIZE;
 		if (start == 0 && end == STANDARD_VECTOR_SIZE) {
 			// entire vector is encapsulated by append: append a single constant
-			auto constant_info = make_unique<ChunkConstantInfo>(this->start + vector_idx * STANDARD_VECTOR_SIZE, *this);
+			auto constant_info = make_unique<ChunkConstantInfo>(this->start + vector_idx * STANDARD_VECTOR_SIZE);
 			constant_info->insert_id = commit_id;
 			constant_info->delete_id = NOT_DELETED_ID;
 			version_info->info[vector_idx] = move(constant_info);
@@ -360,7 +361,7 @@ void RowGroup::AppendVersionInfo(Transaction &transaction, idx_t row_group_start
 			ChunkVectorInfo *info;
 			if (!version_info->info[vector_idx]) {
 				// first time appending to this vector: create new info
-				auto insert_info = make_unique<ChunkVectorInfo>(this->start + vector_idx * STANDARD_VECTOR_SIZE, *this);
+				auto insert_info = make_unique<ChunkVectorInfo>(this->start + vector_idx * STANDARD_VECTOR_SIZE);
 				info = insert_info.get();
 				version_info->info[vector_idx] = move(insert_info);
 			} else {
@@ -497,9 +498,51 @@ RowGroupPointer RowGroup::Checkpoint(TableDataWriter &writer, vector<unique_ptr<
 		// now flush the actual column data to disk
 		state->FlushToDisk();
 	}
+	row_group_pointer.versions = version_info;
 	return row_group_pointer;
 }
 
+
+void RowGroup::CheckpointDeletes(VersionNode *versions, Serializer &serializer) {
+	if (!versions) {
+		// no version information: write nothing
+		serializer.Write<idx_t>(0);
+		return;
+	}
+	// first count how many ChunkInfo's we need to deserialize
+	idx_t chunk_info_count = 0;
+	for (idx_t vector_idx = 0; vector_idx < RowGroup::ROW_GROUP_VECTOR_COUNT; vector_idx++) {
+		auto chunk_info = versions->info[vector_idx].get();
+		if (!chunk_info) {
+			continue;
+		}
+		chunk_info_count++;
+	}
+	// now serialize the actual version information
+	serializer.Write<idx_t>(chunk_info_count);
+	for (idx_t vector_idx = 0; vector_idx < RowGroup::ROW_GROUP_VECTOR_COUNT; vector_idx++) {
+		auto chunk_info = versions->info[vector_idx].get();
+		if (!chunk_info) {
+			continue;
+		}
+		serializer.Write<idx_t>(vector_idx);
+		chunk_info->Serialize(serializer);
+	}
+}
+
+shared_ptr<VersionNode> RowGroup::DeserializeDeletes(Deserializer &source) {
+	auto chunk_count = source.Read<idx_t>();
+	if (chunk_count == 0) {
+		// no deletes
+		return nullptr;
+	}
+	auto version_info = make_shared<VersionNode>();
+	for (idx_t i = 0; i < chunk_count; i++) {
+		idx_t vector_index = source.Read<idx_t>();
+		version_info->info[vector_index] = ChunkInfo::Deserialize(source);
+	}
+	return version_info;
+}
 
 void RowGroup::Serialize(RowGroupPointer &pointer, Serializer &serializer) {
 	serializer.Write<uint64_t>(pointer.row_start);
@@ -511,6 +554,7 @@ void RowGroup::Serialize(RowGroupPointer &pointer, Serializer &serializer) {
 		serializer.Write<block_id_t>(pointer.block_id);
 		serializer.Write<uint64_t>(pointer.offset);
 	}
+	CheckpointDeletes(pointer.versions.get(), serializer);
 }
 
 RowGroupPointer RowGroup::Deserialize(Deserializer &source, const vector<ColumnDefinition> &columns) {
@@ -531,6 +575,7 @@ RowGroupPointer RowGroup::Deserialize(Deserializer &source, const vector<ColumnD
 		pointer.offset = source.Read<uint64_t>();
 		result.data_pointers.push_back(pointer);
 	}
+	result.versions = DeserializeDeletes(source);
 	return result;
 }
 
@@ -585,11 +630,11 @@ void VersionDeleteState::Delete(row_t row_id) {
 		if (!info.version_info->info[vector_idx]) {
 			// no info yet: create it
 			info.version_info->info[vector_idx] =
-			    make_unique<ChunkVectorInfo>(info.start + vector_idx * STANDARD_VECTOR_SIZE, info);
+			    make_unique<ChunkVectorInfo>(info.start + vector_idx * STANDARD_VECTOR_SIZE);
 		} else if (info.version_info->info[vector_idx]->type == ChunkInfoType::CONSTANT_INFO) {
 			auto &constant = (ChunkConstantInfo &)*info.version_info->info[vector_idx];
 			// info exists but it's a constant info: convert to a vector info
-			auto new_info = make_unique<ChunkVectorInfo>(info.start + vector_idx * STANDARD_VECTOR_SIZE, info);
+			auto new_info = make_unique<ChunkVectorInfo>(info.start + vector_idx * STANDARD_VECTOR_SIZE);
 			new_info->insert_id = constant.insert_id;
 			for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
 				new_info->inserted[i] = constant.insert_id;
