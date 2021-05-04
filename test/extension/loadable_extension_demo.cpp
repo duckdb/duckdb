@@ -1,4 +1,8 @@
 #define DUCKDB_BUILD_LOADABLE_EXTENSION
+// TODO lazy loading does not work on mingw compiler.
+#ifdef __MINGW32__
+#define DUCKDB_API __declspec(dllexport)
+#endif
 #include "duckdb.hpp"
 
 using namespace duckdb;
