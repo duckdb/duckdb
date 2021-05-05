@@ -50,6 +50,9 @@ static unique_ptr<FunctionData> PragmaDetailedProfilingOutputBind(ClientContext 
     names.emplace_back("INPUT_SIZE");
     return_types.push_back(LogicalType::INTEGER);
 
+    names.emplace_back("EXTRA_INFO");
+    return_types.push_back(LogicalType::VARCHAR);
+
 	return make_unique<PragmaDetailedProfilingOutputData>(return_types);
 }
 
@@ -60,7 +63,8 @@ unique_ptr<FunctionOperatorData> PragmaDetailedProfilingOutputInit(ClientContext
 	return make_unique<PragmaDetailedProfilingOutputOperatorData>();
 }
 
-static void SetValue(DataChunk &output, int index, int op_id, string annotation, int id, string name, double time, int sample_counter, int tuple_counter) {
+// Insert a row into the given datachunk
+static void SetValue(DataChunk &output, int index, int op_id, string annotation, int id, string name, double time, int sample_counter, int tuple_counter, string extra_info) {
 	output.SetValue(0, index, op_id);
 	output.SetValue(1, index, annotation);
     output.SetValue(2, index, id);
@@ -68,13 +72,13 @@ static void SetValue(DataChunk &output, int index, int op_id, string annotation,
 	output.SetValue(4, index, time);
     output.SetValue(5, index, sample_counter);
     output.SetValue(6, index, tuple_counter);
-
+    output.SetValue(7, index, extra_info);
 }
 
 static void ExtractFunctions(ChunkCollection &collection, ExpressionInfo &info, DataChunk &chunk, int op_id,
                                int &fun_id, int sample_tuples_count, int tuples_count) {
 	if (info.hasfunction) {
-		SetValue(chunk, chunk.size(), op_id, "Function", fun_id++, info.function_name, double(info.function_time) / sample_tuples_count, sample_tuples_count, tuples_count);
+		SetValue(chunk, chunk.size(), op_id, "Function", fun_id++, info.function_name, double(info.function_time) / sample_tuples_count, sample_tuples_count, tuples_count, "");
 		chunk.SetCardinality(chunk.size() + 1);
 		if (chunk.size() == STANDARD_VECTOR_SIZE) {
 			collection.Append(chunk);
@@ -112,7 +116,7 @@ static void PragmaDetailedProfilingOutputFunction(ClientContext &context, const 
 				for (auto &x : op.second->info.executors_info) {
 					for (auto &info : x.second->roots) {
                         SetValue(chunk, chunk.size(), operator_counter, "ExpressionRoot", expression_counter++, info->name,
-                                           double(info->time) / info->sample_tuples_count, info->sample_tuples_count, info->tuples_count);
+                                           double(info->time) / info->sample_tuples_count, info->sample_tuples_count, info->tuples_count, info->extra_info);
                         chunk.SetCardinality(chunk.size() + 1);
                         if (chunk.size() == STANDARD_VECTOR_SIZE) {
                             collection->Append(chunk);

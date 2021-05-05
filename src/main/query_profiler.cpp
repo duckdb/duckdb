@@ -217,7 +217,7 @@ void OperatorProfiler::Flush(PhysicalOperator *phys_op, ExpressionExecutor *expr
 	auto entry = timings.find(phys_op);
 	if (entry != timings.end()) {
 		auto &operator_timing = timings.find(phys_op)->second;
-		operator_timing.executors_info[name] = make_unique<ExpressionExecutorInfo>(*expression_executor);
+		operator_timing.executors_info[name] = make_unique<ExpressionExecutorInfo>(*expression_executor, name);
 		operator_timing.name = phys_op->GetName();
 		operator_timing.changed = true;
 	}
@@ -487,9 +487,10 @@ void ExpressionInfo::ExtractExpressionsRecursive(unique_ptr<ExpressionState> &st
 	return;
 }
 
-ExpressionExecutorInfo::ExpressionExecutorInfo(ExpressionExecutor &executor) {
+ExpressionExecutorInfo::ExpressionExecutorInfo(ExpressionExecutor &executor, string name) {
     for (auto &state : executor.GetStates()) {
 		auto root_info = make_unique<ExpressionRootInfo>(*state);
+		root_info->extra_info = name;
         auto expression_info_p = make_unique<ExpressionInfo>();
         expression_info_p->ExtractExpressionsRecursive(state->root_state);
 		root_info->root = move(expression_info_p);

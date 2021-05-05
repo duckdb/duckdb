@@ -61,13 +61,15 @@ struct ExpressionRootInfo {
     unique_ptr<ExpressionInfo> root;
 	//! Elapsed time
     double time;
-	//! name
+	//! Name
 	string name;
+	//! Extra Info
+	string extra_info;
 };
 
 struct ExpressionExecutorInfo {
 	explicit ExpressionExecutorInfo() {};
-    explicit ExpressionExecutorInfo(ExpressionExecutor &executor);
+    explicit ExpressionExecutorInfo(ExpressionExecutor &executor, string name);
     //! A vector which contain the pointer to all ExpressionRootInfo
     vector<unique_ptr<ExpressionRootInfo>> roots;
 };
