@@ -1,5 +1,4 @@
 #include "duckdb/function/table/sqlite_functions.hpp"
-#include "iostream"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
@@ -130,7 +129,6 @@ static void PragmaDetailedProfilingOutputFunction(ClientContext &context, const 
 						    et->name,
 						    (et->time > 0 && et->time < (1UL << 63)) ? et->time / double(et->sample_tuples_count) : 0,
 						    et->sample_tuples_count, et->tuples_count, et->extra_info);
-						std::cout << et->time << std::endl;
 						// Increment cardinality
 						chunk.SetCardinality(chunk.size() + 1);
 						// Check whether data chunk is full or not

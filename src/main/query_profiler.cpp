@@ -479,7 +479,7 @@ void ExpressionInfo::ExtractExpressionsRecursive(unique_ptr<ExpressionState> &st
 		if (child->expr.expression_class == ExpressionClass::BOUND_FUNCTION) {
 			expression_info_p->hasfunction = true;
 			expression_info_p->function_name = ((BoundFunctionExpression &)child->expr).function.name;
-			expression_info_p->function_time = child->time;
+			expression_info_p->function_time = child->profiler.time;
 		}
 		expression_info_p->ExtractExpressionsRecursive(child);
 		children.push_back(move(expression_info_p));
@@ -496,9 +496,9 @@ ExpressionExecutorInfo::ExpressionExecutorInfo(ExpressionExecutor &executor, con
 }
 
 ExpressionRootInfo::ExpressionRootInfo(ExpressionExecutorState &state, string name)
-    : total_count(state.total_count), current_count(state.current_count), sample_count(state.sample_count),
-      sample_tuples_count(state.sample_tuples_count), tuples_count(state.tuples_count), name(state.name),
-      time(state.time) {
+    : current_count(state.profiler.current_count), sample_count(state.profiler.sample_count),
+      sample_tuples_count(state.profiler.sample_tuples_count), tuples_count(state.profiler.tuples_count), name(state.name),
+      time(state.profiler.time) {
 	// Use the expression tree name as extra-info
 	extra_info = name;
 	auto expression_info_p = make_unique<ExpressionInfo>();

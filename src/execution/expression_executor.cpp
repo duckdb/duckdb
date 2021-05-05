@@ -67,9 +67,9 @@ void ExpressionExecutor::ExecuteExpression(Vector &result) {
 void ExpressionExecutor::ExecuteExpression(idx_t expr_idx, Vector &result) {
 	D_ASSERT(expr_idx < expressions.size());
 	D_ASSERT(result.GetType() == expressions[expr_idx]->return_type);
-	states[expr_idx]->TakeSample();
+	states[expr_idx]->profiler.TakeSample();
 	Execute(*expressions[expr_idx], states[expr_idx]->root_state.get(), nullptr, chunk ? chunk->size() : 1, result);
-	states[expr_idx]->ProcessSample(chunk ? chunk->size() : 0);
+	states[expr_idx]->profiler.ProcessSample(chunk ? chunk->size() : 0);
 }
 
 Value ExpressionExecutor::EvaluateScalar(Expression &expr) {

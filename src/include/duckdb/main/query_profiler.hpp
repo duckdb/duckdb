@@ -39,7 +39,7 @@ struct ExpressionInfo {
 	//! The function Name
 	string function_name;
 	//! The function time
-	double function_time;
+	uint64_t function_time;
 };
 
 //! The ExpressionRootInfo keeps information related to the root of an expression tree
