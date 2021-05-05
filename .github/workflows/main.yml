@@ -456,7 +456,7 @@ jobs:
       run: whoami
 
     - name: Install
-      run: yum install -y gcc gcc-c++ git cmake
+      run: yum install -y gcc gcc-c++ git cmake make
 
     - name: Build
       run: make release
