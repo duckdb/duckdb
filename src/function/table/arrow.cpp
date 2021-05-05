@@ -119,13 +119,19 @@ static unique_ptr<FunctionData> ArrowScanBind(ClientContext &context, vector<Val
 		} else if (format == "u") {
 			return_types.push_back(LogicalType::VARCHAR);
 		} else if (format == "tsn:") {
-			return_types.push_back(LogicalType::TIMESTAMP);
+			return_types.emplace_back(LogicalTypeId::TIMESTAMP_NS);
+		} else if (format == "tsu:") {
+			return_types.emplace_back(LogicalTypeId::TIMESTAMP);
+		} else if (format == "tsm:") {
+			return_types.emplace_back(LogicalTypeId::TIMESTAMP_MS);
+		} else if (format == "tss:") {
+			return_types.emplace_back(LogicalTypeId::TIMESTAMP_SEC);
 		} else if (format == "tdD") {
 			return_types.push_back(LogicalType::DATE);
 		} else if (format == "ttm") {
 			return_types.push_back(LogicalType::TIME);
 		} else {
-			throw NotImplementedException("1 Unsupported Arrow type %s", format);
+			throw NotImplementedException("Unsupported Internal Arrow Type %s", format);
 		}
 		auto name = string(schema.name);
 		if (name.empty()) {
@@ -225,6 +231,10 @@ static void ArrowScanFunction(ClientContext &context, const FunctionData *bind_d
 		case LogicalTypeId::BIGINT:
 		case LogicalTypeId::HUGEINT:
 		case LogicalTypeId::DATE:
+		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::TIMESTAMP_SEC:
+		case LogicalTypeId::TIMESTAMP_MS:
+		case LogicalTypeId::TIMESTAMP_NS:
 			FlatVector::SetData(output.data[col_idx], (data_ptr_t)array.buffers[1] +
 			                                              GetTypeIdSize(output.data[col_idx].GetType().InternalType()) *
 			                                                  (data.chunk_offset + array.offset));
@@ -257,18 +267,7 @@ static void ArrowScanFunction(ClientContext &context, const FunctionData *bind_d
 			auto tgt_ptr = (dtime_t *)FlatVector::GetData(output.data[col_idx]);
 			for (idx_t row = 0; row < output.size(); row++) {
 				auto source_idx = data.chunk_offset + row;
-				tgt_ptr[row] = dtime_t(src_ptr[source_idx]) * 1000;
-			}
-			break;
-		}
-		case LogicalTypeId::TIMESTAMP: {
-			// convert timestamps from nanoseconds to microseconds
-			auto src_ptr = (uint64_t *)array.buffers[1] + data.chunk_offset;
-			auto tgt_ptr = (timestamp_t *)FlatVector::GetData(output.data[col_idx]);
-
-			for (idx_t row = 0; row < output.size(); row++) {
-				auto source_idx = data.chunk_offset + row;
-				tgt_ptr[row] = Timestamp::FromEpochNanoSeconds(src_ptr[source_idx]);
+				tgt_ptr[row] = dtime_t(int64_t(src_ptr[source_idx]) * 1000);
 			}
 			break;
 		}

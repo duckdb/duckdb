@@ -23,7 +23,6 @@ void BuiltinFunctions::RegisterDistributiveAggregates() {
 	Register<ProductFun>();
 	Register<BoolOrFun>();
 	Register<BoolAndFun>();
-	Register<ModeFun>();
 	Register<ArgMinFun>();
 	Register<ArgMaxFun>();
 	Register<ArbitraryFun>();

@@ -80,6 +80,10 @@ public:
 		return string(GetDataUnsafe(), GetSize());
 	}
 
+	explicit operator string() const {
+		return GetString();
+	}
+
 	void Finalize() {
 		// set trailing NULL byte
 		auto dataptr = (char *)GetDataUnsafe();

@@ -1,6 +1,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/aggregate/holistic_functions.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 
@@ -15,39 +16,10 @@ bool operator<(const interval_t &lhs, const interval_t &rhs) {
 	return LessThan::Operation(lhs, rhs);
 }
 
-struct DateValueCast {
-	static Value CreateValue(date_t t) {
-		return Value::DATE(t);
-	}
-	static Value CreateValue(timestamp_t t) {
-		return Value::TIMESTAMP(t);
-	}
-};
-
-struct TimeValueCast {
-	static Value CreateValue(dtime_t t) {
-		return Value::TIME(t);
-	}
-};
-
-struct GenericCast {
-	template <class SRC, class DST>
-	static DST Cast(const SRC &v) {
-		return DST(v);
-	}
-};
-
 template <>
-double GenericCast::Cast(const hugeint_t &v) {
-	return Hugeint::Cast<double>(v);
+timestamp_t Cast::Operation(date_t date) {
+	return Timestamp::FromDatetime(date, dtime_t(0));
 }
-
-struct TimestampCast {
-	template <class SRC, class DST>
-	static DST Cast(const SRC &v) {
-		return Timestamp::FromDatetime(v, 0);
-	}
-};
 
 struct QuantileState {
 	data_ptr_t v;
@@ -235,11 +207,11 @@ AggregateFunction GetDiscreteQuantileAggregateFunction(const LogicalType &type) 
 		break;
 
 	case LogicalTypeId::DATE:
-		return GetTypedDiscreteQuantileAggregateFunction<date_t>(type);
+		return GetTypedDiscreteQuantileAggregateFunction<int32_t>(type);
 	case LogicalTypeId::TIMESTAMP:
-		return GetTypedDiscreteQuantileAggregateFunction<timestamp_t>(type);
+		return GetTypedDiscreteQuantileAggregateFunction<int64_t>(type);
 	case LogicalTypeId::TIME:
-		return GetTypedDiscreteQuantileAggregateFunction<dtime_t>(type);
+		return GetTypedDiscreteQuantileAggregateFunction<int64_t>(type);
 	case LogicalTypeId::INTERVAL:
 		return GetTypedDiscreteQuantileAggregateFunction<interval_t>(type);
 
@@ -248,7 +220,7 @@ AggregateFunction GetDiscreteQuantileAggregateFunction(const LogicalType &type) 
 	}
 }
 
-template <class INPUT_TYPE, typename CAST>
+template <class INPUT_TYPE>
 struct DiscreteQuantileListOperation : public QuantileOperation<INPUT_TYPE> {
 
 	template <class TARGET_TYPE, class STATE>
@@ -266,17 +238,17 @@ struct DiscreteQuantileListOperation : public QuantileOperation<INPUT_TYPE> {
 		for (const auto &quantile : bind_data->quantiles) {
 			auto offset = (idx_t)((double)(state->pos - 1) * quantile);
 			std::nth_element(v_t, v_t + offset, v_t + state->pos);
-			auto val = CAST::CreateValue(v_t[offset]);
+			auto val = Value::CreateValue(v_t[offset]);
 			ListVector::PushBack(result_list, val);
 		}
 		target[idx].length = bind_data->quantiles.size();
 	}
 };
 
-template <typename INPUT_TYPE, class CAST = Value>
+template <typename INPUT_TYPE>
 AggregateFunction GetTypedDiscreteQuantileListAggregateFunction(const LogicalType &type) {
-	return QuantileListAggregate<QuantileState, INPUT_TYPE, list_entry_t,
-	                             DiscreteQuantileListOperation<INPUT_TYPE, CAST>>(type, type);
+	return QuantileListAggregate<QuantileState, INPUT_TYPE, list_entry_t, DiscreteQuantileListOperation<INPUT_TYPE>>(
+	    type, type);
 }
 
 AggregateFunction GetDiscreteQuantileListAggregateFunction(const LogicalType &type) {
@@ -312,11 +284,11 @@ AggregateFunction GetDiscreteQuantileListAggregateFunction(const LogicalType &ty
 		break;
 
 	case LogicalTypeId::DATE:
-		return GetTypedDiscreteQuantileListAggregateFunction<date_t, DateValueCast>(type);
+		return GetTypedDiscreteQuantileListAggregateFunction<date_t>(type);
 	case LogicalTypeId::TIMESTAMP:
-		return GetTypedDiscreteQuantileListAggregateFunction<timestamp_t, DateValueCast>(type);
+		return GetTypedDiscreteQuantileListAggregateFunction<timestamp_t>(type);
 	case LogicalTypeId::TIME:
-		return GetTypedDiscreteQuantileListAggregateFunction<dtime_t, TimeValueCast>(type);
+		return GetTypedDiscreteQuantileListAggregateFunction<dtime_t>(type);
 	case LogicalTypeId::INTERVAL:
 		return GetTypedDiscreteQuantileListAggregateFunction<interval_t>(type);
 
@@ -325,7 +297,7 @@ AggregateFunction GetDiscreteQuantileListAggregateFunction(const LogicalType &ty
 	}
 }
 
-template <class INPUT_TYPE, class TARGET_TYPE, typename TARGET_CAST>
+template <class INPUT_TYPE, class TARGET_TYPE>
 static TARGET_TYPE Interpolate(INPUT_TYPE *v_t, const float q, const idx_t n) {
 	const auto RN = ((double)(n - 1) * q);
 	const auto FRN = idx_t(floor(RN));
@@ -333,18 +305,18 @@ static TARGET_TYPE Interpolate(INPUT_TYPE *v_t, const float q, const idx_t n) {
 
 	if (CRN == FRN) {
 		std::nth_element(v_t, v_t + FRN, v_t + n);
-		return TARGET_CAST::template Cast<INPUT_TYPE, TARGET_TYPE>(v_t[FRN]);
+		return Cast::Operation<INPUT_TYPE, TARGET_TYPE>(v_t[FRN]);
 	} else {
 		std::nth_element(v_t, v_t + FRN, v_t + n);
 		std::nth_element(v_t + FRN, v_t + CRN, v_t + n);
-		auto lo = TARGET_CAST::template Cast<INPUT_TYPE, TARGET_TYPE>(v_t[FRN]);
-		auto hi = TARGET_CAST::template Cast<INPUT_TYPE, TARGET_TYPE>(v_t[CRN]);
+		auto lo = Cast::Operation<INPUT_TYPE, TARGET_TYPE>(v_t[FRN]);
+		auto hi = Cast::Operation<INPUT_TYPE, TARGET_TYPE>(v_t[CRN]);
 		auto delta = hi - lo;
 		return lo + delta * (RN - FRN);
 	}
 }
 
-template <class INPUT_TYPE, typename TARGET_CAST>
+template <class INPUT_TYPE>
 struct ContinuousQuantileOperation : public QuantileOperation<INPUT_TYPE> {
 
 	template <class TARGET_TYPE, class STATE>
@@ -359,16 +331,16 @@ struct ContinuousQuantileOperation : public QuantileOperation<INPUT_TYPE> {
 		auto bind_data = (QuantileBindData *)bind_data_p;
 		D_ASSERT(bind_data->quantiles.size() == 1);
 		auto v_t = (INPUT_TYPE *)state->v;
-		target[idx] = Interpolate<INPUT_TYPE, TARGET_TYPE, TARGET_CAST>(v_t, bind_data->quantiles[0], state->pos);
+		target[idx] = Interpolate<INPUT_TYPE, TARGET_TYPE>(v_t, bind_data->quantiles[0], state->pos);
 	}
 };
 
-template <typename INPUT_TYPE, typename TARGET_TYPE, typename TARGET_CAST = GenericCast>
+template <typename INPUT_TYPE, typename TARGET_TYPE>
 AggregateFunction GetTypedContinuousQuantileAggregateFunction(const LogicalType &input_type,
                                                               const LogicalType &target_type) {
 	return AggregateFunction::UnaryAggregateDestructor<QuantileState, INPUT_TYPE, TARGET_TYPE,
-	                                                   ContinuousQuantileOperation<INPUT_TYPE, TARGET_CAST>>(
-	    input_type, target_type);
+	                                                   ContinuousQuantileOperation<INPUT_TYPE>>(input_type,
+	                                                                                            target_type);
 }
 
 AggregateFunction GetContinuousQuantileAggregateFunction(const LogicalType &type) {
@@ -404,8 +376,7 @@ AggregateFunction GetContinuousQuantileAggregateFunction(const LogicalType &type
 		break;
 
 	case LogicalTypeId::DATE:
-		return GetTypedContinuousQuantileAggregateFunction<date_t, timestamp_t, TimestampCast>(type,
-		                                                                                       LogicalType::TIMESTAMP);
+		return GetTypedContinuousQuantileAggregateFunction<date_t, timestamp_t>(type, LogicalType::TIMESTAMP);
 	case LogicalTypeId::TIMESTAMP:
 		return GetTypedContinuousQuantileAggregateFunction<timestamp_t, timestamp_t>(type, type);
 	case LogicalTypeId::TIME:
@@ -416,7 +387,7 @@ AggregateFunction GetContinuousQuantileAggregateFunction(const LogicalType &type
 	}
 }
 
-template <class INPUT_TYPE, class CHILD_TYPE, class TARGET_CAST, class VALUE_CAST>
+template <class INPUT_TYPE, class CHILD_TYPE>
 struct ContinuousQuantileListOperation : public QuantileOperation<INPUT_TYPE> {
 
 	template <class TARGET_TYPE, class STATE>
@@ -432,20 +403,19 @@ struct ContinuousQuantileListOperation : public QuantileOperation<INPUT_TYPE> {
 		target[idx].offset = ListVector::GetListSize(result_list);
 		auto v_t = (INPUT_TYPE *)state->v;
 		for (const auto &quantile : bind_data->quantiles) {
-			auto child = Interpolate<INPUT_TYPE, CHILD_TYPE, TARGET_CAST>(v_t, quantile, state->pos);
-			auto val = VALUE_CAST::CreateValue(child);
+			auto child = Interpolate<INPUT_TYPE, CHILD_TYPE>(v_t, quantile, state->pos);
+			auto val = Value::CreateValue(child);
 			ListVector::PushBack(result_list, val);
 		}
 		target[idx].length = bind_data->quantiles.size();
 	}
 };
 
-template <typename INPUT_TYPE, typename TARGET_TYPE, class TARGET_CAST = GenericCast, class VALUE_CAST = Value>
+template <typename INPUT_TYPE, typename TARGET_TYPE>
 AggregateFunction GetTypedContinuousQuantileListAggregateFunction(const LogicalType &input_type,
                                                                   const LogicalType &target_type) {
 	return QuantileListAggregate<QuantileState, INPUT_TYPE, list_entry_t,
-	                             ContinuousQuantileListOperation<INPUT_TYPE, TARGET_TYPE, TARGET_CAST, VALUE_CAST>>(
-	    input_type, target_type);
+	                             ContinuousQuantileListOperation<INPUT_TYPE, TARGET_TYPE>>(input_type, target_type);
 }
 
 AggregateFunction GetContinuousQuantileListAggregateFunction(const LogicalType &type) {
@@ -481,14 +451,11 @@ AggregateFunction GetContinuousQuantileListAggregateFunction(const LogicalType &
 		break;
 
 	case LogicalTypeId::DATE:
-		return GetTypedContinuousQuantileListAggregateFunction<date_t, timestamp_t, TimestampCast, DateValueCast>(
-		    type, LogicalType::TIMESTAMP);
+		return GetTypedContinuousQuantileListAggregateFunction<date_t, timestamp_t>(type, LogicalType::TIMESTAMP);
 	case LogicalTypeId::TIMESTAMP:
-		return GetTypedContinuousQuantileListAggregateFunction<timestamp_t, timestamp_t, GenericCast, DateValueCast>(
-		    type, type);
+		return GetTypedContinuousQuantileListAggregateFunction<timestamp_t, timestamp_t>(type, type);
 	case LogicalTypeId::TIME:
-		return GetTypedContinuousQuantileListAggregateFunction<dtime_t, dtime_t, GenericCast, TimeValueCast>(type,
-		                                                                                                     type);
+		return GetTypedContinuousQuantileListAggregateFunction<dtime_t, dtime_t>(type, type);
 
 	default:
 		throw NotImplementedException("Unimplemented discrete quantile list aggregate");

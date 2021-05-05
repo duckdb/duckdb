@@ -44,10 +44,14 @@ bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const
 		return false;
 	}
 	if (source_type.id() == LogicalTypeId::VARCHAR) {
-		return target_type.id() == LogicalTypeId::DATE || target_type.id() == LogicalTypeId::TIMESTAMP;
+		return target_type.id() == LogicalTypeId::DATE || target_type.id() == LogicalTypeId::TIMESTAMP ||
+		       target_type.id() == LogicalTypeId::TIMESTAMP_NS || target_type.id() == LogicalTypeId::TIMESTAMP_MS ||
+		       target_type.id() == LogicalTypeId::TIMESTAMP_SEC;
 	}
 	if (target_type.id() == LogicalTypeId::VARCHAR) {
-		return source_type.id() == LogicalTypeId::DATE || source_type.id() == LogicalTypeId::TIMESTAMP;
+		return source_type.id() == LogicalTypeId::DATE || source_type.id() == LogicalTypeId::TIMESTAMP ||
+		       source_type.id() == LogicalTypeId::TIMESTAMP_NS || source_type.id() == LogicalTypeId::TIMESTAMP_MS ||
+		       source_type.id() == LogicalTypeId::TIMESTAMP_SEC;
 	}
 	return true;
 }
