@@ -172,12 +172,13 @@ if(GIT_RESULT EQUAL "0")
   string(REGEX REPLACE "v[0-9]+.[0-9]+.([0-9]+)" "\\1" DUCKDB_PATCH_VERSION "${GIT_LAST_TAG}")
   string(REGEX REPLACE ".*-([0-9]+)-.*" "\\1" DUCKDB_DEV_ITERATION "${GIT_ITERATION}")
 
-  if(${DUCKDB_DEV_ITERATION} EQUAL 0)
+  if(DUCKDB_DEV_ITERATION EQUAL 0)
     # on a tag; directly use the version
     set(DUCKDB_VERSION "${GIT_LAST_TAG}")
   else()
     # not on a tag, increment the patch version by one and add a -devX suffix
     math(EXPR DUCKDB_PATCH_VERSION "${DUCKDB_PATCH_VERSION}+1")
+    set(DUCKDB_VERSION "v${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION}.${DUCKDB_PATCH_VERSION}-dev${DUCKDB_DEV_ITERATION}")
   endif()
 else()
   # fallback for when building from tarball
@@ -185,8 +186,8 @@ else()
   set(DUCKDB_MINOR_VERSION 0)
   set(DUCKDB_PATCH_VERSION 1)
   set(DUCKDB_DEV_ITERATION 0)
+  set(DUCKDB_VERSION "v${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION}.${DUCKDB_PATCH_VERSION}-dev${DUCKDB_DEV_ITERATION}")
 endif()
-set(DUCKDB_VERSION "v${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION}.${DUCKDB_PATCH_VERSION}-dev${DUCKDB_DEV_ITERATION}")
 
 option(AMALGAMATION_BUILD
        "Build from the amalgamation files, rather than from the normal sources."
