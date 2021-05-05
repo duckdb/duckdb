@@ -57,10 +57,10 @@ struct ExpressionRootInfo {
 	uint64_t tuples_count = 0;
 	//! A vector which contain the pointer to root of each expression tree
 	unique_ptr<ExpressionInfo> root;
+    //! Name
+    string name;
 	//! Elapsed time
 	double time;
-	//! Name
-	string name;
 	//! Extra Info
 	string extra_info;
 };
