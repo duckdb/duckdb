@@ -1,7 +1,11 @@
 cmake_minimum_required(VERSION 2.8.12)
 
+if(POLICY CMP0063)
+    cmake_policy(SET CMP0063 NEW)
+endif()
+
 project(dsdgen CXX)
-cmake_policy(SET CMP0063 NEW)
+
 include_directories(include)
 
 add_subdirectory(dsdgen-c)
