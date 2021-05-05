@@ -17,7 +17,7 @@ class ClientContext;
 class MaterializedQueryResult;
 class PreparedStatementData;
 
-class DUCKDB_API StreamQueryResult : public QueryResult {
+class DUCKDB_CLASS_API StreamQueryResult : public QueryResult {
 public:
 	//! Create a successful StreamQueryResult. StreamQueryResults should always be successful initially (it makes no
 	//! sense to stream an error).

@@ -26,7 +26,7 @@ class LogicalOperator;
 class QueryNode;
 class TableRef;
 
-class DUCKDB_API Relation : public std::enable_shared_from_this<Relation> {
+class DUCKDB_CLASS_API Relation : public std::enable_shared_from_this<Relation> {
 public:
 	DUCKDB_API Relation(ClientContext &context, RelationType type) : context(context), type(type) {
 	}

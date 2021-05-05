@@ -15,7 +15,7 @@ namespace duckdb {
 class DuckDB;
 
 //! The Extension class is the base class used to define extensions
-class DUCKDB_API Extension {
+class DUCKDB_CLASS_API Extension {
 public:
 	DUCKDB_API virtual void Load(DuckDB &db) = 0;
 	DUCKDB_API virtual ~Extension() = default;

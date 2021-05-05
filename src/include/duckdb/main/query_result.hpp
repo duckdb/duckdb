@@ -21,7 +21,7 @@ enum class QueryResultType : uint8_t { MATERIALIZED_RESULT, STREAM_RESULT };
 //! The QueryResult object holds the result of a query. It can either be a MaterializedQueryResult, in which case the
 //! result contains the entire result set, or a StreamQueryResult in which case the Fetch method can be called to
 //! incrementally fetch data from the database.
-class DUCKDB_API QueryResult {
+class DUCKDB_CLASS_API QueryResult {
 public:
 	//! Creates an successful empty query result
 	DUCKDB_API QueryResult(QueryResultType type, StatementType statement_type);

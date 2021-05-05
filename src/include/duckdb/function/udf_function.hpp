@@ -13,7 +13,7 @@
 
 namespace duckdb {
 
-struct DUCKDB_API UDFWrapper {
+struct DUCKDB_CLASS_API UDFWrapper {
 public:
 	template <typename TR, typename... Args>
 	static scalar_function_t CreateScalarFunction(const string &name, TR (*udf_func)(Args...)) {

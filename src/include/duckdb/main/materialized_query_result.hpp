@@ -14,7 +14,7 @@
 
 namespace duckdb {
 
-class DUCKDB_API MaterializedQueryResult : public QueryResult {
+class DUCKDB_CLASS_API MaterializedQueryResult : public QueryResult {
 public:
 	//! Creates an empty successful query result
 	DUCKDB_API explicit MaterializedQueryResult(StatementType statement_type);

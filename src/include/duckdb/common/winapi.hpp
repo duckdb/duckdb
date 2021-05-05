@@ -10,6 +10,12 @@
 #else
 #define DUCKDB_API
 #endif
+
+#ifdef __MINGW32__
+#define DUCKDB_CLASS_API DUCKDB_API
+#else
+#define DUCKDB_CLASS_API
+#endif
 #endif
 
 #ifdef DUCKDB_BUILD_LOADABLE_EXTENSION

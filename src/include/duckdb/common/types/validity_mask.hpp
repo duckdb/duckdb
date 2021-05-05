@@ -18,7 +18,7 @@ struct ValidityMask;
 
 using validity_t = uint64_t;
 
-struct DUCKDB_API ValidityData {
+struct DUCKDB_CLASS_API ValidityData {
 	static constexpr const int BITS_PER_VALUE = sizeof(validity_t) * 8;
 	static constexpr const validity_t MAX_ENTRY = ~validity_t(0);
 

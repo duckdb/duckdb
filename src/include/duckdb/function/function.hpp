@@ -67,7 +67,7 @@ struct FunctionParameters {
 };
 
 //! Function is the base class used for any type of function (scalar, aggregate or simple function)
-class DUCKDB_API Function {
+class DUCKDB_CLASS_API Function {
 public:
 	explicit Function(string name) : name(name) {
 	}

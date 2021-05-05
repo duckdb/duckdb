@@ -20,7 +20,7 @@ class Serializer;
 
 //! The Value object holds a single arbitrary value of any type that can be
 //! stored in the database.
-class DUCKDB_API Value {
+class DUCKDB_CLASS_API Value {
 	friend class Vector;
 
 public:

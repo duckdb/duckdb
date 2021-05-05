@@ -34,7 +34,7 @@ namespace duckdb {
     In addition to holding the data of the vectors, the DataChunk also owns the
    selection vector that underlying vectors can point to.
 */
-class DUCKDB_API DataChunk {
+class DUCKDB_CLASS_API DataChunk {
 public:
 	//! Creates an empty DataChunk
 	DataChunk();
