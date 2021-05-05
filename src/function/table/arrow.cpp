@@ -151,7 +151,7 @@ static unique_ptr<FunctionOperatorData> ArrowScanInit(ClientContext &context, co
 	auto current_chunk = new ArrowArray();
 	auto result = make_unique<ArrowScanState>(current_chunk);
 	result->column_ids = column_ids;
-	return result;
+	return move(result);
 }
 
 void ArrowToDuckDB(ArrowScanState &scan_state, DataChunk &output) {
