@@ -4,7 +4,6 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
-#include "iostream"
 
 namespace duckdb {
 
@@ -55,7 +54,7 @@ struct AggregateState {
 
 class SimpleAggregateGlobalState : public GlobalOperatorState {
 public:
-	explicit SimpleAggregateGlobalState(vector<unique_ptr<Expression>> &aggregates) : state(aggregates){
+	explicit SimpleAggregateGlobalState(vector<unique_ptr<Expression>> &aggregates) : state(aggregates) {
 	}
 
 	//! The lock for updating the global aggregate state
@@ -142,7 +141,6 @@ void PhysicalSimpleAggregate::Sink(ExecutionContext &context, GlobalOperatorStat
 			}
 		}
 
-
 		sink.function_counter.Start();
 		aggregate.function.simple_update(payload_cnt == 0 ? nullptr : &payload_chunk.data[payload_idx],
 		                                 aggregate.bind_info.get(), payload_cnt, sink.state.aggregates[aggr_idx].get(),
@@ -177,8 +175,8 @@ void PhysicalSimpleAggregate::Combine(ExecutionContext &context, GlobalOperatorS
 		source.state.Move(gstate.state);
 	}
 
-    context.thread.profiler.Flush(this, &source.child_executor, "aggregate");
-    context.client.profiler.Flush(context.thread.profiler);
+	context.thread.profiler.Flush(this, &source.child_executor, "aggregate");
+	context.client.profiler.Flush(context.thread.profiler);
 }
 
 //===--------------------------------------------------------------------===//
@@ -216,7 +214,6 @@ string PhysicalSimpleAggregate::ParamsToString() const {
 	return result;
 }
 void PhysicalSimpleAggregate::FinalizeOperatorState(PhysicalOperatorState &state, ExecutionContext &context) {
-
 }
 
 } // namespace duckdb

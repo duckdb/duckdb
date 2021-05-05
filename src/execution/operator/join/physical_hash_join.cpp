@@ -258,16 +258,16 @@ void PhysicalHashJoin::ProbeHashTable(ExecutionContext &context, DataChunk &chun
 	} while (chunk.size() == 0);
 }
 void PhysicalHashJoin::FinalizeOperatorState(PhysicalOperatorState &state, ExecutionContext &context) {
-    auto &state_p = reinterpret_cast<PhysicalHashJoinState &>(state);
-    context.thread.profiler.Flush(this, &state_p.probe_executor, "probe");
-    if (!children.empty() && state.child_state) {
-        children[0]->FinalizeOperatorState(*state.child_state, context);
-    }
+	auto &state_p = reinterpret_cast<PhysicalHashJoinState &>(state);
+	context.thread.profiler.Flush(this, &state_p.probe_executor, "probe");
+	if (!children.empty() && state.child_state) {
+		children[0]->FinalizeOperatorState(*state.child_state, context);
+	}
 }
 void PhysicalHashJoin::Combine(ExecutionContext &context, GlobalOperatorState &gstate, LocalSinkState &lstate) {
-    auto & state = (HashJoinLocalState &)lstate;
-    context.thread.profiler.Flush(this, &state.build_executor, "build");
-    context.client.profiler.Flush(context.thread.profiler);
+	auto &state = (HashJoinLocalState &)lstate;
+	context.thread.profiler.Flush(this, &state.build_executor, "build");
+	context.client.profiler.Flush(context.thread.profiler);
 }
 
 } // namespace duckdb

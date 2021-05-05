@@ -26,16 +26,15 @@ class ExpressionExecutor;
 class PhysicalOperator;
 class SQLStatement;
 
-
 //! The ExpressionInfo keeps information related to an expression
 struct ExpressionInfo {
-    explicit ExpressionInfo() : hasfunction(false){
-    }
+	explicit ExpressionInfo() : hasfunction(false) {
+	}
 	// A vector of children
-    vector<unique_ptr<ExpressionInfo>> children;
+	vector<unique_ptr<ExpressionInfo>> children;
 	// Extract ExpressionInformation from a given expression state
 	void ExtractExpressionsRecursive(unique_ptr<ExpressionState> &state);
-    //! Whether or not expression has function
+	//! Whether or not expression has function
 	bool hasfunction;
 	//! The function Name
 	string function_name;
@@ -47,19 +46,19 @@ struct ExpressionInfo {
 struct ExpressionRootInfo {
 	ExpressionRootInfo(ExpressionExecutorState &executor, string name);
 	//! Count the number of time the executor called
-    uint64_t total_count = 0;
-    //! Count the number of time the executor called since last sampling
-    uint64_t current_count = 0;
-    //! Count the number of samples
-    uint64_t sample_count = 0;
-    //! Count the number of tuples in all samples
-    uint64_t sample_tuples_count = 0;
-    //! Count the number of tuples processed by this executor
-    uint64_t tuples_count = 0;
-    //! A vector which contain the pointer to root of each expression tree
-    unique_ptr<ExpressionInfo> root;
+	uint64_t total_count = 0;
+	//! Count the number of time the executor called since last sampling
+	uint64_t current_count = 0;
+	//! Count the number of samples
+	uint64_t sample_count = 0;
+	//! Count the number of tuples in all samples
+	uint64_t sample_tuples_count = 0;
+	//! Count the number of tuples processed by this executor
+	uint64_t tuples_count = 0;
+	//! A vector which contain the pointer to root of each expression tree
+	unique_ptr<ExpressionInfo> root;
 	//! Elapsed time
-    double time;
+	double time;
 	//! Name
 	string name;
 	//! Extra Info
@@ -68,9 +67,9 @@ struct ExpressionRootInfo {
 
 struct ExpressionExecutorInfo {
 	explicit ExpressionExecutorInfo() {};
-    explicit ExpressionExecutorInfo(ExpressionExecutor &executor, string name);
-    //! A vector which contain the pointer to all ExpressionRootInfo
-    vector<unique_ptr<ExpressionRootInfo>> roots;
+	explicit ExpressionExecutorInfo(ExpressionExecutor &executor, const string &name);
+	//! A vector which contain the pointer to all ExpressionRootInfo
+	vector<unique_ptr<ExpressionRootInfo>> roots;
 };
 
 struct OperatorInformation {
@@ -81,7 +80,7 @@ struct OperatorInformation {
 	}
 
 	//! A mapping of physical operators to recorded timings
-    unordered_map<string, shared_ptr<ExpressionExecutorInfo>> executors_info;
+	unordered_map<string, shared_ptr<ExpressionExecutorInfo>> executors_info;
 
 	//! HACKY
 	bool changed = false;

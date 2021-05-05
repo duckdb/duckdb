@@ -235,8 +235,8 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 		entry->second->info.time += node.second.time;
 		entry->second->info.elements += node.second.elements;
 		// for each data_chunk at the end of pipeline, operators information will get flushed which is not optimal
-		for(auto &x : node.second.executors_info) {
-				entry->second->info.executors_info[x.first] = x.second;
+		for (auto &x : node.second.executors_info) {
+			entry->second->info.executors_info[x.first] = x.second;
 		}
 	}
 }
@@ -479,7 +479,7 @@ void ExpressionInfo::ExtractExpressionsRecursive(unique_ptr<ExpressionState> &st
 		if (child->expr.expression_class == ExpressionClass::BOUND_FUNCTION) {
 			expression_info_p->hasfunction = true;
 			expression_info_p->function_name = ((BoundFunctionExpression &)child->expr).function.name;
-            expression_info_p->function_time = child->time;
+			expression_info_p->function_time = child->time;
 		}
 		expression_info_p->ExtractExpressionsRecursive(child);
 		children.push_back(move(expression_info_p));
@@ -487,20 +487,22 @@ void ExpressionInfo::ExtractExpressionsRecursive(unique_ptr<ExpressionState> &st
 	return;
 }
 
-ExpressionExecutorInfo::ExpressionExecutorInfo(ExpressionExecutor &executor, string name) {
-	//Extract Expression Root Information from ExpressionExecutorStats
-    for (auto &state : executor.GetStates()) {
+ExpressionExecutorInfo::ExpressionExecutorInfo(ExpressionExecutor &executor, const string &name) {
+	// Extract Expression Root Information from ExpressionExecutorStats
+	for (auto &state : executor.GetStates()) {
 		auto root_info = make_unique<ExpressionRootInfo>(*state, name);
-        roots.push_back(move(root_info));
-    }
+		roots.push_back(move(root_info));
+	}
 }
 
-ExpressionRootInfo::ExpressionRootInfo(ExpressionExecutorState &state, string name) : total_count(state.total_count), current_count(state.current_count), sample_count(state.sample_count),
-sample_tuples_count(state.sample_tuples_count), tuples_count(state.tuples_count) , name(state.name) , time(state.time) {
+ExpressionRootInfo::ExpressionRootInfo(ExpressionExecutorState &state, string name)
+    : total_count(state.total_count), current_count(state.current_count), sample_count(state.sample_count),
+      sample_tuples_count(state.sample_tuples_count), tuples_count(state.tuples_count), name(state.name),
+      time(state.time) {
 	// Use the expression tree name as extra-info
-    extra_info = name;
-    auto expression_info_p = make_unique<ExpressionInfo>();
-    expression_info_p->ExtractExpressionsRecursive(state.root_state);
-    root = move(expression_info_p);
+	extra_info = name;
+	auto expression_info_p = make_unique<ExpressionInfo>();
+	expression_info_p->ExtractExpressionsRecursive(state.root_state);
+	root = move(expression_info_p);
 }
 } // namespace duckdb
