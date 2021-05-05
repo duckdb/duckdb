@@ -488,15 +488,19 @@ void ExpressionInfo::ExtractExpressionsRecursive(unique_ptr<ExpressionState> &st
 }
 
 ExpressionExecutorInfo::ExpressionExecutorInfo(ExpressionExecutor &executor, string name) {
+	//Extract Expression Root Information from ExpressionExecutorStats
     for (auto &state : executor.GetStates()) {
-		auto root_info = make_unique<ExpressionRootInfo>(*state);
-		root_info->extra_info = name;
-        auto expression_info_p = make_unique<ExpressionInfo>();
-        expression_info_p->ExtractExpressionsRecursive(state->root_state);
-		root_info->root = move(expression_info_p);
+		auto root_info = make_unique<ExpressionRootInfo>(*state, name);
         roots.push_back(move(root_info));
-
     }
 }
 
+ExpressionRootInfo::ExpressionRootInfo(ExpressionExecutorState &state, string name) : total_count(state.total_count), current_count(state.current_count), sample_count(state.sample_count),
+sample_tuples_count(state.sample_tuples_count), tuples_count(state.tuples_count) , name(state.name) , time(state.time) {
+	// Use the expression tree name as extra-info
+    extra_info = name;
+    auto expression_info_p = make_unique<ExpressionInfo>();
+    expression_info_p->ExtractExpressionsRecursive(state.root_state);
+    root = move(expression_info_p);
+}
 } // namespace duckdb

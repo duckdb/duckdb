@@ -105,25 +105,33 @@ static void PragmaDetailedProfilingOutputFunction(ClientContext &context, const 
 		// create a ChunkCollection
 		auto collection = make_unique<ChunkCollection>();
 
+		// create a chunk
 		DataChunk chunk;
 		chunk.Initialize(data.types);
 
+		// Initialize ids
 		int operator_counter = 1;
+        int function_counter = 1;
+        int expression_counter = 1;
 		if (!context.query_profiler_history.GetPrevProfilers().empty()) {
+			// For each Operator
 			for (auto op : context.query_profiler_history.GetPrevProfilers().back().second.GetTreeMap()) {
-				int function_counter = 1;
-                int expression_counter = 1;
-				for (auto &x : op.second->info.executors_info) {
-					for (auto &info : x.second->roots) {
-                        SetValue(chunk, chunk.size(), operator_counter, "ExpressionRoot", expression_counter++, info->name,
-                                           double(info->time) / info->sample_tuples_count, info->sample_tuples_count, info->tuples_count, info->extra_info);
+				// For each Expression Executor
+				for (auto &ee : op.second->info.executors_info) {
+					// For each Expression tree
+					for (auto &et : ee.second->roots) {
+                        SetValue(chunk, chunk.size(), operator_counter, "ExpressionRoot", expression_counter++, et->name,
+                                           double(et->time) / et->sample_tuples_count, et->sample_tuples_count, et->tuples_count, et->extra_info);
+						//Increment cardinality
                         chunk.SetCardinality(chunk.size() + 1);
+						// Check whether data chunk is full or not
                         if (chunk.size() == STANDARD_VECTOR_SIZE) {
                             collection->Append(chunk);
                             chunk.Reset();
                         }
-						ExtractFunctions(*collection, *info->root, chunk, operator_counter, function_counter,
-						                   info->sample_tuples_count, info->tuples_count);
+						// Extract all functions inside the tree
+						ExtractFunctions(*collection, *et->root, chunk, operator_counter, function_counter,
+						                   et->sample_tuples_count, et->tuples_count);
 					}
 				}
 				operator_counter++;

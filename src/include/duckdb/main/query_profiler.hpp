@@ -45,8 +45,7 @@ struct ExpressionInfo {
 
 //! The ExpressionRootInfo keeps information related to the root of an expression tree
 struct ExpressionRootInfo {
-	ExpressionRootInfo(ExpressionExecutorState &executor) : total_count(executor.total_count), current_count(executor.current_count), sample_count(executor.sample_count),
-      sample_tuples_count(executor.sample_tuples_count), tuples_count(executor.tuples_count) , name(executor.name) , time(executor.time) {};
+	ExpressionRootInfo(ExpressionExecutorState &executor, string name);
 	//! Count the number of time the executor called
     uint64_t total_count = 0;
     //! Count the number of time the executor called since last sampling
