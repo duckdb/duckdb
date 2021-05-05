@@ -16,10 +16,9 @@
 namespace duckdb {
 
 struct ArrowScanFunctionData : public TableFunctionData {
-	ArrowArrayStream *stream;
+	ArrowArrayStream *stream = nullptr;
 	ArrowSchema schema_root;
 	bool is_consumed = false;
-	bool is_released = false;
 
 	void ReleaseSchema() {
 		if (schema_root.release) {
@@ -35,15 +34,15 @@ struct ArrowScanFunctionData : public TableFunctionData {
 
 	~ArrowScanFunctionData() override {
 		ReleaseSchema();
+		if (stream) {
+			stream->release(stream);
+			stream = nullptr;
+		}
 	}
 };
 
 struct ArrowScanState : public FunctionOperatorData {
-	explicit ArrowScanState(ArrowArray *current_chunk): chunk(current_chunk){
-	}
-
-	~ArrowScanState() override {
-		ReleaseArray();
+	explicit ArrowScanState(ArrowArray *current_chunk) : chunk(current_chunk) {
 	}
 
 	void ReleaseArray() {
@@ -57,7 +56,7 @@ struct ArrowScanState : public FunctionOperatorData {
 			chunk->release(chunk);
 		}
 	}
-    ArrowArray *chunk;
+	ArrowArray *chunk;
 	idx_t chunk_offset = 0;
 	vector<column_t> column_ids;
 };
@@ -149,19 +148,14 @@ static unique_ptr<FunctionData> ArrowScanBind(ClientContext &context, vector<Val
 
 static unique_ptr<FunctionOperatorData> ArrowScanInit(ClientContext &context, const FunctionData *bind_data,
                                                       vector<column_t> &column_ids, TableFilterCollection *filters) {
-	auto &data = (ArrowScanFunctionData &)*bind_data;
-	if (data.is_consumed) {
-		throw NotImplementedException("FIXME: Arrow streams can only be read once");
-	}
-	data.is_consumed = true;
 	auto current_chunk = new ArrowArray();
 	auto result = make_unique<ArrowScanState>(current_chunk);
 	result->column_ids = column_ids;
 	return result;
 }
 
-void ArrowToDuckDB(ArrowScanState & scan_state, DataChunk &output) {
-    	for (idx_t col_idx = 0; col_idx < output.ColumnCount(); col_idx++) {
+void ArrowToDuckDB(ArrowScanState &scan_state, DataChunk &output) {
+	for (idx_t col_idx = 0; col_idx < output.ColumnCount(); col_idx++) {
 		auto &array = *scan_state.chunk->children[col_idx];
 		if (!array.release) {
 			throw InvalidInputException("arrow_scan: released array passed");
@@ -191,7 +185,7 @@ void ArrowToDuckDB(ArrowScanState & scan_state, DataChunk &output) {
 				memcpy((void *)mask.GetData(), (data_ptr_t)&temp_nullmask, n_bitmask_bytes);
 			}
 		}
-switch (output.data[col_idx].GetType().id()) {
+		switch (output.data[col_idx].GetType().id()) {
 		case LogicalTypeId::SQLNULL:
 			output.data[col_idx].Reference(Value());
 			break;
@@ -259,26 +253,20 @@ switch (output.data[col_idx].GetType().id()) {
 			throw std::runtime_error("Unsupported type " + output.data[col_idx].GetType().ToString());
 		}
 	}
-
-
 }
 
 static void ArrowScanFunction(ClientContext &context, const FunctionData *bind_data,
                               FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
 	auto &data = (ArrowScanFunctionData &)*bind_data;
 	auto &state = (ArrowScanState &)*operator_state;
-//	if (!data.stream->release) {
-//		//! no more chunks
-//		return;
-//	}
-
 	//! have we run out of data on the current chunk? move to next one
 	if (state.chunk_offset >= (idx_t)state.chunk->length) {
 		state.chunk_offset = 0;
 		state.ReleaseArray();
-		if (data.is_released ){
-		    //! No more chunks
-		    return;
+		delete state.chunk;
+		if (data.is_consumed) {
+			//! No more chunks
+			return;
 		}
 		auto current_chunk = new ArrowArray();
 		if (data.stream->get_next(data.stream, current_chunk)) {
@@ -290,9 +278,9 @@ static void ArrowScanFunction(ClientContext &context, const FunctionData *bind_d
 
 	//! have we run out of chunks? we done
 	if (!state.chunk->release) {
-	    if (data.is_released){
-	        data.is_released = true;
-		    data.stream->release(data.stream);
+		delete state.chunk;
+		if (!data.is_consumed) {
+			data.is_consumed = true;
 		}
 		return;
 	}
@@ -302,79 +290,42 @@ static void ArrowScanFunction(ClientContext &context, const FunctionData *bind_d
 	}
 
 	output.SetCardinality(MinValue<int64_t>(STANDARD_VECTOR_SIZE, state.chunk->length - state.chunk_offset));
-	ArrowToDuckDB(state,output);
+	ArrowToDuckDB(state, output);
 	output.Verify();
 	state.chunk_offset += output.size();
 }
-
-//unique_ptr<NodeStatistics> ArrowScanCardinality(ClientContext &context,
-//                                                                     const FunctionData *bind_data) {
-//	auto &data = (ArrowScanFunctionData &)*bind_data;
-//	auto max_rows = data.stream->number_of_batches*data.current_chunk_root.length;
-//	//! This can be slightly overestimated if last batch is near-empty
-//	return make_unique<NodeStatistics>(max_rows, max_rows);
-//}
-
-struct ParallelArrowScanState : public ParallelState {
-	ParallelArrowScanState() : batch_idx(0) {
-	}
-
-	std::mutex lock;
-	idx_t batch_idx;
-};
 
 idx_t ArrowScanMaxThreads(ClientContext &context, const FunctionData *bind_data_p) {
 	auto &data = (const ArrowScanFunctionData &)*bind_data_p;
 	return data.stream->number_of_batches;
 }
 
-unique_ptr<ParallelState> ArrowScanInitParallelState(ClientContext &context,
-                                                                          const FunctionData *bind_data_p) {
-	return make_unique<ParallelArrowScanState>();
+unique_ptr<ParallelState> ArrowScanInitParallelState(ClientContext &context, const FunctionData *bind_data_p) {
+	return make_unique<ParallelState>();
 }
-
-
 
 bool ArrowScanParallelStateNext(ClientContext &context, const FunctionData *bind_data_p,
-                                                     FunctionOperatorData *operator_state,
-                                                     ParallelState *parallel_state_p) {
-    return false;
+                                FunctionOperatorData *operator_state, ParallelState *parallel_state_p) {
+	return false;
 }
 
-unique_ptr<FunctionOperatorData> ArrowScanParallelInit(ClientContext &context,
-                                                                            const FunctionData *bind_data_p,
-                                                                            ParallelState *state,
-                                                                            vector<column_t> &column_ids,
-                                                                            TableFilterCollection *filters) {
-//    auto &data = (ArrowScanFunctionData &)*bind_data_p;
-//	if (data.is_consumed) {
-//		throw NotImplementedException("FIXME: Arrow streams can only be read once");
-//	}
-//	data.is_consumed = true;
+unique_ptr<FunctionOperatorData> ArrowScanParallelInit(ClientContext &context, const FunctionData *bind_data_p,
+                                                       ParallelState *state, vector<column_t> &column_ids,
+                                                       TableFilterCollection *filters) {
 	auto current_chunk = new ArrowArray();
 	auto result = make_unique<ArrowScanState>(current_chunk);
-//	auto result = make_unique<ArrowScanState>(&data.current_chunk_root);
 	result->column_ids = column_ids;
-//	if (data.stream->get_next(data.stream, &data.current_chunk_root)) {
-//			throw InvalidInputException("arrow_scan: get_next failed(): %s",
-//			                            string(data.stream->get_last_error(data.stream)));
-//		}
-//	if (!ArrowScanParallelStateNext(context, bind_data_p, result.get(), state)) {
-//		return nullptr;
-//	}
 	return move(result);
 }
 
 void ArrowTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunctionSet arrow("arrow_scan");
-	arrow.AddFunction(
-	    TableFunction({LogicalType::POINTER, LogicalType::POINTER}, ArrowScanFunction, ArrowScanBind, ArrowScanInit,
-                      nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, ArrowScanMaxThreads, ArrowScanInitParallelState,
-                      ArrowScanParallelInit, ArrowScanParallelStateNext));
+	arrow.AddFunction(TableFunction({LogicalType::POINTER, LogicalType::POINTER}, ArrowScanFunction, ArrowScanBind,
+	                                ArrowScanInit, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+	                                ArrowScanMaxThreads, ArrowScanInitParallelState, ArrowScanParallelInit,
+	                                ArrowScanParallelStateNext));
 	set.AddFunction(arrow);
 }
-
-
 
 void BuiltinFunctions::RegisterArrowFunctions() {
 	ArrowTableFunction::RegisterFunction(*this);

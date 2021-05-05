@@ -36,7 +36,7 @@ struct ArrowSchema {
 
 struct ArrowArray {
 	// Array data description
-	int64_t length=0;
+	int64_t length = 0;
 	int64_t null_count;
 	int64_t offset;
 	int64_t n_buffers;
@@ -53,7 +53,7 @@ struct ArrowArray {
 
 // EXPERIMENTAL
 struct ArrowArrayStream {
-    uint64_t number_of_batches =0;
+	uint64_t number_of_batches = 0;
 	// Callback to get the stream type
 	// (will be the same for all arrays in the stream).
 	// Return value: 0 if successful, an `errno`-compatible error code otherwise.

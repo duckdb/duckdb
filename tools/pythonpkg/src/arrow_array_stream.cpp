@@ -26,11 +26,11 @@ ArrowArrayStream *PythonTableArrowArrayStreamFactory::Produce(uintptr_t factory_
 	if (!factory->arrow_table) {
 		return nullptr;
 	}
-	if (!factory->stream) {
-		auto table_stream = new PythonTableArrowArrayStream(factory->arrow_table, factory);
-		factory->stream = &table_stream->stream;
-	}
-	return factory->stream;
+	//	if (!factory->stream) {
+	auto table_stream = new PythonTableArrowArrayStream(factory->arrow_table, factory);
+	//		factory->stream = &table_stream->stream;
+	//	}
+	return &table_stream->stream;
 }
 
 int PythonTableArrowArrayStream::PythonTableArrowArrayStream::GetSchema(struct ArrowArrayStream *stream,
