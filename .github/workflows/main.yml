@@ -452,8 +452,11 @@ jobs:
       with:
         fetch-depth: 0
 
+    - name: Whoami
+      run: whoami
+
     - name: Install
-      run: sudo yum install -y gcc gcc-c++ git cmake
+      run: yum install -y gcc gcc-c++ git cmake
 
     - name: Build
       run: make release
