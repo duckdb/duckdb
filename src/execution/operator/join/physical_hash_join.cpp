@@ -251,12 +251,13 @@ void PhysicalHashJoin::ProbeHashTable(ExecutionContext &context, DataChunk &chun
 
 bool PhysicalHashJoin::ProbePerfectHashTable(ExecutionContext &context, DataChunk &result,
                                              PhysicalHashJoinState *physical_state) {
-	// We only do this optimization on small build sides < 10k tuples
-	if (!perfect_join_state.is_build_small)
-		return false;
-	//
+
 	auto global_state = reinterpret_cast<HashJoinGlobalState *>(sink_state.get());
 	auto hash_table_ptr = global_state->hash_table.get();
+	// We only do this optimization when all the requirements are true
+	if (!CheckRequirementsForPerfectHashJoin(hash_table_ptr)) {
+		return false;
+	}
 
 	// fetch the chunk to join
 	children[0]->GetChunk(context, physical_state->child_chunk, physical_state->child_state.get());
@@ -271,7 +272,7 @@ bool PhysicalHashJoin::ProbePerfectHashTable(ExecutionContext &context, DataChun
 	VectorData keys_data;
 	auto keys_size = physical_state->join_keys.size();  // number of keys
 	auto keys_vec = &physical_state->join_keys.data[0]; // keys vector
-	keys_vec->Orrify(keys_size, keys_data);             // get the keys data (Decompress)
+	keys_vec->Orrify(keys_size, keys_data);             // get the keys data (Decompress) convert
 	auto ldata = (int32_t *)keys_data.data; // cast to a typed buffer (TODO: switch case with multiple types)
 
 	// go trough the join_keys and fill the selection vector with the matches
@@ -311,5 +312,22 @@ bool PhysicalHashJoin::ProbePerfectHashTable(ExecutionContext &context, DataChun
 	// scan_structure->AdvancePointers();
 
 	return true;
+}
+
+bool PhysicalHashJoin::CheckRequirementsForPerfectHashJoin(JoinHashTable *ht_ptr) {
+	// first check the build size
+	if (!perfect_join_state.is_build_small) {
+		return false;
+	}
+	// verify uniquiness (build size < min_max_range => duplicate values )
+	auto build_size = Value::INTEGER(ht_ptr->size());
+	auto min_max_range = perfect_join_state.maximum = perfect_join_state.minimum;
+	if (build_size != min_max_range) {
+		return false;
+	}
+	// check for nulls
+	if (ht_ptr->has_null) {
+		// set selection vector
+	}
 }
 } // namespace duckdb
