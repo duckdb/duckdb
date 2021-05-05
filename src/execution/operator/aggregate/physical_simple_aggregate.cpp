@@ -1,9 +1,10 @@
 #include "duckdb/execution/operator/aggregate/physical_simple_aggregate.hpp"
-
+#include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "iostream"
 
 namespace duckdb {
 
@@ -54,13 +55,15 @@ struct AggregateState {
 
 class SimpleAggregateGlobalState : public GlobalOperatorState {
 public:
-	explicit SimpleAggregateGlobalState(vector<unique_ptr<Expression>> &aggregates) : state(aggregates) {
+	explicit SimpleAggregateGlobalState(vector<unique_ptr<Expression>> &aggregates) : state(aggregates) , function_info(){
 	}
 
 	//! The lock for updating the global aggregate state
 	mutex lock;
 	//! The global aggregate state
 	AggregateState state;
+	//!
+    Information function_info;
 };
 
 class SimpleAggregateLocalState : public LocalSinkState {
@@ -95,6 +98,8 @@ public:
 	DataChunk payload_chunk;
 	//! The payload chunk
 	DataChunk payload_chunk_base;
+	//!
+	CycleCounter function_counter;
 };
 
 unique_ptr<GlobalOperatorState> PhysicalSimpleAggregate::GetGlobalState(ClientContext &context) {
@@ -139,10 +144,12 @@ void PhysicalSimpleAggregate::Sink(ExecutionContext &context, GlobalOperatorStat
 			}
 		}
 
-		// perform the actual aggregation
+
+		sink.function_counter.Start();
 		aggregate.function.simple_update(payload_cnt == 0 ? nullptr : &payload_chunk.data[payload_idx],
 		                                 aggregate.bind_info.get(), payload_cnt, sink.state.aggregates[aggr_idx].get(),
 		                                 payload_chunk.size());
+		sink.function_counter.End();
 		payload_idx += payload_cnt;
 	}
 }
@@ -171,6 +178,9 @@ void PhysicalSimpleAggregate::Combine(ExecutionContext &context, GlobalOperatorS
 		// simply move over the source state into the global state
 		source.state.Move(gstate.state);
 	}
+
+    context.thread.profiler.Flush(this, &source.child_executor, "aggregate");
+    context.client.profiler.Flush(context.thread.profiler);
 }
 
 //===--------------------------------------------------------------------===//
@@ -206,6 +216,9 @@ string PhysicalSimpleAggregate::ParamsToString() const {
 		}
 	}
 	return result;
+}
+void PhysicalSimpleAggregate::FinalizeOperatorState(PhysicalOperatorState &state, ExecutionContext &context) {
+
 }
 
 } // namespace duckdb

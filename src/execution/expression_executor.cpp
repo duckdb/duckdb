@@ -42,27 +42,10 @@ void ExpressionExecutor::Execute(DataChunk *input, DataChunk &result) {
 	D_ASSERT(!expressions.empty());
 
 	for (idx_t i = 0; i < expressions.size(); i++) {
-		if (current_count >= next_sample) {
-			states[i]->profiler.Start();
-		}
 		ExecuteExpression(i, result.data[i]);
-		if (current_count >= next_sample) {
-			states[i]->profiler.End();
-			states[i]->time += states[i]->profiler.Elapsed();
-		}
-		if (current_count >= next_sample) {
-			next_sample = 50 + random.NextRandomInteger() % 100;
-			++sample_count;
-			sample_tuples_count += input->size();
-			current_count = 0;
-		} else {
-			++current_count;
-		}
 	}
 	result.SetCardinality(input ? input->size() : 1);
 	result.Verify();
-	++total_count;
-	tuples_count += input->size();
 }
 
 void ExpressionExecutor::ExecuteExpression(DataChunk &input, Vector &result) {
@@ -84,7 +67,24 @@ void ExpressionExecutor::ExecuteExpression(Vector &result) {
 void ExpressionExecutor::ExecuteExpression(idx_t expr_idx, Vector &result) {
 	D_ASSERT(expr_idx < expressions.size());
 	D_ASSERT(result.GetType() == expressions[expr_idx]->return_type);
+    if (current_count >= next_sample) {
+        states[expr_idx]->profiler.Start();
+    }
 	Execute(*expressions[expr_idx], states[expr_idx]->root_state.get(), nullptr, chunk ? chunk->size() : 1, result);
+    if (current_count >= next_sample) {
+        states[expr_idx]->profiler.End();
+        states[expr_idx]->time += states[expr_idx]->profiler.Elapsed();
+    }
+    if (current_count >= next_sample) {
+        next_sample = 50 + random.NextRandomInteger() % 100;
+        ++sample_count;
+        sample_tuples_count += chunk ? chunk->size() : 0;
+        current_count = 0;
+    } else {
+        ++current_count;
+    }
+    ++total_count;
+    tuples_count += chunk ? chunk->size() : 0;
 }
 
 Value ExpressionExecutor::EvaluateScalar(Expression &expr) {

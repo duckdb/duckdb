@@ -27,9 +27,18 @@ class ExpressionExecutor;
 class PhysicalOperator;
 class SQLStatement;
 
-struct ExpressionInformation {
-	explicit ExpressionInformation(string &name) : name(name) {
-	}
+
+struct Information {
+    explicit Information(){
+    }
+    string name;
+    uint64_t time;
+};
+
+class ExpressionInformation {
+public:
+    ExpressionInformation(string &name, double time) : name(name), time(time) {
+    }
 	void ExtractExpressionsRecursive(unique_ptr<ExpressionState> &state);
 	vector<unique_ptr<ExpressionInformation>> children;
 	bool hasfunction = false;
@@ -40,7 +49,9 @@ struct ExpressionInformation {
 };
 
 struct ExpressionExecutorInformation {
-	explicit ExpressionExecutorInformation(ExpressionExecutor &executor);
+	explicit ExpressionExecutorInformation() {};
+    explicit ExpressionExecutorInformation(ExpressionExecutor &executor, string name);
+	void initialize(ExpressionExecutor &executor);
 
 	//! Count the number of time the executor called
 	uint64_t total_count = 0;
@@ -52,19 +63,27 @@ struct ExpressionExecutorInformation {
 	uint64_t sample_tuples_count = 0;
 	//! Count the number of tuples processed by this executor
 	uint64_t tuples_count = 0;
+	//! Executor name, will be used for the expression_root
+    string name;
 
 	vector<unique_ptr<ExpressionInformation>> roots;
 };
 
-struct OperatorTimingInformation {
+struct OperatorInformation {
 	double time = 0;
 	idx_t elements = 0;
-	bool has_executor = false;
-	explicit OperatorTimingInformation(double time_ = 0, idx_t elements_ = 0) : time(time_), elements(elements_) {
+	string name;
+	explicit OperatorInformation(double time_ = 0, idx_t elements_ = 0) : time(time_), elements(elements_) {
 	}
 
 	//! A mapping of physical operators to recorded timings
-	unique_ptr<ExpressionExecutorInformation> executors_info;
+    unordered_map<string, shared_ptr<ExpressionExecutorInformation>> executors_info;
+
+    //! All information
+    vector<Information> information;
+
+	//! HACKY
+	bool changed = false;
 };
 
 //! The OperatorProfiler measures timings of individual operators
@@ -76,7 +95,7 @@ public:
 
 	DUCKDB_API void StartOperator(PhysicalOperator *phys_op);
 	DUCKDB_API void EndOperator(DataChunk *chunk);
-	DUCKDB_API void Flush(PhysicalOperator *phys_op, ExpressionExecutor *expression_executor);
+	DUCKDB_API void Flush(PhysicalOperator *phys_op, ExpressionExecutor *expression_executor, string name);
 
 	~OperatorProfiler() {
 	}
@@ -91,7 +110,7 @@ private:
 	//! The stack of Physical Operators that are currently active
 	std::stack<PhysicalOperator *> execution_stack;
 	//! A mapping of physical operators to recorded timings
-	unordered_map<PhysicalOperator *, OperatorTimingInformation> timings;
+	unordered_map<PhysicalOperator *, OperatorInformation> timings;
 };
 
 //! The QueryProfiler can be used to measure timings of queries
@@ -100,7 +119,7 @@ public:
 	struct TreeNode {
 		string name;
 		string extra_info;
-		OperatorTimingInformation info;
+		OperatorInformation info;
 		vector<unique_ptr<TreeNode>> children;
 		idx_t depth = 0;
 	};

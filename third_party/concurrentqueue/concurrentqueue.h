@@ -1461,7 +1461,8 @@ private:
 		
 	private:
 		// Implemented like a stack, but where node order doesn't matter (nodes are inserted out of order under contention)
-		std::atomic<N*> freeListHead;
+		std::atomic<N*>
+		    freeListHead;
 	
 	static const std::uint32_t REFS_MASK = 0x7FFFFFFF;
 	static const std::uint32_t SHOULD_BE_ON_FREELIST = 0x80000000;

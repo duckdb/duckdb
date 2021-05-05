@@ -206,19 +206,20 @@ void OperatorProfiler::AddTiming(PhysicalOperator *op, double time, idx_t elemen
 	auto entry = timings.find(op);
 	if (entry == timings.end()) {
 		// add new entry
-		timings[op] = OperatorTimingInformation(time, elements);
+		timings[op] = OperatorInformation(time, elements);
 	} else {
 		// add to existing entry
 		entry->second.time += time;
 		entry->second.elements += elements;
 	}
 }
-void OperatorProfiler::Flush(PhysicalOperator *phys_op, ExpressionExecutor *expression_executor) {
+void OperatorProfiler::Flush(PhysicalOperator *phys_op, ExpressionExecutor *expression_executor, string name) {
 	auto entry = timings.find(phys_op);
 	if (entry != timings.end()) {
 		auto &operator_timing = timings.find(phys_op)->second;
-		operator_timing.executors_info = make_unique<ExpressionExecutorInformation>(*expression_executor);
-		operator_timing.has_executor = true;
+		operator_timing.executors_info[name] = make_unique<ExpressionExecutorInformation>(*expression_executor, name);
+		operator_timing.name = phys_op->GetName();
+		operator_timing.changed = true;
 	}
 }
 
@@ -233,8 +234,10 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 
 		entry->second->info.time += node.second.time;
 		entry->second->info.elements += node.second.elements;
-		entry->second->info.executors_info = move(node.second.executors_info);
-		entry->second->info.has_executor = node.second.has_executor;
+		// for each data_chunk at the end of pipeline, operators information will get flushed which is not optimal
+		for(auto &x : node.second.executors_info) {
+				entry->second->info.executors_info[x.first] = x.second;
+		}
 	}
 }
 
@@ -472,7 +475,7 @@ void ExpressionInformation::ExtractExpressionsRecursive(unique_ptr<ExpressionSta
 	}
 	// extract the children of this node
 	for (auto &child : state->child_states) {
-		auto expression_info_p = make_unique<ExpressionInformation>(child.get()->name);
+		auto expression_info_p = make_unique<ExpressionInformation>(child.get()->name, child.get()->time);
 		if (child->expr.expression_class == ExpressionClass::BOUND_FUNCTION) {
 			expression_info_p->hasfunction = true;
 			expression_info_p->function_name = ((BoundFunctionExpression &)child->expr).function.name;
@@ -484,19 +487,38 @@ void ExpressionInformation::ExtractExpressionsRecursive(unique_ptr<ExpressionSta
 	return;
 }
 
-ExpressionExecutorInformation::ExpressionExecutorInformation(ExpressionExecutor &executor)
+//void ExpressionExecutorInformation::initialize(ExpressionExecutor &executor){
+//     total_count = executor.total_count;
+//	 current_count = executor.current_count;
+//	 sample_count = executor.sample_count;
+//	 sample_tuples_count = executor.sample_tuples_count;
+//	 tuples_count = executor.tuples_count;
+//	for (auto &state : executor.GetStates()) {
+//        ExpressionInformation expression_info_p(state.get()->root_state->name);
+//		expression_info_p.time = state->time;
+//		if (state->root_state->expr.expression_class == ExpressionClass::BOUND_FUNCTION) {
+//			expression_info_p.hasfunction = true;
+//			expression_info_p.function_name = ((BoundFunctionExpression &)state->root_state->expr).function.name;
+//            expression_info_p.function_time = state->root_state->time;
+//        }
+//		expression_info_p.ExtractExpressionsRecursive(state.get()->root_state);
+//		roots.push_back(move(expression_info_p));
+//	}
+//}
+
+ExpressionExecutorInformation::ExpressionExecutorInformation(ExpressionExecutor &executor, string name)
     : total_count(executor.total_count), current_count(executor.current_count), sample_count(executor.sample_count),
-      sample_tuples_count(executor.sample_tuples_count), tuples_count(executor.tuples_count) {
-	for (auto &state : executor.GetStates()) {
-		auto expression_info_p = make_unique<ExpressionInformation>(state.get()->root_state->name);
-		expression_info_p->time = state->time;
-		if (state->root_state->expr.expression_class == ExpressionClass::BOUND_FUNCTION) {
-			expression_info_p->hasfunction = true;
-			expression_info_p->function_name = ((BoundFunctionExpression &)state->root_state->expr).function.name;
-            expression_info_p->function_time = state->root_state->time;
+      sample_tuples_count(executor.sample_tuples_count), tuples_count(executor.tuples_count) , name(name) {
+    for (auto &state : executor.GetStates()) {
+        auto expression_info_p =
+            make_unique<ExpressionInformation>(state.get()->root_state->name, state.get()->root_state.get()->time);
+        expression_info_p->time = state->time;
+        if (state->root_state->expr.expression_class == ExpressionClass::BOUND_FUNCTION) {
+            expression_info_p->hasfunction = true;
+            expression_info_p->function_name = ((BoundFunctionExpression &)state->root_state->expr).function.name;
         }
-		expression_info_p->ExtractExpressionsRecursive(state.get()->root_state);
-		roots.push_back(move(expression_info_p));
-	}
+        expression_info_p->ExtractExpressionsRecursive(state.get()->root_state);
+        roots.push_back(move(expression_info_p));
+    }
 }
 } // namespace duckdb

@@ -32,7 +32,7 @@ unique_ptr<PhysicalOperatorState> PhysicalProjection::GetOperatorState() {
 
 void PhysicalProjection::FinalizeOperatorState(PhysicalOperatorState &state_p, ExecutionContext &context) {
 	auto &state = reinterpret_cast<PhysicalProjectionState &>(state_p);
-	context.thread.profiler.Flush(this, &state.executor);
+	context.thread.profiler.Flush(this, &state.executor, "projection");
 	if (!children.empty() && state.child_state) {
 		children[0]->FinalizeOperatorState(*state.child_state, context);
 	}
