@@ -71,7 +71,7 @@ static void SetValue(DataChunk &output, int index, int op_id, string annotation,
 
 }
 
-static void ExtractFunctions(ChunkCollection &collection, ExpressionInformation &info, DataChunk &chunk, int op_id,
+static void ExtractFunctions(ChunkCollection &collection, ExpressionInfo &info, DataChunk &chunk, int op_id,
                                int &fun_id, int sample_tuples_count, int tuples_count) {
 	if (info.hasfunction) {
 		SetValue(chunk, chunk.size(), op_id, "Function", fun_id++, info.function_name, double(info.function_time) / sample_tuples_count, sample_tuples_count, tuples_count);
@@ -111,15 +111,15 @@ static void PragmaDetailedProfilingOutputFunction(ClientContext &context, const 
                 int expression_counter = 1;
 				for (auto &x : op.second->info.executors_info) {
 					for (auto &info : x.second->roots) {
-                        SetValue(chunk, chunk.size(), operator_counter, "ExpressionRoot", expression_counter++, x.second->name,
-                                           double(info->time) / x.second->sample_tuples_count, x.second->sample_tuples_count, x.second->tuples_count);
+                        SetValue(chunk, chunk.size(), operator_counter, "ExpressionRoot", expression_counter++, info->name,
+                                           double(info->time) / info->sample_tuples_count, info->sample_tuples_count, info->tuples_count);
                         chunk.SetCardinality(chunk.size() + 1);
                         if (chunk.size() == STANDARD_VECTOR_SIZE) {
                             collection->Append(chunk);
                             chunk.Reset();
                         }
-						ExtractFunctions(*collection, *info, chunk, operator_counter, function_counter,
-						                   x.second->sample_tuples_count, x.second->tuples_count);
+						ExtractFunctions(*collection, *info->root, chunk, operator_counter, function_counter,
+						                   info->sample_tuples_count, info->tuples_count);
 					}
 				}
 				operator_counter++;

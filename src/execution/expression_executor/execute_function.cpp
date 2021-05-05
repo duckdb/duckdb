@@ -40,11 +40,11 @@ void ExpressionExecutor::Execute(BoundFunctionExpression &expr, ExpressionState 
 		arguments.Verify();
 	}
 	arguments.SetCardinality(count);
-	if (current_count >= next_sample) {
+	if (state->root.current_count >= state->root.next_sample) {
 		state->profiler.Start();
 	}
 	expr.function.function(arguments, *state, result);
-	if (current_count >= next_sample) {
+	if (state->root.current_count >= state->root.next_sample) {
 		state->profiler.End();
 		state->time += state->profiler.Elapsed();
 	}

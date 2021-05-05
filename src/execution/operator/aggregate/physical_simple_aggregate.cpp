@@ -55,15 +55,13 @@ struct AggregateState {
 
 class SimpleAggregateGlobalState : public GlobalOperatorState {
 public:
-	explicit SimpleAggregateGlobalState(vector<unique_ptr<Expression>> &aggregates) : state(aggregates) , function_info(){
+	explicit SimpleAggregateGlobalState(vector<unique_ptr<Expression>> &aggregates) : state(aggregates){
 	}
 
 	//! The lock for updating the global aggregate state
 	mutex lock;
 	//! The global aggregate state
 	AggregateState state;
-	//!
-    Information function_info;
 };
 
 class SimpleAggregateLocalState : public LocalSinkState {

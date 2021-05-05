@@ -399,10 +399,10 @@ unique_ptr<RenderTreeNode> TreeRenderer::CreateNode(const PhysicalOperator &op) 
 	return CreateRenderNode(op.GetName(), op.ParamsToString());
 }
 
-string TreeRenderer::ExtractExpressionsRecursive(ExpressionInformation &state) {
+string TreeRenderer::ExtractExpressionsRecursive(ExpressionInfo &state) {
 	string result = "\n[INFOSEPARATOR]";
-	result += "\n" + state.name;
-	result += "\n" + StringUtil::Format("%.9f", double(state.time));
+	result += "\n" + state.function_name;
+	result += "\n" + StringUtil::Format("%.9f", double(state.function_time));
 	if (state.children.empty()) {
 		return result;
 	}

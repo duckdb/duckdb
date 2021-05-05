@@ -18,7 +18,6 @@
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/execution/expression_executor_state.hpp"
 #include <stack>
-#include <unordered_map>
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/deque.hpp"
 
@@ -28,45 +27,49 @@ class PhysicalOperator;
 class SQLStatement;
 
 
-struct Information {
-    explicit Information(){
+//! The ExpressionInfo keeps information related to an expression
+struct ExpressionInfo {
+    explicit ExpressionInfo() : hasfunction(false){
     }
-    string name;
-    uint64_t time;
-};
-
-class ExpressionInformation {
-public:
-    ExpressionInformation(string &name, double time) : name(name), time(time) {
-    }
+	// A vector of children
+    vector<unique_ptr<ExpressionInfo>> children;
+	// Extract ExpressionInformation from a given expression state
 	void ExtractExpressionsRecursive(unique_ptr<ExpressionState> &state);
-	vector<unique_ptr<ExpressionInformation>> children;
-	bool hasfunction = false;
-	string name;
+    //! Whether or not expression has function
+	bool hasfunction;
+	//! The function Name
 	string function_name;
-	uint64_t function_time = 0;
-	uint64_t time = 0;
+	//! The function time
+	double function_time;
 };
 
-struct ExpressionExecutorInformation {
-	explicit ExpressionExecutorInformation() {};
-    explicit ExpressionExecutorInformation(ExpressionExecutor &executor, string name);
-	void initialize(ExpressionExecutor &executor);
-
+//! The ExpressionRootInfo keeps information related to the root of an expression tree
+struct ExpressionRootInfo {
+	ExpressionRootInfo(ExpressionExecutorState &executor) : total_count(executor.total_count), current_count(executor.current_count), sample_count(executor.sample_count),
+      sample_tuples_count(executor.sample_tuples_count), tuples_count(executor.tuples_count) , name(executor.name) , time(executor.time) {};
 	//! Count the number of time the executor called
-	uint64_t total_count = 0;
-	//! Count the number of time the executor called since last sampling
-	uint64_t current_count = 0;
-	//! Count the number of samples
-	uint64_t sample_count = 0;
-	//! Count the number of tuples in all samples
-	uint64_t sample_tuples_count = 0;
-	//! Count the number of tuples processed by this executor
-	uint64_t tuples_count = 0;
-	//! Executor name, will be used for the expression_root
-    string name;
+    uint64_t total_count = 0;
+    //! Count the number of time the executor called since last sampling
+    uint64_t current_count = 0;
+    //! Count the number of samples
+    uint64_t sample_count = 0;
+    //! Count the number of tuples in all samples
+    uint64_t sample_tuples_count = 0;
+    //! Count the number of tuples processed by this executor
+    uint64_t tuples_count = 0;
+    //! A vector which contain the pointer to root of each expression tree
+    unique_ptr<ExpressionInfo> root;
+	//! Elapsed time
+    double time;
+	//! name
+	string name;
+};
 
-	vector<unique_ptr<ExpressionInformation>> roots;
+struct ExpressionExecutorInfo {
+	explicit ExpressionExecutorInfo() {};
+    explicit ExpressionExecutorInfo(ExpressionExecutor &executor);
+    //! A vector which contain the pointer to all ExpressionRootInfo
+    vector<unique_ptr<ExpressionRootInfo>> roots;
 };
 
 struct OperatorInformation {
@@ -77,10 +80,7 @@ struct OperatorInformation {
 	}
 
 	//! A mapping of physical operators to recorded timings
-    unordered_map<string, shared_ptr<ExpressionExecutorInformation>> executors_info;
-
-    //! All information
-    vector<Information> information;
+    unordered_map<string, shared_ptr<ExpressionExecutorInfo>> executors_info;
 
 	//! HACKY
 	bool changed = false;

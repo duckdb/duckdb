@@ -43,6 +43,18 @@ struct ExpressionExecutorState {
 	CycleCounter profiler;
 	string name;
 	double time;
+    //! Count the number of time the executor called
+    uint64_t total_count = 0;
+    //! Count the number of time the executor called since last sampling
+    uint64_t current_count = 0;
+    //! Show the next sample
+    uint64_t next_sample = 0;
+    //! Count the number of samples
+    uint64_t sample_count = 0;
+    //! Count the number of tuples in all samples
+    uint64_t sample_tuples_count = 0;
+    //! Count the number of tuples processed by this executor
+    uint64_t tuples_count = 0;
 };
 
 } // namespace duckdb
