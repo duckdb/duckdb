@@ -439,6 +439,31 @@ jobs:
       run: make allunit
 
 
+
+
+  centos:
+    name: CentOS 7
+    runs-on: ubuntu-latest
+    container: centos:7
+    #needs: linux-debug
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Install
+      run: sudo yum install -y gcc gcc-c++ git cmake
+
+    - name: Build
+      run: make release
+
+    - name: Test
+      run: make
+
+
+
+
   release-assert:
     name: Release Assertions
     runs-on: ubuntu-20.04
