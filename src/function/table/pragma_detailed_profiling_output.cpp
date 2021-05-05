@@ -1,5 +1,5 @@
 #include "duckdb/function/table/sqlite_functions.hpp"
-
+#include "iostream"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
@@ -79,7 +79,10 @@ static void ExtractFunctions(ChunkCollection &collection, ExpressionInfo &info, 
                              int &fun_id, int sample_tuples_count, int tuples_count) {
 	if (info.hasfunction) {
 		SetValue(chunk, chunk.size(), op_id, "Function", fun_id++, info.function_name,
-		         info.function_time / double(sample_tuples_count), sample_tuples_count, tuples_count, "");
+		         (info.function_time > 0 && info.function_time < (1UL << 63))
+		             ? info.function_time / double(sample_tuples_count)
+		             : 0,
+		         sample_tuples_count, tuples_count, "");
 
 		chunk.SetCardinality(chunk.size() + 1);
 		if (chunk.size() == STANDARD_VECTOR_SIZE) {
@@ -121,9 +124,13 @@ static void PragmaDetailedProfilingOutputFunction(ClientContext &context, const 
 				for (auto &ee : op.second->info.executors_info) {
 					// For each Expression tree
 					for (auto &et : ee.second->roots) {
-						SetValue(chunk, chunk.size(), operator_counter, "ExpressionRoot", expression_counter++,
-						         et->name, et->time / double(et->sample_tuples_count), et->sample_tuples_count,
-						         et->tuples_count, et->extra_info);
+						SetValue(
+						    chunk, chunk.size(), operator_counter, "ExpressionRoot", expression_counter++,
+						    // Sometimes, cycle counter is not accurate, too big or too small. return 0 for those cases
+						    et->name,
+						    (et->time > 0 && et->time < (1UL << 63)) ? et->time / double(et->sample_tuples_count) : 0,
+						    et->sample_tuples_count, et->tuples_count, et->extra_info);
+						std::cout << et->time << std::endl;
 						// Increment cardinality
 						chunk.SetCardinality(chunk.size() + 1);
 						// Check whether data chunk is full or not
