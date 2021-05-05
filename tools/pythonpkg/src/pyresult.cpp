@@ -100,10 +100,19 @@ py::object DuckDBPyResult::Fetchone() {
 		case LogicalTypeId::BLOB:
 			res[col_idx] = py::bytes(val.GetValue<string>());
 			break;
-		case LogicalTypeId::TIMESTAMP: {
+		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::TIMESTAMP_MS:
+		case LogicalTypeId::TIMESTAMP_NS:
+		case LogicalTypeId::TIMESTAMP_SEC: {
 			D_ASSERT(result->types[col_idx].InternalType() == PhysicalType::INT64);
-
 			auto timestamp = val.GetValueUnsafe<timestamp_t>();
+			if (result->types[col_idx].id() == LogicalTypeId::TIMESTAMP_MS) {
+				timestamp = Timestamp::FromEpochMs(timestamp.value);
+			} else if (result->types[col_idx].id() == LogicalTypeId::TIMESTAMP_NS) {
+				timestamp = Timestamp::FromEpochNanoSeconds(timestamp.value);
+			} else if (result->types[col_idx].id() == LogicalTypeId::TIMESTAMP_SEC) {
+				timestamp = Timestamp::FromEpochSeconds(timestamp.value);
+			}
 			int32_t year, month, day, hour, min, sec, micros;
 			date_t date;
 			dtime_t time;
