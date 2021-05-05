@@ -479,6 +479,7 @@ jobs:
       BUILD_ICU: 1
       BUILD_TPCH: 1
       BUILD_FTS: 1
+      TSAN_OPTIONS: second_deadlock_stack=1 suppressions=.sanitizer-thread-suppressions.txt
 
     steps:
     - uses: actions/checkout@v2
