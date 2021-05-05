@@ -57,8 +57,8 @@ struct ExpressionRootInfo {
 	uint64_t tuples_count = 0;
 	//! A vector which contain the pointer to root of each expression tree
 	unique_ptr<ExpressionInfo> root;
-    //! Name
-    string name;
+	//! Name
+	string name;
 	//! Elapsed time
 	double time;
 	//! Extra Info
@@ -95,7 +95,7 @@ public:
 
 	DUCKDB_API void StartOperator(PhysicalOperator *phys_op);
 	DUCKDB_API void EndOperator(DataChunk *chunk);
-	DUCKDB_API void Flush(PhysicalOperator *phys_op, ExpressionExecutor *expression_executor, string name);
+	DUCKDB_API void Flush(PhysicalOperator *phys_op, ExpressionExecutor *expression_executor, const string &name);
 
 	~OperatorProfiler() {
 	}

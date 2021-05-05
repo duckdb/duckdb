@@ -5,7 +5,6 @@
 #include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/client_context.hpp"
-
 #include "duckdb/common/limits.hpp"
 namespace duckdb {
 
@@ -80,7 +79,8 @@ static void ExtractFunctions(ChunkCollection &collection, ExpressionInfo &info, 
                              int &fun_id, int sample_tuples_count, int tuples_count) {
 	if (info.hasfunction) {
 		SetValue(chunk, chunk.size(), op_id, "Function", fun_id++, info.function_name,
-		         double(info.function_time) / sample_tuples_count, sample_tuples_count, tuples_count, "");
+		         info.function_time / double(sample_tuples_count), sample_tuples_count, tuples_count, "");
+
 		chunk.SetCardinality(chunk.size() + 1);
 		if (chunk.size() == STANDARD_VECTOR_SIZE) {
 			collection.Append(chunk);
@@ -122,7 +122,7 @@ static void PragmaDetailedProfilingOutputFunction(ClientContext &context, const 
 					// For each Expression tree
 					for (auto &et : ee.second->roots) {
 						SetValue(chunk, chunk.size(), operator_counter, "ExpressionRoot", expression_counter++,
-						         et->name, double(et->time) / et->sample_tuples_count, et->sample_tuples_count,
+						         et->name, et->time / double(et->sample_tuples_count), et->sample_tuples_count,
 						         et->tuples_count, et->extra_info);
 						// Increment cardinality
 						chunk.SetCardinality(chunk.size() + 1);
