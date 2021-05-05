@@ -300,13 +300,19 @@ private:
 			return std::is_same<T, int8_t>();
 		case LogicalTypeId::SMALLINT:
 			return std::is_same<T, int16_t>();
-		case LogicalTypeId::DATE:
 		case LogicalTypeId::INTEGER:
 			return std::is_same<T, int32_t>();
 		case LogicalTypeId::BIGINT:
-		case LogicalTypeId::TIME:
-		case LogicalTypeId::TIMESTAMP:
 			return std::is_same<T, int64_t>();
+		case LogicalTypeId::DATE:
+			return std::is_same<T, date_t>();
+		case LogicalTypeId::TIME:
+			return std::is_same<T, dtime_t>();
+		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::TIMESTAMP_MS:
+		case LogicalTypeId::TIMESTAMP_NS:
+		case LogicalTypeId::TIMESTAMP_SEC:
+			return std::is_same<T, timestamp_t>();
 		case LogicalTypeId::FLOAT:
 			return std::is_same<T, float>();
 		case LogicalTypeId::DOUBLE:

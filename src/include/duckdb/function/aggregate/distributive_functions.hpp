@@ -60,10 +60,6 @@ struct ApproxCountDistinctFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct ModeFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
 struct ArgMinFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };

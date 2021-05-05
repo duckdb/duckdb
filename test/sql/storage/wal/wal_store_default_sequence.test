@@ -14,8 +14,14 @@ PRAGMA wal_autocheckpoint='1TB';
 statement ok
 CREATE SEQUENCE seq;
 
+# use the sequence so that currval can return a value
+query I
+SELECT nextval('seq')
+----
+1
+
 statement ok
-CREATE TABLE test (a INTEGER DEFAULT nextval('seq'), b INTEGER);
+CREATE TABLE test (a INTEGER DEFAULT nextval('seq'), b INTEGER, c INTEGER DEFAULT currval('seq'));
 
 statement ok
 INSERT INTO test (b) VALUES (11)
@@ -29,21 +35,29 @@ PRAGMA disable_checkpoint_on_shutdown
 statement ok
 PRAGMA wal_autocheckpoint='1TB';
 
-query II
+query III
 SELECT * FROM test ORDER BY b
 ----
-1	11
+2	
+11 
+2
 
 # verify that the sequence was used during the append
 statement ok
 INSERT INTO test (b) VALUES (12), (13)
 
-query II
+query III
 SELECT * FROM test ORDER BY b
 ----
-1	11
-2	12
-3	13
+2	
+11
+2
+3
+12 
+3
+4	
+13
+4
 
 # restart and insert one more time
 restart
@@ -51,11 +65,21 @@ restart
 statement ok
 INSERT INTO test (b) VALUES (14), (15)
 
-query II
+query III
 SELECT * FROM test ORDER BY b
 ----
-1	11
-2	12
-3	13
-4	14
-5	15
+2	
+11
+2
+3
+12
+3
+4
+13
+4
+5
+14
+5
+6
+15
+6
