@@ -9,6 +9,7 @@
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/transaction/transaction.hpp"
+#include "duckdb/planner/filter/constant_filter.hpp"
 
 namespace duckdb {
 
@@ -124,7 +125,7 @@ static void FilterSelectionSwitch(T *vec, T *predicate, SelectionVector &sel, id
 	sel.Initialize(new_sel);
 }
 
-void UncompressedSegment::FilterSelection(SelectionVector &sel, Vector &result, const TableFilter &filter,
+void UncompressedSegment::FilterSelection(SelectionVector &sel, Vector &result, const ConstantFilter &filter,
                                           idx_t &approved_tuple_count, ValidityMask &mask) {
 	// the inplace loops take the result as the last parameter
 	switch (result.GetType().InternalType()) {

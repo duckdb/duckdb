@@ -18,25 +18,4 @@ void SegmentStatistics::Reset() {
 	statistics = BaseStatistics::CreateEmpty(type);
 }
 
-bool SegmentStatistics::CheckZonemap(TableFilter &filter) {
-	switch (type.InternalType()) {
-	case PhysicalType::UINT8:
-	case PhysicalType::UINT16:
-	case PhysicalType::UINT32:
-	case PhysicalType::UINT64:
-	case PhysicalType::INT8:
-	case PhysicalType::INT16:
-	case PhysicalType::INT32:
-	case PhysicalType::INT64:
-	case PhysicalType::INT128:
-	case PhysicalType::FLOAT:
-	case PhysicalType::DOUBLE:
-		return ((NumericStatistics &)*statistics).CheckZonemap(filter.comparison_type, filter.constant);
-	case PhysicalType::VARCHAR:
-		return ((StringStatistics &)*statistics).CheckZonemap(filter.comparison_type, filter.constant.ToString());
-	default:
-		return true;
-	}
-}
-
 } // namespace duckdb

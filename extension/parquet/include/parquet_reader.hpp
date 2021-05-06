@@ -35,7 +35,7 @@ class Allocator;
 class ClientContext;
 class ChunkCollection;
 class BaseStatistics;
-struct TableFilterSet;
+class TableFilterSet;
 
 struct ParquetReaderScanState {
 	vector<idx_t> group_idx_list;

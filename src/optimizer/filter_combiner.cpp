@@ -11,6 +11,8 @@
 #include "duckdb/planner/operator/logical_empty_result.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
+#include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/planner/filter/null_filter.hpp"
 
 #include "duckdb/common/operator/cast_operators.hpp"
 
@@ -158,228 +160,228 @@ bool FilterCombiner::HasFilters() {
 	return has_filters;
 }
 
-unordered_map<idx_t, std::pair<Value *, Value *>> MergeAnd(unordered_map<idx_t, std::pair<Value *, Value *>> &f_1,
-                                                           unordered_map<idx_t, std::pair<Value *, Value *>> &f_2) {
-	unordered_map<idx_t, std::pair<Value *, Value *>> result;
-	for (auto &f : f_1) {
-		auto it = f_2.find(f.first);
-		if (it == f_2.end()) {
-			result[f.first] = f.second;
-		} else {
-			Value *min = nullptr, *max = nullptr;
-			if (it->second.first && f.second.first) {
-				if (*f.second.first > *it->second.first) {
-					min = f.second.first;
-				} else {
-					min = it->second.first;
-				}
+// unordered_map<idx_t, std::pair<Value *, Value *>> MergeAnd(unordered_map<idx_t, std::pair<Value *, Value *>> &f_1,
+//                                                            unordered_map<idx_t, std::pair<Value *, Value *>> &f_2) {
+// 	unordered_map<idx_t, std::pair<Value *, Value *>> result;
+// 	for (auto &f : f_1) {
+// 		auto it = f_2.find(f.first);
+// 		if (it == f_2.end()) {
+// 			result[f.first] = f.second;
+// 		} else {
+// 			Value *min = nullptr, *max = nullptr;
+// 			if (it->second.first && f.second.first) {
+// 				if (*f.second.first > *it->second.first) {
+// 					min = f.second.first;
+// 				} else {
+// 					min = it->second.first;
+// 				}
 
-			} else if (it->second.first) {
-				min = it->second.first;
-			} else if (f.second.first) {
-				min = f.second.first;
-			} else {
-				min = nullptr;
-			}
-			if (it->second.second && f.second.second) {
-				if (*f.second.second < *it->second.second) {
-					max = f.second.second;
-				} else {
-					max = it->second.second;
-				}
-			} else if (it->second.second) {
-				max = it->second.second;
-			} else if (f.second.second) {
-				max = f.second.second;
-			} else {
-				max = nullptr;
-			}
-			result[f.first] = {min, max};
-			f_2.erase(f.first);
-		}
-	}
-	for (auto &f : f_2) {
-		result[f.first] = f.second;
-	}
-	return result;
-}
+// 			} else if (it->second.first) {
+// 				min = it->second.first;
+// 			} else if (f.second.first) {
+// 				min = f.second.first;
+// 			} else {
+// 				min = nullptr;
+// 			}
+// 			if (it->second.second && f.second.second) {
+// 				if (*f.second.second < *it->second.second) {
+// 					max = f.second.second;
+// 				} else {
+// 					max = it->second.second;
+// 				}
+// 			} else if (it->second.second) {
+// 				max = it->second.second;
+// 			} else if (f.second.second) {
+// 				max = f.second.second;
+// 			} else {
+// 				max = nullptr;
+// 			}
+// 			result[f.first] = {min, max};
+// 			f_2.erase(f.first);
+// 		}
+// 	}
+// 	for (auto &f : f_2) {
+// 		result[f.first] = f.second;
+// 	}
+// 	return result;
+// }
 
-unordered_map<idx_t, std::pair<Value *, Value *>> MergeOr(unordered_map<idx_t, std::pair<Value *, Value *>> &f_1,
-                                                          unordered_map<idx_t, std::pair<Value *, Value *>> &f_2) {
-	unordered_map<idx_t, std::pair<Value *, Value *>> result;
-	for (auto &f : f_1) {
-		auto it = f_2.find(f.first);
-		if (it != f_2.end()) {
-			Value *min = nullptr, *max = nullptr;
-			if (it->second.first && f.second.first) {
-				if (*f.second.first < *it->second.first) {
-					min = f.second.first;
-				} else {
-					min = it->second.first;
-				}
-			}
-			if (it->second.second && f.second.second) {
-				if (*f.second.second > *it->second.second) {
-					max = f.second.second;
-				} else {
-					max = it->second.second;
-				}
-			}
-			result[f.first] = {min, max};
-			f_2.erase(f.first);
-		}
-	}
-	return result;
-}
+// unordered_map<idx_t, std::pair<Value *, Value *>> MergeOr(unordered_map<idx_t, std::pair<Value *, Value *>> &f_1,
+//                                                           unordered_map<idx_t, std::pair<Value *, Value *>> &f_2) {
+// 	unordered_map<idx_t, std::pair<Value *, Value *>> result;
+// 	for (auto &f : f_1) {
+// 		auto it = f_2.find(f.first);
+// 		if (it != f_2.end()) {
+// 			Value *min = nullptr, *max = nullptr;
+// 			if (it->second.first && f.second.first) {
+// 				if (*f.second.first < *it->second.first) {
+// 					min = f.second.first;
+// 				} else {
+// 					min = it->second.first;
+// 				}
+// 			}
+// 			if (it->second.second && f.second.second) {
+// 				if (*f.second.second > *it->second.second) {
+// 					max = f.second.second;
+// 				} else {
+// 					max = it->second.second;
+// 				}
+// 			}
+// 			result[f.first] = {min, max};
+// 			f_2.erase(f.first);
+// 		}
+// 	}
+// 	return result;
+// }
 
-unordered_map<idx_t, std::pair<Value *, Value *>>
-FilterCombiner::FindZonemapChecks(vector<idx_t> &column_ids, unordered_set<idx_t> &not_constants, Expression *filter) {
-	unordered_map<idx_t, std::pair<Value *, Value *>> checks;
-	switch (filter->type) {
-	case ExpressionType::CONJUNCTION_OR: {
-		//! For a filter to
-		auto &or_exp = (BoundConjunctionExpression &)*filter;
-		checks = FindZonemapChecks(column_ids, not_constants, or_exp.children[0].get());
-		for (size_t i = 1; i < or_exp.children.size(); ++i) {
-			auto child_check = FindZonemapChecks(column_ids, not_constants, or_exp.children[i].get());
-			checks = MergeOr(checks, child_check);
-		}
-		return checks;
-	}
-	case ExpressionType::CONJUNCTION_AND: {
-		auto &and_exp = (BoundConjunctionExpression &)*filter;
-		checks = FindZonemapChecks(column_ids, not_constants, and_exp.children[0].get());
-		for (size_t i = 1; i < and_exp.children.size(); ++i) {
-			auto child_check = FindZonemapChecks(column_ids, not_constants, and_exp.children[i].get());
-			checks = MergeAnd(checks, child_check);
-		}
-		return checks;
-	}
-	case ExpressionType::COMPARE_IN: {
-		auto &comp_in_exp = (BoundOperatorExpression &)*filter;
-		if (comp_in_exp.children[0]->type == ExpressionType::BOUND_COLUMN_REF) {
-			Value *min = nullptr, *max = nullptr;
-			auto &column_ref = (BoundColumnRefExpression &)*comp_in_exp.children[0].get();
-			for (size_t i {1}; i < comp_in_exp.children.size(); i++) {
-				if (comp_in_exp.children[i]->type != ExpressionType::VALUE_CONSTANT) {
-					//! This indicates the column has a comparison that is not with a constant
-					not_constants.insert(column_ids[column_ref.binding.column_index]);
-					break;
-				} else {
-					auto &const_value_expr = (BoundConstantExpression &)*comp_in_exp.children[i].get();
-					if (const_value_expr.value.is_null) {
-						return checks;
-					}
-					if (!min && !max) {
-						min = &const_value_expr.value;
-						max = min;
-					} else {
-						if (*min > const_value_expr.value) {
-							min = &const_value_expr.value;
-						}
-						if (*max < const_value_expr.value) {
-							max = &const_value_expr.value;
-						}
-					}
-				}
-			}
-			checks[column_ids[column_ref.binding.column_index]] = {min, max};
-		}
-		return checks;
-	}
-	case ExpressionType::COMPARE_EQUAL: {
-		auto &comp_exp = (BoundComparisonExpression &)*filter;
-		if ((comp_exp.left->expression_class == ExpressionClass::BOUND_COLUMN_REF &&
-		     comp_exp.right->expression_class == ExpressionClass::BOUND_CONSTANT)) {
-			auto &column_ref = (BoundColumnRefExpression &)*comp_exp.left;
-			auto &constant_value_expr = (BoundConstantExpression &)*comp_exp.right;
-			checks[column_ids[column_ref.binding.column_index]] = {&constant_value_expr.value,
-			                                                       &constant_value_expr.value};
-		}
-		if ((comp_exp.left->expression_class == ExpressionClass::BOUND_CONSTANT &&
-		     comp_exp.right->expression_class == ExpressionClass::BOUND_COLUMN_REF)) {
-			auto &column_ref = (BoundColumnRefExpression &)*comp_exp.right;
-			auto &constant_value_expr = (BoundConstantExpression &)*comp_exp.left;
-			checks[column_ids[column_ref.binding.column_index]] = {&constant_value_expr.value,
-			                                                       &constant_value_expr.value};
-		}
-		return checks;
-	}
-	case ExpressionType::COMPARE_LESSTHAN:
-	case ExpressionType::COMPARE_LESSTHANOREQUALTO: {
-		auto &comp_exp = (BoundComparisonExpression &)*filter;
-		if ((comp_exp.left->expression_class == ExpressionClass::BOUND_COLUMN_REF &&
-		     comp_exp.right->expression_class == ExpressionClass::BOUND_CONSTANT)) {
-			auto &column_ref = (BoundColumnRefExpression &)*comp_exp.left;
-			auto &constant_value_expr = (BoundConstantExpression &)*comp_exp.right;
-			checks[column_ids[column_ref.binding.column_index]] = {nullptr, &constant_value_expr.value};
-		}
-		if ((comp_exp.left->expression_class == ExpressionClass::BOUND_CONSTANT &&
-		     comp_exp.right->expression_class == ExpressionClass::BOUND_COLUMN_REF)) {
-			auto &column_ref = (BoundColumnRefExpression &)*comp_exp.right;
-			auto &constant_value_expr = (BoundConstantExpression &)*comp_exp.left;
-			checks[column_ids[column_ref.binding.column_index]] = {&constant_value_expr.value, nullptr};
-		}
-		return checks;
-	}
-	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-	case ExpressionType::COMPARE_GREATERTHAN: {
-		auto &comp_exp = (BoundComparisonExpression &)*filter;
-		if ((comp_exp.left->expression_class == ExpressionClass::BOUND_COLUMN_REF &&
-		     comp_exp.right->expression_class == ExpressionClass::BOUND_CONSTANT)) {
-			auto &column_ref = (BoundColumnRefExpression &)*comp_exp.left;
-			auto &constant_value_expr = (BoundConstantExpression &)*comp_exp.right;
-			checks[column_ids[column_ref.binding.column_index]] = {&constant_value_expr.value, nullptr};
-		}
-		if ((comp_exp.left->expression_class == ExpressionClass::BOUND_CONSTANT &&
-		     comp_exp.right->expression_class == ExpressionClass::BOUND_COLUMN_REF)) {
-			auto &column_ref = (BoundColumnRefExpression &)*comp_exp.right;
-			auto &constant_value_expr = (BoundConstantExpression &)*comp_exp.left;
-			checks[column_ids[column_ref.binding.column_index]] = {nullptr, &constant_value_expr.value};
-		}
-		return checks;
-	}
-	default:
-		return checks;
-	}
-}
+// unordered_map<idx_t, std::pair<Value *, Value *>>
+// FilterCombiner::FindZonemapChecks(vector<idx_t> &column_ids, unordered_set<idx_t> &not_constants, Expression *filter) {
+// 	unordered_map<idx_t, std::pair<Value *, Value *>> checks;
+// 	switch (filter->type) {
+// 	case ExpressionType::CONJUNCTION_OR: {
+// 		//! For a filter to
+// 		auto &or_exp = (BoundConjunctionExpression &)*filter;
+// 		checks = FindZonemapChecks(column_ids, not_constants, or_exp.children[0].get());
+// 		for (size_t i = 1; i < or_exp.children.size(); ++i) {
+// 			auto child_check = FindZonemapChecks(column_ids, not_constants, or_exp.children[i].get());
+// 			checks = MergeOr(checks, child_check);
+// 		}
+// 		return checks;
+// 	}
+// 	case ExpressionType::CONJUNCTION_AND: {
+// 		auto &and_exp = (BoundConjunctionExpression &)*filter;
+// 		checks = FindZonemapChecks(column_ids, not_constants, and_exp.children[0].get());
+// 		for (size_t i = 1; i < and_exp.children.size(); ++i) {
+// 			auto child_check = FindZonemapChecks(column_ids, not_constants, and_exp.children[i].get());
+// 			checks = MergeAnd(checks, child_check);
+// 		}
+// 		return checks;
+// 	}
+// 	case ExpressionType::COMPARE_IN: {
+// 		auto &comp_in_exp = (BoundOperatorExpression &)*filter;
+// 		if (comp_in_exp.children[0]->type == ExpressionType::BOUND_COLUMN_REF) {
+// 			Value *min = nullptr, *max = nullptr;
+// 			auto &column_ref = (BoundColumnRefExpression &)*comp_in_exp.children[0].get();
+// 			for (size_t i {1}; i < comp_in_exp.children.size(); i++) {
+// 				if (comp_in_exp.children[i]->type != ExpressionType::VALUE_CONSTANT) {
+// 					//! This indicates the column has a comparison that is not with a constant
+// 					not_constants.insert(column_ids[column_ref.binding.column_index]);
+// 					break;
+// 				} else {
+// 					auto &const_value_expr = (BoundConstantExpression &)*comp_in_exp.children[i].get();
+// 					if (const_value_expr.value.is_null) {
+// 						return checks;
+// 					}
+// 					if (!min && !max) {
+// 						min = &const_value_expr.value;
+// 						max = min;
+// 					} else {
+// 						if (*min > const_value_expr.value) {
+// 							min = &const_value_expr.value;
+// 						}
+// 						if (*max < const_value_expr.value) {
+// 							max = &const_value_expr.value;
+// 						}
+// 					}
+// 				}
+// 			}
+// 			checks[column_ids[column_ref.binding.column_index]] = {min, max};
+// 		}
+// 		return checks;
+// 	}
+// 	case ExpressionType::COMPARE_EQUAL: {
+// 		auto &comp_exp = (BoundComparisonExpression &)*filter;
+// 		if ((comp_exp.left->expression_class == ExpressionClass::BOUND_COLUMN_REF &&
+// 		     comp_exp.right->expression_class == ExpressionClass::BOUND_CONSTANT)) {
+// 			auto &column_ref = (BoundColumnRefExpression &)*comp_exp.left;
+// 			auto &constant_value_expr = (BoundConstantExpression &)*comp_exp.right;
+// 			checks[column_ids[column_ref.binding.column_index]] = {&constant_value_expr.value,
+// 			                                                       &constant_value_expr.value};
+// 		}
+// 		if ((comp_exp.left->expression_class == ExpressionClass::BOUND_CONSTANT &&
+// 		     comp_exp.right->expression_class == ExpressionClass::BOUND_COLUMN_REF)) {
+// 			auto &column_ref = (BoundColumnRefExpression &)*comp_exp.right;
+// 			auto &constant_value_expr = (BoundConstantExpression &)*comp_exp.left;
+// 			checks[column_ids[column_ref.binding.column_index]] = {&constant_value_expr.value,
+// 			                                                       &constant_value_expr.value};
+// 		}
+// 		return checks;
+// 	}
+// 	case ExpressionType::COMPARE_LESSTHAN:
+// 	case ExpressionType::COMPARE_LESSTHANOREQUALTO: {
+// 		auto &comp_exp = (BoundComparisonExpression &)*filter;
+// 		if ((comp_exp.left->expression_class == ExpressionClass::BOUND_COLUMN_REF &&
+// 		     comp_exp.right->expression_class == ExpressionClass::BOUND_CONSTANT)) {
+// 			auto &column_ref = (BoundColumnRefExpression &)*comp_exp.left;
+// 			auto &constant_value_expr = (BoundConstantExpression &)*comp_exp.right;
+// 			checks[column_ids[column_ref.binding.column_index]] = {nullptr, &constant_value_expr.value};
+// 		}
+// 		if ((comp_exp.left->expression_class == ExpressionClass::BOUND_CONSTANT &&
+// 		     comp_exp.right->expression_class == ExpressionClass::BOUND_COLUMN_REF)) {
+// 			auto &column_ref = (BoundColumnRefExpression &)*comp_exp.right;
+// 			auto &constant_value_expr = (BoundConstantExpression &)*comp_exp.left;
+// 			checks[column_ids[column_ref.binding.column_index]] = {&constant_value_expr.value, nullptr};
+// 		}
+// 		return checks;
+// 	}
+// 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+// 	case ExpressionType::COMPARE_GREATERTHAN: {
+// 		auto &comp_exp = (BoundComparisonExpression &)*filter;
+// 		if ((comp_exp.left->expression_class == ExpressionClass::BOUND_COLUMN_REF &&
+// 		     comp_exp.right->expression_class == ExpressionClass::BOUND_CONSTANT)) {
+// 			auto &column_ref = (BoundColumnRefExpression &)*comp_exp.left;
+// 			auto &constant_value_expr = (BoundConstantExpression &)*comp_exp.right;
+// 			checks[column_ids[column_ref.binding.column_index]] = {&constant_value_expr.value, nullptr};
+// 		}
+// 		if ((comp_exp.left->expression_class == ExpressionClass::BOUND_CONSTANT &&
+// 		     comp_exp.right->expression_class == ExpressionClass::BOUND_COLUMN_REF)) {
+// 			auto &column_ref = (BoundColumnRefExpression &)*comp_exp.right;
+// 			auto &constant_value_expr = (BoundConstantExpression &)*comp_exp.left;
+// 			checks[column_ids[column_ref.binding.column_index]] = {nullptr, &constant_value_expr.value};
+// 		}
+// 		return checks;
+// 	}
+// 	default:
+// 		return checks;
+// 	}
+// }
 
-vector<TableFilter> FilterCombiner::GenerateZonemapChecks(vector<idx_t> &column_ids,
-                                                          vector<TableFilter> &pushed_filters) {
-	vector<TableFilter> zonemap_checks;
-	unordered_set<idx_t> not_constants;
-	//! We go through the remaining filters and capture their min max
-	if (remaining_filters.empty()) {
-		return zonemap_checks;
-	}
+// vector<TableFilter> FilterCombiner::GenerateZonemapChecks(vector<idx_t> &column_ids,
+//                                                           vector<TableFilter> &pushed_filters) {
+// 	vector<TableFilter> zonemap_checks;
+// 	unordered_set<idx_t> not_constants;
+// 	//! We go through the remaining filters and capture their min max
+// 	if (remaining_filters.empty()) {
+// 		return zonemap_checks;
+// 	}
 
-	auto checks = FindZonemapChecks(column_ids, not_constants, remaining_filters[0].get());
-	for (size_t i = 1; i < remaining_filters.size(); ++i) {
-		auto child_check = FindZonemapChecks(column_ids, not_constants, remaining_filters[i].get());
-		checks = MergeAnd(checks, child_check);
-	}
-	//! We construct the equivalent filters
-	for (auto not_constant : not_constants) {
-		checks.erase(not_constant);
-	}
-	for (const auto &pushed_filter : pushed_filters) {
-		checks.erase(column_ids[pushed_filter.column_index]);
-	}
-	for (const auto &check : checks) {
-		if (check.second.first) {
-			zonemap_checks.emplace_back(check.second.first->Copy(), ExpressionType::COMPARE_GREATERTHANOREQUALTO,
-			                            check.first);
-		}
-		if (check.second.second) {
-			zonemap_checks.emplace_back(check.second.second->Copy(), ExpressionType::COMPARE_LESSTHANOREQUALTO,
-			                            check.first);
-		}
-	}
-	return zonemap_checks;
-}
+// 	auto checks = FindZonemapChecks(column_ids, not_constants, remaining_filters[0].get());
+// 	for (size_t i = 1; i < remaining_filters.size(); ++i) {
+// 		auto child_check = FindZonemapChecks(column_ids, not_constants, remaining_filters[i].get());
+// 		checks = MergeAnd(checks, child_check);
+// 	}
+// 	//! We construct the equivalent filters
+// 	for (auto not_constant : not_constants) {
+// 		checks.erase(not_constant);
+// 	}
+// 	for (const auto &pushed_filter : pushed_filters) {
+// 		checks.erase(column_ids[pushed_filter.column_index]);
+// 	}
+// 	for (const auto &check : checks) {
+// 		if (check.second.first) {
+// 			zonemap_checks.emplace_back(check.second.first->Copy(), ExpressionType::COMPARE_GREATERTHANOREQUALTO,
+// 			                            check.first);
+// 		}
+// 		if (check.second.second) {
+// 			zonemap_checks.emplace_back(check.second.second->Copy(), ExpressionType::COMPARE_LESSTHANOREQUALTO,
+// 			                            check.first);
+// 		}
+// 	}
+// 	return zonemap_checks;
+// }
 
-vector<TableFilter> FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_ids) {
-	vector<TableFilter> table_filters;
+TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_ids) {
+	TableFilterSet table_filters;
 	//! First, we figure the filters that have constant expressions that we can push down to the table scan
 	for (auto &constant_value : constant_values) {
 		if (!constant_value.second.empty()) {
@@ -395,7 +397,8 @@ vector<TableFilter> FilterCombiner::GenerateTableScanFilters(vector<idx_t> &colu
 				filter_exp = equivalence_map.find(constant_value.first);
 				if (filter_exp->second.size() == 1 && filter_exp->second[0]->type == ExpressionType::BOUND_COLUMN_REF) {
 					auto filter_col_exp = static_cast<BoundColumnRefExpression *>(filter_exp->second[0]);
-					if (column_ids[filter_col_exp->binding.column_index] == COLUMN_IDENTIFIER_ROW_ID) {
+					auto column_index = column_ids[filter_col_exp->binding.column_index];
+					if (column_index == COLUMN_IDENTIFIER_ROW_ID) {
 						break;
 					}
 					auto equivalence_set = filter_exp->first;
@@ -405,10 +408,10 @@ vector<TableFilter> FilterCombiner::GenerateTableScanFilters(vector<idx_t> &colu
 					for (idx_t i = 0; i < entries.size(); i++) {
 						// for each entry also create a comparison with each constant
 						for (idx_t k = 0; k < constant_list.size(); k++) {
-							table_filters.emplace_back(constant_value.second[k].constant,
-							                           constant_value.second[k].comparison_type,
-							                           filter_col_exp->binding.column_index);
+							auto constant_filter = make_unique<ConstantFilter>(constant_value.second[k].comparison_type, constant_value.second[k].constant);
+							table_filters.PushFilter(column_index, move(constant_filter));
 						}
+						table_filters.PushFilter(column_index, make_unique<IsNotNullFilter>());
 					}
 					equivalence_map.erase(filter_exp);
 				}
@@ -430,14 +433,16 @@ vector<TableFilter> FilterCombiner::GenerateTableScanFilters(vector<idx_t> &colu
 				if (like_string.empty()) {
 					continue;
 				}
+				auto column_index = column_ids[column_ref.binding.column_index];
 				auto const_value = constant_value_expr.value.Copy();
 				const_value.str_value = like_string;
 				//! Here the like must be transformed to a BOUND COMPARISON geq le
-				table_filters.emplace_back(const_value, ExpressionType::COMPARE_GREATERTHANOREQUALTO,
-				                           column_ref.binding.column_index);
+				auto lower_bound = make_unique<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, const_value);
 				const_value.str_value[const_value.str_value.size() - 1]++;
-				table_filters.emplace_back(const_value, ExpressionType::COMPARE_LESSTHAN,
-				                           column_ref.binding.column_index);
+				auto upper_bound = make_unique<ConstantFilter>(ExpressionType::COMPARE_LESSTHAN, const_value);
+				table_filters.PushFilter(column_index, move(lower_bound));
+				table_filters.PushFilter(column_index, move(upper_bound));
+				table_filters.PushFilter(column_index, make_unique<IsNotNullFilter>());
 			}
 			if (func.function.name == "~~" && func.children[0]->expression_class == ExpressionClass::BOUND_COLUMN_REF &&
 			    func.children[1]->type == ExpressionType::VALUE_CONSTANT) {
@@ -460,17 +465,20 @@ vector<TableFilter> FilterCombiner::GenerateTableScanFilters(vector<idx_t> &colu
 					prefix += c;
 				}
 				const_value.str_value = prefix;
+				auto column_index = column_ids[column_ref.binding.column_index];
 				if (equality) {
 					//! Here the like can be transformed to an equality query
-					table_filters.emplace_back(const_value, ExpressionType::COMPARE_EQUAL,
-					                           column_ref.binding.column_index);
+					auto equal_filter = make_unique<ConstantFilter>(ExpressionType::COMPARE_EQUAL, const_value);
+					table_filters.PushFilter(column_index, move(equal_filter));
+					table_filters.PushFilter(column_index, make_unique<IsNotNullFilter>());
 				} else {
 					//! Here the like must be transformed to a BOUND COMPARISON geq le
-					table_filters.emplace_back(const_value, ExpressionType::COMPARE_GREATERTHANOREQUALTO,
-					                           column_ref.binding.column_index);
+					auto lower_bound = make_unique<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, const_value);
 					const_value.str_value[const_value.str_value.size() - 1]++;
-					table_filters.emplace_back(const_value, ExpressionType::COMPARE_LESSTHAN,
-					                           column_ref.binding.column_index);
+					auto upper_bound = make_unique<ConstantFilter>(ExpressionType::COMPARE_LESSTHAN, const_value);
+					table_filters.PushFilter(column_index, move(lower_bound));
+					table_filters.PushFilter(column_index, move(upper_bound));
+					table_filters.PushFilter(column_index, make_unique<IsNotNullFilter>());
 				}
 			}
 		} else if (remaining_filter->type == ExpressionType::COMPARE_IN) {
@@ -481,7 +489,8 @@ vector<TableFilter> FilterCombiner::GenerateTableScanFilters(vector<idx_t> &colu
 				continue;
 			}
 			auto &column_ref = (BoundColumnRefExpression &)*func.children[0].get();
-			if (column_ids[column_ref.binding.column_index] == COLUMN_IDENTIFIER_ROW_ID) {
+			auto column_index = column_ids[column_ref.binding.column_index];
+			if (column_index == COLUMN_IDENTIFIER_ROW_ID) {
 				break;
 			}
 			//! check if all children are const expr
@@ -512,15 +521,17 @@ vector<TableFilter> FilterCombiner::GenerateTableScanFilters(vector<idx_t> &colu
 			for (idx_t in_val_idx = 1; in_val_idx < in_values.size(); in_val_idx++) {
 				if (in_values[in_val_idx] - in_values[in_val_idx - 1] > one || in_values[in_val_idx - 1].is_null) {
 					is_consecutive = false;
+					break;
 				}
 			}
 			if (!is_consecutive || in_values.empty()) {
 				continue;
 			}
-			table_filters.emplace_back(in_values.front(), ExpressionType::COMPARE_GREATERTHANOREQUALTO,
-			                           column_ref.binding.column_index);
-			table_filters.emplace_back(in_values.back(), ExpressionType::COMPARE_LESSTHANOREQUALTO,
-			                           column_ref.binding.column_index);
+			auto lower_bound = make_unique<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, in_values.front());
+			auto upper_bound = make_unique<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO, in_values.back());
+			table_filters.PushFilter(column_index, move(lower_bound));
+			table_filters.PushFilter(column_index, move(upper_bound));
+			table_filters.PushFilter(column_index, make_unique<IsNotNullFilter>());
 
 			remaining_filters.erase(remaining_filters.begin() + rem_fil_idx);
 		}

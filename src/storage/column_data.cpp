@@ -31,11 +31,12 @@ void ColumnData::FilterScan(Transaction &transaction, ColumnScanState &state, Ve
 }
 
 void ColumnData::Select(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
-                        idx_t &approved_tuple_count, vector<TableFilter> &table_filters) {
+                        idx_t &approved_tuple_count, TableFilter &table_filter) {
 	Scan(transaction, state, result);
-	for (auto &filter : table_filters) {
-		UncompressedSegment::FilterSelection(sel, result, filter, approved_tuple_count, FlatVector::Validity(result));
-	}
+	throw InternalException("FIXME: select");
+	// for (auto &filter : table_filters) {
+	// 	UncompressedSegment::FilterSelection(sel, result, filter, approved_tuple_count, FlatVector::Validity(result));
+	// }
 }
 
 void ColumnScanState::Next() {

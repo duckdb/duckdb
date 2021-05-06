@@ -32,7 +32,8 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 			filters.push_back(move(f));
 		}
 	}
-	if (!get.table_filters.empty() || !get.function.filter_pushdown) {
+
+	if (!get.table_filters.filters.empty() || !get.function.filter_pushdown) {
 		// the table function does not support filter pushdown: push a LogicalFilter on top
 		return FinishPushdown(move(op));
 	}
@@ -42,20 +43,20 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 	//! Right now this only executes simple AND filters
 	get.table_filters = combiner.GenerateTableScanFilters(get.column_ids);
 
-	//! For more complex filters if all filters to a column are constants we generate a min max boundary used to check
-	//! the zonemaps.
-	auto zonemap_checks = combiner.GenerateZonemapChecks(get.column_ids, get.table_filters);
+	// //! For more complex filters if all filters to a column are constants we generate a min max boundary used to check
+	// //! the zonemaps.
+	// auto zonemap_checks = combiner.GenerateZonemapChecks(get.column_ids, get.table_filters);
 
-	for (auto &f : get.table_filters) {
-		f.column_index = get.column_ids[f.column_index];
-	}
+	// for (auto &f : get.table_filters) {
+	// 	f.column_index = get.column_ids[f.column_index];
+	// }
 
-	//! Use zonemap checks as table filters for pre-processing
-	for (auto &zonemap_check : zonemap_checks) {
-		if (zonemap_check.column_index != COLUMN_IDENTIFIER_ROW_ID) {
-			get.table_filters.push_back(zonemap_check);
-		}
-	}
+	// //! Use zonemap checks as table filters for pre-processing
+	// for (auto &zonemap_check : zonemap_checks) {
+	// 	if (zonemap_check.column_index != COLUMN_IDENTIFIER_ROW_ID) {
+	// 		get.table_filters.push_back(zonemap_check);
+	// 	}
+	// }
 
 	GenerateFilters();
 

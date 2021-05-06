@@ -113,12 +113,12 @@ string PhysicalTableScan::ParamsToString() const {
 		result += "\n[INFOSEPARATOR]\n";
 		result += "Filters: ";
 		for (auto &f : table_filters->filters) {
-			for (auto &filter : f.second) {
-				if (filter.column_index < names.size()) {
-					result += "\n";
-					result += names[column_ids[filter.column_index]] +
-					          ExpressionTypeToOperator(filter.comparison_type) + filter.constant.ToString();
-				}
+			auto &column_index = f.first;
+			auto &filter = f.second;
+			if (column_index < names.size()) {
+				result += names[column_ids[column_index]] + ": ";
+				result += filter->ToString();
+				result += "\n";
 			}
 		}
 	}
