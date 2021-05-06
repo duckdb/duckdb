@@ -20,13 +20,13 @@ FilterPropagateResult ConjunctionOrFilter::CheckStatistics(BaseStatistics &stats
 	return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 }
 
-string ConjunctionOrFilter::ToString() {
+string ConjunctionOrFilter::ToString(const string &column_name) {
 	string result;
 	for(idx_t i = 0; i < child_filters.size(); i++) {
 		if (i > 0) {
 			result += " OR ";
 		}
-		result += child_filters[i]->ToString();
+		result += child_filters[i]->ToString(column_name);
 	}
 	return result;
 }
@@ -51,13 +51,13 @@ FilterPropagateResult ConjunctionAndFilter::CheckStatistics(BaseStatistics &stat
 	return result;
 }
 
-string ConjunctionAndFilter::ToString() {
+string ConjunctionAndFilter::ToString(const string &column_name) {
 	string result;
 	for(idx_t i = 0; i < child_filters.size(); i++) {
 		if (i > 0) {
 			result += " AND ";
 		}
-		result += child_filters[i]->ToString();
+		result += child_filters[i]->ToString(column_name);
 	}
 	return result;
 }

@@ -15,8 +15,8 @@ FilterPropagateResult IsNullFilter::CheckStatistics(BaseStatistics &stats) {
 	}
 }
 
-string IsNullFilter::ToString() {
-	return "IS NULL";
+string IsNullFilter::ToString(const string &column_name) {
+	return column_name + "IS NULL";
 }
 
 IsNotNullFilter::IsNotNullFilter() :
@@ -31,8 +31,8 @@ FilterPropagateResult IsNotNullFilter::CheckStatistics(BaseStatistics &stats) {
 	}
 }
 
-string IsNotNullFilter::ToString() {
-	return "IS NOT NULL";
+string IsNotNullFilter::ToString(const string &column_name) {
+	return column_name + " IS NOT NULL";
 }
 
 }

@@ -23,7 +23,7 @@ string LogicalGet::ParamsToString() const {
 		auto &column_index = kv.first;
 		auto &filter = kv.second;
 		if (column_index < names.size()) {
-			result += names[column_index] + ": " + filter->ToString();
+			result += filter->ToString(names[column_index]);
 		}
 		result += "\n";
 	}

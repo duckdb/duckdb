@@ -29,8 +29,8 @@ FilterPropagateResult ConstantFilter::CheckStatistics(BaseStatistics &stats) {
 	}
 }
 
-string ConstantFilter::ToString() {
-	return ExpressionTypeToOperator(comparison_type) + " " + constant.ToString();
+string ConstantFilter::ToString(const string &column_name) {
+	return column_name + ExpressionTypeToOperator(comparison_type) + constant.ToString();
 }
 
 }

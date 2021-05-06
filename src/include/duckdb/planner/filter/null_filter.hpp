@@ -18,7 +18,7 @@ public:
 
 public:
 	FilterPropagateResult CheckStatistics(BaseStatistics &stats) override;
-	string ToString() override;
+	string ToString(const string &column_name) override;
 };
 
 class IsNotNullFilter : public TableFilter {
@@ -27,7 +27,7 @@ public:
 
 public:
 	FilterPropagateResult CheckStatistics(BaseStatistics &stats) override;
-	string ToString() override;
+	string ToString(const string &column_name) override;
 };
 
 } // namespace duckdb

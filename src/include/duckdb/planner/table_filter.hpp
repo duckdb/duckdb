@@ -36,7 +36,7 @@ public:
 public:
 	//! Returns true if the statistics indicate that the segment can contain values that satisfy that filter
 	virtual FilterPropagateResult CheckStatistics(BaseStatistics &stats) = 0;
-	virtual string ToString() = 0;
+	virtual string ToString(const string &column_name) = 0;
 };
 
 class TableFilterSet {
