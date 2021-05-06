@@ -19,6 +19,7 @@ class ColumnData;
 class ConstantFilter;
 class Transaction;
 class StorageManager;
+class TableFilter;
 
 struct ColumnAppendState;
 struct UpdateInfo;
@@ -50,7 +51,7 @@ public:
 	//! Fetch the vector at index "vector_index" from the uncompressed segment, storing it in the result vector
 	void Scan(ColumnScanState &state, idx_t vector_index, Vector &result);
 
-	static void FilterSelection(SelectionVector &sel, Vector &result, const ConstantFilter &filter,
+	static void FilterSelection(SelectionVector &sel, Vector &result, const TableFilter &filter,
 	                            idx_t &approved_tuple_count, ValidityMask &mask);
 
 	//! Fetch a single vector from the base table
