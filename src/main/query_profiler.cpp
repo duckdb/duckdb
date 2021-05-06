@@ -497,10 +497,10 @@ ExpressionExecutorInfo::ExpressionExecutorInfo(ExpressionExecutor &executor, con
 
 ExpressionRootInfo::ExpressionRootInfo(ExpressionExecutorState &state, string name)
     : current_count(state.profiler.current_count), sample_count(state.profiler.sample_count),
-      sample_tuples_count(state.profiler.sample_tuples_count), tuples_count(state.profiler.tuples_count), name(state.name),
-      time(state.profiler.time) {
-	// Use the expression tree name as extra-info
-	extra_info = name;
+      sample_tuples_count(state.profiler.sample_tuples_count), tuples_count(state.profiler.tuples_count),
+      name(state.name), time(state.profiler.time) {
+	// Use the name of expression-tree as extra-info
+	extra_info = move(name);
 	auto expression_info_p = make_unique<ExpressionInfo>();
 	expression_info_p->ExtractExpressionsRecursive(state.root_state);
 	root = move(expression_info_p);

@@ -6,7 +6,6 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "string.h"
 
 namespace duckdb {
 
