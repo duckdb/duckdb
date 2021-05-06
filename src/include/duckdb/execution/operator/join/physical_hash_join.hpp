@@ -54,8 +54,9 @@ public:
 	vector<LogicalType> build_types;
 	//! Duplicate eliminated types; only used for delim_joins (i.e. correlated subqueries)
 	vector<LogicalType> delim_types;
-	//! Flag to track candidate perfect hash optmization
+	//! Struct for perfect hash optmization
 	PerfectHashJoinState perfect_join_state;
+	bool hasBuiltPerfectHashTable {false};
 
 public:
 	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;
@@ -67,7 +68,8 @@ public:
 	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 	bool ProbePerfectHashTable(ExecutionContext &context, DataChunk &chunk, PhysicalHashJoinState *state);
-	bool CheckRequirementsForPerfectHashJoin(JoinHashTable *hash_table_ptr);
+	void CheckRequirementsForPerfectHashJoin(JoinHashTable *hash_table_ptr);
+	void BuildPerfectHashStructure(JoinHashTable *hash_table_ptr);
 
 private:
 	void ProbeHashTable(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p);

@@ -147,6 +147,10 @@ void PhysicalHashJoin::Sink(ExecutionContext &context, GlobalOperatorState &stat
 void PhysicalHashJoin::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> state) {
 	auto &sink = (HashJoinGlobalState &)*state;
 	sink.hash_table->Finalize();
+	// check for possible perfect hash table
+
+	// We only do this optimization when all the requirements are true
+	CheckRequirementsForPerfectHashJoin(sink.hash_table.get());
 
 	PhysicalSink::Finalize(pipeline, context, move(state));
 }
@@ -254,8 +258,8 @@ bool PhysicalHashJoin::ProbePerfectHashTable(ExecutionContext &context, DataChun
 
 	auto global_state = reinterpret_cast<HashJoinGlobalState *>(sink_state.get());
 	auto hash_table_ptr = global_state->hash_table.get();
-	// We only do this optimization when all the requirements are true
-	if (!CheckRequirementsForPerfectHashJoin(hash_table_ptr)) {
+	// We only probe if the optimized hash table has been built
+	if (!hasBuiltPerfectHashTable) {
 		return false;
 	}
 
@@ -314,20 +318,33 @@ bool PhysicalHashJoin::ProbePerfectHashTable(ExecutionContext &context, DataChun
 	return true;
 }
 
-bool PhysicalHashJoin::CheckRequirementsForPerfectHashJoin(JoinHashTable *ht_ptr) {
+void PhysicalHashJoin::CheckRequirementsForPerfectHashJoin(JoinHashTable *ht_ptr) {
 	// first check the build size
 	if (!perfect_join_state.is_build_small) {
-		return false;
+		return;
 	}
+	// if built, just return to continue the probing
+
+	// Store build side as a set of columns
+	BuildPerfectHashStructure(ht_ptr);
+	hasBuiltPerfectHashTable = true;
+
 	// verify uniquiness (build size < min_max_range => duplicate values )
 	auto build_size = Value::INTEGER(ht_ptr->size());
 	auto min_max_range = perfect_join_state.maximum = perfect_join_state.minimum;
 	if (build_size != min_max_range) {
-		return false;
+		return;
 	}
 	// check for nulls
 	if (ht_ptr->has_null) {
 		// set selection vector
+		return;
 	}
+}
+
+void PhysicalHashJoin::BuildPerfectHashStructure(JoinHashTable *hash_table_ptr) {
+	// allocate memory for vectors and organize hashtable into vectors.
+	std::vector<DataChunk> build_side;
+	DataChunk chunk;
 }
 } // namespace duckdb
