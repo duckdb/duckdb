@@ -125,6 +125,7 @@ void PhysicalIndexJoin::Output(ExecutionContext &context, DataChunk &chunk, Phys
 
 void PhysicalIndexJoin::GetRHSMatches(ExecutionContext &context, PhysicalOperatorState *state_p) const {
 	auto state = reinterpret_cast<PhysicalIndexJoinOperatorState *>(state_p);
+
 	auto &art = (ART &)*index;
 	auto &transaction = Transaction::GetTransaction(context.client);
 	for (idx_t i = 0; i < state->child_chunk.size(); i++) {
@@ -133,10 +134,13 @@ void PhysicalIndexJoin::GetRHSMatches(ExecutionContext &context, PhysicalOperato
 		state->rhs_rows[i].clear();
 		if (!equal_value.is_null) {
 			if (fetch_types.empty()) {
-				//! Nothing to materialize
+				state->lock.index_lock.lock();
 				art.SearchEqualJoinNoFetch(equal_value, state->result_sizes[i]);
+				state->lock.index_lock.unlock();
 			} else {
+				state->lock.index_lock.lock();
 				art.SearchEqual((ARTIndexScanState *)index_state.get(), (idx_t)-1, state->rhs_rows[i]);
+				state->lock.index_lock.unlock();
 				state->result_sizes[i] = state->rhs_rows[i].size();
 			}
 		} else {
@@ -152,9 +156,11 @@ void PhysicalIndexJoin::GetRHSMatches(ExecutionContext &context, PhysicalOperato
 
 void PhysicalIndexJoin::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
 	auto state = reinterpret_cast<PhysicalIndexJoinOperatorState *>(state_p);
+	//! Nothing to materialize
 	if (!state->lock.index_lock) {
 		index->InitializeLock(state->lock);
 	}
+	state->lock.index_lock.unlock();
 	state->result_size = 0;
 	while (state->result_size == 0) {
 		//! Check if we need to get a new LHS chunk
