@@ -256,8 +256,6 @@ void PhysicalHashJoin::ProbeHashTable(ExecutionContext &context, DataChunk &chun
 bool PhysicalHashJoin::ProbePerfectHashTable(ExecutionContext &context, DataChunk &result,
                                              PhysicalHashJoinState *physical_state) {
 
-	auto global_state = reinterpret_cast<HashJoinGlobalState *>(sink_state.get());
-	auto hash_table_ptr = global_state->hash_table.get();
 	// We only probe if the optimized hash table has been built
 	if (!hasBuiltPerfectHashTable) {
 		return false;
@@ -296,6 +294,8 @@ bool PhysicalHashJoin::ProbePerfectHashTable(ExecutionContext &context, DataChun
 
 	// now get the data from the build side
 	// first, set-up scan structure
+	auto global_state = reinterpret_cast<HashJoinGlobalState *>(sink_state.get());
+	auto hash_table_ptr = global_state->hash_table.get();
 	auto scan_structure = make_unique<JoinHashTable::ScanStructure>(*hash_table_ptr);
 	scan_structure->found_match = unique_ptr<bool[]>(new bool[STANDARD_VECTOR_SIZE]);
 	memset(scan_structure->found_match.get(), 0, sizeof(bool) * STANDARD_VECTOR_SIZE);

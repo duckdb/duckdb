@@ -12,7 +12,7 @@
 #include "duckdb/transaction/transaction.hpp"
 
 namespace duckdb {
-constexpr size_t PERFECT_HASH_THRESHOLD = 1 << 14;
+constexpr size_t PERFECT_HASH_THRESHOLD = 1 << 10;
 
 static bool CanPlanIndexJoin(Transaction &transaction, TableScanBindData *bind_data, PhysicalTableScan &scan) {
 	if (!bind_data) {
@@ -31,12 +31,20 @@ static bool CanPlanIndexJoin(Transaction &transaction, TableScanBindData *bind_d
 	return true;
 }
 
-bool IsCandidateForPerfectHash(std::vector<std::unique_ptr<BaseStatistics>> &join_stats) {
-	if (join_stats.empty())
-		return false;
-	auto numeric_stats = reinterpret_cast<NumericStatistics *>(join_stats[0].get()); // lhs stats
-	auto join_keys_range = numeric_stats->max - numeric_stats->min;                  // Join Keys Range
-	return (join_keys_range < PERFECT_HASH_THRESHOLD);
+void CheckForPerfectJoin(LogicalComparisonJoin &op, PerfectHashJoinState &join_state) {
+	if (op.join_stats.empty() || !op.types[0].IsNumeric()) {
+		join_state.is_build_small = false;
+		join_state.is_probe_small = false;
+		return;
+	}
+	auto numeric_stats = reinterpret_cast<NumericStatistics *>(op.join_stats[0].get()); // lhs stats
+	auto join_keys_range = numeric_stats->max - numeric_stats->min;                     // Join Keys Range
+
+	if (join_keys_range < PERFECT_HASH_THRESHOLD) {
+		join_state.is_build_small = true;
+		join_state.minimum = numeric_stats->min;
+		join_state.maximum = numeric_stats->max;
+	}
 }
 
 void TransformIndexJoin(ClientContext &context, LogicalComparisonJoin &op, Index **left_index, Index **right_index,
@@ -123,14 +131,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 			                                      right_index, true, op.estimated_cardinality);
 		}
 		// equality join with small number of keys : possible perfect hash table optimization
-		// TODO: check whether the type of stats is numeric
 		PerfectHashJoinState join_state;
-		if (IsCandidateForPerfectHash(op.join_stats)) {
-			join_state.is_build_small = true;
-			auto numeric_stats = reinterpret_cast<NumericStatistics *>(op.join_stats[0].get());
-			join_state.minimum = numeric_stats->min;
-			join_state.maximum = numeric_stats->max;
-		}
+		CheckForPerfectJoin(op, join_state);
 
 		// equality join: use hash join
 		plan = make_unique<PhysicalHashJoin>(op, move(left), move(right), move(op.conditions), op.join_type,
