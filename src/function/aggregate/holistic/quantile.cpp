@@ -21,11 +21,29 @@ timestamp_t Cast::Operation(date_t date) {
 	return Timestamp::FromDatetime(date, dtime_t(0));
 }
 
+using Frame = std::pair<idx_t, idx_t>;
+
 struct QuantileState {
 	data_ptr_t v;
 	idx_t len;
 	idx_t pos;
+
+	bool framed;
+	Frame P;
+	Value prev;
 };
+
+template <class T>
+static void ResizeState(QuantileState *state, idx_t new_len) {
+	if (new_len <= state->len) {
+		return;
+	}
+	state->v = (data_ptr_t)realloc(state->v, new_len * sizeof(T));
+	if (!state->v) {
+		throw InternalException("Memory allocation failure");
+	}
+	state->len = new_len;
+}
 
 struct QuantileBindData : public FunctionData {
 	explicit QuantileBindData(float quantile_p) : quantiles(1, quantile_p) {
@@ -53,17 +71,8 @@ struct QuantileOperation {
 		state->v = nullptr;
 		state->len = 0;
 		state->pos = 0;
-	}
-
-	static void ResizeState(QuantileState *state, idx_t new_len) {
-		if (new_len <= state->len) {
-			return;
-		}
-		state->v = (data_ptr_t)realloc(state->v, new_len * sizeof(T));
-		if (!state->v) {
-			throw InternalException("Memory allocation failure");
-		}
-		state->len = new_len;
+		state->framed = false;
+		new (&state->prev) Value;
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
@@ -78,7 +87,7 @@ struct QuantileOperation {
 	static void Operation(STATE *state, FunctionData *bind_data_p, INPUT_TYPE *data, ValidityMask &mask, idx_t idx) {
 		if (state->pos == state->len) {
 			// growing conservatively here since we could be running this on many small groups
-			ResizeState(state, state->len == 0 ? 1 : state->len * 2);
+			ResizeState<T>(state, state->len == 0 ? 1 : state->len * 2);
 		}
 		D_ASSERT(state->v);
 		((T *)state->v)[state->pos++] = data[idx];
@@ -89,7 +98,7 @@ struct QuantileOperation {
 		if (source.pos == 0) {
 			return;
 		}
-		ResizeState(target, target->pos + source.pos);
+		ResizeState<T>(target, target->pos + source.pos);
 		memcpy(target->v + target->pos * sizeof(T), source.v, source.pos * sizeof(T));
 		target->pos += source.pos;
 	}
@@ -106,6 +115,74 @@ struct QuantileOperation {
 		return true;
 	}
 };
+
+static void ReuseIndexes(QuantileState *state, const Frame& F) {
+    auto index = (idx_t*) state->v;
+    const auto &P = state->P;
+
+    idx_t j = 0;
+
+    //  Copy overlapping indices
+    for (idx_t p = 0; p < (P.second - P.first); ++p) {
+        auto idx = index[p];
+
+        //  Shift down into any hole
+        if (j != p) {
+            index[j] = idx;
+        }
+
+        //  Skip overlapping values
+        if (F.first <= idx && idx < F.second) {
+            ++j;
+        }
+	}
+
+    //  Insert new indices
+    if (j > 0) {
+        // Overlap: append the new ends
+        for (auto f = F.first; f < P.first; ++f, ++j) {
+            index[j] =  f;
+        }
+        for (auto f = P.second; f < F.second; ++f, ++j) {
+            index[j] =  f;
+        }
+    } else {
+        //  No overlap: overwrite with new values
+        for (auto f = F.first; f < F.second; ++f, ++j) {
+            index[j] = f;
+        }
+    }
+}
+
+template <class INPUT_TYPE>
+static bool ReplaceIndex(QuantileState *state, INPUT_TYPE *v_t, const idx_t k, const Frame &F) {
+    auto index = (idx_t*) state->v;
+    const auto &P = state->P;
+
+    auto same = false;
+
+    idx_t j = 0;
+    for (idx_t p = 0; p < (P.second - P.first); ++p) {
+        auto idx = index[p];
+        if (j != p) {
+            break;
+        }
+
+        if (F.first <= idx && idx < F.second) {
+            ++j;
+        }
+    }
+    index[j] = F.second - 1;
+
+    auto curr = Value::CreateValue(v_t[index[j]]);
+    if (k < j) {
+        same = state->prev < curr;
+    } else if (j < k) {
+        same = curr < state->prev;
+    }
+
+    return same;
+}
 
 template <class STATE_TYPE, class RESULT_TYPE, class OP>
 static void ExecuteListFinalize(Vector &states, FunctionData *bind_data, Vector &result, idx_t count) {
@@ -165,6 +242,45 @@ struct DiscreteQuantileOperation : public QuantileOperation<INPUT_TYPE> {
 		auto offset = (idx_t)((double)(state->pos - 1) * bind_data->quantiles[0]);
 		std::nth_element(v_t, v_t + offset, v_t + state->pos);
 		target[idx] = v_t[offset];
+	}
+
+	template <class STATE>
+	static Value ReplaceMovingQuantile(Vector inputs[], FunctionData *bind_data_p, STATE *state, idx_t count, idx_t begin, idx_t end) {
+		D_ASSERT(inputs[0].GetVectorType() == VectorType::FLAT_VECTOR);
+		auto v_t = FlatVector::GetData<INPUT_TYPE>(inputs[0]);
+
+		//  Initialise
+		if (!state->framed) {
+			ResizeState<idx_t>(state, count);
+			state->P = Frame(0, 0);
+			state->framed = true;
+		}
+
+		D_ASSERT(state->v);
+		auto index = (idx_t*) state->v;
+
+		D_ASSERT(bind_data_p);
+		auto bind_data = (QuantileBindData *)bind_data_p;
+		auto offset = (idx_t)(double(end - begin - 1) * bind_data->quantiles[0]);
+
+		auto same = false;
+		Frame F(begin, end);
+
+		if (F.first == state->P.first + 1 && F.second == state->P.second + 1) {
+			//  Fixed frame size
+			same = ReplaceIndex<INPUT_TYPE>(state, v_t, offset, F);
+		} else {
+			ReuseIndexes(state, F);
+		}
+
+		if (!same) {
+			std::nth_element(index, index + offset, index + state->pos);
+			state->prev = v_t[index[offset]];
+		}
+
+		state->P = F;
+
+		return state->prev;
 	}
 };
 
