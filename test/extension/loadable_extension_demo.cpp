@@ -2,6 +2,7 @@
 // TODO lazy loading does not work on mingw compiler.
 #ifdef __MINGW32__
 #define DUCKDB_API __declspec(dllexport)
+#define DUCKDB_CLASS_API
 #endif
 #include "duckdb.hpp"
 
