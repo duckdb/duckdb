@@ -235,10 +235,9 @@ bool FilterCombiner::HasFilters() {
 // }
 
 // unordered_map<idx_t, std::pair<Value *, Value *>>
-// FilterCombiner::FindZonemapChecks(vector<idx_t> &column_ids, unordered_set<idx_t> &not_constants, Expression *filter) {
-// 	unordered_map<idx_t, std::pair<Value *, Value *>> checks;
-// 	switch (filter->type) {
-// 	case ExpressionType::CONJUNCTION_OR: {
+// FilterCombiner::FindZonemapChecks(vector<idx_t> &column_ids, unordered_set<idx_t> &not_constants, Expression *filter)
+// { 	unordered_map<idx_t, std::pair<Value *, Value *>> checks; 	switch (filter->type) { 	case
+// ExpressionType::CONJUNCTION_OR: {
 // 		//! For a filter to
 // 		auto &or_exp = (BoundConjunctionExpression &)*filter;
 // 		checks = FindZonemapChecks(column_ids, not_constants, or_exp.children[0].get());
@@ -408,7 +407,8 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 					for (idx_t i = 0; i < entries.size(); i++) {
 						// for each entry also create a comparison with each constant
 						for (idx_t k = 0; k < constant_list.size(); k++) {
-							auto constant_filter = make_unique<ConstantFilter>(constant_value.second[k].comparison_type, constant_value.second[k].constant);
+							auto constant_filter = make_unique<ConstantFilter>(constant_value.second[k].comparison_type,
+							                                                   constant_value.second[k].constant);
 							table_filters.PushFilter(column_index, move(constant_filter));
 						}
 						table_filters.PushFilter(column_index, make_unique<IsNotNullFilter>());
@@ -437,7 +437,8 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 				auto const_value = constant_value_expr.value.Copy();
 				const_value.str_value = like_string;
 				//! Here the like must be transformed to a BOUND COMPARISON geq le
-				auto lower_bound = make_unique<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, const_value);
+				auto lower_bound =
+				    make_unique<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, const_value);
 				const_value.str_value[const_value.str_value.size() - 1]++;
 				auto upper_bound = make_unique<ConstantFilter>(ExpressionType::COMPARE_LESSTHAN, const_value);
 				table_filters.PushFilter(column_index, move(lower_bound));
@@ -473,7 +474,8 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 					table_filters.PushFilter(column_index, make_unique<IsNotNullFilter>());
 				} else {
 					//! Here the like must be transformed to a BOUND COMPARISON geq le
-					auto lower_bound = make_unique<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, const_value);
+					auto lower_bound =
+					    make_unique<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, const_value);
 					const_value.str_value[const_value.str_value.size() - 1]++;
 					auto upper_bound = make_unique<ConstantFilter>(ExpressionType::COMPARE_LESSTHAN, const_value);
 					table_filters.PushFilter(column_index, move(lower_bound));
@@ -527,7 +529,8 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 			if (!is_consecutive || in_values.empty()) {
 				continue;
 			}
-			auto lower_bound = make_unique<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, in_values.front());
+			auto lower_bound =
+			    make_unique<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, in_values.front());
 			auto upper_bound = make_unique<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO, in_values.back());
 			table_filters.PushFilter(column_index, move(lower_bound));
 			table_filters.PushFilter(column_index, move(upper_bound));

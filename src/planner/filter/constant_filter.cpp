@@ -4,8 +4,10 @@
 
 namespace duckdb {
 
-ConstantFilter::ConstantFilter(ExpressionType comparison_type_p, Value constant_p) :
-	TableFilter(TableFilterType::CONSTANT_COMPARISON), comparison_type(comparison_type_p), constant(move(constant_p)) {}
+ConstantFilter::ConstantFilter(ExpressionType comparison_type_p, Value constant_p)
+    : TableFilter(TableFilterType::CONSTANT_COMPARISON), comparison_type(comparison_type_p),
+      constant(move(constant_p)) {
+}
 
 FilterPropagateResult ConstantFilter::CheckStatistics(BaseStatistics &stats) {
 	D_ASSERT(constant.type().id() == stats.type.id());
@@ -21,9 +23,9 @@ FilterPropagateResult ConstantFilter::CheckStatistics(BaseStatistics &stats) {
 	case PhysicalType::INT128:
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE:
-		return ((NumericStatistics &) stats).CheckZonemap(comparison_type, constant);
+		return ((NumericStatistics &)stats).CheckZonemap(comparison_type, constant);
 	case PhysicalType::VARCHAR:
-		return ((StringStatistics &) stats).CheckZonemap(comparison_type, constant.ToString());
+		return ((StringStatistics &)stats).CheckZonemap(comparison_type, constant.ToString());
 	default:
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
@@ -33,4 +35,4 @@ string ConstantFilter::ToString(const string &column_name) {
 	return column_name + ExpressionTypeToOperator(comparison_type) + constant.ToString();
 }
 
-}
+} // namespace duckdb

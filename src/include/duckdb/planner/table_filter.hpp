@@ -27,9 +27,10 @@ enum class TableFilterType : uint8_t {
 //! TableFilter represents a filter pushed down into the table scan.
 class TableFilter {
 public:
-	TableFilter(TableFilterType filter_type_p)
-	    : filter_type(filter_type_p) {}
-	virtual ~TableFilter(){}
+	TableFilter(TableFilterType filter_type_p) : filter_type(filter_type_p) {
+	}
+	virtual ~TableFilter() {
+	}
 
 	TableFilterType filter_type;
 

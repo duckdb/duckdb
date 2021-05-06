@@ -43,7 +43,8 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 	//! Right now this only executes simple AND filters
 	get.table_filters = combiner.GenerateTableScanFilters(get.column_ids);
 
-	// //! For more complex filters if all filters to a column are constants we generate a min max boundary used to check
+	// //! For more complex filters if all filters to a column are constants we generate a min max boundary used to
+	// check
 	// //! the zonemaps.
 	// auto zonemap_checks = combiner.GenerateZonemapChecks(get.column_ids, get.table_filters);
 

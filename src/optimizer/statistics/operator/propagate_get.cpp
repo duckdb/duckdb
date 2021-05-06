@@ -12,16 +12,16 @@ FilterPropagateResult StatisticsPropagator::PropagateTableFilter(BaseStatistics 
 
 void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &input, TableFilter &filter) {
 	// FIXME: update stats...
-	switch(filter.filter_type) {
+	switch (filter.filter_type) {
 	case TableFilterType::CONJUNCTION_AND: {
-		auto &conjunction_and = (ConjunctionAndFilter &) filter;
-		for(auto &child_filter : conjunction_and.child_filters) {
+		auto &conjunction_and = (ConjunctionAndFilter &)filter;
+		for (auto &child_filter : conjunction_and.child_filters) {
 			UpdateFilterStatistics(input, *child_filter);
 		}
 		break;
 	}
 	case TableFilterType::CONSTANT_COMPARISON: {
-		auto &constant_filter = (ConstantFilter &) filter;
+		auto &constant_filter = (ConstantFilter &)filter;
 		UpdateFilterStatistics(input, constant_filter.comparison_type, constant_filter.constant);
 		break;
 	}
@@ -29,7 +29,6 @@ void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &input, TableFi
 		break;
 	}
 }
-
 
 unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet &get,
                                                                      unique_ptr<LogicalOperator> *node_ptr) {
@@ -50,11 +49,11 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet 
 	// push table filters into the statistics
 	vector<idx_t> column_indexes;
 	column_indexes.reserve(get.table_filters.filters.size());
-	for(auto &kv : get.table_filters.filters) {
+	for (auto &kv : get.table_filters.filters) {
 		column_indexes.push_back(kv.first);
 	}
 
-	for(auto &table_filter_column : column_indexes) {
+	for (auto &table_filter_column : column_indexes) {
 		idx_t column_index;
 		for (column_index = 0; column_index < get.column_ids.size(); column_index++) {
 			if (get.column_ids[column_index] == table_filter_column) {

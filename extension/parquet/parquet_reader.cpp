@@ -475,17 +475,17 @@ static void FilterOperationSwitch(Vector &v, Value &constant, parquet_filter_t &
 }
 
 static void ApplyFilter(Vector &v, TableFilter &filter, parquet_filter_t &filter_mask, idx_t count) {
-	switch(filter.filter_type) {
+	switch (filter.filter_type) {
 	case TableFilterType::CONJUNCTION_AND: {
-		auto &conjunction = (ConjunctionAndFilter &) filter;
-		for(auto &child_filter : conjunction.child_filters) {
+		auto &conjunction = (ConjunctionAndFilter &)filter;
+		for (auto &child_filter : conjunction.child_filters) {
 			ApplyFilter(v, *child_filter, filter_mask, count);
 		}
 		break;
 	}
 	case TableFilterType::CONJUNCTION_OR: {
-		auto &conjunction = (ConjunctionOrFilter &) filter;
-		for(auto &child_filter : conjunction.child_filters) {
+		auto &conjunction = (ConjunctionOrFilter &)filter;
+		for (auto &child_filter : conjunction.child_filters) {
 			parquet_filter_t child_mask = filter_mask;
 			ApplyFilter(v, *child_filter, child_mask, count);
 			filter_mask |= child_mask;
@@ -493,7 +493,7 @@ static void ApplyFilter(Vector &v, TableFilter &filter, parquet_filter_t &filter
 		break;
 	}
 	case TableFilterType::CONSTANT_COMPARISON: {
-		auto &constant_filter = (ConstantFilter &) filter;
+		auto &constant_filter = (ConstantFilter &)filter;
 		switch (constant_filter.comparison_type) {
 		case ExpressionType::COMPARE_EQUAL:
 			FilterOperationSwitch<Equals>(v, constant_filter.constant, filter_mask, count);

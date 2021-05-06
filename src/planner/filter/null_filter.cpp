@@ -3,8 +3,7 @@
 
 namespace duckdb {
 
-IsNullFilter::IsNullFilter() :
-	TableFilter(TableFilterType::IS_NULL) {
+IsNullFilter::IsNullFilter() : TableFilter(TableFilterType::IS_NULL) {
 }
 
 FilterPropagateResult IsNullFilter::CheckStatistics(BaseStatistics &stats) {
@@ -19,8 +18,7 @@ string IsNullFilter::ToString(const string &column_name) {
 	return column_name + "IS NULL";
 }
 
-IsNotNullFilter::IsNotNullFilter() :
-	TableFilter(TableFilterType::IS_NOT_NULL) {
+IsNotNullFilter::IsNotNullFilter() : TableFilter(TableFilterType::IS_NOT_NULL) {
 }
 
 FilterPropagateResult IsNotNullFilter::CheckStatistics(BaseStatistics &stats) {
@@ -35,4 +33,4 @@ string IsNotNullFilter::ToString(const string &column_name) {
 	return column_name + " IS NOT NULL";
 }
 
-}
+} // namespace duckdb

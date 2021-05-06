@@ -309,14 +309,13 @@ bool DataTable::CheckZonemap(TableScanState &state, const vector<column_t> &colu
 	for (auto &table_filter : table_filters->filters) {
 		D_ASSERT(table_filter.first < column_ids.size());
 		auto base_column_idx = column_ids[table_filter.first];
-		bool read_segment = columns[base_column_idx]->CheckZonemap(
-			state.column_scans[table_filter.first], *table_filter.second);
+		bool read_segment =
+		    columns[base_column_idx]->CheckZonemap(state.column_scans[table_filter.first], *table_filter.second);
 		if (!read_segment) {
 			//! We can skip this partition
-			idx_t vectors_to_skip =
-				ceil((double)(state.column_scans[table_filter.first].current->count +
-								state.column_scans[table_filter.first].current->start - current_row) /
-						STANDARD_VECTOR_SIZE);
+			idx_t vectors_to_skip = ceil((double)(state.column_scans[table_filter.first].current->count +
+			                                      state.column_scans[table_filter.first].current->start - current_row) /
+			                             STANDARD_VECTOR_SIZE);
 			for (idx_t i = 0; i < vectors_to_skip; ++i) {
 				state.NextVector();
 				current_row += STANDARD_VECTOR_SIZE;
