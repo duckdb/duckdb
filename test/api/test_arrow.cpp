@@ -29,7 +29,7 @@ struct MyArrowArrayStream {
 		return 0;
 	}
 
-	static int GetNext(struct ArrowArrayStream *stream, struct ArrowArray *out) {
+	static int GetNext(struct ArrowArrayStream *stream, struct ArrowArray *out, int chunk_idx) {
 		D_ASSERT(stream->private_data);
 		auto my_stream = (MyArrowArrayStream *)stream->private_data;
 		if (!stream->release) {
