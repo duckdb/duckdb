@@ -74,7 +74,7 @@ unique_ptr<FunctionOperatorData> InformationSchemaColumnsInit(ClientContext &con
 
 	// scan all the schemas for tables and views and collect them
 	auto schemas = Catalog::GetCatalog(context).schemas->GetEntries<SchemaCatalogEntry>(context);
-	for(auto &schema : schemas) {
+	for (auto &schema : schemas) {
 		schema->Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	}
 

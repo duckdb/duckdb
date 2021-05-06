@@ -79,15 +79,12 @@ public:
 		}
 	}
 
-	template<class T>
+	template <class T>
 	vector<T *> GetEntries(ClientContext &context) {
 		vector<T *> result;
-		Scan(context, [&](CatalogEntry * entry) {
-			result.push_back((T*) entry);
-		});
+		Scan(context, [&](CatalogEntry *entry) { result.push_back((T *)entry); });
 		return result;
 	}
-
 
 	//! Scan the catalog set, invoking the callback method for every committed entry
 	template <class T>
