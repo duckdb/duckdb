@@ -16,6 +16,8 @@ namespace duckdb {
 
 class WindowSegmentTree {
 public:
+	using FrameBounds = std::pair<idx_t, idx_t>;
+
 	WindowSegmentTree(AggregateFunction &aggregate, FunctionData *bind_info, LogicalType result_type,
 	                  ChunkCollection *input);
 	~WindowSegmentTree();
@@ -24,6 +26,7 @@ public:
 
 private:
 	void ConstructTree();
+	void ExtractFrame(idx_t begin, idx_t end);
 	void WindowSegmentValue(idx_t l_idx, idx_t begin, idx_t end);
 	void AggregateInit();
 	Value AggegateFinal();
@@ -41,6 +44,8 @@ private:
 	DataChunk inputs;
 	//! A vector of pointers to "state", used for intermediate window segment aggregation
 	Vector statep;
+	//! The frame boundaries, used for the frame functions
+	FrameBounds bounds;
 
 	//! The actual window segment tree: an array of aggregate states that represent all the intermediate nodes
 	unique_ptr<data_t[]> levels_flat_native;
