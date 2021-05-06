@@ -1,6 +1,8 @@
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/table_filter.hpp"
+#include "duckdb/planner/filter/conjunction_filter.hpp"
+#include "duckdb/planner/filter/constant_filter.hpp"
 
 namespace duckdb {
 
@@ -10,6 +12,22 @@ FilterPropagateResult StatisticsPropagator::PropagateTableFilter(BaseStatistics 
 
 void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &input, TableFilter &filter) {
 	// FIXME: update stats...
+	switch(filter.filter_type) {
+	case TableFilterType::CONJUNCTION_AND: {
+		auto &conjunction_and = (ConjunctionAndFilter &) filter;
+		for(auto &child_filter : conjunction_and.child_filters) {
+			UpdateFilterStatistics(input, *child_filter);
+		}
+		break;
+	}
+	case TableFilterType::CONSTANT_COMPARISON: {
+		auto &constant_filter = (ConstantFilter &) filter;
+		UpdateFilterStatistics(input, constant_filter.comparison_type, constant_filter.constant);
+		break;
+	}
+	default:
+		break;
+	}
 }
 
 
