@@ -297,7 +297,6 @@ struct ParallelArrowScanState : public ParallelState {
 static void ArrowScanFunctionParallel(ClientContext &context, const FunctionData *bind_data,
                                       FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output,
                                       ParallelState *parallel_state_p) {
-	auto &data = (ArrowScanFunctionData &)*bind_data;
 	auto &state = (ArrowScanState &)*operator_state;
 	//! Out of tuples in this chunk
 	if (state.chunk_offset >= (idx_t)state.chunk->length) {
