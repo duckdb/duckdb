@@ -78,12 +78,8 @@ struct OperatorInformation {
 	string name;
 	explicit OperatorInformation(double time_ = 0, idx_t elements_ = 0) : time(time_), elements(elements_) {
 	}
-
 	//! A mapping of physical operators to recorded timings
 	unordered_map<string, shared_ptr<ExpressionExecutorInfo>> executors_info;
-
-	//! HACKY
-	bool changed = false;
 };
 
 //! The OperatorProfiler measures timings of individual operators

@@ -219,7 +219,6 @@ void OperatorProfiler::Flush(PhysicalOperator *phys_op, ExpressionExecutor *expr
 		auto &operator_timing = timings.find(phys_op)->second;
 		operator_timing.executors_info[name] = make_unique<ExpressionExecutorInfo>(*expression_executor, name);
 		operator_timing.name = phys_op->GetName();
-		operator_timing.changed = true;
 	}
 }
 
@@ -502,6 +501,12 @@ ExpressionRootInfo::ExpressionRootInfo(ExpressionExecutorState &state, string na
 	// Use the name of expression-tree as extra-info
 	extra_info = move(name);
 	auto expression_info_p = make_unique<ExpressionInfo>();
+	// Maybe root has a function
+	if (state.root_state->expr.expression_class == ExpressionClass::BOUND_FUNCTION) {
+		expression_info_p->hasfunction = true;
+		expression_info_p->function_name = ((BoundFunctionExpression &)state.root_state->expr).function.name;
+		expression_info_p->function_time = state.root_state->profiler.time;
+	}
 	expression_info_p->ExtractExpressionsRecursive(state.root_state);
 	root = move(expression_info_p);
 }
