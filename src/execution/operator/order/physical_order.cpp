@@ -1029,8 +1029,7 @@ static void ReOrder(ClientContext &context, SortedBlock &sb, const SortingState 
 
 void PhysicalOrder::SortLocalState(ClientContext &context, OrderLocalState &lstate, const SortingState &sorting_state,
                                    const PayloadState &payload_state) {
-	const idx_t &count = lstate.sorting_block->count;
-	D_ASSERT(count == lstate.payload_block->count);
+	D_ASSERT(lstate.sorting_block->count == lstate.payload_block->count);
 	if (lstate.sorting_block->count == 0) {
 		return;
 	}
