@@ -154,8 +154,8 @@ struct ModeFunction {
 	}
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
-	static void Frame(INPUT_TYPE *fdata, INPUT_TYPE *pdata, FunctionData *bind_data, STATE *state, const FrameBounds &F,
-	                  const FrameBounds &P, RESULT_TYPE *result) {
+	static void Frame(INPUT_TYPE *fdata, INPUT_TYPE *pdata, FunctionData *bind_data, STATE *state,
+	                  const FrameBounds &frame, const FrameBounds &prev, RESULT_TYPE *result) {
 		if (!state->frequency_map) {
 			state->frequency_map = new unordered_map<KEY_TYPE, size_t>();
 		}
@@ -163,23 +163,23 @@ struct ModeFunction {
 		if (state->nonzero <= tau * state->frequency_map->size()) {
 			state->Reset();
 			// for f ∈ F do
-			for (auto f = F.first; f < F.second; ++f) {
+			for (auto f = frame.first; f < frame.second; ++f) {
 				state->ModeAdd(KEY_TYPE(fdata[f]));
 			}
 		} else {
 			// for f ∈ P \ F do
-			for (auto p = P.first; p < F.first; ++p) {
+			for (auto p = prev.first; p < frame.first; ++p) {
 				state->ModeRm(KEY_TYPE(pdata[p]));
 			}
-			for (auto p = F.second; p < P.second; ++p) {
+			for (auto p = frame.second; p < prev.second; ++p) {
 				state->ModeRm(KEY_TYPE(pdata[p]));
 			}
 
 			// for f ∈ F \ P do
-			for (auto f = F.first; f < P.first; ++f) {
+			for (auto f = frame.first; f < prev.first; ++f) {
 				state->ModeAdd(KEY_TYPE(fdata[f]));
 			}
-			for (auto f = P.second; f < F.second; ++f) {
+			for (auto f = prev.second; f < frame.second; ++f) {
 				state->ModeAdd(KEY_TYPE(fdata[f]));
 			}
 		}
