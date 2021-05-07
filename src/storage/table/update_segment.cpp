@@ -11,6 +11,7 @@ namespace duckdb {
 static UpdateSegment::initialize_update_function_t GetInitializeUpdateFunction(PhysicalType type);
 static UpdateSegment::fetch_update_function_t GetFetchUpdateFunction(PhysicalType type);
 static UpdateSegment::fetch_committed_function_t GetFetchCommittedFunction(PhysicalType type);
+static UpdateSegment::fetch_committed_range_function_t GetFetchCommittedRangeFunction(PhysicalType type);
 
 static UpdateSegment::merge_update_function_t GetMergeUpdateFunction(PhysicalType type);
 static UpdateSegment::rollback_update_function_t GetRollbackUpdateFunction(PhysicalType type);
@@ -27,6 +28,7 @@ UpdateSegment::UpdateSegment(RowGroup &row_group, ColumnData &column_data)
 	this->initialize_update_function = GetInitializeUpdateFunction(physical_type);
 	this->fetch_update_function = GetFetchUpdateFunction(physical_type);
 	this->fetch_committed_function = GetFetchCommittedFunction(physical_type);
+	this->fetch_committed_range = GetFetchCommittedRangeFunction(physical_type);
 	this->fetch_row_function = GetFetchRowFunction(physical_type);
 	this->merge_update_function = GetMergeUpdateFunction(physical_type);
 	this->rollback_update_function = GetRollbackUpdateFunction(physical_type);
@@ -221,6 +223,85 @@ void UpdateSegment::FetchCommitted(idx_t vector_index, Vector &result) {
 	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 
 	fetch_committed_function(root->info[vector_index]->info.get(), result);
+}
+
+//===--------------------------------------------------------------------===//
+// Fetch Range
+//===--------------------------------------------------------------------===//
+template <class T>
+static void MergeUpdateInfoRange(UpdateInfo *current, idx_t start, idx_t end, idx_t result_offset, T *result_data, ValidityMask &result_mask) {
+	ValidityMask current_mask(current->validity);
+	auto info_data = (T *)current->tuple_data;
+	for (idx_t i = 0; i < current->N; i++) {
+		auto tuple_idx = current->tuples[i];
+		if (tuple_idx < start) {
+			continue;
+		} else if (i >= end) {
+			break;
+		}
+		auto result_idx = result_offset + tuple_idx;
+		result_data[result_idx] = info_data[i];
+		result_mask.Set(result_idx, current_mask.RowIsValidUnsafe(i));
+	}
+}
+
+template <class T>
+static void TemplatedFetchCommittedRange(UpdateInfo *info, idx_t start, idx_t end, idx_t result_offset, Vector &result) {
+	auto result_data = FlatVector::GetData<T>(result);
+	auto &result_mask = FlatVector::Validity(result);
+	MergeUpdateInfoRange<T>(info, start, end, result_offset, result_data, result_mask);
+}
+
+static UpdateSegment::fetch_committed_range_function_t GetFetchCommittedRangeFunction(PhysicalType type) {
+	switch (type) {
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
+		return TemplatedFetchCommittedRange<int8_t>;
+	case PhysicalType::INT16:
+		return TemplatedFetchCommittedRange<int16_t>;
+	case PhysicalType::INT32:
+		return TemplatedFetchCommittedRange<int32_t>;
+	case PhysicalType::INT64:
+		return TemplatedFetchCommittedRange<int64_t>;
+	case PhysicalType::UINT8:
+		return TemplatedFetchCommittedRange<uint8_t>;
+	case PhysicalType::UINT16:
+		return TemplatedFetchCommittedRange<uint16_t>;
+	case PhysicalType::UINT32:
+		return TemplatedFetchCommittedRange<uint32_t>;
+	case PhysicalType::UINT64:
+		return TemplatedFetchCommittedRange<uint64_t>;
+	case PhysicalType::INT128:
+		return TemplatedFetchCommittedRange<hugeint_t>;
+	case PhysicalType::FLOAT:
+		return TemplatedFetchCommittedRange<float>;
+	case PhysicalType::DOUBLE:
+		return TemplatedFetchCommittedRange<double>;
+	case PhysicalType::INTERVAL:
+		return TemplatedFetchCommittedRange<interval_t>;
+	case PhysicalType::VARCHAR:
+		return TemplatedFetchCommittedRange<string_t>;
+	default:
+		throw NotImplementedException("Unimplemented type for update segment");
+	}
+}
+
+void UpdateSegment::FetchCommittedRange(idx_t start_row, idx_t count, Vector &result) {
+	if (!root) {
+		return;
+	}
+	idx_t end_row = start_row + count;
+	idx_t start_vector = start_row / STANDARD_VECTOR_SIZE;
+	idx_t end_vector = end_row / STANDARD_VECTOR_SIZE;
+	idx_t result_offset = 0;
+	for(idx_t vector_idx = start_vector; vector_idx <= end_vector; vector_idx++) {
+		if (!root->info[vector_idx]) {
+			continue;
+		}
+		idx_t start_in_vector = vector_idx == start_vector ? start_row - start_vector * STANDARD_VECTOR_SIZE : 0;
+		idx_t end_in_vector = vector_idx == end_vector ? end_row - end_vector * STANDARD_VECTOR_SIZE : STANDARD_VECTOR_SIZE;
+		fetch_committed_range(root->info[vector_idx]->info.get(), start_in_vector, end_in_vector, result_offset, result);
+	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -919,35 +1000,19 @@ bool UpdateSegment::HasUncommittedUpdates(idx_t vector_index) {
 	return false;
 }
 
-bool UpdateSegment::HasUpdates(idx_t start_vector_index, idx_t end_vector_index) const {
-	throw NotImplementedException("FIXME: has updates");
-	// idx_t base_vector_index = row_group.start / STANDARD_VECTOR_SIZE;
-	// D_ASSERT(start_vector_index >= base_vector_index);
-	// auto segment = this;
-	// for (idx_t i = start_vector_index; i <= end_vector_index; i++) {
-	// 	idx_t vector_index = i - base_vector_index;
-	// 	while (vector_index >= RowGroup::ROW_GROUP_VECTOR_COUNT) {
-	// 		segment = (UpdateSegment *)next.get();
-	// 		base_vector_index = segment->start / STANDARD_VECTOR_SIZE;
-	// 		vector_index -= RowGroup::ROW_GROUP_VECTOR_COUNT;
-	// 	}
-	// 	if (segment->HasUpdates(vector_index)) {
-	// 		return true;
-	// 	}
-	// }
-	// return false;
-}
-
-UpdateSegment *UpdateSegment::FindSegment(idx_t end_vector_index) const {
-	throw NotImplementedException("FIXME: find segment");
-	// idx_t base_vector_index = start / STANDARD_VECTOR_SIZE;
-	// D_ASSERT(end_vector_index >= base_vector_index);
-	// auto segment = this;
-	// while (end_vector_index >= base_vector_index + RowGroup::ROW_GROUP_VECTOR_COUNT) {
-	// 	segment = (UpdateSegment *)next.get();
-	// 	base_vector_index += RowGroup::ROW_GROUP_VECTOR_COUNT;
-	// }
-	// return (UpdateSegment *)segment;
+bool UpdateSegment::HasUpdates(idx_t start_row_index, idx_t end_row_index) {
+	if (!HasUpdates()) {
+		return false;
+	}
+	auto read_lock = lock.GetSharedLock();
+	idx_t base_vector_index = start_row_index / STANDARD_VECTOR_SIZE;
+	idx_t end_vector_index = end_row_index / STANDARD_VECTOR_SIZE;
+	for (idx_t i = base_vector_index; i <= end_vector_index; i++) {
+		if (root->info[i]) {
+			return true;
+		}
+	}
+	return false;
 }
 
 } // namespace duckdb

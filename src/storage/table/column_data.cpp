@@ -340,11 +340,11 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, Ta
 		if (segment->segment_type == ColumnSegmentType::PERSISTENT) {
 			auto &persistent = (PersistentSegment &)*segment;
 			// persistent segment; check if there were any updates or deletions in this segment
-			idx_t start_vector_idx = (persistent.start - row_group.start) / STANDARD_VECTOR_SIZE;
-			idx_t end_vector_idx = start_vector_idx + (persistent.count + (STANDARD_VECTOR_SIZE - 1)) / STANDARD_VECTOR_SIZE;
+			idx_t start_row_idx = persistent.start - row_group.start;
+			idx_t end_row_idx = start_row_idx + persistent.count;
 			bool has_changes = false;
-			if (!row_group.updates.empty() && column_idx < row_group.updates.size()) {
-				if (row_group.updates[column_idx]->HasUpdates(start_vector_idx, end_vector_idx)) {
+			if (!row_group.updates.empty() && column_idx < row_group.updates.size() && row_group.updates[column_idx]) {
+				if (row_group.updates[column_idx]->HasUpdates(start_row_idx, end_row_idx)) {
 					has_changes = true;
 				}
 			}
@@ -394,8 +394,9 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, Ta
 			idx_t count = MinValue<idx_t>(segment->count - base_row_index, STANDARD_VECTOR_SIZE);
 			state.row_index = segment->start + base_row_index;
 			segment->Scan(state, base_row_index, count, scan_vector, 0);
-
-			// FIXME: merge updates here...
+			if (!row_group.updates.empty() && column_idx < row_group.updates.size() && row_group.updates[column_idx]) {
+				row_group.updates[column_idx]->FetchCommittedRange(segment->start - row_group.start + base_row_index, count, scan_vector);
+			}
 
 			checkpoint_state->AppendData(scan_vector, count);
 		}
