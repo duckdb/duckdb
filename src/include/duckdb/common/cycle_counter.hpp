@@ -22,14 +22,14 @@ public:
 	CycleCounter() : random(0) {
 	}
 	// Next_sample determines if a sample needs to be taken, if so start the profiler
-	void TakeSample() {
+	void BeginSample() {
 		if (current_count >= next_sample) {
 			tmp = Tick();
 		}
 	}
 
-	// Process the sample
-	void ProcessSample(int chunk_size) {
+	// End the sample
+	void EndSample(int chunk_size) {
 		if (current_count >= next_sample) {
 			time += Tick() - tmp;
 		}
@@ -42,20 +42,6 @@ public:
 			++current_count;
 		}
 		tuples_count += chunk_size;
-	}
-
-	// Process the sample
-	void ProcessSample() {
-		if (current_count >= next_sample) {
-			time += Tick() - tmp;
-		}
-		if (current_count >= next_sample) {
-			next_sample = 50 + random.NextRandomInteger() % 100;
-			++sample_count;
-			current_count = 0;
-		} else {
-			++current_count;
-		}
 	}
 
 public:

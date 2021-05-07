@@ -67,7 +67,7 @@ public:
 class SimpleAggregateLocalState : public LocalSinkState {
 public:
 	explicit SimpleAggregateLocalState(vector<unique_ptr<Expression>> &aggregates)
-	    : state(aggregates), function_counter() {
+	    : state(aggregates) {
 		vector<LogicalType> payload_types;
 		for (auto &aggregate : aggregates) {
 			D_ASSERT(aggregate->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
@@ -97,8 +97,6 @@ public:
 	DataChunk payload_chunk;
 	//! The payload chunk
 	DataChunk payload_chunk_base;
-	//!
-	CycleCounter function_counter;
 };
 
 unique_ptr<GlobalOperatorState> PhysicalSimpleAggregate::GetGlobalState(ClientContext &context) {
@@ -143,11 +141,9 @@ void PhysicalSimpleAggregate::Sink(ExecutionContext &context, GlobalOperatorStat
 			}
 		}
 
-		sink.function_counter.TakeSample();
 		aggregate.function.simple_update(payload_cnt == 0 ? nullptr : &payload_chunk.data[payload_idx],
 		                                 aggregate.bind_info.get(), payload_cnt, sink.state.aggregates[aggr_idx].get(),
 		                                 payload_chunk.size());
-		sink.function_counter.ProcessSample();
 		payload_idx += payload_cnt;
 	}
 }

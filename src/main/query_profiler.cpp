@@ -479,6 +479,8 @@ void ExpressionInfo::ExtractExpressionsRecursive(unique_ptr<ExpressionState> &st
 			expression_info_p->hasfunction = true;
 			expression_info_p->function_name = ((BoundFunctionExpression &)child->expr).function.name;
 			expression_info_p->function_time = child->profiler.time;
+			expression_info_p->sample_tuples_count = child->profiler.sample_tuples_count;
+			expression_info_p->tuples_count = child->profiler.tuples_count;
 		}
 		expression_info_p->ExtractExpressionsRecursive(child);
 		children.push_back(move(expression_info_p));
@@ -506,6 +508,8 @@ ExpressionRootInfo::ExpressionRootInfo(ExpressionExecutorState &state, string na
 		expression_info_p->hasfunction = true;
 		expression_info_p->function_name = ((BoundFunctionExpression &)state.root_state->expr).function.name;
 		expression_info_p->function_time = state.root_state->profiler.time;
+        expression_info_p->sample_tuples_count = state.root_state->profiler.sample_tuples_count;
+        expression_info_p->tuples_count = state.root_state->profiler.tuples_count;
 	}
 	expression_info_p->ExtractExpressionsRecursive(state.root_state);
 	root = move(expression_info_p);
