@@ -504,89 +504,6 @@ void ScanStructure::Next(DataChunk &keys, DataChunk &left, DataChunk &result) {
 	}
 }
 
-template <bool NO_MATCH_SEL, class T, class OP>
-static idx_t TemplatedGather(VectorData &vdata, Vector &pointers, const SelectionVector &current_sel, idx_t count,
-                             idx_t offset, SelectionVector *match_sel, SelectionVector *no_match_sel,
-                             idx_t &no_match_count) {
-	idx_t result_count = 0;
-	auto data = (T *)vdata.data;
-	auto ptrs = FlatVector::GetData<uintptr_t>(pointers);
-	for (idx_t i = 0; i < count; i++) {
-		auto idx = current_sel.get_index(i);
-		auto kidx = vdata.sel->get_index(idx);
-		auto gdata = (T *)(ptrs[idx] + offset);
-		T val = Load<T>((data_ptr_t)gdata);
-		if (!vdata.validity.RowIsValid(kidx)) {
-			if (IsNullValue<T>(val)) {
-				match_sel->set_index(result_count++, idx);
-			} else {
-				if (NO_MATCH_SEL) {
-					no_match_sel->set_index(no_match_count++, idx);
-				}
-			}
-		} else {
-			if (OP::template Operation<T>(data[kidx], val)) {
-				match_sel->set_index(result_count++, idx);
-			} else {
-				if (NO_MATCH_SEL) {
-					no_match_sel->set_index(no_match_count++, idx);
-				}
-			}
-		}
-	}
-	return result_count;
-}
-
-template <bool NO_MATCH_SEL, class OP>
-static idx_t GatherSwitch(VectorData &data, PhysicalType type, Vector &pointers, const SelectionVector &current_sel,
-                          idx_t count, idx_t offset, SelectionVector *match_sel, SelectionVector *no_match_sel,
-                          idx_t &no_match_count) {
-	switch (type) {
-	case PhysicalType::UINT8:
-		return TemplatedGather<NO_MATCH_SEL, uint8_t, OP>(data, pointers, current_sel, count, offset, match_sel,
-		                                                  no_match_sel, no_match_count);
-	case PhysicalType::UINT16:
-		return TemplatedGather<NO_MATCH_SEL, uint16_t, OP>(data, pointers, current_sel, count, offset, match_sel,
-		                                                   no_match_sel, no_match_count);
-	case PhysicalType::UINT32:
-		return TemplatedGather<NO_MATCH_SEL, uint32_t, OP>(data, pointers, current_sel, count, offset, match_sel,
-		                                                   no_match_sel, no_match_count);
-	case PhysicalType::UINT64:
-		return TemplatedGather<NO_MATCH_SEL, uint64_t, OP>(data, pointers, current_sel, count, offset, match_sel,
-		                                                   no_match_sel, no_match_count);
-	case PhysicalType::BOOL:
-	case PhysicalType::INT8:
-		return TemplatedGather<NO_MATCH_SEL, int8_t, OP>(data, pointers, current_sel, count, offset, match_sel,
-		                                                 no_match_sel, no_match_count);
-	case PhysicalType::INT16:
-		return TemplatedGather<NO_MATCH_SEL, int16_t, OP>(data, pointers, current_sel, count, offset, match_sel,
-		                                                  no_match_sel, no_match_count);
-	case PhysicalType::INT32:
-		return TemplatedGather<NO_MATCH_SEL, int32_t, OP>(data, pointers, current_sel, count, offset, match_sel,
-		                                                  no_match_sel, no_match_count);
-	case PhysicalType::INT64:
-		return TemplatedGather<NO_MATCH_SEL, int64_t, OP>(data, pointers, current_sel, count, offset, match_sel,
-		                                                  no_match_sel, no_match_count);
-	case PhysicalType::INT128:
-		return TemplatedGather<NO_MATCH_SEL, hugeint_t, OP>(data, pointers, current_sel, count, offset, match_sel,
-		                                                    no_match_sel, no_match_count);
-	case PhysicalType::FLOAT:
-		return TemplatedGather<NO_MATCH_SEL, float, OP>(data, pointers, current_sel, count, offset, match_sel,
-		                                                no_match_sel, no_match_count);
-	case PhysicalType::DOUBLE:
-		return TemplatedGather<NO_MATCH_SEL, double, OP>(data, pointers, current_sel, count, offset, match_sel,
-		                                                 no_match_sel, no_match_count);
-	case PhysicalType::INTERVAL:
-		return TemplatedGather<NO_MATCH_SEL, interval_t, OP>(data, pointers, current_sel, count, offset, match_sel,
-		                                                     no_match_sel, no_match_count);
-	case PhysicalType::VARCHAR:
-		return TemplatedGather<NO_MATCH_SEL, string_t, OP>(data, pointers, current_sel, count, offset, match_sel,
-		                                                   no_match_sel, no_match_count);
-	default:
-		throw NotImplementedException("Unimplemented type for GatherSwitch");
-	}
-}
-
 template <bool NO_MATCH_SEL>
 idx_t ScanStructure::ResolvePredicates(DataChunk &keys, SelectionVector *match_sel, SelectionVector *no_match_sel) {
 	SelectionVector *current_sel = &this->sel_vector;
@@ -686,73 +603,6 @@ void ScanStructure::AdvancePointers(const SelectionVector &sel, idx_t sel_count)
 
 void ScanStructure::AdvancePointers() {
 	AdvancePointers(this->sel_vector, this->count);
-}
-
-template <class T>
-static void TemplatedGatherResult(Vector &result, uintptr_t *pointers, const SelectionVector &result_vector,
-                                  const SelectionVector &sel_vector, idx_t count, idx_t offset) {
-	auto rdata = FlatVector::GetData<T>(result);
-	auto &mask = FlatVector::Validity(result);
-	for (idx_t i = 0; i < count; i++) {
-		auto ridx = result_vector.get_index(i);
-		auto pidx = sel_vector.get_index(i);
-		T hdata = Load<T>((data_ptr_t)(pointers[pidx] + offset));
-		if (IsNullValue<T>(hdata)) {
-			mask.SetInvalid(ridx);
-		} else {
-			rdata[ridx] = hdata;
-		}
-	}
-}
-
-static void GatherResultVector(Vector &result, const SelectionVector &result_vector, uintptr_t *ptrs,
-                               const SelectionVector &sel_vector, idx_t count, idx_t &offset) {
-	result.SetVectorType(VectorType::FLAT_VECTOR);
-	switch (result.GetType().InternalType()) {
-	case PhysicalType::BOOL:
-	case PhysicalType::INT8:
-		TemplatedGatherResult<int8_t>(result, ptrs, result_vector, sel_vector, count, offset);
-		break;
-	case PhysicalType::INT16:
-		TemplatedGatherResult<int16_t>(result, ptrs, result_vector, sel_vector, count, offset);
-		break;
-	case PhysicalType::INT32:
-		TemplatedGatherResult<int32_t>(result, ptrs, result_vector, sel_vector, count, offset);
-		break;
-	case PhysicalType::INT64:
-		TemplatedGatherResult<int64_t>(result, ptrs, result_vector, sel_vector, count, offset);
-		break;
-	case PhysicalType::UINT8:
-		TemplatedGatherResult<uint8_t>(result, ptrs, result_vector, sel_vector, count, offset);
-		break;
-	case PhysicalType::UINT16:
-		TemplatedGatherResult<uint16_t>(result, ptrs, result_vector, sel_vector, count, offset);
-		break;
-	case PhysicalType::UINT32:
-		TemplatedGatherResult<uint32_t>(result, ptrs, result_vector, sel_vector, count, offset);
-		break;
-	case PhysicalType::UINT64:
-		TemplatedGatherResult<uint64_t>(result, ptrs, result_vector, sel_vector, count, offset);
-		break;
-	case PhysicalType::INT128:
-		TemplatedGatherResult<hugeint_t>(result, ptrs, result_vector, sel_vector, count, offset);
-		break;
-	case PhysicalType::FLOAT:
-		TemplatedGatherResult<float>(result, ptrs, result_vector, sel_vector, count, offset);
-		break;
-	case PhysicalType::DOUBLE:
-		TemplatedGatherResult<double>(result, ptrs, result_vector, sel_vector, count, offset);
-		break;
-	case PhysicalType::INTERVAL:
-		TemplatedGatherResult<interval_t>(result, ptrs, result_vector, sel_vector, count, offset);
-		break;
-	case PhysicalType::VARCHAR:
-		TemplatedGatherResult<string_t>(result, ptrs, result_vector, sel_vector, count, offset);
-		break;
-	default:
-		throw NotImplementedException("Unimplemented type for ScanStructure::GatherResult");
-	}
-	offset += GetTypeIdSize(result.GetType().InternalType());
 }
 
 void ScanStructure::GatherResult(Vector &result, const SelectionVector &result_vector,
@@ -1095,6 +945,155 @@ void JoinHashTable::ScanFullOuter(DataChunk &result, JoinHTScanState &state) {
 			GatherResultVector(vector, FlatVector::INCREMENTAL_SELECTION_VECTOR, (uintptr_t *)key_locations,
 			                   FlatVector::INCREMENTAL_SELECTION_VECTOR, found_entries, offset);
 		}
+	}
+}
+
+void JoinHashTable::GatherResultVector(Vector &result, const SelectionVector &result_vector, uintptr_t *ptrs,
+                                       const SelectionVector &sel_vector, idx_t count, idx_t &offset) {
+	result.SetVectorType(VectorType::FLAT_VECTOR);
+	switch (result.GetType().InternalType()) {
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
+		TemplatedGatherResult<int8_t>(result, ptrs, result_vector, sel_vector, count, offset);
+		break;
+	case PhysicalType::INT16:
+		TemplatedGatherResult<int16_t>(result, ptrs, result_vector, sel_vector, count, offset);
+		break;
+	case PhysicalType::INT32:
+		TemplatedGatherResult<int32_t>(result, ptrs, result_vector, sel_vector, count, offset);
+		break;
+	case PhysicalType::INT64:
+		TemplatedGatherResult<int64_t>(result, ptrs, result_vector, sel_vector, count, offset);
+		break;
+	case PhysicalType::UINT8:
+		TemplatedGatherResult<uint8_t>(result, ptrs, result_vector, sel_vector, count, offset);
+		break;
+	case PhysicalType::UINT16:
+		TemplatedGatherResult<uint16_t>(result, ptrs, result_vector, sel_vector, count, offset);
+		break;
+	case PhysicalType::UINT32:
+		TemplatedGatherResult<uint32_t>(result, ptrs, result_vector, sel_vector, count, offset);
+		break;
+	case PhysicalType::UINT64:
+		TemplatedGatherResult<uint64_t>(result, ptrs, result_vector, sel_vector, count, offset);
+		break;
+	case PhysicalType::INT128:
+		TemplatedGatherResult<hugeint_t>(result, ptrs, result_vector, sel_vector, count, offset);
+		break;
+	case PhysicalType::FLOAT:
+		TemplatedGatherResult<float>(result, ptrs, result_vector, sel_vector, count, offset);
+		break;
+	case PhysicalType::DOUBLE:
+		TemplatedGatherResult<double>(result, ptrs, result_vector, sel_vector, count, offset);
+		break;
+	case PhysicalType::INTERVAL:
+		TemplatedGatherResult<interval_t>(result, ptrs, result_vector, sel_vector, count, offset);
+		break;
+	case PhysicalType::VARCHAR:
+		TemplatedGatherResult<string_t>(result, ptrs, result_vector, sel_vector, count, offset);
+		break;
+	default:
+		throw NotImplementedException("Unimplemented type for ScanStructure::GatherResult");
+	}
+	offset += GetTypeIdSize(result.GetType().InternalType());
+}
+template <class T>
+void JoinHashTable::TemplatedGatherResult(Vector &result, uintptr_t *pointers, const SelectionVector &result_vector,
+                                          const SelectionVector &sel_vector, idx_t count, idx_t offset) {
+	auto rdata = FlatVector::GetData<T>(result);
+	auto &mask = FlatVector::Validity(result);
+	for (idx_t i = 0; i < count; i++) {
+		auto ridx = result_vector.get_index(i);
+		auto pidx = sel_vector.get_index(i);
+		T hdata = Load<T>((data_ptr_t)(pointers[pidx] + offset));
+		if (IsNullValue<T>(hdata)) {
+			mask.SetInvalid(ridx);
+		} else {
+			rdata[ridx] = hdata;
+		}
+	}
+}
+
+template <bool NO_MATCH_SEL, class T, class OP>
+idx_t JoinHashTable::TemplatedGather(VectorData &vdata, Vector &pointers, const SelectionVector &current_sel,
+                                     idx_t count, idx_t offset, SelectionVector *match_sel,
+                                     SelectionVector *no_match_sel, idx_t &no_match_count) {
+	idx_t result_count = 0;
+	auto data = (T *)vdata.data;
+	auto ptrs = FlatVector::GetData<uintptr_t>(pointers);
+	for (idx_t i = 0; i < count; i++) {
+		auto idx = current_sel.get_index(i);
+		auto kidx = vdata.sel->get_index(idx);
+		auto gdata = (T *)(ptrs[idx] + offset);
+		T val = Load<T>((data_ptr_t)gdata);
+		if (!vdata.validity.RowIsValid(kidx)) {
+			if (IsNullValue<T>(val)) {
+				match_sel->set_index(result_count++, idx);
+			} else {
+				if (NO_MATCH_SEL) {
+					no_match_sel->set_index(no_match_count++, idx);
+				}
+			}
+		} else {
+			if (OP::template Operation<T>(data[kidx], val)) {
+				match_sel->set_index(result_count++, idx);
+			} else {
+				if (NO_MATCH_SEL) {
+					no_match_sel->set_index(no_match_count++, idx);
+				}
+			}
+		}
+	}
+	return result_count;
+}
+
+template <bool NO_MATCH_SEL, class OP>
+idx_t JoinHashTable::GatherSwitch(VectorData &data, PhysicalType type, Vector &pointers,
+                                  const SelectionVector &current_sel, idx_t count, idx_t offset,
+                                  SelectionVector *match_sel, SelectionVector *no_match_sel, idx_t &no_match_count) {
+	switch (type) {
+	case PhysicalType::UINT8:
+		return TemplatedGather<NO_MATCH_SEL, uint8_t, OP>(data, pointers, current_sel, count, offset, match_sel,
+		                                                  no_match_sel, no_match_count);
+	case PhysicalType::UINT16:
+		return TemplatedGather<NO_MATCH_SEL, uint16_t, OP>(data, pointers, current_sel, count, offset, match_sel,
+		                                                   no_match_sel, no_match_count);
+	case PhysicalType::UINT32:
+		return TemplatedGather<NO_MATCH_SEL, uint32_t, OP>(data, pointers, current_sel, count, offset, match_sel,
+		                                                   no_match_sel, no_match_count);
+	case PhysicalType::UINT64:
+		return TemplatedGather<NO_MATCH_SEL, uint64_t, OP>(data, pointers, current_sel, count, offset, match_sel,
+		                                                   no_match_sel, no_match_count);
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
+		return TemplatedGather<NO_MATCH_SEL, int8_t, OP>(data, pointers, current_sel, count, offset, match_sel,
+		                                                 no_match_sel, no_match_count);
+	case PhysicalType::INT16:
+		return TemplatedGather<NO_MATCH_SEL, int16_t, OP>(data, pointers, current_sel, count, offset, match_sel,
+		                                                  no_match_sel, no_match_count);
+	case PhysicalType::INT32:
+		return TemplatedGather<NO_MATCH_SEL, int32_t, OP>(data, pointers, current_sel, count, offset, match_sel,
+		                                                  no_match_sel, no_match_count);
+	case PhysicalType::INT64:
+		return TemplatedGather<NO_MATCH_SEL, int64_t, OP>(data, pointers, current_sel, count, offset, match_sel,
+		                                                  no_match_sel, no_match_count);
+	case PhysicalType::INT128:
+		return TemplatedGather<NO_MATCH_SEL, hugeint_t, OP>(data, pointers, current_sel, count, offset, match_sel,
+		                                                    no_match_sel, no_match_count);
+	case PhysicalType::FLOAT:
+		return TemplatedGather<NO_MATCH_SEL, float, OP>(data, pointers, current_sel, count, offset, match_sel,
+		                                                no_match_sel, no_match_count);
+	case PhysicalType::DOUBLE:
+		return TemplatedGather<NO_MATCH_SEL, double, OP>(data, pointers, current_sel, count, offset, match_sel,
+		                                                 no_match_sel, no_match_count);
+	case PhysicalType::INTERVAL:
+		return TemplatedGather<NO_MATCH_SEL, interval_t, OP>(data, pointers, current_sel, count, offset, match_sel,
+		                                                     no_match_sel, no_match_count);
+	case PhysicalType::VARCHAR:
+		return TemplatedGather<NO_MATCH_SEL, string_t, OP>(data, pointers, current_sel, count, offset, match_sel,
+		                                                   no_match_sel, no_match_count);
+	default:
+		throw NotImplementedException("Unimplemented type for GatherSwitch");
 	}
 }
 

@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
@@ -135,6 +136,20 @@ public:
 	unique_ptr<ScanStructure> Probe(DataChunk &keys);
 	//! Scan the HT to construct the final full outer join result after
 	void ScanFullOuter(DataChunk &result, JoinHTScanState &state);
+	//
+	static void GatherResultVector(Vector &result, const SelectionVector &result_vector, uintptr_t *ptrs,
+	                               const SelectionVector &sel_vector, idx_t count, idx_t &offset);
+	template <class T>
+	static void TemplatedGatherResult(Vector &result, uintptr_t *pointers, const SelectionVector &result_vector,
+	                                  const SelectionVector &sel_vector, idx_t count, idx_t offset);
+	template <bool NO_MATCH_SEL, class OP>
+	static idx_t GatherSwitch(VectorData &data, PhysicalType type, Vector &pointers, const SelectionVector &current_sel,
+	                          idx_t count, idx_t offset, SelectionVector *match_sel, SelectionVector *no_match_sel,
+	                          idx_t &no_match_count);
+	template <bool NO_MATCH_SEL, class T, class OP>
+	static idx_t TemplatedGather(VectorData &vdata, Vector &pointers, const SelectionVector &current_sel, idx_t count,
+	                             idx_t offset, SelectionVector *match_sel, SelectionVector *no_match_sel,
+	                             idx_t &no_match_count);
 
 	idx_t size() {
 		return count;
