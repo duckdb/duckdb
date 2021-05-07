@@ -40,16 +40,16 @@ DataTable::DataTable(DatabaseInstance &db, const string &schema, const string &t
 			throw IOException("Table statistics column count is not aligned with table column count. Corrupt file?");
 		}
 	}
-	if (total_rows == 0) {
+	if (column_stats.empty()) {
 		D_ASSERT(total_rows == 0);
-		D_ASSERT(column_stats.empty());
-		AppendRowGroup(0);
 
+		AppendRowGroup(0);
 		for(auto &type : types) {
 			column_stats.push_back(BaseStatistics::CreateEmpty(type));
 		}
 	} else {
 		D_ASSERT(column_stats.size() == types.size());
+		D_ASSERT(row_groups->GetRootSegment() != nullptr);
 	}
 }
 
@@ -533,7 +533,6 @@ void DataTable::Append(Transaction &transaction, DataChunk &chunk, TableAppendSt
 }
 
 void DataTable::ScanTableSegment(idx_t row_start, idx_t count, const std::function<void(DataChunk &chunk)> &function) {
-	D_ASSERT(row_start % STANDARD_VECTOR_SIZE == 0);
 	idx_t end = row_start + count;
 
 	vector<column_t> column_ids;
