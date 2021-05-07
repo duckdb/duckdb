@@ -1354,12 +1354,6 @@ YY_DECL
 		if ( ! yyg->yy_start )
 			yyg->yy_start = 1;	/* first start state */
 
-		if ( ! yyin )
-			yyin = stdin;
-
-		if ( ! yyout )
-			yyout = stdout;
-
 		if ( ! YY_CURRENT_BUFFER ) {
 			core_yyensure_buffer_stack (yyscanner);
 			YY_CURRENT_BUFFER_LVALUE =
@@ -3460,14 +3454,8 @@ static int yy_init_globals (yyscan_t yyscanner)
     yyg->yy_start_stack_depth = 0;
     yyg->yy_start_stack =  NULL;
 
-/* Defined in main.c */
-#ifdef YY_STDINIT
-    yyin = stdin;
-    yyout = stdout;
-#else
     yyin = (FILE *) 0;
     yyout = (FILE *) 0;
-#endif
 
     /* For future reference: Set errno on error, since we are called by
      * core_yylex_init()
