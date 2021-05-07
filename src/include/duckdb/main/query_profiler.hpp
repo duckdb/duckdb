@@ -40,10 +40,10 @@ struct ExpressionInfo {
 	string function_name;
 	//! The function time
 	uint64_t function_time;
-    //! Count the number of ALL tuples
-    uint64_t tuples_count = 0;
-    //! Count the number of tuples sampled
-    uint64_t sample_tuples_count = 0;
+	//! Count the number of ALL tuples
+	uint64_t tuples_count = 0;
+	//! Count the number of tuples sampled
+	uint64_t sample_tuples_count = 0;
 };
 
 //! The ExpressionRootInfo keeps information related to the root of an expression tree
