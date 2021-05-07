@@ -174,7 +174,8 @@ DuckDBPyConnection *DuckDBPyConnection::RegisterArrow(const string &name, const 
 		throw std::runtime_error("Only arrow tables supported");
 	}
 	auto stream_factory = make_unique<PythonTableArrowArrayStreamFactory>(table);
-	ArrowArrayStream *(*stream_factory_produce)(uintptr_t factory) = PythonTableArrowArrayStreamFactory::Produce;
+	unique_ptr<ArrowArrayStream> (*stream_factory_produce)(uintptr_t factory) =
+	    PythonTableArrowArrayStreamFactory::Produce;
 	connection
 	    ->TableFunction("arrow_scan", {Value::POINTER((uintptr_t)stream_factory.get()),
 	                                   Value::POINTER((uintptr_t)stream_factory_produce)})
@@ -282,7 +283,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrowTable(const py::object
 
 	auto stream_factory = make_unique<PythonTableArrowArrayStreamFactory>(table);
 	string name = "arrow_table_" + PtrToString((void *)&table);
-	ArrowArrayStream *(*stream_factory_produce)(uintptr_t factory) = PythonTableArrowArrayStreamFactory::Produce;
+	unique_ptr<ArrowArrayStream> (*stream_factory_produce)(uintptr_t factory) =
+	    PythonTableArrowArrayStreamFactory::Produce;
 	auto rel = make_unique<DuckDBPyRelation>(
 	    connection
 	        ->TableFunction("arrow_scan", {Value::POINTER((uintptr_t)stream_factory.get()),

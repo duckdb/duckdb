@@ -29,9 +29,21 @@ struct ArrowSchema {
 	struct ArrowSchema *dictionary;
 
 	// Release callback
-	void (*release)(struct ArrowSchema *);
+	void (*release)(struct ArrowSchema *) = nullptr;
 	// Opaque producer-specific data
 	void *private_data;
+	~ArrowSchema() {
+		if (release) {
+			for (int64_t child_idx = 0; child_idx < n_children; child_idx++) {
+				auto &child = *children[child_idx];
+				if (child.release) {
+					child.release(&child);
+				}
+			}
+			release(this);
+			release = nullptr;
+		}
+	}
 };
 
 struct ArrowArray {
@@ -46,9 +58,21 @@ struct ArrowArray {
 	struct ArrowArray *dictionary;
 
 	// Release callback
-	void (*release)(struct ArrowArray *);
+	void (*release)(struct ArrowArray *) = nullptr;
 	// Opaque producer-specific data
 	void *private_data;
+
+	~ArrowArray() {
+		if (release) {
+			for (int64_t child_idx = 0; child_idx < n_children; child_idx++) {
+				auto &child = *children[child_idx];
+				if (child.release) {
+					child.release(&child);
+				}
+			}
+			release(this);
+		}
+	}
 };
 
 // EXPERIMENTAL
@@ -72,9 +96,16 @@ struct ArrowArrayStream {
 
 	// Release callback: release the stream's own resources.
 	// Note that arrays returned by `get_next` must be individually released.
-	void (*release)(struct ArrowArrayStream *);
+	void (*release)(struct ArrowArrayStream *) = nullptr;
 	// Opaque producer-specific data
 	void *private_data;
+
+	~ArrowArrayStream() {
+		if (release) {
+			release(this);
+			release = nullptr;
+		}
+	}
 };
 
 #ifdef __cplusplus

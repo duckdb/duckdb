@@ -19,15 +19,15 @@ public:
 	~PythonTableArrowArrayStreamFactory() {
 		arrow_table = py::none();
 	}
-	static ArrowArrayStream *Produce(uintptr_t factory);
+	static unique_ptr<ArrowArrayStream> Produce(uintptr_t factory);
 	py::object arrow_table;
-	ArrowArrayStream *stream = nullptr;
 };
+
 class PythonTableArrowArrayStream {
 public:
 	explicit PythonTableArrowArrayStream(const py::object &arrow_table, PythonTableArrowArrayStreamFactory *factory);
 	static void InitializeFunctionPointers(ArrowArrayStream *stream);
-	ArrowArrayStream stream;
+	unique_ptr<ArrowArrayStream> stream;
 	PythonTableArrowArrayStreamFactory *factory;
 
 private:
