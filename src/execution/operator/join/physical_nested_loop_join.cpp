@@ -142,7 +142,7 @@ public:
 };
 
 void PhysicalNestedLoopJoin::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
-                                  DataChunk &input) {
+                                  DataChunk &input) const {
 	auto &gstate = (NestedLoopJoinGlobalState &)state;
 	auto &nlj_state = (NestedLoopJoinLocalState &)lstate;
 

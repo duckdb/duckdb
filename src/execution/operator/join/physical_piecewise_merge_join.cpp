@@ -72,7 +72,7 @@ unique_ptr<LocalSinkState> PhysicalPiecewiseMergeJoin::GetLocalSinkState(Executi
 }
 
 void PhysicalPiecewiseMergeJoin::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
-                                      DataChunk &input) {
+                                      DataChunk &input) const {
 	auto &gstate = (MergeJoinGlobalState &)state;
 	auto &mj_state = (MergeJoinLocalState &)lstate;
 

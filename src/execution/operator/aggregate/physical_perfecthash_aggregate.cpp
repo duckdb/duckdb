@@ -115,7 +115,7 @@ unique_ptr<LocalSinkState> PhysicalPerfectHashAggregate::GetLocalSinkState(Execu
 }
 
 void PhysicalPerfectHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_p,
-                                        DataChunk &input) {
+                                        DataChunk &input) const {
 	auto &lstate = (PerfectHashAggregateLocalState &)lstate_p;
 	DataChunk &group_chunk = lstate.group_chunk;
 	DataChunk &aggregate_input_chunk = lstate.aggregate_input_chunk;

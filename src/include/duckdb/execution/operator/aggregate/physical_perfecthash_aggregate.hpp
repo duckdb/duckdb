@@ -29,7 +29,8 @@ public:
 	vector<unique_ptr<Expression>> aggregates;
 
 public:
-	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) override;
+	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
+	          DataChunk &input) const override;
 	void Combine(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate) override;
 
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) override;
