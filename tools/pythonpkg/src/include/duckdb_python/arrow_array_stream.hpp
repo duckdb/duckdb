@@ -32,13 +32,12 @@ public:
 
 private:
 	static int GetSchema(ArrowArrayStream *stream, struct ArrowSchema *out);
-	static int GetNext(ArrowArrayStream *stream, struct ArrowArray *out);
+	static int GetNext(ArrowArrayStream *stream, struct ArrowArray *out, int chunk_idx);
 	static void Release(ArrowArrayStream *stream);
 	static const char *GetLastError(ArrowArrayStream *stream);
 
 	std::string last_error;
 	py::object arrow_table;
 	py::list batches;
-	idx_t batch_idx = 0;
 };
 } // namespace duckdb
