@@ -1353,7 +1353,6 @@ YY_DECL
 
 		if ( ! yyg->yy_start )
 			yyg->yy_start = 1;	/* first start state */
-
 		if ( ! YY_CURRENT_BUFFER ) {
 			core_yyensure_buffer_stack (yyscanner);
 			YY_CURRENT_BUFFER_LVALUE =
@@ -3454,6 +3453,7 @@ static int yy_init_globals (yyscan_t yyscanner)
     yyg->yy_start_stack_depth = 0;
     yyg->yy_start_stack =  NULL;
 
+/* Defined in main.c */
     yyin = (FILE *) 0;
     yyout = (FILE *) 0;
 
