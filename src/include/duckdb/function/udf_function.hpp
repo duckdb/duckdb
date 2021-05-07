@@ -213,8 +213,7 @@ private:
 	template <typename TR, typename... Args>
 	static scalar_function_t CreateUnaryFunction(const string &name, vector<LogicalType> args, LogicalType ret_type,
 	                                             TR (*udf_func)(Args...)) {
-		D_ASSERT(sizeof...(Args) == 1);
-		return CreateUnaryFunction<TR, Args...>(name, args, ret_type, udf_func);
+		throw std::runtime_error("Incorrect number of arguments for unary function");
 	}
 
 	template <typename TR, typename TA>
@@ -236,8 +235,7 @@ private:
 	template <typename TR, typename... Args>
 	static scalar_function_t CreateBinaryFunction(const string &name, vector<LogicalType> args, LogicalType ret_type,
 	                                              TR (*udf_func)(Args...)) {
-		D_ASSERT(sizeof...(Args) == 2);
-		return CreateBinaryFunction<TR, Args...>(name, args, ret_type, udf_func);
+		throw std::runtime_error("Incorrect number of arguments for binary function");
 	}
 
 	template <typename TR, typename TA, typename TB>
@@ -262,8 +260,7 @@ private:
 	template <typename TR, typename... Args>
 	static scalar_function_t CreateTernaryFunction(const string &name, vector<LogicalType> args, LogicalType ret_type,
 	                                               TR (*udf_func)(Args...)) {
-		D_ASSERT(sizeof...(Args) == 3);
-		return CreateTernaryFunction<TR, Args...>(name, args, ret_type, udf_func);
+		throw std::runtime_error("Incorrect number of arguments for ternary function");
 	}
 
 	template <typename TR, typename TA, typename TB, typename TC>
