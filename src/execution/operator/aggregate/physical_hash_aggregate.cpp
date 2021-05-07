@@ -66,6 +66,26 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 
 	// 10000 seems like a good compromise here
 	radix_limit = 10000;
+
+	// filter_indexes must be pre-built, not lazily instantiated in parallel...
+	idx_t aggregate_input_idx = 0;
+	for (auto &aggregate : aggregates) {
+		auto &aggr = (BoundAggregateExpression &)*aggregate;
+		aggregate_input_idx += aggr.children.size();
+	}
+	for (auto &aggregate : aggregates) {
+		auto &aggr = (BoundAggregateExpression &)*aggregate;
+		if (aggr.filter) {
+			auto &bound_ref_expr = (BoundReferenceExpression &)*aggr.filter;
+			auto it = filter_indexes.find(aggr.filter.get());
+			if (it == filter_indexes.end()) {
+				filter_indexes[aggr.filter.get()] = bound_ref_expr.index;
+				bound_ref_expr.index = aggregate_input_idx++;
+			} else {
+				++aggregate_input_idx;
+			}
+		}
+	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -110,6 +130,7 @@ public:
 
 	DataChunk group_chunk;
 	DataChunk aggregate_input_chunk;
+
 	//! The aggregate HT
 	unique_ptr<PartitionableHashTable> ht;
 
@@ -151,15 +172,9 @@ void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState 
 	for (auto &aggregate : aggregates) {
 		auto &aggr = (BoundAggregateExpression &)*aggregate;
 		if (aggr.filter) {
-			auto &bound_ref_expr = (BoundReferenceExpression &)*aggr.filter;
-			auto it = ht.find(aggr.filter.get());
-			if (it == ht.end()) {
-				aggregate_input_chunk.data[aggregate_input_idx].Reference(input.data[bound_ref_expr.index]);
-				ht[aggr.filter.get()] = bound_ref_expr.index;
-				bound_ref_expr.index = aggregate_input_idx++;
-			} else {
-				aggregate_input_chunk.data[aggregate_input_idx++].Reference(input.data[it->second]);
-			}
+			auto it = filter_indexes.find(aggr.filter.get());
+			D_ASSERT(it != filter_indexes.end());
+			aggregate_input_chunk.data[aggregate_input_idx++].Reference(input.data[it->second]);
 		}
 	}
 
