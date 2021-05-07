@@ -325,16 +325,16 @@ void PhysicalHashJoin::CheckRequirementsForPerfectHashJoin(JoinHashTable *ht_ptr
 	}
 	// if built, just return to continue the probing
 
-	// Store build side as a set of columns
-	BuildPerfectHashStructure(ht_ptr);
-	hasBuiltPerfectHashTable = true;
-
 	// verify uniquiness (build size < min_max_range => duplicate values )
 	auto build_size = Value::INTEGER(ht_ptr->size());
 	auto min_max_range = perfect_join_state.maximum = perfect_join_state.minimum;
 	if (build_size != min_max_range) {
 		return;
 	}
+	// Store build side as a set of columns
+	BuildPerfectHashStructure(ht_ptr);
+	hasBuiltPerfectHashTable = true;
+
 	// check for nulls
 	if (ht_ptr->has_null) {
 		// set selection vector
@@ -343,8 +343,11 @@ void PhysicalHashJoin::CheckRequirementsForPerfectHashJoin(JoinHashTable *ht_ptr
 }
 
 void PhysicalHashJoin::BuildPerfectHashStructure(JoinHashTable *hash_table_ptr) {
-	// allocate memory for vectors and organize hashtable into vectors.
-	std::vector<DataChunk> build_side;
-	DataChunk chunk;
+	// allocate memory for each column in the hashtable
+	std::vector<Vector> build_columns;
+	auto build_size = hash_table_ptr->size();
+	for (auto type : hash_table_ptr->build_types) {
+		build_columns.emplace_back(type, build_size);
+	}
 }
 } // namespace duckdb
