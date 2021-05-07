@@ -71,9 +71,11 @@ struct ExpressionRootInfo {
 
 struct ExpressionExecutorInfo {
 	explicit ExpressionExecutorInfo() {};
-	explicit ExpressionExecutorInfo(ExpressionExecutor &executor, const string &name);
+	explicit ExpressionExecutorInfo(ExpressionExecutor &executor, const string &name, int id);
 	//! A vector which contain the pointer to all ExpressionRootInfo
 	vector<unique_ptr<ExpressionRootInfo>> roots;
+	//! Id, it will be used as index for executors_info vector
+	int id;
 };
 
 struct OperatorInformation {
@@ -81,9 +83,10 @@ struct OperatorInformation {
 	idx_t elements = 0;
 	string name;
 	explicit OperatorInformation(double time_ = 0, idx_t elements_ = 0) : time(time_), elements(elements_) {
+		executors_info.resize(5);
 	}
-	//! A mapping of physical operators to recorded timings
-	unordered_map<string, shared_ptr<ExpressionExecutorInfo>> executors_info;
+	//! A vector of Expression Executor Info
+	vector<unique_ptr<ExpressionExecutorInfo>> executors_info;
 };
 
 //! The OperatorProfiler measures timings of individual operators
@@ -95,7 +98,8 @@ public:
 
 	DUCKDB_API void StartOperator(PhysicalOperator *phys_op);
 	DUCKDB_API void EndOperator(DataChunk *chunk);
-	DUCKDB_API void Flush(PhysicalOperator *phys_op, ExpressionExecutor *expression_executor, const string &name);
+	DUCKDB_API void Flush(PhysicalOperator *phys_op, ExpressionExecutor *expression_executor, const string &name,
+	                      int id);
 
 	~OperatorProfiler() {
 	}
@@ -109,7 +113,7 @@ private:
 	Profiler<system_clock> op;
 	//! The stack of Physical Operators that are currently active
 	std::stack<PhysicalOperator *> execution_stack;
-	//! A mapping of physical operators to recorded timings
+	//! A mapping of physical operators to operator information
 	unordered_map<PhysicalOperator *, OperatorInformation> timings;
 };
 

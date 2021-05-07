@@ -131,22 +131,24 @@ static void PragmaDetailedProfilingOutputFunction(ClientContext &context, const 
 				// For each Expression Executor
 				for (auto &ee : op.second->info.executors_info) {
 					// For each Expression tree
-					for (auto &et : ee.second->roots) {
-						D_ASSERT(et->sample_tuples_count != 0);
-						SetValue(
-						    chunk, chunk.size(), operator_counter, "ExpressionRoot", expression_counter++,
-						    // Sometimes, cycle counter is not accurate, too big or too small. return 0 for those cases
-						    et->name, int(et->time) / double(et->sample_tuples_count), et->sample_tuples_count,
-						    et->tuples_count, et->extra_info);
-						// Increment cardinality
-						chunk.SetCardinality(chunk.size() + 1);
-						// Check whether data chunk is full or not
-						if (chunk.size() == STANDARD_VECTOR_SIZE) {
-							collection->Append(chunk);
-							chunk.Reset();
+					if (ee) {
+						for (auto &et : ee->roots) {
+							D_ASSERT(et->sample_tuples_count != 0);
+							SetValue(chunk, chunk.size(), operator_counter, "ExpressionRoot", expression_counter++,
+							         // Sometimes, cycle counter is not accurate, too big or too small. return 0 for
+							         // those cases
+							         et->name, int(et->time) / double(et->sample_tuples_count), et->sample_tuples_count,
+							         et->tuples_count, et->extra_info);
+							// Increment cardinality
+							chunk.SetCardinality(chunk.size() + 1);
+							// Check whether data chunk is full or not
+							if (chunk.size() == STANDARD_VECTOR_SIZE) {
+								collection->Append(chunk);
+								chunk.Reset();
+							}
+							// Extract all functions inside the tree
+							ExtractFunctions(*collection, *et->root, chunk, operator_counter, function_counter);
 						}
-						// Extract all functions inside the tree
-						ExtractFunctions(*collection, *et->root, chunk, operator_counter, function_counter);
 					}
 				}
 				operator_counter++;

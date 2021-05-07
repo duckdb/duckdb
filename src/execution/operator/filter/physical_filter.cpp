@@ -62,7 +62,7 @@ string PhysicalFilter::ParamsToString() const {
 
 void PhysicalFilter::FinalizeOperatorState(PhysicalOperatorState &state_p, ExecutionContext &context) {
 	auto &state = reinterpret_cast<PhysicalFilterState &>(state_p);
-	context.thread.profiler.Flush(this, &state.executor, "filter");
+	context.thread.profiler.Flush(this, &state.executor, "filter", 0);
 	if (!children.empty() && state.child_state) {
 		children[0]->FinalizeOperatorState(*state.child_state, context);
 	}
