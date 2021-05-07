@@ -346,7 +346,7 @@ bool Hugeint::SubtractInPlace(hugeint_t &lhs, hugeint_t rhs) {
 		}
 	} else {
 		// RHS is negative: check for overflow
-		if (lhs.upper >= (std::numeric_limits<int64_t>::max() + rhs.upper + underflow - 1)) {
+		if (lhs.upper > (std::numeric_limits<int64_t>::max() + rhs.upper + underflow)) {
 			return false;
 		}
 	}
