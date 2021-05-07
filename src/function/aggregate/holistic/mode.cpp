@@ -191,7 +191,7 @@ struct ModeFunction {
 			}
 		}
 
-		if (not state->valid) {
+		if (!state->valid) {
 			// Rescan
 			auto highest_frequency = state->Scan();
 			*(state->mode) = highest_frequency->first;
