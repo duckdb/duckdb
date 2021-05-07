@@ -4,9 +4,9 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/function/aggregate/holistic_functions.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+
 #include "duckdb/common/unordered_map.hpp"
 
 #include <functional>
@@ -94,19 +94,6 @@ struct ModeState {
 			valid = false;
 		}
 	}
-
-	typename Counts::const_iterator Scan() const {
-		//! Initialize control variables to first variable of the frequency map
-		auto highest_frequency = frequency_map->begin();
-		for (auto i = highest_frequency; i != frequency_map->end(); ++i) {
-			// Tie break with the lowest
-			if (i->second > highest_frequency->second ||
-			    (i->second == highest_frequency->second && i->first < highest_frequency->first)) {
-				highest_frequency = i;
-			}
-		}
-		return highest_frequency;
-	}
 };
 
 template <typename KEY_TYPE>
@@ -147,7 +134,13 @@ struct ModeFunction {
 			mask.SetInvalid(idx);
 			return;
 		}
-		auto highest_frequency = state->Scan();
+		//! Initialize control variables to first variable of the frequency map
+		auto highest_frequency = state->frequency_map->begin();
+		for (auto i = highest_frequency; i != state->frequency_map->end(); ++i) {
+			if (i->second > highest_frequency->second) {
+				highest_frequency = i;
+			}
+		}
 		target[idx] = INPUT_TYPE(highest_frequency->first);
 	}
 	template <class INPUT_TYPE, class STATE, class OP>
@@ -193,10 +186,14 @@ struct ModeFunction {
 
 		if (not state->valid) {
 			// Rescan
-			auto highest_frequency = state->Scan();
-			*(state->mode) = highest_frequency->first;
-			state->count = highest_frequency->second;
-			state->valid = true;
+			state->count = 0;
+			for (const auto &c : (*state->frequency_map)) {
+				if (c.second > state->count) {
+					state->valid = true;
+					*(state->mode) = c.first;
+					state->count = c.second;
+				}
+			}
 		}
 
 		result[0] = RESULT_TYPE(*state->mode);
