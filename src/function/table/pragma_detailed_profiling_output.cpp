@@ -87,8 +87,10 @@ static void SetValue(DataChunk &output, int index, int op_id, string annotation,
 static void ExtractFunctions(ChunkCollection &collection, ExpressionInfo &info, DataChunk &chunk, int op_id,
                              int &fun_id) {
 	if (info.hasfunction) {
-		SetValue(chunk, chunk.size(), op_id, "Function", fun_id++, info.function_name, int (info.function_time) / double(info.sample_tuples_count),
-		         info.sample_tuples_count, info.tuples_count, "");
+		D_ASSERT(info.sample_tuples_count != 0);
+		SetValue(chunk, chunk.size(), op_id, "Function", fun_id++, info.function_name,
+		         int(info.function_time) / double(info.sample_tuples_count), info.sample_tuples_count,
+		         info.tuples_count, "");
 
 		chunk.SetCardinality(chunk.size() + 1);
 		if (chunk.size() == STANDARD_VECTOR_SIZE) {
@@ -130,11 +132,12 @@ static void PragmaDetailedProfilingOutputFunction(ClientContext &context, const 
 				for (auto &ee : op.second->info.executors_info) {
 					// For each Expression tree
 					for (auto &et : ee.second->roots) {
+						D_ASSERT(et->sample_tuples_count != 0);
 						SetValue(
 						    chunk, chunk.size(), operator_counter, "ExpressionRoot", expression_counter++,
 						    // Sometimes, cycle counter is not accurate, too big or too small. return 0 for those cases
-						    et->name, int (et->time) / double(et->sample_tuples_count),
-						    et->sample_tuples_count, et->tuples_count, et->extra_info);
+						    et->name, int(et->time) / double(et->sample_tuples_count), et->sample_tuples_count,
+						    et->tuples_count, et->extra_info);
 						// Increment cardinality
 						chunk.SetCardinality(chunk.size() + 1);
 						// Check whether data chunk is full or not
