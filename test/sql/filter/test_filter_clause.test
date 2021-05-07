@@ -5,6 +5,10 @@
 statement ok
 PRAGMA enable_verification
 
+# FIXME
+statement ok
+PRAGMA threads=1
+
 statement ok
 create temporary table t as select range i, mod(range,10) j,mod(range,10)*10000000 k from range(1000);
 
