@@ -60,7 +60,7 @@ jobs:
           cmake --build . --config Release
 
       - name: Test
-        run: test/Release/unittest.exe
+        run: test/unittest.exe
 
   format-check:
     name: Format Check
