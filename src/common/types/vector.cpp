@@ -24,6 +24,14 @@ Vector::Vector(const LogicalType &type, bool create_data, bool zero_data) : data
 	}
 }
 
+Vector::Vector(const LogicalType &type, idx_t tuple_count) {
+	auto data_size = GetTypeIdSize(type.InternalType()) * tuple_count;
+	buffer = make_buffer<VectorBuffer>(VectorType::FLAT_VECTOR, type, data_size);
+	if (type.id() == LogicalTypeId::INVALID) {
+		throw InvalidTypeException(type, "Cannot create a vector of type INVALID!");
+	}
+}
+
 Vector::Vector(const LogicalType &type) : Vector(type, true, false) {
 }
 

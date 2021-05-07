@@ -10,12 +10,12 @@
 
 #include "duckdb/common/bitset.hpp"
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/types/selection_vector.hpp"
-#include "duckdb/common/types/value.hpp"
 #include "duckdb/common/enums/vector_type.hpp"
+#include "duckdb/common/types/selection_vector.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/types/value.hpp"
 #include "duckdb/common/types/vector_buffer.hpp"
 #include "duckdb/common/vector_size.hpp"
-#include "duckdb/common/types/validity_mask.hpp"
 
 namespace duckdb {
 
@@ -49,6 +49,8 @@ public:
 	explicit Vector(const Value &value);
 	//! Create an empty standard vector with a type, equivalent to calling Vector(type, true, false)
 	explicit Vector(const LogicalType &type);
+	//! Create a vector of size tuple_count (non-standard)
+	explicit Vector(const LogicalType &type, idx_t tuple_count);
 	//! Create a non-owning vector that references the specified data
 	Vector(const LogicalType &type, data_ptr_t dataptr);
 	//! Create an owning vector that holds at most STANDARD_VECTOR_SIZE entries.
