@@ -32,10 +32,6 @@ struct PragmaDetailedProfilingOutput {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct PragmaExpressionsProfilingOutput {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
 struct SQLiteMaster {
 	static void RegisterFunction(BuiltinFunctions &set);
 };

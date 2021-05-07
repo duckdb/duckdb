@@ -18,6 +18,8 @@ namespace duckdb {
 //! Optimized by sampling mechanism. Once per 100 times.
 //! //Todo Can be optimized further by calling RDTSC once per sample
 class CycleCounter {
+	friend struct ExpressionInfo;
+	friend struct ExpressionRootInfo;
 public:
 	CycleCounter() : random(0) {
 	}
@@ -44,7 +46,7 @@ public:
 		tuples_count += chunk_size;
 	}
 
-public:
+private:
 	uint64_t Tick() const;
 	// current number on RDT register
 	uint64_t tmp;
