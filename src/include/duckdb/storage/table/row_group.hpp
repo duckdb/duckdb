@@ -78,6 +78,9 @@ public:
 	unique_ptr<RowGroup> AddColumn(ClientContext &context, ColumnDefinition &new_column, ExpressionExecutor &executor, Expression *default_value, Vector &intermediate);
 	unique_ptr<RowGroup> RemoveColumn(idx_t removed_column);
 
+	void CommitDrop();
+	void CommitDropColumn(idx_t index);
+
 	void InitializeEmpty(const vector<LogicalType> &types);
 
 	//! Initialize a scan over this row_group

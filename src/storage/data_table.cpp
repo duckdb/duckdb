@@ -999,8 +999,11 @@ BlockPointer DataTable::Checkpoint(TableDataWriter &writer) {
 }
 
 void DataTable::CommitDropColumn(idx_t index) {
-	throw NotImplementedException("FIXME: commit drop column");
-	// columns[index]->CommitDropColumn();
+	auto segment = (RowGroup *) row_groups->GetRootSegment();
+	while(segment) {
+		segment->CommitDropColumn(index);
+		segment = (RowGroup *) segment->next.get();
+	}
 }
 
 idx_t DataTable::GetTotalRows() {
@@ -1008,11 +1011,12 @@ idx_t DataTable::GetTotalRows() {
 }
 
 void DataTable::CommitDropTable() {
-	throw NotImplementedException("FIXME: commit drop table");
-	// // commit a drop of this table: mark all blocks as modified so they can be reclaimed later on
-	// for (size_t i = 0; i < columns.size(); i++) {
-	// 	CommitDropColumn(i);
-	// }
+	// commit a drop of this table: mark all blocks as modified so they can be reclaimed later on
+	auto segment = (RowGroup *) row_groups->GetRootSegment();
+	while(segment) {
+		segment->CommitDrop();
+		segment = (RowGroup *) segment->next.get();
+	}
 }
 
 } // namespace duckdb

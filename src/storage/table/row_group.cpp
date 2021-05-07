@@ -176,6 +176,17 @@ unique_ptr<RowGroup> RowGroup::RemoveColumn(idx_t removed_column) {
 	return row_group;
 }
 
+void RowGroup::CommitDrop() {
+	for(idx_t column_idx = 0; column_idx < columns.size(); column_idx++) {
+		CommitDropColumn(column_idx);
+	}
+}
+
+void RowGroup::CommitDropColumn(idx_t column_idx) {
+	D_ASSERT(column_idx < columns.size());
+	columns[column_idx]->CommitDropColumn();
+}
+
 template<bool SCAN_DELETES, bool SCAN_COMMITTED, bool ALLOW_UPDATES>
 void RowGroup::TemplatedScan(Transaction *transaction, RowGroupScanState &state, DataChunk &result) {
 	auto &table_filters = state.parent.table_filters;
