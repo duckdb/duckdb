@@ -255,7 +255,7 @@ void PhysicalHashJoin::ProbeHashTable(ExecutionContext &context, DataChunk &chun
 
 bool PhysicalHashJoin::ProbePerfectHashTable(ExecutionContext &context, DataChunk &result,
                                              PhysicalHashJoinState *physical_state) {
-
+	return false;
 	// We only probe if the optimized hash table has been built
 	if (!hasBuiltPerfectHashTable) {
 		return false;
@@ -319,6 +319,7 @@ bool PhysicalHashJoin::ProbePerfectHashTable(ExecutionContext &context, DataChun
 }
 
 void PhysicalHashJoin::CheckRequirementsForPerfectHashJoin(JoinHashTable *ht_ptr) {
+	return;
 	// first check the build size
 	if (!perfect_join_state.is_build_small) {
 		return;
@@ -344,10 +345,18 @@ void PhysicalHashJoin::CheckRequirementsForPerfectHashJoin(JoinHashTable *ht_ptr
 
 void PhysicalHashJoin::BuildPerfectHashStructure(JoinHashTable *hash_table_ptr) {
 	// allocate memory for each column in the hashtable
-	std::vector<Vector> build_columns;
 	auto build_size = hash_table_ptr->size();
 	for (auto type : hash_table_ptr->build_types) {
 		build_columns.emplace_back(type, build_size);
+	}
+	// gather the values from the RHS
+	auto key_locations = make_unique<data_ptr_t>(new data_t[build_size]);
+	idx_t offset = hash_table_ptr->condition_size;
+	for (idx_t i = 0; i != build_columns.size(); ++i) {
+		D_ASSERT(build_columns[i].GetType() == build_types[i]);
+		JoinHashTable::GatherResultVector(build_columns[i], FlatVector::INCREMENTAL_SELECTION_VECTOR,
+		                                  (uintptr_t *)key_locations.get(), FlatVector::INCREMENTAL_SELECTION_VECTOR,
+		                                  build_size, offset);
 	}
 }
 } // namespace duckdb

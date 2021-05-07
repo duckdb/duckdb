@@ -57,7 +57,7 @@ public:
 	//! Struct for perfect hash optmization
 	PerfectHashJoinState perfect_join_state;
 	bool hasBuiltPerfectHashTable {false};
-	std::vector<DataChunk> build_data;
+	std::vector<Vector> build_columns;
 
 public:
 	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;

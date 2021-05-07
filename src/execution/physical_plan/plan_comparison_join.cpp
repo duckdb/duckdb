@@ -32,7 +32,7 @@ static bool CanPlanIndexJoin(Transaction &transaction, TableScanBindData *bind_d
 }
 
 void CheckForPerfectJoin(LogicalComparisonJoin &op, PerfectHashJoinState &join_state) {
-	if (op.join_stats.empty() || !op.types[0].IsNumeric()) {
+	if (op.join_stats.empty() || !op.join_stats[0]->type.IsNumeric()) {
 		join_state.is_build_small = false;
 		join_state.is_probe_small = false;
 		return;
