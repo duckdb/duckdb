@@ -10,11 +10,15 @@
 
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/parallel/parallel_state.hpp"
+#include <atomic>
 
 namespace duckdb {
 
 struct ArrowScanFunctionData : public TableFunctionData {
+	ArrowScanFunctionData() : lines_read(0) {
+	}
 	unique_ptr<ArrowArrayStream> stream;
+	std::atomic<idx_t> lines_read;
 	ArrowSchema schema_root;
 };
 
@@ -75,6 +79,12 @@ private:
 	//! Get next chunk for the running thread
 	static bool ArrowScanParallelStateNext(ClientContext &context, const FunctionData *bind_data_p,
 	                                       FunctionOperatorData *operator_state, ParallelState *parallel_state_p);
+
+	//! -----Utility Functions:-----
+	//! Gets Arrow Table's Cardinality
+	static unique_ptr<NodeStatistics> ArrowScanCardinality(ClientContext &context, const FunctionData *bind_data);
+	//! Gets the progress on the table scan, used for Progress Bars
+	static int ArrowProgress(ClientContext &context, const FunctionData *bind_data_p);
 };
 
 } // namespace duckdb

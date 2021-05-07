@@ -12,6 +12,10 @@ PythonTableArrowArrayStream::PythonTableArrowArrayStream(const py::object &arrow
 	py::gil_scoped_acquire acquire;
 	batches = arrow_table.attr("to_batches")();
 	stream->number_of_batches = py::len(batches);
+	if (stream->number_of_batches >= 1) {
+		stream->first_batch_size = py::len(batches[0]);
+		stream->last_batch_size = py::len(batches[stream->number_of_batches - 1]);
+	}
 	stream->private_data = this;
 }
 

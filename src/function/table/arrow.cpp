@@ -233,8 +233,9 @@ void ArrowTableFunction::ArrowScanFunction(ClientContext &context, const Functio
 	if ((idx_t)state.chunk->n_children != output.ColumnCount()) {
 		throw InvalidInputException("arrow_scan: array column count mismatch");
 	}
-
-	output.SetCardinality(MinValue<int64_t>(STANDARD_VECTOR_SIZE, state.chunk->length - state.chunk_offset));
+	int64_t output_size = MinValue<int64_t>(STANDARD_VECTOR_SIZE, state.chunk->length - state.chunk_offset);
+	data.lines_read += output_size;
+	output.SetCardinality(output_size);
 	ArrowToDuckDB(state, output);
 	output.Verify();
 	state.chunk_offset += output.size();
@@ -243,6 +244,7 @@ void ArrowTableFunction::ArrowScanFunction(ClientContext &context, const Functio
 void ArrowTableFunction::ArrowScanFunctionParallel(ClientContext &context, const FunctionData *bind_data,
                                                    FunctionOperatorData *operator_state, DataChunk *input,
                                                    DataChunk &output, ParallelState *parallel_state_p) {
+	auto &data = (ArrowScanFunctionData &)*bind_data;
 	auto &state = (ArrowScanState &)*operator_state;
 	//! Out of tuples in this chunk
 	if (state.chunk_offset >= (idx_t)state.chunk->length) {
@@ -251,7 +253,9 @@ void ArrowTableFunction::ArrowScanFunctionParallel(ClientContext &context, const
 	if ((idx_t)state.chunk->n_children != output.ColumnCount()) {
 		throw InvalidInputException("arrow_scan: array column count mismatch");
 	}
-	output.SetCardinality(MinValue<int64_t>(STANDARD_VECTOR_SIZE, state.chunk->length - state.chunk_offset));
+	int64_t output_size = MinValue<int64_t>(STANDARD_VECTOR_SIZE, state.chunk->length - state.chunk_offset);
+	data.lines_read += output_size;
+	output.SetCardinality(output_size);
 	ArrowToDuckDB(state, output);
 	output.Verify();
 	state.chunk_offset += output.size();
@@ -304,12 +308,32 @@ ArrowTableFunction::ArrowScanParallelInit(ClientContext &context, const Function
 	return move(result);
 }
 
+unique_ptr<NodeStatistics> ArrowTableFunction::ArrowScanCardinality(ClientContext &context,
+                                                                    const FunctionData *data) {
+	auto &bind_data = (ArrowScanFunctionData &)*data;
+	uint64_t number_of_rows = (bind_data.stream->number_of_batches - 1) * bind_data.stream->first_batch_size +
+	                          bind_data.stream->last_batch_size;
+
+	return make_unique<NodeStatistics>(number_of_rows, number_of_rows);
+}
+
+int ArrowTableFunction::ArrowProgress(ClientContext &context, const FunctionData *bind_data_p) {
+	auto &bind_data = (const ArrowScanFunctionData &)*bind_data_p;
+	if (bind_data.stream->number_of_batches == 0) {
+		return 100;
+	}
+	uint64_t number_of_rows = (bind_data.stream->number_of_batches - 1) * bind_data.stream->first_batch_size +
+	                          bind_data.stream->last_batch_size;
+	auto percentage = bind_data.lines_read * 100 / number_of_rows;
+	return percentage;
+}
+
 void ArrowTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunctionSet arrow("arrow_scan");
 	arrow.AddFunction(TableFunction({LogicalType::POINTER, LogicalType::POINTER}, ArrowScanFunction, ArrowScanBind,
-	                                ArrowScanInit, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+	                                ArrowScanInit, nullptr, nullptr, nullptr, ArrowScanCardinality, nullptr, nullptr,
 	                                ArrowScanMaxThreads, ArrowScanInitParallelState, ArrowScanFunctionParallel,
-	                                ArrowScanParallelInit, ArrowScanParallelStateNext));
+	                                ArrowScanParallelInit, ArrowScanParallelStateNext, false, false, ArrowProgress));
 	set.AddFunction(arrow);
 }
 
