@@ -1097,4 +1097,27 @@ idx_t JoinHashTable::GatherSwitch(VectorData &data, PhysicalType type, Vector &p
 	}
 }
 
+void JoinHashTable::FillWithOffsets(data_ptr_t *key_locations, JoinHTScanState &state) {
+	idx_t found_entries = 0;
+	for (; state.block_position < blocks.size(); state.block_position++, state.position = 0) {
+		auto &block = blocks[state.block_position];
+		auto &handle = pinned_handles[state.block_position];
+		auto baseptr = handle->node->buffer;
+		for (; state.position < block.count; state.position++) {
+			auto tuple_base = baseptr + state.position * entry_size;
+			auto found_match = (bool *)(tuple_base + tuple_size);
+			if (!*found_match) {
+				key_locations[found_entries++] = tuple_base;
+				if (found_entries == STANDARD_VECTOR_SIZE) {
+					state.position++;
+					break;
+				}
+			}
+		}
+		if (found_entries == STANDARD_VECTOR_SIZE) {
+			break;
+		}
+	}
+}
+
 } // namespace duckdb

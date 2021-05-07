@@ -150,7 +150,7 @@ void PhysicalHashJoin::Finalize(Pipeline &pipeline, ClientContext &context, uniq
 	// check for possible perfect hash table
 
 	// We only do this optimization when all the requirements are true
-	CheckRequirementsForPerfectHashJoin(sink.hash_table.get());
+	CheckRequirementsForPerfectHashJoin(sink.hash_table.get(), sink.ht_scan_state);
 
 	PhysicalSink::Finalize(pipeline, context, move(state));
 }
@@ -318,8 +318,7 @@ bool PhysicalHashJoin::ProbePerfectHashTable(ExecutionContext &context, DataChun
 	return true;
 }
 
-void PhysicalHashJoin::CheckRequirementsForPerfectHashJoin(JoinHashTable *ht_ptr) {
-	return;
+void PhysicalHashJoin::CheckRequirementsForPerfectHashJoin(JoinHashTable *ht_ptr, HashJoinGlobalState &join_state) {
 	// first check the build size
 	if (!perfect_join_state.is_build_small) {
 		return;
@@ -328,12 +327,12 @@ void PhysicalHashJoin::CheckRequirementsForPerfectHashJoin(JoinHashTable *ht_ptr
 
 	// verify uniquiness (build size < min_max_range => duplicate values )
 	auto build_size = Value::INTEGER(ht_ptr->size());
-	auto min_max_range = perfect_join_state.maximum = perfect_join_state.minimum;
-	if (build_size != min_max_range) {
+	auto min_max_range = perfect_join_state.maximum - perfect_join_state.minimum;
+	if (build_size != min_max_range + 1) {
 		return;
 	}
 	// Store build side as a set of columns
-	BuildPerfectHashStructure(ht_ptr);
+	BuildPerfectHashStructure(ht_ptr, join_state.ht_scan_state);
 	hasBuiltPerfectHashTable = true;
 
 	// check for nulls
@@ -343,7 +342,7 @@ void PhysicalHashJoin::CheckRequirementsForPerfectHashJoin(JoinHashTable *ht_ptr
 	}
 }
 
-void PhysicalHashJoin::BuildPerfectHashStructure(JoinHashTable *hash_table_ptr) {
+void PhysicalHashJoin::BuildPerfectHashStructure(JoinHashTable *hash_table_ptr, JoinHTScanState &join_ht_state) {
 	// allocate memory for each column in the hashtable
 	auto build_size = hash_table_ptr->size();
 	for (auto type : hash_table_ptr->build_types) {
@@ -351,6 +350,7 @@ void PhysicalHashJoin::BuildPerfectHashStructure(JoinHashTable *hash_table_ptr) 
 	}
 	// gather the values from the RHS
 	auto key_locations = make_unique<data_ptr_t>(new data_t[build_size]);
+	hash_table_ptr->FillWithOffsets(key_locations.get(), join_ht_state);
 	idx_t offset = hash_table_ptr->condition_size;
 	for (idx_t i = 0; i != build_columns.size(); ++i) {
 		D_ASSERT(build_columns[i].GetType() == build_types[i]);
