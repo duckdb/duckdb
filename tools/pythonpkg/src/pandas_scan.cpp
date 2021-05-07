@@ -42,8 +42,8 @@ struct ParallelPandasScanState : public ParallelState {
 PandasScanFunction::PandasScanFunction()
     : TableFunction("pandas_scan", {LogicalType::POINTER}, PandasScanFunc, PandasScanBind, PandasScanInit, nullptr,
                     nullptr, nullptr, PandasScanCardinality, nullptr, nullptr, PandasScanMaxThreads,
-                    PandasScanInitParallelState, PandasScanParallelInit, PandasScanParallelStateNext, true, false,
-                    PandasProgress) {
+                    PandasScanInitParallelState, PandasScanFuncParallel, PandasScanParallelInit,
+                    PandasScanParallelStateNext, true, false, PandasProgress) {
 }
 
 unique_ptr<FunctionData> PandasScanFunction::PandasScanBind(ClientContext &context, vector<Value> &inputs,
@@ -124,6 +124,13 @@ int PandasScanFunction::PandasProgress(ClientContext &context, const FunctionDat
 	}
 	auto percentage = bind_data.lines_read * 100 / bind_data.row_count;
 	return percentage;
+}
+
+void PandasScanFunction::PandasScanFuncParallel(ClientContext &context, const FunctionData *bind_data,
+                                                FunctionOperatorData *operator_state, DataChunk *input,
+                                                DataChunk &output, ParallelState *parallel_state_p) {
+	//! FIXME: Have specialized parallel function from pandas scan here
+	PandasScanFunc(context, bind_data, operator_state, input, output);
 }
 
 //! The main pandas scan function: note that this can be called in parallel without the GIL
