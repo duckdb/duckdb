@@ -200,7 +200,9 @@ void OperatorProfiler::AddTiming(PhysicalOperator *op, double time, idx_t elemen
 	if (!enabled) {
 		return;
 	}
-
+	if (!Value::DoubleIsValid(time)) {
+		return;
+	}
 	auto entry = timings.find(op);
 	if (entry == timings.end()) {
 		// add new entry
