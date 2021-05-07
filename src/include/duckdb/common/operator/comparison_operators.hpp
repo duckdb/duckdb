@@ -193,6 +193,10 @@ template <>
 inline bool DistinctFrom::Operation(interval_t left, interval_t right, bool left_null, bool right_null) {
 	return (!Equals::Operation(left, right) && !left_null && !right_null) || (left_null != right_null);
 }
+inline bool operator<(const interval_t &lhs, const interval_t &rhs) {
+	return LessThan::Operation(lhs, rhs);
+}
+
 //===--------------------------------------------------------------------===//
 // Specialized Hugeint Comparison Operators
 //===--------------------------------------------------------------------===//
