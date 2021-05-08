@@ -33,7 +33,7 @@ public:
 		if (IsInlined()) {
 			// zero initialize the prefix first
 			// this makes sure that strings with length smaller than 4 still have an equal prefix
-			memset(value.inlined.inlined, 0, INLINE_LENGTH);
+			memset(value.inlined.inlined, 0, PREFIX_LENGTH);
 			if (GetSize() == 0) {
 				return;
 			}
@@ -89,7 +89,7 @@ public:
 		auto dataptr = (char *)GetDataUnsafe();
 		if (GetSize() <= INLINE_LENGTH) {
 			// fill prefix with zeros if the length is smaller than the prefix length
-			for (idx_t i = GetSize(); i < INLINE_LENGTH; i++) {
+			for (idx_t i = GetSize(); i < PREFIX_LENGTH; i++) {
 				value.inlined.inlined[i] = '\0';
 			}
 		} else {

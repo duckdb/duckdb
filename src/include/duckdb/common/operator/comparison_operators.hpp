@@ -89,15 +89,20 @@ inline bool LessThan::Operation(bool left, bool right) {
 struct StringComparisonOperators {
 	template <bool INVERSE>
 	static inline bool EqualsOrNot(const string_t a, const string_t b) {
-		if (a.IsInlined()) {
+		auto alen = a.value.inlined.length;
+		auto blen = b.value.inlined.length;
+		if (alen != blen) {
+			return false;
+		}
+		if (alen <= string_t::INLINE_LENGTH) {
 			// small string: compare entire string
-			if (memcmp(&a, &b, sizeof(string_t)) == 0) {
+			if (memcmp(&a.value.inlined.inlined, &b.value.inlined.inlined, alen) == 0) {
 				// entire string is equal
 				return INVERSE ? false : true;
 			}
 		} else {
-			// large string: first check prefix and length
-			if (memcmp(&a, &b, sizeof(uint32_t) + string_t::PREFIX_LENGTH) == 0) {
+			// large string: first check prefix
+			if (memcmp(a.value.pointer.prefix, b.value.pointer.prefix, string_t::PREFIX_LENGTH) == 0) {
 				// prefix and length are equal: check main string
 				if (memcmp(a.value.pointer.ptr, b.value.pointer.ptr, a.GetSize()) == 0) {
 					// entire string is equal
