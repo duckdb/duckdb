@@ -60,6 +60,7 @@ jobs:
           cmake --build . --config Release
 
       - name: Test
+        run: cp src/libduckdb.dll .
         run: test/unittest.exe
 
   format-check:
