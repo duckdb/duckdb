@@ -53,7 +53,7 @@ hash_t Hash(char *val) {
 }
 
 // Jenkins hash function: https://en.wikipedia.org/wiki/Jenkins_hash_function
-uint32_t jenkins_one_at_a_time_hash(const char *key, size_t length) {
+uint32_t JenkinsOneAtATimeHash(const char *key, size_t length) {
 	size_t i = 0;
 	uint32_t hash = 0;
 	while (i != length) {
@@ -68,7 +68,7 @@ uint32_t jenkins_one_at_a_time_hash(const char *key, size_t length) {
 }
 
 hash_t Hash(const char *val, size_t size) {
-	auto hash_val = jenkins_one_at_a_time_hash(val, size);
+	auto hash_val = JenkinsOneAtATimeHash(val, size);
 	return Hash<uint32_t>(hash_val);
 }
 
