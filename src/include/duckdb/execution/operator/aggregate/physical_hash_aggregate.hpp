@@ -48,12 +48,12 @@ public:
 	//! Pointers to the aggregates
 	vector<BoundAggregateExpression *> bindings;
 
-	unordered_map<Expression *, size_t> ht;
+	unordered_map<Expression *, size_t> filter_indexes;
 
 public:
 	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) override;
 	void Combine(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate) override;
-	void Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> gstate) override;
+	bool Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> gstate) override;
 
 	void FinalizeImmediate(ClientContext &context, unique_ptr<GlobalOperatorState> gstate);
 
@@ -70,7 +70,7 @@ private:
 	idx_t radix_limit;
 
 private:
-	void FinalizeInternal(ClientContext &context, unique_ptr<GlobalOperatorState> gstate, bool immediate,
+	bool FinalizeInternal(ClientContext &context, unique_ptr<GlobalOperatorState> gstate, bool immediate,
 	                      Pipeline *pipeline);
 	bool ForceSingleHT(GlobalOperatorState &state);
 };

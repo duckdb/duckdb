@@ -35,7 +35,7 @@ struct ParquetReadBindData : public FunctionData {
 	shared_ptr<ParquetReader> initial_reader;
 	vector<string> files;
 	vector<column_t> column_ids;
-	std::atomic<idx_t> chunk_count;
+	atomic<idx_t> chunk_count;
 	idx_t cur_file;
 };
 
@@ -49,7 +49,7 @@ struct ParquetReadOperatorData : public FunctionOperatorData {
 };
 
 struct ParquetReadParallelState : public ParallelState {
-	std::mutex lock;
+	mutex lock;
 	shared_ptr<ParquetReader> current_reader;
 	idx_t file_index;
 	idx_t row_group_index;

@@ -41,7 +41,7 @@ private:
 	TaskScheduler &scheduler;
 	unique_ptr<ProducerToken> token;
 	size_t task_count;
-	mutable std::atomic<size_t> tasks_completed;
+	mutable atomic<size_t> tasks_completed;
 };
 
 } // namespace duckdb

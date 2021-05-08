@@ -24,7 +24,7 @@ public:
 	}
 
 	PhysicalWindow &op;
-	std::mutex lock;
+	mutex lock;
 	ChunkCollection chunks;
 	ChunkCollection over_collection;
 	ChunkCollection hash_collection;
@@ -870,7 +870,7 @@ public:
 	WindowParallelState() : next_part(0) {
 	}
 	//! The output read position.
-	std::atomic<idx_t> next_part;
+	atomic<idx_t> next_part;
 };
 
 unique_ptr<ParallelState> PhysicalWindow::GetParallelState() {
@@ -1073,7 +1073,7 @@ void PhysicalWindow::Combine(ExecutionContext &context, GlobalOperatorState &gst
 	}
 }
 
-void PhysicalWindow::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> gstate_p) {
+bool PhysicalWindow::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> gstate_p) {
 	this->sink_state = move(gstate_p);
 	auto &gstate = (WindowGlobalState &)*this->sink_state;
 
@@ -1081,7 +1081,7 @@ void PhysicalWindow::Finalize(Pipeline &pipeline, ClientContext &context, unique
 	ChunkCollection &window_results = gstate.window_results;
 
 	if (big_data.Count() == 0) {
-		return;
+		return true;
 	}
 
 	vector<LogicalType> window_types;
@@ -1103,6 +1103,7 @@ void PhysicalWindow::Finalize(Pipeline &pipeline, ClientContext &context, unique
 	}
 
 	D_ASSERT(window_results.ColumnCount() == select_list.size());
+	return true;
 }
 
 unique_ptr<LocalSinkState> PhysicalWindow::GetLocalSinkState(ExecutionContext &context) {

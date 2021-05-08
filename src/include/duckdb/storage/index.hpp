@@ -29,8 +29,6 @@ public:
 	Index(IndexType type, vector<column_t> column_ids, vector<unique_ptr<Expression>> unbound_expressions);
 	virtual ~Index() = default;
 
-	//! Lock used for updating the index
-	std::mutex lock;
 	//! The type of the index
 	IndexType type;
 	//! Column identifiers to extract from the base table
@@ -80,6 +78,9 @@ public:
 
 protected:
 	void ExecuteExpressions(DataChunk &input, DataChunk &result);
+
+	//! Lock used for updating the index
+	mutex lock;
 
 private:
 	//! Bound expressions used by the index
