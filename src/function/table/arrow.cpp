@@ -308,8 +308,7 @@ ArrowTableFunction::ArrowScanParallelInit(ClientContext &context, const Function
 	return move(result);
 }
 
-unique_ptr<NodeStatistics> ArrowTableFunction::ArrowScanCardinality(ClientContext &context,
-                                                                    const FunctionData *data) {
+unique_ptr<NodeStatistics> ArrowTableFunction::ArrowScanCardinality(ClientContext &context, const FunctionData *data) {
 	auto &bind_data = (ArrowScanFunctionData &)*data;
 	uint64_t number_of_rows = (bind_data.stream->number_of_batches - 1) * bind_data.stream->first_batch_size +
 	                          bind_data.stream->last_batch_size;
