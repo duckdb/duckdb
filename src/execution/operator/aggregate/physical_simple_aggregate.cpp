@@ -106,7 +106,7 @@ unique_ptr<LocalSinkState> PhysicalSimpleAggregate::GetLocalSinkState(ExecutionC
 }
 
 void PhysicalSimpleAggregate::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
-                                   DataChunk &input) {
+                                   DataChunk &input) const {
 	auto &sink = (SimpleAggregateLocalState &)lstate;
 	// perform the aggregation inside the local state
 	idx_t payload_idx = 0, payload_expr_idx = 0;

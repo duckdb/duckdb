@@ -19,7 +19,7 @@ public:
 };
 
 void PhysicalDelete::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
-                          DataChunk &input) {
+                          DataChunk &input) const {
 	auto &gstate = (DeleteGlobalState &)state;
 
 	// delete data in the base table
