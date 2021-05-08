@@ -415,6 +415,7 @@ static unique_ptr<TableFunctionRef> TryPandasReplacement(py::dict &dict, py::str
 }
 
 static unique_ptr<TableFunctionRef> PandasScanReplacement(const string &table_name, void *data) {
+	py::gil_scoped_acquire acquire;
 	// look in the locals first
 	PyObject *p = PyEval_GetLocals();
 	auto py_table_name = py::str(table_name);

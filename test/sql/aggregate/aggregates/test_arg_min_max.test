@@ -67,7 +67,7 @@ select arg_min(a,b), arg_max(a,b) from args;
 1.000000	10.000000
 
 query II
-select arg_min(a,b), arg_max(a,b) from args group by a%2;
+select arg_min(a,b), arg_max(a,b) from args group by a%2 ORDER BY arg_min(a,b);
 ----
 1	1
 2	10

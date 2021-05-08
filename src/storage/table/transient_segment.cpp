@@ -29,7 +29,7 @@ TransientSegment::TransientSegment(PersistentSegment &segment)
 	}
 	data = move(segment.data);
 	stats = move(segment.stats);
-	count = segment.count;
+	count = segment.count.load();
 	D_ASSERT(!segment.next);
 }
 

@@ -12,10 +12,6 @@
 
 namespace duckdb {
 
-bool operator<(const interval_t &lhs, const interval_t &rhs) {
-	return LessThan::Operation(lhs, rhs);
-}
-
 template <>
 timestamp_t Cast::Operation(date_t date) {
 	return Timestamp::FromDatetime(date, dtime_t(0));

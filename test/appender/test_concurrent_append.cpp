@@ -11,11 +11,10 @@ using namespace std;
 
 atomic<int> finished_threads;
 
-#define THREAD_COUNT    20
+#define THREAD_COUNT    8
 #define INSERT_ELEMENTS 2000
 
 static void append_to_integers(DuckDB *db, size_t threadnr) {
-	REQUIRE(db);
 	Connection con(*db);
 
 	Appender appender(con, "integers");
@@ -32,7 +31,9 @@ static void append_to_integers(DuckDB *db, size_t threadnr) {
 
 TEST_CASE("Test concurrent appends", "[appender][.]") {
 	unique_ptr<QueryResult> result;
-	DuckDB db(nullptr);
+	DBConfig config;
+	config.maximum_threads = 1;
+	DuckDB db(nullptr, &config);
 	Connection con(db);
 
 	// create a single table to append to

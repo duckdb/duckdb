@@ -29,7 +29,8 @@ public:
 	vector<unique_ptr<Expression>> aggregates;
 
 public:
-	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) override;
+	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
+	          DataChunk &input) const override;
 	void Combine(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate) override;
 
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) override;
@@ -55,7 +56,7 @@ public:
 	//! The number of bits we need to completely cover each of the groups
 	vector<idx_t> required_bits;
 
-	unordered_map<Expression *, size_t> ht;
+	unordered_map<Expression *, size_t> filter_indexes;
 };
 
 } // namespace duckdb

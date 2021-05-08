@@ -16,7 +16,7 @@ public:
 	UpdateGlobalState() : updated_count(0) {
 	}
 
-	std::mutex lock;
+	mutex lock;
 	idx_t updated_count;
 };
 
@@ -42,7 +42,7 @@ public:
 };
 
 void PhysicalUpdate::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
-                          DataChunk &chunk) {
+                          DataChunk &chunk) const {
 	auto &gstate = (UpdateGlobalState &)state;
 	auto &ustate = (UpdateLocalState &)lstate;
 

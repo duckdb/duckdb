@@ -1,5 +1,9 @@
 add_definitions(-DDUCKDB)
 
+if(${DISABLE_THREADS})
+  add_definitions(-DDUCKDB_NO_THREADS)
+endif()
+
 if(NOT MSVC)
   set(CMAKE_CXX_FLAGS_DEBUG
       "${CMAKE_CXX_FLAGS_DEBUG} -Wextra -Wno-unused-parameter -Wno-redundant-move"

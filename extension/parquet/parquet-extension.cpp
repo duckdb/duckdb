@@ -35,7 +35,7 @@ struct ParquetReadBindData : public FunctionData {
 	shared_ptr<ParquetReader> initial_reader;
 	vector<string> files;
 	vector<column_t> column_ids;
-	std::atomic<idx_t> chunk_count;
+	atomic<idx_t> chunk_count;
 	idx_t cur_file;
 };
 
@@ -49,7 +49,7 @@ struct ParquetReadOperatorData : public FunctionOperatorData {
 };
 
 struct ParquetReadParallelState : public ParallelState {
-	std::mutex lock;
+	mutex lock;
 	shared_ptr<ParquetReader> current_reader;
 	idx_t file_index;
 	idx_t row_group_index;
@@ -62,8 +62,8 @@ public:
 	                    ParquetScanInit, /* statistics */ ParquetScanStats, /* cleanup */ nullptr,
 	                    /* dependency */ nullptr, ParquetCardinality,
 	                    /* pushdown_complex_filter */ nullptr, /* to_string */ nullptr, ParquetScanMaxThreads,
-	                    ParquetInitParallelState, ParquetScanParallelInit, ParquetParallelStateNext, true, true,
-	                    ParquetProgress) {
+	                    ParquetInitParallelState, ParquetScanFuncParallel, ParquetScanParallelInit,
+	                    ParquetParallelStateNext, true, true, ParquetProgress) {
 	}
 
 	static unique_ptr<FunctionData> ParquetReadBind(ClientContext &context, CopyInfo &info,
@@ -136,6 +136,12 @@ public:
 		return nullptr;
 	}
 
+	static void ParquetScanFuncParallel(ClientContext &context, const FunctionData *bind_data,
+	                                    FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output,
+	                                    ParallelState *parallel_state_p) {
+		//! FIXME: Have specialized parallel function from pandas scan here
+		ParquetScanImplementation(context, bind_data, operator_state, input, output);
+	}
 	static unique_ptr<FunctionData> ParquetScanBind(ClientContext &context, vector<Value> &inputs,
 	                                                unordered_map<string, Value> &named_parameters,
 	                                                vector<LogicalType> &input_table_types,
