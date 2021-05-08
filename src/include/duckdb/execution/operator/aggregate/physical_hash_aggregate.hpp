@@ -48,7 +48,7 @@ public:
 	//! Pointers to the aggregates
 	vector<BoundAggregateExpression *> bindings;
 
-	unordered_map<Expression *, size_t> ht;
+	unordered_map<Expression *, size_t> filter_indexes;
 
 public:
 	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) override;

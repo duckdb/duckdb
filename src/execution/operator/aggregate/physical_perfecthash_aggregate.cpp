@@ -48,6 +48,26 @@ PhysicalPerfectHashAggregate::PhysicalPerfectHashAggregate(ClientContext &contex
 		payload_types.push_back(pay_filters);
 	}
 	aggregate_objects = AggregateObject::CreateAggregateObjects(bindings);
+
+	// filter_indexes must be pre-built, not lazily instantiated in parallel...
+	idx_t aggregate_input_idx = 0;
+	for (auto &aggregate : aggregates) {
+		auto &aggr = (BoundAggregateExpression &)*aggregate;
+		aggregate_input_idx += aggr.children.size();
+	}
+	for (auto &aggregate : aggregates) {
+		auto &aggr = (BoundAggregateExpression &)*aggregate;
+		if (aggr.filter) {
+			auto &bound_ref_expr = (BoundReferenceExpression &)*aggr.filter;
+			auto it = filter_indexes.find(aggr.filter.get());
+			if (it == filter_indexes.end()) {
+				filter_indexes[aggr.filter.get()] = bound_ref_expr.index;
+				bound_ref_expr.index = aggregate_input_idx++;
+			} else {
+				++aggregate_input_idx;
+			}
+		}
+	}
 }
 
 unique_ptr<PerfectAggregateHashTable> PhysicalPerfectHashAggregate::CreateHT(ClientContext &context) {
@@ -118,15 +138,9 @@ void PhysicalPerfectHashAggregate::Sink(ExecutionContext &context, GlobalOperato
 	for (auto &aggregate : aggregates) {
 		auto &aggr = (BoundAggregateExpression &)*aggregate;
 		if (aggr.filter) {
-			auto &bound_ref_expr = (BoundReferenceExpression &)*aggr.filter;
-			auto it = ht.find(aggr.filter.get());
-			if (it == ht.end()) {
-				aggregate_input_chunk.data[aggregate_input_idx].Reference(input.data[bound_ref_expr.index]);
-				ht[aggr.filter.get()] = bound_ref_expr.index;
-				bound_ref_expr.index = aggregate_input_idx++;
-			} else {
-				aggregate_input_chunk.data[aggregate_input_idx++].Reference(input.data[it->second]);
-			}
+			auto it = filter_indexes.find(aggr.filter.get());
+			D_ASSERT(it != filter_indexes.end());
+			aggregate_input_chunk.data[aggregate_input_idx++].Reference(input.data[it->second]);
 		}
 	}
 
