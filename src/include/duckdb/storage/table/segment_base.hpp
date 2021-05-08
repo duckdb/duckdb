@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/atomic.hpp"
 
 namespace duckdb {
 
@@ -24,9 +25,9 @@ public:
 	}
 
 	//! The start row id of this chunk
-	idx_t start;
+	const idx_t start;
 	//! The amount of entries in this storage chunk
-	idx_t count;
+	atomic<idx_t> count;
 	//! The next segment after this one
 	unique_ptr<SegmentBase> next;
 };

@@ -115,11 +115,11 @@ SELECT b % 2 AS f, SUM(a) FROM test GROUP BY f ORDER BY b % 2;
 
 # order by expression that is not in SELECT
 query II
-SELECT b % 2 AS f, a FROM test ORDER BY b % 4;
+SELECT b % 2 AS f, a FROM test ORDER BY b % 2, a;
 ----
-1	12
 0	11
 0	13
+1	12
 
 # ORDER BY alias
 query IR

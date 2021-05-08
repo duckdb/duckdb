@@ -16,7 +16,7 @@ public:
 	InsertGlobalState() : insert_count(0) {
 	}
 
-	std::mutex lock;
+	mutex lock;
 	idx_t insert_count;
 };
 

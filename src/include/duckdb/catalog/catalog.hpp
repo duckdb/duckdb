@@ -13,7 +13,7 @@
 #include "duckdb/parser/query_error_context.hpp"
 
 #include <functional>
-#include <atomic>
+#include "duckdb/common/atomic.hpp"
 
 namespace duckdb {
 struct CreateSchemaInfo;
@@ -129,7 +129,7 @@ public:
 
 private:
 	//! The catalog version, incremented whenever anything changes in the catalog
-	std::atomic<idx_t> catalog_version;
+	atomic<idx_t> catalog_version;
 
 private:
 	void DropSchema(ClientContext &context, DropInfo *info);

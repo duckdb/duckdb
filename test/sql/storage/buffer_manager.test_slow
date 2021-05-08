@@ -3,6 +3,9 @@
 # group: [storage]
 
 statement ok
+PRAGMA threads=1
+
+statement ok
 PRAGMA memory_limit='1MB'
 
 # streaming results do not use any memory

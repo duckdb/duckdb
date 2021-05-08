@@ -41,8 +41,8 @@ Description: The DuckDB project is an embedded analytical data
     management system with support for the Structured Query Language (SQL). This package includes all of
     DuckDB and a R Database Interface (DBI) connector.
 License: MPL
-URL: https://duckdb.org/, https://github.com/cwida/duckdb
-BugReports: https://github.com/cwida/duckdb/issues
+URL: https://duckdb.org/, https://github.com/duckdb/duckdb
+BugReports: https://github.com/duckdb/duckdb/issues
 Depends:
     DBI,
     R (>= 3.6.0)

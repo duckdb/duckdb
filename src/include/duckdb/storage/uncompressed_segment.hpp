@@ -39,9 +39,9 @@ public:
 	//! The maximum amount of vectors that can be stored in this segment
 	idx_t max_vector_count;
 	//! The current amount of tuples that are stored in this segment
-	idx_t tuple_count;
+	atomic<idx_t> tuple_count;
 	//! The starting row of this segment
-	idx_t row_start;
+	const idx_t row_start;
 
 public:
 	virtual void InitializeScan(ColumnScanState &state) {
