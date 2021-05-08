@@ -295,7 +295,7 @@ static void UpdateChunk(Vector &data, Vector &updates, Vector &row_ids, idx_t co
 	}
 }
 
-void LocalStorage::Update(DataTable *table, Vector &row_ids, vector<column_t> &column_ids, DataChunk &data) {
+void LocalStorage::Update(DataTable *table, Vector &row_ids, const vector<column_t> &column_ids, DataChunk &data) {
 	auto storage = GetStorage(table);
 	// figure out the chunk from which these row ids came
 	idx_t chunk_idx = GetChunk(row_ids);

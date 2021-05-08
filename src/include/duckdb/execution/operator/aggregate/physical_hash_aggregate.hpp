@@ -51,7 +51,8 @@ public:
 	unordered_map<Expression *, size_t> filter_indexes;
 
 public:
-	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) override;
+	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
+	          DataChunk &input) const override;
 	void Combine(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate) override;
 	bool Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> gstate) override;
 
@@ -72,7 +73,7 @@ private:
 private:
 	bool FinalizeInternal(ClientContext &context, unique_ptr<GlobalOperatorState> gstate, bool immediate,
 	                      Pipeline *pipeline);
-	bool ForceSingleHT(GlobalOperatorState &state);
+	bool ForceSingleHT(GlobalOperatorState &state) const;
 };
 
 } // namespace duckdb

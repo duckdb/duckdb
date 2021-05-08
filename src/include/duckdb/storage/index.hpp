@@ -74,7 +74,7 @@ public:
 	virtual bool Insert(IndexLock &lock, DataChunk &input, Vector &row_identifiers) = 0;
 
 	//! Returns true if the index is affected by updates on the specified column ids, and false otherwise
-	bool IndexIsUpdated(vector<column_t> &column_ids);
+	bool IndexIsUpdated(const vector<column_t> &column_ids) const;
 
 protected:
 	void ExecuteExpressions(DataChunk &input, DataChunk &result);

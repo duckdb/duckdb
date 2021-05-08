@@ -27,7 +27,7 @@ unique_ptr<GlobalOperatorState> PhysicalCrossProduct::GetGlobalState(ClientConte
 }
 
 void PhysicalCrossProduct::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_p,
-                                DataChunk &input) {
+                                DataChunk &input) const {
 	auto &sink = (CrossProductGlobalState &)state;
 	lock_guard<mutex> client_guard(sink.rhs_lock);
 	sink.rhs_materialized.Append(input);

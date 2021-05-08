@@ -847,7 +847,7 @@ void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector 
 //===--------------------------------------------------------------------===//
 // Update
 //===--------------------------------------------------------------------===//
-static void CreateMockChunk(vector<LogicalType> &types, vector<column_t> &column_ids, DataChunk &chunk,
+static void CreateMockChunk(vector<LogicalType> &types, const vector<column_t> &column_ids, DataChunk &chunk,
                             DataChunk &mock_chunk) {
 	// construct a mock DataChunk
 	mock_chunk.InitializeEmpty(types);
@@ -857,7 +857,7 @@ static void CreateMockChunk(vector<LogicalType> &types, vector<column_t> &column
 	mock_chunk.SetCardinality(chunk.size());
 }
 
-static bool CreateMockChunk(TableCatalogEntry &table, vector<column_t> &column_ids,
+static bool CreateMockChunk(TableCatalogEntry &table, const vector<column_t> &column_ids,
                             unordered_set<column_t> &desired_column_ids, DataChunk &chunk, DataChunk &mock_chunk) {
 	idx_t found_columns = 0;
 	// check whether the desired columns are present in the UPDATE clause
@@ -881,7 +881,8 @@ static bool CreateMockChunk(TableCatalogEntry &table, vector<column_t> &column_i
 	return true;
 }
 
-void DataTable::VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chunk, vector<column_t> &column_ids) {
+void DataTable::VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chunk,
+                                        const vector<column_t> &column_ids) {
 	for (auto &constraint : table.bound_constraints) {
 		switch (constraint->type) {
 		case ConstraintType::NOT_NULL: {
@@ -923,8 +924,8 @@ void DataTable::VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chu
 #endif
 }
 
-void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector &row_ids, vector<column_t> &column_ids,
-                       DataChunk &updates) {
+void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector &row_ids,
+                       const vector<column_t> &column_ids, DataChunk &updates) {
 	D_ASSERT(row_ids.GetType().InternalType() == ROW_TYPE);
 
 	updates.Verify();

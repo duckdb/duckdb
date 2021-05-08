@@ -64,7 +64,7 @@ unique_ptr<LocalSinkState> PhysicalDelimJoin::GetLocalSinkState(ExecutionContext
 }
 
 void PhysicalDelimJoin::Sink(ExecutionContext &context, GlobalOperatorState &state_p, LocalSinkState &lstate,
-                             DataChunk &input) {
+                             DataChunk &input) const {
 	auto &state = (DelimJoinGlobalState &)state_p;
 	state.lhs_data.Append(input);
 	distinct->Sink(context, *state.distinct_state, lstate, input);
