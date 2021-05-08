@@ -39,14 +39,7 @@ hash_t Hash(interval_t val) {
 
 template <>
 hash_t Hash(const char *str) {
-	hash_t hash = 5381;
-	hash_t c;
-
-	while ((c = *str++)) {
-		hash = ((hash << 5) + hash) + c;
-	}
-
-	return hash;
+	return Hash(str, strlen(str));
 }
 
 template <>
@@ -59,14 +52,24 @@ hash_t Hash(char *val) {
 	return Hash<const char *>(val);
 }
 
-hash_t Hash(const char *val, size_t size) {
-	hash_t hash = 5381;
-
-	for (size_t i = 0; i < size; i++) {
-		hash = ((hash << 5) + hash) + val[i];
+// Jenkins hash function: https://en.wikipedia.org/wiki/Jenkins_hash_function
+uint32_t jenkins_one_at_a_time_hash(const char* key, size_t length) {
+	size_t i = 0;
+	uint32_t hash = 0;
+	while (i != length) {
+		hash += key[i++];
+		hash += hash << 10;
+		hash ^= hash >> 6;
 	}
-
+	hash += hash << 3;
+	hash ^= hash >> 11;
+	hash += hash << 15;
 	return hash;
+}
+
+hash_t Hash(const char *val, size_t size) {
+	auto hash_val = jenkins_one_at_a_time_hash(val, size);
+	return Hash<uint32_t>(hash_val);
 }
 
 hash_t Hash(char *val, size_t size) {
