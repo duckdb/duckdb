@@ -174,12 +174,13 @@ struct string_t;
 
 template <class T>
 using child_list_t = std::vector<std::pair<std::string, T>>;
+// we should be using single_thread_ptr here but cross-thread access to ChunkCollections currently prohibits this.
 template <class T>
-using buffer_ptr = single_thread_ptr<T>;
+using buffer_ptr = shared_ptr<T>;
 
 template <class T, typename... Args>
 buffer_ptr<T> make_buffer(Args &&...args) {
-	return single_thread_make_shared<T>(std::forward<Args>(args)...);
+	return make_shared<T>(std::forward<Args>(args)...);
 }
 
 struct list_entry_t {

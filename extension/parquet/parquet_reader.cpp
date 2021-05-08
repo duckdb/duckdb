@@ -238,6 +238,9 @@ void ParquetReader::InitializeSchema(const vector<LogicalType> &expected_types_p
 
 	auto root_type = root_reader->Type();
 	D_ASSERT(root_type.id() == LogicalTypeId::STRUCT);
+	if (has_expected_types && root_type.child_types().size() != expected_types_p.size()) {
+		throw FormatException("column count mismatch");
+	}
 	idx_t col_idx = 0;
 	for (auto &type_pair : root_type.child_types()) {
 		if (has_expected_types && expected_types_p[col_idx] != type_pair.second) {

@@ -29,12 +29,11 @@ struct ColumnAppendState {
 };
 
 struct IndexLock {
-	std::unique_lock<std::mutex> index_lock;
+	unique_lock<mutex> index_lock;
 };
 
 struct TableAppendState {
-	std::unique_lock<std::mutex> append_lock;
-	unique_ptr<IndexLock[]> index_locks;
+	unique_lock<mutex> append_lock;
 	unique_ptr<ColumnAppendState[]> states;
 	row_t row_start;
 	row_t current_row;

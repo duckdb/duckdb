@@ -62,9 +62,9 @@ void LocalTableStorage::Clear() {
 	deleted_entries.clear();
 	indexes.clear();
 	deleted_rows = 0;
-	for (auto &index : table.info->indexes) {
-		D_ASSERT(index->type == IndexType::ART);
-		auto &art = (ART &)*index;
+	table.info->indexes.Scan([&](Index &index) {
+		D_ASSERT(index.type == IndexType::ART);
+		auto &art = (ART &)index;
 		if (art.is_unique) {
 			// unique index: create a local ART index that maintains the same unique constraint
 			vector<unique_ptr<Expression>> unbound_expressions;
@@ -73,7 +73,8 @@ void LocalTableStorage::Clear() {
 			}
 			indexes.push_back(make_unique<ART>(art.column_ids, move(unbound_expressions), true));
 		}
-	}
+		return false;
+	});
 }
 
 void LocalStorage::InitializeScan(DataTable *table, LocalScanState &state, TableFilterSet *table_filters) {

@@ -17,7 +17,7 @@ struct ConcurrentData {
 	}
 };
 
-#define CONCURRENT_SEQUENCE_THREAD_COUNT 20
+#define CONCURRENT_SEQUENCE_THREAD_COUNT 10
 #define CONCURRENT_SEQUENCE_INSERT_COUNT 100
 
 static void append_values_from_sequence(ConcurrentData *data) {

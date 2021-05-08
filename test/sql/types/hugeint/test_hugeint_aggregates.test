@@ -5,6 +5,10 @@
 statement ok
 PRAGMA enable_verification
 
+# first aggr gets confused otherwise
+statement ok
+PRAGMA threads=1
+
 statement ok
 CREATE TABLE hugeints(g INTEGER, h HUGEINT);
 

@@ -5,6 +5,9 @@
 statement ok
 PRAGMA enable_verification
 
+statement ok
+PRAGMA threads=1
+
 # simple recursive CTE
 query I
 with recursive t as (select 1 as x union select x+1 from t where x < 3) select * from t order by x
