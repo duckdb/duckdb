@@ -157,6 +157,14 @@ FileSystem &DuckDB::GetFileSystem() {
 	return instance->GetFileSystem();
 }
 
+Allocator &Allocator::Get(ClientContext &context) {
+	return Allocator::Get(*context.db);
+}
+
+Allocator &Allocator::Get(DatabaseInstance &db) {
+	return db.config.allocator;
+}
+
 void DatabaseInstance::Configure(DBConfig &new_config) {
 	if (new_config.access_mode != AccessMode::UNDEFINED) {
 		config.access_mode = new_config.access_mode;
@@ -173,6 +181,7 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 	} else {
 		config.maximum_memory = new_config.maximum_memory;
 	}
+	config.allocator = move(new_config.allocator);
 	config.checkpoint_wal_size = new_config.checkpoint_wal_size;
 	config.use_direct_io = new_config.use_direct_io;
 	config.temporary_directory = new_config.temporary_directory;

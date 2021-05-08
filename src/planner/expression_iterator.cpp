@@ -94,6 +94,12 @@ void ExpressionIterator::EnumerateChildren(Expression &expr,
 		for (auto &child : window_expr.children) {
 			callback(child);
 		}
+		if (window_expr.start_expr) {
+			callback(window_expr.start_expr);
+		}
+		if (window_expr.end_expr) {
+			callback(window_expr.end_expr);
+		}
 		if (window_expr.offset_expr) {
 			callback(window_expr.offset_expr);
 		}

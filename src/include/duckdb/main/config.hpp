@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/allocator.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/order_type.hpp"
 #include "duckdb/common/file_system.hpp"
@@ -33,6 +34,8 @@ public:
 
 	//! Access mode of the database (AUTOMATIC, READ_ONLY or READ_WRITE)
 	AccessMode access_mode = AccessMode::AUTOMATIC;
+	//! The allocator used by the system
+	Allocator allocator;
 	// Checkpoint when WAL reaches this size (default: 16MB)
 	idx_t checkpoint_wal_size = 1 << 24;
 	//! Whether or not to use Direct IO, bypassing operating system buffers
