@@ -42,7 +42,7 @@ public:
 };
 
 void PhysicalUpdate::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
-                          DataChunk &chunk) {
+                          DataChunk &chunk) const {
 	auto &gstate = (UpdateGlobalState &)state;
 	auto &ustate = (UpdateLocalState &)lstate;
 

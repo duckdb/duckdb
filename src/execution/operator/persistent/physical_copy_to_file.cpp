@@ -32,7 +32,7 @@ void PhysicalCopyToFile::GetChunkInternal(ExecutionContext &context, DataChunk &
 }
 
 void PhysicalCopyToFile::Sink(ExecutionContext &context, GlobalOperatorState &gstate, LocalSinkState &lstate,
-                              DataChunk &input) {
+                              DataChunk &input) const {
 	auto &g = (CopyToFunctionGlobalState &)gstate;
 	auto &l = (CopyToFunctionLocalState &)lstate;
 

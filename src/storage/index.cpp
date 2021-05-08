@@ -52,7 +52,7 @@ unique_ptr<Expression> Index::BindExpression(unique_ptr<Expression> expr) {
 	return expr;
 }
 
-bool Index::IndexIsUpdated(vector<column_t> &column_ids) {
+bool Index::IndexIsUpdated(const vector<column_t> &column_ids) const {
 	for (auto &column : column_ids) {
 		if (column_id_set.find(column) != column_id_set.end()) {
 			return true;

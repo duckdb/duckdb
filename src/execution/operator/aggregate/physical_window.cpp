@@ -1024,7 +1024,7 @@ void PhysicalWindow::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 }
 
 void PhysicalWindow::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_p,
-                          DataChunk &input) {
+                          DataChunk &input) const {
 	auto &lstate = (WindowLocalState &)lstate_p;
 	lstate.chunks.Append(input);
 
