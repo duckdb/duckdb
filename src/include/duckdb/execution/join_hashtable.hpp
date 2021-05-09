@@ -150,7 +150,7 @@ public:
 	static idx_t TemplatedGather(VectorData &vdata, Vector &pointers, const SelectionVector &current_sel, idx_t count,
 	                             idx_t offset, SelectionVector *match_sel, SelectionVector *no_match_sel,
 	                             idx_t &no_match_count);
-	void FillWithOffsets(data_ptr_t *key_locations, JoinHTScanState &state);
+	void FillWithOffsets(std::vector<data_ptr_t> &key_locations, JoinHTScanState &state);
 	idx_t size() {
 		return count;
 	}

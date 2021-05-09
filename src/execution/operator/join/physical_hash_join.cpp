@@ -39,23 +39,6 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
-class HashJoinLocalState : public LocalSinkState {
-public:
-	DataChunk build_chunk;
-	DataChunk join_keys;
-	ExpressionExecutor build_executor;
-};
-
-class HashJoinGlobalState : public GlobalOperatorState {
-public:
-	HashJoinGlobalState() {
-	}
-
-	//! The HT used by the join
-	unique_ptr<JoinHashTable> hash_table;
-	//! Only used for FULL OUTER JOIN: scan state of the final scan to find unmatched tuples in the build-side
-	JoinHTScanState ht_scan_state;
-};
 
 unique_ptr<GlobalOperatorState> PhysicalHashJoin::GetGlobalState(ClientContext &context) {
 	auto state = make_unique<HashJoinGlobalState>();
@@ -150,7 +133,7 @@ void PhysicalHashJoin::Finalize(Pipeline &pipeline, ClientContext &context, uniq
 	// check for possible perfect hash table
 
 	// We only do this optimization when all the requirements are true
-	CheckRequirementsForPerfectHashJoin(sink.hash_table.get(), sink.ht_scan_state);
+	// CheckRequirementsForPerfectHashJoin(sink.hash_table.get(), sink);
 
 	PhysicalSink::Finalize(pipeline, context, move(state));
 }
@@ -349,13 +332,14 @@ void PhysicalHashJoin::BuildPerfectHashStructure(JoinHashTable *hash_table_ptr, 
 		build_columns.emplace_back(type, build_size);
 	}
 	// gather the values from the RHS
-	auto key_locations = make_unique<data_ptr_t>(new data_t[build_size]);
-	hash_table_ptr->FillWithOffsets(key_locations.get(), join_ht_state);
+	std::vector<data_ptr_t> key_locations;
+	key_locations.reserve(build_size + 1);
+	hash_table_ptr->FillWithOffsets(key_locations, join_ht_state);
 	idx_t offset = hash_table_ptr->condition_size;
 	for (idx_t i = 0; i != build_columns.size(); ++i) {
 		D_ASSERT(build_columns[i].GetType() == build_types[i]);
 		JoinHashTable::GatherResultVector(build_columns[i], FlatVector::INCREMENTAL_SELECTION_VECTOR,
-		                                  (uintptr_t *)key_locations.get(), FlatVector::INCREMENTAL_SELECTION_VECTOR,
+		                                  (uintptr_t *)&key_locations[0], FlatVector::INCREMENTAL_SELECTION_VECTOR,
 		                                  build_size, offset);
 	}
 }

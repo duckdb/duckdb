@@ -37,6 +37,24 @@ public:
 	unique_ptr<JoinHashTable::ScanStructure> scan_structure;
 };
 //! PhysicalHashJoin represents a hash loop join between two tables
+
+class HashJoinGlobalState : public GlobalOperatorState {
+public:
+	HashJoinGlobalState() {
+	}
+
+	//! The HT used by the join
+	unique_ptr<JoinHashTable> hash_table;
+	//! Only used for FULL OUTER JOIN: scan state of the final scan to find unmatched tuples in the build-side
+	JoinHTScanState ht_scan_state;
+};
+
+class HashJoinLocalState : public LocalSinkState {
+public:
+	DataChunk build_chunk;
+	DataChunk join_keys;
+	ExpressionExecutor build_executor;
+};
 class PhysicalHashJoin : public PhysicalComparisonJoin {
 public:
 	PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right,
