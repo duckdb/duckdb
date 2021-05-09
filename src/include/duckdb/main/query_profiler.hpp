@@ -128,9 +128,16 @@ public:
 		idx_t depth = 0;
 	};
 
+    //! The lock used for flushing information from a thread into the global query profiler
+    mutex flush_lock;
+
+    // move constructor.
+    QueryProfiler(QueryProfiler &&sp)  noexcept : save_location(sp.save_location) {
+    }
+
+
 private:
 	unique_ptr<TreeNode> CreateTree(PhysicalOperator *root, idx_t depth = 0);
-
 	void Render(const TreeNode &node, std::ostream &str) const;
 
 public:
@@ -242,6 +249,8 @@ private:
 public:
 	deque<pair<transaction_t, QueryProfiler>> &GetPrevProfilers() {
 		return prev_profilers;
+	}
+	QueryProfilerHistory() {
 	}
 
 	void SetPrevProfilersSize(uint64_t prevProfilersSize) {
