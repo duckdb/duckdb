@@ -38,10 +38,11 @@ TEST_CASE("Test Concurrent Usage of Sequences", "[sequence][.]") {
 	ConcurrentData data(db);
 	ConcurrentData seq_data(db);
 
-    // enable detailed profiling
-    con.Query("PRAGMA enable_profiling");
-    con.Query("PRAGMA profiling_output='__TEST_DIR__/test.json'");
-    con.Query("PRAGMA profiling_mode = detailed");
+	// enable detailed profiling
+	con.Query("PRAGMA enable_profiling");
+	auto detailed_profiling_output = TestCreatePath("detailed_profiling_output");
+	con.Query("PRAGMA profiling_output='" + detailed_profiling_output + "'");
+	con.Query("PRAGMA profiling_mode = detailed");
 
 	// create a sequence
 	REQUIRE_NO_FAIL(con.Query("CREATE SEQUENCE seq;"));

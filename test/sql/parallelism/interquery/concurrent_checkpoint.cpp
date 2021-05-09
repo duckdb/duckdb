@@ -124,7 +124,8 @@ TEST_CASE("Concurrent checkpoint with single updater", "[interquery][.]") {
 
 	// enable detailed profiling
 	con.Query("PRAGMA enable_profiling");
-	con.Query("PRAGMA profiling_output='__TEST_DIR__/test.json'");
+	auto detailed_profiling_output = TestCreatePath("detailed_profiling_output");
+	con.Query("PRAGMA profiling_output='" + detailed_profiling_output + "'");
 	con.Query("PRAGMA profiling_mode = detailed");
 
 	// initialize the database
@@ -188,10 +189,11 @@ TEST_CASE("Concurrent checkpoint with multiple updaters", "[interquery][.]") {
 	DuckDB db(storage_database, config.get());
 	Connection con(db);
 
-    // enable detailed profiling
-    con.Query("PRAGMA enable_profiling");
-    con.Query("PRAGMA profiling_output='__TEST_DIR__/test.json'");
-    con.Query("PRAGMA profiling_mode = detailed");
+	// enable detailed profiling
+	con.Query("PRAGMA enable_profiling");
+	auto detailed_profiling_output = TestCreatePath("detailed_profiling_output");
+	con.Query("PRAGMA profiling_output='" + detailed_profiling_output + "'");
+	con.Query("PRAGMA profiling_mode = detailed");
 
 	ConcurrentCheckpoint::finished = false;
 	ConcurrentCheckpoint::finished_threads = 0;
@@ -228,10 +230,11 @@ TEST_CASE("Force concurrent checkpoint with single updater", "[interquery][.]") 
 	DuckDB db(storage_database, config.get());
 	Connection con(db);
 
-    // enable detailed profiling
-    con.Query("PRAGMA enable_profiling");
-    con.Query("PRAGMA profiling_output='__TEST_DIR__/test.json'");
-    con.Query("PRAGMA profiling_mode = detailed");
+	// enable detailed profiling
+	con.Query("PRAGMA enable_profiling");
+	auto detailed_profiling_output = TestCreatePath("detailed_profiling_output");
+	con.Query("PRAGMA profiling_output='" + detailed_profiling_output + "'");
+	con.Query("PRAGMA profiling_mode = detailed");
 
 	ConcurrentCheckpoint::finished = false;
 	// initialize the database
@@ -269,10 +272,11 @@ TEST_CASE("Concurrent commits on persistent database with automatic checkpoints"
 	DuckDB db(storage_database, config.get());
 	Connection con(db);
 
-    // enable detailed profiling
-    con.Query("PRAGMA enable_profiling");
-    con.Query("PRAGMA profiling_output='__TEST_DIR__/test.json'");
-    con.Query("PRAGMA profiling_mode = detailed");
+	// enable detailed profiling
+	con.Query("PRAGMA enable_profiling");
+	auto detailed_profiling_output = TestCreatePath("detailed_profiling_output");
+	con.Query("PRAGMA profiling_output='" + detailed_profiling_output + "'");
+	con.Query("PRAGMA profiling_mode = detailed");
 
 	const int ACCOUNTS = 20000;
 	ConcurrentCheckpoint::finished = false;
