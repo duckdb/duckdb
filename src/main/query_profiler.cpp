@@ -227,7 +227,7 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 	if (!enabled || !running) {
 		return;
 	}
-	lock_guard<mutex> Guard(flush_lock);
+	lock_guard<mutex> guard(flush_lock);
 	for (auto &node : profiler.timings) {
 		auto entry = tree_map.find(node.first);
 		D_ASSERT(entry != tree_map.end());

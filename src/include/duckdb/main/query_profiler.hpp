@@ -140,9 +140,10 @@ public:
 	// move constructor. during moving profiler into profiler_history fields such as save_location, enabled,
 	// detailed_enabled should remain automatic_print_format.
 	QueryProfiler(QueryProfiler &&qp) noexcept
-	    : save_location(qp.save_location), enabled(qp.enabled), detailed_enabled(qp.detailed_enabled),
-	      automatic_print_format(qp.automatic_print_format) {
+	    : automatic_print_format(qp.automatic_print_format), save_location(qp.save_location), enabled(qp.enabled),
+	      detailed_enabled(qp.detailed_enabled) {
 		tree_map = move(qp.tree_map);
+		root = move(qp.root);
 	}
 
 private:
