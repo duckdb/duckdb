@@ -10,7 +10,7 @@ namespace duckdb {
 WindowSegmentTree::WindowSegmentTree(AggregateFunction &aggregate, FunctionData *bind_info, LogicalType result_type,
                                      ChunkCollection *input)
     : aggregate(aggregate), bind_info(bind_info), result_type(move(result_type)), state(aggregate.state_size()),
-      internal_nodes(0), input_ref(input) {
+      bounds(0, 0), internal_nodes(0), input_ref(input) {
 #if STANDARD_VECTOR_SIZE < 512
 	throw NotImplementedException("Window functions are not supported for vector sizes < 512");
 #endif
@@ -20,7 +20,10 @@ WindowSegmentTree::WindowSegmentTree(AggregateFunction &aggregate, FunctionData 
 
 	if (input_ref && input_ref->ColumnCount() > 0) {
 		inputs.Initialize(input_ref->Types());
-		if (aggregate.combine) {
+		// if we have a frame-by-frame method, share the single state
+		if (aggregate.frame) {
+			AggregateInit();
+		} else if (aggregate.combine) {
 			ConstructTree();
 		}
 	}
@@ -45,6 +48,10 @@ WindowSegmentTree::~WindowSegmentTree() {
 	if (count > 0) {
 		aggregate.destructor(addresses, count);
 	}
+
+	if (aggregate.frame) {
+		(void)AggegateFinal();
+	}
 }
 
 void WindowSegmentTree::AggregateInit() {
@@ -64,42 +71,52 @@ Value WindowSegmentTree::AggegateFinal() {
 	return result.GetValue(0);
 }
 
+void WindowSegmentTree::ExtractFrame(idx_t begin, idx_t end) {
+	inputs.Reset();
+	inputs.SetCardinality(end - begin);
+
+	const idx_t start_in_vector = begin % STANDARD_VECTOR_SIZE;
+	const auto input_count = input_ref->ColumnCount();
+	if (start_in_vector + inputs.size() <= STANDARD_VECTOR_SIZE) {
+		auto &chunk = input_ref->GetChunkForRow(begin);
+		for (idx_t i = 0; i < input_count; ++i) {
+			auto &v = inputs.data[i];
+			auto &vec = chunk.data[i];
+			v.Slice(vec, start_in_vector);
+			v.Verify(inputs.size());
+		}
+	} else {
+		// we cannot just slice the individual vector!
+		auto &chunk_a = input_ref->GetChunkForRow(begin);
+		auto &chunk_b = input_ref->GetChunkForRow(end);
+		idx_t chunk_a_count = chunk_a.size() - start_in_vector;
+		idx_t chunk_b_count = inputs.size() - chunk_a_count;
+		for (idx_t i = 0; i < input_count; ++i) {
+			auto &v = inputs.data[i];
+			VectorOperations::Copy(chunk_a.data[i], v, chunk_a.size(), start_in_vector, 0);
+			VectorOperations::Copy(chunk_b.data[i], v, chunk_b_count, 0, chunk_a_count);
+		}
+	}
+}
+
 void WindowSegmentTree::WindowSegmentValue(idx_t l_idx, idx_t begin, idx_t end) {
 	D_ASSERT(begin <= end);
 	if (begin == end) {
 		return;
 	}
-	inputs.Reset();
-	inputs.SetCardinality(end - begin);
+
+	if (end - begin >= STANDARD_VECTOR_SIZE) {
+		throw InternalException("Cannot compute window aggregation: bounds are too large");
+	}
 
 	Vector s;
 	s.Slice(statep, 0);
-	idx_t start_in_vector = begin % STANDARD_VECTOR_SIZE;
 	if (l_idx == 0) {
-		const auto input_count = input_ref->ColumnCount();
-		if (start_in_vector + inputs.size() <= STANDARD_VECTOR_SIZE) {
-			auto &chunk = input_ref->GetChunkForRow(begin);
-			for (idx_t i = 0; i < input_count; ++i) {
-				auto &v = inputs.data[i];
-				auto &vec = chunk.data[i];
-				v.Slice(vec, start_in_vector);
-				v.Verify(inputs.size());
-			}
-		} else {
-			// we cannot just slice the individual vector!
-			auto &chunk_a = input_ref->GetChunkForRow(begin);
-			auto &chunk_b = input_ref->GetChunkForRow(end);
-			idx_t chunk_a_count = chunk_a.size() - start_in_vector;
-			idx_t chunk_b_count = inputs.size() - chunk_a_count;
-			for (idx_t i = 0; i < input_count; ++i) {
-				auto &v = inputs.data[i];
-				VectorOperations::Copy(chunk_a.data[i], v, chunk_a.size(), start_in_vector, 0);
-				VectorOperations::Copy(chunk_b.data[i], v, chunk_b_count, 0, chunk_a_count);
-			}
-		}
-		aggregate.update(&inputs.data[0], bind_info, input_count, s, inputs.size());
+		ExtractFrame(begin, end);
+		aggregate.update(&inputs.data[0], bind_info, input_ref->ColumnCount(), s, inputs.size());
 	} else {
-		D_ASSERT(end - begin <= STANDARD_VECTOR_SIZE);
+		inputs.Reset();
+		inputs.SetCardinality(end - begin);
 		// find out where the states begin
 		data_ptr_t begin_ptr = levels_flat_native.get() + state.size() * (begin + levels_flat_start[l_idx - 1]);
 		// set up a vector of pointers that point towards the set of states
@@ -162,15 +179,34 @@ Value WindowSegmentTree::Compute(idx_t begin, idx_t end) {
 		return Value::Numeric(result_type, end - begin);
 	}
 
+	// If we have a frame function, use that
+	if (aggregate.frame) {
+		// Reference the previous inputs
+		DataChunk prevs;
+		prevs.InitializeEmpty(inputs.GetTypes());
+		prevs.Reference(inputs);
+
+		// Extract the new inputs
+		ExtractFrame(begin, end);
+
+		// Frame boundaries
+		auto prev_bounds = bounds;
+		bounds = FrameBounds(begin, end);
+
+		Vector result(result_type);
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		ConstantVector::SetNull(result, false);
+
+		aggregate.frame(inputs.data.data(), prevs.data.data(), bind_info, inputs.ColumnCount(), state.data(), bounds,
+		                prev_bounds, result);
+		return result.GetValue(0);
+	}
+
 	AggregateInit();
 
 	// Aggregate everything at once if we can't combine states
 	if (!aggregate.combine) {
 		WindowSegmentValue(0, begin, end);
-		if (end - begin >= STANDARD_VECTOR_SIZE) {
-			throw InternalException(
-			    "Cannot compute window aggregation: bounds are too large for non-combinable aggregate");
-		}
 		return AggegateFinal();
 	}
 

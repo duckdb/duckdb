@@ -4,9 +4,9 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/function/aggregate/holistic_functions.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
-
 #include "duckdb/common/unordered_map.hpp"
 
 #include <functional>
@@ -31,16 +31,89 @@ struct hash<duckdb::hugeint_t> {
 
 namespace duckdb {
 
+using FrameBounds = std::pair<idx_t, idx_t>;
+
 template <class KEY_TYPE>
 struct ModeState {
-	unordered_map<KEY_TYPE, size_t> *frequency_map;
+	using Counts = unordered_map<KEY_TYPE, size_t>;
+
+	Counts *frequency_map;
+	KEY_TYPE *mode;
+	size_t nonzero;
+	bool valid;
+	size_t count;
+
+	void Initialize() {
+		frequency_map = nullptr;
+		mode = nullptr;
+		nonzero = 0;
+		valid = false;
+		count = 0;
+	}
+
+	void Destroy() {
+		if (frequency_map) {
+			delete frequency_map;
+		}
+		if (mode) {
+			delete mode;
+		}
+	}
+
+	void Reset() {
+		Counts empty;
+		frequency_map->swap(empty);
+		nonzero = 0;
+		count = 0;
+		valid = false;
+	}
+
+	void ModeAdd(const KEY_TYPE &key) {
+		auto new_count = ((*frequency_map)[key] += 1);
+		if (new_count == 1) {
+			++nonzero;
+		}
+		if (new_count > count) {
+			valid = true;
+			count = new_count;
+			if (mode) {
+				*mode = key;
+			} else {
+				mode = new KEY_TYPE(key);
+			}
+		}
+	}
+
+	void ModeRm(const KEY_TYPE &key) {
+		auto i = frequency_map->find(key);
+		auto old_count = i->second;
+		nonzero -= int(old_count == 1);
+
+		i->second -= 1;
+		if (count == old_count && key == *mode) {
+			valid = false;
+		}
+	}
+
+	typename Counts::const_iterator Scan() const {
+		//! Initialize control variables to first variable of the frequency map
+		auto highest_frequency = frequency_map->begin();
+		for (auto i = highest_frequency; i != frequency_map->end(); ++i) {
+			// Tie break with the lowest
+			if (i->second > highest_frequency->second ||
+			    (i->second == highest_frequency->second && i->first < highest_frequency->first)) {
+				highest_frequency = i;
+			}
+		}
+		return highest_frequency;
+	}
 };
 
 template <typename KEY_TYPE>
 struct ModeFunction {
 	template <class STATE>
 	static void Initialize(STATE *state) {
-		state->frequency_map = nullptr;
+		state->Initialize();
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
@@ -74,21 +147,59 @@ struct ModeFunction {
 			mask.SetInvalid(idx);
 			return;
 		}
-		//! Initialize control variables to first variable of the frequency map
-		auto highest_frequency = state->frequency_map->begin();
-		for (auto i = highest_frequency; i != state->frequency_map->end(); ++i) {
-			if (i->second > highest_frequency->second) {
-				highest_frequency = i;
-			}
-		}
+		auto highest_frequency = state->Scan();
 		target[idx] = INPUT_TYPE(highest_frequency->first);
 	}
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask,
 	                              idx_t count) {
-		for (idx_t i = 0; i < count; i++) {
-			Operation<INPUT_TYPE, STATE, OP>(state, bind_data, input, mask, 0);
+		if (!state->frequency_map) {
+			state->frequency_map = new unordered_map<KEY_TYPE, size_t>();
 		}
+		auto key = KEY_TYPE(input[0]);
+		(*state->frequency_map)[key] += count;
+	}
+
+	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
+	static void Frame(INPUT_TYPE *fdata, INPUT_TYPE *pdata, FunctionData *bind_data, STATE *state,
+	                  const FrameBounds &frame, const FrameBounds &prev, RESULT_TYPE *result) {
+		if (!state->frequency_map) {
+			state->frequency_map = new unordered_map<KEY_TYPE, size_t>();
+		}
+		const double tau = .25;
+		if (state->nonzero <= tau * state->frequency_map->size()) {
+			state->Reset();
+			// for f ∈ F do
+			for (auto f = frame.first; f < frame.second; ++f) {
+				state->ModeAdd(KEY_TYPE(fdata[f]));
+			}
+		} else {
+			// for f ∈ P \ F do
+			for (auto p = prev.first; p < frame.first; ++p) {
+				state->ModeRm(KEY_TYPE(pdata[p]));
+			}
+			for (auto p = frame.second; p < prev.second; ++p) {
+				state->ModeRm(KEY_TYPE(pdata[p]));
+			}
+
+			// for f ∈ F \ P do
+			for (auto f = frame.first; f < prev.first; ++f) {
+				state->ModeAdd(KEY_TYPE(fdata[f]));
+			}
+			for (auto f = prev.second; f < frame.second; ++f) {
+				state->ModeAdd(KEY_TYPE(fdata[f]));
+			}
+		}
+
+		if (!state->valid) {
+			// Rescan
+			auto highest_frequency = state->Scan();
+			*(state->mode) = highest_frequency->first;
+			state->count = highest_frequency->second;
+			state->valid = true;
+		}
+
+		result[0] = RESULT_TYPE(*state->mode);
 	}
 
 	static bool IgnoreNull() {
@@ -97,16 +208,17 @@ struct ModeFunction {
 
 	template <class STATE>
 	static void Destroy(STATE *state) {
-		if (state->frequency_map) {
-			delete state->frequency_map;
-		}
+		state->Destroy();
 	}
 };
 
 template <typename INPUT_TYPE, typename KEY_TYPE>
 AggregateFunction GetTypedModeFunction(const LogicalType &type) {
-	return AggregateFunction::UnaryAggregateDestructor<ModeState<KEY_TYPE>, INPUT_TYPE, INPUT_TYPE,
-	                                                   ModeFunction<KEY_TYPE>>(type, type);
+	using STATE = ModeState<KEY_TYPE>;
+	using OP = ModeFunction<KEY_TYPE>;
+	auto func = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, INPUT_TYPE, OP>(type, type);
+	func.frame = AggregateFunction::UnaryFrame<STATE, INPUT_TYPE, INPUT_TYPE, OP>;
+	return func;
 }
 
 AggregateFunction GetModeAggregate(const LogicalType &type) {
