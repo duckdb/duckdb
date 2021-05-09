@@ -18,6 +18,12 @@ TEST_CASE("Single thread delete", "[interquery][.]") {
 	Connection con(db);
 	vector<unique_ptr<Connection>> connections;
 
+    // enable detailed profiling
+    con.Query("PRAGMA enable_profiling");
+    con.Query("PRAGMA profiling_output='__TEST_DIR__/test.json'");
+    con.Query("PRAGMA profiling_mode = detailed");
+
+
 	// initialize the database
 	con.Query("CREATE TABLE integers(i INTEGER);");
 	int sum = 0;
@@ -47,6 +53,11 @@ TEST_CASE("Sequential delete", "[interquery][.]") {
 	Connection con(db);
 	vector<unique_ptr<Connection>> connections;
 	Value count;
+
+    // enable detailed profiling
+    con.Query("PRAGMA enable_profiling");
+    con.Query("PRAGMA profiling_output='__TEST_DIR__/test.json'");
+    con.Query("PRAGMA profiling_mode = detailed");
 
 	// initialize the database
 	con.Query("CREATE TABLE integers(i INTEGER);");
@@ -101,6 +112,11 @@ TEST_CASE("Rollback delete", "[interquery][.]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	vector<unique_ptr<Connection>> connections;
+
+    // enable detailed profiling
+    con.Query("PRAGMA enable_profiling");
+    con.Query("PRAGMA profiling_output='__TEST_DIR__/test.json'");
+    con.Query("PRAGMA profiling_mode = detailed");
 
 	// initialize the database
 	con.Query("CREATE TABLE integers(i INTEGER);");
@@ -173,6 +189,11 @@ TEST_CASE("Concurrent delete", "[interquery][.]") {
 	unique_ptr<MaterializedQueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
+
+    // enable detailed profiling
+    con.Query("PRAGMA enable_profiling");
+    con.Query("PRAGMA profiling_output='__TEST_DIR__/test.json'");
+    con.Query("PRAGMA profiling_mode = detailed");
 
 	// initialize the database
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER);"));

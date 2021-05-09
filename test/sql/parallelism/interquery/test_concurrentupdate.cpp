@@ -20,6 +20,11 @@ TEST_CASE("Single thread update", "[interquery][.]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
+    // enable detailed profiling
+    con.Query("PRAGMA enable_profiling");
+    con.Query("PRAGMA profiling_output='__TEST_DIR__/test.json'");
+    con.Query("PRAGMA profiling_mode = detailed");
+
 	// initialize the database
 	con.Query("CREATE TABLE integers(i INTEGER);");
 	int sum = 0;
@@ -60,6 +65,11 @@ TEST_CASE("Concurrent update", "[interquery][.]") {
 	unique_ptr<MaterializedQueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
+
+    // enable detailed profiling
+    con.Query("PRAGMA enable_profiling");
+    con.Query("PRAGMA profiling_output='__TEST_DIR__/test.json'");
+    con.Query("PRAGMA profiling_mode = detailed");
 
 	// fixed seed random numbers
 	mt19937 generator;
@@ -166,6 +176,11 @@ TEST_CASE("Multiple concurrent updaters", "[interquery][.]") {
 	unique_ptr<MaterializedQueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
+
+    // enable detailed profiling
+    con.Query("PRAGMA enable_profiling");
+    con.Query("PRAGMA profiling_output='__TEST_DIR__/test.json'");
+    con.Query("PRAGMA profiling_mode = detailed");
 
 	finished_updating = false;
 	finished_threads = 0;

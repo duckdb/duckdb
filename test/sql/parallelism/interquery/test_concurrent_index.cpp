@@ -31,6 +31,11 @@ TEST_CASE("Concurrent reads during index creation", "[index][.]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
+    // enable detailed profiling
+    con.Query("PRAGMA enable_profiling");
+    con.Query("PRAGMA profiling_output='__TEST_DIR__/test.json'");
+    con.Query("PRAGMA profiling_mode = detailed");
+
 	// create a single table to append to
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
 	// append a bunch of entries
@@ -79,6 +84,11 @@ TEST_CASE("Concurrent writes during index creation", "[index][.]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
+    // enable detailed profiling
+    con.Query("PRAGMA enable_profiling");
+    con.Query("PRAGMA profiling_output='__TEST_DIR__/test.json'");
+    con.Query("PRAGMA profiling_mode = detailed");
+
 	// create a single table to append to
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
 	// append a bunch of entries
@@ -126,6 +136,11 @@ TEST_CASE("Concurrent inserts into PRIMARY KEY column", "[index][.]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
+    // enable detailed profiling
+    con.Query("PRAGMA enable_profiling");
+    con.Query("PRAGMA profiling_output='__TEST_DIR__/test.json'");
+    con.Query("PRAGMA profiling_mode = detailed");
+
 	// create a single table to append to
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER PRIMARY KEY)"));
 
@@ -157,6 +172,11 @@ TEST_CASE("Concurrent updates to PRIMARY KEY column", "[index][.]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
+
+    // enable detailed profiling
+    con.Query("PRAGMA enable_profiling");
+    con.Query("PRAGMA profiling_output='__TEST_DIR__/test.json'");
+    con.Query("PRAGMA profiling_mode = detailed");
 
 	// create a single table and insert the values [1...1000]
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER PRIMARY KEY)"));
@@ -211,6 +231,11 @@ TEST_CASE("Mix of UPDATES and INSERTS on table with PRIMARY KEY constraints", "[
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
+
+    // enable detailed profiling
+    con.Query("PRAGMA enable_profiling");
+    con.Query("PRAGMA profiling_output='__TEST_DIR__/test.json'");
+    con.Query("PRAGMA profiling_mode = detailed");
 
 	atomic<idx_t> atomic_count;
 	atomic_count = 0;
@@ -281,6 +306,11 @@ TEST_CASE("Parallel appends to table with index with transactions", "[index][.]"
 	DuckDB db(nullptr);
 	Connection con(db);
 
+    // enable detailed profiling
+    con.Query("PRAGMA enable_profiling");
+    con.Query("PRAGMA profiling_output='__TEST_DIR__/test.json'");
+    con.Query("PRAGMA profiling_mode = detailed");
+
 	// create a single table
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER PRIMARY KEY)"));
 
@@ -312,6 +342,11 @@ TEST_CASE("Concurrent appends during index join", "[index][.]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
+
+    // enable detailed profiling
+    con.Query("PRAGMA enable_profiling");
+    con.Query("PRAGMA profiling_output='__TEST_DIR__/test.json'");
+    con.Query("PRAGMA profiling_mode = detailed");
 
 	//! create join tables to append to
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));

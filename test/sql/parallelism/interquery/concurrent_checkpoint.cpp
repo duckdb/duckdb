@@ -121,6 +121,12 @@ TEST_CASE("Concurrent checkpoint with single updater", "[interquery][.]") {
 	auto random_amount = bind(amount_distribution, generator);
 
 	ConcurrentCheckpoint::finished = false;
+
+	// enable detailed profiling
+	con.Query("PRAGMA enable_profiling");
+	con.Query("PRAGMA profiling_output='__TEST_DIR__/test.json'");
+	con.Query("PRAGMA profiling_mode = detailed");
+
 	// initialize the database
 	con.Query("BEGIN TRANSACTION");
 	con.Query("CREATE TABLE accounts(id INTEGER, money INTEGER)");
@@ -182,6 +188,11 @@ TEST_CASE("Concurrent checkpoint with multiple updaters", "[interquery][.]") {
 	DuckDB db(storage_database, config.get());
 	Connection con(db);
 
+    // enable detailed profiling
+    con.Query("PRAGMA enable_profiling");
+    con.Query("PRAGMA profiling_output='__TEST_DIR__/test.json'");
+    con.Query("PRAGMA profiling_mode = detailed");
+
 	ConcurrentCheckpoint::finished = false;
 	ConcurrentCheckpoint::finished_threads = 0;
 	// initialize the database
@@ -216,6 +227,11 @@ TEST_CASE("Force concurrent checkpoint with single updater", "[interquery][.]") 
 	unique_ptr<MaterializedQueryResult> result;
 	DuckDB db(storage_database, config.get());
 	Connection con(db);
+
+    // enable detailed profiling
+    con.Query("PRAGMA enable_profiling");
+    con.Query("PRAGMA profiling_output='__TEST_DIR__/test.json'");
+    con.Query("PRAGMA profiling_mode = detailed");
 
 	ConcurrentCheckpoint::finished = false;
 	// initialize the database
@@ -252,6 +268,11 @@ TEST_CASE("Concurrent commits on persistent database with automatic checkpoints"
 	config->checkpoint_wal_size = 1;
 	DuckDB db(storage_database, config.get());
 	Connection con(db);
+
+    // enable detailed profiling
+    con.Query("PRAGMA enable_profiling");
+    con.Query("PRAGMA profiling_output='__TEST_DIR__/test.json'");
+    con.Query("PRAGMA profiling_mode = detailed");
 
 	const int ACCOUNTS = 20000;
 	ConcurrentCheckpoint::finished = false;

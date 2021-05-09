@@ -26,6 +26,11 @@ static void RunQueryUntilSuccess(Connection &con, string query) {
 static void create_drop_table(DuckDB *db) {
 	Connection con(*db);
 
+    // enable detailed profiling
+    con.Query("PRAGMA enable_profiling");
+    con.Query("PRAGMA profiling_output='__TEST_DIR__/test.json'");
+    con.Query("PRAGMA profiling_mode = detailed");
+
 	while (!finished) {
 		// printf("[TABLE] Create table\n");
 		// create the table: this should never fail
@@ -70,6 +75,7 @@ TEST_CASE("Test parallel dependencies in multiple connections", "[catalog][.]") 
 	// in the other thread, we create a prepared statement and execute it
 	// the prepared statement depends on the table
 	// hence when the CASCADE drop is executed the prepared statement also needs to be dropped
+
 
 	thread table_thread = thread(create_drop_table, &db);
 	thread seq_threads[CONCURRENT_DEPENDENCIES_THREAD_COUNT];
