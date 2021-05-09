@@ -103,7 +103,6 @@ string ClientContext::FinalizeQuery(ClientContextLock &lock, bool success) {
 		ActiveTransaction().active_query = MAXIMUM_QUERY_ID;
 		query_profiler_history.GetPrevProfilers().emplace_back(transaction.ActiveTransaction().active_query,
 		                                                       move(profiler));
-		profiler.save_location = query_profiler_history.GetPrevProfilers().back().second.save_location;
 		if (query_profiler_history.GetPrevProfilers().size() >= query_profiler_history.GetPrevProfilersSize()) {
 			query_profiler_history.GetPrevProfilers().pop_front();
 		}

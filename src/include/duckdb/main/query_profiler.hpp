@@ -120,6 +120,12 @@ private:
 //! The QueryProfiler can be used to measure timings of queries
 class QueryProfiler {
 public:
+	DUCKDB_API QueryProfiler()
+	    : automatic_print_format(ProfilerPrintFormat::NONE), enabled(false), detailed_enabled(false), running(false),
+	      query_requires_profiling(false) {
+	}
+
+public:
 	struct TreeNode {
 		string name;
 		string extra_info;
@@ -128,24 +134,22 @@ public:
 		idx_t depth = 0;
 	};
 
-    //! The lock used for flushing information from a thread into the global query profiler
-    mutex flush_lock;
+	//! The lock used for flushing information from a thread into the global query profiler
+	mutex flush_lock;
 
-    // move constructor.
-    QueryProfiler(QueryProfiler &&sp)  noexcept : save_location(sp.save_location) {
-    }
-
+	// move constructor. during moving profiler into profiler_history fields such as save_location, enabled,
+	// detailed_enabled should remain automatic_print_format.
+	QueryProfiler(QueryProfiler &&qp) noexcept
+	    : save_location(qp.save_location), enabled(qp.enabled), detailed_enabled(qp.detailed_enabled),
+	      automatic_print_format(qp.automatic_print_format) {
+		tree_map = move(qp.tree_map);
+	}
 
 private:
 	unique_ptr<TreeNode> CreateTree(PhysicalOperator *root, idx_t depth = 0);
 	void Render(const TreeNode &node, std::ostream &str) const;
 
 public:
-	DUCKDB_API QueryProfiler()
-	    : automatic_print_format(ProfilerPrintFormat::NONE), enabled(false), detailed_enabled(false), running(false),
-	      query_requires_profiling(false) {
-	}
-
 	DUCKDB_API void Enable() {
 		enabled = true;
 		detailed_enabled = false;
@@ -209,7 +213,6 @@ private:
 	unique_ptr<TreeNode> root;
 	//! The query string
 	string query;
-
 	//! The timer used to time the execution time of the entire query
 	Profiler<system_clock> main_query;
 	//! A map of a Physical Operator pointer to a tree node
