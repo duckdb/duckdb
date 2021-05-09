@@ -332,14 +332,15 @@ void PhysicalHashJoin::BuildPerfectHashStructure(JoinHashTable *hash_table_ptr, 
 		build_columns.emplace_back(type, build_size);
 	}
 	// gather the values from the RHS
-	std::vector<data_ptr_t> key_locations;
-	key_locations.reserve(build_size + 1);
+	/* 	std::vector<data_ptr_t> key_locations;
+	    key_locations.reserve(build_size + 1); */
+	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
 	hash_table_ptr->FillWithOffsets(key_locations, join_ht_state);
 	idx_t offset = hash_table_ptr->condition_size;
 	for (idx_t i = 0; i != build_columns.size(); ++i) {
 		D_ASSERT(build_columns[i].GetType() == build_types[i]);
 		JoinHashTable::GatherResultVector(build_columns[i], FlatVector::INCREMENTAL_SELECTION_VECTOR,
-		                                  (uintptr_t *)&key_locations[0], FlatVector::INCREMENTAL_SELECTION_VECTOR,
+		                                  (uintptr_t *)key_locations, FlatVector::INCREMENTAL_SELECTION_VECTOR,
 		                                  build_size, offset);
 	}
 }
