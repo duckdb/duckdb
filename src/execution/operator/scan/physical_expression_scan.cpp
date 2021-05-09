@@ -1,5 +1,5 @@
 #include "duckdb/execution/operator/scan/physical_expression_scan.hpp"
-
+#include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
@@ -41,6 +41,13 @@ void PhysicalExpressionScan::GetChunkInternal(ExecutionContext &context, DataChu
 
 unique_ptr<PhysicalOperatorState> PhysicalExpressionScan::GetOperatorState() {
 	return make_unique<PhysicalExpressionScanState>(*this, children[0].get());
+}
+void PhysicalExpressionScan::FinalizeOperatorState(PhysicalOperatorState &state, ExecutionContext &context) {
+	auto &state_p = reinterpret_cast<PhysicalExpressionScanState &>(state);
+	context.thread.profiler.Flush(this, state_p.executor.get(), "executor", 0);
+	if (!children.empty() && state.child_state) {
+		children[0]->FinalizeOperatorState(*state.child_state, context);
+	}
 }
 
 } // namespace duckdb

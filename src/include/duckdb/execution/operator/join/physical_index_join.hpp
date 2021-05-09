@@ -49,6 +49,7 @@ public:
 	bool lhs_first = true;
 	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
+	void FinalizeOperatorState(PhysicalOperatorState &state, ExecutionContext &context) override;
 
 private:
 	void GetRHSMatches(ExecutionContext &context, PhysicalOperatorState *state_p) const;

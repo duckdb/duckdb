@@ -172,7 +172,7 @@ void PhysicalSimpleAggregate::Combine(ExecutionContext &context, GlobalOperatorS
 		source.state.Move(gstate.state);
 	}
 
-	context.thread.profiler.Flush(this, &source.child_executor, "aggregate", 0);
+	context.thread.profiler.Flush(this, &source.child_executor, "child_executor", 0);
 	context.client.profiler.Flush(context.thread.profiler);
 }
 

@@ -36,6 +36,12 @@ public:
 private:
 	// resolve joins that output max N elements (SEMI, ANTI, MARK)
 	void ResolveSimpleJoin(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state);
+
+public:
+	void FinalizeOperatorState(PhysicalOperatorState &state, ExecutionContext &context) override;
+	void Combine(ExecutionContext &context, GlobalOperatorState &gstate, LocalSinkState &lstate) override;
+
+private:
 	// resolve joins that can potentially output N*M elements (INNER, LEFT, FULL)
 	void ResolveComplexJoin(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state);
 };

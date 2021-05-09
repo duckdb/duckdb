@@ -102,5 +102,10 @@ void PhysicalUpdate::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 
 	state->finished = true;
 }
+void PhysicalUpdate::Combine(ExecutionContext &context, GlobalOperatorState &gstate, LocalSinkState &lstate) {
+	auto &state = (UpdateLocalState &)lstate;
+	context.thread.profiler.Flush(this, &state.default_executor, "default_executor", 1);
+	context.client.profiler.Flush(context.thread.profiler);
+}
 
 } // namespace duckdb
