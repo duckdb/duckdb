@@ -24,7 +24,7 @@ public:
 	}
 
 	PhysicalWindow &op;
-	std::mutex lock;
+	mutex lock;
 	ChunkCollection chunks;
 	ChunkCollection over_collection;
 	ChunkCollection hash_collection;
@@ -724,7 +724,7 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 		case ExpressionType::WINDOW_LEAD:
 		case ExpressionType::WINDOW_LAG: {
 			Value def_val = Value(wexpr->return_type);
-			idx_t offset = 1;
+			int64_t offset = 1;
 			if (wexpr->offset_expr) {
 				offset = leadlag_offset_collection.GetValue(0, wexpr->offset_expr->IsScalar() ? 0 : row_idx)
 				             .GetValue<int64_t>();
@@ -732,22 +732,18 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 			if (wexpr->default_expr) {
 				def_val = leadlag_default_collection.GetValue(0, wexpr->default_expr->IsScalar() ? 0 : row_idx);
 			}
+			int64_t val_idx = (int64_t)row_idx;
 			if (wexpr->type == ExpressionType::WINDOW_LEAD) {
-				auto lead_idx = row_idx + offset;
-				if (lead_idx < bounds.partition_end) {
-					res = payload_collection.GetValue(0, lead_idx);
-				} else {
-					res = def_val;
-				}
+				val_idx += offset;
 			} else {
-				int64_t lag_idx = (int64_t)row_idx - offset;
-				if (lag_idx >= 0 && (idx_t)lag_idx >= bounds.partition_start) {
-					res = payload_collection.GetValue(0, lag_idx);
-				} else {
-					res = def_val;
-				}
+				val_idx -= offset;
 			}
 
+			if (val_idx >= int64_t(bounds.partition_start) && val_idx < int64_t(bounds.partition_end)) {
+				res = payload_collection.GetValue(0, val_idx);
+			} else {
+				res = def_val;
+			}
 			break;
 		}
 		case ExpressionType::WINDOW_FIRST_VALUE: {
@@ -874,7 +870,7 @@ public:
 	WindowParallelState() : next_part(0) {
 	}
 	//! The output read position.
-	std::atomic<idx_t> next_part;
+	atomic<idx_t> next_part;
 };
 
 unique_ptr<ParallelState> PhysicalWindow::GetParallelState() {
@@ -1028,7 +1024,7 @@ void PhysicalWindow::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 }
 
 void PhysicalWindow::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_p,
-                          DataChunk &input) {
+                          DataChunk &input) const {
 	auto &lstate = (WindowLocalState &)lstate_p;
 	lstate.chunks.Append(input);
 
@@ -1077,7 +1073,7 @@ void PhysicalWindow::Combine(ExecutionContext &context, GlobalOperatorState &gst
 	}
 }
 
-void PhysicalWindow::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> gstate_p) {
+bool PhysicalWindow::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> gstate_p) {
 	this->sink_state = move(gstate_p);
 	auto &gstate = (WindowGlobalState &)*this->sink_state;
 
@@ -1085,7 +1081,7 @@ void PhysicalWindow::Finalize(Pipeline &pipeline, ClientContext &context, unique
 	ChunkCollection &window_results = gstate.window_results;
 
 	if (big_data.Count() == 0) {
-		return;
+		return true;
 	}
 
 	vector<LogicalType> window_types;
@@ -1107,6 +1103,7 @@ void PhysicalWindow::Finalize(Pipeline &pipeline, ClientContext &context, unique
 	}
 
 	D_ASSERT(window_results.ColumnCount() == select_list.size());
+	return true;
 }
 
 unique_ptr<LocalSinkState> PhysicalWindow::GetLocalSinkState(ExecutionContext &context) {

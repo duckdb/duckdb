@@ -14,9 +14,9 @@ namespace duckdb {
 
 struct RadixPartitionInfo {
 	explicit RadixPartitionInfo(idx_t _n_partitions_upper_bound);
-	idx_t n_partitions;
-	idx_t radix_bits;
-	hash_t radix_mask;
+	const idx_t n_partitions;
+	const idx_t radix_bits;
+	const hash_t radix_mask;
 	constexpr static idx_t RADIX_SHIFT = 40;
 };
 

@@ -391,6 +391,9 @@ int sqlite3_column_type(sqlite3_stmt *pStmt, int iCol) {
 	case LogicalTypeId::DATE:
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::LIST:
 	case LogicalTypeId::STRUCT:
@@ -946,7 +949,7 @@ int sqlite3_get_autocommit(sqlite3 *db) {
 	return 1;
 	// TODO fix this
 	// return db->con->context->transaction.IsAutoCommit();
-	fprintf(stderr, "sqlite3_get_autocommit: unsupported.\n");
+	// fprintf(stderr, "sqlite3_get_autocommit: unsupported.\n");
 }
 
 int sqlite3_limit(sqlite3 *, int id, int newVal) {
@@ -1001,6 +1004,9 @@ const char *sqlite3_column_decltype(sqlite3_stmt *pStmt, int iCol) {
 	case LogicalTypeId::TIME:
 		return "TIME";
 	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_SEC:
 		return "TIMESTAMP";
 	case LogicalTypeId::VARCHAR:
 		return "VARCHAR";

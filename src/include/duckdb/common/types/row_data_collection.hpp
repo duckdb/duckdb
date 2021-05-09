@@ -17,12 +17,14 @@
 namespace duckdb {
 
 struct RowDataBlock {
-	RowDataBlock(BufferManager &buffer_manager, const idx_t &capacity, const idx_t &entry_size)
-	    : CAPACITY(capacity), count(0), byte_offset(0) {
+	RowDataBlock(BufferManager &buffer_manager, idx_t capacity, idx_t entry_size, idx_t added_capacity = 0)
+	    : capacity(capacity), entry_size(entry_size), count(0), byte_offset(0) {
+		capacity += added_capacity;
 		block = buffer_manager.RegisterMemory(capacity * entry_size, false);
 	}
 	shared_ptr<BlockHandle> block;
-	const idx_t CAPACITY;
+	const idx_t capacity;
+	const idx_t entry_size;
 	idx_t count;
 	idx_t byte_offset;
 };
@@ -34,13 +36,11 @@ struct BlockAppendEntry {
 	idx_t count;
 };
 
-class RowChunk {
+class RowDataCollection {
 public:
-	RowChunk(BufferManager &buffer_manager, idx_t block_capacity, idx_t entry_size);
+	RowDataCollection(BufferManager &buffer_manager, idx_t block_capacity, idx_t entry_size);
 
-	RowChunk(RowChunk &other);
-
-	std::mutex rc_lock;
+	mutex rc_lock;
 
 	//! BufferManager
 	BufferManager &buffer_manager;
@@ -52,10 +52,6 @@ public:
 	idx_t entry_size;
 	//! The blocks holding the main data
 	vector<RowDataBlock> blocks;
-
-	idx_t Size() {
-		return blocks.size();
-	}
 
 public:
 	void SerializeVectorSortable(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count,

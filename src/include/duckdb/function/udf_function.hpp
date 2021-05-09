@@ -131,11 +131,6 @@ public:
 
 private:
 	//-------------------------------- Templated functions --------------------------------//
-	template <typename TR, typename... Args>
-	static scalar_function_t CreateUnaryFunction(const string &name, TR (*udf_func)(Args...)) {
-		D_ASSERT(sizeof...(Args) == 1);
-		return CreateUnaryFunction<TR, Args...>(name, udf_func);
-	}
 
 	template <typename TR, typename TA>
 	static scalar_function_t CreateUnaryFunction(const string &name, TR (*udf_func)(TA)) {
@@ -143,12 +138,6 @@ private:
 			UnaryExecutor::Execute<TA, TR>(input.data[0], result, input.size(), udf_func);
 		};
 		return udf_function;
-	}
-
-	template <typename TR, typename... Args>
-	static scalar_function_t CreateBinaryFunction(const string &name, TR (*udf_func)(Args...)) {
-		D_ASSERT(sizeof...(Args) == 2);
-		return CreateBinaryFunction<TR, Args...>(name, udf_func);
 	}
 
 	template <typename TR, typename TA, typename TB>
@@ -159,12 +148,6 @@ private:
 		return udf_function;
 	}
 
-	template <typename TR, typename... Args>
-	static scalar_function_t CreateTernaryFunction(const string &name, TR (*udf_func)(Args...)) {
-		D_ASSERT(sizeof...(Args) == 3);
-		return CreateTernaryFunction<TR, Args...>(name, udf_func);
-	}
-
 	template <typename TR, typename TA, typename TB, typename TC>
 	static scalar_function_t CreateTernaryFunction(const string &name, TR (*udf_func)(TA, TB, TC)) {
 		scalar_function_t udf_function = [=](DataChunk &input, ExpressionState &state, Vector &result) -> void {
@@ -172,6 +155,21 @@ private:
 			                                         udf_func);
 		};
 		return udf_function;
+	}
+
+	template <typename TR, typename... Args>
+	static scalar_function_t CreateUnaryFunction(const string &name, TR (*udf_func)(Args...)) {
+		throw std::runtime_error("Incorrect number of arguments for unary function");
+	}
+
+	template <typename TR, typename... Args>
+	static scalar_function_t CreateBinaryFunction(const string &name, TR (*udf_func)(Args...)) {
+		throw std::runtime_error("Incorrect number of arguments for binary function");
+	}
+
+	template <typename TR, typename... Args>
+	static scalar_function_t CreateTernaryFunction(const string &name, TR (*udf_func)(Args...)) {
+		throw std::runtime_error("Incorrect number of arguments for ternary function");
 	}
 
 	template <typename T>
@@ -215,8 +213,7 @@ private:
 	template <typename TR, typename... Args>
 	static scalar_function_t CreateUnaryFunction(const string &name, vector<LogicalType> args, LogicalType ret_type,
 	                                             TR (*udf_func)(Args...)) {
-		D_ASSERT(sizeof...(Args) == 1);
-		return CreateUnaryFunction<TR, Args...>(name, args, ret_type, udf_func);
+		throw std::runtime_error("Incorrect number of arguments for unary function");
 	}
 
 	template <typename TR, typename TA>
@@ -238,8 +235,7 @@ private:
 	template <typename TR, typename... Args>
 	static scalar_function_t CreateBinaryFunction(const string &name, vector<LogicalType> args, LogicalType ret_type,
 	                                              TR (*udf_func)(Args...)) {
-		D_ASSERT(sizeof...(Args) == 2);
-		return CreateBinaryFunction<TR, Args...>(name, args, ret_type, udf_func);
+		throw std::runtime_error("Incorrect number of arguments for binary function");
 	}
 
 	template <typename TR, typename TA, typename TB>
@@ -264,8 +260,7 @@ private:
 	template <typename TR, typename... Args>
 	static scalar_function_t CreateTernaryFunction(const string &name, vector<LogicalType> args, LogicalType ret_type,
 	                                               TR (*udf_func)(Args...)) {
-		D_ASSERT(sizeof...(Args) == 3);
-		return CreateTernaryFunction<TR, Args...>(name, args, ret_type, udf_func);
+		throw std::runtime_error("Incorrect number of arguments for ternary function");
 	}
 
 	template <typename TR, typename TA, typename TB, typename TC>
@@ -300,13 +295,19 @@ private:
 			return std::is_same<T, int8_t>();
 		case LogicalTypeId::SMALLINT:
 			return std::is_same<T, int16_t>();
-		case LogicalTypeId::DATE:
 		case LogicalTypeId::INTEGER:
 			return std::is_same<T, int32_t>();
 		case LogicalTypeId::BIGINT:
-		case LogicalTypeId::TIME:
-		case LogicalTypeId::TIMESTAMP:
 			return std::is_same<T, int64_t>();
+		case LogicalTypeId::DATE:
+			return std::is_same<T, date_t>();
+		case LogicalTypeId::TIME:
+			return std::is_same<T, dtime_t>();
+		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::TIMESTAMP_MS:
+		case LogicalTypeId::TIMESTAMP_NS:
+		case LogicalTypeId::TIMESTAMP_SEC:
+			return std::is_same<T, timestamp_t>();
 		case LogicalTypeId::FLOAT:
 			return std::is_same<T, float>();
 		case LogicalTypeId::DOUBLE:

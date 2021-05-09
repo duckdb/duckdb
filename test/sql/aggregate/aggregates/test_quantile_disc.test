@@ -1,0 +1,172 @@
+# name: test/sql/aggregate/aggregates/test_quantile_disc.test
+# description: Test QUANTILE_DISC aggregate
+# group: [aggregates]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table quantile as select range r, random() from range(10000) union all values (NULL, 0.1), (NULL, 0.5), (NULL, 0.9) order by 2;
+
+query I
+SELECT quantile_disc(r, 0.5) FROM quantile
+----
+4999
+
+query I
+SELECT quantile_disc(r::decimal(10,2), 0.5) FROM quantile
+----
+4999
+
+query I
+SELECT quantile_disc(r, 1.0) FROM quantile
+----
+9999
+
+query I
+SELECT quantile_disc(r, 0.0) FROM quantile
+----
+0
+
+query I
+SELECT quantile_disc(NULL, 0.5) FROM quantile
+----
+NULL
+
+query I
+SELECT quantile_disc(42, 0.5) FROM quantile
+----
+42
+
+query I
+SELECT quantile_disc(NULL, 0.5)
+----
+NULL
+
+query I
+SELECT quantile_disc(42, 0.5)
+----
+42
+
+# single GROUP
+query III
+SELECT quantile_disc(r, 0.1), quantile_disc(r, 0.5), quantile_disc(r, 0.9) from quantile
+----
+999
+4999
+8999
+
+# multiple groups
+query II
+SELECT mod(r,10) as g, quantile_disc(r, 0.1) FROM quantile GROUP BY 1 ORDER BY 1
+----
+NULL	NULL
+0	990
+1	991
+2	992
+3	993
+4	994
+5	995
+6	996
+7	997
+8	998
+9	999
+
+# temporal types
+query I
+SELECT quantile_disc('2021-01-01'::TIMESTAMP + interval (r) hour, 0.5) FROM quantile
+----
+2021-07-28 07:00:00
+
+query I
+SELECT quantile_disc('1990-01-01'::DATE + interval (r) day, 0.5) FROM quantile
+----
+2003-09-09
+
+query I
+SELECT quantile_disc('00:00:00'::TIME + interval (r) second, 0.5) FROM quantile
+----
+01:23:19
+
+query I
+SELECT quantile_disc(interval (r) second, 0.5) FROM quantile
+----
+01:23:19
+
+
+# constant input
+query I
+SELECT quantile_disc(1, 0.1) FROM quantile
+----
+1
+
+# empty input
+query I
+SELECT quantile_disc(r, 0.1) FROM quantile WHERE 1=0
+----
+NULL
+
+statement error
+SELECT quantile_disc(r, -0.1) FROM quantile
+
+statement error
+SELECT quantile_disc(r, 1.1) FROM quantile
+
+statement error
+SELECT quantile_disc(r, "string") FROM quantile
+
+statement error
+SELECT quantile_disc(r, NULL) FROM quantile
+
+statement error
+SELECT quantile_disc(r::string, 0.5) FROM quantile
+
+statement error
+SELECT quantile_disc(r) FROM quantile
+
+statement error
+SELECT quantile_disc(r, 0.1, 50) FROM quantile
+
+
+statement ok
+pragma threads=4
+
+statement ok
+PRAGMA force_parallelism
+
+# single GROUP
+query III
+SELECT quantile_disc(r, 0.1), quantile_disc(r, 0.5), quantile_disc(r, 0.9) from quantile
+----
+999
+4999
+8999
+
+# multiple groups
+query II
+SELECT mod(r,10) as g, quantile_disc(r, 0.1) FROM quantile GROUP BY 1 ORDER BY 1
+----
+NULL	NULL
+0	990
+1	991
+2	992
+3	993
+4	994
+5	995
+6	996
+7	997
+8	998
+9	999
+
+# constant input
+query I
+SELECT quantile_disc(1, 0.1) FROM quantile
+----
+1
+
+# empty input
+query I
+SELECT quantile_disc(r, 0.1) FROM quantile WHERE 1=0
+----
+NULL
+

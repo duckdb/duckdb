@@ -24,13 +24,14 @@
 
 #include <exception>
 
-namespace parquet {
+namespace duckdb_parquet {
 namespace format {
 class FileMetaData;
 }
-} // namespace parquet
+} // namespace duckdb_parquet
 
 namespace duckdb {
+class Allocator;
 class ClientContext;
 class ChunkCollection;
 class BaseStatistics;
@@ -43,7 +44,7 @@ struct ParquetReaderScanState {
 	idx_t group_offset;
 	unique_ptr<FileHandle> file_handle;
 	unique_ptr<ColumnReader> root_reader;
-	unique_ptr<apache::thrift::protocol::TProtocol> thrift_file_proto;
+	unique_ptr<duckdb_apache::thrift::protocol::TProtocol> thrift_file_proto;
 
 	bool finished;
 	TableFilterSet *filters;
@@ -55,10 +56,10 @@ struct ParquetReaderScanState {
 
 class ParquetReader {
 public:
-	ParquetReader(unique_ptr<FileHandle> file_handle_p, const vector<LogicalType> &expected_types_p,
-	              const string &initial_filename_p = string());
-	ParquetReader(unique_ptr<FileHandle> file_handle_p)
-	    : ParquetReader(move(file_handle_p), vector<LogicalType>(), string()) {
+	ParquetReader(Allocator &allocator, unique_ptr<FileHandle> file_handle_p,
+	              const vector<LogicalType> &expected_types_p, const string &initial_filename_p = string());
+	ParquetReader(Allocator &allocator, unique_ptr<FileHandle> file_handle_p)
+	    : ParquetReader(allocator, move(file_handle_p), vector<LogicalType>(), string()) {
 	}
 
 	ParquetReader(ClientContext &context, string file_name, const vector<LogicalType> &expected_types_p,
@@ -68,6 +69,7 @@ public:
 	}
 	~ParquetReader();
 
+	Allocator &allocator;
 	string file_name;
 	vector<LogicalType> return_types;
 	vector<string> names;
@@ -81,16 +83,16 @@ public:
 	idx_t NumRows();
 	idx_t NumRowGroups();
 
-	const parquet::format::FileMetaData *GetFileMetadata();
+	const duckdb_parquet::format::FileMetaData *GetFileMetadata();
 
-	static unique_ptr<BaseStatistics> ReadStatistics(LogicalType &type, column_t column_index,
-	                                                 const parquet::format::FileMetaData *file_meta_data);
+	static unique_ptr<BaseStatistics> ReadStatistics(ParquetReader &reader, LogicalType &type, column_t column_index,
+	                                                 const duckdb_parquet::format::FileMetaData *file_meta_data);
 
 private:
 	void InitializeSchema(const vector<LogicalType> &expected_types_p, const string &initial_filename_p);
 	bool ScanInternal(ParquetReaderScanState &state, DataChunk &output);
 
-	const parquet::format::RowGroup &GetGroup(ParquetReaderScanState &state);
+	const duckdb_parquet::format::RowGroup &GetGroup(ParquetReaderScanState &state);
 	void PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t out_col_idx);
 
 	template <typename... Args>

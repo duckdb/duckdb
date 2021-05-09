@@ -189,10 +189,11 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 }
 
 int ClientContext::GetProgress() {
-	if (!progress_bar) {
+	auto my_progress_bar = progress_bar;
+	if (!my_progress_bar) {
 		return -1;
 	}
-	return progress_bar->GetCurrentPercentage();
+	return my_progress_bar->GetCurrentPercentage();
 }
 
 unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(ClientContextLock &lock, const string &query,
@@ -213,10 +214,9 @@ unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(ClientContextLoc
 
 	bool create_stream_result = statement.allow_stream_result && allow_stream_result;
 	if (enable_progress_bar) {
-		if (progress_bar) {
-			progress_bar.reset();
+		if (!progress_bar) {
+			progress_bar = make_shared<ProgressBar>(&executor, wait_time);
 		}
-		progress_bar = make_unique<ProgressBar>(&executor, wait_time);
 		progress_bar->Start();
 	}
 	// store the physical plan in the context for calls to Fetch()

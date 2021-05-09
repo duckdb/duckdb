@@ -53,7 +53,7 @@ SELECT histogram(e) from hist_data
 query I
 select histogram(g)
     from hist_data
-    group by g%2==0
+    group by g%2==0 ORDER BY g%2==0
 ----
 [<bucket: 1, count: 2>, <bucket: 3, count: 1>, <bucket: 5, count: 1>]
 [<bucket: 2, count: 3>]

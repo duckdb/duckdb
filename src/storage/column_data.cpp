@@ -280,7 +280,7 @@ void ColumnCheckpointState::AppendData(Vector &data, idx_t count) {
 }
 
 void ColumnCheckpointState::FlushSegment() {
-	auto tuple_count = current_segment->tuple_count;
+	auto tuple_count = current_segment->tuple_count.load();
 	if (tuple_count == 0) {
 		return;
 	}

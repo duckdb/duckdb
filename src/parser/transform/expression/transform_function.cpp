@@ -211,9 +211,11 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		expr->case_checks.push_back(move(check));
 		expr->else_expr = move(children[2]);
 		return move(expr);
-	}
-
-	else if (lowercase_name == "ifnull") {
+	} else if (lowercase_name == "construct_array") {
+		auto construct_array = make_unique<OperatorExpression>(ExpressionType::ARRAY_CONSTRUCTOR);
+		construct_array->children = move(children);
+		return move(construct_array);
+	} else if (lowercase_name == "ifnull") {
 		if (children.size() != 2) {
 			throw ParserException("Wrong number of arguments to IFNULL.");
 		}

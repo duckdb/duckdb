@@ -1,0 +1,275 @@
+# name: test/sql/aggregate/aggregates/test_quantile_cont.test
+# description: Test QUANTILE_CONT aggregate
+# group: [aggregates]
+
+statement ok
+PRAGMA enable_verification
+
+# Get around 1% approximately equal for R
+statement ok
+create table quantile as select range r, random() from range(0,1000000,100) union all values (NULL, 0.1), (NULL, 0.5), (NULL, 0.9) order by 2;
+
+statement error
+SELECT quantile_cont(r, NULL) FROM quantile
+
+query R
+SELECT quantile_cont(r, 0.5) FROM quantile
+----
+499950
+
+query R
+SELECT quantile_cont(r::decimal(10,2), 0.5) FROM quantile
+----
+499950
+
+query R
+SELECT quantile_cont(r, 1.0) FROM quantile
+----
+999900
+
+query R
+SELECT quantile_cont(r, 0.0) FROM quantile
+----
+0
+
+query R
+SELECT quantile_cont(NULL, 0.5) FROM quantile
+----
+NULL
+
+query R
+SELECT quantile_cont(42, 0.5) FROM quantile
+----
+42
+
+query R
+SELECT quantile_cont(NULL, 0.5)
+----
+NULL
+
+query R
+SELECT quantile_cont(42, 0.5)
+----
+42
+
+# single GROUP
+query RRR
+SELECT quantile_cont(r, 0.25), quantile_cont(r, 0.5), quantile_cont(r, 0.75) from quantile
+----
+249975
+499950
+749925
+
+# multiple groups
+query RR
+SELECT mod(r,1000) as g, quantile_cont(r, 0.25) FROM quantile GROUP BY 1 ORDER BY 1
+----
+NULL	NULL
+0	249750
+100	249850
+200	249950
+300	250050
+400	250150
+500	250250
+600	250350
+700	250450
+800	250550
+900	250650
+
+# temporal types
+query I
+SELECT quantile_cont('2021-01-01'::TIMESTAMP + interval (r) second, 0.5) FROM quantile
+----
+2021-01-06 18:52:30
+
+query I
+SELECT quantile_cont(('1990-01-01'::DATE + interval (r/100) day)::DATE, 0.5) FROM quantile
+----
+2003-09-09 12:00:00
+
+query I
+SELECT quantile_cont('00:00:00'::TIME + interval (r/100) second, 0.5) FROM quantile
+----
+01:23:19.5
+
+statement error
+SELECT quantile_cont(interval (r/100) second, 0.5) FROM quantile
+----
+01:23:19
+
+# constant input
+query R
+SELECT quantile_cont(1, 0.1) FROM quantile
+----
+1
+
+# empty input
+query R
+SELECT quantile_cont(r, 0.1) FROM quantile WHERE 1=0
+----
+NULL
+
+statement error
+SELECT quantile_cont(r, -0.1) FROM quantile
+
+statement error
+SELECT quantile_cont(r, 1.1) FROM quantile
+
+statement error
+SELECT quantile_cont(r, "string") FROM quantile
+
+statement error
+SELECT quantile_cont(r, NULL) FROM quantile
+
+statement error
+SELECT quantile_cont(r::string, 0.5) FROM quantile
+
+statement error
+SELECT quantile_cont(r) FROM quantile
+
+statement error
+SELECT quantile_cont(r, 0.1, 50) FROM quantile
+
+
+statement ok
+pragma threads=4
+
+statement ok
+PRAGMA force_parallelism
+
+# single GROUP
+query RRR
+SELECT quantile_cont(r, 0.25), quantile_cont(r, 0.5), quantile_cont(r, 0.75) from quantile
+----
+249975
+499950
+749925
+
+# multiple groups
+query RR
+SELECT mod(r,1000) as g, quantile_cont(r, 0.25) FROM quantile GROUP BY 1 ORDER BY 1
+----
+NULL	NULL
+0	249750
+100	249850
+200	249950
+300	250050
+400	250150
+500	250250
+600	250350
+700	250450
+800	250550
+900	250650
+
+# constant input
+query R
+SELECT quantile_cont(1, 0.1) FROM quantile
+----
+1
+
+# empty input
+query R
+SELECT quantile_cont(r, 0.1) FROM quantile WHERE 1=0
+----
+NULL
+
+# TINYINT extremes
+query I
+SELECT quantile_cont(t, 0.5) FROM (VALUES (120::TINYINT), (122::TINYINT)) tbl(t)
+----
+121
+
+statement ok
+CREATE TABLE tinyints(t TINYINT);
+
+statement ok
+INSERT INTO tinyints VALUES (-127), (-127);
+
+query I
+SELECT quantile_cont(t, 0.5) FROM tinyints;
+----
+-127
+
+statement ok
+UPDATE tinyints SET t=-t;
+
+query I
+SELECT quantile_cont(t, 0.5) FROM tinyints;
+----
+127
+
+# SMALLINT extremes
+query I
+SELECT quantile_cont(t, 0.5) FROM (VALUES (32764::SMALLINT), (32766::SMALLINT)) tbl(t)
+----
+32765
+
+statement ok
+CREATE TABLE smallints(t SMALLINT);
+
+statement ok
+INSERT INTO smallints VALUES (-32767), (-32767);
+
+query I
+SELECT quantile_cont(t, 0.5) FROM smallints;
+----
+-32767
+
+statement ok
+UPDATE smallints SET t=-t;
+
+query I
+SELECT quantile_cont(t, 0.5) FROM smallints;
+----
+32767
+
+# INTEGER extremes
+query I
+SELECT quantile_cont(t, 0.5) FROM (VALUES (2147483642::INTEGER), (2147483644::INTEGER)) tbl(t)
+----
+2147483643
+
+statement ok
+CREATE TABLE integers(t INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (-2147483647), (-2147483647);
+
+query I
+SELECT quantile_cont(t, 0.5) FROM integers;
+----
+-2147483647
+
+statement ok
+UPDATE integers SET t=-t;
+
+query I
+SELECT quantile_cont(t, 0.5) FROM integers;
+----
+2147483647
+
+# BIGINT extremes
+query I
+SELECT quantile_cont(t, 0.5) FROM (VALUES (9223372036854775794::BIGINT), (9223372036854775796::BIGINT)) tbl(t)
+----
+9223372036854775795
+
+statement ok
+CREATE TABLE bigints(t BIGINT);
+
+statement ok
+INSERT INTO bigints VALUES (-9223372036854775800), (-9223372036854775800);
+
+query I
+SELECT quantile_cont(t, 0.5) FROM bigints;
+----
+-9223372036854775800
+
+statement ok
+UPDATE bigints SET t=-t;
+
+query I
+SELECT quantile_cont(t, 0.5) FROM bigints;
+----
+9223372036854775800
+

@@ -2079,6 +2079,11 @@ a_expr:		c_expr									{ $$ = $1; }
 					n->location = @1;
 					$$ = (PGNode *)n;
 				}
+			| ARRAY '[' opt_expr_list ']' {
+				PGList *func_name = list_make1(makeString("construct_array"));
+				PGFuncCall *n = makeFuncCall(func_name, $3, @1);
+				$$ = (PGNode *) n;
+			}
 		;
 
 /*
@@ -2867,6 +2872,18 @@ expr_list:	a_expr
 				}
 		;
 
+opt_expr_list:
+			expr_list
+				{
+					$$ = $1;
+				}
+			| /* empty */
+				{
+					$$ = NULL;
+				}
+		;
+
+
 /* function arguments can have names */
 func_arg_list:  func_arg_expr
 				{
@@ -3285,9 +3302,17 @@ AexprConst: Iconst
 				{
 					$$ = makeFloatConst($1, @1);
 				}
-			| Sconst
+			| Sconst opt_indirection
 				{
-					$$ = makeStringConst($1, @1);
+					if ($2)
+					{
+						PGAIndirection *n = makeNode(PGAIndirection);
+						n->arg = makeStringConst($1, @1);
+						n->indirection = check_indirection($2, yyscanner);
+						$$ = (PGNode *) n;
+					}
+					else
+						$$ = makeStringConst($1, @1);
 				}
 			| BCONST
 				{

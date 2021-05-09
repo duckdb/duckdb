@@ -8,7 +8,7 @@
 using namespace duckdb;
 using namespace std;
 
-static constexpr int CONCURRENT_APPEND_THREAD_COUNT = 100;
+static constexpr int CONCURRENT_APPEND_THREAD_COUNT = 10;
 static constexpr int CONCURRENT_APPEND_INSERT_ELEMENTS = 1000;
 
 TEST_CASE("Sequential append", "[interquery][.]") {

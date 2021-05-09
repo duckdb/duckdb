@@ -293,7 +293,6 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	if (added_count == 0) {
 		return;
 	}
-	count += added_count;
 
 	vector<unique_ptr<BufferHandle>> handles;
 	vector<BlockAppendEntry> append_entries;
@@ -303,6 +302,8 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	{
 		// first append to the last block (if any)
 		lock_guard<mutex> append_lock(ht_lock);
+		count += added_count;
+
 		if (!blocks.empty()) {
 			auto &last_block = blocks.back();
 			if (last_block.count < last_block.capacity) {
@@ -910,23 +911,26 @@ void JoinHashTable::ScanFullOuter(DataChunk &result, JoinHTScanState &state) {
 	// scan the HT starting from the current position and check which rows from the build side did not find a match
 	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
 	idx_t found_entries = 0;
-	for (; state.block_position < blocks.size(); state.block_position++, state.position = 0) {
-		auto &block = blocks[state.block_position];
-		auto &handle = pinned_handles[state.block_position];
-		auto baseptr = handle->node->buffer;
-		for (; state.position < block.count; state.position++) {
-			auto tuple_base = baseptr + state.position * entry_size;
-			auto found_match = (bool *)(tuple_base + tuple_size);
-			if (!*found_match) {
-				key_locations[found_entries++] = tuple_base;
-				if (found_entries == STANDARD_VECTOR_SIZE) {
-					state.position++;
-					break;
+	{
+		lock_guard<mutex> state_lock(state.lock);
+		for (; state.block_position < blocks.size(); state.block_position++, state.position = 0) {
+			auto &block = blocks[state.block_position];
+			auto &handle = pinned_handles[state.block_position];
+			auto baseptr = handle->node->buffer;
+			for (; state.position < block.count; state.position++) {
+				auto tuple_base = baseptr + state.position * entry_size;
+				auto found_match = (bool *)(tuple_base + tuple_size);
+				if (!*found_match) {
+					key_locations[found_entries++] = tuple_base;
+					if (found_entries == STANDARD_VECTOR_SIZE) {
+						state.position++;
+						break;
+					}
 				}
 			}
-		}
-		if (found_entries == STANDARD_VECTOR_SIZE) {
-			break;
+			if (found_entries == STANDARD_VECTOR_SIZE) {
+				break;
+			}
 		}
 	}
 	result.SetCardinality(found_entries);

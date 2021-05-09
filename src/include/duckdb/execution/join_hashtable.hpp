@@ -26,6 +26,7 @@ struct JoinHTScanState {
 
 	idx_t position;
 	idx_t block_position;
+	mutex lock;
 };
 
 //! JoinHashTable is a linear probing HT that is used for computing joins
@@ -100,7 +101,7 @@ public:
 	};
 
 private:
-	std::mutex ht_lock;
+	mutex ht_lock;
 
 	//! Nodes store the actual data of the tuples inside the HT as a linked list
 	struct HTDataBlock {
@@ -191,7 +192,7 @@ public:
 	idx_t block_capacity;
 
 	struct {
-		std::mutex mj_lock;
+		mutex mj_lock;
 		//! The types of the duplicate eliminated columns, only used in correlated MARK JOIN for flattening ANY()/ALL()
 		//! expressions
 		vector<LogicalType> correlated_types;

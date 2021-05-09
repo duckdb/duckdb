@@ -162,7 +162,7 @@ void append_decimal(tpch_append_information &info, int64_t value) {
 }
 
 void append_date(tpch_append_information &info, string value) {
-	info.appender->AppendValue<int32_t>(Date::FromString(value));
+	info.appender->AppendValue<date_t>(Date::FromString(value));
 }
 
 void append_char(tpch_append_information &info, char value) {
