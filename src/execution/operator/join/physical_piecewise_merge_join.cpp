@@ -331,7 +331,7 @@ void PhysicalPiecewiseMergeJoin::Combine(ExecutionContext &context, GlobalOperat
                                          LocalSinkState &lstate) {
 	auto &state = (MergeJoinLocalState &)lstate;
 	context.thread.profiler.Flush(this, &state.rhs_executor, "rhs_executor", 1);
-	context.client.profiler.Flush(context.thread.profiler);
+	context.client.profiler->Flush(context.thread.profiler);
 }
 
 //===--------------------------------------------------------------------===//

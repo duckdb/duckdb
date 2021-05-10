@@ -125,32 +125,35 @@ static void PragmaDetailedProfilingOutputFunction(ClientContext &context, const 
 		int operator_counter = 1;
 		int function_counter = 1;
 		int expression_counter = 1;
-		if (!context.query_profiler_history.GetPrevProfilers().empty()) {
-			// For each Operator
-			for (auto op : context.query_profiler_history.GetPrevProfilers().back().second.GetTreeMap()) {
-				// For each Expression Executor
-				for (auto &ee : op.second->info.executors_info) {
-					// For each Expression tree
-					if (ee) {
-						for (auto &et : ee->roots) {
-							D_ASSERT(et->sample_tuples_count != 0);
-							SetValue(chunk, chunk.size(), operator_counter, "ExpressionRoot", expression_counter++,
-							         // Sometimes, cycle counter is not accurate, too big or too small. return 0 for
-							         // those cases
-							         et->name, int(et->time) / double(et->sample_tuples_count), et->sample_tuples_count,
-							         et->tuples_count, et->extra_info);
-							// Increment cardinality
-							chunk.SetCardinality(chunk.size() + 1);
-							// Check whether data chunk is full or not
-							if (chunk.size() == STANDARD_VECTOR_SIZE) {
-								collection->Append(chunk);
-								chunk.Reset();
-							}
-							// Extract all functions inside the tree
-							ExtractFunctions(*collection, *et->root, chunk, operator_counter, function_counter);
-						}
-					}
+		if (context.query_profiler_history->GetPrevProfilers().empty()) {
+			return;
+		}
+		// For each Operator
+		for (auto op : context.query_profiler_history->GetPrevProfilers().back().second->GetTreeMap()) {
+			// For each Expression Executor
+			for (auto &expr_executor : op.second->info.executors_info) {
+				// For each Expression tree
+				if (!expr_executor) {
+					continue;
 				}
+				for (auto &expr_timer : expr_executor->roots) {
+					D_ASSERT(expr_timer->sample_tuples_count != 0);
+					SetValue(chunk, chunk.size(), operator_counter, "ExpressionRoot", expression_counter++,
+					         // Sometimes, cycle counter is not accurate, too big or too small. return 0 for
+					         // those cases
+					         expr_timer->name, int(expr_timer->time) / double(expr_timer->sample_tuples_count),
+					         expr_timer->sample_tuples_count, expr_timer->tuples_count, expr_timer->extra_info);
+					// Increment cardinality
+					chunk.SetCardinality(chunk.size() + 1);
+					// Check whether data chunk is full or not
+					if (chunk.size() == STANDARD_VECTOR_SIZE) {
+						collection->Append(chunk);
+						chunk.Reset();
+					}
+					// Extract all functions inside the tree
+					ExtractFunctions(*collection, *expr_timer->root, chunk, operator_counter, function_counter);
+				}
+
 				operator_counter++;
 			}
 		}

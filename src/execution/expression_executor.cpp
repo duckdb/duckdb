@@ -57,9 +57,9 @@ idx_t ExpressionExecutor::SelectExpression(DataChunk &input, SelectionVector &se
 	D_ASSERT(expressions.size() == 1);
 	SetChunk(&input);
 	states[0]->profiler.BeginSample();
-	idx_t tmp = Select(*expressions[0], states[0]->root_state.get(), nullptr, input.size(), &sel, nullptr);
+	idx_t selected_tuples = Select(*expressions[0], states[0]->root_state.get(), nullptr, input.size(), &sel, nullptr);
 	states[0]->profiler.EndSample(chunk ? chunk->size() : 0);
-	return tmp;
+	return selected_tuples;
 }
 
 void ExpressionExecutor::ExecuteExpression(Vector &result) {

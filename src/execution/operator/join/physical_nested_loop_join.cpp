@@ -404,7 +404,7 @@ void PhysicalNestedLoopJoin::FinalizeOperatorState(PhysicalOperatorState &state,
 void PhysicalNestedLoopJoin::Combine(ExecutionContext &context, GlobalOperatorState &gstate, LocalSinkState &lstate) {
 	auto &state = (NestedLoopJoinLocalState &)lstate;
 	context.thread.profiler.Flush(this, &state.rhs_executor, "rhs_executor", 1);
-	context.client.profiler.Flush(context.thread.profiler);
+	context.client.profiler->Flush(context.thread.profiler);
 }
 
 } // namespace duckdb

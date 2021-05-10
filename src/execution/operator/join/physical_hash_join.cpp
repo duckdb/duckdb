@@ -6,6 +6,7 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/query_profiler.hpp"
 
 namespace duckdb {
 
@@ -266,7 +267,7 @@ void PhysicalHashJoin::FinalizeOperatorState(PhysicalOperatorState &state, Execu
 void PhysicalHashJoin::Combine(ExecutionContext &context, GlobalOperatorState &gstate, LocalSinkState &lstate) {
 	auto &state = (HashJoinLocalState &)lstate;
 	context.thread.profiler.Flush(this, &state.build_executor, "build_executor", 1);
-	context.client.profiler.Flush(context.thread.profiler);
+	context.client.profiler->Flush(context.thread.profiler);
 }
 
 } // namespace duckdb

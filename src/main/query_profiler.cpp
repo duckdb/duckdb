@@ -238,12 +238,13 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 		entry->second->info.time += node.second.time;
 		entry->second->info.elements += node.second.elements;
 		for (auto &info : node.second.executors_info) {
-			if (info) {
-				if (int(entry->second->info.executors_info.size()) <= info->id) {
-					entry->second->info.executors_info.resize(info->id + 1);
-				}
-				entry->second->info.executors_info[info->id] = move(info);
+			if (!info) {
+				continue;
 			}
+			if (int(entry->second->info.executors_info.size()) <= info->id) {
+				entry->second->info.executors_info.resize(info->id + 1);
+			}
+			entry->second->info.executors_info[info->id] = move(info);
 		}
 	}
 }
@@ -475,6 +476,12 @@ vector<QueryProfiler::PhaseTimingItem> QueryProfiler::GetOrderedPhaseTimings() c
 	}
 	return result;
 }
+void QueryProfiler::Propagate(QueryProfiler &qp) {
+	this->automatic_print_format = qp.automatic_print_format;
+	this->save_location = qp.save_location;
+	this->enabled = qp.enabled;
+	this->detailed_enabled = qp.detailed_enabled;
+}
 
 void ExpressionInfo::ExtractExpressionsRecursive(unique_ptr<ExpressionState> &state) {
 	if (state->child_states.empty()) {
@@ -482,16 +489,16 @@ void ExpressionInfo::ExtractExpressionsRecursive(unique_ptr<ExpressionState> &st
 	}
 	// extract the children of this node
 	for (auto &child : state->child_states) {
-		auto expression_info_p = make_unique<ExpressionInfo>();
+		auto expr_info = make_unique<ExpressionInfo>();
 		if (child->expr.expression_class == ExpressionClass::BOUND_FUNCTION) {
-			expression_info_p->hasfunction = true;
-			expression_info_p->function_name = ((BoundFunctionExpression &)child->expr).function.name;
-			expression_info_p->function_time = child->profiler.time;
-			expression_info_p->sample_tuples_count = child->profiler.sample_tuples_count;
-			expression_info_p->tuples_count = child->profiler.tuples_count;
+			expr_info->hasfunction = true;
+			expr_info->function_name = ((BoundFunctionExpression &)child->expr).function.name;
+			expr_info->function_time = child->profiler.time;
+			expr_info->sample_tuples_count = child->profiler.sample_tuples_count;
+			expr_info->tuples_count = child->profiler.tuples_count;
 		}
-		expression_info_p->ExtractExpressionsRecursive(child);
-		children.push_back(move(expression_info_p));
+		expr_info->ExtractExpressionsRecursive(child);
+		children.push_back(move(expr_info));
 	}
 	return;
 }

@@ -119,7 +119,7 @@ private:
 //! The QueryProfiler can be used to measure timings of queries
 class QueryProfiler {
 public:
-	DUCKDB_API QueryProfiler()
+    DUCKDB_API QueryProfiler()
 	    : automatic_print_format(ProfilerPrintFormat::NONE), enabled(false), detailed_enabled(false), running(false),
 	      query_requires_profiling(false) {
 	}
@@ -133,21 +133,14 @@ public:
 		idx_t depth = 0;
 	};
 
-	//! The lock used for flushing information from a thread into the global query profiler
-	mutex flush_lock;
-
-	// move constructor. during moving profiler into profiler_history fields such as save_location, enabled,
-	// detailed_enabled should remain automatic_print_format.
-	QueryProfiler(QueryProfiler &&qp) noexcept
-	    : automatic_print_format(qp.automatic_print_format), save_location(qp.save_location), enabled(qp.enabled),
-	      detailed_enabled(qp.detailed_enabled) {
-		tree_map = move(qp.tree_map);
-		root = move(qp.root);
-	}
+	// Propagate save_location, enabled, detailed_enabled and automatic_print_format.
+	void Propagate(QueryProfiler &qp);
 
 private:
 	unique_ptr<TreeNode> CreateTree(PhysicalOperator *root, idx_t depth = 0);
 	void Render(const TreeNode &node, std::ostream &str) const;
+	//! The lock used for flushing information from a thread into the global query profiler
+	mutex flush_lock;
 
 public:
 	DUCKDB_API void Enable() {
@@ -245,12 +238,12 @@ private:
 class QueryProfilerHistory {
 private:
 	//! Previous Query profilers
-	deque<pair<transaction_t, QueryProfiler>> prev_profilers;
+	deque<pair<transaction_t, unique_ptr<QueryProfiler>>> prev_profilers;
 	//! Previous Query profilers size
 	uint64_t prev_profilers_size = 20;
 
 public:
-	deque<pair<transaction_t, QueryProfiler>> &GetPrevProfilers() {
+	deque<pair<transaction_t, unique_ptr<QueryProfiler>>> &GetPrevProfilers() {
 		return prev_profilers;
 	}
 	QueryProfilerHistory() {
