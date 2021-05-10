@@ -1101,10 +1101,11 @@ idx_t JoinHashTable::GatherSwitch(VectorData &data, PhysicalType type, Vector &p
 	}
 }
 
-void JoinHashTable::FillWithOffsets(data_ptr_t *key_locations, JoinHTScanState &state) {
+void JoinHashTable::FillWithOffsets(vector<data_ptr_t> &key_locations, JoinHTScanState &state) {
 
 	// iterate over blocks
 	idx_t matches = 0;
+	lock_guard<mutex> state_lock(state.lock);
 	while (state.block_position < blocks.size()) {
 
 		auto &block = blocks[state.block_position];
@@ -1115,7 +1116,7 @@ void JoinHashTable::FillWithOffsets(data_ptr_t *key_locations, JoinHTScanState &
 			auto tuple_base = baseptr + state.position * entry_size;
 			auto found_match = (bool *)(tuple_base + tuple_size);
 			if (!*found_match) {
-				key_locations[matches++] = (tuple_base);
+				key_locations.push_back(tuple_base);
 			}
 		}
 		state.block_position++;

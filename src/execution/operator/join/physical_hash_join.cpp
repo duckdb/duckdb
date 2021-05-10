@@ -128,11 +128,12 @@ void PhysicalHashJoin::Sink(ExecutionContext &context, GlobalOperatorState &stat
 //===--------------------------------------------------------------------===//
 bool PhysicalHashJoin::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> state) {
 	auto &sink = (HashJoinGlobalState &)*state;
-	sink.hash_table->Finalize();
-	// check for possible perfect hash table
-
 	// We only do this optimization when all the requirements are true
+	// check for possible perfect hash table
 	// CheckRequirementsForPerfectHashJoin(sink.hash_table.get(), sink);
+	if (!hasBuiltPerfectHashTable) {
+		sink.hash_table->Finalize();
+	}
 
 	PhysicalSink::Finalize(pipeline, context, move(state));
 	return true;
@@ -257,7 +258,7 @@ bool PhysicalHashJoin::ProbePerfectHashTable(ExecutionContext &context, DataChun
 	VectorData keys_data;
 	auto keys_size = physical_state->join_keys.size();  // number of keys
 	auto keys_vec = &physical_state->join_keys.data[0]; // keys vector
-	keys_vec->Orrify(keys_size, keys_data);             // get the keys data (Decompress) convert
+	// keys_vec->Orrify(keys_size, keys_data);             // get the keys data (Decompress) convert
 	auto ldata = (int32_t *)keys_data.data; // cast to a typed buffer (TODO: switch case with multiple types)
 
 	// go trough the join_keys and fill the selection vector with the matches
@@ -332,15 +333,15 @@ void PhysicalHashJoin::BuildPerfectHashStructure(JoinHashTable *hash_table_ptr, 
 		build_columns.emplace_back(type, build_size);
 	}
 	// gather the values from the RHS
-	/* 	std::vector<data_ptr_t> key_locations;
-	    key_locations.reserve(build_size + 1); */
-	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
+	vector<data_ptr_t> key_locations;
+	key_locations.reserve(build_size + 1);
 	hash_table_ptr->FillWithOffsets(key_locations, join_ht_state);
 	idx_t offset = hash_table_ptr->condition_size;
 	for (idx_t i = 0; i != build_columns.size(); ++i) {
-		D_ASSERT(build_columns[i].GetType() == build_types[i]);
-		JoinHashTable::GatherResultVector(build_columns[i], FlatVector::INCREMENTAL_SELECTION_VECTOR,
-		                                  (uintptr_t *)key_locations, FlatVector::INCREMENTAL_SELECTION_VECTOR,
+		auto &vector = build_columns[i];
+		D_ASSERT(hash_table_ptr->build_types[i] == vector.GetType());
+		JoinHashTable::GatherResultVector(vector, FlatVector::INCREMENTAL_SELECTION_VECTOR,
+		                                  (uintptr_t *)&key_locations[0], FlatVector::INCREMENTAL_SELECTION_VECTOR,
 		                                  build_size, offset);
 	}
 }
