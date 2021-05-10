@@ -15,13 +15,14 @@ struct EntropyState {
 	DistinctMap *distinct;
 
 	EntropyState &operator=(const EntropyState &other) {
-		if (this != &other) {
-			if (distinct) {
-				delete distinct;
-			}
-			distinct = new DistinctMap(*other.distinct);
-			count = other.count;
+		if (this == &other) {
+			return *this;
 		}
+		if (distinct) {
+			delete distinct;
+		}
+		distinct = new DistinctMap(*other.distinct);
+		count = other.count;
 		return *this;
 	}
 };
