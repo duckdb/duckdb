@@ -40,6 +40,8 @@ public:
 	idx_t buffer_available;
 	idx_t buffer_idx;
 	idx_t file_offset;
+	idx_t buffer_start;
+	idx_t buffer_end;
 };
 
 class HTTPFileSystem : public FileSystem {
@@ -59,34 +61,15 @@ public:
 
 	int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
 
-	int64_t GetFileSize(FileHandle &handle) override {
-		auto &sfh = (HTTPFileHandle &)handle;
-		return sfh.length;
-	}
+	int64_t GetFileSize(FileHandle &handle) override;
 
-	time_t GetLastModifiedTime(FileHandle &handle) override {
-		auto &sfh = (HTTPFileHandle &)handle;
-		return sfh.last_modified;
-	}
+	time_t GetLastModifiedTime(FileHandle &handle) override;
 
-	bool FileExists(const string &filename) override {
-		try {
-			auto handle = OpenFile(filename.c_str(), FileFlags::FILE_FLAGS_READ);
-			auto &sfh = (HTTPFileHandle &)handle;
-			if (sfh.length == 0) {
-				throw std::runtime_error("not there this file");
-			}
-			return true;
-		} catch (...) {
-			return false;
-		};
-	}
+	bool FileExists(const string &filename) override;
 
 	static void Verify();
 
-	bool CanSeek() override {
-		return false;
-	}
+	void Seek(FileHandle &handle, idx_t location) override;
 };
 
 } // namespace duckdb
