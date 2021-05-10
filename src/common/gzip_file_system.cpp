@@ -77,6 +77,28 @@ static constexpr const uint8_t GZIP_HEADER_MINSIZE = 10;
 static constexpr const unsigned char GZIP_FLAG_UNSUPPORTED =
     GZIP_FLAG_ASCII | GZIP_FLAG_MULTIPART | GZIP_FLAG_EXTRA | GZIP_FLAG_COMMENT | GZIP_FLAG_ENCRYPT;
 
+struct MiniZStreamWrapper {
+	~MiniZStreamWrapper() {
+		Close();
+	}
+
+	void Initialize() {
+		Close();
+		mz_stream_ptr = new duckdb_miniz::mz_stream();
+		memset(mz_stream_ptr, 0, sizeof(duckdb_miniz::mz_stream));
+	}
+
+	void Close() {
+		if (mz_stream_ptr) {
+			duckdb_miniz::mz_inflateEnd(mz_stream_ptr);
+			delete mz_stream_ptr;
+			mz_stream_ptr = nullptr;
+		}
+	}
+
+	duckdb_miniz::mz_stream *mz_stream_ptr = nullptr;
+};
+
 class GZipFile : public FileHandle {
 	static constexpr const idx_t BUFFER_SIZE = 1024;
 
@@ -97,15 +119,14 @@ public:
 
 protected:
 	void Close() override {
-		if (mz_stream_ptr) {
-			delete mz_stream_ptr;
-			mz_stream_ptr = nullptr;
-		}
+		miniz_stream.reset();
+		in_buff.reset();
+		out_buff.reset();
 	}
 
 private:
 	idx_t data_start = 0;
-	duckdb_miniz::mz_stream *mz_stream_ptr = nullptr;
+	unique_ptr<MiniZStreamWrapper> miniz_stream;
 	// various buffers & pointers
 	unique_ptr<data_t[]> in_buff;
 	unique_ptr<data_t[]> out_buff;
@@ -127,7 +148,10 @@ void GZipFile::Initialize() {
 	out_buff_start = out_buff.get();
 	out_buff_end = out_buff.get();
 
-	mz_stream_ptr = new duckdb_miniz::mz_stream();
+	miniz_stream = make_unique<MiniZStreamWrapper>();
+	miniz_stream->Initialize();
+
+	auto &mz_stream_ptr = miniz_stream->mz_stream_ptr;
 
 	// TODO use custom alloc/free methods in miniz to throw exceptions on OOM
 	auto read_count = child_handle->Read(gzip_hdr, GZIP_HEADER_MINSIZE);
@@ -166,6 +190,7 @@ void GZipFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, id
 }
 
 int64_t GZipFile::ReadData(void *buffer, int64_t remaining) {
+	auto &mz_stream_ptr = miniz_stream->mz_stream_ptr;
 	idx_t total_read = 0;
 	while (true) {
 		// first check if there are input bytes available in the output buffers
@@ -222,8 +247,6 @@ int64_t GZipFile::ReadData(void *buffer, int64_t remaining) {
 		D_ASSERT(out_buff_end + mz_stream_ptr->avail_out == out_buff.get() + BUFFER_SIZE);
 		// if stream ended, deallocate inflator
 		if (ret == duckdb_miniz::MZ_STREAM_END) {
-			duckdb_miniz::mz_inflateEnd(mz_stream_ptr);
-			delete mz_stream_ptr;
 			mz_stream_ptr = nullptr;
 		}
 	}
