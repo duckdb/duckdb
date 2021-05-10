@@ -99,7 +99,6 @@ public:
 		delete mz_stream_ptr;
 		mz_stream_ptr = nullptr;
 	}
-
 };
 
 class GZipFile : public FileHandle {
