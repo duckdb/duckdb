@@ -139,7 +139,6 @@ public:
 	vector<LogicalType> sql_types;
 	vector<string> col_names;
 	unique_ptr<FileHandle> file_handle;
-	// unique_ptr<std::istream> source;
 	bool plain_file_source = false;
 	bool gzip_compressed = false;
 	idx_t file_size = 0;
