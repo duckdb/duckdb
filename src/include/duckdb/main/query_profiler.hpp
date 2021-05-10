@@ -119,7 +119,7 @@ private:
 //! The QueryProfiler can be used to measure timings of queries
 class QueryProfiler {
 public:
-    DUCKDB_API QueryProfiler()
+	DUCKDB_API QueryProfiler()
 	    : automatic_print_format(ProfilerPrintFormat::NONE), enabled(false), detailed_enabled(false), running(false),
 	      query_requires_profiling(false) {
 	}
