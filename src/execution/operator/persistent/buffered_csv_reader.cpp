@@ -99,7 +99,7 @@ TextSearchShiftArray::TextSearchShiftArray(string search_term) : length(search_t
 		throw Exception("Size of delimiter/quote/escape in CSV reader is limited to 255 bytes");
 	}
 	// initialize the shifts array
-	shifts = unique_ptr<uint8_t[]>(new uint8_t[length * 255]);
+shifts = unique_ptr<uint8_t[]>(new uint8_t[length * 255]);
 	memset(shifts.get(), 0, length * 255 * sizeof(uint8_t));
 	// iterate over each of the characters in the array
 	for (idx_t main_idx = 0; main_idx < length; main_idx++) {
@@ -125,13 +125,13 @@ TextSearchShiftArray::TextSearchShiftArray(string search_term) : length(search_t
 BufferedCSVReader::BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options_p,
                                      const vector<LogicalType> &requested_types)
     : options(move(options_p)), buffer_size(0), position(0), start(0) {
-	source = OpenCSV(context, options);
+	file_handle = OpenCSV(context, options);
 	Initialize(requested_types);
 }
 
 BufferedCSVReader::BufferedCSVReader(BufferedCSVReaderOptions options_p, const vector<LogicalType> &requested_types,
-                                     unique_ptr<std::istream> ssource)
-    : options(move(options_p)), source(move(ssource)), buffer_size(0), position(0), start(0) {
+                                     unique_ptr<FileHandle> file_handle_p)
+    : options(move(options_p)), file_handle(move(file_handle_p)), buffer_size(0), position(0), start(0) {
 	Initialize(requested_types);
 }
 
@@ -155,36 +155,42 @@ void BufferedCSVReader::PrepareComplexParser() {
 	quote_search = TextSearchShiftArray(options.quote);
 }
 
-unique_ptr<std::istream> BufferedCSVReader::OpenCSV(ClientContext &context, const BufferedCSVReaderOptions &options) {
-	if (!FileSystem::GetFileSystem(context).FileExists(options.file_path)) {
+unique_ptr<FileHandle> BufferedCSVReader::OpenCSV(ClientContext &context, const BufferedCSVReaderOptions &options) {
+	auto &fs = FileSystem::GetFileSystem(context);
+	if (!fs.FileExists(options.file_path)) {
 		throw IOException("File \"%s\" not found", options.file_path.c_str());
 	}
-	unique_ptr<std::istream> result;
 
-	gzip_compressed = false;
-	if (options.compression == "infer") {
-		if (StringUtil::EndsWith(StringUtil::Lower(options.file_path), ".gz")) {
-			gzip_compressed = true;
-		}
-	} else if (options.compression == "gzip") {
-		gzip_compressed = true;
-	}
+	// FIXME: gzip stuff
+	auto result = fs.OpenFile(options.file_path.c_str(), FileFlags::FILE_FLAGS_READ);
+	plain_file_source = result->file_system.CanSeek();
+	file_size = result->file_system.GetFileSize(*result);
+	// unique_ptr<std::istream> result;
 
-	if (gzip_compressed) {
-		result = make_unique<GzipStream>(options.file_path);
-		plain_file_source = false;
-	} else {
-		auto csv_local = make_unique<std::ifstream>();
-		csv_local->open(options.file_path);
-		result = move(csv_local);
+	// gzip_compressed = false;
+	// if (options.compression == "infer") {
+	// 	if (StringUtil::EndsWith(StringUtil::Lower(options.file_path), ".gz")) {
+	// 		gzip_compressed = true;
+	// 	}
+	// } else if (options.compression == "gzip") {
+	// 	gzip_compressed = true;
+	// }
 
-		// determine filesize
-		plain_file_source = true;
-		result->seekg(0, result->end);
-		file_size = (idx_t)result->tellg();
-		result->clear();
-		result->seekg(0, result->beg);
-	}
+	// if (gzip_compressed) {
+	// 	result = make_unique<GzipStream>(options.file_path);
+	// 	plain_file_source = false;
+	// } else {
+	// 	auto csv_local = make_unique<std::ifstream>();
+	// 	csv_local->open(options.file_path);
+	// 	result = move(csv_local);
+
+	// 	// determine filesize
+	// 	plain_file_source = true;
+	// 	result->seekg(0, result->end);
+	// 	file_size = (idx_t)result->tellg();
+	// 	result->clear();
+	// 	result->seekg(0, result->beg);
+	// }
 	return result;
 }
 
@@ -206,13 +212,12 @@ void BufferedCSVReader::ResetBuffer() {
 }
 
 void BufferedCSVReader::ResetStream() {
-	if (!plain_file_source && gzip_compressed) {
+	if (!plain_file_source) {
 		// seeking to the beginning appears to not be supported in all compiler/os-scenarios,
 		// so we have to create a new stream source here for now
-		source = make_unique<GzipStream>(options.file_path);
+		file_handle = file_handle->file_system.OpenFile(options.file_path.c_str(), FileFlags::FILE_FLAGS_READ);
 	} else {
-		source->clear();
-		source->seekg(0, source->beg);
+		file_handle->Seek(0);
 	}
 	linenr = 0;
 	linenr_estimated = false;
@@ -246,7 +251,7 @@ void BufferedCSVReader::JumpToBeginning(idx_t skip_rows = 0, bool skip_header = 
 
 void BufferedCSVReader::SkipBOM() {
 	char bom_buffer[3];
-	source->read(bom_buffer, 3);
+	file_handle->Read(bom_buffer, 3);
 	if (bom_buffer[0] != '\xEF' || bom_buffer[1] != '\xBB' || bom_buffer[2] != '\xBF') {
 		ResetStream();
 	}
@@ -255,9 +260,10 @@ void BufferedCSVReader::SkipBOM() {
 void BufferedCSVReader::SkipRowsAndReadHeader(idx_t skip_rows, bool skip_header) {
 	for (idx_t i = 0; i < skip_rows; i++) {
 		// ignore skip rows
-		string read_line;
-		getline(*source, read_line);
-		linenr++;
+		throw InternalException("FIXME: get line");
+		// string read_line;
+		// getline(*source, read_line);
+		// linenr++;
 	}
 
 	if (skip_header) {
@@ -307,12 +313,11 @@ bool BufferedCSVReader::JumpToNextSample() {
 
 	// calculate offset to end of the current partition
 	int64_t offset = partition_size - bytes_in_chunk - remaining_bytes_in_buffer;
-	idx_t current_pos = (idx_t)source->tellg();
+	auto current_pos = file_handle->SeekPosition();
 
 	if (current_pos + offset < file_size) {
 		// set position in stream and clear failure bits
-		source->clear();
-		source->seekg(offset, source->cur);
+		file_handle->Seek(current_pos + offset);
 
 		// estimate linenr
 		linenr += (idx_t)round((offset + remaining_bytes_in_buffer) / bytes_per_line_avg);
@@ -321,7 +326,7 @@ bool BufferedCSVReader::JumpToNextSample() {
 		// seek backwards from the end in last chunk and hope to catch the end of the file
 		// TODO: actually it would be good to make sure that the end of file is being reached, because
 		// messy end-lines are quite common. For this case, however, we first need a skip_end detection anyways.
-		source->seekg(-std::streamoff(bytes_in_chunk), source->end);
+		file_handle->Seek(file_size - bytes_in_chunk);
 
 		// estimate linenr
 		linenr = (idx_t)round((file_size - bytes_in_chunk) / bytes_per_line_avg);
@@ -333,9 +338,10 @@ bool BufferedCSVReader::JumpToNextSample() {
 
 	// seek beginning of next line
 	// FIXME: if this jump ends up in a quoted linebreak, we will have a problem
-	string read_line;
-	getline(*source, read_line);
-	linenr++;
+	throw InternalException("FIXME: read_line");
+	// string read_line;
+	// getline(*source, read_line);
+	// linenr++;
 
 	sample_chunk_idx++;
 
@@ -1248,9 +1254,8 @@ bool BufferedCSVReader::ReadBuffer(idx_t &start) {
 		// remaining from last buffer: copy it here
 		memcpy(buffer.get(), old_buffer.get() + start, remaining);
 	}
-	source->read(buffer.get() + remaining, buffer_read_size);
+	idx_t read_count = file_handle->Read(buffer.get() + remaining, buffer_read_size);
 
-	idx_t read_count = source->eof() ? source->gcount() : buffer_read_size;
 	bytes_in_chunk += read_count;
 	buffer_size = remaining + read_count;
 	buffer[buffer_size] = '\0';

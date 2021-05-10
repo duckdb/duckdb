@@ -33,8 +33,12 @@ public:
 	virtual ~FileHandle() {
 	}
 
+	int64_t Read(void *buffer, idx_t nr_bytes);
+	int64_t Write(void *buffer, idx_t nr_bytes);
 	void Read(void *buffer, idx_t nr_bytes, idx_t location);
 	void Write(void *buffer, idx_t nr_bytes, idx_t location);
+	void Seek(idx_t location);
+	idx_t SeekPosition();
 	void Sync();
 	void Truncate(int64_t new_size);
 
@@ -141,9 +145,16 @@ public:
 		throw NotImplementedException("Can't register a protocol handler on a non-virtual file system");
 	}
 
+	//! Set the file pointer of a file handle to a specified location. Reads and writes will happen from this location
+	virtual void Seek(FileHandle &handle, idx_t location);
+	virtual idx_t SeekPosition(FileHandle &handle);
+
+	//! Whether or not we can seek into the file
+	virtual bool CanSeek();
 private:
 	//! Set the file pointer of a file handle to a specified location. Reads and writes will happen from this location
 	void SetFilePointer(FileHandle &handle, idx_t location);
+	virtual idx_t GetFilePointer(FileHandle &handle);
 };
 
 // bunch of wrappers to allow registering protocol handlers

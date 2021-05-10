@@ -262,64 +262,65 @@ bool compare_chunk(DataChunk &left, DataChunk &right) {
 //! Returns true if they are equal, and stores an error_message otherwise
 bool compare_result(string csv, ChunkCollection &collection, vector<LogicalType> sql_types, bool has_header,
                     string &error_message) {
-	D_ASSERT(collection.Count() == 0 || collection.Types().size() == sql_types.size());
+	// D_ASSERT(collection.Count() == 0 || collection.Types().size() == sql_types.size());
 
-	// set up the CSV reader
-	BufferedCSVReaderOptions options;
-	options.auto_detect = false;
-	options.delimiter = "|";
-	options.header = has_header;
-	options.quote = "\"";
-	options.escape = "\"";
+	// // set up the CSV reader
+	// BufferedCSVReaderOptions options;
+	// options.auto_detect = false;
+	// options.delimiter = "|";
+	// options.header = has_header;
+	// options.quote = "\"";
+	// options.escape = "\"";
 
-	// set up the intermediate result chunk
-	DataChunk parsed_result;
-	parsed_result.Initialize(sql_types);
+	// // set up the intermediate result chunk
+	// DataChunk parsed_result;
+	// parsed_result.Initialize(sql_types);
 
-	// convert the CSV string into a stringstream
-	auto source = make_unique<istringstream>(csv);
+	// // convert the CSV string into a stringstream
+	// auto source = make_unique<istringstream>(csv);
 
-	BufferedCSVReader reader(move(options), sql_types, move(source));
-	idx_t collection_index = 0;
-	idx_t tuple_count = 0;
-	while (true) {
-		// parse a chunk from the CSV file
-		try {
-			parsed_result.Reset();
-			reader.ParseCSV(parsed_result);
-		} catch (Exception &ex) {
-			error_message = "Could not parse CSV: " + string(ex.what());
-			return false;
-		}
-		if (parsed_result.size() == 0) {
-			// out of tuples in CSV file
-			if (collection_index < collection.ChunkCount()) {
-				error_message = StringUtil::Format("Too many tuples in result! Found %llu tuples, but expected %llu",
-				                                   collection.Count(), tuple_count);
-				return false;
-			}
-			return true;
-		}
-		if (collection_index >= collection.ChunkCount()) {
-			// ran out of chunks in the collection, but there are still tuples in the result
-			// keep parsing the csv file to get the total expected count
-			while (parsed_result.size() > 0) {
-				tuple_count += parsed_result.size();
-				parsed_result.Reset();
-				reader.ParseCSV(parsed_result);
-			}
-			error_message = StringUtil::Format("Too few tuples in result! Found %llu tuples, but expected %llu",
-			                                   collection.Count(), tuple_count);
-			return false;
-		}
-		// same counts, compare tuples in chunks
-		if (!compare_chunk(collection.GetChunk(collection_index), parsed_result)) {
-			error_message = show_diff(collection.GetChunk(collection_index), parsed_result);
-			return false;
-		}
+	// BufferedCSVReader reader(move(options), sql_types, move(source));
+	// idx_t collection_index = 0;
+	// idx_t tuple_count = 0;
+	// while (true) {
+	// 	// parse a chunk from the CSV file
+	// 	try {
+	// 		parsed_result.Reset();
+	// 		reader.ParseCSV(parsed_result);
+	// 	} catch (Exception &ex) {
+	// 		error_message = "Could not parse CSV: " + string(ex.what());
+	// 		return false;
+	// 	}
+	// 	if (parsed_result.size() == 0) {
+	// 		// out of tuples in CSV file
+	// 		if (collection_index < collection.ChunkCount()) {
+	// 			error_message = StringUtil::Format("Too many tuples in result! Found %llu tuples, but expected %llu",
+	// 			                                   collection.Count(), tuple_count);
+	// 			return false;
+	// 		}
+	// 		return true;
+	// 	}
+	// 	if (collection_index >= collection.ChunkCount()) {
+	// 		// ran out of chunks in the collection, but there are still tuples in the result
+	// 		// keep parsing the csv file to get the total expected count
+	// 		while (parsed_result.size() > 0) {
+	// 			tuple_count += parsed_result.size();
+	// 			parsed_result.Reset();
+	// 			reader.ParseCSV(parsed_result);
+	// 		}
+	// 		error_message = StringUtil::Format("Too few tuples in result! Found %llu tuples, but expected %llu",
+	// 		                                   collection.Count(), tuple_count);
+	// 		return false;
+	// 	}
+	// 	// same counts, compare tuples in chunks
+	// 	if (!compare_chunk(collection.GetChunk(collection_index), parsed_result)) {
+	// 		error_message = show_diff(collection.GetChunk(collection_index), parsed_result);
+	// 		return false;
+	// 	}
 
-		collection_index++;
-		tuple_count += parsed_result.size();
-	}
+	// 	collection_index++;
+	// 	tuple_count += parsed_result.size();
+	// }
+	throw InternalException("FIXME compare_result");
 }
 } // namespace duckdb

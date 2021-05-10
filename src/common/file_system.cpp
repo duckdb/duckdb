@@ -152,6 +152,16 @@ void FileSystem::SetFilePointer(FileHandle &handle, idx_t location) {
 	}
 }
 
+idx_t FileSystem::GetFilePointer(FileHandle &handle) {
+	int fd = ((UnixFileHandle &)handle).fd;
+	off_t position = lseek(fd, 0, SEEK_CUR);
+	if (position == (off_t)-1) {
+		throw IOException("Could not get file position file \"%s\": %s", handle.path,
+		                  strerror(errno));
+	}
+	return position;
+}
+
 int64_t FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	int fd = ((UnixFileHandle &)handle).fd;
 	int64_t bytes_read = read(fd, buffer, nr_bytes);
@@ -691,6 +701,24 @@ void FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t
 	}
 }
 
+bool FileSystem::CanSeek() {
+	return true;
+}
+
+void FileSystem::Seek(FileHandle &handle, idx_t location) {
+	if (!CanSeek()) {
+		throw IOException("Cannot seek in files of this type");
+	}
+	SetFilePointer(handle, location);
+}
+
+idx_t FileSystem::SeekPosition(FileHandle &handle) {
+	if (!CanSeek()) {
+		throw IOException("Cannot seek in files of this type");
+	}
+	return GetFilePointer(handle);
+}
+
 string FileSystem::JoinPath(const string &a, const string &b) {
 	// FIXME: sanitize paths
 	return a + PathSeparator() + b;
@@ -719,12 +747,28 @@ string FileSystem::ExtractBaseName(const string &path) {
 	return vec[0];
 }
 
+int64_t FileHandle::Read(void *buffer, idx_t nr_bytes) {
+	return file_system.Read(*this, buffer, nr_bytes);
+}
+
+int64_t FileHandle::Write(void *buffer, idx_t nr_bytes) {
+	return file_system.Write(*this, buffer, nr_bytes);
+}
+
 void FileHandle::Read(void *buffer, idx_t nr_bytes, idx_t location) {
 	file_system.Read(*this, buffer, nr_bytes, location);
 }
 
 void FileHandle::Write(void *buffer, idx_t nr_bytes, idx_t location) {
 	file_system.Write(*this, buffer, nr_bytes, location);
+}
+
+void FileHandle::Seek(idx_t location) {
+	file_system.Seek(*this, location);
+}
+
+idx_t FileHandle::SeekPosition() {
+	return file_system.SeekPosition(*this);
 }
 
 void FileHandle::Sync() {

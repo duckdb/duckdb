@@ -118,6 +118,14 @@ void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, id
 	}
 }
 
+int64_t HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
+	auto &hfh = (HTTPFileHandle &)handle;
+	idx_t max_read = hfh.length - hfh.file_offset;
+	nr_bytes = MinValue<idx_t>(max_read, nr_bytes);
+	Read(handle, buffer, nr_bytes, hfh.file_offset);
+	return nr_bytes;
+}
+
 void HTTPFileHandle::IntializeMetadata() {
 	// get length using HEAD
 	auto &hfs = (HTTPFileSystem &)file_system;

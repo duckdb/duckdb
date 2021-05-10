@@ -19,6 +19,7 @@
 
 namespace duckdb {
 struct CopyInfo;
+struct FileHandle;
 struct StrpTimeFormat;
 
 //! The shifts array allows for linear searching of multi-byte values. For each position, it determines the next
@@ -130,12 +131,13 @@ public:
 	BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options,
 	                  const vector<LogicalType> &requested_types = vector<LogicalType>());
 	BufferedCSVReader(BufferedCSVReaderOptions options, const vector<LogicalType> &requested_types,
-	                  unique_ptr<std::istream> source);
+	                  unique_ptr<FileHandle> file_handle_p);
 
 	BufferedCSVReaderOptions options;
 	vector<LogicalType> sql_types;
 	vector<string> col_names;
-	unique_ptr<std::istream> source;
+	unique_ptr<FileHandle> file_handle;
+	// unique_ptr<std::istream> source;
 	bool plain_file_source = false;
 	bool gzip_compressed = false;
 	idx_t file_size = 0;
@@ -215,7 +217,7 @@ private:
 	//! Reads a new buffer from the CSV file if the current one has been exhausted
 	bool ReadBuffer(idx_t &start);
 
-	unique_ptr<std::istream> OpenCSV(ClientContext &context, const BufferedCSVReaderOptions &options);
+	unique_ptr<FileHandle> OpenCSV(ClientContext &context, const BufferedCSVReaderOptions &options);
 };
 
 } // namespace duckdb

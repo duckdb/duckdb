@@ -57,9 +57,7 @@ public:
 	                                            HeaderMap header_map = {}, idx_t file_offset = 0,
 	                                            char *buffer_out = nullptr, idx_t buffer_len = 0);
 
-	int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes) override {
-		throw std::runtime_error("Read3"); // unused by parquet reader
-	}
+	int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
 
 	int64_t GetFileSize(FileHandle &handle) override {
 		auto &sfh = (HTTPFileHandle &)handle;
@@ -85,6 +83,10 @@ public:
 	}
 
 	static void Verify();
+
+	bool CanSeek() override {
+		return false;
+	}
 };
 
 } // namespace duckdb
