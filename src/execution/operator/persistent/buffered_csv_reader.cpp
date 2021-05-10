@@ -128,12 +128,6 @@ BufferedCSVReader::BufferedCSVReader(ClientContext &context, BufferedCSVReaderOp
 	Initialize(requested_types);
 }
 
-// BufferedCSVReader::BufferedCSVReader(BufferedCSVReaderOptions options_p, const vector<LogicalType> &requested_types,
-//                                      unique_ptr<FileHandle> file_handle_p)
-//     : options(move(options_p)), file_handle(move(file_handle_p)), buffer_size(0), position(0), start(0) {
-// 	Initialize(requested_types);
-// }
-
 void BufferedCSVReader::Initialize(const vector<LogicalType> &requested_types) {
 	PrepareComplexParser();
 	if (options.auto_detect) {
