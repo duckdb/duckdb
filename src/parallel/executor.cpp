@@ -234,6 +234,8 @@ void Executor::Flush(ThreadContext &tcontext) {
 }
 
 bool Executor::GetPipelinesProgress(int &current_progress) {
+	lock_guard<mutex> elock(executor_lock);
+
 	if (!pipelines.empty()) {
 		return pipelines.back()->GetProgress(current_progress);
 	} else {

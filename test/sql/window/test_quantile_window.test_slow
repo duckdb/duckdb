@@ -13,11 +13,9 @@ require vector_size 512
 statement ok
 create table rank100 as select b % 100 as a, b from range(0, 10000000) tbl(b) order by b desc;
 
-query I
+statement ok
 select quantile(a, 0.5) over (
     order by b asc
     rows between p preceding and f following)
 from (
     select a, b, mod(b * 47, 1023) as p, (100 - mod(b * 47, 1023)) as f from rank100) t
-----
-0

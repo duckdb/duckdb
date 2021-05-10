@@ -439,6 +439,27 @@ jobs:
       run: make allunit
 
 
+  centos:
+    name: CentOS 7
+    runs-on: ubuntu-latest
+    container: centos:7
+    needs: linux-debug
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Install
+      run: yum install -y gcc gcc-c++ git cmake make
+
+    - name: Build
+      run: make release
+
+    - name: Test
+      run: ./build/release/test/unittest
+
+
   release-assert:
     name: Release Assertions
     runs-on: ubuntu-20.04
@@ -466,6 +487,44 @@ jobs:
     - name: Test
       run: build/relassert/test/unittest "*"
 
+
+  threadsan:
+    name: Thread Sanitizer
+    runs-on: ubuntu-20.04
+    needs: linux-debug
+
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+      BUILD_ICU: 1
+      BUILD_TPCH: 1
+      BUILD_FTS: 1
+      TSAN_OPTIONS: suppressions=.sanitizer-thread-suppressions.txt
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Install
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+    - name: Build
+      run: THREADSAN=1 make reldebug
+
+    - name: Test
+      run: |
+          build/reldebug/test/unittest --end-offset-percentage=10
+          build/reldebug/test/unittest --start-offset-percentage=10 --end-offset-percentage=20
+          build/reldebug/test/unittest --start-offset-percentage=20 --end-offset-percentage=30
+          build/reldebug/test/unittest --start-offset-percentage=30 --end-offset-percentage=40
+          build/reldebug/test/unittest --start-offset-percentage=40 --end-offset-percentage=50
+          build/reldebug/test/unittest --start-offset-percentage=50 --end-offset-percentage=60
+          build/reldebug/test/unittest --start-offset-percentage=60 --end-offset-percentage=70
+          build/reldebug/test/unittest --start-offset-percentage=70 --end-offset-percentage=80
+          build/reldebug/test/unittest --start-offset-percentage=80 --end-offset-percentage=90
+          build/reldebug/test/unittest --start-offset-percentage=90
 
   valgrind:
     name: Valgrind

@@ -29,7 +29,7 @@ struct MyArrowArrayStream {
 		return 0;
 	}
 
-	static int GetNext(struct ArrowArrayStream *stream, struct ArrowArray *out) {
+	static int GetNext(struct ArrowArrayStream *stream, struct ArrowArray *out, int chunk_idx) {
 		D_ASSERT(stream->private_data);
 		auto my_stream = (MyArrowArrayStream *)stream->private_data;
 		if (!stream->release) {
@@ -72,14 +72,10 @@ public:
 	    : arrow_table(move(duckdb_result)) {};
 	static ArrowArrayStream *Produce(uintptr_t factory_ptr) {
 		MyPythonTableArrowArrayStreamFactory *factory = (MyPythonTableArrowArrayStreamFactory *)factory_ptr;
-		if (!factory->stream) {
-			auto table_stream = new MyArrowArrayStream(factory->arrow_table.get());
-			factory->stream = &table_stream->stream;
-		}
-		return factory->stream;
+		auto table_stream = new MyArrowArrayStream(factory->arrow_table.get());
+		return &table_stream->stream;
 	};
 	unique_ptr<QueryResult> arrow_table;
-	ArrowArrayStream *stream = nullptr;
 };
 
 static void TestArrowRoundTrip(string q) {
@@ -125,7 +121,7 @@ TEST_CASE("Test Arrow API round trip", "[arrow]") {
 	    "'1969-01-01'::date, TIME '13:07:16'::time c_time, timestamp '1992-01-01 12:00:00' c_timestamp "
 	    "from (select case when range % 2 == 0 then range else null end as c from range(-10, 10)) sq");
 	//! big result set
-	//	TestArrowRoundTrip("select i from range(0, 2000) sq(i)");
+	TestArrowRoundTrip("select i from range(0, 2000) sq(i)");
 }
 
 TEST_CASE("Test Arrow API unsigned", "[arrow]") {

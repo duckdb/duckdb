@@ -11,6 +11,8 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/atomic.hpp"
+
 #include <memory>
 
 namespace duckdb {
@@ -59,7 +61,7 @@ public:
 	//! Whether or not the entry is an internal entry (cannot be deleted, not dumped, etc)
 	bool internal;
 	//! Timestamp at which the catalog entry was created
-	transaction_t timestamp;
+	atomic<transaction_t> timestamp;
 	//! Child entry
 	unique_ptr<CatalogEntry> child;
 	//! Parent entry (the node that owns this node)

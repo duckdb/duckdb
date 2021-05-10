@@ -7,8 +7,10 @@ PythonTableArrowArrayStream::PythonTableArrowArrayStream(const py::object &arrow
                                                          PythonTableArrowArrayStreamFactory *factory)
     : arrow_table(arrow_table), factory(factory) {
 	InitializeFunctionPointers(&stream);
-	stream.private_data = this;
+	py::gil_scoped_acquire acquire;
 	batches = arrow_table.attr("to_batches")();
+	stream.number_of_batches = py::len(batches);
+	stream.private_data = this;
 }
 
 void PythonTableArrowArrayStream::InitializeFunctionPointers(ArrowArrayStream *stream) {
@@ -24,11 +26,8 @@ ArrowArrayStream *PythonTableArrowArrayStreamFactory::Produce(uintptr_t factory_
 	if (!factory->arrow_table) {
 		return nullptr;
 	}
-	if (!factory->stream) {
-		auto table_stream = new PythonTableArrowArrayStream(factory->arrow_table, factory);
-		factory->stream = &table_stream->stream;
-	}
-	return factory->stream;
+	auto table_stream = new PythonTableArrowArrayStream(factory->arrow_table, factory);
+	return &table_stream->stream;
 }
 
 int PythonTableArrowArrayStream::PythonTableArrowArrayStream::GetSchema(struct ArrowArrayStream *stream,
@@ -50,7 +49,7 @@ int PythonTableArrowArrayStream::PythonTableArrowArrayStream::GetSchema(struct A
 	return 0;
 }
 
-int PythonTableArrowArrayStream::GetNext(struct ArrowArrayStream *stream, struct ArrowArray *out) {
+int PythonTableArrowArrayStream::GetNext(struct ArrowArrayStream *stream, struct ArrowArray *out, int chunk_idx) {
 	D_ASSERT(stream->private_data);
 	py::gil_scoped_acquire acquire;
 	auto my_stream = (PythonTableArrowArrayStream *)stream->private_data;
@@ -58,11 +57,11 @@ int PythonTableArrowArrayStream::GetNext(struct ArrowArrayStream *stream, struct
 		my_stream->last_error = "stream was released";
 		return -1;
 	}
-	if (my_stream->batch_idx >= py::len(my_stream->batches)) {
+	if (chunk_idx >= py::len(my_stream->batches)) {
 		out->release = nullptr;
 		return 0;
 	}
-	auto stream_batch = my_stream->batches[my_stream->batch_idx++];
+	auto stream_batch = my_stream->batches[chunk_idx];
 	if (!py::hasattr(stream_batch, "_export_to_c")) {
 		my_stream->last_error = "failed to acquire export_to_c function";
 		return -1;

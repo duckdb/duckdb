@@ -1,4 +1,6 @@
-cmake_policy(SET CMP0063 NEW)
+if(POLICY CMP0063)
+    cmake_policy(SET CMP0063 NEW)
+endif()
 
 add_library(miniz STATIC miniz.cpp)
 

@@ -23,7 +23,7 @@ struct AlterInfo;
 
 class ClientContext;
 
-typedef unordered_map<CatalogSet *, std::unique_lock<std::mutex>> set_lock_map_t;
+typedef unordered_map<CatalogSet *, unique_lock<mutex>> set_lock_map_t;
 
 struct MappingValue {
 	explicit MappingValue(idx_t index_) : index(index_), timestamp(0), deleted(false), parent(nullptr) {
@@ -52,6 +52,8 @@ public:
 
 	bool DropEntry(ClientContext &context, const string &name, bool cascade);
 
+	void CleanupEntry(CatalogEntry *catalog_entry);
+
 	//! Returns the entry with the specified name
 	CatalogEntry *GetEntry(ClientContext &context, const string &name);
 
@@ -67,7 +69,7 @@ public:
 	template <class T>
 	void Scan(ClientContext &context, T &&callback) {
 		// lock the catalog set
-		std::lock_guard<std::mutex> lock(catalog_lock);
+		lock_guard<mutex> lock(catalog_lock);
 		for (auto &kv : entries) {
 			auto entry = kv.second.get();
 			entry = GetEntryForTransaction(context, entry);
@@ -77,11 +79,18 @@ public:
 		}
 	}
 
+	template <class T>
+	vector<T *> GetEntries(ClientContext &context) {
+		vector<T *> result;
+		Scan(context, [&](CatalogEntry *entry) { result.push_back((T *)entry); });
+		return result;
+	}
+
 	//! Scan the catalog set, invoking the callback method for every committed entry
 	template <class T>
 	void Scan(T &&callback) {
 		// lock the catalog set
-		std::lock_guard<std::mutex> lock(catalog_lock);
+		lock_guard<mutex> lock(catalog_lock);
 		for (auto &kv : entries) {
 			auto entry = kv.second.get();
 			entry = GetCommittedEntry(entry);

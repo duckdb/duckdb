@@ -54,6 +54,7 @@
 #include <string>
 #include <vector>
 #include <iostream>
+#include <thread>
 
 using namespace duckdb;
 using namespace std;
@@ -663,6 +664,7 @@ void Query::ColumnCountMismatch(MaterializedQueryResult &result, int expected_co
 vector<string> Query::LoadResultFromFile(string fname, vector<string> names) {
 	DuckDB db(nullptr);
 	Connection con(db);
+	con.Query("PRAGMA threads=" + to_string(std::thread::hardware_concurrency()));
 	fname = StringUtil::Replace(fname, "<FILE>:", "");
 
 	string struct_definition = "STRUCT_PACK(";

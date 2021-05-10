@@ -33,7 +33,6 @@ public:
 	//! Vector of rows that mush be fetched for every LHS key
 	vector<vector<row_t>> rhs_rows;
 	ExpressionExecutor probe_executor;
-	IndexLock lock;
 };
 
 PhysicalIndexJoin::PhysicalIndexJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
@@ -133,9 +132,12 @@ void PhysicalIndexJoin::GetRHSMatches(ExecutionContext &context, PhysicalOperato
 		state->rhs_rows[i].clear();
 		if (!equal_value.is_null) {
 			if (fetch_types.empty()) {
-				//! Nothing to materialize
+				IndexLock lock;
+				index->InitializeLock(lock);
 				art.SearchEqualJoinNoFetch(equal_value, state->result_sizes[i]);
 			} else {
+				IndexLock lock;
+				index->InitializeLock(lock);
 				art.SearchEqual((ARTIndexScanState *)index_state.get(), (idx_t)-1, state->rhs_rows[i]);
 				state->result_sizes[i] = state->rhs_rows[i].size();
 			}
@@ -152,9 +154,6 @@ void PhysicalIndexJoin::GetRHSMatches(ExecutionContext &context, PhysicalOperato
 
 void PhysicalIndexJoin::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
 	auto state = reinterpret_cast<PhysicalIndexJoinOperatorState *>(state_p);
-	if (!state->lock.index_lock) {
-		index->InitializeLock(state->lock);
-	}
 	state->result_size = 0;
 	while (state->result_size == 0) {
 		//! Check if we need to get a new LHS chunk

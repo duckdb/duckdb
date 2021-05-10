@@ -168,7 +168,7 @@ void CatalogSet::DropEntryInternal(ClientContext &context, idx_t entry_index, Ca
 
 	// add this catalog to the lock set, if it is not there yet
 	if (lock_set.find(this) == lock_set.end()) {
-		lock_set.insert(make_pair(this, std::unique_lock<mutex>(catalog_lock)));
+		lock_set.insert(make_pair(this, unique_lock<mutex>(catalog_lock)));
 	}
 
 	// create a new entry and replace the currently stored one
@@ -204,6 +204,20 @@ bool CatalogSet::DropEntry(ClientContext &context, const string &name, bool casc
 	set_lock_map_t lock_set;
 	DropEntryInternal(context, entry_index, *entry, cascade, lock_set);
 	return true;
+}
+
+void CatalogSet::CleanupEntry(CatalogEntry *catalog_entry) {
+
+	// destroy the backed up entry: it is no longer required
+	D_ASSERT(catalog_entry->parent);
+	if (catalog_entry->parent->type != CatalogType::UPDATED_ENTRY) {
+		if (!catalog_entry->deleted) {
+			// delete the entry from the dependency manager, if it is not deleted yet
+			catalog_entry->catalog->dependency_manager->EraseObject(catalog_entry);
+		}
+		lock_guard<mutex> lock(catalog_lock);
+		catalog_entry->parent->child = move(catalog_entry->child);
+	}
 }
 
 idx_t CatalogSet::GetEntryIndex(CatalogEntry *entry) {
@@ -384,6 +398,8 @@ CatalogEntry *CatalogSet::GetRootEntry(const string &name) {
 }
 
 void CatalogSet::Undo(CatalogEntry *entry) {
+	lock_guard<mutex> write_lock(catalog.write_lock);
+
 	lock_guard<mutex> lock(catalog_lock);
 
 	// entry has to be restored

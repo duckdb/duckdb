@@ -11,9 +11,11 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/function/aggregate_function.hpp"
 
 namespace duckdb {
 struct FunctionData;
+typedef std::pair<idx_t, idx_t> FrameBounds;
 
 class AggregateExecutor {
 private:
@@ -329,6 +331,16 @@ public:
 				                                               FlatVector::Validity(result), i);
 			}
 		}
+	}
+
+	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>
+	static void UnaryFrame(Vector &input, Vector &prev, FunctionData *bind_data, data_ptr_t state, const FrameBounds &F,
+	                       const FrameBounds &P, Vector &result) {
+
+		auto fdata = FlatVector::GetData<INPUT_TYPE>(input) - F.first;
+		auto pdata = FlatVector::GetData<INPUT_TYPE>(prev) - P.first;
+		auto rdata = ConstantVector::GetData<RESULT_TYPE>(result);
+		OP::template Frame<STATE, INPUT_TYPE, RESULT_TYPE>(fdata, pdata, bind_data, (STATE *)state, F, P, rdata);
 	}
 
 	template <class STATE_TYPE, class OP>
