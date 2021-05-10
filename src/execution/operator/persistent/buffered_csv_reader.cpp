@@ -98,7 +98,7 @@ TextSearchShiftArray::TextSearchShiftArray(string search_term) : length(search_t
 		throw Exception("Size of delimiter/quote/escape in CSV reader is limited to 255 bytes");
 	}
 	// initialize the shifts array
-shifts = unique_ptr<uint8_t[]>(new uint8_t[length * 255]);
+	shifts = unique_ptr<uint8_t[]>(new uint8_t[length * 255]);
 	memset(shifts.get(), 0, length * 255 * sizeof(uint8_t));
 	// iterate over each of the characters in the array
 	for (idx_t main_idx = 0; main_idx < length; main_idx++) {
@@ -162,7 +162,8 @@ unique_ptr<FileHandle> BufferedCSVReader::OpenCSV(ClientContext &context, const 
 		this->compression = FileCompressionType::GZIP;
 	}
 
-	auto result = fs.OpenFile(options.file_path.c_str(), FileFlags::FILE_FLAGS_READ, FileLockType::NO_LOCK, this->compression);
+	auto result =
+	    fs.OpenFile(options.file_path.c_str(), FileFlags::FILE_FLAGS_READ, FileLockType::NO_LOCK, this->compression);
 	plain_file_source = result->OnDiskFile();
 	file_size = result->GetFileSize();
 	return result;

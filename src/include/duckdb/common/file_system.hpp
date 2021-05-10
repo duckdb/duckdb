@@ -84,7 +84,9 @@ public:
 	static FileSystem &GetFileSystem(ClientContext &context);
 	static FileSystem &GetFileSystem(DatabaseInstance &db);
 
-	virtual unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags, FileLockType lock = FileLockType::NO_LOCK, FileCompressionType compression = FileCompressionType::UNCOMPRESSED);
+	virtual unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags,
+	                                        FileLockType lock = FileLockType::NO_LOCK,
+	                                        FileCompressionType compression = FileCompressionType::UNCOMPRESSED);
 
 	//! Read exactly nr_bytes from the specified location in the file. Fails if nr_bytes could not be read. This is
 	//! equivalent to calling SetFilePointer(location) followed by calling Read().
@@ -166,6 +168,7 @@ public:
 	//! Whether or not the FS handles plain files on disk. This is relevant for certain optimizations, as random reads
 	//! in a file on-disk are much cheaper than e.g. random reads in a file over the network
 	virtual bool OnDiskFile(FileHandle &handle);
+
 private:
 	//! Set the file pointer of a file handle to a specified location. Reads and writes will happen from this location
 	void SetFilePointer(FileHandle &handle, idx_t location);
@@ -175,8 +178,8 @@ private:
 // bunch of wrappers to allow registering protocol handlers
 class VirtualFileSystem : public FileSystem {
 public:
-	unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags,
-	                                FileLockType lock = FileLockType::NO_LOCK, FileCompressionType compression = FileCompressionType::UNCOMPRESSED) override;
+	unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags, FileLockType lock = FileLockType::NO_LOCK,
+	                                FileCompressionType compression = FileCompressionType::UNCOMPRESSED) override;
 
 	virtual void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
 		handle.file_system.Read(handle, buffer, nr_bytes, location);

@@ -72,14 +72,15 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::Request(FileHandle &handle, string u
 }
 
 HTTPFileHandle::HTTPFileHandle(FileSystem &fs, std::string path)
-    : FileHandle(fs, path), length(0), buffer_available(0), buffer_idx(0), file_offset(0),
-	  buffer_start(0), buffer_end(0) {
+    : FileHandle(fs, path), length(0), buffer_available(0), buffer_idx(0), file_offset(0), buffer_start(0),
+      buffer_end(0) {
 	buffer = std::unique_ptr<data_t[]>(new data_t[BUFFER_LEN]);
 
 	IntializeMetadata();
 }
 
-std::unique_ptr<FileHandle> HTTPFileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock, FileCompressionType compression) {
+std::unique_ptr<FileHandle> HTTPFileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock,
+                                                     FileCompressionType compression) {
 	D_ASSERT(compression == FileCompressionType::UNCOMPRESSED);
 	return duckdb::make_unique<HTTPFileHandle>(*this, path);
 }

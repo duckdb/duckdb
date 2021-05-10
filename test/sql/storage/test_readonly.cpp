@@ -7,7 +7,8 @@ using namespace std;
 namespace duckdb {
 
 class ReadOnlyFileSystem : public FileSystem {
-	unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags, FileLockType lock_type, FileCompressionType compression) override {
+	unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags, FileLockType lock_type,
+	                                FileCompressionType compression) override {
 		if (flags & FileFlags::FILE_FLAGS_WRITE) {
 			throw Exception("RO file system");
 		}

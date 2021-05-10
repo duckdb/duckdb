@@ -54,7 +54,7 @@ namespace duckdb {
 static idx_t GZipConsumeString(FileHandle &input) {
 	idx_t size = 1; // terminator
 	char buffer[1];
-	while(input.Read(buffer, 1) == 1) {
+	while (input.Read(buffer, 1) == 1) {
 		if (buffer[0] == '\0') {
 			break;
 		}
@@ -79,9 +79,10 @@ static constexpr const unsigned char GZIP_FLAG_UNSUPPORTED =
 
 class GZipFile : public FileHandle {
 	static constexpr const idx_t BUFFER_SIZE = 1024;
+
 public:
-	GZipFile(unique_ptr<FileHandle> child_handle_p, const string &path) :
-		FileHandle(gzip_fs, path), child_handle(move(child_handle_p)) {
+	GZipFile(unique_ptr<FileHandle> child_handle_p, const string &path)
+	    : FileHandle(gzip_fs, path), child_handle(move(child_handle_p)) {
 		Initialize();
 	}
 	~GZipFile() override {
@@ -166,7 +167,7 @@ void GZipFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, id
 
 int64_t GZipFile::ReadData(void *buffer, int64_t remaining) {
 	idx_t total_read = 0;
-	while(true) {
+	while (true) {
 		// first check if there are input bytes available in the output buffers
 		if (out_buff_start != out_buff_end) {
 			// there is! copy it into the output buffer
@@ -230,7 +231,7 @@ int64_t GZipFile::ReadData(void *buffer, int64_t remaining) {
 }
 
 int64_t GZipFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
-	auto &gzip_file = (GZipFile &) handle;
+	auto &gzip_file = (GZipFile &)handle;
 	return gzip_file.ReadData(buffer, nr_bytes);
 }
 
@@ -255,21 +256,19 @@ void GZipFileSystem::Seek(FileHandle &handle, idx_t location) {
 }
 
 void GZipFileSystem::Reset(FileHandle &handle) {
-	auto &gzip_file = (GZipFile &) handle;
+	auto &gzip_file = (GZipFile &)handle;
 	gzip_file.child_handle->Reset();
 	gzip_file.Initialize();
 }
 
 int64_t GZipFileSystem::GetFileSize(FileHandle &handle) {
-	auto &gzip_file = (GZipFile &) handle;
+	auto &gzip_file = (GZipFile &)handle;
 	return gzip_file.child_handle->GetFileSize();
 }
 
 bool GZipFileSystem::OnDiskFile(FileHandle &handle) {
-	auto &gzip_file = (GZipFile &) handle;
+	auto &gzip_file = (GZipFile &)handle;
 	return gzip_file.child_handle->OnDiskFile();
 }
 
-
-
-}
+} // namespace duckdb

@@ -84,7 +84,8 @@ public:
 	int fd;
 };
 
-unique_ptr<FileHandle> FileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock_type, FileCompressionType compression) {
+unique_ptr<FileHandle> FileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock_type,
+                                            FileCompressionType compression) {
 	if (compression != FileCompressionType::UNCOMPRESSED) {
 		throw NotImplementedException("Unsupported compression type for default file system");
 	}
@@ -161,8 +162,7 @@ idx_t FileSystem::GetFilePointer(FileHandle &handle) {
 	int fd = ((UnixFileHandle &)handle).fd;
 	off_t position = lseek(fd, 0, SEEK_CUR);
 	if (position == (off_t)-1) {
-		throw IOException("Could not get file position file \"%s\": %s", handle.path,
-		                  strerror(errno));
+		throw IOException("Could not get file position file \"%s\": %s", handle.path, strerror(errno));
 	}
 	return position;
 }
@@ -415,7 +415,8 @@ public:
 	HANDLE fd;
 };
 
-unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, FileLockType lock_type, FileCompressionType compression) {
+unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, FileLockType lock_type,
+                                            FileCompressionType compression) {
 	if (compression != FileCompressionType::UNCOMPRESSED) {
 		throw NotImplementedException("Unsupported compression type for default file system");
 	}
@@ -798,7 +799,7 @@ bool FileHandle::CanSeek() {
 string FileHandle::ReadLine() {
 	string result;
 	char buffer[1];
-	while(true) {
+	while (true) {
 		idx_t tuples_read = Read(buffer, 1);
 		if (tuples_read == 0 || buffer[0] == '\n') {
 			return result;
@@ -816,7 +817,6 @@ bool FileHandle::OnDiskFile() {
 idx_t FileHandle::GetFileSize() {
 	return file_system.GetFileSize(*this);
 }
-
 
 void FileHandle::Sync() {
 	file_system.FileSync(*this);
@@ -944,8 +944,8 @@ vector<string> FileSystem::Glob(const string &path) {
 	return vector<string>();
 }
 
-unique_ptr<FileHandle> VirtualFileSystem::OpenFile(const string &path, uint8_t flags,
-								FileLockType lock, FileCompressionType compression) {
+unique_ptr<FileHandle> VirtualFileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock,
+                                                   FileCompressionType compression) {
 	if (compression == FileCompressionType::AUTO_DETECT) {
 		// auto detect compression settings based on file name
 		auto lower_path = StringUtil::Lower(path);
@@ -958,7 +958,7 @@ unique_ptr<FileHandle> VirtualFileSystem::OpenFile(const string &path, uint8_t f
 	// open the base file handle
 	auto file_handle = FindFileSystem(path)->OpenFile(path, flags, lock, FileCompressionType::UNCOMPRESSED);
 	if (compression != FileCompressionType::UNCOMPRESSED) {
-		switch(compression) {
+		switch (compression) {
 		case FileCompressionType::GZIP:
 			file_handle = GZipFileSystem::OpenCompressedFile(move(file_handle));
 			break;

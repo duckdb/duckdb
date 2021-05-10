@@ -9,8 +9,8 @@ class S3FileSystem : public HTTPFileSystem {
 public:
 	S3FileSystem(DatabaseInstance &instance_p) : database_instance(instance_p) {
 	}
-	std::unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags,
-	                                     FileLockType lock = FileLockType::NO_LOCK, FileCompressionType compression = FileCompressionType::UNCOMPRESSED) override;
+	std::unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags, FileLockType lock = FileLockType::NO_LOCK,
+	                                     FileCompressionType compression = FileCompressionType::UNCOMPRESSED) override;
 
 	unique_ptr<ResponseWrapper> Request(FileHandle &handle, string url, string method, HeaderMap header_map = {},
 	                                    idx_t file_offset = 0, char *buffer_out = nullptr,
