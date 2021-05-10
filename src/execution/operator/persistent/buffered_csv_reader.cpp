@@ -158,7 +158,7 @@ unique_ptr<FileHandle> BufferedCSVReader::OpenCSV(ClientContext &context, const 
 
 	auto result =
 	    fs.OpenFile(options.file_path.c_str(), FileFlags::FILE_FLAGS_READ, FileLockType::NO_LOCK, this->compression);
-	plain_file_source = result->OnDiskFile();
+	plain_file_source = result->OnDiskFile() && result->CanSeek();
 	file_size = result->GetFileSize();
 	return result;
 }

@@ -140,7 +140,6 @@ public:
 	vector<string> col_names;
 	unique_ptr<FileHandle> file_handle;
 	bool plain_file_source = false;
-	bool gzip_compressed = false;
 	idx_t file_size = 0;
 	FileCompressionType compression = FileCompressionType::UNCOMPRESSED;
 
