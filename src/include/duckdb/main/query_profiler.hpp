@@ -83,8 +83,6 @@ struct OperatorInformation {
 	idx_t elements = 0;
 	string name;
 	explicit OperatorInformation(double time_ = 0, idx_t elements_ = 0) : time(time_), elements(elements_) {
-		// at most there is two expression executors per operator
-		executors_info.resize(2);
 	}
 	//! A vector of Expression Executor Info
 	vector<unique_ptr<ExpressionExecutorInfo>> executors_info;

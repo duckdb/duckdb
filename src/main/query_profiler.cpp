@@ -239,8 +239,8 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 		entry->second->info.elements += node.second.elements;
 		for (auto &info : node.second.executors_info) {
 			if (info) {
-				if (int(node.second.executors_info.size()) <= info->id) {
-					node.second.executors_info.resize(info->id + 1);
+				if (int(entry->second->info.executors_info.size()) <= info->id) {
+					entry->second->info.executors_info.resize(info->id + 1);
 				}
 				entry->second->info.executors_info[info->id] = move(info);
 			}
