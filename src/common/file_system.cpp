@@ -88,9 +88,6 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const string &path, uint8_t flags, F
 	if (compression != FileCompressionType::UNCOMPRESSED) {
 		throw NotImplementedException("Unsupported compression type for default file system");
 	}
-	if (!FileExists(path)) {
-		throw IOException("File \"%s\" not found", path.c_str());
-	}
 
 	AssertValidFileFlags(flags);
 
@@ -421,9 +418,6 @@ public:
 unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, FileLockType lock_type, FileCompressionType compression) {
 	if (compression != FileCompressionType::UNCOMPRESSED) {
 		throw NotImplementedException("Unsupported compression type for default file system");
-	}
-	if (!FileExists(path)) {
-		throw IOException("File \"%s\" not found", path.c_str());
 	}
 	AssertValidFileFlags(flags);
 

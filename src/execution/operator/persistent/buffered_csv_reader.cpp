@@ -157,12 +157,12 @@ void BufferedCSVReader::PrepareComplexParser() {
 unique_ptr<FileHandle> BufferedCSVReader::OpenCSV(ClientContext &context, const BufferedCSVReaderOptions &options) {
 	this->compression = FileCompressionType::UNCOMPRESSED;
 	if (options.compression == "infer" || options.compression == "auto") {
-		compression = FileCompressionType::AUTO_DETECT;
+		this->compression = FileCompressionType::AUTO_DETECT;
 	} else if (options.compression == "gzip") {
-		compression = FileCompressionType::GZIP;
+		this->compression = FileCompressionType::GZIP;
 	}
 
-	auto result = fs.OpenFile(options.file_path.c_str(), FileFlags::FILE_FLAGS_READ, FileLockType::NO_LOCK, compression);
+	auto result = fs.OpenFile(options.file_path.c_str(), FileFlags::FILE_FLAGS_READ, FileLockType::NO_LOCK, this->compression);
 	plain_file_source = result->OnDiskFile();
 	file_size = result->GetFileSize();
 	return result;

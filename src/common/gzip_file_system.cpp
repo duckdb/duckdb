@@ -224,7 +224,6 @@ int64_t GZipFile::ReadData(void *buffer, int64_t remaining) {
 			duckdb_miniz::mz_inflateEnd(mz_stream_ptr);
 			delete mz_stream_ptr;
 			mz_stream_ptr = nullptr;
-			break;
 		}
 	}
 	return total_read;
