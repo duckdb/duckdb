@@ -52,7 +52,7 @@ unique_ptr<PhysicalOperatorState> PhysicalCrossProduct::GetOperatorState() {
 }
 
 void PhysicalCrossProduct::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
-                                            PhysicalOperatorState *state_p) {
+                                            PhysicalOperatorState *state_p) const {
 	auto state = reinterpret_cast<PhysicalCrossProductOperatorState *>(state_p);
 	auto &sink = (CrossProductGlobalState &)*sink_state;
 	auto &right_collection = sink.rhs_materialized;

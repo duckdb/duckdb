@@ -14,7 +14,8 @@ public:
 	ExpressionExecutor executor;
 };
 
-void PhysicalProjection::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
+void PhysicalProjection::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
+                                          PhysicalOperatorState *state_p) const {
 	auto state = reinterpret_cast<PhysicalProjectionState *>(state_p);
 
 	// get the next chunk from the child

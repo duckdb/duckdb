@@ -36,7 +36,7 @@ static void WriteValueAsSQL(stringstream &ss, Value &val) {
 }
 
 static void WriteCopyStatement(FileSystem &fs, stringstream &ss, TableCatalogEntry *table, CopyInfo &info,
-                               CopyFunction &function) {
+                               const CopyFunction &function) {
 	string table_file_path;
 	ss << "COPY ";
 	if (table->schema->name != DEFAULT_SCHEMA) {
@@ -74,7 +74,7 @@ static void WriteCopyStatement(FileSystem &fs, stringstream &ss, TableCatalogEnt
 	ss << ");" << std::endl;
 }
 
-void PhysicalExport::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
+void PhysicalExport::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const {
 	auto &ccontext = context.client;
 	auto &fs = FileSystem::GetFileSystem(ccontext);
 

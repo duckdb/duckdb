@@ -212,7 +212,7 @@ public:
 };
 
 void PhysicalNestedLoopJoin::ResolveSimpleJoin(ExecutionContext &context, DataChunk &chunk,
-                                               PhysicalOperatorState *state_p) {
+                                               PhysicalOperatorState *state_p) const {
 	auto state = reinterpret_cast<PhysicalNestedLoopJoinState *>(state_p);
 	auto &gstate = (NestedLoopJoinGlobalState &)*sink_state;
 	do {
@@ -264,7 +264,7 @@ void PhysicalJoin::ConstructLeftJoinResult(DataChunk &left, DataChunk &result, b
 }
 
 void PhysicalNestedLoopJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &chunk,
-                                                PhysicalOperatorState *state_p) {
+                                                PhysicalOperatorState *state_p) const {
 	auto state = reinterpret_cast<PhysicalNestedLoopJoinState *>(state_p);
 	auto &gstate = (NestedLoopJoinGlobalState &)*sink_state;
 
@@ -352,7 +352,7 @@ void PhysicalNestedLoopJoin::ResolveComplexJoin(ExecutionContext &context, DataC
 }
 
 void PhysicalNestedLoopJoin::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
-                                              PhysicalOperatorState *state_p) {
+                                              PhysicalOperatorState *state_p) const {
 	auto state = reinterpret_cast<PhysicalNestedLoopJoinState *>(state_p);
 	auto &gstate = (NestedLoopJoinGlobalState &)*sink_state;
 

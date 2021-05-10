@@ -31,7 +31,8 @@ uint64_t GetDelimiter(DataChunk &input, Expression *expr, uint64_t original_valu
 	return limit_value.value_.ubigint;
 }
 
-void PhysicalLimit::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
+void PhysicalLimit::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
+                                     PhysicalOperatorState *state_p) const {
 	auto state = reinterpret_cast<PhysicalLimitOperatorState *>(state_p);
 
 	idx_t max_element = limit + offset;
@@ -42,13 +43,16 @@ void PhysicalLimit::GetChunkInternal(ExecutionContext &context, DataChunk &chunk
 	// get the next chunk from the child
 	do {
 		children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
-		if (limit_expression) {
-			limit = GetDelimiter(state->child_chunk, limit_expression.get(), limit);
-			limit_expression.reset();
-		}
-		if (offset_expression) {
-			offset = GetDelimiter(state->child_chunk, offset_expression.get(), offset);
-			offset_expression.reset();
+		{
+			lock_guard<mutex> llock(lock);
+			if (limit_expression) {
+				limit = GetDelimiter(state->child_chunk, limit_expression.get(), limit);
+				limit_expression.reset();
+			}
+			if (offset_expression) {
+				offset = GetDelimiter(state->child_chunk, offset_expression.get(), offset);
+				offset_expression.reset();
+			}
 		}
 		max_element = limit + offset;
 		if (state->child_chunk.size() == 0) {

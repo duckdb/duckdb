@@ -62,7 +62,7 @@ PhysicalIndexJoin::PhysicalIndexJoin(LogicalOperator &op, unique_ptr<PhysicalOpe
 	}
 }
 
-void PhysicalIndexJoin::Output(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
+void PhysicalIndexJoin::Output(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) const {
 	auto &transaction = Transaction::GetTransaction(context.client);
 	auto &phy_tbl_scan = (PhysicalTableScan &)*children[1];
 	auto &bind_tbl = (TableScanBindData &)*phy_tbl_scan.bind_data;
@@ -152,7 +152,8 @@ void PhysicalIndexJoin::GetRHSMatches(ExecutionContext &context, PhysicalOperato
 	}
 }
 
-void PhysicalIndexJoin::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
+void PhysicalIndexJoin::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
+                                         PhysicalOperatorState *state_p) const {
 	auto state = reinterpret_cast<PhysicalIndexJoinOperatorState *>(state_p);
 	state->result_size = 0;
 	while (state->result_size == 0) {
