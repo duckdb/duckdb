@@ -642,7 +642,7 @@ struct IntegerCastOperation {
 		return true;
 	}
 
-	template <class T>
+	template <class T, bool NEGATIVE>
 	static bool HandleExponent(T &result, int64_t exponent) {
 		double dbl_res = result * std::pow(10.0L, exponent);
 		if (dbl_res < NumericLimits<T>::Minimum() || dbl_res > NumericLimits<T>::Maximum()) {
