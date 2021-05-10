@@ -236,7 +236,6 @@ void PhysicalHashJoin::ProbeHashTable(ExecutionContext &context, DataChunk &chun
 	} while (chunk.size() == 0);
 }
 
-<<<<<<< HEAD
 bool PhysicalHashJoin::ProbePerfectHashTable(ExecutionContext &context, DataChunk &result,
                                              PhysicalHashJoinState *physical_state) {
 	return false;
@@ -346,6 +345,3 @@ void PhysicalHashJoin::BuildPerfectHashStructure(JoinHashTable *hash_table_ptr, 
 	}
 }
 } // namespace duckdb
-=======
-} // namespace duckdb
->>>>>>> d5964466b9bdc5516857940dfd4507e0cea5431d
