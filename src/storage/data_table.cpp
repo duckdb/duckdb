@@ -49,8 +49,8 @@ DataTable::DataTable(DatabaseInstance &db, const string &schema, const string &t
 }
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition &new_column, Expression *default_value)
-    : info(parent.info), types(parent.types), db(parent.db), versions(parent.versions), total_rows(parent.total_rows),
-      columns(parent.columns), is_root(true) {
+    : info(parent.info), types(parent.types), db(parent.db), versions(parent.versions),
+      total_rows(parent.total_rows.load()), columns(parent.columns), is_root(true) {
 	// prevent any new tuples from being added to the parent
 	lock_guard<mutex> parent_lock(parent.append_lock);
 	// add the new column to this DataTable
@@ -92,20 +92,22 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 }
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_column)
-    : info(parent.info), types(parent.types), db(parent.db), versions(parent.versions), total_rows(parent.total_rows),
-      columns(parent.columns), is_root(true) {
+    : info(parent.info), types(parent.types), db(parent.db), versions(parent.versions),
+      total_rows(parent.total_rows.load()), columns(parent.columns), is_root(true) {
 	// prevent any new tuples from being added to the parent
 	lock_guard<mutex> parent_lock(parent.append_lock);
 	// first check if there are any indexes that exist that point to the removed column
-	for (auto &index : info->indexes) {
-		for (auto &column_id : index->column_ids) {
+	info->indexes.Scan([&](Index &index) {
+		for (auto &column_id : index.column_ids) {
 			if (column_id == removed_column) {
 				throw CatalogException("Cannot drop this column: an index depends on it!");
 			} else if (column_id > removed_column) {
 				throw CatalogException("Cannot drop this column: an index depends on a column after it!");
 			}
 		}
-	}
+		return false;
+	});
+
 	// erase the column from this DataTable
 	D_ASSERT(removed_column < types.size());
 	types.erase(types.begin() + removed_column);
@@ -117,21 +119,23 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_idx, const LogicalType &target_type,
                      vector<column_t> bound_columns, Expression &cast_expr)
-    : info(parent.info), types(parent.types), db(parent.db), versions(parent.versions), total_rows(parent.total_rows),
-      columns(parent.columns), is_root(true) {
+    : info(parent.info), types(parent.types), db(parent.db), versions(parent.versions),
+      total_rows(parent.total_rows.load()), columns(parent.columns), is_root(true) {
 
 	// prevent any new tuples from being added to the parent
 	CreateIndexScanState scan_state;
 	parent.InitializeCreateIndexScan(scan_state, bound_columns);
 
 	// first check if there are any indexes that exist that point to the changed column
-	for (auto &index : info->indexes) {
-		for (auto &column_id : index->column_ids) {
+	info->indexes.Scan([&](Index &index) {
+		for (auto &column_id : index.column_ids) {
 			if (column_id == changed_idx) {
 				throw CatalogException("Cannot change the type of this column: an index depends on it!");
 			}
 		}
-	}
+		return false;
+	});
+
 	// change the type in this DataTable
 	types[changed_idx] = target_type;
 
@@ -266,7 +270,7 @@ bool DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState 
 	idx_t parallel_scan_tuple_count = STANDARD_VECTOR_SIZE * parallel_scan_vector_count;
 
 	if (state.current_row < total_rows) {
-		idx_t next = MinValue(state.current_row + parallel_scan_tuple_count, total_rows);
+		idx_t next = MinValue(state.current_row + parallel_scan_tuple_count, total_rows.load());
 
 		// scan a morsel from the persistent rows
 		InitializeScanWithOffset(scan_state, column_ids, scan_state.table_filters, state.current_row, next);
@@ -520,9 +524,10 @@ void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, DataChunk &chu
 		}
 		case ConstraintType::UNIQUE: {
 			//! check whether or not the chunk can be inserted into the indexes
-			for (auto &index : info->indexes) {
-				index->VerifyAppend(chunk);
-			}
+			info->indexes.Scan([&](Index &index) {
+				index.VerifyAppend(chunk);
+				return false;
+			});
 			break;
 		}
 		case ConstraintType::FOREIGN_KEY:
@@ -555,15 +560,11 @@ void DataTable::Append(TableCatalogEntry &table, ClientContext &context, DataChu
 
 void DataTable::InitializeAppend(Transaction &transaction, TableAppendState &state, idx_t append_count) {
 	// obtain the append lock for this table
-	state.append_lock = std::unique_lock<mutex>(append_lock);
+	state.append_lock = unique_lock<mutex>(append_lock);
 	if (!is_root) {
 		throw TransactionException("Transaction conflict: adding entries to a table that has been altered!");
 	}
-	// obtain locks on all indexes for the table
-	state.index_locks = unique_ptr<IndexLock[]>(new IndexLock[info->indexes.size()]);
-	for (idx_t i = 0; i < info->indexes.size(); i++) {
-		info->indexes[i]->InitializeLock(state.index_locks[i]);
-	}
+
 	// for each column, initialize the append state
 	state.states = unique_ptr<ColumnAppendState[]>(new ColumnAppendState[types.size()]);
 	for (idx_t i = 0; i < types.size(); i++) {
@@ -717,11 +718,8 @@ void DataTable::RevertAppendInternal(idx_t start_row, idx_t count) {
 
 void DataTable::RevertAppend(idx_t start_row, idx_t count) {
 	lock_guard<mutex> lock(append_lock);
-	if (!info->indexes.empty()) {
-		auto index_locks = unique_ptr<IndexLock[]>(new IndexLock[info->indexes.size()]);
-		for (idx_t i = 0; i < info->indexes.size(); i++) {
-			info->indexes[i]->InitializeLock(index_locks[i]);
-		}
+
+	if (!info->indexes.Empty()) {
 		idx_t current_row_base = start_row;
 		row_t row_data[STANDARD_VECTOR_SIZE];
 		Vector row_identifiers(LOGICAL_ROW_TYPE, (data_ptr_t)row_data);
@@ -729,9 +727,10 @@ void DataTable::RevertAppend(idx_t start_row, idx_t count) {
 			for (idx_t i = 0; i < chunk.size(); i++) {
 				row_data[i] = current_row_base + i;
 			}
-			for (idx_t i = 0; i < info->indexes.size(); i++) {
-				info->indexes[i]->Delete(index_locks[i], chunk, row_identifiers);
-			}
+			info->indexes.Scan([&](Index &index) {
+				index.Delete(chunk, row_identifiers);
+				return false;
+			});
 			current_row_base += chunk.size();
 		});
 	}
@@ -743,27 +742,33 @@ void DataTable::RevertAppend(idx_t start_row, idx_t count) {
 //===--------------------------------------------------------------------===//
 bool DataTable::AppendToIndexes(TableAppendState &state, DataChunk &chunk, row_t row_start) {
 	D_ASSERT(is_root);
-	if (info->indexes.empty()) {
+	if (info->indexes.Empty()) {
 		return true;
 	}
 	// first generate the vector of row identifiers
 	Vector row_identifiers(LOGICAL_ROW_TYPE);
 	VectorOperations::GenerateSequence(row_identifiers, chunk.size(), row_start, 1);
 
-	idx_t failed_index = INVALID_INDEX;
+	vector<Index *> already_appended;
+	bool append_failed = false;
 	// now append the entries to the indices
-	for (idx_t i = 0; i < info->indexes.size(); i++) {
-		if (!info->indexes[i]->Append(state.index_locks[i], chunk, row_identifiers)) {
-			failed_index = i;
-			break;
+	info->indexes.Scan([&](Index &index) {
+		if (!index.Append(chunk, row_identifiers)) {
+			append_failed = true;
+			return true;
 		}
-	}
-	if (failed_index != INVALID_INDEX) {
+		already_appended.push_back(&index);
+		return false;
+	});
+
+	if (append_failed) {
 		// constraint violation!
 		// remove any appended entries from previous indexes (if any)
-		for (idx_t i = 0; i < failed_index; i++) {
-			info->indexes[i]->Delete(state.index_locks[i], chunk, row_identifiers);
+
+		for (auto *index : already_appended) {
+			index->Delete(chunk, row_identifiers);
 		}
+
 		return false;
 	}
 	return true;
@@ -771,7 +776,7 @@ bool DataTable::AppendToIndexes(TableAppendState &state, DataChunk &chunk, row_t
 
 void DataTable::RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, row_t row_start) {
 	D_ASSERT(is_root);
-	if (info->indexes.empty()) {
+	if (info->indexes.Empty()) {
 		return;
 	}
 	// first generate the vector of row identifiers
@@ -784,9 +789,10 @@ void DataTable::RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, row
 
 void DataTable::RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, Vector &row_identifiers) {
 	D_ASSERT(is_root);
-	for (idx_t i = 0; i < info->indexes.size(); i++) {
-		info->indexes[i]->Delete(state.index_locks[i], chunk, row_identifiers);
-	}
+	info->indexes.Scan([&](Index &index) {
+		index.Delete(chunk, row_identifiers);
+		return false;
+	});
 }
 
 void DataTable::RemoveFromIndexes(Vector &row_identifiers, idx_t count) {
@@ -807,9 +813,11 @@ void DataTable::RemoveFromIndexes(Vector &row_identifiers, idx_t count) {
 		columns[i]->Fetch(states[i], row_ids[0], result.data[i]);
 	}
 	result.Slice(sel, count);
-	for (auto &index : info->indexes) {
-		index->Delete(result, row_identifiers);
-	}
+
+	info->indexes.Scan([&](Index &index) {
+		index.Delete(result, row_identifiers);
+		return false;
+	});
 }
 
 //===--------------------------------------------------------------------===//
@@ -839,7 +847,7 @@ void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector 
 //===--------------------------------------------------------------------===//
 // Update
 //===--------------------------------------------------------------------===//
-static void CreateMockChunk(vector<LogicalType> &types, vector<column_t> &column_ids, DataChunk &chunk,
+static void CreateMockChunk(vector<LogicalType> &types, const vector<column_t> &column_ids, DataChunk &chunk,
                             DataChunk &mock_chunk) {
 	// construct a mock DataChunk
 	mock_chunk.InitializeEmpty(types);
@@ -849,7 +857,7 @@ static void CreateMockChunk(vector<LogicalType> &types, vector<column_t> &column
 	mock_chunk.SetCardinality(chunk.size());
 }
 
-static bool CreateMockChunk(TableCatalogEntry &table, vector<column_t> &column_ids,
+static bool CreateMockChunk(TableCatalogEntry &table, const vector<column_t> &column_ids,
                             unordered_set<column_t> &desired_column_ids, DataChunk &chunk, DataChunk &mock_chunk) {
 	idx_t found_columns = 0;
 	// check whether the desired columns are present in the UPDATE clause
@@ -873,7 +881,8 @@ static bool CreateMockChunk(TableCatalogEntry &table, vector<column_t> &column_i
 	return true;
 }
 
-void DataTable::VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chunk, vector<column_t> &column_ids) {
+void DataTable::VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chunk,
+                                        const vector<column_t> &column_ids) {
 	for (auto &constraint : table.bound_constraints) {
 		switch (constraint->type) {
 		case ConstraintType::NOT_NULL: {
@@ -907,14 +916,16 @@ void DataTable::VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chu
 	// update should not be called for indexed columns!
 	// instead update should have been rewritten to delete + update on higher layer
 #ifdef DEBUG
-	for (auto &index : info->indexes) {
-		D_ASSERT(!index->IndexIsUpdated(column_ids));
-	}
+	info->indexes.Scan([&](Index &index) {
+		D_ASSERT(!index.IndexIsUpdated(column_ids));
+		return false;
+	});
+
 #endif
 }
 
-void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector &row_ids, vector<column_t> &column_ids,
-                       DataChunk &updates) {
+void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector &row_ids,
+                       const vector<column_t> &column_ids, DataChunk &updates) {
 	D_ASSERT(row_ids.GetType().InternalType() == ROW_TYPE);
 
 	updates.Verify();
@@ -950,8 +961,8 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 //===--------------------------------------------------------------------===//
 void DataTable::InitializeCreateIndexScan(CreateIndexScanState &state, const vector<column_t> &column_ids) {
 	// we grab the append lock to make sure nothing is appended until AFTER we finish the index scan
-	state.append_lock = std::unique_lock<mutex>(append_lock);
-	state.delete_lock = std::unique_lock<mutex>(versions->node_lock);
+	state.append_lock = unique_lock<mutex>(append_lock);
+	state.delete_lock = unique_lock<mutex>(versions->node_lock);
 
 	InitializeScan(state, column_ids);
 }
@@ -1014,27 +1025,30 @@ void DataTable::AddIndex(unique_ptr<Index> index, vector<unique_ptr<Expression>>
 	}
 
 	// now start incrementally building the index
-	IndexLock lock;
-	index->InitializeLock(lock);
-	ExpressionExecutor executor(expressions);
-	while (true) {
-		intermediate.Reset();
-		// scan a new chunk from the table to index
-		CreateIndexScan(state, column_ids, intermediate);
-		if (intermediate.size() == 0) {
-			// finished scanning for index creation
-			// release all locks
-			break;
-		}
-		// resolve the expressions for this chunk
-		executor.Execute(intermediate, result);
+	{
+		IndexLock lock;
+		index->InitializeLock(lock);
+		ExpressionExecutor executor(expressions);
+		while (true) {
+			intermediate.Reset();
+			// scan a new chunk from the table to index
+			CreateIndexScan(state, column_ids, intermediate);
+			if (intermediate.size() == 0) {
+				// finished scanning for index creation
+				// release all locks
+				break;
+			}
+			// resolve the expressions for this chunk
+			executor.Execute(intermediate, result);
 
-		// insert into the index
-		if (!index->Insert(lock, result, intermediate.data[intermediate.ColumnCount() - 1])) {
-			throw ConstraintException("Cant create unique index, table contains duplicate data on indexed column(s)");
+			// insert into the index
+			if (!index->Insert(lock, result, intermediate.data[intermediate.ColumnCount() - 1])) {
+				throw ConstraintException(
+				    "Cant create unique index, table contains duplicate data on indexed column(s)");
+			}
 		}
 	}
-	info->indexes.push_back(move(index));
+	info->indexes.AddIndex(move(index));
 }
 
 unique_ptr<BaseStatistics> DataTable::GetStatistics(ClientContext &context, column_t column_id) {

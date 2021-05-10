@@ -267,7 +267,7 @@ unique_ptr<LocalSinkState> PhysicalOrder::GetLocalSinkState(ExecutionContext &co
 }
 
 void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &gstate_p, LocalSinkState &lstate_p,
-                         DataChunk &input) {
+                         DataChunk &input) const {
 	auto &gstate = (OrderGlobalState &)gstate_p;
 	auto &lstate = (OrderLocalState &)lstate_p;
 	const auto &sorting_state = *gstate.sorting_state;
@@ -1141,9 +1141,8 @@ static void ReOrder(ClientContext &context, SortedBlock &sb, const SortingState 
 }
 
 void PhysicalOrder::SortLocalState(ClientContext &context, OrderLocalState &lstate, const SortingState &sorting_state,
-                                   const PayloadState &payload_state) {
-	const idx_t &count = lstate.sorting_block->count;
-	D_ASSERT(count == lstate.payload_block->count);
+                                   const PayloadState &payload_state) const {
+	D_ASSERT(lstate.sorting_block->count == lstate.payload_block->count);
 	if (lstate.sorting_block->count == 0) {
 		return;
 	}
@@ -1770,11 +1769,11 @@ private:
 	const bool merge_path;
 };
 
-void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> state_p) {
+bool PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> state_p) {
 	this->sink_state = move(state_p);
 	auto &state = (OrderGlobalState &)*this->sink_state;
 	if (state.sorted_blocks.empty()) {
-		return;
+		return true;
 	}
 	// compute total count
 	for (auto &sb : state.sorted_blocks) {
@@ -1824,11 +1823,13 @@ void PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 	if (state.sorted_blocks.size() > 1) {
 		// more than one block - merge
 		PhysicalOrder::ScheduleMergeTasks(pipeline, context, state);
+		return false;
 	} else {
 		// clean up sorting data - payload is sorted
 		for (auto &sb : state.sorted_blocks) {
 			sb->UnregisterSortingBlocks();
 		}
+		return true;
 	}
 }
 
@@ -2041,7 +2042,7 @@ public:
 	idx_t block_idx;
 	idx_t entry_idx;
 
-	std::mutex lock;
+	mutex lock;
 };
 
 unique_ptr<ParallelState> PhysicalOrder::GetParallelState() {

@@ -397,7 +397,12 @@ NULL	[[d, d, d]]
 2	[NULL]
 3	[[a, a]]
 
+
 # lists longer than STANDARD_VECTOR_SIZE
+# need single thread since order within list is otherwise undefined
+statement ok
+PRAGMA threads=1
+
 statement ok
 CREATE TABLE test9 AS (SELECT range % 4 i, range j FROM range(5000));
 

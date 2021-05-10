@@ -13,8 +13,7 @@
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/parallel/parallel_state.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
-
-#include <atomic>
+#include "duckdb/common/atomic.hpp"
 
 namespace duckdb {
 class Executor;
@@ -74,9 +73,9 @@ public:
 
 public:
 	//! The current threads working on the pipeline
-	std::atomic<idx_t> finished_tasks;
+	atomic<idx_t> finished_tasks;
 	//! The maximum amount of threads that can work on the pipeline
-	std::atomic<idx_t> total_tasks;
+	atomic<idx_t> total_tasks;
 
 private:
 	//! The child from which to pull chunks
@@ -91,7 +90,7 @@ private:
 	unordered_set<Pipeline *> dependencies;
 	//! The amount of completed dependencies (the pipeline can only be started after the dependencies have finished
 	//! executing)
-	std::atomic<idx_t> finished_dependencies;
+	atomic<idx_t> finished_dependencies;
 
 	//! The parallel operator (if any)
 	PhysicalOperator *parallel_node;

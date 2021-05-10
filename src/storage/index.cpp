@@ -23,7 +23,7 @@ Index::Index(IndexType type, vector<column_t> column_ids_p, vector<unique_ptr<Ex
 }
 
 void Index::InitializeLock(IndexLock &state) {
-	state.index_lock = std::unique_lock<mutex>(lock);
+	state.index_lock = unique_lock<mutex>(lock);
 }
 
 bool Index::Append(DataChunk &entries, Vector &row_identifiers) {
@@ -52,7 +52,7 @@ unique_ptr<Expression> Index::BindExpression(unique_ptr<Expression> expr) {
 	return expr;
 }
 
-bool Index::IndexIsUpdated(vector<column_t> &column_ids) {
+bool Index::IndexIsUpdated(const vector<column_t> &column_ids) const {
 	for (auto &column : column_ids) {
 		if (column_id_set.find(column) != column_id_set.end()) {
 			return true;
