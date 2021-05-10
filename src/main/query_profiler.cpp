@@ -218,6 +218,9 @@ void OperatorProfiler::Flush(PhysicalOperator *phys_op, ExpressionExecutor *expr
 	auto entry = timings.find(phys_op);
 	if (entry != timings.end()) {
 		auto &operator_timing = timings.find(phys_op)->second;
+		if (int(operator_timing.executors_info.size()) <= id) {
+			operator_timing.executors_info.resize(id + 1);
+		}
 		operator_timing.executors_info[id] = make_unique<ExpressionExecutorInfo>(*expression_executor, name, id);
 		operator_timing.name = phys_op->GetName();
 	}
@@ -234,10 +237,12 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 
 		entry->second->info.time += node.second.time;
 		entry->second->info.elements += node.second.elements;
-		// for each data_chunk at the end of pipeline, operators information will get flushed which is not optimal
-		for (auto &x : node.second.executors_info) {
-			if (x) {
-				entry->second->info.executors_info[x->id] = move(x);
+		for (auto &info : node.second.executors_info) {
+			if (info) {
+				if (int(node.second.executors_info.size()) <= info->id) {
+					node.second.executors_info.resize(info->id + 1);
+				}
+				entry->second->info.executors_info[info->id] = move(info);
 			}
 		}
 	}

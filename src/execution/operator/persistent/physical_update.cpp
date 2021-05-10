@@ -1,10 +1,11 @@
 #include "duckdb/execution/operator/persistent/physical_update.hpp"
-
+#include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
