@@ -79,7 +79,8 @@ HTTPFileHandle::HTTPFileHandle(FileSystem &fs, std::string path)
 	IntializeMetadata();
 }
 
-std::unique_ptr<FileHandle> HTTPFileSystem::OpenFile(const char *path, uint8_t flags, FileLockType lock) {
+std::unique_ptr<FileHandle> HTTPFileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock, FileCompressionType compression) {
+	D_ASSERT(compression == FileCompressionType::UNCOMPRESSED);
 	return duckdb::make_unique<HTTPFileHandle>(*this, path);
 }
 
@@ -133,6 +134,22 @@ int64_t HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes)
 	nr_bytes = MinValue<idx_t>(max_read, nr_bytes);
 	Read(handle, buffer, nr_bytes, hfh.file_offset);
 	return nr_bytes;
+}
+
+void HTTPFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
+	throw std::runtime_error("Cannot write to HTTPFS directly");
+}
+
+int64_t HTTPFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
+	throw std::runtime_error("Cannot write to HTTPFS directly");
+}
+
+void HTTPFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
+	throw std::runtime_error("Cannot truncate a file from HTTPFS");
+}
+
+void HTTPFileSystem::FileSync(FileHandle &handle) {
+	throw std::runtime_error("Cannot sync a file on HTTPFS");
 }
 
 int64_t HTTPFileSystem::GetFileSize(FileHandle &handle) {

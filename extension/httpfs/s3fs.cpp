@@ -89,7 +89,8 @@ HeaderMap S3FileSystem::CreateAuthHeaders(string host, string path, string metho
 	return create_s3_get_header(path, host, region, "s3", method, access_key_id, secret_access_key);
 }
 
-std::unique_ptr<FileHandle> S3FileSystem::OpenFile(const char *path, uint8_t flags, FileLockType lock) {
+std::unique_ptr<FileHandle> S3FileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock, FileCompressionType compression) {
+	D_ASSERT(compression == FileCompressionType::UNCOMPRESSED);
 	return duckdb::make_unique<HTTPFileHandle>(*this, path);
 }
 

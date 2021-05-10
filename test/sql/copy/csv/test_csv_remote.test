@@ -1,0 +1,13 @@
+# name: test/sql/copy/csv/test_csv_remote.test
+# description: Test reading csv files over http
+# group: [csv]
+
+require httpfs
+
+query IIIIIIIIIIIIIII nosort lineitemcsv
+SELECT * FROM read_csv_auto('test/sql/copy/csv/data/lineitem1k.tbl.gz');
+----
+
+query IIIIIIIIIIIIIII nosort lineitemcsv
+select * from read_csv_auto('https://raw.githubusercontent.com/duckdb/duckdb/master/test/sql/copy/csv/data/lineitem1k.tbl.gz');
+----

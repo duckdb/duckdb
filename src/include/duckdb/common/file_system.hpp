@@ -13,6 +13,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/enums/file_compression_type.hpp"
 
 #include <functional>
 
@@ -38,10 +39,15 @@ public:
 	void Read(void *buffer, idx_t nr_bytes, idx_t location);
 	void Write(void *buffer, idx_t nr_bytes, idx_t location);
 	void Seek(idx_t location);
+	void Reset();
 	idx_t SeekPosition();
 	void Sync();
 	void Truncate(int64_t new_size);
 	string ReadLine();
+
+	bool CanSeek();
+	bool OnDiskFile();
+	idx_t GetFileSize();
 
 protected:
 	virtual void Close() = 0;
@@ -78,10 +84,8 @@ public:
 	static FileSystem &GetFileSystem(ClientContext &context);
 	static FileSystem &GetFileSystem(DatabaseInstance &db);
 
-	virtual unique_ptr<FileHandle> OpenFile(const char *path, uint8_t flags, FileLockType lock = FileLockType::NO_LOCK);
-	unique_ptr<FileHandle> OpenFile(string &path, uint8_t flags, FileLockType lock = FileLockType::NO_LOCK) {
-		return OpenFile(path.c_str(), flags, lock);
-	}
+	virtual unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags, FileLockType lock = FileLockType::NO_LOCK, FileCompressionType compression = FileCompressionType::UNCOMPRESSED);
+
 	//! Read exactly nr_bytes from the specified location in the file. Fails if nr_bytes could not be read. This is
 	//! equivalent to calling SetFilePointer(location) followed by calling Read().
 	virtual void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location);
@@ -153,13 +157,15 @@ public:
 
 	//! Set the file pointer of a file handle to a specified location. Reads and writes will happen from this location
 	virtual void Seek(FileHandle &handle, idx_t location);
+	//! Reset a file to the beginning (equivalent to Seek(handle, 0) for simple files)
+	virtual void Reset(FileHandle &handle);
 	virtual idx_t SeekPosition(FileHandle &handle);
 
 	//! Whether or not we can seek into the file
 	virtual bool CanSeek();
 	//! Whether or not the FS handles plain files on disk. This is relevant for certain optimizations, as random reads
 	//! in a file on-disk are much cheaper than e.g. random reads in a file over the network
-	virtual bool OnDiskFile();
+	virtual bool OnDiskFile(FileHandle &handle);
 private:
 	//! Set the file pointer of a file handle to a specified location. Reads and writes will happen from this location
 	void SetFilePointer(FileHandle &handle, idx_t location);
@@ -169,10 +175,8 @@ private:
 // bunch of wrappers to allow registering protocol handlers
 class VirtualFileSystem : public FileSystem {
 public:
-	unique_ptr<FileHandle> OpenFile(const char *path, uint8_t flags,
-	                                FileLockType lock = FileLockType::NO_LOCK) override {
-		return FindFileSystem(path)->OpenFile(path, flags, lock);
-	}
+	unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags,
+	                                FileLockType lock = FileLockType::NO_LOCK, FileCompressionType compression = FileCompressionType::UNCOMPRESSED) override;
 
 	virtual void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
 		handle.file_system.Read(handle, buffer, nr_bytes, location);

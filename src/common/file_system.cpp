@@ -7,6 +7,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/common/gzip_file_system.hpp"
 
 #include <cstdio>
 #include <cstdint>
@@ -83,7 +84,14 @@ public:
 	int fd;
 };
 
-unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, FileLockType lock_type) {
+unique_ptr<FileHandle> FileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock_type, FileCompressionType compression) {
+	if (compression != FileCompressionType::UNCOMPRESSED) {
+		throw NotImplementedException("Unsupported compression type for default file system");
+	}
+	if (!FileExists(path)) {
+		throw IOException("File \"%s\" not found", path.c_str());
+	}
+
 	AssertValidFileFlags(flags);
 
 	int open_flags = 0;
@@ -114,7 +122,7 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 		open_flags |= O_DIRECT | O_SYNC;
 #endif
 	}
-	int fd = open(path, open_flags, 0666);
+	int fd = open(path.c_str(), open_flags, 0666);
 	if (fd == -1) {
 		throw IOException("Cannot open file \"%s\": %s", path, strerror(errno));
 	}
@@ -410,7 +418,13 @@ public:
 	HANDLE fd;
 };
 
-unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, FileLockType lock_type) {
+unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, FileLockType lock_type, FileCompressionType compression) {
+	if (compression != FileCompressionType::UNCOMPRESSED) {
+		throw NotImplementedException("Unsupported compression type for default file system");
+	}
+	if (!FileExists(path)) {
+		throw IOException("File \"%s\" not found", path.c_str());
+	}
 	AssertValidFileFlags(flags);
 
 	DWORD desired_access;
@@ -705,7 +719,7 @@ bool FileSystem::CanSeek() {
 	return true;
 }
 
-bool FileSystem::OnDiskFile() {
+bool FileSystem::OnDiskFile(FileHandle &handle) {
 	return true;
 }
 
@@ -714,6 +728,10 @@ void FileSystem::Seek(FileHandle &handle, idx_t location) {
 		throw IOException("Cannot seek in files of this type");
 	}
 	SetFilePointer(handle, location);
+}
+
+void FileSystem::Reset(FileHandle &handle) {
+	Seek(handle, 0);
 }
 
 idx_t FileSystem::SeekPosition(FileHandle &handle) {
@@ -771,8 +789,16 @@ void FileHandle::Seek(idx_t location) {
 	file_system.Seek(*this, location);
 }
 
+void FileHandle::Reset() {
+	file_system.Reset(*this);
+}
+
 idx_t FileHandle::SeekPosition() {
 	return file_system.SeekPosition(*this);
+}
+
+bool FileHandle::CanSeek() {
+	return file_system.CanSeek();
 }
 
 string FileHandle::ReadLine() {
@@ -788,6 +814,15 @@ string FileHandle::ReadLine() {
 		}
 	}
 }
+
+bool FileHandle::OnDiskFile() {
+	return file_system.OnDiskFile(*this);
+}
+
+idx_t FileHandle::GetFileSize() {
+	return file_system.GetFileSize(*this);
+}
+
 
 void FileHandle::Sync() {
 	file_system.FileSync(*this);
@@ -913,6 +948,31 @@ vector<string> FileSystem::Glob(const string &path) {
 		previous_directories = move(result);
 	}
 	return vector<string>();
+}
+
+unique_ptr<FileHandle> VirtualFileSystem::OpenFile(const string &path, uint8_t flags,
+								FileLockType lock, FileCompressionType compression) {
+	if (compression == FileCompressionType::AUTO_DETECT) {
+		// auto detect compression settings based on file name
+		auto lower_path = StringUtil::Lower(path);
+		if (StringUtil::EndsWith(lower_path, ".gz")) {
+			compression = FileCompressionType::GZIP;
+		} else {
+			compression = FileCompressionType::UNCOMPRESSED;
+		}
+	}
+	// open the base file handle
+	auto file_handle = FindFileSystem(path)->OpenFile(path, flags, lock, FileCompressionType::UNCOMPRESSED);
+	if (compression != FileCompressionType::UNCOMPRESSED) {
+		switch(compression) {
+		case FileCompressionType::GZIP:
+			file_handle = GZipFileSystem::OpenCompressedFile(move(file_handle));
+			break;
+		default:
+			throw NotImplementedException("Unimplemented compression type");
+		}
+	}
+	return file_handle;
 }
 
 } // namespace duckdb

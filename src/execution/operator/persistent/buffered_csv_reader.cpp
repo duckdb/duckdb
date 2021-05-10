@@ -2,7 +2,6 @@
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/file_system.hpp"
-#include "duckdb/common/gzip_stream.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
@@ -124,16 +123,16 @@ shifts = unique_ptr<uint8_t[]>(new uint8_t[length * 255]);
 
 BufferedCSVReader::BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options_p,
                                      const vector<LogicalType> &requested_types)
-    : options(move(options_p)), buffer_size(0), position(0), start(0) {
+    : fs(FileSystem::GetFileSystem(context)), options(move(options_p)), buffer_size(0), position(0), start(0) {
 	file_handle = OpenCSV(context, options);
 	Initialize(requested_types);
 }
 
-BufferedCSVReader::BufferedCSVReader(BufferedCSVReaderOptions options_p, const vector<LogicalType> &requested_types,
-                                     unique_ptr<FileHandle> file_handle_p)
-    : options(move(options_p)), file_handle(move(file_handle_p)), buffer_size(0), position(0), start(0) {
-	Initialize(requested_types);
-}
+// BufferedCSVReader::BufferedCSVReader(BufferedCSVReaderOptions options_p, const vector<LogicalType> &requested_types,
+//                                      unique_ptr<FileHandle> file_handle_p)
+//     : options(move(options_p)), file_handle(move(file_handle_p)), buffer_size(0), position(0), start(0) {
+// 	Initialize(requested_types);
+// }
 
 void BufferedCSVReader::Initialize(const vector<LogicalType> &requested_types) {
 	PrepareComplexParser();
@@ -156,41 +155,16 @@ void BufferedCSVReader::PrepareComplexParser() {
 }
 
 unique_ptr<FileHandle> BufferedCSVReader::OpenCSV(ClientContext &context, const BufferedCSVReaderOptions &options) {
-	auto &fs = FileSystem::GetFileSystem(context);
-	if (!fs.FileExists(options.file_path)) {
-		throw IOException("File \"%s\" not found", options.file_path.c_str());
+	this->compression = FileCompressionType::UNCOMPRESSED;
+	if (options.compression == "infer" || options.compression == "auto") {
+		compression = FileCompressionType::AUTO_DETECT;
+	} else if (options.compression == "gzip") {
+		compression = FileCompressionType::GZIP;
 	}
 
-	// FIXME: gzip stuff
-	auto result = fs.OpenFile(options.file_path.c_str(), FileFlags::FILE_FLAGS_READ);
-	plain_file_source = result->file_system.OnDiskFile();
-	file_size = result->file_system.GetFileSize(*result);
-	// unique_ptr<std::istream> result;
-
-	// gzip_compressed = false;
-	// if (options.compression == "infer") {
-	// 	if (StringUtil::EndsWith(StringUtil::Lower(options.file_path), ".gz")) {
-	// 		gzip_compressed = true;
-	// 	}
-	// } else if (options.compression == "gzip") {
-	// 	gzip_compressed = true;
-	// }
-
-	// if (gzip_compressed) {
-	// 	result = make_unique<GzipStream>(options.file_path);
-	// 	plain_file_source = false;
-	// } else {
-	// 	auto csv_local = make_unique<std::ifstream>();
-	// 	csv_local->open(options.file_path);
-	// 	result = move(csv_local);
-
-	// 	// determine filesize
-	// 	plain_file_source = true;
-	// 	result->seekg(0, result->end);
-	// 	file_size = (idx_t)result->tellg();
-	// 	result->clear();
-	// 	result->seekg(0, result->beg);
-	// }
+	auto result = fs.OpenFile(options.file_path.c_str(), FileFlags::FILE_FLAGS_READ, FileLockType::NO_LOCK, compression);
+	plain_file_source = result->OnDiskFile();
+	file_size = result->GetFileSize();
 	return result;
 }
 
@@ -212,10 +186,10 @@ void BufferedCSVReader::ResetBuffer() {
 }
 
 void BufferedCSVReader::ResetStream() {
-	if (!file_handle->file_system.CanSeek()) {
+	if (!file_handle->CanSeek()) {
 		// seeking to the beginning appears to not be supported in all compiler/os-scenarios,
 		// so we have to create a new stream source here for now
-		file_handle = file_handle->file_system.OpenFile(options.file_path.c_str(), FileFlags::FILE_FLAGS_READ);
+		file_handle->Reset();
 	} else {
 		file_handle->Seek(0);
 	}

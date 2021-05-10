@@ -36,7 +36,7 @@ public:
 	time_t last_modified;
 
 	std::unique_ptr<data_t[]> buffer;
-	constexpr static idx_t BUFFER_LEN = 10000; // FIXME make the buffer bigger
+	constexpr static idx_t BUFFER_LEN = 100000; // FIXME make the buffer bigger
 	idx_t buffer_available;
 	idx_t buffer_idx;
 	idx_t file_offset;
@@ -46,8 +46,8 @@ public:
 
 class HTTPFileSystem : public FileSystem {
 public:
-	std::unique_ptr<FileHandle> OpenFile(const char *path, uint8_t flags,
-	                                     FileLockType lock = FileLockType::NO_LOCK) override;
+	std::unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags,
+	                                     FileLockType lock = FileLockType::NO_LOCK, FileCompressionType compression = FileCompressionType::UNCOMPRESSED) override;
 
 	std::vector<std::string> Glob(const std::string &path) override {
 		return {path}; // FIXME
@@ -61,6 +61,12 @@ public:
 
 	int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
 
+	// unsupported operations
+	void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;
+	int64_t Write(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
+	void Truncate(FileHandle &handle, int64_t new_size) override;
+	void FileSync(FileHandle &handle) override;
+
 	int64_t GetFileSize(FileHandle &handle) override;
 
 	time_t GetLastModifiedTime(FileHandle &handle) override;
@@ -72,7 +78,7 @@ public:
 	void Seek(FileHandle &handle, idx_t location) override;
 
 	bool CanHandleFile(const string &fpath) override;
-	bool OnDiskFile() override {
+	bool OnDiskFile(FileHandle &handle) override {
 		return false;
 	}
 };

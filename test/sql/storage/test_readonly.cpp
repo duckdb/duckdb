@@ -7,11 +7,11 @@ using namespace std;
 namespace duckdb {
 
 class ReadOnlyFileSystem : public FileSystem {
-	unique_ptr<FileHandle> OpenFile(const char *path, uint8_t flags, FileLockType lock_type) override {
+	unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags, FileLockType lock_type, FileCompressionType compression) override {
 		if (flags & FileFlags::FILE_FLAGS_WRITE) {
 			throw Exception("RO file system");
 		}
-		return FileSystem::OpenFile(path, flags, lock_type);
+		return FileSystem::OpenFile(path, flags, lock_type, compression);
 	}
 
 	void CreateDirectory(const string &directory) override {
