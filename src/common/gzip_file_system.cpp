@@ -82,6 +82,9 @@ struct MiniZStreamWrapper {
 		Close();
 	}
 
+	duckdb_miniz::mz_stream *mz_stream_ptr = nullptr;
+
+public:
 	void Initialize() {
 		Close();
 		mz_stream_ptr = new duckdb_miniz::mz_stream();
@@ -89,14 +92,14 @@ struct MiniZStreamWrapper {
 	}
 
 	void Close() {
-		if (mz_stream_ptr) {
-			duckdb_miniz::mz_inflateEnd(mz_stream_ptr);
-			delete mz_stream_ptr;
-			mz_stream_ptr = nullptr;
+		if (!mz_stream_ptr) {
+			return;
 		}
+		duckdb_miniz::mz_inflateEnd(mz_stream_ptr);
+		delete mz_stream_ptr;
+		mz_stream_ptr = nullptr;
 	}
 
-	duckdb_miniz::mz_stream *mz_stream_ptr = nullptr;
 };
 
 class GZipFile : public FileHandle {
@@ -137,6 +140,8 @@ private:
 };
 
 void GZipFile::Initialize() {
+	Close();
+
 	D_ASSERT(BUFFER_SIZE >= 3); // found to work fine with 3
 	uint8_t gzip_hdr[10];
 	data_start = GZIP_HEADER_MINSIZE;
@@ -247,7 +252,7 @@ int64_t GZipFile::ReadData(void *buffer, int64_t remaining) {
 		D_ASSERT(out_buff_end + mz_stream_ptr->avail_out == out_buff.get() + BUFFER_SIZE);
 		// if stream ended, deallocate inflator
 		if (ret == duckdb_miniz::MZ_STREAM_END) {
-			mz_stream_ptr = nullptr;
+			miniz_stream->Close();
 		}
 	}
 	return total_read;
