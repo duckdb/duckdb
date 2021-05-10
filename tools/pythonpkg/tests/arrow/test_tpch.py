@@ -59,6 +59,110 @@ class TestTPCHArrow(object):
 
 
 
+    # def test_q03(self,duckdb_cursor):
+    #     if not can_run:
+    #         return
+    #     query_results = []
+    #     query_results.append('47714|267010.5894|1995-03-11|0')
+    #     query_results.append('22276|266351.5562|1995-01-29|0')
+    #     query_results.append('32965|263768.3414|1995-02-25|0')
+    #     query_results.append('21956|254541.1285|1995-02-02|0')
+    #     query_results.append('1637|243512.7981|1995-02-08|0')
+    #     query_results.append('10916|241320.0814|1995-03-11|0')
+    #     query_results.append('30497|208566.6969|1995-02-07|0')
+    #     query_results.append('450|205447.4232|1995-03-05|0')
+    #     query_results.append('47204|204478.5213|1995-03-13|0')
+    #     query_results.append('9696|201502.2188|1995-02-20|0')
+       
+    #     duckdb_conn = duckdb.connect()
+    #     duckdb_conn.execute("CALL dbgen(sf=0.01);")
+        
+    #     duck_orders= duckdb_conn.table("orders")
+    #     arrow_orders = duck_orders.arrow()
+    #     orders =  duckdb_conn.from_arrow_table(arrow_orders)
+        
+    #     duck_customers= duckdb_conn.table("customer")
+    #     arrow_customers = duck_customers.arrow()
+    #     customers =  duckdb_conn.from_arrow_table(arrow_customers)
+    #     customers.create("customers_arrow")
+
+    #     duck_lineitem = duckdb_conn.table("lineitem")
+    #     arrow_lineitem = duck_lineitem.arrow()
+    #     lineitem =  duckdb_conn.from_arrow_table(arrow_lineitem)
+    #     lineitem.create("lineitem_arrow")
+    #     result = orders.query('orders_arrow','''SELECT l_orderkey,
+    #                                             sum(l_extendedprice * (1 - l_discount)) AS revenue,
+    #                                             o_orderdate,
+    #                                             o_shippriority
+    #                                             FROM
+    #                                                 customers_arrow,
+    #                                                 orders_arrow,
+    #                                                 lineitem_arrow
+    #                                             WHERE
+    #                                                 c_mktsegment = 'BUILDING'
+    #                                                 AND c_custkey = o_custkey
+    #                                                 AND l_orderkey = o_orderkey
+    #                                                 AND o_orderdate < CAST('1995-03-15' AS date)
+    #                                                 AND l_shipdate > CAST('1995-03-15' AS date)
+    #                                             GROUP BY
+    #                                                 l_orderkey,
+    #                                                 o_orderdate,
+    #                                                 o_shippriority
+    #                                             ORDER BY
+    #                                                 revenue DESC,
+    #                                                 o_orderdate
+    #                                             LIMIT 10;''')
+    #     for q_res in query_results:
+    #         db_result = result.fetchone()
+    #         cq_results = q_res.split("|")
+    #         i = 0
+    #         for cq_res in cq_results:
+    #             assert (cq_res == str(db_result[i]))
+    #             i = i+1
+
+    def test_q04(self, duckdb_cursor):
+        if not can_run:
+            return
+        query_results = []
+        query_results.append('1-URGENT|93')
+        query_results.append('2-HIGH|103')
+        query_results.append('3-MEDIUM|109')
+        query_results.append('4-NOT SPECIFIED|102')
+        query_results.append('5-LOW|128')
+
+        duckdb_conn = duckdb.connect()
+        duckdb_conn.execute("CALL dbgen(sf=0.01);")
+        duck_orders= duckdb_conn.table("orders")
+        arrow_orders = duck_orders.arrow()
+        orders =  duckdb_conn.from_arrow_table(arrow_orders)
+        result = orders.query('orders_arrow','''SELECT
+                                                    o_orderpriority,
+                                                    count(*) AS order_count
+                                                FROM
+                                                    orders
+                                                WHERE
+                                                    o_orderdate >= CAST('1993-07-01' AS date)
+                                                    AND o_orderdate < CAST('1993-10-01' AS date)
+                                                    AND EXISTS (
+                                                        SELECT
+                                                            *
+                                                        FROM
+                                                            lineitem
+                                                        WHERE
+                                                            l_orderkey = o_orderkey
+                                                            AND l_commitdate < l_receiptdate)
+                                                GROUP BY
+                                                    o_orderpriority
+                                                ORDER BY
+                                                    o_orderpriority;
+                                                ''')
+        for q_res in query_results:
+            db_result = result.fetchone()
+            cq_results = q_res.split("|")
+            i = 0
+            for cq_res in cq_results:
+                assert (cq_res == str(db_result[i]))
+                i = i+1
 
 
     def test_q06(self, duckdb_cursor):
@@ -77,3 +181,35 @@ class TestTPCHArrow(object):
         assert (result.execute().fetchone()[0] == 1193053.2253)
 
 
+    # def test_q14(self,duckdb_cursor):
+    #     if not can_run:
+    #         return
+    #     duckdb_conn = duckdb.connect()
+    #     duckdb_conn.execute("CALL dbgen(sf=0.01);")
+        
+    #     duck_lineitem = duckdb_conn.table("lineitem")
+    #     arrow_lineitem = duck_lineitem.arrow()
+    #     lineitem =  duckdb_conn.from_arrow_table(arrow_lineitem)
+
+
+    #     duck_part = duckdb_conn.table("part")
+    #     arrow_part = duck_part.arrow()
+    #     part =  duckdb_conn.from_arrow_table(arrow_part)
+    #     part.create("part_arrow")
+
+    #     result = lineitem.query('lineitem_arrow',''' SELECT 100.00 * sum(
+    #                                                     CASE WHEN p_type LIKE 'PROMO%' THEN
+    #                                                         l_extendedprice * (1 - l_discount)
+    #                                                     ELSE
+    #                                                         0
+    #                                                     END) / sum(l_extendedprice * (1 - l_discount)) AS promo_revenue
+    #                                             FROM
+    #                                                 lineitem_arrow,
+    #                                                 part_arrow
+    #                                             WHERE
+    #                                                 l_partkey = p_partkey
+    #                                                 AND l_shipdate >= date '1995-09-01'
+    #                                                 AND l_shipdate < CAST('1995-10-01' AS date);
+    #                                             ''')
+    #     assert (result.execute().fetchone()[0] == 15.4865458122840715)
+    #    
