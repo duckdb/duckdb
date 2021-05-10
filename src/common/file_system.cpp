@@ -415,7 +415,7 @@ public:
 	HANDLE fd;
 };
 
-unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, FileLockType lock_type,
+unique_ptr<FileHandle> FileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock_type,
                                             FileCompressionType compression) {
 	if (compression != FileCompressionType::UNCOMPRESSED) {
 		throw NotImplementedException("Unsupported compression type for default file system");
@@ -447,12 +447,12 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 		flags_and_attributes |= FILE_FLAG_NO_BUFFERING;
 	}
 	HANDLE hFile =
-	    CreateFileA(path, desired_access, share_mode, NULL, creation_disposition, flags_and_attributes, NULL);
+	    CreateFileA(path.c_str(), desired_access, share_mode, NULL, creation_disposition, flags_and_attributes, NULL);
 	if (hFile == INVALID_HANDLE_VALUE) {
 		auto error = GetLastErrorAsString();
-		throw IOException("Cannot open file \"%s\": %s", path, error);
+		throw IOException("Cannot open file \"%s\": %s", path.c_str(), error);
 	}
-	auto handle = make_unique<WindowsFileHandle>(*this, path, hFile);
+	auto handle = make_unique<WindowsFileHandle>(*this, path.c_str(), hFile);
 	if (flags & FileFlags::FILE_FLAGS_APPEND) {
 		SetFilePointer(*handle, GetFileSize(*handle));
 	}
