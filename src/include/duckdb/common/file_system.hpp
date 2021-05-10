@@ -41,6 +41,7 @@ public:
 	idx_t SeekPosition();
 	void Sync();
 	void Truncate(int64_t new_size);
+	string ReadLine();
 
 protected:
 	virtual void Close() = 0;
@@ -141,8 +142,13 @@ public:
 	virtual idx_t GetAvailableMemory();
 
 	//! registers a sub-file system to handle certain file name prefixes, e.g. http:// etc.
-	virtual void RegisterProtocolHandler(string protocol, unique_ptr<FileSystem> protocol_fs) {
-		throw NotImplementedException("Can't register a protocol handler on a non-virtual file system");
+	virtual void RegisterSubSystem(unique_ptr<FileSystem> sub_fs) {
+		throw NotImplementedException("Can't register a sub system on a non-virtual file system");
+	}
+
+	virtual bool CanHandleFile(const string &fpath) {
+		//! Whether or not a sub-system can handle a specific file path
+		return false;
 	}
 
 	//! Set the file pointer of a file handle to a specified location. Reads and writes will happen from this location
@@ -151,6 +157,9 @@ public:
 
 	//! Whether or not we can seek into the file
 	virtual bool CanSeek();
+	//! Whether or not the FS handles plain files on disk. This is relevant for certain optimizations, as random reads
+	//! in a file on-disk are much cheaper than e.g. random reads in a file over the network
+	virtual bool OnDiskFile();
 private:
 	//! Set the file pointer of a file handle to a specified location. Reads and writes will happen from this location
 	void SetFilePointer(FileHandle &handle, idx_t location);
@@ -245,22 +254,22 @@ public:
 		return default_fs.GetAvailableMemory();
 	}
 
-	void RegisterProtocolHandler(string protocol, unique_ptr<FileSystem> protocol_fs) override {
-		protocol_handler_fss[protocol] = move(protocol_fs);
+	void RegisterSubSystem(unique_ptr<FileSystem> fs) override {
+		sub_systems.push_back(move(fs));
 	}
 
 private:
 	FileSystem *FindFileSystem(const string &path) {
-		for (auto &handler : protocol_handler_fss) {
-			if (path.rfind(handler.first, 0) == 0) {
-				return handler.second.get();
+		for (auto &sub_system : sub_systems) {
+			if (sub_system->CanHandleFile(path)) {
+				return sub_system.get();
 			}
 		}
 		return &default_fs;
 	}
 
 private:
-	unordered_map<string, unique_ptr<FileSystem>> protocol_handler_fss;
+	vector<unique_ptr<FileSystem>> sub_systems;
 	FileSystem default_fs;
 };
 

@@ -105,3 +105,7 @@ void S3FileSystem::Verify() {
 		throw std::runtime_error("test fail");
 	}
 }
+
+bool S3FileSystem::CanHandleFile(const string &fpath) {
+	return fpath.rfind("s3://", 0) == 0;
+}

@@ -163,7 +163,7 @@ unique_ptr<FileHandle> BufferedCSVReader::OpenCSV(ClientContext &context, const 
 
 	// FIXME: gzip stuff
 	auto result = fs.OpenFile(options.file_path.c_str(), FileFlags::FILE_FLAGS_READ);
-	plain_file_source = result->file_system.CanSeek();
+	plain_file_source = result->file_system.OnDiskFile();
 	file_size = result->file_system.GetFileSize(*result);
 	// unique_ptr<std::istream> result;
 
@@ -212,7 +212,7 @@ void BufferedCSVReader::ResetBuffer() {
 }
 
 void BufferedCSVReader::ResetStream() {
-	if (!plain_file_source) {
+	if (!file_handle->file_system.CanSeek()) {
 		// seeking to the beginning appears to not be supported in all compiler/os-scenarios,
 		// so we have to create a new stream source here for now
 		file_handle = file_handle->file_system.OpenFile(options.file_path.c_str(), FileFlags::FILE_FLAGS_READ);
@@ -260,10 +260,8 @@ void BufferedCSVReader::SkipBOM() {
 void BufferedCSVReader::SkipRowsAndReadHeader(idx_t skip_rows, bool skip_header) {
 	for (idx_t i = 0; i < skip_rows; i++) {
 		// ignore skip rows
-		throw InternalException("FIXME: get line");
-		// string read_line;
-		// getline(*source, read_line);
-		// linenr++;
+		string read_line = file_handle->ReadLine();
+		linenr++;
 	}
 
 	if (skip_header) {
@@ -338,10 +336,8 @@ bool BufferedCSVReader::JumpToNextSample() {
 
 	// seek beginning of next line
 	// FIXME: if this jump ends up in a quoted linebreak, we will have a problem
-	throw InternalException("FIXME: read_line");
-	// string read_line;
-	// getline(*source, read_line);
-	// linenr++;
+	string read_line = file_handle->ReadLine();
+	linenr++;
 
 	sample_chunk_idx++;
 

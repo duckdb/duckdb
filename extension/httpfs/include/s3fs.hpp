@@ -17,6 +17,7 @@ public:
 	                                    idx_t buffer_len = 0) override;
 	static void Verify();
 
+	bool CanHandleFile(const string &fpath) override;
 public:
 	DatabaseInstance &database_instance;
 

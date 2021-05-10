@@ -705,6 +705,10 @@ bool FileSystem::CanSeek() {
 	return true;
 }
 
+bool FileSystem::OnDiskFile() {
+	return true;
+}
+
 void FileSystem::Seek(FileHandle &handle, idx_t location) {
 	if (!CanSeek()) {
 		throw IOException("Cannot seek in files of this type");
@@ -769,6 +773,20 @@ void FileHandle::Seek(idx_t location) {
 
 idx_t FileHandle::SeekPosition() {
 	return file_system.SeekPosition(*this);
+}
+
+string FileHandle::ReadLine() {
+	string result;
+	char buffer[1];
+	while(true) {
+		idx_t tuples_read = Read(buffer, 1);
+		if (tuples_read == 0 || buffer[0] == '\n') {
+			return result;
+		}
+		if (buffer[0] != '\r') {
+			result += buffer[0];
+		}
+	}
 }
 
 void FileHandle::Sync() {

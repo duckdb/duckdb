@@ -70,6 +70,11 @@ public:
 	static void Verify();
 
 	void Seek(FileHandle &handle, idx_t location) override;
+
+	bool CanHandleFile(const string &fpath) override;
+	bool OnDiskFile() override {
+		return false;
+	}
 };
 
 } // namespace duckdb

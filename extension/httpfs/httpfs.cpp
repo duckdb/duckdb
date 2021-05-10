@@ -158,6 +158,10 @@ bool HTTPFileSystem::FileExists(const string &filename) {
 	};
 }
 
+bool HTTPFileSystem::CanHandleFile(const string &fpath) {
+	return fpath.rfind("https://", 0) == 0 || fpath.rfind("http://", 0) == 0;
+}
+
 void HTTPFileSystem::Seek(FileHandle &handle, idx_t location) {
 	auto &sfh = (HTTPFileHandle &)handle;
 	sfh.file_offset = location;
