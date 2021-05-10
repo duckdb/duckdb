@@ -304,7 +304,7 @@ TEST_CASE("Parallel appends to table with index with transactions", "[index][.]"
 
 static void join_integers(Connection *con, bool *index_join_success, idx_t threadnr) {
 	*index_join_success = true;
-	for(idx_t i = 0; i < 10; i++) {
+	for (idx_t i = 0; i < 10; i++) {
 		auto result = con->Query("SELECT count(*) FROM integers inner join integers_2 on (integers.i = integers_2.i)");
 		if (!CHECK_COLUMN(result, 0, {Value::BIGINT(500000)})) {
 			*index_join_success = false;
