@@ -303,7 +303,7 @@ public:
 	template <class STATE_TYPE, class OP>
 	static void Combine(Vector &source, Vector &target, idx_t count) {
 		D_ASSERT(source.GetType().id() == LogicalTypeId::POINTER && target.GetType().id() == LogicalTypeId::POINTER);
-		auto sdata = FlatVector::GetData<STATE_TYPE *>(source);
+		auto sdata = FlatVector::GetData<const STATE_TYPE *>(source);
 		auto tdata = FlatVector::GetData<STATE_TYPE *>(target);
 
 		for (idx_t i = 0; i < count; i++) {
