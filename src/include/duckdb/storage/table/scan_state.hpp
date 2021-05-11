@@ -78,8 +78,8 @@ private:
 
 class RowGroupScanState {
 public:
-	RowGroupScanState(TableScanState &parent_p) :
-		parent(parent_p) {}
+	RowGroupScanState(TableScanState &parent_p) : parent(parent_p) {
+	}
 
 	//! The parent scan state
 	TableScanState &parent;

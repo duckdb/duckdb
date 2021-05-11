@@ -25,7 +25,8 @@ ColumnData::ColumnData(DatabaseInstance &db, idx_t start_row, LogicalType type, 
     : db(db), start(start_row), type(move(type)), parent(parent) {
 }
 
-ColumnData::~ColumnData() {}
+ColumnData::~ColumnData() {
+}
 
 DatabaseInstance &ColumnData::GetDatabase() const {
 	return db;
@@ -45,7 +46,7 @@ void ColumnData::ScanVector(ColumnScanState &state, Vector &result) {
 	}
 	idx_t row_index = state.row_index;
 	idx_t remaining = STANDARD_VECTOR_SIZE;
-	while(remaining > 0) {
+	while (remaining > 0) {
 		D_ASSERT(row_index >= state.current->start && row_index <= state.current->start + state.current->count);
 		idx_t scan_count = MinValue<idx_t>(remaining, state.current->start + state.current->count - row_index);
 		idx_t start = row_index - state.current->start;
@@ -58,21 +59,20 @@ void ColumnData::ScanVector(ColumnScanState &state, Vector &result) {
 			if (!state.current->next) {
 				break;
 			}
-			state.current = (ColumnSegment*) state.current->next.get();
+			state.current = (ColumnSegment *)state.current->next.get();
 			state.current->InitializeScan(state);
 			D_ASSERT(row_index >= state.current->start && row_index <= state.current->start + state.current->count);
 		}
 	}
 }
 
-void ColumnData::FilterScan(ColumnScanState &state, Vector &result, SelectionVector &sel,
-                            idx_t &approved_tuple_count) {
+void ColumnData::FilterScan(ColumnScanState &state, Vector &result, SelectionVector &sel, idx_t &approved_tuple_count) {
 	Scan(state, result);
 	result.Slice(sel, approved_tuple_count);
 }
 
-void ColumnData::Select(ColumnScanState &state, Vector &result, SelectionVector &sel,
-                        idx_t &approved_tuple_count, vector<TableFilter> &table_filters) {
+void ColumnData::Select(ColumnScanState &state, Vector &result, SelectionVector &sel, idx_t &approved_tuple_count,
+                        vector<TableFilter> &table_filters) {
 	Scan(state, result);
 	for (auto &filter : table_filters) {
 		UncompressedSegment::FilterSelection(sel, result, filter, approved_tuple_count, FlatVector::Validity(result));
@@ -285,8 +285,8 @@ void ColumnCheckpointState::FlushSegment() {
 
 	// construct a persistent segment that points to this block, and append it to the new segment tree
 	auto persistent_segment = make_unique<PersistentSegment>(
-	    column_data.GetDatabase(), block_id, offset_in_block, column_data.type, data_pointer.row_start, data_pointer.tuple_count,
-	    segment_stats->statistics->Copy());
+	    column_data.GetDatabase(), block_id, offset_in_block, column_data.type, data_pointer.row_start,
+	    data_pointer.tuple_count, segment_stats->statistics->Copy());
 	new_tree.AppendSegment(move(persistent_segment));
 
 	data_pointers.push_back(move(data_pointer));
@@ -316,7 +316,8 @@ void ColumnCheckpointState::FlushToDisk() {
 	}
 }
 
-unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, TableDataWriter &writer, idx_t column_idx) {
+unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, TableDataWriter &writer,
+                                                         idx_t column_idx) {
 	// scan the segments of the column data
 	// set up the checkpoint state
 	auto checkpoint_state = CreateCheckpointState(row_group, writer);
@@ -395,7 +396,8 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, Ta
 			state.row_index = segment->start + base_row_index;
 			segment->Scan(state, base_row_index, count, scan_vector, 0);
 			if (!row_group.updates.empty() && column_idx < row_group.updates.size() && row_group.updates[column_idx]) {
-				row_group.updates[column_idx]->FetchCommittedRange(segment->start - row_group.start + base_row_index, count, scan_vector);
+				row_group.updates[column_idx]->FetchCommittedRange(segment->start - row_group.start + base_row_index,
+				                                                   count, scan_vector);
 			}
 
 			checkpoint_state->AppendData(scan_vector, count);
@@ -438,15 +440,15 @@ void ColumnData::BaseDeserialize(DatabaseInstance &db, Deserializer &source, con
 		data_pointer.statistics = BaseStatistics::Deserialize(source, type);
 
 		// create a persistent segment
-		auto segment =
-		    make_unique<PersistentSegment>(db, data_pointer.block_pointer.block_id, data_pointer.block_pointer.offset, type, data_pointer.row_start,
-		                                   data_pointer.tuple_count, move(data_pointer.statistics));
+		auto segment = make_unique<PersistentSegment>(db, data_pointer.block_pointer.block_id,
+		                                              data_pointer.block_pointer.offset, type, data_pointer.row_start,
+		                                              data_pointer.tuple_count, move(data_pointer.statistics));
 		result.data.AppendSegment(move(segment));
 	}
 }
 
 shared_ptr<ColumnData> ColumnData::Deserialize(DatabaseInstance &db, idx_t start_row, Deserializer &source,
-                                                         const LogicalType &type) {
+                                               const LogicalType &type) {
 	return StandardColumnData::Deserialize(db, start_row, source, type);
 }
 

@@ -1,4 +1,4 @@
-# name: test/sql/update/test_big_table_update.test_slow
+# name: test/sql/update/block_boundary_update.test_slow
 # description: Update big table of even and odd values
 # group: [update]
 

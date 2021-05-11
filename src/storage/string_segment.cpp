@@ -137,7 +137,7 @@ void StringSegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &resu
 		baseptr = entry->second->node->buffer;
 	}
 
-	auto base_data = (int32_t *) baseptr;
+	auto base_data = (int32_t *)baseptr;
 	auto result_data = FlatVector::GetData<string_t>(result);
 
 	result_data[result_idx] = FetchStringFromDict(result, baseptr, base_data[row_id]);
@@ -161,8 +161,8 @@ idx_t StringSegment::Append(SegmentStatistics &stats, VectorData &data, idx_t of
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	auto handle = buffer_manager.Pin(block);
 
-	auto source_data = (string_t *) data.data;
-	auto result_data = (int32_t *) handle->node->buffer;
+	auto source_data = (string_t *)data.data;
+	auto result_data = (int32_t *)handle->node->buffer;
 	auto end = handle->node->buffer + Storage::BLOCK_SIZE;
 	for (idx_t i = 0; i < count; i++) {
 		auto source_idx = data.sel->get_index(offset + i);

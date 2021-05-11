@@ -1,4 +1,4 @@
-# name: test/sql/storage/wal/wal_test_null_updates.test
+# name: test/sql/storage/wal/wal_store_updates_big_varchar.test
 # description: Test updates with storage and null values
 # group: [wal]
 

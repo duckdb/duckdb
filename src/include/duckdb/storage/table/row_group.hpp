@@ -32,6 +32,7 @@ class RowGroup : public SegmentBase {
 public:
 	friend class ColumnData;
 	friend class VersionDeleteState;
+
 public:
 	static constexpr const idx_t ROW_GROUP_VECTOR_COUNT = 100;
 	static constexpr const idx_t ROW_GROUP_SIZE = STANDARD_VECTOR_SIZE * ROW_GROUP_VECTOR_COUNT;
@@ -41,7 +42,8 @@ public:
 
 public:
 	RowGroup(DatabaseInstance &db, DataTableInfo &table_info, idx_t start, idx_t count);
-	RowGroup(DatabaseInstance &db, DataTableInfo &table_info, const vector<LogicalType> &types, RowGroupPointer &pointer);
+	RowGroup(DatabaseInstance &db, DataTableInfo &table_info, const vector<LogicalType> &types,
+	         RowGroupPointer &pointer);
 	~RowGroup();
 
 private:
@@ -66,7 +68,7 @@ public:
 		return table_info;
 	}
 	idx_t GetColumnIndex(ColumnData *data) {
-		for(idx_t i = 0; i < columns.size(); i++) {
+		for (idx_t i = 0; i < columns.size(); i++) {
 			if (columns[i].get() == data) {
 				return i;
 			}
@@ -74,8 +76,10 @@ public:
 		return 0;
 	}
 
-	unique_ptr<RowGroup> AlterType(ClientContext &context, const LogicalType &target_type, idx_t changed_idx, ExpressionExecutor &executor, TableScanState &scan_state, DataChunk &scan_chunk);
-	unique_ptr<RowGroup> AddColumn(ClientContext &context, ColumnDefinition &new_column, ExpressionExecutor &executor, Expression *default_value, Vector &intermediate);
+	unique_ptr<RowGroup> AlterType(ClientContext &context, const LogicalType &target_type, idx_t changed_idx,
+	                               ExpressionExecutor &executor, TableScanState &scan_state, DataChunk &scan_chunk);
+	unique_ptr<RowGroup> AddColumn(ClientContext &context, ColumnDefinition &new_column, ExpressionExecutor &executor,
+	                               Expression *default_value, Vector &intermediate);
 	unique_ptr<RowGroup> RemoveColumn(idx_t removed_column);
 
 	void CommitDrop();
@@ -94,7 +98,8 @@ public:
 	//! For a specific row, returns true if it should be used for the transaction and false otherwise.
 	bool Fetch(Transaction &transaction, idx_t row);
 	//! Fetch a specific row from the row_group and insert it into the result at the specified index
-	void FetchRow(Transaction &transaction, ColumnFetchState &state, const vector<column_t> &column_ids, row_t row_id, DataChunk &result, idx_t result_idx);
+	void FetchRow(Transaction &transaction, ColumnFetchState &state, const vector<column_t> &column_ids, row_t row_id,
+	              DataChunk &result, idx_t result_idx);
 
 	//! Append count rows to the version info
 	void AppendVersionInfo(Transaction &transaction, idx_t start, idx_t count, transaction_t commit_id);
@@ -117,10 +122,11 @@ public:
 
 	void MergeStatistics(idx_t column_idx, BaseStatistics &other);
 	unique_ptr<BaseStatistics> GetStatistics(idx_t column_idx);
+
 private:
 	ChunkInfo *GetChunkInfo(idx_t vector_idx);
 
-	template<bool SCAN_DELETES, bool SCAN_COMMITTED, bool ALLOW_UPDATES>
+	template <bool SCAN_DELETES, bool SCAN_COMMITTED, bool ALLOW_UPDATES>
 	void TemplatedScan(Transaction *transaction, RowGroupScanState &state, DataChunk &result);
 
 	static void CheckpointDeletes(VersionNode *versions, Serializer &serializer);

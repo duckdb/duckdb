@@ -25,6 +25,7 @@ public:
 	~ValiditySegment();
 
 	idx_t max_tuples;
+
 public:
 	void InitializeScan(ColumnScanState &state) override;
 	void Scan(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset) override;

@@ -36,9 +36,10 @@ public:
 	void Initialize(PersistentColumnData &column_data) override;
 
 	unique_ptr<ColumnCheckpointState> CreateCheckpointState(RowGroup &row_group, TableDataWriter &writer) override;
-	unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, TableDataWriter &writer, idx_t column_idx) override;
-	static shared_ptr<ColumnData> Deserialize(DatabaseInstance &db, idx_t start_row, Deserializer &source, const LogicalType &type);
-
+	unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, TableDataWriter &writer,
+	                                             idx_t column_idx) override;
+	static shared_ptr<ColumnData> Deserialize(DatabaseInstance &db, idx_t start_row, Deserializer &source,
+	                                          const LogicalType &type);
 };
 
 } // namespace duckdb

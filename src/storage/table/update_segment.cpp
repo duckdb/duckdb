@@ -19,8 +19,7 @@ static UpdateSegment::statistics_update_function_t GetStatisticsUpdateFunction(P
 static UpdateSegment::fetch_row_function_t GetFetchRowFunction(PhysicalType type);
 
 UpdateSegment::UpdateSegment(RowGroup &row_group, ColumnData &column_data)
-    : row_group(row_group), column_data(column_data),
-      stats(column_data.type) {
+    : row_group(row_group), column_data(column_data), stats(column_data.type) {
 	auto physical_type = column_data.type.InternalType();
 
 	this->type_size = GetTypeIdSize(physical_type);
@@ -229,7 +228,8 @@ void UpdateSegment::FetchCommitted(idx_t vector_index, Vector &result) {
 // Fetch Range
 //===--------------------------------------------------------------------===//
 template <class T>
-static void MergeUpdateInfoRange(UpdateInfo *current, idx_t start, idx_t end, idx_t result_offset, T *result_data, ValidityMask &result_mask) {
+static void MergeUpdateInfoRange(UpdateInfo *current, idx_t start, idx_t end, idx_t result_offset, T *result_data,
+                                 ValidityMask &result_mask) {
 	ValidityMask current_mask(current->validity);
 	auto info_data = (T *)current->tuple_data;
 	for (idx_t i = 0; i < current->N; i++) {
@@ -246,7 +246,8 @@ static void MergeUpdateInfoRange(UpdateInfo *current, idx_t start, idx_t end, id
 }
 
 template <class T>
-static void TemplatedFetchCommittedRange(UpdateInfo *info, idx_t start, idx_t end, idx_t result_offset, Vector &result) {
+static void TemplatedFetchCommittedRange(UpdateInfo *info, idx_t start, idx_t end, idx_t result_offset,
+                                         Vector &result) {
 	auto result_data = FlatVector::GetData<T>(result);
 	auto &result_mask = FlatVector::Validity(result);
 	MergeUpdateInfoRange<T>(info, start, end, result_offset, result_data, result_mask);
@@ -294,13 +295,15 @@ void UpdateSegment::FetchCommittedRange(idx_t start_row, idx_t count, Vector &re
 	idx_t start_vector = start_row / STANDARD_VECTOR_SIZE;
 	idx_t end_vector = end_row / STANDARD_VECTOR_SIZE;
 	idx_t result_offset = 0;
-	for(idx_t vector_idx = start_vector; vector_idx <= end_vector; vector_idx++) {
+	for (idx_t vector_idx = start_vector; vector_idx <= end_vector; vector_idx++) {
 		if (!root->info[vector_idx]) {
 			continue;
 		}
 		idx_t start_in_vector = vector_idx == start_vector ? start_row - start_vector * STANDARD_VECTOR_SIZE : 0;
-		idx_t end_in_vector = vector_idx == end_vector ? end_row - end_vector * STANDARD_VECTOR_SIZE : STANDARD_VECTOR_SIZE;
-		fetch_committed_range(root->info[vector_idx]->info.get(), start_in_vector, end_in_vector, result_offset, result);
+		idx_t end_in_vector =
+		    vector_idx == end_vector ? end_row - end_vector * STANDARD_VECTOR_SIZE : STANDARD_VECTOR_SIZE;
+		fetch_committed_range(root->info[vector_idx]->info.get(), start_in_vector, end_in_vector, result_offset,
+		                      result);
 	}
 }
 
@@ -805,7 +808,7 @@ void TemplatedUpdateNumericStatistics(UpdateSegment *segment, SegmentStatistics 
 			if (mask.RowIsValid(i)) {
 				NumericStatistics::Update<T>(stats, update_data[i]);
 			} else {
-				auto &validity_stats = (ValidityStatistics &) *stats.statistics->validity_stats;
+				auto &validity_stats = (ValidityStatistics &)*stats.statistics->validity_stats;
 				validity_stats.has_null = true;
 			}
 		}
@@ -830,7 +833,7 @@ void UpdateStringStatistics(UpdateSegment *segment, SegmentStatistics &stats, Ve
 					update_data[i] = segment->GetStringHeap().AddString(update_data[i]);
 				}
 			} else {
-				auto &validity_stats = (ValidityStatistics &) *stats.statistics->validity_stats;
+				auto &validity_stats = (ValidityStatistics &)*stats.statistics->validity_stats;
 				validity_stats.has_null = true;
 			}
 		}

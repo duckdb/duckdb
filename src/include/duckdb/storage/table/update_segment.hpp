@@ -72,7 +72,8 @@ public:
 	typedef void (*fetch_update_function_t)(transaction_t start_time, transaction_t transaction_id, UpdateInfo *info,
 	                                        Vector &result);
 	typedef void (*fetch_committed_function_t)(UpdateInfo *info, Vector &result);
-	typedef void (*fetch_committed_range_function_t)(UpdateInfo *info, idx_t start, idx_t end, idx_t result_offset, Vector &result);
+	typedef void (*fetch_committed_range_function_t)(UpdateInfo *info, idx_t start, idx_t end, idx_t result_offset,
+	                                                 Vector &result);
 	typedef void (*fetch_row_function_t)(transaction_t start_time, transaction_t transaction_id, UpdateInfo *info,
 	                                     idx_t row_idx, Vector &result, idx_t result_idx);
 	typedef void (*rollback_update_function_t)(UpdateInfo *base_info, UpdateInfo *rollback_info);

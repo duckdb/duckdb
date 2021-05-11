@@ -34,8 +34,8 @@ struct ColumnAppendState {
 };
 
 struct RowGroupAppendState {
-	RowGroupAppendState(TableAppendState &parent_p) :
-		parent(parent_p) {}
+	RowGroupAppendState(TableAppendState &parent_p) : parent(parent_p) {
+	}
 
 	//! The parent append state
 	TableAppendState &parent;
@@ -47,13 +47,13 @@ struct RowGroupAppendState {
 	idx_t offset_in_row_group;
 };
 
-
 struct IndexLock {
 	std::unique_lock<std::mutex> index_lock;
 };
 
 struct TableAppendState {
-	TableAppendState() : row_group_append_state(*this) {}
+	TableAppendState() : row_group_append_state(*this) {
+	}
 
 	RowGroupAppendState row_group_append_state;
 	std::unique_lock<std::mutex> append_lock;

@@ -15,8 +15,7 @@
 
 namespace duckdb {
 
-TableDataReader::TableDataReader(MetaBlockReader &reader, BoundCreateTableInfo &info)
-    : reader(reader), info(info) {
+TableDataReader::TableDataReader(MetaBlockReader &reader, BoundCreateTableInfo &info) : reader(reader), info(info) {
 	info.data = make_unique<PersistentTableData>(info.Base().columns.size());
 }
 
@@ -26,14 +25,14 @@ void TableDataReader::ReadTableData() {
 
 	// deserialize the total table statistics
 	info.data->column_stats.reserve(columns.size());
-	for(idx_t i = 0; i < columns.size(); i++) {
+	for (idx_t i = 0; i < columns.size(); i++) {
 		info.data->column_stats.push_back(BaseStatistics::Deserialize(reader, columns[i].type));
 	}
 
 	// deserialize each of the individual row groups
 	auto row_group_count = reader.Read<uint64_t>();
 	info.data->row_groups.reserve(row_group_count);
-	for(idx_t i = 0; i < row_group_count; i++) {
+	for (idx_t i = 0; i < row_group_count; i++) {
 		auto row_group_pointer = RowGroup::Deserialize(reader, columns);
 		info.data->row_groups.push_back(move(row_group_pointer));
 	}

@@ -60,11 +60,10 @@ public:
 	//! Scan the next vector from the column
 	virtual void Scan(ColumnScanState &state, Vector &result) = 0;
 	//! Scan the next vector from the column and apply a selection vector to filter the data
-	void FilterScan(ColumnScanState &state, Vector &result, SelectionVector &sel,
-	                idx_t &approved_tuple_count);
+	void FilterScan(ColumnScanState &state, Vector &result, SelectionVector &sel, idx_t &approved_tuple_count);
 	//! Executes the filters directly in the table's data
-	void Select(ColumnScanState &state, Vector &result, SelectionVector &sel,
-	            idx_t &approved_tuple_count, vector<TableFilter> &table_filter);
+	void Select(ColumnScanState &state, Vector &result, SelectionVector &sel, idx_t &approved_tuple_count,
+	            vector<TableFilter> &table_filter);
 	//! Initialize an appending phase for this column
 	virtual void InitializeAppend(ColumnAppendState &state);
 	//! Append a vector of type [type] to the end of the column
@@ -81,13 +80,15 @@ public:
 	virtual void CommitDropColumn();
 
 	virtual unique_ptr<ColumnCheckpointState> CreateCheckpointState(RowGroup &row_group, TableDataWriter &writer);
-	virtual unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, TableDataWriter &writer, idx_t column_idx);
+	virtual unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, TableDataWriter &writer,
+	                                                     idx_t column_idx);
 
 	virtual void Initialize(PersistentColumnData &column_data);
 
 	static void BaseDeserialize(DatabaseInstance &db, Deserializer &source, const LogicalType &type,
 	                            ColumnData &result);
-	static shared_ptr<ColumnData> Deserialize(DatabaseInstance &db, idx_t start_row, Deserializer &source, const LogicalType &type);
+	static shared_ptr<ColumnData> Deserialize(DatabaseInstance &db, idx_t start_row, Deserializer &source,
+	                                          const LogicalType &type);
 
 protected:
 	//! Append a transient segment

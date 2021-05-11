@@ -7,8 +7,7 @@
 
 namespace duckdb {
 
-StandardColumnData::StandardColumnData(DatabaseInstance &db, idx_t start_row, LogicalType type,
-                                       ColumnData *parent)
+StandardColumnData::StandardColumnData(DatabaseInstance &db, idx_t start_row, LogicalType type, ColumnData *parent)
     : ColumnData(db, start_row, move(type), parent), validity(db, start_row, this) {
 }
 
@@ -117,8 +116,9 @@ void StandardColumnData::CommitDropColumn() {
 }
 
 struct StandardColumnCheckpointState : public ColumnCheckpointState {
-		StandardColumnCheckpointState(RowGroup &row_group, ColumnData &column_data, TableDataWriter &writer) :
-			ColumnCheckpointState(row_group, column_data, writer){}
+	StandardColumnCheckpointState(RowGroup &row_group, ColumnData &column_data, TableDataWriter &writer)
+	    : ColumnCheckpointState(row_group, column_data, writer) {
+	}
 
 	unique_ptr<ColumnCheckpointState> validity_state;
 
@@ -128,13 +128,15 @@ struct StandardColumnCheckpointState : public ColumnCheckpointState {
 	}
 };
 
-unique_ptr<ColumnCheckpointState> StandardColumnData::CreateCheckpointState(RowGroup &row_group, TableDataWriter &writer) {
+unique_ptr<ColumnCheckpointState> StandardColumnData::CreateCheckpointState(RowGroup &row_group,
+                                                                            TableDataWriter &writer) {
 	return make_unique<StandardColumnCheckpointState>(row_group, *this, writer);
 }
 
-unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(RowGroup &row_group, TableDataWriter &writer, idx_t column_idx) {
+unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(RowGroup &row_group, TableDataWriter &writer,
+                                                                 idx_t column_idx) {
 	auto base_state = ColumnData::Checkpoint(row_group, writer, column_idx);
-	auto &checkpoint_state = (StandardColumnCheckpointState &) *base_state;
+	auto &checkpoint_state = (StandardColumnCheckpointState &)*base_state;
 	checkpoint_state.validity_state = validity.Checkpoint(row_group, writer, column_idx);
 	return base_state;
 }
@@ -145,7 +147,8 @@ void StandardColumnData::Initialize(PersistentColumnData &column_data) {
 	validity.Initialize(*persistent.validity);
 }
 
-shared_ptr<ColumnData> StandardColumnData::Deserialize(DatabaseInstance &db, idx_t start_row, Deserializer &source, const LogicalType &type) {
+shared_ptr<ColumnData> StandardColumnData::Deserialize(DatabaseInstance &db, idx_t start_row, Deserializer &source,
+                                                       const LogicalType &type) {
 	auto result = make_shared<StandardColumnData>(db, start_row, type, nullptr);
 	BaseDeserialize(db, source, type, *result);
 	ColumnData::BaseDeserialize(db, source, LogicalType(LogicalTypeId::VALIDITY), result->validity);

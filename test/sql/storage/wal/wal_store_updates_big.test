@@ -1,4 +1,4 @@
-# name: test/sql/storage/wal/wal_store_updates_big.test_slow
+# name: test/sql/storage/wal/wal_store_updates_big.test
 # description: Test updates with storage and null values on a big table
 # group: [wal]
 

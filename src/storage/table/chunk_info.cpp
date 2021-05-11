@@ -18,9 +18,9 @@ unique_ptr<ChunkInfo> ChunkInfo::Deserialize(Deserializer &source) {
 	case ChunkInfoType::EMPTY_INFO:
 		return nullptr;
 	case ChunkInfoType::CONSTANT_INFO:
-		return ChunkConstantInfo::Deserialize( source);
+		return ChunkConstantInfo::Deserialize(source);
 	case ChunkInfoType::VECTOR_INFO:
-		return ChunkVectorInfo::Deserialize( source);
+		return ChunkVectorInfo::Deserialize(source);
 	default:
 		throw SerializationException("Could not deserialize Chunk Info Type: unrecognized type");
 	}
