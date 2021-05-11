@@ -18,8 +18,10 @@
 namespace duckdb {
 
 struct PerfectHashJoinState {
-	Value minimum;
-	Value maximum;
+	Value build_min;
+	Value build_max;
+	Value probe_min;
+	Value probe_max;
 	bool is_build_small {false};
 	bool is_probe_small {false};
 };

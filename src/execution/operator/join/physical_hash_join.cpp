@@ -276,8 +276,8 @@ void PhysicalHashJoin::CheckRequirementsForPerfectHashJoin(JoinHashTable *ht_ptr
 
 	// verify uniquiness (build size < min_max_range => duplicate values )
 	auto build_size = Value::INTEGER(ht_ptr->size());
-	auto min_max_range = perfect_join_state.maximum - perfect_join_state.minimum;
-	if (build_size != min_max_range + 1) {
+	auto build_range = perfect_join_state.build_max - perfect_join_state.build_min;
+	if (build_size != build_range + 1) {
 		return;
 	}
 	// Store build side as a set of columns
@@ -312,8 +312,8 @@ void PhysicalHashJoin::BuildPerfectHashStructure(JoinHashTable *hash_table_ptr, 
 }
 template <typename T>
 void PhysicalHashJoin::TemplatedMinMaxRange(Vector &source, Vector &result, idx_t count) {
-	auto min_value = perfect_join_state.minimum.GetValue<T>();
-	auto max_value = perfect_join_state.maximum.GetValue<T>();
+	auto min_value = perfect_join_state.build_min.GetValue<T>();
+	auto max_value = perfect_join_state.build_max.GetValue<T>();
 
 	UnaryExecutor::Execute<T, T>(source, result, count, [&](T input_value) {
 		// a match means that input is in the range

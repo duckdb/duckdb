@@ -32,18 +32,26 @@ static bool CanPlanIndexJoin(Transaction &transaction, TableScanBindData *bind_d
 }
 
 void CheckForPerfectJoin(LogicalComparisonJoin &op, PerfectHashJoinState &join_state) {
-	if (op.join_stats.empty() || !op.join_stats[0]->type.IsNumeric()) {
+	if (op.join_stats.empty() || !op.join_stats[0]->type.IsNumeric() || !op.join_stats[1]->type.IsNumeric()) {
 		join_state.is_build_small = false;
 		join_state.is_probe_small = false;
 		return;
 	}
-	auto numeric_stats = reinterpret_cast<NumericStatistics *>(op.join_stats[0].get()); // lhs stats
-	auto join_keys_range = numeric_stats->max - numeric_stats->min;                     // Join Keys Range
+	auto stats_build = reinterpret_cast<NumericStatistics *>(op.join_stats[0].get()); // lhs stats
+	auto build_range = stats_build->max - stats_build->min;                           // Join Keys Range
 
-	if (join_keys_range < PERFECT_HASH_THRESHOLD) {
+	if (build_range < PERFECT_HASH_THRESHOLD) {
 		join_state.is_build_small = true;
-		join_state.minimum = numeric_stats->min;
-		join_state.maximum = numeric_stats->max;
+		join_state.build_min = stats_build->min;
+		join_state.build_max = stats_build->max;
+	}
+	auto stats_probe = reinterpret_cast<NumericStatistics *>(op.join_stats[1].get()); // lhs stats
+	auto probe_range = stats_probe->max - stats_probe->min;                           // Join Keys Range
+
+	if (probe_range < PERFECT_HASH_THRESHOLD) {
+		join_state.is_probe_small = true;
+		join_state.probe_min = stats_probe->min;
+		join_state.probe_max = stats_probe->max;
 	}
 }
 
