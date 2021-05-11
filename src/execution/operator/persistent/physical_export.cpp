@@ -19,7 +19,7 @@ static void WriteCatalogEntries(stringstream &ss, vector<CatalogEntry *> &entrie
 	ss << std::endl;
 }
 
-static void WriteStringStreamToFile(FileSystem &fs, stringstream &ss, string path) {
+static void WriteStringStreamToFile(FileSystem &fs, stringstream &ss, const string &path) {
 	auto ss_string = ss.str();
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW,
 	                          FileLockType::WRITE_LOCK);
