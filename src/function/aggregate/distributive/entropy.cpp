@@ -14,6 +14,7 @@ struct EntropyState {
 	idx_t count;
 	DistinctMap *distinct;
 
+	// NOLINTNEXTLINE(bugprone-unhandled-self-assignment)
 	EntropyState &operator=(const EntropyState &other) {
 		if (this == &other) {
 			return *this;
