@@ -66,6 +66,8 @@ public:
 	public:
 		friend BitArray;
 
+		reference(const reference &r) = default;
+
 		reference &operator=(bool x) noexcept {
 			auto b = parent.Block(pos);
 			auto s = parent.Shift(pos);
