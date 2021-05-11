@@ -1,5 +1,6 @@
 #include "duckdb/common/types/data_chunk.hpp"
 
+#include "duckdb/common/array.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/printer.hpp"
@@ -206,14 +207,19 @@ void DataChunk::Print() {
 	Printer::Print(ToString());
 }
 
-struct DuckDBArrowArrayHolder {
+struct DuckDBArrowArrayChildHolder {
 	ArrowArray array;
-	const void *buffers[3];              // need max three pointers for strings
-	unique_ptr<ArrowArray *[]> children; // just space for the *pointers* to children, not the children themselves
+	// need max three pointers for strings
+	duckdb::array<const void *, 3> buffers = {{nullptr, nullptr, nullptr}};
+	Vector vector = {};
+	unique_ptr<data_t[]> string_offsets = nullptr;
+	unique_ptr<data_t[]> string_data = nullptr;
+};
 
-	Vector vector;
-	unique_ptr<data_t[]> string_offsets;
-	unique_ptr<data_t[]> string_data;
+struct DuckDBArrowArrayHolder {
+	vector<DuckDBArrowArrayChildHolder> children = {};
+	vector<ArrowArray *> children_ptrs = {};
+	array<const void *, 1> buffers = {{nullptr}};
 };
 
 static void ReleaseDuckDBArrowArray(ArrowArray *array) {
@@ -221,7 +227,7 @@ static void ReleaseDuckDBArrowArray(ArrowArray *array) {
 		return;
 	}
 	array->release = nullptr;
-	auto holder = (DuckDBArrowArrayHolder *)array->private_data;
+	auto holder = static_cast<DuckDBArrowArrayHolder *>(array->private_data);
 	delete holder;
 }
 
@@ -229,34 +235,42 @@ void DataChunk::ToArrowArray(ArrowArray *out_array) {
 	Normalify();
 	D_ASSERT(out_array);
 
-	auto root_holder = new DuckDBArrowArrayHolder();
-	root_holder->children = unique_ptr<ArrowArray *[]>(new ArrowArray *[ColumnCount()]);
-	out_array->private_data = root_holder;
-	out_array->release = ReleaseDuckDBArrowArray;
+	// Allocate as unique_ptr first to cleanup properly on error
+	auto root_holder = make_unique<DuckDBArrowArrayHolder>();
 
-	out_array->children = root_holder->children.get();
+	// Allocate the children
+	root_holder->children.resize(ColumnCount());
+	root_holder->children_ptrs.resize(ColumnCount(), nullptr);
+	for (size_t i = 0; i < ColumnCount(); ++i) {
+		root_holder->children_ptrs[i] = &root_holder->children[i].array;
+	}
+	out_array->children = root_holder->children_ptrs.data();
+	out_array->n_children = ColumnCount();
+
+	// Configure root array
 	out_array->length = size();
 	out_array->n_children = ColumnCount();
 	out_array->n_buffers = 1;
-	out_array->buffers = root_holder->buffers;
-	out_array->buffers[0] = nullptr; // there is no actual buffer there since we don't have NULLs
+	out_array->buffers = root_holder->buffers.data(); // there is no actual buffer there since we don't have NULLs
 	out_array->offset = 0;
 	out_array->null_count = 0; // needs to be 0
 	out_array->dictionary = nullptr;
 
+	// Configure child arrays
 	for (idx_t col_idx = 0; col_idx < ColumnCount(); col_idx++) {
-		auto holder = new DuckDBArrowArrayHolder();
-		holder->vector.Reference(data[col_idx]);
-		auto &child = holder->array;
-		auto &vector = holder->vector;
-		child.private_data = holder;
-		child.release = ReleaseDuckDBArrowArray;
+		auto &child_holder = root_holder->children[col_idx];
+		auto &child = child_holder.array;
 
+		auto &vector = child_holder.vector;
+		vector.Reference(data[col_idx]);
+
+		child.private_data = nullptr;
+		child.release = ReleaseDuckDBArrowArray;
 		child.n_children = 0;
 		child.null_count = -1; // unknown
 		child.offset = 0;
 		child.dictionary = nullptr;
-		child.buffers = holder->buffers;
+		child.buffers = child_holder.buffers.data();
 
 		child.length = size();
 
@@ -278,36 +292,30 @@ void DataChunk::ToArrowArray(ArrowArray *out_array) {
 			case LogicalTypeId::DOUBLE:
 			case LogicalTypeId::HUGEINT:
 			case LogicalTypeId::DATE:
+			case LogicalTypeId::TIMESTAMP:
+			case LogicalTypeId::TIMESTAMP_MS:
+			case LogicalTypeId::TIMESTAMP_NS:
+			case LogicalTypeId::TIMESTAMP_SEC:
 				child.n_buffers = 2;
 				child.buffers[1] = (void *)FlatVector::GetData(vector);
 				break;
 			case LogicalTypeId::TIME: {
-				// convert time from microseconds to miliseconds
+				// convert time from microseconds to milliseconds
 				child.n_buffers = 2;
-				holder->string_data = unique_ptr<data_t[]>(new data_t[sizeof(uint32_t) * (size() + 1)]);
-				child.buffers[1] = (void *)holder->string_data.get();
+				child_holder.string_data = unique_ptr<data_t[]>(new data_t[sizeof(uint32_t) * (size() + 1)]);
+				child.buffers[1] = child_holder.string_data.get();
 				auto source_ptr = FlatVector::GetData<dtime_t>(vector);
 				auto target_ptr = (uint32_t *)child.buffers[1];
 				for (idx_t row_idx = 0; row_idx < size(); row_idx++) {
-					target_ptr[row_idx] = uint32_t(source_ptr[row_idx] / 1000);
-				}
-				break;
-			}
-			case LogicalTypeId::TIMESTAMP: {
-				// convert timestamp from microseconds to nanoseconds
-				child.n_buffers = 2;
-				child.buffers[1] = (void *)FlatVector::GetData(vector);
-				auto target_ptr = (timestamp_t *)child.buffers[1];
-				for (idx_t row_idx = 0; row_idx < size(); row_idx++) {
-					target_ptr[row_idx] = Timestamp::GetEpochNanoSeconds(target_ptr[row_idx]);
+					target_ptr[row_idx] = uint32_t(source_ptr[row_idx].micros / 1000);
 				}
 				break;
 			}
 
 			case LogicalTypeId::VARCHAR: {
 				child.n_buffers = 3;
-				holder->string_offsets = unique_ptr<data_t[]>(new data_t[sizeof(uint32_t) * (size() + 1)]);
-				child.buffers[1] = holder->string_offsets.get();
+				child_holder.string_offsets = unique_ptr<data_t[]>(new data_t[sizeof(uint32_t) * (size() + 1)]);
+				child.buffers[1] = child_holder.string_offsets.get();
 				D_ASSERT(child.buffers[1]);
 				// step 1: figure out total string length:
 				idx_t total_string_length = 0;
@@ -320,8 +328,8 @@ void DataChunk::ToArrowArray(ArrowArray *out_array) {
 					total_string_length += string_t_ptr[row_idx].GetSize();
 				}
 				// step 2: allocate this much
-				holder->string_data = unique_ptr<data_t[]>(new data_t[total_string_length]);
-				child.buffers[2] = holder->string_data.get();
+				child_holder.string_data = unique_ptr<data_t[]>(new data_t[total_string_length]);
+				child.buffers[2] = child_holder.string_data.get();
 				D_ASSERT(child.buffers[2]);
 				// step 3: assign buffers
 				idx_t current_heap_offset = 0;
@@ -360,6 +368,10 @@ void DataChunk::ToArrowArray(ArrowArray *out_array) {
 		}
 		out_array->children[col_idx] = &child;
 	}
+
+	// Release ownership to caller
+	out_array->private_data = root_holder.release();
+	out_array->release = ReleaseDuckDBArrowArray;
 }
 
 } // namespace duckdb

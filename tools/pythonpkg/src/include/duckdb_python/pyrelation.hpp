@@ -10,6 +10,7 @@
 
 #include "duckdb_python/pybind_wrapper.hpp"
 #include "duckdb.hpp"
+#include "arrow_array_stream.hpp"
 
 namespace duckdb {
 struct DuckDBPyResult;
@@ -19,6 +20,7 @@ public:
 	explicit DuckDBPyRelation(shared_ptr<Relation> rel);
 
 	shared_ptr<Relation> rel;
+	unique_ptr<PythonTableArrowArrayStreamFactory> arrow_stream_factory;
 
 public:
 	static void Initialize(py::handle &m);
@@ -26,6 +28,8 @@ public:
 	static unique_ptr<DuckDBPyRelation> FromDf(py::object df);
 
 	static unique_ptr<DuckDBPyRelation> Values(py::object values = py::list());
+
+	static unique_ptr<DuckDBPyRelation> FromQuery(const string &query, const string &alias);
 
 	static unique_ptr<DuckDBPyRelation> FromCsvAuto(const string &filename);
 
@@ -62,6 +66,10 @@ public:
 	static unique_ptr<DuckDBPyRelation> DistinctDF(py::object df);
 
 	py::object ToDF();
+
+	py::object Fetchone();
+
+	py::object Fetchall();
 
 	py::object ToArrowTable();
 

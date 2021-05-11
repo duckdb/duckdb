@@ -35,9 +35,9 @@ public:
 	//! The block that this segment relates to
 	shared_ptr<BlockHandle> block;
 	//! The current amount of tuples that are stored in this segment
-	idx_t tuple_count;
+	atomic<idx_t> tuple_count;
 	//! The starting row of this segment
-	idx_t row_start;
+	const idx_t row_start;
 
 public:
 	virtual void InitializeScan(ColumnScanState &state) {

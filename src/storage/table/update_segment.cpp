@@ -153,10 +153,10 @@ static UpdateSegment::fetch_update_function_t GetFetchUpdateFunction(PhysicalTyp
 }
 
 void UpdateSegment::FetchUpdates(Transaction &transaction, idx_t vector_index, Vector &result) {
+	auto lock_handle = lock.GetSharedLock();
 	if (!root) {
 		return;
 	}
-	auto lock_handle = lock.GetSharedLock();
 	if (!root->info[vector_index]) {
 		return;
 	}
@@ -212,6 +212,8 @@ static UpdateSegment::fetch_committed_function_t GetFetchCommittedFunction(Physi
 }
 
 void UpdateSegment::FetchCommitted(idx_t vector_index, Vector &result) {
+	auto lock_handle = lock.GetSharedLock();
+
 	if (!root) {
 		return;
 	}

@@ -115,16 +115,18 @@ void Pipeline::Execute(TaskContext &task) {
 
 void Pipeline::FinishTask() {
 	D_ASSERT(finished_tasks < total_tasks);
+	idx_t current_tasks = total_tasks;
 	idx_t current_finished = ++finished_tasks;
-	if (current_finished == total_tasks) {
+	if (current_finished == current_tasks) {
+		bool finish_pipeline = false;
 		try {
-			sink->Finalize(*this, executor.context, move(sink_state));
+			finish_pipeline = sink->Finalize(*this, executor.context, move(sink_state));
 		} catch (std::exception &ex) {
 			executor.PushError(ex.what());
 		} catch (...) {
 			executor.PushError("Unknown exception in Finalize!");
 		}
-		if (current_finished == total_tasks) {
+		if (finish_pipeline) {
 			Finish();
 		}
 	}
@@ -183,12 +185,6 @@ bool Pipeline::ScheduleOperator(PhysicalOperator *op) {
 		D_ASSERT(get.function.parallel_state_next);
 		idx_t max_threads = get.function.max_threads(executor.context, get.bind_data.get());
 		auto pstate = get.function.init_parallel_state(executor.context, get.bind_data.get());
-		return LaunchScanTasks(op, max_threads, move(pstate));
-	}
-	case PhysicalOperatorType::ORDER_BY: {
-		auto &ord = (PhysicalOrder &)*op;
-		idx_t max_threads = ord.MaxThreads(executor.context);
-		auto pstate = ord.GetParallelState();
 		return LaunchScanTasks(op, max_threads, move(pstate));
 	}
 	case PhysicalOperatorType::WINDOW: {

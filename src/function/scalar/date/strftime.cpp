@@ -91,6 +91,8 @@ idx_t StrfTimeFormat::GetSpecifierLength(StrTimeSpecifier specifier, date_t date
 		return len;
 	}
 	case StrTimeSpecifier::UTC_OFFSET:
+		// +00
+		return 3;
 	case StrTimeSpecifier::TZ_NAME:
 		// empty for now
 		return 0;
@@ -154,6 +156,7 @@ char *StrfTimeFormat::WriteString(char *target, const string_t &str) {
 
 // write a value in the range of 0..99 unpadded (e.g. "1", "2", ... "98", "99")
 char *StrfTimeFormat::Write2(char *target, uint8_t value) {
+	D_ASSERT(value < 100);
 	if (value >= 10) {
 		return WritePadded2(target, value);
 	} else {
@@ -164,6 +167,7 @@ char *StrfTimeFormat::Write2(char *target, uint8_t value) {
 
 // write a value in the range of 0..99 padded to 2 digits
 char *StrfTimeFormat::WritePadded2(char *target, int32_t value) {
+	D_ASSERT(value < 100);
 	auto index = static_cast<unsigned>(value * 2);
 	*target++ = duckdb_fmt::internal::data::digits[index];
 	*target++ = duckdb_fmt::internal::data::digits[index + 1];
@@ -172,6 +176,7 @@ char *StrfTimeFormat::WritePadded2(char *target, int32_t value) {
 
 // write a value in the range of 0..999 padded
 char *StrfTimeFormat::WritePadded3(char *target, uint32_t value) {
+	D_ASSERT(value < 1000);
 	if (value >= 100) {
 		WritePadded2(target + 1, value % 100);
 		*target = char(uint8_t('0') + value / 100);
@@ -212,17 +217,17 @@ bool StrfTimeFormat::IsDateSpecifier(StrTimeSpecifier specifier) {
 char *StrfTimeFormat::WriteDateSpecifier(StrTimeSpecifier specifier, date_t date, char *target) {
 	switch (specifier) {
 	case StrTimeSpecifier::ABBREVIATED_WEEKDAY_NAME: {
-		date_t dow = Date::ExtractISODayOfTheWeek(date);
+		auto dow = Date::ExtractISODayOfTheWeek(date);
 		target = WriteString(target, Date::DAY_NAMES_ABBREVIATED[dow % 7]);
 		break;
 	}
 	case StrTimeSpecifier::FULL_WEEKDAY_NAME: {
-		date_t dow = Date::ExtractISODayOfTheWeek(date);
+		auto dow = Date::ExtractISODayOfTheWeek(date);
 		target = WriteString(target, Date::DAY_NAMES[dow % 7]);
 		break;
 	}
 	case StrTimeSpecifier::WEEKDAY_DECIMAL: {
-		date_t dow = Date::ExtractISODayOfTheWeek(date);
+		auto dow = Date::ExtractISODayOfTheWeek(date);
 		*target = char('0' + uint8_t(dow % 7));
 		target++;
 		break;
@@ -309,12 +314,16 @@ char *StrfTimeFormat::WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t
 		target = WritePadded2(target, data[5]);
 		break;
 	case StrTimeSpecifier::MICROSECOND_PADDED:
-		target = WritePadded(target, data[6] * 1000, 6);
+		target = WritePadded(target, data[6], 6);
 		break;
 	case StrTimeSpecifier::MILLISECOND_PADDED:
-		target = WritePadded3(target, data[6]);
+		target = WritePadded3(target, data[6] / 1000);
 		break;
 	case StrTimeSpecifier::UTC_OFFSET:
+		*target++ = '+';
+		*target++ = '0';
+		*target++ = '0';
+		break;
 	case StrTimeSpecifier::TZ_NAME:
 		// always empty for now, FIXME when we have timestamp with tz
 		break;
@@ -587,7 +596,7 @@ static void StrfTimeFunctionDate(DataChunk &args, ExpressionState &state, Vector
 		return;
 	}
 
-	dtime_t time = 0;
+	dtime_t time(0);
 	UnaryExecutor::Execute<date_t, string_t>(args.data[0], result, args.size(), [&](date_t date) {
 		idx_t len = info.format.GetLength(date, time);
 		string_t target = StringVector::EmptyString(result, len);
@@ -850,7 +859,7 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 					return false;
 				}
 				// milliseconds
-				result_data[6] = int32_t(number * 1000);
+				result_data[6] = number;
 				break;
 			case StrTimeSpecifier::MILLISECOND_PADDED:
 				if (number >= 1000ULL) {
@@ -859,7 +868,7 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 					return false;
 				}
 				// milliseconds
-				result_data[6] = number;
+				result_data[6] = number * 1000;
 				break;
 			default:
 				throw NotImplementedException("Unsupported specifier for strptime");
@@ -928,6 +937,18 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 				result_data[1] = month + 1;
 				break;
 			}
+			case StrTimeSpecifier::UTC_OFFSET: {
+				int hour_offset, minute_offset;
+				if (!Timestamp::TryParseUTCOffset(data, pos, size, hour_offset, minute_offset)) {
+					error_message = "Expected +HH[MM] or -HH[MM]";
+					error_position = pos;
+					return false;
+				}
+				result_data[3] -= hour_offset;
+				result_data[4] -= minute_offset;
+				break;
+			}
+
 			default:
 				throw NotImplementedException("Unsupported specifier for strptime");
 			}

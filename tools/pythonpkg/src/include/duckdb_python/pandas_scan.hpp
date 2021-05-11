@@ -50,6 +50,10 @@ public:
 	static void PandasScanFunc(ClientContext &context, const FunctionData *bind_data,
 	                           FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output);
 
+	static void PandasScanFuncParallel(ClientContext &context, const FunctionData *bind_data,
+	                                   FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output,
+	                                   ParallelState *parallel_state_p);
+
 	static unique_ptr<NodeStatistics> PandasScanCardinality(ClientContext &context, const FunctionData *bind_data);
 };
 

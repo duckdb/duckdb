@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/vector_size.hpp"
+#include "duckdb/common/atomic.hpp"
 
 namespace duckdb {
 class RowGroup;
@@ -46,8 +47,8 @@ class ChunkConstantInfo : public ChunkInfo {
 public:
 	ChunkConstantInfo(idx_t start);
 
-	transaction_t insert_id;
-	transaction_t delete_id;
+	atomic<transaction_t> insert_id;
+	atomic<transaction_t> delete_id;
 
 public:
 	idx_t GetSelVector(Transaction &transaction, SelectionVector &sel_vector, idx_t max_count) override;
@@ -63,13 +64,13 @@ public:
 	ChunkVectorInfo(idx_t start);
 
 	//! The transaction ids of the transactions that inserted the tuples (if any)
-	transaction_t inserted[STANDARD_VECTOR_SIZE];
-	transaction_t insert_id;
-	bool same_inserted_id;
+	atomic<transaction_t> inserted[STANDARD_VECTOR_SIZE];
+	atomic<transaction_t> insert_id;
+	atomic<bool> same_inserted_id;
 
 	//! The transaction ids of the transactions that deleted the tuples (if any)
-	transaction_t deleted[STANDARD_VECTOR_SIZE];
-	bool any_deleted;
+	atomic<transaction_t> deleted[STANDARD_VECTOR_SIZE];
+	atomic<bool> any_deleted;
 
 public:
 	idx_t GetSelVector(transaction_t start_time, transaction_t transaction_id, SelectionVector &sel_vector,

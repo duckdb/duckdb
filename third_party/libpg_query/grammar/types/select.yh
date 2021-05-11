@@ -23,7 +23,7 @@
 
 %type <list>	distinct_clause opt_all_clause 			 			 			 			 			 			 opt_name_list
 				sort_clause opt_sort_clause sortby_list 				name_list from_clause from_list opt_array_bounds
-				qualified_name_list any_name 				any_operator expr_list attrs
+				qualified_name_list any_name 				any_operator expr_list	opt_expr_list attrs
 				target_list opt_target_list 			 			 indirection opt_indirection
 			 group_clause select_limit
 				opt_select_limit 			 			 TableFuncElementList opt_type_modifiers

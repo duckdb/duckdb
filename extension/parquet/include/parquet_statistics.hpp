@@ -8,8 +8,8 @@
 
 namespace duckdb {
 
-using parquet::format::ColumnChunk;
-using parquet::format::SchemaElement;
+using duckdb_parquet::format::ColumnChunk;
+using duckdb_parquet::format::SchemaElement;
 
 struct LogicalType;
 

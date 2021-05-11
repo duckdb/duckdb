@@ -22,11 +22,11 @@
 
 #include "thrift/protocol/TProtocol.h"
 
-namespace apache {
+namespace duckdb_apache {
 namespace thrift {
 namespace protocol {
 
-using apache::thrift::transport::TTransport;
+using duckdb_apache::thrift::transport::TTransport;
 
 /**
  * Helper class that provides default implementations of TProtocol methods.
@@ -298,7 +298,7 @@ public:
                              "this protocol does not support writing (yet).");
   }
 
-  uint32_t skip(TType type) { return ::apache::thrift::protocol::skip(*this, type); }
+  uint32_t skip(TType type) { return ::duckdb_apache::thrift::protocol::skip(*this, type); }
 
 protected:
   TProtocolDefaults(std::shared_ptr<TTransport> ptrans) : TProtocol(ptrans) {}
@@ -485,7 +485,7 @@ public:
    */
   uint32_t skip(TType type) {
     auto* const prot = static_cast<Protocol_*>(this);
-    return ::apache::thrift::protocol::skip(*prot, type);
+    return ::duckdb_apache::thrift::protocol::skip(*prot, type);
   }
 
   /*
@@ -508,6 +508,6 @@ protected:
 };
 }
 }
-} // apache::thrift::protocol
+} // duckdb_apache::thrift::protocol
 
 #endif // #define _THRIFT_PROTOCOL_TVIRTUALPROTOCOL_H_ 1

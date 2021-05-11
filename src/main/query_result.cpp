@@ -1,6 +1,7 @@
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/arrow.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 
@@ -90,10 +91,10 @@ string QueryResult::HeaderToString() {
 }
 
 struct DuckDBArrowSchemaHolder {
-	// unused in root
-	ArrowSchema schema;
 	// unused in children
-	unique_ptr<ArrowSchema *[]> children; // just space for the *pointers* to children, not the children themselves
+	vector<ArrowSchema> children = {};
+	// unused in children
+	vector<ArrowSchema *> children_ptrs = {};
 };
 
 static void ReleaseDuckDBArrowSchema(ArrowSchema *schema) {
@@ -101,35 +102,42 @@ static void ReleaseDuckDBArrowSchema(ArrowSchema *schema) {
 		return;
 	}
 	schema->release = nullptr;
-	auto holder = (DuckDBArrowSchemaHolder *)schema->private_data;
+	auto holder = static_cast<DuckDBArrowSchemaHolder *>(schema->private_data);
 	delete holder;
 }
 
 void QueryResult::ToArrowSchema(ArrowSchema *out_schema) {
 	D_ASSERT(out_schema);
 
-	auto root_holder = new DuckDBArrowSchemaHolder();
+	// Allocate as unique_ptr first to cleanup properly on error
+	auto root_holder = make_unique<DuckDBArrowSchemaHolder>();
 
-	root_holder->children = unique_ptr<ArrowSchema *[]>(new ArrowSchema *[ColumnCount()]);
-	out_schema->private_data = root_holder;
-	out_schema->release = ReleaseDuckDBArrowSchema;
-
-	out_schema->children = root_holder->children.get();
-
-	out_schema->format = "+s"; // struct apparently
+	// Allocate the children
+	root_holder->children.resize(ColumnCount());
+	root_holder->children_ptrs.resize(ColumnCount(), nullptr);
+	for (size_t i = 0; i < ColumnCount(); ++i) {
+		root_holder->children_ptrs[i] = &root_holder->children[i];
+	}
+	out_schema->children = root_holder->children_ptrs.data();
 	out_schema->n_children = ColumnCount();
+
+	// Store the schema
+	out_schema->format = "+s"; // struct apparently
 	out_schema->flags = 0;
 	out_schema->metadata = nullptr;
 	out_schema->name = "duckdb_query_result";
 	out_schema->dictionary = nullptr;
 
+	// Configure all child schemas
 	for (idx_t col_idx = 0; col_idx < ColumnCount(); col_idx++) {
-		auto holder = new DuckDBArrowSchemaHolder();
-		auto &child = holder->schema;
-		child.private_data = holder;
-		child.release = ReleaseDuckDBArrowSchema;
-		child.flags = ARROW_FLAG_NULLABLE;
+		auto &child = root_holder->children[col_idx];
 
+		// Child is cleaned up by parent
+		child.private_data = nullptr;
+		child.release = ReleaseDuckDBArrowSchema;
+
+		// Store the child schema
+		child.flags = ARROW_FLAG_NULLABLE;
 		child.name = names[col_idx].c_str();
 		child.n_children = 0;
 		child.children = nullptr;
@@ -184,13 +192,25 @@ void QueryResult::ToArrowSchema(ArrowSchema *out_schema) {
 			child.format = "ttm";
 			break;
 		case LogicalTypeId::TIMESTAMP:
+			child.format = "tsu:";
+			break;
+		case LogicalTypeId::TIMESTAMP_SEC:
+			child.format = "tss:";
+			break;
+		case LogicalTypeId::TIMESTAMP_NS:
 			child.format = "tsn:";
+			break;
+		case LogicalTypeId::TIMESTAMP_MS:
+			child.format = "tsm:";
 			break;
 		default:
 			throw NotImplementedException("Unsupported Arrow type " + types[col_idx].ToString());
 		}
-		out_schema->children[col_idx] = &child;
 	}
+
+	// Release ownership to caller
+	out_schema->private_data = root_holder.release();
+	out_schema->release = ReleaseDuckDBArrowSchema;
 }
 
 } // namespace duckdb

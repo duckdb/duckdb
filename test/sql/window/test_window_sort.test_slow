@@ -1,0 +1,78 @@
+# name: test/sql/window/test_window_sort.test_slow
+# description: Compare window function sorting with ORDER BY sorting on TPC-H's lineitem
+# group: [window]
+
+require tpch
+
+statement ok
+PRAGMA threads=4
+
+statement ok
+CALL dbgen(sf=1);
+
+statement ok
+pragma force_parallelism
+
+# derive table from lineitem that has a deterministic sorting order on l_extendedprice
+statement ok
+CREATE TABLE lineitem_d AS (
+  SELECT DISTINCT ON (l_extendedprice) *
+  FROM lineitem
+);
+
+# use lag to find rows that are out of place
+query IIIIIIIIIIIIIIIII nosort q0
+with lineitem_ord as (select * from lineitem_d order by l_extendedprice),
+lag_window as (select *, case when l_extendedprice < lag(l_extendedprice) over () then 1 else 0 end incorrect_order from lineitem_ord)
+select * from lag_window order by l_extendedprice
+----
+
+query IIIIIIIIIIIIIIIII nosort q0
+with lag_window as (select *, case when l_extendedprice < lag(l_extendedprice) over (order by l_extendedprice) then 1 else 0 end incorrect_order from lineitem_d)
+select * from lag_window order by l_extendedprice
+----
+
+# compare order with window function order (structs)
+query III nosort q1
+with lineitem_ord as (select * from lineitem_d order by l_extendedprice),
+rownum_window as (select l_extendedprice, struct_pack(sd:=l_shipdate, cd:=l_commitdate, rd:=l_receiptdate), row_number() over () from lineitem_ord)
+select * from rownum_window order by l_extendedprice
+----
+
+query III nosort q1
+with rownum_window as (select l_extendedprice, struct_pack(sd:=l_shipdate, cd:=l_commitdate, rd:=l_receiptdate), row_number() over (order by l_extendedprice) from lineitem_d)
+select * from rownum_window order by l_extendedprice
+----
+
+query III nosort q2
+with lineitem_ord as (select * from lineitem_d order by l_extendedprice),
+rownum_window as (select l_extendedprice, struct_pack(si:=l_shipinstruct, sm:=l_shipmode, c:=l_comment), row_number() over () from lineitem_ord)
+select * from rownum_window order by l_extendedprice
+----
+
+query III nosort q2
+with rownum_window as (select l_extendedprice, struct_pack(si:=l_shipinstruct, sm:=l_shipmode, c:=l_comment), row_number() over (order by l_extendedprice) from lineitem_d)
+select * from rownum_window order by l_extendedprice
+----
+
+# compare order with window function order (lists)
+query IIIII nosort q3
+with lineitem_ord as (select * from lineitem_d order by l_extendedprice),
+rownum_window as (select l_extendedprice, list_value(l_shipdate), list_value(l_commitdate), list_value(l_receiptdate), row_number() over () from lineitem_ord)
+select * from rownum_window order by l_extendedprice
+----
+
+query IIIII nosort q3
+select l_extendedprice, list_value(l_shipdate), list_value(l_commitdate), list_value(l_receiptdate), row_number() over (order by l_extendedprice) from lineitem_d;
+----
+
+query IIIII nosort q4
+with lineitem_ord as (select * from lineitem_d order by l_extendedprice),
+rownum_window as (select l_extendedprice, list_value(l_shipinstruct), list_value(l_shipmode), list_value(l_comment), row_number() over () from lineitem_ord)
+select * from rownum_window order by l_extendedprice
+----
+
+query IIIII nosort q4
+with rownum_window as (select l_extendedprice, list_value(l_shipinstruct), list_value(l_shipmode), list_value(l_comment), row_number() over (order by l_extendedprice) from lineitem_d)
+select * from rownum_window order by l_extendedprice
+----

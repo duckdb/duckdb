@@ -12,6 +12,8 @@
 
 namespace duckdb {
 
+static_assert(sizeof(dtime_t) == sizeof(int64_t), "dtime_t was padded");
+
 // string format is hh:mm:ss.microsecondsZ
 // microseconds and Z are optional
 // ISO 8601
@@ -80,7 +82,8 @@ bool Time::TryConvertTime(const char *buf, idx_t len, idx_t &pos, dtime_t &resul
 	}
 
 	micros = 0;
-	if (pos < len && buf[pos++] == '.') {
+	if (pos < len && buf[pos] == '.') {
+		pos++;
 		// we expect some microseconds
 		int32_t mult = 100000;
 		for (; pos < len && StringUtil::CharacterIsDigit(buf[pos]); pos++, mult /= 10) {
@@ -141,12 +144,12 @@ string Time::Format(int32_t hour, int32_t minute, int32_t second, int32_t micros
 }
 
 dtime_t Time::FromTime(int32_t hour, int32_t minute, int32_t second, int32_t microseconds) {
-	dtime_t result;
+	int64_t result;
 	result = hour;                                             // hours
 	result = result * Interval::MINS_PER_HOUR + minute;        // hours -> minutes
 	result = result * Interval::SECS_PER_MINUTE + second;      // minutes -> seconds
 	result = result * Interval::MICROS_PER_SEC + microseconds; // seconds -> microseconds
-	return result;
+	return dtime_t(result);
 }
 
 bool Time::IsValidTime(int32_t hour, int32_t minute, int32_t second, int32_t microseconds) {
@@ -165,13 +168,14 @@ bool Time::IsValidTime(int32_t hour, int32_t minute, int32_t second, int32_t mic
 	return true;
 }
 
-void Time::Convert(dtime_t time, int32_t &hour, int32_t &min, int32_t &sec, int32_t &micros) {
+void Time::Convert(dtime_t dtime, int32_t &hour, int32_t &min, int32_t &sec, int32_t &micros) {
+	int64_t time = dtime.micros;
 	hour = int32_t(time / Interval::MICROS_PER_HOUR);
-	time -= dtime_t(hour) * Interval::MICROS_PER_HOUR;
+	time -= int64_t(hour) * Interval::MICROS_PER_HOUR;
 	min = int32_t(time / Interval::MICROS_PER_MINUTE);
-	time -= dtime_t(min) * Interval::MICROS_PER_MINUTE;
+	time -= int64_t(min) * Interval::MICROS_PER_MINUTE;
 	sec = int32_t(time / Interval::MICROS_PER_SEC);
-	time -= dtime_t(sec) * Interval::MICROS_PER_SEC;
+	time -= int64_t(sec) * Interval::MICROS_PER_SEC;
 	micros = int32_t(time);
 	D_ASSERT(IsValidTime(hour, min, sec, micros));
 }

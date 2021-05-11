@@ -35,7 +35,7 @@ struct ParquetReadBindData : public FunctionData {
 	shared_ptr<ParquetReader> initial_reader;
 	vector<string> files;
 	vector<column_t> column_ids;
-	std::atomic<idx_t> chunk_count;
+	atomic<idx_t> chunk_count;
 	idx_t cur_file;
 };
 
@@ -49,7 +49,7 @@ struct ParquetReadOperatorData : public FunctionOperatorData {
 };
 
 struct ParquetReadParallelState : public ParallelState {
-	std::mutex lock;
+	mutex lock;
 	shared_ptr<ParquetReader> current_reader;
 	idx_t file_index;
 	idx_t row_group_index;
@@ -62,8 +62,8 @@ public:
 	                    ParquetScanInit, /* statistics */ ParquetScanStats, /* cleanup */ nullptr,
 	                    /* dependency */ nullptr, ParquetCardinality,
 	                    /* pushdown_complex_filter */ nullptr, /* to_string */ nullptr, ParquetScanMaxThreads,
-	                    ParquetInitParallelState, ParquetScanParallelInit, ParquetParallelStateNext, true, true,
-	                    ParquetProgress) {
+	                    ParquetInitParallelState, ParquetScanFuncParallel, ParquetScanParallelInit,
+	                    ParquetParallelStateNext, true, true, ParquetProgress) {
 	}
 
 	static unique_ptr<FunctionData> ParquetReadBind(ClientContext &context, CopyInfo &info,
@@ -94,9 +94,9 @@ public:
 		// we do not want to parse the Parquet metadata for the sole purpose of getting column statistics
 
 		// We already parsed the metadata for the first file in a glob because we need some type info.
-		auto overall_stats =
-		    ParquetReader::ReadStatistics(bind_data.initial_reader->return_types[column_index], column_index,
-		                                  bind_data.initial_reader->metadata->metadata.get());
+		auto overall_stats = ParquetReader::ReadStatistics(
+		    *bind_data.initial_reader, bind_data.initial_reader->return_types[column_index], column_index,
+		    bind_data.initial_reader->metadata->metadata.get());
 
 		if (!overall_stats) {
 			return nullptr;
@@ -121,7 +121,8 @@ public:
 					return nullptr;
 				}
 				// get and merge stats for file
-				auto file_stats = ParquetReader::ReadStatistics(bind_data.initial_reader->return_types[column_index],
+				auto file_stats = ParquetReader::ReadStatistics(*bind_data.initial_reader,
+				                                                bind_data.initial_reader->return_types[column_index],
 				                                                column_index, metadata->metadata.get());
 				if (!file_stats) {
 					return nullptr;
@@ -135,6 +136,12 @@ public:
 		return nullptr;
 	}
 
+	static void ParquetScanFuncParallel(ClientContext &context, const FunctionData *bind_data,
+	                                    FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output,
+	                                    ParallelState *parallel_state_p) {
+		//! FIXME: Have specialized parallel function from pandas scan here
+		ParquetScanImplementation(context, bind_data, operator_state, input, output);
+	}
 	static unique_ptr<FunctionData> ParquetScanBind(ClientContext &context, vector<Value> &inputs,
 	                                                unordered_map<string, Value> &named_parameters,
 	                                                vector<LogicalType> &input_table_types,
@@ -298,7 +305,7 @@ struct ParquetWriteBindData : public FunctionData {
 	vector<LogicalType> sql_types;
 	string file_name;
 	vector<string> column_names;
-	parquet::format::CompressionCodec::type codec = parquet::format::CompressionCodec::SNAPPY;
+	duckdb_parquet::format::CompressionCodec::type codec = duckdb_parquet::format::CompressionCodec::SNAPPY;
 };
 
 struct ParquetWriteGlobalState : public GlobalFunctionData {
@@ -322,16 +329,16 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyInfo &info
 			if (!option.second.empty()) {
 				auto roption = StringUtil::Lower(option.second[0].ToString());
 				if (roption == "uncompressed") {
-					bind_data->codec = parquet::format::CompressionCodec::UNCOMPRESSED;
+					bind_data->codec = duckdb_parquet::format::CompressionCodec::UNCOMPRESSED;
 					continue;
 				} else if (roption == "snappy") {
-					bind_data->codec = parquet::format::CompressionCodec::SNAPPY;
+					bind_data->codec = duckdb_parquet::format::CompressionCodec::SNAPPY;
 					continue;
 				} else if (roption == "gzip") {
-					bind_data->codec = parquet::format::CompressionCodec::GZIP;
+					bind_data->codec = duckdb_parquet::format::CompressionCodec::GZIP;
 					continue;
 				} else if (roption == "zstd") {
-					bind_data->codec = parquet::format::CompressionCodec::ZSTD;
+					bind_data->codec = duckdb_parquet::format::CompressionCodec::ZSTD;
 					continue;
 				}
 			}

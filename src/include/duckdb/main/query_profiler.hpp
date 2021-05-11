@@ -35,7 +35,7 @@ struct ExpressionInformation {
 	bool hasfunction = false;
 	string name;
 	string function_name;
-	uint64_t time = 0;
+	double time = 0;
 };
 
 struct ExpressionExecutorInformation {
@@ -111,7 +111,8 @@ private:
 
 public:
 	DUCKDB_API QueryProfiler()
-	    : automatic_print_format(ProfilerPrintFormat::NONE), enabled(false), detailed_enabled(false), running(false) {
+	    : automatic_print_format(ProfilerPrintFormat::NONE), enabled(false), detailed_enabled(false), running(false),
+	      query_requires_profiling(false) {
 	}
 
 	DUCKDB_API void Enable() {

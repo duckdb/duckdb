@@ -20,7 +20,7 @@ public:
 	CreateTableAsGlobalState() {
 		inserted_count = 0;
 	}
-	std::mutex append_lock;
+	mutex append_lock;
 	TableCatalogEntry *table;
 	int64_t inserted_count;
 };
@@ -33,7 +33,7 @@ unique_ptr<GlobalOperatorState> PhysicalCreateTableAs::GetGlobalState(ClientCont
 }
 
 void PhysicalCreateTableAs::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_p,
-                                 DataChunk &input) {
+                                 DataChunk &input) const {
 	auto &sink = (CreateTableAsGlobalState &)state;
 	if (sink.table) {
 		lock_guard<mutex> client_guard(sink.append_lock);

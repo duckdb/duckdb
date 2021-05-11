@@ -16,7 +16,8 @@ extensions = ['.cpp', '.c', '.hpp', '.h', '.cc', '.hh', 'CMakeLists.txt', '.test
 formatted_directories = ['src', 'benchmark', 'test', 'tools', 'examples', 'extension']
 ignored_files = ['tpch_constants.hpp', 'tpcds_constants.hpp', '_generated', 'tpce_flat_input.hpp',
                  'test_csv_header.hpp', 'duckdb.cpp', 'duckdb.hpp', 'json.hpp', 'sqlite3.h', 'shell.c',
-                 'termcolor.hpp', 'test_insert_invalid.test', 'httplib.hpp', 'os_win.c', 'glob.c', 'printf.c']
+                 'termcolor.hpp', 'test_insert_invalid.test', 'httplib.hpp', 'os_win.c', 'glob.c', 'printf.c',
+                 'helper.hpp', 'single_thread_ptr.hpp','types.hpp']
 ignored_directories = ['.eggs', '__pycache__', 'icu', 'dbgen']
 format_all = False
 check_only = True
@@ -266,7 +267,10 @@ def format_directory(directory):
 
 
 if format_all:
-    os.system(cmake_format_command.replace("${FILE}", "CMakeLists.txt"))
+    try:
+        os.system(cmake_format_command.replace("${FILE}", "CMakeLists.txt"))
+    except:
+        pass
     format_directory('src')
     format_directory('benchmark')
     format_directory('test')

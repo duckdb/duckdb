@@ -12,7 +12,7 @@ using namespace std;
 namespace test_concurrent_update {
 
 static constexpr int CONCURRENT_UPDATE_TRANSACTION_UPDATE_COUNT = 1000;
-static constexpr int CONCURRENT_UPDATE_TOTAL_ACCOUNTS = 20;
+static constexpr int CONCURRENT_UPDATE_TOTAL_ACCOUNTS = 10;
 static constexpr int CONCURRENT_UPDATE_MONEY_PER_ACCOUNT = 10;
 
 TEST_CASE("Single thread update", "[interquery][.]") {

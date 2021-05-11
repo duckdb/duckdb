@@ -36,9 +36,10 @@ struct InterpretedBenchmarkState : public BenchmarkState {
 	DuckDB db;
 	Connection con;
 	unique_ptr<MaterializedQueryResult> result;
-
 	InterpretedBenchmarkState() : db(nullptr), con(db) {
 		con.EnableProfiling();
+		auto res = con.Query("PRAGMA threads=1");
+		D_ASSERT(res->success);
 	}
 };
 
