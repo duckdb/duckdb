@@ -452,4 +452,26 @@ shared_ptr<ColumnData> ColumnData::Deserialize(DatabaseInstance &db, idx_t start
 	return StandardColumnData::Deserialize(db, start_row, source, type);
 }
 
+void ColumnData::Verify(RowGroup &parent) {
+#ifdef DEBUG
+	D_ASSERT(this->start == parent.start);
+	auto root = data.GetRootSegment();
+	if (parent.count == 0) {
+		D_ASSERT(root == nullptr);
+	} else {
+		D_ASSERT(root != nullptr);
+		D_ASSERT(root->start == this->start);
+		idx_t prev_end = root->start;
+		while(root) {
+			D_ASSERT(prev_end == root->start);
+			prev_end = root->start + root->count;
+			if (!root->next) {
+				D_ASSERT(prev_end == parent.start + parent.count);
+			}
+			root = root->next.get();
+		}
+	}
+#endif
+}
+
 } // namespace duckdb

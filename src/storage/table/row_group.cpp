@@ -19,6 +19,8 @@ constexpr const idx_t RowGroup::ROW_GROUP_LAYER_SIZE;
 
 RowGroup::RowGroup(DatabaseInstance &db, DataTableInfo &table_info, idx_t start, idx_t count)
     : SegmentBase(start, count), db(db), table_info(table_info) {
+
+	Verify();
 }
 
 RowGroup::RowGroup(DatabaseInstance &db, DataTableInfo &table_info, const vector<LogicalType> &types,
@@ -40,6 +42,8 @@ RowGroup::RowGroup(DatabaseInstance &db, DataTableInfo &table_info, const vector
 		this->stats.push_back(make_shared<SegmentStatistics>(stats->type, move(stats)));
 	}
 	this->version_info = move(pointer.versions);
+
+	Verify();
 }
 
 RowGroup::~RowGroup() {
@@ -91,6 +95,8 @@ void RowGroup::InitializeScan(RowGroupScanState &state) {
 unique_ptr<RowGroup> RowGroup::AlterType(ClientContext &context, const LogicalType &target_type, idx_t changed_idx,
                                          ExpressionExecutor &executor, TableScanState &scan_state,
                                          DataChunk &scan_chunk) {
+	Verify();
+
 	// construct a new column data for this type
 	auto column_data = make_shared<StandardColumnData>(GetDatabase(), start, target_type);
 
@@ -131,11 +137,14 @@ unique_ptr<RowGroup> RowGroup::AlterType(ClientContext &context, const LogicalTy
 			row_group->stats.push_back(stats[i]);
 		}
 	}
+	row_group->Verify();
 	return row_group;
 }
 
 unique_ptr<RowGroup> RowGroup::AddColumn(ClientContext &context, ColumnDefinition &new_column,
                                          ExpressionExecutor &executor, Expression *default_value, Vector &result) {
+	Verify();
+
 	// construct a new column data for the new column
 	auto added_column = make_shared<StandardColumnData>(GetDatabase(), start, new_column.type);
 
@@ -165,10 +174,14 @@ unique_ptr<RowGroup> RowGroup::AddColumn(ClientContext &context, ColumnDefinitio
 	// now add the new column
 	row_group->columns.push_back(move(added_column));
 	row_group->stats.push_back(move(added_col_stats));
+
+	row_group->Verify();
 	return row_group;
 }
 
 unique_ptr<RowGroup> RowGroup::RemoveColumn(idx_t removed_column) {
+	Verify();
+
 	D_ASSERT(removed_column < columns.size());
 
 	auto row_group = make_unique<RowGroup>(db, table_info, this->start, this->count);
@@ -179,6 +192,8 @@ unique_ptr<RowGroup> RowGroup::RemoveColumn(idx_t removed_column) {
 	// now remove the column
 	row_group->columns.erase(row_group->columns.begin() + removed_column);
 	row_group->stats.erase(row_group->stats.begin() + removed_column);
+
+	row_group->Verify();
 	return row_group;
 }
 
@@ -422,6 +437,7 @@ void RowGroup::RevertAppend(idx_t row_group_start) {
 		column->RevertAppend(row_group_start);
 	}
 	this->count = MinValue<idx_t>(row_group_start - this->start, this->count);
+	Verify();
 }
 
 void RowGroup::InitializeAppend(Transaction &transaction, RowGroupAppendState &append_state,
@@ -444,6 +460,7 @@ void RowGroup::Append(RowGroupAppendState &state, DataChunk &chunk, idx_t append
 		columns[i]->Append(*stats[i]->statistics, state.states[i], chunk.data[i], append_count);
 	}
 	state.offset_in_row_group += append_count;
+	Verify();
 }
 
 void RowGroup::Update(Transaction &transaction, DataChunk &update_chunk, Vector &row_ids,
@@ -633,6 +650,14 @@ void RowGroup::Delete(Transaction &transaction, DataTable *table, Vector &row_id
 		del_state.Delete(ids[ridx] - this->start);
 	}
 	del_state.Flush();
+}
+
+void RowGroup::Verify() {
+#ifdef DEBUG
+	for(auto &column : columns) {
+		column->Verify(*this);
+	}
+#endif
 }
 
 void VersionDeleteState::Delete(row_t row_id) {

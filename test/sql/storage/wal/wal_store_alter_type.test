@@ -35,8 +35,39 @@ SELECT * FROM test ORDER BY 1
 12	21
 13	22
 
+restart
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+query IT
+SELECT * FROM test ORDER BY 1
+----
+11	22
+12	21
+13	22
+
 statement ok
 INSERT INTO test VALUES (10, 'hello')
+
+query IT
+SELECT * FROM test ORDER BY 1
+----
+10	hello
+11	22
+12	21
+13	22
+
+restart
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
 
 query IT
 SELECT * FROM test ORDER BY 1
@@ -60,6 +91,16 @@ SELECT * FROM test ORDER BY 1
 
 statement ok
 INSERT INTO test VALUES (10, 'hello')
+
+query IT
+SELECT * FROM test ORDER BY 1
+----
+10	hello
+11	22
+12	21
+13	22
+
+restart
 
 query IT
 SELECT * FROM test ORDER BY 1

@@ -90,6 +90,7 @@ public:
 	static shared_ptr<ColumnData> Deserialize(DatabaseInstance &db, idx_t start_row, Deserializer &source,
 	                                          const LogicalType &type);
 
+	virtual void Verify(RowGroup &parent);
 protected:
 	//! Append a transient segment
 	void AppendTransientSegment(idx_t start_row);

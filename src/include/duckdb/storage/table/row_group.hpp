@@ -123,6 +123,7 @@ public:
 	void MergeStatistics(idx_t column_idx, BaseStatistics &other);
 	unique_ptr<BaseStatistics> GetStatistics(idx_t column_idx);
 
+	void Verify();
 private:
 	ChunkInfo *GetChunkInfo(idx_t vector_idx);
 
