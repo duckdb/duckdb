@@ -1918,7 +1918,7 @@ struct DecimalCastOperation {
 	static bool HandleExponent(T &state, int64_t exponent) {
 		Finalize<T>(state);
 		if (exponent < 0) {
-			for(idx_t i = 0; i < idx_t(-exponent); i++) {
+			for (idx_t i = 0; i < idx_t(-exponent); i++) {
 				state.result /= 10;
 				if (state.result == 0) {
 					break;
@@ -1927,7 +1927,7 @@ struct DecimalCastOperation {
 			return true;
 		} else {
 			// positive exponent: append 0's
-			for(idx_t i = 0; i < idx_t(exponent); i++) {
+			for (idx_t i = 0; i < idx_t(exponent); i++) {
 				if (!HandleDigit<T, NEGATIVE>(state, 0)) {
 					return false;
 				}
@@ -1974,7 +1974,7 @@ T DecimalStringCast(string_t input, uint8_t width, uint8_t scale) {
 	state.digit_count = 0;
 	state.decimal_count = 0;
 	if (!TryIntegerCast<DecimalCastData<T>, true, DecimalCastOperation, false>(input.GetDataUnsafe(), input.GetSize(),
-	                                                                            state, false)) {
+	                                                                           state, false)) {
 		throw ConversionException("Could not convert string \"%s\" to DECIMAL(%d,%d)", input.GetString(), (int)width,
 		                          (int)scale);
 	}
