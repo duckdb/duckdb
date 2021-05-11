@@ -142,7 +142,7 @@ public:
 };
 
 void PhysicalNestedLoopJoin::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
-                                  DataChunk &input) {
+                                  DataChunk &input) const {
 	auto &gstate = (NestedLoopJoinGlobalState &)state;
 	auto &nlj_state = (NestedLoopJoinLocalState &)lstate;
 
@@ -162,7 +162,7 @@ void PhysicalNestedLoopJoin::Sink(ExecutionContext &context, GlobalOperatorState
 	gstate.right_chunks.Append(nlj_state.right_condition);
 }
 
-void PhysicalNestedLoopJoin::Finalize(Pipeline &pipeline, ClientContext &context,
+bool PhysicalNestedLoopJoin::Finalize(Pipeline &pipeline, ClientContext &context,
                                       unique_ptr<GlobalOperatorState> state) {
 	auto &gstate = (NestedLoopJoinGlobalState &)*state;
 	if (join_type == JoinType::OUTER || join_type == JoinType::RIGHT) {
@@ -171,6 +171,7 @@ void PhysicalNestedLoopJoin::Finalize(Pipeline &pipeline, ClientContext &context
 		memset(gstate.right_found_match.get(), 0, sizeof(bool) * gstate.right_data.Count());
 	}
 	PhysicalSink::Finalize(pipeline, context, move(state));
+	return true;
 }
 
 unique_ptr<GlobalOperatorState> PhysicalNestedLoopJoin::GetGlobalState(ClientContext &context) {

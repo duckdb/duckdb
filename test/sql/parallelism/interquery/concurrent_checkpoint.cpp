@@ -13,7 +13,7 @@ using namespace std;
 class ConcurrentCheckpoint {
 public:
 	static constexpr int CONCURRENT_UPDATE_TRANSACTION_UPDATE_COUNT = 200;
-	static constexpr int CONCURRENT_UPDATE_TOTAL_ACCOUNTS = 20;
+	static constexpr int CONCURRENT_UPDATE_TOTAL_ACCOUNTS = 10;
 	static constexpr int CONCURRENT_UPDATE_MONEY_PER_ACCOUNT = 10;
 
 	static atomic<bool> finished;

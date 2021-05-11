@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/storage/storage_info.hpp"
 
 namespace duckdb {
@@ -48,15 +49,15 @@ private:
 	//! Whether or not the block is loaded/unloaded
 	BlockState state;
 	// amount of concurrent readers
-	int32_t readers;
+	atomic<int32_t> readers;
 	//! The block id of the block
-	block_id_t block_id;
+	const block_id_t block_id;
 	//! Pointer to loaded data (if any)
 	unique_ptr<FileBuffer> buffer;
 	//! Internal eviction timestamp
-	idx_t eviction_timestamp;
+	atomic<idx_t> eviction_timestamp;
 	//! Whether or not the buffer can be destroyed (only used for temporary buffers)
-	bool can_destroy;
+	const bool can_destroy;
 	//! The memory usage of the block
 	idx_t memory_usage;
 };

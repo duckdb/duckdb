@@ -29,10 +29,10 @@ static void create_drop_table(DuckDB *db) {
 	while (!finished) {
 		// printf("[TABLE] Create table\n");
 		// create the table: this should never fail
-		REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
-		REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
-		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3), (4), (5)"));
-		REQUIRE_NO_FAIL(con.Query("COMMIT"));
+		(con.Query("BEGIN TRANSACTION"));
+		(con.Query("CREATE TABLE integers(i INTEGER)"));
+		(con.Query("INSERT INTO integers VALUES (1), (2), (3), (4), (5)"));
+		(con.Query("COMMIT"));
 		// now wait a bit
 		this_thread::sleep_for(chrono::milliseconds(20));
 		// printf("[TABLE] Drop table\n");
@@ -57,7 +57,7 @@ static void create_use_prepared_statement(DuckDB *db) {
 			if (!result->success) {
 				break;
 			} else {
-				REQUIRE(CHECK_COLUMN(result, 0, {15}));
+				D_ASSERT(CHECK_COLUMN(result, 0, {15}));
 			}
 		}
 	}

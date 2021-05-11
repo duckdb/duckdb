@@ -1,8 +1,8 @@
 #include "duckdb_python/pybind_wrapper.hpp"
 
-#include <unordered_map>
-#include <vector>
-#include <atomic>
+#include "duckdb/common/atomic.hpp"
+#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/vector.hpp"
 
 #include "duckdb_python/array_wrapper.hpp"
 #include "duckdb_python/pandas_scan.hpp"

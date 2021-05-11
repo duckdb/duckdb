@@ -26,17 +26,14 @@ int ProgressBar::GetCurrentPercentage() {
 void ProgressBar::Start() {
 #ifndef DUCKDB_NO_THREADS
 	current_percentage = 0;
-	progress_bar_thread = std::thread(&ProgressBar::ProgressBarThread, this);
+	progress_bar_thread = thread(&ProgressBar::ProgressBarThread, this);
 #endif
 }
 
 void ProgressBar::Stop() {
 #ifndef DUCKDB_NO_THREADS
 	if (progress_bar_thread.joinable()) {
-		{
-			std::lock_guard<std::mutex> l(m);
-			stop = true;
-		}
+		stop = true;
 		c.notify_one();
 		progress_bar_thread.join();
 		if (supported && current_percentage > 0 && executor->context.print_progress_bar) {

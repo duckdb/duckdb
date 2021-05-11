@@ -949,7 +949,7 @@ int sqlite3_get_autocommit(sqlite3 *db) {
 	return 1;
 	// TODO fix this
 	// return db->con->context->transaction.IsAutoCommit();
-	fprintf(stderr, "sqlite3_get_autocommit: unsupported.\n");
+	// fprintf(stderr, "sqlite3_get_autocommit: unsupported.\n");
 }
 
 int sqlite3_limit(sqlite3 *, int id, int newVal) {
