@@ -470,6 +470,22 @@ void FileSystem::SetFilePointer(FileHandle &handle, idx_t location) {
 	}
 }
 
+idx_t FileSystem::GetFilePointer(FileHandle &handle) {
+	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
+	LARGE_INTEGER ret;
+
+	LARGE_INTEGER loc;
+	loc.QuadPart=0;
+
+	auto rc = SetFilePointerEx(hFile, pos, &ret, FILE_CURRENT);
+	if (rc == 0) {
+		auto error = GetLastErrorAsString();
+		throw IOException("Could not get file pointer for file \"%s\": %s", handle.path, error);
+	}
+
+	return ret.QuadPart;
+}
+
 int64_t FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
 	DWORD bytes_read;
