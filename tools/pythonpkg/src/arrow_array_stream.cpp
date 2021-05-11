@@ -4,9 +4,9 @@
 
 namespace duckdb {
 
-PythonTableArrowArrayStream::PythonTableArrowArrayStream(const py::object &arrow_table,
+PythonTableArrowArrayStream::PythonTableArrowArrayStream(PyObject *arrow_table_p,
                                                          PythonTableArrowArrayStreamFactory *factory)
-    : factory(factory), arrow_table(arrow_table) {
+    : factory(factory), arrow_table(arrow_table_p) {
 	stream = make_unique<ArrowArrayStream>();
 	InitializeFunctionPointers(stream.get());
 	py::gil_scoped_acquire acquire;
@@ -27,13 +27,12 @@ void PythonTableArrowArrayStream::InitializeFunctionPointers(ArrowArrayStream *s
 }
 
 unique_ptr<ArrowArrayStream> PythonTableArrowArrayStreamFactory::Produce(uintptr_t factory_ptr) {
-	py::gil_scoped_acquire acquire;
 	PythonTableArrowArrayStreamFactory *factory = (PythonTableArrowArrayStreamFactory *)factory_ptr;
 	if (!factory->arrow_table) {
 		return nullptr;
 	}
 	//! This is a bit hacky, but has to be this way to hide pybind from the main duckdb lib
-	auto table_stream = new PythonTableArrowArrayStream(factory->arrow_table, factory);
+	auto table_stream = new PythonTableArrowArrayStream(factory->arrow_table.ptr(), factory);
 	return move(table_stream->stream);
 }
 

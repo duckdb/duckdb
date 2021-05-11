@@ -24,6 +24,7 @@ public:
 	shared_ptr<DuckDB> database;
 	unique_ptr<Connection> connection;
 	unordered_map<string, py::object> registered_dfs;
+	unordered_map<string, py::object> registered_arrow;
 	unordered_map<string, unique_ptr<PythonTableArrowArrayStreamFactory>> registered_arrow_factory;
 	unique_ptr<DuckDBPyResult> result;
 	vector<shared_ptr<DuckDBPyConnection>> cursors;
@@ -43,7 +44,7 @@ public:
 	DuckDBPyConnection *RegisterDF(const string &name, py::object value);
 
 	unique_ptr<DuckDBPyRelation> FromQuery(const string &query, const string &alias = "query_relation");
-	DuckDBPyConnection *RegisterArrow(const string &name, const py::object &value);
+	DuckDBPyConnection *RegisterArrow(const string &name, py::object value);
 
 	unique_ptr<DuckDBPyRelation> Table(const string &tname);
 
@@ -59,7 +60,7 @@ public:
 
 	unique_ptr<DuckDBPyRelation> FromParquet(const string &filename);
 
-	unique_ptr<DuckDBPyRelation> FromArrowTable(const py::object &table);
+	unique_ptr<DuckDBPyRelation> FromArrowTable(py::object table);
 
 	DuckDBPyConnection *UnregisterDF(const string &name);
 
