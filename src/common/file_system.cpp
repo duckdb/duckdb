@@ -475,7 +475,7 @@ idx_t FileSystem::GetFilePointer(FileHandle &handle) {
 	LARGE_INTEGER ret;
 
 	LARGE_INTEGER loc;
-	loc.QuadPart=0;
+	loc.QuadPart = 0;
 
 	auto rc = SetFilePointerEx(hFile, pos, &ret, FILE_CURRENT);
 	if (rc == 0) {
