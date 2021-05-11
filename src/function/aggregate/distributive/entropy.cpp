@@ -14,8 +14,9 @@ struct EntropyState {
 	idx_t count;
 	DistinctMap *distinct;
 
-	// NOLINTNEXTLINE(bugprone-unhandled-self-assignment)
-	EntropyState &operator=(const EntropyState &other) {
+	EntropyState &operator=(const EntropyState &other) = delete;
+
+	EntropyState &Assign(const EntropyState &other) {
 		if (this == &other) {
 			return *this;
 		}
@@ -41,7 +42,7 @@ struct EntropyFunctionBase {
 			return;
 		}
 		if (!target->distinct) {
-			*target = source;
+			target->Assign(source);
 			return;
 		}
 		for (auto &val : *source.distinct) {
