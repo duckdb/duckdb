@@ -41,17 +41,17 @@ void CheckForPerfectJoin(LogicalComparisonJoin &op, PerfectHashJoinState &join_s
 	auto build_range = stats_build->max - stats_build->min;                           // Join Keys Range
 
 	if (build_range < PERFECT_HASH_THRESHOLD) {
-		join_state.is_build_small = true;
-		join_state.build_min = stats_build->min;
-		join_state.build_max = stats_build->max;
-	}
-	auto stats_probe = reinterpret_cast<NumericStatistics *>(op.join_stats[1].get()); // lhs stats
-	auto probe_range = stats_probe->max - stats_probe->min;                           // Join Keys Range
+		auto stats_probe = reinterpret_cast<NumericStatistics *>(op.join_stats[1].get()); // rhs stats
 
-	if (probe_range < PERFECT_HASH_THRESHOLD) {
-		join_state.is_probe_small = true;
+		join_state.is_build_small = true;
 		join_state.probe_min = stats_probe->min;
 		join_state.probe_max = stats_probe->max;
+		join_state.build_min = stats_build->min;
+		join_state.build_max = stats_build->max;
+		// check whether the probe min-max is in the build min-max
+		if (stats_build->min <= stats_probe->min && stats_probe->max <= stats_build->max) {
+			join_state.is_probe_in_range = true;
+		}
 	}
 }
 

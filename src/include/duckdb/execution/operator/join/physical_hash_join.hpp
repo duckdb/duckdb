@@ -23,7 +23,7 @@ struct PerfectHashJoinState {
 	Value probe_min;
 	Value probe_max;
 	bool is_build_small {false};
-	bool is_probe_small {false};
+	bool is_probe_in_range {false};
 };
 
 class PhysicalHashJoinState : public PhysicalOperatorState {
