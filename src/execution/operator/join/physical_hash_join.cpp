@@ -130,7 +130,7 @@ bool PhysicalHashJoin::Finalize(Pipeline &pipeline, ClientContext &context, uniq
 	auto &sink = (HashJoinGlobalState &)*state;
 	// We only do this optimization when all the requirements are true
 	// check for possible perfect hash table
-	// CheckRequirementsForPerfectHashJoin(sink.hash_table.get(), sink);
+	CheckRequirementsForPerfectHashJoin(sink.hash_table.get(), sink);
 	if (!hasBuiltPerfectHashTable) {
 		sink.hash_table->Finalize();
 	}
@@ -160,7 +160,7 @@ void PhysicalHashJoin::GetChunkInternal(ExecutionContext &context, DataChunk &ch
 		// empty hash table with INNER or SEMI join means empty result set
 		return;
 	}
-	// We first try a probe with a perfect hash table, otherwise we do the normal probe
+	// We first try a probe with a perfect hash table, otherwise we do the standard probe
 	if (IsInnerJoin(join_type) && ProbePerfectHashTable(context, chunk, state)) {
 		return;
 	}
@@ -253,51 +253,16 @@ bool PhysicalHashJoin::ProbePerfectHashTable(ExecutionContext &context, DataChun
 	}
 	// fetch the  join keys
 	physical_state->probe_executor.Execute(physical_state->child_chunk, physical_state->join_keys);
-
-	// gets the data and selection vector
-	VectorData keys_data;
-	auto keys_size = physical_state->join_keys.size();  // number of keys
-	auto keys_vec = &physical_state->join_keys.data[0]; // keys vector
-	// keys_vec->Orrify(keys_size, keys_data);             // get the keys data (Decompress) convert
-	auto ldata = (int32_t *)keys_data.data; // cast to a typed buffer (TODO: switch case with multiple types)
-
-	// go trough the join_keys and fill the selection vector with the matches
-	SelectionVector matches(STANDARD_VECTOR_SIZE);
-	size_t sel_idx {0};
-	auto min_value = perfect_join_state.minimum.GetValue<int32_t>();
-	auto max_value = perfect_join_state.maximum.GetValue<int32_t>();
-	for (idx_t idx = 0; idx != physical_state->join_keys.size(); ++idx) {
-		// a match means that ldata is in the range
-		if (min_value <= ldata[idx] && ldata[idx] <= max_value) {
-			matches.set_index(sel_idx++, idx);
-		}
-	}
-	auto result_count = sel_idx;
+	// select the keys that are in the min-max range
+	Vector matches;
+	auto &keys_vec = physical_state->join_keys.data[0];
+	auto keys_count = physical_state->join_keys.size();
+	MinMaxRangeSwitch(keys_vec, matches, keys_count);
 	// slice for the left side
-	result.Slice(physical_state->child_chunk, matches, result_count);
+	// result.Slice(physical_state->child_chunk, matches, result_count);
 
 	// now get the data from the build side
 	// first, set-up scan structure
-	auto global_state = reinterpret_cast<HashJoinGlobalState *>(sink_state.get());
-	auto hash_table_ptr = global_state->hash_table.get();
-	auto scan_structure = make_unique<JoinHashTable::ScanStructure>(*hash_table_ptr);
-	scan_structure->found_match = unique_ptr<bool[]>(new bool[STANDARD_VECTOR_SIZE]);
-	memset(scan_structure->found_match.get(), 0, sizeof(bool) * STANDARD_VECTOR_SIZE);
-	scan_structure->count = result_count;
-	// hash all the keys
-	Vector hashes(LogicalType::HASH);
-	hash_table_ptr->Hash(physical_state->join_keys, matches, scan_structure->count, hashes);
-
-	// now initialize the pointers of the scan structure based on the hashes
-	hash_table_ptr->ApplyBitmask(hashes, matches, scan_structure->count, scan_structure->pointers);
-	//	now gather the data from the build side
-	idx_t offset = hash_table_ptr->condition_size;
-	for (idx_t i = 0; i < hash_table_ptr->build_types.size(); i++) {
-		auto &vector = result.data[physical_state->child_chunk.ColumnCount() + i];
-		D_ASSERT(vector.GetType() == hash_table_ptr->build_types[i]);
-		scan_structure->GatherResult(vector, matches, result_count, offset);
-	}
-	// scan_structure->AdvancePointers();
 
 	return true;
 }
@@ -343,6 +308,64 @@ void PhysicalHashJoin::BuildPerfectHashStructure(JoinHashTable *hash_table_ptr, 
 		JoinHashTable::GatherResultVector(vector, FlatVector::INCREMENTAL_SELECTION_VECTOR,
 		                                  (uintptr_t *)&key_locations[0], FlatVector::INCREMENTAL_SELECTION_VECTOR,
 		                                  build_size, offset);
+	}
+}
+template <typename T>
+void PhysicalHashJoin::TemplatedMinMaxRange(Vector &source, Vector &result, idx_t count) {
+	auto min_value = perfect_join_state.minimum.GetValue<T>();
+	auto max_value = perfect_join_state.maximum.GetValue<T>();
+
+	UnaryExecutor::Execute<T, T>(source, result, count, [&](T input_value) {
+		// a match means that input is in the range
+		if (min_value <= input_value && input_value <= max_value) {
+			return input_value;
+		}
+		return NullValue<T>();
+	});
+}
+
+void PhysicalHashJoin::MinMaxRangeSwitch(Vector &source, Vector &result, idx_t count) {
+	// now switch on the result type
+	switch (result.GetType().id()) {
+	case LogicalTypeId::BOOLEAN:
+		TemplatedMinMaxRange<bool>(source, result, count);
+		break;
+	case LogicalTypeId::TINYINT:
+		TemplatedMinMaxRange<int8_t>(source, result, count);
+		break;
+	case LogicalTypeId::SMALLINT:
+		TemplatedMinMaxRange<int16_t>(source, result, count);
+		break;
+	case LogicalTypeId::INTEGER:
+		TemplatedMinMaxRange<int32_t>(source, result, count);
+		break;
+	case LogicalTypeId::BIGINT:
+		TemplatedMinMaxRange<int64_t>(source, result, count);
+		break;
+	case LogicalTypeId::UTINYINT:
+		TemplatedMinMaxRange<uint8_t>(source, result, count);
+		break;
+	case LogicalTypeId::USMALLINT:
+		TemplatedMinMaxRange<uint16_t>(source, result, count);
+		break;
+	case LogicalTypeId::UINTEGER:
+		TemplatedMinMaxRange<uint32_t>(source, result, count);
+		break;
+	case LogicalTypeId::UBIGINT:
+		TemplatedMinMaxRange<uint64_t>(source, result, count);
+		break;
+	case LogicalTypeId::HUGEINT:
+		TemplatedMinMaxRange<hugeint_t>(source, result, count);
+		break;
+	case LogicalTypeId::FLOAT:
+		TemplatedMinMaxRange<float>(source, result, count);
+		break;
+	case LogicalTypeId::DOUBLE:
+		TemplatedMinMaxRange<double>(source, result, count);
+		break;
+	default:
+		throw NotImplementedException("Type not supported");
+		break;
 	}
 }
 } // namespace duckdb

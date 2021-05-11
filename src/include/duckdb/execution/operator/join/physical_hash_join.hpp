@@ -90,6 +90,9 @@ public:
 	bool ProbePerfectHashTable(ExecutionContext &context, DataChunk &chunk, PhysicalHashJoinState *state);
 	void CheckRequirementsForPerfectHashJoin(JoinHashTable *ht_ptr, HashJoinGlobalState &join_global_state);
 	void BuildPerfectHashStructure(JoinHashTable *ht_ptr, JoinHTScanState &join_ht_state);
+	template <typename T>
+	void TemplatedMinMaxRange(Vector &source, Vector &result, idx_t count);
+	void MinMaxRangeSwitch(Vector &source, Vector &result, idx_t count);
 
 private:
 	void ProbeHashTable(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p);
