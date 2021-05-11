@@ -1,5 +1,5 @@
 #include "duckdb/planner/planner.hpp"
-
+#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"

@@ -367,7 +367,7 @@ string InterpretedBenchmark::BenchmarkInfo() {
 
 string InterpretedBenchmark::GetLogOutput(BenchmarkState *state_p) {
 	auto &state = (InterpretedBenchmarkState &)*state_p;
-	return state.con.context->profiler.ToJSON();
+	return state.con.context->profiler->ToJSON();
 }
 
 string InterpretedBenchmark::DisplayName() {

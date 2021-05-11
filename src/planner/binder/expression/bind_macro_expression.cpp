@@ -8,6 +8,7 @@
 #include "duckdb/parser/query_node/set_operation_node.hpp"
 #include "duckdb/parser/tableref/list.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 

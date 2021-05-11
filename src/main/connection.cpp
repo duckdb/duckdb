@@ -1,5 +1,5 @@
 #include "duckdb/main/connection.hpp"
-
+#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/appender.hpp"
