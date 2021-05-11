@@ -642,7 +642,7 @@ struct IntegerCastOperation {
 		return true;
 	}
 
-	template <class T>
+	template <class T, bool NEGATIVE>
 	static bool HandleExponent(T &result, int64_t exponent) {
 		double dbl_res = result * std::pow(10.0L, exponent);
 		if (dbl_res < NumericLimits<T>::Minimum() || dbl_res > NumericLimits<T>::Maximum()) {
@@ -682,19 +682,21 @@ static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) 
 				idx_t start_digit = pos;
 				while (pos < len) {
 					if (!StringUtil::CharacterIsDigit(buf[pos])) {
-						return false;
+						break;
 					}
 					if (!OP::template HandleDecimal<T, NEGATIVE>(result, buf[pos] - '0')) {
 						return false;
 					}
 					pos++;
 				}
-				if (!OP::template Finalize<T>(result)) {
-					return false;
-				}
 				// make sure there is either (1) one number after the period, or (2) one number before the period
 				// i.e. we accept "1." and ".1" as valid numbers, but not "."
-				return number_before_period || pos > start_digit;
+				if (!(number_before_period || pos > start_digit)) {
+					return false;
+				}
+				if (pos >= len) {
+					break;
+				}
 			}
 			if (StringUtil::CharacterIsSpace(buf[pos])) {
 				// skip any trailing spaces
@@ -722,7 +724,7 @@ static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) 
 							return false;
 						}
 					}
-					return OP::template HandleExponent<T>(result, exponent);
+					return OP::template HandleExponent<T, NEGATIVE>(result, exponent);
 				}
 			}
 			return false;
@@ -1539,7 +1541,7 @@ struct HugeIntegerCastOperation {
 		return true;
 	}
 
-	template <class T>
+	template <class T, bool NEGATIVE>
 	static bool HandleExponent(T &result, int64_t exponent) {
 		result.Flush();
 		if (exponent < -38 || exponent > 38) {
@@ -1912,9 +1914,26 @@ struct DecimalCastOperation {
 		return true;
 	}
 
-	template <class T>
+	template <class T, bool NEGATIVE>
 	static bool HandleExponent(T &state, int64_t exponent) {
-		return false;
+		Finalize<T>(state);
+		if (exponent < 0) {
+			for (idx_t i = 0; i < idx_t(-exponent); i++) {
+				state.result /= 10;
+				if (state.result == 0) {
+					break;
+				}
+			}
+			return true;
+		} else {
+			// positive exponent: append 0's
+			for (idx_t i = 0; i < idx_t(exponent); i++) {
+				if (!HandleDigit<T, NEGATIVE>(state, 0)) {
+					return false;
+				}
+			}
+			return true;
+		}
 	}
 
 	template <class T, bool NEGATIVE>
@@ -1954,8 +1973,8 @@ T DecimalStringCast(string_t input, uint8_t width, uint8_t scale) {
 	state.scale = scale;
 	state.digit_count = 0;
 	state.decimal_count = 0;
-	if (!TryIntegerCast<DecimalCastData<T>, false, DecimalCastOperation, false>(input.GetDataUnsafe(), input.GetSize(),
-	                                                                            state, false)) {
+	if (!TryIntegerCast<DecimalCastData<T>, true, DecimalCastOperation, false>(input.GetDataUnsafe(), input.GetSize(),
+	                                                                           state, false)) {
 		throw ConversionException("Could not convert string \"%s\" to DECIMAL(%d,%d)", input.GetString(), (int)width,
 		                          (int)scale);
 	}
