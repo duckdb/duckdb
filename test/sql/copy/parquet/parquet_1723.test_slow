@@ -1,5 +1,5 @@
-# name: test/sql/copy/parquet/parquet_1619.test
-# description: Error: Not implemented Error: Expr of type 347 not implemented
+# name: test/sql/copy/parquet/parquet_1723.test_slow
+# description: CREATE TABLE from parquet crashes latest bleeding edge
 # group: [parquet]
 
 require parquet
