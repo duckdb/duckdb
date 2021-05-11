@@ -4,10 +4,9 @@
 
 #include <fstream>
 #include <sstream>
-
+#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/client_context.hpp"
-
 #include "extension_helper.hpp"
 
 namespace duckdb {

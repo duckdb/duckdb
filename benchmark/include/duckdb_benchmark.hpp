@@ -14,6 +14,7 @@
 #include "duckdb.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "test_helpers.hpp"
+#include "duckdb/main/query_profiler.hpp"
 
 namespace duckdb {
 
