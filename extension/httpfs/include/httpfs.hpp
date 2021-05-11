@@ -36,7 +36,7 @@ public:
 	time_t last_modified;
 
 	std::unique_ptr<data_t[]> buffer;
-	constexpr static idx_t BUFFER_LEN = 100000; // FIXME make the buffer bigger
+	constexpr static idx_t BUFFER_LEN = 1000000;
 	idx_t buffer_available;
 	idx_t buffer_idx;
 	idx_t file_offset;
