@@ -34,11 +34,11 @@ public:
 	//! The list of column IDs required for the index
 	vector<column_t> column_ids;
 	//! Set of expressions to index by
-	mutable vector<unique_ptr<Expression>> expressions;
+	vector<unique_ptr<Expression>> expressions;
 	//! Info for index creation
 	unique_ptr<CreateIndexInfo> info;
 	//! Unbinded expressions to be used in the optimizer
-	mutable vector<unique_ptr<Expression>> unbound_expressions;
+	vector<unique_ptr<Expression>> unbound_expressions;
 
 public:
 	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const override;
