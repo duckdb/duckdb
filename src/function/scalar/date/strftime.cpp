@@ -203,11 +203,11 @@ bool StrfTimeFormat::IsDateSpecifier(StrTimeSpecifier specifier) {
 	switch (specifier) {
 	case StrTimeSpecifier::ABBREVIATED_WEEKDAY_NAME:
 	case StrTimeSpecifier::FULL_WEEKDAY_NAME:
-	case StrTimeSpecifier::WEEKDAY_DECIMAL:
 	case StrTimeSpecifier::DAY_OF_YEAR_PADDED:
+	case StrTimeSpecifier::DAY_OF_YEAR_DECIMAL:
 	case StrTimeSpecifier::WEEK_NUMBER_PADDED_MON_FIRST:
 	case StrTimeSpecifier::WEEK_NUMBER_PADDED_SUN_FIRST:
-	case StrTimeSpecifier::DAY_OF_YEAR_DECIMAL:
+	case StrTimeSpecifier::WEEKDAY_DECIMAL:
 		return true;
 	default:
 		return false;
@@ -641,16 +641,6 @@ void StrfTimeFun::RegisterFunction(BuiltinFunctions &set) {
 }
 
 void StrpTimeFormat::AddFormatSpecifier(string preceding_literal, StrTimeSpecifier specifier) {
-	switch (specifier) {
-	case StrTimeSpecifier::DAY_OF_YEAR_PADDED:
-	case StrTimeSpecifier::DAY_OF_YEAR_DECIMAL:
-	case StrTimeSpecifier::WEEKDAY_DECIMAL:
-	case StrTimeSpecifier::WEEK_NUMBER_PADDED_SUN_FIRST:
-	case StrTimeSpecifier::WEEK_NUMBER_PADDED_MON_FIRST:
-		throw NotImplementedException("Unimplemented specifier for strptime");
-	default:
-		break;
-	}
 	numeric_width.push_back(NumericSpecifierWidth(specifier));
 	StrTimeFormat::AddFormatSpecifier(move(preceding_literal), specifier);
 }
@@ -742,6 +732,11 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 	}
 	idx_t pos = 0;
 	TimeSpecifierAMOrPM ampm = TimeSpecifierAMOrPM::TIME_SPECIFIER_NONE;
+
+	auto offset_specifier = StrTimeSpecifier::WEEKDAY_DECIMAL;
+	uint64_t weekno = 0;
+	uint64_t weekday = 0;
+	uint64_t yearday = 0;
 
 	for (idx_t i = 0;; i++) {
 		// first compare the literal
@@ -870,6 +865,44 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 				// milliseconds
 				result_data[6] = number * 1000;
 				break;
+			case StrTimeSpecifier::WEEK_NUMBER_PADDED_SUN_FIRST:
+			case StrTimeSpecifier::WEEK_NUMBER_PADDED_MON_FIRST:
+				if (offset_specifier != StrTimeSpecifier::WEEKDAY_DECIMAL) {
+					error_message = "Multiple year offsets specified";
+					error_position = start_pos;
+					return false;
+				}
+				offset_specifier = specifiers[i];
+				if (number > 53) {
+					error_message = "Week out of range, expected a value between 0 and 53";
+					error_position = start_pos;
+					return false;
+				}
+				weekno = number;
+				break;
+			case StrTimeSpecifier::WEEKDAY_DECIMAL:
+				if (number > 6) {
+					error_message = "Weekday out of range, expected a value between 0 and 6";
+					error_position = start_pos;
+					return false;
+				}
+				weekday = number;
+				break;
+			case StrTimeSpecifier::DAY_OF_YEAR_PADDED:
+			case StrTimeSpecifier::DAY_OF_YEAR_DECIMAL:
+				if (offset_specifier != StrTimeSpecifier::WEEKDAY_DECIMAL) {
+					error_message = "Multiple year offsets specified";
+					error_position = start_pos;
+					return false;
+				}
+				if (number < 1 || number > 366) {
+					error_message = "Year day out of range, expected a value between 1 and 366";
+					error_position = start_pos;
+					return false;
+				}
+				offset_specifier = specifiers[i];
+				yearday = number;
+				break;
 			default:
 				throw NotImplementedException("Unsupported specifier for strptime");
 			}
@@ -982,6 +1015,31 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 			}
 		}
 	}
+	switch (offset_specifier) {
+	case StrTimeSpecifier::WEEK_NUMBER_PADDED_SUN_FIRST:
+	case StrTimeSpecifier::WEEK_NUMBER_PADDED_MON_FIRST: {
+		// Get the start of week 1, move back 7 days and the weekno * 7 + weekday
+		const auto jan1 = Date::FromDate(result_data[0], 1, 1);
+		auto yeardate = Date::GetMondayOfCurrentWeek(jan1);
+		yeardate -= int(offset_specifier == StrTimeSpecifier::WEEK_NUMBER_PADDED_SUN_FIRST);
+		// Is there a week 0?
+		yeardate -= 7 * int(yeardate >= jan1);
+		yeardate += weekno * 7 + weekday;
+		Date::Convert(yeardate, result_data[0], result_data[1], result_data[2]);
+		break;
+	}
+	case StrTimeSpecifier::DAY_OF_YEAR_PADDED:
+	case StrTimeSpecifier::DAY_OF_YEAR_DECIMAL: {
+		auto yeardate = Date::FromDate(result_data[0], 1, 1);
+		yeardate += yearday - 1;
+		Date::Convert(yeardate, result_data[0], result_data[1], result_data[2]);
+		break;
+	}
+	default:
+		D_ASSERT(offset_specifier == StrTimeSpecifier::WEEKDAY_DECIMAL);
+		break;
+	}
+
 	return true;
 }
 

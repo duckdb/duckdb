@@ -72,6 +72,45 @@ SELECT strptime('jun', '%b')
 ----
 1900-06-01 00:00:00
 
+# First Monday is jan 1
+query I
+SELECT strptime('1', '%W')
+----
+1900-01-01 00:00:00
+
+# First Sunday is jan 7
+query I
+SELECT strptime('1', '%U')
+----
+1900-01-07 00:00:00
+
+# Ignored
+query I
+SELECT strptime('6', '%w')
+----
+1900-01-01 00:00:00
+
+query I
+SELECT strptime('30', '%U')
+----
+1900-07-29 00:00:00
+
+query I
+SELECT strptime('30', '%W')
+----
+1900-07-23 00:00:00
+
+# 4 days after Monday
+query I
+SELECT strptime('1-4', '%W-%w')
+----
+1900-01-05 00:00:00
+
+query I
+SELECT strptime('30', '%j')
+----
+1900-01-30 00:00:00
+
 # empty specifier and string
 query I
 SELECT strptime('', '')
@@ -248,19 +287,39 @@ SELECT strptime('juke', '%B')
 statement error
 SELECT strptime('junee', '%B')
 
-# day of year not supported
+# day of year out of range
 statement error
-SELECT strptime('30', '%j')
+SELECT strptime('500', '%j')
 
 statement error
-SELECT strptime('30', '%-j')
-
-# week numbers not supported
-statement error
-SELECT strptime('30', '%U')
+SELECT strptime('500', '%-j')
 
 statement error
-SELECT strptime('30', '%W')
+SELECT strptime('0', '%j')
+
+statement error
+SELECT strptime('0', '%-j')
+
+# week numbers out of range
+statement error
+SELECT strptime('60', '%U')
+
+statement error
+SELECT strptime('60', '%W')
+
+# weekday out of range
+statement error
+SELECT strptime('9', '%w')
+
+# Multiple offset types
+statement error
+SELECT strptime('20 19', '%U %W')
+
+statement error
+SELECT strptime('20 19', '%U %j')
+
+statement error
+SELECT strptime('20 19', '%W %j')
 
 # AM/PM out of range
 statement error
