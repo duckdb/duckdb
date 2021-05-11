@@ -403,7 +403,7 @@ struct LocalReadCSVData : public LocalFunctionData {
 };
 
 struct GlobalWriteCSVData : public GlobalFunctionData {
-	GlobalWriteCSVData(FileSystem &fs, string file_path) : fs(fs) {
+	GlobalWriteCSVData(FileSystem &fs, const string &file_path) : fs(fs) {
 		handle = fs.OpenFile(file_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW,
 		                     FileLockType::WRITE_LOCK);
 	}

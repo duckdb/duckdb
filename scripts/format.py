@@ -267,7 +267,10 @@ def format_directory(directory):
 
 
 if format_all:
-    os.system(cmake_format_command.replace("${FILE}", "CMakeLists.txt"))
+    try:
+        os.system(cmake_format_command.replace("${FILE}", "CMakeLists.txt"))
+    except:
+        pass
     format_directory('src')
     format_directory('benchmark')
     format_directory('test')
