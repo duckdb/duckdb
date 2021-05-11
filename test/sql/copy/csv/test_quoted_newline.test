@@ -7,7 +7,7 @@ statement ok
 CREATE TABLE test (a VARCHAR, b INTEGER);
 
 query I
-COPY test FROM 'test/sql/copy/csv/data/test/quoted_newline.csv';
+COPY test FROM 'test/sql/copy/csv/data/test/quoted_newline.csv' (DELIMITER ',', AUTO_DETECT 0);
 ----
 2
 
