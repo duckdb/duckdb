@@ -956,7 +956,7 @@ struct DataFrameScanFunction : public TableFunction {
 	}
 
 	static unique_ptr<FunctionOperatorData> dataframe_scan_init(ClientContext &context, const FunctionData *bind_data,
-	                                                            vector<column_t> &column_ids,
+	                                                            const vector<column_t> &column_ids,
 	                                                            TableFilterCollection *filters) {
 		return make_unique<DataFrameScanState>();
 	}
