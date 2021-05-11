@@ -166,7 +166,7 @@ idx_t StringSegment::Append(SegmentStatistics &stats, VectorData &data, idx_t of
 	auto end = handle->node->buffer + Storage::BLOCK_SIZE;
 	for (idx_t i = 0; i < count; i++) {
 		auto source_idx = data.sel->get_index(offset + i);
-		auto target_idx = tuple_count;
+		auto target_idx = tuple_count.load();
 		idx_t remaining_space = RemainingSpace(*handle);
 		if (remaining_space < sizeof(int32_t)) {
 			// string index does not fit in the block at all
