@@ -477,7 +477,7 @@ idx_t FileSystem::GetFilePointer(FileHandle &handle) {
 	LARGE_INTEGER loc;
 	loc.QuadPart = 0;
 
-	auto rc = SetFilePointerEx(hFile, pos, &ret, FILE_CURRENT);
+	auto rc = SetFilePointerEx(hFile, loc, &ret, FILE_CURRENT);
 	if (rc == 0) {
 		auto error = GetLastErrorAsString();
 		throw IOException("Could not get file pointer for file \"%s\": %s", handle.path, error);
