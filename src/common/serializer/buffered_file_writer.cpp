@@ -5,7 +5,7 @@
 
 namespace duckdb {
 
-BufferedFileWriter::BufferedFileWriter(FileSystem &fs, string path, uint8_t open_flags)
+BufferedFileWriter::BufferedFileWriter(FileSystem &fs, const string &path, uint8_t open_flags)
     : fs(fs), data(unique_ptr<data_t[]>(new data_t[FILE_BUFFER_SIZE])), offset(0), total_written(0) {
 	handle = fs.OpenFile(path, open_flags, FileLockType::WRITE_LOCK);
 }
