@@ -45,7 +45,7 @@ struct FirstFunction : public FirstFunctionBase {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(STATE source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target) {
 		if (!target->is_set) {
 			*target = source;
 		}
@@ -95,7 +95,7 @@ struct FirstFunctionString : public FirstFunctionBase {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(STATE source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target) {
 		if (source.is_set && !target->is_set) {
 			SetValue(target, source.value, source.is_null);
 		}
