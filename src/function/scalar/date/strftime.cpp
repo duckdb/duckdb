@@ -733,6 +733,7 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 	idx_t pos = 0;
 	TimeSpecifierAMOrPM ampm = TimeSpecifierAMOrPM::TIME_SPECIFIER_NONE;
 
+	// Year offset state (Year+W/j)
 	auto offset_specifier = StrTimeSpecifier::WEEKDAY_DECIMAL;
 	uint64_t weekno = 0;
 	uint64_t weekday = 0;
@@ -776,6 +777,7 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 				}
 				// day of the month
 				result_data[2] = number;
+				offset_specifier = specifiers[i];
 				break;
 			case StrTimeSpecifier::MONTH_DECIMAL_PADDED:
 			case StrTimeSpecifier::MONTH_DECIMAL:
@@ -786,6 +788,7 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 				}
 				// month number
 				result_data[1] = number;
+				offset_specifier = specifiers[i];
 				break;
 			case StrTimeSpecifier::YEAR_WITHOUT_CENTURY_PADDED:
 			case StrTimeSpecifier::YEAR_WITHOUT_CENTURY:
@@ -867,12 +870,23 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 				break;
 			case StrTimeSpecifier::WEEK_NUMBER_PADDED_SUN_FIRST:
 			case StrTimeSpecifier::WEEK_NUMBER_PADDED_MON_FIRST:
-				if (offset_specifier != StrTimeSpecifier::WEEKDAY_DECIMAL) {
+				// m/d overrides WU/w but does not conflict
+				switch (offset_specifier) {
+				case StrTimeSpecifier::DAY_OF_MONTH_PADDED:
+				case StrTimeSpecifier::DAY_OF_MONTH:
+				case StrTimeSpecifier::MONTH_DECIMAL_PADDED:
+				case StrTimeSpecifier::MONTH_DECIMAL:
+					// Just validate, don't use
+					break;
+				case StrTimeSpecifier::WEEKDAY_DECIMAL:
+					// First offset specifier
+					offset_specifier = specifiers[i];
+					break;
+				default:
 					error_message = "Multiple year offsets specified";
 					error_position = start_pos;
 					return false;
 				}
-				offset_specifier = specifiers[i];
 				if (number > 53) {
 					error_message = "Week out of range, expected a value between 0 and 53";
 					error_position = start_pos;
@@ -890,7 +904,19 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 				break;
 			case StrTimeSpecifier::DAY_OF_YEAR_PADDED:
 			case StrTimeSpecifier::DAY_OF_YEAR_DECIMAL:
-				if (offset_specifier != StrTimeSpecifier::WEEKDAY_DECIMAL) {
+				// m/d overrides j but does not conflict
+				switch (offset_specifier) {
+				case StrTimeSpecifier::DAY_OF_MONTH_PADDED:
+				case StrTimeSpecifier::DAY_OF_MONTH:
+				case StrTimeSpecifier::MONTH_DECIMAL_PADDED:
+				case StrTimeSpecifier::MONTH_DECIMAL:
+					// Just validate, don't use
+					break;
+				case StrTimeSpecifier::WEEKDAY_DECIMAL:
+					// First offset specifier
+					offset_specifier = specifiers[i];
+					break;
+				default:
 					error_message = "Multiple year offsets specified";
 					error_position = start_pos;
 					return false;
@@ -900,7 +926,6 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 					error_position = start_pos;
 					return false;
 				}
-				offset_specifier = specifiers[i];
 				yearday = number;
 				break;
 			default:
@@ -1018,7 +1043,9 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 	switch (offset_specifier) {
 	case StrTimeSpecifier::WEEK_NUMBER_PADDED_SUN_FIRST:
 	case StrTimeSpecifier::WEEK_NUMBER_PADDED_MON_FIRST: {
-		// Get the start of week 1, move back 7 days and the weekno * 7 + weekday
+		// Adjust weekday to be 0-based for the week type
+		weekday = (weekday + 7 - int(offset_specifier == StrTimeSpecifier::WEEK_NUMBER_PADDED_MON_FIRST)) % 7;
+		// Get the start of week 1, move back 7 days and then weekno * 7 + weekday gives the date
 		const auto jan1 = Date::FromDate(result_data[0], 1, 1);
 		auto yeardate = Date::GetMondayOfCurrentWeek(jan1);
 		yeardate -= int(offset_specifier == StrTimeSpecifier::WEEK_NUMBER_PADDED_SUN_FIRST);
@@ -1035,6 +1062,12 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 		Date::Convert(yeardate, result_data[0], result_data[1], result_data[2]);
 		break;
 	}
+	case StrTimeSpecifier::DAY_OF_MONTH_PADDED:
+	case StrTimeSpecifier::DAY_OF_MONTH:
+	case StrTimeSpecifier::MONTH_DECIMAL_PADDED:
+	case StrTimeSpecifier::MONTH_DECIMAL:
+		// m/d overrides UWw/j
+		break;
 	default:
 		D_ASSERT(offset_specifier == StrTimeSpecifier::WEEKDAY_DECIMAL);
 		break;

@@ -72,17 +72,27 @@ SELECT strptime('jun', '%b')
 ----
 1900-06-01 00:00:00
 
-# First Monday is jan 1
+# First Sunday of Monday weeks is Jan 7
 query I
 SELECT strptime('1', '%W')
 ----
-1900-01-01 00:00:00
+1900-01-07 00:00:00
 
-# First Sunday is jan 7
+# First Sunday of Sunday weeks is Jan 7
 query I
 SELECT strptime('1', '%U')
 ----
 1900-01-07 00:00:00
+
+query II
+SELECT strptime('30', '%U'), strftime('1900-07-29'::DATE, '%U')
+----
+1900-07-29 00:00:00	30
+
+query II
+SELECT strptime('30', '%W'), strftime('1900-07-29'::DATE, '%W')
+----
+1900-07-29 00:00:00	30
 
 # Ignored
 query I
@@ -90,26 +100,77 @@ SELECT strptime('6', '%w')
 ----
 1900-01-01 00:00:00
 
-query I
-SELECT strptime('30', '%U')
+# Thursday after 1st Sunday
+query II
+SELECT strptime('1-4', '%U-%w'), strftime('1900-01-11'::DATE, '%U-%w')
 ----
-1900-07-29 00:00:00
+1900-01-11 00:00:00	01-4
 
-query I
-SELECT strptime('30', '%W')
-----
-1900-07-23 00:00:00
 
-# 4 days after Monday
-query I
-SELECT strptime('1-4', '%W-%w')
+# Thursday after 1st Monday
+query II
+SELECT strptime('1-4', '%W-%w'), strftime('1900-01-04'::DATE, '%W-%w')
 ----
-1900-01-05 00:00:00
+1900-01-04 00:00:00	01-4
 
-query I
-SELECT strptime('30', '%j')
+query II
+SELECT strptime('30', '%j'), strftime('1900-01-30'::DATE, '%-j')
 ----
-1900-01-30 00:00:00
+1900-01-30 00:00:00	30
+
+# Year-Sunday Week-Weekday
+query II
+SELECT strptime('2021-19-4', '%Y-%U-%w'), strftime('2021-05-13'::DATE, '%Y-%U-%w')
+----
+2021-05-13 00:00:00	2021-19-4
+
+# Year-Monday Week-Weekday
+query II
+SELECT strptime('2021-19-4', '%Y-%W-%w'), strftime('2021-05-13'::DATE, '%Y-%U-%w')
+----
+2021-05-13 00:00:00	2021-19-4
+
+# Year, Sunday Week 0, Friday
+query II
+SELECT strptime('2021-0-5', '%Y-%U-%w'), strftime('2021-01-01'::DATE, '%Y-%U-%w')
+----
+2021-01-01 00:00:00	2021-00-5
+
+# Year, Monday Week 0, Friday
+query II
+SELECT strptime('2021-0-5', '%Y-%W-%w'), strftime('2021-01-01'::DATE, '%Y-%W-%w')
+----
+2021-01-01 00:00:00	2021-00-5
+
+# Year-Sunday Week-Weekday Mismatch should defer to the day
+query I
+SELECT strptime('2021-05-12 19-4', '%Y-%m-%d %U-%w')
+----
+2021-05-12 00:00:00
+
+# Year-Monday Week-Weekday Mismatch should defer to the day
+query I
+SELECT strptime('2021-05-12 19-4', '%Y-%m-%d %W-%w')
+----
+2021-05-12 00:00:00
+
+# Round trip Sunday weeks
+query III
+SELECT * FROM (
+    SELECT dt, strftime(dt, '%Y-%U-%w') AS ft, strptime(strftime(dt, '%Y-%U-%w'), '%Y-%U-%w') AS rt
+    FROM (SELECT '2021-01-01'::DATE + (INTERVAL (d) DAY) AS dt FROM range(365) tbl(d)) days
+) diffs
+WHERE rt <> dt
+----
+
+# Round trip Monday weeks
+query III
+SELECT * FROM (
+    SELECT dt, strftime(dt, '%Y-%W-%w') AS ft, strptime(strftime(dt, '%Y-%W-%w'), '%Y-%W-%w') AS rt
+    FROM (SELECT '2021-01-01'::DATE + (INTERVAL (d) DAY) AS dt FROM range(365) tbl(d)) days
+) diffs
+WHERE rt <> dt
+----
 
 # empty specifier and string
 query I
