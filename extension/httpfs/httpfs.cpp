@@ -72,13 +72,16 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::Request(FileHandle &handle, string u
 }
 
 HTTPFileHandle::HTTPFileHandle(FileSystem &fs, std::string path)
-    : FileHandle(fs, path), length(0), buffer_available(0), buffer_idx(0), file_offset(0) {
+    : FileHandle(fs, path), length(0), buffer_available(0), buffer_idx(0), file_offset(0), buffer_start(0),
+      buffer_end(0) {
 	buffer = std::unique_ptr<data_t[]>(new data_t[BUFFER_LEN]);
 
 	IntializeMetadata();
 }
 
-std::unique_ptr<FileHandle> HTTPFileSystem::OpenFile(const char *path, uint8_t flags, FileLockType lock) {
+std::unique_ptr<FileHandle> HTTPFileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock,
+                                                     FileCompressionType compression) {
+	D_ASSERT(compression == FileCompressionType::UNCOMPRESSED);
 	return duckdb::make_unique<HTTPFileHandle>(*this, path);
 }
 
@@ -90,9 +93,12 @@ void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, id
 		throw std::runtime_error("out of file");
 	}
 
-	// TODO we need to check if location is within the cached buffer and update or invalidate
-	// for now just invalidate
-	if (location != hfh.file_offset) {
+	if (location >= hfh.buffer_start && location < hfh.buffer_end) {
+		hfh.file_offset = location;
+		hfh.buffer_idx = location - hfh.buffer_start;
+		hfh.buffer_available = (hfh.buffer_end - hfh.buffer_start) - hfh.buffer_idx;
+	} else {
+		// reset buffer
 		hfh.buffer_available = 0;
 		hfh.buffer_idx = 0;
 		hfh.file_offset = location;
@@ -100,22 +106,83 @@ void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, id
 
 	while (to_read > 0) {
 		auto buffer_read_len = MinValue<idx_t>(hfh.buffer_available, to_read);
-		memcpy((char *)buffer + buffer_offset, hfh.buffer.get() + hfh.buffer_idx, buffer_read_len);
+		if (buffer_read_len > 0) {
+			D_ASSERT(hfh.buffer_start + hfh.buffer_idx + buffer_read_len <= hfh.buffer_end);
+			memcpy((char *)buffer + buffer_offset, hfh.buffer.get() + hfh.buffer_idx, buffer_read_len);
 
-		buffer_offset += buffer_read_len;
-		to_read -= buffer_read_len;
+			buffer_offset += buffer_read_len;
+			to_read -= buffer_read_len;
 
-		hfh.buffer_idx += buffer_read_len;
-		hfh.buffer_available -= buffer_read_len;
-		hfh.file_offset += buffer_read_len;
+			hfh.buffer_idx += buffer_read_len;
+			hfh.buffer_available -= buffer_read_len;
+			hfh.file_offset += buffer_read_len;
+		}
 
 		if (to_read > 0 && hfh.buffer_available == 0) {
 			auto new_buffer_available = MinValue<idx_t>(hfh.BUFFER_LEN, hfh.length - hfh.file_offset);
 			Request(hfh, hfh.path, "GET", {}, hfh.file_offset, (char *)hfh.buffer.get(), new_buffer_available);
 			hfh.buffer_available = new_buffer_available;
 			hfh.buffer_idx = 0;
+			hfh.buffer_start = hfh.file_offset;
+			hfh.buffer_end = hfh.buffer_start + new_buffer_available;
 		}
 	}
+}
+
+int64_t HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
+	auto &hfh = (HTTPFileHandle &)handle;
+	idx_t max_read = hfh.length - hfh.file_offset;
+	nr_bytes = MinValue<idx_t>(max_read, nr_bytes);
+	Read(handle, buffer, nr_bytes, hfh.file_offset);
+	return nr_bytes;
+}
+
+void HTTPFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
+	throw std::runtime_error("Cannot write to HTTPFS directly");
+}
+
+int64_t HTTPFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
+	throw std::runtime_error("Cannot write to HTTPFS directly");
+}
+
+void HTTPFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
+	throw std::runtime_error("Cannot truncate a file from HTTPFS");
+}
+
+void HTTPFileSystem::FileSync(FileHandle &handle) {
+	throw std::runtime_error("Cannot sync a file on HTTPFS");
+}
+
+int64_t HTTPFileSystem::GetFileSize(FileHandle &handle) {
+	auto &sfh = (HTTPFileHandle &)handle;
+	return sfh.length;
+}
+
+time_t HTTPFileSystem::GetLastModifiedTime(FileHandle &handle) {
+	auto &sfh = (HTTPFileHandle &)handle;
+	return sfh.last_modified;
+}
+
+bool HTTPFileSystem::FileExists(const string &filename) {
+	try {
+		auto handle = OpenFile(filename.c_str(), FileFlags::FILE_FLAGS_READ);
+		auto &sfh = (HTTPFileHandle &)handle;
+		if (sfh.length == 0) {
+			throw std::runtime_error("not there this file");
+		}
+		return true;
+	} catch (...) {
+		return false;
+	};
+}
+
+bool HTTPFileSystem::CanHandleFile(const string &fpath) {
+	return fpath.rfind("https://", 0) == 0 || fpath.rfind("http://", 0) == 0;
+}
+
+void HTTPFileSystem::Seek(FileHandle &handle, idx_t location) {
+	auto &sfh = (HTTPFileHandle &)handle;
+	sfh.file_offset = location;
 }
 
 void HTTPFileHandle::IntializeMetadata() {
