@@ -7,10 +7,10 @@
 
 namespace duckdb {
 
-WindowSegmentTree::WindowSegmentTree(AggregateFunction &aggregate, FunctionData *bind_info, LogicalType result_type,
-                                     ChunkCollection *input)
-    : aggregate(aggregate), bind_info(bind_info), result_type(move(result_type)), state(aggregate.state_size()),
-      bounds(0, 0), internal_nodes(0), input_ref(input) {
+WindowSegmentTree::WindowSegmentTree(AggregateFunction &aggregate, FunctionData *bind_info,
+                                     const LogicalType &result_type_p, ChunkCollection *input)
+    : aggregate(aggregate), bind_info(bind_info), result_type(result_type_p), state(aggregate.state_size()),
+      bounds(0, 0), result(result_type_p), internal_nodes(0), input_ref(input) {
 #if STANDARD_VECTOR_SIZE < 512
 	throw NotImplementedException("Window functions are not supported for vector sizes < 512");
 #endif
@@ -22,6 +22,8 @@ WindowSegmentTree::WindowSegmentTree(AggregateFunction &aggregate, FunctionData 
 		inputs.Initialize(input_ref->Types());
 		// if we have a frame-by-frame method, share the single state
 		if (aggregate.frame) {
+			prevs.InitializeEmpty(inputs.GetTypes());
+			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 			AggregateInit();
 		} else if (aggregate.combine) {
 			ConstructTree();
@@ -182,8 +184,6 @@ Value WindowSegmentTree::Compute(idx_t begin, idx_t end) {
 	// If we have a frame function, use that
 	if (aggregate.frame) {
 		// Reference the previous inputs
-		DataChunk prevs;
-		prevs.InitializeEmpty(inputs.GetTypes());
 		prevs.Reference(inputs);
 
 		// Extract the new inputs
@@ -193,8 +193,6 @@ Value WindowSegmentTree::Compute(idx_t begin, idx_t end) {
 		auto prev_bounds = bounds;
 		bounds = FrameBounds(begin, end);
 
-		Vector result(result_type);
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		ConstantVector::SetNull(result, false);
 
 		aggregate.frame(inputs.data.data(), prevs.data.data(), bind_info, inputs.ColumnCount(), state.data(), bounds,
