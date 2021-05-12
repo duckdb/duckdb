@@ -33,7 +33,7 @@ struct RegrInterceptOperation {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(STATE source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target) {
 		target->count += source.count;
 		target->sum_x += source.sum_x;
 		target->sum_y += source.sum_y;
