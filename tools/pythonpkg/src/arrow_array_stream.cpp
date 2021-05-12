@@ -9,8 +9,8 @@ PythonTableArrowArrayStream::PythonTableArrowArrayStream(PyObject *arrow_table_p
     : factory(factory), arrow_table(arrow_table_p) {
 	stream = make_unique<ArrowArrayStream>();
 	InitializeFunctionPointers(stream.get());
-	py::gil_scoped_acquire acquire;
-	batches = arrow_table.attr("to_batches")();
+	py::handle table_handle(arrow_table_p);
+	batches = table_handle.attr("to_batches")();
 	stream->number_of_batches = py::len(batches);
 	if (stream->number_of_batches >= 1) {
 		stream->first_batch_size = py::len(batches[0]);
@@ -27,12 +27,13 @@ void PythonTableArrowArrayStream::InitializeFunctionPointers(ArrowArrayStream *s
 }
 
 unique_ptr<ArrowArrayStream> PythonTableArrowArrayStreamFactory::Produce(uintptr_t factory_ptr) {
+	py::gil_scoped_acquire acquire;
 	PythonTableArrowArrayStreamFactory *factory = (PythonTableArrowArrayStreamFactory *)factory_ptr;
 	if (!factory->arrow_table) {
 		return nullptr;
 	}
 	//! This is a bit hacky, but has to be this way to hide pybind from the main duckdb lib
-	auto table_stream = new PythonTableArrowArrayStream(factory->arrow_table.ptr(), factory);
+	auto table_stream = new PythonTableArrowArrayStream(factory->arrow_table, factory);
 	return move(table_stream->stream);
 }
 
@@ -45,7 +46,8 @@ int PythonTableArrowArrayStream::PythonTableArrowArrayStream::GetSchema(struct A
 		my_stream->last_error = "stream was released";
 		return -1;
 	}
-	auto schema = my_stream->arrow_table.attr("schema");
+	py::handle table_handle(my_stream->arrow_table);
+	auto schema = table_handle.attr("schema");
 	if (!py::hasattr(schema, "_export_to_c")) {
 		my_stream->last_error = "failed to acquire export_to_c function";
 		return -1;

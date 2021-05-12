@@ -15,9 +15,9 @@
 namespace duckdb {
 class PythonTableArrowArrayStreamFactory {
 public:
-	explicit PythonTableArrowArrayStreamFactory(py::handle arrow_table) : arrow_table(arrow_table) {};
+	explicit PythonTableArrowArrayStreamFactory(PyObject * arrow_table) : arrow_table(arrow_table) {};
 	static unique_ptr<ArrowArrayStream> Produce(uintptr_t factory);
-	py::handle arrow_table;
+	PyObject * arrow_table;
 };
 
 class PythonTableArrowArrayStream {
@@ -34,7 +34,7 @@ private:
 	static const char *GetLastError(ArrowArrayStream *stream);
 
 	std::string last_error;
-	py::handle arrow_table;
+	PyObject * arrow_table;
 	py::list batches;
 };
 } // namespace duckdb

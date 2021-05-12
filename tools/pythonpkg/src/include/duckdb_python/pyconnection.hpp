@@ -60,7 +60,7 @@ public:
 
 	unique_ptr<DuckDBPyRelation> FromParquet(const string &filename);
 
-	unique_ptr<DuckDBPyRelation> FromArrowTable(py::object table);
+	unique_ptr<DuckDBPyRelation> FromArrowTable(py::object &table);
 
 	DuckDBPyConnection *UnregisterDF(const string &name);
 

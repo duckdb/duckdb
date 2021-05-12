@@ -270,10 +270,11 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquet(const string &filen
 	return make_unique<DuckDBPyRelation>(connection->TableFunction("parquet_scan", params)->Alias(filename));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrowTable(py::object table) {
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrowTable(py::object& table) {
 	if (!connection) {
 		throw std::runtime_error("connection closed");
 	}
+	py::gil_scoped_acquire acquire;
 
 	// the following is a careful dance around having to depend on pyarrow
 	if (table.is_none() || string(py::str(table.get_type().attr("__name__"))) != "Table") {
@@ -281,8 +282,9 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrowTable(py::object table
 	}
 	string name = "arrow_table_" + GenerateRandomName();
 
-	auto stream_factory = make_unique<PythonTableArrowArrayStreamFactory>(table.ptr());
 	registered_arrow[name] = table;
+	auto stream_factory = make_unique<PythonTableArrowArrayStreamFactory>(registered_arrow[name].ptr());
+
 
 	unique_ptr<ArrowArrayStream> (*stream_factory_produce)(uintptr_t factory) =
 	    PythonTableArrowArrayStreamFactory::Produce;
