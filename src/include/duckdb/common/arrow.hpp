@@ -29,26 +29,14 @@ struct ArrowSchema {
 	struct ArrowSchema *dictionary;
 
 	// Release callback
-	void (*release)(struct ArrowSchema *) = nullptr;
+	void (*release)(struct ArrowSchema *);
 	// Opaque producer-specific data
 	void *private_data;
-	~ArrowSchema() {
-		if (release) {
-			for (int64_t child_idx = 0; child_idx < n_children; child_idx++) {
-				auto &child = *children[child_idx];
-				if (child.release) {
-					child.release(&child);
-				}
-			}
-			release(this);
-			release = nullptr;
-		}
-	}
 };
 
 struct ArrowArray {
 	// Array data description
-	int64_t length = 0;
+	int64_t length;
 	int64_t null_count;
 	int64_t offset;
 	int64_t n_buffers;
@@ -58,28 +46,13 @@ struct ArrowArray {
 	struct ArrowArray *dictionary;
 
 	// Release callback
-	void (*release)(struct ArrowArray *) = nullptr;
+	void (*release)(struct ArrowArray *);
 	// Opaque producer-specific data
 	void *private_data;
-
-	~ArrowArray() {
-		if (release) {
-			for (int64_t child_idx = 0; child_idx < n_children; child_idx++) {
-				auto &child = *children[child_idx];
-				if (child.release) {
-					child.release(&child);
-				}
-			}
-			release(this);
-		}
-	}
 };
 
 // EXPERIMENTAL
 struct ArrowArrayStream {
-	uint64_t number_of_batches = 0;
-	uint64_t first_batch_size = 0;
-	uint64_t last_batch_size = 0;
 	// Callback to get the stream type
 	// (will be the same for all arrays in the stream).
 	// Return value: 0 if successful, an `errno`-compatible error code otherwise.
@@ -87,7 +60,7 @@ struct ArrowArrayStream {
 	// Callback to get the next array
 	// (if no error and the array is released, the stream has ended)
 	// Return value: 0 if successful, an `errno`-compatible error code otherwise.
-	int (*get_next)(struct ArrowArrayStream *, struct ArrowArray *out, int chunk_idx);
+	int (*get_next)(struct ArrowArrayStream *, struct ArrowArray *out);
 
 	// Callback to get optional detailed error information.
 	// This must only be called if the last stream operation failed
@@ -98,16 +71,9 @@ struct ArrowArrayStream {
 
 	// Release callback: release the stream's own resources.
 	// Note that arrays returned by `get_next` must be individually released.
-	void (*release)(struct ArrowArrayStream *) = nullptr;
+	void (*release)(struct ArrowArrayStream *);
 	// Opaque producer-specific data
 	void *private_data;
-
-	~ArrowArrayStream() {
-		if (release) {
-			release(this);
-			release = nullptr;
-		}
-	}
 };
 
 #ifdef __cplusplus

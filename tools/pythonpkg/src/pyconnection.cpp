@@ -179,7 +179,7 @@ DuckDBPyConnection *DuckDBPyConnection::RegisterArrow(const string &name, py::ob
 	auto stream_factory = make_unique<PythonTableArrowArrayStreamFactory>(table.ptr());
 	registered_arrow[name] = table;
 
-	unique_ptr<ArrowArrayStream> (*stream_factory_produce)(uintptr_t factory) =
+	unique_ptr<ArrowArrayStreamDuck> (*stream_factory_produce)(uintptr_t factory) =
 	    PythonTableArrowArrayStreamFactory::Produce;
 	connection
 	    ->TableFunction("arrow_scan", {Value::POINTER((uintptr_t)stream_factory.get()),
@@ -270,7 +270,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquet(const string &filen
 	return make_unique<DuckDBPyRelation>(connection->TableFunction("parquet_scan", params)->Alias(filename));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrowTable(py::object& table) {
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrowTable(py::object &table) {
 	if (!connection) {
 		throw std::runtime_error("connection closed");
 	}
@@ -285,8 +285,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrowTable(py::object& tabl
 	registered_arrow[name] = table;
 	auto stream_factory = make_unique<PythonTableArrowArrayStreamFactory>(registered_arrow[name].ptr());
 
-
-	unique_ptr<ArrowArrayStream> (*stream_factory_produce)(uintptr_t factory) =
+	unique_ptr<ArrowArrayStreamDuck> (*stream_factory_produce)(uintptr_t factory) =
 	    PythonTableArrowArrayStreamFactory::Produce;
 	auto rel = make_unique<DuckDBPyRelation>(
 	    connection
