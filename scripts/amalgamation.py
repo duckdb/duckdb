@@ -69,7 +69,10 @@ if '--extended' in sys.argv:
         'duckdb/storage/object_cache.hpp',
         'duckdb/planner/table_filter.hpp',
         "duckdb/storage/statistics/string_statistics.hpp",
-        "duckdb/storage/statistics/numeric_statistics.hpp"]]
+        "duckdb/storage/statistics/numeric_statistics.hpp",
+        "duckdb/planner/filter/conjunction_filter.hpp",
+        "duckdb/planner/filter/constant_filter.hpp",
+        "duckdb/planner/filter/null_filter.hpp"]]
     main_header_files += add_include_dir(os.path.join(include_dir, 'duckdb/parser/expression'))
     main_header_files += add_include_dir(os.path.join(include_dir, 'duckdb/parser/parsed_data'))
     main_header_files += add_include_dir(os.path.join(include_dir, 'duckdb/parser/tableref'))

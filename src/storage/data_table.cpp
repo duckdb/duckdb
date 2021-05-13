@@ -311,23 +311,20 @@ bool DataTable::CheckZonemap(TableScanState &state, const vector<column_t> &colu
 		return true;
 	}
 	for (auto &table_filter : table_filters->filters) {
-		for (auto &predicate_constant : table_filter.second) {
-			D_ASSERT(predicate_constant.column_index < column_ids.size());
-			auto base_column_idx = column_ids[predicate_constant.column_index];
-			bool read_segment = columns[base_column_idx]->CheckZonemap(
-			    state.column_scans[predicate_constant.column_index], predicate_constant);
-			if (!read_segment) {
-				//! We can skip this partition
-				idx_t vectors_to_skip =
-				    ceil((double)(state.column_scans[predicate_constant.column_index].current->count +
-				                  state.column_scans[predicate_constant.column_index].current->start - current_row) /
-				         STANDARD_VECTOR_SIZE);
-				for (idx_t i = 0; i < vectors_to_skip; ++i) {
-					state.NextVector();
-					current_row += STANDARD_VECTOR_SIZE;
-				}
-				return false;
+		D_ASSERT(table_filter.first < column_ids.size());
+		auto base_column_idx = column_ids[table_filter.first];
+		bool read_segment =
+		    columns[base_column_idx]->CheckZonemap(state.column_scans[table_filter.first], *table_filter.second);
+		if (!read_segment) {
+			//! We can skip this partition
+			idx_t vectors_to_skip = ceil((double)(state.column_scans[table_filter.first].current->count +
+			                                      state.column_scans[table_filter.first].current->start - current_row) /
+			                             STANDARD_VECTOR_SIZE);
+			for (idx_t i = 0; i < vectors_to_skip; ++i) {
+				state.NextVector();
+				current_row += STANDARD_VECTOR_SIZE;
 			}
+			return false;
 		}
 	}
 
@@ -389,7 +386,7 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 				auto tf_idx = state.adaptive_filter->permutation[i];
 				auto col_idx = column_ids[tf_idx];
 				columns[col_idx]->Select(transaction, state.column_scans[tf_idx], result.data[tf_idx], sel,
-				                         approved_tuple_count, state.table_filters->filters[tf_idx]);
+				                         approved_tuple_count, *state.table_filters->filters[tf_idx]);
 			}
 			for (auto &table_filter : state.table_filters->filters) {
 				result.data[table_filter.first].Slice(sel, approved_tuple_count);
