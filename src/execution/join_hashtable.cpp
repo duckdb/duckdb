@@ -429,28 +429,6 @@ void JoinHashTable::Finalize() {
 	finalized = true;
 }
 
-void JoinHashTable::CopyToVector(Vector &result, idx_t col_idx) {
-	auto vdata = FlatVector::GetData<hash_t>(result);
-	for (auto &block : blocks) {
-		auto handle = buffer_manager.Pin(block.block);
-		data_ptr_t dataptr = handle->node->buffer;
-		idx_t entry = 0;
-		while (entry < block.count) {
-			// fetch the next vector of entries from the blocks
-			idx_t next = MinValue<idx_t>(STANDARD_VECTOR_SIZE, block.count - entry);
-			for (idx_t i = 0; i < next; i++) {
-				hash_data[i] = Load<hash_t>((data_ptr_t)(dataptr + column_offset));
-				key_locations[i] = dataptr;
-				dataptr += entry_size;
-			}
-			// now insert into the hash table
-			InsertHashes(hashes, next, key_locations);
-
-			entry += next;
-		}
-		pinned_handles.push_back(move(handle));
-	}
-}
 unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
 	D_ASSERT(count > 0); // should be handled before
 	D_ASSERT(finalized);
@@ -974,6 +952,43 @@ void JoinHashTable::ScanFullOuter(DataChunk &result, JoinHTScanState &state) {
 	}
 }
 
+void JoinHashTable::FullScanHashTable(JoinHTScanState &state) {
+	// scan the HT starting from the current position and check which rows from the build side did not find a match
+	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
+	idx_t found_entries = 0;
+	{
+		lock_guard<mutex> state_lock(state.lock);
+		for (; state.block_position < blocks.size(); state.block_position++, state.position = 0) {
+			auto &block = blocks[state.block_position];
+			auto &handle = pinned_handles[state.block_position];
+			auto baseptr = handle->node->buffer;
+			for (; state.position < block.count; state.position++) {
+				auto tuple_base = baseptr + state.position * entry_size;
+				auto found_match = (bool *)(tuple_base + tuple_size);
+				if (!*found_match) {
+					key_locations[found_entries++] = tuple_base;
+					if (found_entries == STANDARD_VECTOR_SIZE) {
+						state.position++;
+						break;
+					}
+				}
+			}
+			if (found_entries == STANDARD_VECTOR_SIZE) {
+				break;
+			}
+		}
+	}
+
+	// gather the values from the RHS
+	idx_t offset = condition_size;
+	for (idx_t i = 0; i < build_types.size(); i++) {
+		auto &vector = columns[i];
+		D_ASSERT(vector.GetType() == build_types[i]);
+		GatherResultVector(vector, FlatVector::INCREMENTAL_SELECTION_VECTOR, (uintptr_t *)key_locations,
+		                   FlatVector::INCREMENTAL_SELECTION_VECTOR, found_entries, offset);
+	}
+}
+
 void JoinHashTable::GatherResultVector(Vector &result, const SelectionVector &result_vector, uintptr_t *ptrs,
                                        const SelectionVector &sel_vector, idx_t count, idx_t &offset) {
 	result.SetVectorType(VectorType::FLAT_VECTOR);
@@ -1126,7 +1141,6 @@ idx_t JoinHashTable::GatherSwitch(VectorData &data, PhysicalType type, Vector &p
 void JoinHashTable::FillWithOffsets(vector<data_ptr_t> &key_locations, JoinHTScanState &state) {
 
 	// iterate over blocks
-	idx_t matches = 0;
 	lock_guard<mutex> state_lock(state.lock);
 	while (state.block_position < blocks.size()) {
 

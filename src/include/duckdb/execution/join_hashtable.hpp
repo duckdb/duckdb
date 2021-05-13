@@ -152,7 +152,7 @@ public:
 	                             idx_t offset, SelectionVector *match_sel, SelectionVector *no_match_sel,
 	                             idx_t &no_match_count);
 	void FillWithOffsets(vector<data_ptr_t> &key_locations, JoinHTScanState &state);
-	void CopyToVector(Vector &result, idx_t col_idx);
+	void FullScanHashTable(JoinHTScanState &state);
 	idx_t size() {
 		return count;
 	}
@@ -191,6 +191,7 @@ public:
 	uint64_t bitmask;
 	//! The amount of entries stored per block
 	idx_t block_capacity;
+	std::vector<Vector> columns;
 
 	struct {
 		mutex mj_lock;

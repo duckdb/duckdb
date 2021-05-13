@@ -295,12 +295,10 @@ void PhysicalHashJoin::BuildPerfectHashStructure(JoinHashTable *hash_table_ptr, 
 	// allocate memory for each column in the hashtable
 	auto build_size = hash_table_ptr->size();
 	for (auto type : hash_table_ptr->build_types) {
-		build_columns.emplace_back(type, build_size);
+		hash_table_ptr->columns.emplace_back(type, build_size);
 	}
 	// Fill columns with build data
-	for (idx_t col_idx = 0; col_idx != build_columns.size(); ++col_idx) {
-		hash_table_ptr->CopyToVector(build_columns[col_idx], col_idx);
-	}
+	hash_table_ptr->FullScanHashTable(join_ht_state);
 }
 template <typename T>
 void PhysicalHashJoin::TemplatedMinMaxRange(Vector &source, Vector &result, idx_t count) {
