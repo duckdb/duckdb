@@ -164,7 +164,7 @@ public:
 	}
 
 	static unique_ptr<FunctionOperatorData> ParquetScanInit(ClientContext &context, const FunctionData *bind_data_p,
-	                                                        vector<column_t> &column_ids,
+	                                                        const vector<column_t> &column_ids,
 	                                                        TableFilterCollection *filters) {
 		auto &bind_data = (ParquetReadBindData &)*bind_data_p;
 		bind_data.chunk_count = 0;
@@ -198,7 +198,7 @@ public:
 
 	static unique_ptr<FunctionOperatorData>
 	ParquetScanParallelInit(ClientContext &context, const FunctionData *bind_data_p, ParallelState *parallel_state_p,
-	                        vector<column_t> &column_ids, TableFilterCollection *filters) {
+	                        const vector<column_t> &column_ids, TableFilterCollection *filters) {
 		auto result = make_unique<ParquetReadOperatorData>();
 		result->column_ids = column_ids;
 		result->is_parallel = true;

@@ -140,11 +140,9 @@ void LocalStorage::Scan(LocalScanState &state, const vector<column_t> &column_id
 			auto column_filters = state.table_filters->filters.find(i);
 			if (column_filters != state.table_filters->filters.end()) {
 				//! We have filters to apply here
-				for (auto &column_filter : column_filters->second) {
-					auto &mask = FlatVector::Validity(result.data[i]);
-					UncompressedSegment::FilterSelection(sel, result.data[i], column_filter, approved_tuple_count,
-					                                     mask);
-				}
+				auto &mask = FlatVector::Validity(result.data[i]);
+				UncompressedSegment::FilterSelection(sel, result.data[i], *column_filters->second, approved_tuple_count,
+				                                     mask);
 				count = approved_tuple_count;
 			}
 		}

@@ -12,7 +12,6 @@
 
 #include <random>
 namespace duckdb {
-struct TableFilter;
 
 class AdaptiveFilter {
 public:

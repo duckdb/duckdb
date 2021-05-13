@@ -18,7 +18,7 @@ namespace duckdb {
 class BaseStatistics;
 class LogicalGet;
 struct ParallelState;
-struct TableFilterSet;
+class TableFilterSet;
 
 struct FunctionOperatorData {
 	virtual ~FunctionOperatorData() {
@@ -37,7 +37,7 @@ typedef unique_ptr<FunctionData> (*table_function_bind_t)(ClientContext &context
                                                           vector<string> &input_table_names,
                                                           vector<LogicalType> &return_types, vector<string> &names);
 typedef unique_ptr<FunctionOperatorData> (*table_function_init_t)(ClientContext &context, const FunctionData *bind_data,
-                                                                  vector<column_t> &column_ids,
+                                                                  const vector<column_t> &column_ids,
                                                                   TableFilterCollection *filters);
 typedef unique_ptr<BaseStatistics> (*table_statistics_t)(ClientContext &context, const FunctionData *bind_data,
                                                          column_t column_index);
@@ -56,7 +56,7 @@ typedef unique_ptr<ParallelState> (*table_function_init_parallel_state_t)(Client
 typedef unique_ptr<FunctionOperatorData> (*table_function_init_parallel_t)(ClientContext &context,
                                                                            const FunctionData *bind_data,
                                                                            ParallelState *state,
-                                                                           vector<column_t> &column_ids,
+                                                                           const vector<column_t> &column_ids,
                                                                            TableFilterCollection *filters);
 typedef bool (*table_function_parallel_state_next_t)(ClientContext &context, const FunctionData *bind_data,
                                                      FunctionOperatorData *state, ParallelState *parallel_state);
