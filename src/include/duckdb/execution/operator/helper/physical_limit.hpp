@@ -21,7 +21,6 @@ public:
 	}
 
 	// Thread safety
-	mutable mutex lock;
 	mutable idx_t limit;
 	mutable idx_t offset;
 	mutable unique_ptr<Expression> limit_expression;
