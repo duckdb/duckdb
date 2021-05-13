@@ -297,17 +297,9 @@ void PhysicalHashJoin::BuildPerfectHashStructure(JoinHashTable *hash_table_ptr, 
 	for (auto type : hash_table_ptr->build_types) {
 		build_columns.emplace_back(type, build_size);
 	}
-	// gather the values from the RHS
-	vector<data_ptr_t> key_locations;
-	key_locations.reserve(build_size + 1);
-	hash_table_ptr->FillWithOffsets(key_locations, join_ht_state);
-	idx_t offset = hash_table_ptr->condition_size;
-	for (idx_t i = 0; i != build_columns.size(); ++i) {
-		auto &vector = build_columns[i];
-		D_ASSERT(hash_table_ptr->build_types[i] == vector.GetType());
-		JoinHashTable::GatherResultVector(vector, FlatVector::INCREMENTAL_SELECTION_VECTOR,
-		                                  (uintptr_t *)&key_locations[0], FlatVector::INCREMENTAL_SELECTION_VECTOR,
-		                                  build_size, offset);
+	// Fill columns with build data
+	for (idx_t col_idx = 0; col_idx != build_columns.size(); ++col_idx) {
+		hash_table_ptr->CopyToVector(build_columns[col_idx], col_idx);
 	}
 }
 template <typename T>

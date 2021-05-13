@@ -152,6 +152,7 @@ public:
 	                             idx_t offset, SelectionVector *match_sel, SelectionVector *no_match_sel,
 	                             idx_t &no_match_count);
 	void FillWithOffsets(vector<data_ptr_t> &key_locations, JoinHTScanState &state);
+	void CopyToVector(Vector &result, idx_t col_idx);
 	idx_t size() {
 		return count;
 	}

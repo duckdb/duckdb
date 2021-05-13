@@ -429,6 +429,28 @@ void JoinHashTable::Finalize() {
 	finalized = true;
 }
 
+void JoinHashTable::CopyToVector(Vector &result, idx_t col_idx) {
+	auto vdata = FlatVector::GetData<hash_t>(result);
+	for (auto &block : blocks) {
+		auto handle = buffer_manager.Pin(block.block);
+		data_ptr_t dataptr = handle->node->buffer;
+		idx_t entry = 0;
+		while (entry < block.count) {
+			// fetch the next vector of entries from the blocks
+			idx_t next = MinValue<idx_t>(STANDARD_VECTOR_SIZE, block.count - entry);
+			for (idx_t i = 0; i < next; i++) {
+				hash_data[i] = Load<hash_t>((data_ptr_t)(dataptr + column_offset));
+				key_locations[i] = dataptr;
+				dataptr += entry_size;
+			}
+			// now insert into the hash table
+			InsertHashes(hashes, next, key_locations);
+
+			entry += next;
+		}
+		pinned_handles.push_back(move(handle));
+	}
+}
 unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
 	D_ASSERT(count > 0); // should be handled before
 	D_ASSERT(finalized);
