@@ -1,5 +1,5 @@
 # name: test/sql/copy/csv/test_replacement_scan_alias.test
-# description: Test CSV with UTF8 NFC Normalization
+# description: Test replacement scan aliases
 # group: [csv]
 
 # implicit alias is equal to the table name
