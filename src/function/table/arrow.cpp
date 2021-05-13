@@ -189,41 +189,37 @@ void ArrowTableFunction::ArrowToDuckDB(ArrowScanState &scan_state, DataChunk &ou
 		}
 		case LogicalTypeId::TIME: {
 			// convert time from milliseconds to microseconds
-			auto src_ptr = (uint32_t *)array.buffers[1] + scan_state.chunk_offset;
+			auto src_ptr = (uint32_t *)array.buffers[1] + scan_state.chunk_offset + array.offset;
 			auto tgt_ptr = (dtime_t *)FlatVector::GetData(output.data[col_idx]);
 			for (idx_t row = 0; row < output.size(); row++) {
-				auto source_idx = scan_state.chunk_offset + row;
-				tgt_ptr[row] = dtime_t(int64_t(src_ptr[source_idx]) * 1000);
+				tgt_ptr[row] = dtime_t(int64_t(src_ptr[row]) * 1000);
 			}
 			break;
 		}
 		case LogicalTypeId::DECIMAL: {
-			//! We have to convert to INT128
+			//! We have to convert from INT128
 			switch (output.data[col_idx].GetType().InternalType()) {
 			case PhysicalType::INT16: {
-				auto src_ptr = (hugeint_t *)array.buffers[1] + scan_state.chunk_offset;
+				auto src_ptr = (hugeint_t *)array.buffers[1] + scan_state.chunk_offset + array.offset;
 				auto tgt_ptr = (int16_t *)FlatVector::GetData(output.data[col_idx]);
 				for (idx_t row = 0; row < output.size(); row++) {
-					auto source_idx = scan_state.chunk_offset + row;
-					Hugeint::TryCast(src_ptr[source_idx], tgt_ptr[row]);
+					Hugeint::TryCast(src_ptr[row], tgt_ptr[row]);
 				}
 				break;
 			}
 			case PhysicalType::INT32: {
-				auto src_ptr = (hugeint_t *)array.buffers[1] + scan_state.chunk_offset;
+				auto src_ptr = (hugeint_t *)array.buffers[1] + scan_state.chunk_offset + array.offset;
 				auto tgt_ptr = (int32_t *)FlatVector::GetData(output.data[col_idx]);
 				for (idx_t row = 0; row < output.size(); row++) {
-					auto source_idx = scan_state.chunk_offset + row;
-					Hugeint::TryCast(src_ptr[source_idx], tgt_ptr[row]);
+					Hugeint::TryCast(src_ptr[row], tgt_ptr[row]);
 				}
 				break;
 			}
 			case PhysicalType::INT64: {
-				auto src_ptr = (hugeint_t *)array.buffers[1] + scan_state.chunk_offset;
+				auto src_ptr = (hugeint_t *)array.buffers[1] + scan_state.chunk_offset + array.offset;
 				auto tgt_ptr = (int64_t *)FlatVector::GetData(output.data[col_idx]);
 				for (idx_t row = 0; row < output.size(); row++) {
-					auto source_idx = scan_state.chunk_offset + row;
-					Hugeint::TryCast(src_ptr[source_idx], tgt_ptr[row]);
+					Hugeint::TryCast(src_ptr[row], tgt_ptr[row]);
 				}
 				break;
 			}

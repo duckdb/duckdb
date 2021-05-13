@@ -79,40 +79,40 @@ class TestTPCHArrow(object):
             assert(check_result(result,answers))
             print ("Query " + str(i) + " works")
 
-    # def test_tpch_arrow_batch(self,duckdb_cursor):
-    #     if not can_run:
-    #         return
+    def test_tpch_arrow_batch(self,duckdb_cursor):
+        if not can_run:
+            return
 
-    #     tpch_tables = ['part', 'partsupp', 'supplier', 'customer', 'lineitem', 'orders', 'nation', 'region']
-    #     arrow_tables = []
+        tpch_tables = ['part', 'partsupp', 'supplier', 'customer', 'lineitem', 'orders', 'nation', 'region']
+        arrow_tables = []
 
-    #     duckdb_conn = duckdb.connect()
-    #     duckdb_conn.execute("CALL dbgen(sf=0.01);")
+        duckdb_conn = duckdb.connect()
+        duckdb_conn.execute("CALL dbgen(sf=0.01);")
 
-    #     for tpch_table in tpch_tables:
-    #         duck_tbl = duckdb_conn.table(tpch_table)
-    #         arrow_tables.append(pyarrow.Table.from_batches(duck_tbl.arrow().to_batches(10)))
-    #         duck_arrow_table = duckdb_conn.from_arrow_table(arrow_tables[-1])
-    #         duckdb_conn.execute("DROP TABLE "+tpch_table)
-    #         duck_arrow_table.create(tpch_table)
+        for tpch_table in tpch_tables:
+            duck_tbl = duckdb_conn.table(tpch_table)
+            arrow_tables.append(pyarrow.Table.from_batches(duck_tbl.arrow().to_batches(10)))
+            duck_arrow_table = duckdb_conn.from_arrow_table(arrow_tables[-1])
+            duckdb_conn.execute("DROP TABLE "+tpch_table)
+            duck_arrow_table.create(tpch_table)
 
-    #     tpch_path = os.path.join(os.path.dirname(os.path.realpath(__file__)),'..','..','..','..','extension','tpch','dbgen')
-    #     queries_path = os.path.join(tpch_path,'queries')
-    #     answers_path = os.path.join(tpch_path,'answers','sf0.01')
+        tpch_path = os.path.join(os.path.dirname(os.path.realpath(__file__)),'..','..','..','..','extension','tpch','dbgen')
+        queries_path = os.path.join(tpch_path,'queries')
+        answers_path = os.path.join(tpch_path,'answers','sf0.01')
 
-    #     for i in range (1,23):
-    #         query = get_query(queries_path,i)
-    #         answers = get_answer(answers_path,i)
-    #         result = duckdb_conn.execute(query)
-    #         assert(check_result(result,answers))
-    #         print ("Query " + str(i) + " works")
+        for i in range (1,23):
+            query = get_query(queries_path,i)
+            answers = get_answer(answers_path,i)
+            result = duckdb_conn.execute(query)
+            assert(check_result(result,answers))
+            print ("Query " + str(i) + " works")
 
-    #     duckdb_conn.execute("PRAGMA threads=4")
-    #     duckdb_conn.execute("PRAGMA force_parallelism")
+        duckdb_conn.execute("PRAGMA threads=4")
+        duckdb_conn.execute("PRAGMA force_parallelism")
 
-    #     for i in range (1,23):
-    #         query = get_query(queries_path,i)
-    #         answers = get_answer(answers_path,i)
-    #         result = duckdb_conn.execute(query)
-    #         assert(check_result(result,answers))
-    #         print ("Query " + str(i) + " works (Parallel)")
+        for i in range (1,23):
+            query = get_query(queries_path,i)
+            answers = get_answer(answers_path,i)
+            result = duckdb_conn.execute(query)
+            assert(check_result(result,answers))
+            print ("Query " + str(i) + " works (Parallel)")

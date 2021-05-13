@@ -7,8 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #pragma once
-#include "arrow.hpp"
-#include <bitset>
+#include "duckdb/common/arrow.hpp"
 //! Here we have the internal duckdb classes that interact with Arrow's Internal Header (i.e., duckdb/commons/arrow.hpp)
 namespace duckdb {
 class ArrowSchemaDuck {
