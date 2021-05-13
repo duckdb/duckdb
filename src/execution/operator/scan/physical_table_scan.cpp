@@ -31,7 +31,8 @@ PhysicalTableScan::PhysicalTableScan(vector<LogicalType> types, TableFunction fu
       table_filters(move(table_filters_p)) {
 }
 
-void PhysicalTableScan::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
+void PhysicalTableScan::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
+                                         PhysicalOperatorState *state_p) const {
 	auto &state = (PhysicalTableScanOperatorState &)*state_p;
 	if (column_ids.empty()) {
 		return;

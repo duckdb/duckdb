@@ -73,24 +73,24 @@ class OperatorProfiler {
 public:
 	DUCKDB_API explicit OperatorProfiler(bool enabled);
 
-	DUCKDB_API void StartOperator(PhysicalOperator *phys_op);
+	DUCKDB_API void StartOperator(const PhysicalOperator *phys_op);
 	DUCKDB_API void EndOperator(DataChunk *chunk);
-	DUCKDB_API void Flush(PhysicalOperator *phys_op, ExpressionExecutor *expression_executor);
+	DUCKDB_API void Flush(const PhysicalOperator *phys_op, ExpressionExecutor *expression_executor);
 
 	~OperatorProfiler() {
 	}
 
 private:
-	void AddTiming(PhysicalOperator *op, double time, idx_t elements);
+	void AddTiming(const PhysicalOperator *op, double time, idx_t elements);
 
 	//! Whether or not the profiler is enabled
 	bool enabled;
 	//! The timer used to time the execution time of the individual Physical Operators
 	Profiler<system_clock> op;
 	//! The stack of Physical Operators that are currently active
-	std::stack<PhysicalOperator *> execution_stack;
+	std::stack<const PhysicalOperator *> execution_stack;
 	//! A mapping of physical operators to recorded timings
-	unordered_map<PhysicalOperator *, OperatorTimingInformation> timings;
+	unordered_map<const PhysicalOperator *, OperatorTimingInformation> timings;
 };
 
 //! The QueryProfiler can be used to measure timings of queries
@@ -103,6 +103,8 @@ public:
 		vector<unique_ptr<TreeNode>> children;
 		idx_t depth = 0;
 	};
+
+	using TreeMap = unordered_map<const PhysicalOperator *, TreeNode *>;
 
 private:
 	unique_ptr<TreeNode> CreateTree(PhysicalOperator *root, idx_t depth = 0);
@@ -182,10 +184,10 @@ private:
 	//! The timer used to time the execution time of the entire query
 	Profiler<system_clock> main_query;
 	//! A map of a Physical Operator pointer to a tree node
-	unordered_map<PhysicalOperator *, TreeNode *> tree_map;
+	TreeMap tree_map;
 
 public:
-	const unordered_map<PhysicalOperator *, TreeNode *> &GetTreeMap() const {
+	const TreeMap &GetTreeMap() const {
 		return tree_map;
 	}
 

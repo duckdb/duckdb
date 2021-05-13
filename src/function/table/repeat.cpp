@@ -28,7 +28,7 @@ static unique_ptr<FunctionData> RepeatBind(ClientContext &context, vector<Value>
 }
 
 static unique_ptr<FunctionOperatorData> RepeatInit(ClientContext &context, const FunctionData *bind_data,
-                                                   vector<column_t> &column_ids, TableFilterCollection *filters) {
+                                                   const vector<column_t> &column_ids, TableFilterCollection *filters) {
 	return make_unique<RepeatOperatorData>();
 }
 

@@ -27,7 +27,7 @@ public:
 	                                               vector<string> &names);
 
 	static unique_ptr<FunctionOperatorData> PandasScanInit(ClientContext &context, const FunctionData *bind_data_p,
-	                                                       vector<column_t> &column_ids,
+	                                                       const vector<column_t> &column_ids,
 	                                                       TableFilterCollection *filters);
 
 	static idx_t PandasScanMaxThreads(ClientContext &context, const FunctionData *bind_data_p);
@@ -35,10 +35,9 @@ public:
 	static unique_ptr<ParallelState> PandasScanInitParallelState(ClientContext &context,
 	                                                             const FunctionData *bind_data_p);
 
-	static unique_ptr<FunctionOperatorData> PandasScanParallelInit(ClientContext &context,
-	                                                               const FunctionData *bind_data_p,
-	                                                               ParallelState *state, vector<column_t> &column_ids,
-	                                                               TableFilterCollection *filters);
+	static unique_ptr<FunctionOperatorData>
+	PandasScanParallelInit(ClientContext &context, const FunctionData *bind_data_p, ParallelState *state,
+	                       const vector<column_t> &column_ids, TableFilterCollection *filters);
 
 	static bool PandasScanParallelStateNext(ClientContext &context, const FunctionData *bind_data_p,
 	                                        FunctionOperatorData *operator_state, ParallelState *parallel_state_p);

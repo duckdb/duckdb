@@ -153,7 +153,8 @@ static unique_ptr<FunctionData> ArrowScanBind(ClientContext &context, vector<Val
 }
 
 static unique_ptr<FunctionOperatorData> ArrowScanInit(ClientContext &context, const FunctionData *bind_data,
-                                                      vector<column_t> &column_ids, TableFilterCollection *filters) {
+                                                      const vector<column_t> &column_ids,
+                                                      TableFilterCollection *filters) {
 	auto current_chunk = make_unique<ArrowArray>();
 	auto result = make_unique<ArrowScanState>(move(current_chunk));
 	result->column_ids = column_ids;
@@ -346,7 +347,7 @@ bool ArrowScanParallelStateNext(ClientContext &context, const FunctionData *bind
 }
 
 unique_ptr<FunctionOperatorData> ArrowScanParallelInit(ClientContext &context, const FunctionData *bind_data_p,
-                                                       ParallelState *state, vector<column_t> &column_ids,
+                                                       ParallelState *state, const vector<column_t> &column_ids,
                                                        TableFilterCollection *filters) {
 	auto current_chunk = make_unique<ArrowArray>();
 	auto result = make_unique<ArrowScanState>(move(current_chunk));

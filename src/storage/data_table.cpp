@@ -424,7 +424,7 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 //===--------------------------------------------------------------------===//
 // Fetch
 //===--------------------------------------------------------------------===//
-void DataTable::Fetch(Transaction &transaction, DataChunk &result, vector<column_t> &column_ids,
+void DataTable::Fetch(Transaction &transaction, DataChunk &result, const vector<column_t> &column_ids,
                       Vector &row_identifiers, idx_t fetch_count, ColumnFetchState &state) {
 	// first figure out which row identifiers we should use for this transaction by looking at the VersionManagers
 	row_t rows[STANDARD_VECTOR_SIZE];

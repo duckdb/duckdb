@@ -4,7 +4,7 @@
 namespace duckdb {
 
 void PhysicalCreateSequence::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
-                                              PhysicalOperatorState *state) {
+                                              PhysicalOperatorState *state) const {
 	Catalog::GetCatalog(context.client).CreateSequence(context.client, info.get());
 	state->finished = true;
 }

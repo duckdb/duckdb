@@ -47,13 +47,13 @@ public:
 	JoinType join_type;
 	//! In case we swap rhs with lhs we need to output columns related to rhs first.
 	bool lhs_first = true;
-	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 
 private:
 	void GetRHSMatches(ExecutionContext &context, PhysicalOperatorState *state_p) const;
 	//! Fills result chunk
-	void Output(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p);
+	void Output(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) const;
 };
 
 } // namespace duckdb
