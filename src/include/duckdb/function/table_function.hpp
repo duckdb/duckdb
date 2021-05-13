@@ -18,7 +18,7 @@ namespace duckdb {
 class BaseStatistics;
 class LogicalGet;
 struct ParallelState;
-struct TableFilterSet;
+class TableFilterSet;
 
 struct FunctionOperatorData {
 	virtual ~FunctionOperatorData() {

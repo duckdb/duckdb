@@ -22,6 +22,7 @@ class DatabaseInstance;
 class TableDataWriter;
 class PersistentSegment;
 class PersistentColumnData;
+class TableFilter;
 class Transaction;
 
 struct DataTableInfo;
@@ -82,7 +83,7 @@ public:
 	virtual void IndexScan(ColumnScanState &state, Vector &result, bool allow_pending_updates) = 0;
 	//! Executes the filters directly in the table's data
 	void Select(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
-	            idx_t &approved_tuple_count, vector<TableFilter> &table_filter);
+	            idx_t &approved_tuple_count, TableFilter &table_filter);
 	//! Initialize an appending phase for this column
 	virtual void InitializeAppend(ColumnAppendState &state);
 	//! Append a vector of type [type] to the end of the column
