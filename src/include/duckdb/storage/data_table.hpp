@@ -139,7 +139,7 @@ public:
 	void Scan(Transaction &transaction, DataChunk &result, TableScanState &state, vector<column_t> &column_ids);
 
 	//! Fetch data from the specific row identifiers from the base table
-	void Fetch(Transaction &transaction, DataChunk &result, vector<column_t> &column_ids, Vector &row_ids,
+	void Fetch(Transaction &transaction, DataChunk &result, const vector<column_t> &column_ids, Vector &row_ids,
 	           idx_t fetch_count, ColumnFetchState &state);
 
 	//! Append a DataChunk to the table. Throws an exception if the columns don't match the tables' columns.

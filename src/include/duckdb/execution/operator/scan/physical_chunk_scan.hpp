@@ -20,7 +20,7 @@ public:
 	    : PhysicalOperator(op_type, move(types), estimated_cardinality), collection(nullptr) {
 	}
 
-	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 
 public:

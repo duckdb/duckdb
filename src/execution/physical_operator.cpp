@@ -26,7 +26,7 @@ PhysicalOperatorState::PhysicalOperatorState(PhysicalOperator &op, PhysicalOpera
 	}
 }
 
-void PhysicalOperator::GetChunk(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
+void PhysicalOperator::GetChunk(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const {
 	if (context.client.interrupted) {
 		throw InterruptException();
 	}

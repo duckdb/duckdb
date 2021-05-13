@@ -55,7 +55,7 @@ static void SetValue(DataChunk &output, int index, int op_id, string name, doubl
 }
 
 unique_ptr<FunctionOperatorData> PragmaLastProfilingOutputInit(ClientContext &context, const FunctionData *bind_data,
-                                                               vector<column_t> &column_ids,
+                                                               const vector<column_t> &column_ids,
                                                                TableFilterCollection *filters) {
 	return make_unique<PragmaLastProfilingOutputOperatorData>();
 }

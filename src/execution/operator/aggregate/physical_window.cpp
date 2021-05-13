@@ -963,7 +963,8 @@ static void Scan(PhysicalWindowOperatorState &state, DataChunk &chunk) {
 	state.position += STANDARD_VECTOR_SIZE;
 }
 
-void PhysicalWindow::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
+void PhysicalWindow::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
+                                      PhysicalOperatorState *state_p) const {
 	auto &state = *reinterpret_cast<PhysicalWindowOperatorState *>(state_p);
 	auto &gstate = (WindowGlobalState &)*sink_state;
 
