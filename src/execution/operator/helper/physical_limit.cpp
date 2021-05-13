@@ -43,16 +43,13 @@ void PhysicalLimit::GetChunkInternal(ExecutionContext &context, DataChunk &chunk
 	// get the next chunk from the child
 	do {
 		children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
-		{
-			lock_guard<mutex> llock(lock);
-			if (limit_expression) {
-				limit = GetDelimiter(state->child_chunk, limit_expression.get(), limit);
-				limit_expression.reset();
-			}
-			if (offset_expression) {
-				offset = GetDelimiter(state->child_chunk, offset_expression.get(), offset);
-				offset_expression.reset();
-			}
+		if (limit_expression) {
+			limit = GetDelimiter(state->child_chunk, limit_expression.get(), limit);
+			limit_expression.reset();
+		}
+		if (offset_expression) {
+			offset = GetDelimiter(state->child_chunk, offset_expression.get(), offset);
+			offset_expression.reset();
 		}
 		max_element = limit + offset;
 		if (state->child_chunk.size() == 0) {
