@@ -96,9 +96,9 @@ class TestTPCHArrow(object):
             duckdb_conn.execute("DROP TABLE "+tpch_table)
             duck_arrow_table.create(tpch_table)
 
-        tpch_path = os.path.join(os.path.dirname(os.path.realpath(__file__)),'..','..','..','..','extension','tpch','dbgen')
+        tpch_path = os.path.join(os.path.dirname(os.path.realpath(__file__)),'tpch')
         queries_path = os.path.join(tpch_path,'queries')
-        answers_path = os.path.join(tpch_path,'answers','sf0.01')
+        answers_path = os.path.join(tpch_path,'answers')
 
         for i in range (1,23):
             query = get_query(queries_path,i)
