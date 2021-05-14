@@ -2,6 +2,7 @@
 
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/algorithm.hpp"
+#include "duckdb/common/helper.hpp"
 
 #include <cmath>
 
@@ -156,7 +157,7 @@ void WindowSegmentTree::ConstructTree() {
 		for (idx_t pos = 0; pos < level_size; pos += TREE_FANOUT) {
 			// compute the aggregate for this entry in the segment tree
 			AggregateInit();
-			WindowSegmentValue(level_current, pos, MinValue<idx_t>(level_size, pos + TREE_FANOUT));
+			WindowSegmentValue(level_current, pos, MinValue(level_size, pos + TREE_FANOUT));
 
 			memcpy(levels_flat_native.get() + (levels_flat_offset * state.size()), state.data(), state.size());
 
@@ -188,7 +189,7 @@ Value WindowSegmentTree::Compute(idx_t begin, idx_t end) {
 		bounds = FrameBounds(begin, end);
 
 		// Extract the range
-		ExtractFrame(std::min(bounds.first, prev.first), std::max(bounds.second, prev.second));
+		ExtractFrame(MinValue<idx_t>(bounds.first, prev.first), MaxValue<idx_t>(bounds.second, prev.second));
 
 		ConstantVector::SetNull(result, false);
 
