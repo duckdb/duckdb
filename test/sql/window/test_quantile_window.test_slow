@@ -18,4 +18,4 @@ select quantile(a, 0.5) over (
     order by b asc
     rows between p preceding and f following)
 from (
-    select a, b, mod(b * 47, 1023) as p, (100 - mod(b * 47, 1023)) as f from rank100) t
+    select a, b, mod(b * 47, 511) as p, (100 - mod(b * 47, 511)) as f from rank100) t

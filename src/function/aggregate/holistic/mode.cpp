@@ -161,8 +161,8 @@ struct ModeFunction {
 	}
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
-	static void Frame(INPUT_TYPE *data, FunctionData *bind_data, STATE *state, const FrameBounds &frame,
-	                  const FrameBounds &prev, RESULT_TYPE *result) {
+	static void Window(const INPUT_TYPE *data, const ValidityMask &dmask, FunctionData *bind_data_p, STATE *state,
+	                   const FrameBounds &frame, const FrameBounds &prev, RESULT_TYPE *result, ValidityMask &rmask) {
 		if (!state->frequency_map) {
 			state->frequency_map = new unordered_map<KEY_TYPE, size_t>();
 		}
@@ -217,7 +217,7 @@ AggregateFunction GetTypedModeFunction(const LogicalType &type) {
 	using STATE = ModeState<KEY_TYPE>;
 	using OP = ModeFunction<KEY_TYPE>;
 	auto func = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, INPUT_TYPE, OP>(type, type);
-	func.frame = AggregateFunction::UnaryFrame<STATE, INPUT_TYPE, INPUT_TYPE, OP>;
+	func.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, INPUT_TYPE, OP>;
 	return func;
 }
 

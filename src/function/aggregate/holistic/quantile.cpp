@@ -86,7 +86,7 @@ void ReuseIndexes(idx_t *index, const FrameBounds &frame, const FrameBounds &pre
 }
 
 template <class INPUT_TYPE, class STATE>
-static bool ReplaceIndex(STATE *state, INPUT_TYPE *fdata, const idx_t k, const FrameBounds &frame,
+static bool ReplaceIndex(STATE *state, const INPUT_TYPE *fdata, const idx_t k, const FrameBounds &frame,
                          const FrameBounds &prev) {
 	D_ASSERT(state->v);
 	auto index = (idx_t *)state->v;
@@ -116,9 +116,20 @@ static bool ReplaceIndex(STATE *state, INPUT_TYPE *fdata, const idx_t k, const F
 	return same;
 }
 
+struct IndirectNotNull {
+	inline explicit IndirectNotNull(const ValidityMask &mask_p, idx_t bias_p) : mask(mask_p), bias(bias_p) {
+	}
+
+	inline bool operator()(const idx_t &idx) const {
+		return mask.RowIsValid(idx - bias);
+	}
+	const ValidityMask &mask;
+	const idx_t bias;
+};
+
 template <class INPUT_TYPE>
-struct Indirect {
-	inline explicit Indirect(const INPUT_TYPE *inputs_p) : inputs(inputs_p) {
+struct IndirectLess {
+	inline explicit IndirectLess(const INPUT_TYPE *inputs_p) : inputs(inputs_p) {
 	}
 
 	inline bool operator()(const idx_t &lhi, const idx_t &rhi) const {
@@ -253,22 +264,21 @@ struct DiscreteQuantileOperation : public QuantileOperation<SAVE_TYPE> {
 	}
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
-	static void Frame(INPUT_TYPE *data, FunctionData *bind_data_p, STATE *state, const FrameBounds &frame,
-	                  const FrameBounds &prev, RESULT_TYPE *result) {
+	static void Window(const INPUT_TYPE *data, const ValidityMask &dmask, FunctionData *bind_data_p, STATE *state,
+	                   const FrameBounds &frame, const FrameBounds &prev, RESULT_TYPE *result, ValidityMask &rmask) {
 		//  Lazily initialise frame state
-		const auto frame_len = frame.second - frame.first;
-		state->template Resize<idx_t>(frame_len);
+		state->pos = frame.second - frame.first;
+		state->template Resize<idx_t>(state->pos);
 
 		D_ASSERT(state->v);
 		auto index = (idx_t *)state->v;
 
 		D_ASSERT(bind_data_p);
 		auto bind_data = (QuantileBindData *)bind_data_p;
-		auto offset = (idx_t)(double(frame_len - 1) * bind_data->quantiles[0]);
-
+		auto offset = (idx_t)(double(state->pos - 1) * bind_data->quantiles[0]);
 		auto same = false;
 
-		if (frame.first == prev.first + 1 && frame.second == prev.second + 1) {
+		if (dmask.AllValid() && frame.first == prev.first + 1 && frame.second == prev.second + 1) {
 			//  Fixed frame size
 			same = ReplaceIndex<INPUT_TYPE>(state, data, offset, frame, prev);
 		} else {
@@ -276,9 +286,19 @@ struct DiscreteQuantileOperation : public QuantileOperation<SAVE_TYPE> {
 		}
 
 		if (!same) {
-			Indirect<INPUT_TYPE> cmp(data);
-			std::nth_element(index, index + offset, index + frame_len, cmp);
-			state->moving = SAVE_TYPE(data[index[offset]]);
+			auto valid = state->pos;
+			if (!dmask.AllValid()) {
+				IndirectNotNull not_null(dmask, MinValue(frame.first, prev.first));
+				valid = std::partition(index, index + valid, not_null) - index;
+				offset = (idx_t)(double(valid - 1) * bind_data->quantiles[0]);
+			}
+			if (valid) {
+				IndirectLess<INPUT_TYPE> lt(data);
+				std::nth_element(index, index + offset, index + valid, lt);
+				state->moving = SAVE_TYPE(data[index[offset]]);
+			} else {
+				rmask.Set(0, false);
+			}
 		}
 		result[0] = RESULT_TYPE(state->moving);
 	}
@@ -289,7 +309,7 @@ AggregateFunction GetTypedDiscreteQuantileAggregateFunction(const LogicalType &t
 	using STATE = QuantileState<INPUT_TYPE>;
 	using OP = DiscreteQuantileOperation<INPUT_TYPE>;
 	auto fun = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, INPUT_TYPE, OP>(type, type);
-	// fun.frame = AggregateFunction::UnaryFrame<STATE, INPUT_TYPE, INPUT_TYPE, OP>;
+	fun.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, INPUT_TYPE, OP>;
 	return fun;
 }
 

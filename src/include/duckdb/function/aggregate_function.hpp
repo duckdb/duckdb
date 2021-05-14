@@ -46,8 +46,8 @@ typedef void (*aggregate_simple_update_t)(Vector inputs[], FunctionData *bind_da
 
 //! The type used for updating complex windowed aggregate functions (optional)
 typedef std::pair<idx_t, idx_t> FrameBounds;
-typedef void (*aggregate_frame_t)(Vector inputs[], FunctionData *bind_data, idx_t input_count, data_ptr_t state,
-                                  const FrameBounds &F, const FrameBounds &P, Vector &result);
+typedef void (*aggregate_window_t)(Vector inputs[], FunctionData *bind_data, idx_t input_count, data_ptr_t state,
+                                   const FrameBounds &frame, const FrameBounds &prev, Vector &result);
 
 class AggregateFunction : public BaseScalarFunction {
 public:
@@ -55,19 +55,19 @@ public:
 	                  aggregate_initialize_t initialize, aggregate_update_t update, aggregate_combine_t combine,
 	                  aggregate_finalize_t finalize, aggregate_simple_update_t simple_update = nullptr,
 	                  bind_aggregate_function_t bind = nullptr, aggregate_destructor_t destructor = nullptr,
-	                  aggregate_statistics_t statistics = nullptr, aggregate_frame_t frame = nullptr)
+	                  aggregate_statistics_t statistics = nullptr, aggregate_window_t window = nullptr)
 	    : BaseScalarFunction(name, arguments, return_type, false), state_size(state_size), initialize(initialize),
-	      update(update), combine(combine), finalize(finalize), simple_update(simple_update), frame(frame), bind(bind),
-	      destructor(destructor), statistics(statistics) {
+	      update(update), combine(combine), finalize(finalize), simple_update(simple_update), window(window),
+	      bind(bind), destructor(destructor), statistics(statistics) {
 	}
 
 	AggregateFunction(vector<LogicalType> arguments, LogicalType return_type, aggregate_size_t state_size,
 	                  aggregate_initialize_t initialize, aggregate_update_t update, aggregate_combine_t combine,
 	                  aggregate_finalize_t finalize, aggregate_simple_update_t simple_update = nullptr,
 	                  bind_aggregate_function_t bind = nullptr, aggregate_destructor_t destructor = nullptr,
-	                  aggregate_statistics_t statistics = nullptr, aggregate_frame_t frame = nullptr)
+	                  aggregate_statistics_t statistics = nullptr, aggregate_window_t window = nullptr)
 	    : AggregateFunction(string(), arguments, return_type, state_size, initialize, update, combine, finalize,
-	                        simple_update, bind, destructor, statistics, frame) {
+	                        simple_update, bind, destructor, statistics, window) {
 	}
 
 	//! The hashed aggregate state sizing function
@@ -83,7 +83,7 @@ public:
 	//! The simple aggregate update function (may be null)
 	aggregate_simple_update_t simple_update;
 	//! The windowed aggregate frame update function (may be null)
-	aggregate_frame_t frame;
+	aggregate_window_t window;
 
 	//! The bind function (may be null)
 	bind_aggregate_function_t bind;
@@ -95,7 +95,7 @@ public:
 
 	bool operator==(const AggregateFunction &rhs) const {
 		return state_size == rhs.state_size && initialize == rhs.initialize && update == rhs.update &&
-		       combine == rhs.combine && finalize == rhs.finalize && frame == rhs.frame;
+		       combine == rhs.combine && finalize == rhs.finalize && window == rhs.window;
 	}
 	bool operator!=(const AggregateFunction &rhs) const {
 		return !(*this == rhs);
@@ -182,11 +182,11 @@ public:
 	}
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>
-	static void UnaryFrame(Vector inputs[], FunctionData *bind_data, idx_t input_count, data_ptr_t state,
-	                       const FrameBounds &frame, const FrameBounds &prev, Vector &result) {
+	static void UnaryWindow(Vector inputs[], FunctionData *bind_data, idx_t input_count, data_ptr_t state,
+	                        const FrameBounds &frame, const FrameBounds &prev, Vector &result) {
 		D_ASSERT(input_count == 1);
-		AggregateExecutor::UnaryFrame<STATE, INPUT_TYPE, RESULT_TYPE, OP>(inputs[0], bind_data, state, frame, prev,
-		                                                                  result);
+		AggregateExecutor::UnaryWindow<STATE, INPUT_TYPE, RESULT_TYPE, OP>(inputs[0], bind_data, state, frame, prev,
+		                                                                   result);
 	}
 
 	template <class STATE, class A_TYPE, class B_TYPE, class OP>

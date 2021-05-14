@@ -44,11 +44,9 @@ private:
 	DataChunk inputs;
 	//! A vector of pointers to "state", used for intermediate window segment aggregation
 	Vector statep;
-	//! The frame boundaries, used for the frame functions
-	FrameBounds bounds;
-	//! Reused previous frame contents for the frame functions (20% of runtime)
-	DataChunk prevs;
-	//! Reused result value container for the frame functions (20% of runtime)
+	//! The frame boundaries, used for the window functions
+	FrameBounds frame;
+	//! Reused result value container for the window functions (20% of runtime)
 	Vector result;
 
 	//! The actual window segment tree: an array of aggregate states that represent all the intermediate nodes

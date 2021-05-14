@@ -11,7 +11,7 @@ namespace duckdb {
 WindowSegmentTree::WindowSegmentTree(AggregateFunction &aggregate, FunctionData *bind_info,
                                      const LogicalType &result_type_p, ChunkCollection *input)
     : aggregate(aggregate), bind_info(bind_info), result_type(result_type_p), state(aggregate.state_size()),
-      bounds(0, 0), result(result_type_p), internal_nodes(0), input_ref(input) {
+      frame(0, 0), result(result_type_p), internal_nodes(0), input_ref(input) {
 #if STANDARD_VECTOR_SIZE < 512
 	throw NotImplementedException("Window functions are not supported for vector sizes < 512");
 #endif
@@ -22,8 +22,7 @@ WindowSegmentTree::WindowSegmentTree(AggregateFunction &aggregate, FunctionData 
 	if (input_ref && input_ref->ColumnCount() > 0) {
 		inputs.Initialize(input_ref->Types());
 		// if we have a frame-by-frame method, share the single state
-		if (aggregate.frame) {
-			prevs.InitializeEmpty(inputs.GetTypes());
+		if (aggregate.window) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 			AggregateInit();
 		} else if (aggregate.combine) {
@@ -52,7 +51,7 @@ WindowSegmentTree::~WindowSegmentTree() {
 		aggregate.destructor(addresses, count);
 	}
 
-	if (aggregate.frame) {
+	if (aggregate.window) {
 		(void)AggegateFinal();
 	}
 }
@@ -75,6 +74,10 @@ Value WindowSegmentTree::AggegateFinal() {
 }
 
 void WindowSegmentTree::ExtractFrame(idx_t begin, idx_t end) {
+	if (end - begin >= STANDARD_VECTOR_SIZE) {
+		throw InternalException("Cannot compute window aggregation: bounds are too large");
+	}
+
 	inputs.Reset();
 	inputs.SetCardinality(end - begin);
 
@@ -182,18 +185,18 @@ Value WindowSegmentTree::Compute(idx_t begin, idx_t end) {
 		return Value::Numeric(result_type, end - begin);
 	}
 
-	// If we have a frame function, use that
-	if (aggregate.frame) {
+	// If we have a window function, use that
+	if (aggregate.window) {
 		// Frame boundaries
-		auto prev = bounds;
-		bounds = FrameBounds(begin, end);
+		auto prev = frame;
+		frame = FrameBounds(begin, end);
 
 		// Extract the range
-		ExtractFrame(MinValue<idx_t>(bounds.first, prev.first), MaxValue<idx_t>(bounds.second, prev.second));
+		ExtractFrame(MinValue(frame.first, prev.first), MaxValue(frame.second, prev.second));
 
 		ConstantVector::SetNull(result, false);
 
-		aggregate.frame(inputs.data.data(), bind_info, inputs.ColumnCount(), state.data(), bounds, prev, result);
+		aggregate.window(inputs.data.data(), bind_info, inputs.ColumnCount(), state.data(), frame, prev, result);
 		return result.GetValue(0);
 	}
 
