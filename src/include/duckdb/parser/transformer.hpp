@@ -25,6 +25,14 @@ struct OrderByNode;
 struct CopyInfo;
 struct CommonTableExpressionInfo;
 
+struct ExpressionTransformTarget {
+	ExpressionTransformTarget(duckdb_libpgquery::PGNode *node_p, unique_ptr<ParsedExpression> &result_p) :
+		node(node_p), result(result_p) {}
+
+	duckdb_libpgquery::PGNode *node;
+	unique_ptr<ParsedExpression> &result;
+};
+
 //! The transformer class is responsible for transforming the internal Postgres
 //! parser representation into the DuckDB representation
 class Transformer {
@@ -54,6 +62,8 @@ private:
 			this->prepared_statement_parameter_index = new_count;
 		}
 	}
+
+	vector<ExpressionTransformTarget> expressions_to_be_transformed;
 
 private:
 	//! Transforms a Postgres statement into a single SQL statement
@@ -122,6 +132,12 @@ private:
 	//===--------------------------------------------------------------------===//
 	// Expression Transform
 	//===--------------------------------------------------------------------===//
+	//! Transform a Postgres abstract expression into an Expression
+	void TransformExpressionLazy(duckdb_libpgquery::PGNode *node, unique_ptr<ParsedExpression> &result);
+
+	unique_ptr<ParsedExpression> TransformExpression(duckdb_libpgquery::PGNode *node);
+	unique_ptr<ParsedExpression> TransformExpressionInternal(duckdb_libpgquery::PGNode *node);
+
 	//! Transform a Postgres boolean expression into an Expression
 	unique_ptr<ParsedExpression> TransformBoolExpr(duckdb_libpgquery::PGBoolExpr *root);
 	//! Transform a Postgres case expression into an Expression
@@ -136,8 +152,6 @@ private:
 	unique_ptr<ConstantExpression> TransformValue(duckdb_libpgquery::PGValue val);
 	//! Transform a Postgres operator into an Expression
 	unique_ptr<ParsedExpression> TransformAExpr(duckdb_libpgquery::PGAExpr *root);
-	//! Transform a Postgres abstract expression into an Expression
-	unique_ptr<ParsedExpression> TransformExpression(duckdb_libpgquery::PGNode *node);
 	//! Transform a Postgres function call into an Expression
 	unique_ptr<ParsedExpression> TransformFuncCall(duckdb_libpgquery::PGFuncCall *root);
 	//! Transform a Postgres boolean expression into an Expression
@@ -186,9 +200,9 @@ private:
 	// Operator String to ExpressionType (e.g. + => OPERATOR_ADD)
 	ExpressionType OperatorToExpressionType(const string &op);
 
-	unique_ptr<ParsedExpression> TransformUnaryOperator(const string &op, unique_ptr<ParsedExpression> child);
-	unique_ptr<ParsedExpression> TransformBinaryOperator(const string &op, unique_ptr<ParsedExpression> left,
-	                                                     unique_ptr<ParsedExpression> right);
+	unique_ptr<ParsedExpression> TransformUnaryOperator(const string &op, duckdb_libpgquery::PGNode *child);
+	unique_ptr<ParsedExpression> TransformBinaryOperator(const string &op, duckdb_libpgquery::PGNode *left,
+	                                                     duckdb_libpgquery::PGNode *right);
 	//===--------------------------------------------------------------------===//
 	// TableRef transform
 	//===--------------------------------------------------------------------===//
