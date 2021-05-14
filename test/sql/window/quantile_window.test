@@ -1,5 +1,5 @@
 # name: test/sql/window/quantile_window.test
-# description: Test MEDIAN operator with window functions
+# description: Test MEDIAN and QUANTILE aggregates as window functions
 # group: [window]
 
 require vector_size 512

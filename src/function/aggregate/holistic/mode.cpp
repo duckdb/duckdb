@@ -163,6 +163,7 @@ struct ModeFunction {
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
 	static void Window(const INPUT_TYPE *data, const ValidityMask &dmask, FunctionData *bind_data_p, STATE *state,
 	                   const FrameBounds &frame, const FrameBounds &prev, RESULT_TYPE *result, ValidityMask &rmask) {
+		const auto bias = MinValue(frame.first, prev.first);
 		if (!state->frequency_map) {
 			state->frequency_map = new unordered_map<KEY_TYPE, size_t>();
 		}
@@ -171,35 +172,51 @@ struct ModeFunction {
 			state->Reset();
 			// for f ∈ F do
 			for (auto f = frame.first; f < frame.second; ++f) {
-				state->ModeAdd(KEY_TYPE(data[f]));
+				if (dmask.RowIsValid(f - bias)) {
+					state->ModeAdd(KEY_TYPE(data[f]));
+				}
 			}
 		} else {
 			// for f ∈ P \ F do
 			for (auto p = prev.first; p < frame.first; ++p) {
-				state->ModeRm(KEY_TYPE(data[p]));
+				if (dmask.RowIsValid(p - bias)) {
+					state->ModeRm(KEY_TYPE(data[p]));
+				}
 			}
 			for (auto p = frame.second; p < prev.second; ++p) {
-				state->ModeRm(KEY_TYPE(data[p]));
+				if (dmask.RowIsValid(p - bias)) {
+					state->ModeRm(KEY_TYPE(data[p]));
+				}
 			}
 
 			// for f ∈ F \ P do
 			for (auto f = frame.first; f < prev.first; ++f) {
-				state->ModeAdd(KEY_TYPE(data[f]));
+				if (dmask.RowIsValid(f - bias)) {
+					state->ModeAdd(KEY_TYPE(data[f]));
+				}
 			}
 			for (auto f = prev.second; f < frame.second; ++f) {
-				state->ModeAdd(KEY_TYPE(data[f]));
+				if (dmask.RowIsValid(f - bias)) {
+					state->ModeAdd(KEY_TYPE(data[f]));
+				}
 			}
 		}
 
 		if (!state->valid) {
 			// Rescan
 			auto highest_frequency = state->Scan();
-			*(state->mode) = highest_frequency->first;
-			state->count = highest_frequency->second;
-			state->valid = true;
+			if (highest_frequency != state->frequency_map->end()) {
+				*(state->mode) = highest_frequency->first;
+				state->count = highest_frequency->second;
+				state->valid = (state->count > 0);
+			}
 		}
 
-		result[0] = RESULT_TYPE(*state->mode);
+		if (state->valid) {
+			result[0] = RESULT_TYPE(*state->mode);
+		} else {
+			rmask.Set(0, false);
+		}
 	}
 
 	static bool IgnoreNull() {
