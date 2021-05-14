@@ -183,20 +183,16 @@ Value WindowSegmentTree::Compute(idx_t begin, idx_t end) {
 
 	// If we have a frame function, use that
 	if (aggregate.frame) {
-		// Reference the previous inputs
-		prevs.Reference(inputs);
-
-		// Extract the new inputs
-		ExtractFrame(begin, end);
-
 		// Frame boundaries
-		auto prev_bounds = bounds;
+		auto prev = bounds;
 		bounds = FrameBounds(begin, end);
+
+		// Extract the range
+		ExtractFrame(std::min(bounds.first, prev.first), std::max(bounds.second, prev.second));
 
 		ConstantVector::SetNull(result, false);
 
-		aggregate.frame(inputs.data.data(), prevs.data.data(), bind_info, inputs.ColumnCount(), state.data(), bounds,
-		                prev_bounds, result);
+		aggregate.frame(inputs.data.data(), bind_info, inputs.ColumnCount(), state.data(), bounds, prev, result);
 		return result.GetValue(0);
 	}
 

@@ -334,13 +334,12 @@ public:
 	}
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>
-	static void UnaryFrame(Vector &input, Vector &prev, FunctionData *bind_data, data_ptr_t state, const FrameBounds &F,
-	                       const FrameBounds &P, Vector &result) {
+	static void UnaryFrame(Vector &input, FunctionData *bind_data, data_ptr_t state, const FrameBounds &frame,
+	                       const FrameBounds &prev, Vector &result) {
 
-		auto fdata = FlatVector::GetData<INPUT_TYPE>(input) - F.first;
-		auto pdata = FlatVector::GetData<INPUT_TYPE>(prev) - P.first;
+		auto idata = FlatVector::GetData<INPUT_TYPE>(input) - std::min(frame.first, prev.first);
 		auto rdata = ConstantVector::GetData<RESULT_TYPE>(result);
-		OP::template Frame<STATE, INPUT_TYPE, RESULT_TYPE>(fdata, pdata, bind_data, (STATE *)state, F, P, rdata);
+		OP::template Frame<STATE, INPUT_TYPE, RESULT_TYPE>(idata, bind_data, (STATE *)state, frame, prev, rdata);
 	}
 
 	template <class STATE_TYPE, class OP>

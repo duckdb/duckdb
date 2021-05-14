@@ -46,8 +46,8 @@ typedef void (*aggregate_simple_update_t)(Vector inputs[], FunctionData *bind_da
 
 //! The type used for updating complex windowed aggregate functions (optional)
 typedef std::pair<idx_t, idx_t> FrameBounds;
-typedef void (*aggregate_frame_t)(Vector inputs[], Vector prevs[], FunctionData *bind_data, idx_t input_count,
-                                  data_ptr_t state, const FrameBounds &F, const FrameBounds &P, Vector &result);
+typedef void (*aggregate_frame_t)(Vector inputs[], FunctionData *bind_data, idx_t input_count, data_ptr_t state,
+                                  const FrameBounds &F, const FrameBounds &P, Vector &result);
 
 class AggregateFunction : public BaseScalarFunction {
 public:
@@ -182,10 +182,10 @@ public:
 	}
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>
-	static void UnaryFrame(Vector inputs[], Vector prevs[], FunctionData *bind_data, idx_t input_count,
-	                       data_ptr_t state, const FrameBounds &F, const FrameBounds &P, Vector &result) {
+	static void UnaryFrame(Vector inputs[], FunctionData *bind_data, idx_t input_count, data_ptr_t state,
+	                       const FrameBounds &frame, const FrameBounds &prev, Vector &result) {
 		D_ASSERT(input_count == 1);
-		AggregateExecutor::UnaryFrame<STATE, INPUT_TYPE, RESULT_TYPE, OP>(inputs[0], prevs[0], bind_data, state, F, P,
+		AggregateExecutor::UnaryFrame<STATE, INPUT_TYPE, RESULT_TYPE, OP>(inputs[0], bind_data, state, frame, prev,
 		                                                                  result);
 	}
 
