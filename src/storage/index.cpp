@@ -7,12 +7,15 @@
 
 namespace duckdb {
 
-Index::Index(IndexType type, vector<column_t> column_ids_p, vector<unique_ptr<Expression>> unbound_expressions)
-    : type(type), column_ids(move(column_ids_p)), unbound_expressions(move(unbound_expressions)) {
-	for (auto &expr : this->unbound_expressions) {
+Index::Index(IndexType type, const vector<column_t> &column_ids_p,
+             const vector<unique_ptr<Expression>> &unbound_expressions)
+    : type(type), column_ids(column_ids_p) {
+	for (auto &expr : unbound_expressions) {
 		types.push_back(expr->return_type.InternalType());
 		logical_types.push_back(expr->return_type);
-		bound_expressions.push_back(BindExpression(expr->Copy()));
+		auto unbound_expression = expr->Copy();
+		bound_expressions.push_back(BindExpression(unbound_expression->Copy()));
+		this->unbound_expressions.emplace_back(move(unbound_expression));
 	}
 	for (auto &bound_expr : bound_expressions) {
 		executor.AddExpression(*bound_expr);

@@ -999,7 +999,7 @@ bool DataTable::ScanCreateIndex(CreateIndexScanState &state, const vector<column
 	return count > 0;
 }
 
-void DataTable::AddIndex(unique_ptr<Index> index, vector<unique_ptr<Expression>> &expressions) {
+void DataTable::AddIndex(unique_ptr<Index> index, const vector<unique_ptr<Expression>> &expressions) {
 	DataChunk result;
 	result.Initialize(index->logical_types);
 
