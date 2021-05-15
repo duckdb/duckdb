@@ -31,8 +31,11 @@ public:
 	//! Converts a blob to a string, writing the output to the designated output string.
 	//! The string needs to have space for at least GetStringSize(blob) bytes.
 	static void ToString(string_t blob, char *output);
+	static void ToStringAsIs(string_t blob, char *output);
 	//! Convert a blob object to a string
 	static string ToString(string_t blob);
+	//! Copy the contents of a blob object to a string as is
+	static string ToStringAsIs(string_t blob);
 
 	//! Returns the blob size of a string -> blob conversion
 	static idx_t GetBlobSize(string_t str);
