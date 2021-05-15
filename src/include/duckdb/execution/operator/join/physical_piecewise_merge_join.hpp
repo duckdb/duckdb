@@ -37,8 +37,8 @@ public:
 	void Combine(ExecutionContext &context, GlobalOperatorState &gstate, LocalSinkState &lstate) override;
 
 private:
-    // resolve joins that output max N elements (SEMI, ANTI, MARK)
-    void ResolveSimpleJoin(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const;
+	// resolve joins that output max N elements (SEMI, ANTI, MARK)
+	void ResolveSimpleJoin(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const;
 	// resolve joins that can potentially output N*M elements (INNER, LEFT, FULL)
 	void ResolveComplexJoin(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const;
 };

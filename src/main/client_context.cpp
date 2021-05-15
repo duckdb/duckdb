@@ -103,14 +103,14 @@ string ClientContext::FinalizeQuery(ClientContextLock &lock, bool success) {
 	if (transaction.HasActiveTransaction()) {
 		ActiveTransaction().active_query = MAXIMUM_QUERY_ID;
 		// Move the query profiler into the history
-		query_profiler_history->GetPrevProfilers().emplace_back(transaction.ActiveTransaction().active_query,
-		                                                        move(profiler));
+		auto &prev_profilers = query_profiler_history->GetPrevProfilers();
+		prev_profilers.emplace_back(transaction.ActiveTransaction().active_query, move(profiler));
 		// Reinitialize the query profiler
 		profiler = make_unique<QueryProfiler>();
 		// Propagate settings of the saved query into the new profiler.
-		profiler->Propagate(*query_profiler_history->GetPrevProfilers().back().second);
-		if (query_profiler_history->GetPrevProfilers().size() >= query_profiler_history->GetPrevProfilersSize()) {
-			query_profiler_history->GetPrevProfilers().pop_front();
+		profiler->Propagate(*prev_profilers.back().second);
+		if (prev_profilers.size() >= query_profiler_history->GetPrevProfilersSize()) {
+			prev_profilers.pop_front();
 		}
 		try {
 			if (transaction.IsAutoCommit()) {

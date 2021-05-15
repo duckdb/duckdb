@@ -213,8 +213,8 @@ void OperatorProfiler::AddTiming(const PhysicalOperator *op, double time, idx_t 
 		entry->second.elements += elements;
 	}
 }
-void OperatorProfiler::Flush(const PhysicalOperator *phys_op, ExpressionExecutor *expression_executor, const string &name,
-                             int id) {
+void OperatorProfiler::Flush(const PhysicalOperator *phys_op, ExpressionExecutor *expression_executor,
+                             const string &name, int id) {
 	auto entry = timings.find(phys_op);
 	if (entry != timings.end()) {
 		auto &operator_timing = timings.find(phys_op)->second;
