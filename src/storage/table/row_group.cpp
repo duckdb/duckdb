@@ -113,7 +113,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(ClientContext &context, const LogicalTy
 	while (true) {
 		// scan the table
 		scan_chunk.Reset();
-		Scan(transaction, scan_state.row_group_scan_state, scan_chunk);
+		IndexScan(scan_state.row_group_scan_state, scan_chunk, true);
 		if (scan_chunk.size() == 0) {
 			break;
 		}
@@ -460,7 +460,6 @@ void RowGroup::Append(RowGroupAppendState &state, DataChunk &chunk, idx_t append
 		columns[i]->Append(*stats[i]->statistics, state.states[i], chunk.data[i], append_count);
 	}
 	state.offset_in_row_group += append_count;
-	Verify();
 }
 
 void RowGroup::Update(Transaction &transaction, DataChunk &update_chunk, Vector &row_ids,

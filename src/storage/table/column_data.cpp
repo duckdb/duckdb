@@ -456,9 +456,7 @@ void ColumnData::Verify(RowGroup &parent) {
 #ifdef DEBUG
 	D_ASSERT(this->start == parent.start);
 	auto root = data.GetRootSegment();
-	if (parent.count == 0) {
-		D_ASSERT(root == nullptr);
-	} else {
+	if (root) {
 		D_ASSERT(root != nullptr);
 		D_ASSERT(root->start == this->start);
 		idx_t prev_end = root->start;
@@ -470,6 +468,8 @@ void ColumnData::Verify(RowGroup &parent) {
 			}
 			root = root->next.get();
 		}
+	} else {
+		D_ASSERT(parent.count == 0);
 	}
 #endif
 }
