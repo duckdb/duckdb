@@ -20,7 +20,7 @@ struct SumSetOperation {
 		state->isset = false;
 	}
 	template <class STATE>
-	static void Combine(STATE source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target) {
 		target->isset = source.isset || target->isset;
 		target->value += source.value;
 	}

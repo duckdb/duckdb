@@ -18,7 +18,7 @@ add_library_unity(
   exception_format_value.cpp
   file_buffer.cpp
   file_system.cpp
-  gzip_stream.cpp
+  gzip_file_system.cpp
   limits.cpp
   printer.cpp
   progress_bar.cpp

@@ -270,7 +270,7 @@ unique_ptr<LocalSinkState> PhysicalOrder::GetLocalSinkState(ExecutionContext &co
 }
 
 void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &gstate_p, LocalSinkState &lstate_p,
-                         DataChunk &input) {
+                         DataChunk &input) const {
 	auto &gstate = (OrderGlobalState &)gstate_p;
 	auto &lstate = (OrderLocalState &)lstate_p;
 	const auto &sorting_state = *gstate.sorting_state;
@@ -1028,7 +1028,7 @@ static void ReOrder(ClientContext &context, SortedBlock &sb, const SortingState 
 }
 
 void PhysicalOrder::SortLocalState(ClientContext &context, OrderLocalState &lstate, const SortingState &sorting_state,
-                                   const PayloadState &payload_state) {
+                                   const PayloadState &payload_state) const {
 	D_ASSERT(lstate.sorting_block->count == lstate.payload_block->count);
 	if (lstate.sorting_block->count == 0) {
 		return;
@@ -1887,7 +1887,8 @@ static void Scan(ClientContext &context, DataChunk &chunk, PhysicalOrderOperator
 	chunk.Verify();
 }
 
-void PhysicalOrder::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
+void PhysicalOrder::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
+                                     PhysicalOperatorState *state_p) const {
 	auto &state = *reinterpret_cast<PhysicalOrderOperatorState *>(state_p);
 	auto &gstate = (OrderGlobalState &)*this->sink_state;
 	const auto &payload_state = *gstate.payload_state;

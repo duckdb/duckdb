@@ -73,7 +73,7 @@ unique_ptr<LocalSinkState> PhysicalPiecewiseMergeJoin::GetLocalSinkState(Executi
 }
 
 void PhysicalPiecewiseMergeJoin::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
-                                      DataChunk &input) {
+                                      DataChunk &input) const {
 	auto &gstate = (MergeJoinGlobalState &)state;
 	auto &mj_state = (MergeJoinLocalState &)lstate;
 
@@ -154,7 +154,7 @@ public:
 };
 
 void PhysicalPiecewiseMergeJoin::ResolveSimpleJoin(ExecutionContext &context, DataChunk &chunk,
-                                                   PhysicalOperatorState *state_p) {
+                                                   PhysicalOperatorState *state_p) const {
 	auto state = reinterpret_cast<PhysicalPiecewiseMergeJoinState *>(state_p);
 	auto &gstate = (MergeJoinGlobalState &)*sink_state;
 	do {
@@ -195,7 +195,7 @@ void PhysicalPiecewiseMergeJoin::ResolveSimpleJoin(ExecutionContext &context, Da
 }
 
 void PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &chunk,
-                                                    PhysicalOperatorState *state_p) {
+                                                    PhysicalOperatorState *state_p) const {
 	auto state = reinterpret_cast<PhysicalPiecewiseMergeJoinState *>(state_p);
 	auto &gstate = (MergeJoinGlobalState &)*sink_state;
 	do {
@@ -281,7 +281,7 @@ void PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionContext &context, D
 }
 
 void PhysicalPiecewiseMergeJoin::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
-                                                  PhysicalOperatorState *state_p) {
+                                                  PhysicalOperatorState *state_p) const {
 	auto state = reinterpret_cast<PhysicalPiecewiseMergeJoinState *>(state_p);
 	auto &gstate = (MergeJoinGlobalState &)*sink_state;
 

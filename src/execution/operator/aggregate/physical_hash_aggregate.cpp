@@ -147,7 +147,7 @@ unique_ptr<LocalSinkState> PhysicalHashAggregate::GetLocalSinkState(ExecutionCon
 }
 
 void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
-                                 DataChunk &input) {
+                                 DataChunk &input) const {
 	auto &llstate = (HashAggregateLocalState &)lstate;
 	auto &gstate = (HashAggregateGlobalState &)state;
 
@@ -386,7 +386,7 @@ bool PhysicalHashAggregate::FinalizeInternal(ClientContext &context, unique_ptr<
 }
 
 void PhysicalHashAggregate::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
-                                             PhysicalOperatorState *state_p) {
+                                             PhysicalOperatorState *state_p) const {
 	auto &gstate = (HashAggregateGlobalState &)*sink_state;
 	auto &state = (PhysicalHashAggregateState &)*state_p;
 
@@ -455,7 +455,7 @@ unique_ptr<PhysicalOperatorState> PhysicalHashAggregate::GetOperatorState() {
 	                                               children.empty() ? nullptr : children[0].get());
 }
 
-bool PhysicalHashAggregate::ForceSingleHT(GlobalOperatorState &state) {
+bool PhysicalHashAggregate::ForceSingleHT(GlobalOperatorState &state) const {
 	auto &gstate = (HashAggregateGlobalState &)state;
 
 	return !all_combinable || any_distinct || gstate.partition_info.n_partitions < 2;

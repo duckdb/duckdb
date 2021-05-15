@@ -66,6 +66,8 @@ public:
 	public:
 		friend BitArray;
 
+		reference(const reference &r) = default;
+
 		reference &operator=(bool x) noexcept {
 			auto b = parent.Block(pos);
 			auto s = parent.Shift(pos);
@@ -963,7 +965,8 @@ static void Scan(PhysicalWindowOperatorState &state, DataChunk &chunk) {
 	state.position += STANDARD_VECTOR_SIZE;
 }
 
-void PhysicalWindow::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
+void PhysicalWindow::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
+                                      PhysicalOperatorState *state_p) const {
 	auto &state = *reinterpret_cast<PhysicalWindowOperatorState *>(state_p);
 	auto &gstate = (WindowGlobalState &)*sink_state;
 
@@ -1024,7 +1027,7 @@ void PhysicalWindow::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 }
 
 void PhysicalWindow::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_p,
-                          DataChunk &input) {
+                          DataChunk &input) const {
 	auto &lstate = (WindowLocalState &)lstate_p;
 	lstate.chunks.Append(input);
 

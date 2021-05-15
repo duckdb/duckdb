@@ -4,12 +4,12 @@
 namespace duckdb {
 
 struct FunctionExpressionState : public ExpressionState {
-	FunctionExpressionState(Expression &expr, ExpressionExecutorState &root) : ExpressionState(expr, root) {
+	FunctionExpressionState(const Expression &expr, ExpressionExecutorState &root) : ExpressionState(expr, root) {
 	}
 
 	DataChunk arguments;
 };
-unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundFunctionExpression &expr,
+unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundFunctionExpression &expr,
                                                                 ExpressionExecutorState &root) {
 	auto result = make_unique<FunctionExpressionState>(expr, root);
 	for (auto &child : expr.children) {
@@ -22,8 +22,8 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundFunctionExp
 	return move(result);
 }
 
-void ExpressionExecutor::Execute(BoundFunctionExpression &expr, ExpressionState *state, const SelectionVector *sel,
-                                 idx_t count, Vector &result) {
+void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, ExpressionState *state,
+                                 const SelectionVector *sel, idx_t count, Vector &result) {
 	auto &fstate = (FunctionExpressionState &)*state;
 	auto &arguments = fstate.arguments;
 	if (!state->types.empty()) {

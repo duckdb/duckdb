@@ -48,7 +48,7 @@ unique_ptr<LocalSinkState> PhysicalBlockwiseNLJoin::GetLocalSinkState(ExecutionC
 }
 
 void PhysicalBlockwiseNLJoin::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
-                                   DataChunk &input) {
+                                   DataChunk &input) const {
 	auto &gstate = (BlockwiseNLJoinGlobalState &)state;
 	gstate.right_chunks.Append(input);
 }
@@ -91,7 +91,7 @@ public:
 };
 
 void PhysicalBlockwiseNLJoin::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
-                                               PhysicalOperatorState *state_p) {
+                                               PhysicalOperatorState *state_p) const {
 	auto state = reinterpret_cast<PhysicalBlockwiseNLJoinState *>(state_p);
 	auto &gstate = (BlockwiseNLJoinGlobalState &)*sink_state;
 

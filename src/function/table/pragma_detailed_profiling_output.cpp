@@ -59,7 +59,7 @@ static unique_ptr<FunctionData> PragmaDetailedProfilingOutputBind(ClientContext 
 
 unique_ptr<FunctionOperatorData> PragmaDetailedProfilingOutputInit(ClientContext &context,
                                                                    const FunctionData *bind_data,
-                                                                   vector<column_t> &column_ids,
+                                                                   const vector<column_t> &column_ids,
                                                                    TableFilterCollection *filters) {
 	return make_unique<PragmaDetailedProfilingOutputOperatorData>();
 }

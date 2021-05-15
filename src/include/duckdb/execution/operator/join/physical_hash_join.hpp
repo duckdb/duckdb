@@ -38,16 +38,17 @@ public:
 	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;
 
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) override;
-	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) override;
+	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
+	          DataChunk &input) const override;
 	bool Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> gstate) override;
 
-	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 
 	void FinalizeOperatorState(PhysicalOperatorState &state, ExecutionContext &context) override;
 
 private:
-	void ProbeHashTable(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p);
+	void ProbeHashTable(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) const;
 };
 
 } // namespace duckdb

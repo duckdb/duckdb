@@ -148,7 +148,8 @@ struct ReadCSVOperatorData : public FunctionOperatorData {
 };
 
 static unique_ptr<FunctionOperatorData> ReadCSVInit(ClientContext &context, const FunctionData *bind_data_p,
-                                                    vector<column_t> &column_ids, TableFilterCollection *filters) {
+                                                    const vector<column_t> &column_ids,
+                                                    TableFilterCollection *filters) {
 	auto &bind_data = (ReadCSVData &)*bind_data_p;
 	auto result = make_unique<ReadCSVOperatorData>();
 	if (bind_data.initial_reader) {

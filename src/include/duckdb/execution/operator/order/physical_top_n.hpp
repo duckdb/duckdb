@@ -29,13 +29,14 @@ public:
 	idx_t offset;
 
 public:
-	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) override;
+	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
+	          DataChunk &input) const override;
 	void Combine(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate) override;
 	bool Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> gstate) override;
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) override;
 	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;
 
-	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 
 	string ParamsToString() const override;

@@ -33,7 +33,7 @@ public:
 };
 
 void PhysicalInsert::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
-                          DataChunk &chunk) {
+                          DataChunk &chunk) const {
 	auto &gstate = (InsertGlobalState &)state;
 	auto &istate = (InsertLocalState &)lstate;
 
@@ -79,7 +79,7 @@ unique_ptr<LocalSinkState> PhysicalInsert::GetLocalSinkState(ExecutionContext &c
 //===--------------------------------------------------------------------===//
 // GetChunkInternal
 //===--------------------------------------------------------------------===//
-void PhysicalInsert::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
+void PhysicalInsert::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const {
 	auto &gstate = (InsertGlobalState &)*sink_state;
 
 	chunk.SetCardinality(1);

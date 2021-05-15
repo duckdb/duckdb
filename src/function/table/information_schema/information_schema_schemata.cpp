@@ -46,7 +46,7 @@ static unique_ptr<FunctionData> InformationSchemaSchemataBind(ClientContext &con
 }
 
 unique_ptr<FunctionOperatorData> InformationSchemaSchemataInit(ClientContext &context, const FunctionData *bind_data,
-                                                               vector<column_t> &column_ids,
+                                                               const vector<column_t> &column_ids,
                                                                TableFilterCollection *filters) {
 	auto result = make_unique<InformationSchemaSchemataData>();
 

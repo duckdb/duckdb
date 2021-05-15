@@ -14,7 +14,7 @@ void ExpressionState::Finalize() {
 		intermediate_chunk.Initialize(types);
 	}
 }
-ExpressionState::ExpressionState(Expression &expr, ExpressionExecutorState &root)
+ExpressionState::ExpressionState(const Expression &expr, ExpressionExecutorState &root)
     : expr(expr), root(root), name(expr.ToString()) {
 }
 

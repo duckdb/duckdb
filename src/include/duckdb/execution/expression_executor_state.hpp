@@ -19,11 +19,11 @@ class ExpressionExecutor;
 struct ExpressionExecutorState;
 
 struct ExpressionState {
-	ExpressionState(Expression &expr, ExpressionExecutorState &root);
+	ExpressionState(const Expression &expr, ExpressionExecutorState &root);
 	virtual ~ExpressionState() {
 	}
 
-	Expression &expr;
+	const Expression &expr;
 	ExpressionExecutorState &root;
 	vector<unique_ptr<ExpressionState>> child_states;
 	vector<LogicalType> types;

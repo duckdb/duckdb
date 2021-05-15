@@ -140,11 +140,9 @@ void LocalStorage::Scan(LocalScanState &state, const vector<column_t> &column_id
 			auto column_filters = state.table_filters->filters.find(i);
 			if (column_filters != state.table_filters->filters.end()) {
 				//! We have filters to apply here
-				for (auto &column_filter : column_filters->second) {
-					auto &mask = FlatVector::Validity(result.data[i]);
-					UncompressedSegment::FilterSelection(sel, result.data[i], column_filter, approved_tuple_count,
-					                                     mask);
-				}
+				auto &mask = FlatVector::Validity(result.data[i]);
+				UncompressedSegment::FilterSelection(sel, result.data[i], *column_filters->second, approved_tuple_count,
+				                                     mask);
 				count = approved_tuple_count;
 			}
 		}
@@ -295,7 +293,7 @@ static void UpdateChunk(Vector &data, Vector &updates, Vector &row_ids, idx_t co
 	}
 }
 
-void LocalStorage::Update(DataTable *table, Vector &row_ids, vector<column_t> &column_ids, DataChunk &data) {
+void LocalStorage::Update(DataTable *table, Vector &row_ids, const vector<column_t> &column_ids, DataChunk &data) {
 	auto storage = GetStorage(table);
 	// figure out the chunk from which these row ids came
 	idx_t chunk_idx = GetChunk(row_ids);

@@ -156,10 +156,10 @@ void QueryProfiler::Initialize(PhysicalOperator *root_op) {
 }
 
 OperatorProfiler::OperatorProfiler(bool enabled_p) : enabled(enabled_p) {
-	execution_stack = std::stack<PhysicalOperator *>();
+	execution_stack = std::stack<const PhysicalOperator *>();
 }
 
-void OperatorProfiler::StartOperator(PhysicalOperator *phys_op) {
+void OperatorProfiler::StartOperator(const PhysicalOperator *phys_op) {
 	if (!enabled) {
 		return;
 	}
@@ -196,7 +196,7 @@ void OperatorProfiler::EndOperator(DataChunk *chunk) {
 	}
 }
 
-void OperatorProfiler::AddTiming(PhysicalOperator *op, double time, idx_t elements) {
+void OperatorProfiler::AddTiming(const PhysicalOperator *op, double time, idx_t elements) {
 	if (!enabled) {
 		return;
 	}
@@ -213,7 +213,7 @@ void OperatorProfiler::AddTiming(PhysicalOperator *op, double time, idx_t elemen
 		entry->second.elements += elements;
 	}
 }
-void OperatorProfiler::Flush(PhysicalOperator *phys_op, ExpressionExecutor *expression_executor, const string &name,
+void OperatorProfiler::Flush(const PhysicalOperator *phys_op, ExpressionExecutor *expression_executor, const string &name,
                              int id) {
 	auto entry = timings.find(phys_op);
 	if (entry != timings.end()) {

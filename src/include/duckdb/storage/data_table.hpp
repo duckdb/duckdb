@@ -139,7 +139,7 @@ public:
 	void Scan(Transaction &transaction, DataChunk &result, TableScanState &state, vector<column_t> &column_ids);
 
 	//! Fetch data from the specific row identifiers from the base table
-	void Fetch(Transaction &transaction, DataChunk &result, vector<column_t> &column_ids, Vector &row_ids,
+	void Fetch(Transaction &transaction, DataChunk &result, const vector<column_t> &column_ids, Vector &row_ids,
 	           idx_t fetch_count, ColumnFetchState &state);
 
 	//! Append a DataChunk to the table. Throws an exception if the columns don't match the tables' columns.
@@ -147,11 +147,11 @@ public:
 	//! Delete the entries with the specified row identifier from the table
 	void Delete(TableCatalogEntry &table, ClientContext &context, Vector &row_ids, idx_t count);
 	//! Update the entries with the specified row identifier from the table
-	void Update(TableCatalogEntry &table, ClientContext &context, Vector &row_ids, vector<column_t> &column_ids,
+	void Update(TableCatalogEntry &table, ClientContext &context, Vector &row_ids, const vector<column_t> &column_ids,
 	            DataChunk &data);
 
 	//! Add an index to the DataTable
-	void AddIndex(unique_ptr<Index> index, vector<unique_ptr<Expression>> &expressions);
+	void AddIndex(unique_ptr<Index> index, const vector<unique_ptr<Expression>> &expressions);
 
 	//! Begin appending structs to this table, obtaining necessary locks, etc
 	void InitializeAppend(Transaction &transaction, TableAppendState &state, idx_t append_count);
@@ -196,7 +196,7 @@ private:
 	//! Verify constraints with a chunk from the Append containing all columns of the table
 	void VerifyAppendConstraints(TableCatalogEntry &table, DataChunk &chunk);
 	//! Verify constraints with a chunk from the Update containing only the specified column_ids
-	void VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chunk, vector<column_t> &column_ids);
+	void VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chunk, const vector<column_t> &column_ids);
 
 	void InitializeScanWithOffset(TableScanState &state, const vector<column_t> &column_ids,
 	                              TableFilterSet *table_filters, idx_t start_row, idx_t end_row);

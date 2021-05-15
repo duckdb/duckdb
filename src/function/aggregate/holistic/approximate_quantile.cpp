@@ -57,7 +57,7 @@ struct ApproxQuantileOperation {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(STATE source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target) {
 		if (source.pos == 0) {
 			return;
 		}

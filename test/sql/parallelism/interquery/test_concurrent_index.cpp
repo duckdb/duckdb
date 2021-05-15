@@ -338,10 +338,14 @@ TEST_CASE("Parallel appends to table with index with transactions", "[index][.]"
 	REQUIRE(CHECK_COLUMN(result, 1, {Value::BIGINT(CONCURRENT_INDEX_THREAD_COUNT * 50)}));
 }
 
-static void join_integers(DuckDB *db, idx_t threadnr) {
-	Connection con(*db);
-	auto result = con.Query("SELECT count(*) FROM integers inner join integers_2 on (integers.i = integers_2.i)");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(500000)}));
+static void join_integers(Connection *con, bool *index_join_success, idx_t threadnr) {
+	*index_join_success = true;
+	for (idx_t i = 0; i < 10; i++) {
+		auto result = con->Query("SELECT count(*) FROM integers inner join integers_2 on (integers.i = integers_2.i)");
+		if (!CHECK_COLUMN(result, 0, {Value::BIGINT(500000)})) {
+			*index_join_success = false;
+		}
+	}
 }
 
 TEST_CASE("Concurrent appends during index join", "[index][.]") {
@@ -376,8 +380,13 @@ TEST_CASE("Concurrent appends during index join", "[index][.]") {
 	appender_2.Close();
 	//! create the index
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers(i)"));
+
+	bool index_join_success = true;
+	Connection index_join_con(db);
+	index_join_con.Query("BEGIN TRANSACTION");
+
 	thread threads[CONCURRENT_INDEX_THREAD_COUNT];
-	threads[0] = thread(join_integers, &db, 0);
+	threads[0] = thread(join_integers, &index_join_con, &index_join_success, 0);
 	//! now launch a bunch of concurrently writing threads (!)
 	for (idx_t i = 1; i < CONCURRENT_INDEX_THREAD_COUNT; i++) {
 		threads[i] = thread(append_to_integers, &db, i);
@@ -385,4 +394,5 @@ TEST_CASE("Concurrent appends during index join", "[index][.]") {
 	for (idx_t i = 0; i < CONCURRENT_INDEX_THREAD_COUNT; i++) {
 		threads[i].join();
 	}
+	REQUIRE(index_join_success);
 }

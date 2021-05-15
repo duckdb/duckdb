@@ -22,7 +22,8 @@ public:
 	unique_ptr<LocalFunctionData> local_state;
 };
 
-void PhysicalCopyToFile::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
+void PhysicalCopyToFile::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
+                                          PhysicalOperatorState *state) const {
 	auto &g = (CopyToFunctionGlobalState &)*sink_state;
 
 	chunk.SetCardinality(1);
@@ -32,7 +33,7 @@ void PhysicalCopyToFile::GetChunkInternal(ExecutionContext &context, DataChunk &
 }
 
 void PhysicalCopyToFile::Sink(ExecutionContext &context, GlobalOperatorState &gstate, LocalSinkState &lstate,
-                              DataChunk &input) {
+                              DataChunk &input) const {
 	auto &g = (CopyToFunctionGlobalState &)gstate;
 	auto &l = (CopyToFunctionLocalState &)lstate;
 

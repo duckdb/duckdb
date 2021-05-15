@@ -120,7 +120,7 @@ unique_ptr<LocalSinkState> PhysicalHashJoin::GetLocalSinkState(ExecutionContext 
 }
 
 void PhysicalHashJoin::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_p,
-                            DataChunk &input) {
+                            DataChunk &input) const {
 	auto &sink = (HashJoinGlobalState &)state;
 	auto &lstate = (HashJoinLocalState &)lstate_p;
 	// resolve the join keys for the right chunk
@@ -177,7 +177,8 @@ unique_ptr<PhysicalOperatorState> PhysicalHashJoin::GetOperatorState() {
 	return move(state);
 }
 
-void PhysicalHashJoin::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
+void PhysicalHashJoin::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
+                                        PhysicalOperatorState *state_p) const {
 	auto state = reinterpret_cast<PhysicalHashJoinState *>(state_p);
 	auto &sink = (HashJoinGlobalState &)*sink_state;
 	if (sink.hash_table->size() == 0 &&
@@ -224,7 +225,8 @@ void PhysicalHashJoin::GetChunkInternal(ExecutionContext &context, DataChunk &ch
 	} while (true);
 }
 
-void PhysicalHashJoin::ProbeHashTable(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
+void PhysicalHashJoin::ProbeHashTable(ExecutionContext &context, DataChunk &chunk,
+                                      PhysicalOperatorState *state_p) const {
 	auto state = reinterpret_cast<PhysicalHashJoinState *>(state_p);
 	auto &sink = (HashJoinGlobalState &)*sink_state;
 

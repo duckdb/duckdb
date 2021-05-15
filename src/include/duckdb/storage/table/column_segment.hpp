@@ -21,7 +21,6 @@ class ColumnSegment;
 class ColumnData;
 class Transaction;
 class BaseStatistics;
-struct TableFilter;
 struct ColumnFetchState;
 struct ColumnScanState;
 enum class ColumnSegmentType : uint8_t { TRANSIENT, PERSISTENT };
