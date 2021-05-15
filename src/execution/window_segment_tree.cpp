@@ -74,24 +74,26 @@ Value WindowSegmentTree::AggegateFinal() {
 }
 
 void WindowSegmentTree::ExtractFrame(idx_t begin, idx_t end) {
-	if (end - begin >= STANDARD_VECTOR_SIZE) {
+	const auto size = end - begin;
+	if (size >= STANDARD_VECTOR_SIZE) {
 		throw InternalException("Cannot compute window aggregation: bounds are too large");
 	}
 
-	inputs.Reset();
-	inputs.SetCardinality(end - begin);
-
 	const idx_t start_in_vector = begin % STANDARD_VECTOR_SIZE;
 	const auto input_count = input_ref->ColumnCount();
-	if (start_in_vector + inputs.size() <= STANDARD_VECTOR_SIZE) {
+	if (start_in_vector + size <= STANDARD_VECTOR_SIZE) {
+		inputs.SetCardinality(size);
 		auto &chunk = input_ref->GetChunkForRow(begin);
 		for (idx_t i = 0; i < input_count; ++i) {
 			auto &v = inputs.data[i];
 			auto &vec = chunk.data[i];
 			v.Slice(vec, start_in_vector);
-			v.Verify(inputs.size());
+			v.Verify(size);
 		}
 	} else {
+		inputs.Reset();
+		inputs.SetCardinality(size);
+
 		// we cannot just slice the individual vector!
 		auto &chunk_a = input_ref->GetChunkForRow(begin);
 		auto &chunk_b = input_ref->GetChunkForRow(end);
