@@ -104,8 +104,6 @@ unique_ptr<RowGroup> RowGroup::AlterType(ClientContext &context, const LogicalTy
 	column_data->InitializeAppend(append_state);
 
 	// scan the original table, and fill the new column with the transformed value
-	auto &transaction = Transaction::GetTransaction(context);
-
 	InitializeScan(scan_state.row_group_scan_state);
 
 	Vector append_vector(target_type);
@@ -513,7 +511,10 @@ RowGroupPointer RowGroup::Checkpoint(TableDataWriter &writer, vector<unique_ptr<
 		auto checkpoint_state = column->Checkpoint(*this, writer, column_idx);
 		D_ASSERT(checkpoint_state);
 
-		global_stats[column_idx]->Merge(*checkpoint_state->global_stats);
+		auto stats = checkpoint_state->GetStatistics();
+		D_ASSERT(stats);
+
+		global_stats[column_idx]->Merge(*stats);
 		states.push_back(move(checkpoint_state));
 	}
 

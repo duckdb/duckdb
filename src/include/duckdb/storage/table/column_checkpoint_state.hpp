@@ -34,6 +34,10 @@ struct ColumnCheckpointState {
 	unique_ptr<SegmentStatistics> segment_stats;
 
 public:
+	virtual unique_ptr<BaseStatistics> GetStatistics() {
+		return global_stats->Copy();
+	}
+
 	virtual void CreateEmptySegment();
 	virtual void FlushSegment();
 	virtual void AppendData(Vector &data, idx_t count);

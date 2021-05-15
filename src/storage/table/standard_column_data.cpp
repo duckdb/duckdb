@@ -120,6 +120,12 @@ struct StandardColumnCheckpointState : public ColumnCheckpointState {
 	    : ColumnCheckpointState(row_group, column_data, writer) {
 	}
 
+
+	unique_ptr<BaseStatistics> GetStatistics() override {
+		auto stats = global_stats->Copy();
+		stats->validity_stats = validity_state->GetStatistics();
+		return stats;
+	}
 	unique_ptr<ColumnCheckpointState> validity_state;
 
 	void FlushToDisk() override {

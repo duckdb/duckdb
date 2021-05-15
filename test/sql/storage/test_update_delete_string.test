@@ -19,8 +19,32 @@ NULL	hello
 12	NULL
 13	abcdefgh
 
+restart
+
 statement ok
+PRAGMA enable_verification
+
+query II
+SELECT a, b FROM test ORDER BY a
+----
+NULL	hello
+12	NULL
+13	abcdefgh
+
+query II
+SELECT * FROM test WHERE a IS NULL
+----
+NULL	hello
+
+query I
 UPDATE test SET b=NULL WHERE a IS NULL
+----
+1
+
+query II
+SELECT * FROM test WHERE a IS NULL
+----
+NULL	NULL
 
 query II
 SELECT a, b FROM test ORDER BY a
@@ -29,8 +53,21 @@ NULL	NULL
 12	NULL
 13	abcdefgh
 
+restart
+
+query II
+SELECT a, b FROM test ORDER BY a
+----
+NULL	NULL
+12	NULL
+13	abcdefgh
+
+restart
+
 statement ok
 DELETE FROM test WHERE a=12
+
+restart
 
 query II
 SELECT a, b FROM test ORDER BY a
@@ -38,8 +75,21 @@ SELECT a, b FROM test ORDER BY a
 NULL	NULL
 13	abcdefgh
 
+restart
+
 statement ok
 INSERT INTO test VALUES (12, NULL)
+
+restart
+
+query II
+SELECT a, b FROM test ORDER BY a
+----
+NULL	NULL
+12	NULL
+13	abcdefgh
+
+restart
 
 query II
 SELECT a, b FROM test ORDER BY a
@@ -50,6 +100,15 @@ NULL	NULL
 
 statement ok
 UPDATE test SET b='test123' WHERE a=12
+
+query II
+SELECT a, b FROM test ORDER BY a
+----
+NULL	NULL
+12	test123
+13	abcdefgh
+
+restart
 
 query II
 SELECT a, b FROM test ORDER BY a
