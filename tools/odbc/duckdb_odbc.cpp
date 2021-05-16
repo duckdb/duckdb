@@ -6,8 +6,6 @@
 #include <sqlext.h>
 #include <assert.h>
 
-#include <stdexcept>
-
 namespace duckdb {
 enum OdbcHandleType { ENV, DBC, STMT };
 struct OdbcHandle {
@@ -34,9 +32,6 @@ struct OdbcHandleStmt : public OdbcHandle {
 		assert(dbc_p);
 		assert(dbc_p->conn);
 	};
-	~OdbcHandleStmt() {
-		printf("eeeeeeeek\n");
-	}
 
 	OdbcHandleDbc *dbc;
 	unique_ptr<PreparedStatement> stmt;
@@ -92,6 +87,11 @@ SQLRETURN SQLDriverConnect(SQLHDBC ConnectionHandle, SQLHWND WindowHandle, SQLCH
 		dbc->conn = make_unique<Connection>(*dbc->env->db);
 	}
 	return SQL_SUCCESS;
+}
+
+SQLRETURN SQLFreeStmt(SQLHSTMT StatementHandle, SQLUSMALLINT Option) {
+	assert(Option == SQL_CLOSE);
+	return SQLFreeHandle(SQL_HANDLE_STMT, StatementHandle);
 }
 
 SQLRETURN SQLFreeHandle(SQLSMALLINT HandleType, SQLHANDLE Handle) {
@@ -170,7 +170,8 @@ SQLRETURN SQLNumResultCols(SQLHSTMT StatementHandle, SQLSMALLINT *ColumnCountPtr
 	assert(StatementHandle);
 	auto *hdl = (OdbcHandleStmt *)StatementHandle;
 	assert(hdl->res); // TODO make this an exception
-	return hdl->res->types.size();
+	*ColumnCountPtr = hdl->res->types.size();
+	return SQL_SUCCESS;
 }
 
 SQLRETURN SQLGetData(SQLHSTMT StatementHandle, SQLUSMALLINT Col_or_Param_Num, SQLSMALLINT TargetType,
@@ -201,7 +202,7 @@ SQLRETURN SQLBindCol(SQLHSTMT StatementHandle, SQLUSMALLINT ColumnNumber, SQLSMA
 
 SQLRETURN SQLFetch(SQLHSTMT StatementHandle) {
 	assert(StatementHandle);
-	auto *hdl = (OdbcHandleStmt *)StatementHandle;
+    auto *hdl = (OdbcHandleStmt *)StatementHandle;
 	assert(hdl->res); // TODO make this an exception
 
 	if (!hdl->chunk || hdl->chunk_row >= hdl->chunk->size() - 1) {
@@ -217,5 +218,21 @@ SQLRETURN SQLFetch(SQLHSTMT StatementHandle) {
 	assert(hdl->chunk);
 	assert(hdl->chunk_row < hdl->chunk->size());
 	return SQL_SUCCESS;
+}
+
+SQLRETURN SQLDescribeCol(SQLHSTMT StatementHandle, SQLUSMALLINT ColumnNumber, SQLCHAR *ColumnName,
+                         SQLSMALLINT BufferLength, SQLSMALLINT *NameLengthPtr, SQLSMALLINT *DataTypePtr,
+                         SQLULEN *ColumnSizePtr, SQLSMALLINT *DecimalDigitsPtr, SQLSMALLINT *NullablePtr) {
+
+    assert(StatementHandle);
+    auto *hdl = (OdbcHandleStmt *)StatementHandle;
+    assert(hdl->res); // TODO make this an exception
+
+    assert(ColumnNumber <= hdl->res->ColumnCount());
+    *NameLengthPtr = snprintf((char*) ColumnName, BufferLength, "%s", hdl->res->names[ColumnNumber - 1].c_str());
+    *DataTypePtr = SQL_UNKNOWN_TYPE; // TODO
+
+    return SQL_SUCCESS;
+
 }
 } // extern "C"

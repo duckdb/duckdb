@@ -56,22 +56,20 @@ int main(int argc, const char **argv) {
 	SQLExecDirect(stmt, (SQLCHAR *)"insert into a values (42), (43)", SQL_NTS);
 
 	SQLSMALLINT columns; /* number of columns in result-set */
-	SQLNumResultCols(stmt, &columns);
 
 	// SQLBindCol?
 
-	//   SQLExecDirect(stmt, (SQLCHAR *) "SELECT * FROM a", SQL_NTS);
-
 	SQLPrepare(stmt, (SQLCHAR *)"SELECT i, i+1, i+2 FROM a", SQL_NTS);
-
 	SQLExecute(stmt);
 
+	SQLNumResultCols(stmt, &columns);
+
+	printf("num_cols=%d\n", columns);
 	/* Loop through the rows in the result-set */
 	while (SQLFetch(stmt) == SQL_SUCCESS) {
 		SQLUSMALLINT i;
 		/* Loop through the columns */
 		for (i = 1; i <= columns; i++) {
-			printf("%i\n", i);
 			SQLLEN indicator;
 			int int_res;
 			/* retrieve column data as a string */
@@ -87,4 +85,6 @@ int main(int argc, const char **argv) {
 	SQLFreeHandle(SQL_HANDLE_STMT, &stmt);
 	SQLFreeHandle(SQL_HANDLE_DBC, &dbc);
 	SQLFreeHandle(SQL_HANDLE_ENV, &env);
+
+	printf("OK\n");
 }
