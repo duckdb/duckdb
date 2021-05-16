@@ -1,5 +1,6 @@
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/function/aggregate_function.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 
