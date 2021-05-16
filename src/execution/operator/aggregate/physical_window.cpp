@@ -324,7 +324,7 @@ static idx_t FindNextStart(const BitArray<W> &mask, idx_t l, idx_t r) {
 		// Loop over the block
 		for (; shift < mask.BITS_PER_WORD; ++shift, ++l) {
 			if (mask.TestBit(block, shift)) {
-				return std::min(l, r);
+				return MinValue(l, r);
 			}
 		}
 	}
