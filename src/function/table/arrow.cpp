@@ -23,8 +23,8 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &contex
 	auto res = make_unique<ArrowScanFunctionData>();
 	auto &data = *res;
 	auto stream_factory_ptr = inputs[0].GetValue<uintptr_t>();
-	unique_ptr<ArrowArrayStreamDuck> (*stream_factory_produce)(uintptr_t stream_factory_ptr) =
-	    (unique_ptr<ArrowArrayStreamDuck>(*)(uintptr_t stream_factory_ptr))inputs[1].GetValue<uintptr_t>();
+	unique_ptr<ArrowArrayStreamWrapper> (*stream_factory_produce)(uintptr_t stream_factory_ptr) =
+	    (unique_ptr<ArrowArrayStreamWrapper>(*)(uintptr_t stream_factory_ptr))inputs[1].GetValue<uintptr_t>();
 	data.stream = stream_factory_produce(stream_factory_ptr);
 	if (!data.stream) {
 		throw InvalidInputException("arrow_scan: NULL pointer passed");
@@ -103,7 +103,7 @@ unique_ptr<FunctionOperatorData> ArrowTableFunction::ArrowScanInit(ClientContext
                                                                    const FunctionData *bind_data,
                                                                    vector<column_t> &column_ids,
                                                                    TableFilterCollection *filters) {
-	auto current_chunk = make_unique<ArrowArrayDuck>();
+	auto current_chunk = make_unique<ArrowArrayWrapper>();
 	auto result = make_unique<ArrowScanState>(move(current_chunk));
 	result->column_ids = column_ids;
 	return move(result);
@@ -203,7 +203,8 @@ void ArrowTableFunction::ArrowToDuckDB(ArrowScanState &scan_state, DataChunk &ou
 				auto src_ptr = (hugeint_t *)array.buffers[1] + scan_state.chunk_offset + array.offset;
 				auto tgt_ptr = (int16_t *)FlatVector::GetData(output.data[col_idx]);
 				for (idx_t row = 0; row < output.size(); row++) {
-					Hugeint::TryCast(src_ptr[row], tgt_ptr[row]);
+					auto result = Hugeint::TryCast(src_ptr[row], tgt_ptr[row]);
+					D_ASSERT(result);
 				}
 				break;
 			}
@@ -211,7 +212,8 @@ void ArrowTableFunction::ArrowToDuckDB(ArrowScanState &scan_state, DataChunk &ou
 				auto src_ptr = (hugeint_t *)array.buffers[1] + scan_state.chunk_offset + array.offset;
 				auto tgt_ptr = (int32_t *)FlatVector::GetData(output.data[col_idx]);
 				for (idx_t row = 0; row < output.size(); row++) {
-					Hugeint::TryCast(src_ptr[row], tgt_ptr[row]);
+					auto result = Hugeint::TryCast(src_ptr[row], tgt_ptr[row]);
+					D_ASSERT(result);
 				}
 				break;
 			}
@@ -219,7 +221,8 @@ void ArrowTableFunction::ArrowToDuckDB(ArrowScanState &scan_state, DataChunk &ou
 				auto src_ptr = (hugeint_t *)array.buffers[1] + scan_state.chunk_offset + array.offset;
 				auto tgt_ptr = (int64_t *)FlatVector::GetData(output.data[col_idx]);
 				for (idx_t row = 0; row < output.size(); row++) {
-					Hugeint::TryCast(src_ptr[row], tgt_ptr[row]);
+					auto result = Hugeint::TryCast(src_ptr[row], tgt_ptr[row]);
+					D_ASSERT(result);
 				}
 				break;
 			}
@@ -315,20 +318,13 @@ bool ArrowTableFunction::ArrowScanParallelStateNext(ClientContext &context, cons
 	}
 	state.chunk_offset = 0;
 	state.chunk = bind_data.stream->GetNextChunk();
-	//	auto current_chunk = make_unique<ArrowArray>();
-	//	if (bind_data.stream->get_next(bind_data.stream.get(), current_chunk.get(), state.chunk_idx)) {
-	//		throw InvalidInputException("arrow_scan: get_next failed(): %s",
-	//		                            string(bind_data.stream->get_last_error(bind_data.stream.get())));
-	//	}
-	//	state.chunk = move(current_chunk);
-
 	return true;
 }
 
 unique_ptr<FunctionOperatorData>
 ArrowTableFunction::ArrowScanParallelInit(ClientContext &context, const FunctionData *bind_data_p, ParallelState *state,
                                           vector<column_t> &column_ids, TableFilterCollection *filters) {
-	auto current_chunk = make_unique<ArrowArrayDuck>();
+	auto current_chunk = make_unique<ArrowArrayWrapper>();
 	auto result = make_unique<ArrowScanState>(move(current_chunk));
 	result->column_ids = column_ids;
 	if (!ArrowScanParallelStateNext(context, bind_data_p, result.get(), state)) {

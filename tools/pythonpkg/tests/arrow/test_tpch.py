@@ -1,6 +1,4 @@
 import duckdb
-import os
-import sys
 try:
     import pyarrow
     import pyarrow.parquet
@@ -9,30 +7,6 @@ try:
 except:
     can_run = False
 
-def get_answer(answers_path,i):
-    answer_path = ''
-    answers = []
-    if i < 10:
-        answer_path = os.path.join(answers_path,'q0'+str(i)+'.csv')
-    else:
-        answer_path = os.path.join(answers_path,'q'+str(i)+'.csv')
-
-    with open(answer_path, 'r') as file:
-        answers = file.read()
-    answers = answers.split("\n")[1:-1]
-    return answers
-
-def get_query(queries_path,i):
-    query_path = ''
-    query = ''
-    if i < 10:
-        query_path = os.path.join(queries_path,'q0'+str(i)+'.sql')
-    else:
-        query_path = os.path.join(queries_path,'q'+str(i)+'.sql')
-
-    with open(query_path, 'r') as file:
-        query = file.read()
-    return query
 
 def check_result(result,answers):
     for q_res in answers:
@@ -68,13 +42,9 @@ class TestTPCHArrow(object):
             duckdb_conn.execute("DROP TABLE "+tpch_table)
             duck_arrow_table.create(tpch_table)
 
-        tpch_path = os.path.join(os.path.dirname(os.path.realpath(__file__)),'tpch')
-        queries_path = os.path.join(tpch_path,'queries')
-        answers_path = os.path.join(tpch_path,'answers')
-
         for i in range (1,23):
-            query = get_query(queries_path,i)
-            answers = get_answer(answers_path,i)
+            query = duckdb_conn.execute("select query from tpch_queries() where query_nr="+str(i)).fetchone()[0]
+            answers = duckdb_conn.execute("select answer from tpch_answers() where scale_factor = 0.01 and query_nr="+str(i)).fetchone()[1:]
             result = duckdb_conn.execute(query)
             assert(check_result(result,answers))
             print ("Query " + str(i) + " works")
@@ -96,13 +66,9 @@ class TestTPCHArrow(object):
             duckdb_conn.execute("DROP TABLE "+tpch_table)
             duck_arrow_table.create(tpch_table)
 
-        tpch_path = os.path.join(os.path.dirname(os.path.realpath(__file__)),'tpch')
-        queries_path = os.path.join(tpch_path,'queries')
-        answers_path = os.path.join(tpch_path,'answers')
-
         for i in range (1,23):
-            query = get_query(queries_path,i)
-            answers = get_answer(answers_path,i)
+            query = duckdb_conn.execute("select query from tpch_queries() where query_nr="+str(i)).fetchone()[0]
+            answers = duckdb_conn.execute("select answer from tpch_answers() where scale_factor = 0.01 and query_nr="+str(i)).fetchone()[1:]
             result = duckdb_conn.execute(query)
             assert(check_result(result,answers))
             print ("Query " + str(i) + " works")
@@ -111,8 +77,8 @@ class TestTPCHArrow(object):
         duckdb_conn.execute("PRAGMA force_parallelism")
 
         for i in range (1,23):
-            query = get_query(queries_path,i)
-            answers = get_answer(answers_path,i)
+            query = duckdb_conn.execute("select query from tpch_queries() where query_nr="+str(i)).fetchone()[0]
+            answers = duckdb_conn.execute("select answer from tpch_answers() where scale_factor = 0.01 and query_nr="+str(i)).fetchone()[1:]
             result = duckdb_conn.execute(query)
             assert(check_result(result,answers))
             print ("Query " + str(i) + " works (Parallel)")

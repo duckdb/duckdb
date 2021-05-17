@@ -11,22 +11,22 @@
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/parallel/parallel_state.hpp"
 #include "duckdb/common/arrow_duckdb.hpp"
-#include <atomic>
+#include "duckdb/common/atomic.hpp"
 
 namespace duckdb {
 
 struct ArrowScanFunctionData : public TableFunctionData {
 	ArrowScanFunctionData() : lines_read(0) {
 	}
-	unique_ptr<ArrowArrayStreamDuck> stream;
+	unique_ptr<ArrowArrayStreamWrapper> stream;
 	std::atomic<idx_t> lines_read;
-	ArrowSchemaDuck schema_root;
+	ArrowSchemaWrapper schema_root;
 };
 
 struct ArrowScanState : public FunctionOperatorData {
-	explicit ArrowScanState(unique_ptr<ArrowArrayDuck> current_chunk) : chunk(move(current_chunk)) {
+	explicit ArrowScanState(unique_ptr<ArrowArrayWrapper> current_chunk) : chunk(move(current_chunk)) {
 	}
-	unique_ptr<ArrowArrayDuck> chunk;
+	unique_ptr<ArrowArrayWrapper> chunk;
 	idx_t chunk_offset = 0;
 	idx_t chunk_idx = 0;
 	vector<column_t> column_ids;

@@ -39,3 +39,16 @@ class TestProgressBarArrow(object):
         duckdb_conn.execute("PRAGMA threads=1")
         assert (result.execute().fetchone()[0] == 49999995000000)
 
+    def test_progress_arrow_empty(self, duckdb_cursor):
+        if not can_run:
+            return
+
+        data = (pyarrow.array(np.arange(0), type=pyarrow.int32()))
+        duckdb_conn = duckdb.connect()
+        duckdb_conn.execute("PRAGMA set_progress_bar_time=1")
+        duckdb_conn.execute("PRAGMA disable_print_progress_bar")
+
+        tbl = pyarrow.Table.from_arrays([data],['a'])
+        rel = duckdb_conn.from_arrow_table(tbl)
+        result = rel.aggregate('sum(a)')
+        assert (result.execute().fetchone()[0] == None)

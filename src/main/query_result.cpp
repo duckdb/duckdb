@@ -96,7 +96,7 @@ struct DuckDBArrowSchemaHolder {
 	// unused in children
 	vector<ArrowSchema *> children_ptrs = {};
 	//! This holds strings created to represent decimal types
-	vector<unique_ptr<char[]>> decimal_str;
+	vector<unique_ptr<char[]>> owned_type_names;
 };
 
 static void ReleaseDuckDBArrowSchema(ArrowSchema *schema) {
@@ -214,8 +214,8 @@ void QueryResult::ToArrowSchema(ArrowSchema *out_schema) {
 				format_ptr[i] = format[i];
 			}
 			format_ptr[format.size()] = '\0';
-			root_holder->decimal_str.push_back(move(format_ptr));
-			child.format = root_holder->decimal_str.back().get();
+			root_holder->owned_type_names.push_back(move(format_ptr));
+			child.format = root_holder->owned_type_names.back().get();
 			break;
 		}
 		default:
