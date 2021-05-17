@@ -557,7 +557,7 @@ void DataTable::ScanTableSegment(idx_t row_start, idx_t count, const std::functi
 	idx_t row_start_aligned = row_start / STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE;
 	InitializeScanWithOffset(state, column_ids, nullptr, row_start_aligned, row_start + count);
 
-	idx_t current_row = row_start;
+	idx_t current_row = row_start_aligned;
 	while (current_row < end) {
 		CreateIndexScan(state, column_ids, chunk, true);
 		if (chunk.size() == 0) {
@@ -565,14 +565,16 @@ void DataTable::ScanTableSegment(idx_t row_start, idx_t count, const std::functi
 		}
 		idx_t end_row = current_row + chunk.size();
 		// figure out if we need to write the entire chunk or just part of it
-		idx_t chunk_start = current_row < row_start ? row_start : current_row;
-		idx_t chunk_end = end_row > end ? end : end_row;
+		idx_t chunk_start = MaxValue<idx_t>(current_row, row_start);
+		idx_t chunk_end = MinValue<idx_t>(end_row, end);
 		D_ASSERT(chunk_start < chunk_end);
 		idx_t chunk_count = chunk_end - chunk_start;
 		if (chunk_count != chunk.size()) {
 			// need to slice the chunk before insert
-			SelectionVector sel(chunk_start % STANDARD_VECTOR_SIZE, chunk_count);
+			auto start_in_chunk = chunk_start % STANDARD_VECTOR_SIZE;
+			SelectionVector sel(start_in_chunk, chunk_count);
 			chunk.Slice(sel, chunk_count);
+			chunk.Verify();
 		}
 		function(chunk);
 		chunk.Reset();
