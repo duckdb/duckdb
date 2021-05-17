@@ -20,7 +20,7 @@ namespace duckdb {
 class PhysicalExport : public PhysicalOperator {
 public:
 	PhysicalExport(vector<LogicalType> types, CopyFunction function, unique_ptr<CopyInfo> info,
-	               idx_t estimated_cardinality, vector<ExportedTableData> exported_tables)
+	               idx_t estimated_cardinality, BoundExportData exported_tables)
 	    : PhysicalOperator(PhysicalOperatorType::EXPORT, move(types), estimated_cardinality),
 	      function(std::move(function)), info(move(info)), exported_tables(move(exported_tables)) {
 	}
@@ -30,7 +30,7 @@ public:
 	//! The binding info containing the set of options for reading the file
 	unique_ptr<CopyInfo> info;
 	//! The table info for each table that will be exported
-	vector<ExportedTableData> exported_tables;
+	BoundExportData exported_tables;
 
 public:
 	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;

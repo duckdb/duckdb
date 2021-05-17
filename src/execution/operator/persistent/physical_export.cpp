@@ -40,6 +40,10 @@ static void WriteCopyStatement(FileSystem &fs, stringstream &ss, TableCatalogEnt
                                ExportedTableData &exported_table, CopyFunction &function) {
 	ss << "COPY ";
 
+	if (exported_table.schema_name != DEFAULT_SCHEMA) {
+		ss << KeywordHelper::WriteOptionallyQuoted(exported_table.schema_name) << ".";
+	}
+
 	ss << KeywordHelper::WriteOptionallyQuoted(exported_table.table_name) << " FROM '" << exported_table.file_path
 	   << "' (";
 
@@ -114,10 +118,10 @@ void PhysicalExport::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 	// write the load.sql file
 	// for every table, we write COPY INTO statement with the specified options
 	stringstream load_ss;
-	idx_t i = 0;
-	for (auto &table : tables) {
-		WriteCopyStatement(fs, load_ss, (TableCatalogEntry *)table, *info, exported_tables.at(i), function);
-		i++;
+	for (auto kv : exported_tables.data) {
+		auto table = kv.first;
+		auto exported_table_info = kv.second;
+		WriteCopyStatement(fs, load_ss, table, *info, exported_table_info, function);
 	}
 	WriteStringStreamToFile(fs, load_ss, fs.JoinPath(info->file_path, "load.sql"));
 	state->finished = true;

@@ -20,7 +20,7 @@ string SanitizeExportIdentifier(const string &str) {
 	string result(str);
 
 	for (idx_t i = 0; i < str.length(); ++i) {
-		auto c = str.at(i);
+		auto c = str[i];
 		if (c >= 'a' && c <= 'z') {
 			// If it is lower case just continue
 			continue;
@@ -28,10 +28,10 @@ string SanitizeExportIdentifier(const string &str) {
 
 		if (c >= 'A' && c <= 'Z') {
 			// To lowercase
-			result.at(i) = tolower(c);
+			result[i] = tolower(c);
 		} else {
 			// Substitute to underscore
-			result.at(i) = '_';
+			result[i] = '_';
 		}
 	}
 
@@ -70,7 +70,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	auto &fs = FileSystem::GetFileSystem(context);
 	unique_ptr<LogicalOperator> child_operator;
 
-	vector<ExportedTableData> exported_tables(tables.size());
+	BoundExportData exported_tables;
 
 	idx_t id = 0; // Id for table
 	for (auto &table : tables) {
@@ -79,6 +79,8 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		info->format = stmt.info->format;
 		info->options = stmt.info->options;
 		// set up the file name for the COPY TO
+
+		auto exported_data = ExportedTableData();
 		if (table->schema->name == DEFAULT_SCHEMA) {
 			info->file_path =
 			    fs.JoinPath(stmt.info->file_path,
@@ -94,8 +96,11 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		info->schema = table->schema->name;
 		info->table = table->name;
 
-		exported_tables.at(id).file_path = info->file_path;
-		exported_tables.at(id).table_name = info->table;
+		exported_data.table_name = info->table;
+		exported_data.schema_name = info->schema;
+		exported_data.file_path = info->file_path;
+
+		exported_tables.data[table] = exported_data;
 		id++;
 
 		// generate the copy statement and bind it

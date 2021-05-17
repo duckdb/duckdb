@@ -17,13 +17,13 @@ namespace duckdb {
 
 class LogicalExport : public LogicalOperator {
 public:
-	LogicalExport(CopyFunction function, unique_ptr<CopyInfo> copy_info, vector<ExportedTableData> exported_tables)
+	LogicalExport(CopyFunction function, unique_ptr<CopyInfo> copy_info, BoundExportData exported_tables)
 	    : LogicalOperator(LogicalOperatorType::LOGICAL_EXPORT), function(function), copy_info(move(copy_info)),
 	      exported_tables(move(exported_tables)) {
 	}
 	CopyFunction function;
 	unique_ptr<CopyInfo> copy_info;
-	vector<ExportedTableData> exported_tables;
+	BoundExportData exported_tables;
 
 protected:
 	void ResolveTypes() override {
