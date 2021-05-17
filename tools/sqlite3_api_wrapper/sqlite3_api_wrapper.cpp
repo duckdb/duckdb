@@ -1501,17 +1501,16 @@ SQLITE_API int sqlite3_vtab_config(sqlite3 *, int op, ...) {
 	return SQLITE_ERROR;
 }
 
-SQLITE_API int sqlite3_busy_handler(sqlite3*,int(*)(void*,int),void*) {
+SQLITE_API int sqlite3_busy_handler(sqlite3 *, int (*)(void *, int), void *) {
 	return SQLITE_ERROR;
 }
 
-SQLITE_API int sqlite3_get_table(
-  sqlite3 *db,          /* An open database */
-  const char *zSql,     /* SQL to be evaluated */
-  char ***pazResult,    /* Results of the query */
-  int *pnRow,           /* Number of result rows written here */
-  int *pnColumn,        /* Number of result columns written here */
-  char **pzErrmsg       /* Error msg written here */
+SQLITE_API int sqlite3_get_table(sqlite3 *db,       /* An open database */
+                                 const char *zSql,  /* SQL to be evaluated */
+                                 char ***pazResult, /* Results of the query */
+                                 int *pnRow,        /* Number of result rows written here */
+                                 int *pnColumn,     /* Number of result columns written here */
+                                 char **pzErrmsg    /* Error msg written here */
 ) {
 	fprintf(stderr, "sqlite3_get_table: unsupported.\n");
 	return SQLITE_ERROR;
@@ -1521,29 +1520,26 @@ SQLITE_API void sqlite3_free_table(char **result) {
 	fprintf(stderr, "sqlite3_free_table: unsupported.\n");
 }
 
-SQLITE_API sqlite3_int64 sqlite3_last_insert_rowid(sqlite3*) {
+SQLITE_API sqlite3_int64 sqlite3_last_insert_rowid(sqlite3 *) {
 	fprintf(stderr, "sqlite3_last_insert_rowid: unsupported.\n");
 	return SQLITE_ERROR;
 }
 
-SQLITE_API int sqlite3_prepare(
-  sqlite3 *db,            /* Database handle */
-  const char *zSql,       /* SQL statement, UTF-8 encoded */
-  int nByte,              /* Maximum length of zSql in bytes. */
-  sqlite3_stmt **ppStmt,  /* OUT: Statement handle */
-  const char **pzTail     /* OUT: Pointer to unused portion of zSql */
+SQLITE_API int sqlite3_prepare(sqlite3 *db,           /* Database handle */
+                               const char *zSql,      /* SQL statement, UTF-8 encoded */
+                               int nByte,             /* Maximum length of zSql in bytes. */
+                               sqlite3_stmt **ppStmt, /* OUT: Statement handle */
+                               const char **pzTail    /* OUT: Pointer to unused portion of zSql */
 ) {
 	return sqlite3_prepare_v2(db, zSql, nByte, ppStmt, pzTail);
 }
 
-SQLITE_API void *sqlite3_trace(sqlite3*,
-   void(*xTrace)(void*,const char*), void*) {
+SQLITE_API void *sqlite3_trace(sqlite3 *, void (*xTrace)(void *, const char *), void *) {
 	fprintf(stderr, "sqlite3_trace: unsupported.\n");
 	return nullptr;
 }
 
-SQLITE_API void *sqlite3_profile(sqlite3*,
-   void(*xProfile)(void*,const char*,sqlite3_uint64), void*) {
+SQLITE_API void *sqlite3_profile(sqlite3 *, void (*xProfile)(void *, const char *, sqlite3_uint64), void *) {
 	fprintf(stderr, "sqlite3_profile: unsupported.\n");
 	return nullptr;
 }
