@@ -74,4 +74,4 @@ include_directories(arrow_abi_test
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/catch
 )
-target_link_libraries(arrow_abi_test arrow)
+target_link_libraries(arrow_abi_test arrow Threads::Threads)
