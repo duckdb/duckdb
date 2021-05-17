@@ -15,10 +15,15 @@
 
 namespace duckdb {
 class UpdateSegment;
+struct DataTableInfo;
 
 struct UpdateInfo {
 	//! The update segment that this update info affects
 	UpdateSegment *segment;
+	//! The general table information
+	DataTableInfo *table_info;
+	//! The column index of which column we are updating
+	idx_t column_index;
 	//! The version number
 	atomic<transaction_t> version_number;
 	//! The vector index within the uncompressed segment
@@ -29,8 +34,6 @@ struct UpdateInfo {
 	sel_t max;
 	//! The row ids of the tuples that have been updated. This should always be kept sorted!
 	sel_t *tuples;
-	//! The validity mask of the tuples
-	validity_t validity[ValidityMask::STANDARD_ENTRY_COUNT];
 	//! The data of the tuples
 	data_ptr_t tuple_data;
 	//! The previous update info (or nullptr if it is the base)

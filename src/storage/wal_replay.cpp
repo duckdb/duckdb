@@ -414,26 +414,27 @@ void ReplayState::ReplayDelete() {
 void ReplayState::ReplayUpdate() {
 	idx_t column_index = source.Read<column_t>();
 
-	DataChunk chunk;
-	chunk.Deserialize(source);
-	if (deserialize_only) {
-		return;
-	}
-	if (!current_table) {
-		throw Exception("Corrupt WAL: update without table");
-	}
+	throw NotImplementedException("FIXME: replay update");
+	// DataChunk chunk;
+	// chunk.Deserialize(source);
+	// if (deserialize_only) {
+	// 	return;
+	// }
+	// if (!current_table) {
+	// 	throw Exception("Corrupt WAL: update without table");
+	// }
 
-	vector<column_t> column_ids {column_index};
-	if (column_index >= current_table->columns.size()) {
-		throw Exception("Corrupt WAL: column index for update out of bounds");
-	}
+	// vector<column_t> column_ids {column_index};
+	// if (column_index >= current_table->columns.size()) {
+	// 	throw Exception("Corrupt WAL: column index for update out of bounds");
+	// }
 
-	// remove the row id vector from the chunk
-	auto row_ids = move(chunk.data.back());
-	chunk.data.pop_back();
+	// // remove the row id vector from the chunk
+	// auto row_ids = move(chunk.data.back());
+	// chunk.data.pop_back();
 
-	// now perform the update
-	current_table->storage->Update(*current_table, context, row_ids, column_ids, chunk);
+	// // now perform the update
+	// current_table->storage->Update(*current_table, context, row_ids, column_ids, chunk);
 }
 
 void ReplayState::ReplayCheckpoint() {

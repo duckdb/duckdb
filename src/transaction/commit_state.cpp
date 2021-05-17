@@ -135,33 +135,33 @@ void CommitState::WriteDelete(DeleteInfo *info) {
 }
 
 void CommitState::WriteUpdate(UpdateInfo *info) {
-	D_ASSERT(log);
-	// switch to the current table, if necessary
-	auto &column_data = info->segment->column_data;
-	auto &row_group = info->segment->row_group;
+	throw NotImplementedException("FIXME: write update");
+	// D_ASSERT(log);
+	// // switch to the current table, if necessary
+	// auto &column_data = info->segment->column_data;
 
-	SwitchTable(&row_group.GetTableInfo(), UndoFlags::UPDATE_TUPLE);
+	// SwitchTable(info->table_info, UndoFlags::UPDATE_TUPLE);
 
-	vector<LogicalType> update_types;
-	update_types.push_back(column_data.type);
-	update_types.push_back(LOGICAL_ROW_TYPE);
+	// vector<LogicalType> update_types;
+	// update_types.push_back(column_data.type);
+	// update_types.push_back(LOGICAL_ROW_TYPE);
 
-	update_chunk = make_unique<DataChunk>();
-	update_chunk->Initialize(update_types);
+	// update_chunk = make_unique<DataChunk>();
+	// update_chunk->Initialize(update_types);
 
-	// fetch the updated values from the base segment
-	info->segment->FetchCommitted(info->vector_index, update_chunk->data[0]);
+	// // fetch the updated values from the base segment
+	// info->segment->FetchCommitted(info->vector_index, update_chunk->data[0]);
 
-	// write the row ids into the chunk
-	auto row_ids = FlatVector::GetData<row_t>(update_chunk->data[1]);
-	idx_t start = row_group.start + info->vector_index * STANDARD_VECTOR_SIZE;
-	for (idx_t i = 0; i < info->N; i++) {
-		row_ids[info->tuples[i]] = start + info->tuples[i];
-	}
-	SelectionVector sel(info->tuples);
-	update_chunk->Slice(sel, info->N);
+	// // write the row ids into the chunk
+	// auto row_ids = FlatVector::GetData<row_t>(update_chunk->data[1]);
+	// idx_t start = column_data.start + info->vector_index * STANDARD_VECTOR_SIZE;
+	// for (idx_t i = 0; i < info->N; i++) {
+	// 	row_ids[info->tuples[i]] = start + info->tuples[i];
+	// }
+	// SelectionVector sel(info->tuples);
+	// update_chunk->Slice(sel, info->N);
 
-	log->WriteUpdate(*update_chunk, row_group.GetColumnIndex(&column_data));
+	// log->WriteUpdate(*update_chunk, info->column_index);
 }
 
 template <bool HAS_LOG>
@@ -204,7 +204,7 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::UPDATE_TUPLE: {
 		// update:
 		auto info = (UpdateInfo *)data;
-		if (HAS_LOG && !info->segment->row_group.GetTableInfo().IsTemporary()) {
+		if (HAS_LOG && !info->table_info->IsTemporary()) {
 			WriteUpdate(info);
 		}
 		info->version_number = commit_id;

@@ -34,7 +34,7 @@ RowGroup::RowGroup(DatabaseInstance &db, DataTableInfo &table_info, const vector
 		auto &block_pointer = pointer.data_pointers[i];
 		MetaBlockReader column_data_reader(db, block_pointer.block_id);
 		column_data_reader.offset = block_pointer.offset;
-		this->columns.push_back(ColumnData::Deserialize(db, start, column_data_reader, types[i]));
+		this->columns.push_back(ColumnData::Deserialize(db, i, start, column_data_reader, types[i]));
 	}
 
 	// set up the statistics
@@ -52,7 +52,7 @@ RowGroup::~RowGroup() {
 void RowGroup::InitializeEmpty(const vector<LogicalType> &types) {
 	// set up the segment trees for the column segments
 	for (idx_t i = 0; i < types.size(); i++) {
-		auto column_data = make_shared<StandardColumnData>(GetDatabase(), start, types[i]);
+		auto column_data = make_shared<StandardColumnData>(GetDatabase(), i, start, types[i]);
 		stats.push_back(make_shared<SegmentStatistics>(types[i]));
 		columns.push_back(move(column_data));
 	}
@@ -98,7 +98,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(ClientContext &context, const LogicalTy
 	Verify();
 
 	// construct a new column data for this type
-	auto column_data = make_shared<StandardColumnData>(GetDatabase(), start, target_type);
+	auto column_data = make_shared<StandardColumnData>(GetDatabase(), changed_idx, start, target_type);
 
 	ColumnAppendState append_state;
 	column_data->InitializeAppend(append_state);
@@ -123,7 +123,6 @@ unique_ptr<RowGroup> RowGroup::AlterType(ClientContext &context, const LogicalTy
 	// set up the row_group based on this row_group
 	auto row_group = make_unique<RowGroup>(db, table_info, this->start, this->count);
 	row_group->version_info = version_info;
-	row_group->updates = updates;
 	for (idx_t i = 0; i < columns.size(); i++) {
 		if (i == changed_idx) {
 			// this is the altered column: use the new column
@@ -144,7 +143,7 @@ unique_ptr<RowGroup> RowGroup::AddColumn(ClientContext &context, ColumnDefinitio
 	Verify();
 
 	// construct a new column data for the new column
-	auto added_column = make_shared<StandardColumnData>(GetDatabase(), start, new_column.type);
+	auto added_column = make_shared<StandardColumnData>(GetDatabase(), columns.size(), start, new_column.type);
 
 	auto added_col_stats = make_shared<SegmentStatistics>(new_column.type);
 	idx_t rows_to_write = this->count;
@@ -166,7 +165,6 @@ unique_ptr<RowGroup> RowGroup::AddColumn(ClientContext &context, ColumnDefinitio
 	// set up the row_group based on this row_group
 	auto row_group = make_unique<RowGroup>(db, table_info, this->start, this->count);
 	row_group->version_info = version_info;
-	row_group->updates = updates;
 	row_group->columns = columns;
 	row_group->stats = stats;
 	// now add the new column
@@ -184,7 +182,6 @@ unique_ptr<RowGroup> RowGroup::RemoveColumn(idx_t removed_column) {
 
 	auto row_group = make_unique<RowGroup>(db, table_info, this->start, this->count);
 	row_group->version_info = version_info;
-	row_group->updates = updates;
 	row_group->columns = columns;
 	row_group->stats = stats;
 	// now remove the column
@@ -246,17 +243,12 @@ void RowGroup::TemplatedScan(Transaction *transaction, RowGroupScanState &state,
 				D_ASSERT(result.data[i].GetType().InternalType() == ROW_TYPE);
 				result.data[i].Sequence(this->start + current_row, 1);
 			} else {
-				columns[column]->Scan(state.column_scans[i], result.data[i]);
-				if (!updates.empty() && updates[column]) {
-					if (!ALLOW_UPDATES && updates[column]->HasUncommittedUpdates(state.vector_index)) {
-						throw TransactionException("Cannot create index with outstanding updates");
-					}
-					if (SCAN_COMMITTED) {
-						updates[column]->FetchCommitted(state.vector_index, result.data[i]);
-					} else {
-						D_ASSERT(transaction);
-						updates[column]->FetchUpdates(*transaction, state.vector_index, result.data[i]);
-					}
+				if (SCAN_COMMITTED) {
+					columns[column]->ScanCommitted(state.vector_index, state.column_scans[i], result.data[i], ALLOW_UPDATES);
+				} else {
+					D_ASSERT(transaction);
+					D_ASSERT(ALLOW_UPDATES);
+					columns[column]->Scan(*transaction, state.vector_index, state.column_scans[i], result.data[i]);
 				}
 			}
 		}
@@ -354,11 +346,7 @@ void RowGroup::FetchRow(Transaction &transaction, ColumnFetchState &state, const
 			data[result_idx] = row_id;
 		} else {
 			// regular column: fetch data from the base column
-			columns[column]->FetchRow(state, row_id, result.data[col_idx], result_idx);
-			// merge any updates made to this row
-			if (column < updates.size() && updates[column]) {
-				updates[column]->FetchRow(transaction, row_id, result.data[col_idx], result_idx);
-			}
+			columns[column]->FetchRow(transaction, state, row_id, result.data[col_idx], result_idx);
 		}
 	}
 }
@@ -462,9 +450,6 @@ void RowGroup::Append(RowGroupAppendState &state, DataChunk &chunk, idx_t append
 
 void RowGroup::Update(Transaction &transaction, DataChunk &update_chunk, Vector &row_ids,
                       const vector<column_t> &column_ids) {
-	if (updates.empty()) {
-		updates.resize(columns.size());
-	}
 	auto ids = FlatVector::GetData<row_t>(row_ids);
 #ifdef DEBUG
 	for (size_t i = 0; i < update_chunk.size(); i++) {
@@ -475,15 +460,8 @@ void RowGroup::Update(Transaction &transaction, DataChunk &update_chunk, Vector 
 		auto column = column_ids[i];
 		D_ASSERT(column != COLUMN_IDENTIFIER_ROW_ID);
 		D_ASSERT(columns[column]->type.id() == update_chunk.data[i].GetType().id());
-		D_ASSERT(column < updates.size());
-		if (!updates[column]) {
-			updates[column] = make_shared<UpdateSegment>(*this, *columns[column]);
-		}
-		Vector base_vector(columns[column]->type);
-		ColumnScanState state;
-		columns[column]->Fetch(state, ids[0], base_vector);
-		updates[column]->Update(transaction, update_chunk.data[i], ids, update_chunk.size(), base_vector);
-		MergeStatistics(column, *updates[column]->GetStatistics().statistics);
+		columns[column]->Update(transaction, GetTableInfo(), column, update_chunk.data[i], ids, update_chunk.size());
+		MergeStatistics(column, *columns[column]->updates->GetStatistics().statistics);
 	}
 }
 

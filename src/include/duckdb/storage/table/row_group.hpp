@@ -55,8 +55,6 @@ private:
 	shared_ptr<VersionNode> version_info;
 	//! The column data of the row_group
 	vector<shared_ptr<ColumnData>> columns;
-	//! The update data of the row_group
-	vector<shared_ptr<UpdateSegment>> updates;
 	//! The segment statistics for each of the columns
 	vector<shared_ptr<SegmentStatistics>> stats;
 

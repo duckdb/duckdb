@@ -21,8 +21,8 @@
 
 namespace duckdb {
 
-ColumnData::ColumnData(DatabaseInstance &db, idx_t start_row, LogicalType type, ColumnData *parent)
-    : db(db), start(start_row), type(move(type)), parent(parent) {
+ColumnData::ColumnData(DatabaseInstance &db, idx_t column_index, idx_t start_row, LogicalType type, ColumnData *parent)
+    : db(db), column_index(column_index), start(start_row), type(move(type)), parent(parent) {
 }
 
 ColumnData::~ColumnData() {
@@ -66,16 +66,36 @@ void ColumnData::ScanVector(ColumnScanState &state, Vector &result) {
 	}
 }
 
-void ColumnData::FilterScan(ColumnScanState &state, Vector &result, SelectionVector &sel, idx_t &approved_tuple_count) {
-	Scan(state, result);
-	result.Slice(sel, approved_tuple_count);
+template<bool SCAN_COMMITTED, bool ALLOW_UPDATES>
+void ColumnData::ScanVector(Transaction *transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
+	ScanVector(state, result);
+	if (updates) {
+		if (!ALLOW_UPDATES && updates->HasUncommittedUpdates(vector_index)) {
+			throw TransactionException("Cannot create index with outstanding updates");
+		}
+		if (SCAN_COMMITTED) {
+			updates->FetchCommitted(vector_index, result);
+		} else {
+			D_ASSERT(transaction);
+			updates->FetchUpdates(*transaction, vector_index, result);
+		}
+	}
 }
 
-void ColumnData::Select(ColumnScanState &state, Vector &result, SelectionVector &sel, idx_t &approved_tuple_count,
-                        vector<TableFilter> &table_filters) {
-	Scan(state, result);
-	for (auto &filter : table_filters) {
-		UncompressedSegment::FilterSelection(sel, result, filter, approved_tuple_count, FlatVector::Validity(result));
+template void ColumnData::ScanVector<false, false>(Transaction *transaction, idx_t vector_index, ColumnScanState &state, Vector &result);
+template void ColumnData::ScanVector<true, false>(Transaction *transaction, idx_t vector_index, ColumnScanState &state, Vector &result);
+template void ColumnData::ScanVector<false, true>(Transaction *transaction, idx_t vector_index, ColumnScanState &state, Vector &result);
+template void ColumnData::ScanVector<true, true>(Transaction *transaction, idx_t vector_index, ColumnScanState &state, Vector &result);
+
+void ColumnData::Scan(Transaction &transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
+	ScanVector<false, true>(&transaction, vector_index, state, result);
+}
+
+void ColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates) {
+	if (allow_updates) {
+		ScanVector<true, true>(nullptr, vector_index, state, result);
+	} else {
+		ScanVector<true, false>(nullptr, vector_index, state, result);
 	}
 }
 
@@ -184,11 +204,25 @@ void ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
 	ScanVector(state, result);
 }
 
-void ColumnData::FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
+void ColumnData::FetchRow(Transaction &transaction, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
 	auto segment = (ColumnSegment *)data.GetSegment(row_id);
 
 	// now perform the fetch within the segment
 	segment->FetchRow(state, row_id, result, result_idx);
+	// merge any updates made to this row
+	if (updates) {
+		updates->FetchRow(transaction, row_id, result, result_idx);
+	}
+}
+
+void ColumnData::Update(Transaction &transaction, DataTableInfo &table_info, idx_t column_index, Vector &update_vector, row_t *row_ids, idx_t update_count) {
+	if (!updates) {
+		updates = make_unique<UpdateSegment>(*this);
+	}
+	Vector base_vector(type);
+	ColumnScanState state;
+	Fetch(state, row_ids[0], base_vector);
+	updates->Update(transaction, table_info, column_index, update_vector, row_ids, update_count, base_vector);
 }
 
 void ColumnData::AppendTransientSegment(idx_t start_row) {
@@ -330,7 +364,7 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, Ta
 
 	auto &block_manager = BlockManager::GetBlockManager(GetDatabase());
 	checkpoint_state->CreateEmptySegment();
-	Vector intermediate(type);
+	Vector intermediate(row_group.columns[column_idx]->type);
 	// we create a new segment tree with all the new segments
 	// we do this by scanning the current segments of the column and checking for changes
 	// if there are any changes (e.g. updates or deletes) we write the new changes
@@ -344,8 +378,8 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, Ta
 			idx_t start_row_idx = persistent.start - row_group.start;
 			idx_t end_row_idx = start_row_idx + persistent.count;
 			bool has_changes = false;
-			if (!row_group.updates.empty() && column_idx < row_group.updates.size() && row_group.updates[column_idx]) {
-				if (row_group.updates[column_idx]->HasUpdates(start_row_idx, end_row_idx)) {
+			if (!updates) {
+				if (updates->HasUpdates(start_row_idx, end_row_idx)) {
 					has_changes = true;
 				}
 			}
@@ -388,15 +422,15 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, Ta
 		state.current = segment;
 		segment->InitializeScan(state);
 
-		Vector scan_vector(type);
+		Vector scan_vector(type, nullptr);
 		for (idx_t base_row_index = 0; base_row_index < segment->count; base_row_index += STANDARD_VECTOR_SIZE) {
 			scan_vector.Reference(intermediate);
 
 			idx_t count = MinValue<idx_t>(segment->count - base_row_index, STANDARD_VECTOR_SIZE);
 			state.row_index = segment->start + base_row_index;
 			segment->Scan(state, base_row_index, count, scan_vector, 0);
-			if (!row_group.updates.empty() && column_idx < row_group.updates.size() && row_group.updates[column_idx]) {
-				row_group.updates[column_idx]->FetchCommittedRange(segment->start - row_group.start + base_row_index,
+			if (updates) {
+				updates->FetchCommittedRange(segment->start - row_group.start + base_row_index,
 				                                                   count, scan_vector);
 			}
 
@@ -447,9 +481,9 @@ void ColumnData::BaseDeserialize(DatabaseInstance &db, Deserializer &source, con
 	}
 }
 
-shared_ptr<ColumnData> ColumnData::Deserialize(DatabaseInstance &db, idx_t start_row, Deserializer &source,
+shared_ptr<ColumnData> ColumnData::Deserialize(DatabaseInstance &db, idx_t column_index, idx_t start_row, Deserializer &source,
                                                const LogicalType &type) {
-	return StandardColumnData::Deserialize(db, start_row, source, type);
+	return StandardColumnData::Deserialize(db, column_index, start_row, source, type);
 }
 
 void ColumnData::Verify(RowGroup &parent) {

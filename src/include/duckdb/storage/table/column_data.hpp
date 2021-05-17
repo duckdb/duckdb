@@ -27,21 +27,23 @@ class PersistentSegment;
 class PersistentColumnData;
 class Transaction;
 
-struct DataTableInfo;
-
 class ColumnData {
 public:
-	ColumnData(DatabaseInstance &db, idx_t start_row, LogicalType type, ColumnData *parent);
+	ColumnData(DatabaseInstance &db, idx_t column_index, idx_t start_row, LogicalType type, ColumnData *parent);
 	virtual ~ColumnData();
 
 	//! The database instance this column belongs to
 	DatabaseInstance &db;
+	//! The column index of the column, either within the parent table or within the parent
+	idx_t column_index;
 	//! The start row
 	idx_t start;
 	//! The type of the column
 	LogicalType type;
 	//! The parent column (if any)
 	ColumnData *parent;
+	//! The updates for this column segment
+	unique_ptr<UpdateSegment> updates;
 
 public:
 	virtual bool CheckZonemap(ColumnScanState &state, TableFilter &filter) = 0;
@@ -51,19 +53,13 @@ public:
 	//! The root type of the column
 	const LogicalType &RootType() const;
 
-	void ScanVector(ColumnScanState &state, Vector &result);
-
 	//! Initialize a scan of the column
 	virtual void InitializeScan(ColumnScanState &state) = 0;
 	//! Initialize a scan starting at the specified offset
 	virtual void InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) = 0;
 	//! Scan the next vector from the column
-	virtual void Scan(ColumnScanState &state, Vector &result) = 0;
-	//! Scan the next vector from the column and apply a selection vector to filter the data
-	void FilterScan(ColumnScanState &state, Vector &result, SelectionVector &sel, idx_t &approved_tuple_count);
-	//! Executes the filters directly in the table's data
-	void Select(ColumnScanState &state, Vector &result, SelectionVector &sel, idx_t &approved_tuple_count,
-	            vector<TableFilter> &table_filter);
+	virtual void Scan(Transaction &transaction, idx_t vector_index, ColumnScanState &state, Vector &result);
+	virtual void ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates);
 	//! Initialize an appending phase for this column
 	virtual void InitializeAppend(ColumnAppendState &state);
 	//! Append a vector of type [type] to the end of the column
@@ -75,7 +71,9 @@ public:
 	//! Fetch the vector from the column data that belongs to this specific row
 	virtual void Fetch(ColumnScanState &state, row_t row_id, Vector &result);
 	//! Fetch a specific row id and append it to the vector
-	virtual void FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx);
+	virtual void FetchRow(Transaction &transaction, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx);
+
+	virtual void Update(Transaction &transaction, DataTableInfo &table_info, idx_t column_index, Vector &update_vector, row_t *row_ids, idx_t update_count);
 
 	virtual void CommitDropColumn();
 
@@ -87,13 +85,20 @@ public:
 
 	static void BaseDeserialize(DatabaseInstance &db, Deserializer &source, const LogicalType &type,
 	                            ColumnData &result);
-	static shared_ptr<ColumnData> Deserialize(DatabaseInstance &db, idx_t start_row, Deserializer &source,
+	static shared_ptr<ColumnData> Deserialize(DatabaseInstance &db, idx_t column_index, idx_t start_row, Deserializer &source,
 	                                          const LogicalType &type);
 
 	virtual void Verify(RowGroup &parent);
 protected:
 	//! Append a transient segment
 	void AppendTransientSegment(idx_t start_row);
+
+	//! Scans a base vector from the column
+	void ScanVector(ColumnScanState &state, Vector &result);
+	//! Scans a vector from the column merged with any potential updates
+	//! If ALLOW_UPDATES is set to false, the function will instead throw an exception if any updates are found
+	template<bool SCAN_COMMITTED, bool ALLOW_UPDATES>
+	void ScanVector(Transaction *transaction, idx_t vector_index, ColumnScanState &state, Vector &result);
 
 protected:
 	//! The segments holding the data of this column segment

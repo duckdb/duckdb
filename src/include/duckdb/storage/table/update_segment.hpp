@@ -22,10 +22,9 @@ struct UpdateNode;
 
 class UpdateSegment {
 public:
-	UpdateSegment(RowGroup &row_group, ColumnData &column_data);
+	UpdateSegment(ColumnData &column_data);
 	~UpdateSegment();
 
-	RowGroup &row_group;
 	ColumnData &column_data;
 
 public:
@@ -38,7 +37,7 @@ public:
 	void FetchUpdates(Transaction &transaction, idx_t vector_index, Vector &result);
 	void FetchCommitted(idx_t vector_index, Vector &result);
 	void FetchCommittedRange(idx_t start_row, idx_t count, Vector &result);
-	void Update(Transaction &transaction, Vector &update, row_t *ids, idx_t count, Vector &base_data);
+	void Update(Transaction &transaction, DataTableInfo &table_info, idx_t column_index, Vector &update, row_t *ids, idx_t count, Vector &base_data);
 	void FetchRow(Transaction &transaction, idx_t row_id, Vector &result, idx_t result_idx);
 
 	void RollbackUpdate(UpdateInfo *info);
@@ -66,9 +65,10 @@ private:
 
 public:
 	typedef void (*initialize_update_function_t)(SegmentStatistics &stats, UpdateInfo *base_info, Vector &base_data,
-	                                             UpdateInfo *update_info, Vector &update);
+	                                             UpdateInfo *update_info, Vector &update, const SelectionVector &sel);
 	typedef void (*merge_update_function_t)(SegmentStatistics &stats, UpdateInfo *base_info, Vector &base_data,
-	                                        UpdateInfo *update_info, Vector &update, row_t *ids, idx_t count);
+	                                        UpdateInfo *update_info, Vector &update, row_t *ids, idx_t count,
+	                                        const SelectionVector &sel);
 	typedef void (*fetch_update_function_t)(transaction_t start_time, transaction_t transaction_id, UpdateInfo *info,
 	                                        Vector &result);
 	typedef void (*fetch_committed_function_t)(UpdateInfo *info, Vector &result);
@@ -77,8 +77,8 @@ public:
 	typedef void (*fetch_row_function_t)(transaction_t start_time, transaction_t transaction_id, UpdateInfo *info,
 	                                     idx_t row_idx, Vector &result, idx_t result_idx);
 	typedef void (*rollback_update_function_t)(UpdateInfo *base_info, UpdateInfo *rollback_info);
-	typedef void (*statistics_update_function_t)(UpdateSegment *segment, SegmentStatistics &stats, Vector &update,
-	                                             idx_t count);
+	typedef idx_t (*statistics_update_function_t)(UpdateSegment *segment, SegmentStatistics &stats, Vector &update,
+	                                              idx_t count, SelectionVector &sel);
 
 private:
 	initialize_update_function_t initialize_update_function;
@@ -91,7 +91,8 @@ private:
 	statistics_update_function_t statistics_update_function;
 
 private:
-	void InitializeUpdateInfo(UpdateInfo &info, row_t *ids, idx_t count, idx_t vector_index, idx_t vector_offset);
+	void InitializeUpdateInfo(UpdateInfo &info, row_t *ids, const SelectionVector &sel, idx_t count,
+                                         idx_t vector_index, idx_t vector_offset);
 };
 
 struct UpdateNodeData {

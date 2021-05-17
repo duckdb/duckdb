@@ -7,8 +7,8 @@
 
 namespace duckdb {
 
-StandardColumnData::StandardColumnData(DatabaseInstance &db, idx_t start_row, LogicalType type, ColumnData *parent)
-    : ColumnData(db, start_row, move(type), parent), validity(db, start_row, this) {
+StandardColumnData::StandardColumnData(DatabaseInstance &db, idx_t column_index, idx_t start_row, LogicalType type, ColumnData *parent)
+    : ColumnData(db, column_index, start_row, move(type), parent), validity(db, 0, start_row, this) {
 }
 
 bool StandardColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
@@ -54,20 +54,14 @@ void StandardColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t 
 	state.child_states.push_back(move(child_state));
 }
 
-void StandardColumnData::Scan(ColumnScanState &state, Vector &result) {
-	if (!state.initialized) {
-		D_ASSERT(state.current);
-		state.current->InitializeScan(state);
-		state.initialized = true;
-	}
-	// fetch validity data
-	validity.Scan(state.child_states[0], result);
+void StandardColumnData::Scan(Transaction &transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
+	ColumnData::Scan(transaction, vector_index, state, result);
+	validity.Scan(transaction, vector_index, state.child_states[0], result);
+}
 
-	// perform a scan of this segment
-	ScanVector(state, result);
-
-	// move over to the next vector
-	state.Next();
+void StandardColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates) {
+	ColumnData::ScanCommitted(vector_index, state, result, allow_updates);
+	validity.ScanCommitted(vector_index, state.child_states[0], result, allow_updates);
 }
 
 void StandardColumnData::InitializeAppend(ColumnAppendState &state) {
@@ -100,14 +94,18 @@ void StandardColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &res
 	ColumnData::Fetch(state, row_id, result);
 }
 
-void StandardColumnData::FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
+void StandardColumnData::Update(Transaction &transaction, DataTableInfo &table_info, idx_t column_index, Vector &update_vector, row_t *row_ids, idx_t update_count) {
+	ColumnData::Update(transaction, table_info, column_index, update_vector, row_ids, update_count);
+	validity.Update(transaction, table_info, 0, update_vector, row_ids, update_count);
+}
+
+void StandardColumnData::FetchRow(Transaction &transaction, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
 	// find the segment the row belongs to
 	if (state.child_states.empty()) {
 		auto child_state = make_unique<ColumnFetchState>();
 		state.child_states.push_back(move(child_state));
 	}
-	validity.FetchRow(*state.child_states[0], row_id, result, result_idx);
-	ColumnData::FetchRow(state, row_id, result, result_idx);
+	validity.FetchRow(transaction, *state.child_states[0], row_id, result, result_idx);	ColumnData::FetchRow(transaction, state, row_id, result, result_idx);
 }
 
 void StandardColumnData::CommitDropColumn() {
@@ -153,9 +151,9 @@ void StandardColumnData::Initialize(PersistentColumnData &column_data) {
 	validity.Initialize(*persistent.validity);
 }
 
-shared_ptr<ColumnData> StandardColumnData::Deserialize(DatabaseInstance &db, idx_t start_row, Deserializer &source,
+shared_ptr<ColumnData> StandardColumnData::Deserialize(DatabaseInstance &db, idx_t column_index, idx_t start_row, Deserializer &source,
                                                        const LogicalType &type) {
-	auto result = make_shared<StandardColumnData>(db, start_row, type, nullptr);
+	auto result = make_shared<StandardColumnData>(db, column_index, start_row, type, nullptr);
 	BaseDeserialize(db, source, type, *result);
 	ColumnData::BaseDeserialize(db, source, LogicalType(LogicalTypeId::VALIDITY), result->validity);
 	return move(result);
