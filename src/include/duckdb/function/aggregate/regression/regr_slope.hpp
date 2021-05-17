@@ -33,7 +33,7 @@ struct RegrSlopeOperation {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(STATE source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target) {
 		CovarOperation::Combine<CovarState, OP>(source.cov_pop, &target->cov_pop);
 		STDDevBaseOperation::Combine<StddevState, OP>(source.var_pop, &target->var_pop);
 	}

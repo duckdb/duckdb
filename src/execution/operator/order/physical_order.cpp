@@ -2150,7 +2150,8 @@ static void Scan(ClientContext &context, DataChunk &chunk, PhysicalOrderOperator
 	chunk.Verify();
 }
 
-void PhysicalOrder::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
+void PhysicalOrder::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
+                                     PhysicalOperatorState *state_p) const {
 	auto &state = *reinterpret_cast<PhysicalOrderOperatorState *>(state_p);
 	auto &gstate = (OrderGlobalState &)*this->sink_state;
 	const auto &payload_state = *gstate.payload_state;

@@ -21,7 +21,7 @@ public:
 	                           unique_ptr<FunctionData> bind_data_p, vector<column_t> column_ids_p,
 	                           idx_t estimated_cardinality);
 
-	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const override;
 
 public:
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;

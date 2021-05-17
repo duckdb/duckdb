@@ -59,7 +59,8 @@ static unique_ptr<FunctionData> PragmaTableInfoBind(ClientContext &context, vect
 }
 
 unique_ptr<FunctionOperatorData> PragmaTableInfoInit(ClientContext &context, const FunctionData *bind_data,
-                                                     vector<column_t> &column_ids, TableFilterCollection *filters) {
+                                                     const vector<column_t> &column_ids,
+                                                     TableFilterCollection *filters) {
 	return make_unique<PragmaTableOperatorData>();
 }
 

@@ -31,7 +31,8 @@ PhysicalTableScan::PhysicalTableScan(vector<LogicalType> types, TableFunction fu
       table_filters(move(table_filters_p)) {
 }
 
-void PhysicalTableScan::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
+void PhysicalTableScan::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
+                                         PhysicalOperatorState *state_p) const {
 	auto &state = (PhysicalTableScanOperatorState &)*state_p;
 	if (column_ids.empty()) {
 		return;
@@ -119,12 +120,11 @@ string PhysicalTableScan::ParamsToString() const {
 		result += "\n[INFOSEPARATOR]\n";
 		result += "Filters: ";
 		for (auto &f : table_filters->filters) {
-			for (auto &filter : f.second) {
-				if (filter.column_index < names.size()) {
-					result += "\n";
-					result += names[column_ids[filter.column_index]] +
-					          ExpressionTypeToOperator(filter.comparison_type) + filter.constant.ToString();
-				}
+			auto &column_index = f.first;
+			auto &filter = f.second;
+			if (column_index < names.size()) {
+				result += filter->ToString(names[column_ids[column_index]]);
+				result += "\n";
 			}
 		}
 	}

@@ -4,6 +4,7 @@
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/persistent_segment.hpp"
 #include "duckdb/storage/table/transient_segment.hpp"
+#include "duckdb/planner/table_filter.hpp"
 
 namespace duckdb {
 
@@ -18,11 +19,13 @@ bool StandardColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filte
 		if (!state.current) {
 			return true;
 		}
-		if (state.current->stats.CheckZonemap(filter)) {
+		auto prune_result = filter.CheckStatistics(*state.current->stats.statistics);
+		if (prune_result != FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 			return true;
 		}
 		if (state.updates) {
-			return state.updates->GetStatistics().CheckZonemap(filter);
+			prune_result = filter.CheckStatistics(*state.updates->GetStatistics().statistics);
+			return prune_result != FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		} else {
 			return false;
 		}
