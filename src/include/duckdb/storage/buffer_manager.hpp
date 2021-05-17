@@ -16,8 +16,8 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 
-#include <atomic>
-#include <mutex>
+#include "duckdb/common/atomic.hpp"
+#include "duckdb/common/mutex.hpp"
 
 namespace duckdb {
 class DatabaseInstance;
@@ -83,18 +83,18 @@ private:
 	//! The database instance
 	DatabaseInstance &db;
 	//! The current amount of memory that is occupied by the buffer manager (in bytes)
-	std::atomic<idx_t> current_memory;
+	atomic<idx_t> current_memory;
 	//! The maximum amount of memory that the buffer manager can keep (in bytes)
-	std::atomic<idx_t> maximum_memory;
+	atomic<idx_t> maximum_memory;
 	//! The directory name where temporary files are stored
 	string temp_directory;
 	//! The lock for the set of blocks
-	std::mutex manager_lock;
+	mutex manager_lock;
 	//! A mapping of block id -> BlockPointer
 	unordered_map<block_id_t, weak_ptr<BlockHandle>> blocks;
 	//! Eviction queue
 	unique_ptr<EvictionQueue> queue;
 	//! The temporary id used for managed buffers
-	std::atomic<block_id_t> temporary_id;
+	atomic<block_id_t> temporary_id;
 };
 } // namespace duckdb

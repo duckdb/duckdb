@@ -33,14 +33,14 @@ public:
 
 public:
 	void Sink(ExecutionContext &context, GlobalOperatorState &gstate_p, LocalSinkState &lstate_p,
-	          DataChunk &input) override;
+	          DataChunk &input) const override;
 	void Combine(ExecutionContext &context, GlobalOperatorState &gstate_p, LocalSinkState &lstate_p) override;
-	void Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> gstate_p) override;
+	bool Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> gstate_p) override;
 
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) override;
 	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;
 
-	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 
 	idx_t MaxThreads(ClientContext &context);
@@ -60,7 +60,7 @@ public:
 private:
 	//! Sort and re-order local state data when the local state has aggregated SORTING_BLOCK_SIZE data
 	void SortLocalState(ClientContext &context, OrderLocalState &lstate, const SortingState &sorting_state,
-	                    const PayloadState &payload_state);
+	                    const PayloadState &payload_state) const;
 };
 
 } // namespace duckdb

@@ -107,7 +107,9 @@ elif os.path.isdir(revision):
     for fname in changed_files:
         print(fname)
 elif not format_all:
-    os.system("git fetch origin master:master")
+    if revision == 'master':
+        # fetch new changes when comparing to the master
+        os.system("git fetch origin master:master")
     print(action + " since branch or revision: " + revision)
     changed_files = get_changed_files(revision)
     if len(changed_files) == 0:
@@ -267,7 +269,10 @@ def format_directory(directory):
 
 
 if format_all:
-    os.system(cmake_format_command.replace("${FILE}", "CMakeLists.txt"))
+    try:
+        os.system(cmake_format_command.replace("${FILE}", "CMakeLists.txt"))
+    except:
+        pass
     format_directory('src')
     format_directory('benchmark')
     format_directory('test')

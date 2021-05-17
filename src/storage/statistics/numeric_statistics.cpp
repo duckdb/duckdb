@@ -94,20 +94,62 @@ void NumericStatistics::Merge(const BaseStatistics &other_p) {
 	}
 }
 
-bool NumericStatistics::CheckZonemap(ExpressionType comparison_type, const Value &constant) {
+FilterPropagateResult NumericStatistics::CheckZonemap(ExpressionType comparison_type, const Value &constant) {
 	switch (comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
-		return constant >= min && constant <= max;
+		if (constant == min && constant == max) {
+			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
+		} else if (constant >= min && constant <= max) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		} else {
+			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+		}
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		return constant <= max;
+		// X >= C
+		// this can be true only if max(X) >= C
+		// if min(X) >= C, then this is always true
+		if (min >= constant) {
+			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
+		} else if (max >= constant) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		} else {
+			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+		}
 	case ExpressionType::COMPARE_GREATERTHAN:
-		return constant < max;
+		// X > C
+		// this can be true only if max(X) > C
+		// if min(X) > C, then this is always true
+		if (min > constant) {
+			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
+		} else if (max > constant) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		} else {
+			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+		}
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		return constant >= min;
+		// X <= C
+		// this can be true only if min(X) <= C
+		// if max(X) <= C, then this is always true
+		if (max <= constant) {
+			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
+		} else if (min <= constant) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		} else {
+			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+		}
 	case ExpressionType::COMPARE_LESSTHAN:
-		return constant > min;
+		// X < C
+		// this can be true only if min(X) < C
+		// if max(X) < C, then this is always true
+		if (max < constant) {
+			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
+		} else if (min < constant) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		} else {
+			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+		}
 	default:
-		throw InternalException("Operation not implemented");
+		throw InternalException("Expression type in zonemap check not implemented");
 	}
 }
 

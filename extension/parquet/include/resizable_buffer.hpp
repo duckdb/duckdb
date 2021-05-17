@@ -68,12 +68,15 @@ public:
 		resize(allocator, new_size);
 	}
 	void resize(Allocator &allocator, uint64_t new_size) {
+		len = new_size;
+		if (new_size == 0) {
+			return;
+		}
 		if (new_size > alloc_len) {
 			alloc_len = new_size;
 			allocated_data = allocator.Allocate(alloc_len);
+			ptr = (char *)allocated_data->get();
 		}
-		len = new_size;
-		ptr = (char *)allocated_data->get();
 	}
 
 private:

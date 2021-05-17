@@ -19,7 +19,7 @@ struct BoolAndFunFunction {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(STATE source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target) {
 		target->val = target->val && source.val;
 		target->empty = target->empty && source.empty;
 	}
@@ -59,7 +59,7 @@ struct BoolOrFunFunction {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(STATE source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target) {
 		target->val = target->val || source.val;
 		target->empty = target->empty && source.empty;
 	}

@@ -1,12 +1,24 @@
 cmake_minimum_required(VERSION 2.8.12)
-cmake_policy(SET CMP0026 NEW)
-cmake_policy(SET CMP0051 NEW)
+
+if(POLICY CMP0026)
+  cmake_policy(SET CMP0026 NEW)
+endif()
+
+if(POLICY CMP0051)
+  cmake_policy(SET CMP0051 NEW)
+endif()
 
 project(DuckDB)
 
 find_package(Threads REQUIRED)
 
-set(CMAKE_CXX_STANDARD 11)
+if (CMAKE_VERSION VERSION_LESS "3.1")
+    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+else ()
+  set (CMAKE_CXX_STANDARD 11)
+endif ()
+
+
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -98,11 +110,7 @@ if(${ENABLE_THREAD_SANITIZER})
         "Both thread and address sanitizers are enabled. This is not supported by clang. The address sanitizer will be disabled, and we will run with only the thread sanitizer."
     )
   endif()
-  if(FORCE_ASSERT)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=thread")
-  else()
-    set(CXX_EXTRA_DEBUG "${CXX_EXTRA_DEBUG} -fsanitize=thread")
-  endif()
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=thread")
 elseif(${ENABLE_SANITIZER})
   if(FORCE_ASSERT)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address")
@@ -138,33 +146,42 @@ if(${CMAKE_SYSTEM_NAME} STREQUAL "SunOS")
 endif()
 
 execute_process(
-  COMMAND git log -1 --format=%h
-  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  OUTPUT_VARIABLE GIT_COMMIT_HASH
-  OUTPUT_STRIP_TRAILING_WHITESPACE)
+        COMMAND git log -1 --format=%h
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        RESULT_VARIABLE GIT_RESULT
+        OUTPUT_VARIABLE GIT_COMMIT_HASH
+        OUTPUT_STRIP_TRAILING_WHITESPACE)
 execute_process(
-  COMMAND git describe --tags --abbrev=0
-  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  OUTPUT_VARIABLE GIT_LAST_TAG
-  OUTPUT_STRIP_TRAILING_WHITESPACE)
+        COMMAND git describe --tags --abbrev=0
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        OUTPUT_VARIABLE GIT_LAST_TAG
+        OUTPUT_STRIP_TRAILING_WHITESPACE)
 execute_process(
-  COMMAND git describe --tags --long
-  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  OUTPUT_VARIABLE GIT_ITERATION
-  OUTPUT_STRIP_TRAILING_WHITESPACE)
+        COMMAND git describe --tags --long
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        OUTPUT_VARIABLE GIT_ITERATION
+        OUTPUT_STRIP_TRAILING_WHITESPACE)
 
-string(REGEX REPLACE "v([0-9]+).[0-9]+.[0-9]+" "\\1" DUCKDB_MAJOR_VERSION "${GIT_LAST_TAG}")
-string(REGEX REPLACE "v[0-9]+.([0-9]+).[0-9]+" "\\1" DUCKDB_MINOR_VERSION "${GIT_LAST_TAG}")
-string(REGEX REPLACE "v[0-9]+.[0-9]+.([0-9]+)" "\\1" DUCKDB_PATCH_VERSION "${GIT_LAST_TAG}")
-string(REGEX REPLACE ".*-([0-9]+)-.*" "\\1" DUCKDB_DEV_ITERATION "${GIT_ITERATION}")
+if(GIT_RESULT EQUAL "0")
+  string(REGEX REPLACE "v([0-9]+).[0-9]+.[0-9]+" "\\1" DUCKDB_MAJOR_VERSION "${GIT_LAST_TAG}")
+  string(REGEX REPLACE "v[0-9]+.([0-9]+).[0-9]+" "\\1" DUCKDB_MINOR_VERSION "${GIT_LAST_TAG}")
+  string(REGEX REPLACE "v[0-9]+.[0-9]+.([0-9]+)" "\\1" DUCKDB_PATCH_VERSION "${GIT_LAST_TAG}")
+  string(REGEX REPLACE ".*-([0-9]+)-.*" "\\1" DUCKDB_DEV_ITERATION "${GIT_ITERATION}")
 
-if(${DUCKDB_DEV_ITERATION} EQUAL 0)
-  # on a tag; directly use the version
-  set(DUCKDB_VERSION "${GIT_LAST_TAG}")
+  if(DUCKDB_DEV_ITERATION EQUAL 0)
+    # on a tag; directly use the version
+    set(DUCKDB_VERSION "${GIT_LAST_TAG}")
+  else()
+    # not on a tag, increment the patch version by one and add a -devX suffix
+    math(EXPR DUCKDB_PATCH_VERSION "${DUCKDB_PATCH_VERSION}+1")
+    set(DUCKDB_VERSION "v${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION}.${DUCKDB_PATCH_VERSION}-dev${DUCKDB_DEV_ITERATION}")
+  endif()
 else()
-  # not on a tag, increment the patch version by one and add a -devX suffix
-  math(EXPR DUCKDB_PATCH_VERSION "${DUCKDB_PATCH_VERSION}+1")
-
+  # fallback for when building from tarball
+  set(DUCKDB_MAJOR_VERSION 0)
+  set(DUCKDB_MINOR_VERSION 0)
+  set(DUCKDB_PATCH_VERSION 1)
+  set(DUCKDB_DEV_ITERATION 0)
   set(DUCKDB_VERSION "v${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION}.${DUCKDB_PATCH_VERSION}-dev${DUCKDB_DEV_ITERATION}")
 endif()
 
@@ -182,6 +199,8 @@ option(BUILD_SQLSMITH "Enable building of SQLSmith." FALSE)
 option(BUILD_TPCE "Enable building of the TPC-E tool." FALSE)
 option(JDBC_DRIVER "Build the DuckDB JDBC driver" FALSE)
 option(BUILD_PYTHON "Build the DuckDB Python extension" FALSE)
+option(USER_SPACE "Build the DuckDB Python in the user space" FALSE)
+
 option(BUILD_REST "Build the DuckDB REST server" FALSE)
 option(BUILD_SHELL "Build the DuckDB Shell and SQLite API Wrappers" TRUE)
 option(DISABLE_THREADS "Disable support for multi-threading" FALSE)
@@ -387,11 +406,7 @@ function(add_extension_definitions)
   endif()
 
   if(${BUILD_HTTPFS_EXTENSION})
-    if (APPLE)
-      set(OPENSSL_INCLUDE_DIR /usr/local/opt/openssl/include)
-      else()
-      find_package(OpenSSL REQUIRED)
-    endif()
+    find_package(OpenSSL REQUIRED)
     include_directories(${CMAKE_SOURCE_DIR}/extension/httpfs/include ${OPENSSL_INCLUDE_DIR})
     add_definitions(-DBUILD_HTTPFS_EXTENSION=${BUILD_HTTPFS_EXTENSION})
   endif()
@@ -437,17 +452,18 @@ function(link_extension_libraries LIBRARY)
   endif()
 
   if(${BUILD_HTTPFS_EXTENSION})
-    if (APPLE)
-      set(OPENSSL_LIBRARIES /usr/local/opt/openssl/lib/libcrypto.dylib /usr/local/opt/openssl/lib/libssl.dylib )
-      else()
-      find_package(OpenSSL REQUIRED)
-    endif()
+    find_package(OpenSSL REQUIRED)
     target_link_libraries(${LIBRARY} httpfs_extension ${OPENSSL_LIBRARIES})
   endif()
 endfunction()
 
 function(link_threads LIBRARY)
-  target_link_libraries(${LIBRARY} Threads::Threads)
+  if (CMAKE_VERSION VERSION_LESS "3.1")
+    target_link_libraries(${LIBRARY} pthread)
+
+  else()
+    target_link_libraries(${LIBRARY} Threads::Threads)
+  endif()
 endfunction()
 
 if(${EXPORT_DLL_SYMBOLS})
@@ -473,6 +489,7 @@ if(NOT CLANG_TIDY)
   add_subdirectory(third_party)
 endif()
 
+if (CMAKE_VERSION VERSION_GREATER "3.0") # this does not work with 2.8
 # Write the export set for build and install tree
 install(EXPORT "${DUCKDB_EXPORT_SET}" DESTINATION "${INSTALL_CMAKE_DIR}")
 export(EXPORT "${DUCKDB_EXPORT_SET}"
@@ -508,3 +525,4 @@ if(EXISTS ${CMAKE_CONFIG_TEMPLATE} AND EXISTS ${CMAKE_CONFIG_VERSION_TEMPLATE})
     DESTINATION "${INSTALL_CMAKE_DIR}")
 endif()
 
+endif()

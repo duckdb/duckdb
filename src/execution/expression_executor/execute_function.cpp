@@ -4,12 +4,12 @@
 namespace duckdb {
 
 struct FunctionExpressionState : public ExpressionState {
-	FunctionExpressionState(Expression &expr, ExpressionExecutorState &root) : ExpressionState(expr, root) {
+	FunctionExpressionState(const Expression &expr, ExpressionExecutorState &root) : ExpressionState(expr, root) {
 	}
 
 	DataChunk arguments;
 };
-unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundFunctionExpression &expr,
+unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundFunctionExpression &expr,
                                                                 ExpressionExecutorState &root) {
 	auto result = make_unique<FunctionExpressionState>(expr, root);
 	for (auto &child : expr.children) {
@@ -22,8 +22,8 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundFunctionExp
 	return move(result);
 }
 
-void ExpressionExecutor::Execute(BoundFunctionExpression &expr, ExpressionState *state, const SelectionVector *sel,
-                                 idx_t count, Vector &result) {
+void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, ExpressionState *state,
+                                 const SelectionVector *sel, idx_t count, Vector &result) {
 	auto &fstate = (FunctionExpressionState &)*state;
 	auto &arguments = fstate.arguments;
 	if (!state->types.empty()) {
@@ -40,14 +40,9 @@ void ExpressionExecutor::Execute(BoundFunctionExpression &expr, ExpressionState 
 		arguments.Verify();
 	}
 	arguments.SetCardinality(count);
-	if (current_count >= next_sample) {
-		state->profiler.Start();
-	}
+	state->profiler.BeginSample();
 	expr.function.function(arguments, *state, result);
-	if (current_count >= next_sample) {
-		state->profiler.End();
-		state->time += state->profiler.Elapsed();
-	}
+	state->profiler.EndSample(count);
 	if (result.GetType() != expr.return_type) {
 		throw TypeMismatchException(expr.return_type, result.GetType(),
 		                            "expected function to return the former "

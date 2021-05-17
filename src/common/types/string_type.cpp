@@ -19,9 +19,9 @@ void string_t::Verify() {
 	for (idx_t i = 0; i < MinValue<uint32_t>(PREFIX_LENGTH, GetSize()); i++) {
 		D_ASSERT(GetPrefix()[i] == dataptr[i]);
 	}
-	// verify that for strings with length < PREFIX_LENGTH, the rest of the prefix is zero
-	for (idx_t i = GetSize(); i < PREFIX_LENGTH; i++) {
-		D_ASSERT(GetPrefix()[i] == '\0');
+	// verify that for strings with length < INLINE_LENGTH, the rest of the string is zero
+	for (idx_t i = GetSize(); i < INLINE_LENGTH; i++) {
+		D_ASSERT(GetDataUnsafe()[i] == '\0');
 	}
 }
 

@@ -40,7 +40,7 @@ class RowDataCollection {
 public:
 	RowDataCollection(BufferManager &buffer_manager, idx_t block_capacity, idx_t entry_size);
 
-	std::mutex rc_lock;
+	mutex rc_lock;
 
 	//! BufferManager
 	BufferManager &buffer_manager;

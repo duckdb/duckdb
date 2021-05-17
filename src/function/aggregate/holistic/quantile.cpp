@@ -12,10 +12,6 @@
 
 namespace duckdb {
 
-bool operator<(const interval_t &lhs, const interval_t &rhs) {
-	return LessThan::Operation(lhs, rhs);
-}
-
 template <>
 timestamp_t Cast::Operation(date_t date) {
 	return Timestamp::FromDatetime(date, dtime_t(0));
@@ -85,7 +81,7 @@ struct QuantileOperation {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(STATE source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target) {
 		if (source.pos == 0) {
 			return;
 		}

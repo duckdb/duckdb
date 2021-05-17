@@ -31,11 +31,9 @@ void ColumnData::FilterScan(Transaction &transaction, ColumnScanState &state, Ve
 }
 
 void ColumnData::Select(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
-                        idx_t &approved_tuple_count, vector<TableFilter> &table_filters) {
+                        idx_t &approved_tuple_count, TableFilter &table_filter) {
 	Scan(transaction, state, result);
-	for (auto &filter : table_filters) {
-		UncompressedSegment::FilterSelection(sel, result, filter, approved_tuple_count, FlatVector::Validity(result));
-	}
+	UncompressedSegment::FilterSelection(sel, result, table_filter, approved_tuple_count, FlatVector::Validity(result));
 }
 
 void ColumnScanState::Next() {
@@ -280,7 +278,7 @@ void ColumnCheckpointState::AppendData(Vector &data, idx_t count) {
 }
 
 void ColumnCheckpointState::FlushSegment() {
-	auto tuple_count = current_segment->tuple_count;
+	auto tuple_count = current_segment->tuple_count.load();
 	if (tuple_count == 0) {
 		return;
 	}

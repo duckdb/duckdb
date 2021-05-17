@@ -5,9 +5,9 @@
 
 namespace duckdb {
 
-AdaptiveFilter::AdaptiveFilter(Expression &expr)
+AdaptiveFilter::AdaptiveFilter(const Expression &expr)
     : iteration_count(0), observe_interval(10), execute_interval(20), warmup(true) {
-	auto &conj_expr = (BoundConjunctionExpression &)expr;
+	auto &conj_expr = (const BoundConjunctionExpression &)expr;
 	D_ASSERT(conj_expr.children.size() > 1);
 	for (idx_t idx = 0; idx < conj_expr.children.size(); idx++) {
 		permutation.push_back(idx);

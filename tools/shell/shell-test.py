@@ -107,7 +107,16 @@ CREATE TABLE a (I INTEGER);
 .changes on
 INSERT INTO a VALUES (42);
 DROP TABLE a;
-''', err="sqlite3_changes")
+''', out="total_changes: 1")
+
+test('''
+CREATE TABLE a (I INTEGER);
+.changes on
+INSERT INTO a VALUES (42);
+INSERT INTO a VALUES (42);
+INSERT INTO a VALUES (42);
+DROP TABLE a;
+''', out="total_changes: 3")
 
 test('''
 CREATE TABLE a (I INTEGER);

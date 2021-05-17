@@ -1,5 +1,5 @@
 #include "duckdb/main/connection.hpp"
-
+#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/appender.hpp"
@@ -27,9 +27,9 @@ Connection::Connection(DuckDB &database) : Connection(*database.instance) {
 
 string Connection::GetProfilingInformation(ProfilerPrintFormat format) {
 	if (format == ProfilerPrintFormat::JSON) {
-		return context->profiler.ToJSON();
+		return context->profiler->ToJSON();
 	} else {
-		return context->profiler.ToString();
+		return context->profiler->ToString();
 	}
 }
 

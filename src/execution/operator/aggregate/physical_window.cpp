@@ -24,7 +24,7 @@ public:
 	}
 
 	PhysicalWindow &op;
-	std::mutex lock;
+	mutex lock;
 	ChunkCollection chunks;
 	ChunkCollection over_collection;
 	ChunkCollection hash_collection;
@@ -65,6 +65,8 @@ public:
 	class reference { // NOLINT
 	public:
 		friend BitArray;
+
+		reference(const reference &r) = default;
 
 		reference &operator=(bool x) noexcept {
 			auto b = parent.Block(pos);
@@ -322,7 +324,7 @@ static idx_t FindNextStart(const BitArray<W> &mask, idx_t l, idx_t r) {
 		// Loop over the block
 		for (; shift < mask.BITS_PER_WORD; ++shift, ++l) {
 			if (mask.TestBit(block, shift)) {
-				return std::min(l, r);
+				return MinValue(l, r);
 			}
 		}
 	}
@@ -870,7 +872,7 @@ public:
 	WindowParallelState() : next_part(0) {
 	}
 	//! The output read position.
-	std::atomic<idx_t> next_part;
+	atomic<idx_t> next_part;
 };
 
 unique_ptr<ParallelState> PhysicalWindow::GetParallelState() {
@@ -963,7 +965,8 @@ static void Scan(PhysicalWindowOperatorState &state, DataChunk &chunk) {
 	state.position += STANDARD_VECTOR_SIZE;
 }
 
-void PhysicalWindow::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
+void PhysicalWindow::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
+                                      PhysicalOperatorState *state_p) const {
 	auto &state = *reinterpret_cast<PhysicalWindowOperatorState *>(state_p);
 	auto &gstate = (WindowGlobalState &)*sink_state;
 
@@ -1024,7 +1027,7 @@ void PhysicalWindow::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 }
 
 void PhysicalWindow::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_p,
-                          DataChunk &input) {
+                          DataChunk &input) const {
 	auto &lstate = (WindowLocalState &)lstate_p;
 	lstate.chunks.Append(input);
 
@@ -1073,7 +1076,7 @@ void PhysicalWindow::Combine(ExecutionContext &context, GlobalOperatorState &gst
 	}
 }
 
-void PhysicalWindow::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> gstate_p) {
+bool PhysicalWindow::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> gstate_p) {
 	this->sink_state = move(gstate_p);
 	auto &gstate = (WindowGlobalState &)*this->sink_state;
 
@@ -1081,7 +1084,7 @@ void PhysicalWindow::Finalize(Pipeline &pipeline, ClientContext &context, unique
 	ChunkCollection &window_results = gstate.window_results;
 
 	if (big_data.Count() == 0) {
-		return;
+		return true;
 	}
 
 	vector<LogicalType> window_types;
@@ -1103,6 +1106,7 @@ void PhysicalWindow::Finalize(Pipeline &pipeline, ClientContext &context, unique
 	}
 
 	D_ASSERT(window_results.ColumnCount() == select_list.size());
+	return true;
 }
 
 unique_ptr<LocalSinkState> PhysicalWindow::GetLocalSinkState(ExecutionContext &context) {

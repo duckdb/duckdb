@@ -8,7 +8,7 @@ namespace duckdb {
 void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &tside, idx_t tcount,
           SelectionVector &fside, idx_t fcount);
 
-unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundCaseExpression &expr,
+unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundCaseExpression &expr,
                                                                 ExpressionExecutorState &root) {
 	auto result = make_unique<ExpressionState>(expr, root);
 	result->AddChild(expr.check.get());
@@ -18,7 +18,7 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundCaseExpress
 	return result;
 }
 
-void ExpressionExecutor::Execute(BoundCaseExpression &expr, ExpressionState *state, const SelectionVector *sel,
+void ExpressionExecutor::Execute(const BoundCaseExpression &expr, ExpressionState *state, const SelectionVector *sel,
                                  idx_t count, Vector &result) {
 	Vector res_true, res_false;
 	res_true.Reference(state->intermediate_chunk.data[1]);

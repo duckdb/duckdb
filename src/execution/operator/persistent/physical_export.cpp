@@ -20,7 +20,7 @@ static void WriteCatalogEntries(stringstream &ss, vector<CatalogEntry *> &entrie
 	ss << std::endl;
 }
 
-static void WriteStringStreamToFile(FileSystem &fs, stringstream &ss, string path) {
+static void WriteStringStreamToFile(FileSystem &fs, stringstream &ss, const string &path) {
 	auto ss_string = ss.str();
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW,
 	                          FileLockType::WRITE_LOCK);
@@ -37,7 +37,7 @@ static void WriteValueAsSQL(stringstream &ss, Value &val) {
 }
 
 static void WriteCopyStatement(FileSystem &fs, stringstream &ss, TableCatalogEntry *table, CopyInfo &info,
-                               ExportedTableData &exported_table, CopyFunction &function) {
+                               ExportedTableData &exported_table, CopyFunction const &function) {
 	ss << "COPY ";
 
 	if (exported_table.schema_name != DEFAULT_SCHEMA) {
@@ -74,7 +74,7 @@ static void WriteCopyStatement(FileSystem &fs, stringstream &ss, TableCatalogEnt
 	ss << ");" << std::endl;
 }
 
-void PhysicalExport::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
+void PhysicalExport::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const {
 	auto &ccontext = context.client;
 	auto &fs = FileSystem::GetFileSystem(ccontext);
 

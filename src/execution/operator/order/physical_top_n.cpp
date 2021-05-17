@@ -5,7 +5,6 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/storage/data_table.hpp"
-#include "duckdb/common/to_string.hpp"
 
 namespace duckdb {
 
@@ -137,7 +136,7 @@ unique_ptr<GlobalOperatorState> PhysicalTopN::GetGlobalState(ClientContext &cont
 // Sink
 //===--------------------------------------------------------------------===//
 void PhysicalTopN::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
-                        DataChunk &input) {
+                        DataChunk &input) const {
 	// append to the local sink state
 	auto &sink = (TopNLocalState &)lstate;
 	sink.heap.Sink(input);
@@ -159,12 +158,13 @@ void PhysicalTopN::Combine(ExecutionContext &context, GlobalOperatorState &state
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//
-void PhysicalTopN::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> state) {
+bool PhysicalTopN::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> state) {
 	auto &gstate = (TopNGlobalState &)*state;
 	// global finalize: compute the final top N
 	gstate.heap.Reduce();
 
 	PhysicalSink::Finalize(pipeline, context, move(state));
+	return true;
 }
 
 //===--------------------------------------------------------------------===//
@@ -179,7 +179,7 @@ public:
 	idx_t position;
 };
 
-void PhysicalTopN::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
+void PhysicalTopN::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) const {
 	auto &state = (PhysicalTopNOperatorState &)*state_p;
 	auto &gstate = (TopNGlobalState &)*sink_state;
 

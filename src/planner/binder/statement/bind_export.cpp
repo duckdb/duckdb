@@ -10,6 +10,7 @@
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/parser/parsed_data/exported_table_data.hpp"
 
+#include "duckdb/common/string_util.hpp"
 #include <algorithm>
 
 namespace duckdb {
