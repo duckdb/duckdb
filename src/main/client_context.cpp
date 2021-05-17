@@ -1,5 +1,5 @@
 #include "duckdb/main/client_context.hpp"
-
+#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/serializer/buffered_deserializer.hpp"
 #include "duckdb/common/serializer/buffered_serializer.hpp"
@@ -44,7 +44,8 @@ private:
 };
 
 ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
-    : db(move(database)), transaction(db->GetTransactionManager(), *this), interrupted(false), executor(*this),
+    : profiler(make_unique<QueryProfiler>()), query_profiler_history(make_unique<QueryProfilerHistory>()),
+      db(move(database)), transaction(db->GetTransactionManager(), *this), interrupted(false), executor(*this),
       temporary_objects(make_unique<SchemaCatalogEntry>(&db->GetCatalog(), TEMP_SCHEMA, true)), open_result(nullptr) {
 	std::random_device rd;
 	random_engine.seed(rd());
@@ -95,17 +96,21 @@ unique_ptr<DataChunk> ClientContext::Fetch() {
 }
 
 string ClientContext::FinalizeQuery(ClientContextLock &lock, bool success) {
-	profiler.EndQuery();
+	profiler->EndQuery();
 	executor.Reset();
 
 	string error;
 	if (transaction.HasActiveTransaction()) {
 		ActiveTransaction().active_query = MAXIMUM_QUERY_ID;
-		query_profiler_history.GetPrevProfilers().emplace_back(transaction.ActiveTransaction().active_query,
-		                                                       move(profiler));
-		profiler.save_location = query_profiler_history.GetPrevProfilers().back().second.save_location;
-		if (query_profiler_history.GetPrevProfilers().size() >= query_profiler_history.GetPrevProfilersSize()) {
-			query_profiler_history.GetPrevProfilers().pop_front();
+		// Move the query profiler into the history
+		auto &prev_profilers = query_profiler_history->GetPrevProfilers();
+		prev_profilers.emplace_back(transaction.ActiveTransaction().active_query, move(profiler));
+		// Reinitialize the query profiler
+		profiler = make_unique<QueryProfiler>();
+		// Propagate settings of the saved query into the new profiler.
+		profiler->Propagate(*prev_profilers.back().second);
+		if (prev_profilers.size() >= query_profiler_history->GetPrevProfilersSize()) {
+			prev_profilers.pop_front();
 		}
 		try {
 			if (transaction.IsAutoCommit()) {
@@ -154,11 +159,11 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 	StatementType statement_type = statement->type;
 	auto result = make_shared<PreparedStatementData>(statement_type);
 
-	profiler.StartPhase("planner");
+	profiler->StartPhase("planner");
 	Planner planner(*this);
 	planner.CreatePlan(move(statement));
 	D_ASSERT(planner.plan);
-	profiler.EndPhase();
+	profiler->EndPhase();
 
 	auto plan = move(planner.plan);
 	// extract the result column names from the plan
@@ -171,18 +176,18 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 	result->catalog_version = Transaction::GetTransaction(*this).catalog_version;
 
 	if (enable_optimizer) {
-		profiler.StartPhase("optimizer");
+		profiler->StartPhase("optimizer");
 		Optimizer optimizer(*planner.binder, *this);
 		plan = optimizer.Optimize(move(plan));
 		D_ASSERT(plan);
-		profiler.EndPhase();
+		profiler->EndPhase();
 	}
 
-	profiler.StartPhase("physical_planner");
+	profiler->StartPhase("physical_planner");
 	// now convert logical query plan into a physical query plan
 	PhysicalPlanGenerator physical_planner(*this);
 	auto physical_plan = physical_planner.CreatePlan(move(plan));
-	profiler.EndPhase();
+	profiler->EndPhase();
 
 	result->plan = move(physical_plan);
 	return result;
@@ -382,7 +387,7 @@ unique_ptr<QueryResult> ClientContext::RunStatementOrPreparedStatement(ClientCon
 		statement = move(copied_statement);
 	}
 	// start the profiler
-	profiler.StartQuery(query);
+	profiler->StartQuery(query);
 	try {
 		if (statement) {
 			result = RunStatementInternal(lock, query, move(statement), allow_stream_result);
@@ -510,12 +515,12 @@ void ClientContext::Interrupt() {
 
 void ClientContext::EnableProfiling() {
 	auto lock = LockContext();
-	profiler.Enable();
+	profiler->Enable();
 }
 
 void ClientContext::DisableProfiling() {
 	auto lock = LockContext();
-	profiler.Disable();
+	profiler->Disable();
 }
 
 string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement) {
@@ -575,9 +580,9 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 #endif
 
 	// disable profiling if it is enabled
-	bool profiling_is_enabled = profiler.IsEnabled();
+	bool profiling_is_enabled = profiler->IsEnabled();
 	if (profiling_is_enabled) {
-		profiler.Disable();
+		profiler->Disable();
 	}
 
 	// see below
@@ -644,7 +649,7 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 	enable_optimizer = true;
 
 	if (profiling_is_enabled) {
-		profiler.Enable();
+		profiler->Enable();
 	}
 
 	// now compare the results

@@ -11,6 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/cycle_counter.hpp"
+#include "duckdb/common/random_engine.hpp"
 
 namespace duckdb {
 class Expression;
@@ -28,7 +29,6 @@ struct ExpressionState {
 	vector<LogicalType> types;
 	DataChunk intermediate_chunk;
 	string name;
-	double time;
 	CycleCounter profiler;
 
 public:
@@ -37,8 +37,11 @@ public:
 };
 
 struct ExpressionExecutorState {
+	explicit ExpressionExecutorState(const string &name);
 	unique_ptr<ExpressionState> root_state;
 	ExpressionExecutor *executor;
+	CycleCounter profiler;
+	string name;
 };
 
 } // namespace duckdb

@@ -1,10 +1,12 @@
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
-
+#include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/query_profiler.hpp"
 
 namespace duckdb {
 
@@ -256,6 +258,18 @@ void PhysicalHashJoin::ProbeHashTable(ExecutionContext &context, DataChunk &chun
 		state->scan_structure = sink.hash_table->Probe(state->join_keys);
 		state->scan_structure->Next(state->join_keys, state->child_chunk, chunk);
 	} while (chunk.size() == 0);
+}
+void PhysicalHashJoin::FinalizeOperatorState(PhysicalOperatorState &state, ExecutionContext &context) {
+	auto &state_p = reinterpret_cast<PhysicalHashJoinState &>(state);
+	context.thread.profiler.Flush(this, &state_p.probe_executor, "probe_executor", 0);
+	if (!children.empty() && state.child_state) {
+		children[0]->FinalizeOperatorState(*state.child_state, context);
+	}
+}
+void PhysicalHashJoin::Combine(ExecutionContext &context, GlobalOperatorState &gstate, LocalSinkState &lstate) {
+	auto &state = (HashJoinLocalState &)lstate;
+	context.thread.profiler.Flush(this, &state.build_executor, "build_executor", 1);
+	context.client.profiler->Flush(context.thread.profiler);
 }
 
 } // namespace duckdb
