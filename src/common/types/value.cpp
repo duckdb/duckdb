@@ -658,10 +658,6 @@ string Value::GetValue() const {
 	return ToString();
 }
 template <>
-string Value::GetValueAsIs() const {
-	return ToStringAsIs();
-}
-template <>
 float Value::GetValue() const {
 	return GetValueInternal<float>();
 }
@@ -928,18 +924,6 @@ string Value::ToString() const {
 	}
 	default:
 		throw NotImplementedException("Unimplemented type for printing: %s", type_.ToString());
-	}
-}
-
-string Value::ToStringAsIs() const {
-	if (is_null) {
-		return "NULL";
-	}
-	switch (type_.id()) {
-	case LogicalTypeId::BLOB:
-		return Blob::ToStringAsIs(string_t(str_value));
-	default:
-		throw NotImplementedException("Unimplemented type for string as is: %s", type_.ToString());
 	}
 }
 

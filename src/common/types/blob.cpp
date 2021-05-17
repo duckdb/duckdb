@@ -63,20 +63,6 @@ string Blob::ToString(string_t blob) {
 	return string(buffer.get(), str_len);
 }
 
-void Blob::ToStringAsIs(string_t blob, char *output) {
-	auto data = (const_data_ptr_t)blob.GetDataUnsafe();
-	auto len = blob.GetSize();
-	// all characters are copied as-is
-	memcpy(output, data, len);
-}
-
-string Blob::ToStringAsIs(string_t blob) {
-	auto len = blob.GetSize();
-	auto buffer = std::unique_ptr<char[]>(new char[len]);
-	Blob::ToStringAsIs(blob, buffer.get());
-	return string(buffer.get(), len);
-}
-
 idx_t Blob::GetBlobSize(string_t str) {
 	auto data = (const_data_ptr_t)str.GetDataUnsafe();
 	auto len = str.GetSize();

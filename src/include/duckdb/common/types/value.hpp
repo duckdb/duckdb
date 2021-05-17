@@ -124,10 +124,6 @@ public:
 		throw NotImplementedException("Unimplemented template type for Value::GetValue");
 	}
 	template <class T>
-	T GetValueAsIs() const {
-		throw NotImplementedException("Unimplemented template type for Value::GetValueAsIs");
-	}
-	template <class T>
 	static Value CreateValue(T value) {
 		throw NotImplementedException("Unimplemented template type for Value::CreateValue");
 	}
@@ -142,9 +138,6 @@ public:
 	Value Copy() const {
 		return Value(*this);
 	}
-
-	//! Convert this value to a string as is
-	DUCKDB_API string ToStringAsIs() const;
 
 	//! Convert this value to a string
 	DUCKDB_API string ToString() const;
@@ -326,9 +319,6 @@ template <>
 DUCKDB_API dtime_t Value::GetValue() const;
 template <>
 DUCKDB_API timestamp_t Value::GetValue() const;
-
-template <>
-DUCKDB_API string Value::GetValueAsIs() const;
 
 template <>
 DUCKDB_API int8_t &Value::GetValueUnsafe();
