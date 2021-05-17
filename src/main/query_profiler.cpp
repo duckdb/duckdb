@@ -206,19 +206,23 @@ void OperatorProfiler::AddTiming(const PhysicalOperator *op, double time, idx_t 
 	auto entry = timings.find(op);
 	if (entry == timings.end()) {
 		// add new entry
-		timings[op] = OperatorTimingInformation(time, elements);
+		timings[op] = OperatorInformation(time, elements);
 	} else {
 		// add to existing entry
 		entry->second.time += time;
 		entry->second.elements += elements;
 	}
 }
-void OperatorProfiler::Flush(const PhysicalOperator *phys_op, ExpressionExecutor *expression_executor) {
+void OperatorProfiler::Flush(const PhysicalOperator *phys_op, ExpressionExecutor *expression_executor,
+                             const string &name, int id) {
 	auto entry = timings.find(phys_op);
 	if (entry != timings.end()) {
 		auto &operator_timing = timings.find(phys_op)->second;
-		operator_timing.executors_info = make_unique<ExpressionExecutorInformation>(*expression_executor);
-		operator_timing.has_executor = true;
+		if (int(operator_timing.executors_info.size()) <= id) {
+			operator_timing.executors_info.resize(id + 1);
+		}
+		operator_timing.executors_info[id] = make_unique<ExpressionExecutorInfo>(*expression_executor, name, id);
+		operator_timing.name = phys_op->GetName();
 	}
 }
 
@@ -226,15 +230,22 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 	if (!enabled || !running) {
 		return;
 	}
-
+	lock_guard<mutex> guard(flush_lock);
 	for (auto &node : profiler.timings) {
 		auto entry = tree_map.find(node.first);
 		D_ASSERT(entry != tree_map.end());
 
 		entry->second->info.time += node.second.time;
 		entry->second->info.elements += node.second.elements;
-		entry->second->info.executors_info = move(node.second.executors_info);
-		entry->second->info.has_executor = node.second.has_executor;
+		for (auto &info : node.second.executors_info) {
+			if (!info) {
+				continue;
+			}
+			if (int(entry->second->info.executors_info.size()) <= info->id) {
+				entry->second->info.executors_info.resize(info->id + 1);
+			}
+			entry->second->info.executors_info[info->id] = move(info);
+		}
 	}
 }
 
@@ -465,36 +476,56 @@ vector<QueryProfiler::PhaseTimingItem> QueryProfiler::GetOrderedPhaseTimings() c
 	}
 	return result;
 }
+void QueryProfiler::Propagate(QueryProfiler &qp) {
+	this->automatic_print_format = qp.automatic_print_format;
+	this->save_location = qp.save_location;
+	this->enabled = qp.enabled;
+	this->detailed_enabled = qp.detailed_enabled;
+}
 
-void ExpressionInformation::ExtractExpressionsRecursive(unique_ptr<ExpressionState> &state) {
+void ExpressionInfo::ExtractExpressionsRecursive(unique_ptr<ExpressionState> &state) {
 	if (state->child_states.empty()) {
 		return;
 	}
 	// extract the children of this node
 	for (auto &child : state->child_states) {
-		auto expression_info_p = make_unique<ExpressionInformation>(child.get()->name, child.get()->time);
+		auto expr_info = make_unique<ExpressionInfo>();
 		if (child->expr.expression_class == ExpressionClass::BOUND_FUNCTION) {
-			expression_info_p->hasfunction = true;
-			expression_info_p->function_name = ((BoundFunctionExpression &)child->expr).function.name;
+			expr_info->hasfunction = true;
+			expr_info->function_name = ((BoundFunctionExpression &)child->expr).function.name;
+			expr_info->function_time = child->profiler.time;
+			expr_info->sample_tuples_count = child->profiler.sample_tuples_count;
+			expr_info->tuples_count = child->profiler.tuples_count;
 		}
-		expression_info_p->ExtractExpressionsRecursive(child);
-		children.push_back(move(expression_info_p));
+		expr_info->ExtractExpressionsRecursive(child);
+		children.push_back(move(expr_info));
 	}
 	return;
 }
 
-ExpressionExecutorInformation::ExpressionExecutorInformation(ExpressionExecutor &executor)
-    : total_count(executor.total_count), current_count(executor.current_count), sample_count(executor.sample_count),
-      sample_tuples_count(executor.sample_tuples_count), tuples_count(executor.tuples_count) {
+ExpressionExecutorInfo::ExpressionExecutorInfo(ExpressionExecutor &executor, const string &name, int id) : id(id) {
+	// Extract Expression Root Information from ExpressionExecutorStats
 	for (auto &state : executor.GetStates()) {
-		auto expression_info_p =
-		    make_unique<ExpressionInformation>(state.get()->root_state->name, state.get()->root_state.get()->time);
-		if (state->root_state->expr.expression_class == ExpressionClass::BOUND_FUNCTION) {
-			expression_info_p->hasfunction = true;
-			expression_info_p->function_name = ((BoundFunctionExpression &)state->root_state->expr).function.name;
-		}
-		expression_info_p->ExtractExpressionsRecursive(state.get()->root_state);
-		roots.push_back(move(expression_info_p));
+		roots.push_back(make_unique<ExpressionRootInfo>(*state, name));
 	}
+}
+
+ExpressionRootInfo::ExpressionRootInfo(ExpressionExecutorState &state, string name)
+    : current_count(state.profiler.current_count), sample_count(state.profiler.sample_count),
+      sample_tuples_count(state.profiler.sample_tuples_count), tuples_count(state.profiler.tuples_count),
+      name(state.name), time(state.profiler.time) {
+	// Use the name of expression-tree as extra-info
+	extra_info = move(name);
+	auto expression_info_p = make_unique<ExpressionInfo>();
+	// Maybe root has a function
+	if (state.root_state->expr.expression_class == ExpressionClass::BOUND_FUNCTION) {
+		expression_info_p->hasfunction = true;
+		expression_info_p->function_name = ((BoundFunctionExpression &)state.root_state->expr).function.name;
+		expression_info_p->function_time = state.root_state->profiler.time;
+		expression_info_p->sample_tuples_count = state.root_state->profiler.sample_tuples_count;
+		expression_info_p->tuples_count = state.root_state->profiler.tuples_count;
+	}
+	expression_info_p->ExtractExpressionsRecursive(state.root_state);
+	root = move(expression_info_p);
 }
 } // namespace duckdb

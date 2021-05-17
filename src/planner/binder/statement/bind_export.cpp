@@ -8,7 +8,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
-
+#include "duckdb/common/string_util.hpp"
 #include <algorithm>
 
 namespace duckdb {

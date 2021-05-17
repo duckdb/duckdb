@@ -33,6 +33,7 @@ public:
 	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;
 
 	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const override;
+	void FinalizeOperatorState(PhysicalOperatorState &state, ExecutionContext &context) override;
 
 	string ParamsToString() const override;
 };

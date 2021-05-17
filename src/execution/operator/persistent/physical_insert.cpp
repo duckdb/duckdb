@@ -1,10 +1,11 @@
 #include "duckdb/execution/operator/persistent/physical_insert.hpp"
-
+#include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
@@ -85,6 +86,11 @@ void PhysicalInsert::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 	chunk.SetValue(0, 0, Value::BIGINT(gstate.insert_count));
 
 	state->finished = true;
+}
+void PhysicalInsert::Combine(ExecutionContext &context, GlobalOperatorState &gstate, LocalSinkState &lstate) {
+	auto &state = (InsertLocalState &)lstate;
+	context.thread.profiler.Flush(this, &state.default_executor, "default_executor", 1);
+	context.client.profiler->Flush(context.thread.profiler);
 }
 
 } // namespace duckdb
