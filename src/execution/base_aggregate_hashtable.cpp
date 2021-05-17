@@ -23,6 +23,7 @@ BaseAggregateHashTable::BaseAggregateHashTable(BufferManager &buffer_manager, ve
       payload_types(move(payload_types_p)), group_width(0), group_padding(0), payload_width(0) {
 
 	for (idx_t i = 0; i < group_types.size(); i++) {
+		by_offsets.emplace_back(group_width);
 		group_width += GetTypeIdSize(group_types[i].InternalType());
 	}
 	for (idx_t i = 0; i < aggregates.size(); i++) {

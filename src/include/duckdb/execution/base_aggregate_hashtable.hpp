@@ -57,6 +57,8 @@ protected:
 	vector<LogicalType> payload_types;
 	//! The size of the groups in bytes
 	idx_t group_width;
+	//! The offsets to the BY column data in bytes
+	vector<idx_t> by_offsets;
 	//! some optional padding to align payload
 	idx_t group_padding;
 	//! The size of the payload (aggregations) in bytes
