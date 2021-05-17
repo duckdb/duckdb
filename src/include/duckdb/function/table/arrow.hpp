@@ -56,7 +56,8 @@ private:
 	//! -----Single Thread Functions:-----
 	//! Initialize Single Thread Scan
 	static unique_ptr<FunctionOperatorData> ArrowScanInit(ClientContext &context, const FunctionData *bind_data,
-	                                                      const vector<column_t> &column_ids, TableFilterCollection *filters);
+	                                                      const vector<column_t> &column_ids,
+	                                                      TableFilterCollection *filters);
 
 	//! Scan Function for Single Thread Execution
 	static void ArrowScanFunction(ClientContext &context, const FunctionData *bind_data,
