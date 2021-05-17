@@ -1,5 +1,7 @@
-include(ExternalProject)
+# Always build the abi test with asan to reveal problems with the release callbacks
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address")
 
+include(ExternalProject)
 ExternalProject_Add(
     arrow_ep
     GIT_REPOSITORY "https://github.com/apache/arrow"
