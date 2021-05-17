@@ -59,7 +59,7 @@ struct SimpleFactory {
 			return nullptr;
 		}
 
-		// Release the stream
+		// Pass ownership to caller
 		return stream.release();
 	}
 };
