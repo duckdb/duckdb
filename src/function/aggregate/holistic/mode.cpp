@@ -148,7 +148,11 @@ struct ModeFunction {
 			return;
 		}
 		auto highest_frequency = state->Scan();
-		target[idx] = INPUT_TYPE(highest_frequency->first);
+		if (highest_frequency != state->frequency_map->end()) {
+			target[idx] = INPUT_TYPE(highest_frequency->first);
+		} else {
+			mask.SetInvalid(idx);
+		}
 	}
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask,

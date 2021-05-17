@@ -12,7 +12,7 @@ create table rank100 as
         select * from range(0, 10000000) tbl(b)
     ) q;
 
-#   Fixed window
+#   Fixed frame
 statement ok
 prepare fwm as
 select sum(m)
@@ -23,19 +23,26 @@ from (
     from rank100
     ) q;
 
-#   Variable window
+#   Variable frame
 statement ok
-prepare vw as
+prepare vwm as
 select sum(m)
 from (
     select median(a) over (
         order by b asc
-        rows between mod(b * ?1, ?2) preceding and ?3 - mod(b * ?1, ?2) following) as m
+        rows between mod(b * cast(?1 as integer), cast(?2 as integer)) preceding
+                 and cast(?3 as integer) - mod(b * cast(?1 as integer), cast(?2 as integer)) following
+        ) as m
     from rank100
     ) q;
 
+# Checksum the queries
 query I
 execute fwm(100)
 ----
 494997500
 
+query I
+execute vwm(47, 511, 100)
+----
+494989867
