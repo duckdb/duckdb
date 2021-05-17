@@ -238,10 +238,10 @@ static void MergeUpdateInfoRange(UpdateInfo *current, idx_t start, idx_t end, id
 		auto tuple_idx = current->tuples[i];
 		if (tuple_idx < start) {
 			continue;
-		} else if (i >= end) {
+		} else if (tuple_idx >= end) {
 			break;
 		}
-		auto result_idx = result_offset + tuple_idx;
+		auto result_idx = result_offset + tuple_idx - start;
 		result_data[result_idx] = info_data[i];
 		result_mask.Set(result_idx, current_mask.RowIsValidUnsafe(i));
 	}
