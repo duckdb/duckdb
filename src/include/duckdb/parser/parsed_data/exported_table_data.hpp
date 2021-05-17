@@ -13,23 +13,19 @@
 
 namespace duckdb {
 
-struct ExportedTableData : public ParseInfo {
-	ExportedTableData() {
-	}
-
+struct ExportedTableData {
 	//! Name of the exported table
 	string table_name;
 
+	//! Name of the schema
+	string schema_name;
+
 	//! Path to be exported
 	string file_path;
+};
 
-public:
-	unique_ptr<ExportedTableData> Copy() const {
-		auto result = make_unique<ExportedTableData>();
-		result->table_name = table_name;
-		result->file_path = file_path;
-		return result;
-	}
+struct BoundExportData : public ParseInfo {
+	unordered_map<TableCatalogEntry *, ExportedTableData> data;
 };
 
 } // namespace duckdb
