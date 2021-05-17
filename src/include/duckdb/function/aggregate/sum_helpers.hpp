@@ -88,7 +88,7 @@ struct BaseSumOperation {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(STATE source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target) {
 		STATEOP::template Combine<STATE>(source, target);
 	}
 

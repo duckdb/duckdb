@@ -26,6 +26,12 @@ static void RunQueryUntilSuccess(Connection &con, string query) {
 static void create_drop_table(DuckDB *db) {
 	Connection con(*db);
 
+	// enable detailed profiling
+	con.Query("PRAGMA enable_profiling");
+	auto detailed_profiling_output = TestCreatePath("detailed_profiling_output");
+	con.Query("PRAGMA profiling_output='" + detailed_profiling_output + "'");
+	con.Query("PRAGMA profiling_mode = detailed");
+
 	while (!finished) {
 		// printf("[TABLE] Create table\n");
 		// create the table: this should never fail

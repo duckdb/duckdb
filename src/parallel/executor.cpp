@@ -27,7 +27,7 @@ void Executor::Initialize(PhysicalOperator *plan) {
 	physical_plan = plan;
 	physical_state = physical_plan->GetOperatorState();
 
-	context.profiler.Initialize(physical_plan);
+	context.profiler->Initialize(physical_plan);
 	auto &scheduler = TaskScheduler::GetScheduler(context);
 	this->producer = scheduler.CreateProducer();
 
@@ -230,7 +230,7 @@ void Executor::PushError(const string &exception) {
 
 void Executor::Flush(ThreadContext &tcontext) {
 	lock_guard<mutex> elock(executor_lock);
-	context.profiler.Flush(tcontext.profiler);
+	context.profiler->Flush(tcontext.profiler);
 }
 
 bool Executor::GetPipelinesProgress(int &current_progress) {
@@ -256,7 +256,7 @@ unique_ptr<DataChunk> Executor::FetchChunk() {
 	physical_plan->InitializeChunkEmpty(*chunk);
 	physical_plan->GetChunk(econtext, *chunk, physical_state.get());
 	physical_plan->FinalizeOperatorState(*physical_state, econtext);
-	context.profiler.Flush(thread.profiler);
+	context.profiler->Flush(thread.profiler);
 	return chunk;
 }
 

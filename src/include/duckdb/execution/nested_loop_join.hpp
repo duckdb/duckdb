@@ -17,11 +17,12 @@ namespace duckdb {
 
 struct NestedLoopJoinInner {
 	static idx_t Perform(idx_t &ltuple, idx_t &rtuple, DataChunk &left_conditions, DataChunk &right_conditions,
-	                     SelectionVector &lvector, SelectionVector &rvector, vector<JoinCondition> &conditions);
+	                     SelectionVector &lvector, SelectionVector &rvector, const vector<JoinCondition> &conditions);
 };
 
 struct NestedLoopJoinMark {
-	static void Perform(DataChunk &left, ChunkCollection &right, bool found_match[], vector<JoinCondition> &conditions);
+	static void Perform(DataChunk &left, ChunkCollection &right, bool found_match[],
+	                    const vector<JoinCondition> &conditions);
 };
 
 } // namespace duckdb

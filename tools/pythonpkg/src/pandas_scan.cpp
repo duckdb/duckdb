@@ -66,7 +66,7 @@ unique_ptr<FunctionData> PandasScanFunction::PandasScanBind(ClientContext &conte
 
 unique_ptr<FunctionOperatorData> PandasScanFunction::PandasScanInit(ClientContext &context,
                                                                     const FunctionData *bind_data_p,
-                                                                    vector<column_t> &column_ids,
+                                                                    const vector<column_t> &column_ids,
                                                                     TableFilterCollection *filters) {
 	auto &bind_data = (const PandasScanFunctionData &)*bind_data_p;
 	auto result = make_unique<PandasScanState>(0, bind_data.row_count);
@@ -87,7 +87,7 @@ unique_ptr<ParallelState> PandasScanFunction::PandasScanInitParallelState(Client
 unique_ptr<FunctionOperatorData> PandasScanFunction::PandasScanParallelInit(ClientContext &context,
                                                                             const FunctionData *bind_data_p,
                                                                             ParallelState *state,
-                                                                            vector<column_t> &column_ids,
+                                                                            const vector<column_t> &column_ids,
                                                                             TableFilterCollection *filters) {
 	auto result = make_unique<PandasScanState>(0, 0);
 	result->column_ids = column_ids;

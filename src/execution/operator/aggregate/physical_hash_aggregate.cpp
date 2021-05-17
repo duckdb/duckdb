@@ -386,7 +386,7 @@ bool PhysicalHashAggregate::FinalizeInternal(ClientContext &context, unique_ptr<
 }
 
 void PhysicalHashAggregate::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
-                                             PhysicalOperatorState *state_p) {
+                                             PhysicalOperatorState *state_p) const {
 	auto &gstate = (HashAggregateGlobalState &)*sink_state;
 	auto &state = (PhysicalHashAggregateState &)*state_p;
 

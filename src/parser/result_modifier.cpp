@@ -124,6 +124,22 @@ unique_ptr<ResultModifier> OrderModifier::Copy() {
 	return move(copy);
 }
 
+string OrderByNode::ToString() const {
+	auto str = expression->ToString();
+	str += (type == OrderType::ASCENDING) ? " ASC" : " DESC";
+	switch (null_order) {
+	case OrderByNullType::NULLS_FIRST:
+		str += " NULLS FIRST";
+		break;
+	case OrderByNullType::NULLS_LAST:
+		str += " NULLS LAST";
+		break;
+	default:
+		break;
+	}
+	return str;
+}
+
 void OrderByNode::Serialize(Serializer &serializer) {
 	serializer.Write<OrderType>(type);
 	serializer.Write<OrderByNullType>(null_order);

@@ -66,6 +66,8 @@ public:
 	public:
 		friend BitArray;
 
+		reference(const reference &r) = default;
+
 		reference &operator=(bool x) noexcept {
 			auto b = parent.Block(pos);
 			auto s = parent.Shift(pos);
@@ -322,7 +324,7 @@ static idx_t FindNextStart(const BitArray<W> &mask, idx_t l, idx_t r) {
 		// Loop over the block
 		for (; shift < mask.BITS_PER_WORD; ++shift, ++l) {
 			if (mask.TestBit(block, shift)) {
-				return std::min(l, r);
+				return MinValue(l, r);
 			}
 		}
 	}
@@ -963,7 +965,8 @@ static void Scan(PhysicalWindowOperatorState &state, DataChunk &chunk) {
 	state.position += STANDARD_VECTOR_SIZE;
 }
 
-void PhysicalWindow::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
+void PhysicalWindow::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
+                                      PhysicalOperatorState *state_p) const {
 	auto &state = *reinterpret_cast<PhysicalWindowOperatorState *>(state_p);
 	auto &gstate = (WindowGlobalState &)*sink_state;
 

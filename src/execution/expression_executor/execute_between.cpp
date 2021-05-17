@@ -79,7 +79,7 @@ static idx_t BetweenLoopTypeSwitch(Vector &input, Vector &lower, Vector &upper, 
 	}
 }
 
-unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundBetweenExpression &expr,
+unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundBetweenExpression &expr,
                                                                 ExpressionExecutorState &root) {
 	auto result = make_unique<ExpressionState>(expr, root);
 	result->AddChild(expr.input.get());
@@ -89,7 +89,7 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundBetweenExpr
 	return result;
 }
 
-void ExpressionExecutor::Execute(BoundBetweenExpression &expr, ExpressionState *state, const SelectionVector *sel,
+void ExpressionExecutor::Execute(const BoundBetweenExpression &expr, ExpressionState *state, const SelectionVector *sel,
                                  idx_t count, Vector &result) {
 	// resolve the children
 	Vector input, lower, upper;
@@ -120,7 +120,7 @@ void ExpressionExecutor::Execute(BoundBetweenExpression &expr, ExpressionState *
 	VectorOperations::And(intermediate1, intermediate2, result, count);
 }
 
-idx_t ExpressionExecutor::Select(BoundBetweenExpression &expr, ExpressionState *state, const SelectionVector *sel,
+idx_t ExpressionExecutor::Select(const BoundBetweenExpression &expr, ExpressionState *state, const SelectionVector *sel,
                                  idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
 	// resolve the children
 	Vector input, lower, upper;

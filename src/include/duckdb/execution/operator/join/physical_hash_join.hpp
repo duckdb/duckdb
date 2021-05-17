@@ -25,7 +25,7 @@ public:
 	                 idx_t estimated_cardinality);
 	PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right,
 	                 vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality);
-
+	void Combine(ExecutionContext &context, GlobalOperatorState &gstate, LocalSinkState &lstate) override;
 	vector<idx_t> right_projection_map;
 	//! The types of the keys
 	vector<LogicalType> condition_types;
@@ -42,11 +42,13 @@ public:
 	          DataChunk &input) const override;
 	bool Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> gstate) override;
 
-	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 
+	void FinalizeOperatorState(PhysicalOperatorState &state, ExecutionContext &context) override;
+
 private:
-	void ProbeHashTable(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p);
+	void ProbeHashTable(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) const;
 };
 
 } // namespace duckdb

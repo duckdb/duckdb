@@ -1,10 +1,9 @@
 #include "duckdb/function/table/read_csv.hpp"
-
 #include "duckdb/execution/operator/persistent/buffered_csv_reader.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
-
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
@@ -149,7 +148,8 @@ struct ReadCSVOperatorData : public FunctionOperatorData {
 };
 
 static unique_ptr<FunctionOperatorData> ReadCSVInit(ClientContext &context, const FunctionData *bind_data_p,
-                                                    vector<column_t> &column_ids, TableFilterCollection *filters) {
+                                                    const vector<column_t> &column_ids,
+                                                    TableFilterCollection *filters) {
 	auto &bind_data = (ReadCSVData &)*bind_data_p;
 	auto result = make_unique<ReadCSVOperatorData>();
 	if (bind_data.initial_reader) {

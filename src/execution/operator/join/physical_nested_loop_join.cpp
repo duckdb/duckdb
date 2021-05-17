@@ -1,9 +1,10 @@
 #include "duckdb/execution/operator/join/physical_nested_loop_join.hpp"
-
+#include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/nested_loop_join.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
@@ -212,7 +213,7 @@ public:
 };
 
 void PhysicalNestedLoopJoin::ResolveSimpleJoin(ExecutionContext &context, DataChunk &chunk,
-                                               PhysicalOperatorState *state_p) {
+                                               PhysicalOperatorState *state_p) const {
 	auto state = reinterpret_cast<PhysicalNestedLoopJoinState *>(state_p);
 	auto &gstate = (NestedLoopJoinGlobalState &)*sink_state;
 	do {
@@ -264,7 +265,7 @@ void PhysicalJoin::ConstructLeftJoinResult(DataChunk &left, DataChunk &result, b
 }
 
 void PhysicalNestedLoopJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &chunk,
-                                                PhysicalOperatorState *state_p) {
+                                                PhysicalOperatorState *state_p) const {
 	auto state = reinterpret_cast<PhysicalNestedLoopJoinState *>(state_p);
 	auto &gstate = (NestedLoopJoinGlobalState &)*sink_state;
 
@@ -352,7 +353,7 @@ void PhysicalNestedLoopJoin::ResolveComplexJoin(ExecutionContext &context, DataC
 }
 
 void PhysicalNestedLoopJoin::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
-                                              PhysicalOperatorState *state_p) {
+                                              PhysicalOperatorState *state_p) const {
 	auto state = reinterpret_cast<PhysicalNestedLoopJoinState *>(state_p);
 	auto &gstate = (NestedLoopJoinGlobalState &)*sink_state;
 
@@ -391,6 +392,19 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ExecutionContext &context, DataChu
 
 unique_ptr<PhysicalOperatorState> PhysicalNestedLoopJoin::GetOperatorState() {
 	return make_unique<PhysicalNestedLoopJoinState>(*this, children[0].get(), conditions);
+}
+
+void PhysicalNestedLoopJoin::FinalizeOperatorState(PhysicalOperatorState &state, ExecutionContext &context) {
+	auto &state_p = reinterpret_cast<PhysicalNestedLoopJoinState &>(state);
+	context.thread.profiler.Flush(this, &state_p.lhs_executor, "lhs_executor", 0);
+	if (!children.empty() && state.child_state) {
+		children[0]->FinalizeOperatorState(*state.child_state, context);
+	}
+}
+void PhysicalNestedLoopJoin::Combine(ExecutionContext &context, GlobalOperatorState &gstate, LocalSinkState &lstate) {
+	auto &state = (NestedLoopJoinLocalState &)lstate;
+	context.thread.profiler.Flush(this, &state.rhs_executor, "rhs_executor", 1);
+	context.client.profiler->Flush(context.thread.profiler);
 }
 
 } // namespace duckdb

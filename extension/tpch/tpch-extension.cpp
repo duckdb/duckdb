@@ -64,7 +64,7 @@ struct TPCHData : public FunctionOperatorData {
 };
 
 unique_ptr<FunctionOperatorData> TPCHInit(ClientContext &context, const FunctionData *bind_data,
-                                          vector<column_t> &column_ids, TableFilterCollection *filters) {
+                                          const vector<column_t> &column_ids, TableFilterCollection *filters) {
 	auto result = make_unique<TPCHData>();
 	return move(result);
 }

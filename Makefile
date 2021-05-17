@@ -161,7 +161,13 @@ format-check-silent:
 	python3 scripts/format.py --all --check --silent
 
 format-fix:
-	python3 scripts/format.py --all --fix
+	python3 scripts/format.py --all --fix --noconfirm
+
+format-head:
+	python3 scripts/format.py HEAD --fix --noconfirm
+
+format-master:
+	python3 scripts/format.py master --fix --noconfirm
 
 third_party/sqllogictest:
 	git clone --depth=1 https://github.com/cwida/sqllogictest.git third_party/sqllogictest

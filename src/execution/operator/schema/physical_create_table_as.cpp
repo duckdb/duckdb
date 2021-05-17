@@ -46,7 +46,7 @@ void PhysicalCreateTableAs::Sink(ExecutionContext &context, GlobalOperatorState 
 // GetChunkInternal
 //===--------------------------------------------------------------------===//
 void PhysicalCreateTableAs::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
-                                             PhysicalOperatorState *state) {
+                                             PhysicalOperatorState *state) const {
 	auto &sink = (CreateTableAsGlobalState &)*sink_state;
 	if (sink.table) {
 		chunk.SetCardinality(1);
