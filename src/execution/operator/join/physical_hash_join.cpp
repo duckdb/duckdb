@@ -239,7 +239,6 @@ void PhysicalHashJoin::ProbeHashTable(ExecutionContext &context, DataChunk &chun
 
 bool PhysicalHashJoin::ProbePerfectHashTable(ExecutionContext &context, DataChunk &result,
                                              PhysicalHashJoinState *physical_state) {
-	return false;
 	// We only probe if the optimized hash table has been built
 	if (!hasBuiltPerfectHashTable) {
 		return false;
@@ -259,7 +258,7 @@ bool PhysicalHashJoin::ProbePerfectHashTable(ExecutionContext &context, DataChun
 	auto keys_count = physical_state->join_keys.size();
 	MinMaxRangeSwitch(keys_vec, matches, keys_count);
 	// slice for the left side
-	// result.Slice(physical_state->child_chunk, matches, result_count);
+	result.Slice(physical_state->child_chunk, FlatVector::INCREMENTAL_SELECTION_VECTOR, keys_count);
 
 	// now get the data from the build side
 	// first, set-up scan structure
@@ -272,7 +271,6 @@ void PhysicalHashJoin::CheckRequirementsForPerfectHashJoin(JoinHashTable *ht_ptr
 	if (!perfect_join_state.is_build_small) {
 		return;
 	}
-	// if built, just return to continue the probing
 
 	// verify uniquiness (build size < min_max_range => duplicate values )
 	auto build_size = Value::INTEGER(ht_ptr->size());
@@ -300,6 +298,7 @@ void PhysicalHashJoin::BuildPerfectHashStructure(JoinHashTable *hash_table_ptr, 
 	// Fill columns with build data
 	hash_table_ptr->FullScanHashTable(join_ht_state);
 }
+
 template <typename T>
 void PhysicalHashJoin::TemplatedMinMaxRange(Vector &source, Vector &result, idx_t count) {
 	auto min_value = perfect_join_state.build_min.GetValue<T>();
