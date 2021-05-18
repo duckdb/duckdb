@@ -375,13 +375,13 @@ void GroupedAggregateHashTable::FetchAggregates(DataChunk &groups, DataChunk &re
 	Vector addresses(LogicalType::POINTER);
 	FindOrCreateGroups(groups, addresses);
 	// now fetch the aggregates
-	idx_t col_offset = 0;
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 		D_ASSERT(result.ColumnCount() > aggr_idx);
 
-		auto &dest = result.data[aggr_idx];
-		VectorOperations::Gather::Set(addresses, dest, groups.size(), col_offset, aggr_idx);
-		col_offset += GetTypeIdSize(dest.GetType().InternalType());
+		auto &target = result.data[aggr_idx];
+		auto &aggr = aggregates[aggr_idx];
+		aggr.function.finalize(addresses, aggr.bind_data, target, result.size());
+		VectorOperations::AddInPlace(addresses, aggr.payload_size, result.size());
 	}
 }
 
