@@ -71,3 +71,31 @@ class TestArrowIntegration(object):
 
         assert round_tripping.equals(arrow_result, check_metadata=True)
 
+    def test_decimals_roundtrip(self,duckdb_cursor):
+        if not can_run:
+            return
+
+        duckdb_conn = duckdb.connect()
+
+        duckdb_conn.execute("CREATE TABLE test (a DECIMAL(4,2), b DECIMAL(9,2), c DECIMAL (18,2), d DECIMAL (30,2))")
+
+        duckdb_conn.execute("INSERT INTO  test VALUES (1.11,1.11,1.11,1.11),(NULL,NULL,NULL,NULL),(2.11,103.21,99999999999999.21,99999999999999999999.21)")
+
+        true_result = duckdb_conn.execute("SELECT sum(a), sum(b), sum(c),sum(d) from test").fetchall()
+
+        duck_tbl = duckdb_conn.table("test")
+
+        duck_from_arrow = duckdb_conn.from_arrow_table(duck_tbl.arrow())
+
+        duck_from_arrow.create("testarrow")
+
+        arrow_result = duckdb_conn.execute("SELECT sum(a), sum(b), sum(c),sum(d) from testarrow").fetchall()
+
+        assert(arrow_result == true_result)
+
+        arrow_result = duckdb_conn.execute("SELECT typeof(a), typeof(b), typeof(c),typeof(d) from testarrow").fetchone()
+
+        assert (arrow_result[0] == 'DECIMAL(4,2)') 
+        assert (arrow_result[1] == 'DECIMAL(9,2)') 
+        assert (arrow_result[2] == 'DECIMAL(18,2)') 
+        assert (arrow_result[3] == 'DECIMAL(30,2)') 

@@ -311,6 +311,51 @@ void DataChunk::ToArrowArray(ArrowArray *out_array) {
 				}
 				break;
 			}
+			case LogicalTypeId::DECIMAL: {
+				child.n_buffers = 2;
+				//! We have to convert to INT128
+				switch (GetTypes()[col_idx].InternalType()) {
+
+				case PhysicalType::INT16: {
+					child_holder.string_data = unique_ptr<data_t[]>(new data_t[sizeof(hugeint_t) * (size())]);
+					child.buffers[1] = child_holder.string_data.get();
+					auto source_ptr = FlatVector::GetData<int16_t>(vector);
+					auto target_ptr = (hugeint_t *)child.buffers[1];
+					for (idx_t row_idx = 0; row_idx < size(); row_idx++) {
+						target_ptr[row_idx] = source_ptr[row_idx];
+					}
+					break;
+				}
+				case PhysicalType::INT32: {
+					child_holder.string_data = unique_ptr<data_t[]>(new data_t[sizeof(hugeint_t) * (size())]);
+					child.buffers[1] = child_holder.string_data.get();
+					auto source_ptr = FlatVector::GetData<int32_t>(vector);
+					auto target_ptr = (hugeint_t *)child.buffers[1];
+					for (idx_t row_idx = 0; row_idx < size(); row_idx++) {
+						target_ptr[row_idx] = source_ptr[row_idx];
+					}
+					break;
+				}
+				case PhysicalType::INT64: {
+					child_holder.string_data = unique_ptr<data_t[]>(new data_t[sizeof(hugeint_t) * (size())]);
+					child.buffers[1] = child_holder.string_data.get();
+					auto source_ptr = FlatVector::GetData<int64_t>(vector);
+					auto target_ptr = (hugeint_t *)child.buffers[1];
+					for (idx_t row_idx = 0; row_idx < size(); row_idx++) {
+						target_ptr[row_idx] = source_ptr[row_idx];
+					}
+					break;
+				}
+				case PhysicalType::INT128: {
+					child.buffers[1] = (void *)FlatVector::GetData(vector);
+					break;
+				}
+				default:
+					throw std::runtime_error("Unsupported physical type for Decimal" +
+					                         TypeIdToString(GetTypes()[col_idx].InternalType()));
+				}
+				break;
+			}
 
 			case LogicalTypeId::VARCHAR: {
 				child.n_buffers = 3;
