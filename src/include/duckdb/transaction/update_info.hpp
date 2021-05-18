@@ -20,8 +20,6 @@ struct DataTableInfo;
 struct UpdateInfo {
 	//! The update segment that this update info affects
 	UpdateSegment *segment;
-	//! The general table information
-	DataTableInfo *table_info;
 	//! The column index of which column we are updating
 	idx_t column_index;
 	//! The version number

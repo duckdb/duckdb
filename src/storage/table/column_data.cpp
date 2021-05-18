@@ -21,15 +21,19 @@
 
 namespace duckdb {
 
-ColumnData::ColumnData(DatabaseInstance &db, idx_t column_index, idx_t start_row, LogicalType type, ColumnData *parent)
-    : db(db), column_index(column_index), start(start_row), type(move(type)), parent(parent) {
+ColumnData::ColumnData(DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type, ColumnData *parent)
+    : info(info), column_index(column_index), start(start_row), type(move(type)), parent(parent) {
 }
 
 ColumnData::~ColumnData() {
 }
 
 DatabaseInstance &ColumnData::GetDatabase() const {
-	return db;
+	return info.db;
+}
+
+DataTableInfo &ColumnData::GetTableInfo() const {
+	return info;
 }
 
 const LogicalType &ColumnData::RootType() const {
@@ -216,14 +220,14 @@ void ColumnData::FetchRow(Transaction &transaction, ColumnFetchState &state, row
 	}
 }
 
-void ColumnData::Update(Transaction &transaction, DataTableInfo &table_info, idx_t column_index, Vector &update_vector, row_t *row_ids, idx_t update_count) {
+void ColumnData::Update(Transaction &transaction, idx_t column_index, Vector &update_vector, row_t *row_ids, idx_t update_count) {
 	if (!updates) {
 		updates = make_unique<UpdateSegment>(*this);
 	}
 	Vector base_vector(type);
 	ColumnScanState state;
 	Fetch(state, row_ids[0], base_vector);
-	updates->Update(transaction, table_info, column_index, update_vector, row_ids, update_count, base_vector);
+	updates->Update(transaction, column_index, update_vector, row_ids, update_count, base_vector);
 }
 
 unique_ptr<BaseStatistics> ColumnData::GetUpdateStatistics() {
@@ -486,9 +490,9 @@ void ColumnData::BaseDeserialize(DatabaseInstance &db, Deserializer &source, con
 	}
 }
 
-shared_ptr<ColumnData> ColumnData::Deserialize(DatabaseInstance &db, idx_t column_index, idx_t start_row, Deserializer &source,
+shared_ptr<ColumnData> ColumnData::Deserialize(DataTableInfo &info, idx_t column_index, idx_t start_row, Deserializer &source,
                                                const LogicalType &type) {
-	return StandardColumnData::Deserialize(db, column_index, start_row, source, type);
+	return StandardColumnData::Deserialize(info, column_index, start_row, source, type);
 }
 
 void ColumnData::Verify(RowGroup &parent) {

@@ -27,13 +27,15 @@ class PersistentSegment;
 class PersistentColumnData;
 class Transaction;
 
+struct DataTableInfo;
+
 class ColumnData {
 public:
-	ColumnData(DatabaseInstance &db, idx_t column_index, idx_t start_row, LogicalType type, ColumnData *parent);
+	ColumnData(DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type, ColumnData *parent);
 	virtual ~ColumnData();
 
-	//! The database instance this column belongs to
-	DatabaseInstance &db;
+	//! Table info for the column
+	DataTableInfo &info;
 	//! The column index of the column, either within the parent table or within the parent
 	idx_t column_index;
 	//! The start row
@@ -49,6 +51,7 @@ public:
 	virtual bool CheckZonemap(ColumnScanState &state, TableFilter &filter) = 0;
 
 	DatabaseInstance &GetDatabase() const;
+	DataTableInfo &GetTableInfo() const;
 
 	//! The root type of the column
 	const LogicalType &RootType() const;
@@ -73,7 +76,7 @@ public:
 	//! Fetch a specific row id and append it to the vector
 	virtual void FetchRow(Transaction &transaction, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx);
 
-	virtual void Update(Transaction &transaction, DataTableInfo &table_info, idx_t column_index, Vector &update_vector, row_t *row_ids, idx_t update_count);
+	virtual void Update(Transaction &transaction, idx_t column_index, Vector &update_vector, row_t *row_ids, idx_t update_count);
 	virtual unique_ptr<BaseStatistics> GetUpdateStatistics();
 
 	virtual void CommitDropColumn();
@@ -86,7 +89,7 @@ public:
 
 	static void BaseDeserialize(DatabaseInstance &db, Deserializer &source, const LogicalType &type,
 	                            ColumnData &result);
-	static shared_ptr<ColumnData> Deserialize(DatabaseInstance &db, idx_t column_index, idx_t start_row, Deserializer &source,
+	static shared_ptr<ColumnData> Deserialize(DataTableInfo &info, idx_t column_index, idx_t start_row, Deserializer &source,
 	                                          const LogicalType &type);
 
 	virtual void Verify(RowGroup &parent);

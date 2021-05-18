@@ -974,7 +974,7 @@ UpdateSegment::statistics_update_function_t GetStatisticsUpdateFunction(Physical
 //===--------------------------------------------------------------------===//
 // Update
 //===--------------------------------------------------------------------===//
-void UpdateSegment::Update(Transaction &transaction, DataTableInfo &table_info, idx_t column_index, Vector &update, row_t *ids, idx_t count, Vector &base_data) {
+void UpdateSegment::Update(Transaction &transaction, idx_t column_index, Vector &update, row_t *ids, idx_t count, Vector &base_data) {
 	// obtain an exclusive lock
 	auto write_lock = lock.GetExclusiveLock();
 
@@ -1031,7 +1031,6 @@ void UpdateSegment::Update(Transaction &transaction, DataTableInfo &table_info, 
 			node->segment = this;
 			node->vector_index = vector_index;
 			node->N = 0;
-			node->table_info = &table_info;
 			node->column_index = column_index;
 
 			// insert the new node into the chain
@@ -1060,7 +1059,6 @@ void UpdateSegment::Update(Transaction &transaction, DataTableInfo &table_info, 
 		result->info->tuples = result->tuples.get();
 		result->info->tuple_data = result->tuple_data.get();
 		result->info->version_number = TRANSACTION_ID_START - 1;
-		result->info->table_info = &table_info;
 		result->info->column_index = column_index;
 		InitializeUpdateInfo(*result->info, ids, sel, count, vector_index, vector_offset);
 

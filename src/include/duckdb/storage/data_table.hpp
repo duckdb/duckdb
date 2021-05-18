@@ -78,9 +78,11 @@ private:
 };
 
 struct DataTableInfo {
-	DataTableInfo(string schema, string table) : cardinality(0), schema(move(schema)), table(move(table)) {
+	DataTableInfo(DatabaseInstance &db, string schema, string table) : db(db), cardinality(0), schema(move(schema)), table(move(table)) {
 	}
 
+	//! The database instance of the table
+	DatabaseInstance &db;
 	//! The amount of elements in the table. Note that this number signifies the amount of COMMITTED entries in the
 	//! table. It can be inaccurate inside of transactions. More work is needed to properly support that.
 	atomic<idx_t> cardinality;

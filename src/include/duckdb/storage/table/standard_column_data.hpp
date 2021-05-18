@@ -16,7 +16,7 @@ namespace duckdb {
 //! Standard column data represents a regular flat column (e.g. a column of type INTEGER or STRING)
 class StandardColumnData : public ColumnData {
 public:
-	StandardColumnData(DatabaseInstance &db, idx_t column_index, idx_t start_row, LogicalType type, ColumnData *parent = nullptr);
+	StandardColumnData(DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type, ColumnData *parent = nullptr);
 
 	//! The validity column data
 	ValidityColumnData validity;
@@ -32,7 +32,7 @@ public:
 	void RevertAppend(row_t start_row) override;
 	void Fetch(ColumnScanState &state, row_t row_id, Vector &result) override;
 	void FetchRow(Transaction &transaction, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) override;
-	void Update(Transaction &transaction, DataTableInfo &table_info, idx_t column_index, Vector &update_vector, row_t *row_ids, idx_t update_count) override;
+	void Update(Transaction &transaction, idx_t column_index, Vector &update_vector, row_t *row_ids, idx_t update_count) override;
 	unique_ptr<BaseStatistics> GetUpdateStatistics() override;
 
 	void CommitDropColumn() override;
@@ -41,7 +41,7 @@ public:
 	unique_ptr<ColumnCheckpointState> CreateCheckpointState(RowGroup &row_group, TableDataWriter &writer) override;
 	unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, TableDataWriter &writer,
 	                                             idx_t column_idx) override;
-	static shared_ptr<ColumnData> Deserialize(DatabaseInstance &db, idx_t column_index, idx_t start_row, Deserializer &source,
+	static shared_ptr<ColumnData> Deserialize(DataTableInfo &info, idx_t column_index, idx_t start_row, Deserializer &source,
 	                                          const LogicalType &type);
 
 private:

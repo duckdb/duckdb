@@ -37,7 +37,7 @@ public:
 	void FetchUpdates(Transaction &transaction, idx_t vector_index, Vector &result);
 	void FetchCommitted(idx_t vector_index, Vector &result);
 	void FetchCommittedRange(idx_t start_row, idx_t count, Vector &result);
-	void Update(Transaction &transaction, DataTableInfo &table_info, idx_t column_index, Vector &update, row_t *ids, idx_t count, Vector &base_data);
+	void Update(Transaction &transaction, idx_t column_index, Vector &update, row_t *ids, idx_t count, Vector &base_data);
 	void FetchRow(Transaction &transaction, idx_t row_id, Vector &result, idx_t result_idx);
 
 	void RollbackUpdate(UpdateInfo *info);

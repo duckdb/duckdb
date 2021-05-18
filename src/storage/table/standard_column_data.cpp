@@ -4,11 +4,12 @@
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/persistent_segment.hpp"
 #include "duckdb/storage/table/transient_segment.hpp"
+#include "duckdb/storage/data_table.hpp"
 
 namespace duckdb {
 
-StandardColumnData::StandardColumnData(DatabaseInstance &db, idx_t column_index, idx_t start_row, LogicalType type, ColumnData *parent)
-    : ColumnData(db, column_index, start_row, move(type), parent), validity(db, 0, start_row, this) {
+StandardColumnData::StandardColumnData(DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type, ColumnData *parent)
+    : ColumnData(info, column_index, start_row, move(type), parent), validity(info, 0, start_row, this) {
 }
 
 bool StandardColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
@@ -95,9 +96,9 @@ void StandardColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &res
 	ColumnData::Fetch(state, row_id, result);
 }
 
-void StandardColumnData::Update(Transaction &transaction, DataTableInfo &table_info, idx_t column_index, Vector &update_vector, row_t *row_ids, idx_t update_count) {
-	ColumnData::Update(transaction, table_info, column_index, update_vector, row_ids, update_count);
-	validity.Update(transaction, table_info, 0, update_vector, row_ids, update_count);
+void StandardColumnData::Update(Transaction &transaction, idx_t column_index, Vector &update_vector, row_t *row_ids, idx_t update_count) {
+	ColumnData::Update(transaction, column_index, update_vector, row_ids, update_count);
+	validity.Update(transaction, 0, update_vector, row_ids, update_count);
 }
 
 unique_ptr<BaseStatistics> StandardColumnData::GetUpdateStatistics() {
@@ -165,11 +166,11 @@ void StandardColumnData::Initialize(PersistentColumnData &column_data) {
 	validity.Initialize(*persistent.validity);
 }
 
-shared_ptr<ColumnData> StandardColumnData::Deserialize(DatabaseInstance &db, idx_t column_index, idx_t start_row, Deserializer &source,
+shared_ptr<ColumnData> StandardColumnData::Deserialize(DataTableInfo &info, idx_t column_index, idx_t start_row, Deserializer &source,
                                                        const LogicalType &type) {
-	auto result = make_shared<StandardColumnData>(db, column_index, start_row, type, nullptr);
-	BaseDeserialize(db, source, type, *result);
-	ColumnData::BaseDeserialize(db, source, LogicalType(LogicalTypeId::VALIDITY), result->validity);
+	auto result = make_shared<StandardColumnData>(info, column_index, start_row, type, nullptr);
+	BaseDeserialize(info.db, source, type, *result);
+	ColumnData::BaseDeserialize(info.db, source, LogicalType(LogicalTypeId::VALIDITY), result->validity);
 	return move(result);
 }
 

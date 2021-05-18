@@ -204,7 +204,7 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::UPDATE_TUPLE: {
 		// update:
 		auto info = (UpdateInfo *)data;
-		if (HAS_LOG && !info->table_info->IsTemporary()) {
+		if (HAS_LOG && !info->segment->column_data.GetTableInfo().IsTemporary()) {
 			WriteUpdate(info);
 		}
 		info->version_number = commit_id;

@@ -34,7 +34,7 @@ RowGroup::RowGroup(DatabaseInstance &db, DataTableInfo &table_info, const vector
 		auto &block_pointer = pointer.data_pointers[i];
 		MetaBlockReader column_data_reader(db, block_pointer.block_id);
 		column_data_reader.offset = block_pointer.offset;
-		this->columns.push_back(ColumnData::Deserialize(db, i, start, column_data_reader, types[i]));
+		this->columns.push_back(ColumnData::Deserialize(table_info, i, start, column_data_reader, types[i]));
 	}
 
 	// set up the statistics
@@ -52,7 +52,7 @@ RowGroup::~RowGroup() {
 void RowGroup::InitializeEmpty(const vector<LogicalType> &types) {
 	// set up the segment trees for the column segments
 	for (idx_t i = 0; i < types.size(); i++) {
-		auto column_data = make_shared<StandardColumnData>(GetDatabase(), i, start, types[i]);
+		auto column_data = make_shared<StandardColumnData>(GetTableInfo(), i, start, types[i]);
 		stats.push_back(make_shared<SegmentStatistics>(types[i]));
 		columns.push_back(move(column_data));
 	}
@@ -98,7 +98,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(ClientContext &context, const LogicalTy
 	Verify();
 
 	// construct a new column data for this type
-	auto column_data = make_shared<StandardColumnData>(GetDatabase(), changed_idx, start, target_type);
+	auto column_data = make_shared<StandardColumnData>(GetTableInfo(), changed_idx, start, target_type);
 
 	ColumnAppendState append_state;
 	column_data->InitializeAppend(append_state);
@@ -143,7 +143,7 @@ unique_ptr<RowGroup> RowGroup::AddColumn(ClientContext &context, ColumnDefinitio
 	Verify();
 
 	// construct a new column data for the new column
-	auto added_column = make_shared<StandardColumnData>(GetDatabase(), columns.size(), start, new_column.type);
+	auto added_column = make_shared<StandardColumnData>(GetTableInfo(), columns.size(), start, new_column.type);
 
 	auto added_col_stats = make_shared<SegmentStatistics>(new_column.type);
 	idx_t rows_to_write = this->count;
@@ -460,7 +460,7 @@ void RowGroup::Update(Transaction &transaction, DataChunk &update_chunk, Vector 
 		auto column = column_ids[i];
 		D_ASSERT(column != COLUMN_IDENTIFIER_ROW_ID);
 		D_ASSERT(columns[column]->type.id() == update_chunk.data[i].GetType().id());
-		columns[column]->Update(transaction, GetTableInfo(), column, update_chunk.data[i], ids, update_chunk.size());
+		columns[column]->Update(transaction, column, update_chunk.data[i], ids, update_chunk.size());
 		MergeStatistics(column, *columns[column]->GetUpdateStatistics());
 	}
 }

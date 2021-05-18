@@ -23,7 +23,7 @@ namespace duckdb {
 
 DataTable::DataTable(DatabaseInstance &db, const string &schema, const string &table, vector<LogicalType> types_p,
                      unique_ptr<PersistentTableData> data)
-    : info(make_shared<DataTableInfo>(schema, table)), types(move(types_p)), db(db), total_rows(0), is_root(true) {
+    : info(make_shared<DataTableInfo>(db, schema, table)), types(move(types_p)), db(db), total_rows(0), is_root(true) {
 	// initialize the table with the existing data from disk, if any
 	this->row_groups = make_shared<SegmentTree>();
 	if (data && !data->row_groups.empty()) {
