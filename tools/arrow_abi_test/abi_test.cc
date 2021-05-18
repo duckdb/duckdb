@@ -12,7 +12,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
-
+#include "duckdb/common/arrow_wrapper.hpp"
 #include <arrow/type_traits.h>
 #include <memory>
 
@@ -43,26 +43,27 @@ struct SimpleFactory {
 	    : batches(std::move(batches)), schema(std::move(schema)) {
 	}
 
-	static ArrowArrayStream *CreateStream(uintptr_t this_ptr) {
+	static std::unique_ptr<duckdb::ArrowArrayStreamWrapper> CreateStream(uintptr_t this_ptr) {
 		// Create a new batch reader
 		auto &factory = *reinterpret_cast<SimpleFactory *>(this_ptr); // NOLINT
 		REQUIRE_RESULT(auto reader, arrow::RecordBatchReader::Make(factory.batches, factory.schema));
 
 		// Export C arrow stream stream
-		auto stream = duckdb::make_unique<ArrowArrayStream>();
-		stream->release = nullptr;
-		auto maybe_ok = arrow::ExportRecordBatchReader(reader, stream.get());
+		auto stream_wrapper = duckdb::make_unique<duckdb::ArrowArrayStreamWrapper>();
+		stream_wrapper->arrow_array_stream.release = nullptr;
+		auto maybe_ok = arrow::ExportRecordBatchReader(reader, &stream_wrapper->arrow_array_stream);
 		if (!maybe_ok.ok()) {
-			if (stream->release) {
-				stream->release(stream.get());
+			if (stream_wrapper->arrow_array_stream.release) {
+				stream_wrapper->arrow_array_stream.release(&stream_wrapper->arrow_array_stream);
 			}
 			return nullptr;
 		}
 
 		// Pass ownership to caller
-		return stream.release();
+		return stream_wrapper;
 	}
 };
+
 
 TEST_CASE("Test random integers") {
 
@@ -124,9 +125,18 @@ TEST_CASE("Test random integers") {
 				params.push_back(duckdb::Value::POINTER((uintptr_t)&factory));
 				params.push_back(duckdb::Value::POINTER((uintptr_t)&SimpleFactory::CreateStream));
 				auto result = conn.TableFunction("arrow_scan", params)->Execute();
+                REQUIRE(result->ColumnCount() == 3);
+                int32_t expected_a = start_a, expected_b = start_b, expected_c = start_c;
+                auto col_chunk = result->Fetch();
+                while (col_chunk){
+                    for (size_t i = 0; i < col_chunk->size(); i++){
+                    REQUIRE(col_chunk->GetValue(0,i).value_.integer == expected_a++);
+                    REQUIRE(col_chunk->GetValue(1,i).value_.integer == expected_b++);
+                    REQUIRE(col_chunk->GetValue(2,i).value_.integer == expected_c++);
+                }
+                    col_chunk = result->Fetch();
+                }
 
-				// XXX Never gets here atm
-				(void)result;
 			}
 		}
 	}

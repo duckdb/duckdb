@@ -1,6 +1,6 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/assert.hpp"
-#include "duckdb/common/arrow_duckdb.hpp"
+#include "duckdb/common/arrow_wrapper.hpp"
 namespace duckdb {
 
 ArrowSchemaWrapper::~ArrowSchemaWrapper() {
