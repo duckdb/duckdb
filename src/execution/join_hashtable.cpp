@@ -376,8 +376,7 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_loc
 		auto index = indices[i];
 		// set prev in current key to the value (NOTE: this will be nullptr if
 		// there is none)
-		auto prev_pointer = (data_ptr_t *)(key_locations[i] + pointer_offset);
-		Store<data_ptr_t>(pointers[index], (data_ptr_t)prev_pointer);
+		Store<data_ptr_t>(pointers[index], key_locations[i] + pointer_offset);
 
 		// set pointer to current tuple
 		pointers[index] = key_locations[i];
@@ -457,8 +456,7 @@ unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
 	auto pointers = FlatVector::GetData<data_ptr_t>(ss->pointers);
 	for (idx_t i = 0; i < ss->count; i++) {
 		auto idx = current_sel->get_index(i);
-		auto chain_pointer = (data_ptr_t *)(pointers[idx]);
-		pointers[idx] = *chain_pointer;
+		pointers[idx] = Load<data_ptr_t>(pointers[idx]);
 		if (pointers[idx]) {
 			ss->sel_vector.set_index(count++, idx);
 		}
@@ -508,12 +506,11 @@ static idx_t TemplatedGather(VectorData &vdata, Vector &pointers, const Selectio
                              idx_t &no_match_count) {
 	idx_t result_count = 0;
 	auto data = (T *)vdata.data;
-	auto ptrs = FlatVector::GetData<uintptr_t>(pointers);
+	auto ptrs = FlatVector::GetData<data_ptr_t>(pointers);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = current_sel.get_index(i);
 		auto kidx = vdata.sel->get_index(idx);
-		auto gdata = (T *)(ptrs[idx] + offset);
-		T val = Load<T>((data_ptr_t)gdata);
+		T val = Load<T>(ptrs[idx] + offset);
 		if (!vdata.validity.RowIsValid(kidx)) {
 			if (IsNullValue<T>(val)) {
 				match_sel->set_index(result_count++, idx);
@@ -673,8 +670,7 @@ void ScanStructure::AdvancePointers(const SelectionVector &sel, idx_t sel_count)
 	auto ptrs = FlatVector::GetData<data_ptr_t>(this->pointers);
 	for (idx_t i = 0; i < sel_count; i++) {
 		auto idx = sel.get_index(i);
-		auto chain_pointer = (data_ptr_t *)(ptrs[idx] + ht.pointer_offset);
-		ptrs[idx] = Load<data_ptr_t>((data_ptr_t)chain_pointer);
+		ptrs[idx] = Load<data_ptr_t>(ptrs[idx] + ht.pointer_offset);
 		if (ptrs[idx]) {
 			this->sel_vector.set_index(new_count++, idx);
 		}
@@ -687,14 +683,14 @@ void ScanStructure::AdvancePointers() {
 }
 
 template <class T>
-static void TemplatedGatherResult(Vector &result, uintptr_t *pointers, const SelectionVector &result_vector,
+static void TemplatedGatherResult(Vector &result, data_ptr_t *pointers, const SelectionVector &result_vector,
                                   const SelectionVector &sel_vector, idx_t count, idx_t offset) {
 	auto rdata = FlatVector::GetData<T>(result);
 	auto &mask = FlatVector::Validity(result);
 	for (idx_t i = 0; i < count; i++) {
 		auto ridx = result_vector.get_index(i);
 		auto pidx = sel_vector.get_index(i);
-		T hdata = Load<T>((data_ptr_t)(pointers[pidx] + offset));
+		T hdata = Load<T>(pointers[pidx] + offset);
 		if (IsNullValue<T>(hdata)) {
 			mask.SetInvalid(ridx);
 		} else {
@@ -703,7 +699,7 @@ static void TemplatedGatherResult(Vector &result, uintptr_t *pointers, const Sel
 	}
 }
 
-static void GatherResultVector(Vector &result, const SelectionVector &result_vector, uintptr_t *ptrs,
+static void GatherResultVector(Vector &result, const SelectionVector &result_vector, data_ptr_t *ptrs,
                                const SelectionVector &sel_vector, idx_t count, idx_t &offset) {
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	switch (result.GetType().InternalType()) {
@@ -755,7 +751,7 @@ static void GatherResultVector(Vector &result, const SelectionVector &result_vec
 
 void ScanStructure::GatherResult(Vector &result, const SelectionVector &result_vector,
                                  const SelectionVector &sel_vector, idx_t count, idx_t &offset) {
-	auto ptrs = FlatVector::GetData<uintptr_t>(pointers);
+	auto ptrs = FlatVector::GetData<data_ptr_t>(pointers);
 	GatherResultVector(result, result_vector, ptrs, sel_vector, count, offset);
 }
 
@@ -776,12 +772,10 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 	if (result_count > 0) {
 		if (IsRightOuterJoin(ht.join_type)) {
 			// full/right outer join: mark join matches as FOUND in the HT
-			auto ptrs = FlatVector::GetData<uintptr_t>(pointers);
+			auto ptrs = FlatVector::GetData<data_ptr_t>(pointers);
 			for (idx_t i = 0; i < result_count; i++) {
 				auto idx = result_vector.get_index(i);
-				auto chain_pointer = (data_ptr_t *)(ptrs[idx] + ht.tuple_size);
-				auto target = (bool *)chain_pointer;
-				*target = true;
+				Store<bool>(true, ptrs[idx] + ht.tuple_size);
 			}
 		}
 		// matches were found
@@ -1093,7 +1087,7 @@ void JoinHashTable::ScanFullOuter(DataChunk &result, JoinHTScanState &state) {
 		for (idx_t i = 0; i < build_types.size(); i++) {
 			auto &vector = result.data[left_column_count + i];
 			D_ASSERT(vector.GetType() == build_types[i]);
-			GatherResultVector(vector, FlatVector::INCREMENTAL_SELECTION_VECTOR, (uintptr_t *)key_locations,
+			GatherResultVector(vector, FlatVector::INCREMENTAL_SELECTION_VECTOR, key_locations,
 			                   FlatVector::INCREMENTAL_SELECTION_VECTOR, found_entries, offset);
 		}
 	}
