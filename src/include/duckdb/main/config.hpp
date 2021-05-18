@@ -24,6 +24,24 @@ class TableFunctionRef;
 enum class AccessMode : uint8_t { UNDEFINED = 0, AUTOMATIC = 1, READ_ONLY = 2, READ_WRITE = 3 };
 enum class CheckpointAbort : uint8_t { NO_ABORT = 0, DEBUG_ABORT_BEFORE_TRUNCATE = 1, DEBUG_ABORT_BEFORE_HEADER = 2 };
 
+enum class ConfigurationOptionType : uint32_t {
+	INVALID = 0,
+	ACCESS_MODE,
+	DEFAULT_ORDER_TYPE,
+	DEFAULT_NULL_ORDER,
+	ENABLE_EXTERNAL_ACCESS,
+	ENABLE_OBJECT_CACHE,
+	MAXIMUM_MEMORY,
+	THREADS
+};
+
+struct ConfigurationOption {
+	ConfigurationOptionType type;
+	const char *name;
+	const char *description;
+	LogicalTypeId parameter_type;
+};
+
 // this is optional and only used in tests at the moment
 struct DBConfig {
 	friend class DatabaseInstance;
@@ -58,7 +76,7 @@ public:
 	//! Null ordering used when none is specified (default: NULLS FIRST)
 	OrderByNullType default_null_order = OrderByNullType::NULLS_FIRST;
 	//! enable COPY and related commands
-	bool enable_copy = true;
+	bool enable_external_access = true;
 	//! Whether or not object cache is used
 	bool object_cache_enable = false;
 	//! Database configuration variables as controlled by SET
@@ -75,6 +93,14 @@ public:
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);
 	DUCKDB_API static DBConfig &GetConfig(DatabaseInstance &db);
+	DUCKDB_API static vector<ConfigurationOption> GetOptions();
+
+	//! Fetch an option by name. Returns a pointer to the option, or nullptr if none exists.
+	DUCKDB_API static ConfigurationOption *GetOptionByName(const string &name);
+
+	DUCKDB_API void SetOption(const ConfigurationOption &option, Value value);
+
+	DUCKDB_API static idx_t ParseMemoryLimit(const string &arg);
 };
 
 } // namespace duckdb

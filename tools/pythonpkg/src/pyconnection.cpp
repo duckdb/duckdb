@@ -417,11 +417,20 @@ static unique_ptr<TableFunctionRef> PandasScanReplacement(const string &table_na
 	return TryPandasReplacement(global_dict, py_table_name);
 }
 
-shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &database, bool read_only) {
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &database, bool read_only, py::dict config_dict) {
 	auto res = make_shared<DuckDBPyConnection>();
 	DBConfig config;
 	if (read_only) {
 		config.access_mode = AccessMode::READ_ONLY;
+	}
+	for(auto &kv : config_dict) {
+		string key = py::str(kv.first);
+		string val = py::str(kv.second);
+		auto config_property = DBConfig::GetOptionByName(key);
+		if (!config_property) {
+			throw InvalidInputException("Unrecognized configuration property \"%s\"", key);
+		}
+		config.SetOption(*config_property, Value(val));
 	}
 	config.replacement_scans.emplace_back(PandasScanReplacement);
 
@@ -498,7 +507,8 @@ vector<Value> DuckDBPyConnection::TransformPythonParamList(py::handle params) {
 
 DuckDBPyConnection *DuckDBPyConnection::DefaultConnection() {
 	if (!default_connection) {
-		default_connection = DuckDBPyConnection::Connect(":memory:", false);
+		py::dict config_dict;
+		default_connection = DuckDBPyConnection::Connect(":memory:", false, config_dict);
 	}
 	return default_connection.get();
 }
