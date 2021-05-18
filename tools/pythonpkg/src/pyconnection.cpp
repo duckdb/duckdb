@@ -504,11 +504,12 @@ vector<Value> DuckDBPyConnection::TransformPythonParamList(py::handle params) {
 			args.emplace_back(ele.cast<string>());
 		} else if (py::isinstance<py::memoryview>(ele)) {
 			py::memoryview py_view = ele.cast<py::memoryview>();
-			PyObject* py_view_ptr = py_view.ptr();
-			Py_buffer* py_buf = PyMemoryView_GET_BUFFER(py_view_ptr);
+			PyObject *py_view_ptr = py_view.ptr();
+			Py_buffer *py_buf = PyMemoryView_GET_BUFFER(py_view_ptr);
 			args.emplace_back(Value::BLOB(const_data_ptr_t(py_buf->buf), idx_t(py_buf->len)));
 		} else if (py::isinstance<py::bytes>(ele)) {
-			args.emplace_back(Value::BLOB(ele.cast<string>()));
+			const string &ele_string = ele.cast<string>();
+			args.emplace_back(Value::BLOB(const_data_ptr_t(ele_string.data()), ele_string.size()));
 		} else {
 			throw std::runtime_error("unknown param type " + py::str(ele.get_type()).cast<string>());
 		}
