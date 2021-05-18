@@ -206,15 +206,20 @@ void WriteAheadLog::WriteDelete(DataChunk &chunk) {
 	chunk.Serialize(*writer);
 }
 
-void WriteAheadLog::WriteUpdate(DataChunk &chunk, column_t col_idx) {
+void WriteAheadLog::WriteUpdate(DataChunk &chunk, const vector<column_t> &column_indexes) {
 	if (skip_writing) {
 		return;
 	}
 	D_ASSERT(chunk.size() > 0);
+	D_ASSERT(chunk.ColumnCount() == 2);
+	D_ASSERT(chunk.data[1].GetType().id() == LOGICAL_ROW_TYPE.id());
 	chunk.Verify();
 
 	writer->Write<WALType>(WALType::UPDATE_TUPLE);
-	writer->Write<column_t>(col_idx);
+	writer->Write<idx_t>(column_indexes.size());
+	for(auto &col_idx : column_indexes) {
+		writer->Write<column_t>(col_idx);
+	}
 	chunk.Serialize(*writer);
 }
 

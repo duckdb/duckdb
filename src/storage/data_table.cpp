@@ -896,6 +896,35 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 	}
 }
 
+void DataTable::UpdateColumn(TableCatalogEntry &table, ClientContext &context, Vector &row_ids,
+                       const vector<column_t> &column_path, DataChunk &updates) {
+	D_ASSERT(row_ids.GetType().InternalType() == ROW_TYPE);
+	D_ASSERT(updates.ColumnCount() == 1);
+	updates.Verify();
+	if (updates.size() == 0) {
+		return;
+	}
+
+	if (!is_root) {
+		throw TransactionException("Transaction conflict: cannot update a table that has been altered!");
+	}
+
+	// now perform the actual update
+	auto &transaction = Transaction::GetTransaction(context);
+
+	updates.Normalify();
+	row_ids.Normalify(updates.size());
+	auto first_id = FlatVector::GetValue<row_t>(row_ids, 0);
+	if (first_id >= MAX_ROW_ID) {
+		throw NotImplementedException("Cannot update a column-path on transaction local data");
+	}
+	// find the row_group this id belongs to
+	auto primary_column_idx = column_path[0];
+	auto row_group = (RowGroup *)row_groups->GetSegment(first_id);
+	row_group->UpdateColumn(transaction, updates, row_ids, column_path);
+	column_stats[primary_column_idx]->Merge(*row_group->GetStatistics(primary_column_idx));
+}
+
 //===--------------------------------------------------------------------===//
 // Create Index Scan
 //===--------------------------------------------------------------------===//

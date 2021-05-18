@@ -230,6 +230,12 @@ void ColumnData::Update(Transaction &transaction, idx_t column_index, Vector &up
 	updates->Update(transaction, column_index, update_vector, row_ids, update_count, base_vector);
 }
 
+void ColumnData::UpdateColumn(Transaction &transaction, const vector<column_t> &column_path, Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t depth) {
+	// this method should only be called at the end of the path in the base column case
+	D_ASSERT(depth >= column_path.size());
+	ColumnData::Update(transaction, column_path[0], update_vector, row_ids, update_count);
+}
+
 unique_ptr<BaseStatistics> ColumnData::GetUpdateStatistics() {
 	return updates ? updates->GetStatistics().statistics->Copy() : nullptr;
 }
@@ -387,10 +393,8 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, Ta
 			idx_t start_row_idx = persistent.start - row_group.start;
 			idx_t end_row_idx = start_row_idx + persistent.count;
 			bool has_changes = false;
-			if (!updates) {
-				if (updates->HasUpdates(start_row_idx, end_row_idx)) {
-					has_changes = true;
-				}
+			if (updates && updates->HasUpdates(start_row_idx, end_row_idx)) {
+				has_changes = true;
 			}
 			if (has_changes) {
 				// persistent segment has updates: mark it as modified and rewrite the block with the merged updates

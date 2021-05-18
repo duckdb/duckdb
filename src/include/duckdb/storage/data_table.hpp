@@ -153,6 +153,16 @@ public:
 	//! Update the entries with the specified row identifier from the table
 	void Update(TableCatalogEntry &table, ClientContext &context, Vector &row_ids, const vector<column_t> &column_ids,
 	            DataChunk &data);
+	//! Update a single (sub-)column along a column path
+	//! The column_path vector is a *path* towards a column within the table
+	//! i.e. if we have a table with a single column S STRUCT(A INT, B INT)
+	//! and we update the validity mask of "S.B"
+	//! the column path is:
+	//! 0 (first column of table)
+	//! -> 1 (second subcolumn of struct)
+	//! -> 0 (first subcolumn of INT)
+	//! This method should only be used from the WAL replay. It does not verify update constraints.
+	void UpdateColumn(TableCatalogEntry &table, ClientContext &context, Vector &row_ids, const vector<column_t> &column_path, DataChunk &updates);
 
 	//! Add an index to the DataTable
 	void AddIndex(unique_ptr<Index> index, vector<unique_ptr<Expression>> &expressions);

@@ -465,6 +465,17 @@ void RowGroup::Update(Transaction &transaction, DataChunk &update_chunk, Vector 
 	}
 }
 
+void RowGroup::UpdateColumn(Transaction &transaction, DataChunk &updates, Vector &row_ids, const vector<column_t> &column_path) {
+	D_ASSERT(updates.ColumnCount() == 1);
+	auto ids = FlatVector::GetData<row_t>(row_ids);
+
+	auto primary_column_idx = column_path[0];
+	D_ASSERT(primary_column_idx != COLUMN_IDENTIFIER_ROW_ID);
+	D_ASSERT(primary_column_idx < columns.size());
+	columns[primary_column_idx]->UpdateColumn(transaction, column_path, updates.data[0], ids, updates.size(), 1);
+	MergeStatistics(primary_column_idx, *columns[primary_column_idx]->GetUpdateStatistics());
+}
+
 unique_ptr<BaseStatistics> RowGroup::GetStatistics(idx_t column_idx) {
 	D_ASSERT(column_idx < stats.size());
 

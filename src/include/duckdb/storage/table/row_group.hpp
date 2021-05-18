@@ -117,6 +117,9 @@ public:
 	void Append(RowGroupAppendState &append_state, DataChunk &chunk, idx_t append_count);
 
 	void Update(Transaction &transaction, DataChunk &updates, Vector &row_ids, const vector<column_t> &column_ids);
+	//! Update a single column; corresponds to DataTable::UpdateColumn
+	//! This method should only be called from the WAL
+	void UpdateColumn(Transaction &transaction, DataChunk &updates, Vector &row_ids, const vector<column_t> &column_path);
 
 	void MergeStatistics(idx_t column_idx, BaseStatistics &other);
 	unique_ptr<BaseStatistics> GetStatistics(idx_t column_idx);

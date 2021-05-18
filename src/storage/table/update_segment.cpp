@@ -329,6 +329,9 @@ void UpdateSegment::FetchCommittedRange(idx_t start_row, idx_t count, Vector &re
 	idx_t end_row = start_row + count;
 	idx_t start_vector = start_row / STANDARD_VECTOR_SIZE;
 	idx_t end_vector = end_row / STANDARD_VECTOR_SIZE;
+	D_ASSERT(start_vector <= end_vector);
+	D_ASSERT(end_vector < RowGroup::ROW_GROUP_VECTOR_COUNT);
+
 	idx_t result_offset = 0;
 	for (idx_t vector_idx = start_vector; vector_idx <= end_vector; vector_idx++) {
 		if (!root->info[vector_idx]) {
@@ -1073,6 +1076,7 @@ void UpdateSegment::Update(Transaction &transaction, idx_t column_index, Vector 
 		result->info->prev = nullptr;
 		transaction_node->next = nullptr;
 		transaction_node->prev = result->info.get();
+		transaction_node->column_index = column_index;
 
 		transaction_node->Verify();
 		result->info->Verify();

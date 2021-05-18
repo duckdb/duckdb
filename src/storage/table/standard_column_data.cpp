@@ -98,7 +98,17 @@ void StandardColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &res
 
 void StandardColumnData::Update(Transaction &transaction, idx_t column_index, Vector &update_vector, row_t *row_ids, idx_t update_count) {
 	ColumnData::Update(transaction, column_index, update_vector, row_ids, update_count);
-	validity.Update(transaction, 0, update_vector, row_ids, update_count);
+	validity.Update(transaction, column_index, update_vector, row_ids, update_count);
+}
+
+void StandardColumnData::UpdateColumn(Transaction &transaction, const vector<column_t> &column_path, Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t depth) {
+	if (depth >= column_path.size()) {
+		// update this column
+		ColumnData::Update(transaction, column_path[0], update_vector, row_ids, update_count);
+	} else {
+		// update the child column (i.e. the validity column)
+		validity.UpdateColumn(transaction, column_path, update_vector, row_ids, update_count, depth + 1);
+	}
 }
 
 unique_ptr<BaseStatistics> StandardColumnData::GetUpdateStatistics() {

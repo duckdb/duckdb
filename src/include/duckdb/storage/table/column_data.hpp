@@ -77,6 +77,7 @@ public:
 	virtual void FetchRow(Transaction &transaction, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx);
 
 	virtual void Update(Transaction &transaction, idx_t column_index, Vector &update_vector, row_t *row_ids, idx_t update_count);
+	virtual void UpdateColumn(Transaction &transaction, const vector<column_t> &column_path, Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t depth);
 	virtual unique_ptr<BaseStatistics> GetUpdateStatistics();
 
 	virtual void CommitDropColumn();
