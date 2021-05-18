@@ -225,6 +225,10 @@ void ColumnData::Update(Transaction &transaction, DataTableInfo &table_info, idx
 	updates->Update(transaction, table_info, column_index, update_vector, row_ids, update_count, base_vector);
 }
 
+unique_ptr<BaseStatistics> ColumnData::GetUpdateStatistics() {
+	return updates ? updates->GetStatistics().statistics->Copy() : nullptr;
+}
+
 void ColumnData::AppendTransientSegment(idx_t start_row) {
 	auto new_segment = make_unique<TransientSegment>(GetDatabase(), type, start_row);
 	data.AppendSegment(move(new_segment));

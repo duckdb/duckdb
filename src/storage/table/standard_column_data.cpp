@@ -99,6 +99,19 @@ void StandardColumnData::Update(Transaction &transaction, DataTableInfo &table_i
 	validity.Update(transaction, table_info, 0, update_vector, row_ids, update_count);
 }
 
+unique_ptr<BaseStatistics> StandardColumnData::GetUpdateStatistics() {
+	auto stats = updates ? updates->GetStatistics().statistics->Copy() : nullptr;
+	auto validity_stats = validity.GetUpdateStatistics();
+	if (!stats && !validity_stats) {
+		return nullptr;
+	}
+	if (!stats) {
+		stats = make_unique<BaseStatistics>(type);
+	}
+	stats->validity_stats = move(validity_stats);
+	return stats;
+}
+
 void StandardColumnData::FetchRow(Transaction &transaction, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
 	// find the segment the row belongs to
 	if (state.child_states.empty()) {

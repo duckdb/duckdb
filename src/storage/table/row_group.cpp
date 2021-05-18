@@ -461,7 +461,7 @@ void RowGroup::Update(Transaction &transaction, DataChunk &update_chunk, Vector 
 		D_ASSERT(column != COLUMN_IDENTIFIER_ROW_ID);
 		D_ASSERT(columns[column]->type.id() == update_chunk.data[i].GetType().id());
 		columns[column]->Update(transaction, GetTableInfo(), column, update_chunk.data[i], ids, update_chunk.size());
-		MergeStatistics(column, *columns[column]->updates->GetStatistics().statistics);
+		MergeStatistics(column, *columns[column]->GetUpdateStatistics());
 	}
 }
 

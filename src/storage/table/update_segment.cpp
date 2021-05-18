@@ -1042,7 +1042,6 @@ void UpdateSegment::Update(Transaction &transaction, DataTableInfo &table_info, 
 			node->prev = base_info;
 			base_info->next = node;
 		}
-		D_ASSERT(node->column_index == column_index);
 		base_info->Verify();
 		node->Verify();
 

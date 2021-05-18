@@ -33,6 +33,7 @@ public:
 	void Fetch(ColumnScanState &state, row_t row_id, Vector &result) override;
 	void FetchRow(Transaction &transaction, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) override;
 	void Update(Transaction &transaction, DataTableInfo &table_info, idx_t column_index, Vector &update_vector, row_t *row_ids, idx_t update_count) override;
+	unique_ptr<BaseStatistics> GetUpdateStatistics() override;
 
 	void CommitDropColumn() override;
 	void Initialize(PersistentColumnData &column_data) override;
