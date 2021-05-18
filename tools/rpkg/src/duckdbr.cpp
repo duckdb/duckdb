@@ -9,11 +9,12 @@
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "extension/extension_helper.hpp"
-
+#include "duckdb/common/arrow_duckdb.hpp"
 #define R_NO_REMAP
 
 #include <Rdefines.h>
 #include <R_ext/Altrep.h>
+#include <R_ext/Parse.h>
 
 #include <algorithm>
 
@@ -1148,6 +1149,89 @@ SEXP duckdb_register_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 	return R_NilValue;
 }
 
+static SEXP eval_r_string(string s) {
+	ParseStatus status;
+
+	auto x = R_ParseVector(Rf_mkString(s.c_str()), 1, &status, R_NilValue);
+
+	if (LENGTH(x) != 1 || status != PARSE_OK) {
+		Rf_error("eek00");
+	}
+	int evalErr;
+	// TODO catch parser errors here
+	auto res = R_tryEvalSilent(VECTOR_ELT(x, 0), R_GlobalEnv, &evalErr);
+
+	// of course the script may contain errors as well
+	if (evalErr) {
+		Rf_error("eek01");
+	}
+	return res;
+}
+
+class RArrowTabularStreamFactory {
+public:
+	RArrowTabularStreamFactory(SEXP export_fun_p, SEXP arrow_tabular_p)
+	    : arrow_tabular(arrow_tabular_p), export_fun(export_fun_p) {};
+	static unique_ptr<ArrowArrayStreamWrapper> Produce(uintptr_t factory_p) {
+
+		SEXP call;
+		int err;
+		// TODO need some PROTECT around here
+		auto factory = (RArrowTabularStreamFactory *)factory_p;
+
+		// export the arrow tabular to a stream pointer
+		call = Rf_lang2(factory->export_fun, factory->arrow_tabular);
+		SEXP stream_ptr_sexp = R_tryEval(call, R_GlobalEnv, &err);
+		if (err) {
+			Rf_error("EEEK"); // TODO proper cleanup
+		}
+		// TODO this stream pointer leaks for now
+		auto stream_ptr = (void *)(uintptr_t)REAL(stream_ptr_sexp)[0];
+
+		auto res = make_unique<ArrowArrayStreamWrapper>();
+		res->arrow_array_stream = *(ArrowArrayStream *)stream_ptr;
+		return res;
+	}
+
+	SEXP arrow_tabular;
+	SEXP export_fun;
+};
+
+SEXP duckdb_register_arrow_R(SEXP connsexp, SEXP namesexp, SEXP funsexp, SEXP valuesexp) {
+	if (TYPEOF(connsexp) != EXTPTRSXP) {
+		Rf_error("duckdb_register_R: Need external pointer parameter for connection");
+	}
+	Connection *conn = (Connection *)R_ExternalPtrAddr(connsexp);
+	if (!conn) {
+		Rf_error("duckdb_register_R: Invalid connection");
+	}
+	if (TYPEOF(namesexp) != STRSXP || Rf_length(namesexp) != 1) {
+		Rf_error("duckdb_register_R: Need single string parameter for name");
+	}
+	auto name = string(CHAR(STRING_ELT(namesexp, 0)));
+	if (name.empty()) {
+		Rf_error("duckdb_register_R: name parameter cannot be empty");
+	}
+
+	// TODO check type of valuesexp, we expact arrow Tabular ?
+	// TODO check type of funsexp
+	// TODO leak on purpose for now
+	auto stream_factory = new RArrowTabularStreamFactory(funsexp, valuesexp);
+	auto stream_factory_produce = RArrowTabularStreamFactory::Produce;
+	conn->TableFunction("arrow_scan",
+	                    {Value::POINTER((uintptr_t)stream_factory), Value::POINTER((uintptr_t)stream_factory_produce)})
+	    ->CreateView(name, true, true)
+	    ->Print();
+
+	// TODO make this a list
+	auto key1 = Rf_install(("_registered_arrow_function_" + name).c_str());
+	Rf_setAttrib(connsexp, key1, funsexp);
+	auto key2 = Rf_install(("_registered_arrow_table_" + name).c_str());
+	Rf_setAttrib(connsexp, key2, valuesexp);
+
+	return R_NilValue;
+}
+
 SEXP duckdb_unregister_R(SEXP connsexp, SEXP namesexp) {
 	if (TYPEOF(connsexp) != EXTPTRSXP) {
 		Rf_error("duckdb_unregister_R: Need external pointer parameter for connection");
@@ -1223,6 +1307,7 @@ static const R_CallMethodDef R_CallDef[] = {CALLDEF(duckdb_startup_R, 2),
                                             CALLDEF(duckdb_execute_R, 1),
                                             CALLDEF(duckdb_release_R, 1),
                                             CALLDEF(duckdb_register_R, 3),
+                                            CALLDEF(duckdb_register_arrow_R, 3),
                                             CALLDEF(duckdb_unregister_R, 2),
                                             CALLDEF(duckdb_disconnect_R, 1),
                                             CALLDEF(duckdb_shutdown_R, 1),
