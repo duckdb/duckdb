@@ -41,6 +41,7 @@ const LogicalType &ColumnData::RootType() const {
 
 void ColumnData::ScanVector(ColumnScanState &state, Vector &result) {
 	if (!state.initialized) {
+		D_ASSERT(state.current);
 		state.current->InitializeScan(state);
 		state.initialized = true;
 	}
