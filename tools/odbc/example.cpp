@@ -7,8 +7,8 @@
 #define SUCCESS(x)                                                                                                     \
 	do {                                                                                                               \
 		SQLRETURN retval = (x);                                                                                        \
-		if (retval != SQL_SUCCESS) {                                                                                   \
-			fprintf(stderr, "Runtime error: %s returned %d at %s:%d\n", #x, retval, __FILE__, __LINE__);               \
+		if (!SQL_SUCCEEDED(retval)) {                                                                                  \
+			fprintf(stderr, "SQL error: %s returned %d at %s:%d\n", #x, retval, __FILE__, __LINE__);                   \
 			return -1;                                                                                                 \
 		}                                                                                                              \
 	} while (0)
@@ -67,8 +67,20 @@ int main(int argc, const char **argv) {
 
 	SUCCESS(SQLFreeStmt(stmt, SQL_CLOSE));
 
+	char sqlbuf[100];
+
+	sprintf(sqlbuf, "SELECT 'stmt no %d'", 42);
+	SUCCESS(SQLExecDirect(stmt, (SQLCHAR *)sqlbuf, SQL_NTS));
+	SUCCESS(SQLFetch(stmt));
+
+	SQLLEN indicator;
+	SUCCESS(SQLGetData(stmt, 1, SQL_C_CHAR, sqlbuf, 100, &indicator));
+	printf("%s\n", sqlbuf);
+
 	SUCCESS(SQLFreeHandle(SQL_HANDLE_STMT, stmt));
 	// TODO why do those fail?
 	//	SUCCESS(SQLFreeHandle(SQL_HANDLE_DBC, dbc));
 	//	SUCCESS(SQLFreeHandle(SQL_HANDLE_ENV, env));
+
+	printf("OK\n");
 }
