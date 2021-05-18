@@ -118,7 +118,7 @@ void PhysicalExport::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 	// write the load.sql file
 	// for every table, we write COPY INTO statement with the specified options
 	stringstream load_ss;
-	for (auto kv : exported_tables.data) {
+	for (auto const &kv : exported_tables.data) {
 		auto table = kv.first;
 		auto exported_table_info = kv.second;
 		WriteCopyStatement(fs, load_ss, table, *info, exported_table_info, function);
