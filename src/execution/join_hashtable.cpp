@@ -104,80 +104,76 @@ void JoinHashTable::Hash(DataChunk &keys, const SelectionVector &sel, idx_t coun
 }
 template <class T>
 static void TemplatedSerializeVData(VectorData &vdata, const SelectionVector &sel, idx_t count,
-                                    data_ptr_t key_locations[]) {
+                                    data_ptr_t key_locations[], idx_t &col_offset) {
 	auto source = (T *)vdata.data;
 	if (!vdata.validity.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = sel.get_index(i);
 			auto source_idx = vdata.sel->get_index(idx);
 
-			auto target = (T *)key_locations[i];
 			T value = !vdata.validity.RowIsValid(source_idx) ? NullValue<T>() : source[source_idx];
-			Store<T>(value, (data_ptr_t)target);
-			key_locations[i] += sizeof(T);
+			Store<T>(value, key_locations[i] + col_offset);
 		}
 	} else {
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = sel.get_index(i);
 			auto source_idx = vdata.sel->get_index(idx);
 
-			auto target = (T *)key_locations[i];
-			Store<T>(source[source_idx], (data_ptr_t)target);
-			key_locations[i] += sizeof(T);
+			Store<T>(source[source_idx], key_locations[i] + col_offset);
 		}
 	}
+	col_offset += sizeof(T);
 }
 
-static void InitializeOuterJoin(idx_t count, data_ptr_t key_locations[]) {
+static void InitializeOuterJoin(idx_t count, data_ptr_t key_locations[], idx_t &col_offset) {
 	for (idx_t i = 0; i < count; i++) {
-		auto target = (bool *)key_locations[i];
-		*target = false;
-		key_locations[i] += sizeof(bool);
+		Store<bool>(false, key_locations[i] + col_offset);
 	}
+	col_offset += sizeof(bool);
 }
 
 void JoinHashTable::SerializeVectorData(VectorData &vdata, PhysicalType type, const SelectionVector &sel, idx_t count,
-                                        data_ptr_t key_locations[]) {
+                                        data_ptr_t key_locations[], idx_t &col_offset) {
 	switch (type) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
-		TemplatedSerializeVData<int8_t>(vdata, sel, count, key_locations);
+		TemplatedSerializeVData<int8_t>(vdata, sel, count, key_locations, col_offset);
 		break;
 	case PhysicalType::INT16:
-		TemplatedSerializeVData<int16_t>(vdata, sel, count, key_locations);
+		TemplatedSerializeVData<int16_t>(vdata, sel, count, key_locations, col_offset);
 		break;
 	case PhysicalType::INT32:
-		TemplatedSerializeVData<int32_t>(vdata, sel, count, key_locations);
+		TemplatedSerializeVData<int32_t>(vdata, sel, count, key_locations, col_offset);
 		break;
 	case PhysicalType::INT64:
-		TemplatedSerializeVData<int64_t>(vdata, sel, count, key_locations);
+		TemplatedSerializeVData<int64_t>(vdata, sel, count, key_locations, col_offset);
 		break;
 	case PhysicalType::UINT8:
-		TemplatedSerializeVData<uint8_t>(vdata, sel, count, key_locations);
+		TemplatedSerializeVData<uint8_t>(vdata, sel, count, key_locations, col_offset);
 		break;
 	case PhysicalType::UINT16:
-		TemplatedSerializeVData<uint16_t>(vdata, sel, count, key_locations);
+		TemplatedSerializeVData<uint16_t>(vdata, sel, count, key_locations, col_offset);
 		break;
 	case PhysicalType::UINT32:
-		TemplatedSerializeVData<uint32_t>(vdata, sel, count, key_locations);
+		TemplatedSerializeVData<uint32_t>(vdata, sel, count, key_locations, col_offset);
 		break;
 	case PhysicalType::UINT64:
-		TemplatedSerializeVData<uint64_t>(vdata, sel, count, key_locations);
+		TemplatedSerializeVData<uint64_t>(vdata, sel, count, key_locations, col_offset);
 		break;
 	case PhysicalType::INT128:
-		TemplatedSerializeVData<hugeint_t>(vdata, sel, count, key_locations);
+		TemplatedSerializeVData<hugeint_t>(vdata, sel, count, key_locations, col_offset);
 		break;
 	case PhysicalType::FLOAT:
-		TemplatedSerializeVData<float>(vdata, sel, count, key_locations);
+		TemplatedSerializeVData<float>(vdata, sel, count, key_locations, col_offset);
 		break;
 	case PhysicalType::DOUBLE:
-		TemplatedSerializeVData<double>(vdata, sel, count, key_locations);
+		TemplatedSerializeVData<double>(vdata, sel, count, key_locations, col_offset);
 		break;
 	case PhysicalType::HASH:
-		TemplatedSerializeVData<hash_t>(vdata, sel, count, key_locations);
+		TemplatedSerializeVData<hash_t>(vdata, sel, count, key_locations, col_offset);
 		break;
 	case PhysicalType::INTERVAL:
-		TemplatedSerializeVData<interval_t>(vdata, sel, count, key_locations);
+		TemplatedSerializeVData<interval_t>(vdata, sel, count, key_locations, col_offset);
 		break;
 	case PhysicalType::VARCHAR: {
 		StringHeap local_heap;
@@ -194,9 +190,9 @@ void JoinHashTable::SerializeVectorData(VectorData &vdata, PhysicalType type, co
 			} else {
 				new_val = local_heap.AddBlob(source[source_idx].GetDataUnsafe(), source[source_idx].GetSize());
 			}
-			Store<string_t>(new_val, key_locations[i]);
-			key_locations[i] += sizeof(string_t);
+			Store<string_t>(new_val, key_locations[i] + col_offset);
 		}
+		col_offset += sizeof(string_t);
 		lock_guard<mutex> append_lock(ht_lock);
 		string_heap.MergeHeap(local_heap);
 		break;
@@ -207,11 +203,11 @@ void JoinHashTable::SerializeVectorData(VectorData &vdata, PhysicalType type, co
 }
 
 void JoinHashTable::SerializeVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t count,
-                                    data_ptr_t key_locations[]) {
+                                    data_ptr_t key_locations[], idx_t &col_offset) {
 	VectorData vdata;
 	v.Orrify(vcount, vdata);
 
-	SerializeVectorData(vdata, v.GetType().InternalType(), sel, count, key_locations);
+	SerializeVectorData(vdata, v.GetType().InternalType(), sel, count, key_locations, col_offset);
 }
 
 idx_t JoinHashTable::AppendToBlock(HTDataBlock &block, BufferHandle &handle, vector<BlockAppendEntry> &append_entries,
@@ -347,21 +343,22 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	Hash(keys, *current_sel, added_count, hash_values);
 
 	// serialize the keys to the key locations
+	idx_t col_offset = 0;
 	for (idx_t i = 0; i < keys.ColumnCount(); i++) {
 		SerializeVectorData(key_data[i], keys.data[i].GetType().InternalType(), *current_sel, added_count,
-		                    key_locations);
+		                    key_locations, col_offset);
 	}
 	// now serialize the payload
 	if (!build_types.empty()) {
 		for (idx_t i = 0; i < payload.ColumnCount(); i++) {
-			SerializeVector(payload.data[i], payload.size(), *current_sel, added_count, key_locations);
+			SerializeVector(payload.data[i], payload.size(), *current_sel, added_count, key_locations, col_offset);
 		}
 	}
 	if (IsRightOuterJoin(join_type)) {
 		// for FULL/RIGHT OUTER joins initialize the "found" boolean to false
-		InitializeOuterJoin(added_count, key_locations);
+		InitializeOuterJoin(added_count, key_locations, col_offset);
 	}
-	SerializeVector(hash_values, payload.size(), *current_sel, added_count, key_locations);
+	SerializeVector(hash_values, payload.size(), *current_sel, added_count, key_locations, col_offset);
 }
 
 void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_locations[]) {
