@@ -48,7 +48,8 @@ add_dependencies(arrow arrow_ep)
 
 add_executable(arrow_abi_test ${CMAKE_CURRENT_SOURCE_DIR}/abi_test.cc)
 
-include_directories(
-  arrow_abi_test ${CMAKE_CURRENT_SOURCE_DIR}/../../src/include
-  ${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/catch)
+include_directories(arrow_abi_test
+                    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/include)
+
+include_directories(../../third_party/catch)
 target_link_libraries(arrow_abi_test duckdb arrow Threads::Threads)

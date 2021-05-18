@@ -64,8 +64,7 @@ struct SimpleFactory {
 	}
 };
 
-
-TEST_CASE("Test random integers") {
+TEST_CASE("Test random integers", "[arrow]") {
 
 	for (size_t n : std::vector<size_t> {100, 1000, 10000, 100000}) {
 		auto schema = arrow::schema({
@@ -125,18 +124,17 @@ TEST_CASE("Test random integers") {
 				params.push_back(duckdb::Value::POINTER((uintptr_t)&factory));
 				params.push_back(duckdb::Value::POINTER((uintptr_t)&SimpleFactory::CreateStream));
 				auto result = conn.TableFunction("arrow_scan", params)->Execute();
-                REQUIRE(result->ColumnCount() == 3);
-                int32_t expected_a = start_a, expected_b = start_b, expected_c = start_c;
-                auto col_chunk = result->Fetch();
-                while (col_chunk){
-                    for (size_t i = 0; i < col_chunk->size(); i++){
-                    REQUIRE(col_chunk->GetValue(0,i).value_.integer == expected_a++);
-                    REQUIRE(col_chunk->GetValue(1,i).value_.integer == expected_b++);
-                    REQUIRE(col_chunk->GetValue(2,i).value_.integer == expected_c++);
-                }
-                    col_chunk = result->Fetch();
-                }
-
+				REQUIRE(result->ColumnCount() == 3);
+				int32_t expected_a = start_a, expected_b = start_b, expected_c = start_c;
+				auto col_chunk = result->Fetch();
+				while (col_chunk) {
+					for (size_t i = 0; i < col_chunk->size(); i++) {
+						REQUIRE(col_chunk->GetValue(0, i).value_.integer == expected_a++);
+						REQUIRE(col_chunk->GetValue(1, i).value_.integer == expected_b++);
+						REQUIRE(col_chunk->GetValue(2, i).value_.integer == expected_c++);
+					}
+					col_chunk = result->Fetch();
+				}
 			}
 		}
 	}
