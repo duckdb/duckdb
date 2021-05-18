@@ -389,24 +389,29 @@ template <class T>
 static void TemplatedScatter(VectorData &gdata, Vector &addresses, const SelectionVector &sel, idx_t count,
                              idx_t col_offset, idx_t col_idx) {
 	auto data = (T *)gdata.data;
-	auto pointers = FlatVector::GetData<uintptr_t>(addresses);
+	auto pointers = FlatVector::GetData<data_ptr_t>(addresses);
+
 	if (!gdata.validity.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
 			auto pointer_idx = sel.get_index(i);
 			auto group_idx = gdata.sel->get_index(pointer_idx);
-			auto ptr = (T *)(pointers[pointer_idx] + col_offset);
+			auto ptr = pointers[pointer_idx] + col_offset;
 
 			auto isnull = !gdata.validity.RowIsValid(group_idx);
 			T store_value = isnull ? NullValue<T>() : data[group_idx];
-			Store<T>(store_value, (data_ptr_t)ptr);
+			Store<T>(store_value, ptr);
+			if (isnull) {
+				ValidityMask col_mask(pointers[pointer_idx]);
+				col_mask.SetInvalidUnsafe(col_idx);
+			}
 		}
 	} else {
 		for (idx_t i = 0; i < count; i++) {
 			auto pointer_idx = sel.get_index(i);
 			auto group_idx = gdata.sel->get_index(pointer_idx);
-			auto ptr = (T *)(pointers[pointer_idx] + col_offset);
+			auto ptr = pointers[pointer_idx] + col_offset;
 
-			Store<T>(data[group_idx], (data_ptr_t)ptr);
+			Store<T>(data[group_idx], ptr);
 		}
 	}
 }
@@ -467,8 +472,9 @@ void GroupedAggregateHashTable::ScatterGroups(DataChunk &groups, unique_ptr<Vect
 				auto pointer_idx = sel.get_index(i);
 				auto group_idx = gdata.sel->get_index(pointer_idx);
 				auto ptr = pointers[pointer_idx] + col_offset;
-				auto isnull = !gdata.validity.RowIsValid(group_idx);
-				if (isnull) {
+				if (!gdata.validity.RowIsValid(group_idx)) {
+					ValidityMask col_mask(pointers[pointer_idx]);
+					col_mask.SetInvalidUnsafe(col_idx);
 					Store<string_t>(NullValue<string_t>(), ptr);
 				} else if (string_data[group_idx].IsInlined()) {
 					Store<string_t>(string_data[group_idx], ptr);
@@ -489,16 +495,22 @@ void GroupedAggregateHashTable::ScatterGroups(DataChunk &groups, unique_ptr<Vect
 
 template <class T>
 static void TemplatedCompareGroups(VectorData &gdata, Vector &addresses, SelectionVector &sel, idx_t &count,
-                                   idx_t col_offset, SelectionVector &no_match, idx_t &no_match_count) {
+                                   idx_t col_offset, idx_t col_idx, SelectionVector &no_match, idx_t &no_match_count) {
+	// Precompute mask indexes
+	idx_t entry_idx;
+	idx_t idx_in_entry;
+	ValidityMask().GetEntryIndex(col_idx, entry_idx, idx_in_entry);
+
 	auto data = (T *)gdata.data;
-	auto pointers = FlatVector::GetData<uintptr_t>(addresses);
+	auto pointers = FlatVector::GetData<data_ptr_t>(addresses);
 	idx_t match_count = 0;
 	if (!gdata.validity.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = sel.get_index(i);
 			auto group_idx = gdata.sel->get_index(idx);
-			auto value = Load<T>((data_ptr_t)pointers[idx] + col_offset);
-			auto isnull = IsNullValue<T>(value);
+			auto value = Load<T>(pointers[idx] + col_offset);
+			ValidityMask mask(pointers[idx]);
+			auto isnull = !mask.RowIsValid(mask.GetValidityEntry(entry_idx), idx_in_entry);
 
 			if (!gdata.validity.RowIsValid(group_idx)) {
 				if (isnull) {
@@ -508,7 +520,7 @@ static void TemplatedCompareGroups(VectorData &gdata, Vector &addresses, Selecti
 					no_match.set_index(no_match_count++, idx);
 				}
 			} else {
-				if (Equals::Operation<T>(data[group_idx], value)) {
+				if (!isnull && Equals::Operation<T>(data[group_idx], value)) {
 					sel.set_index(match_count++, idx);
 				} else {
 					no_match.set_index(no_match_count++, idx);
@@ -519,8 +531,9 @@ static void TemplatedCompareGroups(VectorData &gdata, Vector &addresses, Selecti
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = sel.get_index(i);
 			auto group_idx = gdata.sel->get_index(idx);
-			auto value = Load<T>((data_ptr_t)pointers[idx] + col_offset);
-			auto isnull = IsNullValue<T>(value);
+			auto value = Load<T>(pointers[idx] + col_offset);
+			ValidityMask mask(pointers[idx]);
+			auto isnull = !mask.RowIsValid(mask.GetValidityEntry(entry_idx), idx_in_entry);
 
 			if (!isnull && Equals::Operation<T>(data[group_idx], value)) {
 				sel.set_index(match_count++, idx);
@@ -535,49 +548,49 @@ static void TemplatedCompareGroups(VectorData &gdata, Vector &addresses, Selecti
 static void CompareGroups(DataChunk &groups, unique_ptr<VectorData[]> &group_data, Vector &addresses, idx_t mask_offset,
                           SelectionVector &sel, idx_t count, SelectionVector &no_match, idx_t &no_match_count) {
 	auto col_offset = mask_offset;
-	for (idx_t group_idx = 0; group_idx < groups.ColumnCount(); group_idx++) {
-		auto &data = groups.data[group_idx];
-		auto &gdata = group_data[group_idx];
+	for (idx_t i = 0; i < groups.ColumnCount(); i++) {
+		auto &data = groups.data[i];
+		auto &gdata = group_data[i];
 		switch (data.GetType().InternalType()) {
 		case PhysicalType::BOOL:
 		case PhysicalType::INT8:
-			TemplatedCompareGroups<int8_t>(gdata, addresses, sel, count, col_offset, no_match, no_match_count);
+			TemplatedCompareGroups<int8_t>(gdata, addresses, sel, count, col_offset, i, no_match, no_match_count);
 			break;
 		case PhysicalType::INT16:
-			TemplatedCompareGroups<int16_t>(gdata, addresses, sel, count, col_offset, no_match, no_match_count);
+			TemplatedCompareGroups<int16_t>(gdata, addresses, sel, count, col_offset, i, no_match, no_match_count);
 			break;
 		case PhysicalType::INT32:
-			TemplatedCompareGroups<int32_t>(gdata, addresses, sel, count, col_offset, no_match, no_match_count);
+			TemplatedCompareGroups<int32_t>(gdata, addresses, sel, count, col_offset, i, no_match, no_match_count);
 			break;
 		case PhysicalType::INT64:
-			TemplatedCompareGroups<int64_t>(gdata, addresses, sel, count, col_offset, no_match, no_match_count);
+			TemplatedCompareGroups<int64_t>(gdata, addresses, sel, count, col_offset, i, no_match, no_match_count);
 			break;
 		case PhysicalType::UINT8:
-			TemplatedCompareGroups<uint8_t>(gdata, addresses, sel, count, col_offset, no_match, no_match_count);
+			TemplatedCompareGroups<uint8_t>(gdata, addresses, sel, count, col_offset, i, no_match, no_match_count);
 			break;
 		case PhysicalType::UINT16:
-			TemplatedCompareGroups<uint16_t>(gdata, addresses, sel, count, col_offset, no_match, no_match_count);
+			TemplatedCompareGroups<uint16_t>(gdata, addresses, sel, count, col_offset, i, no_match, no_match_count);
 			break;
 		case PhysicalType::UINT32:
-			TemplatedCompareGroups<uint32_t>(gdata, addresses, sel, count, col_offset, no_match, no_match_count);
+			TemplatedCompareGroups<uint32_t>(gdata, addresses, sel, count, col_offset, i, no_match, no_match_count);
 			break;
 		case PhysicalType::UINT64:
-			TemplatedCompareGroups<uint64_t>(gdata, addresses, sel, count, col_offset, no_match, no_match_count);
+			TemplatedCompareGroups<uint64_t>(gdata, addresses, sel, count, col_offset, i, no_match, no_match_count);
 			break;
 		case PhysicalType::INT128:
-			TemplatedCompareGroups<hugeint_t>(gdata, addresses, sel, count, col_offset, no_match, no_match_count);
+			TemplatedCompareGroups<hugeint_t>(gdata, addresses, sel, count, col_offset, i, no_match, no_match_count);
 			break;
 		case PhysicalType::FLOAT:
-			TemplatedCompareGroups<float>(gdata, addresses, sel, count, col_offset, no_match, no_match_count);
+			TemplatedCompareGroups<float>(gdata, addresses, sel, count, col_offset, i, no_match, no_match_count);
 			break;
 		case PhysicalType::DOUBLE:
-			TemplatedCompareGroups<double>(gdata, addresses, sel, count, col_offset, no_match, no_match_count);
+			TemplatedCompareGroups<double>(gdata, addresses, sel, count, col_offset, i, no_match, no_match_count);
 			break;
 		case PhysicalType::INTERVAL:
-			TemplatedCompareGroups<interval_t>(gdata, addresses, sel, count, col_offset, no_match, no_match_count);
+			TemplatedCompareGroups<interval_t>(gdata, addresses, sel, count, col_offset, i, no_match, no_match_count);
 			break;
 		case PhysicalType::VARCHAR:
-			TemplatedCompareGroups<string_t>(gdata, addresses, sel, count, col_offset, no_match, no_match_count);
+			TemplatedCompareGroups<string_t>(gdata, addresses, sel, count, col_offset, i, no_match, no_match_count);
 			break;
 		default:
 			throw Exception("Unsupported type for group vector");
@@ -663,8 +676,8 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 				memcpy(entry_payload_ptr, &group_hashes_ptr[index], HASH_WIDTH);
 				D_ASSERT((*(hash_t *)entry_payload_ptr) == group_hashes_ptr[index]);
 
-				// Set the validity mask (clearing is more common)
-				memset(entry_payload_ptr + HASH_WIDTH, 0, group_mask_width);
+				// Set the validity mask (clearing is less common)
+				ValidityMask(entry_payload_ptr + HASH_WIDTH).SetAllValid(group_types.size());
 
 				// initialize the payload info for the column
 				memcpy(entry_payload_ptr + HASH_WIDTH + group_width, empty_payload_data.get(), payload_width);
