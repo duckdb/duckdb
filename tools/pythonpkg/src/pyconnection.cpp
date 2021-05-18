@@ -417,13 +417,14 @@ static unique_ptr<TableFunctionRef> PandasScanReplacement(const string &table_na
 	return TryPandasReplacement(global_dict, py_table_name);
 }
 
-shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &database, bool read_only, py::dict config_dict) {
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &database, bool read_only,
+                                                           py::dict config_dict) {
 	auto res = make_shared<DuckDBPyConnection>();
 	DBConfig config;
 	if (read_only) {
 		config.access_mode = AccessMode::READ_ONLY;
 	}
-	for(auto &kv : config_dict) {
+	for (auto &kv : config_dict) {
 		string key = py::str(kv.first);
 		string val = py::str(kv.second);
 		auto config_property = DBConfig::GetOptionByName(key);

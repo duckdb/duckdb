@@ -5,25 +5,34 @@
 namespace duckdb {
 
 static ConfigurationOption internal_options[] = {
-    { ConfigurationOptionType::ACCESS_MODE, "access_mode", "Access mode of the database (AUTOMATIC, READ_ONLY or READ_WRITE)", LogicalTypeId::VARCHAR},
-    { ConfigurationOptionType::DEFAULT_ORDER_TYPE, "default_order", "The order type used when none is specified (default: ASC)", LogicalTypeId::VARCHAR},
-    { ConfigurationOptionType::DEFAULT_NULL_ORDER, "default_null_order", "Null ordering used when none is specified (default: NULLS FIRST)", LogicalTypeId::VARCHAR},
-    { ConfigurationOptionType::ENABLE_EXTERNAL_ACCESS, "enable_external_access", "Allow the database to access external state (through e.g. COPY TO/FROM, CSV readers, pandas replacement scans, etc)", LogicalTypeId::BOOLEAN},
-    { ConfigurationOptionType::ENABLE_OBJECT_CACHE, "enable_object_cache", "Whether or not object cache is used to cache e.g. Parquet metadata", LogicalTypeId::BOOLEAN},
-	{ ConfigurationOptionType::MAXIMUM_MEMORY, "max_memory", "The maximum memory of the system", LogicalTypeId::VARCHAR},
-	{ ConfigurationOptionType::THREADS, "threads", "The number of total threads used by the system", LogicalTypeId::BIGINT},
-    { ConfigurationOptionType::INVALID, nullptr, nullptr, LogicalTypeId::INVALID }};
+    {ConfigurationOptionType::ACCESS_MODE, "access_mode",
+     "Access mode of the database ([AUTOMATIC], READ_ONLY or READ_WRITE)", LogicalTypeId::VARCHAR},
+    {ConfigurationOptionType::DEFAULT_ORDER_TYPE, "default_order",
+     "The order type used when none is specified ([ASC] or DESC)", LogicalTypeId::VARCHAR},
+    {ConfigurationOptionType::DEFAULT_NULL_ORDER, "default_null_order",
+     "Null ordering used when none is specified ([NULLS_FIRST] or NULLS_LAST)", LogicalTypeId::VARCHAR},
+    {ConfigurationOptionType::ENABLE_EXTERNAL_ACCESS, "enable_external_access",
+     "Allow the database to access external state (through e.g. COPY TO/FROM, CSV readers, pandas replacement scans, "
+     "etc)",
+     LogicalTypeId::BOOLEAN},
+    {ConfigurationOptionType::ENABLE_OBJECT_CACHE, "enable_object_cache",
+     "Whether or not object cache is used to cache e.g. Parquet metadata", LogicalTypeId::BOOLEAN},
+    {ConfigurationOptionType::MAXIMUM_MEMORY, "max_memory", "The maximum memory of the system (e.g. 1GB)",
+     LogicalTypeId::VARCHAR},
+    {ConfigurationOptionType::THREADS, "threads", "The number of total threads used by the system",
+     LogicalTypeId::BIGINT},
+    {ConfigurationOptionType::INVALID, nullptr, nullptr, LogicalTypeId::INVALID}};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {
 	vector<ConfigurationOption> options;
-	for(idx_t index = 0; internal_options[index].name; index++) {
+	for (idx_t index = 0; internal_options[index].name; index++) {
 		options.push_back(internal_options[index]);
 	}
 	return options;
 }
 
 ConfigurationOption *DBConfig::GetOptionByName(const string &name) {
-	for(idx_t index = 0; internal_options[index].name; index++) {
+	for (idx_t index = 0; internal_options[index].name; index++) {
 		if (internal_options[index].name == name) {
 			return internal_options + index;
 		}
@@ -32,7 +41,7 @@ ConfigurationOption *DBConfig::GetOptionByName(const string &name) {
 }
 
 void DBConfig::SetOption(const ConfigurationOption &option, Value value) {
-	switch(option.type) {
+	switch (option.type) {
 	case ConfigurationOptionType::ACCESS_MODE: {
 		auto parameter = StringUtil::Lower(value.ToString());
 		if (parameter == "automatic") {
@@ -42,7 +51,8 @@ void DBConfig::SetOption(const ConfigurationOption &option, Value value) {
 		} else if (parameter == "read_write") {
 			access_mode = AccessMode::READ_WRITE;
 		} else {
-			throw InvalidInputException("Unrecognized parameter for option ACCESS_MODE \"%s\". Expected READ_ONLY or READ_WRITE.", parameter);
+			throw InvalidInputException(
+			    "Unrecognized parameter for option ACCESS_MODE \"%s\". Expected READ_ONLY or READ_WRITE.", parameter);
 		}
 		break;
 	}
@@ -53,7 +63,8 @@ void DBConfig::SetOption(const ConfigurationOption &option, Value value) {
 		} else if (parameter == "desc") {
 			default_order_type = OrderType::DESCENDING;
 		} else {
-			throw InvalidInputException("Unrecognized parameter for option DEFAULT_ORDER \"%s\". Expected ASC or DESC.", parameter);
+			throw InvalidInputException("Unrecognized parameter for option DEFAULT_ORDER \"%s\". Expected ASC or DESC.",
+			                            parameter);
 		}
 		break;
 	}
@@ -64,7 +75,8 @@ void DBConfig::SetOption(const ConfigurationOption &option, Value value) {
 		} else if (parameter == "nulls_last") {
 			default_null_order = OrderByNullType::NULLS_LAST;
 		} else {
-			throw InvalidInputException("Unrecognized parameter for option NULL_ORDER \"%s\". Expected NULLS_FIRST or NULLS_LAST.", parameter);
+			throw InvalidInputException(
+			    "Unrecognized parameter for option NULL_ORDER \"%s\". Expected NULLS_FIRST or NULLS_LAST.", parameter);
 		}
 		break;
 	}
@@ -141,4 +153,4 @@ idx_t DBConfig::ParseMemoryLimit(const string &arg) {
 	return (idx_t)multiplier * limit;
 }
 
-}
+} // namespace duckdb
