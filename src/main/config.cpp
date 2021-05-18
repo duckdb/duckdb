@@ -69,11 +69,11 @@ void DBConfig::SetOption(const ConfigurationOption &option, Value value) {
 		break;
 	}
 	case ConfigurationOptionType::ENABLE_EXTERNAL_ACCESS: {
-		enable_external_access = value.GetValue<bool>();
+		enable_external_access = value.CastAs(LogicalType::BOOLEAN).GetValueUnsafe<int8_t>();
 		break;
 	}
 	case ConfigurationOptionType::ENABLE_OBJECT_CACHE: {
-		object_cache_enable = value.GetValue<bool>();
+		object_cache_enable = value.CastAs(LogicalType::BOOLEAN).GetValueUnsafe<int8_t>();
 		break;
 	}
 	case ConfigurationOptionType::MAXIMUM_MEMORY: {

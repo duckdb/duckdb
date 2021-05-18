@@ -432,7 +432,9 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 		}
 		config.SetOption(*config_property, Value(val));
 	}
-	config.replacement_scans.emplace_back(PandasScanReplacement);
+	if (config.enable_external_access) {
+		config.replacement_scans.emplace_back(PandasScanReplacement);
+	}
 
 	res->database = make_unique<DuckDB>(database, &config);
 	ExtensionHelper::LoadAllExtensions(*res->database);
