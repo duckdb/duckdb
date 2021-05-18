@@ -20,12 +20,12 @@ BaseAggregateHashTable::BaseAggregateHashTable(BufferManager &buffer_manager, ve
                                                vector<LogicalType> payload_types_p,
                                                vector<AggregateObject> aggregate_objects)
     : buffer_manager(buffer_manager), aggregates(move(aggregate_objects)), group_types(move(group_types_p)),
-      payload_types(move(payload_types_p)), group_width(0), group_padding(0), payload_width(0) {
+      payload_types(move(payload_types_p)), group_width(0), group_mask_width(0), group_padding(0), payload_width(0) {
 
 	for (idx_t i = 0; i < group_types.size(); i++) {
-		by_offsets.emplace_back(group_width);
 		group_width += GetTypeIdSize(group_types[i].InternalType());
 	}
+
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		payload_width += aggregates[i].payload_size;
 #ifndef DUCKDB_ALLOW_UNDEFINED

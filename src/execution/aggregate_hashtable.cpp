@@ -384,7 +384,7 @@ void GroupedAggregateHashTable::FetchAggregates(DataChunk &groups, DataChunk &re
 
 template <class T>
 static void TemplatedScatter(VectorData &gdata, Vector &addresses, const SelectionVector &sel, idx_t count,
-                             idx_t ptr_offset) {
+                             idx_t ptr_offset, idx_t key_idx) {
 	auto data = (T *)gdata.data;
 	auto pointers = FlatVector::GetData<uintptr_t>(addresses);
 	if (!gdata.validity.AllValid()) {
@@ -413,49 +413,48 @@ void GroupedAggregateHashTable::ScatterGroups(DataChunk &groups, unique_ptr<Vect
 	if (count == 0) {
 		return;
 	}
-	for (idx_t grp_idx = 0; grp_idx < groups.ColumnCount(); grp_idx++) {
-		auto &data = groups.data[grp_idx];
-		auto &gdata = group_data[grp_idx];
-
-		auto ptr_offset = by_offsets[grp_idx];
+	idx_t ptr_offset = group_mask_width;
+	for (idx_t key_idx = 0; key_idx < groups.ColumnCount(); key_idx++) {
+		auto &data = groups.data[key_idx];
+		auto &gdata = group_data[key_idx];
 
 		switch (data.GetType().InternalType()) {
 		case PhysicalType::BOOL:
 		case PhysicalType::INT8:
-			TemplatedScatter<int8_t>(gdata, addresses, sel, count, ptr_offset);
+			TemplatedScatter<int8_t>(gdata, addresses, sel, count, ptr_offset, key_idx);
 			break;
 		case PhysicalType::INT16:
-			TemplatedScatter<int16_t>(gdata, addresses, sel, count, ptr_offset);
+			TemplatedScatter<int16_t>(gdata, addresses, sel, count, ptr_offset, key_idx);
 			break;
 		case PhysicalType::INT32:
-			TemplatedScatter<int32_t>(gdata, addresses, sel, count, ptr_offset);
+			TemplatedScatter<int32_t>(gdata, addresses, sel, count, ptr_offset, key_idx);
 			break;
 		case PhysicalType::INT64:
-			TemplatedScatter<int64_t>(gdata, addresses, sel, count, ptr_offset);
+			TemplatedScatter<int64_t>(gdata, addresses, sel, count, ptr_offset, key_idx);
 			break;
 		case PhysicalType::UINT8:
-			TemplatedScatter<uint8_t>(gdata, addresses, sel, count, ptr_offset);
+			TemplatedScatter<uint8_t>(gdata, addresses, sel, count, ptr_offset, key_idx);
 			break;
 		case PhysicalType::UINT16:
-			TemplatedScatter<uint16_t>(gdata, addresses, sel, count, ptr_offset);
+			TemplatedScatter<uint16_t>(gdata, addresses, sel, count, ptr_offset, key_idx);
 			break;
 		case PhysicalType::UINT32:
-			TemplatedScatter<uint32_t>(gdata, addresses, sel, count, ptr_offset);
+			TemplatedScatter<uint32_t>(gdata, addresses, sel, count, ptr_offset, key_idx);
 			break;
 		case PhysicalType::UINT64:
-			TemplatedScatter<uint64_t>(gdata, addresses, sel, count, ptr_offset);
+			TemplatedScatter<uint64_t>(gdata, addresses, sel, count, ptr_offset, key_idx);
 			break;
 		case PhysicalType::INT128:
-			TemplatedScatter<hugeint_t>(gdata, addresses, sel, count, ptr_offset);
+			TemplatedScatter<hugeint_t>(gdata, addresses, sel, count, ptr_offset, key_idx);
 			break;
 		case PhysicalType::FLOAT:
-			TemplatedScatter<float>(gdata, addresses, sel, count, ptr_offset);
+			TemplatedScatter<float>(gdata, addresses, sel, count, ptr_offset, key_idx);
 			break;
 		case PhysicalType::DOUBLE:
-			TemplatedScatter<double>(gdata, addresses, sel, count, ptr_offset);
+			TemplatedScatter<double>(gdata, addresses, sel, count, ptr_offset, key_idx);
 			break;
 		case PhysicalType::INTERVAL:
-			TemplatedScatter<interval_t>(gdata, addresses, sel, count, ptr_offset);
+			TemplatedScatter<interval_t>(gdata, addresses, sel, count, ptr_offset, key_idx);
 			break;
 		case PhysicalType::VARCHAR: {
 			auto string_data = (string_t *)gdata.data;
@@ -481,6 +480,7 @@ void GroupedAggregateHashTable::ScatterGroups(DataChunk &groups, unique_ptr<Vect
 		default:
 			throw Exception("Unsupported type for group vector");
 		}
+		ptr_offset += GetTypeIdSize(data.GetType().InternalType());
 	}
 }
 
@@ -529,13 +529,12 @@ static void TemplatedCompareGroups(VectorData &gdata, Vector &addresses, Selecti
 	count = match_count;
 }
 
-static void CompareGroups(DataChunk &groups, unique_ptr<VectorData[]> &group_data, Vector &addresses,
-                          const vector<idx_t> &by_offsets, SelectionVector &sel, idx_t count, SelectionVector &no_match,
-                          idx_t &no_match_count) {
+static void CompareGroups(DataChunk &groups, unique_ptr<VectorData[]> &group_data, Vector &addresses, idx_t mask_offset,
+                          SelectionVector &sel, idx_t count, SelectionVector &no_match, idx_t &no_match_count) {
+	auto ptr_offset = mask_offset;
 	for (idx_t group_idx = 0; group_idx < groups.ColumnCount(); group_idx++) {
 		auto &data = groups.data[group_idx];
 		auto &gdata = group_data[group_idx];
-		auto ptr_offset = by_offsets[group_idx];
 		switch (data.GetType().InternalType()) {
 		case PhysicalType::BOOL:
 		case PhysicalType::INT8:
@@ -580,6 +579,7 @@ static void CompareGroups(DataChunk &groups, unique_ptr<VectorData[]> &group_dat
 		default:
 			throw Exception("Unsupported type for group vector");
 		}
+		ptr_offset += GetTypeIdSize(data.GetType().InternalType());
 	}
 }
 
@@ -707,7 +707,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 		// now we have only the tuples remaining that might match to an existing group
 		// start performing comparisons with each of the groups
 		if (need_compare_count > 0) {
-			CompareGroups(groups, group_data, addresses, by_offsets, group_compare_vector, need_compare_count,
+			CompareGroups(groups, group_data, addresses, group_mask_width, group_compare_vector, need_compare_count,
 			              no_match_vector, no_match_count);
 		}
 
