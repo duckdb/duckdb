@@ -953,30 +953,25 @@ void JoinHashTable::ScanFullOuter(DataChunk &result, JoinHTScanState &state) {
 }
 
 void JoinHashTable::FullScanHashTable(JoinHTScanState &state) {
-	// scan the HT starting from the current position and check which rows from the build side did not find a match
+	// scan the HT starting from the current position
 	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
 	idx_t found_entries = 0;
-	{
-		lock_guard<mutex> state_lock(state.lock);
-		for (; state.block_position < blocks.size(); state.block_position++, state.position = 0) {
-			auto &block = blocks[state.block_position];
-			auto &handle = pinned_handles[state.block_position];
-			auto baseptr = handle->node->buffer;
-			for (; state.position < block.count; state.position++) {
-				auto tuple_base = baseptr + state.position * entry_size;
-				auto found_match = (bool *)(tuple_base + tuple_size);
-				if (!*found_match) {
-					key_locations[found_entries++] = tuple_base;
-					if (found_entries == STANDARD_VECTOR_SIZE) {
-						state.position++;
-						break;
-					}
-				}
-			}
-			if (found_entries == STANDARD_VECTOR_SIZE) {
-				break;
-			}
+
+	lock_guard<mutex> state_lock(state.lock);
+	// go through all the blocks
+	while (state.block_position < blocks.size()) {
+		auto &block = blocks[state.block_position];
+		auto handle = buffer_manager.Pin(block.block);
+		auto base_ptr = handle->node->buffer;
+		// go through all the tuples within this block
+		while (state.position < block.count) {
+			auto tuple_base = base_ptr + state.position * entry_size;
+			// store its locations
+			key_locations[found_entries++] = tuple_base;
+			state.position++;
 		}
+		state.block_position++;
+		state.position = 0;
 	}
 
 	// gather the values from the RHS
