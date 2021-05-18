@@ -72,6 +72,9 @@ endif
 ifneq ($(TIDY_THREADS),)
 	TIDY_THREAD_PARAMETER := -j ${TIDY_THREADS}
 endif
+ifeq ($(BUILD_ARROW_ABI_TEST), 1)
+	EXTENSIONS:=${EXTENSIONS} -DBUILD_ARROW_ABI_TEST=1
+endif
 
 clean:
 	rm -rf build
