@@ -26,9 +26,8 @@ jobs:
     - uses: actions/checkout@v2
       with:
         fetch-depth: 0
-
     - name: Install
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+      run: sudo apt-get install ninja-build
 
     - name: Build
       run: BUILD_ARROW_ABI_TEST=1 make debug
