@@ -28,6 +28,7 @@ import datetime
 import decimal
 import unittest
 import duckdb
+import sys
 
 
 class DuckDBTypeTests(unittest.TestCase):
@@ -97,12 +98,21 @@ class DuckDBTypeTests(unittest.TestCase):
         self.assertEqual(row[0], sample)
 
     def test_CheckMemoryviewFromhexBlob(self):
+        if sys.version_info.major < 3:
+            return
         sample = bytes.fromhex('00FF0F2E3D4C5B6A798800FF00')
         val = memoryview(sample)
         self.cur.execute("insert into test(b) values (?)", (val,))
         self.cur.execute("select b from test")
         row = self.cur.fetchone()
         self.assertEqual(row[0], sample)
+
+    def test_CheckNoneBlob(self):
+        val = None
+        self.cur.execute("insert into test(b) values (?)", (val,))
+        self.cur.execute("select b from test")
+        row = self.cur.fetchone()
+        self.assertEqual(row[0], val)
 
     def test_CheckUnicodeExecute(self):
         self.cur.execute(u"select 'Österreich'")
