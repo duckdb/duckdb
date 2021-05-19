@@ -51,12 +51,10 @@ duckdb_unregister <- function(conn, name) {
 duckdb_register_arrow <- function(conn, name, arrow_scannable) {
   stopifnot(dbIsValid(conn))
 
-    # create a function to pass to c-land
-    export_fun <- function(x) {
-        record_batch_reader <- arrow::Scanner$create(x)$ToRecordBatchReader()
-        stream_ptr <- arrow:::allocate_arrow_array_stream()
+    # create some R functions to pass to c-land
+    export_fun <- function(arrow_scannable, stream_ptr) {
+        record_batch_reader <- arrow::Scanner$create(arrow_scannable)$ToRecordBatchReader()
         arrow:::ExportRecordBatchReader(record_batch_reader, stream_ptr)
-        return(stream_ptr)
     }
   .Call(duckdb_register_arrow_R, conn@conn_ref, as.character(name), export_fun, arrow_scannable)
   invisible(TRUE)

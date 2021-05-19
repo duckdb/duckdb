@@ -1179,16 +1179,15 @@ public:
 		int err;
 		auto factory = (RArrowTabularStreamFactory *)factory_p;
 
+		auto res = make_unique<ArrowArrayStreamWrapper>();
+		auto stream_ptr_sexp =
+		    r.Protect(Rf_ScalarReal(static_cast<double>(reinterpret_cast<uintptr_t>(&res->arrow_array_stream))));
 		// export the arrow scannable to a stream pointer
-		auto export_call = r.Protect(Rf_lang2(factory->export_fun, factory->arrow_scannable));
-		SEXP stream_ptr_sexp = r.Protect(R_tryEval(export_call, R_GlobalEnv, &err));
+		auto export_call = r.Protect(Rf_lang3(factory->export_fun, factory->arrow_scannable, stream_ptr_sexp));
+		R_tryEval(export_call, R_GlobalEnv, &err);
 		if (err) {
 			Rf_error("Failed to produce arrow stream");
 		}
-		// TODO this stream pointer leaks?
-		auto *stream_ptr = reinterpret_cast<ArrowArrayStream *>(static_cast<uintptr_t>(REAL(stream_ptr_sexp)[0]));
-		auto res = make_unique<ArrowArrayStreamWrapper>();
-		res->arrow_array_stream = *stream_ptr;
 		return res;
 	}
 
@@ -1208,7 +1207,7 @@ static SEXP duckdb_finalize_arrow_factory_R(SEXP factorysexp) {
 	return R_NilValue;
 }
 
-SEXP duckdb_register_arrow_R(SEXP connsexp, SEXP namesexp, SEXP funsexp, SEXP valuesexp) {
+SEXP duckdb_register_arrow_R(SEXP connsexp, SEXP namesexp, SEXP export_funsexp, SEXP valuesexp) {
 	if (TYPEOF(connsexp) != EXTPTRSXP) {
 		Rf_error("duckdb_register_R: Need external pointer parameter for connection");
 	}
@@ -1224,13 +1223,12 @@ SEXP duckdb_register_arrow_R(SEXP connsexp, SEXP namesexp, SEXP funsexp, SEXP va
 		Rf_error("duckdb_register_R: name parameter cannot be empty");
 	}
 
-	if (!Rf_isFunction(funsexp)) {
-		Rf_error("duckdb_register_R: Need single function parameter");
+	if (!Rf_isFunction(export_funsexp)) {
+		Rf_error("duckdb_register_R: Need function parameter for export function");
 	}
 
 	RProtector r;
-
-	auto stream_factory = new RArrowTabularStreamFactory(funsexp, valuesexp);
+	auto stream_factory = new RArrowTabularStreamFactory(export_funsexp, valuesexp);
 	auto stream_factory_produce = RArrowTabularStreamFactory::Produce;
 	conn->TableFunction("arrow_scan",
 	                    {Value::POINTER((uintptr_t)stream_factory), Value::POINTER((uintptr_t)stream_factory_produce)})
@@ -1241,7 +1239,7 @@ SEXP duckdb_register_arrow_R(SEXP connsexp, SEXP namesexp, SEXP funsexp, SEXP va
 	R_RegisterCFinalizer(factorysexp, (void (*)(SEXP))duckdb_finalize_arrow_factory_R);
 
 	SEXP state_list = r.Protect(NEW_LIST(3));
-	SET_VECTOR_ELT(state_list, 0, funsexp);
+	SET_VECTOR_ELT(state_list, 0, export_funsexp);
 	SET_VECTOR_ELT(state_list, 1, valuesexp);
 	SET_VECTOR_ELT(state_list, 2, factorysexp);
 
