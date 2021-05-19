@@ -15,7 +15,6 @@ namespace duckdb {
 //! and has two children.
 class ComparisonExpression : public ParsedExpression {
 public:
-	ComparisonExpression(ExpressionType type);
 	ComparisonExpression(ExpressionType type, unique_ptr<ParsedExpression> left, unique_ptr<ParsedExpression> right);
 
 	unique_ptr<ParsedExpression> left;

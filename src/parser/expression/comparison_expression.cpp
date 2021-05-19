@@ -13,9 +13,6 @@ ComparisonExpression::ComparisonExpression(ExpressionType type, unique_ptr<Parse
 	this->right = move(right);
 }
 
-ComparisonExpression::ComparisonExpression(ExpressionType type) :
-	ComparisonExpression(type, nullptr, nullptr) {}
-
 string ComparisonExpression::ToString() const {
 	return left->ToString() + ExpressionTypeToOperator(type) + right->ToString();
 }

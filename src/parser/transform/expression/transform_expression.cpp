@@ -29,14 +29,7 @@ unique_ptr<ParsedExpression> Transformer::TransformNamedArg(duckdb_libpgquery::P
 	return expr;
 }
 
-void Transformer::TransformExpressionLazy(duckdb_libpgquery::PGNode *node, unique_ptr<ParsedExpression> &result) {
-	if (!node) {
-		return;
-	}
-	expressions_to_be_transformed.push_back(ExpressionTransformTarget(node, result));
-}
-
-unique_ptr<ParsedExpression> Transformer::TransformExpressionInternal(duckdb_libpgquery::PGNode *node) {
+unique_ptr<ParsedExpression> Transformer::TransformExpression(duckdb_libpgquery::PGNode *node) {
 	if (!node) {
 		return nullptr;
 	}
@@ -85,16 +78,6 @@ unique_ptr<ParsedExpression> Transformer::TransformExpressionInternal(duckdb_lib
 	default:
 		throw NotImplementedException("Expr of type %d not implemented\n", (int)node->type);
 	}
-}
-
-unique_ptr<ParsedExpression> Transformer::TransformExpression(duckdb_libpgquery::PGNode *node) {
-	auto result = TransformExpressionInternal(node);
-	while(!expressions_to_be_transformed.empty()) {
-		auto entry = expressions_to_be_transformed.back();
-		expressions_to_be_transformed.pop_back();
-		entry.result = TransformExpressionInternal(entry.node);
-	}
-	return result;
 }
 
 bool Transformer::TransformExpressionList(duckdb_libpgquery::PGList *list,

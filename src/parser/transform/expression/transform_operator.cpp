@@ -26,37 +26,31 @@ ExpressionType Transformer::OperatorToExpressionType(const string &op) {
 	return ExpressionType::INVALID;
 }
 
-unique_ptr<ParsedExpression> Transformer::TransformUnaryOperator(const string &op, duckdb_libpgquery::PGNode *child) {
-	D_ASSERT(child);
-
+unique_ptr<ParsedExpression> Transformer::TransformUnaryOperator(const string &op, unique_ptr<ParsedExpression> child) {
 	const auto schema = DEFAULT_SCHEMA;
 
 	vector<unique_ptr<ParsedExpression>> children;
+	children.push_back(move(child));
 
 	// built-in operator function
 	auto result = make_unique<FunctionExpression>(schema, op, children);
-	result->children.resize(1);
-	TransformExpressionLazy(child, result->children[0]);
-
 	result->is_operator = true;
 	return move(result);
 }
 
-unique_ptr<ParsedExpression> Transformer::TransformBinaryOperator(const string &op, duckdb_libpgquery::PGNode *left,
-                                                                  duckdb_libpgquery::PGNode *right) {
+unique_ptr<ParsedExpression> Transformer::TransformBinaryOperator(const string &op, unique_ptr<ParsedExpression> left,
+                                                                  unique_ptr<ParsedExpression> right) {
 	const auto schema = DEFAULT_SCHEMA;
 
 	vector<unique_ptr<ParsedExpression>> children;
+	children.push_back(move(left));
+	children.push_back(move(right));
 
 	if (op == "~" || op == "!~") {
 		// rewrite 'asdf' SIMILAR TO '.*sd.*' into regexp_full_match('asdf', '.*sd.*')
 		bool invert_similar = op == "!~";
 
 		auto result = make_unique<FunctionExpression>(schema, "regexp_full_match", children);
-		result->children.resize(2);
-
-		TransformExpressionLazy(left, result->children[0]);
-		TransformExpressionLazy(right, result->children[1]);
 		if (invert_similar) {
 			return make_unique<OperatorExpression>(ExpressionType::OPERATOR_NOT, move(result));
 		} else {
@@ -66,18 +60,11 @@ unique_ptr<ParsedExpression> Transformer::TransformBinaryOperator(const string &
 		auto target_type = OperatorToExpressionType(op);
 		if (target_type != ExpressionType::INVALID) {
 			// built-in comparison operator
-			auto comparison = make_unique<ComparisonExpression>(target_type);
-			TransformExpressionLazy(left, comparison->left);
-			TransformExpressionLazy(right, comparison->right);
-			return move(comparison);
+			return make_unique<ComparisonExpression>(target_type, move(children[0]), move(children[1]));
 		}
 		// not a special operator: convert to a function expression
 		auto result = make_unique<FunctionExpression>(schema, op, children);
 		result->is_operator = true;
-		result->children.resize(2);
-
-		TransformExpressionLazy(left, result->children[0]);
-		TransformExpressionLazy(right, result->children[1]);
 		return move(result);
 	}
 }
@@ -186,17 +173,21 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(duckdb_libpgquery::PGAE
 		return make_unique<ComparisonExpression>(ExpressionType::COMPARE_DISTINCT_FROM, move(left_expr),
 		                                         move(right_expr));
 	}
+
 	default:
 		break;
 	}
-	if (!root->lexpr) {
+	auto left_expr = TransformExpression(root->lexpr);
+	auto right_expr = TransformExpression(root->rexpr);
+
+	if (!left_expr) {
 		// prefix operator
-		return TransformUnaryOperator(name, root->rexpr);
-	} else if (!root->rexpr) {
+		return TransformUnaryOperator(name, move(right_expr));
+	} else if (!right_expr) {
 		// postfix operator, only ! is currently supported
-		return TransformUnaryOperator(name + "__postfix", root->lexpr);
+		return TransformUnaryOperator(name + "__postfix", move(left_expr));
 	} else {
-		return TransformBinaryOperator(name, root->lexpr, root->rexpr);
+		return TransformBinaryOperator(name, move(left_expr), move(right_expr));
 	}
 }
 
