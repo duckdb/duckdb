@@ -106,7 +106,7 @@ public:
 
 	py::object FetchArrow();
 
-	static shared_ptr<DuckDBPyConnection> Connect(const string &database, bool read_only, py::dict config);
+	static shared_ptr<DuckDBPyConnection> Connect(const string &database, bool read_only, const py::dict &config);
 
 	static vector<Value> TransformPythonParamList(py::handle params);
 
