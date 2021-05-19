@@ -1172,29 +1172,27 @@ SEXP duckdb_unregister_R(SEXP connsexp, SEXP namesexp) {
 
 class RArrowTabularStreamFactory {
 public:
-	RArrowTabularStreamFactory(SEXP export_fun_p, SEXP arrow_tabular_p)
-	    : arrow_tabular(arrow_tabular_p), export_fun(export_fun_p) {};
+	RArrowTabularStreamFactory(SEXP export_fun_p, SEXP arrow_scannable_p)
+	    : arrow_scannable(arrow_scannable_p), export_fun(export_fun_p) {};
 	static unique_ptr<ArrowArrayStreamWrapper> Produce(uintptr_t factory_p) {
 		RProtector r;
 		int err;
 		auto factory = (RArrowTabularStreamFactory *)factory_p;
 
-		// export the arrow tabular to a stream pointer
-		auto export_call = r.Protect(Rf_lang2(factory->export_fun, factory->arrow_tabular));
+		// export the arrow scannable to a stream pointer
+		auto export_call = r.Protect(Rf_lang2(factory->export_fun, factory->arrow_scannable));
 		SEXP stream_ptr_sexp = r.Protect(R_tryEval(export_call, R_GlobalEnv, &err));
 		if (err) {
 			Rf_error("Failed to produce arrow stream");
 		}
 		// TODO this stream pointer leaks?
-		// TODO this may fail on 32 bit
-		auto stream_ptr = (void *)(uintptr_t)REAL(stream_ptr_sexp)[0];
-
+		auto *stream_ptr = reinterpret_cast<ArrowArrayStream *>(static_cast<uintptr_t>(REAL(stream_ptr_sexp)[0]));
 		auto res = make_unique<ArrowArrayStreamWrapper>();
-		res->arrow_array_stream = *(ArrowArrayStream *)stream_ptr;
+		res->arrow_array_stream = *stream_ptr;
 		return res;
 	}
 
-	SEXP arrow_tabular;
+	SEXP arrow_scannable;
 	SEXP export_fun;
 };
 
@@ -1230,9 +1228,6 @@ SEXP duckdb_register_arrow_R(SEXP connsexp, SEXP namesexp, SEXP funsexp, SEXP va
 		Rf_error("duckdb_register_R: Need single function parameter");
 	}
 
-	if (!Rf_inherits(valuesexp, "ArrowTabular")) {
-		Rf_error("duckdb_register_R: Need ArrowTabular object as value parameter");
-	}
 	RProtector r;
 
 	auto stream_factory = new RArrowTabularStreamFactory(funsexp, valuesexp);
