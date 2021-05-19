@@ -244,7 +244,7 @@ jobs:
         fetch-depth: 0
 
     - name: Build
-      run: make debug
+      run: BUILD_ARROW_ABI_TEST=1 make debug
 
     - name: Test
       run: make unit
