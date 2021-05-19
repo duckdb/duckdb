@@ -29,7 +29,7 @@ unique_ptr<TableRef> Transformer::TransformRangeFunction(duckdb_libpgquery::PGRa
 	auto func_call = (duckdb_libpgquery::PGFuncCall *)call_tree;
 	// transform the function call
 	auto result = make_unique<TableFunctionRef>();
-	result->function = TransformFuncCall(func_call);
+	result->function = TransformFuncCall(func_call, 0);
 	result->alias = TransformAlias(root->alias, result->column_name_alias);
 	result->query_location = func_call->location;
 	if (root->sample) {
