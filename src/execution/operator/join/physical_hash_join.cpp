@@ -259,6 +259,7 @@ bool PhysicalHashJoin::ProbePerfectHashTable(ExecutionContext &context, DataChun
 	MinMaxRangeSwitch(keys_vec, matches, keys_count);
 	// slice for the left side
 	result.Slice(physical_state->child_chunk, FlatVector::INCREMENTAL_SELECTION_VECTOR, keys_count);
+	result.Print();
 
 	// now get the data from the build side
 	// first, set-up scan structure
@@ -314,8 +315,8 @@ void PhysicalHashJoin::TemplatedMinMaxRange(Vector &source, Vector &result, idx_
 }
 
 void PhysicalHashJoin::MinMaxRangeSwitch(Vector &source, Vector &result, idx_t count) {
-	// now switch on the result type
-	switch (result.GetType().id()) {
+	// now switch on the source type
+	switch (source.GetType().id()) {
 	case LogicalTypeId::BOOLEAN:
 		TemplatedMinMaxRange<bool>(source, result, count);
 		break;
