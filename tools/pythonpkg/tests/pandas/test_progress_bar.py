@@ -6,7 +6,7 @@ import time
 
 class TestProgressBarPandas(object):
 
-    def test_progress_single(self, duckdb_cursor):     
+    def test_progress_pandas_single(self, duckdb_cursor):     
         con = duckdb.connect()
         df = pd.DataFrame({'i': numpy.arange(10000000)})
 
@@ -18,7 +18,7 @@ class TestProgressBarPandas(object):
         assert result[0][0] == 49999995000000
 
 
-    def test_progress_parallel(self,duckdb_cursor):
+    def test_progress_pandas_parallel(self,duckdb_cursor):
         con = duckdb.connect()
         df = pd.DataFrame({'i': numpy.arange(10000000)})
 

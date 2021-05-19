@@ -25,7 +25,7 @@ public:
 	      current_percentage(-1), stop(false) {
 
 	                              };
-
+	~ProgressBar();
 	//! Starts the thread
 	void Start();
 	//! Stops the thread

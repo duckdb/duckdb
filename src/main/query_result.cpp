@@ -95,6 +95,8 @@ struct DuckDBArrowSchemaHolder {
 	vector<ArrowSchema> children = {};
 	// unused in children
 	vector<ArrowSchema *> children_ptrs = {};
+	//! This holds strings created to represent decimal types
+	vector<unique_ptr<char[]>> owned_type_names;
 };
 
 static void ReleaseDuckDBArrowSchema(ArrowSchema *schema) {
@@ -203,6 +205,19 @@ void QueryResult::ToArrowSchema(ArrowSchema *out_schema) {
 		case LogicalTypeId::TIMESTAMP_MS:
 			child.format = "tsm:";
 			break;
+		case LogicalTypeId::DECIMAL: {
+			uint8_t width, scale;
+			types[col_idx].GetDecimalProperties(width, scale);
+			string format = "d:" + to_string(width) + "," + to_string(scale);
+			unique_ptr<char[]> format_ptr = unique_ptr<char[]>(new char[format.size() + 1]);
+			for (size_t i = 0; i < format.size(); i++) {
+				format_ptr[i] = format[i];
+			}
+			format_ptr[format.size()] = '\0';
+			root_holder->owned_type_names.push_back(move(format_ptr));
+			child.format = root_holder->owned_type_names.back().get();
+			break;
+		}
 		default:
 			throw NotImplementedException("Unsupported Arrow type " + types[col_idx].ToString());
 		}
