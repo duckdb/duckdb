@@ -1149,23 +1149,25 @@ SEXP duckdb_register_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 	return R_NilValue;
 }
 
-static SEXP eval_r_string(string s) {
-	ParseStatus status;
-
-	auto x = R_ParseVector(Rf_mkString(s.c_str()), 1, &status, R_NilValue);
-
-	if (LENGTH(x) != 1 || status != PARSE_OK) {
-		Rf_error("eek00");
+SEXP duckdb_unregister_R(SEXP connsexp, SEXP namesexp) {
+	if (TYPEOF(connsexp) != EXTPTRSXP) {
+		Rf_error("duckdb_unregister_R: Need external pointer parameter for connection");
 	}
-	int evalErr;
-	// TODO catch parser errors here
-	auto res = R_tryEvalSilent(VECTOR_ELT(x, 0), R_GlobalEnv, &evalErr);
-
-	// of course the script may contain errors as well
-	if (evalErr) {
-		Rf_error("eek01");
+	Connection *conn = (Connection *)R_ExternalPtrAddr(connsexp);
+	if (!conn) {
+		Rf_error("duckdb_unregister_R: Invalid connection");
 	}
-	return res;
+	if (TYPEOF(namesexp) != STRSXP || Rf_length(namesexp) != 1) {
+		Rf_error("duckdb_unregister_R: Need single string parameter for name");
+	}
+	auto name = string(CHAR(STRING_ELT(namesexp, 0)));
+	auto key = Rf_install(("_registered_df_" + name).c_str());
+	Rf_setAttrib(connsexp, key, R_NilValue);
+	auto res = conn->Query("DROP VIEW IF EXISTS \"" + name + "\"");
+	if (!res->success) {
+		Rf_error(res->error.c_str());
+	}
+	return R_NilValue;
 }
 
 class RArrowTabularStreamFactory {
@@ -1173,19 +1175,17 @@ public:
 	RArrowTabularStreamFactory(SEXP export_fun_p, SEXP arrow_tabular_p)
 	    : arrow_tabular(arrow_tabular_p), export_fun(export_fun_p) {};
 	static unique_ptr<ArrowArrayStreamWrapper> Produce(uintptr_t factory_p) {
-
-		SEXP call;
+		RProtector r;
 		int err;
-		// TODO need some PROTECT around here
 		auto factory = (RArrowTabularStreamFactory *)factory_p;
 
 		// export the arrow tabular to a stream pointer
-		call = Rf_lang2(factory->export_fun, factory->arrow_tabular);
-		SEXP stream_ptr_sexp = R_tryEval(call, R_GlobalEnv, &err);
+		auto export_call = r.Protect(Rf_lang2(factory->export_fun, factory->arrow_tabular));
+		SEXP stream_ptr_sexp = r.Protect(R_tryEval(export_call, R_GlobalEnv, &err));
 		if (err) {
-			Rf_error("EEEK"); // TODO proper cleanup
+			Rf_error("Failed to produce arrow stream");
 		}
-		// TODO this stream pointer leaks for now
+		// TODO this stream pointer leaks?
 		auto stream_ptr = (void *)(uintptr_t)REAL(stream_ptr_sexp)[0];
 
 		auto res = make_unique<ArrowArrayStreamWrapper>();
@@ -1196,6 +1196,18 @@ public:
 	SEXP arrow_tabular;
 	SEXP export_fun;
 };
+
+static SEXP duckdb_finalize_arrow_factory_R(SEXP factorysexp) {
+	if (TYPEOF(factorysexp) != EXTPTRSXP) {
+		Rf_error("duckdb_finalize_arrow_factory_R: Need external pointer parameter");
+	}
+	auto *factoryaddr = (RArrowTabularStreamFactory *)R_ExternalPtrAddr(factorysexp);
+	if (factoryaddr) {
+		R_ClearExternalPtr(factorysexp);
+		delete factoryaddr;
+	}
+	return R_NilValue;
+}
 
 SEXP duckdb_register_arrow_R(SEXP connsexp, SEXP namesexp, SEXP funsexp, SEXP valuesexp) {
 	if (TYPEOF(connsexp) != EXTPTRSXP) {
@@ -1213,26 +1225,37 @@ SEXP duckdb_register_arrow_R(SEXP connsexp, SEXP namesexp, SEXP funsexp, SEXP va
 		Rf_error("duckdb_register_R: name parameter cannot be empty");
 	}
 
-	// TODO check type of valuesexp, we expact arrow Tabular ?
-	// TODO check type of funsexp
-	// TODO leak on purpose for now
+	if (!Rf_isFunction(funsexp)) {
+		Rf_error("duckdb_register_R: Need single function parameter");
+	}
+
+	if (!Rf_inherits(valuesexp, "ArrowTabular")) {
+		Rf_error("duckdb_register_R: Need ArrowTabular object as value parameter");
+	}
+	RProtector r;
+
 	auto stream_factory = new RArrowTabularStreamFactory(funsexp, valuesexp);
 	auto stream_factory_produce = RArrowTabularStreamFactory::Produce;
 	conn->TableFunction("arrow_scan",
 	                    {Value::POINTER((uintptr_t)stream_factory), Value::POINTER((uintptr_t)stream_factory_produce)})
-	    ->CreateView(name, true, true)
-	    ->Print();
+	    ->CreateView(name, true, true);
 
-	// TODO make this a list
-	auto key1 = Rf_install(("_registered_arrow_function_" + name).c_str());
-	Rf_setAttrib(connsexp, key1, funsexp);
-	auto key2 = Rf_install(("_registered_arrow_table_" + name).c_str());
-	Rf_setAttrib(connsexp, key2, valuesexp);
+	// make r external ptr object to keep factory around until arrow table is unregistered
+	SEXP factorysexp = r.Protect(R_MakeExternalPtr(stream_factory, R_NilValue, R_NilValue));
+	R_RegisterCFinalizer(factorysexp, (void (*)(SEXP))duckdb_finalize_arrow_factory_R);
+
+	SEXP state_list = r.Protect(NEW_LIST(3));
+	SET_VECTOR_ELT(state_list, 0, funsexp);
+	SET_VECTOR_ELT(state_list, 1, valuesexp);
+	SET_VECTOR_ELT(state_list, 2, factorysexp);
+
+	auto key = Rf_install(("_registered_arrow_" + name).c_str());
+	Rf_setAttrib(connsexp, key, state_list);
 
 	return R_NilValue;
 }
 
-SEXP duckdb_unregister_R(SEXP connsexp, SEXP namesexp) {
+SEXP duckdb_unregister_arrow_R(SEXP connsexp, SEXP namesexp) {
 	if (TYPEOF(connsexp) != EXTPTRSXP) {
 		Rf_error("duckdb_unregister_R: Need external pointer parameter for connection");
 	}
@@ -1244,7 +1267,7 @@ SEXP duckdb_unregister_R(SEXP connsexp, SEXP namesexp) {
 		Rf_error("duckdb_unregister_R: Need single string parameter for name");
 	}
 	auto name = string(CHAR(STRING_ELT(namesexp, 0)));
-	auto key = Rf_install(("_registered_df_" + name).c_str());
+	auto key = Rf_install(("_registered_arrow_" + name).c_str());
 	Rf_setAttrib(connsexp, key, R_NilValue);
 	auto res = conn->Query("DROP VIEW IF EXISTS \"" + name + "\"");
 	if (!res->success) {
@@ -1307,8 +1330,9 @@ static const R_CallMethodDef R_CallDef[] = {CALLDEF(duckdb_startup_R, 2),
                                             CALLDEF(duckdb_execute_R, 1),
                                             CALLDEF(duckdb_release_R, 1),
                                             CALLDEF(duckdb_register_R, 3),
-                                            CALLDEF(duckdb_register_arrow_R, 3),
                                             CALLDEF(duckdb_unregister_R, 2),
+                                            CALLDEF(duckdb_register_arrow_R, 3),
+                                            CALLDEF(duckdb_unregister_arrow_R, 2),
                                             CALLDEF(duckdb_disconnect_R, 1),
                                             CALLDEF(duckdb_shutdown_R, 1),
                                             CALLDEF(duckdb_ptr_to_str, 1),
