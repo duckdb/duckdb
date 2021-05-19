@@ -128,10 +128,10 @@ void PhysicalHashJoin::Sink(ExecutionContext &context, GlobalOperatorState &stat
 //===--------------------------------------------------------------------===//
 bool PhysicalHashJoin::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> state) {
 	auto &sink = (HashJoinGlobalState &)*state;
-	// We only do this optimization when all the requirements are true
 	// check for possible perfect hash table
 	CheckRequirementsForPerfectHashJoin(sink.hash_table.get(), sink);
-	if (!hasBuiltPerfectHashTable) {
+	if (!CheckRequirementsForPerfectHashJoin(sink.hash_table.get(), sink)) {
+		// no perfect hash table, just finish the building of the regular hash table
 		sink.hash_table->Finalize();
 	}
 
@@ -161,7 +161,7 @@ void PhysicalHashJoin::GetChunkInternal(ExecutionContext &context, DataChunk &ch
 		return;
 	}
 	// We first try a probe with a perfect hash table, otherwise we do the standard probe
-	if (IsInnerJoin(join_type) && ProbePerfectHashTable(context, chunk, state)) {
+	if (IsInnerJoin(join_type) && ProbePerfectHashTable(context, chunk, state, sink.hash_table.get())) {
 		return;
 	}
 	do {
@@ -238,7 +238,7 @@ void PhysicalHashJoin::ProbeHashTable(ExecutionContext &context, DataChunk &chun
 }
 
 bool PhysicalHashJoin::ProbePerfectHashTable(ExecutionContext &context, DataChunk &result,
-                                             PhysicalHashJoinState *physical_state) {
+                                             PhysicalHashJoinState *physical_state, JoinHashTable *ht_ptr) {
 	// We only probe if the optimized hash table has been built
 	if (!hasBuiltPerfectHashTable) {
 		return false;
@@ -247,37 +247,52 @@ bool PhysicalHashJoin::ProbePerfectHashTable(ExecutionContext &context, DataChun
 	// fetch the chunk to join
 	children[0]->GetChunk(context, physical_state->child_chunk, physical_state->child_state.get());
 	if (physical_state->child_chunk.size() == 0) {
-		// done with probing
+		// no more keys to probe
 		return true;
 	}
-	// fetch the  join keys
+	// fetch the join keys from the chunk
 	physical_state->probe_executor.Execute(physical_state->child_chunk, physical_state->join_keys);
 	// select the keys that are in the min-max range
-	Vector matches;
 	auto &keys_vec = physical_state->join_keys.data[0];
+	Vector matches(keys_vec.GetType());
 	auto keys_count = physical_state->join_keys.size();
 	MinMaxRangeSwitch(keys_vec, matches, keys_count);
-	// slice for the left side
+	// slice for the probe side
 	result.Slice(physical_state->child_chunk, FlatVector::INCREMENTAL_SELECTION_VECTOR, keys_count);
-	result.Print();
 
 	// now get the data from the build side
-	// first, set-up scan structure
-
+	// on the RHS, we need to fetch the data from the perfect hash table
+	for (idx_t i = 0; i < ht_ptr->build_types.size(); i++) {
+		auto &res_vector = result.data[physical_state->child_chunk.ColumnCount() + i];
+		D_ASSERT(res_vector.GetType() == ht_ptr->build_types[i]);
+		auto &build_vec = ht_ptr->columns[i + 1];
+		auto build_data = FlatVector::GetData<int32_t>(build_vec);
+		auto probe_data = FlatVector::GetData<int32_t>(matches);
+		auto sel_vector = FlatVector::INCREMENTAL_SELECTION_VECTOR;
+		auto rsel_vector = FlatVector::INCREMENTAL_SELECTION_VECTOR;
+		auto min_value = perfect_join_state.build_min.GetValue<int32_t>();
+		for (idx_t j = 0; j != keys_count; ++j) {
+			auto ridx = rsel_vector.get_index(i);
+			auto bidx = probe_data[ridx];
+			auto bidx = sel_vector.get_index(i);
+			auto hdata = Load<int32_t>((data_ptr_t)(build_data[bidx]));
+			rdata[ridx] = hdata;
+		}
+	}
 	return true;
 }
 
-void PhysicalHashJoin::CheckRequirementsForPerfectHashJoin(JoinHashTable *ht_ptr, HashJoinGlobalState &join_state) {
+bool PhysicalHashJoin::CheckRequirementsForPerfectHashJoin(JoinHashTable *ht_ptr, HashJoinGlobalState &join_state) {
 	// first check the build size
 	if (!perfect_join_state.is_build_small) {
-		return;
+		return false;
 	}
 
 	// verify uniquiness (build size < min_max_range => duplicate values )
 	auto build_size = Value::INTEGER(ht_ptr->size());
 	auto build_range = perfect_join_state.build_max - perfect_join_state.build_min;
 	if (build_size != build_range + 1) {
-		return;
+		return false;
 	}
 	// Store build side as a set of columns
 	BuildPerfectHashStructure(ht_ptr, join_state.ht_scan_state);
@@ -286,8 +301,9 @@ void PhysicalHashJoin::CheckRequirementsForPerfectHashJoin(JoinHashTable *ht_ptr
 	// check for nulls
 	if (ht_ptr->has_null) {
 		// set selection vector
-		return;
+		return false;
 	}
+	return true;
 }
 
 void PhysicalHashJoin::BuildPerfectHashStructure(JoinHashTable *hash_table_ptr, JoinHTScanState &join_ht_state) {
