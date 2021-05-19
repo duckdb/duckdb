@@ -13,8 +13,9 @@ using ScanStructure = JoinHashTable::ScanStructure;
 
 JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition> &conditions,
                              vector<LogicalType> btypes, JoinType type)
-    : buffer_manager(buffer_manager), build_types(move(btypes)), equality_size(0), condition_size(0), build_size(0),
-      entry_size(0), tuple_size(0), join_type(type), finalized(false), has_null(false), count(0) {
+    : buffer_manager(buffer_manager), build_types(move(btypes)), validity_size(0), equality_size(0), condition_size(0),
+      build_size(0), entry_size(0), tuple_size(0), entry_padding(0), join_type(type), finalized(false), has_null(false),
+      count(0) {
 	for (auto &condition : conditions) {
 		D_ASSERT(condition.left->return_type == condition.right->return_type);
 		auto type = condition.left->return_type;
@@ -41,16 +42,21 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition
 	for (idx_t i = 0; i < build_types.size(); i++) {
 		build_size += GetTypeIdSize(build_types[i].InternalType());
 	}
-	tuple_size = condition_size + build_size;
+	validity_size = ValidityData::EntryCount(conditions.size() + build_types.size()) * sizeof(validity_t);
+	tuple_size = validity_size + condition_size + build_size;
 	pointer_offset = tuple_size;
-	// entry size is the tuple size and the size of the hash/next pointer
-	entry_size = tuple_size + MaxValue(sizeof(hash_t), sizeof(uintptr_t));
 	if (IsRightOuterJoin(join_type)) {
 		// full/right outer joins need an extra bool to keep track of whether or not a tuple has found a matching entry
 		// we place the bool before the NEXT pointer
-		entry_size += sizeof(bool);
 		pointer_offset += sizeof(bool);
 	}
+	// entry size is the tuple size and the size of the hash/next pointer
+	entry_size = pointer_offset + MaxValue(sizeof(hash_t), sizeof(uintptr_t));
+#ifndef DUCKDB_ALLOW_UNDEFINED
+	auto aligned_entry_size = BaseAggregateHashTable::Align(entry_size);
+	entry_padding = aligned_entry_size - entry_size;
+	entry_size += entry_padding;
+#endif
 	// compute the per-block capacity of this HT
 	block_capacity = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, (Storage::BLOCK_ALLOC_SIZE / entry_size) + 1);
 }
@@ -332,6 +338,8 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	for (auto &append_entry : append_entries) {
 		idx_t next = append_idx + append_entry.count;
 		for (; append_idx < next; append_idx++) {
+			// Set the validity mask (clearing is less common)
+			ValidityMask(append_entry.baseptr).SetAllValid(keys.ColumnCount() + payload.ColumnCount());
 			key_locations[append_idx] = append_entry.baseptr;
 			append_entry.baseptr += entry_size;
 		}
@@ -343,7 +351,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	Hash(keys, *current_sel, added_count, hash_values);
 
 	// serialize the keys to the key locations
-	idx_t col_offset = 0;
+	idx_t col_offset = validity_size;
 	for (idx_t i = 0; i < keys.ColumnCount(); i++) {
 		SerializeVectorData(key_data[i], keys.data[i].GetType().InternalType(), *current_sel, added_count,
 		                    key_locations, col_offset);
@@ -586,7 +594,7 @@ template <bool NO_MATCH_SEL>
 idx_t ScanStructure::ResolvePredicates(DataChunk &keys, SelectionVector *match_sel, SelectionVector *no_match_sel) {
 	SelectionVector *current_sel = &this->sel_vector;
 	idx_t remaining_count = this->count;
-	idx_t offset = 0;
+	idx_t offset = ht.validity_size;
 	idx_t no_match_count = 0;
 	for (idx_t i = 0; i < ht.predicates.size(); i++) {
 		auto internal_type = keys.data[i].GetType().InternalType();
@@ -784,7 +792,7 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 		result.Slice(left, result_vector, result_count);
 
 		// on the RHS, we need to fetch the data from the hash table
-		idx_t offset = ht.condition_size;
+		idx_t offset = ht.validity_size + ht.condition_size;
 		for (idx_t i = 0; i < ht.build_types.size(); i++) {
 			auto &vector = result.data[left.ColumnCount() + i];
 			D_ASSERT(vector.GetType() == ht.build_types[i]);
@@ -1030,7 +1038,7 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &input, DataChunk 
 		result.data[i].Reference(input.data[i]);
 	}
 	// now fetch the data from the RHS
-	idx_t offset = ht.condition_size;
+	idx_t offset = ht.validity_size + ht.condition_size;
 	for (idx_t i = 0; i < ht.build_types.size(); i++) {
 		auto &vector = result.data[input.ColumnCount() + i];
 		// set NULL entries for every entry that was not found
@@ -1060,8 +1068,8 @@ void JoinHashTable::ScanFullOuter(DataChunk &result, JoinHTScanState &state) {
 			auto baseptr = handle->node->buffer;
 			for (; state.position < block.count; state.position++) {
 				auto tuple_base = baseptr + state.position * entry_size;
-				auto found_match = (bool *)(tuple_base + tuple_size);
-				if (!*found_match) {
+				auto found_match = Load<bool>(tuple_base + tuple_size);
+				if (!found_match) {
 					key_locations[found_entries++] = tuple_base;
 					if (found_entries == STANDARD_VECTOR_SIZE) {
 						state.position++;
@@ -1083,7 +1091,7 @@ void JoinHashTable::ScanFullOuter(DataChunk &result, JoinHTScanState &state) {
 			ConstantVector::SetNull(result.data[i], true);
 		}
 		// gather the values from the RHS
-		idx_t offset = condition_size;
+		idx_t offset = validity_size + condition_size;
 		for (idx_t i = 0; i < build_types.size(); i++) {
 			auto &vector = result.data[left_column_count + i];
 			D_ASSERT(vector.GetType() == build_types[i]);

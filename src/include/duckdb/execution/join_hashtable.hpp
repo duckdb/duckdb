@@ -152,9 +152,11 @@ public:
 	vector<LogicalType> build_types;
 	//! The comparison predicates
 	vector<ExpressionType> predicates;
-	//! Size of condition keys
+	//! Size of the validity vector for each tuple.
+	idx_t validity_size;
+	//! Size of equality condition keys
 	idx_t equality_size;
-	//! Size of condition keys
+	//! Size of all condition keys
 	idx_t condition_size;
 	//! Size of build tuple
 	idx_t build_size;
@@ -162,6 +164,8 @@ public:
 	idx_t entry_size;
 	//! The total tuple size
 	idx_t tuple_size;
+	//! some optional padding to align payload
+	idx_t entry_padding;
 	//! Next pointer offset in tuple
 	idx_t pointer_offset;
 	//! The join type of the HT
