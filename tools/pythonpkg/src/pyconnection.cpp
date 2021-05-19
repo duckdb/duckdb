@@ -465,8 +465,6 @@ vector<Value> DuckDBPyConnection::TransformPythonParamList(py::handle params) {
 			args.push_back(Value::BIGINT(ele.cast<int64_t>()));
 		} else if (py::isinstance<py::float_>(ele)) {
 			args.push_back(Value::DOUBLE(ele.cast<double>()));
-		} else if (py::isinstance<py::str>(ele)) {
-			args.emplace_back(ele.cast<string>());
 		} else if (py::isinstance(ele, decimal_decimal)) {
 			args.emplace_back(py::str(ele).cast<string>());
 		} else if (py::isinstance(ele, datetime_datetime)) {
@@ -489,6 +487,16 @@ vector<Value> DuckDBPyConnection::TransformPythonParamList(py::handle params) {
 			auto month = PyDateTime_GET_MONTH(ele.ptr());
 			auto day = PyDateTime_GET_DAY(ele.ptr());
 			args.push_back(Value::DATE(year, month, day));
+		} else if (py::isinstance<py::str>(ele)) {
+			args.emplace_back(ele.cast<string>());
+		} else if (py::isinstance<py::memoryview>(ele)) {
+			py::memoryview py_view = ele.cast<py::memoryview>();
+			PyObject *py_view_ptr = py_view.ptr();
+			Py_buffer *py_buf = PyMemoryView_GET_BUFFER(py_view_ptr);
+			args.emplace_back(Value::BLOB(const_data_ptr_t(py_buf->buf), idx_t(py_buf->len)));
+		} else if (py::isinstance<py::bytes>(ele)) {
+			const string &ele_string = ele.cast<string>();
+			args.emplace_back(Value::BLOB(const_data_ptr_t(ele_string.data()), ele_string.size()));
 		} else {
 			throw std::runtime_error("unknown param type " + py::str(ele.get_type()).cast<string>());
 		}
