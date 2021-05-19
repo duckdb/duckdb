@@ -98,7 +98,7 @@ public:
 	//! Fetch an option by name. Returns a pointer to the option, or nullptr if none exists.
 	DUCKDB_API static ConfigurationOption *GetOptionByName(const string &name);
 
-	DUCKDB_API void SetOption(const ConfigurationOption &option, Value value);
+	DUCKDB_API void SetOption(const ConfigurationOption &option, const Value &value);
 
 	DUCKDB_API static idx_t ParseMemoryLimit(const string &arg);
 };

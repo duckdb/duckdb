@@ -418,7 +418,7 @@ static unique_ptr<TableFunctionRef> PandasScanReplacement(const string &table_na
 }
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &database, bool read_only,
-                                                           py::dict config_dict) {
+                                                           const py::dict &config_dict) {
 	auto res = make_shared<DuckDBPyConnection>();
 	DBConfig config;
 	if (read_only) {

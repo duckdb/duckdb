@@ -40,7 +40,7 @@ ConfigurationOption *DBConfig::GetOptionByName(const string &name) {
 	return nullptr;
 }
 
-void DBConfig::SetOption(const ConfigurationOption &option, Value value) {
+void DBConfig::SetOption(const ConfigurationOption &option, const Value &value) {
 	switch (option.type) {
 	case ConfigurationOptionType::ACCESS_MODE: {
 		auto parameter = StringUtil::Lower(value.ToString());
