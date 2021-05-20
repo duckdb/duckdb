@@ -17,7 +17,7 @@ duckdb_ListObjects <- function(con, catalog = NULL, schema = NULL, name = NULL, 
 }
 
 duckdb_ListColumns <- function(con, table = NULL, view = NULL,
-                               catalog = NULL, schema = NULL, ...) {
+                                           catalog = NULL, schema = NULL, ...) {
   if (is.null(table)){
     table <- view
   }
@@ -85,65 +85,64 @@ on_connection_updated <- function(con, hint) {
 
 on_connection_opened <- function(con) {
   code <- paste0(
-    "library(duckdb)
+"library(duckdb)
 drv <- duckdb(\"", con@driver@dbdir,"\", read_only = ", con@driver@read_only ,")
 con <- dbConnect(drv)
 ")
   observer <- getOption("connectionObserver")
-  if (is.null(observer)) return(invisible(NULL))
+  if (is.null(observer))
+    return(invisible(NULL))
 
-  if (!is.null(observer) && !inherits(try(con, silent = TRUE), "try-error")) {
-    icon <- duckdb_ConnectionIcon(con)
+  icon <- duckdb_ConnectionIcon(con)
 
-    host <- get_host(con)
+  host <- get_host(con)
 
     # let observer know that connection has opened
-    observer$connectionOpened(
-      # connection type
-      type = "duckdb",
+  observer$connectionOpened(
+    # connection type
+    type = "duckdb",
 
-      # name displayed in connection pane (to be improved)
-      displayName = paste0("DuckDB "
-                           , '"' , host, '"'
-                           , if (con@driver@read_only) " (readonly)"
-      ),
+    # name displayed in connection pane (to be improved)
+    displayName = paste0("DuckDB "
+                        , '"' , host, '"'
+                        , if (con@driver@read_only) " (readonly)"
+                        ),
 
-      host = host,
+    host = host,
 
-      icon = icon,
+    icon = icon,
 
-      # connection code
-      connectCode = code,
+    # connection code
+    connectCode = code,
 
-      # disconnection code
-      disconnect = function() {
-        dbDisconnect(con, shutdown = TRUE)
-      },
+    # disconnection code
+    disconnect = function() {
+      dbDisconnect(con, shutdown = TRUE)
+    },
 
-      listObjectTypes = function () {
-        duckdb_ListObjectTypes(con)
-      },
+    listObjectTypes = function () {
+      duckdb_ListObjectTypes(con)
+    },
 
-      # table enumeration code
-      listObjects = function(...) {
-        duckdb_ListObjects(con, ...)
-      },
+    # table enumeration code
+    listObjects = function(...) {
+      duckdb_ListObjects(con, ...)
+    },
 
-      # column enumeration code
-      listColumns = function(...) {
-        duckdb_ListColumns(con, ...)
-      },
+    # column enumeration code
+    listColumns = function(...) {
+      duckdb_ListColumns(con, ...)
+    },
 
-      # table preview code
-      previewObject = function(rowLimit, ...) {
-        duckdb_PreviewObject(con, rowLimit, ...)
-      },
+    # table preview code
+    previewObject = function(rowLimit, ...) {
+      duckdb_PreviewObject(con, rowLimit, ...)
+    },
 
-      # other actions that can be executed on this connection
-      actions = duckdb_ConnectionActions(con),
+    # other actions that can be executed on this connection
+    actions = duckdb_ConnectionActions(con),
 
-      # raw connection object
-      connectionObject = con
-    )
-  }
+    # raw connection object
+    connectionObject = con
+  )
 }
