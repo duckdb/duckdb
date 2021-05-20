@@ -125,9 +125,9 @@ ORDER BY TIMESTAMP '1970-01-08 16:19:01' ASC;
 
 query II
 SELECT DISTINCT sqlancer_v0.c1, sqlancer_t0.rowid
-FROM sqlancer_v0 NATURAL FULL JOIN sqlancer_t0;
+FROM sqlancer_v0 NATURAL FULL JOIN sqlancer_t0
+ORDER BY 2 ASC;
 ----
-0	9
 NULL	0
 NULL	1
 NULL	2
@@ -137,6 +137,7 @@ NULL	5
 NULL	6
 NULL	7
 NULL	8
+0	9
 NULL	10
 NULL	11
 NULL	12
@@ -168,9 +169,9 @@ WHERE (NOT sqlancer_t0.c0)
 UNION
 SELECT DISTINCT sqlancer_v0.c1, sqlancer_t0.rowid
 FROM sqlancer_v0 NATURAL FULL JOIN sqlancer_t0
-WHERE ((sqlancer_t0.c0) IS NULL);
+WHERE ((sqlancer_t0.c0) IS NULL)
+ORDER BY 2 ASC;
 ----
-0	9
 NULL	0
 NULL	1
 NULL	2
@@ -180,6 +181,7 @@ NULL	5
 NULL	6
 NULL	7
 NULL	8
+0	9
 NULL	10
 NULL	11
 NULL	12
