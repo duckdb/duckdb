@@ -532,10 +532,10 @@ static idx_t TemplatedGather(VectorData &vdata, Vector &pointers, const Selectio
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = current_sel.get_index(i);
 		auto kidx = vdata.sel->get_index(idx);
+		ValidityMask mask(ptrs[idx]);
+		auto isnull = !mask.RowIsValid(mask.GetValidityEntry(entry_idx), idx_in_entry);
 
 		if (!vdata.validity.RowIsValid(kidx)) {
-			ValidityMask mask(ptrs[idx]);
-			auto isnull = !mask.RowIsValid(mask.GetValidityEntry(entry_idx), idx_in_entry);
 			if (isnull) {
 				match_sel->set_index(result_count++, idx);
 			} else {
@@ -545,7 +545,7 @@ static idx_t TemplatedGather(VectorData &vdata, Vector &pointers, const Selectio
 			}
 		} else {
 			T val = Load<T>(ptrs[idx] + offset);
-			if (OP::template Operation<T>(data[kidx], val)) {
+			if (!isnull && OP::template Operation<T>(data[kidx], val)) {
 				match_sel->set_index(result_count++, idx);
 			} else {
 				if (NO_MATCH_SEL) {
