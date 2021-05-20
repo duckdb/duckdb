@@ -1120,7 +1120,8 @@ void JoinHashTable::ScanFullOuter(DataChunk &result, JoinHTScanState &state) {
 			auto &vector = result.data[left_column_count + i];
 			D_ASSERT(vector.GetType() == build_types[i]);
 			GatherResultVector(vector, FlatVector::INCREMENTAL_SELECTION_VECTOR, key_locations,
-			                   FlatVector::INCREMENTAL_SELECTION_VECTOR, found_entries, offset, i);
+			                   FlatVector::INCREMENTAL_SELECTION_VECTOR, found_entries, offset,
+			                   i + condition_types.size());
 		}
 	}
 }

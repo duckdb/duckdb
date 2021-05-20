@@ -80,6 +80,127 @@ select (select * from (select 42) tbl(a) natural join (select 42) tbl2(a))
 ----
 42
 
+# JoinHashTable::ScanFullOuter coverage
+statement ok
+CREATE TABLE sqlancer_t0(c0 DOUBLE, c1 DOUBLE);
+
+statement ok
+INSERT INTO sqlancer_t0 VALUES
+(0.000000, -1570504255.000000),
+(0.000000, -1570504255.000000),
+(0.000000, -1570504255.000000),
+(0.000000, -1570504255.000000),
+(0.000000, 1.000000),
+(0.000000, 0.543647),
+(0.000000, NULL),
+(0.000000, 1.000000),
+(0.000000, 1.000000),
+(0.000000, 0.000000),
+(0.000000, 1617540830.000000),
+(0.000000, NULL),
+(0.000000, NULL),
+(0.000000, NULL),
+(0.000000, 0.497659),
+(0.000000, -1367407567.000000),
+(0.000000, NULL),
+(0.000000, NULL),
+(0.000000, NULL),
+(0.000000, NULL),
+(0.000000, NULL),
+(0.000000, -547966124.000000),
+(0.000000, NULL),
+(0.000000, -1417028911.000000),
+(0.000000, 277394703.000000),
+(0.000000, NULL),
+(0.000000, NULL),
+(0.000000, NULL),
+(0.000000, NULL),
+(0.000000, NULL)
+;
+
+statement ok
+CREATE VIEW sqlancer_v0(c0, c1) AS SELECT sqlancer_t0.c0, ((sqlancer_t0.rowid)/(-1694294358))
+FROM sqlancer_t0
+ORDER BY TIMESTAMP '1970-01-08 16:19:01' ASC;
+
+query II
+SELECT DISTINCT sqlancer_v0.c1, sqlancer_t0.rowid
+FROM sqlancer_v0 NATURAL FULL JOIN sqlancer_t0;
+----
+0	9
+NULL	0
+NULL	1
+NULL	2
+NULL	3
+NULL	4
+NULL	5
+NULL	6
+NULL	7
+NULL	8
+NULL	10
+NULL	11
+NULL	12
+NULL	13
+NULL	14
+NULL	15
+NULL	16
+NULL	17
+NULL	18
+NULL	19
+NULL	20
+NULL	21
+NULL	22
+NULL	23
+NULL	24
+NULL	25
+NULL	26
+NULL	27
+NULL	28
+NULL	29
+
+query II
+SELECT DISTINCT sqlancer_v0.c1, sqlancer_t0.rowid
+FROM sqlancer_v0 NATURAL FULL JOIN sqlancer_t0 WHERE sqlancer_t0.c0
+UNION
+SELECT DISTINCT sqlancer_v0.c1, sqlancer_t0.rowid
+FROM sqlancer_v0 NATURAL FULL JOIN sqlancer_t0
+WHERE (NOT sqlancer_t0.c0)
+UNION
+SELECT DISTINCT sqlancer_v0.c1, sqlancer_t0.rowid
+FROM sqlancer_v0 NATURAL FULL JOIN sqlancer_t0
+WHERE ((sqlancer_t0.c0) IS NULL);
+----
+0	9
+NULL	0
+NULL	1
+NULL	2
+NULL	3
+NULL	4
+NULL	5
+NULL	6
+NULL	7
+NULL	8
+NULL	10
+NULL	11
+NULL	12
+NULL	13
+NULL	14
+NULL	15
+NULL	16
+NULL	17
+NULL	18
+NULL	19
+NULL	20
+NULL	21
+NULL	22
+NULL	23
+NULL	24
+NULL	25
+NULL	26
+NULL	27
+NULL	28
+NULL	29
+
 # error: duplicate table alias on both sides
 statement error
 select (select * from (select 42) tbl(a) natural join (select 42) tbl(a))
