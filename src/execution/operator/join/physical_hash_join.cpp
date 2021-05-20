@@ -261,23 +261,18 @@ bool PhysicalHashJoin::ProbePerfectHashTable(ExecutionContext &context, DataChun
 	result.Slice(physical_state->child_chunk, FlatVector::INCREMENTAL_SELECTION_VECTOR, keys_count);
 
 	// now get the data from the build side
+	// first get the selection vector from the matches
+	VectorData build_data;
+	matches.Orrify(keys_count, build_data);
+	auto build_sel = build_data.sel;
 	// on the RHS, we need to fetch the data from the perfect hash table
 	for (idx_t i = 0; i < ht_ptr->build_types.size(); i++) {
 		auto &res_vector = result.data[physical_state->child_chunk.ColumnCount() + i];
 		D_ASSERT(res_vector.GetType() == ht_ptr->build_types[i]);
-		auto &build_vec = ht_ptr->columns[i + 1];
-		auto build_data = FlatVector::GetData<int32_t>(build_vec);
-		auto probe_data = FlatVector::GetData<int32_t>(matches);
-		auto sel_vector = FlatVector::INCREMENTAL_SELECTION_VECTOR;
-		auto rsel_vector = FlatVector::INCREMENTAL_SELECTION_VECTOR;
-		auto min_value = perfect_join_state.build_min.GetValue<int32_t>();
-		for (idx_t j = 0; j != keys_count; ++j) {
-			auto ridx = rsel_vector.get_index(i);
-			auto bidx = probe_data[ridx];
-			auto bidx = sel_vector.get_index(i);
-			auto hdata = Load<int32_t>((data_ptr_t)(build_data[bidx]));
-			rdata[ridx] = hdata;
-		}
+		res_vector.Reference(ht_ptr->columns[i + 1]); // skip first column (join keys)
+		VectorData probe_data;
+		res_vector.Orrify(ht_ptr->size(), probe_data);
+		probe_data.sel = build_sel;
 	}
 	return true;
 }
