@@ -1,13 +1,14 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/arrow_duckdb.hpp
+// duckdb/common/arrow_wrapper.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 #include "duckdb/common/arrow.hpp"
+#include "duckdb/common/helper.hpp"
 //! Here we have the internal duckdb classes that interact with Arrow's Internal Header (i.e., duckdb/commons/arrow.hpp)
 namespace duckdb {
 class ArrowSchemaWrapper {
