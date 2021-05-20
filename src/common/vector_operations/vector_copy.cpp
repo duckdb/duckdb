@@ -153,13 +153,14 @@ void VectorOperations::Copy(const Vector &source, Vector &target, const Selectio
 			D_ASSERT(target_offset == 0);
 			// target has no entries: create new entries for the target
 			if (StructVector::HasEntries(source)) {
-			auto &source_children = StructVector::GetEntries(source);
-			for (auto &child : source_children) {
-				auto child_copy = make_unique<Vector>(child.second->GetType());
-				VectorOperations::Copy(*child.second, *child_copy, *sel, source_count, source_offset, target_offset);
-				StructVector::AddEntry(target, child.first, move(child_copy));
+				auto &source_children = StructVector::GetEntries(source);
+				for (auto &child : source_children) {
+					auto child_copy = make_unique<Vector>(child.second->GetType());
+					VectorOperations::Copy(*child.second, *child_copy, *sel, source_count, source_offset,
+					                       target_offset);
+					StructVector::AddEntry(target, child.first, move(child_copy));
+				}
 			}
-                }
 		}
 		break;
 	}
