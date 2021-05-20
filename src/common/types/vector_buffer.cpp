@@ -45,11 +45,9 @@ void VectorListBuffer::SetChild(unique_ptr<Vector> new_child) {
 	capacity = STANDARD_VECTOR_SIZE;
 }
 
-void VectorListBuffer::Append(Vector &to_append, idx_t to_append_size, idx_t source_offset) {
-
-	if (size + to_append_size - source_offset > capacity) {
-		idx_t new_capacity = (size + to_append_size - source_offset) / STANDARD_VECTOR_SIZE +
-		                     ((size + to_append_size - source_offset) % STANDARD_VECTOR_SIZE != 0);
+void VectorListBuffer::Reserve(const Vector &to_append, idx_t to_reserve) {
+	if (to_reserve > capacity) {
+		idx_t new_capacity = (to_reserve) / STANDARD_VECTOR_SIZE + ((to_reserve) % STANDARD_VECTOR_SIZE != 0);
 		new_capacity *= STANDARD_VECTOR_SIZE;
 		if ((child->GetType().id() == LogicalTypeId::STRUCT || child->GetType().id() == LogicalTypeId::MAP) &&
 		    size == 0) {
@@ -63,8 +61,18 @@ void VectorListBuffer::Append(Vector &to_append, idx_t to_append_size, idx_t sou
 		child->Resize(capacity, new_capacity);
 		capacity = new_capacity;
 	}
-	VectorOperations::Copy(to_append, *child, to_append_size, source_offset, size);
+}
 
+void VectorListBuffer::Append(const Vector &to_append, idx_t to_append_size, idx_t source_offset) {
+	Reserve(to_append, size + to_append_size - source_offset);
+	VectorOperations::Copy(to_append, *child, to_append_size, source_offset, size);
+	size += to_append_size - source_offset;
+}
+
+void VectorListBuffer::Append(const Vector &to_append, const SelectionVector &sel, idx_t to_append_size,
+                              idx_t source_offset) {
+	Reserve(to_append, size + to_append_size - source_offset);
+	VectorOperations::Copy(to_append, *child, sel, to_append_size, source_offset, size);
 	size += to_append_size - source_offset;
 }
 

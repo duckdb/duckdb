@@ -1,18 +1,21 @@
 #include "parquet_statistics.hpp"
 #include "parquet_timestamp.hpp"
 
+#include "duckdb.hpp"
+#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/storage/statistics/string_statistics.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
+#endif
 
 namespace duckdb {
 
-using parquet::format::ConvertedType;
-using parquet::format::Type;
+using duckdb_parquet::format::ConvertedType;
+using duckdb_parquet::format::Type;
 
 template <Value (*FUNC)(const_data_ptr_t input)>
 static unique_ptr<BaseStatistics> TemplatedGetNumericStats(const LogicalType &type,
-                                                           const parquet::format::Statistics &parquet_stats) {
+                                                           const duckdb_parquet::format::Statistics &parquet_stats) {
 	auto stats = make_unique<NumericStatistics>(type);
 
 	// for reasons unknown to science, Parquet defines *both* `min` and `min_value` as well as `max` and
@@ -164,9 +167,9 @@ unique_ptr<BaseStatistics> ParquetTransformColumnStatistics(const SchemaElement 
 	// null count is generic
 	if (row_group_stats) {
 		if (parquet_stats.__isset.null_count) {
-			row_group_stats->has_null = parquet_stats.null_count != 0;
+			row_group_stats->validity_stats = make_unique<ValidityStatistics>(parquet_stats.null_count != 0);
 		} else {
-			row_group_stats->has_null = true;
+			row_group_stats->validity_stats = make_unique<ValidityStatistics>(true);
 		}
 	} else {
 		// if stats are missing from any row group we know squat

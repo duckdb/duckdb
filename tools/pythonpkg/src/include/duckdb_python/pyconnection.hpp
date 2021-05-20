@@ -8,21 +8,41 @@
 
 #pragma once
 
-#include "duckdb_python/pybind_wrapper.hpp"
+#include <utility>
+
+#include "arrow_array_stream.hpp"
 #include "duckdb.hpp"
+#include "duckdb_python/pybind_wrapper.hpp"
 
 namespace duckdb {
 
 struct DuckDBPyRelation;
 struct DuckDBPyResult;
 
+class RegisteredObject {
+public:
+	explicit RegisteredObject(py::object obj_p) : obj(move(obj_p)) {
+	}
+	virtual ~RegisteredObject() {
+		obj = py::none();
+	}
+
+	py::object obj;
+};
+
+class RegisteredArrow : public RegisteredObject {
+
+public:
+	RegisteredArrow(unique_ptr<PythonTableArrowArrayStreamFactory> arrow_factory_p, py::object obj_p)
+	    : RegisteredObject(std::move(obj_p)), arrow_factory(move(arrow_factory_p)) {};
+	unique_ptr<PythonTableArrowArrayStreamFactory> arrow_factory;
+};
+
 struct DuckDBPyConnection {
 public:
-	~DuckDBPyConnection();
-
 	shared_ptr<DuckDB> database;
 	unique_ptr<Connection> connection;
-	unordered_map<string, py::object> registered_dfs;
+	unordered_map<string, unique_ptr<RegisteredObject>> registered_objects;
 	unique_ptr<DuckDBPyResult> result;
 	vector<shared_ptr<DuckDBPyConnection>> cursors;
 
@@ -40,6 +60,9 @@ public:
 
 	DuckDBPyConnection *RegisterDF(const string &name, py::object value);
 
+	unique_ptr<DuckDBPyRelation> FromQuery(const string &query, const string &alias = "query_relation");
+	DuckDBPyConnection *RegisterArrow(const string &name, py::object value);
+
 	unique_ptr<DuckDBPyRelation> Table(const string &tname);
 
 	unique_ptr<DuckDBPyRelation> Values(py::object params = py::list());
@@ -54,9 +77,9 @@ public:
 
 	unique_ptr<DuckDBPyRelation> FromParquet(const string &filename);
 
-	unique_ptr<DuckDBPyRelation> FromArrowTable(const py::object &table);
+	unique_ptr<DuckDBPyRelation> FromArrowTable(py::object &table);
 
-	DuckDBPyConnection *UnregisterDF(const string &name);
+	DuckDBPyConnection *UnregisterPythonObject(const string &name);
 
 	DuckDBPyConnection *Begin();
 

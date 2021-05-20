@@ -75,6 +75,9 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 	case ExpressionType::STRUCT_EXTRACT:
 		function_name = "struct_extract";
 		break;
+	case ExpressionType::ARRAY_CONSTRUCTOR:
+		function_name = "list_value";
+		break;
 	default:
 		break;
 	}

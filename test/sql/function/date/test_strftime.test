@@ -98,4 +98,6 @@ select strftime(strptime('023', '%g'), '%g'), strftime(strptime('0', '%g'), '%g'
 
 statement error
 SELECT strptime('-1', '%g');
+
+statement error
 SELECT strptime('1000', '%g');

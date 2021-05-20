@@ -9,6 +9,15 @@ statement ok
 PRAGMA force_parallelism
 
 statement ok
+PRAGMA enable_profiling
+
+statement ok
+PRAGMA profiling_output='__TEST_DIR__/test.json'
+
+statement ok
+PRAGMA profiling_mode = detailed
+
+statement ok
 create  table t as select range a, range%10 b from range(100000);
 
 statement ok

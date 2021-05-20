@@ -347,7 +347,7 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 		} else if (aggr.filter) {
 			UpdateAggregate(aggr, payload, addresses, input_count, payload_idx);
 		} else {
-			aggr.function.update(input_count == 0 ? nullptr : &payload.data[payload_idx], nullptr, input_count,
+			aggr.function.update(input_count == 0 ? nullptr : &payload.data[payload_idx], aggr.bind_data, input_count,
 			                     addresses, payload.size());
 		}
 
@@ -869,8 +869,6 @@ void GroupedAggregateHashTable::Partition(vector<GroupedAggregateHashTable *> &p
 		total_count += partition_entry->Size();
 	}
 	D_ASSERT(total_count == entries);
-	// mark the ht as empty so finalizers are not run
-	entries = 0;
 }
 
 idx_t GroupedAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {

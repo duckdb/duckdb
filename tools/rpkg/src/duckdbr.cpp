@@ -117,8 +117,8 @@ struct RDoubleType {
 };
 
 struct RDateType : public RDoubleType {
-	static double Convert(double val) {
-		return (date_t)val;
+	static date_t Convert(double val) {
+		return date_t((int32_t)val);
 	}
 };
 
@@ -129,37 +129,32 @@ struct RTimestampType : public RDoubleType {
 };
 
 struct RTimeSecondsType : public RDoubleType {
-	static timestamp_t Convert(double val) {
-		dtime_t time = (dtime_t)(val)*Interval::MICROS_PER_SEC;
-		return time;
+	static dtime_t Convert(double val) {
+		return dtime_t(int64_t(val * Interval::MICROS_PER_SEC));
 	}
 };
 
 struct RTimeMinutesType : public RDoubleType {
-	static timestamp_t Convert(double val) {
-		dtime_t time = (dtime_t)(val)*Interval::MICROS_PER_MINUTE;
-		return time;
+	static dtime_t Convert(double val) {
+		return dtime_t(int64_t(val * Interval::MICROS_PER_MINUTE));
 	}
 };
 
 struct RTimeHoursType : public RDoubleType {
-	static timestamp_t Convert(double val) {
-		dtime_t time = (dtime_t)(val)*Interval::MICROS_PER_HOUR;
-		return time;
+	static dtime_t Convert(double val) {
+		return dtime_t(int64_t(val * Interval::MICROS_PER_HOUR));
 	}
 };
 
 struct RTimeDaysType : public RDoubleType {
-	static timestamp_t Convert(double val) {
-		dtime_t time = (dtime_t)(val)*Interval::MICROS_PER_DAY;
-		return time;
+	static dtime_t Convert(double val) {
+		return dtime_t(int64_t(val * Interval::MICROS_PER_DAY));
 	}
 };
 
 struct RTimeWeeksType : public RDoubleType {
-	static timestamp_t Convert(double val) {
-		dtime_t time = (dtime_t)(val)*Interval::MICROS_PER_DAY * 7;
-		return time;
+	static dtime_t Convert(double val) {
+		return dtime_t(int64_t(val * Interval::MICROS_PER_DAY * 7));
 	}
 };
 
@@ -758,7 +753,7 @@ SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 				auto &mask = FlatVector::Validity(src_vec);
 				double *dest_ptr = ((double *)NUMERIC_POINTER(dest)) + dest_offset;
 				for (size_t row_idx = 0; row_idx < chunk->size(); row_idx++) {
-					dest_ptr[row_idx] = !mask.RowIsValid(row_idx) ? NA_REAL : (double)(src_data[row_idx]);
+					dest_ptr[row_idx] = !mask.RowIsValid(row_idx) ? NA_REAL : (double)int32_t(src_data[row_idx]);
 				}
 
 				// some dresssup for R
@@ -776,7 +771,7 @@ SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 						dest_ptr[row_idx] = NA_REAL;
 					} else {
 						dtime_t n = src_data[row_idx];
-						dest_ptr[row_idx] = n / 1000000.0;
+						dest_ptr[row_idx] = n.micros / 1000000.0;
 					}
 				}
 
@@ -909,6 +904,8 @@ struct DataFrameScanFunction : public TableFunction {
 
 	static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, vector<Value> &inputs,
 	                                                    unordered_map<string, Value> &named_parameters,
+	                                                    vector<LogicalType> &input_table_types,
+	                                                    vector<string> &input_table_names,
 	                                                    vector<LogicalType> &return_types, vector<string> &names) {
 		RProtector r;
 		SEXP df((SEXP)inputs[0].GetValue<uintptr_t>());
@@ -959,13 +956,13 @@ struct DataFrameScanFunction : public TableFunction {
 	}
 
 	static unique_ptr<FunctionOperatorData> dataframe_scan_init(ClientContext &context, const FunctionData *bind_data,
-	                                                            vector<column_t> &column_ids,
+	                                                            const vector<column_t> &column_ids,
 	                                                            TableFilterCollection *filters) {
 		return make_unique<DataFrameScanState>();
 	}
 
 	static void dataframe_scan_function(ClientContext &context, const FunctionData *bind_data,
-	                                    FunctionOperatorData *operator_state, DataChunk &output) {
+	                                    FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
 		auto &data = (DataFrameScanFunctionData &)*bind_data;
 		auto &state = (DataFrameScanState &)*operator_state;
 		if (state.position >= data.row_count) {

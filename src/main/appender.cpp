@@ -6,7 +6,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/storage/data_table.hpp"
-
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 
 namespace duckdb {
@@ -173,6 +173,21 @@ void Appender::Append(double value) {
 		throw InvalidInputException("Double value is out of range!");
 	}
 	AppendValueInternal<double>(value);
+}
+
+template <>
+void Appender::Append(date_t value) {
+	AppendValueInternal<int32_t>(value.days);
+}
+
+template <>
+void Appender::Append(dtime_t value) {
+	AppendValueInternal<int64_t>(value.micros);
+}
+
+template <>
+void Appender::Append(timestamp_t value) {
+	AppendValueInternal<int64_t>(value.value);
 }
 
 template <>

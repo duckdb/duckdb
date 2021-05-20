@@ -18,12 +18,11 @@
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/execution/executor.hpp"
 #include "duckdb/main/prepared_statement.hpp"
-#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/main/table_description.hpp"
 #include "duckdb/transaction/transaction_context.hpp"
-
 #include <random>
+#include "duckdb/common/atomic.hpp"
 
 namespace duckdb {
 class Appender;
@@ -32,7 +31,8 @@ class DatabaseInstance;
 class PreparedStatementData;
 class Relation;
 class BufferedFileWriter;
-
+class QueryProfiler;
+class QueryProfilerHistory;
 class ClientContextLock;
 
 //! The ClientContext holds information relevant to the current client session
@@ -44,15 +44,15 @@ public:
 	DUCKDB_API explicit ClientContext(shared_ptr<DatabaseInstance> db);
 	DUCKDB_API ~ClientContext();
 	//! Query profiler
-	QueryProfiler profiler;
+	unique_ptr<QueryProfiler> profiler;
 	//! QueryProfiler History
-	QueryProfilerHistory query_profiler_history;
+	unique_ptr<QueryProfilerHistory> query_profiler_history;
 	//! The database that this client is connected to
 	shared_ptr<DatabaseInstance> db;
 	//! Data for the currently running transaction
 	TransactionContext transaction;
 	//! Whether or not the query is interrupted
-	bool interrupted;
+	atomic<bool> interrupted;
 	//! The current query being executed by the client context
 	string query;
 
@@ -196,7 +196,7 @@ private:
 	//! The currently opened StreamQueryResult (if any)
 	StreamQueryResult *open_result = nullptr;
 	//! Lock on using the ClientContext in parallel
-	std::mutex context_lock;
+	mutex context_lock;
 };
 
 } // namespace duckdb

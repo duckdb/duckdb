@@ -44,14 +44,8 @@ typedef uint8_t data_t;
 typedef data_t *data_ptr_t;
 typedef const data_t *const_data_ptr_t;
 
-//! Type used to represent dates (days since 1970-01-01)
-typedef int32_t date_t;
-//! Type used to represent time (microseconds)
-typedef int64_t dtime_t;
-//! Type used to represent timestamps (microseconds since 1970-01-01)
-typedef int64_t timestamp_t;
 //! Type used for the selection vector
-typedef uint16_t sel_t;
+typedef uint32_t sel_t;
 //! Type used for transaction timestamps
 typedef idx_t transaction_t;
 

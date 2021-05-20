@@ -11,7 +11,9 @@ struct PragmaVersionData : public FunctionOperatorData {
 
 static unique_ptr<FunctionData> PragmaVersionBind(ClientContext &context, vector<Value> &inputs,
                                                   unordered_map<string, Value> &named_parameters,
-                                                  vector<LogicalType> &return_types, vector<string> &names) {
+                                                  vector<LogicalType> &input_table_types,
+                                                  vector<string> &input_table_names, vector<LogicalType> &return_types,
+                                                  vector<string> &names) {
 	names.emplace_back("library_version");
 	return_types.push_back(LogicalType::VARCHAR);
 	names.emplace_back("source_id");
@@ -20,13 +22,13 @@ static unique_ptr<FunctionData> PragmaVersionBind(ClientContext &context, vector
 }
 
 static unique_ptr<FunctionOperatorData> PragmaVersionInit(ClientContext &context, const FunctionData *bind_data,
-                                                          vector<column_t> &column_ids,
+                                                          const vector<column_t> &column_ids,
                                                           TableFilterCollection *filters) {
 	return make_unique<PragmaVersionData>();
 }
 
 static void PragmaVersionFunction(ClientContext &context, const FunctionData *bind_data,
-                                  FunctionOperatorData *operator_state, DataChunk &output) {
+                                  FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
 	auto &data = (PragmaVersionData &)*operator_state;
 	if (data.finished) {
 		// finished returning values

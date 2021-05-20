@@ -19,8 +19,8 @@
 #include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/storage/table/persistent_table_data.hpp"
 
-#include <atomic>
-#include <mutex>
+#include "duckdb/common/atomic.hpp"
+#include "duckdb/common/mutex.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -32,19 +32,63 @@ class Transaction;
 class WriteAheadLog;
 class TableDataWriter;
 
+class TableIndexList {
+public:
+	//! Scan the catalog set, invoking the callback method for every entry
+	template <class T>
+	void Scan(T &&callback) {
+		// lock the catalog set
+		lock_guard<mutex> lock(indexes_lock);
+		for (auto &index : indexes) {
+			if (callback(*index)) {
+				break;
+			}
+		}
+	}
+
+	void AddIndex(unique_ptr<Index> index) {
+		D_ASSERT(index);
+		lock_guard<mutex> lock(indexes_lock);
+		indexes.push_back(move(index));
+	}
+
+	void RemoveIndex(Index *index) {
+		D_ASSERT(index);
+		lock_guard<mutex> lock(indexes_lock);
+
+		for (idx_t index_idx = 0; index_idx < indexes.size(); index_idx++) {
+			auto &index_entry = indexes[index_idx];
+			if (index_entry.get() == index) {
+				indexes.erase(indexes.begin() + index_idx);
+				break;
+			}
+		}
+	}
+
+	bool Empty() {
+		lock_guard<mutex> lock(indexes_lock);
+		return indexes.empty();
+	}
+
+private:
+	//! Indexes associated with the current table
+	mutex indexes_lock;
+	vector<unique_ptr<Index>> indexes;
+};
+
 struct DataTableInfo {
 	DataTableInfo(string schema, string table) : cardinality(0), schema(move(schema)), table(move(table)) {
 	}
 
 	//! The amount of elements in the table. Note that this number signifies the amount of COMMITTED entries in the
 	//! table. It can be inaccurate inside of transactions. More work is needed to properly support that.
-	std::atomic<idx_t> cardinality;
+	atomic<idx_t> cardinality;
 	// schema of the table
 	string schema;
 	// name of the table
 	string table;
-	//! Indexes associated with the current table
-	vector<unique_ptr<Index>> indexes;
+
+	TableIndexList indexes;
 
 	bool IsTemporary() {
 		return schema == TEMP_SCHEMA;
@@ -95,7 +139,7 @@ public:
 	void Scan(Transaction &transaction, DataChunk &result, TableScanState &state, vector<column_t> &column_ids);
 
 	//! Fetch data from the specific row identifiers from the base table
-	void Fetch(Transaction &transaction, DataChunk &result, vector<column_t> &column_ids, Vector &row_ids,
+	void Fetch(Transaction &transaction, DataChunk &result, const vector<column_t> &column_ids, Vector &row_ids,
 	           idx_t fetch_count, ColumnFetchState &state);
 
 	//! Append a DataChunk to the table. Throws an exception if the columns don't match the tables' columns.
@@ -103,11 +147,11 @@ public:
 	//! Delete the entries with the specified row identifier from the table
 	void Delete(TableCatalogEntry &table, ClientContext &context, Vector &row_ids, idx_t count);
 	//! Update the entries with the specified row identifier from the table
-	void Update(TableCatalogEntry &table, ClientContext &context, Vector &row_ids, vector<column_t> &column_ids,
+	void Update(TableCatalogEntry &table, ClientContext &context, Vector &row_ids, const vector<column_t> &column_ids,
 	            DataChunk &data);
 
 	//! Add an index to the DataTable
-	void AddIndex(unique_ptr<Index> index, vector<unique_ptr<Expression>> &expressions);
+	void AddIndex(unique_ptr<Index> index, const vector<unique_ptr<Expression>> &expressions);
 
 	//! Begin appending structs to this table, obtaining necessary locks, etc
 	void InitializeAppend(Transaction &transaction, TableAppendState &state, idx_t append_count);
@@ -152,11 +196,12 @@ private:
 	//! Verify constraints with a chunk from the Append containing all columns of the table
 	void VerifyAppendConstraints(TableCatalogEntry &table, DataChunk &chunk);
 	//! Verify constraints with a chunk from the Update containing only the specified column_ids
-	void VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chunk, vector<column_t> &column_ids);
+	void VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chunk, const vector<column_t> &column_ids);
 
 	void InitializeScanWithOffset(TableScanState &state, const vector<column_t> &column_ids,
 	                              TableFilterSet *table_filters, idx_t start_row, idx_t end_row);
-	bool CheckZonemap(TableScanState &state, TableFilterSet *table_filters, idx_t &current_row);
+	bool CheckZonemap(TableScanState &state, const vector<column_t> &column_ids, TableFilterSet *table_filters,
+	                  idx_t &current_row);
 	bool ScanBaseTable(Transaction &transaction, DataChunk &result, TableScanState &state,
 	                   const vector<column_t> &column_ids, idx_t &current_row, idx_t max_row);
 	bool ScanCreateIndex(CreateIndexScanState &state, const vector<column_t> &column_ids, DataChunk &result,
@@ -173,15 +218,15 @@ private:
 
 private:
 	//! Lock for appending entries to the table
-	std::mutex append_lock;
+	mutex append_lock;
 	//! The segment tree holding the persistent versions
 	shared_ptr<SegmentTree> versions;
 	//! The number of rows in the table
-	idx_t total_rows;
+	atomic<idx_t> total_rows;
 	//! The physical columns of the table
 	vector<shared_ptr<ColumnData>> columns;
 	//! Whether or not the data table is the root DataTable for this table; the root DataTable is the newest version
 	//! that can be appended to
-	bool is_root;
+	atomic<bool> is_root;
 };
 } // namespace duckdb

@@ -62,9 +62,9 @@ void LocalTableStorage::Clear() {
 	deleted_entries.clear();
 	indexes.clear();
 	deleted_rows = 0;
-	for (auto &index : table.info->indexes) {
-		D_ASSERT(index->type == IndexType::ART);
-		auto &art = (ART &)*index;
+	table.info->indexes.Scan([&](Index &index) {
+		D_ASSERT(index.type == IndexType::ART);
+		auto &art = (ART &)index;
 		if (art.is_unique) {
 			// unique index: create a local ART index that maintains the same unique constraint
 			vector<unique_ptr<Expression>> unbound_expressions;
@@ -73,7 +73,8 @@ void LocalTableStorage::Clear() {
 			}
 			indexes.push_back(make_unique<ART>(art.column_ids, move(unbound_expressions), true));
 		}
-	}
+		return false;
+	});
 }
 
 void LocalStorage::InitializeScan(DataTable *table, LocalScanState &state, TableFilterSet *table_filters) {
@@ -139,11 +140,9 @@ void LocalStorage::Scan(LocalScanState &state, const vector<column_t> &column_id
 			auto column_filters = state.table_filters->filters.find(i);
 			if (column_filters != state.table_filters->filters.end()) {
 				//! We have filters to apply here
-				for (auto &column_filter : column_filters->second) {
-					auto &mask = FlatVector::Validity(result.data[i]);
-					UncompressedSegment::FilterSelection(sel, result.data[i], column_filter, approved_tuple_count,
-					                                     mask);
-				}
+				auto &mask = FlatVector::Validity(result.data[i]);
+				UncompressedSegment::FilterSelection(sel, result.data[i], *column_filters->second, approved_tuple_count,
+				                                     mask);
 				count = approved_tuple_count;
 			}
 		}
@@ -189,7 +188,7 @@ void LocalStorage::Append(DataTable *table, DataChunk &chunk) {
 	}
 	//! Append to the chunk
 	storage->collection.Append(chunk);
-	if (storage->active_scans == 0 && storage->collection.Count() >= MorselInfo::MORSEL_SIZE) {
+	if (storage->active_scans == 0 && storage->collection.Count() >= MorselInfo::MORSEL_SIZE * 2) {
 		// flush to base storage
 		Flush(*table, *storage);
 	}
@@ -294,7 +293,7 @@ static void UpdateChunk(Vector &data, Vector &updates, Vector &row_ids, idx_t co
 	}
 }
 
-void LocalStorage::Update(DataTable *table, Vector &row_ids, vector<column_t> &column_ids, DataChunk &data) {
+void LocalStorage::Update(DataTable *table, Vector &row_ids, const vector<column_t> &column_ids, DataChunk &data) {
 	auto storage = GetStorage(table);
 	// figure out the chunk from which these row ids came
 	idx_t chunk_idx = GetChunk(row_ids);
@@ -417,6 +416,7 @@ void LocalStorage::AddColumn(DataTable *old_dt, DataTable *new_dt, ColumnDefinit
 		} else {
 			FlatVector::Validity(result).SetAllInvalid(chunk.size());
 		}
+		result.Normalify(chunk.size());
 		chunk.data.push_back(move(result));
 	}
 

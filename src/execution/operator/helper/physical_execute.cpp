@@ -2,7 +2,8 @@
 
 namespace duckdb {
 
-void PhysicalExecute::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
+void PhysicalExecute::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
+                                       PhysicalOperatorState *state_p) const {
 	D_ASSERT(plan);
 	plan->GetChunk(context, chunk, state_p);
 }

@@ -14,6 +14,7 @@ add_library_unity(
   order_relation.cpp
   update_relation.cpp
   projection_relation.cpp
+  query_relation.cpp
   read_csv_relation.cpp
   setop_relation.cpp
   subquery_relation.cpp

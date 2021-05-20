@@ -23,7 +23,9 @@ unique_ptr<BaseStatistics> StringStatistics::Copy() {
 	stats->has_unicode = has_unicode;
 	stats->max_string_length = max_string_length;
 	stats->max_string_length = max_string_length;
-	stats->has_null = has_null;
+	if (validity_stats) {
+		stats->validity_stats = validity_stats->Copy();
+	}
 	return move(stats);
 }
 
@@ -97,6 +99,7 @@ void StringStatistics::Update(const string_t &value) {
 }
 
 void StringStatistics::Merge(const BaseStatistics &other_p) {
+	BaseStatistics::Merge(other_p);
 	auto &other = (const StringStatistics &)other_p;
 	if (StringValueComparison(other.min, MAX_STRING_MINMAX_SIZE, min) < 0) {
 		memcpy(min, other.min, MAX_STRING_MINMAX_SIZE);
@@ -104,13 +107,12 @@ void StringStatistics::Merge(const BaseStatistics &other_p) {
 	if (StringValueComparison(other.max, MAX_STRING_MINMAX_SIZE, max) > 0) {
 		memcpy(max, other.max, MAX_STRING_MINMAX_SIZE);
 	}
-	has_null = has_null || other.has_null;
 	has_unicode = has_unicode || other.has_unicode;
 	max_string_length = MaxValue<uint32_t>(max_string_length, other.max_string_length);
 	has_overflow_strings = has_overflow_strings || other.has_overflow_strings;
 }
 
-bool StringStatistics::CheckZonemap(ExpressionType comparison_type, const string &constant) {
+FilterPropagateResult StringStatistics::CheckZonemap(ExpressionType comparison_type, const string &constant) {
 	auto data = (const_data_ptr_t)constant.c_str();
 	auto size = constant.size();
 
@@ -119,15 +121,27 @@ bool StringStatistics::CheckZonemap(ExpressionType comparison_type, const string
 	int max_comp = StringValueComparison(data, value_size, max);
 	switch (comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
-		return min_comp >= 0 && max_comp <= 0;
+		if (min_comp >= 0 && max_comp <= 0) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		} else {
+			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+		}
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 	case ExpressionType::COMPARE_GREATERTHAN:
-		return max_comp <= 0;
+		if (max_comp <= 0) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		} else {
+			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+		}
 	case ExpressionType::COMPARE_LESSTHAN:
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		return min_comp >= 0;
+		if (min_comp >= 0) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		} else {
+			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+		}
 	default:
-		throw InternalException("Operation not implemented");
+		throw InternalException("Expression type not implemented for string statistics zone map");
 	}
 }
 
@@ -147,10 +161,9 @@ static idx_t GetValidMinMaxSubstring(data_ptr_t data) {
 string StringStatistics::ToString() {
 	idx_t min_len = GetValidMinMaxSubstring(min);
 	idx_t max_len = GetValidMinMaxSubstring(max);
-	return StringUtil::Format(
-	    "String Statistics [Has Null: %s, Min: %s, Max: %s, Has Unicode: %s, Max String Length: %lld]",
-	    has_null ? "true" : "false", string((const char *)min, min_len), string((const char *)max, max_len),
-	    has_unicode ? "true" : "false", max_string_length);
+	return StringUtil::Format("String Statistics %s[Min: %s, Max: %s, Has Unicode: %s, Max String Length: %lld]",
+	                          validity_stats ? validity_stats->ToString() : "", string((const char *)min, min_len),
+	                          string((const char *)max, max_len), has_unicode ? "true" : "false", max_string_length);
 }
 
 void StringStatistics::Verify(Vector &vector, idx_t count) {

@@ -240,6 +240,9 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		((int32_t *)data)[index] = val.value_.integer;
 		break;
 	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::HASH:
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::BIGINT:
@@ -390,6 +393,12 @@ Value Vector::GetValue(idx_t index) const {
 		return Value::UBIGINT(((uint64_t *)data)[index]);
 	case LogicalTypeId::TIMESTAMP:
 		return Value::TIMESTAMP(((timestamp_t *)data)[index]);
+	case LogicalTypeId::TIMESTAMP_NS:
+		return Value::TimestampNs(((timestamp_t *)data)[index]);
+	case LogicalTypeId::TIMESTAMP_MS:
+		return Value::TimestampMs(((timestamp_t *)data)[index]);
+	case LogicalTypeId::TIMESTAMP_SEC:
+		return Value::TimestampSec(((timestamp_t *)data)[index]);
 	case LogicalTypeId::HUGEINT:
 		return Value::HUGEINT(((hugeint_t *)data)[index]);
 	case LogicalTypeId::DECIMAL: {
@@ -1007,13 +1016,13 @@ bool StructVector::HasEntries(const Vector &vector) {
 	return vector.auxiliary != nullptr;
 }
 
-child_list_t<unique_ptr<Vector>> &StructVector::GetEntries(const Vector &vector) {
+const child_list_t<unique_ptr<Vector>> &StructVector::GetEntries(const Vector &vector) {
 	D_ASSERT(vector.GetType().id() == LogicalTypeId::STRUCT || vector.GetType().id() == LogicalTypeId::MAP);
 	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR ||
 	         vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
 	D_ASSERT(vector.auxiliary);
 	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::STRUCT_BUFFER);
-	return ((VectorStructBuffer *)vector.auxiliary.get())->GetChildren();
+	return ((const VectorStructBuffer *)vector.auxiliary.get())->GetChildren();
 }
 
 void StructVector::AddEntry(Vector &vector, const string &name, unique_ptr<Vector> entry) {
@@ -1040,7 +1049,7 @@ bool ListVector::HasEntry(const Vector &vector) {
 	return vector.auxiliary != nullptr;
 }
 
-Vector &ListVector::GetEntry(const Vector &vector) {
+const Vector &ListVector::GetEntry(const Vector &vector) {
 	D_ASSERT(vector.GetType().id() == LogicalTypeId::LIST);
 	if (vector.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		auto &child = DictionaryVector::Child(vector);
@@ -1051,6 +1060,11 @@ Vector &ListVector::GetEntry(const Vector &vector) {
 	D_ASSERT(vector.auxiliary);
 	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::LIST_BUFFER);
 	return ((VectorListBuffer *)vector.auxiliary.get())->GetChild();
+}
+
+Vector &ListVector::GetEntry(Vector &vector) {
+	const Vector &cvector = vector;
+	return const_cast<Vector &>(ListVector::GetEntry(cvector));
 }
 
 void ListVector::Initialize(Vector &vec) {
@@ -1096,11 +1110,28 @@ Value ListVector::GetValuesFromOffsets(Vector &list, vector<idx_t> &offsets) {
 }
 
 idx_t ListVector::GetListSize(const Vector &vec) {
+	if (vec.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+		auto &child = DictionaryVector::Child(vec);
+		return ListVector::GetListSize(child);
+	}
 	return ((VectorListBuffer &)*vec.auxiliary).size;
+}
+
+void ListVector::ReferenceEntry(Vector &vector, Vector &other) {
+	D_ASSERT(vector.GetType().id() == LogicalTypeId::LIST);
+	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR ||
+	         vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
+	D_ASSERT(other.GetType().id() == LogicalTypeId::LIST);
+	D_ASSERT(other.GetVectorType() == VectorType::FLAT_VECTOR || other.GetVectorType() == VectorType::CONSTANT_VECTOR);
+	vector.auxiliary = other.auxiliary;
 }
 
 void ListVector::SetListSize(Vector &vec, idx_t size) {
 	ListVector::Initialize(vec);
+	if (vec.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+		auto &child = DictionaryVector::Child(vec);
+		ListVector::SetListSize(child, size);
+	}
 	((VectorListBuffer &)*vec.auxiliary).size = size;
 }
 
@@ -1114,7 +1145,7 @@ void ListVector::SetEntry(Vector &vector, unique_ptr<Vector> cc) {
 	((VectorListBuffer *)vector.auxiliary.get())->SetChild(move(cc));
 }
 
-void ListVector::Append(Vector &target, Vector &source, idx_t source_size, idx_t source_offset) {
+void ListVector::Append(Vector &target, const Vector &source, idx_t source_size, idx_t source_offset) {
 	ListVector::Initialize(target);
 	if (source_size - source_offset == 0) {
 		//! Nothing to add
@@ -1122,6 +1153,17 @@ void ListVector::Append(Vector &target, Vector &source, idx_t source_size, idx_t
 	}
 	auto &target_buffer = (VectorListBuffer &)*target.auxiliary;
 	target_buffer.Append(source, source_size, source_offset);
+}
+
+void ListVector::Append(Vector &target, const Vector &source, const SelectionVector &sel, idx_t source_size,
+                        idx_t source_offset) {
+	ListVector::Initialize(target);
+	if (source_size - source_offset == 0) {
+		//! Nothing to add
+		return;
+	}
+	auto &target_buffer = (VectorListBuffer &)*target.auxiliary;
+	target_buffer.Append(source, sel, source_size, source_offset);
 }
 
 void ListVector::PushBack(Vector &target, Value &insert) {

@@ -7,6 +7,7 @@
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/windows_undefs.hpp"
 
 #include <limits>
 
@@ -219,10 +220,10 @@ template <>
 dtime_t AddTimeOperator::Operation(dtime_t left, interval_t right) {
 	int64_t diff = right.micros - ((right.micros / Interval::MICROS_PER_DAY) * Interval::MICROS_PER_DAY);
 	left += diff;
-	if (left >= Interval::MICROS_PER_DAY) {
-		left -= Interval::MICROS_PER_DAY;
-	} else if (left < 0) {
-		left += Interval::MICROS_PER_DAY;
+	if (left.micros >= Interval::MICROS_PER_DAY) {
+		left.micros -= Interval::MICROS_PER_DAY;
+	} else if (left.micros < 0) {
+		left.micros += Interval::MICROS_PER_DAY;
 	}
 	return left;
 }

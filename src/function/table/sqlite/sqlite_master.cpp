@@ -21,7 +21,9 @@ struct SQLiteMasterData : public FunctionOperatorData {
 
 static unique_ptr<FunctionData> SQLiteMasterBind(ClientContext &context, vector<Value> &inputs,
                                                  unordered_map<string, Value> &named_parameters,
-                                                 vector<LogicalType> &return_types, vector<string> &names) {
+                                                 vector<LogicalType> &input_table_types,
+                                                 vector<string> &input_table_names, vector<LogicalType> &return_types,
+                                                 vector<string> &names) {
 	names.emplace_back("type");
 	return_types.push_back(LogicalType::VARCHAR);
 
@@ -41,21 +43,21 @@ static unique_ptr<FunctionData> SQLiteMasterBind(ClientContext &context, vector<
 }
 
 unique_ptr<FunctionOperatorData> SQLiteMasterInit(ClientContext &context, const FunctionData *bind_data,
-                                                  vector<column_t> &column_ids, TableFilterCollection *filters) {
+                                                  const vector<column_t> &column_ids, TableFilterCollection *filters) {
 	auto result = make_unique<SQLiteMasterData>();
 
 	// scan all the schemas for tables and views and collect them
-	Catalog::GetCatalog(context).schemas->Scan(context, [&](CatalogEntry *entry) {
-		auto schema = (SchemaCatalogEntry *)entry;
+	auto schemas = Catalog::GetCatalog(context).schemas->GetEntries<SchemaCatalogEntry>(context);
+	for (auto &schema : schemas) {
 		schema->Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 		schema->Scan(context, CatalogType::INDEX_ENTRY, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
-	});
+	}
 
 	return move(result);
 }
 
 void SQLiteMasterFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
-                          DataChunk &output) {
+                          DataChunk *input, DataChunk &output) {
 	auto &data = (SQLiteMasterData &)*operator_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values

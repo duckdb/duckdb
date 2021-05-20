@@ -22,7 +22,8 @@ class MorselInfo;
 class UpdateSegment;
 class PersistentSegment;
 class TransientSegment;
-struct TableFilterSet;
+class ValiditySegment;
+class TableFilterSet;
 
 struct IndexScanState {
 	virtual ~IndexScanState() {
@@ -38,14 +39,15 @@ struct ColumnScanState {
 	idx_t vector_index;
 	//! The primary buffer handle
 	unique_ptr<BufferHandle> primary_handle;
-	//! The locks that are held during the scan, only used by the index scan
-	vector<unique_ptr<StorageLockKey>> locks;
+	//! Child states of the vector
+	vector<ColumnScanState> child_states;
 	//! Whether or not InitializeState has been called for this segment
 	bool initialized = false;
 	//! If this segment has already been checked for skipping puorposes
 	bool segment_checked = false;
 	//! The update segment of the current column
 	UpdateSegment *updates;
+	//! FIXME: all these vector offsets should be merged into a single row_index
 	//! The vector index within the current update segment
 	idx_t vector_index_updates;
 
@@ -57,6 +59,8 @@ public:
 struct ColumnFetchState {
 	//! The set of pinned block handles for this set of fetches
 	buffer_handle_set_t handles;
+	//! Any child states of the fetch
+	vector<unique_ptr<ColumnFetchState>> child_states;
 };
 
 struct LocalScanState {
@@ -95,8 +99,8 @@ public:
 class CreateIndexScanState : public TableScanState {
 public:
 	vector<unique_ptr<StorageLockKey>> locks;
-	std::unique_lock<std::mutex> append_lock;
-	std::unique_lock<std::mutex> delete_lock;
+	unique_lock<mutex> append_lock;
+	unique_lock<mutex> delete_lock;
 };
 
 } // namespace duckdb

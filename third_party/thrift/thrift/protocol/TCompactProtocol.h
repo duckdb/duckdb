@@ -20,12 +20,12 @@
 #ifndef _THRIFT_PROTOCOL_TCOMPACTPROTOCOL_H_
 #define _THRIFT_PROTOCOL_TCOMPACTPROTOCOL_H_ 1
 
-#include <thrift/protocol/TVirtualProtocol.h>
+#include "thrift/protocol/TVirtualProtocol.h"
 
 #include <stack>
 #include <memory>
 
-namespace apache {
+namespace duckdb_apache {
 namespace thrift {
 namespace protocol {
 
@@ -259,8 +259,8 @@ private:
 typedef TCompactProtocolFactoryT<TTransport> TCompactProtocolFactory;
 }
 }
-} // apache::thrift::protocol
+} // duckdb_apache::thrift::protocol
 
-#include <thrift/protocol/TCompactProtocol.tcc>
+#include "thrift/protocol/TCompactProtocol.tcc"
 
 #endif

@@ -31,11 +31,6 @@ public:
 	void InitializeScan(ColumnScanState &state) override;
 	//! Scan one vector from this transient segment
 	void Scan(ColumnScanState &state, idx_t vector_index, Vector &result) override;
-	//! Scan the next vector from the column and apply a selection vector to filter the data
-	void FilterScan(ColumnScanState &state, Vector &result, SelectionVector &sel, idx_t &approved_tuple_count) override;
-	//! Executes the filters directly in the table's data
-	void Select(ColumnScanState &state, Vector &result, SelectionVector &sel, idx_t &approved_tuple_count,
-	            vector<TableFilter> &table_filter) override;
 	//! Fetch the base table vector index that belongs to this row
 	void Fetch(ColumnScanState &state, idx_t vector_index, Vector &result) override;
 	//! Fetch a value of the specific row id and append it to the result
@@ -44,7 +39,7 @@ public:
 	//! Initialize an append of this transient segment
 	void InitializeAppend(ColumnAppendState &state);
 	//! Appends a (part of) vector to the transient segment, returns the amount of entries successfully appended
-	idx_t Append(ColumnAppendState &state, Vector &data, idx_t offset, idx_t count);
+	idx_t Append(ColumnAppendState &state, VectorData &data, idx_t offset, idx_t count);
 	//! Revert an append made to this transient segment
 	void RevertAppend(idx_t start_row);
 };

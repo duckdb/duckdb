@@ -67,7 +67,7 @@ select arg_min(a,b), arg_max(a,b) from args;
 1.000000	10.000000
 
 query II
-select arg_min(a,b), arg_max(a,b) from args group by a%2;
+select arg_min(a,b), arg_max(a,b) from args group by a%2 ORDER BY arg_min(a,b);
 ----
 1	1
 2	10
@@ -91,21 +91,21 @@ select arg_min(a,b), arg_max(a,b)  from blobs ;
 # Window Function
 require vector_size 512
 
-query I
+query I rowsort
 select arg_min(a,b) over ( partition by a%2) from args;
 ----
-2
-2
-2
 1
+2
+2
+2
 
-query I
+query I rowsort
 select arg_max(a,b) over ( partition by a%2) from args;
 ----
-10
-10
-10
 1
+10
+10
+10
 
 statement ok
 create table names (name string, salary integer)

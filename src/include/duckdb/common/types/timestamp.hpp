@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/types.hpp"
 
 namespace duckdb {
 
@@ -58,5 +59,7 @@ public:
 	static int64_t GetEpochMicroSeconds(timestamp_t timestamp);
 	//! Convert a timestamp to epoch (in nanoseconds)
 	static int64_t GetEpochNanoSeconds(timestamp_t timestamp);
+
+	static bool TryParseUTCOffset(const char *str, idx_t &pos, idx_t len, int &hour_offset, int &minute_offset);
 };
 } // namespace duckdb

@@ -1,5 +1,5 @@
 #include "duckdb/planner/planner.hpp"
-
+#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
@@ -24,10 +24,10 @@ void Planner::CreatePlan(SQLStatement &statement) {
 	vector<BoundParameterExpression *> bound_parameters;
 
 	// first bind the tables and columns to the catalog
-	context.profiler.StartPhase("binder");
+	context.profiler->StartPhase("binder");
 	binder->parameters = &bound_parameters;
 	auto bound_statement = binder->Bind(statement);
-	context.profiler.EndPhase();
+	context.profiler->EndPhase();
 
 	this->read_only = binder->read_only;
 	this->requires_valid_transaction = binder->requires_valid_transaction;
@@ -157,6 +157,7 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	case StatementType::PRAGMA_STATEMENT:
 	case StatementType::SHOW_STATEMENT:
 	case StatementType::SET_STATEMENT:
+	case StatementType::LOAD_STATEMENT:
 		CreatePlan(*statement);
 		break;
 	case StatementType::EXECUTE_STATEMENT:

@@ -1,4 +1,6 @@
 #include "duckdb/execution/operator/projection/physical_projection.hpp"
+#include "duckdb/execution/operator/projection/physical_tableinout_function.hpp"
+
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
@@ -8,14 +10,14 @@
 
 namespace duckdb {
 
-unique_ptr<TableFilterSet> FindColumnIndex(vector<TableFilter> &table_filters, vector<column_t> &column_ids) {
+unique_ptr<TableFilterSet> CreateTableFilterSet(TableFilterSet &table_filters, vector<column_t> &column_ids) {
 	// create the table filter map
 	auto table_filter_set = make_unique<TableFilterSet>();
-	for (auto &table_filter : table_filters) {
+	for (auto &table_filter : table_filters.filters) {
 		// find the relative column index from the absolute column index into the table
 		idx_t column_index = INVALID_INDEX;
 		for (idx_t i = 0; i < column_ids.size(); i++) {
-			if (table_filter.column_index == column_ids[i]) {
+			if (table_filter.first == column_ids[i]) {
 				column_index = i;
 				break;
 			}
@@ -23,22 +25,24 @@ unique_ptr<TableFilterSet> FindColumnIndex(vector<TableFilter> &table_filters, v
 		if (column_index == INVALID_INDEX) {
 			throw InternalException("Could not find column index for table filter");
 		}
-		table_filter.column_index = column_index;
-		auto filter = table_filter_set->filters.find(column_index);
-		if (filter != table_filter_set->filters.end()) {
-			filter->second.push_back(table_filter);
-		} else {
-			table_filter_set->filters.insert(make_pair(column_index, vector<TableFilter> {table_filter}));
-		}
+		table_filter_set->filters[column_index] = move(table_filter.second);
 	}
 	return table_filter_set;
 }
+
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
-	D_ASSERT(op.children.empty());
+	if (!op.children.empty()) {
+		// this is for table producing functions that consume subquery results
+		D_ASSERT(op.children.size() == 1);
+		auto node = make_unique<PhysicalTableInOutFunction>(op.returned_types, op.function, move(op.bind_data),
+		                                                    op.column_ids, op.estimated_cardinality);
+		node->children.push_back(CreatePlan(move(op.children[0])));
+		return move(node);
+	}
 
 	unique_ptr<TableFilterSet> table_filters;
-	if (!op.table_filters.empty()) {
-		table_filters = FindColumnIndex(op.table_filters, op.column_ids);
+	if (!op.table_filters.filters.empty()) {
+		table_filters = CreateTableFilterSet(op.table_filters, op.column_ids);
 	}
 
 	if (op.function.dependency) {
@@ -61,6 +65,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 			if (!projection_necessary) {
 				// a projection is not necessary if all columns have been requested in-order
 				// in that case we just return the node
+
 				return move(node);
 			}
 		}
@@ -77,6 +82,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 				expressions.push_back(make_unique<BoundReferenceExpression>(type, column_id));
 			}
 		}
+
 		auto projection = make_unique<PhysicalProjection>(move(types), move(expressions), op.estimated_cardinality);
 		projection->children.push_back(move(node));
 		return move(projection);

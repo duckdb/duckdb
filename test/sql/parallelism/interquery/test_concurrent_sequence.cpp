@@ -17,7 +17,7 @@ struct ConcurrentData {
 	}
 };
 
-#define CONCURRENT_SEQUENCE_THREAD_COUNT 20
+#define CONCURRENT_SEQUENCE_THREAD_COUNT 10
 #define CONCURRENT_SEQUENCE_INSERT_COUNT 100
 
 static void append_values_from_sequence(ConcurrentData *data) {
@@ -37,6 +37,12 @@ TEST_CASE("Test Concurrent Usage of Sequences", "[sequence][.]") {
 	thread threads[CONCURRENT_SEQUENCE_THREAD_COUNT];
 	ConcurrentData data(db);
 	ConcurrentData seq_data(db);
+
+	// enable detailed profiling
+	con.Query("PRAGMA enable_profiling");
+	auto detailed_profiling_output = TestCreatePath("detailed_profiling_output");
+	con.Query("PRAGMA profiling_output='" + detailed_profiling_output + "'");
+	con.Query("PRAGMA profiling_mode = detailed");
 
 	// create a sequence
 	REQUIRE_NO_FAIL(con.Query("CREATE SEQUENCE seq;"));

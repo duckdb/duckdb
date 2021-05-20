@@ -1,6 +1,6 @@
 Package: duckdb
 Title: DBI Package for the DuckDB Database Management System
-Version: 0.2.6
+Version: 0.2.7
 Authors@R:
     c(person(given = "Hannes",
              family = "Mühleisen",
@@ -41,8 +41,8 @@ Description: The DuckDB project is an embedded analytical data
     management system with support for the Structured Query Language (SQL). This package includes all of
     DuckDB and a R Database Interface (DBI) connector.
 License: MPL
-URL: https://duckdb.org/, https://github.com/cwida/duckdb
-BugReports: https://github.com/cwida/duckdb/issues
+URL: https://duckdb.org/, https://github.com/duckdb/duckdb
+BugReports: https://github.com/duckdb/duckdb/issues
 Depends:
     DBI,
     R (>= 3.6.0)
@@ -57,7 +57,6 @@ Suggests:
     testthat,
     withr
 Encoding: UTF-8
-LazyData: true
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.1.1
 SystemRequirements: C++11, GCC on Solaris

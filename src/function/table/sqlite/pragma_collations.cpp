@@ -17,7 +17,9 @@ struct PragmaCollateData : public FunctionOperatorData {
 
 static unique_ptr<FunctionData> PragmaCollateBind(ClientContext &context, vector<Value> &inputs,
                                                   unordered_map<string, Value> &named_parameters,
-                                                  vector<LogicalType> &return_types, vector<string> &names) {
+                                                  vector<LogicalType> &input_table_types,
+                                                  vector<string> &input_table_names, vector<LogicalType> &return_types,
+                                                  vector<string> &names) {
 	names.emplace_back("collname");
 	return_types.push_back(LogicalType::VARCHAR);
 
@@ -25,7 +27,7 @@ static unique_ptr<FunctionData> PragmaCollateBind(ClientContext &context, vector
 }
 
 unique_ptr<FunctionOperatorData> PragmaCollateInit(ClientContext &context, const FunctionData *bind_data,
-                                                   vector<column_t> &column_ids, TableFilterCollection *filters) {
+                                                   const vector<column_t> &column_ids, TableFilterCollection *filters) {
 	auto result = make_unique<PragmaCollateData>();
 
 	Catalog::GetCatalog(context).schemas->Scan(context, [&](CatalogEntry *entry) {
@@ -38,7 +40,7 @@ unique_ptr<FunctionOperatorData> PragmaCollateInit(ClientContext &context, const
 }
 
 static void PragmaCollateFunction(ClientContext &context, const FunctionData *bind_data,
-                                  FunctionOperatorData *operator_state, DataChunk &output) {
+                                  FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
 	auto &data = (PragmaCollateData &)*operator_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values

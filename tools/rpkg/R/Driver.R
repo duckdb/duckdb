@@ -206,7 +206,10 @@ setMethod(
 setMethod(
   "dbGetInfo", "duckdb_driver",
   function(dbObj, ...) {
-    list(driver.version = NA, client.version = NA)
+    con <- dbConnect(dbObj)
+    version <- dbGetQuery(con, "select library_version from pragma_version()")[[1]][[1]]
+    dbDisconnect(con)
+    list(driver.version = version, client.version = version, dbname=dbObj@dbdir)
   }
 )
 

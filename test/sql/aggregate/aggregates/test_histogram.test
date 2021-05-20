@@ -53,7 +53,7 @@ SELECT histogram(e) from hist_data
 query I
 select histogram(g)
     from hist_data
-    group by g%2==0
+    group by g%2==0 ORDER BY g%2==0
 ----
 {1=2, 3=1, 5=1}
 {2=3}
@@ -78,16 +78,16 @@ select histogram(name) from names;
 
 require vector_size 512
 
-query II
+query II rowsort
 select g,histogram(g) over (partition by g%2)
     from hist_data;
 ----
-2	{2=3}
-2	{2=3}
-2	{2=3}
 1	{1=2, 3=1, 5=1}
 1	{1=2, 3=1, 5=1}
-5	{1=2, 3=1, 5=1}
+2	{2=3}
+2	{2=3}
+2	{2=3}
 3	{1=2, 3=1, 5=1}
+5	{1=2, 3=1, 5=1}
 
 

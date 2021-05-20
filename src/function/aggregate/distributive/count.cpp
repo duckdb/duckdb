@@ -2,6 +2,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/storage/statistics/validity_statistics.hpp"
 
 namespace duckdb {
 
@@ -12,7 +13,7 @@ struct BaseCountFunction {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(STATE source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target) {
 		*target += source;
 	}
 
@@ -63,7 +64,7 @@ AggregateFunction CountStarFun::GetFunction() {
 unique_ptr<BaseStatistics> CountPropagateStats(ClientContext &context, BoundAggregateExpression &expr,
                                                FunctionData *bind_data, vector<unique_ptr<BaseStatistics>> &child_stats,
                                                NodeStatistics *node_stats) {
-	if (child_stats[0] && !child_stats[0]->has_null && !expr.distinct) {
+	if (!expr.distinct && child_stats[0] && !child_stats[0]->CanHaveNull()) {
 		// count on a column without null values: use count star
 		expr.function = CountStarFun::GetFunction();
 		expr.function.name = "count_star";

@@ -29,6 +29,8 @@ struct PragmaTableOperatorData : public FunctionOperatorData {
 
 static unique_ptr<FunctionData> PragmaTableInfoBind(ClientContext &context, vector<Value> &inputs,
                                                     unordered_map<string, Value> &named_parameters,
+                                                    vector<LogicalType> &input_table_types,
+                                                    vector<string> &input_table_names,
                                                     vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("cid");
 	return_types.push_back(LogicalType::INTEGER);
@@ -57,7 +59,8 @@ static unique_ptr<FunctionData> PragmaTableInfoBind(ClientContext &context, vect
 }
 
 unique_ptr<FunctionOperatorData> PragmaTableInfoInit(ClientContext &context, const FunctionData *bind_data,
-                                                     vector<column_t> &column_ids, TableFilterCollection *filters) {
+                                                     const vector<column_t> &column_ids,
+                                                     TableFilterCollection *filters) {
 	return make_unique<PragmaTableOperatorData>();
 }
 
@@ -156,7 +159,7 @@ static void PragmaTableInfoView(PragmaTableOperatorData &data, ViewCatalogEntry 
 }
 
 static void PragmaTableInfoFunction(ClientContext &context, const FunctionData *bind_data_p,
-                                    FunctionOperatorData *operator_state, DataChunk &output) {
+                                    FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
 	auto &bind_data = (PragmaTableFunctionData &)*bind_data_p;
 	auto &state = (PragmaTableOperatorData &)*operator_state;
 	switch (bind_data.entry->type) {

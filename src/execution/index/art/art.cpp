@@ -1,23 +1,18 @@
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/bit_operations.hpp"
 #include <algorithm>
 #include <ctgmath>
 #include <cstring>
 
 namespace duckdb {
 
-ART::ART(vector<column_t> column_ids, vector<unique_ptr<Expression>> unbound_expressions, bool is_unique)
-    : Index(IndexType::ART, move(column_ids), move(unbound_expressions)), is_unique(is_unique) {
+ART::ART(const vector<column_t> &column_ids, const vector<unique_ptr<Expression>> &unbound_expressions, bool is_unique)
+    : Index(IndexType::ART, column_ids, unbound_expressions), is_unique(is_unique) {
 	tree = nullptr;
 	expression_result.Initialize(logical_types);
-	int n = 1;
-	//! little endian if true
-	if (*(char *)&n == 1) {
-		is_little_endian = true;
-	} else {
-		is_little_endian = false;
-	}
+	is_little_endian = IsLittleEndian();
 	switch (types[0]) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
@@ -456,6 +451,8 @@ static unique_ptr<Key> CreateKey(ART &art, PhysicalType type, Value &value) {
 		return Key::CreateKey<uint32_t>(value.value_.uinteger, art.is_little_endian);
 	case PhysicalType::UINT64:
 		return Key::CreateKey<uint64_t>(value.value_.ubigint, art.is_little_endian);
+	case PhysicalType::INT128:
+		return Key::CreateKey<hugeint_t>(value.value_.hugeint, art.is_little_endian);
 	case PhysicalType::FLOAT:
 		return Key::CreateKey<float>(value.value_.float_, art.is_little_endian);
 	case PhysicalType::DOUBLE:

@@ -1,8 +1,9 @@
 #include "duckdb/main/connection.hpp"
-
+#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/appender.hpp"
+#include "duckdb/main/relation/query_relation.hpp"
 #include "duckdb/main/relation/read_csv_relation.hpp"
 #include "duckdb/main/relation/table_relation.hpp"
 #include "duckdb/main/relation/table_function_relation.hpp"
@@ -26,9 +27,9 @@ Connection::Connection(DuckDB &database) : Connection(*database.instance) {
 
 string Connection::GetProfilingInformation(ProfilerPrintFormat format) {
 	if (format == ProfilerPrintFormat::JSON) {
-		return context->profiler.ToJSON();
+		return context->profiler->ToJSON();
 	} else {
-		return context->profiler.ToString();
+		return context->profiler->ToString();
 	}
 }
 
@@ -174,6 +175,10 @@ shared_ptr<Relation> Connection::ReadCSV(const string &csv_file, const vector<st
 		column_list.push_back(move(col_list[0]));
 	}
 	return make_shared<ReadCSVRelation>(*context, csv_file, move(column_list));
+}
+
+shared_ptr<Relation> Connection::RelationFromQuery(string query, string alias) {
+	return make_shared<QueryRelation>(*context, move(query), move(alias));
 }
 
 void Connection::BeginTransaction() {

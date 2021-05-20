@@ -17,14 +17,14 @@
  * under the License.
  */
 
-#include <thrift/transport/TTransportException.h>
+#include "thrift/transport/TTransportException.h"
 #include <cstring>
 
-#include <thrift/thrift-config.h>
+#include "thrift/thrift-config.h"
 
 using std::string;
 
-namespace apache {
+namespace duckdb_apache {
 namespace thrift {
 namespace transport {
 
@@ -56,4 +56,4 @@ const char* TTransportException::what() const noexcept {
 }
 }
 }
-} // apache::thrift::transport
+} // duckdb_apache::thrift::transport

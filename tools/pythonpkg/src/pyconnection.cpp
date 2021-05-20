@@ -2,8 +2,10 @@
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb_python/pyrelation.hpp"
 #include "duckdb_python/pandas_scan.hpp"
+#include "duckdb_python/map.hpp"
 
 #include "duckdb/common/arrow.hpp"
+#include "duckdb_python/arrow_array_stream.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
@@ -52,7 +54,10 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	         py::arg("table_name"), py::arg("df"))
 	    .def("register", &DuckDBPyConnection::RegisterDF,
 	         "Register the passed Data.Frame value for querying with a view", py::arg("view_name"), py::arg("df"))
-	    .def("unregister", &DuckDBPyConnection::UnregisterDF, "Unregister the view name", py::arg("view_name"))
+	    .def("unregister", &DuckDBPyConnection::UnregisterPythonObject, "Unregister the view name",
+	         py::arg("view_name"))
+	    .def("register_arrow", &DuckDBPyConnection::RegisterArrow,
+	         "Register the passed Arrow Table for querying with a view", py::arg("view_name"), py::arg("arrow_table"))
 	    .def("table", &DuckDBPyConnection::Table, "Create a relation object for the name'd table",
 	         py::arg("table_name"))
 	    .def("view", &DuckDBPyConnection::View, "Create a relation object for the name'd view", py::arg("view_name"))
@@ -61,6 +66,10 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	    .def("table_function", &DuckDBPyConnection::TableFunction,
 	         "Create a relation object from the name'd table function with given parameters", py::arg("name"),
 	         py::arg("parameters") = py::list())
+	    .def("from_query", &DuckDBPyConnection::FromQuery, "Create a relation object from the given SQL query",
+	         py::arg("query"), py::arg("alias") = "query_relation")
+	    .def("query", &DuckDBPyConnection::FromQuery, "Create a relation object from the given SQL query",
+	         py::arg("query"), py::arg("alias") = "query_relation")
 	    .def("from_df", &DuckDBPyConnection::FromDF, "Create a relation object from the Data.Frame in df",
 	         py::arg("df") = py::none())
 	    .def("from_arrow_table", &DuckDBPyConnection::FromArrowTable, "Create a relation object from an Arrow table",
@@ -74,12 +83,6 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	    .def("__getattr__", &DuckDBPyConnection::GetAttr, "Get result set attributes, mainly column names");
 
 	PyDateTime_IMPORT;
-}
-
-DuckDBPyConnection::~DuckDBPyConnection() {
-	for (auto &element : registered_dfs) {
-		UnregisterDF(element.first);
-	}
 }
 
 DuckDBPyConnection *DuckDBPyConnection::ExecuteMany(const string &query, py::object params) {
@@ -147,22 +150,41 @@ DuckDBPyConnection *DuckDBPyConnection::Append(const string &name, py::object va
 	return Execute("INSERT INTO \"" + name + "\" SELECT * FROM __append_df");
 }
 
-static string PtrToString(void const *ptr) {
-	std::ostringstream address;
-	address << ptr;
-	return address.str();
+DuckDBPyConnection *DuckDBPyConnection::RegisterDF(const string &name, py::object value) {
+	if (!connection) {
+		throw std::runtime_error("connection closed");
+	}
+	connection->TableFunction("pandas_scan", {Value::POINTER((uintptr_t)value.ptr())})->CreateView(name, true, true);
+	// keep a reference
+	auto object = make_unique<RegisteredObject>(value);
+	registered_objects[name] = move(object);
+	return this;
 }
 
-DuckDBPyConnection *DuckDBPyConnection::RegisterDF(const string &name, py::object value) {
-	// hack alert: put the pointer address into the function call as a string
-	Execute("CREATE OR REPLACE VIEW \"" + name + "\" AS SELECT * FROM pandas_scan('" + PtrToString(value.ptr()) + "')");
+DuckDBPyConnection *DuckDBPyConnection::RegisterArrow(const string &name, py::object table) {
+	if (!connection) {
+		throw std::runtime_error("connection closed");
+	}
+	if (table.is_none() || string(py::str(table.get_type().attr("__name__"))) != "Table") {
+		throw std::runtime_error("Only arrow tables supported");
+	}
+	auto stream_factory = make_unique<PythonTableArrowArrayStreamFactory>(table.ptr());
 
-	// try to bind
-	Execute("SELECT * FROM \"" + name + "\" WHERE FALSE");
-
-	// keep a reference
-	registered_dfs[name] = value;
+	auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
+	connection
+	    ->TableFunction("arrow_scan", {Value::POINTER((uintptr_t)stream_factory.get()),
+	                                   Value::POINTER((uintptr_t)stream_factory_produce)})
+	    ->CreateView(name, true, true);
+	auto object = make_unique<RegisteredArrow>(move(stream_factory), table);
+	registered_objects[name] = move(object);
 	return this;
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromQuery(const string &query, const string &alias) {
+	if (!connection) {
+		throw std::runtime_error("connection closed");
+	}
+	return make_unique<DuckDBPyRelation>(connection->RelationFromQuery(query, alias));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::Table(const string &tname) {
@@ -215,9 +237,9 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromDF(py::object value) {
 		throw std::runtime_error("connection closed");
 	}
 	string name = "df_" + GenerateRandomName();
-	registered_dfs[name] = value;
+	registered_objects[name] = make_unique<RegisteredObject>(value);
 	vector<Value> params;
-	params.emplace_back(PtrToString(value.ptr()));
+	params.emplace_back(Value::POINTER((uintptr_t)value.ptr()));
 	return make_unique<DuckDBPyRelation>(connection->TableFunction("pandas_scan", params)->Alias(name));
 }
 
@@ -239,97 +261,38 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquet(const string &filen
 	return make_unique<DuckDBPyRelation>(connection->TableFunction("parquet_scan", params)->Alias(filename));
 }
 
-struct PythonTableArrowArrayStream {
-	explicit PythonTableArrowArrayStream(const py::object &arrow_table) : arrow_table(arrow_table) {
-		stream.get_schema = PythonTableArrowArrayStream::MyStreamGetSchema;
-		stream.get_next = PythonTableArrowArrayStream::MyStreamGetNext;
-		stream.release = PythonTableArrowArrayStream::MyStreamRelease;
-		stream.get_last_error = PythonTableArrowArrayStream::MyStreamGetLastError;
-		stream.private_data = this;
-
-		batches = arrow_table.attr("to_batches")();
-	}
-
-	static int MyStreamGetSchema(struct ArrowArrayStream *stream, struct ArrowSchema *out) {
-		D_ASSERT(stream->private_data);
-		auto my_stream = (PythonTableArrowArrayStream *)stream->private_data;
-		if (!stream->release) {
-			my_stream->last_error = "stream was released";
-			return -1;
-		}
-		auto schema = my_stream->arrow_table.attr("schema");
-		if (!py::hasattr(schema, "_export_to_c")) {
-			my_stream->last_error = "failed to acquire export_to_c function";
-			return -1;
-		}
-		auto export_to_c = schema.attr("_export_to_c");
-		export_to_c((uint64_t)out);
-		return 0;
-	}
-
-	static int MyStreamGetNext(struct ArrowArrayStream *stream, struct ArrowArray *out) {
-		D_ASSERT(stream->private_data);
-		auto my_stream = (PythonTableArrowArrayStream *)stream->private_data;
-		if (!stream->release) {
-			my_stream->last_error = "stream was released";
-			return -1;
-		}
-		if (my_stream->batch_idx >= py::len(my_stream->batches)) {
-			out->release = nullptr;
-			return 0;
-		}
-		auto stream_batch = my_stream->batches[my_stream->batch_idx++];
-		if (!py::hasattr(stream_batch, "_export_to_c")) {
-			my_stream->last_error = "failed to acquire export_to_c function";
-			return -1;
-		}
-		auto export_to_c = stream_batch.attr("_export_to_c");
-		export_to_c((uint64_t)out);
-		return 0;
-	}
-
-	static void MyStreamRelease(struct ArrowArrayStream *stream) {
-		if (!stream->release) {
-			return;
-		}
-		stream->release = nullptr;
-		delete (PythonTableArrowArrayStream *)stream->private_data;
-	}
-
-	static const char *MyStreamGetLastError(struct ArrowArrayStream *stream) {
-		if (!stream->release) {
-			return "stream was released";
-		}
-		D_ASSERT(stream->private_data);
-		auto my_stream = (PythonTableArrowArrayStream *)stream->private_data;
-		return my_stream->last_error.c_str();
-	}
-
-	ArrowArrayStream stream;
-	string last_error;
-	py::object arrow_table;
-	py::list batches;
-	idx_t batch_idx = 0;
-};
-
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrowTable(const py::object &table) {
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrowTable(py::object &table) {
 	if (!connection) {
 		throw std::runtime_error("connection closed");
 	}
+	py::gil_scoped_acquire acquire;
 
 	// the following is a careful dance around having to depend on pyarrow
 	if (table.is_none() || string(py::str(table.get_type().attr("__name__"))) != "Table") {
 		throw std::runtime_error("Only arrow tables supported");
 	}
+	string name = "arrow_table_" + GenerateRandomName();
 
-	auto my_arrow_table = new PythonTableArrowArrayStream(table);
-	string name = "arrow_table_" + PtrToString((void *)my_arrow_table);
-	return make_unique<DuckDBPyRelation>(
-	    connection->TableFunction("arrow_scan", {Value::POINTER((uintptr_t)my_arrow_table)})->Alias(name));
+	//	registered_arrow[name] = table;
+	auto stream_factory = make_unique<PythonTableArrowArrayStreamFactory>(table.ptr());
+
+	unique_ptr<ArrowArrayStreamWrapper> (*stream_factory_produce)(uintptr_t factory) =
+	    PythonTableArrowArrayStreamFactory::Produce;
+	auto rel = make_unique<DuckDBPyRelation>(
+	    connection
+	        ->TableFunction("arrow_scan", {Value::POINTER((uintptr_t)stream_factory.get()),
+	                                       Value::POINTER((uintptr_t)stream_factory_produce)})
+	        ->Alias(name));
+	registered_objects[name] = make_unique<RegisteredArrow>(move(stream_factory), table);
+	return rel;
 }
 
-DuckDBPyConnection *DuckDBPyConnection::UnregisterDF(const string &name) {
-	registered_dfs[name] = py::none();
+DuckDBPyConnection *DuckDBPyConnection::UnregisterPythonObject(const string &name) {
+	registered_objects.erase(name);
+
+	if (connection) {
+		connection->Query("DROP VIEW \"" + name + "\"");
+	}
 	return this;
 }
 
@@ -432,12 +395,13 @@ static unique_ptr<TableFunctionRef> TryPandasReplacement(py::dict &dict, py::str
 	// check if there is a local or global variable
 	auto table_function = make_unique<TableFunctionRef>();
 	vector<unique_ptr<ParsedExpression>> children;
-	children.push_back(make_unique<ConstantExpression>(Value(PtrToString(entry.ptr()))));
+	children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)entry.ptr())));
 	table_function->function = make_unique<FunctionExpression>("pandas_scan", children);
 	return table_function;
 }
 
 static unique_ptr<TableFunctionRef> PandasScanReplacement(const string &table_name, void *data) {
+	py::gil_scoped_acquire acquire;
 	// look in the locals first
 	PyObject *p = PyEval_GetLocals();
 	auto py_table_name = py::str(table_name);
@@ -466,12 +430,17 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 	res->connection = make_unique<Connection>(*res->database);
 
 	PandasScanFunction scan_fun;
-	CreateTableFunctionInfo info(scan_fun);
+	CreateTableFunctionInfo scan_info(scan_fun);
+
+	MapFunction map_fun;
+	CreateTableFunctionInfo map_info(map_fun);
 
 	auto &context = *res->connection->context;
 	auto &catalog = Catalog::GetCatalog(context);
 	context.transaction.BeginTransaction();
-	catalog.CreateTableFunction(context, &info);
+	catalog.CreateTableFunction(context, &scan_info);
+	catalog.CreateTableFunction(context, &map_info);
+
 	context.transaction.Commit();
 
 	return res;
@@ -496,8 +465,6 @@ vector<Value> DuckDBPyConnection::TransformPythonParamList(py::handle params) {
 			args.push_back(Value::BIGINT(ele.cast<int64_t>()));
 		} else if (py::isinstance<py::float_>(ele)) {
 			args.push_back(Value::DOUBLE(ele.cast<double>()));
-		} else if (py::isinstance<py::str>(ele)) {
-			args.emplace_back(ele.cast<string>());
 		} else if (py::isinstance(ele, decimal_decimal)) {
 			args.emplace_back(py::str(ele).cast<string>());
 		} else if (py::isinstance(ele, datetime_datetime)) {
@@ -520,6 +487,16 @@ vector<Value> DuckDBPyConnection::TransformPythonParamList(py::handle params) {
 			auto month = PyDateTime_GET_MONTH(ele.ptr());
 			auto day = PyDateTime_GET_DAY(ele.ptr());
 			args.push_back(Value::DATE(year, month, day));
+		} else if (py::isinstance<py::str>(ele)) {
+			args.emplace_back(ele.cast<string>());
+		} else if (py::isinstance<py::memoryview>(ele)) {
+			py::memoryview py_view = ele.cast<py::memoryview>();
+			PyObject *py_view_ptr = py_view.ptr();
+			Py_buffer *py_buf = PyMemoryView_GET_BUFFER(py_view_ptr);
+			args.emplace_back(Value::BLOB(const_data_ptr_t(py_buf->buf), idx_t(py_buf->len)));
+		} else if (py::isinstance<py::bytes>(ele)) {
+			const string &ele_string = ele.cast<string>();
+			args.emplace_back(Value::BLOB(const_data_ptr_t(ele_string.data()), ele_string.size()));
 		} else {
 			throw std::runtime_error("unknown param type " + py::str(ele.get_type()).cast<string>());
 		}

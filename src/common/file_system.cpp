@@ -7,6 +7,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/common/gzip_file_system.hpp"
 
 #include <cstdio>
 #include <cstdint>
@@ -83,7 +84,12 @@ public:
 	int fd;
 };
 
-unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, FileLockType lock_type) {
+unique_ptr<FileHandle> FileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock_type,
+                                            FileCompressionType compression) {
+	if (compression != FileCompressionType::UNCOMPRESSED) {
+		throw NotImplementedException("Unsupported compression type for default file system");
+	}
+
 	AssertValidFileFlags(flags);
 
 	int open_flags = 0;
@@ -114,7 +120,7 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 		open_flags |= O_DIRECT | O_SYNC;
 #endif
 	}
-	int fd = open(path, open_flags, 0666);
+	int fd = open(path.c_str(), open_flags, 0666);
 	if (fd == -1) {
 		throw IOException("Cannot open file \"%s\": %s", path, strerror(errno));
 	}
@@ -150,6 +156,15 @@ void FileSystem::SetFilePointer(FileHandle &handle, idx_t location) {
 		throw IOException("Could not seek to location %lld for file \"%s\": %s", location, handle.path,
 		                  strerror(errno));
 	}
+}
+
+idx_t FileSystem::GetFilePointer(FileHandle &handle) {
+	int fd = ((UnixFileHandle &)handle).fd;
+	off_t position = lseek(fd, 0, SEEK_CUR);
+	if (position == (off_t)-1) {
+		throw IOException("Could not get file position file \"%s\": %s", handle.path, strerror(errno));
+	}
+	return position;
 }
 
 int64_t FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
@@ -400,7 +415,11 @@ public:
 	HANDLE fd;
 };
 
-unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, FileLockType lock_type) {
+unique_ptr<FileHandle> FileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock_type,
+                                            FileCompressionType compression) {
+	if (compression != FileCompressionType::UNCOMPRESSED) {
+		throw NotImplementedException("Unsupported compression type for default file system");
+	}
 	AssertValidFileFlags(flags);
 
 	DWORD desired_access;
@@ -428,12 +447,12 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 		flags_and_attributes |= FILE_FLAG_NO_BUFFERING;
 	}
 	HANDLE hFile =
-	    CreateFileA(path, desired_access, share_mode, NULL, creation_disposition, flags_and_attributes, NULL);
+	    CreateFileA(path.c_str(), desired_access, share_mode, NULL, creation_disposition, flags_and_attributes, NULL);
 	if (hFile == INVALID_HANDLE_VALUE) {
 		auto error = GetLastErrorAsString();
-		throw IOException("Cannot open file \"%s\": %s", path, error);
+		throw IOException("Cannot open file \"%s\": %s", path.c_str(), error);
 	}
-	auto handle = make_unique<WindowsFileHandle>(*this, path, hFile);
+	auto handle = make_unique<WindowsFileHandle>(*this, path.c_str(), hFile);
 	if (flags & FileFlags::FILE_FLAGS_APPEND) {
 		SetFilePointer(*handle, GetFileSize(*handle));
 	}
@@ -449,6 +468,22 @@ void FileSystem::SetFilePointer(FileHandle &handle, idx_t location) {
 		auto error = GetLastErrorAsString();
 		throw IOException("Could not seek to location %lld for file \"%s\": %s", location, handle.path, error);
 	}
+}
+
+idx_t FileSystem::GetFilePointer(FileHandle &handle) {
+	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
+	LARGE_INTEGER ret;
+
+	LARGE_INTEGER loc;
+	loc.QuadPart = 0;
+
+	auto rc = SetFilePointerEx(hFile, loc, &ret, FILE_CURRENT);
+	if (rc == 0) {
+		auto error = GetLastErrorAsString();
+		throw IOException("Could not get file pointer for file \"%s\": %s", handle.path, error);
+	}
+
+	return ret.QuadPart;
 }
 
 int64_t FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
@@ -691,9 +726,66 @@ void FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t
 	}
 }
 
+bool FileSystem::CanSeek() {
+	return true;
+}
+
+bool FileSystem::OnDiskFile(FileHandle &handle) {
+	return true;
+}
+
+void FileSystem::Seek(FileHandle &handle, idx_t location) {
+	if (!CanSeek()) {
+		throw IOException("Cannot seek in files of this type");
+	}
+	SetFilePointer(handle, location);
+}
+
+void FileSystem::Reset(FileHandle &handle) {
+	Seek(handle, 0);
+}
+
+idx_t FileSystem::SeekPosition(FileHandle &handle) {
+	if (!CanSeek()) {
+		throw IOException("Cannot seek in files of this type");
+	}
+	return GetFilePointer(handle);
+}
+
 string FileSystem::JoinPath(const string &a, const string &b) {
 	// FIXME: sanitize paths
 	return a + PathSeparator() + b;
+}
+
+string FileSystem::ConvertSeparators(const string &path) {
+	auto separator_str = PathSeparator();
+	char separator = separator_str[0];
+	if (separator == '/') {
+		// on unix-based systems we only accept / as a separator
+		return path;
+	}
+	// on windows-based systems we accept both
+	string result = path;
+	for (idx_t i = 0; i < result.size(); i++) {
+		if (result[i] == '/') {
+			result[i] = separator;
+		}
+	}
+	return result;
+}
+
+string FileSystem::ExtractBaseName(const string &path) {
+	auto sep = PathSeparator();
+	auto vec = StringUtil::Split(StringUtil::Split(path, sep).back(), ".");
+	return vec[0];
+}
+
+int64_t FileHandle::Read(void *buffer, idx_t nr_bytes) {
+	return file_system.Read(*this, buffer, nr_bytes);
+}
+
+int64_t FileHandle::Write(void *buffer, idx_t nr_bytes) {
+	return file_system.Write(*this, buffer, nr_bytes);
 }
 
 void FileHandle::Read(void *buffer, idx_t nr_bytes, idx_t location) {
@@ -702,6 +794,44 @@ void FileHandle::Read(void *buffer, idx_t nr_bytes, idx_t location) {
 
 void FileHandle::Write(void *buffer, idx_t nr_bytes, idx_t location) {
 	file_system.Write(*this, buffer, nr_bytes, location);
+}
+
+void FileHandle::Seek(idx_t location) {
+	file_system.Seek(*this, location);
+}
+
+void FileHandle::Reset() {
+	file_system.Reset(*this);
+}
+
+idx_t FileHandle::SeekPosition() {
+	return file_system.SeekPosition(*this);
+}
+
+bool FileHandle::CanSeek() {
+	return file_system.CanSeek();
+}
+
+string FileHandle::ReadLine() {
+	string result;
+	char buffer[1];
+	while (true) {
+		idx_t tuples_read = Read(buffer, 1);
+		if (tuples_read == 0 || buffer[0] == '\n') {
+			return result;
+		}
+		if (buffer[0] != '\r') {
+			result += buffer[0];
+		}
+	}
+}
+
+bool FileHandle::OnDiskFile() {
+	return file_system.OnDiskFile(*this);
+}
+
+idx_t FileHandle::GetFileSize() {
+	return file_system.GetFileSize(*this);
 }
 
 void FileHandle::Sync() {
@@ -828,6 +958,31 @@ vector<string> FileSystem::Glob(const string &path) {
 		previous_directories = move(result);
 	}
 	return vector<string>();
+}
+
+unique_ptr<FileHandle> VirtualFileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock,
+                                                   FileCompressionType compression) {
+	if (compression == FileCompressionType::AUTO_DETECT) {
+		// auto detect compression settings based on file name
+		auto lower_path = StringUtil::Lower(path);
+		if (StringUtil::EndsWith(lower_path, ".gz")) {
+			compression = FileCompressionType::GZIP;
+		} else {
+			compression = FileCompressionType::UNCOMPRESSED;
+		}
+	}
+	// open the base file handle
+	auto file_handle = FindFileSystem(path)->OpenFile(path, flags, lock, FileCompressionType::UNCOMPRESSED);
+	if (compression != FileCompressionType::UNCOMPRESSED) {
+		switch (compression) {
+		case FileCompressionType::GZIP:
+			file_handle = GZipFileSystem::OpenCompressedFile(move(file_handle));
+			break;
+		default:
+			throw NotImplementedException("Unimplemented compression type");
+		}
+	}
+	return file_handle;
 }
 
 } // namespace duckdb

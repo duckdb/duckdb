@@ -21,7 +21,6 @@ class ColumnSegment;
 class ColumnData;
 class Transaction;
 class BaseStatistics;
-struct TableFilter;
 struct ColumnFetchState;
 struct ColumnScanState;
 enum class ColumnSegmentType : uint8_t { TRANSIENT, PERSISTENT };
@@ -50,12 +49,6 @@ public:
 	virtual void InitializeScan(ColumnScanState &state) = 0;
 	//! Scan one vector from this segment
 	virtual void Scan(ColumnScanState &state, idx_t vector_index, Vector &result) = 0;
-	//! Scan the next vector from the column and apply a selection vector to filter the data
-	virtual void FilterScan(ColumnScanState &state, Vector &result, SelectionVector &sel,
-	                        idx_t &approved_tuple_count) = 0;
-	//! Executes filter in this column
-	virtual void Select(ColumnScanState &state, Vector &result, SelectionVector &sel, idx_t &approved_tuple_count,
-	                    vector<TableFilter> &table_filter) = 0;
 	//! Fetch the base table vector index that belongs to this row
 	virtual void Fetch(ColumnScanState &state, idx_t vector_index, Vector &result) = 0;
 	//! Fetch a value of the specific row id and append it to the result

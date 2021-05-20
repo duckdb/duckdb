@@ -39,13 +39,13 @@ select  corr(v, v2) from aggr
 # Window Function
 require vector_size 512
 
-query I
+query I rowsort
 select  corr(v, v2) over (partition by k)
     from aggr;
 ----
+0.998845
+0.998845
+0.998845
+0.998845
 NULL
-0.998845
-0.998845
-0.998845
-0.998845
 

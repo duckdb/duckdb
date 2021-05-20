@@ -5,7 +5,6 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/storage/data_table.hpp"
-#include "duckdb/common/to_string.hpp"
 
 namespace duckdb {
 
@@ -14,13 +13,23 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 class TopNHeap {
 public:
+	static OrderByNullType FlipNullOrder(OrderByNullType order) {
+		if (order == OrderByNullType::NULLS_FIRST) {
+			return OrderByNullType::NULLS_LAST;
+		} else if (order == OrderByNullType::NULLS_LAST) {
+			return OrderByNullType::NULLS_FIRST;
+		}
+		return order;
+	}
+
 	TopNHeap(const vector<BoundOrderByNode> &orders, idx_t limit, idx_t offset)
 	    : limit(limit), offset(offset), heap_size(0) {
 		for (auto &order : orders) {
 			auto &expr = order.expression;
 			sort_types.push_back(expr->return_type);
 			order_types.push_back(order.type);
-			null_order_types.push_back(order.null_order);
+			null_order_types.push_back(order.type == OrderType::DESCENDING ? FlipNullOrder(order.null_order)
+			                                                               : order.null_order);
 			executor.AddExpression(*expr);
 		}
 		// preallocate the heap
@@ -73,7 +82,7 @@ void TopNHeap::Combine(TopNHeap &other) {
 }
 
 void TopNHeap::Reduce() {
-	heap_size = (heap_data.Count() > offset) ? std::min(limit + offset, heap_data.Count()) : 0;
+	heap_size = (heap_data.Count() > offset) ? MinValue(limit + offset, heap_data.Count()) : 0;
 	if (heap_size == 0) {
 		return;
 	}
@@ -127,7 +136,7 @@ unique_ptr<GlobalOperatorState> PhysicalTopN::GetGlobalState(ClientContext &cont
 // Sink
 //===--------------------------------------------------------------------===//
 void PhysicalTopN::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
-                        DataChunk &input) {
+                        DataChunk &input) const {
 	// append to the local sink state
 	auto &sink = (TopNLocalState &)lstate;
 	sink.heap.Sink(input);
@@ -149,12 +158,13 @@ void PhysicalTopN::Combine(ExecutionContext &context, GlobalOperatorState &state
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//
-void PhysicalTopN::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> state) {
+bool PhysicalTopN::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> state) {
 	auto &gstate = (TopNGlobalState &)*state;
 	// global finalize: compute the final top N
 	gstate.heap.Reduce();
 
 	PhysicalSink::Finalize(pipeline, context, move(state));
+	return true;
 }
 
 //===--------------------------------------------------------------------===//
@@ -169,7 +179,7 @@ public:
 	idx_t position;
 };
 
-void PhysicalTopN::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
+void PhysicalTopN::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) const {
 	auto &state = (PhysicalTopNOperatorState &)*state_p;
 	auto &gstate = (TopNGlobalState &)*sink_state;
 

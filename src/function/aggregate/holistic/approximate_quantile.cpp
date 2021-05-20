@@ -36,7 +36,7 @@ struct ApproxQuantileOperation {
 	template <class STATE>
 	static void Initialize(STATE *state) {
 		state->pos = 0;
-		state->h = new duckdb_tdigest::TDigest(100);
+		state->h = nullptr;
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
@@ -49,15 +49,21 @@ struct ApproxQuantileOperation {
 
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *data, ValidityMask &mask, idx_t idx) {
-		D_ASSERT(state->h);
+		if (!state->h) {
+			state->h = new duckdb_tdigest::TDigest(100);
+		}
 		state->h->add(data[idx]);
 		state->pos++;
 	}
 
 	template <class STATE, class OP>
-	static void Combine(STATE source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target) {
 		if (source.pos == 0) {
 			return;
+		}
+		D_ASSERT(source.h);
+		if (!target->h) {
+			target->h = new duckdb_tdigest::TDigest(100);
 		}
 		target->h->merge(source.h);
 		target->pos += source.pos;

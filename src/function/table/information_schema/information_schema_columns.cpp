@@ -22,6 +22,8 @@ struct InformationSchemaColumnsData : public FunctionOperatorData {
 
 static unique_ptr<FunctionData> InformationSchemaColumnsBind(ClientContext &context, vector<Value> &inputs,
                                                              unordered_map<string, Value> &named_parameters,
+                                                             vector<LogicalType> &input_table_types,
+                                                             vector<string> &input_table_names,
                                                              vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("table_catalog");
 	return_types.push_back(LogicalType::VARCHAR);
@@ -66,15 +68,15 @@ static unique_ptr<FunctionData> InformationSchemaColumnsBind(ClientContext &cont
 }
 
 unique_ptr<FunctionOperatorData> InformationSchemaColumnsInit(ClientContext &context, const FunctionData *bind_data,
-                                                              vector<column_t> &column_ids,
+                                                              const vector<column_t> &column_ids,
                                                               TableFilterCollection *filters) {
 	auto result = make_unique<InformationSchemaColumnsData>();
 
 	// scan all the schemas for tables and views and collect them
-	Catalog::GetCatalog(context).schemas->Scan(context, [&](CatalogEntry *entry) {
-		auto schema = (SchemaCatalogEntry *)entry;
+	auto schemas = Catalog::GetCatalog(context).schemas->GetEntries<SchemaCatalogEntry>(context);
+	for (auto &schema : schemas) {
 		schema->Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
-	});
+	}
 
 	// check the temp schema as well
 	context.temporary_objects->Scan(context, CatalogType::TABLE_ENTRY,
@@ -262,6 +264,9 @@ void ColumnHelper::WriteColumns(idx_t start_index, idx_t start_col, idx_t end_co
 		case LogicalTypeId::INTERVAL:
 		case LogicalTypeId::TIME:
 		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::TIMESTAMP_NS:
+		case LogicalTypeId::TIMESTAMP_MS:
+		case LogicalTypeId::TIMESTAMP_SEC:
 			// No fractional seconds are currently supported in DuckDB
 			datetime_precision = Value::INTEGER(0);
 			break;
@@ -275,7 +280,7 @@ void ColumnHelper::WriteColumns(idx_t start_index, idx_t start_col, idx_t end_co
 } // anonymous namespace
 
 void InformationSchemaColumnsFunction(ClientContext &context, const FunctionData *bind_data,
-                                      FunctionOperatorData *operator_state, DataChunk &output) {
+                                      FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
 	auto &data = (InformationSchemaColumnsData &)*operator_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values

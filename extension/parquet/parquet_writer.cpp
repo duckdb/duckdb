@@ -1,6 +1,8 @@
 #include "parquet_writer.hpp"
 #include "parquet_timestamp.hpp"
 
+#include "duckdb.hpp"
+#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
@@ -13,6 +15,7 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/serializer/buffered_serializer.hpp"
+#endif
 
 #include "snappy.h"
 #include "miniz_wrapper.hpp"
@@ -20,21 +23,21 @@
 
 namespace duckdb {
 
-using namespace parquet;                   // NOLINT
-using namespace apache::thrift;            // NOLINT
-using namespace apache::thrift::protocol;  // NOLINT
-using namespace apache::thrift::transport; // NOLINT
-using namespace duckdb_miniz;              // NOLINT
+using namespace duckdb_parquet;                   // NOLINT
+using namespace duckdb_apache::thrift;            // NOLINT
+using namespace duckdb_apache::thrift::protocol;  // NOLINT
+using namespace duckdb_apache::thrift::transport; // NOLINT
+using namespace duckdb_miniz;                     // NOLINT
 
-using parquet::format::CompressionCodec;
-using parquet::format::ConvertedType;
-using parquet::format::Encoding;
-using parquet::format::FieldRepetitionType;
-using parquet::format::FileMetaData;
-using parquet::format::PageHeader;
-using parquet::format::PageType;
-using parquet::format::RowGroup;
-using parquet::format::Type;
+using duckdb_parquet::format::CompressionCodec;
+using duckdb_parquet::format::ConvertedType;
+using duckdb_parquet::format::Encoding;
+using duckdb_parquet::format::FieldRepetitionType;
+using duckdb_parquet::format::FileMetaData;
+using duckdb_parquet::format::PageHeader;
+using duckdb_parquet::format::PageType;
+using duckdb_parquet::format::RowGroup;
+using duckdb_parquet::format::Type;
 
 class MyTransport : public TTransport {
 public:
@@ -164,7 +167,7 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 	if (buffer.Count() == 0) {
 		return;
 	}
-	std::lock_guard<std::mutex> glock(lock);
+	lock_guard<mutex> glock(lock);
 
 	// set up a new row group for this chunk collection
 	RowGroup row_group;
@@ -282,7 +285,7 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 				auto *ptr = FlatVector::GetData<date_t>(input_column);
 				for (idx_t r = 0; r < input.size(); r++) {
 					if (mask.RowIsValid(r)) {
-						auto ts = Timestamp::FromDatetime(ptr[r], 0);
+						auto ts = Timestamp::FromDatetime(ptr[r], dtime_t(0));
 						temp_writer.Write<Int96>(TimestampToImpalaTimestamp(ts));
 					}
 				}

@@ -1,6 +1,7 @@
 #include "duckdb/common/limits.hpp"
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/windows_undefs.hpp"
 #include <limits>
 
 namespace duckdb {
@@ -90,7 +91,7 @@ uint64_t NumericLimits<uint64_t>::Maximum() {
 hugeint_t NumericLimits<hugeint_t>::Minimum() {
 	hugeint_t result;
 	result.lower = 1;
-	result.upper = numeric_limits<int64_t>::lowest() + 1;
+	result.upper = numeric_limits<int64_t>::lowest();
 	return result;
 }
 

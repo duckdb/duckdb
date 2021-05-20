@@ -11,7 +11,7 @@
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
-#include <atomic>
+#include "duckdb/common/atomic.hpp"
 
 namespace duckdb {
 class UpdateSegment;
@@ -20,7 +20,7 @@ struct UpdateInfo {
 	//! The update segment that this update info affects
 	UpdateSegment *segment;
 	//! The version number
-	std::atomic<transaction_t> version_number;
+	atomic<transaction_t> version_number;
 	//! The vector index within the uncompressed segment
 	idx_t vector_index;
 	//! The amount of updated tuples
@@ -29,8 +29,6 @@ struct UpdateInfo {
 	sel_t max;
 	//! The row ids of the tuples that have been updated. This should always be kept sorted!
 	sel_t *tuples;
-	//! The validity mask of the tuples
-	validity_t validity[ValidityMask::STANDARD_ENTRY_COUNT];
 	//! The data of the tuples
 	data_ptr_t tuple_data;
 	//! The previous update info (or nullptr if it is the base)

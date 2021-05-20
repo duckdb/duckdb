@@ -17,17 +17,17 @@
  * under the License.
  */
 
-#include <thrift/protocol/TProtocol.h>
+#include "thrift/protocol/TProtocol.h"
 
-namespace apache {
+namespace duckdb_apache {
 namespace thrift {
 namespace protocol {
 
 TProtocol::~TProtocol() = default;
 uint32_t TProtocol::skip_virt(TType type) {
-  return ::apache::thrift::protocol::skip(*this, type);
+  return ::duckdb_apache::thrift::protocol::skip(*this, type);
 }
 
 TProtocolFactory::~TProtocolFactory() = default;
 
-}}} // apache::thrift::protocol
+}}} // duckdb_apache::thrift::protocol

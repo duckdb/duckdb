@@ -2,7 +2,6 @@
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/file_system.hpp"
-#include "duckdb/common/gzip_stream.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
@@ -124,18 +123,13 @@ TextSearchShiftArray::TextSearchShiftArray(string search_term) : length(search_t
 
 BufferedCSVReader::BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options_p,
                                      const vector<LogicalType> &requested_types)
-    : options(move(options_p)), buffer_size(0), position(0), start(0) {
-	source = OpenCSV(context, options);
-	Initialize(requested_types);
-}
-
-BufferedCSVReader::BufferedCSVReader(BufferedCSVReaderOptions options_p, const vector<LogicalType> &requested_types,
-                                     unique_ptr<std::istream> ssource)
-    : options(move(options_p)), source(move(ssource)), buffer_size(0), position(0), start(0) {
+    : fs(FileSystem::GetFileSystem(context)), options(move(options_p)), buffer_size(0), position(0), start(0) {
+	file_handle = OpenCSV(context, options);
 	Initialize(requested_types);
 }
 
 void BufferedCSVReader::Initialize(const vector<LogicalType> &requested_types) {
+	PrepareComplexParser();
 	if (options.auto_detect) {
 		sql_types = SniffCSV(requested_types);
 		if (cached_chunks.empty()) {
@@ -145,8 +139,6 @@ void BufferedCSVReader::Initialize(const vector<LogicalType> &requested_types) {
 		sql_types = requested_types;
 		JumpToBeginning(options.skip_rows, options.header);
 	}
-
-	PrepareComplexParser();
 	InitParseChunk(sql_types.size());
 }
 
@@ -156,52 +148,19 @@ void BufferedCSVReader::PrepareComplexParser() {
 	quote_search = TextSearchShiftArray(options.quote);
 }
 
-unique_ptr<std::istream> BufferedCSVReader::OpenCSV(ClientContext &context, const BufferedCSVReaderOptions &options) {
-	if (!FileSystem::GetFileSystem(context).FileExists(options.file_path)) {
-		throw IOException("File \"%s\" not found", options.file_path.c_str());
-	}
-	unique_ptr<std::istream> result;
-
-	gzip_compressed = false;
-	if (options.compression == "infer") {
-		if (StringUtil::EndsWith(StringUtil::Lower(options.file_path), ".gz")) {
-			gzip_compressed = true;
-		}
+unique_ptr<FileHandle> BufferedCSVReader::OpenCSV(ClientContext &context, const BufferedCSVReaderOptions &options) {
+	this->compression = FileCompressionType::UNCOMPRESSED;
+	if (options.compression == "infer" || options.compression == "auto") {
+		this->compression = FileCompressionType::AUTO_DETECT;
 	} else if (options.compression == "gzip") {
-		gzip_compressed = true;
+		this->compression = FileCompressionType::GZIP;
 	}
 
-	if (gzip_compressed) {
-		result = make_unique<GzipStream>(options.file_path);
-		plain_file_source = false;
-	} else {
-		auto csv_local = make_unique<std::ifstream>();
-		csv_local->open(options.file_path);
-		result = move(csv_local);
-
-		// determine filesize
-		plain_file_source = true;
-		result->seekg(0, result->end);
-		file_size = (idx_t)result->tellg();
-		result->clear();
-		result->seekg(0, result->beg);
-	}
+	auto result =
+	    fs.OpenFile(options.file_path.c_str(), FileFlags::FILE_FLAGS_READ, FileLockType::NO_LOCK, this->compression);
+	plain_file_source = result->OnDiskFile() && result->CanSeek();
+	file_size = result->GetFileSize();
 	return result;
-}
-
-void BufferedCSVReader::SkipRowsAndReadHeader(idx_t skip_rows, bool skip_header) {
-	for (idx_t i = 0; i < skip_rows; i++) {
-		// ignore skip rows
-		string read_line;
-		getline(*source, read_line);
-		linenr++;
-	}
-
-	if (skip_header) {
-		// ignore the first line as a header line
-		InitParseChunk(sql_types.size());
-		ParseCSV(ParserMode::PARSING_HEADER);
-	}
 }
 
 // Helper function to generate column names
@@ -222,13 +181,12 @@ void BufferedCSVReader::ResetBuffer() {
 }
 
 void BufferedCSVReader::ResetStream() {
-	if (!plain_file_source && gzip_compressed) {
+	if (!file_handle->CanSeek()) {
 		// seeking to the beginning appears to not be supported in all compiler/os-scenarios,
 		// so we have to create a new stream source here for now
-		source = make_unique<GzipStream>(options.file_path);
+		file_handle->Reset();
 	} else {
-		source->clear();
-		source->seekg(0, source->beg);
+		file_handle->Seek(0);
 	}
 	linenr = 0;
 	linenr_estimated = false;
@@ -255,8 +213,31 @@ void BufferedCSVReader::InitParseChunk(idx_t num_cols) {
 void BufferedCSVReader::JumpToBeginning(idx_t skip_rows = 0, bool skip_header = false) {
 	ResetBuffer();
 	ResetStream();
+	SkipBOM();
 	SkipRowsAndReadHeader(skip_rows, skip_header);
 	sample_chunk_idx = 0;
+}
+
+void BufferedCSVReader::SkipBOM() {
+	char bom_buffer[3];
+	file_handle->Read(bom_buffer, 3);
+	if (bom_buffer[0] != '\xEF' || bom_buffer[1] != '\xBB' || bom_buffer[2] != '\xBF') {
+		ResetStream();
+	}
+}
+
+void BufferedCSVReader::SkipRowsAndReadHeader(idx_t skip_rows, bool skip_header) {
+	for (idx_t i = 0; i < skip_rows; i++) {
+		// ignore skip rows
+		string read_line = file_handle->ReadLine();
+		linenr++;
+	}
+
+	if (skip_header) {
+		// ignore the first line as a header line
+		InitParseChunk(sql_types.size());
+		ParseCSV(ParserMode::PARSING_HEADER);
+	}
 }
 
 bool BufferedCSVReader::JumpToNextSample() {
@@ -299,12 +280,11 @@ bool BufferedCSVReader::JumpToNextSample() {
 
 	// calculate offset to end of the current partition
 	int64_t offset = partition_size - bytes_in_chunk - remaining_bytes_in_buffer;
-	idx_t current_pos = (idx_t)source->tellg();
+	auto current_pos = file_handle->SeekPosition();
 
 	if (current_pos + offset < file_size) {
 		// set position in stream and clear failure bits
-		source->clear();
-		source->seekg(offset, source->cur);
+		file_handle->Seek(current_pos + offset);
 
 		// estimate linenr
 		linenr += (idx_t)round((offset + remaining_bytes_in_buffer) / bytes_per_line_avg);
@@ -313,7 +293,7 @@ bool BufferedCSVReader::JumpToNextSample() {
 		// seek backwards from the end in last chunk and hope to catch the end of the file
 		// TODO: actually it would be good to make sure that the end of file is being reached, because
 		// messy end-lines are quite common. For this case, however, we first need a skip_end detection anyways.
-		source->seekg(-std::streamoff(bytes_in_chunk), source->end);
+		file_handle->Seek(file_size - bytes_in_chunk);
 
 		// estimate linenr
 		linenr = (idx_t)round((file_size - bytes_in_chunk) / bytes_per_line_avg);
@@ -325,8 +305,7 @@ bool BufferedCSVReader::JumpToNextSample() {
 
 	// seek beginning of next line
 	// FIXME: if this jump ends up in a quoted linebreak, we will have a problem
-	string read_line;
-	getline(*source, read_line);
+	string read_line = file_handle->ReadLine();
 	linenr++;
 
 	sample_chunk_idx++;
@@ -430,7 +409,7 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 					options = sniff_info;
 					PrepareComplexParser();
 
-					JumpToBeginning();
+					JumpToBeginning(original_options.skip_rows);
 					sniffed_column_counts.clear();
 					try {
 						ParseCSV(ParserMode::SNIFFING_DIALECT);
@@ -438,7 +417,7 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 						continue;
 					}
 
-					idx_t start_row = 0;
+					idx_t start_row = original_options.skip_rows;
 					idx_t consistent_rows = 0;
 					idx_t num_cols = 0;
 
@@ -447,7 +426,7 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 							consistent_rows++;
 						} else {
 							num_cols = sniffed_column_counts[row];
-							start_row = row;
+							start_row = row + original_options.skip_rows;
 							consistent_rows = 1;
 						}
 					}
@@ -455,7 +434,8 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 					// some logic
 					bool more_values = (consistent_rows > best_consistent_rows && num_cols >= best_num_cols);
 					bool single_column_before = best_num_cols < 2 && num_cols > best_num_cols;
-					bool rows_consistent = start_row + consistent_rows == sniffed_column_counts.size();
+					bool rows_consistent =
+					    start_row + consistent_rows - original_options.skip_rows == sniffed_column_counts.size();
 					bool more_than_one_row = (consistent_rows > 1);
 					bool more_than_one_column = (num_cols > 1);
 					bool start_good = !info_candidates.empty() && (start_row <= info_candidates.front().skip_rows);
@@ -510,8 +490,8 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 	std::map<LogicalTypeId, vector<const char *>> format_template_candidates = {
 	    {LogicalTypeId::DATE, {"%m-%d-%Y", "%m-%d-%y", "%d-%m-%Y", "%d-%m-%y", "%Y-%m-%d", "%y-%m-%d"}},
 	    {LogicalTypeId::TIMESTAMP,
-	     {"%m-%d-%Y %I:%M:%S %p", "%m-%d-%y %I:%M:%S %p", "%d-%m-%Y %H:%M:%S", "%d-%m-%y %H:%M:%S", "%Y-%m-%d %H:%M:%S",
-	      "%y-%m-%d %H:%M:%S"}},
+	     {"%Y-%m-%d %H:%M:%S.%f", "%m-%d-%Y %I:%M:%S %p", "%m-%d-%y %I:%M:%S %p", "%d-%m-%Y %H:%M:%S",
+	      "%d-%m-%y %H:%M:%S", "%Y-%m-%d %H:%M:%S", "%y-%m-%d %H:%M:%S"}},
 	};
 
 	// check which info candidate leads to minimum amount of non-varchar columns...
@@ -1239,9 +1219,8 @@ bool BufferedCSVReader::ReadBuffer(idx_t &start) {
 		// remaining from last buffer: copy it here
 		memcpy(buffer.get(), old_buffer.get() + start, remaining);
 	}
-	source->read(buffer.get() + remaining, buffer_read_size);
+	idx_t read_count = file_handle->Read(buffer.get() + remaining, buffer_read_size);
 
-	idx_t read_count = source->eof() ? source->gcount() : buffer_read_size;
 	bytes_in_chunk += read_count;
 	buffer_size = remaining + read_count;
 	buffer[buffer_size] = '\0';

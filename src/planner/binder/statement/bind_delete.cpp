@@ -6,6 +6,7 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/bound_tableref.hpp"
 #include "duckdb/planner/tableref/bound_basetableref.hpp"
+#include "duckdb/planner/operator/logical_cross_product.hpp"
 
 namespace duckdb {
 
@@ -28,6 +29,32 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 		// delete from persistent table: not read only!
 		this->read_only = false;
 	}
+
+	// plan any tables from the various using clauses
+	if (!stmt.using_clauses.empty()) {
+		unique_ptr<LogicalOperator> child_operator;
+		for (auto &using_clause : stmt.using_clauses) {
+			// bind the using clause
+			auto bound_node = Bind(*using_clause);
+			auto op = CreatePlan(*bound_node);
+			if (child_operator) {
+				// already bound a child: create a cross product to unify the two
+				auto cross_product = make_unique<LogicalCrossProduct>();
+				cross_product->children.push_back(move(child_operator));
+				cross_product->children.push_back(move(op));
+				child_operator = move(cross_product);
+			} else {
+				child_operator = move(op);
+			}
+		}
+		if (child_operator) {
+			auto cross_product = make_unique<LogicalCrossProduct>();
+			cross_product->children.push_back(move(root));
+			cross_product->children.push_back(move(child_operator));
+			root = move(cross_product);
+		}
+	}
+
 	// project any additional columns required for the condition
 	unique_ptr<Expression> condition;
 	if (stmt.condition) {

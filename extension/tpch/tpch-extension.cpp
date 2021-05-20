@@ -24,9 +24,10 @@ struct DBGenFunctionData : public TableFunctionData {
 	bool overwrite = false;
 };
 
-static unique_ptr<FunctionData> dbgen_bind(ClientContext &context, vector<Value> &inputs,
-                                           unordered_map<string, Value> &named_parameters,
-                                           vector<LogicalType> &return_types, vector<string> &names) {
+static unique_ptr<FunctionData> DbgenBind(ClientContext &context, vector<Value> &inputs,
+                                          unordered_map<string, Value> &named_parameters,
+                                          vector<LogicalType> &input_table_types, vector<string> &input_table_names,
+                                          vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_unique<DBGenFunctionData>();
 	for (auto &kv : named_parameters) {
 		if (kv.first == "sf") {
@@ -40,12 +41,12 @@ static unique_ptr<FunctionData> dbgen_bind(ClientContext &context, vector<Value>
 		}
 	}
 	return_types.push_back(LogicalType::BOOLEAN);
-	names.push_back("Success");
+	names.emplace_back("Success");
 	return move(result);
 }
 
-static void dbgen_function(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
-                           DataChunk &output) {
+static void DbgenFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
+                          DataChunk *input, DataChunk &output) {
 	auto &data = (DBGenFunctionData &)*bind_data;
 	if (data.finished) {
 		return;
@@ -55,7 +56,98 @@ static void dbgen_function(ClientContext &context, const FunctionData *bind_data
 
 	data.finished = true;
 }
-static string pragma_tpch_query(ClientContext &context, const FunctionParameters &parameters) {
+
+struct TPCHData : public FunctionOperatorData {
+	TPCHData() : offset(0) {
+	}
+	idx_t offset;
+};
+
+unique_ptr<FunctionOperatorData> TPCHInit(ClientContext &context, const FunctionData *bind_data,
+                                          const vector<column_t> &column_ids, TableFilterCollection *filters) {
+	auto result = make_unique<TPCHData>();
+	return move(result);
+}
+
+static unique_ptr<FunctionData> TPCHQueryBind(ClientContext &context, vector<Value> &inputs,
+                                              unordered_map<string, Value> &named_parameters,
+                                              vector<LogicalType> &input_table_types, vector<string> &input_table_names,
+                                              vector<LogicalType> &return_types, vector<string> &names) {
+	names.emplace_back("query_nr");
+	return_types.push_back(LogicalType::INTEGER);
+
+	names.emplace_back("query");
+	return_types.push_back(LogicalType::VARCHAR);
+
+	return nullptr;
+}
+
+static void TPCHQueryFunction(ClientContext &context, const FunctionData *bind_data,
+                              FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+	auto &data = (TPCHData &)*operator_state;
+	idx_t tpch_queries = 22;
+	if (data.offset >= tpch_queries) {
+		// finished returning values
+		return;
+	}
+	idx_t chunk_count = 0;
+	while (data.offset < tpch_queries && chunk_count < STANDARD_VECTOR_SIZE) {
+		auto query = tpch::DBGenWrapper::GetQuery(data.offset + 1);
+		// "query_nr", PhysicalType::INT32
+		output.SetValue(0, chunk_count, Value::INTEGER((int32_t)data.offset + 1));
+		// "query", PhysicalType::VARCHAR
+		output.SetValue(1, chunk_count, Value(query));
+		data.offset++;
+		chunk_count++;
+	}
+	output.SetCardinality(chunk_count);
+}
+
+static unique_ptr<FunctionData> TPCHQueryAnswerBind(ClientContext &context, vector<Value> &inputs,
+                                                    unordered_map<string, Value> &named_parameters,
+                                                    vector<LogicalType> &input_table_types,
+                                                    vector<string> &input_table_names,
+                                                    vector<LogicalType> &return_types, vector<string> &names) {
+	names.emplace_back("query_nr");
+	return_types.push_back(LogicalType::INTEGER);
+
+	names.emplace_back("scale_factor");
+	return_types.push_back(LogicalType::INTEGER);
+
+	names.emplace_back("answer");
+	return_types.push_back(LogicalType::VARCHAR);
+
+	return nullptr;
+}
+
+static void TPCHQueryAnswerFunction(ClientContext &context, const FunctionData *bind_data,
+                                    FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+	auto &data = (TPCHData &)*operator_state;
+	idx_t tpch_queries = 22;
+	vector<double> scale_factors {0.01, 0.1, 1};
+	idx_t total_answers = tpch_queries * scale_factors.size();
+	if (data.offset >= total_answers) {
+		// finished returning values
+		return;
+	}
+	idx_t chunk_count = 0;
+	while (data.offset < total_answers && chunk_count < STANDARD_VECTOR_SIZE) {
+		idx_t cur_query = data.offset % tpch_queries;
+		idx_t cur_sf = data.offset / tpch_queries;
+		auto answer = tpch::DBGenWrapper::GetAnswer(scale_factors[cur_sf], cur_query + 1);
+		// "query_nr", PhysicalType::INT32
+		output.SetValue(0, chunk_count, Value::INTEGER((int32_t)cur_query + 1));
+		// "scale_factor", PhysicalType::INT32
+		output.SetValue(1, chunk_count, Value::DOUBLE(scale_factors[cur_sf]));
+		// "query", PhysicalType::VARCHAR
+		output.SetValue(2, chunk_count, Value(answer));
+		data.offset++;
+		chunk_count++;
+	}
+	output.SetCardinality(chunk_count);
+}
+
+static string PragmaTpchQuery(ClientContext &context, const FunctionParameters &parameters) {
 	auto index = parameters.values[0].GetValue<int32_t>();
 	return tpch::DBGenWrapper::GetQuery(index);
 }
@@ -64,7 +156,7 @@ void TPCHExtension::Load(DuckDB &db) {
 	Connection con(db);
 	con.BeginTransaction();
 
-	TableFunction dbgen_func("dbgen", {}, dbgen_function, dbgen_bind);
+	TableFunction dbgen_func("dbgen", {}, DbgenFunction, DbgenBind);
 	dbgen_func.named_parameters["sf"] = LogicalType::DOUBLE;
 	dbgen_func.named_parameters["overwrite"] = LogicalType::BOOLEAN;
 	dbgen_func.named_parameters["schema"] = LogicalType::VARCHAR;
@@ -76,10 +168,19 @@ void TPCHExtension::Load(DuckDB &db) {
 	catalog.CreateTableFunction(*con.context, &dbgen_info);
 
 	// create the TPCH pragma that allows us to run the query
-	auto tpch_func = PragmaFunction::PragmaCall("tpch", pragma_tpch_query, {LogicalType::BIGINT});
-
+	auto tpch_func = PragmaFunction::PragmaCall("tpch", PragmaTpchQuery, {LogicalType::BIGINT});
 	CreatePragmaFunctionInfo info(tpch_func);
 	catalog.CreatePragmaFunction(*con.context, &info);
+
+	// create the TPCH_QUERIES function that returns the query
+	TableFunction tpch_query_func("tpch_queries", {}, TPCHQueryFunction, TPCHQueryBind, TPCHInit);
+	CreateTableFunctionInfo tpch_query_info(tpch_query_func);
+	catalog.CreateTableFunction(*con.context, &tpch_query_info);
+
+	// create the TPCH_ANSWERS that returns the query result
+	TableFunction tpch_query_answer_func("tpch_answers", {}, TPCHQueryAnswerFunction, TPCHQueryAnswerBind, TPCHInit);
+	CreateTableFunctionInfo tpch_query_asnwer_info(tpch_query_answer_func);
+	catalog.CreateTableFunction(*con.context, &tpch_query_asnwer_info);
 
 	con.Commit();
 }

@@ -8,7 +8,7 @@ namespace duckdb {
 void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &tside, idx_t tcount,
           SelectionVector &fside, idx_t fcount);
 
-unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundCaseExpression &expr,
+unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundCaseExpression &expr,
                                                                 ExpressionExecutorState &root) {
 	auto result = make_unique<ExpressionState>(expr, root);
 	result->AddChild(expr.check.get());
@@ -18,7 +18,7 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundCaseExpress
 	return result;
 }
 
-void ExpressionExecutor::Execute(BoundCaseExpression &expr, ExpressionState *state, const SelectionVector *sel,
+void ExpressionExecutor::Execute(const BoundCaseExpression &expr, ExpressionState *state, const SelectionVector *sel,
                                  idx_t count, Vector &result) {
 	Vector res_true, res_false;
 	res_true.Reference(state->intermediate_chunk.data[1]);
@@ -52,6 +52,7 @@ void ExpressionExecutor::Execute(BoundCaseExpression &expr, ExpressionState *sta
 
 template <class T>
 void TemplatedFillLoop(Vector &vector, Vector &result, SelectionVector &sel, sel_t count) {
+	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto res = FlatVector::GetData<T>(result);
 	auto &result_mask = FlatVector::Validity(result);
 	if (vector.GetVectorType() == VectorType::CONSTANT_VECTOR) {
@@ -155,7 +156,7 @@ void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &
 
 		auto data = (list_entry_t *)fdata.data;
 		auto res = FlatVector::GetData<list_entry_t>(result);
-		auto &mask = FlatVector::Validity(ListVector::GetEntry(result));
+		auto &mask = FlatVector::Validity(result);
 
 		for (idx_t i = 0; i < fcount; i++) {
 			auto fidx = fdata.sel->get_index(i);
@@ -166,7 +167,8 @@ void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &
 			mask.Set(res_idx, fdata.validity.RowIsValid(fidx));
 		}
 
-		result.Verify(tcount + fcount);
+		result.Verify(tside, tcount);
+		result.Verify(fside, fcount);
 		break;
 	}
 	default:

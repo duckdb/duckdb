@@ -111,6 +111,7 @@ private:
 	unique_ptr<DropStatement> TransformDeallocate(duckdb_libpgquery::PGNode *node);
 	unique_ptr<SetStatement> TransformSet(duckdb_libpgquery::PGNode *node);
 	unique_ptr<SQLStatement> TransformCheckpoint(duckdb_libpgquery::PGNode *node);
+	unique_ptr<LoadStatement> TransformLoad(duckdb_libpgquery::PGNode *node);
 
 	//===--------------------------------------------------------------------===//
 	// Query Node Transform
@@ -145,6 +146,8 @@ private:
 	unique_ptr<ParsedExpression> TransformLambda(duckdb_libpgquery::PGLambdaFunction *node);
 	//! Transform a Postgres array access node (e.g. x[1] or x[1:3])
 	unique_ptr<ParsedExpression> TransformArrayAccess(duckdb_libpgquery::PGAIndirection *node);
+	//! Transform a positional reference (e.g. #1)
+	unique_ptr<ParsedExpression> TransformPositionalReference(duckdb_libpgquery::PGPositionalReference *node);
 
 	//! Transform a Postgres constant value into an Expression
 	unique_ptr<ParsedExpression> TransformConstant(duckdb_libpgquery::PGAConst *c);

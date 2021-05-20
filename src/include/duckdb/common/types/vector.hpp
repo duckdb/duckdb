@@ -80,7 +80,7 @@ public:
 
 	//! Creates the data of this vector with the specified type. Any data that
 	//! is currently in the vector is destroyed.
-	void Initialize(const LogicalType &new_type = LogicalType::INVALID, bool zero_data = false);
+	void Initialize(const LogicalType &new_type = LogicalType(LogicalTypeId::INVALID), bool zero_data = false);
 
 	//! Converts this Vector to a printable string representation
 	string ToString(idx_t count) const;
@@ -90,10 +90,10 @@ public:
 	void Print();
 
 	//! Flatten the vector, removing any compression and turning it into a FLAT_VECTOR
-	void Normalify(idx_t count);
-	void Normalify(const SelectionVector &sel, idx_t count);
+	DUCKDB_API void Normalify(idx_t count);
+	DUCKDB_API void Normalify(const SelectionVector &sel, idx_t count);
 	//! Obtains a selection vector and data pointer through which the data of this vector can be accessed
-	void Orrify(idx_t count, VectorData &data);
+	DUCKDB_API void Orrify(idx_t count, VectorData &data);
 
 	//! Turn the vector into a sequence vector
 	void Sequence(int64_t start, int64_t increment);
@@ -214,11 +214,19 @@ struct ConstantVector {
 };
 
 struct DictionaryVector {
-	static inline SelectionVector &SelVector(const Vector &vector) {
+	static inline const SelectionVector &SelVector(const Vector &vector) {
+		D_ASSERT(vector.GetVectorType() == VectorType::DICTIONARY_VECTOR);
+		return ((const DictionaryBuffer &)*vector.buffer).GetSelVector();
+	}
+	static inline SelectionVector &SelVector(Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::DICTIONARY_VECTOR);
 		return ((DictionaryBuffer &)*vector.buffer).GetSelVector();
 	}
-	static inline Vector &Child(const Vector &vector) {
+	static inline const Vector &Child(const Vector &vector) {
+		D_ASSERT(vector.GetVectorType() == VectorType::DICTIONARY_VECTOR);
+		return ((const VectorChildBuffer &)*vector.auxiliary).data;
+	}
+	static inline Vector &Child(Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::DICTIONARY_VECTOR);
 		return ((VectorChildBuffer &)*vector.auxiliary).data;
 	}
@@ -271,16 +279,21 @@ struct FlatVector {
 };
 
 struct ListVector {
-	static Vector &GetEntry(const Vector &vector);
+	static const Vector &GetEntry(const Vector &vector);
+	static Vector &GetEntry(Vector &vector);
 	static idx_t GetListSize(const Vector &vector);
 	static void SetListSize(Vector &vec, idx_t size);
 	static bool HasEntry(const Vector &vector);
 	static void SetEntry(Vector &vector, unique_ptr<Vector> entry);
-	static void Append(Vector &target, Vector &source, idx_t source_size, idx_t source_offset = 0);
+	static void Append(Vector &target, const Vector &source, idx_t source_size, idx_t source_offset = 0);
+	static void Append(Vector &target, const Vector &source, const SelectionVector &sel, idx_t source_size,
+	                   idx_t source_offset = 0);
 	static void PushBack(Vector &target, Value &insert);
 	static void Initialize(Vector &vec);
 	static vector<idx_t> Search(Vector &list, Value &key);
 	static Value GetValuesFromOffsets(Vector &list, vector<idx_t> &offsets);
+	//! Share the entry of the other list vector
+	static void ReferenceEntry(Vector &vector, Vector &other);
 };
 
 struct StringVector {
@@ -308,7 +321,7 @@ struct StringVector {
 
 struct StructVector {
 	static bool HasEntries(const Vector &vector);
-	static child_list_t<unique_ptr<Vector>> &GetEntries(const Vector &vector);
+	static const child_list_t<unique_ptr<Vector>> &GetEntries(const Vector &vector);
 	static void AddEntry(Vector &vector, const string &name, unique_ptr<Vector> entry);
 };
 

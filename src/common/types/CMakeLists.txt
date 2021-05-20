@@ -12,6 +12,7 @@ add_library_unity(
   hyperloglog.cpp
   interval.cpp
   null_value.cpp
+  row_data_collection.cpp
   selection_vector.cpp
   string_heap.cpp
   string_type.cpp

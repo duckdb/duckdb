@@ -74,6 +74,7 @@ m4/lt~obsolete.m4
 #==============================================================================#
 #m4/
 build/
+duckdb_benchmark_data/
 #*.m4
 *.o
 *.lo
@@ -297,6 +298,7 @@ docs
 
 # tests
 test/test.sql
+duckdb_benchmark_data/
 
 # SQLite logic tests
 test/evidence/

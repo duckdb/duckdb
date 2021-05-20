@@ -17,6 +17,8 @@ struct InformationSchemaSchemataData : public FunctionOperatorData {
 
 static unique_ptr<FunctionData> InformationSchemaSchemataBind(ClientContext &context, vector<Value> &inputs,
                                                               unordered_map<string, Value> &named_parameters,
+                                                              vector<LogicalType> &input_table_types,
+                                                              vector<string> &input_table_names,
                                                               vector<LogicalType> &return_types,
                                                               vector<string> &names) {
 	names.emplace_back("catalog_name");
@@ -44,7 +46,7 @@ static unique_ptr<FunctionData> InformationSchemaSchemataBind(ClientContext &con
 }
 
 unique_ptr<FunctionOperatorData> InformationSchemaSchemataInit(ClientContext &context, const FunctionData *bind_data,
-                                                               vector<column_t> &column_ids,
+                                                               const vector<column_t> &column_ids,
                                                                TableFilterCollection *filters) {
 	auto result = make_unique<InformationSchemaSchemataData>();
 
@@ -58,7 +60,7 @@ unique_ptr<FunctionOperatorData> InformationSchemaSchemataInit(ClientContext &co
 }
 
 void InformationSchemaSchemataFunction(ClientContext &context, const FunctionData *bind_data,
-                                       FunctionOperatorData *operator_state, DataChunk &output) {
+                                       FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
 	auto &data = (InformationSchemaSchemataData &)*operator_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values

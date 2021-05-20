@@ -69,3 +69,41 @@ SELECT sum(unique1) over (order by unique1 rows between unbounded preceding and 
 45.000000
 45.000000
 
+# Issue 1472
+
+statement ok
+create table issue1472 (permno real, date date, ret real);
+
+statement ok
+insert into issue1472 values
+    (10000.0, '1986-02-28'::date, -0.2571428716182709),
+    (10000.0, '1986-03-31'::date, 0.36538460850715637),
+    (10000.0, '1986-04-30'::date, -0.09859155118465424),
+    (10000.0, '1986-05-30'::date, -0.22265625),
+    (10000.0, '1986-06-30'::date, -0.005025125574320555)
+;
+
+query RRR
+select permno,
+    sum(log(ret+1)) over (PARTITION BY permno ORDER BY date rows between 12 preceding and 2 preceding),
+    ret
+from issue1472
+ORDER BY permno, date;
+----
+10000.0	NULL	 -0.2571428716182709
+10000.0	NULL	 0.36538460850715637
+10000.0	 -0.12909470484217817  	 -0.09859155118465424
+10000.0	 0.006160298054551344  	 -0.22265625
+10000.0	 -0.038918077590690346 	 -0.005025125574320555
+
+# Issue #1697
+statement ok
+create table issue1697 as
+    select mod(b, 100) as a, b from (select b from range(10000) tbl(b)) t
+
+statement ok
+select avg(a) over (
+    order by b asc
+    rows between mod(b * 1023, 11) preceding and 23 - mod(b * 1023, 11) following)
+from issue1697
+

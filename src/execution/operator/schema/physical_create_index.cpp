@@ -7,7 +7,8 @@
 
 namespace duckdb {
 
-void PhysicalCreateIndex::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
+void PhysicalCreateIndex::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
+                                           PhysicalOperatorState *state) const {
 	if (column_ids.empty()) {
 		throw NotImplementedException("CREATE INDEX does not refer to any columns in the base table!");
 	}
@@ -22,7 +23,7 @@ void PhysicalCreateIndex::GetChunkInternal(ExecutionContext &context, DataChunk 
 	unique_ptr<Index> index;
 	switch (info->index_type) {
 	case IndexType::ART: {
-		index = make_unique<ART>(column_ids, move(unbound_expressions), info->unique);
+		index = make_unique<ART>(column_ids, unbound_expressions, info->unique);
 		break;
 	}
 	default:

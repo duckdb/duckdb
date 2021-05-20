@@ -87,9 +87,14 @@ static void HistogramCombineFunction(Vector &state, Vector &combined, idx_t coun
 
 	for (idx_t i = 0; i < count; i++) {
 		auto state = states_ptr[sdata.sel->get_index(i)];
+		if (!state->hist) {
+			continue;
+		}
 		if (!combined_ptr[i]->hist) {
 			combined_ptr[i]->hist = new map<T, idx_t>();
 		}
+		D_ASSERT(combined_ptr[i]->hist);
+		D_ASSERT(state->hist);
 		for (auto &entry : *state->hist) {
 			(*combined_ptr[i]->hist)[entry.first] += entry.second;
 		}

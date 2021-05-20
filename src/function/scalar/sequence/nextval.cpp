@@ -52,6 +52,7 @@ static int64_t NextSequenceValue(Transaction &transaction, SequenceCatalogEntry 
 			                        seq->max_value);
 		}
 	}
+	seq->last_value = result;
 	seq->usage_count++;
 	transaction.sequence_usage[seq] = SequenceValue(seq->usage_count, seq->counter);
 	return result;
