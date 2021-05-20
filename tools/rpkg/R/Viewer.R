@@ -92,7 +92,7 @@ con <- dbConnect(drv)
   observer <- getOption("connectionObserver")
   if (is.null(observer)) return(invisible(NULL))
 
-  if (!is.null(observer) && interactive() && !inherits(try(con, silent = TRUE), "try-error")) {
+  if (!is.null(observer) && !inherits(try(con, silent = TRUE), "try-error")) {
     icon <- duckdb_ConnectionIcon(con)
 
     host <- get_host(con)
