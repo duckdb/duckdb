@@ -18,7 +18,7 @@ class WindowSegmentTree {
 public:
 	using FrameBounds = std::pair<idx_t, idx_t>;
 
-	WindowSegmentTree(AggregateFunction &aggregate, FunctionData *bind_info, LogicalType result_type,
+	WindowSegmentTree(AggregateFunction &aggregate, FunctionData *bind_info, const LogicalType &result_type,
 	                  ChunkCollection *input);
 	~WindowSegmentTree();
 
@@ -44,8 +44,10 @@ private:
 	DataChunk inputs;
 	//! A vector of pointers to "state", used for intermediate window segment aggregation
 	Vector statep;
-	//! The frame boundaries, used for the frame functions
-	FrameBounds bounds;
+	//! The frame boundaries, used for the window functions
+	FrameBounds frame;
+	//! Reused result value container for the window functions (20% of runtime)
+	Vector result;
 
 	//! The actual window segment tree: an array of aggregate states that represent all the intermediate nodes
 	unique_ptr<data_t[]> levels_flat_native;

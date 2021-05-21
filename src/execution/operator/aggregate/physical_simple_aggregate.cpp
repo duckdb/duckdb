@@ -1,9 +1,10 @@
 #include "duckdb/execution/operator/aggregate/physical_simple_aggregate.hpp"
-
+#include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
@@ -139,7 +140,6 @@ void PhysicalSimpleAggregate::Sink(ExecutionContext &context, GlobalOperatorStat
 			}
 		}
 
-		// perform the actual aggregation
 		aggregate.function.simple_update(payload_cnt == 0 ? nullptr : &payload_chunk.data[payload_idx],
 		                                 aggregate.bind_info.get(), payload_cnt, sink.state.aggregates[aggr_idx].get(),
 		                                 payload_chunk.size());
@@ -171,6 +171,9 @@ void PhysicalSimpleAggregate::Combine(ExecutionContext &context, GlobalOperatorS
 		// simply move over the source state into the global state
 		source.state.Move(gstate.state);
 	}
+
+	context.thread.profiler.Flush(this, &source.child_executor, "child_executor", 0);
+	context.client.profiler->Flush(context.thread.profiler);
 }
 
 //===--------------------------------------------------------------------===//
@@ -206,6 +209,8 @@ string PhysicalSimpleAggregate::ParamsToString() const {
 		}
 	}
 	return result;
+}
+void PhysicalSimpleAggregate::FinalizeOperatorState(PhysicalOperatorState &state, ExecutionContext &context) {
 }
 
 } // namespace duckdb

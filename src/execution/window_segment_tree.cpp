@@ -2,15 +2,16 @@
 
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/algorithm.hpp"
+#include "duckdb/common/helper.hpp"
 
 #include <cmath>
 
 namespace duckdb {
 
-WindowSegmentTree::WindowSegmentTree(AggregateFunction &aggregate, FunctionData *bind_info, LogicalType result_type,
-                                     ChunkCollection *input)
-    : aggregate(aggregate), bind_info(bind_info), result_type(move(result_type)), state(aggregate.state_size()),
-      bounds(0, 0), internal_nodes(0), input_ref(input) {
+WindowSegmentTree::WindowSegmentTree(AggregateFunction &aggregate, FunctionData *bind_info,
+                                     const LogicalType &result_type_p, ChunkCollection *input)
+    : aggregate(aggregate), bind_info(bind_info), result_type(result_type_p), state(aggregate.state_size()),
+      frame(0, 0), result(result_type_p), internal_nodes(0), input_ref(input) {
 #if STANDARD_VECTOR_SIZE < 512
 	throw NotImplementedException("Window functions are not supported for vector sizes < 512");
 #endif
@@ -21,7 +22,8 @@ WindowSegmentTree::WindowSegmentTree(AggregateFunction &aggregate, FunctionData 
 	if (input_ref && input_ref->ColumnCount() > 0) {
 		inputs.Initialize(input_ref->Types());
 		// if we have a frame-by-frame method, share the single state
-		if (aggregate.frame) {
+		if (aggregate.window) {
+			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 			AggregateInit();
 		} else if (aggregate.combine) {
 			ConstructTree();
@@ -49,7 +51,7 @@ WindowSegmentTree::~WindowSegmentTree() {
 		aggregate.destructor(addresses, count);
 	}
 
-	if (aggregate.frame) {
+	if (aggregate.window) {
 		(void)AggegateFinal();
 	}
 }
@@ -72,20 +74,26 @@ Value WindowSegmentTree::AggegateFinal() {
 }
 
 void WindowSegmentTree::ExtractFrame(idx_t begin, idx_t end) {
-	inputs.Reset();
-	inputs.SetCardinality(end - begin);
+	const auto size = end - begin;
+	if (size >= STANDARD_VECTOR_SIZE) {
+		throw InternalException("Cannot compute window aggregation: bounds are too large");
+	}
 
 	const idx_t start_in_vector = begin % STANDARD_VECTOR_SIZE;
 	const auto input_count = input_ref->ColumnCount();
-	if (start_in_vector + inputs.size() <= STANDARD_VECTOR_SIZE) {
+	if (start_in_vector + size <= STANDARD_VECTOR_SIZE) {
+		inputs.SetCardinality(size);
 		auto &chunk = input_ref->GetChunkForRow(begin);
 		for (idx_t i = 0; i < input_count; ++i) {
 			auto &v = inputs.data[i];
 			auto &vec = chunk.data[i];
 			v.Slice(vec, start_in_vector);
-			v.Verify(inputs.size());
+			v.Verify(size);
 		}
 	} else {
+		inputs.Reset();
+		inputs.SetCardinality(size);
+
 		// we cannot just slice the individual vector!
 		auto &chunk_a = input_ref->GetChunkForRow(begin);
 		auto &chunk_b = input_ref->GetChunkForRow(end);
@@ -154,7 +162,7 @@ void WindowSegmentTree::ConstructTree() {
 		for (idx_t pos = 0; pos < level_size; pos += TREE_FANOUT) {
 			// compute the aggregate for this entry in the segment tree
 			AggregateInit();
-			WindowSegmentValue(level_current, pos, MinValue<idx_t>(level_size, pos + TREE_FANOUT));
+			WindowSegmentValue(level_current, pos, MinValue(level_size, pos + TREE_FANOUT));
 
 			memcpy(levels_flat_native.get() + (levels_flat_offset * state.size()), state.data(), state.size());
 
@@ -179,26 +187,18 @@ Value WindowSegmentTree::Compute(idx_t begin, idx_t end) {
 		return Value::Numeric(result_type, end - begin);
 	}
 
-	// If we have a frame function, use that
-	if (aggregate.frame) {
-		// Reference the previous inputs
-		DataChunk prevs;
-		prevs.InitializeEmpty(inputs.GetTypes());
-		prevs.Reference(inputs);
-
-		// Extract the new inputs
-		ExtractFrame(begin, end);
-
+	// If we have a window function, use that
+	if (aggregate.window) {
 		// Frame boundaries
-		auto prev_bounds = bounds;
-		bounds = FrameBounds(begin, end);
+		auto prev = frame;
+		frame = FrameBounds(begin, end);
 
-		Vector result(result_type);
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		// Extract the range
+		ExtractFrame(MinValue(frame.first, prev.first), MaxValue(frame.second, prev.second));
+
 		ConstantVector::SetNull(result, false);
 
-		aggregate.frame(inputs.data.data(), prevs.data.data(), bind_info, inputs.ColumnCount(), state.data(), bounds,
-		                prev_bounds, result);
+		aggregate.window(inputs.data.data(), bind_info, inputs.ColumnCount(), state.data(), frame, prev, result);
 		return result.GetValue(0);
 	}
 

@@ -26,7 +26,7 @@ ExpressionExecutor::ExpressionExecutor(const vector<unique_ptr<Expression>> &exp
 
 void ExpressionExecutor::AddExpression(const Expression &expr) {
 	expressions.push_back(&expr);
-	auto state = make_unique<ExpressionExecutorState>();
+	auto state = make_unique<ExpressionExecutorState>(expr.ToString());
 	Initialize(expr, *state);
 	states.push_back(move(state));
 }
@@ -38,24 +38,14 @@ void ExpressionExecutor::Initialize(const Expression &expression, ExpressionExec
 
 void ExpressionExecutor::Execute(DataChunk *input, DataChunk &result) {
 	SetChunk(input);
-
 	D_ASSERT(expressions.size() == result.ColumnCount());
 	D_ASSERT(!expressions.empty());
+
 	for (idx_t i = 0; i < expressions.size(); i++) {
 		ExecuteExpression(i, result.data[i]);
-		if (current_count >= next_sample) {
-			next_sample = 50 + random.NextRandomInteger() % 100;
-			++sample_count;
-			sample_tuples_count += input->size();
-			current_count = 0;
-		} else {
-			++current_count;
-		}
 	}
 	result.SetCardinality(input ? input->size() : 1);
 	result.Verify();
-	++total_count;
-	tuples_count += input->size();
 }
 
 void ExpressionExecutor::ExecuteExpression(DataChunk &input, Vector &result) {
@@ -66,7 +56,10 @@ void ExpressionExecutor::ExecuteExpression(DataChunk &input, Vector &result) {
 idx_t ExpressionExecutor::SelectExpression(DataChunk &input, SelectionVector &sel) {
 	D_ASSERT(expressions.size() == 1);
 	SetChunk(&input);
-	return Select(*expressions[0], states[0]->root_state.get(), nullptr, input.size(), &sel, nullptr);
+	states[0]->profiler.BeginSample();
+	idx_t selected_tuples = Select(*expressions[0], states[0]->root_state.get(), nullptr, input.size(), &sel, nullptr);
+	states[0]->profiler.EndSample(chunk ? chunk->size() : 0);
+	return selected_tuples;
 }
 
 void ExpressionExecutor::ExecuteExpression(Vector &result) {
@@ -77,7 +70,9 @@ void ExpressionExecutor::ExecuteExpression(Vector &result) {
 void ExpressionExecutor::ExecuteExpression(idx_t expr_idx, Vector &result) {
 	D_ASSERT(expr_idx < expressions.size());
 	D_ASSERT(result.GetType() == expressions[expr_idx]->return_type);
+	states[expr_idx]->profiler.BeginSample();
 	Execute(*expressions[expr_idx], states[expr_idx]->root_state.get(), nullptr, chunk ? chunk->size() : 1, result);
+	states[expr_idx]->profiler.EndSample(chunk ? chunk->size() : 0);
 }
 
 Value ExpressionExecutor::EvaluateScalar(const Expression &expr) {

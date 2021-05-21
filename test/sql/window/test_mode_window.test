@@ -1,0 +1,139 @@
+# name: test/sql/window/test_mode_window.test
+# description: Test MODE aggregate as a window function
+# group: [window]
+
+require vector_size 512
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table modes as select range r from range(10) union all values (NULL), (NULL), (NULL);
+
+query IIII
+SELECT r % 2, r, r/3, mode(r/3) over (partition by r % 2 order by r) FROM modes ORDER BY 1, 2
+----
+NULL	NULL	NULL	NULL
+NULL	NULL	NULL	NULL
+NULL	NULL	NULL	NULL
+0	0	0	0
+0	2	0	0
+0	4	1	0
+0	6	2	0
+0	8	2	0
+1	1	0	0
+1	3	1	0
+1	5	1	1
+1	7	2	1
+1	9	3	1
+
+query III
+SELECT r, r/3, mode(r/3) over (order by r rows between 1 preceding and 1 following) FROM modes ORDER BY 1, 2
+----
+NULL	NULL	NULL
+NULL	NULL	NULL
+NULL	NULL	0
+0	0	0
+1	0	0
+2	0	0
+3	1	1
+4	1	1
+5	1	1
+6	2	2
+7	2	2
+8	2	2
+9	3	2
+
+query III
+SELECT r, r/3, mode(r/3) over (order by r rows between 1 preceding and 3 following) FROM modes ORDER BY 1, 2
+----
+NULL	NULL	0
+NULL	NULL	0
+NULL	NULL	0
+0	0	0
+1	0	0
+2	0	1
+3	1	1
+4	1	1
+5	1	2
+6	2	2
+7	2	2
+8	2	2
+9	3	2
+
+# Scattered NULLs
+query IIII
+SELECT r, r / 3, n, mode(n) over (partition by r % 3 order by r)
+FROM (SELECT r, CASE r % 2 WHEN 0 THEN r ELSE NULL END AS n FROM modes) nulls
+ORDER BY 1
+----
+NULL	NULL	NULL	NULL
+NULL	NULL	NULL	NULL
+NULL	NULL	NULL	NULL
+0	0	0	0
+1	0	NULL	NULL
+2	0	2	2
+3	1	NULL	0
+4	1	4	4
+5	1	NULL	2
+6	2	6	0
+7	2	NULL	4
+8	2	8	2
+9	3	NULL	0
+
+query III
+SELECT r, n, mode(n) over (order by r rows between 1 preceding and 1 following)
+FROM (SELECT r, CASE r % 2 WHEN 0 THEN r ELSE NULL END AS n FROM modes) nulls
+ORDER BY 1
+----
+NULL	NULL	NULL
+NULL	NULL	NULL
+NULL	NULL	0
+0	0	0
+1	NULL	0
+2	2	2
+3	NULL	2
+4	4	4
+5	NULL	4
+6	6	6
+7	NULL	6
+8	8	8
+9	NULL	8
+
+query III
+SELECT r, n, mode(n) over (order by r rows between 1 preceding and 3 following)
+FROM (SELECT r, CASE r % 2 WHEN 0 THEN r ELSE NULL END AS n FROM modes) nulls
+ORDER BY 1
+----
+NULL	NULL	0
+NULL	NULL	0
+NULL	NULL	0
+0	0	0
+1	NULL	0
+2	2	2
+3	NULL	2
+4	4	4
+5	NULL	4
+6	6	6
+7	NULL	6
+8	8	8
+9	NULL	8
+
+query III
+SELECT r, n, mode(n) over (order by r rows between unbounded preceding and unbounded following)
+FROM (SELECT r, CASE r % 2 WHEN 0 THEN r ELSE NULL END AS n FROM modes) nulls
+ORDER BY 1
+----
+NULL	NULL	0
+NULL	NULL	0
+NULL	NULL	0
+0	0	0
+1	NULL	0
+2	2	0
+3	NULL	0
+4	4	0
+5	NULL	0
+6	6	0
+7	NULL	0
+8	8	0
+9	NULL	0
