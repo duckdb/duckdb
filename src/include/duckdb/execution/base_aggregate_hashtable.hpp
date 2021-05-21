@@ -38,6 +38,8 @@ struct AggregateObject {
 
 class BaseAggregateHashTable {
 public:
+	using ValidityBytes = TemplatedValidityMask<uint8_t>;
+
 	BaseAggregateHashTable(BufferManager &buffer_manager, vector<LogicalType> group_types,
 	                       vector<LogicalType> payload_types, vector<AggregateObject> aggregate_objects);
 	virtual ~BaseAggregateHashTable() {

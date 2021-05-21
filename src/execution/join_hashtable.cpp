@@ -121,7 +121,7 @@ static void TemplatedSerializeVData(VectorData &vdata, const SelectionVector &se
 			T value = isnull ? NullValue<T>() : source[source_idx];
 			Store<T>(value, key_locations[i] + col_offset);
 			if (isnull) {
-				ValidityMask col_mask(key_locations[i]);
+				ValidityMask col_mask((validity_t *)key_locations[i]);
 				col_mask.SetInvalidUnsafe(col_idx);
 			}
 		}
@@ -195,7 +195,7 @@ void JoinHashTable::SerializeVectorData(VectorData &vdata, PhysicalType type, co
 
 			string_t new_val;
 			if (!vdata.validity.RowIsValid(source_idx)) {
-				ValidityMask col_mask(key_locations[i]);
+				ValidityMask col_mask((validity_t *)key_locations[i]);
 				col_mask.SetInvalidUnsafe(col_idx);
 				new_val = NullValue<string_t>();
 			} else if (source[source_idx].IsInlined()) {
@@ -346,7 +346,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 		idx_t next = append_idx + append_entry.count;
 		for (; append_idx < next; append_idx++) {
 			// Set the validity mask (clearing is less common)
-			ValidityMask(append_entry.baseptr).SetAllValid(keys.ColumnCount() + payload.ColumnCount());
+			ValidityMask((validity_t *)append_entry.baseptr).SetAllValid(keys.ColumnCount() + payload.ColumnCount());
 			key_locations[append_idx] = append_entry.baseptr;
 			append_entry.baseptr += entry_size;
 		}
@@ -532,7 +532,7 @@ static idx_t TemplatedGather(VectorData &vdata, Vector &pointers, const Selectio
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = current_sel.get_index(i);
 		auto kidx = vdata.sel->get_index(idx);
-		ValidityMask mask(ptrs[idx]);
+		ValidityMask mask((validity_t *)ptrs[idx]);
 		auto isnull = !mask.RowIsValid(mask.GetValidityEntry(entry_idx), idx_in_entry);
 
 		if (!vdata.validity.RowIsValid(kidx)) {
@@ -721,7 +721,7 @@ static void TemplatedGatherResult(Vector &result, data_ptr_t *pointers, const Se
 		auto ridx = result_vector.get_index(i);
 		auto pidx = sel_vector.get_index(i);
 		T hdata = Load<T>(pointers[pidx] + offset);
-		ValidityMask hmask(pointers[pidx]);
+		ValidityMask hmask((validity_t *)pointers[pidx]);
 		if (!hmask.RowIsValid(hmask.GetValidityEntry(entry_idx), idx_in_entry)) {
 			rmask.SetInvalid(ridx);
 		} else {

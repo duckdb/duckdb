@@ -72,8 +72,6 @@ public:
 	}
 	explicit TemplatedValidityMask(V *ptr) : validity_mask(ptr) {
 	}
-	explicit TemplatedValidityMask(data_ptr_t ptr) : validity_mask((V *)ptr) {
-	}
 	TemplatedValidityMask(const TemplatedValidityMask &original, idx_t count) {
 		Copy(original, count);
 	}
@@ -250,13 +248,11 @@ protected:
 
 struct ValidityMask : public TemplatedValidityMask<validity_t> {
 public:
-	ValidityMask() : TemplatedValidityMask((validity_t *)nullptr) {
+	ValidityMask() : TemplatedValidityMask(nullptr) {
 	}
 	explicit ValidityMask(idx_t max_count) : TemplatedValidityMask(max_count) {
 	}
 	explicit ValidityMask(validity_t *ptr) : TemplatedValidityMask(ptr) {
-	}
-	explicit ValidityMask(data_ptr_t ptr) : ValidityMask((validity_t *)ptr) {
 	}
 	ValidityMask(const ValidityMask &original, idx_t count) : TemplatedValidityMask(original, count) {
 	}

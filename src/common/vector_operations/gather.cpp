@@ -10,12 +10,14 @@
 
 namespace duckdb {
 
+using ValidityBytes = TemplatedValidityMask<uint8_t>;
+
 template <class T>
 static void TemplatedGatherLoop(Vector &source, Vector &dest, idx_t count, idx_t col_offset, idx_t col_idx) {
 	// Precompute mask indexes
 	idx_t entry_idx;
 	idx_t idx_in_entry;
-	ValidityMask().GetEntryIndex(col_idx, entry_idx, idx_in_entry);
+	ValidityBytes::GetEntryIndex(col_idx, entry_idx, idx_in_entry);
 
 	auto addresses = FlatVector::GetData<data_ptr_t>(source);
 	auto data = FlatVector::GetData<T>(dest);
@@ -23,7 +25,7 @@ static void TemplatedGatherLoop(Vector &source, Vector &dest, idx_t count, idx_t
 
 	for (idx_t i = 0; i < count; i++) {
 		data[i] = Load<T>(addresses[i] + col_offset);
-		ValidityMask smask(addresses[i]);
+		ValidityBytes smask(addresses[i]);
 		if (!smask.RowIsValid(smask.GetValidityEntry(entry_idx), idx_in_entry)) {
 			mask.SetInvalid(i);
 		}

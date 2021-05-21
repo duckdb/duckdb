@@ -23,7 +23,7 @@ BaseAggregateHashTable::BaseAggregateHashTable(BufferManager &buffer_manager, ve
       payload_types(move(payload_types_p)), group_width(0), group_mask_width(0), group_padding(0), payload_width(0) {
 
 	// Null mask at the front - 1 bit per value.
-	group_mask_width = ValidityData::EntryCount(group_types.size()) * sizeof(validity_t);
+	group_mask_width = ValidityBytes::ValidityMaskSize(group_types.size());
 	group_width = group_mask_width;
 	for (idx_t i = 0; i < group_types.size(); i++) {
 		group_width += GetTypeIdSize(group_types[i].InternalType());

@@ -17,6 +17,8 @@
 
 namespace duckdb {
 
+using ValidityBytes = BaseAggregateHashTable::ValidityBytes;
+
 GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manager, vector<LogicalType> group_types,
                                                      vector<LogicalType> payload_types,
                                                      const vector<BoundAggregateExpression *> &bindings,
@@ -401,7 +403,7 @@ static void TemplatedScatter(VectorData &gdata, Vector &addresses, const Selecti
 			T store_value = isnull ? NullValue<T>() : data[group_idx];
 			Store<T>(store_value, ptr);
 			if (isnull) {
-				ValidityMask col_mask(pointers[pointer_idx]);
+				ValidityBytes col_mask(pointers[pointer_idx]);
 				col_mask.SetInvalidUnsafe(col_idx);
 			}
 		}
@@ -473,7 +475,7 @@ void GroupedAggregateHashTable::ScatterGroups(DataChunk &groups, unique_ptr<Vect
 				auto group_idx = gdata.sel->get_index(pointer_idx);
 				auto ptr = pointers[pointer_idx] + col_offset;
 				if (!gdata.validity.RowIsValid(group_idx)) {
-					ValidityMask col_mask(pointers[pointer_idx]);
+					ValidityBytes col_mask(pointers[pointer_idx]);
 					col_mask.SetInvalidUnsafe(col_idx);
 					Store<string_t>(NullValue<string_t>(), ptr);
 				} else if (string_data[group_idx].IsInlined()) {
@@ -499,7 +501,7 @@ static void TemplatedCompareGroups(VectorData &gdata, Vector &addresses, Selecti
 	// Precompute mask indexes
 	idx_t entry_idx;
 	idx_t idx_in_entry;
-	ValidityMask().GetEntryIndex(col_idx, entry_idx, idx_in_entry);
+	ValidityBytes::GetEntryIndex(col_idx, entry_idx, idx_in_entry);
 
 	auto data = (T *)gdata.data;
 	auto pointers = FlatVector::GetData<data_ptr_t>(addresses);
@@ -509,7 +511,7 @@ static void TemplatedCompareGroups(VectorData &gdata, Vector &addresses, Selecti
 			auto idx = sel.get_index(i);
 			auto group_idx = gdata.sel->get_index(idx);
 			auto value = Load<T>(pointers[idx] + col_offset);
-			ValidityMask mask(pointers[idx]);
+			ValidityBytes mask(pointers[idx]);
 			auto isnull = !mask.RowIsValid(mask.GetValidityEntry(entry_idx), idx_in_entry);
 
 			if (!gdata.validity.RowIsValid(group_idx)) {
@@ -532,7 +534,7 @@ static void TemplatedCompareGroups(VectorData &gdata, Vector &addresses, Selecti
 			auto idx = sel.get_index(i);
 			auto group_idx = gdata.sel->get_index(idx);
 			auto value = Load<T>(pointers[idx] + col_offset);
-			ValidityMask mask(pointers[idx]);
+			ValidityBytes mask(pointers[idx]);
 			auto isnull = !mask.RowIsValid(mask.GetValidityEntry(entry_idx), idx_in_entry);
 
 			if (!isnull && Equals::Operation<T>(data[group_idx], value)) {
@@ -677,7 +679,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 				D_ASSERT((*(hash_t *)entry_payload_ptr) == group_hashes_ptr[index]);
 
 				// Set the validity mask (clearing is less common)
-				ValidityMask(entry_payload_ptr + HASH_WIDTH).SetAllValid(group_types.size());
+				ValidityBytes(entry_payload_ptr + HASH_WIDTH).SetAllValid(group_types.size());
 
 				// initialize the payload info for the column
 				memcpy(entry_payload_ptr + HASH_WIDTH + group_width, empty_payload_data.get(), payload_width);
