@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb_python/arrow/array_wrapper.hpp
+// duckdb_python/arrow/arrow_array_stream.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -11,7 +11,7 @@
 #include <string>
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/constants.hpp"
-#include "duckdb/common/arrow_duckdb.hpp"
+#include "duckdb/common/arrow_wrapper.hpp"
 #include "pybind_wrapper.hpp"
 namespace duckdb {
 class PythonTableArrowArrayStreamFactory {

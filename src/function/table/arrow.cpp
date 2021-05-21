@@ -1,3 +1,4 @@
+#include "duckdb/common/arrow_wrapper.hpp"
 #include "duckdb.hpp"
 
 #include "duckdb/common/arrow.hpp"

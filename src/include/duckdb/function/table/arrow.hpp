@@ -10,7 +10,7 @@
 
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/parallel/parallel_state.hpp"
-#include "duckdb/common/arrow_duckdb.hpp"
+#include "duckdb/common/arrow_wrapper.hpp"
 #include "duckdb/common/atomic.hpp"
 
 namespace duckdb {
