@@ -43,6 +43,8 @@ struct JoinHTScanState {
 */
 class JoinHashTable {
 public:
+	using ValidityBytes = TemplatedValidityMask<uint8_t>;
+
 	//! Scan structure that can be used to resume scans, as a single probe can
 	//! return 1024*N values (where N is the size of the HT). This is
 	//! returned by the JoinHashTable::Scan function and can be used to resume a

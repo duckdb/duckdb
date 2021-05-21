@@ -9,6 +9,7 @@
 
 namespace duckdb {
 
+using ValidityBytes = JoinHashTable::ValidityBytes;
 using ScanStructure = JoinHashTable::ScanStructure;
 
 JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition> &conditions,
@@ -42,7 +43,7 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition
 	for (idx_t i = 0; i < build_types.size(); i++) {
 		build_size += GetTypeIdSize(build_types[i].InternalType());
 	}
-	validity_size = ValidityData::EntryCount(conditions.size() + build_types.size()) * sizeof(validity_t);
+	validity_size = ValidityBytes::ValidityMaskSize(conditions.size() + build_types.size());
 	tuple_size = validity_size + condition_size + build_size;
 	pointer_offset = tuple_size;
 	if (IsRightOuterJoin(join_type)) {
@@ -121,7 +122,7 @@ static void TemplatedSerializeVData(VectorData &vdata, const SelectionVector &se
 			T value = isnull ? NullValue<T>() : source[source_idx];
 			Store<T>(value, key_locations[i] + col_offset);
 			if (isnull) {
-				ValidityMask col_mask((validity_t *)key_locations[i]);
+				ValidityBytes col_mask(key_locations[i]);
 				col_mask.SetInvalidUnsafe(col_idx);
 			}
 		}
@@ -195,7 +196,7 @@ void JoinHashTable::SerializeVectorData(VectorData &vdata, PhysicalType type, co
 
 			string_t new_val;
 			if (!vdata.validity.RowIsValid(source_idx)) {
-				ValidityMask col_mask((validity_t *)key_locations[i]);
+				ValidityBytes col_mask(key_locations[i]);
 				col_mask.SetInvalidUnsafe(col_idx);
 				new_val = NullValue<string_t>();
 			} else if (source[source_idx].IsInlined()) {
@@ -346,7 +347,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 		idx_t next = append_idx + append_entry.count;
 		for (; append_idx < next; append_idx++) {
 			// Set the validity mask (clearing is less common)
-			ValidityMask((validity_t *)append_entry.baseptr).SetAllValid(keys.ColumnCount() + payload.ColumnCount());
+			ValidityBytes(append_entry.baseptr).SetAllValid(keys.ColumnCount() + payload.ColumnCount());
 			key_locations[append_idx] = append_entry.baseptr;
 			append_entry.baseptr += entry_size;
 		}
@@ -524,7 +525,7 @@ static idx_t TemplatedGather(VectorData &vdata, Vector &pointers, const Selectio
 	// Precompute mask indexes
 	idx_t entry_idx;
 	idx_t idx_in_entry;
-	ValidityMask().GetEntryIndex(col_idx, entry_idx, idx_in_entry);
+	ValidityBytes::GetEntryIndex(col_idx, entry_idx, idx_in_entry);
 
 	idx_t result_count = 0;
 	auto data = (T *)vdata.data;
@@ -532,7 +533,7 @@ static idx_t TemplatedGather(VectorData &vdata, Vector &pointers, const Selectio
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = current_sel.get_index(i);
 		auto kidx = vdata.sel->get_index(idx);
-		ValidityMask mask((validity_t *)ptrs[idx]);
+		ValidityBytes mask(ptrs[idx]);
 		auto isnull = !mask.RowIsValid(mask.GetValidityEntry(entry_idx), idx_in_entry);
 
 		if (!vdata.validity.RowIsValid(kidx)) {
@@ -713,7 +714,7 @@ static void TemplatedGatherResult(Vector &result, data_ptr_t *pointers, const Se
 	// Precompute mask indexes
 	idx_t entry_idx;
 	idx_t idx_in_entry;
-	ValidityMask().GetEntryIndex(col_idx, entry_idx, idx_in_entry);
+	ValidityBytes::GetEntryIndex(col_idx, entry_idx, idx_in_entry);
 
 	auto rdata = FlatVector::GetData<T>(result);
 	auto &rmask = FlatVector::Validity(result);
@@ -721,7 +722,7 @@ static void TemplatedGatherResult(Vector &result, data_ptr_t *pointers, const Se
 		auto ridx = result_vector.get_index(i);
 		auto pidx = sel_vector.get_index(i);
 		T hdata = Load<T>(pointers[pidx] + offset);
-		ValidityMask hmask((validity_t *)pointers[pidx]);
+		ValidityBytes hmask(pointers[pidx]);
 		if (!hmask.RowIsValid(hmask.GetValidityEntry(entry_idx), idx_in_entry)) {
 			rmask.SetInvalid(ridx);
 		} else {
