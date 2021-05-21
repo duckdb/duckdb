@@ -146,7 +146,7 @@ public:
 		idx_t num_threads = task_scheduler.NumberOfThreads();
 		// memory usage per thread should scale with max mem / num threads
 		// we take 30% of the max memory, to be conservative
-		return size_in_bytes > 300000; //(0.3 * max_memory / num_threads);
+		return size_in_bytes > (0.3 * max_memory / num_threads);
 	}
 
 	//! Sorting columns, and variable size sorting data (if any)
