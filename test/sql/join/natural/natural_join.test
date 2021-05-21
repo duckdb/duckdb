@@ -80,6 +80,16 @@ select (select * from (select 42) tbl(a) natural join (select 42) tbl2(a))
 ----
 42
 
+# Multiple 8-bit bitmasks
+query IIIIIIIIIII
+select *
+from
+    (select 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52) tbl1(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11)
+    natural join
+    (select 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52) tbl2(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11);
+----
+42	43	44	45	46	47	48	49	50	51	52
+
 # JoinHashTable::ScanFullOuter coverage
 statement ok
 CREATE TABLE sqlancer_t0(c0 DOUBLE, c1 DOUBLE);
