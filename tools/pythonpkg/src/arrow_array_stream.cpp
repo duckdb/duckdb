@@ -11,11 +11,9 @@ PythonTableArrowArrayStream::PythonTableArrowArrayStream(PyObject *arrow_table_p
 	InitializeFunctionPointers(&stream->arrow_array_stream);
 	py::handle table_handle(arrow_table_p);
 	batches = table_handle.attr("to_batches")();
-	stream->number_of_batches = py::len(batches);
-	if (stream->number_of_batches >= 1) {
-		stream->first_batch_size = py::len(batches[0]);
-		stream->last_batch_size = py::len(batches[stream->number_of_batches - 1]);
-	}
+	py::int_ num_rows_func = table_handle.attr("num_rows");
+	stream->number_of_rows = num_rows_func;
+
 	stream->arrow_array_stream.private_data = this;
 }
 

@@ -33,10 +33,7 @@ public:
 class ArrowArrayStreamWrapper {
 public:
 	ArrowArrayStream arrow_array_stream;
-	uint64_t number_of_batches = 0;
-	uint64_t first_batch_size = 0;
-	uint64_t last_batch_size = 0;
-
+	uint64_t number_of_rows;
 	void GetSchema(ArrowSchemaWrapper &schema);
 
 	unique_ptr<ArrowArrayWrapper> GetNextChunk();

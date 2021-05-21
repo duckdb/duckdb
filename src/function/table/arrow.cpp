@@ -293,8 +293,7 @@ void ArrowTableFunction::ArrowScanFunctionParallel(ClientContext &context, const
 }
 
 idx_t ArrowTableFunction::ArrowScanMaxThreads(ClientContext &context, const FunctionData *bind_data_p) {
-	auto &data = (const ArrowScanFunctionData &)*bind_data_p;
-	return data.stream->number_of_batches;
+	return context.db->NumberOfThreads();
 }
 
 unique_ptr<ParallelState> ArrowTableFunction::ArrowScanInitParallelState(ClientContext &context,
@@ -306,18 +305,22 @@ bool ArrowTableFunction::ArrowScanParallelStateNext(ClientContext &context, cons
                                                     FunctionOperatorData *operator_state,
                                                     ParallelState *parallel_state_p) {
 	auto &bind_data = (const ArrowScanFunctionData &)*bind_data_p;
-	auto &parallel_state = (ParallelArrowScanState &)*parallel_state_p;
+	//	auto &parallel_state = (ParallelArrowScanState &)*parallel_state_p;
 	auto &state = (ArrowScanState &)*operator_state;
-	{
-		lock_guard<mutex> parallel_lock(parallel_state.lock);
-		if (parallel_state.current_chunk_idx >= bind_data.stream->number_of_batches) {
-			return false;
-		}
-		state.chunk_idx = parallel_state.current_chunk_idx;
-		parallel_state.current_chunk_idx++;
-	}
+	//	{
+	////		lock_guard<mutex> parallel_lock(parallel_state.lock);
+	//		if (parallel_state.finished) {
+	//			return false;
+	//		}
+	////		state.chunk_idx = parallel_state.current_chunk_idx;
+	////		parallel_state.current_chunk_idx++;
+	//	}
 	state.chunk_offset = 0;
 	state.chunk = bind_data.stream->GetNextChunk();
+	//! have we run out of chunks? we are done
+	if (!state.chunk->arrow_array.release) {
+		return false;
+	}
 	return true;
 }
 
@@ -335,20 +338,15 @@ ArrowTableFunction::ArrowScanParallelInit(ClientContext &context, const Function
 
 unique_ptr<NodeStatistics> ArrowTableFunction::ArrowScanCardinality(ClientContext &context, const FunctionData *data) {
 	auto &bind_data = (ArrowScanFunctionData &)*data;
-	uint64_t number_of_rows = (bind_data.stream->number_of_batches - 1) * bind_data.stream->first_batch_size +
-	                          bind_data.stream->last_batch_size;
-
-	return make_unique<NodeStatistics>(number_of_rows, number_of_rows);
+	return make_unique<NodeStatistics>(bind_data.stream->number_of_rows, bind_data.stream->number_of_rows);
 }
 
 int ArrowTableFunction::ArrowProgress(ClientContext &context, const FunctionData *bind_data_p) {
 	auto &bind_data = (const ArrowScanFunctionData &)*bind_data_p;
-	if (bind_data.stream->number_of_batches == 0) {
+	if (bind_data.stream->number_of_rows == 0) {
 		return 100;
 	}
-	uint64_t number_of_rows = (bind_data.stream->number_of_batches - 1) * bind_data.stream->first_batch_size +
-	                          bind_data.stream->last_batch_size;
-	auto percentage = bind_data.lines_read * 100 / number_of_rows;
+	auto percentage = bind_data.lines_read * 100 / bind_data.stream->number_of_rows;
 	return percentage;
 }
 

@@ -35,8 +35,7 @@ struct ArrowScanState : public FunctionOperatorData {
 struct ParallelArrowScanState : public ParallelState {
 	ParallelArrowScanState() {
 	}
-	std::mutex lock;
-	idx_t current_chunk_idx = 0;
+	bool finished = false;
 };
 
 struct ArrowTableFunction {
