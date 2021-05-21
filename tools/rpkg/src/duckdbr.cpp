@@ -1173,7 +1173,10 @@ SEXP duckdb_unregister_R(SEXP connsexp, SEXP namesexp) {
 class RArrowTabularStreamFactory {
 public:
 	RArrowTabularStreamFactory(SEXP export_fun_p, SEXP arrow_scannable_p)
-	    : arrow_scannable(arrow_scannable_p), export_fun(export_fun_p) {};
+	    : arrow_scannable(PROTECT(arrow_scannable_p)), export_fun(PROTECT(export_fun_p)) {};
+	~RArrowTabularStreamFactory() {
+		UNPROTECT(2);
+	}
 	static unique_ptr<ArrowArrayStreamWrapper> Produce(uintptr_t factory_p) {
 		RProtector r;
 		int err;
