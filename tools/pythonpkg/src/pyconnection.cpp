@@ -417,13 +417,25 @@ static unique_ptr<TableFunctionRef> PandasScanReplacement(const string &table_na
 	return TryPandasReplacement(global_dict, py_table_name);
 }
 
-shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &database, bool read_only) {
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &database, bool read_only,
+                                                           const py::dict &config_dict) {
 	auto res = make_shared<DuckDBPyConnection>();
 	DBConfig config;
 	if (read_only) {
 		config.access_mode = AccessMode::READ_ONLY;
 	}
-	config.replacement_scans.emplace_back(PandasScanReplacement);
+	for (auto &kv : config_dict) {
+		string key = py::str(kv.first);
+		string val = py::str(kv.second);
+		auto config_property = DBConfig::GetOptionByName(key);
+		if (!config_property) {
+			throw InvalidInputException("Unrecognized configuration property \"%s\"", key);
+		}
+		config.SetOption(*config_property, Value(val));
+	}
+	if (config.enable_external_access) {
+		config.replacement_scans.emplace_back(PandasScanReplacement);
+	}
 
 	res->database = make_unique<DuckDB>(database, &config);
 	ExtensionHelper::LoadAllExtensions(*res->database);
@@ -465,8 +477,6 @@ vector<Value> DuckDBPyConnection::TransformPythonParamList(py::handle params) {
 			args.push_back(Value::BIGINT(ele.cast<int64_t>()));
 		} else if (py::isinstance<py::float_>(ele)) {
 			args.push_back(Value::DOUBLE(ele.cast<double>()));
-		} else if (py::isinstance<py::str>(ele)) {
-			args.emplace_back(ele.cast<string>());
 		} else if (py::isinstance(ele, decimal_decimal)) {
 			args.emplace_back(py::str(ele).cast<string>());
 		} else if (py::isinstance(ele, datetime_datetime)) {
@@ -489,6 +499,16 @@ vector<Value> DuckDBPyConnection::TransformPythonParamList(py::handle params) {
 			auto month = PyDateTime_GET_MONTH(ele.ptr());
 			auto day = PyDateTime_GET_DAY(ele.ptr());
 			args.push_back(Value::DATE(year, month, day));
+		} else if (py::isinstance<py::str>(ele)) {
+			args.emplace_back(ele.cast<string>());
+		} else if (py::isinstance<py::memoryview>(ele)) {
+			py::memoryview py_view = ele.cast<py::memoryview>();
+			PyObject *py_view_ptr = py_view.ptr();
+			Py_buffer *py_buf = PyMemoryView_GET_BUFFER(py_view_ptr);
+			args.emplace_back(Value::BLOB(const_data_ptr_t(py_buf->buf), idx_t(py_buf->len)));
+		} else if (py::isinstance<py::bytes>(ele)) {
+			const string &ele_string = ele.cast<string>();
+			args.emplace_back(Value::BLOB(const_data_ptr_t(ele_string.data()), ele_string.size()));
 		} else {
 			throw std::runtime_error("unknown param type " + py::str(ele.get_type()).cast<string>());
 		}
@@ -498,7 +518,8 @@ vector<Value> DuckDBPyConnection::TransformPythonParamList(py::handle params) {
 
 DuckDBPyConnection *DuckDBPyConnection::DefaultConnection() {
 	if (!default_connection) {
-		default_connection = DuckDBPyConnection::Connect(":memory:", false);
+		py::dict config_dict;
+		default_connection = DuckDBPyConnection::Connect(":memory:", false, config_dict);
 	}
 	return default_connection.get();
 }

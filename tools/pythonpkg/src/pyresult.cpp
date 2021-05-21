@@ -98,7 +98,7 @@ py::object DuckDBPyResult::Fetchone() {
 			res[col_idx] = val.GetValue<string>();
 			break;
 		case LogicalTypeId::BLOB:
-			res[col_idx] = py::bytes(val.GetValue<string>());
+			res[col_idx] = py::bytes(val.GetValueUnsafe<string>());
 			break;
 		case LogicalTypeId::TIMESTAMP:
 		case LogicalTypeId::TIMESTAMP_MS:

@@ -148,7 +148,11 @@ struct ModeFunction {
 			return;
 		}
 		auto highest_frequency = state->Scan();
-		target[idx] = INPUT_TYPE(highest_frequency->first);
+		if (highest_frequency != state->frequency_map->end()) {
+			target[idx] = INPUT_TYPE(highest_frequency->first);
+		} else {
+			mask.SetInvalid(idx);
+		}
 	}
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask,
@@ -161,8 +165,9 @@ struct ModeFunction {
 	}
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
-	static void Frame(INPUT_TYPE *fdata, INPUT_TYPE *pdata, FunctionData *bind_data, STATE *state,
-	                  const FrameBounds &frame, const FrameBounds &prev, RESULT_TYPE *result) {
+	static void Window(const INPUT_TYPE *data, const ValidityMask &dmask, FunctionData *bind_data_p, STATE *state,
+	                   const FrameBounds &frame, const FrameBounds &prev, RESULT_TYPE *result, ValidityMask &rmask) {
+		const auto bias = MinValue(frame.first, prev.first);
 		if (!state->frequency_map) {
 			state->frequency_map = new unordered_map<KEY_TYPE, size_t>();
 		}
@@ -171,35 +176,51 @@ struct ModeFunction {
 			state->Reset();
 			// for f ∈ F do
 			for (auto f = frame.first; f < frame.second; ++f) {
-				state->ModeAdd(KEY_TYPE(fdata[f]));
+				if (dmask.RowIsValid(f - bias)) {
+					state->ModeAdd(KEY_TYPE(data[f]));
+				}
 			}
 		} else {
 			// for f ∈ P \ F do
 			for (auto p = prev.first; p < frame.first; ++p) {
-				state->ModeRm(KEY_TYPE(pdata[p]));
+				if (dmask.RowIsValid(p - bias)) {
+					state->ModeRm(KEY_TYPE(data[p]));
+				}
 			}
 			for (auto p = frame.second; p < prev.second; ++p) {
-				state->ModeRm(KEY_TYPE(pdata[p]));
+				if (dmask.RowIsValid(p - bias)) {
+					state->ModeRm(KEY_TYPE(data[p]));
+				}
 			}
 
 			// for f ∈ F \ P do
 			for (auto f = frame.first; f < prev.first; ++f) {
-				state->ModeAdd(KEY_TYPE(fdata[f]));
+				if (dmask.RowIsValid(f - bias)) {
+					state->ModeAdd(KEY_TYPE(data[f]));
+				}
 			}
 			for (auto f = prev.second; f < frame.second; ++f) {
-				state->ModeAdd(KEY_TYPE(fdata[f]));
+				if (dmask.RowIsValid(f - bias)) {
+					state->ModeAdd(KEY_TYPE(data[f]));
+				}
 			}
 		}
 
 		if (!state->valid) {
 			// Rescan
 			auto highest_frequency = state->Scan();
-			*(state->mode) = highest_frequency->first;
-			state->count = highest_frequency->second;
-			state->valid = true;
+			if (highest_frequency != state->frequency_map->end()) {
+				*(state->mode) = highest_frequency->first;
+				state->count = highest_frequency->second;
+				state->valid = (state->count > 0);
+			}
 		}
 
-		result[0] = RESULT_TYPE(*state->mode);
+		if (state->valid) {
+			result[0] = RESULT_TYPE(*state->mode);
+		} else {
+			rmask.Set(0, false);
+		}
 	}
 
 	static bool IgnoreNull() {
@@ -217,7 +238,7 @@ AggregateFunction GetTypedModeFunction(const LogicalType &type) {
 	using STATE = ModeState<KEY_TYPE>;
 	using OP = ModeFunction<KEY_TYPE>;
 	auto func = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, INPUT_TYPE, OP>(type, type);
-	func.frame = AggregateFunction::UnaryFrame<STATE, INPUT_TYPE, INPUT_TYPE, OP>;
+	func.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, INPUT_TYPE, OP>;
 	return func;
 }
 
