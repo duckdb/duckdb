@@ -294,7 +294,9 @@ void ArrowTableFunction::ArrowScanFunctionParallel(ClientContext &context, const
 }
 
 idx_t ArrowTableFunction::ArrowScanMaxThreads(ClientContext &context, const FunctionData *bind_data_p) {
-	return context.db->NumberOfThreads();
+	auto &bind_data = (const ArrowScanFunctionData &)*bind_data_p;
+	idx_t rows_per_thread = 100000;
+	return (bind_data.stream->number_of_rows + rows_per_thread - 1) / rows_per_thread;
 }
 
 unique_ptr<ParallelState> ArrowTableFunction::ArrowScanInitParallelState(ClientContext &context,
