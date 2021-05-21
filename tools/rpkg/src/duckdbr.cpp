@@ -9,7 +9,7 @@
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "extension/extension_helper.hpp"
-#include "duckdb/common/arrow_duckdb.hpp"
+#include "duckdb/common/arrow_wrapper.hpp"
 #define R_NO_REMAP
 
 #include <Rdefines.h>
