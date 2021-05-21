@@ -271,6 +271,7 @@ void RowDataCollection::ComputeEntrySizes(Vector &v, idx_t entry_sizes[], idx_t 
 		case PhysicalType::VARCHAR:
 			ComputeStringEntrySizes(v, entry_sizes, vcount, offset);
 			break;
+		    case PhysicalType::MAP:
 		case PhysicalType::STRUCT:
 			ComputeStructEntrySizes(v, entry_sizes, vcount, offset);
 			break;
@@ -595,6 +596,7 @@ void RowDataCollection::SerializeVector(Vector &v, idx_t vcount, const Selection
 		case PhysicalType::VARCHAR:
 			SerializeStringVector(v, vcount, sel, ser_count, col_idx, key_locations, validitymask_locations, offset);
 			break;
+		    case PhysicalType::MAP:
 		case PhysicalType::STRUCT:
 			SerializeStructVector(v, vcount, sel, ser_count, col_idx, key_locations, validitymask_locations, offset);
 			break;
@@ -921,6 +923,7 @@ void RowDataCollection::DeserializeIntoVector(Vector &v, const idx_t &vcount, co
 	case PhysicalType::VARCHAR:
 		DeserializeIntoStringVector(v, vcount, col_idx, key_locations, validitymask_locations);
 		break;
+		case PhysicalType::MAP:
 	case PhysicalType::STRUCT:
 		DeserializeIntoStructVector(v, vcount, col_idx, key_locations, validitymask_locations);
 		break;
@@ -928,7 +931,7 @@ void RowDataCollection::DeserializeIntoVector(Vector &v, const idx_t &vcount, co
 		DeserializeIntoListVector(v, vcount, col_idx, key_locations, validitymask_locations);
 		break;
 	default:
-		throw NotImplementedException("FIXME: unimplemented deserialize from row-format");
+		throw NotImplementedException("Unimplemented deserialize from row-format");
 	}
 }
 

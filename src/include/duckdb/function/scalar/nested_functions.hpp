@@ -46,6 +46,9 @@ struct MapExtractFun {
 struct ListExtractFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
+struct CardinalityFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
 
 struct StructExtractFun {
 	static ScalarFunction GetFunction();

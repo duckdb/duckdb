@@ -9,7 +9,7 @@ namespace duckdb {
 
 static void MapFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(result.GetType().id() == LogicalTypeId::MAP);
-	D_ASSERT(result.GetType().child_types().size() == 2);
+	D_ASSERT(result.GetType().child_types().size() == 2 );
 
 	//! Otherwise if its not a constant vector, this breaks the optimizer
 	result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -18,10 +18,37 @@ static void MapFunction(DataChunk &args, ExpressionState &state, Vector &result)
 			result.SetVectorType(VectorType::FLAT_VECTOR);
 		}
 	}
-	unique_ptr<Vector> vec_ptr = make_unique<Vector>();
+
+	if (args.data.empty()){
+        child_list_t<LogicalType> child_types;
+	    child_types.push_back({"", LogicalTypeId::SQLNULL});
+	    LogicalType list_vector_type(LogicalType::LIST.id(), child_types);
+	    auto list_vector = make_unique<Vector>(list_vector_type);
+	    auto list_child = make_unique<Vector>(LogicalTypeId::SQLNULL);
+	    ListVector::SetEntry(*list_vector, move(list_child));
+	    ListVector::SetListSize(*list_vector, 0);
+	    auto list_data = FlatVector::GetData<list_entry_t>(*list_vector);
+	    list_data->offset = 0;
+	    list_data->length = 0;
+        StructVector::AddEntry(result, "key", move(list_vector));
+
+
+        list_vector = make_unique<Vector>(list_vector_type);
+        list_child = make_unique<Vector>(LogicalTypeId::SQLNULL);
+	    ListVector::SetEntry(*list_vector, move(list_child));
+	    ListVector::SetListSize(*list_vector, 0);
+	    list_data = FlatVector::GetData<list_entry_t>(*list_vector);
+	    list_data->offset = 0;
+	    list_data->length = 0;
+	    StructVector::AddEntry(result, "value", move(list_vector));
+	    //! This is an empty map
+	    return;
+	}
+
 	if (ListVector::GetListSize(args.data[0]) != ListVector::GetListSize(args.data[1])) {
 		throw Exception("Key list has a different size from Value list");
 	}
+	unique_ptr<Vector> vec_ptr = make_unique<Vector>();
 	vec_ptr->Reference(args.data[0]);
 	StructVector::AddEntry(result, "key", move(vec_ptr));
 	vec_ptr = make_unique<Vector>();
@@ -33,17 +60,30 @@ static void MapFunction(DataChunk &args, ExpressionState &state, Vector &result)
 static unique_ptr<FunctionData> MapBind(ClientContext &context, ScalarFunction &bound_function,
                                         vector<unique_ptr<Expression>> &arguments) {
 	child_list_t<LogicalType> child_types;
-	if (arguments.size() != 2) {
+
+	if (arguments.size() != 2 && !arguments.empty()) {
 		throw Exception("We need exactly two lists for a map");
 	}
-	if (arguments[0]->return_type.id() != LogicalTypeId::LIST) {
-		throw Exception("First argument is not a list");
-	}
+	if (arguments.size() == 2){
+	    if (arguments[0]->return_type.id() != LogicalTypeId::LIST) {
+		    throw Exception("First argument is not a list");
+	    }
 	if (arguments[1]->return_type.id() != LogicalTypeId::LIST) {
 		throw Exception("Second argument is not a list");
 	}
-	child_types.push_back(make_pair("key", arguments[0]->return_type));
-	child_types.push_back(make_pair("value", arguments[1]->return_type));
+		    child_types.push_back(make_pair("key", arguments[0]->return_type));
+	    child_types.push_back(make_pair("value", arguments[1]->return_type));
+	}
+
+	if (arguments.empty()){
+	    child_list_t<LogicalType> child;
+	    child.push_back({"",LogicalTypeId::SQLNULL});
+	    auto empty = LogicalType(LogicalTypeId::LIST,child);
+	    child_types.push_back(make_pair("key",empty));
+	    child_types.push_back(make_pair("value", empty));
+	}
+
+
 
 	//! this is more for completeness reasons
 	bound_function.return_type = LogicalType(LogicalTypeId::MAP, move(child_types));
@@ -52,8 +92,10 @@ static unique_ptr<FunctionData> MapBind(ClientContext &context, ScalarFunction &
 
 void MapFun::RegisterFunction(BuiltinFunctions &set) {
 	//! the arguments and return types are actually set in the binder function
-	ScalarFunction fun("map", {LogicalType::ANY, LogicalType::ANY}, LogicalType::MAP, MapFunction, false, MapBind);
+	ScalarFunction fun("map", {}, LogicalType::MAP, MapFunction, false, MapBind);
+	fun.varargs = LogicalType::ANY;
 	set.AddFunction(fun);
+
 }
 
 } // namespace duckdb

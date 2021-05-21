@@ -135,7 +135,7 @@ void MapExtract(Vector &map, Value &values, Vector &result) {
 			if (values.list_value[i].is_null) {
 				result_mask.Set(i, false);
 			} else {
-				result_data[i] = values.list_value[i].value_.integer;
+				result_data[i] = values.list_value[i].value_.date;
 			}
 		}
 		break;
@@ -146,7 +146,7 @@ void MapExtract(Vector &map, Value &values, Vector &result) {
 			if (values.list_value[i].is_null) {
 				result_mask.Set(i, false);
 			} else {
-				result_data[i] = values.list_value[i].value_.bigint;
+				result_data[i] = values.list_value[i].value_.time;
 			}
 		}
 		break;
@@ -157,7 +157,7 @@ void MapExtract(Vector &map, Value &values, Vector &result) {
 			if (values.list_value[i].is_null) {
 				result_mask.Set(i, false);
 			} else {
-				result_data[i] = values.list_value[i].value_.bigint;
+				result_data[i] = values.list_value[i].value_.timestamp;
 			}
 		}
 		break;

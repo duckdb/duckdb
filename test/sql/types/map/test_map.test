@@ -1,5 +1,5 @@
 # name: test/sql/types/map/test_map.test
-# description: Test basic casting of maps
+# description: Test basic functionality of maps
 # group: [map]
 
 statement ok
@@ -34,6 +34,18 @@ query I
 select m[1] from (select MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as m) as T
 ----
 10
+
+# Empty maps
+query I
+select MAP(LIST_VALUE(),LIST_VALUE())
+----
+{}
+
+query I
+select MAP()
+----
+{}
+
 
 # all those are FORBIDDEN
 
