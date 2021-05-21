@@ -431,22 +431,22 @@ public:
 	}
 
 	void GlobalToLocalIndex(const idx_t &global_idx, idx_t &local_block_index, idx_t &local_entry_index) {
-        if (global_idx == Count()) {
-            local_block_index = data_blocks.size() - 1;
-            local_entry_index = data_blocks.back().count;
-            return;
-        }
+		if (global_idx == Count()) {
+			local_block_index = data_blocks.size() - 1;
+			local_entry_index = data_blocks.back().count;
+			return;
+		}
 		D_ASSERT(global_idx < Count());
 		local_entry_index = global_idx;
 		for (local_block_index = 0; local_block_index < data_blocks.size(); local_block_index++) {
 			const idx_t &block_count = data_blocks[local_block_index].count;
-			if (local_entry_index > block_count) {
+			if (local_entry_index >= block_count) {
 				local_entry_index -= block_count;
 			} else {
 				break;
 			}
 		}
-        D_ASSERT(local_entry_index < data_blocks[local_block_index].count);
+		D_ASSERT(local_entry_index < data_blocks[local_block_index].count);
 	}
 
 	unique_ptr<SortedData> CreateSlice(const idx_t start, const idx_t end) {
@@ -664,7 +664,7 @@ public:
 		local_entry_index = global_idx;
 		for (local_block_index = 0; local_block_index < sorting_blocks.size(); local_block_index++) {
 			const idx_t &block_count = sorting_blocks[local_block_index].count;
-			if (local_entry_index > block_count) {
+			if (local_entry_index >= block_count) {
 				local_entry_index -= block_count;
 			} else {
 				break;
@@ -1885,12 +1885,12 @@ int CompareUsingGlobalIndex(BufferManager &buffer_manager, SortedBlock &l, Sorte
 		l.PinVarBlocks();
 		r.PinVarBlocks();
 		comp_res = CompareColumns(l, r, l_ptr, r_ptr, sorting_state);
-		for (idx_t col_idx = 0; col_idx < sorting_state.num_cols; col_idx++) {
-			if (!sorting_state.constant_size[col_idx]) {
-				l.var_sorting_cols[col_idx]->UnpinAndReset(0, 0);
-				r.var_sorting_cols[col_idx]->UnpinAndReset(0, 0);
-			}
-		}
+		//		for (idx_t col_idx = 0; col_idx < sorting_state.num_cols; col_idx++) {
+		//			if (!sorting_state.constant_size[col_idx]) {
+		//				l.var_sorting_cols[col_idx]->UnpinAndReset(0, 0);
+		//				r.var_sorting_cols[col_idx]->UnpinAndReset(0, 0);
+		//			}
+		//		}
 	}
 	return comp_res;
 }
@@ -2033,7 +2033,7 @@ void PhysicalOrder::ScheduleMergeTasks(Pipeline &pipeline, ClientContext &contex
 				ComputeIntersection(buffer_manager, left, right, task_num * tuples_per_task, l_end, r_end,
 				                    *state.sorting_state);
 				D_ASSERT(l_end <= l_count);
-                D_ASSERT(r_end <= r_count);
+				D_ASSERT(r_end <= r_count);
 				D_ASSERT(task_num * tuples_per_task == l_end + r_end);
 				state.sorted_blocks_temp.back().push_back(
 				    make_unique<SortedBlock>(buffer_manager, *state.sorting_state, *state.payload_state));
