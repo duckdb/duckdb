@@ -525,6 +525,7 @@ RowGroupPointer RowGroup::Checkpoint(TableDataWriter &writer, vector<unique_ptr<
 		state->FlushToDisk();
 	}
 	row_group_pointer.versions = version_info;
+	Verify();
 	return row_group_pointer;
 }
 

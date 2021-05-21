@@ -56,14 +56,17 @@ void StandardColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t 
 }
 
 void StandardColumnData::Scan(Transaction &transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
+	D_ASSERT(state.row_index == state.child_states[0].row_index);
 	ColumnData::Scan(transaction, vector_index, state, result);
 	validity.Scan(transaction, vector_index, state.child_states[0], result);
 	state.Next();
 }
 
 void StandardColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates) {
+	D_ASSERT(state.row_index == state.child_states[0].row_index);
 	ColumnData::ScanCommitted(vector_index, state, result, allow_updates);
 	validity.ScanCommitted(vector_index, state.child_states[0], result, allow_updates);
+	state.Next();
 }
 
 void StandardColumnData::InitializeAppend(ColumnAppendState &state) {

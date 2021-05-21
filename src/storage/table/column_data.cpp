@@ -118,6 +118,7 @@ void ColumnScanState::Next() {
 			break;
 		}
 	}
+	D_ASSERT(!current || (row_index >= current->start && row_index < current->start + current->count));
 	for (auto &child_state : child_states) {
 		child_state.Next();
 	}
