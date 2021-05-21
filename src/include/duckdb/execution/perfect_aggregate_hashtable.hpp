@@ -39,6 +39,8 @@ protected:
 	idx_t total_groups;
 	//! The tuple size
 	idx_t tuple_size;
+	//! The number of grouping columns
+	idx_t grouping_columns;
 
 	// The actual pointer to the data
 	data_ptr_t data;

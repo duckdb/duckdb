@@ -18,7 +18,9 @@ PerfectAggregateHashTable::PerfectAggregateHashTable(BufferManager &buffer_manag
 	// the total amount of groups we allocate space for is 2^required_bits
 	total_groups = 1 << total_required_bits;
 	// we don't need to store the groups in a perfect hash table, since the group keys can be deduced by their location
-	tuple_size = layout.GetAggrWidth();
+	grouping_columns = layout.ColumnCount();
+	layout.Initialize(layout.GetAggregates());
+	tuple_size = layout.GetRowWidth();
 
 	// allocate and null initialize the data
 	owned_data = unique_ptr<data_t[]>(new data_t[tuple_size * total_groups]);
@@ -30,7 +32,7 @@ PerfectAggregateHashTable::PerfectAggregateHashTable(BufferManager &buffer_manag
 	// set up the empty payloads for every tuple, and initialize the "occupied" flag to false
 	data_ptr_t payload_ptr = data;
 	for (idx_t i = 0; i < total_groups; i++) {
-		memcpy(payload_ptr, empty_payload_data.get(), layout.GetAggrWidth());
+		memcpy(payload_ptr, empty_payload_data.get(), tuple_size);
 		payload_ptr += tuple_size;
 	}
 }
@@ -246,14 +248,14 @@ void PerfectAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {
 	}
 	// first reconstruct the groups from the group index
 	idx_t shift = total_required_bits;
-	for (idx_t i = 0; i < layout.ColumnCount(); i++) {
+	for (idx_t i = 0; i < grouping_columns; i++) {
 		shift -= required_bits[i];
 		ReconstructGroupVector(group_values, group_minima[i], required_bits[i], shift, entry_count, result.data[i]);
 	}
 	// then construct the payloads
 	auto &aggregates = layout.GetAggregates();
 	for (idx_t i = 0; i < aggregates.size(); i++) {
-		auto &target = result.data[layout.ColumnCount() + i];
+		auto &target = result.data[grouping_columns + i];
 		auto &aggr = aggregates[i];
 		aggr.function.finalize(addresses, aggr.bind_data, target, entry_count);
 		VectorOperations::AddInPlace(addresses, aggr.payload_size, entry_count);
