@@ -306,16 +306,8 @@ bool ArrowTableFunction::ArrowScanParallelStateNext(ClientContext &context, cons
                                                     FunctionOperatorData *operator_state,
                                                     ParallelState *parallel_state_p) {
 	auto &bind_data = (const ArrowScanFunctionData &)*bind_data_p;
-	//	auto &parallel_state = (ParallelArrowScanState &)*parallel_state_p;
 	auto &state = (ArrowScanState &)*operator_state;
-	//	{
-	////		lock_guard<mutex> parallel_lock(parallel_state.lock);
-	//		if (parallel_state.finished) {
-	//			return false;
-	//		}
-	////		state.chunk_idx = parallel_state.current_chunk_idx;
-	////		parallel_state.current_chunk_idx++;
-	//	}
+
 	state.chunk_offset = 0;
 	state.chunk = bind_data.stream->GetNextChunk();
 	//! have we run out of chunks? we are done
