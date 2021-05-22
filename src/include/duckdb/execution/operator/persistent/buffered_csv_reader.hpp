@@ -129,6 +129,8 @@ class BufferedCSVReader {
 	vector<vector<string>> quote_candidates_map = {{"\""}, {"\"", "'"}, {""}};
 	//! Candidates for escape character auto detection (per quote rule)
 	vector<vector<string>> escape_candidates_map = {{""}, {"\\"}, {""}};
+    //! Candidates for beginning of comment line
+    vector<string> comment_candidates = {"#"};
 
 public:
 	BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options,
