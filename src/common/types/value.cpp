@@ -654,6 +654,14 @@ uint16_t Value::GetValue() const {
 	return GetValueInternal<uint16_t>();
 }
 template <>
+uint32_t Value::GetValue() const {
+	return GetValueInternal<uint32_t>();
+}
+template <>
+uint64_t Value::GetValue() const {
+	return GetValueInternal<uint64_t>();
+}
+template <>
 string Value::GetValue() const {
 	return ToString();
 }

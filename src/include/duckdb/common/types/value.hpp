@@ -304,6 +304,10 @@ DUCKDB_API uint8_t Value::GetValue() const;
 template <>
 DUCKDB_API uint16_t Value::GetValue() const;
 template <>
+DUCKDB_API uint32_t Value::GetValue() const;
+template <>
+DUCKDB_API uint64_t Value::GetValue() const;
+template <>
 DUCKDB_API hugeint_t Value::GetValue() const;
 template <>
 DUCKDB_API string Value::GetValue() const;
