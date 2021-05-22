@@ -6,6 +6,7 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 
+#include <iostream>
 namespace duckdb {
 
 PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
@@ -264,15 +265,21 @@ bool PhysicalHashJoin::ProbePerfectHashTable(ExecutionContext &context, DataChun
 	// first get the selection vector from the matches
 	VectorData build_data;
 	matches.Orrify(keys_count, build_data);
-	auto build_sel = build_data.sel;
+	auto i_data = (int32_t *)build_data.data;
+	SelectionVector sel_vec(keys_count);
+	auto min_value = perfect_join_state.probe_min.GetValue<int32_t>();
+	for (idx_t i = 0; i != keys_count; ++i) {
+		auto idx = i_data[i] - min_value;
+		sel_vec.set_index(i, idx);
+	}
+
 	// on the RHS, we need to fetch the data from the perfect hash table
 	for (idx_t i = 0; i < ht_ptr->build_types.size(); i++) {
 		auto &res_vector = result.data[physical_state->child_chunk.ColumnCount() + i];
 		D_ASSERT(res_vector.GetType() == ht_ptr->build_types[i]);
-		res_vector.Reference(ht_ptr->columns[i + 1]); // skip first column (join keys)
-		VectorData probe_data;
-		res_vector.Orrify(ht_ptr->size(), probe_data);
-		probe_data.sel = build_sel;
+		auto &build_vec = ht_ptr->columns[i];
+		res_vector.Reference(build_vec); //
+		res_vector.Slice(sel_vec, keys_count);
 	}
 	return true;
 }
