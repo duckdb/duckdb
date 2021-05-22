@@ -258,22 +258,14 @@ bool PhysicalHashJoin::ProbePerfectHashTable(ExecutionContext &context, DataChun
 	Vector matches(keys_vec.GetType());
 	auto keys_count = physical_state->join_keys.size();
 	MinMaxRangeSwitch(keys_vec, matches, keys_count);
-	// slice for the probe side
+	// copy the probe data to the result
 	result.Slice(physical_state->child_chunk, FlatVector::INCREMENTAL_SELECTION_VECTOR, keys_count);
 
 	// now get the data from the build side
 	// first get the selection vector from the matches
-	VectorData build_data;
-	matches.Orrify(keys_count, build_data);
-	auto i_data = (int32_t *)build_data.data;
 	SelectionVector sel_vec(keys_count);
-	auto min_value = perfect_join_state.probe_min.GetValue<int32_t>();
-	for (idx_t i = 0; i != keys_count; ++i) {
-		auto idx = i_data[i] - min_value;
-		sel_vec.set_index(i, idx);
-	}
-
-	// on the RHS, we need to fetch the data from the perfect hash table
+	FillSelectionVectorSwitch(matches, keys_count, sel_vec);
+	// on the RHS, we need to fetch the data from the perfect hash table and slice it using the new selection vector
 	for (idx_t i = 0; i < ht_ptr->build_types.size(); i++) {
 		auto &res_vector = result.data[physical_state->child_chunk.ColumnCount() + i];
 		D_ASSERT(res_vector.GetType() == ht_ptr->build_types[i]);
@@ -293,18 +285,13 @@ bool PhysicalHashJoin::CheckRequirementsForPerfectHashJoin(JoinHashTable *ht_ptr
 	// verify uniquiness (build size < min_max_range => duplicate values )
 	auto build_size = Value::INTEGER(ht_ptr->size());
 	auto build_range = perfect_join_state.build_max - perfect_join_state.build_min;
-	if (build_size != build_range + 1) {
+	if ((build_size != build_range + 1) || ht_ptr->has_null) {
 		return false;
 	}
+
 	// Store build side as a set of columns
 	BuildPerfectHashStructure(ht_ptr, join_state.ht_scan_state);
 	hasBuiltPerfectHashTable = true;
-
-	// check for nulls
-	if (ht_ptr->has_null) {
-		// set selection vector
-		return false;
-	}
 	return true;
 }
 
@@ -330,6 +317,54 @@ void PhysicalHashJoin::TemplatedMinMaxRange(Vector &source, Vector &result, idx_
 		}
 		return NullValue<T>();
 	});
+}
+
+template <typename T>
+void PhysicalHashJoin::TemplatedFillSelectionVector(Vector &matches, idx_t count, SelectionVector &sel_vec) {
+	VectorData build_data;
+	matches.Orrify(count, build_data);
+	auto i_data = (T *)build_data.data;
+	auto min_value = perfect_join_state.probe_min.GetValue<T>();
+	// generate the selection vector
+	for (idx_t i = 0; i != count; ++i) {
+		auto idx = i_data[i] - min_value;
+		sel_vec.set_index(i, idx);
+	}
+}
+
+void PhysicalHashJoin::FillSelectionVectorSwitch(Vector &matches, idx_t count, SelectionVector &sel_vec) {
+	switch (matches.GetType().id()) {
+	case LogicalTypeId::BOOLEAN:
+		TemplatedFillSelectionVector<bool>(matches, count, sel_vec);
+		break;
+	case LogicalTypeId::TINYINT:
+		TemplatedFillSelectionVector<int8_t>(matches, count, sel_vec);
+		break;
+	case LogicalTypeId::SMALLINT:
+		TemplatedFillSelectionVector<int16_t>(matches, count, sel_vec);
+		break;
+	case LogicalTypeId::INTEGER:
+		TemplatedFillSelectionVector<int32_t>(matches, count, sel_vec);
+		break;
+	case LogicalTypeId::BIGINT:
+		TemplatedFillSelectionVector<int64_t>(matches, count, sel_vec);
+		break;
+	case LogicalTypeId::UTINYINT:
+		TemplatedFillSelectionVector<uint8_t>(matches, count, sel_vec);
+		break;
+	case LogicalTypeId::USMALLINT:
+		TemplatedFillSelectionVector<uint16_t>(matches, count, sel_vec);
+		break;
+	case LogicalTypeId::UINTEGER:
+		TemplatedFillSelectionVector<uint32_t>(matches, count, sel_vec);
+		break;
+	case LogicalTypeId::UBIGINT:
+		TemplatedFillSelectionVector<uint64_t>(matches, count, sel_vec);
+		break;
+	default:
+		throw NotImplementedException("Type not supported");
+		break;
+	}
 }
 
 void PhysicalHashJoin::MinMaxRangeSwitch(Vector &source, Vector &result, idx_t count) {

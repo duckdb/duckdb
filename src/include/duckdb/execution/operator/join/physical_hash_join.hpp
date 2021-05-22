@@ -95,6 +95,9 @@ public:
 	template <typename T>
 	void TemplatedMinMaxRange(Vector &source, Vector &result, idx_t count);
 	void MinMaxRangeSwitch(Vector &source, Vector &result, idx_t count);
+	void FillSelectionVectorSwitch(Vector &matches, idx_t count, SelectionVector &sel_vec);
+	template <typename T>
+	void TemplatedFillSelectionVector(Vector &matches, idx_t count, SelectionVector &sel_vec);
 
 private:
 	void ProbeHashTable(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p);
