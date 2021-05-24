@@ -891,7 +891,7 @@ jobs:
   rstats-linux:
     name: R Package Linux
     runs-on: ubuntu-20.04
-    needs: linux-debug
+#    needs: linux-debug
 
     steps:
     - uses: actions/checkout@v2
@@ -929,7 +929,7 @@ jobs:
   rstats-windows:
     name: R Package Windows
     runs-on: windows-latest
-    needs: linux-debug
+#    needs: linux-debug
 
     steps:
     - uses: actions/checkout@v2
