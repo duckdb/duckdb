@@ -91,6 +91,10 @@ public:
 	idx_t max_row;
 	//! Child column scans
 	unique_ptr<ColumnScanState[]> column_scans;
+
+public:
+	//! Move to the next vector, skipping past the current one
+	void NextVector();
 };
 
 class TableScanState {

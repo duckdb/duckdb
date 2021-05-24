@@ -203,6 +203,14 @@ void RowGroup::CommitDropColumn(idx_t column_idx) {
 	columns[column_idx]->CommitDropColumn();
 }
 
+void RowGroupScanState::NextVector() {
+	vector_index++;
+	for(idx_t i = 0; i < parent.column_ids.size(); i++) {
+		column_scans[i].Next();
+	}
+}
+
+
 template <bool SCAN_DELETES, bool SCAN_COMMITTED, bool ALLOW_UPDATES>
 void RowGroup::TemplatedScan(Transaction *transaction, RowGroupScanState &state, DataChunk &result) {
 	auto &table_filters = state.parent.table_filters;
@@ -228,7 +236,7 @@ void RowGroup::TemplatedScan(Transaction *transaction, RowGroupScanState &state,
 			count = state.row_group->GetSelVector(*transaction, state.vector_index, valid_sel, max_count);
 			if (count == 0) {
 				// nothing to scan for this vector, skip the entire vector
-				state.vector_index++;
+				state.NextVector();
 				continue;
 			}
 		} else {
@@ -637,6 +645,8 @@ void RowGroup::Delete(Transaction &transaction, DataTable *table, Vector &row_id
 	auto ids = (row_t *)rdata.data;
 	for (idx_t i = 0; i < count; i++) {
 		auto ridx = rdata.sel->get_index(i);
+		D_ASSERT(ids[ridx] >= 0);
+		D_ASSERT(idx_t(ids[ridx]) >= this->start && idx_t(ids[ridx]) < this->start + this->count);
 		del_state.Delete(ids[ridx] - this->start);
 	}
 	del_state.Flush();
@@ -651,6 +661,7 @@ void RowGroup::Verify() {
 }
 
 void VersionDeleteState::Delete(row_t row_id) {
+	D_ASSERT(row_id >= 0);
 	idx_t vector_idx = row_id / STANDARD_VECTOR_SIZE;
 	idx_t idx_in_vector = row_id - vector_idx * STANDARD_VECTOR_SIZE;
 	if (current_chunk != vector_idx) {
