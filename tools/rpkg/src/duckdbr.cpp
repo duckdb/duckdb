@@ -1186,6 +1186,7 @@ public:
 			Rf_error("Failed to produce arrow stream");
 		}
 		// TODO this stream pointer leaks?
+		// TODO this may fail on 32 bit
 		auto stream_ptr = (void *)(uintptr_t)REAL(stream_ptr_sexp)[0];
 
 		auto res = make_unique<ArrowArrayStreamWrapper>();
