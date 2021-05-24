@@ -929,7 +929,6 @@ jobs:
   rstats-windows:
     name: R Package Windows
     runs-on: windows-latest
-    needs: linux-debug
 
     steps:
     - uses: actions/checkout@v2
