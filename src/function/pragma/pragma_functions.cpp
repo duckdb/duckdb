@@ -72,10 +72,8 @@ static void PragmaProfileOutput(ClientContext &context, const FunctionParameters
 	context.profiler->save_location = parameters.values[0].ToString();
 }
 
-static idx_t ParseMemoryLimit(string arg);
-
 static void PragmaMemoryLimit(ClientContext &context, const FunctionParameters &parameters) {
-	idx_t new_limit = ParseMemoryLimit(parameters.values[0].ToString());
+	idx_t new_limit = DBConfig::ParseMemoryLimit(parameters.values[0].ToString());
 	// set the new limit in the buffer manager
 	BufferManager::GetBufferManager(context).SetLimit(new_limit);
 }
@@ -220,7 +218,7 @@ static void PragmaPerfectHashThreshold(ClientContext &context, const FunctionPar
 }
 
 static void PragmaAutoCheckpointThreshold(ClientContext &context, const FunctionParameters &parameters) {
-	idx_t new_limit = ParseMemoryLimit(parameters.values[0].ToString());
+	idx_t new_limit = DBConfig::ParseMemoryLimit(parameters.values[0].ToString());
 	DBConfig::GetConfig(context).checkpoint_wal_size = new_limit;
 }
 
@@ -308,58 +306,6 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 
 	set.AddFunction(
 	    PragmaFunction::PragmaAssignment("debug_checkpoint_abort", PragmaDebugCheckpointAbort, LogicalType::VARCHAR));
-}
-
-idx_t ParseMemoryLimit(string arg) {
-	if (arg[0] == '-' || arg == "null" || arg == "none") {
-		return INVALID_INDEX;
-	}
-	// split based on the number/non-number
-	idx_t idx = 0;
-	while (StringUtil::CharacterIsSpace(arg[idx])) {
-		idx++;
-	}
-	idx_t num_start = idx;
-	while ((arg[idx] >= '0' && arg[idx] <= '9') || arg[idx] == '.' || arg[idx] == 'e' || arg[idx] == 'E' ||
-	       arg[idx] == '-') {
-		idx++;
-	}
-	if (idx == num_start) {
-		throw ParserException("Memory limit must have a number (e.g. PRAGMA memory_limit=1GB");
-	}
-	string number = arg.substr(num_start, idx - num_start);
-
-	// try to parse the number
-	double limit = Cast::Operation<string_t, double>(string_t(number));
-
-	// now parse the memory limit unit (e.g. bytes, gb, etc)
-	while (StringUtil::CharacterIsSpace(arg[idx])) {
-		idx++;
-	}
-	idx_t start = idx;
-	while (idx < arg.size() && !StringUtil::CharacterIsSpace(arg[idx])) {
-		idx++;
-	}
-	if (limit < 0) {
-		// limit < 0, set limit to infinite
-		return (idx_t)-1;
-	}
-	string unit = StringUtil::Lower(arg.substr(start, idx - start));
-	idx_t multiplier;
-	if (unit == "byte" || unit == "bytes" || unit == "b") {
-		multiplier = 1;
-	} else if (unit == "kilobyte" || unit == "kilobytes" || unit == "kb" || unit == "k") {
-		multiplier = 1000LL;
-	} else if (unit == "megabyte" || unit == "megabytes" || unit == "mb" || unit == "m") {
-		multiplier = 1000LL * 1000LL;
-	} else if (unit == "gigabyte" || unit == "gigabytes" || unit == "gb" || unit == "g") {
-		multiplier = 1000LL * 1000LL * 1000LL;
-	} else if (unit == "terabyte" || unit == "terabytes" || unit == "tb" || unit == "t") {
-		multiplier = 1000LL * 1000LL * 1000LL * 1000LL;
-	} else {
-		throw ParserException("Unknown unit for memory_limit: %s (expected: b, mb, gb or tb)", unit);
-	}
-	return (idx_t)multiplier * limit;
 }
 
 } // namespace duckdb
