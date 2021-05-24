@@ -25,8 +25,6 @@ struct TableAppendState;
 struct ColumnAppendState {
 	//! The current segment of the append
 	TransientSegment *current;
-	//! The update segment to append to
-	UpdateSegment *updates;
 	//! Child append states
 	vector<ColumnAppendState> child_appends;
 	//! The write lock that is held by the append

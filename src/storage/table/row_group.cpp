@@ -63,7 +63,7 @@ void RowGroup::InitializeScanWithOffset(RowGroupScanState &state, idx_t vector_o
 	state.row_group = this;
 
 	state.vector_index = vector_offset;
-	state.max_row = MinValue<idx_t>(this->count, state.parent.max_row - this->start);
+	state.max_row = this->start > state.parent.max_row ? 0 : MinValue<idx_t>(this->count, state.parent.max_row - this->start);
 	state.column_scans = unique_ptr<ColumnScanState[]>(new ColumnScanState[column_ids.size()]);
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto column = column_ids[i];
@@ -80,7 +80,7 @@ void RowGroup::InitializeScan(RowGroupScanState &state) {
 	auto &column_ids = state.parent.column_ids;
 	state.row_group = this;
 	state.vector_index = 0;
-	state.max_row = MinValue<idx_t>(this->count, state.parent.max_row - this->start);
+	state.max_row = this->start > state.parent.max_row ? 0 : MinValue<idx_t>(this->count, state.parent.max_row - this->start);
 	state.column_scans = unique_ptr<ColumnScanState[]>(new ColumnScanState[column_ids.size()]);
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto column = column_ids[i];

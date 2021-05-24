@@ -427,10 +427,9 @@ void ReplayState::ReplayUpdate() {
 		throw Exception("Corrupt WAL: update without table");
 	}
 
-	// vector<column_t> column_ids {column_index};
-	// if (column_index >= current_table->columns.size()) {
-	// 	throw Exception("Corrupt WAL: column index for update out of bounds");
-	// }
+	if (column_path[0] >= current_table->columns.size()) {
+		throw Exception("Corrupt WAL: column index for update out of bounds");
+	}
 
 	// remove the row id vector from the chunk
 	auto row_ids = move(chunk.data.back());
