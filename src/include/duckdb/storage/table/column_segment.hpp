@@ -24,7 +24,7 @@ class DatabaseInstance;
 class Transaction;
 class BaseStatistics;
 class UpdateSegment;
-struct TableFilter;
+class TableFilter;
 struct ColumnFetchState;
 struct ColumnScanState;
 

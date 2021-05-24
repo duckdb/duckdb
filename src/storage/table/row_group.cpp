@@ -270,16 +270,15 @@ void RowGroup::TemplatedScan(Transaction *transaction, RowGroupScanState &state,
 			//! First, we scan the columns with filters, fetch their data and generate a selection vector.
 			//! get runtime statistics
 			auto start_time = high_resolution_clock::now();
-			for (idx_t i = 0; i < table_filters->filters.size(); i++) {
+			for (idx_t i = 0; i < adaptive_filter->permutation.size(); i++) {
 				auto tf_idx = adaptive_filter->permutation[i];
-				for (auto &filter : table_filters->filters[tf_idx]) {
-					D_ASSERT(tf_idx < result.data.size());
-					UncompressedSegment::FilterSelection(sel, result.data[tf_idx], filter, approved_tuple_count,
-					                                     FlatVector::Validity(result.data[tf_idx]));
-				}
+				D_ASSERT(table_filters->filters.count(tf_idx) == 1);
+				auto &filter = table_filters->filters[tf_idx];
+				UncompressedSegment::FilterSelection(sel, result.data[tf_idx], *filter, approved_tuple_count,
+														FlatVector::Validity(result.data[tf_idx]));
 			}
 			auto end_time = high_resolution_clock::now();
-			if (adaptive_filter && table_filters->filters.size() > 1) {
+			if (adaptive_filter && adaptive_filter->permutation.size() > 1) {
 				adaptive_filter->AdaptRuntimeStatistics(duration_cast<duration<double>>(end_time - start_time).count());
 			}
 

@@ -23,8 +23,8 @@ bool StandardColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filte
 		if (prune_result != FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 			return true;
 		}
-		if (state.updates) {
-			prune_result = filter.CheckStatistics(*state.updates->GetStatistics().statistics);
+		if (updates) {
+			prune_result = filter.CheckStatistics(*updates->GetStatistics().statistics);
 			return prune_result != FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		} else {
 			return false;
