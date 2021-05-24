@@ -74,6 +74,8 @@ void ColumnData::ScanVector(ColumnScanState &state, Vector &result) {
 template<bool SCAN_COMMITTED, bool ALLOW_UPDATES>
 void ColumnData::ScanVector(Transaction *transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
 	ScanVector(state, result);
+
+	lock_guard<mutex> update_guard(update_lock);
 	if (updates) {
 		if (!ALLOW_UPDATES && updates->HasUncommittedUpdates(vector_index)) {
 			throw TransactionException("Cannot create index with outstanding updates");
@@ -216,12 +218,14 @@ void ColumnData::FetchRow(Transaction &transaction, ColumnFetchState &state, row
 	// now perform the fetch within the segment
 	segment->FetchRow(state, row_id, result, result_idx);
 	// merge any updates made to this row
+	lock_guard<mutex> update_guard(update_lock);
 	if (updates) {
 		updates->FetchRow(transaction, row_id, result, result_idx);
 	}
 }
 
 void ColumnData::Update(Transaction &transaction, idx_t column_index, Vector &update_vector, row_t *row_ids, idx_t update_count) {
+	lock_guard<mutex> update_guard(update_lock);
 	if (!updates) {
 		updates = make_unique<UpdateSegment>(*this);
 	}
@@ -238,6 +242,7 @@ void ColumnData::UpdateColumn(Transaction &transaction, const vector<column_t> &
 }
 
 unique_ptr<BaseStatistics> ColumnData::GetUpdateStatistics() {
+	lock_guard<mutex> update_guard(update_lock);
 	return updates ? updates->GetStatistics().statistics->Copy() : nullptr;
 }
 
@@ -377,6 +382,7 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, Ta
 		// empty table: flush the empty list
 		return checkpoint_state;
 	}
+	lock_guard<mutex> update_guard(update_lock);
 
 	auto &block_manager = BlockManager::GetBlockManager(GetDatabase());
 	checkpoint_state->CreateEmptySegment();

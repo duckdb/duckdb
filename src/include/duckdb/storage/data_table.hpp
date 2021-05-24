@@ -238,6 +238,8 @@ private:
 	shared_ptr<SegmentTree> row_groups;
 	//! Column statistics
 	vector<unique_ptr<BaseStatistics>> column_stats;
+	//! The statistics lock
+	mutex stats_lock;
 	//! Whether or not the data table is the root DataTable for this table; the root DataTable is the newest version
 	//! that can be appended to
 	atomic<bool> is_root;

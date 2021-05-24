@@ -890,6 +890,8 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 	// find the row_group this id belongs to
 	auto row_group = (RowGroup *)row_groups->GetSegment(first_id);
 	row_group->Update(transaction, updates, row_ids, column_ids);
+
+	lock_guard<mutex> stats_guard(stats_lock);
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto column_id = column_ids[i];
 		column_stats[column_id]->Merge(*row_group->GetStatistics(column_id));
@@ -922,6 +924,8 @@ void DataTable::UpdateColumn(TableCatalogEntry &table, ClientContext &context, V
 	auto primary_column_idx = column_path[0];
 	auto row_group = (RowGroup *)row_groups->GetSegment(first_id);
 	row_group->UpdateColumn(transaction, updates, row_ids, column_path);
+
+	lock_guard<mutex> stats_guard(stats_lock);
 	column_stats[primary_column_idx]->Merge(*row_group->GetStatistics(primary_column_idx));
 }
 
@@ -1013,6 +1017,7 @@ unique_ptr<BaseStatistics> DataTable::GetStatistics(ClientContext &context, colu
 	if (column_id == COLUMN_IDENTIFIER_ROW_ID) {
 		return nullptr;
 	}
+	lock_guard<mutex> stats_guard(stats_lock);
 	return column_stats[column_id]->Copy();
 }
 

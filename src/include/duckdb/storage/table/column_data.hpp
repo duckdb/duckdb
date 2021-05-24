@@ -17,6 +17,7 @@
 #include "duckdb/storage/table/persistent_table_data.hpp"
 #include "duckdb/storage/statistics/segment_statistics.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
+#include "duckdb/common/mutex.hpp"
 
 namespace duckdb {
 class ColumnData;
@@ -44,8 +45,6 @@ public:
 	LogicalType type;
 	//! The parent column (if any)
 	ColumnData *parent;
-	//! The updates for this column segment
-	unique_ptr<UpdateSegment> updates;
 
 public:
 	virtual bool CheckZonemap(ColumnScanState &state, TableFilter &filter) = 0;
@@ -108,6 +107,10 @@ protected:
 protected:
 	//! The segments holding the data of this column segment
 	SegmentTree data;
+	//! The lock for the updates
+	mutex update_lock;
+	//! The updates for this column segment
+	unique_ptr<UpdateSegment> updates;
 };
 
 } // namespace duckdb
