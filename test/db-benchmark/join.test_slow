@@ -1,0 +1,100 @@
+# name: test/db-benchmark/join.test_slow
+# description: Join benchmark (0.5GB - small dataset) from h2oai db-benchmark (https://github.com/h2oai/db-benchmark)
+# group: [db-benchmark]
+
+require httpfs
+
+statement ok
+pragma threads=16
+
+statement ok
+CREATE TABLE x AS SELECT * FROM read_csv_auto('https://github.com/cwida/duckdb-data/releases/download/v1.0/J1_1e7_NA_0_0.csv.gz');
+
+statement ok
+CREATE TABLE small AS SELECT * FROM read_csv_auto('https://github.com/cwida/duckdb-data/releases/download/v1.0/J1_1e7_1e1_0_0.csv.gz');
+
+statement ok
+CREATE TABLE medium AS SELECT * FROM read_csv_auto('https://github.com/cwida/duckdb-data/releases/download/v1.0/J1_1e7_1e4_0_0.csv.gz');
+
+statement ok
+CREATE TABLE big AS SELECT * FROM read_csv_auto('https://github.com/cwida/duckdb-data/releases/download/v1.0/J1_1e7_1e7_0_0.csv.gz');
+
+query I
+SELECT COUNT(*) FROM x;
+----
+10000000
+
+query I
+SELECT COUNT(*) FROM small;
+----
+10
+
+query I
+SELECT COUNT(*) FROM medium;
+----
+10000
+
+query I
+SELECT COUNT(*) FROM big;
+----
+10000000
+
+# q1
+statement ok
+CREATE TABLE ans AS SELECT x.*, small.id4 AS small_id4, v2 FROM x JOIN small USING (id1);
+
+query III
+SELECT COUNT(*), SUM(v1) AS v1, SUM(v2) AS v2 FROM ans;
+----
+8998860	450015153.57734203	347720187.39596415
+
+statement ok
+DROP TABLE ans;
+
+# q2
+statement ok
+CREATE TABLE ans AS SELECT x.*, medium.id1 AS medium_id1, medium.id4 AS medium_id4, medium.id5 AS medium_id5, v2 FROM x JOIN medium USING (id2);
+
+query III
+SELECT COUNT(*), SUM(v1) AS v1, SUM(v2) AS v2 FROM ans;
+----
+8998412	449954076.0263213	449999844.93746006
+
+statement ok
+DROP TABLE ans;
+
+# q3
+statement ok
+CREATE TABLE ans AS SELECT x.*, medium.id1 AS medium_id1, medium.id4 AS medium_id4, medium.id5 AS medium_id5, v2 FROM x LEFT JOIN medium USING (id2);
+
+query III
+SELECT COUNT(*), SUM(v1) AS v1, SUM(v2) AS v2 FROM ans;
+----
+10000000	500043740.7523774	449999844.93746
+
+statement ok
+DROP TABLE ans;
+
+# q4
+statement ok
+CREATE TABLE ans AS SELECT x.*, medium.id1 AS medium_id1, medium.id2 AS medium_id2, medium.id4 AS medium_id4, v2 FROM x JOIN medium USING (id5);
+
+query III
+SELECT COUNT(*), SUM(v1) AS v1, SUM(v2) AS v2 FROM ans;
+----
+8998412	449954076.02631813	449999844.93746257
+
+statement ok
+DROP TABLE ans;
+
+# q5
+statement ok
+CREATE TABLE ans AS SELECT x.*, big.id1 AS big_id1, big.id2 AS big_id2, big.id4 AS big_id4, big.id5 AS big_id5, big.id6 AS big_id6, v2 FROM x JOIN big USING (id3);
+
+query III
+SELECT COUNT(*), SUM(v1) AS v1, SUM(v2) AS v2 FROM ans;
+----
+9000000	450032091.8405316	449860428.6155452
+
+statement ok
+DROP TABLE ans;

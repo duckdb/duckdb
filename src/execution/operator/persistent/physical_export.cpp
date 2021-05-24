@@ -4,6 +4,7 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
 
 #include <algorithm>
 #include <sstream>
@@ -36,17 +37,16 @@ static void WriteValueAsSQL(stringstream &ss, Value &val) {
 }
 
 static void WriteCopyStatement(FileSystem &fs, stringstream &ss, TableCatalogEntry *table, CopyInfo &info,
-                               CopyFunction &function) {
-	string table_file_path;
+                               ExportedTableData &exported_table, CopyFunction const &function) {
 	ss << "COPY ";
-	if (table->schema->name != DEFAULT_SCHEMA) {
-		table_file_path = fs.JoinPath(
-		    info.file_path, StringUtil::Format("%s.%s.%s", table->schema->name, table->name, function.extension));
-		ss << table->schema->name << ".";
-	} else {
-		table_file_path = fs.JoinPath(info.file_path, StringUtil::Format("%s.%s", table->name, function.extension));
+
+	if (exported_table.schema_name != DEFAULT_SCHEMA) {
+		ss << KeywordHelper::WriteOptionallyQuoted(exported_table.schema_name) << ".";
 	}
-	ss << table->name << " FROM '" << table_file_path << "' (";
+
+	ss << KeywordHelper::WriteOptionallyQuoted(exported_table.table_name) << " FROM '" << exported_table.file_path
+	   << "' (";
+
 	// write the copy options
 	ss << "FORMAT '" << info.format << "'";
 	if (info.format == "csv") {
@@ -74,7 +74,7 @@ static void WriteCopyStatement(FileSystem &fs, stringstream &ss, TableCatalogEnt
 	ss << ");" << std::endl;
 }
 
-void PhysicalExport::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
+void PhysicalExport::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const {
 	auto &ccontext = context.client;
 	auto &fs = FileSystem::GetFileSystem(ccontext);
 
@@ -118,8 +118,10 @@ void PhysicalExport::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 	// write the load.sql file
 	// for every table, we write COPY INTO statement with the specified options
 	stringstream load_ss;
-	for (auto &table : tables) {
-		WriteCopyStatement(fs, load_ss, (TableCatalogEntry *)table, *info, function);
+	for (auto const &kv : exported_tables.data) {
+		auto table = kv.first;
+		auto exported_table_info = kv.second;
+		WriteCopyStatement(fs, load_ss, table, *info, exported_table_info, function);
 	}
 	WriteStringStreamToFile(fs, load_ss, fs.JoinPath(info->file_path, "load.sql"));
 	state->finished = true;

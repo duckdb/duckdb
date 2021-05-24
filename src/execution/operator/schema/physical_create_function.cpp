@@ -6,7 +6,7 @@
 namespace duckdb {
 
 void PhysicalCreateFunction::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
-                                              PhysicalOperatorState *state) {
+                                              PhysicalOperatorState *state) const {
 	Catalog::GetCatalog(context.client).CreateFunction(context.client, info.get());
 	state->finished = true;
 }

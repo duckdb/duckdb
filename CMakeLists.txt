@@ -215,6 +215,7 @@ option(FORCE_ASSERT "Enable checking of assertions, even in release mode" FALSE)
 option(TREAT_WARNINGS_AS_ERRORS "Treat warnings as errors" FALSE)
 option(EXPORT_DLL_SYMBOLS "Export dll symbols on Windows, else import" TRUE)
 option(BUILD_RDTSC "Enable the rdtsc instruction." FALSE)
+option(BUILD_ARROW_ABI_TEST "Enable the Arrow ABI Test." FALSE)
 
 if(${BUILD_RDTSC})
   add_compile_definitions(RDTSC)

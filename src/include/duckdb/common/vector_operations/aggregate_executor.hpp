@@ -303,7 +303,7 @@ public:
 	template <class STATE_TYPE, class OP>
 	static void Combine(Vector &source, Vector &target, idx_t count) {
 		D_ASSERT(source.GetType().id() == LogicalTypeId::POINTER && target.GetType().id() == LogicalTypeId::POINTER);
-		auto sdata = FlatVector::GetData<STATE_TYPE *>(source);
+		auto sdata = FlatVector::GetData<const STATE_TYPE *>(source);
 		auto tdata = FlatVector::GetData<STATE_TYPE *>(target);
 
 		for (idx_t i = 0; i < count; i++) {
@@ -334,13 +334,15 @@ public:
 	}
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>
-	static void UnaryFrame(Vector &input, Vector &prev, FunctionData *bind_data, data_ptr_t state, const FrameBounds &F,
-	                       const FrameBounds &P, Vector &result) {
+	static void UnaryWindow(Vector &input, FunctionData *bind_data, data_ptr_t state, const FrameBounds &frame,
+	                        const FrameBounds &prev, Vector &result) {
 
-		auto fdata = FlatVector::GetData<INPUT_TYPE>(input) - F.first;
-		auto pdata = FlatVector::GetData<INPUT_TYPE>(prev) - P.first;
+		auto idata = FlatVector::GetData<const INPUT_TYPE>(input) - MinValue(frame.first, prev.first);
+		const auto &ivalid = FlatVector::Validity(input);
 		auto rdata = ConstantVector::GetData<RESULT_TYPE>(result);
-		OP::template Frame<STATE, INPUT_TYPE, RESULT_TYPE>(fdata, pdata, bind_data, (STATE *)state, F, P, rdata);
+		auto &rvalid = ConstantVector::Validity(result);
+		OP::template Window<STATE, INPUT_TYPE, RESULT_TYPE>(idata, ivalid, bind_data, (STATE *)state, frame, prev,
+		                                                    rdata, rvalid);
 	}
 
 	template <class STATE_TYPE, class OP>

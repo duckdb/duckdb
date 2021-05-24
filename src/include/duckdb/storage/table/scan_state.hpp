@@ -24,7 +24,7 @@ class PersistentSegment;
 class TableScanState;
 class TransientSegment;
 class ValiditySegment;
-struct TableFilterSet;
+class TableFilterSet;
 
 struct IndexScanState {
 	virtual ~IndexScanState() {

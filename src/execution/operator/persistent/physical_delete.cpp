@@ -35,7 +35,7 @@ unique_ptr<GlobalOperatorState> PhysicalDelete::GetGlobalState(ClientContext &co
 //===--------------------------------------------------------------------===//
 // GetChunkInternal
 //===--------------------------------------------------------------------===//
-void PhysicalDelete::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
+void PhysicalDelete::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const {
 	auto &gstate = (DeleteGlobalState &)*sink_state;
 
 	chunk.SetCardinality(1);

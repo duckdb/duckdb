@@ -18,7 +18,7 @@ class TestArrowParallel(object):
         duckdb_conn.execute("PRAGMA force_parallelism")
         data = (pyarrow.array(np.random.randint(800, size=1000000), type=pyarrow.int32()))
         tbl = pyarrow.Table.from_batches(pyarrow.Table.from_arrays([data],['a']).to_batches(10000))
-        rel = duckdb.from_arrow_table(tbl)
+        rel = duckdb_conn.from_arrow_table(tbl)
         # Also test multiple reads
         assert(rel.aggregate("(count(a))::INT").execute().fetchone()[0] == 1000000)
         assert(rel.aggregate("(count(a))::INT").execute().fetchone()[0] == 1000000)
@@ -37,9 +37,9 @@ class TestArrowParallel(object):
         for i in [7, 51, 99, 100, 101, 500, 1000, 2000]:
             data = (pyarrow.array(np.arange(3,7), type=pyarrow.int32()))
             tbl = pyarrow.Table.from_arrays([data],['a'])
-            rel_id = duckdb.from_arrow_table(tbl)
+            rel_id = duckdb_conn.from_arrow_table(tbl)
             userdata_parquet_table2 = pyarrow.Table.from_batches(userdata_parquet_table.to_batches(i))
-            rel = duckdb.from_arrow_table(userdata_parquet_table2)
+            rel = duckdb_conn.from_arrow_table(userdata_parquet_table2)
             result = rel.filter("first_name=\'Jose\' and salary > 134708.82").aggregate('count(*)')
             assert (result.execute().fetchone()[0] == 4)
 
@@ -57,9 +57,9 @@ class TestArrowParallel(object):
         for i in [7, 51, 99, 100, 101, 500, 1000, 2000]:
             data = (pyarrow.array(np.arange(3,7), type=pyarrow.int32()))
             tbl = pyarrow.Table.from_arrays([data],['a'])
-            rel_id = duckdb.from_arrow_table(tbl)
+            rel_id = duckdb_conn.from_arrow_table(tbl)
             userdata_parquet_table2 = pyarrow.Table.from_batches(userdata_parquet_table.to_batches(i))
-            rel = duckdb.from_arrow_table(userdata_parquet_table2)
+            rel = duckdb_conn.from_arrow_table(userdata_parquet_table2)
             result = rel.filter("first_name=\'Jose\' and salary > 134708.82").aggregate('count(*)')
             assert (result.execute().fetchone()[0] == 4)
 
@@ -72,6 +72,6 @@ class TestArrowParallel(object):
 
         data = (pyarrow.array(np.random.randint(800, size=1000), type=pyarrow.int32()))
         tbl = pyarrow.Table.from_batches(pyarrow.Table.from_arrays([data],['a']).to_batches(2))
-        rel = duckdb.from_arrow_table(tbl)
+        rel = duckdb_conn.from_arrow_table(tbl)
         # Also test multiple reads
         assert(rel.aggregate("(count(a))::INT").execute().fetchone()[0] == 1000)

@@ -13,7 +13,6 @@
 #include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
-struct TableFilter;
 
 class SegmentStatistics {
 public:
@@ -26,7 +25,6 @@ public:
 	unique_ptr<BaseStatistics> statistics;
 
 public:
-	bool CheckZonemap(TableFilter &filter);
 	void Reset();
 };
 

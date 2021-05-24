@@ -54,7 +54,7 @@ idx_t ValiditySegment::Append(SegmentStatistics &stats, VectorData &data, idx_t 
 	auto &validity_stats = (ValidityStatistics &)*stats.statistics;
 	ValidityMask mask((validity_t *)handle->node->buffer);
 	for (idx_t i = 0; i < append_count; i++) {
-		auto idx = data.sel->get_index(i);
+		auto idx = data.sel->get_index(offset + i);
 		if (!data.validity.RowIsValidUnsafe(idx)) {
 			mask.SetInvalidUnsafe(tuple_count + i);
 			validity_stats.has_null = true;

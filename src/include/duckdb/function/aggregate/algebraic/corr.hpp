@@ -41,7 +41,7 @@ struct CorrOperation {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(STATE source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target) {
 		CovarOperation::Combine<CovarState, OP>(source.cov_pop, &target->cov_pop);
 		STDDevBaseOperation::Combine<StddevState, OP>(source.dev_pop_x, &target->dev_pop_x);
 		STDDevBaseOperation::Combine<StddevState, OP>(source.dev_pop_y, &target->dev_pop_y);

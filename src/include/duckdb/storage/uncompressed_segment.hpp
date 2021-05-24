@@ -16,8 +16,10 @@
 namespace duckdb {
 class BlockHandle;
 class ColumnData;
+class ConstantFilter;
 class Transaction;
 class StorageManager;
+class TableFilter;
 
 struct ColumnAppendState;
 struct UpdateInfo;

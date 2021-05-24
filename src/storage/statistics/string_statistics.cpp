@@ -112,7 +112,7 @@ void StringStatistics::Merge(const BaseStatistics &other_p) {
 	has_overflow_strings = has_overflow_strings || other.has_overflow_strings;
 }
 
-bool StringStatistics::CheckZonemap(ExpressionType comparison_type, const string &constant) {
+FilterPropagateResult StringStatistics::CheckZonemap(ExpressionType comparison_type, const string &constant) {
 	auto data = (const_data_ptr_t)constant.c_str();
 	auto size = constant.size();
 
@@ -121,15 +121,27 @@ bool StringStatistics::CheckZonemap(ExpressionType comparison_type, const string
 	int max_comp = StringValueComparison(data, value_size, max);
 	switch (comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
-		return min_comp >= 0 && max_comp <= 0;
+		if (min_comp >= 0 && max_comp <= 0) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		} else {
+			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+		}
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 	case ExpressionType::COMPARE_GREATERTHAN:
-		return max_comp <= 0;
+		if (max_comp <= 0) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		} else {
+			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+		}
 	case ExpressionType::COMPARE_LESSTHAN:
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		return min_comp >= 0;
+		if (min_comp >= 0) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		} else {
+			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+		}
 	default:
-		throw InternalException("Operation not implemented");
+		throw InternalException("Expression type not implemented for string statistics zone map");
 	}
 }
 

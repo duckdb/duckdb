@@ -1,10 +1,11 @@
 #include "duckdb/execution/operator/persistent/physical_update.hpp"
-
+#include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
@@ -94,13 +95,18 @@ unique_ptr<LocalSinkState> PhysicalUpdate::GetLocalSinkState(ExecutionContext &c
 //===--------------------------------------------------------------------===//
 // GetChunkInternal
 //===--------------------------------------------------------------------===//
-void PhysicalUpdate::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
+void PhysicalUpdate::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const {
 	auto &gstate = (UpdateGlobalState &)*sink_state;
 
 	chunk.SetCardinality(1);
 	chunk.SetValue(0, 0, Value::BIGINT(gstate.updated_count));
 
 	state->finished = true;
+}
+void PhysicalUpdate::Combine(ExecutionContext &context, GlobalOperatorState &gstate, LocalSinkState &lstate) {
+	auto &state = (UpdateLocalState &)lstate;
+	context.thread.profiler.Flush(this, &state.default_executor, "default_executor", 1);
+	context.client.profiler->Flush(context.thread.profiler);
 }
 
 } // namespace duckdb

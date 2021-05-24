@@ -4,10 +4,9 @@
 
 #include <fstream>
 #include <sstream>
-
+#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/client_context.hpp"
-
 #include "extension_helper.hpp"
 
 namespace duckdb {
@@ -367,7 +366,7 @@ string InterpretedBenchmark::BenchmarkInfo() {
 
 string InterpretedBenchmark::GetLogOutput(BenchmarkState *state_p) {
 	auto &state = (InterpretedBenchmarkState &)*state_p;
-	return state.con.context->profiler.ToJSON();
+	return state.con.context->profiler->ToJSON();
 }
 
 string InterpretedBenchmark::DisplayName() {
