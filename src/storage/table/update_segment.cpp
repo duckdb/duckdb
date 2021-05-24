@@ -323,16 +323,16 @@ static UpdateSegment::fetch_committed_range_function_t GetFetchCommittedRangeFun
 }
 
 void UpdateSegment::FetchCommittedRange(idx_t start_row, idx_t count, Vector &result) {
+	D_ASSERT(count > 0);
 	if (!root) {
 		return;
 	}
 	idx_t end_row = start_row + count;
 	idx_t start_vector = start_row / STANDARD_VECTOR_SIZE;
-	idx_t end_vector = end_row / STANDARD_VECTOR_SIZE;
+	idx_t end_vector = (end_row - 1) / STANDARD_VECTOR_SIZE;
 	D_ASSERT(start_vector <= end_vector);
 	D_ASSERT(end_vector < RowGroup::ROW_GROUP_VECTOR_COUNT);
 
-	idx_t result_offset = 0;
 	for (idx_t vector_idx = start_vector; vector_idx <= end_vector; vector_idx++) {
 		if (!root->info[vector_idx]) {
 			continue;
@@ -340,6 +340,9 @@ void UpdateSegment::FetchCommittedRange(idx_t start_row, idx_t count, Vector &re
 		idx_t start_in_vector = vector_idx == start_vector ? start_row - start_vector * STANDARD_VECTOR_SIZE : 0;
 		idx_t end_in_vector =
 		    vector_idx == end_vector ? end_row - end_vector * STANDARD_VECTOR_SIZE : STANDARD_VECTOR_SIZE;
+		D_ASSERT(start_in_vector < end_in_vector);
+		D_ASSERT(end_in_vector > 0 && end_in_vector <= STANDARD_VECTOR_SIZE);
+		idx_t result_offset = ((vector_idx * STANDARD_VECTOR_SIZE) + start_in_vector) - start_row;
 		fetch_committed_range(root->info[vector_idx]->info.get(), start_in_vector, end_in_vector, result_offset,
 		                      result);
 	}

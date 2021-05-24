@@ -23,9 +23,37 @@ SELECT COUNT(*), SUM(a), SUM(b), MIN(a), MAX(a), MIN(b), MAX(b) FROM test WHERE 
 1000	500500	500500	1	1000	1	1000
 
 query I
+SELECT COUNT(*) FROM test WHERE a>0
+----
+1000
+
+query I
+SELECT COUNT(*) FROM test WHERE a>0 AND a<>b
+----
+0
+
+query I
 UPDATE test SET b=b+1 WHERE a>0 AND a%2=0
 ----
 500
+
+query II nosort select_after_update
+SELECT * FROM test WHERE a>0 ORDER BY 1,2
+----
+
+query I
+SELECT COUNT(*) FROM test WHERE a>0
+----
+1000
+
+query I
+SELECT COUNT(*) FROM test WHERE a>0 AND a<>b
+----
+500
+
+query II nosort select_after_update
+SELECT * FROM test WHERE a>0 ORDER BY 1,2
+----
 
 query IIIIIII
 SELECT COUNT(*), SUM(a), SUM(b), MIN(a), MAX(a), MIN(b), MAX(b) FROM test WHERE a>0
@@ -39,6 +67,20 @@ PRAGMA disable_checkpoint_on_shutdown
 
 statement ok
 PRAGMA wal_autocheckpoint='1TB';
+
+query I
+SELECT COUNT(*) FROM test WHERE a>0 AND a%2=0
+----
+500
+
+query I
+SELECT COUNT(*) FROM test WHERE a>0 AND a<>b
+----
+500
+
+query II nosort select_after_update
+SELECT * FROM test WHERE a>0 ORDER BY 1,2
+----
 
 query IIIIIII
 SELECT COUNT(*), SUM(a), SUM(b), MIN(a), MAX(a), MIN(b), MAX(b) FROM test WHERE a>0
