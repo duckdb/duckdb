@@ -390,6 +390,37 @@ void GroupedAggregateHashTable::FetchAggregates(DataChunk &groups, DataChunk &re
 	}
 }
 
+static void ScatterAllValid(const RowLayout &layout, Vector &addresses, const SelectionVector &sel, idx_t count) {
+	if (count == 0) {
+		return;
+	}
+	auto pointers = FlatVector::GetData<data_ptr_t>(addresses);
+
+	for (idx_t i = 0; i < count; ++i) {
+		auto row_idx = sel.get_index(i);
+		auto row = pointers[row_idx];
+		ValidityBytes(row).SetAllValid(layout.ColumnCount());
+	}
+}
+
+static void ScatterInitializeStates(RowLayout &layout, Vector &addresses, const SelectionVector &sel, idx_t count) {
+	if (count == 0) {
+		return;
+	}
+	auto pointers = FlatVector::GetData<data_ptr_t>(addresses);
+	auto &offsets = layout.GetOffsets();
+	auto aggr_idx = layout.ColumnCount();
+
+	for (auto &aggr : layout.GetAggregates()) {
+		for (idx_t i = 0; i < count; ++i) {
+			auto row_idx = sel.get_index(i);
+			auto row = pointers[row_idx];
+			aggr.function.initialize(row + offsets[aggr_idx]);
+		}
+		++aggr_idx;
+	}
+}
+
 template <class T>
 static void TemplatedScatter(VectorData &gdata, Vector &addresses, const SelectionVector &sel, idx_t count,
                              idx_t col_offset, idx_t col_idx) {
@@ -421,18 +452,18 @@ static void TemplatedScatter(VectorData &gdata, Vector &addresses, const Selecti
 	}
 }
 
-void GroupedAggregateHashTable::ScatterGroups(DataChunk &groups, unique_ptr<VectorData[]> &group_data,
-                                              Vector &addresses, const SelectionVector &sel, idx_t count) {
+static void ScatterGroups(VectorData group_data[], const RowLayout &layout, Vector &addresses, StringHeap &string_heap,
+                          const SelectionVector &sel, idx_t count) {
 	if (count == 0) {
 		return;
 	}
 	auto &offsets = layout.GetOffsets();
-	for (idx_t col_idx = 0; col_idx < groups.ColumnCount(); col_idx++) {
-		auto &data = groups.data[col_idx];
+	auto &types = layout.GetTypes();
+	for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
 		auto &gdata = group_data[col_idx];
 		auto col_offset = offsets[col_idx];
 
-		switch (data.GetType().InternalType()) {
+		switch (types[col_idx].InternalType()) {
 		case PhysicalType::BOOL:
 		case PhysicalType::INT8:
 			TemplatedScatter<int8_t>(gdata, addresses, sel, count, col_offset, col_idx);
@@ -495,7 +526,6 @@ void GroupedAggregateHashTable::ScatterGroups(DataChunk &groups, unique_ptr<Vect
 		default:
 			throw Exception("Unsupported type for group vector");
 		}
-		col_offset += GetTypeIdSize(data.GetType().InternalType());
 	}
 }
 
@@ -551,13 +581,17 @@ static void TemplatedCompareGroups(VectorData &gdata, Vector &addresses, Selecti
 	count = match_count;
 }
 
-static void CompareGroups(DataChunk &groups, unique_ptr<VectorData[]> &group_data, Vector &addresses, idx_t mask_offset,
-                          SelectionVector &sel, idx_t count, SelectionVector &no_match, idx_t &no_match_count) {
-	auto col_offset = mask_offset;
-	for (idx_t i = 0; i < groups.ColumnCount(); i++) {
-		auto &data = groups.data[i];
+static void CompareGroups(VectorData group_data[], const RowLayout &layout, Vector &addresses, SelectionVector &sel,
+                          idx_t count, SelectionVector &no_match, idx_t &no_match_count) {
+	if (count == 0) {
+		return;
+	}
+	auto &offsets = layout.GetOffsets();
+	auto &types = layout.GetTypes();
+	for (idx_t i = 0; i < types.size(); ++i) {
+		auto col_offset = offsets[i];
 		auto &gdata = group_data[i];
-		switch (data.GetType().InternalType()) {
+		switch (types[i].InternalType()) {
 		case PhysicalType::BOOL:
 		case PhysicalType::INT8:
 			TemplatedCompareGroups<int8_t>(gdata, addresses, sel, count, col_offset, i, no_match, no_match_count);
@@ -601,7 +635,6 @@ static void CompareGroups(DataChunk &groups, unique_ptr<VectorData[]> &group_dat
 		default:
 			throw Exception("Unsupported type for group vector");
 		}
-		col_offset += GetTypeIdSize(data.GetType().InternalType());
 	}
 }
 
@@ -682,13 +715,6 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 				memcpy(entry_payload_ptr, &group_hashes_ptr[index], HASH_WIDTH);
 				D_ASSERT((*(hash_t *)entry_payload_ptr) == group_hashes_ptr[index]);
 
-				// Set the validity mask (clearing is less common)
-				ValidityBytes(entry_payload_ptr + HASH_WIDTH).SetAllValid(layout.ColumnCount());
-
-				// initialize the payload info for the column
-				memcpy(entry_payload_ptr + HASH_WIDTH + layout.GetAggrOffset(), empty_payload_data.get(),
-				       layout.GetAggrWidth());
-
 				D_ASSERT(group_hashes_ptr[index] >> hash_prefix_shift <= NumericLimits<uint16_t>::Maximum());
 				D_ASSERT(payload_page_offset < tuples_per_block);
 				D_ASSERT(payload_hds.size() < NumericLimits<uint32_t>::Maximum());
@@ -726,16 +752,15 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 			}
 		}
 
-		if (new_entry_count > 0) {
-			// for each of the locations that are empty, serialize the group columns to the locations
-			ScatterGroups(groups, group_data, addresses, empty_vector, new_entry_count);
-		}
+		// for each of the locations that are empty, serialize the group columns to the locations
+		ScatterAllValid(layout, addresses, empty_vector, new_entry_count);
+		ScatterGroups(group_data.get(), layout, addresses, string_heap, empty_vector, new_entry_count);
+		ScatterInitializeStates(layout, addresses, empty_vector, new_entry_count);
+
 		// now we have only the tuples remaining that might match to an existing group
 		// start performing comparisons with each of the groups
-		if (need_compare_count > 0) {
-			CompareGroups(groups, group_data, addresses, layout.GetDataOffset(), group_compare_vector,
-			              need_compare_count, no_match_vector, no_match_count);
-		}
+		CompareGroups(group_data.get(), layout, addresses, group_compare_vector, need_compare_count, no_match_vector,
+		              no_match_count);
 
 		// each of the entries that do not match we move them to the next entry in the HT
 		for (idx_t i = 0; i < no_match_count; i++) {

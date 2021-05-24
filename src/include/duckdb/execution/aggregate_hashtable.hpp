@@ -154,8 +154,6 @@ private:
 	//! Resize the HT to the specified size. Must be larger than the current
 	//! size.
 	void Destroy();
-	void ScatterGroups(DataChunk &groups, unique_ptr<VectorData[]> &group_data, Vector &addresses,
-	                   const SelectionVector &sel, idx_t count);
 
 	void Verify();
 
