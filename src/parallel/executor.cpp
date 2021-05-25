@@ -24,21 +24,24 @@ Executor::~Executor() {
 void Executor::Initialize(PhysicalOperator *plan) {
 	Reset();
 
-	physical_plan = plan;
-	physical_state = physical_plan->GetOperatorState();
-
-	context.profiler->Initialize(physical_plan);
 	auto &scheduler = TaskScheduler::GetScheduler(context);
-	this->producer = scheduler.CreateProducer();
+	{
+		lock_guard<mutex> elock(executor_lock);
+		physical_plan = plan;
+		physical_state = physical_plan->GetOperatorState();
 
-	BuildPipelines(physical_plan, nullptr);
+		context.profiler->Initialize(physical_plan);
+		this->producer = scheduler.CreateProducer();
 
-	this->total_pipelines = pipelines.size();
+		BuildPipelines(physical_plan, nullptr);
 
-	// schedule pipelines that do not have dependents
-	for (auto &pipeline : pipelines) {
-		if (!pipeline->HasDependencies()) {
-			pipeline->Schedule();
+		this->total_pipelines = pipelines.size();
+
+		// schedule pipelines that do not have dependents
+		for (auto &pipeline : pipelines) {
+			if (!pipeline->HasDependencies()) {
+				pipeline->Schedule();
+			}
 		}
 	}
 

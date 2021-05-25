@@ -119,6 +119,7 @@ static void PragmaSetThreads(ClientContext &context, const FunctionParameters &p
 static void PragmaEnableProgressBar(ClientContext &context, const FunctionParameters &parameters) {
 	context.enable_progress_bar = true;
 }
+
 static void PragmaSetProgressBarWaitTime(ClientContext &context, const FunctionParameters &parameters) {
 	context.wait_time = parameters.values[0].GetValue<int>();
 	context.enable_progress_bar = true;
