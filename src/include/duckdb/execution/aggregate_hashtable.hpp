@@ -87,8 +87,6 @@ public:
 	void FindOrCreateGroups(DataChunk &groups, Vector &addresses_out);
 
 	//! Executes the filter(if any) and update the aggregates
-	static void UpdateAggregate(AggregateObject &aggr, DataChunk &payload, Vector &distinct_addresses,
-	                            idx_t input_count, idx_t payload_idx);
 	void Combine(GroupedAggregateHashTable &other);
 
 	idx_t Size() {

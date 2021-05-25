@@ -13,6 +13,7 @@
 
 namespace duckdb {
 
+struct AggregateObject;
 class RowLayout;
 struct SelectionVector;
 class Vector;
@@ -26,6 +27,10 @@ struct RowOperations {
 	static void InitializeStates(RowLayout &layout, Vector &addresses, const SelectionVector &sel, idx_t count);
 	//! destructor
 	static void DestroyStates(RowLayout &layout, Vector &addresses, idx_t count);
+	//! update
+	static void UpdateStates(AggregateObject &aggr, Vector &addresses, DataChunk &payload, idx_t arg_idx, idx_t count);
+	//! filtered update
+	static void UpdateFilteredStates(AggregateObject &aggr, Vector &addresses, DataChunk &payload, idx_t arg_idx);
 };
 
 } // namespace duckdb

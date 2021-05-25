@@ -264,22 +264,6 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload)
 	return AddChunk(groups, hashes, payload);
 }
 
-void GroupedAggregateHashTable::UpdateAggregate(AggregateObject &aggr, DataChunk &payload, Vector &distinct_addresses,
-                                                idx_t input_count, idx_t payload_idx) {
-	ExpressionExecutor filter_execution(aggr.filter);
-	SelectionVector true_sel(STANDARD_VECTOR_SIZE);
-	auto count = filter_execution.SelectExpression(payload, true_sel);
-	DataChunk filtered_payload;
-	auto pay_types = payload.GetTypes();
-	filtered_payload.Initialize(pay_types);
-	filtered_payload.Slice(payload, true_sel, count);
-	Vector filtered_addresses;
-	filtered_addresses.Slice(distinct_addresses, true_sel, count);
-	filtered_addresses.Normalify(count);
-	aggr.function.update(input_count == 0 ? nullptr : &filtered_payload.data[payload_idx], nullptr, input_count,
-	                     filtered_addresses, filtered_payload.size());
-}
-
 idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashes, DataChunk &payload) {
 	D_ASSERT(!is_finalized);
 
@@ -305,7 +289,6 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 		// for any entries for which a group was found, update the aggregate
 		auto &aggr = aggregates[aggr_idx];
-		auto input_count = (idx_t)aggr.child_count;
 		if (aggr.distinct) {
 			// construct chunk for secondary hash table probing
 			vector<LogicalType> probe_types(groups.GetTypes());
@@ -341,7 +324,7 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 					distinct_payload.Slice(payload, new_groups, new_group_count);
 					distinct_addresses.Verify(new_group_count);
 					distinct_addresses.Normalify(new_group_count);
-					UpdateAggregate(aggr, distinct_payload, distinct_addresses, input_count, payload_idx);
+					RowOperations::UpdateFilteredStates(aggr, distinct_addresses, distinct_payload, payload_idx);
 				} else {
 					Vector distinct_addresses;
 					distinct_addresses.Slice(addresses, new_groups, new_group_count);
@@ -351,19 +334,17 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 					}
 					distinct_addresses.Verify(new_group_count);
 
-					aggr.function.update(input_count == 0 ? nullptr : &payload.data[payload_idx], nullptr, input_count,
-					                     distinct_addresses, new_group_count);
+					RowOperations::UpdateStates(aggr, distinct_addresses, payload, payload_idx, new_group_count);
 				}
 			}
 		} else if (aggr.filter) {
-			UpdateAggregate(aggr, payload, addresses, input_count, payload_idx);
+			RowOperations::UpdateFilteredStates(aggr, addresses, payload, payload_idx);
 		} else {
-			aggr.function.update(input_count == 0 ? nullptr : &payload.data[payload_idx], aggr.bind_data, input_count,
-			                     addresses, payload.size());
+			RowOperations::UpdateStates(aggr, addresses, payload, payload_idx, payload.size());
 		}
 
 		// move to the next aggregate
-		payload_idx += input_count;
+		payload_idx += aggr.child_count;
 		VectorOperations::AddInPlace(addresses, aggr.payload_size, payload.size());
 	}
 
