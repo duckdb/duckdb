@@ -1,2 +1,4 @@
 deadlock:LockClients
+deadlock:RollbackTransaction
+deadlock:Checkpoint
 race:NextInnerJoin
