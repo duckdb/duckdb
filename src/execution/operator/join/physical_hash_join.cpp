@@ -196,7 +196,7 @@ void PhysicalHashJoin::GetChunkInternal(ExecutionContext &context, DataChunk &ch
 				state->cached_chunk.Reset();
 			} else
 #endif
-			    if (IsRightOuterJoin(join_type)) {
+			if (IsRightOuterJoin(join_type)) {
 				// check if we need to scan any unmatched tuples from the RHS for the full/right outer join
 				sink.hash_table->ScanFullOuter(chunk, sink.ht_scan_state);
 			}

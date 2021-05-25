@@ -330,7 +330,7 @@ idx_t RowGroup::GetSelVector(Transaction &transaction, idx_t vector_idx, Selecti
 }
 
 bool RowGroup::Fetch(Transaction &transaction, idx_t row) {
-	D_ASSERT(row < RowGroup::ROW_GROUP_SIZE);
+	D_ASSERT(row < this->count);
 	lock_guard<mutex> lock(row_group_lock);
 
 	idx_t vector_index = row / STANDARD_VECTOR_SIZE;

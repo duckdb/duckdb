@@ -169,12 +169,19 @@ bool Pipeline::ScheduleOperator(PhysicalOperator *op) {
 	case PhysicalOperatorType::UNNEST:
 	case PhysicalOperatorType::FILTER:
 	case PhysicalOperatorType::PROJECTION:
-	case PhysicalOperatorType::HASH_JOIN:
 	case PhysicalOperatorType::CROSS_PRODUCT:
 	case PhysicalOperatorType::STREAMING_SAMPLE:
 	case PhysicalOperatorType::INOUT_FUNCTION:
 		// filter, projection or hash probe: continue in children
 		return ScheduleOperator(op->children[0].get());
+	case PhysicalOperatorType::HASH_JOIN: {
+		// hash join; for now we can't safely parallelize right or full outer join probes
+		auto &join = (PhysicalHashJoin &) *op;
+		if (IsRightOuterJoin(join.join_type)) {
+			return false;
+		}
+		return ScheduleOperator(op->children[0].get());
+	}
 	case PhysicalOperatorType::TABLE_SCAN: {
 		auto &get = (PhysicalTableScan &)*op;
 		if (!get.function.max_threads) {

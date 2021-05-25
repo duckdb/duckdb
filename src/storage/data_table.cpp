@@ -381,7 +381,7 @@ void DataTable::Fetch(Transaction &transaction, DataChunk &result, const vector<
 	for (idx_t i = 0; i < fetch_count; i++) {
 		auto row_id = row_ids[i];
 		auto row_group = (RowGroup *)row_groups->GetSegment(row_id);
-		if (!row_group->Fetch(transaction, row_id)) {
+		if (!row_group->Fetch(transaction, row_id - row_group->start)) {
 			continue;
 		}
 		row_group->FetchRow(transaction, state, column_ids, row_id, result, count);

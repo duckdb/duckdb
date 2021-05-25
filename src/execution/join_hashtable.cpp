@@ -784,6 +784,8 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 				auto idx = result_vector.get_index(i);
 				auto chain_pointer = (data_ptr_t *)(ptrs[idx] + ht.tuple_size);
 				auto target = (bool *)chain_pointer;
+				// NOTE: threadsan reports this as a data race because this can be set concurrently by separate threads
+				// Technically it is, but it does not matter, since the only value that can be written is "true"
 				*target = true;
 			}
 		}
