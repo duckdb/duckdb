@@ -26,7 +26,7 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &contex
 	    (unique_ptr<ArrowArrayStreamWrapper>(*)(uintptr_t stream_factory_ptr))inputs[1].GetPointer();
 	auto rows_per_thread = inputs[2].GetValue<uint64_t>();
 
-	auto res = make_unique<ArrowScanFunctionData>(1000000);
+	auto res = make_unique<ArrowScanFunctionData>(rows_per_thread);
 	auto &data = *res;
 	data.stream = stream_factory_produce(stream_factory_ptr);
 	if (!data.stream) {
@@ -348,10 +348,11 @@ int ArrowTableFunction::ArrowProgress(ClientContext &context, const FunctionData
 
 void ArrowTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunctionSet arrow("arrow_scan");
-	arrow.AddFunction(TableFunction({LogicalType::POINTER, LogicalType::POINTER, LogicalType::UBIGINT}, ArrowScanFunction, ArrowScanBind,
-	                                ArrowScanInit, nullptr, nullptr, nullptr, ArrowScanCardinality, nullptr, nullptr,
-	                                ArrowScanMaxThreads, ArrowScanInitParallelState, ArrowScanFunctionParallel,
-	                                ArrowScanParallelInit, ArrowScanParallelStateNext, false, false, ArrowProgress));
+	arrow.AddFunction(TableFunction({LogicalType::POINTER, LogicalType::POINTER, LogicalType::UBIGINT},
+	                                ArrowScanFunction, ArrowScanBind, ArrowScanInit, nullptr, nullptr, nullptr,
+	                                ArrowScanCardinality, nullptr, nullptr, ArrowScanMaxThreads,
+	                                ArrowScanInitParallelState, ArrowScanFunctionParallel, ArrowScanParallelInit,
+	                                ArrowScanParallelStateNext, false, false, ArrowProgress));
 	set.AddFunction(arrow);
 }
 
