@@ -21,11 +21,13 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &contex
                                                            vector<string> &input_table_names,
                                                            vector<LogicalType> &return_types, vector<string> &names) {
 
-	auto res = make_unique<ArrowScanFunctionData>();
-	auto &data = *res;
 	auto stream_factory_ptr = inputs[0].GetValue<uintptr_t>();
 	unique_ptr<ArrowArrayStreamWrapper> (*stream_factory_produce)(uintptr_t stream_factory_ptr) =
 	    (unique_ptr<ArrowArrayStreamWrapper>(*)(uintptr_t stream_factory_ptr))inputs[1].GetValue<uintptr_t>();
+	auto rows_per_thread = inputs[2].GetValue<uint64_t>();
+
+	auto res = make_unique<ArrowScanFunctionData>(1000000);
+	auto &data = *res;
 	data.stream = stream_factory_produce(stream_factory_ptr);
 	if (!data.stream) {
 		throw InvalidInputException("arrow_scan: NULL pointer passed");
@@ -295,8 +297,7 @@ void ArrowTableFunction::ArrowScanFunctionParallel(ClientContext &context, const
 
 idx_t ArrowTableFunction::ArrowScanMaxThreads(ClientContext &context, const FunctionData *bind_data_p) {
 	auto &bind_data = (const ArrowScanFunctionData &)*bind_data_p;
-	idx_t rows_per_thread = 100000;
-	return (bind_data.stream->number_of_rows + rows_per_thread - 1) / rows_per_thread;
+	return (bind_data.stream->number_of_rows + bind_data.rows_per_thread - 1) / bind_data.rows_per_thread;
 }
 
 unique_ptr<ParallelState> ArrowTableFunction::ArrowScanInitParallelState(ClientContext &context,
@@ -347,7 +348,7 @@ int ArrowTableFunction::ArrowProgress(ClientContext &context, const FunctionData
 
 void ArrowTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunctionSet arrow("arrow_scan");
-	arrow.AddFunction(TableFunction({LogicalType::POINTER, LogicalType::POINTER}, ArrowScanFunction, ArrowScanBind,
+	arrow.AddFunction(TableFunction({LogicalType::POINTER, LogicalType::POINTER, LogicalType::UBIGINT}, ArrowScanFunction, ArrowScanBind,
 	                                ArrowScanInit, nullptr, nullptr, nullptr, ArrowScanCardinality, nullptr, nullptr,
 	                                ArrowScanMaxThreads, ArrowScanInitParallelState, ArrowScanFunctionParallel,
 	                                ArrowScanParallelInit, ArrowScanParallelStateNext, false, false, ArrowProgress));
