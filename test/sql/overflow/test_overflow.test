@@ -33,7 +33,7 @@ statement error
 SELECT cast(200 AS TINYINT)
 
 statement error
-SELECT cast(-128 AS TINYINT)
+SELECT cast(-129 AS TINYINT)
 
 # addition overflow
 statement error
