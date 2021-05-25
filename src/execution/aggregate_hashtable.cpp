@@ -17,6 +17,8 @@
 
 namespace duckdb {
 
+using ValidityBytes = BaseAggregateHashTable::ValidityBytes;
+
 GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manager, vector<LogicalType> group_types,
                                                      vector<LogicalType> payload_types,
                                                      const vector<BoundAggregateExpression *> &bindings,
@@ -378,33 +380,40 @@ void GroupedAggregateHashTable::FetchAggregates(DataChunk &groups, DataChunk &re
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 		D_ASSERT(result.ColumnCount() > aggr_idx);
 
-		VectorOperations::Gather::Set(addresses, result.data[aggr_idx], groups.size());
+		auto &target = result.data[aggr_idx];
+		auto &aggr = aggregates[aggr_idx];
+		aggr.function.finalize(addresses, aggr.bind_data, target, result.size());
+		VectorOperations::AddInPlace(addresses, aggr.payload_size, result.size());
 	}
 }
 
 template <class T>
 static void TemplatedScatter(VectorData &gdata, Vector &addresses, const SelectionVector &sel, idx_t count,
-                             idx_t type_size) {
+                             idx_t col_offset, idx_t col_idx) {
 	auto data = (T *)gdata.data;
-	auto pointers = FlatVector::GetData<uintptr_t>(addresses);
+	auto pointers = FlatVector::GetData<data_ptr_t>(addresses);
+
 	if (!gdata.validity.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
 			auto pointer_idx = sel.get_index(i);
 			auto group_idx = gdata.sel->get_index(pointer_idx);
-			auto ptr = (T *)pointers[pointer_idx];
+			auto ptr = pointers[pointer_idx] + col_offset;
 
-			T store_value = !gdata.validity.RowIsValid(group_idx) ? NullValue<T>() : data[group_idx];
-			Store<T>(store_value, (data_ptr_t)ptr);
-			pointers[pointer_idx] += type_size;
+			auto isnull = !gdata.validity.RowIsValid(group_idx);
+			T store_value = isnull ? NullValue<T>() : data[group_idx];
+			Store<T>(store_value, ptr);
+			if (isnull) {
+				ValidityBytes col_mask(pointers[pointer_idx]);
+				col_mask.SetInvalidUnsafe(col_idx);
+			}
 		}
 	} else {
 		for (idx_t i = 0; i < count; i++) {
 			auto pointer_idx = sel.get_index(i);
 			auto group_idx = gdata.sel->get_index(pointer_idx);
-			auto ptr = (T *)pointers[pointer_idx];
+			auto ptr = pointers[pointer_idx] + col_offset;
 
-			Store<T>(data[group_idx], (data_ptr_t)ptr);
-			pointers[pointer_idx] += type_size;
+			Store<T>(data[group_idx], ptr);
 		}
 	}
 }
@@ -414,49 +423,48 @@ void GroupedAggregateHashTable::ScatterGroups(DataChunk &groups, unique_ptr<Vect
 	if (count == 0) {
 		return;
 	}
-	for (idx_t grp_idx = 0; grp_idx < groups.ColumnCount(); grp_idx++) {
-		auto &data = groups.data[grp_idx];
-		auto &gdata = group_data[grp_idx];
-
-		auto type_size = GetTypeIdSize(data.GetType().InternalType());
+	idx_t col_offset = group_mask_width;
+	for (idx_t col_idx = 0; col_idx < groups.ColumnCount(); col_idx++) {
+		auto &data = groups.data[col_idx];
+		auto &gdata = group_data[col_idx];
 
 		switch (data.GetType().InternalType()) {
 		case PhysicalType::BOOL:
 		case PhysicalType::INT8:
-			TemplatedScatter<int8_t>(gdata, addresses, sel, count, type_size);
+			TemplatedScatter<int8_t>(gdata, addresses, sel, count, col_offset, col_idx);
 			break;
 		case PhysicalType::INT16:
-			TemplatedScatter<int16_t>(gdata, addresses, sel, count, type_size);
+			TemplatedScatter<int16_t>(gdata, addresses, sel, count, col_offset, col_idx);
 			break;
 		case PhysicalType::INT32:
-			TemplatedScatter<int32_t>(gdata, addresses, sel, count, type_size);
+			TemplatedScatter<int32_t>(gdata, addresses, sel, count, col_offset, col_idx);
 			break;
 		case PhysicalType::INT64:
-			TemplatedScatter<int64_t>(gdata, addresses, sel, count, type_size);
+			TemplatedScatter<int64_t>(gdata, addresses, sel, count, col_offset, col_idx);
 			break;
 		case PhysicalType::UINT8:
-			TemplatedScatter<uint8_t>(gdata, addresses, sel, count, type_size);
+			TemplatedScatter<uint8_t>(gdata, addresses, sel, count, col_offset, col_idx);
 			break;
 		case PhysicalType::UINT16:
-			TemplatedScatter<uint16_t>(gdata, addresses, sel, count, type_size);
+			TemplatedScatter<uint16_t>(gdata, addresses, sel, count, col_offset, col_idx);
 			break;
 		case PhysicalType::UINT32:
-			TemplatedScatter<uint32_t>(gdata, addresses, sel, count, type_size);
+			TemplatedScatter<uint32_t>(gdata, addresses, sel, count, col_offset, col_idx);
 			break;
 		case PhysicalType::UINT64:
-			TemplatedScatter<uint64_t>(gdata, addresses, sel, count, type_size);
+			TemplatedScatter<uint64_t>(gdata, addresses, sel, count, col_offset, col_idx);
 			break;
 		case PhysicalType::INT128:
-			TemplatedScatter<hugeint_t>(gdata, addresses, sel, count, type_size);
+			TemplatedScatter<hugeint_t>(gdata, addresses, sel, count, col_offset, col_idx);
 			break;
 		case PhysicalType::FLOAT:
-			TemplatedScatter<float>(gdata, addresses, sel, count, type_size);
+			TemplatedScatter<float>(gdata, addresses, sel, count, col_offset, col_idx);
 			break;
 		case PhysicalType::DOUBLE:
-			TemplatedScatter<double>(gdata, addresses, sel, count, type_size);
+			TemplatedScatter<double>(gdata, addresses, sel, count, col_offset, col_idx);
 			break;
 		case PhysicalType::INTERVAL:
-			TemplatedScatter<interval_t>(gdata, addresses, sel, count, type_size);
+			TemplatedScatter<interval_t>(gdata, addresses, sel, count, col_offset, col_idx);
 			break;
 		case PhysicalType::VARCHAR: {
 			auto string_data = (string_t *)gdata.data;
@@ -465,8 +473,10 @@ void GroupedAggregateHashTable::ScatterGroups(DataChunk &groups, unique_ptr<Vect
 			for (idx_t i = 0; i < count; i++) {
 				auto pointer_idx = sel.get_index(i);
 				auto group_idx = gdata.sel->get_index(pointer_idx);
-				auto ptr = pointers[pointer_idx];
+				auto ptr = pointers[pointer_idx] + col_offset;
 				if (!gdata.validity.RowIsValid(group_idx)) {
+					ValidityBytes col_mask(pointers[pointer_idx]);
+					col_mask.SetInvalidUnsafe(col_idx);
 					Store<string_t>(NullValue<string_t>(), ptr);
 				} else if (string_data[group_idx].IsInlined()) {
 					Store<string_t>(string_data[group_idx], ptr);
@@ -475,41 +485,45 @@ void GroupedAggregateHashTable::ScatterGroups(DataChunk &groups, unique_ptr<Vect
 					    string_heap.AddBlob(string_data[group_idx].GetDataUnsafe(), string_data[group_idx].GetSize()),
 					    ptr);
 				}
-
-				pointers[pointer_idx] += type_size;
 			}
 			break;
 		}
 		default:
 			throw Exception("Unsupported type for group vector");
 		}
+		col_offset += GetTypeIdSize(data.GetType().InternalType());
 	}
 }
 
 template <class T>
 static void TemplatedCompareGroups(VectorData &gdata, Vector &addresses, SelectionVector &sel, idx_t &count,
-                                   idx_t type_size, SelectionVector &no_match, idx_t &no_match_count) {
+                                   idx_t col_offset, idx_t col_idx, SelectionVector &no_match, idx_t &no_match_count) {
+	// Precompute mask indexes
+	idx_t entry_idx;
+	idx_t idx_in_entry;
+	ValidityBytes::GetEntryIndex(col_idx, entry_idx, idx_in_entry);
+
 	auto data = (T *)gdata.data;
-	auto pointers = FlatVector::GetData<uintptr_t>(addresses);
+	auto pointers = FlatVector::GetData<data_ptr_t>(addresses);
 	idx_t match_count = 0;
 	if (!gdata.validity.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = sel.get_index(i);
 			auto group_idx = gdata.sel->get_index(idx);
-			auto value = Load<T>((data_ptr_t)pointers[idx]);
+			auto value = Load<T>(pointers[idx] + col_offset);
+			ValidityBytes mask(pointers[idx]);
+			auto isnull = !mask.RowIsValid(mask.GetValidityEntry(entry_idx), idx_in_entry);
 
 			if (!gdata.validity.RowIsValid(group_idx)) {
-				if (IsNullValue<T>(value)) {
+				if (isnull) {
 					// match: move to next value to compare
 					sel.set_index(match_count++, idx);
-					pointers[idx] += type_size;
 				} else {
 					no_match.set_index(no_match_count++, idx);
 				}
 			} else {
-				if (Equals::Operation<T>(data[group_idx], value)) {
+				if (!isnull && Equals::Operation<T>(data[group_idx], value)) {
 					sel.set_index(match_count++, idx);
-					pointers[idx] += type_size;
 				} else {
 					no_match.set_index(no_match_count++, idx);
 				}
@@ -519,11 +533,12 @@ static void TemplatedCompareGroups(VectorData &gdata, Vector &addresses, Selecti
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = sel.get_index(i);
 			auto group_idx = gdata.sel->get_index(idx);
-			auto value = Load<T>((data_ptr_t)pointers[idx]);
+			auto value = Load<T>(pointers[idx] + col_offset);
+			ValidityBytes mask(pointers[idx]);
+			auto isnull = !mask.RowIsValid(mask.GetValidityEntry(entry_idx), idx_in_entry);
 
-			if (Equals::Operation<T>(data[group_idx], value)) {
+			if (!isnull && Equals::Operation<T>(data[group_idx], value)) {
 				sel.set_index(match_count++, idx);
-				pointers[idx] += type_size;
 			} else {
 				no_match.set_index(no_match_count++, idx);
 			}
@@ -532,56 +547,57 @@ static void TemplatedCompareGroups(VectorData &gdata, Vector &addresses, Selecti
 	count = match_count;
 }
 
-static void CompareGroups(DataChunk &groups, unique_ptr<VectorData[]> &group_data, Vector &addresses,
+static void CompareGroups(DataChunk &groups, unique_ptr<VectorData[]> &group_data, Vector &addresses, idx_t mask_offset,
                           SelectionVector &sel, idx_t count, SelectionVector &no_match, idx_t &no_match_count) {
-	for (idx_t group_idx = 0; group_idx < groups.ColumnCount(); group_idx++) {
-		auto &data = groups.data[group_idx];
-		auto &gdata = group_data[group_idx];
-		auto type_size = GetTypeIdSize(data.GetType().InternalType());
+	auto col_offset = mask_offset;
+	for (idx_t i = 0; i < groups.ColumnCount(); i++) {
+		auto &data = groups.data[i];
+		auto &gdata = group_data[i];
 		switch (data.GetType().InternalType()) {
 		case PhysicalType::BOOL:
 		case PhysicalType::INT8:
-			TemplatedCompareGroups<int8_t>(gdata, addresses, sel, count, type_size, no_match, no_match_count);
+			TemplatedCompareGroups<int8_t>(gdata, addresses, sel, count, col_offset, i, no_match, no_match_count);
 			break;
 		case PhysicalType::INT16:
-			TemplatedCompareGroups<int16_t>(gdata, addresses, sel, count, type_size, no_match, no_match_count);
+			TemplatedCompareGroups<int16_t>(gdata, addresses, sel, count, col_offset, i, no_match, no_match_count);
 			break;
 		case PhysicalType::INT32:
-			TemplatedCompareGroups<int32_t>(gdata, addresses, sel, count, type_size, no_match, no_match_count);
+			TemplatedCompareGroups<int32_t>(gdata, addresses, sel, count, col_offset, i, no_match, no_match_count);
 			break;
 		case PhysicalType::INT64:
-			TemplatedCompareGroups<int64_t>(gdata, addresses, sel, count, type_size, no_match, no_match_count);
+			TemplatedCompareGroups<int64_t>(gdata, addresses, sel, count, col_offset, i, no_match, no_match_count);
 			break;
 		case PhysicalType::UINT8:
-			TemplatedCompareGroups<uint8_t>(gdata, addresses, sel, count, type_size, no_match, no_match_count);
+			TemplatedCompareGroups<uint8_t>(gdata, addresses, sel, count, col_offset, i, no_match, no_match_count);
 			break;
 		case PhysicalType::UINT16:
-			TemplatedCompareGroups<uint16_t>(gdata, addresses, sel, count, type_size, no_match, no_match_count);
+			TemplatedCompareGroups<uint16_t>(gdata, addresses, sel, count, col_offset, i, no_match, no_match_count);
 			break;
 		case PhysicalType::UINT32:
-			TemplatedCompareGroups<uint32_t>(gdata, addresses, sel, count, type_size, no_match, no_match_count);
+			TemplatedCompareGroups<uint32_t>(gdata, addresses, sel, count, col_offset, i, no_match, no_match_count);
 			break;
 		case PhysicalType::UINT64:
-			TemplatedCompareGroups<uint64_t>(gdata, addresses, sel, count, type_size, no_match, no_match_count);
+			TemplatedCompareGroups<uint64_t>(gdata, addresses, sel, count, col_offset, i, no_match, no_match_count);
 			break;
 		case PhysicalType::INT128:
-			TemplatedCompareGroups<hugeint_t>(gdata, addresses, sel, count, type_size, no_match, no_match_count);
+			TemplatedCompareGroups<hugeint_t>(gdata, addresses, sel, count, col_offset, i, no_match, no_match_count);
 			break;
 		case PhysicalType::FLOAT:
-			TemplatedCompareGroups<float>(gdata, addresses, sel, count, type_size, no_match, no_match_count);
+			TemplatedCompareGroups<float>(gdata, addresses, sel, count, col_offset, i, no_match, no_match_count);
 			break;
 		case PhysicalType::DOUBLE:
-			TemplatedCompareGroups<double>(gdata, addresses, sel, count, type_size, no_match, no_match_count);
+			TemplatedCompareGroups<double>(gdata, addresses, sel, count, col_offset, i, no_match, no_match_count);
 			break;
 		case PhysicalType::INTERVAL:
-			TemplatedCompareGroups<interval_t>(gdata, addresses, sel, count, type_size, no_match, no_match_count);
+			TemplatedCompareGroups<interval_t>(gdata, addresses, sel, count, col_offset, i, no_match, no_match_count);
 			break;
 		case PhysicalType::VARCHAR:
-			TemplatedCompareGroups<string_t>(gdata, addresses, sel, count, type_size, no_match, no_match_count);
+			TemplatedCompareGroups<string_t>(gdata, addresses, sel, count, col_offset, i, no_match, no_match_count);
 			break;
 		default:
 			throw Exception("Unsupported type for group vector");
 		}
+		col_offset += GetTypeIdSize(data.GetType().InternalType());
 	}
 }
 
@@ -662,6 +678,9 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 				memcpy(entry_payload_ptr, &group_hashes_ptr[index], HASH_WIDTH);
 				D_ASSERT((*(hash_t *)entry_payload_ptr) == group_hashes_ptr[index]);
 
+				// Set the validity mask (clearing is less common)
+				ValidityBytes(entry_payload_ptr + HASH_WIDTH).SetAllValid(group_types.size());
+
 				// initialize the payload info for the column
 				memcpy(entry_payload_ptr + HASH_WIDTH + group_width, empty_payload_data.get(), payload_width);
 
@@ -709,8 +728,8 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 		// now we have only the tuples remaining that might match to an existing group
 		// start performing comparisons with each of the groups
 		if (need_compare_count > 0) {
-			CompareGroups(groups, group_data, addresses, group_compare_vector, need_compare_count, no_match_vector,
-			              no_match_count);
+			CompareGroups(groups, group_data, addresses, group_mask_width, group_compare_vector, need_compare_count,
+			              no_match_vector, no_match_count);
 		}
 
 		// each of the entries that do not match we move them to the next entry in the HT
@@ -724,9 +743,9 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 		sel_vector = &no_match_vector;
 		remaining_entries = no_match_count;
 	}
-	// pointers in addresses now were moved behind the grousp by CompareGroups/ScatterGroups but we may have to add
+	// pointers in addresses now were moved behind the groups by CompareGroups/ScatterGroups but we may have to add
 	// padding still to point at the payload.
-	VectorOperations::AddInPlace(addresses, group_padding, groups.size());
+	VectorOperations::AddInPlace(addresses, group_width, groups.size());
 	return new_group_count;
 }
 
@@ -764,18 +783,19 @@ void GroupedAggregateHashTable::FlushMove(Vector &source_addresses, Vector &sour
 	DataChunk groups;
 	groups.Initialize(group_types);
 	groups.SetCardinality(count);
+	auto col_offset = group_mask_width;
 	for (idx_t i = 0; i < groups.ColumnCount(); i++) {
 		auto &column = groups.data[i];
-		VectorOperations::Gather::Set(source_addresses, column, count);
+		VectorOperations::Gather::Set(source_addresses, column, count, col_offset, i);
+		col_offset += GetTypeIdSize(column.GetType().InternalType());
 	}
+	VectorOperations::AddInPlace(source_addresses, group_width, count);
 
 	SelectionVector new_groups(STANDARD_VECTOR_SIZE);
 	Vector group_addresses(LogicalType::POINTER);
 	SelectionVector new_groups_sel(STANDARD_VECTOR_SIZE);
 
 	FindOrCreateGroups(groups, source_hashes, group_addresses, new_groups_sel);
-
-	VectorOperations::AddInPlace(source_addresses, group_padding, count);
 
 	for (auto &aggr : aggregates) {
 		// for any entries for which a group was found, update the aggregate
@@ -896,12 +916,13 @@ idx_t GroupedAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {
 
 	result.SetCardinality(this_n);
 	// fetch the group columns
+	auto col_offset = group_mask_width;
 	for (idx_t i = 0; i < group_types.size(); i++) {
 		auto &column = result.data[i];
-		VectorOperations::Gather::Set(addresses, column, result.size());
+		VectorOperations::Gather::Set(addresses, column, result.size(), col_offset, i);
+		col_offset += GetTypeIdSize(column.GetType().InternalType());
 	}
-
-	VectorOperations::AddInPlace(addresses, group_padding, result.size());
+	VectorOperations::AddInPlace(addresses, group_width, result.size());
 
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		auto &target = result.data[group_types.size() + i];
