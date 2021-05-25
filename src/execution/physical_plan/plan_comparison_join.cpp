@@ -12,7 +12,8 @@
 #include "duckdb/transaction/transaction.hpp"
 
 namespace duckdb {
-constexpr size_t PERFECT_HASH_THRESHOLD = 1 << 10;
+constexpr size_t BUILD_THRESHOLD = 1 << 10; // 1024
+constexpr size_t MIN_THRESHOLD = 1 << 7;    // 128
 
 static bool CanPlanIndexJoin(Transaction &transaction, TableScanBindData *bind_data, PhysicalTableScan &scan) {
 	if (!bind_data) {
@@ -31,17 +32,17 @@ static bool CanPlanIndexJoin(Transaction &transaction, TableScanBindData *bind_d
 	return true;
 }
 
-void CheckForPerfectJoin(LogicalComparisonJoin &op, PerfectHashJoinState &join_state) {
-	if (op.join_stats.empty() || !op.join_stats[0]->type.IsNumeric() || !op.join_stats[1]->type.IsNumeric()) {
-		// do nothing
+void CheckForInvisibleJoin(LogicalComparisonJoin &op, PerfectHashJoinState &join_state) {
+	if (op.join_stats.empty() || !op.join_stats[0]->type.IsIntegral() || !op.join_stats[1]->type.IsIntegral()) {
+		// invisible join not possible for no integral types
 		return;
 	}
 	auto stats_build = reinterpret_cast<NumericStatistics *>(op.join_stats[0].get()); // lhs stats
 	auto build_range = stats_build->max - stats_build->min;                           // Join Keys Range
 
-	if (build_range < PERFECT_HASH_THRESHOLD) {
+	if (build_range < BUILD_THRESHOLD) {
+		// Fill join_stats for invisible join
 		auto stats_probe = reinterpret_cast<NumericStatistics *>(op.join_stats[1].get()); // rhs stats
-
 		join_state.is_build_small = true;
 		join_state.probe_min = stats_probe->min;
 		join_state.probe_max = stats_probe->max;
@@ -50,6 +51,10 @@ void CheckForPerfectJoin(LogicalComparisonJoin &op, PerfectHashJoinState &join_s
 		// check whether the probe min-max is in the build min-max
 		if (stats_build->min <= stats_probe->min && stats_probe->max <= stats_build->max) {
 			join_state.is_probe_in_range = true;
+		}
+		// check whether min is close to 0
+		if (stats_build->min < MIN_THRESHOLD) {
+			join_state.is_build_min_small = true;
 		}
 	}
 }
@@ -141,7 +146,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 		}
 		// equality join with small number of keys : possible perfect hash table optimization
 		PerfectHashJoinState join_state;
-		CheckForPerfectJoin(op, join_state);
+		CheckForInvisibleJoin(op, join_state);
 
 		// equality join: use hash join
 		plan = make_unique<PhysicalHashJoin>(op, move(left), move(right), move(op.conditions), op.join_type,

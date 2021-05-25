@@ -24,6 +24,7 @@ struct PerfectHashJoinState {
 	Value probe_max;
 	bool is_build_small {false};
 	bool is_probe_in_range {false};
+	bool is_build_min_small {false}; // theshould  100;
 };
 
 class PhysicalHashJoinState : public PhysicalOperatorState {
@@ -76,7 +77,7 @@ public:
 	vector<LogicalType> delim_types;
 	//! Struct for perfect hash optmization
 	PerfectHashJoinState perfect_join_state;
-	bool hasBuiltPerfectHashTable {false};
+	bool hasInvisibleJoin {false};
 
 public:
 	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;
@@ -95,6 +96,7 @@ public:
 	void FillSelectionVectorSwitch(Vector &source, SelectionVector &sel_vec, idx_t count);
 	template <typename T>
 	void TemplatedFillSelectionVector(Vector &source, SelectionVector &sel_vec, idx_t count);
+	bool HasDuplicates(JoinHashTable *ht_ptr);
 
 private:
 	void ProbeHashTable(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p);

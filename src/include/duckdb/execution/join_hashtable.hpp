@@ -142,7 +142,7 @@ public:
 	                               const SelectionVector &sel_vector, idx_t count, idx_t &offset);
 	template <class T>
 	static void TemplatedGatherResult(Vector &result, uintptr_t *pointers, const SelectionVector &result_vector,
-	                                  const SelectionVector &sel_vector, idx_t count, idx_t offset);
+	                                  const SelectionVector &sel_vector, const idx_t count, idx_t offset);
 	template <bool NO_MATCH_SEL, class OP>
 	static idx_t GatherSwitch(VectorData &data, PhysicalType type, Vector &pointers, const SelectionVector &current_sel,
 	                          idx_t count, idx_t offset, SelectionVector *match_sel, SelectionVector *no_match_sel,
@@ -184,14 +184,15 @@ public:
 	//! The join type of the HT
 	JoinType join_type;
 	//! Whether or not the HT has been finalized
-	bool finalized;
+	bool finalized {false};
 	//! Whether or not any of the key elements contain NULL
-	bool has_null;
+	bool has_null {false};
 	//! Bitmask for getting relevant bits from the hashes to determine the position
 	uint64_t bitmask;
 	//! The amount of entries stored per block
 	idx_t block_capacity;
 	std::vector<Vector> columns;
+	bool has_duplicates {false};
 
 	struct {
 		mutex mj_lock;

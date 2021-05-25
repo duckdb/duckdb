@@ -240,7 +240,7 @@ void PhysicalHashJoin::ProbeHashTable(ExecutionContext &context, DataChunk &chun
 bool PhysicalHashJoin::ProbePerfectHashTable(ExecutionContext &context, DataChunk &result,
                                              PhysicalHashJoinState *physical_state, JoinHashTable *ht_ptr) {
 	// We only probe if the optimized hash table has been built
-	if (!hasBuiltPerfectHashTable) {
+	if (!hasInvisibleJoin) {
 		return false;
 	}
 
@@ -278,16 +278,20 @@ bool PhysicalHashJoin::CheckRequirementsForPerfectHashJoin(JoinHashTable *ht_ptr
 	}
 
 	// verify uniquiness (build size < min_max_range => duplicate values )
-	auto build_size = Value::INTEGER(ht_ptr->size());
-	auto build_range = perfect_join_state.build_max - perfect_join_state.build_min;
-	if ((build_size != build_range + 1) || ht_ptr->has_null) {
+	if (ht_ptr->has_null) {
 		return false;
 	}
 
 	// Store build side as a set of columns
 	BuildPerfectHashStructure(ht_ptr, join_state.ht_scan_state);
-	hasBuiltPerfectHashTable = true;
+	if (HasDuplicates(ht_ptr)) {
+		return false;
+	}
+	hasInvisibleJoin = true;
 	return true;
+}
+
+bool HasDuplicates(JoinHashTable *ht_ptr) {
 }
 
 void PhysicalHashJoin::BuildPerfectHashStructure(JoinHashTable *hash_table_ptr, JoinHTScanState &join_ht_state) {
@@ -305,15 +309,13 @@ void PhysicalHashJoin::TemplatedFillSelectionVector(Vector &source, SelectionVec
 	auto min_value = perfect_join_state.build_min.GetValue<T>();
 	auto max_value = perfect_join_state.build_max.GetValue<T>();
 
-	VectorData build_data;
-	source.Orrify(count, build_data);
-	auto i_data = (T *)build_data.data;
+	auto vector_data = FlatVector::GetData<T>(source);
 	// generate the selection vector
 	for (idx_t i = 0; i != count; ++i) {
 		// add index to selection vector if value in the range
-		auto input_value = i_data[i];
+		auto input_value = vector_data[i];
 		if (min_value <= input_value && input_value <= max_value) {
-			auto idx = i_data[i] - min_value;
+			auto idx = input_value - min_value;
 			sel_vec.set_index(i, idx);
 		}
 	}
@@ -321,9 +323,6 @@ void PhysicalHashJoin::TemplatedFillSelectionVector(Vector &source, SelectionVec
 
 void PhysicalHashJoin::FillSelectionVectorSwitch(Vector &source, SelectionVector &sel_vec, idx_t count) {
 	switch (source.GetType().id()) {
-	case LogicalTypeId::BOOLEAN:
-		TemplatedFillSelectionVector<bool>(source, sel_vec, count);
-		break;
 	case LogicalTypeId::TINYINT:
 		TemplatedFillSelectionVector<int8_t>(source, sel_vec, count);
 		break;
