@@ -60,7 +60,7 @@ void DataTable::AppendRowGroup(idx_t start_row) {
 }
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition &new_column, Expression *default_value)
-    : info(parent.info), types(parent.types), db(parent.db), total_rows(parent.total_rows), is_root(true) {
+    : info(parent.info), types(parent.types), db(parent.db), total_rows(parent.total_rows.load()), is_root(true) {
 	// prevent any new tuples from being added to the parent
 	lock_guard<mutex> parent_lock(parent.append_lock);
 	// add the new column to this DataTable
@@ -107,7 +107,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 }
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_column)
-    : info(parent.info), types(parent.types), db(parent.db), total_rows(parent.total_rows), is_root(true) {
+    : info(parent.info), types(parent.types), db(parent.db), total_rows(parent.total_rows.load()), is_root(true) {
 	// prevent any new tuples from being added to the parent
 	lock_guard<mutex> parent_lock(parent.append_lock);
 	// first check if there are any indexes that exist that point to the removed column
@@ -146,7 +146,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_idx, const LogicalType &target_type,
                      vector<column_t> bound_columns, Expression &cast_expr)
-    : info(parent.info), types(parent.types), db(parent.db), total_rows(parent.total_rows), is_root(true) {
+    : info(parent.info), types(parent.types), db(parent.db), total_rows(parent.total_rows.load()), is_root(true) {
 	// prevent any tuples from being added to the parent
 	lock_guard<mutex> lock(append_lock);
 
@@ -503,6 +503,7 @@ void DataTable::Append(Transaction &transaction, DataChunk &chunk, TableAppendSt
 		if (append_count > 0) {
 			current_row_group->Append(state.row_group_append_state, chunk, append_count);
 			// merge the stats
+			lock_guard<mutex> stats_guard(stats_lock);
 			for (idx_t i = 0; i < types.size(); i++) {
 				column_stats[i]->Merge(*current_row_group->GetStatistics(i));
 			}

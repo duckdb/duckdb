@@ -233,7 +233,7 @@ private:
 	//! Lock for appending entries to the table
 	mutex append_lock;
 	//! The number of rows in the table
-	idx_t total_rows;
+	atomic<idx_t> total_rows;
 	//! The segment trees holding the various row_groups of the table
 	shared_ptr<SegmentTree> row_groups;
 	//! Column statistics
