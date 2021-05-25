@@ -363,6 +363,27 @@ void PhysicalOrder::Combine(ExecutionContext &context, GlobalOperatorState &gsta
 	}
 }
 
+template <class SORTED>
+void TemplatedGlobalToLocalIndex(SORTED &sorted, const vector<RowDataBlock> &blocks, const idx_t &global_idx,
+                                 idx_t &local_block_index, idx_t &local_entry_index) {
+	if (global_idx == sorted.Count()) {
+		local_block_index = blocks.size() - 1;
+		local_entry_index = blocks.back().count;
+		return;
+	}
+	D_ASSERT(global_idx < sorted.Count());
+	local_entry_index = global_idx;
+	for (local_block_index = 0; local_block_index < blocks.size(); local_block_index++) {
+		const idx_t &block_count = blocks[local_block_index].count;
+		if (local_entry_index >= block_count) {
+			local_entry_index -= block_count;
+		} else {
+			break;
+		}
+	}
+	D_ASSERT(local_entry_index < blocks[local_block_index].count);
+}
+
 struct SortedData {
 public:
 	SortedData(BufferManager &buffer_manager, bool constant_size, idx_t entry_size)
@@ -437,22 +458,7 @@ public:
 	}
 
 	void GlobalToLocalIndex(const idx_t &global_idx, idx_t &local_block_index, idx_t &local_entry_index) {
-		if (global_idx == Count()) {
-			local_block_index = data_blocks.size() - 1;
-			local_entry_index = data_blocks.back().count;
-			return;
-		}
-		D_ASSERT(global_idx < Count());
-		local_entry_index = global_idx;
-		for (local_block_index = 0; local_block_index < data_blocks.size(); local_block_index++) {
-			const idx_t &block_count = data_blocks[local_block_index].count;
-			if (local_entry_index >= block_count) {
-				local_entry_index -= block_count;
-			} else {
-				break;
-			}
-		}
-		D_ASSERT(local_entry_index < data_blocks[local_block_index].count);
+		TemplatedGlobalToLocalIndex<SortedData>(*this, data_blocks, global_idx, local_block_index, local_entry_index);
 	}
 
 	unique_ptr<SortedData> CreateSlice(const idx_t start, const idx_t end) {
@@ -661,22 +667,8 @@ public:
 	}
 
 	void GlobalToLocalIndex(const idx_t &global_idx, idx_t &local_block_index, idx_t &local_entry_index) {
-		if (global_idx == Count()) {
-			local_block_index = sorting_blocks.size() - 1;
-			local_entry_index = sorting_blocks.back().count;
-			return;
-		}
-		D_ASSERT(global_idx < Count());
-		local_entry_index = global_idx;
-		for (local_block_index = 0; local_block_index < sorting_blocks.size(); local_block_index++) {
-			const idx_t &block_count = sorting_blocks[local_block_index].count;
-			if (local_entry_index >= block_count) {
-				local_entry_index -= block_count;
-			} else {
-				break;
-			}
-		}
-		D_ASSERT(local_entry_index < sorting_blocks[local_block_index].count);
+		TemplatedGlobalToLocalIndex<SortedBlock>(*this, sorting_blocks, global_idx, local_block_index,
+		                                         local_entry_index);
 	}
 
 	unique_ptr<SortedBlock> CreateSlice(const idx_t start, const idx_t end) {
