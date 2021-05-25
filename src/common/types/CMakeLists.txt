@@ -13,6 +13,7 @@ add_library_unity(
   interval.cpp
   null_value.cpp
   row_data_collection.cpp
+  row_layout.cpp
   selection_vector.cpp
   string_heap.cpp
   string_type.cpp

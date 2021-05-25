@@ -17,7 +17,7 @@
 
 namespace duckdb {
 
-using ValidityBytes = BaseAggregateHashTable::ValidityBytes;
+using ValidityBytes = RowLayout::ValidityBytes;
 
 GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manager, vector<LogicalType> group_types,
                                                      vector<LogicalType> payload_types,
@@ -51,7 +51,7 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manag
 
 	tuple_size = layout.GetRowWidth();
 #ifndef DUCKDB_ALLOW_UNDEFINED
-	tuple_size = BaseAggregateHashTable::Align(tuple_size);
+	tuple_size = RowLayout::Align(tuple_size);
 #endif
 
 	D_ASSERT(tuple_size <= Storage::BLOCK_ALLOC_SIZE);

@@ -54,7 +54,7 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition
 	// entry size is the tuple size and the size of the hash/next pointer
 	entry_size = pointer_offset + MaxValue(sizeof(hash_t), sizeof(uintptr_t));
 #ifndef DUCKDB_ALLOW_UNDEFINED
-	auto aligned_entry_size = BaseAggregateHashTable::Align(entry_size);
+	auto aligned_entry_size = RowLayout::Align(entry_size);
 	entry_padding = aligned_entry_size - entry_size;
 	entry_size += entry_padding;
 #endif
