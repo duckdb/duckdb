@@ -1048,7 +1048,6 @@ void JoinHashTable::TemplatedGatherResult(Vector &result, uintptr_t *pointers, c
 		} else {
 			rdata[ridx] = hdata;
 			if (bit_position[ridx]) {
-				has_duplicates = true;
 			}
 			bit_position[ridx] = true;
 		}

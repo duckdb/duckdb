@@ -291,7 +291,8 @@ bool PhysicalHashJoin::CheckRequirementsForPerfectHashJoin(JoinHashTable *ht_ptr
 	return true;
 }
 
-bool HasDuplicates(JoinHashTable *ht_ptr) {
+bool PhysicalHashJoin::HasDuplicates(JoinHashTable *ht_ptr) {
+	return true;
 }
 
 void PhysicalHashJoin::BuildPerfectHashStructure(JoinHashTable *hash_table_ptr, JoinHTScanState &join_ht_state) {
