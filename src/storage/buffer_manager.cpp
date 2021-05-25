@@ -178,17 +178,29 @@ unique_ptr<BufferHandle> BufferManager::Allocate(idx_t alloc_size) {
 }
 
 unique_ptr<BufferHandle> BufferManager::Pin(shared_ptr<BlockHandle> &handle) {
-	// lock the block
+	idx_t required_memory;
+	{
+		// lock the block
+		lock_guard<mutex> lock(handle->lock);
+		// check if the block is already loaded
+		if (handle->state == BlockState::BLOCK_LOADED) {
+			// the block is loaded, increment the reader count and return a pointer to the handle
+			handle->readers++;
+			return handle->Load(handle);
+		}
+		required_memory = handle->memory_usage;
+	}
+	// evict blocks until we have space for the current block
+	if (!EvictBlocks(required_memory, maximum_memory)) {
+		throw OutOfRangeException("Not enough memory to complete operation: failed to pin block");
+	}
+	// lock the handle again and repeat the check (in case anybody loaded in the mean time)
 	lock_guard<mutex> lock(handle->lock);
 	// check if the block is already loaded
 	if (handle->state == BlockState::BLOCK_LOADED) {
 		// the block is loaded, increment the reader count and return a pointer to the handle
 		handle->readers++;
 		return handle->Load(handle);
-	}
-	// evict blocks until we have space for the current block
-	if (!EvictBlocks(handle->memory_usage, maximum_memory)) {
-		throw OutOfRangeException("Not enough memory to complete operation: failed to pin block");
 	}
 	// now we can actually load the current block
 	D_ASSERT(handle->readers == 0);
