@@ -243,7 +243,7 @@ void ColumnData::UpdateColumn(Transaction &transaction, const vector<column_t> &
 
 unique_ptr<BaseStatistics> ColumnData::GetUpdateStatistics() {
 	lock_guard<mutex> update_guard(update_lock);
-	return updates ? updates->GetStatistics().statistics->Copy() : nullptr;
+	return updates ? updates->GetStatistics() : nullptr;
 }
 
 void ColumnData::AppendTransientSegment(idx_t start_row) {

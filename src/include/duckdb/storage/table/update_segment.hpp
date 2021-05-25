@@ -44,9 +44,7 @@ public:
 	void CleanupUpdateInternal(const StorageLockKey &lock, UpdateInfo *info);
 	void CleanupUpdate(UpdateInfo *info);
 
-	SegmentStatistics &GetStatistics() {
-		return stats;
-	}
+	unique_ptr<BaseStatistics> GetStatistics();
 	StringHeap &GetStringHeap() {
 		return heap;
 	}
@@ -58,15 +56,17 @@ private:
 	unique_ptr<UpdateNode> root;
 	//! Update statistics
 	SegmentStatistics stats;
+	//! Stats lock
+	mutex stats_lock;
 	//! Internal type size
 	idx_t type_size;
 	//! String heap, only used for strings
 	StringHeap heap;
 
 public:
-	typedef void (*initialize_update_function_t)(SegmentStatistics &stats, UpdateInfo *base_info, Vector &base_data,
+	typedef void (*initialize_update_function_t)(UpdateInfo *base_info, Vector &base_data,
 	                                             UpdateInfo *update_info, Vector &update, const SelectionVector &sel);
-	typedef void (*merge_update_function_t)(SegmentStatistics &stats, UpdateInfo *base_info, Vector &base_data,
+	typedef void (*merge_update_function_t)(UpdateInfo *base_info, Vector &base_data,
 	                                        UpdateInfo *update_info, Vector &update, row_t *ids, idx_t count,
 	                                        const SelectionVector &sel);
 	typedef void (*fetch_update_function_t)(transaction_t start_time, transaction_t transaction_id, UpdateInfo *info,

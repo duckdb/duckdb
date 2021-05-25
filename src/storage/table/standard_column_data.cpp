@@ -24,7 +24,8 @@ bool StandardColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filte
 			return true;
 		}
 		if (updates) {
-			prune_result = filter.CheckStatistics(*updates->GetStatistics().statistics);
+			auto update_stats = updates->GetStatistics();
+			prune_result = filter.CheckStatistics(*update_stats);
 			return prune_result != FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		} else {
 			return false;
@@ -117,7 +118,7 @@ void StandardColumnData::UpdateColumn(Transaction &transaction, const vector<col
 }
 
 unique_ptr<BaseStatistics> StandardColumnData::GetUpdateStatistics() {
-	auto stats = updates ? updates->GetStatistics().statistics->Copy() : nullptr;
+	auto stats = updates ? updates->GetStatistics() : nullptr;
 	auto validity_stats = validity.GetUpdateStatistics();
 	if (!stats && !validity_stats) {
 		return nullptr;

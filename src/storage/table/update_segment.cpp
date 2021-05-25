@@ -577,7 +577,7 @@ void UpdateSegment::InitializeUpdateInfo(UpdateInfo &info, row_t *ids, const Sel
 }
 
 
-static void InitializeUpdateValidity(SegmentStatistics &stats, UpdateInfo *base_info, Vector &base_data,
+static void InitializeUpdateValidity(UpdateInfo *base_info, Vector &base_data,
                                      UpdateInfo *update_info, Vector &update, const SelectionVector &sel) {
 	auto &update_mask = FlatVector::Validity(update);
 	auto tuple_data = (bool *)update_info->tuple_data;
@@ -607,7 +607,7 @@ static void InitializeUpdateValidity(SegmentStatistics &stats, UpdateInfo *base_
 }
 
 template <class T>
-static void InitializeUpdateData(SegmentStatistics &stats, UpdateInfo *base_info, Vector &base_data,
+static void InitializeUpdateData(UpdateInfo *base_info, Vector &base_data,
                                  UpdateInfo *update_info, Vector &update, const SelectionVector &sel) {
 	auto update_data = FlatVector::GetData<T>(update);
 	auto tuple_data = (T *)update_info->tuple_data;
@@ -714,7 +714,7 @@ struct ExtractValidityEntry {
 };
 
 template <class T, class V, class OP = ExtractStandardEntry>
-static void MergeUpdateLoopInternal(SegmentStatistics &stats, UpdateInfo *base_info, V *base_table_data,
+static void MergeUpdateLoopInternal(UpdateInfo *base_info, V *base_table_data,
                                     UpdateInfo *update_info, V *update_vector_data, row_t *ids, idx_t count,
                                     const SelectionVector &sel) {
 	auto base_id = base_info->segment->column_data.start + base_info->vector_index * STANDARD_VECTOR_SIZE;
@@ -815,21 +815,21 @@ static void MergeUpdateLoopInternal(SegmentStatistics &stats, UpdateInfo *base_i
 	memcpy(base_info->tuples, result_ids, result_offset * sizeof(sel_t));
 }
 
-static void MergeValidityLoop(SegmentStatistics &stats, UpdateInfo *base_info, Vector &base_data,
+static void MergeValidityLoop(UpdateInfo *base_info, Vector &base_data,
                               UpdateInfo *update_info, Vector &update, row_t *ids, idx_t count,
                               const SelectionVector &sel) {
 	auto &base_validity = FlatVector::Validity(base_data);
 	auto &update_validity = FlatVector::Validity(update);
-	MergeUpdateLoopInternal<bool, ValidityMask, ExtractValidityEntry>(stats, base_info, &base_validity, update_info,
+	MergeUpdateLoopInternal<bool, ValidityMask, ExtractValidityEntry>(base_info, &base_validity, update_info,
 	                                                                  &update_validity, ids, count, sel);
 }
 
 template <class T>
-static void MergeUpdateLoop(SegmentStatistics &stats, UpdateInfo *base_info, Vector &base_data, UpdateInfo *update_info,
+static void MergeUpdateLoop(UpdateInfo *base_info, Vector &base_data, UpdateInfo *update_info,
                             Vector &update, row_t *ids, idx_t count, const SelectionVector &sel) {
 	auto base_table_data = FlatVector::GetData<T>(base_data);
 	auto update_vector_data = FlatVector::GetData<T>(update);
-	MergeUpdateLoopInternal<T, T>(stats, base_info, base_table_data, update_info, update_vector_data, ids, count, sel);
+	MergeUpdateLoopInternal<T, T>(base_info, base_table_data, update_info, update_vector_data, ids, count, sel);
 }
 
 static UpdateSegment::merge_update_function_t GetMergeUpdateFunction(PhysicalType type) {
@@ -871,6 +871,11 @@ static UpdateSegment::merge_update_function_t GetMergeUpdateFunction(PhysicalTyp
 //===--------------------------------------------------------------------===//
 // Update statistics
 //===--------------------------------------------------------------------===//
+unique_ptr<BaseStatistics> UpdateSegment::GetStatistics() {
+	lock_guard<mutex> stats_guard(stats_lock);
+	return stats.statistics->Copy();
+}
+
 idx_t UpdateValidityStatistics(UpdateSegment *segment, SegmentStatistics &stats, Vector &update, idx_t count,
                                SelectionVector &sel) {
 	auto &mask = FlatVector::Validity(update);
@@ -986,7 +991,10 @@ void UpdateSegment::Update(Transaction &transaction, idx_t column_index, Vector 
 
 	// update statistics
 	SelectionVector sel;
-	count = statistics_update_function(this, stats, update, count, sel);
+	{
+		lock_guard<mutex> stats_guard(stats_lock);
+		count = statistics_update_function(this, stats, update, count, sel);
+	}
 	if (count == 0) {
 		return;
 	}
@@ -1051,7 +1059,7 @@ void UpdateSegment::Update(Transaction &transaction, idx_t column_index, Vector 
 		node->Verify();
 
 		// now we are going to perform the merge
-		merge_update_function(stats, base_info, base_data, node, update, ids, count, sel);
+		merge_update_function(base_info, base_data, node, update, ids, count, sel);
 
 		base_info->Verify();
 		node->Verify();
@@ -1073,7 +1081,7 @@ void UpdateSegment::Update(Transaction &transaction, idx_t column_index, Vector 
 		InitializeUpdateInfo(*transaction_node, ids, sel, count, vector_index, vector_offset);
 
 		// we write the updates in the
-		initialize_update_function(stats, transaction_node, base_data, result->info.get(), update, sel);
+		initialize_update_function(transaction_node, base_data, result->info.get(), update, sel);
 
 		result->info->next = transaction_node;
 		result->info->prev = nullptr;
