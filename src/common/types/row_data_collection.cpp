@@ -713,19 +713,6 @@ static void TemplatedDeserializeIntoVector(Vector &v, idx_t count, idx_t col_idx
 	}
 }
 
-static ValidityMask &GetValidity(Vector &v) {
-	switch (v.GetVectorType()) {
-	case VectorType::DICTIONARY_VECTOR:
-		return GetValidity(DictionaryVector::Child(v));
-	case VectorType::FLAT_VECTOR:
-		return FlatVector::Validity(v);
-	case VectorType::CONSTANT_VECTOR:
-		return ConstantVector::Validity(v);
-	default:
-		throw NotImplementedException("FIXME: cannot deserialize vector with this vectortype");
-	}
-}
-
 void RowDataCollection::DeserializeIntoStringVector(Vector &v, const idx_t &vcount, const idx_t &col_idx,
                                                     data_ptr_t *key_locations, data_ptr_t *validitymask_locations) {
 	const auto &validity = FlatVector::Validity(v);
@@ -817,7 +804,7 @@ void RowDataCollection::DeserializeIntoListVector(Vector &v, const idx_t &vcount
 			auto &list_vec_to_append = ListVector::GetEntry(append_vector);
 
 			// set validity
-			auto &append_validity = GetValidity(list_vec_to_append);
+			auto &append_validity = Vector::GetValidity(list_vec_to_append);
 			for (idx_t entry_idx = 0; entry_idx < next; entry_idx++) {
 				append_validity.Set(entry_idx, *(validitymask_location) & (1 << offset_in_byte));
 				if (++offset_in_byte == 8) {

@@ -1074,12 +1074,26 @@ void ListVector::Initialize(Vector &vec) {
 	}
 }
 
+ValidityMask &Vector::GetValidity(Vector &v) {
+	switch (v.GetVectorType()) {
+	case VectorType::DICTIONARY_VECTOR:
+		return GetValidity(DictionaryVector::Child(v));
+	case VectorType::FLAT_VECTOR:
+		return FlatVector::Validity(v);
+	case VectorType::CONSTANT_VECTOR:
+		return ConstantVector::Validity(v);
+	default:
+		throw NotImplementedException("FIXME: cannot deserialize vector with this vectortype");
+	}
+}
+
 template <class T>
 void Search(Vector &list, T key, vector<idx_t> &offsets, bool is_key_null) {
 	auto &list_vector = ListVector::GetEntry(list);
 
 	auto data = (T *)list_vector.GetData();
-	auto validity_mask = GetValidity(list_vector);
+
+	auto validity_mask = Vector::GetValidity(list_vector);
 	if (is_key_null) {
 		for (idx_t i = 0; i < ListVector::GetListSize(list); i++) {
 			if (!validity_mask.RowIsValid(i)) {
@@ -1099,7 +1113,7 @@ void SearchString(Vector &list, string &key, vector<idx_t> &offsets, bool is_key
 	auto &list_vector = ListVector::GetEntry(list);
 
 	auto data = (string_t *)list_vector.GetData();
-	auto validity_mask = GetValidity(list_vector);
+	auto validity_mask = Vector::GetValidity(list_vector);
 	if (is_key_null) {
 		for (idx_t i = 0; i < ListVector::GetListSize(list); i++) {
 			if (!validity_mask.RowIsValid(i)) {

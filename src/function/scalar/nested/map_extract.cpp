@@ -52,7 +52,7 @@ static unique_ptr<FunctionData> MapExtractBind(ClientContext &context, ScalarFun
 
 	//! Here we have to construct the List Type that will be returned
 	child_list_t<LogicalType> children;
-	children.push_back(make_pair("", value_type));
+	children.push_back(std::make_pair("", value_type));
 
 	bound_function.return_type = LogicalType(LogicalTypeId::LIST, move(children));
 	return make_unique<VariableReturnBindData>(value_type);

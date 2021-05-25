@@ -155,6 +155,8 @@ public:
 		buffer->SetBufferType(buffer_type);
 	}
 
+	static ValidityMask &GetValidity(Vector &v);
+
 protected:
 	//! A pointer to the data.
 	data_ptr_t data;
