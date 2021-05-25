@@ -108,3 +108,43 @@ SELECT length(l_comment) FROM parquet_scan('test/sql/copy/parquet/data/lineitem-
 23
 34
 29
+
+query I
+SELECT COUNT(*) FROM parquet_scan('test/sql/copy/parquet/data/date.parquet') where d == cast('1970-01-01' as date)
+----
+1
+
+query I
+SELECT COUNT(*) FROM parquet_scan('test/sql/copy/parquet/data/date.parquet') where d > cast('1970-01-01' as date)
+----
+11
+
+query I
+SELECT COUNT(*) FROM parquet_scan('test/sql/copy/parquet/data/date.parquet') where d < cast('1970-01-01' as date)
+----
+0
+
+query I
+SELECT COUNT(*) FROM parquet_scan('test/sql/copy/parquet/data/date.parquet') where d between cast('1975-01-01' as date) and cast('1976-01-01' as date)
+----
+6
+
+query I
+SELECT COUNT(*) FROM parquet_scan('test/sql/copy/parquet/data/date.parquet') where d >= cast('1975-01-01' as date) and d < cast('1976-01-01' as date)
+----
+5
+
+query I
+SELECT COUNT(*) FROM parquet_scan('test/sql/copy/parquet/data/date.parquet') where d < cast('1975-01-01' as date) and d > cast('1976-01-01' as date)
+----
+0
+
+query I
+SELECT COUNT(*) FROM parquet_scan('test/sql/copy/parquet/data/date.parquet') where d < cast('1975-01-01' as date) or d > cast('1976-01-01' as date)
+----
+6
+
+query I
+SELECT COUNT(*) FROM parquet_scan('test/sql/copy/parquet/data/date.parquet') where d < cast('1975-01-01' as date) or d >= cast('1976-01-01' as date)
+----
+7
