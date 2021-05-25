@@ -527,6 +527,8 @@ jobs:
           build/reldebug/test/unittest --start-offset-percentage=70 --end-offset-percentage=80
           build/reldebug/test/unittest --start-offset-percentage=80 --end-offset-percentage=90
           build/reldebug/test/unittest --start-offset-percentage=90
+          build/reldebug/test/unittest "[intraquery]"
+          build/reldebug/test/unittest "[interquery]"
 
   valgrind:
     name: Valgrind
