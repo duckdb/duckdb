@@ -164,10 +164,10 @@ void CommitState::WriteUpdate(UpdateInfo *info) {
 		row_ids[info->tuples[i]] = start + info->tuples[i];
 	}
 	if (column_data.type.id() == LogicalTypeId::VALIDITY) {
-		auto booleans = FlatVector::GetData<bool>(update_chunk->data[0]);
-		auto &mask = FlatVector::Validity(update_chunk->data[0]);
-		for (idx_t i = 0; i < info->N; i++) {
-			booleans[i] = mask.RowIsValid(i);
+		auto booleans = FlatVector<bool>(update_chunk->data[0]);
+		for(idx_t i = 0; i < info->N; i++) {
+			auto idx = info->tuples[idx];
+			booleans[idx] = false;
 		}
 	}
 	SelectionVector sel(info->tuples);

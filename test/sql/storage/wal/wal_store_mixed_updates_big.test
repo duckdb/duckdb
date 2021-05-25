@@ -33,6 +33,11 @@ SELECT COUNT(*) FROM test WHERE a>0 AND a<>b
 0
 
 query I
+SELECT SUM(CASE WHEN b IS NULL THEN 1 ELSE 0 END) FROM test WHERE a>0 AND a%2=0
+----
+0
+
+query I
 UPDATE test SET b=b+1 WHERE a>0 AND a%2=0
 ----
 500
