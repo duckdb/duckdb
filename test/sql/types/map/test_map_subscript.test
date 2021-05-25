@@ -1,0 +1,77 @@
+# name: test/sql/types/map/test_map_subscript.test
+# description: Test cardinality function for maps
+# group: [map]
+
+# Single element on map
+query I
+select m[1] from (select MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as m) as T
+----
+[10]
+
+#Element not present on MAP
+query I
+select m[0] from (select MAP(LIST_VALUE(1, 2, 3, 4,2),LIST_VALUE(10, 9, 8, 7,11)) as m) as T
+----
+[]
+
+# Null present on map
+query I
+select m[NULL] from (select MAP(LIST_VALUE(1, 2, 3, 4,2, NULL),LIST_VALUE(10, 9, 8, 7,11,42)) as m) as T
+----
+[42]
+
+# Null not present on map
+query I
+select m[NULL] from (select MAP(LIST_VALUE(1, 2, 3, 4,2),LIST_VALUE(10, 9, 8, 7,11)) as m) as T
+----
+[]
+
+#Multiple elements on map
+query I
+select m[2] from (select MAP(LIST_VALUE(1, 2, 3, 4,2),LIST_VALUE(10, 9, 8, 7,11)) as m) as T
+----
+[9, 11]
+
+# Empty maps
+query I
+select m[2] from (select MAP(LIST_VALUE(),LIST_VALUE()) as m) as T
+----
+[]
+
+query I
+select m[2] from (select MAP() as m) as T
+----
+[]
+
+# Check autocast
+query I
+select m[2::TINYINT] from (select MAP(LIST_VALUE(1, 2, 3, 4,2),LIST_VALUE(10, 9, 8, 7,11)) as m) as T
+----
+[9, 11]
+
+
+#Test Strings
+query I
+select m['Jon Lajoie'] from (select MAP(LIST_VALUE('Jon Lajoie', 'Backstreet Boys', 'Tenacious D','Jon Lajoie' ),LIST_VALUE(10,9,10,11)) as m) as T
+----
+[10, 11]
+
+query I
+select m['Spice Girls'] from (select MAP(LIST_VALUE('Jon Lajoie', 'Backstreet Boys', 'Tenacious D','Jon Lajoie' ),LIST_VALUE(10,9,10,11)) as m) as T
+----
+[]
+
+query I
+select m[NULL] from (select MAP(LIST_VALUE('Jon Lajoie', 'Backstreet Boys', 'Tenacious D','Jon Lajoie' ),LIST_VALUE(10,9,10,11)) as m) as T
+----
+[]
+
+query I
+select m[NULL] from (select MAP(LIST_VALUE('Jon Lajoie', 'Backstreet Boys', 'Tenacious D','Jon Lajoie',NULL ),LIST_VALUE(10,9,10,11,1)) as m) as T
+----
+[1]
+
+query I
+select m[0] from (select MAP(LIST_VALUE('Jon Lajoie', 'Backstreet Boys', 'Tenacious D','Jon Lajoie' ),LIST_VALUE(10,9,10,11)) as m) as T
+----
+[]

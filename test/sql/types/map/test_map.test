@@ -6,16 +6,6 @@ statement ok
 PRAGMA enable_verification
 
 query I
-select typeof(cast(NULL AS MAP(int, float)));
-----
-MAP<INTEGER, FLOAT>
-
-query I
-select typeof(cast(NULL AS MAP(string, string)));
-----
-MAP<VARCHAR, VARCHAR>
-
-query I
 select MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7))
 ----
 {1=10, 2=9, 3=8, 4=7}
@@ -23,17 +13,12 @@ select MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7))
 query I
 select map_extract(m,1) from (select MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as m) as T
 ----
-10
+[10]
 
 query I
 select map_extract(m,3) from (select MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as m) as T
 ----
-8
-
-query I
-select m[1] from (select MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as m) as T
-----
-10
+[8]
 
 # Empty maps
 query I
@@ -46,22 +31,10 @@ select MAP()
 ----
 {}
 
-
-# all those are FORBIDDEN
-
+# Lists with different size are FORBIDDEN
 statement error
-select typeof(cast(NULL AS MAP(int)));
+select MAP(LIST_VALUE(10),LIST_VALUE())
 
+# Maps that are not initilalized empty or with lists are  FORBIDDEN
 statement error
-select typeof(cast(NULL AS MAP(string)));
-
-statement error
-select typeof(cast(NULL AS MAP(int, int, int)));
-
-statement error
-select typeof(cast(NULL AS MAP()));
-
-query I
-select cast(NULL AS MAP(int, int))
-----
-NULL
+select MAP(10,12)

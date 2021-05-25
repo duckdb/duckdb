@@ -1075,26 +1075,120 @@ void ListVector::Initialize(Vector &vec) {
 }
 
 template <class T>
-void Search(Vector &list, T key, vector<idx_t> &offsets) {
-	auto data = (T *)ListVector::GetEntry(list).GetData();
-	for (idx_t i = 0; i < ListVector::GetListSize(list); i++) {
+void Search(Vector &list, T key, vector<idx_t> &offsets, bool is_key_null) {
+    auto &list_vector = ListVector::GetEntry(list);
+
+	auto data = (T *)list_vector.GetData();
+	auto validity_mask = GetValidity(list_vector);
+	if (is_key_null){
+	    for (idx_t i = 0; i < ListVector::GetListSize(list); i++) {
+            if (!validity_mask.RowIsValid(i)) {
+                offsets.push_back(i);
+            }
+        }
+	}
+	else{
+	    for (idx_t i = 0; i < ListVector::GetListSize(list); i++) {
 		if (key == data[i]) {
 			offsets.push_back(i);
 		}
+	    }
 	}
 }
+
+void SearchString(Vector &list, string& key, vector<idx_t> &offsets, bool is_key_null) {
+    auto &list_vector = ListVector::GetEntry(list);
+
+	auto data = (string_t *)list_vector.GetData();
+	auto validity_mask = GetValidity(list_vector);
+	if (is_key_null){
+	    for (idx_t i = 0; i < ListVector::GetListSize(list); i++) {
+            if (!validity_mask.RowIsValid(i)) {
+                offsets.push_back(i);
+            }
+        }
+	}
+	else{
+	    for (idx_t i = 0; i < ListVector::GetListSize(list); i++) {
+	         auto data_str = data[i].GetDataUnsafe();
+	         auto data_str_size = data[i].GetSize();
+            if (data_str_size == key.size()){
+                bool equal = true;
+                for (idx_t str_idx = 0; str_idx < data_str_size; str_idx ++){
+                    if (data_str[str_idx] != key[str_idx]){
+                        equal = false;
+                        break;
+                    }
+                }
+                if (equal){
+                    offsets.push_back(i);
+                }
+        }
+	    }
+	}
+}
+
 
 vector<idx_t> ListVector::Search(Vector &list, Value &key) {
 	vector<idx_t> offsets;
 	if (!ListVector::HasEntry(list)) {
 		return offsets;
 	}
-	switch (key.type().id()) {
+
+	auto &list_vector = ListVector::GetEntry(list);
+
+	switch (list_vector.GetType().id()) {
+
+	    case LogicalTypeId::SQLNULL:
+	        return offsets;
+	        case LogicalTypeId::UTINYINT:
+		::duckdb::Search<uint8_t>(list, key.value_.utinyint, offsets,key.is_null);
+		break;
+	case LogicalTypeId::TINYINT:
+	    ::duckdb::Search<int8_t>(list, key.value_.tinyint, offsets,key.is_null);
+		break;
+	case LogicalTypeId::USMALLINT:
+	    ::duckdb::Search<uint16_t>(list, key.value_.usmallint, offsets,key.is_null);
+		break;
+	case LogicalTypeId::SMALLINT:
+	    ::duckdb::Search<int16_t>(list, key.value_.smallint, offsets,key.is_null);
+		break;
+	case LogicalTypeId::UINTEGER:
+	    ::duckdb::Search<uint32_t>(list, key.value_.uinteger, offsets,key.is_null);
+		break;
 	case LogicalTypeId::INTEGER:
-		::duckdb::Search<int32_t>(list, key.value_.integer, offsets);
+	    ::duckdb::Search<int32_t>(list, key.value_.integer, offsets,key.is_null);
+		break;
+	case LogicalTypeId::UBIGINT:
+	    ::duckdb::Search<uint64_t>(list, key.value_.ubigint, offsets,key.is_null);
+		break;
+	case LogicalTypeId::BIGINT:
+	    ::duckdb::Search<int64_t>(list, key.value_.bigint, offsets,key.is_null);
+		break;
+	case LogicalTypeId::HUGEINT:
+	    ::duckdb::Search<hugeint_t>(list, key.value_.hugeint, offsets,key.is_null);
+		break;
+	case LogicalTypeId::FLOAT:
+	    ::duckdb::Search<float>(list, key.value_.float_, offsets,key.is_null);
+		break;
+	case LogicalTypeId::DOUBLE:
+	    ::duckdb::Search<double>(list, key.value_.double_, offsets,key.is_null);
+		break;
+	case LogicalTypeId::DATE:
+	    ::duckdb::Search<date_t>(list, key.value_.date, offsets,key.is_null);
+		break;
+	case LogicalTypeId::TIME:
+	    ::duckdb::Search<dtime_t>(list, key.value_.time, offsets,key.is_null);
+		break;
+	case LogicalTypeId::TIMESTAMP:
+	    ::duckdb::Search<timestamp_t>(list, key.value_.timestamp, offsets,key.is_null);
+		break;
+	case LogicalTypeId::BLOB:
+	case LogicalTypeId::VARCHAR:
+	     ::duckdb::SearchString(list, key.str_value, offsets,key.is_null);
 		break;
 	default:
-		throw InvalidTypeException(key.type().id(), "Invalid type for List Vector Search");
+		throw InvalidTypeException(list.GetType().id(), "Invalid type for List Vector Search");
 	}
 	return offsets;
 }

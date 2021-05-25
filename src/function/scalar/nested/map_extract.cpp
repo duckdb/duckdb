@@ -5,220 +5,19 @@
 #include "duckdb/common/types/data_chunk.hpp"
 
 namespace duckdb {
-void MapExtract(Vector &map, Value &values, Vector &result) {
-	auto &result_mask = FlatVector::Validity(result);
-	switch (values.type().id()) {
-	case LogicalTypeId::UTINYINT: {
-		auto result_data = FlatVector::GetData<uint8_t>(result);
-		for (idx_t i = 0; i < values.list_value.size(); i++) {
-			if (values.list_value[i].is_null) {
-				result_mask.Set(i, false);
-			} else {
-				result_data[i] = values.list_value[i].value_.utinyint;
-			}
-		}
-		break;
-	}
-	case LogicalTypeId::USMALLINT: {
-		auto result_data = FlatVector::GetData<uint16_t>(result);
-		for (idx_t i = 0; i < values.list_value.size(); i++) {
-			if (values.list_value[i].is_null) {
-				result_mask.Set(i, false);
-			} else {
-				result_data[i] = values.list_value[i].value_.usmallint;
-			}
-		}
-		break;
-	}
-	case LogicalTypeId::UINTEGER: {
-		auto result_data = FlatVector::GetData<uint32_t>(result);
-		for (idx_t i = 0; i < values.list_value.size(); i++) {
-			if (values.list_value[i].is_null) {
-				result_mask.Set(i, false);
-			} else {
-				result_data[i] = values.list_value[i].value_.uinteger;
-			}
-		}
-		break;
-	}
-	case LogicalTypeId::UBIGINT: {
-		auto result_data = FlatVector::GetData<uint64_t>(result);
-		for (idx_t i = 0; i < values.list_value.size(); i++) {
-			if (values.list_value[i].is_null) {
-				result_mask.Set(i, false);
-			} else {
-				result_data[i] = values.list_value[i].value_.ubigint;
-			}
-		}
-		break;
-	}
-	case LogicalTypeId::TINYINT: {
-		auto result_data = FlatVector::GetData<int8_t>(result);
-		for (idx_t i = 0; i < values.list_value.size(); i++) {
-			if (values.list_value[i].is_null) {
-				result_mask.Set(i, false);
-			} else {
-				result_data[i] = values.list_value[i].value_.tinyint;
-			}
-		}
-		break;
-	}
-	case LogicalTypeId::SMALLINT: {
-		auto result_data = FlatVector::GetData<int16_t>(result);
-		for (idx_t i = 0; i < values.list_value.size(); i++) {
-			if (values.list_value[i].is_null) {
-				result_mask.Set(i, false);
-			} else {
-				result_data[i] = values.list_value[i].value_.smallint;
-			}
-		}
-		break;
-	}
-	case LogicalTypeId::INTEGER: {
-		auto result_data = FlatVector::GetData<int32_t>(result);
-		for (idx_t i = 0; i < values.list_value.size(); i++) {
-			if (values.list_value[i].is_null) {
-				result_mask.Set(i, false);
-			} else {
-				result_data[i] = values.list_value[i].value_.integer;
-			}
-		}
-		break;
-	}
-	case LogicalTypeId::BIGINT: {
-		auto result_data = FlatVector::GetData<int64_t>(result);
-		for (idx_t i = 0; i < values.list_value.size(); i++) {
-			if (values.list_value[i].is_null) {
-				result_mask.Set(i, false);
-			} else {
-				result_data[i] = values.list_value[i].value_.bigint;
-			}
-		}
-		break;
-	}
-	case LogicalTypeId::HUGEINT: {
-		auto result_data = FlatVector::GetData<hugeint_t>(result);
-		for (idx_t i = 0; i < values.list_value.size(); i++) {
-			if (values.list_value[i].is_null) {
-				result_mask.Set(i, false);
-			} else {
-				result_data[i] = values.list_value[i].value_.hugeint;
-			}
-		}
-		break;
-	}
-	case LogicalTypeId::FLOAT: {
-		auto result_data = FlatVector::GetData<float>(result);
-		for (idx_t i = 0; i < values.list_value.size(); i++) {
-			if (values.list_value[i].is_null) {
-				result_mask.Set(i, false);
-			} else {
-				result_data[i] = values.list_value[i].value_.float_;
-			}
-		}
-		break;
-	}
-	case LogicalTypeId::DOUBLE: {
-		auto result_data = FlatVector::GetData<double>(result);
-		for (idx_t i = 0; i < values.list_value.size(); i++) {
-			if (values.list_value[i].is_null) {
-				result_mask.Set(i, false);
-			} else {
-				result_data[i] = values.list_value[i].value_.double_;
-			}
-		}
-		break;
-	}
-	case LogicalTypeId::DATE: {
-		auto result_data = FlatVector::GetData<date_t>(result);
-		for (idx_t i = 0; i < values.list_value.size(); i++) {
-			if (values.list_value[i].is_null) {
-				result_mask.Set(i, false);
-			} else {
-				result_data[i] = values.list_value[i].value_.date;
-			}
-		}
-		break;
-	}
-	case LogicalTypeId::TIME: {
-		auto result_data = FlatVector::GetData<dtime_t>(result);
-		for (idx_t i = 0; i < values.list_value.size(); i++) {
-			if (values.list_value[i].is_null) {
-				result_mask.Set(i, false);
-			} else {
-				result_data[i] = values.list_value[i].value_.time;
-			}
-		}
-		break;
-	}
-	case LogicalTypeId::TIMESTAMP: {
-		auto result_data = FlatVector::GetData<timestamp_t>(result);
-		for (idx_t i = 0; i < values.list_value.size(); i++) {
-			if (values.list_value[i].is_null) {
-				result_mask.Set(i, false);
-			} else {
-				result_data[i] = values.list_value[i].value_.timestamp;
-			}
-		}
-		break;
-	}
-		//            case LogicalTypeId::BLOB:
-		//            case LogicalTypeId::VARCHAR:
-		//                MapExtractTemplate<string_t, true>(count, map, key, result);
-		//                break;
-		//            case LogicalTypeId::SQLNULL:
-		//                result.Reference(Value());
-		//                break;
-	default:
-		throw NotImplementedException("Unimplemented type for MAP_EXTRACT");
-	}
+void FillResult(Value &values, Vector &result) {
+    //! First Initialize List Vector
+    ListVector::Initialize(result);
 
-	auto result_data = FlatVector::GetData<uint8_t>(result);
-	for (idx_t i = 0; i < values.list_value.size(); i++) {
-		result_data[i] = values.list_value[i].value_.utinyint;
-	}
-	//
-	//	auto &vec = ListVector::GetEntry(list);
-	//	// heap-ref once
-	//	if (HEAP_REF) {
-	//		StringVector::AddHeapReference(result, vec);
-	//	}
-	//
-	//	// this is lifted from ExecuteGenericLoop because we can't push the list child data into this otherwise
-	//	// should have gone with GetValue perhaps
-	//	for (idx_t i = 0; i < count; i++) {
-	//		auto list_index = list_data.sel->get_index(i);
-	//		auto offsets_index = offsets_data.sel->get_index(i);
-	//		if (list_data.validity.RowIsValid(list_index) && offsets_data.validity.RowIsValid(offsets_index)) {
-	//			auto list_entry = ((list_entry_t *)list_data.data)[list_index];
-	//			auto offsets_entry = ((int64_t *)offsets_data.data)[offsets_index];
-	//			idx_t child_offset;
-	//			if (offsets_entry < 0) {
-	//				if ((idx_t)-offsets_entry > list_entry.length) {
-	//					result_mask.SetInvalid(i);
-	//					continue;
-	//				}
-	//				child_offset = list_entry.offset + list_entry.length + offsets_entry;
-	//			} else {
-	//				if ((idx_t)offsets_entry >= list_entry.length) {
-	//					result_mask.SetInvalid(i);
-	//					continue;
-	//				}
-	//				child_offset = list_entry.offset + offsets_entry;
-	//			}
-	//			vec.Orrify(ListVector::GetListSize(list), child_data);
-	//			if (child_data.validity.RowIsValid(child_offset)) {
-	//				result_data[i] = ((T *)child_data.data)[child_offset];
-	//			} else {
-	//				result_mask.SetInvalid(i);
-	//			}
-	//		} else {
-	//			result_mask.SetInvalid(i);
-	//		}
-	//	}
-	//	if (count == 1) {
-	//		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	//	}
+    //! Push Values to List Vector
+    for (idx_t i = 0; i < values.list_value.size(); i++) {
+        ListVector::PushBack(result,values.list_value[i]);
+    }
+
+    //! now set the pointer
+    auto &entry = ((list_entry_t *)result.GetData())[0];
+    entry.length = values.list_value.size();
+    entry.offset = 0;
 }
 
 static void MapExtractFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -230,13 +29,13 @@ static void MapExtractFunction(DataChunk &args, ExpressionState &state, Vector &
 
 	auto &children = StructVector::GetEntries(map);
 	auto key_value = key.GetValue(0);
+	if (children[0].second->GetType().child_types()[0].second != LogicalTypeId::SQLNULL){
+	    key_value = key_value.CastAs(children[0].second->GetType().child_types()[0].second);
+	}
 	auto offsets = ListVector::Search(*children[0].second, key_value);
 
-	for (auto &offset : offsets) {
-		children[1].second->GetValue(offset);
-	}
 	auto values = ListVector::GetValuesFromOffsets(*children[1].second, offsets);
-	MapExtract(map, values, result);
+	FillResult(values, result);
 	result.Verify(args.size());
 }
 
@@ -250,12 +49,15 @@ static unique_ptr<FunctionData> MapExtractBind(ClientContext &context, ScalarFun
 	}
 	auto key_type = arguments[0]->return_type.child_types()[0].second.child_types()[0].second;
 	auto value_type = arguments[0]->return_type.child_types()[1].second.child_types()[0].second;
-	//! TODO: prolly want to try to cast this first
 
-	if (key_type != arguments[1]->return_type) {
-		throw BinderException("MAP_EXTRACT second argument has a different type from the MAP type");
-	}
-	bound_function.return_type = value_type;
+//	if (key_type != arguments[1]->return_type && key_type != LogicalTypeId::SQLNULL && arguments[1]->return_type != LogicalTypeId::SQLNULL) {
+//		throw BinderException("MAP_EXTRACT second argument has a different type from the MAP type");
+//	}
+	//! Here we have to construct the List Type that will be returned
+	child_list_t<LogicalType> children;
+	children.push_back(make_pair("", value_type));
+
+	bound_function.return_type = LogicalType(LogicalTypeId::LIST, move(children));
 	return make_unique<VariableReturnBindData>(value_type);
 }
 
