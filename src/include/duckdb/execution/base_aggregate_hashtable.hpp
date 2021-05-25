@@ -38,6 +38,8 @@ struct AggregateObject {
 
 class BaseAggregateHashTable {
 public:
+	using ValidityBytes = TemplatedValidityMask<uint8_t>;
+
 	BaseAggregateHashTable(BufferManager &buffer_manager, vector<LogicalType> group_types,
 	                       vector<LogicalType> payload_types, vector<AggregateObject> aggregate_objects);
 	virtual ~BaseAggregateHashTable() {
@@ -57,6 +59,8 @@ protected:
 	vector<LogicalType> payload_types;
 	//! The size of the groups in bytes
 	idx_t group_width;
+	//! The size of the group validity mask in bytes
+	idx_t group_mask_width;
 	//! some optional padding to align payload
 	idx_t group_padding;
 	//! The size of the payload (aggregations) in bytes
