@@ -3,6 +3,7 @@
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/null_value.hpp"
+#include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
@@ -409,24 +410,6 @@ static void ScatterAllValid(const RowLayout &layout, Vector &addresses, const Se
 	}
 }
 
-static void ScatterInitializeStates(RowLayout &layout, Vector &addresses, const SelectionVector &sel, idx_t count) {
-	if (count == 0) {
-		return;
-	}
-	auto pointers = FlatVector::GetData<data_ptr_t>(addresses);
-	auto &offsets = layout.GetOffsets();
-	auto aggr_idx = layout.ColumnCount();
-
-	for (auto &aggr : layout.GetAggregates()) {
-		for (idx_t i = 0; i < count; ++i) {
-			auto row_idx = sel.get_index(i);
-			auto row = pointers[row_idx];
-			aggr.function.initialize(row + offsets[aggr_idx]);
-		}
-		++aggr_idx;
-	}
-}
-
 template <class T>
 static void TemplatedScatter(VectorData &gdata, Vector &addresses, const SelectionVector &sel, idx_t count,
                              idx_t col_offset, idx_t col_idx) {
@@ -762,7 +745,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 		// for each of the locations that are empty, serialize the group columns to the locations
 		ScatterAllValid(layout, addresses, empty_vector, new_entry_count);
 		ScatterGroups(group_data.get(), layout, addresses, string_heap, empty_vector, new_entry_count);
-		ScatterInitializeStates(layout, addresses, empty_vector, new_entry_count);
+		RowOperations::InitializeStates(layout, addresses, empty_vector, new_entry_count);
 
 		// now we have only the tuples remaining that might match to an existing group
 		// start performing comparisons with each of the groups
