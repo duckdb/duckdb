@@ -1,3 +1,4 @@
+#include "duckdb/common/arrow_wrapper.hpp"
 #include "duckdb.hpp"
 
 #include "duckdb/common/arrow.hpp"
@@ -22,9 +23,9 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &contex
 
 	auto res = make_unique<ArrowScanFunctionData>();
 	auto &data = *res;
-	auto stream_factory_ptr = inputs[0].GetValue<uintptr_t>();
+	auto stream_factory_ptr = inputs[0].GetPointer();
 	unique_ptr<ArrowArrayStreamWrapper> (*stream_factory_produce)(uintptr_t stream_factory_ptr) =
-	    (unique_ptr<ArrowArrayStreamWrapper>(*)(uintptr_t stream_factory_ptr))inputs[1].GetValue<uintptr_t>();
+	    (unique_ptr<ArrowArrayStreamWrapper>(*)(uintptr_t stream_factory_ptr))inputs[1].GetPointer();
 	data.stream = stream_factory_produce(stream_factory_ptr);
 	if (!data.stream) {
 		throw InvalidInputException("arrow_scan: NULL pointer passed");

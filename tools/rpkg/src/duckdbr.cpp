@@ -908,7 +908,7 @@ struct DataFrameScanFunction : public TableFunction {
 	                                                    vector<string> &input_table_names,
 	                                                    vector<LogicalType> &return_types, vector<string> &names) {
 		RProtector r;
-		SEXP df((SEXP)inputs[0].GetValue<uintptr_t>());
+		SEXP df((SEXP)inputs[0].GetPointer());
 
 		auto df_names = r.Protect(GET_NAMES(df));
 		vector<RType> rtypes;

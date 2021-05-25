@@ -903,7 +903,7 @@ public:
 };
 
 unique_ptr<PhysicalOperatorState> PhysicalWindow::GetOperatorState() {
-	return make_unique<PhysicalWindowOperatorState>(*this, children[0].get());
+	return make_unique<PhysicalWindowOperatorState>(*this, children.empty() ? nullptr : children[0].get());
 }
 
 static void GeneratePartition(PhysicalWindowOperatorState &state, WindowGlobalState &gstate, const idx_t hash_bin) {
@@ -1076,7 +1076,7 @@ void PhysicalWindow::Combine(ExecutionContext &context, GlobalOperatorState &gst
 	}
 }
 
-bool PhysicalWindow::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> gstate_p) {
+bool PhysicalWindow::FinalizeInternal(ClientContext &context, unique_ptr<GlobalOperatorState> gstate_p) {
 	this->sink_state = move(gstate_p);
 	auto &gstate = (WindowGlobalState &)*this->sink_state;
 
@@ -1107,6 +1107,10 @@ bool PhysicalWindow::Finalize(Pipeline &pipeline, ClientContext &context, unique
 
 	D_ASSERT(window_results.ColumnCount() == select_list.size());
 	return true;
+}
+
+bool PhysicalWindow::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> gstate_p) {
+	return FinalizeInternal(context, move(gstate_p));
 }
 
 unique_ptr<LocalSinkState> PhysicalWindow::GetLocalSinkState(ExecutionContext &context) {

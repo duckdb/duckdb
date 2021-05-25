@@ -144,6 +144,8 @@ public:
 	//! Convert this value to a string
 	DUCKDB_API string ToString() const;
 
+	DUCKDB_API uintptr_t GetPointer() const;
+
 	//! Cast this value to another type
 	DUCKDB_API Value CastAs(const LogicalType &target_type, bool strict = false) const;
 	//! Tries to cast value to another type, throws exception if its not possible
@@ -306,6 +308,10 @@ DUCKDB_API uint8_t Value::GetValue() const;
 template <>
 DUCKDB_API uint16_t Value::GetValue() const;
 template <>
+DUCKDB_API uint32_t Value::GetValue() const;
+template <>
+DUCKDB_API uint64_t Value::GetValue() const;
+template <>
 DUCKDB_API hugeint_t Value::GetValue() const;
 template <>
 DUCKDB_API string Value::GetValue() const;
@@ -313,8 +319,6 @@ template <>
 DUCKDB_API float Value::GetValue() const;
 template <>
 DUCKDB_API double Value::GetValue() const;
-template <>
-DUCKDB_API uintptr_t Value::GetValue() const;
 template <>
 DUCKDB_API date_t Value::GetValue() const;
 template <>

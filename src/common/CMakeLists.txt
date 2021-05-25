@@ -10,7 +10,7 @@ add_library_unity(
   duckdb_common
   OBJECT
   allocator.cpp
-  arrow_duckdb.cpp
+  arrow_wrapper.cpp
   assert.cpp
   bit_operations.cpp
   constants.cpp
