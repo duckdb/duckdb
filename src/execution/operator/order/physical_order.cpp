@@ -145,8 +145,8 @@ public:
 		idx_t max_memory = buffer_manager.GetMaxMemory();
 		idx_t num_threads = task_scheduler.NumberOfThreads();
 		// memory usage per thread should scale with max mem / num threads
-		// we take 30% of the max memory, to be conservative
-		return size_in_bytes > (0.3 * max_memory / num_threads);
+		// we take 10% of the max memory, to be VERY conservative
+		return size_in_bytes > (0.1 * max_memory / num_threads);
 	}
 
 	//! Sorting columns, and variable size sorting data (if any)
@@ -1885,12 +1885,6 @@ int CompareUsingGlobalIndex(BufferManager &buffer_manager, SortedBlock &l, Sorte
 		l.PinVarBlocks();
 		r.PinVarBlocks();
 		comp_res = CompareColumns(l, r, l_ptr, r_ptr, sorting_state);
-		//		for (idx_t col_idx = 0; col_idx < sorting_state.num_cols; col_idx++) {
-		//			if (!sorting_state.constant_size[col_idx]) {
-		//				l.var_sorting_cols[col_idx]->UnpinAndReset(0, 0);
-		//				r.var_sorting_cols[col_idx]->UnpinAndReset(0, 0);
-		//			}
-		//		}
 	}
 	return comp_res;
 }
@@ -1994,6 +1988,7 @@ void PhysicalOrder::ScheduleMergeTasks(Pipeline &pipeline, ClientContext &contex
 		num_blocks--;
 	}
 
+	const auto &sorting_state = *state.sorting_state;
 	auto &ts = TaskScheduler::GetScheduler(context);
 	auto &buffer_manager = BufferManager::GetBufferManager(context);
 	const idx_t num_threads = ts.NumberOfThreads();
@@ -2050,6 +2045,13 @@ void PhysicalOrder::ScheduleMergeTasks(Pipeline &pipeline, ClientContext &contex
 			    pipeline, context, state, left.CreateSlice(l_start, l_count), right.CreateSlice(r_start, r_count),
 			    *state.sorted_blocks_temp.back().back());
 			ts.ScheduleTask(pipeline.token, move(new_task));
+            // unpin blocks that were used for computing the intersection
+            for (idx_t col_idx = 0; col_idx < sorting_state.num_cols; col_idx++) {
+                if (!sorting_state.constant_size[col_idx]) {
+                    left.var_sorting_cols[col_idx]->UnpinAndReset(0, 0);
+                    right.var_sorting_cols[col_idx]->UnpinAndReset(0, 0);
+                }
+            }
 		}
 	}
 }
