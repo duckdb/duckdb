@@ -33,9 +33,10 @@ class BufferHandle;
 // NOTE: PAGE_NR and PAGE_OFFSET are reversed for 64 bit HTs because struct packing
 
 // payload layout
-// [HASH][GROUPS][PADDING][PAYLOAD]
-// [HASH] is the hash of the groups
+// [VALIDITY][GROUPS][HASH][PADDING][PAYLOAD]
+// [VALIDITY] is the validity bits of the data columns (including the HASH)
 // [GROUPS] is the group data, could be multiple values, fixed size, strings are elsewhere
+// [HASH] is the hash data of the groups
 // [PADDING] is gunk data to align payload properly
 // [PAYLOAD] is the payload (i.e. the aggregate states)
 struct aggr_ht_entry_64 {
@@ -127,6 +128,7 @@ private:
 	unique_ptr<BufferHandle> hashes_hdl;
 	data_ptr_t hashes_hdl_ptr;
 	data_ptr_t hashes_end_ptr; // of hashes
+	idx_t hash_offset;         // Offset into the layout of the hash column
 
 	idx_t hash_prefix_shift;
 	idx_t payload_page_offset;
