@@ -41,6 +41,11 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manag
       group_compare_vector(STANDARD_VECTOR_SIZE), no_match_vector(STANDARD_VECTOR_SIZE),
       empty_vector(STANDARD_VECTOR_SIZE) {
 
+	// Append hash column to the end and update the layout
+	auto types = layout.GetTypes();
+	types.emplace_back(LogicalType::HASH);
+	layout.Initialize(types, layout.GetAggregates());
+
 	// HT layout
 	tuple_size = HASH_WIDTH + layout.GetRowWidth();
 #ifndef DUCKDB_ALLOW_UNDEFINED
@@ -75,8 +80,9 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manag
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		auto &aggr = aggregates[i];
 		if (aggr.distinct) {
-			// group types plus aggr return type
+			// layout types minus hash column plus aggr return type
 			vector<LogicalType> distinct_group_types(layout.GetTypes());
+			(void)distinct_group_types.pop_back();
 			for (idx_t child_idx = 0; child_idx < aggr.child_count; child_idx++) {
 				distinct_group_types.push_back(payload_types[payload_idx]);
 			}
@@ -280,12 +286,10 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 	// dummy
 	SelectionVector new_groups(STANDARD_VECTOR_SIZE);
 
-	D_ASSERT(groups.ColumnCount() == layout.ColumnCount());
-#ifdef DEBUG
-	for (idx_t i = 0; i < layout.ColumnCount(); i++) {
+	D_ASSERT(groups.ColumnCount() + 1 == layout.ColumnCount());
+	for (idx_t i = 0; i < groups.ColumnCount(); i++) {
 		D_ASSERT(groups.GetTypes()[i] == layout.GetTypes()[i]);
 	}
-#endif
 
 	Vector addresses(LogicalType::POINTER);
 	auto new_group_count = FindOrCreateGroups(groups, group_hashes, addresses, new_groups);
@@ -301,17 +305,17 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 		auto input_count = (idx_t)aggr.child_count;
 		if (aggr.distinct) {
 			// construct chunk for secondary hash table probing
-			vector<LogicalType> probe_types(layout.GetTypes());
+			vector<LogicalType> probe_types(groups.GetTypes());
 			for (idx_t i = 0; i < aggr.child_count; i++) {
 				probe_types.push_back(payload_types[payload_idx]);
 			}
 			DataChunk probe_chunk;
 			probe_chunk.Initialize(probe_types);
-			for (idx_t group_idx = 0; group_idx < layout.ColumnCount(); group_idx++) {
+			for (idx_t group_idx = 0; group_idx < groups.ColumnCount(); group_idx++) {
 				probe_chunk.data[group_idx].Reference(groups.data[group_idx]);
 			}
 			for (idx_t i = 0; i < aggr.child_count; i++) {
-				probe_chunk.data[layout.ColumnCount() + i].Reference(payload.data[payload_idx + i]);
+				probe_chunk.data[groups.ColumnCount() + i].Reference(payload.data[payload_idx + i]);
 			}
 			probe_chunk.SetCardinality(groups);
 			probe_chunk.Verify();
@@ -366,7 +370,7 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 
 void GroupedAggregateHashTable::FetchAggregates(DataChunk &groups, DataChunk &result) {
 	groups.Verify();
-	D_ASSERT(groups.ColumnCount() == layout.ColumnCount());
+	D_ASSERT(groups.ColumnCount() + 1 == layout.ColumnCount());
 	for (idx_t i = 0; i < result.ColumnCount(); i++) {
 		D_ASSERT(result.data[i].GetType() == payload_types[i]);
 	}
@@ -381,7 +385,7 @@ void GroupedAggregateHashTable::FetchAggregates(DataChunk &groups, DataChunk &re
 	// now fetch the aggregates
 	auto &aggregates = layout.GetAggregates();
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
-		D_ASSERT(result.ColumnCount() > aggr_idx);
+		D_ASSERT(aggr_idx < result.ColumnCount());
 
 		auto &target = result.data[aggr_idx];
 		auto &aggr = aggregates[aggr_idx];
@@ -500,6 +504,9 @@ static void ScatterGroups(VectorData group_data[], const RowLayout &layout, Vect
 			break;
 		case PhysicalType::INTERVAL:
 			TemplatedScatter<interval_t>(gdata, addresses, sel, count, col_offset, col_idx);
+			break;
+		case PhysicalType::HASH:
+			TemplatedScatter<hash_t>(gdata, addresses, sel, count, col_offset, col_idx);
 			break;
 		case PhysicalType::VARCHAR: {
 			auto string_data = (string_t *)gdata.data;
@@ -629,6 +636,9 @@ static void CompareGroups(VectorData group_data[], const RowLayout &layout, Vect
 		case PhysicalType::INTERVAL:
 			TemplatedCompareGroups<interval_t>(gdata, addresses, sel, count, col_offset, i, no_match, no_match_count);
 			break;
+		case PhysicalType::HASH:
+			TemplatedCompareGroups<hash_t>(gdata, addresses, sel, count, col_offset, i, no_match, no_match_count);
+			break;
 		case PhysicalType::VARCHAR:
 			TemplatedCompareGroups<string_t>(gdata, addresses, sel, count, col_offset, i, no_match, no_match_count);
 			break;
@@ -654,7 +664,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 	}
 
 	D_ASSERT(capacity - entries >= groups.size());
-	D_ASSERT(groups.ColumnCount() == layout.ColumnCount());
+	D_ASSERT(groups.ColumnCount() + 1 == layout.ColumnCount());
 	// we need to be able to fit at least one vector of data
 	D_ASSERT(capacity - entries >= groups.size());
 	D_ASSERT(group_hashes.GetType() == LogicalType::HASH);
@@ -688,10 +698,11 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 	idx_t remaining_entries = groups.size();
 
 	// orrify all the groups
-	auto group_data = unique_ptr<VectorData[]>(new VectorData[groups.ColumnCount()]);
+	auto group_data = unique_ptr<VectorData[]>(new VectorData[layout.ColumnCount()]);
 	for (idx_t grp_idx = 0; grp_idx < groups.ColumnCount(); grp_idx++) {
 		groups.data[grp_idx].Orrify(groups.size(), group_data[grp_idx]);
 	}
+	group_hashes.Orrify(groups.size(), group_data[groups.ColumnCount()]);
 
 	idx_t new_group_count = 0;
 	while (remaining_entries > 0) {
@@ -811,7 +822,7 @@ void GroupedAggregateHashTable::FlushMove(Vector &source_addresses, Vector &sour
 	D_ASSERT(source_hashes.GetType() == LogicalType::HASH);
 
 	DataChunk groups;
-	groups.Initialize(layout.GetTypes());
+	groups.Initialize(vector<LogicalType>(layout.GetTypes().begin(), layout.GetTypes().end() - 1));
 	groups.SetCardinality(count);
 	const auto &offsets = layout.GetOffsets();
 	for (idx_t i = 0; i < groups.ColumnCount(); i++) {
@@ -944,9 +955,10 @@ idx_t GroupedAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {
 	}
 
 	result.SetCardinality(this_n);
-	// fetch the group columns
+	// fetch the group columns (ignoring the final hash column
+	const auto group_cols = layout.ColumnCount() - 1;
 	const auto &offsets = layout.GetOffsets();
-	for (idx_t i = 0; i < layout.ColumnCount(); i++) {
+	for (idx_t i = 0; i < group_cols; i++) {
 		auto &column = result.data[i];
 		VectorOperations::Gather::Set(addresses, column, result.size(), offsets[i], i);
 	}
@@ -954,7 +966,7 @@ idx_t GroupedAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {
 
 	auto &aggregates = layout.GetAggregates();
 	for (idx_t i = 0; i < aggregates.size(); i++) {
-		auto &target = result.data[layout.ColumnCount() + i];
+		auto &target = result.data[group_cols + i];
 		auto &aggr = aggregates[i];
 		aggr.function.finalize(addresses, aggr.bind_data, target, result.size());
 		VectorOperations::AddInPlace(addresses, aggr.payload_size, result.size());
