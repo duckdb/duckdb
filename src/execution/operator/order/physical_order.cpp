@@ -61,6 +61,7 @@ public:
 	//! Sorted data
 	vector<unique_ptr<SortedBlock>> sorted_blocks;
 	vector<vector<unique_ptr<SortedBlock>>> sorted_blocks_temp;
+	unique_ptr<SortedBlock> odd_one_out = nullptr;
 
 	//! Total count - set after PhysicalOrder::Finalize is called
 	idx_t total_count;
@@ -71,6 +72,11 @@ public:
 	vector<idx_t> var_sorting_offset_block_capacity;
 	pair<idx_t, idx_t> payload_data_block_dims;
 	idx_t payload_offset_block_capacity;
+
+	//! Progress in merge path stage
+	idx_t pair_idx;
+	idx_t l_start;
+	idx_t r_start;
 };
 
 class OrderLocalState : public LocalSinkState {
@@ -1268,20 +1274,64 @@ int CompareColumns(const SortedBlock &left, const SortedBlock &right, const data
 
 class PhysicalOrderMergeTask : public Task {
 public:
-	PhysicalOrderMergeTask(Pipeline &parent_p, ClientContext &context_p, OrderGlobalState &state_p,
-	                       unique_ptr<SortedBlock> left_p, unique_ptr<SortedBlock> right_p, SortedBlock &result)
+	PhysicalOrderMergeTask(Pipeline &parent_p, ClientContext &context_p, OrderGlobalState &state_p)
 	    : parent(parent_p), context(context_p), buffer_manager(BufferManager::GetBufferManager(context_p)),
-	      state(state_p), sorting_state(*state_p.sorting_state), left_block(move(left_p)), right_block(move(right_p)),
-	      result(result) {
+	      state(state_p), sorting_state(*state_p.sorting_state) {
 	}
 
 	void Execute() override {
+		{
+			lock_guard<mutex> glock(state.lock);
+
+			state.sorted_blocks_temp[state.pair_idx].push_back(
+			    make_unique<SortedBlock>(buffer_manager, *state.sorting_state, *state.payload_state));
+			result = state.sorted_blocks_temp[state.pair_idx].back().get();
+
+			auto &left = *state.sorted_blocks[state.pair_idx * 2];
+			auto &right = *state.sorted_blocks[state.pair_idx * 2 + 1];
+			const idx_t l_count = left.Count();
+			const idx_t r_count = right.Count();
+
+			// Assign work to this thread using Merge Path
+			idx_t l_end;
+			idx_t r_end;
+			if (state.l_start + state.r_start + state.sorting_block_capacity < l_count + r_count) {
+				const idx_t intersection = state.l_start + state.r_start + state.sorting_block_capacity;
+				ComputeIntersection(left, right, intersection, l_end, r_end);
+				D_ASSERT(l_end <= l_count);
+				D_ASSERT(r_end <= r_count);
+				D_ASSERT(intersection == l_end + r_end);
+
+				// Unpin after finding the intersection
+				for (idx_t col_idx = 0; col_idx < sorting_state.num_cols; col_idx++) {
+					if (!sorting_state.constant_size[col_idx]) {
+						left.var_sorting_cols[col_idx]->UnpinAndReset(0, 0);
+						right.var_sorting_cols[col_idx]->UnpinAndReset(0, 0);
+					}
+				}
+			} else {
+				l_end = l_count;
+				r_end = r_count;
+			}
+
+			left_block = left.CreateSlice(state.l_start, l_end);
+			right_block = right.CreateSlice(state.r_start, r_end);
+
+			state.l_start = l_end;
+			state.r_start = r_end;
+			if (state.l_start == l_count && state.r_start == r_count) {
+				state.pair_idx++;
+				state.l_start = 0;
+				state.r_start = 0;
+			}
+		}
+
 		auto &left = *left_block;
 		auto &right = *right_block;
 		auto l_count = left.Remaining();
 		auto r_count = right.Remaining();
 
-		result.InitializeWrite(state);
+		result->InitializeWrite(state);
 		bool left_smaller[PhysicalOrder::MERGE_STRIDE];
 		idx_t next_entry_sizes[PhysicalOrder::MERGE_STRIDE];
 		while (true) {
@@ -1299,18 +1349,18 @@ public:
 			if (!sorting_state.all_constant) {
 				for (idx_t col_idx = 0; col_idx < sorting_state.num_cols; col_idx++) {
 					if (!sorting_state.constant_size[col_idx]) {
-						Merge(*result.var_sorting_cols[col_idx], *left.var_sorting_cols[col_idx],
+						Merge(*result->var_sorting_cols[col_idx], *left.var_sorting_cols[col_idx],
 						      *right.var_sorting_cols[col_idx], next, left_smaller, next_entry_sizes);
 					}
 				}
 			}
-			Merge(*result.payload_data, *left.payload_data, *right.payload_data, next, left_smaller, next_entry_sizes);
+			Merge(*result->payload_data, *left.payload_data, *right.payload_data, next, left_smaller, next_entry_sizes);
 		}
-		D_ASSERT(result.Count() == l_count + r_count);
+		D_ASSERT(result->Count() == l_count + r_count);
 
 		lock_guard<mutex> glock(state.lock);
 		parent.finished_tasks++;
-		if (parent.total_tasks == parent.finished_tasks) {
+		if (parent.finished_tasks == parent.total_tasks) {
 			for (auto &sb : state.sorted_blocks) {
 				sb->UnregisterSortingBlocks();
 				sb->UnregisterPayloadBlocks();
@@ -1322,7 +1372,120 @@ public:
 				state.sorted_blocks.back()->AppendSortedBlocks(sorted_block_vector);
 			}
 			state.sorted_blocks_temp.clear();
+			if (state.odd_one_out) {
+				state.sorted_blocks.insert(state.sorted_blocks.begin(), move(state.odd_one_out));
+			}
 			PhysicalOrder::ScheduleMergeTasks(parent, context, state);
+		}
+	}
+
+	//! Compare values within SortedBlocks using a global index
+	int CompareUsingGlobalIndex(SortedBlock &l, SortedBlock &r, const idx_t l_idx, const idx_t r_idx) {
+		D_ASSERT(l_idx < l.Count());
+		D_ASSERT(r_idx < r.Count());
+
+		idx_t l_entry_idx;
+		idx_t l_block_idx;
+		l.GlobalToLocalIndex(l_idx, l_block_idx, l_entry_idx);
+
+		idx_t r_entry_idx;
+		idx_t r_block_idx;
+		r.GlobalToLocalIndex(r_idx, r_block_idx, r_entry_idx);
+
+		auto l_block_handle = buffer_manager.Pin(l.sorting_blocks[l_block_idx].block);
+		auto r_block_handle = buffer_manager.Pin(r.sorting_blocks[r_block_idx].block);
+		data_ptr_t l_ptr = l_block_handle->Ptr() + l_entry_idx * sorting_state.entry_size;
+		data_ptr_t r_ptr = r_block_handle->Ptr() + r_entry_idx * sorting_state.entry_size;
+
+		int comp_res;
+		if (sorting_state.all_constant) {
+			comp_res = memcmp(l_ptr, r_ptr, sorting_state.comp_size);
+		} else {
+			l.SetVarIndices(l_idx);
+			r.SetVarIndices(r_idx);
+			l.PinVarBlocks();
+			r.PinVarBlocks();
+			comp_res = CompareColumns(l, r, l_ptr, r_ptr, sorting_state);
+		}
+		return comp_res;
+	}
+
+	void ComputeIntersection(SortedBlock &l, SortedBlock &r, const idx_t sum, idx_t &l_idx, idx_t &r_idx) {
+		const idx_t l_count = l.Count();
+		const idx_t r_count = r.Count();
+		// cover some edge cases
+		if (sum >= l_count + r_count) {
+			l_idx = l_count;
+			r_idx = r_count;
+			return;
+		} else if (sum == 0) {
+			l_idx = 0;
+			r_idx = 0;
+			return;
+		} else if (l_count == 0) {
+			l_idx = 0;
+			r_idx = sum;
+			return;
+		} else if (r_count == 0) {
+			r_idx = 0;
+			l_idx = sum;
+			return;
+		}
+		// determine offsets for the binary search
+		const idx_t l_offset = MinValue(l_count, sum);
+		const idx_t r_offset = sum > l_count ? sum - l_count : 0;
+		D_ASSERT(l_offset + r_offset == sum);
+		const idx_t search_space =
+		    sum > MaxValue(l_count, r_count) ? l_count + r_count - sum : MinValue(sum, MinValue(l_count, r_count));
+		// binary search
+		idx_t left = 0;
+		idx_t right = search_space - 1;
+		idx_t middle;
+		int comp_res;
+		while (left <= right) {
+			middle = (left + right) / 2;
+			l_idx = l_offset - middle;
+			r_idx = r_offset + middle;
+			if (l_idx == l_count || r_idx == 0) {
+				CompareUsingGlobalIndex(l, r, l_idx - 1, r_idx);
+				if (comp_res > 0) {
+					l_idx--;
+					r_idx++;
+				} else {
+					return;
+				}
+				if (l_idx == 0 || r_idx == r_count) {
+					return;
+				} else {
+					break;
+				}
+			}
+			comp_res = CompareUsingGlobalIndex(l, r, l_idx, r_idx);
+			if (comp_res > 0) {
+				left = middle + 1;
+			} else {
+				right = middle - 1;
+			}
+		}
+		// shift by one (if needed)
+		if (l_idx == 0) {
+			comp_res = CompareUsingGlobalIndex(l, r, l_idx, r_idx);
+			if (comp_res > 0) {
+				l_idx--;
+				r_idx++;
+			}
+			return;
+		}
+		int l_r_min1 = CompareUsingGlobalIndex(l, r, l_idx, r_idx - 1);
+		int l_min1_r = CompareUsingGlobalIndex(l, r, l_idx - 1, r_idx);
+		if (l_r_min1 > 0 && l_min1_r < 0) {
+			return;
+		} else if (l_r_min1 > 0) {
+			l_idx--;
+			r_idx++;
+		} else if (l_min1_r < 0) {
+			l_idx++;
+			r_idx--;
 		}
 	}
 
@@ -1464,7 +1627,7 @@ public:
 		data_ptr_t l_ptr;
 		data_ptr_t r_ptr;
 
-		RowDataBlock *result_block = &result.sorting_blocks.back();
+		RowDataBlock *result_block = &result->sorting_blocks.back();
 		auto result_handle = buffer_manager.Pin(result_block->block);
 		data_ptr_t result_ptr = result_handle->Ptr() + result_block->count * sorting_state.entry_size;
 
@@ -1486,8 +1649,8 @@ public:
 
 			// create new result block (if needed)
 			if (result_block->count == result_block->capacity) {
-				result.CreateBlock();
-				result_block = &result.sorting_blocks.back();
+				result->CreateBlock();
+				result_block = &result->sorting_blocks.back();
 				result_handle = buffer_manager.Pin(result_block->block);
 				result_ptr = result_handle->Ptr();
 			}
@@ -1790,7 +1953,7 @@ private:
 
 	unique_ptr<SortedBlock> left_block;
 	unique_ptr<SortedBlock> right_block;
-	SortedBlock &result;
+	SortedBlock *result;
 };
 
 bool PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> state_p) {
@@ -1982,77 +2145,30 @@ void PhysicalOrder::ScheduleMergeTasks(Pipeline &pipeline, ClientContext &contex
 	// uneven amount of blocks
 	auto num_blocks = state.sorted_blocks.size();
 	if (num_blocks % 2 == 1) {
-		state.sorted_blocks_temp.emplace_back();
-		state.sorted_blocks_temp.back().push_back(move(state.sorted_blocks.back()));
-		state.sorted_blocks.pop_back();
+		state.odd_one_out = move(state.sorted_blocks.back());
 		num_blocks--;
 	}
 
-	const auto &sorting_state = *state.sorting_state;
-	auto &ts = TaskScheduler::GetScheduler(context);
-	auto &buffer_manager = BufferManager::GetBufferManager(context);
-	const idx_t num_threads = ts.NumberOfThreads();
-	if ((num_blocks / 2) >= num_threads) {
-		// there are enough blocks to give 2 blocks to each thread
-		pipeline.total_tasks += num_blocks / 2;
-		for (idx_t i = 0; i < num_blocks; i += 2) {
-			state.sorted_blocks_temp.emplace_back();
-			state.sorted_blocks_temp.back().push_back(
-			    make_unique<SortedBlock>(buffer_manager, *state.sorting_state, *state.payload_state));
-			auto &left = *state.sorted_blocks[i];
-			auto &right = *state.sorted_blocks[i + 1];
-			auto new_task = make_unique<PhysicalOrderMergeTask>(
-			    pipeline, context, state, left.CreateSlice(0, left.Count()), right.CreateSlice(0, right.Count()),
-			    *state.sorted_blocks_temp.back().back());
-			ts.ScheduleTask(pipeline.token, move(new_task));
-		}
-	} else {
-		idx_t tasks_per_merge = 2;
-		while ((tasks_per_merge * num_blocks / 2) < num_threads) {
-			tasks_per_merge++;
-		}
-		pipeline.total_tasks += tasks_per_merge * num_blocks / 2;
-		for (idx_t i = 0; i < num_blocks; i += 2) {
-			state.sorted_blocks_temp.emplace_back();
-			auto &left = *state.sorted_blocks[i];
-			auto &right = *state.sorted_blocks[i + 1];
-			const idx_t l_count = left.Count();
-			const idx_t r_count = right.Count();
-			const idx_t tuples_per_task = (l_count + r_count) / tasks_per_merge;
+	state.pair_idx = 0;
+	state.l_start = 0;
+	state.r_start = 0;
 
-			idx_t l_start = 0;
-			idx_t r_start = 0;
-			for (idx_t task_num = 1; task_num < tasks_per_merge; task_num++) {
-				idx_t l_end;
-				idx_t r_end;
-				ComputeIntersection(buffer_manager, left, right, task_num * tuples_per_task, l_end, r_end,
-				                    *state.sorting_state);
-				D_ASSERT(l_end <= l_count);
-				D_ASSERT(r_end <= r_count);
-				D_ASSERT(task_num * tuples_per_task == l_end + r_end);
-				state.sorted_blocks_temp.back().push_back(
-				    make_unique<SortedBlock>(buffer_manager, *state.sorting_state, *state.payload_state));
-				auto new_task = make_unique<PhysicalOrderMergeTask>(
-				    pipeline, context, state, left.CreateSlice(l_start, l_end), right.CreateSlice(r_start, r_end),
-				    *state.sorted_blocks_temp.back().back());
-				ts.ScheduleTask(pipeline.token, move(new_task));
-				l_start = l_end;
-				r_start = r_end;
-			}
-			state.sorted_blocks_temp.back().push_back(
-			    make_unique<SortedBlock>(buffer_manager, *state.sorting_state, *state.payload_state));
-			auto new_task = make_unique<PhysicalOrderMergeTask>(
-			    pipeline, context, state, left.CreateSlice(l_start, l_count), right.CreateSlice(r_start, r_count),
-			    *state.sorted_blocks_temp.back().back());
-			ts.ScheduleTask(pipeline.token, move(new_task));
-            // unpin blocks that were used for computing the intersection
-            for (idx_t col_idx = 0; col_idx < sorting_state.num_cols; col_idx++) {
-                if (!sorting_state.constant_size[col_idx]) {
-                    left.var_sorting_cols[col_idx]->UnpinAndReset(0, 0);
-                    right.var_sorting_cols[col_idx]->UnpinAndReset(0, 0);
-                }
-            }
-		}
+	// compute how many tasks there will be
+	idx_t num_tasks = 0;
+	for (idx_t block_idx = 0; block_idx < num_blocks; block_idx += 2) {
+		auto &left = *state.sorted_blocks[block_idx];
+		auto &right = *state.sorted_blocks[block_idx + 1];
+		const idx_t count = left.Count() + right.Count();
+		num_tasks += (count + state.sorting_block_capacity - 1) / state.sorting_block_capacity;
+		// allocate room for merge results
+		state.sorted_blocks_temp.emplace_back();
+	}
+
+	// schedule the tasks
+	pipeline.total_tasks += num_tasks;
+	for (idx_t tnum = 0; tnum < num_tasks; tnum++) {
+		auto new_task = make_unique<PhysicalOrderMergeTask>(pipeline, context, state);
+		TaskScheduler::GetScheduler(context).ScheduleTask(pipeline.token, move(new_task));
 	}
 }
 
