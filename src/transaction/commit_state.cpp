@@ -164,6 +164,8 @@ void CommitState::WriteUpdate(UpdateInfo *info) {
 		row_ids[info->tuples[i]] = start + info->tuples[i];
 	}
 	if (column_data.type.id() == LogicalTypeId::VALIDITY) {
+		// zero-initialize the booleans
+		// FIXME: this is only required because of NullValue<T> in Vector::Serialize...
 		auto booleans = FlatVector::GetData<bool>(update_chunk->data[0]);
 		for(idx_t i = 0; i < info->N; i++) {
 			auto idx = info->tuples[i];
