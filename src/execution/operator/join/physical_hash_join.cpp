@@ -130,11 +130,10 @@ void PhysicalHashJoin::Sink(ExecutionContext &context, GlobalOperatorState &stat
 bool PhysicalHashJoin::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> state) {
 	auto &sink = (HashJoinGlobalState &)*state;
 	// check for possible perfect hash table
-	CheckRequirementsForPerfectHashJoin(sink.hash_table.get(), sink);
-	if (!CheckRequirementsForPerfectHashJoin(sink.hash_table.get(), sink)) {
-		// no perfect hash table, just finish the building of the regular hash table
-		sink.hash_table->Finalize();
-	}
+	//	if (!CheckRequirementsForPerfectHashJoin(sink.hash_table.get(), sink)) {
+	// no perfect hash table, just finish the building of the regular hash table
+	sink.hash_table->Finalize();
+	//	}
 
 	PhysicalSink::Finalize(pipeline, context, move(state));
 	return true;
@@ -162,9 +161,9 @@ void PhysicalHashJoin::GetChunkInternal(ExecutionContext &context, DataChunk &ch
 		return;
 	}
 	// We first try a probe with a perfect hash table, otherwise we do the standard probe
-	if (IsInnerJoin(join_type) && ProbePerfectHashTable(context, chunk, state, sink.hash_table.get())) {
-		return;
-	}
+	/* 	if (IsInnerJoin(join_type) && ProbePerfectHashTable(context, chunk, state, sink.hash_table.get())) {
+	        return;
+	    } */
 	do {
 		ProbeHashTable(context, chunk, state);
 		if (chunk.size() == 0) {
@@ -255,16 +254,12 @@ bool PhysicalHashJoin::ProbePerfectHashTable(ExecutionContext &context, DataChun
 	physical_state->probe_executor.Execute(physical_state->child_chunk, physical_state->join_keys);
 	// select the keys that are in the min-max range
 	auto &keys_vec = physical_state->join_keys.data[0];
-	Vector matches(keys_vec.GetType());
+	Vector source(keys_vec.GetType());
 	auto keys_count = physical_state->join_keys.size();
-	MinMaxRangeSwitch(keys_vec, matches, keys_count);
+	SelectionVector sel_vec(keys_count);
+	FillSelectionVectorSwitch(keys_vec, sel_vec, keys_count);
 	// copy the probe data to the result
 	result.Slice(physical_state->child_chunk, FlatVector::INCREMENTAL_SELECTION_VECTOR, keys_count);
-
-	// now get the data from the build side
-	// first get the selection vector from the matches
-	SelectionVector sel_vec(keys_count);
-	FillSelectionVectorSwitch(matches, keys_count, sel_vec);
 	// on the RHS, we need to fetch the data from the perfect hash table and slice it using the new selection vector
 	for (idx_t i = 0; i < ht_ptr->build_types.size(); i++) {
 		auto &res_vector = result.data[physical_state->child_chunk.ColumnCount() + i];
@@ -306,105 +301,52 @@ void PhysicalHashJoin::BuildPerfectHashStructure(JoinHashTable *hash_table_ptr, 
 }
 
 template <typename T>
-void PhysicalHashJoin::TemplatedMinMaxRange(Vector &source, Vector &result, idx_t count) {
+void PhysicalHashJoin::TemplatedFillSelectionVector(Vector &source, SelectionVector &sel_vec, idx_t count) {
 	auto min_value = perfect_join_state.build_min.GetValue<T>();
 	auto max_value = perfect_join_state.build_max.GetValue<T>();
 
-	UnaryExecutor::Execute<T, T>(source, result, count, [&](T input_value) {
-		// a match means that input is in the range
-		if (min_value <= input_value && input_value <= max_value) {
-			return input_value;
-		}
-		return NullValue<T>();
-	});
-}
-
-template <typename T>
-void PhysicalHashJoin::TemplatedFillSelectionVector(Vector &matches, idx_t count, SelectionVector &sel_vec) {
 	VectorData build_data;
-	matches.Orrify(count, build_data);
+	source.Orrify(count, build_data);
 	auto i_data = (T *)build_data.data;
-	auto min_value = perfect_join_state.probe_min.GetValue<T>();
 	// generate the selection vector
 	for (idx_t i = 0; i != count; ++i) {
-		auto idx = i_data[i] - min_value;
-		sel_vec.set_index(i, idx);
+		// add index to selection vector if value in the range
+		auto input_value = i_data[i];
+		if (min_value <= input_value && input_value <= max_value) {
+			auto idx = i_data[i] - min_value;
+			sel_vec.set_index(i, idx);
+		}
 	}
 }
 
-void PhysicalHashJoin::FillSelectionVectorSwitch(Vector &matches, idx_t count, SelectionVector &sel_vec) {
-	switch (matches.GetType().id()) {
-	case LogicalTypeId::BOOLEAN:
-		TemplatedFillSelectionVector<bool>(matches, count, sel_vec);
-		break;
-	case LogicalTypeId::TINYINT:
-		TemplatedFillSelectionVector<int8_t>(matches, count, sel_vec);
-		break;
-	case LogicalTypeId::SMALLINT:
-		TemplatedFillSelectionVector<int16_t>(matches, count, sel_vec);
-		break;
-	case LogicalTypeId::INTEGER:
-		TemplatedFillSelectionVector<int32_t>(matches, count, sel_vec);
-		break;
-	case LogicalTypeId::BIGINT:
-		TemplatedFillSelectionVector<int64_t>(matches, count, sel_vec);
-		break;
-	case LogicalTypeId::UTINYINT:
-		TemplatedFillSelectionVector<uint8_t>(matches, count, sel_vec);
-		break;
-	case LogicalTypeId::USMALLINT:
-		TemplatedFillSelectionVector<uint16_t>(matches, count, sel_vec);
-		break;
-	case LogicalTypeId::UINTEGER:
-		TemplatedFillSelectionVector<uint32_t>(matches, count, sel_vec);
-		break;
-	case LogicalTypeId::UBIGINT:
-		TemplatedFillSelectionVector<uint64_t>(matches, count, sel_vec);
-		break;
-	default:
-		throw NotImplementedException("Type not supported");
-		break;
-	}
-}
-
-void PhysicalHashJoin::MinMaxRangeSwitch(Vector &source, Vector &result, idx_t count) {
-	// now switch on the source type
+void PhysicalHashJoin::FillSelectionVectorSwitch(Vector &source, SelectionVector &sel_vec, idx_t count) {
 	switch (source.GetType().id()) {
 	case LogicalTypeId::BOOLEAN:
-		TemplatedMinMaxRange<bool>(source, result, count);
+		TemplatedFillSelectionVector<bool>(source, sel_vec, count);
 		break;
 	case LogicalTypeId::TINYINT:
-		TemplatedMinMaxRange<int8_t>(source, result, count);
+		TemplatedFillSelectionVector<int8_t>(source, sel_vec, count);
 		break;
 	case LogicalTypeId::SMALLINT:
-		TemplatedMinMaxRange<int16_t>(source, result, count);
+		TemplatedFillSelectionVector<int16_t>(source, sel_vec, count);
 		break;
 	case LogicalTypeId::INTEGER:
-		TemplatedMinMaxRange<int32_t>(source, result, count);
+		TemplatedFillSelectionVector<int32_t>(source, sel_vec, count);
 		break;
 	case LogicalTypeId::BIGINT:
-		TemplatedMinMaxRange<int64_t>(source, result, count);
+		TemplatedFillSelectionVector<int64_t>(source, sel_vec, count);
 		break;
 	case LogicalTypeId::UTINYINT:
-		TemplatedMinMaxRange<uint8_t>(source, result, count);
+		TemplatedFillSelectionVector<uint8_t>(source, sel_vec, count);
 		break;
 	case LogicalTypeId::USMALLINT:
-		TemplatedMinMaxRange<uint16_t>(source, result, count);
+		TemplatedFillSelectionVector<uint16_t>(source, sel_vec, count);
 		break;
 	case LogicalTypeId::UINTEGER:
-		TemplatedMinMaxRange<uint32_t>(source, result, count);
+		TemplatedFillSelectionVector<uint32_t>(source, sel_vec, count);
 		break;
 	case LogicalTypeId::UBIGINT:
-		TemplatedMinMaxRange<uint64_t>(source, result, count);
-		break;
-	case LogicalTypeId::HUGEINT:
-		TemplatedMinMaxRange<hugeint_t>(source, result, count);
-		break;
-	case LogicalTypeId::FLOAT:
-		TemplatedMinMaxRange<float>(source, result, count);
-		break;
-	case LogicalTypeId::DOUBLE:
-		TemplatedMinMaxRange<double>(source, result, count);
+		TemplatedFillSelectionVector<uint64_t>(source, sel_vec, count);
 		break;
 	default:
 		throw NotImplementedException("Type not supported");

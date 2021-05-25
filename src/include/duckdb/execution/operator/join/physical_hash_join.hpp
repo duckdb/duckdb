@@ -92,12 +92,9 @@ public:
 	                           JoinHashTable *ht_ptr);
 	bool CheckRequirementsForPerfectHashJoin(JoinHashTable *ht_ptr, HashJoinGlobalState &join_global_state);
 	void BuildPerfectHashStructure(JoinHashTable *ht_ptr, JoinHTScanState &join_ht_state);
+	void FillSelectionVectorSwitch(Vector &source, SelectionVector &sel_vec, idx_t count);
 	template <typename T>
-	void TemplatedMinMaxRange(Vector &source, Vector &result, idx_t count);
-	void MinMaxRangeSwitch(Vector &source, Vector &result, idx_t count);
-	void FillSelectionVectorSwitch(Vector &matches, idx_t count, SelectionVector &sel_vec);
-	template <typename T>
-	void TemplatedFillSelectionVector(Vector &matches, idx_t count, SelectionVector &sel_vec);
+	void TemplatedFillSelectionVector(Vector &source, SelectionVector &sel_vec, idx_t count);
 
 private:
 	void ProbeHashTable(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p);
