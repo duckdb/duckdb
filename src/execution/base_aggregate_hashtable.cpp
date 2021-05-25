@@ -19,17 +19,4 @@ BaseAggregateHashTable::BaseAggregateHashTable(BufferManager &buffer_manager, ve
 	}
 }
 
-void BaseAggregateHashTable::CallDestructors(Vector &state_vector, idx_t count) {
-	if (count == 0) {
-		return;
-	}
-	for (auto &aggr : layout.GetAggregates()) {
-		if (aggr.function.destructor) {
-			aggr.function.destructor(state_vector, count);
-		}
-		// move to the next aggregate state
-		VectorOperations::AddInPlace(state_vector, aggr.payload_size, count);
-	}
-}
-
 } // namespace duckdb

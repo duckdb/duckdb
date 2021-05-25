@@ -24,7 +24,8 @@ struct RowOperations {
 	//===--------------------------------------------------------------------===//
 	//! initialize
 	static void InitializeStates(RowLayout &layout, Vector &addresses, const SelectionVector &sel, idx_t count);
-
+	//! destructor
+	static void DestroyStates(RowLayout &layout, Vector &addresses, idx_t count);
 };
 
 } // namespace duckdb

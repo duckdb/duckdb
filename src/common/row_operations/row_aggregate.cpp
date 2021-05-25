@@ -30,4 +30,19 @@ void RowOperations::InitializeStates(RowLayout &layout, Vector &addresses, const
 	}
 }
 
+void RowOperations::DestroyStates(RowLayout &layout, Vector &addresses, idx_t count) {
+	if (count == 0) {
+		return;
+	}
+	//	Move to the first aggregate state
+	VectorOperations::AddInPlace(addresses, layout.GetAggrOffset(), count);
+	for (auto &aggr : layout.GetAggregates()) {
+		if (aggr.function.destructor) {
+			aggr.function.destructor(addresses, count);
+		}
+		// move to the next aggregate state
+		VectorOperations::AddInPlace(addresses, aggr.payload_size, count);
+	}
+}
+
 } // namespace duckdb

@@ -147,13 +147,13 @@ void GroupedAggregateHashTable::Destroy() {
 	idx_t count = 0;
 
 	PayloadApply([&](idx_t page_nr, idx_t page_offset, data_ptr_t ptr) {
-		data_pointers[count++] = ptr + layout.GetAggrOffset();
+		data_pointers[count++] = ptr;
 		if (count == STANDARD_VECTOR_SIZE) {
-			CallDestructors(state_vector, count);
+			RowOperations::DestroyStates(layout, state_vector, count);
 			count = 0;
 		}
 	});
-	CallDestructors(state_vector, count);
+	RowOperations::DestroyStates(layout, state_vector, count);
 }
 
 template <class T>

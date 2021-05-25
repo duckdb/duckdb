@@ -31,9 +31,6 @@ protected:
 
 	//! The empty payload data
 	unique_ptr<data_t[]> empty_payload_data;
-
-protected:
-	void CallDestructors(Vector &state_vector, idx_t count);
 };
 
 } // namespace duckdb

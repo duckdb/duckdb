@@ -286,13 +286,13 @@ void PerfectAggregateHashTable::Destroy() {
 		if (group_is_set[i]) {
 			data_pointers[count++] = payload_ptr;
 			if (count == STANDARD_VECTOR_SIZE) {
-				CallDestructors(state_vector, count);
+				RowOperations::DestroyStates(layout, state_vector, count);
 				count = 0;
 			}
 		}
 		payload_ptr += tuple_size;
 	}
-	CallDestructors(state_vector, count);
+	RowOperations::DestroyStates(layout, state_vector, count);
 }
 
 } // namespace duckdb
