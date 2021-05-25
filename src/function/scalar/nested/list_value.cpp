@@ -55,6 +55,8 @@ void ListValueFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(fun);
 	fun.name = "list_pack";
 	set.AddFunction(fun);
+	fun.name = "array";
+	set.AddFunction(fun);
 }
 
 } // namespace duckdb

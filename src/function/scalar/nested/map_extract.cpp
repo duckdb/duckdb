@@ -6,18 +6,18 @@
 
 namespace duckdb {
 void FillResult(Value &values, Vector &result) {
-    //! First Initialize List Vector
-    ListVector::Initialize(result);
+	//! First Initialize List Vector
+	ListVector::Initialize(result);
 
-    //! Push Values to List Vector
-    for (idx_t i = 0; i < values.list_value.size(); i++) {
-        ListVector::PushBack(result,values.list_value[i]);
-    }
+	//! Push Values to List Vector
+	for (idx_t i = 0; i < values.list_value.size(); i++) {
+		ListVector::PushBack(result, values.list_value[i]);
+	}
 
-    //! now set the pointer
-    auto &entry = ((list_entry_t *)result.GetData())[0];
-    entry.length = values.list_value.size();
-    entry.offset = 0;
+	//! now set the pointer
+	auto &entry = ((list_entry_t *)result.GetData())[0];
+	entry.length = values.list_value.size();
+	entry.offset = 0;
 }
 
 static void MapExtractFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -29,8 +29,8 @@ static void MapExtractFunction(DataChunk &args, ExpressionState &state, Vector &
 
 	auto &children = StructVector::GetEntries(map);
 	auto key_value = key.GetValue(0);
-	if (children[0].second->GetType().child_types()[0].second != LogicalTypeId::SQLNULL){
-	    key_value = key_value.CastAs(children[0].second->GetType().child_types()[0].second);
+	if (children[0].second->GetType().child_types()[0].second != LogicalTypeId::SQLNULL) {
+		key_value = key_value.CastAs(children[0].second->GetType().child_types()[0].second);
 	}
 	auto offsets = ListVector::Search(*children[0].second, key_value);
 
@@ -50,9 +50,6 @@ static unique_ptr<FunctionData> MapExtractBind(ClientContext &context, ScalarFun
 	auto key_type = arguments[0]->return_type.child_types()[0].second.child_types()[0].second;
 	auto value_type = arguments[0]->return_type.child_types()[1].second.child_types()[0].second;
 
-//	if (key_type != arguments[1]->return_type && key_type != LogicalTypeId::SQLNULL && arguments[1]->return_type != LogicalTypeId::SQLNULL) {
-//		throw BinderException("MAP_EXTRACT second argument has a different type from the MAP type");
-//	}
 	//! Here we have to construct the List Type that will be returned
 	child_list_t<LogicalType> children;
 	children.push_back(make_pair("", value_type));
@@ -65,6 +62,8 @@ void MapExtractFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunction fun("map_extract", {LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY, MapExtractFunction, false,
 	                   MapExtractBind);
 	fun.varargs = LogicalType::ANY;
+	set.AddFunction(fun);
+	fun.name = "element_at";
 	set.AddFunction(fun);
 }
 
