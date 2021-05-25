@@ -53,7 +53,6 @@ protected:
 	vector<Value> group_minima;
 
 private:
-	void Combine(Vector &source_addresses, Vector &target_addresses, idx_t combine_count);
 	//! Destroy the perfect aggregate HT (called automatically by the destructor)
 	void Destroy();
 };

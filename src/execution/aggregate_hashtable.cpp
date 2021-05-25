@@ -367,15 +367,7 @@ void GroupedAggregateHashTable::FetchAggregates(DataChunk &groups, DataChunk &re
 	Vector addresses(LogicalType::POINTER);
 	FindOrCreateGroups(groups, addresses);
 	// now fetch the aggregates
-	auto &aggregates = layout.GetAggregates();
-	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
-		D_ASSERT(aggr_idx < result.ColumnCount());
-
-		auto &target = result.data[aggr_idx];
-		auto &aggr = aggregates[aggr_idx];
-		aggr.function.finalize(addresses, aggr.bind_data, target, result.size());
-		VectorOperations::AddInPlace(addresses, aggr.payload_size, result.size());
-	}
+	RowOperations::FinalizeStates(layout, addresses, result, 0);
 }
 
 static void ScatterAllValid(const RowLayout &layout, Vector &addresses, const SelectionVector &sel, idx_t count) {
@@ -797,13 +789,7 @@ void GroupedAggregateHashTable::FlushMove(Vector &source_addresses, Vector &sour
 
 	FindOrCreateGroups(groups, source_hashes, group_addresses, new_groups_sel);
 
-	for (auto &aggr : layout.GetAggregates()) {
-		// for any entries for which a group was found, update the aggregate
-		D_ASSERT(aggr.function.combine);
-		aggr.function.combine(source_addresses, group_addresses, count);
-		VectorOperations::AddInPlace(source_addresses, aggr.payload_size, count);
-		VectorOperations::AddInPlace(group_addresses, aggr.payload_size, count);
-	}
+	RowOperations::CombineStates(layout, source_addresses, group_addresses, count);
 }
 
 void GroupedAggregateHashTable::Combine(GroupedAggregateHashTable &other) {
@@ -924,13 +910,8 @@ idx_t GroupedAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {
 	}
 	VectorOperations::AddInPlace(addresses, layout.GetAggrOffset(), result.size());
 
-	auto &aggregates = layout.GetAggregates();
-	for (idx_t i = 0; i < aggregates.size(); i++) {
-		auto &target = result.data[group_cols + i];
-		auto &aggr = aggregates[i];
-		aggr.function.finalize(addresses, aggr.bind_data, target, result.size());
-		VectorOperations::AddInPlace(addresses, aggr.payload_size, result.size());
-	}
+	RowOperations::FinalizeStates(layout, addresses, result, group_cols);
+
 	scan_position += this_n;
 	return this_n;
 }

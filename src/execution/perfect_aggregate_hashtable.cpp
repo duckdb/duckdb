@@ -128,19 +128,6 @@ void PerfectAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) 
 	}
 }
 
-void PerfectAggregateHashTable::Combine(Vector &source_addresses, Vector &target_addresses, idx_t combine_count) {
-	if (combine_count == 0) {
-		return;
-	}
-
-	for (auto &aggr : layout.GetAggregates()) {
-		D_ASSERT(aggr.function.combine);
-		aggr.function.combine(source_addresses, target_addresses, combine_count);
-		VectorOperations::AddInPlace(source_addresses, aggr.payload_size, combine_count);
-		VectorOperations::AddInPlace(target_addresses, aggr.payload_size, combine_count);
-	}
-}
-
 void PerfectAggregateHashTable::Combine(PerfectAggregateHashTable &other) {
 	D_ASSERT(total_groups == other.total_groups);
 	D_ASSERT(tuple_size == other.tuple_size);
@@ -165,7 +152,7 @@ void PerfectAggregateHashTable::Combine(PerfectAggregateHashTable &other) {
 				target_addresses_ptr[combine_count] = target_ptr;
 				combine_count++;
 				if (combine_count == STANDARD_VECTOR_SIZE) {
-					Combine(source_addresses, target_addresses, combine_count);
+					RowOperations::CombineStates(layout, source_addresses, target_addresses, combine_count);
 					combine_count = 0;
 				}
 			} else {
@@ -179,7 +166,7 @@ void PerfectAggregateHashTable::Combine(PerfectAggregateHashTable &other) {
 		source_ptr += tuple_size;
 		target_ptr += tuple_size;
 	}
-	Combine(source_addresses, target_addresses, combine_count);
+	RowOperations::CombineStates(layout, source_addresses, target_addresses, combine_count);
 }
 
 template <class T>
@@ -252,14 +239,8 @@ void PerfectAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {
 		ReconstructGroupVector(group_values, group_minima[i], required_bits[i], shift, entry_count, result.data[i]);
 	}
 	// then construct the payloads
-	auto &aggregates = layout.GetAggregates();
-	for (idx_t i = 0; i < aggregates.size(); i++) {
-		auto &target = result.data[grouping_columns + i];
-		auto &aggr = aggregates[i];
-		aggr.function.finalize(addresses, aggr.bind_data, target, entry_count);
-		VectorOperations::AddInPlace(addresses, aggr.payload_size, entry_count);
-	}
 	result.SetCardinality(entry_count);
+	RowOperations::FinalizeStates(layout, addresses, result, grouping_columns);
 }
 
 void PerfectAggregateHashTable::Destroy() {

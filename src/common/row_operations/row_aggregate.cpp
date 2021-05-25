@@ -69,4 +69,26 @@ void RowOperations::UpdateFilteredStates(AggregateObject &aggr, Vector &addresse
 	UpdateStates(aggr, filtered_addresses, filtered_payload, arg_idx, filtered_payload.size());
 }
 
+void RowOperations::CombineStates(RowLayout &layout, Vector &sources, Vector &targets, idx_t count) {
+	if (count == 0) {
+		return;
+	}
+
+	for (auto &aggr : layout.GetAggregates()) {
+		D_ASSERT(aggr.function.combine);
+		aggr.function.combine(sources, targets, count);
+		VectorOperations::AddInPlace(sources, aggr.payload_size, count);
+		VectorOperations::AddInPlace(targets, aggr.payload_size, count);
+	}
+}
+
+void RowOperations::FinalizeStates(RowLayout &layout, Vector &addresses, DataChunk &result, idx_t aggr_idx) {
+	auto &aggregates = layout.GetAggregates();
+	for (idx_t i = 0; i < aggregates.size(); i++) {
+		auto &target = result.data[aggr_idx + i];
+		auto &aggr = aggregates[i];
+		aggr.function.finalize(addresses, aggr.bind_data, target, result.size());
+		VectorOperations::AddInPlace(addresses, aggr.payload_size, result.size());
+	}
+}
 } // namespace duckdb
