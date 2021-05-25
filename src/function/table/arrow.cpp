@@ -21,9 +21,9 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &contex
                                                            vector<string> &input_table_names,
                                                            vector<LogicalType> &return_types, vector<string> &names) {
 
-	auto stream_factory_ptr = inputs[0].GetValue<uintptr_t>();
+	auto stream_factory_ptr = inputs[0].GetPointer();
 	unique_ptr<ArrowArrayStreamWrapper> (*stream_factory_produce)(uintptr_t stream_factory_ptr) =
-	    (unique_ptr<ArrowArrayStreamWrapper>(*)(uintptr_t stream_factory_ptr))inputs[1].GetValue<uintptr_t>();
+	    (unique_ptr<ArrowArrayStreamWrapper>(*)(uintptr_t stream_factory_ptr))inputs[1].GetPointer();
 	auto rows_per_thread = inputs[2].GetValue<uint64_t>();
 
 	auto res = make_unique<ArrowScanFunctionData>(1000000);

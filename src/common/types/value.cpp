@@ -654,6 +654,14 @@ uint16_t Value::GetValue() const {
 	return GetValueInternal<uint16_t>();
 }
 template <>
+uint32_t Value::GetValue() const {
+	return GetValueInternal<uint32_t>();
+}
+template <>
+uint64_t Value::GetValue() const {
+	return GetValueInternal<uint64_t>();
+}
+template <>
 string Value::GetValue() const {
 	return ToString();
 }
@@ -677,8 +685,8 @@ template <>
 timestamp_t Value::GetValue() const {
 	return GetValueInternal<timestamp_t>();
 }
-template <>
-uintptr_t Value::GetValue() const {
+
+uintptr_t Value::GetPointer() const {
 	D_ASSERT(type() == LogicalType::POINTER);
 	return value_.pointer;
 }
