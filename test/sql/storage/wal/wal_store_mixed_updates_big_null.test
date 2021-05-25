@@ -1,5 +1,5 @@
-# name: test/sql/storage/wal/wal_store_mixed_updates_big.test
-# description: Test updates mix with a big table
+# name: test/sql/storage/wal/wal_store_mixed_updates_big_null.test
+# description: Test updates mix with a big table and NULL values
 # group: [wal]
 
 # load the DB from disk
@@ -33,7 +33,7 @@ SELECT COUNT(*) FROM test WHERE a>0 AND a<>b
 0
 
 query I
-UPDATE test SET b=b+1 WHERE a>0 AND a%2=0
+UPDATE test SET b=NULL WHERE a>0 AND a%2=0
 ----
 500
 
@@ -47,7 +47,7 @@ SELECT COUNT(*) FROM test WHERE a>0
 1000
 
 query I
-SELECT COUNT(*) FROM test WHERE a>0 AND a<>b
+SELECT COUNT(*) FROM test WHERE a>0 AND b IS NULL
 ----
 500
 
@@ -55,10 +55,10 @@ query II nosort select_after_update
 SELECT * FROM test WHERE a>0 ORDER BY 1,2
 ----
 
-query IIIIIII
-SELECT COUNT(*), SUM(a), SUM(b), MIN(a), MAX(a), MIN(b), MAX(b) FROM test WHERE a>0
+query IIIIIIII
+SELECT COUNT(*), SUM(a), SUM(b), MIN(a), MAX(a), MIN(b), MAX(b), COUNT(b) FROM test WHERE a>0
 ----
-1000	500500	501000	1	1000	1	1001
+1000	500500	250000	1	1000	1	999	500
 
 restart
 
@@ -76,36 +76,20 @@ SELECT COUNT(*) FROM test WHERE a>0 AND a%2=0
 query I
 SELECT COUNT(*) FROM test WHERE a IS NULL OR b IS NULL
 ----
-0
-
-query I
-SELECT COUNT(*) FROM test WHERE a>0 AND a<>b
-----
 500
 
 query II nosort select_after_update
 SELECT * FROM test WHERE a>0 ORDER BY 1,2
 ----
 
-query IIIIIII
-SELECT COUNT(*), SUM(a), SUM(b), MIN(a), MAX(a), MIN(b), MAX(b) FROM test WHERE a>0
+query IIIIIIII
+SELECT COUNT(*), SUM(a), SUM(b), MIN(a), MAX(a), MIN(b), MAX(b), COUNT(b) FROM test WHERE a>0
 ----
-1000	500500	501000	1	1000	1	1001
-
-query I
-UPDATE test SET b=NULL WHERE a>0 AND a%2=1
-----
-500
-
-query IIIIIII
-SELECT COUNT(*), SUM(a), SUM(b), MIN(a), MAX(a), MIN(b), MAX(b) FROM test WHERE a>0
-----
-1000	500500	251000	1	1000	3	1001
+1000	500500	250000	1	1000	1	999	500
 
 restart
 
-query IIIIIII
-SELECT COUNT(*), SUM(a), SUM(b), MIN(a), MAX(a), MIN(b), MAX(b) FROM test WHERE a>0
+query IIIIIIII
+SELECT COUNT(*), SUM(a), SUM(b), MIN(a), MAX(a), MIN(b), MAX(b), COUNT(b) FROM test WHERE a>0
 ----
-1000	500500	251000	1	1000	3	1001
-
+1000	500500	250000	1	1000	1	999	500
