@@ -292,7 +292,7 @@ public:
 
 	void Execute() override {
 		FinalizeHT(state, radix);
-		auto total_tasks = parent.total_tasks;
+		auto total_tasks = parent.total_tasks.load();
 		auto finished_tasks = ++parent.finished_tasks;
 		// finish the whole pipeline
 		if (total_tasks == finished_tasks) {
