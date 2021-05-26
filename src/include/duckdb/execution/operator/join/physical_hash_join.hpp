@@ -89,8 +89,8 @@ public:
 
 	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
-	bool ProbePerfectHashTable(ExecutionContext &context, DataChunk &chunk, PhysicalHashJoinState *state,
-	                           JoinHashTable *ht_ptr);
+	bool ExecuteInvisibleJoin(ExecutionContext &context, DataChunk &chunk, PhysicalHashJoinState *state,
+	                          JoinHashTable *ht_ptr);
 	bool CheckRequirementsForPerfectHashJoin(JoinHashTable *ht_ptr, HashJoinGlobalState &join_global_state);
 	void BuildPerfectHashStructure(JoinHashTable *ht_ptr, JoinHTScanState &join_ht_state);
 	void FillSelectionVectorSwitch(Vector &source, SelectionVector &sel_vec, idx_t count);

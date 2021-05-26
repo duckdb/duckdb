@@ -1,0 +1,98 @@
+# name: test/sql/join/inner/test_join_perfect_hash.test
+# description: Test joins that would generate a perfect hashtable
+# group: [inner]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test1 (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test1 VALUES (11, 1), (12, 2), (13, 3)
+
+statement ok
+CREATE TABLE test2 (b INTEGER, c INTEGER);
+
+statement ok
+INSERT INTO test2 VALUES (1, 10), (2, 20), (3, 30), (1, 10), (2, 20), (3, 30), (1, 10), (2, 20), (3, 30), (1, 10), (2, 20), (3, 30), (1, 10), (2, 20), (3, 30)
+
+# simple inner join
+query III
+SELECT a, test1.b, c FROM test1, test2 WHERE test1.b = test2.b ORDER BY c;
+----
+11	1	10
+11	1	10
+11	1	10
+11	1	10
+11	1	10
+12	2	20
+12	2	20
+12	2	20
+12	2	20
+12	2	20
+13	3	30
+13	3	30
+13	3	30
+13	3	30
+13	3	30
+
+# join with duplicates
+
+#statement ok
+#INSERT INTO test1 VALUES (14, 1)
+#
+#query III
+#SELECT a, test1.b, c FROM test1, test2 WHERE test1.b = test2.b ORDER BY c;
+#----
+#11
+
+# join with probe outside build range
+#statement ok
+#INSERT INTO test2 VALUES (4, 10)
+#
+#query III
+#SELECT a, test1.b, c FROM test1, test2 WHERE test1.b = test2.b ORDER BY c;
+#----
+#11	1	10
+#14	1	10
+#11	1	10
+#14	1	10
+#11	1	10
+#14	1	10
+#11	1	10
+#14	1	10
+#11	1	10
+#14	1	10
+#12	2	20
+#12	2	20
+#12	2	20
+#12	2	20
+#12	2	20
+#13	3	30
+#13	3	30
+#13	3	30
+#13	3	30
+#13	3	30
+#
+
+# join with nulls
+#INSERT INTO test2 VALUES (4, 10)
+#query VI
+#SELECT a, test1.b, c FROM test1, test2 WHERE test1.b = test2.b ORDER BY c;
+#----
+#11	1	10
+#11	1	10
+#11	1	10
+#11	1	10
+#11	1	10
+#12	2	20
+#12	2	20
+#12	2	20
+#12	2	20
+#12	2	20
+#13	3	30
+#13	3	30
+#13	3	30
+#13	3	30
+#13	3	30

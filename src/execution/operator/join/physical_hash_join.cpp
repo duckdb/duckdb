@@ -130,10 +130,10 @@ void PhysicalHashJoin::Sink(ExecutionContext &context, GlobalOperatorState &stat
 bool PhysicalHashJoin::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> state) {
 	auto &sink = (HashJoinGlobalState &)*state;
 	// check for possible perfect hash table
-	//	if (!CheckRequirementsForPerfectHashJoin(sink.hash_table.get(), sink)) {
-	// no perfect hash table, just finish the building of the regular hash table
-	sink.hash_table->Finalize();
-	//	}
+	if (!CheckRequirementsForPerfectHashJoin(sink.hash_table.get(), sink)) {
+		// no perfect hash table, just finish the building of the regular hash table
+		sink.hash_table->Finalize();
+	}
 
 	PhysicalSink::Finalize(pipeline, context, move(state));
 	return true;
@@ -160,10 +160,10 @@ void PhysicalHashJoin::GetChunkInternal(ExecutionContext &context, DataChunk &ch
 		// empty hash table with INNER or SEMI join means empty result set
 		return;
 	}
-	// We first try a probe with a perfect hash table, otherwise we do the standard probe
-	/* 	if (IsInnerJoin(join_type) && ProbePerfectHashTable(context, chunk, state, sink.hash_table.get())) {
-	        return;
-	    } */
+	// We first try a probe with an invisible join opt, otherwise we do the standard probe
+	if (IsInnerJoin(join_type) && ExecuteInvisibleJoin(context, chunk, state, sink.hash_table.get())) {
+		return;
+	}
 	do {
 		ProbeHashTable(context, chunk, state);
 		if (chunk.size() == 0) {
@@ -237,8 +237,8 @@ void PhysicalHashJoin::ProbeHashTable(ExecutionContext &context, DataChunk &chun
 	} while (chunk.size() == 0);
 }
 
-bool PhysicalHashJoin::ProbePerfectHashTable(ExecutionContext &context, DataChunk &result,
-                                             PhysicalHashJoinState *physical_state, JoinHashTable *ht_ptr) {
+bool PhysicalHashJoin::ExecuteInvisibleJoin(ExecutionContext &context, DataChunk &result,
+                                            PhysicalHashJoinState *physical_state, JoinHashTable *ht_ptr) {
 	// We only probe if the optimized hash table has been built
 	if (!hasInvisibleJoin) {
 		return false;
@@ -292,7 +292,7 @@ bool PhysicalHashJoin::CheckRequirementsForPerfectHashJoin(JoinHashTable *ht_ptr
 }
 
 bool PhysicalHashJoin::HasDuplicates(JoinHashTable *ht_ptr) {
-	return true;
+	return false;
 }
 
 void PhysicalHashJoin::BuildPerfectHashStructure(JoinHashTable *hash_table_ptr, JoinHTScanState &join_ht_state) {

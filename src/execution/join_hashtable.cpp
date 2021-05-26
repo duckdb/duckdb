@@ -1038,7 +1038,6 @@ void JoinHashTable::TemplatedGatherResult(Vector &result, uintptr_t *pointers, c
                                           const SelectionVector &sel_vector, const idx_t count, idx_t offset) {
 	auto rdata = FlatVector::GetData<T>(result);
 	auto &mask = FlatVector::Validity(result);
-	std::vector<bool> bit_position(count, false);
 	for (idx_t i = 0; i < count; i++) {
 		auto ridx = result_vector.get_index(i);
 		auto pidx = sel_vector.get_index(i);
@@ -1047,9 +1046,6 @@ void JoinHashTable::TemplatedGatherResult(Vector &result, uintptr_t *pointers, c
 			mask.SetInvalid(ridx);
 		} else {
 			rdata[ridx] = hdata;
-			if (bit_position[ridx]) {
-			}
-			bit_position[ridx] = true;
 		}
 	}
 }
