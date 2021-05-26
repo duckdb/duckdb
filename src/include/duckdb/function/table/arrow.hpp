@@ -16,11 +16,12 @@
 namespace duckdb {
 
 struct ArrowScanFunctionData : public TableFunctionData {
-	ArrowScanFunctionData() : lines_read(0) {
+	ArrowScanFunctionData(idx_t rows_per_thread_p) : lines_read(0), rows_per_thread(rows_per_thread_p) {
 	}
 	unique_ptr<ArrowArrayStreamWrapper> stream;
 	std::atomic<idx_t> lines_read;
 	ArrowSchemaWrapper schema_root;
+	idx_t rows_per_thread;
 };
 
 struct ArrowScanState : public FunctionOperatorData {
@@ -35,8 +36,7 @@ struct ArrowScanState : public FunctionOperatorData {
 struct ParallelArrowScanState : public ParallelState {
 	ParallelArrowScanState() {
 	}
-	std::mutex lock;
-	idx_t current_chunk_idx = 0;
+	bool finished = false;
 };
 
 struct ArrowTableFunction {
