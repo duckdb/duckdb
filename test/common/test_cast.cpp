@@ -109,15 +109,15 @@ TEST_CASE("Test casting to int8_t", "[cast]") {
 	TestNumericCast<int32_t, int8_t>(working_values_int32, broken_values_int32);
 	// int64_t -> int8_t
 	vector<int64_t> working_values_int64 = {10, -10, 127, -128};
-	vector<int64_t> broken_values_int64 = {128, -129, 10000000000, -10000000000};
+	vector<int64_t> broken_values_int64 = {128, -129, 10000000000LL, -10000000000LL};
 	TestNumericCast<int64_t, int8_t>(working_values_int64, broken_values_int64);
 	// float -> int8_t
 	vector<float> working_values_float = {10, -10, 127, -128, 1.3f, -2.7f};
-	vector<float> broken_values_float = {128, -129, 10000000000, -10000000000, 1e30f, -1e30f};
+	vector<float> broken_values_float = {128, -129, 10000000000.0f, -10000000000.0f, 1e30f, -1e30f};
 	TestNumericCast<float, int8_t>(working_values_float, broken_values_float);
 	// double -> int8_t
 	vector<double> working_values_double = {10, -10, 127, -128, 1.3, -2.7};
-	vector<double> broken_values_double = {128, -129, 10000000000, -10000000000, 1e100, -1e100};
+	vector<double> broken_values_double = {128, -129, 10000000000.0, -10000000000.0, 1e100, -1e100};
 	TestNumericCast<double, int8_t>(working_values_double, broken_values_double);
 	// string -> int8_t
 	vector<string> working_values_str = {"10",  "+10", "-10",   "127", "-128", "1.3",   "1e2",
@@ -148,7 +148,7 @@ TEST_CASE("Test casting to int16_t", "[cast]") {
 	TestNumericCast<int32_t, int16_t>(working_values_int32, broken_values_int32);
 	// int64_t -> int16_t
 	vector<int64_t> working_values_int64 = {10, -10, 127, -127, 32767, -32768};
-	vector<int64_t> broken_values_int64 = {32768, -32769, 10000000000, -10000000000};
+	vector<int64_t> broken_values_int64 = {32768, -32769, 10000000000LL, -10000000000LL};
 	TestNumericCast<int64_t, int16_t>(working_values_int64, broken_values_int64);
 	// float -> int16_t
 	vector<float> working_values_float = {10.0f, -10.0f, 32767.0f, -32768.0f, 1.3f, -2.7f};
@@ -156,7 +156,7 @@ TEST_CASE("Test casting to int16_t", "[cast]") {
 	TestNumericCast<float, int16_t>(working_values_float, broken_values_float);
 	// double -> int16_t
 	vector<double> working_values_double = {10, -10, 32767, -32768, 1.3, -2.7};
-	vector<double> broken_values_double = {32768, -32769, 10000000000, -10000000000, 1e100, -1e100};
+	vector<double> broken_values_double = {32768, -32769, 10000000000.0, -10000000000.0, 1e100, -1e100};
 	TestNumericCast<double, int16_t>(working_values_double, broken_values_double);
 	// string -> int16_t
 	vector<string> working_values_str = {"10", "-10", "32767", "-32768", "1.3", "3e4", "250e2", "3e+4", "3e0", "30e-1"};
@@ -172,7 +172,7 @@ TEST_CASE("Test casting to int16_t", "[cast]") {
 
 TEST_CASE("Test casting to int32_t", "[cast]") {
 	// int64_t -> int32_t
-	vector<int64_t> working_values_int64 = {10, -10, 127, -127, 32767, -32768, 2147483647, -2147483648};
+	vector<int64_t> working_values_int64 = {10, -10, 127, -127, 32767, -32768, 2147483647LL, -2147483648LL};
 	vector<int64_t> broken_values_int64 = {2147483648LL, -2147483649LL, 10000000000LL, -10000000000LL};
 	TestNumericCast<int64_t, int32_t>(working_values_int64, broken_values_int64);
 	// float -> int32_t
