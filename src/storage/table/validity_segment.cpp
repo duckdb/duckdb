@@ -66,6 +66,7 @@ idx_t ValiditySegment::Append(SegmentStatistics &stats, VectorData &data, idx_t 
 
 void ValiditySegment::Scan(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset) {
 	// FIXME: this should be optimized and use shifts/masks to copy multiple values at once
+// #if STANDARD_VECTOR_SIZE >= 64
 	idx_t base_tuple = start;
 	ValidityMask source_mask(state.primary_handle->node->buffer);
 	auto &target = FlatVector::Validity(result);
@@ -86,7 +87,7 @@ void ValiditySegment::RevertAppend(idx_t start_row) {
 		idx_t byte_pos = start_bit / 8;
 		idx_t bit_start = byte_pos * 8;
 		idx_t bit_end = (byte_pos + 1) * 8;
-		ValidityMask mask(handle->node->buffer + byte_pos);
+		ValidityMask mask((validity_t *)handle->node->buffer + byte_pos);
 		for (idx_t i = start_bit; i < bit_end; i++) {
 			mask.SetValid(i - bit_start);
 		}

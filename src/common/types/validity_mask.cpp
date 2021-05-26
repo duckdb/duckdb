@@ -2,20 +2,10 @@
 
 namespace duckdb {
 
-ValidityData::ValidityData(idx_t count) {
-	auto entry_count = EntryCount(count);
-	owned_data = unique_ptr<validity_t[]>(new validity_t[entry_count]);
-	for (idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
-		owned_data[entry_idx] = MAX_ENTRY;
-	}
+ValidityData::ValidityData(idx_t count) : TemplatedValidityData(count) {
 }
-ValidityData::ValidityData(const ValidityMask &original, idx_t count) {
-	D_ASSERT(original.validity_mask);
-	auto entry_count = EntryCount(count);
-	owned_data = unique_ptr<validity_t[]>(new validity_t[entry_count]);
-	for (idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
-		owned_data[entry_idx] = original.validity_mask[entry_idx];
-	}
+ValidityData::ValidityData(const ValidityMask &original, idx_t count)
+    : TemplatedValidityData(original.GetData(), count) {
 }
 
 void ValidityMask::Combine(const ValidityMask &other, idx_t count) {
@@ -54,13 +44,6 @@ string ValidityMask::ToString(idx_t count) const {
 	}
 	result += "]";
 	return result;
-}
-
-bool ValidityMask::IsMaskSet() const {
-	if (validity_mask) {
-		return true;
-	}
-	return false;
 }
 
 void ValidityMask::Resize(idx_t old_size, idx_t new_size) {
