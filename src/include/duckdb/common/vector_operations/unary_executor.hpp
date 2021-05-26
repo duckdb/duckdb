@@ -18,7 +18,7 @@ namespace duckdb {
 
 struct UnaryOperatorWrapper {
 	template <class FUNC, class OP, class INPUT_TYPE, class RESULT_TYPE>
-	static inline RESULT_TYPE Operation(FUNC fun, INPUT_TYPE input, ValidityMask &mask, idx_t idx) {
+	static inline RESULT_TYPE Operation(FUNC /*fun*/, INPUT_TYPE input, ValidityMask & /*mask*/, idx_t /*idx*/) {
 		return OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input);
 	}
 
@@ -29,7 +29,7 @@ struct UnaryOperatorWrapper {
 
 struct UnaryLambdaWrapper {
 	template <class FUNC, class OP, class INPUT_TYPE, class RESULT_TYPE>
-	static inline RESULT_TYPE Operation(FUNC fun, INPUT_TYPE input, ValidityMask &mask, idx_t idx) {
+	static inline RESULT_TYPE Operation(FUNC fun, INPUT_TYPE input, ValidityMask &/*mask*/, idx_t /*idx*/) {
 		return fun(input);
 	}
 

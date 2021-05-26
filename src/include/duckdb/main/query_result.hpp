@@ -117,7 +117,7 @@ private:
 			Next();
 			return *this;
 		}
-		bool operator!=(const QueryResultIterator &other) const {
+		bool operator!=(const QueryResultIterator & /*other*/) const {
 			return result->iterator_chunk && result->iterator_chunk->ColumnCount() > 0;
 		}
 		const QueryResultRow &operator*() const {

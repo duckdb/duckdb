@@ -18,14 +18,15 @@ namespace duckdb {
 
 struct DefaultNullCheckOperator {
 	template <class LEFT_TYPE, class RIGHT_TYPE>
-	static inline bool Operation(LEFT_TYPE left, RIGHT_TYPE right) {
+	static inline bool Operation(LEFT_TYPE /*left*/, RIGHT_TYPE /*right*/) {
 		return false;
 	}
 };
 
 struct BinaryStandardOperatorWrapper {
 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
-	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, ValidityMask &mask, idx_t idx) {
+	static inline RESULT_TYPE Operation(FUNC /*fun*/, LEFT_TYPE left, RIGHT_TYPE right, ValidityMask & /*mask*/,
+	                                    idx_t /*idx*/) {
 		return OP::template Operation<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(left, right);
 	}
 
@@ -36,7 +37,8 @@ struct BinaryStandardOperatorWrapper {
 
 struct BinarySingleArgumentOperatorWrapper {
 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
-	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, ValidityMask &mask, idx_t idx) {
+	static inline RESULT_TYPE Operation(FUNC /*fun*/, LEFT_TYPE left, RIGHT_TYPE right, ValidityMask & /*mask*/,
+	                                    idx_t /*idx*/) {
 		return OP::template Operation<LEFT_TYPE>(left, right);
 	}
 
@@ -47,7 +49,8 @@ struct BinarySingleArgumentOperatorWrapper {
 
 struct BinaryLambdaWrapper {
 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
-	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, ValidityMask &mask, idx_t idx) {
+	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, ValidityMask & /*mask*/,
+	                                    idx_t /*idx*/) {
 		return fun(left, right);
 	}
 

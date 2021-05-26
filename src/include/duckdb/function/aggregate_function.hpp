@@ -10,9 +10,9 @@
 
 #include "duckdb/common/vector_operations/aggregate_executor.hpp"
 #include "duckdb/function/function.hpp"
+#include "duckdb/planner/expression.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/statistics/node_statistics.hpp"
-#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
 
@@ -154,14 +154,14 @@ public:
 	}
 
 	template <class STATE, class OP>
-	static void NullaryScatterUpdate(Vector inputs[], FunctionData *bind_data, idx_t input_count, Vector &states,
+	static void NullaryScatterUpdate(Vector * /*inputs[]*/, FunctionData *bind_data, idx_t input_count, Vector &states,
 	                                 idx_t count) {
 		D_ASSERT(input_count == 0);
 		AggregateExecutor::NullaryScatter<STATE, OP>(states, bind_data, count);
 	}
 
 	template <class STATE, class OP>
-	static void NullaryUpdate(Vector inputs[], FunctionData *bind_data, idx_t input_count, data_ptr_t state,
+	static void NullaryUpdate(Vector * /*inputs[]*/, FunctionData *bind_data, idx_t input_count, data_ptr_t state,
 	                          idx_t count) {
 		D_ASSERT(input_count == 0);
 		AggregateExecutor::NullaryUpdate<STATE, OP>(state, bind_data, count);

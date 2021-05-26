@@ -148,11 +148,11 @@ public:
 	virtual idx_t GetAvailableMemory();
 
 	//! registers a sub-file system to handle certain file name prefixes, e.g. http:// etc.
-	virtual void RegisterSubSystem(unique_ptr<FileSystem> sub_fs) {
+	virtual void RegisterSubSystem(unique_ptr<FileSystem> /*sub_fs*/) {
 		throw NotImplementedException("Can't register a sub system on a non-virtual file system");
 	}
 
-	virtual bool CanHandleFile(const string &fpath) {
+	virtual bool CanHandleFile(const string & /*fpath*/) {
 		//! Whether or not a sub-system can handle a specific file path
 		return false;
 	}

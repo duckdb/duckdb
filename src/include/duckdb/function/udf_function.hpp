@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/aggregate_function.hpp"
+#include "duckdb/function/scalar_function.hpp"
 
 namespace duckdb {
 
@@ -133,24 +133,24 @@ private:
 	//-------------------------------- Templated functions --------------------------------//
 
 	template <typename TR, typename TA>
-	static scalar_function_t CreateUnaryFunction(const string &name, TR (*udf_func)(TA)) {
-		scalar_function_t udf_function = [=](DataChunk &input, ExpressionState &state, Vector &result) -> void {
+	static scalar_function_t CreateUnaryFunction(const string & /*name*/, TR (*udf_func)(TA)) {
+		scalar_function_t udf_function = [=](DataChunk &input, ExpressionState & /*state*/, Vector &result) -> void {
 			UnaryExecutor::Execute<TA, TR>(input.data[0], result, input.size(), udf_func);
 		};
 		return udf_function;
 	}
 
 	template <typename TR, typename TA, typename TB>
-	static scalar_function_t CreateBinaryFunction(const string &name, TR (*udf_func)(TA, TB)) {
-		scalar_function_t udf_function = [=](DataChunk &input, ExpressionState &state, Vector &result) -> void {
+	static scalar_function_t CreateBinaryFunction(const string & /*name*/, TR (*udf_func)(TA, TB)) {
+		scalar_function_t udf_function = [=](DataChunk &input, ExpressionState & /*state*/, Vector &result) -> void {
 			BinaryExecutor::Execute<TA, TB, TR>(input.data[0], input.data[1], result, input.size(), udf_func);
 		};
 		return udf_function;
 	}
 
 	template <typename TR, typename TA, typename TB, typename TC>
-	static scalar_function_t CreateTernaryFunction(const string &name, TR (*udf_func)(TA, TB, TC)) {
-		scalar_function_t udf_function = [=](DataChunk &input, ExpressionState &state, Vector &result) -> void {
+	static scalar_function_t CreateTernaryFunction(const string & /*name*/, TR (*udf_func)(TA, TB, TC)) {
+		scalar_function_t udf_function = [=](DataChunk &input, ExpressionState & /*state*/, Vector &result) -> void {
 			TernaryExecutor::Execute<TA, TB, TC, TR>(input.data[0], input.data[1], input.data[2], result, input.size(),
 			                                         udf_func);
 		};
@@ -158,17 +158,17 @@ private:
 	}
 
 	template <typename TR, typename... Args>
-	static scalar_function_t CreateUnaryFunction(const string &name, TR (*udf_func)(Args...)) {
+	static scalar_function_t CreateUnaryFunction(const string & /*name*/, TR /*(*udf_func)(Args...)*/) {
 		throw std::runtime_error("Incorrect number of arguments for unary function");
 	}
 
 	template <typename TR, typename... Args>
-	static scalar_function_t CreateBinaryFunction(const string &name, TR (*udf_func)(Args...)) {
+	static scalar_function_t CreateBinaryFunction(const string & /*name*/, TR /*(*udf_func)(Args...)*/) {
 		throw std::runtime_error("Incorrect number of arguments for binary function");
 	}
 
 	template <typename TR, typename... Args>
-	static scalar_function_t CreateTernaryFunction(const string &name, TR (*udf_func)(Args...)) {
+	static scalar_function_t CreateTernaryFunction(const string & /*name*/, TR /*(*udf_func)(Args...)*/) {
 		throw std::runtime_error("Incorrect number of arguments for ternary function");
 	}
 
@@ -211,14 +211,14 @@ private:
 	//-------------------------------- Argumented functions --------------------------------//
 
 	template <typename TR, typename... Args>
-	static scalar_function_t CreateUnaryFunction(const string &name, vector<LogicalType> args, LogicalType ret_type,
-	                                             TR (*udf_func)(Args...)) {
+	static scalar_function_t CreateUnaryFunction(const string & /*name*/, vector<LogicalType> /*args*/,
+	                                             LogicalType /*ret_type*/, TR /*(*udf_func)(Args...)*/) {
 		throw std::runtime_error("Incorrect number of arguments for unary function");
 	}
 
 	template <typename TR, typename TA>
-	static scalar_function_t CreateUnaryFunction(const string &name, vector<LogicalType> args, LogicalType ret_type,
-	                                             TR (*udf_func)(TA)) {
+	static scalar_function_t CreateUnaryFunction(const string & /*name*/, vector<LogicalType> args,
+	                                             LogicalType /*ret_type*/, TR (*udf_func)(TA)) {
 		if (args.size() != 1) {
 			throw std::runtime_error("The number of LogicalType arguments (\"args\") should be 1!");
 		}
@@ -226,21 +226,21 @@ private:
 			throw std::runtime_error("The first arguments don't match!");
 		}
 
-		scalar_function_t udf_function = [=](DataChunk &input, ExpressionState &state, Vector &result) -> void {
+		scalar_function_t udf_function = [=](DataChunk &input, ExpressionState & /*state*/, Vector &result) -> void {
 			UnaryExecutor::Execute<TA, TR>(input.data[0], result, input.size(), udf_func);
 		};
 		return udf_function;
 	}
 
 	template <typename TR, typename... Args>
-	static scalar_function_t CreateBinaryFunction(const string &name, vector<LogicalType> args, LogicalType ret_type,
-	                                              TR (*udf_func)(Args...)) {
+	static scalar_function_t CreateBinaryFunction(const string & /*name*/, vector<LogicalType> /*args*/,
+	                                              LogicalType /*ret_type*/, TR /*(*udf_func)(Args...)*/) {
 		throw std::runtime_error("Incorrect number of arguments for binary function");
 	}
 
 	template <typename TR, typename TA, typename TB>
-	static scalar_function_t CreateBinaryFunction(const string &name, vector<LogicalType> args, LogicalType ret_type,
-	                                              TR (*udf_func)(TA, TB)) {
+	static scalar_function_t CreateBinaryFunction(const string & /*name*/, vector<LogicalType> args,
+	                                              LogicalType /*ret_type*/, TR (*udf_func)(TA, TB)) {
 		if (args.size() != 2) {
 			throw std::runtime_error("The number of LogicalType arguments (\"args\") should be 2!");
 		}
@@ -251,21 +251,21 @@ private:
 			throw std::runtime_error("The second arguments don't match!");
 		}
 
-		scalar_function_t udf_function = [=](DataChunk &input, ExpressionState &state, Vector &result) {
+		scalar_function_t udf_function = [=](DataChunk &input, ExpressionState & /*state*/, Vector &result) {
 			BinaryExecutor::Execute<TA, TB, TR>(input.data[0], input.data[1], result, input.size(), udf_func);
 		};
 		return udf_function;
 	}
 
 	template <typename TR, typename... Args>
-	static scalar_function_t CreateTernaryFunction(const string &name, vector<LogicalType> args, LogicalType ret_type,
-	                                               TR (*udf_func)(Args...)) {
+	static scalar_function_t CreateTernaryFunction(const string & /*name*/, vector<LogicalType> /*args*/,
+	                                               LogicalType /*ret_type*/, TR /*(*udf_func)(Args...)*/) {
 		throw std::runtime_error("Incorrect number of arguments for ternary function");
 	}
 
 	template <typename TR, typename TA, typename TB, typename TC>
-	static scalar_function_t CreateTernaryFunction(const string &name, vector<LogicalType> args, LogicalType ret_type,
-	                                               TR (*udf_func)(TA, TB, TC)) {
+	static scalar_function_t CreateTernaryFunction(const string & /*name*/, vector<LogicalType> args,
+	                                               LogicalType /*ret_type*/, TR (*udf_func)(TA, TB, TC)) {
 		if (args.size() != 3) {
 			throw std::runtime_error("The number of LogicalType arguments (\"args\") should be 3!");
 		}
@@ -279,7 +279,7 @@ private:
 			throw std::runtime_error("The second arguments don't match!");
 		}
 
-		scalar_function_t udf_function = [=](DataChunk &input, ExpressionState &state, Vector &result) -> void {
+		scalar_function_t udf_function = [=](DataChunk &input, ExpressionState & /*state*/, Vector &result) -> void {
 			TernaryExecutor::Execute<TA, TB, TC, TR>(input.data[0], input.data[1], input.data[2], result, input.size(),
 			                                         udf_func);
 		};

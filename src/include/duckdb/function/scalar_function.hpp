@@ -95,19 +95,19 @@ private:
 	}
 
 public:
-	static void NopFunction(DataChunk &input, ExpressionState &state, Vector &result) {
+	static void NopFunction(DataChunk &input, ExpressionState & /*state*/, Vector &result) {
 		D_ASSERT(input.ColumnCount() >= 1);
 		result.Reference(input.data[0]);
 	}
 
 	template <class TA, class TR, class OP>
-	static void UnaryFunction(DataChunk &input, ExpressionState &state, Vector &result) {
+	static void UnaryFunction(DataChunk &input, ExpressionState & /*state*/, Vector &result) {
 		D_ASSERT(input.ColumnCount() >= 1);
 		UnaryExecutor::Execute<TA, TR, OP>(input.data[0], result, input.size());
 	}
 
 	template <class TA, class TB, class TR, class OP>
-	static void BinaryFunction(DataChunk &input, ExpressionState &state, Vector &result) {
+	static void BinaryFunction(DataChunk &input, ExpressionState & /*state*/, Vector &result) {
 		D_ASSERT(input.ColumnCount() == 2);
 		BinaryExecutor::ExecuteStandard<TA, TB, TR, OP>(input.data[0], input.data[1], result, input.size());
 	}

@@ -54,10 +54,10 @@ public:
 		return make_unique<AllocatedData>(*this, AllocateData(size));
 	}
 
-	static data_ptr_t DefaultAllocate(PrivateAllocatorData *private_data, idx_t size) {
+	static data_ptr_t DefaultAllocate(PrivateAllocatorData * /*private_data*/, idx_t size) {
 		return new data_t[size];
 	}
-	static void DefaultFree(PrivateAllocatorData *private_data, data_ptr_t pointer) {
+	static void DefaultFree(PrivateAllocatorData * /*private_data*/, data_ptr_t pointer) {
 		delete[] pointer;
 	}
 	static Allocator &Get(ClientContext &context);

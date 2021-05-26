@@ -124,7 +124,7 @@ public:
 		throw NotImplementedException("Unimplemented template type for Value::GetValue");
 	}
 	template <class T>
-	static Value CreateValue(T value) {
+	static Value CreateValue(T /*value*/) {
 		throw NotImplementedException("Unimplemented template type for Value::CreateValue");
 	}
 	// Returns the internal value. Unlike GetValue(), this method does not perform casting, and assumes T matches the
@@ -184,7 +184,7 @@ public:
 	static bool DoubleIsValid(double value);
 
 	template <class T>
-	static bool IsValid(T value) {
+	static bool IsValid(T /*value*/) {
 		return true;
 	}
 

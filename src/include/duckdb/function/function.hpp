@@ -39,7 +39,7 @@ struct FunctionData {
 	virtual unique_ptr<FunctionData> Copy() {
 		return make_unique<FunctionData>();
 	};
-	virtual bool Equals(FunctionData &other) {
+	virtual bool Equals(FunctionData & /*other*/) {
 		return true;
 	}
 	static bool Equals(FunctionData *left, FunctionData *right) {
