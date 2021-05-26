@@ -95,6 +95,7 @@ public:
 	static shared_ptr<ColumnData> Deserialize(DataTableInfo &info, idx_t column_index, idx_t start_row,
 	                                          Deserializer &source, const LogicalType &type);
 
+	virtual void GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, vector<vector<Value>> &result);
 	virtual void Verify(RowGroup &parent);
 
 protected:

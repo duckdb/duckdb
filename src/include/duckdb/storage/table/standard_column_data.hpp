@@ -49,6 +49,8 @@ public:
 	static shared_ptr<ColumnData> Deserialize(DataTableInfo &info, idx_t column_index, idx_t start_row,
 	                                          Deserializer &source, const LogicalType &type);
 
+	void GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, vector<vector<Value>> &result) override;
+
 private:
 	template <bool SCAN_COMMITTED, bool ALLOW_UPDATES>
 	void TemplatedScan(Transaction *transaction, ColumnScanState &state, Vector &result);

@@ -15,8 +15,6 @@ namespace duckdb {
 
 constexpr const idx_t RowGroup::ROW_GROUP_VECTOR_COUNT;
 constexpr const idx_t RowGroup::ROW_GROUP_SIZE;
-constexpr const idx_t RowGroup::ROW_GROUP_LAYER_COUNT;
-constexpr const idx_t RowGroup::ROW_GROUP_LAYER_SIZE;
 
 RowGroup::RowGroup(DatabaseInstance &db, DataTableInfo &table_info, idx_t start, idx_t count)
     : SegmentBase(start, count), db(db), table_info(table_info) {
@@ -616,6 +614,18 @@ RowGroupPointer RowGroup::Deserialize(Deserializer &source, const vector<ColumnD
 	return result;
 }
 
+//===--------------------------------------------------------------------===//
+// GetStorageInfo
+//===--------------------------------------------------------------------===//
+void RowGroup::GetStorageInfo(idx_t row_group_index, vector<vector<Value>> &result) {
+	for(idx_t col_idx = 0; col_idx < columns.size(); col_idx++) {
+		columns[col_idx]->GetStorageInfo(row_group_index, { col_idx }, result);
+	}
+}
+
+//===--------------------------------------------------------------------===//
+// Version Delete Information
+//===--------------------------------------------------------------------===//
 class VersionDeleteState {
 public:
 	VersionDeleteState(RowGroup &info, Transaction &transaction, DataTable *table, idx_t base_row)

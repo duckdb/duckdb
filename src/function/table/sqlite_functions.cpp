@@ -13,27 +13,12 @@ void BuiltinFunctions::RegisterSQLiteFunctions() {
 	PragmaFunctionPragma::RegisterFunction(*this);
 	PragmaCollations::RegisterFunction(*this);
 	PragmaTableInfo::RegisterFunction(*this);
+	PragmaStorageInfo::RegisterFunction(*this);
 	SQLiteMaster::RegisterFunction(*this);
 	PragmaDatabaseSize::RegisterFunction(*this);
 	PragmaDatabaseList::RegisterFunction(*this);
 	PragmaLastProfilingOutput::RegisterFunction(*this);
 	PragmaDetailedProfilingOutput::RegisterFunction(*this);
-
-	// CreateViewInfo info;
-	// info.schema = DEFAULT_SCHEMA;
-	// info.view_name = "sqlite_master";
-	// info.on_conflict = OnCreateConflict::REPLACE;
-
-	// auto select = make_unique<SelectNode>();
-	// select->select_list.push_back(make_unique<StarExpression>());
-	// vector<unique_ptr<ParsedExpression>> children;
-
-	// auto function = make_unique<FunctionExpression>(DEFAULT_SCHEMA, "sqlite_master", children);
-	// auto function_expr = make_unique<TableFunctionRef>();
-	// function_expr->function = move(function);
-	// select->from_table = move(function_expr);
-	// info.query = move(select);
-	//	catalog.CreateView(transaction, &info);
 }
 
 } // namespace duckdb

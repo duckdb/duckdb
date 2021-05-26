@@ -512,6 +512,65 @@ shared_ptr<ColumnData> ColumnData::Deserialize(DataTableInfo &info, idx_t column
 	return StandardColumnData::Deserialize(info, column_index, start_row, source, type);
 }
 
+
+void ColumnData::GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, vector<vector<Value>> &result) {
+	D_ASSERT(!col_path.empty());
+
+	// convert the column path to a string
+	string col_path_str = "[";
+	for(idx_t i = 0; i < col_path.size(); i++) {
+		if (i > 0) {
+			col_path_str += ", ";
+		}
+		col_path_str += to_string(col_path[i]);
+	}
+	col_path_str += "]";
+
+	// iterate over the segments
+	idx_t segment_idx = 0;
+	auto segment = (ColumnSegment *) data.GetRootSegment();
+	while(segment) {
+		vector<Value> column_info;
+		// row_group_id
+		column_info.push_back(Value::BIGINT(row_group_index));
+		// column_id
+		column_info.push_back(Value::BIGINT(col_path[0]));
+		// column_path
+		column_info.push_back(Value(col_path_str));
+		// segment_id
+		column_info.push_back(Value::BIGINT(segment_idx));
+		// segment_type
+		column_info.push_back(Value(type.ToString()));
+		// start
+		column_info.push_back(Value::BIGINT(segment->start));
+		// count
+		column_info.push_back(Value::BIGINT(segment->count));
+		// stats
+		column_info.push_back(Value(segment->stats.statistics ? segment->stats.statistics->ToString() : string("No Stats")));
+		// has_updates
+		column_info.push_back(Value::BOOLEAN(updates ? true : false));
+		// persistent
+		// block_id
+		// block_offset
+		if (segment->segment_type == ColumnSegmentType::PERSISTENT) {
+			auto &persistent = (PersistentSegment &) *segment;
+			column_info.push_back(Value::BOOLEAN(true));
+			column_info.push_back(Value::BIGINT(persistent.block_id));
+			column_info.push_back(Value::BIGINT(persistent.offset));
+		} else {
+			column_info.push_back(Value::BOOLEAN(false));
+			column_info.push_back(Value());
+			column_info.push_back(Value());
+		}
+
+		result.push_back(move(column_info));
+
+		segment_idx++;
+		segment = (ColumnSegment *) segment->next.get();
+	}
+
+}
+
 void ColumnData::Verify(RowGroup &parent) {
 #ifdef DEBUG
 	D_ASSERT(this->start == parent.start);

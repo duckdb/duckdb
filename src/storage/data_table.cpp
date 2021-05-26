@@ -1072,4 +1072,22 @@ void DataTable::CommitDropTable() {
 	}
 }
 
+//===--------------------------------------------------------------------===//
+// GetStorageInfo
+//===--------------------------------------------------------------------===//
+vector<vector<Value>> DataTable::GetStorageInfo() {
+	vector<vector<Value>> result;
+
+	auto row_group = (RowGroup *) row_groups->GetRootSegment();
+	idx_t row_group_index = 0;
+	while(row_group) {
+		row_group->GetStorageInfo(row_group_index, result);
+		row_group_index++;
+
+		row_group = (RowGroup *) row_group->next.get();
+	}
+
+	return result;
+}
+
 } // namespace duckdb

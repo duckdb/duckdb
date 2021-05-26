@@ -210,6 +210,7 @@ public:
 	//! Appends an empty row_group to the table
 	void AppendRowGroup(idx_t start_row);
 
+	vector<vector<Value>> GetStorageInfo();
 private:
 	//! Verify constraints with a chunk from the Append containing all columns of the table
 	void VerifyAppendConstraints(TableCatalogEntry &table, DataChunk &chunk);

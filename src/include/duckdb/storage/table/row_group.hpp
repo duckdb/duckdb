@@ -34,11 +34,8 @@ public:
 	friend class VersionDeleteState;
 
 public:
-	static constexpr const idx_t ROW_GROUP_VECTOR_COUNT = 100;
+	static constexpr const idx_t ROW_GROUP_VECTOR_COUNT = 120;
 	static constexpr const idx_t ROW_GROUP_SIZE = STANDARD_VECTOR_SIZE * ROW_GROUP_VECTOR_COUNT;
-
-	static constexpr const idx_t ROW_GROUP_LAYER_COUNT = 10;
-	static constexpr const idx_t ROW_GROUP_LAYER_SIZE = ROW_GROUP_SIZE / ROW_GROUP_LAYER_COUNT;
 
 public:
 	RowGroup(DatabaseInstance &db, DataTableInfo &table_info, idx_t start, idx_t count);
@@ -124,6 +121,8 @@ public:
 
 	void MergeStatistics(idx_t column_idx, BaseStatistics &other);
 	unique_ptr<BaseStatistics> GetStatistics(idx_t column_idx);
+
+	void GetStorageInfo(idx_t row_group_index, vector<vector<Value>> &result);
 
 	void Verify();
 
