@@ -583,9 +583,9 @@ void RowGroup::Serialize(RowGroupPointer &pointer, Serializer &serializer) {
 	for (auto &stats : pointer.statistics) {
 		stats->Serialize(serializer);
 	}
-	for (auto &pointer : pointer.data_pointers) {
-		serializer.Write<block_id_t>(pointer.block_id);
-		serializer.Write<uint64_t>(pointer.offset);
+	for (auto &data_pointer : pointer.data_pointers) {
+		serializer.Write<block_id_t>(data_pointer.block_id);
+		serializer.Write<uint64_t>(data_pointer.offset);
 	}
 	CheckpointDeletes(pointer.versions.get(), serializer);
 }
