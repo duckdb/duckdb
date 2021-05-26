@@ -49,7 +49,6 @@ duckdb_unregister <- function(conn, name) {
 #' @return These functions are called for their side effect.
 #' @export
 duckdb_register_arrow <- function(conn, name, arrow_scannable) {
-  skip_if_not_installed("arrow", "4.0.1")
   stopifnot(dbIsValid(conn))
 
     # create some R functions to pass to c-land
