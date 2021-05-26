@@ -8,8 +8,8 @@ PerfectAggregateHashTable::PerfectAggregateHashTable(BufferManager &buffer_manag
                                                      vector<LogicalType> payload_types_p,
                                                      vector<AggregateObject> aggregate_objects_p,
                                                      vector<Value> group_minima_p, vector<idx_t> required_bits_p)
-    : BaseAggregateHashTable(buffer_manager, move(group_types_p), move(payload_types_p), move(aggregate_objects_p)),
-      required_bits(move(required_bits_p)), total_required_bits(0), group_minima(move(group_minima_p)) {
+    : BaseAggregateHashTable(buffer_manager, move(payload_types_p)), required_bits(move(required_bits_p)),
+      total_required_bits(0), group_minima(move(group_minima_p)) {
 	addresses.Initialize(LogicalType::POINTER);
 
 	for (auto &group_bits : required_bits) {
@@ -18,23 +18,35 @@ PerfectAggregateHashTable::PerfectAggregateHashTable(BufferManager &buffer_manag
 	// the total amount of groups we allocate space for is 2^required_bits
 	total_groups = 1 << total_required_bits;
 	// we don't need to store the groups in a perfect hash table, since the group keys can be deduced by their location
-	grouping_columns = layout.ColumnCount();
-	layout.Initialize(layout.GetAggregates());
+	grouping_columns = group_types_p.size();
+	layout.Initialize(move(aggregate_objects_p));
 	tuple_size = layout.GetRowWidth();
 
 	// allocate and null initialize the data
 	owned_data = unique_ptr<data_t[]>(new data_t[tuple_size * total_groups]);
 	data = owned_data.get();
 
+	// set up the empty payloads for every tuple, and initialize the "occupied" flag to false
 	group_is_set = unique_ptr<bool[]>(new bool[total_groups]);
 	memset(group_is_set.get(), 0, total_groups * sizeof(bool));
 
-	// set up the empty payloads for every tuple, and initialize the "occupied" flag to false
+	// loop over the hash table
+	// and call the initialize method for each of the aggregates
+	// Note that simple copying is not correct because the state may not be POD.
+	auto data_pointers = FlatVector::GetData<data_ptr_t>(addresses);
+	idx_t count = 0;
+
+	// iterate over all initialised slots of the hash table
 	data_ptr_t payload_ptr = data;
 	for (idx_t i = 0; i < total_groups; i++) {
-		memcpy(payload_ptr, empty_payload_data.get(), tuple_size);
+		data_pointers[count++] = payload_ptr;
+		if (count == STANDARD_VECTOR_SIZE) {
+			RowOperations::InitializeStates(layout, addresses, FlatVector::INCREMENTAL_SELECTION_VECTOR, count);
+			count = 0;
+		}
 		payload_ptr += tuple_size;
 	}
+	RowOperations::InitializeStates(layout, addresses, FlatVector::INCREMENTAL_SELECTION_VECTOR, count);
 }
 
 PerfectAggregateHashTable::~PerfectAggregateHashTable() {
@@ -136,11 +148,14 @@ void PerfectAggregateHashTable::Combine(PerfectAggregateHashTable &other) {
 	Vector target_addresses(LogicalType::POINTER);
 	auto source_addresses_ptr = FlatVector::GetData<data_ptr_t>(source_addresses);
 	auto target_addresses_ptr = FlatVector::GetData<data_ptr_t>(target_addresses);
+	auto reinit_addresses_ptr = FlatVector::GetData<data_ptr_t>(addresses);
 
 	// iterate over all entries of both hash tables and call combine for all entries that can be combined
 	data_ptr_t source_ptr = other.data;
 	data_ptr_t target_ptr = data;
 	idx_t combine_count = 0;
+	idx_t reinit_count = 0;
+	const auto &reinit_sel = FlatVector::INCREMENTAL_SELECTION_VECTOR;
 	for (idx_t i = 0; i < total_groups; i++) {
 		auto has_entry_source = other.group_is_set[i];
 		// we only have any work to do if the source has an entry for this group
@@ -159,6 +174,12 @@ void PerfectAggregateHashTable::Combine(PerfectAggregateHashTable &other) {
 				group_is_set[i] = true;
 				// only source has an entry for this group: we can just memcpy it over
 				memcpy(target_ptr, source_ptr, tuple_size);
+				// we need to properly reinitialise the memory here.
+				reinit_addresses_ptr[reinit_count++] = source_ptr;
+				if (reinit_count == STANDARD_VECTOR_SIZE) {
+					RowOperations::InitializeStates(layout, addresses, reinit_sel, reinit_count);
+					reinit_count = 0;
+				}
 				// we clear this entry in the other HT as we "consume" the entry here
 				other.group_is_set[i] = false;
 			}
@@ -167,6 +188,7 @@ void PerfectAggregateHashTable::Combine(PerfectAggregateHashTable &other) {
 		target_ptr += tuple_size;
 	}
 	RowOperations::CombineStates(layout, source_addresses, target_addresses, combine_count);
+	RowOperations::InitializeStates(layout, addresses, reinit_sel, reinit_count);
 }
 
 template <class T>
@@ -256,23 +278,20 @@ void PerfectAggregateHashTable::Destroy() {
 	}
 	// there are aggregates with destructors: loop over the hash table
 	// and call the destructor method for each of the aggregates
-	data_ptr_t data_pointers[STANDARD_VECTOR_SIZE];
-	Vector state_vector(LogicalType::POINTER, (data_ptr_t)data_pointers);
+	auto data_pointers = FlatVector::GetData<data_ptr_t>(addresses);
 	idx_t count = 0;
 
-	// iterate over all occupied slots of the hash table
+	// iterate over all initialised slots of the hash table
 	data_ptr_t payload_ptr = data;
 	for (idx_t i = 0; i < total_groups; i++) {
-		if (group_is_set[i]) {
-			data_pointers[count++] = payload_ptr;
-			if (count == STANDARD_VECTOR_SIZE) {
-				RowOperations::DestroyStates(layout, state_vector, count);
-				count = 0;
-			}
+		data_pointers[count++] = payload_ptr;
+		if (count == STANDARD_VECTOR_SIZE) {
+			RowOperations::DestroyStates(layout, addresses, count);
+			count = 0;
 		}
 		payload_ptr += tuple_size;
 	}
-	RowOperations::DestroyStates(layout, state_vector, count);
+	RowOperations::DestroyStates(layout, addresses, count);
 }
 
 } // namespace duckdb

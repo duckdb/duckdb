@@ -17,8 +17,7 @@ class BufferManager;
 
 class BaseAggregateHashTable {
 public:
-	BaseAggregateHashTable(BufferManager &buffer_manager, vector<LogicalType> group_types,
-	                       vector<LogicalType> payload_types, vector<AggregateObject> aggregate_objects);
+	BaseAggregateHashTable(BufferManager &buffer_manager, vector<LogicalType> payload_types);
 	virtual ~BaseAggregateHashTable() {
 	}
 
@@ -28,9 +27,6 @@ protected:
 	RowLayout layout;
 	//! The types of the payload columns stored in the hashtable
 	vector<LogicalType> payload_types;
-
-	//! The empty payload data
-	unique_ptr<data_t[]> empty_payload_data;
 };
 
 } // namespace duckdb

@@ -36,16 +36,14 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manag
                                                      vector<LogicalType> payload_types_p,
                                                      vector<AggregateObject> aggregate_objects_p,
                                                      HtEntryType entry_type)
-    : BaseAggregateHashTable(buffer_manager, move(group_types_p), move(payload_types_p), move(aggregate_objects_p)),
-      entry_type(entry_type), capacity(0), entries(0), payload_page_offset(0), is_finalized(false),
-      ht_offsets(LogicalTypeId::BIGINT), hash_salts(LogicalTypeId::SMALLINT),
-      group_compare_vector(STANDARD_VECTOR_SIZE), no_match_vector(STANDARD_VECTOR_SIZE),
-      empty_vector(STANDARD_VECTOR_SIZE) {
+    : BaseAggregateHashTable(buffer_manager, move(payload_types_p)), entry_type(entry_type), capacity(0), entries(0),
+      payload_page_offset(0), is_finalized(false), ht_offsets(LogicalTypeId::BIGINT),
+      hash_salts(LogicalTypeId::SMALLINT), group_compare_vector(STANDARD_VECTOR_SIZE),
+      no_match_vector(STANDARD_VECTOR_SIZE), empty_vector(STANDARD_VECTOR_SIZE) {
 
-	// Append hash column to the end and update the layout
-	auto types = layout.GetTypes();
-	types.emplace_back(LogicalType::HASH);
-	layout.Initialize(types, layout.GetAggregates());
+	// Append hash column to the end and initialise the row layout
+	group_types_p.emplace_back(LogicalType::HASH);
+	layout.Initialize(move(group_types_p), move(aggregate_objects_p));
 
 	// HT layout
 	hash_offset = layout.GetOffsets()[layout.ColumnCount() - 1];
