@@ -68,7 +68,7 @@ void ValiditySegment::Scan(ColumnScanState &state, idx_t start, idx_t scan_count
 	// FIXME: this should be optimized and use shifts/masks to copy multiple values at once
 // #if STANDARD_VECTOR_SIZE >= 64
 	idx_t base_tuple = start;
-	ValidityMask source_mask(state.primary_handle->node->buffer);
+	ValidityMask source_mask((validity_t *) state.primary_handle->node->buffer);
 	auto &target = FlatVector::Validity(result);
 	for (idx_t i = 0; i < scan_count; i++) {
 		target.Set(result_offset + i, source_mask.RowIsValid(base_tuple + i));
