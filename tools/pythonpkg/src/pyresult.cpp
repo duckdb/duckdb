@@ -91,9 +91,10 @@ py::object DuckDBPyResult::Fetchone() {
 		case LogicalTypeId::DOUBLE:
 			res[col_idx] = val.GetValue<double>();
 			break;
-		case LogicalTypeId::DECIMAL:
-			res[col_idx] = val.CastAs(LogicalType::DOUBLE).GetValue<double>();
-			break;
+		case LogicalTypeId::DECIMAL: {
+			py::object decimal_py = py::module_::import("decimal").attr("Decimal");
+			res[col_idx] = decimal_py(val.ToString());
+		} break;
 		case LogicalTypeId::VARCHAR:
 			res[col_idx] = val.GetValue<string>();
 			break;
