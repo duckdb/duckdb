@@ -1,3 +1,3 @@
 PKG_CPPFLAGS = -I. -DDUCKDB_DISABLE_PRINT {{ INCLUDES }}
-OBJECTS=duckdbr.o {{ SOURCES }}
+OBJECTS=duckdbr.o database.o connection.o statement.o register.o scan.o utils.o altrep.o types.cpp {{ SOURCES }}
 PKG_LIBS={{ LINK_FLAGS }}
