@@ -272,8 +272,6 @@ void CommitState::RevertCommit(UndoFlags type, data_ptr_t data) {
 		info->version_number = transaction_id;
 		break;
 	}
-	case UndoFlags::WAL_UPDATE:
-		break;
 	default:
 		throw NotImplementedException("UndoBuffer - don't know how to revert commit of this type!");
 	}
