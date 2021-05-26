@@ -191,7 +191,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 	executor.AddExpression(cast_expr);
 
 	TableScanState scan_state;
-	scan_state.column_ids = move(bound_columns);
+	scan_state.column_ids = bound_columns;
 	scan_state.max_row = total_rows;
 
 	// now alter the type of the column within all of the row_groups individually
