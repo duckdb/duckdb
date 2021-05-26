@@ -28,16 +28,36 @@ static void MapExtractFunction(DataChunk &args, ExpressionState &state, Vector &
 	auto &map = args.data[0];
 	auto &key = args.data[1];
 
-	auto &children = StructVector::GetEntries(map);
 	auto key_value = key.GetValue(0);
-	if (children[0].second->GetType().child_types()[0].second != LogicalTypeId::SQLNULL) {
-		key_value = key_value.CastAs(children[0].second->GetType().child_types()[0].second);
+	VectorData offset_data;
+
+	if (map.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+		auto &child = DictionaryVector::Child(map);
+		auto &children = StructVector::GetEntries(child);
+		auto &dict_sel = DictionaryVector::SelVector(map);
+		children[0].second->Orrify(args.size(), offset_data);
+		if (children[0].second->GetType().child_types()[0].second != LogicalTypeId::SQLNULL) {
+			key_value = key_value.CastAs(children[0].second->GetType().child_types()[0].second);
+		}
+		for (idx_t row = 0; row < args.size(); row++) {
+			auto offsets =
+			    ListVector::Search(*children[0].second, key_value, offset_data.sel->get_index(dict_sel.get_index(row)));
+			auto values = ListVector::GetValuesFromOffsets(*children[1].second, offsets);
+			FillResult(values, result, row);
+		}
+	} else {
+		auto &children = StructVector::GetEntries(map);
+		children[0].second->Orrify(args.size(), offset_data);
+		if (children[0].second->GetType().child_types()[0].second != LogicalTypeId::SQLNULL) {
+			key_value = key_value.CastAs(children[0].second->GetType().child_types()[0].second);
+		}
+		for (idx_t row = 0; row < args.size(); row++) {
+			auto offsets = ListVector::Search(*children[0].second, key_value, offset_data.sel->get_index(row));
+			auto values = ListVector::GetValuesFromOffsets(*children[1].second, offsets);
+			FillResult(values, result, row);
+		}
 	}
-	for (idx_t row = 0; row < args.size(); row++) {
-		auto offsets = ListVector::Search(*children[0].second, key_value, row);
-		auto values = ListVector::GetValuesFromOffsets(*children[1].second, offsets);
-		FillResult(values, result, row);
-	}
+
 	if (args.size() == 1) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
