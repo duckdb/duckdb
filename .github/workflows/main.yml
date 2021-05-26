@@ -530,6 +530,7 @@ jobs:
           build/reldebug/test/unittest "[intraquery]"
           build/reldebug/test/unittest "[interquery]"
           build/reldebug/test/unittest "[detailed_profiler]"
+          build/reldebug/test/unittest test/sql/tpch/tpch_sf01.test_slow
 
   valgrind:
     name: Valgrind
