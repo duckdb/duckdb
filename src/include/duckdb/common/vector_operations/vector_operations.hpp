@@ -97,9 +97,8 @@ struct VectorOperations {
 	//===--------------------------------------------------------------------===//
 	// make sure dest.count is set for gather methods!
 	struct Gather {
-		//! dest.data[i] = ptr[i]. NullValue<T> is checked for and converted to the nullmask in dest. The source
-		//! addresses are incremented by the size of the type.
-		static void Set(Vector &source, Vector &dest, idx_t count);
+		//! dest.data[i] = ptr[i]. NullValue<T> is checked for and converted to the nullmask in dest.
+		static void Set(Vector &source, Vector &dest, idx_t count, idx_t col_offset, idx_t col_idx);
 	};
 
 	//===--------------------------------------------------------------------===//
