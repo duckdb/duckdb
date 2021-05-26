@@ -820,6 +820,7 @@ jobs:
       CIBW_TEST_REQUIRES: 'pytest'
       CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" "pyarrow>=3.0.0"'
       CIBW_TEST_COMMAND: 'python -m pytest {project}/tests'
+      CIBW_ARCHS_MACOS: 'x86_64 universal2 arm64'
       SETUPTOOLS_SCM_NO_LOCAL: 'yes'
       TWINE_USERNAME: 'hfmuehleisen'
 
