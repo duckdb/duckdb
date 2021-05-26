@@ -292,9 +292,10 @@ public:
 
 	void Execute() override {
 		FinalizeHT(state, radix);
+		auto total_tasks = parent.total_tasks;
 		auto finished_tasks = ++parent.finished_tasks;
 		// finish the whole pipeline
-		if (parent.total_tasks == finished_tasks) {
+		if (total_tasks == finished_tasks) {
 			parent.Finish();
 		}
 	}
