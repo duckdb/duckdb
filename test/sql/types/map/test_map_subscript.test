@@ -95,3 +95,91 @@ query I
 select element_at(m,3) from (select MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as m) as T
 ----
 [8]
+
+#Map with larger-than-vector-size cardinalities
+query I
+select m[10] from (select MAP(lst,lst) as m from (SELECT LIST(i) as lst FROM range(10000) tbl(i)) as lst_tbl) as T
+----
+[10]
+
+#Duplicate keys in a map
+query I
+select m[1] from (select MAP(LIST_VALUE(1, 1, 1, 4),LIST_VALUE(10, 9, 8, 7)) as m) as T
+----
+[10, 9, 8]
+
+#String search with a bunch of NULL values in the map
+query I
+select m[NULL] from (select MAP(LIST_VALUE('Jon Lajoie', NULL, 'Tenacious D',NULL,NULL ),LIST_VALUE(10,9,10,11,13)) as m) as T
+----
+[9, 11, 13]
+
+#A map with only NULL values as key or value (or both)
+query I
+select m[10] from (select MAP(LIST_VALUE(10,9,10,11,13),LIST_VALUE(NULL, NULL, NULL,NULL,NULL)) as m) as T
+----
+[NULL, NULL]
+
+query I
+select m[NULL] from (select MAP(LIST_VALUE(NULL, NULL, NULL,NULL,NULL ),LIST_VALUE(10,9,10,11,13)) as m) as T
+----
+[10, 9, 10, 11, 13]
+
+query I
+select m[NULL] from (select MAP(LIST_VALUE(NULL, NULL, NULL,NULL,NULL ),LIST_VALUE(NULL, NULL, NULL,NULL,NULL )) as m) as T
+----
+[NULL, NULL, NULL, NULL, NULL]
+
+#Searching using a non-constant value (e.g. select m[a] from ...)
+statement ok
+create table ints (a integer, b integer)
+
+statement ok
+insert into ints values (1,1), (2,2),(3,3),(4,4)
+
+query I
+select m from (select MAP(lsta,lstb) as m from (SELECT list(a) as lsta, list(b) as lstb FROM ints where a < 4 and b > 1) as lst_tbl) as T
+----
+{2=2, 3=3}
+
+query I
+select m[2] from (select MAP(lsta,lstb) as m from (SELECT list(a) as lsta, list(b) as lstb FROM ints where a < 4 and b > 1) as lst_tbl) as T
+----
+[2]
+
+#What about multiple rows each with a map, instead of just a single row?
+statement ok
+insert into ints values (1,1), (1,2),(2,3),(4,4)
+
+query I
+select m from (select MAP(lsta,lstb) as m from (SELECT list(a) as lsta, list(b) as lstb FROM ints group by b) as lst_tbl) as T
+----
+{1=1, 1=1}
+{2=2, 1=2}
+{3=3, 2=3}
+{4=4, 4=4}
+
+query I
+select m[1] from (select MAP(lsta,lstb) as m from (SELECT list(a) as lsta, list(b) as lstb FROM ints group by b) as lst_tbl) as T
+----
+[1, 1]
+[2]
+[]
+[]
+
+#What about multiple rows each with a map, with a selection vector on top of them (e.g. because of a WHERE clause)?
+statement ok
+insert into ints values (1,4)
+
+query I
+select m[1] from (select MAP(lsta,lstb) as m from (SELECT list(a) as lsta, list(b) as lstb FROM ints where b <4 group by b) as lst_tbl) as T
+----
+[1, 1]
+[2]
+[]
+
+#map_extract directly on a constant map (SELECT map_extract(MAP(..)), i.e. no FROM clause).
+query I
+SELECT map_extract(MAP(LIST_VALUE(10,9,10,11,13),LIST_VALUE(10,9,10,11,13)),10)
+----
+[10, 10]

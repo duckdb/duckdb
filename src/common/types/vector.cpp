@@ -12,6 +12,7 @@
 #include "duckdb/common/types/sel_cache.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
 
 #include <cstring> // strlen() on Solaris
 
@@ -1073,35 +1074,25 @@ void ListVector::Initialize(Vector &vec) {
 		ListVector::SetEntry(vec, move(vec_child));
 	}
 }
-
-ValidityMask &Vector::GetValidity(Vector &v) {
-	switch (v.GetVectorType()) {
-	case VectorType::DICTIONARY_VECTOR:
-		return GetValidity(DictionaryVector::Child(v));
-	case VectorType::FLAT_VECTOR:
-		return FlatVector::Validity(v);
-	case VectorType::CONSTANT_VECTOR:
-		return ConstantVector::Validity(v);
-	default:
-		throw NotImplementedException("FIXME: cannot deserialize vector with this vectortype");
-	}
-}
-
 template <class T>
-void Search(Vector &list, T key, vector<idx_t> &offsets, bool is_key_null) {
+void TemplatedSearchInMap(Vector &list, T key, vector<idx_t> &offsets, bool is_key_null, idx_t offset, idx_t length) {
 	auto &list_vector = ListVector::GetEntry(list);
+	VectorData vector_data;
+	list_vector.Orrify(ListVector::GetListSize(list), vector_data);
+	auto data = (T *)vector_data.data;
+	auto validity_mask = vector_data.validity;
 
-	auto data = (T *)list_vector.GetData();
-
-	auto validity_mask = Vector::GetValidity(list_vector);
 	if (is_key_null) {
-		for (idx_t i = 0; i < ListVector::GetListSize(list); i++) {
+		for (idx_t i = offset; i < offset + length; i++) {
 			if (!validity_mask.RowIsValid(i)) {
 				offsets.push_back(i);
 			}
 		}
 	} else {
-		for (idx_t i = 0; i < ListVector::GetListSize(list); i++) {
+		for (idx_t i = offset; i < offset + length; i++) {
+			if (!validity_mask.RowIsValid(i)) {
+				continue;
+			}
 			if (key == data[i]) {
 				offsets.push_back(i);
 			}
@@ -1109,94 +1100,106 @@ void Search(Vector &list, T key, vector<idx_t> &offsets, bool is_key_null) {
 	}
 }
 
-void SearchString(Vector &list, string &key, vector<idx_t> &offsets, bool is_key_null) {
+void SearchString(Vector &list, string &key, vector<idx_t> &offsets, bool is_key_null, idx_t offset, idx_t length) {
 	auto &list_vector = ListVector::GetEntry(list);
-
-	auto data = (string_t *)list_vector.GetData();
-	auto validity_mask = Vector::GetValidity(list_vector);
+	VectorData vector_data;
+	list_vector.Orrify(ListVector::GetListSize(list), vector_data);
+	auto data = (string_t *)vector_data.data;
+	auto validity_mask = vector_data.validity;
 	if (is_key_null) {
-		for (idx_t i = 0; i < ListVector::GetListSize(list); i++) {
+		for (idx_t i = offset; i < offset + length; i++) {
 			if (!validity_mask.RowIsValid(i)) {
 				offsets.push_back(i);
 			}
 		}
 	} else {
-		for (idx_t i = 0; i < ListVector::GetListSize(list); i++) {
-			auto data_str = data[i].GetDataUnsafe();
-			auto data_str_size = data[i].GetSize();
-			if (data_str_size == key.size()) {
-				bool equal = true;
-				for (idx_t str_idx = 0; str_idx < data_str_size; str_idx++) {
-					if (data_str[str_idx] != key[str_idx]) {
-						equal = false;
-						break;
-					}
-				}
-				if (equal) {
-					offsets.push_back(i);
-				}
+		string_t key_str_t(key);
+		for (idx_t i = offset; i < offset + length; i++) {
+			if (!validity_mask.RowIsValid(i)) {
+				continue;
+			}
+			if (Equals::Operation<string_t>(data[i], key_str_t)) {
+				offsets.push_back(i);
 			}
 		}
 	}
 }
 
-vector<idx_t> ListVector::Search(Vector &list, Value &key) {
+vector<idx_t> ListVector::Search(Vector &list, Value &key, idx_t row) {
 	vector<idx_t> offsets;
 	if (!ListVector::HasEntry(list)) {
 		return offsets;
 	}
 
 	auto &list_vector = ListVector::GetEntry(list);
-
+	auto &entry = ((list_entry_t *)list.GetData())[row];
 	switch (list_vector.GetType().id()) {
 
 	case LogicalTypeId::SQLNULL:
-		return offsets;
+		if (key.is_null) {
+			for (idx_t i = entry.offset; i < entry.offset + entry.length; i++) {
+				offsets.push_back(i);
+			}
+		}
+		break;
 	case LogicalTypeId::UTINYINT:
-		::duckdb::Search<uint8_t>(list, key.value_.utinyint, offsets, key.is_null);
+		::duckdb::TemplatedSearchInMap<uint8_t>(list, key.value_.utinyint, offsets, key.is_null, entry.offset,
+		                                        entry.length);
 		break;
 	case LogicalTypeId::TINYINT:
-		::duckdb::Search<int8_t>(list, key.value_.tinyint, offsets, key.is_null);
+		::duckdb::TemplatedSearchInMap<int8_t>(list, key.value_.tinyint, offsets, key.is_null, entry.offset,
+		                                       entry.length);
 		break;
 	case LogicalTypeId::USMALLINT:
-		::duckdb::Search<uint16_t>(list, key.value_.usmallint, offsets, key.is_null);
+		::duckdb::TemplatedSearchInMap<uint16_t>(list, key.value_.usmallint, offsets, key.is_null, entry.offset,
+		                                         entry.length);
 		break;
 	case LogicalTypeId::SMALLINT:
-		::duckdb::Search<int16_t>(list, key.value_.smallint, offsets, key.is_null);
+		::duckdb::TemplatedSearchInMap<int16_t>(list, key.value_.smallint, offsets, key.is_null, entry.offset,
+		                                        entry.length);
 		break;
 	case LogicalTypeId::UINTEGER:
-		::duckdb::Search<uint32_t>(list, key.value_.uinteger, offsets, key.is_null);
+		::duckdb::TemplatedSearchInMap<uint32_t>(list, key.value_.uinteger, offsets, key.is_null, entry.offset,
+		                                         entry.length);
 		break;
 	case LogicalTypeId::INTEGER:
-		::duckdb::Search<int32_t>(list, key.value_.integer, offsets, key.is_null);
+		::duckdb::TemplatedSearchInMap<int32_t>(list, key.value_.integer, offsets, key.is_null, entry.offset,
+		                                        entry.length);
 		break;
 	case LogicalTypeId::UBIGINT:
-		::duckdb::Search<uint64_t>(list, key.value_.ubigint, offsets, key.is_null);
+		::duckdb::TemplatedSearchInMap<uint64_t>(list, key.value_.ubigint, offsets, key.is_null, entry.offset,
+		                                         entry.length);
 		break;
 	case LogicalTypeId::BIGINT:
-		::duckdb::Search<int64_t>(list, key.value_.bigint, offsets, key.is_null);
+		::duckdb::TemplatedSearchInMap<int64_t>(list, key.value_.bigint, offsets, key.is_null, entry.offset,
+		                                        entry.length);
 		break;
 	case LogicalTypeId::HUGEINT:
-		::duckdb::Search<hugeint_t>(list, key.value_.hugeint, offsets, key.is_null);
+		::duckdb::TemplatedSearchInMap<hugeint_t>(list, key.value_.hugeint, offsets, key.is_null, entry.offset,
+		                                          entry.length);
 		break;
 	case LogicalTypeId::FLOAT:
-		::duckdb::Search<float>(list, key.value_.float_, offsets, key.is_null);
+		::duckdb::TemplatedSearchInMap<float>(list, key.value_.float_, offsets, key.is_null, entry.offset,
+		                                      entry.length);
 		break;
 	case LogicalTypeId::DOUBLE:
-		::duckdb::Search<double>(list, key.value_.double_, offsets, key.is_null);
+		::duckdb::TemplatedSearchInMap<double>(list, key.value_.double_, offsets, key.is_null, entry.offset,
+		                                       entry.length);
 		break;
 	case LogicalTypeId::DATE:
-		::duckdb::Search<date_t>(list, key.value_.date, offsets, key.is_null);
+		::duckdb::TemplatedSearchInMap<date_t>(list, key.value_.date, offsets, key.is_null, entry.offset, entry.length);
 		break;
 	case LogicalTypeId::TIME:
-		::duckdb::Search<dtime_t>(list, key.value_.time, offsets, key.is_null);
+		::duckdb::TemplatedSearchInMap<dtime_t>(list, key.value_.time, offsets, key.is_null, entry.offset,
+		                                        entry.length);
 		break;
 	case LogicalTypeId::TIMESTAMP:
-		::duckdb::Search<timestamp_t>(list, key.value_.timestamp, offsets, key.is_null);
+		::duckdb::TemplatedSearchInMap<timestamp_t>(list, key.value_.timestamp, offsets, key.is_null, entry.offset,
+		                                            entry.length);
 		break;
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR:
-		::duckdb::SearchString(list, key.str_value, offsets, key.is_null);
+		::duckdb::SearchString(list, key.str_value, offsets, key.is_null, entry.offset, entry.length);
 		break;
 	default:
 		throw InvalidTypeException(list.GetType().id(), "Invalid type for List Vector Search");

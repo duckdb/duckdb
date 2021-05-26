@@ -5,33 +5,33 @@
 statement ok
 PRAGMA enable_verification
 
-## Empty Table
-#query I
-#SELECT histogram(i) FROM range(100) tbl(i) WHERE 1=0;
-#----
-#NULL
-#
-##Corner cases
-#statement error
-#select histogram()
-#
-#query I
-#select histogram(NULL)
-#----
-#NULL
-#
-#query I
-#select histogram(1)
-#----
-#{1=1}
-#
-#statement error
-#select histogram(*)
-#
-#query I
-#SELECT histogram(2) FROM range(100);
-#----
-#{2=100}
+# Empty Table
+query I
+SELECT histogram(i) FROM range(100) tbl(i) WHERE 1=0;
+----
+NULL
+
+#Corner cases
+statement error
+select histogram()
+
+query I
+select histogram(NULL)
+----
+NULL
+
+query I
+select histogram(1)
+----
+{1=1}
+
+statement error
+select histogram(*)
+
+query I
+SELECT histogram(2) FROM range(100);
+----
+{2=100}
 
 statement ok
 CREATE TABLE hist_data (g INTEGER, e INTEGER)

@@ -26,6 +26,22 @@ select MAP()
 statement error
 select MAP(LIST_VALUE(10),LIST_VALUE())
 
-# Maps that are not initilalized empty or with lists are  FORBIDDEN
+# Maps that are not initialized empty or with lists are  FORBIDDEN
+# Map where the 2 entries are not lists
 statement error
 select MAP(10,12)
+
+# Map function called with more than 2 lists
+statement error
+select MAP(LIST_VALUE(10),LIST_VALUE(10),LIST_VALUE(10))
+# Map where 1 of the 2 entries is not a list
+statement error
+select MAP(LIST_VALUE(10),10)
+
+#Map with unbalanced list cardinalities
+statement error
+select MAP(LIST_VALUE(10,20),LIST_VALUE(10))
+
+#Can't struct extract from a map
+statement error
+select struct_extract(m,'key') from (select MAP(LIST_VALUE(NULL, NULL, NULL,NULL,NULL ),LIST_VALUE(10,9,10,11,13)) as m) as T

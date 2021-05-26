@@ -47,12 +47,13 @@ static void MapFunction(DataChunk &args, ExpressionState &state, Vector &result)
 	if (ListVector::GetListSize(args.data[0]) != ListVector::GetListSize(args.data[1])) {
 		throw Exception("Key list has a different size from Value list");
 	}
-	unique_ptr<Vector> vec_ptr = make_unique<Vector>();
-	vec_ptr->Reference(args.data[0]);
-	StructVector::AddEntry(result, "key", move(vec_ptr));
-	vec_ptr = make_unique<Vector>();
-	vec_ptr->Reference(args.data[1]);
-	StructVector::AddEntry(result, "value", move(vec_ptr));
+	unique_ptr<Vector> key_vec = make_unique<Vector>();
+	key_vec->Reference(args.data[0]);
+	auto val_vec = make_unique<Vector>();
+	val_vec->Reference(args.data[1]);
+
+	StructVector::AddEntry(result, "key", move(key_vec));
+	StructVector::AddEntry(result, "value", move(val_vec));
 	result.Verify(args.size());
 }
 

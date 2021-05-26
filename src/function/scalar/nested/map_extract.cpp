@@ -5,24 +5,25 @@
 #include "duckdb/common/types/data_chunk.hpp"
 
 namespace duckdb {
-void FillResult(Value &values, Vector &result) {
+void FillResult(Value &values, Vector &result, idx_t row) {
 	//! First Initialize List Vector
 	ListVector::Initialize(result);
-
+	idx_t current_offset = ListVector::GetListSize(result);
 	//! Push Values to List Vector
 	for (idx_t i = 0; i < values.list_value.size(); i++) {
 		ListVector::PushBack(result, values.list_value[i]);
 	}
 
 	//! now set the pointer
-	auto &entry = ((list_entry_t *)result.GetData())[0];
+	auto &entry = ((list_entry_t *)result.GetData())[row];
 	entry.length = values.list_value.size();
-	entry.offset = 0;
+	entry.offset = current_offset;
 }
 
 static void MapExtractFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.data.size() == 2);
 	D_ASSERT(args.data[0].GetType().id() == LogicalTypeId::MAP);
+	result.SetVectorType(VectorType::FLAT_VECTOR);
 
 	auto &map = args.data[0];
 	auto &key = args.data[1];
@@ -32,10 +33,15 @@ static void MapExtractFunction(DataChunk &args, ExpressionState &state, Vector &
 	if (children[0].second->GetType().child_types()[0].second != LogicalTypeId::SQLNULL) {
 		key_value = key_value.CastAs(children[0].second->GetType().child_types()[0].second);
 	}
-	auto offsets = ListVector::Search(*children[0].second, key_value);
+	for (idx_t row = 0; row < args.size(); row++) {
+		auto offsets = ListVector::Search(*children[0].second, key_value, row);
+		auto values = ListVector::GetValuesFromOffsets(*children[1].second, offsets);
+		FillResult(values, result, row);
+	}
+	if (args.size() == 1) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	}
 
-	auto values = ListVector::GetValuesFromOffsets(*children[1].second, offsets);
-	FillResult(values, result);
 	result.Verify(args.size());
 }
 
@@ -47,7 +53,6 @@ static unique_ptr<FunctionData> MapExtractBind(ClientContext &context, ScalarFun
 	if (arguments[0]->return_type.id() != LogicalTypeId::MAP) {
 		throw BinderException("MAP_EXTRACT can only operate on MAPs");
 	}
-	auto key_type = arguments[0]->return_type.child_types()[0].second.child_types()[0].second;
 	auto value_type = arguments[0]->return_type.child_types()[1].second.child_types()[0].second;
 
 	//! Here we have to construct the List Type that will be returned

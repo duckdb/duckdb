@@ -155,8 +155,6 @@ public:
 		buffer->SetBufferType(buffer_type);
 	}
 
-	static ValidityMask &GetValidity(Vector &v);
-
 protected:
 	//! A pointer to the data.
 	data_ptr_t data;
@@ -292,7 +290,7 @@ struct ListVector {
 	                   idx_t source_offset = 0);
 	static void PushBack(Vector &target, Value &insert);
 	static void Initialize(Vector &vec);
-	static vector<idx_t> Search(Vector &list, Value &key);
+	static vector<idx_t> Search(Vector &list, Value &key, idx_t row);
 	static Value GetValuesFromOffsets(Vector &list, vector<idx_t> &offsets);
 	//! Share the entry of the other list vector
 	static void ReferenceEntry(Vector &vector, Vector &other);

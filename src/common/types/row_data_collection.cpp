@@ -804,7 +804,8 @@ void RowDataCollection::DeserializeIntoListVector(Vector &v, const idx_t &vcount
 			auto &list_vec_to_append = ListVector::GetEntry(append_vector);
 
 			// set validity
-			auto &append_validity = Vector::GetValidity(list_vec_to_append);
+			//! Since we are constructing the vector, this will always be a flat vector.
+			auto &append_validity = FlatVector::Validity(list_vec_to_append);
 			for (idx_t entry_idx = 0; entry_idx < next; entry_idx++) {
 				append_validity.Set(entry_idx, *(validitymask_location) & (1 << offset_in_byte));
 				if (++offset_in_byte == 8) {
