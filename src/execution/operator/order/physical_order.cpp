@@ -1358,15 +1358,16 @@ public:
 				sb->UnregisterPayloadBlocks();
 			}
 			state.sorted_blocks.clear();
+            if (state.odd_one_out) {
+                state.sorted_blocks.push_back(move(state.odd_one_out));
+				state.odd_one_out = nullptr;
+            }
 			for (auto &sorted_block_vector : state.sorted_blocks_temp) {
 				state.sorted_blocks.push_back(
 				    make_unique<SortedBlock>(buffer_manager, *state.sorting_state, *state.payload_state));
 				state.sorted_blocks.back()->AppendSortedBlocks(sorted_block_vector);
 			}
 			state.sorted_blocks_temp.clear();
-			if (state.odd_one_out) {
-				state.sorted_blocks.insert(state.sorted_blocks.begin(), move(state.odd_one_out));
-			}
 			PhysicalOrder::ScheduleMergeTasks(parent, context, state);
 		}
 	}
@@ -2138,6 +2139,7 @@ void PhysicalOrder::ScheduleMergeTasks(Pipeline &pipeline, ClientContext &contex
 	auto num_blocks = state.sorted_blocks.size();
 	if (num_blocks % 2 == 1) {
 		state.odd_one_out = move(state.sorted_blocks.back());
+		state.sorted_blocks.pop_back();
 		num_blocks--;
 	}
 
