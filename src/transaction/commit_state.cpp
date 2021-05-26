@@ -143,12 +143,12 @@ void CommitState::WriteUpdate(UpdateInfo *info) {
 	SwitchTable(&table_info, UndoFlags::UPDATE_TUPLE);
 
 	// initialize the update chunk
- 	vector<LogicalType> update_types;
- 	if (column_data.type.id() == LogicalTypeId::VALIDITY) {
- 		update_types.push_back(LogicalType::BOOLEAN);
- 	} else {
- 		update_types.push_back(column_data.type);
- 	}
+	vector<LogicalType> update_types;
+	if (column_data.type.id() == LogicalTypeId::VALIDITY) {
+		update_types.push_back(LogicalType::BOOLEAN);
+	} else {
+		update_types.push_back(column_data.type);
+	}
 	update_types.push_back(LOGICAL_ROW_TYPE);
 
 	update_chunk = make_unique<DataChunk>();
@@ -167,7 +167,7 @@ void CommitState::WriteUpdate(UpdateInfo *info) {
 		// zero-initialize the booleans
 		// FIXME: this is only required because of NullValue<T> in Vector::Serialize...
 		auto booleans = FlatVector::GetData<bool>(update_chunk->data[0]);
-		for(idx_t i = 0; i < info->N; i++) {
+		for (idx_t i = 0; i < info->N; i++) {
 			auto idx = info->tuples[i];
 			booleans[idx] = false;
 		}
@@ -178,7 +178,7 @@ void CommitState::WriteUpdate(UpdateInfo *info) {
 	// construct the column index path
 	vector<column_t> column_indexes;
 	auto column_data_ptr = &column_data;
-	while(column_data_ptr->parent) {
+	while (column_data_ptr->parent) {
 		column_indexes.push_back(column_data_ptr->column_index);
 		column_data_ptr = column_data_ptr->parent;
 	}

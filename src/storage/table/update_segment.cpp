@@ -18,8 +18,7 @@ static UpdateSegment::rollback_update_function_t GetRollbackUpdateFunction(Physi
 static UpdateSegment::statistics_update_function_t GetStatisticsUpdateFunction(PhysicalType type);
 static UpdateSegment::fetch_row_function_t GetFetchRowFunction(PhysicalType type);
 
-UpdateSegment::UpdateSegment(ColumnData &column_data)
-    : column_data(column_data), stats(column_data.type) {
+UpdateSegment::UpdateSegment(ColumnData &column_data) : column_data(column_data), stats(column_data.type) {
 	auto physical_type = column_data.type.InternalType();
 
 	this->type_size = GetTypeIdSize(physical_type);
@@ -48,7 +47,6 @@ void UpdateSegment::ClearUpdates() {
 //===--------------------------------------------------------------------===//
 Value UpdateInfo::GetValue(idx_t index) {
 	auto &type = segment->column_data.type;
-
 
 	switch (type.id()) {
 	case LogicalTypeId::VALIDITY:
@@ -95,11 +93,11 @@ static void MergeValidityInfo(UpdateInfo *current, ValidityMask &result_mask) {
 	}
 }
 
-static void UpdateMergeValidity(transaction_t start_time, transaction_t transaction_id, UpdateInfo *info, Vector &result) {
+static void UpdateMergeValidity(transaction_t start_time, transaction_t transaction_id, UpdateInfo *info,
+                                Vector &result) {
 	auto &result_mask = FlatVector::Validity(result);
-	UpdateInfo::UpdatesForTransaction(info, start_time, transaction_id, [&](UpdateInfo *current) {
-		MergeValidityInfo(current, result_mask);
-	});
+	UpdateInfo::UpdatesForTransaction(info, start_time, transaction_id,
+	                                  [&](UpdateInfo *current) { MergeValidityInfo(current, result_mask); });
 }
 
 template <class T>
@@ -120,9 +118,8 @@ static void MergeUpdateInfo(UpdateInfo *current, T *result_data) {
 template <class T>
 static void UpdateMergeFetch(transaction_t start_time, transaction_t transaction_id, UpdateInfo *info, Vector &result) {
 	auto result_data = FlatVector::GetData<T>(result);
-	UpdateInfo::UpdatesForTransaction(info, start_time, transaction_id, [&](UpdateInfo *current) {
-		MergeUpdateInfo<T>(current, result_data);
-	});
+	UpdateInfo::UpdatesForTransaction(info, start_time, transaction_id,
+	                                  [&](UpdateInfo *current) { MergeUpdateInfo<T>(current, result_data); });
 }
 
 static UpdateSegment::fetch_update_function_t GetFetchUpdateFunction(PhysicalType type) {
@@ -244,7 +241,8 @@ void UpdateSegment::FetchCommitted(idx_t vector_index, Vector &result) {
 //===--------------------------------------------------------------------===//
 // Fetch Range
 //===--------------------------------------------------------------------===//
-static void MergeUpdateInfoRangeValidity(UpdateInfo *current, idx_t start, idx_t end, idx_t result_offset, ValidityMask &result_mask) {
+static void MergeUpdateInfoRangeValidity(UpdateInfo *current, idx_t start, idx_t end, idx_t result_offset,
+                                         ValidityMask &result_mask) {
 	auto info_data = (bool *)current->tuple_data;
 	for (idx_t i = 0; i < current->N; i++) {
 		auto tuple_idx = current->tuples[i];
@@ -258,8 +256,7 @@ static void MergeUpdateInfoRangeValidity(UpdateInfo *current, idx_t start, idx_t
 	}
 }
 
-static void FetchCommittedRangeValidity(UpdateInfo *info, idx_t start, idx_t end, idx_t result_offset,
-                                         Vector &result) {
+static void FetchCommittedRangeValidity(UpdateInfo *info, idx_t start, idx_t end, idx_t result_offset, Vector &result) {
 	auto &result_mask = FlatVector::Validity(result);
 	MergeUpdateInfoRangeValidity(info, start, end, result_offset, result_mask);
 }
@@ -352,7 +349,7 @@ void UpdateSegment::FetchCommittedRange(idx_t start_row, idx_t count, Vector &re
 // Fetch Row
 //===--------------------------------------------------------------------===//
 static void FetchRowValidity(transaction_t start_time, transaction_t transaction_id, UpdateInfo *info, idx_t row_idx,
-                              Vector &result, idx_t result_idx) {
+                             Vector &result, idx_t result_idx) {
 	auto &result_mask = FlatVector::Validity(result);
 	UpdateInfo::UpdatesForTransaction(info, start_time, transaction_id, [&](UpdateInfo *current) {
 		auto info_data = (bool *)current->tuple_data;
@@ -576,9 +573,8 @@ void UpdateSegment::InitializeUpdateInfo(UpdateInfo &info, row_t *ids, const Sel
 	};
 }
 
-
-static void InitializeUpdateValidity(UpdateInfo *base_info, Vector &base_data,
-                                     UpdateInfo *update_info, Vector &update, const SelectionVector &sel) {
+static void InitializeUpdateValidity(UpdateInfo *base_info, Vector &base_data, UpdateInfo *update_info, Vector &update,
+                                     const SelectionVector &sel) {
 	auto &update_mask = FlatVector::Validity(update);
 	auto tuple_data = (bool *)update_info->tuple_data;
 
@@ -607,8 +603,8 @@ static void InitializeUpdateValidity(UpdateInfo *base_info, Vector &base_data,
 }
 
 template <class T>
-static void InitializeUpdateData(UpdateInfo *base_info, Vector &base_data,
-                                 UpdateInfo *update_info, Vector &update, const SelectionVector &sel) {
+static void InitializeUpdateData(UpdateInfo *base_info, Vector &base_data, UpdateInfo *update_info, Vector &update,
+                                 const SelectionVector &sel) {
 	auto update_data = FlatVector::GetData<T>(update);
 	auto tuple_data = (T *)update_info->tuple_data;
 
@@ -714,9 +710,8 @@ struct ExtractValidityEntry {
 };
 
 template <class T, class V, class OP = ExtractStandardEntry>
-static void MergeUpdateLoopInternal(UpdateInfo *base_info, V *base_table_data,
-                                    UpdateInfo *update_info, V *update_vector_data, row_t *ids, idx_t count,
-                                    const SelectionVector &sel) {
+static void MergeUpdateLoopInternal(UpdateInfo *base_info, V *base_table_data, UpdateInfo *update_info,
+                                    V *update_vector_data, row_t *ids, idx_t count, const SelectionVector &sel) {
 	auto base_id = base_info->segment->column_data.start + base_info->vector_index * STANDARD_VECTOR_SIZE;
 #ifdef DEBUG
 	// all of these should be sorted, otherwise the below algorithm does not work
@@ -815,9 +810,8 @@ static void MergeUpdateLoopInternal(UpdateInfo *base_info, V *base_table_data,
 	memcpy(base_info->tuples, result_ids, result_offset * sizeof(sel_t));
 }
 
-static void MergeValidityLoop(UpdateInfo *base_info, Vector &base_data,
-                              UpdateInfo *update_info, Vector &update, row_t *ids, idx_t count,
-                              const SelectionVector &sel) {
+static void MergeValidityLoop(UpdateInfo *base_info, Vector &base_data, UpdateInfo *update_info, Vector &update,
+                              row_t *ids, idx_t count, const SelectionVector &sel) {
 	auto &base_validity = FlatVector::Validity(base_data);
 	auto &update_validity = FlatVector::Validity(update);
 	MergeUpdateLoopInternal<bool, ValidityMask, ExtractValidityEntry>(base_info, &base_validity, update_info,
@@ -825,8 +819,8 @@ static void MergeValidityLoop(UpdateInfo *base_info, Vector &base_data,
 }
 
 template <class T>
-static void MergeUpdateLoop(UpdateInfo *base_info, Vector &base_data, UpdateInfo *update_info,
-                            Vector &update, row_t *ids, idx_t count, const SelectionVector &sel) {
+static void MergeUpdateLoop(UpdateInfo *base_info, Vector &base_data, UpdateInfo *update_info, Vector &update,
+                            row_t *ids, idx_t count, const SelectionVector &sel) {
 	auto base_table_data = FlatVector::GetData<T>(base_data);
 	auto update_vector_data = FlatVector::GetData<T>(update);
 	MergeUpdateLoopInternal<T, T>(base_info, base_table_data, update_info, update_vector_data, ids, count, sel);
@@ -985,7 +979,8 @@ UpdateSegment::statistics_update_function_t GetStatisticsUpdateFunction(Physical
 //===--------------------------------------------------------------------===//
 // Update
 //===--------------------------------------------------------------------===//
-void UpdateSegment::Update(Transaction &transaction, idx_t column_index, Vector &update, row_t *ids, idx_t count, Vector &base_data) {
+void UpdateSegment::Update(Transaction &transaction, idx_t column_index, Vector &update, row_t *ids, idx_t count,
+                           Vector &base_data) {
 	// obtain an exclusive lock
 	auto write_lock = lock.GetExclusiveLock();
 

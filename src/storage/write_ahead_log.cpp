@@ -217,7 +217,7 @@ void WriteAheadLog::WriteUpdate(DataChunk &chunk, const vector<column_t> &column
 
 	writer->Write<WALType>(WALType::UPDATE_TUPLE);
 	writer->Write<idx_t>(column_indexes.size());
-	for(auto &col_idx : column_indexes) {
+	for (auto &col_idx : column_indexes) {
 		writer->Write<column_t>(col_idx);
 	}
 	chunk.Serialize(*writer);

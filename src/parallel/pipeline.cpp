@@ -176,7 +176,7 @@ bool Pipeline::ScheduleOperator(PhysicalOperator *op) {
 		return ScheduleOperator(op->children[0].get());
 	case PhysicalOperatorType::HASH_JOIN: {
 		// hash join; for now we can't safely parallelize right or full outer join probes
-		auto &join = (PhysicalHashJoin &) *op;
+		auto &join = (PhysicalHashJoin &)*op;
 		if (IsRightOuterJoin(join.join_type)) {
 			return false;
 		}

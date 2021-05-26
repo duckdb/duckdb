@@ -37,7 +37,8 @@ public:
 	void FetchUpdates(Transaction &transaction, idx_t vector_index, Vector &result);
 	void FetchCommitted(idx_t vector_index, Vector &result);
 	void FetchCommittedRange(idx_t start_row, idx_t count, Vector &result);
-	void Update(Transaction &transaction, idx_t column_index, Vector &update, row_t *ids, idx_t count, Vector &base_data);
+	void Update(Transaction &transaction, idx_t column_index, Vector &update, row_t *ids, idx_t count,
+	            Vector &base_data);
 	void FetchRow(Transaction &transaction, idx_t row_id, Vector &result, idx_t result_idx);
 
 	void RollbackUpdate(UpdateInfo *info);
@@ -64,11 +65,10 @@ private:
 	StringHeap heap;
 
 public:
-	typedef void (*initialize_update_function_t)(UpdateInfo *base_info, Vector &base_data,
-	                                             UpdateInfo *update_info, Vector &update, const SelectionVector &sel);
-	typedef void (*merge_update_function_t)(UpdateInfo *base_info, Vector &base_data,
-	                                        UpdateInfo *update_info, Vector &update, row_t *ids, idx_t count,
-	                                        const SelectionVector &sel);
+	typedef void (*initialize_update_function_t)(UpdateInfo *base_info, Vector &base_data, UpdateInfo *update_info,
+	                                             Vector &update, const SelectionVector &sel);
+	typedef void (*merge_update_function_t)(UpdateInfo *base_info, Vector &base_data, UpdateInfo *update_info,
+	                                        Vector &update, row_t *ids, idx_t count, const SelectionVector &sel);
 	typedef void (*fetch_update_function_t)(transaction_t start_time, transaction_t transaction_id, UpdateInfo *info,
 	                                        Vector &result);
 	typedef void (*fetch_committed_function_t)(UpdateInfo *info, Vector &result);
@@ -91,8 +91,8 @@ private:
 	statistics_update_function_t statistics_update_function;
 
 private:
-	void InitializeUpdateInfo(UpdateInfo &info, row_t *ids, const SelectionVector &sel, idx_t count,
-                                         idx_t vector_index, idx_t vector_offset);
+	void InitializeUpdateInfo(UpdateInfo &info, row_t *ids, const SelectionVector &sel, idx_t count, idx_t vector_index,
+	                          idx_t vector_offset);
 };
 
 struct UpdateNodeData {

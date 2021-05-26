@@ -73,10 +73,13 @@ public:
 	//! Fetch the vector from the column data that belongs to this specific row
 	virtual void Fetch(ColumnScanState &state, row_t row_id, Vector &result);
 	//! Fetch a specific row id and append it to the vector
-	virtual void FetchRow(Transaction &transaction, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx);
+	virtual void FetchRow(Transaction &transaction, ColumnFetchState &state, row_t row_id, Vector &result,
+	                      idx_t result_idx);
 
-	virtual void Update(Transaction &transaction, idx_t column_index, Vector &update_vector, row_t *row_ids, idx_t update_count);
-	virtual void UpdateColumn(Transaction &transaction, const vector<column_t> &column_path, Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t depth);
+	virtual void Update(Transaction &transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
+	                    idx_t update_count);
+	virtual void UpdateColumn(Transaction &transaction, const vector<column_t> &column_path, Vector &update_vector,
+	                          row_t *row_ids, idx_t update_count, idx_t depth);
 	virtual unique_ptr<BaseStatistics> GetUpdateStatistics();
 
 	virtual void CommitDropColumn();
@@ -89,10 +92,11 @@ public:
 
 	static void BaseDeserialize(DatabaseInstance &db, Deserializer &source, const LogicalType &type,
 	                            ColumnData &result);
-	static shared_ptr<ColumnData> Deserialize(DataTableInfo &info, idx_t column_index, idx_t start_row, Deserializer &source,
-	                                          const LogicalType &type);
+	static shared_ptr<ColumnData> Deserialize(DataTableInfo &info, idx_t column_index, idx_t start_row,
+	                                          Deserializer &source, const LogicalType &type);
 
 	virtual void Verify(RowGroup &parent);
+
 protected:
 	//! Append a transient segment
 	void AppendTransientSegment(idx_t start_row);
@@ -101,7 +105,7 @@ protected:
 	void ScanVector(ColumnScanState &state, Vector &result);
 	//! Scans a vector from the column merged with any potential updates
 	//! If ALLOW_UPDATES is set to false, the function will instead throw an exception if any updates are found
-	template<bool SCAN_COMMITTED, bool ALLOW_UPDATES>
+	template <bool SCAN_COMMITTED, bool ALLOW_UPDATES>
 	void ScanVector(Transaction *transaction, idx_t vector_index, ColumnScanState &state, Vector &result);
 
 protected:

@@ -895,7 +895,7 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 }
 
 void DataTable::UpdateColumn(TableCatalogEntry &table, ClientContext &context, Vector &row_ids,
-                       const vector<column_t> &column_path, DataChunk &updates) {
+                             const vector<column_t> &column_path, DataChunk &updates) {
 	D_ASSERT(row_ids.GetType().InternalType() == ROW_TYPE);
 	D_ASSERT(updates.ColumnCount() == 1);
 	updates.Verify();

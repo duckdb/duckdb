@@ -415,7 +415,7 @@ void ReplayState::ReplayUpdate() {
 	vector<column_t> column_path;
 	auto column_index_count = source.Read<idx_t>();
 	column_path.reserve(column_index_count);
-	for(idx_t i = 0; i < column_index_count; i++) {
+	for (idx_t i = 0; i < column_index_count; i++) {
 		column_path.push_back(source.Read<column_t>());
 	}
 	DataChunk chunk;

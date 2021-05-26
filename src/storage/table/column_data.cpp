@@ -71,7 +71,7 @@ void ColumnData::ScanVector(ColumnScanState &state, Vector &result) {
 	}
 }
 
-template<bool SCAN_COMMITTED, bool ALLOW_UPDATES>
+template <bool SCAN_COMMITTED, bool ALLOW_UPDATES>
 void ColumnData::ScanVector(Transaction *transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
 	ScanVector(state, result);
 
@@ -89,10 +89,14 @@ void ColumnData::ScanVector(Transaction *transaction, idx_t vector_index, Column
 	}
 }
 
-template void ColumnData::ScanVector<false, false>(Transaction *transaction, idx_t vector_index, ColumnScanState &state, Vector &result);
-template void ColumnData::ScanVector<true, false>(Transaction *transaction, idx_t vector_index, ColumnScanState &state, Vector &result);
-template void ColumnData::ScanVector<false, true>(Transaction *transaction, idx_t vector_index, ColumnScanState &state, Vector &result);
-template void ColumnData::ScanVector<true, true>(Transaction *transaction, idx_t vector_index, ColumnScanState &state, Vector &result);
+template void ColumnData::ScanVector<false, false>(Transaction *transaction, idx_t vector_index, ColumnScanState &state,
+                                                   Vector &result);
+template void ColumnData::ScanVector<true, false>(Transaction *transaction, idx_t vector_index, ColumnScanState &state,
+                                                  Vector &result);
+template void ColumnData::ScanVector<false, true>(Transaction *transaction, idx_t vector_index, ColumnScanState &state,
+                                                  Vector &result);
+template void ColumnData::ScanVector<true, true>(Transaction *transaction, idx_t vector_index, ColumnScanState &state,
+                                                 Vector &result);
 
 void ColumnData::Scan(Transaction &transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
 	ScanVector<false, true>(&transaction, vector_index, state, result);
@@ -212,7 +216,8 @@ void ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
 	ScanVector(state, result);
 }
 
-void ColumnData::FetchRow(Transaction &transaction, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
+void ColumnData::FetchRow(Transaction &transaction, ColumnFetchState &state, row_t row_id, Vector &result,
+                          idx_t result_idx) {
 	auto segment = (ColumnSegment *)data.GetSegment(row_id);
 
 	// now perform the fetch within the segment
@@ -224,7 +229,8 @@ void ColumnData::FetchRow(Transaction &transaction, ColumnFetchState &state, row
 	}
 }
 
-void ColumnData::Update(Transaction &transaction, idx_t column_index, Vector &update_vector, row_t *row_ids, idx_t update_count) {
+void ColumnData::Update(Transaction &transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
+                        idx_t update_count) {
 	lock_guard<mutex> update_guard(update_lock);
 	if (!updates) {
 		updates = make_unique<UpdateSegment>(*this);
@@ -235,7 +241,8 @@ void ColumnData::Update(Transaction &transaction, idx_t column_index, Vector &up
 	updates->Update(transaction, column_index, update_vector, row_ids, update_count, base_vector);
 }
 
-void ColumnData::UpdateColumn(Transaction &transaction, const vector<column_t> &column_path, Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t depth) {
+void ColumnData::UpdateColumn(Transaction &transaction, const vector<column_t> &column_path, Vector &update_vector,
+                              row_t *row_ids, idx_t update_count, idx_t depth) {
 	// this method should only be called at the end of the path in the base column case
 	D_ASSERT(depth >= column_path.size());
 	ColumnData::Update(transaction, column_path[0], update_vector, row_ids, update_count);
@@ -450,8 +457,7 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, Ta
 			state.row_index = segment->start + base_row_index;
 			segment->Scan(state, base_row_index, count, scan_vector, 0);
 			if (updates) {
-				updates->FetchCommittedRange(segment->start - row_group.start + base_row_index,
-				                                                   count, scan_vector);
+				updates->FetchCommittedRange(segment->start - row_group.start + base_row_index, count, scan_vector);
 			}
 
 			checkpoint_state->AppendData(scan_vector, count);
@@ -501,8 +507,8 @@ void ColumnData::BaseDeserialize(DatabaseInstance &db, Deserializer &source, con
 	}
 }
 
-shared_ptr<ColumnData> ColumnData::Deserialize(DataTableInfo &info, idx_t column_index, idx_t start_row, Deserializer &source,
-                                               const LogicalType &type) {
+shared_ptr<ColumnData> ColumnData::Deserialize(DataTableInfo &info, idx_t column_index, idx_t start_row,
+                                               Deserializer &source, const LogicalType &type) {
 	return StandardColumnData::Deserialize(info, column_index, start_row, source, type);
 }
 
@@ -514,7 +520,7 @@ void ColumnData::Verify(RowGroup &parent) {
 		D_ASSERT(root != nullptr);
 		D_ASSERT(root->start == this->start);
 		idx_t prev_end = root->start;
-		while(root) {
+		while (root) {
 			D_ASSERT(prev_end == root->start);
 			prev_end = root->start + root->count;
 			if (!root->next) {

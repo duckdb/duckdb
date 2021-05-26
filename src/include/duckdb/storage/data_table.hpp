@@ -78,7 +78,8 @@ private:
 };
 
 struct DataTableInfo {
-	DataTableInfo(DatabaseInstance &db, string schema, string table) : db(db), cardinality(0), schema(move(schema)), table(move(table)) {
+	DataTableInfo(DatabaseInstance &db, string schema, string table)
+	    : db(db), cardinality(0), schema(move(schema)), table(move(table)) {
 	}
 
 	//! The database instance of the table
@@ -162,7 +163,8 @@ public:
 	//! -> 1 (second subcolumn of struct)
 	//! -> 0 (first subcolumn of INT)
 	//! This method should only be used from the WAL replay. It does not verify update constraints.
-	void UpdateColumn(TableCatalogEntry &table, ClientContext &context, Vector &row_ids, const vector<column_t> &column_path, DataChunk &updates);
+	void UpdateColumn(TableCatalogEntry &table, ClientContext &context, Vector &row_ids,
+	                  const vector<column_t> &column_path, DataChunk &updates);
 
 	//! Add an index to the DataTable
 	void AddIndex(unique_ptr<Index> index, const vector<unique_ptr<Expression>> &expressions);

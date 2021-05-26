@@ -64,7 +64,8 @@ void RowGroup::InitializeScanWithOffset(RowGroupScanState &state, idx_t vector_o
 	state.row_group = this;
 
 	state.vector_index = vector_offset;
-	state.max_row = this->start > state.parent.max_row ? 0 : MinValue<idx_t>(this->count, state.parent.max_row - this->start);
+	state.max_row =
+	    this->start > state.parent.max_row ? 0 : MinValue<idx_t>(this->count, state.parent.max_row - this->start);
 	state.column_scans = unique_ptr<ColumnScanState[]>(new ColumnScanState[column_ids.size()]);
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto column = column_ids[i];
@@ -81,7 +82,8 @@ void RowGroup::InitializeScan(RowGroupScanState &state) {
 	auto &column_ids = state.parent.column_ids;
 	state.row_group = this;
 	state.vector_index = 0;
-	state.max_row = this->start > state.parent.max_row ? 0 : MinValue<idx_t>(this->count, state.parent.max_row - this->start);
+	state.max_row =
+	    this->start > state.parent.max_row ? 0 : MinValue<idx_t>(this->count, state.parent.max_row - this->start);
 	state.column_scans = unique_ptr<ColumnScanState[]>(new ColumnScanState[column_ids.size()]);
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto column = column_ids[i];
@@ -206,11 +208,10 @@ void RowGroup::CommitDropColumn(idx_t column_idx) {
 
 void RowGroupScanState::NextVector() {
 	vector_index++;
-	for(idx_t i = 0; i < parent.column_ids.size(); i++) {
+	for (idx_t i = 0; i < parent.column_ids.size(); i++) {
 		column_scans[i].Next();
 	}
 }
-
 
 template <bool SCAN_DELETES, bool SCAN_COMMITTED, bool ALLOW_UPDATES>
 void RowGroup::TemplatedScan(Transaction *transaction, RowGroupScanState &state, DataChunk &result) {
@@ -253,7 +254,8 @@ void RowGroup::TemplatedScan(Transaction *transaction, RowGroupScanState &state,
 				result.data[i].Sequence(this->start + current_row, 1);
 			} else {
 				if (SCAN_COMMITTED) {
-					columns[column]->ScanCommitted(state.vector_index, state.column_scans[i], result.data[i], ALLOW_UPDATES);
+					columns[column]->ScanCommitted(state.vector_index, state.column_scans[i], result.data[i],
+					                               ALLOW_UPDATES);
 				} else {
 					D_ASSERT(transaction);
 					D_ASSERT(ALLOW_UPDATES);
@@ -276,7 +278,7 @@ void RowGroup::TemplatedScan(Transaction *transaction, RowGroupScanState &state,
 				D_ASSERT(table_filters->filters.count(tf_idx) == 1);
 				auto &filter = table_filters->filters[tf_idx];
 				UncompressedSegment::FilterSelection(sel, result.data[tf_idx], *filter, approved_tuple_count,
-														FlatVector::Validity(result.data[tf_idx]));
+				                                     FlatVector::Validity(result.data[tf_idx]));
 			}
 			auto end_time = high_resolution_clock::now();
 			if (adaptive_filter && adaptive_filter->permutation.size() > 1) {
@@ -473,7 +475,8 @@ void RowGroup::Update(Transaction &transaction, DataChunk &update_chunk, Vector 
 	}
 }
 
-void RowGroup::UpdateColumn(Transaction &transaction, DataChunk &updates, Vector &row_ids, const vector<column_t> &column_path) {
+void RowGroup::UpdateColumn(Transaction &transaction, DataChunk &updates, Vector &row_ids,
+                            const vector<column_t> &column_path) {
 	D_ASSERT(updates.ColumnCount() == 1);
 	auto ids = FlatVector::GetData<row_t>(row_ids);
 
@@ -654,7 +657,7 @@ void RowGroup::Delete(Transaction &transaction, DataTable *table, Vector &row_id
 
 void RowGroup::Verify() {
 #ifdef DEBUG
-	for(auto &column : columns) {
+	for (auto &column : columns) {
 		column->Verify(*this);
 	}
 #endif

@@ -9,7 +9,8 @@
 
 namespace duckdb {
 
-StandardColumnData::StandardColumnData(DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type, ColumnData *parent)
+StandardColumnData::StandardColumnData(DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type,
+                                       ColumnData *parent)
     : ColumnData(info, column_index, start_row, move(type), parent), validity(info, 0, start_row, this) {
 }
 
@@ -102,12 +103,14 @@ void StandardColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &res
 	ColumnData::Fetch(state, row_id, result);
 }
 
-void StandardColumnData::Update(Transaction &transaction, idx_t column_index, Vector &update_vector, row_t *row_ids, idx_t update_count) {
+void StandardColumnData::Update(Transaction &transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
+                                idx_t update_count) {
 	ColumnData::Update(transaction, column_index, update_vector, row_ids, update_count);
 	validity.Update(transaction, column_index, update_vector, row_ids, update_count);
 }
 
-void StandardColumnData::UpdateColumn(Transaction &transaction, const vector<column_t> &column_path, Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t depth) {
+void StandardColumnData::UpdateColumn(Transaction &transaction, const vector<column_t> &column_path,
+                                      Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t depth) {
 	if (depth >= column_path.size()) {
 		// update this column
 		ColumnData::Update(transaction, column_path[0], update_vector, row_ids, update_count);
@@ -130,13 +133,15 @@ unique_ptr<BaseStatistics> StandardColumnData::GetUpdateStatistics() {
 	return stats;
 }
 
-void StandardColumnData::FetchRow(Transaction &transaction, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
+void StandardColumnData::FetchRow(Transaction &transaction, ColumnFetchState &state, row_t row_id, Vector &result,
+                                  idx_t result_idx) {
 	// find the segment the row belongs to
 	if (state.child_states.empty()) {
 		auto child_state = make_unique<ColumnFetchState>();
 		state.child_states.push_back(move(child_state));
 	}
-	validity.FetchRow(transaction, *state.child_states[0], row_id, result, result_idx);	ColumnData::FetchRow(transaction, state, row_id, result, result_idx);
+	validity.FetchRow(transaction, *state.child_states[0], row_id, result, result_idx);
+	ColumnData::FetchRow(transaction, state, row_id, result, result_idx);
 }
 
 void StandardColumnData::CommitDropColumn() {
@@ -148,7 +153,6 @@ struct StandardColumnCheckpointState : public ColumnCheckpointState {
 	StandardColumnCheckpointState(RowGroup &row_group, ColumnData &column_data, TableDataWriter &writer)
 	    : ColumnCheckpointState(row_group, column_data, writer) {
 	}
-
 
 	unique_ptr<BaseStatistics> GetStatistics() override {
 		auto stats = global_stats->Copy();
@@ -182,8 +186,8 @@ void StandardColumnData::Initialize(PersistentColumnData &column_data) {
 	validity.Initialize(*persistent.validity);
 }
 
-shared_ptr<ColumnData> StandardColumnData::Deserialize(DataTableInfo &info, idx_t column_index, idx_t start_row, Deserializer &source,
-                                                       const LogicalType &type) {
+shared_ptr<ColumnData> StandardColumnData::Deserialize(DataTableInfo &info, idx_t column_index, idx_t start_row,
+                                                       Deserializer &source, const LogicalType &type) {
 	auto result = make_shared<StandardColumnData>(info, column_index, start_row, type, nullptr);
 	BaseDeserialize(info.db, source, type, *result);
 	ColumnData::BaseDeserialize(info.db, source, LogicalType(LogicalTypeId::VALIDITY), result->validity);
