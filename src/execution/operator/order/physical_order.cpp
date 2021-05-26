@@ -152,13 +152,13 @@ public:
 	}
 
 	//! Sorting columns, and variable size sorting data (if any)
-	unique_ptr<RowDataCollection> sorting_block = nullptr;
+	unique_ptr<RowDataCollection> sorting_block;
 	vector<unique_ptr<RowDataCollection>> var_sorting_blocks;
 	vector<unique_ptr<RowDataCollection>> var_sorting_sizes;
 
 	//! Payload data (and payload entry sizes if there is variable size data)
-	unique_ptr<RowDataCollection> payload_block = nullptr;
-	unique_ptr<RowDataCollection> sizes_block = nullptr;
+	unique_ptr<RowDataCollection> payload_block;
+	unique_ptr<RowDataCollection> sizes_block;
 
 	//! Sorted data
 	vector<unique_ptr<SortedBlock>> sorted_blocks;
@@ -436,8 +436,8 @@ private:
 	std::pair<idx_t, idx_t> data_dims;
 	idx_t offset_capacity;
 
-	unique_ptr<BufferHandle> data_handle = nullptr;
-	unique_ptr<BufferHandle> offset_handle = nullptr;
+	unique_ptr<BufferHandle> data_handle;
+	unique_ptr<BufferHandle> offset_handle;
 
 	data_ptr_t dataptr;
 	idx_t *offsets;
@@ -912,7 +912,7 @@ static void SortInMemory(BufferManager &buffer_manager, SortedBlock &cb, const S
 
 	idx_t sorting_size = 0;
 	idx_t col_offset = 0;
-	unique_ptr<BufferHandle> ties_handle = nullptr;
+	unique_ptr<BufferHandle> ties_handle;
 	bool *ties = nullptr;
 	const idx_t num_cols = sorting_state.num_cols;
 	for (idx_t i = 0; i < num_cols; i++) {
@@ -1157,12 +1157,12 @@ public:
 		idx_t r_entry_idx = right.entry_idx;
 
 		// these are always used
-		RowDataBlock *l_block = nullptr;
-		RowDataBlock *r_block = nullptr;
-		unique_ptr<BufferHandle> l_block_handle = nullptr;
-		unique_ptr<BufferHandle> r_block_handle = nullptr;
-		data_ptr_t l_ptr = nullptr;
-		data_ptr_t r_ptr = nullptr;
+		RowDataBlock *l_block;
+		RowDataBlock *r_block;
+		unique_ptr<BufferHandle> l_block_handle;
+		unique_ptr<BufferHandle> r_block_handle;
+		data_ptr_t l_ptr;
+		data_ptr_t r_ptr;
 
 		// these are only used for variable size sorting data
 		vector<idx_t> l_var_block_idxs(sorting_state.num_cols);
@@ -1301,8 +1301,8 @@ public:
 
 	//! Merges the fixed size sorting blocks
 	void Merge(const idx_t &count, const bool *left_smaller) {
-		RowDataBlock *l_block = nullptr;
-		RowDataBlock *r_block = nullptr;
+		RowDataBlock *l_block;
+		RowDataBlock *r_block;
 		unique_ptr<BufferHandle> l_block_handle;
 		unique_ptr<BufferHandle> r_block_handle;
 		data_ptr_t l_ptr;
@@ -1367,16 +1367,16 @@ public:
 	void Merge(SortedData &result_data, SortedData &l_data, SortedData &r_data, const idx_t &count,
 	           const bool *left_smaller, idx_t *next_entry_sizes) {
 		// these are always used
-		RowDataBlock *l_data_block = nullptr;
-		RowDataBlock *r_data_block = nullptr;
+		RowDataBlock *l_data_block;
+		RowDataBlock *r_data_block;
 		unique_ptr<BufferHandle> l_data_block_handle;
 		unique_ptr<BufferHandle> r_data_block_handle;
 		data_ptr_t l_ptr;
 		data_ptr_t r_ptr;
 
 		// these are only used when payload size is variable
-		RowDataBlock *l_offset_block = nullptr;
-		RowDataBlock *r_offset_block = nullptr;
+		RowDataBlock *l_offset_block;
+		RowDataBlock *r_offset_block;
 		unique_ptr<BufferHandle> l_offset_block_handle;
 		unique_ptr<BufferHandle> r_offset_block_handle;
 		idx_t *l_offsets;
@@ -1390,7 +1390,7 @@ public:
 		result_ptr += result_data.constant_size ? result_data_block->count * result_data_block->entry_size
 		                                        : result_data_block->byte_offset;
 
-		RowDataBlock *result_offset_block = nullptr;
+		RowDataBlock *result_offset_block;
 		unique_ptr<BufferHandle> result_offset_handle;
 		idx_t *result_offsets;
 		if (!result_data.constant_size) {
