@@ -420,6 +420,7 @@ int sqlite3_column_type(sqlite3_stmt *pStmt, int iCol) {
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::LIST:
 	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::MAP:
 		return SQLITE_TEXT;
 	case LogicalTypeId::BLOB:
 		return SQLITE_BLOB;
@@ -1031,6 +1032,8 @@ const char *sqlite3_column_decltype(sqlite3_stmt *pStmt, int iCol) {
 		return "VARCHAR";
 	case LogicalTypeId::LIST:
 		return "LIST";
+	case LogicalTypeId::MAP:
+		return "MAP";
 	case LogicalTypeId::STRUCT:
 		return "STRUCT";
 	case LogicalTypeId::BLOB:

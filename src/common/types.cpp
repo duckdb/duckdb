@@ -256,10 +256,9 @@ idx_t GetTypeIdSize(PhysicalType type) {
 		return sizeof(string_t);
 	case PhysicalType::INTERVAL:
 		return sizeof(interval_t);
+	case PhysicalType::MAP:
 	case PhysicalType::STRUCT:
 		return 0; // no own payload
-	case PhysicalType::MAP:
-		return 42; // FIXME there is no way to create this type yet
 	case PhysicalType::LIST:
 		return 16; // offset + len
 
@@ -414,7 +413,8 @@ string LogicalType::ToString() const {
 		if (child_types_.size() != 2) {
 			throw Exception("Map needs exactly two child elements");
 		}
-		return "MAP<" + child_types_[0].second.ToString() + ", " + child_types_[1].second.ToString() + ">";
+		return "MAP<" + child_types_[0].second.child_types()[0].second.ToString() + ", " +
+		       child_types_[1].second.child_types()[0].second.ToString() + ">";
 	}
 	case LogicalTypeId::DECIMAL: {
 		if (width_ == 0) {
