@@ -86,7 +86,7 @@ static unique_ptr<FunctionData> PragmaStorageInfoBind(ClientContext &context, ve
 
 	auto result = make_unique<PragmaStorageFunctionData>(table_entry);
 	result->storage_info = table_entry->storage->GetStorageInfo();
-	return result;
+	return move(result);
 }
 
 unique_ptr<FunctionOperatorData> PragmaStorageInfoInit(ClientContext &context, const FunctionData *bind_data,
