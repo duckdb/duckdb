@@ -33,6 +33,7 @@ static bool CanPlanIndexJoin(Transaction &transaction, TableScanBindData *bind_d
 }
 
 void CheckForInvisibleJoin(LogicalComparisonJoin &op, PerfectHashJoinState &join_state) {
+	auto cardinality = op.estimated_cardinality;
 	if (op.join_stats.empty() || !op.join_stats[0]->type.IsIntegral() || !op.join_stats[1]->type.IsIntegral()) {
 		// invisible join not possible for no integral types
 		return;

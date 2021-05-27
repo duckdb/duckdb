@@ -24,7 +24,8 @@ struct PerfectHashJoinState {
 	Value probe_max;
 	bool is_build_small {false};
 	bool is_probe_in_range {false};
-	bool is_build_min_small {false}; // theshould  100;
+	bool is_build_min_small {false};
+	bool is_build_dense {false};
 };
 
 class PhysicalHashJoinState : public PhysicalOperatorState {

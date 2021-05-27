@@ -6,6 +6,9 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
+PRAGMA enable_profiling;
+
+statement ok
 CREATE TABLE test1 (a INTEGER, b INTEGER);
 
 statement ok
@@ -36,6 +39,19 @@ SELECT a, test1.b, c FROM test1, test2 WHERE test1.b = test2.b ORDER BY c;
 13	3	30
 13	3	30
 13	3	30
+
+
+# create the table integers with the values 0..1000
+statement ok
+CREATE TABLE test3 AS SELECT * FROM range(0, 100, 1);
+
+statement ok
+CREATE TABLE test4 AS SELECT cast(random()*100 as integer) AS probe FROM generate_series(1,100000) as tbl(i);
+
+mode output_hash
+
+query I
+select * from test3,test4 where test3.range=test4.probe order by test4.probe;
 
 # join with duplicates
 
