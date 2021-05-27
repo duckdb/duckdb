@@ -2,7 +2,8 @@
 
 namespace duckdb {
 
-AllocatedData::AllocatedData(Allocator &allocator, data_ptr_t pointer) : allocator(allocator), pointer(pointer) {
+AllocatedData::AllocatedData(Allocator &allocator, data_ptr_t pointer, idx_t allocated_size) :
+    allocator(allocator), pointer(pointer), allocated_size(allocated_size) {
 }
 AllocatedData::~AllocatedData() {
 	Reset();
@@ -12,7 +13,7 @@ void AllocatedData::Reset() {
 	if (!pointer) {
 		return;
 	}
-	allocator.FreeData(pointer);
+	allocator.FreeData(pointer, allocated_size);
 	pointer = nullptr;
 }
 
@@ -28,11 +29,11 @@ data_ptr_t Allocator::AllocateData(idx_t size) {
 	return allocate_function(private_data.get(), size);
 }
 
-void Allocator::FreeData(data_ptr_t pointer) {
+void Allocator::FreeData(data_ptr_t pointer, idx_t size) {
 	if (!pointer) {
 		return;
 	}
-	return free_function(private_data.get(), pointer);
+	return free_function(private_data.get(), pointer, size);
 }
 
 } // namespace duckdb
