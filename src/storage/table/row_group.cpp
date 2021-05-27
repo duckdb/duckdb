@@ -224,7 +224,7 @@ void RowGroupScanState::NextVector() {
 }
 
 bool RowGroup::CheckZonemap(TableFilterSet &filters, const vector<column_t> &column_ids) {
-	for(auto &entry : filters.filters) {
+	for (auto &entry : filters.filters) {
 		auto column_index = entry.first;
 		auto &filter = entry.second;
 		auto base_column_index = column_ids[column_index];
@@ -247,10 +247,10 @@ bool RowGroup::CheckZonemapSegments(RowGroupScanState &state) {
 		D_ASSERT(entry.first < column_ids.size());
 		auto column_idx = entry.first;
 		auto base_column_idx = column_ids[column_idx];
-		bool read_segment =
-		    columns[base_column_idx]->CheckZonemap(state.column_scans[column_idx], *entry.second);
+		bool read_segment = columns[base_column_idx]->CheckZonemap(state.column_scans[column_idx], *entry.second);
 		if (!read_segment) {
-			idx_t target_row = state.column_scans[column_idx].current->start + state.column_scans[column_idx].current->count;
+			idx_t target_row =
+			    state.column_scans[column_idx].current->start + state.column_scans[column_idx].current->count;
 			D_ASSERT(target_row >= this->start);
 			D_ASSERT(target_row <= this->start + this->count);
 			idx_t target_vector_index = (target_row - this->start) / STANDARD_VECTOR_SIZE;
@@ -259,10 +259,11 @@ bool RowGroup::CheckZonemapSegments(RowGroupScanState &state) {
 				// for now we just bail-out
 				// FIXME: we could check if we can ALSO skip the next segments, in which case skipping a full vector
 				// might be possible
-				// we don't care that much though, since a single segment that fits less than a full vector is exceedingly rare
+				// we don't care that much though, since a single segment that fits less than a full vector is
+				// exceedingly rare
 				return true;
 			}
-			while(state.vector_index < target_vector_index) {
+			while (state.vector_index < target_vector_index) {
 				state.NextVector();
 			}
 			return false;
@@ -679,8 +680,8 @@ RowGroupPointer RowGroup::Deserialize(Deserializer &source, const vector<ColumnD
 // GetStorageInfo
 //===--------------------------------------------------------------------===//
 void RowGroup::GetStorageInfo(idx_t row_group_index, vector<vector<Value>> &result) {
-	for(idx_t col_idx = 0; col_idx < columns.size(); col_idx++) {
-		columns[col_idx]->GetStorageInfo(row_group_index, { col_idx }, result);
+	for (idx_t col_idx = 0; col_idx < columns.size(); col_idx++) {
+		columns[col_idx]->GetStorageInfo(row_group_index, {col_idx}, result);
 	}
 }
 

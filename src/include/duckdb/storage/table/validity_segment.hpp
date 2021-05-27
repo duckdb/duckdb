@@ -22,6 +22,7 @@ struct VectorData;
 class ValiditySegment : public UncompressedSegment {
 	static const validity_t LOWER_MASKS[65];
 	static const validity_t UPPER_MASKS[65];
+
 public:
 	ValiditySegment(DatabaseInstance &db, idx_t row_start, block_id_t block_id = INVALID_BLOCK);
 	~ValiditySegment();

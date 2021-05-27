@@ -1,4 +1,4 @@
-# name: test/sql/storage/test_update_delete_string.test
+# name: test/sql/storage/test_unaligned_scan.test
 # description: Test updates/deletes and strings
 # group: [storage]
 

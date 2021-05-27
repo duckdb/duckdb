@@ -211,14 +211,15 @@ public:
 	void AppendRowGroup(idx_t start_row);
 
 	vector<vector<Value>> GetStorageInfo();
+
 private:
 	//! Verify constraints with a chunk from the Append containing all columns of the table
 	void VerifyAppendConstraints(TableCatalogEntry &table, DataChunk &chunk);
 	//! Verify constraints with a chunk from the Update containing only the specified column_ids
 	void VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chunk, const vector<column_t> &column_ids);
 
-	void InitializeScanWithOffset(TableScanState &state, const vector<column_t> &column_ids,
-	                              idx_t start_row, idx_t end_row);
+	void InitializeScanWithOffset(TableScanState &state, const vector<column_t> &column_ids, idx_t start_row,
+	                              idx_t end_row);
 	bool InitializeScanInRowGroup(TableScanState &state, const vector<column_t> &column_ids,
 	                              TableFilterSet *table_filters, RowGroup *row_group, idx_t vector_index,
 	                              idx_t max_row);

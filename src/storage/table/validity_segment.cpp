@@ -64,7 +64,6 @@ idx_t ValiditySegment::Append(SegmentStatistics &stats, VectorData &data, idx_t 
 	return append_count;
 }
 
-
 // LOWER_MASKS contains masks with all the lower bits set until a specific value
 // LOWER_MASKS[0] has the 0 lowest bits set, i.e.:
 // 0b0000000000000000000000000000000000000000000000000000000000000000,
@@ -79,73 +78,71 @@ idx_t ValiditySegment::Append(SegmentStatistics &stats, VectorData &data, idx_t 
 // generated with this python snippet:
 // for i in range(65):
 //   print(hex(int((64 - i) * '0' + i * '1', 2)) + ",")
-const validity_t ValiditySegment::LOWER_MASKS[] = {
-	0x0,
-	0x1,
-	0x3,
-	0x7,
-	0xf,
-	0x1f,
-	0x3f,
-	0x7f,
-	0xff,
-	0x1ff,
-	0x3ff,
-	0x7ff,
-	0xfff,
-	0x1fff,
-	0x3fff,
-	0x7fff,
-	0xffff,
-	0x1ffff,
-	0x3ffff,
-	0x7ffff,
-	0xfffff,
-	0x1fffff,
-	0x3fffff,
-	0x7fffff,
-	0xffffff,
-	0x1ffffff,
-	0x3ffffff,
-	0x7ffffff,
-	0xfffffff,
-	0x1fffffff,
-	0x3fffffff,
-	0x7fffffff,
-	0xffffffff,
-	0x1ffffffff,
-	0x3ffffffff,
-	0x7ffffffff,
-	0xfffffffff,
-	0x1fffffffff,
-	0x3fffffffff,
-	0x7fffffffff,
-	0xffffffffff,
-	0x1ffffffffff,
-	0x3ffffffffff,
-	0x7ffffffffff,
-	0xfffffffffff,
-	0x1fffffffffff,
-	0x3fffffffffff,
-	0x7fffffffffff,
-	0xffffffffffff,
-	0x1ffffffffffff,
-	0x3ffffffffffff,
-	0x7ffffffffffff,
-	0xfffffffffffff,
-	0x1fffffffffffff,
-	0x3fffffffffffff,
-	0x7fffffffffffff,
-	0xffffffffffffff,
-	0x1ffffffffffffff,
-	0x3ffffffffffffff,
-	0x7ffffffffffffff,
-	0xfffffffffffffff,
-	0x1fffffffffffffff,
-	0x3fffffffffffffff,
-	0x7fffffffffffffff,
-	0xffffffffffffffff
-};
+const validity_t ValiditySegment::LOWER_MASKS[] = {0x0,
+                                                   0x1,
+                                                   0x3,
+                                                   0x7,
+                                                   0xf,
+                                                   0x1f,
+                                                   0x3f,
+                                                   0x7f,
+                                                   0xff,
+                                                   0x1ff,
+                                                   0x3ff,
+                                                   0x7ff,
+                                                   0xfff,
+                                                   0x1fff,
+                                                   0x3fff,
+                                                   0x7fff,
+                                                   0xffff,
+                                                   0x1ffff,
+                                                   0x3ffff,
+                                                   0x7ffff,
+                                                   0xfffff,
+                                                   0x1fffff,
+                                                   0x3fffff,
+                                                   0x7fffff,
+                                                   0xffffff,
+                                                   0x1ffffff,
+                                                   0x3ffffff,
+                                                   0x7ffffff,
+                                                   0xfffffff,
+                                                   0x1fffffff,
+                                                   0x3fffffff,
+                                                   0x7fffffff,
+                                                   0xffffffff,
+                                                   0x1ffffffff,
+                                                   0x3ffffffff,
+                                                   0x7ffffffff,
+                                                   0xfffffffff,
+                                                   0x1fffffffff,
+                                                   0x3fffffffff,
+                                                   0x7fffffffff,
+                                                   0xffffffffff,
+                                                   0x1ffffffffff,
+                                                   0x3ffffffffff,
+                                                   0x7ffffffffff,
+                                                   0xfffffffffff,
+                                                   0x1fffffffffff,
+                                                   0x3fffffffffff,
+                                                   0x7fffffffffff,
+                                                   0xffffffffffff,
+                                                   0x1ffffffffffff,
+                                                   0x3ffffffffffff,
+                                                   0x7ffffffffffff,
+                                                   0xfffffffffffff,
+                                                   0x1fffffffffffff,
+                                                   0x3fffffffffffff,
+                                                   0x7fffffffffffff,
+                                                   0xffffffffffffff,
+                                                   0x1ffffffffffffff,
+                                                   0x3ffffffffffffff,
+                                                   0x7ffffffffffffff,
+                                                   0xfffffffffffffff,
+                                                   0x1fffffffffffffff,
+                                                   0x3fffffffffffffff,
+                                                   0x7fffffffffffffff,
+                                                   0xffffffffffffffff};
 
 // UPPER_MASKS contains masks with all the highest bits set until a specific value
 // UPPER_MASKS[0] has the 0 highest bits set, i.e.:
@@ -161,86 +158,84 @@ const validity_t ValiditySegment::LOWER_MASKS[] = {
 // generated with this python snippet:
 // for i in range(65):
 //   print(hex(int(i * '1' + (64 - i) * '0', 2)) + ",")
-const validity_t ValiditySegment::UPPER_MASKS[] = {
-	0x0,
-	0x8000000000000000,
-	0xc000000000000000,
-	0xe000000000000000,
-	0xf000000000000000,
-	0xf800000000000000,
-	0xfc00000000000000,
-	0xfe00000000000000,
-	0xff00000000000000,
-	0xff80000000000000,
-	0xffc0000000000000,
-	0xffe0000000000000,
-	0xfff0000000000000,
-	0xfff8000000000000,
-	0xfffc000000000000,
-	0xfffe000000000000,
-	0xffff000000000000,
-	0xffff800000000000,
-	0xffffc00000000000,
-	0xffffe00000000000,
-	0xfffff00000000000,
-	0xfffff80000000000,
-	0xfffffc0000000000,
-	0xfffffe0000000000,
-	0xffffff0000000000,
-	0xffffff8000000000,
-	0xffffffc000000000,
-	0xffffffe000000000,
-	0xfffffff000000000,
-	0xfffffff800000000,
-	0xfffffffc00000000,
-	0xfffffffe00000000,
-	0xffffffff00000000,
-	0xffffffff80000000,
-	0xffffffffc0000000,
-	0xffffffffe0000000,
-	0xfffffffff0000000,
-	0xfffffffff8000000,
-	0xfffffffffc000000,
-	0xfffffffffe000000,
-	0xffffffffff000000,
-	0xffffffffff800000,
-	0xffffffffffc00000,
-	0xffffffffffe00000,
-	0xfffffffffff00000,
-	0xfffffffffff80000,
-	0xfffffffffffc0000,
-	0xfffffffffffe0000,
-	0xffffffffffff0000,
-	0xffffffffffff8000,
-	0xffffffffffffc000,
-	0xffffffffffffe000,
-	0xfffffffffffff000,
-	0xfffffffffffff800,
-	0xfffffffffffffc00,
-	0xfffffffffffffe00,
-	0xffffffffffffff00,
-	0xffffffffffffff80,
-	0xffffffffffffffc0,
-	0xffffffffffffffe0,
-	0xfffffffffffffff0,
-	0xfffffffffffffff8,
-	0xfffffffffffffffc,
-	0xfffffffffffffffe,
-	0xffffffffffffffff
-};
+const validity_t ValiditySegment::UPPER_MASKS[] = {0x0,
+                                                   0x8000000000000000,
+                                                   0xc000000000000000,
+                                                   0xe000000000000000,
+                                                   0xf000000000000000,
+                                                   0xf800000000000000,
+                                                   0xfc00000000000000,
+                                                   0xfe00000000000000,
+                                                   0xff00000000000000,
+                                                   0xff80000000000000,
+                                                   0xffc0000000000000,
+                                                   0xffe0000000000000,
+                                                   0xfff0000000000000,
+                                                   0xfff8000000000000,
+                                                   0xfffc000000000000,
+                                                   0xfffe000000000000,
+                                                   0xffff000000000000,
+                                                   0xffff800000000000,
+                                                   0xffffc00000000000,
+                                                   0xffffe00000000000,
+                                                   0xfffff00000000000,
+                                                   0xfffff80000000000,
+                                                   0xfffffc0000000000,
+                                                   0xfffffe0000000000,
+                                                   0xffffff0000000000,
+                                                   0xffffff8000000000,
+                                                   0xffffffc000000000,
+                                                   0xffffffe000000000,
+                                                   0xfffffff000000000,
+                                                   0xfffffff800000000,
+                                                   0xfffffffc00000000,
+                                                   0xfffffffe00000000,
+                                                   0xffffffff00000000,
+                                                   0xffffffff80000000,
+                                                   0xffffffffc0000000,
+                                                   0xffffffffe0000000,
+                                                   0xfffffffff0000000,
+                                                   0xfffffffff8000000,
+                                                   0xfffffffffc000000,
+                                                   0xfffffffffe000000,
+                                                   0xffffffffff000000,
+                                                   0xffffffffff800000,
+                                                   0xffffffffffc00000,
+                                                   0xffffffffffe00000,
+                                                   0xfffffffffff00000,
+                                                   0xfffffffffff80000,
+                                                   0xfffffffffffc0000,
+                                                   0xfffffffffffe0000,
+                                                   0xffffffffffff0000,
+                                                   0xffffffffffff8000,
+                                                   0xffffffffffffc000,
+                                                   0xffffffffffffe000,
+                                                   0xfffffffffffff000,
+                                                   0xfffffffffffff800,
+                                                   0xfffffffffffffc00,
+                                                   0xfffffffffffffe00,
+                                                   0xffffffffffffff00,
+                                                   0xffffffffffffff80,
+                                                   0xffffffffffffffc0,
+                                                   0xffffffffffffffe0,
+                                                   0xfffffffffffffff0,
+                                                   0xfffffffffffffff8,
+                                                   0xfffffffffffffffc,
+                                                   0xfffffffffffffffe,
+                                                   0xffffffffffffffff};
 
 void ValiditySegment::Scan(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset) {
 	static_assert(sizeof(validity_t) == sizeof(uint64_t), "validity_t should be 64-bit");
 
 	auto &result_mask = FlatVector::Validity(result);
-	auto input_data = (validity_t *) state.primary_handle->node->buffer;
-	auto result_data = (validity_t *) result_mask.GetData();
+	auto input_data = (validity_t *)state.primary_handle->node->buffer;
+	auto result_data = (validity_t *)result_mask.GetData();
 
 	// the code below does this, but using bitwise ops:
 	// ValidityMask source_mask(input_data);
-    // for (idx_t i = 0; i < scan_count; i++) {
-    //     result_mask.Set(result_offset + i, source_mask.RowIsValid(start + i));
-    // }
+	// for (idx_t i = 0; i < scan_count; i++) {
+	//     result_mask.Set(result_offset + i, source_mask.RowIsValid(start + i));
+	// }
 
 	// set up the initial positions
 	// we need to find the validity_entry to modify, together with the bit-index WITHIN the validity entry
@@ -253,7 +248,7 @@ void ValiditySegment::Scan(ColumnScanState &state, idx_t start, idx_t scan_count
 
 	// now start the bit games
 	idx_t pos = 0;
-	while(pos < scan_count) {
+	while (pos < scan_count) {
 		// these are the current validity entries we are dealing with
 		idx_t current_result_idx = result_entry;
 		idx_t offset;
@@ -315,7 +310,7 @@ void ValiditySegment::Scan(ColumnScanState &state, idx_t start, idx_t scan_count
 		if (input_mask != ValidityMask::ValidityBuffer::MAX_ENTRY) {
 			if (!result_data) {
 				result_mask.Initialize(STANDARD_VECTOR_SIZE);
-				result_data = (validity_t *) result_mask.GetData();
+				result_data = (validity_t *)result_mask.GetData();
 			}
 			result_data[current_result_idx] &= input_mask;
 		}

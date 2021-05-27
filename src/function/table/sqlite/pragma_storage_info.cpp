@@ -16,8 +16,7 @@
 namespace duckdb {
 
 struct PragmaStorageFunctionData : public TableFunctionData {
-	explicit PragmaStorageFunctionData(TableCatalogEntry *table_entry) :
-	    table_entry(table_entry) {
+	explicit PragmaStorageFunctionData(TableCatalogEntry *table_entry) : table_entry(table_entry) {
 	}
 
 	TableCatalogEntry *table_entry;
@@ -32,10 +31,10 @@ struct PragmaStorageOperatorData : public FunctionOperatorData {
 };
 
 static unique_ptr<FunctionData> PragmaStorageInfoBind(ClientContext &context, vector<Value> &inputs,
-                                                    unordered_map<string, Value> &named_parameters,
-                                                    vector<LogicalType> &input_table_types,
-                                                    vector<string> &input_table_names,
-                                                    vector<LogicalType> &return_types, vector<string> &names) {
+                                                      unordered_map<string, Value> &named_parameters,
+                                                      vector<LogicalType> &input_table_types,
+                                                      vector<string> &input_table_names,
+                                                      vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("row_group_id");
 	return_types.push_back(LogicalType::BIGINT);
 
@@ -83,7 +82,7 @@ static unique_ptr<FunctionData> PragmaStorageInfoBind(ClientContext &context, ve
 	if (entry->type != CatalogType::TABLE_ENTRY) {
 		throw Exception("storage_info requires a table as parameter");
 	}
-	auto table_entry = (TableCatalogEntry *) entry;
+	auto table_entry = (TableCatalogEntry *)entry;
 
 	auto result = make_unique<PragmaStorageFunctionData>(table_entry);
 	result->storage_info = table_entry->storage->GetStorageInfo();
@@ -91,13 +90,13 @@ static unique_ptr<FunctionData> PragmaStorageInfoBind(ClientContext &context, ve
 }
 
 unique_ptr<FunctionOperatorData> PragmaStorageInfoInit(ClientContext &context, const FunctionData *bind_data,
-                                                     const vector<column_t> &column_ids,
-                                                     TableFilterCollection *filters) {
+                                                       const vector<column_t> &column_ids,
+                                                       TableFilterCollection *filters) {
 	return make_unique<PragmaStorageOperatorData>();
 }
 
 static void PragmaStorageInfoFunction(ClientContext &context, const FunctionData *bind_data_p,
-                                    FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+                                      FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
 	auto &bind_data = (PragmaStorageFunctionData &)*bind_data_p;
 	auto &data = (PragmaStorageOperatorData &)*operator_state;
 	idx_t count = 0;
@@ -105,7 +104,7 @@ static void PragmaStorageInfoFunction(ClientContext &context, const FunctionData
 		auto &entry = bind_data.storage_info[data.offset++];
 		D_ASSERT(entry.size() + 1 == output.ColumnCount());
 		idx_t result_idx = 0;
-		for(idx_t col_idx = 0; col_idx < entry.size(); col_idx++, result_idx++) {
+		for (idx_t col_idx = 0; col_idx < entry.size(); col_idx++, result_idx++) {
 			if (col_idx == 1) {
 				// write the column name
 				auto column_index = entry[col_idx].GetValue<int64_t>();

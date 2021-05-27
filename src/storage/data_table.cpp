@@ -227,7 +227,7 @@ void DataTable::InitializeScan(TableScanState &state, const vector<column_t> &co
 		state.adaptive_filter = make_unique<AdaptiveFilter>(table_filters);
 	}
 	while (row_group && !row_group->InitializeScan(state.row_group_scan_state)) {
-		row_group = (RowGroup *) row_group->next.get();
+		row_group = (RowGroup *)row_group->next.get();
 	}
 }
 
@@ -237,8 +237,8 @@ void DataTable::InitializeScan(Transaction &transaction, TableScanState &state, 
 	transaction.storage.InitializeScan(this, state.local_state, table_filters);
 }
 
-void DataTable::InitializeScanWithOffset(TableScanState &state, const vector<column_t> &column_ids,
-                                         idx_t start_row, idx_t end_row) {
+void DataTable::InitializeScanWithOffset(TableScanState &state, const vector<column_t> &column_ids, idx_t start_row,
+                                         idx_t end_row) {
 
 	auto row_group = (RowGroup *)row_groups->GetSegment(start_row);
 	state.column_ids = column_ids;
@@ -292,8 +292,8 @@ bool DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState 
 			vector_index = 0;
 			max_row = state.current_row_group->start + state.current_row_group->count;
 		}
-		bool need_to_scan = InitializeScanInRowGroup(scan_state, column_ids, scan_state.table_filters, state.current_row_group,
-		                         vector_index, max_row);
+		bool need_to_scan = InitializeScanInRowGroup(scan_state, column_ids, scan_state.table_filters,
+		                                             state.current_row_group, vector_index, max_row);
 		if (context.force_parallelism) {
 			state.vector_index++;
 			if (state.vector_index * STANDARD_VECTOR_SIZE >= state.current_row_group->count) {
@@ -350,7 +350,7 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 						break;
 					}
 				}
-			} while(current_row_group);
+			} while (current_row_group);
 		}
 	}
 	return false;
@@ -1064,13 +1064,13 @@ void DataTable::CommitDropTable() {
 vector<vector<Value>> DataTable::GetStorageInfo() {
 	vector<vector<Value>> result;
 
-	auto row_group = (RowGroup *) row_groups->GetRootSegment();
+	auto row_group = (RowGroup *)row_groups->GetRootSegment();
 	idx_t row_group_index = 0;
-	while(row_group) {
+	while (row_group) {
 		row_group->GetStorageInfo(row_group_index, result);
 		row_group_index++;
 
-		row_group = (RowGroup *) row_group->next.get();
+		row_group = (RowGroup *)row_group->next.get();
 	}
 
 	return result;
