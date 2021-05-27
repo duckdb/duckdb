@@ -124,8 +124,7 @@ struct EvictionQueue {
 
 class TemporaryDirectoryHandle {
 public:
-	TemporaryDirectoryHandle(DatabaseInstance &db, string path_p) :
-		db(db), temp_directory(move(path_p)) {
+	TemporaryDirectoryHandle(DatabaseInstance &db, string path_p) : db(db), temp_directory(move(path_p)) {
 		auto &fs = FileSystem::GetFileSystem(db);
 		if (!temp_directory.empty()) {
 			fs.CreateDirectory(temp_directory);
@@ -149,7 +148,6 @@ void BufferManager::SetTemporaryDirectory(string new_dir) {
 	}
 	this->temp_directory = move(new_dir);
 }
-
 
 BufferManager::BufferManager(DatabaseInstance &db, string tmp, idx_t maximum_memory)
     : db(db), current_memory(0), maximum_memory(maximum_memory), temp_directory(move(tmp)),
@@ -312,8 +310,9 @@ string BufferManager::GetTemporaryPath(block_id_t id) {
 
 void BufferManager::RequireTemporaryDirectory() {
 	if (temp_directory.empty()) {
-		throw Exception("Out-of-memory: cannot write buffer because no temporary directory is specified!\nTo enable "
-		                "temporary buffer eviction set a temporary directory using PRAGMA temp_directory='/path/to/tmp.tmp'");
+		throw Exception(
+		    "Out-of-memory: cannot write buffer because no temporary directory is specified!\nTo enable "
+		    "temporary buffer eviction set a temporary directory using PRAGMA temp_directory='/path/to/tmp.tmp'");
 	}
 	lock_guard<mutex> temp_handle_guard(temp_handle_lock);
 	if (!temp_directory_handle) {

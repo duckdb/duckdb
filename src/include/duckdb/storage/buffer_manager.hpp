@@ -65,11 +65,12 @@ public:
 		return maximum_memory;
 	}
 
-	const string& GetTemporaryDirectory() {
+	const string &GetTemporaryDirectory() {
 		return temp_directory;
 	}
 
 	void SetTemporaryDirectory(string new_dir);
+
 private:
 	//! Evict blocks until the currently used memory + extra_memory fit, returns false if this was not possible
 	//! (i.e. not enough blocks could be evicted)
@@ -85,6 +86,7 @@ private:
 	void DeleteTemporaryFile(block_id_t id);
 
 	void RequireTemporaryDirectory();
+
 private:
 	//! The database instance
 	DatabaseInstance &db;
