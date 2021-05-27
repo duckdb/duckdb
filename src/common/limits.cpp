@@ -90,7 +90,7 @@ uint64_t NumericLimits<uint64_t>::Maximum() {
 
 hugeint_t NumericLimits<hugeint_t>::Minimum() {
 	hugeint_t result;
-	result.lower = 1;
+	result.lower = 0;
 	result.upper = numeric_limits<int64_t>::lowest();
 	return result;
 }

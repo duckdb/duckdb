@@ -720,7 +720,12 @@ void Vector::Serialize(idx_t count, Serializer &serializer) {
 	const auto write_validity = (count > 0) && !vdata.validity.AllValid();
 	serializer.Write<bool>(write_validity);
 	if (write_validity) {
-		serializer.WriteData((const_data_ptr_t)vdata.validity.GetData(), vdata.validity.ValidityMaskSize(count));
+		ValidityMask flat_mask(count);
+		for (idx_t i = 0; i < count; ++i) {
+			auto row_idx = vdata.sel->get_index(i);
+			flat_mask.Set(i, vdata.validity.RowIsValid(row_idx));
+		}
+		serializer.WriteData((const_data_ptr_t)flat_mask.GetData(), flat_mask.ValidityMaskSize(count));
 	}
 
 	if (TypeIsConstantSize(type.InternalType())) {
@@ -751,7 +756,8 @@ void Vector::Deserialize(idx_t count, Deserializer &source) {
 
 	auto &validity = FlatVector::Validity(*this);
 	validity.Reset();
-	if (source.Read<bool>()) {
+	const auto has_validity = source.Read<bool>();
+	if (has_validity) {
 		validity.Initialize(count);
 		source.ReadData((data_ptr_t)validity.GetData(), validity.ValidityMaskSize(count));
 	}
