@@ -238,6 +238,11 @@ static void PragmaDebugCheckpointAbort(ClientContext &context, const FunctionPar
 	}
 }
 
+static void PragmaSetTempDirectory(ClientContext &context, const FunctionParameters &parameters) {
+	auto &buffer_manager = BufferManager::GetBufferManager(context);
+	buffer_manager.SetTemporaryDirectory(parameters.values[0].ToString());
+}
+
 void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	RegisterEnableProfiling(set);
 
@@ -307,6 +312,8 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 
 	set.AddFunction(
 	    PragmaFunction::PragmaAssignment("debug_checkpoint_abort", PragmaDebugCheckpointAbort, LogicalType::VARCHAR));
+
+	set.AddFunction(PragmaFunction::PragmaAssignment("temp_directory", PragmaSetTempDirectory, LogicalType::VARCHAR));
 }
 
 } // namespace duckdb
