@@ -489,6 +489,34 @@ jobs:
     - name: Test
       run: build/relassert/test/unittest "*"
 
+  force-storage:
+    name: Force Storage
+    runs-on: ubuntu-20.04
+    needs: linux-debug
+
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+      BUILD_ICU: 1
+      BUILD_PARQUET: 1
+      BUILD_TPCH: 1
+      BUILD_FTS: 1
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Install
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+    - name: Build
+      run: make reldebug
+
+    - name: Test
+      run: build/reldebug/test/unittest "*" --force-storage
+
 
   threadsan:
     name: Thread Sanitizer
