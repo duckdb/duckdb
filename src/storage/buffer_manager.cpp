@@ -313,7 +313,7 @@ string BufferManager::GetTemporaryPath(block_id_t id) {
 void BufferManager::RequireTemporaryDirectory() {
 	if (temp_directory.empty()) {
 		throw Exception("Out-of-memory: cannot write buffer because no temporary directory is specified!\nTo enable "
-		                "temporary buffer eviction set a temporary directory in the configuration");
+		                "temporary buffer eviction set a temporary directory using PRAGMA temp_directory='/path/to/tmp.tmp'");
 	}
 	lock_guard<mutex> temp_handle_guard(temp_handle_lock);
 	if (!temp_directory_handle) {
