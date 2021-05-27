@@ -83,8 +83,9 @@ public:
 	void InitializeEmpty(const vector<LogicalType> &types);
 
 	//! Initialize a scan over this row_group
-	void InitializeScan(RowGroupScanState &state);
-	void InitializeScanWithOffset(RowGroupScanState &state, idx_t vector_offset);
+	bool InitializeScan(RowGroupScanState &state);
+	bool InitializeScanWithOffset(RowGroupScanState &state, idx_t vector_offset);
+	bool CheckZonemap(TableFilterSet &filters, const vector<column_t> &column_ids);
 	void Scan(Transaction &transaction, RowGroupScanState &state, DataChunk &result);
 	void IndexScan(RowGroupScanState &state, DataChunk &result, bool allow_pending_updates);
 

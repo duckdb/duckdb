@@ -57,7 +57,7 @@ void RowGroup::InitializeEmpty(const vector<LogicalType> &types) {
 	}
 }
 
-void RowGroup::InitializeScanWithOffset(RowGroupScanState &state, idx_t vector_offset) {
+bool RowGroup::InitializeScanWithOffset(RowGroupScanState &state, idx_t vector_offset) {
 	auto &column_ids = state.parent.column_ids;
 	state.row_group = this;
 
@@ -74,9 +74,14 @@ void RowGroup::InitializeScanWithOffset(RowGroupScanState &state, idx_t vector_o
 			state.column_scans[i].current = nullptr;
 		}
 	}
+	if (state.parent.table_filters) {
+		return CheckZonemap(*state.parent.table_filters, column_ids);
+	} else {
+		return true;
+	}
 }
 
-void RowGroup::InitializeScan(RowGroupScanState &state) {
+bool RowGroup::InitializeScan(RowGroupScanState &state) {
 	auto &column_ids = state.parent.column_ids;
 	state.row_group = this;
 	state.vector_index = 0;
@@ -91,6 +96,26 @@ void RowGroup::InitializeScan(RowGroupScanState &state) {
 			state.column_scans[i].current = nullptr;
 		}
 	}
+	if (state.parent.table_filters) {
+		return CheckZonemap(*state.parent.table_filters, column_ids);
+	} else {
+		return true;
+	}
+}
+
+bool RowGroup::CheckZonemap(TableFilterSet &filters, const vector<column_t> &column_ids) {
+	for(auto &entry : filters.filters) {
+		auto column_index = entry.first;
+		auto &filter = entry.second;
+		auto base_column_index = column_ids[column_index];
+
+		auto propagate_result = filter->CheckStatistics(*stats[base_column_index]->statistics);
+		if (propagate_result == FilterPropagateResult::FILTER_ALWAYS_FALSE ||
+		    propagate_result == FilterPropagateResult::FILTER_FALSE_OR_NULL) {
+			return false;
+		}
+	}
+	return true;
 }
 
 unique_ptr<RowGroup> RowGroup::AlterType(ClientContext &context, const LogicalType &target_type, idx_t changed_idx,

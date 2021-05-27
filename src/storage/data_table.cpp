@@ -250,7 +250,7 @@ void DataTable::InitializeScanWithOffset(TableScanState &state, const vector<col
 	row_group->InitializeScanWithOffset(state.row_group_scan_state, start_vector);
 }
 
-void DataTable::InitializeScanInRowGroup(TableScanState &state, const vector<column_t> &column_ids,
+bool DataTable::InitializeScanInRowGroup(TableScanState &state, const vector<column_t> &column_ids,
                                          TableFilterSet *table_filters, RowGroup *row_group, idx_t vector_index,
                                          idx_t max_row) {
 	state.column_ids = column_ids;
@@ -260,7 +260,7 @@ void DataTable::InitializeScanInRowGroup(TableScanState &state, const vector<col
 		D_ASSERT(table_filters->filters.size() > 0);
 		state.adaptive_filter = make_unique<AdaptiveFilter>(table_filters);
 	}
-	row_group->InitializeScanWithOffset(state.row_group_scan_state, vector_index);
+	return row_group->InitializeScanWithOffset(state.row_group_scan_state, vector_index);
 }
 
 idx_t DataTable::MaxThreads(ClientContext &context) {
@@ -280,7 +280,7 @@ void DataTable::InitializeParallelScan(ParallelTableScanState &state) {
 
 bool DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState &state, TableScanState &scan_state,
                                  const vector<column_t> &column_ids) {
-	if (state.current_row_group) {
+	while (state.current_row_group) {
 		idx_t vector_index;
 		idx_t max_row;
 		if (context.force_parallelism) {
@@ -292,7 +292,7 @@ bool DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState 
 			vector_index = 0;
 			max_row = state.current_row_group->start + state.current_row_group->count;
 		}
-		InitializeScanInRowGroup(scan_state, column_ids, scan_state.table_filters, state.current_row_group,
+		bool need_to_scan = InitializeScanInRowGroup(scan_state, column_ids, scan_state.table_filters, state.current_row_group,
 		                         vector_index, max_row);
 		if (context.force_parallelism) {
 			state.vector_index++;
@@ -303,8 +303,13 @@ bool DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState 
 		} else {
 			state.current_row_group = (RowGroup *)state.current_row_group->next.get();
 		}
+		if (!need_to_scan) {
+			// filters allow us to skip this row group: move to the next row group
+			continue;
+		}
 		return true;
-	} else if (!state.transaction_local_data) {
+	}
+	if (!state.transaction_local_data) {
 		auto &transaction = Transaction::GetTransaction(context);
 		// create a task for scanning the local data
 		scan_state.row_group_scan_state.max_row = 0;
@@ -361,10 +366,16 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 		if (result.size() > 0) {
 			return true;
 		} else {
-			current_row_group = state.row_group_scan_state.row_group = (RowGroup *)current_row_group->next.get();
-			if (current_row_group) {
-				current_row_group->InitializeScan(state.row_group_scan_state);
-			}
+			do {
+				current_row_group = state.row_group_scan_state.row_group = (RowGroup *)current_row_group->next.get();
+				if (current_row_group) {
+					bool scan_row_group = current_row_group->InitializeScan(state.row_group_scan_state);
+					if (scan_row_group) {
+						// skip this row group
+						break;
+					}
+				}
+			} while(current_row_group);
 		}
 	}
 	return false;

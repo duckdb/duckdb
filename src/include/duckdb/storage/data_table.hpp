@@ -219,7 +219,7 @@ private:
 
 	void InitializeScanWithOffset(TableScanState &state, const vector<column_t> &column_ids,
 	                              TableFilterSet *table_filters, idx_t start_row, idx_t end_row);
-	void InitializeScanInRowGroup(TableScanState &state, const vector<column_t> &column_ids,
+	bool InitializeScanInRowGroup(TableScanState &state, const vector<column_t> &column_ids,
 	                              TableFilterSet *table_filters, RowGroup *row_group, idx_t vector_index,
 	                              idx_t max_row);
 	bool CheckZonemap(TableScanState &state, const vector<column_t> &column_ids, TableFilterSet *table_filters,
