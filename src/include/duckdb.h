@@ -180,7 +180,8 @@ DUCKDB_API uint64_t duckdb_value_uint64(duckdb_result *result, idx_t col, idx_t 
 DUCKDB_API float duckdb_value_float(duckdb_result *result, idx_t col, idx_t row);
 //! Converts the specified value to a double. Returns 0.0 on failure or NULL.
 DUCKDB_API double duckdb_value_double(duckdb_result *result, idx_t col, idx_t row);
-//! Converts the specified value to a string. Returns nullptr on failure or NULL. The result must be freed with duckdb_free.
+//! Converts the specified value to a string. Returns nullptr on failure or NULL. The result must be freed with
+//! duckdb_free.
 DUCKDB_API char *duckdb_value_varchar(duckdb_result *result, idx_t col, idx_t row);
 //! Fetches a blob from a result set column. Returns a blob with blob.data set to nullptr on failure or NULL. The
 //! resulting "blob.data" must be freed with duckdb_free.
