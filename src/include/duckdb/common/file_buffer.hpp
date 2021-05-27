@@ -14,7 +14,6 @@ namespace duckdb {
 class Allocator;
 struct FileHandle;
 
-
 enum class FileBufferType : uint8_t { BLOCK = 1, MANAGED_BUFFER = 2 };
 
 //! The FileBuffer represents a buffer that can be read or written to a Direct IO FileHandle.

@@ -67,6 +67,7 @@ public:
 	PrivateAllocatorData *GetPrivateData() {
 		return private_data.get();
 	}
+
 private:
 	allocate_function_ptr_t allocate_function;
 	free_function_ptr_t free_function;

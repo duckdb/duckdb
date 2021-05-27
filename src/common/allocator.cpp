@@ -2,8 +2,8 @@
 
 namespace duckdb {
 
-AllocatedData::AllocatedData(Allocator &allocator, data_ptr_t pointer, idx_t allocated_size) :
-    allocator(allocator), pointer(pointer), allocated_size(allocated_size) {
+AllocatedData::AllocatedData(Allocator &allocator, data_ptr_t pointer, idx_t allocated_size)
+    : allocator(allocator), pointer(pointer), allocated_size(allocated_size) {
 }
 AllocatedData::~AllocatedData() {
 	Reset();

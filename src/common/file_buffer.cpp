@@ -9,8 +9,8 @@
 
 namespace duckdb {
 
-FileBuffer::FileBuffer(Allocator &allocator, FileBufferType type, uint64_t bufsiz) :
-	allocator(allocator), type(type), malloced_buffer(nullptr) {
+FileBuffer::FileBuffer(Allocator &allocator, FileBufferType type, uint64_t bufsiz)
+    : allocator(allocator), type(type), malloced_buffer(nullptr) {
 	const int sector_size = Storage::SECTOR_SIZE;
 	// round up to the nearest sector_size, this is only really necessary if the file buffer will be used for Direct IO
 	if (bufsiz % sector_size != 0) {
