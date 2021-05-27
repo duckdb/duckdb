@@ -536,18 +536,17 @@ void ColumnData::GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, v
 		// column_id
 		column_info.push_back(Value::BIGINT(col_path[0]));
 		// column_path
-		column_info.push_back(Value(col_path_str));
+		column_info.emplace_back(col_path_str);
 		// segment_id
 		column_info.push_back(Value::BIGINT(segment_idx));
 		// segment_type
-		column_info.push_back(Value(type.ToString()));
+		column_info.emplace_back(type.ToString());
 		// start
 		column_info.push_back(Value::BIGINT(segment->start));
 		// count
 		column_info.push_back(Value::BIGINT(segment->count));
 		// stats
-		column_info.push_back(
-		    Value(segment->stats.statistics ? segment->stats.statistics->ToString() : string("No Stats")));
+		column_info.emplace_back(segment->stats.statistics ? segment->stats.statistics->ToString() : string("No Stats"));
 		// has_updates
 		column_info.push_back(Value::BOOLEAN(updates ? true : false));
 		// persistent
@@ -560,8 +559,8 @@ void ColumnData::GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, v
 			column_info.push_back(Value::BIGINT(persistent.offset));
 		} else {
 			column_info.push_back(Value::BOOLEAN(false));
-			column_info.push_back(Value());
-			column_info.push_back(Value());
+			column_info.emplace_back();
+			column_info.emplace_back();
 		}
 
 		result.push_back(move(column_info));
