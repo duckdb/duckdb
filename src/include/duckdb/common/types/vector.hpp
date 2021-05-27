@@ -290,6 +290,8 @@ struct ListVector {
 	                   idx_t source_offset = 0);
 	static void PushBack(Vector &target, Value &insert);
 	static void Initialize(Vector &vec);
+	static vector<idx_t> Search(Vector &list, Value &key, idx_t row);
+	static Value GetValuesFromOffsets(Vector &list, vector<idx_t> &offsets);
 	//! Share the entry of the other list vector
 	static void ReferenceEntry(Vector &vector, Vector &other);
 };
