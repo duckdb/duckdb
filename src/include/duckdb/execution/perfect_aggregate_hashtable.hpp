@@ -52,6 +52,9 @@ protected:
 	//! The minimum values for each of the group columns
 	vector<Value> group_minima;
 
+	//! Reused selection vector
+	SelectionVector sel;
+
 private:
 	//! Destroy the perfect aggregate HT (called automatically by the destructor)
 	void Destroy();
