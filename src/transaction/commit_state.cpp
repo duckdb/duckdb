@@ -94,6 +94,8 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 			log->WriteDropSequence((SequenceCatalogEntry *)entry);
 		} else if (entry->type == CatalogType::MACRO_ENTRY) {
 			log->WriteDropMacro((MacroCatalogEntry *)entry);
+		} else if (entry->type == CatalogType::INDEX_ENTRY) {
+			// do nothing, indexes aren't (yet) persisted to disk
 		} else if (entry->type == CatalogType::PREPARED_STATEMENT) {
 			// do nothing, prepared statements aren't persisted to disk
 		} else {
