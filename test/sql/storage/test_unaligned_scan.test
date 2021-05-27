@@ -1,0 +1,43 @@
+# name: test/sql/storage/test_update_delete_string.test
+# description: Test updates/deletes and strings
+# group: [storage]
+
+# load the DB from disk
+load __TEST_DIR__/test_unaligned_scan.db
+
+# create a database and insert values
+statement ok
+CREATE TABLE test (a INTEGER, b VARCHAR);
+
+# insert 3 tuples and checkpoint
+statement ok
+INSERT INTO test VALUES (NULL, 'hello'), (13, 'abcdefgh'), (12, NULL)
+
+query II
+SELECT a, b FROM test ORDER BY a
+----
+NULL	hello
+12	NULL
+13	abcdefgh
+
+restart
+
+statement ok
+PRAGMA enable_verification
+
+query II
+SELECT a, b FROM test ORDER BY a
+----
+NULL	hello
+12	NULL
+13	abcdefgh
+
+# now we have persistent segments containing 3 tuples
+# now insert many values
+statement ok
+INSERT INTO test SELECT CASE WHEN i%2=0 THEN i ELSE NULL END, CASE WHEN i%2=0 THEN 'hello'||i::VARCHAR ELSE NULL END FROM range(10000) tbl(i)
+
+query IIIIIIII
+SELECT COUNT(*), SUM(a), MIN(a), MAX(a), MIN(b), MAX(b), COUNT(a), COUNT(b) FROM test
+----
+10003	24995025	0	9998	abcdefgh	hello9998	5002	5002

@@ -8,8 +8,6 @@ PRAGMA enable_verification
 statement ok
 CREATE TABLE integers(i INTEGER, j INTEGER)
 
-mode output_result
-
 statement ok
 PRAGMA storage_info('integers')
 
