@@ -41,7 +41,7 @@ void RowOperations::DestroyStates(RowLayout &layout, Vector &addresses, idx_t co
 		if (aggr.function.destructor) {
 			aggr.function.destructor(addresses, count);
 		}
-		// move to the next aggregate state
+		// Move to the next aggregate state
 		VectorOperations::AddInPlace(addresses, aggr.payload_size, count);
 	}
 }
@@ -74,21 +74,32 @@ void RowOperations::CombineStates(RowLayout &layout, Vector &sources, Vector &ta
 		return;
 	}
 
+	//	Move to the first aggregate states
+	VectorOperations::AddInPlace(sources, layout.GetAggrOffset(), count);
+	VectorOperations::AddInPlace(targets, layout.GetAggrOffset(), count);
 	for (auto &aggr : layout.GetAggregates()) {
 		D_ASSERT(aggr.function.combine);
 		aggr.function.combine(sources, targets, count);
+
+		// Move to the next aggregate states
 		VectorOperations::AddInPlace(sources, aggr.payload_size, count);
 		VectorOperations::AddInPlace(targets, aggr.payload_size, count);
 	}
 }
 
 void RowOperations::FinalizeStates(RowLayout &layout, Vector &addresses, DataChunk &result, idx_t aggr_idx) {
+	//	Move to the first aggregate state
+	VectorOperations::AddInPlace(addresses, layout.GetAggrOffset(), result.size());
+
 	auto &aggregates = layout.GetAggregates();
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		auto &target = result.data[aggr_idx + i];
 		auto &aggr = aggregates[i];
 		aggr.function.finalize(addresses, aggr.bind_data, target, result.size());
+
+		// Move to the next aggregate state
 		VectorOperations::AddInPlace(addresses, aggr.payload_size, result.size());
 	}
 }
+
 } // namespace duckdb

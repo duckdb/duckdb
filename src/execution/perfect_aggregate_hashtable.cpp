@@ -140,7 +140,6 @@ void PerfectAggregateHashTable::Combine(PerfectAggregateHashTable &other) {
 	Vector target_addresses(LogicalType::POINTER);
 	auto source_addresses_ptr = FlatVector::GetData<data_ptr_t>(source_addresses);
 	auto target_addresses_ptr = FlatVector::GetData<data_ptr_t>(target_addresses);
-	auto reinit_addresses_ptr = FlatVector::GetData<data_ptr_t>(addresses);
 
 	// iterate over all entries of both hash tables and call combine for all entries that can be combined
 	data_ptr_t source_ptr = other.data;

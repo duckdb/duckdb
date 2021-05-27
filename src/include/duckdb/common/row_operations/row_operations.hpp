@@ -31,9 +31,9 @@ struct RowOperations {
 	static void UpdateStates(AggregateObject &aggr, Vector &addresses, DataChunk &payload, idx_t arg_idx, idx_t count);
 	//! filtered update - aligned addresses
 	static void UpdateFilteredStates(AggregateObject &aggr, Vector &addresses, DataChunk &payload, idx_t arg_idx);
-	//! combine - aligned addresses, updated
+	//! combine - unaligned addresses, updated
 	static void CombineStates(RowLayout &layout, Vector &sources, Vector &targets, idx_t count);
-	//! finalize - aligned addresses, updated
+	//! finalize - unaligned addresses, updated
 	static void FinalizeStates(RowLayout &layout, Vector &addresses, DataChunk &result, idx_t aggr_idx);
 };
 

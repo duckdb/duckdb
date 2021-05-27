@@ -278,6 +278,7 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 
 	Vector addresses(LogicalType::POINTER);
 	auto new_group_count = FindOrCreateGroups(groups, group_hashes, addresses, new_groups);
+	VectorOperations::AddInPlace(addresses, layout.GetAggrOffset(), payload.size());
 
 	// now every cell has an entry
 	// update the aggregates
@@ -734,9 +735,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 		sel_vector = &no_match_vector;
 		remaining_entries = no_match_count;
 	}
-	// pointers in addresses now were moved behind the groups by CompareGroups/ScatterGroups but we may have to add
-	// padding still to point at the payload.
-	VectorOperations::AddInPlace(addresses, layout.GetAggrOffset(), groups.size());
+
 	return new_group_count;
 }
 
@@ -779,7 +778,6 @@ void GroupedAggregateHashTable::FlushMove(Vector &source_addresses, Vector &sour
 		auto &column = groups.data[i];
 		VectorOperations::Gather::Set(source_addresses, column, count, offsets[i], i);
 	}
-	VectorOperations::AddInPlace(source_addresses, layout.GetAggrOffset(), count);
 
 	SelectionVector new_groups(STANDARD_VECTOR_SIZE);
 	Vector group_addresses(LogicalType::POINTER);
@@ -906,7 +904,6 @@ idx_t GroupedAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {
 		auto &column = result.data[i];
 		VectorOperations::Gather::Set(addresses, column, result.size(), offsets[i], i);
 	}
-	VectorOperations::AddInPlace(addresses, layout.GetAggrOffset(), result.size());
 
 	RowOperations::FinalizeStates(layout, addresses, result, group_cols);
 
