@@ -2,7 +2,7 @@
 #include "altrepstring.hpp"
 using namespace duckdb;
 
-static const R_CallMethodDef R_CallDef[] = {{"duckdb_startup_R", (DL_FUNC)RApi::Startup, 2},
+static const R_CallMethodDef R_CallDef[] = {{"duckdb_startup_R", (DL_FUNC)RApi::Startup, 3},
                                             {"duckdb_connect_R", (DL_FUNC)RApi::Connect, 1},
                                             {"duckdb_prepare_R", (DL_FUNC)RApi::Prepare, 2},
                                             {"duckdb_bind_R", (DL_FUNC)RApi::Bind, 2},

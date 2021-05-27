@@ -19,7 +19,7 @@ static SEXP duckdb_finalize_database_R(SEXP dbsexp) {
 	return R_NilValue;
 }
 
-SEXP RApi::Startup(SEXP dbdirsexp, SEXP readonlysexp) {
+SEXP RApi::Startup(SEXP dbdirsexp, SEXP readonlysexp, SEXP configsexp) {
 	if (TYPEOF(dbdirsexp) != STRSXP || Rf_length(dbdirsexp) != 1) {
 		Rf_error("duckdb_startup_R: Need string parameter for dbdir");
 	}
@@ -35,10 +35,27 @@ SEXP RApi::Startup(SEXP dbdirsexp, SEXP readonlysexp) {
 	}
 
 	DBConfig config;
-	config.access_mode = AccessMode::READ_WRITE;
 	if (read_only) {
 		config.access_mode = AccessMode::READ_ONLY;
 	}
+
+	RProtector r;
+	auto confignamessexp = r.Protect(GET_NAMES(configsexp));
+
+	for (idx_t i = 0; i < Rf_length(configsexp); i++) {
+		string key = string(CHAR(STRING_ELT(confignamessexp, i)));
+		string val = string(CHAR(STRING_ELT(VECTOR_ELT(configsexp, i), 0)));
+		auto config_property = DBConfig::GetOptionByName(key);
+		if (!config_property) {
+			Rf_error("Unrecognized configuration property '%s'", key.c_str());
+		}
+		try {
+			config.SetOption(*config_property, Value(val));
+		} catch (std::exception &e) {
+			Rf_error("duckdb_startup_R: Failed to set configuration option: %s", e.what());
+		}
+	}
+
 	DuckDB *dbaddr;
 	try {
 		dbaddr = new DuckDB(dbdir, &config);
@@ -55,8 +72,6 @@ SEXP RApi::Startup(SEXP dbdirsexp, SEXP readonlysexp) {
 	context.transaction.BeginTransaction();
 	catalog.CreateTableFunction(context, &info);
 	context.transaction.Commit();
-
-	RProtector r;
 
 	SEXP dbsexp = r.Protect(R_MakeExternalPtr(dbaddr, R_NilValue, R_NilValue));
 	R_RegisterCFinalizer(dbsexp, (void (*)(SEXP))duckdb_finalize_database_R);

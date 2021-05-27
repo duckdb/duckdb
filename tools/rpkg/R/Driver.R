@@ -74,7 +74,7 @@ setMethod(
            debug = getOption("duckdb.debug", FALSE),
            read_only = FALSE,
            timezone_out = "UTC",
-           tz_out_convert = c("with", "force")) {
+           tz_out_convert = c("with", "force"), config = list()) {
 
     check_flag(debug)
     timezone_out <- check_tz(timezone_out)
@@ -86,7 +86,7 @@ setMethod(
     # aha, a late comer. let's make a new instance.
     if (!missing_dbdir && dbdir != drv@dbdir) {
       duckdb_shutdown(drv)
-      drv <- duckdb(dbdir, read_only)
+      drv <- duckdb(dbdir, read_only, config)
     }
 
     conn <- duckdb_connection(drv, debug = debug)
@@ -136,11 +136,11 @@ setMethod(
 #'
 #' @import methods DBI
 #' @export
-duckdb <- function(dbdir = DBDIR_MEMORY, read_only = FALSE) {
+duckdb <- function(dbdir = DBDIR_MEMORY, read_only = FALSE, config=list()) {
   check_flag(read_only)
   new(
     "duckdb_driver",
-    database_ref = .Call(duckdb_startup_R, dbdir, read_only),
+    database_ref = .Call(duckdb_startup_R, dbdir, read_only, config),
     dbdir = dbdir,
     read_only = read_only
   )

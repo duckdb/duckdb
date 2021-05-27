@@ -11,7 +11,7 @@ namespace duckdb {
 
 struct RApi {
 
-	static SEXP Startup(SEXP dbdirsexp, SEXP readonlysexp);
+	static SEXP Startup(SEXP dbdirsexp, SEXP readonlysexp, SEXP configsexp);
 
 	static SEXP Shutdown(SEXP dbsexp);
 
