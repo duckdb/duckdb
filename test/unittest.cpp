@@ -13,7 +13,7 @@ bool TestForceStorage() {
 	return test_force_storage;
 }
 
-}
+} // namespace duckdb
 
 int main(int argc, char *argv[]) {
 	TestChangeDirectory(DUCKDB_ROOT_DIRECTORY);
@@ -29,8 +29,8 @@ int main(int argc, char *argv[]) {
 	}
 
 	int new_argc = 0;
-	auto new_argv = unique_ptr<char*[]>(new char*[argc]);
-	for(int i = 0; i < argc; i++) {
+	auto new_argv = unique_ptr<char *[]>(new char *[argc]);
+	for (int i = 0; i < argc; i++) {
 		if (string(argv[i]) == "--force-storage") {
 			test_force_storage = true;
 		} else {

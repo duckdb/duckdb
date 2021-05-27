@@ -63,7 +63,8 @@ using namespace std;
 
 struct SQLLogicTestRunner {
 public:
-	SQLLogicTestRunner(string dbpath) : dbpath(move(dbpath)) {}
+	SQLLogicTestRunner(string dbpath) : dbpath(move(dbpath)) {
+	}
 	~SQLLogicTestRunner();
 
 	void ExecuteFile(string script);
@@ -1032,7 +1033,7 @@ string SQLLogicTestRunner::ReplaceKeywords(string input) {
 }
 
 SQLLogicTestRunner::~SQLLogicTestRunner() {
-	for(auto &loaded_path : loaded_databases) {
+	for (auto &loaded_path : loaded_databases) {
 		if (loaded_path.empty()) {
 			continue;
 		}
