@@ -36,7 +36,7 @@ using duckdb_parquet::format::FieldRepetitionType;
 using duckdb_parquet::format::FileMetaData;
 using duckdb_parquet::format::PageHeader;
 using duckdb_parquet::format::PageType;
-using duckdb_parquet::format::RowGroup;
+using ParquetRowGroup = duckdb_parquet::format::RowGroup;
 using duckdb_parquet::format::Type;
 
 class MyTransport : public TTransport {
