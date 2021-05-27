@@ -187,7 +187,10 @@ DUCKDB_API char *duckdb_value_varchar(duckdb_result *result, idx_t col, idx_t ro
 //! resulting "blob.data" must be freed with duckdb_free.
 DUCKDB_API duckdb_blob duckdb_value_blob(duckdb_result *result, idx_t col, idx_t row);
 
-//! Free a value returned from duckdb_value_varchar or duckdb_value_blob
+//! Allocate [size] amounts of memory using the duckdb internal malloc function. Any memory allocated in this manner
+//! should be freed using duckdb_free
+DUCKDB_API void *duckdb_malloc(size_t size);
+//! Free a value returned from duckdb_malloc, duckdb_value_varchar or duckdb_value_blob
 DUCKDB_API void duckdb_free(void *ptr);
 
 // Prepared Statements
