@@ -535,7 +535,7 @@ TEST_CASE("Test prepared statements in C API", "[capi][.]") {
 	// test duckdb_malloc explicitly
 	auto malloced_data = duckdb_malloc(100);
 	memcpy(malloced_data, "hello\0", 6);
-	REQUIRE(string((char *) malloced_data) == "hello");
+	REQUIRE(string((char *)malloced_data) == "hello");
 	duckdb_free(malloced_data);
 }
 
