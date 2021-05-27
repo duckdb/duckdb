@@ -218,12 +218,10 @@ private:
 	void VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chunk, const vector<column_t> &column_ids);
 
 	void InitializeScanWithOffset(TableScanState &state, const vector<column_t> &column_ids,
-	                              TableFilterSet *table_filters, idx_t start_row, idx_t end_row);
+	                              idx_t start_row, idx_t end_row);
 	bool InitializeScanInRowGroup(TableScanState &state, const vector<column_t> &column_ids,
 	                              TableFilterSet *table_filters, RowGroup *row_group, idx_t vector_index,
 	                              idx_t max_row);
-	bool CheckZonemap(TableScanState &state, const vector<column_t> &column_ids, TableFilterSet *table_filters,
-	                  idx_t &current_row);
 	bool ScanBaseTable(Transaction &transaction, DataChunk &result, TableScanState &state);
 	bool ScanCreateIndex(CreateIndexScanState &state, DataChunk &result, bool allow_pending_updates = false);
 

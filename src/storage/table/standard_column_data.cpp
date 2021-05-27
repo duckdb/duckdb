@@ -16,10 +16,10 @@ StandardColumnData::StandardColumnData(DataTableInfo &info, idx_t column_index, 
 
 bool StandardColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
 	if (!state.segment_checked) {
-		state.segment_checked = true;
 		if (!state.current) {
 			return true;
 		}
+		state.segment_checked = true;
 		auto prune_result = filter.CheckStatistics(*state.current->stats.statistics);
 		if (prune_result != FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 			return true;

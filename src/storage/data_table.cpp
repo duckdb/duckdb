@@ -226,7 +226,9 @@ void DataTable::InitializeScan(TableScanState &state, const vector<column_t> &co
 		D_ASSERT(table_filters->filters.size() > 0);
 		state.adaptive_filter = make_unique<AdaptiveFilter>(table_filters);
 	}
-	row_group->InitializeScan(state.row_group_scan_state);
+	while (row_group && !row_group->InitializeScan(state.row_group_scan_state)) {
+		row_group = (RowGroup *) row_group->next.get();
+	}
 }
 
 void DataTable::InitializeScan(Transaction &transaction, TableScanState &state, const vector<column_t> &column_ids,
@@ -236,18 +238,16 @@ void DataTable::InitializeScan(Transaction &transaction, TableScanState &state, 
 }
 
 void DataTable::InitializeScanWithOffset(TableScanState &state, const vector<column_t> &column_ids,
-                                         TableFilterSet *table_filters, idx_t start_row, idx_t end_row) {
+                                         idx_t start_row, idx_t end_row) {
 
 	auto row_group = (RowGroup *)row_groups->GetSegment(start_row);
 	state.column_ids = column_ids;
 	state.max_row = end_row;
-	state.table_filters = table_filters;
-	if (table_filters) {
-		D_ASSERT(table_filters->filters.size() > 0);
-		state.adaptive_filter = make_unique<AdaptiveFilter>(table_filters);
-	}
+	state.table_filters = nullptr;
 	idx_t start_vector = (start_row - row_group->start) / STANDARD_VECTOR_SIZE;
-	row_group->InitializeScanWithOffset(state.row_group_scan_state, start_vector);
+	if (!row_group->InitializeScanWithOffset(state.row_group_scan_state, start_vector)) {
+		throw InternalException("Failed to initialize row group scan with offset");
+	}
 }
 
 bool DataTable::InitializeScanInRowGroup(TableScanState &state, const vector<column_t> &column_ids,
@@ -332,31 +332,6 @@ void DataTable::Scan(Transaction &transaction, DataChunk &result, TableScanState
 
 	// scan the transaction-local segments
 	transaction.storage.Scan(state.local_state, column_ids, result);
-}
-
-bool DataTable::CheckZonemap(TableScanState &state, const vector<column_t> &column_ids, TableFilterSet *table_filters,
-                             idx_t &current_row) {
-	// if (!table_filters) {
-	// 	return true;
-	// }
-	// for (auto &table_filter : table_filters->filters) {
-	// 	D_ASSERT(table_filter.first < column_ids.size());
-	// 	auto base_column_idx = column_ids[table_filter.first];
-	// 	bool read_segment =
-	// 	    columns[base_column_idx]->CheckZonemap(state.column_scans[table_filter.first], *table_filter.second);
-	// 	if (!read_segment) {
-	// 		//! We can skip this partition
-	// 		idx_t vectors_to_skip = ceil((double)(state.column_scans[table_filter.first].current->count +
-	// 		                                      state.column_scans[table_filter.first].current->start - current_row) /
-	// 		                             STANDARD_VECTOR_SIZE);
-	// 		for (idx_t i = 0; i < vectors_to_skip; ++i) {
-	// 			state.NextVector();
-	// 			current_row += STANDARD_VECTOR_SIZE;
-	// 		}
-	// 		return false;
-	// 	}
-	// }
-	return true;
 }
 
 bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, TableScanState &state) {
@@ -562,7 +537,7 @@ void DataTable::ScanTableSegment(idx_t row_start, idx_t count, const std::functi
 	CreateIndexScanState state;
 
 	idx_t row_start_aligned = row_start / STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE;
-	InitializeScanWithOffset(state, column_ids, nullptr, row_start_aligned, row_start + count);
+	InitializeScanWithOffset(state, column_ids, row_start_aligned, row_start + count);
 
 	idx_t current_row = row_start_aligned;
 	while (current_row < end) {

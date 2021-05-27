@@ -66,6 +66,7 @@ void ColumnData::ScanVector(ColumnScanState &state, Vector &result) {
 			}
 			state.current = (ColumnSegment *)state.current->next.get();
 			state.current->InitializeScan(state);
+			state.segment_checked = false;
 			D_ASSERT(row_index >= state.current->start && row_index <= state.current->start + state.current->count);
 		}
 	}

@@ -59,8 +59,13 @@ void RowGroup::InitializeEmpty(const vector<LogicalType> &types) {
 
 bool RowGroup::InitializeScanWithOffset(RowGroupScanState &state, idx_t vector_offset) {
 	auto &column_ids = state.parent.column_ids;
-	state.row_group = this;
+	if (state.parent.table_filters) {
+		if (!CheckZonemap(*state.parent.table_filters, column_ids)) {
+			return false;
+		}
+	}
 
+	state.row_group = this;
 	state.vector_index = vector_offset;
 	state.max_row =
 	    this->start > state.parent.max_row ? 0 : MinValue<idx_t>(this->count, state.parent.max_row - this->start);
@@ -74,15 +79,16 @@ bool RowGroup::InitializeScanWithOffset(RowGroupScanState &state, idx_t vector_o
 			state.column_scans[i].current = nullptr;
 		}
 	}
-	if (state.parent.table_filters) {
-		return CheckZonemap(*state.parent.table_filters, column_ids);
-	} else {
-		return true;
-	}
+	return true;
 }
 
 bool RowGroup::InitializeScan(RowGroupScanState &state) {
 	auto &column_ids = state.parent.column_ids;
+	if (state.parent.table_filters) {
+		if (!CheckZonemap(*state.parent.table_filters, column_ids)) {
+			return false;
+		}
+	}
 	state.row_group = this;
 	state.vector_index = 0;
 	state.max_row =
@@ -94,25 +100,6 @@ bool RowGroup::InitializeScan(RowGroupScanState &state) {
 			columns[column]->InitializeScan(state.column_scans[i]);
 		} else {
 			state.column_scans[i].current = nullptr;
-		}
-	}
-	if (state.parent.table_filters) {
-		return CheckZonemap(*state.parent.table_filters, column_ids);
-	} else {
-		return true;
-	}
-}
-
-bool RowGroup::CheckZonemap(TableFilterSet &filters, const vector<column_t> &column_ids) {
-	for(auto &entry : filters.filters) {
-		auto column_index = entry.first;
-		auto &filter = entry.second;
-		auto base_column_index = column_ids[column_index];
-
-		auto propagate_result = filter->CheckStatistics(*stats[base_column_index]->statistics);
-		if (propagate_result == FilterPropagateResult::FILTER_ALWAYS_FALSE ||
-		    propagate_result == FilterPropagateResult::FILTER_FALSE_OR_NULL) {
-			return false;
 		}
 	}
 	return true;
@@ -236,6 +223,55 @@ void RowGroupScanState::NextVector() {
 	}
 }
 
+bool RowGroup::CheckZonemap(TableFilterSet &filters, const vector<column_t> &column_ids) {
+	for(auto &entry : filters.filters) {
+		auto column_index = entry.first;
+		auto &filter = entry.second;
+		auto base_column_index = column_ids[column_index];
+
+		auto propagate_result = filter->CheckStatistics(*stats[base_column_index]->statistics);
+		if (propagate_result == FilterPropagateResult::FILTER_ALWAYS_FALSE ||
+		    propagate_result == FilterPropagateResult::FILTER_FALSE_OR_NULL) {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool RowGroup::CheckZonemapSegments(RowGroupScanState &state) {
+	if (!state.parent.table_filters) {
+		return true;
+	}
+	auto &column_ids = state.parent.column_ids;
+	for (auto &entry : state.parent.table_filters->filters) {
+		D_ASSERT(entry.first < column_ids.size());
+		auto column_idx = entry.first;
+		auto base_column_idx = column_ids[column_idx];
+		bool read_segment =
+		    columns[base_column_idx]->CheckZonemap(state.column_scans[column_idx], *entry.second);
+		if (!read_segment) {
+			idx_t target_row = state.column_scans[column_idx].current->start + state.column_scans[column_idx].current->count;
+			D_ASSERT(target_row >= this->start);
+			D_ASSERT(target_row <= this->start + this->count);
+			idx_t target_vector_index = (target_row - this->start) / STANDARD_VECTOR_SIZE;
+			if (state.vector_index == target_vector_index) {
+				// we can't skip any full vectors because this segment contains less than a full vector
+				// for now we just bail-out
+				// FIXME: we could check if we can ALSO skip the next segments, in which case skipping a full vector
+				// might be possible
+				// we don't care that much though, since a single segment that fits less than a full vector is exceedingly rare
+				return true;
+			}
+			while(state.vector_index < target_vector_index) {
+				state.NextVector();
+			}
+			return false;
+		}
+	}
+
+	return true;
+}
+
 template <bool SCAN_DELETES, bool SCAN_COMMITTED, bool ALLOW_UPDATES>
 void RowGroup::TemplatedScan(Transaction *transaction, RowGroupScanState &state, DataChunk &result) {
 	auto &table_filters = state.parent.table_filters;
@@ -250,9 +286,9 @@ void RowGroup::TemplatedScan(Transaction *transaction, RowGroupScanState &state,
 		auto max_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, state.max_row - current_row);
 		// idx_t vector_offset = (current_row - state.base_row) / STANDARD_VECTOR_SIZE;
 		// //! first check the zonemap if we have to scan this partition
-		// if (!CheckZonemap(state, column_ids, state.table_filters, current_row)) {
-		// 	return true;
-		// }
+		if (!CheckZonemapSegments(state)) {
+			continue;
+		}
 		// // second, scan the version chunk manager to figure out which tuples to load for this transaction
 		idx_t count;
 		SelectionVector valid_sel(STANDARD_VECTOR_SIZE);

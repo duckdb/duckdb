@@ -85,7 +85,10 @@ public:
 	//! Initialize a scan over this row_group
 	bool InitializeScan(RowGroupScanState &state);
 	bool InitializeScanWithOffset(RowGroupScanState &state, idx_t vector_offset);
+	//! Checks the given set of table filters against the row-group statistics. Returns false if the entire row group can be skipped.
 	bool CheckZonemap(TableFilterSet &filters, const vector<column_t> &column_ids);
+	//! Checks the given set of table filters against the per-segment statistics. Returns false if any segments were skipped.
+	bool CheckZonemapSegments(RowGroupScanState &state);
 	void Scan(Transaction &transaction, RowGroupScanState &state, DataChunk &result);
 	void IndexScan(RowGroupScanState &state, DataChunk &result, bool allow_pending_updates);
 
