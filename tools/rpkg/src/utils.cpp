@@ -1,4 +1,5 @@
-#include "duckdbr.hpp"
+#include "rapi.hpp"
+#include "typesr.hpp"
 
 using namespace duckdb;
 
@@ -36,15 +37,29 @@ SEXP RApi::StringsToSexp(vector<string> s) {
 }
 
 RStrings::RStrings() {
-    // allocate strings once
-    RProtector r;
+	// allocate strings once
+	RProtector r;
 
-    SEXP out = r.Protect(Rf_allocVector(STRSXP, 5));
-    SET_STRING_ELT(out, 0, secs = Rf_mkChar("secs"));
-    SET_STRING_ELT(out, 1, mins = Rf_mkChar("mins"));
-    SET_STRING_ELT(out, 2, hours = Rf_mkChar("hours"));
-    SET_STRING_ELT(out, 3, days = Rf_mkChar("days"));
-    SET_STRING_ELT(out, 4, weeks = Rf_mkChar("weeks"));
-    R_PreserveObject(out);
-    MARK_NOT_MUTABLE(out);
+	SEXP out = r.Protect(Rf_allocVector(STRSXP, 5));
+	SET_STRING_ELT(out, 0, secs = Rf_mkChar("secs"));
+	SET_STRING_ELT(out, 1, mins = Rf_mkChar("mins"));
+	SET_STRING_ELT(out, 2, hours = Rf_mkChar("hours"));
+	SET_STRING_ELT(out, 3, days = Rf_mkChar("days"));
+	SET_STRING_ELT(out, 4, weeks = Rf_mkChar("weeks"));
+	R_PreserveObject(out);
+	MARK_NOT_MUTABLE(out);
+}
+
+template <class SRC, class DST, class RTYPE>
+static void AppendColumnSegment(SRC *source_data, Vector &result, idx_t count) {
+	auto result_data = FlatVector::GetData<DST>(result);
+	auto &result_mask = FlatVector::Validity(result);
+	for (idx_t i = 0; i < count; i++) {
+		auto val = source_data[i];
+		if (RTYPE::IsNull(val)) {
+			result_mask.SetInvalid(i);
+		} else {
+			result_data[i] = RTYPE::Convert(val);
+		}
+	}
 }

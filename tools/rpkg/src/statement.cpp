@@ -1,6 +1,21 @@
-#include "duckdbr.hpp"
+#include "rapi.hpp"
+#include "typesr.hpp"
+#include "altrepstring.hpp"
+
+#include "duckdb/common/types/timestamp.hpp"
 
 using namespace duckdb;
+
+// converter for primitive types
+template <class SRC, class DEST>
+static void VectorToR(Vector &src_vec, size_t count, void *dest, uint64_t dest_offset, DEST na_val) {
+	auto src_ptr = FlatVector::GetData<SRC>(src_vec);
+	auto &mask = FlatVector::Validity(src_vec);
+	auto dest_ptr = ((DEST *)dest) + dest_offset;
+	for (size_t row_idx = 0; row_idx < count; row_idx++) {
+		dest_ptr[row_idx] = !mask.RowIsValid(row_idx) ? na_val : src_ptr[row_idx];
+	}
+}
 
 struct RStatement {
 	unique_ptr<PreparedStatement> stmt;
@@ -144,7 +159,7 @@ SEXP RApi::Bind(SEXP stmtsexp, SEXP paramsexp) {
 		if (Rf_length(valsexp) != 1) {
 			Rf_error("duckdb_bind_R: bind parameter values need to have length 1");
 		}
-		auto rtype = DetectRType(valsexp);
+		auto rtype = RApiTypes::DetectRType(valsexp);
 		switch (rtype) {
 		case RType::LOGICAL: {
 			auto lgl_val = INTEGER_POINTER(valsexp)[0];
@@ -242,7 +257,7 @@ static SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 
 	uint64_t nrows = result->collection.Count();
 	SEXP retlist = r.Protect(NEW_LIST(ncols));
-	SET_NAMES(retlist, cpp_str_to_strsexp(result->names));
+	SET_NAMES(retlist, RApi::StringsToSexp(result->names));
 
 	for (size_t col_idx = 0; col_idx < ncols; col_idx++) {
 		RProtector r_varvalue;
@@ -273,8 +288,8 @@ static SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 			wrapper->vectors.resize(result->collection.Chunks().size());
 
 			auto ptr = PROTECT(R_MakeExternalPtr((void *)wrapper, R_NilValue, R_NilValue));
-			R_RegisterCFinalizer(ptr, duckdb_altrep_strings_finalizer);
-			varvalue = r_varvalue.Protect(R_new_altrep(duckdb_altrep_string_class, ptr, R_NilValue));
+			R_RegisterCFinalizer(ptr, AltrepString::Finalize);
+			varvalue = r_varvalue.Protect(R_new_altrep(AltrepString::rclass, ptr, R_NilValue));
 			UNPROTECT(1);
 			break;
 		}
@@ -309,20 +324,20 @@ static SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 			SEXP dest = VECTOR_ELT(retlist, col_idx);
 			switch (result->types[col_idx].id()) {
 			case LogicalTypeId::BOOLEAN:
-				vector_to_r<int8_t, uint32_t>(chunk->data[col_idx], chunk->size(), LOGICAL_POINTER(dest), dest_offset,
-				                              NA_LOGICAL);
+				VectorToR<int8_t, uint32_t>(chunk->data[col_idx], chunk->size(), LOGICAL_POINTER(dest), dest_offset,
+				                            NA_LOGICAL);
 				break;
 			case LogicalTypeId::TINYINT:
-				vector_to_r<int8_t, uint32_t>(chunk->data[col_idx], chunk->size(), INTEGER_POINTER(dest), dest_offset,
-				                              NA_INTEGER);
+				VectorToR<int8_t, uint32_t>(chunk->data[col_idx], chunk->size(), INTEGER_POINTER(dest), dest_offset,
+				                            NA_INTEGER);
 				break;
 			case LogicalTypeId::SMALLINT:
-				vector_to_r<int16_t, uint32_t>(chunk->data[col_idx], chunk->size(), INTEGER_POINTER(dest), dest_offset,
-				                               NA_INTEGER);
+				VectorToR<int16_t, uint32_t>(chunk->data[col_idx], chunk->size(), INTEGER_POINTER(dest), dest_offset,
+				                             NA_INTEGER);
 				break;
 			case LogicalTypeId::INTEGER:
-				vector_to_r<int32_t, uint32_t>(chunk->data[col_idx], chunk->size(), INTEGER_POINTER(dest), dest_offset,
-				                               NA_INTEGER);
+				VectorToR<int32_t, uint32_t>(chunk->data[col_idx], chunk->size(), INTEGER_POINTER(dest), dest_offset,
+				                             NA_INTEGER);
 				break;
 			case LogicalTypeId::TIMESTAMP: {
 				auto &src_vec = chunk->data[col_idx];
@@ -378,8 +393,8 @@ static SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 				break;
 			}
 			case LogicalTypeId::BIGINT:
-				vector_to_r<int64_t, double>(chunk->data[col_idx], chunk->size(), NUMERIC_POINTER(dest), dest_offset,
-				                             NA_REAL);
+				VectorToR<int64_t, double>(chunk->data[col_idx], chunk->size(), NUMERIC_POINTER(dest), dest_offset,
+				                           NA_REAL);
 				break;
 			case LogicalTypeId::HUGEINT: {
 				auto &src_vec = chunk->data[col_idx];
@@ -419,13 +434,13 @@ static SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 				break;
 			}
 			case LogicalTypeId::FLOAT:
-				vector_to_r<float, double>(chunk->data[col_idx], chunk->size(), NUMERIC_POINTER(dest), dest_offset,
-				                           NA_REAL);
+				VectorToR<float, double>(chunk->data[col_idx], chunk->size(), NUMERIC_POINTER(dest), dest_offset,
+				                         NA_REAL);
 				break;
 
 			case LogicalTypeId::DOUBLE:
-				vector_to_r<double, double>(chunk->data[col_idx], chunk->size(), NUMERIC_POINTER(dest), dest_offset,
-				                            NA_REAL);
+				VectorToR<double, double>(chunk->data[col_idx], chunk->size(), NUMERIC_POINTER(dest), dest_offset,
+				                          NA_REAL);
 				break;
 			case LogicalTypeId::VARCHAR: {
 				auto wrapper = (DuckDBAltrepStringWrapper *)R_ExternalPtrAddr(R_altrep_data1(dest));

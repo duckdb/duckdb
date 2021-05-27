@@ -1,5 +1,5 @@
-#include "duckdbr.hpp"
-
+#include "rapi.hpp"
+#include "altrepstring.hpp"
 using namespace duckdb;
 
 static const R_CallMethodDef R_CallDef[] = {{"duckdb_startup_R", (DL_FUNC)RApi::Startup, 2},
@@ -22,22 +22,7 @@ void R_init_duckdb(DllInfo *dll) {
 	R_registerRoutines(dll, NULL, R_CallDef, NULL, NULL);
 	R_useDynamicSymbols(dll, FALSE);
 
-	AltrepString::rclass = R_make_altstring_class("duckdb_strings", "duckdb", dll);
-
-	/* override ALTREP methods */
-	R_set_altrep_Inspect_method(AltrepString::rclass, AltrepString::Inspect);
-	R_set_altrep_Length_method(AltrepString::rclass, AltrepString::Length);
-
-	/* override ALTVEC methods */
-	R_set_altvec_Dataptr_method(AltrepString::rclass, AltrepString::Dataptr);
-	R_set_altvec_Dataptr_or_null_method(AltrepString::rclass, AltrepString::DataptrOrNull);
-
-	/* override ALTSTRING methods */
-	R_set_altstring_Elt_method(AltrepString::rclass, AltrepString::Elt);
-	R_set_altstring_Is_sorted_method(AltrepString::rclass, AltrepString::IsSorted);
-	R_set_altstring_No_NA_method(AltrepString::rclass, AltrepString::NoNA);
-	R_set_altstring_Set_elt_method(AltrepString::rclass, AltrepString::SetElt);
-
+	AltrepString::Initialize(dll);
 	// TODO implement SEXP (*R_altvec_Extract_subset_method_t)(SEXP, SEXP, SEXP);
 }
 } // extern "C"

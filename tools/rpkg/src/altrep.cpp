@@ -1,11 +1,28 @@
-#include "duckdbr.hpp"
+#include "rapi.hpp"
+#include "typesr.hpp"
+#include "altrepstring.hpp"
 
 using namespace duckdb;
 
-struct DuckDBAltrepStringWrapper {
-	vector<Vector> vectors;
-	idx_t length;
-};
+R_altrep_class_t AltrepString::rclass;
+
+void AltrepString::Initialize(DllInfo *dll) {
+	rclass = R_make_altstring_class("duckdb_strings", "duckdb", dll);
+
+	/* override ALTREP methods */
+	R_set_altrep_Inspect_method(rclass, Inspect);
+	R_set_altrep_Length_method(rclass, Length);
+
+	/* override ALTVEC methods */
+	R_set_altvec_Dataptr_method(rclass, Dataptr);
+	R_set_altvec_Dataptr_or_null_method(rclass, DataptrOrNull);
+
+	/* override ALTSTRING methods */
+	R_set_altstring_Elt_method(rclass, Elt);
+	R_set_altstring_Is_sorted_method(rclass, IsSorted);
+	R_set_altstring_No_NA_method(rclass, NoNA);
+	R_set_altstring_Set_elt_method(rclass, SetElt);
+}
 
 static DuckDBAltrepStringWrapper *duckdb_altrep_wrapper(SEXP x) {
 	auto wrapper = (DuckDBAltrepStringWrapper *)R_ExternalPtrAddr(R_altrep_data1(x));

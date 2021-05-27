@@ -1,8 +1,14 @@
-#include "duckdbr.hpp"
+#include "rapi.hpp"
+#include "typesr.hpp"
+
+#include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/interval.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 
 using namespace duckdb;
 
-RType RApi::DetectRType(SEXP v) {
+RType RApiTypes::DetectRType(SEXP v) {
 	if (TYPEOF(v) == REALSXP && Rf_inherits(v, "POSIXct")) {
 		return RType::TIMESTAMP;
 	} else if (TYPEOF(v) == REALSXP && Rf_inherits(v, "Date")) {
@@ -38,4 +44,57 @@ RType RApi::DetectRType(SEXP v) {
 		return RType::STRING;
 	}
 	return RType::UNKNOWN;
+}
+
+bool RDoubleType::IsNull(double val) {
+	return ISNA(val);
+}
+
+double RDoubleType::Convert(double val) {
+	return val;
+}
+
+date_t RDateType::Convert(double val) {
+	return date_t((int32_t)val);
+}
+
+timestamp_t RTimestampType::Convert(double val) {
+	return Timestamp::FromEpochSeconds(val);
+}
+
+dtime_t RTimeSecondsType::Convert(double val) {
+	return dtime_t(int64_t(val * Interval::MICROS_PER_SEC));
+}
+
+dtime_t RTimeMinutesType::Convert(double val) {
+	return dtime_t(int64_t(val * Interval::MICROS_PER_MINUTE));
+}
+
+dtime_t RTimeHoursType::Convert(double val) {
+	return dtime_t(int64_t(val * Interval::MICROS_PER_HOUR));
+}
+
+dtime_t RTimeDaysType::Convert(double val) {
+	return dtime_t(int64_t(val * Interval::MICROS_PER_DAY));
+}
+
+dtime_t RTimeWeeksType::Convert(double val) {
+	return dtime_t(int64_t(val * Interval::MICROS_PER_DAY * 7));
+}
+
+bool RIntegerType::IsNull(int val) {
+	return val == NA_INTEGER;
+}
+
+int RIntegerType::Convert(int val) {
+	return val;
+}
+
+bool RBooleanType::Convert(int val) {
+	return val;
+}
+
+template <>
+double RIntegralType::DoubleCast<>(hugeint_t val) {
+	return Hugeint::Cast<double>(val);
 }

@@ -1,4 +1,4 @@
-#include "duckdbr.hpp"
+#include "rapi.hpp"
 #include "duckdb/common/arrow_wrapper.hpp"
 
 using namespace duckdb;

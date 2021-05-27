@@ -1,4 +1,4 @@
-#include "duckdbr.hpp"
+#include "rapi.hpp"
 
 using namespace duckdb;
 

@@ -1,4 +1,4 @@
-#include "duckdbr.hpp"
+#include "rapi.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "extension/extension_helper.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
