@@ -49,6 +49,7 @@ setMethod(
 #'   is chosen, the timestamp will be returned as it would appear in the specified time zone.
 #'   If `"force"` is chosen, the timestamp will have the same clock
 #'   time as the timestamp in the database, but with the new time zone.
+#' @param config Named list with DuckDB configuration flags
 #'
 #' @return `dbConnect()` returns an object of class
 #'   \linkS4class{duckdb_connection}.
