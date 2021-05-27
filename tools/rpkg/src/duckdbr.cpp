@@ -1231,8 +1231,8 @@ SEXP duckdb_register_arrow_R(SEXP connsexp, SEXP namesexp, SEXP export_funsexp, 
 	RProtector r;
 	auto stream_factory = new RArrowTabularStreamFactory(export_funsexp, valuesexp);
 	auto stream_factory_produce = RArrowTabularStreamFactory::Produce;
-	conn->TableFunction("arrow_scan",
-	                    {Value::POINTER((uintptr_t)stream_factory), Value::POINTER((uintptr_t)stream_factory_produce)})
+	conn->TableFunction("arrow_scan", {Value::POINTER((uintptr_t)stream_factory),
+	                                   Value::POINTER((uintptr_t)stream_factory_produce), Value::UBIGINT(100000)})
 	    ->CreateView(name, true, true);
 
 	// make r external ptr object to keep factory around until arrow table is unregistered
