@@ -207,9 +207,6 @@ void ValiditySegment::Scan(ColumnScanState &state, idx_t start, idx_t scan_count
 	auto &result_mask = FlatVector::Validity(result);
 	auto input_data = (validity_t *) state.primary_handle->node->buffer;
 	auto result_data = (validity_t *) result_mask.GetData();
-	// if (input_mask.AllValid(start, scan_count)) {
-	// 	return;
-	// }
 
 	// the code below does this, but using bitwise ops:
 	// ValidityMask source_mask(input_data);
@@ -294,12 +291,10 @@ void ValiditySegment::Scan(ColumnScanState &state, idx_t start, idx_t scan_count
 			}
 			result_data[current_result_idx] &= input_mask;
 		}
-		// result_mask &= input_mask;
 	}
 
 #ifdef DEBUG
 	// verify that we actually accomplished the bitwise ops equivalent that we wanted to do
-	ValidityMask input_mask(input_data);
 	for (idx_t i = 0; i < scan_count; i++) {
 		D_ASSERT(result_mask.RowIsValid(result_offset + i) == input_mask.RowIsValid(start + i));
 	}
