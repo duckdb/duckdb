@@ -218,6 +218,22 @@ public:
 		return false;
 	}
 
+	inline bool AllValid(idx_t start, idx_t count) {
+		if (!validity_mask) {
+			return true;
+		}
+		auto end = start + count;
+
+		auto start_entry = start / BITS_PER_VALUE;
+		auto end_entry = end / BITS_PER_VALUE;
+		for(idx_t i = start_entry; i <= end_entry; i++) {
+			if (validity_mask[i] != ValidityBuffer::MAX_ENTRY) {
+				return false;
+			}
+		}
+		return true;
+	}
+
 public:
 	void Initialize(validity_t *validity) {
 		validity_data.reset();

@@ -206,15 +206,10 @@ void ValiditySegment::Scan(ColumnScanState &state, idx_t start, idx_t scan_count
 
 	auto &result_mask = FlatVector::Validity(result);
 	auto input_data = (validity_t *) state.primary_handle->node->buffer;
-#ifdef DEBUG
-	ValidityMask input_mask(input_data);
-#endif
-
-	if (result_mask.AllValid()) {
-		result_mask.Initialize(STANDARD_VECTOR_SIZE);
-	}
 	auto result_data = (validity_t *) result_mask.GetData();
-	D_ASSERT(result_data);
+	// if (input_mask.AllValid(start, scan_count)) {
+	// 	return;
+	// }
 
 	// the code below does this, but using bitwise ops:
 	// ValidityMask source_mask(input_data);
@@ -235,8 +230,8 @@ void ValiditySegment::Scan(ColumnScanState &state, idx_t start, idx_t scan_count
 	idx_t pos = 0;
 	while(pos < scan_count) {
 		// these are the current validity entries we are dealing with
+		idx_t current_result_idx = result_entry;
 		idx_t offset;
-		auto &result_mask = result_data[result_entry];
 		validity_t input_mask = input_data[input_entry];
 
 		// construct the mask to AND together with the result
@@ -292,11 +287,19 @@ void ValiditySegment::Scan(ColumnScanState &state, idx_t start, idx_t scan_count
 			input_mask |= RIGHT_MASKS[pos - scan_count];
 		}
 		// now finally we can merge the input mask with the result mask
-		result_mask &= input_mask;
+		if (input_mask != ValidityMask::ValidityBuffer::MAX_ENTRY) {
+			if (!result_data) {
+				result_mask.Initialize(STANDARD_VECTOR_SIZE);
+				result_data = (validity_t *) result_mask.GetData();
+			}
+			result_data[current_result_idx] &= input_mask;
+		}
+		// result_mask &= input_mask;
 	}
 
 #ifdef DEBUG
 	// verify that we actually accomplished the bitwise ops equivalent that we wanted to do
+	ValidityMask input_mask(input_data);
 	for (idx_t i = 0; i < scan_count; i++) {
 		D_ASSERT(result_mask.RowIsValid(result_offset + i) == input_mask.RowIsValid(start + i));
 	}
