@@ -95,6 +95,10 @@ struct DuckDBArrowSchemaHolder {
 	vector<ArrowSchema> children = {};
 	// unused in children
 	vector<ArrowSchema *> children_ptrs = {};
+	// unused in children
+	vector<ArrowSchema> nested_children = {};
+	// unused in children
+	vector<ArrowSchema*> nested_children_ptr = {};
 	//! This holds strings created to represent decimal types
 	vector<unique_ptr<char[]>> owned_type_names;
 };
@@ -108,46 +112,22 @@ static void ReleaseDuckDBArrowSchema(ArrowSchema *schema) {
 	delete holder;
 }
 
-void QueryResult::ToArrowSchema(ArrowSchema *out_schema) {
-	D_ASSERT(out_schema);
+void InitializeChild(ArrowSchema& child, const string& name = ""){
+    //! Child is cleaned up by parent
+    child.private_data = nullptr;
+    child.release = ReleaseDuckDBArrowSchema;
 
-	// Allocate as unique_ptr first to cleanup properly on error
-	auto root_holder = make_unique<DuckDBArrowSchemaHolder>();
-
-	// Allocate the children
-	root_holder->children.resize(ColumnCount());
-	root_holder->children_ptrs.resize(ColumnCount(), nullptr);
-	for (size_t i = 0; i < ColumnCount(); ++i) {
-		root_holder->children_ptrs[i] = &root_holder->children[i];
-	}
-	out_schema->children = root_holder->children_ptrs.data();
-	out_schema->n_children = ColumnCount();
-
-	// Store the schema
-	out_schema->format = "+s"; // struct apparently
-	out_schema->flags = 0;
-	out_schema->metadata = nullptr;
-	out_schema->name = "duckdb_query_result";
-	out_schema->dictionary = nullptr;
-
-	// Configure all child schemas
-	for (idx_t col_idx = 0; col_idx < ColumnCount(); col_idx++) {
-		auto &child = root_holder->children[col_idx];
-
-		// Child is cleaned up by parent
-		child.private_data = nullptr;
-		child.release = ReleaseDuckDBArrowSchema;
-
-		// Store the child schema
-		child.flags = ARROW_FLAG_NULLABLE;
-		child.name = names[col_idx].c_str();
-		child.n_children = 0;
-		child.children = nullptr;
-		child.flags = 0;
-		child.metadata = nullptr;
-		child.dictionary = nullptr;
-
-		switch (types[col_idx].id()) {
+    //! Store the child schema
+     child.flags = ARROW_FLAG_NULLABLE;
+     child.name = name.c_str();
+     child.n_children = 0;
+     child.children = nullptr;
+     child.flags = 0;
+     child.metadata = nullptr;
+     child.dictionary = nullptr;
+}
+void SetArrowFormat(DuckDBArrowSchemaHolder& root_holder, ArrowSchema& child, const LogicalType &type){
+    switch (type.id()) {
 		case LogicalTypeId::BOOLEAN:
 			child.format = "b";
 			break;
@@ -207,20 +187,59 @@ void QueryResult::ToArrowSchema(ArrowSchema *out_schema) {
 			break;
 		case LogicalTypeId::DECIMAL: {
 			uint8_t width, scale;
-			types[col_idx].GetDecimalProperties(width, scale);
+			type.GetDecimalProperties(width, scale);
 			string format = "d:" + to_string(width) + "," + to_string(scale);
 			unique_ptr<char[]> format_ptr = unique_ptr<char[]>(new char[format.size() + 1]);
 			for (size_t i = 0; i < format.size(); i++) {
 				format_ptr[i] = format[i];
 			}
 			format_ptr[format.size()] = '\0';
-			root_holder->owned_type_names.push_back(move(format_ptr));
-			child.format = root_holder->owned_type_names.back().get();
+			root_holder.owned_type_names.push_back(move(format_ptr));
+			child.format = root_holder.owned_type_names.back().get();
 			break;
 		}
+		case LogicalTypeId::LIST:
+			child.format = "+l";
+			child.children = root_holder.nested_children_ptr.data();
+			child.n_children = 1;
+			root_holder.nested_children.resize(root_holder.nested_children.size()+1);
+			root_holder.nested_children_ptr.push_back(root_holder.nested_children.data());
+			InitializeChild(*child.children[0]);
+			SetArrowFormat(root_holder,*child.children[0],type.child_types()[0].second);
+			break;
 		default:
-			throw NotImplementedException("Unsupported Arrow type " + types[col_idx].ToString());
+			throw NotImplementedException("Unsupported Arrow type " + type.ToString());
 		}
+}
+
+void QueryResult::ToArrowSchema(ArrowSchema *out_schema) {
+	D_ASSERT(out_schema);
+
+	// Allocate as unique_ptr first to cleanup properly on error
+	auto root_holder = make_unique<DuckDBArrowSchemaHolder>();
+
+	// Allocate the children
+	root_holder->children.resize(ColumnCount());
+	root_holder->children_ptrs.resize(ColumnCount(), nullptr);
+	for (size_t i = 0; i < ColumnCount(); ++i) {
+		root_holder->children_ptrs[i] = &root_holder->children[i];
+	}
+	out_schema->children = root_holder->children_ptrs.data();
+	out_schema->n_children = ColumnCount();
+
+	// Store the schema
+	out_schema->format = "+s"; // struct apparently
+	out_schema->flags = 0;
+	out_schema->metadata = nullptr;
+	out_schema->name = "duckdb_query_result";
+	out_schema->dictionary = nullptr;
+
+	// Configure all child schemas
+	for (idx_t col_idx = 0; col_idx < ColumnCount(); col_idx++) {
+		auto &child = root_holder->children[col_idx];
+		InitializeChild(child,names[col_idx]);
+        SetArrowFormat(*root_holder,child,types[col_idx]);
+
 	}
 
 	// Release ownership to caller
