@@ -5,6 +5,7 @@
 
 #include "duckdb/common/serializer/buffered_deserializer.hpp"
 #include "duckdb/common/serializer/buffered_serializer.hpp"
+#include "duckdb/common/allocator.hpp"
 
 #include <algorithm>
 #include <cstring>
