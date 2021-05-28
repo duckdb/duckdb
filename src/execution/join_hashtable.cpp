@@ -14,12 +14,11 @@ using ScanStructure = JoinHashTable::ScanStructure;
 
 JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition> &conditions,
                              vector<LogicalType> btypes, JoinType type)
-    : buffer_manager(buffer_manager), build_types(move(btypes)), validity_size(0), condition_size(0), entry_size(0),
-      tuple_size(0), join_type(type), finalized(false), has_null(false), count(0) {
+    : buffer_manager(buffer_manager), build_types(move(btypes)), validity_size(0), entry_size(0), tuple_size(0),
+      join_type(type), finalized(false), has_null(false), count(0) {
 	for (auto &condition : conditions) {
 		D_ASSERT(condition.left->return_type == condition.right->return_type);
 		auto type = condition.left->return_type;
-		auto type_size = GetTypeIdSize(type.InternalType());
 		if (condition.comparison == ExpressionType::COMPARE_EQUAL) {
 			// all equality conditions should be at the front
 			// all other conditions at the back
@@ -33,7 +32,6 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition
 		         (condition.null_values_are_equal && condition.comparison == ExpressionType::COMPARE_EQUAL));
 
 		condition_types.push_back(type);
-		condition_size += type_size;
 	}
 	// at least one equality is necessary
 	D_ASSERT(equality_types.size() > 0);
@@ -516,9 +514,9 @@ void ScanStructure::Next(DataChunk &keys, DataChunk &left, DataChunk &result) {
 }
 
 template <bool NO_MATCH_SEL, class T, class OP>
-static idx_t TemplatedGather(VectorData &vdata, Vector &pointers, const SelectionVector &current_sel, idx_t count,
-                             idx_t offset, idx_t col_idx, SelectionVector *match_sel, SelectionVector *no_match_sel,
-                             idx_t &no_match_count) {
+static idx_t TemplatedGather(VectorData &vdata, Vector &pointers, const SelectionVector &current_sel, const idx_t count,
+                             const idx_t offset, const idx_t col_idx, SelectionVector *match_sel,
+                             SelectionVector *no_match_sel, idx_t &no_match_count) {
 	// Precompute mask indexes
 	idx_t entry_idx;
 	idx_t idx_in_entry;
@@ -557,7 +555,7 @@ static idx_t TemplatedGather(VectorData &vdata, Vector &pointers, const Selectio
 
 template <bool NO_MATCH_SEL, class OP>
 static idx_t GatherSwitch(VectorData &data, PhysicalType type, Vector &pointers, const SelectionVector &current_sel,
-                          idx_t count, idx_t offset, idx_t col_idx, SelectionVector *match_sel,
+                          const idx_t count, const idx_t offset, const idx_t col_idx, SelectionVector *match_sel,
                           SelectionVector *no_match_sel, idx_t &no_match_count) {
 	switch (type) {
 	case PhysicalType::UINT8:
@@ -609,10 +607,11 @@ template <bool NO_MATCH_SEL>
 idx_t ScanStructure::ResolvePredicates(DataChunk &keys, SelectionVector *match_sel, SelectionVector *no_match_sel) {
 	SelectionVector *current_sel = &this->sel_vector;
 	idx_t remaining_count = this->count;
-	idx_t offset = ht.validity_size;
+	const auto &offsets = ht.layout.GetOffsets();
 	idx_t no_match_count = 0;
 	for (idx_t i = 0; i < ht.predicates.size(); i++) {
 		auto internal_type = keys.data[i].GetType().InternalType();
+		const auto offset = offsets[i];
 		switch (ht.predicates[i]) {
 		case ExpressionType::COMPARE_EQUAL:
 			remaining_count =
@@ -651,7 +650,6 @@ idx_t ScanStructure::ResolvePredicates(DataChunk &keys, SelectionVector *match_s
 			break;
 		}
 		current_sel = match_sel;
-		offset += GetTypeIdSize(internal_type);
 	}
 	return remaining_count;
 }
@@ -707,7 +705,8 @@ void ScanStructure::AdvancePointers() {
 
 template <class T>
 static void TemplatedGatherResult(Vector &result, data_ptr_t *pointers, const SelectionVector &result_vector,
-                                  const SelectionVector &sel_vector, idx_t count, idx_t offset, idx_t col_idx) {
+                                  const SelectionVector &sel_vector, const idx_t count, const idx_t offset,
+                                  const idx_t col_idx) {
 	// Precompute mask indexes
 	idx_t entry_idx;
 	idx_t idx_in_entry;
@@ -729,7 +728,8 @@ static void TemplatedGatherResult(Vector &result, data_ptr_t *pointers, const Se
 }
 
 static void GatherResultVector(Vector &result, const SelectionVector &result_vector, data_ptr_t *ptrs,
-                               const SelectionVector &sel_vector, idx_t count, idx_t &offset, idx_t col_idx) {
+                               const SelectionVector &sel_vector, const idx_t count, const idx_t offset,
+                               const idx_t col_idx) {
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	switch (result.GetType().InternalType()) {
 	case PhysicalType::BOOL:
@@ -775,17 +775,17 @@ static void GatherResultVector(Vector &result, const SelectionVector &result_vec
 	default:
 		throw NotImplementedException("Unimplemented type for ScanStructure::GatherResult");
 	}
-	offset += GetTypeIdSize(result.GetType().InternalType());
 }
 
 void ScanStructure::GatherResult(Vector &result, const SelectionVector &result_vector,
-                                 const SelectionVector &sel_vector, idx_t count, idx_t &offset, idx_t col_idx) {
+                                 const SelectionVector &sel_vector, const idx_t count, const idx_t offset,
+                                 const idx_t col_idx) {
 	auto ptrs = FlatVector::GetData<data_ptr_t>(pointers);
 	GatherResultVector(result, result_vector, ptrs, sel_vector, count, offset, col_idx);
 }
 
-void ScanStructure::GatherResult(Vector &result, const SelectionVector &sel_vector, idx_t count, idx_t &offset,
-                                 idx_t col_idx) {
+void ScanStructure::GatherResult(Vector &result, const SelectionVector &sel_vector, const idx_t count,
+                                 const idx_t offset, const idx_t col_idx) {
 	GatherResult(result, FlatVector::INCREMENTAL_SELECTION_VECTOR, sel_vector, count, offset, col_idx);
 }
 
@@ -814,10 +814,11 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 		result.Slice(left, result_vector, result_count);
 
 		// on the RHS, we need to fetch the data from the hash table
-		idx_t offset = ht.validity_size + ht.condition_size;
+		const auto &offsets = ht.layout.GetOffsets();
 		for (idx_t i = 0; i < ht.build_types.size(); i++) {
 			auto &vector = result.data[left.ColumnCount() + i];
 			D_ASSERT(vector.GetType() == ht.build_types[i]);
+			const auto offset = offsets[ht.condition_types.size() + i];
 			GatherResult(vector, result_vector, result_count, offset, i + ht.condition_types.size());
 		}
 		AdvancePointers();
@@ -1060,7 +1061,7 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &input, DataChunk 
 		result.data[i].Reference(input.data[i]);
 	}
 	// now fetch the data from the RHS
-	idx_t offset = ht.validity_size + ht.condition_size;
+	const auto &offsets = ht.layout.GetOffsets();
 	for (idx_t i = 0; i < ht.build_types.size(); i++) {
 		auto &vector = result.data[input.ColumnCount() + i];
 		// set NULL entries for every entry that was not found
@@ -1070,6 +1071,7 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &input, DataChunk 
 			mask.SetValid(result_sel.get_index(j));
 		}
 		// for the remaining values we fetch the values
+		const auto offset = offsets[ht.condition_types.size() + i];
 		GatherResult(vector, result_sel, result_sel, result_count, offset, i + ht.condition_types.size());
 	}
 	result.SetCardinality(input.size());
@@ -1113,10 +1115,11 @@ void JoinHashTable::ScanFullOuter(DataChunk &result, JoinHTScanState &state) {
 			ConstantVector::SetNull(result.data[i], true);
 		}
 		// gather the values from the RHS
-		idx_t offset = validity_size + condition_size;
+		const auto &offsets = layout.GetOffsets();
 		for (idx_t i = 0; i < build_types.size(); i++) {
 			auto &vector = result.data[left_column_count + i];
 			D_ASSERT(vector.GetType() == build_types[i]);
+			const auto offset = offsets[condition_types.size() + i];
 			GatherResultVector(vector, FlatVector::INCREMENTAL_SELECTION_VECTOR, key_locations,
 			                   FlatVector::INCREMENTAL_SELECTION_VECTOR, found_entries, offset,
 			                   i + condition_types.size());
