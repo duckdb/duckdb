@@ -43,7 +43,7 @@ public:
 	//! Create a VARCHAR value
 	Value(string val); // NOLINT: Allow implicit conversion from `string`
 
-	LogicalType type() const {
+	const LogicalType &type() const {
 		return type_;
 	}
 

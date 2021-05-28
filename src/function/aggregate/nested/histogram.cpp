@@ -106,7 +106,7 @@ static void HistogramFinalize(Vector &state_vector, FunctionData *, Vector &resu
 	VectorData sdata;
 	state_vector.Orrify(count, sdata);
 	auto states = (HistogramAggState<T> **)sdata.data;
-	result.Initialize(result.GetType());
+	result.Initialize();
 
 	idx_t old_len = 0;
 

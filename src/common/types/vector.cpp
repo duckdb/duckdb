@@ -49,18 +49,24 @@ Vector::Vector(Vector &&other) noexcept
 }
 
 void Vector::Reference(const Value &value) {
+	buffer = VectorBuffer::CreateConstantVector(VectorType::CONSTANT_VECTOR, value.type());
 	if (value.type().id() == LogicalTypeId::STRUCT || value.type().id() == LogicalTypeId::MAP) {
-		Initialize(value.type());
-		auto &child_entries = StructVector::GetEntries(*this);
-		for(auto &child : child_entries) {
-			child->SetVectorType(VectorType::CONSTANT_VECTOR);
+		auto struct_buffer = make_unique<VectorStructBuffer>();
+		auto &child_types = value.type().child_types();
+		auto &child_vectors = struct_buffer->GetChildren();
+		for(idx_t i = 0; i < child_types.size(); i++) {
+			auto vector = make_unique<Vector>(value.is_null ? Value(child_types[i].second) : value.struct_value[i]);
+			child_vectors.push_back(move(vector));
+		}
+		auxiliary = move(struct_buffer);
+		if (value.is_null) {
+			SetValue(0, value);
 		}
 	} else {
-		buffer = VectorBuffer::CreateConstantVector(VectorType::CONSTANT_VECTOR, value.type());
 		auxiliary.reset();
 		data = buffer->GetData();
+		SetValue(0, value);
 	}
-	SetValue(0, value);
 }
 
 void Vector::Reference(Vector &other) {
@@ -146,8 +152,10 @@ void Vector::Initialize(const LogicalType &new_type, bool zero_data) {
 			auto vector = make_unique<Vector>(child_type.second);
 			child_vectors.push_back(move(vector));
 		}
+
 		auxiliary = move(struct_buffer);
-	} else if (GetTypeIdSize(type.InternalType()) > 0) {
+	}
+	if (GetTypeIdSize(type.InternalType()) > 0) {
 		buffer = VectorBuffer::CreateStandardVector(VectorType::FLAT_VECTOR, type);
 		data = buffer->GetData();
 		if (zero_data) {
