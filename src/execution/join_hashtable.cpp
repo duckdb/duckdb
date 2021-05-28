@@ -14,9 +14,8 @@ using ScanStructure = JoinHashTable::ScanStructure;
 
 JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition> &conditions,
                              vector<LogicalType> btypes, JoinType type)
-    : buffer_manager(buffer_manager), build_types(move(btypes)), validity_size(0), equality_size(0), condition_size(0),
-      build_size(0), entry_size(0), tuple_size(0), entry_padding(0), join_type(type), finalized(false), has_null(false),
-      count(0) {
+    : buffer_manager(buffer_manager), build_types(move(btypes)), validity_size(0), condition_size(0), entry_size(0),
+      tuple_size(0), join_type(type), finalized(false), has_null(false), count(0) {
 	for (auto &condition : conditions) {
 		D_ASSERT(condition.left->return_type == condition.right->return_type);
 		auto type = condition.left->return_type;
@@ -27,7 +26,6 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition
 			// this assert checks that
 			D_ASSERT(equality_types.size() == condition_types.size());
 			equality_types.push_back(type);
-			equality_size += type_size;
 		}
 		predicates.push_back(condition.comparison);
 		null_values_are_equal.push_back(condition.null_values_are_equal);
@@ -40,24 +38,23 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition
 	// at least one equality is necessary
 	D_ASSERT(equality_types.size() > 0);
 
-	for (idx_t i = 0; i < build_types.size(); i++) {
-		build_size += GetTypeIdSize(build_types[i].InternalType());
-	}
-	validity_size = ValidityBytes::ValidityMaskSize(conditions.size() + build_types.size());
-	tuple_size = validity_size + condition_size + build_size;
-	pointer_offset = tuple_size;
+	// Types for the layout
+	vector<LogicalType> layout_types(condition_types);
+	layout_types.insert(layout_types.end(), build_types.begin(), build_types.end());
 	if (IsRightOuterJoin(join_type)) {
 		// full/right outer joins need an extra bool to keep track of whether or not a tuple has found a matching entry
 		// we place the bool before the NEXT pointer
-		pointer_offset += sizeof(bool);
+		layout_types.emplace_back(LogicalType::BOOLEAN);
 	}
-	// entry size is the tuple size and the size of the hash/next pointer
-	entry_size = pointer_offset + MaxValue(sizeof(hash_t), sizeof(uintptr_t));
-#ifndef DUCKDB_ALLOW_UNDEFINED
-	auto aligned_entry_size = RowLayout::Align(entry_size);
-	entry_padding = aligned_entry_size - entry_size;
-	entry_size += entry_padding;
-#endif
+	layout_types.emplace_back(sizeof(hash_t) < sizeof(uintptr_t) ? LogicalType::POINTER : LogicalType::HASH);
+	layout.Initialize(layout_types);
+
+	const auto &offsets = layout.GetOffsets();
+	validity_size = offsets[0];
+	tuple_size = offsets[condition_types.size() + build_types.size()];
+	pointer_offset = offsets.back();
+	entry_size = layout.GetRowWidth();
+
 	// compute the per-block capacity of this HT
 	block_capacity = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, (Storage::BLOCK_ALLOC_SIZE / entry_size) + 1);
 }

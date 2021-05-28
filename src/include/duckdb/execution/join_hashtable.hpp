@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/types/row_layout.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
@@ -154,20 +155,16 @@ public:
 	vector<LogicalType> build_types;
 	//! The comparison predicates
 	vector<ExpressionType> predicates;
+	//! Data column layout
+	RowLayout layout;
 	//! Size of the validity vector for each tuple.
 	idx_t validity_size;
-	//! Size of equality condition keys
-	idx_t equality_size;
 	//! Size of all condition keys
 	idx_t condition_size;
-	//! Size of build tuple
-	idx_t build_size;
 	//! The size of an entry as stored in the HashTable
 	idx_t entry_size;
 	//! The total tuple size
 	idx_t tuple_size;
-	//! some optional padding to align payload
-	idx_t entry_padding;
 	//! Next pointer offset in tuple
 	idx_t pointer_offset;
 	//! The join type of the HT
