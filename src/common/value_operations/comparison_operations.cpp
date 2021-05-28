@@ -53,6 +53,7 @@ static bool TemplatedBooleanOperation(const Value &left, const Value &right) {
 		return OP::Operation(left.value_.interval, right.value_.interval);
 	case PhysicalType::VARCHAR:
 		return OP::Operation(left.str_value, right.str_value);
+	case PhysicalType::MAP:
 	case PhysicalType::STRUCT: {
 		// this should be enforced by the type
 		D_ASSERT(left.struct_value.size() == right.struct_value.size());

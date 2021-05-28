@@ -271,6 +271,7 @@ void RowDataCollection::ComputeEntrySizes(Vector &v, idx_t entry_sizes[], idx_t 
 		case PhysicalType::VARCHAR:
 			ComputeStringEntrySizes(v, entry_sizes, vcount, offset);
 			break;
+		case PhysicalType::MAP:
 		case PhysicalType::STRUCT:
 			ComputeStructEntrySizes(v, entry_sizes, vcount, offset);
 			break;
@@ -595,6 +596,7 @@ void RowDataCollection::SerializeVector(Vector &v, idx_t vcount, const Selection
 		case PhysicalType::VARCHAR:
 			SerializeStringVector(v, vcount, sel, ser_count, col_idx, key_locations, validitymask_locations, offset);
 			break;
+		case PhysicalType::MAP:
 		case PhysicalType::STRUCT:
 			SerializeStructVector(v, vcount, sel, ser_count, col_idx, key_locations, validitymask_locations, offset);
 			break;
@@ -711,19 +713,6 @@ static void TemplatedDeserializeIntoVector(Vector &v, idx_t count, idx_t col_idx
 	}
 }
 
-static ValidityMask &GetValidity(Vector &v) {
-	switch (v.GetVectorType()) {
-	case VectorType::DICTIONARY_VECTOR:
-		return GetValidity(DictionaryVector::Child(v));
-	case VectorType::FLAT_VECTOR:
-		return FlatVector::Validity(v);
-	case VectorType::CONSTANT_VECTOR:
-		return ConstantVector::Validity(v);
-	default:
-		throw NotImplementedException("FIXME: cannot deserialize vector with this vectortype");
-	}
-}
-
 void RowDataCollection::DeserializeIntoStringVector(Vector &v, const idx_t &vcount, const idx_t &col_idx,
                                                     data_ptr_t *key_locations, data_ptr_t *validitymask_locations) {
 	const auto &validity = FlatVector::Validity(v);
@@ -814,7 +803,8 @@ void RowDataCollection::DeserializeIntoListVector(Vector &v, const idx_t &vcount
 			auto &list_vec_to_append = ListVector::GetEntry(append_vector);
 
 			// set validity
-			auto &append_validity = GetValidity(list_vec_to_append);
+			//! Since we are constructing the vector, this will always be a flat vector.
+			auto &append_validity = FlatVector::Validity(list_vec_to_append);
 			for (idx_t entry_idx = 0; entry_idx < next; entry_idx++) {
 				append_validity.Set(entry_idx, *(validitymask_location) & (1 << offset_in_byte));
 				if (++offset_in_byte == 8) {
@@ -920,6 +910,7 @@ void RowDataCollection::DeserializeIntoVector(Vector &v, const idx_t &vcount, co
 	case PhysicalType::VARCHAR:
 		DeserializeIntoStringVector(v, vcount, col_idx, key_locations, validitymask_locations);
 		break;
+	case PhysicalType::MAP:
 	case PhysicalType::STRUCT:
 		DeserializeIntoStructVector(v, vcount, col_idx, key_locations, validitymask_locations);
 		break;
@@ -927,7 +918,7 @@ void RowDataCollection::DeserializeIntoVector(Vector &v, const idx_t &vcount, co
 		DeserializeIntoListVector(v, vcount, col_idx, key_locations, validitymask_locations);
 		break;
 	default:
-		throw NotImplementedException("FIXME: unimplemented deserialize from row-format");
+		throw NotImplementedException("Unimplemented deserialize from row-format");
 	}
 }
 

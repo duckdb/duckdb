@@ -113,6 +113,8 @@ public:
 	static Value STRUCT(child_list_t<Value> values);
 	//! Create a list value with the given entries
 	static Value LIST(vector<Value> values);
+	//! Creat a map value with the given lists
+	static Value MAP(child_list_t<Value> values);
 
 	//! Create a blob Value from a data pointer and a length: no bytes are interpreted
 	static Value BLOB(const_data_ptr_t data, idx_t len);

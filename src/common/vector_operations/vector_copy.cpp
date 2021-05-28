@@ -137,6 +137,7 @@ void VectorOperations::Copy(const Vector &source, Vector &target, const Selectio
 		}
 		break;
 	}
+	case PhysicalType::MAP:
 	case PhysicalType::STRUCT: {
 		auto &source_children = StructVector::GetEntries(source);
 		auto &target_children = StructVector::GetEntries(target);
