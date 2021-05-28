@@ -192,6 +192,7 @@ option(AMALGAMATION_BUILD
 option(BUILD_ICU_EXTENSION "Build the ICU extension." FALSE)
 option(BUILD_PARQUET_EXTENSION "Build the Parquet extension." FALSE)
 option(BUILD_TPCH_EXTENSION "Build the TPC-H extension." FALSE)
+option(BUILD_TPCDS_EXTENSION "Build the TPC-DS extension." FALSE)
 option(BUILD_FTS_EXTENSION "Build the FTS extension." FALSE)
 option(BUILD_HTTPFS_EXTENSION "Build the HTTP File System extension." FALSE)
 option(BUILD_BENCHMARKS "Enable building of the benchmark suite." FALSE)
@@ -401,6 +402,11 @@ function(add_extension_definitions)
     add_definitions(-DBUILD_TPCH_EXTENSION=${BUILD_TPCH_EXTENSION})
   endif()
 
+  if(${BUILD_TPCDS_EXTENSION})
+    include_directories(${PROJECT_SOURCE_DIR}/extension/tpcds/include)
+    add_definitions(-DBUILD_TPCDS_EXTENSION=${BUILD_TPCDS_EXTENSION})
+  endif()
+
   if(${BUILD_FTS_EXTENSION})
     include_directories(${CMAKE_SOURCE_DIR}/extension/fts/include)
     add_definitions(-DBUILD_FTS_EXTENSION=${BUILD_FTS_EXTENSION})
@@ -426,6 +432,10 @@ function(add_extension_dependencies LIBRARY)
     add_dependencies(${LIBRARY} tpch_extension)
   endif()
 
+  if(${BUILD_TPCDS_EXTENSION})
+    add_dependencies(${LIBRARY} tpcds_extension)
+  endif()
+
   if(${BUILD_FTS_EXTENSION})
     add_dependencies(${LIBRARY} fts_extension)
   endif()
@@ -446,6 +456,10 @@ function(link_extension_libraries LIBRARY)
 
   if(${BUILD_TPCH_EXTENSION})
     target_link_libraries(${LIBRARY} tpch_extension)
+  endif()
+
+  if(${BUILD_TPCDS_EXTENSION})
+    target_link_libraries(${LIBRARY} tpcds_extension)
   endif()
 
   if(${BUILD_FTS_EXTENSION})

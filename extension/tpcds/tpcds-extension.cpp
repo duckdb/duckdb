@@ -1,0 +1,196 @@
+#include "tpcds-extension.hpp"
+
+#ifndef DUCKDB_AMALGAMATION
+#include "duckdb/function/table_function.hpp"
+#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_view_info.hpp"
+#include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
+#endif
+
+#include "dsdgen.hpp"
+
+namespace duckdb {
+
+struct DSDGenFunctionData : public TableFunctionData {
+	DSDGenFunctionData() {
+	}
+
+	bool finished = false;
+	double sf = 0;
+	string schema = DEFAULT_SCHEMA;
+	string suffix;
+	bool overwrite = false;
+};
+
+static unique_ptr<FunctionData> DsdgenBind(ClientContext &context, vector<Value> &inputs,
+                                          unordered_map<string, Value> &named_parameters,
+                                          vector<LogicalType> &input_table_types, vector<string> &input_table_names,
+                                          vector<LogicalType> &return_types, vector<string> &names) {
+	auto result = make_unique<DSDGenFunctionData>();
+	for (auto &kv : named_parameters) {
+		if (kv.first == "sf") {
+			result->sf = kv.second.value_.double_;
+		} else if (kv.first == "schema") {
+			result->schema = kv.second.str_value;
+		} else if (kv.first == "suffix") {
+			result->suffix = kv.second.str_value;
+		} else if (kv.first == "overwrite") {
+			result->overwrite = kv.second.value_.boolean;
+		}
+	}
+	return_types.push_back(LogicalType::BOOLEAN);
+	names.emplace_back("Success");
+	return move(result);
+}
+
+static void DsdgenFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
+                          DataChunk *input, DataChunk &output) {
+	auto &data = (DSDGenFunctionData &)*bind_data;
+	if (data.finished) {
+		return;
+	}
+	tpcds::DSDGenWrapper::CreateTPCDSSchema(context, data.schema, data.suffix);
+	tpcds::DSDGenWrapper::LoadTPCDSData(context, data.sf, data.schema, data.suffix);
+
+	data.finished = true;
+}
+
+struct TPCDSData : public FunctionOperatorData {
+	TPCDSData() : offset(0) {
+	}
+	idx_t offset;
+};
+
+unique_ptr<FunctionOperatorData> TPCDSInit(ClientContext &context, const FunctionData *bind_data,
+                                          const vector<column_t> &column_ids, TableFilterCollection *filters) {
+	auto result = make_unique<TPCDSData>();
+	return move(result);
+}
+
+static unique_ptr<FunctionData> TPCDSQueryBind(ClientContext &context, vector<Value> &inputs,
+                                              unordered_map<string, Value> &named_parameters,
+                                              vector<LogicalType> &input_table_types, vector<string> &input_table_names,
+                                              vector<LogicalType> &return_types, vector<string> &names) {
+	names.emplace_back("query_nr");
+	return_types.push_back(LogicalType::INTEGER);
+
+	names.emplace_back("query");
+	return_types.push_back(LogicalType::VARCHAR);
+
+	return nullptr;
+}
+
+static void TPCDSQueryFunction(ClientContext &context, const FunctionData *bind_data,
+                              FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+	auto &data = (TPCDSData &)*operator_state;
+	idx_t tpcds_queries = 22;
+	if (data.offset >= tpcds_queries) {
+		// finished returning values
+		return;
+	}
+	idx_t chunk_count = 0;
+	while (data.offset < tpcds_queries && chunk_count < STANDARD_VECTOR_SIZE) {
+		auto query = tpcds::DSDGenWrapper::GetQuery(data.offset + 1);
+		// "query_nr", PhysicalType::INT32
+		output.SetValue(0, chunk_count, Value::INTEGER((int32_t)data.offset + 1));
+		// "query", PhysicalType::VARCHAR
+		output.SetValue(1, chunk_count, Value(query));
+		data.offset++;
+		chunk_count++;
+	}
+	output.SetCardinality(chunk_count);
+}
+
+static unique_ptr<FunctionData> TPCDSQueryAnswerBind(ClientContext &context, vector<Value> &inputs,
+                                                    unordered_map<string, Value> &named_parameters,
+                                                    vector<LogicalType> &input_table_types,
+                                                    vector<string> &input_table_names,
+                                                    vector<LogicalType> &return_types, vector<string> &names) {
+	names.emplace_back("query_nr");
+	return_types.push_back(LogicalType::INTEGER);
+
+	names.emplace_back("scale_factor");
+	return_types.push_back(LogicalType::INTEGER);
+
+	names.emplace_back("answer");
+	return_types.push_back(LogicalType::VARCHAR);
+
+	return nullptr;
+}
+
+static void TPCDSQueryAnswerFunction(ClientContext &context, const FunctionData *bind_data,
+                                    FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+	auto &data = (TPCDSData &)*operator_state;
+	idx_t tpcds_queries = 22;
+	vector<double> scale_factors {0.01, 0.1, 1};
+	idx_t total_answers = tpcds_queries * scale_factors.size();
+	if (data.offset >= total_answers) {
+		// finished returning values
+		return;
+	}
+	idx_t chunk_count = 0;
+	while (data.offset < total_answers && chunk_count < STANDARD_VECTOR_SIZE) {
+		idx_t cur_query = data.offset % tpcds_queries;
+		idx_t cur_sf = data.offset / tpcds_queries;
+		auto answer = tpcds::DSDGenWrapper::GetAnswer(scale_factors[cur_sf], cur_query + 1);
+		// "query_nr", PhysicalType::INT32
+		output.SetValue(0, chunk_count, Value::INTEGER((int32_t)cur_query + 1));
+		// "scale_factor", PhysicalType::INT32
+		output.SetValue(1, chunk_count, Value::DOUBLE(scale_factors[cur_sf]));
+		// "query", PhysicalType::VARCHAR
+		output.SetValue(2, chunk_count, Value(answer));
+		data.offset++;
+		chunk_count++;
+	}
+	output.SetCardinality(chunk_count);
+}
+
+static string PragmaTpchQuery(ClientContext &context, const FunctionParameters &parameters) {
+	auto index = parameters.values[0].GetValue<int32_t>();
+	return tpcds::DSDGenWrapper::GetQuery(index);
+}
+
+void TPCDSExtension::Load(DuckDB &db) {
+	Connection con(db);
+	con.BeginTransaction();
+
+	TableFunction dbgen_func("dbgen", {}, DsdgenFunction, DsdgenBind);
+	dbgen_func.named_parameters["sf"] = LogicalType::DOUBLE;
+	dbgen_func.named_parameters["overwrite"] = LogicalType::BOOLEAN;
+	dbgen_func.named_parameters["schema"] = LogicalType::VARCHAR;
+	dbgen_func.named_parameters["suffix"] = LogicalType::VARCHAR;
+	CreateTableFunctionInfo dbgen_info(dbgen_func);
+
+	// create the dbgen function
+	auto &catalog = Catalog::GetCatalog(*con.context);
+	catalog.CreateTableFunction(*con.context, &dbgen_info);
+
+	// create the TPCDS pragma that allows us to run the query
+	auto tpcds_func = PragmaFunction::PragmaCall("tpcds", PragmaTpchQuery, {LogicalType::BIGINT});
+	CreatePragmaFunctionInfo info(tpcds_func);
+	catalog.CreatePragmaFunction(*con.context, &info);
+
+	// create the TPCDS_QUERIES function that returns the query
+	TableFunction tpcds_query_func("tpcds_queries", {}, TPCDSQueryFunction, TPCDSQueryBind, TPCDSInit);
+	CreateTableFunctionInfo tpcds_query_info(tpcds_query_func);
+	catalog.CreateTableFunction(*con.context, &tpcds_query_info);
+
+	// create the TPCDS_ANSWERS that returns the query result
+	TableFunction tpcds_query_answer_func("tpcds_answers", {}, TPCDSQueryAnswerFunction, TPCDSQueryAnswerBind, TPCDSInit);
+	CreateTableFunctionInfo tpcds_query_asnwer_info(tpcds_query_answer_func);
+	catalog.CreateTableFunction(*con.context, &tpcds_query_asnwer_info);
+
+	con.Commit();
+}
+
+std::string TPCDSExtension::GetQuery(int query) {
+	return tpcds::DSDGenWrapper::GetQuery(query);
+}
+
+std::string TPCDSExtension::GetAnswer(double sf, int query) {
+	return tpcds::DSDGenWrapper::GetAnswer(sf, query);
+}
+
+} // namespace duckdb
