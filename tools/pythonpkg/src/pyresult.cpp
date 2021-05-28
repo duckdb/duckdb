@@ -121,8 +121,7 @@ py::object GetValueToPython(Value &val, const LogicalType &type) {
 			auto &child_entry = type.child_types()[i];
 			auto &child_name = child_entry.first;
 			auto &child_type = child_entry.second;
-			py_struct[child_name.c_str()] =
-			    GetValueToPython(val.struct_value[i], child_type);
+			py_struct[child_name.c_str()] = GetValueToPython(val.struct_value[i], child_type);
 		}
 		return std::move(py_struct);
 	}

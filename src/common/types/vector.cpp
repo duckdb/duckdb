@@ -54,7 +54,7 @@ void Vector::Reference(const Value &value) {
 		auto struct_buffer = make_unique<VectorStructBuffer>();
 		auto &child_types = value.type().child_types();
 		auto &child_vectors = struct_buffer->GetChildren();
-		for(idx_t i = 0; i < child_types.size(); i++) {
+		for (idx_t i = 0; i < child_types.size(); i++) {
 			auto vector = make_unique<Vector>(value.is_null ? Value(child_types[i].second) : value.struct_value[i]);
 			child_vectors.push_back(move(vector));
 		}
@@ -148,7 +148,7 @@ void Vector::Initialize(const LogicalType &new_type, bool zero_data) {
 		auto struct_buffer = make_unique<VectorStructBuffer>();
 		auto &child_types = type.child_types();
 		auto &child_vectors = struct_buffer->GetChildren();
-		for(auto &child_type : child_types) {
+		for (auto &child_type : child_types) {
 			auto vector = make_unique<Vector>(child_type.second);
 			child_vectors.push_back(move(vector));
 		}
@@ -910,7 +910,7 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 		if (GetVectorType() == VectorType::FLAT_VECTOR || GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			auto &children = StructVector::GetEntries(*this);
 			D_ASSERT(child_types.size() == children.size());
-			for(idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
+			for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
 				D_ASSERT(children[child_idx]->GetType() == child_types[child_idx].second);
 				children[child_idx]->Verify(sel, count);
 			}

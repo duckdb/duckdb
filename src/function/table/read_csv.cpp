@@ -99,7 +99,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, vector<Value
 			}
 			auto &child_types = child_type.child_types();
 			D_ASSERT(child_types.size() == kv.second.struct_value.size());
-			for(idx_t i = 0; i < kv.second.struct_value.size(); i++) {
+			for (idx_t i = 0; i < kv.second.struct_value.size(); i++) {
 				auto &name = child_types[i].first;
 				auto &val = kv.second.struct_value[i];
 				names.push_back(name);
