@@ -35,16 +35,16 @@ public:
 
 	idx_t Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
 	           Vector &result) override {
-		result.Initialize(Type());
+		auto &type = Type();
+		result.Initialize(type);
 
-		for (idx_t i = 0; i < Type().child_types().size(); i++) {
-			auto child_read = make_unique<Vector>();
-			child_read->Initialize(Type().child_types()[i].second);
-			auto child_num_values = child_readers[i]->Read(num_values, filter, define_out, repeat_out, *child_read);
+		auto &struct_entries = StructVector::GetEntries(result);
+		D_ASSERT(type.child_types().size() == struct_entries.size());
+		for (idx_t i = 0; i < struct_entries.size(); i++) {
+			auto child_num_values = child_readers[i]->Read(num_values, filter, define_out, repeat_out, *struct_entries[i]);
 			if (child_num_values != num_values) {
 				throw std::runtime_error("Struct child row count mismatch");
 			}
-			StructVector::AddEntry(result, Type().child_types()[i].first, move(child_read));
 		}
 
 		return num_values;

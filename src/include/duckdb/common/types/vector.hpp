@@ -318,9 +318,8 @@ struct StringVector {
 };
 
 struct StructVector {
-	static bool HasEntries(const Vector &vector);
-	static const child_list_t<unique_ptr<Vector>> &GetEntries(const Vector &vector);
-	static void AddEntry(Vector &vector, const string &name, unique_ptr<Vector> entry);
+	static const vector<unique_ptr<Vector>> &GetEntries(const Vector &vector);
+	static vector<unique_ptr<Vector>> &GetEntries(Vector &vector);
 };
 
 struct SequenceVector {

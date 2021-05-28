@@ -418,11 +418,11 @@ Value Value::STRUCT(child_list_t<Value> values) {
 	Value result;
 	child_list_t<LogicalType> child_types;
 	for (auto &child : values) {
-		child_types.push_back(make_pair(child.first, child.second.type()));
+		child_types.push_back(make_pair(move(child.first), child.second.type()));
+		result.struct_value.push_back(move(child.second));
 	}
 	result.type_ = LogicalType(LogicalTypeId::STRUCT, child_types);
 
-	result.struct_value = move(values);
 	result.is_null = false;
 	return result;
 }
@@ -909,8 +909,9 @@ string Value::ToString() const {
 	case LogicalTypeId::STRUCT: {
 		string ret = "<";
 		for (size_t i = 0; i < struct_value.size(); i++) {
+			auto &name = type_.child_types()[i].first;
 			auto &child = struct_value[i];
-			ret += child.first + ": " + child.second.ToString();
+			ret += name + ": " + child.ToString();
 			if (i < struct_value.size() - 1) {
 				ret += ", ";
 			}
