@@ -996,7 +996,7 @@ void JoinHashTable::GatherResultVector(Vector &result, const SelectionVector &re
 		TemplatedGatherResult<int16_t>(result, ptrs, result_vector, sel_vector, count, offset);
 		break;
 	case PhysicalType::INT32:
-		TemplatedGatherResult<int32_t>(result, ptrs, result_vector, sel_vector, count, offset);
+		TemplatedGatherInvisible<int32_t>(result, ptrs, result_vector, sel_vector, count, offset);
 		break;
 	case PhysicalType::INT64:
 		TemplatedGatherResult<int64_t>(result, ptrs, result_vector, sel_vector, count, offset);
@@ -1033,6 +1033,7 @@ void JoinHashTable::GatherResultVector(Vector &result, const SelectionVector &re
 	}
 	offset += GetTypeIdSize(result.GetType().InternalType());
 }
+
 template <class T>
 void JoinHashTable::TemplatedGatherResult(Vector &result, uintptr_t *pointers, const SelectionVector &result_vector,
                                           const SelectionVector &sel_vector, const idx_t count, idx_t offset) {
@@ -1046,6 +1047,22 @@ void JoinHashTable::TemplatedGatherResult(Vector &result, uintptr_t *pointers, c
 			mask.SetInvalid(ridx);
 		} else {
 			rdata[ridx] = hdata;
+		}
+	}
+}
+
+template <typename T>
+void JoinHashTable::TemplatedGatherInvisible(Vector &result, uintptr_t *pointers, const SelectionVector &result_vector,
+                                             const SelectionVector &sel_vector, const idx_t count, idx_t offset) {
+	auto rdata = FlatVector::GetData<T>(result);
+	auto &mask = FlatVector::Validity(result);
+	for (idx_t i = 0; i < count; i++) {
+		auto pidx = sel_vector.get_index(i);
+		auto ridx = Load<T>((data_ptr_t)(pointers[pidx] + offset));
+		if (IsNullValue<T>(ridx)) {
+			mask.SetInvalid(ridx);
+		} else {
+			rdata[ridx] = ridx;
 		}
 	}
 }

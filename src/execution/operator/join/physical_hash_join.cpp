@@ -15,7 +15,7 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
                                    const vector<idx_t> &right_projection_map_p, vector<LogicalType> delim_types,
                                    idx_t estimated_cardinality, PerfectHashJoinState join_state)
     : PhysicalComparisonJoin(op, PhysicalOperatorType::HASH_JOIN, move(cond), join_type, estimated_cardinality),
-      right_projection_map(right_projection_map_p), delim_types(move(delim_types)), perfect_join_state(join_state) {
+      right_projection_map(right_projection_map_p), delim_types(move(delim_types)), pjoin_state(join_state) {
 	children.push_back(move(left));
 	children.push_back(move(right));
 
@@ -130,10 +130,10 @@ void PhysicalHashJoin::Sink(ExecutionContext &context, GlobalOperatorState &stat
 bool PhysicalHashJoin::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> state) {
 	auto &sink = (HashJoinGlobalState &)*state;
 	// check for possible perfect hash table
-	//	if (!CheckRequirementsForPerfectHashJoin(sink.hash_table.get(), sink)) {
-	// no perfect hash table, just finish the building of the regular hash table
-	sink.hash_table->Finalize();
-	//}
+	if (!CheckRequirementsForPerfectHashJoin(sink.hash_table.get(), sink)) {
+		// no perfect hash table, just finish the building of the regular hash table
+		sink.hash_table->Finalize();
+	}
 
 	PhysicalSink::Finalize(pipeline, context, move(state));
 	return true;
@@ -161,9 +161,9 @@ void PhysicalHashJoin::GetChunkInternal(ExecutionContext &context, DataChunk &ch
 		return;
 	}
 	// We first try a probe with an invisible join opt, otherwise we do the standard probe
-	// if (IsInnerJoin(join_type) && ExecuteInvisibleJoin(context, chunk, state, sink.hash_table.get())) {
-	// return;
-	//}
+	if (IsInnerJoin(join_type) && ExecuteInvisibleJoin(context, chunk, state, sink.hash_table.get())) {
+		// return;
+	}
 	do {
 		ProbeHashTable(context, chunk, state);
 		if (chunk.size() == 0) {
@@ -273,7 +273,7 @@ bool PhysicalHashJoin::ExecuteInvisibleJoin(ExecutionContext &context, DataChunk
 
 bool PhysicalHashJoin::CheckRequirementsForPerfectHashJoin(JoinHashTable *ht_ptr, HashJoinGlobalState &join_state) {
 	// first check the build size
-	if (!perfect_join_state.is_build_small) {
+	if (!pjoin_state.is_build_small) {
 		return false;
 	}
 
@@ -296,8 +296,9 @@ bool PhysicalHashJoin::HasDuplicates(JoinHashTable *ht_ptr) {
 }
 
 void PhysicalHashJoin::BuildPerfectHashStructure(JoinHashTable *hash_table_ptr, JoinHTScanState &join_ht_state) {
-	// allocate memory for each column in the hashtable
-	auto build_size = hash_table_ptr->size();
+	// allocate memory for each column
+	auto build_size =
+	    (pjoin_state.is_build_min_small) ? hash_table_ptr->size() + MIN_THRESHOLD : hash_table_ptr->size();
 	for (auto type : hash_table_ptr->build_types) {
 		hash_table_ptr->columns.emplace_back(type, build_size);
 	}
@@ -307,18 +308,18 @@ void PhysicalHashJoin::BuildPerfectHashStructure(JoinHashTable *hash_table_ptr, 
 
 template <typename T>
 void PhysicalHashJoin::TemplatedFillSelectionVector(Vector &source, SelectionVector &sel_vec, idx_t count) {
-	auto min_value = perfect_join_state.build_min.GetValue<T>();
-	auto max_value = perfect_join_state.build_max.GetValue<T>();
+	auto min_value = pjoin_state.build_min.GetValue<T>();
+	auto max_value = pjoin_state.build_max.GetValue<T>();
 
 	auto vector_data = FlatVector::GetData<T>(source);
 	// generate the selection vector
 	for (idx_t i = 0; i != count; ++i) {
 		// add index to selection vector if value in the range
 		auto input_value = vector_data[i];
-		// if (min_value <= input_value && input_value <= max_value) {
-		auto idx = input_value - min_value;
-		sel_vec.set_index(i, idx);
-		//}
+		if (min_value <= input_value && input_value <= max_value) {
+			auto idx = input_value - min_value;
+			sel_vec.set_index(i, idx);
+		}
 	}
 }
 

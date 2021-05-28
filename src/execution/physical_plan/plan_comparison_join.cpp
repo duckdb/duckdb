@@ -12,8 +12,6 @@
 #include "duckdb/transaction/transaction.hpp"
 
 namespace duckdb {
-constexpr size_t BUILD_THRESHOLD = 1 << 10; // 1024
-constexpr size_t MIN_THRESHOLD = 1 << 7;    // 128
 
 static bool CanPlanIndexJoin(Transaction &transaction, TableScanBindData *bind_data, PhysicalTableScan &scan) {
 	if (!bind_data) {
@@ -33,7 +31,6 @@ static bool CanPlanIndexJoin(Transaction &transaction, TableScanBindData *bind_d
 }
 
 void CheckForInvisibleJoin(LogicalComparisonJoin &op, PerfectHashJoinState &join_state) {
-	auto cardinality = op.estimated_cardinality;
 	if (op.join_stats.empty() || !op.join_stats[0]->type.IsIntegral() || !op.join_stats[1]->type.IsIntegral()) {
 		// invisible join not possible for no integral types
 		return;

@@ -153,6 +153,9 @@ public:
 	                             idx_t &no_match_count);
 	void FillWithOffsets(vector<data_ptr_t> &key_locations, JoinHTScanState &state);
 	void FullScanHashTable(JoinHTScanState &state);
+	template <typename T>
+	static void TemplatedGatherInvisible(Vector &result, uintptr_t *pointers, const SelectionVector &result_vector,
+	                                     const SelectionVector &sel_vector, const idx_t count, idx_t offset);
 	idx_t size() {
 		return count;
 	}

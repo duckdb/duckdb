@@ -43,10 +43,10 @@ SELECT a, test1.b, c FROM test1, test2 WHERE test1.b = test2.b ORDER BY c;
 
 # create the table integers with the values 0..1000
 statement ok
-CREATE TABLE test3 AS SELECT * FROM range(0, 100, 1);
+CREATE TABLE test3 AS SELECT * FROM range(0, 10, 1);
 
 statement ok
-CREATE TABLE test4 AS SELECT cast(random()*100 as integer) AS probe FROM generate_series(1,100000) as tbl(i);
+CREATE TABLE test4 AS SELECT cast(random()*10 as integer) AS probe FROM generate_series(1,10) as tbl(i);
 
 mode output_hash
 

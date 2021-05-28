@@ -16,6 +16,8 @@
 #include "duckdb/planner/operator/logical_join.hpp"
 
 namespace duckdb {
+constexpr size_t BUILD_THRESHOLD = 1 << 10; // 1024
+constexpr size_t MIN_THRESHOLD = 1 << 7;    // 128
 
 struct PerfectHashJoinState {
 	Value build_min;
@@ -77,7 +79,7 @@ public:
 	//! Duplicate eliminated types; only used for delim_joins (i.e. correlated subqueries)
 	vector<LogicalType> delim_types;
 	//! Struct for perfect hash optmization
-	PerfectHashJoinState perfect_join_state;
+	PerfectHashJoinState pjoin_state;
 	bool hasInvisibleJoin {false};
 
 public:
