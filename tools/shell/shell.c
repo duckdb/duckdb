@@ -18252,7 +18252,7 @@ static int do_meta_command(char *zLine, ShellState *p){
     }else{
       raw_printf(stderr, "Error: mode should be one of: "
          "ascii box column csv html insert json line list markdown "
-         "quote table tabs tcl\n");
+         "quote table tabs tcl latex trash \n");
       rc = 1;
     }
     p->cMode = p->mode;
