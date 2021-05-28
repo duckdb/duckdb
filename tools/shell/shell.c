@@ -12881,7 +12881,7 @@ static void exec_prepared_stmt(
    || pArg->cMode==MODE_Table
    || pArg->cMode==MODE_Box
    || pArg->cMode==MODE_Markdown
-   || pArg->cMode == MODE_Latex
+   || pArg->cMode==MODE_Latex
   ){
     exec_prepared_stmt_columnar(pArg, pStmt);
     return;
