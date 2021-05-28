@@ -31,15 +31,20 @@ TEST_CASE("Test using a custom allocator", "[api]") {
 
 	Allocator my_allocator(my_allocate_function, my_free_function, make_unique<MyAllocateData>(&memory_counter));
 
+	REQUIRE(memory_counter.load() == 0);
+
 	DBConfig config;
 	config.allocator = move(my_allocator);
 	DuckDB db(nullptr, &config);
 	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE tbl AS SELECT * FROM range(1000000)"));
 
-	// printf("\nMemory usage: %lld\n", memory_counter.load());
+	// check that the memory counter reported anything
+	REQUIRE(memory_counter.load() > 0);
+	auto table_memory_usage = memory_counter.load();
 
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE tbl"));
 
-	// printf("\nMemory usage: %lld\n", memory_counter.load());
+	// check that the memory counter usage has decreased after we dropped the table
+	REQUIRE(memory_counter.load() < table_memory_usage);
 }
