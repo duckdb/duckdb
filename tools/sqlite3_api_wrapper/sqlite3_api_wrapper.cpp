@@ -1,8 +1,11 @@
 #include "sqlite3.h"
+#include "udf_struct_sqlite3.h"
+#include "sqlite3_udf_wrapper.hpp"
 
 #include "duckdb.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/common/types.hpp"
 
 #include <ctype.h>
 #include <stdio.h>
@@ -1120,8 +1123,17 @@ int sqlite3_create_function(sqlite3 *db, const char *zFunctionName, int nArg, in
                             void (*xFunc)(sqlite3_context *, int, sqlite3_value **),
                             void (*xStep)(sqlite3_context *, int, sqlite3_value **),
                             void (*xFinal)(sqlite3_context *)) {
-	// fprintf(stderr, "sqlite3_create_function: unsupported.\n");
-	return -1;
+
+	string fname = string(zFunctionName);
+
+	//Unary function for now
+	if(nArg == 1 && xFunc) {
+		auto udf_sqlite3 = SQLiteUDFWrapper::CreateBinarySQLiteFunction(xFunc);
+		UDFWrapper::RegisterFunction(fname, {LogicalType::INTEGER}, LogicalType::VARCHAR, udf_sqlite3, *(db->con->context));
+		return SQLITE_OK;
+	}
+
+	return SQLITE_MISUSE;
 }
 
 int sqlite3_set_authorizer(sqlite3 *, int (*xAuth)(void *, int, const char *, const char *, const char *, const char *),
@@ -1347,7 +1359,9 @@ SQLITE_API void sqlite3_result_error_nomem(sqlite3_context *) {
 SQLITE_API void sqlite3_result_error_code(sqlite3_context *, int) {
 }
 
-SQLITE_API void sqlite3_result_int(sqlite3_context *, int) {
+SQLITE_API void sqlite3_result_int(sqlite3_context *context, int val) {
+    context->result.u.i = val;
+    context->result.type = PhysicalType::INT32;
 }
 
 SQLITE_API void sqlite3_result_int64(sqlite3_context *, sqlite3_int64) {
@@ -1394,8 +1408,11 @@ double sqlite3_value_double(sqlite3_value *) {
 	return 0;
 }
 
-int sqlite3_value_int(sqlite3_value *) {
-	return 0;
+int sqlite3_value_int(sqlite3_value *pVal) {
+    if(TypeIsInteger(pVal->type)) {
+        return pVal->u.i;
+    }
+    return 0;
 }
 
 sqlite3_int64 sqlite3_value_int64(sqlite3_value *) {
