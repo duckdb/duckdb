@@ -773,6 +773,14 @@ duckdb_blob duckdb_value_blob(duckdb_result *result, idx_t col, idx_t row) {
 	return blob;
 }
 
+void *duckdb_malloc(size_t size) {
+	return malloc(size);
+}
+
+void duckdb_free(void *ptr) {
+	free(ptr);
+}
+
 duckdb_state duckdb_appender_create(duckdb_connection connection, const char *schema, const char *table,
                                     duckdb_appender *out_appender) {
 	Connection *conn = (Connection *)connection;
