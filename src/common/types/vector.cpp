@@ -49,8 +49,12 @@ Vector::Vector(Vector &&other) noexcept
 }
 
 void Vector::Reference(const Value &value) {
-	if (value.type().id() == LogicalTypeId::STRUCT) {
+	if (value.type().id() == LogicalTypeId::STRUCT || value.type().id() == LogicalTypeId::MAP) {
 		Initialize(value.type());
+		auto &child_entries = StructVector::GetEntries(*this);
+		for(auto &child : child_entries) {
+			child->SetVectorType(VectorType::CONSTANT_VECTOR);
+		}
 	} else {
 		buffer = VectorBuffer::CreateConstantVector(VectorType::CONSTANT_VECTOR, value.type());
 		auxiliary.reset();
@@ -134,7 +138,7 @@ void Vector::Initialize(const LogicalType &new_type, bool zero_data) {
 	auxiliary.reset();
 	validity.Reset();
 	auto &type = GetType();
-	if (type.id() == LogicalTypeId::STRUCT) {
+	if (type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::MAP) {
 		auto struct_buffer = make_unique<VectorStructBuffer>();
 		auto &child_types = type.child_types();
 		auto &child_vectors = struct_buffer->GetChildren();
@@ -323,8 +327,8 @@ void Vector::SetValue(idx_t index, const Value &val) {
 			auto &vec_child = children[i];
 			vec_child->SetValue(index, struct_child);
 		}
-	} break;
-
+		break;
+	}
 	case LogicalTypeId::LIST: {
 		if (!auxiliary) {
 			auto vec_list = make_unique<Vector>(GetType().child_types()[0].second);
@@ -341,7 +345,8 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		auto &entry = ((list_entry_t *)data)[index];
 		entry.length = val.list_value.size();
 		entry.offset = offset;
-	} break;
+		break;
+	}
 	default:
 		throw NotImplementedException("Unimplemented type for Vector::SetValue");
 	}
