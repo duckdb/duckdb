@@ -487,7 +487,17 @@ jobs:
       run: make relassert
 
     - name: Test
-      run: build/relassert/test/unittest "*"
+      run: |
+          build/relassert/test/unittest "*"" --end-offset-percentage=10
+          build/relassert/test/unittest "*"" --start-offset-percentage=10 --end-offset-percentage=20
+          build/relassert/test/unittest "*"" --start-offset-percentage=20 --end-offset-percentage=30
+          build/relassert/test/unittest "*"" --start-offset-percentage=30 --end-offset-percentage=40
+          build/relassert/test/unittest "*"" --start-offset-percentage=40 --end-offset-percentage=50
+          build/relassert/test/unittest "*"" --start-offset-percentage=50 --end-offset-percentage=60
+          build/relassert/test/unittest "*"" --start-offset-percentage=60 --end-offset-percentage=70
+          build/relassert/test/unittest "*"" --start-offset-percentage=70 --end-offset-percentage=80
+          build/relassert/test/unittest "*"" --start-offset-percentage=80 --end-offset-percentage=90
+          build/relassert/test/unittest "*"" --start-offset-percentage=90
 
   force-storage:
     name: Force Storage
