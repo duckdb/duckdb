@@ -113,6 +113,8 @@ public:
 	static Value STRUCT(child_list_t<Value> values);
 	//! Create a list value with the given entries
 	static Value LIST(std::vector<Value> values);
+	//! Creat a map value with the given lists
+	static Value MAP(child_list_t<Value> values);
 
 	//! Create a blob Value from a data pointer and a length: no bytes are interpreted
 	static Value BLOB(const_data_ptr_t data, idx_t len);
@@ -141,6 +143,8 @@ public:
 
 	//! Convert this value to a string
 	DUCKDB_API string ToString() const;
+
+	DUCKDB_API uintptr_t GetPointer() const;
 
 	//! Cast this value to another type
 	DUCKDB_API Value CastAs(const LogicalType &target_type, bool strict = false) const;
@@ -304,6 +308,10 @@ DUCKDB_API uint8_t Value::GetValue() const;
 template <>
 DUCKDB_API uint16_t Value::GetValue() const;
 template <>
+DUCKDB_API uint32_t Value::GetValue() const;
+template <>
+DUCKDB_API uint64_t Value::GetValue() const;
+template <>
 DUCKDB_API hugeint_t Value::GetValue() const;
 template <>
 DUCKDB_API string Value::GetValue() const;
@@ -311,8 +319,6 @@ template <>
 DUCKDB_API float Value::GetValue() const;
 template <>
 DUCKDB_API double Value::GetValue() const;
-template <>
-DUCKDB_API uintptr_t Value::GetValue() const;
 template <>
 DUCKDB_API date_t Value::GetValue() const;
 template <>

@@ -49,7 +49,8 @@ void VectorListBuffer::Reserve(const Vector &to_append, idx_t to_reserve) {
 	if (to_reserve > capacity) {
 		idx_t new_capacity = (to_reserve) / STANDARD_VECTOR_SIZE + ((to_reserve) % STANDARD_VECTOR_SIZE != 0);
 		new_capacity *= STANDARD_VECTOR_SIZE;
-		if (child->GetType().id() == LogicalTypeId::STRUCT && size == 0) {
+		if ((child->GetType().id() == LogicalTypeId::STRUCT || child->GetType().id() == LogicalTypeId::MAP) &&
+		    size == 0) {
 			// Empty struct, gotta initialize it first
 			auto &source_children = StructVector::GetEntries(to_append);
 			for (auto &src_child : source_children) {

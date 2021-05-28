@@ -4,6 +4,7 @@ import sys
 try:
     import pyarrow
     import pyarrow.parquet
+    import numpy as np
     can_run = True
 except:
     can_run = False
@@ -99,3 +100,11 @@ class TestArrowIntegration(object):
         assert (arrow_result[1] == 'DECIMAL(9,2)') 
         assert (arrow_result[2] == 'DECIMAL(18,2)') 
         assert (arrow_result[3] == 'DECIMAL(30,2)') 
+
+        #Lets also test big number comming from arrow land
+        data = (pyarrow.array(np.array([9999999999999999999999999999999999]), type=pyarrow.decimal128(38,0)))
+        arrow_tbl = pyarrow.Table.from_arrays([data],['a'])
+        duckdb_conn = duckdb.connect()
+        duckdb_conn.from_arrow_table(arrow_tbl).create("bigdecimal")
+        result = duckdb_conn.execute('select * from bigdecimal')
+        assert (result.fetchone()[0] == 9999999999999999999999999999999999)
