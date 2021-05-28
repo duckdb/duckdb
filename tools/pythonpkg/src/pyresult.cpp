@@ -33,61 +33,43 @@ static SRC FetchScalar(Vector &src_vec, idx_t offset) {
 }
 
 py::object GetValueToPython(Value &val, const LogicalType &type) {
-	py::object res;
 	if (val.is_null) {
-		res = py::none();
-		return res;
+		return py::none();
 	}
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
-
-		res = py::cast(val.GetValue<bool>());
-		break;
+		return py::cast(val.GetValue<bool>());
 	case LogicalTypeId::TINYINT:
-		res = py::cast(val.GetValue<int8_t>());
-		break;
+		return py::cast(val.GetValue<int8_t>());
 	case LogicalTypeId::SMALLINT:
-		res = py::cast(val.GetValue<int16_t>());
-		break;
+		return py::cast(val.GetValue<int16_t>());
 	case LogicalTypeId::INTEGER:
-		res = py::cast(val.GetValue<int32_t>());
-		break;
+		return py::cast(val.GetValue<int32_t>());
 	case LogicalTypeId::BIGINT:
-		res = py::cast(val.GetValue<int64_t>());
-		break;
+		return py::cast(val.GetValue<int64_t>());
 	case LogicalTypeId::UTINYINT:
-		res = py::cast(val.GetValue<uint8_t>());
-		break;
+		return py::cast(val.GetValue<uint8_t>());
 	case LogicalTypeId::USMALLINT:
-		res = py::cast(val.GetValue<uint16_t>());
-		break;
+		return py::cast(val.GetValue<uint16_t>());
 	case LogicalTypeId::UINTEGER:
-		res = py::cast(val.GetValue<uint32_t>());
-		break;
+		return py::cast(val.GetValue<uint32_t>());
 	case LogicalTypeId::UBIGINT:
-		res = py::cast(val.GetValue<uint64_t>());
-		break;
-	case LogicalTypeId::HUGEINT: {
-		auto hugeint_str = val.GetValue<string>();
-		res = py::cast(PyLong_FromString((char *)hugeint_str.c_str(), nullptr, 10));
-		break;
-	}
+		return py::cast(val.GetValue<uint64_t>());
+	case LogicalTypeId::HUGEINT:
+		return py::cast<py::object>(PyLong_FromString((char *)val.GetValue<string>().c_str(), nullptr, 10));
+
 	case LogicalTypeId::FLOAT:
-		res = py::cast(val.GetValue<float>());
-		break;
+		return py::cast(val.GetValue<float>());
 	case LogicalTypeId::DOUBLE:
-		res = py::cast(val.GetValue<double>());
-		break;
+		return py::cast(val.GetValue<double>());
 	case LogicalTypeId::DECIMAL: {
 		py::object decimal_py = py::module_::import("decimal").attr("Decimal");
-		res = decimal_py(val.ToString());
-	} break;
+		return decimal_py(val.ToString());
+	}
 	case LogicalTypeId::VARCHAR:
-		res = py::cast(val.GetValue<string>());
-		break;
+		return py::cast(val.GetValue<string>());
 	case LogicalTypeId::BLOB:
-		res = py::cast(val.GetValue<string>());
-		break;
+		return py::bytes(val.GetValueUnsafe<string>());
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_NS:
@@ -107,8 +89,7 @@ py::object GetValueToPython(Value &val, const LogicalType &type) {
 		Timestamp::Convert(timestamp, date, time);
 		Date::Convert(date, year, month, day);
 		Time::Convert(time, hour, min, sec, micros);
-		res = py::cast(PyDateTime_FromDateAndTime(year, month, day, hour, min, sec, micros));
-		break;
+		return py::cast<py::object>(PyDateTime_FromDateAndTime(year, month, day, hour, min, sec, micros));
 	}
 	case LogicalTypeId::TIME: {
 		D_ASSERT(type.InternalType() == PhysicalType::INT64);
@@ -116,8 +97,7 @@ py::object GetValueToPython(Value &val, const LogicalType &type) {
 		int32_t hour, min, sec, microsec;
 		auto time = val.GetValueUnsafe<dtime_t>();
 		duckdb::Time::Convert(time, hour, min, sec, microsec);
-		res = py::cast(PyTime_FromTime(hour, min, sec, microsec));
-		break;
+		return py::cast<py::object>(PyTime_FromTime(hour, min, sec, microsec));
 	}
 	case LogicalTypeId::DATE: {
 		D_ASSERT(type.InternalType() == PhysicalType::INT32);
@@ -125,16 +105,14 @@ py::object GetValueToPython(Value &val, const LogicalType &type) {
 		auto date = val.GetValueUnsafe<date_t>();
 		int32_t year, month, day;
 		duckdb::Date::Convert(date, year, month, day);
-		res = py::cast(PyDate_FromDate(year, month, day));
-		break;
+		return py::cast<py::object>(PyDate_FromDate(year, month, day));
 	}
 	case LogicalTypeId::LIST: {
 		py::list list;
 		for (auto list_elem : val.list_value) {
 			list.append(GetValueToPython(list_elem, type.child_types()[0].second));
 		}
-		res = list;
-		break;
+		return std::move(list);
 	}
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::STRUCT: {
@@ -148,7 +126,6 @@ py::object GetValueToPython(Value &val, const LogicalType &type) {
 	default:
 		throw std::runtime_error("unsupported type: " + type.ToString());
 	}
-	return res;
 }
 
 py::object DuckDBPyResult::Fetchone() {
