@@ -12,7 +12,6 @@ struct CastSQLite {
         return (sqlite3_value)input;
     }
 
-    // static void ToVectorInt(int32_t *__restrict data, sqlite3_value *__restrict result, idx_t count);
 	template<class T>
 	static void ToVectorSQLiteValue(T *__restrict data, sqlite3_value *__restrict result, idx_t count) {
 		for(idx_t i=0; i < count; ++i) {
