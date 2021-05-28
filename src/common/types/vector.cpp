@@ -891,8 +891,7 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 		}
 	}
 
-<<<<<<< HEAD
-	if (GetType().InternalType() == PhysicalType::STRUCT) {
+	if (GetType().InternalType() == PhysicalType::STRUCT || GetType().InternalType() == PhysicalType::MAP) {
 		auto &child_types = GetType().child_types();
 		D_ASSERT(child_types.size() > 0);
 		if (GetVectorType() == VectorType::FLAT_VECTOR || GetVectorType() == VectorType::CONSTANT_VECTOR) {
@@ -901,17 +900,6 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 			for(idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
 				D_ASSERT(children[child_idx]->GetType() == child_types[child_idx].second);
 				children[child_idx]->Verify(sel, count);
-=======
-	if (GetType().InternalType() == PhysicalType::STRUCT || GetType().InternalType() == PhysicalType::MAP) {
-		D_ASSERT(!GetType().child_types().empty());
-		if (GetVectorType() == VectorType::FLAT_VECTOR || GetVectorType() == VectorType::CONSTANT_VECTOR) {
-			if (StructVector::HasEntries(*this)) {
-				auto &children = StructVector::GetEntries(*this);
-				D_ASSERT(!children.empty());
-				for (auto &child : children) {
-					child.second->Verify(sel, count);
-				}
->>>>>>> master
 			}
 		}
 	}
@@ -1044,21 +1032,8 @@ void StringVector::AddHeapReference(Vector &vector, Vector &other) {
 	string_buffer.AddHeapReference(other.auxiliary);
 }
 
-<<<<<<< HEAD
 vector<unique_ptr<Vector>> &StructVector::GetEntries(Vector &vector) {
-	D_ASSERT(vector.GetType().id() == LogicalTypeId::STRUCT);
-=======
-bool StructVector::HasEntries(const Vector &vector) {
 	D_ASSERT(vector.GetType().id() == LogicalTypeId::STRUCT || vector.GetType().id() == LogicalTypeId::MAP);
-	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR ||
-	         vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
-	D_ASSERT(vector.auxiliary == nullptr || vector.auxiliary->GetBufferType() == VectorBufferType::STRUCT_BUFFER);
-	return vector.auxiliary != nullptr;
-}
-
-const child_list_t<unique_ptr<Vector>> &StructVector::GetEntries(const Vector &vector) {
-	D_ASSERT(vector.GetType().id() == LogicalTypeId::STRUCT || vector.GetType().id() == LogicalTypeId::MAP);
->>>>>>> master
 	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR ||
 	         vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
 	D_ASSERT(vector.auxiliary);
@@ -1066,22 +1041,8 @@ const child_list_t<unique_ptr<Vector>> &StructVector::GetEntries(const Vector &v
 	return ((VectorStructBuffer *)vector.auxiliary.get())->GetChildren();
 }
 
-<<<<<<< HEAD
 const vector<unique_ptr<Vector>> &StructVector::GetEntries(const Vector &vector) {
 	return GetEntries((Vector &)vector);
-=======
-void StructVector::AddEntry(Vector &vector, const string &name, unique_ptr<Vector> entry) {
-	// TODO asser that an entry with this name does not already exist
-	D_ASSERT(vector.GetType().id() == LogicalTypeId::STRUCT || vector.GetType().id() == LogicalTypeId::MAP);
-	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR ||
-	         vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
-	if (!vector.auxiliary) {
-		vector.auxiliary = make_buffer<VectorStructBuffer>();
-	}
-	D_ASSERT(vector.auxiliary);
-	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::STRUCT_BUFFER);
-	((VectorStructBuffer *)vector.auxiliary.get())->AddChild(name, move(entry));
->>>>>>> master
 }
 
 bool ListVector::HasEntry(const Vector &vector) {

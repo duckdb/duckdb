@@ -427,15 +427,16 @@ Value Value::STRUCT(child_list_t<Value> values) {
 	return result;
 }
 
-Value Value::MAP(child_list_t<Value> values) {
+Value Value::MAP(Value key, Value value) {
 	Value result;
 	child_list_t<LogicalType> child_types;
-	child_types.push_back({values[0].first, values[0].second.type()});
-	child_types.push_back({values[1].first, values[1].second.type()});
+	child_types.push_back({"key", key.type()});
+	child_types.push_back({"value", value.type()});
 
 	result.type_ = LogicalType(LogicalTypeId::MAP, child_types);
 
-	result.struct_value = move(values);
+	result.struct_value.push_back(move(key));
+	result.struct_value.push_back(move(value));
 	result.is_null = false;
 	return result;
 }
@@ -946,8 +947,8 @@ string Value::ToString() const {
 	}
 	case LogicalTypeId::MAP: {
 		string ret = "{";
-		auto &key_list = struct_value[0].second.list_value;
-		auto &value_list = struct_value[1].second.list_value;
+		auto &key_list = struct_value[0].list_value;
+		auto &value_list = struct_value[1].list_value;
 		for (size_t i = 0; i < key_list.size(); i++) {
 			ret += key_list[i].ToString() + "=" + value_list[i].ToString();
 			if (i < key_list.size() - 1) {

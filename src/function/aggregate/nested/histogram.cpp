@@ -107,21 +107,14 @@ static void HistogramFinalize(Vector &state_vector, FunctionData *, Vector &resu
 	state_vector.Orrify(count, sdata);
 	auto states = (HistogramAggState<T> **)sdata.data;
 	result.Initialize(result.GetType());
-	//	auto list_struct_data = FlatVector::GetData<list_entry_t>(result);
-	//	auto list_child = make_unique<Vector>(result.GetType().child_types()[0].second);
-	child_list_t<LogicalType> bucket_type, count_type;
-	bucket_type.push_back({"", result.GetType().child_types()[0].second.child_types()[0].second});
-	count_type.push_back({"", LogicalType::UBIGINT});
+
 	idx_t old_len = 0;
 
 	auto &mask = FlatVector::Validity(result);
 
-	LogicalType bucket_list_type({LogicalTypeId::LIST, bucket_type});
-	auto bucket_list = make_unique<Vector>(bucket_list_type);
-
-	LogicalType count_list_type({LogicalTypeId::LIST, count_type});
-	auto count_list = make_unique<Vector>(count_list_type);
-
+	auto &child_entries = StructVector::GetEntries(result);
+	auto &bucket_list = child_entries[0];
+	auto &count_list = child_entries[1];
 	for (idx_t i = 0; i < count; i++) {
 		auto state = states[sdata.sel->get_index(i)];
 		if (!state->hist) {
@@ -143,8 +136,6 @@ static void HistogramFinalize(Vector &state_vector, FunctionData *, Vector &resu
 		list_struct_data[i].offset = old_len;
 		old_len = list_struct_data[i].length;
 	}
-	StructVector::AddEntry(result, "bucket", move(bucket_list));
-	StructVector::AddEntry(result, "count", move(count_list));
 }
 
 unique_ptr<FunctionData> HistogramBindFunction(ClientContext &context, AggregateFunction &function,
