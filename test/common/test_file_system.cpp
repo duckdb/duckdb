@@ -100,11 +100,12 @@ TEST_CASE("Test file operations", "[file_system]") {
 TEST_CASE("Test file buffers for reading/writing to file", "[file_system]") {
 	FileSystem fs;
 	unique_ptr<FileHandle> handle;
+	Allocator allocator;
 
 	auto fname = TestCreatePath("test_file");
 
 	// create the buffer and fill it with data
-	auto buf = make_unique<FileBuffer>(FileBufferType::MANAGED_BUFFER, 4096);
+	auto buf = make_unique<FileBuffer>(allocator, FileBufferType::MANAGED_BUFFER, 4096);
 	int64_t *ptr = (int64_t *)buf->buffer;
 	for (size_t i = 0; i < 10; i++) {
 		ptr[i] = i;
