@@ -713,6 +713,21 @@ void Vector::Sequence(int64_t start, int64_t increment) {
 
 void Vector::Serialize(idx_t count, Serializer &serializer) {
 	auto &type = GetType();
+
+	VectorData vdata;
+	Orrify(count, vdata);
+
+	const auto write_validity = (count > 0) && !vdata.validity.AllValid();
+	serializer.Write<bool>(write_validity);
+	if (write_validity) {
+		ValidityMask flat_mask(count);
+		for (idx_t i = 0; i < count; ++i) {
+			auto row_idx = vdata.sel->get_index(i);
+			flat_mask.Set(i, vdata.validity.RowIsValid(row_idx));
+		}
+		serializer.WriteData((const_data_ptr_t)flat_mask.GetData(), flat_mask.ValidityMaskSize(count));
+	}
+
 	if (TypeIsConstantSize(type.InternalType())) {
 		// constant size type: simple copy
 		idx_t write_size = GetTypeIdSize(type.InternalType()) * count;
@@ -720,9 +735,6 @@ void Vector::Serialize(idx_t count, Serializer &serializer) {
 		VectorOperations::WriteToStorage(*this, count, ptr.get());
 		serializer.WriteData(ptr.get(), write_size);
 	} else {
-		VectorData vdata;
-		Orrify(count, vdata);
-
 		switch (type.InternalType()) {
 		case PhysicalType::VARCHAR: {
 			auto strings = (string_t *)vdata.data;
@@ -734,13 +746,22 @@ void Vector::Serialize(idx_t count, Serializer &serializer) {
 			break;
 		}
 		default:
-			throw NotImplementedException("Unimplemented type for Vector::Serialize!");
+			throw NotImplementedException("Unimplemented variable width type for Vector::Serialize!");
 		}
 	}
 }
 
 void Vector::Deserialize(idx_t count, Deserializer &source) {
 	auto &type = GetType();
+
+	auto &validity = FlatVector::Validity(*this);
+	validity.Reset();
+	const auto has_validity = source.Read<bool>();
+	if (has_validity) {
+		validity.Initialize(count);
+		source.ReadData((data_ptr_t)validity.GetData(), validity.ValidityMaskSize(count));
+	}
+
 	if (TypeIsConstantSize(type.InternalType())) {
 		// constant size type: read fixed amount of data from
 		auto column_size = GetTypeIdSize(type.InternalType()) * count;
@@ -750,15 +771,12 @@ void Vector::Deserialize(idx_t count, Deserializer &source) {
 		VectorOperations::ReadFromStorage(ptr.get(), count, *this);
 	} else {
 		auto strings = FlatVector::GetData<string_t>(*this);
-		auto &validity = FlatVector::Validity(*this);
 		for (idx_t i = 0; i < count; i++) {
 			// read the strings
 			auto str = source.Read<string>();
 			// now add the string to the StringHeap of the vector
 			// and write the pointer into the vector
-			if (IsNullValue<const char *>((const char *)str.c_str())) {
-				validity.SetInvalid(i);
-			} else {
+			if (validity.RowIsValid(i)) {
 				strings[i] = StringVector::AddStringOrBlob(*this, str);
 			}
 		}

@@ -3,6 +3,7 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/parallel/concurrentqueue.hpp"
+#include "duckdb/common/allocator.hpp"
 
 namespace duckdb {
 
@@ -48,7 +49,7 @@ unique_ptr<BufferHandle> BlockHandle::Load(shared_ptr<BlockHandle> &handle) {
 		// this is mainly down to the block manager only having a single pointer into the file
 		// this is relatively easy to fix later on
 		lock_guard<mutex> buffer_lock(buffer_manager.manager_lock);
-		auto block = make_unique<Block>(handle->block_id);
+		auto block = make_unique<Block>(Allocator::Get(handle->db), handle->block_id);
 		block_manager.Read(*block);
 		handle->buffer = move(block);
 	} else {

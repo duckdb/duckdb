@@ -14,12 +14,13 @@
   debug = getOption("duckdb.debug", FALSE),
   read_only = FALSE,
   timezone_out = "UTC",
-  tz_out_convert = c("with", "force")
+  tz_out_convert = c("with", "force"),
+  config = list()
 )
 
 \S4method{dbDisconnect}{duckdb_connection}(conn, ..., shutdown = FALSE)
 
-duckdb(dbdir = DBDIR_MEMORY, read_only = FALSE)
+duckdb(dbdir = DBDIR_MEMORY, read_only = FALSE, config = list())
 
 duckdb_shutdown(drv)
 }
@@ -46,6 +47,8 @@ in \code{timezone_out}. There are two options: \code{"with"}, and \code{"force"}
 is chosen, the timestamp will be returned as it would appear in the specified time zone.
 If \code{"force"} is chosen, the timestamp will have the same clock
 time as the timestamp in the database, but with the new time zone.}
+
+\item{config}{Named list with DuckDB configuration flags}
 
 \item{conn}{A \code{duckdb_connection} object}
 
