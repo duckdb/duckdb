@@ -487,8 +487,8 @@ jobs:
       run: make relassert
 
     - name: Test
-      run: | # we exclude this test because it causes an internal error in the address sanitizer
-          build/relassert/test/unittest "*" exclude:test/sql/constraints/primarykey/test_pk_prefix.test_slow
+      run: |
+          build/relassert/test/unittest "*"
 
   force-storage:
     name: Force Storage

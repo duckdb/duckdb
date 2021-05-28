@@ -78,7 +78,8 @@ private:
 
 class RowGroupScanState {
 public:
-	RowGroupScanState(TableScanState &parent_p) : parent(parent_p) {
+	RowGroupScanState(TableScanState &parent_p) :
+	    parent(parent_p), vector_index(0), max_row(0) {
 	}
 
 	//! The parent scan state
@@ -99,7 +100,7 @@ public:
 
 class TableScanState {
 public:
-	TableScanState() : row_group_scan_state(*this) {};
+	TableScanState() : row_group_scan_state(*this), max_row(0) {};
 
 	//! The row_group scan state
 	RowGroupScanState row_group_scan_state;

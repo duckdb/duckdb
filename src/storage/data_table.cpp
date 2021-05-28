@@ -722,6 +722,7 @@ void DataTable::RemoveFromIndexes(Vector &row_identifiers, idx_t count) {
 	// now fetch the columns from that row_group
 	// FIXME: we do not need to fetch all columns, only the columns required by the indices!
 	TableScanState state;
+	state.max_row = total_rows;
 	for (idx_t i = 0; i < types.size(); i++) {
 		state.column_ids.push_back(i);
 	}
