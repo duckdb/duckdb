@@ -9,7 +9,7 @@
 using namespace std;
 
 // SQLite UDF to be register on DuckDB
-void multiply2(sqlite3_context *context, int argc, sqlite3_value **argv) {
+void multiply10(sqlite3_context *context, int argc, sqlite3_value **argv) {
 	assert(argc == 1);
 	int v = sqlite3_value_int(argv[0]);
 	v *= 10;
@@ -30,7 +30,7 @@ TEST_CASE("Basic sqlite UDF wrapper usage", "[sqlite3wrapper]") {
 	}
 
 	// create sqlite udf
-	REQUIRE(sqlite3_create_function(db_w.db, "multiply2", 1, 0, nullptr, &multiply2, nullptr, nullptr) == SQLITE_OK);
-	REQUIRE(db_w.Execute("SELECT multiply2(i) FROM integers"));
+	REQUIRE(sqlite3_create_function(db_w.db, "multiply10", 1, 0, nullptr, &multiply10, nullptr, nullptr) == SQLITE_OK);
+	REQUIRE(db_w.Execute("SELECT multiply10(i) FROM integers"));
 	REQUIRE(db_w.CheckColumn(0, {"-50", "-40", "-30", "-20", "-10", "0", "10", "20", "30", "40", "50"}));
 }
