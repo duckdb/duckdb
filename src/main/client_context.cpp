@@ -692,25 +692,26 @@ void ClientContext::RunFunctionInTransactionInternal(ClientContextLock &lock, co
 		throw Exception("Failed: transaction has been invalidated!");
 	}
 	// check if we are on AutoCommit. In this case we should start a transaction
-	if (transaction.IsAutoCommit()) {
+	bool require_new_transaction = transaction.IsAutoCommit() && !transaction.HasActiveTransaction();
+	if (require_new_transaction) {
 		transaction.BeginTransaction();
 	}
 	try {
 		fun();
 	} catch (StandardException &ex) {
-		if (transaction.IsAutoCommit()) {
+		if (require_new_transaction) {
 			transaction.Rollback();
 		}
 		throw;
 	} catch (std::exception &ex) {
-		if (transaction.IsAutoCommit()) {
+		if (require_new_transaction) {
 			transaction.Rollback();
 		} else {
 			ActiveTransaction().Invalidate();
 		}
 		throw;
 	}
-	if (transaction.IsAutoCommit()) {
+	if (require_new_transaction) {
 		transaction.Commit();
 	}
 }
