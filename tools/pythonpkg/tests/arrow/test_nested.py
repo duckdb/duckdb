@@ -7,13 +7,27 @@ try:
 except:
     can_run = False
 
-# class TestArrowParallel(object):
-#     def test_parallel_run(self,duckdb_cursor):
-#         if not can_run:
-#         	return
-       # def test_lists(self, duckdb_cursor):
-# duckdb_conn = duckdb.connect()
-# result = duckdb_conn.execute("create table integers ( a integer)")
-# result = duckdb_conn.execute("insert into integers values (1), (2), (3), (4) ")
-print(duckdb.query("SELECT a from (select list_value(1) as a) as t").arrow())
+class TestArrowNested(object):
+    def test_lists(self,duckdb_cursor):
+        if not can_run:
+            return
+        
+        #Test Constant List
+        query = duckdb.query("SELECT a from (select list_value(3,5,10) as a) as t").arrow()['a'].to_numpy() 
+        assert query[0][0] == 3
+        assert query[0][1] == 5
+        assert query[0][2] == 10
 
+        # Empty List
+        query = duckdb.query("SELECT a from (select list_value() as a) as t").arrow()['a'].to_numpy() 
+        assert len(query[0]) == 0
+
+        #Test Constant List With Null
+        query = duckdb.query("SELECT a from (select list_value(3,NULL) as a) as t").arrow()['a'].to_numpy() 
+        assert query[0][0] == 3
+        assert query[0][1] == None
+
+        #Test Constant List With only Null
+        query = duckdb.query("SELECT a from (select list_value(NULL,NULL) as a) as t").arrow()['a'].to_numpy() 
+        assert query[0][0] == None
+        assert query[0][1] == None
