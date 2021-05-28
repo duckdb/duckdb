@@ -680,20 +680,20 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 			string col_name = val.ToString();
 
 			// check if beginning of first col name matches beginning of a comment
-            if (col == 0) {
-                for (const auto &comment_candidate : comment_candidates) {
-                    if (col_name.rfind(comment_candidate, 0) == 0) {
-                        col_name = col_name.substr(comment_candidate.size(), col_name.size());
+			if (col == 0) {
+				for (const auto &comment_candidate : comment_candidates) {
+					if (col_name.rfind(comment_candidate, 0) == 0) {
+						col_name = col_name.substr(comment_candidate.size(), col_name.size());
 
-                        // col_name now includes whitespace after comment marker, which needs to be removed
-                        while (!col_name.empty() &&
-                               (std::isspace(*col_name.begin()) || (*col_name.begin() == options.delimiter[0]))) {
-                            col_name.erase(col_name.begin());
-                        }
-                        break;
-                    }
-                }
-            }
+						// col_name now includes whitespace after comment marker, which needs to be removed
+						while (!col_name.empty() &&
+						       (std::isspace(*col_name.begin()) || (*col_name.begin() == options.delimiter[0]))) {
+							col_name.erase(col_name.begin());
+						}
+						break;
+					}
+				}
+			}
 
 			if (col_name.empty() || val.is_null) {
 				col_name = GenerateColumnName(options.num_cols, col);
