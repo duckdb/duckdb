@@ -41,7 +41,8 @@ public:
 		auto &struct_entries = StructVector::GetEntries(result);
 		D_ASSERT(type.child_types().size() == struct_entries.size());
 		for (idx_t i = 0; i < struct_entries.size(); i++) {
-			auto child_num_values = child_readers[i]->Read(num_values, filter, define_out, repeat_out, *struct_entries[i]);
+			auto child_num_values =
+			    child_readers[i]->Read(num_values, filter, define_out, repeat_out, *struct_entries[i]);
 			if (child_num_values != num_values) {
 				throw std::runtime_error("Struct child row count mismatch");
 			}
