@@ -207,7 +207,6 @@ bool CatalogSet::DropEntry(ClientContext &context, const string &name, bool casc
 }
 
 void CatalogSet::CleanupEntry(CatalogEntry *catalog_entry) {
-
 	// destroy the backed up entry: it is no longer required
 	D_ASSERT(catalog_entry->parent);
 	if (catalog_entry->parent->type != CatalogType::UPDATED_ENTRY) {
