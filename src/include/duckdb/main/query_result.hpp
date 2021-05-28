@@ -70,10 +70,10 @@ public:
 		try {
 			result = Fetch();
 			return true;
-		} catch(std::exception &ex) {
+		} catch (std::exception &ex) {
 			error = ex.what();
 			return false;
-		} catch(...) {
+		} catch (...) {
 			error = "Unknown error in Fetch";
 			return false;
 		}
