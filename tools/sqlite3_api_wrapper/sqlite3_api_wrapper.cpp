@@ -1129,7 +1129,7 @@ int sqlite3_create_function(sqlite3 *db, const char *zFunctionName, int nArg, in
 	//Unary function for now
 	if(nArg == 1 && xFunc) {
 		auto udf_sqlite3 = SQLiteUDFWrapper::CreateBinarySQLiteFunction(xFunc);
-		UDFWrapper::RegisterFunction(fname, {LogicalType::INTEGER}, LogicalType::VARCHAR, udf_sqlite3, *(db->con->context));
+		UDFWrapper::RegisterFunction(fname, {LogicalType::ANY}, LogicalType::VARCHAR, udf_sqlite3, *(db->con->context));
 		return SQLITE_OK;
 	}
 
