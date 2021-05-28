@@ -1,0 +1,41 @@
+# name: test/sql/copy/csv/test_header_comment.test
+# description: Test read CSV file with comment symbol at start of header line
+# group: [csv]
+
+# CSV file with header in comment form
+statement ok
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/test/header_comment.csv');
+
+query T
+SELECT name from pragma_table_info('test')
+----
+time
+value
+
+statement ok
+DROP TABLE test;
+
+statement ok
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/test/header_comment_tab.csv');
+
+query T
+SELECT name from pragma_table_info('test')
+----
+time
+value
+
+statement ok
+DROP TABLE test;
+
+statement ok
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/test/header_no_comment.csv');
+
+query T
+SELECT name from pragma_table_info('test')
+----
+time
+value
+
+statement ok
+DROP TABLE test;
+
