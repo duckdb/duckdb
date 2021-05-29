@@ -54,6 +54,9 @@ public:
 		return true;
 	}
 
+	//! Get the name of the expression
+	string GetName() const override;
+	//! Convert the Expression to a String
 	string ToString() const override;
 
 	static bool Equals(const WindowExpression *a, const WindowExpression *b);

@@ -52,6 +52,7 @@ static bool TemplatedBooleanOperation(const Value &left, const Value &right) {
 		return OP::Operation(left.value_.interval, right.value_.interval);
 	case PhysicalType::VARCHAR:
 		return OP::Operation(left.str_value, right.str_value);
+	case PhysicalType::MAP:
 	case PhysicalType::STRUCT: {
 		for (idx_t i = 0; i < left.struct_value.size(); i++) {
 			if (i >= right.struct_value.size() || left.struct_value[i].first != right.struct_value[i].first ||

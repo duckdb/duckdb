@@ -29,9 +29,10 @@ public:
 	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
 	          DataChunk &input) const override;
 	bool Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> gstate) override;
-
+	void FinalizeOperatorState(PhysicalOperatorState &state, ExecutionContext &context) override;
 	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
+	void Combine(ExecutionContext &context, GlobalOperatorState &gstate, LocalSinkState &lstate) override;
 
 private:
 	// resolve joins that output max N elements (SEMI, ANTI, MARK)

@@ -33,6 +33,8 @@ public:
 
 	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
+	void FinalizeOperatorState(PhysicalOperatorState &state, ExecutionContext &context) override;
+	void Combine(ExecutionContext &context, GlobalOperatorState &gstate, LocalSinkState &lstate) override;
 
 private:
 	// resolve joins that output max N elements (SEMI, ANTI, MARK)

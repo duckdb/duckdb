@@ -23,7 +23,8 @@ public:
 	}
 
 	//! The set of expressions to scan
-	mutable vector<vector<unique_ptr<Expression>>> expressions;
+	vector<vector<unique_ptr<Expression>>> expressions;
+	void FinalizeOperatorState(PhysicalOperatorState &state, ExecutionContext &context) override;
 
 public:
 	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const override;

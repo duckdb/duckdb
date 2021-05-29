@@ -17,7 +17,7 @@ statement ok
 SELECT 0::TINYINT + -127::TINYINT
 
 statement error
-SELECT -1::TINYINT + -127::TINYINT
+SELECT -2::TINYINT + -127::TINYINT
 
 # smallint
 statement ok
@@ -30,7 +30,7 @@ statement ok
 SELECT 0::SMALLINT + -32767::SMALLINT
 
 statement error
-SELECT -1::SMALLINT + -32767::SMALLINT
+SELECT -2::SMALLINT + -32767::SMALLINT
 
 # integer
 statement ok
@@ -43,7 +43,7 @@ statement ok
 SELECT 0::INTEGER + -2147483647::INTEGER
 
 statement error
-SELECT -1::INTEGER + -2147483647::INTEGER
+SELECT -2::INTEGER + -2147483647::INTEGER
 
 # bigint
 statement ok
@@ -56,7 +56,7 @@ statement ok
 SELECT 0::BIGINT + -9223372036854775807::BIGINT
 
 statement error
-SELECT -1::BIGINT + -9223372036854775807::BIGINT
+SELECT -2::BIGINT + -9223372036854775808::BIGINT
 
 # subtraction
 # tinyint
@@ -70,7 +70,7 @@ statement ok
 SELECT 0::TINYINT - 127::TINYINT
 
 statement error
-SELECT -1::TINYINT - 127::TINYINT
+SELECT -2::TINYINT - 127::TINYINT
 
 # smallint
 statement ok
@@ -83,7 +83,7 @@ statement ok
 SELECT 0::SMALLINT - 32767::SMALLINT
 
 statement error
-SELECT -1::SMALLINT - 32767::SMALLINT
+SELECT -2::SMALLINT - 32767::SMALLINT
 
 # integer
 statement ok
@@ -96,7 +96,7 @@ statement ok
 SELECT 0::INTEGER - 2147483647::INTEGER
 
 statement error
-SELECT -1::INTEGER - 2147483647::INTEGER
+SELECT -2::INTEGER - 2147483647::INTEGER
 
 # bigint
 statement ok
@@ -109,7 +109,7 @@ statement ok
 SELECT 0::BIGINT - 9223372036854775807::BIGINT
 
 statement error
-SELECT -1::BIGINT - 9223372036854775807::BIGINT
+SELECT -2::BIGINT - 9223372036854775807::BIGINT
 
 # multiplication
 # tinyint
@@ -122,8 +122,11 @@ SELECT 50::TINYINT * 3::TINYINT
 statement ok
 SELECT -1::TINYINT * 127::TINYINT
 
-statement error
+statement ok
 SELECT -2::TINYINT * 64::TINYINT
+
+statement error
+SELECT -2::TINYINT * 65::TINYINT
 
 # smallint
 statement ok
@@ -135,8 +138,11 @@ SELECT 15000::SMALLINT * 3::SMALLINT
 statement ok
 SELECT -1::SMALLINT * 32767::SMALLINT
 
-statement error
+statement ok
 SELECT -2::SMALLINT * 16384::SMALLINT
+
+statement error
+SELECT -2::SMALLINT * 16385::SMALLINT
 
 # integer
 statement ok
@@ -148,8 +154,11 @@ SELECT 1073741820::INTEGER * 3::INTEGER
 statement ok
 SELECT -1::INTEGER * 2147483647::INTEGER
 
-statement error
+statement ok
 SELECT -2::INTEGER * 1073741824::INTEGER
+
+statement error
+SELECT -2::INTEGER * 1073741825::INTEGER
 
 # bigint
 statement ok
@@ -162,4 +171,4 @@ statement ok
 SELECT -1::BIGINT * 9223372036854775807::BIGINT
 
 statement error
-SELECT -2::BIGINT * 4611686018427387904::BIGINT
+SELECT -2::BIGINT * 4611686018427387905::BIGINT

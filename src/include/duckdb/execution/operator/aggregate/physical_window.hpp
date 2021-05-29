@@ -29,6 +29,7 @@ public:
 	          DataChunk &input) const override;
 	void Combine(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate) override;
 	bool Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> gstate) override;
+	bool FinalizeInternal(ClientContext &context, unique_ptr<GlobalOperatorState> gstate);
 
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) override;
 	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;

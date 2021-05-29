@@ -61,7 +61,7 @@ ifeq (${BUILD_JDBC}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DJDBC_DRIVER=1
 endif
 ifeq (${BUILD_PYTHON}, 1)
-	EXTENSIONS:=${EXTENSIONS} -DBUILD_PYTHON=1 -DBUILD_FTS_EXTENSION=1
+	EXTENSIONS:=${EXTENSIONS} -DBUILD_PYTHON=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1
 endif
 ifeq (${BUILD_R}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DBUILD_R=1
@@ -71,6 +71,9 @@ ifeq (${BUILD_REST}, 1)
 endif
 ifneq ($(TIDY_THREADS),)
 	TIDY_THREAD_PARAMETER := -j ${TIDY_THREADS}
+endif
+ifeq ($(BUILD_ARROW_ABI_TEST), 1)
+	EXTENSIONS:=${EXTENSIONS} -DBUILD_ARROW_ABI_TEST=1
 endif
 
 clean:
@@ -103,6 +106,11 @@ clreldebug:
 unittest: debug
 	build/debug/test/unittest
 	build/debug/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
+
+unittestci:
+	build/debug/test/unittest
+	build/debug/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
+	build/debug/tools/arrow_abi_test/arrow_abi_test
 
 allunit: release_expanded # uses release build because otherwise allunit takes forever
 	build/release_expanded/test/unittest "*"

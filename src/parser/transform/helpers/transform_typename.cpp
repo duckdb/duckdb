@@ -44,25 +44,25 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_n
 	}
 
 	if (base_type == LogicalTypeId::MAP) {
+		//! We transform MAP<TYPE_KEY, TYPE_VALUE> to STRUCT<LIST<key: TYPE_KEY>, LIST<value: TYPE_VALUE>>
+
 		if (!type_name->typmods || type_name->typmods->length != 2) {
 			throw ParserException("Map type needs exactly two entries, key and value type");
 		}
 		child_list_t<LogicalType> children;
-		unordered_set<string> name_collision_set;
 
-		auto key_type = TransformTypeName((duckdb_libpgquery::PGTypeName *)type_name->typmods->head->data.ptr_value);
-		auto value_type = TransformTypeName((duckdb_libpgquery::PGTypeName *)type_name->typmods->tail->data.ptr_value);
+		child_list_t<LogicalType> key_type, value_type;
+		key_type.push_back(
+		    {"", TransformTypeName((duckdb_libpgquery::PGTypeName *)type_name->typmods->head->data.ptr_value)});
+		value_type.push_back(
+		    {"", TransformTypeName((duckdb_libpgquery::PGTypeName *)type_name->typmods->tail->data.ptr_value)});
 
-		children.push_back(make_pair("key", key_type));
-		children.push_back(make_pair("value", value_type));
+		children.push_back({"key", {LogicalTypeId::LIST, key_type}});
+		children.push_back({"value", {LogicalTypeId::LIST, value_type}});
 
-		// for now we just transform MAP<TYPE_KEY, TYPE_VALUE> to LIST<STRUCT<key: TYPE_KEY, value: TYPE_VALUE>>
 		D_ASSERT(children.size() == 2);
-		auto struct_type = LogicalType(LogicalTypeId::STRUCT, children);
-		child_list_t<LogicalType> list_children;
-		list_children.push_back(make_pair("", struct_type));
 
-		return LogicalType(LogicalTypeId::LIST, list_children);
+		return LogicalType(LogicalTypeId::MAP, children);
 	}
 
 	int8_t width = base_type.width(), scale = base_type.scale();

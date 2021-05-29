@@ -66,6 +66,8 @@ public:
 	public:
 		friend BitArray;
 
+		reference(const reference &r) = default;
+
 		reference &operator=(bool x) noexcept {
 			auto b = parent.Block(pos);
 			auto s = parent.Shift(pos);
@@ -322,7 +324,7 @@ static idx_t FindNextStart(const BitArray<W> &mask, idx_t l, idx_t r) {
 		// Loop over the block
 		for (; shift < mask.BITS_PER_WORD; ++shift, ++l) {
 			if (mask.TestBit(block, shift)) {
-				return std::min(l, r);
+				return MinValue(l, r);
 			}
 		}
 	}
@@ -901,7 +903,7 @@ public:
 };
 
 unique_ptr<PhysicalOperatorState> PhysicalWindow::GetOperatorState() {
-	return make_unique<PhysicalWindowOperatorState>(*this, children[0].get());
+	return make_unique<PhysicalWindowOperatorState>(*this, children.empty() ? nullptr : children[0].get());
 }
 
 static void GeneratePartition(PhysicalWindowOperatorState &state, WindowGlobalState &gstate, const idx_t hash_bin) {
@@ -1074,7 +1076,7 @@ void PhysicalWindow::Combine(ExecutionContext &context, GlobalOperatorState &gst
 	}
 }
 
-bool PhysicalWindow::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> gstate_p) {
+bool PhysicalWindow::FinalizeInternal(ClientContext &context, unique_ptr<GlobalOperatorState> gstate_p) {
 	this->sink_state = move(gstate_p);
 	auto &gstate = (WindowGlobalState &)*this->sink_state;
 
@@ -1105,6 +1107,10 @@ bool PhysicalWindow::Finalize(Pipeline &pipeline, ClientContext &context, unique
 
 	D_ASSERT(window_results.ColumnCount() == select_list.size());
 	return true;
+}
+
+bool PhysicalWindow::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> gstate_p) {
+	return FinalizeInternal(context, move(gstate_p));
 }
 
 unique_ptr<LocalSinkState> PhysicalWindow::GetLocalSinkState(ExecutionContext &context) {

@@ -427,6 +427,19 @@ Value Value::STRUCT(child_list_t<Value> values) {
 	return result;
 }
 
+Value Value::MAP(child_list_t<Value> values) {
+	Value result;
+	child_list_t<LogicalType> child_types;
+	child_types.push_back({values[0].first, values[0].second.type()});
+	child_types.push_back({values[1].first, values[1].second.type()});
+
+	result.type_ = LogicalType(LogicalTypeId::MAP, child_types);
+
+	result.struct_value = move(values);
+	result.is_null = false;
+	return result;
+}
+
 Value Value::LIST(vector<Value> values) {
 	Value result;
 	result.type_ = LogicalType(LogicalTypeId::LIST);
@@ -654,6 +667,14 @@ uint16_t Value::GetValue() const {
 	return GetValueInternal<uint16_t>();
 }
 template <>
+uint32_t Value::GetValue() const {
+	return GetValueInternal<uint32_t>();
+}
+template <>
+uint64_t Value::GetValue() const {
+	return GetValueInternal<uint64_t>();
+}
+template <>
 string Value::GetValue() const {
 	return ToString();
 }
@@ -677,8 +698,8 @@ template <>
 timestamp_t Value::GetValue() const {
 	return GetValueInternal<timestamp_t>();
 }
-template <>
-uintptr_t Value::GetValue() const {
+
+uintptr_t Value::GetPointer() const {
 	D_ASSERT(type() == LogicalType::POINTER);
 	return value_.pointer;
 }
@@ -920,6 +941,19 @@ string Value::ToString() const {
 			}
 		}
 		ret += "]";
+		return ret;
+	}
+	case LogicalTypeId::MAP: {
+		string ret = "{";
+		auto &key_list = struct_value[0].second.list_value;
+		auto &value_list = struct_value[1].second.list_value;
+		for (size_t i = 0; i < key_list.size(); i++) {
+			ret += key_list[i].ToString() + "=" + value_list[i].ToString();
+			if (i < key_list.size() - 1) {
+				ret += ", ";
+			}
+		}
+		ret += "}";
 		return ret;
 	}
 	default:

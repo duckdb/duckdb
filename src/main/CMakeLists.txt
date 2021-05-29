@@ -3,6 +3,7 @@ add_subdirectory(relation)
 set(DUCKDB_MAIN_FILES
     appender.cpp
     client_context.cpp
+    config.cpp
     connection.cpp
     database.cpp
     materialized_query_result.cpp

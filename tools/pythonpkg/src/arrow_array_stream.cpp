@@ -1,16 +1,20 @@
 #include "duckdb/common/assert.hpp"
 #include "include/duckdb_python/arrow_array_stream.hpp"
+#include "duckdb/common/common.hpp"
 
 namespace duckdb {
 
-PythonTableArrowArrayStream::PythonTableArrowArrayStream(const py::object &arrow_table,
+PythonTableArrowArrayStream::PythonTableArrowArrayStream(PyObject *arrow_table_p,
                                                          PythonTableArrowArrayStreamFactory *factory)
-    : arrow_table(arrow_table), factory(factory) {
-	InitializeFunctionPointers(&stream);
-	py::gil_scoped_acquire acquire;
-	batches = arrow_table.attr("to_batches")();
-	stream.number_of_batches = py::len(batches);
-	stream.private_data = this;
+    : factory(factory), arrow_table(arrow_table_p), chunk_idx(0) {
+	stream = make_unique<ArrowArrayStreamWrapper>();
+	InitializeFunctionPointers(&stream->arrow_array_stream);
+	py::handle table_handle(arrow_table_p);
+	batches = table_handle.attr("to_batches")();
+	py::int_ num_rows_func = table_handle.attr("num_rows");
+	stream->number_of_rows = num_rows_func;
+
+	stream->arrow_array_stream.private_data = this;
 }
 
 void PythonTableArrowArrayStream::InitializeFunctionPointers(ArrowArrayStream *stream) {
@@ -20,17 +24,18 @@ void PythonTableArrowArrayStream::InitializeFunctionPointers(ArrowArrayStream *s
 	stream->get_last_error = PythonTableArrowArrayStream::GetLastError;
 }
 
-ArrowArrayStream *PythonTableArrowArrayStreamFactory::Produce(uintptr_t factory_ptr) {
+unique_ptr<ArrowArrayStreamWrapper> PythonTableArrowArrayStreamFactory::Produce(uintptr_t factory_ptr) {
 	py::gil_scoped_acquire acquire;
 	PythonTableArrowArrayStreamFactory *factory = (PythonTableArrowArrayStreamFactory *)factory_ptr;
 	if (!factory->arrow_table) {
 		return nullptr;
 	}
+	//! This is a bit hacky, but has to be this way to hide pybind from the main duckdb lib
 	auto table_stream = new PythonTableArrowArrayStream(factory->arrow_table, factory);
-	return &table_stream->stream;
+	return move(table_stream->stream);
 }
 
-int PythonTableArrowArrayStream::PythonTableArrowArrayStream::GetSchema(struct ArrowArrayStream *stream,
+int PythonTableArrowArrayStream::PythonTableArrowArrayStream::GetSchema(ArrowArrayStream *stream,
                                                                         struct ArrowSchema *out) {
 	D_ASSERT(stream->private_data);
 	py::gil_scoped_acquire acquire;
@@ -39,7 +44,8 @@ int PythonTableArrowArrayStream::PythonTableArrowArrayStream::GetSchema(struct A
 		my_stream->last_error = "stream was released";
 		return -1;
 	}
-	auto schema = my_stream->arrow_table.attr("schema");
+	py::handle table_handle(my_stream->arrow_table);
+	auto schema = table_handle.attr("schema");
 	if (!py::hasattr(schema, "_export_to_c")) {
 		my_stream->last_error = "failed to acquire export_to_c function";
 		return -1;
@@ -49,7 +55,7 @@ int PythonTableArrowArrayStream::PythonTableArrowArrayStream::GetSchema(struct A
 	return 0;
 }
 
-int PythonTableArrowArrayStream::GetNext(struct ArrowArrayStream *stream, struct ArrowArray *out, int chunk_idx) {
+int PythonTableArrowArrayStream::GetNext(struct ArrowArrayStream *stream, struct ArrowArray *out) {
 	D_ASSERT(stream->private_data);
 	py::gil_scoped_acquire acquire;
 	auto my_stream = (PythonTableArrowArrayStream *)stream->private_data;
@@ -57,11 +63,11 @@ int PythonTableArrowArrayStream::GetNext(struct ArrowArrayStream *stream, struct
 		my_stream->last_error = "stream was released";
 		return -1;
 	}
-	if (chunk_idx >= py::len(my_stream->batches)) {
+	if (my_stream->chunk_idx >= py::len(my_stream->batches)) {
 		out->release = nullptr;
 		return 0;
 	}
-	auto stream_batch = my_stream->batches[chunk_idx];
+	auto stream_batch = my_stream->batches[my_stream->chunk_idx++];
 	if (!py::hasattr(stream_batch, "_export_to_c")) {
 		my_stream->last_error = "failed to acquire export_to_c function";
 		return -1;
@@ -78,7 +84,6 @@ void PythonTableArrowArrayStream::Release(struct ArrowArrayStream *stream) {
 	}
 	stream->release = nullptr;
 	auto private_data = (PythonTableArrowArrayStream *)stream->private_data;
-	private_data->factory->stream = nullptr;
 	delete (PythonTableArrowArrayStream *)stream->private_data;
 }
 

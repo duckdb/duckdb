@@ -1,5 +1,5 @@
 #include "duckdb/execution/operator/join/physical_index_join.hpp"
-
+#include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/index/art/art.hpp"
@@ -197,6 +197,13 @@ unique_ptr<PhysicalOperatorState> PhysicalIndexJoin::GetOperatorState() {
 		state->probe_executor.AddExpression(*cond.left);
 	}
 	return move(state);
+}
+void PhysicalIndexJoin::FinalizeOperatorState(PhysicalOperatorState &state, ExecutionContext &context) {
+	auto &state_p = reinterpret_cast<PhysicalIndexJoinOperatorState &>(state);
+	context.thread.profiler.Flush(this, &state_p.probe_executor, "probe_executor", 0);
+	if (!children.empty() && state.child_state) {
+		children[0]->FinalizeOperatorState(*state.child_state, context);
+	}
 }
 
 } // namespace duckdb

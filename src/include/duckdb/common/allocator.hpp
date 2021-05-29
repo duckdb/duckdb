@@ -21,11 +21,11 @@ struct PrivateAllocatorData {
 };
 
 typedef data_ptr_t (*allocate_function_ptr_t)(PrivateAllocatorData *private_data, idx_t size);
-typedef void (*free_function_ptr_t)(PrivateAllocatorData *private_data, data_ptr_t pointer);
+typedef void (*free_function_ptr_t)(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size);
 
 class AllocatedData {
 public:
-	AllocatedData(Allocator &allocator, data_ptr_t pointer);
+	AllocatedData(Allocator &allocator, data_ptr_t pointer, idx_t allocated_size);
 	~AllocatedData();
 
 	data_ptr_t get() {
@@ -39,6 +39,7 @@ public:
 private:
 	Allocator &allocator;
 	data_ptr_t pointer;
+	idx_t allocated_size;
 };
 
 class Allocator {
@@ -48,20 +49,24 @@ public:
 	          unique_ptr<PrivateAllocatorData> private_data);
 
 	data_ptr_t AllocateData(idx_t size);
-	void FreeData(data_ptr_t pointer);
+	void FreeData(data_ptr_t pointer, idx_t size);
 
 	unique_ptr<AllocatedData> Allocate(idx_t size) {
-		return make_unique<AllocatedData>(*this, AllocateData(size));
+		return make_unique<AllocatedData>(*this, AllocateData(size), size);
 	}
 
 	static data_ptr_t DefaultAllocate(PrivateAllocatorData *private_data, idx_t size) {
 		return new data_t[size];
 	}
-	static void DefaultFree(PrivateAllocatorData *private_data, data_ptr_t pointer) {
+	static void DefaultFree(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size) {
 		delete[] pointer;
 	}
 	static Allocator &Get(ClientContext &context);
 	static Allocator &Get(DatabaseInstance &db);
+
+	PrivateAllocatorData *GetPrivateData() {
+		return private_data.get();
+	}
 
 private:
 	allocate_function_ptr_t allocate_function;
