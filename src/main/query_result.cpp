@@ -1,3 +1,4 @@
+#include <list>
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/arrow.hpp"
@@ -95,10 +96,9 @@ struct DuckDBArrowSchemaHolder {
 	vector<ArrowSchema> children = {};
 	// unused in children
 	vector<ArrowSchema *> children_ptrs = {};
-	// unused in children
-	vector<ArrowSchema> nested_children = {};
-	// unused in children
-	vector<ArrowSchema *> nested_children_ptr = {};
+	//! used for nested structures
+	std::list<ArrowSchema> nested_children = {};
+	std::list<ArrowSchema *> nested_children_ptr = {};
 	//! This holds strings created to represent decimal types
 	vector<unique_ptr<char[]>> owned_type_names;
 };
@@ -202,15 +202,18 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		child.format = "n";
 		break;
 	}
-	case LogicalTypeId::LIST:
+	case LogicalTypeId::LIST: {
 		child.format = "+l";
 		child.n_children = 1;
-		root_holder.nested_children.resize(root_holder.nested_children.size() + 1);
-		root_holder.nested_children_ptr.push_back(root_holder.nested_children.data());
-		child.children = root_holder.nested_children_ptr.data();
-		InitializeChild(*child.children[0]);
-		SetArrowFormat(root_holder, *child.children[0], type.child_types()[0].second);
+		root_holder.nested_children.push_back({});
+		root_holder.nested_children_ptr.push_back(&root_holder.nested_children.back());
+		InitializeChild(root_holder.nested_children.back());
+		child.children = &root_holder.nested_children_ptr.back();
+		child.children[0]->name = "l";
+		SetArrowFormat(root_holder, **child.children, type.child_types()[0].second);
 		break;
+	}
+
 	default:
 		throw NotImplementedException("Unsupported Arrow type " + type.ToString());
 	}

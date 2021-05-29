@@ -246,6 +246,18 @@ void InitializeChild(DuckDBArrowArrayChildHolder &child_holder, idx_t size) {
 
 	child.length = size;
 }
+void SetChildValidityMask(Vector &vector, ArrowArray &child) {
+	auto &mask = FlatVector::Validity(vector);
+	if (!mask.AllValid()) {
+		//! any bits are set: might have nulls
+		child.null_count = -1;
+	} else {
+		//! no bits are set; we know there are no nulls
+		child.null_count = 0;
+	}
+	child.buffers[0] = (void *)mask.GetData();
+}
+
 void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType &type, Vector &data, idx_t size) {
 	auto &child = child_holder.array;
 	auto &vector = child_holder.vector;
@@ -271,9 +283,9 @@ void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType 
 		child.n_buffers = 2;
 		child.buffers[1] = (void *)FlatVector::GetData(vector);
 		break;
-	    case LogicalTypeId::SQLNULL:
-	        child.n_buffers = 1;
-	        break;
+	case LogicalTypeId::SQLNULL:
+		child.n_buffers = 1;
+		break;
 	case LogicalTypeId::TIME: {
 		//! convert time from microseconds to milliseconds
 		vector.Reference(data);
@@ -396,6 +408,7 @@ void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType 
 		child.children = &child_holder.children_ptrs[0];
 		auto &child_vector = ListVector::GetEntry(data);
 		SetArrowChild(child_holder.children[0], type.child_types()[0].second, child_vector, list_size);
+		SetChildValidityMask(child_vector, child_holder.children[0].array);
 		break;
 	}
 
@@ -438,15 +451,7 @@ void DataChunk::ToArrowArray(ArrowArray *out_array) {
 			// TODO support other vector types
 		case VectorType::FLAT_VECTOR: {
 			SetArrowChild(child_holder, GetTypes()[col_idx], data[col_idx], size());
-			auto &mask = FlatVector::Validity(vector);
-			if (!mask.AllValid()) {
-				// any bits are set: might have nulls
-				child.null_count = -1;
-			} else {
-				// no bits are set; we know there are no nulls
-				child.null_count = 0;
-			}
-			child.buffers[0] = (void *)mask.GetData();
+			SetChildValidityMask(vector, child);
 			break;
 		}
 		default:
