@@ -54,7 +54,7 @@ class TestArrowNested(object):
         #Nested Lists
         compare_results("SELECT LIST(le) FROM (SELECT LIST(i) le from range(100) tbl(i) group by i%10) as t")
       
-        compare_results('''select grp,lst,cs (select grp, lst, case when grp>1 then m[0] else list_value(null) end as cs
+        compare_results('''SELECT grp,lst,cs FROM (select grp, lst, case when grp>1 then lst else list_value(null) end as cs
                         from (SELECT a%4 as grp, list(a) as lst FROM range(7) tbl(a) group by grp) as lst_tbl) as T;''')
         
 
