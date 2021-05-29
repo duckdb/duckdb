@@ -204,10 +204,10 @@ private:
 
 	idx_t PrepareKeys(DataChunk &keys, unique_ptr<VectorData[]> &key_data, const SelectionVector *&current_sel,
 	                  SelectionVector &sel, bool build_side);
-	void SerializeVectorData(VectorData &vdata, PhysicalType type, const SelectionVector &sel, idx_t count,
-	                         data_ptr_t key_locations[], idx_t &col_offset, idx_t col);
-	void SerializeVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t count, data_ptr_t key_locations[],
-	                     idx_t &col_offset, idx_t col);
+	void SerializeVectorData(VectorData &vdata, const SelectionVector &sel, const idx_t count,
+	                         data_ptr_t key_locations[], const idx_t col_idx);
+	void SerializeVector(Vector &v, idx_t vcount, const SelectionVector &sel, const idx_t count,
+	                     data_ptr_t key_locations[], const idx_t col_idx);
 
 	//! The amount of entries stored in the HT currently
 	idx_t count;
