@@ -551,7 +551,7 @@ jobs:
       run: make debug
 
     - name: Test
-      run: valgrind ./build/debug/test/unittest -s "Test TPC-H SF0.01"
+      run: valgrind ./build/debug/test/unittest test/sql/tpch/tpch_sf001.test_slow
 
 # borked somehow. needs investigation.
 #  codecov:
