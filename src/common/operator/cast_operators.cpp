@@ -642,7 +642,7 @@ struct IntegerCastOperation {
 		return true;
 	}
 
-	template <class T>
+	template <class T, bool NEGATIVE>
 	static bool HandleExponent(T &result, int64_t exponent) {
 		double dbl_res = result * std::pow(10.0L, exponent);
 		if (dbl_res < NumericLimits<T>::Minimum() || dbl_res > NumericLimits<T>::Maximum()) {
@@ -682,19 +682,21 @@ static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) 
 				idx_t start_digit = pos;
 				while (pos < len) {
 					if (!StringUtil::CharacterIsDigit(buf[pos])) {
-						return false;
+						break;
 					}
 					if (!OP::template HandleDecimal<T, NEGATIVE>(result, buf[pos] - '0')) {
 						return false;
 					}
 					pos++;
 				}
-				if (!OP::template Finalize<T>(result)) {
-					return false;
-				}
 				// make sure there is either (1) one number after the period, or (2) one number before the period
 				// i.e. we accept "1." and ".1" as valid numbers, but not "."
-				return number_before_period || pos > start_digit;
+				if (!(number_before_period || pos > start_digit)) {
+					return false;
+				}
+				if (pos >= len) {
+					break;
+				}
 			}
 			if (StringUtil::CharacterIsSpace(buf[pos])) {
 				// skip any trailing spaces
@@ -722,7 +724,7 @@ static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) 
 							return false;
 						}
 					}
-					return OP::template HandleExponent<T>(result, exponent);
+					return OP::template HandleExponent<T, NEGATIVE>(result, exponent);
 				}
 			}
 			return false;
@@ -1297,6 +1299,18 @@ string_t CastFromTimestamp::Operation(timestamp_t input, Vector &vector) {
 	result.Finalize();
 	return result;
 }
+template <>
+duckdb::string_t CastFromTimestampNS::Operation(duckdb::timestamp_t input, Vector &result) {
+	return CastFromTimestamp::Operation(Timestamp::FromEpochNanoSeconds(input.value), result);
+}
+template <>
+duckdb::string_t CastFromTimestampMS::Operation(duckdb::timestamp_t input, Vector &result) {
+	return CastFromTimestamp::Operation(Timestamp::FromEpochMs(input.value), result);
+}
+template <>
+duckdb::string_t CastFromTimestampSec::Operation(duckdb::timestamp_t input, Vector &result) {
+	return CastFromTimestamp::Operation(Timestamp::FromEpochSeconds(input.value), result);
+}
 
 template <>
 date_t CastTimestampToDate::Operation(timestamp_t input) {
@@ -1308,12 +1322,59 @@ dtime_t CastTimestampToTime::Operation(timestamp_t input) {
 	return Timestamp::GetTime(input);
 }
 
+template <>
+timestamp_t CastTimestampUsToMs::Operation(timestamp_t input) {
+	timestamp_t cast_timestamp(Timestamp::GetEpochMs(input));
+	return cast_timestamp;
+}
+template <>
+timestamp_t CastTimestampUsToNs::Operation(timestamp_t input) {
+	timestamp_t cast_timestamp(Timestamp::GetEpochNanoSeconds(input));
+	return cast_timestamp;
+}
+template <>
+timestamp_t CastTimestampUsToSec::Operation(timestamp_t input) {
+	timestamp_t cast_timestamp(Timestamp::GetEpochSeconds(input));
+	return cast_timestamp;
+}
+template <>
+timestamp_t CastTimestampMsToUs::Operation(timestamp_t input) {
+	return Timestamp::FromEpochMs(input.value);
+}
+template <>
+timestamp_t CastTimestampNsToUs::Operation(timestamp_t input) {
+	return Timestamp::FromEpochNanoSeconds(input.value);
+}
+template <>
+timestamp_t CastTimestampSecToUs::Operation(timestamp_t input) {
+	return Timestamp::FromEpochSeconds(input.value);
+}
 //===--------------------------------------------------------------------===//
 // Cast To Timestamp
 //===--------------------------------------------------------------------===//
 template <>
 timestamp_t CastToTimestamp::Operation(string_t input) {
 	return Timestamp::FromCString(input.GetDataUnsafe(), input.GetSize());
+}
+
+template <>
+timestamp_t CastToTimestampNS::Operation(string_t input) {
+	timestamp_t cast_timestamp(
+	    Timestamp::GetEpochNanoSeconds(Timestamp::FromCString(input.GetDataUnsafe(), input.GetSize())));
+	return cast_timestamp;
+}
+
+template <>
+timestamp_t CastToTimestampMS::Operation(string_t input) {
+	timestamp_t cast_timestamp(Timestamp::GetEpochMs(Timestamp::FromCString(input.GetDataUnsafe(), input.GetSize())));
+	return cast_timestamp;
+}
+
+template <>
+timestamp_t CastToTimestampSec::Operation(string_t input) {
+	timestamp_t cast_timestamp(
+	    Timestamp::GetEpochSeconds(Timestamp::FromCString(input.GetDataUnsafe(), input.GetSize())));
+	return cast_timestamp;
 }
 
 //===--------------------------------------------------------------------===//
@@ -1340,6 +1401,67 @@ string_t CastToBlob::Operation(string_t input, Vector &vector) {
 	Blob::ToBlob(input, (data_ptr_t)result.GetDataWriteable());
 	result.Finalize();
 	return result;
+}
+
+//===--------------------------------------------------------------------===//
+// Cast To Date
+//===--------------------------------------------------------------------===//
+template <>
+bool TryCast::Operation(string_t input, date_t &result, bool strict) {
+	idx_t pos;
+	return Date::TryConvertDate(input.GetDataUnsafe(), input.GetSize(), pos, result, strict);
+}
+
+template <>
+date_t StrictCast::Operation(string_t input) {
+	return TryStrictCastString<date_t>(input);
+}
+
+template <>
+date_t Cast::Operation(string_t input) {
+	return TryCastString<date_t>(input);
+}
+
+//===--------------------------------------------------------------------===//
+// Cast To Time
+//===--------------------------------------------------------------------===//
+template <>
+bool TryCast::Operation(string_t input, dtime_t &result, bool strict) {
+	idx_t pos;
+	return Time::TryConvertTime(input.GetDataUnsafe(), input.GetSize(), pos, result, strict);
+}
+
+template <>
+dtime_t StrictCast::Operation(string_t input) {
+	return TryStrictCastString<dtime_t>(input);
+}
+
+template <>
+dtime_t Cast::Operation(string_t input) {
+	return TryCastString<dtime_t>(input);
+}
+
+//===--------------------------------------------------------------------===//
+// Cast To Timestamp
+//===--------------------------------------------------------------------===//
+template <>
+bool TryCast::Operation(string_t input, timestamp_t &result, bool strict) {
+	try {
+		result = Timestamp::FromCString(input.GetDataUnsafe(), input.GetSize());
+		return true;
+	} catch (const ConversionException &) {
+		return false;
+	}
+}
+
+template <>
+timestamp_t StrictCast::Operation(string_t input) {
+	return TryStrictCastString<timestamp_t>(input);
+}
+
+template <>
+timestamp_t Cast::Operation(string_t input) {
+	return Timestamp::FromCString(input.GetDataUnsafe(), input.GetSize());
 }
 
 //===--------------------------------------------------------------------===//
@@ -1419,7 +1541,7 @@ struct HugeIntegerCastOperation {
 		return true;
 	}
 
-	template <class T>
+	template <class T, bool NEGATIVE>
 	static bool HandleExponent(T &result, int64_t exponent) {
 		result.Flush();
 		if (exponent < -38 || exponent > 38) {
@@ -1616,6 +1738,30 @@ bool TryCast::Operation(hugeint_t input, int32_t &result, bool strict) {
 }
 
 template <>
+bool TryCast::Operation(hugeint_t input, date_t &result, bool strict) {
+	int32_t days;
+	auto success = Hugeint::TryCast<int32_t>(input, days);
+	result = date_t(days);
+	return success;
+}
+
+template <>
+bool TryCast::Operation(hugeint_t input, dtime_t &result, bool strict) {
+	int64_t micros;
+	auto success = Hugeint::TryCast<int64_t>(input, micros);
+	result = dtime_t(micros);
+	return success;
+}
+
+template <>
+bool TryCast::Operation(hugeint_t input, timestamp_t &result, bool strict) {
+	int64_t micros;
+	auto success = Hugeint::TryCast<int64_t>(input, micros);
+	result = timestamp_t(micros);
+	return success;
+}
+
+template <>
 bool TryCast::Operation(hugeint_t input, int64_t &result, bool strict) {
 	return Hugeint::TryCast<int64_t>(input, result);
 }
@@ -1711,6 +1857,21 @@ double Cast::Operation(hugeint_t input) {
 }
 
 template <>
+date_t Cast::Operation(hugeint_t input) {
+	return date_t(HugeintCastToNumeric<int32_t>(input));
+}
+
+template <>
+dtime_t Cast::Operation(hugeint_t input) {
+	return dtime_t(HugeintCastToNumeric<int64_t>(input));
+}
+
+template <>
+timestamp_t Cast::Operation(hugeint_t input) {
+	return timestamp_t(HugeintCastToNumeric<int64_t>(input));
+}
+
+template <>
 bool TryCast::Operation(hugeint_t input, hugeint_t &result, bool strict) {
 	result = input;
 	return true;
@@ -1753,9 +1914,26 @@ struct DecimalCastOperation {
 		return true;
 	}
 
-	template <class T>
+	template <class T, bool NEGATIVE>
 	static bool HandleExponent(T &state, int64_t exponent) {
-		return false;
+		Finalize<T>(state);
+		if (exponent < 0) {
+			for (idx_t i = 0; i < idx_t(-exponent); i++) {
+				state.result /= 10;
+				if (state.result == 0) {
+					break;
+				}
+			}
+			return true;
+		} else {
+			// positive exponent: append 0's
+			for (idx_t i = 0; i < idx_t(exponent); i++) {
+				if (!HandleDigit<T, NEGATIVE>(state, 0)) {
+					return false;
+				}
+			}
+			return true;
+		}
 	}
 
 	template <class T, bool NEGATIVE>
@@ -1795,8 +1973,8 @@ T DecimalStringCast(string_t input, uint8_t width, uint8_t scale) {
 	state.scale = scale;
 	state.digit_count = 0;
 	state.decimal_count = 0;
-	if (!TryIntegerCast<DecimalCastData<T>, false, DecimalCastOperation, false>(input.GetDataUnsafe(), input.GetSize(),
-	                                                                            state, false)) {
+	if (!TryIntegerCast<DecimalCastData<T>, true, DecimalCastOperation, false>(input.GetDataUnsafe(), input.GetSize(),
+	                                                                           state, false)) {
 		throw ConversionException("Could not convert string \"%s\" to DECIMAL(%d,%d)", input.GetString(), (int)width,
 		                          (int)scale);
 	}

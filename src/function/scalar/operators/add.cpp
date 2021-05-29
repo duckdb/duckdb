@@ -155,10 +155,6 @@ bool TryAddOperator::Operation(int64_t left, int64_t right, int64_t &result) {
 		return false;
 	}
 #endif
-	// FIXME: this check can be removed if we get rid of NullValue<T>
-	if (result == std::numeric_limits<int64_t>::min()) {
-		return false;
-	}
 	return true;
 }
 
@@ -220,10 +216,10 @@ template <>
 dtime_t AddTimeOperator::Operation(dtime_t left, interval_t right) {
 	int64_t diff = right.micros - ((right.micros / Interval::MICROS_PER_DAY) * Interval::MICROS_PER_DAY);
 	left += diff;
-	if (left >= Interval::MICROS_PER_DAY) {
-		left -= Interval::MICROS_PER_DAY;
-	} else if (left < 0) {
-		left += Interval::MICROS_PER_DAY;
+	if (left.micros >= Interval::MICROS_PER_DAY) {
+		left.micros -= Interval::MICROS_PER_DAY;
+	} else if (left.micros < 0) {
+		left.micros += Interval::MICROS_PER_DAY;
 	}
 	return left;
 }

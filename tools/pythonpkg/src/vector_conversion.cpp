@@ -69,6 +69,7 @@ static string_t DecodePythonUnicode(T *codepoints, idx_t codepoint_count, Vector
 		D_ASSERT(sz >= 1);
 		target += sz;
 	}
+	result.Finalize();
 	return result;
 }
 
@@ -121,6 +122,31 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 				continue;
 			}
 			tgt_ptr[row] = Timestamp::FromEpochNanoSeconds(src_ptr[source_idx]);
+		}
+		break;
+	}
+	case PandasType::INTERVAL: {
+		auto src_ptr = (int64_t *)numpy_col.data();
+		auto tgt_ptr = FlatVector::GetData<interval_t>(out);
+		auto &mask = FlatVector::Validity(out);
+
+		for (idx_t row = 0; row < count; row++) {
+			auto source_idx = offset + row;
+			if (src_ptr[source_idx] <= NumericLimits<int64_t>::Minimum()) {
+				// pandas Not a Time (NaT)
+				mask.SetInvalid(row);
+				continue;
+			}
+			int64_t micro = src_ptr[source_idx] / 1000;
+			int64_t days = micro / Interval::MICROS_PER_DAY;
+			micro = micro % Interval::MICROS_PER_DAY;
+			int64_t months = days / Interval::DAYS_PER_MONTH;
+			days = days % Interval::DAYS_PER_MONTH;
+			interval_t interval;
+			interval.months = months;
+			interval.days = days;
+			interval.micros = micro;
+			tgt_ptr[row] = interval;
 		}
 		break;
 	}
@@ -236,6 +262,9 @@ static void ConvertPandasType(const string &col_type, LogicalType &duckdb_col_ty
 		// this better be strings
 		duckdb_col_type = LogicalType::VARCHAR;
 		pandas_type = PandasType::VARCHAR;
+	} else if (col_type == "timedelta64[ns]") {
+		duckdb_col_type = LogicalType::INTERVAL;
+		pandas_type = PandasType::INTERVAL;
 	} else {
 		throw std::runtime_error("unsupported python type " + col_type);
 	}

@@ -1,8 +1,8 @@
 #include "duckdb_python/pybind_wrapper.hpp"
 
-#include <unordered_map>
-#include <vector>
-#include <atomic>
+#include "duckdb/common/atomic.hpp"
+#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/vector.hpp"
 
 #include "duckdb_python/array_wrapper.hpp"
 #include "duckdb_python/pandas_scan.hpp"
@@ -74,7 +74,7 @@ PYBIND11_MODULE(duckdb, m) {
 	m.def("connect", &DuckDBPyConnection::Connect,
 	      "Create a DuckDB database instance. Can take a database file name to read/write persistent data and a "
 	      "read_only flag if no changes are desired",
-	      py::arg("database") = ":memory:", py::arg("read_only") = false);
+	      py::arg("database") = ":memory:", py::arg("read_only") = false, py::arg("config") = py::dict());
 	m.def("tokenize", PyTokenize,
 	      "Tokenizes a SQL string, returning a list of (position, type) tuples that can be "
 	      "used for e.g. syntax highlighting",

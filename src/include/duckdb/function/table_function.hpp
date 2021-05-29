@@ -18,7 +18,7 @@ namespace duckdb {
 class BaseStatistics;
 class LogicalGet;
 struct ParallelState;
-struct TableFilterSet;
+class TableFilterSet;
 
 struct FunctionOperatorData {
 	virtual ~FunctionOperatorData() {
@@ -37,12 +37,17 @@ typedef unique_ptr<FunctionData> (*table_function_bind_t)(ClientContext &context
                                                           vector<string> &input_table_names,
                                                           vector<LogicalType> &return_types, vector<string> &names);
 typedef unique_ptr<FunctionOperatorData> (*table_function_init_t)(ClientContext &context, const FunctionData *bind_data,
-                                                                  vector<column_t> &column_ids,
+                                                                  const vector<column_t> &column_ids,
                                                                   TableFilterCollection *filters);
 typedef unique_ptr<BaseStatistics> (*table_statistics_t)(ClientContext &context, const FunctionData *bind_data,
                                                          column_t column_index);
 typedef void (*table_function_t)(ClientContext &context, const FunctionData *bind_data,
                                  FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output);
+
+typedef void (*table_function_parallel_t)(ClientContext &context, const FunctionData *bind_data,
+                                          FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output,
+                                          ParallelState *parallel_state);
+
 typedef void (*table_function_cleanup_t)(ClientContext &context, const FunctionData *bind_data,
                                          FunctionOperatorData *operator_state);
 typedef idx_t (*table_function_max_threads_t)(ClientContext &context, const FunctionData *bind_data);
@@ -51,7 +56,7 @@ typedef unique_ptr<ParallelState> (*table_function_init_parallel_state_t)(Client
 typedef unique_ptr<FunctionOperatorData> (*table_function_init_parallel_t)(ClientContext &context,
                                                                            const FunctionData *bind_data,
                                                                            ParallelState *state,
-                                                                           vector<column_t> &column_ids,
+                                                                           const vector<column_t> &column_ids,
                                                                            TableFilterCollection *filters);
 typedef bool (*table_function_parallel_state_next_t)(ClientContext &context, const FunctionData *bind_data,
                                                      FunctionOperatorData *state, ParallelState *parallel_state);
@@ -73,13 +78,14 @@ public:
 	              table_function_pushdown_complex_filter_t pushdown_complex_filter = nullptr,
 	              table_function_to_string_t to_string = nullptr, table_function_max_threads_t max_threads = nullptr,
 	              table_function_init_parallel_state_t init_parallel_state = nullptr,
+	              table_function_parallel_t parallel_function = nullptr,
 	              table_function_init_parallel_t parallel_init = nullptr,
 	              table_function_parallel_state_next_t parallel_state_next = nullptr, bool projection_pushdown = false,
 	              bool filter_pushdown = false, table_function_progress_t query_progress = nullptr)
 	    : SimpleNamedParameterFunction(std::move(name), move(arguments)), bind(bind), init(init), function(function),
 	      statistics(statistics), cleanup(cleanup), dependency(dependency), cardinality(cardinality),
 	      pushdown_complex_filter(pushdown_complex_filter), to_string(to_string), max_threads(max_threads),
-	      init_parallel_state(init_parallel_state), parallel_init(parallel_init),
+	      init_parallel_state(init_parallel_state), parallel_function(parallel_function), parallel_init(parallel_init),
 	      parallel_state_next(parallel_state_next), table_scan_progress(query_progress),
 	      projection_pushdown(projection_pushdown), filter_pushdown(filter_pushdown) {
 	}
@@ -90,12 +96,13 @@ public:
 	              table_function_pushdown_complex_filter_t pushdown_complex_filter = nullptr,
 	              table_function_to_string_t to_string = nullptr, table_function_max_threads_t max_threads = nullptr,
 	              table_function_init_parallel_state_t init_parallel_state = nullptr,
+	              table_function_parallel_t parallel_function = nullptr,
 	              table_function_init_parallel_t parallel_init = nullptr,
 	              table_function_parallel_state_next_t parallel_state_next = nullptr, bool projection_pushdown = false,
 	              bool filter_pushdown = false, table_function_progress_t query_progress = nullptr)
 	    : TableFunction(string(), arguments, function, bind, init, statistics, cleanup, dependency, cardinality,
-	                    pushdown_complex_filter, to_string, max_threads, init_parallel_state, parallel_init,
-	                    parallel_state_next, projection_pushdown, filter_pushdown, query_progress) {
+	                    pushdown_complex_filter, to_string, max_threads, init_parallel_state, parallel_function,
+	                    parallel_init, parallel_state_next, projection_pushdown, filter_pushdown, query_progress) {
 	}
 	TableFunction() : SimpleNamedParameterFunction("", {}) {
 	}
@@ -131,6 +138,8 @@ public:
 	table_function_max_threads_t max_threads;
 	//! (Optional) initialize the parallel scan state, called once in total.
 	table_function_init_parallel_state_t init_parallel_state;
+	//! (Optional) Parallel version of the main function
+	table_function_parallel_t parallel_function;
 	//! (Optional) initialize the parallel scan given the parallel state. Called once per task. Return nullptr if there
 	//! is nothing left to scan.
 	table_function_init_parallel_t parallel_init;

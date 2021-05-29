@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb_python/arrow/array_wrapper.hpp
+// duckdb_python/arrow/arrow_array_stream.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -9,36 +9,35 @@
 #pragma once
 
 #include <string>
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/constants.hpp"
-#include "duckdb/common/arrow.hpp"
+#include "duckdb/common/arrow_wrapper.hpp"
 #include "pybind_wrapper.hpp"
 namespace duckdb {
 class PythonTableArrowArrayStreamFactory {
 public:
-	explicit PythonTableArrowArrayStreamFactory(const py::object &arrow_table) : arrow_table(arrow_table) {};
-	~PythonTableArrowArrayStreamFactory() {
-		arrow_table = py::none();
-	}
-	static ArrowArrayStream *Produce(uintptr_t factory);
-	py::object arrow_table;
-	ArrowArrayStream *stream = nullptr;
+	explicit PythonTableArrowArrayStreamFactory(PyObject *arrow_table) : arrow_table(arrow_table) {};
+	static unique_ptr<ArrowArrayStreamWrapper> Produce(uintptr_t factory);
+	PyObject *arrow_table;
 };
+
 class PythonTableArrowArrayStream {
 public:
-	explicit PythonTableArrowArrayStream(const py::object &arrow_table, PythonTableArrowArrayStreamFactory *factory);
-	static void InitializeFunctionPointers(ArrowArrayStream *stream);
-	ArrowArrayStream stream;
+	explicit PythonTableArrowArrayStream(PyObject *arrow_table, PythonTableArrowArrayStreamFactory *factory);
+
+	unique_ptr<ArrowArrayStreamWrapper> stream;
 	PythonTableArrowArrayStreamFactory *factory;
 
 private:
-	static int GetSchema(ArrowArrayStream *stream, struct ArrowSchema *out);
-	static int GetNext(ArrowArrayStream *stream, struct ArrowArray *out);
-	static void Release(ArrowArrayStream *stream);
-	static const char *GetLastError(ArrowArrayStream *stream);
+	static void InitializeFunctionPointers(ArrowArrayStream *stream);
+	static int GetSchema(struct ArrowArrayStream *stream, struct ArrowSchema *out);
+	static int GetNext(struct ArrowArrayStream *stream, struct ArrowArray *out);
+	static void Release(struct ArrowArrayStream *stream);
+	static const char *GetLastError(struct ArrowArrayStream *stream);
 
 	std::string last_error;
-	py::object arrow_table;
+	PyObject *arrow_table;
 	py::list batches;
-	idx_t batch_idx = 0;
+	std::atomic<idx_t> chunk_idx;
 };
 } // namespace duckdb

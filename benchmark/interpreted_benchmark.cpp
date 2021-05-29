@@ -4,10 +4,9 @@
 
 #include <fstream>
 #include <sstream>
-
+#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/client_context.hpp"
-
 #include "extension_helper.hpp"
 
 namespace duckdb {
@@ -36,9 +35,10 @@ struct InterpretedBenchmarkState : public BenchmarkState {
 	DuckDB db;
 	Connection con;
 	unique_ptr<MaterializedQueryResult> result;
-
 	InterpretedBenchmarkState() : db(nullptr), con(db) {
 		con.EnableProfiling();
+		auto res = con.Query("PRAGMA threads=1");
+		D_ASSERT(res->success);
 	}
 };
 
@@ -366,7 +366,7 @@ string InterpretedBenchmark::BenchmarkInfo() {
 
 string InterpretedBenchmark::GetLogOutput(BenchmarkState *state_p) {
 	auto &state = (InterpretedBenchmarkState &)*state_p;
-	return state.con.context->profiler.ToJSON();
+	return state.con.context->profiler->ToJSON();
 }
 
 string InterpretedBenchmark::DisplayName() {

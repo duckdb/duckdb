@@ -46,7 +46,7 @@ timestamp_t ParquetTimestampMsToTimestamp(const int64_t &raw_ts) {
 }
 
 date_t ParquetIntToDate(const int32_t &raw_date) {
-	return raw_date;
+	return date_t(raw_date);
 }
 
 } // namespace duckdb

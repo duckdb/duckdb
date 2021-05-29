@@ -91,6 +91,9 @@ public:
 	static Value TIMESTAMP(date_t date, dtime_t time);
 	//! Create a timestamp Value from a specified timestamp
 	static Value TIMESTAMP(timestamp_t timestamp);
+	static Value TimestampNs(timestamp_t timestamp);
+	static Value TimestampMs(timestamp_t timestamp);
+	static Value TimestampSec(timestamp_t timestamp);
 	//! Create a timestamp Value from a specified timestamp in separate values
 	static Value TIMESTAMP(int32_t year, int32_t month, int32_t day, int32_t hour, int32_t min, int32_t sec,
 	                       int32_t micros);
@@ -110,6 +113,8 @@ public:
 	static Value STRUCT(child_list_t<Value> values);
 	//! Create a list value with the given entries
 	static Value LIST(std::vector<Value> values);
+	//! Creat a map value with the given lists
+	static Value MAP(child_list_t<Value> values);
 
 	//! Create a blob Value from a data pointer and a length: no bytes are interpreted
 	static Value BLOB(const_data_ptr_t data, idx_t len);
@@ -138,6 +143,8 @@ public:
 
 	//! Convert this value to a string
 	DUCKDB_API string ToString() const;
+
+	DUCKDB_API uintptr_t GetPointer() const;
 
 	//! Cast this value to another type
 	DUCKDB_API Value CastAs(const LogicalType &target_type, bool strict = false) const;
@@ -217,6 +224,9 @@ public:
 		double double_;
 		uintptr_t pointer;
 		uint64_t hash;
+		date_t date;
+		dtime_t time;
+		timestamp_t timestamp;
 		interval_t interval;
 	} value_;
 
@@ -263,6 +273,12 @@ Value DUCKDB_API Value::CreateValue(int64_t value);
 template <>
 Value DUCKDB_API Value::CreateValue(hugeint_t value);
 template <>
+Value DUCKDB_API Value::CreateValue(date_t value);
+template <>
+Value DUCKDB_API Value::CreateValue(dtime_t value);
+template <>
+Value DUCKDB_API Value::CreateValue(timestamp_t value);
+template <>
 Value DUCKDB_API Value::CreateValue(const char *value);
 template <>
 Value DUCKDB_API Value::CreateValue(string value);
@@ -272,6 +288,8 @@ template <>
 Value DUCKDB_API Value::CreateValue(float value);
 template <>
 Value DUCKDB_API Value::CreateValue(double value);
+template <>
+Value DUCKDB_API Value::CreateValue(interval_t value);
 template <>
 Value DUCKDB_API Value::CreateValue(Value value);
 
@@ -290,6 +308,10 @@ DUCKDB_API uint8_t Value::GetValue() const;
 template <>
 DUCKDB_API uint16_t Value::GetValue() const;
 template <>
+DUCKDB_API uint32_t Value::GetValue() const;
+template <>
+DUCKDB_API uint64_t Value::GetValue() const;
+template <>
 DUCKDB_API hugeint_t Value::GetValue() const;
 template <>
 DUCKDB_API string Value::GetValue() const;
@@ -298,7 +320,11 @@ DUCKDB_API float Value::GetValue() const;
 template <>
 DUCKDB_API double Value::GetValue() const;
 template <>
-DUCKDB_API uintptr_t Value::GetValue() const;
+DUCKDB_API date_t Value::GetValue() const;
+template <>
+DUCKDB_API dtime_t Value::GetValue() const;
+template <>
+DUCKDB_API timestamp_t Value::GetValue() const;
 
 template <>
 DUCKDB_API int8_t &Value::GetValueUnsafe();
@@ -324,6 +350,14 @@ template <>
 DUCKDB_API float &Value::GetValueUnsafe();
 template <>
 DUCKDB_API double &Value::GetValueUnsafe();
+template <>
+DUCKDB_API date_t &Value::GetValueUnsafe();
+template <>
+DUCKDB_API dtime_t &Value::GetValueUnsafe();
+template <>
+DUCKDB_API timestamp_t &Value::GetValueUnsafe();
+template <>
+DUCKDB_API interval_t &Value::GetValueUnsafe();
 
 template <>
 DUCKDB_API bool Value::IsValid(float value);

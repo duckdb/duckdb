@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/types.hpp"
 #include "duckdb/common/types/string_type.hpp"
 
 namespace duckdb {

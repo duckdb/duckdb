@@ -18,6 +18,7 @@ LogicalType::LogicalType() : id_(LogicalTypeId::INVALID), width_(0), scale_(0), 
 LogicalType::LogicalType(LogicalTypeId id) : id_(id), width_(0), scale_(0), collation_(string()) {
 	physical_type_ = GetInternalType();
 }
+
 LogicalType::LogicalType(LogicalTypeId id, string collation)
     : id_(id), width_(0), scale_(0), collation_(move(collation)) {
 	physical_type_ = GetInternalType();
@@ -61,6 +62,9 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::BIGINT:
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_MS:
 		return PhysicalType::INT64;
 	case LogicalTypeId::UBIGINT:
 		return PhysicalType::UINT64;
@@ -126,7 +130,12 @@ const LogicalType LogicalType::FLOAT = LogicalType(LogicalTypeId::FLOAT);
 const LogicalType LogicalType::DECIMAL = LogicalType(LogicalTypeId::DECIMAL);
 const LogicalType LogicalType::DOUBLE = LogicalType(LogicalTypeId::DOUBLE);
 const LogicalType LogicalType::DATE = LogicalType(LogicalTypeId::DATE);
+
 const LogicalType LogicalType::TIMESTAMP = LogicalType(LogicalTypeId::TIMESTAMP);
+const LogicalType LogicalType::TIMESTAMP_MS = LogicalType(LogicalTypeId::TIMESTAMP_MS);
+const LogicalType LogicalType::TIMESTAMP_NS = LogicalType(LogicalTypeId::TIMESTAMP_NS);
+const LogicalType LogicalType::TIMESTAMP_S = LogicalType(LogicalTypeId::TIMESTAMP_SEC);
+
 const LogicalType LogicalType::TIME = LogicalType(LogicalTypeId::TIME);
 const LogicalType LogicalType::HASH = LogicalType(LogicalTypeId::HASH);
 const LogicalType LogicalType::POINTER = LogicalType(LogicalTypeId::POINTER);
@@ -247,10 +256,9 @@ idx_t GetTypeIdSize(PhysicalType type) {
 		return sizeof(string_t);
 	case PhysicalType::INTERVAL:
 		return sizeof(interval_t);
+	case PhysicalType::MAP:
 	case PhysicalType::STRUCT:
 		return 0; // no own payload
-	case PhysicalType::MAP:
-		return 42; // FIXME there is no way to create this type yet
 	case PhysicalType::LIST:
 		return 16; // offset + len
 
@@ -330,6 +338,12 @@ string LogicalTypeIdToString(LogicalTypeId id) {
 		return "TIME";
 	case LogicalTypeId::TIMESTAMP:
 		return "TIMESTAMP";
+	case LogicalTypeId::TIMESTAMP_MS:
+		return "TIMESTAMP (MS)";
+	case LogicalTypeId::TIMESTAMP_NS:
+		return "TIMESTAMP (NS)";
+	case LogicalTypeId::TIMESTAMP_SEC:
+		return "TIMESTAMP (SEC)";
 	case LogicalTypeId::FLOAT:
 		return "FLOAT";
 	case LogicalTypeId::DOUBLE:
@@ -399,7 +413,8 @@ string LogicalType::ToString() const {
 		if (child_types_.size() != 2) {
 			throw Exception("Map needs exactly two child elements");
 		}
-		return "MAP<" + child_types_[0].second.ToString() + ", " + child_types_[1].second.ToString() + ">";
+		return "MAP<" + child_types_[0].second.child_types()[0].second.ToString() + ", " +
+		       child_types_[1].second.child_types()[0].second.ToString() + ">";
 	}
 	case LogicalTypeId::DECIMAL: {
 		if (width_ == 0) {
@@ -427,8 +442,14 @@ LogicalType TransformStringToLogicalType(const string &str) {
 		return LogicalType::BIGINT;
 	} else if (lower_str == "int2" || lower_str == "smallint" || lower_str == "short" || lower_str == "int16") {
 		return LogicalType::SMALLINT;
-	} else if (lower_str == "timestamp" || lower_str == "datetime") {
+	} else if (lower_str == "timestamp" || lower_str == "datetime" || lower_str == "timestamp_us") {
 		return LogicalType::TIMESTAMP;
+	} else if (lower_str == "timestamp_ms") {
+		return LogicalType::TIMESTAMP_MS;
+	} else if (lower_str == "timestamp_ns") {
+		return LogicalType::TIMESTAMP_NS;
+	} else if (lower_str == "timestamp_s") {
+		return LogicalType::TIMESTAMP_S;
 	} else if (lower_str == "bool" || lower_str == "boolean" || lower_str == "logical") {
 		return LogicalType(LogicalTypeId::BOOLEAN);
 	} else if (lower_str == "real" || lower_str == "float4" || lower_str == "float") {
@@ -628,7 +649,6 @@ bool LogicalType::IsMoreGenericThan(LogicalType &other) const {
 		default:
 			return false;
 		}
-		return false;
 	case LogicalTypeId::DOUBLE:
 		switch (other.id()) {
 		case LogicalTypeId::BOOLEAN:
@@ -641,10 +661,42 @@ bool LogicalType::IsMoreGenericThan(LogicalType &other) const {
 		default:
 			return false;
 		}
-		return false;
 	case LogicalTypeId::DATE:
 		return false;
-	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP: {
+		switch (other.id()) {
+		case LogicalTypeId::TIMESTAMP_NS:
+		case LogicalTypeId::TIME:
+		case LogicalTypeId::DATE:
+			return true;
+		default:
+			return false;
+		}
+	}
+	case LogicalTypeId::TIMESTAMP_NS: {
+		switch (other.id()) {
+		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::TIMESTAMP_MS:
+		case LogicalTypeId::TIMESTAMP_SEC:
+		case LogicalTypeId::TIME:
+		case LogicalTypeId::DATE:
+			return true;
+		default:
+			return false;
+		}
+	}
+	case LogicalTypeId::TIMESTAMP_MS: {
+		switch (other.id()) {
+		case LogicalTypeId::TIMESTAMP_SEC:
+		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::TIME:
+		case LogicalTypeId::DATE:
+			return true;
+		default:
+			return false;
+		}
+	}
+	case LogicalTypeId::TIMESTAMP_SEC: {
 		switch (other.id()) {
 		case LogicalTypeId::TIME:
 		case LogicalTypeId::DATE:
@@ -652,13 +704,13 @@ bool LogicalType::IsMoreGenericThan(LogicalType &other) const {
 		default:
 			return false;
 		}
+	}
+
 	case LogicalTypeId::VARCHAR:
 		return true;
 	default:
 		return false;
 	}
-
-	return true;
 }
 
 LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalType &right) {

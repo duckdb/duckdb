@@ -11,8 +11,7 @@ add_library_unity(
   hugeint.cpp
   hyperloglog.cpp
   interval.cpp
-  null_value.cpp
-  row_chunk.cpp
+  row_data_collection.cpp
   selection_vector.cpp
   string_heap.cpp
   string_type.cpp

@@ -3,6 +3,7 @@
 #ifndef DUCKDB_AMALGAMATION
 #include "parquet_reader.hpp"
 #include "duckdb/planner/table_filter.hpp"
+#include "duckdb/planner/filter/constant_filter.hpp"
 #else
 #include "parquet-amalgamation.hpp"
 #endif
@@ -38,8 +39,9 @@ int main(int argc, const char **argv) {
 
 	// the db instance and client context are not really required so we may remove them
 
+	Allocator allocator;
 	FileSystem fs;
-	ParquetReader reader(fs.OpenFile(filename, FileFlags::FILE_FLAGS_READ));
+	ParquetReader reader(allocator, fs.OpenFile(filename, FileFlags::FILE_FLAGS_READ));
 
 	// only return columns first_name and last_name
 	std::vector<column_t> column_ids;
@@ -75,8 +77,9 @@ int main(int argc, const char **argv) {
 			PrintUsage();
 		}
 		auto idx = entry->second;
-		TableFilter filter(Value(splits[1]).CastAs(return_types[idx]), ExpressionType::COMPARE_EQUAL, idx);
-		filters.filters[idx].push_back(filter);
+		auto filter =
+		    make_unique<ConstantFilter>(ExpressionType::COMPARE_EQUAL, Value(splits[1]).CastAs(return_types[idx]));
+		filters.filters[idx] = move(filter);
 	}
 
 	ParquetReaderScanState state;

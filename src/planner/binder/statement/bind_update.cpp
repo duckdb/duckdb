@@ -70,11 +70,13 @@ static void BindUpdateConstraints(TableCatalogEntry &table, LogicalGet &get, Log
 	// delete for the insert, we thus need all the columns to be available, hence we check if the update touches any
 	// index columns
 	update.is_index_update = false;
-	for (auto &index : table.storage->info->indexes) {
-		if (index->IndexIsUpdated(update.columns)) {
+	table.storage->info->indexes.Scan([&](Index &index) {
+		if (index.IndexIsUpdated(update.columns)) {
 			update.is_index_update = true;
+			return true;
 		}
-	}
+		return false;
+	});
 	if (update.is_index_update) {
 		// the update updates a column required by an index, push projections for all columns
 		unordered_set<column_t> all_columns;

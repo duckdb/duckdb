@@ -40,24 +40,26 @@ void TransformIndexJoin(ClientContext &context, LogicalComparisonJoin &op, Index
 			auto &tbl_scan = (PhysicalTableScan &)*left;
 			auto tbl = dynamic_cast<TableScanBindData *>(tbl_scan.bind_data.get());
 			if (CanPlanIndexJoin(transaction, tbl, tbl_scan)) {
-				for (auto &index : tbl->table->storage->info->indexes) {
-					if (index->unbound_expressions[0]->alias == op.conditions[0].left->alias) {
-						*left_index = index.get();
-						break;
+				tbl->table->storage->info->indexes.Scan([&](Index &index) {
+					if (index.unbound_expressions[0]->alias == op.conditions[0].left->alias) {
+						*left_index = &index;
+						return true;
 					}
-				}
+					return false;
+				});
 			}
 		}
 		if (right->type == PhysicalOperatorType::TABLE_SCAN) {
 			auto &tbl_scan = (PhysicalTableScan &)*right;
 			auto tbl = dynamic_cast<TableScanBindData *>(tbl_scan.bind_data.get());
 			if (CanPlanIndexJoin(transaction, tbl, tbl_scan)) {
-				for (auto &index : tbl->table->storage->info->indexes) {
-					if (index->unbound_expressions[0]->alias == op.conditions[0].right->alias) {
-						*right_index = index.get();
-						break;
+				tbl->table->storage->info->indexes.Scan([&](Index &index) {
+					if (index.unbound_expressions[0]->alias == op.conditions[0].right->alias) {
+						*right_index = &index;
+						return true;
 					}
-				}
+					return false;
+				});
 			}
 		}
 	}

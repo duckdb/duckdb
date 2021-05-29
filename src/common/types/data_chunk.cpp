@@ -292,28 +292,67 @@ void DataChunk::ToArrowArray(ArrowArray *out_array) {
 			case LogicalTypeId::DOUBLE:
 			case LogicalTypeId::HUGEINT:
 			case LogicalTypeId::DATE:
+			case LogicalTypeId::TIMESTAMP:
+			case LogicalTypeId::TIMESTAMP_MS:
+			case LogicalTypeId::TIMESTAMP_NS:
+			case LogicalTypeId::TIMESTAMP_SEC:
 				child.n_buffers = 2;
 				child.buffers[1] = (void *)FlatVector::GetData(vector);
 				break;
 			case LogicalTypeId::TIME: {
-				// convert time from microseconds to miliseconds
+				// convert time from microseconds to milliseconds
 				child.n_buffers = 2;
 				child_holder.string_data = unique_ptr<data_t[]>(new data_t[sizeof(uint32_t) * (size() + 1)]);
 				child.buffers[1] = child_holder.string_data.get();
 				auto source_ptr = FlatVector::GetData<dtime_t>(vector);
 				auto target_ptr = (uint32_t *)child.buffers[1];
 				for (idx_t row_idx = 0; row_idx < size(); row_idx++) {
-					target_ptr[row_idx] = uint32_t(source_ptr[row_idx] / 1000);
+					target_ptr[row_idx] = uint32_t(source_ptr[row_idx].micros / 1000);
 				}
 				break;
 			}
-			case LogicalTypeId::TIMESTAMP: {
-				// convert timestamp from microseconds to nanoseconds
+			case LogicalTypeId::DECIMAL: {
 				child.n_buffers = 2;
-				child.buffers[1] = (void *)FlatVector::GetData(vector);
-				auto target_ptr = (timestamp_t *)child.buffers[1];
-				for (idx_t row_idx = 0; row_idx < size(); row_idx++) {
-					target_ptr[row_idx] = Timestamp::GetEpochNanoSeconds(target_ptr[row_idx]);
+				//! We have to convert to INT128
+				switch (GetTypes()[col_idx].InternalType()) {
+
+				case PhysicalType::INT16: {
+					child_holder.string_data = unique_ptr<data_t[]>(new data_t[sizeof(hugeint_t) * (size())]);
+					child.buffers[1] = child_holder.string_data.get();
+					auto source_ptr = FlatVector::GetData<int16_t>(vector);
+					auto target_ptr = (hugeint_t *)child.buffers[1];
+					for (idx_t row_idx = 0; row_idx < size(); row_idx++) {
+						target_ptr[row_idx] = source_ptr[row_idx];
+					}
+					break;
+				}
+				case PhysicalType::INT32: {
+					child_holder.string_data = unique_ptr<data_t[]>(new data_t[sizeof(hugeint_t) * (size())]);
+					child.buffers[1] = child_holder.string_data.get();
+					auto source_ptr = FlatVector::GetData<int32_t>(vector);
+					auto target_ptr = (hugeint_t *)child.buffers[1];
+					for (idx_t row_idx = 0; row_idx < size(); row_idx++) {
+						target_ptr[row_idx] = source_ptr[row_idx];
+					}
+					break;
+				}
+				case PhysicalType::INT64: {
+					child_holder.string_data = unique_ptr<data_t[]>(new data_t[sizeof(hugeint_t) * (size())]);
+					child.buffers[1] = child_holder.string_data.get();
+					auto source_ptr = FlatVector::GetData<int64_t>(vector);
+					auto target_ptr = (hugeint_t *)child.buffers[1];
+					for (idx_t row_idx = 0; row_idx < size(); row_idx++) {
+						target_ptr[row_idx] = source_ptr[row_idx];
+					}
+					break;
+				}
+				case PhysicalType::INT128: {
+					child.buffers[1] = (void *)FlatVector::GetData(vector);
+					break;
+				}
+				default:
+					throw std::runtime_error("Unsupported physical type for Decimal" +
+					                         TypeIdToString(GetTypes()[col_idx].InternalType()));
 				}
 				break;
 			}

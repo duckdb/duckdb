@@ -337,7 +337,7 @@ struct UDFAverageFunction {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(STATE source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target) {
 		target->count += source.count;
 		target->sum += source.sum;
 	}
@@ -345,7 +345,7 @@ struct UDFAverageFunction {
 	template <class T, class STATE>
 	static void Finalize(Vector &result, FunctionData *bind_data, STATE *state, T *target, ValidityMask &mask,
 	                     idx_t idx) {
-		if (!Value::DoubleIsValid(state->sum)) {
+		if (!Value::DoubleIsValid(double(state->sum))) {
 			throw OutOfRangeException("AVG is out of range!");
 		} else if (state->count == 0) {
 			mask.SetInvalid(idx);
@@ -400,7 +400,7 @@ struct UDFCovarOperation {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(STATE source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target) {
 		if (target->count == 0) {
 			*target = source;
 		} else if (source.count > 0) {
@@ -545,7 +545,7 @@ struct UDFSum {
 	template <class STATE_TYPE>
 	static void Combine(Vector &source, Vector &target, idx_t count) {
 		D_ASSERT(source.GetType().id() == LogicalTypeId::POINTER && target.GetType().id() == LogicalTypeId::POINTER);
-		auto sdata = FlatVector::GetData<STATE_TYPE *>(source);
+		auto sdata = FlatVector::GetData<const STATE_TYPE *>(source);
 		auto tdata = FlatVector::GetData<STATE_TYPE *>(target);
 		// OP::template Combine<STATE_TYPE, OP>(*sdata[i], tdata[i]);
 		for (idx_t i = 0; i < count; i++) {

@@ -76,6 +76,27 @@ NULL	NULL
 800	250550
 900	250650
 
+# temporal types
+query I
+SELECT quantile_cont('2021-01-01'::TIMESTAMP + interval (r) second, 0.5) FROM quantile
+----
+2021-01-06 18:52:30
+
+query I
+SELECT quantile_cont(('1990-01-01'::DATE + interval (r/100) day)::DATE, 0.5) FROM quantile
+----
+2003-09-09 12:00:00
+
+query I
+SELECT quantile_cont('00:00:00'::TIME + interval (r/100) second, 0.5) FROM quantile
+----
+01:23:19.5
+
+statement error
+SELECT quantile_cont(interval (r/100) second, 0.5) FROM quantile
+----
+01:23:19
+
 # constant input
 query R
 SELECT quantile_cont(1, 0.1) FROM quantile

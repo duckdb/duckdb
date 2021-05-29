@@ -9,6 +9,8 @@ add_subdirectory(vector_operations)
 add_library_unity(
   duckdb_common
   OBJECT
+  allocator.cpp
+  arrow_wrapper.cpp
   assert.cpp
   bit_operations.cpp
   constants.cpp
@@ -17,7 +19,7 @@ add_library_unity(
   exception_format_value.cpp
   file_buffer.cpp
   file_system.cpp
-  gzip_stream.cpp
+  gzip_file_system.cpp
   limits.cpp
   printer.cpp
   progress_bar.cpp

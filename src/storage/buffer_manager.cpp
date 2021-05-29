@@ -1,32 +1,25 @@
 #include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/common/to_string.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/parallel/concurrentqueue.hpp"
+#include "duckdb/common/allocator.hpp"
 
 namespace duckdb {
 
-BlockHandle::BlockHandle(DatabaseInstance &db, block_id_t block_id_p) : db(db) {
-	block_id = block_id_p;
-	readers = 0;
-	buffer = nullptr;
+BlockHandle::BlockHandle(DatabaseInstance &db, block_id_t block_id_p)
+    : db(db), readers(0), block_id(block_id_p), buffer(nullptr), eviction_timestamp(0), can_destroy(false) {
 	eviction_timestamp = 0;
 	state = BlockState::BLOCK_UNLOADED;
-	can_destroy = false;
 	memory_usage = Storage::BLOCK_ALLOC_SIZE;
 }
 
 BlockHandle::BlockHandle(DatabaseInstance &db, block_id_t block_id_p, unique_ptr<FileBuffer> buffer_p,
                          bool can_destroy_p, idx_t alloc_size)
-    : db(db) {
+    : db(db), readers(0), block_id(block_id_p), eviction_timestamp(0), can_destroy(can_destroy_p) {
 	D_ASSERT(alloc_size >= Storage::BLOCK_SIZE);
-	block_id = block_id_p;
-	readers = 0;
 	buffer = move(buffer_p);
-	eviction_timestamp = 0;
 	state = BlockState::BLOCK_LOADED;
-	can_destroy = can_destroy_p;
 	memory_usage = alloc_size;
 }
 
@@ -56,7 +49,7 @@ unique_ptr<BufferHandle> BlockHandle::Load(shared_ptr<BlockHandle> &handle) {
 		// this is mainly down to the block manager only having a single pointer into the file
 		// this is relatively easy to fix later on
 		lock_guard<mutex> buffer_lock(buffer_manager.manager_lock);
-		auto block = make_unique<Block>(handle->block_id);
+		auto block = make_unique<Block>(Allocator::Get(handle->db), handle->block_id);
 		block_manager.Read(*block);
 		handle->buffer = move(block);
 	} else {

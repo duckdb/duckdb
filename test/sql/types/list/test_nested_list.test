@@ -5,6 +5,10 @@
 statement ok
 PRAGMA enable_verification
 
+# otherwise sorting order of lists is undefined
+statement ok
+PRAGMA threads=1
+
 statement ok
 CREATE TABLE list_data (g INTEGER, e INTEGER)
 

@@ -5,7 +5,8 @@
 statement ok
 PRAGMA enable_verification
 
-# payload string that is longer than the 8MB initial string size - this tests whether RowChunk dynamically increases block capacity
+# payload string that is longer than the 8MB initial string size - this tests whether RowDataCollection dynamically increases block capacity
+# TODO: test a mix of long and short strings
 statement ok
 select range % 2 i, string_agg('thisstringis200characterslong..........................................................................................................................................................................') s from range(100000) group by i order by i
 
@@ -396,7 +397,12 @@ NULL	[[d, d, d]]
 2	[NULL]
 3	[[a, a]]
 
+
 # lists longer than STANDARD_VECTOR_SIZE
+# need single thread since order within list is otherwise undefined
+statement ok
+PRAGMA threads=1
+
 statement ok
 CREATE TABLE test9 AS (SELECT range % 4 i, range j FROM range(5000));
 

@@ -5,7 +5,7 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb_python/vector_conversion.hpp"
 
-#include <atomic>
+#include "duckdb/common/atomic.hpp"
 
 namespace duckdb {
 
@@ -17,7 +17,7 @@ struct PandasScanFunctionData : public TableFunctionData {
 	}
 	py::handle df;
 	idx_t row_count;
-	std::atomic<idx_t> lines_read;
+	atomic<idx_t> lines_read;
 	vector<PandasColumnBindData> pandas_bind_data;
 	vector<LogicalType> sql_types;
 };
@@ -42,8 +42,8 @@ struct ParallelPandasScanState : public ParallelState {
 PandasScanFunction::PandasScanFunction()
     : TableFunction("pandas_scan", {LogicalType::POINTER}, PandasScanFunc, PandasScanBind, PandasScanInit, nullptr,
                     nullptr, nullptr, PandasScanCardinality, nullptr, nullptr, PandasScanMaxThreads,
-                    PandasScanInitParallelState, PandasScanParallelInit, PandasScanParallelStateNext, true, false,
-                    PandasProgress) {
+                    PandasScanInitParallelState, PandasScanFuncParallel, PandasScanParallelInit,
+                    PandasScanParallelStateNext, true, false, PandasProgress) {
 }
 
 unique_ptr<FunctionData> PandasScanFunction::PandasScanBind(ClientContext &context, vector<Value> &inputs,
@@ -52,7 +52,7 @@ unique_ptr<FunctionData> PandasScanFunction::PandasScanBind(ClientContext &conte
                                                             vector<string> &input_table_names,
                                                             vector<LogicalType> &return_types, vector<string> &names) {
 	py::gil_scoped_acquire acquire;
-	py::handle df((PyObject *)(inputs[0].GetValue<uintptr_t>()));
+	py::handle df((PyObject *)(inputs[0].GetPointer()));
 
 	vector<PandasColumnBindData> pandas_bind_data;
 	VectorConversion::BindPandas(df, pandas_bind_data, return_types, names);
@@ -66,7 +66,7 @@ unique_ptr<FunctionData> PandasScanFunction::PandasScanBind(ClientContext &conte
 
 unique_ptr<FunctionOperatorData> PandasScanFunction::PandasScanInit(ClientContext &context,
                                                                     const FunctionData *bind_data_p,
-                                                                    vector<column_t> &column_ids,
+                                                                    const vector<column_t> &column_ids,
                                                                     TableFilterCollection *filters) {
 	auto &bind_data = (const PandasScanFunctionData &)*bind_data_p;
 	auto result = make_unique<PandasScanState>(0, bind_data.row_count);
@@ -87,7 +87,7 @@ unique_ptr<ParallelState> PandasScanFunction::PandasScanInitParallelState(Client
 unique_ptr<FunctionOperatorData> PandasScanFunction::PandasScanParallelInit(ClientContext &context,
                                                                             const FunctionData *bind_data_p,
                                                                             ParallelState *state,
-                                                                            vector<column_t> &column_ids,
+                                                                            const vector<column_t> &column_ids,
                                                                             TableFilterCollection *filters) {
 	auto result = make_unique<PandasScanState>(0, 0);
 	result->column_ids = column_ids;
@@ -124,6 +124,13 @@ int PandasScanFunction::PandasProgress(ClientContext &context, const FunctionDat
 	}
 	auto percentage = bind_data.lines_read * 100 / bind_data.row_count;
 	return percentage;
+}
+
+void PandasScanFunction::PandasScanFuncParallel(ClientContext &context, const FunctionData *bind_data,
+                                                FunctionOperatorData *operator_state, DataChunk *input,
+                                                DataChunk &output, ParallelState *parallel_state_p) {
+	//! FIXME: Have specialized parallel function from pandas scan here
+	PandasScanFunc(context, bind_data, operator_state, input, output);
 }
 
 //! The main pandas scan function: note that this can be called in parallel without the GIL

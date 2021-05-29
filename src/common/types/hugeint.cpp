@@ -4,6 +4,7 @@
 #include "duckdb/common/limits.hpp"
 
 #include <cmath>
+#include <limits>
 
 namespace duckdb {
 

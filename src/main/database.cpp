@@ -9,6 +9,10 @@
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/main/connection_manager.hpp"
 
+#ifndef DUCKDB_NO_THREADS
+#include "duckdb/common/thread.hpp"
+#endif
+
 namespace duckdb {
 
 DBConfig::~DBConfig() {
@@ -113,6 +117,9 @@ void DatabaseInstance::Initialize(const char *path, DBConfig *new_config) {
 
 	// initialize the database
 	storage->Initialize();
+
+	// only increase thread count after storage init because we get races on catalog otherwise
+	scheduler->SetThreads(config.maximum_threads);
 }
 
 DuckDB::DuckDB(const char *path, DBConfig *new_config) : instance(make_shared<DatabaseInstance>()) {
@@ -157,6 +164,14 @@ FileSystem &DuckDB::GetFileSystem() {
 	return instance->GetFileSystem();
 }
 
+Allocator &Allocator::Get(ClientContext &context) {
+	return Allocator::Get(*context.db);
+}
+
+Allocator &Allocator::Get(DatabaseInstance &db) {
+	return db.config.allocator;
+}
+
 void DatabaseInstance::Configure(DBConfig &new_config) {
 	if (new_config.access_mode != AccessMode::UNDEFINED) {
 		config.access_mode = new_config.access_mode;
@@ -173,13 +188,25 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 	} else {
 		config.maximum_memory = new_config.maximum_memory;
 	}
+	if (new_config.maximum_threads == (idx_t)-1) {
+#ifndef DUCKDB_NO_THREADS
+		config.maximum_threads = 1;
+		// FIXME: next release
+		// config.maximum_threads = std::thread::hardware_concurrency();
+#else
+		config.maximum_threads = 1;
+#endif
+	} else {
+		config.maximum_threads = new_config.maximum_threads;
+	}
+	config.allocator = move(new_config.allocator);
 	config.checkpoint_wal_size = new_config.checkpoint_wal_size;
 	config.use_direct_io = new_config.use_direct_io;
 	config.temporary_directory = new_config.temporary_directory;
 	config.collation = new_config.collation;
 	config.default_order_type = new_config.default_order_type;
 	config.default_null_order = new_config.default_null_order;
-	config.enable_copy = new_config.enable_copy;
+	config.enable_external_access = new_config.enable_external_access;
 	config.replacement_scans = move(new_config.replacement_scans);
 }
 

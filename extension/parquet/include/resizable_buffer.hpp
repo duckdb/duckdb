@@ -8,6 +8,9 @@
 #pragma once
 
 #include "duckdb.hpp"
+#ifndef DUCKDB_AMALGAMATION
+#include "duckdb/common/allocator.hpp"
+#endif
 
 #include <exception>
 
@@ -61,22 +64,23 @@ class ResizeableBuffer : public ByteBuffer {
 public:
 	ResizeableBuffer() {
 	}
-
-	ResizeableBuffer(uint64_t new_size) {
-		resize(new_size);
+	ResizeableBuffer(Allocator &allocator, uint64_t new_size) {
+		resize(allocator, new_size);
 	}
-	void resize(uint64_t new_size) {
+	void resize(Allocator &allocator, uint64_t new_size) {
+		len = new_size;
+		if (new_size == 0) {
+			return;
+		}
 		if (new_size > alloc_len) {
 			alloc_len = new_size;
-			auto new_holder = std::unique_ptr<char[]>(new char[alloc_len]);
-			holder = move(new_holder);
+			allocated_data = allocator.Allocate(alloc_len);
+			ptr = (char *)allocated_data->get();
 		}
-		len = new_size;
-		ptr = holder.get();
 	}
 
 private:
-	std::unique_ptr<char[]> holder = nullptr;
+	unique_ptr<AllocatedData> allocated_data;
 	idx_t alloc_len = 0;
 };
 

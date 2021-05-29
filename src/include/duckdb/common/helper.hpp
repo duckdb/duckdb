@@ -25,7 +25,7 @@ unique_ptr<T> make_unique(Args &&... args) {
 using std::make_unique;
 #endif
 template <typename S, typename T, typename... Args>
-unique_ptr<S> make_unique_base(Args &&...args) {
+unique_ptr<S> make_unique_base(Args &&... args) {
 	return unique_ptr<S>(new T(std::forward<Args>(args)...));
 }
 

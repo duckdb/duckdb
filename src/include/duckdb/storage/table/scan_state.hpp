@@ -23,7 +23,7 @@ class UpdateSegment;
 class PersistentSegment;
 class TransientSegment;
 class ValiditySegment;
-struct TableFilterSet;
+class TableFilterSet;
 
 struct IndexScanState {
 	virtual ~IndexScanState() {
@@ -99,8 +99,8 @@ public:
 class CreateIndexScanState : public TableScanState {
 public:
 	vector<unique_ptr<StorageLockKey>> locks;
-	std::unique_lock<std::mutex> append_lock;
-	std::unique_lock<std::mutex> delete_lock;
+	unique_lock<mutex> append_lock;
+	unique_lock<mutex> delete_lock;
 };
 
 } // namespace duckdb

@@ -61,15 +61,16 @@ static unique_ptr<FunctionData> InformationSchemaTablesBind(ClientContext &conte
 }
 
 unique_ptr<FunctionOperatorData> InformationSchemaTablesInit(ClientContext &context, const FunctionData *bind_data,
-                                                             vector<column_t> &column_ids,
+                                                             const vector<column_t> &column_ids,
                                                              TableFilterCollection *filters) {
 	auto result = make_unique<InformationSchemaTablesData>();
 
 	// scan all the schemas for tables and views and collect them
-	Catalog::GetCatalog(context).schemas->Scan(context, [&](CatalogEntry *entry) {
-		auto schema = (SchemaCatalogEntry *)entry;
+
+	auto schemas = Catalog::GetCatalog(context).schemas->GetEntries<SchemaCatalogEntry>(context);
+	for (auto &schema : schemas) {
 		schema->Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
-	});
+	};
 
 	// check the temp schema as well
 	context.temporary_objects->Scan(context, CatalogType::TABLE_ENTRY,
