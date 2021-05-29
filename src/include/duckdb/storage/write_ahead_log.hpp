@@ -77,7 +77,15 @@ public:
 
 	void WriteInsert(DataChunk &chunk);
 	void WriteDelete(DataChunk &chunk);
-	void WriteUpdate(DataChunk &chunk, column_t col_idx);
+	//! Write a single (sub-) column update to the WAL. Chunk must be a pair of (COL, ROW_ID).
+	//! The column_path vector is a *path* towards a column within the table
+	//! i.e. if we have a table with a single column S STRUCT(A INT, B INT)
+	//! and we update the validity mask of "S.B"
+	//! the column path is:
+	//! 0 (first column of table)
+	//! -> 1 (second subcolumn of struct)
+	//! -> 0 (first subcolumn of INT)
+	void WriteUpdate(DataChunk &chunk, const vector<column_t> &column_path);
 
 	//! Truncate the WAL to a previous size, and clear anything currently set in the writer
 	void Truncate(int64_t size);

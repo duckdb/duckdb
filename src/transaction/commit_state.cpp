@@ -10,6 +10,8 @@
 #include "duckdb/common/serializer/buffered_deserializer.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
+#include "duckdb/storage/table/column_data.hpp"
+#include "duckdb/storage/table/row_group.hpp"
 
 #include "duckdb/storage/table/chunk_info.hpp"
 
@@ -92,6 +94,8 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 			log->WriteDropSequence((SequenceCatalogEntry *)entry);
 		} else if (entry->type == CatalogType::MACRO_ENTRY) {
 			log->WriteDropMacro((MacroCatalogEntry *)entry);
+		} else if (entry->type == CatalogType::INDEX_ENTRY) {
+			// do nothing, indexes aren't (yet) persisted to disk
 		} else if (entry->type == CatalogType::PREPARED_STATEMENT) {
 			// do nothing, prepared statements aren't persisted to disk
 		} else {
@@ -136,8 +140,11 @@ void CommitState::WriteUpdate(UpdateInfo *info) {
 	D_ASSERT(log);
 	// switch to the current table, if necessary
 	auto &column_data = info->segment->column_data;
-	SwitchTable(&column_data.table_info, UndoFlags::UPDATE_TUPLE);
+	auto &table_info = column_data.GetTableInfo();
 
+	SwitchTable(&table_info, UndoFlags::UPDATE_TUPLE);
+
+	// initialize the update chunk
 	vector<LogicalType> update_types;
 	if (column_data.type.id() == LogicalTypeId::VALIDITY) {
 		update_types.push_back(LogicalType::BOOLEAN);
@@ -154,14 +161,33 @@ void CommitState::WriteUpdate(UpdateInfo *info) {
 
 	// write the row ids into the chunk
 	auto row_ids = FlatVector::GetData<row_t>(update_chunk->data[1]);
-	idx_t start = info->segment->start + info->vector_index * STANDARD_VECTOR_SIZE;
+	idx_t start = column_data.start + info->vector_index * STANDARD_VECTOR_SIZE;
 	for (idx_t i = 0; i < info->N; i++) {
 		row_ids[info->tuples[i]] = start + info->tuples[i];
+	}
+	if (column_data.type.id() == LogicalTypeId::VALIDITY) {
+		// zero-initialize the booleans
+		// FIXME: this is only required because of NullValue<T> in Vector::Serialize...
+		auto booleans = FlatVector::GetData<bool>(update_chunk->data[0]);
+		for (idx_t i = 0; i < info->N; i++) {
+			auto idx = info->tuples[i];
+			booleans[idx] = false;
+		}
 	}
 	SelectionVector sel(info->tuples);
 	update_chunk->Slice(sel, info->N);
 
-	log->WriteUpdate(*update_chunk, column_data.column_idx);
+	// construct the column index path
+	vector<column_t> column_indexes;
+	auto column_data_ptr = &column_data;
+	while (column_data_ptr->parent) {
+		column_indexes.push_back(column_data_ptr->column_index);
+		column_data_ptr = column_data_ptr->parent;
+	}
+	column_indexes.push_back(info->column_index);
+	std::reverse(column_indexes.begin(), column_indexes.end());
+
+	log->WriteUpdate(*update_chunk, column_indexes);
 }
 
 template <bool HAS_LOG>
@@ -204,7 +230,7 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::UPDATE_TUPLE: {
 		// update:
 		auto info = (UpdateInfo *)data;
-		if (HAS_LOG && !info->segment->column_data.table_info.IsTemporary()) {
+		if (HAS_LOG && !info->segment->column_data.GetTableInfo().IsTemporary()) {
 			WriteUpdate(info);
 		}
 		info->version_number = commit_id;

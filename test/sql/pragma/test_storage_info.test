@@ -1,0 +1,29 @@
+# name: test/sql/pragma/test_storage_info.test
+# description: Test storage_info pragma
+# group: [pragma]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER, j INTEGER)
+
+statement ok
+PRAGMA storage_info('integers')
+
+statement ok
+INSERT INTO integers VALUES (1, 1), (2, NULL), (3, 3), (4, 5)
+
+statement ok
+PRAGMA storage_info('integers')
+
+# use on view
+statement ok
+CREATE VIEW v1 AS SELECT 42
+
+statement error
+PRAGMA storage_info('v1')
+
+# non-existant table
+statement error
+PRAGMA storage_info('bla')

@@ -21,4 +21,9 @@ public:
 	block_id_t id;
 };
 
+struct BlockPointer {
+	block_id_t block_id;
+	uint32_t offset;
+};
+
 } // namespace duckdb

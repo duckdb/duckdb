@@ -2,6 +2,9 @@
 # description: Test update behavior with multiple updaters and NULL values
 # group: [update]
 
+statement ok updater
+PRAGMA enable_verification
+
 statement ok con1
 PRAGMA enable_verification
 
@@ -53,6 +56,11 @@ UPDATE test SET a=NULL WHERE a=3
 
 statement ok con4
 BEGIN TRANSACTION
+
+query I updater
+SELECT COUNT(*) FROM test WHERE a IS NULL
+----
+3
 
 query I updater
 UPDATE test SET a=99 WHERE a IS NULL

@@ -14,6 +14,9 @@ INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)
 restart
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
 ALTER TABLE test ALTER b TYPE VARCHAR
 
 query IT
@@ -34,8 +37,22 @@ SELECT * FROM test ORDER BY 1
 12	21
 13	22
 
-statement ok
+query IT
+SELECT * FROM test WHERE b='hello'
+----
+10	hello
+
+query I
 DELETE FROM test WHERE b='hello'
+----
+1
+
+query IT
+SELECT * FROM test ORDER BY 1
+----
+11	22
+12	21
+13	22
 
 restart
 

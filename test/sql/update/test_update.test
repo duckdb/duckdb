@@ -2,6 +2,9 @@
 # description: Test standard update behavior
 # group: [update]
 
+statement ok
+PRAGMA enable_verification
+
 # create a table
 statement ok con1
 CREATE TABLE test (a INTEGER);
@@ -11,6 +14,11 @@ INSERT INTO test VALUES (3)
 
 query I con1
 SELECT * FROM test
+----
+3
+
+query I con1
+SELECT * FROM test WHERE a=3
 ----
 3
 
@@ -27,8 +35,18 @@ SELECT * FROM test
 ----
 1
 
+query I con1
+SELECT * FROM test WHERE a=1
+----
+1
+
 query I con2
 SELECT * FROM test
+----
+3
+
+query I con2
+SELECT * FROM test WHERE a=3
 ----
 3
 
@@ -69,6 +87,11 @@ ROLLBACK
 
 query I con1
 SELECT * FROM test
+----
+1
+
+query I con1
+SELECT * FROM test WHERE a=1
 ----
 1
 
