@@ -198,7 +198,7 @@ describe('prepare', function() {
 /*
     describe('retrieving reset() function', function() {
         var db;
-        before(function(done) { db = new sqlite3.Database(':memory:', 
+        before(function(done) { db = new sqlite3.Database(':memory:',
             function(err) {
                 db.run("CREATE TEMPORARY VIEW foo AS SELECT * FROM read_csv_auto('test/support/prepare.csv')", done)
             }
@@ -232,7 +232,7 @@ describe('prepare', function() {
 
     describe('multiple get() parameter binding', function() {
         var db;
-        before(function(done) { db = new sqlite3.Database(':memory:', 
+        before(function(done) { db = new sqlite3.Database(':memory:',
             function(err) {
                 db.run("CREATE TEMPORARY VIEW foo AS SELECT * FROM read_csv_auto('test/support/prepare.csv')", done)
             }
@@ -268,7 +268,7 @@ describe('prepare', function() {
 
     describe('prepare() parameter binding', function() {
         var db;
-        before(function(done) { db = new sqlite3.Database(':memory:', 
+        before(function(done) { db = new sqlite3.Database(':memory:',
             function(err) {
                 db.run("CREATE TEMPORARY VIEW foo AS SELECT * FROM read_csv_auto('test/support/prepare.csv')", done)
             }
@@ -311,7 +311,7 @@ describe('prepare', function() {
 
     describe('all()', function() {
         var db;
-        before(function(done) { db = new sqlite3.Database(':memory:', 
+        before(function(done) { db = new sqlite3.Database(':memory:',
             function(err) {
                 db.run("CREATE TEMPORARY VIEW foo AS SELECT * FROM read_csv_auto('test/support/prepare.csv')", done)
             }
@@ -344,7 +344,7 @@ describe('prepare', function() {
 
     describe('all()', function() {
         var db;
-        before(function(done) { db = new sqlite3.Database(':memory:', 
+        before(function(done) { db = new sqlite3.Database(':memory:',
             function(err) {
                 db.run("CREATE TEMPORARY VIEW foo AS SELECT * FROM read_csv_auto('test/support/prepare.csv')", done)
             }
@@ -434,7 +434,7 @@ describe('prepare', function() {
 /*
     describe('test Database#get()', function() {
         var db;
-        before(function(done) { db = new sqlite3.Database(':memory:', 
+        before(function(done) { db = new sqlite3.Database(':memory:',
             function(err) {
                 db.run("CREATE TEMPORARY VIEW foo AS SELECT * FROM read_csv_auto('test/support/prepare.csv')", done)
             }
@@ -617,24 +617,23 @@ describe('prepare', function() {
             });
 
             it("should aggregate sum(num)", function (done) {
-                // Uncaught Error: Data type is not supported HUGEINT
                 db.all("SELECT sum(num) as sum FROM foo", function (err, res) {
-                    assert.equal(res[0].sum, 1);
+                    assert.equal(res[0].sum, 499500);
                     done(err);
                 });
             });
 
             it("should aggregate product(num)", function (done) {
-                // libc++abi.dylib: terminating with uncaught exception of type duckdb::OutOfRangeException: Out of Range Error: Invalid double value inf
-                db.all("SELECT product(num) as product FROM foo WHERE num > 0", function (err, res) {
-                    assert.equal(res[0].product, 1);
+                db.all("SELECT product(num) as product FROM foo WHERE num < 20 AND num > 0", function (err, res) {
+                    assert.equal(res[0].product, 121645100408832000);
                     done(err);
                 });
             });
 
+
             it("should aggregate product(flt)", function (done) {
-                db.all("SELECT product(flt) as product FROM foo WHERE flt > 0", function (err, res) {
-                    assert.equal(res[0].product, 1);
+                db.all("SELECT product(flt) as product FROM foo WHERE num < 10 AND num > 0", function (err, res) {
+                    assert.equal(res[0].product, 10817125966.120956);
                     done(err);
                 });
             });
