@@ -56,6 +56,10 @@ public:
 public:
 	void InitializeScan(ColumnScanState &state) override;
 
+	//! Scans a vector of "scan_count" entries starting at position "start"
+	//! Store it in result with offset "result_offset"
+	void Scan(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset) override;
+
 	//! Fetch a single value and append it to the vector
 	void FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) override;
 
@@ -64,27 +68,12 @@ public:
 	//! full.
 	idx_t Append(SegmentStatistics &stats, VectorData &data, idx_t offset, idx_t count) override;
 
-	void ToTemporary() override;
-
-protected:
-	void FetchBaseData(ColumnScanState &state, idx_t vector_index, Vector &result) override;
-
 private:
-	void AppendData(BufferHandle &handle, SegmentStatistics &stats, data_ptr_t target, data_ptr_t end,
-	                idx_t target_offset, VectorData &source, idx_t offset, idx_t count);
-
-	//! Fetch all the strings of a vector from the base table and place their locations in the result vector
-	void FetchBaseData(ColumnScanState &state, data_ptr_t base_data, idx_t vector_index, Vector &result, idx_t count);
-
 	string_location_t FetchStringLocation(data_ptr_t baseptr, int32_t dict_offset);
 	string_t FetchString(Vector &result, data_ptr_t baseptr, string_location_t location);
 	//! Fetch a single string from the dictionary and returns it, potentially pins a buffer manager page and adds it to
 	//! the set of pinned pages
 	string_t FetchStringFromDict(Vector &result, data_ptr_t baseptr, int32_t dict_offset);
-
-	//! Fetch string locations for a subset of the strings
-	void FetchStringLocations(data_ptr_t baseptr, row_t *ids, idx_t vector_index, idx_t vector_offset, idx_t count,
-	                          string_location_t result[]);
 
 	void WriteString(string_t string, block_id_t &result_block, int32_t &result_offset);
 	string_t ReadString(Vector &result, block_id_t block, int32_t offset);
@@ -94,9 +83,6 @@ private:
 
 	void WriteStringMarker(data_ptr_t target, block_id_t block_id, int32_t offset);
 	void ReadStringMarker(data_ptr_t target, block_id_t &block_id, int32_t &offset);
-
-	//! Expand the string segment, adding an additional maximum vector to the segment
-	void ExpandStringSegment(data_ptr_t baseptr);
 
 	//! The amount of bytes remaining to store in the block
 	idx_t RemainingSpace(BufferHandle &handle);

@@ -12,6 +12,8 @@
 #include "duckdb/transaction/delete_info.hpp"
 #include "duckdb/transaction/update_info.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/storage/table/column_data.hpp"
 
 #include <cstring>
 

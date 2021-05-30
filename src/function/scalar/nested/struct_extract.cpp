@@ -35,24 +35,14 @@ static void StructExtractFunction(DataChunk &args, ExpressionState &state, Vecto
 		auto &child = DictionaryVector::Child(vec);
 		auto &dict_sel = DictionaryVector::SelVector(vec);
 		auto &children = StructVector::GetEntries(child);
-		if (info.index >= children.size()) {
-			throw Exception("Not enough struct entries for struct_extract");
-		}
+		D_ASSERT(info.index < children.size());
 		auto &struct_child = children[info.index];
-		if (struct_child.first != info.key || struct_child.second->GetType() != info.type) {
-			throw Exception("Struct key or type mismatch");
-		}
-		result.Slice(*struct_child.second, dict_sel, args.size());
+		result.Slice(*struct_child, dict_sel, args.size());
 	} else {
 		auto &children = StructVector::GetEntries(vec);
-		if (info.index >= children.size()) {
-			throw Exception("Not enough struct entries for struct_extract");
-		}
+		D_ASSERT(info.index < children.size());
 		auto &struct_child = children[info.index];
-		if (struct_child.first != info.key || struct_child.second->GetType() != info.type) {
-			throw Exception("Struct key or type mismatch");
-		}
-		result.Reference(*struct_child.second);
+		result.Reference(*struct_child);
 	}
 	result.Verify(args.size());
 }
