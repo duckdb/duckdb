@@ -67,7 +67,20 @@ LogicalType GetArrowLogicalType(ArrowSchema &schema) {
 		auto child_type = GetArrowLogicalType(*schema.children[0]);
 		child_list_t<LogicalType> child_types {{"", child_type}};
 		return LogicalType(LogicalTypeId::LIST, child_types);
-	} else {
+	}
+	else if (format == "+s" || format == "+m") {
+	    child_list_t<LogicalType> child_types;
+	    for (idx_t type_idx = 0; type_idx < (idx_t )schema.n_children; type_idx++){
+	        auto child_type = GetArrowLogicalType(*schema.children[0]);
+	        child_types.push_back({"",child_type});
+	    }
+	    if (format == "+m"){
+	        return LogicalType(LogicalTypeId::MAP, child_types);
+	    }
+	    return LogicalType(LogicalTypeId::STRUCT, child_types);
+
+	}
+    else {
 		throw NotImplementedException("Unsupported Internal Arrow Type %s", format);
 	}
 }
@@ -252,6 +265,21 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 		ListVector::SetListSize(vector, list_size);
 		SetValidityMask(child_vector, *array.children[0], scan_state, list_size);
 		ColumnArrowToDuckDB(child_vector, *array.children[0], scan_state, list_size);
+		break;
+	}
+	case LogicalTypeId::MAP:
+	case LogicalTypeId::STRUCT:{
+	    //! First initialize MAP/Struct
+	    for (idx_t type_idx = 0; type_idx < (idx_t) array.n_children; type_idx++){
+	        auto vec_child = make_unique<Vector>(vector.GetType().child_types()[type_idx].second);
+	        StructVector::AddEntry(vector,"n",move(vec_child));
+	    }
+	    //! Now fill the children
+	    auto &children_vector = StructVector::GetEntries(vector);
+	    for (idx_t type_idx = 0; type_idx < (idx_t) array.n_children; type_idx++){
+	        SetValidityMask(*children_vector[type_idx].second, *array.children[type_idx], scan_state, 1);
+		    ColumnArrowToDuckDB(*children_vector[type_idx].second, *array.children[type_idx], scan_state, 1);
+	    }
 		break;
 	}
 	default:

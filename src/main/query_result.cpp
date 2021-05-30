@@ -97,8 +97,8 @@ struct DuckDBArrowSchemaHolder {
 	// unused in children
 	vector<ArrowSchema *> children_ptrs = {};
 	//! used for nested structures
-	std::list<ArrowSchema> nested_children = {};
-	std::list<ArrowSchema *> nested_children_ptr = {};
+	std::list<std::vector<ArrowSchema>> nested_children = {};
+	std::list<std::vector<ArrowSchema *>> nested_children_ptr = {};
 	//! This holds strings created to represent decimal types
 	vector<unique_ptr<char[]>> owned_type_names;
 };
@@ -205,12 +205,37 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 	case LogicalTypeId::LIST: {
 		child.format = "+l";
 		child.n_children = 1;
-		root_holder.nested_children.push_back({});
-		root_holder.nested_children_ptr.push_back(&root_holder.nested_children.back());
-		InitializeChild(root_holder.nested_children.back());
-		child.children = &root_holder.nested_children_ptr.back();
+		root_holder.nested_children.emplace_back();
+		root_holder.nested_children.back().resize(1);
+		root_holder.nested_children_ptr.emplace_back();
+		root_holder.nested_children_ptr.back().push_back(&root_holder.nested_children.back()[0]);
+		InitializeChild(root_holder.nested_children.back()[0]);
+		child.children = &root_holder.nested_children_ptr.back()[0];
 		child.children[0]->name = "l";
 		SetArrowFormat(root_holder, **child.children, type.child_types()[0].second);
+		break;
+	}
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::MAP:{
+	    if (type.id() == LogicalTypeId::STRUCT){
+	        child.format = "+s";
+	    } else{
+	        child.format = "+m";
+	    }
+		child.n_children = type.child_types().size();
+	    root_holder.nested_children.emplace_back();
+	    root_holder.nested_children.back().resize(type.child_types().size());
+	    root_holder.nested_children_ptr.emplace_back();
+	    root_holder.nested_children_ptr.back().resize(type.child_types().size());
+	    for (idx_t type_idx = 0; type_idx < type.child_types().size(); type_idx ++){
+	        root_holder.nested_children_ptr.back()[type_idx] = &root_holder.nested_children.back()[type_idx];
+	    }
+	    child.children =  &root_holder.nested_children_ptr.back()[0];
+	    for (size_t type_idx = 0; type_idx <type.child_types().size(); type_idx ++ ) {
+	        InitializeChild(*child.children[type_idx]);
+	        child.children[type_idx]->name = "s";
+            SetArrowFormat(root_holder, *child.children[type_idx] , type.child_types()[type_idx].second);
+        }
 		break;
 	}
 
