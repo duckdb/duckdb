@@ -123,20 +123,39 @@ struct EvictionQueue {
 	eviction_queue_t q;
 };
 
+class TemporaryDirectoryHandle {
+public:
+	TemporaryDirectoryHandle(DatabaseInstance &db, string path_p) : db(db), temp_directory(move(path_p)) {
+		auto &fs = FileSystem::GetFileSystem(db);
+		if (!temp_directory.empty()) {
+			fs.CreateDirectory(temp_directory);
+		}
+	}
+	~TemporaryDirectoryHandle() {
+		auto &fs = FileSystem::GetFileSystem(db);
+		if (!temp_directory.empty()) {
+			fs.RemoveDirectory(temp_directory);
+		}
+	}
+
+private:
+	DatabaseInstance &db;
+	string temp_directory;
+};
+
+void BufferManager::SetTemporaryDirectory(string new_dir) {
+	if (temp_directory_handle) {
+		throw NotImplementedException("Cannot switch temporary directory after the current one has been used");
+	}
+	this->temp_directory = move(new_dir);
+}
+
 BufferManager::BufferManager(DatabaseInstance &db, string tmp, idx_t maximum_memory)
     : db(db), current_memory(0), maximum_memory(maximum_memory), temp_directory(move(tmp)),
       queue(make_unique<EvictionQueue>()), temporary_id(MAXIMUM_BLOCK) {
-	auto &fs = FileSystem::GetFileSystem(db);
-	if (!temp_directory.empty()) {
-		fs.CreateDirectory(temp_directory);
-	}
 }
 
 BufferManager::~BufferManager() {
-	auto &fs = FileSystem::GetFileSystem(db);
-	if (!temp_directory.empty()) {
-		fs.RemoveDirectory(temp_directory);
-	}
 }
 
 shared_ptr<BlockHandle> BufferManager::RegisterBlock(block_id_t block_id) {
@@ -179,17 +198,29 @@ unique_ptr<BufferHandle> BufferManager::Allocate(idx_t alloc_size) {
 }
 
 unique_ptr<BufferHandle> BufferManager::Pin(shared_ptr<BlockHandle> &handle) {
-	// lock the block
+	idx_t required_memory;
+	{
+		// lock the block
+		lock_guard<mutex> lock(handle->lock);
+		// check if the block is already loaded
+		if (handle->state == BlockState::BLOCK_LOADED) {
+			// the block is loaded, increment the reader count and return a pointer to the handle
+			handle->readers++;
+			return handle->Load(handle);
+		}
+		required_memory = handle->memory_usage;
+	}
+	// evict blocks until we have space for the current block
+	if (!EvictBlocks(required_memory, maximum_memory)) {
+		throw OutOfRangeException("Not enough memory to complete operation: failed to pin block");
+	}
+	// lock the handle again and repeat the check (in case anybody loaded in the mean time)
 	lock_guard<mutex> lock(handle->lock);
 	// check if the block is already loaded
 	if (handle->state == BlockState::BLOCK_LOADED) {
 		// the block is loaded, increment the reader count and return a pointer to the handle
 		handle->readers++;
 		return handle->Load(handle);
-	}
-	// evict blocks until we have space for the current block
-	if (!EvictBlocks(handle->memory_usage, maximum_memory)) {
-		throw OutOfRangeException("Not enough memory to complete operation: failed to pin block");
 	}
 	// now we can actually load the current block
 	D_ASSERT(handle->readers == 0);
@@ -278,8 +309,22 @@ string BufferManager::GetTemporaryPath(block_id_t id) {
 	return fs.JoinPath(temp_directory, to_string(id) + ".block");
 }
 
+void BufferManager::RequireTemporaryDirectory() {
+	if (temp_directory.empty()) {
+		throw Exception(
+		    "Out-of-memory: cannot write buffer because no temporary directory is specified!\nTo enable "
+		    "temporary buffer eviction set a temporary directory using PRAGMA temp_directory='/path/to/tmp.tmp'");
+	}
+	lock_guard<mutex> temp_handle_guard(temp_handle_lock);
+	if (!temp_directory_handle) {
+		// temp directory has not been created yet: initialize it
+		temp_directory_handle = make_unique<TemporaryDirectoryHandle>(db, temp_directory);
+	}
+}
+
 void BufferManager::WriteTemporaryBuffer(ManagedBuffer &buffer) {
-	D_ASSERT(!temp_directory.empty());
+	RequireTemporaryDirectory();
+
 	D_ASSERT(buffer.size + Storage::BLOCK_HEADER_SIZE >= Storage::BLOCK_ALLOC_SIZE);
 	// get the path to write to
 	auto path = GetTemporaryPath(buffer.id);
@@ -291,10 +336,8 @@ void BufferManager::WriteTemporaryBuffer(ManagedBuffer &buffer) {
 }
 
 unique_ptr<FileBuffer> BufferManager::ReadTemporaryBuffer(block_id_t id) {
-	if (temp_directory.empty()) {
-		throw Exception("Out-of-memory: cannot read buffer because no temporary directory is specified!\nTo enable "
-		                "temporary buffer eviction set a temporary directory in the configuration");
-	}
+	D_ASSERT(!temp_directory.empty());
+	D_ASSERT(temp_directory_handle.get());
 	idx_t alloc_size;
 	// open the temporary file and read the size
 	auto path = GetTemporaryPath(id);
@@ -309,6 +352,9 @@ unique_ptr<FileBuffer> BufferManager::ReadTemporaryBuffer(block_id_t id) {
 }
 
 void BufferManager::DeleteTemporaryFile(block_id_t id) {
+	if (temp_directory.empty() || !temp_directory_handle) {
+		return;
+	}
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto path = GetTemporaryPath(id);
 	if (fs.FileExists(path)) {

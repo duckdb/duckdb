@@ -23,13 +23,8 @@ create  table t as select range a, range%10 b from range(100000);
 statement ok
 create table bool (a bool);
 
-loop i 0 5000
-
 statement ok
-insert into bool values (True),(False);
-
-endloop
-
+insert into bool select i from (values (True),(False)) tbl(i), range(5000);
 
 query I
 select regr_avgx(a, b) from t group by b%2;

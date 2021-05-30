@@ -183,19 +183,16 @@ public:
 	~VectorStructBuffer() override;
 
 public:
-	const child_list_t<unique_ptr<Vector>> &GetChildren() const {
+	const vector<unique_ptr<Vector>> &GetChildren() const {
 		return children;
 	}
-	child_list_t<unique_ptr<Vector>> &GetChildren() {
+	vector<unique_ptr<Vector>> &GetChildren() {
 		return children;
-	}
-	void AddChild(string name, unique_ptr<Vector> vector) {
-		children.push_back(std::make_pair(name, move(vector)));
 	}
 
 private:
 	//! child vectors used for nested data
-	child_list_t<unique_ptr<Vector>> children;
+	vector<unique_ptr<Vector>> children;
 };
 
 class VectorListBuffer : public VectorBuffer {
