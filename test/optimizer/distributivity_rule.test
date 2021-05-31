@@ -32,10 +32,6 @@ EXPLAIN SELECT X OR X FROM test
 ----
 
 query I nosort distributivity3
-EXPLAIN SELECT X FROM test
-----
-
-query I nosort distributivity3
 EXPLAIN SELECT X OR X OR X OR X FROM test
 ----
 
@@ -43,13 +39,13 @@ query I nosort distributivity3
 EXPLAIN SELECT X OR (X OR (X OR X)) FROM test
 ----
 
-# X OR (X AND A) => X AND A
+# X OR (X AND A) => X
 query I nosort distributivity4
 EXPLAIN SELECT X OR (X AND A) FROM test
 ----
 
 query I nosort distributivity4
-EXPLAIN SELECT X AND A FROM test
+EXPLAIN SELECT X OR X FROM test
 ----
 
 statement ok
