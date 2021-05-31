@@ -39,13 +39,13 @@ static unique_ptr<FunctionData> StructPackBind(ClientContext &context, ScalarFun
 	for (idx_t i = 0; i < arguments.size(); i++) {
 		auto &child = arguments[i];
 		if (child->alias.empty() && bound_function.name == "struct_pack") {
-			throw Exception("Need named argument for struct pack, e.g. STRUCT_PACK(a := b)");
+			throw BinderException("Need named argument for struct pack, e.g. STRUCT_PACK(a := b)");
 		}
 		if (child->alias.empty() && bound_function.name == "row") {
 			child->alias = "v" + std::to_string(i + 1);
 		}
 		if (name_collision_set.find(child->alias) != name_collision_set.end()) {
-			throw Exception("Duplicate struct entry name");
+			throw BinderException("Duplicate struct entry name \"%s\"", child->alias);
 		}
 		name_collision_set.insert(child->alias);
 		struct_children.push_back(make_pair(child->alias, arguments[i]->return_type));
