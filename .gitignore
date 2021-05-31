@@ -331,3 +331,7 @@ ub_*.cpp
 # python parquet files used in tests
 tools/pythonpkg/tests/unsigned.parquet
 tools/pythonpkg/tests/userdata1.parquet
+
+# node tests
+__nvm
+
