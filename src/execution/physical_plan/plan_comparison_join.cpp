@@ -1,6 +1,7 @@
 #include "duckdb/execution/operator/join/physical_cross_product.hpp"
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
 #include "duckdb/execution/operator/join/physical_index_join.hpp"
+#include "duckdb/execution/operator/join/physical_invisible_join.hpp"
 #include "duckdb/execution/operator/join/physical_nested_loop_join.hpp"
 #include "duckdb/execution/operator/join/physical_piecewise_merge_join.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
@@ -30,10 +31,10 @@ static bool CanPlanIndexJoin(Transaction &transaction, TableScanBindData *bind_d
 	return true;
 }
 
-void CheckForInvisibleJoin(LogicalComparisonJoin &op, PerfectHashJoinState &join_state) {
+bool CheckForInvisibleJoin(LogicalComparisonJoin &op, PerfectHashJoinState &join_state) {
 	if (op.join_stats.empty() || !op.join_stats[0]->type.IsIntegral() || !op.join_stats[1]->type.IsIntegral()) {
 		// invisible join not possible for no integral types
-		return;
+		return false;
 	}
 	auto stats_build = reinterpret_cast<NumericStatistics *>(op.join_stats[0].get()); // lhs stats
 	auto build_range = stats_build->max - stats_build->min;                           // Join Keys Range
@@ -54,7 +55,9 @@ void CheckForInvisibleJoin(LogicalComparisonJoin &op, PerfectHashJoinState &join
 		if (stats_build->min < MIN_THRESHOLD) {
 			join_state.is_build_min_small = true;
 		}
+		return true;
 	}
+	return false;
 }
 
 void TransformIndexJoin(ClientContext &context, LogicalComparisonJoin &op, Index **left_index, Index **right_index,
@@ -142,14 +145,19 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 			                                      op.left_projection_map, op.right_projection_map, tbl_scan.column_ids,
 			                                      right_index, true, op.estimated_cardinality);
 		}
-		// equality join with small number of keys : possible perfect hash table optimization
+		// equality join with small number of keys : possible invisible optimization
 		PerfectHashJoinState join_state;
-		CheckForInvisibleJoin(op, join_state);
+		if (CheckForInvisibleJoin(op, join_state)) {
+			plan = make_unique<PhysicalInvisibleJoin>(op, move(left), move(right), move(op.conditions), op.join_type,
+			                                          op.left_projection_map, op.right_projection_map,
+			                                          move(op.delim_types), op.estimated_cardinality, join_state);
+		} else {
 
-		// equality join: use hash join
-		plan = make_unique<PhysicalHashJoin>(op, move(left), move(right), move(op.conditions), op.join_type,
-		                                     op.left_projection_map, op.right_projection_map, move(op.delim_types),
-		                                     op.estimated_cardinality, join_state);
+			// equality join: use hash join
+			plan = make_unique<PhysicalHashJoin>(op, move(left), move(right), move(op.conditions), op.join_type,
+			                                     op.left_projection_map, op.right_projection_map, move(op.delim_types),
+			                                     op.estimated_cardinality, join_state);
+		}
 	} else {
 		D_ASSERT(!has_null_equal_conditions); // don't support this for anything but hash joins for now
 		if (op.conditions.size() == 1 && !has_inequality) {
