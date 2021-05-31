@@ -382,10 +382,9 @@ void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType 
 		break;
 	}
 	case LogicalTypeId::LIST: {
-		if (!ListVector::HasEntry(data)) {
-			//! List is empty
-			D_ASSERT(0);
-		}
+
+		D_ASSERT(ListVector::HasEntry(data));
+
 		//! Lists have two buffers
 		child.n_buffers = 2;
 		//! Second Buffer is the list offsets

@@ -1,6 +1,6 @@
 import duckdb
 try:
-    import pyarrow
+    import pyarrow as pa
     import pyarrow.parquet
     import numpy as np
     can_run = True
@@ -34,6 +34,27 @@ class TestArrowNested(object):
         assert query[0][0] == 3
         assert np.isnan(query[0][1])
 
+    def test_list_types(self,duckdb_cursor):
+        if not can_run:
+            return
+        #Large Lists
+        data = pyarrow.array([[1],None, [2]], type=pyarrow.large_list(pyarrow.int64()))
+        arrow_table = pa.Table.from_arrays([data],['a'])
+        print(arrow_table)
+        rel = duckdb.from_arrow_table(arrow_table)
+        res = rel.execute().fetchall()
+        assert res == [([1],), (None,), ([2],)]
+
+        #Fixed Size Lists
+        data = pyarrow.array([[1],None, [2]], type=pyarrow.list_(pyarrow.int64(),1))
+        arrow_table = pa.Table.from_arrays([data],['a'])
+        print(arrow_table)
+        rel = duckdb.from_arrow_table(arrow_table)
+        res = rel.execute().fetchall()
+        print(res)
+        assert res == [([1],), (None,), ([2],)]
+
+
     def test_lists_roundtrip(self,duckdb_cursor):
         if not can_run:
             return
@@ -56,6 +77,4 @@ class TestArrowNested(object):
       
         compare_results('''SELECT grp,lst,cs FROM (select grp, lst, case when grp>1 then lst else list_value(null) end as cs
                         from (SELECT a%4 as grp, list(a) as lst FROM range(7) tbl(a) group by grp) as lst_tbl) as T;''')
-        
-
-
+    
