@@ -7,6 +7,8 @@ namespace duckdb {
 
 struct SQLiteUDFWrapper {
 public:
+    static scalar_function_t CreateSQLiteScalarFunction(scalar_sqlite_udf_t sqlite_udf);
+
     static scalar_function_t CreateBinarySQLiteFunction(scalar_sqlite_udf_t sqlite_udf);
 
 };

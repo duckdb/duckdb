@@ -32,12 +32,15 @@ struct CastSQLite {
     }
 
 	template<class T>
-	static void ToVectorSQLiteValue(T *__restrict data, sqlite3_value *__restrict result, idx_t count) {
+	static unique_ptr<vector<sqlite3_value>> ToVectorSQLiteValue(T *__restrict data, idx_t count) {
+		unique_ptr<vector<sqlite3_value>> result = make_unique<vector<sqlite3_value>>(count);
+		auto res_data = (*result).data();
 		for(idx_t i=0; i < count; ++i) {
-			result[i] = CastSQLite::Operation(data[i]);
+			res_data[i] = CastSQLite::Operation(data[i]);
 		}
+		return result;
 	}
-    static void ToVectorSQLite(LogicalType type, VectorData &vec_data, vector<sqlite3_value> &result);
+	static unique_ptr<vector<sqlite3_value>> ToVectorSQLite(LogicalType type, VectorData &vec_data, idx_t size);
 
 	/**
 	 * Noop GetValue()

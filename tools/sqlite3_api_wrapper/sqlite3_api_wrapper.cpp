@@ -1126,10 +1126,15 @@ int sqlite3_create_function(sqlite3 *db, const char *zFunctionName, int nArg, in
 
 	string fname = string(zFunctionName);
 
-	//Unary function for now
-	if(nArg == 1 && xFunc) {
-		auto udf_sqlite3 = SQLiteUDFWrapper::CreateBinarySQLiteFunction(xFunc);
-		UDFWrapper::RegisterFunction(fname, {LogicalType::ANY}, LogicalType::VARCHAR, udf_sqlite3, *(db->con->context));
+	//Scalar function
+	if(xFunc) {
+		auto udf_sqlite3 = SQLiteUDFWrapper::CreateSQLiteScalarFunction(xFunc);
+		vector<LogicalType> argv_types(nArg);
+		for(idx_t i=0; i < nArg; ++i) {
+			argv_types[i] = LogicalType::ANY;
+		}
+		UDFWrapper::RegisterFunction(fname, argv_types, LogicalType::VARCHAR, udf_sqlite3, *(db->con->context));
+
 		return SQLITE_OK;
 	}
 

@@ -46,37 +46,31 @@ double CastSQLite::GetValue(sqlite3_value input) {
 }
 
 //*** Cast to vectors ***********************************/
-
-void CastSQLite::ToVectorSQLite(LogicalType type, VectorData &vec_data, vector<sqlite3_value> &result) {
+unique_ptr<vector<sqlite3_value>> CastSQLite::ToVectorSQLite(LogicalType type, VectorData &vec_data, idx_t size) {
 	LogicalTypeId type_id = type.id();
 	switch (type_id) {
 	case LogicalTypeId::TINYINT: {
-		ToVectorSQLiteValue<int8_t>((int8_t *)vec_data.data, (sqlite3_value *)result.data(), result.size());
-		break;
+		return ToVectorSQLiteValue<int8_t>((int8_t *)vec_data.data, size);
 	}
 	case LogicalTypeId::SMALLINT: {
-		ToVectorSQLiteValue<int16_t>((int16_t *)vec_data.data, (sqlite3_value *)result.data(), result.size());
-		break;
+		return ToVectorSQLiteValue<int16_t>((int16_t *)vec_data.data, size);
 	}
 	case LogicalTypeId::INTEGER: {
-		ToVectorSQLiteValue<int32_t>((int32_t *)vec_data.data, (sqlite3_value *)result.data(), result.size());
-		break;
+		return ToVectorSQLiteValue<int32_t>((int32_t *)vec_data.data, size);
 	}
 	case LogicalTypeId::BIGINT: {
-		ToVectorSQLiteValue<int64_t>((int64_t *)vec_data.data, (sqlite3_value *)result.data(), result.size());
-		break;
+		return ToVectorSQLiteValue<int64_t>((int64_t *)vec_data.data, size);
 	}
 	case LogicalTypeId::FLOAT: {
-		ToVectorSQLiteValue<float>((float *)vec_data.data, (sqlite3_value *)result.data(), result.size());
-		break;
+		return ToVectorSQLiteValue<float>((float *)vec_data.data, size);
 	}
 	case LogicalTypeId::DOUBLE: {
-		ToVectorSQLiteValue<double>((double *)vec_data.data, (sqlite3_value *)result.data(), result.size());
-		break;
+		return ToVectorSQLiteValue<double>((double *)vec_data.data, size);
 	}
 	default:
-		break;
+		throw std::runtime_error("SQLite UDF API: type is not supported!");
 	}
+
 }
 
 void CastSQLite::ToVectorString(SQLiteTypeValue type, vector<sqlite3_value> &vec_sqlite, Vector &result) {
