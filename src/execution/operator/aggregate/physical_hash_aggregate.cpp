@@ -292,10 +292,10 @@ public:
 
 	void Execute() override {
 		FinalizeHT(state, radix);
-		lock_guard<mutex> glock(state.lock);
-		parent.finished_tasks++;
+		auto total_tasks = parent.total_tasks.load();
+		auto finished_tasks = ++parent.finished_tasks;
 		// finish the whole pipeline
-		if (parent.total_tasks == parent.finished_tasks) {
+		if (total_tasks == finished_tasks) {
 			parent.Finish();
 		}
 	}

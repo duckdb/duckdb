@@ -14,15 +14,13 @@ static void StructPackFunction(DataChunk &args, ExpressionState &state, Vector &
 	D_ASSERT(args.ColumnCount() == info.stype.child_types().size());
 
 	bool all_const = true;
+	auto &child_entries = StructVector::GetEntries(result);
 	for (size_t i = 0; i < args.ColumnCount(); i++) {
 		if (args.data[i].GetVectorType() != VectorType::CONSTANT_VECTOR) {
 			all_const = false;
 		}
 		// same holds for this
-		D_ASSERT(args.data[i].GetType() == info.stype.child_types()[i].second);
-		auto new_child = make_unique<Vector>(info.stype.child_types()[i].second);
-		new_child->Reference(args.data[i]);
-		StructVector::AddEntry(result, info.stype.child_types()[i].first, move(new_child));
+		child_entries[i]->Reference(args.data[i]);
 	}
 	result.SetVectorType(all_const ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR);
 

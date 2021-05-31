@@ -10,7 +10,8 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 template <class OP>
 static bool TemplatedBooleanOperation(const Value &left, const Value &right) {
-	auto left_type = left.type(), right_type = right.type();
+	const auto &left_type = left.type();
+	const auto &right_type = right.type();
 	if (left_type != right_type) {
 		try {
 			LogicalType comparison_type = BoundComparisonExpression::BindComparison(left_type, right_type);
@@ -54,9 +55,10 @@ static bool TemplatedBooleanOperation(const Value &left, const Value &right) {
 		return OP::Operation(left.str_value, right.str_value);
 	case PhysicalType::MAP:
 	case PhysicalType::STRUCT: {
+		// this should be enforced by the type
+		D_ASSERT(left.struct_value.size() == right.struct_value.size());
 		for (idx_t i = 0; i < left.struct_value.size(); i++) {
-			if (i >= right.struct_value.size() || left.struct_value[i].first != right.struct_value[i].first ||
-			    left.struct_value[i].second != left.struct_value[i].second) {
+			if (left.struct_value[i] != right.struct_value[i]) {
 				return false;
 			}
 		}
