@@ -473,6 +473,12 @@ INSERT INTO a VALUES (42);
 SELECT * FROM a;
 ''', '\\begin{tabular}')
 
+# .mode trash
+test('''
+.mode trash
+SELECT 1;
+''', '')
+
 # dump blobs: FIXME
 # test('''
 # CREATE TABLE a (b BLOB);

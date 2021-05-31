@@ -66,6 +66,19 @@ public:
 		return types.size();
 	}
 
+	DUCKDB_API bool TryFetch(unique_ptr<DataChunk> &result, string &error) {
+		try {
+			result = Fetch();
+			return true;
+		} catch (std::exception &ex) {
+			error = ex.what();
+			return false;
+		} catch (...) {
+			error = "Unknown error in Fetch";
+			return false;
+		}
+	}
+
 	DUCKDB_API void ToArrowSchema(ArrowSchema *out_array);
 
 private:
