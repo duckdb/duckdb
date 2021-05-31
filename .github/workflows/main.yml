@@ -170,7 +170,7 @@ jobs:
           duckdb_cli-windows-i386.zip
           tools/jdbc/duckdb_jdbc.jar
 
-   mingw:
+  mingw:
      name: MingW (64 Bit)
      runs-on: windows-latest
      needs: linux-debug
