@@ -52,7 +52,7 @@ public:
 		db.LoadExtension<TPCHExtension>();
 #endif
 #ifdef BUILD_TPCH_EXTENSION
-        db.LoadExtension<TPDSHExtension>();
+        db.LoadExtension<TPCDSExtension>();
 #endif
 #ifdef BUILD_FTS_EXTENSION
 		db.LoadExtension<FTSExtension>();

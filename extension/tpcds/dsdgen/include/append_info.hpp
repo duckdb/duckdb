@@ -17,7 +17,7 @@ struct tpcds_table_def {
 #define DBGEN_VERSION 24
 
 struct tpcds_append_information {
-	tpcds_append_information(duckdb::DuckDB &db, std::string schema_name, std::string table_name) : connection(db), appender(connection, schema_name, table_name)
+	tpcds_append_information(duckdb::Connection connection, std::string schema_name, std::string table_name) : connection(connection), appender(connection, schema_name, table_name)
 	     {
 	}
 

@@ -5,6 +5,7 @@
 #include "tpcds_constants.hpp"
 #include "append_info.hpp"
 #include "dsdgen_helpers.hpp"
+#include "duckdb/main/client_context.hpp"
 #include <cassert>
 
 using namespace duckdb;
@@ -12,8 +13,8 @@ using namespace std;
 
 namespace tpcds {
 
-void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
-	Connection con(db);
+void DSDGenWrapper::DSDGen(double flt_scale, ClientContext &context, string schema, string suffix) {
+	Connection con(*context.db);
 
 	con.Query("BEGIN TRANSACTION");
 	// FIXME: No restart support yet, suspect only fix is init_rand
@@ -41,7 +42,7 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 	for (int table_id = tmin; table_id < tmax; table_id++) {
 		auto table_def = GetTDefByNumber(table_id);
 		assert(table_def.name);
-		auto append = make_unique<tpcds_append_information>(db, schema, table_def.name);
+		auto append = make_unique<tpcds_append_information>(con, schema, table_def.name);
 		append->table_def = table_def;
 		append_info[table_id] = move(append);
 	}
@@ -81,14 +82,14 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 	}
 }
 
-string get_query(int query) {
+string DSDGenWrapper::GetQuery(int query) {
 	if (query <= 0 || query > TPCDS_QUERIES_COUNT) {
 		throw SyntaxException("Out of range TPC-DS query number %d", query);
 	}
 	return TPCDS_QUERIES[query - 1];
 }
 
-string get_answer(double sf, int query) {
+string DSDGenWrapper::GetAnswer(double sf, int query) {
 	if (query <= 0 || query > TPCDS_QUERIES_COUNT) {
 		throw SyntaxException("Out of range TPC-DS query number %d", query);
 	}

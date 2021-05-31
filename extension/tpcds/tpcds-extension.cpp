@@ -51,8 +51,7 @@ static void DsdgenFunction(ClientContext &context, const FunctionData *bind_data
 	if (data.finished) {
 		return;
 	}
-	tpcds::DSDGenWrapper::CreateTPCDSSchema(context, data.schema, data.suffix);
-	tpcds::DSDGenWrapper::LoadTPCDSData(context, data.sf, data.schema, data.suffix);
+    tpcds::DSDGenWrapper::DSDGen(data.sf, context, data.schema, data.suffix);
 
 	data.finished = true;
 }
@@ -147,7 +146,7 @@ static void TPCDSQueryAnswerFunction(ClientContext &context, const FunctionData 
 	output.SetCardinality(chunk_count);
 }
 
-static string PragmaTpchQuery(ClientContext &context, const FunctionParameters &parameters) {
+static string PragmaTpcdsQuery(ClientContext &context, const FunctionParameters &parameters) {
 	auto index = parameters.values[0].GetValue<int32_t>();
 	return tpcds::DSDGenWrapper::GetQuery(index);
 }
@@ -156,19 +155,19 @@ void TPCDSExtension::Load(DuckDB &db) {
 	Connection con(db);
 	con.BeginTransaction();
 
-	TableFunction dbgen_func("dbgen", {}, DsdgenFunction, DsdgenBind);
-	dbgen_func.named_parameters["sf"] = LogicalType::DOUBLE;
-	dbgen_func.named_parameters["overwrite"] = LogicalType::BOOLEAN;
-	dbgen_func.named_parameters["schema"] = LogicalType::VARCHAR;
-	dbgen_func.named_parameters["suffix"] = LogicalType::VARCHAR;
-	CreateTableFunctionInfo dbgen_info(dbgen_func);
+	TableFunction dsdgen_func("dsdgen", {}, DsdgenFunction, DsdgenBind);
+	dsdgen_func.named_parameters["sf"] = LogicalType::DOUBLE;
+	dsdgen_func.named_parameters["overwrite"] = LogicalType::BOOLEAN;
+	dsdgen_func.named_parameters["schema"] = LogicalType::VARCHAR;
+	dsdgen_func.named_parameters["suffix"] = LogicalType::VARCHAR;
+	CreateTableFunctionInfo dsdgen_info(dsdgen_func);
 
-	// create the dbgen function
+	// create the dsdgen function
 	auto &catalog = Catalog::GetCatalog(*con.context);
-	catalog.CreateTableFunction(*con.context, &dbgen_info);
+	catalog.CreateTableFunction(*con.context, &dsdgen_info);
 
 	// create the TPCDS pragma that allows us to run the query
-	auto tpcds_func = PragmaFunction::PragmaCall("tpcds", PragmaTpchQuery, {LogicalType::BIGINT});
+	auto tpcds_func = PragmaFunction::PragmaCall("tpcds", PragmaTpcdsQuery, {LogicalType::BIGINT});
 	CreatePragmaFunctionInfo info(tpcds_func);
 	catalog.CreatePragmaFunction(*con.context, &info);
 

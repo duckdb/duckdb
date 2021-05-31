@@ -1,16 +1,35 @@
+//===----------------------------------------------------------------------===//
+//
+//                         DuckDB
+//
+// dsdgen.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
 #pragma once
 
-#include "duckdb/catalog/catalog.hpp"
 #include "duckdb.hpp"
+#ifndef DUCKDB_AMALGAMATION
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
+#endif
+
+namespace duckdb {
+class ClientContext;
+}
 
 namespace tpcds {
-//! Adds the TPC-DS tables filled with the given SF to the catalog. Suffix adds
-//! a suffix to the table names, if given. SF=0 will only add the schema
-//! information.
-void dbgen(double sf, duckdb::DuckDB &database, std::string schema = DEFAULT_SCHEMA, std::string suffix = "");
 
-//! Gets the specified TPC-DS Query number as a string
-std::string get_query(int query);
-//! Returns the CSV answer of a TPC-DS query
-std::string get_answer(double sf, int query);
+struct DSDGenWrapper {
+    //! Generate the TPC-DS data of the given scale factor
+    static void DSDGen(double flt_scale, duckdb::ClientContext &context, std::string schema = DEFAULT_SCHEMA, std::string suffix = "");
+
+    //! Gets the specified TPC-DS Query number as a string
+    static std::string GetQuery(int query);
+    //! Returns the CSV answer of a TPC-DS query
+    static std::string GetAnswer(double sf, int query);
+};
+
 } // namespace tpcds
+
