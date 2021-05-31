@@ -1,5 +1,5 @@
 # skip building extensions on mingw
-if (MSVC AND NOT WIN32)
+if (WIN32 AND NOT MSVC)
   return()
 endif()
 
