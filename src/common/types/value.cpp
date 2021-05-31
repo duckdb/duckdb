@@ -921,16 +921,16 @@ string Value::ToString() const {
 	case LogicalTypeId::HASH:
 		return to_string(value_.hash);
 	case LogicalTypeId::STRUCT: {
-		string ret = "<";
+		string ret = "{";
 		for (size_t i = 0; i < struct_value.size(); i++) {
 			auto &name = type_.child_types()[i].first;
 			auto &child = struct_value[i];
-			ret += name + ": " + child.ToString();
+			ret += "'" + name + "': " + child.ToString();
 			if (i < struct_value.size() - 1) {
 				ret += ", ";
 			}
 		}
-		ret += ">";
+		ret += "}";
 		return ret;
 	}
 	case LogicalTypeId::LIST: {
