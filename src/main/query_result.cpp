@@ -215,13 +215,8 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		SetArrowFormat(root_holder, **child.children, type.child_types()[0].second);
 		break;
 	}
-	case LogicalTypeId::STRUCT:
-	case LogicalTypeId::MAP:{
-	    if (type.id() == LogicalTypeId::STRUCT){
-	        child.format = "+s";
-	    } else{
-	        child.format = "+m";
-	    }
+	case LogicalTypeId::STRUCT:{
+	    child.format = "+s";
 		child.n_children = type.child_types().size();
 	    root_holder.nested_children.emplace_back();
 	    root_holder.nested_children.back().resize(type.child_types().size());
@@ -233,9 +228,24 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 	    child.children =  &root_holder.nested_children_ptr.back()[0];
 	    for (size_t type_idx = 0; type_idx <type.child_types().size(); type_idx ++ ) {
 	        InitializeChild(*child.children[type_idx]);
-	        child.children[type_idx]->name = "s";
+	        child.children[type_idx]->name = type.child_types()[type_idx].first.c_str();
             SetArrowFormat(root_holder, *child.children[type_idx] , type.child_types()[type_idx].second);
         }
+		break;
+	}
+	case LogicalTypeId::MAP:{
+	    child.format = "+m";
+	    //! Map has one child which is a struct
+		child.n_children = 1;
+	    root_holder.nested_children.emplace_back();
+		root_holder.nested_children.back().resize(1);
+		root_holder.nested_children_ptr.emplace_back();
+		root_holder.nested_children_ptr.back().push_back(&root_holder.nested_children.back()[0]);
+		InitializeChild(root_holder.nested_children.back()[0]);
+		child.children = &root_holder.nested_children_ptr.back()[0];
+		child.children[0]->name = "entries";
+		LogicalType struct_type (LogicalTypeId::STRUCT,type.child_types());
+		SetArrowFormat(root_holder, *child.children[0],struct_type);
 		break;
 	}
 
