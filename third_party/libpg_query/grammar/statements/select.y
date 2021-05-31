@@ -1881,6 +1881,10 @@ a_expr:		c_expr									{ $$ = $1; }
 				PGFuncCall *n = makeFuncCall(SystemFuncName("struct_pack"), $2, @2);
 				$$ = (PGNode *) n;
 			}
+			| '[' opt_expr_list ']' {
+				PGFuncCall *n = makeFuncCall(SystemFuncName("list_value"), $2, @2);
+				$$ = (PGNode *) n;
+			}
 			| row LAMBDA_ARROW a_expr
 			{
 				PGLambdaFunction *n = makeNode(PGLambdaFunction);
