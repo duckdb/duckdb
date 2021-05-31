@@ -19,41 +19,35 @@ static void MapFunction(DataChunk &args, ExpressionState &state, Vector &result)
 		}
 	}
 
+	auto &child_entries = StructVector::GetEntries(result);
+	D_ASSERT(child_entries.size() == 2);
+	auto &key_vector = child_entries[0];
+	auto &value_vector = child_entries[1];
 	if (args.data.empty()) {
-		child_list_t<LogicalType> child_types;
-		child_types.push_back({"", LogicalTypeId::SQLNULL});
-		LogicalType list_vector_type(LogicalType::LIST.id(), child_types);
-		auto list_vector = make_unique<Vector>(list_vector_type);
-		auto list_child = make_unique<Vector>(LogicalTypeId::SQLNULL);
-		ListVector::SetEntry(*list_vector, move(list_child));
-		ListVector::SetListSize(*list_vector, 0);
-		auto list_data = FlatVector::GetData<list_entry_t>(*list_vector);
-		list_data->offset = 0;
-		list_data->length = 0;
-		StructVector::AddEntry(result, "key", move(list_vector));
+		// no arguments: construct an empty map
 
-		list_vector = make_unique<Vector>(list_vector_type);
-		list_child = make_unique<Vector>(LogicalTypeId::SQLNULL);
-		ListVector::SetEntry(*list_vector, move(list_child));
-		ListVector::SetListSize(*list_vector, 0);
-		list_data = FlatVector::GetData<list_entry_t>(*list_vector);
+		auto list_child = make_unique<Vector>(LogicalTypeId::SQLNULL);
+		ListVector::SetEntry(*key_vector, move(list_child));
+		ListVector::SetListSize(*key_vector, 0);
+		auto list_data = FlatVector::GetData<list_entry_t>(*key_vector);
 		list_data->offset = 0;
 		list_data->length = 0;
-		StructVector::AddEntry(result, "value", move(list_vector));
-		//! This is an empty map
+
+		list_child = make_unique<Vector>(LogicalTypeId::SQLNULL);
+		ListVector::SetEntry(*value_vector, move(list_child));
+		ListVector::SetListSize(*value_vector, 0);
+		list_data = FlatVector::GetData<list_entry_t>(*value_vector);
+		list_data->offset = 0;
+		list_data->length = 0;
 		return;
 	}
 
 	if (ListVector::GetListSize(args.data[0]) != ListVector::GetListSize(args.data[1])) {
 		throw Exception("Key list has a different size from Value list");
 	}
-	unique_ptr<Vector> key_vec = make_unique<Vector>();
-	key_vec->Reference(args.data[0]);
-	auto val_vec = make_unique<Vector>();
-	val_vec->Reference(args.data[1]);
+	key_vector->Reference(args.data[0]);
+	value_vector->Reference(args.data[1]);
 
-	StructVector::AddEntry(result, "key", move(key_vec));
-	StructVector::AddEntry(result, "value", move(val_vec));
 	result.Verify(args.size());
 }
 

@@ -93,15 +93,20 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, vector<Value
 				throw InvalidInputException("Could not parse TIMESTAMPFORMAT: %s", error.c_str());
 			}
 		} else if (kv.first == "columns") {
-			if (kv.second.type().id() != LogicalTypeId::STRUCT) {
+			auto &child_type = kv.second.type();
+			if (child_type.id() != LogicalTypeId::STRUCT) {
 				throw BinderException("read_csv columns requires a a struct as input");
 			}
-			for (auto &val : kv.second.struct_value) {
-				names.push_back(val.first);
-				if (val.second.type().id() != LogicalTypeId::VARCHAR) {
+			auto &child_types = child_type.child_types();
+			D_ASSERT(child_types.size() == kv.second.struct_value.size());
+			for (idx_t i = 0; i < kv.second.struct_value.size(); i++) {
+				auto &name = child_types[i].first;
+				auto &val = kv.second.struct_value[i];
+				names.push_back(name);
+				if (val.type().id() != LogicalTypeId::VARCHAR) {
 					throw BinderException("read_csv requires a type specification as string");
 				}
-				return_types.push_back(TransformStringToLogicalType(val.second.str_value.c_str()));
+				return_types.push_back(TransformStringToLogicalType(val.str_value.c_str()));
 			}
 			if (names.empty()) {
 				throw BinderException("read_csv requires at least a single column as input!");

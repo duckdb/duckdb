@@ -32,6 +32,104 @@ static SRC FetchScalar(Vector &src_vec, idx_t offset) {
 	return src_ptr[offset];
 }
 
+py::object GetValueToPython(Value &val, const LogicalType &type) {
+	if (val.is_null) {
+		return py::none();
+	}
+	switch (type.id()) {
+	case LogicalTypeId::BOOLEAN:
+		return py::cast(val.GetValue<bool>());
+	case LogicalTypeId::TINYINT:
+		return py::cast(val.GetValue<int8_t>());
+	case LogicalTypeId::SMALLINT:
+		return py::cast(val.GetValue<int16_t>());
+	case LogicalTypeId::INTEGER:
+		return py::cast(val.GetValue<int32_t>());
+	case LogicalTypeId::BIGINT:
+		return py::cast(val.GetValue<int64_t>());
+	case LogicalTypeId::UTINYINT:
+		return py::cast(val.GetValue<uint8_t>());
+	case LogicalTypeId::USMALLINT:
+		return py::cast(val.GetValue<uint16_t>());
+	case LogicalTypeId::UINTEGER:
+		return py::cast(val.GetValue<uint32_t>());
+	case LogicalTypeId::UBIGINT:
+		return py::cast(val.GetValue<uint64_t>());
+	case LogicalTypeId::HUGEINT:
+		return py::cast<py::object>(PyLong_FromString((char *)val.GetValue<string>().c_str(), nullptr, 10));
+
+	case LogicalTypeId::FLOAT:
+		return py::cast(val.GetValue<float>());
+	case LogicalTypeId::DOUBLE:
+		return py::cast(val.GetValue<double>());
+	case LogicalTypeId::DECIMAL: {
+		py::object decimal_py = py::module_::import("decimal").attr("Decimal");
+		return decimal_py(val.ToString());
+	}
+	case LogicalTypeId::VARCHAR:
+		return py::cast(val.GetValue<string>());
+	case LogicalTypeId::BLOB:
+		return py::bytes(val.GetValueUnsafe<string>());
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_SEC: {
+		D_ASSERT(type.InternalType() == PhysicalType::INT64);
+		auto timestamp = val.GetValueUnsafe<timestamp_t>();
+		if (type.id() == LogicalTypeId::TIMESTAMP_MS) {
+			timestamp = Timestamp::FromEpochMs(timestamp.value);
+		} else if (type.id() == LogicalTypeId::TIMESTAMP_NS) {
+			timestamp = Timestamp::FromEpochNanoSeconds(timestamp.value);
+		} else if (type.id() == LogicalTypeId::TIMESTAMP_SEC) {
+			timestamp = Timestamp::FromEpochSeconds(timestamp.value);
+		}
+		int32_t year, month, day, hour, min, sec, micros;
+		date_t date;
+		dtime_t time;
+		Timestamp::Convert(timestamp, date, time);
+		Date::Convert(date, year, month, day);
+		Time::Convert(time, hour, min, sec, micros);
+		return py::cast<py::object>(PyDateTime_FromDateAndTime(year, month, day, hour, min, sec, micros));
+	}
+	case LogicalTypeId::TIME: {
+		D_ASSERT(type.InternalType() == PhysicalType::INT64);
+
+		int32_t hour, min, sec, microsec;
+		auto time = val.GetValueUnsafe<dtime_t>();
+		duckdb::Time::Convert(time, hour, min, sec, microsec);
+		return py::cast<py::object>(PyTime_FromTime(hour, min, sec, microsec));
+	}
+	case LogicalTypeId::DATE: {
+		D_ASSERT(type.InternalType() == PhysicalType::INT32);
+
+		auto date = val.GetValueUnsafe<date_t>();
+		int32_t year, month, day;
+		duckdb::Date::Convert(date, year, month, day);
+		return py::cast<py::object>(PyDate_FromDate(year, month, day));
+	}
+	case LogicalTypeId::LIST: {
+		py::list list;
+		for (auto list_elem : val.list_value) {
+			list.append(GetValueToPython(list_elem, type.child_types()[0].second));
+		}
+		return std::move(list);
+	}
+	case LogicalTypeId::MAP:
+	case LogicalTypeId::STRUCT: {
+		py::dict py_struct;
+		for (idx_t i = 0; i < val.struct_value.size(); i++) {
+			auto &child_entry = type.child_types()[i];
+			auto &child_name = child_entry.first;
+			auto &child_type = child_entry.second;
+			py_struct[child_name.c_str()] = GetValueToPython(val.struct_value[i], child_type);
+		}
+		return std::move(py_struct);
+	}
+	default:
+		throw std::runtime_error("unsupported type: " + type.ToString());
+	}
+}
+
 py::object DuckDBPyResult::Fetchone() {
 	if (!result) {
 		throw std::runtime_error("result closed");
@@ -52,99 +150,7 @@ py::object DuckDBPyResult::Fetchone() {
 			continue;
 		}
 		auto val = current_chunk->data[col_idx].GetValue(chunk_offset);
-		switch (result->types[col_idx].id()) {
-		case LogicalTypeId::BOOLEAN:
-			res[col_idx] = val.GetValue<bool>();
-			break;
-		case LogicalTypeId::TINYINT:
-			res[col_idx] = val.GetValue<int8_t>();
-			break;
-		case LogicalTypeId::SMALLINT:
-			res[col_idx] = val.GetValue<int16_t>();
-			break;
-		case LogicalTypeId::INTEGER:
-			res[col_idx] = val.GetValue<int32_t>();
-			break;
-		case LogicalTypeId::BIGINT:
-			res[col_idx] = val.GetValue<int64_t>();
-			break;
-		case LogicalTypeId::UTINYINT:
-			res[col_idx] = val.GetValue<uint8_t>();
-			break;
-		case LogicalTypeId::USMALLINT:
-			res[col_idx] = val.GetValue<uint16_t>();
-			break;
-		case LogicalTypeId::UINTEGER:
-			res[col_idx] = val.GetValue<uint32_t>();
-			break;
-		case LogicalTypeId::UBIGINT:
-			res[col_idx] = val.GetValue<uint64_t>();
-			break;
-		case LogicalTypeId::HUGEINT: {
-			auto hugeint_str = val.GetValue<string>();
-			res[col_idx] = PyLong_FromString((char *)hugeint_str.c_str(), nullptr, 10);
-			break;
-		}
-		case LogicalTypeId::FLOAT:
-			res[col_idx] = val.GetValue<float>();
-			break;
-		case LogicalTypeId::DOUBLE:
-			res[col_idx] = val.GetValue<double>();
-			break;
-		case LogicalTypeId::DECIMAL: {
-			py::object decimal_py = py::module_::import("decimal").attr("Decimal");
-			res[col_idx] = decimal_py(val.ToString());
-		} break;
-		case LogicalTypeId::VARCHAR:
-			res[col_idx] = val.GetValue<string>();
-			break;
-		case LogicalTypeId::BLOB:
-			res[col_idx] = py::bytes(val.GetValueUnsafe<string>());
-			break;
-		case LogicalTypeId::TIMESTAMP:
-		case LogicalTypeId::TIMESTAMP_MS:
-		case LogicalTypeId::TIMESTAMP_NS:
-		case LogicalTypeId::TIMESTAMP_SEC: {
-			D_ASSERT(result->types[col_idx].InternalType() == PhysicalType::INT64);
-			auto timestamp = val.GetValueUnsafe<timestamp_t>();
-			if (result->types[col_idx].id() == LogicalTypeId::TIMESTAMP_MS) {
-				timestamp = Timestamp::FromEpochMs(timestamp.value);
-			} else if (result->types[col_idx].id() == LogicalTypeId::TIMESTAMP_NS) {
-				timestamp = Timestamp::FromEpochNanoSeconds(timestamp.value);
-			} else if (result->types[col_idx].id() == LogicalTypeId::TIMESTAMP_SEC) {
-				timestamp = Timestamp::FromEpochSeconds(timestamp.value);
-			}
-			int32_t year, month, day, hour, min, sec, micros;
-			date_t date;
-			dtime_t time;
-			Timestamp::Convert(timestamp, date, time);
-			Date::Convert(date, year, month, day);
-			Time::Convert(time, hour, min, sec, micros);
-			res[col_idx] = PyDateTime_FromDateAndTime(year, month, day, hour, min, sec, micros);
-			break;
-		}
-		case LogicalTypeId::TIME: {
-			D_ASSERT(result->types[col_idx].InternalType() == PhysicalType::INT64);
-
-			int32_t hour, min, sec, microsec;
-			auto time = val.GetValueUnsafe<dtime_t>();
-			duckdb::Time::Convert(time, hour, min, sec, microsec);
-			res[col_idx] = PyTime_FromTime(hour, min, sec, microsec);
-			break;
-		}
-		case LogicalTypeId::DATE: {
-			D_ASSERT(result->types[col_idx].InternalType() == PhysicalType::INT32);
-
-			auto date = val.GetValueUnsafe<date_t>();
-			int32_t year, month, day;
-			duckdb::Date::Convert(date, year, month, day);
-			res[col_idx] = PyDate_FromDate(year, month, day);
-			break;
-		}
-
-		default:
-			throw std::runtime_error("unsupported type: " + result->types[col_idx].ToString());
-		}
+		res[col_idx] = GetValueToPython(val, result->types[col_idx]);
 	}
 	chunk_offset++;
 	return move(res);
