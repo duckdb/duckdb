@@ -1,0 +1,15 @@
+# name: test/sql/storage/types/struct/struct_storage.test
+# description: Test structs with persistent storage
+# group: [types]
+
+# load the DB from disk
+load __TEST_DIR__/struct_storage_test.db
+
+statement ok
+CREATE TABLE a(b STRUCT(i INTEGER, j INTEGER));
+
+statement ok
+INSERT INTO a VALUES (STRUCT_PACK(i := 1, j:= 2));
+
+statement ok
+SELECT * FROM a;

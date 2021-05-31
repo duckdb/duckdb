@@ -9,6 +9,7 @@
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/table/validity_segment.hpp"
+#include "duckdb/storage/table/struct_column_data.hpp"
 
 #include "duckdb/storage/numeric_segment.hpp"
 #include "duckdb/storage/string_segment.hpp"
@@ -591,6 +592,36 @@ void ColumnData::Verify(RowGroup &parent) {
 		D_ASSERT(parent.count == 0);
 	}
 #endif
+}
+
+struct SharedConstructor {
+	template <class T, typename... Args>
+	static shared_ptr<T> Create(Args &&...args) {
+		return make_shared<T>(std::forward<Args>(args)...);
+	}
+};
+
+struct UniqueConstructor {
+	template <class T, typename... Args>
+	static unique_ptr<T> Create(Args &&...args) {
+		return make_unique<T>(std::forward<Args>(args)...);
+	}
+};
+
+template<class RET, class OP>
+static RET CreateColumnInternal(DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type, ColumnData *parent) {
+	if (type.id() == LogicalTypeId::STRUCT) {
+		return OP::template Create<StructColumnData>(info, column_index, start_row, move(type), parent);
+	}
+	return OP::template Create<StandardColumnData>(info, column_index, start_row, move(type), parent);
+}
+
+shared_ptr<ColumnData> ColumnData::CreateColumn(DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type, ColumnData *parent) {
+	return CreateColumnInternal<shared_ptr<ColumnData>, SharedConstructor>(info, column_index, start_row, move(type), parent);
+}
+
+unique_ptr<ColumnData> ColumnData::CreateColumnUnique(DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type, ColumnData *parent) {
+	return CreateColumnInternal<unique_ptr<ColumnData>, UniqueConstructor>(info, column_index, start_row, move(type), parent);
 }
 
 } // namespace duckdb

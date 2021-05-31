@@ -1,0 +1,14 @@
+# name: test/sql/types/struct/struct_tables.test
+# description: Test storing structs in in-memory tables
+# group: [types]
+
+statement ok
+CREATE TABLE a(b STRUCT(i INTEGER, j INTEGER));
+
+statement ok
+INSERT INTO a VALUES (STRUCT_PACK(i := 1, j:= 2));
+
+query I
+SELECT * FROM a;
+----
+<i: 1, j: 2>

@@ -10,6 +10,7 @@ add_library_unity(
   persistent_segment.cpp
   row_group.cpp
   standard_column_data.cpp
+  struct_column_data.cpp
   transient_segment.cpp
   validity_column_data.cpp
   validity_segment.cpp)
