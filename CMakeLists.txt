@@ -97,7 +97,7 @@ if((BUILD_PYTHON OR BUILD_R)
   else()
     message(
       WARNING
-        "Sanitizers are not enabled but will not be built because the Python/R builds are enabled. Use FORCE_SANITIZER to force building of the sanitizers even when building these packages."
+        "Sanitizers are enabled but will not be built because the Python/R builds are enabled. Use FORCE_SANITIZER to force building of the sanitizers even when building these packages."
     )
     set(ENABLE_SANITIZER FALSE)
     set(ENABLE_UBSAN FALSE)

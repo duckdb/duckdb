@@ -13,18 +13,12 @@ namespace duckdb {
 
 StringSegment::StringSegment(DatabaseInstance &db, idx_t row_start, block_id_t block_id)
     : UncompressedSegment(db, PhysicalType::VARCHAR, row_start) {
-	this->max_vector_count = 0;
-	// the vector_size is given in the size of the dictionary offsets
-	this->vector_size = STANDARD_VECTOR_SIZE * sizeof(int32_t);
-
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	if (block_id == INVALID_BLOCK) {
 		// start off with an empty string segment: allocate space for it
 		this->block = buffer_manager.RegisterMemory(Storage::BLOCK_ALLOC_SIZE, false);
 		auto handle = buffer_manager.Pin(block);
 		SetDictionaryOffset(*handle, sizeof(idx_t));
-
-		ExpandStringSegment(handle->node->buffer);
 	} else {
 		this->block = buffer_manager.RegisterBlock(block_id);
 	}
@@ -45,11 +39,6 @@ StringSegment::~StringSegment() {
 	}
 }
 
-void StringSegment::ExpandStringSegment(data_ptr_t baseptr) {
-	// clear the nullmask for this vector
-	max_vector_count++;
-}
-
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
@@ -68,41 +57,20 @@ void StringSegment::ReadString(string_t *result_data, Vector &result, data_ptr_t
 }
 
 //===--------------------------------------------------------------------===//
-// Fetch base data
+// Scan base data
 //===--------------------------------------------------------------------===//
-void StringSegment::FetchBaseData(ColumnScanState &state, idx_t vector_index, Vector &result) {
+void StringSegment::Scan(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset) {
+	D_ASSERT(RowRangeIsValid(start, scan_count));
+
 	// clear any previously locked buffers and get the primary buffer handle
 	auto handle = state.primary_handle.get();
 
-	// fetch the data from the base segment
-	FetchBaseData(state, handle->node->buffer, vector_index, result, GetVectorCount(vector_index));
-}
-
-void StringSegment::FetchBaseData(ColumnScanState &state, data_ptr_t baseptr, idx_t vector_index, Vector &result,
-                                  idx_t count) {
-	auto base = baseptr + vector_index * vector_size;
-
-	auto base_data = (int32_t *)base;
+	auto baseptr = handle->node->buffer;
+	auto base_data = (int32_t *)handle->node->buffer;
 	auto result_data = FlatVector::GetData<string_t>(result);
 
-	// no updates: fetch only from the string dictionary
-	for (idx_t i = 0; i < count; i++) {
-		result_data[i] = FetchStringFromDict(result, baseptr, base_data[i]);
-	}
-}
-
-//===--------------------------------------------------------------------===//
-// Fetch strings
-//===--------------------------------------------------------------------===//
-void StringSegment::FetchStringLocations(data_ptr_t baseptr, row_t *ids, idx_t vector_index, idx_t vector_offset,
-                                         idx_t count, string_location_t result[]) {
-	auto base = baseptr + vector_index * vector_size;
-	auto base_data = (int32_t *)base;
-
-	// no updates: fetch strings from base vector
-	for (idx_t i = 0; i < count; i++) {
-		auto id = ids[i] - vector_offset;
-		result[i] = FetchStringLocation(baseptr, base_data[id]);
+	for (idx_t i = 0; i < scan_count; i++) {
+		result_data[result_offset + i] = FetchStringFromDict(result, baseptr, base_data[start + i]);
 	}
 }
 
@@ -151,10 +119,6 @@ string_t StringSegment::FetchString(Vector &result, data_ptr_t baseptr, string_l
 }
 
 void StringSegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
-	idx_t vector_index = row_id / STANDARD_VECTOR_SIZE;
-	idx_t id_in_vector = row_id - vector_index * STANDARD_VECTOR_SIZE;
-	D_ASSERT(vector_index < max_vector_count);
-
 	data_ptr_t baseptr;
 
 	// fetch a single row from the string segment
@@ -173,50 +137,17 @@ void StringSegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &resu
 		baseptr = entry->second->node->buffer;
 	}
 
-	auto base = baseptr + vector_index * vector_size;
-	auto base_data = (int32_t *)base;
+	auto base_data = (int32_t *)baseptr;
 	auto result_data = FlatVector::GetData<string_t>(result);
 
-	result_data[result_idx] = FetchStringFromDict(result, baseptr, base_data[id_in_vector]);
+	result_data[result_idx] = FetchStringFromDict(result, baseptr, base_data[row_id]);
 }
 
 //===--------------------------------------------------------------------===//
 // Append
 //===--------------------------------------------------------------------===//
-idx_t StringSegment::Append(SegmentStatistics &stats, VectorData &data, idx_t offset, idx_t count) {
-	auto &buffer_manager = BufferManager::GetBufferManager(db);
-	auto handle = buffer_manager.Pin(block);
-	idx_t initial_count = tuple_count;
-	while (count > 0) {
-		// get the vector index of the vector to append to and see how many tuples we can append to that vector
-		idx_t vector_index = tuple_count / STANDARD_VECTOR_SIZE;
-		if (vector_index == max_vector_count) {
-			// we are at the maximum vector, check if there is space to increase the maximum vector count
-			// as a heuristic, we only allow another vector to be added if we have at least 32 bytes per string
-			// remaining (32KB out of a 256KB block, or around 12% empty)
-			if (RemainingSpace(*handle) >= STANDARD_VECTOR_SIZE * 32) {
-				// we have enough remaining space to add another vector
-				ExpandStringSegment(handle->node->buffer);
-			} else {
-				break;
-			}
-		}
-		idx_t current_tuple_count = tuple_count - vector_index * STANDARD_VECTOR_SIZE;
-		idx_t append_count = MinValue(STANDARD_VECTOR_SIZE - current_tuple_count, count);
-
-		// now perform the actual append
-		AppendData(*handle, stats, handle->node->buffer + vector_size * vector_index,
-		           handle->node->buffer + Storage::BLOCK_SIZE, current_tuple_count, data, offset, append_count);
-
-		count -= append_count;
-		offset += append_count;
-		tuple_count += append_count;
-	}
-	return tuple_count - initial_count;
-}
-
 idx_t StringSegment::RemainingSpace(BufferHandle &handle) {
-	idx_t used_space = GetDictionaryOffset(handle) + max_vector_count * vector_size;
+	idx_t used_space = GetDictionaryOffset(handle) + tuple_count * sizeof(int32_t);
 	D_ASSERT(Storage::BLOCK_SIZE >= used_space);
 	return Storage::BLOCK_SIZE - used_space;
 }
@@ -226,40 +157,53 @@ static inline void UpdateStringStats(SegmentStatistics &stats, const string_t &n
 	sstats.Update(new_value);
 }
 
-void StringSegment::AppendData(BufferHandle &handle, SegmentStatistics &stats, data_ptr_t target, data_ptr_t end,
-                               idx_t target_offset, VectorData &adata, idx_t offset, idx_t count) {
-	auto sdata = (string_t *)adata.data;
-	auto result_data = (int32_t *)target;
+idx_t StringSegment::Append(SegmentStatistics &stats, VectorData &data, idx_t offset, idx_t count) {
+	auto &buffer_manager = BufferManager::GetBufferManager(db);
+	auto handle = buffer_manager.Pin(block);
 
-	idx_t remaining_strings = STANDARD_VECTOR_SIZE - (this->tuple_count % STANDARD_VECTOR_SIZE);
+	auto source_data = (string_t *)data.data;
+	auto result_data = (int32_t *)handle->node->buffer;
+	auto end = handle->node->buffer + Storage::BLOCK_SIZE;
 	for (idx_t i = 0; i < count; i++) {
-		auto source_idx = adata.sel->get_index(offset + i);
-		auto target_idx = target_offset + i;
-		if (!adata.validity.RowIsValid(source_idx)) {
+		auto source_idx = data.sel->get_index(offset + i);
+		auto target_idx = tuple_count.load();
+		idx_t remaining_space = RemainingSpace(*handle);
+		if (remaining_space < sizeof(int32_t)) {
+			// string index does not fit in the block at all
+			return i;
+		}
+		remaining_space -= sizeof(int32_t);
+		if (!data.validity.RowIsValid(source_idx)) {
 			// null value is stored as -1
 			result_data[target_idx] = 0;
 		} else {
-			auto dictionary_offset = GetDictionaryOffset(handle);
+			auto dictionary_offset = GetDictionaryOffset(*handle);
 			D_ASSERT(dictionary_offset < Storage::BLOCK_SIZE);
 			// non-null value, check if we can fit it within the block
-			idx_t string_length = sdata[source_idx].GetSize();
-			idx_t total_length = string_length + sizeof(uint16_t);
+			idx_t string_length = source_data[source_idx].GetSize();
+			idx_t dictionary_length = string_length + sizeof(uint16_t);
 
-			UpdateStringStats(stats, sdata[source_idx]);
+			// determine whether or not we have space in the block for this string
+			bool use_overflow_block = false;
+			idx_t required_space = dictionary_length;
+			if (required_space >= STRING_BLOCK_LIMIT) {
+				// string exceeds block limit, store in overflow block and only write a marker here
+				required_space = BIG_STRING_MARKER_SIZE;
+				use_overflow_block = true;
+			}
+			if (required_space > remaining_space) {
+				// no space remaining: return how many tuples we ended up writing
+				return i;
+			}
+			// we have space: write the string
+			UpdateStringStats(stats, source_data[source_idx]);
 
-			// determine whether or not the string needs to be stored in an overflow block
-			// we never place small strings in the overflow blocks: the pointer would take more space than the
-			// string itself we always place big strings (>= STRING_BLOCK_LIMIT) in the overflow blocks we also have
-			// to always leave enough room for BIG_STRING_MARKER_SIZE for each of the remaining strings
-			if (total_length > BIG_STRING_MARKER_BASE_SIZE &&
-			    (total_length >= STRING_BLOCK_LIMIT ||
-			     total_length + (remaining_strings * BIG_STRING_MARKER_SIZE) > RemainingSpace(handle))) {
-				D_ASSERT(RemainingSpace(handle) >= BIG_STRING_MARKER_SIZE);
-				// string is too big for block: write to overflow blocks
+			if (use_overflow_block) {
+				// write to overflow blocks
 				block_id_t block;
 				int32_t offset;
 				// write the string into the current string block
-				WriteString(sdata[source_idx], block, offset);
+				WriteString(source_data[source_idx], block, offset);
 				dictionary_offset += BIG_STRING_MARKER_SIZE;
 				auto dict_pos = end - dictionary_offset;
 
@@ -268,20 +212,21 @@ void StringSegment::AppendData(BufferHandle &handle, SegmentStatistics &stats, d
 			} else {
 				// string fits in block, append to dictionary and increment dictionary position
 				D_ASSERT(string_length < NumericLimits<uint16_t>::Maximum());
-				dictionary_offset += total_length;
+				dictionary_offset += required_space;
 				auto dict_pos = end - dictionary_offset; // first write the length as u16
 				Store<uint16_t>(string_length, dict_pos);
 				// now write the actual string data into the dictionary
-				memcpy(dict_pos + sizeof(uint16_t), sdata[source_idx].GetDataUnsafe(), string_length);
+				memcpy(dict_pos + sizeof(uint16_t), source_data[source_idx].GetDataUnsafe(), string_length);
 			}
-			D_ASSERT(RemainingSpace(handle) <= Storage::BLOCK_SIZE);
+			D_ASSERT(RemainingSpace(*handle) <= Storage::BLOCK_SIZE);
 			// place the dictionary offset into the set of vectors
 			D_ASSERT(dictionary_offset <= Storage::BLOCK_SIZE);
 			result_data[target_idx] = dictionary_offset;
-			SetDictionaryOffset(handle, dictionary_offset);
+			SetDictionaryOffset(*handle, dictionary_offset);
 		}
-		remaining_strings--;
+		tuple_count++;
 	}
+	return count;
 }
 
 void StringSegment::WriteString(string_t string, block_id_t &result_block, int32_t &result_offset) {
@@ -407,11 +352,6 @@ void StringSegment::ReadStringMarker(data_ptr_t target, block_id_t &block_id, in
 	memcpy(&block_id, target, sizeof(block_id_t));
 	target += sizeof(block_id_t);
 	memcpy(&offset, target, sizeof(int32_t));
-}
-
-void StringSegment::ToTemporary() {
-	ToTemporaryInternal();
-	this->max_vector_count = (this->tuple_count + (STANDARD_VECTOR_SIZE - 1)) / STANDARD_VECTOR_SIZE;
 }
 
 } // namespace duckdb

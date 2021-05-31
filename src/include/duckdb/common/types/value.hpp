@@ -43,7 +43,7 @@ public:
 	//! Create a VARCHAR value
 	Value(string val); // NOLINT: Allow implicit conversion from `string`
 
-	LogicalType type() const {
+	const LogicalType &type() const {
 		return type_;
 	}
 
@@ -112,9 +112,9 @@ public:
 	//! Create a struct value with given list of entries
 	static Value STRUCT(child_list_t<Value> values);
 	//! Create a list value with the given entries
-	static Value LIST(std::vector<Value> values);
-	//! Creat a map value with the given lists
-	static Value MAP(child_list_t<Value> values);
+	static Value LIST(vector<Value> values);
+	//! Creat a map value from a (key, value) pair
+	static Value MAP(Value key, Value value);
 
 	//! Create a blob Value from a data pointer and a length: no bytes are interpreted
 	static Value BLOB(const_data_ptr_t data, idx_t len);
@@ -233,8 +233,8 @@ public:
 	//! The value of the object, if it is of a variable size type
 	string str_value;
 
-	child_list_t<Value> struct_value;
-	std::vector<Value> list_value;
+	vector<Value> struct_value;
+	vector<Value> list_value;
 
 private:
 	template <class T>

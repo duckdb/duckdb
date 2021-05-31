@@ -50,9 +50,23 @@ Vector::Vector(Vector &&other) noexcept
 
 void Vector::Reference(const Value &value) {
 	buffer = VectorBuffer::CreateConstantVector(VectorType::CONSTANT_VECTOR, value.type());
-	auxiliary.reset();
-	data = buffer->GetData();
-	SetValue(0, value);
+	if (value.type().id() == LogicalTypeId::STRUCT || value.type().id() == LogicalTypeId::MAP) {
+		auto struct_buffer = make_unique<VectorStructBuffer>();
+		auto &child_types = value.type().child_types();
+		auto &child_vectors = struct_buffer->GetChildren();
+		for (idx_t i = 0; i < child_types.size(); i++) {
+			auto vector = make_unique<Vector>(value.is_null ? Value(child_types[i].second) : value.struct_value[i]);
+			child_vectors.push_back(move(vector));
+		}
+		auxiliary = move(struct_buffer);
+		if (value.is_null) {
+			SetValue(0, value);
+		}
+	} else {
+		auxiliary.reset();
+		data = buffer->GetData();
+		SetValue(0, value);
+	}
 }
 
 void Vector::Reference(Vector &other) {
@@ -129,14 +143,26 @@ void Vector::Initialize(const LogicalType &new_type, bool zero_data) {
 	}
 	auxiliary.reset();
 	validity.Reset();
-	if (GetTypeIdSize(GetType().InternalType()) > 0) {
-		buffer = VectorBuffer::CreateStandardVector(VectorType::FLAT_VECTOR, GetType());
+	auto &type = GetType();
+	if (type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::MAP) {
+		auto struct_buffer = make_unique<VectorStructBuffer>();
+		auto &child_types = type.child_types();
+		auto &child_vectors = struct_buffer->GetChildren();
+		for (auto &child_type : child_types) {
+			auto vector = make_unique<Vector>(child_type.second);
+			child_vectors.push_back(move(vector));
+		}
+
+		auxiliary = move(struct_buffer);
+	}
+	if (GetTypeIdSize(type.InternalType()) > 0) {
+		buffer = VectorBuffer::CreateStandardVector(VectorType::FLAT_VECTOR, type);
 		data = buffer->GetData();
 		if (zero_data) {
-			memset(data, 0, STANDARD_VECTOR_SIZE * GetTypeIdSize(new_type.InternalType()));
+			memset(data, 0, STANDARD_VECTOR_SIZE * GetTypeIdSize(type.InternalType()));
 		}
 	} else {
-		buffer = VectorBuffer::CreateStandardVector(VectorType::FLAT_VECTOR, GetType());
+		buffer = VectorBuffer::CreateStandardVector(VectorType::FLAT_VECTOR, type);
 	}
 }
 
@@ -170,16 +196,16 @@ void FindChildren(std::vector<DataArrays> &to_resize, VectorBuffer &auxiliary) {
 		auto &buffer = (VectorStructBuffer &)auxiliary;
 		auto &children = buffer.GetChildren();
 		for (auto &child : children) {
-			auto data = child.second->GetData();
+			auto data = child->GetData();
 			if (!data) {
 				//! Nested type
-				DataArrays arrays(*child.second, data, child.second->GetBuffer().get(),
-				                  GetTypeIdSize(child.second->GetType().InternalType()), true);
+				DataArrays arrays(*child, data, child->GetBuffer().get(),
+				                  GetTypeIdSize(child->GetType().InternalType()), true);
 				to_resize.emplace_back(arrays);
-				FindChildren(to_resize, *child.second->GetAuxiliary());
+				FindChildren(to_resize, *child->GetAuxiliary());
 			} else {
-				DataArrays arrays(*child.second, data, child.second->GetBuffer().get(),
-				                  GetTypeIdSize(child.second->GetType().InternalType()), false);
+				DataArrays arrays(*child, data, child->GetBuffer().get(),
+				                  GetTypeIdSize(child->GetType().InternalType()), false);
 				to_resize.emplace_back(arrays);
 			}
 		}
@@ -218,12 +244,11 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		SetValue(index, val.CastAs(GetType()));
 		return;
 	}
-	if (GetType().id() != LogicalTypeId::STRUCT || GetType().id() != LogicalTypeId::MAP) {
-		validity.EnsureWritable();
-		validity.Set(index, !val.is_null);
-		if (val.is_null) {
-			return;
-		}
+
+	validity.EnsureWritable();
+	validity.Set(index, !val.is_null);
+	if (val.is_null) {
+		return;
 	}
 
 	switch (GetType().id()) {
@@ -301,15 +326,6 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		break;
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::STRUCT: {
-		if (!auxiliary || StructVector::GetEntries(*this).empty()) {
-			for (size_t i = 0; i < val.struct_value.size(); i++) {
-				auto &struct_child = val.struct_value[i];
-				auto cv = make_unique<Vector>(struct_child.second.type());
-				cv->SetVectorType(GetVectorType());
-				StructVector::AddEntry(*this, struct_child.first, move(cv));
-			}
-		}
-
 		auto &children = StructVector::GetEntries(*this);
 		D_ASSERT(children.size() == val.struct_value.size());
 
@@ -317,11 +333,10 @@ void Vector::SetValue(idx_t index, const Value &val) {
 			auto &struct_child = val.struct_value[i];
 			D_ASSERT(GetVectorType() == VectorType::CONSTANT_VECTOR || GetVectorType() == VectorType::FLAT_VECTOR);
 			auto &vec_child = children[i];
-			D_ASSERT(vec_child.first == struct_child.first);
-			vec_child.second->SetValue(index, struct_child.second);
+			vec_child->SetValue(index, struct_child);
 		}
-	} break;
-
+		break;
+	}
 	case LogicalTypeId::LIST: {
 		if (!auxiliary) {
 			auto vec_list = make_unique<Vector>(GetType().child_types()[0].second);
@@ -338,7 +353,8 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		auto &entry = ((list_entry_t *)data)[index];
 		entry.length = val.list_value.size();
 		entry.offset = offset;
-	} break;
+		break;
+	}
 	default:
 		throw NotImplementedException("Unimplemented type for Vector::SetValue");
 	}
@@ -439,8 +455,9 @@ Value Vector::GetValue(idx_t index) const {
 		Value ret(GetType());
 		ret.is_null = false;
 		// we can derive the value schema from the vector schema
-		for (auto &struct_child : StructVector::GetEntries(*this)) {
-			ret.struct_value.push_back(pair<string, Value>(struct_child.first, struct_child.second->GetValue(index)));
+		auto &child_entries = StructVector::GetEntries(*this);
+		for (auto &struct_child : child_entries) {
+			ret.struct_value.push_back(struct_child->GetValue(index));
 		}
 		return ret;
 	}
@@ -623,9 +640,10 @@ void Vector::Normalify(idx_t count) {
 		}
 		case PhysicalType::MAP:
 		case PhysicalType::STRUCT: {
-			for (auto &child : StructVector::GetEntries(*this)) {
-				D_ASSERT(child.second->GetVectorType() == VectorType::CONSTANT_VECTOR);
-				child.second->Normalify(count);
+			auto &child_entries = StructVector::GetEntries(*this);
+			for (auto &child : child_entries) {
+				D_ASSERT(child->GetVectorType() == VectorType::CONSTANT_VECTOR);
+				child->Normalify(count);
 			}
 		} break;
 		default:
@@ -887,14 +905,14 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 	}
 
 	if (GetType().InternalType() == PhysicalType::STRUCT || GetType().InternalType() == PhysicalType::MAP) {
-		D_ASSERT(!GetType().child_types().empty());
+		auto &child_types = GetType().child_types();
+		D_ASSERT(child_types.size() > 0);
 		if (GetVectorType() == VectorType::FLAT_VECTOR || GetVectorType() == VectorType::CONSTANT_VECTOR) {
-			if (StructVector::HasEntries(*this)) {
-				auto &children = StructVector::GetEntries(*this);
-				D_ASSERT(!children.empty());
-				for (auto &child : children) {
-					child.second->Verify(sel, count);
-				}
+			auto &children = StructVector::GetEntries(*this);
+			D_ASSERT(child_types.size() == children.size());
+			for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
+				D_ASSERT(children[child_idx]->GetType() == child_types[child_idx].second);
+				children[child_idx]->Verify(sel, count);
 			}
 		}
 	}
@@ -1027,34 +1045,17 @@ void StringVector::AddHeapReference(Vector &vector, Vector &other) {
 	string_buffer.AddHeapReference(other.auxiliary);
 }
 
-bool StructVector::HasEntries(const Vector &vector) {
-	D_ASSERT(vector.GetType().id() == LogicalTypeId::STRUCT || vector.GetType().id() == LogicalTypeId::MAP);
-	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR ||
-	         vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
-	D_ASSERT(vector.auxiliary == nullptr || vector.auxiliary->GetBufferType() == VectorBufferType::STRUCT_BUFFER);
-	return vector.auxiliary != nullptr;
-}
-
-const child_list_t<unique_ptr<Vector>> &StructVector::GetEntries(const Vector &vector) {
+vector<unique_ptr<Vector>> &StructVector::GetEntries(Vector &vector) {
 	D_ASSERT(vector.GetType().id() == LogicalTypeId::STRUCT || vector.GetType().id() == LogicalTypeId::MAP);
 	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR ||
 	         vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
 	D_ASSERT(vector.auxiliary);
 	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::STRUCT_BUFFER);
-	return ((const VectorStructBuffer *)vector.auxiliary.get())->GetChildren();
+	return ((VectorStructBuffer *)vector.auxiliary.get())->GetChildren();
 }
 
-void StructVector::AddEntry(Vector &vector, const string &name, unique_ptr<Vector> entry) {
-	// TODO asser that an entry with this name does not already exist
-	D_ASSERT(vector.GetType().id() == LogicalTypeId::STRUCT || vector.GetType().id() == LogicalTypeId::MAP);
-	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR ||
-	         vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
-	if (!vector.auxiliary) {
-		vector.auxiliary = make_buffer<VectorStructBuffer>();
-	}
-	D_ASSERT(vector.auxiliary);
-	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::STRUCT_BUFFER);
-	((VectorStructBuffer *)vector.auxiliary.get())->AddChild(name, move(entry));
+const vector<unique_ptr<Vector>> &StructVector::GetEntries(const Vector &vector) {
+	return GetEntries((Vector &)vector);
 }
 
 bool ListVector::HasEntry(const Vector &vector) {

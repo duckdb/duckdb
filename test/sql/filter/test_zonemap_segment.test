@@ -1,0 +1,111 @@
+# name: test/sql/filter/test_zonemap_segment.test
+# description: Test zonemaps of individual segments
+# group: [filter]
+
+# load the DB from disk
+load __TEST_DIR__/zonemap_segment.db
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+statement ok
+INSERT INTO integers SELECT 1 FROM range(65534);
+
+statement ok
+INSERT INTO integers SELECT 2 FROM range(65534);
+
+statement ok
+INSERT INTO integers SELECT 3 FROM range(65534);
+
+query I
+SELECT SUM(i) FROM integers WHERE i=1
+----
+65534
+
+query I
+SELECT SUM(i) FROM integers WHERE i=2
+----
+131068
+
+query I
+SELECT SUM(i) FROM integers WHERE i=3
+----
+196602
+
+query I
+SELECT SUM(i) FROM integers WHERE i=4
+----
+NULL
+
+restart
+
+query I
+SELECT SUM(i) FROM integers WHERE i=1
+----
+65534
+
+query I
+SELECT SUM(i) FROM integers WHERE i=2
+----
+131068
+
+query I
+SELECT SUM(i) FROM integers WHERE i=3
+----
+196602
+
+query I
+SELECT SUM(i) FROM integers WHERE i=4
+----
+NULL
+
+statement ok
+INSERT INTO integers SELECT 4 FROM range(65534);
+
+statement ok
+INSERT INTO integers SELECT 5 FROM range(65534);
+
+query I
+SELECT SUM(i) FROM integers WHERE i=4
+----
+262136
+
+query I
+SELECT SUM(i) FROM integers WHERE i=5
+----
+327670
+
+restart
+
+query I
+SELECT SUM(i) FROM integers WHERE i=1
+----
+65534
+
+query I
+SELECT SUM(i) FROM integers WHERE i=2
+----
+131068
+
+query I
+SELECT SUM(i) FROM integers WHERE i=3
+----
+196602
+
+query I
+SELECT SUM(i) FROM integers WHERE i=4
+----
+262136
+
+query I
+SELECT SUM(i) FROM integers WHERE i=5
+----
+327670
+
+query I
+SELECT SUM(i) FROM integers WHERE i=6
+----
+NULL

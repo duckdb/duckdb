@@ -14,8 +14,24 @@ ALTER TABLE test ALTER i SET DATA TYPE VARCHAR
 query TI
 SELECT * FROM test
 ----
-1
-1
-2
-2
+1	1
+2	2
 
+# filter on an altered column
+query TI
+SELECT * FROM test WHERE i='1'
+----
+1	1
+
+statement ok
+ALTER TABLE test ALTER i SET DATA TYPE INTEGER
+
+query II
+SELECT * FROM test WHERE i=1
+----
+1	1
+
+query I
+SELECT stats(i) FROM test LIMIT 1
+----
+<REGEX>:.*1.*2.*

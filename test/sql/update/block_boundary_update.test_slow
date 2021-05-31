@@ -1,0 +1,51 @@
+# name: test/sql/update/block_boundary_update.test_slow
+# description: Update big table of even and odd values
+# group: [update]
+
+statement ok
+CREATE TABLE test AS SELECT * FROM range (0, 50000, 1) t1(i);
+
+query II
+SELECT COUNT(i), SUM(i) FROM test
+----
+50000	1249975000
+
+statement ok
+UPDATE test SET i=i+1
+
+query II
+SELECT COUNT(i), SUM(i) FROM test
+----
+50000	1250025000
+
+statement ok
+UPDATE test SET i=i+1
+
+query II
+SELECT COUNT(i), SUM(i) FROM test
+----
+50000	1250075000
+
+statement ok
+INSERT INTO test SELECT * FROM test;
+
+query II
+SELECT COUNT(i), SUM(i) FROM test
+----
+100000	2500150000
+
+statement ok
+UPDATE test SET i=i+1
+
+query II
+SELECT COUNT(i), SUM(i) FROM test
+----
+100000	2500250000
+
+statement ok
+UPDATE test SET i=i+1
+
+query II
+SELECT COUNT(i), SUM(i) FROM test
+----
+100000	2500350000
