@@ -1,6 +1,7 @@
 #pragma once
 
 #include "duckdb/common/types.hpp"
+#include "sqlite3_value_type.hpp"
 
 using namespace duckdb;
 
@@ -12,7 +13,7 @@ struct sqlite3_value {
         const char *zPType; /* Pointer type when MEM_Term|MEM_Subtype|MEM_Null */
     } u;
     // uint16_t flags;
-    PhysicalType type;
+    SQLiteTypeValue type;
 };
 
 struct sqlite3_context {
