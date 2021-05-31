@@ -1,3 +1,8 @@
+# skip building extensions on mingw
+if (MSVC AND NOT WIN32)
+  return()
+endif()
+
 add_library(loadable_extension_demo SHARED loadable_extension_demo.cpp)
 set_target_properties(loadable_extension_demo PROPERTIES PREFIX "")
 target_link_libraries(loadable_extension_demo duckdb ${DUCKDB_EXTRA_LINK_FLAGS})
@@ -14,10 +19,8 @@ if(MSVC)
 endif()
 
 if(WIN32)
-  if(MSVC)
-    set_target_properties(loadable_extension_demo
-                          PROPERTIES LINK_FLAGS_RELEASE "/DELAYLOAD:duckdb.dll")
-    set(CMAKE_EXE_LINKER_FLAGS_RELEASE
-        "${CMAKE_EXE_LINKER_FLAGS_RELEASE}  /DELAYLOAD:duckdb.dll")
-  endif()
+  set_target_properties(loadable_extension_demo
+                        PROPERTIES LINK_FLAGS_RELEASE "/DELAYLOAD:duckdb.dll")
+  set(CMAKE_EXE_LINKER_FLAGS_RELEASE
+      "${CMAKE_EXE_LINKER_FLAGS_RELEASE}  /DELAYLOAD:duckdb.dll")
 endif()
