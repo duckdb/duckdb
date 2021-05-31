@@ -2800,7 +2800,7 @@ row:		qualified_row							{ $$ = $1;}
 		;
 
 dict_arg:
-	SCONST ':' a_expr						{
+	ColIdOrString ':' a_expr						{
 		PGNamedArgExpr *na = makeNode(PGNamedArgExpr);
 		na->name = $1;
 		na->arg = (PGExpr *) $3;
