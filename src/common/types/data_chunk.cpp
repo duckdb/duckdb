@@ -411,36 +411,37 @@ void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType 
 		SetChildValidityMask(child_vector, child_holder.children[0].array);
 		break;
 	}
-	case LogicalTypeId::STRUCT:{
-	    vector.Reference(data);
-	    //! Structs only have validity buffers
+	case LogicalTypeId::STRUCT: {
+		vector.Reference(data);
+		//! Structs only have validity buffers
 		child.n_buffers = 1;
 		auto &children = StructVector::GetEntries(vector);
 		child.n_children = children.size();
-	    child_holder.children.resize(child.n_children);
-	    for (auto& struct_child: child_holder.children){
-	        InitializeChild(struct_child, size);
-	        child_holder.children_ptrs.push_back(&struct_child.array);
-	    }
+		child_holder.children.resize(child.n_children);
+		for (auto &struct_child : child_holder.children) {
+			InitializeChild(struct_child, size);
+			child_holder.children_ptrs.push_back(&struct_child.array);
+		}
 		child.children = &child_holder.children_ptrs[0];
-	    for (idx_t child_idx = 0; child_idx < child_holder.children.size(); child_idx++){
-	        SetArrowChild(child_holder.children[child_idx], type.child_types()[child_idx].second, *children[child_idx].second, size);
-		    SetChildValidityMask(*children[child_idx].second, child_holder.children[child_idx].array);
-	    }
+		for (idx_t child_idx = 0; child_idx < child_holder.children.size(); child_idx++) {
+			SetArrowChild(child_holder.children[child_idx], type.child_types()[child_idx].second,
+			              *children[child_idx].second, size);
+			SetChildValidityMask(*children[child_idx].second, child_holder.children[child_idx].array);
+		}
 		break;
 	}
-		case LogicalTypeId::MAP:{
-	    vector.Reference(data);
-	    //! No idea why maps needs two buffers
+	case LogicalTypeId::MAP: {
+		vector.Reference(data);
+		//! No idea why maps needs two buffers
 		child.n_buffers = 2;
-        //! Maps have one child
+		//! Maps have one child
 		child.n_children = 1;
-	    child_holder.children.resize(1);
-	    InitializeChild(child_holder.children[0], size);
-	    child_holder.children_ptrs.push_back(&child_holder.children[0].array);
+		child_holder.children.resize(1);
+		InitializeChild(child_holder.children[0], size);
+		child_holder.children_ptrs.push_back(&child_holder.children[0].array);
 
 		child.children = &child_holder.children_ptrs[0];
-		LogicalType struct_type (LogicalTypeId::STRUCT, type.child_types());
+		LogicalType struct_type(LogicalTypeId::STRUCT, type.child_types());
 		SetArrowChild(child_holder.children[0], struct_type, vector, size);
 		SetChildValidityMask(vector, child_holder.children[0].array);
 
@@ -485,8 +486,8 @@ void DataChunk::ToArrowArray(ArrowArray *out_array) {
 			// TODO support other vector types
 		case VectorType::FLAT_VECTOR: {
 			SetArrowChild(child_holder, GetTypes()[col_idx], data[col_idx], size());
-			if (GetTypes()[col_idx].id() != LogicalTypeId::MAP){
-			    SetChildValidityMask(vector, child);
+			if (GetTypes()[col_idx].id() != LogicalTypeId::MAP) {
+				SetChildValidityMask(vector, child);
 			}
 			break;
 		}
