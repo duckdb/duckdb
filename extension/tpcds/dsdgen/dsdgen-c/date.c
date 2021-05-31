@@ -47,7 +47,7 @@
 #include "mathops.h"
 #include "dist.h"
 
-#define D_CHARS "ymdYMD24" /* valid characters in a DBGDATE setting */
+#define D_CHARS      "ymdYMD24" /* valid characters in a DBGDATE setting */
 #define MIN_DATE_INT 18000101
 
 static int m_days[2][13] = {{0, 0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334},

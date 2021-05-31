@@ -33,43 +33,21 @@
  * Contributors:
  * Gradient Systems
  */
-#ifndef W_ITEM_H
-#define W_ITEM_H
-#include "constants.h"
-
-#define I_PROMO_PERCENTAGE 20 /* percent of items that have associated promotions */
-#define MIN_ITEM_MARKDOWN_PCT "0.30"
-#define MAX_ITEM_MARKDOWN_PCT "0.90"
-
-/*
- * ITEM table structure
- */
-struct W_ITEM_TBL {
-	ds_key_t i_item_sk;
-	char i_item_id[RS_BKEY + 1];
-	ds_key_t i_rec_start_date_id;
-	ds_key_t i_rec_end_date_id;
-	char i_item_desc[RS_I_ITEM_DESC + 1];
-	decimal_t i_current_price; /* list price */
-	decimal_t i_wholesale_cost;
-	ds_key_t i_brand_id;
-	char i_brand[RS_I_BRAND + 1];
-	ds_key_t i_class_id;
-	char *i_class;
-	ds_key_t i_category_id;
-	char *i_category;
-	ds_key_t i_manufact_id;
-	char i_manufact[RS_I_MANUFACT + 1];
-	char *i_size;
-	char i_formulation[RS_I_FORMULATION + 1];
-	char *i_color;
-	char *i_units;
-	char *i_container;
-	ds_key_t i_manager_id;
-	char i_product_name[RS_I_PRODUCT_NAME + 1];
-	ds_key_t i_promo_sk;
-};
-
-int mk_w_item(void *info_arr, ds_key_t kIndex);
-int vld_w_item(int nTable, ds_key_t kRow, int *Permutation);
-#endif
+#define OP_PLUS    0x00001
+#define OP_MINUS   0x00002
+#define OP_MULT    0x00004
+#define OP_DIV     0x00008
+#define OP_MOD     0x00010
+#define OP_XOR     0x00020
+#define OP_PAREN   0x00040
+#define OP_BRACKET 0x00080
+#define OP_NEST    0x00100 /* a --> (a) */
+#define OP_NEG     0x00200
+#define OP_ADDR    0x00400 /* get an address */
+#define OP_PTR     0x00800 /* reference through a pointer */
+#define OP_FUNC    0x01000 /* user function/macro */
+#define OP_UNIQUE  0x02000 /* built in functions start here */
+#define OP_TEXT    0x04000
+#define OP_RANDOM  0x08000
+#define OP_RANGE   0x10000
+#define OP_USER    0x20000 /* user defined function */

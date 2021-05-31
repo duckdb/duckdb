@@ -33,20 +33,53 @@
  * Contributors:
  * Gradient Systems
  */
-#ifndef DBGEN_VERSION_H
-#define DBGEN_VERSION_H
+#ifndef DCOMP_H
+#define DCOMP_H
 
-#define RS_VERSION_LENGTH 100
-#define RS_CMDLINARGS_LENGTH 200
+#include "config.h"
+#include "porting.h"
+#include "grammar.h"
+#include "dist.h"
 
-struct DBGEN_VERSION_TBL {
-	char szVersion[RS_VERSION_LENGTH + 1];
-	char szDate[26];
-	char szTime[26];
-	char szCmdLineArgs[RS_CMDLINARGS_LENGTH + 1];
-};
+/*
+ * query template grammar definition
+ */
+#define TKN_UNKNOWN 0
+#define TKN_CREATE  1
+#define TKN_WEIGHTS 2
+#define TKN_TYPES   3
+#define TKN_INCLUDE 4
+#define TKN_SET     5
+#define TKN_VARCHAR 6
+#define TKN_INT     7
+#define TKN_ADD     8
+#define TKN_DATE    9
+#define TKN_DECIMAL 10
+#define TKN_NAMES   11
+#define MAX_TOKEN   11
 
-int mk_dbgen_version(void *pDest, ds_key_t kIndex);
-int pr_dbgen_version(void *pSrc);
-int ld_dbgen_version(void *pSrc);
+int ProcessDistribution(char *s, token_t *t);
+int ProcessTypes(char *s, token_t *t);
+int ProcessInclude(char *s, token_t *t);
+int ProcessSet(char *s, token_t *t);
+int ProcessAdd(char *s, token_t *t);
+
+#ifdef DECLARER
+token_t dcomp_tokens[MAX_TOKEN + 2] = {{TKN_UNKNOWN, "", NULL},
+                                       {TKN_CREATE, "create", ProcessDistribution},
+                                       {TKN_WEIGHTS, "weights", NULL},
+                                       {TKN_TYPES, "types", NULL},
+                                       {TKN_INCLUDE, "#include", ProcessInclude},
+                                       {TKN_SET, "set", ProcessSet},
+                                       {TKN_VARCHAR, "varchar", NULL},
+                                       {TKN_INT, "int", NULL},
+                                       {TKN_ADD, "add", ProcessAdd},
+                                       {TKN_DATE, "date", NULL},
+                                       {TKN_DECIMAL, "decimal", NULL},
+                                       {TKN_NAMES, "names", NULL},
+                                       {-1, "", NULL}};
+#else
+extern token_t tokens[];
 #endif
+
+#endif /* DCOMP_H */

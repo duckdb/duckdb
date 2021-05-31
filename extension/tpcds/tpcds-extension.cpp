@@ -1,5 +1,7 @@
 #include "tpcds-extension.hpp"
 
+#include "dsdgen.hpp"
+
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
@@ -8,8 +10,6 @@
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
 #endif
-
-#include "dsdgen.hpp"
 
 namespace duckdb {
 
@@ -25,9 +25,9 @@ struct DSDGenFunctionData : public TableFunctionData {
 };
 
 static unique_ptr<FunctionData> DsdgenBind(ClientContext &context, vector<Value> &inputs,
-                                          unordered_map<string, Value> &named_parameters,
-                                          vector<LogicalType> &input_table_types, vector<string> &input_table_names,
-                                          vector<LogicalType> &return_types, vector<string> &names) {
+                                           unordered_map<string, Value> &named_parameters,
+                                           vector<LogicalType> &input_table_types, vector<string> &input_table_names,
+                                           vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_unique<DSDGenFunctionData>();
 	for (auto &kv : named_parameters) {
 		if (kv.first == "sf") {
@@ -46,12 +46,12 @@ static unique_ptr<FunctionData> DsdgenBind(ClientContext &context, vector<Value>
 }
 
 static void DsdgenFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
-                          DataChunk *input, DataChunk &output) {
+                           DataChunk *input, DataChunk &output) {
 	auto &data = (DSDGenFunctionData &)*bind_data;
 	if (data.finished) {
 		return;
 	}
-    tpcds::DSDGenWrapper::DSDGen(data.sf, context, data.schema, data.suffix);
+	tpcds::DSDGenWrapper::DSDGen(data.sf, context, data.schema, data.suffix);
 
 	data.finished = true;
 }
@@ -63,15 +63,16 @@ struct TPCDSData : public FunctionOperatorData {
 };
 
 unique_ptr<FunctionOperatorData> TPCDSInit(ClientContext &context, const FunctionData *bind_data,
-                                          const vector<column_t> &column_ids, TableFilterCollection *filters) {
+                                           const vector<column_t> &column_ids, TableFilterCollection *filters) {
 	auto result = make_unique<TPCDSData>();
 	return move(result);
 }
 
 static unique_ptr<FunctionData> TPCDSQueryBind(ClientContext &context, vector<Value> &inputs,
-                                              unordered_map<string, Value> &named_parameters,
-                                              vector<LogicalType> &input_table_types, vector<string> &input_table_names,
-                                              vector<LogicalType> &return_types, vector<string> &names) {
+                                               unordered_map<string, Value> &named_parameters,
+                                               vector<LogicalType> &input_table_types,
+                                               vector<string> &input_table_names, vector<LogicalType> &return_types,
+                                               vector<string> &names) {
 	names.emplace_back("query_nr");
 	return_types.push_back(LogicalType::INTEGER);
 
@@ -82,7 +83,7 @@ static unique_ptr<FunctionData> TPCDSQueryBind(ClientContext &context, vector<Va
 }
 
 static void TPCDSQueryFunction(ClientContext &context, const FunctionData *bind_data,
-                              FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+                               FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
 	auto &data = (TPCDSData &)*operator_state;
 	idx_t tpcds_queries = 22;
 	if (data.offset >= tpcds_queries) {
@@ -91,7 +92,7 @@ static void TPCDSQueryFunction(ClientContext &context, const FunctionData *bind_
 	}
 	idx_t chunk_count = 0;
 	while (data.offset < tpcds_queries && chunk_count < STANDARD_VECTOR_SIZE) {
-		auto query = tpcds::DSDGenWrapper::GetQuery(data.offset + 1);
+		auto query = TPCDSExtension::GetQuery(data.offset + 1);
 		// "query_nr", PhysicalType::INT32
 		output.SetValue(0, chunk_count, Value::INTEGER((int32_t)data.offset + 1));
 		// "query", PhysicalType::VARCHAR
@@ -103,10 +104,10 @@ static void TPCDSQueryFunction(ClientContext &context, const FunctionData *bind_
 }
 
 static unique_ptr<FunctionData> TPCDSQueryAnswerBind(ClientContext &context, vector<Value> &inputs,
-                                                    unordered_map<string, Value> &named_parameters,
-                                                    vector<LogicalType> &input_table_types,
-                                                    vector<string> &input_table_names,
-                                                    vector<LogicalType> &return_types, vector<string> &names) {
+                                                     unordered_map<string, Value> &named_parameters,
+                                                     vector<LogicalType> &input_table_types,
+                                                     vector<string> &input_table_names,
+                                                     vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("query_nr");
 	return_types.push_back(LogicalType::INTEGER);
 
@@ -120,7 +121,7 @@ static unique_ptr<FunctionData> TPCDSQueryAnswerBind(ClientContext &context, vec
 }
 
 static void TPCDSQueryAnswerFunction(ClientContext &context, const FunctionData *bind_data,
-                                    FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+                                     FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
 	auto &data = (TPCDSData &)*operator_state;
 	idx_t tpcds_queries = 22;
 	vector<double> scale_factors {0.01, 0.1, 1};
@@ -133,7 +134,7 @@ static void TPCDSQueryAnswerFunction(ClientContext &context, const FunctionData 
 	while (data.offset < total_answers && chunk_count < STANDARD_VECTOR_SIZE) {
 		idx_t cur_query = data.offset % tpcds_queries;
 		idx_t cur_sf = data.offset / tpcds_queries;
-		auto answer = tpcds::DSDGenWrapper::GetAnswer(scale_factors[cur_sf], cur_query + 1);
+		auto answer = TPCDSExtension::GetAnswer(scale_factors[cur_sf], cur_query + 1);
 		// "query_nr", PhysicalType::INT32
 		output.SetValue(0, chunk_count, Value::INTEGER((int32_t)cur_query + 1));
 		// "scale_factor", PhysicalType::INT32
@@ -177,7 +178,8 @@ void TPCDSExtension::Load(DuckDB &db) {
 	catalog.CreateTableFunction(*con.context, &tpcds_query_info);
 
 	// create the TPCDS_ANSWERS that returns the query result
-	TableFunction tpcds_query_answer_func("tpcds_answers", {}, TPCDSQueryAnswerFunction, TPCDSQueryAnswerBind, TPCDSInit);
+	TableFunction tpcds_query_answer_func("tpcds_answers", {}, TPCDSQueryAnswerFunction, TPCDSQueryAnswerBind,
+	                                      TPCDSInit);
 	CreateTableFunctionInfo tpcds_query_asnwer_info(tpcds_query_answer_func);
 	catalog.CreateTableFunction(*con.context, &tpcds_query_asnwer_info);
 

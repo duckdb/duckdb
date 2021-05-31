@@ -33,53 +33,50 @@
  * Contributors:
  * Gradient Systems
  */
-#ifndef DCOMP_H
-#define DCOMP_H
 
-#include "config.h"
-#include "porting.h"
-#include "grammar.h"
-#include "dist.h"
+#ifndef R_PARAMS_H
+#define R_PARAMS_H
+#define OPT_NONE  0x00
+#define OPT_FLG   0x01  /* option is a flag; no parameter */
+#define OPT_INT   0x02  /* argument is an integer */
+#define OPT_STR   0x04  /* argument is a string */
+#define OPT_NOP   0x08  /* flags non-operational options */
+#define OPT_SUB   0x10  /* sub-option defined */
+#define OPT_ADV   0x20  /* advanced option */
+#define OPT_SET   0x40  /* not changeable -- used for default/file/command precedence */
+#define OPT_DFLT  0x80  /* param set to non-zero default */
+#define OPT_MULTI 0x100 /* param may be set repeatedly */
+#define OPT_HIDE  0x200 /* hidden option -- not listed in usage */
+#define TYPE_MASK 0x07
 
-/*
- * query template grammar definition
- */
-#define TKN_UNKNOWN 0
-#define TKN_CREATE 1
-#define TKN_WEIGHTS 2
-#define TKN_TYPES 3
-#define TKN_INCLUDE 4
-#define TKN_SET 5
-#define TKN_VARCHAR 6
-#define TKN_INT 7
-#define TKN_ADD 8
-#define TKN_DATE 9
-#define TKN_DECIMAL 10
-#define TKN_NAMES 11
-#define MAX_TOKEN 11
-
-int ProcessDistribution(char *s, token_t *t);
-int ProcessTypes(char *s, token_t *t);
-int ProcessInclude(char *s, token_t *t);
-int ProcessSet(char *s, token_t *t);
-int ProcessAdd(char *s, token_t *t);
-
-#ifdef DECLARER
-token_t dcomp_tokens[MAX_TOKEN + 2] = {{TKN_UNKNOWN, "", NULL},
-                                       {TKN_CREATE, "create", ProcessDistribution},
-                                       {TKN_WEIGHTS, "weights", NULL},
-                                       {TKN_TYPES, "types", NULL},
-                                       {TKN_INCLUDE, "#include", ProcessInclude},
-                                       {TKN_SET, "set", ProcessSet},
-                                       {TKN_VARCHAR, "varchar", NULL},
-                                       {TKN_INT, "int", NULL},
-                                       {TKN_ADD, "add", ProcessAdd},
-                                       {TKN_DATE, "date", NULL},
-                                       {TKN_DECIMAL, "decimal", NULL},
-                                       {TKN_NAMES, "names", NULL},
-                                       {-1, "", NULL}};
-#else
-extern token_t tokens[];
+typedef struct OPTION_T {
+	const char *name;
+	int flags;
+	int index;
+	const char *usage;
+	int (*action)(char *szPName, char *optarg);
+	const char *dflt;
+} option_t;
 #endif
-
-#endif /* DCOMP_H */
+/*
+ * function declarations
+ */
+int process_options(int count, char **args);
+char *get_str(char *var);
+void set_str(char *param, char *value);
+int get_int(char *var);
+void set_int(char *var, char *val);
+int is_set(char *flag);
+void clr_flg(char *flag);
+int find_table(char *szParamName, char *tname);
+int read_file(char *param_name, char *arg);
+int usage(char *param_name, char *msg);
+char *GetParamName(int nParam);
+char *GetParamValue(int nParam);
+int load_param(int nParam, char *value);
+int fnd_param(char *name);
+int init_params(void);
+int set_option(char *pname, char *value);
+void load_params(void);
+int IsIntParam(char *szName);
+int IsStrParam(char *szName);

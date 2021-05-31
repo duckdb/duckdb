@@ -48,25 +48,25 @@ extern "C" {
 /*
  * Flag field definitions used in tdefs[]
  */
-#define FL_NONE 0x0000       /* this table is not defined */
-#define FL_NOP 0x0001        /* this table is not defined */
+#define FL_NONE       0x0000 /* this table is not defined */
+#define FL_NOP        0x0001 /* this table is not defined */
 #define FL_DATE_BASED 0x0002 /* this table is produced in date order */
-#define FL_CHILD 0x0004      /* this table is the child in a parent/child link */
-#define FL_OPEN 0x0008       /* this table has a valid output destination */
-#define FL_DUP_NAME 0x0010   /* to keep find_table() from complaining twice */
+#define FL_CHILD      0x0004 /* this table is the child in a parent/child link */
+#define FL_OPEN       0x0008 /* this table has a valid output destination */
+#define FL_DUP_NAME   0x0010 /* to keep find_table() from complaining twice */
 #define FL_TYPE_2                                                                                                      \
-	0x0020              /* this dimension keeps history -- rowcount shows unique entities                              \
-	                       (not including revisions) */
-#define FL_SMALL 0x0040 /* this table has low rowcount; used by address.c */
+	0x0020               /* this dimension keeps history -- rowcount shows unique entities                             \
+	                        (not including revisions) */
+#define FL_SMALL  0x0040 /* this table has low rowcount; used by address.c */
 #define FL_SPARSE 0x0080
 /* unused 0x0100 */
-#define FL_NO_UPDATE 0x0200  /* this table is not altered by the update process */
+#define FL_NO_UPDATE  0x0200 /* this table is not altered by the update process */
 #define FL_SOURCE_DDL 0x0400 /* table in the souce schema */
 #define FL_JOIN_ERROR 0x0800 /* join called without an explicit rule */
-#define FL_PARENT 0x1000     /* this table has a child in nParam */
+#define FL_PARENT     0x1000 /* this table has a child in nParam */
 #define FL_FACT_TABLE 0x2000
-#define FL_PASSTHRU 0x4000 /* verify routine uses warehouse without change */
-#define FL_VPRINT 0x8000   /* verify routine includes print function */
+#define FL_PASSTHRU   0x4000 /* verify routine uses warehouse without change */
+#define FL_VPRINT     0x8000 /* verify routine includes print function */
 
 /*
  * general table descriptions.

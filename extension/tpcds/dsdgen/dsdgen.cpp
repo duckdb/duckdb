@@ -1,4 +1,5 @@
 #include "dsdgen.hpp"
+
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/storage/data_table.hpp"

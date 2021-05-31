@@ -33,50 +33,26 @@
  * Contributors:
  * Gradient Systems
  */
+#ifndef SCD_H
+#define SCD_H
+#include "decimal.h"
 
-#ifndef R_PARAMS_H
-#define R_PARAMS_H
-#define OPT_NONE 0x00
-#define OPT_FLG 0x01    /* option is a flag; no parameter */
-#define OPT_INT 0x02    /* argument is an integer */
-#define OPT_STR 0x04    /* argument is a string */
-#define OPT_NOP 0x08    /* flags non-operational options */
-#define OPT_SUB 0x10    /* sub-option defined */
-#define OPT_ADV 0x20    /* advanced option */
-#define OPT_SET 0x40    /* not changeable -- used for default/file/command precedence */
-#define OPT_DFLT 0x80   /* param set to non-zero default */
-#define OPT_MULTI 0x100 /* param may be set repeatedly */
-#define OPT_HIDE 0x200  /* hidden option -- not listed in usage */
-#define TYPE_MASK 0x07
-
-typedef struct OPTION_T {
-	const char *name;
-	int flags;
-	int index;
-	const char *usage;
-	int (*action)(char *szPName, char *optarg);
-	const char *dflt;
-} option_t;
-#endif
+extern char arBKeys[MAX_TABLE][17];
+int setSCDKeys(int nTableID, ds_key_t hgIndex, char *szBKey, ds_key_t *hgBeginDateKey, ds_key_t *hgEndDateKey);
+ds_key_t scd_join(int tbl, int col, ds_key_t jDate);
+ds_key_t matchSCDSK(ds_key_t kUnique, ds_key_t jDate, int nTable);
+ds_key_t getSKFromID(ds_key_t kID, int nColumn);
+ds_key_t getFirstSK(ds_key_t kID);
 /*
- * function declarations
+ * handle the partial change of a history keeping record
+ * TODO: remove the macros in favor of straight fucntion calls
  */
-int process_options(int count, char **args);
-char *get_str(char *var);
-void set_str(char *param, char *value);
-int get_int(char *var);
-void set_int(char *var, char *val);
-int is_set(char *flag);
-void clr_flg(char *flag);
-int find_table(char *szParamName, char *tname);
-int read_file(char *param_name, char *arg);
-int usage(char *param_name, char *msg);
-char *GetParamName(int nParam);
-char *GetParamValue(int nParam);
-int load_param(int nParam, char *value);
-int fnd_param(char *name);
-int init_params(void);
-int set_option(char *pname, char *value);
-void load_params(void);
-int IsIntParam(char *szName);
-int IsStrParam(char *szName);
+#define SCD_INT  0
+#define SCD_CHAR 1
+#define SCD_DEC  2
+#define SCD_KEY  3
+#define SCD_PTR  4
+void changeSCD(int nDataType, void *pNewData, void *pOldData, int *nFlags, int bFirst);
+int validateSCD(int nTable, ds_key_t kRow, int *Permutation);
+void printValidation(int nTable, ds_key_t kRow);
+#endif

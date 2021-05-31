@@ -33,59 +33,52 @@
  * Contributors:
  * Gradient Systems
  */
-#ifndef GENRAND_H
-#define GENRAND_H
+#ifndef R_DATE_H
+#define R_DATE_H
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#include "decimal.h"
-#include "date.h"
-#include "dist.h"
-#include "address.h"
-#define JMS 1
+#include "mathops.h"
 
-typedef struct RNG_T {
-	int nUsed;
-	int nUsedPerRow;
-	long nSeed;
-	long nInitialSeed; /* used to allow skip_row() to back up */
-	int nColumn;       /* column where this stream is used */
-	int nTable;        /* table where this stream is used */
-	int nDuplicateOf;  /* duplicate streams allow independent tables to share
-	                      data streams */
-#ifdef JMS
-	ds_key_t nTotal;
-#endif
-} rng_t;
-extern rng_t Streams[];
+typedef struct DATE_T {
+	int flags;
+	int year;
+	int month;
+	int day;
+	int julian;
+} date_t;
 
-#define FL_SEED_OVERRUN 0x0001
+date_t *mk_date(void);
 
-#define ALPHANUM "abcdefghijklmnopqrstuvxyzABCDEFGHIJKLMNOPQRSTUVXYZ0123456789"
-#define DIGITS "0123456789"
+int jtodt(date_t *dest, int i);
+int strtodt(date_t *dest, char *s);
+int strtotime(char *str);
 
-#define RNG_SEED 19620718
+char *dttostr(date_t *d);
+int dttoj(date_t *d);
 
-int genrand_integer(int *dest, int dist, int min, int max, int mean, int stream);
-int genrand_decimal(decimal_t *dest, int dist, decimal_t *min, decimal_t *max, decimal_t *mean, int stream);
-int genrand_date(date_t *dest, int dist, date_t *min, date_t *max, date_t *mean, int stream);
-ds_key_t genrand_key(ds_key_t *dest, int dist, ds_key_t min, ds_key_t max, ds_key_t mean, int stream);
-int gen_charset(char *dest, char *set, int min, int max, int stream);
-int dump_seeds_ds(int tbl);
-void init_rand(void);
-void skip_random(int s, ds_key_t count);
-int RNGReset(int nTable);
-long next_random(int nStream);
-void genrand_email(char *pEmail, char *pFirst, char *pLast, int nColumn);
-void genrand_ipaddr(char *pDest, int nColumn);
-int genrand_url(char *pDest, int nColumn);
-int setSeed(int nStream, int nValue);
-void resetSeeds(int nTable);
+int date_t_op(date_t *dest, int o, date_t *d1, date_t *d2);
+int set_dow(date_t *d);
+int is_leap(int year);
+int day_number(date_t *d);
+int date_part(date_t *d, int p);
+int set_outfile(int i);
+int getDateWeightFromJulian(int jDay, int nDistribution);
+#define CENTURY_SHIFT 20 /* years before this are assumed to be 2000's */
+/*
+ * DATE OPERATORS
+ */
+#define OP_FIRST_DOM 0x01 /* get date of first day of current month */
+#define OP_LAST_DOM  0x02 /* get date of last day of current month; LY == 2/28) */
+#define OP_SAME_LY   0x03 /* get date for same day/month, last year */
+#define OP_SAME_LQ   0x04 /* get date for same offset in the prior quarter */
+
+extern char *weekday_names[];
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif
+#endif /* R_DATE_H */

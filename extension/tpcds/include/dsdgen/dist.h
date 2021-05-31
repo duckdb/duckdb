@@ -78,8 +78,8 @@ typedef struct DISTINDEX_T {
 
 int dist_op(void *dest, int op, char *d_name, int vset, int wset, int stream);
 #define pick_distribution(dest, dist, v, w, s) dist_op(dest, 0, dist, v, w, s)
-#define dist_member(dest, dist, v, w) dist_op(dest, 1, dist, v, w, 0)
-#define dist_max(dist, w) dist->maximums[w - 1]
+#define dist_member(dest, dist, v, w)          dist_op(dest, 1, dist, v, w, 0)
+#define dist_max(dist, w)                      dist->maximums[w - 1]
 int dist_weight(int *dest, char *d, int index, int wset);
 int distsize(char *szDistname);
 int dist_type(char *szDistName, int vset);
@@ -93,17 +93,17 @@ int MatchDistWeight(void *dest, char *szDist, int nWeight, int nWeightSet, int V
 int findDistValue(char *szValue, char *szDistName, int ValueSet);
 int di_compare(const void *op1, const void *op2);
 
-#define DIST_UNIFORM 0x0001
+#define DIST_UNIFORM     0x0001
 #define DIST_EXPONENTIAL 0x0002
 /* sales and returns are special; they must match calendar.dst */
-#define DIST_SALES 3
-#define DIST_RETURNS 5
-#define DIST_CHAR 0x0004
-#define DIST_INT 0x0008
+#define DIST_SALES     3
+#define DIST_RETURNS   5
+#define DIST_CHAR      0x0004
+#define DIST_INT       0x0008
 #define DIST_NAMES_SET 0xff00
 
 /* DistNameIndex needs to know what sort of name we are trying to match */
-#define VALUE_NAME 0x0000
+#define VALUE_NAME  0x0000
 #define WEIGHT_NAME 0x0001
 
 #ifdef __cplusplus

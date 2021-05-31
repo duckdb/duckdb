@@ -39,9 +39,9 @@
 
 //#ifdef MACOS
 #define SUPPORT_64BITS
-#define HUGE_TYPE int64_t
+#define HUGE_TYPE   int64_t
 #define HUGE_FORMAT "%zu"
-#define HUGE_COUNT 1
+#define HUGE_COUNT  1
 #define USE_STRING_H
 #define USE_STDLIB_H
 #define USE_LIMITS_H
@@ -60,10 +60,10 @@
 #else
 /* the 64 bit defines are for the Metaware compiler */
 #define SUPPORT_64BITS
-#define HUGE_TYPE long long
-#define HUGE_COUNT 1
+#define HUGE_TYPE   long long
+#define HUGE_COUNT  1
 #define HUGE_FORMAT "%LLd"
-#define int32_t int
+#define int32_t     int
 #endif /* SQLSERVER or MP/RAS */
 #endif /* NCR */
 
@@ -76,8 +76,8 @@
  * lines for 64 bit seed generation
  */
 #define SUPPORT_64BITS
-#define HUGE_TYPE long long
-#define HUGE_COUNT 1
+#define HUGE_TYPE   long long
+#define HUGE_COUNT  1
 #define HUGE_FORMAT "%lld"
 #define STDLIB_HAS_GETOPT
 #define USE_STDLIB_H
@@ -88,16 +88,16 @@
 #define USE_STRING_H
 #define PATH_SEP '\\'
 #define SUPPORT_64BITS
-#define HUGE_TYPE __int64
-#define HUGE_COUNT 1
+#define HUGE_TYPE   __int64
+#define HUGE_COUNT  1
 #define HUGE_FORMAT "%I64d"
 #endif /* WIN32 */
 
 #ifdef HPUX
 #define SUPPORT_64BITS
-#define HUGE_TYPE long long int
+#define HUGE_TYPE   long long int
 #define HUGE_FORMAT "%lld"
-#define HUGE_COUNT 1
+#define HUGE_COUNT  1
 #define USE_STRING_H
 #define USE_VALUES_H
 #define USE_STDLIB_H
@@ -107,16 +107,16 @@
 #ifdef INTERIX
 #define USE_LIMITS_H
 #define SUPPORT_64BITS
-#define HUGE_TYPE long long int
+#define HUGE_TYPE   long long int
 #define HUGE_FORMAT "%lld"
-#define HUGE_COUNT 1
+#define HUGE_COUNT  1
 #endif /* INTERIX */
 
 #ifdef LINUX
 #define SUPPORT_64BITS
-#define HUGE_TYPE int64_t
+#define HUGE_TYPE   int64_t
 #define HUGE_FORMAT "%lld"
-#define HUGE_COUNT 1
+#define HUGE_COUNT  1
 #define USE_STRING_H
 #define USE_VALUES_H
 #define USE_STDLIB_H
@@ -125,9 +125,9 @@
 
 #ifdef SOLARIS
 #define SUPPORT_64BITS
-#define HUGE_TYPE long long
+#define HUGE_TYPE   long long
 #define HUGE_FORMAT "%lld"
-#define HUGE_COUNT 1
+#define HUGE_COUNT  1
 #define USE_STRING_H
 #define USE_VALUES_H
 #define USE_STDLIB_H
@@ -135,9 +135,9 @@
 
 #ifdef SOL86
 #define SUPPORT_64BITS
-#define HUGE_TYPE long long
+#define HUGE_TYPE   long long
 #define HUGE_FORMAT "%lld"
-#define HUGE_COUNT 1
+#define HUGE_COUNT  1
 #define USE_STRING_H
 #define USE_VALUES_H
 #define USE_STDLIB_H
@@ -148,8 +148,8 @@
 #define USE_LIMITS_H
 #define PATH_SEP '\\'
 #define SUPPORT_64BITS
-#define HUGE_TYPE __int64
-#define HUGE_COUNT 1
+#define HUGE_TYPE   __int64
+#define HUGE_COUNT  1
 #define HUGE_FORMAT "%I64d"
 #endif /* WIN32 */
 
@@ -158,8 +158,8 @@
 #define USE_STRING_H
 #define PATH_SEP '\\'
 #define SUPPORT_64BITS
-#define HUGE_TYPE __int64
-#define HUGE_COUNT 1
+#define HUGE_TYPE   __int64
+#define HUGE_COUNT  1
 #define HUGE_FORMAT "%I64d"
 #endif /* WIN32 */
 

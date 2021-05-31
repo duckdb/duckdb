@@ -33,52 +33,55 @@
  * Contributors:
  * Gradient Systems
  */
-#ifndef R_DATE_H
-#define R_DATE_H
+#ifndef W_STORE_H
+#define W_STORE_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "address.h"
+#include "decimal.h"
 
-#include "mathops.h"
+#define RS_W_STORE_NAME          50
+#define RS_W_STORE_MGR           40
+#define RS_W_MARKET_MGR          40
+#define RS_W_MARKET_DESC         100
+#define STORE_MIN_TAX_PERCENTAGE "0.00"
+#define STORE_MAX_TAX_PERCENTAGE "0.11"
 
-typedef struct DATE_T {
-	int flags;
-	int year;
-	int month;
-	int day;
-	int julian;
-} date_t;
-
-date_t *mk_date(void);
-
-int jtodt(date_t *dest, int i);
-int strtodt(date_t *dest, char *s);
-int strtotime(char *str);
-
-char *dttostr(date_t *d);
-int dttoj(date_t *d);
-
-int date_t_op(date_t *dest, int o, date_t *d1, date_t *d2);
-int set_dow(date_t *d);
-int is_leap(int year);
-int day_number(date_t *d);
-int date_part(date_t *d, int p);
-int set_outfile(int i);
-int getDateWeightFromJulian(int jDay, int nDistribution);
-#define CENTURY_SHIFT 20 /* years before this are assumed to be 2000's */
 /*
- * DATE OPERATORS
+ * STORE table structure
  */
-#define OP_FIRST_DOM 0x01 /* get date of first day of current month */
-#define OP_LAST_DOM 0x02  /* get date of last day of current month; LY == 2/28) */
-#define OP_SAME_LY 0x03   /* get date for same day/month, last year */
-#define OP_SAME_LQ 0x04   /* get date for same offset in the prior quarter */
+struct W_STORE_TBL {
+	ds_key_t store_sk;
+	char store_id[RS_BKEY + 1];
+	ds_key_t rec_start_date_id;
+	ds_key_t rec_end_date_id;
+	ds_key_t closed_date_id;
+	char store_name[RS_W_STORE_NAME + 1];
+	int employees;
+	int floor_space;
+	char *hours;
+	char store_manager[RS_W_STORE_MGR + 1];
+	int market_id;
+	decimal_t dTaxPercentage;
+	char *geography_class;
+	char market_desc[RS_W_MARKET_DESC + 1];
+	char market_manager[RS_W_MARKET_MGR + 1];
+	ds_key_t division_id;
+	char *division_name;
+	ds_key_t company_id;
+	char *company_name;
+	ds_addr_t address;
+};
 
-extern char *weekday_names[];
+/***
+ *** STORE_xxx Store Defines
+ ***/
+#define STORE_MIN_DAYS_OPEN  5
+#define STORE_MAX_DAYS_OPEN  500
+#define STORE_CLOSED_PCT     30
+#define STORE_MIN_REV_GROWTH "-0.05"
+#define STORE_MAX_REV_GROWTH "0.50"
+#define STORE_DESC_MIN       15
 
-#ifdef __cplusplus
-}
+int mk_w_store(void *info_arr, ds_key_t kIndex);
+
 #endif
-
-#endif /* R_DATE_H */

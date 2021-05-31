@@ -6,50 +6,50 @@ See distcomp.c for details
 */
 
 /* aliases for values/weights in the first_names distribution */
-#define first_names_name 1
-#define first_names_male 1
-#define first_names_female 2
+#define first_names_name    1
+#define first_names_male    1
+#define first_names_female  2
 #define first_names_unified 3
 
 /* aliases for values/weights in the last_names distribution */
 /* NONE DEFINED */
 
 /* aliases for values/weights in the calendar distribution */
-#define calendar_day_seq 1
-#define calendar_month_name 2
-#define calendar_date 3
-#define calendar_season 4
-#define calendar_month_num 5
-#define calendar_quarter 6
-#define calendar_fom 7
-#define calendar_holiday 8
-#define calendar_uniform 1
+#define calendar_day_seq      1
+#define calendar_month_name   2
+#define calendar_date         3
+#define calendar_season       4
+#define calendar_month_num    5
+#define calendar_quarter      6
+#define calendar_fom          7
+#define calendar_holiday      8
+#define calendar_uniform      1
 #define calendar_uniform_leap 2
-#define calendar_sales 3
-#define calendar_sales_leap 4
-#define calendar_returns 5
+#define calendar_sales        3
+#define calendar_sales_leap   4
+#define calendar_returns      5
 #define calendar_returns_leap 6
-#define calendar_skewed 7
-#define calendar_low 8
-#define calendar_medium 9
-#define calendar_high 10
+#define calendar_skewed       7
+#define calendar_low          8
+#define calendar_medium       9
+#define calendar_high         10
 
 /* aliases for values/weights in the week_info distribution */
 /* NONE DEFINED */
 
 /* aliases for values/weights in the fips_county distribution */
-#define fips_county_fips 1
-#define fips_county_county 2
-#define fips_county_st 3
-#define fips_county_state 4
-#define fips_county_zone 5
-#define fips_county_gmt 6
-#define fips_county_uniform 1
+#define fips_county_fips       1
+#define fips_county_county     2
+#define fips_county_st         3
+#define fips_county_state      4
+#define fips_county_zone       5
+#define fips_county_gmt        6
+#define fips_county_uniform    1
 #define fips_county_population 2
-#define fips_county_tz 3
-#define fips_county_tz90 4
-#define fips_county_tz9 5
-#define fips_county_tz1 6
+#define fips_county_tz         3
+#define fips_county_tz90       4
+#define fips_county_tz9        5
+#define fips_county_tz1        6
 
 /* aliases for values/weights in the street_names distribution */
 /* NONE DEFINED */
@@ -88,12 +88,12 @@ See distcomp.c for details
 /* NONE DEFINED */
 
 /* aliases for values/weights in the cities distribution */
-#define cities_name 1
-#define cities_usgs 1
+#define cities_name    1
+#define cities_usgs    1
 #define cities_uniform 2
-#define cities_large 3
-#define cities_medium 4
-#define cities_small 5
+#define cities_large   3
+#define cities_medium  4
+#define cities_small   5
 #define cities_unified 6
 
 /* aliases for values/weights in the categories distribution */
@@ -139,24 +139,24 @@ See distcomp.c for details
 /* NONE DEFINED */
 
 /* aliases for values/weights in the colors distribution */
-#define colors_name 1
+#define colors_name    1
 #define colors_uniform 1
-#define colors_skewed 2
-#define colors_low 3
-#define colors_medium 4
-#define colors_high 5
+#define colors_skewed  2
+#define colors_low     3
+#define colors_medium  4
+#define colors_high    5
 
 /* aliases for values/weights in the brand_syllables distribution */
 /* NONE DEFINED */
 
 /* aliases for values/weights in the i_current_price distribution */
-#define i_current_price_index 1
-#define i_current_price_low_bound 2
+#define i_current_price_index      1
+#define i_current_price_low_bound  2
 #define i_current_price_high_bound 3
-#define i_current_price_skew 1
-#define i_current_price_high 2
-#define i_current_price_medium 3
-#define i_current_price_low 4
+#define i_current_price_skew       1
+#define i_current_price_high       2
+#define i_current_price_medium     3
+#define i_current_price_low        4
 
 /* aliases for values/weights in the i_manufact_id distribution */
 /* NONE DEFINED */

@@ -72,7 +72,7 @@ struct {
 
 /* NOTE: these need to be in sync with a_dist.h */
 #define D_NAME_LEN 20
-#define FL_LOADED 0x01
+#define FL_LOADED  0x01
 static int load_dist(d_idx_t *d);
 
 /*

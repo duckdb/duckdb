@@ -33,55 +33,56 @@
  * Contributors:
  * Gradient Systems
  */
-#ifndef W_STORE_H
-#define W_STORE_H
 
-#include "address.h"
-#include "decimal.h"
+#ifndef DS_ADDRESS_H
+#define DS_ADDRESS_H
 
-#define RS_W_STORE_NAME 50
-#define RS_W_STORE_MGR 40
-#define RS_W_MARKET_MGR 40
-#define RS_W_MARKET_DESC 100
-#define STORE_MIN_TAX_PERCENTAGE "0.00"
-#define STORE_MAX_TAX_PERCENTAGE "0.11"
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-/*
- * STORE table structure
- */
-struct W_STORE_TBL {
-	ds_key_t store_sk;
-	char store_id[RS_BKEY + 1];
-	ds_key_t rec_start_date_id;
-	ds_key_t rec_end_date_id;
-	ds_key_t closed_date_id;
-	char store_name[RS_W_STORE_NAME + 1];
-	int employees;
-	int floor_space;
-	char *hours;
-	char store_manager[RS_W_STORE_MGR + 1];
-	int market_id;
-	decimal_t dTaxPercentage;
-	char *geography_class;
-	char market_desc[RS_W_MARKET_DESC + 1];
-	char market_manager[RS_W_MARKET_MGR + 1];
-	ds_key_t division_id;
-	char *division_name;
-	ds_key_t company_id;
-	char *company_name;
-	ds_addr_t address;
+#include "constants.h"
+
+typedef struct DS_ADDR_T {
+	char suite_num[RS_CC_SUITE_NUM + 1];
+	int street_num;
+	char *street_name1;
+	char *street_name2;
+	char *street_type;
+	char *city;
+	char *county;
+	char *state;
+	char country[RS_CC_COUNTRY + 1];
+	int zip;
+	int plus4;
+	int gmt_offset;
+} ds_addr_t;
+
+#define DS_ADDR_SUITE_NUM    0
+#define DS_ADDR_STREET_NUM   1
+#define DS_ADDR_STREET_NAME1 2
+#define DS_ADDR_STREET_NAME2 3
+#define DS_ADDR_STREET_TYPE  4
+#define DS_ADDR_CITY         5
+#define DS_ADDR_COUNTY       6
+#define DS_ADDR_STATE        7
+#define DS_ADDR_COUNTRY      8
+#define DS_ADDR_ZIP          9
+#define DS_ADDR_PLUS4        10
+#define DS_ADDR_GMT_OFFSET   11
+
+int mk_address(ds_addr_t *pDest, int nColumn);
+int mk_streetnumber(int nTable, int *dest);
+int mk_suitenumber(int nTable, char *dest);
+int mk_streetname(int nTable, char *dest);
+int mk_city(int nTable, char **dest);
+int city_hash(int nTable, char *name);
+int mk_zipcode(int nTable, char *dest, int nRegion, char *city);
+void printAddressPart(FILE *fp, ds_addr_t *pAddr, int nAddressPart);
+void resetCountCount(void);
+
+#ifdef __cplusplus
 };
-
-/***
- *** STORE_xxx Store Defines
- ***/
-#define STORE_MIN_DAYS_OPEN 5
-#define STORE_MAX_DAYS_OPEN 500
-#define STORE_CLOSED_PCT 30
-#define STORE_MIN_REV_GROWTH "-0.05"
-#define STORE_MAX_REV_GROWTH "0.50"
-#define STORE_DESC_MIN 15
-
-int mk_w_store(void *info_arr, ds_key_t kIndex);
+#endif
 
 #endif

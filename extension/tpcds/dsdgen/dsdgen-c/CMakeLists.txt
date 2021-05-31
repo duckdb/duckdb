@@ -1,57 +1,59 @@
-add_library(dsdgen_c OBJECT
-            skip_days.c
-            address.c
-            build_support.c
-            date.c
-            dbgen_version.c
-            decimal.c
-            dist.c
-            error_msg.c
-            genrand.c
-            join.c
-            list.c
-            load.c
-            misc.c
-            nulls.c
-            parallel.c
-            permute.c
-            pricing.c
-            r_params.c
-            release.c
-            scaling.c
-            scd.c
-            sparse.c
-            StringBuffer.c
-            tdef_functions.c
-            tdefs.c
-            text.c
-            w_call_center.c
-            w_catalog_page.c
-            w_catalog_returns.c
-            w_catalog_sales.c
-            w_customer.c
-            w_customer_address.c
-            w_customer_demographics.c
-            w_datetbl.c
-            w_household_demographics.c
-            w_income_band.c
-            w_inventory.c
-            w_item.c
-            w_promotion.c
-            w_reason.c
-            w_ship_mode.c
-            w_store.c
-            w_store_returns.c
-            w_store_sales.c
-            w_timetbl.c
-            w_warehouse.c
-            w_web_page.c
-            w_web_returns.c
-            w_web_sales.c
-            w_web_sales.c
-            w_web_site.c)
-set(ALL_OBJECT_FILES
-    ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:dsdgen_c>
+add_library(
+  dsdgen_c OBJECT
+  skip_days.c
+  address.c
+  build_support.c
+  date.c
+  dbgen_version.c
+  decimal.c
+  dist.c
+  error_msg.c
+  genrand.c
+  join.c
+  list.c
+  load.c
+  misc.c
+  nulls.c
+  parallel.c
+  permute.c
+  pricing.c
+  r_params.c
+  release.c
+  scaling.c
+  scd.c
+  sparse.c
+  StringBuffer.c
+  tdef_functions.c
+  tdefs.c
+  text.c
+  w_call_center.c
+  w_catalog_page.c
+  w_catalog_returns.c
+  w_catalog_sales.c
+  w_customer.c
+  w_customer_address.c
+  w_customer_demographics.c
+  w_datetbl.c
+  w_household_demographics.c
+  w_income_band.c
+  w_inventory.c
+  w_item.c
+  w_promotion.c
+  w_reason.c
+  w_ship_mode.c
+  w_store.c
+  w_store_returns.c
+  w_store_sales.c
+  w_timetbl.c
+  w_warehouse.c
+  w_web_page.c
+  w_web_returns.c
+  w_web_sales.c
+  w_web_sales.c
+  w_web_site.c)
+
+set(DSDGEN_OBJECT_FILES
+    ${DSDGEN_OBJECT_FILES} $<TARGET_OBJECTS:dsdgen_c>
     PARENT_SCOPE)
 
 disable_target_warnings(dsdgen_c)

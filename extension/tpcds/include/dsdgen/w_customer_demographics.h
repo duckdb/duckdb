@@ -33,22 +33,31 @@
  * Contributors:
  * Gradient Systems
  */
-#ifndef GRAMMAR_H
-#define GRAMMAR_H
+#ifndef W_CUSTOMER_DEMOGRAPHICS_H
+#define W_CUSTOMER_DEMOGRAPHICS_H
 
-typedef struct TOKEN_T {
-	int index;
-	char word[40];
-	int (*handler)(char *s, struct TOKEN_T *t);
-} token_t;
+/***
+*** CD_xxx Customer Demographcis Defines
+***/
+#define CD_MAX_CHILDREN 7
+#define CD_MAX_EMPLOYED 7
+#define CD_MAX_COLLEGE  7
 
-#define COMMENT_CHAR '-'
-#define STMT_END ';'
-int ParseFile(char *szPath);
-int FindToken(char *name);
-void SetTokens(token_t *t);
-char *ProcessStr(char *stmt, token_t *pTokens);
-char *SafeStrtok(char *string, char *delims);
-extern token_t *pTokens;
+/*
+ * CUSTOMER_DEMOGRAPHICS table structure
+ */
+struct W_CUSTOMER_DEMOGRAPHICS_TBL {
+	ds_key_t cd_demo_sk;
+	char *cd_gender;
+	char *cd_marital_status;
+	char *cd_education_status;
+	int cd_purchase_estimate;
+	char *cd_credit_rating;
+	int cd_dep_count;
+	int cd_dep_employed_count;
+	int cd_dep_college_count;
+};
 
-#endif /* GRAMMAR_H */
+int mk_w_customer_demographics(void *info_arr, ds_key_t kIndex);
+
+#endif

@@ -82,23 +82,23 @@ char *strdup(const char *);
 #include <windows.h>
 #include <winbase.h>
 #include <io.h>
-#define random rand
-#define strncasecmp _strnicmp
-#define strcasecmp _stricmp
-#define strdup _strdup
-#define access _access
-#define isatty _isatty
-#define fileno _fileno
-#define F_OK 0
-#define MAXINT INT_MAX
-#define THREAD __declspec(thread)
-#define MIN_MULTI_NODE_ROWS 100000
+#define random                rand
+#define strncasecmp           _strnicmp
+#define strcasecmp            _stricmp
+#define strdup                _strdup
+#define access                _access
+#define isatty                _isatty
+#define fileno                _fileno
+#define F_OK                  0
+#define MAXINT                INT_MAX
+#define THREAD                __declspec(thread)
+#define MIN_MULTI_NODE_ROWS   100000
 #define MIN_MULTI_THREAD_ROWS 5000
-#define THREAD __declspec(thread)
+#define THREAD                __declspec(thread)
 /* Lines added by Chuck McDevitt for WIN32 support */
 #ifndef _POSIX_
 #ifndef S_ISREG
-#define S_ISREG(m) (((m)&_S_IFMT) == _S_IFREG)
+#define S_ISREG(m)  (((m)&_S_IFMT) == _S_IFREG)
 #define S_ISFIFO(m) (((m)&_S_IFMT) == _S_IFIFO)
 #endif
 #endif

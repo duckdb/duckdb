@@ -31,7 +31,7 @@ void append_row_end(append_info *info) {
 void append_varchar(append_info *info, const char *value) {
 	auto append_info = (tpcds_append_information *)info;
 	if (!nullCheck(append_info->appender.CurrentColumn())) {
-		append_info->appender.Append<const char*>(value);
+		append_info->appender.Append<const char *>(value);
 	} else {
 		append_info->appender.Append(nullptr);
 	}
@@ -64,7 +64,7 @@ void append_date(append_info *info, int64_t value) {
 	date_t dTemp;
 	jtodt(&dTemp, (int)value);
 	auto ddate = duckdb::Date::FromDate(dTemp.year, dTemp.month, dTemp.day);
-	append_integer(info, (int32_t) ddate);
+	append_integer(info, (int32_t)ddate);
 }
 
 void append_decimal(append_info *info, decimal_t *val) {

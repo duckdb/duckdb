@@ -33,56 +33,20 @@
  * Contributors:
  * Gradient Systems
  */
+#ifndef DBGEN_VERSION_H
+#define DBGEN_VERSION_H
 
-#ifndef DS_ADDRESS_H
-#define DS_ADDRESS_H
+#define RS_VERSION_LENGTH    100
+#define RS_CMDLINARGS_LENGTH 200
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-#include "constants.h"
-
-typedef struct DS_ADDR_T {
-	char suite_num[RS_CC_SUITE_NUM + 1];
-	int street_num;
-	char *street_name1;
-	char *street_name2;
-	char *street_type;
-	char *city;
-	char *county;
-	char *state;
-	char country[RS_CC_COUNTRY + 1];
-	int zip;
-	int plus4;
-	int gmt_offset;
-} ds_addr_t;
-
-#define DS_ADDR_SUITE_NUM 0
-#define DS_ADDR_STREET_NUM 1
-#define DS_ADDR_STREET_NAME1 2
-#define DS_ADDR_STREET_NAME2 3
-#define DS_ADDR_STREET_TYPE 4
-#define DS_ADDR_CITY 5
-#define DS_ADDR_COUNTY 6
-#define DS_ADDR_STATE 7
-#define DS_ADDR_COUNTRY 8
-#define DS_ADDR_ZIP 9
-#define DS_ADDR_PLUS4 10
-#define DS_ADDR_GMT_OFFSET 11
-
-int mk_address(ds_addr_t *pDest, int nColumn);
-int mk_streetnumber(int nTable, int *dest);
-int mk_suitenumber(int nTable, char *dest);
-int mk_streetname(int nTable, char *dest);
-int mk_city(int nTable, char **dest);
-int city_hash(int nTable, char *name);
-int mk_zipcode(int nTable, char *dest, int nRegion, char *city);
-void printAddressPart(FILE *fp, ds_addr_t *pAddr, int nAddressPart);
-void resetCountCount(void);
-
-#ifdef __cplusplus
+struct DBGEN_VERSION_TBL {
+	char szVersion[RS_VERSION_LENGTH + 1];
+	char szDate[26];
+	char szTime[26];
+	char szCmdLineArgs[RS_CMDLINARGS_LENGTH + 1];
 };
-#endif
 
+int mk_dbgen_version(void *pDest, ds_key_t kIndex);
+int pr_dbgen_version(void *pSrc);
+int ld_dbgen_version(void *pSrc);
 #endif
