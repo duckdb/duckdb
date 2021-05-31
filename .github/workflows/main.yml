@@ -105,8 +105,9 @@ jobs:
            cmake --build . --config Release
 
        - name: Test
-         run: cp src/libduckdb.dll .
-         run: test/unittest.exe
+         run: |
+           cp src/libduckdb.dll .
+           test/unittest.exe
 
 #   win-release-64:
 #     name: Windows (64 Bit)
