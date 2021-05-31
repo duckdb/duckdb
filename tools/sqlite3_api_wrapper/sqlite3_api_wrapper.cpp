@@ -1341,7 +1341,9 @@ SQLITE_API void sqlite3_result_blob(sqlite3_context *, const void *, int, void (
 SQLITE_API void sqlite3_result_blob64(sqlite3_context *, const void *, sqlite3_uint64, void (*)(void *)) {
 }
 
-SQLITE_API void sqlite3_result_double(sqlite3_context *, double) {
+SQLITE_API void sqlite3_result_double(sqlite3_context *context, double val) {
+	context->result.u.r = val;
+    context->result.type = SQLiteTypeValue::FLOAT;
 }
 
 SQLITE_API void sqlite3_result_error(sqlite3_context *, const char *, int) {
@@ -1361,7 +1363,7 @@ SQLITE_API void sqlite3_result_error_code(sqlite3_context *, int) {
 
 SQLITE_API void sqlite3_result_int(sqlite3_context *context, int val) {
     context->result.u.i = val;
-    context->result.type = PhysicalType::INT32;
+    context->result.type = SQLiteTypeValue::INTEGER;
 }
 
 SQLITE_API void sqlite3_result_int64(sqlite3_context *, sqlite3_int64) {
@@ -1404,19 +1406,22 @@ const void *sqlite3_value_blob(sqlite3_value *) {
 	return nullptr;
 }
 
-double sqlite3_value_double(sqlite3_value *) {
-	return 0;
+double sqlite3_value_double(sqlite3_value *pVal) {
+	if(pVal->type == SQLiteTypeValue::FLOAT) {
+        return pVal->u.r;
+    }
+	return 0.0;
 }
 
 int sqlite3_value_int(sqlite3_value *pVal) {
-    if(TypeIsInteger(pVal->type)) {
+	return sqlite3_value_int64(pVal);
+}
+
+sqlite3_int64 sqlite3_value_int64(sqlite3_value *pVal) {
+    if(pVal->type == SQLiteTypeValue::INTEGER) {
         return pVal->u.i;
     }
     return 0;
-}
-
-sqlite3_int64 sqlite3_value_int64(sqlite3_value *) {
-	return 0;
 }
 
 void *sqlite3_value_pointer(sqlite3_value *, const char *) {
