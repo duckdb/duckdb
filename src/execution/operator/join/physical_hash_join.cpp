@@ -162,7 +162,7 @@ void PhysicalHashJoin::GetChunkInternal(ExecutionContext &context, DataChunk &ch
 	}
 	// We first try a probe with an invisible join opt, otherwise we do the standard probe
 	if (IsInnerJoin(join_type) && ExecuteInvisibleJoin(context, chunk, state, sink.hash_table.get())) {
-		// return;
+		return;
 	}
 	do {
 		ProbeHashTable(context, chunk, state);
@@ -257,7 +257,7 @@ bool PhysicalHashJoin::ExecuteInvisibleJoin(ExecutionContext &context, DataChunk
 	Vector source(keys_vec.GetType());
 	auto keys_count = physical_state->join_keys.size();
 	SelectionVector sel_vec(keys_count);
-	FillSelectionVectorSwitch(keys_vec, sel_vec, keys_count);
+	// FillSelectionVectorSwitch(keys_vec, sel_vec, keys_count);
 	// copy the probe data to the result
 	result.Reference(physical_state->child_chunk);
 	// on the RHS, we need to fetch the data from the perfect hash table and slice it using the new selection vector
@@ -310,17 +310,18 @@ template <typename T>
 void PhysicalHashJoin::TemplatedFillSelectionVector(Vector &source, SelectionVector &sel_vec, idx_t count) {
 	auto min_value = pjoin_state.build_min.GetValue<T>();
 	auto max_value = pjoin_state.build_max.GetValue<T>();
+	pjoin_state.range = max_value - min_value;
 
 	auto vector_data = FlatVector::GetData<T>(source);
 	// generate the selection vector
 	for (idx_t i = 0; i != count; ++i) {
 		// add index to selection vector if value in the range
 		auto input_value = vector_data[i];
-		if (min_value <= input_value && input_value <= max_value) {
-			auto idx = input_value - min_value;
-			sel_vec.set_index(i, idx);
-		}
+		//		if (min_value <= input_value && input_value <= max_value) {
+		auto idx = input_value;
+		sel_vec.set_index(i, idx);
 	}
+	//	}
 }
 
 void PhysicalHashJoin::FillSelectionVectorSwitch(Vector &source, SelectionVector &sel_vec, idx_t count) {

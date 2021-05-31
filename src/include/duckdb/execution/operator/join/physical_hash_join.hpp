@@ -28,6 +28,7 @@ struct PerfectHashJoinState {
 	bool is_probe_in_range {false};
 	bool is_build_min_small {false};
 	bool is_build_dense {false};
+	uint32_t range;
 };
 
 class PhysicalHashJoinState : public PhysicalOperatorState {
