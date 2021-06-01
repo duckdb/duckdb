@@ -38,9 +38,16 @@ public:
 	unordered_map<string, std::shared_ptr<idx_t>> cte_references;
 
 public:
-	//! Given a column name, find the matching table it belongs to. Throws an
-	//! exception if no table has a column of the given name.
+	//! Given a column name, find the matching table it belongs to.
+	//! Returns false if there was ambiguity (e.g. two tables with the same column name)
+	//! Returns true but "result" will be empty if no match was found
+	bool TryGetMatchingBinding(const string &column_name, string &result);
+	//! Given a column name, find the matching table it belongs to.
+	//! Throws an exception if there was ambiguity.
+	//! Returns an empty string if no match was found.
 	string GetMatchingBinding(const string &column_name);
+	//! Returns the column type of a (table_name, column_name) pair, or INVALID if no match was found
+	LogicalType GetColumnType(const string &table_name, const string &column_name);
 	//! Like GetMatchingBinding, but instead of throwing an error if multiple tables have the same binding it will
 	//! return a list of all the matching ones
 	unordered_set<string> GetMatchingBindings(const string &column_name);
@@ -111,7 +118,7 @@ private:
 	//! Gets a binding of the specified name. Returns a nullptr and sets the out_error if the binding could not be
 	//! found.
 	Binding *GetBinding(const string &name, string &out_error);
-
+	bool GetMatchingBindingInternal(const string &column_name, string &result, bool throw_exception);
 private:
 	//! The set of bindings
 	unordered_map<string, unique_ptr<Binding>> bindings;

@@ -51,19 +51,19 @@ static unique_ptr<FunctionData> StructExtractBind(ClientContext &context, Scalar
                                                   vector<unique_ptr<Expression>> &arguments) {
 	auto &struct_children = arguments[0]->return_type.child_types();
 	if (struct_children.empty()) {
-		throw Exception("Can't extract something from an empty struct");
+		throw BinderException("Can't extract something from an empty struct");
 	}
 
 	auto &key_child = arguments[1];
 
 	if (key_child->return_type.id() != LogicalTypeId::VARCHAR ||
 	    key_child->return_type.id() != LogicalTypeId::VARCHAR || !key_child->IsFoldable()) {
-		throw Exception("Key name for struct_extract needs to be a constant string");
+		throw BinderException("Key name for struct_extract needs to be a constant string");
 	}
 	Value key_val = ExpressionExecutor::EvaluateScalar(*key_child.get());
 	D_ASSERT(key_val.type().id() == LogicalTypeId::VARCHAR);
 	if (key_val.is_null || key_val.str_value.length() < 1) {
-		throw Exception("Key name for struct_extract needs to be neither NULL nor empty");
+		throw BinderException("Key name for struct_extract needs to be neither NULL nor empty");
 	}
 	string key = StringUtil::Lower(key_val.str_value);
 
@@ -81,7 +81,13 @@ static unique_ptr<FunctionData> StructExtractBind(ClientContext &context, Scalar
 		}
 	}
 	if (!found_key) {
-		throw Exception("Could not find key in struct");
+		vector<string> candidates;
+		for (auto &kv : struct_children) {
+			candidates.push_back(kv.first);
+		}
+		string candidate_str =
+		    StringUtil::CandidatesMessage(StringUtil::TopNLevenshtein(candidates, key), "Candidate struct keys");
+		throw BinderException("Could not find key  \"%s\" in struct%s", key, candidate_str);
 	}
 
 	bound_function.return_type = return_type;

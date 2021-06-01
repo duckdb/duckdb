@@ -47,6 +47,14 @@ BindResult Binding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	return BindResult(make_unique<BoundColumnRefExpression>(colref.GetName(), sql_type, binding, depth));
 }
 
+LogicalType Binding::GetColumnType(const string &column_name) {
+	auto column_entry = name_map.find(column_name);
+	if (column_entry == name_map.end()) {
+		return LogicalType::INVALID;
+	}
+	return types[column_entry->second];
+}
+
 TableBinding::TableBinding(const string &alias, vector<LogicalType> types_p, vector<string> names_p, LogicalGet &get,
                            idx_t index, bool add_row_id)
     : Binding(alias, move(types_p), move(names_p), index), get(get) {

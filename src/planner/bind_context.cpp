@@ -14,8 +14,7 @@
 
 namespace duckdb {
 
-string BindContext::GetMatchingBinding(const string &column_name) {
-	string result;
+bool BindContext::GetMatchingBindingInternal(const string &column_name, string &result, bool throw_exception) {
 	for (auto &kv : bindings) {
 		auto binding = kv.second.get();
 		auto is_using_binding = GetUsingBinding(column_name, kv.first);
@@ -24,13 +23,27 @@ string BindContext::GetMatchingBinding(const string &column_name) {
 		}
 		if (binding->HasMatchingBinding(column_name)) {
 			if (!result.empty() || is_using_binding) {
-				throw BinderException("Ambiguous reference to column name \"%s\" (use: \"%s.%s\" "
-				                      "or \"%s.%s\")",
-				                      column_name, result, column_name, kv.first, column_name);
+				if (throw_exception) {
+					throw BinderException("Ambiguous reference to column name \"%s\" (use: \"%s.%s\" "
+										"or \"%s.%s\")",
+										column_name, result, column_name, kv.first, column_name);
+				} else {
+					return false;
+				}
 			}
 			result = kv.first;
 		}
 	}
+	return true;
+}
+
+bool BindContext::TryGetMatchingBinding(const string &column_name, string &result) {
+	return GetMatchingBindingInternal(column_name, result, false);
+}
+
+string BindContext::GetMatchingBinding(const string &column_name) {
+	string result;
+	GetMatchingBindingInternal(column_name, result, true);
 	return result;
 }
 
@@ -144,6 +157,15 @@ Binding *BindContext::GetBinding(const string &name, string &out_error) {
 		return nullptr;
 	}
 	return match->second.get();
+}
+
+LogicalType BindContext::GetColumnType(const string &table_name, const string &column_name) {
+	string error;
+	auto binding = GetBinding(table_name, error);
+	if (!binding) {
+		return LogicalType::INVALID;
+	}
+	return binding->GetColumnType(column_name);
 }
 
 BindResult BindContext::BindColumn(ColumnRefExpression &colref, idx_t depth) {

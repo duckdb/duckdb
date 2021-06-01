@@ -99,6 +99,7 @@ protected:
 	virtual BindResult BindUnnest(FunctionExpression &expr, idx_t depth);
 	virtual BindResult BindMacro(FunctionExpression &expr, MacroCatalogEntry *macro, idx_t depth,
 	                             unique_ptr<ParsedExpression> *expr_ptr);
+	virtual BindResult BindStructExtract(ColumnRefExpression &expr, idx_t depth);
 
 	virtual void ReplaceMacroParametersRecursive(unique_ptr<ParsedExpression> &expr);
 	virtual void ReplaceMacroParametersRecursive(ParsedExpression &expr, QueryNode &node);

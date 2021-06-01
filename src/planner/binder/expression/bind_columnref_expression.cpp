@@ -1,4 +1,6 @@
 #include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
@@ -6,6 +8,30 @@
 #include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
+
+BindResult ExpressionBinder::BindStructExtract(ColumnRefExpression &colref, idx_t depth) {
+	if (colref.table_name.empty()) {
+		return BindResult("Empty table name");
+	}
+	// check if we can bind the table name as a column
+	string actual_table_name;
+	if (!binder.bind_context.TryGetMatchingBinding(colref.table_name, actual_table_name)) {
+		return BindResult("Matching table not found");
+	}
+	// check if the column is a struct
+	auto type = binder.bind_context.GetColumnType(actual_table_name, colref.table_name);
+	if (type.id() != LogicalTypeId::STRUCT) {
+		// not a struct!
+		return BindResult("Not a struct");
+	}
+	// we can! try to bind this as a STRUCT_EXTRACT call instead
+	vector<unique_ptr<ParsedExpression>> children;
+	children.push_back(make_unique<ColumnRefExpression>(colref.table_name, actual_table_name));
+	children.push_back(make_unique<ConstantExpression>(Value(colref.column_name)));
+	auto function = make_unique_base<ParsedExpression, FunctionExpression>("struct_extract", children);
+	function->alias = colref.GetName();
+	return BindExpression(&function, depth);
+}
 
 BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref, idx_t depth) {
 	D_ASSERT(!colref.column_name.empty());
@@ -52,6 +78,12 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref, idx_t d
 	if (!result.HasError()) {
 		bound_columns = true;
 	} else {
+		// we failed to bind the column
+		// check if we can bind the column as a struct extract call instead
+		auto extract_result = BindStructExtract(colref, depth);
+		if (!extract_result.HasError()) {
+			return extract_result;
+		}
 		result.error = binder.FormatError(colref, result.error);
 	}
 	return result;

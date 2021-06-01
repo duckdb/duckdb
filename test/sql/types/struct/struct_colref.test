@@ -1,0 +1,32 @@
+# name: test/sql/types/struct/struct_colref.test
+# description: Test referring to struct elements without brackets
+# group: [struct]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT a.i FROM (VALUES ({'i': 1, 'j': 2})) tbl(a)
+----
+1
+
+query I
+SELECT a.i + a.j FROM (VALUES ({'i': 1, 'j': 2})) tbl(a)
+----
+3
+
+# not a struct
+statement error
+SELECT a.i FROM (VALUES (1)) tbl(a)
+
+# cannot access like this
+statement error
+SELECT i FROM (VALUES ({'i': 1, 'j': 2})) tbl(a)
+
+# column not found
+statement error
+SELECT a.jj FROM (VALUES ({'i': 1, 'j': 2})) tbl(a)
+
+# table not found
+statement error
+SELECT b.k FROM (VALUES ({'i': 1, 'j': 2})) tbl(a)
