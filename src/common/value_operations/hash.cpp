@@ -47,10 +47,11 @@ hash_t ValueOperations::Hash(const Value &op) {
 		}
 		return hash;
 	}
+	case PhysicalType::MAP:
 	case PhysicalType::STRUCT: {
 		hash_t hash = 0;
 		for (auto &entry : op.struct_value) {
-			hash ^= ValueOperations::Hash(entry.second);
+			hash ^= ValueOperations::Hash(entry);
 		}
 		return hash;
 	}

@@ -626,7 +626,8 @@ static void ListCastSwitch(Vector &source, Vector &result, idx_t count) {
 
 static void StructCastSwitch(Vector &source, Vector &result, idx_t count) {
 	switch (result.GetType().id()) {
-	case LogicalTypeId::STRUCT: {
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::MAP: {
 		if (source.GetType().child_types().size() != result.GetType().child_types().size()) {
 			throw TypeMismatchException(source.GetType(), result.GetType(), "Cannot cast STRUCTs of different size");
 		}
@@ -634,19 +635,18 @@ static void StructCastSwitch(Vector &source, Vector &result, idx_t count) {
 		D_ASSERT(source_children.size() == source.GetType().child_types().size());
 
 		bool is_constant = true;
+		auto &result_children = StructVector::GetEntries(result);
 		for (idx_t c_idx = 0; c_idx < result.GetType().child_types().size(); c_idx++) {
-			auto &child_type = result.GetType().child_types()[c_idx];
-			auto result_child_vector = make_unique<Vector>(child_type.second);
-			auto &source_child_vector = *source_children[c_idx].second;
+			auto &result_child_vector = result_children[c_idx];
+			auto &source_child_vector = *source_children[c_idx];
 			if (source_child_vector.GetVectorType() != VectorType::CONSTANT_VECTOR) {
 				is_constant = false;
 			}
-			if (child_type.second != source_child_vector.GetType()) {
+			if (result_child_vector->GetType() != source_child_vector.GetType()) {
 				VectorOperations::Cast(source_child_vector, *result_child_vector, count, false);
 			} else {
 				result_child_vector->Reference(source_child_vector);
 			}
-			StructVector::AddEntry(result, child_type.first, move(result_child_vector));
 		}
 		if (is_constant) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -749,6 +749,7 @@ void VectorOperations::Cast(Vector &source, Vector &result, idx_t count, bool st
 		ConstantVector::SetNull(result, true);
 		break;
 	}
+	case LogicalTypeId::MAP:
 	case LogicalTypeId::STRUCT:
 		StructCastSwitch(source, result, count);
 		break;

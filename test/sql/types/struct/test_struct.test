@@ -27,15 +27,15 @@ SELECT STRUCT_PACK(a := 42, b := 43) as struct
 ----
 <a: 42, b: 43>
 
-# FIXME: this is borked
-mode skip
-
 query I
 select null::row(a integer);
 ----
-<a: NULL>
+NULL
 
-mode unskip
+query I
+select STRUCT_PACK(a := NULL, b := NULL) as struct
+----
+<a: NULL, b: NULL>
 
 query II
 SELECT e, STRUCT_EXTRACT(STRUCT_PACK(xx := e, yy := g), 'xx') as ee FROM struct_data

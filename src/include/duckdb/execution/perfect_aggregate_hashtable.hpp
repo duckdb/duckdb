@@ -14,7 +14,7 @@ namespace duckdb {
 
 class PerfectAggregateHashTable : public BaseAggregateHashTable {
 public:
-	PerfectAggregateHashTable(BufferManager &buffer_manager, vector<LogicalType> group_types,
+	PerfectAggregateHashTable(BufferManager &buffer_manager, const vector<LogicalType> &group_types,
 	                          vector<LogicalType> payload_types_p, vector<AggregateObject> aggregate_objects,
 	                          vector<Value> group_minima, vector<idx_t> required_bits);
 	~PerfectAggregateHashTable() override;

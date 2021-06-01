@@ -52,7 +52,7 @@ unique_ptr<FunctionData> PandasScanFunction::PandasScanBind(ClientContext &conte
                                                             vector<string> &input_table_names,
                                                             vector<LogicalType> &return_types, vector<string> &names) {
 	py::gil_scoped_acquire acquire;
-	py::handle df((PyObject *)(inputs[0].GetValue<uintptr_t>()));
+	py::handle df((PyObject *)(inputs[0].GetPointer()));
 
 	vector<PandasColumnBindData> pandas_bind_data;
 	VectorConversion::BindPandas(df, pandas_bind_data, return_types, names);

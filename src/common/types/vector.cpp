@@ -12,6 +12,7 @@
 #include "duckdb/common/types/sel_cache.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
 
 #include <cstring> // strlen() on Solaris
 
@@ -49,9 +50,23 @@ Vector::Vector(Vector &&other) noexcept
 
 void Vector::Reference(const Value &value) {
 	buffer = VectorBuffer::CreateConstantVector(VectorType::CONSTANT_VECTOR, value.type());
-	auxiliary.reset();
-	data = buffer->GetData();
-	SetValue(0, value);
+	if (value.type().id() == LogicalTypeId::STRUCT || value.type().id() == LogicalTypeId::MAP) {
+		auto struct_buffer = make_unique<VectorStructBuffer>();
+		auto &child_types = value.type().child_types();
+		auto &child_vectors = struct_buffer->GetChildren();
+		for (idx_t i = 0; i < child_types.size(); i++) {
+			auto vector = make_unique<Vector>(value.is_null ? Value(child_types[i].second) : value.struct_value[i]);
+			child_vectors.push_back(move(vector));
+		}
+		auxiliary = move(struct_buffer);
+		if (value.is_null) {
+			SetValue(0, value);
+		}
+	} else {
+		auxiliary.reset();
+		data = buffer->GetData();
+		SetValue(0, value);
+	}
 }
 
 void Vector::Reference(Vector &other) {
@@ -128,14 +143,26 @@ void Vector::Initialize(const LogicalType &new_type, bool zero_data) {
 	}
 	auxiliary.reset();
 	validity.Reset();
-	if (GetTypeIdSize(GetType().InternalType()) > 0) {
-		buffer = VectorBuffer::CreateStandardVector(VectorType::FLAT_VECTOR, GetType());
+	auto &type = GetType();
+	if (type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::MAP) {
+		auto struct_buffer = make_unique<VectorStructBuffer>();
+		auto &child_types = type.child_types();
+		auto &child_vectors = struct_buffer->GetChildren();
+		for (auto &child_type : child_types) {
+			auto vector = make_unique<Vector>(child_type.second);
+			child_vectors.push_back(move(vector));
+		}
+
+		auxiliary = move(struct_buffer);
+	}
+	if (GetTypeIdSize(type.InternalType()) > 0) {
+		buffer = VectorBuffer::CreateStandardVector(VectorType::FLAT_VECTOR, type);
 		data = buffer->GetData();
 		if (zero_data) {
-			memset(data, 0, STANDARD_VECTOR_SIZE * GetTypeIdSize(new_type.InternalType()));
+			memset(data, 0, STANDARD_VECTOR_SIZE * GetTypeIdSize(type.InternalType()));
 		}
 	} else {
-		buffer = VectorBuffer::CreateStandardVector(VectorType::FLAT_VECTOR, GetType());
+		buffer = VectorBuffer::CreateStandardVector(VectorType::FLAT_VECTOR, type);
 	}
 }
 
@@ -169,16 +196,16 @@ void FindChildren(std::vector<DataArrays> &to_resize, VectorBuffer &auxiliary) {
 		auto &buffer = (VectorStructBuffer &)auxiliary;
 		auto &children = buffer.GetChildren();
 		for (auto &child : children) {
-			auto data = child.second->GetData();
+			auto data = child->GetData();
 			if (!data) {
 				//! Nested type
-				DataArrays arrays(*child.second, data, child.second->GetBuffer().get(),
-				                  GetTypeIdSize(child.second->GetType().InternalType()), true);
+				DataArrays arrays(*child, data, child->GetBuffer().get(),
+				                  GetTypeIdSize(child->GetType().InternalType()), true);
 				to_resize.emplace_back(arrays);
-				FindChildren(to_resize, *child.second->GetAuxiliary());
+				FindChildren(to_resize, *child->GetAuxiliary());
 			} else {
-				DataArrays arrays(*child.second, data, child.second->GetBuffer().get(),
-				                  GetTypeIdSize(child.second->GetType().InternalType()), false);
+				DataArrays arrays(*child, data, child->GetBuffer().get(),
+				                  GetTypeIdSize(child->GetType().InternalType()), false);
 				to_resize.emplace_back(arrays);
 			}
 		}
@@ -217,12 +244,11 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		SetValue(index, val.CastAs(GetType()));
 		return;
 	}
-	if (GetType().id() != LogicalTypeId::STRUCT) {
-		validity.EnsureWritable();
-		validity.Set(index, !val.is_null);
-		if (val.is_null) {
-			return;
-		}
+
+	validity.EnsureWritable();
+	validity.Set(index, !val.is_null);
+	if (val.is_null) {
+		return;
 	}
 
 	switch (GetType().id()) {
@@ -298,16 +324,8 @@ void Vector::SetValue(idx_t index, const Value &val) {
 	case LogicalTypeId::BLOB:
 		((string_t *)data)[index] = StringVector::AddStringOrBlob(*this, val.str_value);
 		break;
+	case LogicalTypeId::MAP:
 	case LogicalTypeId::STRUCT: {
-		if (!auxiliary || StructVector::GetEntries(*this).empty()) {
-			for (size_t i = 0; i < val.struct_value.size(); i++) {
-				auto &struct_child = val.struct_value[i];
-				auto cv = make_unique<Vector>(struct_child.second.type());
-				cv->SetVectorType(GetVectorType());
-				StructVector::AddEntry(*this, struct_child.first, move(cv));
-			}
-		}
-
 		auto &children = StructVector::GetEntries(*this);
 		D_ASSERT(children.size() == val.struct_value.size());
 
@@ -315,11 +333,10 @@ void Vector::SetValue(idx_t index, const Value &val) {
 			auto &struct_child = val.struct_value[i];
 			D_ASSERT(GetVectorType() == VectorType::CONSTANT_VECTOR || GetVectorType() == VectorType::FLAT_VECTOR);
 			auto &vec_child = children[i];
-			D_ASSERT(vec_child.first == struct_child.first);
-			vec_child.second->SetValue(index, struct_child.second);
+			vec_child->SetValue(index, struct_child);
 		}
-	} break;
-
+		break;
+	}
 	case LogicalTypeId::LIST: {
 		if (!auxiliary) {
 			auto vec_list = make_unique<Vector>(GetType().child_types()[0].second);
@@ -336,7 +353,8 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		auto &entry = ((list_entry_t *)data)[index];
 		entry.length = val.list_value.size();
 		entry.offset = offset;
-	} break;
+		break;
+	}
 	default:
 		throw NotImplementedException("Unimplemented type for Vector::SetValue");
 	}
@@ -432,12 +450,14 @@ Value Vector::GetValue(idx_t index) const {
 		auto str = ((string_t *)data)[index];
 		return Value::BLOB((const_data_ptr_t)str.GetDataUnsafe(), str.GetSize());
 	}
+	case LogicalTypeId::MAP:
 	case LogicalTypeId::STRUCT: {
 		Value ret(GetType());
 		ret.is_null = false;
 		// we can derive the value schema from the vector schema
-		for (auto &struct_child : StructVector::GetEntries(*this)) {
-			ret.struct_value.push_back(pair<string, Value>(struct_child.first, struct_child.second->GetValue(index)));
+		auto &child_entries = StructVector::GetEntries(*this);
+		for (auto &struct_child : child_entries) {
+			ret.struct_value.push_back(struct_child->GetValue(index));
 		}
 		return ret;
 	}
@@ -618,10 +638,12 @@ void Vector::Normalify(idx_t count) {
 			TemplatedFlattenConstantVector<list_entry_t>(data, old_data, count);
 			break;
 		}
+		case PhysicalType::MAP:
 		case PhysicalType::STRUCT: {
-			for (auto &child : StructVector::GetEntries(*this)) {
-				D_ASSERT(child.second->GetVectorType() == VectorType::CONSTANT_VECTOR);
-				child.second->Normalify(count);
+			auto &child_entries = StructVector::GetEntries(*this);
+			for (auto &child : child_entries) {
+				D_ASSERT(child->GetVectorType() == VectorType::CONSTANT_VECTOR);
+				child->Normalify(count);
 			}
 		} break;
 		default:
@@ -709,6 +731,21 @@ void Vector::Sequence(int64_t start, int64_t increment) {
 
 void Vector::Serialize(idx_t count, Serializer &serializer) {
 	auto &type = GetType();
+
+	VectorData vdata;
+	Orrify(count, vdata);
+
+	const auto write_validity = (count > 0) && !vdata.validity.AllValid();
+	serializer.Write<bool>(write_validity);
+	if (write_validity) {
+		ValidityMask flat_mask(count);
+		for (idx_t i = 0; i < count; ++i) {
+			auto row_idx = vdata.sel->get_index(i);
+			flat_mask.Set(i, vdata.validity.RowIsValid(row_idx));
+		}
+		serializer.WriteData((const_data_ptr_t)flat_mask.GetData(), flat_mask.ValidityMaskSize(count));
+	}
+
 	if (TypeIsConstantSize(type.InternalType())) {
 		// constant size type: simple copy
 		idx_t write_size = GetTypeIdSize(type.InternalType()) * count;
@@ -716,9 +753,6 @@ void Vector::Serialize(idx_t count, Serializer &serializer) {
 		VectorOperations::WriteToStorage(*this, count, ptr.get());
 		serializer.WriteData(ptr.get(), write_size);
 	} else {
-		VectorData vdata;
-		Orrify(count, vdata);
-
 		switch (type.InternalType()) {
 		case PhysicalType::VARCHAR: {
 			auto strings = (string_t *)vdata.data;
@@ -730,13 +764,22 @@ void Vector::Serialize(idx_t count, Serializer &serializer) {
 			break;
 		}
 		default:
-			throw NotImplementedException("Unimplemented type for Vector::Serialize!");
+			throw NotImplementedException("Unimplemented variable width type for Vector::Serialize!");
 		}
 	}
 }
 
 void Vector::Deserialize(idx_t count, Deserializer &source) {
 	auto &type = GetType();
+
+	auto &validity = FlatVector::Validity(*this);
+	validity.Reset();
+	const auto has_validity = source.Read<bool>();
+	if (has_validity) {
+		validity.Initialize(count);
+		source.ReadData((data_ptr_t)validity.GetData(), validity.ValidityMaskSize(count));
+	}
+
 	if (TypeIsConstantSize(type.InternalType())) {
 		// constant size type: read fixed amount of data from
 		auto column_size = GetTypeIdSize(type.InternalType()) * count;
@@ -746,15 +789,12 @@ void Vector::Deserialize(idx_t count, Deserializer &source) {
 		VectorOperations::ReadFromStorage(ptr.get(), count, *this);
 	} else {
 		auto strings = FlatVector::GetData<string_t>(*this);
-		auto &validity = FlatVector::Validity(*this);
 		for (idx_t i = 0; i < count; i++) {
 			// read the strings
 			auto str = source.Read<string>();
 			// now add the string to the StringHeap of the vector
 			// and write the pointer into the vector
-			if (IsNullValue<const char *>((const char *)str.c_str())) {
-				validity.SetInvalid(i);
-			} else {
+			if (validity.RowIsValid(i)) {
 				strings[i] = StringVector::AddStringOrBlob(*this, str);
 			}
 		}
@@ -864,13 +904,15 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 		}
 	}
 
-	if (GetType().InternalType() == PhysicalType::STRUCT) {
-		D_ASSERT(GetType().child_types().size() > 0);
+	if (GetType().InternalType() == PhysicalType::STRUCT || GetType().InternalType() == PhysicalType::MAP) {
+		auto &child_types = GetType().child_types();
+		D_ASSERT(child_types.size() > 0);
 		if (GetVectorType() == VectorType::FLAT_VECTOR || GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			auto &children = StructVector::GetEntries(*this);
-			D_ASSERT(children.size() > 0);
-			for (auto &child : children) {
-				child.second->Verify(sel, count);
+			D_ASSERT(child_types.size() == children.size());
+			for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
+				D_ASSERT(children[child_idx]->GetType() == child_types[child_idx].second);
+				children[child_idx]->Verify(sel, count);
 			}
 		}
 	}
@@ -891,7 +933,7 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 			for (idx_t i = 0; i < count; i++) {
 				auto idx = sel.get_index(i);
 				auto &le = list_data[idx];
-				if (validity.RowIsValid(idx)) {
+				if (validity.RowIsValid(idx) && ListVector::HasEntry(*this)) {
 					D_ASSERT(le.offset + le.length <= ListVector::GetListSize(*this));
 				}
 			}
@@ -1003,34 +1045,17 @@ void StringVector::AddHeapReference(Vector &vector, Vector &other) {
 	string_buffer.AddHeapReference(other.auxiliary);
 }
 
-bool StructVector::HasEntries(const Vector &vector) {
-	D_ASSERT(vector.GetType().id() == LogicalTypeId::STRUCT);
-	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR ||
-	         vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
-	D_ASSERT(vector.auxiliary == nullptr || vector.auxiliary->GetBufferType() == VectorBufferType::STRUCT_BUFFER);
-	return vector.auxiliary != nullptr;
-}
-
-const child_list_t<unique_ptr<Vector>> &StructVector::GetEntries(const Vector &vector) {
-	D_ASSERT(vector.GetType().id() == LogicalTypeId::STRUCT);
+vector<unique_ptr<Vector>> &StructVector::GetEntries(Vector &vector) {
+	D_ASSERT(vector.GetType().id() == LogicalTypeId::STRUCT || vector.GetType().id() == LogicalTypeId::MAP);
 	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR ||
 	         vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
 	D_ASSERT(vector.auxiliary);
 	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::STRUCT_BUFFER);
-	return ((const VectorStructBuffer *)vector.auxiliary.get())->GetChildren();
+	return ((VectorStructBuffer *)vector.auxiliary.get())->GetChildren();
 }
 
-void StructVector::AddEntry(Vector &vector, const string &name, unique_ptr<Vector> entry) {
-	// TODO asser that an entry with this name does not already exist
-	D_ASSERT(vector.GetType().id() == LogicalTypeId::STRUCT);
-	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR ||
-	         vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
-	if (!vector.auxiliary) {
-		vector.auxiliary = make_buffer<VectorStructBuffer>();
-	}
-	D_ASSERT(vector.auxiliary);
-	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::STRUCT_BUFFER);
-	((VectorStructBuffer *)vector.auxiliary.get())->AddChild(name, move(entry));
+const vector<unique_ptr<Vector>> &StructVector::GetEntries(const Vector &vector) {
+	return GetEntries((Vector &)vector);
 }
 
 bool ListVector::HasEntry(const Vector &vector) {
@@ -1068,6 +1093,149 @@ void ListVector::Initialize(Vector &vec) {
 		ListVector::SetEntry(vec, move(vec_child));
 	}
 }
+template <class T>
+void TemplatedSearchInMap(Vector &list, T key, vector<idx_t> &offsets, bool is_key_null, idx_t offset, idx_t length) {
+	auto &list_vector = ListVector::GetEntry(list);
+	VectorData vector_data;
+	list_vector.Orrify(ListVector::GetListSize(list), vector_data);
+	auto data = (T *)vector_data.data;
+	auto validity_mask = vector_data.validity;
+
+	if (is_key_null) {
+		for (idx_t i = offset; i < offset + length; i++) {
+			if (!validity_mask.RowIsValid(i)) {
+				offsets.push_back(i);
+			}
+		}
+	} else {
+		for (idx_t i = offset; i < offset + length; i++) {
+			if (!validity_mask.RowIsValid(i)) {
+				continue;
+			}
+			if (key == data[i]) {
+				offsets.push_back(i);
+			}
+		}
+	}
+}
+
+void SearchString(Vector &list, string &key, vector<idx_t> &offsets, bool is_key_null, idx_t offset, idx_t length) {
+	auto &list_vector = ListVector::GetEntry(list);
+	VectorData vector_data;
+	list_vector.Orrify(ListVector::GetListSize(list), vector_data);
+	auto data = (string_t *)vector_data.data;
+	auto validity_mask = vector_data.validity;
+	if (is_key_null) {
+		for (idx_t i = offset; i < offset + length; i++) {
+			if (!validity_mask.RowIsValid(i)) {
+				offsets.push_back(i);
+			}
+		}
+	} else {
+		string_t key_str_t(key);
+		for (idx_t i = offset; i < offset + length; i++) {
+			if (!validity_mask.RowIsValid(i)) {
+				continue;
+			}
+			if (Equals::Operation<string_t>(data[i], key_str_t)) {
+				offsets.push_back(i);
+			}
+		}
+	}
+}
+
+vector<idx_t> ListVector::Search(Vector &list, Value &key, idx_t row) {
+	vector<idx_t> offsets;
+	if (!ListVector::HasEntry(list)) {
+		return offsets;
+	}
+
+	auto &list_vector = ListVector::GetEntry(list);
+	auto &entry = ((list_entry_t *)list.GetData())[row];
+	switch (list_vector.GetType().id()) {
+
+	case LogicalTypeId::SQLNULL:
+		if (key.is_null) {
+			for (idx_t i = entry.offset; i < entry.offset + entry.length; i++) {
+				offsets.push_back(i);
+			}
+		}
+		break;
+	case LogicalTypeId::UTINYINT:
+		::duckdb::TemplatedSearchInMap<uint8_t>(list, key.value_.utinyint, offsets, key.is_null, entry.offset,
+		                                        entry.length);
+		break;
+	case LogicalTypeId::TINYINT:
+		::duckdb::TemplatedSearchInMap<int8_t>(list, key.value_.tinyint, offsets, key.is_null, entry.offset,
+		                                       entry.length);
+		break;
+	case LogicalTypeId::USMALLINT:
+		::duckdb::TemplatedSearchInMap<uint16_t>(list, key.value_.usmallint, offsets, key.is_null, entry.offset,
+		                                         entry.length);
+		break;
+	case LogicalTypeId::SMALLINT:
+		::duckdb::TemplatedSearchInMap<int16_t>(list, key.value_.smallint, offsets, key.is_null, entry.offset,
+		                                        entry.length);
+		break;
+	case LogicalTypeId::UINTEGER:
+		::duckdb::TemplatedSearchInMap<uint32_t>(list, key.value_.uinteger, offsets, key.is_null, entry.offset,
+		                                         entry.length);
+		break;
+	case LogicalTypeId::INTEGER:
+		::duckdb::TemplatedSearchInMap<int32_t>(list, key.value_.integer, offsets, key.is_null, entry.offset,
+		                                        entry.length);
+		break;
+	case LogicalTypeId::UBIGINT:
+		::duckdb::TemplatedSearchInMap<uint64_t>(list, key.value_.ubigint, offsets, key.is_null, entry.offset,
+		                                         entry.length);
+		break;
+	case LogicalTypeId::BIGINT:
+		::duckdb::TemplatedSearchInMap<int64_t>(list, key.value_.bigint, offsets, key.is_null, entry.offset,
+		                                        entry.length);
+		break;
+	case LogicalTypeId::HUGEINT:
+		::duckdb::TemplatedSearchInMap<hugeint_t>(list, key.value_.hugeint, offsets, key.is_null, entry.offset,
+		                                          entry.length);
+		break;
+	case LogicalTypeId::FLOAT:
+		::duckdb::TemplatedSearchInMap<float>(list, key.value_.float_, offsets, key.is_null, entry.offset,
+		                                      entry.length);
+		break;
+	case LogicalTypeId::DOUBLE:
+		::duckdb::TemplatedSearchInMap<double>(list, key.value_.double_, offsets, key.is_null, entry.offset,
+		                                       entry.length);
+		break;
+	case LogicalTypeId::DATE:
+		::duckdb::TemplatedSearchInMap<date_t>(list, key.value_.date, offsets, key.is_null, entry.offset, entry.length);
+		break;
+	case LogicalTypeId::TIME:
+		::duckdb::TemplatedSearchInMap<dtime_t>(list, key.value_.time, offsets, key.is_null, entry.offset,
+		                                        entry.length);
+		break;
+	case LogicalTypeId::TIMESTAMP:
+		::duckdb::TemplatedSearchInMap<timestamp_t>(list, key.value_.timestamp, offsets, key.is_null, entry.offset,
+		                                            entry.length);
+		break;
+	case LogicalTypeId::BLOB:
+	case LogicalTypeId::VARCHAR:
+		::duckdb::SearchString(list, key.str_value, offsets, key.is_null, entry.offset, entry.length);
+		break;
+	default:
+		throw InvalidTypeException(list.GetType().id(), "Invalid type for List Vector Search");
+	}
+	return offsets;
+}
+
+Value ListVector::GetValuesFromOffsets(Vector &list, vector<idx_t> &offsets) {
+	Value ret(list.GetType().child_types()[0].second);
+	ret.is_null = false;
+	auto &child_vec = ListVector::GetEntry(list);
+	for (auto &offset : offsets) {
+		ret.list_value.push_back(child_vec.GetValue(offset));
+	}
+	return ret;
+}
+
 idx_t ListVector::GetListSize(const Vector &vec) {
 	if (vec.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		auto &child = DictionaryVector::Child(vec);

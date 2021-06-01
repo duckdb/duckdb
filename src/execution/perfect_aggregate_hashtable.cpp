@@ -1,10 +1,12 @@
 #include "duckdb/execution/perfect_aggregate_hashtable.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
+#include "duckdb/common/row_operations/row_operations.hpp"
 
 namespace duckdb {
 
-PerfectAggregateHashTable::PerfectAggregateHashTable(BufferManager &buffer_manager, vector<LogicalType> group_types_p,
+PerfectAggregateHashTable::PerfectAggregateHashTable(BufferManager &buffer_manager,
+                                                     const vector<LogicalType> &group_types_p,
                                                      vector<LogicalType> payload_types_p,
                                                      vector<AggregateObject> aggregate_objects_p,
                                                      vector<Value> group_minima_p, vector<idx_t> required_bits_p)

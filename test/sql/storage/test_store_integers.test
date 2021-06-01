@@ -57,3 +57,27 @@ SELECT * FROM test2 ORDER BY a
 11
 12
 13
+
+# append a row
+statement ok
+INSERT INTO test VALUES (14, 23)
+
+query II
+SELECT * FROM test ORDER BY a
+----
+NULL	NULL
+11	22
+12	21
+13	22
+14	23
+
+restart
+
+query II
+SELECT * FROM test ORDER BY a
+----
+NULL	NULL
+11	22
+12	21
+13	22
+14	23

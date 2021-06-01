@@ -21,14 +21,7 @@ NumericSegment::NumericSegment(DatabaseInstance &db, PhysicalType type, idx_t ro
 
 	// figure out how many vectors we want to store in this block
 	this->type_size = GetTypeIdSize(type);
-	this->vector_size = type_size * STANDARD_VECTOR_SIZE;
-	this->max_vector_count = Storage::BLOCK_SIZE / vector_size;
-	// FIXME: this is a fix for test/sql/storage/checkpointed_self_append_tinyint.test
-	// it is only required because of ToTemporary()
-	// this should be removed when ToTemporary() is removed
-	if (max_vector_count > 80) {
-		max_vector_count = 80;
-	}
+	this->max_tuple_count = Storage::BLOCK_SIZE / type_size;
 
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	if (block_id == INVALID_BLOCK) {
@@ -49,22 +42,18 @@ void NumericSegment::InitializeScan(ColumnScanState &state) {
 }
 
 //===--------------------------------------------------------------------===//
-// Fetch base data
+// Scan base data
 //===--------------------------------------------------------------------===//
-void NumericSegment::FetchBaseData(ColumnScanState &state, idx_t vector_index, Vector &result) {
-	D_ASSERT(vector_index < max_vector_count);
-	D_ASSERT(vector_index * STANDARD_VECTOR_SIZE <= tuple_count);
+void NumericSegment::Scan(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset) {
+	D_ASSERT(start <= tuple_count);
+	D_ASSERT(start + scan_count <= tuple_count);
 
 	auto data = state.primary_handle->node->buffer;
-	auto offset = vector_index * vector_size;
+	auto source_data = data + start * type_size;
 
-	idx_t count = GetVectorCount(vector_index);
-
-	auto source_data = data + offset;
-
-	// fetch the nullmask and copy the data from the base table
+	// copy the data from the base table
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	memcpy(FlatVector::GetData(result), source_data, count * type_size);
+	memcpy(FlatVector::GetData(result) + result_offset * type_size, source_data, scan_count * type_size);
 }
 
 //===--------------------------------------------------------------------===//
@@ -74,15 +63,10 @@ void NumericSegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &res
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	auto handle = buffer_manager.Pin(block);
 
-	// get the vector index
-	idx_t vector_index = row_id / STANDARD_VECTOR_SIZE;
-	idx_t id_in_vector = row_id - vector_index * STANDARD_VECTOR_SIZE;
-	D_ASSERT(vector_index < max_vector_count);
-
 	// first fetch the data from the base table
-	auto vector_ptr = handle->node->buffer + vector_index * vector_size;
+	auto data_ptr = handle->node->buffer + row_id * type_size;
 
-	memcpy(FlatVector::GetData(result) + result_idx * type_size, vector_ptr + id_in_vector * type_size, type_size);
+	memcpy(FlatVector::GetData(result) + result_idx * type_size, data_ptr, type_size);
 }
 
 //===--------------------------------------------------------------------===//
@@ -92,25 +76,12 @@ idx_t NumericSegment::Append(SegmentStatistics &stats, VectorData &data, idx_t o
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	auto handle = buffer_manager.Pin(block);
 
-	idx_t initial_count = tuple_count;
-	while (count > 0) {
-		// get the vector index of the vector to append to and see how many tuples we can append to that vector
-		idx_t vector_index = tuple_count / STANDARD_VECTOR_SIZE;
-		if (vector_index == max_vector_count) {
-			break;
-		}
-		idx_t current_tuple_count = tuple_count - vector_index * STANDARD_VECTOR_SIZE;
-		idx_t append_count = MinValue(STANDARD_VECTOR_SIZE - current_tuple_count, count);
+	auto target_ptr = handle->node->buffer;
+	idx_t copy_count = MinValue<idx_t>(count, max_tuple_count - tuple_count);
 
-		// now perform the actual append
-		append_function(stats, handle->node->buffer + vector_size * vector_index, current_tuple_count, data, offset,
-		                append_count);
-
-		count -= append_count;
-		offset += append_count;
-		tuple_count += append_count;
-	}
-	return tuple_count - initial_count;
+	append_function(stats, target_ptr, tuple_count, data, offset, copy_count);
+	tuple_count += copy_count;
+	return copy_count;
 }
 
 //===--------------------------------------------------------------------===//

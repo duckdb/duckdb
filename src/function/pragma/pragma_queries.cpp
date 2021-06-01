@@ -62,8 +62,13 @@ string PragmaDatabaseSize(ClientContext &context, const FunctionParameters &para
 	return "SELECT * FROM pragma_database_size()";
 }
 
+string PragmaStorageInfo(ClientContext &context, const FunctionParameters &parameters) {
+	return StringUtil::Format("SELECT * FROM pragma_storage_info('%s')", parameters.values[0].ToString());
+}
+
 void PragmaQueries::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(PragmaFunction::PragmaCall("table_info", PragmaTableInfo, {LogicalType::VARCHAR}));
+	set.AddFunction(PragmaFunction::PragmaCall("storage_info", PragmaStorageInfo, {LogicalType::VARCHAR}));
 	set.AddFunction(PragmaFunction::PragmaStatement("show_tables", PragmaShowTables));
 	set.AddFunction(PragmaFunction::PragmaStatement("database_list", PragmaDatabaseList));
 	set.AddFunction(PragmaFunction::PragmaStatement("collations", PragmaCollations));

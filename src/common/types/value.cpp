@@ -418,11 +418,25 @@ Value Value::STRUCT(child_list_t<Value> values) {
 	Value result;
 	child_list_t<LogicalType> child_types;
 	for (auto &child : values) {
-		child_types.push_back(make_pair(child.first, child.second.type()));
+		child_types.push_back(make_pair(move(child.first), child.second.type()));
+		result.struct_value.push_back(move(child.second));
 	}
 	result.type_ = LogicalType(LogicalTypeId::STRUCT, child_types);
 
-	result.struct_value = move(values);
+	result.is_null = false;
+	return result;
+}
+
+Value Value::MAP(Value key, Value value) {
+	Value result;
+	child_list_t<LogicalType> child_types;
+	child_types.push_back({"key", key.type()});
+	child_types.push_back({"value", value.type()});
+
+	result.type_ = LogicalType(LogicalTypeId::MAP, child_types);
+
+	result.struct_value.push_back(move(key));
+	result.struct_value.push_back(move(value));
 	result.is_null = false;
 	return result;
 }
@@ -654,6 +668,14 @@ uint16_t Value::GetValue() const {
 	return GetValueInternal<uint16_t>();
 }
 template <>
+uint32_t Value::GetValue() const {
+	return GetValueInternal<uint32_t>();
+}
+template <>
+uint64_t Value::GetValue() const {
+	return GetValueInternal<uint64_t>();
+}
+template <>
 string Value::GetValue() const {
 	return ToString();
 }
@@ -677,8 +699,8 @@ template <>
 timestamp_t Value::GetValue() const {
 	return GetValueInternal<timestamp_t>();
 }
-template <>
-uintptr_t Value::GetValue() const {
+
+uintptr_t Value::GetPointer() const {
 	D_ASSERT(type() == LogicalType::POINTER);
 	return value_.pointer;
 }
@@ -901,8 +923,9 @@ string Value::ToString() const {
 	case LogicalTypeId::STRUCT: {
 		string ret = "<";
 		for (size_t i = 0; i < struct_value.size(); i++) {
+			auto &name = type_.child_types()[i].first;
 			auto &child = struct_value[i];
-			ret += child.first + ": " + child.second.ToString();
+			ret += name + ": " + child.ToString();
 			if (i < struct_value.size() - 1) {
 				ret += ", ";
 			}
@@ -920,6 +943,19 @@ string Value::ToString() const {
 			}
 		}
 		ret += "]";
+		return ret;
+	}
+	case LogicalTypeId::MAP: {
+		string ret = "{";
+		auto &key_list = struct_value[0].list_value;
+		auto &value_list = struct_value[1].list_value;
+		for (size_t i = 0; i < key_list.size(); i++) {
+			ret += key_list[i].ToString() + "=" + value_list[i].ToString();
+			if (i < key_list.size() - 1) {
+				ret += ", ";
+			}
+		}
+		ret += "}";
 		return ret;
 	}
 	default:

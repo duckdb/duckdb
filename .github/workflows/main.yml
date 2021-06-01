@@ -487,7 +487,36 @@ jobs:
       run: make relassert
 
     - name: Test
-      run: build/relassert/test/unittest "*"
+      run: |
+          build/relassert/test/unittest "*"
+
+  force-storage:
+    name: Force Storage
+    runs-on: ubuntu-20.04
+    needs: linux-debug
+
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+      BUILD_ICU: 1
+      BUILD_PARQUET: 1
+      BUILD_TPCH: 1
+      BUILD_FTS: 1
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Install
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+    - name: Build
+      run: make reldebug
+
+    - name: Test
+      run: build/reldebug/test/unittest "*" --force-storage
 
 
   threadsan:
@@ -527,6 +556,10 @@ jobs:
           build/reldebug/test/unittest --start-offset-percentage=70 --end-offset-percentage=80
           build/reldebug/test/unittest --start-offset-percentage=80 --end-offset-percentage=90
           build/reldebug/test/unittest --start-offset-percentage=90
+          build/reldebug/test/unittest "[intraquery]"
+          build/reldebug/test/unittest "[interquery]"
+          build/reldebug/test/unittest "[detailed_profiler]"
+          build/reldebug/test/unittest test/sql/tpch/tpch_sf01.test_slow
 
   valgrind:
     name: Valgrind
@@ -551,7 +584,7 @@ jobs:
       run: make debug
 
     - name: Test
-      run: valgrind ./build/debug/test/unittest -s "Test TPC-H SF0.01"
+      run: valgrind ./build/debug/test/unittest test/sql/tpch/tpch_sf001.test_slow
 
 # borked somehow. needs investigation.
 #  codecov:
@@ -820,6 +853,7 @@ jobs:
       CIBW_TEST_REQUIRES: 'pytest'
       CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" "pyarrow>=3.0.0"'
       CIBW_TEST_COMMAND: 'python -m pytest {project}/tests'
+      CIBW_ARCHS_MACOS: 'x86_64 universal2 arm64'
       SETUPTOOLS_SCM_NO_LOCAL: 'yes'
       TWINE_USERNAME: 'hfmuehleisen'
 
@@ -908,7 +942,7 @@ jobs:
 
     - name: Install
       run: |
-        sudo apt-get update -y -qq && sudo apt-get install -y -qq texlive-latex-base texlive-fonts-extra
+        sudo apt-get update -y -qq && sudo apt-get install -y -qq texlive-latex-base texlive-fonts-extra libcurl4-openssl-dev
         mkdir -p $HOME/.R
         R -f tools/rpkg/dependencies.R
 

@@ -41,7 +41,7 @@ using duckdb_parquet::format::ColumnChunk;
 using duckdb_parquet::format::ConvertedType;
 using duckdb_parquet::format::FieldRepetitionType;
 using duckdb_parquet::format::FileMetaData;
-using duckdb_parquet::format::RowGroup;
+using ParquetRowGroup = duckdb_parquet::format::RowGroup;
 using duckdb_parquet::format::SchemaElement;
 using duckdb_parquet::format::Statistics;
 using duckdb_parquet::format::Type;
@@ -331,7 +331,7 @@ unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(ParquetReader &reader, 
 	return column_stats;
 }
 
-const RowGroup &ParquetReader::GetGroup(ParquetReaderScanState &state) {
+const ParquetRowGroup &ParquetReader::GetGroup(ParquetReaderScanState &state) {
 	auto file_meta_data = GetFileMetadata();
 	D_ASSERT(state.current_group >= 0 && (idx_t)state.current_group < state.group_idx_list.size());
 	D_ASSERT(state.group_idx_list[state.current_group] >= 0 &&
@@ -464,6 +464,9 @@ static void FilterOperationSwitch(Vector &v, Value &constant, parquet_filter_t &
 		break;
 	case LogicalTypeId::DOUBLE:
 		TemplatedFilterOperation<double, OP>(v, constant.value_.double_, filter_mask, count);
+		break;
+	case LogicalTypeId::DATE:
+		TemplatedFilterOperation<date_t, OP>(v, constant.value_.date, filter_mask, count);
 		break;
 	case LogicalTypeId::TIMESTAMP:
 		TemplatedFilterOperation<timestamp_t, OP>(v, constant.value_.timestamp, filter_mask, count);

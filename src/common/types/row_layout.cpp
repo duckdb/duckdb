@@ -29,7 +29,7 @@ RowLayout::RowLayout() : flag_width(0), data_width(0), aggr_width(0), row_width(
 
 void RowLayout::Initialize(vector<LogicalType> types_p, Aggregates aggregates_p) {
 	offsets.clear();
-	types = types_p;
+	types = move(types_p);
 
 	// Null mask at the front - 1 bit per value.
 	flag_width = ValidityBytes::ValidityMaskSize(types.size());
