@@ -128,8 +128,6 @@ jobs:
     - name: Duckdb.dll export symbols with C++ on Windows
       run: cl -I src/include examples/embedded-c++-windows/cppintegration.cpp -link src/Release/duckdb.lib
 
-
-
   win-release-32:
     name: Windows (32 Bit)
     runs-on: windows-latest
@@ -172,6 +170,34 @@ jobs:
           duckdb_cli-windows-i386.zip
           tools/jdbc/duckdb_jdbc.jar
 
+  mingw:
+     name: MingW (64 Bit)
+     runs-on: windows-latest
+     needs: linux-debug
+     defaults:
+       run:
+         shell: msys2 {0}
+     steps:
+       - uses: actions/checkout@v2
+       - uses: msys2/setup-msys2@v2
+         with:
+           msystem: MINGW64
+           update: true
+           install: git mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja git
+       # see here: https://gist.github.com/scivision/1de4fd6abea9ba6b2d87dc1e86b5d2ce
+       - name: Put MSYS2_MinGW64 on PATH
+         # there is not yet an environment variable for this path from msys2/setup-msys2
+         run: export PATH=D:/a/_temp/msys/msys64/mingw64/bin:$PATH
+
+       - name: Build
+         run: |
+           cmake -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DBUILD_PARQUET_EXTENSION=1
+           cmake --build . --config Release
+
+       - name: Test
+         run: |
+           cp src/libduckdb.dll .
+           test/unittest.exe
 
   xcode-release:
     name: OSX Release
