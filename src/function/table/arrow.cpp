@@ -130,7 +130,7 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &contex
 			throw InvalidInputException("arrow_scan: released schema passed");
 		}
 		if (schema.dictionary) {
-			throw NotImplementedException("arrow_scan: dictionary vectors not supported yet");
+			res->dictionary_type[col_idx] = GetArrowLogicalType(schema, res->original_list_type, col_idx);
 		}
 		auto format = string(schema.format);
 		return_types.emplace_back(GetArrowLogicalType(schema, res->original_list_type, col_idx));
@@ -155,7 +155,6 @@ unique_ptr<FunctionOperatorData> ArrowTableFunction::ArrowScanInit(ClientContext
 
 void SetValidityMask(Vector &vector, ArrowArray &array, ArrowScanState &scan_state, idx_t size) {
 	if (array.null_count != 0 && array.buffers[0]) {
-
 		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
 		auto &mask = FlatVector::Validity(vector);
 		auto bit_offset = scan_state.chunk_offset + array.offset;
@@ -169,9 +168,11 @@ void SetValidityMask(Vector &vector, ArrowArray &array, ArrowScanState &scan_sta
 			bitset<STANDARD_VECTOR_SIZE + 8> temp_nullmask;
 			memcpy(&temp_nullmask, (uint8_t *)array.buffers[0] + bit_offset / 8, n_bitmask_bytes + 1);
 
-			temp_nullmask >>= (bit_offset % 8); // why this has to be a right shift is a mystery to me
+			temp_nullmask >>= (bit_offset % 8); //! why this has to be a right shift is a mystery to me
 			memcpy((void *)mask.GetData(), (data_ptr_t)&temp_nullmask, n_bitmask_bytes);
 		}
+		//! Set last element to null
+//		mask.Set(size,false);
 	}
 }
 
@@ -354,9 +355,71 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 	}
 }
 
+void SetSelectionVector(SelectionVector &sel, data_ptr_t indices_p, LogicalType &logical_type,idx_t size){
+    sel.Initialize(size);
+    switch (logical_type.id()) {
+        case LogicalTypeId::UINTEGER:
+        case LogicalTypeId::INTEGER:{
+            auto indices = (uint32_t*) indices_p;
+            for (idx_t row = 0; row < size; row++) {
+		        sel.set_index(row,indices[row]);
+		    }
+            break;
+        }
+        case LogicalTypeId::BIGINT:
+            {
+            auto indices = (uint64_t*) indices_p;
+            for (idx_t row = 0; row < size; row++) {
+		        sel.set_index(row,indices[row]);
+		    }
+            break;
+        }
+        default:
+            throw std::runtime_error("(Arrow) Unsupported type for selection vectors " + logical_type.ToString());
+    }
+}
+
+void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, ArrowScanState &scan_state, idx_t size,
+                         std::unordered_map<idx_t, std::vector<std::pair<ArrowListType, idx_t>>> &arrow_lists,
+                         idx_t col_idx,std::unordered_map<idx_t, LogicalType>& dictionary_type, idx_t list_col_idx = 0) {
+    SelectionVector sel;
+	switch (vector.GetType().id()) {
+	case LogicalTypeId::SQLNULL:
+		vector.Reference(Value());
+		break;
+	case LogicalTypeId::BOOLEAN:
+	case LogicalTypeId::TINYINT:
+	case LogicalTypeId::SMALLINT:
+	case LogicalTypeId::INTEGER:
+	case LogicalTypeId::FLOAT:
+	case LogicalTypeId::UTINYINT:
+	case LogicalTypeId::USMALLINT:
+	case LogicalTypeId::UINTEGER:
+	case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::DOUBLE:
+	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::DATE:
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_NS:{
+		FlatVector::SetData(vector, (data_ptr_t)array.dictionary->buffers[1] +  GetTypeIdSize(vector.GetType().InternalType())*
+		                                                               array.offset);
+		SetValidityMask(vector, *array.dictionary, scan_state, size);
+		auto indices = (data_ptr_t)array.buffers[1] +  GetTypeIdSize(dictionary_type[col_idx].InternalType())*
+		                                                               (scan_state.chunk_offset + array.offset);
+		SetSelectionVector(sel,indices,dictionary_type[col_idx],size);
+		vector.Slice(sel,size);
+	}
+		break;
+	default:
+		throw std::runtime_error("Unsupported type " + vector.GetType().ToString());
+	}
+}
 void ArrowTableFunction::ArrowToDuckDB(ArrowScanState &scan_state,
                                        std::unordered_map<idx_t, vector<std::pair<ArrowListType, idx_t>>> &arrow_lists,
-                                       DataChunk &output) {
+                                       std::unordered_map<idx_t, LogicalType>& dictionary_type,DataChunk &output) {
 	for (idx_t col_idx = 0; col_idx < output.ColumnCount(); col_idx++) {
 		auto &array = *scan_state.chunk->arrow_array.children[col_idx];
 		if (!array.release) {
@@ -366,10 +429,13 @@ void ArrowTableFunction::ArrowToDuckDB(ArrowScanState &scan_state,
 			throw InvalidInputException("arrow_scan: array length mismatch");
 		}
 		if (array.dictionary) {
-			throw NotImplementedException("arrow_scan: dictionary vectors not supported yet");
+			ColumnArrowToDuckDBDictionary(output.data[col_idx], array, scan_state, output.size(), arrow_lists, col_idx,dictionary_type);
 		}
-		SetValidityMask(output.data[col_idx], array, scan_state, output.size());
-		ColumnArrowToDuckDB(output.data[col_idx], array, scan_state, output.size(), arrow_lists, col_idx);
+		else{
+		    ColumnArrowToDuckDB(output.data[col_idx], array, scan_state, output.size(), arrow_lists, col_idx);
+		    SetValidityMask(output.data[col_idx], array, scan_state, output.size());
+		}
+
 	}
 }
 
@@ -395,7 +461,7 @@ void ArrowTableFunction::ArrowScanFunction(ClientContext &context, const Functio
 	int64_t output_size = MinValue<int64_t>(STANDARD_VECTOR_SIZE, state.chunk->arrow_array.length - state.chunk_offset);
 	data.lines_read += output_size;
 	output.SetCardinality(output_size);
-	ArrowToDuckDB(state, data.original_list_type, output);
+	ArrowToDuckDB(state, data.original_list_type,data.dictionary_type, output);
 	output.Verify();
 	state.chunk_offset += output.size();
 }
@@ -415,7 +481,7 @@ void ArrowTableFunction::ArrowScanFunctionParallel(ClientContext &context, const
 	int64_t output_size = MinValue<int64_t>(STANDARD_VECTOR_SIZE, state.chunk->arrow_array.length - state.chunk_offset);
 	data.lines_read += output_size;
 	output.SetCardinality(output_size);
-	ArrowToDuckDB(state, data.original_list_type, output);
+	ArrowToDuckDB(state, data.original_list_type,data.dictionary_type, output);
 	output.Verify();
 	state.chunk_offset += output.size();
 }

@@ -25,6 +25,8 @@ struct ArrowScanFunctionData : public TableFunctionData {
 	unique_ptr<ArrowArrayStreamWrapper> stream;
 	//! This holds the original list type (col_idx, [ArrowListType,size])
 	std::unordered_map<idx_t, vector<std::pair<ArrowListType, idx_t>>> original_list_type;
+	//! This holds the index type for dictionaries
+	std::unordered_map<idx_t, LogicalType> dictionary_type;
 	std::atomic<idx_t> lines_read;
 	ArrowSchemaWrapper schema_root;
 	idx_t rows_per_thread;
@@ -59,7 +61,7 @@ private:
 	//! Actual conversion from Arrow to DuckDB
 	static void ArrowToDuckDB(ArrowScanState &scan_state,
 	                          std::unordered_map<idx_t, vector<std::pair<ArrowListType, idx_t>>> &arrow_lists,
-	                          DataChunk &output);
+	                          std::unordered_map<idx_t, LogicalType>& dictionary_type,DataChunk &output);
 
 	//! -----Single Thread Functions:-----
 	//! Initialize Single Thread Scan

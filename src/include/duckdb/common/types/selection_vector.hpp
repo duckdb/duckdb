@@ -88,6 +88,10 @@ public:
 	string ToString(idx_t count = 0) const;
 	void Print(idx_t count = 0) const;
 
+	sel_t& operator[] (idx_t index){
+        return sel_vector[index];
+	}
+
 private:
 	sel_t *sel_vector;
 	buffer_ptr<SelectionData> selection_data;
