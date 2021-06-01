@@ -166,6 +166,8 @@ public:
 	idx_t tuple_size;
 	//! Next pointer offset in tuple
 	idx_t pointer_offset;
+	//! A constant false column for initialising right outer joins
+	Vector vfound;
 	//! The join type of the HT
 	JoinType join_type;
 	//! Whether or not the HT has been finalized
@@ -204,10 +206,13 @@ private:
 
 	idx_t PrepareKeys(DataChunk &keys, unique_ptr<VectorData[]> &key_data, const SelectionVector *&current_sel,
 	                  SelectionVector &sel, bool build_side);
+<<<<<<< Updated upstream
 	void SerializeVectorData(VectorData &vdata, const SelectionVector &sel, const idx_t count,
 	                         data_ptr_t key_locations[], const idx_t col_idx);
 	void SerializeVector(Vector &v, idx_t vcount, const SelectionVector &sel, const idx_t count,
 	                     data_ptr_t key_locations[], const idx_t col_idx);
+=======
+>>>>>>> Stashed changes
 
 	//! The amount of entries stored in the HT currently
 	idx_t count;

@@ -43,6 +43,8 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition
 		// full/right outer joins need an extra bool to keep track of whether or not a tuple has found a matching entry
 		// we place the bool before the NEXT pointer
 		layout_types.emplace_back(LogicalType::BOOLEAN);
+		Value flag(false);
+		vfound.Reference(flag);
 	}
 	layout_types.emplace_back(LogicalType::HASH);
 	layout.Initialize(layout_types);
@@ -103,6 +105,7 @@ void JoinHashTable::Hash(DataChunk &keys, const SelectionVector &sel, idx_t coun
 		}
 	}
 }
+<<<<<<< Updated upstream
 template <class T>
 static void TemplatedSerializeVData(VectorData &vdata, const SelectionVector &sel, const idx_t count,
                                     data_ptr_t key_locations[], const idx_t col_offset, const idx_t col_idx) {
@@ -217,6 +220,8 @@ void JoinHashTable::SerializeVector(Vector &v, idx_t vcount, const SelectionVect
 	SerializeVectorData(vdata, sel, count, key_locations, col_idx);
 }
 
+=======
+>>>>>>> Stashed changes
 idx_t JoinHashTable::AppendToBlock(HTDataBlock &block, BufferHandle &handle, vector<BlockAppendEntry> &append_entries,
                                    idx_t remaining) {
 	idx_t append_count = MinValue<idx_t>(remaining, block.capacity - block.count);
@@ -340,8 +345,13 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 		idx_t next = append_idx + append_entry.count;
 		for (; append_idx < next; append_idx++) {
 			// Set the validity mask (clearing is less common)
+<<<<<<< Updated upstream
 			ValidityBytes(append_entry.baseptr).SetAllValid(layout.ColumnCount());
 			key_locations[append_idx] = append_entry.baseptr;
+=======
+			auto idx = current_sel->get_index(append_idx);
+			key_locations[idx] = append_entry.baseptr;
+>>>>>>> Stashed changes
 			append_entry.baseptr += entry_size;
 		}
 	}
@@ -351,8 +361,12 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	Vector hash_values(LogicalType::HASH);
 	Hash(keys, *current_sel, added_count, hash_values);
 
+	vector<VectorData> source_data;
+	source_data.reserve(layout.ColumnCount());
+
 	// serialize the keys to the key locations
 	for (idx_t i = 0; i < keys.ColumnCount(); i++) {
+<<<<<<< Updated upstream
 		SerializeVectorData(key_data[i], *current_sel, added_count, key_locations, i);
 	}
 	// now serialize the payload
@@ -368,6 +382,33 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	}
 	idx_t hash_col = layout.ColumnCount() - 1;
 	SerializeVector(hash_values, payload.size(), *current_sel, added_count, key_locations, hash_col);
+=======
+		source_data.emplace_back(move(key_data[i]));
+	}
+	// now serialize the payload
+	D_ASSERT(build_types.size() == payload.ColumnCount());
+	for (idx_t i = 0; i < payload.ColumnCount(); i++) {
+		VectorData pdata;
+		payload.data[i].Orrify(payload.size(), pdata);
+		source_data.emplace_back(move(pdata));
+	}
+	if (IsRightOuterJoin(join_type)) {
+		// for FULL/RIGHT OUTER joins initialize the "found" boolean to false
+		VectorData fdata;
+		vfound.Orrify(keys.size(), fdata);
+		source_data.emplace_back(move(fdata));
+	}
+
+	// serialise the hashes at the end
+	VectorData hdata;
+	hash_values.Orrify(keys.size(), hdata);
+	source_data.emplace_back(move(hdata));
+
+	StringHeap local_heap;
+	RowOperations::Scatter(source_data.data(), layout, addresses, local_heap, *current_sel, added_count);
+	lock_guard<mutex> append_lock(ht_lock);
+	string_heap.MergeHeap(local_heap);
+>>>>>>> Stashed changes
 }
 
 void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_locations[]) {
