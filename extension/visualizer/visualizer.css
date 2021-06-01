@@ -1,0 +1,18 @@
+html {
+    height: 100%;
+}
+
+.link {
+    fill: none;
+    stroke: blue;
+    stroke-opacity: 0.3;
+}
+
+svg {
+    border: 5px solid gray;
+}
+
+div {
+    position: absolute;
+    z-index: 1;
+}
