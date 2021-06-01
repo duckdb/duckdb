@@ -211,12 +211,12 @@ struct DuckDBArrowArrayChildHolder {
 	ArrowArray array;
 	//! need max three pointers for strings
 	duckdb::array<const void *, 3> buffers = {{nullptr, nullptr, nullptr}};
-	Vector vector = {};
-	unique_ptr<data_t[]> offsets = nullptr;
-	unique_ptr<data_t[]> data = nullptr;
+	Vector vector;
+	unique_ptr<data_t[]> offsets;
+	unique_ptr<data_t[]> data;
 	//! Children of nested structures
-	::duckdb::vector<DuckDBArrowArrayChildHolder> children = {};
-	::duckdb::vector<ArrowArray *> children_ptrs = {};
+	::duckdb::vector<DuckDBArrowArrayChildHolder> children;
+	::duckdb::vector<ArrowArray *> children_ptrs;
 };
 
 struct DuckDBArrowArrayHolder {
@@ -382,10 +382,9 @@ void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType 
 		break;
 	}
 	case LogicalTypeId::LIST: {
-		if (!ListVector::HasEntry(data)) {
-			//! List is empty
-			D_ASSERT(0);
-		}
+
+		D_ASSERT(ListVector::HasEntry(data));
+
 		//! Lists have two buffers
 		child.n_buffers = 2;
 		//! Second Buffer is the list offsets
