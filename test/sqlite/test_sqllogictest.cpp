@@ -1352,7 +1352,24 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 		} else if (strcmp(sScript.azToken[0], "require") == 0) {
 			// require command
 			string param = StringUtil::Lower(sScript.azToken[1]);
-			if (param == "vector_size") {
+			// os specific stuff
+			if (param == "notmingw") {
+#ifdef __MINGW32__
+				return;
+#endif
+			} else if (param == "mingw") {
+#ifndef __MINGW32__
+				return;
+#endif
+			} else if (param == "notwindows") {
+#ifdef _WIN32
+				return;
+#endif
+			} else if (param == "windows") {
+#ifndef _WIN32
+				return;
+#endif
+			} else if (param == "vector_size") {
 				// require a specific vector size
 				int required_vector_size = std::stoi(sScript.azToken[2]);
 				if (STANDARD_VECTOR_SIZE < required_vector_size) {
