@@ -32,10 +32,15 @@ static bool CanPlanIndexJoin(Transaction &transaction, TableScanBindData *bind_d
 }
 
 bool CheckForInvisibleJoin(LogicalComparisonJoin &op, PerfectHashJoinState &join_state) {
+	// we only do this optimization for inner joins
+	if (op.join_type != JoinType::INNER)
+		return false;
+	// and integral types
 	if (op.join_stats.empty() || !op.join_stats[0]->type.IsIntegral() || !op.join_stats[1]->type.IsIntegral()) {
 		// invisible join not possible for no integral types
 		return false;
 	}
+	// with a build range smaller than the threshold
 	auto stats_build = reinterpret_cast<NumericStatistics *>(op.join_stats[0].get()); // lhs stats
 	auto build_range = stats_build->max - stats_build->min;                           // Join Keys Range
 
@@ -51,7 +56,7 @@ bool CheckForInvisibleJoin(LogicalComparisonJoin &op, PerfectHashJoinState &join
 		if (stats_build->min <= stats_probe->min && stats_probe->max <= stats_build->max) {
 			join_state.is_probe_in_range = true;
 		}
-		// check whether min is close to 0
+		// check whether min is close to 0 // enable optimization without subtraction
 		if (stats_build->min < MIN_THRESHOLD) {
 			join_state.is_build_min_small = true;
 		}
@@ -145,7 +150,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 			                                      op.left_projection_map, op.right_projection_map, tbl_scan.column_ids,
 			                                      right_index, true, op.estimated_cardinality);
 		}
-		// equality join with small number of keys : possible invisible optimization
+		// equality join with small number of keys : possible invisible join  optimization
 		PerfectHashJoinState join_state;
 		if (CheckForInvisibleJoin(op, join_state)) {
 			plan = make_unique<PhysicalInvisibleJoin>(op, move(left), move(right), move(op.conditions), op.join_type,

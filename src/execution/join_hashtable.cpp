@@ -1040,7 +1040,7 @@ void JoinHashTable::TemplatedGatherResult(Vector &result, uintptr_t *pointers, c
 	auto rdata = FlatVector::GetData<T>(result);
 	auto &mask = FlatVector::Validity(result);
 	for (idx_t i = 0; i < count; i++) {
-		auto ridx = result_vector.get_index(i) + 1;
+		auto ridx = result_vector.get_index(i);
 		auto pidx = sel_vector.get_index(i);
 		auto hdata = Load<T>((data_ptr_t)(pointers[pidx] + offset));
 		if (IsNullValue<T>(hdata)) {
