@@ -93,12 +93,12 @@ string QueryResult::HeaderToString() {
 
 struct DuckDBArrowSchemaHolder {
 	// unused in children
-	vector<ArrowSchema> children = {};
+	vector<ArrowSchema> children;
 	// unused in children
-	vector<ArrowSchema *> children_ptrs = {};
+	vector<ArrowSchema *> children_ptrs;
 	//! used for nested structures
-	std::list<ArrowSchema> nested_children = {};
-	std::list<ArrowSchema *> nested_children_ptr = {};
+	std::list<ArrowSchema> nested_children;
+	std::list<ArrowSchema *> nested_children_ptr;
 	//! This holds strings created to represent decimal types
 	vector<unique_ptr<char[]>> owned_type_names;
 };

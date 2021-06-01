@@ -37,10 +37,10 @@ class TestArrowNested(object):
     def test_list_types(self,duckdb_cursor):
         if not can_run:
             return
+
         #Large Lists
         data = pyarrow.array([[1],None, [2]], type=pyarrow.large_list(pyarrow.int64()))
         arrow_table = pa.Table.from_arrays([data],['a'])
-        print(arrow_table)
         rel = duckdb.from_arrow_table(arrow_table)
         res = rel.execute().fetchall()
         assert res == [([1],), (None,), ([2],)]
@@ -48,12 +48,23 @@ class TestArrowNested(object):
         #Fixed Size Lists
         data = pyarrow.array([[1],None, [2]], type=pyarrow.list_(pyarrow.int64(),1))
         arrow_table = pa.Table.from_arrays([data],['a'])
-        print(arrow_table)
         rel = duckdb.from_arrow_table(arrow_table)
         res = rel.execute().fetchall()
-        print(res)
         assert res == [([1],), (None,), ([2],)]
+        
+        #Complex nested structures with different list types
+        data = [pyarrow.array([[1],None, [2]], type=pyarrow.list_(pyarrow.int64(),1)),pyarrow.array([[1],None, [2]], type=pyarrow.large_list(pyarrow.int64())),pyarrow.array([[1,2,3],None, [2,1]], type=pyarrow.list_(pyarrow.int64()))]
+        arrow_table = pa.Table.from_arrays([data[0],data[1],data[2]],['a','b','c'])
+        rel = duckdb.from_arrow_table(arrow_table)
+        res = rel.project('a').execute().fetchall()
+        assert res == [([1],), (None,), ([2],)]
+        res = rel.project('b').execute().fetchall()
+        assert res == [([1],), (None,), ([2],)]
+        res = rel.project('c').execute().fetchall()
+        assert res == [([1,2,3],), (None,), ([2,1],)]
 
+        
+   
 
     def test_lists_roundtrip(self,duckdb_cursor):
         if not can_run:
@@ -74,7 +85,12 @@ class TestArrowNested(object):
         compare_results("SELECT a from (SELECT list_value(1) as a FROM range(10) tbl(i)) as t")
         #Nested Lists
         compare_results("SELECT LIST(le) FROM (SELECT LIST(i) le from range(100) tbl(i) group by i%10) as t")
-      
+
+        #LIST[LIST[LIST[LIST[LIST[INTEGER]]]]]]
+        compare_results("SELECT list (lllle) llllle from (SELECT list (llle) lllle from (SELECT list(lle) llle from (SELECT LIST(le) lle FROM (SELECT LIST(i) le from range(100) tbl(i) group by i%10) as t) as t1) as t2) as t3")
+                
         compare_results('''SELECT grp,lst,cs FROM (select grp, lst, case when grp>1 then lst else list_value(null) end as cs
                         from (SELECT a%4 as grp, list(a) as lst FROM range(7) tbl(a) group by grp) as lst_tbl) as T;''')
-    
+
+        #Tests for converting multiple lists to/from Arrow with NULL values and/or strings
+        compare_results("SELECT list(st) from (select i, case when i%10 then NULL else i::VARCHAR end as st from range(1000) tbl(i)) as t group by i%5")

@@ -211,12 +211,12 @@ struct DuckDBArrowArrayChildHolder {
 	ArrowArray array;
 	//! need max three pointers for strings
 	duckdb::array<const void *, 3> buffers = {{nullptr, nullptr, nullptr}};
-	Vector vector = {};
-	unique_ptr<data_t[]> offsets = nullptr;
-	unique_ptr<data_t[]> data = nullptr;
+	Vector vector;
+	unique_ptr<data_t[]> offsets;
+	unique_ptr<data_t[]> data;
 	//! Children of nested structures
-	::duckdb::vector<DuckDBArrowArrayChildHolder> children = {};
-	::duckdb::vector<ArrowArray *> children_ptrs = {};
+	::duckdb::vector<DuckDBArrowArrayChildHolder> children;
+	::duckdb::vector<ArrowArray *> children_ptrs;
 };
 
 struct DuckDBArrowArrayHolder {
