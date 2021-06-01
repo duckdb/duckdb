@@ -16,6 +16,7 @@ namespace duckdb {
 struct AggregateObject;
 class RowLayout;
 struct SelectionVector;
+class StringHeap;
 class Vector;
 
 // RowOperations contains a set of operations that operate on data using a RowLayout
@@ -35,6 +36,12 @@ struct RowOperations {
 	static void CombineStates(RowLayout &layout, Vector &sources, Vector &targets, idx_t count);
 	//! finalize - unaligned addresses, updated
 	static void FinalizeStates(RowLayout &layout, Vector &addresses, DataChunk &result, idx_t aggr_idx);
+
+	//===--------------------------------------------------------------------===//
+	// Read/Write Operators
+	//===--------------------------------------------------------------------===//
+	static void Scatter(VectorData group_data[], const RowLayout &layout, Vector &addresses, StringHeap &string_heap,
+	                    const SelectionVector &sel, idx_t count);
 };
 
 } // namespace duckdb
