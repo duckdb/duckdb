@@ -423,9 +423,9 @@ void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType 
 		}
 		child.children = &child_holder.children_ptrs[0];
 		for (idx_t child_idx = 0; child_idx < child_holder.children.size(); child_idx++) {
-			SetArrowChild(child_holder.children[child_idx], type.child_types()[child_idx].second,
-			              *children[child_idx].second, size);
-			SetChildValidityMask(*children[child_idx].second, child_holder.children[child_idx].array);
+			SetArrowChild(child_holder.children[child_idx], type.child_types()[child_idx].second, *children[child_idx],
+			              size);
+			SetChildValidityMask(*children[child_idx], child_holder.children[child_idx].array);
 		}
 		break;
 	}

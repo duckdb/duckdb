@@ -319,33 +319,23 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 	case LogicalTypeId::MAP: {
 		//! Since this is a map we skip first child, because its a struct
 		auto &struct_arrow = *array.children[0];
-		//! First initialize MAP/Struct
+		auto &child_entries = StructVector::GetEntries(vector);
+		D_ASSERT(child_entries.size() == 2);
+		//! Fill the children
 		for (idx_t type_idx = 0; type_idx < (idx_t)struct_arrow.n_children; type_idx++) {
-			auto vec_child = make_unique<Vector>(vector.GetType().child_types()[type_idx].second);
-			StructVector::AddEntry(vector, vector.GetType().child_types()[type_idx].first, move(vec_child));
-		}
-		//! Now fill the children
-		auto &children_vector = StructVector::GetEntries(vector);
-
-		for (idx_t type_idx = 0; type_idx < (idx_t)struct_arrow.n_children; type_idx++) {
-			SetValidityMask(*children_vector[type_idx].second, *struct_arrow.children[type_idx], scan_state, size);
-			ColumnArrowToDuckDB(*children_vector[type_idx].second, *struct_arrow.children[type_idx], scan_state, size,
+			SetValidityMask(*child_entries[type_idx], *struct_arrow.children[type_idx], scan_state, size);
+			ColumnArrowToDuckDB(*child_entries[type_idx], *struct_arrow.children[type_idx], scan_state, size,
 			                    arrow_lists, col_idx, list_col_idx);
 		}
 		break;
 	}
 	case LogicalTypeId::STRUCT: {
-		//! First initialize Struct
+		//! Fill the children
+		auto &child_entries = StructVector::GetEntries(vector);
 		for (idx_t type_idx = 0; type_idx < (idx_t)array.n_children; type_idx++) {
-			auto vec_child = make_unique<Vector>(vector.GetType().child_types()[type_idx].second);
-			StructVector::AddEntry(vector, vector.GetType().child_types()[type_idx].first, move(vec_child));
-		}
-		//! Now fill the children
-		auto &children_vector = StructVector::GetEntries(vector);
-		for (idx_t type_idx = 0; type_idx < (idx_t)array.n_children; type_idx++) {
-			SetValidityMask(*children_vector[type_idx].second, *array.children[type_idx], scan_state, size);
-			ColumnArrowToDuckDB(*children_vector[type_idx].second, *array.children[type_idx], scan_state, size,
-			                    arrow_lists, col_idx, list_col_idx);
+			SetValidityMask(*child_entries[type_idx], *array.children[type_idx], scan_state, size);
+			ColumnArrowToDuckDB(*child_entries[type_idx], *array.children[type_idx], scan_state, size, arrow_lists,
+			                    col_idx, list_col_idx);
 		}
 		break;
 	}
