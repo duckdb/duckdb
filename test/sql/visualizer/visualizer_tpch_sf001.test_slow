@@ -1,4 +1,4 @@
-# name: test/sql/detailed_profiler/visualizer_tpch_sf001.test_slow
+# name: test/sql/visualizer/visualizer_tpch_sf001.test_slow
 # description: Test Visualizer for TPC-H SF0.1
 # group: [visualizer]
 

@@ -352,8 +352,8 @@ void QueryProfiler::ToStream(std::ostream &ss, bool print_optimizer_output) cons
 }
 
 // Print a row
-static void PrintRow(std::ostream &ss, const string& annotation, int id, const string& name, double time, int sample_counter,
-                     int tuple_counter, string extra_info, int depth) {
+static void PrintRow(std::ostream &ss, const string &annotation, int id, const string &name, double time,
+                     int sample_counter, int tuple_counter, string extra_info, int depth) {
 	ss << string(depth * 3, ' ') << "{\n";
 	ss << string(depth * 3, ' ') << "\"annotation\": \"" + annotation + "\",\n";
 	ss << string(depth * 3, ' ') << "\"id\": " + to_string(id) + ",\n";
@@ -370,7 +370,8 @@ static void PrintRow(std::ostream &ss, const string& annotation, int id, const s
 #endif
 	ss << string(depth * 3, ' ') << "\"sample_size\": " << to_string(sample_counter) + ",\n";
 	ss << string(depth * 3, ' ') << "\"input_size\": " << to_string(tuple_counter) + ",\n";
-	ss << string(depth * 3, ' ') << "\"extra_info\": \"" << StringUtil::Replace(std::move(extra_info), "\n", "\\n") + "\"\n";
+	ss << string(depth * 3, ' ') << "\"extra_info\": \""
+	   << StringUtil::Replace(std::move(extra_info), "\n", "\\n") + "\"\n";
 	ss << string(depth * 3, ' ') << "},\n";
 }
 
@@ -402,7 +403,7 @@ static void ToJSONRecursive(QueryProfiler::TreeNode &node, std::ostream &ss, int
 	ss << "  ";
 	for (auto &expr_executor : node.info.executors_info) {
 		// For each Expression tree
-		if(!expr_executor){
+		if (!expr_executor) {
 			continue;
 		}
 		for (auto &expr_timer : expr_executor->roots) {
@@ -448,8 +449,8 @@ string QueryProfiler::ToJSON() const {
 	ss << "{\n";
 	ss << "   \"name\":  \"Query\", \n";
 	ss << "   \"result\": " + to_string(main_query.Elapsed()) + ",\n";
-    ss << "   \"timing\": " + to_string(main_query.Elapsed()) + ",\n";
-    ss << "   \"extra-info\": \"" + StringUtil::Replace(query, "\n", "\\n") + "\", \n";
+	ss << "   \"timing\": " + to_string(main_query.Elapsed()) + ",\n";
+	ss << "   \"extra-info\": \"" + StringUtil::Replace(query, "\n", "\\n") + "\", \n";
 	// print the phase timings
 	ss << "   \"timings\": [\n";
 	const auto &ordered_phase_timings = GetOrderedPhaseTimings();

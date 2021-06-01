@@ -1,4 +1,4 @@
-# name: test/sql/detailed_profiler/test_visualizer.test
+# name: test/sql/visualizer/test_visualizer.test
 # description: Profiler Visualizer
 # group: [visualizer]
 
