@@ -25,11 +25,6 @@ PhysicalInvisibleJoin::PhysicalInvisibleJoin(LogicalOperator &op, unique_ptr<Phy
 	for (auto &condition : conditions) {
 		condition_types.push_back(condition.left->return_type);
 	}
-
-	// for ANTI, SEMI and MARK join, we only need to store the keys, so for these the build types are empty
-	if (join_type != JoinType::ANTI && join_type != JoinType::SEMI && join_type != JoinType::MARK) {
-		build_types = LogicalOperator::MapTypes(children[1]->GetTypes(), right_projection_map);
-	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -40,48 +35,6 @@ unique_ptr<GlobalOperatorState> PhysicalInvisibleJoin::GetGlobalState(ClientCont
 	auto state = make_unique<HashJoinGlobalState>();
 	state->hash_table =
 	    make_unique<JoinHashTable>(BufferManager::GetBufferManager(context), conditions, build_types, join_type);
-	if (!delim_types.empty() && join_type == JoinType::MARK) {
-		// correlated MARK join
-		if (delim_types.size() + 1 == conditions.size()) {
-			// the correlated MARK join has one more condition than the amount of correlated columns
-			// this is the case in a correlated ANY() expression
-			// in this case we need to keep track of additional entries, namely:
-			// - (1) the total amount of elements per group
-			// - (2) the amount of non-null elements per group
-			// we need these to correctly deal with the cases of either:
-			// - (1) the group being empty [in which case the result is always false, even if the comparison is NULL]
-			// - (2) the group containing a NULL value [in which case FALSE becomes NULL]
-			auto &info = state->hash_table->correlated_mark_join_info;
-
-			vector<LogicalType> payload_types;
-			vector<BoundAggregateExpression *> correlated_aggregates;
-			unique_ptr<BoundAggregateExpression> aggr;
-
-			// jury-rigging the GroupedAggregateHashTable
-			// we need a count_star and a count to get counts with and without NULLs
-			aggr = AggregateFunction::BindAggregateFunction(context, CountStarFun::GetFunction(), {}, nullptr, false);
-			correlated_aggregates.push_back(&*aggr);
-			payload_types.push_back(aggr->return_type);
-			info.correlated_aggregates.push_back(move(aggr));
-
-			auto count_fun = CountFun::GetFunction();
-			vector<unique_ptr<Expression>> children;
-			// this is a dummy but we need it to make the hash table understand whats going on
-			children.push_back(make_unique_base<Expression, BoundReferenceExpression>(count_fun.return_type, 0));
-			aggr = AggregateFunction::BindAggregateFunction(context, count_fun, move(children), nullptr, false);
-			correlated_aggregates.push_back(&*aggr);
-			payload_types.push_back(aggr->return_type);
-			info.correlated_aggregates.push_back(move(aggr));
-
-			info.correlated_counts = make_unique<GroupedAggregateHashTable>(
-			    BufferManager::GetBufferManager(context), delim_types, payload_types, correlated_aggregates);
-			info.correlated_types = delim_types;
-			// FIXME: these can be initialized "empty" (without allocating empty vectors)
-			info.group_chunk.Initialize(delim_types);
-			info.payload_chunk.Initialize(payload_types);
-			info.result_chunk.Initialize(payload_types);
-		}
-	}
 	return move(state);
 }
 

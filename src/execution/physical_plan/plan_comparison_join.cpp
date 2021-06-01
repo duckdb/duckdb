@@ -150,15 +150,14 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 			                                      op.left_projection_map, op.right_projection_map, tbl_scan.column_ids,
 			                                      right_index, true, op.estimated_cardinality);
 		}
-		// equality join with small number of keys : possible invisible join  optimization
+		// equality join with small number of keys : possible invisible join optimization
 		PerfectHashJoinState join_state;
 		if (CheckForInvisibleJoin(op, join_state)) {
 			plan = make_unique<PhysicalInvisibleJoin>(op, move(left), move(right), move(op.conditions), op.join_type,
 			                                          op.left_projection_map, op.right_projection_map,
 			                                          move(op.delim_types), op.estimated_cardinality, join_state);
 		} else {
-
-			// equality join: use hash join
+			// equality join: use regular hash join
 			plan = make_unique<PhysicalHashJoin>(op, move(left), move(right), move(op.conditions), op.join_type,
 			                                     op.left_projection_map, op.right_projection_map, move(op.delim_types),
 			                                     op.estimated_cardinality, join_state);
