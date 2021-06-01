@@ -4,8 +4,8 @@
 
 
 require visualizer
-require tpch
 
+require tpch
 
 statement ok
 PRAGMA enable_profiling
@@ -19,7 +19,7 @@ PRAGMA profiling_mode = detailed
 statement ok
 CALL dbgen(sf=0.01);
 
-loop i 1 9
+loop i 1 10
 
 query I
 PRAGMA tpch(${i})
@@ -32,15 +32,14 @@ Pragma visualize_last_profiling_output ='__TEST_DIR__/test.html'
 endloop
 
 
-loop i 10 23
+loop i 10 22
 
 query I
 PRAGMA tpch(${i})
 ----
 <FILE>:extension/tpch/dbgen/answers/sf0.01/q${i}.csv
 
-statement ok
-Pragma visualize_last_profiling_output ='__TEST_DIR__/test.html'
+
 
 endloop
 

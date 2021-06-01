@@ -355,12 +355,12 @@ void QueryProfiler::ToStream(std::ostream &ss, bool print_optimizer_output) cons
 static void PrintRow(std::ostream &ss, const string& annotation, int id, const string& name, double time, int sample_counter,
                      int tuple_counter, string extra_info, int depth) {
 	ss << string(depth * 3, ' ') << "{\n";
-	ss << string(depth * 3, ' ') << "\"ANNOTATION\": \"" + annotation + "\",\n";
-	ss << string(depth * 3, ' ') << "\"ID\": " + to_string(id) + ",\n";
-	ss << string(depth * 3, ' ') << "\"NAME\": \"" + name + "\",\n";
+	ss << string(depth * 3, ' ') << "\"annotation\": \"" + annotation + "\",\n";
+	ss << string(depth * 3, ' ') << "\"id\": " + to_string(id) + ",\n";
+	ss << string(depth * 3, ' ') << "\"name\": \"" + name + "\",\n";
 #if defined(RDTSC)
 	ss << string(depth * 3, ' ') << "\"timing\": \"NULL\" ,\n";
-	ss << string(depth * 3, ' ') << "\"CYCLES_PER_TUPLE\": " + StringUtil::Format("%.4f", time) + ",\n";
+	ss << string(depth * 3, ' ') << "\"cycles_per_tuple\": " + StringUtil::Format("%.4f", time) + ",\n";
 #else
 	ss << string(depth * 3, ' ') << "\"timing\":" + StringUtil::Format("%.4f", time) + ",\n";
 	ss << string(depth * 3, ' ')
@@ -368,9 +368,9 @@ static void PrintRow(std::ostream &ss, const string& annotation, int id, const s
 	      "TUPLE\": "
 	      "\"NULL\" ,\n";
 #endif
-	ss << string(depth * 3, ' ') << "\"SAMPLE_SIZE\": " << to_string(sample_counter) + ",\n";
-	ss << string(depth * 3, ' ') << "\"INPUT_SIZE\": " << to_string(tuple_counter) + ",\n";
-	ss << string(depth * 3, ' ') << "\"EXTRA_INFO\": \"" << StringUtil::Replace(std::move(extra_info), "\n", "\\n") + "\"\n";
+	ss << string(depth * 3, ' ') << "\"sample_size\": " << to_string(sample_counter) + ",\n";
+	ss << string(depth * 3, ' ') << "\"input_size\": " << to_string(tuple_counter) + ",\n";
+	ss << string(depth * 3, ' ') << "\"extra_info\": \"" << StringUtil::Replace(std::move(extra_info), "\n", "\\n") + "\"\n";
 	ss << string(depth * 3, ' ') << "},\n";
 }
 
@@ -402,6 +402,9 @@ static void ToJSONRecursive(QueryProfiler::TreeNode &node, std::ostream &ss, int
 	ss << "  ";
 	for (auto &expr_executor : node.info.executors_info) {
 		// For each Expression tree
+		if(!expr_executor){
+			continue;
+		}
 		for (auto &expr_timer : expr_executor->roots) {
 			D_ASSERT(expr_timer->sample_tuples_count != 0);
 			PrintRow(ss, "ExpressionRoot", expression_counter++, expr_timer->name,
@@ -445,7 +448,8 @@ string QueryProfiler::ToJSON() const {
 	ss << "{\n";
 	ss << "   \"name\":  \"Query\", \n";
 	ss << "   \"result\": " + to_string(main_query.Elapsed()) + ",\n";
-	ss << "   \"extra-info\": \"" + StringUtil::Replace(query, "\n", "\\n") + "\", \n";
+    ss << "   \"timing\": " + to_string(main_query.Elapsed()) + ",\n";
+    ss << "   \"extra-info\": \"" + StringUtil::Replace(query, "\n", "\\n") + "\", \n";
 	// print the phase timings
 	ss << "   \"timings\": [\n";
 	const auto &ordered_phase_timings = GetOrderedPhaseTimings();
@@ -454,7 +458,7 @@ string QueryProfiler::ToJSON() const {
 			ss << ",\n";
 		}
 		ss << "   {\n";
-		ss << "   \"anotation\": \"" + ordered_phase_timings[i].first + "\", \n";
+		ss << "   \"annotation\": \"" + ordered_phase_timings[i].first + "\", \n";
 		ss << "   \"timing\": " + to_string(ordered_phase_timings[i].second) + "\n";
 		ss << "   }\n";
 	}

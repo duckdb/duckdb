@@ -8,7 +8,7 @@ statement ok
 PRAGMA enable_profiling
 
 statement ok
-PRAGMA profiling_output='__TEST_DIR__/test.json'
+PRAGMA profiling_output='__TEST_DIR__/first.json'
 
 statement ok
 PRAGMA profiling_mode = detailed
@@ -27,3 +27,18 @@ SELECT t1.v1 FROM t1 JOIN t2 USING (v1)
 
 statement ok
 Pragma visualize_last_profiling_output ='__TEST_DIR__/test.html'
+
+statement ok
+SELECT t1.v1 FROM t1 JOIN t2 USING (v1)
+
+statement ok
+Pragma visualize_json_profiling_output('__TEST_DIR__/test.html','__TEST_DIR__/first.json')
+
+statement ok
+PRAGMA profiling_output='__TEST_DIR__/second.json'
+
+statement ok
+SELECT t1.v1 FROM t1 JOIN t2 USING (v1)
+
+statement ok
+Pragma visualize_diff_profiling_output('__TEST_DIR__/test.html','__TEST_DIR__/first.json','__TEST_DIR__/second.json')
