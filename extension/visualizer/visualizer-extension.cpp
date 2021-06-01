@@ -44,7 +44,7 @@ static void WriteToFile(string &path, string info) {
 	out.close();
 }
 
-static void PragmaVisualizeProfilingOutput(ClientContext &context, const FunctionParameters &parameters) {
+static void PragmaVisualizeLastProfilingOutput(ClientContext &context, const FunctionParameters &parameters) {
 	// this is either enable_profiling = json, or enable_profiling = query_tree
 	string file_name = parameters.values[0].ToString();
 	if (file_name.empty()) {
@@ -58,7 +58,7 @@ void VisualizerExtension::Load(DuckDB &db) {
 	con.BeginTransaction();
 	auto &catalog = Catalog::GetCatalog(*con.context);
 
-	auto set_cpu_func = PragmaFunction::PragmaAssignment("visualize_profiling_output", PragmaVisualizeProfilingOutput,
+	auto set_cpu_func = PragmaFunction::PragmaAssignment("visualize_last_profiling_output", PragmaVisualizeLastProfilingOutput,
 	                                                     LogicalType::VARCHAR);
 	CreatePragmaFunctionInfo info(set_cpu_func);
 	catalog.CreatePragmaFunction(*con.context, &info);
