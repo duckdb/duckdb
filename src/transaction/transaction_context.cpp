@@ -16,12 +16,16 @@ TransactionContext::~TransactionContext() {
 }
 
 void TransactionContext::BeginTransaction() {
-	D_ASSERT(!current_transaction); // cannot start a transaction within a transaction
+	if (current_transaction) {
+		throw TransactionException("cannot start a transaction within a transaction");
+	}
 	current_transaction = transaction_manager.StartTransaction(context);
 }
 
 void TransactionContext::Commit() {
-	D_ASSERT(current_transaction); // cannot commit if there is no active transaction
+	if (!current_transaction) {
+		throw TransactionException("failed to commit: no transaction active");
+	}
 	auto transaction = current_transaction;
 	SetAutoCommit(true);
 	current_transaction = nullptr;
@@ -39,7 +43,9 @@ void TransactionContext::SetAutoCommit(bool value) {
 }
 
 void TransactionContext::Rollback() {
-	D_ASSERT(current_transaction); // cannot rollback if there is no active transaction
+	if (!current_transaction) {
+		throw TransactionException("failed to rollback: no transaction active");
+	}
 	auto transaction = current_transaction;
 	ClearTransaction();
 	transaction_manager.RollbackTransaction(transaction);

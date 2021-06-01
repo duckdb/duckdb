@@ -30,7 +30,7 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_n
 			D_ASSERT(!entry_name.empty());
 
 			if (name_collision_set.find(entry_name) != name_collision_set.end()) {
-				throw ParserException("Duplicate struct entry name");
+				throw ParserException("Duplicate struct entry name \"%s\"", entry_name);
 			}
 			name_collision_set.insert(entry_name);
 
