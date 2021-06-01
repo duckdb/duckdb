@@ -30,8 +30,9 @@ static void test_runner() {
 struct RegisterOssfuzzTests {
 	RegisterOssfuzzTests() {
 		// register a separate test for each file in the QUERY_DIRECTORY
-		fs.ListFiles(QUERY_DIRECTORY,
-		             [&](const string &path, bool) { REGISTER_TEST_CASE(test_runner, string(QUERY_DIRECTORY) + "/" + path, "[ossfuzz][.]"); });
+		fs.ListFiles(QUERY_DIRECTORY, [&](const string &path, bool) {
+			REGISTER_TEST_CASE(test_runner, string(QUERY_DIRECTORY) + "/" + path, "[ossfuzz][.]");
+		});
 	}
 };
 RegisterOssfuzzTests register_ossfuzz_test;
