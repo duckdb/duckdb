@@ -85,7 +85,7 @@ LogicalType GetArrowLogicalType(ArrowSchema &schema,
 	} else if (format == "+s") {
 		child_list_t<LogicalType> child_types;
 		for (idx_t type_idx = 0; type_idx < (idx_t)schema.n_children; type_idx++) {
-			auto child_type = GetArrowLogicalType(*schema.children[type_idx]);
+			auto child_type = GetArrowLogicalType(*schema.children[type_idx], arrow_lists, col_idx);
 			child_types.push_back({schema.children[type_idx]->name, child_type});
 		}
 		return LogicalType(LogicalTypeId::STRUCT, child_types);
@@ -95,7 +95,7 @@ LogicalType GetArrowLogicalType(ArrowSchema &schema,
 		//! First type will be struct, so we skip it
 		auto &struct_schema = *schema.children[0];
 		for (idx_t type_idx = 0; type_idx < (idx_t)struct_schema.n_children; type_idx++) {
-			auto child_type = GetArrowLogicalType(*struct_schema.children[type_idx]);
+			auto child_type = GetArrowLogicalType(*struct_schema.children[type_idx], arrow_lists, col_idx);
 			child_types.push_back({struct_schema.children[type_idx]->name, child_type});
 		}
 		return LogicalType(LogicalTypeId::MAP, child_types);
@@ -329,7 +329,8 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 
 		for (idx_t type_idx = 0; type_idx < (idx_t)struct_arrow.n_children; type_idx++) {
 			SetValidityMask(*children_vector[type_idx].second, *struct_arrow.children[type_idx], scan_state, size);
-			ColumnArrowToDuckDB(*children_vector[type_idx].second, *struct_arrow.children[type_idx], scan_state, size);
+			ColumnArrowToDuckDB(*children_vector[type_idx].second, *struct_arrow.children[type_idx], scan_state, size,
+			                    arrow_lists, col_idx, list_col_idx);
 		}
 		break;
 	}
@@ -343,7 +344,8 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 		auto &children_vector = StructVector::GetEntries(vector);
 		for (idx_t type_idx = 0; type_idx < (idx_t)array.n_children; type_idx++) {
 			SetValidityMask(*children_vector[type_idx].second, *array.children[type_idx], scan_state, size);
-			ColumnArrowToDuckDB(*children_vector[type_idx].second, *array.children[type_idx], scan_state, size);
+			ColumnArrowToDuckDB(*children_vector[type_idx].second, *array.children[type_idx], scan_state, size,
+			                    arrow_lists, col_idx, list_col_idx);
 		}
 		break;
 	}
