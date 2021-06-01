@@ -86,7 +86,6 @@ void QueryProfiler::EndQuery() {
 			query_info = ToString(true);
 		}
 
-
 		if (save_location.empty()) {
 			Printer::Print(query_info);
 			Printer::Print("\n");
@@ -353,42 +352,43 @@ void QueryProfiler::ToStream(std::ostream &ss, bool print_optimizer_output) cons
 }
 
 // Print a row
-static void PrintRow(std::ostream &ss, string annotation, int id, string name, double time,
-                     int sample_counter, int tuple_counter, string extra_info, int depth) {
-    ss << string(depth * 3, ' ') <<  "{\n";
+static void PrintRow(std::ostream &ss, string annotation, int id, string name, double time, int sample_counter,
+                     int tuple_counter, string extra_info, int depth) {
+	ss << string(depth * 3, ' ') << "{\n";
 	ss << string(depth * 3, ' ') << "\"ANNOTATION\": \"" + annotation + "\",\n";
-    ss << string(depth * 3, ' ') << "\"ID\": " + to_string(id) + ",\n";
-    ss << string(depth * 3, ' ') << "\"NAME\": \"" + name + "\",\n";
+	ss << string(depth * 3, ' ') << "\"ID\": " + to_string(id) + ",\n";
+	ss << string(depth * 3, ' ') << "\"NAME\": \"" + name + "\",\n";
 #if defined(RDTSC)
-    ss << string(depth * 3, ' ') << "\"timing\": \"NULL\" ,\n";
-    ss << string(depth * 3, ' ') << "\"CYCLES_PER_TUPLE\": " + StringUtil::Format("%.2f", time) + ",\n";
+	ss << string(depth * 3, ' ') << "\"timing\": \"NULL\" ,\n";
+	ss << string(depth * 3, ' ') << "\"CYCLES_PER_TUPLE\": " + StringUtil::Format("%.4f", time) + ",\n";
 #else
-    ss << string(depth * 3, ' ') << "\"time\": \" + StringUtil::Format("%.9f", time) + "\",\n";
-    ss << string(depth * 3, ' ') << "\"CYCLES_PER_TUPLE\": \"NULL\" ,\n";
+	ss << string(depth * 3, ' ') << "\"timing\":" + StringUtil::Format("%.4f", time) + ",\n";
+	ss << string(depth * 3, ' ')
+	   << "\"CYCLES_PER_"
+	      "TUPLE\": "
+	      "\"NULL\" ,\n";
 #endif
-    ss << string(depth * 3, ' ') << "\"SAMPLE_SIZE\": " << to_string(sample_counter) + ",\n";
-    ss << string(depth * 3, ' ') << "\"INPUT_SIZE\": " << to_string(tuple_counter) + ",\n";
-    ss << string(depth * 3, ' ') << "\"EXTRA_INFO\": \"" << StringUtil::Replace(extra_info, "\n", "\\n") + "\"\n";
-    ss << string(depth * 3, ' ') <<  "},\n";
+	ss << string(depth * 3, ' ') << "\"SAMPLE_SIZE\": " << to_string(sample_counter) + ",\n";
+	ss << string(depth * 3, ' ') << "\"INPUT_SIZE\": " << to_string(tuple_counter) + ",\n";
+	ss << string(depth * 3, ' ') << "\"EXTRA_INFO\": \"" << StringUtil::Replace(extra_info, "\n", "\\n") + "\"\n";
+	ss << string(depth * 3, ' ') << "},\n";
 }
 
-static void ExtractFunctions(std::ostream &ss, ExpressionInfo &info,
-                             int &fun_id, int depth) {
-    if (info.hasfunction) {
-            D_ASSERT(info.sample_tuples_count != 0);
-        PrintRow(ss, "Function", fun_id++, info.function_name,
-                 int(info.function_time) / double(info.sample_tuples_count), info.sample_tuples_count,
-                 info.tuples_count, "", depth);
-    }
-    if (info.children.empty()) {
-        return;
-    }
-    // extract the children of this node
-    for (auto &child : info.children) {
-        ExtractFunctions(ss, *child, fun_id, depth);
-    }
+static void ExtractFunctions(std::ostream &ss, ExpressionInfo &info, int &fun_id, int depth) {
+	if (info.hasfunction) {
+		D_ASSERT(info.sample_tuples_count != 0);
+		PrintRow(ss, "Function", fun_id++, info.function_name,
+		         int(info.function_time) / double(info.sample_tuples_count), info.sample_tuples_count,
+		         info.tuples_count, "", depth);
+	}
+	if (info.children.empty()) {
+		return;
+	}
+	// extract the children of this node
+	for (auto &child : info.children) {
+		ExtractFunctions(ss, *child, fun_id, depth);
+	}
 }
-
 
 static void ToJSONRecursive(QueryProfiler::TreeNode &node, std::ostream &ss, int depth = 1) {
 	ss << "{\n";
@@ -396,28 +396,28 @@ static void ToJSONRecursive(QueryProfiler::TreeNode &node, std::ostream &ss, int
 	ss << string(depth * 3, ' ') << "\"timing\":" + StringUtil::Format("%.2f", node.info.time) + ",\n";
 	ss << string(depth * 3, ' ') << "\"cardinality\":" + to_string(node.info.elements) + ",\n";
 	ss << string(depth * 3, ' ') << "\"extra_info\": \"" + StringUtil::Replace(node.extra_info, "\n", "\\n") + "\",\n";
-    ss << string(depth * 3, ' ') << "\"timings\":[";
-    int32_t function_counter = 1;
-    int32_t expression_counter = 1;
-    ss << "  ";
-    for (auto &expr_executor : node.info.executors_info) {
-        // For each Expression tree
-        for (auto &expr_timer : expr_executor->roots) {
-                D_ASSERT(expr_timer->sample_tuples_count != 0);
-            PrintRow(ss, "ExpressionRoot", expression_counter++,
-                     expr_timer->name, int(expr_timer->time) / double(expr_timer->sample_tuples_count),
-                     expr_timer->sample_tuples_count, expr_timer->tuples_count, expr_timer->extra_info, depth + 1);
-            // Extract all functions inside the tree
-            ExtractFunctions(ss, *expr_timer->root, function_counter, depth + 1);
-        }
-    }
-    ss.seekp(-2,ss.cur);
+	ss << string(depth * 3, ' ') << "\"timings\":[";
+	int32_t function_counter = 1;
+	int32_t expression_counter = 1;
+	ss << "  ";
+	for (auto &expr_executor : node.info.executors_info) {
+		// For each Expression tree
+		for (auto &expr_timer : expr_executor->roots) {
+			D_ASSERT(expr_timer->sample_tuples_count != 0);
+			PrintRow(ss, "ExpressionRoot", expression_counter++, expr_timer->name,
+			         int(expr_timer->time) / double(expr_timer->sample_tuples_count), expr_timer->sample_tuples_count,
+			         expr_timer->tuples_count, expr_timer->extra_info, depth + 1);
+			// Extract all functions inside the tree
+			ExtractFunctions(ss, *expr_timer->root, function_counter, depth + 1);
+		}
+	}
+	ss.seekp(-2, ss.cur);
 	ss << "\n";
-    ss << string(depth * 3, ' ') << "\n  ],\n";
-    ss << string(depth * 3, ' ') << "\"children\": [";
-    if (node.children.empty()) {
-        ss << string(depth * 3, ' ') << "]\n";
-    } else {
+	ss << string(depth * 3, ' ') << "\n  ],\n";
+	ss << string(depth * 3, ' ') << "\"children\": [";
+	if (node.children.empty()) {
+		ss << string(depth * 3, ' ') << "]\n";
+	} else {
 		for (idx_t i = 0; i < node.children.size(); i++) {
 			if (i > 0) {
 				ss << ",";
@@ -443,18 +443,18 @@ string QueryProfiler::ToJSON() const {
 	}
 	std::stringstream ss;
 	ss << "{\n";
-    ss << "   \"name\":  \"Query\", \n";
+	ss << "   \"name\":  \"Query\", \n";
 	ss << "   \"result\": " + to_string(main_query.Elapsed()) + ",\n";
-    ss << "   \"extra-info\": \"" + StringUtil::Replace(query, "\n", "\\n") + "\", \n";
-    // print the phase timings
+	ss << "   \"extra-info\": \"" + StringUtil::Replace(query, "\n", "\\n") + "\", \n";
+	// print the phase timings
 	ss << "   \"timings\": [\n";
 	const auto &ordered_phase_timings = GetOrderedPhaseTimings();
 	for (idx_t i = 0; i < ordered_phase_timings.size(); i++) {
-        if (i > 0) {
-            ss << ",\n";
-        }
+		if (i > 0) {
+			ss << ",\n";
+		}
 		ss << "   {\n";
-		ss << "   \"anotation\": \"" +  ordered_phase_timings[i].first + "\", \n";
+		ss << "   \"anotation\": \"" + ordered_phase_timings[i].first + "\", \n";
 		ss << "   \"timing\": " + to_string(ordered_phase_timings[i].second) + "\n";
 		ss << "   }\n";
 	}
@@ -541,7 +541,6 @@ void QueryProfiler::Propagate(QueryProfiler &qp) {
 	this->enabled = qp.enabled;
 	this->detailed_enabled = qp.detailed_enabled;
 }
-
 
 void ExpressionInfo::ExtractExpressionsRecursive(unique_ptr<ExpressionState> &state) {
 	if (state->child_states.empty()) {
