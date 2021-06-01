@@ -52,6 +52,10 @@ void Executor::Initialize(PhysicalOperator *plan) {
 			task->Execute();
 			task.reset();
 		}
+		if (!exceptions.empty()) {
+			// an exception has occurred executing one of the pipelines
+			throw Exception(exceptions[0]);
+		}
 	}
 
 	pipelines.clear();

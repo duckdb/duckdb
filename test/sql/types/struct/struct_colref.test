@@ -15,6 +15,27 @@ SELECT a.i + a.j FROM (VALUES ({'i': 1, 'j': 2})) tbl(a)
 ----
 3
 
+# correlated subqueries
+# binding works
+statement ok
+explain SELECT (SELECT STRUCT_EXTRACT(a, 'i')) FROM (VALUES ({'i': 1, 'j': 2})) tbl(a)
+
+statement ok
+explain SELECT (SELECT a.i) FROM (VALUES ({'i': 1, 'j': 2})) tbl(a)
+
+statement ok
+explain SELECT (SELECT a.i + b.j FROM (VALUES ({'i': 1, 'j': 2})) tbl(b)) FROM (VALUES ({'i': 1, 'j': 2})) tbl(a)
+
+# FIXME: correlated subqueries execute a DISTINCT, which is not supported yet for structs
+statement error
+SELECT (SELECT STRUCT_EXTRACT(a, 'i')) FROM (VALUES ({'i': 1, 'j': 2})) tbl(a)
+
+statement error
+SELECT (SELECT a.i) FROM (VALUES ({'i': 1, 'j': 2})) tbl(a)
+
+statement error
+SELECT (SELECT a.i + b.j FROM (VALUES ({'i': 1, 'j': 2})) tbl(b)) FROM (VALUES ({'i': 1, 'j': 2})) tbl(a)
+
 # not a struct
 statement error
 SELECT a.i FROM (VALUES (1)) tbl(a)
