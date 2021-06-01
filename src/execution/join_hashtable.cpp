@@ -4,6 +4,7 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/null_value.hpp"
+#include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 
@@ -602,90 +603,14 @@ void ScanStructure::AdvancePointers() {
 	AdvancePointers(this->sel_vector, this->count);
 }
 
-template <class T>
-static void TemplatedGatherResult(Vector &result, data_ptr_t *pointers, const SelectionVector &result_vector,
-                                  const SelectionVector &sel_vector, const idx_t count, const idx_t offset,
-                                  const idx_t col_idx) {
-	// Precompute mask indexes
-	idx_t entry_idx;
-	idx_t idx_in_entry;
-	ValidityBytes::GetEntryIndex(col_idx, entry_idx, idx_in_entry);
-
-	auto rdata = FlatVector::GetData<T>(result);
-	auto &rmask = FlatVector::Validity(result);
-	for (idx_t i = 0; i < count; i++) {
-		auto ridx = result_vector.get_index(i);
-		auto pidx = sel_vector.get_index(i);
-		T hdata = Load<T>(pointers[pidx] + offset);
-		ValidityBytes hmask(pointers[pidx]);
-		if (!hmask.RowIsValid(hmask.GetValidityEntry(entry_idx), idx_in_entry)) {
-			rmask.SetInvalid(ridx);
-		} else {
-			rdata[ridx] = hdata;
-		}
-	}
-}
-
-static void GatherResultVector(Vector &result, const SelectionVector &result_vector, data_ptr_t *ptrs,
-                               const SelectionVector &sel_vector, const idx_t count, const idx_t offset,
-                               const idx_t col_idx) {
-	result.SetVectorType(VectorType::FLAT_VECTOR);
-	switch (result.GetType().InternalType()) {
-	case PhysicalType::BOOL:
-	case PhysicalType::INT8:
-		TemplatedGatherResult<int8_t>(result, ptrs, result_vector, sel_vector, count, offset, col_idx);
-		break;
-	case PhysicalType::INT16:
-		TemplatedGatherResult<int16_t>(result, ptrs, result_vector, sel_vector, count, offset, col_idx);
-		break;
-	case PhysicalType::INT32:
-		TemplatedGatherResult<int32_t>(result, ptrs, result_vector, sel_vector, count, offset, col_idx);
-		break;
-	case PhysicalType::INT64:
-		TemplatedGatherResult<int64_t>(result, ptrs, result_vector, sel_vector, count, offset, col_idx);
-		break;
-	case PhysicalType::UINT8:
-		TemplatedGatherResult<uint8_t>(result, ptrs, result_vector, sel_vector, count, offset, col_idx);
-		break;
-	case PhysicalType::UINT16:
-		TemplatedGatherResult<uint16_t>(result, ptrs, result_vector, sel_vector, count, offset, col_idx);
-		break;
-	case PhysicalType::UINT32:
-		TemplatedGatherResult<uint32_t>(result, ptrs, result_vector, sel_vector, count, offset, col_idx);
-		break;
-	case PhysicalType::UINT64:
-		TemplatedGatherResult<uint64_t>(result, ptrs, result_vector, sel_vector, count, offset, col_idx);
-		break;
-	case PhysicalType::INT128:
-		TemplatedGatherResult<hugeint_t>(result, ptrs, result_vector, sel_vector, count, offset, col_idx);
-		break;
-	case PhysicalType::FLOAT:
-		TemplatedGatherResult<float>(result, ptrs, result_vector, sel_vector, count, offset, col_idx);
-		break;
-	case PhysicalType::DOUBLE:
-		TemplatedGatherResult<double>(result, ptrs, result_vector, sel_vector, count, offset, col_idx);
-		break;
-	case PhysicalType::INTERVAL:
-		TemplatedGatherResult<interval_t>(result, ptrs, result_vector, sel_vector, count, offset, col_idx);
-		break;
-	case PhysicalType::VARCHAR:
-		TemplatedGatherResult<string_t>(result, ptrs, result_vector, sel_vector, count, offset, col_idx);
-		break;
-	default:
-		throw NotImplementedException("Unimplemented type for ScanStructure::GatherResult");
-	}
-}
-
 void ScanStructure::GatherResult(Vector &result, const SelectionVector &result_vector,
-                                 const SelectionVector &sel_vector, const idx_t count, const idx_t offset,
-                                 const idx_t col_idx) {
-	auto ptrs = FlatVector::GetData<data_ptr_t>(pointers);
-	GatherResultVector(result, result_vector, ptrs, sel_vector, count, offset, col_idx);
+                                 const SelectionVector &sel_vector, const idx_t count, const idx_t col_idx) {
+	RowOperations::Gather(ht.layout, pointers, sel_vector, result, result_vector, count, col_idx);
 }
 
 void ScanStructure::GatherResult(Vector &result, const SelectionVector &sel_vector, const idx_t count,
-                                 const idx_t offset, const idx_t col_idx) {
-	GatherResult(result, FlatVector::INCREMENTAL_SELECTION_VECTOR, sel_vector, count, offset, col_idx);
+                                 const idx_t col_idx) {
+	GatherResult(result, FlatVector::INCREMENTAL_SELECTION_VECTOR, sel_vector, count, col_idx);
 }
 
 void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
@@ -715,12 +640,10 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 		result.Slice(left, result_vector, result_count);
 
 		// on the RHS, we need to fetch the data from the hash table
-		const auto &offsets = ht.layout.GetOffsets();
 		for (idx_t i = 0; i < ht.build_types.size(); i++) {
 			auto &vector = result.data[left.ColumnCount() + i];
 			D_ASSERT(vector.GetType() == ht.build_types[i]);
-			const auto offset = offsets[ht.condition_types.size() + i];
-			GatherResult(vector, result_vector, result_count, offset, i + ht.condition_types.size());
+			GatherResult(vector, result_vector, result_count, i + ht.condition_types.size());
 		}
 		AdvancePointers();
 	}
@@ -962,7 +885,6 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &input, DataChunk 
 		result.data[i].Reference(input.data[i]);
 	}
 	// now fetch the data from the RHS
-	const auto &offsets = ht.layout.GetOffsets();
 	for (idx_t i = 0; i < ht.build_types.size(); i++) {
 		auto &vector = result.data[input.ColumnCount() + i];
 		// set NULL entries for every entry that was not found
@@ -972,8 +894,7 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &input, DataChunk 
 			mask.SetValid(result_sel.get_index(j));
 		}
 		// for the remaining values we fetch the values
-		const auto offset = offsets[ht.condition_types.size() + i];
-		GatherResult(vector, result_sel, result_sel, result_count, offset, i + ht.condition_types.size());
+		GatherResult(vector, result_sel, result_sel, result_count, i + ht.condition_types.size());
 	}
 	result.SetCardinality(input.size());
 
@@ -983,7 +904,8 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &input, DataChunk 
 
 void JoinHashTable::ScanFullOuter(DataChunk &result, JoinHTScanState &state) {
 	// scan the HT starting from the current position and check which rows from the build side did not find a match
-	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
+	Vector addresses(LogicalType::POINTER);
+	auto key_locations = FlatVector::GetData<data_ptr_t>(addresses);
 	idx_t found_entries = 0;
 	{
 		lock_guard<mutex> state_lock(state.lock);
@@ -1010,20 +932,18 @@ void JoinHashTable::ScanFullOuter(DataChunk &result, JoinHTScanState &state) {
 	result.SetCardinality(found_entries);
 	if (found_entries > 0) {
 		idx_t left_column_count = result.ColumnCount() - build_types.size();
+		const auto &sel_vector = FlatVector::INCREMENTAL_SELECTION_VECTOR;
 		// set the left side as a constant NULL
 		for (idx_t i = 0; i < left_column_count; i++) {
 			result.data[i].SetVectorType(VectorType::CONSTANT_VECTOR);
 			ConstantVector::SetNull(result.data[i], true);
 		}
 		// gather the values from the RHS
-		const auto &offsets = layout.GetOffsets();
 		for (idx_t i = 0; i < build_types.size(); i++) {
 			auto &vector = result.data[left_column_count + i];
 			D_ASSERT(vector.GetType() == build_types[i]);
-			const auto offset = offsets[condition_types.size() + i];
-			GatherResultVector(vector, FlatVector::INCREMENTAL_SELECTION_VECTOR, key_locations,
-			                   FlatVector::INCREMENTAL_SELECTION_VECTOR, found_entries, offset,
-			                   i + condition_types.size());
+			RowOperations::Gather(layout, addresses, sel_vector, vector, sel_vector, found_entries,
+			                      i + condition_types.size());
 		}
 	}
 }

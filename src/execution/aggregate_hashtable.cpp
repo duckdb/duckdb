@@ -650,7 +650,8 @@ void GroupedAggregateHashTable::FlushMove(Vector &source_addresses, Vector &sour
 	groups.SetCardinality(count);
 	for (idx_t i = 0; i < groups.ColumnCount(); i++) {
 		auto &column = groups.data[i];
-		RowOperations::Gather(layout, source_addresses, column, count, i);
+		RowOperations::Gather(layout, source_addresses, FlatVector::INCREMENTAL_SELECTION_VECTOR, column,
+		                      FlatVector::INCREMENTAL_SELECTION_VECTOR, count, i);
 	}
 
 	SelectionVector new_groups(STANDARD_VECTOR_SIZE);
@@ -775,7 +776,8 @@ idx_t GroupedAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {
 	const auto group_cols = layout.ColumnCount() - 1;
 	for (idx_t i = 0; i < group_cols; i++) {
 		auto &column = result.data[i];
-		RowOperations::Gather(layout, addresses, column, result.size(), i);
+		RowOperations::Gather(layout, addresses, FlatVector::INCREMENTAL_SELECTION_VECTOR, column,
+		                      FlatVector::INCREMENTAL_SELECTION_VECTOR, result.size(), i);
 	}
 
 	RowOperations::FinalizeStates(layout, addresses, result, group_cols);
