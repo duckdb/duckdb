@@ -105,123 +105,6 @@ void JoinHashTable::Hash(DataChunk &keys, const SelectionVector &sel, idx_t coun
 		}
 	}
 }
-<<<<<<< Updated upstream
-template <class T>
-static void TemplatedSerializeVData(VectorData &vdata, const SelectionVector &sel, const idx_t count,
-                                    data_ptr_t key_locations[], const idx_t col_offset, const idx_t col_idx) {
-	auto source = (T *)vdata.data;
-	if (!vdata.validity.AllValid()) {
-		for (idx_t i = 0; i < count; i++) {
-			auto idx = sel.get_index(i);
-			auto source_idx = vdata.sel->get_index(idx);
-
-			auto isnull = !vdata.validity.RowIsValid(source_idx);
-			T value = isnull ? NullValue<T>() : source[source_idx];
-			Store<T>(value, key_locations[i] + col_offset);
-			if (isnull) {
-				ValidityBytes col_mask(key_locations[i]);
-				col_mask.SetInvalidUnsafe(col_idx);
-			}
-		}
-	} else {
-		for (idx_t i = 0; i < count; i++) {
-			auto idx = sel.get_index(i);
-			auto source_idx = vdata.sel->get_index(idx);
-
-			Store<T>(source[source_idx], key_locations[i] + col_offset);
-		}
-	}
-}
-
-static void InitializeOuterJoin(idx_t count, data_ptr_t key_locations[], const idx_t col_offset) {
-	for (idx_t i = 0; i < count; i++) {
-		Store<bool>(false, key_locations[i] + col_offset);
-	}
-}
-
-void JoinHashTable::SerializeVectorData(VectorData &vdata, const SelectionVector &sel, const idx_t count,
-                                        data_ptr_t key_locations[], const idx_t col_idx) {
-	const auto &col_offset = layout.GetOffsets()[col_idx];
-	const auto &type = layout.GetTypes()[col_idx];
-	switch (type.InternalType()) {
-	case PhysicalType::BOOL:
-	case PhysicalType::INT8:
-		TemplatedSerializeVData<int8_t>(vdata, sel, count, key_locations, col_offset, col_idx);
-		break;
-	case PhysicalType::INT16:
-		TemplatedSerializeVData<int16_t>(vdata, sel, count, key_locations, col_offset, col_idx);
-		break;
-	case PhysicalType::INT32:
-		TemplatedSerializeVData<int32_t>(vdata, sel, count, key_locations, col_offset, col_idx);
-		break;
-	case PhysicalType::INT64:
-		TemplatedSerializeVData<int64_t>(vdata, sel, count, key_locations, col_offset, col_idx);
-		break;
-	case PhysicalType::UINT8:
-		TemplatedSerializeVData<uint8_t>(vdata, sel, count, key_locations, col_offset, col_idx);
-		break;
-	case PhysicalType::UINT16:
-		TemplatedSerializeVData<uint16_t>(vdata, sel, count, key_locations, col_offset, col_idx);
-		break;
-	case PhysicalType::UINT32:
-		TemplatedSerializeVData<uint32_t>(vdata, sel, count, key_locations, col_offset, col_idx);
-		break;
-	case PhysicalType::UINT64:
-		TemplatedSerializeVData<uint64_t>(vdata, sel, count, key_locations, col_offset, col_idx);
-		break;
-	case PhysicalType::INT128:
-		TemplatedSerializeVData<hugeint_t>(vdata, sel, count, key_locations, col_offset, col_idx);
-		break;
-	case PhysicalType::FLOAT:
-		TemplatedSerializeVData<float>(vdata, sel, count, key_locations, col_offset, col_idx);
-		break;
-	case PhysicalType::DOUBLE:
-		TemplatedSerializeVData<double>(vdata, sel, count, key_locations, col_offset, col_idx);
-		break;
-	case PhysicalType::HASH:
-		TemplatedSerializeVData<hash_t>(vdata, sel, count, key_locations, col_offset, col_idx);
-		break;
-	case PhysicalType::INTERVAL:
-		TemplatedSerializeVData<interval_t>(vdata, sel, count, key_locations, col_offset, col_idx);
-		break;
-	case PhysicalType::VARCHAR: {
-		StringHeap local_heap;
-		auto source = (string_t *)vdata.data;
-		for (idx_t i = 0; i < count; i++) {
-			auto idx = sel.get_index(i);
-			auto source_idx = vdata.sel->get_index(idx);
-
-			string_t new_val;
-			if (!vdata.validity.RowIsValid(source_idx)) {
-				ValidityBytes col_mask(key_locations[i]);
-				col_mask.SetInvalidUnsafe(col_idx);
-				new_val = NullValue<string_t>();
-			} else if (source[source_idx].IsInlined()) {
-				new_val = source[source_idx];
-			} else {
-				new_val = local_heap.AddBlob(source[source_idx].GetDataUnsafe(), source[source_idx].GetSize());
-			}
-			Store<string_t>(new_val, key_locations[i] + col_offset);
-		}
-		lock_guard<mutex> append_lock(ht_lock);
-		string_heap.MergeHeap(local_heap);
-		break;
-	}
-	default:
-		throw NotImplementedException("FIXME: unimplemented serialize");
-	}
-}
-
-void JoinHashTable::SerializeVector(Vector &v, idx_t vcount, const SelectionVector &sel, const idx_t count,
-                                    data_ptr_t key_locations[], const idx_t col_idx) {
-	VectorData vdata;
-	v.Orrify(vcount, vdata);
-
-	SerializeVectorData(vdata, sel, count, key_locations, col_idx);
-}
-
-=======
->>>>>>> Stashed changes
 idx_t JoinHashTable::AppendToBlock(HTDataBlock &block, BufferHandle &handle, vector<BlockAppendEntry> &append_entries,
                                    idx_t remaining) {
 	idx_t append_count = MinValue<idx_t>(remaining, block.capacity - block.count);
@@ -304,7 +187,6 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 
 	vector<unique_ptr<BufferHandle>> handles;
 	vector<BlockAppendEntry> append_entries;
-	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
 	// first allocate space of where to serialize the keys and payload columns
 	idx_t remaining = added_count;
 	{
@@ -340,18 +222,16 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 		}
 	}
 	// now set up the key_locations based on the append entries
+	Vector addresses(LogicalType::POINTER);
+	auto key_locations = FlatVector::GetData<data_ptr_t>(addresses);
+	;
 	idx_t append_idx = 0;
 	for (auto &append_entry : append_entries) {
 		idx_t next = append_idx + append_entry.count;
 		for (; append_idx < next; append_idx++) {
 			// Set the validity mask (clearing is less common)
-<<<<<<< Updated upstream
-			ValidityBytes(append_entry.baseptr).SetAllValid(layout.ColumnCount());
-			key_locations[append_idx] = append_entry.baseptr;
-=======
 			auto idx = current_sel->get_index(append_idx);
 			key_locations[idx] = append_entry.baseptr;
->>>>>>> Stashed changes
 			append_entry.baseptr += entry_size;
 		}
 	}
@@ -366,23 +246,6 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 
 	// serialize the keys to the key locations
 	for (idx_t i = 0; i < keys.ColumnCount(); i++) {
-<<<<<<< Updated upstream
-		SerializeVectorData(key_data[i], *current_sel, added_count, key_locations, i);
-	}
-	// now serialize the payload
-	if (!build_types.empty()) {
-		for (idx_t i = 0; i < payload.ColumnCount(); i++) {
-			SerializeVector(payload.data[i], payload.size(), *current_sel, added_count, key_locations,
-			                keys.ColumnCount() + i);
-		}
-	}
-	if (IsRightOuterJoin(join_type)) {
-		// for FULL/RIGHT OUTER joins initialize the "found" boolean to false
-		InitializeOuterJoin(added_count, key_locations, tuple_size);
-	}
-	idx_t hash_col = layout.ColumnCount() - 1;
-	SerializeVector(hash_values, payload.size(), *current_sel, added_count, key_locations, hash_col);
-=======
 		source_data.emplace_back(move(key_data[i]));
 	}
 	// now serialize the payload
@@ -408,7 +271,6 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	RowOperations::Scatter(source_data.data(), layout, addresses, local_heap, *current_sel, added_count);
 	lock_guard<mutex> append_lock(ht_lock);
 	string_heap.MergeHeap(local_heap);
->>>>>>> Stashed changes
 }
 
 void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_locations[]) {
