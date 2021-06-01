@@ -77,6 +77,7 @@ void NumericStatistics::Update<interval_t>(SegmentStatistics &stats, interval_t 
 NumericStatistics::NumericStatistics(LogicalType type_p) : BaseStatistics(move(type_p)) {
 	min = Value::MaximumValue(type);
 	max = Value::MinimumValue(type);
+	validity_stats = make_unique<ValidityStatistics>(false);
 }
 
 NumericStatistics::NumericStatistics(LogicalType type_p, Value min_p, Value max_p)

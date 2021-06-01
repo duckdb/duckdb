@@ -3,22 +3,63 @@
 # group: [struct]
 
 statement ok
-CREATE TABLE a(b STRUCT(i INTEGER, j INTEGER));
+CREATE TABLE a(b ROW(i INTEGER, j INTEGER));
 
+# insert standard struct
 statement ok
 INSERT INTO a VALUES (STRUCT_PACK(i := 1, j:= 2));
 
 query I
-SELECT * FROM a;
+SELECT * FROM a ORDER BY (b).i;
 ----
-<i: 1, j: 2>
+{'i': 1, 'j': 2}
 
 statement ok
 INSERT INTO a VALUES (NULL);
 
 query I
-SELECT * FROM a;
+SELECT * FROM a ORDER BY (b).i;
 ----
-<i: 1, j: 2>
 NULL
+{'i': 1, 'j': 2}
 
+# unnamed struct
+statement ok
+INSERT INTO a VALUES (ROW(2, 3));
+
+query I
+SELECT * FROM a ORDER BY (b).i;
+----
+NULL
+{'i': 1, 'j': 2}
+{'i': 2, 'j': 3}
+
+# null values in children
+statement ok
+INSERT INTO a VALUES (ROW(3, NULL)), (ROW(NULL, 4));
+
+query I
+SELECT * FROM a ORDER BY (b).i, (b).j;
+----
+NULL
+{'i': NULL, 'j': 4}
+{'i': 1, 'j': 2}
+{'i': 2, 'j': 3}
+{'i': 3, 'j': NULL}
+
+# incorrect number of struct entries
+statement error
+INSERT INTO a VALUES (ROW(1, 2, 3))
+
+statement error
+INSERT INTO a VALUES (ROW(1))
+
+# incorrect types
+statement error
+INSERT INTO a VALUES (ROW('hello', 1))
+
+statement error
+INSERT INTO a VALUES (ROW('hello', [1, 2]))
+
+statement error
+INSERT INTO a VALUES (ROW(1, ROW(1, 7)))

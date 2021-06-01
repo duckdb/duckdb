@@ -1,0 +1,82 @@
+# name: test/sql/types/struct/nested_structs.test
+# description: Test storing nested structs in tables
+# group: [struct]
+
+statement ok
+CREATE TABLE a(c ROW(i ROW(a INTEGER), j INTEGER));
+
+statement ok
+INSERT INTO a VALUES ({
+	'i': {
+		'a': 3
+	},
+	'j': 4
+})
+
+query I
+SELECT * FROM a
+----
+{'i': {'a': 3}, 'j': 4}
+
+query I
+SELECT ((c).i).a FROM a
+----
+3
+
+statement ok
+INSERT INTO a VALUES (NULL)
+
+query I
+SELECT * FROM a
+----
+{'i': {'a': 3}, 'j': 4}
+NULL
+
+query I
+SELECT ((c).i).a FROM a
+----
+3
+NULL
+
+# nulls at different levels
+statement ok
+INSERT INTO a VALUES (ROW(ROW(NULL), 1))
+
+statement ok
+INSERT INTO a VALUES (ROW(ROW(1), NULL))
+
+statement ok
+INSERT INTO a VALUES (ROW(NULL, 1))
+
+query I
+SELECT * FROM a
+----
+{'i': {'a': 3}, 'j': 4}
+NULL
+{'i': {'a': NULL}, 'j': 1}
+{'i': {'a': 1}, 'j': NULL}
+{'i': NULL, 'j': 1}
+
+# create table as
+statement ok
+CREATE TABLE b AS SELECT {
+	'a': {
+		'a': 1,
+		'b': 'hello'
+	}
+} c;
+
+query I
+SELECT (c).a FROM b
+----
+{'a': 1, 'b': hello}
+
+# nested struct mismatch on insertion
+statement error
+INSERT INTO a VALUES (1)
+
+statement error
+INSERT INTO a VALUES (ROW(1, 2))
+
+statement error
+INSERT INTO a VALUES (ROW(ROW(1, 2, 3), 1))

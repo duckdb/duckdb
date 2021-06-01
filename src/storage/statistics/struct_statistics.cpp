@@ -12,6 +12,7 @@ StructStatistics::StructStatistics(LogicalType type_p) :
 	for(idx_t i = 0; i < child_types.size(); i++) {
 		child_stats[i] = BaseStatistics::CreateEmpty(child_types[i].second);
 	}
+	validity_stats = make_unique<ValidityStatistics>(false);
 }
 
 void StructStatistics::Merge(const BaseStatistics &other_p) {

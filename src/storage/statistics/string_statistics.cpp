@@ -14,6 +14,7 @@ StringStatistics::StringStatistics(LogicalType type_p) : BaseStatistics(move(typ
 	max_string_length = 0;
 	has_unicode = false;
 	has_overflow_strings = false;
+	validity_stats = make_unique<ValidityStatistics>(false);
 }
 
 unique_ptr<BaseStatistics> StringStatistics::Copy() {
