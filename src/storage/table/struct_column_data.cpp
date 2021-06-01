@@ -143,17 +143,17 @@ void StructColumnData::UpdateColumn(Transaction &transaction, const vector<colum
 }
 
 unique_ptr<BaseStatistics> StructColumnData::GetUpdateStatistics() {
-	throw NotImplementedException("FIXME: struct update");
-	// auto stats = updates ? updates->GetStatistics() : nullptr;
-	// auto validity_stats = validity.GetUpdateStatistics();
-	// if (!stats && !validity_stats) {
-	// 	return nullptr;
-	// }
-	// if (!stats) {
-	// 	stats = BaseStatistics::CreateEmpty(type);
-	// }
-	// stats->validity_stats = move(validity_stats);
-	// return stats;
+	// check if any child column has updates
+	auto stats = BaseStatistics::CreateEmpty(type);
+	auto &struct_stats = (StructStatistics &) *stats;
+	stats->validity_stats = validity.GetUpdateStatistics();
+	for(idx_t i = 0; i < sub_columns.size(); i++) {
+		auto child_stats = sub_columns[i]->GetUpdateStatistics();
+		if (child_stats) {
+			struct_stats.child_stats[i] = move(child_stats);
+		}
+	}
+	return stats;
 }
 
 void StructColumnData::FetchRow(Transaction &transaction, ColumnFetchState &state, row_t row_id, Vector &result,

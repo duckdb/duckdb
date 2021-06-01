@@ -984,6 +984,8 @@ void UpdateSegment::Update(Transaction &transaction, idx_t column_index, Vector 
 	// obtain an exclusive lock
 	auto write_lock = lock.GetExclusiveLock();
 
+	update.Normalify(count);
+
 	// update statistics
 	SelectionVector sel;
 	{
