@@ -111,8 +111,10 @@ py::object GetValueToPython(Value &val, const LogicalType &type) {
 	case LogicalTypeId::STRUCT: {
 		py::dict py_struct;
 		for (idx_t i = 0; i < val.struct_value.size(); i++) {
-			py_struct[type.child_types()[i].first.c_str()] =
-			    GetValueToPython(val.struct_value[i].second, type.child_types()[i].second);
+			auto &child_entry = type.child_types()[i];
+			auto &child_name = child_entry.first;
+			auto &child_type = child_entry.second;
+			py_struct[child_name.c_str()] = GetValueToPython(val.struct_value[i], child_type);
 		}
 		return std::move(py_struct);
 	}

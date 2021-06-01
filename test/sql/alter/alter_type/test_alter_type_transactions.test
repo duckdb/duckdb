@@ -63,12 +63,11 @@ SELECT * FROM test
 ----
 2	2
 
-# we can also update rows, but updates to i will not be seen...
-# should we check this somehow?
-statement ok con2
+# we cannot update rows on tables that have been altered
+statement error con2
 UPDATE test SET i=1000
 
-statement ok con2
+statement error con2
 UPDATE test SET j=100
 
 query TI con1
@@ -77,18 +76,13 @@ SELECT * FROM test
 1	1
 2	2
 
-query II con2
-SELECT * FROM test
-----
-1000	100
-
 statement ok con1
 COMMIT
 
 query TI con1
 SELECT * FROM test
 ----
-2	100
+2	2
 
 statement ok con1
 DROP TABLE test

@@ -184,7 +184,7 @@ void RowDataCollection::ComputeStructEntrySizes(Vector &v, idx_t entry_sizes[], 
 		num_children = children.size();
 		for (auto &struct_child : children) {
 			Vector struct_vector;
-			struct_vector.Slice(*struct_child.second, dict_sel, vcount);
+			struct_vector.Slice(*struct_child, dict_sel, vcount);
 			struct_vectors.push_back(move(struct_vector));
 		}
 	} else {
@@ -192,7 +192,7 @@ void RowDataCollection::ComputeStructEntrySizes(Vector &v, idx_t entry_sizes[], 
 		num_children = children.size();
 		for (auto &struct_child : children) {
 			Vector struct_vector;
-			struct_vector.Reference(*struct_child.second);
+			struct_vector.Reference(*struct_child);
 			struct_vectors.push_back(move(struct_vector));
 		}
 	}
@@ -445,7 +445,7 @@ void RowDataCollection::SerializeStructVector(Vector &v, idx_t vcount, const Sel
 		num_children = children.size();
 		for (auto &struct_child : children) {
 			Vector struct_vector;
-			struct_vector.Slice(*struct_child.second, dict_sel, vcount);
+			struct_vector.Slice(*struct_child, dict_sel, vcount);
 			struct_vectors.push_back(move(struct_vector));
 		}
 	} else {
@@ -453,7 +453,7 @@ void RowDataCollection::SerializeStructVector(Vector &v, idx_t vcount, const Sel
 		num_children = children.size();
 		for (auto &struct_child : children) {
 			Vector struct_vector;
-			struct_vector.Reference(*struct_child.second);
+			struct_vector.Reference(*struct_child);
 			struct_vectors.push_back(move(struct_vector));
 		}
 	}
@@ -755,10 +755,9 @@ void RowDataCollection::DeserializeIntoStructVector(Vector &v, const idx_t &vcou
 	}
 
 	// now deserialize into the struct vectors
+	auto &children = StructVector::GetEntries(v);
 	for (idx_t i = 0; i < child_types.size(); i++) {
-		auto new_child = make_unique<Vector>(child_types[i].second);
-		DeserializeIntoVector(*new_child, vcount, i, key_locations, struct_validitymask_locations);
-		StructVector::AddEntry(v, child_types[i].first, move(new_child));
+		DeserializeIntoVector(*children[i], vcount, i, key_locations, struct_validitymask_locations);
 	}
 }
 

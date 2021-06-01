@@ -6,7 +6,7 @@
 
 namespace duckdb {
 
-unique_ptr<ParsedExpression> Transformer::TransformColumnRef(duckdb_libpgquery::PGColumnRef *root) {
+unique_ptr<ParsedExpression> Transformer::TransformColumnRef(duckdb_libpgquery::PGColumnRef *root, idx_t depth) {
 	auto fields = root->fields;
 	switch ((reinterpret_cast<duckdb_libpgquery::PGNode *>(fields->head->data.ptr_value))->type) {
 	case duckdb_libpgquery::T_PGString: {

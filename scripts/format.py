@@ -18,7 +18,7 @@ ignored_files = ['tpch_constants.hpp', 'tpcds_constants.hpp', '_generated', 'tpc
                  'test_csv_header.hpp', 'duckdb.cpp', 'duckdb.hpp', 'json.hpp', 'sqlite3.h', 'shell.c',
                  'termcolor.hpp', 'test_insert_invalid.test', 'httplib.hpp', 'os_win.c', 'glob.c', 'printf.c',
                  'helper.hpp', 'single_thread_ptr.hpp','types.hpp']
-ignored_directories = ['.eggs', '__pycache__', 'icu', 'dbgen']
+ignored_directories = ['.eggs', '__pycache__', 'icu', 'dbgen', os.path.join('tools', 'pythonpkg', 'duckdb'), os.path.join('tools', 'pythonpkg', 'build'), os.path.join('tools', 'rpkg', 'src', 'duckdb')]
 format_all = False
 check_only = True
 confirm = True
@@ -258,7 +258,7 @@ def format_directory(directory):
     for f in files:
         full_path = os.path.join(directory, f)
         if os.path.isdir(full_path):
-            if f in ignored_directories:
+            if f in ignored_directories or full_path in ignored_directories:
                 continue
             if not silent:
                 print(full_path)

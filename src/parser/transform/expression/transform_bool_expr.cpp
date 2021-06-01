@@ -4,10 +4,10 @@
 
 namespace duckdb {
 
-unique_ptr<ParsedExpression> Transformer::TransformBoolExpr(duckdb_libpgquery::PGBoolExpr *root) {
+unique_ptr<ParsedExpression> Transformer::TransformBoolExpr(duckdb_libpgquery::PGBoolExpr *root, idx_t depth) {
 	unique_ptr<ParsedExpression> result;
 	for (auto node = root->args->head; node != nullptr; node = node->next) {
-		auto next = TransformExpression(reinterpret_cast<duckdb_libpgquery::PGNode *>(node->data.ptr_value));
+		auto next = TransformExpression(reinterpret_cast<duckdb_libpgquery::PGNode *>(node->data.ptr_value), depth + 1);
 
 		switch (root->boolop) {
 		case duckdb_libpgquery::PG_AND_EXPR: {

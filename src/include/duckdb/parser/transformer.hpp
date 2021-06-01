@@ -28,8 +28,11 @@ struct CommonTableExpressionInfo;
 //! The transformer class is responsible for transforming the internal Postgres
 //! parser representation into the DuckDB representation
 class Transformer {
+	static constexpr const idx_t DEFAULT_MAX_EXPRESSION_DEPTH = 1000;
+
 public:
-	explicit Transformer(Transformer *parent = nullptr) : parent(parent) {
+	explicit Transformer(Transformer *parent = nullptr, idx_t max_expression_depth_p = DEFAULT_MAX_EXPRESSION_DEPTH)
+	    : parent(parent), max_expression_depth(parent ? parent->max_expression_depth : max_expression_depth_p) {
 	}
 
 	//! Transforms a Postgres parse tree into a set of SQL Statements
@@ -42,6 +45,7 @@ public:
 
 private:
 	Transformer *parent;
+	idx_t max_expression_depth;
 	//! The current prepared statement parameter index
 	idx_t prepared_statement_parameter_index = 0;
 	//! Holds window expressions defined by name. We need those when transforming the expressions referring to them.
@@ -123,43 +127,44 @@ private:
 	// Expression Transform
 	//===--------------------------------------------------------------------===//
 	//! Transform a Postgres boolean expression into an Expression
-	unique_ptr<ParsedExpression> TransformBoolExpr(duckdb_libpgquery::PGBoolExpr *root);
+	unique_ptr<ParsedExpression> TransformBoolExpr(duckdb_libpgquery::PGBoolExpr *root, idx_t depth);
 	//! Transform a Postgres case expression into an Expression
-	unique_ptr<ParsedExpression> TransformCase(duckdb_libpgquery::PGCaseExpr *root);
+	unique_ptr<ParsedExpression> TransformCase(duckdb_libpgquery::PGCaseExpr *root, idx_t depth);
 	//! Transform a Postgres type cast into an Expression
-	unique_ptr<ParsedExpression> TransformTypeCast(duckdb_libpgquery::PGTypeCast *root);
+	unique_ptr<ParsedExpression> TransformTypeCast(duckdb_libpgquery::PGTypeCast *root, idx_t depth);
 	//! Transform a Postgres coalesce into an Expression
-	unique_ptr<ParsedExpression> TransformCoalesce(duckdb_libpgquery::PGAExpr *root);
+	unique_ptr<ParsedExpression> TransformCoalesce(duckdb_libpgquery::PGAExpr *root, idx_t depth);
 	//! Transform a Postgres column reference into an Expression
-	unique_ptr<ParsedExpression> TransformColumnRef(duckdb_libpgquery::PGColumnRef *root);
+	unique_ptr<ParsedExpression> TransformColumnRef(duckdb_libpgquery::PGColumnRef *root, idx_t depth);
 	//! Transform a Postgres constant value into an Expression
-	unique_ptr<ConstantExpression> TransformValue(duckdb_libpgquery::PGValue val);
+	unique_ptr<ConstantExpression> TransformValue(duckdb_libpgquery::PGValue val, idx_t depth);
 	//! Transform a Postgres operator into an Expression
-	unique_ptr<ParsedExpression> TransformAExpr(duckdb_libpgquery::PGAExpr *root);
+	unique_ptr<ParsedExpression> TransformAExpr(duckdb_libpgquery::PGAExpr *root, idx_t depth);
 	//! Transform a Postgres abstract expression into an Expression
-	unique_ptr<ParsedExpression> TransformExpression(duckdb_libpgquery::PGNode *node);
+	unique_ptr<ParsedExpression> TransformExpression(duckdb_libpgquery::PGNode *node, idx_t depth);
 	//! Transform a Postgres function call into an Expression
-	unique_ptr<ParsedExpression> TransformFuncCall(duckdb_libpgquery::PGFuncCall *root);
+	unique_ptr<ParsedExpression> TransformFuncCall(duckdb_libpgquery::PGFuncCall *root, idx_t depth);
 	//! Transform a Postgres boolean expression into an Expression
-	unique_ptr<ParsedExpression> TransformInterval(duckdb_libpgquery::PGIntervalConstant *root);
+	unique_ptr<ParsedExpression> TransformInterval(duckdb_libpgquery::PGIntervalConstant *root, idx_t depth);
 	//! Transform a Postgres lambda node [e.g. (x, y) -> x + y] into a lambda expression
-	unique_ptr<ParsedExpression> TransformLambda(duckdb_libpgquery::PGLambdaFunction *node);
+	unique_ptr<ParsedExpression> TransformLambda(duckdb_libpgquery::PGLambdaFunction *node, idx_t depth);
 	//! Transform a Postgres array access node (e.g. x[1] or x[1:3])
-	unique_ptr<ParsedExpression> TransformArrayAccess(duckdb_libpgquery::PGAIndirection *node);
+	unique_ptr<ParsedExpression> TransformArrayAccess(duckdb_libpgquery::PGAIndirection *node, idx_t depth);
 	//! Transform a positional reference (e.g. #1)
-	unique_ptr<ParsedExpression> TransformPositionalReference(duckdb_libpgquery::PGPositionalReference *node);
+	unique_ptr<ParsedExpression> TransformPositionalReference(duckdb_libpgquery::PGPositionalReference *node,
+	                                                          idx_t depth);
 
 	//! Transform a Postgres constant value into an Expression
-	unique_ptr<ParsedExpression> TransformConstant(duckdb_libpgquery::PGAConst *c);
+	unique_ptr<ParsedExpression> TransformConstant(duckdb_libpgquery::PGAConst *c, idx_t depth);
 
-	unique_ptr<ParsedExpression> TransformResTarget(duckdb_libpgquery::PGResTarget *root);
-	unique_ptr<ParsedExpression> TransformNullTest(duckdb_libpgquery::PGNullTest *root);
-	unique_ptr<ParsedExpression> TransformParamRef(duckdb_libpgquery::PGParamRef *node);
-	unique_ptr<ParsedExpression> TransformNamedArg(duckdb_libpgquery::PGNamedArgExpr *root);
+	unique_ptr<ParsedExpression> TransformResTarget(duckdb_libpgquery::PGResTarget *root, idx_t depth);
+	unique_ptr<ParsedExpression> TransformNullTest(duckdb_libpgquery::PGNullTest *root, idx_t depth);
+	unique_ptr<ParsedExpression> TransformParamRef(duckdb_libpgquery::PGParamRef *node, idx_t depth);
+	unique_ptr<ParsedExpression> TransformNamedArg(duckdb_libpgquery::PGNamedArgExpr *root, idx_t depth);
 
-	unique_ptr<ParsedExpression> TransformSQLValueFunction(duckdb_libpgquery::PGSQLValueFunction *node);
+	unique_ptr<ParsedExpression> TransformSQLValueFunction(duckdb_libpgquery::PGSQLValueFunction *node, idx_t depth);
 
-	unique_ptr<ParsedExpression> TransformSubquery(duckdb_libpgquery::PGSubLink *root);
+	unique_ptr<ParsedExpression> TransformSubquery(duckdb_libpgquery::PGSubLink *root, idx_t depth);
 	//===--------------------------------------------------------------------===//
 	// Constraints transform
 	//===--------------------------------------------------------------------===//
@@ -171,7 +176,7 @@ private:
 	//===--------------------------------------------------------------------===//
 	// Collation transform
 	//===--------------------------------------------------------------------===//
-	unique_ptr<ParsedExpression> TransformCollateExpr(duckdb_libpgquery::PGCollateClause *collate);
+	unique_ptr<ParsedExpression> TransformCollateExpr(duckdb_libpgquery::PGCollateClause *collate, idx_t depth);
 
 	string TransformCollation(duckdb_libpgquery::PGCollateClause *collate);
 
@@ -219,12 +224,13 @@ private:
 	bool TransformOrderBy(duckdb_libpgquery::PGList *order, vector<OrderByNode> &result);
 
 	//! Transform a Postgres SELECT clause into a list of Expressions
-	bool TransformExpressionList(duckdb_libpgquery::PGList *list, vector<unique_ptr<ParsedExpression>> &result);
+	bool TransformExpressionList(duckdb_libpgquery::PGList *list, vector<unique_ptr<ParsedExpression>> &result,
+	                             idx_t depth);
 
 	//! Transform a Postgres PARTITION BY/ORDER BY specification into lists of expressions
-	void TransformWindowDef(duckdb_libpgquery::PGWindowDef *window_spec, WindowExpression *expr);
+	void TransformWindowDef(duckdb_libpgquery::PGWindowDef *window_spec, WindowExpression *expr, idx_t depth);
 	//! Transform a Postgres window frame specification into frame expressions
-	void TransformWindowFrame(duckdb_libpgquery::PGWindowDef *window_spec, WindowExpression *expr);
+	void TransformWindowFrame(duckdb_libpgquery::PGWindowDef *window_spec, WindowExpression *expr, idx_t depth);
 
 	unique_ptr<SampleOptions> TransformSampleOptions(duckdb_libpgquery::PGNode *options);
 };

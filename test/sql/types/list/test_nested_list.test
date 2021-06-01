@@ -188,28 +188,28 @@ SELECT g, UNNEST(l)+1 u FROM (SELECT g, LIST(e) l FROM list_data GROUP BY g) u1 
 query IT
 SELECT g, STRUCT_PACK(a := g, b := le) sl FROM (SELECT g, LIST(e) le from list_data GROUP BY g) xx WHERE g < 3 ORDER BY g
 ----
-1	<a: 1, b: [1, 2]>
-2	<a: 2, b: [3, 4, 5]>
+1	{'a': 1, 'b': [1, 2]}
+2	{'a': 2, 'b': [3, 4, 5]}
 
 query T
 SELECT LIST(STRUCT_PACK(a := g, b := le)) mind_blown FROM (SELECT g, LIST(e) le from list_data  GROUP BY g ORDER BY g) xx
 ----
-[<a: 1, b: [1, 2]>, <a: 2, b: [3, 4, 5]>, <a: 3, b: [6]>, <a: 5, b: [NULL]>]
+[{'a': 1, 'b': [1, 2]}, {'a': 2, 'b': [3, 4, 5]}, {'a': 3, 'b': [6]}, {'a': 5, 'b': [NULL]}]
 
 query IT
 SELECT g, LIST(STRUCT_PACK(a := e, b := e+1)) ls from list_data GROUP BY g ORDER BY g
 ----
-1	[<a: 1, b: 2>, <a: 2, b: 3>]
-2	[<a: 3, b: 4>, <a: 4, b: 5>, <a: 5, b: 6>]
-3	[<a: 6, b: 7>]
-5	[<a: NULL, b: NULL>]
+1	[{'a': 1, 'b': 2}, {'a': 2, 'b': 3}]
+2	[{'a': 3, 'b': 4}, {'a': 4, 'b': 5}, {'a': 5, 'b': 6}]
+3	[{'a': 6, 'b': 7}]
+5	[{'a': NULL, 'b': NULL}]
 
 # TODO check second col
 query IT
 SELECT g, LIST(STRUCT_PACK(a := e, b := e+1)) ls from list_data WHERE g > 2GROUP BY g ORDER BY g
 ----
-3	[<a: 6, b: 7>]
-5	[<a: NULL, b: NULL>]
+3	[{'a': 6, 'b': 7}]
+5	[{'a': NULL, 'b': NULL}]
 
 # list of list of int
 query IT

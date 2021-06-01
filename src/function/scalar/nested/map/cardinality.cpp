@@ -15,23 +15,16 @@ static void CardinalityFunction(DataChunk &args, ExpressionState &state, Vector 
 	if (map.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		auto &child = DictionaryVector::Child(map);
 		auto &dict_sel = DictionaryVector::SelVector(map);
-		if (!StructVector::HasEntries(child)) {
-			result_data[0] = 0;
-			return;
-		}
+
 		auto &children = StructVector::GetEntries(child);
-		children[0].second->Orrify(args.size(), list_data);
+		children[0]->Orrify(args.size(), list_data);
 		for (idx_t row = 0; row < args.size(); row++) {
 			auto list_entry = ((list_entry_t *)list_data.data)[list_data.sel->get_index(dict_sel.get_index(row))];
 			result_data[row] = list_entry.length;
 		}
 	} else {
-		if (!StructVector::HasEntries(map)) {
-			result_data[0] = 0;
-			return;
-		}
 		auto &children = StructVector::GetEntries(map);
-		children[0].second->Orrify(args.size(), list_data);
+		children[0]->Orrify(args.size(), list_data);
 		for (idx_t row = 0; row < args.size(); row++) {
 			auto list_entry = ((list_entry_t *)list_data.data)[list_data.sel->get_index(row)];
 			result_data[row] = list_entry.length;

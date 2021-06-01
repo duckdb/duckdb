@@ -12,7 +12,7 @@
 namespace duckdb {
 
 TransientSegment::TransientSegment(DatabaseInstance &db, const LogicalType &type_p, idx_t start)
-    : ColumnSegment(type_p, ColumnSegmentType::TRANSIENT, start), db(db) {
+    : ColumnSegment(db, type_p, ColumnSegmentType::TRANSIENT, start) {
 	if (type.InternalType() == PhysicalType::VARCHAR) {
 		data = make_unique<StringSegment>(db, start);
 	} else if (type.InternalType() == PhysicalType::BIT) {
@@ -20,33 +20,6 @@ TransientSegment::TransientSegment(DatabaseInstance &db, const LogicalType &type
 	} else {
 		data = make_unique<NumericSegment>(db, type.InternalType(), start);
 	}
-}
-
-TransientSegment::TransientSegment(PersistentSegment &segment)
-    : ColumnSegment(segment.type, ColumnSegmentType::TRANSIENT, segment.start), db(segment.db) {
-	if (segment.block_id == segment.data->block->BlockId()) {
-		segment.data->ToTemporary();
-	}
-	data = move(segment.data);
-	stats = move(segment.stats);
-	count = segment.count.load();
-	D_ASSERT(!segment.next);
-}
-
-void TransientSegment::InitializeScan(ColumnScanState &state) {
-	data->InitializeScan(state);
-}
-
-void TransientSegment::Scan(ColumnScanState &state, idx_t vector_index, Vector &result) {
-	data->Scan(state, vector_index, result);
-}
-
-void TransientSegment::Fetch(ColumnScanState &state, idx_t vector_index, Vector &result) {
-	data->Fetch(state, vector_index, result);
-}
-
-void TransientSegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
-	data->FetchRow(state, row_id - this->start, result, result_idx);
 }
 
 void TransientSegment::InitializeAppend(ColumnAppendState &state) {
