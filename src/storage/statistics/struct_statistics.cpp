@@ -67,14 +67,11 @@ string StructStatistics::ToString() {
 }
 
 void StructStatistics::Verify(Vector &vector, idx_t count) {
-	if (!StructVector::HasEntries(vector)) {
-		return;
-	}
 	BaseStatistics::Verify(vector, count);
 
 	auto &child_entries = StructVector::GetEntries(vector);
 	for(idx_t i = 0; i < child_entries.size(); i++) {
-		child_stats[i]->Verify(*child_entries[i].second, count);
+		child_stats[i]->Verify(*child_entries[i], count);
 	}
 }
 

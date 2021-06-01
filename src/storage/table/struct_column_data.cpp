@@ -51,13 +51,12 @@ void StructColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t ro
 }
 
 void StructColumnData::Scan(Transaction &transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
-	D_ASSERT(StructVector::HasEntries(result));
 	// D_ASSERT(state.row_index == state.child_states[0].row_index);
 	// ColumnData::Scan(transaction, vector_index, state, result);
 	validity.Scan(transaction, vector_index, state.child_states[0], result);
 	auto &child_entries = StructVector::GetEntries(result);
 	for(idx_t i = 0; i < sub_columns.size(); i++) {
-		sub_columns[i]->Scan(transaction, vector_index, state.child_states[i + 1], *child_entries[i].second);
+		sub_columns[i]->Scan(transaction, vector_index, state.child_states[i + 1], *child_entries[i]);
 	}
 	state.child_states[0].Next();
 }
@@ -84,14 +83,12 @@ void StructColumnData::InitializeAppend(ColumnAppendState &state) {
 }
 
 void StructColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count) {
-	D_ASSERT(StructVector::HasEntries(vector));
-
 	validity.Append(*stats.validity_stats, state.child_appends[0], vector, count);
 
 	auto &struct_stats = (StructStatistics &) stats;
 	auto &child_entries = StructVector::GetEntries(vector);
 	for(idx_t i = 0; i < child_entries.size(); i++) {
-		sub_columns[i]->Append(*struct_stats.child_stats[i], state.child_appends[i + 1], *child_entries[i].second, count);
+		sub_columns[i]->Append(*struct_stats.child_stats[i], state.child_appends[i + 1], *child_entries[i], count);
 	}
 }
 
@@ -116,12 +113,9 @@ void StructColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &resul
 void StructColumnData::Update(Transaction &transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
                                 idx_t update_count) {
 	validity.Update(transaction, column_index, update_vector, row_ids, update_count);
-	if (!StructVector::HasEntries(update_vector)) {
-		return;
-	}
 	auto &child_entries = StructVector::GetEntries(update_vector);
 	for(idx_t i = 0; i < child_entries.size(); i++) {
-		sub_columns[i]->Update(transaction, column_index, *child_entries[i].second, row_ids, update_count);
+		sub_columns[i]->Update(transaction, column_index, *child_entries[i], row_ids, update_count);
 	}
 }
 
