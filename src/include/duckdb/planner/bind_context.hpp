@@ -119,6 +119,7 @@ private:
 	//! found.
 	Binding *GetBinding(const string &name, string &out_error);
 	bool GetMatchingBindingInternal(const string &column_name, string &result, bool throw_exception);
+
 private:
 	//! The set of bindings
 	unordered_map<string, unique_ptr<Binding>> bindings;

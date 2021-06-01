@@ -25,8 +25,8 @@ bool BindContext::GetMatchingBindingInternal(const string &column_name, string &
 			if (!result.empty() || is_using_binding) {
 				if (throw_exception) {
 					throw BinderException("Ambiguous reference to column name \"%s\" (use: \"%s.%s\" "
-										"or \"%s.%s\")",
-										column_name, result, column_name, kv.first, column_name);
+					                      "or \"%s.%s\")",
+					                      column_name, result, column_name, kv.first, column_name);
 				} else {
 					return false;
 				}
