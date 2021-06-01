@@ -84,8 +84,6 @@ void QueryProfiler::EndQuery() {
 			query_info = ToString();
 		} else if (automatic_print_format == ProfilerPrintFormat::QUERY_TREE_OPTIMIZER) {
 			query_info = ToString(true);
-		} else if (automatic_print_format == ProfilerPrintFormat::HTML) {
-			query_info = ToHTML();
 		}
 
 
@@ -543,26 +541,7 @@ void QueryProfiler::Propagate(QueryProfiler &qp) {
 	this->enabled = qp.enabled;
 	this->detailed_enabled = qp.detailed_enabled;
 }
-string QueryProfiler::ToHTML() const {
-    std::stringstream ss;
-	ss << "<!DOCTYPE <html>\n";
-	ss << "<head>\n";
-    ss << "\t<meta charset=\"utf-8\">\n";
-//    ss << "\t<meta name=\"viewport\" content=\"width=device-width\">\n";
-    ss << "\t<title>Query Profile Graph for Query</title>\n";
-//    ss << "\t${CSS}\n";
-    ss << "</head>\n";
-    ss << "<body>\n";
-//    ss << "\t${LIBRARIES}\n";
-    ss << "\n";
-    //    ss << "\t${CHART_SCRIPT}\n";
-	ss << "<script type='text/javascript' src=''></script>";
-    ss << "\n";
-    ss << "</body>\n";
-    ss << "</html>\n";
-//    ss << "\"\"\".replace(\"${CSS}\", html_output['css']).replace('${CHART_SCRIPT}', html_output['chart_script']).replace('${LIBRARIES}', html_output['libraries']))";
-	return ss.str();
-}
+
 
 void ExpressionInfo::ExtractExpressionsRecursive(unique_ptr<ExpressionState> &state) {
 	if (state->child_states.empty()) {

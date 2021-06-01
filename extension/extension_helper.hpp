@@ -30,6 +30,10 @@
 #include "httpfs-extension.hpp"
 #endif
 
+#ifdef BUILD_VISUALIZER_EXTENSION
+#include "visualizer-extension.hpp"
+#endif
+
 namespace duckdb {
 class DuckDB;
 
@@ -52,6 +56,9 @@ public:
 #endif
 #ifdef BUILD_HTTPFS_EXTENSION
 		db.LoadExtension<HTTPFsExtension>();
+#endif
+#ifdef BUILD_VISUALIZER_EXTENSION
+        db.LoadExtension<VisualizerExtension>();
 #endif
 	}
 
@@ -90,10 +97,17 @@ public:
 #else
 			return ExtensionLoadResult::NOT_LOADED;
 #endif
+		} else if (extension == "visualizer") {
+#ifdef BUILD_VISUALIZER_EXTENSION
+            db.LoadExtension<VisualizerExtension>();
+#else
+            // visualizer extension required but not build: skip this test
+			return ExtensionLoadResult::NOT_LOADED;
+#endif
 		} else {
-			// unknown extension
-			return ExtensionLoadResult::EXTENSION_UNKNOWN;
-		}
+					// unknown extension
+					return ExtensionLoadResult::EXTENSION_UNKNOWN;
+				}
 		return ExtensionLoadResult::LOADED_EXTENSION;
 	}
 };

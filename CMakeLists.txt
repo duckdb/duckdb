@@ -194,6 +194,7 @@ option(BUILD_PARQUET_EXTENSION "Build the Parquet extension." FALSE)
 option(BUILD_TPCH_EXTENSION "Build the TPC-H extension." FALSE)
 option(BUILD_FTS_EXTENSION "Build the FTS extension." FALSE)
 option(BUILD_HTTPFS_EXTENSION "Build the HTTP File System extension." FALSE)
+option(BUILD_VISUALIZER_EXTENSION "Build the profiler-output visualizer extension." FALSE)
 option(BUILD_BENCHMARKS "Enable building of the benchmark suite." FALSE)
 option(BUILD_SQLSMITH "Enable building of SQLSmith." FALSE)
 option(BUILD_TPCE "Enable building of the TPC-E tool." FALSE)
@@ -225,6 +226,7 @@ if(BUILD_PYTHON
    OR BUILD_R
    OR JDBC_DRIVER)
   set(BUILD_ICU_EXTENSION TRUE)
+  set(BUILD_VISUALIZER_EXTENSION TRUE)
   set(BUILD_PARQUET_EXTENSION TRUE)
 endif()
 
@@ -411,6 +413,11 @@ function(add_extension_definitions)
     include_directories(${CMAKE_SOURCE_DIR}/extension/httpfs/include ${OPENSSL_INCLUDE_DIR})
     add_definitions(-DBUILD_HTTPFS_EXTENSION=${BUILD_HTTPFS_EXTENSION})
   endif()
+
+  if(${BUILD_VISUALIZER_EXTENSION})
+    include_directories(${PROJECT_SOURCE_DIR}/extension/visualizer/include)
+    add_definitions(-DBUILD_VISUALIZER_EXTENSION=${BUILD_VISUALIZER_EXTENSION})
+  endif()
 endfunction()
 
 function(add_extension_dependencies LIBRARY)
@@ -432,6 +439,10 @@ function(add_extension_dependencies LIBRARY)
 
   if(${BUILD_HTTPFS_EXTENSION})
     add_dependencies(${LIBRARY} httpfs_extension)
+  endif()
+
+  if(${BUILD_VISUALIZER_EXTENSION})
+    add_dependencies(${LIBRARY} visualizer_extension)
   endif()
 endfunction()
 
@@ -455,6 +466,10 @@ function(link_extension_libraries LIBRARY)
   if(${BUILD_HTTPFS_EXTENSION})
     find_package(OpenSSL REQUIRED)
     target_link_libraries(${LIBRARY} httpfs_extension ${OPENSSL_LIBRARIES})
+  endif()
+
+  if(${BUILD_VISUALIZER_EXTENSION})
+    target_link_libraries(${LIBRARY} visualizer_extension)
   endif()
 endfunction()
 

@@ -17,3 +17,7 @@ endif()
 if(${BUILD_HTTPFS_EXTENSION})
   add_subdirectory(httpfs)
 endif()
+
+if(${BUILD_VISUALIZER_EXTENSION})
+  add_subdirectory(visualizer)
+endif()
