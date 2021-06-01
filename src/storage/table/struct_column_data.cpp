@@ -100,14 +100,19 @@ void StructColumnData::RevertAppend(row_t start_row) {
 }
 
 void StructColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
-	throw NotImplementedException("FIXME: struct");
-	// // fetch validity mask
-	// if (state.child_states.empty()) {
-	// 	ColumnScanState child_state;
-	// 	state.child_states.push_back(move(child_state));
-	// }
-	// validity.Fetch(state.child_states[0], row_id, result);
-	// ColumnData::Fetch(state, row_id, result);
+	// fetch validity mask
+	auto &child_entries = StructVector::GetEntries(result);
+	// insert any child states that are required
+	for(idx_t i = state.child_states.size(); i < child_entries.size() + 1; i++) {
+		ColumnScanState child_state;
+		state.child_states.push_back(move(child_state));
+	}
+	// fetch the validity state
+	validity.Fetch(state.child_states[0], row_id, result);
+	// fetch the sub-column states
+	for(idx_t i = 0; i < child_entries.size(); i++) {
+		sub_columns[i]->Fetch(state.child_states[i + 1], row_id, *child_entries[i]);
+	}
 }
 
 void StructColumnData::Update(Transaction &transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
@@ -153,14 +158,19 @@ unique_ptr<BaseStatistics> StructColumnData::GetUpdateStatistics() {
 
 void StructColumnData::FetchRow(Transaction &transaction, ColumnFetchState &state, row_t row_id, Vector &result,
                                   idx_t result_idx) {
-	throw NotImplementedException("FIXME: struct");
-	// // find the segment the row belongs to
-	// if (state.child_states.empty()) {
-	// 	auto child_state = make_unique<ColumnFetchState>();
-	// 	state.child_states.push_back(move(child_state));
-	// }
-	// validity.FetchRow(transaction, *state.child_states[0], row_id, result, result_idx);
-	// ColumnData::FetchRow(transaction, state, row_id, result, result_idx);
+	// fetch validity mask
+	auto &child_entries = StructVector::GetEntries(result);
+	// insert any child states that are required
+	for(idx_t i = state.child_states.size(); i < child_entries.size() + 1; i++) {
+		auto child_state = make_unique<ColumnFetchState>();
+		state.child_states.push_back(move(child_state));
+	}
+	// fetch the validity state
+	validity.FetchRow(transaction, *state.child_states[0], row_id, result, result_idx);
+	// fetch the sub-column states
+	for(idx_t i = 0; i < child_entries.size(); i++) {
+		sub_columns[i]->FetchRow(transaction, *state.child_states[i + 1], row_id, *child_entries[i], result_idx);
+	}
 }
 
 void StructColumnData::CommitDropColumn() {
