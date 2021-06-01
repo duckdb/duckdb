@@ -40,8 +40,11 @@ struct RowOperations {
 	//===--------------------------------------------------------------------===//
 	// Read/Write Operators
 	//===--------------------------------------------------------------------===//
-	static void Scatter(VectorData group_data[], const RowLayout &layout, Vector &addresses, StringHeap &string_heap,
+	//! Scatter group data to the rows. Initialises the ValidityMask.
+	static void Scatter(VectorData source_data[], const RowLayout &layout, Vector &addresses, StringHeap &string_heap,
 	                    const SelectionVector &sel, idx_t count);
+	//! Gather a single column
+	static void Gather(const RowLayout &layout, Vector &addresses, Vector &dest, idx_t count, idx_t col_idx);
 };
 
 } // namespace duckdb

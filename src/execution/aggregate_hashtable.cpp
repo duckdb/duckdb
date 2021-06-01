@@ -648,10 +648,9 @@ void GroupedAggregateHashTable::FlushMove(Vector &source_addresses, Vector &sour
 	DataChunk groups;
 	groups.Initialize(vector<LogicalType>(layout.GetTypes().begin(), layout.GetTypes().end() - 1));
 	groups.SetCardinality(count);
-	const auto &offsets = layout.GetOffsets();
 	for (idx_t i = 0; i < groups.ColumnCount(); i++) {
 		auto &column = groups.data[i];
-		VectorOperations::Gather::Set(source_addresses, column, count, offsets[i], i);
+		RowOperations::Gather(layout, source_addresses, column, count, i);
 	}
 
 	SelectionVector new_groups(STANDARD_VECTOR_SIZE);
@@ -774,10 +773,9 @@ idx_t GroupedAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {
 	result.SetCardinality(this_n);
 	// fetch the group columns (ignoring the final hash column
 	const auto group_cols = layout.ColumnCount() - 1;
-	const auto &offsets = layout.GetOffsets();
 	for (idx_t i = 0; i < group_cols; i++) {
 		auto &column = result.data[i];
-		VectorOperations::Gather::Set(addresses, column, result.size(), offsets[i], i);
+		RowOperations::Gather(layout, addresses, column, result.size(), i);
 	}
 
 	RowOperations::FinalizeStates(layout, addresses, result, group_cols);

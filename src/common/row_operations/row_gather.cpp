@@ -1,12 +1,11 @@
 //===--------------------------------------------------------------------===//
-// gather.cpp
+// row_gather.cpp
 // Description: This file contains the implementation of the gather operators
 //===--------------------------------------------------------------------===//
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/operator/constant_operators.hpp"
-#include "duckdb/common/types/null_value.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/row_operations/row_operations.hpp"
 
 namespace duckdb {
 
@@ -32,10 +31,11 @@ static void TemplatedGatherLoop(Vector &source, Vector &dest, idx_t count, idx_t
 	}
 }
 
-void VectorOperations::Gather::Set(Vector &source, Vector &dest, idx_t count, idx_t col_offset, idx_t col_idx) {
+void RowOperations::Gather(const RowLayout &layout, Vector &source, Vector &dest, idx_t count, idx_t col_idx) {
 	D_ASSERT(source.GetVectorType() == VectorType::FLAT_VECTOR);
 	D_ASSERT(source.GetType().id() == LogicalTypeId::POINTER); // "Cannot gather from non-pointer type!"
 
+	const auto col_offset = layout.GetOffsets()[col_idx];
 	dest.SetVectorType(VectorType::FLAT_VECTOR);
 	switch (dest.GetType().InternalType()) {
 	case PhysicalType::UINT8:
@@ -78,11 +78,14 @@ void VectorOperations::Gather::Set(Vector &source, Vector &dest, idx_t count, id
 	case PhysicalType::INTERVAL:
 		TemplatedGatherLoop<interval_t>(source, dest, count, col_offset, col_idx);
 		break;
+	case PhysicalType::HASH:
+		TemplatedGatherLoop<hash_t>(source, dest, count, col_offset, col_idx);
+		break;
 	case PhysicalType::VARCHAR:
 		TemplatedGatherLoop<string_t>(source, dest, count, col_offset, col_idx);
 		break;
 	default:
-		throw NotImplementedException("Unimplemented type for gather");
+		throw NotImplementedException("Unimplemented type for RowOperations::Gather");
 	}
 }
 
