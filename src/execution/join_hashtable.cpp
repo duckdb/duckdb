@@ -801,6 +801,8 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 			auto ptrs = FlatVector::GetData<data_ptr_t>(pointers);
 			for (idx_t i = 0; i < result_count; i++) {
 				auto idx = result_vector.get_index(i);
+				// NOTE: threadsan reports this as a data race because this can be set concurrently by separate threads
+				// Technically it is, but it does not matter, since the only value that can be written is "true"
 				Store<bool>(true, ptrs[idx] + ht.tuple_size);
 			}
 		}

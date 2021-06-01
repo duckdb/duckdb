@@ -14,15 +14,13 @@ static void StructPackFunction(DataChunk &args, ExpressionState &state, Vector &
 	D_ASSERT(args.ColumnCount() == info.stype.child_types().size());
 
 	bool all_const = true;
+	auto &child_entries = StructVector::GetEntries(result);
 	for (size_t i = 0; i < args.ColumnCount(); i++) {
 		if (args.data[i].GetVectorType() != VectorType::CONSTANT_VECTOR) {
 			all_const = false;
 		}
 		// same holds for this
-		D_ASSERT(args.data[i].GetType() == info.stype.child_types()[i].second);
-		auto new_child = make_unique<Vector>(info.stype.child_types()[i].second);
-		new_child->Reference(args.data[i]);
-		StructVector::AddEntry(result, info.stype.child_types()[i].first, move(new_child));
+		child_entries[i]->Reference(args.data[i]);
 	}
 	result.SetVectorType(all_const ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR);
 
@@ -41,13 +39,13 @@ static unique_ptr<FunctionData> StructPackBind(ClientContext &context, ScalarFun
 	for (idx_t i = 0; i < arguments.size(); i++) {
 		auto &child = arguments[i];
 		if (child->alias.empty() && bound_function.name == "struct_pack") {
-			throw Exception("Need named argument for struct pack, e.g. STRUCT_PACK(a := b)");
+			throw BinderException("Need named argument for struct pack, e.g. STRUCT_PACK(a := b)");
 		}
 		if (child->alias.empty() && bound_function.name == "row") {
 			child->alias = "v" + std::to_string(i + 1);
 		}
 		if (name_collision_set.find(child->alias) != name_collision_set.end()) {
-			throw Exception("Duplicate struct entry name");
+			throw BinderException("Duplicate struct entry name \"%s\"", child->alias);
 		}
 		name_collision_set.insert(child->alias);
 		struct_children.push_back(make_pair(child->alias, arguments[i]->return_type));

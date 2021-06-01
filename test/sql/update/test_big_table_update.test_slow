@@ -44,29 +44,36 @@ COMMIT
 query RR con1
 SELECT SUM(a), SUM(LENGTH(b)) FROM test
 ----
-575808000.000000	1920000.000000
+575808000	1920000
 
 query RR con2
 SELECT SUM(a), SUM(LENGTH(b)) FROM test
 ----
-575808000.000000	1920000.000000
+575808000	1920000
 
 # increment all even values by two
 statement ok con1
 BEGIN TRANSACTION
 
-statement ok con1
-UPDATE test SET a=a+2, b='hellohello' WHERE a%2=0
-
-query RR con1
+query RR con2
 SELECT SUM(a), SUM(LENGTH(b)) FROM test
 ----
-576192000.000000	2880000.000000
+575808000	1920000
+
+query I con1
+UPDATE test SET a=a+2, b='hellohello' WHERE a%2=0
+----
+192000
 
 query RR con2
 SELECT SUM(a), SUM(LENGTH(b)) FROM test
 ----
-575808000.000000	1920000.000000
+575808000	1920000
+
+query RR con1
+SELECT SUM(a), SUM(LENGTH(b)) FROM test
+----
+576192000	2880000
 
 # now increment all odd values by two
 statement ok con1
@@ -75,12 +82,12 @@ UPDATE test SET a=a+2, b='hellohello' WHERE a%2=1
 query RR con1
 SELECT SUM(a), SUM(LENGTH(b)) FROM test
 ----
-576576000.000000	3840000.000000
+576576000	3840000
 
 query RR con2
 SELECT SUM(a), SUM(LENGTH(b)) FROM test
 ----
-575808000.000000	1920000.000000
+575808000	1920000
 
 # increment all tuples by two now
 statement ok con1
@@ -89,12 +96,12 @@ UPDATE test SET a=a+2, b='hellohellohellohello'
 query RR con1
 SELECT SUM(a), SUM(LENGTH(b)) FROM test
 ----
-577344000.000000	7680000.000000
+577344000	7680000
 
 query RR con2
 SELECT SUM(a), SUM(LENGTH(b)) FROM test
 ----
-575808000.000000	1920000.000000
+575808000	1920000
 
 statement ok con1
 COMMIT
@@ -102,10 +109,10 @@ COMMIT
 query RR con1
 SELECT SUM(a), SUM(LENGTH(b)) FROM test
 ----
-577344000.000000	7680000.000000
+577344000	7680000
 
 query RR con2
 SELECT SUM(a), SUM(LENGTH(b)) FROM test
 ----
-577344000.000000	7680000.000000
+577344000	7680000
 

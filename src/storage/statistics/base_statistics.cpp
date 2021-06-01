@@ -32,6 +32,7 @@ unique_ptr<BaseStatistics> BaseStatistics::Copy() {
 }
 
 void BaseStatistics::Merge(const BaseStatistics &other) {
+	D_ASSERT(type == other.type);
 	if (other.validity_stats) {
 		if (validity_stats) {
 			validity_stats->Merge(*other.validity_stats);

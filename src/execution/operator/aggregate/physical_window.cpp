@@ -235,7 +235,7 @@ static void MaskTypedColumn(MASK_TYPE &mask, ChunkCollection &over_collection, c
 		mask.SetBlock(b, block);
 	}
 
-	//	Finish last ragged block
+	// Finish last ragged block
 	if (r < row_count) {
 		auto block = mask.GetBlock(complete_block_count);
 		if (block != mask.ONES) {

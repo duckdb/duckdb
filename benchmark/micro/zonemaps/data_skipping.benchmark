@@ -1,0 +1,15 @@
+# name: benchmark/micro/zonemaps/data_skipping.benchmark
+# description: Benchmark Data Skipping
+# group: [zonemaps]
+
+name DataSkipping
+group micro
+
+load
+CREATE TABLE integers AS SELECT range i, range j FROM range(10000000)
+
+run
+SELECT sum(j) FROM integers WHERE i = 100;
+
+result I
+100

@@ -2,6 +2,11 @@
 # description: Test that the buffer manager correctly frees any memory we use
 # group: [storage]
 
+load
+
+statement ok
+PRAGMA temp_directory=''
+
 statement ok
 PRAGMA threads=1
 

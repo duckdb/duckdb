@@ -10806,7 +10806,8 @@ struct ShellState {
 #define MODE_Markdown 14 /* Markdown formatting */
 #define MODE_Table   15  /* MySQL-style table formatting */
 #define MODE_Box     16  /* Unicode box-drawing characters */
-#define MODE_Latex   17  /* Unicode box-drawing characters */
+#define MODE_Latex   17  /* Latex tabular formatting */
+#define MODE_Trash   18  /* Discard output */
 
 static const char *modeDescr[] = {
   "line",
@@ -10826,7 +10827,8 @@ static const char *modeDescr[] = {
   "markdown",
   "table",
   "box",
-  "latex"
+  "latex",
+  "trash"
 };
 
 /*
@@ -12879,7 +12881,7 @@ static void exec_prepared_stmt(
    || pArg->cMode==MODE_Table
    || pArg->cMode==MODE_Box
    || pArg->cMode==MODE_Markdown
-   || pArg->cMode == MODE_Latex
+   || pArg->cMode==MODE_Latex
   ){
     exec_prepared_stmt_columnar(pArg, pStmt);
     return;
@@ -12907,24 +12909,26 @@ static void exec_prepared_stmt(
         azCols[i] = (char *)sqlite3_column_name(pStmt, i);
       }
       do{
-        /* extract the data and data types */
-        for(i=0; i<nCol; i++){
-          aiTypes[i] = x = sqlite3_column_type(pStmt, i);
-          if( x==SQLITE_BLOB && pArg && pArg->cMode==MODE_Insert ){
-            azVals[i] = "";
-          }else{
-            azVals[i] = (char*)sqlite3_column_text(pStmt, i);
-          }
-          if( !azVals[i] && (aiTypes[i]!=SQLITE_NULL) ){
-            rc = SQLITE_NOMEM;
-            break; /* from for */
-          }
-        } /* end for */
+        if (pArg->cMode!=MODE_Trash) {
+          /* extract the data and data types */
+          for(i=0; i<nCol; i++){
+            aiTypes[i] = x = sqlite3_column_type(pStmt, i);
+            if( x==SQLITE_BLOB && pArg && pArg->cMode==MODE_Insert ){
+              azVals[i] = "";
+            }else{
+              azVals[i] = (char*)sqlite3_column_text(pStmt, i);
+            }
+            if( !azVals[i] && (aiTypes[i]!=SQLITE_NULL) ){
+              rc = SQLITE_NOMEM;
+              break; /* from for */
+            }
+          } /* end for */
+        }
 
         /* if data and types extracted successfully... */
         if( SQLITE_ROW == rc ){
           /* call the supplied callback with the result row data */
-          if( shell_callback(pArg, nCol, azVals, azCols, aiTypes) ){
+          if( pArg->cMode!=MODE_Trash && shell_callback(pArg, nCol, azVals, azCols, aiTypes) ){
             rc = SQLITE_ABORT;
           }else{
             rc = sqlite3_step(pStmt);
@@ -18241,12 +18245,14 @@ static int do_meta_command(char *zLine, ShellState *p){
       p->mode = MODE_Json;
     }else if( c2=='l' && strncmp(azArg[1],"latex",n2)==0 ){
       p->mode = MODE_Latex;
+    }else if( c2=='t' && strncmp(azArg[1],"trash",n2)==0 ){
+      p->mode = MODE_Trash;
     }else if( nArg==1 ){
       raw_printf(p->out, "current output mode: %s\n", modeDescr[p->mode]);
     }else{
       raw_printf(stderr, "Error: mode should be one of: "
          "ascii box column csv html insert json line list markdown "
-         "quote table tabs tcl\n");
+         "quote table tabs tcl latex trash \n");
       rc = 1;
     }
     p->cMode = p->mode;

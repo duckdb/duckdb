@@ -6,16 +6,17 @@
 
 namespace duckdb {
 
-SegmentStatistics::SegmentStatistics(LogicalType type, idx_t type_size) : type(move(type)), type_size(type_size) {
+SegmentStatistics::SegmentStatistics(LogicalType type) : type(move(type)) {
 	Reset();
 }
 
-SegmentStatistics::SegmentStatistics(LogicalType type, idx_t type_size, unique_ptr<BaseStatistics> stats)
-    : type(move(type)), type_size(type_size), statistics(move(stats)) {
+SegmentStatistics::SegmentStatistics(LogicalType type, unique_ptr<BaseStatistics> stats)
+    : type(move(type)), statistics(move(stats)) {
 }
 
 void SegmentStatistics::Reset() {
 	statistics = BaseStatistics::CreateEmpty(type);
+	statistics->validity_stats = make_unique<ValidityStatistics>(false);
 }
 
 } // namespace duckdb

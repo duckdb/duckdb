@@ -125,42 +125,40 @@ select * from (SELECT id, unnest(url) u FROM parquet_scan('test/sql/copy/parquet
 query II
 SELECT id, authors FROM parquet_scan('test/sql/copy/parquet/data/apkwan.parquet') limit 10
 ----
-53e997b9b7602d9701f9f044	[<name: M. Stoll, id: 56018d9645cedb3395e77641, org: Abteilung Klinische Immunologie Medizinische Hochschule Hannover>, <name: H. Heiken, id: 53f4d53adabfaef34ff814c8, org: Abteilung Klinische Immunologie Medizinische Hochschule Hannover>, <name: G. M. N. Behrens, id: 53f42afbdabfaec09f0ed4e0, org: Abteilung Klinische Immunologie Medizinische Hochschule Hannover>, <name: R. E. Schmidt, id: 56018d9645cedb3395e77644, org: Abteilung Klinische Immunologie Medizinische Hochschule Hannover>]
-53e997b2b7602d9701f8fea5	[<name: D. Barr, id: 5440d4cfdabfae805a6fd46c, org: Camborne School of Mines Redruth, Cornwall England>]
-53e997aeb7602d9701f8856e	[<name: B Sharf, id: 54059f34dabfae44f081a626, org: NULL>, <name: E Bental, id: 5434518edabfaebba5856df4, org: NULL>]
-53e997bab7602d9701fa1e34	[<name: R. A. Kyle, id: 53f45704dabfaedd74e30781, org: NULL>]
-53e997abb7602d9701f846c0	[<name: J. Mitchell, id: 5405942bdabfae44f08177f9, org: NULL>]
-53e9978db7602d9701f4d7e8	[<name: &NA;, id: NULL, org: NULL>]
-53e9984bb7602d970207c61d	[<name: Olaf Th. Buck, id: 53f4cef7dabfaeedd477c91f, org: NULL>, <name: Volker Linnemann, id: 544837ccdabfae87b7dea930, org: NULL>]
-53e99796b7602d9701f5cd36	[<name: D. P. McKenzie, id: 53f4384cdabfaeb22f48309c, org: NULL>, <name: J. G. Gluyas, id: 53f42c87dabfaec09f108097, org: NULL>, <name: G. Eglinton, id: 56017dd445cedb3395e642dd, org: NULL>, <name: M. L. Coleman, id: 53f44fc6dabfaedd74e13c0e, org: NULL>]
-53e99809b7602d970201f551	[<name: A Moncrieff, id: 53f42dcfdabfaee43ebca730, org: NULL>, <name: L E Whitby, id: 53f4508fdabfaeb22f4e9af6, org: NULL>]
-53e997a6b7602d9701f7ffb0	[<name: R R Walters, id: 53f43b0edabfaee0d9b91d40, org: NULL>]
-
+53e997b9b7602d9701f9f044	[{'name': M. Stoll, 'id': 56018d9645cedb3395e77641, 'org': Abteilung Klinische Immunologie Medizinische Hochschule Hannover}, {'name': H. Heiken, 'id': 53f4d53adabfaef34ff814c8, 'org': Abteilung Klinische Immunologie Medizinische Hochschule Hannover}, {'name': G. M. N. Behrens, 'id': 53f42afbdabfaec09f0ed4e0, 'org': Abteilung Klinische Immunologie Medizinische Hochschule Hannover}, {'name': R. E. Schmidt, 'id': 56018d9645cedb3395e77644, 'org': Abteilung Klinische Immunologie Medizinische Hochschule Hannover}]
+53e997b2b7602d9701f8fea5	[{'name': D. Barr, 'id': 5440d4cfdabfae805a6fd46c, 'org': Camborne School of Mines Redruth, Cornwall England}]
+53e997aeb7602d9701f8856e	[{'name': B Sharf, 'id': 54059f34dabfae44f081a626, 'org': NULL}, {'name': E Bental, 'id': 5434518edabfaebba5856df4, 'org': NULL}]
+53e997bab7602d9701fa1e34	[{'name': R. A. Kyle, 'id': 53f45704dabfaedd74e30781, 'org': NULL}]
+53e997abb7602d9701f846c0	[{'name': J. Mitchell, 'id': 5405942bdabfae44f08177f9, 'org': NULL}]
+53e9978db7602d9701f4d7e8	[{'name': &NA;, 'id': NULL, 'org': NULL}]
+53e9984bb7602d970207c61d	[{'name': Olaf Th. Buck, 'id': 53f4cef7dabfaeedd477c91f, 'org': NULL}, {'name': Volker Linnemann, 'id': 544837ccdabfae87b7dea930, 'org': NULL}]
+53e99796b7602d9701f5cd36	[{'name': D. P. McKenzie, 'id': 53f4384cdabfaeb22f48309c, 'org': NULL}, {'name': J. G. Gluyas, 'id': 53f42c87dabfaec09f108097, 'org': NULL}, {'name': G. Eglinton, 'id': 56017dd445cedb3395e642dd, 'org': NULL}, {'name': M. L. Coleman, 'id': 53f44fc6dabfaedd74e13c0e, 'org': NULL}]
+53e99809b7602d970201f551	[{'name': A Moncrieff, 'id': 53f42dcfdabfaee43ebca730, 'org': NULL}, {'name': L E Whitby, 'id': 53f4508fdabfaeb22f4e9af6, 'org': NULL}]
+53e997a6b7602d9701f7ffb0	[{'name': R R Walters, 'id': 53f43b0edabfaee0d9b91d40, 'org': NULL}]
 
 query II
 SELECT id, unnest(authors) FROM parquet_scan('test/sql/copy/parquet/data/apkwan.parquet') limit 20
 ----
-53e997b9b7602d9701f9f044	<name: M. Stoll, id: 56018d9645cedb3395e77641, org: Abteilung Klinische Immunologie Medizinische Hochschule Hannover>
-53e997b9b7602d9701f9f044	<name: H. Heiken, id: 53f4d53adabfaef34ff814c8, org: Abteilung Klinische Immunologie Medizinische Hochschule Hannover>
-53e997b9b7602d9701f9f044	<name: G. M. N. Behrens, id: 53f42afbdabfaec09f0ed4e0, org: Abteilung Klinische Immunologie Medizinische Hochschule Hannover>
-53e997b9b7602d9701f9f044	<name: R. E. Schmidt, id: 56018d9645cedb3395e77644, org: Abteilung Klinische Immunologie Medizinische Hochschule Hannover>
-53e997b2b7602d9701f8fea5	<name: D. Barr, id: 5440d4cfdabfae805a6fd46c, org: Camborne School of Mines Redruth, Cornwall England>
-53e997aeb7602d9701f8856e	<name: B Sharf, id: 54059f34dabfae44f081a626, org: NULL>
-53e997aeb7602d9701f8856e	<name: E Bental, id: 5434518edabfaebba5856df4, org: NULL>
-53e997bab7602d9701fa1e34	<name: R. A. Kyle, id: 53f45704dabfaedd74e30781, org: NULL>
-53e997abb7602d9701f846c0	<name: J. Mitchell, id: 5405942bdabfae44f08177f9, org: NULL>
-53e9978db7602d9701f4d7e8	<name: &NA;, id: NULL, org: NULL>
-53e9984bb7602d970207c61d	<name: Olaf Th. Buck, id: 53f4cef7dabfaeedd477c91f, org: NULL>
-53e9984bb7602d970207c61d	<name: Volker Linnemann, id: 544837ccdabfae87b7dea930, org: NULL>
-53e99796b7602d9701f5cd36	<name: D. P. McKenzie, id: 53f4384cdabfaeb22f48309c, org: NULL>
-53e99796b7602d9701f5cd36	<name: J. G. Gluyas, id: 53f42c87dabfaec09f108097, org: NULL>
-53e99796b7602d9701f5cd36	<name: G. Eglinton, id: 56017dd445cedb3395e642dd, org: NULL>
-53e99796b7602d9701f5cd36	<name: M. L. Coleman, id: 53f44fc6dabfaedd74e13c0e, org: NULL>
-53e99809b7602d970201f551	<name: A Moncrieff, id: 53f42dcfdabfaee43ebca730, org: NULL>
-53e99809b7602d970201f551	<name: L E Whitby, id: 53f4508fdabfaeb22f4e9af6, org: NULL>
-53e997a6b7602d9701f7ffb0	<name: R R Walters, id: 53f43b0edabfaee0d9b91d40, org: NULL>
-53e99813b7602d970202f0a1	<name: Sean Milmo, id: 53f45f64dabfaee4dc832b5f, org: NULL>
-
+53e997b9b7602d9701f9f044	{'name': M. Stoll, 'id': 56018d9645cedb3395e77641, 'org': Abteilung Klinische Immunologie Medizinische Hochschule Hannover}
+53e997b9b7602d9701f9f044	{'name': H. Heiken, 'id': 53f4d53adabfaef34ff814c8, 'org': Abteilung Klinische Immunologie Medizinische Hochschule Hannover}
+53e997b9b7602d9701f9f044	{'name': G. M. N. Behrens, 'id': 53f42afbdabfaec09f0ed4e0, 'org': Abteilung Klinische Immunologie Medizinische Hochschule Hannover}
+53e997b9b7602d9701f9f044	{'name': R. E. Schmidt, 'id': 56018d9645cedb3395e77644, 'org': Abteilung Klinische Immunologie Medizinische Hochschule Hannover}
+53e997b2b7602d9701f8fea5	{'name': D. Barr, 'id': 5440d4cfdabfae805a6fd46c, 'org': Camborne School of Mines Redruth, Cornwall England}
+53e997aeb7602d9701f8856e	{'name': B Sharf, 'id': 54059f34dabfae44f081a626, 'org': NULL}
+53e997aeb7602d9701f8856e	{'name': E Bental, 'id': 5434518edabfaebba5856df4, 'org': NULL}
+53e997bab7602d9701fa1e34	{'name': R. A. Kyle, 'id': 53f45704dabfaedd74e30781, 'org': NULL}
+53e997abb7602d9701f846c0	{'name': J. Mitchell, 'id': 5405942bdabfae44f08177f9, 'org': NULL}
+53e9978db7602d9701f4d7e8	{'name': &NA;, 'id': NULL, 'org': NULL}
+53e9984bb7602d970207c61d	{'name': Olaf Th. Buck, 'id': 53f4cef7dabfaeedd477c91f, 'org': NULL}
+53e9984bb7602d970207c61d	{'name': Volker Linnemann, 'id': 544837ccdabfae87b7dea930, 'org': NULL}
+53e99796b7602d9701f5cd36	{'name': D. P. McKenzie, 'id': 53f4384cdabfaeb22f48309c, 'org': NULL}
+53e99796b7602d9701f5cd36	{'name': J. G. Gluyas, 'id': 53f42c87dabfaec09f108097, 'org': NULL}
+53e99796b7602d9701f5cd36	{'name': G. Eglinton, 'id': 56017dd445cedb3395e642dd, 'org': NULL}
+53e99796b7602d9701f5cd36	{'name': M. L. Coleman, 'id': 53f44fc6dabfaedd74e13c0e, 'org': NULL}
+53e99809b7602d970201f551	{'name': A Moncrieff, 'id': 53f42dcfdabfaee43ebca730, 'org': NULL}
+53e99809b7602d970201f551	{'name': L E Whitby, 'id': 53f4508fdabfaeb22f4e9af6, 'org': NULL}
+53e997a6b7602d9701f7ffb0	{'name': R R Walters, 'id': 53f43b0edabfaee0d9b91d40, 'org': NULL}
+53e99813b7602d970202f0a1	{'name': Sean Milmo, 'id': 53f45f64dabfaee4dc832b5f, 'org': NULL}
 
 query III
 SELECT id, struct_extract(unnest(authors), 'name'), struct_extract(unnest(authors), 'id') FROM parquet_scan('test/sql/copy/parquet/data/apkwan.parquet') limit 20
