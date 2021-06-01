@@ -352,7 +352,7 @@ void QueryProfiler::ToStream(std::ostream &ss, bool print_optimizer_output) cons
 }
 
 // Print a row
-static void PrintRow(std::ostream &ss, string annotation, int id, string name, double time, int sample_counter,
+static void PrintRow(std::ostream &ss, const string& annotation, int id, const string& name, double time, int sample_counter,
                      int tuple_counter, string extra_info, int depth) {
 	ss << string(depth * 3, ' ') << "{\n";
 	ss << string(depth * 3, ' ') << "\"ANNOTATION\": \"" + annotation + "\",\n";
@@ -370,7 +370,7 @@ static void PrintRow(std::ostream &ss, string annotation, int id, string name, d
 #endif
 	ss << string(depth * 3, ' ') << "\"SAMPLE_SIZE\": " << to_string(sample_counter) + ",\n";
 	ss << string(depth * 3, ' ') << "\"INPUT_SIZE\": " << to_string(tuple_counter) + ",\n";
-	ss << string(depth * 3, ' ') << "\"EXTRA_INFO\": \"" << StringUtil::Replace(extra_info, "\n", "\\n") + "\"\n";
+	ss << string(depth * 3, ' ') << "\"EXTRA_INFO\": \"" << StringUtil::Replace(std::move(extra_info), "\n", "\\n") + "\"\n";
 	ss << string(depth * 3, ' ') << "},\n";
 }
 
