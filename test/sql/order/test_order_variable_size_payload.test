@@ -150,58 +150,58 @@ NULL	[[a, , a, ]]
 query TT
 select i, struct_pack(i:=i, s:=s) from test5 order by i;
 ----
-NULL	<i: NULL, s: abbab>
-1	<i: 1, s: babab>
-2	<i: 2, s: NULL>
-3	<i: 3, s: ababa>
+NULL	{'i': NULL, 's': abbab}
+1	{'i': 1, 's': babab}
+2	{'i': 2, 's': NULL}
+3	{'i': 3, 's': ababa}
 
 query TT
 select i, struct_pack(i:=i, s:=string_split(s, 'b')) from test5 order by i;
 ----
-NULL	<i: NULL, s: [a, , a, ]>
-1	<i: 1, s: [, a, a, ]>
-2	<i: 2, s: NULL>
-3	<i: 3, s: [a, a, a]>
+NULL	{'i': NULL, 's': [a, , a, ]}
+1	{'i': 1, 's': [, a, a, ]}
+2	{'i': 2, 's': NULL}
+3	{'i': 3, 's': [a, a, a]}
 
 query TT
 select i, struct_pack(i:=i, s:=UNNEST(string_split(s, 'b'))) from test5 order by i;
 ----
-NULL	<i: NULL, s: a>
-NULL	<i: NULL, s: >
-NULL	<i: NULL, s: a>
-NULL	<i: NULL, s: >
-1	<i: 1, s: >
-1	<i: 1, s: a>
-1	<i: 1, s: a>
-1	<i: 1, s: >
-2	<i: 2, s: NULL>
-3	<i: 3, s: a>
-3	<i: 3, s: a>
-3	<i: 3, s: a>
+NULL	{'i': NULL, 's': a}
+NULL	{'i': NULL, 's': }
+NULL	{'i': NULL, 's': a}
+NULL	{'i': NULL, 's': }
+1	{'i': 1, 's': }
+1	{'i': 1, 's': a}
+1	{'i': 1, 's': a}
+1	{'i': 1, 's': }
+2	{'i': 2, 's': NULL}
+3	{'i': 3, 's': a}
+3	{'i': 3, 's': a}
+3	{'i': 3, 's': a}
 
 query TT
 select i, struct_pack(i:=i, s:=list(s)) from test5 group by i order by i;
 ----
-NULL	<i: NULL, s: [abbab]>
-1	<i: 1, s: [babab]>
-2	<i: 2, s: [NULL]>
-3	<i: 3, s: [ababa]>
+NULL	{'i': NULL, 's': [abbab]}
+1	{'i': 1, 's': [babab]}
+2	{'i': 2, 's': [NULL]}
+3	{'i': 3, 's': [ababa]}
 
 query TT
 select i, struct_pack(i:=i, s:=s) from test5 order by s;
 ----
-2	<i: 2, s: NULL>
-3	<i: 3, s: ababa>
-NULL	<i: NULL, s: abbab>
-1	<i: 1, s: babab>
+2	{'i': 2, 's': NULL}
+3	{'i': 3, 's': ababa}
+NULL	{'i': NULL, 's': abbab}
+1	{'i': 1, 's': babab}
 
 query TT
 select i, struct_pack(i:=i, s:=list(string_split(s, 'b'))) from test5 group by i order by i;
 ----
-NULL	<i: NULL, s: [[a, , a, ]]>
-1	<i: 1, s: [[, a, a, ]]>
-2	<i: 2, s: [NULL]>
-3	<i: 3, s: [[a, a, a]]>
+NULL	{'i': NULL, 's': [[a, , a, ]]}
+1	{'i': 1, 's': [[, a, a, ]]}
+2	{'i': 2, 's': [NULL]}
+3	{'i': 3, 's': [[a, a, a]]}
 
 # sorting by a mix of variable size and constant size columns
 statement ok
