@@ -26,6 +26,7 @@ static string ToHTML(ClientContext &context, const string &first_json_path, cons
 	ss << d3_js.rdbuf();
 	ss << "</script>\n";
 	ss << "<script> var data = ";
+	// If no json_file is given, read from query profiler
 	if (first_json_path.empty()) {
 		auto &lastProfiler = context.query_profiler_history->GetPrevProfilers().back().second;
 		ss << lastProfiler->ToJSON();
@@ -35,6 +36,7 @@ static string ToHTML(ClientContext &context, const string &first_json_path, cons
 	}
 	ss << "</script>\n";
 	ss << "<script> var secondData = ";
+	// If no json_file is given, make second json_data null
 	if (second_json_path.empty()) {
 		ss << "null;";
 	} else {
@@ -59,7 +61,6 @@ static void WriteToFile(string &path, string info) {
 }
 
 static void PragmaVisualizeLastProfilingOutput(ClientContext &context, const FunctionParameters &parameters) {
-	// this is either enable_profiling = json, or enable_profiling = query_tree
 	string file_name = parameters.values[0].ToString();
 	if (file_name.empty()) {
 		throw ParserException("Filename not specified");
@@ -68,7 +69,6 @@ static void PragmaVisualizeLastProfilingOutput(ClientContext &context, const Fun
 }
 
 static void PragmaVisualizeJsonProfilingOutput(ClientContext &context, const FunctionParameters &parameters) {
-	// this is either enable_profiling = json, or enable_profiling = query_tree
 	string file_name = parameters.values[0].ToString();
 	if (file_name.empty()) {
 		throw ParserException("Filename not specified");
