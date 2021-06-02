@@ -323,13 +323,14 @@ bool Hugeint::AddInPlace(hugeint_t &lhs, hugeint_t rhs) {
 		if (lhs.upper > (std::numeric_limits<int64_t>::max() - rhs.upper - overflow)) {
 			return false;
 		}
+		lhs.upper = lhs.upper + overflow + rhs.upper;
 	} else {
 		// RHS is negative: check for underflow
 		if (lhs.upper < std::numeric_limits<int64_t>::min() - rhs.upper - overflow) {
 			return false;
 		}
+		lhs.upper = lhs.upper + (overflow + rhs.upper);
 	}
-	lhs.upper = lhs.upper + overflow + rhs.upper;
 	lhs.lower += rhs.lower;
 	if (lhs.upper == std::numeric_limits<int64_t>::min() && lhs.lower == 0) {
 		return false;
@@ -345,14 +346,15 @@ bool Hugeint::SubtractInPlace(hugeint_t &lhs, hugeint_t rhs) {
 		if (lhs.upper < (std::numeric_limits<int64_t>::min() + rhs.upper + underflow)) {
 			return false;
 		}
+		lhs.upper = (lhs.upper - rhs.upper) - underflow;
 	} else {
 		// RHS is negative: check for overflow
 		if (lhs.upper > std::numeric_limits<int64_t>::min() &&
 		    lhs.upper - 1 >= (std::numeric_limits<int64_t>::max() + rhs.upper + underflow)) {
 			return false;
 		}
+		lhs.upper = lhs.upper - (rhs.upper + underflow);
 	}
-	lhs.upper = lhs.upper - rhs.upper - underflow;
 	lhs.lower -= rhs.lower;
 	if (lhs.upper == std::numeric_limits<int64_t>::min() && lhs.lower == 0) {
 		return false;
