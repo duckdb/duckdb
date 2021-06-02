@@ -1121,11 +1121,11 @@
         epsilon$5 = 1e-6;
 
     function translateX(x) {
-        return 'translate(" + x + ",0)';
+        return "translate(" + x + ",0)";
     }
 
     function translateY(y) {
-        return "translate(0," + y + ')';
+        return "translate(0," + y + ")";
     }
 
     function number$2(scale) {
@@ -2448,7 +2448,7 @@
                 .on("touchmove.drag", touchmoved)
                 .on("touchend.drag touchcancel.drag", touchended)
                 .style("touch-action", "none")
-                .style("-webkit-tap-highlight-color", 'rgba(0,0,0,0)');
+                .style("-webkit-tap-highlight-color", "rgba(0,0,0,0)");
         }
 
         function mousedowned(event, d) {
@@ -2879,7 +2879,7 @@
             + Math.max(0, Math.min(255, Math.round(this.r) || 0)) + ", "
             + Math.max(0, Math.min(255, Math.round(this.g) || 0)) + ", "
             + Math.max(0, Math.min(255, Math.round(this.b) || 0))
-            + (a === 1 ? ')' : ", " + a + ')');
+            + (a === 1 ? ")" : ", " + a + ")");
     }
 
     function hex(value) {
@@ -2964,7 +2964,7 @@
                 + (this.h || 0) + ", "
                 + (this.s || 0) * 100 + "%, "
                 + (this.l || 0) * 100 + "%"
-                + (a === 1 ? ')' : ", " + a + ')');
+                + (a === 1 ? ")" : ", " + a + ")");
         }
     }));
 
@@ -3515,10 +3515,10 @@
 
         function scale(xa, ya, xb, yb, s, q) {
             if (xa !== xb || ya !== yb) {
-                var i = s.push(pop(s) + "scale(", null, ",", null, ')');
+                var i = s.push(pop(s) + "scale(", null, ",", null, ")");
                 q.push({i: i - 4, x: interpolateNumber(xa, xb)}, {i: i - 2, x: interpolateNumber(ya, yb)});
             } else if (xb !== 1 || yb !== 1) {
-                s.push(pop(s) + "scale(" + xb + "," + yb + ')');
+                s.push(pop(s) + "scale(" + xb + "," + yb + ")");
             }
         }
 
@@ -3539,8 +3539,8 @@
         };
     }
 
-    var interpolateTransformCss = interpolateTransform(parseCss, "px, ", 'px)', 'deg)');
-    var interpolateTransformSvg = interpolateTransform(parseSvg, ", ", ')', ')');
+    var interpolateTransformCss = interpolateTransform(parseCss, "px, ", "px)", "deg)");
+    var interpolateTransformSvg = interpolateTransform(parseSvg, ", ", ")", ")");
 
     var epsilon2$1 = 1e-12;
 
@@ -5173,7 +5173,7 @@
                 .on("touchmove.brush", touchmoved)
                 .on("touchend.brush touchcancel.brush", touchended)
                 .style("touch-action", "none")
-                .style("-webkit-tap-highlight-color", 'rgba(0,0,0,0)');
+                .style("-webkit-tap-highlight-color", "rgba(0,0,0,0)");
         }
 
         brush.move = function(group, selection) {
@@ -9107,7 +9107,7 @@
 
                     // Compute the prefix and suffix.
                     valuePrefix = (valueNegative ? (sign === "(" ? sign : minus) : sign === "-" || sign === "(" ? "" : sign) + valuePrefix;
-                    valueSuffix = (type === "s" ? prefixes[8 + prefixExponent / 3] : "") + valueSuffix + (valueNegative && sign === "(" ? ')' : "");
+                    valueSuffix = (type === "s" ? prefixes[8 + prefixExponent / 3] : "") + valueSuffix + (valueNegative && sign === "(" ? ")" : "");
 
                     // Break the formatted value into the integer “value” part that can be
                     // grouped, and fractional or exponential “suffix” part that is not.
@@ -15625,7 +15625,7 @@
     }
 
     function formatRe(names) {
-        return new RegExp("^(?:" + names.map(requote).join("|") + ')', "i");
+        return new RegExp("^(?:" + names.map(requote).join("|") + ")", "i");
     }
 
     function formatLookup(names) {
@@ -16641,7 +16641,7 @@
             + Math.max(0, Math.min(255, Math.round(-4.54 - t * (35.34 - t * (2381.73 - t * (6402.7 - t * (7024.72 - t * 2710.57))))))) + ", "
             + Math.max(0, Math.min(255, Math.round(32.49 + t * (170.73 + t * (52.82 - t * (131.46 - t * (176.58 - t * 67.37))))))) + ", "
             + Math.max(0, Math.min(255, Math.round(81.24 + t * (442.36 - t * (2482.43 - t * (6167.24 - t * (6614.94 - t * 2475.67)))))))
-            + ')';
+            + ")";
     }
 
     var cubehelix = cubehelixLong(cubehelix$3(300, 0.5, 0.0), cubehelix$3(-240, 0.5, 1.0));
@@ -16680,7 +16680,7 @@
             + Math.max(0, Math.min(255, Math.round(34.61 + t * (1172.33 - t * (10793.56 - t * (33300.12 - t * (38394.49 - t * 14825.05))))))) + ", "
             + Math.max(0, Math.min(255, Math.round(23.31 + t * (557.33 + t * (1225.33 - t * (3574.96 - t * (1073.77 + t * 707.56))))))) + ", "
             + Math.max(0, Math.min(255, Math.round(27.2 + t * (3211.1 - t * (15327.97 - t * (27814 - t * (22569.18 - t * 6838.66)))))))
-            + ')';
+            + ")";
     }
 
     function ramp(range) {
@@ -18696,7 +18696,7 @@
             return y.copy().domain(y.range().map(this.invertY, this).map(y.invert, y));
         },
         toString: function() {
-            return "translate(" + this.x + "," + this.y + ") scale(" + this.k + ')';
+            return "translate(" + this.x + "," + this.y + ") scale(" + this.k + ")";
         }
     };
 
@@ -18789,7 +18789,7 @@
                 .on("touchstart.zoom", touchstarted)
                 .on("touchmove.zoom", touchmoved)
                 .on("touchend.zoom touchcancel.zoom", touchended)
-                .style("-webkit-tap-highlight-color", 'rgba(0,0,0,0)');
+                .style("-webkit-tap-highlight-color", "rgba(0,0,0,0)");
         }
 
         zoom.transform = function(collection, transform, point, event) {

@@ -148,7 +148,7 @@ function update(e, source) {
     const nodeEnter = node.enter().append('g')
         .attr('class', 'node')
         .attr("transform", function (d) {
-            return "translate(" + source.x0 + "," + source.y0 + ')';
+            return "translate(" + source.x0 + "," + source.y0 + ")";
         });
 
 // Add rect for the nodes
@@ -190,7 +190,7 @@ function update(e, source) {
         .attr("r", 20)
         .attr("fill", "white")
         .attr("transform", function (d) {
-            return "translate(" + rectNode.width / 2 + ", " + rectNode.height + ')';
+            return "translate(" + rectNode.width / 2 + ", " + rectNode.height + ")";
         });
 
 // Add toggle-button for the nodes
@@ -207,7 +207,7 @@ function update(e, source) {
 
     nodeEnter.selectAll(".button")
         .attr("transform", function (d) {
-            return "translate(" + rectNode.width / 2 + ", " + rectNode.height + ')';
+            return "translate(" + rectNode.width / 2 + ", " + rectNode.height + ")";
         })
         .attr("fill-opacity", d => d._children ? 0.5 : 0.2);
 
