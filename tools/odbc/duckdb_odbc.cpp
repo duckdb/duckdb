@@ -176,8 +176,6 @@ SQLRETURN SQLSetStmtAttr(SQLHSTMT StatementHandle, SQLINTEGER Attribute, SQLPOIN
 	}
 	case SQL_ATTR_ROWS_FETCHED_PTR: {
 		stmt->rows_fetched_ptr = (SQLULEN *)ValuePtr;
-		;
-		// fetch needs to set this now
 		return SQL_SUCCESS;
 	}
 	default:
@@ -297,7 +295,6 @@ SQLRETURN SQLPrepare(SQLHSTMT StatementHandle, SQLCHAR *StatementText, SQLINTEGE
 		}
 		stmt->params.resize(stmt->stmt->n_param);
 		stmt->bound_cols.resize(stmt->stmt->ColumnCount());
-
 		return SQL_SUCCESS;
 	});
 }
@@ -437,6 +434,7 @@ SQLRETURN SQLGetData(SQLHSTMT StatementHandle, SQLUSMALLINT Col_or_Param_Num, SQ
 
 		case SQL_CHAR: {
 			auto out_len = snprintf((char *)TargetValuePtr, BufferLength, "%s", val.GetValue<string>().c_str());
+
 			if (StrLen_or_IndPtr) {
 				*StrLen_or_IndPtr = out_len;
 			}
@@ -464,6 +462,7 @@ SQLRETURN SQLBindCol(SQLHSTMT StatementHandle, SQLUSMALLINT ColumnNumber, SQLSMA
 
 		return SQL_SUCCESS;
 	});
+
 }
 
 SQLRETURN SQLFetch(SQLHSTMT StatementHandle) {
@@ -504,6 +503,7 @@ SQLRETURN SQLFetch(SQLHSTMT StatementHandle) {
 				}
 			}
 		}
+
 
 		assert(stmt->chunk);
 		assert(stmt->chunk_row < stmt->chunk->size());
@@ -777,5 +777,6 @@ SQLRETURN SQLTables(SQLHSTMT StatementHandle, SQLCHAR *CatalogName, SQLSMALLINT 
 SQLRETURN SQLCancel(SQLHSTMT StatementHandle) {
 	return WithStatement(StatementHandle, [&](OdbcHandleStmt *stmt) { return SQL_SUCCESS; });
 }
+
 
 } // extern "C"
