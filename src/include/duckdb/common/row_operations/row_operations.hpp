@@ -16,6 +16,7 @@ namespace duckdb {
 struct AggregateObject;
 class DataChunk;
 class RowLayout;
+class RowDataCollection;
 struct SelectionVector;
 class StringHeap;
 class Vector;
@@ -43,7 +44,7 @@ struct RowOperations {
 	// Read/Write Operators
 	//===--------------------------------------------------------------------===//
 	//! Scatter group data to the rows. Initialises the ValidityMask.
-	static void Scatter(VectorData col_data[], const RowLayout &layout, Vector &rows, StringHeap &string_heap,
+	static void Scatter(VectorData col_data[], const RowLayout &layout, Vector &rows, RowDataCollection &string_heap,
 	                    const SelectionVector &sel, idx_t count);
 	//! Gather a single column
 	static void Gather(const RowLayout &layout, Vector &rows, const SelectionVector &row_sel, Vector &col,

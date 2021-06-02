@@ -3,6 +3,7 @@
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/null_value.hpp"
+#include "duckdb/common/types/row_data_collection.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -90,6 +91,7 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manag
 	}
 	addresses.Initialize(LogicalType::POINTER);
 	predicates.resize(layout.ColumnCount() - 1, ExpressionType::COMPARE_EQUAL);
+	string_heap = make_unique<RowDataCollection>(buffer_manager, Storage::BLOCK_ALLOC_SIZE / 8, 8);
 }
 
 GroupedAggregateHashTable::~GroupedAggregateHashTable() {
@@ -477,7 +479,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 		}
 
 		// for each of the locations that are empty, serialize the group columns to the locations
-		RowOperations::Scatter(group_data.get(), layout, addresses, string_heap, empty_vector, new_entry_count);
+		RowOperations::Scatter(group_data.get(), layout, addresses, *string_heap, empty_vector, new_entry_count);
 		RowOperations::InitializeStates(layout, addresses, empty_vector, new_entry_count);
 
 		// now we have only the tuples remaining that might match to an existing group
@@ -582,7 +584,7 @@ void GroupedAggregateHashTable::Combine(GroupedAggregateHashTable &other) {
 		}
 	});
 	FlushMove(addresses, hashes, group_idx);
-	string_heap.MergeHeap(other.string_heap);
+	string_heap->Merge(*other.string_heap);
 	Verify();
 }
 
@@ -627,7 +629,7 @@ void GroupedAggregateHashTable::Partition(vector<GroupedAggregateHashTable *> &p
 		auto &info = partition_info[info_idx++];
 		partition_entry->FlushMove(info.addresses, info.hashes, info.group_count);
 
-		partition_entry->string_heap.MergeHeap(string_heap);
+		partition_entry->string_heap->Merge(*string_heap);
 		partition_entry->Verify();
 		total_count += partition_entry->Size();
 	}

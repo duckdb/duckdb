@@ -9,6 +9,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/types/null_value.hpp"
+#include "duckdb/common/types/row_data_collection.hpp"
 #include "duckdb/common/types/row_layout.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
 #include "duckdb/common/types/string_heap.hpp"
@@ -50,8 +51,21 @@ static void TemplatedScatter(VectorData &gdata, Vector &addresses, const Selecti
 	}
 }
 
+static void ComputeStringEntrySizes(const VectorData &vdata, idx_t entry_sizes[], const SelectionVector &sel,
+                                    idx_t vcount, idx_t offset = 0) {
+	auto strings = (const string_t *)vdata.data;
+	for (idx_t i = 0; i < vcount; i++) {
+		auto pointer_idx = sel.get_index(i);
+		idx_t str_idx = vdata.sel->get_index(pointer_idx) + offset;
+		const auto &str = strings[str_idx];
+		if (vdata.validity.RowIsValid(str_idx) && !str.IsInlined()) {
+			entry_sizes[i] += str.GetSize();
+		}
+	}
+}
+
 void RowOperations::Scatter(VectorData group_data[], const RowLayout &layout, Vector &addresses,
-                            StringHeap &string_heap, const SelectionVector &sel, idx_t count) {
+                            RowDataCollection &string_heap, const SelectionVector &sel, idx_t count) {
 	if (count == 0) {
 		return;
 	}
@@ -112,6 +126,13 @@ void RowOperations::Scatter(VectorData group_data[], const RowLayout &layout, Ve
 			TemplatedScatter<hash_t>(gdata, addresses, sel, count, col_offset, col_idx);
 			break;
 		case PhysicalType::VARCHAR: {
+			idx_t entry_sizes[STANDARD_VECTOR_SIZE];
+			std::fill_n(entry_sizes, count, 0);
+			ComputeStringEntrySizes(gdata, entry_sizes, sel, count);
+
+			data_ptr_t str_locations[STANDARD_VECTOR_SIZE];
+			string_heap.Build(count, str_locations, entry_sizes);
+
 			auto string_data = (string_t *)gdata.data;
 			auto pointers = FlatVector::GetData<data_ptr_t>(addresses);
 
@@ -126,9 +147,11 @@ void RowOperations::Scatter(VectorData group_data[], const RowLayout &layout, Ve
 				} else if (string_data[group_idx].IsInlined()) {
 					Store<string_t>(string_data[group_idx], ptr);
 				} else {
-					Store<string_t>(
-					    string_heap.AddBlob(string_data[group_idx].GetDataUnsafe(), string_data[group_idx].GetSize()),
-					    ptr);
+					const auto &str = string_data[group_idx];
+					string_t inserted((const char *)str_locations[i], str.GetSize());
+					memcpy(inserted.GetDataWriteable(), str.GetDataUnsafe(), str.GetSize());
+					inserted.Finalize();
+					Store<string_t>(inserted, ptr);
 				}
 			}
 			break;

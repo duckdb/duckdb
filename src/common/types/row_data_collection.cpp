@@ -695,6 +695,27 @@ void RowDataCollection::Build(idx_t added_count, data_ptr_t key_locations[], idx
 	}
 }
 
+void RowDataCollection::Merge(RowDataCollection &other) {
+	RowDataCollection temp(buffer_manager, Storage::BLOCK_ALLOC_SIZE, 1);
+	{
+		//	One lock at a time to avoid deadlocks
+		lock_guard<mutex> read_lock(other.rc_lock);
+		temp.count = other.count;
+		temp.block_capacity = other.block_capacity;
+		temp.entry_size = other.entry_size;
+		temp.blocks = move(other.blocks);
+		other.count = 0;
+	}
+
+	lock_guard<mutex> write_lock(rc_lock);
+	count += temp.count;
+	block_capacity = MaxValue(block_capacity, temp.block_capacity);
+	entry_size = MaxValue(entry_size, temp.entry_size);
+	for (auto &block : temp.blocks) {
+		blocks.emplace_back(move(block));
+	}
+}
+
 template <class T>
 static void TemplatedDeserializeIntoVector(Vector &v, idx_t count, idx_t col_idx, data_ptr_t *key_locations) {
 	auto target = FlatVector::GetData<T>(v);

@@ -4,6 +4,7 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/null_value.hpp"
+#include "duckdb/common/types/row_data_collection.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
@@ -57,6 +58,7 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition
 
 	// compute the per-block capacity of this HT
 	block_capacity = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, (Storage::BLOCK_ALLOC_SIZE / entry_size) + 1);
+	string_heap = make_unique<RowDataCollection>(buffer_manager, Storage::BLOCK_ALLOC_SIZE / 8, 8);
 }
 
 JoinHashTable::~JoinHashTable() {
@@ -268,10 +270,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	hash_values.Orrify(keys.size(), hdata);
 	source_data.emplace_back(move(hdata));
 
-	StringHeap local_heap;
-	RowOperations::Scatter(source_data.data(), layout, addresses, local_heap, *current_sel, added_count);
-	lock_guard<mutex> append_lock(ht_lock);
-	string_heap.MergeHeap(local_heap);
+	RowOperations::Scatter(source_data.data(), layout, addresses, *string_heap, *current_sel, added_count);
 }
 
 void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_locations[]) {

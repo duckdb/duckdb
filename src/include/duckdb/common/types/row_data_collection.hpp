@@ -74,6 +74,8 @@ public:
 	                    idx_t remaining, idx_t entry_sizes[]);
 	void Build(idx_t added_count, data_ptr_t key_locations[], idx_t entry_sizes[]);
 
+	void Merge(RowDataCollection &other);
+
 	static void DeserializeIntoVector(Vector &v, const idx_t &vcount, const idx_t &col_idx, data_ptr_t key_locations[],
 	                                  data_ptr_t validitymask_locations[]);
 
