@@ -60,37 +60,40 @@ static void WriteToFile(string &path, string info) {
 static void PragmaVisualizeLastProfilingOutput(ClientContext &context, const FunctionParameters &parameters) {
 	string file_name = parameters.values[0].ToString();
 	if (file_name.empty()) {
-		throw ParserException("Filename not specified");
+		Printer::Print(ToHTML(context, "", ""));
+		return;
 	}
 	WriteToFile(file_name, ToHTML(context, "", ""));
 }
 
 static void PragmaVisualizeJsonProfilingOutput(ClientContext &context, const FunctionParameters &parameters) {
 	string file_name = parameters.values[0].ToString();
-	if (file_name.empty()) {
-		throw ParserException("Filename not specified");
-	}
 	string json_path = parameters.values[1].ToString();
 	if (file_name.empty()) {
 		throw ParserException("JsonPath not specified");
+	}
+	if (json_path.empty()) {
+		Printer::Print(ToHTML(context, json_path, ""));
+		return;
 	}
 	WriteToFile(file_name, ToHTML(context, json_path, ""));
 }
 
 static void PragmaVisualizeDiffProfilingOutput(ClientContext &context, const FunctionParameters &parameters) {
-	// this is either enable_profiling = json, or enable_profiling = query_tree
 	string file_name = parameters.values[0].ToString();
-	if (file_name.empty()) {
-		throw ParserException("Filename not specified");
-	}
 	string first_json_path = parameters.values[1].ToString();
-	if (file_name.empty()) {
+	string second_json_path = parameters.values[2].ToString();
+	if (first_json_path.empty()) {
 		throw ParserException("First JsonPath not specified");
 	}
-	string second_json_path = parameters.values[2].ToString();
-	if (file_name.empty()) {
+	if (second_json_path.empty()) {
 		throw ParserException("Second JsonPath not specified");
 	}
+	if (file_name.empty()) {
+		Printer::Print(ToHTML(context, first_json_path, second_json_path));
+		return;
+	}
+
 	WriteToFile(file_name, ToHTML(context, first_json_path, second_json_path));
 }
 
