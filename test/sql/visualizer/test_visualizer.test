@@ -8,6 +8,9 @@ statement ok
 PRAGMA enable_profiling='json'
 
 statement ok
+Pragma visualize_last_profiling_output ='__TEST_DIR__/test.html'
+
+statement ok
 PRAGMA profiling_output='__TEST_DIR__/first.json'
 
 statement ok
