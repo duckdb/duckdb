@@ -2,6 +2,7 @@
 #include "compare_result.hpp"
 #include "dsdgen.hpp"
 #include "duckdb_benchmark_macro.hpp"
+#include "tpcds-extension.hpp"
 
 using namespace duckdb;
 
@@ -11,22 +12,24 @@ using namespace duckdb;
 	virtual void Load(DuckDBBenchmarkState *state) {                                                                   \
 		string cached_name = "tpcds_sf" + std::to_string(SF);                                                          \
 		if (!BenchmarkRunner::TryLoadDatabase(state->db, cached_name)) {                                               \
-			tpcds::dbgen(SF, state->db);                                                                               \
+			state->db.LoadExtension<TPCDSExtension>();                                                                 \
+			Connection con(state->db);                                                                                 \
+			con.Query("CALL dsdgen(sf=" + std::to_string(SF) + ")");                                                   \
 			BenchmarkRunner::SaveDatabase(state->db, cached_name);                                                     \
 		}                                                                                                              \
 	}                                                                                                                  \
 	virtual string GetQuery() {                                                                                        \
-		return tpcds::get_query(QNR);                                                                                  \
+		return tpcds::DSDGenWrapper::GetQuery(QNR);                                                                    \
 	}                                                                                                                  \
 	virtual string VerifyResult(QueryResult *result) {                                                                 \
 		if (!result->success) {                                                                                        \
 			return result->error;                                                                                      \
 		}                                                                                                              \
-		return ""; /*return compare_csv(*result, tpch::get_answer(SF, QNR),                                            \
+		return ""; /*return compare_csv(*result, tpcds::DSDGenWrapper::GetAnswer(SF, QNR),                             \
 		              true);  */                                                                                       \
 	}                                                                                                                  \
 	virtual string BenchmarkInfo() {                                                                                   \
-		return StringUtil::Format("TPC-DS Q%d SF%d: %s", QNR, SF, tpcds::get_query(QNR).c_str());                      \
+		return StringUtil::Format("TPC-DS Q%d SF%d: %s", QNR, SF, tpcds::DSDGenWrapper::GetQuery(QNR).c_str());        \
 	}
 
 DUCKDB_BENCHMARK(DSQ001, "[tpcds-sf1]")

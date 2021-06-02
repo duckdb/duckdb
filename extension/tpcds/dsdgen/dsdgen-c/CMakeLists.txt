@@ -49,7 +49,6 @@ add_library(
   w_web_page.c
   w_web_returns.c
   w_web_sales.c
-  w_web_sales.c
   w_web_site.c)
 
 set(DSDGEN_OBJECT_FILES
