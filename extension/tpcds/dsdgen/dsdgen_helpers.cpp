@@ -1,25 +1,23 @@
 #include "dsdgen_helpers.hpp"
 
 #define DECLARER
-#include "build_support.h"
-#include "params.h"
-
-#include "tdefs.h"
-#include "scaling.h"
 #include "address.h"
+#include "build_support.h"
+#include "config.h"
 #include "dist.h"
 #include "genrand.h"
-
-#include "config.h"
+#include "params.h"
 #include "porting.h"
-
+#include "scaling.h"
 #include "tdefs.h"
 
 namespace tpcds {
 
-void InitializeDSDgen() {
-	init_params(); // among other set random seed
-	init_rand();   // no random numbers without this
+void InitializeDSDgen(int scale) {
+	char scale_str[12];
+	sprintf(scale_str, "%d", scale);
+	set_int("SCALE", scale_str); // set SF, which also does a default init (e.g. random seed)
+	init_rand();                 // no random numbers without this
 }
 
 ds_key_t GetRowCount(int table_id) {

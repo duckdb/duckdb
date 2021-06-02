@@ -1,12 +1,13 @@
 #include "dsdgen.hpp"
 
-#include "duckdb/common/exception.hpp"
-#include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/storage/data_table.hpp"
-#include "tpcds_constants.hpp"
 #include "append_info.hpp"
 #include "dsdgen_helpers.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/storage/data_table.hpp"
+#include "tpcds_constants.hpp"
+
 #include <cassert>
 
 using namespace duckdb;
@@ -14,7 +15,7 @@ using namespace std;
 
 namespace tpcds {
 
-void DSDGenWrapper::DSDGen(double flt_scale, ClientContext &context, string schema, string suffix) {
+void DSDGenWrapper::DSDGen(int scale, ClientContext &context, string schema, string suffix) {
 	Connection con(*context.db);
 
 	con.Query("BEGIN TRANSACTION");
@@ -27,12 +28,12 @@ void DSDGenWrapper::DSDGen(double flt_scale, ClientContext &context, string sche
 
 	con.Query("COMMIT");
 
-	if (flt_scale == 0) {
+	if (scale == 0) {
 		// schema only
 		return;
 	}
 
-	InitializeDSDgen();
+	InitializeDSDgen(scale);
 
 	// populate append info
 	vector<unique_ptr<tpcds_append_information>> append_info;
@@ -55,7 +56,7 @@ void DSDGenWrapper::DSDGen(double flt_scale, ClientContext &context, string sche
 			continue;
 		}
 
-		ds_key_t kRowCount = GetRowCount(table_id), kFirstRow = 1;
+		ds_key_t k_row_count = GetRowCount(table_id), k_first_row = 1;
 
 		// TODO: verify this is correct and required here
 		/*
@@ -68,7 +69,7 @@ void DSDGenWrapper::DSDGen(double flt_scale, ClientContext &context, string sche
 		auto builder_func = GetTDefFunctionByNumber(table_id);
 		assert(builder_func);
 
-		for (ds_key_t i = kFirstRow; kRowCount; i++, kRowCount--) {
+		for (ds_key_t i = k_first_row; k_row_count; i++, k_row_count--) {
 			// append happens directly in builders since they dump child tables
 			// immediately
 			if (builder_func((void *)&append_info, i)) {
@@ -93,8 +94,9 @@ string DSDGenWrapper::GetQuery(int query) {
 string DSDGenWrapper::GetAnswer(double sf, int query) {
 	if (query <= 0 || query > TPCDS_QUERIES_COUNT) {
 		throw SyntaxException("Out of range TPC-DS query number %d", query);
+	} else {
+		throw NotImplementedException("Don't have TPC-DS answers for SF %llf!", sf);
 	}
-	return "";
 }
 
 } // namespace tpcds

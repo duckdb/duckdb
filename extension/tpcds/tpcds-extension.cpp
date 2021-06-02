@@ -18,7 +18,7 @@ struct DSDGenFunctionData : public TableFunctionData {
 	}
 
 	bool finished = false;
-	double sf = 0;
+	int sf = 0;
 	string schema = DEFAULT_SCHEMA;
 	string suffix;
 	bool overwrite = false;
@@ -31,7 +31,7 @@ static unique_ptr<FunctionData> DsdgenBind(ClientContext &context, vector<Value>
 	auto result = make_unique<DSDGenFunctionData>();
 	for (auto &kv : named_parameters) {
 		if (kv.first == "sf") {
-			result->sf = kv.second.value_.double_;
+			result->sf = kv.second.value_.integer;
 		} else if (kv.first == "schema") {
 			result->schema = kv.second.str_value;
 		} else if (kv.first == "suffix") {
@@ -157,7 +157,7 @@ void TPCDSExtension::Load(DuckDB &db) {
 	con.BeginTransaction();
 
 	TableFunction dsdgen_func("dsdgen", {}, DsdgenFunction, DsdgenBind);
-	dsdgen_func.named_parameters["sf"] = LogicalType::DOUBLE;
+	dsdgen_func.named_parameters["sf"] = LogicalType::INTEGER;
 	dsdgen_func.named_parameters["overwrite"] = LogicalType::BOOLEAN;
 	dsdgen_func.named_parameters["schema"] = LogicalType::VARCHAR;
 	dsdgen_func.named_parameters["suffix"] = LogicalType::VARCHAR;
