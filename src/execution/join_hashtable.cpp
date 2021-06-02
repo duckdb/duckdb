@@ -413,159 +413,21 @@ void ScanStructure::Next(DataChunk &keys, DataChunk &left, DataChunk &result) {
 	}
 }
 
-template <bool NO_MATCH_SEL, class T, class OP>
-static idx_t TemplatedGather(VectorData &vdata, Vector &pointers, const SelectionVector &current_sel, const idx_t count,
-                             const idx_t offset, const idx_t col_idx, SelectionVector *match_sel,
-                             SelectionVector *no_match_sel, idx_t &no_match_count) {
-	// Precompute mask indexes
-	idx_t entry_idx;
-	idx_t idx_in_entry;
-	ValidityBytes::GetEntryIndex(col_idx, entry_idx, idx_in_entry);
-
-	idx_t result_count = 0;
-	auto data = (T *)vdata.data;
-	auto ptrs = FlatVector::GetData<data_ptr_t>(pointers);
-	for (idx_t i = 0; i < count; i++) {
-		auto idx = current_sel.get_index(i);
-		auto kidx = vdata.sel->get_index(idx);
-		ValidityBytes mask(ptrs[idx]);
-		auto isnull = !mask.RowIsValid(mask.GetValidityEntry(entry_idx), idx_in_entry);
-
-		if (!vdata.validity.RowIsValid(kidx)) {
-			if (isnull) {
-				match_sel->set_index(result_count++, idx);
-			} else {
-				if (NO_MATCH_SEL) {
-					no_match_sel->set_index(no_match_count++, idx);
-				}
-			}
-		} else {
-			T val = Load<T>(ptrs[idx] + offset);
-			if (!isnull && OP::template Operation<T>(data[kidx], val)) {
-				match_sel->set_index(result_count++, idx);
-			} else {
-				if (NO_MATCH_SEL) {
-					no_match_sel->set_index(no_match_count++, idx);
-				}
-			}
-		}
+idx_t ScanStructure::ResolvePredicates(DataChunk &keys, SelectionVector &match_sel, SelectionVector *no_match_sel) {
+	// Start with the scan selection
+	for (idx_t i = 0; i < this->count; ++i) {
+		match_sel.set_index(i, this->sel_vector.get_index(i));
 	}
-	return result_count;
-}
-
-template <bool NO_MATCH_SEL, class OP>
-static idx_t GatherSwitch(VectorData &data, PhysicalType type, Vector &pointers, const SelectionVector &current_sel,
-                          const idx_t count, const idx_t offset, const idx_t col_idx, SelectionVector *match_sel,
-                          SelectionVector *no_match_sel, idx_t &no_match_count) {
-	switch (type) {
-	case PhysicalType::UINT8:
-		return TemplatedGather<NO_MATCH_SEL, uint8_t, OP>(data, pointers, current_sel, count, offset, col_idx,
-		                                                  match_sel, no_match_sel, no_match_count);
-	case PhysicalType::UINT16:
-		return TemplatedGather<NO_MATCH_SEL, uint16_t, OP>(data, pointers, current_sel, count, offset, col_idx,
-		                                                   match_sel, no_match_sel, no_match_count);
-	case PhysicalType::UINT32:
-		return TemplatedGather<NO_MATCH_SEL, uint32_t, OP>(data, pointers, current_sel, count, offset, col_idx,
-		                                                   match_sel, no_match_sel, no_match_count);
-	case PhysicalType::UINT64:
-		return TemplatedGather<NO_MATCH_SEL, uint64_t, OP>(data, pointers, current_sel, count, offset, col_idx,
-		                                                   match_sel, no_match_sel, no_match_count);
-	case PhysicalType::BOOL:
-	case PhysicalType::INT8:
-		return TemplatedGather<NO_MATCH_SEL, int8_t, OP>(data, pointers, current_sel, count, offset, col_idx, match_sel,
-		                                                 no_match_sel, no_match_count);
-	case PhysicalType::INT16:
-		return TemplatedGather<NO_MATCH_SEL, int16_t, OP>(data, pointers, current_sel, count, offset, col_idx,
-		                                                  match_sel, no_match_sel, no_match_count);
-	case PhysicalType::INT32:
-		return TemplatedGather<NO_MATCH_SEL, int32_t, OP>(data, pointers, current_sel, count, offset, col_idx,
-		                                                  match_sel, no_match_sel, no_match_count);
-	case PhysicalType::INT64:
-		return TemplatedGather<NO_MATCH_SEL, int64_t, OP>(data, pointers, current_sel, count, offset, col_idx,
-		                                                  match_sel, no_match_sel, no_match_count);
-	case PhysicalType::INT128:
-		return TemplatedGather<NO_MATCH_SEL, hugeint_t, OP>(data, pointers, current_sel, count, offset, col_idx,
-		                                                    match_sel, no_match_sel, no_match_count);
-	case PhysicalType::FLOAT:
-		return TemplatedGather<NO_MATCH_SEL, float, OP>(data, pointers, current_sel, count, offset, col_idx, match_sel,
-		                                                no_match_sel, no_match_count);
-	case PhysicalType::DOUBLE:
-		return TemplatedGather<NO_MATCH_SEL, double, OP>(data, pointers, current_sel, count, offset, col_idx, match_sel,
-		                                                 no_match_sel, no_match_count);
-	case PhysicalType::INTERVAL:
-		return TemplatedGather<NO_MATCH_SEL, interval_t, OP>(data, pointers, current_sel, count, offset, col_idx,
-		                                                     match_sel, no_match_sel, no_match_count);
-	case PhysicalType::VARCHAR:
-		return TemplatedGather<NO_MATCH_SEL, string_t, OP>(data, pointers, current_sel, count, offset, col_idx,
-		                                                   match_sel, no_match_sel, no_match_count);
-	default:
-		throw NotImplementedException("Unimplemented type for GatherSwitch");
-	}
-}
-
-template <bool NO_MATCH_SEL>
-idx_t ScanStructure::ResolvePredicates(DataChunk &keys, SelectionVector *match_sel, SelectionVector *no_match_sel) {
-	SelectionVector *current_sel = &this->sel_vector;
-	idx_t remaining_count = this->count;
-	const auto &offsets = ht.layout.GetOffsets();
 	idx_t no_match_count = 0;
-	for (idx_t i = 0; i < ht.predicates.size(); i++) {
-		auto internal_type = keys.data[i].GetType().InternalType();
-		const auto offset = offsets[i];
-		switch (ht.predicates[i]) {
-		case ExpressionType::COMPARE_EQUAL:
-			remaining_count =
-			    GatherSwitch<NO_MATCH_SEL, Equals>(key_data[i], internal_type, this->pointers, *current_sel,
-			                                       remaining_count, offset, i, match_sel, no_match_sel, no_match_count);
-			break;
-		case ExpressionType::COMPARE_NOTEQUAL:
-			remaining_count = GatherSwitch<NO_MATCH_SEL, NotEquals>(key_data[i], internal_type, this->pointers,
-			                                                        *current_sel, remaining_count, offset, i, match_sel,
-			                                                        no_match_sel, no_match_count);
-			break;
-		case ExpressionType::COMPARE_GREATERTHAN:
-			remaining_count = GatherSwitch<NO_MATCH_SEL, GreaterThan>(key_data[i], internal_type, this->pointers,
-			                                                          *current_sel, remaining_count, offset, i,
-			                                                          match_sel, no_match_sel, no_match_count);
-			break;
-		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-			remaining_count = GatherSwitch<NO_MATCH_SEL, GreaterThanEquals>(key_data[i], internal_type, this->pointers,
-			                                                                *current_sel, remaining_count, offset, i,
-			                                                                match_sel, no_match_sel, no_match_count);
-			break;
-		case ExpressionType::COMPARE_LESSTHAN:
-			remaining_count = GatherSwitch<NO_MATCH_SEL, LessThan>(key_data[i], internal_type, this->pointers,
-			                                                       *current_sel, remaining_count, offset, i, match_sel,
-			                                                       no_match_sel, no_match_count);
-			break;
-		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-			remaining_count = GatherSwitch<NO_MATCH_SEL, LessThanEquals>(key_data[i], internal_type, this->pointers,
-			                                                             *current_sel, remaining_count, offset, i,
-			                                                             match_sel, no_match_sel, no_match_count);
-			break;
-		default:
-			throw NotImplementedException("Unimplemented comparison type for join");
-		}
-		if (remaining_count == 0) {
-			break;
-		}
-		current_sel = match_sel;
-	}
-	return remaining_count;
-}
 
-idx_t ScanStructure::ResolvePredicates(DataChunk &keys, SelectionVector &match_sel, SelectionVector &no_match_sel) {
-	return ResolvePredicates<true>(keys, &match_sel, &no_match_sel);
-}
-
-idx_t ScanStructure::ResolvePredicates(DataChunk &keys, SelectionVector &match_sel) {
-	return ResolvePredicates<false>(keys, &match_sel, nullptr);
+	return RowOperations::Match(ht.layout, pointers, key_data.get(), ht.predicates, match_sel, this->count,
+	                            no_match_sel, no_match_count);
 }
 
 idx_t ScanStructure::ScanInnerJoin(DataChunk &keys, SelectionVector &result_vector) {
 	while (true) {
 		// resolve the predicates for this set of keys
-		idx_t result_count = ResolvePredicates(keys, result_vector);
+		idx_t result_count = ResolvePredicates(keys, result_vector, nullptr);
 
 		// after doing all the comparisons set the found_match vector
 		if (found_match) {
@@ -658,7 +520,7 @@ void ScanStructure::ScanKeyMatches(DataChunk &keys) {
 	SelectionVector match_sel(STANDARD_VECTOR_SIZE), no_match_sel(STANDARD_VECTOR_SIZE);
 	while (this->count > 0) {
 		// resolve the predicates for the current set of pointers
-		idx_t match_count = ResolvePredicates(keys, match_sel, no_match_sel);
+		idx_t match_count = ResolvePredicates(keys, match_sel, &no_match_sel);
 		idx_t no_match_count = this->count - match_count;
 
 		// mark each of the matches as found
@@ -866,7 +728,7 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &input, DataChunk 
 	SelectionVector match_sel(STANDARD_VECTOR_SIZE), no_match_sel(STANDARD_VECTOR_SIZE);
 	while (this->count > 0) {
 		// resolve the predicates for the current set of pointers
-		idx_t match_count = ResolvePredicates(keys, match_sel, no_match_sel);
+		idx_t match_count = ResolvePredicates(keys, match_sel, &no_match_sel);
 		idx_t no_match_count = this->count - match_count;
 
 		// mark each of the matches as found
