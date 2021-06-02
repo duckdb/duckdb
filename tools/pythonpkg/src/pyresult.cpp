@@ -26,12 +26,6 @@ void DuckDBPyResult::Initialize(py::handle &m) {
 	PyDateTime_IMPORT;
 }
 
-template <class SRC>
-static SRC FetchScalar(Vector &src_vec, idx_t offset) {
-	auto src_ptr = FlatVector::GetData<SRC>(src_vec);
-	return src_ptr[offset];
-}
-
 py::object GetValueToPython(Value &val, const LogicalType &type) {
 	if (val.is_null) {
 		return py::none();
@@ -57,7 +51,6 @@ py::object GetValueToPython(Value &val, const LogicalType &type) {
 		return py::cast(val.GetValue<uint64_t>());
 	case LogicalTypeId::HUGEINT:
 		return py::cast<py::object>(PyLong_FromString((char *)val.GetValue<string>().c_str(), nullptr, 10));
-
 	case LogicalTypeId::FLOAT:
 		return py::cast(val.GetValue<float>());
 	case LogicalTypeId::DOUBLE:
