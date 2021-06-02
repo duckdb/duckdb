@@ -975,7 +975,7 @@ void JoinHashTable::FullScanHashTable(JoinHTScanState &state) {
 	}
 
 	// gather the values from the RHS
-	idx_t offset = condition_size;
+	idx_t offset = 0;
 	for (idx_t i = 0; i < build_types.size(); i++) {
 		auto &vector = columns[i];
 		D_ASSERT(vector.GetType() == build_types[i]);

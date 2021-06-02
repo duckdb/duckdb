@@ -57,9 +57,6 @@ public:
 	template <typename T>
 	void TemplatedFillSelectionVector(Vector &source, SelectionVector &sel_vec, idx_t count);
 	bool HasDuplicates(JoinHashTable *ht_ptr);
-
-private:
-	void ProbeHashTable(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p);
 };
 
 } // namespace duckdb

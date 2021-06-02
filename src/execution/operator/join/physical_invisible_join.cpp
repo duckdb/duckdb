@@ -25,6 +25,7 @@ PhysicalInvisibleJoin::PhysicalInvisibleJoin(LogicalOperator &op, unique_ptr<Phy
 	for (auto &condition : conditions) {
 		condition_types.push_back(condition.left->return_type);
 	}
+	build_types = LogicalOperator::MapTypes(children[1]->GetTypes(), right_projection_map);
 }
 
 //===--------------------------------------------------------------------===//
@@ -114,78 +115,6 @@ void PhysicalInvisibleJoin::GetChunkInternal(ExecutionContext &context, DataChun
 	if (IsInnerJoin(join_type) && ExecuteInvisibleJoin(context, chunk, state, sink.hash_table.get())) {
 		return;
 	}
-	do {
-		ProbeHashTable(context, chunk, state);
-		if (chunk.size() == 0) {
-#if STANDARD_VECTOR_SIZE >= 128
-			if (state->cached_chunk.size() > 0) {
-				// finished probing but cached data remains, return cached chunk
-				chunk.Reference(state->cached_chunk);
-				state->cached_chunk.Reset();
-			} else
-#endif
-			    if (IsRightOuterJoin(join_type)) {
-				// check if we need to scan any unmatched tuples from the RHS for the full/right outer join
-				sink.hash_table->ScanFullOuter(chunk, sink.ht_scan_state);
-			}
-			return;
-		} else {
-#if STANDARD_VECTOR_SIZE >= 128
-			if (chunk.size() < 64) {
-				// small chunk: add it to chunk cache and continue
-				state->cached_chunk.Append(chunk);
-				if (state->cached_chunk.size() >= (STANDARD_VECTOR_SIZE - 64)) {
-					// chunk cache full: return it
-					chunk.Reference(state->cached_chunk);
-					state->cached_chunk.Reset();
-					return;
-				} else {
-					// chunk cache not full: probe again
-					chunk.Reset();
-				}
-			} else {
-				return;
-			}
-#else
-			return;
-#endif
-		}
-	} while (true);
-}
-
-void PhysicalInvisibleJoin::ProbeHashTable(ExecutionContext &context, DataChunk &chunk,
-                                           PhysicalOperatorState *state_p) {
-	auto state = reinterpret_cast<PhysicalHashJoinState *>(state_p);
-	auto &sink = (HashJoinGlobalState &)*sink_state;
-
-	if (state->child_chunk.size() > 0 && state->scan_structure) {
-		// still have elements remaining from the previous probe (i.e. we got
-		// >1024 elements in the previous probe)
-		state->scan_structure->Next(state->join_keys, state->child_chunk, chunk);
-		if (chunk.size() > 0) {
-			return;
-		}
-		state->scan_structure = nullptr;
-	}
-
-	// probe the HT
-	do {
-		// fetch the chunk from the left side
-		children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
-		if (state->child_chunk.size() == 0) {
-			return;
-		}
-		if (sink.hash_table->size() == 0) {
-			ConstructEmptyJoinResult(sink.hash_table->join_type, sink.hash_table->has_null, state->child_chunk, chunk);
-			return;
-		}
-		// resolve the join keys for the left chunk
-		state->probe_executor.Execute(state->child_chunk, state->join_keys);
-
-		// perform the actual probe
-		state->scan_structure = sink.hash_table->Probe(state->join_keys);
-		state->scan_structure->Next(state->join_keys, state->child_chunk, chunk);
-	} while (chunk.size() == 0);
 }
 
 bool PhysicalInvisibleJoin::ExecuteInvisibleJoin(ExecutionContext &context, DataChunk &result,
