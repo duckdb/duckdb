@@ -33,7 +33,7 @@ RowGroup::RowGroup(DatabaseInstance &db, DataTableInfo &table_info, const vector
 		auto &block_pointer = pointer.data_pointers[i];
 		MetaBlockReader column_data_reader(db, block_pointer.block_id);
 		column_data_reader.offset = block_pointer.offset;
-		this->columns.push_back(ColumnData::Deserialize(table_info, i, start, column_data_reader, types[i]));
+		this->columns.push_back(ColumnData::Deserialize(table_info, i, start, column_data_reader, types[i], nullptr));
 	}
 
 	// set up the statistics
@@ -568,7 +568,7 @@ RowGroupPointer RowGroup::Checkpoint(TableDataWriter &writer, vector<unique_ptr<
 	// checkpoint the individual columns of the row group
 	for (idx_t column_idx = 0; column_idx < columns.size(); column_idx++) {
 		auto &column = columns[column_idx];
-		auto checkpoint_state = column->Checkpoint(*this, writer, column_idx);
+		auto checkpoint_state = column->Checkpoint(*this, writer);
 		D_ASSERT(checkpoint_state);
 
 		auto stats = checkpoint_state->GetStatistics();
@@ -636,6 +636,9 @@ shared_ptr<VersionNode> RowGroup::DeserializeDeletes(Deserializer &source) {
 	auto version_info = make_shared<VersionNode>();
 	for (idx_t i = 0; i < chunk_count; i++) {
 		idx_t vector_index = source.Read<idx_t>();
+		if (vector_index >= RowGroup::ROW_GROUP_VECTOR_COUNT) {
+			throw Exception("In DeserializeDeletes, vector_index is out of range for the row group. Corrupted file?");
+		}
 		version_info->info[vector_index] = ChunkInfo::Deserialize(source);
 	}
 	return version_info;

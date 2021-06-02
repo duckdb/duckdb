@@ -154,12 +154,13 @@ struct StandardColumnCheckpointState : public ColumnCheckpointState {
 	    : ColumnCheckpointState(row_group, column_data, writer) {
 	}
 
+	unique_ptr<ColumnCheckpointState> validity_state;
+public:
 	unique_ptr<BaseStatistics> GetStatistics() override {
 		auto stats = global_stats->Copy();
 		stats->validity_stats = validity_state->GetStatistics();
 		return stats;
 	}
-	unique_ptr<ColumnCheckpointState> validity_state;
 
 	void FlushToDisk() override {
 		ColumnCheckpointState::FlushToDisk();
@@ -172,11 +173,10 @@ unique_ptr<ColumnCheckpointState> StandardColumnData::CreateCheckpointState(RowG
 	return make_unique<StandardColumnCheckpointState>(row_group, *this, writer);
 }
 
-unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(RowGroup &row_group, TableDataWriter &writer,
-                                                                 idx_t column_idx) {
-	auto base_state = ColumnData::Checkpoint(row_group, writer, column_idx);
+unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(RowGroup &row_group, TableDataWriter &writer) {
+	auto base_state = ColumnData::Checkpoint(row_group, writer);
 	auto &checkpoint_state = (StandardColumnCheckpointState &)*base_state;
-	checkpoint_state.validity_state = validity.Checkpoint(row_group, writer, column_idx);
+	checkpoint_state.validity_state = validity.Checkpoint(row_group, writer);
 	return base_state;
 }
 
@@ -186,12 +186,9 @@ void StandardColumnData::Initialize(PersistentColumnData &column_data) {
 	validity.Initialize(*persistent.validity);
 }
 
-shared_ptr<ColumnData> StandardColumnData::Deserialize(DataTableInfo &info, idx_t column_index, idx_t start_row,
-                                                       Deserializer &source, const LogicalType &type) {
-	auto result = make_shared<StandardColumnData>(info, column_index, start_row, type, nullptr);
-	BaseDeserialize(info.db, source, type, *result);
-	ColumnData::BaseDeserialize(info.db, source, LogicalType(LogicalTypeId::VALIDITY), result->validity);
-	return move(result);
+void StandardColumnData::DeserializeColumn(Deserializer &source) {
+	ColumnData::DeserializeColumn(source);
+	validity.DeserializeColumn(source);
 }
 
 void StandardColumnData::GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, vector<vector<Value>> &result) {

@@ -55,8 +55,8 @@ void StructStatistics::Serialize(Serializer &serializer) {
 
 unique_ptr<BaseStatistics> StructStatistics::Deserialize(Deserializer &source, LogicalType type) {
 	D_ASSERT(type.id() == LogicalTypeId::STRUCT);
-	auto &child_types = type.child_types();
 	auto result = make_unique<StructStatistics>(move(type));
+	auto &child_types = result->type.child_types();
 	for(idx_t i = 0; i < child_types.size(); i++) {
 		result->child_stats[i] = BaseStatistics::Deserialize(source, child_types[i].second);
 	}

@@ -9,7 +9,22 @@ statement ok
 CREATE TABLE a(b STRUCT(i INTEGER, j INTEGER));
 
 statement ok
-INSERT INTO a VALUES (STRUCT_PACK(i := 1, j:= 2));
+INSERT INTO a VALUES ({'i': 1, 'j': 2}), (NULL), ({'i': NULL, 'j': 2}), (ROW(1, NULL));
 
-statement ok
+query I
 SELECT * FROM a;
+----
+{'i': 1, 'j': 2}
+NULL
+{'i': NULL, 'j': 2}
+{'i': 1, 'j': NULL}
+
+restart
+
+query I
+SELECT * FROM a;
+----
+{'i': 1, 'j': 2}
+NULL
+{'i': NULL, 'j': 2}
+{'i': 1, 'j': NULL}

@@ -31,6 +31,12 @@ public:
 	unique_ptr<PersistentColumnData> validity;
 };
 
+class StructPersistentColumnData : public PersistentColumnData {
+public:
+	unique_ptr<PersistentColumnData> validity;
+	vector<unique_ptr<PersistentColumnData>> child_data;
+};
+
 class PersistentTableData {
 public:
 	explicit PersistentTableData(idx_t column_count);

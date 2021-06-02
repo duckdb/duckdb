@@ -85,15 +85,13 @@ public:
 	virtual void CommitDropColumn();
 
 	virtual unique_ptr<ColumnCheckpointState> CreateCheckpointState(RowGroup &row_group, TableDataWriter &writer);
-	virtual unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, TableDataWriter &writer,
-	                                                     idx_t column_idx);
+	virtual unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, TableDataWriter &writer);
 
 	virtual void Initialize(PersistentColumnData &column_data);
 
-	static void BaseDeserialize(DatabaseInstance &db, Deserializer &source, const LogicalType &type,
-	                            ColumnData &result);
+	virtual void DeserializeColumn(Deserializer &source);
 	static shared_ptr<ColumnData> Deserialize(DataTableInfo &info, idx_t column_index, idx_t start_row,
-	                                          Deserializer &source, const LogicalType &type);
+	                                          Deserializer &source, const LogicalType &type, ColumnData *parent);
 
 	virtual void GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, vector<vector<Value>> &result);
 	virtual void Verify(RowGroup &parent);

@@ -51,8 +51,6 @@ void StructColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t ro
 }
 
 void StructColumnData::Scan(Transaction &transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
-	// D_ASSERT(state.row_index == state.child_states[0].row_index);
-	// ColumnData::Scan(transaction, vector_index, state, result);
 	validity.Scan(transaction, vector_index, state.child_states[0], result);
 	auto &child_entries = StructVector::GetEntries(result);
 	for(idx_t i = 0; i < sub_columns.size(); i++) {
@@ -62,12 +60,12 @@ void StructColumnData::Scan(Transaction &transaction, idx_t vector_index, Column
 }
 
 void StructColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates) {
-	throw NotImplementedException("FIXME: struct");
-
-	// D_ASSERT(state.row_index == state.child_states[0].row_index);
-	// ColumnData::ScanCommitted(vector_index, state, result, allow_updates);
-	// validity.ScanCommitted(vector_index, state.child_states[0], result, allow_updates);
-	// state.Next();
+	validity.ScanCommitted(vector_index, state.child_states[0], result, allow_updates);
+	auto &child_entries = StructVector::GetEntries(result);
+	for(idx_t i = 0; i < sub_columns.size(); i++) {
+		sub_columns[i]->ScanCommitted(vector_index, state.child_states[i + 1], *child_entries[i], allow_updates);
+	}
+	state.child_states[0].Next();
 }
 
 void StructColumnData::InitializeAppend(ColumnAppendState &state) {
@@ -180,53 +178,62 @@ void StructColumnData::CommitDropColumn() {
 	}
 }
 
-// struct StandardColumnCheckpointState : public ColumnCheckpointState {
-// 	StandardColumnCheckpointState(RowGroup &row_group, ColumnData &column_data, TableDataWriter &writer)
-// 	    : ColumnCheckpointState(row_group, column_data, writer) {
-// 	}
+struct StructColumnCheckpointState : public ColumnCheckpointState {
+	StructColumnCheckpointState(RowGroup &row_group, ColumnData &column_data, TableDataWriter &writer)
+	    : ColumnCheckpointState(row_group, column_data, writer) {
+		global_stats = make_unique<StructStatistics>(column_data.type);
+	}
 
-// 	unique_ptr<BaseStatistics> GetStatistics() override {
-// 		auto stats = global_stats->Copy();
-// 		stats->validity_stats = validity_state->GetStatistics();
-// 		return stats;
-// 	}
-// 	unique_ptr<ColumnCheckpointState> validity_state;
+	unique_ptr<ColumnCheckpointState> validity_state;
+	vector<unique_ptr<ColumnCheckpointState>> child_states;
 
-// 	void FlushToDisk() override {
-// 		ColumnCheckpointState::FlushToDisk();
-// 		validity_state->FlushToDisk();
-// 	}
-// };
+public:
+	unique_ptr<BaseStatistics> GetStatistics() override {
+		auto stats = make_unique<StructStatistics>(column_data.type);
+		D_ASSERT(stats->child_stats.size() == child_states.size());
+		stats->validity_stats = validity_state->GetStatistics();
+		for(idx_t i = 0; i < child_states.size(); i++) {
+			stats->child_stats[i] = child_states[i]->GetStatistics();
+			D_ASSERT(stats->child_stats[i]);
+		}
+		return move(stats);
+	}
+
+	void FlushToDisk() override {
+		validity_state->FlushToDisk();
+		for(auto &state : child_states) {
+			state->FlushToDisk();
+		}
+	}
+};
 
 unique_ptr<ColumnCheckpointState> StructColumnData::CreateCheckpointState(RowGroup &row_group,
-                                                                            TableDataWriter &writer) {
-	throw NotImplementedException("FIXME: struct");
-	// return make_unique<StandardColumnCheckpointState>(row_group, *this, writer);
+                                                                          TableDataWriter &writer) {
+	return make_unique<StructColumnCheckpointState>(row_group, *this, writer);
 }
 
-unique_ptr<ColumnCheckpointState> StructColumnData::Checkpoint(RowGroup &row_group, TableDataWriter &writer,
-                                                                 idx_t column_idx) {
-	throw NotImplementedException("FIXME: struct");
-	// auto base_state = ColumnData::Checkpoint(row_group, writer, column_idx);
-	// auto &checkpoint_state = (StandardColumnCheckpointState &)*base_state;
-	// checkpoint_state.validity_state = validity.Checkpoint(row_group, writer, column_idx);
-	// return base_state;
+unique_ptr<ColumnCheckpointState> StructColumnData::Checkpoint(RowGroup &row_group, TableDataWriter &writer) {
+	auto checkpoint_state = make_unique<StructColumnCheckpointState>(row_group, *this, writer);
+	checkpoint_state->validity_state = validity.Checkpoint(row_group, writer);
+	for(auto &sub_column : sub_columns) {
+		checkpoint_state->child_states.push_back(sub_column->Checkpoint(row_group, writer));
+	}
+	return move(checkpoint_state);
 }
 
 void StructColumnData::Initialize(PersistentColumnData &column_data) {
-	throw NotImplementedException("FIXME: struct");
-	// auto &persistent = (StandardPersistentColumnData &)column_data;
-	// ColumnData::Initialize(column_data);
-	// validity.Initialize(*persistent.validity);
+	auto &persistent = (StructPersistentColumnData &)column_data;
+	validity.Initialize(*persistent.validity);
+	for(idx_t i = 0; i < sub_columns.size(); i++) {
+		sub_columns[i]->Initialize(*persistent.child_data[i]);
+	}
 }
 
-shared_ptr<ColumnData> StructColumnData::Deserialize(DataTableInfo &info, idx_t column_index, idx_t start_row,
-                                                       Deserializer &source, const LogicalType &type) {
-	throw NotImplementedException("FIXME: struct");
-	// auto result = make_shared<StandardColumnData>(info, column_index, start_row, type, nullptr);
-	// BaseDeserialize(info.db, source, type, *result);
-	// ColumnData::BaseDeserialize(info.db, source, LogicalType(LogicalTypeId::VALIDITY), result->validity);
-	// return move(result);
+void StructColumnData::DeserializeColumn(Deserializer &source) {
+	validity.DeserializeColumn(source);
+	for(auto &sub_column : sub_columns) {
+		sub_column->DeserializeColumn(source);
+	}
 }
 
 void StructColumnData::GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, vector<vector<Value>> &result) {
