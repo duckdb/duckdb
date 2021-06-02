@@ -46,6 +46,14 @@ struct RowOperations {
 	//! Gather a single column
 	static void Gather(const RowLayout &layout, Vector &rows, const SelectionVector &row_sel, Vector &col,
 	                   const SelectionVector &col_sel, idx_t count, idx_t col_idx);
+
+	//===--------------------------------------------------------------------===//
+	// Comparison Operators
+	//===--------------------------------------------------------------------===//
+	//! Compare a block of key data against the row values to produce an updated selection that matches
+	//! and a second (optional) selection of non-matching values.
+	static void Match(const RowLayout &layout, Vector &rows, VectorData col_data[], SelectionVector &sel, idx_t count,
+	                  SelectionVector *no_match, idx_t &no_match_count);
 };
 
 } // namespace duckdb

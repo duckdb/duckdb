@@ -369,119 +369,7 @@ void GroupedAggregateHashTable::FetchAggregates(DataChunk &groups, DataChunk &re
 	RowOperations::FinalizeStates(layout, addresses, result, 0);
 }
 
-template <class T>
-static void TemplatedCompareGroups(VectorData &gdata, Vector &addresses, SelectionVector &sel, idx_t &count,
-                                   idx_t col_offset, idx_t col_idx, SelectionVector &no_match, idx_t &no_match_count) {
-	// Precompute mask indexes
-	idx_t entry_idx;
-	idx_t idx_in_entry;
-	ValidityBytes::GetEntryIndex(col_idx, entry_idx, idx_in_entry);
-
-	auto data = (T *)gdata.data;
-	auto pointers = FlatVector::GetData<data_ptr_t>(addresses);
-	idx_t match_count = 0;
-	if (!gdata.validity.AllValid()) {
-		for (idx_t i = 0; i < count; i++) {
-			auto idx = sel.get_index(i);
-			auto group_idx = gdata.sel->get_index(idx);
-			auto value = Load<T>(pointers[idx] + col_offset);
-			ValidityBytes mask(pointers[idx]);
-			auto isnull = !mask.RowIsValid(mask.GetValidityEntry(entry_idx), idx_in_entry);
-
-			if (!gdata.validity.RowIsValid(group_idx)) {
-				if (isnull) {
-					// match: move to next value to compare
-					sel.set_index(match_count++, idx);
-				} else {
-					no_match.set_index(no_match_count++, idx);
-				}
-			} else {
-				if (!isnull && Equals::Operation<T>(data[group_idx], value)) {
-					sel.set_index(match_count++, idx);
-				} else {
-					no_match.set_index(no_match_count++, idx);
-				}
-			}
-		}
-	} else {
-		for (idx_t i = 0; i < count; i++) {
-			auto idx = sel.get_index(i);
-			auto group_idx = gdata.sel->get_index(idx);
-			auto value = Load<T>(pointers[idx] + col_offset);
-			ValidityBytes mask(pointers[idx]);
-			auto isnull = !mask.RowIsValid(mask.GetValidityEntry(entry_idx), idx_in_entry);
-
-			if (!isnull && Equals::Operation<T>(data[group_idx], value)) {
-				sel.set_index(match_count++, idx);
-			} else {
-				no_match.set_index(no_match_count++, idx);
-			}
-		}
-	}
-	count = match_count;
-}
-
-static void CompareGroups(VectorData group_data[], const RowLayout &layout, Vector &addresses, SelectionVector &sel,
-                          idx_t count, SelectionVector &no_match, idx_t &no_match_count) {
-	if (count == 0) {
-		return;
-	}
-	auto &offsets = layout.GetOffsets();
-	auto &types = layout.GetTypes();
-	for (idx_t i = 0; i < types.size(); ++i) {
-		auto col_offset = offsets[i];
-		auto &gdata = group_data[i];
-		switch (types[i].InternalType()) {
-		case PhysicalType::BOOL:
-		case PhysicalType::INT8:
-			TemplatedCompareGroups<int8_t>(gdata, addresses, sel, count, col_offset, i, no_match, no_match_count);
-			break;
-		case PhysicalType::INT16:
-			TemplatedCompareGroups<int16_t>(gdata, addresses, sel, count, col_offset, i, no_match, no_match_count);
-			break;
-		case PhysicalType::INT32:
-			TemplatedCompareGroups<int32_t>(gdata, addresses, sel, count, col_offset, i, no_match, no_match_count);
-			break;
-		case PhysicalType::INT64:
-			TemplatedCompareGroups<int64_t>(gdata, addresses, sel, count, col_offset, i, no_match, no_match_count);
-			break;
-		case PhysicalType::UINT8:
-			TemplatedCompareGroups<uint8_t>(gdata, addresses, sel, count, col_offset, i, no_match, no_match_count);
-			break;
-		case PhysicalType::UINT16:
-			TemplatedCompareGroups<uint16_t>(gdata, addresses, sel, count, col_offset, i, no_match, no_match_count);
-			break;
-		case PhysicalType::UINT32:
-			TemplatedCompareGroups<uint32_t>(gdata, addresses, sel, count, col_offset, i, no_match, no_match_count);
-			break;
-		case PhysicalType::UINT64:
-			TemplatedCompareGroups<uint64_t>(gdata, addresses, sel, count, col_offset, i, no_match, no_match_count);
-			break;
-		case PhysicalType::INT128:
-			TemplatedCompareGroups<hugeint_t>(gdata, addresses, sel, count, col_offset, i, no_match, no_match_count);
-			break;
-		case PhysicalType::FLOAT:
-			TemplatedCompareGroups<float>(gdata, addresses, sel, count, col_offset, i, no_match, no_match_count);
-			break;
-		case PhysicalType::DOUBLE:
-			TemplatedCompareGroups<double>(gdata, addresses, sel, count, col_offset, i, no_match, no_match_count);
-			break;
-		case PhysicalType::INTERVAL:
-			TemplatedCompareGroups<interval_t>(gdata, addresses, sel, count, col_offset, i, no_match, no_match_count);
-			break;
-		case PhysicalType::HASH:
-			TemplatedCompareGroups<hash_t>(gdata, addresses, sel, count, col_offset, i, no_match, no_match_count);
-			break;
-		case PhysicalType::VARCHAR:
-			TemplatedCompareGroups<string_t>(gdata, addresses, sel, count, col_offset, i, no_match, no_match_count);
-			break;
-		default:
-			throw Exception("Unsupported type for group vector");
-		}
-	}
-}
-
-template <class T>
+template <class ENTRY>
 idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, Vector &group_hashes, Vector &addresses,
                                                             SelectionVector &new_groups_out) {
 
@@ -493,7 +381,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 
 	// resize at 50% capacity, also need to fit the entire vector
 	if (capacity - entries <= groups.size() || entries > capacity / LOAD_FACTOR) {
-		Resize<T>(capacity * 2);
+		Resize<ENTRY>(capacity * 2);
 	}
 
 	D_ASSERT(capacity - entries >= groups.size());
@@ -546,7 +434,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 		// first figure out for each remaining whether or not it belongs to a full or empty group
 		for (idx_t i = 0; i < remaining_entries; i++) {
 			const idx_t index = sel_vector->get_index(i);
-			const auto ht_entry_ptr = ((T *)this->hashes_hdl_ptr) + ht_offsets_ptr[index];
+			const auto ht_entry_ptr = ((ENTRY *)this->hashes_hdl_ptr) + ht_offsets_ptr[index];
 			if (ht_entry_ptr->page_nr == 0) { // we use page number 0 as a "unused marker"
 				// cell is empty; setup the new entry
 				if (payload_page_offset == tuples_per_block || payload_hds.empty()) {
@@ -596,8 +484,8 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 
 		// now we have only the tuples remaining that might match to an existing group
 		// start performing comparisons with each of the groups
-		CompareGroups(group_data.get(), layout, addresses, group_compare_vector, need_compare_count, no_match_vector,
-		              no_match_count);
+		RowOperations::Match(layout, addresses, group_data.get(), group_compare_vector, need_compare_count,
+		                     &no_match_vector, no_match_count);
 
 		// each of the entries that do not match we move them to the next entry in the HT
 		for (idx_t i = 0; i < no_match_count; i++) {
