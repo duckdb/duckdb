@@ -2,12 +2,31 @@
 import os
 from python_helpers import open_utf8
 
+NUM_OF_LINES = 1000
+
 visualizer_dir = 'extension/visualizer'
 visualizer_css = os.path.join(visualizer_dir, 'visualizer.css')
 visualizer_d3 = os.path.join(visualizer_dir, 'd3.js')
 visualizer_script = os.path.join(visualizer_dir, 'script.js')
 visualizer_header = os.path.join(visualizer_dir, 'include', 'visualizer_constants.hpp')
 
+
+def file_len(fname):
+    with open(fname) as f:
+        for i, l in enumerate(f):
+            pass
+    return i + 1
+
+def split_file(filename, varname):
+    parts = (file_len(filename) / NUM_OF_LINES) + 1
+    result =  'string %s[%d] = {R"(\n' % (varname, parts)
+    with open(filename) as fin:
+        for i,line in enumerate(fin):
+            result += line
+            if (i+1)%NUM_OF_LINES == 0:
+                result += ')",\n R"(\n'
+
+    return result + ')"};\n'
 
 def write_file(filename, varname):
     with open_utf8(filename, 'r') as f:
@@ -26,7 +45,7 @@ using namespace duckdb;
 """
 
     result += write_file(visualizer_css, "css")
-    result += write_file(visualizer_d3, "d3")
+    result += split_file(visualizer_d3, "d3")
     result += write_file(visualizer_script, "script")
 
     with open_utf8(visualizer_header, 'w+') as f:

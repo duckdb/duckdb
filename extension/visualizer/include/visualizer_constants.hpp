@@ -23,7 +23,7 @@ div {
     position: absolute;
     z-index: 1;
 })";
-string d3 = R"(
+string d3[20] = {R"(
 // https://d3js.org v6.7.0 Copyright 2021 Mike Bostock
 (function (global, factory) {
     typeof exports === 'object' && typeof module !== 'undefined' ? factory(exports) :
@@ -1024,6 +1024,8 @@ string d3 = R"(
             }
         }
         return false;
+)",
+                 R"(
     }
 
     function filter$1(values, test) {
@@ -2024,6 +2026,8 @@ string d3 = R"(
 
     function textFunction$1(value) {
         return function() {
+)",
+                 R"(
             var v = value.apply(this, arguments);
             this.textContent = v == null ? "" : v;
         };
@@ -3024,6 +3028,8 @@ string d3 = R"(
             b = rgb2lrgb(o.b),
             y = xyz2lab((0.2225045 * r + 0.7168786 * g + 0.0606169 * b) / Yn), x, z;
         if (r === g && g === b) x = z = y; else {
+)",
+                 R"(
             x = xyz2lab((0.4360747 * r + 0.3850649 * g + 0.1430804 * b) / Xn);
             z = xyz2lab((0.0139322 * r + 0.0971045 * g + 0.7141733 * b) / Zn);
         }
@@ -4024,6 +4030,8 @@ string d3 = R"(
     }
 
     function interrupt(node, name) {
+)",
+                 R"(
         var schedules = node.__transition,
             schedule,
             active,
@@ -5024,6 +5032,8 @@ string d3 = R"(
         name: "y",
         handles: ["n", "s"].map(type),
         input: function(y, e) { return y == null ? null : [[e[0][0], +y[0]], [e[1][0], +y[1]]]; },
+)",
+                 R"(
         output: function(xy) { return xy && [xy[0][1], xy[1][1]]; }
     };
 
@@ -6024,6 +6034,8 @@ string d3 = R"(
 
     var constant$5 = x => () => x;
 
+)",
+                 R"(
     function contains$2(ring, hole) {
         var i = -1, n = hole.length, c;
         while (++i < n) if (c = ringContains(ring, hole[i])) return c;
@@ -7024,6 +7036,8 @@ string d3 = R"(
                 } else {
                     const d = 1 / ab;
                     x = x1 + (ey * bl - dy * cl) * d;
+)",
+                 R"(
                     y = y1 + (dx * cl - ex * bl) * d;
                 }
                 circumcenters[j] = x;
@@ -8024,6 +8038,8 @@ string d3 = R"(
 
         if (node) quads.push(new Quad(node, x0, y0, x3, y3));
         if (radius == null) radius = Infinity;
+)",
+                 R"(
         else {
             x0 = x - radius, y0 = y - radius;
             x3 = x + radius, y3 = y + radius;
@@ -9024,6 +9040,8 @@ string d3 = R"(
     }
 
     function formatRounded(x, p) {
+)",
+                 R"(
         var d = formatDecimalParts(x, p);
         if (!d) return x + "";
         var coefficient = d[0],
@@ -10024,6 +10042,8 @@ string d3 = R"(
 
     function link$1(array) {
         if (!(n = array.length)) return;
+)",
+                 R"(
         var n,
             i = 0,
             a = array[0],
@@ -11024,6 +11044,8 @@ string d3 = R"(
             ];
         } : function() {
             return [x0 * degrees, y0 * degrees];
+)",
+                 R"(
         };
 
         interpolate.distance = d;
@@ -12024,6 +12046,8 @@ string d3 = R"(
         function project(x, y) {
             if (f > 0) { if (y < -halfPi$1 + epsilon$1) y = -halfPi$1 + epsilon$1; }
             else { if (y > halfPi$1 - epsilon$1) y = halfPi$1 - epsilon$1; }
+)",
+                 R"(
             var r = f / pow$1(tany(y), n);
             return [r * sin$1(n * x), f - r * cos$1(n * x)];
         }
@@ -13024,6 +13048,8 @@ string d3 = R"(
         partition.padding = function(x) {
             return arguments.length ? (padding = +x, partition) : padding;
         };
+)",
+                 R"(
 
         return partition;
     }
@@ -14024,6 +14050,8 @@ string d3 = R"(
         function randomPoisson(lambda) {
             return function() {
                 var acc = 0, l = lambda;
+)",
+                 R"(
                 while (l > 16) {
                     var n = Math.floor(0.875 * l),
                         t = G(n)();
@@ -15024,6 +15052,8 @@ string d3 = R"(
         return (end - start) / durationSecond;
     }, function(date) {
         return date.getUTCSeconds();
+)",
+                 R"(
     });
     var seconds = second.range;
 
@@ -16024,6 +16054,8 @@ string d3 = R"(
 
         scale.invert = function(y) {
             return new Date(invert(y));
+)",
+                 R"(
         };
 
         scale.domain = function(_) {
@@ -17024,6 +17056,8 @@ string d3 = R"(
     Linear.prototype = {
         areaStart: function() {
             this._line = 0;
+)",
+                 R"(
         },
         areaEnd: function() {
             this._line = NaN;
@@ -18024,6 +18058,8 @@ string d3 = R"(
             y1 = that._y1,
             x2 = that._x2,
             y2 = that._y2;
+)",
+                 R"(
 
         if (that._l01_a > epsilon) {
             var a = 2 * that._l01_2a + 3 * that._l01_a * that._l12_a + that._l12_2a,
@@ -19024,6 +19060,8 @@ string d3 = R"(
                     var dx = event.clientX - x0, dy = event.clientY - y0;
                     g.moved = dx * dx + dy * dy > clickDistance2;
                 }
+)",
+                 R"(
                 g.event(event)
                     .zoom("mouse", constrain(translate(g.that.__zoom, g.mouse[0] = pointer(event, currentTarget), g.mouse[1]), g.extent, translateExtent));
             }
@@ -19732,7 +19770,7 @@ string d3 = R"(
     Object.defineProperty(exports, '__esModule', { value: true });
 
 })));
-)";
+)"};
 string script = R"(
 const green = '#80ff80';
 const yellow = '#ffff4d';

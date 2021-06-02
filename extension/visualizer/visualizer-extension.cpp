@@ -21,7 +21,9 @@ static string ToHTML(ClientContext &context, const string &first_json_path, cons
 	ss << "</head>\n";
 	ss << "<body>\n";
 	ss << "<script>";
-	ss << d3;
+	for (auto part : d3) {
+		ss << part;
+	}
 	ss << "</script>\n";
 	ss << "<script> var data = ";
 	// If no json_file is given, read from query profiler
