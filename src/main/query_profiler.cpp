@@ -354,25 +354,25 @@ void QueryProfiler::ToStream(std::ostream &ss, bool print_optimizer_output) cons
 // Print a row
 static void PrintRow(std::ostream &ss, const string &annotation, int id, const string &name, double time,
                      int sample_counter, int tuple_counter, string extra_info, int depth) {
-	ss << string(depth * 3, ' ') << "{\n";
-	ss << string(depth * 3, ' ') << "\"annotation\": \"" + annotation + "\",\n";
-	ss << string(depth * 3, ' ') << "\"id\": " + to_string(id) + ",\n";
-	ss << string(depth * 3, ' ') << "\"name\": \"" + name + "\",\n";
+	ss << string(depth * 3, ' ') << " {\n";
+	ss << string(depth * 3, ' ') << "   \"annotation\": \"" + annotation + "\",\n";
+	ss << string(depth * 3, ' ') << "   \"id\": " + to_string(id) + ",\n";
+	ss << string(depth * 3, ' ') << "   \"name\": \"" + name + "\",\n";
 #if defined(RDTSC)
-	ss << string(depth * 3, ' ') << "\"timing\": \"NULL\" ,\n";
-	ss << string(depth * 3, ' ') << "\"cycles_per_tuple\": " + StringUtil::Format("%.4f", time) + ",\n";
+	ss << string(depth * 3, ' ') << "   \"timing\": \"NULL\" ,\n";
+	ss << string(depth * 3, ' ') << "   \"cycles_per_tuple\": " + StringUtil::Format("%.4f", time) + ",\n";
 #else
-	ss << string(depth * 3, ' ') << "\"timing\":" + StringUtil::Format("%.4f", time) + ",\n";
+	ss << string(depth * 3, ' ') << "   \"timing\":" + StringUtil::Format("%.4f", time) + ",\n";
 	ss << string(depth * 3, ' ')
-	   << "\"CYCLES_PER_"
+	   << "   \"CYCLES_PER_"
 	      "TUPLE\": "
 	      "\"NULL\" ,\n";
 #endif
-	ss << string(depth * 3, ' ') << "\"sample_size\": " << to_string(sample_counter) + ",\n";
-	ss << string(depth * 3, ' ') << "\"input_size\": " << to_string(tuple_counter) + ",\n";
-	ss << string(depth * 3, ' ') << "\"extra_info\": \""
+	ss << string(depth * 3, ' ') << "   \"sample_size\": " << to_string(sample_counter) + ",\n";
+	ss << string(depth * 3, ' ') << "   \"input_size\": " << to_string(tuple_counter) + ",\n";
+	ss << string(depth * 3, ' ') << "   \"extra_info\": \""
 	   << StringUtil::Replace(std::move(extra_info), "\n", "\\n") + "\"\n";
-	ss << string(depth * 3, ' ') << "},\n";
+	ss << string(depth * 3, ' ') << " },\n";
 }
 
 static void ExtractFunctions(std::ostream &ss, ExpressionInfo &info, int &fun_id, int depth) {
@@ -392,15 +392,16 @@ static void ExtractFunctions(std::ostream &ss, ExpressionInfo &info, int &fun_id
 }
 
 static void ToJSONRecursive(QueryProfiler::TreeNode &node, std::ostream &ss, int depth = 1) {
-	ss << "{\n";
-	ss << string(depth * 3, ' ') << "\"name\": \"" + node.name + "\",\n";
-	ss << string(depth * 3, ' ') << "\"timing\":" + StringUtil::Format("%.2f", node.info.time) + ",\n";
-	ss << string(depth * 3, ' ') << "\"cardinality\":" + to_string(node.info.elements) + ",\n";
-	ss << string(depth * 3, ' ') << "\"extra_info\": \"" + StringUtil::Replace(node.extra_info, "\n", "\\n") + "\",\n";
-	ss << string(depth * 3, ' ') << "\"timings\":[";
+	ss << string(depth * 3, ' ') << " {\n";
+	ss << string(depth * 3, ' ') << "   \"name\": \"" + node.name + "\",\n";
+	ss << string(depth * 3, ' ') << "   \"timing\":" + StringUtil::Format("%.2f", node.info.time) + ",\n";
+	ss << string(depth * 3, ' ') << "   \"cardinality\":" + to_string(node.info.elements) + ",\n";
+	ss << string(depth * 3, ' ')
+	   << "   \"extra_info\": \"" + StringUtil::Replace(node.extra_info, "\n", "\\n") + "\",\n";
+	ss << string(depth * 3, ' ') << "   \"timings\": [";
 	int32_t function_counter = 1;
 	int32_t expression_counter = 1;
-	ss << "  ";
+	ss << "\n ";
 	for (auto &expr_executor : node.info.executors_info) {
 		// For each Expression tree
 		if (!expr_executor) {
@@ -417,22 +418,20 @@ static void ToJSONRecursive(QueryProfiler::TreeNode &node, std::ostream &ss, int
 	}
 	ss.seekp(-2, ss.cur);
 	ss << "\n";
-	ss << string(depth * 3, ' ') << "\n  ],\n";
-	ss << string(depth * 3, ' ') << "\"children\": [";
+	ss << string(depth * 3, ' ') << "   ],\n";
+	ss << string(depth * 3, ' ') << "   \"children\": [\n";
 	if (node.children.empty()) {
-		ss << string(depth * 3, ' ') << "]\n";
+		ss << string(depth * 3, ' ') << "   ]\n";
 	} else {
 		for (idx_t i = 0; i < node.children.size(); i++) {
 			if (i > 0) {
-				ss << ",";
+				ss << ",\n";
 			}
-			ss << "\n" << string(depth * 3, ' ');
 			ToJSONRecursive(*node.children[i], ss, depth + 1);
 		}
-		ss << "\n";
-		ss << string(depth * 3, ' ') << "]\n";
+		ss << string(depth * 3, ' ') << "   ]\n";
 	}
-	ss << string(depth * 3, ' ') << "}";
+	ss << string(depth * 3, ' ') << " }\n";
 }
 
 string QueryProfiler::ToJSON() const {
@@ -461,13 +460,15 @@ string QueryProfiler::ToJSON() const {
 		ss << "   {\n";
 		ss << "   \"annotation\": \"" + ordered_phase_timings[i].first + "\", \n";
 		ss << "   \"timing\": " + to_string(ordered_phase_timings[i].second) + "\n";
-		ss << "   }\n";
+		ss << "   }";
 	}
-	ss << "\n   ],\n";
+	ss << "\n";
+	ss << "   ],\n";
 	// recursively print the physical operator tree
-	ss << "   \"children\": [";
+	ss << "   \"children\": [\n";
 	ToJSONRecursive(*root, ss);
-	ss << "\n]}";
+	ss << "   ]\n";
+	ss << "}";
 	return ss.str();
 }
 

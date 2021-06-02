@@ -154,7 +154,7 @@ static void PragmaDetailedProfilingOutputFunction(ClientContext &context, const 
 					ExtractFunctions(*collection, *expr_timer->root, chunk, operator_counter, function_counter);
 				}
 			}
-            operator_counter++;
+			operator_counter++;
 		}
 		collection->Append(chunk);
 		data.collection = move(collection);
