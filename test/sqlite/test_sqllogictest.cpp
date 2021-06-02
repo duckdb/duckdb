@@ -1037,6 +1037,10 @@ SQLLogicTestRunner::~SQLLogicTestRunner() {
 		if (loaded_path.empty()) {
 			continue;
 		}
+		// only delete database files that were created during the tests
+		if (!StringUtil::StartsWith(loaded_path, TestDirectoryPath())) {
+			continue;
+		}
 		DeleteDatabase(loaded_path);
 	}
 }
