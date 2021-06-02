@@ -5,16 +5,15 @@
 #include "duckdb/common/fstream.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "visualizer_constants.hpp"
 
 namespace duckdb {
 
 static string ToHTML(ClientContext &context, const string &first_json_path, const string &second_json_path) {
-	string path = VIS_RESOURCE_DIR;
 	std::stringstream ss;
 	ss << "<!DOCTYPE <html>\n";
 	ss << "<style>\n";
-	ifstream css(path + "visualizer.css");
-	ss << css.rdbuf();
+	ss << css;
 	ss << "</style>\n";
 	ss << "<head>\n";
 	ss << "\t<meta charset=\"utf-8\">\n";
@@ -22,8 +21,7 @@ static string ToHTML(ClientContext &context, const string &first_json_path, cons
 	ss << "</head>\n";
 	ss << "<body>\n";
 	ss << "<script>";
-	ifstream d3_js(path + "d3.js");
-	ss << d3_js.rdbuf();
+	ss << d3;
 	ss << "</script>\n";
 	ss << "<script> var data = ";
 	// If no json_file is given, read from query profiler
@@ -46,8 +44,7 @@ static string ToHTML(ClientContext &context, const string &first_json_path, cons
 	ss << "</script>\n";
 	ss << "\n";
 	ss << "<script>";
-	ifstream script_js(path + "script.js");
-	ss << script_js.rdbuf();
+	ss << script;
 	ss << "</script>\n";
 	ss << "</body>\n";
 	ss << "</html>\n";
