@@ -69,10 +69,10 @@ static void PragmaVisualizeLastProfilingOutput(ClientContext &context, const Fun
 static void PragmaVisualizeJsonProfilingOutput(ClientContext &context, const FunctionParameters &parameters) {
 	string file_name = parameters.values[0].ToString();
 	string json_path = parameters.values[1].ToString();
-	if (file_name.empty()) {
+	if (json_path.empty()) {
 		throw ParserException("JsonPath not specified");
 	}
-	if (json_path.empty()) {
+	if (file_name.empty()) {
 		Printer::Print(ToHTML(context, json_path, ""));
 		return;
 	}
