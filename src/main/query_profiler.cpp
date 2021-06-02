@@ -449,6 +449,7 @@ string QueryProfiler::ToJSON() const {
 	ss << "   \"name\":  \"Query\", \n";
 	ss << "   \"result\": " + to_string(main_query.Elapsed()) + ",\n";
 	ss << "   \"timing\": " + to_string(main_query.Elapsed()) + ",\n";
+	ss << "   \"cardinality\": " + to_string(root->info.elements) + ",\n";
 	ss << "   \"extra-info\": \"" + StringUtil::Replace(query, "\n", "\\n") + "\", \n";
 	// print the phase timings
 	ss << "   \"timings\": [\n";
