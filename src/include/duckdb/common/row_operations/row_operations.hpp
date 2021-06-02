@@ -8,16 +8,17 @@
 
 #pragma once
 
-#include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
 
 namespace duckdb {
 
 struct AggregateObject;
+class DataChunk;
 class RowLayout;
 struct SelectionVector;
 class StringHeap;
 class Vector;
+struct VectorData;
 
 // RowOperations contains a set of operations that operate on data using a RowLayout
 struct RowOperations {
@@ -52,8 +53,11 @@ struct RowOperations {
 	//===--------------------------------------------------------------------===//
 	//! Compare a block of key data against the row values to produce an updated selection that matches
 	//! and a second (optional) selection of non-matching values.
-	static void Match(const RowLayout &layout, Vector &rows, VectorData col_data[], SelectionVector &sel, idx_t count,
-	                  SelectionVector *no_match, idx_t &no_match_count);
+	//! Returns the number of matches remaining in the selection.
+	using Predicates = std::vector<ExpressionType>;
+
+	static idx_t Match(const RowLayout &layout, Vector &rows, VectorData col_data[], const Predicates &predicates,
+	                   SelectionVector &sel, idx_t count, SelectionVector *no_match, idx_t &no_match_count);
 };
 
 } // namespace duckdb

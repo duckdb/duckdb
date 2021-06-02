@@ -49,9 +49,6 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manag
 	hash_offset = layout.GetOffsets()[layout.ColumnCount() - 1];
 
 	tuple_size = layout.GetRowWidth();
-#ifndef DUCKDB_ALLOW_UNDEFINED
-	tuple_size = RowLayout::Align(tuple_size);
-#endif
 
 	D_ASSERT(tuple_size <= Storage::BLOCK_ALLOC_SIZE);
 	tuples_per_block = Storage::BLOCK_ALLOC_SIZE / tuple_size;
@@ -92,6 +89,7 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manag
 		payload_idx += aggr.child_count;
 	}
 	addresses.Initialize(LogicalType::POINTER);
+	predicates.resize(layout.ColumnCount() - 1, ExpressionType::COMPARE_EQUAL);
 }
 
 GroupedAggregateHashTable::~GroupedAggregateHashTable() {
@@ -154,9 +152,9 @@ void GroupedAggregateHashTable::Destroy() {
 	RowOperations::DestroyStates(layout, state_vector, count);
 }
 
-template <class T>
+template <class ENTRY>
 void GroupedAggregateHashTable::VerifyInternal() {
-	auto hashes_ptr = (T *)hashes_hdl_ptr;
+	auto hashes_ptr = (ENTRY *)hashes_hdl_ptr;
 	D_ASSERT(payload_hds.size() == payload_hds_ptrs.size());
 	idx_t count = 0;
 	for (idx_t i = 0; i < capacity; i++) {
@@ -205,7 +203,7 @@ void GroupedAggregateHashTable::Verify() {
 #endif
 }
 
-template <class T>
+template <class ENTRY>
 void GroupedAggregateHashTable::Resize(idx_t size) {
 	Verify();
 
@@ -222,7 +220,7 @@ void GroupedAggregateHashTable::Resize(idx_t size) {
 	D_ASSERT((size & (size - 1)) == 0);
 	bitmask = size - 1;
 
-	auto byte_size = size * sizeof(T);
+	auto byte_size = size * sizeof(ENTRY);
 	if (byte_size > (idx_t)Storage::BLOCK_ALLOC_SIZE) {
 		hashes_hdl = buffer_manager.Allocate(byte_size);
 		hashes_hdl_ptr = hashes_hdl->Ptr();
@@ -231,7 +229,7 @@ void GroupedAggregateHashTable::Resize(idx_t size) {
 	hashes_end_ptr = hashes_hdl_ptr + byte_size;
 	capacity = size;
 
-	auto hashes_arr = (T *)hashes_hdl_ptr;
+	auto hashes_arr = (ENTRY *)hashes_hdl_ptr;
 
 	PayloadApply([&](idx_t page_nr, idx_t page_offset, data_ptr_t ptr) {
 		auto hash = Load<hash_t>(ptr + hash_offset);
@@ -484,7 +482,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 
 		// now we have only the tuples remaining that might match to an existing group
 		// start performing comparisons with each of the groups
-		RowOperations::Match(layout, addresses, group_data.get(), group_compare_vector, need_compare_count,
+		RowOperations::Match(layout, addresses, group_data.get(), predicates, group_compare_vector, need_compare_count,
 		                     &no_match_vector, no_match_count);
 
 		// each of the entries that do not match we move them to the next entry in the HT
