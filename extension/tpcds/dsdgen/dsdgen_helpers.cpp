@@ -1,15 +1,15 @@
 #include "dsdgen_helpers.hpp"
 
 #define DECLARER
-#include "address.h"
-#include "build_support.h"
-#include "config.h"
-#include "dist.h"
-#include "genrand.h"
-#include "params.h"
-#include "porting.h"
-#include "scaling.h"
-#include "tdefs.h"
+#include "address.hpp"
+#include "build_support.hpp"
+#include "config.hpp"
+#include "dist.hpp"
+#include "genrand.hpp"
+#include "params.hpp"
+#include "porting.hpp"
+#include "scaling.hpp"
+#include "tdefs.hpp"
 
 namespace tpcds {
 

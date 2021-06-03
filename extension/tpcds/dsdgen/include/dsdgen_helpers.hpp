@@ -1,7 +1,8 @@
 #pragma once
 
+#include "append_info-c.hpp"
+
 #include <cstdint>
-#include "append_info.hpp"
 
 namespace tpcds {
 

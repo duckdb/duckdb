@@ -1,6 +1,6 @@
 #include "dsdgen.hpp"
 
-#include "append_info.hpp"
+#include "append_info-c.hpp"
 #include "dsdgen_helpers.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/data_chunk.hpp"

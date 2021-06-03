@@ -4,11 +4,11 @@
 
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
-#include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
 #endif
 
 namespace duckdb {
@@ -158,9 +158,10 @@ void TPCDSExtension::Load(DuckDB &db) {
 
 	TableFunction dsdgen_func("dsdgen", {}, DsdgenFunction, DsdgenBind);
 	dsdgen_func.named_parameters["sf"] = LogicalType::INTEGER;
-	dsdgen_func.named_parameters["overwrite"] = LogicalType::BOOLEAN;
-	dsdgen_func.named_parameters["schema"] = LogicalType::VARCHAR;
-	dsdgen_func.named_parameters["suffix"] = LogicalType::VARCHAR;
+	// FIXME: no support for these parameters for now
+	//	dsdgen_func.named_parameters["overwrite"] = LogicalType::BOOLEAN;
+	//	dsdgen_func.named_parameters["schema"] = LogicalType::VARCHAR;
+	//	dsdgen_func.named_parameters["suffix"] = LogicalType::VARCHAR;
 	CreateTableFunctionInfo dsdgen_info(dsdgen_func);
 
 	// create the dsdgen function
