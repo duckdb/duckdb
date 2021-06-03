@@ -145,9 +145,7 @@ public:
 	}
 
 	// Setters
-	inline void SetVectorType(VectorType vector_type) {
-		buffer->SetVectorType(vector_type);
-	}
+	void SetVectorType(VectorType vector_type);
 	inline void SetType(const LogicalType &type) {
 		buffer->SetType(type);
 	}
@@ -200,10 +198,7 @@ struct ConstantVector {
 		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
 		return !vector.validity.RowIsValid(0);
 	}
-	static inline void SetNull(Vector &vector, bool is_null) {
-		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
-		vector.validity.Set(0, !is_null);
-	}
+	static void SetNull(Vector &vector, bool is_null);
 	static inline ValidityMask &Validity(Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
 		return vector.validity;

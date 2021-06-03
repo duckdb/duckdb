@@ -807,6 +807,7 @@ void Vector::Deserialize(idx_t count, Deserializer &source) {
 					strings[i] = StringVector::AddStringOrBlob(*this, str);
 				}
 			}
+			break;
 		}
 		case PhysicalType::STRUCT: {
 			auto &entries = StructVector::GetEntries(*this);
@@ -817,6 +818,16 @@ void Vector::Deserialize(idx_t count, Deserializer &source) {
 		}
 		default:
 			throw NotImplementedException("Unimplemented variable width type for Vector::Deserialize!");
+		}
+	}
+}
+
+void Vector::SetVectorType(VectorType vector_type) {
+	buffer->SetVectorType(vector_type);
+	if (vector_type == VectorType::CONSTANT_VECTOR && GetType().InternalType() == PhysicalType::STRUCT) {
+		auto &entries = StructVector::GetEntries(*this);
+		for(auto &entry : entries) {
+			entry->SetVectorType(vector_type);
 		}
 	}
 }
@@ -927,23 +938,16 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 	if (GetType().InternalType() == PhysicalType::STRUCT || GetType().InternalType() == PhysicalType::MAP) {
 		auto &child_types = GetType().child_types();
 		D_ASSERT(child_types.size() > 0);
-		if (GetVectorType() == VectorType::FLAT_VECTOR) {
+		if (GetVectorType() == VectorType::FLAT_VECTOR || GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			// create a selection vector of the non-null entries of the struct vector
-			auto &nulls = FlatVector::Validity(*this);
-			SelectionVector new_sel(STANDARD_VECTOR_SIZE);
-			idx_t new_count = 0;
-			for(idx_t i = 0; i < count; i++) {
-				auto idx = sel.get_index(i);
-				if (nulls.RowIsValid(idx)) {
-					new_sel.set_index(new_count++, idx);
-				}
-			}
-
 			auto &children = StructVector::GetEntries(*this);
 			D_ASSERT(child_types.size() == children.size());
 			for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
+				if (GetVectorType() == VectorType::CONSTANT_VECTOR) {
+					D_ASSERT(children[child_idx]->GetVectorType() == VectorType::CONSTANT_VECTOR);
+				}
 				D_ASSERT(children[child_idx]->GetType() == child_types[child_idx].second);
-				children[child_idx]->Verify(new_sel, new_count);
+				children[child_idx]->Verify(sel, count);
 			}
 		}
 	}
@@ -982,6 +986,18 @@ void Vector::Verify(idx_t count) {
 		Verify(selection_vector, count);
 	} else {
 		Verify(FlatVector::INCREMENTAL_SELECTION_VECTOR, count);
+	}
+}
+
+void ConstantVector::SetNull(Vector &vector, bool is_null) {
+	D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
+	vector.validity.Set(0, !is_null);
+	if (is_null && vector.GetType().InternalType() == PhysicalType::STRUCT) {
+		// set all child entries to null as well
+		auto &entries = StructVector::GetEntries(vector);
+		for(auto &entry : entries) {
+			ConstantVector::SetNull(*entry, is_null);
+		}
 	}
 }
 

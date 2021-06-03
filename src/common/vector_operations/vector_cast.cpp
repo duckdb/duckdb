@@ -634,22 +634,22 @@ static void StructCastSwitch(Vector &source, Vector &result, idx_t count) {
 		auto &source_children = StructVector::GetEntries(source);
 		D_ASSERT(source_children.size() == source.GetType().child_types().size());
 
-		bool is_constant = true;
 		auto &result_children = StructVector::GetEntries(result);
 		for (idx_t c_idx = 0; c_idx < result.GetType().child_types().size(); c_idx++) {
 			auto &result_child_vector = result_children[c_idx];
 			auto &source_child_vector = *source_children[c_idx];
-			if (source_child_vector.GetVectorType() != VectorType::CONSTANT_VECTOR) {
-				is_constant = false;
-			}
 			if (result_child_vector->GetType() != source_child_vector.GetType()) {
 				VectorOperations::Cast(source_child_vector, *result_child_vector, count, false);
 			} else {
 				result_child_vector->Reference(source_child_vector);
 			}
 		}
-		if (is_constant) {
+		if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+			ConstantVector::SetNull(result, ConstantVector::IsNull(source));
+		} else {
+			source.Normalify(count);
+			FlatVector::Validity(result) = FlatVector::Validity(source);
 		}
 
 		break;

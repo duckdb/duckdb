@@ -102,6 +102,8 @@ static void AppendLoop(SegmentStatistics &stats, data_ptr_t target, idx_t target
 				NumericStatistics::Update<T>(stats, sdata[source_idx]);
 				tdata[target_idx] = sdata[source_idx];
 			} else {
+				// we insert a NullValue<T> in the null gap for debuggability
+				// this value should never be used or read anywhere
 				tdata[target_idx] = NullValue<T>();
 			}
 		}

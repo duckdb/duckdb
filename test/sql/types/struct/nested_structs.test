@@ -3,6 +3,9 @@
 # group: [struct]
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
 CREATE TABLE a(c ROW(i ROW(a INTEGER), j INTEGER));
 
 statement ok

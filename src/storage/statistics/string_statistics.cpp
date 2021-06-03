@@ -147,17 +147,15 @@ FilterPropagateResult StringStatistics::CheckZonemap(ExpressionType comparison_t
 }
 
 static idx_t GetValidMinMaxSubstring(data_ptr_t data) {
-	idx_t len = 0;
 	for (idx_t i = 0; i < StringStatistics::MAX_STRING_MINMAX_SIZE; i++) {
 		if (data[i] == '\0') {
 			return i;
 		}
-		if ((data[i] & 0xC0) != 0x80) {
-			len = i;
-			break;
+		if ((data[i] & 0x80) != 0) {
+			return i;
 		}
 	}
-	return len;
+	return StringStatistics::MAX_STRING_MINMAX_SIZE;
 }
 
 string StringStatistics::ToString() {

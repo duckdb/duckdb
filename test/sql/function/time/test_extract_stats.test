@@ -18,29 +18,29 @@ PRAGMA disable_verification
 query I
 SELECT stats(EXTRACT(second FROM i)) FROM times LIMIT 1
 ----
-<REGEX>:.*true.*0.*60.*
+<REGEX>:.*0.*60.*true.*
 
 query I
 SELECT stats(EXTRACT(minute FROM i)) FROM times LIMIT 1
 ----
-<REGEX>:.*true.*0.*60.*
+<REGEX>:.*0.*60.*true.*
 
 query I
 SELECT stats(EXTRACT(hour FROM i)) FROM times LIMIT 1
 ----
-<REGEX>:.*true.*0.*24.*
+<REGEX>:.*0.*24.*true.*
 
 query I
 SELECT stats(EXTRACT(milliseconds FROM i)) FROM times LIMIT 1
 ----
-<REGEX>:.*true.*0.*60000.*
+<REGEX>:.*0.*60000.*true.*
 
 query I
 SELECT stats(EXTRACT(microseconds FROM i)) FROM times LIMIT 1
 ----
-<REGEX>:.*true.*0.*60000000.*
+<REGEX>:.*0.*60000000.*true.*
 
 query I
 SELECT stats(EXTRACT(epoch FROM i)) FROM times LIMIT 1
 ----
-<REGEX>:.*true.*0.*86400.*
+<REGEX>:.*0.*86400.*true.*
