@@ -44,8 +44,8 @@ static string ToHTML(ClientContext &context, const string &first_json_path, cons
 	if (second_json_path.empty()) {
 		ss << "null;";
 	}
-    // if second json_file is given, read from file.
-    if (!second_json_path.empty()) {
+	// if second json_file is given, read from file.
+	if (!second_json_path.empty()) {
 		ifstream data_json(second_json_path);
 		ss << data_json.rdbuf();
 		// throw an IO exception if it fails to read the json_file
