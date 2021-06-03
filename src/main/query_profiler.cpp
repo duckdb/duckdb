@@ -363,10 +363,7 @@ static void PrintRow(std::ostream &ss, const string &annotation, int id, const s
 	ss << string(depth * 3, ' ') << "   \"cycles_per_tuple\": " + StringUtil::Format("%.4f", time) + ",\n";
 #else
 	ss << string(depth * 3, ' ') << "   \"timing\":" + to_string(time) + ",\n";
-	ss << string(depth * 3, ' ')
-	   << "   \"CYCLES_PER_"
-	      "TUPLE\": "
-	      "\"NULL\" ,\n";
+	ss << string(depth * 3, ' ') << "   \"cycles_per_tuple\": \"NULL\" ,\n";
 #endif
 	ss << string(depth * 3, ' ') << "   \"sample_size\": " << to_string(sample_counter) + ",\n";
 	ss << string(depth * 3, ' ') << "   \"input_size\": " << to_string(tuple_counter) + ",\n";
