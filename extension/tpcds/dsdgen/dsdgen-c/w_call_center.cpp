@@ -54,6 +54,7 @@
 
 #include <assert.h>
 #include <stdio.h>
+#include <string.h>
 
 struct CALL_CENTER_TBL g_w_call_center;
 static struct CALL_CENTER_TBL g_OldValues;

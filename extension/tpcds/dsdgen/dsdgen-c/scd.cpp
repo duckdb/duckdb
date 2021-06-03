@@ -36,6 +36,7 @@
 #include "config.hpp"
 #include "porting.hpp"
 #include <stdio.h>
+#include <string.h>
 #include "tdefs.hpp"
 #include "scd.hpp"
 #include "tables.hpp"

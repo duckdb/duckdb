@@ -51,6 +51,7 @@
 #include "tdefs.hpp"
 
 #include <stdio.h>
+#include <string.h>
 
 struct W_WEB_SITE_TBL g_w_web_site;
 static struct W_WEB_SITE_TBL g_OldValues;

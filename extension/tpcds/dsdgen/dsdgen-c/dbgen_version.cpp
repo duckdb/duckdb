@@ -36,6 +36,7 @@
 #include "config.hpp"
 #include "porting.hpp"
 #include <stdio.h>
+#include <string.h>
 #include <time.h>
 #include "dbgen_version.hpp"
 #include "columns.hpp"

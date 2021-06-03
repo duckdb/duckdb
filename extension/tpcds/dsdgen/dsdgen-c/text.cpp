@@ -37,6 +37,7 @@
 #include "porting.hpp"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <ctype.h>
 #include "decimal.hpp"
 #include "date.hpp"

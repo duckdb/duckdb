@@ -36,6 +36,7 @@
 #include "config.hpp"
 #include "porting.hpp"
 #include <stdio.h>
+#include <string.h>
 #include <fcntl.h>
 #include <assert.h>
 #ifdef WIN32
