@@ -14,7 +14,7 @@ def open_utf8(fpath, flags):
     else:
         return open(fpath, flags, encoding="utf8")
 
-def get_byte_array(fpath, add_null_terminator = False):
+def get_byte_array(fpath, add_null_terminator = True):
     with open(fpath, 'rb') as f:
         text = bytearray(f.read())
     result_text = ""
