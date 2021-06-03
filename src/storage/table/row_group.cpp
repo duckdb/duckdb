@@ -692,7 +692,7 @@ class VersionDeleteState {
 public:
 	VersionDeleteState(RowGroup &info, Transaction &transaction, DataTable *table, idx_t base_row)
 	    : info(info), transaction(transaction), table(table), current_info(nullptr), current_chunk(INVALID_INDEX),
-	      count(0), base_row(base_row) {
+	      count(0), base_row(base_row), delete_count(0) {
 	}
 
 	RowGroup &info;
@@ -704,27 +704,25 @@ public:
 	idx_t count;
 	idx_t base_row;
 	idx_t chunk_row;
+	idx_t delete_count;
 
 public:
 	void Delete(row_t row_id);
 	void Flush();
 };
 
-void RowGroup::Delete(Transaction &transaction, DataTable *table, Vector &row_ids, idx_t count) {
+idx_t RowGroup::Delete(Transaction &transaction, DataTable *table, row_t *ids, idx_t count) {
 	lock_guard<mutex> lock(row_group_lock);
 	VersionDeleteState del_state(*this, transaction, table, this->start);
 
-	VectorData rdata;
-	row_ids.Orrify(count, rdata);
 	// obtain a write lock
-	auto ids = (row_t *)rdata.data;
 	for (idx_t i = 0; i < count; i++) {
-		auto ridx = rdata.sel->get_index(i);
-		D_ASSERT(ids[ridx] >= 0);
-		D_ASSERT(idx_t(ids[ridx]) >= this->start && idx_t(ids[ridx]) < this->start + this->count);
-		del_state.Delete(ids[ridx] - this->start);
+		D_ASSERT(ids[i] >= 0);
+		D_ASSERT(idx_t(ids[i]) >= this->start && idx_t(ids[i]) < this->start + this->count);
+		del_state.Delete(ids[i] - this->start);
 	}
 	del_state.Flush();
+	return del_state.delete_count;
 }
 
 void RowGroup::Verify() {
@@ -773,7 +771,7 @@ void VersionDeleteState::Flush() {
 		return;
 	}
 	// delete in the current info
-	current_info->Delete(transaction, rows, count);
+	delete_count += current_info->Delete(transaction, rows, count);
 	// now push the delete into the undo buffer
 	transaction.PushDelete(table, current_info, rows, count, base_row + chunk_row);
 	count = 0;
