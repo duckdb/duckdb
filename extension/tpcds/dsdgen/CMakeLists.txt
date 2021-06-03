@@ -1,3 +1,4 @@
+include_directories(include)
 include_directories(include/dsdgen)
 add_subdirectory(dsdgen-c)
 

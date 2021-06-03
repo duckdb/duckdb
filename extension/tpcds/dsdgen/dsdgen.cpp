@@ -16,6 +16,12 @@ using namespace std;
 namespace tpcds {
 
 void DSDGenWrapper::DSDGen(int scale, ClientContext &context, string schema, string suffix) {
+	if (scale != 0 && scale != 1 && scale != 10 && scale != 100 && scale != 300 && scale != 1000 && scale != 3000 &&
+	    scale != 10000 && scale != 30000 && scale != 100000) {
+		throw InvalidInputException(
+		    "Scale factor must be one of {0, 1, 10, 100, 300, 1000, 3000, 10000, 30000, 100000}");
+	}
+
 	Connection con(*context.db);
 
 	con.Query("BEGIN TRANSACTION");

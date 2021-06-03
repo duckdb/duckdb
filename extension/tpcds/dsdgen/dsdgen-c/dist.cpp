@@ -33,12 +33,14 @@
  * Contributors:
  * Gradient Systems
  */
+
 #include "config.hpp"
 #include "porting.hpp"
 #include <stdio.h>
 #include <fcntl.h>
 #include <assert.h>
 #ifdef WIN32
+#include <Winsock2.h> // for ntohl
 #include <io.h>
 #include <stdlib.h>
 #include <search.h>

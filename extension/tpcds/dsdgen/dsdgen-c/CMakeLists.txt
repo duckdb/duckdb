@@ -9,6 +9,7 @@ add_library(
   dist.cpp
   error_msg.cpp
   genrand.cpp
+  grammar.cpp
   join.cpp
   list.cpp
   load.cpp
@@ -49,7 +50,8 @@ add_library(
   w_web_page.cpp
   w_web_returns.cpp
   w_web_sales.cpp
-  w_web_site.cpp)
+  w_web_site.cpp
+  grammar.cpp)
 
 set(DSDGEN_OBJECT_FILES
     ${DSDGEN_OBJECT_FILES} $<TARGET_OBJECTS:dsdgen_c>
