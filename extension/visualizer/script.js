@@ -180,7 +180,7 @@ function update(e, source) {
             + '<center><b>' + d.data.name + '</b><br><br></center>'
             + '<center><b>Cardinality: </b>' + d.data.cardinality + '<br></center>'
             + '<center><b>Uncounted: </b>' + d.data.uncounted + '<br></center>'
-            + '<center><b>Timing: </b>' + ((Math.round(d.data.timing * 100) / 100).toFixed(2)) + '<br><center>'
+            + '<center><b>Timing: </b>' + d.data.timing + '<br><center>'
             + '</div>';
     })
         .on('click', (e, d) => display_table(e, d));
@@ -411,9 +411,6 @@ function display_table(e, d) {
             d3.select(this).style("font-size", "12px")
         })
         .text(function (d) {
-            if(!isNaN(d)) {
-                return ((Math.round(d * 100000) / 100000));
-            }
             return d;
         })
 }

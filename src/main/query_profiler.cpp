@@ -362,7 +362,7 @@ static void PrintRow(std::ostream &ss, const string &annotation, int id, const s
 	ss << string(depth * 3, ' ') << "   \"timing\": \"NULL\" ,\n";
 	ss << string(depth * 3, ' ') << "   \"cycles_per_tuple\": " + StringUtil::Format("%.4f", time) + ",\n";
 #else
-	ss << string(depth * 3, ' ') << "   \"timing\":" + StringUtil::Format("%.4f", time) + ",\n";
+	ss << string(depth * 3, ' ') << "   \"timing\":" + to_string(time) + ",\n";
 	ss << string(depth * 3, ' ')
 	   << "   \"CYCLES_PER_"
 	      "TUPLE\": "
@@ -394,7 +394,7 @@ static void ExtractFunctions(std::ostream &ss, ExpressionInfo &info, int &fun_id
 static void ToJSONRecursive(QueryProfiler::TreeNode &node, std::ostream &ss, int depth = 1) {
 	ss << string(depth * 3, ' ') << " {\n";
 	ss << string(depth * 3, ' ') << "   \"name\": \"" + node.name + "\",\n";
-	ss << string(depth * 3, ' ') << "   \"timing\":" + StringUtil::Format("%.2f", node.info.time) + ",\n";
+	ss << string(depth * 3, ' ') << "   \"timing\":" + to_string(node.info.time) + ",\n";
 	ss << string(depth * 3, ' ') << "   \"cardinality\":" + to_string(node.info.elements) + ",\n";
 	ss << string(depth * 3, ' ')
 	   << "   \"extra_info\": \"" + StringUtil::Replace(node.extra_info, "\n", "\\n") + "\",\n";
