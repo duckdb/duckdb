@@ -35,12 +35,16 @@ bool CheckForInvisibleJoin(LogicalComparisonJoin &op, PerfectHashJoinState &join
 	// we only do this optimization for inner joins
 	if (op.join_type != JoinType::INNER)
 		return false;
-	// and integral types
+	// with one condition
+	if (op.conditions.size() != 1) {
+		return false;
+	}
+	// with integral types
 	if (op.join_stats.empty() || !op.join_stats[0]->type.IsIntegral() || !op.join_stats[1]->type.IsIntegral()) {
 		// invisible join not possible for no integral types
 		return false;
 	}
-	// with a build range smaller than the threshold
+	// and when the build range is smaller than the pre-set threshold
 	auto stats_build = reinterpret_cast<NumericStatistics *>(op.join_stats[0].get()); // lhs stats
 	auto build_range = stats_build->max - stats_build->min;                           // Join Keys Range
 
