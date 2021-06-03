@@ -25,10 +25,11 @@ static string ToHTML(ClientContext &context, const string &first_json_path, cons
 	ss << "</script>\n";
 	ss << "<script> var data = ";
 	// If no json_file is given, read from query profiler
-	if (first_json_path.empty()) {
-		auto &lastProfiler = context.query_profiler_history->GetPrevProfilers().back().second;
-		ss << lastProfiler->ToJSON();
-	} else {
+	auto &prevProfilers = context.query_profiler_history->GetPrevProfilers();
+	if (first_json_path.empty() && !prevProfilers.empty()) {
+		ss << prevProfilers.back().second->ToJSON();
+	}
+	if (!first_json_path.empty()) {
 		ifstream data_json(first_json_path);
 		ss << data_json.rdbuf();
 	}
