@@ -5,18 +5,14 @@
 statement ok
 PRAGMA enable_verification
 
-# Empty Table
 query I
-SELECT histogram(i) FROM range(100) tbl(i) WHERE 1=0;
+select histogram(NULL)
 ----
 NULL
 
-#Corner cases
-statement error
-select histogram()
-
+# Empty Table
 query I
-select histogram(NULL)
+SELECT histogram(i) FROM range(100) tbl(i) WHERE 1=0;
 ----
 NULL
 
@@ -24,9 +20,6 @@ query I
 select histogram(1)
 ----
 {1=1}
-
-statement error
-select histogram(*)
 
 query I
 SELECT histogram(2) FROM range(100);
@@ -90,4 +83,9 @@ select g,histogram(g) over (partition by g%2)
 3	{1=2, 3=1, 5=1}
 5	{1=2, 3=1, 5=1}
 
+#Corner cases
+statement error
+select histogram()
 
+statement error
+select histogram(*)

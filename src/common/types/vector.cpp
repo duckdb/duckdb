@@ -247,7 +247,9 @@ void Vector::SetValue(idx_t index, const Value &val) {
 
 	validity.EnsureWritable();
 	validity.Set(index, !val.is_null);
-	if (val.is_null) {
+	if (val.is_null && GetType().InternalType() != PhysicalType::STRUCT) {
+		// for structs we still need to set the child-entries to NULL
+		// so we do not bail out yet
 		return;
 	}
 
@@ -326,14 +328,18 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		break;
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::STRUCT: {
-		auto &children = StructVector::GetEntries(*this);
-		D_ASSERT(children.size() == val.struct_value.size());
+		D_ASSERT(GetVectorType() == VectorType::CONSTANT_VECTOR || GetVectorType() == VectorType::FLAT_VECTOR);
 
-		for (size_t i = 0; i < val.struct_value.size(); i++) {
-			auto &struct_child = val.struct_value[i];
-			D_ASSERT(GetVectorType() == VectorType::CONSTANT_VECTOR || GetVectorType() == VectorType::FLAT_VECTOR);
+		auto &children = StructVector::GetEntries(*this);
+		D_ASSERT(val.is_null || children.size() == val.struct_value.size());
+		for (size_t i = 0; i < children.size(); i++) {
 			auto &vec_child = children[i];
-			vec_child->SetValue(index, struct_child);
+			if (!val.is_null) {
+				auto &struct_child = val.struct_value[i];
+				vec_child->SetValue(index, struct_child);
+			} else {
+				vec_child->SetValue(index, Value());
+			}
 		}
 		break;
 	}
@@ -638,7 +644,6 @@ void Vector::Normalify(idx_t count) {
 			TemplatedFlattenConstantVector<list_entry_t>(data, old_data, count);
 			break;
 		}
-		case PhysicalType::MAP:
 		case PhysicalType::STRUCT: {
 			auto &child_entries = StructVector::GetEntries(*this);
 			for (auto &child : child_entries) {
@@ -935,7 +940,7 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 		}
 	}
 
-	if (GetType().InternalType() == PhysicalType::STRUCT || GetType().InternalType() == PhysicalType::MAP) {
+	if (GetType().InternalType() == PhysicalType::STRUCT) {
 		auto &child_types = GetType().child_types();
 		D_ASSERT(child_types.size() > 0);
 		if (GetVectorType() == VectorType::FLAT_VECTOR || GetVectorType() == VectorType::CONSTANT_VECTOR) {
@@ -996,6 +1001,7 @@ void ConstantVector::SetNull(Vector &vector, bool is_null) {
 		// set all child entries to null as well
 		auto &entries = StructVector::GetEntries(vector);
 		for(auto &entry : entries) {
+			entry->SetVectorType(VectorType::CONSTANT_VECTOR);
 			ConstantVector::SetNull(*entry, is_null);
 		}
 	}

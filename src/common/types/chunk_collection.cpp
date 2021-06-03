@@ -438,7 +438,6 @@ void ChunkCollection::MaterializeSortedChunk(DataChunk &target, idx_t order[], i
 		case PhysicalType::INTERVAL:
 			TemplatedSetValues<interval_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
-		case PhysicalType::MAP:
 		case PhysicalType::LIST:
 		case PhysicalType::STRUCT: {
 			for (idx_t row_idx = 0; row_idx < remaining_data; row_idx++) {
@@ -602,7 +601,6 @@ idx_t ChunkCollection::MaterializeHeapChunk(DataChunk &target, idx_t order[], id
 			TemplatedSetValues<string_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
 		// TODO this is ugly and sloooow!
-		case PhysicalType::MAP:
 		case PhysicalType::STRUCT:
 		case PhysicalType::LIST: {
 			for (idx_t row_idx = 0; row_idx < remaining_data; row_idx++) {

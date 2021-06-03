@@ -9,6 +9,12 @@ PRAGMA enable_verification
 statement ok
 PRAGMA threads=1
 
+# scalar nested lists
+query I
+SELECT [{'i': 1,'j': [2, 3]}, NULL, {'i': 1, 'j': [2, 3]}];
+----
+[{'i': 1, 'j': [2, 3]}, NULL, {'i': 1, 'j': [2, 3]}]
+
 statement ok
 CREATE TABLE list_data (g INTEGER, e INTEGER)
 

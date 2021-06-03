@@ -92,12 +92,11 @@ PhysicalType LogicalType::GetInternalType() {
 		return PhysicalType::VARCHAR;
 	case LogicalTypeId::INTERVAL:
 		return PhysicalType::INTERVAL;
+	case LogicalTypeId::MAP:
 	case LogicalTypeId::STRUCT:
 		return PhysicalType::STRUCT;
 	case LogicalTypeId::LIST:
 		return PhysicalType::LIST;
-	case LogicalTypeId::MAP:
-		return PhysicalType::MAP;
 	case LogicalTypeId::HASH:
 		return PhysicalType::HASH;
 	case LogicalTypeId::POINTER:
@@ -210,8 +209,6 @@ string TypeIdToString(PhysicalType type) {
 		return "STRUCT<?>";
 	case PhysicalType::LIST:
 		return "LIST<?>";
-	case PhysicalType::MAP:
-		return "MAP<?>";
 	case PhysicalType::INVALID:
 		return "INVALID";
 	case PhysicalType::BIT:
@@ -256,7 +253,6 @@ idx_t GetTypeIdSize(PhysicalType type) {
 		return sizeof(string_t);
 	case PhysicalType::INTERVAL:
 		return sizeof(interval_t);
-	case PhysicalType::MAP:
 	case PhysicalType::STRUCT:
 		return 0; // no own payload
 	case PhysicalType::LIST:
