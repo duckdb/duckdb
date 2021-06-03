@@ -1,4 +1,4 @@
-# name: test/sql/types/struct/lineitem_struct.test_slow
+# name: test/sql/types/nested/struct/lineitem_struct.test_slow
 # description: Test packing and unpacking lineitem into structs
 # group: [struct]
 

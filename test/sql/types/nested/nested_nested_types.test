@@ -1,0 +1,12 @@
+# name: test/sql/types/nested/nested_nested_types.test
+# description: Test Nested Types Nested on other Nested types
+# group: [nested]
+
+
+statement ok
+PRAGMA enable_verification
+
+query T
+SELECT [{'i':1,'j':[2,3]},NULL]
+----
+{'a': 42, 'b': 43}

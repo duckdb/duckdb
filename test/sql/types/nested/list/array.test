@@ -1,4 +1,4 @@
-# name: test/sql/types/list/array.test
+# name: test/sql/types/nested/list/array.test
 # description: Test ARRAY syntax
 # group: [list]
 

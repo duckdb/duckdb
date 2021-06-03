@@ -1,4 +1,4 @@
-# name: test/sql/types/list/list.test_slow
+# name: test/sql/types/nested/list/list.test_slow
 # description: Test big list
 # group: [list]
 

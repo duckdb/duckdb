@@ -1,4 +1,4 @@
-# name: test/sql/types/map/test_map.test
+# name: test/sql/types/nested/map/test_map.test
 # description: Test basic functionality of maps
 # group: [map]
 
