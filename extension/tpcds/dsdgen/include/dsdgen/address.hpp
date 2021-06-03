@@ -74,7 +74,7 @@ int mk_streetname(int nTable, char *dest);
 int mk_city(int nTable, char **dest);
 int city_hash(int nTable, char *name);
 int mk_zipcode(int nTable, char *dest, int nRegion, char *city);
-//void printAddressPart(FILE *fp, ds_addr_t *pAddr, int nAddressPart);
+// void printAddressPart(FILE *fp, ds_addr_t *pAddr, int nAddressPart);
 void resetCountCount(void);
 
 #endif
