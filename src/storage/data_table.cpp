@@ -758,8 +758,28 @@ void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector 
 		// deletion is in transaction-local storage: push delete into local chunk collection
 		transaction.storage.Delete(this, row_identifiers, count);
 	} else {
-		auto row_group = (RowGroup *)row_groups->GetSegment(first_id);
-		row_group->Delete(transaction, this, row_identifiers, count);
+		// delete is in the row groups
+		// we need to figure out for each id to which row group it belongs
+		// usually all (or many) ids belong to the same row group
+		// we iterate over the ids and check for every id if it belongs to the same row group as their predecessor
+		idx_t pos = 0;
+		do {
+			idx_t start = pos;
+			auto row_group = (RowGroup *)row_groups->GetSegment(ids[pos]);
+			for (pos++; pos < count; pos++) {
+				D_ASSERT(ids[pos] >= 0);
+				// check if this id still belongs to this row group
+				if (idx_t(ids[pos]) < row_group->start) {
+					// id is before row_group start -> it does not
+					break;
+				}
+				if (idx_t(ids[pos]) >= row_group->start + row_group->count) {
+					// id is after row group end -> it does not
+					break;
+				}
+			}
+			row_group->Delete(transaction, this, ids + start, pos - start);
+		} while (pos < count);
 	}
 }
 
