@@ -36,11 +36,12 @@
 #ifndef PORTING_H
 #define PORTING_H
 
-#ifdef USE_STRING_H
 #include <string.h>
-#else
-#include <strings.h>
-#endif
+//#ifdef USE_STRING_H
+//#include <string.h>
+//#else
+//#include <strings.h>
+//#endif
 
 #ifdef USE_VALUES_H
 #include <values.h>

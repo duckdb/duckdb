@@ -50,7 +50,6 @@
 #include "tdefs.hpp"
 
 #include <stdio.h>
-#include <string.h>
 
 struct CATALOG_PAGE_TBL g_w_catalog_page;
 
