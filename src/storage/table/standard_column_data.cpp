@@ -185,10 +185,7 @@ void StandardColumnData::CheckpointScan(ColumnSegment *segment, ColumnScanState 
 	ColumnData::CheckpointScan(segment, state, row_group_start, base_row_index, count, scan_vector);
 
 	idx_t offset_in_row_group = segment->start - row_group_start;
-
-	ColumnScanState child_state;
-	validity.InitializeScanWithOffset(child_state, row_group_start + offset_in_row_group);
-	validity.ScanCommitted(offset_in_row_group / STANDARD_VECTOR_SIZE, child_state, scan_vector, false);
+	validity.ScanCommittedRange(row_group_start, offset_in_row_group, count, scan_vector);
 }
 
 void StandardColumnData::Initialize(PersistentColumnData &column_data) {

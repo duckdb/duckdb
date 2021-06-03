@@ -62,6 +62,8 @@ public:
 	//! Scan the next vector from the column
 	virtual void Scan(Transaction &transaction, idx_t vector_index, ColumnScanState &state, Vector &result);
 	virtual void ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates);
+	virtual void ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_group, idx_t count, Vector &result);
+
 	//! Initialize an appending phase for this column
 	virtual void InitializeAppend(ColumnAppendState &state);
 	//! Append a vector of type [type] to the end of the column

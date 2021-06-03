@@ -112,6 +112,15 @@ void ColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vecto
 	}
 }
 
+void ColumnData::ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_group, idx_t count, Vector &result) {
+	ColumnScanState child_state;
+	InitializeScanWithOffset(child_state, row_group_start + offset_in_row_group);
+	ScanVector(child_state, result);
+	if (updates) {
+		updates->FetchCommittedRange(offset_in_row_group, count, result);
+	}
+}
+
 void ColumnScanState::Next() {
 	//! There is no column segment
 	if (!current) {
