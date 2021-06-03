@@ -8,8 +8,8 @@
 namespace duckdb {
 
 inline uint64_t ChronoNow() {
-	return std::chrono::duration_cast<std::chrono::milliseconds>(
-	           std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now())
+	return std::chrono::duration_cast<std::chrono::nanoseconds>(
+	           std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now())
 	               .time_since_epoch())
 	    .count();
 }
