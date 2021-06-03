@@ -1,5 +1,6 @@
 // needs to be first because BOOL
 #include "duckdb.hpp"
+#include "duckdb/main/prepared_statement_data.hpp"
 
 #include <sql.h>
 #include <sqltypes.h>
@@ -137,8 +138,38 @@ SQLRETURN SQLSetEnvAttr(SQLHENV EnvironmentHandle, SQLINTEGER Attribute, SQLPOIN
 	return SQL_SUCCESS; // TODO
 }
 
+// https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqlsetconnectattr-function
 SQLRETURN SQLSetConnectAttr(SQLHDBC ConnectionHandle, SQLINTEGER Attribute, SQLPOINTER ValuePtr,
                             SQLINTEGER StringLength) {
+
+	if (!ConnectionHandle) {
+		return SQL_ERROR;
+	}
+	auto *hdl = (OdbcHandleDbc *)ConnectionHandle;
+	if (hdl->type != OdbcHandleType::DBC) {
+		return SQL_ERROR;
+	}
+	if (!hdl->conn) {
+		return SQL_ERROR;
+	}
+	switch (Attribute) {
+	case SQL_ATTR_AUTOCOMMIT:
+		// assert StringLength == SQL_IS_UINTEGER
+		switch ((ptrdiff_t)ValuePtr) {
+		case (ptrdiff_t)SQL_AUTOCOMMIT_ON:
+			hdl->conn->SetAutoCommit(true);
+			break;
+		case (ptrdiff_t)SQL_AUTOCOMMIT_OFF:
+			hdl->conn->SetAutoCommit(false);
+			break;
+		default:
+			return SQL_ERROR;
+		}
+		break;
+	default:
+		return SQL_ERROR;
+	}
+
 	return SQL_SUCCESS; // TODO
 }
 
@@ -462,7 +493,6 @@ SQLRETURN SQLBindCol(SQLHSTMT StatementHandle, SQLUSMALLINT ColumnNumber, SQLSMA
 
 		return SQL_SUCCESS;
 	});
-
 }
 
 SQLRETURN SQLFetch(SQLHSTMT StatementHandle) {
@@ -503,7 +533,6 @@ SQLRETURN SQLFetch(SQLHSTMT StatementHandle) {
 				}
 			}
 		}
-
 
 		assert(stmt->chunk);
 		assert(stmt->chunk_row < stmt->chunk->size());
@@ -684,8 +713,8 @@ SQLRETURN SQLRowCount(SQLHSTMT StatementHandle, SQLLEN *RowCountPtr) {
 		if (!RowCountPtr) {
 			return SQL_ERROR;
 		}
-
-		*RowCountPtr = stmt->res->Fetch()->GetValue(0, 0).GetValue<SQLLEN>();
+		// TODO implement
+		*RowCountPtr = -1;
 		return SQL_SUCCESS;
 	});
 }
@@ -778,5 +807,54 @@ SQLRETURN SQLCancel(SQLHSTMT StatementHandle) {
 	return WithStatement(StatementHandle, [&](OdbcHandleStmt *stmt) { return SQL_SUCCESS; });
 }
 
+// https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqldescribeparam-function
+SQLRETURN SQLDescribeParam(SQLHSTMT StatementHandle, SQLUSMALLINT ParameterNumber, SQLSMALLINT *DataTypePtr,
+                           SQLULEN *ParameterSizePtr, SQLSMALLINT *DecimalDigitsPtr, SQLSMALLINT *NullablePtr) {
+	return WithStatementPrepared(StatementHandle, [&](OdbcHandleStmt *stmt) {
+		if (ParameterNumber < 0 || ParameterNumber > stmt->stmt->n_param) {
+			return SQL_ERROR;
+		}
+		// TODO make global maps with type mappings for duckdb <> odbc
+		auto odbc_type = SQL_UNKNOWN_TYPE;
+		auto odbc_size = 0;
+		auto param_type_id = stmt->stmt->data->GetType(ParameterNumber).id();
+		switch (param_type_id) {
+		case LogicalTypeId::VARCHAR:
+			odbc_type = SQL_VARCHAR;
+			odbc_size = SQL_NO_TOTAL;
+			break;
+		case LogicalTypeId::FLOAT:
+			odbc_type = SQL_FLOAT;
+			odbc_size = sizeof(float);
+			break;
+		case LogicalTypeId::DOUBLE:
+			odbc_type = SQL_DOUBLE;
+			odbc_size = sizeof(double);
+			break;
+		case LogicalTypeId::SMALLINT:
+			odbc_type = SQL_SMALLINT;
+			odbc_size = sizeof(int16_t);
+			break;
+		case LogicalTypeId::INTEGER:
+			odbc_type = SQL_INTEGER;
+			odbc_size = sizeof(int32_t);
+			break;
+		default:
+			// TODO probably more types should be supported here ay
+			return SQL_ERROR;
+		}
+		if (DataTypePtr) {
+			*DataTypePtr = odbc_type;
+		}
+		if (ParameterSizePtr) {
+			*ParameterSizePtr = odbc_size;
+		}
+		// TODO DecimalDigitsPtr
+		if (NullablePtr) {
+			*NullablePtr = SQL_NULLABLE_UNKNOWN;
+		}
+		return SQL_SUCCESS;
+	});
+}
 
 } // extern "C"
