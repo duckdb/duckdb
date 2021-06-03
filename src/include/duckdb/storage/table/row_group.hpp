@@ -110,7 +110,7 @@ public:
 	void RevertAppend(idx_t start);
 
 	//! Delete the given set of rows in the version manager
-	void Delete(Transaction &transaction, DataTable *table, row_t *row_ids, idx_t count);
+	idx_t Delete(Transaction &transaction, DataTable *table, row_t *row_ids, idx_t count);
 
 	RowGroupPointer Checkpoint(TableDataWriter &writer, vector<unique_ptr<BaseStatistics>> &global_stats);
 	static void Serialize(RowGroupPointer &pointer, Serializer &serializer);

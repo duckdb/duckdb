@@ -150,7 +150,7 @@ public:
 	//! Append a DataChunk to the table. Throws an exception if the columns don't match the tables' columns.
 	void Append(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk);
 	//! Delete the entries with the specified row identifier from the table
-	void Delete(TableCatalogEntry &table, ClientContext &context, Vector &row_ids, idx_t count);
+	idx_t Delete(TableCatalogEntry &table, ClientContext &context, Vector &row_ids, idx_t count);
 	//! Update the entries with the specified row identifier from the table
 	void Update(TableCatalogEntry &table, ClientContext &context, Vector &row_ids, const vector<column_t> &column_ids,
 	            DataChunk &data);
