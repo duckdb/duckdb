@@ -710,19 +710,15 @@ public:
 	void Flush();
 };
 
-void RowGroup::Delete(Transaction &transaction, DataTable *table, Vector &row_ids, idx_t count) {
+void RowGroup::Delete(Transaction &transaction, DataTable *table, row_t *ids, idx_t count) {
 	lock_guard<mutex> lock(row_group_lock);
 	VersionDeleteState del_state(*this, transaction, table, this->start);
 
-	VectorData rdata;
-	row_ids.Orrify(count, rdata);
 	// obtain a write lock
-	auto ids = (row_t *)rdata.data;
 	for (idx_t i = 0; i < count; i++) {
-		auto ridx = rdata.sel->get_index(i);
-		D_ASSERT(ids[ridx] >= 0);
-		D_ASSERT(idx_t(ids[ridx]) >= this->start && idx_t(ids[ridx]) < this->start + this->count);
-		del_state.Delete(ids[ridx] - this->start);
+		D_ASSERT(ids[i] >= 0);
+		D_ASSERT(idx_t(ids[i]) >= this->start && idx_t(ids[i]) < this->start + this->count);
+		del_state.Delete(ids[i] - this->start);
 	}
 	del_state.Flush();
 }
