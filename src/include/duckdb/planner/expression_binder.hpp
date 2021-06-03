@@ -51,6 +51,7 @@ public:
 	//! The target type that should result from the binder. If the result is not of this type, a cast to this type will
 	//! be added. Defaults to INVALID.
 	LogicalType target_type;
+
 public:
 	unique_ptr<Expression> Bind(unique_ptr<ParsedExpression> &expr, LogicalType *result_type = nullptr,
 	                            bool root_expression = true);

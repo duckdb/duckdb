@@ -112,12 +112,12 @@ void ExpressionBinder::ExtractCorrelatedExpressions(Binder &binder, Expression &
 }
 
 static bool ContainsNullType(const LogicalType &type) {
-	switch(type.id()) {
+	switch (type.id()) {
 	case LogicalTypeId::STRUCT:
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::LIST: {
 		auto &child_types = type.child_types();
-		for(auto &child_type : child_types) {
+		for (auto &child_type : child_types) {
 			if (ContainsNullType(child_type.second)) {
 				return true;
 			}
@@ -132,13 +132,13 @@ static bool ContainsNullType(const LogicalType &type) {
 }
 
 static void ExchangeNullType(LogicalType &type) {
-	switch(type.id()) {
+	switch (type.id()) {
 	case LogicalTypeId::STRUCT:
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::LIST: {
 		auto &child_types = type.child_types();
-		for(auto &child_type : child_types) {
-			ExchangeNullType((LogicalType &) child_type.second);
+		for (auto &child_type : child_types) {
+			ExchangeNullType((LogicalType &)child_type.second);
 		}
 		break;
 	}

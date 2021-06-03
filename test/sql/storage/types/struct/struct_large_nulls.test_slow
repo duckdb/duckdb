@@ -1,6 +1,6 @@
-# name: test/sql/storage/types/struct/struct_reclaim_space_drop.test_slow
+# name: test/sql/storage/types/struct/struct_large_nulls.test_slow
 # description: Test that we reclaim space when dropping tables with struct columns
-# group: [storage]
+# group: [struct]
 
 load __TEST_DIR__/test_struct_large_nulls.db
 

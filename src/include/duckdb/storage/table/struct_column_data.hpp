@@ -17,7 +17,7 @@ namespace duckdb {
 class StructColumnData : public ColumnData {
 public:
 	StructColumnData(DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type,
-	                   ColumnData *parent = nullptr);
+	                 ColumnData *parent = nullptr);
 
 	//! The sub-columns of the struct
 	vector<unique_ptr<ColumnData>> sub_columns;
@@ -51,7 +51,6 @@ public:
 	void DeserializeColumn(Deserializer &source) override;
 
 	void GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, vector<vector<Value>> &result) override;
-
 };
 
 } // namespace duckdb

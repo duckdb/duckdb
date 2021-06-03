@@ -162,8 +162,9 @@ string StringStatistics::ToString() {
 	idx_t min_len = GetValidMinMaxSubstring(min);
 	idx_t max_len = GetValidMinMaxSubstring(max);
 	return StringUtil::Format("[Min: %s, Max: %s, Has Unicode: %s, Max String Length: %lld]%s",
-	                          string((const char *)min, min_len),
-	                          string((const char *)max, max_len), has_unicode ? "true" : "false", max_string_length, validity_stats ? validity_stats->ToString() : "");
+	                          string((const char *)min, min_len), string((const char *)max, max_len),
+	                          has_unicode ? "true" : "false", max_string_length,
+	                          validity_stats ? validity_stats->ToString() : "");
 }
 
 void StringStatistics::Verify(Vector &vector, idx_t count) {

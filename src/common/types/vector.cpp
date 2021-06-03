@@ -770,7 +770,7 @@ void Vector::Serialize(idx_t count, Serializer &serializer) {
 		case PhysicalType::STRUCT: {
 			Normalify(count);
 			auto &entries = StructVector::GetEntries(*this);
-			for(auto &entry : entries) {
+			for (auto &entry : entries) {
 				entry->Serialize(count, serializer);
 			}
 			break;
@@ -816,7 +816,7 @@ void Vector::Deserialize(idx_t count, Deserializer &source) {
 		}
 		case PhysicalType::STRUCT: {
 			auto &entries = StructVector::GetEntries(*this);
-			for(auto &entry : entries) {
+			for (auto &entry : entries) {
 				entry->Deserialize(count, source);
 			}
 			break;
@@ -831,7 +831,7 @@ void Vector::SetVectorType(VectorType vector_type) {
 	buffer->SetVectorType(vector_type);
 	if (vector_type == VectorType::CONSTANT_VECTOR && GetType().InternalType() == PhysicalType::STRUCT) {
 		auto &entries = StructVector::GetEntries(*this);
-		for(auto &entry : entries) {
+		for (auto &entry : entries) {
 			entry->SetVectorType(vector_type);
 		}
 	}
@@ -1000,7 +1000,7 @@ void ConstantVector::SetNull(Vector &vector, bool is_null) {
 	if (is_null && vector.GetType().InternalType() == PhysicalType::STRUCT) {
 		// set all child entries to null as well
 		auto &entries = StructVector::GetEntries(vector);
-		for(auto &entry : entries) {
+		for (auto &entry : entries) {
 			entry->SetVectorType(VectorType::CONSTANT_VECTOR);
 			ConstantVector::SetNull(*entry, is_null);
 		}

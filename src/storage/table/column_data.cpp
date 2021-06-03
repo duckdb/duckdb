@@ -389,7 +389,8 @@ void ColumnCheckpointState::FlushToDisk() {
 	}
 }
 
-void ColumnData::CheckpointScan(ColumnSegment *segment, ColumnScanState &state, idx_t row_group_start, idx_t base_row_index, idx_t count, Vector &scan_vector) {
+void ColumnData::CheckpointScan(ColumnSegment *segment, ColumnScanState &state, idx_t row_group_start,
+                                idx_t base_row_index, idx_t count, Vector &scan_vector) {
 	segment->Scan(state, base_row_index, count, scan_vector, 0);
 	if (updates) {
 		updates->FetchCommittedRange(segment->start - row_group_start + base_row_index, count, scan_vector);
@@ -624,8 +625,9 @@ struct UniqueConstructor {
 	}
 };
 
-template<class RET, class OP>
-static RET CreateColumnInternal(DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type, ColumnData *parent) {
+template <class RET, class OP>
+static RET CreateColumnInternal(DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type,
+                                ColumnData *parent) {
 	if (type.id() == LogicalTypeId::STRUCT) {
 		return OP::template Create<StructColumnData>(info, column_index, start_row, move(type), parent);
 	} else if (type.id() == LogicalTypeId::VALIDITY) {
@@ -634,12 +636,16 @@ static RET CreateColumnInternal(DataTableInfo &info, idx_t column_index, idx_t s
 	return OP::template Create<StandardColumnData>(info, column_index, start_row, move(type), parent);
 }
 
-shared_ptr<ColumnData> ColumnData::CreateColumn(DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type, ColumnData *parent) {
-	return CreateColumnInternal<shared_ptr<ColumnData>, SharedConstructor>(info, column_index, start_row, move(type), parent);
+shared_ptr<ColumnData> ColumnData::CreateColumn(DataTableInfo &info, idx_t column_index, idx_t start_row,
+                                                LogicalType type, ColumnData *parent) {
+	return CreateColumnInternal<shared_ptr<ColumnData>, SharedConstructor>(info, column_index, start_row, move(type),
+	                                                                       parent);
 }
 
-unique_ptr<ColumnData> ColumnData::CreateColumnUnique(DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type, ColumnData *parent) {
-	return CreateColumnInternal<unique_ptr<ColumnData>, UniqueConstructor>(info, column_index, start_row, move(type), parent);
+unique_ptr<ColumnData> ColumnData::CreateColumnUnique(DataTableInfo &info, idx_t column_index, idx_t start_row,
+                                                      LogicalType type, ColumnData *parent) {
+	return CreateColumnInternal<unique_ptr<ColumnData>, UniqueConstructor>(info, column_index, start_row, move(type),
+	                                                                       parent);
 }
 
 } // namespace duckdb

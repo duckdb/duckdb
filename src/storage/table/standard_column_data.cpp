@@ -155,6 +155,7 @@ struct StandardColumnCheckpointState : public ColumnCheckpointState {
 	}
 
 	unique_ptr<ColumnCheckpointState> validity_state;
+
 public:
 	unique_ptr<BaseStatistics> GetStatistics() override {
 		auto stats = global_stats->Copy();
@@ -181,7 +182,8 @@ unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(RowGroup &row_g
 	return base_state;
 }
 
-void StandardColumnData::CheckpointScan(ColumnSegment *segment, ColumnScanState &state, idx_t row_group_start, idx_t base_row_index, idx_t count, Vector &scan_vector) {
+void StandardColumnData::CheckpointScan(ColumnSegment *segment, ColumnScanState &state, idx_t row_group_start,
+                                        idx_t base_row_index, idx_t count, Vector &scan_vector) {
 	ColumnData::CheckpointScan(segment, state, row_group_start, base_row_index, count, scan_vector);
 
 	idx_t offset_in_row_group = segment->start - row_group_start;
