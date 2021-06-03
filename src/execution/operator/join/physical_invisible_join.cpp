@@ -36,9 +36,26 @@ unique_ptr<GlobalOperatorState> PhysicalInvisibleJoin::GetGlobalState(ClientCont
 	auto state = make_unique<HashJoinGlobalState>();
 	state->hash_table =
 	    make_unique<JoinHashTable>(BufferManager::GetBufferManager(context), conditions, build_types, join_type);
+	// first set the build size
+	const auto build_size = (pjoin_state.is_build_min_small) ? pjoin_state.estimated_cardinality + MIN_THRESHOLD
+	                                                         : pjoin_state.estimated_cardinality;
+	// init bool vector
+	state->build_tuples = unique_ptr<bool[]>(new bool[build_size]);
+	memset(state->build_tuples.get(), false, sizeof(bool) * build_size);
 	return move(state);
 }
 
+void PhysicalInvisibleJoin::AppendToBuild(DataChunk &join_keys, DataChunk &build,
+                                          std::vector<Vector> &build_columns) const {
+
+	// for each column fill with build data
+	for (idx_t i = 0; i != build_columns.size(); ++i) {
+		// for each tuple
+		for (idx_t i = 0; i != build.size(); ++i) {
+			std::cout << "copy here" << std::endl;
+		}
+	}
+}
 unique_ptr<LocalSinkState> PhysicalInvisibleJoin::GetLocalSinkState(ExecutionContext &context) {
 	auto state = make_unique<HashJoinLocalState>();
 	if (!right_projection_map.empty()) {
@@ -53,7 +70,7 @@ unique_ptr<LocalSinkState> PhysicalInvisibleJoin::GetLocalSinkState(ExecutionCon
 
 void PhysicalInvisibleJoin::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_p,
                                  DataChunk &input) const {
-	auto &sink = (HashJoinGlobalState &)state;
+	auto &global_state = (HashJoinGlobalState &)state;
 	auto &lstate = (HashJoinLocalState &)lstate_p;
 	// resolve the join keys for the right chunk
 	lstate.build_executor.Execute(input, lstate.join_keys);
@@ -66,13 +83,13 @@ void PhysicalInvisibleJoin::Sink(ExecutionContext &context, GlobalOperatorState 
 		for (idx_t i = 0; i < right_projection_map.size(); i++) {
 			lstate.build_chunk.data[i].Reference(input.data[right_projection_map[i]]);
 		}
-		sink.hash_table->Build(lstate.join_keys, lstate.build_chunk);
+		global_state.hash_table->Build(lstate.join_keys, lstate.build_chunk);
 	} else {
 		// there is not a projected map: place the entire right chunk in the HT
-		sink.hash_table->Build(lstate.join_keys, input);
+		global_state.hash_table->Build(lstate.join_keys, input);
 	}
+	AppendToBuild(lstate.join_keys, input, global_state.build_columns);
 }
-
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//

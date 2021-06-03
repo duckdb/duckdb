@@ -52,6 +52,7 @@ bool CheckForInvisibleJoin(LogicalComparisonJoin &op, PerfectHashJoinState &join
 		join_state.probe_max = stats_probe->max;
 		join_state.build_min = stats_build->min;
 		join_state.build_max = stats_build->max;
+		join_state.estimated_cardinality = op.estimated_cardinality;
 		// check whether the probe min-max is in the build min-max
 		if (stats_build->min <= stats_probe->min && stats_probe->max <= stats_build->max) {
 			join_state.is_probe_in_range = true;

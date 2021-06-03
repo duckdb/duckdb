@@ -57,6 +57,7 @@ public:
 	template <typename T>
 	void TemplatedFillSelectionVector(Vector &source, SelectionVector &sel_vec, idx_t count);
 	bool HasDuplicates(JoinHashTable *ht_ptr);
+	void AppendToBuild(DataChunk &join_keys, DataChunk &build, std::vector<Vector> &build_columns) const;
 };
 
 } // namespace duckdb

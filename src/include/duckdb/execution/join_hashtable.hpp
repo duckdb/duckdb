@@ -195,7 +195,6 @@ public:
 	//! The amount of entries stored per block
 	idx_t block_capacity;
 	std::vector<Vector> columns;
-	bool has_duplicates {false};
 
 	struct {
 		mutex mj_lock;

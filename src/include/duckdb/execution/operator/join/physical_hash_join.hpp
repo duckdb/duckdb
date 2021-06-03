@@ -28,7 +28,8 @@ struct PerfectHashJoinState {
 	bool is_probe_in_range {false};
 	bool is_build_min_small {false};
 	bool is_build_dense {false};
-	uint32_t range;
+	idx_t range {0};
+	idx_t estimated_cardinality {0};
 };
 
 class PhysicalHashJoinState : public PhysicalOperatorState {
@@ -54,6 +55,8 @@ public:
 	unique_ptr<JoinHashTable> hash_table;
 	//! Only used for FULL OUTER JOIN: scan state of the final scan to find unmatched tuples in the build-side
 	JoinHTScanState ht_scan_state;
+	vector<Vector> build_columns;              // for build_data storage
+	unique_ptr<bool[]> build_tuples {nullptr}; // For duplicate checking
 };
 
 class HashJoinLocalState : public LocalSinkState {
