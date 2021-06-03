@@ -174,10 +174,21 @@ unique_ptr<ColumnCheckpointState> StandardColumnData::CreateCheckpointState(RowG
 }
 
 unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(RowGroup &row_group, TableDataWriter &writer) {
+	auto validity_state = validity.Checkpoint(row_group, writer);
 	auto base_state = ColumnData::Checkpoint(row_group, writer);
 	auto &checkpoint_state = (StandardColumnCheckpointState &)*base_state;
-	checkpoint_state.validity_state = validity.Checkpoint(row_group, writer);
+	checkpoint_state.validity_state = move(validity_state);
 	return base_state;
+}
+
+void StandardColumnData::CheckpointScan(ColumnSegment *segment, ColumnScanState &state, idx_t row_group_start, idx_t base_row_index, idx_t count, Vector &scan_vector) {
+	ColumnData::CheckpointScan(segment, state, row_group_start, base_row_index, count, scan_vector);
+
+	idx_t offset_in_row_group = segment->start - row_group_start;
+
+	ColumnScanState child_state;
+	validity.InitializeScanWithOffset(child_state, row_group_start + offset_in_row_group);
+	validity.ScanCommitted(offset_in_row_group / STANDARD_VECTOR_SIZE, child_state, scan_vector, false);
 }
 
 void StandardColumnData::Initialize(PersistentColumnData &column_data) {

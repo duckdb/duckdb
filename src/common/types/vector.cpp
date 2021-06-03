@@ -763,6 +763,7 @@ void Vector::Serialize(idx_t count, Serializer &serializer) {
 			break;
 		}
 		case PhysicalType::STRUCT: {
+			Normalify(count);
 			auto &entries = StructVector::GetEntries(*this);
 			for(auto &entry : entries) {
 				entry->Serialize(count, serializer);
@@ -926,12 +927,23 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 	if (GetType().InternalType() == PhysicalType::STRUCT || GetType().InternalType() == PhysicalType::MAP) {
 		auto &child_types = GetType().child_types();
 		D_ASSERT(child_types.size() > 0);
-		if (GetVectorType() == VectorType::FLAT_VECTOR || GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		if (GetVectorType() == VectorType::FLAT_VECTOR) {
+			// create a selection vector of the non-null entries of the struct vector
+			auto &nulls = FlatVector::Validity(*this);
+			SelectionVector new_sel(STANDARD_VECTOR_SIZE);
+			idx_t new_count = 0;
+			for(idx_t i = 0; i < count; i++) {
+				auto idx = sel.get_index(i);
+				if (nulls.RowIsValid(idx)) {
+					new_sel.set_index(new_count++, idx);
+				}
+			}
+
 			auto &children = StructVector::GetEntries(*this);
 			D_ASSERT(child_types.size() == children.size());
 			for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
 				D_ASSERT(children[child_idx]->GetType() == child_types[child_idx].second);
-				children[child_idx]->Verify(sel, count);
+				children[child_idx]->Verify(new_sel, new_count);
 			}
 		}
 	}

@@ -175,8 +175,8 @@ unique_ptr<BaseStatistics> NumericStatistics::Deserialize(Deserializer &source, 
 }
 
 string NumericStatistics::ToString() {
-	return StringUtil::Format("Numeric Statistics<%s> %s[Min: %s, Max: %s]", type.ToString(),
-	                          validity_stats ? validity_stats->ToString() : "", min.ToString(), max.ToString());
+	return StringUtil::Format("[Min: %s, Max: %s]%s",
+	                          min.ToString(), max.ToString(), validity_stats ? validity_stats->ToString() : "");
 }
 
 template <class T>

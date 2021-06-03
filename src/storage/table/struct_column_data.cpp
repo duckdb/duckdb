@@ -81,11 +81,24 @@ void StructColumnData::InitializeAppend(ColumnAppendState &state) {
 }
 
 void StructColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count) {
+	vector.Normalify(count);
+
+	// append the null values
 	validity.Append(*stats.validity_stats, state.child_appends[0], vector, count);
+
+	auto &struct_validity = FlatVector::Validity(vector);
 
 	auto &struct_stats = (StructStatistics &) stats;
 	auto &child_entries = StructVector::GetEntries(vector);
 	for(idx_t i = 0; i < child_entries.size(); i++) {
+		if (!struct_validity.AllValid()) {
+			// we set the child entries of the struct to NULL
+			// for any values in which the struct itself is NULL
+			child_entries[i]->Normalify(count);
+
+			auto &child_validity = FlatVector::Validity(*child_entries[i]);
+			child_validity.Combine(struct_validity, count);
+		}
 		sub_columns[i]->Append(*struct_stats.child_stats[i], state.child_appends[i + 1], *child_entries[i], count);
 	}
 }
@@ -237,10 +250,12 @@ void StructColumnData::DeserializeColumn(Deserializer &source) {
 }
 
 void StructColumnData::GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, vector<vector<Value>> &result) {
-	throw NotImplementedException("FIXME: struct");
-	// ColumnData::GetStorageInfo(row_group_index, col_path, result);
-	// col_path.push_back(0);
-	// validity.GetStorageInfo(row_group_index, move(col_path), result);
+	col_path.push_back(0);
+	validity.GetStorageInfo(row_group_index, col_path, result);
+	for(idx_t i = 0; i < sub_columns.size(); i++) {
+		col_path.back() = i + 1;
+		sub_columns[i]->GetStorageInfo(row_group_index, col_path, result);
+	}
 }
 
 }

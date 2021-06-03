@@ -111,6 +111,45 @@ void ExpressionBinder::ExtractCorrelatedExpressions(Binder &binder, Expression &
 	                                      [&](Expression &child) { ExtractCorrelatedExpressions(binder, child); });
 }
 
+static bool ContainsNullType(const LogicalType &type) {
+	switch(type.id()) {
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::MAP:
+	case LogicalTypeId::LIST: {
+		auto &child_types = type.child_types();
+		for(auto &child_type : child_types) {
+			if (ContainsNullType(child_type.second)) {
+				return true;
+			}
+		}
+		return false;
+	}
+	case LogicalTypeId::SQLNULL:
+		return true;
+	default:
+		return false;
+	}
+}
+
+static void ExchangeNullType(LogicalType &type) {
+	switch(type.id()) {
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::MAP:
+	case LogicalTypeId::LIST: {
+		auto &child_types = type.child_types();
+		for(auto &child_type : child_types) {
+			ExchangeNullType((LogicalType &) child_type.second);
+		}
+		break;
+	}
+	case LogicalTypeId::SQLNULL:
+		type = LogicalType::INTEGER;
+		break;
+	default:
+		break;
+	}
+}
+
 unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr, LogicalType *result_type,
                                               bool root_expression) {
 	// bind the main expression
@@ -131,10 +170,12 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 		// the binder has a specific target type: add a cast to that type
 		result = BoundCastExpression::AddCastToType(move(result), target_type);
 	} else {
-		if (result->return_type.id() == LogicalTypeId::SQLNULL) {
-			// SQL NULL type is only used internally in the binder
-			// cast to INTEGER if we encounter it outside of the binder
-			result = BoundCastExpression::AddCastToType(move(result), LogicalType::INTEGER);
+		// SQL NULL type is only used internally in the binder
+		// cast to INTEGER if we encounter it outside of the binder
+		if (ContainsNullType(result->return_type)) {
+			auto result_type = result->return_type;
+			ExchangeNullType(result_type);
+			result = BoundCastExpression::AddCastToType(move(result), move(result_type));
 		}
 	}
 	if (result_type) {

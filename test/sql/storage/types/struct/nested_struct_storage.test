@@ -1,0 +1,157 @@
+# name: test/sql/storage/types/struct/nested_struct_storage.test
+# description: Test structs with persistent storage
+# group: [types]
+
+# load the DB from disk
+load __TEST_DIR__/struct_storage_test.db
+
+statement ok
+CREATE TABLE a AS SELECT {
+	'r1': {
+		'a': 'hello',
+		'b': 3
+	},
+	'r2': {
+		'a': 'world',
+		'b': 17,
+		'c': NULL
+	}
+} c
+
+query I
+SELECT * FROM a
+----
+{'r1': {'a': hello, 'b': 3}, 'r2': {'a': world, 'b': 17, 'c': NULL}}
+
+query I
+SELECT c['r1']['a'] from a
+----
+hello
+
+restart
+
+query I
+SELECT * FROM a
+----
+{'r1': {'a': hello, 'b': 3}, 'r2': {'a': world, 'b': 17, 'c': NULL}}
+
+query I
+SELECT c['r1']['a'] from a
+----
+hello
+
+# update
+statement ok
+UPDATE a SET c={
+	'r1': {
+		'a': 'blabla',
+		'b': 3
+	},
+	'r2': {
+		'a': 'world',
+		'b': 18,
+		'c': NULL
+	}
+}
+
+query I
+SELECT * FROM a
+----
+{'r1': {'a': blabla, 'b': 3}, 'r2': {'a': world, 'b': 18, 'c': NULL}}
+
+query I
+SELECT c['r1']['a'] from a
+----
+blabla
+
+restart
+
+query I
+SELECT * FROM a
+----
+{'r1': {'a': blabla, 'b': 3}, 'r2': {'a': world, 'b': 18, 'c': NULL}}
+
+query I
+SELECT c['r1']['a'] from a
+----
+blabla
+
+# nulls at different levels
+statement ok
+INSERT INTO a VALUES (
+{
+	'r1': {
+		'a': NULL,
+		'b': 3
+	},
+	'r2': {
+		'a': NULL,
+		'b': 17,
+		'c': NULL
+	}
+})
+
+query I
+SELECT * FROM a
+----
+{'r1': {'a': blabla, 'b': 3}, 'r2': {'a': world, 'b': 18, 'c': NULL}}
+{'r1': {'a': NULL, 'b': 3}, 'r2': {'a': NULL, 'b': 17, 'c': NULL}}
+
+statement ok
+INSERT INTO a VALUES ({
+	'r1': NULL,
+	'r2': {
+		'a': NULL,
+		'b': 17,
+		'c': NULL
+	}
+})
+
+query I
+SELECT * FROM a
+----
+{'r1': {'a': blabla, 'b': 3}, 'r2': {'a': world, 'b': 18, 'c': NULL}}
+{'r1': {'a': NULL, 'b': 3}, 'r2': {'a': NULL, 'b': 17, 'c': NULL}}
+{'r1': NULL, 'r2': {'a': NULL, 'b': 17, 'c': NULL}}
+
+statement ok
+INSERT INTO a VALUES ({
+	'r1': NULL,
+	'r2': NULL
+})
+
+query I
+SELECT * FROM a
+----
+{'r1': {'a': blabla, 'b': 3}, 'r2': {'a': world, 'b': 18, 'c': NULL}}
+{'r1': {'a': NULL, 'b': 3}, 'r2': {'a': NULL, 'b': 17, 'c': NULL}}
+{'r1': NULL, 'r2': {'a': NULL, 'b': 17, 'c': NULL}}
+{'r1': NULL, 'r2': NULL}
+
+statement ok
+INSERT INTO a VALUES(NULL)
+
+query I
+SELECT * FROM a
+----
+{'r1': {'a': blabla, 'b': 3}, 'r2': {'a': world, 'b': 18, 'c': NULL}}
+{'r1': {'a': NULL, 'b': 3}, 'r2': {'a': NULL, 'b': 17, 'c': NULL}}
+{'r1': NULL, 'r2': {'a': NULL, 'b': 17, 'c': NULL}}
+{'r1': NULL, 'r2': NULL}
+NULL
+
+restart
+
+query I
+SELECT * FROM a
+----
+{'r1': {'a': blabla, 'b': 3}, 'r2': {'a': world, 'b': 18, 'c': NULL}}
+{'r1': {'a': NULL, 'b': 3}, 'r2': {'a': NULL, 'b': 17, 'c': NULL}}
+{'r1': NULL, 'r2': {'a': NULL, 'b': 17, 'c': NULL}}
+{'r1': NULL, 'r2': NULL}
+NULL
+
+# verify that no null values have crept their way into the stats
+query II
+select column_path, stats from pragma_storage_info('a') where  stats LIKE '%[Min: -2147483648, Max: -2147483648]%'
+----

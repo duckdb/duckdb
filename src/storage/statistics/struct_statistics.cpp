@@ -64,7 +64,18 @@ unique_ptr<BaseStatistics> StructStatistics::Deserialize(Deserializer &source, L
 }
 
 string StructStatistics::ToString() {
-	return "Struct Statistics";
+	string result;
+	result += " {";
+	auto &child_types = type.child_types();
+	for(idx_t i = 0; i < child_types.size(); i++) {
+		if (i > 0) {
+			result += ", ";
+		}
+		result += child_types[i].first + ": " + (child_stats[i] ? child_stats[i]->ToString() : "No Stats");
+	}
+	result += "}";
+	result += validity_stats ? validity_stats->ToString() : "";
+	return result;
 }
 
 void StructStatistics::Verify(Vector &vector, idx_t count) {

@@ -108,9 +108,7 @@ unique_ptr<BaseStatistics> BaseStatistics::Deserialize(Deserializer &source, Log
 	default:
 		throw InternalException("Unimplemented type for statistics deserialization");
 	}
-	if (!can_have_null) {
-		result->validity_stats = make_unique<ValidityStatistics>(can_have_null);
-	}
+	result->validity_stats = make_unique<ValidityStatistics>(can_have_null);
 	return result;
 }
 

@@ -380,6 +380,13 @@ void ColumnCheckpointState::FlushToDisk() {
 	}
 }
 
+void ColumnData::CheckpointScan(ColumnSegment *segment, ColumnScanState &state, idx_t row_group_start, idx_t base_row_index, idx_t count, Vector &scan_vector) {
+	segment->Scan(state, base_row_index, count, scan_vector, 0);
+	if (updates) {
+		updates->FetchCommittedRange(segment->start - row_group_start + base_row_index, count, scan_vector);
+	}
+}
+
 unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, TableDataWriter &writer) {
 	// scan the segments of the column data
 	// set up the checkpoint state
@@ -456,10 +463,8 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, Ta
 
 			idx_t count = MinValue<idx_t>(segment->count - base_row_index, STANDARD_VECTOR_SIZE);
 			state.row_index = segment->start + base_row_index;
-			segment->Scan(state, base_row_index, count, scan_vector, 0);
-			if (updates) {
-				updates->FetchCommittedRange(segment->start - row_group.start + base_row_index, count, scan_vector);
-			}
+
+			CheckpointScan(segment, state, row_group.start, base_row_index, count, scan_vector);
 
 			checkpoint_state->AppendData(scan_vector, count);
 		}

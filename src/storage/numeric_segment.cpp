@@ -9,6 +9,7 @@
 #include "duckdb/common/vector_size.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/planner/table_filter.hpp"
+#include "duckdb/common/types/null_value.hpp"
 
 namespace duckdb {
 
@@ -100,6 +101,8 @@ static void AppendLoop(SegmentStatistics &stats, data_ptr_t target, idx_t target
 			if (!is_null) {
 				NumericStatistics::Update<T>(stats, sdata[source_idx]);
 				tdata[target_idx] = sdata[source_idx];
+			} else {
+				tdata[target_idx] = NullValue<T>();
 			}
 		}
 	} else {
