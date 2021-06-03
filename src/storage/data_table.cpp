@@ -766,7 +766,7 @@ void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector 
 		do {
 			idx_t start = pos;
 			auto row_group = (RowGroup *)row_groups->GetSegment(ids[pos]);
-			for(pos++; pos < count; pos++) {
+			for (pos++; pos < count; pos++) {
 				D_ASSERT(ids[pos] >= 0);
 				// check if this id still belongs to this row group
 				if (idx_t(ids[pos]) < row_group->start) {
@@ -779,7 +779,7 @@ void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector 
 				}
 			}
 			row_group->Delete(transaction, this, ids + start, pos - start);
-		} while(pos < count);
+		} while (pos < count);
 	}
 }
 
