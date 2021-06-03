@@ -24,23 +24,34 @@ static string ToHTML(ClientContext &context, const string &first_json_path, cons
 	ss << d3;
 	ss << "</script>\n";
 	ss << "<script> var data = ";
-	// If no json_file is given, read from query profiler
+	// If no json_file is given and profiler history is not empty, read from query profiler
 	auto &prevProfilers = context.query_profiler_history->GetPrevProfilers();
 	if (first_json_path.empty() && !prevProfilers.empty()) {
 		ss << prevProfilers.back().second->ToJSON();
 	}
+	// if first json_file is given, read from file.
 	if (!first_json_path.empty()) {
 		ifstream data_json(first_json_path);
 		ss << data_json.rdbuf();
+		// throw an IO exception if it fails to read the json_file
+		if (data_json.fail()) {
+			throw IOException(strerror(errno));
+		}
 	}
 	ss << "</script>\n";
 	ss << "<script> var secondData = ";
-	// If no json_file is given, make second json_data null
+	// If no second json_file is given, make second json_data null
 	if (second_json_path.empty()) {
 		ss << "null;";
-	} else {
+	}
+    // if second json_file is given, read from file.
+    if (!second_json_path.empty()) {
 		ifstream data_json(second_json_path);
 		ss << data_json.rdbuf();
+		// throw an IO exception if it fails to read the json_file
+		if (data_json.fail()) {
+			throw IOException(strerror(errno));
+		}
 	}
 	ss << "</script>\n";
 	ss << "\n";
@@ -56,6 +67,10 @@ static void WriteToFile(string &path, string info) {
 	ofstream out(path);
 	out << info;
 	out.close();
+	// throw an IO exception if it fails to write to the file
+	if (out.fail()) {
+		throw IOException(strerror(errno));
+	}
 }
 
 static void PragmaVisualizeLastProfilingOutput(ClientContext &context, const FunctionParameters &parameters) {

@@ -474,6 +474,10 @@ void QueryProfiler::WriteToFile(const char *path, string &info) const {
 	ofstream out(path);
 	out << info;
 	out.close();
+	// throw an IO exception if it fails to write the file
+	if (out.fail()) {
+		throw IOException(strerror(errno));
+	}
 }
 
 unique_ptr<QueryProfiler::TreeNode> QueryProfiler::CreateTree(PhysicalOperator *root, idx_t depth) {
