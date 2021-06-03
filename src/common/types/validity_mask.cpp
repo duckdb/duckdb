@@ -46,6 +46,15 @@ string ValidityMask::ToString(idx_t count) const {
 	return result;
 }
 
+bool ValidityMask::Equal(ValidityMask &mask, idx_t count) const {
+	for (idx_t i = 0; i < count; i++) {
+		if (RowIsValid(i) != mask.RowIsValid(i)) {
+			return false;
+		}
+	}
+	return true;
+}
+
 void ValidityMask::Resize(idx_t old_size, idx_t new_size) {
 	if (validity_mask) {
 		auto new_size_count = EntryCount(new_size);

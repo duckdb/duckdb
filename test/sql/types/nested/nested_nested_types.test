@@ -3,10 +3,34 @@
 # group: [nested]
 
 
-statement ok
-PRAGMA enable_verification
-
 query T
 SELECT [{'i':1,'j':[2,3]},NULL]
 ----
-{'a': 42, 'b': 43}
+[{'i': 1, 'j': [2, 3]}, NULL]
+
+#query T
+#SELECT [{'i':1,'j':[2,3]},NULL, {'i':1,'j':[2,3]}]
+#----
+#[{'i': 1, 'j': [2, 3]}, NULL,{'i': 1, 'j': [2, 3]}]
+
+query T
+SELECT * FROM (VALUES (MAP(LIST_VALUE(1,2),LIST_VALUE(3,4))), (NULL), (MAP(LIST_VALUE(1,2),LIST_VALUE(3,4))), (NULL)) as a
+----
+{1=3, 2=4}
+NULL
+{1=3, 2=4}
+NULL
+
+query T
+SELECT MAP(LIST_VALUE({'i':1,'j':2},NULL),LIST_VALUE({'i':1,'j':2},{'i':3,'j':4}))
+----
+{{'i': 1, 'j': 2}={'i': 1, 'j': 2}, NULL={'i': 3, 'j': 4}}
+
+
+query T
+SELECT * FROM (VALUES (MAP(LIST_VALUE(1,2),LIST_VALUE(3,4))), (NULL), (MAP(LIST_VALUE(1,2),LIST_VALUE(3,4))), (NULL)) as a
+----
+{1=3, 2=4}
+NULL
+{1=3, 2=4}
+NULL

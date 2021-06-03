@@ -100,8 +100,8 @@ public:
 
 	//! Verify that the Vector is in a consistent, not corrupt state. DEBUG
 	//! FUNCTION ONLY!
-	void Verify(idx_t count);
-	void Verify(const SelectionVector &sel, idx_t count);
+	void Verify(idx_t count, ValidityMask *validity_parent = nullptr);
+	void Verify(const SelectionVector &sel, idx_t count, ValidityMask *validity_parent = nullptr);
 	void UTFVerify(idx_t count);
 	void UTFVerify(const SelectionVector &sel, idx_t count);
 

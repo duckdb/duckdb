@@ -177,7 +177,7 @@ void SetValidityMask(Vector &vector, ArrowArray &array, ArrowScanState &scan_sta
 
 void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan_state, idx_t size,
                          std::unordered_map<idx_t, std::vector<std::pair<ArrowListType, idx_t>>> &arrow_lists,
-                         idx_t col_idx, idx_t list_col_idx = 0) {
+                         idx_t col_idx, idx_t &list_col_idx) {
 	switch (vector.GetType().id()) {
 	case LogicalTypeId::SQLNULL:
 		vector.Reference(Value());
@@ -274,7 +274,7 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 		break;
 	}
 	case LogicalTypeId::LIST: {
-		auto original_type = arrow_lists[col_idx][list_col_idx];
+		auto original_type = arrow_lists[col_idx][list_col_idx++];
 		idx_t list_size = 0;
 		ListVector::Initialize(vector);
 		auto &child_vector = ListVector::GetEntry(vector);
@@ -313,7 +313,7 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 		ListVector::SetListSize(vector, list_size);
 		SetValidityMask(child_vector, *array.children[0], scan_state, list_size);
 		ColumnArrowToDuckDB(child_vector, *array.children[0], scan_state, list_size, arrow_lists, col_idx,
-		                    list_col_idx + 1);
+		                    list_col_idx);
 		break;
 	}
 	case LogicalTypeId::MAP: {
@@ -348,6 +348,7 @@ void ArrowTableFunction::ArrowToDuckDB(ArrowScanState &scan_state,
                                        std::unordered_map<idx_t, vector<std::pair<ArrowListType, idx_t>>> &arrow_lists,
                                        DataChunk &output) {
 	for (idx_t col_idx = 0; col_idx < output.ColumnCount(); col_idx++) {
+		idx_t list_col_idx = 0;
 		auto &array = *scan_state.chunk->arrow_array.children[col_idx];
 		if (!array.release) {
 			throw InvalidInputException("arrow_scan: released array passed");
@@ -359,7 +360,7 @@ void ArrowTableFunction::ArrowToDuckDB(ArrowScanState &scan_state,
 			throw NotImplementedException("arrow_scan: dictionary vectors not supported yet");
 		}
 		SetValidityMask(output.data[col_idx], array, scan_state, output.size());
-		ColumnArrowToDuckDB(output.data[col_idx], array, scan_state, output.size(), arrow_lists, col_idx);
+		ColumnArrowToDuckDB(output.data[col_idx], array, scan_state, output.size(), arrow_lists, col_idx, list_col_idx);
 	}
 }
 

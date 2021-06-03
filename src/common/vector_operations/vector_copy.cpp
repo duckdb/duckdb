@@ -24,7 +24,7 @@ static void TemplatedCopy(const Vector &source, const SelectionVector &sel, Vect
 }
 
 void VectorOperations::Copy(const Vector &source, Vector &target, const SelectionVector &sel_p, idx_t source_count,
-                            idx_t source_offset, idx_t target_offset) {
+                            idx_t source_offset, idx_t target_offset, ValidityMask *parent_validity) {
 	D_ASSERT(source_offset <= source_count);
 	D_ASSERT(target.GetVectorType() == VectorType::FLAT_VECTOR);
 	D_ASSERT(source.GetType() == target.GetType());
@@ -144,7 +144,7 @@ void VectorOperations::Copy(const Vector &source, Vector &target, const Selectio
 		D_ASSERT(source_children.size() == target_children.size());
 		for (idx_t i = 0; i < source_children.size(); i++) {
 			VectorOperations::Copy(*source_children[i], *target_children[i], *sel, source_count, source_offset,
-			                       target_offset);
+			                       target_offset, &tmask);
 		}
 		break;
 	}
@@ -161,6 +161,11 @@ void VectorOperations::Copy(const Vector &source, Vector &target, const Selectio
 			auto sdata = FlatVector::GetData<list_entry_t>(source);
 			vector<sel_t> child_rows;
 			for (idx_t i = 0; i < copy_count; ++i) {
+				if (parent_validity) {
+					if (!parent_validity->RowIsValid(target_offset + i)) {
+						continue;
+					}
+				}
 				if (tmask.RowIsValid(target_offset + i)) {
 					auto source_idx = sel->get_index(source_offset + i);
 					auto &source_entry = sdata[source_idx];

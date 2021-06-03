@@ -838,7 +838,7 @@ void Vector::UTFVerify(idx_t count) {
 	UTFVerify(FlatVector::INCREMENTAL_SELECTION_VECTOR, count);
 }
 
-void Vector::Verify(const SelectionVector &sel, idx_t count) {
+void Vector::Verify(const SelectionVector &sel, idx_t count, ValidityMask *validity_parent) {
 #ifdef DEBUG
 	if (count == 0) {
 		return;
@@ -906,13 +906,14 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 
 	if (GetType().InternalType() == PhysicalType::STRUCT || GetType().InternalType() == PhysicalType::MAP) {
 		auto &child_types = GetType().child_types();
-		D_ASSERT(child_types.size() > 0);
+		D_ASSERT(!child_types.empty());
 		if (GetVectorType() == VectorType::FLAT_VECTOR || GetVectorType() == VectorType::CONSTANT_VECTOR) {
+
 			auto &children = StructVector::GetEntries(*this);
 			D_ASSERT(child_types.size() == children.size());
 			for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
 				D_ASSERT(children[child_idx]->GetType() == child_types[child_idx].second);
-				children[child_idx]->Verify(sel, count);
+				children[child_idx]->Verify(sel, count, validity_parent);
 			}
 		}
 	}
@@ -933,6 +934,11 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 			for (idx_t i = 0; i < count; i++) {
 				auto idx = sel.get_index(i);
 				auto &le = list_data[idx];
+				if (validity_parent) {
+					if (!validity_parent->RowIsValid(idx)) {
+						continue;
+					}
+				}
 				if (validity.RowIsValid(idx) && ListVector::HasEntry(*this)) {
 					D_ASSERT(le.offset + le.length <= ListVector::GetListSize(*this));
 				}
@@ -942,15 +948,15 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 #endif
 }
 
-void Vector::Verify(idx_t count) {
+void Vector::Verify(idx_t count, ValidityMask *validity_parent) {
 	if (count > STANDARD_VECTOR_SIZE) {
 		SelectionVector selection_vector(count);
 		for (size_t i = 0; i < count; i++) {
 			selection_vector.set_index(i, i);
 		}
-		Verify(selection_vector, count);
+		Verify(selection_vector, count, &validity);
 	} else {
-		Verify(FlatVector::INCREMENTAL_SELECTION_VECTOR, count);
+		Verify(FlatVector::INCREMENTAL_SELECTION_VECTOR, count, &validity);
 	}
 }
 
