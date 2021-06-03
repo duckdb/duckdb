@@ -21,141 +21,144 @@ namespace duckdb {
 using ValidityBytes = RowLayout::ValidityBytes;
 
 template <class T>
-static void TemplatedScatter(VectorData &gdata, Vector &addresses, const SelectionVector &sel, idx_t count,
-                             idx_t col_offset, idx_t col_idx) {
-	auto data = (T *)gdata.data;
-	auto pointers = FlatVector::GetData<data_ptr_t>(addresses);
+static void TemplatedScatter(VectorData &col, Vector &rows, const SelectionVector &sel, const idx_t count,
+                             const idx_t col_offset, const idx_t col_no) {
+	auto data = (T *)col.data;
+	auto ptrs = FlatVector::GetData<data_ptr_t>(rows);
 
-	if (!gdata.validity.AllValid()) {
+	if (!col.validity.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
-			auto pointer_idx = sel.get_index(i);
-			auto group_idx = gdata.sel->get_index(pointer_idx);
-			auto ptr = pointers[pointer_idx] + col_offset;
+			auto idx = sel.get_index(i);
+			auto col_idx = col.sel->get_index(idx);
+			auto row = ptrs[idx];
 
-			auto isnull = !gdata.validity.RowIsValid(group_idx);
-			T store_value = isnull ? NullValue<T>() : data[group_idx];
-			Store<T>(store_value, ptr);
+			auto isnull = !col.validity.RowIsValid(col_idx);
+			T store_value = isnull ? NullValue<T>() : data[col_idx];
+			Store<T>(store_value, row + col_offset);
 			if (isnull) {
-				ValidityBytes col_mask(pointers[pointer_idx]);
-				col_mask.SetInvalidUnsafe(col_idx);
+				ValidityBytes col_mask(ptrs[idx]);
+				col_mask.SetInvalidUnsafe(col_no);
 			}
 		}
 	} else {
 		for (idx_t i = 0; i < count; i++) {
-			auto pointer_idx = sel.get_index(i);
-			auto group_idx = gdata.sel->get_index(pointer_idx);
-			auto ptr = pointers[pointer_idx] + col_offset;
+			auto idx = sel.get_index(i);
+			auto col_idx = col.sel->get_index(idx);
+			auto row = ptrs[idx];
 
-			Store<T>(data[group_idx], ptr);
+			Store<T>(data[col_idx], row + col_offset);
 		}
 	}
 }
 
-static void ComputeStringEntrySizes(const VectorData &vdata, idx_t entry_sizes[], const SelectionVector &sel,
-                                    idx_t vcount, idx_t offset = 0) {
-	auto strings = (const string_t *)vdata.data;
-	for (idx_t i = 0; i < vcount; i++) {
-		auto pointer_idx = sel.get_index(i);
-		idx_t str_idx = vdata.sel->get_index(pointer_idx) + offset;
-		const auto &str = strings[str_idx];
-		if (vdata.validity.RowIsValid(str_idx) && !str.IsInlined()) {
+static void ComputeStringEntrySizes(const VectorData &col, idx_t entry_sizes[], const SelectionVector &sel,
+                                    const idx_t count, const idx_t offset = 0) {
+	auto data = (const string_t *)col.data;
+	for (idx_t i = 0; i < count; i++) {
+		auto idx = sel.get_index(i);
+		auto col_idx = col.sel->get_index(idx) + offset;
+		const auto &str = data[col_idx];
+		if (col.validity.RowIsValid(col_idx) && !str.IsInlined()) {
 			entry_sizes[i] += str.GetSize();
 		}
 	}
 }
+static void ScatterStrings(VectorData &col, Vector &rows, RowDataCollection &string_heap, const SelectionVector &sel,
+                           const idx_t count, const idx_t col_offset, const idx_t col_no) {
 
-void RowOperations::Scatter(VectorData group_data[], const RowLayout &layout, Vector &addresses,
+	idx_t entry_sizes[STANDARD_VECTOR_SIZE];
+	std::fill_n(entry_sizes, count, 0);
+	ComputeStringEntrySizes(col, entry_sizes, sel, count);
+
+	data_ptr_t str_locations[STANDARD_VECTOR_SIZE];
+	string_heap.Build(count, str_locations, entry_sizes);
+
+	auto string_data = (string_t *)col.data;
+	auto ptrs = FlatVector::GetData<data_ptr_t>(rows);
+
+	for (idx_t i = 0; i < count; i++) {
+		auto idx = sel.get_index(i);
+		auto col_idx = col.sel->get_index(idx);
+		auto row = ptrs[idx];
+		if (!col.validity.RowIsValid(col_idx)) {
+			ValidityBytes col_mask(row);
+			col_mask.SetInvalidUnsafe(col_no);
+			Store<string_t>(NullValue<string_t>(), row + col_offset);
+		} else if (string_data[col_idx].IsInlined()) {
+			Store<string_t>(string_data[col_idx], row + col_offset);
+		} else {
+			const auto &str = string_data[col_idx];
+			string_t inserted((const char *)str_locations[i], str.GetSize());
+			memcpy(inserted.GetDataWriteable(), str.GetDataUnsafe(), str.GetSize());
+			inserted.Finalize();
+			Store<string_t>(inserted, row + col_offset);
+		}
+	}
+}
+void RowOperations::Scatter(VectorData group_data[], const RowLayout &layout, Vector &rows,
                             RowDataCollection &string_heap, const SelectionVector &sel, idx_t count) {
 	if (count == 0) {
 		return;
 	}
 
 	// Set the validity mask for each row before inserting data
-	auto pointers = FlatVector::GetData<data_ptr_t>(addresses);
+	auto ptrs = FlatVector::GetData<data_ptr_t>(rows);
 	for (idx_t i = 0; i < count; ++i) {
 		auto row_idx = sel.get_index(i);
-		auto row = pointers[row_idx];
+		auto row = ptrs[row_idx];
 		ValidityBytes(row).SetAllValid(layout.ColumnCount());
 	}
 
 	auto &offsets = layout.GetOffsets();
 	auto &types = layout.GetTypes();
-	for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
-		auto &gdata = group_data[col_idx];
-		auto col_offset = offsets[col_idx];
+	for (idx_t col_no = 0; col_no < types.size(); col_no++) {
+		auto &col = group_data[col_no];
+		auto col_offset = offsets[col_no];
 
-		switch (types[col_idx].InternalType()) {
+		switch (types[col_no].InternalType()) {
 		case PhysicalType::BOOL:
 		case PhysicalType::INT8:
-			TemplatedScatter<int8_t>(gdata, addresses, sel, count, col_offset, col_idx);
+			TemplatedScatter<int8_t>(col, rows, sel, count, col_offset, col_no);
 			break;
 		case PhysicalType::INT16:
-			TemplatedScatter<int16_t>(gdata, addresses, sel, count, col_offset, col_idx);
+			TemplatedScatter<int16_t>(col, rows, sel, count, col_offset, col_no);
 			break;
 		case PhysicalType::INT32:
-			TemplatedScatter<int32_t>(gdata, addresses, sel, count, col_offset, col_idx);
+			TemplatedScatter<int32_t>(col, rows, sel, count, col_offset, col_no);
 			break;
 		case PhysicalType::INT64:
-			TemplatedScatter<int64_t>(gdata, addresses, sel, count, col_offset, col_idx);
+			TemplatedScatter<int64_t>(col, rows, sel, count, col_offset, col_no);
 			break;
 		case PhysicalType::UINT8:
-			TemplatedScatter<uint8_t>(gdata, addresses, sel, count, col_offset, col_idx);
+			TemplatedScatter<uint8_t>(col, rows, sel, count, col_offset, col_no);
 			break;
 		case PhysicalType::UINT16:
-			TemplatedScatter<uint16_t>(gdata, addresses, sel, count, col_offset, col_idx);
+			TemplatedScatter<uint16_t>(col, rows, sel, count, col_offset, col_no);
 			break;
 		case PhysicalType::UINT32:
-			TemplatedScatter<uint32_t>(gdata, addresses, sel, count, col_offset, col_idx);
+			TemplatedScatter<uint32_t>(col, rows, sel, count, col_offset, col_no);
 			break;
 		case PhysicalType::UINT64:
-			TemplatedScatter<uint64_t>(gdata, addresses, sel, count, col_offset, col_idx);
+			TemplatedScatter<uint64_t>(col, rows, sel, count, col_offset, col_no);
 			break;
 		case PhysicalType::INT128:
-			TemplatedScatter<hugeint_t>(gdata, addresses, sel, count, col_offset, col_idx);
+			TemplatedScatter<hugeint_t>(col, rows, sel, count, col_offset, col_no);
 			break;
 		case PhysicalType::FLOAT:
-			TemplatedScatter<float>(gdata, addresses, sel, count, col_offset, col_idx);
+			TemplatedScatter<float>(col, rows, sel, count, col_offset, col_no);
 			break;
 		case PhysicalType::DOUBLE:
-			TemplatedScatter<double>(gdata, addresses, sel, count, col_offset, col_idx);
+			TemplatedScatter<double>(col, rows, sel, count, col_offset, col_no);
 			break;
 		case PhysicalType::INTERVAL:
-			TemplatedScatter<interval_t>(gdata, addresses, sel, count, col_offset, col_idx);
+			TemplatedScatter<interval_t>(col, rows, sel, count, col_offset, col_no);
 			break;
 		case PhysicalType::HASH:
-			TemplatedScatter<hash_t>(gdata, addresses, sel, count, col_offset, col_idx);
+			TemplatedScatter<hash_t>(col, rows, sel, count, col_offset, col_no);
 			break;
-		case PhysicalType::VARCHAR: {
-			idx_t entry_sizes[STANDARD_VECTOR_SIZE];
-			std::fill_n(entry_sizes, count, 0);
-			ComputeStringEntrySizes(gdata, entry_sizes, sel, count);
-
-			data_ptr_t str_locations[STANDARD_VECTOR_SIZE];
-			string_heap.Build(count, str_locations, entry_sizes);
-
-			auto string_data = (string_t *)gdata.data;
-			auto pointers = FlatVector::GetData<data_ptr_t>(addresses);
-
-			for (idx_t i = 0; i < count; i++) {
-				auto pointer_idx = sel.get_index(i);
-				auto group_idx = gdata.sel->get_index(pointer_idx);
-				auto ptr = pointers[pointer_idx] + col_offset;
-				if (!gdata.validity.RowIsValid(group_idx)) {
-					ValidityBytes col_mask(pointers[pointer_idx]);
-					col_mask.SetInvalidUnsafe(col_idx);
-					Store<string_t>(NullValue<string_t>(), ptr);
-				} else if (string_data[group_idx].IsInlined()) {
-					Store<string_t>(string_data[group_idx], ptr);
-				} else {
-					const auto &str = string_data[group_idx];
-					string_t inserted((const char *)str_locations[i], str.GetSize());
-					memcpy(inserted.GetDataWriteable(), str.GetDataUnsafe(), str.GetSize());
-					inserted.Finalize();
-					Store<string_t>(inserted, ptr);
-				}
-			}
+		case PhysicalType::VARCHAR:
+			ScatterStrings(col, rows, string_heap, sel, count, col_offset, col_no);
 			break;
-		}
 		default:
 			throw Exception("Unsupported type for row scatter");
 		}
