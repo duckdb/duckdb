@@ -127,11 +127,15 @@ bool ChunkVectorInfo::Fetch(Transaction &transaction, row_t row) {
 	return UseVersion(transaction, inserted[row]) && !UseVersion(transaction, deleted[row]);
 }
 
-void ChunkVectorInfo::Delete(Transaction &transaction, row_t rows[], idx_t count) {
+idx_t ChunkVectorInfo::Delete(Transaction &transaction, row_t rows[], idx_t count) {
 	any_deleted = true;
 
 	// first check the chunk for conflicts
+	idx_t deleted_tuples = 0;
 	for (idx_t i = 0; i < count; i++) {
+		if (deleted[rows[i]] == transaction.transaction_id) {
+			continue;
+		}
 		if (deleted[rows[i]] != NOT_DELETED_ID) {
 			// tuple was already deleted by another transaction
 			throw TransactionException("Conflict on tuple deletion!");
@@ -139,11 +143,13 @@ void ChunkVectorInfo::Delete(Transaction &transaction, row_t rows[], idx_t count
 		if (inserted[rows[i]] >= TRANSACTION_ID_START) {
 			throw TransactionException("Deleting non-committed tuples is not supported (for now...)");
 		}
+		deleted_tuples++;
 	}
 	// after verifying that there are no conflicts we mark the tuples as deleted
 	for (idx_t i = 0; i < count; i++) {
 		deleted[rows[i]] = transaction.transaction_id;
 	}
+	return deleted_tuples;
 }
 
 void ChunkVectorInfo::CommitDelete(transaction_t commit_id, row_t rows[], idx_t count) {

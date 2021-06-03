@@ -742,10 +742,10 @@ void DataTable::RemoveFromIndexes(Vector &row_identifiers, idx_t count) {
 //===--------------------------------------------------------------------===//
 // Delete
 //===--------------------------------------------------------------------===//
-void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector &row_identifiers, idx_t count) {
+idx_t DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector &row_identifiers, idx_t count) {
 	D_ASSERT(row_identifiers.GetType().InternalType() == ROW_TYPE);
 	if (count == 0) {
-		return;
+		return 0;
 	}
 
 	auto &transaction = Transaction::GetTransaction(context);
@@ -756,8 +756,9 @@ void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector 
 
 	if (first_id >= MAX_ROW_ID) {
 		// deletion is in transaction-local storage: push delete into local chunk collection
-		transaction.storage.Delete(this, row_identifiers, count);
+		return transaction.storage.Delete(this, row_identifiers, count);
 	} else {
+		idx_t delete_count = 0;
 		// delete is in the row groups
 		// we need to figure out for each id to which row group it belongs
 		// usually all (or many) ids belong to the same row group
@@ -778,8 +779,9 @@ void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector 
 					break;
 				}
 			}
-			row_group->Delete(transaction, this, ids + start, pos - start);
+			delete_count += row_group->Delete(transaction, this, ids + start, pos - start);
 		} while (pos < count);
+		return delete_count;
 	}
 }
 
