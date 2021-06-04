@@ -155,11 +155,13 @@ void Vector::Initialize(const LogicalType &new_type, bool zero_data) {
 
 		auxiliary = move(struct_buffer);
 	}
-	if (GetTypeIdSize(type.InternalType()) > 0) {
+	auto internal_type = type.InternalType();
+	auto type_size = GetTypeIdSize(internal_type);
+	if (type_size > 0) {
 		buffer = VectorBuffer::CreateStandardVector(VectorType::FLAT_VECTOR, type);
 		data = buffer->GetData();
 		if (zero_data) {
-			memset(data, 0, STANDARD_VECTOR_SIZE * GetTypeIdSize(type.InternalType()));
+			memset(data, 0, STANDARD_VECTOR_SIZE * type_size);
 		}
 	} else {
 		buffer = VectorBuffer::CreateStandardVector(VectorType::FLAT_VECTOR, type);

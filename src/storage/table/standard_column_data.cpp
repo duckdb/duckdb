@@ -186,7 +186,7 @@ void StandardColumnData::CheckpointScan(ColumnSegment *segment, ColumnScanState 
                                         idx_t base_row_index, idx_t count, Vector &scan_vector) {
 	ColumnData::CheckpointScan(segment, state, row_group_start, base_row_index, count, scan_vector);
 
-	idx_t offset_in_row_group = segment->start - row_group_start;
+	idx_t offset_in_row_group = segment->start - row_group_start + base_row_index;
 	validity.ScanCommittedRange(row_group_start, offset_in_row_group, count, scan_vector);
 }
 

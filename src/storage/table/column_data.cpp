@@ -411,7 +411,9 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, Ta
 
 	auto &block_manager = BlockManager::GetBlockManager(GetDatabase());
 	checkpoint_state->CreateEmptySegment();
-	Vector intermediate(type.id() == LogicalTypeId::VALIDITY ? LogicalType::BOOLEAN : type);
+
+	bool is_validity = type.id() == LogicalTypeId::VALIDITY;
+	Vector intermediate(is_validity ? LogicalType::BOOLEAN : type, true, is_validity);
 	// we create a new segment tree with all the new segments
 	// we do this by scanning the current segments of the column and checking for changes
 	// if there are any changes (e.g. updates or deletes) we write the new changes
