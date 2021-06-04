@@ -36,6 +36,26 @@ static void TemplatedGatherLoop(Vector &rows, const SelectionVector &row_sel, Ve
 	}
 }
 
+static void GatherNestedVector(Vector &rows, const SelectionVector &row_sel, Vector &col,
+                               const SelectionVector &col_sel, idx_t count, idx_t col_offset, idx_t col_no) {
+	auto ptrs = FlatVector::GetData<data_ptr_t>(rows);
+	auto data = FlatVector::GetData<data_ptr_t>(col);
+
+	// Build the gather locations
+	data_ptr_t data_locations[STANDARD_VECTOR_SIZE];
+	data_ptr_t mask_locations[STANDARD_VECTOR_SIZE];
+	for (idx_t i = 0; i < count; i++) {
+		auto row_idx = row_sel.get_index(i);
+		mask_locations[i] = ptrs[row_idx];
+
+		auto col_idx = col_sel.get_index(i);
+		data_locations[i] = data[col_idx];
+	}
+
+	// Deserialise into the vector locations
+	RowDataCollection::DeserializeIntoVector(col, count, col_sel, col_no, data_locations, mask_locations);
+}
+
 void RowOperations::Gather(const RowLayout &layout, Vector &rows, const SelectionVector &row_sel, Vector &col,
                            const SelectionVector &col_sel, idx_t count, idx_t col_no) {
 	D_ASSERT(rows.GetVectorType() == VectorType::FLAT_VECTOR);
@@ -89,6 +109,11 @@ void RowOperations::Gather(const RowLayout &layout, Vector &rows, const Selectio
 		break;
 	case PhysicalType::VARCHAR:
 		TemplatedGatherLoop<string_t>(rows, row_sel, col, col_sel, count, col_offset, col_no);
+		break;
+	case PhysicalType::LIST:
+	case PhysicalType::MAP:
+	case PhysicalType::STRUCT:
+		GatherNestedVector(rows, row_sel, col, col_sel, count, col_offset, col_no);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for RowOperations::Gather");

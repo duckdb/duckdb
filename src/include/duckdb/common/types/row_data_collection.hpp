@@ -76,8 +76,8 @@ public:
 
 	void Merge(RowDataCollection &other);
 
-	static void DeserializeIntoVector(Vector &v, const idx_t &vcount, const idx_t &col_idx, data_ptr_t key_locations[],
-	                                  data_ptr_t validitymask_locations[]);
+	static void DeserializeIntoVector(Vector &v, const idx_t &vcount, const SelectionVector &sel, const idx_t &col_idx,
+	                                  data_ptr_t key_locations[], data_ptr_t validitymask_locations[]);
 
 private:
 	template <class T>
@@ -99,13 +99,6 @@ private:
 	                                  idx_t offset);
 	static void SerializeListVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count, idx_t col_idx,
 	                                data_ptr_t key_locations[], data_ptr_t validitymask_locations[], idx_t offset);
-
-	static void DeserializeIntoStringVector(Vector &v, const idx_t &vcount, const idx_t &col_idx,
-	                                        data_ptr_t *key_locations, data_ptr_t *validitymask_locations);
-	static void DeserializeIntoStructVector(Vector &v, const idx_t &vcount, const idx_t &col_idx,
-	                                        data_ptr_t *key_locations, data_ptr_t *validitymask_locations);
-	static void DeserializeIntoListVector(Vector &v, const idx_t &vcount, const idx_t &col_idx,
-	                                      data_ptr_t *key_locations, data_ptr_t *validitymask_locations);
 
 	//! Whether the system is little endian
 	const bool is_little_endian;

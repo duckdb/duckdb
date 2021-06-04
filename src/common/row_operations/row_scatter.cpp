@@ -63,8 +63,10 @@ static void ComputeStringEntrySizes(const VectorData &col, idx_t entry_sizes[], 
 		}
 	}
 }
-static void ScatterStrings(VectorData &col, Vector &rows, RowDataCollection &string_heap, const SelectionVector &sel,
-                           const idx_t count, const idx_t col_offset, const idx_t col_no) {
+
+static void ScatterStringVector(VectorData &col, Vector &rows, RowDataCollection &string_heap,
+                                const SelectionVector &sel, const idx_t count, const idx_t col_offset,
+                                const idx_t col_no) {
 
 	idx_t entry_sizes[STANDARD_VECTOR_SIZE];
 	std::fill_n(entry_sizes, count, 0);
@@ -95,6 +97,42 @@ static void ScatterStrings(VectorData &col, Vector &rows, RowDataCollection &str
 		}
 	}
 }
+
+static void ScatterNestedVector(Vector &vec, VectorData &col, Vector &rows, RowDataCollection &data_collection,
+                                const SelectionVector &sel, const idx_t count, const idx_t col_offset,
+                                const idx_t col_no, const idx_t vcount) {
+
+	idx_t entry_sizes[STANDARD_VECTOR_SIZE];
+	std::fill_n(entry_sizes, vcount, 0);
+
+	// FIXME: The top level here does another Orrify even though we have that information...
+	// FIXME: SerializeVector takes a selection, but ComputeEntrySizes does not...
+	RowDataCollection::ComputeEntrySizes(vec, entry_sizes, vcount);
+
+	// Only serialise the selected rows
+	for (idx_t i = 0; i < count; ++i) {
+		auto idx = sel.get_index(i);
+		auto col_idx = col.sel->get_index(idx);
+		entry_sizes[i] = entry_sizes[col_idx];
+	}
+
+	// Build out the buffer space
+	data_ptr_t data_locations[STANDARD_VECTOR_SIZE];
+	data_collection.Build(count, data_locations, entry_sizes);
+
+	// Serialise the data
+	auto ptrs = FlatVector::GetData<data_ptr_t>(rows);
+	RowDataCollection::SerializeVector(vec, vcount, sel, count, col_no, data_locations, ptrs);
+
+	// Store pointers to the data in the row
+	for (idx_t i = 0; i < count; i++) {
+		auto idx = sel.get_index(i);
+		auto row = ptrs[idx];
+
+		Store<data_ptr_t>(data_locations[i], row + col_offset);
+	}
+}
+
 void RowOperations::Scatter(DataChunk &columns, VectorData col_data[], const RowLayout &layout, Vector &rows,
                             RowDataCollection &string_heap, const SelectionVector &sel, idx_t count) {
 	if (count == 0) {
@@ -109,9 +147,11 @@ void RowOperations::Scatter(DataChunk &columns, VectorData col_data[], const Row
 		ValidityBytes(row).SetAllValid(layout.ColumnCount());
 	}
 
+	const auto vcount = columns.size();
 	auto &offsets = layout.GetOffsets();
 	auto &types = layout.GetTypes();
 	for (idx_t col_no = 0; col_no < types.size(); col_no++) {
+		auto &vec = columns.data[col_no];
 		auto &col = col_data[col_no];
 		auto col_offset = offsets[col_no];
 
@@ -157,7 +197,12 @@ void RowOperations::Scatter(DataChunk &columns, VectorData col_data[], const Row
 			TemplatedScatter<hash_t>(col, rows, sel, count, col_offset, col_no);
 			break;
 		case PhysicalType::VARCHAR:
-			ScatterStrings(col, rows, string_heap, sel, count, col_offset, col_no);
+			ScatterStringVector(col, rows, string_heap, sel, count, col_offset, col_no);
+			break;
+		case PhysicalType::LIST:
+		case PhysicalType::MAP:
+		case PhysicalType::STRUCT:
+			ScatterNestedVector(vec, col, rows, string_heap, sel, count, col_offset, col_no, vcount);
 			break;
 		default:
 			throw Exception("Unsupported type for RowOperations::Scatter");
