@@ -7,10 +7,8 @@ endif()
 
 add_definitions(-DNO_FRAMEWORKS)
 message(${ODBC_INCLUDE_DIRS})
-include_directories(${ODBC_INCLUDE_DIRS})
+include_directories(${ODBC_INCLUDE_DIRS} include)
 
-add_library(duckdb_odbc SHARED duckdb_odbc.cpp)
+add_library(duckdb_odbc SHARED driver.cpp connection.cpp statement.cpp
+                               prepared.cpp result.cpp)
 target_link_libraries(duckdb_odbc duckdb_static)
-
-add_executable(odbc_example example.cpp)
-target_link_libraries(odbc_example ${ODBC_LIBRARIES})
