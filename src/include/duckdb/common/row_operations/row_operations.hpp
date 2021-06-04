@@ -58,8 +58,9 @@ struct RowOperations {
 	//! Returns the number of matches remaining in the selection.
 	using Predicates = vector<ExpressionType>;
 
-	static idx_t Match(const RowLayout &layout, Vector &rows, VectorData col_data[], const Predicates &predicates,
-	                   SelectionVector &sel, idx_t count, SelectionVector *no_match, idx_t &no_match_count);
+	static idx_t Match(DataChunk &columns, VectorData col_data[], const RowLayout &layout, Vector &rows,
+	                   const Predicates &predicates, SelectionVector &sel, idx_t count, SelectionVector *no_match,
+	                   idx_t &no_match_count);
 };
 
 } // namespace duckdb

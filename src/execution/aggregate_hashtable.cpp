@@ -490,8 +490,8 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 
 		// now we have only the tuples remaining that might match to an existing group
 		// start performing comparisons with each of the groups
-		RowOperations::Match(layout, addresses, group_data.get(), predicates, group_compare_vector, need_compare_count,
-		                     &no_match_vector, no_match_count);
+		RowOperations::Match(group_chunk, group_data.get(), layout, addresses, predicates, group_compare_vector,
+		                     need_compare_count, &no_match_vector, no_match_count);
 
 		// each of the entries that do not match we move them to the next entry in the HT
 		for (idx_t i = 0; i < no_match_count; i++) {
