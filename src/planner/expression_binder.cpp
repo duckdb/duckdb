@@ -175,7 +175,7 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 		if (ContainsNullType(result->return_type)) {
 			auto result_type = result->return_type;
 			ExchangeNullType(result_type);
-			result = BoundCastExpression::AddCastToType(move(result), move(result_type));
+			result = BoundCastExpression::AddCastToType(move(result), result_type);
 		}
 	}
 	if (result_type) {

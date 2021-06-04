@@ -145,7 +145,7 @@ public:
 	}
 
 	// Setters
-	void SetVectorType(VectorType vector_type);
+	DUCKDB_API void SetVectorType(VectorType vector_type);
 	inline void SetType(const LogicalType &type) {
 		buffer->SetType(type);
 	}
@@ -198,7 +198,7 @@ struct ConstantVector {
 		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
 		return !vector.validity.RowIsValid(0);
 	}
-	static void SetNull(Vector &vector, bool is_null);
+	DUCKDB_API static void SetNull(Vector &vector, bool is_null);
 	static inline ValidityMask &Validity(Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
 		return vector.validity;
@@ -274,49 +274,49 @@ struct FlatVector {
 };
 
 struct ListVector {
-	static const Vector &GetEntry(const Vector &vector);
-	static Vector &GetEntry(Vector &vector);
-	static idx_t GetListSize(const Vector &vector);
-	static void SetListSize(Vector &vec, idx_t size);
-	static bool HasEntry(const Vector &vector);
-	static void SetEntry(Vector &vector, unique_ptr<Vector> entry);
-	static void Append(Vector &target, const Vector &source, idx_t source_size, idx_t source_offset = 0);
-	static void Append(Vector &target, const Vector &source, const SelectionVector &sel, idx_t source_size,
+	DUCKDB_API static const Vector &GetEntry(const Vector &vector);
+	DUCKDB_API static Vector &GetEntry(Vector &vector);
+	DUCKDB_API static idx_t GetListSize(const Vector &vector);
+	DUCKDB_API static void SetListSize(Vector &vec, idx_t size);
+	DUCKDB_API static bool HasEntry(const Vector &vector);
+	DUCKDB_API static void SetEntry(Vector &vector, unique_ptr<Vector> entry);
+	DUCKDB_API static void Append(Vector &target, const Vector &source, idx_t source_size, idx_t source_offset = 0);
+	DUCKDB_API static void Append(Vector &target, const Vector &source, const SelectionVector &sel, idx_t source_size,
 	                   idx_t source_offset = 0);
-	static void PushBack(Vector &target, Value &insert);
-	static void Initialize(Vector &vec);
-	static vector<idx_t> Search(Vector &list, Value &key, idx_t row);
-	static Value GetValuesFromOffsets(Vector &list, vector<idx_t> &offsets);
+	DUCKDB_API static void PushBack(Vector &target, Value &insert);
+	DUCKDB_API static void Initialize(Vector &vec);
+	DUCKDB_API static vector<idx_t> Search(Vector &list, Value &key, idx_t row);
+	DUCKDB_API static Value GetValuesFromOffsets(Vector &list, vector<idx_t> &offsets);
 	//! Share the entry of the other list vector
-	static void ReferenceEntry(Vector &vector, Vector &other);
+	DUCKDB_API static void ReferenceEntry(Vector &vector, Vector &other);
 };
 
 struct StringVector {
 	//! Add a string to the string heap of the vector (auxiliary data)
-	static string_t AddString(Vector &vector, const char *data, idx_t len);
+	DUCKDB_API static string_t AddString(Vector &vector, const char *data, idx_t len);
 	//! Add a string to the string heap of the vector (auxiliary data)
-	static string_t AddString(Vector &vector, const char *data);
+	DUCKDB_API static string_t AddString(Vector &vector, const char *data);
 	//! Add a string to the string heap of the vector (auxiliary data)
-	static string_t AddString(Vector &vector, string_t data);
+	DUCKDB_API static string_t AddString(Vector &vector, string_t data);
 	//! Add a string to the string heap of the vector (auxiliary data)
-	static string_t AddString(Vector &vector, const string &data);
+	DUCKDB_API static string_t AddString(Vector &vector, const string &data);
 	//! Add a string or a blob to the string heap of the vector (auxiliary data)
 	//! This function is the same as ::AddString, except the added data does not need to be valid UTF8
-	static string_t AddStringOrBlob(Vector &vector, string_t data);
+	DUCKDB_API static string_t AddStringOrBlob(Vector &vector, string_t data);
 	//! Allocates an empty string of the specified size, and returns a writable pointer that can be used to store the
 	//! result of an operation
-	static string_t EmptyString(Vector &vector, idx_t len);
+	DUCKDB_API static string_t EmptyString(Vector &vector, idx_t len);
 	//! Adds a reference to a handle that stores strings of this vector
-	static void AddHandle(Vector &vector, unique_ptr<BufferHandle> handle);
+	DUCKDB_API static void AddHandle(Vector &vector, unique_ptr<BufferHandle> handle);
 	//! Adds a reference to an unspecified vector buffer that stores strings of this vector
-	static void AddBuffer(Vector &vector, buffer_ptr<VectorBuffer> buffer);
+	DUCKDB_API static void AddBuffer(Vector &vector, buffer_ptr<VectorBuffer> buffer);
 	//! Add a reference from this vector to the string heap of the provided vector
-	static void AddHeapReference(Vector &vector, Vector &other);
+	DUCKDB_API static void AddHeapReference(Vector &vector, Vector &other);
 };
 
 struct StructVector {
-	static const vector<unique_ptr<Vector>> &GetEntries(const Vector &vector);
-	static vector<unique_ptr<Vector>> &GetEntries(Vector &vector);
+	DUCKDB_API static const vector<unique_ptr<Vector>> &GetEntries(const Vector &vector);
+	DUCKDB_API static vector<unique_ptr<Vector>> &GetEntries(Vector &vector);
 };
 
 struct SequenceVector {
