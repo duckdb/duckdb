@@ -74,6 +74,12 @@ SELECT * FROM a ORDER BY (b).i;
 statement ok
 INSERT INTO a VALUES ({'i': 2, 'j': 3});
 
+query I
+SELECT * FROM a
+----
+{'i': 3, 'j': NULL}
+{'i': 2, 'j': 3}
+
 statement ok
 INSERT INTO a VALUES ({'i': 3, 'j': 4});
 
