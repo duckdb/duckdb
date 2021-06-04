@@ -12,6 +12,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/types/value.hpp"
 
 namespace duckdb {
 class Serializer;

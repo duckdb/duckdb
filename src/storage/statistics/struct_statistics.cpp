@@ -1,4 +1,5 @@
 #include "duckdb/storage/statistics/struct_statistics.hpp"
+#include "duckdb/common/types/vector.hpp"
 
 namespace duckdb {
 
