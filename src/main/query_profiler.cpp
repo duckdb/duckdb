@@ -216,14 +216,15 @@ void OperatorProfiler::AddTiming(const PhysicalOperator *op, double time, idx_t 
 void OperatorProfiler::Flush(const PhysicalOperator *phys_op, ExpressionExecutor *expression_executor,
                              const string &name, int id) {
 	auto entry = timings.find(phys_op);
-	if (entry != timings.end()) {
-		auto &operator_timing = timings.find(phys_op)->second;
-		if (int(operator_timing.executors_info.size()) <= id) {
-			operator_timing.executors_info.resize(id + 1);
-		}
-		operator_timing.executors_info[id] = make_unique<ExpressionExecutorInfo>(*expression_executor, name, id);
-		operator_timing.name = phys_op->GetName();
+	if (entry == timings.end()) {
+		return;
 	}
+	auto &operator_timing = timings.find(phys_op)->second;
+	if (int(operator_timing.executors_info.size()) <= id) {
+		operator_timing.executors_info.resize(id + 1);
+	}
+	operator_timing.executors_info[id] = make_unique<ExpressionExecutorInfo>(*expression_executor, name, id);
+	operator_timing.name = phys_op->GetName();
 }
 
 void QueryProfiler::Flush(OperatorProfiler &profiler) {
@@ -237,6 +238,9 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 
 		entry->second->info.time += node.second.time;
 		entry->second->info.elements += node.second.elements;
+		if (!detailed_enabled) {
+			continue;
+		}
 		for (auto &info : node.second.executors_info) {
 			if (!info) {
 				continue;

@@ -24,13 +24,11 @@ static string ToHTML(ClientContext &context, const string &first_json_path, cons
 	ss << d3;
 	ss << "</script>\n";
 	ss << "<script> var data = ";
-	// If no json_file is given and profiler history is not empty, read from query profiler
+	// If no json_file is given and profiler history is not empty, read from query profiler. Else read from file.
 	auto &prevProfilers = context.query_profiler_history->GetPrevProfilers();
 	if (first_json_path.empty() && !prevProfilers.empty()) {
 		ss << prevProfilers.back().second->ToJSON();
-	}
-	// if first json_file is given, read from file.
-	if (!first_json_path.empty()) {
+	} else if (!first_json_path.empty()) {
 		ifstream data_json(first_json_path);
 		ss << data_json.rdbuf();
 		// throw an IO exception if it fails to read the json_file
@@ -40,12 +38,10 @@ static string ToHTML(ClientContext &context, const string &first_json_path, cons
 	}
 	ss << "</script>\n";
 	ss << "<script> var secondData = ";
-	// If no second json_file is given, make second json_data null
+	// If no second json_file is given, make second json_data null. Else read from file.
 	if (second_json_path.empty()) {
 		ss << "null;";
-	}
-	// if second json_file is given, read from file.
-	if (!second_json_path.empty()) {
+	} else if (!second_json_path.empty()) {
 		ifstream data_json(second_json_path);
 		ss << data_json.rdbuf();
 		// throw an IO exception if it fails to read the json_file
