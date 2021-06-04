@@ -825,8 +825,8 @@ jobs:
     - name: Build
       run: DISABLE_SANITIZER=1 make debug
 
-    - name: Test nanodbc
-      run: NANODBC_TEST_CONNSTR_ODBC="DRIVER=./build/debug/tools/odbc/libduckdb_odbc.so" ./nanodbc/build/test/odbc_tests test_simple
+    # - name: Test nanodbc
+    #   run: NANODBC_TEST_CONNSTR_ODBC="DRIVER=./build/debug/tools/odbc/libduckdb_odbc.so" ./nanodbc/build/test/odbc_tests test_simple
 
     - name: Test psqlodbc
       run: |
