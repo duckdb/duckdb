@@ -33,18 +33,18 @@
  * Contributors:
  * Gradient Systems
  */
-#include "config.hpp"
-#include "porting.hpp"
+#include "config.h"
+#include "porting.h"
 #include <stdio.h>
-#include "tables.hpp"
-#include "columns.hpp"
-#include "genrand.hpp"
-#include "tdefs.hpp"
-#include "scaling.hpp"
-#include "w_tdefs.hpp"
-#include "s_tdefs.hpp"
-#include "tdef_functions.hpp"
-#include "r_params.hpp"
+#include "tables.h"
+#include "columns.h"
+#include "genrand.h"
+#include "tdefs.h"
+#include "scaling.h"
+#include "w_tdefs.h"
+#include "s_tdefs.h"
+#include "tdef_functions.h"
+#include "r_params.h"
 
 extern tdef w_tdefs[];
 extern tdef s_tdefs[];

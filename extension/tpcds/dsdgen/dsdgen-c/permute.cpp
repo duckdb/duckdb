@@ -33,13 +33,13 @@
  * Contributors:
  * Gradient Systems
  */
-#include "config.hpp"
-#include "porting.hpp"
+#include "config.h"
+#include "porting.h"
 #ifndef USE_STDLIB_H
 #include <malloc.h>
 #endif
 #include <stdio.h>
-#include "genrand.hpp"
+#include "genrand.h"
 
 /*
  * Routine: MakePermutation(int nSize)

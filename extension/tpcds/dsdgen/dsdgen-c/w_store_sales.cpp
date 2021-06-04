@@ -33,24 +33,24 @@
  * Contributors:
  * Gradient Systems
  */
-#include "w_store_sales.hpp"
+#include "w_store_sales.h"
 
-#include "append_info.hpp"
-#include "build_support.hpp"
-#include "columns.hpp"
-#include "config.hpp"
-#include "constants.hpp"
-#include "decimal.hpp"
-#include "genrand.hpp"
-#include "nulls.hpp"
-#include "parallel.hpp"
-#include "permute.hpp"
-#include "porting.hpp"
-#include "scaling.hpp"
-#include "scd.hpp"
-#include "tables.hpp"
-#include "tdefs.hpp"
-#include "w_store_returns.hpp"
+#include "append_info.h"
+#include "build_support.h"
+#include "columns.h"
+#include "config.h"
+#include "constants.h"
+#include "decimal.h"
+#include "genrand.h"
+#include "nulls.h"
+#include "parallel.h"
+#include "permute.h"
+#include "porting.h"
+#include "scaling.h"
+#include "scd.h"
+#include "tables.h"
+#include "tdefs.h"
+#include "w_store_returns.h"
 
 #ifdef JMS
 extern rng_t Streams[];

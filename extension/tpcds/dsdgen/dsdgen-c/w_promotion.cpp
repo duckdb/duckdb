@@ -33,18 +33,18 @@
  * Contributors:
  * Gradient Systems
  */
-#include "w_promotion.hpp"
+#include "w_promotion.h"
 
-#include "append_info.hpp"
-#include "build_support.hpp"
-#include "columns.hpp"
-#include "config.hpp"
-#include "genrand.hpp"
-#include "misc.hpp"
-#include "nulls.hpp"
-#include "porting.hpp"
-#include "tables.hpp"
-#include "tdefs.hpp"
+#include "append_info.h"
+#include "build_support.h"
+#include "columns.h"
+#include "config.h"
+#include "genrand.h"
+#include "misc.h"
+#include "nulls.h"
+#include "porting.h"
+#include "tables.h"
+#include "tdefs.h"
 
 #include <stdio.h>
 

@@ -33,21 +33,21 @@
  * Contributors:
  * Gradient Systems
  */
-#include "config.hpp"
-#include "porting.hpp"
+#include "config.h"
+#include "porting.h"
 #include <stdio.h>
-#include "pricing.hpp"
-#include "w_web_returns.hpp"
-#include "w_web_sales.hpp"
-#include "date.hpp"
-#include "decimal.hpp"
-#include "genrand.hpp"
-#include "build_support.hpp"
-#include "misc.hpp"
-#include "error_msg.hpp"
-#include "tables.hpp"
-#include "nulls.hpp"
-#include "tdefs.hpp"
+#include "pricing.h"
+#include "w_web_returns.h"
+#include "w_web_sales.h"
+#include "date.h"
+#include "decimal.h"
+#include "genrand.h"
+#include "build_support.h"
+#include "misc.h"
+#include "error_msg.h"
+#include "tables.h"
+#include "nulls.h"
+#include "tdefs.h"
 
 struct W_WEB_RETURNS_TBL g_w_web_returns;
 extern struct W_WEB_SALES_TBL g_w_web_sales;

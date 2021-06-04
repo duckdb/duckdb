@@ -1,13 +1,13 @@
 #include "append_info-c.hpp"
 
-#include "append_info.hpp"
-#include "config.hpp"
-#include "date.hpp"
+#include "append_info.h"
+#include "config.h"
+#include "date.h"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/storage/data_table.hpp"
-#include "nulls.hpp"
-#include "porting.hpp"
+#include "nulls.h"
+#include "porting.h"
 
 #include <cstring>
 #include <memory>

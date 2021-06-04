@@ -33,21 +33,21 @@
  * Contributors:
  * Gradient Systems
  */
-#include "config.hpp"
-#include "porting.hpp"
+#include "config.h"
+#include "porting.h"
 #include <stdio.h>
-#include "tdefs.hpp"
-#include "scd.hpp"
-#include "tables.hpp"
-#include "build_support.hpp"
-#include "dist.hpp"
-#include "scaling.hpp"
-#include "genrand.hpp"
-#include "constants.hpp"
-#include "parallel.hpp"
-#include "params.hpp"
-#include "tdef_functions.hpp"
-#include "permute.hpp"
+#include "tdefs.h"
+#include "scd.h"
+#include "tables.h"
+#include "build_support.h"
+#include "dist.h"
+#include "scaling.h"
+#include "genrand.h"
+#include "constants.h"
+#include "parallel.h"
+#include "params.h"
+#include "tdef_functions.h"
+#include "permute.h"
 
 /* an array of the most recent business key for each table */
 char arBKeys[MAX_TABLE][17];

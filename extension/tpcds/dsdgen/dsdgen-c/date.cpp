@@ -35,17 +35,17 @@
  */
 
 /*** includes ***/
-#include "config.hpp"
-#include "porting.hpp"
+#include "config.h"
+#include "porting.h"
 #include <stdlib.h>
 #ifndef USE_STDLIB_H
 #include <malloc.h>
 #endif
 #include <stdio.h>
 #include <math.h>
-#include "date.hpp"
-#include "mathops.hpp"
-#include "dist.hpp"
+#include "date.h"
+#include "mathops.h"
+#include "dist.h"
 
 #define D_CHARS      "ymdYMD24" /* valid characters in a DBGDATE setting */
 #define MIN_DATE_INT 18000101

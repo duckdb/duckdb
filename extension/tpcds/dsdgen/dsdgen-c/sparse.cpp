@@ -33,13 +33,13 @@
  * Contributors:
  * Gradient Systems
  */
-#include "config.hpp"
-#include "porting.hpp"
-#include "scaling.hpp"
-#include "genrand.hpp"
-#include "sparse.hpp"
-#include "tdefs.hpp"
-#include "error_msg.hpp"
+#include "config.h"
+#include "porting.h"
+#include "scaling.h"
+#include "genrand.h"
+#include "sparse.h"
+#include "tdefs.h"
+#include "error_msg.h"
 
 /*
  * Routine: initSparseKeys()

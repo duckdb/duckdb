@@ -33,26 +33,26 @@
  * Contributors:
  * Gradient Systems
  */
-#include "config.hpp"
-#include "porting.hpp"
+#include "config.h"
+#include "porting.h"
 #include <stdio.h>
 #ifndef WIN32
 #include <netinet/in.h>
 #endif
 #include <math.h>
-#include "decimal.hpp"
-#include "constants.hpp"
-#include "dist.hpp"
-#include "r_params.hpp"
-#include "genrand.hpp"
-#include "tdefs.hpp"
-#include "tables.hpp"
-#include "build_support.hpp"
-#include "genrand.hpp"
-#include "columns.hpp"
-#include "StringBuffer.hpp"
-#include "error_msg.hpp"
-#include "scaling.hpp"
+#include "decimal.h"
+#include "constants.h"
+#include "dist.h"
+#include "r_params.h"
+#include "genrand.h"
+#include "tdefs.h"
+#include "tables.h"
+#include "build_support.h"
+#include "genrand.h"
+#include "columns.h"
+#include "StringBuffer.h"
+#include "error_msg.h"
+#include "scaling.h"
 
 /*
  * Routine: hierarchy_item

@@ -33,11 +33,11 @@
  * Contributors:
  * Gradient Systems
  */
-#include "config.hpp"
-#include "porting.hpp"
-#include "nulls.hpp"
-#include "genrand.hpp"
-#include "tdefs.hpp"
+#include "config.h"
+#include "porting.h"
+#include "nulls.h"
+#include "genrand.h"
+#include "tdefs.h"
 
 /*
  * Routine: nullCheck(int nColumn)

@@ -33,9 +33,9 @@
  * Contributors:
  * Gradient Systems
  */
-#include "config.hpp"
-#include "porting.hpp"
-#include "tables.hpp"
+#include "config.h"
+#include "porting.h"
+#include "tables.h"
 
 #ifdef SQLSERVER
 // ODBC headers

@@ -33,21 +33,21 @@
  * Contributors:
  * Gradient Systems
  */
-#include "w_warehouse.hpp"
+#include "w_warehouse.h"
 
-#include "address.hpp"
-#include "append_info.hpp"
-#include "build_support.hpp"
-#include "config.hpp"
-#include "constants.hpp"
-#include "date.hpp"
-#include "decimal.hpp"
-#include "genrand.hpp"
-#include "misc.hpp"
-#include "nulls.hpp"
-#include "porting.hpp"
-#include "tables.hpp"
-#include "tdefs.hpp"
+#include "address.h"
+#include "append_info.h"
+#include "build_support.h"
+#include "config.h"
+#include "constants.h"
+#include "date.h"
+#include "decimal.h"
+#include "genrand.h"
+#include "misc.h"
+#include "nulls.h"
+#include "porting.h"
+#include "tables.h"
+#include "tdefs.h"
 
 #include <stdio.h>
 

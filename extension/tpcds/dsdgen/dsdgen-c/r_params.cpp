@@ -39,11 +39,11 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
-#include "config.hpp"
-#include "porting.hpp"
-#include "r_params.hpp"
-#include "tdefs.hpp"
-#include "release.hpp"
+#include "config.h"
+#include "porting.h"
+#include "r_params.h"
+#include "tdefs.h"
+#include "release.h"
 
 #define PARAM_MAX_LEN 80
 

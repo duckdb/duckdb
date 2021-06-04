@@ -34,13 +34,12 @@
  * Gradient Systems
  */
 
-#include "config.hpp"
-#include "porting.hpp"
+#include "config.h"
+#include "porting.h"
 #include <stdio.h>
 #include <fcntl.h>
 #include <assert.h>
 #ifdef WIN32
-#include <Winsock2.h> // for ntohl
 #include <io.h>
 #include <stdlib.h>
 #include <search.h>
@@ -55,14 +54,14 @@
 #ifndef USE_STDLIB_H
 #include <malloc.h>
 #endif
-#include "config.hpp"
-#include "decimal.hpp"
-#include "date.hpp"
-#include "dist.hpp"
-#include "genrand.hpp"
-#include "error_msg.hpp"
-#include "r_params.hpp"
-#include "dcomp.hpp"
+#include "config.h"
+#include "decimal.h"
+#include "date.h"
+#include "dist.h"
+#include "genrand.h"
+#include "error_msg.h"
+#include "r_params.h"
+#include "dcomp.h"
 #ifdef TEST
 option_t options[] = {{"DISTRIBUTIONS", OPT_STR, 2, "read distributions from file <s>", NULL, "tester_dist.idx"}, NULL};
 

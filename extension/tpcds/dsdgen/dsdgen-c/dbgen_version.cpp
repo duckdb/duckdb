@@ -33,16 +33,16 @@
  * Contributors:
  * Gradient Systems
  */
-#include "config.hpp"
-#include "porting.hpp"
+#include "config.h"
+#include "porting.h"
 #include <stdio.h>
 #include <time.h>
-#include "dbgen_version.hpp"
-#include "columns.hpp"
-#include "build_support.hpp"
-#include "tables.hpp"
-#include "misc.hpp"
-#include "release.hpp"
+#include "dbgen_version.h"
+#include "columns.h"
+#include "build_support.h"
+#include "tables.h"
+#include "misc.h"
+#include "release.h"
 
 struct DBGEN_VERSION_TBL g_dbgen_version;
 

@@ -33,11 +33,11 @@
  * Contributors:
  * Gradient Systems
  */
-#include "config.hpp"
-#include "porting.hpp"
+#include "config.h"
+#include "porting.h"
 #include <stdio.h>
-#include "error_msg.hpp"
-#include "grammar_support.hpp"
+#include "error_msg.h"
+#include "grammar_support.h"
 static int *LN;
 static char *FN;
 
@@ -46,7 +46,7 @@ err_msg_t Errors[MAX_ERROR + 2] = {{
                                        "",
                                    },
                                    {EFLG_STR_ARG, "File '%s' not found"},
-                                   {EFLG_NO_ARG, "Line exceeds maximum leng.hpp"},
+                                   {EFLG_NO_ARG, "Line exceeds maximum leng.h"},
                                    {EFLG_STR_ARG, "Memory allocation failed %s"},
                                    {EFLG_STR_ARG, "Syntax Error: \n'%s'"},
                                    {EFLG_NO_ARG, "Invalid/Out-of-range Argument"},
@@ -80,7 +80,7 @@ err_msg_t Errors[MAX_ERROR + 2] = {{
                                    {EFLG_STR_ARG, "Bad Hierarchy Call: '%s'"},
                                    {EFLG_NO_ARG, "Must set types and weights before defining names"},
                                    {EFLG_NO_ARG, "More than 20 arguments in definition"},
-                                   {EFLG_NO_ARG, "Argument type mismat.hpp"},
+                                   {EFLG_NO_ARG, "Argument type mismat.h"},
                                    {EFLG_NO_ARG, "RANGE()/LIST()/ULIST() cannot be used in the "
                                                  "same expression"}, /* QERR_RANGE_LIST
                                                                       */

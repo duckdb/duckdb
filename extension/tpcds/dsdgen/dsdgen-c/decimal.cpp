@@ -35,14 +35,14 @@
  */
 
 /*** includes ***/
-#include "config.hpp"
-#include "porting.hpp"
+#include "config.h"
+#include "porting.h"
 #ifndef USE_STDLIB_H
 #include <malloc.h>
 #endif
 #include <stdio.h>
-#include "decimal.hpp"
-#include "mathops.hpp"
+#include "decimal.h"
+#include "mathops.h"
 
 /*
  * Routine: set_precision(decimal_t *dest, int size, int precision)

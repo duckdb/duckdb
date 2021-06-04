@@ -33,24 +33,24 @@
  * Contributors:
  * Gradient Systems
  */
-#include "w_call_center.hpp"
+#include "w_call_center.h"
 
-#include "append_info.hpp"
-#include "build_support.hpp"
-#include "columns.hpp"
-#include "config.hpp"
-#include "date.hpp"
-#include "decimal.hpp"
-#include "dist.hpp"
-#include "genrand.hpp"
-#include "misc.hpp"
-#include "nulls.hpp"
-#include "porting.hpp"
-#include "r_params.hpp"
-#include "scaling.hpp"
-#include "scd.hpp"
-#include "tables.hpp"
-#include "tdefs.hpp"
+#include "append_info.h"
+#include "build_support.h"
+#include "columns.h"
+#include "config.h"
+#include "date.h"
+#include "decimal.h"
+#include "dist.h"
+#include "genrand.h"
+#include "misc.h"
+#include "nulls.h"
+#include "porting.h"
+#include "r_params.h"
+#include "scaling.h"
+#include "scd.h"
+#include "tables.h"
+#include "tdefs.h"
 
 #include <assert.h>
 #include <stdio.h>

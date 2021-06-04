@@ -36,14 +36,14 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include "config.hpp"
-#include "porting.hpp"
-#include "grammar.hpp"
-#include "error_msg.hpp"
-#include "StringBuffer.hpp"
-//#include "expr.hpp"
-#include "decimal.hpp"
-#include "date.hpp"
+#include "config.h"
+#include "porting.h"
+#include "grammar.h"
+#include "error_msg.h"
+#include "StringBuffer.h"
+//#include "expr.h"
+#include "decimal.h"
+#include "date.h"
 
 int nLineNumber = 0;
 extern char *CurrentFileName;

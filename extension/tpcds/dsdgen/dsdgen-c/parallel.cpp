@@ -33,13 +33,13 @@
  * Contributors:
  * Gradient Systems
  */
-#include "config.hpp"
-#include "porting.hpp"
+#include "config.h"
+#include "porting.h"
 #include <stdio.h>
-#include "r_params.hpp"
-#include "scaling.hpp"
-#include "tdefs.hpp"
-#include "genrand.hpp"
+#include "r_params.h"
+#include "scaling.h"
+#include "tdefs.h"
+#include "genrand.h"
 
 /*
  * Routine: split_work(int tnum, worker_t *w)

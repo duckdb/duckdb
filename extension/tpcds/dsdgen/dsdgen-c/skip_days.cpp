@@ -1,8 +1,8 @@
-#include "skip_days.hpp"
-#include "date.hpp"
-#include "constants.hpp"
-#include "scaling.hpp"
-#include "parallel.hpp"
+#include "skip_days.h"
+#include "date.h"
+#include "constants.h"
+#include "scaling.h"
+#include "parallel.h"
 
 ds_key_t skipDays(int nTable, ds_key_t *pRemainder) {
 	static int bInit = 0;

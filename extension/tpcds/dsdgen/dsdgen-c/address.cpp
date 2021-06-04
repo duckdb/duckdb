@@ -33,18 +33,18 @@
  * Contributors:
  * Gradient Systems
  */
-#include "config.hpp"
-#include "porting.hpp"
+#include "config.h"
+#include "porting.h"
 #include <stdio.h>
-#include "address.hpp"
-#include "dist.hpp"
-#include "r_params.hpp"
-#include "genrand.hpp"
-#include "columns.hpp"
-#include "tables.hpp"
-#include "tdefs.hpp"
-#include "permute.hpp"
-#include "scaling.hpp"
+#include "address.h"
+#include "dist.h"
+#include "r_params.h"
+#include "genrand.h"
+#include "columns.h"
+#include "tables.h"
+#include "tdefs.h"
+#include "permute.h"
+#include "scaling.h"
 
 static int s_nCountyCount = 0;
 static int s_nCityCount = 0;

@@ -34,8 +34,8 @@
  * Gradient Systems
  */
 
-#include "config.hpp"
-#include "porting.hpp"
+#include "config.h"
+#include "porting.h"
 #include <stdio.h>
 #include <time.h>
 #include <errno.h>
@@ -50,13 +50,13 @@
 #endif /* AIX */
 #include <sys/types.h>
 #include <sys/stat.h>
-#include "date.hpp"
-#include "decimal.hpp"
-#include "dist.hpp"
-#include "misc.hpp"
-#include "tdefs.hpp"
-#include "r_params.hpp"
-#include "genrand.hpp"
+#include "date.h"
+#include "decimal.h"
+#include "dist.h"
+#include "misc.h"
+#include "tdefs.h"
+#include "r_params.h"
+#include "genrand.h"
 
 static char alpha_num[65] = "0123456789abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ,";
 

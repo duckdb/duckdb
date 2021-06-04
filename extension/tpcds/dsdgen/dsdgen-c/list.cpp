@@ -33,12 +33,12 @@
  * Contributors:
  * Gradient Systems
  */
-#include "config.hpp"
-#include "porting.hpp"
+#include "config.h"
+#include "porting.h"
 #include <stdio.h>
 #include <assert.h>
-#include "list.hpp"
-#include "error_msg.hpp"
+#include "list.h"
+#include "error_msg.h"
 
 list_t *makeList(int nFlags, int (*SortFunc)(const void *d1, const void *d2)) {
 	list_t *pRes;

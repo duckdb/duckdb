@@ -33,15 +33,15 @@
  * Contributors:
  * Gradient Systems
  */
-#include "config.hpp"
-#include "porting.hpp"
+#include "config.h"
+#include "porting.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
-#include "decimal.hpp"
-#include "date.hpp"
-#include "genrand.hpp"
-#include "dist.hpp"
+#include "decimal.h"
+#include "date.h"
+#include "genrand.h"
+#include "dist.h"
 
 /*
  * Routine: mk_sentence()
@@ -172,8 +172,8 @@ char *gen_text(char *dest, int min, int max, int stream) {
 
 #ifdef TEST
 #define DECLARER
-#include "r_driver.hpp"
-#include "r_params.hpp"
+#include "r_driver.h"
+#include "r_params.h"
 
 typedef struct {
 	char *name;

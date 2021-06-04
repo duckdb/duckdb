@@ -33,14 +33,14 @@
  * Contributors:
  * Gradient Systems
  */
-#include "config.hpp"
-#include "porting.hpp"
+#include "config.h"
+#include "porting.h"
 #include <stdio.h>
 #include <assert.h>
 #ifndef USE_STDLIB_H
 #include <malloc.h>
 #endif
-#include "StringBuffer.hpp"
+#include "StringBuffer.h"
 
 /*
  * Routine: InitBuffer

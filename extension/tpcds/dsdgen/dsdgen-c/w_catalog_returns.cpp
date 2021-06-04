@@ -33,19 +33,19 @@
  * Contributors:
  * Gradient Systems
  */
-#include "config.hpp"
-#include "porting.hpp"
+#include "config.h"
+#include "porting.h"
 #include <stdio.h>
-#include "genrand.hpp"
-#include "w_catalog_returns.hpp"
-#include "w_catalog_sales.hpp"
-#include "columns.hpp"
-#include "build_support.hpp"
-#include "tables.hpp"
-#include "constants.hpp"
-#include "nulls.hpp"
-#include "tdefs.hpp"
-#include "parallel.hpp"
+#include "genrand.h"
+#include "w_catalog_returns.h"
+#include "w_catalog_sales.h"
+#include "columns.h"
+#include "build_support.h"
+#include "tables.h"
+#include "constants.h"
+#include "nulls.h"
+#include "tdefs.h"
+#include "parallel.h"
 
 struct W_CATALOG_RETURNS_TBL g_w_catalog_returns;
 extern struct W_CATALOG_SALES_TBL g_w_catalog_sales;

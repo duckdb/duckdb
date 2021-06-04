@@ -33,19 +33,19 @@
  * Contributors:
  * Gradient Systems
  */
-#include "w_customer_demographics.hpp"
+#include "w_customer_demographics.h"
 
-#include "append_info.hpp"
-#include "build_support.hpp"
-#include "columns.hpp"
-#include "config.hpp"
-#include "constants.hpp"
-#include "genrand.hpp"
-#include "nulls.hpp"
-#include "porting.hpp"
-#include "sparse.hpp"
-#include "tables.hpp"
-#include "tdefs.hpp"
+#include "append_info.h"
+#include "build_support.h"
+#include "columns.h"
+#include "config.h"
+#include "constants.h"
+#include "genrand.h"
+#include "nulls.h"
+#include "porting.h"
+#include "sparse.h"
+#include "tables.h"
+#include "tdefs.h"
 
 #include <stdio.h>
 

@@ -33,26 +33,26 @@
  * Contributors:
  * Gradient Systems
  */
-#include "config.hpp"
-#include "porting.hpp"
+#include "config.h"
+#include "porting.h"
 #include <stdio.h>
 #include <stdlib.h>
 #ifdef WIN32
 #include <search.h>
 #include <limits.h>
 #endif
-#include "config.hpp"
-#include "porting.hpp"
-#include "decimal.hpp"
-#include "date.hpp"
-#include "genrand.hpp"
-#include "dist.hpp"
-#include "r_params.hpp"
-#include "params.hpp"
+#include "config.h"
+#include "porting.h"
+#include "decimal.h"
+#include "date.h"
+#include "genrand.h"
+#include "dist.h"
+#include "r_params.h"
+#include "params.h"
 
-#include "columns.hpp"
-#include "tables.hpp"
-#include "streams.hpp"
+#include "columns.h"
+#include "tables.h"
+#include "streams.h"
 
 static long Mult = 16807; /* the multiplier */
 static long nQ = 127773;  /* the quotient MAXINT / Mult */

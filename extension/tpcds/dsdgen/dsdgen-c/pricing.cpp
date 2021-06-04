@@ -33,17 +33,17 @@
  * Contributors:
  * Gradient Systems
  */
-#include "config.hpp"
-#include "porting.hpp"
+#include "config.h"
+#include "porting.h"
 #include <stdio.h>
-#include "decimal.hpp"
-#include "pricing.hpp"
-#include "constants.hpp"
-#include "columns.hpp"
-#include "error_msg.hpp"
-#include "dist.hpp"
-#include "genrand.hpp"
-#include "w_web_sales.hpp"
+#include "decimal.h"
+#include "pricing.h"
+#include "constants.h"
+#include "columns.h"
+#include "error_msg.h"
+#include "dist.h"
+#include "genrand.h"
+#include "w_web_sales.h"
 
 #define MAX_LIMIT 12
 static ds_limits_t aPriceLimits[MAX_LIMIT] = {
