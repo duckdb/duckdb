@@ -451,7 +451,10 @@ string QueryProfiler::ToJSON() const {
 	ss << "   \"result\": " + to_string(main_query.Elapsed()) + ",\n";
 	ss << "   \"timing\": " + to_string(main_query.Elapsed()) + ",\n";
 	ss << "   \"cardinality\": " + to_string(root->info.elements) + ",\n";
-	ss << "   \"extra-info\": \"" + StringUtil::Replace(query, "\n", "\\n") + "\", \n";
+	// JSON cannot have literal control characters in string literals
+	string extra_info = StringUtil::Replace(query, "\t", "\\t");
+	extra_info = StringUtil::Replace(extra_info, "\n", "\\n");
+	ss << "   \"extra-info\": \"" + extra_info + "\", \n";
 	// print the phase timings
 	ss << "   \"timings\": [\n";
 	const auto &ordered_phase_timings = GetOrderedPhaseTimings();
