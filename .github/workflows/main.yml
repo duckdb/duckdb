@@ -793,6 +793,38 @@ jobs:
     - name: Test
       run: (cd jdbccts && make DUCKDB_JAR=../build/release/tools/jdbc/duckdb_jdbc.jar test)
 
+
+  odbc:
+    name: ODBC
+    runs-on: ubuntu-20.04
+#    needs: linux-debug
+
+    env:
+      BUILD_ODBC: 1
+      GEN: ninja
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Dependencies
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build unixodbc-dev
+
+    - name: Install nanodbc
+      run: |
+        wget https://github.com/nanodbc/nanodbc/archive/refs/tags/v2.13.0.tar.gz -O nanodbc.tgz
+        tar xvf nanodbc.tgz -C nanodbc --strip-components=1
+        (cd nanodbc && mkdir build && cd build && cmake -DNANODBC_DISABLE_TESTS=OFF && cmake --build .)
+
+    - name: Build
+      run: make release
+
+    - name: Test
+      run: NANODBC_TEST_CONNSTR_ODBC="DRIVER=./build/release/tools/odbc/libduckdb_odbc.so" ./nanodbc/build/test/odbc_tests test_simple
+
+
+
   linux-python3:
     name: Python 3 Linux
     runs-on: ubuntu-20.04
