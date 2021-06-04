@@ -1,6 +1,10 @@
 const green = '#80ff80';
+const lightGreen = '#d9ffb3';
+const darkGreen = '#00cc44'
 const yellow = '#ffff4d';
 const red = '#ffa899';
+const darkRed = '#ff0000';
+const epsilon = 0.000000000000000001;
 var isDiff = false;
 
 function diff(obj1, obj2) {
@@ -83,12 +87,14 @@ root.descendants().forEach((d, i) => {
 var rectColor;
 if (!isDiff) {
     rectColor = d3.scaleLinear()
-        .domain([minTime, (maxTime + minTime) / 2, maxTime])
-        .range(['green', 'yellow', 'red']);
+        .domain([Number.MIN_SAFE_INTEGER, minTime, (maxTime + minTime) / 2, (maxTime + minTime) / 2 + epsilon, maxTime, Number.MAX_SAFE_INTEGER])
+        .range([darkGreen, green, lightGreen, yellow, red, darkRed]);
+
 } else {
     rectColor = d3.scaleLinear()
-        .domain([minTime, 0, maxTime])
-        .range(['green', 'yellow', 'red']);
+        .domain([Number.MIN_SAFE_INTEGER, minTime, 0, epsilon,  maxTime, Number.MAX_SAFE_INTEGER])
+        .range([darkGreen, green, lightGreen, yellow, red, darkRed]);
+
 }
 
 const widthScale = d3.scaleLinear()
@@ -352,12 +358,12 @@ function display_table(e, d) {
 
     if (!isDiff) {
         var rowColorScale = d3.scaleLinear()
-            .domain([min, (min + max) / 2, max])
-            .range(['#80ff80', '#ffff4d', '#ffa899']);
+            .domain([Number.MIN_SAFE_INTEGER, min, (min + max) / 2, (min + max) / 2 + epsilon, max, Number.MAX_SAFE_INTEGER])
+            .range([darkGreen, green, lightGreen, yellow, red, darkRed]);
     } else {
         rowColorScale = d3.scaleLinear()
-            .domain([min, 0, max])
-            .range(['#80ff80', '#ffff4d', '#ffa899']);
+            .domain([Number.MIN_SAFE_INTEGER, min, 0, epsilon, max, Number.MAX_SAFE_INTEGER])
+            .range([darkGreen, green, lightGreen, yellow, red, darkRed]);
     }
 
 
