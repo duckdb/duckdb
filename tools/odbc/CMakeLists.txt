@@ -6,7 +6,6 @@ if(NOT ODBC_FOUND)
 endif()
 
 add_definitions(-DNO_FRAMEWORKS)
-message(${ODBC_INCLUDE_DIRS})
 include_directories(${ODBC_INCLUDE_DIRS} include)
 
 add_library(duckdb_odbc SHARED driver.cpp connection.cpp statement.cpp
