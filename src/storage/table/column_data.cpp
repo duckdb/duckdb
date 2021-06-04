@@ -613,20 +613,6 @@ void ColumnData::Verify(RowGroup &parent) {
 #endif
 }
 
-struct SharedConstructor {
-	template <class T, typename... ARGS>
-	static shared_ptr<T> Create(ARGS &&...args) {
-		return make_shared<T>(std::forward<ARGS>(args)...);
-	}
-};
-
-struct UniqueConstructor {
-	template <class T, typename... ARGS>
-	static unique_ptr<T> Create(ARGS &&...args) {
-		return make_unique<T>(std::forward<ARGS>(args)...);
-	}
-};
-
 template <class RET, class OP>
 static RET CreateColumnInternal(DataTableInfo &info, idx_t column_index, idx_t start_row, const LogicalType &type,
                                 ColumnData *parent) {
@@ -640,14 +626,12 @@ static RET CreateColumnInternal(DataTableInfo &info, idx_t column_index, idx_t s
 
 shared_ptr<ColumnData> ColumnData::CreateColumn(DataTableInfo &info, idx_t column_index, idx_t start_row,
                                                 const LogicalType &type, ColumnData *parent) {
-	return CreateColumnInternal<shared_ptr<ColumnData>, SharedConstructor>(info, column_index, start_row, move(type),
-	                                                                       parent);
+	return CreateColumnInternal<shared_ptr<ColumnData>, SharedConstructor>(info, column_index, start_row, type, parent);
 }
 
 unique_ptr<ColumnData> ColumnData::CreateColumnUnique(DataTableInfo &info, idx_t column_index, idx_t start_row,
                                                       const LogicalType &type, ColumnData *parent) {
-	return CreateColumnInternal<unique_ptr<ColumnData>, UniqueConstructor>(info, column_index, start_row, move(type),
-	                                                                       parent);
+	return CreateColumnInternal<unique_ptr<ColumnData>, UniqueConstructor>(info, column_index, start_row, type, parent);
 }
 
 } // namespace duckdb

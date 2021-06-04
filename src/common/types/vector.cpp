@@ -1014,7 +1014,7 @@ const SelectionVector *ConstantVector::ZeroSelectionVector(idx_t count, Selectio
 		return &ConstantVector::ZERO_SELECTION_VECTOR;
 	}
 	owned_sel.Initialize(count);
-	for(idx_t i = 0; i < count; i++) {
+	for (idx_t i = 0; i < count; i++) {
 		owned_sel.set_index(i, 0);
 	}
 	return &owned_sel;
