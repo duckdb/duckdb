@@ -38,7 +38,7 @@
 
 #ifdef _WIN32
 // Need to come before any Windows.h includes
-#include <Winsock2.h>
+#include <winsock.h>
 #endif
 
 #define D_NAME_LEN 20
