@@ -80,7 +80,7 @@ public:
 	void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) override;
 
 	void Append(idx_t start, idx_t end, transaction_t commit_id);
-	void Delete(Transaction &transaction, row_t rows[], idx_t count);
+	idx_t Delete(Transaction &transaction, row_t rows[], idx_t count);
 	void CommitDelete(transaction_t commit_id, row_t rows[], idx_t count);
 
 	void Serialize(Serializer &serialize) override;
