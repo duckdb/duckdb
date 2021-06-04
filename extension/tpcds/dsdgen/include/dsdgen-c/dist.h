@@ -36,6 +36,11 @@
 #ifndef R_DIST_H
 #define R_DIST_H
 
+#ifdef _WIN32
+// Need to come before any Windows.h includes
+#include <Winsock2.h>
+#endif
+
 #define D_NAME_LEN 20
 
 typedef struct DIST_T {
