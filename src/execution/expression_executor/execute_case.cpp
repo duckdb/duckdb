@@ -80,11 +80,38 @@ void TemplatedFillLoop(Vector &vector, Vector &result, SelectionVector &sel, sel
 	}
 }
 
+void ValidityFillLoop(Vector &vector, Vector &result, SelectionVector &sel, sel_t count) {
+	result.SetVectorType(VectorType::FLAT_VECTOR);
+	auto &result_mask = FlatVector::Validity(result);
+	if (vector.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		if (ConstantVector::IsNull(vector)) {
+			for (idx_t i = 0; i < count; i++) {
+				result_mask.SetInvalid(sel.get_index(i));
+			}
+		}
+	} else {
+		VectorData vdata;
+		vector.Orrify(count, vdata);
+		for (idx_t i = 0; i < count; i++) {
+			auto source_idx = vdata.sel->get_index(i);
+			auto res_idx = sel.get_index(i);
+
+			result_mask.Set(res_idx, vdata.validity.RowIsValid(source_idx));
+		}
+	}
+}
+
 template <class T>
 void TemplatedCaseLoop(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &tside, idx_t tcount,
                        SelectionVector &fside, idx_t fcount) {
 	TemplatedFillLoop<T>(res_true, result, tside, tcount);
 	TemplatedFillLoop<T>(res_false, result, fside, fcount);
+}
+
+void ValidityCaseLoop(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &tside, idx_t tcount,
+                      SelectionVector &fside, idx_t fcount) {
+	ValidityFillLoop(res_true, result, tside, tcount);
+	ValidityFillLoop(res_false, result, fside, fcount);
 }
 
 void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &tside, idx_t tcount,
@@ -137,6 +164,7 @@ void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &
 		auto &result_entries = StructVector::GetEntries(result);
 		D_ASSERT(res_true_entries.size() == res_false_entries.size() &&
 		         res_true_entries.size() == result_entries.size());
+		ValidityCaseLoop(res_true, res_false, result, tside, tcount, fside, fcount);
 		for (idx_t i = 0; i < res_true_entries.size(); i++) {
 			Case(*res_true_entries[i], *res_false_entries[i], *result_entries[i], tside, tcount, fside, fcount);
 		}

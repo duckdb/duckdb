@@ -16,6 +16,17 @@ SELECT CASE WHEN 1=0 THEN {'i': 1} ELSE {'i': 2} END
 ----
 {'i': 2}
 
+# null values
+query I
+SELECT CASE WHEN 1=1 THEN NULL ELSE {'i': 2} END
+----
+NULL
+
+query I
+SELECT CASE WHEN 1=0 THEN NULL ELSE {'i': NULL} END
+----
+{'i': NULL}
+
 # now with a table
 query II
 SELECT i, CASE WHEN i%2=0 THEN {'i': 1} ELSE {'i': 2} END FROM range(6) tbl(i)
@@ -59,3 +70,35 @@ SELECT i, CASE WHEN i%2=0 THEN {'i': [1,2,3]} ELSE {'i': [7,8]} END FROM range(6
 3	{'i': [7, 8]}
 4	{'i': [1, 2, 3]}
 5	{'i': [7, 8]}
+
+# null values
+query II
+SELECT i, CASE WHEN i%2=0 THEN {'i': [1,2,3]} ELSE NULL END FROM range(6) tbl(i)
+----
+0	{'i': [1, 2, 3]}
+1	NULL
+2	{'i': [1, 2, 3]}
+3	NULL
+4	{'i': [1, 2, 3]}
+5	NULL
+
+query II
+SELECT i, CASE WHEN i%2=0 THEN {'i': [1,2,3]} ELSE {'i': NULL} END FROM range(6) tbl(i)
+----
+0	{'i': [1, 2, 3]}
+1	{'i': NULL}
+2	{'i': [1, 2, 3]}
+3	{'i': NULL}
+4	{'i': [1, 2, 3]}
+5	{'i': NULL}
+
+# different types on child lists
+query II
+SELECT i, CASE WHEN i%2=0 THEN {'i': [1,2,3]} ELSE {'i': ['hello']} END FROM range(6) tbl(i)
+----
+0	{'i': [1, 2, 3]}
+1	{'i': [hello]}
+2	{'i': [1, 2, 3]}
+3	{'i': [hello]}
+4	{'i': [1, 2, 3]}
+5	{'i': [hello]}

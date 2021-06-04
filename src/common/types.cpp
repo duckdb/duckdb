@@ -733,6 +733,21 @@ LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalTy
 			    make_pair(left.child_types()[0].first,
 			              MaxLogicalType(left.child_types()[0].second, right.child_types()[0].second)));
 			return LogicalType(LogicalTypeId::LIST, move(child_types));
+		} else if (left.id() == LogicalTypeId::STRUCT) {
+			// struct: perform recursively
+			auto &left_child_types = left.child_types();
+			auto &right_child_types = right.child_types();
+			if (left_child_types.size() != right_child_types.size()) {
+				// child types are not of equal size, we can't cast anyway
+				// just return the left child
+				return left;
+			}
+			child_list_t<LogicalType> child_types;
+			for (idx_t i = 0; i < left_child_types.size(); i++) {
+				auto child_type = MaxLogicalType(left_child_types[i].second, right_child_types[i].second);
+				child_types.push_back(make_pair(left_child_types[i].first, move(child_type)));
+			}
+			return LogicalType(LogicalTypeId::STRUCT, move(child_types));
 		} else {
 			// types are equal but no extra specifier: just return the type
 			// FIXME: LIST and STRUCT?
