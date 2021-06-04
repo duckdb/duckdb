@@ -108,6 +108,10 @@ char *strdup(const char *);
 #endif
 #endif /* WIN32 */
 
+#ifdef _MSC_VER
+#pragma comment(lib, "ws2_32.lib")
+#endif
+
 #ifdef INTERIX
 #include <limits.h>
 #define MAXINT INT_MAX
