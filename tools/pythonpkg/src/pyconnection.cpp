@@ -171,13 +171,6 @@ DuckDBPyConnection *DuckDBPyConnection::RegisterArrow(const string &name, py::ob
 	if (table.is_none() || (py_object_type != "Table" && py_object_type != "FileSystemDataset")) {
 		throw std::runtime_error("Only arrow tables/datasets are supported");
 	}
-	//	py::object table;
-	//	if (py_object_type == "FileSystemDataset"){
-	//	   table =  arrow_obj.attr("to_batches")();
-	//	}
-	//	else{
-	//	    table = arrow_obj;
-	//	}
 	auto stream_factory = make_unique<PythonTableArrowArrayStreamFactory>(table.ptr());
 
 	auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
@@ -283,13 +276,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrowTable(py::object &tabl
 	if (table.is_none() || (py_object_type != "Table" && py_object_type != "FileSystemDataset")) {
 		throw std::runtime_error("Only arrow tables/datasets are supported");
 	}
-	//	py::object table;
-	//	if (py_object_type == "FileSystemDataset"){
-	//	   table =  arrow_obj.attr("to_batches")();
-	//	}
-	//	else{
-	//	    table = arrow_obj;
-	//	}
+	
 	string name = "arrow_table_" + GenerateRandomName();
 
 	auto stream_factory = make_unique<PythonTableArrowArrayStreamFactory>(table.ptr());
