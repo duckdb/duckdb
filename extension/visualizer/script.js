@@ -14,7 +14,11 @@ function diff(obj1, obj2) {
             if (typeof obj2[key] === 'object') {
                 diff(obj1[key], obj2[key]);
             } else if (obj2[key] !== obj1[key]) {
-                obj1[key] = obj2[key] - obj1[key]
+                if(obj1[key] === 0  || obj2[key] === 0){
+                    obj1[key] = 1
+                } else {
+                    obj1[key] = (((obj1[key] / obj2[key]) * 100) / 100).toFixed(2);
+                }
             }
         }
 
@@ -92,8 +96,8 @@ if (!isDiff) {
 
 } else {
     rectColor = d3.scaleLinear()
-        .domain([Number.MIN_SAFE_INTEGER, minTime, 0, epsilon,  maxTime, Number.MAX_SAFE_INTEGER])
-        .range([darkGreen, green, lightGreen, yellow, red, darkRed]);
+        .domain([Number.MIN_SAFE_INTEGER, minTime, 1, 1 + epsilon,  maxTime, Number.MAX_SAFE_INTEGER])
+        .range([darkRed, red, yellow, lightGreen, green, darkGreen]);
 
 }
 
@@ -362,8 +366,8 @@ function display_table(e, d) {
             .range([darkGreen, green, lightGreen, yellow, red, darkRed]);
     } else {
         rowColorScale = d3.scaleLinear()
-            .domain([Number.MIN_SAFE_INTEGER, min, 0, epsilon, max, Number.MAX_SAFE_INTEGER])
-            .range([darkGreen, green, lightGreen, yellow, red, darkRed]);
+            .domain([Number.MIN_SAFE_INTEGER, min, 1, 1 + epsilon, max, Number.MAX_SAFE_INTEGER])
+            .range([darkRed, red, yellow, lightGreen, green, darkGreen]);
     }
 
 
