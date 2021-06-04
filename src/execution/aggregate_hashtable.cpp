@@ -418,12 +418,17 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 
 	idx_t remaining_entries = groups.size();
 
-	// orrify all the groups
-	auto group_data = unique_ptr<VectorData[]>(new VectorData[layout.ColumnCount()]);
+	// make a chunk that references the groups and the hashes
+	DataChunk group_chunk;
+	group_chunk.InitializeEmpty(layout.GetTypes());
 	for (idx_t grp_idx = 0; grp_idx < groups.ColumnCount(); grp_idx++) {
-		groups.data[grp_idx].Orrify(groups.size(), group_data[grp_idx]);
+		group_chunk.data[grp_idx].Reference(groups.data[grp_idx]);
 	}
-	group_hashes.Orrify(groups.size(), group_data[groups.ColumnCount()]);
+	group_chunk.data[groups.ColumnCount()].Reference(group_hashes);
+	group_chunk.SetCardinality(groups);
+
+	// orrify all the groups
+	auto group_data = group_chunk.Orrify();
 
 	idx_t new_group_count = 0;
 	while (remaining_entries > 0) {
@@ -479,7 +484,8 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 		}
 
 		// for each of the locations that are empty, serialize the group columns to the locations
-		RowOperations::Scatter(group_data.get(), layout, addresses, *string_heap, empty_vector, new_entry_count);
+		RowOperations::Scatter(group_chunk, group_data.get(), layout, addresses, *string_heap, empty_vector,
+		                       new_entry_count);
 		RowOperations::InitializeStates(layout, addresses, empty_vector, new_entry_count);
 
 		// now we have only the tuples remaining that might match to an existing group

@@ -95,7 +95,7 @@ static void ScatterStrings(VectorData &col, Vector &rows, RowDataCollection &str
 		}
 	}
 }
-void RowOperations::Scatter(VectorData group_data[], const RowLayout &layout, Vector &rows,
+void RowOperations::Scatter(DataChunk &columns, VectorData col_data[], const RowLayout &layout, Vector &rows,
                             RowDataCollection &string_heap, const SelectionVector &sel, idx_t count) {
 	if (count == 0) {
 		return;
@@ -112,7 +112,7 @@ void RowOperations::Scatter(VectorData group_data[], const RowLayout &layout, Ve
 	auto &offsets = layout.GetOffsets();
 	auto &types = layout.GetTypes();
 	for (idx_t col_no = 0; col_no < types.size(); col_no++) {
-		auto &col = group_data[col_no];
+		auto &col = col_data[col_no];
 		auto col_offset = offsets[col_no];
 
 		switch (types[col_no].InternalType()) {
@@ -160,7 +160,7 @@ void RowOperations::Scatter(VectorData group_data[], const RowLayout &layout, Ve
 			ScatterStrings(col, rows, string_heap, sel, count, col_offset, col_no);
 			break;
 		default:
-			throw Exception("Unsupported type for row scatter");
+			throw Exception("Unsupported type for RowOperations::Scatter");
 		}
 	}
 }

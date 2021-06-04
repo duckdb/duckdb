@@ -244,33 +244,42 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	Vector hash_values(LogicalType::HASH);
 	Hash(keys, *current_sel, added_count, hash_values);
 
+	// build a chunk so we can handle nested types that need more than Orrification
+	DataChunk source_chunk;
+	source_chunk.InitializeEmpty(layout.GetTypes());
+
 	vector<VectorData> source_data;
 	source_data.reserve(layout.ColumnCount());
 
 	// serialize the keys to the key locations
 	for (idx_t i = 0; i < keys.ColumnCount(); i++) {
+		source_chunk.data[i].Reference(keys.data[i]);
 		source_data.emplace_back(move(key_data[i]));
 	}
 	// now serialize the payload
 	D_ASSERT(build_types.size() == payload.ColumnCount());
 	for (idx_t i = 0; i < payload.ColumnCount(); i++) {
+		source_chunk.data[source_data.size()].Reference(payload.data[i]);
 		VectorData pdata;
 		payload.data[i].Orrify(payload.size(), pdata);
 		source_data.emplace_back(move(pdata));
 	}
 	if (IsRightOuterJoin(join_type)) {
 		// for FULL/RIGHT OUTER joins initialize the "found" boolean to false
+		source_chunk.data[source_data.size()].Reference(vfound);
 		VectorData fdata;
 		vfound.Orrify(keys.size(), fdata);
 		source_data.emplace_back(move(fdata));
 	}
 
 	// serialise the hashes at the end
+	source_chunk.data[source_data.size()].Reference(hash_values);
 	VectorData hdata;
 	hash_values.Orrify(keys.size(), hdata);
 	source_data.emplace_back(move(hdata));
 
-	RowOperations::Scatter(source_data.data(), layout, addresses, *string_heap, *current_sel, added_count);
+	RowOperations::Scatter(source_chunk, source_data.data(), layout, addresses, *string_heap, *current_sel,
+	                       added_count);
 }
 
 void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_locations[]) {
