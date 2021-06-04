@@ -814,7 +814,7 @@ jobs:
     - name: Install nanodbc
       run: |
         wget https://github.com/nanodbc/nanodbc/archive/refs/tags/v2.13.0.tar.gz -O nanodbc.tgz
-        (mkdir nanodbc && tar xvf nanodbc.tgz -C nanodbc --strip-components=1 && cd nanodbc && mkdir build && cd build && cmake -DNANODBC_DISABLE_TESTS=OFF && cmake --build .)
+        (mkdir nanodbc && tar xvf nanodbc.tgz -C nanodbc --strip-components=1 && cd nanodbc && mkdir build && cd build && cmake -DNANODBC_DISABLE_TESTS=OFF .. && cmake --build .)
 
     - name: Build
       run: make release
