@@ -13,7 +13,9 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_n
 	LogicalType base_type = TransformStringToLogicalType(name);
 
 	if (base_type == LogicalTypeId::STRUCT) {
-		D_ASSERT(type_name->typmods && type_name->typmods->length > 0);
+		if (!type_name->typmods || type_name->typmods->length == 0) {
+			throw ParserException("Struct needs a name and entries");
+		}
 		child_list_t<LogicalType> children;
 		unordered_set<string> name_collision_set;
 

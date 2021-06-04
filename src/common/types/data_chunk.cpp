@@ -209,11 +209,14 @@ void DataChunk::Print() {
 
 struct DuckDBArrowArrayChildHolder {
 	ArrowArray array;
-	// need max three pointers for strings
+	//! need max three pointers for strings
 	duckdb::array<const void *, 3> buffers = {{nullptr, nullptr, nullptr}};
-	Vector vector = {};
-	unique_ptr<data_t[]> string_offsets = nullptr;
-	unique_ptr<data_t[]> string_data = nullptr;
+	Vector vector;
+	unique_ptr<data_t[]> offsets;
+	unique_ptr<data_t[]> data;
+	//! Children of nested structures
+	::duckdb::vector<DuckDBArrowArrayChildHolder> children;
+	::duckdb::vector<ArrowArray *> children_ptrs;
 };
 
 struct DuckDBArrowArrayHolder {
@@ -231,6 +234,187 @@ static void ReleaseDuckDBArrowArray(ArrowArray *array) {
 	delete holder;
 }
 
+void InitializeChild(DuckDBArrowArrayChildHolder &child_holder, idx_t size) {
+	auto &child = child_holder.array;
+	child.private_data = nullptr;
+	child.release = ReleaseDuckDBArrowArray;
+	child.n_children = 0;
+	child.null_count = -1; // unknown
+	child.offset = 0;
+	child.dictionary = nullptr;
+	child.buffers = child_holder.buffers.data();
+
+	child.length = size;
+}
+void SetChildValidityMask(Vector &vector, ArrowArray &child) {
+	auto &mask = FlatVector::Validity(vector);
+	if (!mask.AllValid()) {
+		//! any bits are set: might have nulls
+		child.null_count = -1;
+	} else {
+		//! no bits are set; we know there are no nulls
+		child.null_count = 0;
+	}
+	child.buffers[0] = (void *)mask.GetData();
+}
+
+void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType &type, Vector &data, idx_t size) {
+	auto &child = child_holder.array;
+	auto &vector = child_holder.vector;
+	switch (type.id()) {
+	case LogicalTypeId::BOOLEAN:
+	case LogicalTypeId::TINYINT:
+	case LogicalTypeId::SMALLINT:
+	case LogicalTypeId::INTEGER:
+	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::UTINYINT:
+	case LogicalTypeId::USMALLINT:
+	case LogicalTypeId::UINTEGER:
+	case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::FLOAT:
+	case LogicalTypeId::DOUBLE:
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::DATE:
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_SEC:
+		vector.Reference(data);
+		child.n_buffers = 2;
+		child.buffers[1] = (void *)FlatVector::GetData(vector);
+		break;
+	case LogicalTypeId::SQLNULL:
+		child.n_buffers = 1;
+		break;
+	case LogicalTypeId::TIME: {
+		//! convert time from microseconds to milliseconds
+		vector.Reference(data);
+		child.n_buffers = 2;
+		child_holder.data = unique_ptr<data_t[]>(new data_t[sizeof(uint32_t) * (size + 1)]);
+		child.buffers[1] = child_holder.data.get();
+		auto source_ptr = FlatVector::GetData<dtime_t>(vector);
+		auto target_ptr = (uint32_t *)child.buffers[1];
+		for (idx_t row_idx = 0; row_idx < size; row_idx++) {
+			target_ptr[row_idx] = uint32_t(source_ptr[row_idx].micros / 1000);
+		}
+		break;
+	}
+	case LogicalTypeId::DECIMAL: {
+		child.n_buffers = 2;
+		vector.Reference(data);
+		//! We have to convert to INT128
+		switch (type.InternalType()) {
+
+		case PhysicalType::INT16: {
+			child_holder.data = unique_ptr<data_t[]>(new data_t[sizeof(hugeint_t) * (size)]);
+			child.buffers[1] = child_holder.data.get();
+			auto source_ptr = FlatVector::GetData<int16_t>(vector);
+			auto target_ptr = (hugeint_t *)child.buffers[1];
+			for (idx_t row_idx = 0; row_idx < size; row_idx++) {
+				target_ptr[row_idx] = source_ptr[row_idx];
+			}
+			break;
+		}
+		case PhysicalType::INT32: {
+			child_holder.data = unique_ptr<data_t[]>(new data_t[sizeof(hugeint_t) * (size)]);
+			child.buffers[1] = child_holder.data.get();
+			auto source_ptr = FlatVector::GetData<int32_t>(vector);
+			auto target_ptr = (hugeint_t *)child.buffers[1];
+			for (idx_t row_idx = 0; row_idx < size; row_idx++) {
+				target_ptr[row_idx] = source_ptr[row_idx];
+			}
+			break;
+		}
+		case PhysicalType::INT64: {
+			child_holder.data = unique_ptr<data_t[]>(new data_t[sizeof(hugeint_t) * (size)]);
+			child.buffers[1] = child_holder.data.get();
+			auto source_ptr = FlatVector::GetData<int64_t>(vector);
+			auto target_ptr = (hugeint_t *)child.buffers[1];
+			for (idx_t row_idx = 0; row_idx < size; row_idx++) {
+				target_ptr[row_idx] = source_ptr[row_idx];
+			}
+			break;
+		}
+		case PhysicalType::INT128: {
+			child.buffers[1] = (void *)FlatVector::GetData(vector);
+			break;
+		}
+		default:
+			throw std::runtime_error("Unsupported physical type for Decimal" + TypeIdToString(type.InternalType()));
+		}
+		break;
+	}
+
+	case LogicalTypeId::VARCHAR: {
+		vector.Reference(data);
+		child.n_buffers = 3;
+		child_holder.offsets = unique_ptr<data_t[]>(new data_t[sizeof(uint32_t) * (size + 1)]);
+		child.buffers[1] = child_holder.offsets.get();
+		D_ASSERT(child.buffers[1]);
+		//! step 1: figure out total string length:
+		idx_t total_string_length = 0;
+		auto string_t_ptr = FlatVector::GetData<string_t>(vector);
+		auto &mask = FlatVector::Validity(vector);
+		for (idx_t row_idx = 0; row_idx < size; row_idx++) {
+			if (!mask.RowIsValid(row_idx)) {
+				continue;
+			}
+			total_string_length += string_t_ptr[row_idx].GetSize();
+		}
+		//! step 2: allocate this much
+		child_holder.data = unique_ptr<data_t[]>(new data_t[total_string_length]);
+		child.buffers[2] = child_holder.data.get();
+		D_ASSERT(child.buffers[2]);
+		//! step 3: assign buffers
+		idx_t current_heap_offset = 0;
+		auto target_ptr = (uint32_t *)child.buffers[1];
+
+		for (idx_t row_idx = 0; row_idx < size; row_idx++) {
+			target_ptr[row_idx] = current_heap_offset;
+			if (!mask.RowIsValid(row_idx)) {
+				continue;
+			}
+			auto &str = string_t_ptr[row_idx];
+			memcpy((void *)((uint8_t *)child.buffers[2] + current_heap_offset), str.GetDataUnsafe(), str.GetSize());
+			current_heap_offset += str.GetSize();
+		}
+		target_ptr[size] = current_heap_offset; //! need to terminate last string!
+		break;
+	}
+	case LogicalTypeId::LIST: {
+
+		D_ASSERT(ListVector::HasEntry(data));
+
+		//! Lists have two buffers
+		child.n_buffers = 2;
+		//! Second Buffer is the list offsets
+		child_holder.offsets = unique_ptr<data_t[]>(new data_t[sizeof(uint32_t) * (size + 1)]);
+		child.buffers[1] = child_holder.offsets.get();
+		auto offset_ptr = (uint32_t *)child.buffers[1];
+		auto list_data = FlatVector::GetData<list_entry_t>(data);
+		idx_t offset = 0;
+		offset_ptr[0] = 0;
+		for (idx_t i = 0; i < size; i++) {
+			auto &le = list_data[i];
+			offset += le.length;
+			offset_ptr[i + 1] = offset;
+		}
+		auto list_size = ListVector::GetListSize(data);
+		child_holder.children.resize(1);
+		InitializeChild(child_holder.children[0], list_size);
+		child.n_children = 1;
+		child_holder.children_ptrs.push_back(&child_holder.children[0].array);
+		child.children = &child_holder.children_ptrs[0];
+		auto &child_vector = ListVector::GetEntry(data);
+		SetArrowChild(child_holder.children[0], type.child_types()[0].second, child_vector, list_size);
+		SetChildValidityMask(child_vector, child_holder.children[0].array);
+		break;
+	}
+
+	default:
+		throw std::runtime_error("Unsupported type " + type.ToString());
+	}
+} // namespace duckdb
 void DataChunk::ToArrowArray(ArrowArray *out_array) {
 	Normalify();
 	D_ASSERT(out_array);
@@ -256,156 +440,17 @@ void DataChunk::ToArrowArray(ArrowArray *out_array) {
 	out_array->null_count = 0; // needs to be 0
 	out_array->dictionary = nullptr;
 
-	// Configure child arrays
+	//! Configure child arrays
 	for (idx_t col_idx = 0; col_idx < ColumnCount(); col_idx++) {
 		auto &child_holder = root_holder->children[col_idx];
-		auto &child = child_holder.array;
-
+		InitializeChild(child_holder, size());
 		auto &vector = child_holder.vector;
-		vector.Reference(data[col_idx]);
-
-		child.private_data = nullptr;
-		child.release = ReleaseDuckDBArrowArray;
-		child.n_children = 0;
-		child.null_count = -1; // unknown
-		child.offset = 0;
-		child.dictionary = nullptr;
-		child.buffers = child_holder.buffers.data();
-
-		child.length = size();
-
+		auto &child = child_holder.array;
 		switch (vector.GetVectorType()) {
 			// TODO support other vector types
 		case VectorType::FLAT_VECTOR: {
-			switch (GetTypes()[col_idx].id()) {
-				// TODO support other data types
-			case LogicalTypeId::BOOLEAN:
-			case LogicalTypeId::TINYINT:
-			case LogicalTypeId::SMALLINT:
-			case LogicalTypeId::INTEGER:
-			case LogicalTypeId::BIGINT:
-			case LogicalTypeId::UTINYINT:
-			case LogicalTypeId::USMALLINT:
-			case LogicalTypeId::UINTEGER:
-			case LogicalTypeId::UBIGINT:
-			case LogicalTypeId::FLOAT:
-			case LogicalTypeId::DOUBLE:
-			case LogicalTypeId::HUGEINT:
-			case LogicalTypeId::DATE:
-			case LogicalTypeId::TIMESTAMP:
-			case LogicalTypeId::TIMESTAMP_MS:
-			case LogicalTypeId::TIMESTAMP_NS:
-			case LogicalTypeId::TIMESTAMP_SEC:
-				child.n_buffers = 2;
-				child.buffers[1] = (void *)FlatVector::GetData(vector);
-				break;
-			case LogicalTypeId::TIME: {
-				// convert time from microseconds to milliseconds
-				child.n_buffers = 2;
-				child_holder.string_data = unique_ptr<data_t[]>(new data_t[sizeof(uint32_t) * (size() + 1)]);
-				child.buffers[1] = child_holder.string_data.get();
-				auto source_ptr = FlatVector::GetData<dtime_t>(vector);
-				auto target_ptr = (uint32_t *)child.buffers[1];
-				for (idx_t row_idx = 0; row_idx < size(); row_idx++) {
-					target_ptr[row_idx] = uint32_t(source_ptr[row_idx].micros / 1000);
-				}
-				break;
-			}
-			case LogicalTypeId::DECIMAL: {
-				child.n_buffers = 2;
-				//! We have to convert to INT128
-				switch (GetTypes()[col_idx].InternalType()) {
-
-				case PhysicalType::INT16: {
-					child_holder.string_data = unique_ptr<data_t[]>(new data_t[sizeof(hugeint_t) * (size())]);
-					child.buffers[1] = child_holder.string_data.get();
-					auto source_ptr = FlatVector::GetData<int16_t>(vector);
-					auto target_ptr = (hugeint_t *)child.buffers[1];
-					for (idx_t row_idx = 0; row_idx < size(); row_idx++) {
-						target_ptr[row_idx] = source_ptr[row_idx];
-					}
-					break;
-				}
-				case PhysicalType::INT32: {
-					child_holder.string_data = unique_ptr<data_t[]>(new data_t[sizeof(hugeint_t) * (size())]);
-					child.buffers[1] = child_holder.string_data.get();
-					auto source_ptr = FlatVector::GetData<int32_t>(vector);
-					auto target_ptr = (hugeint_t *)child.buffers[1];
-					for (idx_t row_idx = 0; row_idx < size(); row_idx++) {
-						target_ptr[row_idx] = source_ptr[row_idx];
-					}
-					break;
-				}
-				case PhysicalType::INT64: {
-					child_holder.string_data = unique_ptr<data_t[]>(new data_t[sizeof(hugeint_t) * (size())]);
-					child.buffers[1] = child_holder.string_data.get();
-					auto source_ptr = FlatVector::GetData<int64_t>(vector);
-					auto target_ptr = (hugeint_t *)child.buffers[1];
-					for (idx_t row_idx = 0; row_idx < size(); row_idx++) {
-						target_ptr[row_idx] = source_ptr[row_idx];
-					}
-					break;
-				}
-				case PhysicalType::INT128: {
-					child.buffers[1] = (void *)FlatVector::GetData(vector);
-					break;
-				}
-				default:
-					throw std::runtime_error("Unsupported physical type for Decimal" +
-					                         TypeIdToString(GetTypes()[col_idx].InternalType()));
-				}
-				break;
-			}
-
-			case LogicalTypeId::VARCHAR: {
-				child.n_buffers = 3;
-				child_holder.string_offsets = unique_ptr<data_t[]>(new data_t[sizeof(uint32_t) * (size() + 1)]);
-				child.buffers[1] = child_holder.string_offsets.get();
-				D_ASSERT(child.buffers[1]);
-				// step 1: figure out total string length:
-				idx_t total_string_length = 0;
-				auto string_t_ptr = FlatVector::GetData<string_t>(vector);
-				auto &mask = FlatVector::Validity(vector);
-				for (idx_t row_idx = 0; row_idx < size(); row_idx++) {
-					if (!mask.RowIsValid(row_idx)) {
-						continue;
-					}
-					total_string_length += string_t_ptr[row_idx].GetSize();
-				}
-				// step 2: allocate this much
-				child_holder.string_data = unique_ptr<data_t[]>(new data_t[total_string_length]);
-				child.buffers[2] = child_holder.string_data.get();
-				D_ASSERT(child.buffers[2]);
-				// step 3: assign buffers
-				idx_t current_heap_offset = 0;
-				auto target_ptr = (uint32_t *)child.buffers[1];
-
-				for (idx_t row_idx = 0; row_idx < size(); row_idx++) {
-					target_ptr[row_idx] = current_heap_offset;
-					if (!mask.RowIsValid(row_idx)) {
-						continue;
-					}
-					auto &str = string_t_ptr[row_idx];
-					memcpy((void *)((uint8_t *)child.buffers[2] + current_heap_offset), str.GetDataUnsafe(),
-					       str.GetSize());
-					current_heap_offset += str.GetSize();
-				}
-				target_ptr[size()] = current_heap_offset; // need to terminate last string!
-				break;
-			}
-			default:
-				throw std::runtime_error("Unsupported type " + GetTypes()[col_idx].ToString());
-			}
-
-			auto &mask = FlatVector::Validity(vector);
-			if (!mask.AllValid()) {
-				// any bits are set: might have nulls
-				child.null_count = -1;
-			} else {
-				// no bits are set; we know there are no nulls
-				child.null_count = 0;
-			}
-			child.buffers[0] = (void *)mask.GetData();
+			SetArrowChild(child_holder, GetTypes()[col_idx], data[col_idx], size());
+			SetChildValidityMask(vector, child);
 			break;
 		}
 		default:

@@ -6,7 +6,7 @@
 
 namespace duckdb {
 
-unique_ptr<ParsedExpression> Transformer::TransformInterval(duckdb_libpgquery::PGIntervalConstant *node) {
+unique_ptr<ParsedExpression> Transformer::TransformInterval(duckdb_libpgquery::PGIntervalConstant *node, idx_t depth) {
 	// handle post-fix notation of INTERVAL
 
 	// three scenarios
@@ -16,7 +16,7 @@ unique_ptr<ParsedExpression> Transformer::TransformInterval(duckdb_libpgquery::P
 	unique_ptr<ParsedExpression> expr;
 	switch (node->val_type) {
 	case duckdb_libpgquery::T_PGAExpr:
-		expr = TransformExpression(node->eval);
+		expr = TransformExpression(node->eval, depth + 1);
 		break;
 	case duckdb_libpgquery::T_PGString:
 		expr = make_unique<ConstantExpression>(Value(node->sval));

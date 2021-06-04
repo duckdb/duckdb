@@ -49,7 +49,7 @@ void Transformer::TransformCopyOptions(CopyInfo &info, duckdb_libpgquery::PGList
 			break;
 		default:
 			info.options[def_elem->defname].push_back(
-			    TransformValue(*((duckdb_libpgquery::PGValue *)def_elem->arg))->value);
+			    TransformValue(*((duckdb_libpgquery::PGValue *)def_elem->arg), 0)->value);
 			break;
 		}
 	}
