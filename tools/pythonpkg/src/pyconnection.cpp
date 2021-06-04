@@ -276,7 +276,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrowTable(py::object &tabl
 	if (table.is_none() || (py_object_type != "Table" && py_object_type != "FileSystemDataset")) {
 		throw std::runtime_error("Only arrow tables/datasets are supported");
 	}
-	
+
 	string name = "arrow_table_" + GenerateRandomName();
 
 	auto stream_factory = make_unique<PythonTableArrowArrayStreamFactory>(table.ptr());
