@@ -16,7 +16,7 @@
 #include "duckdb/planner/operator/logical_join.hpp"
 
 namespace duckdb {
-constexpr size_t BUILD_THRESHOLD = 1 << 10; // 1024
+constexpr size_t BUILD_THRESHOLD = 1 << 17; // 1024
 constexpr size_t MIN_THRESHOLD = 1 << 7;    // 128
 
 struct PerfectHashJoinState {
