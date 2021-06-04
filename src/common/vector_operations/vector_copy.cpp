@@ -28,6 +28,9 @@ void VectorOperations::Copy(const Vector &source, Vector &target, const Selectio
 	D_ASSERT(source_offset <= source_count);
 	D_ASSERT(target.GetVectorType() == VectorType::FLAT_VECTOR);
 	D_ASSERT(source.GetType() == target.GetType());
+	idx_t copy_count = source_count - source_offset;
+
+	SelectionVector owned_sel;
 	const SelectionVector *sel = &sel_p;
 	switch (source.GetVectorType()) {
 	case VectorType::DICTIONARY_VECTOR: {
@@ -49,7 +52,7 @@ void VectorOperations::Copy(const Vector &source, Vector &target, const Selectio
 		return;
 	}
 	case VectorType::CONSTANT_VECTOR:
-		sel = &ConstantVector::ZERO_SELECTION_VECTOR;
+		sel = ConstantVector::ZeroSelectionVector(copy_count, owned_sel);
 		break; // carry on with below code
 	case VectorType::FLAT_VECTOR:
 		break;
@@ -57,7 +60,6 @@ void VectorOperations::Copy(const Vector &source, Vector &target, const Selectio
 		throw NotImplementedException("FIXME unimplemented vector type for VectorOperations::Copy");
 	}
 
-	idx_t copy_count = source_count - source_offset;
 	if (copy_count == 0) {
 		return;
 	}

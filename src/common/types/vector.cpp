@@ -1009,6 +1009,17 @@ void ConstantVector::SetNull(Vector &vector, bool is_null) {
 	}
 }
 
+const SelectionVector *ConstantVector::ZeroSelectionVector(idx_t count, SelectionVector &owned_sel) {
+	if (count <= STANDARD_VECTOR_SIZE) {
+		return &ConstantVector::ZERO_SELECTION_VECTOR;
+	}
+	owned_sel.Initialize(count);
+	for(idx_t i = 0; i < count; i++) {
+		owned_sel.set_index(i, 0);
+	}
+	return &owned_sel;
+}
+
 string_t StringVector::AddString(Vector &vector, const char *data, idx_t len) {
 	return StringVector::AddString(vector, string_t(data, len));
 }

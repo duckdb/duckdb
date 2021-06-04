@@ -203,6 +203,7 @@ struct ConstantVector {
 		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
 		return vector.validity;
 	}
+	DUCKDB_API static const SelectionVector *ZeroSelectionVector(idx_t count, SelectionVector &owned_sel);
 
 	static const sel_t ZERO_VECTOR[STANDARD_VECTOR_SIZE];
 	static const SelectionVector ZERO_SELECTION_VECTOR;
