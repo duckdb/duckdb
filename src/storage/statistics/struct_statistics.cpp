@@ -3,7 +3,7 @@
 namespace duckdb {
 
 StructStatistics::StructStatistics(LogicalType type_p) : BaseStatistics(move(type_p)) {
-	D_ASSERT(type.id() == LogicalTypeId::STRUCT);
+	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
 
 	auto &child_types = type.child_types();
 	child_stats.resize(child_types.size());

@@ -628,7 +628,7 @@ struct UniqueConstructor {
 template <class RET, class OP>
 static RET CreateColumnInternal(DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type,
                                 ColumnData *parent) {
-	if (type.id() == LogicalTypeId::STRUCT) {
+	if (type.InternalType() == PhysicalType::STRUCT) {
 		return OP::template Create<StructColumnData>(info, column_index, start_row, move(type), parent);
 	} else if (type.id() == LogicalTypeId::VALIDITY) {
 		return OP::template Create<ValidityColumnData>(info, column_index, start_row, parent);

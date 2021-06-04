@@ -6,7 +6,7 @@ namespace duckdb {
 StructColumnData::StructColumnData(DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type_p,
                                    ColumnData *parent)
     : ColumnData(info, column_index, start_row, move(type_p), parent), validity(info, 0, start_row, this) {
-	D_ASSERT(type.id() == LogicalTypeId::STRUCT);
+	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
 	auto &child_types = type.child_types();
 	D_ASSERT(child_types.size() > 0);
 	// the sub column index, starting at 1 (0 is the validity mask)
