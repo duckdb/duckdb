@@ -91,12 +91,12 @@ static unique_ptr<FunctionData> StructExtractBind(ClientContext &context, Scalar
 }
 
 static unique_ptr<BaseStatistics> PropagateStructExtractStats(ClientContext &context, BoundFunctionExpression &expr,
-                                                        FunctionData *bind_data,
-                                                        vector<unique_ptr<BaseStatistics>> &child_stats) {
+                                                              FunctionData *bind_data,
+                                                              vector<unique_ptr<BaseStatistics>> &child_stats) {
 	if (!child_stats[0]) {
 		return nullptr;
 	}
-	auto &struct_stats = (StructStatistics &) *child_stats[0];
+	auto &struct_stats = (StructStatistics &)*child_stats[0];
 	auto &info = (StructExtractBindData &)*bind_data;
 	return info.index < struct_stats.child_stats.size() ? struct_stats.child_stats[info.index]->Copy() : nullptr;
 }

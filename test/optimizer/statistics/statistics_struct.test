@@ -1,4 +1,4 @@
-# name: test/optimizer/statistics/statistics_setop.test
+# name: test/optimizer/statistics/statistics_struct.test
 # description: Statistics propagation test with structs
 # group: [statistics]
 

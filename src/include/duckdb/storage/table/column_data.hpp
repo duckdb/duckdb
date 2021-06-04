@@ -102,9 +102,9 @@ public:
 	virtual void Verify(RowGroup &parent);
 
 	static shared_ptr<ColumnData> CreateColumn(DataTableInfo &info, idx_t column_index, idx_t start_row,
-	                                           LogicalType type, ColumnData *parent = nullptr);
+	                                           const LogicalType &type, ColumnData *parent = nullptr);
 	static unique_ptr<ColumnData> CreateColumnUnique(DataTableInfo &info, idx_t column_index, idx_t start_row,
-	                                                 LogicalType type, ColumnData *parent = nullptr);
+	                                                 const LogicalType &type, ColumnData *parent = nullptr);
 
 protected:
 	//! Append a transient segment

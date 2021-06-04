@@ -612,38 +612,38 @@ void ColumnData::Verify(RowGroup &parent) {
 }
 
 struct SharedConstructor {
-	template <class T, typename... Args>
-	static shared_ptr<T> Create(Args &&...args) {
-		return make_shared<T>(std::forward<Args>(args)...);
+	template <class T, typename... ARGS>
+	static shared_ptr<T> Create(ARGS &&...args) {
+		return make_shared<T>(std::forward<ARGS>(args)...);
 	}
 };
 
 struct UniqueConstructor {
-	template <class T, typename... Args>
-	static unique_ptr<T> Create(Args &&...args) {
-		return make_unique<T>(std::forward<Args>(args)...);
+	template <class T, typename... ARGS>
+	static unique_ptr<T> Create(ARGS &&...args) {
+		return make_unique<T>(std::forward<ARGS>(args)...);
 	}
 };
 
 template <class RET, class OP>
-static RET CreateColumnInternal(DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type,
+static RET CreateColumnInternal(DataTableInfo &info, idx_t column_index, idx_t start_row, const LogicalType &type,
                                 ColumnData *parent) {
 	if (type.InternalType() == PhysicalType::STRUCT) {
-		return OP::template Create<StructColumnData>(info, column_index, start_row, move(type), parent);
+		return OP::template Create<StructColumnData>(info, column_index, start_row, type, parent);
 	} else if (type.id() == LogicalTypeId::VALIDITY) {
 		return OP::template Create<ValidityColumnData>(info, column_index, start_row, parent);
 	}
-	return OP::template Create<StandardColumnData>(info, column_index, start_row, move(type), parent);
+	return OP::template Create<StandardColumnData>(info, column_index, start_row, type, parent);
 }
 
 shared_ptr<ColumnData> ColumnData::CreateColumn(DataTableInfo &info, idx_t column_index, idx_t start_row,
-                                                LogicalType type, ColumnData *parent) {
+                                                const LogicalType &type, ColumnData *parent) {
 	return CreateColumnInternal<shared_ptr<ColumnData>, SharedConstructor>(info, column_index, start_row, move(type),
 	                                                                       parent);
 }
 
 unique_ptr<ColumnData> ColumnData::CreateColumnUnique(DataTableInfo &info, idx_t column_index, idx_t start_row,
-                                                      LogicalType type, ColumnData *parent) {
+                                                      const LogicalType &type, ColumnData *parent) {
 	return CreateColumnInternal<unique_ptr<ColumnData>, UniqueConstructor>(info, column_index, start_row, move(type),
 	                                                                       parent);
 }

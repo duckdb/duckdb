@@ -132,11 +132,12 @@ void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &
 		StringVector::AddHeapReference(result, res_false);
 		break;
 	case PhysicalType::STRUCT: {
-		auto &res_true_entries  = StructVector::GetEntries(res_true);
+		auto &res_true_entries = StructVector::GetEntries(res_true);
 		auto &res_false_entries = StructVector::GetEntries(res_false);
-		auto &result_entries    = StructVector::GetEntries(result);
-		D_ASSERT(res_true_entries.size() == res_false_entries.size() && res_true_entries.size() == result_entries.size());
-		for(idx_t i = 0; i < res_true_entries.size(); i++) {
+		auto &result_entries = StructVector::GetEntries(result);
+		D_ASSERT(res_true_entries.size() == res_false_entries.size() &&
+		         res_true_entries.size() == result_entries.size());
+		for (idx_t i = 0; i < res_true_entries.size(); i++) {
 			Case(*res_true_entries[i], *res_false_entries[i], *result_entries[i], tside, tcount, fside, fcount);
 		}
 		break;
