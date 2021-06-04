@@ -13,6 +13,8 @@ SQLRETURN SQLAllocHandle(SQLSMALLINT HandleType, SQLHANDLE InputHandle, SQLHANDL
 SQLRETURN SQLFreeHandle(SQLSMALLINT HandleType, SQLHANDLE Handle);
 
 // attributes
+SQLRETURN SQLGetConnectAttr(SQLHDBC ConnectionHandle, SQLINTEGER Attribute, SQLPOINTER ValuePtr,
+                            SQLINTEGER BufferLength, SQLINTEGER *StringLengthPtr);
 SQLRETURN SQLSetEnvAttr(SQLHENV EnvironmentHandle, SQLINTEGER Attribute, SQLPOINTER ValuePtr, SQLINTEGER StringLength);
 SQLRETURN SQLSetConnectAttr(SQLHDBC ConnectionHandle, SQLINTEGER Attribute, SQLPOINTER ValuePtr,
                             SQLINTEGER StringLength);
@@ -22,6 +24,9 @@ SQLRETURN SQLSetStmtAttr(SQLHSTMT StatementHandle, SQLINTEGER Attribute, SQLPOIN
 SQLRETURN SQLDriverConnect(SQLHDBC ConnectionHandle, SQLHWND WindowHandle, SQLCHAR *InConnectionString,
                            SQLSMALLINT StringLength1, SQLCHAR *OutConnectionString, SQLSMALLINT BufferLength,
                            SQLSMALLINT *StringLength2Ptr, SQLUSMALLINT DriverCompletion);
+SQLRETURN SQLConnect(SQLHDBC ConnectionHandle, SQLCHAR *ServerName, SQLSMALLINT NameLength1, SQLCHAR *UserName,
+                     SQLSMALLINT NameLength2, SQLCHAR *Authentication, SQLSMALLINT NameLength3);
+
 SQLRETURN SQLGetInfo(SQLHDBC ConnectionHandle, SQLUSMALLINT InfoType, SQLPOINTER InfoValuePtr, SQLSMALLINT BufferLength,
                      SQLSMALLINT *StringLengthPtr);
 SQLRETURN SQLEndTran(SQLSMALLINT HandleType, SQLHANDLE Handle, SQLSMALLINT CompletionType);
@@ -71,12 +76,13 @@ struct OdbcHandleEnv : public OdbcHandle {
 };
 
 struct OdbcHandleDbc : public OdbcHandle {
-	OdbcHandleDbc(OdbcHandleEnv *env_p) : OdbcHandle(OdbcHandleType::DBC), env(env_p) {
+	OdbcHandleDbc(OdbcHandleEnv *env_p) : OdbcHandle(OdbcHandleType::DBC), env(env_p), autocommit(true) {
 		D_ASSERT(env_p);
 		D_ASSERT(env_p->db);
 	};
 	OdbcHandleEnv *env;
 	unique_ptr<Connection> conn;
+	bool autocommit;
 };
 
 struct OdbcBoundCol {

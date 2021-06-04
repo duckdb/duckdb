@@ -21,7 +21,6 @@ SQLRETURN SQLAllocHandle(SQLSMALLINT HandleType, SQLHANDLE InputHandle, SQLHANDL
 		D_ASSERT(dbc->type == OdbcHandleType::DBC);
 		*OutputHandlePtr = new OdbcHandleStmt(dbc);
 		return SQL_SUCCESS;
-		break;
 	}
 	default:
 		return SQL_ERROR;
@@ -57,7 +56,22 @@ SQLRETURN SQLFreeHandle(SQLSMALLINT HandleType, SQLHANDLE Handle) {
 }
 
 SQLRETURN SQLSetEnvAttr(SQLHENV EnvironmentHandle, SQLINTEGER Attribute, SQLPOINTER ValuePtr, SQLINTEGER StringLength) {
-	return SQL_ERROR;
+	if (!EnvironmentHandle) {
+		return SQL_ERROR;
+	}
+	auto *env = (OdbcHandleEnv *)EnvironmentHandle;
+	if (env->type != OdbcHandleType::ENV) {
+		return SQL_ERROR;
+	}
+	switch (Attribute) {
+	case SQL_ATTR_ODBC_VERSION: {
+		auto version = (SQLINTEGER)(uintptr_t)ValuePtr;
+		// TODO actually do something with this?
+		return SQL_SUCCESS;
+	}
+	default:
+		return SQL_ERROR;
+	}
 }
 
 SQLRETURN SQLDriverConnect(SQLHDBC ConnectionHandle, SQLHWND WindowHandle, SQLCHAR *InConnectionString,
@@ -73,6 +87,24 @@ SQLRETURN SQLDriverConnect(SQLHDBC ConnectionHandle, SQLHWND WindowHandle, SQLCH
 	}
 	if (!dbc->conn) {
 		dbc->conn = make_unique<Connection>(*dbc->env->db);
+		dbc->conn->SetAutoCommit(dbc->autocommit);
+	}
+	return SQL_SUCCESS;
+}
+
+SQLRETURN SQLConnect(SQLHDBC ConnectionHandle, SQLCHAR *ServerName, SQLSMALLINT NameLength1, SQLCHAR *UserName,
+                     SQLSMALLINT NameLength2, SQLCHAR *Authentication, SQLSMALLINT NameLength3) {
+	// TODO this is duplicated from above, but ServerName is just the DSN
+	if (!ConnectionHandle) {
+		return SQL_ERROR;
+	}
+	auto *dbc = (OdbcHandleDbc *)ConnectionHandle;
+	if (dbc->type != OdbcHandleType::DBC) {
+		return SQL_ERROR;
+	}
+	if (!dbc->conn) {
+		dbc->conn = make_unique<Connection>(*dbc->env->db);
+		dbc->conn->SetAutoCommit(dbc->autocommit);
 	}
 	return SQL_SUCCESS;
 }

@@ -811,17 +811,22 @@ jobs:
     - name: Dependencies
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build unixodbc-dev
 
-    - name: Build
-      run: make release
 
     - name: Install nanodbc
       run: |
         wget https://github.com/nanodbc/nanodbc/archive/refs/tags/v2.13.0.tar.gz -O nanodbc.tgz
-        (mkdir nanodbc && tar xvf nanodbc.tgz -C nanodbc --strip-components=1 && cd nanodbc && mkdir build && cd build && cmake -DNANODBC_DISABLE_TESTS=OFF .. && cmake --build .)
+        (mkdir nanodbc && tar xvf nanodbc.tgz -C nanodbc --strip-components=1 && cd nanodbc && sed -i -e "s/set(test_list/set(test_list odbc/" test/CMakeLists.txt && mkdir build && cd build && cmake -DNANODBC_DISABLE_TESTS=OFF .. && cmake --build .)
 
-    - name: Test
-      run: NANODBC_TEST_CONNSTR_ODBC="DRIVER=./build/release/tools/odbc/libduckdb_odbc.so" ./nanodbc/build/test/odbc_tests test_simple
+    - name: Install psqlodbc
+      run: |
+        git clone https://github.com/Mytherin/psqlodbc.git
+        (cd psqlodbc && mkdir build && cd build && cmake .. && cmake --build .)
 
+    - name: Build
+      run: make debug
+
+    - name: Test nanodbc
+      run: NANODBC_TEST_CONNSTR_ODBC="DRIVER=./build/debug/tools/odbc/libduckdb_odbc.so" ./nanodbc/build/test/odbc_tests test_simple
 
 
   linux-python3:

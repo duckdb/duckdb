@@ -1,18 +1,35 @@
 #include "duckdb_odbc.hpp"
 using namespace duckdb;
 
-// https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqlsetconnectattr-function
+SQLRETURN SQLGetConnectAttr(SQLHDBC ConnectionHandle, SQLINTEGER Attribute, SQLPOINTER ValuePtr,
+                            SQLINTEGER BufferLength, SQLINTEGER *StringLengthPtr) {
+
+	return WithConnection(ConnectionHandle, [&](OdbcHandleDbc *dbc) {
+		if (!ValuePtr) {
+			return SQL_ERROR;
+		}
+		switch (Attribute) {
+		case SQL_ATTR_AUTOCOMMIT:
+			*(SQLUINTEGER *)ValuePtr = dbc->autocommit;
+			return SQL_SUCCESS;
+		default:
+			return SQL_ERROR;
+		}
+	});
+}
+
 SQLRETURN SQLSetConnectAttr(SQLHDBC ConnectionHandle, SQLINTEGER Attribute, SQLPOINTER ValuePtr,
                             SQLINTEGER StringLength) {
 	return WithConnection(ConnectionHandle, [&](OdbcHandleDbc *dbc) {
 		switch (Attribute) {
 		case SQL_ATTR_AUTOCOMMIT:
-			// assert StringLength == SQL_IS_UINTEGER
 			switch ((ptrdiff_t)ValuePtr) {
 			case (ptrdiff_t)SQL_AUTOCOMMIT_ON:
+				dbc->autocommit = true;
 				dbc->conn->SetAutoCommit(true);
 				return SQL_SUCCESS;
 			case (ptrdiff_t)SQL_AUTOCOMMIT_OFF:
+				dbc->autocommit = false;
 				dbc->conn->SetAutoCommit(false);
 				return SQL_SUCCESS;
 			default:
