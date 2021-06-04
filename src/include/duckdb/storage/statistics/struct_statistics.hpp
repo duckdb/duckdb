@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/common/enums/filter_propagate_result.hpp"
 
 namespace duckdb {
 
