@@ -82,6 +82,7 @@ char *strdup(const char *);
 #endif
 
 #ifdef WIN32
+#include <Winsock2.h>
 #include <windows.h>
 #include <winbase.h>
 #include <io.h>
