@@ -1,0 +1,187 @@
+# name: test/sql/join/test_nested_payloads.test
+# description: Test join with nested types in the payload
+# group: [join]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3), (5), (NULL)
+
+# Payload is LISTs of integers
+statement ok
+CREATE VIEW intlists AS SELECT * FROM (VALUES
+	(1, LIST_VALUE(1)),
+	(2, LIST_VALUE(NULL)),
+	(3, LIST_VALUE()),
+	(4, LIST_VALUE(2, 3)),
+	(5, LIST_VALUE(9,10,11)),
+	(NULL::INTEGER, LIST_VALUE(13))
+	) lv(k, l);
+
+query II
+SELECT k, l FROM intlists ORDER BY k;
+----
+NULL	[13]
+1	[1]
+2	[NULL]
+3	[]
+4	[2, 3]
+5	[9, 10, 11]
+
+query III
+SELECT i, k, l FROM integers, intlists WHERE i = k ORDER BY i, k
+----
+1	1	[1]
+2	2	[NULL]
+3	3	[]
+5	5	[9, 10, 11]
+
+query III
+SELECT i, k, l FROM integers LEFT OUTER JOIN intlists ON integers.i=intlists.k ORDER BY i, k
+----
+NULL	NULL	NULL
+1	1	[1]
+2	2	[NULL]
+3	3	[]
+5	5	[9, 10, 11]
+
+query III
+SELECT i, k, l FROM intlists RIGHT OUTER JOIN integers ON integers.i=intlists.k ORDER BY i, k
+----
+NULL	NULL	NULL
+1	1	[1]
+2	2	[NULL]
+3	3	[]
+5	5	[9, 10, 11]
+
+query III
+SELECT i, k, l FROM integers FULL OUTER JOIN intlists ON integers.i=intlists.k ORDER BY i, k
+----
+NULL	NULL	NULL
+NULL	NULL	[13]
+NULL	4	[2, 3]
+1	1	[1]
+2	2	[NULL]
+3	3	[]
+5	5	[9, 10, 11]
+
+# Payload is LISTs of strings
+statement ok
+CREATE VIEW strlists AS SELECT * FROM (VALUES
+	(1, LIST_VALUE('a')),
+	(2, LIST_VALUE(NULL)),
+	(3, LIST_VALUE()),
+	(4, LIST_VALUE('b', 'c')),
+	(5, LIST_VALUE('i','j','k')),
+	(NULL::INTEGER, LIST_VALUE('m'))
+	) lv(k, l);
+
+query II
+SELECT k, l FROM strlists ORDER BY k;
+----
+NULL	[m]
+1	[a]
+2	[NULL]
+3	[]
+4	[b, c]
+5	[i, j, k]
+
+query III
+SELECT i, k, l FROM integers, strlists WHERE i = k ORDER BY i
+----
+1	1	[a]
+2	2	[NULL]
+3	3	[]
+5	5	[i, j, k]
+
+query III
+SELECT i, k, l FROM integers LEFT OUTER JOIN strlists ON integers.i=strlists.k ORDER BY i
+----
+NULL	NULL	NULL
+1	1	[a]
+2	2	[NULL]
+3	3	[]
+5	5	[i, j, k]
+
+query III
+SELECT i, k, l FROM strlists RIGHT OUTER JOIN integers ON integers.i=strlists.k ORDER BY i
+----
+NULL	NULL	NULL
+1	1	[a]
+2	2	[NULL]
+3	3	[]
+5	5	[i, j, k]
+
+query III
+SELECT i, k, l FROM integers FULL OUTER JOIN strlists ON integers.i=strlists.k ORDER BY i, k
+----
+NULL	NULL	NULL
+NULL	NULL	[m]
+NULL	4	[b, c]
+1	1	[a]
+2	2	[NULL]
+3	3	[]
+5	5	[i, j, k]
+
+# Payload is STRUCTs of integers and strings
+statement ok
+CREATE VIEW structs AS SELECT * FROM (VALUES
+	(1, STRUCT_PACK(a := 1, b:= 'a')),
+	(2, STRUCT_PACK(a := NULL, b:= NULL)),
+	(3, STRUCT_PACK(a := 0, b:= '')),
+	(4, STRUCT_PACK(a := 2, b := 'c')),
+	(5, STRUCT_PACK(a := 9, b := 'i')),
+	(NULL::INTEGER, STRUCT_PACK(a := 13, b := 'm'))
+	) sv(k, s);
+
+query II
+SELECT k, s FROM structs ORDER BY k;
+----
+NULL	{'a': 13, 'b': m}
+1	{'a': 1, 'b': a}
+2	{'a': NULL, 'b': NULL}
+3	{'a': 0, 'b': }
+4	{'a': 2, 'b': c}
+5	{'a': 9, 'b': i}
+
+query III
+SELECT i, k, s FROM integers, structs WHERE i = k ORDER BY i, k
+----
+1	1	{'a': 1, 'b': a}
+2	2	{'a': NULL, 'b': NULL}
+3	3	{'a': 0, 'b': }
+5	5	{'a': 9, 'b': i}
+
+query III
+SELECT i, k, s FROM integers LEFT OUTER JOIN structs ON integers.i=structs.k ORDER BY i, k
+----
+NULL	NULL	NULL
+1	1	{'a': 1, 'b': a}
+2	2	{'a': NULL, 'b': NULL}
+3	3	{'a': 0, 'b': }
+5	5	{'a': 9, 'b': i}
+
+query III
+SELECT i, k, s FROM structs RIGHT OUTER JOIN integers ON integers.i=structs.k ORDER BY i, k
+----
+NULL	NULL	NULL
+1	1	{'a': 1, 'b': a}
+2	2	{'a': NULL, 'b': NULL}
+3	3	{'a': 0, 'b': }
+5	5	{'a': 9, 'b': i}
+
+
+query III
+SELECT i, k, s FROM integers FULL OUTER JOIN structs ON integers.i=structs.k ORDER BY i, k
+----
+NULL	NULL	NULL
+NULL	NULL	{'a': 13, 'b': m}
+NULL	4	{'a': 2, 'b': c}
+1	1	{'a': 1, 'b': a}
+2	2	{'a': NULL, 'b': NULL}
+3	3	{'a': 0, 'b': }
+5	5	{'a': 9, 'b': i}

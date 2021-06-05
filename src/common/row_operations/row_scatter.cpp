@@ -120,17 +120,18 @@ static void ScatterNestedVector(Vector &vec, VectorData &col, Vector &rows, RowD
 	data_ptr_t data_locations[STANDARD_VECTOR_SIZE];
 	data_collection.Build(count, data_locations, entry_sizes);
 
-	// Serialise the data
-	auto ptrs = FlatVector::GetData<data_ptr_t>(rows);
-	RowDataCollection::SerializeVector(vec, vcount, sel, count, col_no, data_locations, ptrs);
-
 	// Store pointers to the data in the row
+	// Do this first because SerializeVector destroys the locations
+	auto ptrs = FlatVector::GetData<data_ptr_t>(rows);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = sel.get_index(i);
 		auto row = ptrs[idx];
 
 		Store<data_ptr_t>(data_locations[i], row + col_offset);
 	}
+
+	// Serialise the data
+	RowDataCollection::SerializeVector(vec, vcount, sel, count, col_no, data_locations, ptrs);
 }
 
 void RowOperations::Scatter(DataChunk &columns, VectorData col_data[], const RowLayout &layout, Vector &rows,

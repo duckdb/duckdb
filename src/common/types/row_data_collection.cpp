@@ -219,6 +219,8 @@ static list_entry_t *GetListData(Vector &v) {
 }
 
 void RowDataCollection::ComputeListEntrySizes(Vector &v, idx_t entry_sizes[], idx_t vcount, idx_t offset) {
+	ListVector::Initialize(v);
+
 	VectorData vdata;
 	v.Orrify(vcount, vdata);
 
@@ -575,8 +577,8 @@ void RowDataCollection::SerializeListVector(Vector &v, idx_t vcount, const Selec
 			}
 
 			// now serialize to the locations
-			SerializeVector(child_vector, ListVector::GetListSize(v), sel, next, 0, list_entry_locations, nullptr,
-			                entry_offset);
+			SerializeVector(child_vector, ListVector::GetListSize(v), FlatVector::INCREMENTAL_SELECTION_VECTOR, next, 0,
+			                list_entry_locations, nullptr, entry_offset);
 
 			// update for next iteration
 			entry_remaining -= next;

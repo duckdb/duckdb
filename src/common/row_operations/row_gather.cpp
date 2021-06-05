@@ -39,7 +39,6 @@ static void TemplatedGatherLoop(Vector &rows, const SelectionVector &row_sel, Ve
 static void GatherNestedVector(Vector &rows, const SelectionVector &row_sel, Vector &col,
                                const SelectionVector &col_sel, idx_t count, idx_t col_offset, idx_t col_no) {
 	auto ptrs = FlatVector::GetData<data_ptr_t>(rows);
-	auto data = FlatVector::GetData<data_ptr_t>(col);
 
 	// Build the gather locations
 	data_ptr_t data_locations[STANDARD_VECTOR_SIZE];
@@ -47,9 +46,7 @@ static void GatherNestedVector(Vector &rows, const SelectionVector &row_sel, Vec
 	for (idx_t i = 0; i < count; i++) {
 		auto row_idx = row_sel.get_index(i);
 		mask_locations[i] = ptrs[row_idx];
-
-		auto col_idx = col_sel.get_index(i);
-		data_locations[i] = data[col_idx];
+		data_locations[i] = Load<data_ptr_t>(ptrs[row_idx] + col_offset);
 	}
 
 	// Deserialise into the vector locations
