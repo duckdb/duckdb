@@ -228,7 +228,16 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		child.children = &root_holder.nested_children_ptr.back()[0];
 		for (size_t type_idx = 0; type_idx < type.child_types().size(); type_idx++) {
 			InitializeChild(*child.children[type_idx]);
-			child.children[type_idx]->name = type.child_types()[type_idx].first.c_str();
+
+			auto &struct_col_name = type.child_types()[type_idx].first;
+			unique_ptr<char[]> name_ptr = unique_ptr<char[]>(new char[struct_col_name.size() + 1]);
+			for (size_t i = 0; i < struct_col_name.size(); i++) {
+				name_ptr[i] = struct_col_name[i];
+			}
+			name_ptr[struct_col_name.size()] = '\0';
+			root_holder.owned_type_names.push_back(move(name_ptr));
+
+			child.children[type_idx]->name = root_holder.owned_type_names.back().get();
 			SetArrowFormat(root_holder, *child.children[type_idx], type.child_types()[type_idx].second);
 		}
 		break;
