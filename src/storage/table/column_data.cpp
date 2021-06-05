@@ -9,6 +9,7 @@
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/table/validity_segment.hpp"
+#include "duckdb/storage/table/struct_column_data.hpp"
 
 #include "duckdb/storage/numeric_segment.hpp"
 #include "duckdb/storage/string_segment.hpp"
@@ -108,6 +109,15 @@ void ColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vecto
 		ScanVector<true, true>(nullptr, vector_index, state, result);
 	} else {
 		ScanVector<true, false>(nullptr, vector_index, state, result);
+	}
+}
+
+void ColumnData::ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_group, idx_t count, Vector &result) {
+	ColumnScanState child_state;
+	InitializeScanWithOffset(child_state, row_group_start + offset_in_row_group);
+	ScanVector(child_state, result);
+	if (updates) {
+		updates->FetchCommittedRange(offset_in_row_group, count, result);
 	}
 }
 
@@ -379,8 +389,15 @@ void ColumnCheckpointState::FlushToDisk() {
 	}
 }
 
-unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, TableDataWriter &writer,
-                                                         idx_t column_idx) {
+void ColumnData::CheckpointScan(ColumnSegment *segment, ColumnScanState &state, idx_t row_group_start,
+                                idx_t base_row_index, idx_t count, Vector &scan_vector) {
+	segment->Scan(state, base_row_index, count, scan_vector, 0);
+	if (updates) {
+		updates->FetchCommittedRange(segment->start - row_group_start + base_row_index, count, scan_vector);
+	}
+}
+
+unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, TableDataWriter &writer) {
 	// scan the segments of the column data
 	// set up the checkpoint state
 	auto checkpoint_state = CreateCheckpointState(row_group, writer);
@@ -394,7 +411,9 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, Ta
 
 	auto &block_manager = BlockManager::GetBlockManager(GetDatabase());
 	checkpoint_state->CreateEmptySegment();
-	Vector intermediate(row_group.columns[column_idx]->type);
+
+	bool is_validity = type.id() == LogicalTypeId::VALIDITY;
+	Vector intermediate(is_validity ? LogicalType::BOOLEAN : type, true, is_validity);
 	// we create a new segment tree with all the new segments
 	// we do this by scanning the current segments of the column and checking for changes
 	// if there are any changes (e.g. updates or deletes) we write the new changes
@@ -456,10 +475,8 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, Ta
 
 			idx_t count = MinValue<idx_t>(segment->count - base_row_index, STANDARD_VECTOR_SIZE);
 			state.row_index = segment->start + base_row_index;
-			segment->Scan(state, base_row_index, count, scan_vector, 0);
-			if (updates) {
-				updates->FetchCommittedRange(segment->start - row_group.start + base_row_index, count, scan_vector);
-			}
+
+			CheckpointScan(segment, state, row_group.start, base_row_index, count, scan_vector);
 
 			checkpoint_state->AppendData(scan_vector, count);
 		}
@@ -487,8 +504,7 @@ void ColumnData::Initialize(PersistentColumnData &column_data) {
 	}
 }
 
-void ColumnData::BaseDeserialize(DatabaseInstance &db, Deserializer &source, const LogicalType &type,
-                                 ColumnData &result) {
+void ColumnData::DeserializeColumn(Deserializer &source) {
 	// load the data pointers for the column
 	idx_t data_pointer_count = source.Read<idx_t>();
 	for (idx_t data_ptr = 0; data_ptr < data_pointer_count; data_ptr++) {
@@ -501,16 +517,18 @@ void ColumnData::BaseDeserialize(DatabaseInstance &db, Deserializer &source, con
 		data_pointer.statistics = BaseStatistics::Deserialize(source, type);
 
 		// create a persistent segment
-		auto segment = make_unique<PersistentSegment>(db, data_pointer.block_pointer.block_id,
+		auto segment = make_unique<PersistentSegment>(GetDatabase(), data_pointer.block_pointer.block_id,
 		                                              data_pointer.block_pointer.offset, type, data_pointer.row_start,
 		                                              data_pointer.tuple_count, move(data_pointer.statistics));
-		result.data.AppendSegment(move(segment));
+		data.AppendSegment(move(segment));
 	}
 }
 
 shared_ptr<ColumnData> ColumnData::Deserialize(DataTableInfo &info, idx_t column_index, idx_t start_row,
-                                               Deserializer &source, const LogicalType &type) {
-	return StandardColumnData::Deserialize(info, column_index, start_row, source, type);
+                                               Deserializer &source, const LogicalType &type, ColumnData *parent) {
+	auto entry = ColumnData::CreateColumn(info, column_index, start_row, type, parent);
+	entry->DeserializeColumn(source);
+	return entry;
 }
 
 void ColumnData::GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, vector<vector<Value>> &result) {
@@ -588,9 +606,32 @@ void ColumnData::Verify(RowGroup &parent) {
 			root = root->next.get();
 		}
 	} else {
-		D_ASSERT(parent.count == 0);
+		if (type.id() != LogicalTypeId::STRUCT) {
+			D_ASSERT(parent.count == 0);
+		}
 	}
 #endif
+}
+
+template <class RET, class OP>
+static RET CreateColumnInternal(DataTableInfo &info, idx_t column_index, idx_t start_row, const LogicalType &type,
+                                ColumnData *parent) {
+	if (type.InternalType() == PhysicalType::STRUCT) {
+		return OP::template Create<StructColumnData>(info, column_index, start_row, type, parent);
+	} else if (type.id() == LogicalTypeId::VALIDITY) {
+		return OP::template Create<ValidityColumnData>(info, column_index, start_row, parent);
+	}
+	return OP::template Create<StandardColumnData>(info, column_index, start_row, type, parent);
+}
+
+shared_ptr<ColumnData> ColumnData::CreateColumn(DataTableInfo &info, idx_t column_index, idx_t start_row,
+                                                const LogicalType &type, ColumnData *parent) {
+	return CreateColumnInternal<shared_ptr<ColumnData>, SharedConstructor>(info, column_index, start_row, type, parent);
+}
+
+unique_ptr<ColumnData> ColumnData::CreateColumnUnique(DataTableInfo &info, idx_t column_index, idx_t start_row,
+                                                      const LogicalType &type, ColumnData *parent) {
+	return CreateColumnInternal<unique_ptr<ColumnData>, UniqueConstructor>(info, column_index, start_row, type, parent);
 }
 
 } // namespace duckdb

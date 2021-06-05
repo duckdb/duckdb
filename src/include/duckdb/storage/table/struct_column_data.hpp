@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/storage/table/standard_column_data.hpp
+// duckdb/storage/table/struct_column_data.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -13,13 +13,15 @@
 
 namespace duckdb {
 
-//! Standard column data represents a regular flat column (e.g. a column of type INTEGER or STRING)
-class StandardColumnData : public ColumnData {
+//! Struct column data represents a struct
+class StructColumnData : public ColumnData {
 public:
-	StandardColumnData(DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type,
-	                   ColumnData *parent = nullptr);
+	StructColumnData(DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type,
+	                 ColumnData *parent = nullptr);
 
-	//! The validity column data
+	//! The sub-columns of the struct
+	vector<unique_ptr<ColumnData>> sub_columns;
+	//! The validity column data of the struct
 	ValidityColumnData validity;
 
 public:
@@ -29,7 +31,7 @@ public:
 	void Scan(Transaction &transaction, idx_t vector_index, ColumnScanState &state, Vector &result) override;
 	void ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates) override;
 	void InitializeAppend(ColumnAppendState &state) override;
-	void AppendData(BaseStatistics &stats, ColumnAppendState &state, VectorData &vdata, idx_t count) override;
+	void Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count) override;
 	void RevertAppend(row_t start_row) override;
 	void Fetch(ColumnScanState &state, row_t row_id, Vector &result) override;
 	void FetchRow(Transaction &transaction, ColumnFetchState &state, row_t row_id, Vector &result,
@@ -45,16 +47,10 @@ public:
 
 	unique_ptr<ColumnCheckpointState> CreateCheckpointState(RowGroup &row_group, TableDataWriter &writer) override;
 	unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, TableDataWriter &writer) override;
-	void CheckpointScan(ColumnSegment *segment, ColumnScanState &state, idx_t row_group_start, idx_t base_row_index,
-	                    idx_t count, Vector &scan_vector) override;
 
 	void DeserializeColumn(Deserializer &source) override;
 
 	void GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, vector<vector<Value>> &result) override;
-
-private:
-	template <bool SCAN_COMMITTED, bool ALLOW_UPDATES>
-	void TemplatedScan(Transaction *transaction, ColumnScanState &state, Vector &result);
 };
 
 } // namespace duckdb

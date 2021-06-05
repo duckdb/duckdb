@@ -1,0 +1,30 @@
+# name: test/optimizer/statistics/statistics_struct.test
+# description: Statistics propagation test with structs
+# group: [statistics]
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+CREATE TABLE structs AS SELECT {'i': i} c FROM range(4) tbl(i);
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+# we can statically determine IS NULL/IS NOT NULL are false, if there are no null values for this column
+query II
+EXPLAIN SELECT c IS NULL FROM structs;
+----
+logical_opt	<!REGEX>:.*IS_NULL.*
+
+# the same applies to c['i']
+query II
+EXPLAIN SELECT c['i'] IS NULL FROM structs;
+----
+logical_opt	<!REGEX>:.*IS_NULL.*
+
+# filter is out of range
+query II
+EXPLAIN SELECT * FROM structs WHERE c['i']=4;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*

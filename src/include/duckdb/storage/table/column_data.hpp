@@ -62,10 +62,12 @@ public:
 	//! Scan the next vector from the column
 	virtual void Scan(Transaction &transaction, idx_t vector_index, ColumnScanState &state, Vector &result);
 	virtual void ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates);
+	virtual void ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_group, idx_t count, Vector &result);
+
 	//! Initialize an appending phase for this column
 	virtual void InitializeAppend(ColumnAppendState &state);
 	//! Append a vector of type [type] to the end of the column
-	void Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count);
+	virtual void Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count);
 	virtual void AppendData(BaseStatistics &stats, ColumnAppendState &state, VectorData &vdata, idx_t count);
 	//! Revert a set of appends to the ColumnData
 	virtual void RevertAppend(row_t start_row);
@@ -85,18 +87,24 @@ public:
 	virtual void CommitDropColumn();
 
 	virtual unique_ptr<ColumnCheckpointState> CreateCheckpointState(RowGroup &row_group, TableDataWriter &writer);
-	virtual unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, TableDataWriter &writer,
-	                                                     idx_t column_idx);
+	virtual unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, TableDataWriter &writer);
+
+	virtual void CheckpointScan(ColumnSegment *segment, ColumnScanState &state, idx_t row_group_start,
+	                            idx_t base_row_index, idx_t count, Vector &scan_vector);
 
 	virtual void Initialize(PersistentColumnData &column_data);
 
-	static void BaseDeserialize(DatabaseInstance &db, Deserializer &source, const LogicalType &type,
-	                            ColumnData &result);
+	virtual void DeserializeColumn(Deserializer &source);
 	static shared_ptr<ColumnData> Deserialize(DataTableInfo &info, idx_t column_index, idx_t start_row,
-	                                          Deserializer &source, const LogicalType &type);
+	                                          Deserializer &source, const LogicalType &type, ColumnData *parent);
 
 	virtual void GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, vector<vector<Value>> &result);
 	virtual void Verify(RowGroup &parent);
+
+	static shared_ptr<ColumnData> CreateColumn(DataTableInfo &info, idx_t column_index, idx_t start_row,
+	                                           const LogicalType &type, ColumnData *parent = nullptr);
+	static unique_ptr<ColumnData> CreateColumnUnique(DataTableInfo &info, idx_t column_index, idx_t start_row,
+	                                                 const LogicalType &type, ColumnData *parent = nullptr);
 
 protected:
 	//! Append a transient segment

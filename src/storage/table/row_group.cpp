@@ -33,7 +33,7 @@ RowGroup::RowGroup(DatabaseInstance &db, DataTableInfo &table_info, const vector
 		auto &block_pointer = pointer.data_pointers[i];
 		MetaBlockReader column_data_reader(db, block_pointer.block_id);
 		column_data_reader.offset = block_pointer.offset;
-		this->columns.push_back(ColumnData::Deserialize(table_info, i, start, column_data_reader, types[i]));
+		this->columns.push_back(ColumnData::Deserialize(table_info, i, start, column_data_reader, types[i], nullptr));
 	}
 
 	// set up the statistics
@@ -51,7 +51,7 @@ RowGroup::~RowGroup() {
 void RowGroup::InitializeEmpty(const vector<LogicalType> &types) {
 	// set up the segment trees for the column segments
 	for (idx_t i = 0; i < types.size(); i++) {
-		auto column_data = make_shared<StandardColumnData>(GetTableInfo(), i, start, types[i]);
+		auto column_data = ColumnData::CreateColumn(GetTableInfo(), i, start, types[i]);
 		stats.push_back(make_shared<SegmentStatistics>(types[i]));
 		columns.push_back(move(column_data));
 	}
@@ -111,7 +111,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(ClientContext &context, const LogicalTy
 	Verify();
 
 	// construct a new column data for this type
-	auto column_data = make_shared<StandardColumnData>(GetTableInfo(), changed_idx, start, target_type);
+	auto column_data = ColumnData::CreateColumn(GetTableInfo(), changed_idx, start, target_type);
 
 	ColumnAppendState append_state;
 	column_data->InitializeAppend(append_state);
@@ -156,7 +156,7 @@ unique_ptr<RowGroup> RowGroup::AddColumn(ClientContext &context, ColumnDefinitio
 	Verify();
 
 	// construct a new column data for the new column
-	auto added_column = make_shared<StandardColumnData>(GetTableInfo(), columns.size(), start, new_column.type);
+	auto added_column = ColumnData::CreateColumn(GetTableInfo(), columns.size(), start, new_column.type);
 
 	auto added_col_stats = make_shared<SegmentStatistics>(new_column.type);
 	idx_t rows_to_write = this->count;
@@ -568,7 +568,7 @@ RowGroupPointer RowGroup::Checkpoint(TableDataWriter &writer, vector<unique_ptr<
 	// checkpoint the individual columns of the row group
 	for (idx_t column_idx = 0; column_idx < columns.size(); column_idx++) {
 		auto &column = columns[column_idx];
-		auto checkpoint_state = column->Checkpoint(*this, writer, column_idx);
+		auto checkpoint_state = column->Checkpoint(*this, writer);
 		D_ASSERT(checkpoint_state);
 
 		auto stats = checkpoint_state->GetStatistics();
@@ -590,7 +590,7 @@ RowGroupPointer RowGroup::Checkpoint(TableDataWriter &writer, vector<unique_ptr<
 
 		// store the stats and the data pointers in the row group pointers
 		row_group_pointer.data_pointers.push_back(pointer);
-		row_group_pointer.statistics.push_back(move(state->global_stats));
+		row_group_pointer.statistics.push_back(state->GetStatistics());
 
 		// now flush the actual column data to disk
 		state->FlushToDisk();
@@ -636,6 +636,9 @@ shared_ptr<VersionNode> RowGroup::DeserializeDeletes(Deserializer &source) {
 	auto version_info = make_shared<VersionNode>();
 	for (idx_t i = 0; i < chunk_count; i++) {
 		idx_t vector_index = source.Read<idx_t>();
+		if (vector_index >= RowGroup::ROW_GROUP_VECTOR_COUNT) {
+			throw Exception("In DeserializeDeletes, vector_index is out of range for the row group. Corrupted file?");
+		}
 		version_info->info[vector_index] = ChunkInfo::Deserialize(source);
 	}
 	return version_info;
