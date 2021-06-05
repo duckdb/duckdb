@@ -8,10 +8,10 @@ SELECT [{'i':1,'j':[2,3]},NULL]
 ----
 [{'i': 1, 'j': [2, 3]}, NULL]
 
-#query T
-#SELECT [{'i':1,'j':[2,3]},NULL, {'i':1,'j':[2,3]}]
-#----
-#[{'i': 1, 'j': [2, 3]}, NULL,{'i': 1, 'j': [2, 3]}]
+query T
+SELECT [{'i':1,'j':[2,3]},NULL, {'i':1,'j':[2,3]}]
+----
+[{'i': 1, 'j': [2, 3]}, NULL, {'i': 1, 'j': [2, 3]}]
 
 query T
 SELECT * FROM (VALUES (MAP(LIST_VALUE(1,2),LIST_VALUE(3,4))), (NULL), (MAP(LIST_VALUE(1,2),LIST_VALUE(3,4))), (NULL)) as a

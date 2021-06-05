@@ -146,7 +146,7 @@ class TestArrowNested(object):
         compare_results("SELECT * FROM (VALUES ({'i':1,'j':2}), (NULL), ({'i':1,'j':2}), (NULL)) as a")
 
         # Null checks on lists with structs not working properly
-        # compare_results("SELECT [{'i':1,'j':[2,3]},NULL,{'i':1,'j':[2,3]}]")
+        compare_results("SELECT [{'i':1,'j':[2,3]},NULL,{'i':1,'j':[2,3]}]")
         
         # MAP that is NULL entirely ( This should be fixed when the previous is fixed)
         compare_results("SELECT * FROM (VALUES (MAP(LIST_VALUE(1,2),LIST_VALUE(3,4))), (MAP(LIST_VALUE(1,2),LIST_VALUE(3,4))), (NULL)) as a")
