@@ -832,7 +832,7 @@ jobs:
       run: |
         echo -e "[ODBC]\nTrace = yes\nTraceFile = /tmp/odbctrace\n\n[DuckDB Driver]\nDriver = ./build/debug/tools/odbc/libduckdb_odbc.so" > odbcinst.ini
         echo -e "[DuckDB]\nDriver = DuckDB Driver\nDatabase=:memory:\n" > odbc.ini
-        ODBCSYSINI=. PSQLODBC_TEST_DSN="DuckDB" ./build/debug/psql_odbc_test connect-test || cat /tmp/odbctrace
+        ODBCSYSINI=. PSQLODBC_TEST_DSN="DuckDB" ./psqlodbc/build/debug/psql_odbc_test connect-test || cat /tmp/odbctrace
 
 
   linux-python3:
