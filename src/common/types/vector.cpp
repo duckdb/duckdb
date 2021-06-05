@@ -155,11 +155,13 @@ void Vector::Initialize(const LogicalType &new_type, bool zero_data) {
 
 		auxiliary = move(struct_buffer);
 	}
-	if (GetTypeIdSize(type.InternalType()) > 0) {
+	auto internal_type = type.InternalType();
+	auto type_size = GetTypeIdSize(internal_type);
+	if (type_size > 0) {
 		buffer = VectorBuffer::CreateStandardVector(VectorType::FLAT_VECTOR, type);
 		data = buffer->GetData();
 		if (zero_data) {
-			memset(data, 0, STANDARD_VECTOR_SIZE * GetTypeIdSize(type.InternalType()));
+			memset(data, 0, STANDARD_VECTOR_SIZE * type_size);
 		}
 	} else {
 		buffer = VectorBuffer::CreateStandardVector(VectorType::FLAT_VECTOR, type);
@@ -247,7 +249,9 @@ void Vector::SetValue(idx_t index, const Value &val) {
 
 	validity.EnsureWritable();
 	validity.Set(index, !val.is_null);
-	if (val.is_null) {
+	if (val.is_null && GetType().InternalType() != PhysicalType::STRUCT) {
+		// for structs we still need to set the child-entries to NULL
+		// so we do not bail out yet
 		return;
 	}
 
@@ -326,14 +330,18 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		break;
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::STRUCT: {
-		auto &children = StructVector::GetEntries(*this);
-		D_ASSERT(children.size() == val.struct_value.size());
+		D_ASSERT(GetVectorType() == VectorType::CONSTANT_VECTOR || GetVectorType() == VectorType::FLAT_VECTOR);
 
-		for (size_t i = 0; i < val.struct_value.size(); i++) {
-			auto &struct_child = val.struct_value[i];
-			D_ASSERT(GetVectorType() == VectorType::CONSTANT_VECTOR || GetVectorType() == VectorType::FLAT_VECTOR);
+		auto &children = StructVector::GetEntries(*this);
+		D_ASSERT(val.is_null || children.size() == val.struct_value.size());
+		for (size_t i = 0; i < children.size(); i++) {
 			auto &vec_child = children[i];
-			vec_child->SetValue(index, struct_child);
+			if (!val.is_null) {
+				auto &struct_child = val.struct_value[i];
+				vec_child->SetValue(index, struct_child);
+			} else {
+				vec_child->SetValue(index, Value());
+			}
 		}
 		break;
 	}
@@ -638,7 +646,6 @@ void Vector::Normalify(idx_t count) {
 			TemplatedFlattenConstantVector<list_entry_t>(data, old_data, count);
 			break;
 		}
-		case PhysicalType::MAP:
 		case PhysicalType::STRUCT: {
 			auto &child_entries = StructVector::GetEntries(*this);
 			for (auto &child : child_entries) {
@@ -745,7 +752,6 @@ void Vector::Serialize(idx_t count, Serializer &serializer) {
 		}
 		serializer.WriteData((const_data_ptr_t)flat_mask.GetData(), flat_mask.ValidityMaskSize(count));
 	}
-
 	if (TypeIsConstantSize(type.InternalType())) {
 		// constant size type: simple copy
 		idx_t write_size = GetTypeIdSize(type.InternalType()) * count;
@@ -760,6 +766,14 @@ void Vector::Serialize(idx_t count, Serializer &serializer) {
 				auto idx = vdata.sel->get_index(i);
 				auto source = !vdata.validity.RowIsValid(idx) ? NullValue<string_t>() : strings[idx];
 				serializer.WriteStringLen((const_data_ptr_t)source.GetDataUnsafe(), source.GetSize());
+			}
+			break;
+		}
+		case PhysicalType::STRUCT: {
+			Normalify(count);
+			auto &entries = StructVector::GetEntries(*this);
+			for (auto &entry : entries) {
+				entry->Serialize(count, serializer);
 			}
 			break;
 		}
@@ -788,15 +802,39 @@ void Vector::Deserialize(idx_t count, Deserializer &source) {
 
 		VectorOperations::ReadFromStorage(ptr.get(), count, *this);
 	} else {
-		auto strings = FlatVector::GetData<string_t>(*this);
-		for (idx_t i = 0; i < count; i++) {
-			// read the strings
-			auto str = source.Read<string>();
-			// now add the string to the StringHeap of the vector
-			// and write the pointer into the vector
-			if (validity.RowIsValid(i)) {
-				strings[i] = StringVector::AddStringOrBlob(*this, str);
+		switch (type.InternalType()) {
+		case PhysicalType::VARCHAR: {
+			auto strings = FlatVector::GetData<string_t>(*this);
+			for (idx_t i = 0; i < count; i++) {
+				// read the strings
+				auto str = source.Read<string>();
+				// now add the string to the StringHeap of the vector
+				// and write the pointer into the vector
+				if (validity.RowIsValid(i)) {
+					strings[i] = StringVector::AddStringOrBlob(*this, str);
+				}
 			}
+			break;
+		}
+		case PhysicalType::STRUCT: {
+			auto &entries = StructVector::GetEntries(*this);
+			for (auto &entry : entries) {
+				entry->Deserialize(count, source);
+			}
+			break;
+		}
+		default:
+			throw NotImplementedException("Unimplemented variable width type for Vector::Deserialize!");
+		}
+	}
+}
+
+void Vector::SetVectorType(VectorType vector_type) {
+	buffer->SetVectorType(vector_type);
+	if (vector_type == VectorType::CONSTANT_VECTOR && GetType().InternalType() == PhysicalType::STRUCT) {
+		auto &entries = StructVector::GetEntries(*this);
+		for (auto &entry : entries) {
+			entry->SetVectorType(vector_type);
 		}
 	}
 }
@@ -838,7 +876,7 @@ void Vector::UTFVerify(idx_t count) {
 	UTFVerify(FlatVector::INCREMENTAL_SELECTION_VECTOR, count);
 }
 
-void Vector::Verify(const SelectionVector &sel, idx_t count, ValidityMask *validity_parent) {
+void Vector::Verify(const SelectionVector &sel, idx_t count) {
 #ifdef DEBUG
 	if (count == 0) {
 		return;
@@ -904,16 +942,19 @@ void Vector::Verify(const SelectionVector &sel, idx_t count, ValidityMask *valid
 		}
 	}
 
-	if (GetType().InternalType() == PhysicalType::STRUCT || GetType().InternalType() == PhysicalType::MAP) {
+	if (GetType().InternalType() == PhysicalType::STRUCT) {
 		auto &child_types = GetType().child_types();
-		D_ASSERT(!child_types.empty());
+		D_ASSERT(child_types.size() > 0);
 		if (GetVectorType() == VectorType::FLAT_VECTOR || GetVectorType() == VectorType::CONSTANT_VECTOR) {
-
+			// create a selection vector of the non-null entries of the struct vector
 			auto &children = StructVector::GetEntries(*this);
 			D_ASSERT(child_types.size() == children.size());
 			for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
+				if (GetVectorType() == VectorType::CONSTANT_VECTOR) {
+					D_ASSERT(children[child_idx]->GetVectorType() == VectorType::CONSTANT_VECTOR);
+				}
 				D_ASSERT(children[child_idx]->GetType() == child_types[child_idx].second);
-				children[child_idx]->Verify(sel, count, validity_parent);
+				children[child_idx]->Verify(sel, count);
 			}
 		}
 	}
@@ -934,11 +975,6 @@ void Vector::Verify(const SelectionVector &sel, idx_t count, ValidityMask *valid
 			for (idx_t i = 0; i < count; i++) {
 				auto idx = sel.get_index(i);
 				auto &le = list_data[idx];
-				if (validity_parent) {
-					if (!validity_parent->RowIsValid(idx)) {
-						continue;
-					}
-				}
 				if (validity.RowIsValid(idx) && ListVector::HasEntry(*this)) {
 					D_ASSERT(le.offset + le.length <= ListVector::GetListSize(*this));
 				}
@@ -948,16 +984,40 @@ void Vector::Verify(const SelectionVector &sel, idx_t count, ValidityMask *valid
 #endif
 }
 
-void Vector::Verify(idx_t count, ValidityMask *validity_parent) {
+void Vector::Verify(idx_t count) {
 	if (count > STANDARD_VECTOR_SIZE) {
 		SelectionVector selection_vector(count);
 		for (size_t i = 0; i < count; i++) {
 			selection_vector.set_index(i, i);
 		}
-		Verify(selection_vector, count, &validity);
+		Verify(selection_vector, count);
 	} else {
-		Verify(FlatVector::INCREMENTAL_SELECTION_VECTOR, count, &validity);
+		Verify(FlatVector::INCREMENTAL_SELECTION_VECTOR, count);
 	}
+}
+
+void ConstantVector::SetNull(Vector &vector, bool is_null) {
+	D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
+	vector.validity.Set(0, !is_null);
+	if (is_null && vector.GetType().InternalType() == PhysicalType::STRUCT) {
+		// set all child entries to null as well
+		auto &entries = StructVector::GetEntries(vector);
+		for (auto &entry : entries) {
+			entry->SetVectorType(VectorType::CONSTANT_VECTOR);
+			ConstantVector::SetNull(*entry, is_null);
+		}
+	}
+}
+
+const SelectionVector *ConstantVector::ZeroSelectionVector(idx_t count, SelectionVector &owned_sel) {
+	if (count <= STANDARD_VECTOR_SIZE) {
+		return &ConstantVector::ZERO_SELECTION_VECTOR;
+	}
+	owned_sel.Initialize(count);
+	for (idx_t i = 0; i < count; i++) {
+		owned_sel.set_index(i, 0);
+	}
+	return &owned_sel;
 }
 
 string_t StringVector::AddString(Vector &vector, const char *data, idx_t len) {

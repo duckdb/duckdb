@@ -2,6 +2,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/storage/statistics/struct_statistics.hpp"
 
 namespace duckdb {
 
@@ -89,9 +90,20 @@ static unique_ptr<FunctionData> StructExtractBind(ClientContext &context, Scalar
 	return make_unique<StructExtractBindData>(key, key_index, return_type);
 }
 
+static unique_ptr<BaseStatistics> PropagateStructExtractStats(ClientContext &context, BoundFunctionExpression &expr,
+                                                              FunctionData *bind_data,
+                                                              vector<unique_ptr<BaseStatistics>> &child_stats) {
+	if (!child_stats[0]) {
+		return nullptr;
+	}
+	auto &struct_stats = (StructStatistics &)*child_stats[0];
+	auto &info = (StructExtractBindData &)*bind_data;
+	return info.index < struct_stats.child_stats.size() ? struct_stats.child_stats[info.index]->Copy() : nullptr;
+}
+
 ScalarFunction StructExtractFun::GetFunction() {
 	return ScalarFunction("struct_extract", {LogicalType::STRUCT, LogicalType::VARCHAR}, LogicalType::ANY,
-	                      StructExtractFunction, false, StructExtractBind);
+	                      StructExtractFunction, false, StructExtractBind, nullptr, PropagateStructExtractStats);
 }
 
 void StructExtractFun::RegisterFunction(BuiltinFunctions &set) {

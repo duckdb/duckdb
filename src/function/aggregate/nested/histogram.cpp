@@ -115,10 +115,15 @@ static void HistogramFinalize(Vector &state_vector, FunctionData *, Vector &resu
 	auto &child_entries = StructVector::GetEntries(result);
 	auto &bucket_list = child_entries[0];
 	auto &count_list = child_entries[1];
+
+	auto &bucket_validity = FlatVector::Validity(*bucket_list);
+	auto &count_validity = FlatVector::Validity(*count_list);
 	for (idx_t i = 0; i < count; i++) {
 		auto state = states[sdata.sel->get_index(i)];
 		if (!state->hist) {
 			mask.SetInvalid(i);
+			bucket_validity.SetInvalid(i);
+			count_validity.SetInvalid(i);
 			continue;
 		}
 		for (auto &entry : *state->hist) {

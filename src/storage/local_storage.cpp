@@ -215,7 +215,7 @@ static idx_t GetChunk(Vector &row_ids) {
 	return first_id / STANDARD_VECTOR_SIZE;
 }
 
-void LocalStorage::Delete(DataTable *table, Vector &row_ids, idx_t count) {
+idx_t LocalStorage::Delete(DataTable *table, Vector &row_ids, idx_t count) {
 	auto storage = GetStorage(table);
 	// figure out the chunk from which these row ids came
 	idx_t chunk_idx = GetChunk(row_ids);
@@ -233,16 +233,21 @@ void LocalStorage::Delete(DataTable *table, Vector &row_ids, idx_t count) {
 	} else {
 		deleted = entry->second.get();
 	}
-	storage->deleted_rows += count;
 
 	// now actually mark the entries as deleted in the deleted vector
 	idx_t base_index = MAX_ROW_ID + chunk_idx * STANDARD_VECTOR_SIZE;
 
+	idx_t deleted_count = 0;
 	auto ids = FlatVector::GetData<row_t>(row_ids);
 	for (idx_t i = 0; i < count; i++) {
 		auto id = ids[i] - base_index;
+		if (!deleted[id]) {
+			deleted_count++;
+		}
 		deleted[id] = true;
 	}
+	storage->deleted_rows += deleted_count;
+	return deleted_count;
 }
 
 template <class T>

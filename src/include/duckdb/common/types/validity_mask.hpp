@@ -195,7 +195,6 @@ public:
 
 	//! Marks "count" entries in the validity mask as invalid (null)
 	inline void SetAllInvalid(idx_t count) {
-		D_ASSERT(count <= STANDARD_VECTOR_SIZE);
 		EnsureWritable();
 		for (idx_t i = 0; i < ValidityBuffer::EntryCount(count); i++) {
 			validity_mask[i] = 0;
@@ -204,7 +203,6 @@ public:
 
 	//! Marks "count" entries in the validity mask as valid (not null)
 	inline void SetAllValid(idx_t count) {
-		D_ASSERT(count <= STANDARD_VECTOR_SIZE);
 		EnsureWritable();
 		for (idx_t i = 0; i < ValidityBuffer::EntryCount(count); i++) {
 			validity_mask[i] = ValidityBuffer::MAX_ENTRY;

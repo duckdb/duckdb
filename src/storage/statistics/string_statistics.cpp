@@ -14,6 +14,7 @@ StringStatistics::StringStatistics(LogicalType type_p) : BaseStatistics(move(typ
 	max_string_length = 0;
 	has_unicode = false;
 	has_overflow_strings = false;
+	validity_stats = make_unique<ValidityStatistics>(false);
 }
 
 unique_ptr<BaseStatistics> StringStatistics::Copy() {
@@ -146,24 +147,24 @@ FilterPropagateResult StringStatistics::CheckZonemap(ExpressionType comparison_t
 }
 
 static idx_t GetValidMinMaxSubstring(data_ptr_t data) {
-	idx_t len = 0;
 	for (idx_t i = 0; i < StringStatistics::MAX_STRING_MINMAX_SIZE; i++) {
 		if (data[i] == '\0') {
 			return i;
 		}
-		if ((data[i] & 0xC0) != 0x80) {
-			len = i;
+		if ((data[i] & 0x80) != 0) {
+			return i;
 		}
 	}
-	return len;
+	return StringStatistics::MAX_STRING_MINMAX_SIZE;
 }
 
 string StringStatistics::ToString() {
 	idx_t min_len = GetValidMinMaxSubstring(min);
 	idx_t max_len = GetValidMinMaxSubstring(max);
-	return StringUtil::Format("String Statistics %s[Min: %s, Max: %s, Has Unicode: %s, Max String Length: %lld]",
-	                          validity_stats ? validity_stats->ToString() : "", string((const char *)min, min_len),
-	                          string((const char *)max, max_len), has_unicode ? "true" : "false", max_string_length);
+	return StringUtil::Format("[Min: %s, Max: %s, Has Unicode: %s, Max String Length: %lld]%s",
+	                          string((const char *)min, min_len), string((const char *)max, max_len),
+	                          has_unicode ? "true" : "false", max_string_length,
+	                          validity_stats ? validity_stats->ToString() : "");
 }
 
 void StringStatistics::Verify(Vector &vector, idx_t count) {

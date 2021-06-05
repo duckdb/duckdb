@@ -92,12 +92,11 @@ PhysicalType LogicalType::GetInternalType() {
 		return PhysicalType::VARCHAR;
 	case LogicalTypeId::INTERVAL:
 		return PhysicalType::INTERVAL;
+	case LogicalTypeId::MAP:
 	case LogicalTypeId::STRUCT:
 		return PhysicalType::STRUCT;
 	case LogicalTypeId::LIST:
 		return PhysicalType::LIST;
-	case LogicalTypeId::MAP:
-		return PhysicalType::MAP;
 	case LogicalTypeId::HASH:
 		return PhysicalType::HASH;
 	case LogicalTypeId::POINTER:
@@ -210,8 +209,6 @@ string TypeIdToString(PhysicalType type) {
 		return "STRUCT<?>";
 	case PhysicalType::LIST:
 		return "LIST<?>";
-	case PhysicalType::MAP:
-		return "MAP<?>";
 	case PhysicalType::INVALID:
 		return "INVALID";
 	case PhysicalType::BIT:
@@ -256,7 +253,6 @@ idx_t GetTypeIdSize(PhysicalType type) {
 		return sizeof(string_t);
 	case PhysicalType::INTERVAL:
 		return sizeof(interval_t);
-	case PhysicalType::MAP:
 	case PhysicalType::STRUCT:
 		return 0; // no own payload
 	case PhysicalType::LIST:
@@ -737,6 +733,21 @@ LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalTy
 			    make_pair(left.child_types()[0].first,
 			              MaxLogicalType(left.child_types()[0].second, right.child_types()[0].second)));
 			return LogicalType(LogicalTypeId::LIST, move(child_types));
+		} else if (left.id() == LogicalTypeId::STRUCT) {
+			// struct: perform recursively
+			auto &left_child_types = left.child_types();
+			auto &right_child_types = right.child_types();
+			if (left_child_types.size() != right_child_types.size()) {
+				// child types are not of equal size, we can't cast anyway
+				// just return the left child
+				return left;
+			}
+			child_list_t<LogicalType> child_types;
+			for (idx_t i = 0; i < left_child_types.size(); i++) {
+				auto child_type = MaxLogicalType(left_child_types[i].second, right_child_types[i].second);
+				child_types.push_back(make_pair(left_child_types[i].first, move(child_type)));
+			}
+			return LogicalType(LogicalTypeId::STRUCT, move(child_types));
 		} else {
 			// types are equal but no extra specifier: just return the type
 			// FIXME: LIST and STRUCT?

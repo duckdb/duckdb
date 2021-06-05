@@ -1,5 +1,6 @@
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/storage/statistics/string_statistics.hpp"
+#include "duckdb/storage/statistics/struct_statistics.hpp"
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -61,9 +62,13 @@ unique_ptr<BaseStatistics> BaseStatistics::CreateEmpty(LogicalType type) {
 		return make_unique<NumericStatistics>(move(type));
 	case PhysicalType::VARCHAR:
 		return make_unique<StringStatistics>(move(type));
+	case PhysicalType::STRUCT:
+		return make_unique<StructStatistics>(move(type));
 	case PhysicalType::INTERVAL:
 	default:
-		return make_unique<BaseStatistics>(move(type));
+		auto base_stats = make_unique<BaseStatistics>(move(type));
+		base_stats->validity_stats = make_unique<ValidityStatistics>(false);
+		return base_stats;
 	}
 }
 
@@ -94,15 +99,16 @@ unique_ptr<BaseStatistics> BaseStatistics::Deserialize(Deserializer &source, Log
 	case PhysicalType::VARCHAR:
 		result = StringStatistics::Deserialize(source, move(type));
 		break;
+	case PhysicalType::STRUCT:
+		result = StructStatistics::Deserialize(source, move(type));
+		break;
 	case PhysicalType::INTERVAL:
 		result = make_unique<BaseStatistics>(move(type));
 		break;
 	default:
 		throw InternalException("Unimplemented type for statistics deserialization");
 	}
-	if (!can_have_null) {
-		result->validity_stats = make_unique<ValidityStatistics>(can_have_null);
-	}
+	result->validity_stats = make_unique<ValidityStatistics>(can_have_null);
 	return result;
 }
 

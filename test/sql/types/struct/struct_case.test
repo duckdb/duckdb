@@ -1,0 +1,104 @@
+# name: test/sql/types/struct/struct_case.test
+# description: Test struct case statement
+# group: [struct]
+
+statement ok
+PRAGMA enable_verification
+
+# constant case
+query I
+SELECT CASE WHEN 1=1 THEN {'i': 1} ELSE {'i': 2} END
+----
+{'i': 1}
+
+query I
+SELECT CASE WHEN 1=0 THEN {'i': 1} ELSE {'i': 2} END
+----
+{'i': 2}
+
+# null values
+query I
+SELECT CASE WHEN 1=1 THEN NULL ELSE {'i': 2} END
+----
+NULL
+
+query I
+SELECT CASE WHEN 1=0 THEN NULL ELSE {'i': NULL} END
+----
+{'i': NULL}
+
+# now with a table
+query II
+SELECT i, CASE WHEN i%2=0 THEN {'i': 1} ELSE {'i': 2} END FROM range(6) tbl(i)
+----
+0	{'i': 1}
+1	{'i': 2}
+2	{'i': 1}
+3	{'i': 2}
+4	{'i': 1}
+5	{'i': 2}
+
+# strings
+query II
+SELECT i, CASE WHEN i%2=0 THEN {'i': 'hello'} ELSE {'i': 'world'} END FROM range(6) tbl(i)
+----
+0	{'i': hello}
+1	{'i': world}
+2	{'i': hello}
+3	{'i': world}
+4	{'i': hello}
+5	{'i': world}
+
+# nested structs
+query II
+SELECT i, CASE WHEN i%2=0 THEN {'i': 'hello', 'j': {'a': 3, 'b': NULL}} ELSE {'i': 'world', 'j': {'a': 7, 'b': 22}} END FROM range(6) tbl(i)
+----
+0	{'i': hello, 'j': {'a': 3, 'b': NULL}}
+1	{'i': world, 'j': {'a': 7, 'b': 22}}
+2	{'i': hello, 'j': {'a': 3, 'b': NULL}}
+3	{'i': world, 'j': {'a': 7, 'b': 22}}
+4	{'i': hello, 'j': {'a': 3, 'b': NULL}}
+5	{'i': world, 'j': {'a': 7, 'b': 22}}
+
+# lists in structs
+query II
+SELECT i, CASE WHEN i%2=0 THEN {'i': [1,2,3]} ELSE {'i': [7,8]} END FROM range(6) tbl(i)
+----
+0	{'i': [1, 2, 3]}
+1	{'i': [7, 8]}
+2	{'i': [1, 2, 3]}
+3	{'i': [7, 8]}
+4	{'i': [1, 2, 3]}
+5	{'i': [7, 8]}
+
+# null values
+query II
+SELECT i, CASE WHEN i%2=0 THEN {'i': [1,2,3]} ELSE NULL END FROM range(6) tbl(i)
+----
+0	{'i': [1, 2, 3]}
+1	NULL
+2	{'i': [1, 2, 3]}
+3	NULL
+4	{'i': [1, 2, 3]}
+5	NULL
+
+query II
+SELECT i, CASE WHEN i%2=0 THEN {'i': [1,2,3]} ELSE {'i': NULL} END FROM range(6) tbl(i)
+----
+0	{'i': [1, 2, 3]}
+1	{'i': NULL}
+2	{'i': [1, 2, 3]}
+3	{'i': NULL}
+4	{'i': [1, 2, 3]}
+5	{'i': NULL}
+
+# different types on child lists
+query II
+SELECT i, CASE WHEN i%2=0 THEN {'i': [1,2,3]} ELSE {'i': ['hello']} END FROM range(6) tbl(i)
+----
+0	{'i': [1, 2, 3]}
+1	{'i': [hello]}
+2	{'i': [1, 2, 3]}
+3	{'i': [hello]}
+4	{'i': [1, 2, 3]}
+5	{'i': [hello]}

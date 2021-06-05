@@ -173,7 +173,7 @@ SELECT STRUCT_EXTRACT(STRUCT_PACK(xx := e, yy := g), g) FROM struct_data
 statement error
 SELECT STRUCT_EXTRACT(STRUCT_PACK(xx := e, yy := g), '42') FROM struct_data
 
-statement error
+statement ok
 CREATE TABLE test AS SELECT e, STRUCT_PACK(e) FROM struct_data
 
 statement ok
