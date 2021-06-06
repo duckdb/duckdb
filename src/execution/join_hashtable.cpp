@@ -978,7 +978,7 @@ void JoinHashTable::FullScanHashTable(JoinHTScanState &state, LogicalType key_ty
 	idx_t offset = 0;
 	GatherResultVector(build_vector, FlatVector::INCREMENTAL_SELECTION_VECTOR, (uintptr_t *)key_locations,
 	                   FlatVector::INCREMENTAL_SELECTION_VECTOR, found_entries, offset);
-	SelectionVector sel_build;
+	SelectionVector sel_build(found_entries);
 	FillSelectionVectorSwitch(build_vector, sel_build, found_entries);
 	// gather the values from the RHS using the sel_build selection vector
 	offset = condition_size;
@@ -1179,9 +1179,6 @@ void JoinHashTable::FillWithOffsets(vector<data_ptr_t> &key_locations, JoinHTSca
 
 template <typename T>
 void JoinHashTable::TemplatedFillSelectionVector(Vector &source, SelectionVector &sel_vec, idx_t count) {
-	auto min_value = pjoin_state.build_min.GetValue<T>();
-	auto max_value = pjoin_state.build_max.GetValue<T>();
-	pjoin_state.range = max_value - min_value;
 
 	auto vector_data = FlatVector::GetData<T>(source);
 	// generate the selection vector

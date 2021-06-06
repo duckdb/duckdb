@@ -117,6 +117,7 @@ void PhysicalHashJoin::Sink(ExecutionContext &context, GlobalOperatorState &stat
 		for (idx_t i = 0; i < right_projection_map.size(); i++) {
 			lstate.build_chunk.data[i].Reference(input.data[right_projection_map[i]]);
 		}
+		sink.key_type = lstate.join_keys.GetTypes()[0];
 		sink.hash_table->Build(lstate.join_keys, lstate.build_chunk);
 	} else {
 		// there is not a projected map: place the entire right chunk in the HT
@@ -257,7 +258,7 @@ bool PhysicalHashJoin::ExecuteInvisibleJoin(ExecutionContext &context, DataChunk
 	Vector source(keys_vec.GetType());
 	auto keys_count = physical_state->join_keys.size();
 	SelectionVector sel_vec(keys_count);
-	// FillSelectionVectorSwitch(keys_vec, sel_vec, keys_count);
+	FillSelectionVectorSwitch(keys_vec, sel_vec, keys_count);
 	// copy the probe data to the result
 	result.Reference(physical_state->child_chunk);
 	// on the RHS, we need to fetch the data from the perfect hash table and slice it using the new selection vector
@@ -295,7 +296,8 @@ bool PhysicalHashJoin::HasDuplicates(JoinHashTable *ht_ptr) {
 	return false;
 }
 
-void PhysicalHashJoin::BuildPerfectHashStructure(JoinHashTable *hash_table_ptr, JoinHTScanState &join_ht_state) {
+void PhysicalHashJoin::BuildPerfectHashStructure(JoinHashTable *hash_table_ptr, JoinHTScanState &join_ht_state,
+                                                 LogicalType key_type) {
 	// allocate memory for each column
 	auto build_size =
 	    (pjoin_state.is_build_min_small) ? hash_table_ptr->size() + MIN_THRESHOLD : hash_table_ptr->size();
@@ -303,7 +305,7 @@ void PhysicalHashJoin::BuildPerfectHashStructure(JoinHashTable *hash_table_ptr, 
 		hash_table_ptr->columns.emplace_back(type, build_size);
 	}
 	// Fill columns with build data
-	hash_table_ptr->FullScanHashTable(join_ht_state);
+	hash_table_ptr->FullScanHashTable(join_ht_state, key_type);
 }
 
 template <typename T>
