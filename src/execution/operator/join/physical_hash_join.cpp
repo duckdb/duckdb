@@ -283,7 +283,7 @@ bool PhysicalHashJoin::CheckRequirementsForPerfectHashJoin(JoinHashTable *ht_ptr
 	}
 
 	// Store build side as a set of columns
-	BuildPerfectHashStructure(ht_ptr, join_state.ht_scan_state);
+	BuildPerfectHashStructure(ht_ptr, join_state.ht_scan_state, join_state.key_type);
 	if (HasDuplicates(ht_ptr)) {
 		return false;
 	}

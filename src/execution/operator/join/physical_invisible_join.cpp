@@ -181,7 +181,7 @@ bool PhysicalInvisibleJoin::CheckRequirementsForPerfectHashJoin(JoinHashTable *h
 	}
 
 	// Store build side as a set of columns
-	BuildPerfectHashStructure(ht_ptr, join_state.ht_scan_state);
+	BuildPerfectHashStructure(ht_ptr, join_state.ht_scan_state, join_state.key_type);
 	if (HasDuplicates(ht_ptr)) {
 		return false;
 	}
@@ -193,7 +193,8 @@ bool PhysicalInvisibleJoin::HasDuplicates(JoinHashTable *ht_ptr) {
 	return false;
 }
 
-void PhysicalInvisibleJoin::BuildPerfectHashStructure(JoinHashTable *hash_table_ptr, JoinHTScanState &join_ht_state) {
+void PhysicalInvisibleJoin::BuildPerfectHashStructure(JoinHashTable *hash_table_ptr, JoinHTScanState &join_ht_state,
+                                                      LogicalType key_type) {
 	// allocate memory for each column
 	auto build_size =
 	    (pjoin_state.is_build_min_small) ? hash_table_ptr->size() + MIN_THRESHOLD : hash_table_ptr->size();
@@ -201,7 +202,7 @@ void PhysicalInvisibleJoin::BuildPerfectHashStructure(JoinHashTable *hash_table_
 		hash_table_ptr->columns.emplace_back(type, build_size);
 	}
 	// Fill columns with build data
-	hash_table_ptr->FullScanHashTable(join_ht_state);
+	hash_table_ptr->FullScanHashTable(join_ht_state, key_type);
 }
 
 template <typename T>

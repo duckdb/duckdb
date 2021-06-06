@@ -952,7 +952,7 @@ void JoinHashTable::ScanFullOuter(DataChunk &result, JoinHTScanState &state) {
 	}
 }
 
-void JoinHashTable::FullScanHashTable(JoinHTScanState &state) {
+void JoinHashTable::FullScanHashTable(JoinHTScanState &state, LogicalType key_type) {
 	// scan the HT starting from the current position
 	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
 	idx_t found_entries = 0;
@@ -973,14 +973,20 @@ void JoinHashTable::FullScanHashTable(JoinHTScanState &state) {
 		state.block_position++;
 		state.position = 0;
 	}
-
-	// gather the values from the RHS
+	// build selection vector using the build_keys
+	Vector build_vector(key_type, found_entries);
 	idx_t offset = 0;
+	GatherResultVector(build_vector, FlatVector::INCREMENTAL_SELECTION_VECTOR, (uintptr_t *)key_locations,
+	                   FlatVector::INCREMENTAL_SELECTION_VECTOR, found_entries, offset);
+	SelectionVector sel_build;
+	FillSelectionVectorSwitch(build_vector, sel_build, found_entries);
+	// gather the values from the RHS using the sel_build selection vector
+	offset = condition_size;
 	for (idx_t i = 0; i < build_types.size(); i++) {
 		auto &vector = columns[i];
 		D_ASSERT(vector.GetType() == build_types[i]);
-		GatherResultVector(vector, FlatVector::INCREMENTAL_SELECTION_VECTOR, (uintptr_t *)key_locations,
-		                   FlatVector::INCREMENTAL_SELECTION_VECTOR, found_entries, offset);
+		GatherResultVector(vector, sel_build, (uintptr_t *)key_locations, FlatVector::INCREMENTAL_SELECTION_VECTOR,
+		                   found_entries, offset);
 	}
 }
 
@@ -1168,6 +1174,56 @@ void JoinHashTable::FillWithOffsets(vector<data_ptr_t> &key_locations, JoinHTSca
 			}
 		}
 		state.block_position++;
+	}
+}
+
+template <typename T>
+void JoinHashTable::TemplatedFillSelectionVector(Vector &source, SelectionVector &sel_vec, idx_t count) {
+	auto min_value = pjoin_state.build_min.GetValue<T>();
+	auto max_value = pjoin_state.build_max.GetValue<T>();
+	pjoin_state.range = max_value - min_value;
+
+	auto vector_data = FlatVector::GetData<T>(source);
+	// generate the selection vector
+	for (idx_t i = 0; i != count; ++i) {
+		// add index to selection vector if value in the range
+		auto input_value = vector_data[i];
+		//		if (min_value <= input_value && input_value <= max_value) {
+		auto idx = input_value;
+		sel_vec.set_index(i, idx);
+	}
+	//	}
+}
+
+void JoinHashTable::FillSelectionVectorSwitch(Vector &source, SelectionVector &sel_vec, idx_t count) {
+	switch (source.GetType().id()) {
+	case LogicalTypeId::TINYINT:
+		TemplatedFillSelectionVector<int8_t>(source, sel_vec, count);
+		break;
+	case LogicalTypeId::SMALLINT:
+		TemplatedFillSelectionVector<int16_t>(source, sel_vec, count);
+		break;
+	case LogicalTypeId::INTEGER:
+		TemplatedFillSelectionVector<int32_t>(source, sel_vec, count);
+		break;
+	case LogicalTypeId::BIGINT:
+		TemplatedFillSelectionVector<int64_t>(source, sel_vec, count);
+		break;
+	case LogicalTypeId::UTINYINT:
+		TemplatedFillSelectionVector<uint8_t>(source, sel_vec, count);
+		break;
+	case LogicalTypeId::USMALLINT:
+		TemplatedFillSelectionVector<uint16_t>(source, sel_vec, count);
+		break;
+	case LogicalTypeId::UINTEGER:
+		TemplatedFillSelectionVector<uint32_t>(source, sel_vec, count);
+		break;
+	case LogicalTypeId::UBIGINT:
+		TemplatedFillSelectionVector<uint64_t>(source, sel_vec, count);
+		break;
+	default:
+		throw NotImplementedException("Type not supported");
+		break;
 	}
 }
 

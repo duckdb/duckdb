@@ -55,7 +55,8 @@ public:
 	unique_ptr<JoinHashTable> hash_table;
 	//! Only used for FULL OUTER JOIN: scan state of the final scan to find unmatched tuples in the build-side
 	JoinHTScanState ht_scan_state;
-	vector<Vector> build_columns;              // for build_data storage
+	vector<Vector> build_columns; // for build_data storage
+	LogicalType key_type {LogicalType::INVALID};
 	unique_ptr<bool[]> build_tuples {nullptr}; // For duplicate checking
 };
 

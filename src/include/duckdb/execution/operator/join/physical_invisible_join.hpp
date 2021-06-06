@@ -52,7 +52,7 @@ public:
 	bool ExecuteInvisibleJoin(ExecutionContext &context, DataChunk &chunk, PhysicalHashJoinState *state,
 	                          JoinHashTable *ht_ptr);
 	bool CheckRequirementsForPerfectHashJoin(JoinHashTable *ht_ptr, HashJoinGlobalState &join_global_state);
-	void BuildPerfectHashStructure(JoinHashTable *ht_ptr, JoinHTScanState &join_ht_state);
+	void BuildPerfectHashStructure(JoinHashTable *ht_ptr, JoinHTScanState &join_ht_state, LogicalType type);
 	void FillSelectionVectorSwitch(Vector &source, SelectionVector &sel_vec, idx_t count);
 	template <typename T>
 	void TemplatedFillSelectionVector(Vector &source, SelectionVector &sel_vec, idx_t count);
