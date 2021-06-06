@@ -18,10 +18,10 @@ void DependencyManager::AddObject(ClientContext &context, CatalogEntry *object,
 		}
 	}
 	// indexes do not require CASCADE to be dropped, they are simply always dropped along with the table
-	bool requires_cascade = object->type != CatalogType::INDEX_ENTRY;
+	auto dependency_type = object->type == CatalogType::INDEX_ENTRY ? DependencyType::DEPENDENCY_AUTOMATIC : DependencyType::DEPENDENCY_REGULAR;
 	// add the object to the dependents_map of each object that it depends on
 	for (auto &dependency : dependencies) {
-		dependents_map[dependency].insert(Dependency(object, requires_cascade));
+		dependents_map[dependency].insert(Dependency(object, dependency_type));
 	}
 	// create the dependents map for this object: it starts out empty
 	dependents_map[object] = dependency_set_t();
@@ -49,7 +49,7 @@ void DependencyManager::DropObject(ClientContext &context, CatalogEntry *object,
 			continue;
 		}
 		// conflict: attempting to delete this object but the dependent object still exists
-		if (cascade || !dep.requires_cascade) {
+		if (cascade || dep.dependency_type == DependencyType::DEPENDENCY_AUTOMATIC) {
 			// cascade: drop the dependent object
 			catalog_set.DropEntryInternal(context, entry_index, *dependency_entry, cascade, lock_set);
 		} else {
@@ -127,6 +127,15 @@ void DependencyManager::ClearDependencies(CatalogSet &set) {
 		while (centry) {
 			EraseObjectInternal(centry);
 			centry = centry->child.get();
+		}
+	}
+}
+
+void DependencyManager::Scan(std::function<void(CatalogEntry *, CatalogEntry *, DependencyType)> callback) {
+	lock_guard<mutex> write_lock(catalog.write_lock);
+	for(auto &entry : dependents_map) {
+		for(auto &dependent : entry.second) {
+			callback(entry.first, dependent.entry, dependent.dependency_type);
 		}
 	}
 }

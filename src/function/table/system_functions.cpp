@@ -19,7 +19,9 @@ void BuiltinFunctions::RegisterSQLiteFunctions() {
 	PragmaDatabaseList::RegisterFunction(*this);
 	PragmaLastProfilingOutput::RegisterFunction(*this);
 	PragmaDetailedProfilingOutput::RegisterFunction(*this);
+
 	DuckDBSchemasFun::RegisterFunction(*this);
+	DuckDBDependenciesFun::RegisterFunction(*this);
 }
 
 } // namespace duckdb

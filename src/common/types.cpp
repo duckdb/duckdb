@@ -434,7 +434,7 @@ LogicalType TransformStringToLogicalType(const string &str) {
 		return LogicalType::VARCHAR;
 	} else if (lower_str == "bytea" || lower_str == "blob" || lower_str == "varbinary" || lower_str == "binary") {
 		return LogicalType::BLOB;
-	} else if (lower_str == "int8" || lower_str == "bigint" || lower_str == "int64" || lower_str == "long") {
+	} else if (lower_str == "int8" || lower_str == "bigint" || lower_str == "int64" || lower_str == "long" || lower_str == "oid") {
 		return LogicalType::BIGINT;
 	} else if (lower_str == "int2" || lower_str == "smallint" || lower_str == "short" || lower_str == "int16") {
 		return LogicalType::SMALLINT;

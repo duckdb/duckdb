@@ -64,6 +64,10 @@ public:
 	static Catalog &GetCatalog(ClientContext &context);
 	static Catalog &GetCatalog(DatabaseInstance &db);
 
+	DependencyManager &GetDependencyManager() {
+		return *dependency_manager;
+	}
+
 	//! Returns the current version of the catalog (incremented whenever anything changes, not stored between restarts)
 	idx_t GetCatalogVersion();
 	//! Trigger a modification in the catalog, increasing the catalog version and returning the previous version

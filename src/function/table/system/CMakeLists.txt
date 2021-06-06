@@ -1,6 +1,7 @@
 add_library_unity(
   duckdb_table_func_system
   OBJECT
+  duckdb_dependencies.cpp
   duckdb_schemas.cpp
   pragma_collations.cpp
   pragma_database_list.cpp

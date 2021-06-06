@@ -12,6 +12,8 @@
 #include "duckdb/catalog/catalog_set.hpp"
 #include "duckdb/catalog/dependency.hpp"
 
+#include <functional>
+
 namespace duckdb {
 class Catalog;
 class ClientContext;
@@ -28,6 +30,8 @@ public:
 	// //! Clear all the dependencies of all entries in the catalog set
 	void ClearDependencies(CatalogSet &set);
 
+	//! Scans all dependencies, returning pairs of (object, dependent)
+	void Scan(std::function<void(CatalogEntry *, CatalogEntry *, DependencyType)> callback);
 private:
 	Catalog &catalog;
 	//! Map of objects that DEPEND on [object], i.e. [object] can only be deleted when all entries in the dependency map

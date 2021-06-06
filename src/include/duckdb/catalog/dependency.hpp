@@ -14,16 +14,21 @@
 namespace duckdb {
 class CatalogEntry;
 
+enum class DependencyType {
+	DEPENDENCY_REGULAR = 0,
+	DEPENDENCY_AUTOMATIC = 1
+};
+
 struct Dependency {
-	Dependency(CatalogEntry *entry, bool requires_cascade = true)
+	Dependency(CatalogEntry *entry, DependencyType dependency_type = DependencyType::DEPENDENCY_REGULAR)
 	    : // NOLINT: Allow implicit conversion from `CatalogEntry`
-	      entry(entry), requires_cascade(requires_cascade) {
+	      entry(entry), dependency_type(dependency_type) {
 	}
 
 	//! The catalog entry this depends on
 	CatalogEntry *entry;
-	//! Whether or not this dependency requires a cascade to drop
-	bool requires_cascade;
+	//! The type of dependency
+	DependencyType dependency_type;
 };
 
 struct DependencyHashFunction {
