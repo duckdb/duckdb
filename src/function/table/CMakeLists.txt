@@ -1,5 +1,5 @@
 add_subdirectory(information_schema)
-add_subdirectory(sqlite)
+add_subdirectory(system)
 add_subdirectory(version)
 add_library_unity(
   duckdb_func_table
@@ -11,7 +11,7 @@ add_library_unity(
   repeat.cpp
   copy_csv.cpp
   read_csv.cpp
-  sqlite_functions.cpp
+  system_functions.cpp
   summary.cpp
   information_schema_functions.cpp
   table_scan.cpp

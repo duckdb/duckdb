@@ -66,8 +66,8 @@ public:
 
 	//! Returns the current version of the catalog (incremented whenever anything changes, not stored between restarts)
 	idx_t GetCatalogVersion();
-	//! Trigger a modification in the catalog, increasing the catalog version
-	void ModifyCatalog();
+	//! Trigger a modification in the catalog, increasing the catalog version and returning the previous version
+	idx_t ModifyCatalog();
 
 	//! Creates a schema in the catalog.
 	CatalogEntry *CreateSchema(ClientContext &context, CreateSchemaInfo *info);

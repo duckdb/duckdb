@@ -3,7 +3,6 @@
 namespace duckdb {
 
 void BuiltinFunctions::RegisterInformationSchemaFunctions() {
-	InformationSchemaSchemata::RegisterFunction(*this);
 	InformationSchemaTables::RegisterFunction(*this);
 	InformationSchemaColumns::RegisterFunction(*this);
 }

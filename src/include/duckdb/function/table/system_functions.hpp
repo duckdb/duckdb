@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/function/table/sqlite_functions.hpp
+// duckdb/function/table/system_functions.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -49,6 +49,10 @@ struct PragmaDatabaseList {
 };
 
 struct PragmaDatabaseSize {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct DuckDBSchemasFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

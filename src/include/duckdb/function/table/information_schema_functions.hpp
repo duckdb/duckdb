@@ -12,10 +12,6 @@
 
 namespace duckdb {
 
-struct InformationSchemaSchemata {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
 struct InformationSchemaTables {
 	static void RegisterFunction(BuiltinFunctions &set);
 };

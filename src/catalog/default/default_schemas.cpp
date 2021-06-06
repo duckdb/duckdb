@@ -7,7 +7,7 @@ struct DefaultSchema {
 	const char *name;
 };
 
-static DefaultSchema internal_schemas[] = {{"information_schema"}, {nullptr}};
+static DefaultSchema internal_schemas[] = {{"information_schema"}, {"pg_catalog"}, {nullptr}};
 
 static bool GetDefaultSchema(const string &schema) {
 	for (idx_t index = 0; internal_schemas[index].name != nullptr; index++) {

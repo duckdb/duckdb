@@ -43,7 +43,6 @@ CatalogEntry *Catalog::CreateTable(ClientContext &context, BoundCreateTableInfo 
 }
 
 CatalogEntry *Catalog::CreateTable(ClientContext &context, SchemaCatalogEntry *schema, BoundCreateTableInfo *info) {
-	ModifyCatalog();
 	return schema->CreateTable(context, info);
 }
 
@@ -53,7 +52,6 @@ CatalogEntry *Catalog::CreateView(ClientContext &context, CreateViewInfo *info) 
 }
 
 CatalogEntry *Catalog::CreateView(ClientContext &context, SchemaCatalogEntry *schema, CreateViewInfo *info) {
-	ModifyCatalog();
 	return schema->CreateView(context, info);
 }
 
@@ -63,7 +61,6 @@ CatalogEntry *Catalog::CreateSequence(ClientContext &context, CreateSequenceInfo
 }
 
 CatalogEntry *Catalog::CreateSequence(ClientContext &context, SchemaCatalogEntry *schema, CreateSequenceInfo *info) {
-	ModifyCatalog();
 	return schema->CreateSequence(context, info);
 }
 
@@ -74,7 +71,6 @@ CatalogEntry *Catalog::CreateTableFunction(ClientContext &context, CreateTableFu
 
 CatalogEntry *Catalog::CreateTableFunction(ClientContext &context, SchemaCatalogEntry *schema,
                                            CreateTableFunctionInfo *info) {
-	ModifyCatalog();
 	return schema->CreateTableFunction(context, info);
 }
 
@@ -85,7 +81,6 @@ CatalogEntry *Catalog::CreateCopyFunction(ClientContext &context, CreateCopyFunc
 
 CatalogEntry *Catalog::CreateCopyFunction(ClientContext &context, SchemaCatalogEntry *schema,
                                           CreateCopyFunctionInfo *info) {
-	ModifyCatalog();
 	return schema->CreateCopyFunction(context, info);
 }
 
@@ -96,7 +91,6 @@ CatalogEntry *Catalog::CreatePragmaFunction(ClientContext &context, CreatePragma
 
 CatalogEntry *Catalog::CreatePragmaFunction(ClientContext &context, SchemaCatalogEntry *schema,
                                             CreatePragmaFunctionInfo *info) {
-	ModifyCatalog();
 	return schema->CreatePragmaFunction(context, info);
 }
 
@@ -106,7 +100,6 @@ CatalogEntry *Catalog::CreateFunction(ClientContext &context, CreateFunctionInfo
 }
 
 CatalogEntry *Catalog::CreateFunction(ClientContext &context, SchemaCatalogEntry *schema, CreateFunctionInfo *info) {
-	ModifyCatalog();
 	return schema->CreateFunction(context, info);
 }
 
@@ -116,7 +109,6 @@ CatalogEntry *Catalog::CreateCollation(ClientContext &context, CreateCollationIn
 }
 
 CatalogEntry *Catalog::CreateCollation(ClientContext &context, SchemaCatalogEntry *schema, CreateCollationInfo *info) {
-	ModifyCatalog();
 	return schema->CreateCollation(context, info);
 }
 
@@ -127,7 +119,6 @@ CatalogEntry *Catalog::CreateSchema(ClientContext &context, CreateSchemaInfo *in
 	if (info->schema == TEMP_SCHEMA) {
 		throw CatalogException("Cannot create built-in schema \"%s\"", info->schema);
 	}
-	ModifyCatalog();
 
 	unordered_set<CatalogEntry *> dependencies;
 	auto entry = make_unique<SchemaCatalogEntry>(this, info->schema, info->internal);
@@ -300,8 +291,8 @@ idx_t Catalog::GetCatalogVersion() {
 	return catalog_version;
 }
 
-void Catalog::ModifyCatalog() {
-	catalog_version++;
+idx_t Catalog::ModifyCatalog() {
+	return catalog_version++;
 }
 
 } // namespace duckdb
