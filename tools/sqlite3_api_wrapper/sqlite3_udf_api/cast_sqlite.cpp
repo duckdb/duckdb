@@ -67,7 +67,6 @@ string_t CastSQLite::GetValue(sqlite3_value input) {
 	return input.str_t;
 }
 
-
 //*** Cast to vectors ***********************************/
 unique_ptr<vector<sqlite3_value>> CastSQLite::ToVectorSQLite(LogicalType type, VectorData &vec_data, idx_t size) {
 	LogicalTypeId type_id = type.id();
@@ -103,7 +102,7 @@ unique_ptr<vector<sqlite3_value>> CastSQLite::ToVectorSQLite(LogicalType type, V
 
 void CastSQLite::ToVectorString(SQLiteTypeValue type, vector<sqlite3_value> &vec_sqlite, Vector &result) {
 	string_t *result_data;
-	if(result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+	if (result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		result_data = ConstantVector::GetData<string_t>(result);
 	} else {
 		result_data = FlatVector::GetData<string_t>(result);
@@ -128,9 +127,10 @@ void CastSQLite::ToVectorString(SQLiteTypeValue type, vector<sqlite3_value> &vec
 	}
 }
 
-template<>
-void CastSQLite::ToVectorStringValue<string_t>(sqlite3_value *__restrict data,  idx_t count, string_t *__restrict result_data, Vector &result) {
-	for(idx_t i=0; i < count; ++i) {
+template <>
+void CastSQLite::ToVectorStringValue<string_t>(sqlite3_value *__restrict data, idx_t count,
+                                               string_t *__restrict result_data, Vector &result) {
+	for (idx_t i = 0; i < count; ++i) {
 		string_t value = GetValue<string_t>(data[i]);
 		result_data[i] = value;
 	}

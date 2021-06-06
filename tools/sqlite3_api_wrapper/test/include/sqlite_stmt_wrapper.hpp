@@ -19,9 +19,9 @@ public:
 
 	/**
 	 * Execute a prepated statment previously "groomed" and print the result
-	*/
+	 */
 	int ExecutePreparedStmt() {
-		if(!stmt) {
+		if (!stmt) {
 			fprintf(stderr, "There is no prepated statement: Prepare(...) must be invoked firstly.\n");
 			return SQLITE_MISUSE;
 		}
@@ -39,9 +39,9 @@ public:
 			azCols[i] = (char *)sqlite3_column_name(stmt, i);
 		}
 
-		while(rc == SQLITE_ROW) {
+		while (rc == SQLITE_ROW) {
 			rc = sqlite3_step(stmt);
-			if(rc == SQLITE_ROW) {
+			if (rc == SQLITE_ROW) {
 				for (idx_t i = 0; i < nCol; i++) {
 					azVals[i] = (char *)sqlite3_column_text(stmt, i);
 					if (!azVals[i] && sqlite3_column_type(stmt, i) != SQLITE_NULL) {
@@ -62,13 +62,13 @@ public:
 			}
 		}
 
-		if(rc == SQLITE_DONE) {
+		if (rc == SQLITE_DONE) {
 			print_result(results);
 		}
 		Finalize();
 		sqlite3_free(azCols);
 		sqlite3_free(azVals);
-		return (rc == SQLITE_DONE) ? SQLITE_OK: rc;
+		return (rc == SQLITE_DONE) ? SQLITE_OK : rc;
 	}
 
 	void Finalize() {
@@ -78,4 +78,3 @@ public:
 		}
 	}
 };
-

@@ -1128,11 +1128,11 @@ int sqlite3_create_function(sqlite3 *db, const char *zFunctionName, int nArg, in
 
 	string fname = string(zFunctionName);
 
-	//Scalar function
-	if(xFunc) {
+	// Scalar function
+	if (xFunc) {
 		auto udf_sqlite3 = SQLiteUDFWrapper::CreateSQLiteScalarFunction(xFunc, pApp);
 		vector<LogicalType> argv_types(nArg);
-		for(idx_t i=0; i < (idx_t)nArg; ++i) {
+		for (idx_t i = 0; i < (idx_t)nArg; ++i) {
 			argv_types[i] = LogicalType::ANY;
 		}
 		UDFWrapper::RegisterFunction(fname, argv_types, LogicalType::VARCHAR, udf_sqlite3, *(db->con->context));
@@ -1344,7 +1344,7 @@ SQLITE_API char *sqlite3_win32_unicode_to_utf8(LPCWSTR zWideText) {
 
 // TODO complain
 SQLITE_API void sqlite3_result_blob(sqlite3_context *context, const void *blob, int n_bytes, void (*)(void *)) {
-	if(blob) {
+	if (blob) {
 		context->result.type = SQLiteTypeValue::BLOB;
 		context->result.n = n_bytes;
 		string_t str = string_t((const char *)blob, n_bytes);
@@ -1357,7 +1357,7 @@ SQLITE_API void sqlite3_result_blob64(sqlite3_context *, const void *, sqlite3_u
 
 SQLITE_API void sqlite3_result_double(sqlite3_context *context, double val) {
 	context->result.u.r = val;
-    context->result.type = SQLiteTypeValue::FLOAT;
+	context->result.type = SQLiteTypeValue::FLOAT;
 }
 
 SQLITE_API void sqlite3_result_error(sqlite3_context *context, const char *msg, int n_bytes) {
@@ -1378,8 +1378,8 @@ SQLITE_API void sqlite3_result_error_code(sqlite3_context *, int) {
 }
 
 SQLITE_API void sqlite3_result_int(sqlite3_context *context, int val) {
-    context->result.u.i = val;
-    context->result.type = SQLiteTypeValue::INTEGER;
+	context->result.u.i = val;
+	context->result.type = SQLiteTypeValue::INTEGER;
 }
 
 SQLITE_API void sqlite3_result_int64(sqlite3_context *, sqlite3_int64) {
@@ -1390,7 +1390,7 @@ SQLITE_API void sqlite3_result_null(sqlite3_context *context) {
 }
 
 SQLITE_API void sqlite3_result_text(sqlite3_context *context, const char *str_c, int n_chars, void (*)(void *)) {
-	if(str_c) {
+	if (str_c) {
 		auto utf_type = Utf8Proc::Analyze(str_c, n_chars);
 		if (utf_type == UnicodeType::INVALID) {
 			throw Exception("Text value is not valid UTF8");
@@ -1434,9 +1434,9 @@ const void *sqlite3_value_blob(sqlite3_value *pVal) {
 }
 
 double sqlite3_value_double(sqlite3_value *pVal) {
-	if(pVal->type == SQLiteTypeValue::FLOAT) {
-        return pVal->u.r;
-    }
+	if (pVal->type == SQLiteTypeValue::FLOAT) {
+		return pVal->u.r;
+	}
 	return 0.0;
 }
 
@@ -1445,10 +1445,10 @@ int sqlite3_value_int(sqlite3_value *pVal) {
 }
 
 sqlite3_int64 sqlite3_value_int64(sqlite3_value *pVal) {
-    if(pVal->type == SQLiteTypeValue::INTEGER) {
-        return pVal->u.i;
-    }
-    return 0;
+	if (pVal->type == SQLiteTypeValue::INTEGER) {
+		return pVal->u.i;
+	}
+	return 0;
 }
 
 void *sqlite3_value_pointer(sqlite3_value *, const char *) {
@@ -1456,9 +1456,9 @@ void *sqlite3_value_pointer(sqlite3_value *, const char *) {
 }
 
 const unsigned char *sqlite3_value_text(sqlite3_value *pVal) {
-	if(pVal && (pVal->type == SQLiteTypeValue::TEXT || pVal->type == SQLiteTypeValue::BLOB)) {
-		//We don't need to append \0 at the end of string
-		//To know the number of chars or bytes, call function sqlite3_value_bytes()
+	if (pVal && (pVal->type == SQLiteTypeValue::TEXT || pVal->type == SQLiteTypeValue::BLOB)) {
+		// We don't need to append \0 at the end of string
+		// To know the number of chars or bytes, call function sqlite3_value_bytes()
 		return (const unsigned char *)pVal->str_t.GetDataUnsafe();
 	}
 	return nullptr;
@@ -1477,7 +1477,7 @@ SQLITE_API const void *sqlite3_value_text16be(sqlite3_value *) {
 }
 
 SQLITE_API int sqlite3_value_bytes(sqlite3_value *pVal) {
-	if(pVal->type == SQLiteTypeValue::TEXT || pVal->type == SQLiteTypeValue::BLOB) {
+	if (pVal->type == SQLiteTypeValue::TEXT || pVal->type == SQLiteTypeValue::BLOB) {
 		return pVal->n;
 	}
 	return 0;

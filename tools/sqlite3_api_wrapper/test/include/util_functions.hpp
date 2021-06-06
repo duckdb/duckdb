@@ -21,7 +21,7 @@ static int concatenate_results(void *arg, int ncols, char **vals, char **colname
 }
 
 static void print_result(vector<vector<string>> &results) {
-	if(results.empty()) {
+	if (results.empty()) {
 		return;
 	}
 	for (idx_t row_idx = 0; row_idx < results[0].size(); row_idx++) {

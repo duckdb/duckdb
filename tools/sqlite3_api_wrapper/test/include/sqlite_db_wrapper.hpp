@@ -64,4 +64,3 @@ public:
 		return true;
 	}
 };
-
