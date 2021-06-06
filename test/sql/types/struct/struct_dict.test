@@ -2,6 +2,9 @@
 # description: Test dict syntax for structs
 # group: [struct]
 
+statement ok
+PRAGMA enable_verification
+
 query I
 SELECT {'i': 1, 'j': 2};
 ----

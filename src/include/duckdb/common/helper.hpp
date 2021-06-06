@@ -34,6 +34,20 @@ unique_ptr<S> unique_ptr_cast(unique_ptr<T> src) {
 	return unique_ptr<S>(static_cast<S *>(src.release()));
 }
 
+struct SharedConstructor {
+	template <class T, typename... ARGS>
+	static shared_ptr<T> Create(ARGS &&...args) {
+		return make_shared<T>(std::forward<ARGS>(args)...);
+	}
+};
+
+struct UniqueConstructor {
+	template <class T, typename... ARGS>
+	static unique_ptr<T> Create(ARGS &&...args) {
+		return make_unique<T>(std::forward<ARGS>(args)...);
+	}
+};
+
 template <typename T>
 T MaxValue(T a, T b) {
 	return a > b ? a : b;

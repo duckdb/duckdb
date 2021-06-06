@@ -1,0 +1,112 @@
+# name: test/sql/types/struct/struct_index.test
+# description: Test struct lookups using an index
+# group: [struct]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE a(id INTEGER PRIMARY KEY, c ROW(i ROW(a INTEGER), j INTEGER));
+
+statement ok
+INSERT INTO a VALUES (1, {
+	'i': {
+		'a': 3
+	},
+	'j': 4
+})
+
+# simple lookup
+query II
+SELECT * FROM a WHERE id=1
+----
+1	{'i': {'a': 3}, 'j': 4}
+
+# now with null values at different levels
+statement ok
+INSERT INTO a VALUES (2, NULL)
+
+statement ok
+INSERT INTO a VALUES (3, ROW(ROW(NULL), 1))
+
+statement ok
+INSERT INTO a VALUES (4, ROW(ROW(1), NULL))
+
+statement ok
+INSERT INTO a VALUES (5, ROW(NULL, 1))
+
+query II
+SELECT * FROM a WHERE id=2
+----
+2	NULL
+
+query II
+SELECT * FROM a WHERE id=3
+----
+3	{'i': {'a': NULL}, 'j': 1}
+
+query II
+SELECT * FROM a WHERE id=4
+----
+4	{'i': {'a': 1}, 'j': NULL}
+
+query II
+SELECT * FROM a WHERE id=5
+----
+5	{'i': NULL, 'j': 1}
+
+# test index construction on a table with structs
+statement ok
+DROP TABLE a;
+
+statement ok
+CREATE TABLE a(id INTEGER, c ROW(i ROW(a INTEGER), j INTEGER));
+
+statement ok
+INSERT INTO a VALUES (1, {
+	'i': {
+		'a': 3
+	},
+	'j': 4
+})
+
+statement ok
+INSERT INTO a VALUES (2, NULL)
+
+statement ok
+INSERT INTO a VALUES (3, ROW(ROW(NULL), 1))
+
+statement ok
+INSERT INTO a VALUES (4, ROW(ROW(1), NULL))
+
+statement ok
+INSERT INTO a VALUES (5, ROW(NULL, 1))
+
+statement ok
+CREATE INDEX a_index ON a(id);
+
+query II
+SELECT * FROM a WHERE id=1
+----
+1	{'i': {'a': 3}, 'j': 4}
+
+query II
+SELECT * FROM a WHERE id=2
+----
+2	NULL
+
+query II
+SELECT * FROM a WHERE id=3
+----
+3	{'i': {'a': NULL}, 'j': 1}
+
+query II
+SELECT * FROM a WHERE id=4
+----
+4	{'i': {'a': 1}, 'j': NULL}
+
+query II
+SELECT * FROM a WHERE id=5
+----
+5	{'i': NULL, 'j': 1}
+
