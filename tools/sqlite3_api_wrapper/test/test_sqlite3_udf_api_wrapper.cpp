@@ -2,37 +2,15 @@
 #include "sqlite3.h"
 #include <string>
 #include <thread>
+#include <string.h>
 
 #include "sqlite_db_wrapper.hpp"
 #include "sqlite_stmt_wrapper.hpp"
 
+//All UDFs are implemented in "udf_scalar_functions.hpp"
+#include "udf_scalar_functions.hpp"
+
 using namespace std;
-
-// SQLite UDF to be register on DuckDB
-void multiply10(sqlite3_context *context, int argc, sqlite3_value **argv) {
-	assert(argc == 1);
-	int v = sqlite3_value_int(argv[0]);
-	v *= 10;
-	sqlite3_result_int(context, v);
-}
-
-void sum_cols_int(sqlite3_context *context, int argc, sqlite3_value **argv) {
-	assert(argc > 0);
-	auto sum = sqlite3_value_int(argv[0]);
-	for(int i=1; i < argc; ++i) {
-		sum += sqlite3_value_int(argv[i]);
-	}
-	sqlite3_result_int(context, sum);
-}
-
-void sum_cols_double(sqlite3_context *context, int argc, sqlite3_value **argv) {
-	assert(argc > 0);
-	auto sum = sqlite3_value_double(argv[0]);
-	for(int i=1; i < argc; ++i) {
-		sum += sqlite3_value_double(argv[i]);
-	}
-	sqlite3_result_double(context, sum);
-}
 
 TEST_CASE("SQLite UDF wrapper: basic usage", "[sqlite3wrapper]") {
 	SQLiteDBWrapper db_w;
@@ -113,4 +91,92 @@ TEST_CASE("SQLite UDF wrapper: double values", "[sqlite3wrapper]") {
 	//FLOAT + DOUBLE
 	REQUIRE(db_w.Execute("SELECT sum_cols_double(f, d) FROM floats"));
 	REQUIRE(db_w.CheckColumn(0, {"-10.0", "-8.0", "-6.0", "-4.0", "-2.0", "0.0", "2.0", "4.0", "6.0", "8.0", "10.0"}));
+}
+
+TEST_CASE("SQLite UDF wrapper: text and blob values", "[sqlite3wrapper]") {
+	SQLiteDBWrapper db_w;
+
+	// open an in-memory db
+	REQUIRE(db_w.Open(":memory:"));
+
+	//create function check_text
+	REQUIRE(sqlite3_create_function(db_w.db, "check_text", 1, 0, nullptr, &check_text, nullptr, nullptr) == SQLITE_OK);
+	//create function check_blob
+	REQUIRE(sqlite3_create_function(db_w.db, "check_blob", 1, 0, nullptr, &check_blob, nullptr, nullptr) == SQLITE_OK);
+
+
+	//TEXT
+	REQUIRE(db_w.Execute("SELECT check_text('XXXX'::VARCHAR)"));
+	REQUIRE(db_w.CheckColumn(0, {"TTTT"}));
+
+	//BLOB
+	REQUIRE(db_w.Execute("SELECT check_blob('XXXX'::BLOB)"));
+	REQUIRE(db_w.CheckColumn(0, {"BBBB"}));
+}
+
+TEST_CASE("SQLite UDF wrapper: check type", "[sqlite3wrapper]") {
+	SQLiteDBWrapper db_w;
+
+	// open an in-memory db
+	REQUIRE(db_w.Open(":memory:"));
+
+	//create function
+	REQUIRE(sqlite3_create_function(db_w.db, "check_type", 1, 0, nullptr, &check_type, nullptr, nullptr) == SQLITE_OK);
+
+	//INT
+	REQUIRE(db_w.Execute("SELECT check_type('4'::INTEGER)"));
+	REQUIRE(db_w.CheckColumn(0, {"40"}));
+
+	//FLOAT
+	REQUIRE(db_w.Execute("SELECT check_type('4.0'::DOUBLE)"));
+	REQUIRE(db_w.CheckColumn(0, {"400.0"}));
+
+	//TEXT
+	REQUIRE(db_w.Execute("SELECT check_type('aaaa'::VARCHAR)"));
+	REQUIRE(db_w.CheckColumn(0, {"TEXT"}));
+
+	//BLOB
+	REQUIRE(db_w.Execute("SELECT check_type('aaaa'::BLOB)"));
+	REQUIRE(db_w.CheckColumn(0, {"BLOB"}));
+}
+
+TEST_CASE("SQLite UDF wrapper: set null", "[sqlite3wrapper]") {
+	SQLiteDBWrapper db_w;
+
+	// open an in-memory db
+	REQUIRE(db_w.Open(":memory:"));
+
+	//create function
+	REQUIRE(sqlite3_create_function(db_w.db, "set_null", 1, 0, nullptr, &set_null, nullptr, nullptr) == SQLITE_OK);
+
+	//INT
+	REQUIRE(db_w.Execute("SELECT set_null('4'::INTEGER)"));
+	REQUIRE(db_w.CheckColumn(0, {""}));
+
+	//FLOAT
+	REQUIRE(db_w.Execute("SELECT set_null('4.0'::DOUBLE)"));
+	REQUIRE(db_w.CheckColumn(0, {""}));
+
+	//TEXT
+	REQUIRE(db_w.Execute("SELECT set_null('aaaa'::VARCHAR)"));
+	REQUIRE(db_w.CheckColumn(0, {""}));
+
+	//BLOB
+	REQUIRE(db_w.Execute("SELECT set_null('aaaa'::BLOB)"));
+	REQUIRE(db_w.CheckColumn(0, {""}));
+}
+
+
+TEST_CASE("SQLite UDF wrapper: get user data", "[sqlite3wrapper]") {
+	SQLiteDBWrapper db_w;
+
+	// open an in-memory db
+	REQUIRE(db_w.Open(":memory:"));
+
+	char user_data[] = {"TEST"}; // user data to be used along the UDF
+	//create function that gets user data (string) and replace the input value
+	REQUIRE(sqlite3_create_function(db_w.db, "get_user_data", 1, 0, user_data, &get_user_data, nullptr, nullptr) == SQLITE_OK);
+
+	REQUIRE(db_w.Execute("SELECT get_user_data('DUCKDB ____'::VARCHAR)"));
+	REQUIRE(db_w.CheckColumn(0, {"DUCKDB TEST"}));
 }

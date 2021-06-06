@@ -7,9 +7,11 @@ add_subdirectory(sqlite3_udf_api)
 add_extension_definitions()
 add_definitions(-DSQLITE_SHELL_IS_UTF8)
 
+include_directories(../../third_party/utf8proc/include)
+
 add_library(sqlite3_api_wrapper_static STATIC sqlite3_api_wrapper.cpp
                                               ${ALL_OBJECT_FILES})
-target_link_libraries(sqlite3_api_wrapper_static duckdb_static)
+target_link_libraries(sqlite3_api_wrapper_static duckdb_static utf8proc)
 link_threads(sqlite3_api_wrapper_static)
 
 link_extension_libraries(sqlite3_api_wrapper_static)

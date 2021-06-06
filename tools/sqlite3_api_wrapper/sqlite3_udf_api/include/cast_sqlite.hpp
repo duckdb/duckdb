@@ -32,7 +32,7 @@ struct CastSQLite {
     }
 
 	template<class T>
-	static unique_ptr<vector<sqlite3_value>> ToVectorSQLiteValue(T *__restrict data, idx_t count) {
+	static inline unique_ptr<vector<sqlite3_value>> ToVectorSQLiteValue(T *__restrict data, idx_t count) {
 		unique_ptr<vector<sqlite3_value>> result = make_unique<vector<sqlite3_value>>(count);
 		auto res_data = (*result).data();
 		for(idx_t i=0; i < count; ++i) {
@@ -40,6 +40,18 @@ struct CastSQLite {
 		}
 		return result;
 	}
+
+	static sqlite3_value OperationBlob(string_t blob);
+
+	static inline unique_ptr<vector<sqlite3_value>> ToVectorSQLiteValueBlob(string_t *__restrict data, idx_t count) {
+		unique_ptr<vector<sqlite3_value>> result = make_unique<vector<sqlite3_value>>(count);
+		auto res_data = (*result).data();
+		for(idx_t i=0; i < count; ++i) {
+			res_data[i] = CastSQLite::OperationBlob(data[i]);
+		}
+		return result;
+	}
+
 	static unique_ptr<vector<sqlite3_value>> ToVectorSQLite(LogicalType type, VectorData &vec_data, idx_t size);
 
 	/**
@@ -62,6 +74,10 @@ struct CastSQLite {
 	static void ToVectorString(SQLiteTypeValue type, vector<sqlite3_value> &vec_sqlite, Vector &result);
 };
 
+template<>
+void CastSQLite::ToVectorStringValue<string_t>(sqlite3_value *__restrict data,  idx_t count, string_t *__restrict result_data, Vector &result);
+
+
 // CAST to sqlite int ****************************/
 template <>
 sqlite3_value CastSQLite::Operation(int8_t input);
@@ -82,6 +98,13 @@ sqlite3_value CastSQLite::Operation(float input);
 template <>
 sqlite3_value CastSQLite::Operation(double input);
 
+// CAST string **********************************/
+template <>
+sqlite3_value CastSQLite::Operation(char *input);
+
+template <>
+sqlite3_value CastSQLite::Operation(string_t input);
+
 
 //GET value from sqlite int (sqlite.u.i) ********/
 template <>
@@ -90,3 +113,6 @@ int64_t CastSQLite::GetValue(sqlite3_value input);
 //GET value from sqlite float (sqlite.u.r) ******/
 template <>
 double CastSQLite::GetValue(sqlite3_value input);
+
+template <>
+string_t CastSQLite::GetValue(sqlite3_value input);
