@@ -147,6 +147,7 @@ private:
 	SelectionVector group_compare_vector;
 	SelectionVector no_match_vector;
 	SelectionVector empty_vector;
+	vector<ExpressionType> predicates;
 
 private:
 	GroupedAggregateHashTable(const GroupedAggregateHashTable &) = delete;
@@ -160,11 +161,11 @@ private:
 	void FlushMove(Vector &source_addresses, Vector &source_hashes, idx_t count);
 	void NewBlock();
 
-	template <class T>
+	template <class ENTRY>
 	void VerifyInternal();
-	template <class T>
+	template <class ENTRY>
 	void Resize(idx_t size);
-	template <class T>
+	template <class ENTRY>
 	idx_t FindOrCreateGroupsInternal(DataChunk &groups, Vector &group_hashes, Vector &addresses,
 	                                 SelectionVector &new_groups);
 
