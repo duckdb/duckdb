@@ -853,6 +853,8 @@ static void DeserializeIntoListVector(Vector &v, const idx_t vcount, const Selec
 void RowDataCollection::DeserializeIntoVector(Vector &v, const idx_t &vcount, const SelectionVector &sel,
                                               const idx_t &col_no, data_ptr_t key_locations[],
                                               data_ptr_t validitymask_locations[]) {
+	v.SetVectorType(VectorType::FLAT_VECTOR);
+
 	auto &validity = FlatVector::Validity(v);
 	if (validitymask_locations) {
 		// Precompute mask indexes
