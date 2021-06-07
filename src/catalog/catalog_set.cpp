@@ -382,7 +382,7 @@ CatalogEntry *CatalogSet::GetEntry(ClientContext &context, const string &name) {
 		return current;
 	}
 	// no entry found with this name, check for defaults
-	if (!defaults) {
+	if (!defaults || defaults->created_all_entries) {
 		// no defaults either: return null
 		return nullptr;
 	}
@@ -472,7 +472,7 @@ void CatalogSet::Undo(CatalogEntry *entry) {
 void CatalogSet::Scan(ClientContext &context, std::function<void(CatalogEntry *)> callback) {
 	// lock the catalog set
 	unique_lock<mutex> lock(catalog_lock);
-	if (defaults) {
+	if (defaults && !defaults->created_all_entries) {
 		// this catalog set has a default set defined:
 		auto default_entries = defaults->GetDefaultEntries();
 		for (auto &default_entry : default_entries) {
@@ -487,7 +487,7 @@ void CatalogSet::Scan(ClientContext &context, std::function<void(CatalogEntry *)
 				CreateEntryInternal(context, move(entry));
 			}
 		}
-		defaults.reset();
+		defaults->created_all_entries = true;
 	}
 	for (auto &kv : entries) {
 		auto entry = kv.second.get();
