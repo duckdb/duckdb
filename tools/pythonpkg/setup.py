@@ -11,7 +11,10 @@ from setuptools import setup, Extension
 from setuptools.command.sdist import sdist
 import distutils.spawn
 
-extensions = ['parquet', 'icu', 'fts']
+extensions = ['parquet', 'icu', 'fts','tpch']
+
+if platform.system() == 'Windows':
+    extensions = ['parquet', 'icu', 'fts']
 
 def open_utf8(fpath, flags):
     import sys

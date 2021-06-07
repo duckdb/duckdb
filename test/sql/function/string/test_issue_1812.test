@@ -1,0 +1,58 @@
+# name: test/sql/function/string/test_issue_1812.test
+# description: Test LIKE statement
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t (str VARCHAR);
+
+statement ok
+INSERT INTO t VALUES ('hello1'), ('hello2'), ('hello3'), ('world1'), ('world2'), ('world3');
+
+query I
+SELECT COUNT(*) FROM t WHERE str LIKE '%o%'; -- 6
+----
+6
+
+query I
+SELECT COUNT(*) FROM t WHERE str LIKE '%rld%'; -- 3
+----
+3
+
+query I
+SELECT COUNT(*) FROM t WHERE str LIKE '%o%' OR (str LIKE '%o%' AND str LIKE '%rld%');
+----
+6
+
+query I
+SELECT COUNT(*) FROM t
+WHERE (str LIKE '%o%' AND str LIKE '%rld%')
+    OR str LIKE '%o%';
+----
+6
+
+query I
+SELECT COUNT(*) FROM t
+WHERE (str LIKE '%o%' AND str LIKE '%rld%')
+   OR (str LIKE '%o%')
+   OR (str LIKE '%o%');
+----
+6
+
+query I
+SELECT COUNT(*) FROM t
+WHERE (str LIKE '%o%' AND str LIKE '%rld%')
+   OR (str LIKE '%o%')
+   OR (str LIKE '%o%' AND str LIKE 'blabla%');
+----
+6
+
+query I
+SELECT COUNT(*) FROM t
+WHERE (str LIKE '%o%' AND str LIKE '%1%')
+   OR (str LIKE '%o%' AND str LIKE '%1%' AND str LIKE 'blabla%')
+   OR (str LIKE '%o%' AND str LIKE '%1%' AND str LIKE 'blabla2%')
+----
+2

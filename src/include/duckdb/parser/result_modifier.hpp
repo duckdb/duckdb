@@ -54,6 +54,7 @@ struct OrderByNode {
 
 public:
 	void Serialize(Serializer &serializer);
+	string ToString() const;
 	static OrderByNode Deserialize(Deserializer &source);
 };
 

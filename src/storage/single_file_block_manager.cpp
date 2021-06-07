@@ -5,6 +5,7 @@
 
 #include "duckdb/common/serializer/buffered_deserializer.hpp"
 #include "duckdb/common/serializer/buffered_serializer.hpp"
+#include "duckdb/common/allocator.hpp"
 
 #include <algorithm>
 #include <cstring>
@@ -65,9 +66,10 @@ T DeserializeHeaderStructure(data_ptr_t ptr) {
 	return T::Deserialize(source);
 }
 
-SingleFileBlockManager::SingleFileBlockManager(DatabaseInstance &db, string path, bool read_only, bool create_new,
+SingleFileBlockManager::SingleFileBlockManager(DatabaseInstance &db, string path_p, bool read_only, bool create_new,
                                                bool use_direct_io)
-    : db(db), path(path), header_buffer(FileBufferType::MANAGED_BUFFER, Storage::FILE_HEADER_SIZE), iteration_count(0),
+    : db(db), path(move(path_p)),
+      header_buffer(Allocator::Get(db), FileBufferType::MANAGED_BUFFER, Storage::FILE_HEADER_SIZE), iteration_count(0),
       read_only(read_only), use_direct_io(use_direct_io) {
 	uint8_t flags;
 	FileLockType lock;
@@ -217,7 +219,7 @@ block_id_t SingleFileBlockManager::GetMetaBlock() {
 }
 
 unique_ptr<Block> SingleFileBlockManager::CreateBlock() {
-	return make_unique<Block>(GetFreeBlockId());
+	return make_unique<Block>(Allocator::Get(db), GetFreeBlockId());
 }
 
 void SingleFileBlockManager::Read(Block &block) {

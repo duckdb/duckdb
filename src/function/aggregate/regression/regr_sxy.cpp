@@ -29,7 +29,7 @@ struct RegrSXYOperation {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(STATE source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target) {
 		CovarOperation::Combine<CovarState, OP>(source.cov_pop, &target->cov_pop);
 		RegrCountFunction::Combine<size_t, OP>(source.count, &target->count);
 	}

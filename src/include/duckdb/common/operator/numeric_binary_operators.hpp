@@ -13,13 +13,6 @@
 
 namespace duckdb {
 
-struct NegateOperator {
-	template <class TA, class TR>
-	static inline TR Operation(TA input) {
-		return -input;
-	}
-};
-
 struct DivideOperator {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA left, TB right) {

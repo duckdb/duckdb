@@ -6,7 +6,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/storage/data_table.hpp"
-
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 
 namespace duckdb {

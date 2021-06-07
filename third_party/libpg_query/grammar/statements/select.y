@@ -1877,6 +1877,14 @@ a_expr:		c_expr									{ $$ = $1; }
 				PGFuncCall *n = makeFuncCall(SystemFuncName("row"), $1, @1);
 				$$ = (PGNode *) n;
 			}
+			| '{' dict_arguments '}' {
+				PGFuncCall *n = makeFuncCall(SystemFuncName("struct_pack"), $2, @2);
+				$$ = (PGNode *) n;
+			}
+			| '[' opt_expr_list ']' {
+				PGFuncCall *n = makeFuncCall(SystemFuncName("list_value"), $2, @2);
+				$$ = (PGNode *) n;
+			}
 			| row LAMBDA_ARROW a_expr
 			{
 				PGLambdaFunction *n = makeNode(PGLambdaFunction);
@@ -2790,6 +2798,20 @@ qualified_row:	ROW '(' expr_list ')'					{ $$ = $3; }
 row:		qualified_row							{ $$ = $1;}
 			| '(' expr_list ',' a_expr ')'			{ $$ = lappend($2, $4); }
 		;
+
+dict_arg:
+	ColIdOrString ':' a_expr						{
+		PGNamedArgExpr *na = makeNode(PGNamedArgExpr);
+		na->name = $1;
+		na->arg = (PGExpr *) $3;
+		na->argnumber = -1;
+		na->location = @1;
+		$$ = (PGNode *) na;
+	}
+
+dict_arguments:
+	dict_arg						{ $$ = list_make1($1); }
+	| dict_arguments ',' dict_arg	{ $$ = lappend($1, $3); }
 
 sub_type:	ANY										{ $$ = PG_ANY_SUBLINK; }
 			| SOME									{ $$ = PG_ANY_SUBLINK; }

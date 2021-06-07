@@ -80,7 +80,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromParquet(const string &filenam
 	return DuckDBPyConnection::DefaultConnection()->FromParquet(filename);
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromArrowTable(const py::object &table) {
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromArrowTable(py::object &table) {
 	return DuckDBPyConnection::DefaultConnection()->FromArrowTable(table);
 }
 

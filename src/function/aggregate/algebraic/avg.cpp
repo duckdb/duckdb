@@ -31,7 +31,7 @@ struct AverageSetOperation {
 		state->count = 0;
 	}
 	template <class STATE>
-	static void Combine(STATE source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target) {
 		target->count += source.count;
 		target->value += source.value;
 	}

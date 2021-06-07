@@ -103,7 +103,7 @@ struct StringAggSingleFunction : public StringAggBaseFunction {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(STATE source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target) {
 		if (source.dataptr == nullptr) {
 			// source is not set: skip combining
 			return;

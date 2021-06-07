@@ -98,7 +98,8 @@ void PhysicalDelimJoin::Combine(ExecutionContext &context, GlobalOperatorState &
 	distinct->Combine(context, *dstate.distinct_state, lstate);
 }
 
-void PhysicalDelimJoin::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
+void PhysicalDelimJoin::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
+                                         PhysicalOperatorState *state_p) const {
 	auto state = reinterpret_cast<PhysicalDelimJoinState *>(state_p);
 	if (!state->join_state) {
 		// create the state of the underlying join

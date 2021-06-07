@@ -20,13 +20,13 @@ unique_ptr<CreateStatement> Transformer::TransformCreateFunction(duckdb_libpgque
 	info->schema = qname.schema;
 	info->name = qname.name;
 
-	auto function = TransformExpression(stmt->function);
+	auto function = TransformExpression(stmt->function, 0);
 	D_ASSERT(function);
 	auto macro_func = make_unique<MacroFunction>(move(function));
 
 	if (stmt->params) {
 		vector<unique_ptr<ParsedExpression>> parameters;
-		auto res = TransformExpressionList(stmt->params, parameters);
+		auto res = TransformExpressionList(stmt->params, parameters, 0);
 		if (!res) {
 			throw ParserException("Failed to transform macro parameters!");
 		}

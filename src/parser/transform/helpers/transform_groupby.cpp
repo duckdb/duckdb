@@ -11,7 +11,7 @@ bool Transformer::TransformGroupBy(duckdb_libpgquery::PGList *group, vector<uniq
 
 	for (auto node = group->head; node != nullptr; node = node->next) {
 		auto n = reinterpret_cast<duckdb_libpgquery::PGNode *>(node->data.ptr_value);
-		result.push_back(TransformExpression(n));
+		result.push_back(TransformExpression(n, 0));
 	}
 	return true;
 }

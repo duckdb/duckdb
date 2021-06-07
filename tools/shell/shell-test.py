@@ -66,8 +66,8 @@ SELECT SUM(i) FROM a;
 
 # nested types
 test('select LIST_VALUE(1, 2);', out='[1, 2]')
-test("select STRUCT_PACK(x := 3, y := 3);", out='<x: 3, y: 3>')
-test("select STRUCT_PACK(x := 3, y := LIST_VALUE(1, 2));", out='<x: 3, y: [1, 2]>')
+test("select STRUCT_PACK(x := 3, y := 3);", out="{'x': 3, 'y': 3}")
+test("select STRUCT_PACK(x := 3, y := LIST_VALUE(1, 2));", out="{'x': 3, 'y': [1, 2]}")
 
 test('''
 CREATE TABLE a (i STRING);
@@ -107,7 +107,16 @@ CREATE TABLE a (I INTEGER);
 .changes on
 INSERT INTO a VALUES (42);
 DROP TABLE a;
-''', err="sqlite3_changes")
+''', out="total_changes: 1")
+
+test('''
+CREATE TABLE a (I INTEGER);
+.changes on
+INSERT INTO a VALUES (42);
+INSERT INTO a VALUES (42);
+INSERT INTO a VALUES (42);
+DROP TABLE a;
+''', out="total_changes: 3")
 
 test('''
 CREATE TABLE a (I INTEGER);
@@ -463,6 +472,12 @@ CREATE TABLE a (I INTEGER);
 INSERT INTO a VALUES (42);
 SELECT * FROM a;
 ''', '\\begin{tabular}')
+
+# .mode trash
+test('''
+.mode trash
+SELECT 1;
+''', '')
 
 # dump blobs: FIXME
 # test('''

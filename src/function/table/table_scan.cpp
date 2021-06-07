@@ -30,7 +30,8 @@ struct TableScanOperatorData : public FunctionOperatorData {
 };
 
 static unique_ptr<FunctionOperatorData> TableScanInit(ClientContext &context, const FunctionData *bind_data_p,
-                                                      vector<column_t> &column_ids, TableFilterCollection *filters) {
+                                                      const vector<column_t> &column_ids,
+                                                      TableFilterCollection *filters) {
 	auto result = make_unique<TableScanOperatorData>();
 	auto &transaction = Transaction::GetTransaction(context);
 	auto &bind_data = (const TableScanBindData &)*bind_data_p;
@@ -53,7 +54,7 @@ static unique_ptr<BaseStatistics> TableScanStatistics(ClientContext &context, co
 }
 
 static unique_ptr<FunctionOperatorData> TableScanParallelInit(ClientContext &context, const FunctionData *bind_data_p,
-                                                              ParallelState *state, vector<column_t> &column_ids,
+                                                              ParallelState *state, const vector<column_t> &column_ids,
                                                               TableFilterCollection *filters) {
 	auto result = make_unique<TableScanOperatorData>();
 	result->column_ids = column_ids;
@@ -142,7 +143,8 @@ struct IndexScanOperatorData : public FunctionOperatorData {
 };
 
 static unique_ptr<FunctionOperatorData> IndexScanInit(ClientContext &context, const FunctionData *bind_data_p,
-                                                      vector<column_t> &column_ids, TableFilterCollection *filters) {
+                                                      const vector<column_t> &column_ids,
+                                                      TableFilterCollection *filters) {
 	auto result = make_unique<IndexScanOperatorData>();
 	auto &transaction = Transaction::GetTransaction(context);
 	auto &bind_data = (const TableScanBindData &)*bind_data_p;

@@ -3,7 +3,8 @@
 
 namespace duckdb {
 
-void PhysicalPrepare::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
+void PhysicalPrepare::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
+                                       PhysicalOperatorState *state) const {
 	auto &client = context.client;
 
 	// store the prepared statement in the context

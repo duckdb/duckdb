@@ -39,6 +39,10 @@ public:
 		return block_id;
 	}
 
+	int32_t Readers() const {
+		return readers;
+	}
+
 private:
 	static unique_ptr<BufferHandle> Load(shared_ptr<BlockHandle> &handle);
 	void Unload();
@@ -48,7 +52,7 @@ private:
 	mutex lock;
 	//! Whether or not the block is loaded/unloaded
 	BlockState state;
-	// amount of concurrent readers
+	//! Amount of concurrent readers
 	atomic<int32_t> readers;
 	//! The block id of the block
 	const block_id_t block_id;

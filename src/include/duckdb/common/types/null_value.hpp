@@ -20,8 +20,7 @@
 
 namespace duckdb {
 
-//! This is no longer used in regular vectors, however, hash tables use this
-//! value to store a NULL
+//! Placeholder to insert in Vectors or to use for hashing NULLs
 template <class T>
 inline T NullValue() {
 	return std::numeric_limits<T>::min();
@@ -76,47 +75,5 @@ template <>
 inline double NullValue() {
 	return NAN;
 }
-
-template <class T>
-inline bool IsNullValue(T value) {
-	return value == NullValue<T>();
-}
-
-template <>
-inline bool IsNullValue(const char *value) {
-	return *value == str_nil[0];
-}
-
-template <>
-inline bool IsNullValue(string_t value) {
-	return value.GetDataUnsafe()[0] == str_nil[0];
-}
-
-template <>
-inline bool IsNullValue(interval_t value) {
-	return value.days == NullValue<int32_t>() && value.months == NullValue<int32_t>() &&
-	       value.micros == NullValue<int64_t>();
-}
-
-template <>
-inline bool IsNullValue(char *value) {
-	return IsNullValue<const char *>(value);
-}
-
-template <>
-inline bool IsNullValue(float value) {
-	return std::isnan(value);
-}
-
-template <>
-inline bool IsNullValue(double value) {
-	return std::isnan(value);
-}
-
-//! Compares a specific memory region against the types NULL value
-bool IsNullValue(data_ptr_t ptr, PhysicalType type);
-
-//! Writes NullValue<T> value of a specific type to a memory address
-void SetNullValue(data_ptr_t ptr, PhysicalType type);
 
 } // namespace duckdb

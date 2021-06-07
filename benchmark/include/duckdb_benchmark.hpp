@@ -14,6 +14,7 @@
 #include "duckdb.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "test_helpers.hpp"
+#include "duckdb/main/query_profiler.hpp"
 
 namespace duckdb {
 
@@ -95,7 +96,7 @@ public:
 
 	string GetLogOutput(BenchmarkState *state_p) override {
 		auto state = (DuckDBBenchmarkState *)state_p;
-		return state->conn.context->profiler.ToJSON();
+		return state->conn.context->profiler->ToJSON();
 	}
 
 	//! Interrupt the benchmark because of a timeout

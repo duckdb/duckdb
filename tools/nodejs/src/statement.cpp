@@ -149,6 +149,9 @@ static Napi::Value convert_chunk(Napi::Env &env, std::vector<std::string> names,
 			case duckdb::LogicalTypeId::BIGINT: {
 				value = Napi::Number::New(env, dval.value_.bigint);
 			} break;
+			case duckdb::LogicalTypeId::HUGEINT: {
+				value = Napi::Number::New(env, dval.GetValue<double>());
+			} break;
 			case duckdb::LogicalTypeId::VARCHAR: {
 				value = Napi::String::New(env, dval.str_value);
 			} break;

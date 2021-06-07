@@ -61,12 +61,11 @@ void CleanupState::CleanupDelete(DeleteInfo *info) {
 		Flush();
 		current_table = version_table;
 	}
+	count = 0;
 	for (idx_t i = 0; i < info->count; i++) {
-		if (count == STANDARD_VECTOR_SIZE) {
-			Flush();
-		}
 		row_numbers[count++] = info->vinfo->start + info->rows[i];
 	}
+	Flush();
 }
 
 void CleanupState::Flush() {

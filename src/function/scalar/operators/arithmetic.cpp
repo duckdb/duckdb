@@ -14,6 +14,8 @@
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 
+#include <limits>
+
 namespace duckdb {
 
 template <class OP>
@@ -281,6 +283,18 @@ void AddFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 // - [subtract]
 //===--------------------------------------------------------------------===//
+struct NegateOperator {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
+		using Limits = std::numeric_limits<TR>;
+		auto cast = (TR)input;
+		if (Limits::is_integer && Limits::is_signed && Limits::lowest() == cast) {
+			throw OutOfRangeException("Overflow in negation of integer!");
+		}
+		return -cast;
+	}
+};
+
 unique_ptr<FunctionData> DecimalNegateBind(ClientContext &context, ScalarFunction &bound_function,
                                            vector<unique_ptr<Expression>> &arguments) {
 	auto decimal_type = arguments[0]->return_type;

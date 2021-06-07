@@ -5,7 +5,7 @@ namespace duckdb {
 
 // COALESCE(a,b,c) returns the first argument that is NOT NULL, so
 // rewrite into CASE(a IS NOT NULL, a, CASE(b IS NOT NULL, b, c))
-unique_ptr<ParsedExpression> Transformer::TransformCoalesce(duckdb_libpgquery::PGAExpr *root) {
+unique_ptr<ParsedExpression> Transformer::TransformCoalesce(duckdb_libpgquery::PGAExpr *root, idx_t depth) {
 	if (!root) {
 		return nullptr;
 	}
@@ -15,7 +15,8 @@ unique_ptr<ParsedExpression> Transformer::TransformCoalesce(duckdb_libpgquery::P
 	auto coalesce_op = make_unique<OperatorExpression>(ExpressionType::OPERATOR_COALESCE);
 	for (auto cell = coalesce_args->head; cell; cell = cell->next) {
 		// get the value of the COALESCE
-		auto value_expr = TransformExpression(reinterpret_cast<duckdb_libpgquery::PGNode *>(cell->data.ptr_value));
+		auto value_expr =
+		    TransformExpression(reinterpret_cast<duckdb_libpgquery::PGNode *>(cell->data.ptr_value), depth + 1);
 		coalesce_op->children.push_back(move(value_expr));
 	}
 	return move(coalesce_op);

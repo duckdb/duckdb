@@ -428,7 +428,14 @@ void TableCatalogEntry::Serialize(Serializer &serializer) {
 
 string TableCatalogEntry::ToSQL() {
 	std::stringstream ss;
-	ss << "CREATE TABLE " << KeywordHelper::WriteOptionallyQuoted(name) << "(";
+
+	ss << "CREATE TABLE ";
+
+	if (schema->name != DEFAULT_SCHEMA) {
+		ss << KeywordHelper::WriteOptionallyQuoted(schema->name) << ".";
+	}
+
+	ss << KeywordHelper::WriteOptionallyQuoted(name) << "(";
 
 	// find all columns that have NOT NULL specified, but are NOT primary key columns
 	unordered_set<idx_t> not_null_columns;

@@ -91,7 +91,7 @@ public:
 };
 
 void PhysicalBlockwiseNLJoin::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
-                                               PhysicalOperatorState *state_p) {
+                                               PhysicalOperatorState *state_p) const {
 	auto state = reinterpret_cast<PhysicalBlockwiseNLJoinState *>(state_p);
 	auto &gstate = (BlockwiseNLJoinGlobalState &)*sink_state;
 

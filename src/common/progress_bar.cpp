@@ -25,9 +25,14 @@ int ProgressBar::GetCurrentPercentage() {
 
 void ProgressBar::Start() {
 #ifndef DUCKDB_NO_THREADS
+	stop = false;
 	current_percentage = 0;
 	progress_bar_thread = thread(&ProgressBar::ProgressBarThread, this);
 #endif
+}
+
+ProgressBar::~ProgressBar() {
+	Stop();
 }
 
 void ProgressBar::Stop() {

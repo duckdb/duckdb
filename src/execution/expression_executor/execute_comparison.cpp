@@ -6,7 +6,7 @@
 
 namespace duckdb {
 
-unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundComparisonExpression &expr,
+unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundComparisonExpression &expr,
                                                                 ExpressionExecutorState &root) {
 	auto result = make_unique<ExpressionState>(expr, root);
 	result->AddChild(expr.left.get());
@@ -15,8 +15,8 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundComparisonE
 	return result;
 }
 
-void ExpressionExecutor::Execute(BoundComparisonExpression &expr, ExpressionState *state, const SelectionVector *sel,
-                                 idx_t count, Vector &result) {
+void ExpressionExecutor::Execute(const BoundComparisonExpression &expr, ExpressionState *state,
+                                 const SelectionVector *sel, idx_t count, Vector &result) {
 	// resolve the children
 	Vector left, right;
 	left.Reference(state->intermediate_chunk.data[0]);
@@ -124,8 +124,9 @@ idx_t VectorOperations::LessThanEquals(Vector &left, Vector &right, const Select
 	return TemplatedSelectOperation<duckdb::GreaterThanEquals>(left, right, sel, count, true_sel, false_sel);
 }
 
-idx_t ExpressionExecutor::Select(BoundComparisonExpression &expr, ExpressionState *state, const SelectionVector *sel,
-                                 idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
+idx_t ExpressionExecutor::Select(const BoundComparisonExpression &expr, ExpressionState *state,
+                                 const SelectionVector *sel, idx_t count, SelectionVector *true_sel,
+                                 SelectionVector *false_sel) {
 	// resolve the children
 	Vector left, right;
 	left.Reference(state->intermediate_chunk.data[0]);

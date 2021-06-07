@@ -14,28 +14,28 @@ INSERT INTO struct_data VALUES (1, 1), (1, 2), (2, 3), (2, 4), (2, 5), (3, 6), (
 query T
 SELECT STRUCT_PACK(a := 42, b := 43)
 ----
-<a: 42, b: 43>
+{'a': 42, 'b': 43}
 
 query IT
 SELECT e, STRUCT_PACK(e) FROM struct_data ORDER BY e LIMIT 2
 ----
-NULL	<e: NULL>
-1	<e: 1>
+NULL	{'e': NULL}
+1	{'e': 1}
 
 query T
 SELECT STRUCT_PACK(a := 42, b := 43) as struct
 ----
-<a: 42, b: 43>
-
-# FIXME: this is borked
-mode skip
+{'a': 42, 'b': 43}
 
 query I
 select null::row(a integer);
 ----
-<a: NULL>
+NULL
 
-mode unskip
+query I
+select STRUCT_PACK(a := NULL, b := NULL) as struct
+----
+{'a': NULL, 'b': NULL}
 
 query II
 SELECT e, STRUCT_EXTRACT(STRUCT_PACK(xx := e, yy := g), 'xx') as ee FROM struct_data
@@ -173,7 +173,7 @@ SELECT STRUCT_EXTRACT(STRUCT_PACK(xx := e, yy := g), g) FROM struct_data
 statement error
 SELECT STRUCT_EXTRACT(STRUCT_PACK(xx := e, yy := g), '42') FROM struct_data
 
-statement error
+statement ok
 CREATE TABLE test AS SELECT e, STRUCT_PACK(e) FROM struct_data
 
 statement ok

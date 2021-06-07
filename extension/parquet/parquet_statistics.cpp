@@ -59,6 +59,10 @@ static Value TransformStatisticsDouble(const_data_ptr_t input) {
 	return Value::CreateValue<double>(val);
 }
 
+static Value TransformStatisticsDate(const_data_ptr_t input) {
+	return Value::DATE(ParquetIntToDate(Load<int32_t>(input)));
+}
+
 static Value TransformStatisticsTimestampMs(const_data_ptr_t input) {
 	return Value::TIMESTAMP(ParquetTimestampMsToTimestamp(Load<int64_t>(input)));
 }
@@ -111,6 +115,10 @@ unique_ptr<BaseStatistics> ParquetTransformColumnStatistics(const SchemaElement 
 
 	case LogicalTypeId::DOUBLE:
 		row_group_stats = TemplatedGetNumericStats<TransformStatisticsDouble>(type, parquet_stats);
+		break;
+
+	case LogicalTypeId::DATE:
+		row_group_stats = TemplatedGetNumericStats<TransformStatisticsDate>(type, parquet_stats);
 		break;
 
 		// here we go, our favorite type

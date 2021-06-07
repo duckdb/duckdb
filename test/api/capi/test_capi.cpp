@@ -476,7 +476,7 @@ TEST_CASE("Test prepared statements in C API", "[capi][.]") {
 	REQUIRE(status == DuckDBSuccess);
 	auto value = duckdb_value_varchar(&res, 0, 0);
 	REQUIRE(string(value) == "hello");
-	free(value);
+	duckdb_free(value);
 	duckdb_destroy_result(&res);
 
 	duckdb_bind_blob(stmt, 1, "hello\0world", 11);
@@ -484,7 +484,7 @@ TEST_CASE("Test prepared statements in C API", "[capi][.]") {
 	REQUIRE(status == DuckDBSuccess);
 	value = duckdb_value_varchar(&res, 0, 0);
 	REQUIRE(string(value) == "hello\\x00world");
-	free(value);
+	duckdb_free(value);
 	duckdb_destroy_result(&res);
 
 	duckdb_destroy_prepare(&stmt);
@@ -531,6 +531,12 @@ TEST_CASE("Test prepared statements in C API", "[capi][.]") {
 	REQUIRE(status == DuckDBError);
 	duckdb_destroy_result(&res);
 	duckdb_destroy_prepare(&stmt);
+
+	// test duckdb_malloc explicitly
+	auto malloced_data = duckdb_malloc(100);
+	memcpy(malloced_data, "hello\0", 6);
+	REQUIRE(string((char *)malloced_data) == "hello");
+	duckdb_free(malloced_data);
 }
 
 TEST_CASE("Test appender statements in C API", "[capi][.]") {

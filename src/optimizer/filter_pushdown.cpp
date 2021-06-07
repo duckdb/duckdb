@@ -70,6 +70,7 @@ void FilterPushdown::PushFilters() {
 	}
 	filters.clear();
 }
+
 FilterResult FilterPushdown::AddFilter(unique_ptr<Expression> expr) {
 	PushFilters();
 	// split up the filters by AND predicate

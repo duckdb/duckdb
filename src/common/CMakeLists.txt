@@ -1,6 +1,7 @@
 add_subdirectory(crypto)
 add_subdirectory(enums)
 add_subdirectory(operator)
+add_subdirectory(row_operations)
 add_subdirectory(serializer)
 add_subdirectory(types)
 add_subdirectory(value_operations)
@@ -10,6 +11,7 @@ add_library_unity(
   duckdb_common
   OBJECT
   allocator.cpp
+  arrow_wrapper.cpp
   assert.cpp
   bit_operations.cpp
   constants.cpp
@@ -18,7 +20,7 @@ add_library_unity(
   exception_format_value.cpp
   file_buffer.cpp
   file_system.cpp
-  gzip_stream.cpp
+  gzip_file_system.cpp
   limits.cpp
   printer.cpp
   progress_bar.cpp

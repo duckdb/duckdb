@@ -69,7 +69,7 @@ unique_ptr<ParsedExpression> Transformer::TransformBinaryOperator(const string &
 	}
 }
 
-unique_ptr<ParsedExpression> Transformer::TransformAExpr(duckdb_libpgquery::PGAExpr *root) {
+unique_ptr<ParsedExpression> Transformer::TransformAExpr(duckdb_libpgquery::PGAExpr *root, idx_t depth) {
 	if (!root) {
 		return nullptr;
 	}
@@ -77,7 +77,7 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(duckdb_libpgquery::PGAE
 
 	switch (root->kind) {
 	case duckdb_libpgquery::PG_AEXPR_IN: {
-		auto left_expr = TransformExpression(root->lexpr);
+		auto left_expr = TransformExpression(root->lexpr, depth + 1);
 		ExpressionType operator_type;
 		// this looks very odd, but seems to be the way to find out its NOT IN
 		if (name == "<>") {
@@ -88,14 +88,14 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(duckdb_libpgquery::PGAE
 			operator_type = ExpressionType::COMPARE_IN;
 		}
 		auto result = make_unique<OperatorExpression>(operator_type, move(left_expr));
-		TransformExpressionList((duckdb_libpgquery::PGList *)root->rexpr, result->children);
+		TransformExpressionList((duckdb_libpgquery::PGList *)root->rexpr, result->children, depth);
 		return move(result);
 	}
 	// rewrite NULLIF(a, b) into CASE WHEN a=b THEN NULL ELSE a END
 	case duckdb_libpgquery::PG_AEXPR_NULLIF: {
 		vector<unique_ptr<ParsedExpression>> children;
-		children.push_back(TransformExpression(root->lexpr));
-		children.push_back(TransformExpression(root->rexpr));
+		children.push_back(TransformExpression(root->lexpr, depth + 1));
+		children.push_back(TransformExpression(root->rexpr, depth + 1));
 		return make_unique<FunctionExpression>("nullif", children);
 	}
 	// rewrite (NOT) X BETWEEN A AND B into (NOT) AND(GREATERTHANOREQUALTO(X,
@@ -107,15 +107,17 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(duckdb_libpgquery::PGAE
 			throw Exception("(NOT) BETWEEN needs two args");
 		}
 
-		auto between_left =
-		    TransformExpression(reinterpret_cast<duckdb_libpgquery::PGNode *>(between_args->head->data.ptr_value));
-		auto between_right =
-		    TransformExpression(reinterpret_cast<duckdb_libpgquery::PGNode *>(between_args->tail->data.ptr_value));
+		auto between_left = TransformExpression(
+		    reinterpret_cast<duckdb_libpgquery::PGNode *>(between_args->head->data.ptr_value), depth + 1);
+		auto between_right = TransformExpression(
+		    reinterpret_cast<duckdb_libpgquery::PGNode *>(between_args->tail->data.ptr_value), depth + 1);
 
-		auto compare_left = make_unique<ComparisonExpression>(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
-		                                                      TransformExpression(root->lexpr), move(between_left));
-		auto compare_right = make_unique<ComparisonExpression>(ExpressionType::COMPARE_LESSTHANOREQUALTO,
-		                                                       TransformExpression(root->lexpr), move(between_right));
+		auto compare_left =
+		    make_unique<ComparisonExpression>(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
+		                                      TransformExpression(root->lexpr, depth + 1), move(between_left));
+		auto compare_right =
+		    make_unique<ComparisonExpression>(ExpressionType::COMPARE_LESSTHANOREQUALTO,
+		                                      TransformExpression(root->lexpr, depth + 1), move(between_right));
 		auto compare_between = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, move(compare_left),
 		                                                          move(compare_right));
 		if (root->kind == duckdb_libpgquery::PG_AEXPR_BETWEEN) {
@@ -126,8 +128,8 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(duckdb_libpgquery::PGAE
 	}
 	// rewrite SIMILAR TO into regexp_full_match('asdf', '.*sd.*')
 	case duckdb_libpgquery::PG_AEXPR_SIMILAR: {
-		auto left_expr = TransformExpression(root->lexpr);
-		auto right_expr = TransformExpression(root->rexpr);
+		auto left_expr = TransformExpression(root->lexpr, depth + 1);
+		auto right_expr = TransformExpression(root->rexpr, depth + 1);
 
 		vector<unique_ptr<ParsedExpression>> children;
 		children.push_back(move(left_expr));
@@ -162,14 +164,14 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(duckdb_libpgquery::PGAE
 		}
 	}
 	case duckdb_libpgquery::PG_AEXPR_NOT_DISTINCT: {
-		auto left_expr = TransformExpression(root->lexpr);
-		auto right_expr = TransformExpression(root->rexpr);
+		auto left_expr = TransformExpression(root->lexpr, depth + 1);
+		auto right_expr = TransformExpression(root->rexpr, depth + 1);
 		return make_unique<ComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM, move(left_expr),
 		                                         move(right_expr));
 	}
 	case duckdb_libpgquery::PG_AEXPR_DISTINCT: {
-		auto left_expr = TransformExpression(root->lexpr);
-		auto right_expr = TransformExpression(root->rexpr);
+		auto left_expr = TransformExpression(root->lexpr, depth + 1);
+		auto right_expr = TransformExpression(root->rexpr, depth + 1);
 		return make_unique<ComparisonExpression>(ExpressionType::COMPARE_DISTINCT_FROM, move(left_expr),
 		                                         move(right_expr));
 	}
@@ -177,8 +179,8 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(duckdb_libpgquery::PGAE
 	default:
 		break;
 	}
-	auto left_expr = TransformExpression(root->lexpr);
-	auto right_expr = TransformExpression(root->rexpr);
+	auto left_expr = TransformExpression(root->lexpr, depth + 1);
+	auto right_expr = TransformExpression(root->rexpr, depth + 1);
 
 	if (!left_expr) {
 		// prefix operator

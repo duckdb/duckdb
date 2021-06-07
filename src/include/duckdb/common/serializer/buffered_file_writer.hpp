@@ -19,7 +19,7 @@ class BufferedFileWriter : public Serializer {
 public:
 	//! Serializes to a buffer allocated by the serializer, will expand when
 	//! writing past the initial threshold
-	BufferedFileWriter(FileSystem &fs, string path,
+	BufferedFileWriter(FileSystem &fs, const string &path,
 	                   uint8_t open_flags = FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
 
 	FileSystem &fs;

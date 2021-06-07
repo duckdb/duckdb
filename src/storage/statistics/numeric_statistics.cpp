@@ -77,6 +77,7 @@ void NumericStatistics::Update<interval_t>(SegmentStatistics &stats, interval_t 
 NumericStatistics::NumericStatistics(LogicalType type_p) : BaseStatistics(move(type_p)) {
 	min = Value::MaximumValue(type);
 	max = Value::MinimumValue(type);
+	validity_stats = make_unique<ValidityStatistics>(false);
 }
 
 NumericStatistics::NumericStatistics(LogicalType type_p, Value min_p, Value max_p)
@@ -94,20 +95,62 @@ void NumericStatistics::Merge(const BaseStatistics &other_p) {
 	}
 }
 
-bool NumericStatistics::CheckZonemap(ExpressionType comparison_type, const Value &constant) {
+FilterPropagateResult NumericStatistics::CheckZonemap(ExpressionType comparison_type, const Value &constant) {
 	switch (comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
-		return constant >= min && constant <= max;
+		if (constant == min && constant == max) {
+			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
+		} else if (constant >= min && constant <= max) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		} else {
+			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+		}
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		return constant <= max;
+		// X >= C
+		// this can be true only if max(X) >= C
+		// if min(X) >= C, then this is always true
+		if (min >= constant) {
+			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
+		} else if (max >= constant) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		} else {
+			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+		}
 	case ExpressionType::COMPARE_GREATERTHAN:
-		return constant < max;
+		// X > C
+		// this can be true only if max(X) > C
+		// if min(X) > C, then this is always true
+		if (min > constant) {
+			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
+		} else if (max > constant) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		} else {
+			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+		}
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		return constant >= min;
+		// X <= C
+		// this can be true only if min(X) <= C
+		// if max(X) <= C, then this is always true
+		if (max <= constant) {
+			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
+		} else if (min <= constant) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		} else {
+			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+		}
 	case ExpressionType::COMPARE_LESSTHAN:
-		return constant > min;
+		// X < C
+		// this can be true only if min(X) < C
+		// if max(X) < C, then this is always true
+		if (max < constant) {
+			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
+		} else if (min < constant) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		} else {
+			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+		}
 	default:
-		throw InternalException("Operation not implemented");
+		throw InternalException("Expression type in zonemap check not implemented");
 	}
 }
 
@@ -132,8 +175,8 @@ unique_ptr<BaseStatistics> NumericStatistics::Deserialize(Deserializer &source, 
 }
 
 string NumericStatistics::ToString() {
-	return StringUtil::Format("Numeric Statistics<%s> %s[Min: %s, Max: %s]", type.ToString(),
-	                          validity_stats ? validity_stats->ToString() : "", min.ToString(), max.ToString());
+	return StringUtil::Format("[Min: %s, Max: %s]%s", min.ToString(), max.ToString(),
+	                          validity_stats ? validity_stats->ToString() : "");
 }
 
 template <class T>

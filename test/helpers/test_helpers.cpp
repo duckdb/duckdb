@@ -264,6 +264,12 @@ bool compare_result(string csv, ChunkCollection &collection, vector<LogicalType>
                     string &error_message) {
 	D_ASSERT(collection.Count() == 0 || collection.Types().size() == sql_types.size());
 
+	// create the csv on disk
+	auto csv_path = TestCreatePath("__test_csv_path.csv");
+	ofstream f(csv_path);
+	f << csv;
+	f.close();
+
 	// set up the CSV reader
 	BufferedCSVReaderOptions options;
 	options.auto_detect = false;
@@ -271,15 +277,15 @@ bool compare_result(string csv, ChunkCollection &collection, vector<LogicalType>
 	options.header = has_header;
 	options.quote = "\"";
 	options.escape = "\"";
+	options.file_path = csv_path;
 
 	// set up the intermediate result chunk
 	DataChunk parsed_result;
 	parsed_result.Initialize(sql_types);
 
-	// convert the CSV string into a stringstream
-	auto source = make_unique<istringstream>(csv);
-
-	BufferedCSVReader reader(move(options), sql_types, move(source));
+	DuckDB db;
+	Connection con(db);
+	BufferedCSVReader reader(*con.context, move(options), sql_types);
 	idx_t collection_index = 0;
 	idx_t tuple_count = 0;
 	while (true) {

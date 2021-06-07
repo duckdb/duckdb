@@ -206,7 +206,7 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 	config.collation = new_config.collation;
 	config.default_order_type = new_config.default_order_type;
 	config.default_null_order = new_config.default_null_order;
-	config.enable_copy = new_config.enable_copy;
+	config.enable_external_access = new_config.enable_external_access;
 	config.replacement_scans = move(new_config.replacement_scans);
 }
 

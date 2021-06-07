@@ -52,7 +52,7 @@ unique_ptr<FunctionData> MapFunction::MapFunctionBind(ClientContext &context, ve
 
 	auto data_uptr = make_unique<MapFunctionData>();
 	auto &data = *data_uptr;
-	data.function = (PyObject *)inputs[0].GetValue<uintptr_t>();
+	data.function = (PyObject *)inputs[0].GetPointer();
 	data.in_names = input_table_names;
 	data.in_types = input_table_types;
 

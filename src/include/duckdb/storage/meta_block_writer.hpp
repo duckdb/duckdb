@@ -28,6 +28,7 @@ public:
 	idx_t offset;
 
 public:
+	BlockPointer GetBlockPointer();
 	void Flush();
 
 	void WriteData(const_data_ptr_t buffer, idx_t write_size) override;

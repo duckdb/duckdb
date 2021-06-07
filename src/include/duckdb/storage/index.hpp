@@ -26,7 +26,8 @@ struct IndexLock;
 //! The index is an abstract base class that serves as the basis for indexes
 class Index {
 public:
-	Index(IndexType type, vector<column_t> column_ids, vector<unique_ptr<Expression>> unbound_expressions);
+	Index(IndexType type, const vector<column_t> &column_ids,
+	      const vector<unique_ptr<Expression>> &unbound_expressions);
 	virtual ~Index() = default;
 
 	//! The type of the index

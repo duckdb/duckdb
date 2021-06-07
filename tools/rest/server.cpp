@@ -259,7 +259,7 @@ int main(int argc, char **argv) {
 		} else if (arg == "--read_only") {
 			config.access_mode = AccessMode::READ_ONLY;
 		} else if (arg == "--disable_copy") {
-			config.enable_copy = false;
+			config.enable_external_access = false;
 		} else if (StringUtil::StartsWith(arg, "--database=")) {
 			auto splits = StringUtil::Split(arg, '=');
 			if (splits.size() != 2) {

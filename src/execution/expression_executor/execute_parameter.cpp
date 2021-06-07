@@ -4,15 +4,15 @@
 
 namespace duckdb {
 
-unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundParameterExpression &expr,
+unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundParameterExpression &expr,
                                                                 ExpressionExecutorState &root) {
 	auto result = make_unique<ExpressionState>(expr, root);
 	result->Finalize();
 	return result;
 }
 
-void ExpressionExecutor::Execute(BoundParameterExpression &expr, ExpressionState *state, const SelectionVector *sel,
-                                 idx_t count, Vector &result) {
+void ExpressionExecutor::Execute(const BoundParameterExpression &expr, ExpressionState *state,
+                                 const SelectionVector *sel, idx_t count, Vector &result) {
 	D_ASSERT(expr.value);
 	D_ASSERT(expr.value->type() == expr.return_type);
 	result.Reference(*expr.value);

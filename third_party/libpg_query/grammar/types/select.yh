@@ -68,6 +68,9 @@
 %type <list>	when_clause_list
 %type <subquerytype>	sub_type
 
+%type <node>	dict_arg
+%type <list>	dict_arguments
+
 %type <alias>	alias_clause opt_alias_clause
 %type <list>	func_alias_clause
 %type <sortby>	sortby

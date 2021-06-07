@@ -52,7 +52,7 @@ struct ArgMinOperation : ArgMinMaxOperation {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(STATE &source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target) {
 		if (!source.is_initialized) {
 			return;
 		}
@@ -86,7 +86,7 @@ struct ArgMaxOperation : ArgMinMaxOperation {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(STATE &source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target) {
 		if (!source.is_initialized) {
 			return;
 		}

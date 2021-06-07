@@ -19,9 +19,12 @@ string LogicalGet::GetName() const {
 
 string LogicalGet::ParamsToString() const {
 	string result;
-	for (auto &filter : table_filters) {
-		result +=
-		    names[filter.column_index] + ExpressionTypeToOperator(filter.comparison_type) + filter.constant.ToString();
+	for (auto &kv : table_filters.filters) {
+		auto &column_index = kv.first;
+		auto &filter = kv.second;
+		if (column_index < names.size()) {
+			result += filter->ToString(names[column_index]);
+		}
 		result += "\n";
 	}
 	if (!function.to_string) {

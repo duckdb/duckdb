@@ -31,7 +31,8 @@ uint64_t GetDelimiter(DataChunk &input, Expression *expr, uint64_t original_valu
 	return limit_value.value_.ubigint;
 }
 
-void PhysicalLimit::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
+void PhysicalLimit::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
+                                     PhysicalOperatorState *state_p) const {
 	auto state = reinterpret_cast<PhysicalLimitOperatorState *>(state_p);
 
 	idx_t max_element = limit + offset;

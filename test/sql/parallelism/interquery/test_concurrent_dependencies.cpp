@@ -26,6 +26,12 @@ static void RunQueryUntilSuccess(Connection &con, string query) {
 static void create_drop_table(DuckDB *db) {
 	Connection con(*db);
 
+	// enable detailed profiling
+	con.Query("PRAGMA enable_profiling");
+	auto detailed_profiling_output = TestCreatePath("detailed_profiling_output");
+	con.Query("PRAGMA profiling_output='" + detailed_profiling_output + "'");
+	con.Query("PRAGMA profiling_mode = detailed");
+
 	while (!finished) {
 		// printf("[TABLE] Create table\n");
 		// create the table: this should never fail
@@ -63,7 +69,7 @@ static void create_use_prepared_statement(DuckDB *db) {
 	}
 }
 
-TEST_CASE("Test parallel dependencies in multiple connections", "[catalog][.]") {
+TEST_CASE("Test parallel dependencies in multiple connections", "[interquery][.]") {
 	DuckDB db(nullptr);
 
 	// in this test we create and drop a table in one thread (with CASCADE drop)
@@ -123,7 +129,7 @@ static void create_use_table_view(DuckDB *db, int threadnr) {
 		}
 	}
 }
-TEST_CASE("Test parallel dependencies with schemas and tables", "[catalog][.]") {
+TEST_CASE("Test parallel dependencies with schemas and tables", "[interquery][.]") {
 	DuckDB db(nullptr);
 	// FIXME: this test crashes
 	return;

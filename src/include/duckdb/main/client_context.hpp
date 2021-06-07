@@ -18,11 +18,9 @@
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/execution/executor.hpp"
 #include "duckdb/main/prepared_statement.hpp"
-#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/main/table_description.hpp"
 #include "duckdb/transaction/transaction_context.hpp"
-
 #include <random>
 #include "duckdb/common/atomic.hpp"
 
@@ -33,7 +31,8 @@ class DatabaseInstance;
 class PreparedStatementData;
 class Relation;
 class BufferedFileWriter;
-
+class QueryProfiler;
+class QueryProfilerHistory;
 class ClientContextLock;
 
 //! The ClientContext holds information relevant to the current client session
@@ -45,9 +44,9 @@ public:
 	DUCKDB_API explicit ClientContext(shared_ptr<DatabaseInstance> db);
 	DUCKDB_API ~ClientContext();
 	//! Query profiler
-	QueryProfiler profiler;
+	unique_ptr<QueryProfiler> profiler;
 	//! QueryProfiler History
-	QueryProfilerHistory query_profiler_history;
+	unique_ptr<QueryProfilerHistory> query_profiler_history;
 	//! The database that this client is connected to
 	shared_ptr<DatabaseInstance> db;
 	//! Data for the currently running transaction
@@ -61,7 +60,7 @@ public:
 	Executor executor;
 
 	//! The Progress Bar
-	shared_ptr<ProgressBar> progress_bar;
+	unique_ptr<ProgressBar> progress_bar;
 	//! If the progress bar is enabled or not.
 	bool enable_progress_bar = false;
 	//! If the print of the progress bar is enabled

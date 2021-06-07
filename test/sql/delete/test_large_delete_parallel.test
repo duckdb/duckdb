@@ -1,0 +1,25 @@
+# name: test/sql/delete/test_large_delete_parallel.test
+# description: Test scan with large deletions
+# group: [delete]
+
+statement ok
+pragma threads=2
+
+statement ok
+pragma force_parallelism
+
+statement ok
+CREATE TABLE a AS SELECT * FROM range(0, 10000, 1) t1(i);
+
+query I
+SELECT COUNT(*) FROM a;
+----
+10000
+
+statement ok
+DELETE FROM a WHERE i >= 2000 AND i < 5000;
+
+query I
+SELECT COUNT(*) FROM a;
+----
+7000

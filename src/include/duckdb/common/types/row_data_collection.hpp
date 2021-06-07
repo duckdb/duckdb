@@ -27,6 +27,11 @@ struct RowDataBlock {
 	const idx_t entry_size;
 	idx_t count;
 	idx_t byte_offset;
+
+	RowDataBlock(const RowDataBlock &other)
+	    : block(other.block), capacity(other.capacity), entry_size(other.entry_size), count(other.count),
+	      byte_offset(other.byte_offset) {
+	}
 };
 
 struct BlockAppendEntry {

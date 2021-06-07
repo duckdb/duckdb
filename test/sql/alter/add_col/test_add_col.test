@@ -14,10 +14,6 @@ ALTER TABLE test ADD COLUMN k INTEGER
 query III
 SELECT * FROM test
 ----
-1
-1
-NULL
-2
-2
-NULL
+1	1	NULL
+2	2	NULL
 

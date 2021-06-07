@@ -9,13 +9,13 @@
 namespace duckdb {
 
 struct ConjunctionState : public ExpressionState {
-	ConjunctionState(Expression &expr, ExpressionExecutorState &root) : ExpressionState(expr, root) {
+	ConjunctionState(const Expression &expr, ExpressionExecutorState &root) : ExpressionState(expr, root) {
 		adaptive_filter = make_unique<AdaptiveFilter>(expr);
 	}
 	unique_ptr<AdaptiveFilter> adaptive_filter;
 };
 
-unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundConjunctionExpression &expr,
+unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundConjunctionExpression &expr,
                                                                 ExpressionExecutorState &root) {
 	auto result = make_unique<ConjunctionState>(expr, root);
 	for (auto &child : expr.children) {
@@ -25,8 +25,8 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundConjunction
 	return move(result);
 }
 
-void ExpressionExecutor::Execute(BoundConjunctionExpression &expr, ExpressionState *state, const SelectionVector *sel,
-                                 idx_t count, Vector &result) {
+void ExpressionExecutor::Execute(const BoundConjunctionExpression &expr, ExpressionState *state,
+                                 const SelectionVector *sel, idx_t count, Vector &result) {
 	// execute the children
 	for (idx_t i = 0; i < expr.children.size(); i++) {
 		Vector current_result;
@@ -53,8 +53,9 @@ void ExpressionExecutor::Execute(BoundConjunctionExpression &expr, ExpressionSta
 	}
 }
 
-idx_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionState *state_p, const SelectionVector *sel,
-                                 idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
+idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, ExpressionState *state_p,
+                                 const SelectionVector *sel, idx_t count, SelectionVector *true_sel,
+                                 SelectionVector *false_sel) {
 	auto state = (ConjunctionState *)state_p;
 
 	if (expr.type == ExpressionType::CONJUNCTION_AND) {

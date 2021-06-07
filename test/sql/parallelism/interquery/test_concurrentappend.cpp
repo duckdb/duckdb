@@ -17,6 +17,12 @@ TEST_CASE("Sequential append", "[interquery][.]") {
 	Connection con(db);
 	vector<unique_ptr<Connection>> connections;
 
+	// enable detailed profiling
+	con.Query("PRAGMA enable_profiling");
+	auto detailed_profiling_output = TestCreatePath("detailed_profiling_output");
+	con.Query("PRAGMA profiling_output='" + detailed_profiling_output + "'");
+	con.Query("PRAGMA profiling_mode = detailed");
+
 	// initialize the database
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER);"));
 
@@ -77,6 +83,12 @@ TEST_CASE("Concurrent append", "[interquery][.]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
+
+	// enable detailed profiling
+	con.Query("PRAGMA enable_profiling");
+	auto detailed_profiling_output = TestCreatePath("detailed_profiling_output");
+	con.Query("PRAGMA profiling_output='" + detailed_profiling_output + "'");
+	con.Query("PRAGMA profiling_mode = detailed");
 
 	// initialize the database
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER);"));

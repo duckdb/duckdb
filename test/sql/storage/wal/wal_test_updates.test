@@ -20,6 +20,13 @@ INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)
 statement ok
 UPDATE test SET b=b+1 WHERE a=11
 
+query II
+SELECT a, b FROM test ORDER BY a
+----
+11	23
+12	21
+13	22
+
 statement ok
 UPDATE test SET b=b+1 WHERE a=11
 

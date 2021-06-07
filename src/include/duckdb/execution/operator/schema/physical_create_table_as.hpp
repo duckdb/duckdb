@@ -30,6 +30,6 @@ public:
 	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
 	          DataChunk &input) const override;
 
-	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const override;
 };
 } // namespace duckdb

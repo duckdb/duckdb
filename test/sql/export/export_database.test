@@ -20,8 +20,34 @@ statement ok
 INSERT INTO strings VALUES ('NULL', DATE '1992-01-01'), (NULL, DATE '1993-01-01');
 
 statement ok
+CREATE TABLE "table.with-symbols"(i INTEGER)
+
+statement ok
+INSERT INTO "table.with-symbols" VALUES (1), (4), (NULL)
+
+statement ok
+CREATE TABLE "table ""." ( "col ""." TEXT)
+
+statement ok
+INSERT INTO "table ""." ("col "".") VALUES ('quote_escaped_quote_''')
+
+statement ok
+CREATE TABLE "SAME_NAME"(i INTEGER, j INTEGER);
+
+statement ok
+CREATE TABLE "same_name"(i INTEGER, j INTEGER);
+
+statement ok
+INSERT INTO "SAME_NAME" VALUES (1, 1), (2, 2)
+
+statement ok
+INSERT INTO "same_name" VALUES (3, 3), (4, 4)
+
+statement ok
 CREATE VIEW v1 AS SELECT * FROM integers WHERE i>3; --
 CREATE VIEW v2 AS SELECT * FROM integers WHERE i < 3;
+CREATE VIEW "view.with-symbols" AS SELECT * FROM "table.with-symbols" WHERE i < 3;
+CREATE VIEW "view ""." AS SELECT * FROM "table.with-symbols" WHERE i < 3;
 
 statement ok
 CREATE VIEW v3 AS SELECT * FROM integers WHERE i IS NULL --
@@ -68,6 +94,75 @@ SELECT * FROM v3 ORDER BY 1
 ----
 NULL	1
 
+query I
+SELECT * FROM "table.with-symbols" ORDER BY 1
+----
+NULL
+1
+4
+
+query I
+SELECT * FROM "view.with-symbols" ORDER BY 1
+----
+1
+
+
+query TT
+SELECT "table ""."."col "".", "col ""." FROM "table "".";
+----
+quote_escaped_quote_'	quote_escaped_quote_'
+
+query I
+SELECT * FROM "view ""." ORDER BY 1
+----
+1
+
+query II
+SELECT * FROM "SAME_NAME" ORDER BY i
+----
+1	1
+2	2
+
+query II
+SELECT * FROM "same_name" ORDER BY i
+----
+3	3
+4	4
+
+statement ok
+CREATE SCHEMA s1;
+CREATE SCHEMA s2;
+
+
+statement ok
+CREATE TABLE table01(i INTEGER, j INTEGER);
+CREATE TABLE s1.table01(i INTEGER, j INTEGER);
+CREATE TABLE s2.table01(i INTEGER, j INTEGER);
+
+statement ok
+INSERT INTO table01 VALUES (1, 1), (2, 2);
+INSERT INTO s1.table01 VALUES (3, 3), (4, 4);
+INSERT INTO s2.table01 VALUES (5, 5), (6, 6);
+
+
+query II
+SELECT * FROM table01 ORDER BY i;
+----
+1	1
+2	2
+
+query II
+SELECT * FROM s1.table01 ORDER BY i;
+----
+3	3
+4	4
+
+query II
+SELECT * FROM s2.table01 ORDER BY i;
+----
+5	5
+6	6
+
 # now export the db
 statement ok
 EXPORT DATABASE '__TEST_DIR__/export_test' (FORMAT CSV)
@@ -112,6 +207,58 @@ query I
 SELECT nextval('seq')
 ----
 2
+
+query I
+SELECT * FROM "table.with-symbols" ORDER BY 1
+----
+NULL
+1
+4
+
+query I
+SELECT * FROM "view.with-symbols" ORDER BY 1
+----
+1
+
+query TT
+SELECT "table ""."."col "".", "col ""." FROM "table "".";
+----
+quote_escaped_quote_'	quote_escaped_quote_'
+
+query I
+SELECT * FROM "view ""." ORDER BY 1
+----
+1
+
+query II
+SELECT * FROM "SAME_NAME" ORDER BY i
+----
+1	1
+2	2
+
+query II
+SELECT * FROM "same_name" ORDER BY i
+----
+3	3
+4	4
+
+query II
+SELECT * FROM table01 ORDER BY i;
+----
+1	1
+2	2
+
+query II
+SELECT * FROM s1.table01 ORDER BY i;
+----
+3	3
+4	4
+
+query II
+SELECT * FROM s2.table01 ORDER BY i;
+----
+5	5
+6	6
 
 # verify that constraints are still there
 statement error

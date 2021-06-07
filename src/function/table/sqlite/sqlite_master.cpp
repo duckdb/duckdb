@@ -43,7 +43,7 @@ static unique_ptr<FunctionData> SQLiteMasterBind(ClientContext &context, vector<
 }
 
 unique_ptr<FunctionOperatorData> SQLiteMasterInit(ClientContext &context, const FunctionData *bind_data,
-                                                  vector<column_t> &column_ids, TableFilterCollection *filters) {
+                                                  const vector<column_t> &column_ids, TableFilterCollection *filters) {
 	auto result = make_unique<SQLiteMasterData>();
 
 	// scan all the schemas for tables and views and collect them

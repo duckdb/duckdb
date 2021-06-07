@@ -20,7 +20,8 @@ PhysicalUnion::PhysicalUnion(vector<LogicalType> types, unique_ptr<PhysicalOpera
 }
 
 // first exhaust top, then exhaust bottom. state to remember which.
-void PhysicalUnion::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
+void PhysicalUnion::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
+                                     PhysicalOperatorState *state_p) const {
 	auto state = reinterpret_cast<PhysicalUnionOperatorState *>(state_p);
 	if (!state->top_done) {
 		children[0]->GetChunk(context, chunk, state->top_state.get());

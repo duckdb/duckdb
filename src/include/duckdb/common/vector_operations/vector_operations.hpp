@@ -93,16 +93,6 @@ struct VectorOperations {
 	                                   SelectionVector *true_sel, SelectionVector *false_sel);
 
 	//===--------------------------------------------------------------------===//
-	// Scatter methods
-	//===--------------------------------------------------------------------===//
-	// make sure dest.count is set for gather methods!
-	struct Gather {
-		//! dest.data[i] = ptr[i]. NullValue<T> is checked for and converted to the nullmask in dest. The source
-		//! addresses are incremented by the size of the type.
-		static void Set(Vector &source, Vector &dest, idx_t count);
-	};
-
-	//===--------------------------------------------------------------------===//
 	// Hash functions
 	//===--------------------------------------------------------------------===//
 	// result = HASH(A)

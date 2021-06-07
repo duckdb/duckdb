@@ -15,18 +15,12 @@
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/bound_tokens.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/common/enums/filter_propagate_result.hpp"
 
 namespace duckdb {
 class ClientContext;
 class LogicalOperator;
-
-enum class FilterPropagateResult : uint8_t {
-	NO_PRUNING_POSSIBLE = 0,
-	FILTER_ALWAYS_TRUE = 1,
-	FILTER_ALWAYS_FALSE = 2,
-	FILTER_TRUE_OR_NULL = 3,
-	FILTER_FALSE_OR_NULL = 4
-};
+class TableFilter;
 
 class StatisticsPropagator {
 public:
@@ -68,6 +62,11 @@ private:
 	void UpdateFilterStatistics(Expression &condition);
 	//! Set the statistics of a specific column binding to not contain null values
 	void SetStatisticsNotNull(ColumnBinding binding);
+
+	//! Run a comparison between the statistics and the table filter; returns the prune result
+	FilterPropagateResult PropagateTableFilter(BaseStatistics &stats, TableFilter &filter);
+	//! Update filter statistics from a TableFilter
+	void UpdateFilterStatistics(BaseStatistics &input, TableFilter &filter);
 
 	//! Add cardinalities together (i.e. new max is stats.max + new_stats.max): used for union
 	void AddCardinalities(unique_ptr<NodeStatistics> &stats, NodeStatistics &new_stats);

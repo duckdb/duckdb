@@ -180,7 +180,7 @@ public:
 };
 
 void PhysicalPerfectHashAggregate::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
-                                                    PhysicalOperatorState *state_p) {
+                                                    PhysicalOperatorState *state_p) const {
 	auto &state = (PerfectHashAggregateState &)*state_p;
 	auto &gstate = (PerfectHashAggregateGlobalState &)*sink_state;
 

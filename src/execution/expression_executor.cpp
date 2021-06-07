@@ -8,54 +8,44 @@ namespace duckdb {
 ExpressionExecutor::ExpressionExecutor() : random(0) {
 }
 
-ExpressionExecutor::ExpressionExecutor(Expression *expression) : ExpressionExecutor() {
+ExpressionExecutor::ExpressionExecutor(const Expression *expression) : ExpressionExecutor() {
 	D_ASSERT(expression);
 	AddExpression(*expression);
 }
 
-ExpressionExecutor::ExpressionExecutor(Expression &expression) : ExpressionExecutor() {
+ExpressionExecutor::ExpressionExecutor(const Expression &expression) : ExpressionExecutor() {
 	AddExpression(expression);
 }
 
-ExpressionExecutor::ExpressionExecutor(vector<unique_ptr<Expression>> &exprs) : ExpressionExecutor() {
+ExpressionExecutor::ExpressionExecutor(const vector<unique_ptr<Expression>> &exprs) : ExpressionExecutor() {
 	D_ASSERT(exprs.size() > 0);
 	for (auto &expr : exprs) {
 		AddExpression(*expr);
 	}
 }
 
-void ExpressionExecutor::AddExpression(Expression &expr) {
+void ExpressionExecutor::AddExpression(const Expression &expr) {
 	expressions.push_back(&expr);
-	auto state = make_unique<ExpressionExecutorState>();
+	auto state = make_unique<ExpressionExecutorState>(expr.ToString());
 	Initialize(expr, *state);
 	states.push_back(move(state));
 }
 
-void ExpressionExecutor::Initialize(Expression &expression, ExpressionExecutorState &state) {
+void ExpressionExecutor::Initialize(const Expression &expression, ExpressionExecutorState &state) {
 	state.root_state = InitializeState(expression, state);
 	state.executor = this;
 }
 
 void ExpressionExecutor::Execute(DataChunk *input, DataChunk &result) {
 	SetChunk(input);
-
 	D_ASSERT(expressions.size() == result.ColumnCount());
 	D_ASSERT(!expressions.empty());
+
 	for (idx_t i = 0; i < expressions.size(); i++) {
 		ExecuteExpression(i, result.data[i]);
-		if (current_count >= next_sample) {
-			next_sample = 50 + random.NextRandomInteger() % 100;
-			++sample_count;
-			sample_tuples_count += input->size();
-			current_count = 0;
-		} else {
-			++current_count;
-		}
 	}
 	result.SetCardinality(input ? input->size() : 1);
 	result.Verify();
-	++total_count;
-	tuples_count += input->size();
 }
 
 void ExpressionExecutor::ExecuteExpression(DataChunk &input, Vector &result) {
@@ -66,7 +56,10 @@ void ExpressionExecutor::ExecuteExpression(DataChunk &input, Vector &result) {
 idx_t ExpressionExecutor::SelectExpression(DataChunk &input, SelectionVector &sel) {
 	D_ASSERT(expressions.size() == 1);
 	SetChunk(&input);
-	return Select(*expressions[0], states[0]->root_state.get(), nullptr, input.size(), &sel, nullptr);
+	states[0]->profiler.BeginSample();
+	idx_t selected_tuples = Select(*expressions[0], states[0]->root_state.get(), nullptr, input.size(), &sel, nullptr);
+	states[0]->profiler.EndSample(chunk ? chunk->size() : 0);
+	return selected_tuples;
 }
 
 void ExpressionExecutor::ExecuteExpression(Vector &result) {
@@ -77,10 +70,12 @@ void ExpressionExecutor::ExecuteExpression(Vector &result) {
 void ExpressionExecutor::ExecuteExpression(idx_t expr_idx, Vector &result) {
 	D_ASSERT(expr_idx < expressions.size());
 	D_ASSERT(result.GetType() == expressions[expr_idx]->return_type);
+	states[expr_idx]->profiler.BeginSample();
 	Execute(*expressions[expr_idx], states[expr_idx]->root_state.get(), nullptr, chunk ? chunk->size() : 1, result);
+	states[expr_idx]->profiler.EndSample(chunk ? chunk->size() : 0);
 }
 
-Value ExpressionExecutor::EvaluateScalar(Expression &expr) {
+Value ExpressionExecutor::EvaluateScalar(const Expression &expr) {
 	D_ASSERT(expr.IsFoldable());
 	// use an ExpressionExecutor to execute the expression
 	ExpressionExecutor executor(expr);
@@ -94,7 +89,7 @@ Value ExpressionExecutor::EvaluateScalar(Expression &expr) {
 	return result_value;
 }
 
-void ExpressionExecutor::Verify(Expression &expr, Vector &vector, idx_t count) {
+void ExpressionExecutor::Verify(const Expression &expr, Vector &vector, idx_t count) {
 	D_ASSERT(expr.return_type == vector.GetType());
 	vector.Verify(count);
 	if (expr.stats) {
@@ -102,68 +97,69 @@ void ExpressionExecutor::Verify(Expression &expr, Vector &vector, idx_t count) {
 	}
 }
 
-unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(Expression &expr, ExpressionExecutorState &state) {
+unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const Expression &expr,
+                                                                ExpressionExecutorState &state) {
 	switch (expr.expression_class) {
 	case ExpressionClass::BOUND_REF:
-		return InitializeState((BoundReferenceExpression &)expr, state);
+		return InitializeState((const BoundReferenceExpression &)expr, state);
 	case ExpressionClass::BOUND_BETWEEN:
-		return InitializeState((BoundBetweenExpression &)expr, state);
+		return InitializeState((const BoundBetweenExpression &)expr, state);
 	case ExpressionClass::BOUND_CASE:
-		return InitializeState((BoundCaseExpression &)expr, state);
+		return InitializeState((const BoundCaseExpression &)expr, state);
 	case ExpressionClass::BOUND_CAST:
-		return InitializeState((BoundCastExpression &)expr, state);
+		return InitializeState((const BoundCastExpression &)expr, state);
 	case ExpressionClass::BOUND_COMPARISON:
-		return InitializeState((BoundComparisonExpression &)expr, state);
+		return InitializeState((const BoundComparisonExpression &)expr, state);
 	case ExpressionClass::BOUND_CONJUNCTION:
-		return InitializeState((BoundConjunctionExpression &)expr, state);
+		return InitializeState((const BoundConjunctionExpression &)expr, state);
 	case ExpressionClass::BOUND_CONSTANT:
-		return InitializeState((BoundConstantExpression &)expr, state);
+		return InitializeState((const BoundConstantExpression &)expr, state);
 	case ExpressionClass::BOUND_FUNCTION:
-		return InitializeState((BoundFunctionExpression &)expr, state);
+		return InitializeState((const BoundFunctionExpression &)expr, state);
 	case ExpressionClass::BOUND_OPERATOR:
-		return InitializeState((BoundOperatorExpression &)expr, state);
+		return InitializeState((const BoundOperatorExpression &)expr, state);
 	case ExpressionClass::BOUND_PARAMETER:
-		return InitializeState((BoundParameterExpression &)expr, state);
+		return InitializeState((const BoundParameterExpression &)expr, state);
 	default:
 		throw NotImplementedException("Attempting to initialize state of expression of unknown type!");
 	}
 }
 
-void ExpressionExecutor::Execute(Expression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
-                                 Vector &result) {
+void ExpressionExecutor::Execute(const Expression &expr, ExpressionState *state, const SelectionVector *sel,
+                                 idx_t count, Vector &result) {
 	if (count == 0) {
 		return;
 	}
 	switch (expr.expression_class) {
 	case ExpressionClass::BOUND_BETWEEN:
-		Execute((BoundBetweenExpression &)expr, state, sel, count, result);
+		Execute((const BoundBetweenExpression &)expr, state, sel, count, result);
 		break;
 	case ExpressionClass::BOUND_REF:
-		Execute((BoundReferenceExpression &)expr, state, sel, count, result);
+		Execute((const BoundReferenceExpression &)expr, state, sel, count, result);
 		break;
 	case ExpressionClass::BOUND_CASE:
-		Execute((BoundCaseExpression &)expr, state, sel, count, result);
+		Execute((const BoundCaseExpression &)expr, state, sel, count, result);
 		break;
 	case ExpressionClass::BOUND_CAST:
-		Execute((BoundCastExpression &)expr, state, sel, count, result);
+		Execute((const BoundCastExpression &)expr, state, sel, count, result);
 		break;
 	case ExpressionClass::BOUND_COMPARISON:
-		Execute((BoundComparisonExpression &)expr, state, sel, count, result);
+		Execute((const BoundComparisonExpression &)expr, state, sel, count, result);
 		break;
 	case ExpressionClass::BOUND_CONJUNCTION:
-		Execute((BoundConjunctionExpression &)expr, state, sel, count, result);
+		Execute((const BoundConjunctionExpression &)expr, state, sel, count, result);
 		break;
 	case ExpressionClass::BOUND_CONSTANT:
-		Execute((BoundConstantExpression &)expr, state, sel, count, result);
+		Execute((const BoundConstantExpression &)expr, state, sel, count, result);
 		break;
 	case ExpressionClass::BOUND_FUNCTION:
-		Execute((BoundFunctionExpression &)expr, state, sel, count, result);
+		Execute((const BoundFunctionExpression &)expr, state, sel, count, result);
 		break;
 	case ExpressionClass::BOUND_OPERATOR:
-		Execute((BoundOperatorExpression &)expr, state, sel, count, result);
+		Execute((const BoundOperatorExpression &)expr, state, sel, count, result);
 		break;
 	case ExpressionClass::BOUND_PARAMETER:
-		Execute((BoundParameterExpression &)expr, state, sel, count, result);
+		Execute((const BoundParameterExpression &)expr, state, sel, count, result);
 		break;
 	default:
 		throw NotImplementedException("Attempting to execute expression of unknown type!");
@@ -171,8 +167,8 @@ void ExpressionExecutor::Execute(Expression &expr, ExpressionState *state, const
 	Verify(expr, result, count);
 }
 
-idx_t ExpressionExecutor::Select(Expression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
-                                 SelectionVector *true_sel, SelectionVector *false_sel) {
+idx_t ExpressionExecutor::Select(const Expression &expr, ExpressionState *state, const SelectionVector *sel,
+                                 idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
 	if (count == 0) {
 		return 0;
 	}
@@ -231,7 +227,7 @@ static inline idx_t DefaultSelectSwitch(VectorData &idata, const SelectionVector
 	}
 }
 
-idx_t ExpressionExecutor::DefaultSelect(Expression &expr, ExpressionState *state, const SelectionVector *sel,
+idx_t ExpressionExecutor::DefaultSelect(const Expression &expr, ExpressionState *state, const SelectionVector *sel,
                                         idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
 	// generic selection of boolean expression:
 	// resolve the true/false expression first

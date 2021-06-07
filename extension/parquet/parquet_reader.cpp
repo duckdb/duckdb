@@ -18,6 +18,9 @@
 #include "duckdb.hpp"
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/planner/table_filter.hpp"
+#include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/planner/filter/null_filter.hpp"
+#include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/date.hpp"
@@ -38,7 +41,7 @@ using duckdb_parquet::format::ColumnChunk;
 using duckdb_parquet::format::ConvertedType;
 using duckdb_parquet::format::FieldRepetitionType;
 using duckdb_parquet::format::FileMetaData;
-using duckdb_parquet::format::RowGroup;
+using ParquetRowGroup = duckdb_parquet::format::RowGroup;
 using duckdb_parquet::format::SchemaElement;
 using duckdb_parquet::format::Statistics;
 using duckdb_parquet::format::Type;
@@ -328,7 +331,7 @@ unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(ParquetReader &reader, 
 	return column_stats;
 }
 
-const RowGroup &ParquetReader::GetGroup(ParquetReaderScanState &state) {
+const ParquetRowGroup &ParquetReader::GetGroup(ParquetReaderScanState &state) {
 	auto file_meta_data = GetFileMetadata();
 	D_ASSERT(state.current_group >= 0 && (idx_t)state.current_group < state.group_idx_list.size());
 	D_ASSERT(state.group_idx_list[state.current_group] >= 0 &&
@@ -348,38 +351,10 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t o
 		auto filter_entry = state.filters->filters.find(out_col_idx);
 		if (stats && filter_entry != state.filters->filters.end()) {
 			bool skip_chunk = false;
-			switch (column_reader->Type().id()) {
-			case LogicalTypeId::UTINYINT:
-			case LogicalTypeId::USMALLINT:
-			case LogicalTypeId::UINTEGER:
-			case LogicalTypeId::UBIGINT:
-			case LogicalTypeId::INTEGER:
-			case LogicalTypeId::BIGINT:
-			case LogicalTypeId::FLOAT:
-			case LogicalTypeId::TIMESTAMP:
-			case LogicalTypeId::DOUBLE: {
-				auto &num_stats = (NumericStatistics &)*stats;
-				for (auto &filter : filter_entry->second) {
-					skip_chunk = !num_stats.CheckZonemap(filter.comparison_type, filter.constant);
-					if (skip_chunk) {
-						break;
-					}
-				}
-				break;
-			}
-			case LogicalTypeId::BLOB:
-			case LogicalTypeId::VARCHAR: {
-				auto &str_stats = (StringStatistics &)*stats;
-				for (auto &filter : filter_entry->second) {
-					skip_chunk = !str_stats.CheckZonemap(filter.comparison_type, filter.constant.str_value);
-					if (skip_chunk) {
-						break;
-					}
-				}
-				break;
-			}
-			default:
-				break;
+			auto &filter = *filter_entry->second;
+			auto prune_result = filter.CheckStatistics(*stats);
+			if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
+				skip_chunk = true;
 			}
 			if (skip_chunk) {
 				state.group_offset = group.num_rows;
@@ -417,6 +392,26 @@ void ParquetReader::InitializeScan(ParquetReaderScanState &state, vector<column_
 	state.repeat_buf.resize(allocator, STANDARD_VECTOR_SIZE);
 }
 
+void FilterIsNull(Vector &v, parquet_filter_t &filter_mask, idx_t count) {
+	auto &mask = FlatVector::Validity(v);
+	if (mask.AllValid()) {
+		filter_mask.reset();
+	} else {
+		for (idx_t i = 0; i < count; i++) {
+			filter_mask[i] = filter_mask[i] && !mask.RowIsValid(i);
+		}
+	}
+}
+
+void FilterIsNotNull(Vector &v, parquet_filter_t &filter_mask, idx_t count) {
+	auto &mask = FlatVector::Validity(v);
+	if (!mask.AllValid()) {
+		for (idx_t i = 0; i < count; i++) {
+			filter_mask[i] = filter_mask[i] && mask.RowIsValid(i);
+		}
+	}
+}
+
 template <class T, class OP>
 void TemplatedFilterOperation(Vector &v, T constant, parquet_filter_t &filter_mask, idx_t count) {
 	D_ASSERT(v.GetVectorType() == VectorType::FLAT_VECTOR); // we just created the damn thing it better be
@@ -426,7 +421,9 @@ void TemplatedFilterOperation(Vector &v, T constant, parquet_filter_t &filter_ma
 
 	if (!mask.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
-			filter_mask[i] = filter_mask[i] && mask.RowIsValid(i) && OP::Operation(v_ptr[i], constant);
+			if (mask.RowIsValid(i)) {
+				filter_mask[i] = filter_mask[i] && OP::Operation(v_ptr[i], constant);
+			}
 		}
 	} else {
 		for (idx_t i = 0; i < count; i++) {
@@ -444,50 +441,95 @@ static void FilterOperationSwitch(Vector &v, Value &constant, parquet_filter_t &
 	case LogicalTypeId::BOOLEAN:
 		TemplatedFilterOperation<bool, OP>(v, constant.value_.boolean, filter_mask, count);
 		break;
-
 	case LogicalTypeId::UTINYINT:
 		TemplatedFilterOperation<uint8_t, OP>(v, constant.value_.utinyint, filter_mask, count);
 		break;
-
 	case LogicalTypeId::USMALLINT:
 		TemplatedFilterOperation<uint16_t, OP>(v, constant.value_.usmallint, filter_mask, count);
 		break;
-
 	case LogicalTypeId::UINTEGER:
 		TemplatedFilterOperation<uint32_t, OP>(v, constant.value_.uinteger, filter_mask, count);
 		break;
-
 	case LogicalTypeId::UBIGINT:
 		TemplatedFilterOperation<uint64_t, OP>(v, constant.value_.ubigint, filter_mask, count);
 		break;
-
 	case LogicalTypeId::INTEGER:
 		TemplatedFilterOperation<int32_t, OP>(v, constant.value_.integer, filter_mask, count);
 		break;
-
 	case LogicalTypeId::BIGINT:
 		TemplatedFilterOperation<int64_t, OP>(v, constant.value_.bigint, filter_mask, count);
 		break;
-
 	case LogicalTypeId::FLOAT:
 		TemplatedFilterOperation<float, OP>(v, constant.value_.float_, filter_mask, count);
 		break;
-
 	case LogicalTypeId::DOUBLE:
 		TemplatedFilterOperation<double, OP>(v, constant.value_.double_, filter_mask, count);
 		break;
-
+	case LogicalTypeId::DATE:
+		TemplatedFilterOperation<date_t, OP>(v, constant.value_.date, filter_mask, count);
+		break;
 	case LogicalTypeId::TIMESTAMP:
 		TemplatedFilterOperation<timestamp_t, OP>(v, constant.value_.timestamp, filter_mask, count);
 		break;
-
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR:
 		TemplatedFilterOperation<string_t, OP>(v, string_t(constant.str_value), filter_mask, count);
 		break;
-
 	default:
 		throw NotImplementedException("Unsupported type for filter %s", v.ToString());
+	}
+}
+
+static void ApplyFilter(Vector &v, TableFilter &filter, parquet_filter_t &filter_mask, idx_t count) {
+	switch (filter.filter_type) {
+	case TableFilterType::CONJUNCTION_AND: {
+		auto &conjunction = (ConjunctionAndFilter &)filter;
+		for (auto &child_filter : conjunction.child_filters) {
+			ApplyFilter(v, *child_filter, filter_mask, count);
+		}
+		break;
+	}
+	case TableFilterType::CONJUNCTION_OR: {
+		auto &conjunction = (ConjunctionOrFilter &)filter;
+		for (auto &child_filter : conjunction.child_filters) {
+			parquet_filter_t child_mask = filter_mask;
+			ApplyFilter(v, *child_filter, child_mask, count);
+			filter_mask |= child_mask;
+		}
+		break;
+	}
+	case TableFilterType::CONSTANT_COMPARISON: {
+		auto &constant_filter = (ConstantFilter &)filter;
+		switch (constant_filter.comparison_type) {
+		case ExpressionType::COMPARE_EQUAL:
+			FilterOperationSwitch<Equals>(v, constant_filter.constant, filter_mask, count);
+			break;
+		case ExpressionType::COMPARE_LESSTHAN:
+			FilterOperationSwitch<LessThan>(v, constant_filter.constant, filter_mask, count);
+			break;
+		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+			FilterOperationSwitch<LessThanEquals>(v, constant_filter.constant, filter_mask, count);
+			break;
+		case ExpressionType::COMPARE_GREATERTHAN:
+			FilterOperationSwitch<GreaterThan>(v, constant_filter.constant, filter_mask, count);
+			break;
+		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+			FilterOperationSwitch<GreaterThanEquals>(v, constant_filter.constant, filter_mask, count);
+			break;
+		default:
+			D_ASSERT(0);
+		}
+		break;
+	}
+	case TableFilterType::IS_NOT_NULL:
+		FilterIsNotNull(v, filter_mask, count);
+		break;
+	case TableFilterType::IS_NULL:
+		FilterIsNull(v, filter_mask, count);
+		break;
+	default:
+		D_ASSERT(0);
+		break;
 	}
 }
 
@@ -563,32 +605,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 
 			need_to_read[filter_col.first] = false;
 
-			for (auto &filter : filter_col.second) {
-				switch (filter.comparison_type) {
-				case ExpressionType::COMPARE_EQUAL:
-					FilterOperationSwitch<Equals>(result.data[filter_col.first], filter.constant, filter_mask,
-					                              this_output_chunk_rows);
-					break;
-				case ExpressionType::COMPARE_LESSTHAN:
-					FilterOperationSwitch<LessThan>(result.data[filter_col.first], filter.constant, filter_mask,
-					                                this_output_chunk_rows);
-					break;
-				case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-					FilterOperationSwitch<LessThanEquals>(result.data[filter_col.first], filter.constant, filter_mask,
-					                                      this_output_chunk_rows);
-					break;
-				case ExpressionType::COMPARE_GREATERTHAN:
-					FilterOperationSwitch<GreaterThan>(result.data[filter_col.first], filter.constant, filter_mask,
-					                                   this_output_chunk_rows);
-					break;
-				case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-					FilterOperationSwitch<GreaterThanEquals>(result.data[filter_col.first], filter.constant,
-					                                         filter_mask, this_output_chunk_rows);
-					break;
-				default:
-					D_ASSERT(0);
-				}
-			}
+			ApplyFilter(result.data[filter_col.first], *filter_col.second, filter_mask, this_output_chunk_rows);
 		}
 
 		// we still may have to read some cols

@@ -35,7 +35,7 @@ public:
 
 	static unique_ptr<DuckDBPyRelation> FromParquet(const string &filename);
 
-	static unique_ptr<DuckDBPyRelation> FromArrowTable(const py::object &table);
+	static unique_ptr<DuckDBPyRelation> FromArrowTable(py::object &table);
 
 	unique_ptr<DuckDBPyRelation> Project(const string &expr);
 

@@ -69,6 +69,7 @@ static string_t DecodePythonUnicode(T *codepoints, idx_t codepoint_count, Vector
 		D_ASSERT(sz >= 1);
 		target += sz;
 	}
+	result.Finalize();
 	return result;
 }
 

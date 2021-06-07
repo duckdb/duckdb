@@ -1,0 +1,137 @@
+# name: test/db-benchmark/groupby.test_slow
+# description: Group By benchmark (0.5GB - small dataset) from h2oai db-benchmark (https://github.com/h2oai/db-benchmark)
+# group: [db-benchmark]
+
+require httpfs
+
+statement ok
+pragma threads=16
+
+# 5% nulls
+statement ok
+CREATE TABLE x AS SELECT * FROM read_csv_auto('https://github.com/cwida/duckdb-data/releases/download/v1.0/G1_1e7_1e2_5_0.csv.gz');
+
+# statement ok
+# CREATE TABLE x AS SELECT * FROM read_csv_auto('G1_1e7_1e2_5_0.csv.gz');
+
+# q1
+statement ok
+CREATE TABLE ans AS SELECT id1, sum(v1) AS v1 FROM x GROUP BY id1
+
+query II
+SELECT COUNT(*), sum(v1)::varchar AS v1 FROM ans
+----
+96	28498857
+
+statement ok
+DROP TABLE ans
+
+# q2
+statement ok
+CREATE TABLE ans AS SELECT id1, id2, sum(v1) AS v1 FROM x GROUP BY id1, id2;
+
+query II
+SELECT count(*), sum(v1) AS v1 FROM ans;
+----
+9216	28498857
+
+statement ok
+DROP TABLE ans;
+
+# q3
+statement ok
+CREATE TABLE ans AS SELECT id3, sum(v1) AS v1, avg(v3) AS v3 FROM x GROUP BY id3;
+
+query III
+SELECT COUNT(*), sum(v1) AS v1, sum(v3) AS v3 FROM ans;
+----
+95001	28498857	4749467.631946747
+
+statement ok
+DROP TABLE ans;
+
+# q4
+statement ok
+CREATE TABLE ans AS SELECT id4, avg(v1) AS v1, avg(v2) AS v2, avg(v3) AS v3 FROM x GROUP BY id4;
+
+query IIII
+SELECT COUNT(*), sum(v1) AS v1, sum(v2) AS v2, sum(v3) AS v3 FROM ans
+----
+96	287.9894309270616821	767.8529216923457105	4799.873270453372
+
+statement ok
+DROP TABLE ans;
+
+# q5
+statement ok
+CREATE TABLE ans AS SELECT id6, sum(v1) AS v1, sum(v2) AS v2, sum(v3) AS v3 FROM x GROUP BY id6;
+
+query IIII
+SELECT COUNT(*), sum(v1) AS v1, sum(v2) AS v2, sum(v3) AS v3 FROM ans
+----
+95001	28498857	75988394	474969574.04777884
+
+statement ok
+DROP TABLE ans;
+
+# q6
+statement ok
+CREATE TABLE ans AS SELECT id4, id5, quantile_cont(v3, 0.5) AS median_v3, stddev(v3) AS sd_v3 FROM x GROUP BY id4, id5;
+
+# WARNING: this result might be incorrect
+# could not verify using Postgres because of lack of median
+query III
+SELECT COUNT(*), sum(median_v3) AS median_v3, sum(sd_v3) AS sd_v3 FROM ans
+----
+9216	460771.216444	266006.904622
+
+statement ok
+DROP TABLE ans;
+
+# q7
+statement ok
+CREATE TABLE ans AS SELECT id3, max(v1)-min(v2) AS range_v1_v2 FROM x GROUP BY id3;
+
+query II
+SELECT count(*), sum(range_v1_v2) AS range_v1_v2 FROM ans;
+----
+95001	379850
+
+statement ok
+DROP TABLE ans;
+
+# q8
+statement ok
+CREATE TABLE ans AS SELECT id6, v3 AS largest2_v3 FROM (SELECT id6, v3, row_number() OVER (PARTITION BY id6 ORDER BY v3 DESC) AS order_v3 FROM x WHERE v3 IS NOT NULL) sub_query WHERE order_v3 <= 2
+
+query II
+SELECT count(*), sum(largest2_v3) AS largest2_v3 FROM ans
+----
+190002	18700554.779631943
+
+statement ok
+DROP TABLE ans;
+
+# q9
+statement ok
+CREATE TABLE ans AS SELECT id2, id4, pow(corr(v1, v2), 2) AS r2 FROM x GROUP BY id2, id4;
+
+query II
+SELECT count(*), sum(r2) AS r2 FROM ans
+----
+9216	9.940515516534346
+
+statement ok
+DROP TABLE ans;
+
+# q10
+statement ok
+CREATE TABLE ans AS SELECT id1, id2, id3, id4, id5, id6, sum(v3) AS v3, count(*) AS count FROM x GROUP BY id1, id2, id3, id4, id5, id6;
+
+query II
+SELECT sum(v3) AS v3, sum(count) AS count FROM ans;
+----
+474969574	10000000
+
+statement ok
+DROP TABLE ans

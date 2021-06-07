@@ -1,0 +1,95 @@
+# name: test/sql/storage/wal/wal_store_mixed_updates_big_null.test
+# description: Test updates mix with a big table and NULL values
+# group: [wal]
+
+# load the DB from disk
+load __TEST_DIR__/test_store_updates.db
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+statement ok
+CREATE TABLE test AS SELECT -i a, -i b FROM range(100000) tbl(i)
+
+statement ok
+INSERT INTO test SELECT i+1 a, i+1 b FROM range(1000) tbl(i)
+
+query IIIIIII
+SELECT COUNT(*), SUM(a), SUM(b), MIN(a), MAX(a), MIN(b), MAX(b) FROM test WHERE a>0
+----
+1000	500500	500500	1	1000	1	1000
+
+query I
+SELECT COUNT(*) FROM test WHERE a>0
+----
+1000
+
+query I
+SELECT COUNT(*) FROM test WHERE a>0 AND a<>b
+----
+0
+
+query I
+UPDATE test SET b=NULL WHERE a>0 AND a%2=0
+----
+500
+
+query II nosort select_after_update
+SELECT * FROM test WHERE a>0 ORDER BY 1,2
+----
+
+query I
+SELECT COUNT(*) FROM test WHERE a>0
+----
+1000
+
+query I
+SELECT COUNT(*) FROM test WHERE a>0 AND b IS NULL
+----
+500
+
+query II nosort select_after_update
+SELECT * FROM test WHERE a>0 ORDER BY 1,2
+----
+
+query IIIIIIII
+SELECT COUNT(*), SUM(a), SUM(b), MIN(a), MAX(a), MIN(b), MAX(b), COUNT(b) FROM test WHERE a>0
+----
+1000	500500	250000	1	1000	1	999	500
+
+restart
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+query I
+SELECT COUNT(*) FROM test WHERE a>0 AND a%2=0
+----
+500
+
+query I
+SELECT COUNT(*) FROM test WHERE a IS NULL OR b IS NULL
+----
+500
+
+query II nosort select_after_update
+SELECT * FROM test WHERE a>0 ORDER BY 1,2
+----
+
+query IIIIIIII
+SELECT COUNT(*), SUM(a), SUM(b), MIN(a), MAX(a), MIN(b), MAX(b), COUNT(b) FROM test WHERE a>0
+----
+1000	500500	250000	1	1000	1	999	500
+
+restart
+
+query IIIIIIII
+SELECT COUNT(*), SUM(a), SUM(b), MIN(a), MAX(a), MIN(b), MAX(b), COUNT(b) FROM test WHERE a>0
+----
+1000	500500	250000	1	1000	1	999	500

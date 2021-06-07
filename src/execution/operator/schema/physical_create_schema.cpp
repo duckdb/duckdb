@@ -3,7 +3,8 @@
 
 namespace duckdb {
 
-void PhysicalCreateSchema::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
+void PhysicalCreateSchema::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
+                                            PhysicalOperatorState *state) const {
 	Catalog::GetCatalog(context.client).CreateSchema(context.client, info.get());
 	state->finished = true;
 }
