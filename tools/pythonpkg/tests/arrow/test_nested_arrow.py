@@ -3,6 +3,8 @@ try:
     import pyarrow as pa
     import pyarrow.parquet
     import numpy as np
+    import pandas as pd
+    import pytest
     can_run = True
 except:
     can_run = False
@@ -11,6 +13,9 @@ def compare_results(query):
     true_answer = duckdb.query(query).fetchall()
     from_arrow = duckdb.from_arrow_table(duckdb.query(query).arrow()).fetchall()
     assert true_answer == from_arrow
+
+def arrow_to_pandas(query):
+    return duckdb.query(query).arrow().to_pandas()['a'].values.tolist()
 
 class TestArrowNested(object):
     def test_lists_basic(self,duckdb_cursor):
@@ -69,8 +74,6 @@ class TestArrowNested(object):
         assert res == [({'fixed': [1], 'large': [1], 'normal': [1, 2, 3]},), ({'fixed': None, 'large': None, 'normal': None},), ({'fixed': [2], 'large': [2], 'normal': [2, 1]},)]
 
 
-
-
     def test_lists_roundtrip(self,duckdb_cursor):
         if not can_run:
             return
@@ -112,14 +115,29 @@ class TestArrowNested(object):
         if not can_run:
             return
         compare_results("SELECT a from (select MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as a) as t")
-        compare_results("SELECT a from (select MAP(LIST_VALUE(1, 2, 3, 4,2, NULL),LIST_VALUE(10, 9, 8, 7,11,42)) as a) as t")
+        
+        with pytest.raises(Exception):
+            compare_results("SELECT a from (select MAP(LIST_VALUE(1, 2, 3, 4,2, NULL),LIST_VALUE(10, 9, 8, 7,11,42)) as a) as t")
+        
         compare_results("SELECT a from (select MAP(LIST_VALUE(),LIST_VALUE()) as a) as t")
         compare_results("SELECT a from (select MAP(LIST_VALUE('Jon Lajoie', 'Backstreet Boys', 'Tenacious D','Jon Lajoie' ),LIST_VALUE(10,9,10,11)) as a) as t")
-        compare_results("SELECT a from (select MAP(LIST_VALUE('Jon Lajoie', NULL, 'Tenacious D',NULL,NULL ),LIST_VALUE(10,9,10,11,13)) as a) as t")
-        compare_results("SELECT a from (select MAP(LIST_VALUE(NULL, NULL, NULL,NULL,NULL ),LIST_VALUE(10,9,10,11,13)) as a) as t")
-        compare_results("SELECT a from (select MAP(LIST_VALUE(NULL, NULL, NULL,NULL,NULL ),LIST_VALUE(NULL, NULL, NULL,NULL,NULL )) as a) as t")
+        with pytest.raises(Exception):
+            compare_results("SELECT a from (select MAP(LIST_VALUE('Jon Lajoie', NULL, 'Tenacious D',NULL,NULL ),LIST_VALUE(10,9,10,11,13)) as a) as t")
+        with pytest.raises(Exception):
+            compare_results("SELECT a from (select MAP(LIST_VALUE(NULL, NULL, NULL,NULL,NULL ),LIST_VALUE(10,9,10,11,13)) as a) as t")
+        with pytest.raises(Exception):
+            compare_results("SELECT a from (select MAP(LIST_VALUE(NULL, NULL, NULL,NULL,NULL ),LIST_VALUE(NULL, NULL, NULL,NULL,NULL )) as a) as t")
         compare_results("SELECT m from (select MAP(list_value(1), list_value(2)) from range(5) tbl(i)) tbl(m)")
         compare_results("SELECT m from (select MAP(lsta,lstb) as m from (SELECT list(i) as lsta, list(i) as lstb from range(10000) tbl(i) group by i%5) as lst_tbl) as T")
+
+    
+    def test_map_arrow_to_pandas(self,duckdb_cursor):
+        assert arrow_to_pandas("SELECT a from (select MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as a) as t") == [[(1, 10), (2, 9), (3, 8), (4, 7)]]
+        assert arrow_to_pandas("SELECT a from (select MAP(LIST_VALUE(),LIST_VALUE()) as a) as t") == [[]]
+        assert arrow_to_pandas("SELECT a from (select MAP(LIST_VALUE('Jon Lajoie', 'Backstreet Boys', 'Tenacious D','Jon Lajoie' ),LIST_VALUE(10,9,10,11)) as a) as t") == [[('Jon Lajoie', 10), ('Backstreet Boys', 9), ('Tenacious D', 10), ('Jon Lajoie', 11)]]
+        assert arrow_to_pandas("SELECT a from (select MAP(list_value(1), list_value(2)) from range(5) tbl(i)) tbl(a)") == [[(1, 2)], [(1, 2)], [(1, 2)], [(1, 2)], [(1, 2)]]
+        assert arrow_to_pandas("SELECT MAP(LIST_VALUE({'i':1,'j':2},{'i':3,'j':4}),LIST_VALUE({'i':1,'j':2},{'i':3,'j':4})) as a") == [[({'i': 1, 'j': 2}, {'i': 1, 'j': 2}), ({'i': 3, 'j': 4}, {'i': 3, 'j': 4})]]
+
 
     def test_frankstein_nested(self,duckdb_cursor):
         if not can_run:
@@ -131,10 +149,10 @@ class TestArrowNested(object):
         compare_results("SELECT [{'i':1,'j':[2,3]},NULL]")
                 
         # Maps embedded in a struct
-        compare_results("SELECT {'i':mp,'j':mp2} FROM (SELECT MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as mp, MAP(LIST_VALUE(1, 2, 3, NULL),LIST_VALUE(10, 9, 8, 7)) as mp2) as t")
+        compare_results("SELECT {'i':mp,'j':mp2} FROM (SELECT MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as mp, MAP(LIST_VALUE(1, 2, 3, 5),LIST_VALUE(10, 9, 8, 7)) as mp2) as t")
 
         # List of maps 
-        compare_results("SELECT [mp,mp2] FROM (SELECT MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as mp, MAP(LIST_VALUE(1, 2, 3, NULL),LIST_VALUE(10, 9, 8, 7)) as mp2) as t")
+        compare_results("SELECT [mp,mp2] FROM (SELECT MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as mp, MAP(LIST_VALUE(1, 2, 3, 5),LIST_VALUE(10, 9, 8, 7)) as mp2) as t")
 
         # Map with list as key and/or value
         compare_results("SELECT MAP(LIST_VALUE([1,2],[3,4],[5,4]),LIST_VALUE([1,2],[3,4],[5,4]))")
@@ -145,8 +163,9 @@ class TestArrowNested(object):
         # Struct that is NULL entirely
         compare_results("SELECT * FROM (VALUES ({'i':1,'j':2}), (NULL), ({'i':1,'j':2}), (NULL)) as a")
 
-        # Null checks on lists with structs not working properly
+        # Null checks on lists with structs 
         compare_results("SELECT [{'i':1,'j':[2,3]},NULL,{'i':1,'j':[2,3]}]")
         
-        # MAP that is NULL entirely ( This should be fixed when the previous is fixed)
-        compare_results("SELECT * FROM (VALUES (MAP(LIST_VALUE(1,2),LIST_VALUE(3,4))), (MAP(LIST_VALUE(1,2),LIST_VALUE(3,4))), (NULL)) as a")
+        # MAP that is NULL entirely 
+        compare_results("SELECT * FROM (VALUES (MAP(LIST_VALUE(1,2),LIST_VALUE(3,4))),(NULL), (MAP(LIST_VALUE(1,2),LIST_VALUE(3,4))), (NULL)) as a")
+

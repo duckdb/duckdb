@@ -261,7 +261,6 @@ public:
 	void Slice(const ValidityMask &other, idx_t offset);
 	void Combine(const ValidityMask &other, idx_t count);
 	string ToString(idx_t count) const;
-	bool Equal(ValidityMask &mask, idx_t count) const;
 };
 
 } // namespace duckdb

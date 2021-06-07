@@ -126,6 +126,26 @@ void InitializeChild(ArrowSchema &child, const string &name = "") {
 	child.metadata = nullptr;
 	child.dictionary = nullptr;
 }
+void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type);
+
+void SetArrowMapFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type) {
+	child.format = "+m";
+	//! Map has one child which is a struct
+	child.n_children = 1;
+	root_holder.nested_children.emplace_back();
+	root_holder.nested_children.back().resize(1);
+	root_holder.nested_children_ptr.emplace_back();
+	root_holder.nested_children_ptr.back().push_back(&root_holder.nested_children.back()[0]);
+	InitializeChild(root_holder.nested_children.back()[0]);
+	child.children = &root_holder.nested_children_ptr.back()[0];
+	child.children[0]->name = "entries";
+	child_list_t<LogicalType> struct_child_type;
+	struct_child_type.push_back(type.child_types()[0].second.child_types()[0]);
+	struct_child_type.push_back(type.child_types()[1].second.child_types()[0]);
+	LogicalType struct_type(LogicalTypeId::STRUCT, struct_child_type);
+	SetArrowFormat(root_holder, *child.children[0], struct_type);
+}
+
 void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
@@ -243,18 +263,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		break;
 	}
 	case LogicalTypeId::MAP: {
-		child.format = "+m";
-		//! Map has one child which is a struct
-		child.n_children = 1;
-		root_holder.nested_children.emplace_back();
-		root_holder.nested_children.back().resize(1);
-		root_holder.nested_children_ptr.emplace_back();
-		root_holder.nested_children_ptr.back().push_back(&root_holder.nested_children.back()[0]);
-		InitializeChild(root_holder.nested_children.back()[0]);
-		child.children = &root_holder.nested_children_ptr.back()[0];
-		child.children[0]->name = "entries";
-		LogicalType struct_type(LogicalTypeId::STRUCT, type.child_types());
-		SetArrowFormat(root_holder, *child.children[0], struct_type);
+		SetArrowMapFormat(root_holder, child, type);
 		break;
 	}
 

@@ -46,20 +46,6 @@ string ValidityMask::ToString(idx_t count) const {
 	return result;
 }
 
-bool ValidityMask::Equal(ValidityMask &mask, idx_t count) const {
-	if (AllValid() && mask.AllValid()) {
-		return true;
-	} else if (!AllValid() && !mask.AllValid()) {
-		auto v_count = EntryCount(count);
-		for (idx_t entry_idx = 0; entry_idx < v_count; entry_idx++) {
-			mask.validity_mask[entry_idx] = validity_mask[entry_idx];
-		}
-		return true;
-	} else {
-		return false;
-	}
-}
-
 void ValidityMask::Resize(idx_t old_size, idx_t new_size) {
 	if (validity_mask) {
 		auto new_size_count = EntryCount(new_size);

@@ -127,7 +127,7 @@ struct VectorOperations {
 	static void Copy(const Vector &source, Vector &target, idx_t source_count, idx_t source_offset,
 	                 idx_t target_offset);
 	static void Copy(const Vector &source, Vector &target, const SelectionVector &sel, idx_t source_count,
-	                 idx_t source_offset, idx_t target_offset, ValidityMask *parent_validity = nullptr);
+	                 idx_t source_offset, idx_t target_offset);
 
 	// Copy the data of <source> to the target location, setting null values to
 	// NullValue<T>. Used to store data without separate NULL mask.
