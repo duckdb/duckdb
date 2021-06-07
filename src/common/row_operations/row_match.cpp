@@ -77,6 +77,44 @@ static void TemplatedMatchType(VectorData &col, Vector &rows, SelectionVector &s
 }
 
 template <class OP, bool NO_MATCH_SEL>
+static void TemplatedMatchNested(Vector &col, Vector &rows, SelectionVector &sel, idx_t &count, const idx_t col_offset,
+                                 const idx_t col_no, SelectionVector *no_match, idx_t &no_match_count) {
+	// Gather a dense Vector containing the column values being matched
+	Vector key(col.GetType());
+	const auto &key_sel = FlatVector::INCREMENTAL_SELECTION_VECTOR;
+	RowOperations::Gather(rows, sel, key, key_sel, count, col_offset, col_no);
+
+	auto ptrs = FlatVector::GetData<data_ptr_t>(rows);
+	idx_t match_count = 0;
+	for (idx_t i = 0; i < count; i++) {
+		auto idx = sel.get_index(i);
+
+		auto key_value = key.GetValue(i);
+		auto col_value = col.GetValue(idx);
+
+		if (col_value.is_null) {
+			if (key_value.is_null) {
+				// match: move to next value to compare
+				sel.set_index(match_count++, idx);
+			} else {
+				if (NO_MATCH_SEL) {
+					no_match->set_index(no_match_count++, idx);
+				}
+			}
+		} else {
+			if (!key_value.is_null && OP::template Operation<Value>(col_value, key_value)) {
+				sel.set_index(match_count++, idx);
+			} else {
+				if (NO_MATCH_SEL) {
+					no_match->set_index(no_match_count++, idx);
+				}
+			}
+		}
+	}
+	count = match_count;
+}
+
+template <class OP, bool NO_MATCH_SEL>
 static void TemplatedMatchOp(Vector &vec, VectorData &col, const RowLayout &layout, Vector &rows, SelectionVector &sel,
                              idx_t &count, idx_t col_no, SelectionVector *no_match, idx_t &no_match_count) {
 	if (count == 0) {
@@ -140,6 +178,11 @@ static void TemplatedMatchOp(Vector &vec, VectorData &col, const RowLayout &layo
 	case PhysicalType::VARCHAR:
 		TemplatedMatchType<string_t, OP, NO_MATCH_SEL>(col, rows, sel, count, col_offset, col_no, no_match,
 		                                               no_match_count);
+		break;
+	case PhysicalType::LIST:
+	case PhysicalType::MAP:
+	case PhysicalType::STRUCT:
+		TemplatedMatchNested<OP, NO_MATCH_SEL>(vec, rows, sel, count, col_offset, col_no, no_match, no_match_count);
 		break;
 	default:
 		throw Exception("Unsupported column type for RowOperations::Match");

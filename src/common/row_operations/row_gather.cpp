@@ -50,16 +50,15 @@ static void GatherNestedVector(Vector &rows, const SelectionVector &row_sel, Vec
 		data_locations[i] = Load<data_ptr_t>(ptrs[row_idx] + col_offset);
 	}
 
-	// Deserialise into the vector locations
+	// Deserialise into the selected locations
 	RowDataCollection::DeserializeIntoVector(col, count, col_sel, col_no, data_locations, mask_locations);
 }
 
-void RowOperations::Gather(const RowLayout &layout, Vector &rows, const SelectionVector &row_sel, Vector &col,
-                           const SelectionVector &col_sel, idx_t count, idx_t col_no) {
+void RowOperations::Gather(Vector &rows, const SelectionVector &row_sel, Vector &col, const SelectionVector &col_sel,
+                           const idx_t count, const idx_t col_offset, const idx_t col_no) {
 	D_ASSERT(rows.GetVectorType() == VectorType::FLAT_VECTOR);
 	D_ASSERT(rows.GetType().id() == LogicalTypeId::POINTER); // "Cannot gather from non-pointer type!"
 
-	const auto col_offset = layout.GetOffsets()[col_no];
 	col.SetVectorType(VectorType::FLAT_VECTOR);
 	switch (col.GetType().InternalType()) {
 	case PhysicalType::UINT8:
