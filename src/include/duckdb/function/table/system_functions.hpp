@@ -64,4 +64,8 @@ struct DuckDBTablesFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct DuckDBViewsFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 } // namespace duckdb

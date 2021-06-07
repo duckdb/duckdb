@@ -2,8 +2,8 @@
 # description: Test pg_tablespace function
 # group: [pg_catalog]
 
-query IIIIII nosort pg_depend
+query IIIIII nosort pg_tspace
 SELECT * FROM pg_tablespace
 
-query IIIIII nosort pg_depend
+query IIIIII nosort pg_tspace
 SELECT * FROM pg_catalog.pg_tablespace

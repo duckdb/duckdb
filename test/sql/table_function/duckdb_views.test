@@ -1,0 +1,27 @@
+# name: test/sql/table_function/duckdb_views.test
+# description: Test duckdb_views function
+# group: [table_function]
+
+query I
+SELECT COUNT(*) FROM duckdb_views();
+----
+0
+
+statement ok
+CREATE VIEW v1 AS SELECT 42;
+
+statement ok
+CREATE TEMPORARY VIEW v2 AS SELECT 42;
+
+statement ok
+CREATE SCHEMA myschema;
+
+statement ok
+CREATE VIEW myschema.v2 AS SELECT 42;
+
+query III
+SELECT schema_name, view_name, temporary FROM duckdb_views() ORDER BY view_name;
+----
+main	v1	False
+myschema	v2	False
+temp	v2	True

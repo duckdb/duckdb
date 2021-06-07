@@ -4,6 +4,7 @@ add_library_unity(
   duckdb_dependencies.cpp
   duckdb_schemas.cpp
   duckdb_tables.cpp
+  duckdb_views.cpp
   pragma_collations.cpp
   pragma_database_list.cpp
   pragma_database_size.cpp

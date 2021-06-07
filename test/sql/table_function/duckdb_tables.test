@@ -1,5 +1,5 @@
-# name: test/sql/table_function/duckdb_schemas.test
-# description: Test duckdb_schemas function
+# name: test/sql/table_function/duckdb_tables.test
+# description: Test duckdb_tables function
 # group: [table_function]
 
 query I
@@ -21,6 +21,9 @@ CREATE TABLE myschema.mytable(k DOUBLE)
 
 statement ok
 CREATE TEMPORARY TABLE mytemp(i INTEGER)
+
+statement ok
+CREATE VIEW v1 AS SELECT 42
 
 query IIIIIIII
 SELECT schema_name, table_name, temporary, has_primary_key, estimated_size, column_count, index_count, check_constraint_count FROM duckdb_tables() ORDER BY table_name;

@@ -55,6 +55,8 @@ static unique_ptr<FunctionData> DuckDBTablesBind(ClientContext &context, vector<
 	names.emplace_back("check_constraint_count");
 	return_types.push_back(LogicalType::BIGINT);
 
+	names.emplace_back("sql");
+	return_types.push_back(LogicalType::VARCHAR);
 
 	return nullptr;
 }
@@ -136,6 +138,8 @@ void DuckDBTablesFunction(ClientContext &context, const FunctionData *bind_data,
 		output.SetValue(8, count, Value::BIGINT(table.storage->info->indexes.Count()));
 		// check_constraint_count, LogicalType::BIGINT
 		output.SetValue(9, count, Value::BIGINT(CheckConstraintCount(table)));
+		// sql, LogicalType::VARCHAR
+		output.SetValue(10, count, Value(table.ToSQL()));
 
 		count++;
 	}
