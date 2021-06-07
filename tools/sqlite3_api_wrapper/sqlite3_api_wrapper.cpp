@@ -234,7 +234,7 @@ int sqlite3_step(sqlite3_stmt *pStmt) {
 	pStmt->current_text = nullptr;
 	if (!pStmt->result) {
 		// no result yet! call Execute()
-		pStmt->result = pStmt->prepared->Execute(pStmt->bound_values, false);
+		pStmt->result = pStmt->prepared->Execute(pStmt->bound_values, true);
 		if (!pStmt->result->success) {
 			// error in execute: clear prepared statement
 			pStmt->db->last_error = pStmt->result->error;
@@ -242,7 +242,11 @@ int sqlite3_step(sqlite3_stmt *pStmt) {
 			return SQLITE_ERROR;
 		}
 		// fetch a chunk
-		pStmt->current_chunk = pStmt->result->Fetch();
+		if (!pStmt->result->TryFetch(pStmt->current_chunk, pStmt->db->last_error)) {
+			pStmt->prepared = nullptr;
+			return SQLITE_ERROR;
+		}
+
 		pStmt->current_row = -1;
 
 		auto statement_type = pStmt->prepared->GetStatementType();
@@ -266,7 +270,10 @@ int sqlite3_step(sqlite3_stmt *pStmt) {
 	if (pStmt->current_row >= (int32_t)pStmt->current_chunk->size()) {
 		// have to fetch again!
 		pStmt->current_row = 0;
-		pStmt->current_chunk = pStmt->result->Fetch();
+		if (!pStmt->result->TryFetch(pStmt->current_chunk, pStmt->db->last_error)) {
+			pStmt->prepared = nullptr;
+			return SQLITE_ERROR;
+		}
 		if (!pStmt->current_chunk || pStmt->current_chunk->size() == 0) {
 			sqlite3_reset(pStmt);
 			return SQLITE_DONE;
@@ -425,6 +432,7 @@ int sqlite3_column_type(sqlite3_stmt *pStmt, int iCol) {
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::LIST:
 	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::MAP:
 		return SQLITE_TEXT;
 	case LogicalTypeId::BLOB:
 		return SQLITE_BLOB;
@@ -1036,6 +1044,8 @@ const char *sqlite3_column_decltype(sqlite3_stmt *pStmt, int iCol) {
 		return "VARCHAR";
 	case LogicalTypeId::LIST:
 		return "LIST";
+	case LogicalTypeId::MAP:
+		return "MAP";
 	case LogicalTypeId::STRUCT:
 		return "STRUCT";
 	case LogicalTypeId::BLOB:

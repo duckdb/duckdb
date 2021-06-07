@@ -14,7 +14,7 @@ namespace duckdb {
 
 class PerfectAggregateHashTable : public BaseAggregateHashTable {
 public:
-	PerfectAggregateHashTable(BufferManager &buffer_manager, vector<LogicalType> group_types,
+	PerfectAggregateHashTable(BufferManager &buffer_manager, const vector<LogicalType> &group_types,
 	                          vector<LogicalType> payload_types_p, vector<AggregateObject> aggregate_objects,
 	                          vector<Value> group_minima, vector<idx_t> required_bits);
 	~PerfectAggregateHashTable() override;
@@ -39,6 +39,8 @@ protected:
 	idx_t total_groups;
 	//! The tuple size
 	idx_t tuple_size;
+	//! The number of grouping columns
+	idx_t grouping_columns;
 
 	// The actual pointer to the data
 	data_ptr_t data;
@@ -50,8 +52,10 @@ protected:
 	//! The minimum values for each of the group columns
 	vector<Value> group_minima;
 
+	//! Reused selection vector
+	SelectionVector sel;
+
 private:
-	void Combine(Vector &source_addresses, Vector &target_addresses, idx_t combine_count);
 	//! Destroy the perfect aggregate HT (called automatically by the destructor)
 	void Destroy();
 };

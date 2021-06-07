@@ -36,7 +36,7 @@ using duckdb_parquet::format::FieldRepetitionType;
 using duckdb_parquet::format::FileMetaData;
 using duckdb_parquet::format::PageHeader;
 using duckdb_parquet::format::PageType;
-using duckdb_parquet::format::RowGroup;
+using ParquetRowGroup = duckdb_parquet::format::RowGroup;
 using duckdb_parquet::format::Type;
 
 class MyTransport : public TTransport {
@@ -170,7 +170,7 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 	lock_guard<mutex> glock(lock);
 
 	// set up a new row group for this chunk collection
-	RowGroup row_group;
+	ParquetRowGroup row_group;
 	row_group.num_rows = 0;
 	row_group.file_offset = writer->GetTotalWritten();
 	row_group.__isset.file_offset = true;

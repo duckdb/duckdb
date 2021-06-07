@@ -15,6 +15,13 @@ INSERT INTO test VALUES (NULL, 'hello'), (13, 'abcdefgh'), (12, NULL)
 statement ok
 CHECKPOINT
 
+query II
+SELECT a, b FROM test ORDER BY a
+----
+NULL	hello
+12	NULL
+13	abcdefgh
+
 restart
 
 query II

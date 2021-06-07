@@ -21,6 +21,7 @@
 
 namespace duckdb {
 class DatabaseInstance;
+class TemporaryDirectoryHandle;
 struct EvictionQueue;
 
 //! The buffer manager is in charge of handling memory management for the database. It hands out memory buffers that can
@@ -28,7 +29,6 @@ struct EvictionQueue;
 class BufferManager {
 	friend class BufferHandle;
 	friend class BlockHandle;
-	friend class BlockPointer;
 
 public:
 	BufferManager(DatabaseInstance &db, string temp_directory, idx_t maximum_memory);
@@ -65,6 +65,12 @@ public:
 		return maximum_memory;
 	}
 
+	const string &GetTemporaryDirectory() {
+		return temp_directory;
+	}
+
+	void SetTemporaryDirectory(string new_dir);
+
 private:
 	//! Evict blocks until the currently used memory + extra_memory fit, returns false if this was not possible
 	//! (i.e. not enough blocks could be evicted)
@@ -79,6 +85,8 @@ private:
 
 	void DeleteTemporaryFile(block_id_t id);
 
+	void RequireTemporaryDirectory();
+
 private:
 	//! The database instance
 	DatabaseInstance &db;
@@ -88,9 +96,13 @@ private:
 	atomic<idx_t> maximum_memory;
 	//! The directory name where temporary files are stored
 	string temp_directory;
+	//! Lock for creating the temp handle
+	mutex temp_handle_lock;
+	//! Handle for the temporary directory
+	unique_ptr<TemporaryDirectoryHandle> temp_directory_handle;
 	//! The lock for the set of blocks
 	mutex manager_lock;
-	//! A mapping of block id -> BlockPointer
+	//! A mapping of block id -> BlockHandle
 	unordered_map<block_id_t, weak_ptr<BlockHandle>> blocks;
 	//! Eviction queue
 	unique_ptr<EvictionQueue> queue;

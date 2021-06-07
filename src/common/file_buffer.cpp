@@ -3,12 +3,14 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/checksum.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/allocator.hpp"
 
 #include <cstring>
 
 namespace duckdb {
 
-FileBuffer::FileBuffer(FileBufferType type, uint64_t bufsiz) : type(type) {
+FileBuffer::FileBuffer(Allocator &allocator, FileBufferType type, uint64_t bufsiz)
+    : allocator(allocator), type(type), malloced_buffer(nullptr) {
 	const int sector_size = Storage::SECTOR_SIZE;
 	// round up to the nearest sector_size, this is only really necessary if the file buffer will be used for Direct IO
 	if (bufsiz % sector_size != 0) {
@@ -17,7 +19,8 @@ FileBuffer::FileBuffer(FileBufferType type, uint64_t bufsiz) : type(type) {
 	D_ASSERT(bufsiz % sector_size == 0);
 	D_ASSERT(bufsiz >= sector_size);
 	// we add (sector_size - 1) to ensure that we can align the buffer to sector_size
-	malloced_buffer = (data_ptr_t)malloc(bufsiz + (sector_size - 1));
+	malloced_size = bufsiz + (sector_size - 1);
+	malloced_buffer = allocator.AllocateData(malloced_size);
 	if (!malloced_buffer) {
 		throw std::bad_alloc();
 	}
@@ -38,7 +41,7 @@ FileBuffer::FileBuffer(FileBufferType type, uint64_t bufsiz) : type(type) {
 }
 
 FileBuffer::~FileBuffer() {
-	free(malloced_buffer);
+	allocator.FreeData(malloced_buffer, malloced_size);
 }
 
 void FileBuffer::Read(FileHandle &handle, uint64_t location) {

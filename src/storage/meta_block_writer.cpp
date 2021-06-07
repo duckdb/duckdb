@@ -15,6 +15,13 @@ MetaBlockWriter::~MetaBlockWriter() {
 	Flush();
 }
 
+BlockPointer MetaBlockWriter::GetBlockPointer() {
+	BlockPointer pointer;
+	pointer.block_id = block->id;
+	pointer.offset = offset;
+	return pointer;
+}
+
 void MetaBlockWriter::Flush() {
 	if (offset > sizeof(block_id_t)) {
 		auto &block_manager = BlockManager::GetBlockManager(db);

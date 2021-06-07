@@ -129,10 +129,6 @@ bool TrySubtractOperator::Operation(int64_t left, int64_t right, int64_t &result
 	if (__builtin_sub_overflow(left, right, &result)) {
 		return false;
 	}
-	// FIXME: this check can be removed if we get rid of NullValue<T>
-	if (result == std::numeric_limits<int64_t>::min()) {
-		return false;
-	}
 #else
 	if (right < 0) {
 		if (NumericLimits<int64_t>::Maximum() + right < left) {

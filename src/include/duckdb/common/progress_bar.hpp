@@ -23,15 +23,19 @@ public:
 	explicit ProgressBar(Executor *executor, idx_t show_progress_after, idx_t time_update_bar = 100)
 	    : executor(executor), show_progress_after(show_progress_after), time_update_bar(time_update_bar),
 	      current_percentage(-1), stop(false) {
-
-	                              };
+	}
 	~ProgressBar();
+
 	//! Starts the thread
 	void Start();
 	//! Stops the thread
 	void Stop();
 	//! Gets current percentage
 	int GetCurrentPercentage();
+
+	void Initialize(idx_t show_progress_after) {
+		this->show_progress_after = show_progress_after;
+	}
 
 private:
 	const string PROGRESS_BAR_STRING = "||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||";

@@ -38,7 +38,7 @@ statement ok
 CHECKPOINT;
 
 query I nosort expected_blocks
-select total_blocks / 100 from pragma_database_size();
+select round(total_blocks / 100.0) from pragma_database_size();
 
 query III
 SELECT MIN(i), MAX(i), COUNT(*) FROM integers

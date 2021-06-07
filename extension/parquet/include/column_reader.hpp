@@ -86,7 +86,8 @@ public:
 	}
 
 	unique_ptr<BaseStatistics> Stats(const std::vector<ColumnChunk> &columns) {
-		if (Type().id() == LogicalTypeId::LIST || Type().id() == LogicalTypeId::STRUCT) {
+		if (Type().id() == LogicalTypeId::LIST || Type().id() == LogicalTypeId::STRUCT ||
+		    Type().id() == LogicalTypeId::MAP) {
 			return nullptr;
 		}
 		return ParquetTransformColumnStatistics(Schema(), Type(), columns[file_idx]);

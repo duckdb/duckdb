@@ -77,6 +77,7 @@ void NumericStatistics::Update<interval_t>(SegmentStatistics &stats, interval_t 
 NumericStatistics::NumericStatistics(LogicalType type_p) : BaseStatistics(move(type_p)) {
 	min = Value::MaximumValue(type);
 	max = Value::MinimumValue(type);
+	validity_stats = make_unique<ValidityStatistics>(false);
 }
 
 NumericStatistics::NumericStatistics(LogicalType type_p, Value min_p, Value max_p)
@@ -174,8 +175,8 @@ unique_ptr<BaseStatistics> NumericStatistics::Deserialize(Deserializer &source, 
 }
 
 string NumericStatistics::ToString() {
-	return StringUtil::Format("Numeric Statistics<%s> %s[Min: %s, Max: %s]", type.ToString(),
-	                          validity_stats ? validity_stats->ToString() : "", min.ToString(), max.ToString());
+	return StringUtil::Format("[Min: %s, Max: %s]%s", min.ToString(), max.ToString(),
+	                          validity_stats ? validity_stats->ToString() : "");
 }
 
 template <class T>

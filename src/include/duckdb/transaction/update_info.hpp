@@ -15,10 +15,13 @@
 
 namespace duckdb {
 class UpdateSegment;
+struct DataTableInfo;
 
 struct UpdateInfo {
 	//! The update segment that this update info affects
 	UpdateSegment *segment;
+	//! The column index of which column we are updating
+	idx_t column_index;
 	//! The version number
 	atomic<transaction_t> version_number;
 	//! The vector index within the uncompressed segment

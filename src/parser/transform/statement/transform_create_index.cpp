@@ -44,7 +44,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateIndex(duckdb_libpgquery:
 		} else {
 			// parse the index expression
 			D_ASSERT(index_element->expr);
-			info->expressions.push_back(TransformExpression(index_element->expr));
+			info->expressions.push_back(TransformExpression(index_element->expr, 0));
 		}
 	}
 

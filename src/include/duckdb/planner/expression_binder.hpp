@@ -48,6 +48,11 @@ public:
 	ExpressionBinder(Binder &binder, ClientContext &context, bool replace_binder = false);
 	virtual ~ExpressionBinder();
 
+	//! The target type that should result from the binder. If the result is not of this type, a cast to this type will
+	//! be added. Defaults to INVALID.
+	LogicalType target_type;
+
+public:
 	unique_ptr<Expression> Bind(unique_ptr<ParsedExpression> &expr, LogicalType *result_type = nullptr,
 	                            bool root_expression = true);
 
@@ -66,10 +71,6 @@ public:
 	static void TestCollation(ClientContext &context, const string &collation);
 
 	bool BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr);
-
-	//! The target type that should result from the binder. If the result is not of this type, a cast to this type will
-	//! be added. Defaults to INVALID.
-	LogicalType target_type;
 
 	void BindChild(unique_ptr<ParsedExpression> &expr, idx_t depth, string &error);
 	static void ExtractCorrelatedExpressions(Binder &binder, Expression &expr);

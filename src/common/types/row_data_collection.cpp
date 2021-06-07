@@ -184,7 +184,7 @@ void RowDataCollection::ComputeStructEntrySizes(Vector &v, idx_t entry_sizes[], 
 		num_children = children.size();
 		for (auto &struct_child : children) {
 			Vector struct_vector;
-			struct_vector.Slice(*struct_child.second, dict_sel, vcount);
+			struct_vector.Slice(*struct_child, dict_sel, vcount);
 			struct_vectors.push_back(move(struct_vector));
 		}
 	} else {
@@ -192,7 +192,7 @@ void RowDataCollection::ComputeStructEntrySizes(Vector &v, idx_t entry_sizes[], 
 		num_children = children.size();
 		for (auto &struct_child : children) {
 			Vector struct_vector;
-			struct_vector.Reference(*struct_child.second);
+			struct_vector.Reference(*struct_child);
 			struct_vectors.push_back(move(struct_vector));
 		}
 	}
@@ -444,7 +444,7 @@ void RowDataCollection::SerializeStructVector(Vector &v, idx_t vcount, const Sel
 		num_children = children.size();
 		for (auto &struct_child : children) {
 			Vector struct_vector;
-			struct_vector.Slice(*struct_child.second, dict_sel, vcount);
+			struct_vector.Slice(*struct_child, dict_sel, vcount);
 			struct_vectors.push_back(move(struct_vector));
 		}
 	} else {
@@ -452,7 +452,7 @@ void RowDataCollection::SerializeStructVector(Vector &v, idx_t vcount, const Sel
 		num_children = children.size();
 		for (auto &struct_child : children) {
 			Vector struct_vector;
-			struct_vector.Reference(*struct_child.second);
+			struct_vector.Reference(*struct_child);
 			struct_vectors.push_back(move(struct_vector));
 		}
 	}
@@ -711,19 +711,6 @@ static void TemplatedDeserializeIntoVector(Vector &v, idx_t count, idx_t col_idx
 	}
 }
 
-static ValidityMask &GetValidity(Vector &v) {
-	switch (v.GetVectorType()) {
-	case VectorType::DICTIONARY_VECTOR:
-		return GetValidity(DictionaryVector::Child(v));
-	case VectorType::FLAT_VECTOR:
-		return FlatVector::Validity(v);
-	case VectorType::CONSTANT_VECTOR:
-		return ConstantVector::Validity(v);
-	default:
-		throw NotImplementedException("FIXME: cannot deserialize vector with this vectortype");
-	}
-}
-
 void RowDataCollection::DeserializeIntoStringVector(Vector &v, const idx_t &vcount, const idx_t &col_idx,
                                                     data_ptr_t *key_locations, data_ptr_t *validitymask_locations) {
 	const auto &validity = FlatVector::Validity(v);
@@ -766,10 +753,9 @@ void RowDataCollection::DeserializeIntoStructVector(Vector &v, const idx_t &vcou
 	}
 
 	// now deserialize into the struct vectors
+	auto &children = StructVector::GetEntries(v);
 	for (idx_t i = 0; i < child_types.size(); i++) {
-		auto new_child = make_unique<Vector>(child_types[i].second);
-		DeserializeIntoVector(*new_child, vcount, i, key_locations, struct_validitymask_locations);
-		StructVector::AddEntry(v, child_types[i].first, move(new_child));
+		DeserializeIntoVector(*children[i], vcount, i, key_locations, struct_validitymask_locations);
 	}
 }
 
@@ -815,7 +801,8 @@ void RowDataCollection::DeserializeIntoListVector(Vector &v, const idx_t &vcount
 			auto &list_vec_to_append = ListVector::GetEntry(append_vector);
 
 			// set validity
-			auto &append_validity = GetValidity(list_vec_to_append);
+			//! Since we are constructing the vector, this will always be a flat vector.
+			auto &append_validity = FlatVector::Validity(list_vec_to_append);
 			for (idx_t entry_idx = 0; entry_idx < next; entry_idx++) {
 				append_validity.Set(entry_idx, *(validitymask_location) & (1 << offset_in_byte));
 				if (++offset_in_byte == 8) {
@@ -928,7 +915,7 @@ void RowDataCollection::DeserializeIntoVector(Vector &v, const idx_t &vcount, co
 		DeserializeIntoListVector(v, vcount, col_idx, key_locations, validitymask_locations);
 		break;
 	default:
-		throw NotImplementedException("FIXME: unimplemented deserialize from row-format");
+		throw NotImplementedException("Unimplemented deserialize from row-format");
 	}
 }
 

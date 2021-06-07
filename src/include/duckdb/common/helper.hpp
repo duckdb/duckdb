@@ -25,7 +25,7 @@ unique_ptr<T> make_unique(Args &&... args) {
 using std::make_unique;
 #endif
 template <typename S, typename T, typename... Args>
-unique_ptr<S> make_unique_base(Args &&...args) {
+unique_ptr<S> make_unique_base(Args &&... args) {
 	return unique_ptr<S>(new T(std::forward<Args>(args)...));
 }
 
@@ -33,6 +33,20 @@ template <typename T, typename S>
 unique_ptr<S> unique_ptr_cast(unique_ptr<T> src) {
 	return unique_ptr<S>(static_cast<S *>(src.release()));
 }
+
+struct SharedConstructor {
+	template <class T, typename... ARGS>
+	static shared_ptr<T> Create(ARGS &&...args) {
+		return make_shared<T>(std::forward<ARGS>(args)...);
+	}
+};
+
+struct UniqueConstructor {
+	template <class T, typename... ARGS>
+	static unique_ptr<T> Create(ARGS &&...args) {
+		return make_unique<T>(std::forward<ARGS>(args)...);
+	}
+};
 
 template <typename T>
 T MaxValue(T a, T b) {

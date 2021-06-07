@@ -18,6 +18,7 @@
 namespace duckdb {
 class SequenceCatalogEntry;
 
+class ColumnData;
 class ClientContext;
 class CatalogEntry;
 class DataTable;

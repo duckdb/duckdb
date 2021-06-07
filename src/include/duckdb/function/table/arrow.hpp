@@ -14,13 +14,20 @@
 #include "duckdb/common/atomic.hpp"
 
 namespace duckdb {
+//===--------------------------------------------------------------------===//
+// Arrow List Types
+//===--------------------------------------------------------------------===//
+enum class ArrowListType : uint8_t { FIXED_SIZE = 0, NORMAL = 1, SUPER_SIZE = 2 };
 
 struct ArrowScanFunctionData : public TableFunctionData {
-	ArrowScanFunctionData() : lines_read(0) {
+	ArrowScanFunctionData(idx_t rows_per_thread_p) : lines_read(0), rows_per_thread(rows_per_thread_p) {
 	}
 	unique_ptr<ArrowArrayStreamWrapper> stream;
+	//! This holds the original list type (col_idx, [ArrowListType,size])
+	std::unordered_map<idx_t, vector<std::pair<ArrowListType, idx_t>>> original_list_type;
 	std::atomic<idx_t> lines_read;
 	ArrowSchemaWrapper schema_root;
+	idx_t rows_per_thread;
 };
 
 struct ArrowScanState : public FunctionOperatorData {
@@ -35,8 +42,7 @@ struct ArrowScanState : public FunctionOperatorData {
 struct ParallelArrowScanState : public ParallelState {
 	ParallelArrowScanState() {
 	}
-	std::mutex lock;
-	idx_t current_chunk_idx = 0;
+	bool finished = false;
 };
 
 struct ArrowTableFunction {
@@ -51,7 +57,9 @@ private:
 	                                              vector<string> &input_table_names, vector<LogicalType> &return_types,
 	                                              vector<string> &names);
 	//! Actual conversion from Arrow to DuckDB
-	static void ArrowToDuckDB(ArrowScanState &scan_state, DataChunk &output);
+	static void ArrowToDuckDB(ArrowScanState &scan_state,
+	                          std::unordered_map<idx_t, vector<std::pair<ArrowListType, idx_t>>> &arrow_lists,
+	                          DataChunk &output);
 
 	//! -----Single Thread Functions:-----
 	//! Initialize Single Thread Scan

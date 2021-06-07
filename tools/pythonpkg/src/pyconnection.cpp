@@ -57,7 +57,8 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	    .def("unregister", &DuckDBPyConnection::UnregisterPythonObject, "Unregister the view name",
 	         py::arg("view_name"))
 	    .def("register_arrow", &DuckDBPyConnection::RegisterArrow,
-	         "Register the passed Arrow Table for querying with a view", py::arg("view_name"), py::arg("arrow_table"))
+	         "Register the passed Arrow Table for querying with a view", py::arg("view_name"), py::arg("arrow_table"),
+	         py::arg("rows_per_thread") = 1000000)
 	    .def("table", &DuckDBPyConnection::Table, "Create a relation object for the name'd table",
 	         py::arg("table_name"))
 	    .def("view", &DuckDBPyConnection::View, "Create a relation object for the name'd view", py::arg("view_name"))
@@ -73,7 +74,7 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	    .def("from_df", &DuckDBPyConnection::FromDF, "Create a relation object from the Data.Frame in df",
 	         py::arg("df") = py::none())
 	    .def("from_arrow_table", &DuckDBPyConnection::FromArrowTable, "Create a relation object from an Arrow table",
-	         py::arg("table"))
+	         py::arg("table"), py::arg("rows_per_thread") = 1000000)
 	    .def("df", &DuckDBPyConnection::FromDF, "Create a relation object from the Data.Frame in df (alias of from_df)",
 	         py::arg("df"))
 	    .def("from_csv_auto", &DuckDBPyConnection::FromCsvAuto,
@@ -161,7 +162,8 @@ DuckDBPyConnection *DuckDBPyConnection::RegisterDF(const string &name, py::objec
 	return this;
 }
 
-DuckDBPyConnection *DuckDBPyConnection::RegisterArrow(const string &name, py::object table) {
+DuckDBPyConnection *DuckDBPyConnection::RegisterArrow(const string &name, py::object table,
+                                                      const idx_t rows_per_tuple) {
 	if (!connection) {
 		throw std::runtime_error("connection closed");
 	}
@@ -172,8 +174,9 @@ DuckDBPyConnection *DuckDBPyConnection::RegisterArrow(const string &name, py::ob
 
 	auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
 	connection
-	    ->TableFunction("arrow_scan", {Value::POINTER((uintptr_t)stream_factory.get()),
-	                                   Value::POINTER((uintptr_t)stream_factory_produce)})
+	    ->TableFunction("arrow_scan",
+	                    {Value::POINTER((uintptr_t)stream_factory.get()),
+	                     Value::POINTER((uintptr_t)stream_factory_produce), Value::UBIGINT(rows_per_tuple)})
 	    ->CreateView(name, true, true);
 	auto object = make_unique<RegisteredArrow>(move(stream_factory), table);
 	registered_objects[name] = move(object);
@@ -261,7 +264,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquet(const string &filen
 	return make_unique<DuckDBPyRelation>(connection->TableFunction("parquet_scan", params)->Alias(filename));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrowTable(py::object &table) {
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrowTable(py::object &table, const idx_t rows_per_tuple) {
 	if (!connection) {
 		throw std::runtime_error("connection closed");
 	}
@@ -273,15 +276,15 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrowTable(py::object &tabl
 	}
 	string name = "arrow_table_" + GenerateRandomName();
 
-	//	registered_arrow[name] = table;
 	auto stream_factory = make_unique<PythonTableArrowArrayStreamFactory>(table.ptr());
 
 	unique_ptr<ArrowArrayStreamWrapper> (*stream_factory_produce)(uintptr_t factory) =
 	    PythonTableArrowArrayStreamFactory::Produce;
 	auto rel = make_unique<DuckDBPyRelation>(
 	    connection
-	        ->TableFunction("arrow_scan", {Value::POINTER((uintptr_t)stream_factory.get()),
-	                                       Value::POINTER((uintptr_t)stream_factory_produce)})
+	        ->TableFunction("arrow_scan",
+	                        {Value::POINTER((uintptr_t)stream_factory.get()),
+	                         Value::POINTER((uintptr_t)stream_factory_produce), Value::UBIGINT(rows_per_tuple)})
 	        ->Alias(name));
 	registered_objects[name] = make_unique<RegisteredArrow>(move(stream_factory), table);
 	return rel;

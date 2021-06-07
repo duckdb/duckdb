@@ -134,9 +134,13 @@ void PhysicalHashJoin::Sink(ExecutionContext &context, GlobalOperatorState &stat
 			lstate.build_chunk.data[i].Reference(input.data[right_projection_map[i]]);
 		}
 		sink.hash_table->Build(lstate.join_keys, lstate.build_chunk);
-	} else {
+	} else if (!build_types.empty()) {
 		// there is not a projected map: place the entire right chunk in the HT
 		sink.hash_table->Build(lstate.join_keys, input);
+	} else {
+		// there are only keys: place an empty chunk in the payload
+		lstate.build_chunk.SetCardinality(input.size());
+		sink.hash_table->Build(lstate.join_keys, lstate.build_chunk);
 	}
 }
 

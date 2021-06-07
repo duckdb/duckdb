@@ -36,7 +36,7 @@ struct ParquetReadBindData : public FunctionData {
 	vector<string> files;
 	vector<column_t> column_ids;
 	atomic<idx_t> chunk_count;
-	idx_t cur_file;
+	atomic<idx_t> cur_file;
 };
 
 struct ParquetReadOperatorData : public FunctionOperatorData {
