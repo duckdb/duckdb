@@ -402,7 +402,7 @@ CatalogEntry *CatalogSet::GetEntry(ClientContext &context, const string &name) {
 		return result;
 	}
 	// we found a default entry, but failed
-	// this generally means somebody else created the entry first
+	// this means somebody else created the entry first
 	// just retry?
 	return GetEntry(context, name);
 }
