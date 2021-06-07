@@ -84,7 +84,6 @@ static void TemplatedMatchNested(Vector &col, Vector &rows, SelectionVector &sel
 	const auto &key_sel = FlatVector::INCREMENTAL_SELECTION_VECTOR;
 	RowOperations::Gather(rows, sel, key, key_sel, count, col_offset, col_no);
 
-	auto ptrs = FlatVector::GetData<data_ptr_t>(rows);
 	idx_t match_count = 0;
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = sel.get_index(i);

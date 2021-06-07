@@ -11,7 +11,7 @@ CREATE TABLE integers(i INTEGER)
 statement ok
 INSERT INTO integers VALUES (1), (2), (3), (5), (NULL)
 
-# Payload is LISTs of integers
+# Payload is LIST<INTEGER>
 statement ok
 CREATE VIEW intlists AS SELECT * FROM (VALUES
 	(1, LIST_VALUE(1)),
@@ -69,7 +69,7 @@ NULL	4	[2, 3]
 3	3	[]
 5	5	[9, 10, 11]
 
-# Payload is LISTs of strings
+# Payload is LIST<VARCHAR>
 statement ok
 CREATE VIEW strlists AS SELECT * FROM (VALUES
 	(1, LIST_VALUE('a')),
@@ -127,7 +127,7 @@ NULL	4	[b, c]
 3	3	[]
 5	5	[i, j, k]
 
-# Payload is STRUCTs of integers and strings
+# Payload is STRUCT<INTEGER, VARCHAR>
 statement ok
 CREATE VIEW structs AS SELECT * FROM (VALUES
 	(1, STRUCT_PACK(a := 1, b:= 'a')),

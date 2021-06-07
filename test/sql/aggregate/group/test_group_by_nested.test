@@ -1,0 +1,103 @@
+# name: test/sql/aggregate/group/test_group_by_nested.test
+# description: GROUP BY nested types (STRUCTs, LISTs)
+# group: [group]
+
+statement ok
+PRAGMA enable_verification
+
+# Key is LIST<INTEGER>
+statement ok
+CREATE VIEW intlists AS SELECT * FROM (VALUES
+	(21, [1]),
+	(22, [NULL]),
+	(23, []),
+	(24, [2, 3]),
+	(NULL::INTEGER, [13]),
+	(32, [NULL]),
+	(34, [2, 3])
+	) lv(v, k);
+
+# Single hash of LIST<INTEGER>
+query II
+SELECT k, SUM(v) FROM intlists GROUP BY k ORDER BY 2
+----
+[13]	NULL
+[1]	21
+[]	23
+[NULL]	54
+[2, 3]	58
+
+# Combined hash of LIST<INTEGER>
+query III
+SELECT k, LEAST(v, 21) as c, SUM(v) FROM intlists GROUP BY k, c ORDER BY 2, 3
+----
+[13]	NULL	NULL
+[1]	21	21
+[]	21	23
+[NULL]	21	54
+[2, 3]	21	58
+
+# Key is LIST<VARCHAR>
+statement ok
+CREATE VIEW strlists AS SELECT * FROM (VALUES
+	(21, ['a']),
+	(22, [NULL]),
+	(23, []),
+	(24, ['b', 'c']),
+	(NULL::INTEGER, ['m']),
+	(32, [NULL]),
+	(34, ['b', 'c'])
+	) lv(v, k);
+
+# Single hash of LIST<VARCHAR>
+query II
+SELECT k, SUM(v) FROM strlists GROUP BY k ORDER BY 2
+----
+[m]	NULL
+[a]	21
+[]	23
+[NULL]	54
+[b, c]	58
+
+# Combined hash of LIST<VARCHAR>
+query III
+SELECT k, LEAST(v, 21) as c, SUM(v) FROM strlists GROUP BY k, c ORDER BY 2, 3
+----
+[m]	NULL	NULL
+[a]	21	21
+[]	21	23
+[NULL]	21	54
+[b, c]	21	58
+
+# Key is STRUCT<INTEGER, VARCHAR>
+statement ok
+CREATE VIEW structs AS SELECT * FROM (VALUES
+	(21, {'a': 1, 'b': 'a'}),
+	(22, {'a': NULL, 'b': NULL}),
+	(23, {'a': 0, 'b': ''}),
+	(24, {'a': 2, 'b': 'c'}),
+	(NULL::INTEGER, {'a': 13, 'b': 'm'}),
+	(32, {'a': NULL, 'b': NULL}),
+	(34, {'a': 2, 'b': 'c'})
+	) sv(v, k);
+
+# Single hash of STRUCT<INTEGER, VARCHAR>
+query II
+SELECT k, SUM(v) FROM structs GROUP BY k ORDER BY 2
+----
+{'a': 13, 'b': m}	NULL
+{'a': 1, 'b': a}	21
+{'a': 0, 'b': }	23
+{'a': NULL, 'b': NULL}	54
+{'a': 2, 'b': c}	58
+
+# Combined hash of STRUCT<INTEGER, VARCHAR>
+query III
+SELECT k, LEAST(v, 21) as c, SUM(v) FROM structs GROUP BY k, c ORDER BY 2, 3
+----
+{'a': 13, 'b': m}	NULL	NULL
+{'a': 1, 'b': a}	21	21
+{'a': 0, 'b': }	21	23
+{'a': NULL, 'b': NULL}	21	54
+{'a': 2, 'b': c}	21	58
+

@@ -4,8 +4,10 @@
 //===--------------------------------------------------------------------===//
 
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/types/null_value.hpp"
+#include "duckdb/common/value_operations/value_operations.hpp"
 
 namespace duckdb {
 
@@ -54,6 +56,26 @@ static inline void TemplatedLoopHash(Vector &input, Vector &result, const Select
 }
 
 template <bool HAS_RSEL>
+static inline void ValueLoopHash(Vector &input, Vector &result, const SelectionVector *rsel, idx_t count) {
+	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		auto result_data = ConstantVector::GetData<hash_t>(result);
+
+		auto input_value = input.GetValue(0);
+		result_data[0] = ValueOperations::Hash(input_value);
+	} else {
+		result.SetVectorType(VectorType::FLAT_VECTOR);
+		auto result_data = FlatVector::GetData<hash_t>(result);
+
+		for (idx_t i = 0; i < count; i++) {
+			auto ridx = HAS_RSEL ? rsel->get_index(i) : i;
+			auto input_value = input.GetValue(ridx);
+			result_data[ridx] = ValueOperations::Hash(input_value);
+		}
+	}
+}
+
+template <bool HAS_RSEL>
 static inline void HashTypeSwitch(Vector &input, Vector &result, const SelectionVector *rsel, idx_t count) {
 	D_ASSERT(result.GetType().id() == LogicalTypeId::HASH);
 	switch (input.GetType().InternalType()) {
@@ -96,6 +118,11 @@ static inline void HashTypeSwitch(Vector &input, Vector &result, const Selection
 		break;
 	case PhysicalType::VARCHAR:
 		TemplatedLoopHash<HAS_RSEL, string_t>(input, result, rsel, count);
+		break;
+	case PhysicalType::LIST:
+	case PhysicalType::MAP:
+	case PhysicalType::STRUCT:
+		ValueLoopHash<HAS_RSEL>(input, result, rsel, count);
 		break;
 	default:
 		throw InvalidTypeException(input.GetType(), "Invalid type for hash");
@@ -183,6 +210,38 @@ void TemplatedLoopCombineHash(Vector &input, Vector &hashes, const SelectionVect
 }
 
 template <bool HAS_RSEL>
+static inline void ValueLoopCombineHash(Vector &input, Vector &hashes, const SelectionVector *rsel, idx_t count) {
+	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR && hashes.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		auto hash_data = ConstantVector::GetData<hash_t>(hashes);
+
+		auto input_value = input.GetValue(0);
+		auto other_hash = ValueOperations::Hash(input_value);
+		hash_data[0] = CombineHashScalar(hash_data[0], other_hash);
+	} else if (hashes.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		// mix constant with non-constant, first get the constant value
+		auto constant_hash = *ConstantVector::GetData<hash_t>(hashes);
+		// now re-initialize the hashes vector to an empty flat vector
+		hashes.Initialize(hashes.GetType());
+		auto hash_data = FlatVector::GetData<hash_t>(hashes);
+		for (idx_t i = 0; i < count; i++) {
+			auto ridx = HAS_RSEL ? rsel->get_index(i) : i;
+			auto input_value = input.GetValue(ridx);
+			auto other_hash = ValueOperations::Hash(input_value);
+			hash_data[ridx] = CombineHashScalar(constant_hash, other_hash);
+		}
+	} else {
+		D_ASSERT(hashes.GetVectorType() == VectorType::FLAT_VECTOR);
+		auto hash_data = FlatVector::GetData<hash_t>(hashes);
+		for (idx_t i = 0; i < count; i++) {
+			auto ridx = HAS_RSEL ? rsel->get_index(i) : i;
+			auto input_value = input.GetValue(ridx);
+			auto other_hash = ValueOperations::Hash(input_value);
+			hash_data[ridx] = CombineHashScalar(hash_data[ridx], other_hash);
+		}
+	}
+}
+
+template <bool HAS_RSEL>
 static inline void CombineHashTypeSwitch(Vector &hashes, Vector &input, const SelectionVector *rsel, idx_t count) {
 	D_ASSERT(hashes.GetType().id() == LogicalTypeId::HASH);
 	switch (input.GetType().InternalType()) {
@@ -225,6 +284,11 @@ static inline void CombineHashTypeSwitch(Vector &hashes, Vector &input, const Se
 		break;
 	case PhysicalType::VARCHAR:
 		TemplatedLoopCombineHash<HAS_RSEL, string_t>(input, hashes, rsel, count);
+		break;
+	case PhysicalType::LIST:
+	case PhysicalType::MAP:
+	case PhysicalType::STRUCT:
+		ValueLoopCombineHash<HAS_RSEL>(input, hashes, rsel, count);
 		break;
 	default:
 		throw InvalidTypeException(input.GetType(), "Invalid type for hash");
