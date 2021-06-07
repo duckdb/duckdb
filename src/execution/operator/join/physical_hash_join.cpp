@@ -110,6 +110,7 @@ void PhysicalHashJoin::Sink(ExecutionContext &context, GlobalOperatorState &stat
 	lstate.build_executor.Execute(input, lstate.join_keys);
 	// TODO: add statement to check for possible per
 	// build the HT
+	sink.key_type = lstate.join_keys.GetTypes()[0];
 	if (!right_projection_map.empty()) {
 		// there is a projection map: fill the build chunk with the projected columns
 		lstate.build_chunk.Reset();
@@ -117,7 +118,6 @@ void PhysicalHashJoin::Sink(ExecutionContext &context, GlobalOperatorState &stat
 		for (idx_t i = 0; i < right_projection_map.size(); i++) {
 			lstate.build_chunk.data[i].Reference(input.data[right_projection_map[i]]);
 		}
-		sink.key_type = lstate.join_keys.GetTypes()[0];
 		sink.hash_table->Build(lstate.join_keys, lstate.build_chunk);
 	} else {
 		// there is not a projected map: place the entire right chunk in the HT
@@ -131,10 +131,10 @@ void PhysicalHashJoin::Sink(ExecutionContext &context, GlobalOperatorState &stat
 bool PhysicalHashJoin::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> state) {
 	auto &sink = (HashJoinGlobalState &)*state;
 	// check for possible perfect hash table
-	if (!CheckRequirementsForPerfectHashJoin(sink.hash_table.get(), sink)) {
-		// no perfect hash table, just finish the building of the regular hash table
-		sink.hash_table->Finalize();
-	}
+	// if (!CheckRequirementsForPerfectHashJoin(sink.hash_table.get(), sink)) {
+	// no perfect hash table, just finish the building of the regular hash table
+	sink.hash_table->Finalize();
+	//}
 
 	PhysicalSink::Finalize(pipeline, context, move(state));
 	return true;

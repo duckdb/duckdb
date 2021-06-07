@@ -25,6 +25,8 @@ Vector::Vector(const LogicalType &type, bool create_data, bool zero_data) : data
 }
 
 Vector::Vector(const LogicalType &type, idx_t tuple_count) {
+	D_ASSERT(type != LogicalType::INVALID);
+	D_ASSERT(tuple_count > 0);
 	auto data_size = GetTypeIdSize(type.InternalType()) * tuple_count;
 	buffer = make_buffer<VectorBuffer>(VectorType::FLAT_VECTOR, type, data_size);
 	auxiliary.reset();

@@ -154,8 +154,8 @@ public:
 	void FillWithOffsets(vector<data_ptr_t> &key_locations, JoinHTScanState &state);
 	void FullScanHashTable(JoinHTScanState &state, LogicalType key_type);
 	template <typename T>
-	static void TemplatedGatherInvisible(Vector &result, uintptr_t *pointers, const SelectionVector &result_vector,
-	                                     const SelectionVector &sel_vector, const idx_t count, idx_t offset);
+	void TemplatedGatherInvisible(Vector &result, uintptr_t *pointers, const SelectionVector &result_vector,
+	                              const SelectionVector &sel_vector, const idx_t count, idx_t offset);
 	template <typename T>
 	void TemplatedFillSelectionVector(Vector &source, SelectionVector &sel_vec, idx_t count);
 	void FillSelectionVectorSwitch(Vector &source, SelectionVector &sel_vec, idx_t count);

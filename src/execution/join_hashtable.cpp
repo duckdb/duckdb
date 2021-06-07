@@ -954,39 +954,29 @@ void JoinHashTable::ScanFullOuter(DataChunk &result, JoinHTScanState &state) {
 
 void JoinHashTable::FullScanHashTable(JoinHTScanState &state, LogicalType key_type) {
 	// scan the HT starting from the current position
-	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
-	idx_t found_entries = 0;
+	vector<data_ptr_t> key_locations;
+	key_locations.reserve(STANDARD_VECTOR_SIZE);
 
 	lock_guard<mutex> state_lock(state.lock);
-	// go through all the blocks
-	while (state.block_position < blocks.size()) {
-		auto &block = blocks[state.block_position];
-		auto handle = buffer_manager.Pin(block.block);
-		auto base_ptr = handle->node->buffer;
-		// go through all the tuples within this block
-		while (state.position < block.count) {
-			auto tuple_base = base_ptr + state.position * entry_size;
-			// store its locations
-			key_locations[found_entries++] = tuple_base;
-			state.position++;
-		}
-		state.block_position++;
-		state.position = 0;
-	}
+	// go through all the blocks and get keys location
+	FillWithOffsets(key_locations, state);
+	auto keys_count = key_locations.size();
 	// build selection vector using the build_keys
-	Vector build_vector(key_type, found_entries);
+	Vector build_vector(key_type, keys_count);
 	idx_t offset = 0;
-	GatherResultVector(build_vector, FlatVector::INCREMENTAL_SELECTION_VECTOR, (uintptr_t *)key_locations,
-	                   FlatVector::INCREMENTAL_SELECTION_VECTOR, found_entries, offset);
-	SelectionVector sel_build(found_entries);
-	FillSelectionVectorSwitch(build_vector, sel_build, found_entries);
+	// first gather the keys
+	GatherResultVector(build_vector, FlatVector::INCREMENTAL_SELECTION_VECTOR, (uintptr_t *)&key_locations[0],
+	                   FlatVector::INCREMENTAL_SELECTION_VECTOR, keys_count, offset);
+	SelectionVector sel_build(keys_count + 1);
+	// now fill them
+	FillSelectionVectorSwitch(build_vector, sel_build, keys_count);
 	// gather the values from the RHS using the sel_build selection vector
 	offset = condition_size;
 	for (idx_t i = 0; i < build_types.size(); i++) {
 		auto &vector = columns[i];
 		D_ASSERT(vector.GetType() == build_types[i]);
-		GatherResultVector(vector, sel_build, (uintptr_t *)key_locations, FlatVector::INCREMENTAL_SELECTION_VECTOR,
-		                   found_entries, offset);
+		GatherResultVector(vector, sel_build, (uintptr_t *)&key_locations[0], FlatVector::INCREMENTAL_SELECTION_VECTOR,
+		                   keys_count, offset);
 	}
 }
 
@@ -1063,12 +1053,13 @@ void JoinHashTable::TemplatedGatherInvisible(Vector &result, uintptr_t *pointers
 	auto rdata = FlatVector::GetData<T>(result);
 	auto &mask = FlatVector::Validity(result);
 	for (idx_t i = 0; i < count; i++) {
-		auto pidx = sel_vector.get_index(i);
-		auto ridx = Load<T>((data_ptr_t)(pointers[pidx] + offset));
-		if (IsNullValue<T>(ridx)) {
+		auto ridx = i;
+		auto pidx = i;
+		auto hdata = Load<T>((data_ptr_t)(pointers[pidx] + offset));
+		if (IsNullValue<T>(hdata)) {
 			mask.SetInvalid(ridx);
 		} else {
-			rdata[ridx] = ridx;
+			rdata[ridx] = hdata;
 		}
 	}
 }
@@ -1159,21 +1150,19 @@ idx_t JoinHashTable::GatherSwitch(VectorData &data, PhysicalType type, Vector &p
 void JoinHashTable::FillWithOffsets(vector<data_ptr_t> &key_locations, JoinHTScanState &state) {
 
 	// iterate over blocks
-	lock_guard<mutex> state_lock(state.lock);
 	while (state.block_position < blocks.size()) {
-
 		auto &block = blocks[state.block_position];
-		auto &handle = pinned_handles[state.block_position];
-		auto baseptr = handle->node->buffer;
-		// iterate over tuples
-		for (state.position = 0; state.position < block.count; state.position++) {
-			auto tuple_base = baseptr + state.position * entry_size;
-			auto found_match = (bool *)(tuple_base + tuple_size);
-			if (!*found_match) {
-				key_locations.push_back(tuple_base);
-			}
+		auto handle = buffer_manager.Pin(block.block);
+		auto base_ptr = handle->node->buffer;
+		// go through all the tuples within this block
+		while (state.position < block.count) {
+			auto tuple_base = base_ptr + state.position * entry_size;
+			// store its locations
+			key_locations.push_back(tuple_base);
+			state.position++;
 		}
 		state.block_position++;
+		state.position = 0;
 	}
 }
 
