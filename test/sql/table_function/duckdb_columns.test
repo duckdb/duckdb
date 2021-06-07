@@ -1,0 +1,6 @@
+# name: test/sql/table_function/duckdb_columns.test
+# description: Test duckdb_columns function
+# group: [table_function]
+
+statement ok
+SELECT * FROM duckdb_columns();

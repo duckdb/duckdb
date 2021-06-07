@@ -1,4 +1,4 @@
-#include "duckdb/function/table/information_schema_functions.hpp"
+#include "duckdb/function/table/system_functions.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
@@ -11,8 +11,8 @@
 
 namespace duckdb {
 
-struct InformationSchemaColumnsData : public FunctionOperatorData {
-	InformationSchemaColumnsData() : offset(0), column_offset(0) {
+struct DuckDBColumnsData : public FunctionOperatorData {
+	DuckDBColumnsData() : offset(0), column_offset(0) {
 	}
 
 	vector<CatalogEntry *> entries;
@@ -20,16 +20,19 @@ struct InformationSchemaColumnsData : public FunctionOperatorData {
 	idx_t column_offset;
 };
 
-static unique_ptr<FunctionData> InformationSchemaColumnsBind(ClientContext &context, vector<Value> &inputs,
+static unique_ptr<FunctionData> DuckDBColumnsBind(ClientContext &context, vector<Value> &inputs,
                                                              unordered_map<string, Value> &named_parameters,
                                                              vector<LogicalType> &input_table_types,
                                                              vector<string> &input_table_names,
                                                              vector<LogicalType> &return_types, vector<string> &names) {
-	names.emplace_back("table_catalog");
+	names.emplace_back("schema_oid");
+	return_types.push_back(LogicalType::BIGINT);
+
+	names.emplace_back("schema_name");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.emplace_back("table_schema");
-	return_types.push_back(LogicalType::VARCHAR);
+	names.emplace_back("table_oid");
+	return_types.push_back(LogicalType::BIGINT);
 
 	names.emplace_back("table_name");
 	return_types.push_back(LogicalType::VARCHAR);
@@ -37,22 +40,22 @@ static unique_ptr<FunctionData> InformationSchemaColumnsBind(ClientContext &cont
 	names.emplace_back("column_name");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.emplace_back("ordinal_position");
+	names.emplace_back("column_index");
 	return_types.push_back(LogicalType::INTEGER);
 
 	names.emplace_back("column_default");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.emplace_back("is_nullable"); // YES/NO
-	return_types.push_back(LogicalType::VARCHAR);
+	names.emplace_back("is_nullable");
+	return_types.push_back(LogicalType::BOOLEAN);
 
 	names.emplace_back("data_type");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.emplace_back("character_maximum_length");
-	return_types.push_back(LogicalType::INTEGER);
+	names.emplace_back("data_type_id");
+	return_types.push_back(LogicalType::BIGINT);
 
-	names.emplace_back("character_octet_length");
+	names.emplace_back("character_maximum_length");
 	return_types.push_back(LogicalType::INTEGER);
 
 	names.emplace_back("numeric_precision");
@@ -61,16 +64,13 @@ static unique_ptr<FunctionData> InformationSchemaColumnsBind(ClientContext &cont
 	names.emplace_back("numeric_scale");
 	return_types.push_back(LogicalType::INTEGER);
 
-	names.emplace_back("datetime_precision");
-	return_types.push_back(LogicalType::INTEGER);
-
 	return nullptr;
 }
 
-unique_ptr<FunctionOperatorData> InformationSchemaColumnsInit(ClientContext &context, const FunctionData *bind_data,
+unique_ptr<FunctionOperatorData> DuckDBColumnsInit(ClientContext &context, const FunctionData *bind_data,
                                                               const vector<column_t> &column_ids,
                                                               TableFilterCollection *filters) {
-	auto result = make_unique<InformationSchemaColumnsData>();
+	auto result = make_unique<DuckDBColumnsData>();
 
 	// scan all the schemas for tables and views and collect them
 	auto schemas = Catalog::GetCatalog(context).schemas->GetEntries<SchemaCatalogEntry>(context);
@@ -183,37 +183,36 @@ unique_ptr<ColumnHelper> ColumnHelper::Create(CatalogEntry *entry) {
 void ColumnHelper::WriteColumns(idx_t start_index, idx_t start_col, idx_t end_col, DataChunk &output) {
 	for (idx_t i = start_col; i < end_col; i++) {
 		auto index = start_index + (i - start_col);
-		// "table_catalog", PhysicalType::VARCHAR
-		output.SetValue(0, index, Value());
-		// "table_schema", PhysicalType::VARCHAR
-		output.SetValue(1, index, Value(Entry()->schema->name));
-		// "table_name", PhysicalType::VARCHAR
-		output.SetValue(2, index, Value(Entry()->name));
-		// "column_name", PhysicalType::VARCHAR
-		output.SetValue(3, index, Value(ColumnName(i)));
-		// "ordinal_position", PhysicalType::INTEGER
-		output.SetValue(4, index, Value::INTEGER(i + 1));
-		// "column_default", PhysicalType::VARCHAR
-		output.SetValue(5, index, Value(ColumnDefault(i)));
-		// "is_nullable", PhysicalType::VARCHAR YES/NO
-		output.SetValue(6, index, Value(IsNullable(i) ? "YES" : "NO"));
+		auto &entry = *Entry();
 
-		// "data_type", PhysicalType::VARCHAR
+		// schema_oid, BIGINT
+		output.SetValue(0, index, Value::BIGINT(entry.schema->oid));
+		// schema_name, VARCHAR
+		output.SetValue(1, index, entry.schema->name);
+		// table_oid, BIGINT
+		output.SetValue(2, index, Value::BIGINT(entry.oid));
+		// table_name, VARCHAR
+		output.SetValue(3, index, entry.name);
+		// column_name, VARCHAR
+		output.SetValue(4, index, Value(ColumnName(i)));
+		// column_index, INTEGER
+		output.SetValue(5, index, Value::INTEGER(i + 1));
+		// column_default, VARCHAR
+		output.SetValue(6, index, Value(ColumnDefault(i)));
+		// is_nullable, BOOLEAN
+		output.SetValue(7, index, Value::BOOLEAN(IsNullable(i)));
+		// data_type, VARCHAR
 		const LogicalType &type = ColumnType(i);
-		output.SetValue(7, index, Value(type.ToString()));
-
+		output.SetValue(8, index, Value(type.ToString()));
+		// data_type_id, BIGINT
+		output.SetValue(9, index, Value::BIGINT(int(type.id())));
 		if (type == LogicalType::VARCHAR) {
 			// FIXME: need check constraints in place to set this correctly
-			// "character_maximum_length", PhysicalType::INTEGER
-			output.SetValue(8, index, Value());
-			// "character_octet_length", PhysicalType::INTEGER
-			// FIXME: where did this number come from?
-			output.SetValue(9, index, Value::INTEGER(1073741824));
+			// character_maximum_length, INTEGER
+			output.SetValue(10, index, Value());
 		} else {
 			// "character_maximum_length", PhysicalType::INTEGER
-			output.SetValue(8, index, Value());
-			// "character_octet_length", PhysicalType::INTEGER
-			output.SetValue(9, index, Value());
+			output.SetValue(10, index, Value());
 		}
 
 		Value numeric_precision, numeric_scale;
@@ -255,33 +254,19 @@ void ColumnHelper::WriteColumns(idx_t start_index, idx_t start_col, idx_t end_co
 			numeric_scale = Value();
 			break;
 		}
-		output.SetValue(10, index, numeric_precision);
-		output.SetValue(11, index, numeric_scale);
 
-		Value datetime_precision;
-		switch (type.id()) {
-		case LogicalTypeId::DATE:
-		case LogicalTypeId::INTERVAL:
-		case LogicalTypeId::TIME:
-		case LogicalTypeId::TIMESTAMP:
-		case LogicalTypeId::TIMESTAMP_NS:
-		case LogicalTypeId::TIMESTAMP_MS:
-		case LogicalTypeId::TIMESTAMP_SEC:
-			// No fractional seconds are currently supported in DuckDB
-			datetime_precision = Value::INTEGER(0);
-			break;
-		default:
-			datetime_precision = Value();
-		}
-		output.SetValue(12, index, datetime_precision);
+		// numeric_precision, INTEGER
+		output.SetValue(11, index, numeric_precision);
+		// numeric_scale, INTEGER
+		output.SetValue(12, index, numeric_scale);
 	}
 }
 
 } // anonymous namespace
 
-void InformationSchemaColumnsFunction(ClientContext &context, const FunctionData *bind_data,
+void DuckDBColumnsFunction(ClientContext &context, const FunctionData *bind_data,
                                       FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
-	auto &data = (InformationSchemaColumnsData &)*operator_state;
+	auto &data = (DuckDBColumnsData &)*operator_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;
@@ -321,9 +306,9 @@ void InformationSchemaColumnsFunction(ClientContext &context, const FunctionData
 	data.column_offset = column_offset;
 }
 
-void InformationSchemaColumns::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("information_schema_columns", {}, InformationSchemaColumnsFunction,
-	                              InformationSchemaColumnsBind, InformationSchemaColumnsInit));
+void DuckDBColumnsFun::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction(TableFunction("duckdb_columns", {}, DuckDBColumnsFunction,
+	                              DuckDBColumnsBind, DuckDBColumnsInit));
 }
 
 } // namespace duckdb

@@ -1,4 +1,3 @@
-add_subdirectory(information_schema)
 add_subdirectory(system)
 add_subdirectory(version)
 add_library_unity(
@@ -13,7 +12,6 @@ add_library_unity(
   read_csv.cpp
   system_functions.cpp
   summary.cpp
-  information_schema_functions.cpp
   table_scan.cpp
   pragma_last_profiling_output.cpp
   pragma_detailed_profiling_output.cpp)
