@@ -9,7 +9,7 @@
 namespace duckdb {
 
 ART::ART(const vector<column_t> &column_ids, const vector<unique_ptr<Expression>> &unbound_expressions, bool is_unique)
-    : Index(IndexType::ART, column_ids, unbound_expressions), is_unique(is_unique) {
+    : Index(IndexType::ART, column_ids, unbound_expressions, is_unique) {
 	tree = nullptr;
 	expression_result.Initialize(logical_types);
 	is_little_endian = IsLittleEndian();
