@@ -8,6 +8,7 @@ add_library_unity(
   duckdb_schemas.cpp
   duckdb_sequences.cpp
   duckdb_tables.cpp
+  duckdb_types.cpp
   duckdb_views.cpp
   pragma_collations.cpp
   pragma_database_list.cpp
