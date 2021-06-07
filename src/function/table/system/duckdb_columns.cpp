@@ -21,10 +21,10 @@ struct DuckDBColumnsData : public FunctionOperatorData {
 };
 
 static unique_ptr<FunctionData> DuckDBColumnsBind(ClientContext &context, vector<Value> &inputs,
-                                                             unordered_map<string, Value> &named_parameters,
-                                                             vector<LogicalType> &input_table_types,
-                                                             vector<string> &input_table_names,
-                                                             vector<LogicalType> &return_types, vector<string> &names) {
+                                                  unordered_map<string, Value> &named_parameters,
+                                                  vector<LogicalType> &input_table_types,
+                                                  vector<string> &input_table_names, vector<LogicalType> &return_types,
+                                                  vector<string> &names) {
 	names.emplace_back("schema_oid");
 	return_types.push_back(LogicalType::BIGINT);
 
@@ -71,8 +71,7 @@ static unique_ptr<FunctionData> DuckDBColumnsBind(ClientContext &context, vector
 }
 
 unique_ptr<FunctionOperatorData> DuckDBColumnsInit(ClientContext &context, const FunctionData *bind_data,
-                                                              const vector<column_t> &column_ids,
-                                                              TableFilterCollection *filters) {
+                                                   const vector<column_t> &column_ids, TableFilterCollection *filters) {
 	auto result = make_unique<DuckDBColumnsData>();
 
 	// scan all the schemas for tables and views and collect them
@@ -278,8 +277,8 @@ void ColumnHelper::WriteColumns(idx_t start_index, idx_t start_col, idx_t end_co
 
 } // anonymous namespace
 
-void DuckDBColumnsFunction(ClientContext &context, const FunctionData *bind_data,
-                                      FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+void DuckDBColumnsFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
+                           DataChunk *input, DataChunk &output) {
 	auto &data = (DuckDBColumnsData &)*operator_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
@@ -321,8 +320,7 @@ void DuckDBColumnsFunction(ClientContext &context, const FunctionData *bind_data
 }
 
 void DuckDBColumnsFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("duckdb_columns", {}, DuckDBColumnsFunction,
-	                              DuckDBColumnsBind, DuckDBColumnsInit));
+	set.AddFunction(TableFunction("duckdb_columns", {}, DuckDBColumnsFunction, DuckDBColumnsBind, DuckDBColumnsInit));
 }
 
 } // namespace duckdb

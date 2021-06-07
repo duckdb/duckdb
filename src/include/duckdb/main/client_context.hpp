@@ -90,7 +90,7 @@ public:
 	std::mt19937 random_engine;
 
 	//! The schema search path, in order by which entries are searched if no schema entry is provided
-	vector<string> catalog_search_path = { TEMP_SCHEMA, DEFAULT_SCHEMA, "pg_catalog" };
+	vector<string> catalog_search_path = {TEMP_SCHEMA, DEFAULT_SCHEMA, "pg_catalog"};
 
 public:
 	DUCKDB_API Transaction &ActiveTransaction() {

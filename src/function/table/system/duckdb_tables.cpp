@@ -20,11 +20,10 @@ struct DuckDBTablesData : public FunctionOperatorData {
 };
 
 static unique_ptr<FunctionData> DuckDBTablesBind(ClientContext &context, vector<Value> &inputs,
-                                                              unordered_map<string, Value> &named_parameters,
-                                                              vector<LogicalType> &input_table_types,
-                                                              vector<string> &input_table_names,
-                                                              vector<LogicalType> &return_types,
-                                                              vector<string> &names) {
+                                                 unordered_map<string, Value> &named_parameters,
+                                                 vector<LogicalType> &input_table_types,
+                                                 vector<string> &input_table_names, vector<LogicalType> &return_types,
+                                                 vector<string> &names) {
 	names.emplace_back("schema_name");
 	return_types.push_back(LogicalType::VARCHAR);
 
@@ -65,8 +64,7 @@ static unique_ptr<FunctionData> DuckDBTablesBind(ClientContext &context, vector<
 }
 
 unique_ptr<FunctionOperatorData> DuckDBTablesInit(ClientContext &context, const FunctionData *bind_data,
-                                                               const vector<column_t> &column_ids,
-                                                               TableFilterCollection *filters) {
+                                                  const vector<column_t> &column_ids, TableFilterCollection *filters) {
 	auto result = make_unique<DuckDBTablesData>();
 
 	// scan all the schemas for tables and collect themand collect them
@@ -82,9 +80,9 @@ unique_ptr<FunctionOperatorData> DuckDBTablesInit(ClientContext &context, const 
 }
 
 static bool TableHasPrimaryKey(TableCatalogEntry &table) {
-	for(auto &constraint : table.constraints) {
+	for (auto &constraint : table.constraints) {
 		if (constraint->type == ConstraintType::UNIQUE) {
-			auto &unique = (UniqueConstraint &) *constraint;
+			auto &unique = (UniqueConstraint &)*constraint;
 			if (unique.is_primary_key) {
 				return true;
 			}
@@ -95,7 +93,7 @@ static bool TableHasPrimaryKey(TableCatalogEntry &table) {
 
 static idx_t CheckConstraintCount(TableCatalogEntry &table) {
 	idx_t check_count = 0;
-	for(auto &constraint : table.constraints) {
+	for (auto &constraint : table.constraints) {
 		if (constraint->type == ConstraintType::CHECK) {
 			check_count++;
 		}
@@ -103,8 +101,8 @@ static idx_t CheckConstraintCount(TableCatalogEntry &table) {
 	return check_count;
 }
 
-void DuckDBTablesFunction(ClientContext &context, const FunctionData *bind_data,
-                                       FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+void DuckDBTablesFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
+                          DataChunk *input, DataChunk &output) {
 	auto &data = (DuckDBTablesData &)*operator_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
@@ -119,7 +117,7 @@ void DuckDBTablesFunction(ClientContext &context, const FunctionData *bind_data,
 		if (entry->type != CatalogType::TABLE_ENTRY) {
 			continue;
 		}
-		auto &table = (TableCatalogEntry &) *entry;
+		auto &table = (TableCatalogEntry &)*entry;
 		// return values:
 		// schema_name, LogicalType::VARCHAR
 		output.SetValue(0, count, Value(table.schema->name));
@@ -152,8 +150,7 @@ void DuckDBTablesFunction(ClientContext &context, const FunctionData *bind_data,
 }
 
 void DuckDBTablesFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("duckdb_tables", {}, DuckDBTablesFunction,
-	                              DuckDBTablesBind, DuckDBTablesInit));
+	set.AddFunction(TableFunction("duckdb_tables", {}, DuckDBTablesFunction, DuckDBTablesBind, DuckDBTablesInit));
 }
 
 } // namespace duckdb

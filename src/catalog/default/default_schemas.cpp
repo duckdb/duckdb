@@ -36,5 +36,4 @@ vector<string> DefaultSchemaGenerator::GetDefaultEntries() {
 	return result;
 }
 
-
 } // namespace duckdb

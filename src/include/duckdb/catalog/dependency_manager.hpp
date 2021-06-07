@@ -32,6 +32,7 @@ public:
 
 	//! Scans all dependencies, returning pairs of (object, dependent)
 	void Scan(std::function<void(CatalogEntry *, CatalogEntry *, DependencyType)> callback);
+
 private:
 	Catalog &catalog;
 	//! Map of objects that DEPEND on [object], i.e. [object] can only be deleted when all entries in the dependency map

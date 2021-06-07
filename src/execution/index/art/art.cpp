@@ -8,7 +8,8 @@
 
 namespace duckdb {
 
-ART::ART(const vector<column_t> &column_ids, const vector<unique_ptr<Expression>> &unbound_expressions, bool is_unique, bool is_primary)
+ART::ART(const vector<column_t> &column_ids, const vector<unique_ptr<Expression>> &unbound_expressions, bool is_unique,
+         bool is_primary)
     : Index(IndexType::ART, column_ids, unbound_expressions, is_unique, is_primary) {
 	tree = nullptr;
 	expression_result.Initialize(logical_types);

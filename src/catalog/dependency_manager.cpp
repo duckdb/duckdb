@@ -18,7 +18,8 @@ void DependencyManager::AddObject(ClientContext &context, CatalogEntry *object,
 		}
 	}
 	// indexes do not require CASCADE to be dropped, they are simply always dropped along with the table
-	auto dependency_type = object->type == CatalogType::INDEX_ENTRY ? DependencyType::DEPENDENCY_AUTOMATIC : DependencyType::DEPENDENCY_REGULAR;
+	auto dependency_type = object->type == CatalogType::INDEX_ENTRY ? DependencyType::DEPENDENCY_AUTOMATIC
+	                                                                : DependencyType::DEPENDENCY_REGULAR;
 	// add the object to the dependents_map of each object that it depends on
 	for (auto &dependency : dependencies) {
 		dependents_map[dependency].insert(Dependency(object, dependency_type));
@@ -133,8 +134,8 @@ void DependencyManager::ClearDependencies(CatalogSet &set) {
 
 void DependencyManager::Scan(std::function<void(CatalogEntry *, CatalogEntry *, DependencyType)> callback) {
 	lock_guard<mutex> write_lock(catalog.write_lock);
-	for(auto &entry : dependents_map) {
-		for(auto &dependent : entry.second) {
+	for (auto &entry : dependents_map) {
+		for (auto &dependent : entry.second) {
 			callback(entry.first, dependent.entry, dependent.dependency_type);
 		}
 	}

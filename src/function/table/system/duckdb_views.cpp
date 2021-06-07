@@ -17,11 +17,10 @@ struct DuckDBViewsData : public FunctionOperatorData {
 };
 
 static unique_ptr<FunctionData> DuckDBViewsBind(ClientContext &context, vector<Value> &inputs,
-                                                              unordered_map<string, Value> &named_parameters,
-                                                              vector<LogicalType> &input_table_types,
-                                                              vector<string> &input_table_names,
-                                                              vector<LogicalType> &return_types,
-                                                              vector<string> &names) {
+                                                unordered_map<string, Value> &named_parameters,
+                                                vector<LogicalType> &input_table_types,
+                                                vector<string> &input_table_names, vector<LogicalType> &return_types,
+                                                vector<string> &names) {
 	names.emplace_back("schema_name");
 	return_types.push_back(LogicalType::VARCHAR);
 
@@ -50,8 +49,7 @@ static unique_ptr<FunctionData> DuckDBViewsBind(ClientContext &context, vector<V
 }
 
 unique_ptr<FunctionOperatorData> DuckDBViewsInit(ClientContext &context, const FunctionData *bind_data,
-                                                               const vector<column_t> &column_ids,
-                                                               TableFilterCollection *filters) {
+                                                 const vector<column_t> &column_ids, TableFilterCollection *filters) {
 	auto result = make_unique<DuckDBViewsData>();
 
 	// scan all the schemas for tables and collect themand collect them
@@ -66,8 +64,8 @@ unique_ptr<FunctionOperatorData> DuckDBViewsInit(ClientContext &context, const F
 	return move(result);
 }
 
-void DuckDBViewsFunction(ClientContext &context, const FunctionData *bind_data,
-                                       FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+void DuckDBViewsFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
+                         DataChunk *input, DataChunk &output) {
 	auto &data = (DuckDBViewsData &)*operator_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
@@ -82,7 +80,7 @@ void DuckDBViewsFunction(ClientContext &context, const FunctionData *bind_data,
 		if (entry->type != CatalogType::VIEW_ENTRY) {
 			continue;
 		}
-		auto &view = (ViewCatalogEntry &) *entry;
+		auto &view = (ViewCatalogEntry &)*entry;
 
 		// return values:
 		// schema_name, LogicalType::VARCHAR
@@ -108,8 +106,7 @@ void DuckDBViewsFunction(ClientContext &context, const FunctionData *bind_data,
 }
 
 void DuckDBViewsFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("duckdb_views", {}, DuckDBViewsFunction,
-	                              DuckDBViewsBind, DuckDBViewsInit));
+	set.AddFunction(TableFunction("duckdb_views", {}, DuckDBViewsFunction, DuckDBViewsBind, DuckDBViewsInit));
 }
 
 } // namespace duckdb

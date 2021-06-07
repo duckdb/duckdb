@@ -66,9 +66,9 @@ public:
 	void Undo(CatalogEntry *entry);
 
 	//! Scan the catalog set, invoking the callback method for every committed entry
-	void Scan(std::function<void(CatalogEntry*)> callback);
+	void Scan(std::function<void(CatalogEntry *)> callback);
 	//! Scan the catalog set, invoking the callback method for every entry
-	void Scan(ClientContext &context, std::function<void(CatalogEntry*)> callback);
+	void Scan(ClientContext &context, std::function<void(CatalogEntry *)> callback);
 
 	template <class T>
 	vector<T *> GetEntries(ClientContext &context) {

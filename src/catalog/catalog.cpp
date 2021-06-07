@@ -155,7 +155,7 @@ void Catalog::DropEntry(ClientContext &context, DropInfo *info) {
 		if (info->schema.empty()) {
 			// invalid schema: check the search path
 			info->schema = DEFAULT_SCHEMA;
-			for(idx_t i = 0; i < context.catalog_search_path.size(); i++) {
+			for (idx_t i = 0; i < context.catalog_search_path.size(); i++) {
 				auto entry = GetEntry(context, info->type, context.catalog_search_path[i], info->name, true);
 				if (entry) {
 					info->schema = context.catalog_search_path[i];
@@ -196,7 +196,7 @@ CatalogEntry *Catalog::GetEntry(ClientContext &context, CatalogType type, string
 			throw InternalException("Empty catalog search path");
 		}
 		schema_name = DEFAULT_SCHEMA;
-		for(idx_t i = 0; i < context.catalog_search_path.size(); i++) {
+		for (idx_t i = 0; i < context.catalog_search_path.size(); i++) {
 			auto entry = GetEntry(context, type, context.catalog_search_path[i], name, true);
 			if (entry) {
 				return entry;
@@ -285,7 +285,7 @@ void Catalog::Alter(ClientContext &context, AlterInfo *info) {
 		auto catalog_type = info->GetCatalogType();
 		// invalid schema: search the catalog search path
 		info->schema = DEFAULT_SCHEMA;
-		for(idx_t i = 0; i < context.catalog_search_path.size(); i++) {
+		for (idx_t i = 0; i < context.catalog_search_path.size(); i++) {
 			auto entry = GetEntry(context, catalog_type, context.catalog_search_path[i], info->name, true);
 			if (entry) {
 				// entry exists in this schema: alter there

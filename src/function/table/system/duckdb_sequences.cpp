@@ -17,11 +17,10 @@ struct DuckDBSequencesData : public FunctionOperatorData {
 };
 
 static unique_ptr<FunctionData> DuckDBSequencesBind(ClientContext &context, vector<Value> &inputs,
-                                                              unordered_map<string, Value> &named_parameters,
-                                                              vector<LogicalType> &input_table_types,
-                                                              vector<string> &input_table_names,
-                                                              vector<LogicalType> &return_types,
-                                                              vector<string> &names) {
+                                                    unordered_map<string, Value> &named_parameters,
+                                                    vector<LogicalType> &input_table_types,
+                                                    vector<string> &input_table_names,
+                                                    vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("schema_name");
 	return_types.push_back(LogicalType::VARCHAR);
 
@@ -62,14 +61,15 @@ static unique_ptr<FunctionData> DuckDBSequencesBind(ClientContext &context, vect
 }
 
 unique_ptr<FunctionOperatorData> DuckDBSequencesInit(ClientContext &context, const FunctionData *bind_data,
-                                                               const vector<column_t> &column_ids,
-                                                               TableFilterCollection *filters) {
+                                                     const vector<column_t> &column_ids,
+                                                     TableFilterCollection *filters) {
 	auto result = make_unique<DuckDBSequencesData>();
 
 	// scan all the schemas for tables and collect themand collect them
 	auto schemas = Catalog::GetCatalog(context).schemas->GetEntries<SchemaCatalogEntry>(context);
 	for (auto &schema : schemas) {
-		schema->Scan(context, CatalogType::SEQUENCE_ENTRY, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
+		schema->Scan(context, CatalogType::SEQUENCE_ENTRY,
+		             [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	};
 
 	// check the temp schema as well
@@ -79,7 +79,7 @@ unique_ptr<FunctionOperatorData> DuckDBSequencesInit(ClientContext &context, con
 }
 
 void DuckDBSequencesFunction(ClientContext &context, const FunctionData *bind_data,
-                                       FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+                             FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
 	auto &data = (DuckDBSequencesData &)*operator_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
@@ -91,7 +91,7 @@ void DuckDBSequencesFunction(ClientContext &context, const FunctionData *bind_da
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = data.entries[data.offset++];
 
-		auto &seq = (SequenceCatalogEntry &) *entry;
+		auto &seq = (SequenceCatalogEntry &)*entry;
 		// return values:
 		// schema_name, VARCHAR
 		output.SetValue(0, count, Value(seq.schema->name));
@@ -124,8 +124,8 @@ void DuckDBSequencesFunction(ClientContext &context, const FunctionData *bind_da
 }
 
 void DuckDBSequencesFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("duckdb_sequences", {}, DuckDBSequencesFunction,
-	                              DuckDBSequencesBind, DuckDBSequencesInit));
+	set.AddFunction(
+	    TableFunction("duckdb_sequences", {}, DuckDBSequencesFunction, DuckDBSequencesBind, DuckDBSequencesInit));
 }
 
 } // namespace duckdb

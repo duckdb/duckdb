@@ -25,11 +25,10 @@ struct DuckDBConstraintsData : public FunctionOperatorData {
 };
 
 static unique_ptr<FunctionData> DuckDBConstraintsBind(ClientContext &context, vector<Value> &inputs,
-                                                              unordered_map<string, Value> &named_parameters,
-                                                              vector<LogicalType> &input_table_types,
-                                                              vector<string> &input_table_names,
-                                                              vector<LogicalType> &return_types,
-                                                              vector<string> &names) {
+                                                      unordered_map<string, Value> &named_parameters,
+                                                      vector<LogicalType> &input_table_types,
+                                                      vector<string> &input_table_names,
+                                                      vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("schema_name");
 	return_types.push_back(LogicalType::VARCHAR);
 
@@ -75,8 +74,8 @@ static unique_ptr<FunctionData> DuckDBConstraintsBind(ClientContext &context, ve
 }
 
 unique_ptr<FunctionOperatorData> DuckDBConstraintsInit(ClientContext &context, const FunctionData *bind_data,
-                                                               const vector<column_t> &column_ids,
-                                                               TableFilterCollection *filters) {
+                                                       const vector<column_t> &column_ids,
+                                                       TableFilterCollection *filters) {
 	auto result = make_unique<DuckDBConstraintsData>();
 
 	// scan all the schemas for tables and collect themand collect them
@@ -92,7 +91,7 @@ unique_ptr<FunctionOperatorData> DuckDBConstraintsInit(ClientContext &context, c
 }
 
 void DuckDBConstraintsFunction(ClientContext &context, const FunctionData *bind_data,
-                                       FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+                               FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
 	auto &data = (DuckDBConstraintsData &)*operator_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
@@ -108,8 +107,9 @@ void DuckDBConstraintsFunction(ClientContext &context, const FunctionData *bind_
 			continue;
 		}
 
-		auto &table = (TableCatalogEntry &) *entry;
-		for(; data.constraint_offset < table.constraints.size() && count < STANDARD_VECTOR_SIZE; data.constraint_offset++) {
+		auto &table = (TableCatalogEntry &)*entry;
+		for (; data.constraint_offset < table.constraints.size() && count < STANDARD_VECTOR_SIZE;
+		     data.constraint_offset++) {
 			auto &constraint = table.constraints[data.constraint_offset];
 			// return values:
 			// schema_name, LogicalType::VARCHAR
@@ -126,12 +126,12 @@ void DuckDBConstraintsFunction(ClientContext &context, const FunctionData *bind_
 
 			// constraint_type, VARCHAR
 			string constraint_type;
-			switch(constraint->type) {
+			switch (constraint->type) {
 			case ConstraintType::CHECK:
 				constraint_type = "CHECK";
 				break;
 			case ConstraintType::UNIQUE: {
-				auto &unique = (UniqueConstraint &) *constraint;
+				auto &unique = (UniqueConstraint &)*constraint;
 				constraint_type = unique.is_primary_key ? "PRIMARY KEY" : "UNIQUE";
 				break;
 			}
@@ -152,30 +152,30 @@ void DuckDBConstraintsFunction(ClientContext &context, const FunctionData *bind_
 			// expression, VARCHAR
 			Value expression_text;
 			if (constraint->type == ConstraintType::CHECK) {
-				auto &check = (CheckConstraint &) *constraint;
+				auto &check = (CheckConstraint &)*constraint;
 				expression_text = Value(check.expression->ToString());
 			}
 			output.SetValue(7, count, expression_text);
 
-			auto &bound_constraint = (BoundConstraint &) *table.bound_constraints[data.constraint_offset];
+			auto &bound_constraint = (BoundConstraint &)*table.bound_constraints[data.constraint_offset];
 			vector<column_t> column_index_list;
-			switch(bound_constraint.type) {
+			switch (bound_constraint.type) {
 			case ConstraintType::CHECK: {
-				auto &bound_check = (BoundCheckConstraint &) bound_constraint;
-				for(auto &col_idx : bound_check.bound_columns) {
+				auto &bound_check = (BoundCheckConstraint &)bound_constraint;
+				for (auto &col_idx : bound_check.bound_columns) {
 					column_index_list.push_back(col_idx);
 				}
 				break;
 			}
 			case ConstraintType::UNIQUE: {
-				auto &bound_unique = (BoundUniqueConstraint &) bound_constraint;
-				for(auto &col_idx : bound_unique.keys) {
+				auto &bound_unique = (BoundUniqueConstraint &)bound_constraint;
+				for (auto &col_idx : bound_unique.keys) {
 					column_index_list.push_back(column_t(col_idx));
 				}
 				break;
 			}
 			case ConstraintType::NOT_NULL: {
-				auto &bound_not_null = (BoundNotNullConstraint &) bound_constraint;
+				auto &bound_not_null = (BoundNotNullConstraint &)bound_constraint;
 				column_index_list.push_back(bound_not_null.index);
 				break;
 			}
@@ -186,7 +186,7 @@ void DuckDBConstraintsFunction(ClientContext &context, const FunctionData *bind_
 
 			vector<Value> index_list;
 			vector<Value> column_name_list;
-			for(auto column_index : column_index_list) {
+			for (auto column_index : column_index_list) {
 				index_list.push_back(Value::BIGINT(column_index));
 				column_name_list.push_back(Value(table.columns[column_index].name));
 			}
@@ -207,8 +207,8 @@ void DuckDBConstraintsFunction(ClientContext &context, const FunctionData *bind_
 }
 
 void DuckDBConstraintsFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("duckdb_constraints", {}, DuckDBConstraintsFunction,
-	                              DuckDBConstraintsBind, DuckDBConstraintsInit));
+	set.AddFunction(TableFunction("duckdb_constraints", {}, DuckDBConstraintsFunction, DuckDBConstraintsBind,
+	                              DuckDBConstraintsInit));
 }
 
 } // namespace duckdb

@@ -452,13 +452,13 @@ void CatalogSet::Undo(CatalogEntry *entry) {
 	entry->catalog->ModifyCatalog();
 }
 
-void CatalogSet::Scan(ClientContext &context, std::function<void(CatalogEntry*)> callback) {
+void CatalogSet::Scan(ClientContext &context, std::function<void(CatalogEntry *)> callback) {
 	// lock the catalog set
 	lock_guard<mutex> lock(catalog_lock);
 	if (defaults) {
 		// this catalog set has a default set defined:
 		auto default_entries = defaults->GetDefaultEntries();
-		for(auto &default_entry : default_entries) {
+		for (auto &default_entry : default_entries) {
 			auto map_entry = mapping.find(default_entry);
 			if (map_entry == mapping.end()) {
 				auto entry = defaults->CreateDefaultEntry(context, default_entry);
@@ -476,7 +476,7 @@ void CatalogSet::Scan(ClientContext &context, std::function<void(CatalogEntry*)>
 	}
 }
 
-void CatalogSet::Scan(std::function<void(CatalogEntry*)> callback) {
+void CatalogSet::Scan(std::function<void(CatalogEntry *)> callback) {
 	// lock the catalog set
 	lock_guard<mutex> lock(catalog_lock);
 	for (auto &kv : entries) {

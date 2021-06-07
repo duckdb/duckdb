@@ -8,8 +8,8 @@
 namespace duckdb {
 
 struct DependencyInformation {
-	CatalogEntry* object;
-	CatalogEntry* dependent;
+	CatalogEntry *object;
+	CatalogEntry *dependent;
 	DependencyType type;
 };
 
@@ -22,11 +22,10 @@ struct DuckDBDependenciesData : public FunctionOperatorData {
 };
 
 static unique_ptr<FunctionData> DuckDBDependenciesBind(ClientContext &context, vector<Value> &inputs,
-                                                              unordered_map<string, Value> &named_parameters,
-                                                              vector<LogicalType> &input_table_types,
-                                                              vector<string> &input_table_names,
-                                                              vector<LogicalType> &return_types,
-                                                              vector<string> &names) {
+                                                       unordered_map<string, Value> &named_parameters,
+                                                       vector<LogicalType> &input_table_types,
+                                                       vector<string> &input_table_names,
+                                                       vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("classid");
 	return_types.push_back(LogicalType::BIGINT);
 
@@ -52,8 +51,8 @@ static unique_ptr<FunctionData> DuckDBDependenciesBind(ClientContext &context, v
 }
 
 unique_ptr<FunctionOperatorData> DuckDBDependenciesInit(ClientContext &context, const FunctionData *bind_data,
-                                                               const vector<column_t> &column_ids,
-                                                               TableFilterCollection *filters) {
+                                                        const vector<column_t> &column_ids,
+                                                        TableFilterCollection *filters) {
 	auto result = make_unique<DuckDBDependenciesData>();
 
 	// scan all the schemas and collect them
@@ -71,7 +70,7 @@ unique_ptr<FunctionOperatorData> DuckDBDependenciesInit(ClientContext &context, 
 }
 
 void DuckDBDependenciesFunction(ClientContext &context, const FunctionData *bind_data,
-                                       FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+                                FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
 	auto &data = (DuckDBDependenciesData &)*operator_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
@@ -98,7 +97,7 @@ void DuckDBDependenciesFunction(ClientContext &context, const FunctionData *bind
 		output.SetValue(5, count, Value::INTEGER(0));
 		// deptype, LogicalType::VARCHAR
 		string dependency_type_str;
-		switch(entry.type) {
+		switch (entry.type) {
 		case DependencyType::DEPENDENCY_REGULAR:
 			dependency_type_str = "n";
 			break;
@@ -117,8 +116,8 @@ void DuckDBDependenciesFunction(ClientContext &context, const FunctionData *bind
 }
 
 void DuckDBDependenciesFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("duckdb_dependencies", {}, DuckDBDependenciesFunction,
-	                              DuckDBDependenciesBind, DuckDBDependenciesInit));
+	set.AddFunction(TableFunction("duckdb_dependencies", {}, DuckDBDependenciesFunction, DuckDBDependenciesBind,
+	                              DuckDBDependenciesInit));
 }
 
 } // namespace duckdb

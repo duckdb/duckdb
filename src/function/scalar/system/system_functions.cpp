@@ -18,9 +18,8 @@ struct SystemBindData : public FunctionData {
 	}
 };
 
-
 unique_ptr<FunctionData> BindSystemFunction(ClientContext &context, ScalarFunction &bound_function,
-                                         vector<unique_ptr<Expression>> &arguments) {
+                                            vector<unique_ptr<Expression>> &arguments) {
 	return make_unique<SystemBindData>(context);
 }
 
@@ -40,7 +39,7 @@ static void CurrentSchemaFunction(DataChunk &input, ExpressionState &state, Vect
 
 // current_schemas
 static void CurrentSchemasFunction(DataChunk &input, ExpressionState &state, Vector &result) {
-	vector<Value> schema_list = { Value(DEFAULT_SCHEMA) };
+	vector<Value> schema_list = {Value(DEFAULT_SCHEMA)};
 	auto val = Value::LIST(schema_list);
 	result.Reference(val);
 }
@@ -66,10 +65,13 @@ void SystemFun::RegisterFunction(BuiltinFunctions &set) {
 	child_types.push_back(make_pair("", LogicalType::VARCHAR));
 	auto varchar_list_type = LogicalType(LogicalTypeId::LIST, child_types);
 
-	set.AddFunction(ScalarFunction("current_query", {}, LogicalType::VARCHAR, CurrentQueryFunction, false, BindSystemFunction));
+	set.AddFunction(
+	    ScalarFunction("current_query", {}, LogicalType::VARCHAR, CurrentQueryFunction, false, BindSystemFunction));
 	set.AddFunction(ScalarFunction("current_schema", {}, LogicalType::VARCHAR, CurrentSchemaFunction));
-	set.AddFunction(ScalarFunction("current_schemas", {LogicalType::BOOLEAN}, varchar_list_type, CurrentSchemasFunction));
-	set.AddFunction(ScalarFunction("txid_current", {}, LogicalType::BIGINT, TransactionIdCurrent, false, BindSystemFunction));
+	set.AddFunction(
+	    ScalarFunction("current_schemas", {LogicalType::BOOLEAN}, varchar_list_type, CurrentSchemasFunction));
+	set.AddFunction(
+	    ScalarFunction("txid_current", {}, LogicalType::BIGINT, TransactionIdCurrent, false, BindSystemFunction));
 	set.AddFunction(ScalarFunction("version", {}, LogicalType::VARCHAR, VersionFunction));
 }
 

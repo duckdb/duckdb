@@ -18,11 +18,10 @@ struct DuckDBIndexesData : public FunctionOperatorData {
 };
 
 static unique_ptr<FunctionData> DuckDBIndexesBind(ClientContext &context, vector<Value> &inputs,
-                                                              unordered_map<string, Value> &named_parameters,
-                                                              vector<LogicalType> &input_table_types,
-                                                              vector<string> &input_table_names,
-                                                              vector<LogicalType> &return_types,
-                                                              vector<string> &names) {
+                                                  unordered_map<string, Value> &named_parameters,
+                                                  vector<LogicalType> &input_table_types,
+                                                  vector<string> &input_table_names, vector<LogicalType> &return_types,
+                                                  vector<string> &names) {
 	names.emplace_back("schema_name");
 	return_types.push_back(LogicalType::VARCHAR);
 
@@ -57,8 +56,7 @@ static unique_ptr<FunctionData> DuckDBIndexesBind(ClientContext &context, vector
 }
 
 unique_ptr<FunctionOperatorData> DuckDBIndexesInit(ClientContext &context, const FunctionData *bind_data,
-                                                               const vector<column_t> &column_ids,
-                                                               TableFilterCollection *filters) {
+                                                   const vector<column_t> &column_ids, TableFilterCollection *filters) {
 	auto result = make_unique<DuckDBIndexesData>();
 
 	// scan all the schemas for tables and collect themand collect them
@@ -73,8 +71,8 @@ unique_ptr<FunctionOperatorData> DuckDBIndexesInit(ClientContext &context, const
 	return move(result);
 }
 
-void DuckDBIndexesFunction(ClientContext &context, const FunctionData *bind_data,
-                                       FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+void DuckDBIndexesFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
+                           DataChunk *input, DataChunk &output) {
 	auto &data = (DuckDBIndexesData &)*operator_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
@@ -86,7 +84,7 @@ void DuckDBIndexesFunction(ClientContext &context, const FunctionData *bind_data
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = data.entries[data.offset++];
 
-		auto &index = (IndexCatalogEntry &) *entry;
+		auto &index = (IndexCatalogEntry &)*entry;
 		// return values:
 
 		// schema_name, VARCHAR
@@ -119,8 +117,7 @@ void DuckDBIndexesFunction(ClientContext &context, const FunctionData *bind_data
 }
 
 void DuckDBIndexesFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("duckdb_indexes", {}, DuckDBIndexesFunction,
-	                              DuckDBIndexesBind, DuckDBIndexesInit));
+	set.AddFunction(TableFunction("duckdb_indexes", {}, DuckDBIndexesFunction, DuckDBIndexesBind, DuckDBIndexesInit));
 }
 
 } // namespace duckdb

@@ -17,11 +17,10 @@ struct DuckDBTypesData : public FunctionOperatorData {
 };
 
 static unique_ptr<FunctionData> DuckDBTypesBind(ClientContext &context, vector<Value> &inputs,
-                                                              unordered_map<string, Value> &named_parameters,
-                                                              vector<LogicalType> &input_table_types,
-                                                              vector<string> &input_table_names,
-                                                              vector<LogicalType> &return_types,
-                                                              vector<string> &names) {
+                                                unordered_map<string, Value> &named_parameters,
+                                                vector<LogicalType> &input_table_types,
+                                                vector<string> &input_table_names, vector<LogicalType> &return_types,
+                                                vector<string> &names) {
 	names.emplace_back("schema_name");
 	return_types.push_back(LogicalType::VARCHAR);
 
@@ -48,16 +47,15 @@ static unique_ptr<FunctionData> DuckDBTypesBind(ClientContext &context, vector<V
 }
 
 unique_ptr<FunctionOperatorData> DuckDBTypesInit(ClientContext &context, const FunctionData *bind_data,
-                                                               const vector<column_t> &column_ids,
-                                                               TableFilterCollection *filters) {
+                                                 const vector<column_t> &column_ids, TableFilterCollection *filters) {
 	auto result = make_unique<DuckDBTypesData>();
 	result->types = LogicalType::ALL_TYPES;
 	// FIXME: add user-defined types here (when we have them)
 	return move(result);
 }
 
-void DuckDBTypesFunction(ClientContext &context, const FunctionData *bind_data,
-                                       FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+void DuckDBTypesFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
+                         DataChunk *input, DataChunk &output) {
 	auto &data = (DuckDBTypesData &)*operator_state;
 	if (data.offset >= data.types.size()) {
 		// finished returning values
@@ -82,7 +80,7 @@ void DuckDBTypesFunction(ClientContext &context, const FunctionData *bind_data,
 		output.SetValue(4, count, Value::BIGINT(GetTypeIdSize(type.InternalType())));
 		// type_category, VARCHAR
 		string category;
-		switch(type.id()) {
+		switch (type.id()) {
 		case LogicalTypeId::TINYINT:
 		case LogicalTypeId::SMALLINT:
 		case LogicalTypeId::INTEGER:
@@ -131,8 +129,7 @@ void DuckDBTypesFunction(ClientContext &context, const FunctionData *bind_data,
 }
 
 void DuckDBTypesFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("duckdb_types", {}, DuckDBTypesFunction,
-	                              DuckDBTypesBind, DuckDBTypesInit));
+	set.AddFunction(TableFunction("duckdb_types", {}, DuckDBTypesFunction, DuckDBTypesBind, DuckDBTypesInit));
 }
 
 } // namespace duckdb

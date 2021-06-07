@@ -16,11 +16,10 @@ struct DuckDBSchemasData : public FunctionOperatorData {
 };
 
 static unique_ptr<FunctionData> DuckDBSchemasBind(ClientContext &context, vector<Value> &inputs,
-                                                              unordered_map<string, Value> &named_parameters,
-                                                              vector<LogicalType> &input_table_types,
-                                                              vector<string> &input_table_names,
-                                                              vector<LogicalType> &return_types,
-                                                              vector<string> &names) {
+                                                  unordered_map<string, Value> &named_parameters,
+                                                  vector<LogicalType> &input_table_types,
+                                                  vector<string> &input_table_names, vector<LogicalType> &return_types,
+                                                  vector<string> &names) {
 	names.emplace_back("oid");
 	return_types.push_back(LogicalType::BIGINT);
 
@@ -37,8 +36,7 @@ static unique_ptr<FunctionData> DuckDBSchemasBind(ClientContext &context, vector
 }
 
 unique_ptr<FunctionOperatorData> DuckDBSchemasInit(ClientContext &context, const FunctionData *bind_data,
-                                                               const vector<column_t> &column_ids,
-                                                               TableFilterCollection *filters) {
+                                                   const vector<column_t> &column_ids, TableFilterCollection *filters) {
 	auto result = make_unique<DuckDBSchemasData>();
 
 	// scan all the schemas and collect them
@@ -50,8 +48,8 @@ unique_ptr<FunctionOperatorData> DuckDBSchemasInit(ClientContext &context, const
 	return move(result);
 }
 
-void DuckDBSchemasFunction(ClientContext &context, const FunctionData *bind_data,
-                                       FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+void DuckDBSchemasFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
+                           DataChunk *input, DataChunk &output) {
 	auto &data = (DuckDBSchemasData &)*operator_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
@@ -80,8 +78,7 @@ void DuckDBSchemasFunction(ClientContext &context, const FunctionData *bind_data
 }
 
 void DuckDBSchemasFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("duckdb_schemas", {}, DuckDBSchemasFunction,
-	                              DuckDBSchemasBind, DuckDBSchemasInit));
+	set.AddFunction(TableFunction("duckdb_schemas", {}, DuckDBSchemasFunction, DuckDBSchemasBind, DuckDBSchemasInit));
 }
 
 } // namespace duckdb
