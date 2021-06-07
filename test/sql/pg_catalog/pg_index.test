@@ -8,8 +8,6 @@ CREATE TABLE integers(i INTEGER, j INTEGER, k INTEGER)
 statement ok
 CREATE INDEX i_index ON integers((j + 1), k)
 
-mode output_result
-
 query IIIIII nosort pg_index
 SELECT * FROM pg_index
 
