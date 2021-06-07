@@ -40,6 +40,9 @@ static unique_ptr<FunctionData> DuckDBViewsBind(ClientContext &context, vector<V
 	names.emplace_back("temporary");
 	return_types.push_back(LogicalType::BOOLEAN);
 
+	names.emplace_back("column_count");
+	return_types.push_back(LogicalType::BIGINT);
+
 	names.emplace_back("sql");
 	return_types.push_back(LogicalType::VARCHAR);
 
@@ -94,8 +97,10 @@ void DuckDBViewsFunction(ClientContext &context, const FunctionData *bind_data,
 		output.SetValue(4, count, Value::BOOLEAN(view.internal));
 		// temporary, LogicalType::BOOLEAN
 		output.SetValue(5, count, Value::BOOLEAN(view.temporary));
+		// column_count, LogicalType::BIGINT
+		output.SetValue(6, count, Value::BIGINT(view.types.size()));
 		// sql, LogicalType::VARCHAR
-		output.SetValue(6, count, Value(view.ToSQL()));
+		output.SetValue(7, count, Value(view.ToSQL()));
 
 		count++;
 	}
