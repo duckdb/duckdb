@@ -22,6 +22,7 @@ void BuiltinFunctions::RegisterSQLiteFunctions() {
 
 	DuckDBSchemasFun::RegisterFunction(*this);
 	DuckDBDependenciesFun::RegisterFunction(*this);
+	DuckDBTablesFun::RegisterFunction(*this);
 }
 
 } // namespace duckdb
