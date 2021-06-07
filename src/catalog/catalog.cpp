@@ -153,9 +153,15 @@ void Catalog::DropEntry(ClientContext &context, DropInfo *info) {
 		DropSchema(context, info);
 	} else {
 		if (info->schema.empty()) {
-			// invalid schema: check if the entry is in the temp schema
-			auto entry = GetEntry(context, info->type, TEMP_SCHEMA, info->name, true);
-			info->schema = entry ? TEMP_SCHEMA : DEFAULT_SCHEMA;
+			// invalid schema: check the search path
+			info->schema = DEFAULT_SCHEMA;
+			for(idx_t i = 0; i < context.catalog_search_path.size(); i++) {
+				auto entry = GetEntry(context, info->type, context.catalog_search_path[i], info->name, true);
+				if (entry) {
+					info->schema = context.catalog_search_path[i];
+					break;
+				}
+			}
 		}
 		auto schema = GetSchema(context, info->schema);
 		schema->DropEntry(context, info);
@@ -184,14 +190,18 @@ void Catalog::ScanSchemas(ClientContext &context, std::function<void(CatalogEntr
 
 CatalogEntry *Catalog::GetEntry(ClientContext &context, CatalogType type, string schema_name, const string &name,
                                 bool if_exists, QueryErrorContext error_context) {
-	if (schema_name.empty()) {
-		// invalid schema: first search the temporary schema
-		auto entry = GetEntry(context, type, TEMP_SCHEMA, name, true);
-		if (entry) {
-			return entry;
+	if (schema_name == INVALID_SCHEMA) {
+		// no schema provided: check the catalog search path in order
+		if (context.catalog_search_path.empty()) {
+			throw InternalException("Empty catalog search path");
 		}
-		// if the entry does not exist in the temp schema, search in the default schema
 		schema_name = DEFAULT_SCHEMA;
+		for(idx_t i = 0; i < context.catalog_search_path.size(); i++) {
+			auto entry = GetEntry(context, type, context.catalog_search_path[i], name, true);
+			if (entry) {
+				return entry;
+			}
+		}
 	}
 	auto schema = GetSchema(context, schema_name, error_context);
 	return schema->GetEntry(context, type, name, if_exists, error_context);
@@ -273,14 +283,15 @@ void Catalog::Alter(ClientContext &context, AlterInfo *info) {
 	ModifyCatalog();
 	if (info->schema.empty()) {
 		auto catalog_type = info->GetCatalogType();
-		// invalid schema: first search the temporary schema
-		auto entry = GetEntry(context, catalog_type, TEMP_SCHEMA, info->name, true);
-		if (entry) {
-			// entry exists in temp schema: alter there
-			info->schema = TEMP_SCHEMA;
-		} else {
-			// if the entry does not exist in the temp schema, search in the default schema
-			info->schema = DEFAULT_SCHEMA;
+		// invalid schema: search the catalog search path
+		info->schema = DEFAULT_SCHEMA;
+		for(idx_t i = 0; i < context.catalog_search_path.size(); i++) {
+			auto entry = GetEntry(context, catalog_type, context.catalog_search_path[i], info->name, true);
+			if (entry) {
+				// entry exists in this schema: alter there
+				info->schema = context.catalog_search_path[i];
+				break;
+			}
 		}
 	}
 	auto schema = GetSchema(context, info->schema);

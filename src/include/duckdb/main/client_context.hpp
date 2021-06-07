@@ -89,6 +89,9 @@ public:
 	//! The random generator used by random(). Its seed value can be set by setseed().
 	std::mt19937 random_engine;
 
+	//! The schema search path, in order by which entries are searched if no schema entry is provided
+	vector<string> catalog_search_path = { TEMP_SCHEMA, DEFAULT_SCHEMA, "pg_catalog" };
+
 public:
 	DUCKDB_API Transaction &ActiveTransaction() {
 		return transaction.ActiveTransaction();
