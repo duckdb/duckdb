@@ -34,6 +34,9 @@ static unique_ptr<FunctionData> DuckDBViewsBind(ClientContext &context, vector<V
 	names.emplace_back("view_oid");
 	return_types.push_back(LogicalType::BIGINT);
 
+	names.emplace_back("internal");
+	return_types.push_back(LogicalType::BOOLEAN);
+
 	names.emplace_back("temporary");
 	return_types.push_back(LogicalType::BOOLEAN);
 
@@ -87,10 +90,12 @@ void DuckDBViewsFunction(ClientContext &context, const FunctionData *bind_data,
 		output.SetValue(2, count, Value(view.name));
 		// view_oid, LogicalType::BIGINT
 		output.SetValue(3, count, Value::BIGINT(view.oid));
+		// internal, LogicalType::BOOLEAN
+		output.SetValue(4, count, Value::BOOLEAN(view.internal));
 		// temporary, LogicalType::BOOLEAN
-		output.SetValue(4, count, Value::BOOLEAN(view.temporary));
+		output.SetValue(5, count, Value::BOOLEAN(view.temporary));
 		// sql, LogicalType::VARCHAR
-		output.SetValue(5, count, Value(view.ToSQL()));
+		output.SetValue(6, count, Value(view.ToSQL()));
 
 		count++;
 	}

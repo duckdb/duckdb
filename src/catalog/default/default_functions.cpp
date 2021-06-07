@@ -102,4 +102,12 @@ unique_ptr<CatalogEntry> DefaultFunctionGenerator::CreateDefaultEntry(ClientCont
 	return nullptr;
 }
 
+vector<string> DefaultFunctionGenerator::GetDefaultEntries() {
+	vector<string> result;
+	for (idx_t index = 0; internal_macros[index].name != nullptr; index++) {
+		result.push_back(internal_macros[index].name);
+	}
+	return result;
+}
+
 } // namespace duckdb

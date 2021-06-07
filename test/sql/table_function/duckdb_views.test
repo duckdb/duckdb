@@ -3,7 +3,7 @@
 # group: [table_function]
 
 query I
-SELECT COUNT(*) FROM duckdb_views();
+SELECT COUNT(*) FROM duckdb_views;
 ----
 0
 
@@ -20,7 +20,14 @@ statement ok
 CREATE VIEW myschema.v2 AS SELECT 42;
 
 query III
-SELECT schema_name, view_name, temporary FROM duckdb_views() ORDER BY view_name;
+SELECT schema_name, view_name, temporary FROM duckdb_views() WHERE NOT internal ORDER BY view_name;
+----
+main	v1	False
+myschema	v2	False
+temp	v2	True
+
+query III
+SELECT schema_name, view_name, temporary FROM duckdb_views ORDER BY view_name;
 ----
 main	v1	False
 myschema	v2	False

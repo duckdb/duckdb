@@ -58,7 +58,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 
 	// gather a list of all the tables
 	vector<TableCatalogEntry *> tables;
-	Catalog::GetCatalog(context).schemas->Scan(context, [&](CatalogEntry *entry) {
+	catalog.schemas->Scan(context, [&](CatalogEntry *entry) {
 		auto schema = (SchemaCatalogEntry *)entry;
 		schema->Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) {
 			if (entry->type == CatalogType::TABLE_ENTRY) {

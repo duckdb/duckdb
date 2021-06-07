@@ -28,4 +28,13 @@ unique_ptr<CatalogEntry> DefaultSchemaGenerator::CreateDefaultEntry(ClientContex
 	return nullptr;
 }
 
+vector<string> DefaultSchemaGenerator::GetDefaultEntries() {
+	vector<string> result;
+	for (idx_t index = 0; internal_schemas[index].name != nullptr; index++) {
+		result.push_back(internal_schemas[index].name);
+	}
+	return result;
+}
+
+
 } // namespace duckdb

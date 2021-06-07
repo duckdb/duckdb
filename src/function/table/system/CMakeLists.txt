@@ -3,6 +3,7 @@ add_library_unity(
   OBJECT
   duckdb_dependencies.cpp
   duckdb_schemas.cpp
+  duckdb_sequences.cpp
   duckdb_tables.cpp
   duckdb_views.cpp
   pragma_collations.cpp

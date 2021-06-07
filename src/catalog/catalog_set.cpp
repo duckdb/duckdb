@@ -351,6 +351,19 @@ string CatalogSet::SimilarEntry(ClientContext &context, const string &name) {
 	return result;
 }
 
+CatalogEntry *CatalogSet::CreateEntryInternal(ClientContext &context, unique_ptr<CatalogEntry> entry) {
+	auto &name = entry->name;
+	auto entry_index = current_entry++;
+	auto catalog_entry = entry.get();
+
+	entry->timestamp = 0;
+
+	PutMapping(context, name, entry_index);
+	mapping[name]->timestamp = 0;
+	entries[entry_index] = move(entry);
+	return catalog_entry;
+}
+
 CatalogEntry *CatalogSet::GetEntry(ClientContext &context, const string &name) {
 	lock_guard<mutex> lock(catalog_lock);
 
@@ -362,16 +375,8 @@ CatalogEntry *CatalogSet::GetEntry(ClientContext &context, const string &name) {
 			// check if there is a default entry that we can create with this name
 			auto entry = defaults->CreateDefaultEntry(context, name);
 			if (entry) {
-				// there is a default entry!
-				auto entry_index = current_entry++;
-				auto catalog_entry = entry.get();
-
-				entry->timestamp = 0;
-
-				PutMapping(context, name, entry_index);
-				mapping[name]->timestamp = 0;
-				entries[entry_index] = move(entry);
-				return catalog_entry;
+				// there is a default entry! create it
+				return CreateEntryInternal(context, move(entry));
 			}
 		}
 		return nullptr;
@@ -445,6 +450,42 @@ void CatalogSet::Undo(CatalogEntry *entry) {
 	}
 	// we mark the catalog as being modified, since this action can lead to e.g. tables being dropped
 	entry->catalog->ModifyCatalog();
+}
+
+void CatalogSet::Scan(ClientContext &context, std::function<void(CatalogEntry*)> callback) {
+	// lock the catalog set
+	lock_guard<mutex> lock(catalog_lock);
+	if (defaults) {
+		// this catalog set has a default set defined:
+		auto default_entries = defaults->GetDefaultEntries();
+		for(auto &default_entry : default_entries) {
+			auto map_entry = mapping.find(default_entry);
+			if (map_entry == mapping.end()) {
+				auto entry = defaults->CreateDefaultEntry(context, default_entry);
+				CreateEntryInternal(context, move(entry));
+			}
+		}
+		defaults.reset();
+	}
+	for (auto &kv : entries) {
+		auto entry = kv.second.get();
+		entry = GetEntryForTransaction(context, entry);
+		if (!entry->deleted) {
+			callback(entry);
+		}
+	}
+}
+
+void CatalogSet::Scan(std::function<void(CatalogEntry*)> callback) {
+	// lock the catalog set
+	lock_guard<mutex> lock(catalog_lock);
+	for (auto &kv : entries) {
+		auto entry = kv.second.get();
+		entry = GetCommittedEntry(entry);
+		if (!entry->deleted) {
+			callback(entry);
+		}
+	}
 }
 
 } // namespace duckdb

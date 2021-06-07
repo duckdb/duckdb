@@ -37,6 +37,9 @@ static unique_ptr<FunctionData> DuckDBTablesBind(ClientContext &context, vector<
 	names.emplace_back("table_oid");
 	return_types.push_back(LogicalType::BIGINT);
 
+	names.emplace_back("internal");
+	return_types.push_back(LogicalType::BOOLEAN);
+
 	names.emplace_back("temporary");
 	return_types.push_back(LogicalType::BOOLEAN);
 
@@ -126,20 +129,22 @@ void DuckDBTablesFunction(ClientContext &context, const FunctionData *bind_data,
 		output.SetValue(2, count, Value(table.name));
 		// table_oid, LogicalType::BIGINT
 		output.SetValue(3, count, Value::BIGINT(table.oid));
+		// internal, LogicalType::BOOLEAN
+		output.SetValue(4, count, Value::BOOLEAN(table.internal));
 		// temporary, LogicalType::BOOLEAN
-		output.SetValue(4, count, Value::BOOLEAN(table.temporary));
+		output.SetValue(5, count, Value::BOOLEAN(table.temporary));
 		// has_primary_key, LogicalType::BOOLEAN
-		output.SetValue(5, count, Value::BOOLEAN(TableHasPrimaryKey(table)));
+		output.SetValue(6, count, Value::BOOLEAN(TableHasPrimaryKey(table)));
 		// estimated_size, LogicalType::BIGINT
-		output.SetValue(6, count, Value::BIGINT(table.storage->info->cardinality.load()));
+		output.SetValue(7, count, Value::BIGINT(table.storage->info->cardinality.load()));
 		// column_count, LogicalType::BIGINT
-		output.SetValue(7, count, Value::BIGINT(table.columns.size()));
+		output.SetValue(8, count, Value::BIGINT(table.columns.size()));
 		// index_count, LogicalType::BIGINT
-		output.SetValue(8, count, Value::BIGINT(table.storage->info->indexes.Count()));
+		output.SetValue(9, count, Value::BIGINT(table.storage->info->indexes.Count()));
 		// check_constraint_count, LogicalType::BIGINT
-		output.SetValue(9, count, Value::BIGINT(CheckConstraintCount(table)));
+		output.SetValue(10, count, Value::BIGINT(CheckConstraintCount(table)));
 		// sql, LogicalType::VARCHAR
-		output.SetValue(10, count, Value(table.ToSQL()));
+		output.SetValue(11, count, Value(table.ToSQL()));
 
 		count++;
 	}

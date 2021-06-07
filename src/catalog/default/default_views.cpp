@@ -19,15 +19,21 @@ static DefaultView internal_views[] = {
     {DEFAULT_SCHEMA, "sqlite_schema", "SELECT * FROM sqlite_master()"},
     {DEFAULT_SCHEMA, "sqlite_temp_master", "SELECT * FROM sqlite_master()"},
     {DEFAULT_SCHEMA, "sqlite_temp_schema", "SELECT * FROM sqlite_master()"},
+    {DEFAULT_SCHEMA, "duckdb_tables", "SELECT * FROM duckdb_tables() WHERE NOT internal"},
+    {DEFAULT_SCHEMA, "duckdb_views", "SELECT * FROM duckdb_views() WHERE NOT internal"},
     {DEFAULT_SCHEMA, "pg_class", "SELECT * FROM pg_catalog.pg_class"},
     {DEFAULT_SCHEMA, "pg_depend", "SELECT * FROM pg_catalog.pg_depend"},
     {DEFAULT_SCHEMA, "pg_namespace", "SELECT * FROM pg_catalog.pg_namespace"},
+    {DEFAULT_SCHEMA, "pg_sequence", "SELECT * FROM pg_catalog.pg_sequence"},
+    {DEFAULT_SCHEMA, "pg_sequences", "SELECT * FROM pg_catalog.pg_sequences"},
     {DEFAULT_SCHEMA, "pg_tables", "SELECT * FROM pg_catalog.pg_tables"},
     {DEFAULT_SCHEMA, "pg_tablespace", "SELECT * FROM pg_catalog.pg_tablespace"},
     {DEFAULT_SCHEMA, "pg_views", "SELECT * FROM pg_catalog.pg_views"},
     {"pg_catalog", "pg_class", "SELECT table_name relname, schema_oid relnamespace, 0 reltype, 0 reloftype, 0 relowner, 0 relam, 0 relfilenode, 0 reltablespace, 0 relpages, estimated_size::real reltuples, 0 reltoastrelid, 0 reltoastidxid, index_count > 0 relhasindex, false relisshared, case when temporary then 't' else 'p' end relpersistence, 'r' relkind, column_count relnatts, check_constraint_count relchecks, false relhasoids, has_primary_key relhaspkey, false relhasrules, false relhastriggers, false relhassubclass, 0 relfrozenxid, NULL relacl, NULL reloptions FROM duckdb_tables()"},
     {"pg_catalog", "pg_depend", "SELECT * FROM duckdb_dependencies()"},
     {"pg_catalog", "pg_namespace", "SELECT id oid, schema_name nspname, 0 nspowner, NULL nspacl FROM duckdb_schemas()"},
+    {"pg_catalog", "pg_sequence", "SELECT sequence_oid seqrelid, 0 seqtypid, start_value seqstart, increment_by seqincrement, max_value seqmax, min_value seqmin, 0 seqcache, cycle seqcycle FROM duckdb_sequences()"},
+	{"pg_catalog", "pg_sequences", "SELECT schema_name schemaname, sequence_name sequencename, 'duckdb' sequenceowner, 0 data_type, start_value, min_value, max_value, increment_by, cycle, 0 cache_size, last_value FROM duckdb_sequences()"},
     {"pg_catalog", "pg_tables", "SELECT schema_name schemaname, table_name tablename, 'duckdb' tableowner, NULL \"tablespace\", index_count > 0 hasindexes, false hasrules, false hastriggers FROM duckdb_tables()"},
     {"pg_catalog", "pg_tablespace", "SELECT 0 oid, 'pg_default' spcname, 0 spcowner, NULL spcacl, NULL spcoptions"},
     {"pg_catalog", "pg_views", "SELECT schema_name schemaname, view_name viewname, 'duckdb' viewowner, sql definition FROM duckdb_views()"},
@@ -69,6 +75,17 @@ unique_ptr<CatalogEntry> DefaultViewGenerator::CreateDefaultEntry(ClientContext 
 		return make_unique_base<CatalogEntry, ViewCatalogEntry>(&catalog, schema, info.get());
 	}
 	return nullptr;
+}
+
+vector<string> DefaultViewGenerator::GetDefaultEntries() {
+	vector<string> result;
+	for (idx_t index = 0; internal_views[index].name != nullptr; index++) {
+		if (internal_views[index].schema == schema->name) {
+			result.push_back(internal_views[index].name);
+		}
+	}
+	return result;
+
 }
 
 } // namespace duckdb
