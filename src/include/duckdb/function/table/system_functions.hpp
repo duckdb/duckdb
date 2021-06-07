@@ -60,6 +60,10 @@ struct DuckDBColumnsFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct DuckDBConstraintsFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct DuckDBDependenciesFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };

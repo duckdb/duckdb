@@ -21,6 +21,7 @@ void BuiltinFunctions::RegisterSQLiteFunctions() {
 	PragmaDetailedProfilingOutput::RegisterFunction(*this);
 
 	DuckDBColumnsFun::RegisterFunction(*this);
+	DuckDBConstraintsFun::RegisterFunction(*this);
 	DuckDBSchemasFun::RegisterFunction(*this);
 	DuckDBDependenciesFun::RegisterFunction(*this);
 	DuckDBSequencesFun::RegisterFunction(*this);
