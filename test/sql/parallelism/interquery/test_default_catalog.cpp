@@ -25,7 +25,7 @@ public:
 		}
 	}
 
-	static void QueryDefaultCatalog(DuckDB *db, bool *read_correct) {
+	static void QueryDefaultCatalog(DuckDB *db, bool *read_correct, int thread_id) {
 		vector<string> random_default_views {
 			"pragma_database_list",
 			"sqlite_master",
@@ -44,7 +44,7 @@ public:
 		Connection con(*db);
 		*read_correct = true;
 		for(idx_t i = 0; i < CONCURRENT_DEFAULT_ITERATION_COUNT; i++) {
-			auto result = con.Query("SELECT * FROM " + random_default_views[rand() % random_default_views.size()]);
+			auto result = con.Query("SELECT * FROM " + random_default_views[uint64_t(i + thread_id * 98492849238523987) % random_default_views.size()]);
 			if (!result->success) {
 				*read_correct = false;
 			}
@@ -66,7 +66,7 @@ TEST_CASE("Concurrent default catalog using Scan", "[interquery][.]") {
 	bool correct[ConcurrentDefaultCatalog::CONCURRENT_DEFAULT_THREAD_COUNT];
 	thread threads[ConcurrentDefaultCatalog::CONCURRENT_DEFAULT_THREAD_COUNT];
 	for (size_t i = 0; i < ConcurrentDefaultCatalog::CONCURRENT_DEFAULT_THREAD_COUNT; i++) {
-		threads[i] = thread(ConcurrentDefaultCatalog::ScanDefaultCatalog, &db, correct);
+		threads[i] = thread(ConcurrentDefaultCatalog::ScanDefaultCatalog, &db, correct + i);
 	}
 
 	for (size_t i = 0; i < ConcurrentDefaultCatalog::CONCURRENT_DEFAULT_THREAD_COUNT; i++) {
@@ -89,7 +89,7 @@ TEST_CASE("Concurrent default catalog using Queries", "[interquery][.]") {
 	bool correct[ConcurrentDefaultCatalog::CONCURRENT_DEFAULT_THREAD_COUNT];
 	thread threads[ConcurrentDefaultCatalog::CONCURRENT_DEFAULT_THREAD_COUNT];
 	for (size_t i = 0; i < ConcurrentDefaultCatalog::CONCURRENT_DEFAULT_THREAD_COUNT; i++) {
-		threads[i] = thread(ConcurrentDefaultCatalog::QueryDefaultCatalog, &db, correct);
+		threads[i] = thread(ConcurrentDefaultCatalog::QueryDefaultCatalog, &db, correct + i, i);
 	}
 
 	for (size_t i = 0; i < ConcurrentDefaultCatalog::CONCURRENT_DEFAULT_THREAD_COUNT; i++) {
