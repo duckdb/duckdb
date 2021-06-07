@@ -97,7 +97,7 @@ jobs:
     - name: Build
       run: |
         python scripts/windows_ci.py
-        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_REST=1 -DJDBC_DRIVER=1
+        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_REST=1 -DJDBC_DRIVER=1 -DBUILD_VISUALIZER_EXTENSION=1
         cmake --build . --config Release
 
     - name: Test
@@ -144,7 +144,7 @@ jobs:
 
     - name: Build
       run: |
-        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=Win32 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DJDBC_DRIVER=1
+        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=Win32 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DJDBC_DRIVER=1 -DBUILD_VISUALIZER_EXTENSION=1
         cmake --build . --config Release
 
     - name: Test
@@ -205,6 +205,7 @@ jobs:
     needs: linux-debug
 
     env:
+      BUILD_VISUALIZER: 1
       BUILD_ICU: 1
       BUILD_TPCH: 1
       BUILD_FTS: 1
@@ -290,6 +291,7 @@ jobs:
 
     env:
       GEN: ninja
+      BUILD_VISUALIZER: 1
       BUILD_BENCHMARK: 1
       BUILD_ICU: 1
       BUILD_TPCH: 1
@@ -500,6 +502,7 @@ jobs:
       BUILD_ICU: 1
       BUILD_TPCH: 1
       BUILD_FTS: 1
+      BUILD_VISUALIZER: 1
 
     steps:
     - uses: actions/checkout@v2
@@ -529,6 +532,7 @@ jobs:
       BUILD_PARQUET: 1
       BUILD_TPCH: 1
       BUILD_FTS: 1
+      BUILD_VISUALIZER: 1
 
     steps:
     - uses: actions/checkout@v2
@@ -557,6 +561,7 @@ jobs:
       BUILD_ICU: 1
       BUILD_TPCH: 1
       BUILD_FTS: 1
+      BUILD_VISUALIZER: 1
       TSAN_OPTIONS: suppressions=.sanitizer-thread-suppressions.txt
 
     steps:
