@@ -404,6 +404,7 @@ CatalogEntry *CatalogSet::GetEntry(ClientContext &context, const string &name) {
 	// we found a default entry, but failed
 	// this means somebody else created the entry first
 	// just retry?
+	lock.unlock();
 	return GetEntry(context, name);
 }
 
