@@ -61,6 +61,9 @@ static unique_ptr<FunctionData> DuckDBColumnsBind(ClientContext &context, vector
 	names.emplace_back("numeric_precision");
 	return_types.push_back(LogicalType::INTEGER);
 
+	names.emplace_back("numeric_precision_radix");
+	return_types.push_back(LogicalType::INTEGER);
+
 	names.emplace_back("numeric_scale");
 	return_types.push_back(LogicalType::INTEGER);
 
@@ -215,50 +218,61 @@ void ColumnHelper::WriteColumns(idx_t start_index, idx_t start_col, idx_t end_co
 			output.SetValue(10, index, Value());
 		}
 
-		Value numeric_precision, numeric_scale;
+		Value numeric_precision, numeric_scale, numeric_precision_radix;
 		switch (type.id()) {
 		case LogicalTypeId::DECIMAL:
 			numeric_precision = Value::INTEGER(type.width());
 			numeric_scale = Value::INTEGER(type.scale());
+			numeric_precision_radix = Value::INTEGER(10);
 			break;
 		case LogicalTypeId::HUGEINT:
 			numeric_precision = Value::INTEGER(128);
 			numeric_scale = Value::INTEGER(0);
+			numeric_precision_radix = Value::INTEGER(2);
 			break;
 		case LogicalTypeId::BIGINT:
 			numeric_precision = Value::INTEGER(64);
 			numeric_scale = Value::INTEGER(0);
+			numeric_precision_radix = Value::INTEGER(2);
 			break;
 		case LogicalTypeId::INTEGER:
 			numeric_precision = Value::INTEGER(32);
 			numeric_scale = Value::INTEGER(0);
+			numeric_precision_radix = Value::INTEGER(2);
 			break;
 		case LogicalTypeId::SMALLINT:
 			numeric_precision = Value::INTEGER(16);
 			numeric_scale = Value::INTEGER(0);
+			numeric_precision_radix = Value::INTEGER(2);
 			break;
 		case LogicalTypeId::TINYINT:
 			numeric_precision = Value::INTEGER(8);
 			numeric_scale = Value::INTEGER(0);
+			numeric_precision_radix = Value::INTEGER(2);
 			break;
 		case LogicalTypeId::FLOAT:
 			numeric_precision = Value::INTEGER(24);
 			numeric_scale = Value::INTEGER(0);
+			numeric_precision_radix = Value::INTEGER(2);
 			break;
 		case LogicalTypeId::DOUBLE:
 			numeric_precision = Value::INTEGER(53);
 			numeric_scale = Value::INTEGER(0);
+			numeric_precision_radix = Value::INTEGER(2);
 			break;
 		default:
 			numeric_precision = Value();
 			numeric_scale = Value();
+			numeric_precision_radix = Value();
 			break;
 		}
 
 		// numeric_precision, INTEGER
 		output.SetValue(11, index, numeric_precision);
+		// numeric_precision_radix, INTEGER
+		output.SetValue(12, index, numeric_precision_radix);
 		// numeric_scale, INTEGER
-		output.SetValue(12, index, numeric_scale);
+		output.SetValue(13, index, numeric_scale);
 	}
 }
 
