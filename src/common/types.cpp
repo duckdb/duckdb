@@ -165,7 +165,7 @@ const vector<LogicalType> LogicalType::ALL_TYPES = {
     LogicalType::BOOLEAN,   LogicalType::TINYINT,   LogicalType::SMALLINT, LogicalType::INTEGER, LogicalType::BIGINT,
     LogicalType::DATE,      LogicalType::TIMESTAMP, LogicalType::DOUBLE,   LogicalType::FLOAT,   LogicalType::VARCHAR,
     LogicalType::BLOB,      LogicalType::INTERVAL,  LogicalType::HUGEINT,  LogicalType::DECIMAL, LogicalType::UTINYINT,
-    LogicalType::USMALLINT, LogicalType::UINTEGER,  LogicalType::UBIGINT};
+    LogicalType::USMALLINT, LogicalType::UINTEGER,  LogicalType::UBIGINT, LogicalType::TIME};
 // TODO add LIST/STRUCT here
 
 const LogicalType LOGICAL_ROW_TYPE = LogicalType::BIGINT;

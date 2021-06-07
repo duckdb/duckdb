@@ -44,6 +44,9 @@ static unique_ptr<FunctionData> DuckDBIndexesBind(ClientContext &context, vector
 	names.emplace_back("is_unique");
 	return_types.push_back(LogicalType::BOOLEAN);
 
+	names.emplace_back("is_primary");
+	return_types.push_back(LogicalType::BOOLEAN);
+
 	names.emplace_back("expressions");
 	return_types.push_back(LogicalType::VARCHAR);
 
@@ -101,12 +104,14 @@ void DuckDBIndexesFunction(ClientContext &context, const FunctionData *bind_data
 		auto &catalog = Catalog::GetCatalog(context);
 		auto table_entry = catalog.GetEntry(context, CatalogType::TABLE_ENTRY, index.info->schema, index.info->table);
 		output.SetValue(5, count, Value::BIGINT(table_entry->oid));
-		// unique, BOOLEAN
+		// is_unique, BOOLEAN
 		output.SetValue(6, count, Value::BOOLEAN(index.index->is_unique));
+		// is_primary, BOOLEAN
+		output.SetValue(7, count, Value::BOOLEAN(index.index->is_primary));
 		// expressions, VARCHAR
-		output.SetValue(7, count, Value());
+		output.SetValue(8, count, Value());
 		// sql, VARCHAR
-		output.SetValue(8, count, Value(index.ToSQL()));
+		output.SetValue(9, count, Value(index.ToSQL()));
 
 		count++;
 	}

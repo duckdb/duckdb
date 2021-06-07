@@ -59,7 +59,7 @@ static DefaultMacro internal_macros[] = {
 	{"pg_catalog", "pg_get_viewdef", {"oid", nullptr}, "(select sql from duckdb_views() v where v.view_oid=oid)"},
 	{"pg_catalog", "pg_get_constraintdef", {"constraint_oid", "pretty_bool", nullptr}, "(select constraint_text from duckdb_constraints() d_constraint where d_constraint.table_oid=constraint_oid/1000000 and d_constraint.constraint_index=constraint_oid%1000000)"},
 	{"pg_catalog", "pg_get_expr", {"pg_node_tree", "relation_oid", nullptr}, "pg_node_tree"},
-	{"pg_catalog", "format_type", {"type_oid", "typemod", nullptr}, "(select type_name from duckdb_types() t where t.type_oid=type_oid)"},
+	{"pg_catalog", "format_type", {"type_oid", "typemod", nullptr}, "(select case when type_name='FLOAT' then 'real' when type_name='DOUBLE' then 'double precision' when type_name='DECIMAL' then 'numeric' when type_name='VARCHAR' then 'character varying' when type_name='BLOB' then 'bytea' when type_name='TIMESTAMP' then 'timestamp without time zone' when type_name='TIME' then 'time without time zone' else lower(type_name) end from duckdb_types() t where t.type_oid=type_oid) || case when typemod>0 then concat('(', typemod/1000, ',', typemod%1000, ')') else '' end"},
 
 	{"pg_catalog", "pg_has_role", {"user", "role", "privilege", nullptr}, "true"},  //boolean  //does user have privilege for role
 	{"pg_catalog", "pg_has_role", {"role", "privilege", nullptr}, "true"},  //boolean  //does current user have privilege for role
@@ -67,6 +67,20 @@ static DefaultMacro internal_macros[] = {
 	{"pg_catalog", "col_description", {"table_oid", "column_number", nullptr}, "NULL"},   // get comment for a table column
 	{"pg_catalog", "obj_description", {"object_oid", "catalog_name", nullptr}, "NULL"},   // get comment for a database object
 	{"pg_catalog", "shobj_description", {"object_oid", "catalog_name", nullptr}, "NULL"}, // get comment for a shared database object
+
+	// visibility functions
+	{"pg_catalog", "pg_collation_is_visible", {"collation_oid", nullptr}, "true"},
+	{"pg_catalog", "pg_conversion_is_visible", {"conversion_oid", nullptr}, "true"},
+	{"pg_catalog", "pg_function_is_visible", {"function_oid", nullptr}, "true"},
+	{"pg_catalog", "pg_opclass_is_visible", {"opclass_oid", nullptr}, "true"},
+	{"pg_catalog", "pg_operator_is_visible", {"operator_oid", nullptr}, "true"},
+	{"pg_catalog", "pg_opfamily_is_visible", {"opclass_oid", nullptr}, "true"},
+	{"pg_catalog", "pg_table_is_visible", {"table_oid", nullptr}, "true"},
+	{"pg_catalog", "pg_ts_config_is_visible", {"config_oid", nullptr}, "true"},
+	{"pg_catalog", "pg_ts_dict_is_visible", {"dict_oid", nullptr}, "true"},
+	{"pg_catalog", "pg_ts_parser_is_visible", {"parser_oid", nullptr}, "true"},
+	{"pg_catalog", "pg_ts_template_is_visible", {"template_oid", nullptr}, "true"},
+	{"pg_catalog", "pg_type_is_visible", {"type_oid", nullptr}, "true"},
 
 	{DEFAULT_SCHEMA, "nullif", {"a", "b", nullptr}, "CASE WHEN a=b THEN NULL ELSE a END"},
                                          {nullptr, nullptr, {nullptr}, nullptr}};

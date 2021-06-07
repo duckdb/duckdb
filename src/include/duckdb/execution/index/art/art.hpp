@@ -65,7 +65,7 @@ struct ARTIndexScanState : public IndexScanState {
 class ART : public Index {
 public:
 	ART(const vector<column_t> &column_ids, const vector<unique_ptr<Expression>> &unbound_expressions,
-	    bool is_unique = false);
+	    bool is_unique = false, bool is_primary = false);
 	~ART() override;
 
 	//! Root of the tree
