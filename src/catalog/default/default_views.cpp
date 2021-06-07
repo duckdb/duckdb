@@ -19,6 +19,7 @@ static DefaultView internal_views[] = {
     {DEFAULT_SCHEMA, "sqlite_schema", "SELECT * FROM sqlite_master()"},
     {DEFAULT_SCHEMA, "sqlite_temp_master", "SELECT * FROM sqlite_master()"},
     {DEFAULT_SCHEMA, "sqlite_temp_schema", "SELECT * FROM sqlite_master()"},
+    {DEFAULT_SCHEMA, "duckdb_schemas", "SELECT * FROM duckdb_schemas() WHERE NOT internal"},
     {DEFAULT_SCHEMA, "duckdb_tables", "SELECT * FROM duckdb_tables() WHERE NOT internal"},
     {DEFAULT_SCHEMA, "duckdb_views", "SELECT * FROM duckdb_views() WHERE NOT internal"},
     {DEFAULT_SCHEMA, "pg_class", "SELECT * FROM pg_catalog.pg_class"},

@@ -2,16 +2,20 @@
 # description: Test duckdb_schemas function
 # group: [table_function]
 
-# main and temp schemas
 query I
-SELECT COUNT(*) FROM duckdb_schemas();
+SELECT COUNT(*) FROM duckdb_schemas;
 ----
-2
+0
 
 statement ok
 CREATE SCHEMA scheme;
 
 query I
 SELECT COUNT(*) FROM duckdb_schemas() WHERE schema_name='scheme';
+----
+1
+
+query I
+SELECT COUNT(*) FROM duckdb_schemas WHERE schema_name='scheme';
 ----
 1

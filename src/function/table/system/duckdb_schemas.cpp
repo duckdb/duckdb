@@ -21,28 +21,16 @@ static unique_ptr<FunctionData> DuckDBSchemasBind(ClientContext &context, vector
                                                               vector<string> &input_table_names,
                                                               vector<LogicalType> &return_types,
                                                               vector<string> &names) {
-	names.emplace_back("id");
+	names.emplace_back("oid");
 	return_types.push_back(LogicalType::BIGINT);
-
-	names.emplace_back("catalog_name");
-	return_types.push_back(LogicalType::VARCHAR);
 
 	names.emplace_back("schema_name");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.emplace_back("schema_owner");
-	return_types.push_back(LogicalType::VARCHAR);
+	names.emplace_back("internal");
+	return_types.push_back(LogicalType::BOOLEAN);
 
-	names.emplace_back("default_character_set_catalog");
-	return_types.push_back(LogicalType::VARCHAR);
-
-	names.emplace_back("default_character_set_schema");
-	return_types.push_back(LogicalType::VARCHAR);
-
-	names.emplace_back("default_character_set_name");
-	return_types.push_back(LogicalType::VARCHAR);
-
-	names.emplace_back("sql_path");
+	names.emplace_back("sql");
 	return_types.push_back(LogicalType::VARCHAR);
 
 	return nullptr;
@@ -76,22 +64,14 @@ void DuckDBSchemasFunction(ClientContext &context, const FunctionData *bind_data
 		auto &entry = data.entries[data.offset];
 
 		// return values:
-		// "id", PhysicalType::BIGINT
+		// "oid", PhysicalType::BIGINT
 		output.SetValue(0, count, Value::BIGINT(entry->oid));
-		// "catalog_name", PhysicalType::VARCHAR
-		output.SetValue(1, count, Value());
 		// "schema_name", PhysicalType::VARCHAR
-		output.SetValue(2, count, Value(entry->name));
-		// "schema_owner", PhysicalType::VARCHAR
+		output.SetValue(1, count, Value(entry->name));
+		// "internal", PhysicalType::BOOLEAN
+		output.SetValue(2, count, Value::BOOLEAN(entry->internal));
+		// "sql", PhysicalType::VARCHAR
 		output.SetValue(3, count, Value());
-		// "default_character_set_catalog", PhysicalType::VARCHAR
-		output.SetValue(4, count, Value());
-		// "default_character_set_schema", PhysicalType::VARCHAR
-		output.SetValue(5, count, Value());
-		// "default_character_set_name", PhysicalType::VARCHAR
-		output.SetValue(6, count, Value());
-		// "sql_path", PhysicalType::VARCHAR
-		output.SetValue(7, count, Value());
 
 		data.offset++;
 		count++;
