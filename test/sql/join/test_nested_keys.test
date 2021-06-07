@@ -1,0 +1,178 @@
+# name: test/sql/join/test_nested_payloads.test
+# description: Test join with nested types for the keys
+# group: [join]
+
+statement ok
+PRAGMA enable_verification
+
+# Key is LIST<INTEGER>
+statement ok
+CREATE VIEW intlistdim AS SELECT * FROM (VALUES
+	([1]),
+	([NULL]),
+	([]),
+	([9,10,11]),
+	(NULL)
+	) lv(pk);
+
+statement ok
+CREATE VIEW intlists AS SELECT * FROM (VALUES
+	(1, [1]),
+	(2, [NULL]),
+	(3, []),
+	(4, [2, 3]),
+	(5, [9,10,11]),
+	(NULL::INTEGER, [13])
+	) lv(i, fk);
+
+query III
+SELECT i, pk, fk FROM intlistdim, intlists WHERE pk = fk ORDER BY i
+----
+1	[1]	[1]
+2	[NULL]	[NULL]
+3	[]	[]
+5	[9, 10, 11]	[9, 10, 11]
+
+query III
+SELECT i, pk, fk FROM intlistdim LEFT OUTER JOIN intlists ON intlistdim.pk=intlists.fk ORDER BY i
+----
+NULL	NULL	NULL
+1	[1]	[1]
+2	[NULL]	[NULL]
+3	[]	[]
+5	[9, 10, 11]	[9, 10, 11]
+
+query III
+SELECT i, pk, fk FROM intlists RIGHT OUTER JOIN intlistdim ON intlistdim.pk=intlists.fk ORDER BY i
+----
+NULL	NULL	NULL
+1	[1]	[1]
+2	[NULL]	[NULL]
+3	[]	[]
+5	[9, 10, 11]	[9, 10, 11]
+
+query III
+SELECT i, pk, fk FROM intlistdim FULL OUTER JOIN intlists ON intlistdim.pk=intlists.fk ORDER BY i
+----
+NULL	NULL	NULL
+NULL	NULL	[13]
+1	[1]	[1]
+2	[NULL]	[NULL]
+3	[]	[]
+4	NULL	[2, 3]
+5	[9, 10, 11]	[9, 10, 11]
+
+# Key is LIST<VARCHAR>
+statement ok
+CREATE VIEW strlistdim AS SELECT * FROM (VALUES
+	(['a']),
+	([NULL]),
+	([]),
+	(['i','j','k']),
+	(NULL)
+	) lv(pk);
+
+statement ok
+CREATE VIEW strlists AS SELECT * FROM (VALUES
+	(1, ['a']),
+	(2, [NULL]),
+	(3, []),
+	(4, ['b', 'c']),
+	(5, ['i','j','k']),
+	(NULL::INTEGER, ['m'])
+	) lv(i, fk);
+
+query III
+SELECT i, pk, fk FROM strlistdim, strlists WHERE pk = fk ORDER BY i
+----
+1	[a]	[a]
+2	[NULL]	[NULL]
+3	[]	[]
+5	[i, j, k]	[i, j, k]
+
+query III
+SELECT i, pk, fk FROM strlistdim LEFT OUTER JOIN strlists ON strlistdim.pk=strlists.fk ORDER BY i
+----
+NULL	NULL	NULL
+1	[a]	[a]
+2	[NULL]	[NULL]
+3	[]	[]
+5	[i, j, k]	[i, j, k]
+
+query III
+SELECT i, pk, fk FROM strlists RIGHT OUTER JOIN strlistdim ON strlistdim.pk=strlists.fk ORDER BY i
+----
+NULL	NULL	NULL
+1	[a]	[a]
+2	[NULL]	[NULL]
+3	[]	[]
+5	[i, j, k]	[i, j, k]
+
+query III
+SELECT i, pk, fk FROM strlistdim FULL OUTER JOIN strlists ON strlistdim.pk=strlists.fk ORDER BY i
+----
+NULL	NULL	NULL
+NULL	NULL	[m]
+1	[a]	[a]
+2	[NULL]	[NULL]
+3	[]	[]
+4	NULL	[b, c]
+5	[i, j, k]	[i, j, k]
+
+# Key is STRUCT<INTEGER, VARCHAR>
+statement ok
+CREATE VIEW structdim AS SELECT * FROM (VALUES
+	({'a': 1, 'b': 'a'}),
+	({'a': NULL, 'b': NULL}),
+	({'a': 0, 'b': ''}),
+	({'a': 9, 'b': 'i'}),
+	(NULL)
+	) sd(pk);
+
+statement ok
+CREATE VIEW structs AS SELECT * FROM (VALUES
+	(1, {'a': 1, 'b': 'a'}),
+	(2, {'a': NULL, 'b': NULL}),
+	(3, {'a': 0, 'b': ''}),
+	(4, {'a': 2, 'b': 'c'}),
+	(5, {'a': 9, 'b': 'i'}),
+	(NULL::INTEGER, {'a': 13, 'b': 'm'})
+	) sv(i, fk);
+
+query III
+SELECT i, pk, fk FROM structdim, structs WHERE pk = fk ORDER BY i
+----
+1	{'a': 1, 'b': a}	{'a': 1, 'b': a}
+2	{'a': NULL, 'b': NULL}	{'a': NULL, 'b': NULL}
+3	{'a': 0, 'b': }	{'a': 0, 'b': }
+5	{'a': 9, 'b': i}	{'a': 9, 'b': i}
+
+query III
+SELECT i, pk, fk FROM structdim LEFT OUTER JOIN structs ON structdim.pk=structs.fk ORDER BY i
+----
+NULL	NULL	NULL
+1	{'a': 1, 'b': a}	{'a': 1, 'b': a}
+2	{'a': NULL, 'b': NULL}	{'a': NULL, 'b': NULL}
+3	{'a': 0, 'b': }	{'a': 0, 'b': }
+5	{'a': 9, 'b': i}	{'a': 9, 'b': i}
+
+query III
+SELECT i, pk, fk FROM structs RIGHT OUTER JOIN structdim ON structdim.pk=structs.fk ORDER BY i
+----
+NULL	NULL	NULL
+1	{'a': 1, 'b': a}	{'a': 1, 'b': a}
+2	{'a': NULL, 'b': NULL}	{'a': NULL, 'b': NULL}
+3	{'a': 0, 'b': }	{'a': 0, 'b': }
+5	{'a': 9, 'b': i}	{'a': 9, 'b': i}
+
+
+query III
+SELECT i, pk, fk FROM structdim FULL OUTER JOIN structs ON structdim.pk=structs.fk ORDER BY i
+----
+NULL	NULL	NULL
+NULL	NULL	{'a': 13, 'b': m}
+1	{'a': 1, 'b': a}	{'a': 1, 'b': a}
+2	{'a': NULL, 'b': NULL}	{'a': NULL, 'b': NULL}
+3	{'a': 0, 'b': }	{'a': 0, 'b': }
+4	NULL	{'a': 2, 'b': c}
+5	{'a': 9, 'b': i}	{'a': 9, 'b': i}

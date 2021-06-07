@@ -89,6 +89,9 @@ static idx_t TemplatedSelectOperation(Vector &left, Vector &right, const Selecti
 		return BinaryExecutor::Select<interval_t, interval_t, OP>(left, right, sel, count, true_sel, false_sel);
 	case PhysicalType::VARCHAR:
 		return BinaryExecutor::Select<string_t, string_t, OP>(left, right, sel, count, true_sel, false_sel);
+	case PhysicalType::LIST:
+	case PhysicalType::STRUCT:
+		return BinaryExecutor::Select<Vector, Vector, OP>(left, right, sel, count, true_sel, false_sel);
 	default:
 		throw InvalidTypeException(left.GetType(), "Invalid type for comparison");
 	}

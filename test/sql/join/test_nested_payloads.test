@@ -14,12 +14,12 @@ INSERT INTO integers VALUES (1), (2), (3), (5), (NULL)
 # Payload is LIST<INTEGER>
 statement ok
 CREATE VIEW intlists AS SELECT * FROM (VALUES
-	(1, LIST_VALUE(1)),
-	(2, LIST_VALUE(NULL)),
-	(3, LIST_VALUE()),
-	(4, LIST_VALUE(2, 3)),
-	(5, LIST_VALUE(9,10,11)),
-	(NULL::INTEGER, LIST_VALUE(13))
+	(1, [1]),
+	(2, [NULL]),
+	(3, []),
+	(4, [2, 3]),
+	(5, [9,10,11]),
+	(NULL::INTEGER, [13])
 	) lv(k, l);
 
 query II
@@ -72,23 +72,13 @@ NULL	4	[2, 3]
 # Payload is LIST<VARCHAR>
 statement ok
 CREATE VIEW strlists AS SELECT * FROM (VALUES
-	(1, LIST_VALUE('a')),
-	(2, LIST_VALUE(NULL)),
-	(3, LIST_VALUE()),
-	(4, LIST_VALUE('b', 'c')),
-	(5, LIST_VALUE('i','j','k')),
-	(NULL::INTEGER, LIST_VALUE('m'))
+	(1, ['a']),
+	(2, [NULL]),
+	(3, []),
+	(4, ['b', 'c']),
+	(5, ['i','j','k']),
+	(NULL::INTEGER, ['m'])
 	) lv(k, l);
-
-query II
-SELECT k, l FROM strlists ORDER BY k;
-----
-NULL	[m]
-1	[a]
-2	[NULL]
-3	[]
-4	[b, c]
-5	[i, j, k]
 
 query III
 SELECT i, k, l FROM integers, strlists WHERE i = k ORDER BY i
@@ -130,12 +120,12 @@ NULL	4	[b, c]
 # Payload is STRUCT<INTEGER, VARCHAR>
 statement ok
 CREATE VIEW structs AS SELECT * FROM (VALUES
-	(1, STRUCT_PACK(a := 1, b:= 'a')),
-	(2, STRUCT_PACK(a := NULL, b:= NULL)),
-	(3, STRUCT_PACK(a := 0, b:= '')),
-	(4, STRUCT_PACK(a := 2, b := 'c')),
-	(5, STRUCT_PACK(a := 9, b := 'i')),
-	(NULL::INTEGER, STRUCT_PACK(a := 13, b := 'm'))
+	(1, {'a': 1, 'b': 'a'}),
+	(2, {'a': NULL, 'b': NULL}),
+	(3, {'a': 0, 'b': ''}),
+	(4, {'a': 2, 'b': 'c'}),
+	(5, {'a': 9, 'b': 'i'}),
+	(NULL::INTEGER, {'a': 13, 'b': 'm'})
 	) sv(k, s);
 
 query II
