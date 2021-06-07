@@ -132,6 +132,8 @@ class TestArrowNested(object):
 
     
     def test_map_arrow_to_pandas(self,duckdb_cursor):
+        if not can_run:
+            return
         assert arrow_to_pandas("SELECT a from (select MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as a) as t") == [[(1, 10), (2, 9), (3, 8), (4, 7)]]
         assert arrow_to_pandas("SELECT a from (select MAP(LIST_VALUE(),LIST_VALUE()) as a) as t") == [[]]
         assert arrow_to_pandas("SELECT a from (select MAP(LIST_VALUE('Jon Lajoie', 'Backstreet Boys', 'Tenacious D','Jon Lajoie' ),LIST_VALUE(10,9,10,11)) as a) as t") == [[('Jon Lajoie', 10), ('Backstreet Boys', 9), ('Tenacious D', 10), ('Jon Lajoie', 11)]]
