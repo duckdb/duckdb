@@ -101,15 +101,15 @@ void DuckDBConstraintsFunction(ClientContext &context, const FunctionData *bind_
 	// either fill up the chunk or return all the remaining columns
 	idx_t count = 0;
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
-		auto &entry = data.entries[data.offset++];
+		auto &entry = data.entries[data.offset];
 
 		if (entry->type != CatalogType::TABLE_ENTRY) {
+			data.offset++;
 			continue;
 		}
 
 		auto &table = (TableCatalogEntry &)*entry;
-		for (; data.constraint_offset < table.constraints.size() && count < STANDARD_VECTOR_SIZE;
-		     data.constraint_offset++) {
+		for (; data.constraint_offset < table.constraints.size() && count < STANDARD_VECTOR_SIZE; data.constraint_offset++) {
 			auto &constraint = table.constraints[data.constraint_offset];
 			// return values:
 			// schema_name, LogicalType::VARCHAR
@@ -201,6 +201,7 @@ void DuckDBConstraintsFunction(ClientContext &context, const FunctionData *bind_
 		}
 		if (data.constraint_offset >= table.constraints.size()) {
 			data.constraint_offset = 0;
+			data.offset++;
 		}
 	}
 	output.SetCardinality(count);

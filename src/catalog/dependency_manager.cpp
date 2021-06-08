@@ -132,7 +132,7 @@ void DependencyManager::ClearDependencies(CatalogSet &set) {
 	}
 }
 
-void DependencyManager::Scan(std::function<void(CatalogEntry *, CatalogEntry *, DependencyType)> &callback) {
+void DependencyManager::Scan(const std::function<void(CatalogEntry *, CatalogEntry *, DependencyType)> &callback) {
 	lock_guard<mutex> write_lock(catalog.write_lock);
 	for (auto &entry : dependents_map) {
 		for (auto &dependent : entry.second) {
