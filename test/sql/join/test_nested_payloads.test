@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-CREATE TABLE integers(i INTEGER)
+CREATE TABLE integers(fk INTEGER)
 
 statement ok
 INSERT INTO integers VALUES (1), (2), (3), (5), (NULL)
@@ -20,10 +20,10 @@ CREATE VIEW intlists AS SELECT * FROM (VALUES
 	(4, [2, 3]),
 	(5, [9,10,11]),
 	(NULL::INTEGER, [13])
-	) lv(k, l);
+	) lv(pk, p);
 
 query II
-SELECT k, l FROM intlists ORDER BY k;
+SELECT pk, p FROM intlists ORDER BY pk;
 ----
 NULL	[13]
 1	[1]
@@ -33,7 +33,7 @@ NULL	[13]
 5	[9, 10, 11]
 
 query III
-SELECT i, k, l FROM integers, intlists WHERE i = k ORDER BY i, k
+SELECT fk, pk, p FROM integers, intlists WHERE fk = pk ORDER BY fk, pk
 ----
 1	1	[1]
 2	2	[NULL]
@@ -41,16 +41,7 @@ SELECT i, k, l FROM integers, intlists WHERE i = k ORDER BY i, k
 5	5	[9, 10, 11]
 
 query III
-SELECT i, k, l FROM integers LEFT OUTER JOIN intlists ON integers.i=intlists.k ORDER BY i, k
-----
-NULL	NULL	NULL
-1	1	[1]
-2	2	[NULL]
-3	3	[]
-5	5	[9, 10, 11]
-
-query III
-SELECT i, k, l FROM intlists RIGHT OUTER JOIN integers ON integers.i=intlists.k ORDER BY i, k
+SELECT fk, pk, p FROM integers LEFT OUTER JOIN intlists ON integers.fk=intlists.pk ORDER BY fk, pk
 ----
 NULL	NULL	NULL
 1	1	[1]
@@ -59,7 +50,16 @@ NULL	NULL	NULL
 5	5	[9, 10, 11]
 
 query III
-SELECT i, k, l FROM integers FULL OUTER JOIN intlists ON integers.i=intlists.k ORDER BY i, k
+SELECT fk, pk, p FROM intlists RIGHT OUTER JOIN integers ON integers.fk=intlists.pk ORDER BY fk, pk
+----
+NULL	NULL	NULL
+1	1	[1]
+2	2	[NULL]
+3	3	[]
+5	5	[9, 10, 11]
+
+query III
+SELECT fk, pk, p FROM integers FULL OUTER JOIN intlists ON integers.fk=intlists.pk ORDER BY fk, pk
 ----
 NULL	NULL	NULL
 NULL	NULL	[13]
@@ -78,10 +78,10 @@ CREATE VIEW strlists AS SELECT * FROM (VALUES
 	(4, ['b', 'c']),
 	(5, ['i','j','k']),
 	(NULL::INTEGER, ['m'])
-	) lv(k, l);
+	) lv(pk, p);
 
 query III
-SELECT i, k, l FROM integers, strlists WHERE i = k ORDER BY i
+SELECT fk, pk, p FROM integers, strlists WHERE fk = pk ORDER BY fk
 ----
 1	1	[a]
 2	2	[NULL]
@@ -89,16 +89,7 @@ SELECT i, k, l FROM integers, strlists WHERE i = k ORDER BY i
 5	5	[i, j, k]
 
 query III
-SELECT i, k, l FROM integers LEFT OUTER JOIN strlists ON integers.i=strlists.k ORDER BY i
-----
-NULL	NULL	NULL
-1	1	[a]
-2	2	[NULL]
-3	3	[]
-5	5	[i, j, k]
-
-query III
-SELECT i, k, l FROM strlists RIGHT OUTER JOIN integers ON integers.i=strlists.k ORDER BY i
+SELECT fk, pk, p FROM integers LEFT OUTER JOIN strlists ON integers.fk=strlists.pk ORDER BY fk
 ----
 NULL	NULL	NULL
 1	1	[a]
@@ -107,7 +98,16 @@ NULL	NULL	NULL
 5	5	[i, j, k]
 
 query III
-SELECT i, k, l FROM integers FULL OUTER JOIN strlists ON integers.i=strlists.k ORDER BY i, k
+SELECT fk, pk, p FROM strlists RIGHT OUTER JOIN integers ON integers.fk=strlists.pk ORDER BY fk
+----
+NULL	NULL	NULL
+1	1	[a]
+2	2	[NULL]
+3	3	[]
+5	5	[i, j, k]
+
+query III
+SELECT fk, pk, p FROM integers FULL OUTER JOIN strlists ON integers.fk=strlists.pk ORDER BY fk, pk
 ----
 NULL	NULL	NULL
 NULL	NULL	[m]
@@ -117,7 +117,7 @@ NULL	4	[b, c]
 3	3	[]
 5	5	[i, j, k]
 
-# Payload is STRUCT<INTEGER, VARCHAR>
+# Payload is STRUCT<a: INTEGER, b: VARCHAR>
 statement ok
 CREATE VIEW structs AS SELECT * FROM (VALUES
 	(1, {'a': 1, 'b': 'a'}),
@@ -126,10 +126,10 @@ CREATE VIEW structs AS SELECT * FROM (VALUES
 	(4, {'a': 2, 'b': 'c'}),
 	(5, {'a': 9, 'b': 'i'}),
 	(NULL::INTEGER, {'a': 13, 'b': 'm'})
-	) sv(k, s);
+	) sv(pk, p);
 
 query II
-SELECT k, s FROM structs ORDER BY k;
+SELECT pk, p FROM structs ORDER BY pk;
 ----
 NULL	{'a': 13, 'b': m}
 1	{'a': 1, 'b': a}
@@ -139,7 +139,7 @@ NULL	{'a': 13, 'b': m}
 5	{'a': 9, 'b': i}
 
 query III
-SELECT i, k, s FROM integers, structs WHERE i = k ORDER BY i, k
+SELECT fk, pk, p FROM integers, structs WHERE fk = pk ORDER BY fk, pk
 ----
 1	1	{'a': 1, 'b': a}
 2	2	{'a': NULL, 'b': NULL}
@@ -147,16 +147,7 @@ SELECT i, k, s FROM integers, structs WHERE i = k ORDER BY i, k
 5	5	{'a': 9, 'b': i}
 
 query III
-SELECT i, k, s FROM integers LEFT OUTER JOIN structs ON integers.i=structs.k ORDER BY i, k
-----
-NULL	NULL	NULL
-1	1	{'a': 1, 'b': a}
-2	2	{'a': NULL, 'b': NULL}
-3	3	{'a': 0, 'b': }
-5	5	{'a': 9, 'b': i}
-
-query III
-SELECT i, k, s FROM structs RIGHT OUTER JOIN integers ON integers.i=structs.k ORDER BY i, k
+SELECT fk, pk, p FROM integers LEFT OUTER JOIN structs ON integers.fk=structs.pk ORDER BY fk, pk
 ----
 NULL	NULL	NULL
 1	1	{'a': 1, 'b': a}
@@ -164,9 +155,18 @@ NULL	NULL	NULL
 3	3	{'a': 0, 'b': }
 5	5	{'a': 9, 'b': i}
 
+query III
+SELECT fk, pk, p FROM structs RIGHT OUTER JOIN integers ON integers.fk=structs.pk ORDER BY fk, pk
+----
+NULL	NULL	NULL
+1	1	{'a': 1, 'b': a}
+2	2	{'a': NULL, 'b': NULL}
+3	3	{'a': 0, 'b': }
+5	5	{'a': 9, 'b': i}
+
 
 query III
-SELECT i, k, s FROM integers FULL OUTER JOIN structs ON integers.i=structs.k ORDER BY i, k
+SELECT fk, pk, p FROM integers FULL OUTER JOIN structs ON integers.fk=structs.pk ORDER BY fk, pk
 ----
 NULL	NULL	NULL
 NULL	NULL	{'a': 13, 'b': m}
@@ -175,3 +175,111 @@ NULL	4	{'a': 2, 'b': c}
 2	2	{'a': NULL, 'b': NULL}
 3	3	{'a': 0, 'b': }
 5	5	{'a': 9, 'b': i}
+
+# Payload is STRUCT<a: LIST<INTEGER>, b: LIST<VARCHAR> >
+statement ok
+CREATE VIEW struct_lint_lstr AS SELECT * FROM (VALUES
+	(1, {'x': [1], 'y': ['a']}),
+	(2, {'x': [NULL], 'y': [NULL]}),
+	(3, {'x': [], 'y': []}),
+	(4, {'x': [2, 3], 'y': ['b', 'c']}),
+	(5, {'x': [9,10,11], 'y': ['i','j','k']}),
+	(NULL::INTEGER, {'x': [13], 'y': ['m']})
+	) lv(pk, p);
+
+query III
+SELECT fk, pk, p FROM integers, struct_lint_lstr WHERE fk = pk ORDER BY fk, pk
+----
+1	1	{'x': [1], 'y': [a]}
+2	2	{'x': [NULL], 'y': [NULL]}
+3	3	{'x': [], 'y': []}
+5	5	{'x': [9, 10, 11], 'y': [i, j, k]}
+
+query III
+SELECT fk, pk, p
+FROM integers LEFT OUTER JOIN struct_lint_lstr ON integers.fk=struct_lint_lstr.pk
+ORDER BY fk, pk
+----
+NULL	NULL	NULL
+1	1	{'x': [1], 'y': [a]}
+2	2	{'x': [NULL], 'y': [NULL]}
+3	3	{'x': [], 'y': []}
+5	5	{'x': [9, 10, 11], 'y': [i, j, k]}
+
+query III
+SELECT fk, pk, p
+FROM struct_lint_lstr RIGHT OUTER JOIN integers ON integers.fk=struct_lint_lstr.pk
+ORDER BY fk, pk
+----
+NULL	NULL	NULL
+1	1	{'x': [1], 'y': [a]}
+2	2	{'x': [NULL], 'y': [NULL]}
+3	3	{'x': [], 'y': []}
+5	5	{'x': [9, 10, 11], 'y': [i, j, k]}
+
+query III
+SELECT fk, pk, p
+FROM integers FULL OUTER JOIN struct_lint_lstr ON integers.fk=struct_lint_lstr.pk
+ORDER BY fk, pk
+----
+NULL	NULL	NULL
+NULL	NULL	{'x': [13], 'y': [m]}
+NULL	4	{'x': [2, 3], 'y': [b, c]}
+1	1	{'x': [1], 'y': [a]}
+2	2	{'x': [NULL], 'y': [NULL]}
+3	3	{'x': [], 'y': []}
+5	5	{'x': [9, 10, 11], 'y': [i, j, k]}
+
+# Payload is STRUCT<x: LIST<STRUCT<l4: LIST<INT>, i4 INT> >, y: LIST<VARCHAR> >.
+statement ok
+CREATE VIEW r2l3r4l5i4i2l3v AS SELECT * FROM (VALUES
+	(1, {'x': [{'l4': [51], 'i4': 41}], 'y': ['a']}),
+	(2, {'x': [NULL], 'y': [NULL]}),
+	(3, {'x': [], 'y': []}),
+	(4, {'x': [{'l4': [52, 53], 'i4': 42}, {'l4': [54, 55], 'i4': 43}], 'y': ['b', 'c']}),
+	(5, {'x': [{'l4': [56], 'i4': 44}, {'l4': [57, 58], 'i4': 45}, {'l4': [59, 60, 61], 'i4': 46}], 'y': ['i','j','k']}),
+	(NULL::INTEGER, {'x': [{'l4': [62], 'i4': 47}], 'y': ['m']})
+	) lv(pk, p);
+
+query III
+SELECT fk, pk, p FROM integers, r2l3r4l5i4i2l3v WHERE fk = pk ORDER BY fk, pk
+----
+1	1	{'x': [{'l4': [51], 'i4': 41}], 'y': [a]}
+2	2	{'x': [NULL], 'y': [NULL]}
+3	3	{'x': [], 'y': []}
+5	5	{'x': [{'l4': [56], 'i4': 44}, {'l4': [57, 58], 'i4': 45}, {'l4': [59, 60, 61], 'i4': 46}], 'y': [i, j, k]}
+
+query III
+SELECT fk, pk, p
+FROM integers LEFT OUTER JOIN r2l3r4l5i4i2l3v ON integers.fk=r2l3r4l5i4i2l3v.pk
+ORDER BY fk, pk
+----
+NULL	NULL	NULL
+1	1	{'x': [{'l4': [51], 'i4': 41}], 'y': [a]}
+2	2	{'x': [NULL], 'y': [NULL]}
+3	3	{'x': [], 'y': []}
+5	5	{'x': [{'l4': [56], 'i4': 44}, {'l4': [57, 58], 'i4': 45}, {'l4': [59, 60, 61], 'i4': 46}], 'y': [i, j, k]}
+
+query III
+SELECT fk, pk, p
+FROM r2l3r4l5i4i2l3v RIGHT OUTER JOIN integers ON integers.fk=r2l3r4l5i4i2l3v.pk
+ORDER BY fk, pk
+----
+NULL	NULL	NULL
+1	1	{'x': [{'l4': [51], 'i4': 41}], 'y': [a]}
+2	2	{'x': [NULL], 'y': [NULL]}
+3	3	{'x': [], 'y': []}
+5	5	{'x': [{'l4': [56], 'i4': 44}, {'l4': [57, 58], 'i4': 45}, {'l4': [59, 60, 61], 'i4': 46}], 'y': [i, j, k]}
+
+query III
+SELECT fk, pk, p
+FROM integers FULL OUTER JOIN r2l3r4l5i4i2l3v ON integers.fk=r2l3r4l5i4i2l3v.pk
+ORDER BY fk, pk
+----
+NULL	NULL	NULL
+NULL	NULL	{'x': [{'l4': [62], 'i4': 47}], 'y': [m]}
+NULL	4	{'x': [{'l4': [52, 53], 'i4': 42}, {'l4': [54, 55], 'i4': 43}], 'y': [b, c]}
+1	1	{'x': [{'l4': [51], 'i4': 41}], 'y': [a]}
+2	2	{'x': [NULL], 'y': [NULL]}
+3	3	{'x': [], 'y': []}
+5	5	{'x': [{'l4': [56], 'i4': 44}, {'l4': [57, 58], 'i4': 45}, {'l4': [59, 60, 61], 'i4': 46}], 'y': [i, j, k]}

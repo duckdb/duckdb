@@ -490,15 +490,17 @@ void RowDataCollection::SerializeStructVector(Vector &v, idx_t vcount, const Sel
 }
 
 void RowDataCollection::SerializeListVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count,
-                                            idx_t col_idx, data_ptr_t key_locations[],
+                                            idx_t col_no, data_ptr_t key_locations[],
                                             data_ptr_t validitymask_locations[], idx_t offset) {
 	VectorData vdata;
 	v.Orrify(vcount, vdata);
 
-	auto byte_offset = col_idx / 8;
-	const auto bit = ~(1UL << (col_idx % 8));
+	idx_t entry_idx;
+	idx_t idx_in_entry;
+	ValidityBytes::GetEntryIndex(col_no, entry_idx, idx_in_entry);
 
 	auto list_data = GetListData(v);
+	ListVector::Initialize(v);
 	auto &child_vector = ListVector::GetEntry(v);
 
 	VectorData list_vdata;
@@ -513,8 +515,9 @@ void RowDataCollection::SerializeListVector(Vector &v, idx_t vcount, const Selec
 		auto source_idx = vdata.sel->get_index(idx) + offset;
 		if (!vdata.validity.RowIsValid(source_idx)) {
 			if (validitymask_locations) {
-				// set the validitymask
-				*(validitymask_locations[i] + byte_offset) &= bit;
+				// set the row validitymask for this column to invalid
+				ValidityBytes row_mask(validitymask_locations[i]);
+				row_mask.SetInvalidUnsafe(entry_idx, idx_in_entry);
 			}
 			continue;
 		}
