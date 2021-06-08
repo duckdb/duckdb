@@ -36,10 +36,6 @@ struct PragmaDetailedProfilingOutput {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct SQLiteMaster {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
 struct PragmaVersion {
 	static void RegisterFunction(BuiltinFunctions &set);
 };

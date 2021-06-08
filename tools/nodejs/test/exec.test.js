@@ -17,7 +17,7 @@ describe('exec', function() {
     });
 
     it('retrieve database structure', function(done) {
-        db.all("SELECT type, name FROM sqlite_master() ORDER BY type, name", function(err, rows) {
+        db.all("SELECT type, name FROM sqlite_master ORDER BY type, name", function(err, rows) {
             if (err) throw err;
             assert.deepEqual(rows, [
                // { type: 'index', name: 'grid_key_lookup' },

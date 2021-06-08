@@ -15,10 +15,10 @@ struct DefaultView {
 
 static DefaultView internal_views[] = {
     {DEFAULT_SCHEMA, "pragma_database_list", "SELECT * FROM pragma_database_list()"},
-    {DEFAULT_SCHEMA, "sqlite_master", "SELECT * FROM sqlite_master()"},
-    {DEFAULT_SCHEMA, "sqlite_schema", "SELECT * FROM sqlite_master()"},
-    {DEFAULT_SCHEMA, "sqlite_temp_master", "SELECT * FROM sqlite_master()"},
-    {DEFAULT_SCHEMA, "sqlite_temp_schema", "SELECT * FROM sqlite_master()"},
+    {DEFAULT_SCHEMA, "sqlite_master", "select 'table' \"type\", table_name \"name\", table_name \"tbl_name\", 0 rootpage, sql from duckdb_tables union all select 'view' \"type\", view_name \"name\", view_name \"tbl_name\", 0 rootpage, sql from duckdb_views union all select 'index' \"type\", index_name \"name\", table_name \"tbl_name\", 0 rootpage, sql from duckdb_indexes;"},
+    {DEFAULT_SCHEMA, "sqlite_schema", "SELECT * FROM sqlite_master"},
+    {DEFAULT_SCHEMA, "sqlite_temp_master", "SELECT * FROM sqlite_master"},
+    {DEFAULT_SCHEMA, "sqlite_temp_schema", "SELECT * FROM sqlite_master"},
     {DEFAULT_SCHEMA, "duckdb_constraints", "SELECT * FROM duckdb_constraints()"},
     {DEFAULT_SCHEMA, "duckdb_columns", "SELECT * FROM duckdb_columns()"},
     {DEFAULT_SCHEMA, "duckdb_indexes", "SELECT * FROM duckdb_indexes()"},
