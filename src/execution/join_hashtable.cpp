@@ -812,34 +812,31 @@ void JoinHashTable::ScanFullOuter(DataChunk &result, JoinHTScanState &state) {
 
 void JoinHashTable::FullScanHashTable(JoinHTScanState &state, LogicalType key_type) {
 	// scan the HT starting from the current position
-	vector<data_ptr_t> key_locations;
-	key_locations.reserve(STANDARD_VECTOR_SIZE);
+	Vector addresses(LogicalType::POINTER, count); // allocate space for all the tuples
+	auto key_locations = FlatVector::GetData<data_ptr_t>(addresses);
 
 	lock_guard<mutex> state_lock(state.lock);
 	// go through all the blocks and get keys location
-	FillWithOffsets(key_locations, state);
-	auto keys_count = key_locations.size();
+	auto keys_count = FillWithOffsets(key_locations, state);
 	// build selection vector using the build_keys
 	Vector build_vector(key_type, keys_count);
-	// first gather the keys
-	/* 	RowOperations::Gather(layout, addresses, sel_vector, vector, sel_vector, keys_count, 0);
-	    GatherResultVector(build_vector, FlatVector::INCREMENTAL_SELECTION_VECTOR, (uintptr_t *)&key_locations[0],
-	                       FlatVector::INCREMENTAL_SELECTION_VECTOR, keys_count, 0); */
+	// first scan the keys
+	RowOperations::FullScanColumn(layout, addresses, build_vector, keys_count, 0);
 	SelectionVector sel_build(keys_count + 1);
 	// now fill them
 	FillSelectionVectorSwitch(build_vector, sel_build, keys_count);
-	// gather the values from the RHS using the sel_build selection vector
+	// full scan the remaining build columns
 	for (idx_t i = 0; i < build_types.size(); i++) {
 		auto &vector = columns[i];
 		D_ASSERT(vector.GetType() == build_types[i]);
-		/* 	GatherResultVector(vector, sel_build, (uintptr_t *)&key_locations[0],
-		   FlatVector::INCREMENTAL_SELECTION_VECTOR, keys_count, condition_types.size()); */
+		RowOperations::Gather(layout, addresses, sel_build, vector, sel_build, keys_count, i + condition_types.size());
 	}
 }
 
-void JoinHashTable::FillWithOffsets(vector<data_ptr_t> &key_locations, JoinHTScanState &state) {
+idx_t JoinHashTable::FillWithOffsets(data_ptr_t *key_locations, JoinHTScanState &state) {
 
 	// iterate over blocks
+	idx_t key_count = 0;
 	while (state.block_position < blocks.size()) {
 		auto &block = blocks[state.block_position];
 		auto handle = buffer_manager.Pin(block.block);
@@ -848,12 +845,13 @@ void JoinHashTable::FillWithOffsets(vector<data_ptr_t> &key_locations, JoinHTSca
 		while (state.position < block.count) {
 			auto tuple_base = base_ptr + state.position * entry_size;
 			// store its locations
-			key_locations.push_back(tuple_base);
+			key_locations[key_count++] = tuple_base;
 			state.position++;
 		}
 		state.block_position++;
 		state.position = 0;
 	}
+	return key_count;
 }
 
 template <typename T>

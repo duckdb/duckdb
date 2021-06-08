@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "duckdb/common/vector.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 
@@ -48,6 +48,8 @@ struct RowOperations {
 	//! Gather a single column
 	static void Gather(const RowLayout &layout, Vector &rows, const SelectionVector &row_sel, Vector &col,
 	                   const SelectionVector &col_sel, idx_t count, idx_t col_idx);
+	//! Full Scan an entire columns
+	static void FullScanColumn(const RowLayout &layout, Vector &rows, Vector &col, idx_t count, idx_t col_idx);
 
 	//===--------------------------------------------------------------------===//
 	// Comparison Operators

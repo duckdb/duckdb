@@ -100,7 +100,7 @@ public:
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 	bool ExecuteInvisibleJoin(ExecutionContext &context, DataChunk &chunk, PhysicalHashJoinState *state,
 	                          JoinHashTable *ht_ptr) const;
-	bool CheckRequirementsForPerfectHashJoin(JoinHashTable *ht_ptr, HashJoinGlobalState &join_global_state);
+	bool CheckRequirementsForInvisibleJoin(JoinHashTable *ht_ptr, HashJoinGlobalState &join_global_state);
 	void BuildPerfectHashStructure(JoinHashTable *ht_ptr, JoinHTScanState &join_ht_state, LogicalType key_type);
 	void FillSelectionVectorSwitch(Vector &source, SelectionVector &sel_vec, idx_t count) const;
 	template <typename T>

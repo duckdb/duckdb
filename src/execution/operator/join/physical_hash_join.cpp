@@ -137,10 +137,10 @@ void PhysicalHashJoin::Sink(ExecutionContext &context, GlobalOperatorState &stat
 bool PhysicalHashJoin::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> state) {
 	auto &sink = (HashJoinGlobalState &)*state;
 	// check for possible perfect hash table
-	// if (!CheckRequirementsForPerfectHashJoin(sink.hash_table.get(), sink)) {
-	// no perfect hash table, just finish the building of the regular hash table
-	sink.hash_table->Finalize();
-	//}
+	if (!CheckRequirementsForInvisibleJoin(sink.hash_table.get(), sink)) {
+		// no invisible join, just finish building the regular hash table
+		sink.hash_table->Finalize();
+	}
 
 	PhysicalSink::Finalize(pipeline, context, move(state));
 	return true;
@@ -292,13 +292,13 @@ bool PhysicalHashJoin::ExecuteInvisibleJoin(ExecutionContext &context, DataChunk
 	return true;
 }
 
-bool PhysicalHashJoin::CheckRequirementsForPerfectHashJoin(JoinHashTable *ht_ptr, HashJoinGlobalState &join_state) {
+bool PhysicalHashJoin::CheckRequirementsForInvisibleJoin(JoinHashTable *ht_ptr, HashJoinGlobalState &join_state) {
 	// first check the build size
 	if (!pjoin_state.is_build_small) {
 		return false;
 	}
 
-	// verify uniquiness (build size < min_max_range => duplicate values )
+	// check for nulls
 	if (ht_ptr->has_null) {
 		return false;
 	}

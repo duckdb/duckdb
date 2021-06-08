@@ -141,7 +141,7 @@ public:
 	//! Scan the HT to construct the final full outer join result after
 	void ScanFullOuter(DataChunk &result, JoinHTScanState &state);
 	// Invisible join methods
-	void FillWithOffsets(vector<data_ptr_t> &key_locations, JoinHTScanState &state);
+	idx_t FillWithOffsets(data_ptr_t *key_locations, JoinHTScanState &state);
 	void FullScanHashTable(JoinHTScanState &state, LogicalType key_type);
 	void FillSelectionVectorSwitch(Vector &source, SelectionVector &sel_vec, idx_t count) const;
 	template <typename T>
