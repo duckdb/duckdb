@@ -1,0 +1,95 @@
+# name: test/sql/storage/types/struct/struct_storage.test
+# description: Test structs with persistent storage
+# group: [struct]
+
+# load the DB from disk
+load __TEST_DIR__/struct_storage_test.db
+
+statement ok
+CREATE TABLE a(b STRUCT(i INTEGER, j INTEGER));
+
+statement ok
+INSERT INTO a VALUES ({'i': 1, 'j': 2}), (NULL), ({'i': NULL, 'j': 2}), (ROW(1, NULL));
+
+query I
+SELECT * FROM a;
+----
+{'i': 1, 'j': 2}
+NULL
+{'i': NULL, 'j': 2}
+{'i': 1, 'j': NULL}
+
+query I
+SELECT COUNT(*) FROM a WHERE b IS NULL;
+----
+1
+
+restart
+
+query I
+SELECT * FROM a;
+----
+{'i': 1, 'j': 2}
+NULL
+{'i': NULL, 'j': 2}
+{'i': 1, 'j': NULL}
+
+query I
+SELECT COUNT(*) FROM a WHERE b IS NULL;
+----
+1
+
+# deletes
+query I
+DELETE FROM a WHERE (b).i=1
+----
+2
+
+query I
+SELECT * FROM a;
+----
+NULL
+{'i': NULL, 'j': 2}
+
+restart
+
+query I
+SELECT * FROM a;
+----
+NULL
+{'i': NULL, 'j': 2}
+
+query I
+SELECT COUNT(*) FROM a WHERE b IS NULL;
+----
+1
+
+# updates
+query I
+UPDATE a SET b={i: 7, j: 9} WHERE b IS NULL
+----
+1
+
+query I
+SELECT * FROM a;
+----
+{'i': 7, 'j': 9}
+{'i': NULL, 'j': 2}
+
+query I
+SELECT COUNT(*) FROM a WHERE b IS NULL;
+----
+0
+
+restart
+
+query I
+SELECT * FROM a;
+----
+{'i': 7, 'j': 9}
+{'i': NULL, 'j': 2}
+
+query I
+SELECT COUNT(*) FROM a WHERE b IS NULL;
+----
+0

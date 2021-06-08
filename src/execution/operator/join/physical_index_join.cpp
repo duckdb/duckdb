@@ -8,6 +8,7 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/transaction.hpp"
+#include "duckdb/storage/table/append_state.hpp"
 
 #include <iostream>
 #include <utility>

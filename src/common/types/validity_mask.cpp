@@ -78,7 +78,7 @@ void ValidityMask::Slice(const ValidityMask &other, idx_t offset) {
 
 	// first shift the "whole" units
 	idx_t entire_units = offset / BITS_PER_VALUE;
-	idx_t sub_units = offset - entire_units % BITS_PER_VALUE;
+	idx_t sub_units = offset - entire_units * BITS_PER_VALUE;
 	if (entire_units > 0) {
 		idx_t validity_idx;
 		for (validity_idx = 0; validity_idx + entire_units < STANDARD_ENTRY_COUNT; validity_idx++) {

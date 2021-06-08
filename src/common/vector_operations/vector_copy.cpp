@@ -28,6 +28,9 @@ void VectorOperations::Copy(const Vector &source, Vector &target, const Selectio
 	D_ASSERT(source_offset <= source_count);
 	D_ASSERT(target.GetVectorType() == VectorType::FLAT_VECTOR);
 	D_ASSERT(source.GetType() == target.GetType());
+	idx_t copy_count = source_count - source_offset;
+
+	SelectionVector owned_sel;
 	const SelectionVector *sel = &sel_p;
 	switch (source.GetVectorType()) {
 	case VectorType::DICTIONARY_VECTOR: {
@@ -49,7 +52,7 @@ void VectorOperations::Copy(const Vector &source, Vector &target, const Selectio
 		return;
 	}
 	case VectorType::CONSTANT_VECTOR:
-		sel = &ConstantVector::ZERO_SELECTION_VECTOR;
+		sel = ConstantVector::ZeroSelectionVector(copy_count, owned_sel);
 		break; // carry on with below code
 	case VectorType::FLAT_VECTOR:
 		break;
@@ -57,7 +60,6 @@ void VectorOperations::Copy(const Vector &source, Vector &target, const Selectio
 		throw NotImplementedException("FIXME unimplemented vector type for VectorOperations::Copy");
 	}
 
-	idx_t copy_count = source_count - source_offset;
 	if (copy_count == 0) {
 		return;
 	}
@@ -137,30 +139,13 @@ void VectorOperations::Copy(const Vector &source, Vector &target, const Selectio
 		}
 		break;
 	}
-	case PhysicalType::MAP:
 	case PhysicalType::STRUCT: {
-		if (StructVector::HasEntries(target)) {
-			// target already has entries: append to them
-			auto &source_children = StructVector::GetEntries(source);
-			auto &target_children = StructVector::GetEntries(target);
-			D_ASSERT(source_children.size() == target_children.size());
-			for (idx_t i = 0; i < source_children.size(); i++) {
-				D_ASSERT(target_children[i].first == target_children[i].first);
-				VectorOperations::Copy(*source_children[i].second, *target_children[i].second, *sel, source_count,
-				                       source_offset, target_offset);
-			}
-		} else {
-			D_ASSERT(target_offset == 0);
-			// target has no entries: create new entries for the target
-			if (StructVector::HasEntries(source)) {
-				auto &source_children = StructVector::GetEntries(source);
-				for (auto &child : source_children) {
-					auto child_copy = make_unique<Vector>(child.second->GetType());
-					VectorOperations::Copy(*child.second, *child_copy, *sel, source_count, source_offset,
-					                       target_offset);
-					StructVector::AddEntry(target, child.first, move(child_copy));
-				}
-			}
+		auto &source_children = StructVector::GetEntries(source);
+		auto &target_children = StructVector::GetEntries(target);
+		D_ASSERT(source_children.size() == target_children.size());
+		for (idx_t i = 0; i < source_children.size(); i++) {
+			VectorOperations::Copy(*source_children[i], *target_children[i], *sel, source_count, source_offset,
+			                       target_offset);
 		}
 		break;
 	}

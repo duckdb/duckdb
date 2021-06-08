@@ -184,7 +184,7 @@ void RowDataCollection::ComputeStructEntrySizes(Vector &v, idx_t entry_sizes[], 
 		num_children = children.size();
 		for (auto &struct_child : children) {
 			Vector struct_vector;
-			struct_vector.Slice(*struct_child.second, dict_sel, vcount);
+			struct_vector.Slice(*struct_child, dict_sel, vcount);
 			struct_vectors.push_back(move(struct_vector));
 		}
 	} else {
@@ -192,7 +192,7 @@ void RowDataCollection::ComputeStructEntrySizes(Vector &v, idx_t entry_sizes[], 
 		num_children = children.size();
 		for (auto &struct_child : children) {
 			Vector struct_vector;
-			struct_vector.Reference(*struct_child.second);
+			struct_vector.Reference(*struct_child);
 			struct_vectors.push_back(move(struct_vector));
 		}
 	}
@@ -271,7 +271,6 @@ void RowDataCollection::ComputeEntrySizes(Vector &v, idx_t entry_sizes[], idx_t 
 		case PhysicalType::VARCHAR:
 			ComputeStringEntrySizes(v, entry_sizes, vcount, offset);
 			break;
-		case PhysicalType::MAP:
 		case PhysicalType::STRUCT:
 			ComputeStructEntrySizes(v, entry_sizes, vcount, offset);
 			break;
@@ -445,7 +444,7 @@ void RowDataCollection::SerializeStructVector(Vector &v, idx_t vcount, const Sel
 		num_children = children.size();
 		for (auto &struct_child : children) {
 			Vector struct_vector;
-			struct_vector.Slice(*struct_child.second, dict_sel, vcount);
+			struct_vector.Slice(*struct_child, dict_sel, vcount);
 			struct_vectors.push_back(move(struct_vector));
 		}
 	} else {
@@ -453,7 +452,7 @@ void RowDataCollection::SerializeStructVector(Vector &v, idx_t vcount, const Sel
 		num_children = children.size();
 		for (auto &struct_child : children) {
 			Vector struct_vector;
-			struct_vector.Reference(*struct_child.second);
+			struct_vector.Reference(*struct_child);
 			struct_vectors.push_back(move(struct_vector));
 		}
 	}
@@ -596,7 +595,6 @@ void RowDataCollection::SerializeVector(Vector &v, idx_t vcount, const Selection
 		case PhysicalType::VARCHAR:
 			SerializeStringVector(v, vcount, sel, ser_count, col_idx, key_locations, validitymask_locations, offset);
 			break;
-		case PhysicalType::MAP:
 		case PhysicalType::STRUCT:
 			SerializeStructVector(v, vcount, sel, ser_count, col_idx, key_locations, validitymask_locations, offset);
 			break;
@@ -755,10 +753,9 @@ void RowDataCollection::DeserializeIntoStructVector(Vector &v, const idx_t &vcou
 	}
 
 	// now deserialize into the struct vectors
+	auto &children = StructVector::GetEntries(v);
 	for (idx_t i = 0; i < child_types.size(); i++) {
-		auto new_child = make_unique<Vector>(child_types[i].second);
-		DeserializeIntoVector(*new_child, vcount, i, key_locations, struct_validitymask_locations);
-		StructVector::AddEntry(v, child_types[i].first, move(new_child));
+		DeserializeIntoVector(*children[i], vcount, i, key_locations, struct_validitymask_locations);
 	}
 }
 
@@ -911,7 +908,6 @@ void RowDataCollection::DeserializeIntoVector(Vector &v, const idx_t &vcount, co
 	case PhysicalType::VARCHAR:
 		DeserializeIntoStringVector(v, vcount, col_idx, key_locations, validitymask_locations);
 		break;
-	case PhysicalType::MAP:
 	case PhysicalType::STRUCT:
 		DeserializeIntoStructVector(v, vcount, col_idx, key_locations, validitymask_locations);
 		break;

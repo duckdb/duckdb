@@ -16,7 +16,7 @@
 namespace duckdb {
 
 UncompressedSegment::UncompressedSegment(DatabaseInstance &db, PhysicalType type, idx_t row_start)
-    : db(db), type(type), max_vector_count(0), tuple_count(0), row_start(row_start) {
+    : db(db), type(type), tuple_count(0), row_start(row_start) {
 }
 
 UncompressedSegment::~UncompressedSegment() {
@@ -37,16 +37,12 @@ void UncompressedSegment::Verify() {
 #endif
 }
 
-void UncompressedSegment::Fetch(ColumnScanState &state, idx_t vector_index, Vector &result) {
-	InitializeScan(state);
-	FetchBaseData(state, vector_index, result);
+bool UncompressedSegment::RowIdIsValid(idx_t row_id) const {
+	return row_id <= tuple_count;
 }
 
-//===--------------------------------------------------------------------===//
-// Scan
-//===--------------------------------------------------------------------===//
-void UncompressedSegment::Scan(ColumnScanState &state, idx_t vector_index, Vector &result) {
-	FetchBaseData(state, vector_index, result);
+bool UncompressedSegment::RowRangeIsValid(idx_t row_id, idx_t count) const {
+	return row_id <= tuple_count && row_id + count <= tuple_count;
 }
 
 //===--------------------------------------------------------------------===//
@@ -286,33 +282,6 @@ void UncompressedSegment::FilterSelection(SelectionVector &sel, Vector &result, 
 
 void UncompressedSegment::RevertAppend(idx_t start_row) {
 	tuple_count = start_row - this->row_start;
-}
-
-//===--------------------------------------------------------------------===//
-// ToTemporary
-//===--------------------------------------------------------------------===//
-void UncompressedSegment::ToTemporary() {
-	ToTemporaryInternal();
-}
-
-void UncompressedSegment::ToTemporaryInternal() {
-	if (block->BlockId() >= MAXIMUM_BLOCK) {
-		// conversion has already been performed by a different thread
-		return;
-	}
-	auto &block_manager = BlockManager::GetBlockManager(db);
-	block_manager.MarkBlockAsModified(block->BlockId());
-
-	// pin the current block
-	auto &buffer_manager = BufferManager::GetBufferManager(db);
-	auto current = buffer_manager.Pin(block);
-
-	// now allocate a new block from the buffer manager
-	auto new_block = buffer_manager.RegisterMemory(Storage::BLOCK_ALLOC_SIZE, false);
-	auto handle = buffer_manager.Pin(new_block);
-	// now copy the data over and switch to using the new block id
-	memcpy(handle->node->buffer, current->node->buffer, Storage::BLOCK_SIZE);
-	this->block = move(new_block);
 }
 
 } // namespace duckdb

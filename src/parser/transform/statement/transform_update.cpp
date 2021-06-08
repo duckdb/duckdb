@@ -18,10 +18,10 @@ unique_ptr<UpdateStatement> Transformer::TransformUpdate(duckdb_libpgquery::PGNo
 	for (auto cell = root->head; cell != nullptr; cell = cell->next) {
 		auto target = (duckdb_libpgquery::PGResTarget *)(cell->data.ptr_value);
 		result->columns.emplace_back(target->name);
-		result->expressions.push_back(TransformExpression(target->val));
+		result->expressions.push_back(TransformExpression(target->val, 0));
 	}
 
-	result->condition = TransformExpression(stmt->whereClause);
+	result->condition = TransformExpression(stmt->whereClause, 0);
 	return result;
 }
 

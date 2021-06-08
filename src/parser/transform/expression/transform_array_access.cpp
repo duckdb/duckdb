@@ -6,10 +6,11 @@
 
 namespace duckdb {
 
-unique_ptr<ParsedExpression> Transformer::TransformArrayAccess(duckdb_libpgquery::PGAIndirection *indirection_node) {
+unique_ptr<ParsedExpression> Transformer::TransformArrayAccess(duckdb_libpgquery::PGAIndirection *indirection_node,
+                                                               idx_t depth) {
 	// transform the source expression
 	unique_ptr<ParsedExpression> result;
-	result = TransformExpression(indirection_node->arg);
+	result = TransformExpression(indirection_node->arg, depth + 1);
 
 	// now go over the indices
 	// note that a single indirection node can contain multiple indices
@@ -28,15 +29,15 @@ unique_ptr<ParsedExpression> Transformer::TransformArrayAccess(duckdb_libpgquery
 			if (index->is_slice) {
 				// slice
 				children.push_back(!index->lidx ? make_unique<ConstantExpression>(Value())
-				                                : TransformExpression(index->lidx));
+				                                : TransformExpression(index->lidx, depth + 1));
 				children.push_back(!index->uidx ? make_unique<ConstantExpression>(Value())
-				                                : TransformExpression(index->uidx));
+				                                : TransformExpression(index->uidx, depth + 1));
 				result = make_unique<OperatorExpression>(ExpressionType::ARRAY_SLICE, move(children));
 			} else {
 				// array access
 				D_ASSERT(!index->lidx);
 				D_ASSERT(index->uidx);
-				children.push_back(TransformExpression(index->uidx));
+				children.push_back(TransformExpression(index->uidx, depth + 1));
 				result = make_unique<OperatorExpression>(ExpressionType::ARRAY_EXTRACT, move(children));
 			}
 			break;
@@ -45,7 +46,7 @@ unique_ptr<ParsedExpression> Transformer::TransformArrayAccess(duckdb_libpgquery
 			auto val = (duckdb_libpgquery::PGValue *)target;
 			vector<unique_ptr<ParsedExpression>> children;
 			children.push_back(move(result));
-			children.push_back(TransformValue(*val));
+			children.push_back(TransformValue(*val, depth + 1));
 			result = make_unique<OperatorExpression>(ExpressionType::STRUCT_EXTRACT, move(children));
 			break;
 		}

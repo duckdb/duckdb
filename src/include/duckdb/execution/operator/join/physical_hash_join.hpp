@@ -26,6 +26,7 @@ public:
 	PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right,
 	                 vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality);
 	void Combine(ExecutionContext &context, GlobalOperatorState &gstate, LocalSinkState &lstate) override;
+
 	vector<idx_t> right_projection_map;
 	//! The types of the keys
 	vector<LogicalType> condition_types;

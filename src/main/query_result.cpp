@@ -126,6 +126,26 @@ void InitializeChild(ArrowSchema &child, const string &name = "") {
 	child.metadata = nullptr;
 	child.dictionary = nullptr;
 }
+void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type);
+
+void SetArrowMapFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type) {
+	child.format = "+m";
+	//! Map has one child which is a struct
+	child.n_children = 1;
+	root_holder.nested_children.emplace_back();
+	root_holder.nested_children.back().resize(1);
+	root_holder.nested_children_ptr.emplace_back();
+	root_holder.nested_children_ptr.back().push_back(&root_holder.nested_children.back()[0]);
+	InitializeChild(root_holder.nested_children.back()[0]);
+	child.children = &root_holder.nested_children_ptr.back()[0];
+	child.children[0]->name = "entries";
+	child_list_t<LogicalType> struct_child_type;
+	struct_child_type.push_back(type.child_types()[0].second.child_types()[0]);
+	struct_child_type.push_back(type.child_types()[1].second.child_types()[0]);
+	LogicalType struct_type(LogicalTypeId::STRUCT, struct_child_type);
+	SetArrowFormat(root_holder, *child.children[0], struct_type);
+}
+
 void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
@@ -228,24 +248,22 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		child.children = &root_holder.nested_children_ptr.back()[0];
 		for (size_t type_idx = 0; type_idx < type.child_types().size(); type_idx++) {
 			InitializeChild(*child.children[type_idx]);
-			child.children[type_idx]->name = type.child_types()[type_idx].first.c_str();
+
+			auto &struct_col_name = type.child_types()[type_idx].first;
+			unique_ptr<char[]> name_ptr = unique_ptr<char[]>(new char[struct_col_name.size() + 1]);
+			for (size_t i = 0; i < struct_col_name.size(); i++) {
+				name_ptr[i] = struct_col_name[i];
+			}
+			name_ptr[struct_col_name.size()] = '\0';
+			root_holder.owned_type_names.push_back(move(name_ptr));
+
+			child.children[type_idx]->name = root_holder.owned_type_names.back().get();
 			SetArrowFormat(root_holder, *child.children[type_idx], type.child_types()[type_idx].second);
 		}
 		break;
 	}
 	case LogicalTypeId::MAP: {
-		child.format = "+m";
-		//! Map has one child which is a struct
-		child.n_children = 1;
-		root_holder.nested_children.emplace_back();
-		root_holder.nested_children.back().resize(1);
-		root_holder.nested_children_ptr.emplace_back();
-		root_holder.nested_children_ptr.back().push_back(&root_holder.nested_children.back()[0]);
-		InitializeChild(root_holder.nested_children.back()[0]);
-		child.children = &root_holder.nested_children_ptr.back()[0];
-		child.children[0]->name = "entries";
-		LogicalType struct_type(LogicalTypeId::STRUCT, type.child_types());
-		SetArrowFormat(root_holder, *child.children[0], struct_type);
+		SetArrowMapFormat(root_holder, child, type);
 		break;
 	}
 

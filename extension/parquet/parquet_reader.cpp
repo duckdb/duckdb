@@ -41,7 +41,7 @@ using duckdb_parquet::format::ColumnChunk;
 using duckdb_parquet::format::ConvertedType;
 using duckdb_parquet::format::FieldRepetitionType;
 using duckdb_parquet::format::FileMetaData;
-using duckdb_parquet::format::RowGroup;
+using ParquetRowGroup = duckdb_parquet::format::RowGroup;
 using duckdb_parquet::format::SchemaElement;
 using duckdb_parquet::format::Statistics;
 using duckdb_parquet::format::Type;
@@ -331,7 +331,7 @@ unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(ParquetReader &reader, 
 	return column_stats;
 }
 
-const RowGroup &ParquetReader::GetGroup(ParquetReaderScanState &state) {
+const ParquetRowGroup &ParquetReader::GetGroup(ParquetReaderScanState &state) {
 	auto file_meta_data = GetFileMetadata();
 	D_ASSERT(state.current_group >= 0 && (idx_t)state.current_group < state.group_idx_list.size());
 	D_ASSERT(state.group_idx_list[state.current_group] >= 0 &&

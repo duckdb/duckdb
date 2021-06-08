@@ -26,7 +26,7 @@ static void read_from_integers(DuckDB *db, bool *correct, idx_t threadnr) {
 	}
 }
 
-TEST_CASE("Concurrent reads during index creation", "[index][.]") {
+TEST_CASE("Concurrent reads during index creation", "[interquery][.]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -133,7 +133,7 @@ static void append_to_primary_key(DuckDB *db) {
 	}
 }
 
-TEST_CASE("Concurrent inserts into PRIMARY KEY column", "[index][.]") {
+TEST_CASE("Concurrent inserts into PRIMARY KEY column", "[interquery][.]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -171,7 +171,7 @@ static void update_to_primary_key(DuckDB *db) {
 	}
 }
 
-TEST_CASE("Concurrent updates to PRIMARY KEY column", "[index][.]") {
+TEST_CASE("Concurrent updates to PRIMARY KEY column", "[interquery][.]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -231,7 +231,7 @@ static void mix_update_to_primary_key(DuckDB *db, atomic<idx_t> *count, idx_t th
 	}
 }
 
-TEST_CASE("Mix of UPDATES and INSERTS on table with PRIMARY KEY constraints", "[index][.]") {
+TEST_CASE("Mix of UPDATES and INSERTS on table with PRIMARY KEY constraints", "[interquery][.]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -306,7 +306,7 @@ static void append_to_primary_key_with_transaction(DuckDB *db, idx_t thread_nr, 
 	}
 }
 
-TEST_CASE("Parallel appends to table with index with transactions", "[index][.]") {
+TEST_CASE("Parallel appends to table with index with transactions", "[interquery][.]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -348,7 +348,7 @@ static void join_integers(Connection *con, bool *index_join_success, idx_t threa
 	}
 }
 
-TEST_CASE("Concurrent appends during index join", "[index][.]") {
+TEST_CASE("Concurrent appends during index join", "[interquery][.]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);

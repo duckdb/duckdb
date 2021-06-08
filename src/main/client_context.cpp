@@ -49,6 +49,8 @@ ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
       temporary_objects(make_unique<SchemaCatalogEntry>(&db->GetCatalog(), TEMP_SCHEMA, true)), open_result(nullptr) {
 	std::random_device rd;
 	random_engine.seed(rd());
+
+	progress_bar = make_unique<ProgressBar>(&executor, wait_time);
 }
 
 ClientContext::~ClientContext() {
@@ -219,10 +221,7 @@ unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(ClientContextLoc
 
 	bool create_stream_result = statement.allow_stream_result && allow_stream_result;
 	if (enable_progress_bar) {
-		if (progress_bar) {
-			progress_bar.reset();
-		}
-		progress_bar = make_unique<ProgressBar>(&executor, wait_time);
+		progress_bar->Initialize(wait_time);
 		progress_bar->Start();
 	}
 	// store the physical plan in the context for calls to Fetch()
@@ -233,7 +232,7 @@ unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(ClientContextLoc
 	D_ASSERT(types == statement.types);
 
 	if (create_stream_result) {
-		if (progress_bar) {
+		if (enable_progress_bar) {
 			progress_bar->Stop();
 		}
 		// successfully compiled SELECT clause and it is the last statement
@@ -257,7 +256,7 @@ unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(ClientContextLoc
 #endif
 		result->collection.Append(*chunk);
 	}
-	if (progress_bar) {
+	if (enable_progress_bar) {
 		progress_bar->Stop();
 	}
 	return move(result);
@@ -692,25 +691,26 @@ void ClientContext::RunFunctionInTransactionInternal(ClientContextLock &lock, co
 		throw Exception("Failed: transaction has been invalidated!");
 	}
 	// check if we are on AutoCommit. In this case we should start a transaction
-	if (transaction.IsAutoCommit()) {
+	bool require_new_transaction = transaction.IsAutoCommit() && !transaction.HasActiveTransaction();
+	if (require_new_transaction) {
 		transaction.BeginTransaction();
 	}
 	try {
 		fun();
 	} catch (StandardException &ex) {
-		if (transaction.IsAutoCommit()) {
+		if (require_new_transaction) {
 			transaction.Rollback();
 		}
 		throw;
 	} catch (std::exception &ex) {
-		if (transaction.IsAutoCommit()) {
+		if (require_new_transaction) {
 			transaction.Rollback();
 		} else {
 			ActiveTransaction().Invalidate();
 		}
 		throw;
 	}
-	if (transaction.IsAutoCommit()) {
+	if (require_new_transaction) {
 		transaction.Commit();
 	}
 }

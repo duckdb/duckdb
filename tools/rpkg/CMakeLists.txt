@@ -20,8 +20,19 @@ find_library(
 
 include_directories(${R_INCLUDE_DIR})
 include_directories(../../)
+include_directories(src/include)
 
 # this is used for clang-tidy checks and IDE support
-add_library(duckdb_r_shlib SHARED src/duckdbr.cpp)
+add_library(
+  duckdb_r_shlib SHARED
+  src/rapi.cpp
+  src/database.cpp
+  src/connection.cpp
+  src/statement.cpp
+  src/register.cpp
+  src/scan.cpp
+  src/utils.cpp
+  src/altrep.cpp
+  src/types.cpp)
 target_link_libraries(duckdb_r_shlib duckdb ${DUCKDB_EXTRA_LINK_FLAGS}
                       ${R_LIBRARY_BASE})

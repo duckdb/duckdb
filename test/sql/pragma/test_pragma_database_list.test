@@ -2,6 +2,9 @@
 # description: Test PRAGMA database_list
 # group: [pragma]
 
+# explicitly load an in-memory database
+load
+
 query III
 PRAGMA database_list
 ----

@@ -6,7 +6,7 @@
 
 namespace duckdb {
 
-unique_ptr<ConstantExpression> Transformer::TransformValue(duckdb_libpgquery::PGValue val) {
+unique_ptr<ConstantExpression> Transformer::TransformValue(duckdb_libpgquery::PGValue val, idx_t depth) {
 	switch (val.type) {
 	case duckdb_libpgquery::T_PGInteger:
 		D_ASSERT(val.val.ival <= NumericLimits<int32_t>::Maximum());
@@ -73,8 +73,8 @@ unique_ptr<ConstantExpression> Transformer::TransformValue(duckdb_libpgquery::PG
 	}
 }
 
-unique_ptr<ParsedExpression> Transformer::TransformConstant(duckdb_libpgquery::PGAConst *c) {
-	return TransformValue(c->val);
+unique_ptr<ParsedExpression> Transformer::TransformConstant(duckdb_libpgquery::PGAConst *c, idx_t depth) {
+	return TransformValue(c->val, depth + 1);
 }
 
 } // namespace duckdb

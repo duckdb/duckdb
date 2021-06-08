@@ -2,6 +2,7 @@ library("testthat")
 library("DBI")
 
 test_that("duckdb_register_arrow() works", {
+  skip_on_os("windows")
   skip_if_not_installed("arrow", "4.0.1")
   con <- dbConnect(duckdb::duckdb())
   res <- arrow::read_parquet("userdata1.parquet", as_data_frame=FALSE)

@@ -54,7 +54,7 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition
 	// entry size is the tuple size and the size of the hash/next pointer
 	entry_size = pointer_offset + MaxValue(sizeof(hash_t), sizeof(uintptr_t));
 #ifndef DUCKDB_ALLOW_UNDEFINED
-	auto aligned_entry_size = BaseAggregateHashTable::Align(entry_size);
+	auto aligned_entry_size = RowLayout::Align(entry_size);
 	entry_padding = aligned_entry_size - entry_size;
 	entry_size += entry_padding;
 #endif
@@ -808,6 +808,8 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 			auto ptrs = FlatVector::GetData<data_ptr_t>(pointers);
 			for (idx_t i = 0; i < result_count; i++) {
 				auto idx = result_vector.get_index(i);
+				// NOTE: threadsan reports this as a data race because this can be set concurrently by separate threads
+				// Technically it is, but it does not matter, since the only value that can be written is "true"
 				Store<bool>(true, ptrs[idx] + ht.tuple_size);
 			}
 		}

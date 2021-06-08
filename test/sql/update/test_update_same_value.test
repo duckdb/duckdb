@@ -34,6 +34,11 @@ SELECT * FROM test
 3
 4
 
+query I con1
+SELECT * FROM test WHERE a=4
+----
+4
+
 query I con2
 SELECT * FROM test
 ----

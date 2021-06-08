@@ -35,25 +35,27 @@ static void MapExtractFunction(DataChunk &args, ExpressionState &state, Vector &
 		auto &child = DictionaryVector::Child(map);
 		auto &children = StructVector::GetEntries(child);
 		auto &dict_sel = DictionaryVector::SelVector(map);
-		children[0].second->Orrify(args.size(), offset_data);
-		if (children[0].second->GetType().child_types()[0].second != LogicalTypeId::SQLNULL) {
-			key_value = key_value.CastAs(children[0].second->GetType().child_types()[0].second);
+		children[0]->Orrify(args.size(), offset_data);
+		auto &key_type = children[0]->GetType().child_types()[0].second;
+		if (key_type != LogicalTypeId::SQLNULL) {
+			key_value = key_value.CastAs(key_type);
 		}
 		for (idx_t row = 0; row < args.size(); row++) {
 			auto offsets =
-			    ListVector::Search(*children[0].second, key_value, offset_data.sel->get_index(dict_sel.get_index(row)));
-			auto values = ListVector::GetValuesFromOffsets(*children[1].second, offsets);
+			    ListVector::Search(*children[0], key_value, offset_data.sel->get_index(dict_sel.get_index(row)));
+			auto values = ListVector::GetValuesFromOffsets(*children[1], offsets);
 			FillResult(values, result, row);
 		}
 	} else {
 		auto &children = StructVector::GetEntries(map);
-		children[0].second->Orrify(args.size(), offset_data);
-		if (children[0].second->GetType().child_types()[0].second != LogicalTypeId::SQLNULL) {
-			key_value = key_value.CastAs(children[0].second->GetType().child_types()[0].second);
+		children[0]->Orrify(args.size(), offset_data);
+		auto &key_type = children[0]->GetType().child_types()[0].second;
+		if (key_type != LogicalTypeId::SQLNULL) {
+			key_value = key_value.CastAs(key_type);
 		}
 		for (idx_t row = 0; row < args.size(); row++) {
-			auto offsets = ListVector::Search(*children[0].second, key_value, offset_data.sel->get_index(row));
-			auto values = ListVector::GetValuesFromOffsets(*children[1].second, offsets);
+			auto offsets = ListVector::Search(*children[0], key_value, offset_data.sel->get_index(row));
+			auto values = ListVector::GetValuesFromOffsets(*children[1], offsets);
 			FillResult(values, result, row);
 		}
 	}

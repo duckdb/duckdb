@@ -128,8 +128,6 @@ jobs:
     - name: Duckdb.dll export symbols with C++ on Windows
       run: cl -I src/include examples/embedded-c++-windows/cppintegration.cpp -link src/Release/duckdb.lib
 
-
-
   win-release-32:
     name: Windows (32 Bit)
     runs-on: windows-latest
@@ -172,6 +170,34 @@ jobs:
           duckdb_cli-windows-i386.zip
           tools/jdbc/duckdb_jdbc.jar
 
+  mingw:
+     name: MingW (64 Bit)
+     runs-on: windows-latest
+     needs: linux-debug
+     defaults:
+       run:
+         shell: msys2 {0}
+     steps:
+       - uses: actions/checkout@v2
+       - uses: msys2/setup-msys2@v2
+         with:
+           msystem: MINGW64
+           update: true
+           install: git mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja git
+       # see here: https://gist.github.com/scivision/1de4fd6abea9ba6b2d87dc1e86b5d2ce
+       - name: Put MSYS2_MinGW64 on PATH
+         # there is not yet an environment variable for this path from msys2/setup-msys2
+         run: export PATH=D:/a/_temp/msys/msys64/mingw64/bin:$PATH
+
+       - name: Build
+         run: |
+           cmake -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DBUILD_PARQUET_EXTENSION=1
+           cmake --build . --config Release
+
+       - name: Test
+         run: |
+           cp src/libduckdb.dll .
+           test/unittest.exe
 
   xcode-release:
     name: OSX Release
@@ -487,7 +513,36 @@ jobs:
       run: make relassert
 
     - name: Test
-      run: build/relassert/test/unittest "*"
+      run: |
+          build/relassert/test/unittest "*"
+
+  force-storage:
+    name: Force Storage
+    runs-on: ubuntu-20.04
+    needs: linux-debug
+
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+      BUILD_ICU: 1
+      BUILD_PARQUET: 1
+      BUILD_TPCH: 1
+      BUILD_FTS: 1
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Install
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+    - name: Build
+      run: make reldebug
+
+    - name: Test
+      run: build/reldebug/test/unittest "*" --force-storage
 
 
   threadsan:
@@ -527,6 +582,10 @@ jobs:
           build/reldebug/test/unittest --start-offset-percentage=70 --end-offset-percentage=80
           build/reldebug/test/unittest --start-offset-percentage=80 --end-offset-percentage=90
           build/reldebug/test/unittest --start-offset-percentage=90
+          build/reldebug/test/unittest "[intraquery]"
+          build/reldebug/test/unittest "[interquery]"
+          build/reldebug/test/unittest "[detailed_profiler]"
+          build/reldebug/test/unittest test/sql/tpch/tpch_sf01.test_slow
 
   valgrind:
     name: Valgrind
@@ -551,7 +610,7 @@ jobs:
       run: make debug
 
     - name: Test
-      run: valgrind ./build/debug/test/unittest -s "Test TPC-H SF0.01"
+      run: valgrind ./build/debug/test/unittest test/sql/tpch/tpch_sf001.test_slow
 
 # borked somehow. needs investigation.
 #  codecov:

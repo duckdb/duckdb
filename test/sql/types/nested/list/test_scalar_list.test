@@ -1,0 +1,140 @@
+# name: test/sql/types/nested/list/test_scalar_list.test
+# description: Test scalar lists
+# group: [list]
+
+statement ok
+PRAGMA enable_verification
+
+query T
+SELECT LIST_VALUE('hello')
+----
+[hello]
+
+query T
+SELECT LIST_VALUE('hello')::VARCHAR
+----
+[hello]
+
+query T
+SELECT l::VARChAR FROM (VALUES (LIST_VALUE('hello', 'world')), (LIST_VALUE('a', 'b', 'c'))) t(l)
+----
+[hello, world]
+[a, b, c]
+
+statement ok
+CREATE TABLE list_data (g INTEGER, e INTEGER)
+
+statement ok
+INSERT INTO list_data VALUES (1, 1), (1, 2), (2, 3), (2, 4), (2, 5), (3, 6), (5, NULL)
+
+query TTTTT
+SELECT LIST_VALUE(1, 2, 3, '4') a, LIST_VALUE('a','b','c') b, LIST_VALUE(42, NULL) c, LIST_VALUE(NULL, NULL, NULL) d, LIST_VALUE() e
+----
+[1, 2, 3, 4]	[a, b, c]	[42, NULL]	[NULL, NULL, NULL]	[]
+
+query T
+SELECT a FROM (VALUES (LIST_VALUE(1, 2, 3, 4)), (LIST_VALUE()), (LIST_VALUE(NULL::INTEGER)), (LIST_VALUE(42))) lv(a)
+----
+[1, 2, 3, 4]
+[]
+[NULL]
+[42]
+
+query T
+SELECT a FROM (VALUES (LIST_VALUE('hello', 'world')), (LIST_VALUE()), (LIST_VALUE(NULL::VARCHAR)), (LIST_VALUE('42'))) lv(a)
+----
+[hello, world]
+[]
+[NULL]
+[42]
+
+query TTT
+SELECT * FROM (VALUES ((LIST_VALUE()), (LIST_VALUE(NULL)), LIST_VALUE(1, 2))) lv(a)
+----
+[]	[NULL]	[1, 2]
+
+query T
+SELECT * FROM (VALUES (LIST_VALUE(1, 2)), (LIST_VALUE()), (LIST_VALUE(NULL::INTEGER))) lv(a)
+----
+[1, 2]
+[]
+[NULL]
+
+# casting null to list or empty list to something else should work
+query T
+SELECT LIST_VALUE(1, 2, 3) UNION ALL SELECT LIST_VALUE(NULL::INTEGER) UNION ALL SELECT LIST_VALUE() UNION ALL SELECT NULL
+----
+[1, 2, 3]
+[NULL]
+[]
+NULL
+
+query T
+SELECT NULL UNION ALL SELECT LIST_VALUE() UNION ALL SELECT LIST_VALUE(NULL::INTEGER) UNION ALL SELECT LIST_VALUE(1, 2, 3)
+----
+NULL
+[]
+[NULL]
+[1, 2, 3]
+
+# empty list should not abort UNNEST
+query I
+SELECT UNNEST(a) ua FROM (VALUES (LIST_VALUE(1, 2, 3, 4)), (LIST_VALUE()), (LIST_VALUE(NULL::INTEGER)), (LIST_VALUE(42))) lv(a)
+----
+1
+2
+3
+4
+NULL
+42
+
+# TODO this should work but does not. its also kind of obscure
+# SELECT UNNEST(a) ua FROM (VALUES (LIST_VALUE()), (LIST_VALUE(1, 2, 3, 4)), LIST_VALUE(NULL)), (LIST_VALUE(42))) lv(a));
+# 1, 2, 3, 4, Value(), 42
+# list child type mismatch
+statement error
+SELECT * FROM (VALUES (LIST_VALUE(1, 2)), (LIST_VALUE()), (LIST_VALUE('a'))) lv(a)
+
+# can't cast lists to stuff
+statement error
+SELECT CAST(LIST_VALUE(42) AS INTEGER)
+
+# can't add a number to a list
+statement error
+SELECT LIST_VALUE(42) + 4
+
+# can't add a number to a list
+statement error
+SELECT LIST_VALUE(42, 'a')
+
+# can have unnest anywhere
+query I
+SELECT CAST(UNNEST(LIST_VALUE(42))+2 AS INTEGER)
+----
+44
+
+query T
+SELECT LIST_VALUE(g, e, 42, NULL) FROM list_data WHERE g > 2
+----
+[3, 6, 42, NULL]
+[5, NULL, 42, NULL]
+
+query T
+SELECT CASE WHEN g = 2 THEN LIST_VALUE(g, e, 42) ELSE LIST_VALUE(84, NULL) END FROM list_data WHERE g > 1 UNION ALL SELECT LIST_VALUE(NULL::INTEGER)
+----
+[2, 3, 42]
+[2, 4, 42]
+[2, 5, 42]
+[84, NULL]
+[84, NULL]
+[NULL]
+
+query I
+SELECT CASE WHEN g = 2 THEN LIST_VALUE(g, e, 42) ELSE LIST_VALUE('eeek') END FROM list_data	WHERE g > 1
+----
+[2, 3, 42]
+[2, 4, 42]
+[2, 5, 42]
+[eeek]
+[eeek]
+

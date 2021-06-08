@@ -1,6 +1,7 @@
 add_subdirectory(crypto)
 add_subdirectory(enums)
 add_subdirectory(operator)
+add_subdirectory(row_operations)
 add_subdirectory(serializer)
 add_subdirectory(types)
 add_subdirectory(value_operations)

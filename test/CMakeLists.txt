@@ -10,6 +10,7 @@ add_subdirectory(extension)
 add_subdirectory(helpers)
 add_subdirectory(sql)
 add_subdirectory(sqlite)
+add_subdirectory(ossfuzz)
 
 if(NOT WIN32 AND NOT SUN)
   if(${BUILD_TPCE})
