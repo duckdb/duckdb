@@ -1,4 +1,4 @@
-# name: test/sql/join/test_nested_payloads.test
+# name: test/sql/join/test_nested_keys.test
 # description: Test join with nested types for the keys
 # group: [join]
 
