@@ -43,6 +43,9 @@ static unique_ptr<FunctionData> DuckDBColumnsBind(ClientContext &context, vector
 	names.emplace_back("column_index");
 	return_types.push_back(LogicalType::INTEGER);
 
+	names.emplace_back("internal");
+	return_types.push_back(LogicalType::BOOLEAN);
+
 	names.emplace_back("column_default");
 	return_types.push_back(LogicalType::VARCHAR);
 
@@ -199,22 +202,24 @@ void ColumnHelper::WriteColumns(idx_t start_index, idx_t start_col, idx_t end_co
 		output.SetValue(4, index, Value(ColumnName(i)));
 		// column_index, INTEGER
 		output.SetValue(5, index, Value::INTEGER(i + 1));
+		// internal, BOOLEAN
+		output.SetValue(6, index, Value::BOOLEAN(entry.internal));
 		// column_default, VARCHAR
-		output.SetValue(6, index, Value(ColumnDefault(i)));
+		output.SetValue(7, index, Value(ColumnDefault(i)));
 		// is_nullable, BOOLEAN
-		output.SetValue(7, index, Value::BOOLEAN(IsNullable(i)));
+		output.SetValue(8, index, Value::BOOLEAN(IsNullable(i)));
 		// data_type, VARCHAR
 		const LogicalType &type = ColumnType(i);
-		output.SetValue(8, index, Value(type.ToString()));
+		output.SetValue(9, index, Value(type.ToString()));
 		// data_type_id, BIGINT
-		output.SetValue(9, index, Value::BIGINT(int(type.id())));
+		output.SetValue(10, index, Value::BIGINT(int(type.id())));
 		if (type == LogicalType::VARCHAR) {
 			// FIXME: need check constraints in place to set this correctly
 			// character_maximum_length, INTEGER
-			output.SetValue(10, index, Value());
+			output.SetValue(11, index, Value());
 		} else {
 			// "character_maximum_length", PhysicalType::INTEGER
-			output.SetValue(10, index, Value());
+			output.SetValue(11, index, Value());
 		}
 
 		Value numeric_precision, numeric_scale, numeric_precision_radix;
@@ -267,11 +272,11 @@ void ColumnHelper::WriteColumns(idx_t start_index, idx_t start_col, idx_t end_co
 		}
 
 		// numeric_precision, INTEGER
-		output.SetValue(11, index, numeric_precision);
+		output.SetValue(12, index, numeric_precision);
 		// numeric_precision_radix, INTEGER
-		output.SetValue(12, index, numeric_precision_radix);
+		output.SetValue(13, index, numeric_precision_radix);
 		// numeric_scale, INTEGER
-		output.SetValue(13, index, numeric_scale);
+		output.SetValue(14, index, numeric_scale);
 	}
 }
 
