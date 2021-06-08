@@ -38,7 +38,7 @@ static unique_ptr<FunctionData> ListValueBind(ClientContext &context, ScalarFunc
 	// collect names and deconflict, construct return type
 	child_list_t<LogicalType> child_types;
 	LogicalType child_type = LogicalType::SQLNULL;
-	for(idx_t i = 0; i < arguments.size(); i++) {
+	for (idx_t i = 0; i < arguments.size(); i++) {
 		child_type = LogicalType::MaxLogicalType(child_type, arguments[i]->return_type);
 	}
 	child_types.push_back(make_pair("", move(child_type)));

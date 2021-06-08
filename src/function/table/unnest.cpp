@@ -39,7 +39,7 @@ static void UnnestFunction(ClientContext &context, const FunctionData *bind_data
 
 	auto &list_value = bind_data.value.list_value;
 	idx_t count = 0;
-	for(; state.current_count < list_value.size() && count < STANDARD_VECTOR_SIZE; state.current_count++) {
+	for (; state.current_count < list_value.size() && count < STANDARD_VECTOR_SIZE; state.current_count++) {
 		output.data[0].SetValue(count, list_value[state.current_count]);
 		count++;
 	}
