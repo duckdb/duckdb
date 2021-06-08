@@ -121,7 +121,7 @@ TEST_CASE("Test view creation using a read only database", "[readonly]") {
 	// create the database file and initialize it with data
 	con = make_unique<Connection>(*db);
 
-	REQUIRE_NOTHROW(con->TableFunction("sqlite_master")->CreateView("boo", true, true));
+	REQUIRE_NOTHROW(con->TableFunction("duckdb_tables")->CreateView("boo", true, true));
 	con.reset();
 	db.reset();
 
