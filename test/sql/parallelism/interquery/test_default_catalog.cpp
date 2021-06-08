@@ -17,7 +17,7 @@ public:
 	static void ScanDefaultCatalog(DuckDB *db, bool *read_correct) {
 		Connection con(*db);
 		*read_correct = true;
-		for(idx_t i = 0; i < CONCURRENT_DEFAULT_ITERATION_COUNT; i++) {
+		for (idx_t i = 0; i < CONCURRENT_DEFAULT_ITERATION_COUNT; i++) {
 			auto result = con.Query("SELECT * FROM pg_class");
 			if (!result->success) {
 				*read_correct = false;
@@ -26,24 +26,14 @@ public:
 	}
 
 	static void QueryDefaultCatalog(DuckDB *db, bool *read_correct, int thread_id) {
-		vector<string> random_default_views {
-			"pragma_database_list",
-			"sqlite_master",
-			"sqlite_schema",
-			"sqlite_temp_master",
-			"sqlite_temp_schema",
-			"duckdb_constraints",
-			"duckdb_columns",
-			"duckdb_indexes",
-			"duckdb_schemas",
-			"duckdb_tables",
-			"duckdb_types",
-			"duckdb_views"
-		};
+		vector<string> random_default_views {"pragma_database_list", "sqlite_master",      "sqlite_schema",
+		                                     "sqlite_temp_master",   "sqlite_temp_schema", "duckdb_constraints",
+		                                     "duckdb_columns",       "duckdb_indexes",     "duckdb_schemas",
+		                                     "duckdb_tables",        "duckdb_types",       "duckdb_views"};
 
 		Connection con(*db);
 		*read_correct = true;
-		for(idx_t i = 0; i < CONCURRENT_DEFAULT_ITERATION_COUNT; i++) {
+		for (idx_t i = 0; i < CONCURRENT_DEFAULT_ITERATION_COUNT; i++) {
 			auto result = con.Query("SELECT * FROM " + random_default_views[rand() % random_default_views.size()]);
 			if (!result->success) {
 				*read_correct = false;
@@ -53,33 +43,33 @@ public:
 
 	static void QueryDefaultCatalogFunctions(DuckDB *db, bool *read_correct, int thread_id) {
 		vector<string> random_queries {
-			"SELECT pg_collation_is_visible(0)",
-			"SELECT pg_conversion_is_visible(0)",
-			"SELECT pg_function_is_visible(0)",
-			"SELECT pg_opclass_is_visible(0)",
-			"SELECT pg_operator_is_visible(0)",
-			"SELECT pg_opfamily_is_visible(0)",
-			"SELECT pg_table_is_visible(0)",
-			"SELECT pg_ts_config_is_visible(0)",
-			"SELECT pg_ts_dict_is_visible(0)",
-			"SELECT pg_ts_parser_is_visible(0)",
-			"SELECT pg_ts_template_is_visible(0)",
-			"SELECT pg_type_is_visible(0)",
-			"SELECT current_user",
-			"SELECT current_catalog",
-			"SELECT current_database()",
-			"SELECT user",
-			"SELECT session_user",
-			"SELECT inet_client_addr()",
-			"SELECT inet_client_port()",
-			"SELECT inet_server_addr()",
-			"SELECT inet_server_port()",
-			"SELECT pg_my_temp_schema()",
+		    "SELECT pg_collation_is_visible(0)",
+		    "SELECT pg_conversion_is_visible(0)",
+		    "SELECT pg_function_is_visible(0)",
+		    "SELECT pg_opclass_is_visible(0)",
+		    "SELECT pg_operator_is_visible(0)",
+		    "SELECT pg_opfamily_is_visible(0)",
+		    "SELECT pg_table_is_visible(0)",
+		    "SELECT pg_ts_config_is_visible(0)",
+		    "SELECT pg_ts_dict_is_visible(0)",
+		    "SELECT pg_ts_parser_is_visible(0)",
+		    "SELECT pg_ts_template_is_visible(0)",
+		    "SELECT pg_type_is_visible(0)",
+		    "SELECT current_user",
+		    "SELECT current_catalog",
+		    "SELECT current_database()",
+		    "SELECT user",
+		    "SELECT session_user",
+		    "SELECT inet_client_addr()",
+		    "SELECT inet_client_port()",
+		    "SELECT inet_server_addr()",
+		    "SELECT inet_server_port()",
+		    "SELECT pg_my_temp_schema()",
 		};
 
 		Connection con(*db);
 		*read_correct = true;
-		for(idx_t i = 0; i < CONCURRENT_DEFAULT_ITERATION_COUNT; i++) {
+		for (idx_t i = 0; i < CONCURRENT_DEFAULT_ITERATION_COUNT; i++) {
 			auto result = con.Query(random_queries[rand() % random_queries.size()]);
 			if (!result->success) {
 				*read_correct = false;
