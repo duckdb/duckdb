@@ -190,7 +190,7 @@ void Catalog::ScanSchemas(ClientContext &context, std::function<void(CatalogEntr
 
 CatalogEntry *Catalog::GetEntry(ClientContext &context, CatalogType type, string schema_name, const string &name,
                                 bool if_exists, QueryErrorContext error_context) {
-	if (schema_name == INVALID_SCHEMA) {
+	if (schema_name.empty()) {
 		// no schema provided: check the catalog search path in order
 		if (context.catalog_search_path.empty()) {
 			throw InternalException("Empty catalog search path");

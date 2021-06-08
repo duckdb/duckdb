@@ -31,7 +31,7 @@ public:
 	void ClearDependencies(CatalogSet &set);
 
 	//! Scans all dependencies, returning pairs of (object, dependent)
-	void Scan(std::function<void(CatalogEntry *, CatalogEntry *, DependencyType)> callback);
+	void Scan(std::function<void(CatalogEntry *, CatalogEntry *, DependencyType)> &callback);
 
 private:
 	Catalog &catalog;

@@ -31,7 +31,7 @@ unique_ptr<CatalogEntry> DefaultSchemaGenerator::CreateDefaultEntry(ClientContex
 vector<string> DefaultSchemaGenerator::GetDefaultEntries() {
 	vector<string> result;
 	for (idx_t index = 0; internal_schemas[index].name != nullptr; index++) {
-		result.push_back(internal_schemas[index].name);
+		result.emplace_back(internal_schemas[index].name);
 	}
 	return result;
 }

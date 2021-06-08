@@ -15,10 +15,11 @@ statement ok nosort duckdb_col
 SELECT * FROM duckdb_constraints;
 
 query IIII
-SELECT table_name, constraint_index, constraint_type, constraint_column_names FROM duckdb_constraints ORDER BY table_name, constraint_index
+SELECT table_name, constraint_index, constraint_type, UNNEST(constraint_column_names) col_name FROM duckdb_constraints ORDER BY table_name, constraint_index, col_name
 ----
-integers	0	PRIMARY KEY	[i]
-integers	1	CHECK	[i]
-integers	2	NOT NULL	[i]
-test	0	UNIQUE	[i]
-test	1	CHECK	[k, i]
+integers	0	PRIMARY KEY	i
+integers	1	CHECK	i
+integers	2	NOT NULL	i
+test	0	UNIQUE	i
+test	1	CHECK	i
+test	1	CHECK	k

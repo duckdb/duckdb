@@ -470,7 +470,7 @@ void CatalogSet::Undo(CatalogEntry *entry) {
 	entry->catalog->ModifyCatalog();
 }
 
-void CatalogSet::Scan(ClientContext &context, std::function<void(CatalogEntry *)> callback) {
+void CatalogSet::Scan(ClientContext &context, std::function<void(CatalogEntry *)> &callback) {
 	// lock the catalog set
 	unique_lock<mutex> lock(catalog_lock);
 	if (defaults && !defaults->created_all_entries) {
@@ -499,7 +499,7 @@ void CatalogSet::Scan(ClientContext &context, std::function<void(CatalogEntry *)
 	}
 }
 
-void CatalogSet::Scan(std::function<void(CatalogEntry *)> callback) {
+void CatalogSet::Scan(std::function<void(CatalogEntry *)> &callback) {
 	// lock the catalog set
 	lock_guard<mutex> lock(catalog_lock);
 	for (auto &kv : entries) {

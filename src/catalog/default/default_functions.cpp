@@ -128,7 +128,7 @@ vector<string> DefaultFunctionGenerator::GetDefaultEntries() {
 	vector<string> result;
 	for (idx_t index = 0; internal_macros[index].name != nullptr; index++) {
 		if (internal_macros[index].schema == schema->name) {
-			result.push_back(internal_macros[index].name);
+			result.emplace_back(internal_macros[index].name);
 		}
 	}
 	return result;

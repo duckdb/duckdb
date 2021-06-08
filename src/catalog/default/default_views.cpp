@@ -104,7 +104,7 @@ vector<string> DefaultViewGenerator::GetDefaultEntries() {
 	vector<string> result;
 	for (idx_t index = 0; internal_views[index].name != nullptr; index++) {
 		if (internal_views[index].schema == schema->name) {
-			result.push_back(internal_views[index].name);
+			result.emplace_back(internal_views[index].name);
 		}
 	}
 	return result;
