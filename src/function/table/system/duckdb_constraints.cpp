@@ -109,7 +109,8 @@ void DuckDBConstraintsFunction(ClientContext &context, const FunctionData *bind_
 		}
 
 		auto &table = (TableCatalogEntry &)*entry;
-		for (; data.constraint_offset < table.constraints.size() && count < STANDARD_VECTOR_SIZE; data.constraint_offset++) {
+		for (; data.constraint_offset < table.constraints.size() && count < STANDARD_VECTOR_SIZE;
+		     data.constraint_offset++) {
 			auto &constraint = table.constraints[data.constraint_offset];
 			// return values:
 			// schema_name, LogicalType::VARCHAR
