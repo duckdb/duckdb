@@ -344,7 +344,7 @@ void SetStructMap(DuckDBArrowArrayChildHolder &child_holder, const LogicalType &
 	for (idx_t child_idx = 0; child_idx < child_holder.children.size(); child_idx++) {
 		auto &list_vector_child = ListVector::GetEntry(*children[child_idx]);
 		if (child_idx == 0) {
-			auto &key_validity = ListVector::GetValidityMask(*children[child_idx]);
+			auto key_validity = ListVector::GetValidityMask(*children[child_idx]);
 			if (!key_validity.AllValid()) {
 				if (!key_validity.CheckAllValid(list_size)) {
 					throw std::runtime_error("Arrow doesnt accept NULL keys on Maps");
