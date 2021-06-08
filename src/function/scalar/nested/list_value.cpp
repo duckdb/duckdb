@@ -37,11 +37,11 @@ static unique_ptr<FunctionData> ListValueBind(ClientContext &context, ScalarFunc
                                               vector<unique_ptr<Expression>> &arguments) {
 	// collect names and deconflict, construct return type
 	child_list_t<LogicalType> child_types;
-	if (!arguments.empty()) {
-		child_types.push_back(make_pair("", arguments[0]->return_type));
-	} else {
-		child_types.push_back(make_pair("", LogicalType::SQLNULL));
+	LogicalType child_type = LogicalType::SQLNULL;
+	for(idx_t i = 0; i < arguments.size(); i++) {
+		child_type = LogicalType::MaxLogicalType(child_type, arguments[i]->return_type);
 	}
+	child_types.push_back(make_pair("", move(child_type)));
 
 	// this is more for completeness reasons
 	bound_function.return_type = LogicalType(LogicalTypeId::LIST, move(child_types));
