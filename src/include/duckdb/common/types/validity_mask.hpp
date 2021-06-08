@@ -106,18 +106,6 @@ public:
 		return true;
 	}
 
-	bool CheckAllValid(idx_t count, const SelectionVector *sel) const {
-		if (AllValid()) {
-			return true;
-		}
-		for (idx_t i = 0; i < count; i++) {
-			if (!RowIsValid(sel->get_index(i))) {
-				return false;
-			}
-		}
-		return true;
-	}
-
 	inline V *GetData() const {
 		return validity_mask;
 	}
