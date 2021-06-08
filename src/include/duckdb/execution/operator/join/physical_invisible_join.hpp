@@ -45,12 +45,12 @@ public:
 
 	bool Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> gstate) override;
 
-	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const override;
 
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 
 	bool ExecuteInvisibleJoin(ExecutionContext &context, DataChunk &chunk, PhysicalHashJoinState *state,
-	                          JoinHashTable *ht_ptr);
+	                          JoinHashTable *ht_ptr) const;
 	bool CheckRequirementsForPerfectHashJoin(JoinHashTable *ht_ptr, HashJoinGlobalState &join_global_state);
 	void BuildPerfectHashStructure(JoinHashTable *ht_ptr, JoinHTScanState &join_ht_state, LogicalType type);
 	void FillSelectionVectorSwitch(Vector &source, SelectionVector &sel_vec, idx_t count);

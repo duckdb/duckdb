@@ -9,7 +9,7 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 
-#include <iostream>
+namespace duckdb {
 
 PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
                                    unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
@@ -259,7 +259,7 @@ void PhysicalHashJoin::Combine(ExecutionContext &context, GlobalOperatorState &g
 }
 
 bool PhysicalHashJoin::ExecuteInvisibleJoin(ExecutionContext &context, DataChunk &result,
-                                            PhysicalHashJoinState *physical_state, JoinHashTable *ht_ptr) {
+                                            PhysicalHashJoinState *physical_state, JoinHashTable *ht_ptr) const {
 	// We only probe if the optimized hash table has been built
 	if (!hasInvisibleJoin) {
 		return false;
@@ -329,10 +329,9 @@ void PhysicalHashJoin::BuildPerfectHashStructure(JoinHashTable *hash_table_ptr, 
 }
 
 template <typename T>
-void PhysicalHashJoin::TemplatedFillSelectionVector(Vector &source, SelectionVector &sel_vec, idx_t count) {
-	auto min_value = pjoin_state.build_min.GetValue<T>();
-	auto max_value = pjoin_state.build_max.GetValue<T>();
-	pjoin_state.range = max_value - min_value;
+void PhysicalHashJoin::TemplatedFillSelectionVector(Vector &source, SelectionVector &sel_vec, idx_t count) const {
+	/* 	auto min_value = pjoin_state.build_min.GetValue<T>();
+	    auto max_value = pjoin_state.build_max.GetValue<T>(); */
 
 	auto vector_data = FlatVector::GetData<T>(source);
 	// generate the selection vector
@@ -346,7 +345,7 @@ void PhysicalHashJoin::TemplatedFillSelectionVector(Vector &source, SelectionVec
 	//	}
 }
 
-void PhysicalHashJoin::FillSelectionVectorSwitch(Vector &source, SelectionVector &sel_vec, idx_t count) {
+void PhysicalHashJoin::FillSelectionVectorSwitch(Vector &source, SelectionVector &sel_vec, idx_t count) const {
 	switch (source.GetType().id()) {
 	case LogicalTypeId::TINYINT:
 		TemplatedFillSelectionVector<int8_t>(source, sel_vec, count);

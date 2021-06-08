@@ -120,7 +120,7 @@ unique_ptr<PhysicalOperatorState> PhysicalInvisibleJoin::GetOperatorState() {
 }
 
 void PhysicalInvisibleJoin::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
-                                             PhysicalOperatorState *state_p) {
+                                             PhysicalOperatorState *state_p) const {
 	auto state = reinterpret_cast<PhysicalHashJoinState *>(state_p);
 	auto &sink = (HashJoinGlobalState &)*sink_state;
 	if (sink.hash_table->size() == 0 &&
@@ -135,7 +135,7 @@ void PhysicalInvisibleJoin::GetChunkInternal(ExecutionContext &context, DataChun
 }
 
 bool PhysicalInvisibleJoin::ExecuteInvisibleJoin(ExecutionContext &context, DataChunk &result,
-                                                 PhysicalHashJoinState *physical_state, JoinHashTable *ht_ptr) {
+                                                 PhysicalHashJoinState *physical_state, JoinHashTable *ht_ptr) const {
 	// We only probe if the optimized hash table has been built
 	if (!hasInvisibleJoin) {
 		return false;

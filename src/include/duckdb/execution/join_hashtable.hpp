@@ -140,28 +140,12 @@ public:
 	unique_ptr<ScanStructure> Probe(DataChunk &keys);
 	//! Scan the HT to construct the final full outer join result after
 	void ScanFullOuter(DataChunk &result, JoinHTScanState &state);
-	//
-	static void GatherResultVector(Vector &result, const SelectionVector &result_vector, uintptr_t *ptrs,
-	                               const SelectionVector &sel_vector, idx_t count, idx_t &offset);
-	template <class T>
-	static void TemplatedGatherResult(Vector &result, uintptr_t *pointers, const SelectionVector &result_vector,
-	                                  const SelectionVector &sel_vector, const idx_t count, idx_t offset);
-	template <bool NO_MATCH_SEL, class OP>
-	static idx_t GatherSwitch(VectorData &data, PhysicalType type, Vector &pointers, const SelectionVector &current_sel,
-	                          idx_t count, idx_t offset, SelectionVector *match_sel, SelectionVector *no_match_sel,
-	                          idx_t &no_match_count);
-	template <bool NO_MATCH_SEL, class T, class OP>
-	static idx_t TemplatedGather(VectorData &vdata, Vector &pointers, const SelectionVector &current_sel, idx_t count,
-	                             idx_t offset, SelectionVector *match_sel, SelectionVector *no_match_sel,
-	                             idx_t &no_match_count);
+	// Invisible join methods
 	void FillWithOffsets(vector<data_ptr_t> &key_locations, JoinHTScanState &state);
 	void FullScanHashTable(JoinHTScanState &state, LogicalType key_type);
+	void FillSelectionVectorSwitch(Vector &source, SelectionVector &sel_vec, idx_t count) const;
 	template <typename T>
-	void TemplatedGatherInvisible(Vector &result, uintptr_t *pointers, const SelectionVector &result_vector,
-	                              const SelectionVector &sel_vector, const idx_t count, idx_t offset);
-	template <typename T>
-	void TemplatedFillSelectionVector(Vector &source, SelectionVector &sel_vec, idx_t count);
-	void FillSelectionVectorSwitch(Vector &source, SelectionVector &sel_vec, idx_t count);
+	void TemplatedFillSelectionVector(Vector &source, SelectionVector &sel_vec, idx_t count) const;
 	idx_t size() {
 		return count;
 	}

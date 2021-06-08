@@ -99,12 +99,12 @@ public:
 	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 	bool ExecuteInvisibleJoin(ExecutionContext &context, DataChunk &chunk, PhysicalHashJoinState *state,
-	                          JoinHashTable *ht_ptr);
+	                          JoinHashTable *ht_ptr) const;
 	bool CheckRequirementsForPerfectHashJoin(JoinHashTable *ht_ptr, HashJoinGlobalState &join_global_state);
 	void BuildPerfectHashStructure(JoinHashTable *ht_ptr, JoinHTScanState &join_ht_state, LogicalType key_type);
-	void FillSelectionVectorSwitch(Vector &source, SelectionVector &sel_vec, idx_t count);
+	void FillSelectionVectorSwitch(Vector &source, SelectionVector &sel_vec, idx_t count) const;
 	template <typename T>
-	void TemplatedFillSelectionVector(Vector &source, SelectionVector &sel_vec, idx_t count);
+	void TemplatedFillSelectionVector(Vector &source, SelectionVector &sel_vec, idx_t count) const;
 	bool HasDuplicates(JoinHashTable *ht_ptr);
 
 	void FinalizeOperatorState(PhysicalOperatorState &state, ExecutionContext &context) override;
