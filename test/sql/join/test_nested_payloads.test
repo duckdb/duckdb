@@ -50,6 +50,15 @@ NULL	NULL	NULL
 5	5	[9, 10, 11]
 
 query III
+SELECT fk, pk, p
+FROM integers LEFT OUTER JOIN intlists ON integers.fk=intlists.pk
+WHERE pk < 5 AND fk > 1
+ORDER BY fk, pk
+----
+2	2	[NULL]
+3	3	[]
+
+query III
 SELECT fk, pk, p FROM intlists RIGHT OUTER JOIN integers ON integers.fk=intlists.pk ORDER BY fk, pk
 ----
 NULL	NULL	NULL
@@ -96,6 +105,15 @@ NULL	NULL	NULL
 2	2	[NULL]
 3	3	[]
 5	5	[i, j, k]
+
+query III
+SELECT fk, pk, p
+FROM integers LEFT OUTER JOIN strlists ON integers.fk=strlists.pk
+WHERE pk < 5 AND fk > 1
+ORDER BY fk
+----
+2	2	[NULL]
+3	3	[]
 
 query III
 SELECT fk, pk, p FROM strlists RIGHT OUTER JOIN integers ON integers.fk=strlists.pk ORDER BY fk
@@ -156,6 +174,15 @@ NULL	NULL	NULL
 5	5	{'a': 9, 'b': i}
 
 query III
+SELECT fk, pk, p
+FROM integers LEFT OUTER JOIN structs ON integers.fk=structs.pk
+WHERE pk < 5 AND fk > 1
+ORDER BY fk, pk
+----
+2	2	{'a': NULL, 'b': NULL}
+3	3	{'a': 0, 'b': }
+
+query III
 SELECT fk, pk, p FROM structs RIGHT OUTER JOIN integers ON integers.fk=structs.pk ORDER BY fk, pk
 ----
 NULL	NULL	NULL
@@ -205,6 +232,15 @@ NULL	NULL	NULL
 2	2	{'x': [NULL], 'y': [NULL]}
 3	3	{'x': [], 'y': []}
 5	5	{'x': [9, 10, 11], 'y': [i, j, k]}
+
+query III
+SELECT fk, pk, p
+FROM integers LEFT OUTER JOIN struct_lint_lstr ON integers.fk=struct_lint_lstr.pk
+WHERE pk < 5 AND fk > 1
+ORDER BY fk, pk
+----
+2	2	{'x': [NULL], 'y': [NULL]}
+3	3	{'x': [], 'y': []}
 
 query III
 SELECT fk, pk, p
@@ -259,6 +295,15 @@ NULL	NULL	NULL
 2	2	{'x': [NULL], 'y': [NULL]}
 3	3	{'x': [], 'y': []}
 5	5	{'x': [{'l4': [56], 'i4': 44}, {'l4': [57, 58], 'i4': 45}, {'l4': [59, 60, 61], 'i4': 46}], 'y': [i, j, k]}
+
+query III
+SELECT fk, pk, p
+FROM integers LEFT OUTER JOIN r2l3r4l5i4i2l3v ON integers.fk=r2l3r4l5i4i2l3v.pk
+WHERE pk < 5 AND fk > 1
+ORDER BY fk, pk
+----
+2	2	{'x': [NULL], 'y': [NULL]}
+3	3	{'x': [], 'y': []}
 
 query III
 SELECT fk, pk, p
