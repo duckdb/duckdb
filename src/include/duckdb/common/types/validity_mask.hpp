@@ -93,6 +93,31 @@ public:
 		}
 		return valid_count == entry_count;
 	}
+
+	bool CheckAllValid(idx_t to, idx_t from) const {
+		if (AllValid()) {
+			return true;
+		}
+		for (idx_t i = from; i < to; i++) {
+			if (!RowIsValid(i)) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	bool CheckAllValid(idx_t count, const SelectionVector *sel) const {
+		if (AllValid()) {
+			return true;
+		}
+		for (idx_t i = 0; i < count; i++) {
+			if (!RowIsValid(sel->get_index(i))) {
+				return false;
+			}
+		}
+		return true;
+	}
+
 	inline V *GetData() const {
 		return validity_mask;
 	}

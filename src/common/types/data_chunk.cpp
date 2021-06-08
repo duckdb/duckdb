@@ -344,10 +344,17 @@ void SetStructMap(DuckDBArrowArrayChildHolder &child_holder, const LogicalType &
 	for (idx_t child_idx = 0; child_idx < child_holder.children.size(); child_idx++) {
 		auto &list_vector_child = ListVector::GetEntry(*children[child_idx]);
 		if (child_idx == 0) {
-			auto key_validity = ListVector::GetValidityMask(*children[child_idx]);
-			if (!key_validity.AllValid()) {
-				if (!key_validity.CheckAllValid(list_size)) {
-					throw std::runtime_error("Arrow doesnt accept NULL keys on Maps");
+			VectorData list_data;
+			children[child_idx]->Orrify(size, list_data);
+			auto list_child_validity = FlatVector::Validity(list_vector_child);
+			if (!list_child_validity.AllValid()) {
+				//! Get the offsets to check from the selection vector
+				auto list_offsets = FlatVector::GetData<list_entry_t>(*children[child_idx]);
+				for (idx_t list_idx = 0; list_idx < size; list_idx++) {
+					auto offset = list_offsets[list_data.sel->get_index(list_idx)];
+					if (!list_child_validity.CheckAllValid(offset.length + offset.offset, offset.offset)) {
+						throw std::runtime_error("Arrow doesnt accept NULL keys on Maps");
+					}
 				}
 			}
 		} else {

@@ -284,7 +284,6 @@ struct ListVector {
 	DUCKDB_API static void Append(Vector &target, const Vector &source, idx_t source_size, idx_t source_offset = 0);
 	DUCKDB_API static void Append(Vector &target, const Vector &source, const SelectionVector &sel, idx_t source_size,
 	                              idx_t source_offset = 0);
-	DUCKDB_API static ValidityMask GetValidityMask(Vector &vector);
 	DUCKDB_API static void PushBack(Vector &target, Value &insert);
 	DUCKDB_API static void Initialize(Vector &vec);
 	DUCKDB_API static vector<idx_t> Search(Vector &list, Value &key, idx_t row);

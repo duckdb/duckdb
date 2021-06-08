@@ -1358,20 +1358,6 @@ void ListVector::Append(Vector &target, const Vector &source, const SelectionVec
 	auto &target_buffer = (VectorListBuffer &)*target.auxiliary;
 	target_buffer.Append(source, sel, source_size, source_offset);
 }
-ValidityMask ListVector::GetValidityMask(Vector &vector) {
-	D_ASSERT(vector.GetType().id() == LogicalTypeId::LIST);
-	if (vector.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-		auto &child = DictionaryVector::Child(vector);
-		VectorData list_data;
-		child.Orrify(ListVector::GetListSize(vector), list_data);
-		return list_data.validity;
-	}
-	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR ||
-	         vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
-	D_ASSERT(vector.auxiliary);
-	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::LIST_BUFFER);
-	return FlatVector::Validity(((VectorListBuffer *)vector.auxiliary.get())->GetChild());
-}
 
 void ListVector::PushBack(Vector &target, Value &insert) {
 	ListVector::Initialize(target);
