@@ -76,7 +76,7 @@ static unique_ptr<FunctionData> MapExtractBind(ClientContext &context, ScalarFun
 		throw BinderException("MAP_EXTRACT can only operate on MAPs");
 	}
 	auto &child_types = StructType::GetChildTypes(arguments[0]->return_type);
-	auto &value_type = child_types[1].second;
+	auto &value_type = ListType::GetChildType(child_types[1].second);
 
 	//! Here we have to construct the List Type that will be returned
 	bound_function.return_type = LogicalType::LIST(value_type);

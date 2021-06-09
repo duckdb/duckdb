@@ -343,6 +343,9 @@ string LogicalTypeIdToString(LogicalTypeId id) {
 string LogicalType::ToString() const {
 	switch (id_) {
 	case LogicalTypeId::STRUCT: {
+		if (!type_info_) {
+			return "STRUCT";
+		}
 		auto &child_types = StructType::GetChildTypes(*this);
 		string ret = "STRUCT<";
 		for (size_t i = 0; i < child_types.size(); i++) {
@@ -355,9 +358,15 @@ string LogicalType::ToString() const {
 		return ret;
 	}
 	case LogicalTypeId::LIST: {
+		if (!type_info_) {
+			return "LIST";
+		}
 		return "LIST<" + ListType::GetChildType(*this).ToString() + ">";
 	}
 	case LogicalTypeId::MAP: {
+		if (!type_info_) {
+			return "MAP";
+		}
 		auto &child_types = StructType::GetChildTypes(*this);
 		if (child_types.empty()) {
 			return "MAP<?>";
@@ -369,6 +378,9 @@ string LogicalType::ToString() const {
 		       ListType::GetChildType(child_types[1].second).ToString() + ">";
 	}
 	case LogicalTypeId::DECIMAL: {
+		if (!type_info_) {
+			return "DECIMAL";
+		}
 		auto width = DecimalType::GetWidth(*this);
 		auto scale = DecimalType::GetScale(*this);
 		if (width == 0) {
@@ -869,7 +881,7 @@ public:
 		if (type != other_p->type) {
 			return false;
 		}
-		auto &other = (ListTypeInfo &) other_p;
+		auto &other = (ListTypeInfo &) *other_p;
 		return child_type_ == other.child_type_;
 	}
 
@@ -937,7 +949,7 @@ public:
 };
 
 const child_list_t<LogicalType> &StructType::GetChildTypes(const LogicalType &type) {
-	D_ASSERT(type.id() == LogicalTypeId::STRUCT);
+	D_ASSERT(type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::MAP);
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
 	return ((StructTypeInfo &) *info).child_types_;

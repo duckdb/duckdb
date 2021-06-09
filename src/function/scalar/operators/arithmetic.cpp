@@ -497,7 +497,10 @@ unique_ptr<FunctionData> BindDecimalMultiply(ClientContext &context, ScalarFunct
 		if (argument_type.InternalType() == result_type.InternalType()) {
 			bound_function.arguments[i] = argument_type;
 		} else {
-			bound_function.arguments[i] = LogicalType::DECIMAL(result_width, DecimalType::GetScale(argument_type));
+			uint8_t width, scale;
+			argument_type.GetDecimalProperties(width, scale);
+
+			bound_function.arguments[i] = LogicalType::DECIMAL(result_width, scale);
 		}
 	}
 	result_type.Verify();

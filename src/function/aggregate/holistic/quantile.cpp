@@ -633,13 +633,13 @@ unique_ptr<FunctionData> BindQuantile(ClientContext &context, AggregateFunction 
 	}
 	Value quantile_val = ExpressionExecutor::EvaluateScalar(*arguments[1]);
 	vector<float> quantiles;
-	// if (quantile_val.type().child_types().empty()) {
-	// 	quantiles.push_back(CheckQuantile(quantile_val));
-	// } else {
-	for (const auto &element_val : quantile_val.list_value) {
-		quantiles.push_back(CheckQuantile(element_val));
+	if (quantile_val.type().id() != LogicalTypeId::LIST) {
+		quantiles.push_back(CheckQuantile(quantile_val));
+	} else {
+		for (const auto &element_val : quantile_val.list_value) {
+			quantiles.push_back(CheckQuantile(element_val));
+		}
 	}
-	// }
 
 	arguments.pop_back();
 	return make_unique<QuantileBindData>(quantiles);

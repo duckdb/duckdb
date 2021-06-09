@@ -140,7 +140,7 @@ static LogicalType ExchangeNullType(const LogicalType &type) {
 		for (auto &child_type : child_types) {
 			child_type.second = ExchangeNullType(child_type.second);
 		}
-		return LogicalType::STRUCT(move(child_types));
+		return type.id() == LogicalTypeId::MAP ? LogicalType::MAP(move(child_types)) : LogicalType::STRUCT(move(child_types));
 	}
 	case LogicalTypeId::LIST:
 		return LogicalType::LIST(ExchangeNullType(ListType::GetChildType(type)));
