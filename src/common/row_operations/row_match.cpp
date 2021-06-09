@@ -14,6 +14,48 @@ namespace duckdb {
 using ValidityBytes = RowLayout::ValidityBytes;
 using Predicates = RowOperations::Predicates;
 
+template <typename OP>
+static idx_t SelectComparison(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+                              SelectionVector *true_sel, SelectionVector *false_sel) {
+	throw NotImplementedException("Unsupported nested comparison operand for RowOperations::Match");
+}
+
+template <>
+idx_t SelectComparison<Equals>(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+                               SelectionVector *true_sel, SelectionVector *false_sel) {
+	return VectorOperations::Equals(left, right, sel, count, true_sel, false_sel);
+}
+
+template <>
+idx_t SelectComparison<NotEquals>(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+                                  SelectionVector *true_sel, SelectionVector *false_sel) {
+	return VectorOperations::NotEquals(left, right, sel, count, true_sel, false_sel);
+}
+
+template <>
+idx_t SelectComparison<GreaterThan>(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+                                    SelectionVector *true_sel, SelectionVector *false_sel) {
+	return VectorOperations::GreaterThan(left, right, sel, count, true_sel, false_sel);
+}
+
+template <>
+idx_t SelectComparison<GreaterThanEquals>(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+                                          SelectionVector *true_sel, SelectionVector *false_sel) {
+	return VectorOperations::GreaterThanEquals(left, right, sel, count, true_sel, false_sel);
+}
+
+template <>
+idx_t SelectComparison<LessThan>(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+                                 SelectionVector *true_sel, SelectionVector *false_sel) {
+	return VectorOperations::GreaterThanEquals(left, right, sel, count, true_sel, false_sel);
+}
+
+template <>
+idx_t SelectComparison<LessThanEquals>(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+                                       SelectionVector *true_sel, SelectionVector *false_sel) {
+	return VectorOperations::GreaterThanEquals(left, right, sel, count, true_sel, false_sel);
+}
+
 template <class T, class OP, bool NO_MATCH_SEL>
 static void TemplatedMatchType(VectorData &col, Vector &rows, SelectionVector &sel, idx_t &count, idx_t col_offset,
                                idx_t col_no, SelectionVector *no_match, idx_t &no_match_count) {
@@ -81,36 +123,15 @@ static void TemplatedMatchNested(Vector &col, Vector &rows, SelectionVector &sel
                                  const idx_t col_no, SelectionVector *no_match, idx_t &no_match_count) {
 	// Gather a Vector containing the column values being matched
 	Vector key(col.GetType());
-	const auto &key_sel = FlatVector::INCREMENTAL_SELECTION_VECTOR;
 	RowOperations::Gather(rows, sel, key, sel, count, col_offset, col_no);
 
-	idx_t match_count = 0;
-	for (idx_t i = 0; i < count; i++) {
-		auto idx = sel.get_index(i);
-
-		auto key_value = key.GetValue(idx);
-		auto col_value = col.GetValue(idx);
-
-		if (col_value.is_null) {
-			if (key_value.is_null) {
-				// match: move to next value to compare
-				sel.set_index(match_count++, idx);
-			} else {
-				if (NO_MATCH_SEL) {
-					no_match->set_index(no_match_count++, idx);
-				}
-			}
-		} else {
-			if (!key_value.is_null && OP::template Operation<Value>(col_value, key_value)) {
-				sel.set_index(match_count++, idx);
-			} else {
-				if (NO_MATCH_SEL) {
-					no_match->set_index(no_match_count++, idx);
-				}
-			}
-		}
+	if (NO_MATCH_SEL) {
+		auto match_count = SelectComparison<OP>(col, key, &sel, count, &sel, no_match);
+		no_match_count = count - match_count;
+		count = match_count;
+	} else {
+		count = SelectComparison<OP>(col, key, &sel, count, &sel, nullptr);
 	}
-	count = match_count;
 }
 
 template <class OP, bool NO_MATCH_SEL>
