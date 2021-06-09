@@ -720,7 +720,7 @@ void ScanStructure::NextLeftJoin(DataChunk &keys, DataChunk &left, DataChunk &re
 
 			// now set the right side to NULL
 			for (idx_t i = left.ColumnCount(); i < result.ColumnCount(); i++) {
-                Vector &vec = result.data[i];
+				Vector &vec = result.data[i];
 				vec.SetVectorType(VectorType::CONSTANT_VECTOR);
 				ConstantVector::SetNull(vec, true);
 			}
@@ -808,7 +808,7 @@ void JoinHashTable::ScanFullOuter(DataChunk &result, JoinHTScanState &state) {
 		const auto &sel_vector = FlatVector::INCREMENTAL_SELECTION_VECTOR;
 		// set the left side as a constant NULL
 		for (idx_t i = 0; i < left_column_count; i++) {
-            Vector &vec = result.data[i];
+			Vector &vec = result.data[i];
 			vec.SetVectorType(VectorType::CONSTANT_VECTOR);
 			ConstantVector::SetNull(vec, true);
 		}
