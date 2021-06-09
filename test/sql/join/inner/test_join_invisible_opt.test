@@ -45,10 +45,10 @@ SELECT a, test1.b, c FROM test1, test2 WHERE test1.b = test2.b ORDER BY c;
 
 # create the table integers with the values 0..1000
 statement ok
-CREATE TABLE test3 AS SELECT * FROM range(0, 1024, 1);
+CREATE TABLE test3 AS SELECT * FROM range(0, 4096, 1);
 
 statement ok
-CREATE TABLE test4 AS SELECT * FROM range(0, 1024, 1);
+CREATE TABLE test4 AS SELECT * FROM range(0, 4096, 1);
 
 
 mode output_hash

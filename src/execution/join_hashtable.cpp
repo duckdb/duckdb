@@ -823,13 +823,15 @@ void JoinHashTable::FullScanHashTable(JoinHTScanState &state, LogicalType key_ty
 	// first scan the keys
 	RowOperations::FullScanColumn(layout, addresses, build_vector, keys_count, 0);
 	SelectionVector sel_build(keys_count + 1);
+	SelectionVector sel_addresses(keys_count + 1);
 	// now fill them
-	FillSelectionVectorSwitch(build_vector, sel_build, keys_count);
+	FillSelectionVectorSwitch(build_vector, sel_build, sel_addresses, keys_count);
 	// full scan the remaining build columns
 	for (idx_t i = 0; i < build_types.size(); i++) {
 		auto &vector = columns[i];
 		D_ASSERT(vector.GetType() == build_types[i]);
-		RowOperations::Gather(layout, addresses, sel_build, vector, sel_build, keys_count, i + condition_types.size());
+		RowOperations::Gather(layout, addresses, sel_addresses, vector, sel_build, keys_count,
+		                      i + condition_types.size());
 	}
 }
 
@@ -855,7 +857,8 @@ idx_t JoinHashTable::FillWithOffsets(data_ptr_t *key_locations, JoinHTScanState 
 }
 
 template <typename T>
-void JoinHashTable::TemplatedFillSelectionVector(Vector &source, SelectionVector &sel_vec, idx_t count) const {
+void JoinHashTable::TemplatedFillSelectionVector(Vector &source, SelectionVector &res_sel_vec,
+                                                 SelectionVector &seq_sel_vec, idx_t count) const {
 
 	auto vector_data = FlatVector::GetData<T>(source);
 	// generate the selection vector
@@ -864,36 +867,38 @@ void JoinHashTable::TemplatedFillSelectionVector(Vector &source, SelectionVector
 		auto input_value = vector_data[i];
 		//		if (min_value <= input_value && input_value <= max_value) {
 		auto idx = input_value;
-		sel_vec.set_index(i, idx);
+		res_sel_vec.set_index(i, idx);
+		seq_sel_vec.set_index(i, i);
 	}
 	//	}
 }
 
-void JoinHashTable::FillSelectionVectorSwitch(Vector &source, SelectionVector &sel_vec, idx_t count) const {
+void JoinHashTable::FillSelectionVectorSwitch(Vector &source, SelectionVector &result_sel_vec,
+                                              SelectionVector &sequential_sel_vec, idx_t count) const {
 	switch (source.GetType().id()) {
 	case LogicalTypeId::TINYINT:
-		TemplatedFillSelectionVector<int8_t>(source, sel_vec, count);
+		TemplatedFillSelectionVector<int8_t>(source, result_sel_vec, sequential_sel_vec, count);
 		break;
 	case LogicalTypeId::SMALLINT:
-		TemplatedFillSelectionVector<int16_t>(source, sel_vec, count);
+		TemplatedFillSelectionVector<int16_t>(source, result_sel_vec, sequential_sel_vec, count);
 		break;
 	case LogicalTypeId::INTEGER:
-		TemplatedFillSelectionVector<int32_t>(source, sel_vec, count);
+		TemplatedFillSelectionVector<int32_t>(source, result_sel_vec, sequential_sel_vec, count);
 		break;
 	case LogicalTypeId::BIGINT:
-		TemplatedFillSelectionVector<int64_t>(source, sel_vec, count);
+		TemplatedFillSelectionVector<int64_t>(source, result_sel_vec, sequential_sel_vec, count);
 		break;
 	case LogicalTypeId::UTINYINT:
-		TemplatedFillSelectionVector<uint8_t>(source, sel_vec, count);
+		TemplatedFillSelectionVector<uint8_t>(source, result_sel_vec, sequential_sel_vec, count);
 		break;
 	case LogicalTypeId::USMALLINT:
-		TemplatedFillSelectionVector<uint16_t>(source, sel_vec, count);
+		TemplatedFillSelectionVector<uint16_t>(source, result_sel_vec, sequential_sel_vec, count);
 		break;
 	case LogicalTypeId::UINTEGER:
-		TemplatedFillSelectionVector<uint32_t>(source, sel_vec, count);
+		TemplatedFillSelectionVector<uint32_t>(source, result_sel_vec, sequential_sel_vec, count);
 		break;
 	case LogicalTypeId::UBIGINT:
-		TemplatedFillSelectionVector<uint64_t>(source, sel_vec, count);
+		TemplatedFillSelectionVector<uint64_t>(source, result_sel_vec, sequential_sel_vec, count);
 		break;
 	default:
 		throw NotImplementedException("Type not supported");

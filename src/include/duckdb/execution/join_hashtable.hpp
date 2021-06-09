@@ -143,9 +143,11 @@ public:
 	// Invisible join methods
 	idx_t FillWithOffsets(data_ptr_t *key_locations, JoinHTScanState &state);
 	void FullScanHashTable(JoinHTScanState &state, LogicalType key_type);
-	void FillSelectionVectorSwitch(Vector &source, SelectionVector &sel_vec, idx_t count) const;
+	void FillSelectionVectorSwitch(Vector &source, SelectionVector &sel_vec, SelectionVector &sequential_sel_vec,
+	                               idx_t count) const;
 	template <typename T>
-	void TemplatedFillSelectionVector(Vector &source, SelectionVector &sel_vec, idx_t count) const;
+	void TemplatedFillSelectionVector(Vector &source, SelectionVector &sel_vec, SelectionVector &seq_sel_vec,
+	                                  idx_t count) const;
 	idx_t size() {
 		return count;
 	}
