@@ -56,6 +56,25 @@ static inline void TemplatedLoopHash(Vector &input, Vector &result, const Select
 }
 
 template <bool HAS_RSEL>
+static inline void StructLoopHash(Vector &input, Vector &hashes, const SelectionVector *rsel, idx_t count) {
+	auto &children = StructVector::GetEntries(input);
+
+	D_ASSERT(children.size() > 0);
+	idx_t col_no = 0;
+	if (HAS_RSEL) {
+		VectorOperations::Hash(*children[col_no++], hashes, *rsel, count);
+		while (col_no < children.size()) {
+			VectorOperations::CombineHash(hashes, *children[col_no++], *rsel, count);
+		}
+	} else {
+		VectorOperations::Hash(*children[col_no++], hashes, count);
+		while (col_no < children.size()) {
+			VectorOperations::CombineHash(hashes, *children[col_no++], count);
+		}
+	}
+}
+
+template <bool HAS_RSEL>
 static inline void ValueLoopHash(Vector &input, Vector &result, const SelectionVector *rsel, idx_t count) {
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -119,9 +138,11 @@ static inline void HashTypeSwitch(Vector &input, Vector &result, const Selection
 	case PhysicalType::VARCHAR:
 		TemplatedLoopHash<HAS_RSEL, string_t>(input, result, rsel, count);
 		break;
-	case PhysicalType::LIST:
 	case PhysicalType::MAP:
 	case PhysicalType::STRUCT:
+		StructLoopHash<HAS_RSEL>(input, result, rsel, count);
+		break;
+	case PhysicalType::LIST:
 		ValueLoopHash<HAS_RSEL>(input, result, rsel, count);
 		break;
 	default:
@@ -210,6 +231,19 @@ void TemplatedLoopCombineHash(Vector &input, Vector &hashes, const SelectionVect
 }
 
 template <bool HAS_RSEL>
+static inline void StructLoopCombineHash(Vector &input, Vector &hashes, const SelectionVector *rsel, idx_t count) {
+	auto &children = StructVector::GetEntries(input);
+
+	for (auto &child : children) {
+		if (HAS_RSEL) {
+			VectorOperations::CombineHash(hashes, *child, *rsel, count);
+		} else {
+			VectorOperations::CombineHash(hashes, *child, count);
+		}
+	}
+}
+
+template <bool HAS_RSEL>
 static inline void ValueLoopCombineHash(Vector &input, Vector &hashes, const SelectionVector *rsel, idx_t count) {
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR && hashes.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		auto hash_data = ConstantVector::GetData<hash_t>(hashes);
@@ -285,9 +319,11 @@ static inline void CombineHashTypeSwitch(Vector &hashes, Vector &input, const Se
 	case PhysicalType::VARCHAR:
 		TemplatedLoopCombineHash<HAS_RSEL, string_t>(input, hashes, rsel, count);
 		break;
-	case PhysicalType::LIST:
 	case PhysicalType::MAP:
 	case PhysicalType::STRUCT:
+		StructLoopCombineHash<HAS_RSEL>(input, hashes, rsel, count);
+		break;
+	case PhysicalType::LIST:
 		ValueLoopCombineHash<HAS_RSEL>(input, hashes, rsel, count);
 		break;
 	default:
