@@ -97,10 +97,9 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, vector<Value
 			if (child_type.id() != LogicalTypeId::STRUCT) {
 				throw BinderException("read_csv columns requires a a struct as input");
 			}
-			auto &child_types = StructType::GetChildTypes(child_type);
-			D_ASSERT(child_types.size() == kv.second.struct_value.size());
+			D_ASSERT(StructType::GetChildCount(child_type) == kv.second.struct_value.size());
 			for (idx_t i = 0; i < kv.second.struct_value.size(); i++) {
-				auto &name = child_types[i].first;
+				auto &name = StructType::GetChildName(child_type, i);
 				auto &val = kv.second.struct_value[i];
 				names.push_back(name);
 				if (val.type().id() != LogicalTypeId::VARCHAR) {

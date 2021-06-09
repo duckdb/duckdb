@@ -239,13 +239,14 @@ void InitializeChild(DuckDBArrowArrayChildHolder &child_holder, idx_t size) {
 	child.private_data = nullptr;
 	child.release = ReleaseDuckDBArrowArray;
 	child.n_children = 0;
-	child.null_count = -1; // unknown
+	child.null_count = 0;
 	child.offset = 0;
 	child.dictionary = nullptr;
 	child.buffers = child_holder.buffers.data();
 
 	child.length = size;
 }
+
 void SetChildValidityMask(Vector &vector, ArrowArray &child) {
 	auto &mask = FlatVector::Validity(vector);
 	if (!mask.AllValid()) {
@@ -258,7 +259,116 @@ void SetChildValidityMask(Vector &vector, ArrowArray &child) {
 	child.buffers[0] = (void *)mask.GetData();
 }
 
-void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType &type, Vector &data, idx_t size) {
+void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType &type, Vector &data, idx_t size,
+                   ValidityMask *parent_mask = nullptr);
+
+void SetList(DuckDBArrowArrayChildHolder &child_holder, const LogicalType &type, Vector &data, idx_t size,
+             ValidityMask *parent_mask = nullptr) {
+	auto &child = child_holder.array;
+	auto &vector = child_holder.vector;
+	vector.Reference(data);
+	D_ASSERT(ListVector::HasEntry(data));
+
+	//! Lists have two buffers
+	child.n_buffers = 2;
+	//! Second Buffer is the list offsets
+	child_holder.offsets = unique_ptr<data_t[]>(new data_t[sizeof(uint32_t) * (size + 1)]);
+	child.buffers[1] = child_holder.offsets.get();
+	auto offset_ptr = (uint32_t *)child.buffers[1];
+	auto list_data = FlatVector::GetData<list_entry_t>(data);
+	idx_t offset = 0;
+	offset_ptr[0] = 0;
+	for (idx_t i = 0; i < size; i++) {
+		auto &le = list_data[i];
+		if (parent_mask) {
+			if (parent_mask->RowIsValid(i)) {
+				offset += le.length;
+			}
+		} else {
+			offset += le.length;
+		}
+
+		offset_ptr[i + 1] = offset;
+	}
+	auto list_size = ListVector::GetListSize(data);
+	child_holder.children.resize(1);
+	InitializeChild(child_holder.children[0], list_size);
+	child.n_children = 1;
+	child_holder.children_ptrs.push_back(&child_holder.children[0].array);
+	child.children = &child_holder.children_ptrs[0];
+	auto &child_vector = ListVector::GetEntry(data);
+	auto &list_mask = FlatVector::Validity(data);
+	auto &child_types = StructType::GetChildTypes(type);
+	SetArrowChild(child_holder.children[0], child_types[0].second, child_vector, list_size, &list_mask);
+	SetChildValidityMask(child_vector, child_holder.children[0].array);
+}
+
+void SetStruct(DuckDBArrowArrayChildHolder &child_holder, const LogicalType &type, Vector &data, idx_t size,
+               ValidityMask *parent_mask = nullptr, bool is_map = false) {
+	auto &child = child_holder.array;
+	auto &vector = child_holder.vector;
+	vector.Reference(data);
+	//! Structs only have validity buffers
+	child.n_buffers = 1;
+	auto &children = StructVector::GetEntries(vector);
+	child.n_children = children.size();
+	child_holder.children.resize(child.n_children);
+	for (auto &struct_child : child_holder.children) {
+		InitializeChild(struct_child, size);
+		child_holder.children_ptrs.push_back(&struct_child.array);
+	}
+	child.children = &child_holder.children_ptrs[0];
+	for (idx_t child_idx = 0; child_idx < child_holder.children.size(); child_idx++) {
+		auto &struct_mask = FlatVector::Validity(data);
+		SetArrowChild(child_holder.children[child_idx], StructType::GetChildType(type, child_idx), *children[child_idx],
+		              size, &struct_mask);
+		SetChildValidityMask(*children[child_idx], child_holder.children[child_idx].array);
+	}
+}
+
+void SetStructMap(DuckDBArrowArrayChildHolder &child_holder, const LogicalType &type, Vector &data, idx_t size,
+                  ValidityMask *map_mask) {
+	auto &child = child_holder.array;
+	auto &vector = child_holder.vector;
+	vector.Reference(data);
+	//! Structs only have validity buffers
+	child.n_buffers = 1;
+	auto &children = StructVector::GetEntries(vector);
+	child.n_children = children.size();
+	child_holder.children.resize(child.n_children);
+	auto list_size = ListVector::GetListSize(*children[0]);
+	for (auto &struct_child : child_holder.children) {
+		InitializeChild(struct_child, list_size);
+		child_holder.children_ptrs.push_back(&struct_child.array);
+	}
+	child.children = &child_holder.children_ptrs[0];
+	auto &child_types = StructType::GetChildTypes(type);
+	for (idx_t child_idx = 0; child_idx < child_holder.children.size(); child_idx++) {
+		auto &list_vector_child = ListVector::GetEntry(*children[child_idx]);
+		if (child_idx == 0) {
+			VectorData list_data;
+			children[child_idx]->Orrify(size, list_data);
+			auto list_child_validity = FlatVector::Validity(list_vector_child);
+			if (!list_child_validity.AllValid()) {
+				//! Get the offsets to check from the selection vector
+				auto list_offsets = FlatVector::GetData<list_entry_t>(*children[child_idx]);
+				for (idx_t list_idx = 0; list_idx < size; list_idx++) {
+					auto offset = list_offsets[list_data.sel->get_index(list_idx)];
+					if (!list_child_validity.CheckAllValid(offset.length + offset.offset, offset.offset)) {
+						throw std::runtime_error("Arrow doesnt accept NULL keys on Maps");
+					}
+				}
+			}
+		} else {
+			SetChildValidityMask(list_vector_child, child_holder.children[child_idx].array);
+		}
+		SetArrowChild(child_holder.children[child_idx], ListType::GetChildType(child_types[child_idx].second),
+		              list_vector_child, list_size, map_mask);
+	}
+}
+
+void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType &type, Vector &data, idx_t size,
+                   ValidityMask *parent_mask) {
 	auto &child = child_holder.array;
 	auto &vector = child_holder.vector;
 	switch (type.id()) {
@@ -383,33 +493,44 @@ void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType 
 	}
 	case LogicalTypeId::LIST: {
 		D_ASSERT(ListVector::HasEntry(data));
-
-		//! Lists have two buffers
+		SetList(child_holder, type, data, size, parent_mask);
+		break;
+	}
+	case LogicalTypeId::STRUCT: {
+		SetStruct(child_holder, type, data, size, parent_mask);
+		break;
+	}
+	case LogicalTypeId::MAP: {
+		vector.Reference(data);
+		auto &map_mask = FlatVector::Validity(vector);
 		child.n_buffers = 2;
-		//! Second Buffer is the list offsets
+		//! Maps have one child
+		child.n_children = 1;
+		child_holder.children.resize(1);
+		InitializeChild(child_holder.children[0], size);
+		child_holder.children_ptrs.push_back(&child_holder.children[0].array);
+		//! Second Buffer is the offsets
 		child_holder.offsets = unique_ptr<data_t[]>(new data_t[sizeof(uint32_t) * (size + 1)]);
 		child.buffers[1] = child_holder.offsets.get();
+		auto &struct_children = StructVector::GetEntries(data);
 		auto offset_ptr = (uint32_t *)child.buffers[1];
-		auto list_data = FlatVector::GetData<list_entry_t>(data);
+		auto list_data = FlatVector::GetData<list_entry_t>(*struct_children[0]);
 		idx_t offset = 0;
 		offset_ptr[0] = 0;
 		for (idx_t i = 0; i < size; i++) {
 			auto &le = list_data[i];
-			offset += le.length;
+			if (map_mask.RowIsValid(i)) {
+				offset += le.length;
+			}
 			offset_ptr[i + 1] = offset;
 		}
-		auto list_size = ListVector::GetListSize(data);
-		child_holder.children.resize(1);
-		InitializeChild(child_holder.children[0], list_size);
-		child.n_children = 1;
-		child_holder.children_ptrs.push_back(&child_holder.children[0].array);
 		child.children = &child_holder.children_ptrs[0];
-		auto &child_vector = ListVector::GetEntry(data);
-		SetArrowChild(child_holder.children[0], ListType::GetChildType(type), child_vector, list_size);
-		SetChildValidityMask(child_vector, child_holder.children[0].array);
+		//! We need to set up a struct
+		auto struct_type = LogicalType::STRUCT(StructType::GetChildTypes(type));
+
+		SetStructMap(child_holder.children[0], struct_type, vector, size, &map_mask);
 		break;
 	}
-
 	default:
 		throw std::runtime_error("Unsupported type " + type.ToString());
 	}

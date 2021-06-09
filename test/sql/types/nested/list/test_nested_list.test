@@ -1,4 +1,4 @@
-# name: test/sql/types/list/test_nested_list.test
+# name: test/sql/types/nested/list/test_nested_list.test
 # description: Test filter and projection of nested lists
 # group: [list]
 

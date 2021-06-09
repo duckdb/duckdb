@@ -97,8 +97,8 @@ struct DuckDBArrowSchemaHolder {
 	// unused in children
 	vector<ArrowSchema *> children_ptrs;
 	//! used for nested structures
-	std::list<ArrowSchema> nested_children;
-	std::list<ArrowSchema *> nested_children_ptr;
+	std::list<std::vector<ArrowSchema>> nested_children;
+	std::list<std::vector<ArrowSchema *>> nested_children_ptr;
 	//! This holds strings created to represent decimal types
 	vector<unique_ptr<char[]>> owned_type_names;
 };
@@ -126,6 +126,26 @@ void InitializeChild(ArrowSchema &child, const string &name = "") {
 	child.metadata = nullptr;
 	child.dictionary = nullptr;
 }
+void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type);
+
+void SetArrowMapFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type) {
+	child.format = "+m";
+	//! Map has one child which is a struct
+	child.n_children = 1;
+	root_holder.nested_children.emplace_back();
+	root_holder.nested_children.back().resize(1);
+	root_holder.nested_children_ptr.emplace_back();
+	root_holder.nested_children_ptr.back().push_back(&root_holder.nested_children.back()[0]);
+	InitializeChild(root_holder.nested_children.back()[0]);
+	child.children = &root_holder.nested_children_ptr.back()[0];
+	child.children[0]->name = "entries";
+	child_list_t<LogicalType> struct_child_types;
+	struct_child_types.push_back(make_pair("key", ListType::GetChildType(StructType::GetChildType(type, 0))));
+	struct_child_types.push_back(make_pair("value", ListType::GetChildType(StructType::GetChildType(type, 1))));
+	auto struct_type = LogicalType::STRUCT(move(struct_child_types));
+	SetArrowFormat(root_holder, *child.children[0], struct_type);
+}
+
 void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
@@ -205,12 +225,46 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 	case LogicalTypeId::LIST: {
 		child.format = "+l";
 		child.n_children = 1;
-		root_holder.nested_children.push_back({});
-		root_holder.nested_children_ptr.push_back(&root_holder.nested_children.back());
-		InitializeChild(root_holder.nested_children.back());
-		child.children = &root_holder.nested_children_ptr.back();
+		root_holder.nested_children.emplace_back();
+		root_holder.nested_children.back().resize(1);
+		root_holder.nested_children_ptr.emplace_back();
+		root_holder.nested_children_ptr.back().push_back(&root_holder.nested_children.back()[0]);
+		InitializeChild(root_holder.nested_children.back()[0]);
+		child.children = &root_holder.nested_children_ptr.back()[0];
 		child.children[0]->name = "l";
 		SetArrowFormat(root_holder, **child.children, ListType::GetChildType(type));
+		break;
+	}
+	case LogicalTypeId::STRUCT: {
+		child.format = "+s";
+		auto &child_types = StructType::GetChildTypes(type);
+		child.n_children = child_types.size();
+		root_holder.nested_children.emplace_back();
+		root_holder.nested_children.back().resize(child_types.size());
+		root_holder.nested_children_ptr.emplace_back();
+		root_holder.nested_children_ptr.back().resize(child_types.size());
+		for (idx_t type_idx = 0; type_idx < child_types.size(); type_idx++) {
+			root_holder.nested_children_ptr.back()[type_idx] = &root_holder.nested_children.back()[type_idx];
+		}
+		child.children = &root_holder.nested_children_ptr.back()[0];
+		for (size_t type_idx = 0; type_idx < child_types.size(); type_idx++) {
+			InitializeChild(*child.children[type_idx]);
+
+			auto &struct_col_name = child_types[type_idx].first;
+			unique_ptr<char[]> name_ptr = unique_ptr<char[]>(new char[struct_col_name.size() + 1]);
+			for (size_t i = 0; i < struct_col_name.size(); i++) {
+				name_ptr[i] = struct_col_name[i];
+			}
+			name_ptr[struct_col_name.size()] = '\0';
+			root_holder.owned_type_names.push_back(move(name_ptr));
+
+			child.children[type_idx]->name = root_holder.owned_type_names.back().get();
+			SetArrowFormat(root_holder, *child.children[type_idx], child_types[type_idx].second);
+		}
+		break;
+	}
+	case LogicalTypeId::MAP: {
+		SetArrowMapFormat(root_holder, child, type);
 		break;
 	}
 

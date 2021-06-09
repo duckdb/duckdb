@@ -955,6 +955,22 @@ const child_list_t<LogicalType> &StructType::GetChildTypes(const LogicalType &ty
 	return ((StructTypeInfo &) *info).child_types_;
 }
 
+const LogicalType &StructType::GetChildType(const LogicalType &type, idx_t index) {
+	auto &child_types = StructType::GetChildTypes(type);
+	D_ASSERT(index < child_types.size());
+	return child_types[index].second;
+}
+
+const string &StructType::GetChildName(const LogicalType &type, idx_t index) {
+	auto &child_types = StructType::GetChildTypes(type);
+	D_ASSERT(index < child_types.size());
+	return child_types[index].first;
+}
+
+idx_t StructType::GetChildCount(const LogicalType &type) {
+	return StructType::GetChildTypes(type).size();
+}
+
 LogicalType LogicalType::STRUCT(child_list_t<LogicalType> children) {
 	auto info = make_shared<StructTypeInfo>(move(children));
 	return LogicalType(LogicalTypeId::STRUCT, move(info));

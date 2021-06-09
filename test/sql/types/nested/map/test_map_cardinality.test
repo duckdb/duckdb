@@ -1,4 +1,4 @@
-# name: test/sql/types/map/test_map_cardinality.test
+# name: test/sql/types/nested/map/test_map_cardinality.test
 # description: Test cardinality function for maps
 # group: [map]
 
