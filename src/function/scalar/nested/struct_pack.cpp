@@ -11,7 +11,7 @@ static void StructPackFunction(DataChunk &args, ExpressionState &state, Vector &
 	auto &info = (VariableReturnBindData &)*func_expr.bind_info;
 
 	// this should never happen if the binder below is sane
-	D_ASSERT(args.ColumnCount() == info.stype.child_types().size());
+	D_ASSERT(args.ColumnCount() == StructType::GetChildTypes(info.stype).size());
 
 	bool all_const = true;
 	auto &child_entries = StructVector::GetEntries(result);
@@ -52,13 +52,13 @@ static unique_ptr<FunctionData> StructPackBind(ClientContext &context, ScalarFun
 	}
 
 	// this is more for completeness reasons
-	bound_function.return_type = LogicalType(LogicalTypeId::STRUCT, move(struct_children));
+	bound_function.return_type = LogicalType::STRUCT(move(struct_children));
 	return make_unique<VariableReturnBindData>(bound_function.return_type);
 }
 
 void StructPackFun::RegisterFunction(BuiltinFunctions &set) {
 	// the arguments and return types are actually set in the binder function
-	ScalarFunction fun("struct_pack", {}, LogicalType::STRUCT, StructPackFunction, false, StructPackBind);
+	ScalarFunction fun("struct_pack", {}, LogicalTypeId::STRUCT, StructPackFunction, false, StructPackBind);
 	fun.varargs = LogicalType::ANY;
 	set.AddFunction(fun);
 	fun.name = "row";

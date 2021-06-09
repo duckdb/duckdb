@@ -12,28 +12,14 @@
 
 namespace duckdb {
 
-LogicalType::LogicalType() : id_(LogicalTypeId::INVALID), width_(0), scale_(0), collation_(string()) {
-	physical_type_ = GetInternalType();
-}
-LogicalType::LogicalType(LogicalTypeId id) : id_(id), width_(0), scale_(0), collation_(string()) {
-	physical_type_ = GetInternalType();
+LogicalType::LogicalType() : LogicalType(LogicalTypeId::INVALID) {
 }
 
-LogicalType::LogicalType(LogicalTypeId id, string collation)
-    : id_(id), width_(0), scale_(0), collation_(move(collation)) {
+LogicalType::LogicalType(LogicalTypeId id) : id_(id) {
 	physical_type_ = GetInternalType();
 }
-LogicalType::LogicalType(LogicalTypeId id, uint8_t width, uint8_t scale)
-    : id_(id), width_(width), scale_(scale), collation_(string()) {
-	physical_type_ = GetInternalType();
-}
-LogicalType::LogicalType(LogicalTypeId id, child_list_t<LogicalType> child_types)
-    : id_(id), width_(0), scale_(0), collation_(string()), child_types_(move(child_types)) {
-	physical_type_ = GetInternalType();
-}
-LogicalType::LogicalType(LogicalTypeId id, uint8_t width, uint8_t scale, string collation,
-                         child_list_t<LogicalType> child_types)
-    : id_(id), width_(width), scale_(scale), collation_(move(collation)), child_types_(move(child_types)) {
+LogicalType::LogicalType(LogicalTypeId id, shared_ptr<ExtraTypeInfo> type_info_p) :
+	id_(id), type_info_(move(type_info_p)) {
 	physical_type_ = GetInternalType();
 }
 
@@ -74,7 +60,11 @@ PhysicalType LogicalType::GetInternalType() {
 		return PhysicalType::FLOAT;
 	case LogicalTypeId::DOUBLE:
 		return PhysicalType::DOUBLE;
-	case LogicalTypeId::DECIMAL:
+	case LogicalTypeId::DECIMAL: {
+		if (!type_info_) {
+			return PhysicalType::INVALID;
+		}
+		auto width_ = DecimalType::GetWidth(*this);
 		if (width_ <= Decimal::MAX_WIDTH_INT16) {
 			return PhysicalType::INT16;
 		} else if (width_ <= Decimal::MAX_WIDTH_INT32) {
@@ -86,6 +76,7 @@ PhysicalType LogicalType::GetInternalType() {
 		} else {
 			throw NotImplementedException("Widths bigger than 38 are not supported");
 		}
+	}
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::CHAR:
 	case LogicalTypeId::BLOB:
@@ -126,7 +117,6 @@ const LogicalType LogicalType::BIGINT = LogicalType(LogicalTypeId::BIGINT);
 const LogicalType LogicalType::UBIGINT = LogicalType(LogicalTypeId::UBIGINT);
 const LogicalType LogicalType::HUGEINT = LogicalType(LogicalTypeId::HUGEINT);
 const LogicalType LogicalType::FLOAT = LogicalType(LogicalTypeId::FLOAT);
-const LogicalType LogicalType::DECIMAL = LogicalType(LogicalTypeId::DECIMAL);
 const LogicalType LogicalType::DOUBLE = LogicalType(LogicalTypeId::DOUBLE);
 const LogicalType LogicalType::DATE = LogicalType(LogicalTypeId::DATE);
 
@@ -145,16 +135,13 @@ const LogicalType LogicalType::BLOB = LogicalType(LogicalTypeId::BLOB);
 const LogicalType LogicalType::INTERVAL = LogicalType(LogicalTypeId::INTERVAL);
 
 // TODO these are incomplete and should maybe not exist as such
-const LogicalType LogicalType::STRUCT = LogicalType(LogicalTypeId::STRUCT);
-const LogicalType LogicalType::LIST = LogicalType(LogicalTypeId::LIST);
-const LogicalType LogicalType::MAP = LogicalType(LogicalTypeId::MAP);
 const LogicalType LogicalType::TABLE = LogicalType(LogicalTypeId::TABLE);
 
 const LogicalType LogicalType::ANY = LogicalType(LogicalTypeId::ANY);
 
 const vector<LogicalType> LogicalType::NUMERIC = {LogicalType::TINYINT,   LogicalType::SMALLINT, LogicalType::INTEGER,
                                                   LogicalType::BIGINT,    LogicalType::HUGEINT,  LogicalType::FLOAT,
-                                                  LogicalType::DOUBLE,    LogicalType::DECIMAL,  LogicalType::UTINYINT,
+                                                  LogicalType::DOUBLE,    LogicalTypeId::DECIMAL,  LogicalType::UTINYINT,
                                                   LogicalType::USMALLINT, LogicalType::UINTEGER, LogicalType::UBIGINT};
 
 const vector<LogicalType> LogicalType::INTEGRAL = {LogicalType::TINYINT,   LogicalType::SMALLINT, LogicalType::INTEGER,
@@ -164,7 +151,7 @@ const vector<LogicalType> LogicalType::INTEGRAL = {LogicalType::TINYINT,   Logic
 const vector<LogicalType> LogicalType::ALL_TYPES = {
     LogicalType::BOOLEAN,   LogicalType::TINYINT,   LogicalType::SMALLINT, LogicalType::INTEGER, LogicalType::BIGINT,
     LogicalType::DATE,      LogicalType::TIMESTAMP, LogicalType::DOUBLE,   LogicalType::FLOAT,   LogicalType::VARCHAR,
-    LogicalType::BLOB,      LogicalType::INTERVAL,  LogicalType::HUGEINT,  LogicalType::DECIMAL, LogicalType::UTINYINT,
+    LogicalType::BLOB,      LogicalType::INTERVAL,  LogicalType::HUGEINT,  LogicalTypeId::DECIMAL, LogicalType::UTINYINT,
     LogicalType::USMALLINT, LogicalType::UINTEGER,  LogicalType::UBIGINT};
 // TODO add LIST/STRUCT here
 
@@ -279,33 +266,6 @@ bool TypeIsInteger(PhysicalType type) {
 	return (type >= PhysicalType::UINT8 && type <= PhysicalType::INT64) || type == PhysicalType::INT128;
 }
 
-void LogicalType::Serialize(Serializer &serializer) const {
-	serializer.Write<LogicalTypeId>(id_);
-	serializer.Write<uint8_t>(width_);
-	serializer.Write<uint8_t>(scale_);
-	serializer.WriteString(collation_);
-	serializer.Write<uint16_t>(child_types_.size());
-	for (auto &entry : child_types_) {
-		serializer.WriteString(entry.first);
-		entry.second.Serialize(serializer);
-	}
-}
-
-LogicalType LogicalType::Deserialize(Deserializer &source) {
-	auto id = source.Read<LogicalTypeId>();
-	auto width = source.Read<uint8_t>();
-	auto scale = source.Read<uint8_t>();
-	auto collation = source.Read<string>();
-	child_list_t<LogicalType> children;
-	auto child_count = source.Read<uint16_t>();
-	for (uint16_t i = 0; i < child_count; i++) {
-		string name = source.Read<string>();
-		LogicalType child_type = LogicalType::Deserialize(source);
-		children.push_back(make_pair(move(name), move(child_type)));
-	}
-	return LogicalType(id, width, scale, collation, move(children));
-}
-
 string LogicalTypeIdToString(LogicalTypeId id) {
 	switch (id) {
 	case LogicalTypeId::BOOLEAN:
@@ -383,10 +343,11 @@ string LogicalTypeIdToString(LogicalTypeId id) {
 string LogicalType::ToString() const {
 	switch (id_) {
 	case LogicalTypeId::STRUCT: {
+		auto &child_types = StructType::GetChildTypes(*this);
 		string ret = "STRUCT<";
-		for (size_t i = 0; i < child_types_.size(); i++) {
-			ret += child_types_[i].first + ": " + child_types_[i].second.ToString();
-			if (i < child_types_.size() - 1) {
+		for (size_t i = 0; i < child_types.size(); i++) {
+			ret += child_types[i].first + ": " + child_types[i].second.ToString();
+			if (i < child_types.size() - 1) {
 				ret += ", ";
 			}
 		}
@@ -394,88 +355,85 @@ string LogicalType::ToString() const {
 		return ret;
 	}
 	case LogicalTypeId::LIST: {
-		if (child_types_.empty()) {
-			return "LIST<?>";
-		}
-		if (child_types_.size() != 1) {
-			throw Exception("List needs a single child element");
-		}
-		return "LIST<" + child_types_[0].second.ToString() + ">";
+		return "LIST<" + ListType::GetChildType(*this).ToString() + ">";
 	}
 	case LogicalTypeId::MAP: {
-		if (child_types_.empty()) {
+		auto &child_types = StructType::GetChildTypes(*this);
+		if (child_types.empty()) {
 			return "MAP<?>";
 		}
-		if (child_types_.size() != 2) {
+		if (child_types.size() != 2) {
 			throw Exception("Map needs exactly two child elements");
 		}
-		return "MAP<" + child_types_[0].second.child_types()[0].second.ToString() + ", " +
-		       child_types_[1].second.child_types()[0].second.ToString() + ">";
+		return "MAP<" + ListType::GetChildType(child_types[0].second).ToString() + ", " +
+		       ListType::GetChildType(child_types[1].second).ToString() + ">";
 	}
 	case LogicalTypeId::DECIMAL: {
-		if (width_ == 0) {
+		auto width = DecimalType::GetWidth(*this);
+		auto scale = DecimalType::GetScale(*this);
+		if (width == 0) {
 			return "DECIMAL";
 		}
-		return StringUtil::Format("DECIMAL(%d,%d)", width_, scale_);
+		return StringUtil::Format("DECIMAL(%d,%d)", width, scale);
 	}
 	default:
 		return LogicalTypeIdToString(id_);
 	}
 }
 
-LogicalType TransformStringToLogicalType(const string &str) {
+LogicalTypeId TransformStringToLogicalType(const string &str) {
 	auto lower_str = StringUtil::Lower(str);
 	// Transform column type
 	if (lower_str == "int" || lower_str == "int4" || lower_str == "signed" || lower_str == "integer" ||
 	    lower_str == "integral" || lower_str == "int32") {
-		return LogicalType::INTEGER;
+		return LogicalTypeId::INTEGER;
 	} else if (lower_str == "varchar" || lower_str == "bpchar" || lower_str == "text" || lower_str == "string" ||
 	           lower_str == "char") {
-		return LogicalType::VARCHAR;
+		return LogicalTypeId::VARCHAR;
 	} else if (lower_str == "bytea" || lower_str == "blob" || lower_str == "varbinary" || lower_str == "binary") {
-		return LogicalType::BLOB;
+		return LogicalTypeId::BLOB;
 	} else if (lower_str == "int8" || lower_str == "bigint" || lower_str == "int64" || lower_str == "long") {
-		return LogicalType::BIGINT;
+		return LogicalTypeId::BIGINT;
 	} else if (lower_str == "int2" || lower_str == "smallint" || lower_str == "short" || lower_str == "int16") {
-		return LogicalType::SMALLINT;
+		return LogicalTypeId::SMALLINT;
 	} else if (lower_str == "timestamp" || lower_str == "datetime" || lower_str == "timestamp_us") {
-		return LogicalType::TIMESTAMP;
+		return LogicalTypeId::TIMESTAMP;
 	} else if (lower_str == "timestamp_ms") {
-		return LogicalType::TIMESTAMP_MS;
+		return LogicalTypeId::TIMESTAMP_MS;
 	} else if (lower_str == "timestamp_ns") {
-		return LogicalType::TIMESTAMP_NS;
+		return LogicalTypeId::TIMESTAMP_NS;
 	} else if (lower_str == "timestamp_s") {
-		return LogicalType::TIMESTAMP_S;
+		return LogicalTypeId::TIMESTAMP_SEC;
 	} else if (lower_str == "bool" || lower_str == "boolean" || lower_str == "logical") {
-		return LogicalType(LogicalTypeId::BOOLEAN);
+		return LogicalTypeId::BOOLEAN;
 	} else if (lower_str == "real" || lower_str == "float4" || lower_str == "float") {
-		return LogicalType::FLOAT;
+		return LogicalTypeId::FLOAT;
 	} else if (lower_str == "decimal" || lower_str == "dec" || lower_str == "numeric") {
-		return LogicalType(LogicalTypeId::DECIMAL, 18, 3);
+		return LogicalTypeId::DECIMAL;
 	} else if (lower_str == "double" || lower_str == "float8" || lower_str == "decimal") {
-		return LogicalType::DOUBLE;
+		return LogicalTypeId::DOUBLE;
 	} else if (lower_str == "tinyint" || lower_str == "int1") {
-		return LogicalType::TINYINT;
+		return LogicalTypeId::TINYINT;
 	} else if (lower_str == "date") {
-		return LogicalType::DATE;
+		return LogicalTypeId::DATE;
 	} else if (lower_str == "time") {
-		return LogicalType::TIME;
+		return LogicalTypeId::TIME;
 	} else if (lower_str == "interval") {
-		return LogicalType::INTERVAL;
+		return LogicalTypeId::INTERVAL;
 	} else if (lower_str == "hugeint" || lower_str == "int128") {
-		return LogicalType::HUGEINT;
+		return LogicalTypeId::HUGEINT;
 	} else if (lower_str == "struct" || lower_str == "row") {
-		return LogicalType::STRUCT;
+		return LogicalTypeId::STRUCT;
 	} else if (lower_str == "map") {
-		return LogicalType::MAP;
+		return LogicalTypeId::MAP;
 	} else if (lower_str == "utinyint") {
-		return LogicalType::UTINYINT;
+		return LogicalTypeId::UTINYINT;
 	} else if (lower_str == "usmallint") {
-		return LogicalType::USMALLINT;
+		return LogicalTypeId::USMALLINT;
 	} else if (lower_str == "uinteger") {
-		return LogicalType::UINTEGER;
+		return LogicalTypeId::UINTEGER;
 	} else if (lower_str == "ubigint") {
-		return LogicalType::UBIGINT;
+		return LogicalTypeId::UBIGINT;
 	} else {
 		throw NotImplementedException("DataType %s not supported yet...\n", str);
 	}
@@ -575,8 +533,8 @@ bool LogicalType::GetDecimalProperties(uint8_t &width, uint8_t &scale) const {
 		scale = 0;
 		break;
 	case LogicalTypeId::DECIMAL:
-		width = width_;
-		scale = scale_;
+		width = DecimalType::GetWidth(*this);
+		scale = DecimalType::GetScale(*this);
 		break;
 	default:
 		return false;
@@ -717,26 +675,24 @@ LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalTy
 	} else {
 		if (left.id() == LogicalTypeId::VARCHAR) {
 			// varchar: use type that has collation (if any)
-			if (right.collation().empty()) {
+			if (StringType::GetCollation(right).empty()) {
 				return left;
 			} else {
 				return right;
 			}
 		} else if (left.id() == LogicalTypeId::DECIMAL) {
 			// use max width/scale of the two types
-			return LogicalType(LogicalTypeId::DECIMAL, MaxValue<uint8_t>(left.width(), right.width()),
-			                   MaxValue<uint8_t>(left.scale(), right.scale()));
+			auto width = MaxValue<uint8_t>(DecimalType::GetWidth(left), DecimalType::GetWidth(right));
+			auto scale = MaxValue<uint8_t>(DecimalType::GetScale(left), DecimalType::GetScale(right));
+			return LogicalType::DECIMAL(width, scale);
 		} else if (left.id() == LogicalTypeId::LIST) {
 			// list: perform max recursively on child type
-			child_list_t<LogicalType> child_types;
-			child_types.push_back(
-			    make_pair(left.child_types()[0].first,
-			              MaxLogicalType(left.child_types()[0].second, right.child_types()[0].second)));
-			return LogicalType(LogicalTypeId::LIST, move(child_types));
+			auto new_child = MaxLogicalType(ListType::GetChildType(left), ListType::GetChildType(right));
+			return LogicalType::LIST(move(new_child));
 		} else if (left.id() == LogicalTypeId::STRUCT) {
 			// struct: perform recursively
-			auto &left_child_types = left.child_types();
-			auto &right_child_types = right.child_types();
+			auto &left_child_types = StructType::GetChildTypes(left);
+			auto &right_child_types = StructType::GetChildTypes(right);
 			if (left_child_types.size() != right_child_types.size()) {
 				// child types are not of equal size, we can't cast anyway
 				// just return the left child
@@ -747,10 +703,9 @@ LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalTy
 				auto child_type = MaxLogicalType(left_child_types[i].second, right_child_types[i].second);
 				child_types.push_back(make_pair(left_child_types[i].first, move(child_type)));
 			}
-			return LogicalType(LogicalTypeId::STRUCT, move(child_types));
+			return LogicalType::STRUCT(move(child_types));
 		} else {
 			// types are equal but no extra specifier: just return the type
-			// FIXME: LIST and STRUCT?
 			return left;
 		}
 	}
@@ -759,8 +714,8 @@ LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalTy
 void LogicalType::Verify() const {
 #ifdef DEBUG
 	if (id_ == LogicalTypeId::DECIMAL) {
-		D_ASSERT(width_ >= 1 && width_ <= Decimal::MAX_WIDTH_DECIMAL);
-		D_ASSERT(scale_ >= 0 && scale_ <= width_);
+		D_ASSERT(DecimalType::GetWidth(*this) >= 1 && DecimalType::GetWidth(*this) <= Decimal::MAX_WIDTH_DECIMAL);
+		D_ASSERT(DecimalType::GetScale(*this) >= 0 && DecimalType::GetScale(*this) <= DecimalType::GetWidth(*this));
 	}
 #endif
 }
@@ -773,6 +728,294 @@ bool ApproxEqual(float ldecimal, float rdecimal) {
 bool ApproxEqual(double ldecimal, double rdecimal) {
 	double epsilon = std::fabs(rdecimal) * 0.01;
 	return std::fabs(ldecimal - rdecimal) <= epsilon;
+}
+
+//===--------------------------------------------------------------------===//
+// Extra Type Info
+//===--------------------------------------------------------------------===//
+enum class ExtraTypeInfoType : uint8_t {
+	INVALID_TYPE_INFO = 0,
+	DECIMAL_TYPE_INFO = 1,
+	STRING_TYPE_INFO = 2,
+	LIST_TYPE_INFO = 3,
+	STRUCT_TYPE_INFO = 4
+};
+
+struct ExtraTypeInfo {
+	ExtraTypeInfo(ExtraTypeInfoType type) : type(type) {}
+	virtual ~ExtraTypeInfo() {
+	}
+
+	ExtraTypeInfoType type;
+
+public:
+	virtual bool Equals(ExtraTypeInfo *other) = 0;
+	//! Serializes a ExtraTypeInfo to a stand-alone binary blob
+	virtual void Serialize(Serializer &serializer) const = 0;
+	//! Serializes a ExtraTypeInfo to a stand-alone binary blob
+	static void Serialize(ExtraTypeInfo *info, Serializer &serializer);
+	//! Deserializes a blob back into an ExtraTypeInfo
+	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source);
+};
+
+//===--------------------------------------------------------------------===//
+// Decimal Type
+//===--------------------------------------------------------------------===//
+struct DecimalTypeInfo : public ExtraTypeInfo {
+	DecimalTypeInfo(uint8_t width_p, uint8_t scale_p) :
+	    ExtraTypeInfo(ExtraTypeInfoType::DECIMAL_TYPE_INFO), width_(width_p), scale_(scale_p) {}
+
+	uint8_t width_;
+	uint8_t scale_;
+
+public:
+	bool Equals(ExtraTypeInfo *other_p) override {
+		if (!other_p) {
+			return false;
+		}
+		if (type != other_p->type) {
+			return false;
+		}
+		auto &other = (DecimalTypeInfo &) *other_p;
+		return width_ == other.width_ && scale_ == other.scale_;
+	}
+
+	void Serialize(Serializer &serializer) const override {
+		serializer.Write<uint8_t>(width_);
+		serializer.Write<uint8_t>(scale_);
+	}
+
+	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source) {
+		auto width = source.Read<uint8_t>();
+		auto scale = source.Read<uint8_t>();
+		return make_shared<DecimalTypeInfo>(width, scale);
+	}
+};
+
+uint8_t DecimalType::GetWidth(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::DECIMAL);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	return ((DecimalTypeInfo &) *info).width_;
+}
+
+uint8_t DecimalType::GetScale(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::DECIMAL);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	return ((DecimalTypeInfo &) *info).scale_;
+}
+
+LogicalType LogicalType::DECIMAL(int width, int scale) {
+	auto type_info = make_shared<DecimalTypeInfo>(width, scale);
+	return LogicalType(LogicalTypeId::DECIMAL, move(type_info));
+}
+
+//===--------------------------------------------------------------------===//
+// String Type
+//===--------------------------------------------------------------------===//
+struct StringTypeInfo : public ExtraTypeInfo {
+	StringTypeInfo(string collation_p) :
+	    ExtraTypeInfo(ExtraTypeInfoType::STRING_TYPE_INFO), collation_(move(collation_p)) {}
+
+	string collation_;
+
+public:
+	bool Equals(ExtraTypeInfo *other_p) override {
+		// collation info has no impact on equality
+		return true;
+	}
+
+	void Serialize(Serializer &serializer) const override {
+		serializer.WriteString(collation_);
+	}
+
+	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source) {
+		auto collation = source.Read<string>();
+		return make_shared<StringTypeInfo>(move(collation));
+	}
+};
+
+string StringType::GetCollation(const LogicalType &type) {
+	if (type.id() != LogicalTypeId::VARCHAR) {
+		return string();
+	}
+	auto info = type.AuxInfo();
+	if (!info) {
+		return string();
+	}
+	return ((StringTypeInfo &) *info).collation_;
+}
+
+LogicalType LogicalType::VARCHAR_COLLATION(string collation) {
+	auto string_info = make_shared<StringTypeInfo>(move(collation));
+	return LogicalType(LogicalTypeId::VARCHAR, move(string_info));
+}
+
+//===--------------------------------------------------------------------===//
+// List Type
+//===--------------------------------------------------------------------===//
+struct ListTypeInfo : public ExtraTypeInfo {
+	ListTypeInfo(LogicalType child_type_p) :
+	    ExtraTypeInfo(ExtraTypeInfoType::LIST_TYPE_INFO), child_type_(move(child_type_p)) {}
+
+	LogicalType child_type_;
+
+public:
+	bool Equals(ExtraTypeInfo *other_p) override {
+		if (!other_p) {
+			return false;
+		}
+		if (type != other_p->type) {
+			return false;
+		}
+		auto &other = (ListTypeInfo &) other_p;
+		return child_type_ == other.child_type_;
+	}
+
+	void Serialize(Serializer &serializer) const override {
+		child_type_.Serialize(serializer);
+	}
+
+	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source) {
+		auto child_type = LogicalType::Deserialize(source);
+		return make_shared<ListTypeInfo>(move(child_type));
+	}
+};
+
+const LogicalType &ListType::GetChildType(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::LIST);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	return ((ListTypeInfo &) *info).child_type_;
+}
+
+LogicalType LogicalType::LIST(LogicalType child) {
+	auto info = make_shared<ListTypeInfo>(move(child));
+	return LogicalType(LogicalTypeId::LIST, move(info));
+}
+
+//===--------------------------------------------------------------------===//
+// Struct Type
+//===--------------------------------------------------------------------===//
+struct StructTypeInfo : public ExtraTypeInfo {
+	StructTypeInfo(child_list_t<LogicalType> child_types_p) :
+	    ExtraTypeInfo(ExtraTypeInfoType::STRUCT_TYPE_INFO), child_types_(move(child_types_p)) {}
+
+	child_list_t<LogicalType> child_types_;
+
+public:
+	bool Equals(ExtraTypeInfo *other_p) override {
+		if (!other_p) {
+			return false;
+		}
+		if (type != other_p->type) {
+			return false;
+		}
+		auto &other = (StructTypeInfo &) *other_p;
+		return child_types_ == other.child_types_;
+	}
+
+	void Serialize(Serializer &serializer) const override {
+		serializer.Write<uint32_t>(child_types_.size());
+		for(idx_t i = 0; i < child_types_.size(); i++) {
+			serializer.WriteString(child_types_[i].first);
+			child_types_[i].second.Serialize(serializer);
+		}
+	}
+
+	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source) {
+		child_list_t<LogicalType> child_list;
+		auto child_types_size = source.Read<uint32_t>();
+		for(uint32_t i = 0; i < child_types_size; i++) {
+			auto name = source.Read<string>();
+			auto type = LogicalType::Deserialize(source);
+			child_list.push_back(make_pair(move(name), move(type)));
+		}
+		return make_shared<StructTypeInfo>(move(child_list));
+	}
+};
+
+const child_list_t<LogicalType> &StructType::GetChildTypes(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::STRUCT);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	return ((StructTypeInfo &) *info).child_types_;
+}
+
+LogicalType LogicalType::STRUCT(child_list_t<LogicalType> children) {
+	auto info = make_shared<StructTypeInfo>(move(children));
+	return LogicalType(LogicalTypeId::STRUCT, move(info));
+}
+
+LogicalType LogicalType::MAP(child_list_t<LogicalType> children) {
+	auto info = make_shared<StructTypeInfo>(move(children));
+	return LogicalType(LogicalTypeId::MAP, move(info));
+}
+
+//===--------------------------------------------------------------------===//
+// Extra Type Info
+//===--------------------------------------------------------------------===//
+void ExtraTypeInfo::Serialize(ExtraTypeInfo *info, Serializer &serializer) {
+	if (!info) {
+		serializer.Write<ExtraTypeInfoType>(ExtraTypeInfoType::INVALID_TYPE_INFO);
+	} else {
+		serializer.Write<ExtraTypeInfoType>(info->type);
+		info->Serialize(serializer);
+	}
+}
+
+shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(Deserializer &source) {
+	auto type = source.Read<ExtraTypeInfoType>();
+	switch(type) {
+	case ExtraTypeInfoType::INVALID_TYPE_INFO:
+		return nullptr;
+	case ExtraTypeInfoType::DECIMAL_TYPE_INFO:
+		return DecimalTypeInfo::Deserialize(source);
+	case ExtraTypeInfoType::STRING_TYPE_INFO:
+		return StringTypeInfo::Deserialize(source);
+	case ExtraTypeInfoType::LIST_TYPE_INFO:
+		return ListTypeInfo::Deserialize(source);
+	case ExtraTypeInfoType::STRUCT_TYPE_INFO:
+		return StructTypeInfo::Deserialize(source);
+	default:
+		throw NotImplementedException("Unimplemented type info in ExtraTypeInfo::Deserialize");
+	}
+}
+
+//===--------------------------------------------------------------------===//
+// Logical Type
+//===--------------------------------------------------------------------===//
+
+// the destructor needs to know about the extra type info
+LogicalType::~LogicalType() {
+}
+
+void LogicalType::Serialize(Serializer &serializer) const {
+	serializer.Write<LogicalTypeId>(id_);
+	ExtraTypeInfo::Serialize(type_info_.get(), serializer);
+}
+
+LogicalType LogicalType::Deserialize(Deserializer &source) {
+	auto id = source.Read<LogicalTypeId>();
+	auto info = ExtraTypeInfo::Deserialize(source);
+
+	return LogicalType(id, move(info));
+}
+
+bool LogicalType::operator==(const LogicalType &rhs) const {
+	if (id_ != rhs.id_) {
+		return false;
+	}
+	if (type_info_.get() == rhs.type_info_.get()) {
+		return true;
+	}
+	if (type_info_) {
+		return type_info_->Equals(rhs.type_info_.get());
+	} else {
+		D_ASSERT(rhs.type_info_);
+		return rhs.type_info_->Equals(type_info_.get());
+	}
 }
 
 } // namespace duckdb

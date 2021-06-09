@@ -210,7 +210,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		InitializeChild(root_holder.nested_children.back());
 		child.children = &root_holder.nested_children_ptr.back();
 		child.children[0]->name = "l";
-		SetArrowFormat(root_holder, **child.children, type.child_types()[0].second);
+		SetArrowFormat(root_holder, **child.children, ListType::GetChildType(type));
 		break;
 	}
 

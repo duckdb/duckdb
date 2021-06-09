@@ -140,7 +140,7 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<LogicalType>
 				auto sql_type = sql_types[bound_colref.binding.column_index];
 				if (sql_type.id() == LogicalTypeId::VARCHAR) {
 					target_distinct =
-					    ExpressionBinder::PushCollation(context, move(target_distinct), sql_type.collation(), true);
+					    ExpressionBinder::PushCollation(context, move(target_distinct), StringType::GetCollation(sql_type), true);
 				}
 			}
 			break;
@@ -159,7 +159,7 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<LogicalType>
 				bound_colref.return_type = sql_types[bound_colref.binding.column_index];
 				if (sql_type.id() == LogicalTypeId::VARCHAR) {
 					order_node.expression =
-					    ExpressionBinder::PushCollation(context, move(order_node.expression), sql_type.collation());
+					    ExpressionBinder::PushCollation(context, move(order_node.expression), StringType::GetCollation(sql_type));
 				}
 			}
 			break;
@@ -250,7 +250,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 			D_ASSERT(bound_expr->return_type.id() != LogicalTypeId::INVALID);
 
 			// push a potential collation, if necessary
-			bound_expr = ExpressionBinder::PushCollation(context, move(bound_expr), group_type.collation(), true);
+			bound_expr = ExpressionBinder::PushCollation(context, move(bound_expr), StringType::GetCollation(group_type), true);
 			result->groups.push_back(move(bound_expr));
 
 			// in the unbound expression we DO bind the table names of any ColumnRefs

@@ -364,37 +364,25 @@ enum class LogicalTypeId : uint8_t {
 	TABLE = 103
 };
 
+struct ExtraTypeInfo;
+
 struct LogicalType {
 	DUCKDB_API LogicalType();
 	DUCKDB_API LogicalType(LogicalTypeId id); // NOLINT: Allow implicit conversion from `LogicalTypeId`
-	DUCKDB_API LogicalType(LogicalTypeId id, string collation);
-	DUCKDB_API LogicalType(LogicalTypeId id, uint8_t width, uint8_t scale);
-	LogicalType(LogicalTypeId id, child_list_t<LogicalType> child_types);
-	LogicalType(LogicalTypeId id, uint8_t width, uint8_t scale, string collation,
-	            child_list_t<LogicalType> child_types);
+	DUCKDB_API LogicalType(LogicalTypeId id, shared_ptr<ExtraTypeInfo> type_info);
+	DUCKDB_API ~LogicalType();
 
 	LogicalTypeId id() const {
 		return id_;
 	}
-	uint8_t width() const {
-		return width_;
-	}
-	uint8_t scale() const {
-		return scale_;
-	}
-	const string &collation() const {
-		return collation_;
-	}
-	const child_list_t<LogicalType> &child_types() const {
-		return child_types_;
-	}
 	PhysicalType InternalType() const {
 		return physical_type_;
 	}
-
-	bool operator==(const LogicalType &rhs) const {
-		return id_ == rhs.id_ && width_ == rhs.width_ && scale_ == rhs.scale_ && child_types_ == rhs.child_types_;
+	const ExtraTypeInfo *AuxInfo() const {
+		return type_info_.get();
 	}
+
+	bool operator==(const LogicalType &rhs) const;
 	bool operator!=(const LogicalType &rhs) const {
 		return !(*this == rhs);
 	}
@@ -419,11 +407,8 @@ struct LogicalType {
 
 private:
 	LogicalTypeId id_;
-	uint8_t width_;
-	uint8_t scale_;
-	string collation_;
-	child_list_t<LogicalType> child_types_;
 	PhysicalType physical_type_;
+	shared_ptr<ExtraTypeInfo> type_info_;
 
 private:
 	PhysicalType GetInternalType();
@@ -441,7 +426,6 @@ public:
 	DUCKDB_API static const LogicalType UBIGINT;
 	DUCKDB_API static const LogicalType FLOAT;
 	DUCKDB_API static const LogicalType DOUBLE;
-	DUCKDB_API static const LogicalType DECIMAL;
 	DUCKDB_API static const LogicalType DATE;
 	DUCKDB_API static const LogicalType TIMESTAMP;
 	DUCKDB_API static const LogicalType TIMESTAMP_S;
@@ -449,9 +433,6 @@ public:
 	DUCKDB_API static const LogicalType TIMESTAMP_NS;
 	DUCKDB_API static const LogicalType TIME;
 	DUCKDB_API static const LogicalType VARCHAR;
-	DUCKDB_API static const LogicalType STRUCT;
-	DUCKDB_API static const LogicalType MAP;
-	DUCKDB_API static const LogicalType LIST;
 	DUCKDB_API static const LogicalType ANY;
 	DUCKDB_API static const LogicalType BLOB;
 	DUCKDB_API static const LogicalType INTERVAL;
@@ -461,6 +442,12 @@ public:
 	DUCKDB_API static const LogicalType TABLE;
 	DUCKDB_API static const LogicalType INVALID;
 
+	DUCKDB_API static LogicalType DECIMAL(int width, int scale);
+	DUCKDB_API static LogicalType VARCHAR_COLLATION(string collation);
+	DUCKDB_API static LogicalType LIST(LogicalType child);
+	DUCKDB_API static LogicalType STRUCT(child_list_t<LogicalType> children);
+	DUCKDB_API static LogicalType MAP(child_list_t<LogicalType> children);
+
 	//! A list of all NUMERIC types (integral and floating point types)
 	DUCKDB_API static const vector<LogicalType> NUMERIC;
 	//! A list of all INTEGRAL types
@@ -469,9 +456,27 @@ public:
 	DUCKDB_API static const vector<LogicalType> ALL_TYPES;
 };
 
+struct DecimalType {
+	DUCKDB_API static uint8_t GetWidth(const LogicalType &type);
+	DUCKDB_API static uint8_t GetScale(const LogicalType &type);
+};
+
+struct StringType {
+	DUCKDB_API static string GetCollation(const LogicalType &type);
+};
+
+struct ListType {
+	DUCKDB_API static const LogicalType &GetChildType(const LogicalType &type);
+};
+
+struct StructType {
+	DUCKDB_API static const child_list_t<LogicalType> &GetChildTypes(const LogicalType &type);
+};
+
+
 string LogicalTypeIdToString(LogicalTypeId type);
 
-LogicalType TransformStringToLogicalType(const string &str);
+LogicalTypeId TransformStringToLogicalType(const string &str);
 
 //! Returns the PhysicalType for the given type
 template <class T>

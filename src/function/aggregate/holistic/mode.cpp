@@ -291,7 +291,7 @@ void ModeFun::RegisterFunction(BuiltinFunctions &set) {
 	                                      LogicalType::INTERVAL};
 
 	AggregateFunctionSet mode("mode");
-	mode.AddFunction(AggregateFunction({LogicalType::DECIMAL}, LogicalType::DECIMAL, nullptr, nullptr, nullptr, nullptr,
+	mode.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr, nullptr,
 	                                   nullptr, nullptr, BindModeDecimal));
 
 	for (const auto &type : LogicalType::NUMERIC) {

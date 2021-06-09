@@ -66,7 +66,6 @@ void ListExtractTemplate(idx_t count, Vector &list, Vector &offsets, Vector &res
 
 static void ExecuteListExtract(Vector &result, Vector &list, Vector &offsets, const idx_t count) {
 	D_ASSERT(list.GetType().id() == LogicalTypeId::LIST);
-	D_ASSERT(list.GetType().child_types().size() == 1);
 
 	switch (result.GetType().id()) {
 	case LogicalTypeId::UTINYINT:
@@ -163,15 +162,14 @@ static unique_ptr<FunctionData> ListExtractBind(ClientContext &context, ScalarFu
 	D_ASSERT(bound_function.arguments.size() == 2);
 	D_ASSERT(LogicalTypeId::LIST == arguments[0]->return_type.id());
 	// list extract returns the child type of the list as return type
-	bound_function.return_type = arguments[0]->return_type.child_types()[0].second;
+	bound_function.return_type = ListType::GetChildType(arguments[0]->return_type);
 
 	return make_unique<VariableReturnBindData>(bound_function.return_type);
 }
 
 void ListExtractFun::RegisterFunction(BuiltinFunctions &set) {
 	// the arguments and return types are actually set in the binder function
-	LogicalType list_of_any(LogicalTypeId::LIST, {make_pair("", LogicalTypeId::ANY)});
-	ScalarFunction lfun({list_of_any, LogicalType::BIGINT}, LogicalType::ANY, ListExtractFunction, false,
+	ScalarFunction lfun({LogicalType::LIST(LogicalType::ANY), LogicalType::BIGINT}, LogicalType::ANY, ListExtractFunction, false,
 	                    ListExtractBind);
 
 	ScalarFunction sfun({LogicalType::VARCHAR, LogicalType::INTEGER}, LogicalType::VARCHAR, ListExtractFunction, false,

@@ -135,12 +135,12 @@ unique_ptr<FunctionData> BindDecimalAvg(ClientContext &context, AggregateFunctio
 	function.name = "avg";
 	function.arguments[0] = decimal_type;
 	function.return_type = LogicalType::DOUBLE;
-	return make_unique<AverageDecimalBindData>(Hugeint::Cast<double>(Hugeint::POWERS_OF_TEN[decimal_type.scale()]));
+	return make_unique<AverageDecimalBindData>(Hugeint::Cast<double>(Hugeint::POWERS_OF_TEN[DecimalType::GetScale(decimal_type)]));
 }
 
 void AvgFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet avg("avg");
-	avg.AddFunction(AggregateFunction({LogicalType::DECIMAL}, LogicalType::DECIMAL, nullptr, nullptr, nullptr, nullptr,
+	avg.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr, nullptr,
 	                                  nullptr, nullptr, BindDecimalAvg));
 	avg.AddFunction(GetAverageAggregate(PhysicalType::INT16));
 	avg.AddFunction(GetAverageAggregate(PhysicalType::INT32));

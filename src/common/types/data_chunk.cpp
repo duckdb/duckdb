@@ -382,7 +382,6 @@ void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType 
 		break;
 	}
 	case LogicalTypeId::LIST: {
-
 		D_ASSERT(ListVector::HasEntry(data));
 
 		//! Lists have two buffers
@@ -406,7 +405,7 @@ void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType 
 		child_holder.children_ptrs.push_back(&child_holder.children[0].array);
 		child.children = &child_holder.children_ptrs[0];
 		auto &child_vector = ListVector::GetEntry(data);
-		SetArrowChild(child_holder.children[0], type.child_types()[0].second, child_vector, list_size);
+		SetArrowChild(child_holder.children[0], ListType::GetChildType(type), child_vector, list_size);
 		SetChildValidityMask(child_vector, child_holder.children[0].array);
 		break;
 	}
