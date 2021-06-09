@@ -1,4 +1,4 @@
-# name: test/sql/types/list/lineitem_list.test_slow
+# name: test/sql/types/nested/list/lineitem_list.test_slow
 # description: Test packing and unpacking lineitem into lists
 # group: [list]
 

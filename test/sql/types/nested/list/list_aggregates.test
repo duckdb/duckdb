@@ -1,4 +1,4 @@
-# name: test/sql/types/list/list_aggregates.test
+# name: test/sql/types/nested/list/list_aggregates.test
 # description: Test lists with aggregations
 # group: [list]
 

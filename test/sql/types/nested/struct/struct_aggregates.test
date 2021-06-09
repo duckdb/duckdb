@@ -1,4 +1,4 @@
-# name: test/sql/types/struct/struct_aggregates.test
+# name: test/sql/types/nested/struct/struct_aggregates.test
 # description: Test structs with aggregations
 # group: [struct]
 

@@ -1,4 +1,4 @@
-# name: test/sql/types/list/test_list_index.test
+# name: test/sql/types/nested/list/test_list_index.test
 # description: Test accessing list elements using a list
 # group: [list]
 
