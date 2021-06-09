@@ -159,7 +159,7 @@ unique_ptr<FunctionOperatorData> ArrowTableFunction::ArrowScanInit(ClientContext
 
 void SetValidityMask(Vector &vector, ArrowArray &array, ArrowScanState &scan_state, idx_t size, bool add_null = false) {
 	auto &mask = FlatVector::Validity(vector);
-    if (array.null_count != 0 && array.buffers[0]) {
+	if (array.null_count != 0 && array.buffers[0]) {
 		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
 		auto bit_offset = scan_state.chunk_offset + array.offset;
 		auto n_bitmask_bytes = (size + 8 - 1) / 8;
@@ -177,11 +177,11 @@ void SetValidityMask(Vector &vector, ArrowArray &array, ArrowScanState &scan_sta
 		}
 	}
 	if (add_null) {
-			//! We are setting a validity mask of the data part of dictionary vector
-			//! For some reason, Nulls are allowed to be indexes, hence we need to set the last element here to be null
-			//! We might have to resize the mask
-			mask.Resize(size, size + 1);
-			mask.SetInvalid(size);
+		//! We are setting a validity mask of the data part of dictionary vector
+		//! For some reason, Nulls are allowed to be indexes, hence we need to set the last element here to be null
+		//! We might have to resize the mask
+		mask.Resize(size, size + 1);
+		mask.SetInvalid(size);
 	}
 }
 
@@ -406,41 +406,67 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 	}
 }
 
+template <class T>
+static void SetSelectionVectorLoop(SelectionVector &sel, data_ptr_t indices_p, idx_t size) {
+	auto indices = (T *)indices_p;
+	for (idx_t row = 0; row < size; row++) {
+		sel.set_index(row, indices[row]);
+	}
+}
+
+template <class T>
+static void SetMaskedSelectionVectorLoop(SelectionVector &sel, data_ptr_t indices_p, idx_t size, ValidityMask &mask,
+                                         idx_t last_element_pos) {
+	auto indices = (T *)indices_p;
+	for (idx_t row = 0; row < size; row++) {
+		if (mask.RowIsValid(row)) {
+			sel.set_index(row, indices[row]);
+		} else {
+			//! Need to point out to last element
+			sel.set_index(row, last_element_pos);
+		}
+	}
+}
+
 void SetSelectionVector(SelectionVector &sel, data_ptr_t indices_p, LogicalType &logical_type, idx_t size,
-                        ValidityMask& mask) {
+                        ValidityMask *mask = nullptr, idx_t last_element_pos = 0) {
 	sel.Initialize(size);
+	if (mask) {
 		switch (logical_type.id()) {
 		case LogicalTypeId::UINTEGER:
-		case LogicalTypeId::INTEGER: {
-			auto indices = (uint32_t *)indices_p;
-			for (idx_t row = 0; row < size; row++) {
-			    if (mask.RowIsValid(row)){
-			        sel.set_index(row, indices[row]);
-			    }
-			    else{
-			        //! Need to point out to last element
-			        sel.set_index(row, size);
-			    }
-			}
+			SetMaskedSelectionVectorLoop<uint32_t>(sel, indices_p, size, *mask, last_element_pos);
 			break;
-		}
-		case LogicalTypeId::BIGINT: {
-			auto indices = (uint64_t *)indices_p;
-			for (idx_t row = 0; row < size; row++) {
-			    if (mask.RowIsValid(row)){
-			        sel.set_index(row, indices[row]);
-			    }
-			    else{
-			        //! Need to point out to last element
-			        sel.set_index(row, size);
-			    }
-			}
+		case LogicalTypeId::INTEGER:
+			SetMaskedSelectionVectorLoop<int32_t>(sel, indices_p, size, *mask, last_element_pos);
 			break;
-		}
+		case LogicalTypeId::BIGINT:
+			SetMaskedSelectionVectorLoop<int64_t>(sel, indices_p, size, *mask, last_element_pos);
+			break;
+		case LogicalTypeId::UBIGINT:
+			SetMaskedSelectionVectorLoop<uint64_t>(sel, indices_p, size, *mask, last_element_pos);
+			break;
 		default:
 			throw std::runtime_error("(Arrow) Unsupported type for selection vectors " + logical_type.ToString());
 		}
 
+	} else {
+		switch (logical_type.id()) {
+		case LogicalTypeId::UINTEGER:
+			SetSelectionVectorLoop<uint32_t>(sel, indices_p, size);
+			break;
+		case LogicalTypeId::INTEGER:
+			SetSelectionVectorLoop<int32_t>(sel, indices_p, size);
+			break;
+		case LogicalTypeId::BIGINT:
+			SetSelectionVectorLoop<int64_t>(sel, indices_p, size);
+			break;
+		case LogicalTypeId::UBIGINT:
+			SetSelectionVectorLoop<uint64_t>(sel, indices_p, size);
+			break;
+		default:
+			throw std::runtime_error("(Arrow) Unsupported type for selection vectors " + logical_type.ToString());
+		}
+	}
 }
 
 void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, ArrowScanState &scan_state, idx_t size,
@@ -448,43 +474,26 @@ void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, ArrowScanS
                                    idx_t col_idx, std::unordered_map<idx_t, LogicalType> &dictionary_type,
                                    idx_t list_col_idx = 0) {
 	SelectionVector sel;
-	ValidityMask indices_validity;
-	switch (vector.GetType().id()) {
-	case LogicalTypeId::BOOLEAN:
-	case LogicalTypeId::TINYINT:
-	case LogicalTypeId::SMALLINT:
-	case LogicalTypeId::INTEGER:
-	case LogicalTypeId::FLOAT:
-	case LogicalTypeId::UTINYINT:
-	case LogicalTypeId::USMALLINT:
-	case LogicalTypeId::UINTEGER:
-	case LogicalTypeId::UBIGINT:
-	case LogicalTypeId::DOUBLE:
-	case LogicalTypeId::BIGINT:
-	case LogicalTypeId::HUGEINT:
-	case LogicalTypeId::DATE:
-	case LogicalTypeId::TIMESTAMP:
-	case LogicalTypeId::TIMESTAMP_SEC:
-	case LogicalTypeId::TIMESTAMP_MS:
-	case LogicalTypeId::TIMESTAMP_NS: {
-		FlatVector::SetData(vector, (data_ptr_t)array.dictionary->buffers[1] +
-		                                GetTypeIdSize(vector.GetType().InternalType()) * array.offset);
-		if (array.null_count == 0) {
-			//! If we don't have any null values in our indexes we can just copy the buffers to the right place
-			SetValidityMask(vector, *array.dictionary, scan_state, size);
-		} else {
-			//! Our indexes might have null values, so we need to insert a null value in our base data to point to it
-			SetValidityMask(vector, *array.dictionary, scan_state, size, true);
-			GetValidityMask(indices_validity, array, scan_state, size);
-		}
-		auto indices = (data_ptr_t)array.buffers[1] + GetTypeIdSize(dictionary_type[col_idx].InternalType()) *
-		        (scan_state.chunk_offset + array.offset);
-		SetSelectionVector(sel, indices, dictionary_type[col_idx], size,indices_validity);
-		vector.Slice(sel, size);
-	} break;
-	default:
-		throw std::runtime_error("Unsupported type " + vector.GetType().ToString());
+	auto &dict_vectors = scan_state.arrow_dictionary_vectors;
+	if (dict_vectors.find(col_idx) == dict_vectors.end()) {
+		//! We need to set the dictionary data for this column
+		auto base_vector = make_unique<Vector>(vector.GetType());
+		ColumnArrowToDuckDB(*base_vector, *array.dictionary, scan_state, array.dictionary->length, arrow_lists, col_idx,
+		                    list_col_idx);
+		SetValidityMask(*base_vector, *array.dictionary, scan_state, array.dictionary->length, array.null_count > 0);
+		dict_vectors[col_idx] = move(base_vector);
 	}
+	//! Get Pointer to Indices of Dictionary
+	auto indices = (data_ptr_t)array.buffers[1] +
+	               GetTypeIdSize(dictionary_type[col_idx].InternalType()) * (scan_state.chunk_offset + array.offset);
+	if (array.null_count > 0) {
+		ValidityMask indices_validity;
+		GetValidityMask(indices_validity, array, scan_state, size);
+		SetSelectionVector(sel, indices, dictionary_type[col_idx], size, &indices_validity, array.dictionary->length);
+	} else {
+		SetSelectionVector(sel, indices, dictionary_type[col_idx], size);
+	}
+	vector.Slice(*dict_vectors[col_idx], sel, size);
 }
 void ArrowTableFunction::ArrowToDuckDB(ArrowScanState &scan_state,
                                        std::unordered_map<idx_t, vector<std::pair<ArrowListType, idx_t>>> &arrow_lists,
@@ -517,6 +526,7 @@ void ArrowTableFunction::ArrowScanFunction(ClientContext &context, const Functio
 	//! have we run out of data on the current chunk? move to next one
 	if (state.chunk_offset >= (idx_t)state.chunk->arrow_array.length) {
 		state.chunk_offset = 0;
+		state.arrow_dictionary_vectors.clear();
 		state.chunk = data.stream->GetNextChunk();
 	}
 
