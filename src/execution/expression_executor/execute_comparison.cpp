@@ -105,11 +105,10 @@ static idx_t TemplatedSelectOperation(Vector &left, Vector &right, const Selecti
 struct PositionComparator {
 
 	// Select the rows that definitely match.
-	// Sometimes this cannot be determined without looking at the next position.
 	template <typename OP>
 	static idx_t Definite(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
 	                      SelectionVector *true_sel, SelectionVector &false_sel) {
-		return 0;
+		return TemplatedSelectOperation<OP>(left, right, sel, count, true_sel, &false_sel);
 	}
 
 	// Select the possible rows that need further testing.
@@ -121,14 +120,62 @@ struct PositionComparator {
 	}
 
 	// Select the matching rows for the final position.
-	// This is typically more restrictive than Possible and less restrictive than Definite.
-	// The default is for struct equality.
+	// Usually the OP can tie break correctly
 	template <typename OP>
 	static idx_t Final(Vector &left, Vector &right, const SelectionVector *sel, idx_t count, SelectionVector *true_sel,
 	                   SelectionVector *false_sel) {
-		return VectorOperations::SelectNotDistinctFrom(left, right, sel, count, true_sel, false_sel);
+		return TemplatedSelectOperation<OP>(left, right, sel, count, true_sel, false_sel);
 	}
 };
+
+// Equals must always check every column
+template <>
+idx_t PositionComparator::Definite<duckdb::Equals>(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+                                                   SelectionVector *true_sel, SelectionVector &false_sel) {
+	return 0;
+}
+
+template <>
+idx_t PositionComparator::Final<duckdb::Equals>(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+                                                SelectionVector *true_sel, SelectionVector *false_sel) {
+	return VectorOperations::SelectNotDistinctFrom(left, right, sel, count, true_sel, false_sel);
+}
+
+// NotEquals must check everything that matched
+template <>
+idx_t PositionComparator::Definite<duckdb::NotEquals>(Vector &left, Vector &right, const SelectionVector *sel,
+                                                      idx_t count, SelectionVector *true_sel,
+                                                      SelectionVector &false_sel) {
+	return VectorOperations::SelectDistinctFrom(left, right, sel, count, true_sel, &false_sel);
+}
+
+template <>
+idx_t PositionComparator::Possible<duckdb::NotEquals>(Vector &left, Vector &right, const SelectionVector *sel,
+                                                      idx_t count, SelectionVector &true_sel,
+                                                      SelectionVector *false_sel) {
+	return count;
+}
+
+template <>
+idx_t PositionComparator::Final<duckdb::NotEquals>(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+                                                   SelectionVector *true_sel, SelectionVector *false_sel) {
+	return VectorOperations::SelectDistinctFrom(left, right, sel, count, true_sel, false_sel);
+}
+
+// Non-strict inequalities must use strict comparisons for Definite
+template <>
+idx_t PositionComparator::Definite<duckdb::LessThanEquals>(Vector &left, Vector &right, const SelectionVector *sel,
+                                                           idx_t count, SelectionVector *true_sel,
+                                                           SelectionVector &false_sel) {
+	return TemplatedSelectOperation<duckdb::LessThan>(left, right, sel, count, true_sel, &false_sel);
+}
+
+template <>
+idx_t PositionComparator::Definite<duckdb::GreaterThanEquals>(Vector &left, Vector &right, const SelectionVector *sel,
+                                                              idx_t count, SelectionVector *true_sel,
+                                                              SelectionVector &false_sel) {
+	return TemplatedSelectOperation<duckdb::GreaterThan>(left, right, sel, count, true_sel, &false_sel);
+}
 
 static inline void GetStructChildren(Vector &v, const idx_t vcount, vector<Vector> &struct_vectors) {
 	if (v.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
@@ -224,17 +271,23 @@ static idx_t StructSelectOperation(Vector &left, Vector &right, const SelectionV
 		idx_t possible = 0;
 		if (definite > 0) {
 			possible = PositionComparator::Possible<OP>(lchild, rchild, &maybe_vec, count, maybe_vec, false_sel);
+			sel = &maybe_vec;
 		} else {
 			// If there were no definite matches, then for speed,
-			// matched may not have been filled in.
+			// maybe_vec may not have been filled in.
 			possible = PositionComparator::Possible<OP>(lchild, rchild, sel, count, maybe_vec, false_sel);
+
+			// If everything is still possible, then for speed,
+			// maybe_vec may not have been filled in.
+			if (possible != count) {
+				sel = &maybe_vec;
+			}
 		}
 
 		// Advance the false selection
 		if (false_sel) {
 			false_sel->Initialize(false_sel->data() + (count - possible));
 		}
-		sel = &maybe_vec;
 		count = possible;
 	}
 
