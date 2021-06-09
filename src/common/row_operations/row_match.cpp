@@ -79,16 +79,16 @@ static void TemplatedMatchType(VectorData &col, Vector &rows, SelectionVector &s
 template <class OP, bool NO_MATCH_SEL>
 static void TemplatedMatchNested(Vector &col, Vector &rows, SelectionVector &sel, idx_t &count, const idx_t col_offset,
                                  const idx_t col_no, SelectionVector *no_match, idx_t &no_match_count) {
-	// Gather a dense Vector containing the column values being matched
+	// Gather a Vector containing the column values being matched
 	Vector key(col.GetType());
 	const auto &key_sel = FlatVector::INCREMENTAL_SELECTION_VECTOR;
-	RowOperations::Gather(rows, sel, key, key_sel, count, col_offset, col_no);
+	RowOperations::Gather(rows, sel, key, sel, count, col_offset, col_no);
 
 	idx_t match_count = 0;
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = sel.get_index(i);
 
-		auto key_value = key.GetValue(i);
+		auto key_value = key.GetValue(idx);
 		auto col_value = col.GetValue(idx);
 
 		if (col_value.is_null) {
