@@ -75,22 +75,58 @@ static inline void StructLoopHash(Vector &input, Vector &hashes, const Selection
 }
 
 template <bool HAS_RSEL>
-static inline void ValueLoopHash(Vector &input, Vector &result, const SelectionVector *rsel, idx_t count) {
-	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		auto result_data = ConstantVector::GetData<hash_t>(result);
+static inline void ListLoopHash(Vector &input, Vector &hashes, const SelectionVector *rsel, idx_t count) {
+	auto hdata = FlatVector::GetData<hash_t>(hashes);
 
-		auto input_value = input.GetValue(0);
-		result_data[0] = ValueOperations::Hash(input_value);
-	} else {
-		result.SetVectorType(VectorType::FLAT_VECTOR);
-		auto result_data = FlatVector::GetData<hash_t>(result);
+	VectorData idata;
+	input.Orrify(count, idata);
+	const auto ldata = (const list_entry_t *)idata.data;
 
-		for (idx_t i = 0; i < count; i++) {
-			auto ridx = HAS_RSEL ? rsel->get_index(i) : i;
-			auto input_value = input.GetValue(ridx);
-			result_data[ridx] = ValueOperations::Hash(input_value);
+	// Slice the child into a dictionary so we can iterate through the positions
+	// We only need one entry per position in the parent
+	SelectionVector cursor(STANDARD_VECTOR_SIZE);
+
+	// Set up the cursor for the first position
+	SelectionVector unprocessed(count);
+	idx_t remaining = 0;
+	for (idx_t i = 0; i < count; ++i) {
+		const idx_t ridx = HAS_RSEL ? rsel->get_index(i) : 0;
+		const auto &entry = ldata[ridx];
+		if (idata.validity.RowIsValid(ridx) && entry.length > 0) {
+			cursor.set_index(ridx, entry.offset);
+			unprocessed.set_index(remaining++, ridx);
+		} else {
+			hdata[ridx] = 0;
 		}
+	}
+	count = remaining;
+	if (count == 0) {
+		return;
+	}
+
+	// Compute the first round of hashes
+	Vector child;
+	child.Slice(ListVector::GetEntry(input), cursor, count);
+	VectorOperations::Hash(child, hashes, unprocessed, count);
+
+	// Combine the hashes for the remaining positions until there are none left
+	for (idx_t position = 1;; ++position) {
+		idx_t remaining = 0;
+		for (idx_t i = 0; i < count; ++i) {
+			const auto ridx = unprocessed.get_index(i);
+			const auto &entry = ldata[ridx];
+			if (entry.length > position) {
+				// Entry still has values to hash
+				cursor.set_index(ridx, cursor.get_index(ridx) + 1);
+				unprocessed.set_index(remaining++, ridx);
+			}
+		}
+		if (remaining == 0) {
+			break;
+		}
+
+		VectorOperations::CombineHash(hashes, child, unprocessed, remaining);
+		count = remaining;
 	}
 }
 
@@ -143,7 +179,7 @@ static inline void HashTypeSwitch(Vector &input, Vector &result, const Selection
 		StructLoopHash<HAS_RSEL>(input, result, rsel, count);
 		break;
 	case PhysicalType::LIST:
-		ValueLoopHash<HAS_RSEL>(input, result, rsel, count);
+		ListLoopHash<HAS_RSEL>(input, result, rsel, count);
 		break;
 	default:
 		throw InvalidTypeException(input.GetType(), "Invalid type for hash");
