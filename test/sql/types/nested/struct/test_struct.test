@@ -1,4 +1,4 @@
-# name: test/sql/types/struct/test_struct.test
+# name: test/sql/types/nested/struct/test_struct.test
 # description: Test filter and projection of nested struct
 # group: [struct]
 

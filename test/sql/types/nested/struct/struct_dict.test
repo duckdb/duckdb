@@ -1,4 +1,4 @@
-# name: test/sql/types/struct/struct_dict.test
+# name: test/sql/types/nested/struct/struct_dict.test
 # description: Test dict syntax for structs
 # group: [struct]
 
