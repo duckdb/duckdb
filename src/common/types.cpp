@@ -165,7 +165,7 @@ const vector<LogicalType> LogicalType::ALL_TYPES = {
     LogicalType::BOOLEAN,   LogicalType::TINYINT,   LogicalType::SMALLINT, LogicalType::INTEGER, LogicalType::BIGINT,
     LogicalType::DATE,      LogicalType::TIMESTAMP, LogicalType::DOUBLE,   LogicalType::FLOAT,   LogicalType::VARCHAR,
     LogicalType::BLOB,      LogicalType::INTERVAL,  LogicalType::HUGEINT,  LogicalType::DECIMAL, LogicalType::UTINYINT,
-    LogicalType::USMALLINT, LogicalType::UINTEGER,  LogicalType::UBIGINT};
+    LogicalType::USMALLINT, LogicalType::UINTEGER,  LogicalType::UBIGINT,  LogicalType::TIME};
 // TODO add LIST/STRUCT here
 
 const LogicalType LOGICAL_ROW_TYPE = LogicalType::BIGINT;
@@ -434,7 +434,8 @@ LogicalType TransformStringToLogicalType(const string &str) {
 		return LogicalType::VARCHAR;
 	} else if (lower_str == "bytea" || lower_str == "blob" || lower_str == "varbinary" || lower_str == "binary") {
 		return LogicalType::BLOB;
-	} else if (lower_str == "int8" || lower_str == "bigint" || lower_str == "int64" || lower_str == "long") {
+	} else if (lower_str == "int8" || lower_str == "bigint" || lower_str == "int64" || lower_str == "long" ||
+	           lower_str == "oid") {
 		return LogicalType::BIGINT;
 	} else if (lower_str == "int2" || lower_str == "smallint" || lower_str == "short" || lower_str == "int16") {
 		return LogicalType::SMALLINT;

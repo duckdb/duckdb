@@ -65,39 +65,16 @@ public:
 	//! entry
 	void Undo(CatalogEntry *entry);
 
+	//! Scan the catalog set, invoking the callback method for every committed entry
+	void Scan(const std::function<void(CatalogEntry *)> &callback);
 	//! Scan the catalog set, invoking the callback method for every entry
-	template <class T>
-	void Scan(ClientContext &context, T &&callback) {
-		// lock the catalog set
-		lock_guard<mutex> lock(catalog_lock);
-		for (auto &kv : entries) {
-			auto entry = kv.second.get();
-			entry = GetEntryForTransaction(context, entry);
-			if (!entry->deleted) {
-				callback(entry);
-			}
-		}
-	}
+	void Scan(ClientContext &context, const std::function<void(CatalogEntry *)> &callback);
 
 	template <class T>
 	vector<T *> GetEntries(ClientContext &context) {
 		vector<T *> result;
 		Scan(context, [&](CatalogEntry *entry) { result.push_back((T *)entry); });
 		return result;
-	}
-
-	//! Scan the catalog set, invoking the callback method for every committed entry
-	template <class T>
-	void Scan(T &&callback) {
-		// lock the catalog set
-		lock_guard<mutex> lock(catalog_lock);
-		for (auto &kv : entries) {
-			auto entry = kv.second.get();
-			entry = GetCommittedEntry(entry);
-			if (!entry->deleted) {
-				callback(entry);
-			}
-		}
 	}
 
 	static bool HasConflict(ClientContext &context, transaction_t timestamp);
@@ -119,6 +96,7 @@ private:
 	//! Drops an entry from the catalog set; must hold the catalog_lock to safely call this
 	void DropEntryInternal(ClientContext &context, idx_t entry_index, CatalogEntry &entry, bool cascade,
 	                       set_lock_map_t &lock_set);
+	CatalogEntry *CreateEntryInternal(ClientContext &context, unique_ptr<CatalogEntry> entry);
 	MappingValue *GetMapping(ClientContext &context, const string &name, bool allow_lowercase_alias,
 	                         bool get_latest = false);
 	void PutMapping(ClientContext &context, const string &name, idx_t entry_index);

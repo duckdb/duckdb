@@ -17,7 +17,7 @@ TEST_CASE("Test TPC-E", "[tpce][.]") {
 	uint32_t sf = 100000;
 	tpce::dbgen(db, sf);
 
-	auto result = con.Query("SELECT * FROM sqlite_master()");
+	auto result = con.Query("SELECT * FROM sqlite_master");
 
 	for (size_t i = 0; i < result->collection.Count(); i++) {
 		auto table_name = result->collection.GetValue(1, i);

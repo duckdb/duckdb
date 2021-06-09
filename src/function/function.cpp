@@ -28,7 +28,6 @@ void BuiltinFunctions::Initialize() {
 	RegisterReadFunctions();
 	RegisterTableFunctions();
 	RegisterArrowFunctions();
-	RegisterInformationSchemaFunctions();
 
 	RegisterAlgebraicAggregates();
 	RegisterDistributiveAggregates();
