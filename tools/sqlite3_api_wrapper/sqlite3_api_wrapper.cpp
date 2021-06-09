@@ -1553,3 +1553,31 @@ SQLITE_API void *sqlite3_profile(sqlite3 *, void (*xProfile)(void *, const char 
 	fprintf(stderr, "sqlite3_profile: unsupported.\n");
 	return nullptr;
 }
+
+SQLITE_API int sqlite3_libversion_number(void) {
+	return SQLITE_VERSION_NUMBER;
+}
+
+SQLITE_API int sqlite3_threadsafe(void) {
+	fprintf(stderr, "sqlite3_threadsafe: unsupported.\n");
+	return SQLITE_ERROR;
+}
+
+SQLITE_API sqlite3_mutex *sqlite3_mutex_alloc(int) {
+	fprintf(stderr, "sqlite3_mutex_alloc: unsupported.\n");
+	return nullptr;
+}
+
+SQLITE_API void sqlite3_mutex_free(sqlite3_mutex*) {
+	fprintf(stderr, "sqlite3_mutex_free: unsupported.\n");
+}
+
+SQLITE_API int sqlite3_extended_result_codes(sqlite3 *db, int onoff){
+	fprintf(stderr, "sqlite3_extended_result_codes: unsupported.\n");
+	return SQLITE_ERROR;
+}
+
+SQLITE_API int sqlite3_bind_zeroblob(sqlite3_stmt *pStmt, int i, int n){
+	fprintf(stderr, "sqlite3_bind_zeroblob: unsupported.\n");
+	return SQLITE_ERROR;
+}
