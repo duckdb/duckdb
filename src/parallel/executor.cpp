@@ -52,6 +52,28 @@ void Executor::Initialize(PhysicalOperator *plan) {
 			task->Execute();
 			task.reset();
 		}
+		if (!exceptions.empty()) {
+			// an exception has occurred executing one of the pipelines
+			// we need to wait until all threads are finished
+			// we do this by creating weak pointers to all pipelines
+			// then clearing our references to the pipelines
+			// and waiting until all pipelines have been destroyed
+			vector<weak_ptr<Pipeline>> weak_references;
+			weak_references.reserve(pipelines.size());
+			for (auto &pipeline : pipelines) {
+				weak_references.push_back(weak_ptr<Pipeline>(pipeline));
+			}
+			pipelines.clear();
+			for (auto &weak_ref : weak_references) {
+				while (true) {
+					auto weak = weak_ref.lock();
+					if (!weak) {
+						break;
+					}
+				}
+			}
+			throw Exception(exceptions[0]);
+		}
 	}
 
 	pipelines.clear();
@@ -75,12 +97,12 @@ void Executor::Reset() {
 void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 	if (op->IsSink()) {
 		// operator is a sink, build a pipeline
-		auto pipeline = make_unique<Pipeline>(*this, *producer);
+		auto pipeline = make_shared<Pipeline>(*this, *producer);
 		pipeline->sink = (PhysicalSink *)op;
 		pipeline->sink_state = pipeline->sink->GetGlobalState(context);
 		if (parent) {
 			// the parent is dependent on this pipeline to complete
-			parent->AddDependency(pipeline.get());
+			parent->AddDependency(pipeline);
 		}
 		switch (op->type) {
 		case PhysicalOperatorType::CREATE_TABLE_AS:
@@ -119,7 +141,8 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 		}
 		// recurse into the pipeline child
 		BuildPipelines(pipeline->child, pipeline.get());
-		for (auto &dependency : pipeline->GetDependencies()) {
+		for (auto &entry : pipeline->dependencies) {
+			auto dependency = entry.second.lock();
 			auto dependency_cte = dependency->GetRecursiveCTE();
 			if (dependency_cte) {
 				pipeline->SetRecursiveCTE(dependency_cte);
@@ -155,7 +178,8 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 			// this chunk scan introduces a dependency to the current pipeline
 			// namely a dependency on the duplicate elimination pipeline to finish
 			D_ASSERT(parent);
-			parent->AddDependency(entry->second);
+			auto delim_dependency = entry->second->shared_from_this();
+			parent->AddDependency(delim_dependency);
 			break;
 		}
 		case PhysicalOperatorType::EXECUTE: {
@@ -177,7 +201,7 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 			BuildPipelines(op->children[1].get(), parent);
 			// re-order the pipelines such that they are executed in the correct order of dependencies
 			for (idx_t i = 0; i < cte_node.pipelines.size(); i++) {
-				auto &deps = cte_node.pipelines[i]->GetDependencies();
+				auto &deps = cte_node.pipelines[i]->dependencies;
 				for (idx_t j = i + 1; j < cte_node.pipelines.size(); j++) {
 					if (deps.find(cte_node.pipelines[j].get()) != deps.end()) {
 						// pipeline "i" depends on pipeline "j" but pipeline "i" is scheduled to be executed before

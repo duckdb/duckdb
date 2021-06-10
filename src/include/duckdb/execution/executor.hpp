@@ -60,7 +60,7 @@ private:
 
 	mutex executor_lock;
 	//! The pipelines of the current query
-	vector<unique_ptr<Pipeline>> pipelines;
+	vector<shared_ptr<Pipeline>> pipelines;
 	//! The producer of this query
 	unique_ptr<ProducerToken> producer;
 	//! Exceptions that occurred during the execution of the current query
