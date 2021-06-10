@@ -442,8 +442,17 @@ Value Value::MAP(Value key, Value value) {
 }
 
 Value Value::LIST(vector<Value> values) {
+	D_ASSERT(!values.empty());
+#ifdef DEBUG
+	for (idx_t i = 1; i < values.size(); i++) {
+		D_ASSERT(values[i].type() == values[0].type());
+	}
+#endif
+	child_list_t<LogicalType> child_types;
+	child_types.push_back({"", values[0].type()});
+
 	Value result;
-	result.type_ = LogicalType(LogicalTypeId::LIST);
+	result.type_ = LogicalType(LogicalTypeId::LIST, child_types);
 	result.list_value = move(values);
 	result.is_null = false;
 	return result;
