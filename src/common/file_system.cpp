@@ -514,6 +514,8 @@ void FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t 
 	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
 	DWORD bytes_read;
 	OVERLAPPED ov = {};
+	ov.Internal = 0;
+	ov.InternalHigh = 0;
 	ov.Offset = location & 0xFFFFFFFF;
 	ov.OffsetHigh = location >> 32;
 	ov.hEvent = 0;
@@ -543,6 +545,8 @@ void FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t
 	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
 	DWORD bytes_written;
 	OVERLAPPED ov = {};
+	ov.Internal = 0;
+	ov.InternalHigh = 0;
 	ov.Offset = location & 0xFFFFFFFF;
 	ov.OffsetHigh = location >> 32;
 	ov.hEvent = 0;
