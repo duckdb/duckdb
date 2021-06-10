@@ -298,8 +298,8 @@ void SetList(DuckDBArrowArrayChildHolder &child_holder, const LogicalType &type,
 	child.children = &child_holder.children_ptrs[0];
 	auto &child_vector = ListVector::GetEntry(data);
 	auto &list_mask = FlatVector::Validity(data);
-	auto &child_types = StructType::GetChildTypes(type);
-	SetArrowChild(child_holder.children[0], child_types[0].second, child_vector, list_size, &list_mask);
+	auto &child_type = ListType::GetChildType(type);
+	SetArrowChild(child_holder.children[0], child_type, child_vector, list_size, &list_mask);
 	SetChildValidityMask(child_vector, child_holder.children[0].array);
 }
 
