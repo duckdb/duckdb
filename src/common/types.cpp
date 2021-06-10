@@ -831,11 +831,11 @@ LogicalType LogicalType::DECIMAL(int width, int scale) {
 // String Type
 //===--------------------------------------------------------------------===//
 struct StringTypeInfo : public ExtraTypeInfo {
-	StringTypeInfo(string collation_p)
-	    : ExtraTypeInfo(ExtraTypeInfoType::STRING_TYPE_INFO), collation_(move(collation_p)) {
+	explicit StringTypeInfo(string collation_p)
+	    : ExtraTypeInfo(ExtraTypeInfoType::STRING_TYPE_INFO), collation(move(collation_p)) {
 	}
 
-	string collation_;
+	string collation;
 
 public:
 	bool Equals(ExtraTypeInfo *other_p) override {
@@ -844,7 +844,7 @@ public:
 	}
 
 	void Serialize(Serializer &serializer) const override {
-		serializer.WriteString(collation_);
+		serializer.WriteString(collation);
 	}
 
 	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source) {
@@ -861,7 +861,7 @@ string StringType::GetCollation(const LogicalType &type) {
 	if (!info) {
 		return string();
 	}
-	return ((StringTypeInfo &)*info).collation_;
+	return ((StringTypeInfo &)*info).collation;
 }
 
 LogicalType LogicalType::VARCHAR_COLLATION(string collation) {
@@ -873,7 +873,7 @@ LogicalType LogicalType::VARCHAR_COLLATION(string collation) {
 // List Type
 //===--------------------------------------------------------------------===//
 struct ListTypeInfo : public ExtraTypeInfo {
-	ListTypeInfo(LogicalType child_type_p)
+	explicit ListTypeInfo(LogicalType child_type_p)
 	    : ExtraTypeInfo(ExtraTypeInfoType::LIST_TYPE_INFO), child_type(move(child_type_p)) {
 	}
 
@@ -917,7 +917,7 @@ LogicalType LogicalType::LIST(LogicalType child) {
 // Struct Type
 //===--------------------------------------------------------------------===//
 struct StructTypeInfo : public ExtraTypeInfo {
-	StructTypeInfo(child_list_t<LogicalType> child_types_p)
+	explicit StructTypeInfo(child_list_t<LogicalType> child_types_p)
 	    : ExtraTypeInfo(ExtraTypeInfoType::STRUCT_TYPE_INFO), child_types(move(child_types_p)) {
 	}
 
