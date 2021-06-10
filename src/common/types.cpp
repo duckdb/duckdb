@@ -864,7 +864,7 @@ string StringType::GetCollation(const LogicalType &type) {
 	return ((StringTypeInfo &)*info).collation;
 }
 
-LogicalType LogicalType::VARCHAR_COLLATION(string collation) {
+LogicalType LogicalType::VARCHAR_COLLATION(string collation) { // NOLINT
 	auto string_info = make_shared<StringTypeInfo>(move(collation));
 	return LogicalType(LogicalTypeId::VARCHAR, move(string_info));
 }
