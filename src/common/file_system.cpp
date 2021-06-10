@@ -167,6 +167,17 @@ idx_t FileSystem::GetFilePointer(FileHandle &handle) {
 	return position;
 }
 
+void FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
+	int fd = ((UnixFileHandle &)handle).fd;
+	int64_t bytes_read = pread(fd, buffer, nr_bytes, location);
+	if (bytes_read == -1) {
+		throw IOException("Could not read from file \"%s\": %s", handle.path, strerror(errno));
+	}
+	if (bytes_read != nr_bytes) {
+		throw IOException("Could not read all bytes from file \"%s\": wanted=%lld read=%lld", handle.path, nr_bytes, bytes_read);
+	}
+}
+
 int64_t FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	int fd = ((UnixFileHandle &)handle).fd;
 	int64_t bytes_read = read(fd, buffer, nr_bytes);
@@ -174,6 +185,17 @@ int64_t FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 		throw IOException("Could not read from file \"%s\": %s", handle.path, strerror(errno));
 	}
 	return bytes_read;
+}
+
+void FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
+	int fd = ((UnixFileHandle &)handle).fd;
+	int64_t bytes_written = pwrite(fd, buffer, nr_bytes, location);
+	if (bytes_written == -1) {
+		throw IOException("Could not write file \"%s\": %s", handle.path, strerror(errno));
+	}
+	if (bytes_written != nr_bytes) {
+		throw IOException("Could not write all bytes to file \"%s\": wanted=%lld wrote=%lld", handle.path, nr_bytes, bytes_written);
+	}
 }
 
 int64_t FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
@@ -425,7 +447,7 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const string &path, uint8_t flags, F
 	DWORD desired_access;
 	DWORD share_mode;
 	DWORD creation_disposition = OPEN_EXISTING;
-	DWORD flags_and_attributes = FILE_ATTRIBUTE_NORMAL;
+	DWORD flags_and_attributes = FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED;
 	if (flags & FileFlags::FILE_FLAGS_READ) {
 		desired_access = GENERIC_READ;
 		share_mode = FILE_SHARE_READ;
@@ -486,6 +508,23 @@ idx_t FileSystem::GetFilePointer(FileHandle &handle) {
 	return ret.QuadPart;
 }
 
+void FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
+	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
+	DWORD bytes_read;
+	OVERLAPPED ov = {};
+	ov.Offset = location & 0xFFFFFFFF;
+	ov.OffsetHigh = location >> 32;
+	ov.hEvent = 0;
+	auto rc = ReadFile(hFile, buffer, (DWORD)nr_bytes, &bytes_read, &ov);
+	if (rc == 0) {
+		auto error = GetLastErrorAsString();
+		throw IOException("Could not write file \"%s\": %s", handle.path, error);
+	}
+	if (bytes_read != nr_bytes) {
+		throw IOException("Could not read all bytes from file \"%s\": wanted=%lld read=%lld", handle.path, nr_bytes, bytes_read);
+	}
+}
+
 int64_t FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
 	DWORD bytes_read;
@@ -495,6 +534,23 @@ int64_t FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 		throw IOException("Could not write file \"%s\": %s", handle.path, error);
 	}
 	return bytes_read;
+}
+
+void FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
+	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
+	DWORD bytes_written;
+	OVERLAPPED ov = {};
+	ov.Offset = location & 0xFFFFFFFF;
+	ov.OffsetHigh = location >> 32;
+	ov.hEvent = 0;
+	auto rc = WriteFile(hFile, buffer, (DWORD)nr_bytes, &bytes_written, &ov);
+	if (rc == 0) {
+		auto error = GetLastErrorAsString();
+		throw IOException("Could not write file \"%s\": %s", handle.path, error);
+	}
+	if (bytes_written != nr_bytes) {
+		throw IOException("Could not write all bytes to file \"%s\": wanted=%lld wrote=%lld", handle.path, nr_bytes, bytes_written);
+	}
 }
 
 int64_t FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
@@ -704,26 +760,6 @@ string FileSystem::GetHomeDirectory() {
 		return string();
 	}
 	return homedir;
-}
-
-void FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
-	// seek to the location
-	SetFilePointer(handle, location);
-	// now read from the location
-	int64_t bytes_read = Read(handle, buffer, nr_bytes);
-	if (bytes_read != nr_bytes) {
-		throw IOException("Could not read sufficient bytes from file \"%s\"", handle.path);
-	}
-}
-
-void FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
-	// seek to the location
-	SetFilePointer(handle, location);
-	// now write to the location
-	int64_t bytes_written = Write(handle, buffer, nr_bytes);
-	if (bytes_written != nr_bytes) {
-		throw IOException("Could not write sufficient bytes from file \"%s\"", handle.path);
-	}
 }
 
 bool FileSystem::CanSeek() {
