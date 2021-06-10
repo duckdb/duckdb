@@ -424,7 +424,7 @@ std::string GetLastErrorAsString() {
 
 struct WindowsFileHandle : public FileHandle {
 public:
-	WindowsFileHandle(FileSystem &file_system, string path, HANDLE fd) : FileHandle(file_system, path), fd(fd) {
+	WindowsFileHandle(FileSystem &file_system, string path, HANDLE fd) : FileHandle(file_system, path), position(0), fd(fd) {
 	}
 	virtual ~WindowsFileHandle() {
 		Close();
@@ -436,6 +436,7 @@ protected:
 	};
 
 public:
+        idx_t position;
 	HANDLE fd;
 };
 
@@ -478,7 +479,9 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const string &path, uint8_t flags, F
 	}
 	auto handle = make_unique<WindowsFileHandle>(*this, path.c_str(), hFile);
 	if (flags & FileFlags::FILE_FLAGS_APPEND) {
-		SetFilePointer(*handle, GetFileSize(*handle));
+		auto file_size = GetFileSize(*handle);
+		handle->position = file_size;
+		SetFilePointer(*handle, file_size);
 	}
 	return move(handle);
 }
@@ -492,22 +495,11 @@ void FileSystem::SetFilePointer(FileHandle &handle, idx_t location) {
 		auto error = GetLastErrorAsString();
 		throw IOException("Could not seek to location %lld for file \"%s\": %s", location, handle.path, error);
 	}
+	((WindowsFileHandle &)handle).position = location;
 }
 
 idx_t FileSystem::GetFilePointer(FileHandle &handle) {
-	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
-	LARGE_INTEGER ret;
-
-	LARGE_INTEGER loc;
-	loc.QuadPart = 0;
-
-	auto rc = SetFilePointerEx(hFile, loc, &ret, FILE_CURRENT);
-	if (rc == 0) {
-		auto error = GetLastErrorAsString();
-		throw IOException("Could not get file pointer for file \"%s\": %s", handle.path, error);
-	}
-
-	return ret.QuadPart;
+	return ((WindowsFileHandle &)handle).position;
 }
 
 void FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
@@ -533,11 +525,19 @@ void FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t 
 int64_t FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
 	DWORD bytes_read;
-	auto rc = ReadFile(hFile, buffer, (DWORD)nr_bytes, &bytes_read, NULL);
+	auto& pos = ((WindowsFileHandle &)handle).position;
+	OVERLAPPED ov = {};
+	ov.Internal = 0;
+	ov.InternalHigh = 0;
+	ov.Offset = pos & 0xFFFFFFFF;
+	ov.OffsetHigh = pos >> 32;
+	ov.hEvent = 0;
+	auto rc = ReadFile(hFile, buffer, (DWORD)nr_bytes, &bytes_read, &ov);
 	if (rc == 0) {
 		auto error = GetLastErrorAsString();
 		throw IOException("Could not write file \"%s\": %s", handle.path, error);
 	}
+	pos += bytes_read;
 	return bytes_read;
 }
 
@@ -563,13 +563,21 @@ void FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t
 
 int64_t FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
-	DWORD bytes_read;
-	auto rc = WriteFile(hFile, buffer, (DWORD)nr_bytes, &bytes_read, NULL);
+	DWORD bytes_written;
+	auto& pos = ((WindowsFileHandle &)handle).position;
+	OVERLAPPED ov = {};
+	ov.Internal = 0;
+	ov.InternalHigh = 0;
+	ov.Offset = pos & 0xFFFFFFFF;
+	ov.OffsetHigh = pos >> 32;
+	ov.hEvent = 0;
+	auto rc = WriteFile(hFile, buffer, (DWORD)nr_bytes, &bytes_written, &ov);
 	if (rc == 0) {
 		auto error = GetLastErrorAsString();
 		throw IOException("Could not write file \"%s\": %s", handle.path, error);
 	}
-	return bytes_read;
+	pos += bytes_written;
+	return bytes_written;
 }
 
 int64_t FileSystem::GetFileSize(FileHandle &handle) {
