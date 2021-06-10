@@ -87,11 +87,14 @@ void PhysicalExport::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 
 	Catalog::GetCatalog(ccontext).schemas->Scan(context.client, [&](CatalogEntry *entry) {
 		auto schema = (SchemaCatalogEntry *)entry;
-		if (schema->name != DEFAULT_SCHEMA) {
+		if (!schema->internal) {
 			// export schema
 			schemas.push_back(schema);
 		}
 		schema->Scan(context.client, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) {
+			if (entry->internal) {
+				return;
+			}
 			if (entry->type == CatalogType::TABLE_ENTRY) {
 				tables.push_back(entry);
 			} else {
