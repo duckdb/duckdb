@@ -370,6 +370,7 @@ struct LogicalType {
 	DUCKDB_API LogicalType();
 	DUCKDB_API LogicalType(LogicalTypeId id); // NOLINT: Allow implicit conversion from `LogicalTypeId`
 	DUCKDB_API LogicalType(LogicalTypeId id, shared_ptr<ExtraTypeInfo> type_info);
+	DUCKDB_API LogicalType(LogicalType&& source)
 	DUCKDB_API ~LogicalType();
 
 	LogicalTypeId id() const {

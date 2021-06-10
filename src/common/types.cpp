@@ -23,6 +23,9 @@ LogicalType::LogicalType(LogicalTypeId id, shared_ptr<ExtraTypeInfo> type_info_p
 	physical_type_ = GetInternalType();
 }
 
+LogicalType::LogicalType(LogicalType&& source) :
+	id_(source.id_), physical_type_(source.physical_type_), type_info_(move(source.type_info_)) {}
+
 hash_t LogicalType::Hash() const {
 	return duckdb::Hash<uint8_t>((uint8_t)id_);
 }
@@ -64,14 +67,14 @@ PhysicalType LogicalType::GetInternalType() {
 		if (!type_info_) {
 			return PhysicalType::INVALID;
 		}
-		auto width_ = DecimalType::GetWidth(*this);
-		if (width_ <= Decimal::MAX_WIDTH_INT16) {
+		auto width = DecimalType::GetWidth(*this);
+		if (width <= Decimal::MAX_WIDTH_INT16) {
 			return PhysicalType::INT16;
-		} else if (width_ <= Decimal::MAX_WIDTH_INT32) {
+		} else if (width <= Decimal::MAX_WIDTH_INT32) {
 			return PhysicalType::INT32;
-		} else if (width_ <= Decimal::MAX_WIDTH_INT64) {
+		} else if (width <= Decimal::MAX_WIDTH_INT64) {
 			return PhysicalType::INT64;
-		} else if (width_ <= Decimal::MAX_WIDTH_INT128) {
+		} else if (width <= Decimal::MAX_WIDTH_INT128) {
 			return PhysicalType::INT128;
 		} else {
 			throw NotImplementedException("Widths bigger than 38 are not supported");
@@ -756,7 +759,7 @@ enum class ExtraTypeInfoType : uint8_t {
 };
 
 struct ExtraTypeInfo {
-	ExtraTypeInfo(ExtraTypeInfoType type) : type(type) {
+	explicit ExtraTypeInfo(ExtraTypeInfoType type) : type(type) {
 	}
 	virtual ~ExtraTypeInfo() {
 	}
@@ -778,11 +781,11 @@ public:
 //===--------------------------------------------------------------------===//
 struct DecimalTypeInfo : public ExtraTypeInfo {
 	DecimalTypeInfo(uint8_t width_p, uint8_t scale_p)
-	    : ExtraTypeInfo(ExtraTypeInfoType::DECIMAL_TYPE_INFO), width_(width_p), scale_(scale_p) {
+	    : ExtraTypeInfo(ExtraTypeInfoType::DECIMAL_TYPE_INFO), width(width_p), scale(scale_p) {
 	}
 
-	uint8_t width_;
-	uint8_t scale_;
+	uint8_t width;
+	uint8_t scale;
 
 public:
 	bool Equals(ExtraTypeInfo *other_p) override {
@@ -793,12 +796,12 @@ public:
 			return false;
 		}
 		auto &other = (DecimalTypeInfo &)*other_p;
-		return width_ == other.width_ && scale_ == other.scale_;
+		return width == other.width && scale == other.scale;
 	}
 
 	void Serialize(Serializer &serializer) const override {
-		serializer.Write<uint8_t>(width_);
-		serializer.Write<uint8_t>(scale_);
+		serializer.Write<uint8_t>(width);
+		serializer.Write<uint8_t>(scale);
 	}
 
 	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source) {
@@ -812,14 +815,14 @@ uint8_t DecimalType::GetWidth(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::DECIMAL);
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
-	return ((DecimalTypeInfo &)*info).width_;
+	return ((DecimalTypeInfo &)*info).width;
 }
 
 uint8_t DecimalType::GetScale(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::DECIMAL);
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
-	return ((DecimalTypeInfo &)*info).scale_;
+	return ((DecimalTypeInfo &)*info).scale;
 }
 
 LogicalType LogicalType::DECIMAL(int width, int scale) {
@@ -874,10 +877,10 @@ LogicalType LogicalType::VARCHAR_COLLATION(string collation) {
 //===--------------------------------------------------------------------===//
 struct ListTypeInfo : public ExtraTypeInfo {
 	ListTypeInfo(LogicalType child_type_p)
-	    : ExtraTypeInfo(ExtraTypeInfoType::LIST_TYPE_INFO), child_type_(move(child_type_p)) {
+	    : ExtraTypeInfo(ExtraTypeInfoType::LIST_TYPE_INFO), child_type(move(child_type_p)) {
 	}
 
-	LogicalType child_type_;
+	LogicalType child_type;
 
 public:
 	bool Equals(ExtraTypeInfo *other_p) override {
@@ -888,11 +891,11 @@ public:
 			return false;
 		}
 		auto &other = (ListTypeInfo &)*other_p;
-		return child_type_ == other.child_type_;
+		return child_type == other.child_type;
 	}
 
 	void Serialize(Serializer &serializer) const override {
-		child_type_.Serialize(serializer);
+		child_type.Serialize(serializer);
 	}
 
 	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source) {
@@ -905,7 +908,7 @@ const LogicalType &ListType::GetChildType(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::LIST);
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
-	return ((ListTypeInfo &)*info).child_type_;
+	return ((ListTypeInfo &)*info).child_type;
 }
 
 LogicalType LogicalType::LIST(LogicalType child) {
@@ -918,10 +921,10 @@ LogicalType LogicalType::LIST(LogicalType child) {
 //===--------------------------------------------------------------------===//
 struct StructTypeInfo : public ExtraTypeInfo {
 	StructTypeInfo(child_list_t<LogicalType> child_types_p)
-	    : ExtraTypeInfo(ExtraTypeInfoType::STRUCT_TYPE_INFO), child_types_(move(child_types_p)) {
+	    : ExtraTypeInfo(ExtraTypeInfoType::STRUCT_TYPE_INFO), child_types(move(child_types_p)) {
 	}
 
-	child_list_t<LogicalType> child_types_;
+	child_list_t<LogicalType> child_types;
 
 public:
 	bool Equals(ExtraTypeInfo *other_p) override {
@@ -932,14 +935,14 @@ public:
 			return false;
 		}
 		auto &other = (StructTypeInfo &)*other_p;
-		return child_types_ == other.child_types_;
+		return child_types == other.child_types;
 	}
 
 	void Serialize(Serializer &serializer) const override {
-		serializer.Write<uint32_t>(child_types_.size());
-		for (idx_t i = 0; i < child_types_.size(); i++) {
-			serializer.WriteString(child_types_[i].first);
-			child_types_[i].second.Serialize(serializer);
+		serializer.Write<uint32_t>(child_types.size());
+		for (idx_t i = 0; i < child_types.size(); i++) {
+			serializer.WriteString(child_types[i].first);
+			child_types[i].second.Serialize(serializer);
 		}
 	}
 
@@ -959,7 +962,7 @@ const child_list_t<LogicalType> &StructType::GetChildTypes(const LogicalType &ty
 	D_ASSERT(type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::MAP);
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
-	return ((StructTypeInfo &)*info).child_types_;
+	return ((StructTypeInfo &)*info).child_types;
 }
 
 const LogicalType &StructType::GetChildType(const LogicalType &type, idx_t index) {
