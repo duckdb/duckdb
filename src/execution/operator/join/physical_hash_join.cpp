@@ -279,9 +279,9 @@ bool PhysicalHashJoin::ExecuteInvisibleJoin(ExecutionContext &context, DataChunk
 	auto keys_count = physical_state->join_keys.size();
 	SelectionVector sel_vec(keys_count);
 	FillSelectionVectorSwitch(keys_vec, sel_vec, keys_count);
-	// copy the probe data to the result
+	// reference the probe data to the result
 	result.Reference(physical_state->child_chunk);
-	// on the RHS, we need to fetch the data from the perfect hash table and slice it using the new selection vector
+	// on the RHS, we need to fetch the data from the build structure and slice it using the new selection vector
 	for (idx_t i = 0; i < ht_ptr->build_types.size(); i++) {
 		auto &res_vector = result.data[physical_state->child_chunk.ColumnCount() + i];
 		D_ASSERT(res_vector.GetType() == ht_ptr->build_types[i]);

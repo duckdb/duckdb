@@ -3,6 +3,7 @@
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/serializer.hpp"
@@ -12,7 +13,6 @@
 #include "duckdb/common/types/sel_cache.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
-#include "duckdb/common/operator/comparison_operators.hpp"
 
 #include <cstring> // strlen() on Solaris
 
@@ -900,7 +900,6 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
 			auto oidx = sel.get_index(i);
 			auto idx = dict_sel.get_index(oidx);
-			D_ASSERT(idx < STANDARD_VECTOR_SIZE);
 		}
 		// merge the selection vectors and verify the child
 		auto new_buffer = dict_sel.Slice(sel, count);

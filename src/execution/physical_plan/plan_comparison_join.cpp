@@ -165,7 +165,12 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 			plan = make_unique<PhysicalHashJoin>(op, move(left), move(right), move(op.conditions), op.join_type,
 			                                     op.left_projection_map, op.right_projection_map, move(op.delim_types),
 			                                     op.estimated_cardinality, join_state);
+		} else {
+			plan = make_unique<PhysicalHashJoin>(op, move(left), move(right), move(op.conditions), op.join_type,
+			                                     op.left_projection_map, op.right_projection_map, move(op.delim_types),
+			                                     op.estimated_cardinality, join_state);
 		}
+
 	} else {
 		D_ASSERT(!has_null_equal_conditions); // don't support this for anything but hash joins for now
 		if (op.conditions.size() == 1 && !has_inequality) {
