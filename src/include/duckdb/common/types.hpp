@@ -370,7 +370,12 @@ struct LogicalType {
 	DUCKDB_API LogicalType();
 	DUCKDB_API LogicalType(LogicalTypeId id); // NOLINT: Allow implicit conversion from `LogicalTypeId`
 	DUCKDB_API LogicalType(LogicalTypeId id, shared_ptr<ExtraTypeInfo> type_info);
-	DUCKDB_API LogicalType(LogicalType&& source);
+	DUCKDB_API LogicalType(const LogicalType &other) :
+		id_(other.id_), physical_type_(other.physical_type_), type_info_(other.type_info_) {}
+
+	DUCKDB_API LogicalType(LogicalType &&other) :
+		id_(other.id_), physical_type_(other.physical_type_), type_info_(move(other.type_info_)) {}
+
 	DUCKDB_API ~LogicalType();
 
 	LogicalTypeId id() const {
@@ -383,6 +388,12 @@ struct LogicalType {
 		return type_info_.get();
 	}
 
+	LogicalType& operator=(const LogicalType &other) {
+		id_ = other.id_;
+		physical_type_ = other.physical_type_;
+		type_info_ = other.type_info_;
+		return *this;
+	}
 	bool operator==(const LogicalType &rhs) const;
 	bool operator!=(const LogicalType &rhs) const {
 		return !(*this == rhs);
@@ -443,11 +454,12 @@ public:
 	DUCKDB_API static const LogicalType TABLE;
 	DUCKDB_API static const LogicalType INVALID;
 
-	DUCKDB_API static LogicalType DECIMAL(int width, int scale);
-	DUCKDB_API static LogicalType VARCHAR_COLLATION(string collation);
-	DUCKDB_API static LogicalType LIST(LogicalType child);
-	DUCKDB_API static LogicalType STRUCT(child_list_t<LogicalType> children);
-	DUCKDB_API static LogicalType MAP(child_list_t<LogicalType> children);
+	// explicitly allowing these functions to be capitalized to be in-line with the remaining functions
+	DUCKDB_API static LogicalType DECIMAL(int width, int scale);                 // NOLINT
+	DUCKDB_API static LogicalType VARCHAR_COLLATION(string collation);           // NOLINT
+	DUCKDB_API static LogicalType LIST(LogicalType child);                       // NOLINT
+	DUCKDB_API static LogicalType STRUCT(child_list_t<LogicalType> children);    // NOLINT
+	DUCKDB_API static LogicalType MAP(child_list_t<LogicalType> children);       // NOLINT
 
 	//! A list of all NUMERIC types (integral and floating point types)
 	DUCKDB_API static const vector<LogicalType> NUMERIC;
