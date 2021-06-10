@@ -59,6 +59,10 @@ template <typename OP>
 static idx_t StructSelectOperation(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
                                    SelectionVector *true_sel, SelectionVector *false_sel);
 
+template <typename OP>
+static idx_t ListSelectOperation(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+                                 SelectionVector *true_sel, SelectionVector *false_sel);
+
 template <class OP>
 static idx_t TemplatedSelectOperation(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
                                       SelectionVector *true_sel, SelectionVector *false_sel) {
@@ -96,7 +100,7 @@ static idx_t TemplatedSelectOperation(Vector &left, Vector &right, const Selecti
 	case PhysicalType::STRUCT:
 		return StructSelectOperation<OP>(left, right, sel, count, true_sel, false_sel);
 	case PhysicalType::LIST:
-		return BinaryExecutor::Select<Vector, Vector, OP>(left, right, sel, count, true_sel, false_sel);
+		return ListSelectOperation<OP>(left, right, sel, count, true_sel, false_sel);
 	default:
 		throw InvalidTypeException(left.GetType(), "Invalid type for comparison");
 	}

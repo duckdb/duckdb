@@ -76,13 +76,24 @@ DistinctSelectGenericLoop(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rd
 		auto lindex = lsel->get_index(i);
 		auto rindex = rsel->get_index(i);
 		if (NO_NULL) {
-			if (OP::Operation(ldata[lindex], rdata[rindex], true, true) && HAS_TRUE_SEL) {
-				true_sel->set_index(true_count++, result_idx);
+			if (OP::Operation(ldata[lindex], rdata[rindex], true, true)) {
+				if (HAS_TRUE_SEL) {
+					true_sel->set_index(true_count++, result_idx);
+				}
+			} else {
+				if (HAS_FALSE_SEL) {
+					false_sel->set_index(false_count++, result_idx);
+				}
 			}
 		} else {
-			if (OP::Operation(ldata[lindex], rdata[rindex], !lmask.RowIsValid(i), !rmask.RowIsValid(i)) &&
-			    HAS_FALSE_SEL) {
-				false_sel->set_index(false_count++, result_idx);
+			if (OP::Operation(ldata[lindex], rdata[rindex], !lmask.RowIsValid(lindex), !rmask.RowIsValid(rindex))) {
+				if (HAS_TRUE_SEL) {
+					true_sel->set_index(true_count++, result_idx);
+				}
+			} else {
+				if (HAS_FALSE_SEL) {
+					false_sel->set_index(false_count++, result_idx);
+				}
 			}
 		}
 	}
