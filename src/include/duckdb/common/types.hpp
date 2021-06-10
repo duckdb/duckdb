@@ -388,12 +388,21 @@ struct LogicalType {
 		return type_info_.get();
 	}
 
+	// copy assignment
 	LogicalType& operator=(const LogicalType &other) {
 		id_ = other.id_;
 		physical_type_ = other.physical_type_;
 		type_info_ = other.type_info_;
 		return *this;
 	}
+	// move assignment
+	LogicalType& operator=(LogicalType&& other) {
+		id_ = other.id_;
+		physical_type_ = other.physical_type_;
+		type_info_ = move(other.type_info_);
+		return *this;
+	}
+
 	bool operator==(const LogicalType &rhs) const;
 	bool operator!=(const LogicalType &rhs) const {
 		return !(*this == rhs);
