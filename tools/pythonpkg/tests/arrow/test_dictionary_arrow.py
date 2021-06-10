@@ -5,6 +5,7 @@ try:
     import numpy as np
     from pandas import Timestamp
     import datetime
+    import pandas as pd
     can_run = True
 except:
     can_run = False
@@ -168,10 +169,4 @@ class TestArrowDictionary(object):
         print (rel.execute().fetchall())
         result = [(None,), (datetime.datetime(2001, 9, 25, 0, 0),), (datetime.datetime(2006, 11, 14, 0, 0),), (datetime.datetime(2012, 5, 15, 0, 0),), (None,)] * 1000
         assert rel.execute().fetchall() == result
-        
-
-
-    # def test_dictionary_nested(self,duckdb_cursor)
-    #     if not can_run:
-    #         return
-
+     
