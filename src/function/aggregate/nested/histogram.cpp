@@ -203,11 +203,12 @@ AggregateFunction GetHistogramFunction(PhysicalType type) {
 		                         HistogramFinalize<int64_t>, nullptr, HistogramBindFunction,
 		                         AggregateFunction::StateDestroy<HistogramAggState<int64_t>, HistogramFunction>);
 	case PhysicalType::FLOAT:
-		return AggregateFunction(
-		    "histogram", {LogicalType::FLOAT}, LogicalTypeId::MAP, AggregateFunction::StateSize<HistogramAggState<float>>,
-		    AggregateFunction::StateInitialize<HistogramAggState<float>, HistogramFunction>,
-		    HistogramUpdateFunction<float>, HistogramCombineFunction<float>, HistogramFinalize<float>, nullptr,
-		    HistogramBindFunction, AggregateFunction::StateDestroy<HistogramAggState<float>, HistogramFunction>);
+		return AggregateFunction("histogram", {LogicalType::FLOAT}, LogicalTypeId::MAP,
+		                         AggregateFunction::StateSize<HistogramAggState<float>>,
+		                         AggregateFunction::StateInitialize<HistogramAggState<float>, HistogramFunction>,
+		                         HistogramUpdateFunction<float>, HistogramCombineFunction<float>,
+		                         HistogramFinalize<float>, nullptr, HistogramBindFunction,
+		                         AggregateFunction::StateDestroy<HistogramAggState<float>, HistogramFunction>);
 	case PhysicalType::DOUBLE:
 		return AggregateFunction("histogram", {LogicalType::DOUBLE}, LogicalTypeId::MAP,
 		                         AggregateFunction::StateSize<HistogramAggState<double>>,

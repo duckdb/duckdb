@@ -34,7 +34,8 @@ static void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &r
 
 static unique_ptr<FunctionData> ListValueBind(ClientContext &context, ScalarFunction &bound_function,
                                               vector<unique_ptr<Expression>> &arguments) {
-	bound_function.return_type = LogicalType::LIST(arguments.empty() ? LogicalType::SQLNULL : arguments[0]->return_type);
+	bound_function.return_type =
+	    LogicalType::LIST(arguments.empty() ? LogicalType::SQLNULL : arguments[0]->return_type);
 	return make_unique<VariableReturnBindData>(bound_function.return_type);
 }
 

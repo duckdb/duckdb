@@ -54,7 +54,8 @@ static unique_ptr<FunctionData> DuckDBConstraintsBind(ClientContext &context, ve
 	names.emplace_back("expression");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	names.emplace_back("constraint_column_indexes");;
+	names.emplace_back("constraint_column_indexes");
+	;
 	return_types.push_back(LogicalType::LIST(LogicalType::BIGINT));
 
 	names.emplace_back("constraint_column_names");

@@ -449,7 +449,7 @@ Value Value::LIST(vector<Value> values) {
 	}
 #endif
 	Value result;
-	result.type_ = LogicalType::LIST( values[0].type());
+	result.type_ = LogicalType::LIST(values[0].type());
 	result.list_value = move(values);
 	result.is_null = false;
 	return result;

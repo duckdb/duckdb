@@ -169,8 +169,8 @@ static unique_ptr<FunctionData> ListExtractBind(ClientContext &context, ScalarFu
 
 void ListExtractFun::RegisterFunction(BuiltinFunctions &set) {
 	// the arguments and return types are actually set in the binder function
-	ScalarFunction lfun({LogicalType::LIST(LogicalType::ANY), LogicalType::BIGINT}, LogicalType::ANY, ListExtractFunction, false,
-	                    ListExtractBind);
+	ScalarFunction lfun({LogicalType::LIST(LogicalType::ANY), LogicalType::BIGINT}, LogicalType::ANY,
+	                    ListExtractFunction, false, ListExtractBind);
 
 	ScalarFunction sfun({LogicalType::VARCHAR, LogicalType::INTEGER}, LogicalType::VARCHAR, ListExtractFunction, false,
 	                    nullptr);

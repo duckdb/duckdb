@@ -95,8 +95,7 @@ LogicalType BoundComparisonExpression::BindComparison(LogicalType left_type, Log
 			// else: check if collations are compatible
 			auto left_collation = StringType::GetCollation(left_type);
 			auto right_collation = StringType::GetCollation(right_type);
-			if (!left_collation.empty() && !right_collation.empty() &&
-			    left_collation != right_collation) {
+			if (!left_collation.empty() && !right_collation.empty() && left_collation != right_collation) {
 				throw BinderException("Cannot combine types with different collation!");
 			}
 		}
@@ -130,10 +129,8 @@ BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t de
 	if (input_type.id() == LogicalTypeId::VARCHAR) {
 		// handle collation
 		auto collation = StringType::GetCollation(input_type);
-		left.expr =
-		    PushCollation(context, move(left.expr), collation, expr.type == ExpressionType::COMPARE_EQUAL);
-		right.expr = PushCollation(context, move(right.expr), collation,
-		                           expr.type == ExpressionType::COMPARE_EQUAL);
+		left.expr = PushCollation(context, move(left.expr), collation, expr.type == ExpressionType::COMPARE_EQUAL);
+		right.expr = PushCollation(context, move(right.expr), collation, expr.type == ExpressionType::COMPARE_EQUAL);
 	}
 	// now create the bound comparison expression
 	return BindResult(make_unique<BoundComparisonExpression>(expr.type, move(left.expr), move(right.expr)));

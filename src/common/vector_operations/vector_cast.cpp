@@ -40,19 +40,16 @@ static void ToDecimalCast(Vector &source, Vector &result, idx_t count) {
 	auto scale = DecimalType::GetScale(result_type);
 	switch (result_type.InternalType()) {
 	case PhysicalType::INT16:
-		UnaryExecutor::Execute<T, int16_t>(source, result, count, [&](T input) {
-			return CastToDecimal::Operation<T, int16_t>(input, width, scale);
-		});
+		UnaryExecutor::Execute<T, int16_t>(
+		    source, result, count, [&](T input) { return CastToDecimal::Operation<T, int16_t>(input, width, scale); });
 		break;
 	case PhysicalType::INT32:
-		UnaryExecutor::Execute<T, int32_t>(source, result, count, [&](T input) {
-			return CastToDecimal::Operation<T, int32_t>(input, width, scale);
-		});
+		UnaryExecutor::Execute<T, int32_t>(
+		    source, result, count, [&](T input) { return CastToDecimal::Operation<T, int32_t>(input, width, scale); });
 		break;
 	case PhysicalType::INT64:
-		UnaryExecutor::Execute<T, int64_t>(source, result, count, [&](T input) {
-			return CastToDecimal::Operation<T, int64_t>(input, width, scale);
-		});
+		UnaryExecutor::Execute<T, int64_t>(
+		    source, result, count, [&](T input) { return CastToDecimal::Operation<T, int64_t>(input, width, scale); });
 		break;
 	case PhysicalType::INT128:
 		UnaryExecutor::Execute<T, hugeint_t>(source, result, count, [&](T input) {
@@ -116,8 +113,7 @@ void TemplatedDecimalScaleUp(Vector &source, Vector &result, idx_t count) {
 		UnaryExecutor::Execute<SOURCE, DEST>(source, result, count, [&](SOURCE input) {
 			if (input >= limit || input <= -limit) {
 				throw OutOfRangeException("Casting value \"%s\" to type %s failed: value is out of range!",
-				                          Decimal::ToString(input, source_scale),
-				                          result.GetType().ToString());
+				                          Decimal::ToString(input, source_scale), result.GetType().ToString());
 			}
 			return Cast::Operation<SOURCE, DEST>(input) * multiply_factor;
 		});
@@ -144,8 +140,7 @@ void TemplatedDecimalScaleDown(Vector &source, Vector &result, idx_t count) {
 		UnaryExecutor::Execute<SOURCE, DEST>(source, result, count, [&](SOURCE input) {
 			if (input >= limit || input <= -limit) {
 				throw OutOfRangeException("Casting value \"%s\" to type %s failed: value is out of range!",
-				                          Decimal::ToString(input, source_scale),
-				                          result.GetType().ToString());
+				                          Decimal::ToString(input, source_scale), result.GetType().ToString());
 			}
 			return Cast::Operation<SOURCE, DEST>(input / divide_factor);
 		});
@@ -266,26 +261,22 @@ static void DecimalCastSwitch(Vector &source, Vector &result, idx_t count) {
 		switch (source_type.InternalType()) {
 		case PhysicalType::INT16:
 			UnaryExecutor::Execute<int16_t, string_t>(source, result, count, [&](int16_t input) {
-				return StringCastFromDecimal::Operation<int16_t>(input, width, scale,
-				                                                 result);
+				return StringCastFromDecimal::Operation<int16_t>(input, width, scale, result);
 			});
 			break;
 		case PhysicalType::INT32:
 			UnaryExecutor::Execute<int32_t, string_t>(source, result, count, [&](int32_t input) {
-				return StringCastFromDecimal::Operation<int32_t>(input, width, scale,
-				                                                 result);
+				return StringCastFromDecimal::Operation<int32_t>(input, width, scale, result);
 			});
 			break;
 		case PhysicalType::INT64:
 			UnaryExecutor::Execute<int64_t, string_t>(source, result, count, [&](int64_t input) {
-				return StringCastFromDecimal::Operation<int64_t>(input, width, scale,
-				                                                 result);
+				return StringCastFromDecimal::Operation<int64_t>(input, width, scale, result);
 			});
 			break;
 		case PhysicalType::INT128:
 			UnaryExecutor::Execute<hugeint_t, string_t>(source, result, count, [&](hugeint_t input) {
-				return StringCastFromDecimal::Operation<hugeint_t>(input, width, scale,
-				                                                   result);
+				return StringCastFromDecimal::Operation<hugeint_t>(input, width, scale, result);
 			});
 			break;
 		default:

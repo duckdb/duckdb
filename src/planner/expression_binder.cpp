@@ -116,7 +116,7 @@ static bool ContainsNullType(const LogicalType &type) {
 	case LogicalTypeId::STRUCT:
 	case LogicalTypeId::MAP: {
 		auto child_count = StructType::GetChildCount(type);
-		for(idx_t i = 0; i < child_count; i++) {
+		for (idx_t i = 0; i < child_count; i++) {
 			if (ContainsNullType(StructType::GetChildType(type, i))) {
 				return true;
 			}
@@ -141,7 +141,8 @@ static LogicalType ExchangeNullType(const LogicalType &type) {
 		for (auto &child_type : child_types) {
 			child_type.second = ExchangeNullType(child_type.second);
 		}
-		return type.id() == LogicalTypeId::MAP ? LogicalType::MAP(move(child_types)) : LogicalType::STRUCT(move(child_types));
+		return type.id() == LogicalTypeId::MAP ? LogicalType::MAP(move(child_types))
+		                                       : LogicalType::STRUCT(move(child_types));
 	}
 	case LogicalTypeId::LIST:
 		return LogicalType::LIST(ExchangeNullType(ListType::GetChildType(type)));
