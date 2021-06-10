@@ -9,7 +9,7 @@ string PragmaTableInfo(ClientContext &context, const FunctionParameters &paramet
 }
 
 string PragmaShowTables(ClientContext &context, const FunctionParameters &parameters) {
-	return "SELECT name FROM sqlite_master() ORDER BY name";
+	return "SELECT name FROM sqlite_master ORDER BY name";
 }
 
 string PragmaAllProfiling(ClientContext &context, const FunctionParameters &parameters) {

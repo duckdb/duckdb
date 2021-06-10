@@ -59,6 +59,7 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 			if (unique.index != INVALID_INDEX) {
 				D_ASSERT(unique.index < base.columns.size());
 				// unique constraint is given by single index
+				unique.columns.push_back(base.columns[unique.index].name);
 				keys.insert(unique.index);
 			} else {
 				// unique constraint is given by list of names

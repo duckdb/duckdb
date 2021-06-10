@@ -40,7 +40,7 @@ Annie	🙂
 Jeff	🤢
 
 query TT
-SELECT type, name FROM sqlite_master() WHERE name='👤' ORDER BY name;
+SELECT type, name FROM sqlite_master WHERE name='👤' ORDER BY name;
 ----
 table	👤
 

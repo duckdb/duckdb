@@ -107,7 +107,7 @@ if(${ENABLE_THREAD_SANITIZER})
   if(${ENABLE_SANITIZER})
     message(
       WARNING
-        "Both thread and address sanitizers are enabled. This is not supported by clang. The address sanitizer will be disabled, and we will run with only the thread sanitizer."
+        "Both thread and address sanitizers are enabled. This is not supported. The address sanitizer will be disabled, and we will run with only the thread sanitizer."
     )
   endif()
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=thread")
@@ -120,15 +120,22 @@ elseif(${ENABLE_SANITIZER})
 endif()
 
 if(${ENABLE_UBSAN})
-  if(FORCE_ASSERT)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=undefined -fno-sanitize-recover=all")
-    if (${DISABLE_VPTR_SANITIZER})
-      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-sanitize=vptr")
-    endif()
+  if(${ENABLE_THREAD_SANITIZER})
+    message(
+      WARNING
+        "Both thread and undefined sanitizers are enabled. This is not supported. The undefined sanitizer will be disabled, and we will run with only the thread sanitizer."
+    )
   else()
-    set(CXX_EXTRA_DEBUG "${CXX_EXTRA_DEBUG} -fsanitize=undefined -fno-sanitize-recover=all")
-    if (${DISABLE_VPTR_SANITIZER})
-      set(CXX_EXTRA_DEBUG "${CXX_EXTRA_DEBUG} -fno-sanitize=vptr")
+    if(FORCE_ASSERT)
+      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=undefined -fno-sanitize-recover=all")
+      if (${DISABLE_VPTR_SANITIZER})
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-sanitize=vptr")
+      endif()
+    else()
+      set(CXX_EXTRA_DEBUG "${CXX_EXTRA_DEBUG} -fsanitize=undefined -fno-sanitize-recover=all")
+      if (${DISABLE_VPTR_SANITIZER})
+        set(CXX_EXTRA_DEBUG "${CXX_EXTRA_DEBUG} -fno-sanitize=vptr")
+      endif()
     endif()
   endif()
 endif()

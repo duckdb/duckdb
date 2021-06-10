@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/function/table/sqlite_functions.hpp
+// duckdb/function/table/system_functions.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -36,10 +36,6 @@ struct PragmaDetailedProfilingOutput {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct SQLiteMaster {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
 struct PragmaVersion {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
@@ -49,6 +45,42 @@ struct PragmaDatabaseList {
 };
 
 struct PragmaDatabaseSize {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct DuckDBSchemasFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct DuckDBColumnsFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct DuckDBConstraintsFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct DuckDBDependenciesFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct DuckDBIndexesFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct DuckDBSequencesFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct DuckDBTablesFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct DuckDBTypesFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct DuckDBViewsFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

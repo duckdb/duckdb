@@ -44,7 +44,7 @@ bool QueryNode::Equals(const QueryNode *other) const {
 	return other->type == type;
 }
 
-void QueryNode::CopyProperties(QueryNode &other) {
+void QueryNode::CopyProperties(QueryNode &other) const {
 	for (auto &modifier : modifiers) {
 		other.modifiers.push_back(modifier->Copy());
 	}

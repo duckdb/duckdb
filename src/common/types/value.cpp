@@ -442,8 +442,14 @@ Value Value::MAP(Value key, Value value) {
 }
 
 Value Value::LIST(vector<Value> values) {
+	D_ASSERT(!values.empty());
+#ifdef DEBUG
+	for (idx_t i = 1; i < values.size(); i++) {
+		D_ASSERT(values[i].type() == values[0].type());
+	}
+#endif
 	Value result;
-	result.type_ = LogicalType::LIST(LogicalTypeId::SQLNULL);
+	result.type_ = LogicalType::LIST( values[0].type());
 	result.list_value = move(values);
 	result.is_null = false;
 	return result;

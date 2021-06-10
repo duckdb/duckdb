@@ -1,0 +1,15 @@
+# name: test/sql/table_function/duckdb_indexes.test
+# description: Test duckdb_indexes function
+# group: [table_function]
+
+statement ok
+CREATE TABLE integers(i INTEGER, j INTEGER, k INTEGER)
+
+statement ok
+CREATE INDEX i_index ON integers((j + 1), k)
+
+statement ok nosort duckdb_col
+SELECT * FROM duckdb_indexes();
+
+statement ok nosort duckdb_col
+SELECT * FROM duckdb_indexes;
