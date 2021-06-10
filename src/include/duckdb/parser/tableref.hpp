@@ -48,6 +48,6 @@ public:
 	static unique_ptr<TableRef> Deserialize(Deserializer &source);
 
 	//! Copy the properties of this table ref to the target
-	void CopyProperties(TableRef &target);
+	void CopyProperties(TableRef &target) const;
 };
 } // namespace duckdb

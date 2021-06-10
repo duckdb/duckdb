@@ -1,0 +1,257 @@
+# name: test/sql/types/nested/list/test_list_slice.test
+# description: List slicing test
+# group: [list]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE listdata (
+    c0 char(1),
+    c1 char(1),
+    c2 char(1),
+    c3 char(1),
+    c4 char(1),
+    off integer,
+    length integer)
+
+statement ok
+INSERT INTO listdata VALUES
+    ('h', 'e', 'l', 'l', 'o', 0, 2),
+    ('w', 'o', 'r', 'l', 'd', 1, 3),
+    ('b', NULL, NULL, NULL, NULL, 0, 1),
+    (NULL, NULL, NULL, NULL, NULL, 1, 2)
+
+statement ok
+CREATE VIEW lists AS
+    SELECT CASE
+            WHEN c0 = 'b' THEN LIST_VALUE(c0)
+            WHEN c0 IS NULL THEN NULL
+            ELSE LIST_VALUE(c0, c1, c2, c3, c4)
+            END AS s,
+    off, length FROM listdata;
+
+# check contents
+query T
+SELECT s from lists
+----
+[h, e, l, l, o]
+[w, o, r, l, d]
+[b]
+NULL
+
+# Slicing string constants is not supported
+statement ok
+CREATE TABLE duckdata(c0 char(1), c1 char(1), c2 char(1));
+
+statement ok
+INSERT INTO duckdata VALUES ('🦆', 'a', 'b'), ('a', 'b', 'c')
+
+statement ok
+CREATE VIEW ducks AS SELECT LIST_VALUE(c0, c1, c2) AS d from duckdata;
+
+statement ok
+CREATE VIEW hello AS SELECT s AS hello FROM lists WHERE off = 0 AND length = 2
+
+statement ok
+CREATE VIEW nulltable as SELECT s as n FROM lists WHERE off = 1 AND length = 2
+
+query T
+SELECT d from ducks
+----
+[🦆, a, b]
+[a, b, c]
+
+# test zero length
+query T
+SELECT d[0:0] FROM ducks
+----
+[]
+[]
+
+# constant offset/length
+# normal slice
+query T
+SELECT s[0:2] FROM lists
+----
+[h, e]
+[w, o]
+NULL
+NULL
+
+# index out of range
+query T
+SELECT s[1:3] FROM lists
+----
+[e, l]
+[o, r]
+NULL
+NULL
+
+# variable length offset/length
+query T
+SELECT s[off:length+off] FROM lists
+----
+[h, e]
+[o, r, l]
+[b]
+NULL
+
+query T
+SELECT s[off:2+off] FROM lists
+----
+[h, e]
+[o, r]
+NULL
+NULL
+
+query T
+SELECT s[0:length] FROM lists
+----
+[h, e]
+[w, o, r]
+[b]
+NULL
+
+query T
+SELECT hello[off:length+off] FROM lists, hello
+----
+[h, e]
+[e, l, l]
+[h]
+[e, l]
+
+# test substrings with constant nulls in different places
+query T
+SELECT n[off:length+off] FROM lists, nulltable
+----
+NULL
+NULL
+NULL
+NULL
+
+query T
+SELECT hello[NULL:length+NULL] FROM lists, hello
+----
+[h, e, l, l, o]
+[h, e, l, l, o]
+[h, e, l, l, o]
+[h, e, l, l, o]
+
+query T
+SELECT hello[off:NULL+off] FROM lists, hello
+----
+[h, e, l, l, o]
+[e, l, l, o]
+[h, e, l, l, o]
+[e, l, l, o]
+
+query T
+SELECT n[NULL:length+NULL] FROM lists, nulltable
+----
+NULL
+NULL
+NULL
+NULL
+
+query T
+SELECT hello[NULL:NULL+NULL] FROM lists, hello
+----
+[h, e, l, l, o]
+[h, e, l, l, o]
+[h, e, l, l, o]
+[h, e, l, l, o]
+
+query T
+SELECT n[off:NULL+off] FROM lists, nulltable
+----
+NULL
+NULL
+NULL
+NULL
+
+query T
+SELECT n[NULL:NULL+NULL] FROM lists, nulltable
+----
+NULL
+NULL
+NULL
+NULL
+
+# fixed slice
+query T
+SELECT s[-2:] FROM lists
+----
+[l, o]
+[l, d]
+NULL
+NULL
+
+# negative length
+query T
+SELECT s[0:1] FROM lists
+----
+[h]
+[w]
+[b]
+NULL
+
+# negative offset and negative length
+query T
+SELECT s[-4:-2] FROM lists
+----
+[e, l]
+[o, r]
+NULL
+NULL
+
+# length 0
+query T
+SELECT s[1:1] FROM lists
+----
+[]
+[]
+[]
+NULL
+
+# no end
+query T
+SELECT s[1:] FROM lists
+----
+[e, l, l, o]
+[o, r, l, d]
+[]
+NULL
+
+# very large offset and length
+query T
+SELECT s[(2147483647-1):1] FROM lists
+----
+NULL
+NULL
+NULL
+NULL
+
+query T
+SELECT s[(2147483647-1):-1] FROM lists
+----
+NULL
+NULL
+NULL
+NULL
+
+query T
+SELECT s[(-2147483646-1):-1] FROM lists
+----
+NULL
+NULL
+NULL
+NULL
+
+query T
+SELECT s[(-2147483646-1):-2147483647] FROM lists
+----
+NULL
+NULL
+NULL
+NULL

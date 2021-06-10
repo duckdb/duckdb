@@ -34,7 +34,7 @@ schema_duckdb::schema_duckdb(std::string &conninfo, bool no_catalog) : duckdb_co
 	connection->Query("CALL dbgen(sf=0)");
 
 	cerr << "Loading tables...";
-	auto result = connection->Query("SELECT * FROM sqlite_master() WHERE type IN ('table', 'view')");
+	auto result = connection->Query("SELECT * FROM sqlite_master WHERE type IN ('table', 'view')");
 	if (!result->success) {
 		throw runtime_error(result->error);
 	}
