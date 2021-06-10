@@ -90,7 +90,7 @@ static inline void ListLoopHash(Vector &input, Vector &hashes, const SelectionVe
 	SelectionVector unprocessed(count);
 	idx_t remaining = 0;
 	for (idx_t i = 0; i < count; ++i) {
-		const idx_t ridx = HAS_RSEL ? rsel->get_index(i) : 0;
+		const idx_t ridx = HAS_RSEL ? rsel->get_index(i) : i;
 		const auto &entry = ldata[ridx];
 		if (idata.validity.RowIsValid(ridx) && entry.length > 0) {
 			cursor.set_index(ridx, entry.offset);
