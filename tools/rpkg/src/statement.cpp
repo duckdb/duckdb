@@ -414,7 +414,7 @@ static SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 				auto &src_vec = chunk->data[col_idx];
 				auto &decimal_type = result->types[col_idx];
 				double *dest_ptr = ((double *)NUMERIC_POINTER(dest)) + dest_offset;
-				auto dec_scale = decimal_type.scale();
+				auto dec_scale = DecimalType::GetScale(decimal_type);
 				switch (decimal_type.InternalType()) {
 				case PhysicalType::INT16:
 					RDecimalCastLoop<int16_t>(src_vec, chunk->size(), dest_ptr, dec_scale);

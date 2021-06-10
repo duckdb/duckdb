@@ -412,7 +412,7 @@ void StringParquetValueConversion::PlainSkip(ByteBuffer &plain_data, ColumnReade
 idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
                              Vector &result_out) {
 	if (!ListVector::HasEntry(result_out)) {
-		auto list_child = make_unique<Vector>(result_out.GetType().child_types()[0].second);
+		auto list_child = make_unique<Vector>(ListType::GetChildType(result_out.GetType()));
 		ListVector::SetEntry(result_out, move(list_child));
 	}
 
@@ -505,7 +505,7 @@ ListColumnReader::ListColumnReader(ParquetReader &reader, LogicalType type_p, co
 	child_defines_ptr = (uint8_t *)child_defines.ptr;
 	child_repeats_ptr = (uint8_t *)child_repeats.ptr;
 
-	auto child_type = Type().child_types()[0].second;
+	auto child_type = ListType::GetChildType(Type());
 	child_result.Initialize(child_type);
 
 	vector<LogicalType> append_chunk_types;

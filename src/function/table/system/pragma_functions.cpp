@@ -30,10 +30,7 @@ static unique_ptr<FunctionData> PragmaFunctionsBind(ClientContext &context, vect
 	return_types.push_back(LogicalType::VARCHAR);
 
 	names.emplace_back("parameters");
-	child_list_t<LogicalType> child_types;
-	child_types.push_back(std::make_pair("", LogicalType::VARCHAR));
-	LogicalType param_types(LogicalTypeId::LIST, move(child_types));
-	return_types.push_back(move(param_types));
+	return_types.push_back(LogicalType::LIST(LogicalType::VARCHAR));
 
 	names.emplace_back("varargs");
 	return_types.push_back(LogicalType::VARCHAR);

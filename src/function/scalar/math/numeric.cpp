@@ -202,15 +202,17 @@ struct CeilOperator {
 template <class T, class POWERS_OF_TEN, class OP>
 static void GenericRoundFunctionDecimal(DataChunk &input, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
-	OP::template Operation<T, POWERS_OF_TEN>(input, func_expr.children[0]->return_type.scale(), result);
+	OP::template Operation<T, POWERS_OF_TEN>(input, DecimalType::GetScale(func_expr.children[0]->return_type), result);
 }
 
 template <class OP>
 unique_ptr<FunctionData> BindGenericRoundFunctionDecimal(ClientContext &context, ScalarFunction &bound_function,
                                                          vector<unique_ptr<Expression>> &arguments) {
 	// ceil essentially removes the scale
-	auto decimal_type = arguments[0]->return_type;
-	if (decimal_type.scale() == 0) {
+	auto &decimal_type = arguments[0]->return_type;
+	auto scale = DecimalType::GetScale(decimal_type);
+	auto width = DecimalType::GetWidth(decimal_type);
+	if (scale == 0) {
 		bound_function.function = ScalarFunction::NopFunction;
 	} else {
 		switch (decimal_type.InternalType()) {
@@ -229,7 +231,7 @@ unique_ptr<FunctionData> BindGenericRoundFunctionDecimal(ClientContext &context,
 		}
 	}
 	bound_function.arguments[0] = decimal_type;
-	bound_function.return_type = LogicalType(LogicalTypeId::DECIMAL, decimal_type.width(), 0);
+	bound_function.return_type = LogicalType::DECIMAL(width, 0);
 	return nullptr;
 }
 
@@ -405,8 +407,9 @@ template <class T, class POWERS_OF_TEN_CLASS>
 static void DecimalRoundNegativePrecisionFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (RoundPrecisionFunctionData &)*func_expr.bind_info;
-	auto source_scale = func_expr.children[0]->return_type.scale();
-	if (-info.target_scale >= func_expr.children[0]->return_type.width()) {
+	auto source_scale = DecimalType::GetScale(func_expr.children[0]->return_type);
+	auto width = DecimalType::GetWidth(func_expr.children[0]->return_type);
+	if (-info.target_scale >= width) {
 		// scale too big for width
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		result.SetValue(0, Value::INTEGER(0));
@@ -429,7 +432,7 @@ template <class T, class POWERS_OF_TEN_CLASS>
 static void DecimalRoundPositivePrecisionFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (RoundPrecisionFunctionData &)*func_expr.bind_info;
-	auto source_scale = func_expr.children[0]->return_type.scale();
+	auto source_scale = DecimalType::GetScale(func_expr.children[0]->return_type);
 	T power_of_ten = POWERS_OF_TEN_CLASS::POWERS_OF_TEN[source_scale - info.target_scale];
 	T addition = power_of_ten / 2;
 	UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(), [&](T input) {
@@ -444,7 +447,7 @@ static void DecimalRoundPositivePrecisionFunction(DataChunk &input, ExpressionSt
 
 unique_ptr<FunctionData> BindDecimalRoundPrecision(ClientContext &context, ScalarFunction &bound_function,
                                                    vector<unique_ptr<Expression>> &arguments) {
-	auto decimal_type = arguments[0]->return_type;
+	auto &decimal_type = arguments[0]->return_type;
 	if (!arguments[1]->IsFoldable()) {
 		throw NotImplementedException("ROUND(DECIMAL, INTEGER) with non-constant precision is not supported");
 	}
@@ -459,6 +462,8 @@ unique_ptr<FunctionData> BindDecimalRoundPrecision(ClientContext &context, Scala
 	// i.e. ROUND(DECIMAL(18,3), -1) -> DECIMAL(18,0)
 	int32_t round_value = val.value_.integer;
 	uint8_t target_scale;
+	auto width = DecimalType::GetWidth(decimal_type);
+	auto scale = DecimalType::GetScale(decimal_type);
 	if (round_value < 0) {
 		target_scale = 0;
 		switch (decimal_type.InternalType()) {
@@ -476,10 +481,10 @@ unique_ptr<FunctionData> BindDecimalRoundPrecision(ClientContext &context, Scala
 			break;
 		}
 	} else {
-		if (round_value >= (int32_t)decimal_type.scale()) {
+		if (round_value >= (int32_t)scale) {
 			// if round_value is bigger than or equal to scale we do nothing
 			bound_function.function = ScalarFunction::NopFunction;
-			target_scale = decimal_type.scale();
+			target_scale = scale;
 		} else {
 			target_scale = round_value;
 			switch (decimal_type.InternalType()) {
@@ -499,7 +504,7 @@ unique_ptr<FunctionData> BindDecimalRoundPrecision(ClientContext &context, Scala
 		}
 	}
 	bound_function.arguments[0] = decimal_type;
-	bound_function.return_type = LogicalType(LogicalTypeId::DECIMAL, decimal_type.width(), target_scale);
+	bound_function.return_type = LogicalType::DECIMAL(width, target_scale);
 	return make_unique<RoundPrecisionFunctionData>(round_value);
 }
 

@@ -176,9 +176,8 @@ unique_ptr<Vector> BaseStringSplitFunction(string_t input, string_t delim, const
 
 	bool ascii_only = Utf8Proc::Analyze(input_data, input_size) == UnicodeType::ASCII;
 
-	child_list_t<LogicalType> child_type {{"", LogicalType::VARCHAR}};
-	LogicalType list = {LogicalTypeId::LIST, child_type};
-	auto output = make_unique<Vector>(list);
+	auto list_type = LogicalType::LIST(LogicalType::VARCHAR);
+	auto output = make_unique<Vector>(list_type);
 	unique_ptr<StringSplitIterator> iter;
 	if (regex) {
 		auto re = make_unique<RE2>(duckdb_re2::StringPiece(delim_data, delim_size));
@@ -208,13 +207,10 @@ static void StringSplitExecutor(DataChunk &args, ExpressionState &state, Vector 
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 	auto list_struct_data = FlatVector::GetData<list_entry_t>(result);
 
-	LogicalType varchar = LogicalType::VARCHAR;
-	auto list_child = make_unique<Vector>(varchar);
+	auto list_child = make_unique<Vector>(LogicalType::VARCHAR);
 	ListVector::SetEntry(result, move(list_child));
 
-	child_list_t<LogicalType> child_types;
-	child_types.push_back({"", varchar});
-	LogicalType list_vector_type(LogicalType::LIST.id(), child_types);
+	auto list_vector_type = LogicalType::LIST(LogicalType::VARCHAR);
 
 	size_t total_len = 0;
 	for (idx_t i = 0; i < args.size(); i++) {
@@ -228,7 +224,7 @@ static void StringSplitExecutor(DataChunk &args, ExpressionState &state, Vector 
 		if (!delim_data.validity.RowIsValid(delim_data.sel->get_index(i))) {
 			// special case: delimiter is NULL
 			split_input = make_unique<Vector>(list_vector_type);
-			auto child = make_unique<Vector>(varchar);
+			auto child = make_unique<Vector>(LogicalType::VARCHAR);
 			ListVector::SetEntry(*split_input, move(child));
 			Value val(input);
 			ListVector::PushBack(*split_input, val);
@@ -258,9 +254,7 @@ static void StringSplitRegexFunction(DataChunk &args, ExpressionState &state, Ve
 }
 
 void StringSplitFun::RegisterFunction(BuiltinFunctions &set) {
-	child_list_t<LogicalType> child_types;
-	child_types.push_back(make_pair("string", LogicalType::VARCHAR));
-	auto varchar_list_type = LogicalType(LogicalTypeId::LIST, child_types);
+	auto varchar_list_type = LogicalType::LIST(LogicalType::VARCHAR);
 
 	set.AddFunction(
 	    {"string_split", "str_split", "string_to_array"},

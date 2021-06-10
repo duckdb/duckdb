@@ -61,9 +61,7 @@ static void VersionFunction(DataChunk &input, ExpressionState &state, Vector &re
 }
 
 void SystemFun::RegisterFunction(BuiltinFunctions &set) {
-	child_list_t<LogicalType> child_types;
-	child_types.push_back(make_pair("", LogicalType::VARCHAR));
-	auto varchar_list_type = LogicalType(LogicalTypeId::LIST, child_types);
+	auto varchar_list_type = LogicalType::LIST(LogicalType::VARCHAR);
 
 	set.AddFunction(
 	    ScalarFunction("current_query", {}, LogicalType::VARCHAR, CurrentQueryFunction, false, BindSystemFunction));
