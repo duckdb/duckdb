@@ -135,9 +135,12 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &contex
 		}
 		if (schema.dictionary) {
 			res->dictionary_type[col_idx] = GetArrowLogicalType(schema, res->original_list_type, col_idx);
+			return_types.emplace_back(GetArrowLogicalType(*schema.dictionary, res->original_list_type, col_idx));
+		}
+		else{
+		    return_types.emplace_back(GetArrowLogicalType(schema, res->original_list_type, col_idx));
 		}
 		auto format = string(schema.format);
-		return_types.emplace_back(GetArrowLogicalType(schema, res->original_list_type, col_idx));
 		auto name = string(schema.name);
 		if (name.empty()) {
 			name = string("v") + to_string(col_idx);
@@ -415,6 +418,18 @@ static void SetSelectionVectorLoop(SelectionVector &sel, data_ptr_t indices_p, i
 }
 
 template <class T>
+static void SetSelectionVectorLoopWithChecks(SelectionVector &sel, data_ptr_t indices_p, idx_t size) {
+
+	auto indices = (T *)indices_p;
+	for (idx_t row = 0; row < size; row++) {
+	    if (indices[row] > std::numeric_limits<uint32_t>::max()){
+	        throw std::runtime_error("DuckDB only supports indices that fit on an uint32");
+	    }
+		sel.set_index(row, indices[row]);
+	}
+}
+
+template <class T>
 static void SetMaskedSelectionVectorLoop(SelectionVector &sel, data_ptr_t indices_p, idx_t size, ValidityMask &mask,
                                          idx_t last_element_pos) {
 	auto indices = (T *)indices_p;
@@ -428,40 +443,91 @@ static void SetMaskedSelectionVectorLoop(SelectionVector &sel, data_ptr_t indice
 	}
 }
 
+
 void SetSelectionVector(SelectionVector &sel, data_ptr_t indices_p, LogicalType &logical_type, idx_t size,
                         ValidityMask *mask = nullptr, idx_t last_element_pos = 0) {
 	sel.Initialize(size);
+
 	if (mask) {
 		switch (logical_type.id()) {
+		case LogicalTypeId::UTINYINT:
+			SetMaskedSelectionVectorLoop<uint8_t>(sel, indices_p, size, *mask, last_element_pos);
+			break;
+		case LogicalTypeId::TINYINT:
+			SetMaskedSelectionVectorLoop<int8_t>(sel, indices_p, size, *mask, last_element_pos);
+			break;
+		case LogicalTypeId::USMALLINT:
+			SetMaskedSelectionVectorLoop<uint16_t>(sel, indices_p, size, *mask, last_element_pos);
+			break;
+		case LogicalTypeId::SMALLINT:
+			SetMaskedSelectionVectorLoop<int16_t>(sel, indices_p, size, *mask, last_element_pos);
+			break;
 		case LogicalTypeId::UINTEGER:
+		    if (last_element_pos > std::numeric_limits<uint32_t>::max()){
+		        //! Its guaranteed that our indices will point to the last element, so just throw an error
+	            throw std::runtime_error("DuckDB only supports indices that fit on an uint32");
+	        }
 			SetMaskedSelectionVectorLoop<uint32_t>(sel, indices_p, size, *mask, last_element_pos);
 			break;
 		case LogicalTypeId::INTEGER:
 			SetMaskedSelectionVectorLoop<int32_t>(sel, indices_p, size, *mask, last_element_pos);
 			break;
+		case LogicalTypeId::UBIGINT:
+		    if (last_element_pos > std::numeric_limits<uint32_t>::max()){
+		        //! Its guaranteed that our indices will point to the last element, so just throw an error
+	            throw std::runtime_error("DuckDB only supports indices that fit on an uint32");
+	        }
+		    SetMaskedSelectionVectorLoop<uint64_t>(sel, indices_p, size, *mask, last_element_pos);
+			break;
 		case LogicalTypeId::BIGINT:
+		    if (last_element_pos > std::numeric_limits<uint32_t>::max()){
+		        //! Its guaranteed that our indices will point to the last element, so just throw an error
+	            throw std::runtime_error("DuckDB only supports indices that fit on an uint32");
+	        }
 			SetMaskedSelectionVectorLoop<int64_t>(sel, indices_p, size, *mask, last_element_pos);
 			break;
-		case LogicalTypeId::UBIGINT:
-			SetMaskedSelectionVectorLoop<uint64_t>(sel, indices_p, size, *mask, last_element_pos);
-			break;
+
 		default:
 			throw std::runtime_error("(Arrow) Unsupported type for selection vectors " + logical_type.ToString());
 		}
 
 	} else {
 		switch (logical_type.id()) {
+		case LogicalTypeId::UTINYINT:
+			SetSelectionVectorLoop<uint8_t>(sel, indices_p, size);
+			break;
+		case LogicalTypeId::TINYINT:
+			SetSelectionVectorLoop<int8_t>(sel, indices_p, size);
+			break;
+		case LogicalTypeId::USMALLINT:
+			SetSelectionVectorLoop<uint16_t>(sel, indices_p, size);
+			break;
+		case LogicalTypeId::SMALLINT:
+			SetSelectionVectorLoop<int16_t>(sel, indices_p, size);
+			break;
 		case LogicalTypeId::UINTEGER:
 			SetSelectionVectorLoop<uint32_t>(sel, indices_p, size);
 			break;
 		case LogicalTypeId::INTEGER:
 			SetSelectionVectorLoop<int32_t>(sel, indices_p, size);
 			break;
-		case LogicalTypeId::BIGINT:
-			SetSelectionVectorLoop<int64_t>(sel, indices_p, size);
-			break;
 		case LogicalTypeId::UBIGINT:
-			SetSelectionVectorLoop<uint64_t>(sel, indices_p, size);
+		    if (last_element_pos > std::numeric_limits<uint32_t>::max()){
+		        //! We need to check if our indexes fit in a uint32_t
+	            SetSelectionVectorLoopWithChecks<uint64_t>(sel, indices_p, size);
+	        }
+		    else{
+		        SetSelectionVectorLoop<uint64_t>(sel, indices_p, size);
+		    }
+			break;
+		case LogicalTypeId::BIGINT:
+		    if (last_element_pos > std::numeric_limits<uint32_t>::max()){
+		        //! We need to check if our indexes fit in a uint32_t
+	            SetSelectionVectorLoopWithChecks<int64_t>(sel, indices_p, size);
+	        }
+		    else{
+		        SetSelectionVectorLoop<int64_t>(sel, indices_p, size);
+		    }
 			break;
 		default:
 			throw std::runtime_error("(Arrow) Unsupported type for selection vectors " + logical_type.ToString());
