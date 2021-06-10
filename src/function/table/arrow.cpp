@@ -13,6 +13,8 @@
 #include "duckdb/common/to_string.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/limits.hpp"
+
 namespace duckdb {
 
 LogicalType GetArrowLogicalType(ArrowSchema &schema,
@@ -421,7 +423,7 @@ static void SetSelectionVectorLoopWithChecks(SelectionVector &sel, data_ptr_t in
 
 	auto indices = (T *)indices_p;
 	for (idx_t row = 0; row < size; row++) {
-		if (indices[row] > std::numeric_limits<uint32_t>::max()) {
+		if (indices[row] > NumericLimits<uint32_t>::Maximum()) {
 			throw std::runtime_error("DuckDB only supports indices that fit on an uint32");
 		}
 		sel.set_index(row, indices[row]);
@@ -461,7 +463,7 @@ void SetSelectionVector(SelectionVector &sel, data_ptr_t indices_p, LogicalType 
 			SetMaskedSelectionVectorLoop<int16_t>(sel, indices_p, size, *mask, last_element_pos);
 			break;
 		case LogicalTypeId::UINTEGER:
-			if (last_element_pos > std::numeric_limits<uint32_t>::max()) {
+			if (last_element_pos > NumericLimits<uint32_t>::Maximum()) {
 				//! Its guaranteed that our indices will point to the last element, so just throw an error
 				throw std::runtime_error("DuckDB only supports indices that fit on an uint32");
 			}
@@ -471,14 +473,14 @@ void SetSelectionVector(SelectionVector &sel, data_ptr_t indices_p, LogicalType 
 			SetMaskedSelectionVectorLoop<int32_t>(sel, indices_p, size, *mask, last_element_pos);
 			break;
 		case LogicalTypeId::UBIGINT:
-			if (last_element_pos > std::numeric_limits<uint32_t>::max()) {
+			if (last_element_pos > NumericLimits<uint32_t>::Maximum()) {
 				//! Its guaranteed that our indices will point to the last element, so just throw an error
 				throw std::runtime_error("DuckDB only supports indices that fit on an uint32");
 			}
 			SetMaskedSelectionVectorLoop<uint64_t>(sel, indices_p, size, *mask, last_element_pos);
 			break;
 		case LogicalTypeId::BIGINT:
-			if (last_element_pos > std::numeric_limits<uint32_t>::max()) {
+			if (last_element_pos > NumericLimits<uint32_t>::Maximum()) {
 				//! Its guaranteed that our indices will point to the last element, so just throw an error
 				throw std::runtime_error("DuckDB only supports indices that fit on an uint32");
 			}
@@ -510,7 +512,7 @@ void SetSelectionVector(SelectionVector &sel, data_ptr_t indices_p, LogicalType 
 			SetSelectionVectorLoop<int32_t>(sel, indices_p, size);
 			break;
 		case LogicalTypeId::UBIGINT:
-			if (last_element_pos > std::numeric_limits<uint32_t>::max()) {
+			if (last_element_pos > NumericLimits<uint32_t>::Maximum()) {
 				//! We need to check if our indexes fit in a uint32_t
 				SetSelectionVectorLoopWithChecks<uint64_t>(sel, indices_p, size);
 			} else {
@@ -518,7 +520,7 @@ void SetSelectionVector(SelectionVector &sel, data_ptr_t indices_p, LogicalType 
 			}
 			break;
 		case LogicalTypeId::BIGINT:
-			if (last_element_pos > std::numeric_limits<uint32_t>::max()) {
+			if (last_element_pos > NumericLimits<uint32_t>::Maximum()) {
 				//! We need to check if our indexes fit in a uint32_t
 				SetSelectionVectorLoopWithChecks<int64_t>(sel, indices_p, size);
 			} else {
