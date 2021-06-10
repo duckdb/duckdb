@@ -1,16 +1,16 @@
 #include "duckdb/common/file_system.hpp"
 
+#include "duckdb/common/checksum.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/gzip_file_system.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/common/checksum.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
-#include "duckdb/function/scalar/string_functions.hpp"
-#include "duckdb/common/gzip_file_system.hpp"
 
-#include <cstdio>
 #include <cstdint>
+#include <cstdio>
 
 #ifndef _WIN32
 #include <dirent.h>
@@ -174,7 +174,8 @@ void FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t 
 		throw IOException("Could not read from file \"%s\": %s", handle.path, strerror(errno));
 	}
 	if (bytes_read != nr_bytes) {
-		throw IOException("Could not read all bytes from file \"%s\": wanted=%lld read=%lld", handle.path, nr_bytes, bytes_read);
+		throw IOException("Could not read all bytes from file \"%s\": wanted=%lld read=%lld", handle.path, nr_bytes,
+		                  bytes_read);
 	}
 }
 
@@ -194,7 +195,8 @@ void FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t
 		throw IOException("Could not write file \"%s\": %s", handle.path, strerror(errno));
 	}
 	if (bytes_written != nr_bytes) {
-		throw IOException("Could not write all bytes to file \"%s\": wanted=%lld wrote=%lld", handle.path, nr_bytes, bytes_written);
+		throw IOException("Could not write all bytes to file \"%s\": wanted=%lld wrote=%lld", handle.path, nr_bytes,
+		                  bytes_written);
 	}
 }
 
@@ -521,7 +523,8 @@ void FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t 
 		throw IOException("Could not write file \"%s\": %s", handle.path, error);
 	}
 	if (bytes_read != nr_bytes) {
-		throw IOException("Could not read all bytes from file \"%s\": wanted=%lld read=%lld", handle.path, nr_bytes, bytes_read);
+		throw IOException("Could not read all bytes from file \"%s\": wanted=%lld read=%lld", handle.path, nr_bytes,
+		                  bytes_read);
 	}
 }
 
@@ -549,7 +552,8 @@ void FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t
 		throw IOException("Could not write file \"%s\": %s", handle.path, error);
 	}
 	if (bytes_written != nr_bytes) {
-		throw IOException("Could not write all bytes to file \"%s\": wanted=%lld wrote=%lld", handle.path, nr_bytes, bytes_written);
+		throw IOException("Could not write all bytes to file \"%s\": wanted=%lld wrote=%lld", handle.path, nr_bytes,
+		                  bytes_written);
 	}
 }
 
