@@ -1,4 +1,4 @@
-#include "duckdb/function/table/sqlite_functions.hpp"
+#include "duckdb/function/table/system_functions.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
@@ -14,11 +14,20 @@ void BuiltinFunctions::RegisterSQLiteFunctions() {
 	PragmaCollations::RegisterFunction(*this);
 	PragmaTableInfo::RegisterFunction(*this);
 	PragmaStorageInfo::RegisterFunction(*this);
-	SQLiteMaster::RegisterFunction(*this);
 	PragmaDatabaseSize::RegisterFunction(*this);
 	PragmaDatabaseList::RegisterFunction(*this);
 	PragmaLastProfilingOutput::RegisterFunction(*this);
 	PragmaDetailedProfilingOutput::RegisterFunction(*this);
+
+	DuckDBColumnsFun::RegisterFunction(*this);
+	DuckDBConstraintsFun::RegisterFunction(*this);
+	DuckDBIndexesFun::RegisterFunction(*this);
+	DuckDBSchemasFun::RegisterFunction(*this);
+	DuckDBDependenciesFun::RegisterFunction(*this);
+	DuckDBSequencesFun::RegisterFunction(*this);
+	DuckDBTablesFun::RegisterFunction(*this);
+	DuckDBTypesFun::RegisterFunction(*this);
+	DuckDBViewsFun::RegisterFunction(*this);
 }
 
 } // namespace duckdb

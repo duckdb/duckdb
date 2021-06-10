@@ -1,0 +1,17 @@
+# name: test/sql/table_function/duckdb_dependencies.test
+# description: Test duckdb_dependencies function
+# group: [table_function]
+
+# test the base dependencies
+statement ok
+SELECT * FROM duckdb_dependencies();
+
+# add some new dependencies
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+CREATE INDEX i_index ON integers(i)
+
+statement ok
+SELECT * FROM duckdb_dependencies();

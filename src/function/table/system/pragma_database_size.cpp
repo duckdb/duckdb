@@ -1,4 +1,4 @@
-#include "duckdb/function/table/sqlite_functions.hpp"
+#include "duckdb/function/table/system_functions.hpp"
 
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/block_manager.hpp"

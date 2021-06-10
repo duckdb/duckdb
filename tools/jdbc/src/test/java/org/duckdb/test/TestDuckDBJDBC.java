@@ -807,22 +807,6 @@ public class TestDuckDBJDBC {
 		assertFalse(rs.next());
 		rs.close();
 
-		rs = md.getSchemas();
-		assertTrue(rs.next());
-		assertEquals(rs.getString("TABLE_SCHEM"), "main");
-		assertNull(rs.getObject("TABLE_CATALOG"));
-		assertEquals(rs.getString(1), "main");
-		assertNull(rs.getObject(2));
-
-		assertTrue(rs.next());
-		assertEquals(rs.getString("TABLE_SCHEM"), "temp");
-		assertNull(rs.getObject("TABLE_CATALOG"));
-		assertEquals(rs.getString(1), "temp");
-		assertNull(rs.getObject(2));
-
-		assertFalse(rs.next());
-		rs.close();
-
 		rs = md.getSchemas(null, "ma%");
 		assertTrue(rs.next());
 		assertEquals(rs.getString("TABLE_SCHEM"), "main");

@@ -65,15 +65,13 @@ struct ARTIndexScanState : public IndexScanState {
 class ART : public Index {
 public:
 	ART(const vector<column_t> &column_ids, const vector<unique_ptr<Expression>> &unbound_expressions,
-	    bool is_unique = false);
+	    bool is_unique = false, bool is_primary = false);
 	~ART() override;
 
 	//! Root of the tree
 	unique_ptr<Node> tree;
 	//! True if machine is little endian
 	bool is_little_endian;
-	//! Whether or not the ART is an index built to enforce a UNIQUE constraint
-	bool is_unique;
 
 public:
 	//! Initialize a scan on the index with the given expression and column ids
