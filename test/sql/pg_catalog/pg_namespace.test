@@ -1,0 +1,39 @@
+# name: test/sql/pg_catalog/pg_namespace.test
+# description: Test pg_namespace function
+# group: [pg_catalog]
+
+query I
+SELECT COUNT(*) FROM pg_namespace WHERE nspname='myschema'
+----
+0
+
+statement ok
+CREATE SCHEMA myschema
+
+query I
+SELECT COUNT(*) FROM pg_namespace WHERE nspname='myschema'
+----
+1
+
+# can query through the "pg_catalog" namespace
+query IIII nosort pgnamespace
+SELECT * FROM pg_namespace
+
+query IIII nosort pgnamespace
+SELECT * FROM pg_catalog.pg_namespace
+
+# oid of an entry does not change even after adding new entries
+query I nosort pgmyschema
+SELECT * FROM pg_namespace WHERE nspname='myschema'
+
+statement ok
+CREATE SCHEMA bla
+
+statement ok
+CREATE SCHEMA test
+
+statement ok
+CREATE SCHEMA myschema33
+
+query I nosort pgmyschema
+SELECT * FROM pg_namespace WHERE nspname='myschema'

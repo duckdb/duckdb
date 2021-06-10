@@ -3,7 +3,7 @@
 duckdb_ListObjectTypes <- function(con) {
   object_types <- list(table = list(contains="data"))
 
-  types <- dbGetQuery(con, "SELECT DISTINCT type FROM sqlite_master()")[[1]]
+  types <- dbGetQuery(con, "SELECT DISTINCT type FROM sqlite_master")[[1]]
   if (any(types =="view")){
     object_types <- c(object_types, view=list(contains="data"))
   }
@@ -11,7 +11,7 @@ duckdb_ListObjectTypes <- function(con) {
 }
 
 duckdb_ListObjects <- function(con, catalog = NULL, schema = NULL, name = NULL, type = NULL, ...) {
-  objects <- dbGetQuery(con, "SELECT name,type FROM sqlite_master()")
+  objects <- dbGetQuery(con, "SELECT name,type FROM sqlite_master")
   objects <- objects[objects$type %in% c("table","view"),]
   objects
 }

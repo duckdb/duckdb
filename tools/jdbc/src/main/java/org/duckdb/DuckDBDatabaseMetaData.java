@@ -626,13 +626,13 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 	@Override
 	public ResultSet getCatalogs() throws SQLException {
 		return conn.createStatement().executeQuery(
-				"SELECT DISTINCT catalog_name AS 'TABLE_CAT' FROM information_schema_schemata() ORDER BY \"TABLE_CAT\"");
+				"SELECT DISTINCT catalog_name AS 'TABLE_CAT' FROM information_schema.schemata ORDER BY \"TABLE_CAT\"");
 	}
 
 	@Override
 	public ResultSet getSchemas() throws SQLException {
 		return conn.createStatement().executeQuery(
-				"SELECT schema_name AS 'TABLE_SCHEM', catalog_name AS 'TABLE_CATALOG' FROM information_schema_schemata() ORDER BY \"TABLE_CATALOG\", \"TABLE_SCHEM\"");
+				"SELECT schema_name AS 'TABLE_SCHEM', catalog_name AS 'TABLE_CATALOG' FROM information_schema.schemata ORDER BY \"TABLE_CATALOG\", \"TABLE_SCHEM\"");
 	}
 
 	@Override
@@ -641,7 +641,7 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 			throw new SQLException("catalog argument is not supported");
 		}
 		PreparedStatement ps = conn.prepareStatement(
-				"SELECT schema_name AS 'TABLE_SCHEM', catalog_name AS 'TABLE_CATALOG' FROM information_schema_schemata() WHERE schema_name LIKE ? ORDER BY \"TABLE_CATALOG\", \"TABLE_SCHEM\"");
+				"SELECT schema_name AS 'TABLE_SCHEM', catalog_name AS 'TABLE_CATALOG' FROM information_schema.schemata WHERE schema_name LIKE ? ORDER BY \"TABLE_CATALOG\", \"TABLE_SCHEM\"");
 		ps.setString(1, schemaPattern);
 		return ps.executeQuery();
 	}
@@ -649,7 +649,7 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 	@Override
 	public ResultSet getTableTypes() throws SQLException {
 		return conn.createStatement().executeQuery(
-				"SELECT DISTINCT table_type AS 'TABLE_TYPE' FROM information_schema_tables() ORDER BY \"TABLE_TYPE\"");
+				"SELECT DISTINCT table_type AS 'TABLE_TYPE' FROM information_schema.tables ORDER BY \"TABLE_TYPE\"");
 	}
 
 	@Override
@@ -676,7 +676,7 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 			tableNamePattern = "%";
 		}
 		PreparedStatement ps = conn.prepareStatement(
-				"SELECT table_catalog AS 'TABLE_CAT', table_schema AS 'TABLE_SCHEM', table_name AS 'TABLE_NAME', table_type as 'TABLE_TYPE', NULL AS 'REMARKS', NULL AS 'TYPE_CAT', NULL AS 'TYPE_SCHEM', NULL AS 'TYPE_NAME', NULL as 'SELF_REFERENCING_COL_NAME', NULL as 'REF_GENERATION' FROM information_schema_tables() WHERE "+ table_type_str +" table_schema LIKE ? AND table_name LIKE ? ORDER BY \"TABLE_TYPE\", \"TABLE_CAT\", \"TABLE_SCHEM\", \"TABLE_NAME\"");
+				"SELECT table_catalog AS 'TABLE_CAT', table_schema AS 'TABLE_SCHEM', table_name AS 'TABLE_NAME', table_type as 'TABLE_TYPE', NULL AS 'REMARKS', NULL AS 'TYPE_CAT', NULL AS 'TYPE_SCHEM', NULL AS 'TYPE_NAME', NULL as 'SELF_REFERENCING_COL_NAME', NULL as 'REF_GENERATION' FROM information_schema.tables WHERE "+ table_type_str +" table_schema LIKE ? AND table_name LIKE ? ORDER BY \"TABLE_TYPE\", \"TABLE_CAT\", \"TABLE_SCHEM\", \"TABLE_NAME\"");
 		ps.setString(1, schemaPattern);
 		ps.setString(2, tableNamePattern);
 		return ps.executeQuery();
@@ -705,7 +705,7 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 		// TODO this could get slow with many many columns and we really only need the
 		// types :/
 		ResultSet rs = gunky_statement
-				.executeQuery("SELECT DISTINCT data_type FROM information_schema_columns() ORDER BY data_type");
+				.executeQuery("SELECT DISTINCT data_type FROM information_schema.columns ORDER BY data_type");
 		while (rs.next()) {
 			values_str += ", ('" + rs.getString(1) + "', "
 					+ Integer.toString(DuckDBResultSetMetaData.type_to_int(rs.getString(1))) + ")";
@@ -714,7 +714,7 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 		gunky_statement.close();
 
 		PreparedStatement ps = conn.prepareStatement(
-				"SELECT table_catalog AS 'TABLE_CAT', table_schema AS 'TABLE_SCHEM', table_name AS 'TABLE_NAME', column_name as 'COLUMN_NAME', type_id AS 'DATA_TYPE', c.data_type AS 'TYPE_NAME', NULL AS 'COLUMN_SIZE', NULL AS 'BUFFER_LENGTH', numeric_precision AS 'DECIMAL_DIGITS', 10 AS 'NUM_PREC_RADIX', CASE WHEN is_nullable = 'YES' THEN 1 else 0 END AS 'NULLABLE', NULL as 'REMARKS', column_default AS 'COLUMN_DEF', NULL AS 'SQL_DATA_TYPE', NULL AS 'SQL_DATETIME_SUB', character_octet_length AS 'CHAR_OCTET_LENGTH', ordinal_position AS 'ORDINAL_POSITION', is_nullable AS 'IS_NULLABLE', NULL AS 'SCOPE_CATALOG', NULL AS 'SCOPE_SCHEMA', NULL AS 'SCOPE_TABLE', NULL AS 'SOURCE_DATA_TYPE', '' AS 'IS_AUTOINCREMENT', '' AS 'IS_GENERATEDCOLUMN'  FROM information_schema_columns() c JOIN ("
+				"SELECT table_catalog AS 'TABLE_CAT', table_schema AS 'TABLE_SCHEM', table_name AS 'TABLE_NAME', column_name as 'COLUMN_NAME', type_id AS 'DATA_TYPE', c.data_type AS 'TYPE_NAME', NULL AS 'COLUMN_SIZE', NULL AS 'BUFFER_LENGTH', numeric_precision AS 'DECIMAL_DIGITS', 10 AS 'NUM_PREC_RADIX', CASE WHEN is_nullable = 'YES' THEN 1 else 0 END AS 'NULLABLE', NULL as 'REMARKS', column_default AS 'COLUMN_DEF', NULL AS 'SQL_DATA_TYPE', NULL AS 'SQL_DATETIME_SUB', character_octet_length AS 'CHAR_OCTET_LENGTH', ordinal_position AS 'ORDINAL_POSITION', is_nullable AS 'IS_NULLABLE', NULL AS 'SCOPE_CATALOG', NULL AS 'SCOPE_SCHEMA', NULL AS 'SCOPE_TABLE', NULL AS 'SOURCE_DATA_TYPE', '' AS 'IS_AUTOINCREMENT', '' AS 'IS_GENERATEDCOLUMN'  FROM information_schema.columns c JOIN ("
 						+ values_str
 						+ ") t(type_name, type_id) ON c.data_type = t.type_name WHERE table_schema LIKE ? AND table_name LIKE ? AND column_name LIKE ? ORDER BY \"TABLE_CAT\",\"TABLE_SCHEM\", \"TABLE_NAME\", \"ORDINAL_POSITION\"");
 		ps.setString(1, schemaPattern);
