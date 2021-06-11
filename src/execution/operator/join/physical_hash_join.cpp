@@ -159,6 +159,32 @@ unique_ptr<PhysicalOperatorState> PhysicalHashJoin::GetOperatorState() {
 	return move(state);
 }
 
+void PhysicalHashJoin::PrepareForInvisibleJoin(ExecutionContext &context, DataChunk &result,
+                                               PhysicalHashJoinState *physical_state) const {
+	auto &sink = (HashJoinGlobalState &)*sink_state;
+	auto ht_ptr = sink.hash_table.get();
+	if (hasInvisibleJoin) {
+		// select the keys that are in the min-max range
+		physical_state->sel_vec.Initialize(ht_ptr->size());
+		auto &keys_vec = physical_state->join_keys.data[0];
+		SelectionVector sel;
+		sel.Initialize((sel_t *)keys_vec.GetData());
+		auto keys_count = physical_state->join_keys.size();
+		// if fast pass does not apply use selection vector instead
+		// reference the probe data to the result
+		// on the RHS, we need to fetch the data from the build structure and slice it using the new selection
+		// vector
+		for (idx_t i = 0; i < ht_ptr->build_types.size(); i++) {
+			auto &res_vector = result.data[physical_state->child_chunk.ColumnCount() + i];
+			D_ASSERT(res_vector.GetType() == ht_ptr->build_types[i]);
+			auto &build_vec = ht_ptr->columns[i];
+			res_vector.Reference(build_vec); //
+			res_vector.Slice(sel, keys_count);
+		}
+		physical_state->has_done_allocation = true;
+	}
+}
+
 void PhysicalHashJoin::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
                                         PhysicalOperatorState *state_p) const {
 	auto state = reinterpret_cast<PhysicalHashJoinState *>(state_p);
@@ -290,6 +316,25 @@ bool PhysicalHashJoin::ExecuteInvisibleJoin(ExecutionContext &context, DataChunk
 		res_vector.Slice(sel_vec, keys_count);
 	}
 	return true;
+	/* 	// We only probe if the optimized hash table has been built
+	    if (!hasInvisibleJoin) {
+	        return false;
+	    }
+
+	    // fetch the chunk to join
+	    children[0]->GetChunk(context, physical_state->child_chunk, physical_state->child_state.get());
+	    result.Reference(physical_state->child_chunk);
+	    if (physical_state->child_chunk.size() == 0) {
+	        // no more keys to probe
+	        return true;
+	    }
+	    // fetch the join keys from the chunk
+	    physical_state->probe_executor.Execute(physical_state->child_chunk, physical_state->join_keys);
+
+	    // TODO if its not minus 0 or not 32 bits, apply the switch
+	    // reference the probe data to the result
+	    // on the RHS, we need to fetch the data from the build structure and slice it using the new selection vector
+	    return true; */
 }
 
 bool PhysicalHashJoin::CheckRequirementsForInvisibleJoin(JoinHashTable *ht_ptr, HashJoinGlobalState &join_state) {

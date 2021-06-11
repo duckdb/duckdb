@@ -43,6 +43,8 @@ public:
 	DataChunk join_keys;
 	ExpressionExecutor probe_executor;
 	unique_ptr<JoinHashTable::ScanStructure> scan_structure;
+	bool has_done_allocation {false};
+	SelectionVector sel_vec;
 };
 //! PhysicalHashJoin represents a hash loop join between two tables
 
@@ -108,26 +110,7 @@ public:
 	bool HasDuplicates(JoinHashTable *ht_ptr);
 
 	void FinalizeOperatorState(PhysicalOperatorState &state, ExecutionContext &context) override;
-	/* 	void InitializeChunkEmpty(DataChunk &result) override {
-	        PhysicalOperator::InitializeChunk(result);
-	        if (hasInvisibleJoin) {
-	            // select the keys that are in the min-max range
-	            auto &keys_vec = physical_state->join_keys.data[0];
-	            Vector source(keys_vec.GetType());
-	            auto keys_count = physical_state->join_keys.size();
-	            // reference the probe data to the result
-	            result.Reference(physical_state->child_chunk);
-	            // on the RHS, we need to fetch the data from the build structure and slice it using the new selection
-	            // vector
-	            for (idx_t i = 0; i < ht_ptr->build_types.size(); i++) {
-	                auto &res_vector = result.data[physical_state->child_chunk.ColumnCount() + i];
-	                D_ASSERT(res_vector.GetType() == ht_ptr->build_types[i]);
-	                auto &build_vec = ht_ptr->columns[i];
-	                res_vector.Reference(build_vec); //
-	                res_vector.Slice(keys_vec, keys_count);
-	            }
-	        }
-	    } */
+	void PrepareForInvisibleJoin(ExecutionContext &context, DataChunk &result, PhysicalHashJoinState *state) const;
 
 private:
 	void ProbeHashTable(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) const;

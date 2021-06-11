@@ -114,10 +114,10 @@ PRAGMA disable_profiling
 
 # create the table integers with the values 0..1000
 statement ok
-CREATE TABLE test11 AS SELECT * FROM range(0, 1024, 1);
+CREATE TABLE test11 AS SELECT * FROM range(0, 10000, 1);
 
 statement ok
-CREATE TABLE test12 AS SELECT * FROM range(0, 1024, 1);
+CREATE TABLE test12 AS SELECT * FROM range(0, 10000, 1);
 
 # START LOOP 0..10
 loop i 0 9

@@ -9,9 +9,9 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/types/selection_vector.hpp"
 #include "duckdb/common/types/string_heap.hpp"
 #include "duckdb/common/types/string_type.hpp"
-#include "duckdb/common/types/selection_vector.hpp"
 
 namespace duckdb {
 
@@ -143,8 +143,7 @@ public:
 	void SetSelVector(const SelectionVector &vector) {
 		this->sel_vector.Initialize(vector);
 	}
-
-private:
+	// private:
 	SelectionVector sel_vector;
 };
 

@@ -125,6 +125,7 @@ void Vector::Slice(const SelectionVector &sel, idx_t count) {
 	child_ref->data.Reference(*this);
 
 	auto dict_buffer = make_buffer<DictionaryBuffer>(sel, GetType(), VectorType::DICTIONARY_VECTOR);
+	auto var = dict_buffer->sel_vector;
 	buffer = move(dict_buffer);
 	auxiliary = move(child_ref);
 }
