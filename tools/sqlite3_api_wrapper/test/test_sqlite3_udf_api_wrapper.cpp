@@ -29,7 +29,6 @@ TEST_CASE("SQLite UDF wrapper: basic usage", "[sqlite3wrapper]") {
 	REQUIRE(sqlite3_create_function(db_w.db, "multiply10", 1, 0, nullptr, &multiply10, nullptr, nullptr) == SQLITE_OK);
 	REQUIRE(db_w.Execute("SELECT multiply10(i) FROM integers"));
 	REQUIRE(db_w.CheckColumn(0, {"-50", "-40", "-30", "-20", "-10", "0", "10", "20", "30", "40", "50"}));
-
 }
 
 TEST_CASE("SQLite UDF wrapper: testing NULL values", "[sqlite3wrapper]") {
@@ -46,7 +45,8 @@ TEST_CASE("SQLite UDF wrapper: testing NULL values", "[sqlite3wrapper]") {
 	REQUIRE(db_w.Execute("CREATE TABLE integers(i INTEGER, j INTEGER, k INTEGER, l INTEGER)"));
 	REQUIRE(db_w.Execute("INSERT INTO integers VALUES (NULL, NULL, NULL, NULL), (NULL, NULL, NULL, NULL)"));
 
-	REQUIRE(sqlite3_create_function(db_w.db, "sum_cols_int_check_nulls", 4, 0, nullptr, &sum_cols_int_check_nulls, nullptr, nullptr) == SQLITE_OK);
+	REQUIRE(sqlite3_create_function(db_w.db, "sum_cols_int_check_nulls", 4, 0, nullptr, &sum_cols_int_check_nulls,
+	                                nullptr, nullptr) == SQLITE_OK);
 
 	REQUIRE(db_w.Execute("SELECT sum_cols_int_check_nulls(i, j, k, l) FROM integers"));
 	REQUIRE(db_w.CheckColumn(0, {"NULL", "NULL"}));
@@ -62,7 +62,8 @@ TEST_CASE("SQLite UDF wrapper: testing NULL values", "[sqlite3wrapper]") {
 	REQUIRE(db_w.CheckColumn(0, {"NULL", "NULL", "4", "8", "NULL", "NULL"}));
 
 	// UDF that threats NULL entries as zero
-	REQUIRE(sqlite3_create_function(db_w.db, "sum_cols_int", 4, 0, nullptr, &sum_cols_int, nullptr, nullptr) == SQLITE_OK);
+	REQUIRE(sqlite3_create_function(db_w.db, "sum_cols_int", 4, 0, nullptr, &sum_cols_int, nullptr, nullptr) ==
+	        SQLITE_OK);
 	REQUIRE(db_w.Execute("DELETE FROM integers"));
 	REQUIRE(db_w.Execute("INSERT INTO integers VALUES (NULL, NULL, 1, 1), (2, 2, 2, NULL)"));
 	REQUIRE(db_w.Execute("SELECT sum_cols_int(i, j, k, l) FROM integers"));

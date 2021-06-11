@@ -6,41 +6,41 @@
 bool CastSQLite::IsCastToVarchar(LogicalType type) {
 	LogicalTypeId type_id = type.id();
 	switch (type_id) {
-		case LogicalTypeId::TINYINT:
-		case LogicalTypeId::SMALLINT:
-		case LogicalTypeId::INTEGER:
-		case LogicalTypeId::BIGINT:
-		case LogicalTypeId::FLOAT:
-		case LogicalTypeId::DOUBLE:
-		case LogicalTypeId::CHAR:
-		case LogicalTypeId::VARCHAR:
-		case LogicalTypeId::BLOB:
-		case LogicalTypeId::SQLNULL:
-			return false; //supportted types
-		default:
-			return true; //types need casting to varchar
+	case LogicalTypeId::TINYINT:
+	case LogicalTypeId::SMALLINT:
+	case LogicalTypeId::INTEGER:
+	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::FLOAT:
+	case LogicalTypeId::DOUBLE:
+	case LogicalTypeId::CHAR:
+	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::BLOB:
+	case LogicalTypeId::SQLNULL:
+		return false; // supportted types
+	default:
+		return true; // types need casting to varchar
 	}
 }
 
 void CastSQLite::InputVectorsToVarchar(DataChunk &data_chunk) {
-	for(idx_t i=0; i < data_chunk.ColumnCount(); ++i) {
-		if(CastSQLite::IsCastToVarchar(data_chunk.data[i].GetType())) {
+	for (idx_t i = 0; i < data_chunk.ColumnCount(); ++i) {
+		if (CastSQLite::IsCastToVarchar(data_chunk.data[i].GetType())) {
 			LogicalType vchar_type(LogicalTypeId::VARCHAR);
 			Vector varchar_vector(vchar_type);
 
 			VectorOperations::Cast(data_chunk.data[i], varchar_vector, data_chunk.size(), true);
 
 			bool is_constant_vector = false;
-			if(data_chunk.data[i].GetVectorType() == VectorType::CONSTANT_VECTOR) {
+			if (data_chunk.data[i].GetVectorType() == VectorType::CONSTANT_VECTOR) {
 				is_constant_vector = true;
-				//it's needed to change to FLAT_VECTOR for the COPY works
+				// it's needed to change to FLAT_VECTOR for the COPY works
 				data_chunk.data[i].SetVectorType(VectorType::FLAT_VECTOR);
 			}
 
 			data_chunk.data[i].SetType(vchar_type);
 			VectorOperations::Copy(varchar_vector, data_chunk.data[i], data_chunk.size(), 0, 0);
 
-			if(is_constant_vector) {
+			if (is_constant_vector) {
 				data_chunk.data[i].SetVectorType(VectorType::CONSTANT_VECTOR);
 			}
 		}
@@ -48,19 +48,18 @@ void CastSQLite::InputVectorsToVarchar(DataChunk &data_chunk) {
 }
 
 VectorType CastSQLite::ToVectorsSQLiteValue(DataChunk &data_chunk, Vector &result,
-											vector<unique_ptr<vector<sqlite3_value>>> &vec_sqlite_values,
-											unique_ptr<VectorData[]> vec_data)
-{
+                                            vector<unique_ptr<vector<sqlite3_value>>> &vec_sqlite_values,
+                                            unique_ptr<VectorData[]> vec_data) {
 	VectorType result_vec_type = VectorType::CONSTANT_VECTOR;
 
-	//Casting input data to sqlite_value
-	for(idx_t i=0; i < data_chunk.ColumnCount(); ++i) {
+	// Casting input data to sqlite_value
+	for (idx_t i = 0; i < data_chunk.ColumnCount(); ++i) {
 		auto input_data = vec_data[i];
 		auto sqlite_values = CastSQLite::ToVector(data_chunk.data[i].GetType(), input_data, data_chunk.size(), result);
 		vec_sqlite_values[i] = move(sqlite_values);
 
-		//case there is a non-constant input vector, the result must be a FLAT vector
-		if(data_chunk.data[i].GetVectorType() != VectorType::CONSTANT_VECTOR) {
+		// case there is a non-constant input vector, the result must be a FLAT vector
+		if (data_chunk.data[i].GetVectorType() != VectorType::CONSTANT_VECTOR) {
 			result_vec_type = VectorType::FLAT_VECTOR;
 		}
 	}
@@ -68,7 +67,8 @@ VectorType CastSQLite::ToVectorsSQLiteValue(DataChunk &data_chunk, Vector &resul
 }
 
 //*** Cast to vectors ***********************************/
-unique_ptr<vector<sqlite3_value>> CastSQLite::ToVector(LogicalType type, VectorData &vec_data, idx_t size, Vector &result) {
+unique_ptr<vector<sqlite3_value>> CastSQLite::ToVector(LogicalType type, VectorData &vec_data, idx_t size,
+                                                       Vector &result) {
 	LogicalTypeId type_id = type.id();
 	switch (type_id) {
 	case LogicalTypeId::TINYINT: {
@@ -82,7 +82,7 @@ unique_ptr<vector<sqlite3_value>> CastSQLite::ToVector(LogicalType type, VectorD
 	}
 	case LogicalTypeId::BIGINT: {
 		return CastToVectorSQLiteValue::Operation<int64_t, CastToSQLiteValue>(vec_data, size);
-	}	
+	}
 	case LogicalTypeId::FLOAT: {
 		return CastToVectorSQLiteValue::Operation<float, CastToSQLiteValue>(vec_data, size);
 	}
@@ -97,14 +97,14 @@ unique_ptr<vector<sqlite3_value>> CastSQLite::ToVector(LogicalType type, VectorD
 	}
 	case LogicalTypeId::CHAR:
 	case LogicalTypeId::VARCHAR:
-	default: 
+	default:
 		return CastToVectorSQLiteValue::Operation<string_t, CastToSQLiteValue>(vec_data, size);
 	}
 }
 
 void CastSQLite::ToVectorString(SQLiteTypeValue type, vector<sqlite3_value> &vec_sqlite, Vector &result) {
 	string_t *result_data;
-	if(result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+	if (result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		result_data = ConstantVector::GetData<string_t>(result);
 	} else {
 		result_data = FlatVector::GetData<string_t>(result);
@@ -125,18 +125,17 @@ void CastSQLite::ToVectorString(SQLiteTypeValue type, vector<sqlite3_value> &vec
 		break;
 	}
 	default:
-		if(result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		if (result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			ConstantVector::SetNull(result, true);
 		}
 		break;
 	}
 }
 
-template<>
-void CastSQLite::ToVectorStringValue<string_t>(sqlite3_value *__restrict data,  idx_t count,
-											   string_t *__restrict result_data, Vector &result)
-{
-	for(idx_t i=0; i < count; ++i) {
+template <>
+void CastSQLite::ToVectorStringValue<string_t>(sqlite3_value *__restrict data, idx_t count,
+                                               string_t *__restrict result_data, Vector &result) {
+	for (idx_t i = 0; i < count; ++i) {
 		string_t str_value = CastFromSQLiteValue::GetValue<string_t>(data[i]);
 		result_data[i] = StringVector::AddString(result, str_value);
 	}
