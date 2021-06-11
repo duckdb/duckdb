@@ -698,24 +698,6 @@ void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &input, DataChunk &r
 	finished = true;
 }
 
-static void SetConstantNull(Vector &vec) {
-	vec.SetVectorType(VectorType::CONSTANT_VECTOR);
-	ConstantVector::SetNull(vec, true);
-
-	switch (vec.GetType().InternalType()) {
-	case PhysicalType::MAP:
-	case PhysicalType::STRUCT: {
-		auto &children = StructVector::GetEntries(vec);
-		for (auto &child : children) {
-			SetConstantNull(*child);
-		}
-		break;
-	}
-	default:
-		break;
-	}
-}
-
 void ScanStructure::NextLeftJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
 	// a LEFT OUTER JOIN is identical to an INNER JOIN except all tuples that do
 	// not have a match must return at least one tuple (with the right side set
@@ -739,7 +721,9 @@ void ScanStructure::NextLeftJoin(DataChunk &keys, DataChunk &left, DataChunk &re
 
 			// now set the right side to NULL
 			for (idx_t i = left.ColumnCount(); i < result.ColumnCount(); i++) {
-				SetConstantNull(result.data[i]);
+				Vector &vec = result.data[i];
+				vec.SetVectorType(VectorType::CONSTANT_VECTOR);
+				ConstantVector::SetNull(vec, true);
 			}
 		}
 		finished = true;
@@ -825,7 +809,9 @@ void JoinHashTable::ScanFullOuter(DataChunk &result, JoinHTScanState &state) {
 		const auto &sel_vector = FlatVector::INCREMENTAL_SELECTION_VECTOR;
 		// set the left side as a constant NULL
 		for (idx_t i = 0; i < left_column_count; i++) {
-			SetConstantNull(result.data[i]);
+			Vector &vec = result.data[i];
+			vec.SetVectorType(VectorType::CONSTANT_VECTOR);
+			ConstantVector::SetNull(vec, true);
 		}
 		// gather the values from the RHS
 		for (idx_t i = 0; i < build_types.size(); i++) {
