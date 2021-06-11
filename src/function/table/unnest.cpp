@@ -4,7 +4,7 @@
 namespace duckdb {
 
 struct UnnestFunctionData : public TableFunctionData {
-	UnnestFunctionData(Value value) : value(move(value)) {
+	explicit UnnestFunctionData(Value value) : value(move(value)) {
 	}
 
 	Value value;
