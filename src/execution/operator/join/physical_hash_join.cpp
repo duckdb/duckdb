@@ -195,9 +195,9 @@ void PhysicalHashJoin::GetChunkInternal(ExecutionContext &context, DataChunk &ch
 		return;
 	}
 	// We first try a probe with an invisible join opt, otherwise we do the standard probe
-	if (IsInnerJoin(join_type) && ExecuteInvisibleJoin(context, chunk, state, sink.hash_table.get())) {
-		return;
-	}
+	/* if (IsInnerJoin(join_type) && ExecuteInvisibleJoin(context, chunk, state, sink.hash_table.get())) {
+	    return;
+	} */
 	do {
 		ProbeHashTable(context, chunk, state);
 		if (chunk.size() == 0) {

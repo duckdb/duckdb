@@ -31,18 +31,18 @@ static bool CanPlanIndexJoin(Transaction &transaction, TableScanBindData *bind_d
 	return true;
 }
 
-bool CheckForInvisibleJoin(LogicalComparisonJoin &op, PerfectHashJoinState &join_state) {
+bool CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinState &join_state) {
 	// we only do this optimization for inner joins
 	if (op.join_type != JoinType::INNER)
-		return false;
+		return;
 	// with one condition
 	if (op.conditions.size() != 1) {
-		return false;
+		return;
 	}
 	// with integral types
 	if (op.join_stats.empty() || !op.join_stats[0]->type.IsIntegral() || !op.join_stats[1]->type.IsIntegral()) {
 		// invisible join not possible for no integral types
-		return false;
+		return;
 	}
 	// and when the build range is smaller than the pre-set threshold
 	auto stats_build = reinterpret_cast<NumericStatistics *>(op.join_stats[0].get()); // lhs stats
@@ -65,9 +65,8 @@ bool CheckForInvisibleJoin(LogicalComparisonJoin &op, PerfectHashJoinState &join
 		if (stats_build->min < MIN_THRESHOLD) {
 			join_state.is_build_min_small = true;
 		}
-		return true;
 	}
-	return false;
+	return;
 }
 
 void TransformIndexJoin(ClientContext &context, LogicalComparisonJoin &op, Index **left_index, Index **right_index,
@@ -155,21 +154,12 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 			                                      op.left_projection_map, op.right_projection_map, tbl_scan.column_ids,
 			                                      right_index, true, op.estimated_cardinality);
 		}
-		// equality join with small number of keys : possible invisible join optimization
+		// equality join with small number of keys : possible perfect join optimization
 		PerfectHashJoinState join_state;
-		if (CheckForInvisibleJoin(op, join_state)) {
-			/* 			plan = make_unique<PhysicalInvisibleJoin>(op, move(left), move(right), move(op.conditions),
-			   op.join_type, op.left_projection_map, op.right_projection_map, move(op.delim_types),
-			   op.estimated_cardinality, join_state); */
-			// equality join: use regular hash join
-			plan = make_unique<PhysicalHashJoin>(op, move(left), move(right), move(op.conditions), op.join_type,
-			                                     op.left_projection_map, op.right_projection_map, move(op.delim_types),
-			                                     op.estimated_cardinality, join_state);
-		} else {
-			plan = make_unique<PhysicalHashJoin>(op, move(left), move(right), move(op.conditions), op.join_type,
-			                                     op.left_projection_map, op.right_projection_map, move(op.delim_types),
-			                                     op.estimated_cardinality, join_state);
-		}
+		CheckForPerfectJoinOpt(op, join_state);
+		plan = make_unique<PhysicalHashJoin>(op, move(left), move(right), move(op.conditions), op.join_type,
+		                                     op.left_projection_map, op.right_projection_map, move(op.delim_types),
+		                                     op.estimated_cardinality, join_state);
 
 	} else {
 		D_ASSERT(!has_null_equal_conditions); // don't support this for anything but hash joins for now

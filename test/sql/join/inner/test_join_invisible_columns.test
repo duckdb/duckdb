@@ -15,7 +15,7 @@ statement ok
 CREATE TABLE test4 AS SELECT range r, random() as a FROM range(0, 1024, 1);
 
 # START LOOP 0..10
-loop i 0 9
+loop i 0 90
 
 statement ok
 INSERT INTO test4 SELECT * FROM test3;  
@@ -42,7 +42,7 @@ statement ok
 CREATE TABLE test6 AS SELECT range r, random() as a, random() as b, random() as c, random() as d FROM range(0, 1024, 1);
 
 # START LOOP 0..10
-loop i 0 9
+loop i 0 90
 
 statement ok
 INSERT INTO test6 SELECT * FROM test5;  
@@ -69,7 +69,7 @@ statement ok
 CREATE TABLE test8 AS SELECT range r, random() as a, random() as b, random() as c, random() as d, random() as e, random() as f, random() as g, random() as h FROM range(0, 1024, 1);
 
 # START LOOP 0..10
-loop i 0 9
+loop i 0 90
 
 statement ok
 INSERT INTO test8 SELECT * FROM test7;  

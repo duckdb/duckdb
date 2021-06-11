@@ -33,8 +33,7 @@ public:
 	//! right now.
 	double Elapsed() const {
 		auto _end = finished ? end : Tick();
-		auto seconds = std::chrono::duration_cast<std::chrono::duration<double>>(_end - start);
-		return std::chrono::duration_cast<std::chrono::milliseconds>(seconds).count();
+		return std::chrono::duration_cast<std::chrono::duration<double>>(_end - start).count();
 	}
 
 private:
