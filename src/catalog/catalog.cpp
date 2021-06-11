@@ -43,7 +43,6 @@ CatalogEntry *Catalog::CreateTable(ClientContext &context, BoundCreateTableInfo 
 }
 
 CatalogEntry *Catalog::CreateTable(ClientContext &context, SchemaCatalogEntry *schema, BoundCreateTableInfo *info) {
-	ModifyCatalog();
 	return schema->CreateTable(context, info);
 }
 
@@ -53,7 +52,6 @@ CatalogEntry *Catalog::CreateView(ClientContext &context, CreateViewInfo *info) 
 }
 
 CatalogEntry *Catalog::CreateView(ClientContext &context, SchemaCatalogEntry *schema, CreateViewInfo *info) {
-	ModifyCatalog();
 	return schema->CreateView(context, info);
 }
 
@@ -63,7 +61,6 @@ CatalogEntry *Catalog::CreateSequence(ClientContext &context, CreateSequenceInfo
 }
 
 CatalogEntry *Catalog::CreateSequence(ClientContext &context, SchemaCatalogEntry *schema, CreateSequenceInfo *info) {
-	ModifyCatalog();
 	return schema->CreateSequence(context, info);
 }
 
@@ -74,7 +71,6 @@ CatalogEntry *Catalog::CreateTableFunction(ClientContext &context, CreateTableFu
 
 CatalogEntry *Catalog::CreateTableFunction(ClientContext &context, SchemaCatalogEntry *schema,
                                            CreateTableFunctionInfo *info) {
-	ModifyCatalog();
 	return schema->CreateTableFunction(context, info);
 }
 
@@ -85,7 +81,6 @@ CatalogEntry *Catalog::CreateCopyFunction(ClientContext &context, CreateCopyFunc
 
 CatalogEntry *Catalog::CreateCopyFunction(ClientContext &context, SchemaCatalogEntry *schema,
                                           CreateCopyFunctionInfo *info) {
-	ModifyCatalog();
 	return schema->CreateCopyFunction(context, info);
 }
 
@@ -96,7 +91,6 @@ CatalogEntry *Catalog::CreatePragmaFunction(ClientContext &context, CreatePragma
 
 CatalogEntry *Catalog::CreatePragmaFunction(ClientContext &context, SchemaCatalogEntry *schema,
                                             CreatePragmaFunctionInfo *info) {
-	ModifyCatalog();
 	return schema->CreatePragmaFunction(context, info);
 }
 
@@ -106,7 +100,6 @@ CatalogEntry *Catalog::CreateFunction(ClientContext &context, CreateFunctionInfo
 }
 
 CatalogEntry *Catalog::CreateFunction(ClientContext &context, SchemaCatalogEntry *schema, CreateFunctionInfo *info) {
-	ModifyCatalog();
 	return schema->CreateFunction(context, info);
 }
 
@@ -116,7 +109,6 @@ CatalogEntry *Catalog::CreateCollation(ClientContext &context, CreateCollationIn
 }
 
 CatalogEntry *Catalog::CreateCollation(ClientContext &context, SchemaCatalogEntry *schema, CreateCollationInfo *info) {
-	ModifyCatalog();
 	return schema->CreateCollation(context, info);
 }
 
@@ -127,7 +119,6 @@ CatalogEntry *Catalog::CreateSchema(ClientContext &context, CreateSchemaInfo *in
 	if (info->schema == TEMP_SCHEMA) {
 		throw CatalogException("Cannot create built-in schema \"%s\"", info->schema);
 	}
-	ModifyCatalog();
 
 	unordered_set<CatalogEntry *> dependencies;
 	auto entry = make_unique<SchemaCatalogEntry>(this, info->schema, info->internal);
@@ -162,9 +153,15 @@ void Catalog::DropEntry(ClientContext &context, DropInfo *info) {
 		DropSchema(context, info);
 	} else {
 		if (info->schema.empty()) {
-			// invalid schema: check if the entry is in the temp schema
-			auto entry = GetEntry(context, info->type, TEMP_SCHEMA, info->name, true);
-			info->schema = entry ? TEMP_SCHEMA : DEFAULT_SCHEMA;
+			// invalid schema: check the search path
+			info->schema = DEFAULT_SCHEMA;
+			for (idx_t i = 0; i < context.catalog_search_path.size(); i++) {
+				auto entry = GetEntry(context, info->type, context.catalog_search_path[i], info->name, true);
+				if (entry) {
+					info->schema = context.catalog_search_path[i];
+					break;
+				}
+			}
 		}
 		auto schema = GetSchema(context, info->schema);
 		schema->DropEntry(context, info);
@@ -194,13 +191,17 @@ void Catalog::ScanSchemas(ClientContext &context, std::function<void(CatalogEntr
 CatalogEntry *Catalog::GetEntry(ClientContext &context, CatalogType type, string schema_name, const string &name,
                                 bool if_exists, QueryErrorContext error_context) {
 	if (schema_name.empty()) {
-		// invalid schema: first search the temporary schema
-		auto entry = GetEntry(context, type, TEMP_SCHEMA, name, true);
-		if (entry) {
-			return entry;
+		// no schema provided: check the catalog search path in order
+		if (context.catalog_search_path.empty()) {
+			throw InternalException("Empty catalog search path");
 		}
-		// if the entry does not exist in the temp schema, search in the default schema
 		schema_name = DEFAULT_SCHEMA;
+		for (idx_t i = 0; i < context.catalog_search_path.size(); i++) {
+			auto entry = GetEntry(context, type, context.catalog_search_path[i], name, true);
+			if (entry) {
+				return entry;
+			}
+		}
 	}
 	auto schema = GetSchema(context, schema_name, error_context);
 	return schema->GetEntry(context, type, name, if_exists, error_context);
@@ -282,14 +283,15 @@ void Catalog::Alter(ClientContext &context, AlterInfo *info) {
 	ModifyCatalog();
 	if (info->schema.empty()) {
 		auto catalog_type = info->GetCatalogType();
-		// invalid schema: first search the temporary schema
-		auto entry = GetEntry(context, catalog_type, TEMP_SCHEMA, info->name, true);
-		if (entry) {
-			// entry exists in temp schema: alter there
-			info->schema = TEMP_SCHEMA;
-		} else {
-			// if the entry does not exist in the temp schema, search in the default schema
-			info->schema = DEFAULT_SCHEMA;
+		// invalid schema: search the catalog search path
+		info->schema = DEFAULT_SCHEMA;
+		for (idx_t i = 0; i < context.catalog_search_path.size(); i++) {
+			auto entry = GetEntry(context, catalog_type, context.catalog_search_path[i], info->name, true);
+			if (entry) {
+				// entry exists in this schema: alter there
+				info->schema = context.catalog_search_path[i];
+				break;
+			}
 		}
 	}
 	auto schema = GetSchema(context, info->schema);
@@ -300,8 +302,8 @@ idx_t Catalog::GetCatalogVersion() {
 	return catalog_version;
 }
 
-void Catalog::ModifyCatalog() {
-	catalog_version++;
+idx_t Catalog::ModifyCatalog() {
+	return catalog_version++;
 }
 
 } // namespace duckdb

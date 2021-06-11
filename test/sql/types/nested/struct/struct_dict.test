@@ -1,0 +1,46 @@
+# name: test/sql/types/nested/struct/struct_dict.test
+# description: Test dict syntax for structs
+# group: [struct]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT {'i': 1, 'j': 2};
+----
+{'i': 1, 'j': 2}
+
+query I
+SELECT {'i': NULL, 'j': 2};
+----
+{'i': NULL, 'j': 2}
+
+query I
+SELECT {'i': [], 'j': 2};
+----
+{'i': [], 'j': 2}
+
+query I
+SELECT {'i': [1, 2, 3], 'j': 2};
+----
+{'i': [1, 2, 3], 'j': 2}
+
+# non constant members
+query I
+SELECT {i: r, j: 2} FROM range(3) tbl(r);
+----
+{'i': 0, 'j': 2}
+{'i': 1, 'j': 2}
+{'i': 2, 'j': 2}
+
+# duplicate key
+statement error
+SELECT {'i': 3, 'i': 4}
+
+# empty struct is not allowed
+statement error
+SELECT {};
+
+# need string keys
+statement error
+SELECT {1:3};

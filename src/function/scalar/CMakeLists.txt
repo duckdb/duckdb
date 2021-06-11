@@ -6,6 +6,7 @@ add_subdirectory(operators)
 add_subdirectory(sequence)
 add_subdirectory(string)
 add_subdirectory(nested)
+add_subdirectory(system)
 
 add_library_unity(
   duckdb_func_scalar
