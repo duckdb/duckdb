@@ -64,11 +64,6 @@ SELECT COUNT(*) FROM income_band
 20
 
 query T
-SELECT COUNT(*) FROM inventory
-----
-11745000
-
-query T
 SELECT COUNT(*) FROM item
 ----
 18000

@@ -1,0 +1,9 @@
+# name: test/sql/tpcds/tpcds_sf1_gen.test
+# description: Test TPC-DS SF1 data generation
+# group: [tpcds]
+
+require tpcds
+
+# dsdgen with sf=1, without queries so it doesn't have to be a .test_slow
+statement ok
+CALL dsdgen(sf=1)

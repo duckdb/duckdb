@@ -38,13 +38,14 @@
 
 #include "r_params.h"
 #include "release.h"
+#include "build_support.h"
+
 #ifdef DECLARER
 
 option_t options[] = {{"ABREVIATION", OPT_STR, 0, "build table with abreviation <s>", NULL, ""},
                       {"DELIMITER", OPT_STR | OPT_ADV, 1, "use <s> as output field separator", NULL, "|"},
                       {"DIR", OPT_STR, 2, "generate tables in directory <s>", NULL, "."},
-                      {"DISTRIBUTIONS", OPT_STR | OPT_ADV, 3, "read distributions from file <s>", NULL,
-                       "extension/tpcds/dsdgen/tpcds.idx"},
+                      {"DISTRIBUTIONS", OPT_STR | OPT_ADV, 3, "read distributions from file <s>", NULL, "NONE"},
                       {"FORCE", OPT_FLG | OPT_ADV, 4, "over-write data files without prompting", NULL, "N"},
                       {"HELP", OPT_INT, 5, "display this message", usage, "0"},
                       {"PARAMS", OPT_STR, 6, "read parameters from file <s>", read_file, ""},

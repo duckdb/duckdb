@@ -252,6 +252,9 @@ int mk_city(int nTable, char **dest) {
  * Side Effects:
  * TODO: None
  */
+#ifndef WIN32
+__attribute__((no_sanitize("undefined")))
+#endif
 int city_hash(int nTable, char *name) {
 	char *cp;
 	int hash_value = 0, res = 0;

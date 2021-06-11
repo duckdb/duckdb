@@ -511,6 +511,9 @@ int genrand_date(date_t *dest, int dist, date_t *min, date_t *max, date_t *mean,
  * TODO:
  */
 // FIXME: allow re-init
+#ifndef WIN32
+__attribute__((no_sanitize("undefined")))
+#endif
 void init_rand(void) {
 	static int bInit = 0;
 	int i, skip, nSeed;

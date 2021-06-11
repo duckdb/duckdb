@@ -26,3 +26,9 @@ PRAGMA tpcds(32908301298)
 
 statement error
 PRAGMA tpcds(1.1)
+
+# queries
+query T
+SELECT * FROM tpcds_queries()
+----
+206 values hashing to 4fa46c9bb76f94dd5654cd7876d617b4
