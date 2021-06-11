@@ -61,3 +61,24 @@ SELECT SUM(i), COUNT(i) FROM integers WHERE i>0
 ----
 NULL	0
 
+statement ok
+create table test_int(i integer primary key);
+
+statement ok
+insert into test_int select * from range(1000000);
+
+query I
+select count(*) from test_int;
+----
+1000000
+
+statement ok
+delete from test_int;
+
+statement ok
+insert into test_int select * from range(1000000);
+
+query I
+select count(*) from test_int;
+----
+1000000

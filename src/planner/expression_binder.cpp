@@ -111,6 +111,48 @@ void ExpressionBinder::ExtractCorrelatedExpressions(Binder &binder, Expression &
 	                                      [&](Expression &child) { ExtractCorrelatedExpressions(binder, child); });
 }
 
+static bool ContainsNullType(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::MAP: {
+		auto child_count = StructType::GetChildCount(type);
+		for (idx_t i = 0; i < child_count; i++) {
+			if (ContainsNullType(StructType::GetChildType(type, i))) {
+				return true;
+			}
+		}
+		return false;
+	}
+	case LogicalTypeId::LIST:
+		return ContainsNullType(ListType::GetChildType(type));
+	case LogicalTypeId::SQLNULL:
+		return true;
+	default:
+		return false;
+	}
+}
+
+static LogicalType ExchangeNullType(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::MAP: {
+		// we make a copy of the child types of the struct here
+		auto child_types = StructType::GetChildTypes(type);
+		for (auto &child_type : child_types) {
+			child_type.second = ExchangeNullType(child_type.second);
+		}
+		return type.id() == LogicalTypeId::MAP ? LogicalType::MAP(move(child_types))
+		                                       : LogicalType::STRUCT(move(child_types));
+	}
+	case LogicalTypeId::LIST:
+		return LogicalType::LIST(ExchangeNullType(ListType::GetChildType(type)));
+	case LogicalTypeId::SQLNULL:
+		return LogicalType::INTEGER;
+	default:
+		return type;
+	}
+}
+
 unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr, LogicalType *result_type,
                                               bool root_expression) {
 	// bind the main expression
@@ -131,10 +173,11 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 		// the binder has a specific target type: add a cast to that type
 		result = BoundCastExpression::AddCastToType(move(result), target_type);
 	} else {
-		if (result->return_type.id() == LogicalTypeId::SQLNULL) {
-			// SQL NULL type is only used internally in the binder
-			// cast to INTEGER if we encounter it outside of the binder
-			result = BoundCastExpression::AddCastToType(move(result), LogicalType::INTEGER);
+		// SQL NULL type is only used internally in the binder
+		// cast to INTEGER if we encounter it outside of the binder
+		if (ContainsNullType(result->return_type)) {
+			auto result_type = ExchangeNullType(result->return_type);
+			result = BoundCastExpression::AddCastToType(move(result), result_type);
 		}
 	}
 	if (result_type) {

@@ -155,7 +155,6 @@ static void ArraySliceFunction(DataChunk &args, ExpressionState &state, Vector &
 	switch (result.GetType().id()) {
 	case LogicalTypeId::LIST:
 		// Share the value dictionary as we are just going to slice it
-		D_ASSERT(result.GetType().child_types().size() == 1);
 		ListVector::ReferenceEntry(result, s);
 		ExecuteSlice<list_entry_t, int64_t>(result, s, b, e, count);
 		break;

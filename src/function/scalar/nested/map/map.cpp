@@ -9,7 +9,6 @@ namespace duckdb {
 
 static void MapFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(result.GetType().id() == LogicalTypeId::MAP);
-	D_ASSERT(result.GetType().child_types().size() == 2);
 
 	//! Otherwise if its not a constant vector, this breaks the optimizer
 	result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -29,16 +28,21 @@ static void MapFunction(DataChunk &args, ExpressionState &state, Vector &result)
 		auto list_child = make_unique<Vector>(LogicalTypeId::SQLNULL);
 		ListVector::SetEntry(*key_vector, move(list_child));
 		ListVector::SetListSize(*key_vector, 0);
-		auto list_data = FlatVector::GetData<list_entry_t>(*key_vector);
+		key_vector->SetVectorType(VectorType::CONSTANT_VECTOR);
+		auto list_data = ConstantVector::GetData<list_entry_t>(*key_vector);
 		list_data->offset = 0;
 		list_data->length = 0;
 
 		list_child = make_unique<Vector>(LogicalTypeId::SQLNULL);
+		list_child->SetVectorType(VectorType::CONSTANT_VECTOR);
 		ListVector::SetEntry(*value_vector, move(list_child));
 		ListVector::SetListSize(*value_vector, 0);
-		list_data = FlatVector::GetData<list_entry_t>(*value_vector);
+		value_vector->SetVectorType(VectorType::CONSTANT_VECTOR);
+		list_data = ConstantVector::GetData<list_entry_t>(*value_vector);
 		list_data->offset = 0;
 		list_data->length = 0;
+
+		result.Verify(args.size());
 		return;
 	}
 
@@ -70,21 +74,19 @@ static unique_ptr<FunctionData> MapBind(ClientContext &context, ScalarFunction &
 	}
 
 	if (arguments.empty()) {
-		child_list_t<LogicalType> child;
-		child.push_back({"", LogicalTypeId::SQLNULL});
-		auto empty = LogicalType(LogicalTypeId::LIST, child);
+		auto empty = LogicalType::LIST(LogicalTypeId::SQLNULL);
 		child_types.push_back(make_pair("key", empty));
 		child_types.push_back(make_pair("value", empty));
 	}
 
 	//! this is more for completeness reasons
-	bound_function.return_type = LogicalType(LogicalTypeId::MAP, move(child_types));
+	bound_function.return_type = LogicalType::MAP(move(child_types));
 	return make_unique<VariableReturnBindData>(bound_function.return_type);
 }
 
 void MapFun::RegisterFunction(BuiltinFunctions &set) {
 	//! the arguments and return types are actually set in the binder function
-	ScalarFunction fun("map", {}, LogicalType::MAP, MapFunction, false, MapBind);
+	ScalarFunction fun("map", {}, LogicalTypeId::MAP, MapFunction, false, MapBind);
 	fun.varargs = LogicalType::ANY;
 	set.AddFunction(fun);
 }

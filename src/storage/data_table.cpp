@@ -709,7 +709,7 @@ void DataTable::RemoveFromIndexes(Vector &row_identifiers, idx_t count) {
 	// figure out which row_group to fetch from
 	auto row_group = (RowGroup *)row_groups->GetSegment(row_ids[0]);
 	auto row_group_vector_idx = (row_ids[0] - row_group->start) / STANDARD_VECTOR_SIZE;
-	auto base_row_id = row_group_vector_idx * STANDARD_VECTOR_SIZE;
+	auto base_row_id = row_group_vector_idx * STANDARD_VECTOR_SIZE + row_group->start;
 
 	// create a selection vector from the row_ids
 	SelectionVector sel(STANDARD_VECTOR_SIZE);

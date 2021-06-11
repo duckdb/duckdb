@@ -52,7 +52,7 @@ void Vector::Reference(const Value &value) {
 	buffer = VectorBuffer::CreateConstantVector(VectorType::CONSTANT_VECTOR, value.type());
 	if (value.type().id() == LogicalTypeId::STRUCT || value.type().id() == LogicalTypeId::MAP) {
 		auto struct_buffer = make_unique<VectorStructBuffer>();
-		auto &child_types = value.type().child_types();
+		auto &child_types = StructType::GetChildTypes(value.type());
 		auto &child_vectors = struct_buffer->GetChildren();
 		for (idx_t i = 0; i < child_types.size(); i++) {
 			auto vector = make_unique<Vector>(value.is_null ? Value(child_types[i].second) : value.struct_value[i]);
@@ -146,7 +146,7 @@ void Vector::Initialize(const LogicalType &new_type, bool zero_data) {
 	auto &type = GetType();
 	if (type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::MAP) {
 		auto struct_buffer = make_unique<VectorStructBuffer>();
-		auto &child_types = type.child_types();
+		auto &child_types = StructType::GetChildTypes(type);
 		auto &child_vectors = struct_buffer->GetChildren();
 		for (auto &child_type : child_types) {
 			auto vector = make_unique<Vector>(child_type.second);
@@ -155,11 +155,13 @@ void Vector::Initialize(const LogicalType &new_type, bool zero_data) {
 
 		auxiliary = move(struct_buffer);
 	}
-	if (GetTypeIdSize(type.InternalType()) > 0) {
+	auto internal_type = type.InternalType();
+	auto type_size = GetTypeIdSize(internal_type);
+	if (type_size > 0) {
 		buffer = VectorBuffer::CreateStandardVector(VectorType::FLAT_VECTOR, type);
 		data = buffer->GetData();
 		if (zero_data) {
-			memset(data, 0, STANDARD_VECTOR_SIZE * GetTypeIdSize(type.InternalType()));
+			memset(data, 0, STANDARD_VECTOR_SIZE * type_size);
 		}
 	} else {
 		buffer = VectorBuffer::CreateStandardVector(VectorType::FLAT_VECTOR, type);
@@ -247,7 +249,9 @@ void Vector::SetValue(idx_t index, const Value &val) {
 
 	validity.EnsureWritable();
 	validity.Set(index, !val.is_null);
-	if (val.is_null) {
+	if (val.is_null && GetType().InternalType() != PhysicalType::STRUCT) {
+		// for structs we still need to set the child-entries to NULL
+		// so we do not bail out yet
 		return;
 	}
 
@@ -290,7 +294,8 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		((hugeint_t *)data)[index] = val.value_.hugeint;
 		break;
 	case LogicalTypeId::DECIMAL:
-		D_ASSERT(GetType().width() == val.type().width() && GetType().scale() == val.type().scale());
+		D_ASSERT(DecimalType::GetWidth(GetType()) == DecimalType::GetWidth(val.type()));
+		D_ASSERT(DecimalType::GetScale(GetType()) == DecimalType::GetScale(val.type()));
 		switch (GetType().InternalType()) {
 		case PhysicalType::INT16:
 			((int16_t *)data)[index] = val.value_.smallint;
@@ -326,20 +331,24 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		break;
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::STRUCT: {
-		auto &children = StructVector::GetEntries(*this);
-		D_ASSERT(children.size() == val.struct_value.size());
+		D_ASSERT(GetVectorType() == VectorType::CONSTANT_VECTOR || GetVectorType() == VectorType::FLAT_VECTOR);
 
-		for (size_t i = 0; i < val.struct_value.size(); i++) {
-			auto &struct_child = val.struct_value[i];
-			D_ASSERT(GetVectorType() == VectorType::CONSTANT_VECTOR || GetVectorType() == VectorType::FLAT_VECTOR);
+		auto &children = StructVector::GetEntries(*this);
+		D_ASSERT(val.is_null || children.size() == val.struct_value.size());
+		for (size_t i = 0; i < children.size(); i++) {
 			auto &vec_child = children[i];
-			vec_child->SetValue(index, struct_child);
+			if (!val.is_null) {
+				auto &struct_child = val.struct_value[i];
+				vec_child->SetValue(index, struct_child);
+			} else {
+				vec_child->SetValue(index, Value());
+			}
 		}
 		break;
 	}
 	case LogicalTypeId::LIST: {
 		if (!auxiliary) {
-			auto vec_list = make_unique<Vector>(GetType().child_types()[0].second);
+			auto vec_list = make_unique<Vector>(ListType::GetChildType(GetType()));
 			ListVector::SetEntry(*this, move(vec_list));
 		}
 		auto offset = ListVector::GetListSize(*this);
@@ -419,15 +428,17 @@ Value Vector::GetValue(idx_t index) const {
 	case LogicalTypeId::HUGEINT:
 		return Value::HUGEINT(((hugeint_t *)data)[index]);
 	case LogicalTypeId::DECIMAL: {
+		auto width = DecimalType::GetWidth(GetType());
+		auto scale = DecimalType::GetScale(GetType());
 		switch (GetType().InternalType()) {
 		case PhysicalType::INT16:
-			return Value::DECIMAL(((int16_t *)data)[index], GetType().width(), GetType().scale());
+			return Value::DECIMAL(((int16_t *)data)[index], width, scale);
 		case PhysicalType::INT32:
-			return Value::DECIMAL(((int32_t *)data)[index], GetType().width(), GetType().scale());
+			return Value::DECIMAL(((int32_t *)data)[index], width, scale);
 		case PhysicalType::INT64:
-			return Value::DECIMAL(((int64_t *)data)[index], GetType().width(), GetType().scale());
+			return Value::DECIMAL(((int64_t *)data)[index], width, scale);
 		case PhysicalType::INT128:
-			return Value::DECIMAL(((hugeint_t *)data)[index], GetType().width(), GetType().scale());
+			return Value::DECIMAL(((hugeint_t *)data)[index], width, scale);
 		default:
 			throw NotImplementedException("Widths bigger than 38 are not supported");
 		}
@@ -638,7 +649,6 @@ void Vector::Normalify(idx_t count) {
 			TemplatedFlattenConstantVector<list_entry_t>(data, old_data, count);
 			break;
 		}
-		case PhysicalType::MAP:
 		case PhysicalType::STRUCT: {
 			auto &child_entries = StructVector::GetEntries(*this);
 			for (auto &child : child_entries) {
@@ -745,7 +755,6 @@ void Vector::Serialize(idx_t count, Serializer &serializer) {
 		}
 		serializer.WriteData((const_data_ptr_t)flat_mask.GetData(), flat_mask.ValidityMaskSize(count));
 	}
-
 	if (TypeIsConstantSize(type.InternalType())) {
 		// constant size type: simple copy
 		idx_t write_size = GetTypeIdSize(type.InternalType()) * count;
@@ -760,6 +769,14 @@ void Vector::Serialize(idx_t count, Serializer &serializer) {
 				auto idx = vdata.sel->get_index(i);
 				auto source = !vdata.validity.RowIsValid(idx) ? NullValue<string_t>() : strings[idx];
 				serializer.WriteStringLen((const_data_ptr_t)source.GetDataUnsafe(), source.GetSize());
+			}
+			break;
+		}
+		case PhysicalType::STRUCT: {
+			Normalify(count);
+			auto &entries = StructVector::GetEntries(*this);
+			for (auto &entry : entries) {
+				entry->Serialize(count, serializer);
 			}
 			break;
 		}
@@ -788,15 +805,39 @@ void Vector::Deserialize(idx_t count, Deserializer &source) {
 
 		VectorOperations::ReadFromStorage(ptr.get(), count, *this);
 	} else {
-		auto strings = FlatVector::GetData<string_t>(*this);
-		for (idx_t i = 0; i < count; i++) {
-			// read the strings
-			auto str = source.Read<string>();
-			// now add the string to the StringHeap of the vector
-			// and write the pointer into the vector
-			if (validity.RowIsValid(i)) {
-				strings[i] = StringVector::AddStringOrBlob(*this, str);
+		switch (type.InternalType()) {
+		case PhysicalType::VARCHAR: {
+			auto strings = FlatVector::GetData<string_t>(*this);
+			for (idx_t i = 0; i < count; i++) {
+				// read the strings
+				auto str = source.Read<string>();
+				// now add the string to the StringHeap of the vector
+				// and write the pointer into the vector
+				if (validity.RowIsValid(i)) {
+					strings[i] = StringVector::AddStringOrBlob(*this, str);
+				}
 			}
+			break;
+		}
+		case PhysicalType::STRUCT: {
+			auto &entries = StructVector::GetEntries(*this);
+			for (auto &entry : entries) {
+				entry->Deserialize(count, source);
+			}
+			break;
+		}
+		default:
+			throw NotImplementedException("Unimplemented variable width type for Vector::Deserialize!");
+		}
+	}
+}
+
+void Vector::SetVectorType(VectorType vector_type) {
+	buffer->SetVectorType(vector_type);
+	if (vector_type == VectorType::CONSTANT_VECTOR && GetType().InternalType() == PhysicalType::STRUCT) {
+		auto &entries = StructVector::GetEntries(*this);
+		for (auto &entry : entries) {
+			entry->SetVectorType(vector_type);
 		}
 	}
 }
@@ -904,13 +945,17 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 		}
 	}
 
-	if (GetType().InternalType() == PhysicalType::STRUCT || GetType().InternalType() == PhysicalType::MAP) {
-		auto &child_types = GetType().child_types();
+	if (GetType().InternalType() == PhysicalType::STRUCT) {
+		auto &child_types = StructType::GetChildTypes(GetType());
 		D_ASSERT(child_types.size() > 0);
 		if (GetVectorType() == VectorType::FLAT_VECTOR || GetVectorType() == VectorType::CONSTANT_VECTOR) {
+			// create a selection vector of the non-null entries of the struct vector
 			auto &children = StructVector::GetEntries(*this);
 			D_ASSERT(child_types.size() == children.size());
 			for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
+				if (GetVectorType() == VectorType::CONSTANT_VECTOR) {
+					D_ASSERT(children[child_idx]->GetVectorType() == VectorType::CONSTANT_VECTOR);
+				}
 				D_ASSERT(children[child_idx]->GetType() == child_types[child_idx].second);
 				children[child_idx]->Verify(sel, count);
 			}
@@ -918,7 +963,6 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 	}
 
 	if (GetType().InternalType() == PhysicalType::LIST) {
-		D_ASSERT(GetType().child_types().size() == 1);
 		if (GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			if (!ConstantVector::IsNull(*this)) {
 				ListVector::GetEntry(*this).Verify(ListVector::GetListSize(*this));
@@ -952,6 +996,30 @@ void Vector::Verify(idx_t count) {
 	} else {
 		Verify(FlatVector::INCREMENTAL_SELECTION_VECTOR, count);
 	}
+}
+
+void ConstantVector::SetNull(Vector &vector, bool is_null) {
+	D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
+	vector.validity.Set(0, !is_null);
+	if (is_null && vector.GetType().InternalType() == PhysicalType::STRUCT) {
+		// set all child entries to null as well
+		auto &entries = StructVector::GetEntries(vector);
+		for (auto &entry : entries) {
+			entry->SetVectorType(VectorType::CONSTANT_VECTOR);
+			ConstantVector::SetNull(*entry, is_null);
+		}
+	}
+}
+
+const SelectionVector *ConstantVector::ZeroSelectionVector(idx_t count, SelectionVector &owned_sel) {
+	if (count <= STANDARD_VECTOR_SIZE) {
+		return &ConstantVector::ZERO_SELECTION_VECTOR;
+	}
+	owned_sel.Initialize(count);
+	for (idx_t i = 0; i < count; i++) {
+		owned_sel.set_index(i, 0);
+	}
+	return &owned_sel;
 }
 
 string_t StringVector::AddString(Vector &vector, const char *data, idx_t len) {
@@ -1089,7 +1157,7 @@ Vector &ListVector::GetEntry(Vector &vector) {
 
 void ListVector::Initialize(Vector &vec) {
 	if (!ListVector::HasEntry(vec)) {
-		auto vec_child = make_unique<Vector>(vec.GetType().child_types()[0].second);
+		auto vec_child = make_unique<Vector>(ListType::GetChildType(vec.GetType()));
 		ListVector::SetEntry(vec, move(vec_child));
 	}
 }
@@ -1227,7 +1295,7 @@ vector<idx_t> ListVector::Search(Vector &list, Value &key, idx_t row) {
 }
 
 Value ListVector::GetValuesFromOffsets(Vector &list, vector<idx_t> &offsets) {
-	Value ret(list.GetType().child_types()[0].second);
+	Value ret(ListType::GetChildType(list.GetType()));
 	ret.is_null = false;
 	auto &child_vec = ListVector::GetEntry(list);
 	for (auto &offset : offsets) {

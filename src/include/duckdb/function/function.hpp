@@ -224,7 +224,6 @@ private:
 	void RegisterReadFunctions();
 	void RegisterTableFunctions();
 	void RegisterArrowFunctions();
-	void RegisterInformationSchemaFunctions();
 
 	// aggregates
 	void RegisterAlgebraicAggregates();

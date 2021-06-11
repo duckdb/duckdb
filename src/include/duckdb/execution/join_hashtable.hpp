@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/types/row_layout.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
@@ -90,14 +91,11 @@ public:
 
 		idx_t ScanInnerJoin(DataChunk &keys, SelectionVector &result_vector);
 
-		idx_t ResolvePredicates(DataChunk &keys, SelectionVector &match_sel);
-		idx_t ResolvePredicates(DataChunk &keys, SelectionVector &match_sel, SelectionVector &no_match_sel);
 		void GatherResult(Vector &result, const SelectionVector &result_vector, const SelectionVector &sel_vector,
-		                  idx_t count, idx_t &offset, idx_t col_idx);
-		void GatherResult(Vector &result, const SelectionVector &sel_vector, idx_t count, idx_t &offset, idx_t col_idx);
+		                  const idx_t count, const idx_t col_idx);
+		void GatherResult(Vector &result, const SelectionVector &sel_vector, const idx_t count, const idx_t col_idx);
 
-		template <bool NO_MATCH_SEL>
-		idx_t ResolvePredicates(DataChunk &keys, SelectionVector *match_sel, SelectionVector *no_match_sel);
+		idx_t ResolvePredicates(DataChunk &keys, SelectionVector &match_sel, SelectionVector *no_match_sel);
 	};
 
 private:
@@ -154,22 +152,18 @@ public:
 	vector<LogicalType> build_types;
 	//! The comparison predicates
 	vector<ExpressionType> predicates;
+	//! Data column layout
+	RowLayout layout;
 	//! Size of the validity vector for each tuple.
 	idx_t validity_size;
-	//! Size of equality condition keys
-	idx_t equality_size;
-	//! Size of all condition keys
-	idx_t condition_size;
-	//! Size of build tuple
-	idx_t build_size;
 	//! The size of an entry as stored in the HashTable
 	idx_t entry_size;
 	//! The total tuple size
 	idx_t tuple_size;
-	//! some optional padding to align payload
-	idx_t entry_padding;
 	//! Next pointer offset in tuple
 	idx_t pointer_offset;
+	//! A constant false column for initialising right outer joins
+	Vector vfound;
 	//! The join type of the HT
 	JoinType join_type;
 	//! Whether or not the HT has been finalized
@@ -208,10 +202,6 @@ private:
 
 	idx_t PrepareKeys(DataChunk &keys, unique_ptr<VectorData[]> &key_data, const SelectionVector *&current_sel,
 	                  SelectionVector &sel, bool build_side);
-	void SerializeVectorData(VectorData &vdata, PhysicalType type, const SelectionVector &sel, idx_t count,
-	                         data_ptr_t key_locations[], idx_t &col_offset, idx_t col);
-	void SerializeVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t count, data_ptr_t key_locations[],
-	                     idx_t &col_offset, idx_t col);
 
 	//! The amount of entries stored in the HT currently
 	idx_t count;

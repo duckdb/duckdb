@@ -204,9 +204,7 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 	}
 	if (from.id() == LogicalTypeId::LIST && to.id() == LogicalTypeId::LIST) {
 		// Lists can be cast if their child types can be cast
-		D_ASSERT(!from.child_types().empty());
-		D_ASSERT(!to.child_types().empty());
-		return ImplicitCast(from.child_types()[0].second, to.child_types()[0].second);
+		return ImplicitCast(ListType::GetChildType(from), ListType::GetChildType(to));
 	}
 	if ((from.id() == LogicalTypeId::TIMESTAMP_SEC || from.id() == LogicalTypeId::TIMESTAMP_MS ||
 	     from.id() == LogicalTypeId::TIMESTAMP_NS) &&

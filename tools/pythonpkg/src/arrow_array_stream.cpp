@@ -11,7 +11,10 @@ PythonTableArrowArrayStream::PythonTableArrowArrayStream(PyObject *arrow_table_p
 	InitializeFunctionPointers(&stream->arrow_array_stream);
 	py::handle table_handle(arrow_table_p);
 	batches = table_handle.attr("to_batches")();
-	py::int_ num_rows_func = table_handle.attr("num_rows");
+	py::int_ num_rows_func = -1;
+	if (py::hasattr(table_handle, "num_rows")) {
+		num_rows_func = table_handle.attr("num_rows");
+	}
 	stream->number_of_rows = num_rows_func;
 
 	stream->arrow_array_stream.private_data = this;

@@ -14,10 +14,10 @@ cpp_format_command = 'clang-format --sort-includes=0 -style=file'
 cmake_format_command = 'cmake-format'
 extensions = ['.cpp', '.c', '.hpp', '.h', '.cc', '.hh', 'CMakeLists.txt', '.test', '.test_slow']
 formatted_directories = ['src', 'benchmark', 'test', 'tools', 'examples', 'extension']
-ignored_files = ['tpch_constants.hpp', 'tpcds_constants.hpp', '_generated', 'tpce_flat_input.hpp',
+ignored_files = ['tpch_constants.hpp', 'tpcds_constants.hpp', '_generated', 'tpce_flat_input.hpp', 'release.h',
                  'test_csv_header.hpp', 'duckdb.cpp', 'duckdb.hpp', 'json.hpp', 'sqlite3.h', 'shell.c',
                  'termcolor.hpp', 'test_insert_invalid.test', 'httplib.hpp', 'os_win.c', 'glob.c', 'printf.c',
-                 'helper.hpp', 'single_thread_ptr.hpp', 'types.hpp', 'release.h']
+                 'helper.hpp', 'single_thread_ptr.hpp','types.hpp', 'default_views.cpp', 'default_functions.cpp']
 ignored_directories = ['.eggs', '__pycache__', 'icu', 'dbgen', os.path.join('tools', 'pythonpkg', 'duckdb'), os.path.join('tools', 'pythonpkg', 'build'), os.path.join('tools', 'rpkg', 'src', 'duckdb')]
 format_all = False
 check_only = True

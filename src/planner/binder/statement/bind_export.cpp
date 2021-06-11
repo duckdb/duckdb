@@ -58,14 +58,14 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 
 	// gather a list of all the tables
 	vector<TableCatalogEntry *> tables;
-	Catalog::GetCatalog(context).schemas->Scan(context, [&](CatalogEntry *entry) {
-		auto schema = (SchemaCatalogEntry *)entry;
+	auto schemas = catalog.schemas->GetEntries<SchemaCatalogEntry>(context);
+	for (auto &schema : schemas) {
 		schema->Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) {
 			if (entry->type == CatalogType::TABLE_ENTRY) {
 				tables.push_back((TableCatalogEntry *)entry);
 			}
 		});
-	});
+	}
 
 	// now generate the COPY statements for each of the tables
 	auto &fs = FileSystem::GetFileSystem(context);

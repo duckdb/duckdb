@@ -233,7 +233,7 @@ void RowDataCollection::ComputeListEntrySizes(Vector &v, idx_t entry_sizes[], id
 			entry_sizes[i] += (list_entry.length + 7) / 8;
 
 			// serialize size of each entry (if non-constant size)
-			if (!TypeIsConstantSize(v.GetType().child_types()[0].second.InternalType())) {
+			if (!TypeIsConstantSize(ListType::GetChildType(v.GetType()).InternalType())) {
 				entry_sizes[i] += list_entry.length * sizeof(list_entry.length);
 			}
 
@@ -271,7 +271,6 @@ void RowDataCollection::ComputeEntrySizes(Vector &v, idx_t entry_sizes[], idx_t 
 		case PhysicalType::VARCHAR:
 			ComputeStringEntrySizes(v, entry_sizes, vcount, offset);
 			break;
-		case PhysicalType::MAP:
 		case PhysicalType::STRUCT:
 			ComputeStructEntrySizes(v, entry_sizes, vcount, offset);
 			break;
@@ -500,7 +499,7 @@ void RowDataCollection::SerializeListVector(Vector &v, idx_t vcount, const Selec
 
 	VectorData list_vdata;
 	child_vector.Orrify(ListVector::GetListSize(v), list_vdata);
-	auto child_type = v.GetType().child_types()[0].second.InternalType();
+	auto child_type = ListType::GetChildType(v.GetType()).InternalType();
 
 	idx_t list_entry_sizes[STANDARD_VECTOR_SIZE];
 	data_ptr_t list_entry_locations[STANDARD_VECTOR_SIZE];
@@ -596,7 +595,6 @@ void RowDataCollection::SerializeVector(Vector &v, idx_t vcount, const Selection
 		case PhysicalType::VARCHAR:
 			SerializeStringVector(v, vcount, sel, ser_count, col_idx, key_locations, validitymask_locations, offset);
 			break;
-		case PhysicalType::MAP:
 		case PhysicalType::STRUCT:
 			SerializeStructVector(v, vcount, sel, ser_count, col_idx, key_locations, validitymask_locations, offset);
 			break;
@@ -745,7 +743,7 @@ void RowDataCollection::DeserializeIntoStringVector(Vector &v, const idx_t &vcou
 void RowDataCollection::DeserializeIntoStructVector(Vector &v, const idx_t &vcount, const idx_t &col_idx,
                                                     data_ptr_t *key_locations, data_ptr_t *validitymask_locations) {
 	// struct must have a validitymask for its fields
-	auto &child_types = v.GetType().child_types();
+	auto &child_types = StructType::GetChildTypes(v.GetType());
 	const idx_t struct_validitymask_size = (child_types.size() + 7) / 8;
 	data_ptr_t struct_validitymask_locations[STANDARD_VECTOR_SIZE];
 	for (idx_t i = 0; i < vcount; i++) {
@@ -765,7 +763,7 @@ void RowDataCollection::DeserializeIntoListVector(Vector &v, const idx_t &vcount
                                                   data_ptr_t *key_locations, data_ptr_t *validitymask_locations) {
 	const auto &validity = FlatVector::Validity(v);
 
-	auto child_type = v.GetType().child_types()[0].second;
+	auto child_type = ListType::GetChildType(v.GetType());
 	auto list_data = GetListData(v);
 	data_ptr_t list_entry_locations[STANDARD_VECTOR_SIZE];
 
@@ -910,7 +908,6 @@ void RowDataCollection::DeserializeIntoVector(Vector &v, const idx_t &vcount, co
 	case PhysicalType::VARCHAR:
 		DeserializeIntoStringVector(v, vcount, col_idx, key_locations, validitymask_locations);
 		break;
-	case PhysicalType::MAP:
 	case PhysicalType::STRUCT:
 		DeserializeIntoStructVector(v, vcount, col_idx, key_locations, validitymask_locations);
 		break;
