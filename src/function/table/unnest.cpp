@@ -46,8 +46,8 @@ static void UnnestFunction(ClientContext &context, const FunctionData *bind_data
 }
 
 void UnnestTableFunction::RegisterFunction(BuiltinFunctions &set) {
-	TableFunction repeat("unnest", {LogicalTypeId::LIST}, UnnestFunction, UnnestBind, UnnestInit);
-	set.AddFunction(repeat);
+	TableFunction unnest_function("unnest", {LogicalTypeId::LIST}, UnnestFunction, UnnestBind, UnnestInit);
+	set.AddFunction(unnest_function);
 }
 
 } // namespace duckdb
