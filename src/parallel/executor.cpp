@@ -77,7 +77,7 @@ void Executor::Initialize(PhysicalOperator *plan) {
 				}
 			}
 		}
-		throw Exception(move(exception));
+		throw Exception(exception);
 	}
 
 	pipelines.clear();
