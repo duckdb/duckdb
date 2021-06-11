@@ -1,0 +1,88 @@
+# name: test/sql/join/inner/test_join_invisible_columns.test
+# description: Test joins that would generate a perfect hashtable
+# group: [inner]
+
+statement ok
+PRAGMA enable_verification
+
+mode output_hash
+
+# create the table integers with the values 0..1000
+statement ok
+CREATE TABLE test3 AS SELECT range r, random() FROM range(0, 1024, 1);
+
+statement ok
+CREATE TABLE test4 AS SELECT range r, random() as a FROM range(0, 1024, 1);
+
+# START LOOP 0..10
+loop i 0 9
+
+statement ok
+INSERT INTO test4 SELECT * FROM test3;  
+
+endloop
+
+mode output_hash
+
+statement ok
+PRAGMA enable_profiling;
+
+query I
+select test3.r, test4.a from test3,test4 where test3.r=test4.r;
+
+statement ok
+PRAGMA disable_profiling
+
+
+# create the table integers with the values 0..1000
+statement ok
+CREATE TABLE test5 AS SELECT range r, random() as a, random() as b, random() as c, random() as d FROM range(0, 1024, 1);
+
+statement ok
+CREATE TABLE test6 AS SELECT range r, random() as a, random() as b, random() as c, random() as d FROM range(0, 1024, 1);
+
+# START LOOP 0..10
+loop i 0 9
+
+statement ok
+INSERT INTO test6 SELECT * FROM test5;  
+
+endloop
+
+mode output_hash
+
+statement ok
+PRAGMA enable_profiling;
+
+query I
+select test6.r, test5.a, test5.b, test5.c, test5.d from test5,test6 where test5.r=test6.r;
+
+statement ok
+PRAGMA disable_profiling
+
+
+# create the table integers with the values 0..1000
+statement ok
+CREATE TABLE test7 AS SELECT range r, random() as a, random() as b, random() as c, random() as d, random() as e, random() as f, random() as g, random() as h FROM range(0, 1024, 1);
+
+statement ok
+CREATE TABLE test8 AS SELECT range r, random() as a, random() as b, random() as c, random() as d, random() as e, random() as f, random() as g, random() as h FROM range(0, 1024, 1);
+
+# START LOOP 0..10
+loop i 0 9
+
+statement ok
+INSERT INTO test8 SELECT * FROM test7;  
+
+endloop
+
+mode output_hash
+
+statement ok
+PRAGMA enable_profiling;
+
+query I
+select test8.r, test7.a, test7.b, test7.c, test7.d, test7.e, test7.f, test7.g, test7.h from test7,test8 where test7.r=test8.r;
+
+statement ok
+PRAGMA disable_profiling
