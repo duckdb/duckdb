@@ -126,10 +126,10 @@ TEST_CASE("Basic prepared statement usage", "[sqlite3wrapper]") {
 	REQUIRE(sqlite3_step(stmt.stmt) == SQLITE_DONE);
 
 	REQUIRE(db.Execute("SELECT * FROM test ORDER BY 1"));
-	REQUIRE(db.CheckColumn(0, {"", "", "", "", "2"}));
-	REQUIRE(db.CheckColumn(1, {"", "", "", "", "1000"}));
-	REQUIRE(db.CheckColumn(2, {"", "", "", "", "1992-01-01"}));
-	REQUIRE(db.CheckColumn(3, {"", "", "", "", "hello world"}));
+	REQUIRE(db.CheckColumn(0, {"NULL", "NULL", "NULL", "NULL", "2"}));
+	REQUIRE(db.CheckColumn(1, {"NULL", "NULL", "NULL", "NULL", "1000"}));
+	REQUIRE(db.CheckColumn(2, {"NULL", "NULL", "NULL", "NULL", "1992-01-01"}));
+	REQUIRE(db.CheckColumn(3, {"NULL", "NULL", "NULL", "NULL", "hello world"}));
 
 	REQUIRE(sqlite3_finalize(nullptr) == SQLITE_OK);
 

@@ -22,7 +22,7 @@ public:
 	 */
 	int ExecutePreparedStmt() {
 		if (!stmt) {
-			fprintf(stderr, "There is no prepated statement: Prepare(...) must be invoked firstly.\n");
+			fprintf(stderr, "There is no a prepared statement: Prepare(...) must be invoked firstly.\n");
 			return SQLITE_MISUSE;
 		}
 

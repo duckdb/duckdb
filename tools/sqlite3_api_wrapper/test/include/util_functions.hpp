@@ -15,7 +15,7 @@ static int concatenate_results(void *arg, int ncols, char **vals, char **colname
 		results.resize(ncols);
 	}
 	for (int i = 0; i < ncols; i++) {
-		results[i].push_back(vals[i] ? vals[i] : "");
+		results[i].push_back(vals[i] ? vals[i] : "NULL");
 	}
 	return SQLITE_OK;
 }

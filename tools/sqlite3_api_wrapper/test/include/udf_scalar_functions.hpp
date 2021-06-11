@@ -21,6 +21,25 @@ static void sum_cols_int(sqlite3_context *context, int argc, sqlite3_value **arg
 	sqlite3_result_int(context, sum);
 }
 
+static void sum_cols_int_check_nulls(sqlite3_context *context, int argc, sqlite3_value **argv) {
+	assert(argc > 0);
+	auto sum = 0;
+	int res_type = SQLITE_INTEGER;
+	for (int i = 0; i < argc; ++i) {
+		int type = sqlite3_value_type(argv[i]);
+		if(type == SQLITE_NULL) {
+			res_type = SQLITE_NULL;
+		} else {
+			sum += sqlite3_value_int(argv[i]);
+		}
+	}
+	if(res_type == SQLITE_NULL) {
+		sqlite3_result_null(context);
+	} else {
+		sqlite3_result_int(context, sum);
+	}
+}
+
 static void sum_cols_double(sqlite3_context *context, int argc, sqlite3_value **argv) {
 	assert(argc > 0);
 	auto sum = sqlite3_value_double(argv[0]);

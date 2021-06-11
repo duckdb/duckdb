@@ -29,6 +29,44 @@ TEST_CASE("SQLite UDF wrapper: basic usage", "[sqlite3wrapper]") {
 	REQUIRE(sqlite3_create_function(db_w.db, "multiply10", 1, 0, nullptr, &multiply10, nullptr, nullptr) == SQLITE_OK);
 	REQUIRE(db_w.Execute("SELECT multiply10(i) FROM integers"));
 	REQUIRE(db_w.CheckColumn(0, {"-50", "-40", "-30", "-20", "-10", "0", "10", "20", "30", "40", "50"}));
+
+}
+
+TEST_CASE("SQLite UDF wrapper: testing NULL values", "[sqlite3wrapper]") {
+	SQLiteDBWrapper db_w;
+
+	// open an in-memory db
+	REQUIRE(db_w.Open(":memory:"));
+
+	// testing null values
+	REQUIRE(db_w.Execute("SELECT NULL"));
+	REQUIRE(db_w.CheckColumn(0, {"NULL"}));
+
+	// insert NULL value and test
+	REQUIRE(db_w.Execute("CREATE TABLE integers(i INTEGER, j INTEGER, k INTEGER, l INTEGER)"));
+	REQUIRE(db_w.Execute("INSERT INTO integers VALUES (NULL, NULL, NULL, NULL), (NULL, NULL, NULL, NULL)"));
+
+	REQUIRE(sqlite3_create_function(db_w.db, "sum_cols_int_check_nulls", 4, 0, nullptr, &sum_cols_int_check_nulls, nullptr, nullptr) == SQLITE_OK);
+
+	REQUIRE(db_w.Execute("SELECT sum_cols_int_check_nulls(i, j, k, l) FROM integers"));
+	REQUIRE(db_w.CheckColumn(0, {"NULL", "NULL"}));
+
+	// insert valid values
+	REQUIRE(db_w.Execute("INSERT INTO integers VALUES (1, 1, 1, 1), (2, 2, 2, 2)"));
+	REQUIRE(db_w.Execute("SELECT sum_cols_int_check_nulls(i, j, k, l) FROM integers"));
+	REQUIRE(db_w.CheckColumn(0, {"NULL", "NULL", "4", "8"}));
+
+	// insert valid values with NULL ones
+	REQUIRE(db_w.Execute("INSERT INTO integers VALUES (NULL, 1, 1, 1), (2, 2, 2, NULL)"));
+	REQUIRE(db_w.Execute("SELECT sum_cols_int_check_nulls(i, j, k, l) FROM integers"));
+	REQUIRE(db_w.CheckColumn(0, {"NULL", "NULL", "4", "8", "NULL", "NULL"}));
+
+	// UDF that threats NULL entries as zero
+	REQUIRE(sqlite3_create_function(db_w.db, "sum_cols_int", 4, 0, nullptr, &sum_cols_int, nullptr, nullptr) == SQLITE_OK);
+	REQUIRE(db_w.Execute("DELETE FROM integers"));
+	REQUIRE(db_w.Execute("INSERT INTO integers VALUES (NULL, NULL, 1, 1), (2, 2, 2, NULL)"));
+	REQUIRE(db_w.Execute("SELECT sum_cols_int(i, j, k, l) FROM integers"));
+	REQUIRE(db_w.CheckColumn(0, {"2", "6"}));
 }
 
 TEST_CASE("SQLite UDF wrapper: multiple arguments", "[sqlite3wrapper]") {
@@ -155,19 +193,19 @@ TEST_CASE("SQLite UDF wrapper: set null", "[sqlite3wrapper]") {
 
 	// INT
 	REQUIRE(db_w.Execute("SELECT set_null('4'::INTEGER)"));
-	REQUIRE(db_w.CheckColumn(0, {""}));
+	REQUIRE(db_w.CheckColumn(0, {"NULL"}));
 
 	// FLOAT
 	REQUIRE(db_w.Execute("SELECT set_null('4.0'::DOUBLE)"));
-	REQUIRE(db_w.CheckColumn(0, {""}));
+	REQUIRE(db_w.CheckColumn(0, {"NULL"}));
 
 	// TEXT
 	REQUIRE(db_w.Execute("SELECT set_null('aaaa'::VARCHAR)"));
-	REQUIRE(db_w.CheckColumn(0, {""}));
+	REQUIRE(db_w.CheckColumn(0, {"NULL"}));
 
 	// BLOB
 	REQUIRE(db_w.Execute("SELECT set_null('aaaa'::BLOB)"));
-	REQUIRE(db_w.CheckColumn(0, {""}));
+	REQUIRE(db_w.CheckColumn(0, {"NULL"}));
 }
 
 TEST_CASE("SQLite UDF wrapper: get user data", "[sqlite3wrapper]") {
