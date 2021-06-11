@@ -59,7 +59,7 @@ statement ok
 PRAGMA enable_profiling;
 
 query I
-select test4.range from test3,test4 where test3.range=test4.range;
+select test4.range, test3.range from test3,test4 where test3.range=test4.range order by test4.range;
 
 statement ok
 PRAGMA disable_profiling
@@ -78,7 +78,7 @@ statement ok
 PRAGMA enable_profiling;
 
 query I
-select test6.range from test5,test6 where test5.range=test6.range;
+select test6.range, test5.range from test5,test6 where test5.range=test6.range order by test6.range;
 
 statement ok
 PRAGMA disable_profiling
@@ -97,20 +97,11 @@ statement ok
 PRAGMA enable_profiling;
 
 query I
-select test8.range from test7,test8 where test7.range=test8.range;
+select test8.range, test7.range from test7,test8 where test7.range=test8.range order by test8.range;
 
 statement ok
 PRAGMA disable_profiling
 
-# varying probe size
-statement ok
-PRAGMA enable_profiling;
-
-query I
-select test8.range from test7,test8 where test7.range=test8.range;
-
-statement ok
-PRAGMA disable_profiling
 
 # create the table integers with the values 0..1000
 statement ok
@@ -133,7 +124,7 @@ statement ok
 PRAGMA enable_profiling;
 
 query I
-select test12.range from test11,test12 where test11.range=test12.range;
+select test12.range, test11.range from test11,test12 where test11.range=test12.range order by test12.range;
 
 statement ok
 PRAGMA disable_profiling
@@ -151,7 +142,7 @@ statement ok
 PRAGMA enable_profiling;
 
 query I
-select test12.range from test11,test12 where test11.range=test12.range;
+select test12.range, test11.range from test11,test12 where test11.range=test12.range order by test11.range;
 
 statement ok
 PRAGMA disable_profiling
