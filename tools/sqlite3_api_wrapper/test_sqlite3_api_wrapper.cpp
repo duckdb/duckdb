@@ -150,22 +150,22 @@ TEST_CASE("Basic prepared statement usage", "[sqlite3wrapper]") {
 
 	// open an in-memory db
 	REQUIRE(db.Open(":memory:"));
-	REQUIRE(db.Execute("CREATE TABLE test(i INTEGER, j BIGINT, k DATE, l VARCHAR)"));
+	REQUIRE(db.Execute("CREATE TABLE test(i INTEGER, j BIGINT, k DATE, l VARCHAR, b BLOB)"));
 #ifndef SQLITE_TEST
 	// sqlite3_prepare_v2 errors
 	// nullptr for db/stmt, note: normal sqlite segfaults here
-	REQUIRE(sqlite3_prepare_v2(nullptr, "INSERT INTO test VALUES ($1, $2, $3, $4)", -1, nullptr, nullptr) ==
+	REQUIRE(sqlite3_prepare_v2(nullptr, "INSERT INTO test VALUES ($1, $2, $3, $4, $5)", -1, nullptr, nullptr) ==
 	        SQLITE_MISUSE);
-	REQUIRE(sqlite3_prepare_v2(db.db, "INSERT INTO test VALUES ($1, $2, $3, $4)", -1, nullptr, nullptr) ==
+	REQUIRE(sqlite3_prepare_v2(db.db, "INSERT INTO test VALUES ($1, $2, $3, $4, $5)", -1, nullptr, nullptr) ==
 	        SQLITE_MISUSE);
 #endif
 	// prepared statement
-	REQUIRE(stmt.Prepare(db.db, "INSERT INTO test VALUES ($1, $2, $3, $4)", -1, nullptr) == SQLITE_OK);
+	REQUIRE(stmt.Prepare(db.db, "INSERT INTO test VALUES ($1, $2, $3, $4, $5)", -1, nullptr) == SQLITE_OK);
 
 	// test for parameter count, names and indexes
 	REQUIRE(sqlite3_bind_parameter_count(nullptr) == 0);
-	REQUIRE(sqlite3_bind_parameter_count(stmt.stmt) == 4);
-	for (int i = 1; i < 5; i++) {
+	REQUIRE(sqlite3_bind_parameter_count(stmt.stmt) == 5);
+	for (int i = 1; i < 6; i++) {
 		REQUIRE(sqlite3_bind_parameter_name(nullptr, i) == nullptr);
 		REQUIRE(sqlite3_bind_parameter_index(nullptr, nullptr) == 0);
 		REQUIRE(sqlite3_bind_parameter_index(stmt.stmt, nullptr) == 0);
@@ -174,7 +174,7 @@ TEST_CASE("Basic prepared statement usage", "[sqlite3wrapper]") {
 		REQUIRE(sqlite3_bind_parameter_index(stmt.stmt, sqlite3_bind_parameter_name(stmt.stmt, i)) == i);
 	}
 	REQUIRE(sqlite3_bind_parameter_name(stmt.stmt, 0) == nullptr);
-	REQUIRE(sqlite3_bind_parameter_name(stmt.stmt, 5) == nullptr);
+	REQUIRE(sqlite3_bind_parameter_name(stmt.stmt, 6) == nullptr);
 
 #ifndef SQLITE_TEST
 	// this segfaults in SQLITE
@@ -186,7 +186,7 @@ TEST_CASE("Basic prepared statement usage", "[sqlite3wrapper]") {
 	// incorrect bindings: nullptr as statement, wrong type and out of range binding
 	REQUIRE(sqlite3_bind_int(nullptr, 1, 1) == SQLITE_MISUSE);
 	REQUIRE(sqlite3_bind_int(stmt.stmt, 0, 1) == SQLITE_RANGE);
-	REQUIRE(sqlite3_bind_int(stmt.stmt, 5, 1) == SQLITE_RANGE);
+	REQUIRE(sqlite3_bind_int(stmt.stmt, 6, 1) == SQLITE_RANGE);
 
 	// we can bind the incorrect type just fine
 	// error will only be thrown on execution
@@ -197,6 +197,11 @@ TEST_CASE("Basic prepared statement usage", "[sqlite3wrapper]") {
 	REQUIRE(sqlite3_bind_int64(stmt.stmt, 2, 1000) == SQLITE_OK);
 	REQUIRE(sqlite3_bind_text(stmt.stmt, 3, "1992-01-01", -1, nullptr) == SQLITE_OK);
 	REQUIRE(sqlite3_bind_text(stmt.stmt, 4, "hello world", -1, nullptr) == SQLITE_OK);
+	// test for bind blob
+	REQUIRE(sqlite3_bind_blob(stmt.stmt, 5, "hello world", -1, nullptr) == SQLITE_OK);
+	REQUIRE(sqlite3_bind_blob(stmt.stmt, 5, "hello world", 10, nullptr) == SQLITE_OK);
+	REQUIRE(sqlite3_bind_zeroblob(stmt.stmt, 5, -1) == SQLITE_OK);
+	REQUIRE(sqlite3_bind_zeroblob(stmt.stmt, 5, 10) == SQLITE_OK);
 
 	REQUIRE(sqlite3_step(nullptr) == SQLITE_MISUSE);
 	REQUIRE(sqlite3_step(stmt.stmt) == SQLITE_DONE);
@@ -211,6 +216,7 @@ TEST_CASE("Basic prepared statement usage", "[sqlite3wrapper]") {
 	REQUIRE(sqlite3_bind_null(stmt.stmt, 2) == SQLITE_OK);
 	REQUIRE(sqlite3_bind_null(stmt.stmt, 3) == SQLITE_OK);
 	REQUIRE(sqlite3_bind_null(stmt.stmt, 4) == SQLITE_OK);
+	REQUIRE(sqlite3_bind_null(stmt.stmt, 5) == SQLITE_OK);
 
 	// we can step multiple times
 	REQUIRE(sqlite3_step(stmt.stmt) == SQLITE_DONE);
@@ -227,6 +233,7 @@ TEST_CASE("Basic prepared statement usage", "[sqlite3wrapper]") {
 	REQUIRE(db.CheckColumn(1, {"", "", "", "", "1000"}));
 	REQUIRE(db.CheckColumn(2, {"", "", "", "", "1992-01-01"}));
 	REQUIRE(db.CheckColumn(3, {"", "", "", "", "hello world"}));
+	REQUIRE(db.CheckColumn(4, {"", "", "", "", "0000000000"}));
 
 	REQUIRE(sqlite3_finalize(nullptr) == SQLITE_OK);
 
@@ -264,6 +271,7 @@ TEST_CASE("Basic prepared statement usage", "[sqlite3wrapper]") {
 	REQUIRE(string((char *)sqlite3_column_text(stmt.stmt, 1)) == string("1000"));
 	REQUIRE(string((char *)sqlite3_column_text(stmt.stmt, 2)) == string("1992-01-01"));
 	REQUIRE(string((char *)sqlite3_column_text(stmt.stmt, 3)) == string("hello world"));
+	REQUIRE(string((char *)sqlite3_column_blob(stmt.stmt, 4)) == string("0000000000"));
 	REQUIRE(sqlite3_column_int(stmt.stmt, 3) == 0);
 	REQUIRE(sqlite3_column_int64(stmt.stmt, 3) == 0);
 	REQUIRE(sqlite3_column_double(stmt.stmt, 3) == 0);

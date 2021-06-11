@@ -625,17 +625,26 @@ int sqlite3_bind_blob(sqlite3_stmt *stmt, int idx, const void *val, int length, 
 	if (!val) {
 		return SQLITE_MISUSE;
 	}
+	Value blob;
+	if (length < 0) {
+		blob = Value::BLOB(string((const char *)val));
+	} else {
+		blob = Value::BLOB((const_data_ptr_t)val, length);
+	}
 	if (free_func && ((ptrdiff_t)free_func) != -1) {
 		free_func((void *)val);
 	}
 	try {
-		return sqlite3_internal_bind_value(stmt, idx, Value::BLOB((const_data_ptr_t)val, length));
+		return sqlite3_internal_bind_value(stmt, idx, blob);
 	} catch (std::exception &ex) {
 		return SQLITE_ERROR;
 	}
 }
 
 SQLITE_API int sqlite3_bind_zeroblob(sqlite3_stmt *stmt, int idx, int length) {
+	if (length < 0) {
+		length = 0;
+	}
 	return sqlite3_internal_bind_value(stmt, idx, Value::BLOB(string(length, '0')));
 }
 
