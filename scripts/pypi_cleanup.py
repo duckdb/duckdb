@@ -24,20 +24,34 @@ latest_release_v = version.LooseVersion(last_release)
 
 to_delete = []
 
+# todo ugly double loop
+latest_prerelease = -1
+
+def parsever(ele):
+	major = version.LooseVersion('.'.join(ele.split('.')[:3]))
+	dev = int(ele.split('.')[3].replace('dev',''))
+	return (major, dev,)
+
+for ele in resp_json["releases"]:
+	if not ".dev" in ele:
+		continue
+
+	(major, dev) = parsever(ele)
+
+	if (major > latest_release_v and dev > latest_prerelease):
+		latest_prerelease = dev
+
+
 for ele in resp_json["releases"]:
 	# never delete regular release builds
 	if not ".dev" in ele:
 		continue
 
-	major = '.'.join(ele.split('.')[:3])
-	major_v = version.LooseVersion(major)
+	(major, dev) = parsever(ele)
 
-	# also keep dev builds *since* the latest release
-	if (major_v > latest_release_v):
-		continue
+	if (major <= latest_release_v or (major > latest_release_v and dev < latest_prerelease)):
+		to_delete += [ele]
 
-	# everything else may go
-	to_delete += [ele]
 
 if (len(to_delete) < 1):
 	raise ValueError("Nothing to do")
