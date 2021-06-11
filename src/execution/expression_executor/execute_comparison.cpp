@@ -241,26 +241,6 @@ static inline const SelectionVector *SelectNotNull(VectorData &ldata, VectorData
 	return sel;
 }
 
-static inline void GetStructChildren(Vector &v, const idx_t vcount, vector<Vector> &struct_vectors) {
-	if (v.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-		auto &child = DictionaryVector::Child(v);
-		auto &dict_sel = DictionaryVector::SelVector(v);
-		auto &children = StructVector::GetEntries(child);
-		for (auto &struct_child : children) {
-			Vector struct_vector;
-			struct_vector.Slice(*struct_child, dict_sel, vcount);
-			struct_vectors.push_back(move(struct_vector));
-		}
-	} else {
-		auto &children = StructVector::GetEntries(v);
-		for (auto &struct_child : children) {
-			Vector struct_vector;
-			struct_vector.Reference(*struct_child);
-			struct_vectors.push_back(move(struct_vector));
-		}
-	}
-}
-
 template <typename OP>
 static idx_t StructSelectOperation(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
                                    SelectionVector *true_sel, SelectionVector *false_sel) {
@@ -282,18 +262,14 @@ static idx_t StructSelectOperation(Vector &left, Vector &right, const SelectionV
 	SelectionVector maybe_vec(count);
 	sel = SelectNotNull(ldata, rdata, count, sel, false_sel, maybe_vec);
 
-	vector<Vector> lchildren;
-	GetStructChildren(left, count, lchildren);
-
-	vector<Vector> rchildren;
-	GetStructChildren(right, count, rchildren);
-
+	auto &lchildren = StructVector::GetEntries(left);
+	auto &rchildren = StructVector::GetEntries(right);
 	D_ASSERT(lchildren.size() == rchildren.size());
 
 	idx_t col_no = 0;
 	for (; col_no < lchildren.size() - 1; ++col_no) {
-		auto &lchild = lchildren[col_no];
-		auto &rchild = rchildren[col_no];
+		auto &lchild = *lchildren[col_no];
+		auto &rchild = *rchildren[col_no];
 
 		// Find everything that definitely matches
 		auto definite = PositionComparator::Definite<OP>(lchild, rchild, sel, count, true_sel, maybe_vec);
@@ -324,7 +300,9 @@ static idx_t StructSelectOperation(Vector &left, Vector &right, const SelectionV
 	}
 
 	//	Find everything that matches the last column exactly
-	result += PositionComparator::Final<OP>(lchildren[col_no], rchildren[col_no], sel, count, true_sel, false_sel);
+	auto &lchild = *lchildren[col_no];
+	auto &rchild = *rchildren[col_no];
+	result += PositionComparator::Final<OP>(lchild, rchild, sel, count, true_sel, false_sel);
 
 	return result;
 }
