@@ -154,7 +154,7 @@ void VectorOperations::Copy(const Vector &source, Vector &target, const Selectio
 		if (ListVector::HasEntry(source)) {
 			//! if the source has list offsets, we need to append them to the target
 			if (!ListVector::HasEntry(target)) {
-				auto target_child = make_unique<Vector>(target.GetType().child_types()[0].second);
+				auto target_child = make_unique<Vector>(ListType::GetChildType(target.GetType()));
 				ListVector::SetEntry(target, move(target_child));
 			}
 

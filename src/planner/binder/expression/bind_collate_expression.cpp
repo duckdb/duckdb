@@ -13,7 +13,7 @@ BindResult ExpressionBinder::BindExpression(CollateExpression &expr, idx_t depth
 	if (child.expr->return_type.id() != LogicalTypeId::VARCHAR) {
 		throw BinderException("collations are only supported for type varchar");
 	}
-	child.expr->return_type = LogicalType(LogicalTypeId::VARCHAR, expr.collation);
+	child.expr->return_type = LogicalType::VARCHAR_COLLATION(expr.collation);
 	return BindResult(move(child.expr));
 }
 

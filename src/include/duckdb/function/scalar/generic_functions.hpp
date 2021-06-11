@@ -44,4 +44,8 @@ struct CurrentSettingFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct SystemFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 } // namespace duckdb

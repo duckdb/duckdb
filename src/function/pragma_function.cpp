@@ -21,22 +21,22 @@ PragmaFunction PragmaFunction::PragmaCall(const string &name, pragma_function_t 
 
 PragmaFunction PragmaFunction::PragmaStatement(const string &name, pragma_query_t query) {
 	vector<LogicalType> types;
-	return PragmaFunction(name, PragmaType::PRAGMA_STATEMENT, query, nullptr, types, LogicalType::INVALID);
+	return PragmaFunction(name, PragmaType::PRAGMA_STATEMENT, query, nullptr, move(types), LogicalType::INVALID);
 }
 
 PragmaFunction PragmaFunction::PragmaStatement(const string &name, pragma_function_t function) {
 	vector<LogicalType> types;
-	return PragmaFunction(name, PragmaType::PRAGMA_STATEMENT, nullptr, function, types, LogicalType::INVALID);
+	return PragmaFunction(name, PragmaType::PRAGMA_STATEMENT, nullptr, function, move(types), LogicalType::INVALID);
 }
 
 PragmaFunction PragmaFunction::PragmaAssignment(const string &name, pragma_query_t query, LogicalType type) {
 	vector<LogicalType> types {move(type)};
-	return PragmaFunction(name, PragmaType::PRAGMA_ASSIGNMENT, query, nullptr, types, LogicalType::INVALID);
+	return PragmaFunction(name, PragmaType::PRAGMA_ASSIGNMENT, query, nullptr, move(types), LogicalType::INVALID);
 }
 
 PragmaFunction PragmaFunction::PragmaAssignment(const string &name, pragma_function_t function, LogicalType type) {
 	vector<LogicalType> types {move(type)};
-	return PragmaFunction(name, PragmaType::PRAGMA_ASSIGNMENT, nullptr, function, types, LogicalType::INVALID);
+	return PragmaFunction(name, PragmaType::PRAGMA_ASSIGNMENT, nullptr, function, move(types), LogicalType::INVALID);
 }
 
 string PragmaFunction::ToString() {

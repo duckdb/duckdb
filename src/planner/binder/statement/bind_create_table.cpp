@@ -59,6 +59,7 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 			if (unique.index != INVALID_INDEX) {
 				D_ASSERT(unique.index < base.columns.size());
 				// unique constraint is given by single index
+				unique.columns.push_back(base.columns[unique.index].name);
 				keys.insert(unique.index);
 			} else {
 				// unique constraint is given by list of names
@@ -149,7 +150,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 	}
 	// bind collations to detect any unsupported collation errors
 	for (auto &column : base.columns) {
-		ExpressionBinder::TestCollation(context, column.type.collation());
+		ExpressionBinder::TestCollation(context, StringType::GetCollation(column.type));
 	}
 	return result;
 }

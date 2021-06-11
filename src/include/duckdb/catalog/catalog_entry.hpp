@@ -24,10 +24,7 @@ class ClientContext;
 //! Abstract base class of an entry in the catalog
 class CatalogEntry {
 public:
-	CatalogEntry(CatalogType type, Catalog *catalog, string name)
-	    : type(type), catalog(catalog), set(nullptr), name(name), deleted(false), temporary(false), internal(false),
-	      parent(nullptr) {
-	}
+	CatalogEntry(CatalogType type, Catalog *catalog, string name);
 	virtual ~CatalogEntry();
 
 	virtual unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo *info) {
@@ -46,6 +43,8 @@ public:
 		throw CatalogException("Unsupported catalog type for ToSQL()");
 	}
 
+	//! The oid of the entry
+	idx_t oid;
 	//! The type of this catalog entry
 	CatalogType type;
 	//! Reference to the catalog this entry belongs to

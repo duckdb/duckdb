@@ -20,7 +20,7 @@ public:
 	    : ColumnReader(reader, move(type_p), schema_p, schema_idx_p, max_define_p, max_repeat_p),
 	      child_readers(move(child_readers_p)) {
 		D_ASSERT(type.id() == LogicalTypeId::STRUCT);
-		D_ASSERT(!type.child_types().empty());
+		D_ASSERT(!StructType::GetChildTypes(type).empty());
 	};
 
 	ColumnReader *GetChildReader(idx_t child_idx) {
@@ -39,7 +39,7 @@ public:
 		result.Initialize(type);
 
 		auto &struct_entries = StructVector::GetEntries(result);
-		D_ASSERT(type.child_types().size() == struct_entries.size());
+		D_ASSERT(StructType::GetChildTypes(type).size() == struct_entries.size());
 		for (idx_t i = 0; i < struct_entries.size(); i++) {
 			auto child_num_values =
 			    child_readers[i]->Read(num_values, filter, define_out, repeat_out, *struct_entries[i]);

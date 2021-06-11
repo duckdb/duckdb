@@ -1031,12 +1031,12 @@ CREATE TABLE wide (
   col1024 bigint);
 
 query I
-SELECT COUNT(1) FROM information_schema_columns() WHERE table_name='wide'
+SELECT COUNT(1) FROM information_schema.columns WHERE table_name='wide'
 ----
 1025
 
 query I
-SELECT COUNT(1) FROM information_schema_columns() WHERE table_name='wide' AND column_name='col1024' AND data_type='BIGINT'
+SELECT COUNT(1) FROM information_schema.columns WHERE table_name='wide' AND column_name='col1024' AND data_type='BIGINT'
 ----
 1
 
@@ -1044,7 +1044,7 @@ statement ok
 CREATE VIEW vwide AS SELECT * FROM wide;
 
 query I
-SELECT COUNT(1) FROM information_schema_columns() WHERE table_name='wide' OR table_name='vwide'
+SELECT COUNT(1) FROM information_schema.columns WHERE table_name='wide' OR table_name='vwide'
 ----
 2050
 

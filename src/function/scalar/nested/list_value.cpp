@@ -9,8 +9,7 @@ namespace duckdb {
 
 static void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
-	D_ASSERT(result.GetType().child_types().size() == 1);
-	auto child_type = result.GetType().child_types()[0].second;
+	auto &child_type = ListType::GetChildType(result.GetType());
 	auto list_child = make_unique<Vector>(child_type);
 	ListVector::SetEntry(result, move(list_child));
 
@@ -36,21 +35,19 @@ static void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &r
 static unique_ptr<FunctionData> ListValueBind(ClientContext &context, ScalarFunction &bound_function,
                                               vector<unique_ptr<Expression>> &arguments) {
 	// collect names and deconflict, construct return type
-	child_list_t<LogicalType> child_types;
-	LogicalType child_type = LogicalType::SQLNULL;
+	auto child_type = LogicalType::SQLNULL;
 	for (idx_t i = 0; i < arguments.size(); i++) {
 		child_type = LogicalType::MaxLogicalType(child_type, arguments[i]->return_type);
 	}
-	child_types.push_back(make_pair("", move(child_type)));
 
 	// this is more for completeness reasons
-	bound_function.return_type = LogicalType(LogicalTypeId::LIST, move(child_types));
+	bound_function.return_type = LogicalType::LIST(move(child_type));
 	return make_unique<VariableReturnBindData>(bound_function.return_type);
 }
 
 void ListValueFun::RegisterFunction(BuiltinFunctions &set) {
 	// the arguments and return types are actually set in the binder function
-	ScalarFunction fun("list_value", {}, LogicalType::LIST, ListValueFunction, false, ListValueBind);
+	ScalarFunction fun("list_value", {}, LogicalTypeId::LIST, ListValueFunction, false, ListValueBind);
 	fun.varargs = LogicalType::ANY;
 	set.AddFunction(fun);
 	fun.name = "list_pack";
