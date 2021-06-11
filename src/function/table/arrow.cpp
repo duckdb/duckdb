@@ -13,6 +13,8 @@
 #include "duckdb/common/to_string.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/limits.hpp"
+
 namespace duckdb {
 
 LogicalType GetArrowLogicalType(ArrowSchema &schema,
@@ -130,10 +132,12 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &contex
 			throw InvalidInputException("arrow_scan: released schema passed");
 		}
 		if (schema.dictionary) {
-			throw NotImplementedException("arrow_scan: dictionary vectors not supported yet");
+			res->dictionary_type[col_idx] = GetArrowLogicalType(schema, res->original_list_type, col_idx);
+			return_types.emplace_back(GetArrowLogicalType(*schema.dictionary, res->original_list_type, col_idx));
+		} else {
+			return_types.emplace_back(GetArrowLogicalType(schema, res->original_list_type, col_idx));
 		}
 		auto format = string(schema.format);
-		return_types.emplace_back(GetArrowLogicalType(schema, res->original_list_type, col_idx));
 		auto name = string(schema.name);
 		if (name.empty()) {
 			name = string("v") + to_string(col_idx);
@@ -153,11 +157,10 @@ unique_ptr<FunctionOperatorData> ArrowTableFunction::ArrowScanInit(ClientContext
 	return move(result);
 }
 
-void SetValidityMask(Vector &vector, ArrowArray &array, ArrowScanState &scan_state, idx_t size) {
+void SetValidityMask(Vector &vector, ArrowArray &array, ArrowScanState &scan_state, idx_t size, bool add_null = false) {
+	auto &mask = FlatVector::Validity(vector);
 	if (array.null_count != 0 && array.buffers[0]) {
-
 		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
-		auto &mask = FlatVector::Validity(vector);
 		auto bit_offset = scan_state.chunk_offset + array.offset;
 		auto n_bitmask_bytes = (size + 8 - 1) / 8;
 		mask.EnsureWritable();
@@ -169,11 +172,38 @@ void SetValidityMask(Vector &vector, ArrowArray &array, ArrowScanState &scan_sta
 			bitset<STANDARD_VECTOR_SIZE + 8> temp_nullmask;
 			memcpy(&temp_nullmask, (uint8_t *)array.buffers[0] + bit_offset / 8, n_bitmask_bytes + 1);
 
-			temp_nullmask >>= (bit_offset % 8); // why this has to be a right shift is a mystery to me
+			temp_nullmask >>= (bit_offset % 8); //! why this has to be a right shift is a mystery to me
+			memcpy((void *)mask.GetData(), (data_ptr_t)&temp_nullmask, n_bitmask_bytes);
+		}
+	}
+	if (add_null) {
+		//! We are setting a validity mask of the data part of dictionary vector
+		//! For some reason, Nulls are allowed to be indexes, hence we need to set the last element here to be null
+		//! We might have to resize the mask
+		mask.Resize(size, size + 1);
+		mask.SetInvalid(size);
+	}
+}
+
+void GetValidityMask(ValidityMask &mask, ArrowArray &array, ArrowScanState &scan_state, idx_t size) {
+	if (array.null_count != 0 && array.buffers[0]) {
+		auto bit_offset = scan_state.chunk_offset + array.offset;
+		auto n_bitmask_bytes = (size + 8 - 1) / 8;
+		mask.EnsureWritable();
+		if (bit_offset % 8 == 0) {
+			//! just memcpy nullmask
+			memcpy((void *)mask.GetData(), (uint8_t *)array.buffers[0] + bit_offset / 8, n_bitmask_bytes);
+		} else {
+			//! need to re-align nullmask
+			bitset<STANDARD_VECTOR_SIZE + 8> temp_nullmask;
+			memcpy(&temp_nullmask, (uint8_t *)array.buffers[0] + bit_offset / 8, n_bitmask_bytes + 1);
+
+			temp_nullmask >>= (bit_offset % 8); //! why this has to be a right shift is a mystery to me
 			memcpy((void *)mask.GetData(), (data_ptr_t)&temp_nullmask, n_bitmask_bytes);
 		}
 	}
 }
+
 void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan_state, idx_t size,
                          std::unordered_map<idx_t, std::vector<std::pair<ArrowListType, idx_t>>> &arrow_lists,
                          idx_t col_idx, idx_t &list_col_idx);
@@ -376,9 +406,158 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 	}
 }
 
+template <class T>
+static void SetSelectionVectorLoop(SelectionVector &sel, data_ptr_t indices_p, idx_t size) {
+	auto indices = (T *)indices_p;
+	for (idx_t row = 0; row < size; row++) {
+		sel.set_index(row, indices[row]);
+	}
+}
+
+template <class T>
+static void SetSelectionVectorLoopWithChecks(SelectionVector &sel, data_ptr_t indices_p, idx_t size) {
+
+	auto indices = (T *)indices_p;
+	for (idx_t row = 0; row < size; row++) {
+		if (indices[row] > NumericLimits<uint32_t>::Maximum()) {
+			throw std::runtime_error("DuckDB only supports indices that fit on an uint32");
+		}
+		sel.set_index(row, indices[row]);
+	}
+}
+
+template <class T>
+static void SetMaskedSelectionVectorLoop(SelectionVector &sel, data_ptr_t indices_p, idx_t size, ValidityMask &mask,
+                                         idx_t last_element_pos) {
+	auto indices = (T *)indices_p;
+	for (idx_t row = 0; row < size; row++) {
+		if (mask.RowIsValid(row)) {
+			sel.set_index(row, indices[row]);
+		} else {
+			//! Need to point out to last element
+			sel.set_index(row, last_element_pos);
+		}
+	}
+}
+
+void SetSelectionVector(SelectionVector &sel, data_ptr_t indices_p, LogicalType &logical_type, idx_t size,
+                        ValidityMask *mask = nullptr, idx_t last_element_pos = 0) {
+	sel.Initialize(size);
+
+	if (mask) {
+		switch (logical_type.id()) {
+		case LogicalTypeId::UTINYINT:
+			SetMaskedSelectionVectorLoop<uint8_t>(sel, indices_p, size, *mask, last_element_pos);
+			break;
+		case LogicalTypeId::TINYINT:
+			SetMaskedSelectionVectorLoop<int8_t>(sel, indices_p, size, *mask, last_element_pos);
+			break;
+		case LogicalTypeId::USMALLINT:
+			SetMaskedSelectionVectorLoop<uint16_t>(sel, indices_p, size, *mask, last_element_pos);
+			break;
+		case LogicalTypeId::SMALLINT:
+			SetMaskedSelectionVectorLoop<int16_t>(sel, indices_p, size, *mask, last_element_pos);
+			break;
+		case LogicalTypeId::UINTEGER:
+			if (last_element_pos > NumericLimits<uint32_t>::Maximum()) {
+				//! Its guaranteed that our indices will point to the last element, so just throw an error
+				throw std::runtime_error("DuckDB only supports indices that fit on an uint32");
+			}
+			SetMaskedSelectionVectorLoop<uint32_t>(sel, indices_p, size, *mask, last_element_pos);
+			break;
+		case LogicalTypeId::INTEGER:
+			SetMaskedSelectionVectorLoop<int32_t>(sel, indices_p, size, *mask, last_element_pos);
+			break;
+		case LogicalTypeId::UBIGINT:
+			if (last_element_pos > NumericLimits<uint32_t>::Maximum()) {
+				//! Its guaranteed that our indices will point to the last element, so just throw an error
+				throw std::runtime_error("DuckDB only supports indices that fit on an uint32");
+			}
+			SetMaskedSelectionVectorLoop<uint64_t>(sel, indices_p, size, *mask, last_element_pos);
+			break;
+		case LogicalTypeId::BIGINT:
+			if (last_element_pos > NumericLimits<uint32_t>::Maximum()) {
+				//! Its guaranteed that our indices will point to the last element, so just throw an error
+				throw std::runtime_error("DuckDB only supports indices that fit on an uint32");
+			}
+			SetMaskedSelectionVectorLoop<int64_t>(sel, indices_p, size, *mask, last_element_pos);
+			break;
+
+		default:
+			throw std::runtime_error("(Arrow) Unsupported type for selection vectors " + logical_type.ToString());
+		}
+
+	} else {
+		switch (logical_type.id()) {
+		case LogicalTypeId::UTINYINT:
+			SetSelectionVectorLoop<uint8_t>(sel, indices_p, size);
+			break;
+		case LogicalTypeId::TINYINT:
+			SetSelectionVectorLoop<int8_t>(sel, indices_p, size);
+			break;
+		case LogicalTypeId::USMALLINT:
+			SetSelectionVectorLoop<uint16_t>(sel, indices_p, size);
+			break;
+		case LogicalTypeId::SMALLINT:
+			SetSelectionVectorLoop<int16_t>(sel, indices_p, size);
+			break;
+		case LogicalTypeId::UINTEGER:
+			SetSelectionVectorLoop<uint32_t>(sel, indices_p, size);
+			break;
+		case LogicalTypeId::INTEGER:
+			SetSelectionVectorLoop<int32_t>(sel, indices_p, size);
+			break;
+		case LogicalTypeId::UBIGINT:
+			if (last_element_pos > NumericLimits<uint32_t>::Maximum()) {
+				//! We need to check if our indexes fit in a uint32_t
+				SetSelectionVectorLoopWithChecks<uint64_t>(sel, indices_p, size);
+			} else {
+				SetSelectionVectorLoop<uint64_t>(sel, indices_p, size);
+			}
+			break;
+		case LogicalTypeId::BIGINT:
+			if (last_element_pos > NumericLimits<uint32_t>::Maximum()) {
+				//! We need to check if our indexes fit in a uint32_t
+				SetSelectionVectorLoopWithChecks<int64_t>(sel, indices_p, size);
+			} else {
+				SetSelectionVectorLoop<int64_t>(sel, indices_p, size);
+			}
+			break;
+		default:
+			throw std::runtime_error("(Arrow) Unsupported type for selection vectors " + logical_type.ToString());
+		}
+	}
+}
+
+void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, ArrowScanState &scan_state, idx_t size,
+                                   std::unordered_map<idx_t, std::vector<std::pair<ArrowListType, idx_t>>> &arrow_lists,
+                                   idx_t col_idx, std::unordered_map<idx_t, LogicalType> &dictionary_type,
+                                   idx_t list_col_idx = 0) {
+	SelectionVector sel;
+	auto &dict_vectors = scan_state.arrow_dictionary_vectors;
+	if (dict_vectors.find(col_idx) == dict_vectors.end()) {
+		//! We need to set the dictionary data for this column
+		auto base_vector = make_unique<Vector>(vector.GetType());
+		SetValidityMask(*base_vector, *array.dictionary, scan_state, array.dictionary->length, array.null_count > 0);
+		ColumnArrowToDuckDB(*base_vector, *array.dictionary, scan_state, array.dictionary->length, arrow_lists, col_idx,
+		                    list_col_idx);
+		dict_vectors[col_idx] = move(base_vector);
+	}
+	//! Get Pointer to Indices of Dictionary
+	auto indices = (data_ptr_t)array.buffers[1] +
+	               GetTypeIdSize(dictionary_type[col_idx].InternalType()) * (scan_state.chunk_offset + array.offset);
+	if (array.null_count > 0) {
+		ValidityMask indices_validity;
+		GetValidityMask(indices_validity, array, scan_state, size);
+		SetSelectionVector(sel, indices, dictionary_type[col_idx], size, &indices_validity, array.dictionary->length);
+	} else {
+		SetSelectionVector(sel, indices, dictionary_type[col_idx], size);
+	}
+	vector.Slice(*dict_vectors[col_idx], sel, size);
+}
 void ArrowTableFunction::ArrowToDuckDB(ArrowScanState &scan_state,
                                        std::unordered_map<idx_t, vector<std::pair<ArrowListType, idx_t>>> &arrow_lists,
-                                       DataChunk &output) {
+                                       std::unordered_map<idx_t, LogicalType> &dictionary_type, DataChunk &output) {
 	for (idx_t col_idx = 0; col_idx < output.ColumnCount(); col_idx++) {
 		idx_t list_col_idx = 0;
 		auto &array = *scan_state.chunk->arrow_array.children[col_idx];
@@ -389,10 +568,13 @@ void ArrowTableFunction::ArrowToDuckDB(ArrowScanState &scan_state,
 			throw InvalidInputException("arrow_scan: array length mismatch");
 		}
 		if (array.dictionary) {
-			throw NotImplementedException("arrow_scan: dictionary vectors not supported yet");
+			ColumnArrowToDuckDBDictionary(output.data[col_idx], array, scan_state, output.size(), arrow_lists, col_idx,
+			                              dictionary_type);
+		} else {
+			SetValidityMask(output.data[col_idx], array, scan_state, output.size());
+			ColumnArrowToDuckDB(output.data[col_idx], array, scan_state, output.size(), arrow_lists, col_idx,
+			                    list_col_idx);
 		}
-		SetValidityMask(output.data[col_idx], array, scan_state, output.size());
-		ColumnArrowToDuckDB(output.data[col_idx], array, scan_state, output.size(), arrow_lists, col_idx, list_col_idx);
 	}
 }
 
@@ -404,6 +586,7 @@ void ArrowTableFunction::ArrowScanFunction(ClientContext &context, const Functio
 	//! have we run out of data on the current chunk? move to next one
 	if (state.chunk_offset >= (idx_t)state.chunk->arrow_array.length) {
 		state.chunk_offset = 0;
+		state.arrow_dictionary_vectors.clear();
 		state.chunk = data.stream->GetNextChunk();
 	}
 
@@ -418,7 +601,7 @@ void ArrowTableFunction::ArrowScanFunction(ClientContext &context, const Functio
 	int64_t output_size = MinValue<int64_t>(STANDARD_VECTOR_SIZE, state.chunk->arrow_array.length - state.chunk_offset);
 	data.lines_read += output_size;
 	output.SetCardinality(output_size);
-	ArrowToDuckDB(state, data.original_list_type, output);
+	ArrowToDuckDB(state, data.original_list_type, data.dictionary_type, output);
 	output.Verify();
 	state.chunk_offset += output.size();
 }
@@ -438,7 +621,7 @@ void ArrowTableFunction::ArrowScanFunctionParallel(ClientContext &context, const
 	int64_t output_size = MinValue<int64_t>(STANDARD_VECTOR_SIZE, state.chunk->arrow_array.length - state.chunk_offset);
 	data.lines_read += output_size;
 	output.SetCardinality(output_size);
-	ArrowToDuckDB(state, data.original_list_type, output);
+	ArrowToDuckDB(state, data.original_list_type, data.dictionary_type, output);
 	output.Verify();
 	state.chunk_offset += output.size();
 }
