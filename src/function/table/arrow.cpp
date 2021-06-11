@@ -18,9 +18,15 @@
 namespace duckdb {
 
 LogicalType GetArrowLogicalType(ArrowSchema &schema,
-                                std::unordered_map<idx_t, vector<std::pair<ArrowListType, idx_t>>> &arrow_lists,
+                                std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data,
                                 idx_t col_idx) {
 	auto format = string(schema.format);
+	if (format == "+l" || format == "+L" || (format[0] == '+' && format[1] == 'w')) {
+		//! This is a list, we might have to create a list_convert_data in our arrow_convert_data
+		if (arrow_convert_data.find(col_idx) == arrow_convert_data.end()) {
+			arrow_convert_data[col_idx] = make_unique<ListArrowConvertData>();
+		}
+	}
 	if (format == "n") {
 		return LogicalType::SQLNULL;
 	} else if (format == "b") {
@@ -68,23 +74,26 @@ LogicalType GetArrowLogicalType(ArrowSchema &schema,
 	} else if (format == "ttm") {
 		return LogicalType::TIME;
 	} else if (format == "+l") {
-		arrow_lists[col_idx].emplace_back(ArrowListType::NORMAL, 0);
-		auto child_type = GetArrowLogicalType(*schema.children[0], arrow_lists, col_idx);
+
+		((ListArrowConvertData *)arrow_convert_data[col_idx].get())->list_type.emplace_back(ArrowListType::NORMAL, 0);
+		auto child_type = GetArrowLogicalType(*schema.children[0], arrow_convert_data, col_idx);
 		return LogicalType::LIST(child_type);
 	} else if (format == "+L") {
-		arrow_lists[col_idx].emplace_back(ArrowListType::SUPER_SIZE, 0);
-		auto child_type = GetArrowLogicalType(*schema.children[0], arrow_lists, col_idx);
+		((ListArrowConvertData *)arrow_convert_data[col_idx].get())
+		    ->list_type.emplace_back(ArrowListType::SUPER_SIZE, 0);
+		auto child_type = GetArrowLogicalType(*schema.children[0], arrow_convert_data, col_idx);
 		return LogicalType::LIST(child_type);
 	} else if (format[0] == '+' && format[1] == 'w') {
 		std::string parameters = format.substr(format.find(':') + 1);
 		idx_t fixed_size = std::stoi(parameters);
-		arrow_lists[col_idx].emplace_back(ArrowListType::FIXED_SIZE, fixed_size);
-		auto child_type = GetArrowLogicalType(*schema.children[0], arrow_lists, col_idx);
+		((ListArrowConvertData *)arrow_convert_data[col_idx].get())
+		    ->list_type.emplace_back(ArrowListType::FIXED_SIZE, fixed_size);
+		auto child_type = GetArrowLogicalType(*schema.children[0], arrow_convert_data, col_idx);
 		return LogicalType::LIST(move(child_type));
 	} else if (format == "+s") {
 		child_list_t<LogicalType> child_types;
 		for (idx_t type_idx = 0; type_idx < (idx_t)schema.n_children; type_idx++) {
-			auto child_type = GetArrowLogicalType(*schema.children[type_idx], arrow_lists, col_idx);
+			auto child_type = GetArrowLogicalType(*schema.children[type_idx], arrow_convert_data, col_idx);
 			child_types.push_back({schema.children[type_idx]->name, child_type});
 		}
 		return LogicalType::STRUCT(move(child_types));
@@ -95,7 +104,7 @@ LogicalType GetArrowLogicalType(ArrowSchema &schema,
 		auto &struct_schema = *schema.children[0];
 		for (idx_t type_idx = 0; type_idx < (idx_t)struct_schema.n_children; type_idx++) {
 			//! The other types must be added on lists
-			auto child_type = GetArrowLogicalType(*struct_schema.children[type_idx], arrow_lists, col_idx);
+			auto child_type = GetArrowLogicalType(*struct_schema.children[type_idx], arrow_convert_data, col_idx);
 
 			auto list_type = LogicalType::LIST(child_type);
 			child_types.push_back({struct_schema.children[type_idx]->name, list_type});
@@ -132,10 +141,11 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &contex
 			throw InvalidInputException("arrow_scan: released schema passed");
 		}
 		if (schema.dictionary) {
-			res->dictionary_type[col_idx] = GetArrowLogicalType(schema, res->original_list_type, col_idx);
-			return_types.emplace_back(GetArrowLogicalType(*schema.dictionary, res->original_list_type, col_idx));
+			res->arrow_convert_data[col_idx] =
+			    make_unique<DictionaryArrowConvertData>(GetArrowLogicalType(schema, res->arrow_convert_data, col_idx));
+			return_types.emplace_back(GetArrowLogicalType(*schema.dictionary, res->arrow_convert_data, col_idx));
 		} else {
-			return_types.emplace_back(GetArrowLogicalType(schema, res->original_list_type, col_idx));
+			return_types.emplace_back(GetArrowLogicalType(schema, res->arrow_convert_data, col_idx));
 		}
 		auto format = string(schema.format);
 		auto name = string(schema.name);
@@ -205,13 +215,13 @@ void GetValidityMask(ValidityMask &mask, ArrowArray &array, ArrowScanState &scan
 }
 
 void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan_state, idx_t size,
-                         std::unordered_map<idx_t, std::vector<std::pair<ArrowListType, idx_t>>> &arrow_lists,
-                         idx_t col_idx, idx_t &list_col_idx);
+                         std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data, idx_t col_idx,
+                         idx_t &list_col_idx);
 
 void ArrowToDuckDBList(Vector &vector, ArrowArray &array, ArrowScanState &scan_state, idx_t size,
-                       std::unordered_map<idx_t, std::vector<std::pair<ArrowListType, idx_t>>> &arrow_lists,
-                       idx_t col_idx, idx_t &list_col_idx) {
-	auto original_type = arrow_lists[col_idx][list_col_idx++];
+                       std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data, idx_t col_idx,
+                       idx_t &list_col_idx) {
+	auto original_type = ((ListArrowConvertData *)arrow_convert_data[col_idx].get())->list_type[list_col_idx++];
 	idx_t list_size = 0;
 	ListVector::Initialize(vector);
 	auto &child_vector = ListVector::GetEntry(vector);
@@ -249,11 +259,12 @@ void ArrowToDuckDBList(Vector &vector, ArrowArray &array, ArrowScanState &scan_s
 	}
 	ListVector::SetListSize(vector, list_size);
 	SetValidityMask(child_vector, *array.children[0], scan_state, list_size);
-	ColumnArrowToDuckDB(child_vector, *array.children[0], scan_state, list_size, arrow_lists, col_idx, list_col_idx);
+	ColumnArrowToDuckDB(child_vector, *array.children[0], scan_state, list_size, arrow_convert_data, col_idx,
+	                    list_col_idx);
 }
 void ArrowToDuckDBMapList(Vector &vector, ArrowArray &array, ArrowScanState &scan_state, idx_t size,
-                          std::unordered_map<idx_t, std::vector<std::pair<ArrowListType, idx_t>>> &arrow_lists,
-                          idx_t col_idx, idx_t &list_col_idx, uint32_t *offsets) {
+                          std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data, idx_t col_idx,
+                          idx_t &list_col_idx, uint32_t *offsets) {
 	idx_t list_size = 0;
 	ListVector::Initialize(vector);
 	auto &child_vector = ListVector::GetEntry(vector);
@@ -267,11 +278,11 @@ void ArrowToDuckDBMapList(Vector &vector, ArrowArray &array, ArrowScanState &sca
 
 	ListVector::SetListSize(vector, list_size);
 	SetValidityMask(child_vector, array, scan_state, list_size);
-	ColumnArrowToDuckDB(child_vector, array, scan_state, list_size, arrow_lists, col_idx, list_col_idx);
+	ColumnArrowToDuckDB(child_vector, array, scan_state, list_size, arrow_convert_data, col_idx, list_col_idx);
 }
 void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan_state, idx_t size,
-                         std::unordered_map<idx_t, std::vector<std::pair<ArrowListType, idx_t>>> &arrow_lists,
-                         idx_t col_idx, idx_t &list_col_idx) {
+                         std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data, idx_t col_idx,
+                         idx_t &list_col_idx) {
 	switch (vector.GetType().id()) {
 	case LogicalTypeId::SQLNULL:
 		vector.Reference(Value());
@@ -375,7 +386,7 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 		break;
 	}
 	case LogicalTypeId::LIST: {
-		ArrowToDuckDBList(vector, array, scan_state, size, arrow_lists, col_idx, list_col_idx);
+		ArrowToDuckDBList(vector, array, scan_state, size, arrow_convert_data, col_idx, list_col_idx);
 		break;
 	}
 	case LogicalTypeId::MAP: {
@@ -387,7 +398,7 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 		//! Fill the children
 		for (idx_t type_idx = 0; type_idx < (idx_t)struct_arrow.n_children; type_idx++) {
 			ArrowToDuckDBMapList(*child_entries[type_idx], *struct_arrow.children[type_idx], scan_state, size,
-			                     arrow_lists, col_idx, list_col_idx, offsets);
+			                     arrow_convert_data, col_idx, list_col_idx, offsets);
 		}
 		break;
 	}
@@ -396,8 +407,8 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 		auto &child_entries = StructVector::GetEntries(vector);
 		for (idx_t type_idx = 0; type_idx < (idx_t)array.n_children; type_idx++) {
 			SetValidityMask(*child_entries[type_idx], *array.children[type_idx], scan_state, size);
-			ColumnArrowToDuckDB(*child_entries[type_idx], *array.children[type_idx], scan_state, size, arrow_lists,
-			                    col_idx, list_col_idx);
+			ColumnArrowToDuckDB(*child_entries[type_idx], *array.children[type_idx], scan_state, size,
+			                    arrow_convert_data, col_idx, list_col_idx);
 		}
 		break;
 	}
@@ -530,34 +541,34 @@ void SetSelectionVector(SelectionVector &sel, data_ptr_t indices_p, LogicalType 
 }
 
 void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, ArrowScanState &scan_state, idx_t size,
-                                   std::unordered_map<idx_t, std::vector<std::pair<ArrowListType, idx_t>>> &arrow_lists,
-                                   idx_t col_idx, std::unordered_map<idx_t, LogicalType> &dictionary_type,
-                                   idx_t list_col_idx = 0) {
+                                   std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data,
+                                   idx_t col_idx, idx_t list_col_idx = 0) {
 	SelectionVector sel;
 	auto &dict_vectors = scan_state.arrow_dictionary_vectors;
 	if (dict_vectors.find(col_idx) == dict_vectors.end()) {
 		//! We need to set the dictionary data for this column
 		auto base_vector = make_unique<Vector>(vector.GetType());
 		SetValidityMask(*base_vector, *array.dictionary, scan_state, array.dictionary->length, array.null_count > 0);
-		ColumnArrowToDuckDB(*base_vector, *array.dictionary, scan_state, array.dictionary->length, arrow_lists, col_idx,
-		                    list_col_idx);
+		ColumnArrowToDuckDB(*base_vector, *array.dictionary, scan_state, array.dictionary->length, arrow_convert_data,
+		                    col_idx, list_col_idx);
 		dict_vectors[col_idx] = move(base_vector);
 	}
+	auto dictionary_type = ((DictionaryArrowConvertData *)arrow_convert_data[col_idx].get())->dictionary_type;
 	//! Get Pointer to Indices of Dictionary
 	auto indices = (data_ptr_t)array.buffers[1] +
-	               GetTypeIdSize(dictionary_type[col_idx].InternalType()) * (scan_state.chunk_offset + array.offset);
+	               GetTypeIdSize(dictionary_type.InternalType()) * (scan_state.chunk_offset + array.offset);
 	if (array.null_count > 0) {
 		ValidityMask indices_validity;
 		GetValidityMask(indices_validity, array, scan_state, size);
-		SetSelectionVector(sel, indices, dictionary_type[col_idx], size, &indices_validity, array.dictionary->length);
+		SetSelectionVector(sel, indices, dictionary_type, size, &indices_validity, array.dictionary->length);
 	} else {
-		SetSelectionVector(sel, indices, dictionary_type[col_idx], size);
+		SetSelectionVector(sel, indices, dictionary_type, size);
 	}
 	vector.Slice(*dict_vectors[col_idx], sel, size);
 }
 void ArrowTableFunction::ArrowToDuckDB(ArrowScanState &scan_state,
-                                       std::unordered_map<idx_t, vector<std::pair<ArrowListType, idx_t>>> &arrow_lists,
-                                       std::unordered_map<idx_t, LogicalType> &dictionary_type, DataChunk &output) {
+                                       std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data,
+                                       DataChunk &output) {
 	for (idx_t col_idx = 0; col_idx < output.ColumnCount(); col_idx++) {
 		idx_t list_col_idx = 0;
 		auto &array = *scan_state.chunk->arrow_array.children[col_idx];
@@ -568,11 +579,11 @@ void ArrowTableFunction::ArrowToDuckDB(ArrowScanState &scan_state,
 			throw InvalidInputException("arrow_scan: array length mismatch");
 		}
 		if (array.dictionary) {
-			ColumnArrowToDuckDBDictionary(output.data[col_idx], array, scan_state, output.size(), arrow_lists, col_idx,
-			                              dictionary_type);
+			ColumnArrowToDuckDBDictionary(output.data[col_idx], array, scan_state, output.size(), arrow_convert_data,
+			                              col_idx);
 		} else {
 			SetValidityMask(output.data[col_idx], array, scan_state, output.size());
-			ColumnArrowToDuckDB(output.data[col_idx], array, scan_state, output.size(), arrow_lists, col_idx,
+			ColumnArrowToDuckDB(output.data[col_idx], array, scan_state, output.size(), arrow_convert_data, col_idx,
 			                    list_col_idx);
 		}
 	}
@@ -601,7 +612,7 @@ void ArrowTableFunction::ArrowScanFunction(ClientContext &context, const Functio
 	int64_t output_size = MinValue<int64_t>(STANDARD_VECTOR_SIZE, state.chunk->arrow_array.length - state.chunk_offset);
 	data.lines_read += output_size;
 	output.SetCardinality(output_size);
-	ArrowToDuckDB(state, data.original_list_type, data.dictionary_type, output);
+	ArrowToDuckDB(state, data.arrow_convert_data, output);
 	output.Verify();
 	state.chunk_offset += output.size();
 }
@@ -621,7 +632,7 @@ void ArrowTableFunction::ArrowScanFunctionParallel(ClientContext &context, const
 	int64_t output_size = MinValue<int64_t>(STANDARD_VECTOR_SIZE, state.chunk->arrow_array.length - state.chunk_offset);
 	data.lines_read += output_size;
 	output.SetCardinality(output_size);
-	ArrowToDuckDB(state, data.original_list_type, data.dictionary_type, output);
+	ArrowToDuckDB(state, data.arrow_convert_data, output);
 	output.Verify();
 	state.chunk_offset += output.size();
 }
