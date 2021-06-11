@@ -21,8 +21,7 @@ static unique_ptr<FunctionData> UnnestBind(ClientContext &context, vector<Value>
                                            unordered_map<string, Value> &named_parameters,
                                            vector<LogicalType> &input_table_types, vector<string> &input_table_names,
                                            vector<LogicalType> &return_types, vector<string> &names) {
-	auto &child_types = inputs[0].type().child_types();
-	return_types.push_back(child_types[0].second);
+	return_types.push_back(ListType::GetChildType(inputs[0].type()));
 	names.push_back(inputs[0].ToString());
 	return make_unique<UnnestFunctionData>(inputs[0]);
 }
@@ -47,7 +46,7 @@ static void UnnestFunction(ClientContext &context, const FunctionData *bind_data
 }
 
 void UnnestTableFunction::RegisterFunction(BuiltinFunctions &set) {
-	TableFunction repeat("unnest", {LogicalType::LIST}, UnnestFunction, UnnestBind, UnnestInit);
+	TableFunction repeat("unnest", {LogicalTypeId::LIST}, UnnestFunction, UnnestBind, UnnestInit);
 	set.AddFunction(repeat);
 }
 
