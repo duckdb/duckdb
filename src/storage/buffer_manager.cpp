@@ -45,10 +45,6 @@ unique_ptr<BufferHandle> BlockHandle::Load(shared_ptr<BlockHandle> &handle) {
 	auto &buffer_manager = BufferManager::GetBufferManager(handle->db);
 	auto &block_manager = BlockManager::GetBlockManager(handle->db);
 	if (handle->block_id < MAXIMUM_BLOCK) {
-		// FIXME: currently we still require a lock for reading blocks from disk
-		// this is mainly down to the block manager only having a single pointer into the file
-		// this is relatively easy to fix later on
-		lock_guard<mutex> buffer_lock(buffer_manager.manager_lock);
 		auto block = make_unique<Block>(Allocator::Get(handle->db), handle->block_id);
 		block_manager.Read(*block);
 		handle->buffer = move(block);
