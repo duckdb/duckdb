@@ -333,6 +333,14 @@ static void ExecuteDistinct(Vector &left, Vector &right, Vector &result, idx_t c
 	}
 }
 
+template <typename OP>
+static idx_t DistinctSelectStruct(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+                                  SelectionVector *true_sel, SelectionVector *false_sel);
+
+template <typename OP>
+static idx_t DistinctSelectList(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+                                SelectionVector *true_sel, SelectionVector *false_sel);
+
 template <class OP>
 static idx_t TemplatedDistinctSelectOperation(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
                                               SelectionVector *true_sel, SelectionVector *false_sel) {
@@ -367,9 +375,201 @@ static idx_t TemplatedDistinctSelectOperation(Vector &left, Vector &right, const
 		return DistinctSelect<interval_t, interval_t, OP>(left, right, sel, count, true_sel, false_sel);
 	case PhysicalType::VARCHAR:
 		return DistinctSelect<string_t, string_t, OP>(left, right, sel, count, true_sel, false_sel);
+	case PhysicalType::MAP:
+	case PhysicalType::STRUCT:
+		return DistinctSelectStruct<OP>(left, right, sel, count, true_sel, false_sel);
+	case PhysicalType::LIST:
+		return DistinctSelectList<OP>(left, right, sel, count, true_sel, false_sel);
 	default:
 		throw InvalidTypeException(left.GetType(), "Invalid type for comparison");
 	}
+}
+
+static inline SelectionVector *InitializeSelection(SelectionVector &vec, SelectionVector *sel) {
+	if (sel) {
+		vec.Initialize(sel->data());
+		sel = &vec;
+	}
+	return sel;
+}
+
+static inline void AppendSelection(SelectionVector *sel, idx_t &count, const idx_t idx) {
+	if (sel) {
+		sel->set_index(count, idx);
+	}
+	++count;
+}
+
+static inline void AdvanceSelection(SelectionVector *sel, idx_t completed) {
+	if (sel) {
+		sel->Initialize(sel->data() + completed);
+	}
+}
+
+static inline const SelectionVector *SelectNotNull(VectorData &ldata, VectorData &rdata, idx_t &count,
+                                                   idx_t &true_count, const SelectionVector *sel,
+                                                   SelectionVector &maybe_vec, SelectionVector *true_sel,
+                                                   SelectionVector *false_sel) {
+	// We need multiple, real selections
+	if (!sel) {
+		sel = &FlatVector::INCREMENTAL_SELECTION_VECTOR;
+	}
+
+	// For top-level distincts, NULL semantics are computed separately
+	if (!ldata.validity.AllValid() || !rdata.validity.AllValid()) {
+		idx_t false_count = 0;
+		idx_t remaining = 0;
+		for (idx_t i = 0; i < count; ++i) {
+			const auto idx = sel->get_index(i);
+			const auto lnull = !ldata.validity.RowIsValid(idx);
+			const auto rnull = !rdata.validity.RowIsValid(idx);
+			if (lnull != rnull) {
+				AppendSelection(false_sel, false_count, idx);
+			} else if (lnull) {
+				AppendSelection(true_sel, true_count, idx);
+			} else {
+				AppendSelection(&maybe_vec, remaining, idx);
+			}
+		}
+		AdvanceSelection(true_sel, true_count);
+		AdvanceSelection(false_sel, false_count);
+		count = remaining;
+	}
+
+	return sel;
+}
+
+template <class OP>
+static idx_t DistinctSelectStruct(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+                                  SelectionVector *true_sel, SelectionVector *false_sel) {
+	// Incrementally fill in successes and failures as we discover them
+	SelectionVector true_vec;
+	true_sel = InitializeSelection(true_vec, true_sel);
+
+	SelectionVector false_vec;
+	false_sel = InitializeSelection(false_vec, false_sel);
+
+	// For top-level comparisons, NULL semantics are in effect,
+	// so filter out any NULLs
+	VectorData lvdata, rvdata;
+	left.Orrify(count, lvdata);
+	right.Orrify(count, rvdata);
+
+	idx_t result = 0;
+	SelectionVector maybe_vec(count);
+	sel = SelectNotNull(lvdata, rvdata, count, result, sel, maybe_vec, true_sel, false_sel);
+
+	auto &lchildren = StructVector::GetEntries(left);
+	auto &rchildren = StructVector::GetEntries(right);
+	D_ASSERT(lchildren.size() == rchildren.size());
+
+	idx_t col_no = 0;
+	for (; col_no < lchildren.size() - 1; ++col_no) {
+		auto &lchild = *lchildren[col_no];
+		auto &rchild = *rchildren[col_no];
+
+		// Find what might match on the next position
+		auto possible = TemplatedDistinctSelectOperation<OP>(lchild, rchild, sel, count, &maybe_vec, false_sel);
+		AdvanceSelection(false_sel, count - possible);
+		count = possible;
+		sel = &maybe_vec;
+	}
+
+	// Find everything that matches the last column exactly
+	auto &lchild = *lchildren[col_no];
+	auto &rchild = *rchildren[col_no];
+	result += TemplatedDistinctSelectOperation<OP>(lchild, rchild, sel, count, true_sel, false_sel);
+
+	return result;
+}
+
+template <typename OP>
+static idx_t DistinctSelectList(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+                                SelectionVector *true_sel, SelectionVector *false_sel) {
+	// Incrementally fill in successes and failures as we discover them
+	SelectionVector true_vec;
+	true_sel = InitializeSelection(true_vec, true_sel);
+
+	SelectionVector false_vec;
+	false_sel = InitializeSelection(false_vec, false_sel);
+
+	// For top-level comparisons, NULL semantics are in effect,
+	// so filter out any NULL LISTs
+	VectorData lvdata, rvdata;
+	left.Orrify(count, lvdata);
+	right.Orrify(count, rvdata);
+
+	idx_t result = 0;
+	SelectionVector maybe_vec(count);
+	sel = SelectNotNull(lvdata, rvdata, count, result, sel, maybe_vec, true_sel, false_sel);
+
+	if (count == 0) {
+		return result;
+	}
+
+	// The cursors provide a means of mapping the selected list to a current position in that list.
+	// We use them to create dictionary views of the children so we can vectorise the positional comparisons.
+	// Note that they only need to be as large as the parent because only one entry is active per LIST.
+	SelectionVector lcursor(count);
+	SelectionVector rcursor(count);
+
+	const auto ldata = (const list_entry_t *)lvdata.data;
+	const auto rdata = (const list_entry_t *)rvdata.data;
+
+	for (idx_t i = 0; i < count; ++i) {
+		const idx_t idx = sel->get_index(i);
+		const auto &lentry = ldata[idx];
+		const auto &rentry = rdata[idx];
+		lcursor.set_index(idx, lentry.offset);
+		rcursor.set_index(idx, rentry.offset);
+	}
+
+	Vector lchild;
+	lchild.Slice(ListVector::GetEntry(left), lcursor, count);
+
+	Vector rchild;
+	rchild.Slice(ListVector::GetEntry(right), rcursor, count);
+
+	for (idx_t pos = 0; count > 0; ++pos) {
+		// Tie-break the pairs where one of the LISTs is exhausted.
+		idx_t true_count = 0;
+		idx_t false_count = 0;
+		idx_t remaining = 0;
+		for (idx_t i = 0; i < count; ++i) {
+			const auto idx = sel->get_index(i);
+			const auto &lentry = ldata[idx];
+			const auto &rentry = rdata[idx];
+			if (lentry.length == pos || rentry.length == pos) {
+				if (OP::Operation(lentry.length, rentry.length, false, false)) {
+					AppendSelection(true_sel, true_count, idx);
+				} else {
+					AppendSelection(false_sel, false_count, idx);
+				}
+			} else {
+				AppendSelection(&maybe_vec, remaining, idx);
+			}
+		}
+		AdvanceSelection(true_sel, true_count);
+		AdvanceSelection(false_sel, false_count);
+		count = remaining;
+		sel = &maybe_vec;
+		result += true_count;
+
+		// Find what might match on the next position
+		auto possible = TemplatedDistinctSelectOperation<OP>(lchild, rchild, sel, count, &maybe_vec, false_sel);
+		AdvanceSelection(false_sel, count - possible);
+		count = possible;
+		sel = &maybe_vec;
+
+		// Increment the cursors
+		for (idx_t i = 0; i < count; ++i) {
+			const auto idx = sel->get_index(i);
+			lcursor.set_index(idx, lcursor.get_index(idx) + 1);
+			rcursor.set_index(idx, rcursor.get_index(idx) + 1);
+		}
+	}
+
+	return result;
 }
 
 void VectorOperations::DistinctFrom(Vector &left, Vector &right, Vector &result, idx_t count) {
