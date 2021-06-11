@@ -74,7 +74,7 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_n
 			for (auto node = type_name->typmods->head; node; node = node->next) {
 				auto &const_val = *((duckdb_libpgquery::PGAConst *)node->data.ptr_value);
 				if (const_val.type != duckdb_libpgquery::T_PGAConst ||
-					const_val.val.type != duckdb_libpgquery::T_PGInteger) {
+				    const_val.val.type != duckdb_libpgquery::T_PGInteger) {
 					throw ParserException("Expected an integer constant as type modifier");
 				}
 				if (const_val.val.val.ival < 0) {
