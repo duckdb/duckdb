@@ -196,12 +196,19 @@ TEST_CASE("Basic prepared statement usage", "[sqlite3wrapper]") {
 	REQUIRE(sqlite3_bind_int(stmt.stmt, 1, 2) == SQLITE_OK);
 	REQUIRE(sqlite3_bind_int64(stmt.stmt, 2, 1000) == SQLITE_OK);
 	REQUIRE(sqlite3_bind_text(stmt.stmt, 3, "1992-01-01", -1, nullptr) == SQLITE_OK);
+	REQUIRE(sqlite3_bind_text(stmt.stmt, 4, nullptr, -1, &free) == SQLITE_MISUSE);
+	char *buffer = (char *)malloc(12);
+	strcpy(buffer, "hello world");
+	REQUIRE(sqlite3_bind_text(stmt.stmt, 4, buffer, -1, &free) == SQLITE_OK);
 	REQUIRE(sqlite3_bind_text(stmt.stmt, 4, "hello world", -1, nullptr) == SQLITE_OK);
 	// test for bind blob
 	REQUIRE(sqlite3_bind_blob(stmt.stmt, 5, "hello world", -1, nullptr) == SQLITE_OK);
 	REQUIRE(sqlite3_bind_blob(stmt.stmt, 5, "hello world", 10, nullptr) == SQLITE_OK);
-	REQUIRE(sqlite3_bind_zeroblob(stmt.stmt, 5, -1) == SQLITE_OK);
-	REQUIRE(sqlite3_bind_zeroblob(stmt.stmt, 5, 10) == SQLITE_OK);
+	REQUIRE(sqlite3_bind_blob(stmt.stmt, 5, "hello world", 20, nullptr) == SQLITE_OK);
+	REQUIRE(sqlite3_bind_blob(stmt.stmt, 5, NULL, 10, &free) == SQLITE_MISUSE);
+	buffer = (char *)malloc(6);
+	strcpy(buffer, "hello");
+	REQUIRE(sqlite3_bind_blob(stmt.stmt, 5, buffer, 5, &free) == SQLITE_OK);
 
 	REQUIRE(sqlite3_step(nullptr) == SQLITE_MISUSE);
 	REQUIRE(sqlite3_step(stmt.stmt) == SQLITE_DONE);
@@ -233,7 +240,7 @@ TEST_CASE("Basic prepared statement usage", "[sqlite3wrapper]") {
 	REQUIRE(db.CheckColumn(1, {"", "", "", "", "1000"}));
 	REQUIRE(db.CheckColumn(2, {"", "", "", "", "1992-01-01"}));
 	REQUIRE(db.CheckColumn(3, {"", "", "", "", "hello world"}));
-	REQUIRE(db.CheckColumn(4, {"", "", "", "", "0000000000"}));
+	REQUIRE(db.CheckColumn(4, {"", "", "", "", "hello"}));
 
 	REQUIRE(sqlite3_finalize(nullptr) == SQLITE_OK);
 
@@ -271,7 +278,7 @@ TEST_CASE("Basic prepared statement usage", "[sqlite3wrapper]") {
 	REQUIRE(string((char *)sqlite3_column_text(stmt.stmt, 1)) == string("1000"));
 	REQUIRE(string((char *)sqlite3_column_text(stmt.stmt, 2)) == string("1992-01-01"));
 	REQUIRE(string((char *)sqlite3_column_text(stmt.stmt, 3)) == string("hello world"));
-	REQUIRE(string((char *)sqlite3_column_blob(stmt.stmt, 4)) == string("0000000000"));
+	REQUIRE(string((char *)sqlite3_column_blob(stmt.stmt, 4)) == string("hello"));
 	REQUIRE(sqlite3_column_int(stmt.stmt, 3) == 0);
 	REQUIRE(sqlite3_column_int64(stmt.stmt, 3) == 0);
 	REQUIRE(sqlite3_column_double(stmt.stmt, 3) == 0);

@@ -613,6 +613,7 @@ int sqlite3_bind_text(sqlite3_stmt *stmt, int idx, const char *val, int length, 
 	}
 	if (free_func && ((ptrdiff_t)free_func) != -1) {
 		free_func((void *)val);
+		val = nullptr;
 	}
 	try {
 		return sqlite3_internal_bind_value(stmt, idx, Value(value));
@@ -633,6 +634,7 @@ int sqlite3_bind_blob(sqlite3_stmt *stmt, int idx, const void *val, int length, 
 	}
 	if (free_func && ((ptrdiff_t)free_func) != -1) {
 		free_func((void *)val);
+		val = nullptr;
 	}
 	try {
 		return sqlite3_internal_bind_value(stmt, idx, blob);
@@ -642,10 +644,8 @@ int sqlite3_bind_blob(sqlite3_stmt *stmt, int idx, const void *val, int length, 
 }
 
 SQLITE_API int sqlite3_bind_zeroblob(sqlite3_stmt *stmt, int idx, int length) {
-	if (length < 0) {
-		length = 0;
-	}
-	return sqlite3_internal_bind_value(stmt, idx, Value::BLOB(string(length, '0')));
+	fprintf(stderr, "sqlite3_bind_zeroblob: unsupported.\n");
+	return SQLITE_ERROR;
 }
 
 int sqlite3_clear_bindings(sqlite3_stmt *stmt) {
