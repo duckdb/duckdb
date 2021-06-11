@@ -47,6 +47,8 @@ public:
 
 	//! Push a new error
 	void PushError(const string &exception);
+	bool GetError(string &exception);
+
 
 	//! Flush a thread context into the client context
 	void Flush(ThreadContext &context);
