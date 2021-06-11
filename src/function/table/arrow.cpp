@@ -50,7 +50,7 @@ LogicalType GetArrowLogicalType(ArrowSchema &schema,
 		if (width > 38) {
 			throw NotImplementedException("Unsupported Internal Arrow Type for Decimal %s", format);
 		}
-		return LogicalType(LogicalTypeId::DECIMAL, width, scale);
+		return LogicalType::DECIMAL(width, scale);
 	} else if (format == "u") {
 		return LogicalType::VARCHAR;
 	} else if (format == "tsn:") {
@@ -68,27 +68,24 @@ LogicalType GetArrowLogicalType(ArrowSchema &schema,
 	} else if (format == "+l") {
 		arrow_lists[col_idx].emplace_back(ArrowListType::NORMAL, 0);
 		auto child_type = GetArrowLogicalType(*schema.children[0], arrow_lists, col_idx);
-		child_list_t<LogicalType> child_types {{"", child_type}};
-		return LogicalType(LogicalTypeId::LIST, child_types);
+		return LogicalType::LIST(child_type);
 	} else if (format == "+L") {
 		arrow_lists[col_idx].emplace_back(ArrowListType::SUPER_SIZE, 0);
 		auto child_type = GetArrowLogicalType(*schema.children[0], arrow_lists, col_idx);
-		child_list_t<LogicalType> child_types {{"", child_type}};
-		return LogicalType(LogicalTypeId::LIST, child_types);
+		return LogicalType::LIST(child_type);
 	} else if (format[0] == '+' && format[1] == 'w') {
 		std::string parameters = format.substr(format.find(':') + 1);
 		idx_t fixed_size = std::stoi(parameters);
 		arrow_lists[col_idx].emplace_back(ArrowListType::FIXED_SIZE, fixed_size);
 		auto child_type = GetArrowLogicalType(*schema.children[0], arrow_lists, col_idx);
-		child_list_t<LogicalType> child_types {{"", child_type}};
-		return LogicalType(LogicalTypeId::LIST, child_types);
+		return LogicalType::LIST(move(child_type));
 	} else if (format == "+s") {
 		child_list_t<LogicalType> child_types;
 		for (idx_t type_idx = 0; type_idx < (idx_t)schema.n_children; type_idx++) {
 			auto child_type = GetArrowLogicalType(*schema.children[type_idx], arrow_lists, col_idx);
 			child_types.push_back({schema.children[type_idx]->name, child_type});
 		}
-		return LogicalType(LogicalTypeId::STRUCT, child_types);
+		return LogicalType::STRUCT(move(child_types));
 
 	} else if (format == "+m") {
 		child_list_t<LogicalType> child_types;
@@ -97,12 +94,11 @@ LogicalType GetArrowLogicalType(ArrowSchema &schema,
 		for (idx_t type_idx = 0; type_idx < (idx_t)struct_schema.n_children; type_idx++) {
 			//! The other types must be added on lists
 			auto child_type = GetArrowLogicalType(*struct_schema.children[type_idx], arrow_lists, col_idx);
-			child_list_t<LogicalType> list_child;
-			list_child.push_back({"", child_type});
-			LogicalType list_type(LogicalTypeId::LIST, list_child);
+
+			auto list_type = LogicalType::LIST(child_type);
 			child_types.push_back({struct_schema.children[type_idx]->name, list_type});
 		}
-		return LogicalType(LogicalTypeId::MAP, child_types);
+		return LogicalType::MAP(move(child_types));
 	} else {
 		throw NotImplementedException("Unsupported Internal Arrow Type %s", format);
 	}

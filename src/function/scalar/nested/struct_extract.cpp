@@ -50,7 +50,7 @@ static void StructExtractFunction(DataChunk &args, ExpressionState &state, Vecto
 
 static unique_ptr<FunctionData> StructExtractBind(ClientContext &context, ScalarFunction &bound_function,
                                                   vector<unique_ptr<Expression>> &arguments) {
-	auto &struct_children = arguments[0]->return_type.child_types();
+	auto &struct_children = StructType::GetChildTypes(arguments[0]->return_type);
 	if (struct_children.empty()) {
 		throw Exception("Can't extract something from an empty struct");
 	}
@@ -102,7 +102,7 @@ static unique_ptr<BaseStatistics> PropagateStructExtractStats(ClientContext &con
 }
 
 ScalarFunction StructExtractFun::GetFunction() {
-	return ScalarFunction("struct_extract", {LogicalType::STRUCT, LogicalType::VARCHAR}, LogicalType::ANY,
+	return ScalarFunction("struct_extract", {LogicalTypeId::STRUCT, LogicalType::VARCHAR}, LogicalType::ANY,
 	                      StructExtractFunction, false, StructExtractBind, nullptr, PropagateStructExtractStats);
 }
 

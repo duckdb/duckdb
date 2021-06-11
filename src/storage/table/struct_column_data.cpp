@@ -7,7 +7,7 @@ StructColumnData::StructColumnData(DataTableInfo &info, idx_t column_index, idx_
                                    ColumnData *parent)
     : ColumnData(info, column_index, start_row, move(type_p), parent), validity(info, 0, start_row, this) {
 	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
-	auto &child_types = type.child_types();
+	auto &child_types = StructType::GetChildTypes(type);
 	D_ASSERT(child_types.size() > 0);
 	// the sub column index, starting at 1 (0 is the validity mask)
 	idx_t sub_column_index = 1;

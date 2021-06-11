@@ -150,7 +150,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 	}
 	// bind collations to detect any unsupported collation errors
 	for (auto &column : base.columns) {
-		ExpressionBinder::TestCollation(context, column.type.collation());
+		ExpressionBinder::TestCollation(context, StringType::GetCollation(column.type));
 	}
 	return result;
 }

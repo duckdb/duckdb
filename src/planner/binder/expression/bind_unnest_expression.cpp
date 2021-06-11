@@ -22,15 +22,11 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth) {
 		return BindResult(error);
 	}
 	auto &child = (BoundExpression &)*function.children[0];
-	LogicalType child_type = child.expr->return_type;
+	auto &child_type = child.expr->return_type;
 	if (child_type.id() != LogicalTypeId::LIST) {
 		return BindResult(binder.FormatError(function, "Unnest() can only be applied to lists"));
 	}
-	LogicalType return_type = LogicalType::ANY;
-	D_ASSERT(child_type.child_types().size() <= 1);
-	if (child_type.child_types().size() == 1) {
-		return_type = child_type.child_types()[0].second;
-	}
+	auto &return_type = ListType::GetChildType(child_type);
 
 	auto result = make_unique<BoundUnnestExpression>(return_type);
 	result->child = move(child.expr);
