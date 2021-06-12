@@ -74,10 +74,6 @@ struct FirstFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct ArbitraryFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
 struct MaxFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };

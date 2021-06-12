@@ -237,7 +237,7 @@ void RowDataCollection::ComputeListEntrySizes(Vector &v, idx_t entry_sizes[], id
 			entry_sizes[i] += (list_entry.length + 7) / 8;
 
 			// serialize size of each entry (if non-constant size)
-			if (!TypeIsConstantSize(v.GetType().child_types()[0].second.InternalType())) {
+			if (!TypeIsConstantSize(ListType::GetChildType(v.GetType()).InternalType())) {
 				entry_sizes[i] += list_entry.length * sizeof(list_entry.length);
 			}
 
@@ -505,7 +505,7 @@ void RowDataCollection::SerializeListVector(Vector &v, idx_t vcount, const Selec
 
 	VectorData list_vdata;
 	child_vector.Orrify(ListVector::GetListSize(v), list_vdata);
-	auto child_type = v.GetType().child_types()[0].second.InternalType();
+	auto child_type = ListType::GetChildType(v.GetType()).InternalType();
 
 	idx_t list_entry_sizes[STANDARD_VECTOR_SIZE];
 	data_ptr_t list_entry_locations[STANDARD_VECTOR_SIZE];
@@ -754,7 +754,7 @@ static void DeserializeIntoStringVector(Vector &v, const idx_t vcount, const Sel
 static void DeserializeIntoStructVector(Vector &v, const idx_t vcount, const SelectionVector &sel,
                                         data_ptr_t *key_locations) {
 	// struct must have a validitymask for its fields
-	auto &child_types = v.GetType().child_types();
+	auto &child_types = StructType::GetChildTypes(v.GetType());
 	const idx_t struct_validitymask_size = (child_types.size() + 7) / 8;
 	data_ptr_t struct_validitymask_locations[STANDARD_VECTOR_SIZE];
 	for (idx_t i = 0; i < vcount; i++) {
@@ -775,7 +775,7 @@ static void DeserializeIntoListVector(Vector &v, const idx_t vcount, const Selec
                                       data_ptr_t *key_locations) {
 	const auto &validity = FlatVector::Validity(v);
 
-	auto child_type = v.GetType().child_types()[0].second;
+	auto child_type = ListType::GetChildType(v.GetType());
 	auto list_data = GetListData(v);
 	data_ptr_t list_entry_locations[STANDARD_VECTOR_SIZE];
 

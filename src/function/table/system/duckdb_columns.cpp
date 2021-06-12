@@ -225,8 +225,8 @@ void ColumnHelper::WriteColumns(idx_t start_index, idx_t start_col, idx_t end_co
 		Value numeric_precision, numeric_scale, numeric_precision_radix;
 		switch (type.id()) {
 		case LogicalTypeId::DECIMAL:
-			numeric_precision = Value::INTEGER(type.width());
-			numeric_scale = Value::INTEGER(type.scale());
+			numeric_precision = Value::INTEGER(DecimalType::GetWidth(type));
+			numeric_scale = Value::INTEGER(DecimalType::GetScale(type));
 			numeric_precision_radix = Value::INTEGER(10);
 			break;
 		case LogicalTypeId::HUGEINT:

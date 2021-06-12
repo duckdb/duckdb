@@ -206,9 +206,8 @@ struct QuantileOperation {
 template <class STATE_TYPE, class RESULT_TYPE, class OP>
 static void ExecuteListFinalize(Vector &states, FunctionData *bind_data, Vector &result, idx_t count) {
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
-	D_ASSERT(result.GetType().child_types().size() == 1);
 
-	auto list_child = make_unique<Vector>(result.GetType().child_types()[0].second);
+	auto list_child = make_unique<Vector>(ListType::GetChildType(result.GetType()));
 	ListVector::SetEntry(result, move(list_child));
 
 	if (states.GetVectorType() == VectorType::CONSTANT_VECTOR) {
@@ -235,7 +234,7 @@ static void ExecuteListFinalize(Vector &states, FunctionData *bind_data, Vector 
 
 template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>
 static AggregateFunction QuantileListAggregate(const LogicalType &input_type, const LogicalType &child_type) {
-	LogicalType result_type(LogicalTypeId::LIST, {{"", child_type}});
+	LogicalType result_type = LogicalType::LIST(child_type);
 	return AggregateFunction(
 	    {input_type}, result_type, AggregateFunction::StateSize<STATE>, AggregateFunction::StateInitialize<STATE, OP>,
 	    AggregateFunction::UnaryScatterUpdate<STATE, INPUT_TYPE, OP>, AggregateFunction::StateCombine<STATE, OP>,
@@ -634,7 +633,7 @@ unique_ptr<FunctionData> BindQuantile(ClientContext &context, AggregateFunction 
 	}
 	Value quantile_val = ExpressionExecutor::EvaluateScalar(*arguments[1]);
 	vector<float> quantiles;
-	if (quantile_val.type().child_types().empty()) {
+	if (quantile_val.type().id() != LogicalTypeId::LIST) {
 		quantiles.push_back(CheckQuantile(quantile_val));
 	} else {
 		for (const auto &element_val : quantile_val.list_value) {
@@ -680,7 +679,7 @@ AggregateFunction GetDiscreteQuantileListAggregate(const LogicalType &type) {
 	auto fun = GetDiscreteQuantileListAggregateFunction(type);
 	fun.bind = BindQuantile;
 	// temporarily push an argument so we can bind the actual quantile
-	LogicalType list_of_float(LogicalTypeId::LIST, {std::make_pair("", LogicalType::FLOAT)});
+	auto list_of_float = LogicalType::LIST(LogicalType::FLOAT);
 	fun.arguments.push_back(list_of_float);
 	return fun;
 }
@@ -697,7 +696,7 @@ AggregateFunction GetContinuousQuantileListAggregate(const LogicalType &type) {
 	auto fun = GetContinuousQuantileListAggregateFunction(type);
 	fun.bind = BindQuantile;
 	// temporarily push an argument so we can bind the actual quantile
-	LogicalType list_of_double(LogicalTypeId::LIST, {std::make_pair("", LogicalType::DOUBLE)});
+	auto list_of_double = LogicalType::LIST(LogicalType::DOUBLE);
 	fun.arguments.push_back(list_of_double);
 	return fun;
 }
@@ -709,16 +708,16 @@ void QuantileFun::RegisterFunction(BuiltinFunctions &set) {
 	                                       LogicalType::TIME,    LogicalType::INTERVAL};
 
 	AggregateFunctionSet median("median");
-	median.AddFunction(AggregateFunction({LogicalType::DECIMAL}, LogicalType::DECIMAL, nullptr, nullptr, nullptr,
+	median.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr,
 	                                     nullptr, nullptr, nullptr, BindMedianDecimal));
 
 	AggregateFunctionSet quantile_disc("quantile_disc");
-	quantile_disc.AddFunction(AggregateFunction({LogicalType::DECIMAL, LogicalType::FLOAT}, LogicalType::DECIMAL,
+	quantile_disc.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL, LogicalType::FLOAT}, LogicalTypeId::DECIMAL,
 	                                            nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
 	                                            BindDiscreteQuantileDecimal));
 
 	AggregateFunctionSet quantile_cont("quantile_cont");
-	quantile_cont.AddFunction(AggregateFunction({LogicalType::DECIMAL, LogicalType::FLOAT}, LogicalType::DECIMAL,
+	quantile_cont.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL, LogicalType::FLOAT}, LogicalTypeId::DECIMAL,
 	                                            nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
 	                                            BindContinuousQuantileDecimal));
 

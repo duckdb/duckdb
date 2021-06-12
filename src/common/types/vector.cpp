@@ -52,7 +52,7 @@ void Vector::Reference(const Value &value) {
 	buffer = VectorBuffer::CreateConstantVector(VectorType::CONSTANT_VECTOR, value.type());
 	if (value.type().id() == LogicalTypeId::STRUCT || value.type().id() == LogicalTypeId::MAP) {
 		auto struct_buffer = make_unique<VectorStructBuffer>();
-		auto &child_types = value.type().child_types();
+		auto &child_types = StructType::GetChildTypes(value.type());
 		auto &child_vectors = struct_buffer->GetChildren();
 		for (idx_t i = 0; i < child_types.size(); i++) {
 			auto vector = make_unique<Vector>(value.is_null ? Value(child_types[i].second) : value.struct_value[i]);
@@ -146,7 +146,7 @@ void Vector::Initialize(const LogicalType &new_type, bool zero_data) {
 	auto &type = GetType();
 	if (type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::MAP) {
 		auto struct_buffer = make_unique<VectorStructBuffer>();
-		auto &child_types = type.child_types();
+		auto &child_types = StructType::GetChildTypes(type);
 		auto &child_vectors = struct_buffer->GetChildren();
 		for (auto &child_type : child_types) {
 			auto vector = make_unique<Vector>(child_type.second);
@@ -294,7 +294,8 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		((hugeint_t *)data)[index] = val.value_.hugeint;
 		break;
 	case LogicalTypeId::DECIMAL:
-		D_ASSERT(GetType().width() == val.type().width() && GetType().scale() == val.type().scale());
+		D_ASSERT(DecimalType::GetWidth(GetType()) == DecimalType::GetWidth(val.type()));
+		D_ASSERT(DecimalType::GetScale(GetType()) == DecimalType::GetScale(val.type()));
 		switch (GetType().InternalType()) {
 		case PhysicalType::INT16:
 			((int16_t *)data)[index] = val.value_.smallint;
@@ -347,7 +348,7 @@ void Vector::SetValue(idx_t index, const Value &val) {
 	}
 	case LogicalTypeId::LIST: {
 		if (!auxiliary) {
-			auto vec_list = make_unique<Vector>(GetType().child_types()[0].second);
+			auto vec_list = make_unique<Vector>(ListType::GetChildType(GetType()));
 			ListVector::SetEntry(*this, move(vec_list));
 		}
 		auto offset = ListVector::GetListSize(*this);
@@ -427,15 +428,17 @@ Value Vector::GetValue(idx_t index) const {
 	case LogicalTypeId::HUGEINT:
 		return Value::HUGEINT(((hugeint_t *)data)[index]);
 	case LogicalTypeId::DECIMAL: {
+		auto width = DecimalType::GetWidth(GetType());
+		auto scale = DecimalType::GetScale(GetType());
 		switch (GetType().InternalType()) {
 		case PhysicalType::INT16:
-			return Value::DECIMAL(((int16_t *)data)[index], GetType().width(), GetType().scale());
+			return Value::DECIMAL(((int16_t *)data)[index], width, scale);
 		case PhysicalType::INT32:
-			return Value::DECIMAL(((int32_t *)data)[index], GetType().width(), GetType().scale());
+			return Value::DECIMAL(((int32_t *)data)[index], width, scale);
 		case PhysicalType::INT64:
-			return Value::DECIMAL(((int64_t *)data)[index], GetType().width(), GetType().scale());
+			return Value::DECIMAL(((int64_t *)data)[index], width, scale);
 		case PhysicalType::INT128:
-			return Value::DECIMAL(((hugeint_t *)data)[index], GetType().width(), GetType().scale());
+			return Value::DECIMAL(((hugeint_t *)data)[index], width, scale);
 		default:
 			throw NotImplementedException("Widths bigger than 38 are not supported");
 		}
@@ -943,7 +946,7 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 	}
 
 	if (GetType().InternalType() == PhysicalType::STRUCT) {
-		auto &child_types = GetType().child_types();
+		auto &child_types = StructType::GetChildTypes(GetType());
 		D_ASSERT(child_types.size() > 0);
 		if (GetVectorType() == VectorType::FLAT_VECTOR || GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			// create a selection vector of the non-null entries of the struct vector
@@ -960,7 +963,6 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 	}
 
 	if (GetType().InternalType() == PhysicalType::LIST) {
-		D_ASSERT(GetType().child_types().size() == 1);
 		if (GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			if (!ConstantVector::IsNull(*this)) {
 				ListVector::GetEntry(*this).Verify(ListVector::GetListSize(*this));
@@ -1159,7 +1161,7 @@ Vector &ListVector::GetEntry(Vector &vector) {
 
 void ListVector::Initialize(Vector &vec) {
 	if (!ListVector::HasEntry(vec)) {
-		auto vec_child = make_unique<Vector>(vec.GetType().child_types()[0].second);
+		auto vec_child = make_unique<Vector>(ListType::GetChildType(vec.GetType()));
 		ListVector::SetEntry(vec, move(vec_child));
 	}
 }
@@ -1297,7 +1299,7 @@ vector<idx_t> ListVector::Search(Vector &list, Value &key, idx_t row) {
 }
 
 Value ListVector::GetValuesFromOffsets(Vector &list, vector<idx_t> &offsets) {
-	Value ret(list.GetType().child_types()[0].second);
+	Value ret(ListType::GetChildType(list.GetType()));
 	ret.is_null = false;
 	auto &child_vec = ListVector::GetEntry(list);
 	for (auto &offset : offsets) {

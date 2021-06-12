@@ -77,7 +77,9 @@ void DuckDBTypesFunction(ClientContext &context, const FunctionData *bind_data, 
 		// type_name, VARCHAR
 		output.SetValue(3, count, Value(type.ToString()));
 		// type_size, BIGINT
-		output.SetValue(4, count, Value::BIGINT(GetTypeIdSize(type.InternalType())));
+		auto internal_type = type.InternalType();
+		output.SetValue(4, count,
+		                internal_type == PhysicalType::INVALID ? Value() : Value::BIGINT(GetTypeIdSize(internal_type)));
 		// type_category, VARCHAR
 		string category;
 		switch (type.id()) {

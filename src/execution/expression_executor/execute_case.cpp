@@ -171,7 +171,7 @@ void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &
 		break;
 	}
 	case PhysicalType::LIST: {
-		auto result_vector = make_unique<Vector>(result.GetType().child_types()[0].second);
+		auto result_vector = make_unique<Vector>(ListType::GetChildType(result.GetType()));
 		ListVector::SetEntry(result, move(result_vector));
 
 		idx_t offset = 0;
