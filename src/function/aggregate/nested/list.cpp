@@ -36,7 +36,6 @@ static void ListUpdateFunction(Vector inputs[], FunctionData *, idx_t input_coun
 	auto list_vector_type = LogicalType::LIST(input.GetType());
 
 	auto states = (ListAggState **)sdata.data;
-	SelectionVector sel(STANDARD_VECTOR_SIZE);
 	if (input.GetVectorType() == VectorType::SEQUENCE_VECTOR) {
 		input.Normalify(count);
 	}
