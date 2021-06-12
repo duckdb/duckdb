@@ -38,7 +38,13 @@ void RowLayout::Initialize(vector<LogicalType> types_p, Aggregates aggregates_p)
 	// Data columns. No alignment required.
 	for (const auto &type : types) {
 		offsets.push_back(row_width);
-		row_width += GetTypeIdSize(type.InternalType());
+		const auto internal_type = type.InternalType();
+		if (TypeIsConstantSize(internal_type) || internal_type == PhysicalType::VARCHAR) {
+			row_width += GetTypeIdSize(type.InternalType());
+		} else {
+			// Variable size types use pointers to the actual data.
+			row_width += sizeof(data_ptr_t);
+		}
 	}
 
 	// Alignment padding for aggregates
