@@ -12,12 +12,24 @@ statement error
 select nextafter('bla','bla')
 
 statement error
+select nextafter(NULL,1)
+
+
+statement error
+select nextafter(1,NULL)
+
+
+statement error
 select nextafter(99, 1)
+
+
+query R
+select nextafter(99.0::DOUBLE, 1.0::DOUBLE) < 99
 ----
 True
 
 query R
-select nextafter(99.0::DOUBLE, 1.0::DOUBLE) < 99
+select nextafter(99.0::DOUBLE, 99.0::DOUBLE) = 99
 ----
 True
 
@@ -59,3 +71,17 @@ select nextafter(a, 0::FLOAT) from test
 19.999998
 29.999998
 39.999996
+
+statement ok
+create table test_twoc (a FLOAT, b FLOAT)
+
+statement ok
+INSERT INTO test_twoc VALUES (10,1),(20,21),(30,1),(40,41)
+
+query R
+select nextafter(a, b) from test_twoc
+----
+9.999999
+20.000002
+29.999998
+40.000004
