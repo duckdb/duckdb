@@ -38,7 +38,7 @@ template <class T>
 static void RDecimalCastLoop(Vector &src_vec, size_t count, double *dest_ptr, uint8_t scale) {
 	auto src_ptr = FlatVector::GetData<T>(src_vec);
 	auto &mask = FlatVector::Validity(src_vec);
-	double division = pow(10, scale);
+	double division = std::pow((uint64_t)10, (uint64_t)scale);
 	for (size_t row_idx = 0; row_idx < count; row_idx++) {
 		dest_ptr[row_idx] =
 		    !mask.RowIsValid(row_idx) ? NA_REAL : RIntegralType::DoubleCast<T>(src_ptr[row_idx]) / division;
