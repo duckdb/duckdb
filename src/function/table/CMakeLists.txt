@@ -14,7 +14,8 @@ add_library_unity(
   summary.cpp
   table_scan.cpp
   pragma_last_profiling_output.cpp
-  pragma_detailed_profiling_output.cpp)
+  pragma_detailed_profiling_output.cpp
+  unnest.cpp)
 
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_func_table>

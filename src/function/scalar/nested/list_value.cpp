@@ -34,8 +34,14 @@ static void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &r
 
 static unique_ptr<FunctionData> ListValueBind(ClientContext &context, ScalarFunction &bound_function,
                                               vector<unique_ptr<Expression>> &arguments) {
-	bound_function.return_type =
-	    LogicalType::LIST(arguments.empty() ? LogicalType::SQLNULL : arguments[0]->return_type);
+	// collect names and deconflict, construct return type
+	auto child_type = LogicalType::SQLNULL;
+	for (idx_t i = 0; i < arguments.size(); i++) {
+		child_type = LogicalType::MaxLogicalType(child_type, arguments[i]->return_type);
+	}
+
+	// this is more for completeness reasons
+	bound_function.return_type = LogicalType::LIST(move(child_type));
 	return make_unique<VariableReturnBindData>(bound_function.return_type);
 }
 
