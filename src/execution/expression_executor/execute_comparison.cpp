@@ -189,29 +189,8 @@ idx_t PositionComparator::Definite<duckdb::GreaterThanEquals>(Vector &left, Vect
 	return TemplatedSelectOperation<duckdb::GreaterThan>(left, right, sel, count, true_sel, &false_sel);
 }
 
-static inline SelectionVector *InitializeSelection(SelectionVector &vec, SelectionVector *sel) {
-	if (sel) {
-		vec.Initialize(sel->data());
-		sel = &vec;
-	}
-	return sel;
-}
-
-static inline void AppendSelection(SelectionVector *sel, idx_t &count, const idx_t idx) {
-	if (sel) {
-		sel->set_index(count, idx);
-	}
-	++count;
-}
-
-static inline void AdvanceSelection(SelectionVector *sel, idx_t completed) {
-	if (sel) {
-		sel->Initialize(sel->data() + completed);
-	}
-}
-
 static inline const SelectionVector *SelectNotNull(VectorData &ldata, VectorData &rdata, idx_t &count,
-                                                   const SelectionVector *sel, SelectionVector *false_sel,
+                                                   const SelectionVector *sel, OptionalSelection &false_vec,
                                                    SelectionVector &maybe_vec) {
 
 	//	We need multiple, real selections
@@ -227,12 +206,12 @@ static inline const SelectionVector *SelectNotNull(VectorData &ldata, VectorData
 		for (idx_t i = 0; i < count; ++i) {
 			const auto idx = sel->get_index(i);
 			if (!ldata.validity.RowIsValid(idx) || !rdata.validity.RowIsValid(idx)) {
-				AppendSelection(false_sel, false_count, idx);
+				false_vec.Append(false_count, idx);
 			} else {
-				AppendSelection(&maybe_vec, true_count, idx);
+				maybe_vec.set_index(true_count++, idx);
 			}
 		}
-		AdvanceSelection(false_sel, false_count);
+		false_vec.Advance(false_count);
 
 		sel = &maybe_vec;
 		count = true_count;
@@ -247,11 +226,8 @@ static idx_t StructSelectOperation(Vector &left, Vector &right, const SelectionV
 	idx_t result = 0;
 
 	// Incrementally fill in successes and failures as we discover them
-	SelectionVector true_vec;
-	true_sel = InitializeSelection(true_vec, true_sel);
-
-	SelectionVector false_vec;
-	false_sel = InitializeSelection(false_vec, false_sel);
+	OptionalSelection true_vec(true_sel);
+	OptionalSelection false_vec(false_sel);
 
 	// For top-level comparisons, NULL semantics are in effect,
 	// so filter out any NULLs
@@ -260,7 +236,7 @@ static idx_t StructSelectOperation(Vector &left, Vector &right, const SelectionV
 	right.Orrify(count, rdata);
 
 	SelectionVector maybe_vec(count);
-	sel = SelectNotNull(ldata, rdata, count, sel, false_sel, maybe_vec);
+	sel = SelectNotNull(ldata, rdata, count, sel, false_vec, maybe_vec);
 
 	auto &lchildren = StructVector::GetEntries(left);
 	auto &rchildren = StructVector::GetEntries(right);
@@ -272,20 +248,20 @@ static idx_t StructSelectOperation(Vector &left, Vector &right, const SelectionV
 		auto &rchild = *rchildren[col_no];
 
 		// Find everything that definitely matches
-		auto definite = PositionComparator::Definite<OP>(lchild, rchild, sel, count, true_sel, maybe_vec);
-		AdvanceSelection(true_sel, definite);
+		auto definite = PositionComparator::Definite<OP>(lchild, rchild, sel, count, true_vec, maybe_vec);
+		true_vec.Advance(definite);
 		count -= definite;
 		result += definite;
 
 		// Find what might match on the next position
 		idx_t possible = 0;
 		if (definite > 0) {
-			possible = PositionComparator::Possible<OP>(lchild, rchild, &maybe_vec, count, maybe_vec, false_sel);
+			possible = PositionComparator::Possible<OP>(lchild, rchild, &maybe_vec, count, maybe_vec, false_vec);
 			sel = &maybe_vec;
 		} else {
 			// If there were no definite matches, then for speed,
 			// maybe_vec may not have been filled in.
-			possible = PositionComparator::Possible<OP>(lchild, rchild, sel, count, maybe_vec, false_sel);
+			possible = PositionComparator::Possible<OP>(lchild, rchild, sel, count, maybe_vec, false_vec);
 
 			// If everything is still possible, then for speed,
 			// maybe_vec may not have been filled in.
@@ -294,7 +270,7 @@ static idx_t StructSelectOperation(Vector &left, Vector &right, const SelectionV
 			}
 		}
 
-		AdvanceSelection(false_sel, (count - possible));
+		false_vec.Advance((count - possible));
 
 		count = possible;
 	}
@@ -302,7 +278,7 @@ static idx_t StructSelectOperation(Vector &left, Vector &right, const SelectionV
 	//	Find everything that matches the last column exactly
 	auto &lchild = *lchildren[col_no];
 	auto &rchild = *rchildren[col_no];
-	result += PositionComparator::Final<OP>(lchild, rchild, sel, count, true_sel, false_sel);
+	result += PositionComparator::Final<OP>(lchild, rchild, sel, count, true_vec, false_vec);
 
 	return result;
 }
@@ -313,11 +289,8 @@ static idx_t ListSelectOperation(Vector &left, Vector &right, const SelectionVec
 	idx_t result = 0;
 
 	// Incrementally fill in successes and failures as we discover them
-	SelectionVector true_vec;
-	true_sel = InitializeSelection(true_vec, true_sel);
-
-	SelectionVector false_vec;
-	false_sel = InitializeSelection(false_vec, false_sel);
+	OptionalSelection true_vec(true_sel);
+	OptionalSelection false_vec(false_sel);
 
 	// For top-level comparisons, NULL semantics are in effect,
 	// so filter out any NULL LISTs
@@ -326,7 +299,7 @@ static idx_t ListSelectOperation(Vector &left, Vector &right, const SelectionVec
 	right.Orrify(count, rvdata);
 
 	SelectionVector maybe_vec(count);
-	sel = SelectNotNull(lvdata, rvdata, count, sel, false_sel, maybe_vec);
+	sel = SelectNotNull(lvdata, rvdata, count, sel, false_vec, maybe_vec);
 
 	if (count == 0) {
 		return count;
@@ -379,35 +352,35 @@ static idx_t ListSelectOperation(Vector &left, Vector &right, const SelectionVec
 			const auto &rentry = rdata[idx];
 			if (lentry.length == pos || rentry.length == pos) {
 				if (PositionComparator::TieBreak<OP>(lentry.length, rentry.length)) {
-					AppendSelection(true_sel, true_count, idx);
+					true_vec.Append(true_count, idx);
 				} else {
-					AppendSelection(false_sel, false_count, idx);
+					false_vec.Append(false_count, idx);
 				}
 			} else {
-				AppendSelection(&maybe_vec, remaining, idx);
+				maybe_vec.set_index(remaining++, idx);
 			}
 		}
-		AdvanceSelection(true_sel, true_count);
-		AdvanceSelection(false_sel, false_count);
+		true_vec.Advance(true_count);
+		false_vec.Advance(false_count);
 		count = remaining;
 		sel = &maybe_vec;
 		result += true_count;
 
 		// Find everything that definitely matches
-		auto definite = PositionComparator::Definite<OP>(lchild, rchild, sel, count, true_sel, maybe_vec);
-		AdvanceSelection(true_sel, definite);
+		auto definite = PositionComparator::Definite<OP>(lchild, rchild, sel, count, true_vec, maybe_vec);
+		true_vec.Advance(definite);
 		result += definite;
 		count -= definite;
 
 		// Find what might match on the next position
 		idx_t possible = 0;
 		if (definite > 0) {
-			possible = PositionComparator::Possible<OP>(lchild, rchild, &maybe_vec, count, maybe_vec, false_sel);
+			possible = PositionComparator::Possible<OP>(lchild, rchild, &maybe_vec, count, maybe_vec, false_vec);
 			sel = &maybe_vec;
 		} else {
 			// If there were no definite matches, then for speed,
 			// maybe_vec may not have been filled in, so we reuse sel.
-			possible = PositionComparator::Possible<OP>(lchild, rchild, sel, count, maybe_vec, false_sel);
+			possible = PositionComparator::Possible<OP>(lchild, rchild, sel, count, maybe_vec, false_vec);
 
 			// If everything is still possible, then for speed,
 			// maybe_vec may not have been filled in, so we reuse sel.
@@ -415,7 +388,7 @@ static idx_t ListSelectOperation(Vector &left, Vector &right, const SelectionVec
 				sel = &maybe_vec;
 			}
 		}
-		AdvanceSelection(false_sel, (count - possible));
+		false_vec.Advance(count - possible);
 		count = possible;
 
 		// Increment the cursors

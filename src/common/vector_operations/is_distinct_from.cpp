@@ -385,31 +385,10 @@ static idx_t TemplatedDistinctSelectOperation(Vector &left, Vector &right, const
 	}
 }
 
-static inline SelectionVector *InitializeSelection(SelectionVector &vec, SelectionVector *sel) {
-	if (sel) {
-		vec.Initialize(sel->data());
-		sel = &vec;
-	}
-	return sel;
-}
-
-static inline void AppendSelection(SelectionVector *sel, idx_t &count, const idx_t idx) {
-	if (sel) {
-		sel->set_index(count, idx);
-	}
-	++count;
-}
-
-static inline void AdvanceSelection(SelectionVector *sel, idx_t completed) {
-	if (sel) {
-		sel->Initialize(sel->data() + completed);
-	}
-}
-
-static inline const SelectionVector *SelectNotNull(VectorData &ldata, VectorData &rdata, idx_t &count,
-                                                   idx_t &true_count, const SelectionVector *sel,
-                                                   SelectionVector &maybe_vec, SelectionVector *true_sel,
-                                                   SelectionVector *false_sel) {
+static inline const SelectionVector *DistinctNotNull(VectorData &ldata, VectorData &rdata, idx_t &count,
+                                                     idx_t &true_count, const SelectionVector *sel,
+                                                     SelectionVector &maybe_vec, OptionalSelection &true_vec,
+                                                     OptionalSelection &false_vec) {
 	// We need multiple, real selections
 	if (!sel) {
 		sel = &FlatVector::INCREMENTAL_SELECTION_VECTOR;
@@ -424,15 +403,15 @@ static inline const SelectionVector *SelectNotNull(VectorData &ldata, VectorData
 			const auto lnull = !ldata.validity.RowIsValid(idx);
 			const auto rnull = !rdata.validity.RowIsValid(idx);
 			if (lnull != rnull) {
-				AppendSelection(false_sel, false_count, idx);
+				false_vec.Append(false_count, idx);
 			} else if (lnull) {
-				AppendSelection(true_sel, true_count, idx);
+				true_vec.Append(true_count, idx);
 			} else {
-				AppendSelection(&maybe_vec, remaining, idx);
+				maybe_vec.set_index(remaining++, idx);
 			}
 		}
-		AdvanceSelection(true_sel, true_count);
-		AdvanceSelection(false_sel, false_count);
+		true_vec.Advance(true_count);
+		false_vec.Advance(false_count);
 		count = remaining;
 	}
 
@@ -443,11 +422,8 @@ template <class OP>
 static idx_t DistinctSelectStruct(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
                                   SelectionVector *true_sel, SelectionVector *false_sel) {
 	// Incrementally fill in successes and failures as we discover them
-	SelectionVector true_vec;
-	true_sel = InitializeSelection(true_vec, true_sel);
-
-	SelectionVector false_vec;
-	false_sel = InitializeSelection(false_vec, false_sel);
+	OptionalSelection true_vec(true_sel);
+	OptionalSelection false_vec(false_sel);
 
 	// For top-level comparisons, NULL semantics are in effect,
 	// so filter out any NULLs
@@ -457,7 +433,7 @@ static idx_t DistinctSelectStruct(Vector &left, Vector &right, const SelectionVe
 
 	idx_t result = 0;
 	SelectionVector maybe_vec(count);
-	sel = SelectNotNull(lvdata, rvdata, count, result, sel, maybe_vec, true_sel, false_sel);
+	sel = DistinctNotNull(lvdata, rvdata, count, result, sel, maybe_vec, true_vec, false_vec);
 
 	auto &lchildren = StructVector::GetEntries(left);
 	auto &rchildren = StructVector::GetEntries(right);
@@ -469,8 +445,8 @@ static idx_t DistinctSelectStruct(Vector &left, Vector &right, const SelectionVe
 		auto &rchild = *rchildren[col_no];
 
 		// Find what might match on the next position
-		auto possible = TemplatedDistinctSelectOperation<OP>(lchild, rchild, sel, count, &maybe_vec, false_sel);
-		AdvanceSelection(false_sel, count - possible);
+		auto possible = TemplatedDistinctSelectOperation<OP>(lchild, rchild, sel, count, &maybe_vec, false_vec);
+		false_vec.Advance(count - possible);
 		count = possible;
 		sel = &maybe_vec;
 	}
@@ -478,7 +454,7 @@ static idx_t DistinctSelectStruct(Vector &left, Vector &right, const SelectionVe
 	// Find everything that matches the last column exactly
 	auto &lchild = *lchildren[col_no];
 	auto &rchild = *rchildren[col_no];
-	result += TemplatedDistinctSelectOperation<OP>(lchild, rchild, sel, count, true_sel, false_sel);
+	result += TemplatedDistinctSelectOperation<OP>(lchild, rchild, sel, count, true_vec, false_vec);
 
 	return result;
 }
@@ -487,11 +463,8 @@ template <typename OP>
 static idx_t DistinctSelectList(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
                                 SelectionVector *true_sel, SelectionVector *false_sel) {
 	// Incrementally fill in successes and failures as we discover them
-	SelectionVector true_vec;
-	true_sel = InitializeSelection(true_vec, true_sel);
-
-	SelectionVector false_vec;
-	false_sel = InitializeSelection(false_vec, false_sel);
+	OptionalSelection true_vec(true_sel);
+	OptionalSelection false_vec(false_sel);
 
 	// For top-level comparisons, NULL semantics are in effect,
 	// so filter out any NULL LISTs
@@ -501,7 +474,7 @@ static idx_t DistinctSelectList(Vector &left, Vector &right, const SelectionVect
 
 	idx_t result = 0;
 	SelectionVector maybe_vec(count);
-	sel = SelectNotNull(lvdata, rvdata, count, result, sel, maybe_vec, true_sel, false_sel);
+	sel = DistinctNotNull(lvdata, rvdata, count, result, sel, maybe_vec, true_vec, false_vec);
 
 	if (count == 0) {
 		return result;
@@ -541,23 +514,23 @@ static idx_t DistinctSelectList(Vector &left, Vector &right, const SelectionVect
 			const auto &rentry = rdata[idx];
 			if (lentry.length == pos || rentry.length == pos) {
 				if (OP::Operation(lentry.length, rentry.length, false, false)) {
-					AppendSelection(true_sel, true_count, idx);
+					true_vec.Append(true_count, idx);
 				} else {
-					AppendSelection(false_sel, false_count, idx);
+					false_vec.Append(false_count, idx);
 				}
 			} else {
-				AppendSelection(&maybe_vec, remaining, idx);
+				maybe_vec.set_index(remaining++, idx);
 			}
 		}
-		AdvanceSelection(true_sel, true_count);
-		AdvanceSelection(false_sel, false_count);
+		true_vec.Advance(true_count);
+		false_vec.Advance(false_count);
 		count = remaining;
 		sel = &maybe_vec;
 		result += true_count;
 
 		// Find what might match on the next position
-		auto possible = TemplatedDistinctSelectOperation<OP>(lchild, rchild, sel, count, &maybe_vec, false_sel);
-		AdvanceSelection(false_sel, count - possible);
+		auto possible = TemplatedDistinctSelectOperation<OP>(lchild, rchild, sel, count, &maybe_vec, false_vec);
+		false_vec.Advance(count - possible);
 		count = possible;
 		sel = &maybe_vec;
 
