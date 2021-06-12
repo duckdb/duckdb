@@ -203,8 +203,7 @@ TEST_CASE("Basic prepared statement usage", "[sqlite3wrapper]") {
 	REQUIRE(sqlite3_bind_text(stmt.stmt, 4, "hello world", -1, nullptr) == SQLITE_OK);
 	// test for bind blob
 	REQUIRE(sqlite3_bind_blob(stmt.stmt, 5, "hello world", -1, nullptr) == SQLITE_OK);
-	REQUIRE(sqlite3_bind_blob(stmt.stmt, 5, "hello world", 10, nullptr) == SQLITE_OK);
-	REQUIRE(sqlite3_bind_blob(stmt.stmt, 5, "hello world", 20, nullptr) == SQLITE_OK);
+	REQUIRE(sqlite3_bind_blob(stmt.stmt, 5, "hello world", 11, nullptr) == SQLITE_OK);
 	REQUIRE(sqlite3_bind_blob(stmt.stmt, 5, NULL, 10, &free) == SQLITE_MISUSE);
 	buffer = (char *)malloc(6);
 	strcpy(buffer, "hello");
