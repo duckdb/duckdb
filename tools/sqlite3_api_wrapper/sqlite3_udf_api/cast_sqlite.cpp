@@ -3,7 +3,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
 
-bool CastSQLite::IsCastToVarchar(LogicalType type) {
+bool CastSQLite::RequiresCastToVarchar(LogicalType type) {
 	LogicalTypeId type_id = type.id();
 	switch (type_id) {
 	case LogicalTypeId::TINYINT:
@@ -22,27 +22,16 @@ bool CastSQLite::IsCastToVarchar(LogicalType type) {
 	}
 }
 
-void CastSQLite::InputVectorsToVarchar(DataChunk &data_chunk) {
+void CastSQLite::InputVectorsToVarchar(DataChunk &data_chunk, DataChunk &new_chunk) {
+	new_chunk.SetCardinality(data_chunk.size());
+	new_chunk.Initialize(data_chunk.GetTypes());
+
 	for (idx_t i = 0; i < data_chunk.ColumnCount(); ++i) {
-		if (CastSQLite::IsCastToVarchar(data_chunk.data[i].GetType())) {
-			LogicalType vchar_type(LogicalTypeId::VARCHAR);
-			Vector varchar_vector(vchar_type);
-
-			VectorOperations::Cast(data_chunk.data[i], varchar_vector, data_chunk.size(), true);
-
-			bool is_constant_vector = false;
-			if (data_chunk.data[i].GetVectorType() == VectorType::CONSTANT_VECTOR) {
-				is_constant_vector = true;
-				// it's needed to change to FLAT_VECTOR for the COPY works
-				data_chunk.data[i].SetVectorType(VectorType::FLAT_VECTOR);
-			}
-
-			data_chunk.data[i].SetType(vchar_type);
-			VectorOperations::Copy(varchar_vector, data_chunk.data[i], data_chunk.size(), 0, 0);
-
-			if (is_constant_vector) {
-				data_chunk.data[i].SetVectorType(VectorType::CONSTANT_VECTOR);
-			}
+		if (CastSQLite::RequiresCastToVarchar(data_chunk.data[i].GetType())) {
+			new_chunk.data[i].SetType(LogicalTypeId::VARCHAR);
+			VectorOperations::Cast(data_chunk.data[i], new_chunk.data[i], data_chunk.size(), true);
+		} else {
+			new_chunk.data[i].Reference(data_chunk.data[i]);
 		}
 	}
 }

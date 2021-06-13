@@ -18,6 +18,7 @@
 #include <string>
 #include <chrono>
 #include <cassert>
+#include <climits>
 
 #include "extension_helper.hpp"
 
@@ -50,15 +51,6 @@ struct sqlite3_stmt {
 	vector<string> bound_names;
 	//! The current column values converted to string, used and filled by sqlite3_column_text
 	unique_ptr<sqlite3_string_buffer[]> current_text;
-};
-
-struct sqlite3 {
-	unique_ptr<DuckDB> db;
-	unique_ptr<Connection> con;
-	string last_error;
-	int64_t last_changes = 0;
-	int64_t total_changes = 0;
-	int errCode; /* Most recent error code (SQLITE_*) */
 };
 
 void sqlite3_randomness(int N, void *pBuf) {
@@ -725,7 +717,8 @@ int sqlite3_errcode(sqlite3 *db) {
 	if (!db) {
 		return SQLITE_NOMEM;
 	}
-	return db->last_error.empty() ? SQLITE_OK : SQLITE_ERROR;
+	// return db->last_error.empty() ? SQLITE_OK : SQLITE_ERROR;
+	return db->errCode; //! We should return the exact error code
 }
 
 int sqlite3_extended_errcode(sqlite3 *db) {
@@ -1396,11 +1389,12 @@ SQLITE_API void sqlite3_result_error_code(sqlite3_context *, int) {
 }
 
 SQLITE_API void sqlite3_result_int(sqlite3_context *context, int val) {
-	context->result.u.i = val;
-	context->result.type = SQLiteTypeValue::INTEGER;
+	sqlite3_result_int64(context, val);
 }
 
-SQLITE_API void sqlite3_result_int64(sqlite3_context *, sqlite3_int64) {
+SQLITE_API void sqlite3_result_int64(sqlite3_context *context, sqlite3_int64 val) {
+	context->result.u.i = val;
+	context->result.type = SQLiteTypeValue::INTEGER;
 }
 
 SQLITE_API void sqlite3_result_null(sqlite3_context *context) {
@@ -1457,6 +1451,7 @@ const void *sqlite3_value_blob(sqlite3_value *pVal) {
 
 double sqlite3_value_double(sqlite3_value *pVal) {
 	if (!pVal) {
+		pVal->db->errCode = SQLITE_MISUSE;
 		return 0.0;
 	}
 	switch (pVal->type) {
@@ -1466,29 +1461,45 @@ double sqlite3_value_double(sqlite3_value *pVal) {
 		return (double)pVal->u.i;
 	case SQLiteTypeValue::TEXT:
 	case SQLiteTypeValue::BLOB:
-		return StrictCast::Operation<string_t, double>(pVal->str_t);
+		double res;
+		if (TryCast::Operation<string_t, double>(pVal->str_t, res)) {
+			return res;
+		}
 	default:
+		pVal->db->errCode = SQLITE_MISMATCH;
 		return 0.0;
 	}
 }
 
 int sqlite3_value_int(sqlite3_value *pVal) {
-	return sqlite3_value_int64(pVal);
+	int64_t res = sqlite3_value_int64(pVal);
+	if (res >= std::numeric_limits<int>::min() && res <= std::numeric_limits<int>::max()) {
+		return res;
+	}
+	pVal->db->errCode = SQLITE_MISMATCH;
+	return 0;
 }
 
 sqlite3_int64 sqlite3_value_int64(sqlite3_value *pVal) {
 	if (!pVal) {
+		pVal->db->errCode = SQLITE_MISUSE;
 		return 0;
 	}
+	int64_t res;
 	switch (pVal->type) {
 	case SQLiteTypeValue::INTEGER:
 		return pVal->u.i;
 	case SQLiteTypeValue::FLOAT:
-		return Cast::Operation<double, int64_t>(pVal->u.r);
+		if (TryCast::Operation<double, int64_t>(pVal->u.r, res)) {
+			return res;
+		}
 	case SQLiteTypeValue::TEXT:
 	case SQLiteTypeValue::BLOB:
-		return StrictCast::Operation<string_t, int64_t>(pVal->str_t);
+		if (TryCast::Operation<string_t, int64_t>(pVal->str_t, res)) {
+			return res;
+		}
 	default:
+		pVal->db->errCode = SQLITE_MISMATCH;
 		return 0;
 	}
 }
@@ -1499,6 +1510,7 @@ void *sqlite3_value_pointer(sqlite3_value *, const char *) {
 
 const unsigned char *sqlite3_value_text(sqlite3_value *pVal) {
 	if (!pVal) {
+		pVal->db->errCode = SQLITE_MISUSE;
 		return nullptr;
 	}
 
@@ -1509,9 +1521,8 @@ const unsigned char *sqlite3_value_text(sqlite3_value *pVal) {
 	}
 
 	if (pVal->type == SQLiteTypeValue::INTEGER || pVal->type == SQLiteTypeValue::FLOAT) {
-		Value value((pVal->type == SQLiteTypeValue::INTEGER) ? pVal->u.i : pVal->u.r);
+		Value value = (pVal->type == SQLiteTypeValue::INTEGER) ? Value::BIGINT(pVal->u.i) : Value::DOUBLE(pVal->u.r);
 		if (value.TryCastAs(LogicalType::VARCHAR) == false) {
-			printf("Could not cast 'integer' sqlite_value to 'text'.\n");
 			pVal->db->errCode = SQLITE_NOMEM;
 			return nullptr;
 		}
@@ -1530,7 +1541,7 @@ const unsigned char *sqlite3_value_text(sqlite3_value *pVal) {
 	if (pVal->type == SQLiteTypeValue::NULL_VALUE) {
 		return nullptr;
 	}
-	pVal->db->errCode = SQLITE_ERROR;
+	pVal->db->errCode = SQLITE_MISMATCH;
 	return nullptr;
 }
 

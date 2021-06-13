@@ -22,8 +22,8 @@ struct CastFromSQLiteValue {
 };
 
 struct CastSQLite {
-	static void InputVectorsToVarchar(DataChunk &data_chunk);
-	static bool IsCastToVarchar(LogicalType type);
+	static void InputVectorsToVarchar(DataChunk &data_chunk, DataChunk &new_chunk);
+	static bool RequiresCastToVarchar(LogicalType type);
 
 	static VectorType ToVectorsSQLiteValue(DataChunk &data_chunk, Vector &result,
 	                                       vector<unique_ptr<vector<sqlite3_value>>> &vec_sqlites,

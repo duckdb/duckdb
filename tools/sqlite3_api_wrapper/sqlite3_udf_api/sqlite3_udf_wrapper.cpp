@@ -7,15 +7,16 @@
 scalar_function_t SQLiteUDFWrapper::CreateSQLiteScalarFunction(scalar_sqlite_udf_t sqlite_udf, sqlite3 *db_sqlite3,
                                                                void *pApp) {
 	scalar_function_t udf_function = [=](DataChunk &args, ExpressionState &state, Vector &result) -> void {
-		CastSQLite::InputVectorsToVarchar(args);
+		DataChunk cast_chunk;
+		CastSQLite::InputVectorsToVarchar(args, cast_chunk);
 
 		// Orrify all input colunms
-		unique_ptr<VectorData[]> vec_data = args.Orrify();
+		unique_ptr<VectorData[]> vec_data = cast_chunk.Orrify();
 
 		// Vector of sqlite3_value for all input columns
-		vector<unique_ptr<vector<sqlite3_value>>> vec_sqlite(args.ColumnCount());
+		vector<unique_ptr<vector<sqlite3_value>>> vec_sqlite(cast_chunk.ColumnCount());
 		// Casting input data to vectors of sqlite_value
-		VectorType result_vec_type = CastSQLite::ToVectorsSQLiteValue(args, result, vec_sqlite, move(vec_data));
+		VectorType result_vec_type = CastSQLite::ToVectorsSQLiteValue(cast_chunk, result, vec_sqlite, move(vec_data));
 		result.SetVectorType(result_vec_type);
 
 		SQLiteTypeValue res_sqlite_value_type =
@@ -24,22 +25,22 @@ scalar_function_t SQLiteUDFWrapper::CreateSQLiteScalarFunction(scalar_sqlite_udf
 		sqlite3_context context;
 		context.pFunc.pUserData = pApp; // set the function data
 
-		size_t argc = args.ColumnCount();                     // num of args for the UDF
-		vector<sqlite3_value> res_sqlite_values(args.size()); // to store the results from the UDF calls
+		size_t argc = cast_chunk.ColumnCount();                     // num of args for the UDF
+		vector<sqlite3_value> res_sqlite_values(cast_chunk.size()); // to store the results from the UDF calls
 		vector<sqlite3_value> vec_values_to_free; // sqlite_values to free because some memory allocation has happened
+
+		unique_ptr<sqlite3_value *[]> argv = unique_ptr<sqlite3_value *[]>(new sqlite3_value *[argc]);
 
 		// traversing the vector of sqlite values
 		for (idx_t row_idx = 0; row_idx < res_sqlite_values.size(); ++row_idx) {
-
-			sqlite3_value **argv = new sqlite3_value *[argc];
-
 			// create a tuple from sqlite_values
 			for (idx_t col_idx = 0; col_idx < argc; ++col_idx) {
 				argv[col_idx] = &(*(vec_sqlite[col_idx]))[row_idx];
 				argv[col_idx]->db = db_sqlite3;
+				db_sqlite3->errCode = SQLITE_OK;
 			}
 			// call the UDF on that tuple
-			sqlite_udf(&context, argc, argv);
+			sqlite_udf(&context, argc, argv.get());
 
 			// check memory allocatated by the sqlite_values
 			for (idx_t col_idx = 0; col_idx < argc; ++col_idx) {
@@ -68,10 +69,6 @@ scalar_function_t SQLiteUDFWrapper::CreateSQLiteScalarFunction(scalar_sqlite_udf
 			}
 			// getting result
 			res_sqlite_values[row_idx] = context.result;
-
-			if (argc > 0) {
-				delete[] argv;
-			}
 		}
 
 		CastSQLite::ToVectorString(res_sqlite_value_type, res_sqlite_values, result);
