@@ -1,5 +1,5 @@
 add_library(
-  dsdgen_c OBJECT
+  dsdgen_c STATIC
   skip_days.cpp
   address.cpp
   build_support.cpp
