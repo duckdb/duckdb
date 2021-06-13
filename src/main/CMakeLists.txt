@@ -1,5 +1,9 @@
 add_subdirectory(relation)
 
+if (FORCE_QUERY_LOG)
+  add_definitions(-DDUCKDB_FORCE_QUERY_LOG="\""${FORCE_QUERY_LOG}"\"")
+endif()
+
 set(DUCKDB_MAIN_FILES
     appender.cpp
     client_context.cpp
