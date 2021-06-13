@@ -1,6 +1,6 @@
 add_subdirectory(relation)
 
-if (FORCE_QUERY_LOG)
+if(FORCE_QUERY_LOG)
   add_definitions(-DDUCKDB_FORCE_QUERY_LOG="\""${FORCE_QUERY_LOG}"\"")
 endif()
 
