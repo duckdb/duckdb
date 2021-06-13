@@ -3,7 +3,7 @@
 #include <vector>
 #include "util_functions.hpp"
 
-using namespace std;
+// using namespace std;
 
 // C++ wrapper class for the C wrapper API that wraps our C++ API, because why not
 class SQLiteDBWrapper {
@@ -17,7 +17,7 @@ public:
 	}
 
 	sqlite3 *db;
-	vector<vector<string>> results;
+	std::vector<std::vector<string>> results;
 
 public:
 	int Open(string filename) {

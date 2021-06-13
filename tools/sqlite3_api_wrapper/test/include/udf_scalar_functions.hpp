@@ -1,8 +1,8 @@
 #include "sqlite3.h"
+#include "udf_struct_sqlite3.h"
+
 #include <string>
 #include <string.h>
-
-using namespace std;
 
 // SQLite UDF to be register on DuckDB
 static void multiply10(sqlite3_context *context, int argc, sqlite3_value **argv) {
@@ -139,5 +139,45 @@ static void get_user_data(sqlite3_context *context, int argc, sqlite3_value **ar
 		sqlite3_result_text(context, str, str_len, nullptr);
 	} else {
 		sqlite3_result_null(context);
+	}
+}
+
+// get text value from interger or float types
+static void cast_numbers_to_text(sqlite3_context *context, int argc, sqlite3_value **argv) {
+	assert(sqlite3_value_type(argv[0]) == SQLITE_INTEGER || sqlite3_value_type(argv[0]) == SQLITE_FLOAT);
+	char *str = (char *)sqlite3_value_text(argv[0]); // argv[0] is a an integer
+	assert(sqlite3_value_type(argv[0]) == SQLITE_TEXT);
+	size_t len = sqlite3_value_bytes(argv[0]);
+	sqlite3_result_text(context, str, len, nullptr);
+}
+
+static void cast_to_int32(sqlite3_context *context, int argc, sqlite3_value **argv) {
+	// argv[0] is not a 32-bit integer, internal casting must occur
+	int value = sqlite3_value_int(argv[0]);
+	if (sqlite3_errcode(argv[0]->db) == SQLITE_MISMATCH) {
+		sqlite3_result_null(context);
+	} else {
+		sqlite3_result_int(context, value);
+	}
+}
+
+static void cast_to_int64(sqlite3_context *context, int argc, sqlite3_value **argv) {
+	// argv[0] is not a 64-bit integer, internal casting must occur
+	int64_t value = sqlite3_value_int64(argv[0]);
+	if (sqlite3_errcode(argv[0]->db) == SQLITE_MISMATCH) {
+		sqlite3_result_null(context);
+	} else {
+		sqlite3_result_int64(context, value);
+	}
+}
+
+static void cast_to_float(sqlite3_context *context, int argc, sqlite3_value **argv) {
+	assert(sqlite3_value_type(argv[0]) != SQLITE_FLOAT);
+	// argv[0] is not a float, internal casting must occur
+	double value = sqlite3_value_double(argv[0]);
+	if (sqlite3_errcode(argv[0]->db) == SQLITE_MISMATCH) {
+		sqlite3_result_null(context);
+	} else {
+		sqlite3_result_double(context, value);
 	}
 }

@@ -223,3 +223,88 @@ TEST_CASE("SQLite UDF wrapper: get user data", "[sqlite3wrapper]") {
 	REQUIRE(db_w.Execute("SELECT get_user_data('DUCKDB ____'::VARCHAR)"));
 	REQUIRE(db_w.CheckColumn(0, {"DUCKDB TEST"}));
 }
+
+TEST_CASE("SQLite UDF wrapper: testing sqlite cast numbers to text", "[sqlite3wrapper]") {
+	SQLiteDBWrapper db_w;
+
+	// open an in-memory db
+	REQUIRE(db_w.Open(":memory:"));
+	REQUIRE(sqlite3_create_function(db_w.db, "cast_numbers_to_text", 1, 0, nullptr, &cast_numbers_to_text, nullptr,
+	                                nullptr) == SQLITE_OK);
+
+	// testing conversion of integers to text
+	REQUIRE(db_w.Execute("CREATE TABLE integers(t_int TINYINT, s_int SMALLINT, i_int INTEGER, b_int BIGINT)"));
+	REQUIRE(db_w.Execute(
+	    "INSERT INTO integers VALUES (99, 9999, 99999999, 999999999999), (88, 8888, 88888888, 888888888888)"));
+
+	REQUIRE(db_w.Execute("SELECT cast_numbers_to_text(t_int) FROM integers"));
+	REQUIRE(db_w.CheckColumn(0, {"99", "88"}));
+
+	REQUIRE(db_w.Execute("SELECT cast_numbers_to_text(s_int) FROM integers"));
+	REQUIRE(db_w.CheckColumn(0, {"9999", "8888"}));
+
+	REQUIRE(db_w.Execute("SELECT cast_numbers_to_text(i_int) FROM integers"));
+	REQUIRE(db_w.CheckColumn(0, {"99999999", "88888888"}));
+
+	REQUIRE(db_w.Execute("SELECT cast_numbers_to_text(b_int) FROM integers"));
+	REQUIRE(db_w.CheckColumn(0, {"999999999999", "888888888888"}));
+
+	// testing conversion of floats to text
+	REQUIRE(db_w.Execute("CREATE TABLE floats(f FLOAT, d DOUBLE)"));
+	REQUIRE(db_w.Execute("INSERT INTO floats VALUES (11111.0, 11111.0), (22222.0, 22222.0)"));
+
+	REQUIRE(db_w.Execute("SELECT cast_numbers_to_text(f) FROM floats"));
+	REQUIRE(db_w.CheckColumn(0, {"11111.0", "22222.0"}));
+
+	REQUIRE(db_w.Execute("SELECT cast_numbers_to_text(d) FROM floats"));
+	REQUIRE(db_w.CheckColumn(0, {"11111.0", "22222.0"}));
+}
+
+TEST_CASE("SQLite UDF wrapper: testing more casts", "[sqlite3wrapper]") {
+	SQLiteDBWrapper db_w;
+
+	// open an in-memory db
+	REQUIRE(db_w.Open(":memory:"));
+
+	REQUIRE(db_w.Execute("CREATE TABLE tbl(str VARCHAR, blob BLOB, big BIGINT, f_real FLOAT)"));
+	REQUIRE(db_w.Execute("INSERT INTO tbl VALUES('DuckDB string', 'DuckDB blob', 999999999999999999, 55.0)"));
+
+	REQUIRE(sqlite3_create_function(db_w.db, "cast_to_int32", 1, 0, nullptr, &cast_to_int32, nullptr, nullptr) ==
+	        SQLITE_OK);
+	REQUIRE(db_w.Execute("SELECT cast_to_int32(str) FROM tbl")); // invalid string
+	REQUIRE(db_w.CheckColumn(0, {"NULL"}));
+
+	REQUIRE(db_w.Execute("SELECT cast_to_int32(blob) FROM tbl")); // invalid blob
+	REQUIRE(db_w.CheckColumn(0, {"NULL"}));
+
+	REQUIRE(db_w.Execute("SELECT cast_to_int32(big) FROM tbl")); // big int out of int-32 range
+	REQUIRE(db_w.CheckColumn(0, {"NULL"}));
+
+	REQUIRE(db_w.Execute("SELECT cast_to_int32(f_real) FROM tbl")); // float to int-32
+	REQUIRE(db_w.CheckColumn(0, {"55"}));
+
+	REQUIRE(sqlite3_create_function(db_w.db, "cast_to_int64", 1, 0, nullptr, &cast_to_int64, nullptr, nullptr) ==
+	        SQLITE_OK);
+	REQUIRE(db_w.Execute("SELECT cast_to_int64(str) FROM tbl"));
+	REQUIRE(db_w.CheckColumn(0, {"NULL"}));
+
+	REQUIRE(db_w.Execute("SELECT cast_to_int64(blob) FROM tbl"));
+	REQUIRE(db_w.CheckColumn(0, {"NULL"}));
+
+	REQUIRE(db_w.Execute("SELECT cast_to_int64(big) FROM tbl"));
+	REQUIRE(db_w.CheckColumn(0, {"999999999999999999"}));
+
+	REQUIRE(db_w.Execute("SELECT cast_to_int64(f_real) FROM tbl")); // float to int-64
+	REQUIRE(db_w.CheckColumn(0, {"55"}));
+
+	REQUIRE(sqlite3_create_function(db_w.db, "cast_to_float", 1, 0, nullptr, &cast_to_float, nullptr, nullptr) ==
+	        SQLITE_OK);
+	REQUIRE(db_w.Execute("SELECT cast_to_float(str) FROM tbl"));
+	REQUIRE(db_w.CheckColumn(0, {"NULL"}));
+
+	REQUIRE(db_w.Execute("SELECT cast_to_float(blob) FROM tbl"));
+	REQUIRE(db_w.CheckColumn(0, {"NULL"}));
+
+	REQUIRE(db_w.Execute("SELECT cast_to_float(big) FROM tbl"));
+	REQUIRE(db_w.CheckColumn(0, {"1e+18"}));
+}
