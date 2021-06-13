@@ -44,18 +44,16 @@ enum class ExpressionType : uint8_t {
 	COMPARE_LESSTHANOREQUALTO = 29,
 	// greater than equal operator between left and right
 	COMPARE_GREATERTHANOREQUALTO = 30,
-	// compare between left and right (inclusive bound)
-	COMPARE_BETWEEN = 31,
 	// IN operator [left IN (right1, right2, ...)]
 	COMPARE_IN = 35,
 	// NOT IN operator [left NOT IN (right1, right2, ...)]
 	COMPARE_NOT_IN = 36,
 	// IS DISTINCT FROM operator
 	COMPARE_DISTINCT_FROM = 37,
-	// compare final boundary
 
 	COMPARE_BETWEEN = 38,
 	COMPARE_NOT_BETWEEN = 39,
+	// compare final boundary
 	COMPARE_BOUNDARY_END = COMPARE_NOT_BETWEEN,
 	// IS NOT DISTINCT FROM operator
 	COMPARE_NOT_DISTINCT_FROM = 40,
