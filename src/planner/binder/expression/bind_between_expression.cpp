@@ -42,14 +42,18 @@ BindResult ExpressionBinder::BindExpression(BetweenExpression &expr, idx_t depth
 	}
 	if (!input.expr->HasSideEffects() && !input.expr->HasParameter()) {
 		// the expression does not have side effects: create two comparisons
-		auto left_compare = make_unique<BoundComparisonExpression>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, input.expr->Copy(), move(lower.expr));
-		auto right_compare = make_unique<BoundComparisonExpression>(ExpressionType::COMPARE_LESSTHANOREQUALTO, move(input.expr), move(upper.expr));
-		return BindResult(make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, move(left_compare), move(right_compare)));
+		auto left_compare = make_unique<BoundComparisonExpression>(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
+		                                                           input.expr->Copy(), move(lower.expr));
+		auto right_compare = make_unique<BoundComparisonExpression>(ExpressionType::COMPARE_LESSTHANOREQUALTO,
+		                                                            move(input.expr), move(upper.expr));
+		return BindResult(make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, move(left_compare),
+		                                                          move(right_compare)));
 	} else {
 		// expression has side effects: we cannot duplicate it
 		// create a bound_between directly
-		return BindResult(make_unique<BoundBetweenExpression>(move(input.expr), move(lower.expr), move(upper.expr), true, true));
+		return BindResult(
+		    make_unique<BoundBetweenExpression>(move(input.expr), move(lower.expr), move(upper.expr), true, true));
 	}
 }
 
-}
+} // namespace duckdb

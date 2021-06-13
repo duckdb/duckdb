@@ -1,4 +1,4 @@
-# name: test/sql/collate/test_collate_accent_insensitive.test
+# name: test/sql/collate/test_collate_between.test
 # description: Test accent insensitive collation
 # group: [collate]
 

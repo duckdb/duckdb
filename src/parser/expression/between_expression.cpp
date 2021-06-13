@@ -2,8 +2,10 @@
 
 namespace duckdb {
 
-BetweenExpression::BetweenExpression(unique_ptr<ParsedExpression> input_p, unique_ptr<ParsedExpression> lower_p, unique_ptr<ParsedExpression> upper_p)
-    : ParsedExpression(type, ExpressionClass::BETWEEN), input(move(input_p)), lower(move(lower_p)), upper(move(upper_p)) {
+BetweenExpression::BetweenExpression(unique_ptr<ParsedExpression> input_p, unique_ptr<ParsedExpression> lower_p,
+                                     unique_ptr<ParsedExpression> upper_p)
+    : ParsedExpression(ExpressionType::COMPARE_BETWEEN, ExpressionClass::BETWEEN), input(move(input_p)), lower(move(lower_p)),
+      upper(move(upper_p)) {
 }
 
 string BetweenExpression::ToString() const {
@@ -43,4 +45,4 @@ unique_ptr<ParsedExpression> BetweenExpression::Deserialize(ExpressionType type,
 	return make_unique<BetweenExpression>(move(input), move(lower), move(upper));
 }
 
-}
+} // namespace duckdb
