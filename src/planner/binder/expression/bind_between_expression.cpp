@@ -36,9 +36,9 @@ BindResult ExpressionBinder::BindExpression(BetweenExpression &expr, idx_t depth
 	if (input_type.id() == LogicalTypeId::VARCHAR) {
 		// handle collation
 		auto collation = StringType::GetCollation(input_type);
-		input.expr = PushCollation(context, move(input.expr), collation, expr.type == ExpressionType::COMPARE_EQUAL);
-		lower.expr = PushCollation(context, move(lower.expr), collation, expr.type == ExpressionType::COMPARE_EQUAL);
-		upper.expr = PushCollation(context, move(upper.expr), collation, expr.type == ExpressionType::COMPARE_EQUAL);
+		input.expr = PushCollation(context, move(input.expr), collation, false);
+		lower.expr = PushCollation(context, move(lower.expr), collation, false);
+		upper.expr = PushCollation(context, move(upper.expr), collation, false);
 	}
 	if (!input.expr->HasSideEffects() && !input.expr->HasParameter()) {
 		// the expression does not have side effects: create two comparisons
