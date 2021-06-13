@@ -1,0 +1,37 @@
+# name: test/sql/subquery/scalar/test_complex_correlated_subquery.test
+# description: Test complex correlated subqueries
+# group: [scalar]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT (SELECT UNNEST(i)) FROM (VALUES ([1])) tbl(i);
+----
+1
+
+query I
+SELECT (SELECT SUM(k) FROM (SELECT UNNEST(i)) tbl(k)) FROM (VALUES ([1, 2, 3])) tbl(i);
+----
+6
+
+query I
+SELECT 1=ANY(SELECT UNNEST(i)) tbl(k)) FROM (VALUES ([1, 2, 3])) tbl(i);
+----
+true
+
+
+query I
+SELECT 4=ANY(SELECT UNNEST(i)) tbl(k)) FROM (VALUES ([1, 2, 3])) tbl(i);
+----
+false
+
+query I
+SELECT NULL=ANY(SELECT UNNEST(i)) tbl(k)) FROM (VALUES ([1, 2, 3])) tbl(i);
+----
+NULL
+
+query I
+SELECT 4=ANY(SELECT UNNEST(i)) tbl(k)) FROM (VALUES ([1, 2, 3, NULL])) tbl(i);
+----
+NULL
