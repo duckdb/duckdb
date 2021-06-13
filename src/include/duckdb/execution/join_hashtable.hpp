@@ -19,6 +19,7 @@
 namespace duckdb {
 class BufferManager;
 class BufferHandle;
+class RowDataCollection;
 
 struct JoinHTScanState {
 	JoinHTScanState() : position(0), block_position(0) {
@@ -141,7 +142,7 @@ public:
 	}
 
 	//! The stringheap of the JoinHashTable
-	StringHeap string_heap;
+	unique_ptr<RowDataCollection> string_heap;
 	//! BufferManager
 	BufferManager &buffer_manager;
 	//! The types of the keys used in equality comparison

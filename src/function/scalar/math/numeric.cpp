@@ -85,6 +85,47 @@ static void BinaryDoubleFunctionWrapper(DataChunk &input, ExpressionState &state
 }
 
 //===--------------------------------------------------------------------===//
+// nextafter
+//===--------------------------------------------------------------------===//
+
+struct NextAfterOperator {
+	template <class TA, class TB, class TR>
+	static inline TR Operation(TA base, TB exponent) {
+		throw NotImplementedException("Unimplemented type for NextAfter Function");
+	}
+
+	template <class TA, class TB, class TR>
+	static inline double Operation(double input, double approximate_to) {
+		return nextafter(input, approximate_to);
+	}
+	template <class TA, class TB, class TR>
+	static inline float Operation(float input, float approximate_to) {
+		return nextafterf(input, approximate_to);
+	}
+};
+
+unique_ptr<FunctionData> BindNextAfter(ClientContext &context, ScalarFunction &function,
+                                       vector<unique_ptr<Expression>> &arguments) {
+	if ((arguments[0]->return_type != arguments[1]->return_type) ||
+	    (arguments[0]->return_type != LogicalType::FLOAT && arguments[0]->return_type != LogicalType::DOUBLE)) {
+		throw NotImplementedException("Unimplemented type for NextAfter Function");
+	}
+
+	return make_unique<FunctionData>();
+}
+
+void NextAfterFun::RegisterFunction(BuiltinFunctions &set) {
+	ScalarFunctionSet next_after_fun("nextafter");
+	next_after_fun.AddFunction(
+	    ScalarFunction("nextafter", {LogicalType::DOUBLE, LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                   BinaryDoubleFunctionWrapper<double, NextAfterOperator>, false, BindNextAfter));
+	next_after_fun.AddFunction(ScalarFunction("nextafter", {LogicalType::FLOAT, LogicalType::FLOAT}, LogicalType::FLOAT,
+	                                          BinaryDoubleFunctionWrapper<float, NextAfterOperator>, false,
+	                                          BindNextAfter));
+	set.AddFunction(next_after_fun);
+}
+
+//===--------------------------------------------------------------------===//
 // abs
 //===--------------------------------------------------------------------===//
 struct AbsOperator {

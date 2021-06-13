@@ -13,6 +13,7 @@
 namespace duckdb {
 class BlockHandle;
 class BufferHandle;
+class RowDataCollection;
 
 //! GroupedAggregateHashTable is a linear probing HT that is used for computing
 //! aggregates
@@ -100,7 +101,7 @@ public:
 	void Finalize();
 
 	//! The stringheap of the AggregateHashTable
-	StringHeap string_heap;
+	unique_ptr<RowDataCollection> string_heap;
 
 	//! The hash table load factor, when a resize is triggered
 	constexpr static float LOAD_FACTOR = 1.5;
