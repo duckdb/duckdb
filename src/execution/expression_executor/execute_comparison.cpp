@@ -414,22 +414,22 @@ idx_t VectorOperations::NotEquals(Vector &left, Vector &right, const SelectionVe
 
 idx_t VectorOperations::GreaterThan(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
                                     SelectionVector *true_sel, SelectionVector *false_sel) {
-	return TemplatedSelectOperation<duckdb::LessThan>(left, right, sel, count, true_sel, false_sel);
+	return TemplatedSelectOperation<duckdb::GreaterThan>(left, right, sel, count, true_sel, false_sel);
 }
 
 idx_t VectorOperations::GreaterThanEquals(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
                                           SelectionVector *true_sel, SelectionVector *false_sel) {
-	return TemplatedSelectOperation<duckdb::GreaterThan>(left, right, sel, count, true_sel, false_sel);
+	return TemplatedSelectOperation<duckdb::GreaterThanEquals>(left, right, sel, count, true_sel, false_sel);
 }
 
 idx_t VectorOperations::LessThan(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
                                  SelectionVector *true_sel, SelectionVector *false_sel) {
-	return TemplatedSelectOperation<duckdb::LessThanEquals>(left, right, sel, count, true_sel, false_sel);
+	return TemplatedSelectOperation<duckdb::LessThan>(left, right, sel, count, true_sel, false_sel);
 }
 
 idx_t VectorOperations::LessThanEquals(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
                                        SelectionVector *true_sel, SelectionVector *false_sel) {
-	return TemplatedSelectOperation<duckdb::GreaterThanEquals>(left, right, sel, count, true_sel, false_sel);
+	return TemplatedSelectOperation<duckdb::LessThanEquals>(left, right, sel, count, true_sel, false_sel);
 }
 
 idx_t ExpressionExecutor::Select(const BoundComparisonExpression &expr, ExpressionState *state,
@@ -449,13 +449,13 @@ idx_t ExpressionExecutor::Select(const BoundComparisonExpression &expr, Expressi
 	case ExpressionType::COMPARE_NOTEQUAL:
 		return VectorOperations::NotEquals(left, right, sel, count, true_sel, false_sel);
 	case ExpressionType::COMPARE_LESSTHAN:
-		return VectorOperations::GreaterThan(left, right, sel, count, true_sel, false_sel);
-	case ExpressionType::COMPARE_GREATERTHAN:
-		return VectorOperations::GreaterThanEquals(left, right, sel, count, true_sel, false_sel);
-	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
 		return VectorOperations::LessThan(left, right, sel, count, true_sel, false_sel);
-	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+	case ExpressionType::COMPARE_GREATERTHAN:
+		return VectorOperations::GreaterThan(left, right, sel, count, true_sel, false_sel);
+	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
 		return VectorOperations::LessThanEquals(left, right, sel, count, true_sel, false_sel);
+	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		return VectorOperations::GreaterThanEquals(left, right, sel, count, true_sel, false_sel);
 	case ExpressionType::COMPARE_DISTINCT_FROM:
 		return VectorOperations::SelectDistinctFrom(left, right, sel, count, true_sel, false_sel);
 	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
