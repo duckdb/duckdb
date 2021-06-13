@@ -219,4 +219,3 @@ query I
 SELECT COUNT(*) FROM integers WHERE 1 BETWEEN 0 AND i-1
 ----
 2
-
