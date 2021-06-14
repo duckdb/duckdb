@@ -721,6 +721,7 @@ jobs:
 
     env:
       BUILD_JDBC: 1
+      FORCE_QUERY_LOG: sqlancer_log.tmp
       GEN: ninja
 
     steps:
@@ -752,6 +753,7 @@ jobs:
 
     env:
       BUILD_JDBC: 1
+      FORCE_QUERY_LOG: sqlancer_log.tmp
       GEN: ninja
 
     steps:
