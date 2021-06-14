@@ -33,18 +33,20 @@
  * Contributors:
  * Gradient Systems
  */
-#include "config.h"
-#include "porting.h"
-#include <stdio.h>
 #include "address.h"
-#include "dist.h"
-#include "r_params.h"
-#include "genrand.h"
+
 #include "columns.h"
+#include "config.h"
+#include "dist.h"
+#include "genrand.h"
+#include "permute.h"
+#include "porting.h"
+#include "r_params.h"
+#include "scaling.h"
 #include "tables.h"
 #include "tdefs.h"
-#include "permute.h"
-#include "scaling.h"
+
+#include <stdio.h>
 
 static int s_nCountyCount = 0;
 static int s_nCityCount = 0;
@@ -252,6 +254,11 @@ int mk_city(int nTable, char **dest) {
  * Side Effects:
  * TODO: None
  */
+#if defined(__has_feature)
+#if __has_feature(address_sanitizer)
+__attribute__((no_sanitize("address")))
+#endif
+#endif
 int city_hash(int nTable, char *name) {
 	char *cp;
 	int hash_value = 0, res = 0;

@@ -35,24 +35,24 @@
  */
 #include "config.h"
 #include "porting.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #ifdef WIN32
-#include <search.h>
 #include <limits.h>
+#include <search.h>
 #endif
-#include "config.h"
-#include "porting.h"
-#include "decimal.h"
-#include "date.h"
-#include "genrand.h"
-#include "dist.h"
-#include "r_params.h"
-#include "params.h"
-
 #include "columns.h"
-#include "tables.h"
+#include "config.h"
+#include "date.h"
+#include "decimal.h"
+#include "dist.h"
+#include "genrand.h"
+#include "params.h"
+#include "porting.h"
+#include "r_params.h"
 #include "streams.h"
+#include "tables.h"
 
 static long Mult = 16807; /* the multiplier */
 static long nQ = 127773;  /* the quotient MAXINT / Mult */
@@ -511,6 +511,11 @@ int genrand_date(date_t *dest, int dist, date_t *min, date_t *max, date_t *mean,
  * TODO:
  */
 // FIXME: allow re-init
+#if defined(__has_feature)
+#if __has_feature(address_sanitizer)
+__attribute__((no_sanitize("address")))
+#endif
+#endif
 void init_rand(void) {
 	static int bInit = 0;
 	int i, skip, nSeed;
