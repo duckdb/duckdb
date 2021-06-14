@@ -54,6 +54,8 @@ bool ParsedExpression::Equals(const BaseExpression *other) const {
 		return false;
 	}
 	switch (expression_class) {
+	case ExpressionClass::BETWEEN:
+		return BetweenExpression::Equals((BetweenExpression *)this, (BetweenExpression *)other);
 	case ExpressionClass::CASE:
 		return CaseExpression::Equals((CaseExpression *)this, (CaseExpression *)other);
 	case ExpressionClass::CAST:
@@ -113,6 +115,9 @@ unique_ptr<ParsedExpression> ParsedExpression::Deserialize(Deserializer &source)
 	auto alias = source.Read<string>();
 	unique_ptr<ParsedExpression> result;
 	switch (expression_class) {
+	case ExpressionClass::BETWEEN:
+		result = BetweenExpression::Deserialize(type, source);
+		break;
 	case ExpressionClass::CASE:
 		result = CaseExpression::Deserialize(type, source);
 		break;
