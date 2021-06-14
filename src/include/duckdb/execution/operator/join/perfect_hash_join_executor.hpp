@@ -19,6 +19,9 @@ namespace duckdb {
 constexpr size_t BUILD_THRESHOLD = 1 << 14; // 16384
 constexpr size_t MIN_THRESHOLD = 1 << 7;    // 128
 
+class PhysicalHashJoinState;
+class HashJoinGlobalState;
+
 struct PerfectHashJoinState {
 	Value build_min;
 	Value build_max;
@@ -35,20 +38,18 @@ struct PerfectHashJoinState {
 //! PhysicalHashJoin represents a hash loop join between two tables
 class PerfectHashJoinExecutor {
 public:
-	PerfectHashJoinExecutor(PerfectHashJoinState join_state) {
-	}
+	PerfectHashJoinExecutor(PerfectHashJoinState join_state);
+	bool ExecutePerfectHashJoin(ExecutionContext &context, DataChunk &chunk, PhysicalHashJoinState *state,
+	                            JoinHashTable *ht_ptr, PhysicalOperator *operator_child) const;
+	bool CheckRequirementsForPerfectHashJoin(JoinHashTable *ht_ptr, HashJoinGlobalState *hj_global_state);
+	void BuildPerfectHashStructure(JoinHashTable *ht_ptr, JoinHTScanState &join_ht_state, LogicalType type);
+	void FillSelectionVectorSwitch(Vector &source, SelectionVector &sel_vec, idx_t count) const;
+	template <typename T>
+	void TemplatedFillSelectionVector(Vector &source, SelectionVector &sel_vec, idx_t count) const;
+
+private:
 	PerfectHashJoinState pjoin_state;
-	/*
-	    bool ExecuteInvisibleJoin(ExecutionContext &context, DataChunk &chunk, PhysicalHashJoinState *state,
-	                              JoinHashTable *ht_ptr) const {
-	    }
-	        bool CheckRequirementsForPerfectHashJoin(JoinHashTable *ht_ptr, HashJoinGlobalState &join_global_state);
-	        void BuildPerfectHashStructure(JoinHashTable *ht_ptr, JoinHTScanState &join_ht_state, LogicalType type);
-	        void FillSelectionVectorSwitch(Vector &source, SelectionVector &sel_vec, idx_t count);
-	        template <typename T>
-	        void TemplatedFillSelectionVector(Vector &source, SelectionVector &sel_vec, idx_t count);
-	        bool HasDuplicates(JoinHashTable *ht_ptr);
-	        void AppendToBuild(DataChunk &join_keys, DataChunk &build, std::vector<Vector> &build_columns) const; */
+	bool hasInvisibleJoin {false};
 };
 
 } // namespace duckdb

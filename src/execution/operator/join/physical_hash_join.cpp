@@ -17,7 +17,8 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
                                    const vector<idx_t> &right_projection_map_p, vector<LogicalType> delim_types,
                                    idx_t estimated_cardinality, PerfectHashJoinState join_state)
     : PhysicalComparisonJoin(op, PhysicalOperatorType::HASH_JOIN, move(cond), join_type, estimated_cardinality),
-      right_projection_map(right_projection_map_p), delim_types(move(delim_types)), pjoin_state(join_state) {
+      right_projection_map(right_projection_map_p), delim_types(move(delim_types)) {
+
 	children.push_back(move(left));
 	children.push_back(move(right));
 
@@ -30,6 +31,7 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
 	if (join_type != JoinType::ANTI && join_type != JoinType::SEMI && join_type != JoinType::MARK) {
 		build_types = LogicalOperator::MapTypes(children[1]->GetTypes(), right_projection_map);
 	}
+	perfect_join_executor = make_unique<PerfectHashJoinExecutor>(join_state);
 }
 
 PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
@@ -135,11 +137,11 @@ void PhysicalHashJoin::Sink(ExecutionContext &context, GlobalOperatorState &stat
 // Finalize
 //===--------------------------------------------------------------------===//
 bool PhysicalHashJoin::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> state) {
-	auto &sink = (HashJoinGlobalState &)*state;
+	auto sink = reinterpret_cast<HashJoinGlobalState *>(state.get());
 	// check for possible perfect hash table
-	if (!CheckRequirementsForInvisibleJoin(sink.hash_table.get(), sink)) {
+	if (!perfect_join_executor->CheckRequirementsForPerfectHashJoin(sink->hash_table.get(), sink)) {
 		// no invisible join, just finish building the regular hash table
-		sink.hash_table->Finalize();
+		sink->hash_table->Finalize();
 	}
 
 	PhysicalSink::Finalize(pipeline, context, move(state));
@@ -159,32 +161,6 @@ unique_ptr<PhysicalOperatorState> PhysicalHashJoin::GetOperatorState() {
 	return move(state);
 }
 
-void PhysicalHashJoin::PrepareForInvisibleJoin(ExecutionContext &context, DataChunk &result,
-                                               PhysicalHashJoinState *physical_state) const {
-	auto &sink = (HashJoinGlobalState &)*sink_state;
-	auto ht_ptr = sink.hash_table.get();
-	if (hasInvisibleJoin) {
-		// select the keys that are in the min-max range
-		physical_state->sel_vec.Initialize(ht_ptr->size());
-		auto &keys_vec = physical_state->join_keys.data[0];
-		SelectionVector sel;
-		sel.Initialize((sel_t *)keys_vec.GetData());
-		auto keys_count = physical_state->join_keys.size();
-		// if fast pass does not apply use selection vector instead
-		// reference the probe data to the result
-		// on the RHS, we need to fetch the data from the build structure and slice it using the new selection
-		// vector
-		for (idx_t i = 0; i < ht_ptr->build_types.size(); i++) {
-			auto &res_vector = result.data[physical_state->child_chunk.ColumnCount() + i];
-			D_ASSERT(res_vector.GetType() == ht_ptr->build_types[i]);
-			auto &build_vec = ht_ptr->columns[i];
-			res_vector.Reference(build_vec); //
-			res_vector.Slice(sel, keys_count);
-		}
-		physical_state->has_done_allocation = true;
-	}
-}
-
 void PhysicalHashJoin::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
                                         PhysicalOperatorState *state_p) const {
 	auto state = reinterpret_cast<PhysicalHashJoinState *>(state_p);
@@ -195,9 +171,10 @@ void PhysicalHashJoin::GetChunkInternal(ExecutionContext &context, DataChunk &ch
 		return;
 	}
 	// We first try a probe with an invisible join opt, otherwise we do the standard probe
-	/* if (IsInnerJoin(join_type) && ExecuteInvisibleJoin(context, chunk, state, sink.hash_table.get())) {
-	    return;
-	} */
+	if (perfect_join_executor->ExecutePerfectHashJoin(context, chunk, state, sink.hash_table.get(),
+	                                                  children[0].get())) {
+		return;
+	}
 	do {
 		ProbeHashTable(context, chunk, state);
 		if (chunk.size() == 0) {
@@ -282,143 +259,5 @@ void PhysicalHashJoin::Combine(ExecutionContext &context, GlobalOperatorState &g
 	auto &state = (HashJoinLocalState &)lstate;
 	context.thread.profiler.Flush(this, &state.build_executor, "build_executor", 1);
 	context.client.profiler->Flush(context.thread.profiler);
-}
-
-bool PhysicalHashJoin::ExecuteInvisibleJoin(ExecutionContext &context, DataChunk &result,
-                                            PhysicalHashJoinState *physical_state, JoinHashTable *ht_ptr) const {
-	// We only probe if the optimized hash table has been built
-	if (!hasInvisibleJoin) {
-		return false;
-	}
-
-	// fetch the chunk to join
-	children[0]->GetChunk(context, physical_state->child_chunk, physical_state->child_state.get());
-	if (physical_state->child_chunk.size() == 0) {
-		// no more keys to probe
-		return true;
-	}
-	// fetch the join keys from the chunk
-	physical_state->probe_executor.Execute(physical_state->child_chunk, physical_state->join_keys);
-	// select the keys that are in the min-max range
-	auto &keys_vec = physical_state->join_keys.data[0];
-	Vector source(keys_vec.GetType());
-	auto keys_count = physical_state->join_keys.size();
-	SelectionVector sel_vec(keys_count);
-	FillSelectionVectorSwitch(keys_vec, sel_vec, keys_count);
-	// reference the probe data to the result
-	result.Reference(physical_state->child_chunk);
-	// on the RHS, we need to fetch the data from the build structure and slice it using the new selection vector
-	for (idx_t i = 0; i < ht_ptr->build_types.size(); i++) {
-		auto &res_vector = result.data[physical_state->child_chunk.ColumnCount() + i];
-		D_ASSERT(res_vector.GetType() == ht_ptr->build_types[i]);
-		auto &build_vec = ht_ptr->columns[i];
-		res_vector.Reference(build_vec); //
-		res_vector.Slice(sel_vec, keys_count);
-	}
-	return true;
-	/* 	// We only probe if the optimized hash table has been built
-	    if (!hasInvisibleJoin) {
-	        return false;
-	    }
-
-	    // fetch the chunk to join
-	    children[0]->GetChunk(context, physical_state->child_chunk, physical_state->child_state.get());
-	    result.Reference(physical_state->child_chunk);
-	    if (physical_state->child_chunk.size() == 0) {
-	        // no more keys to probe
-	        return true;
-	    }
-	    // fetch the join keys from the chunk
-	    physical_state->probe_executor.Execute(physical_state->child_chunk, physical_state->join_keys);
-
-	    // TODO if its not minus 0 or not 32 bits, apply the switch
-	    // reference the probe data to the result
-	    // on the RHS, we need to fetch the data from the build structure and slice it using the new selection vector
-	    return true; */
-}
-
-bool PhysicalHashJoin::CheckRequirementsForInvisibleJoin(JoinHashTable *ht_ptr, HashJoinGlobalState &join_state) {
-	// first check the build size
-	if (!pjoin_state.is_build_small) {
-		return false;
-	}
-
-	// check for nulls
-	if (ht_ptr->has_null) {
-		return false;
-	}
-
-	// Store build side as a set of columns
-	BuildPerfectHashStructure(ht_ptr, join_state.ht_scan_state, join_state.key_type);
-	if (HasDuplicates(ht_ptr)) {
-		return false;
-	}
-	hasInvisibleJoin = true;
-	return true;
-}
-
-bool PhysicalHashJoin::HasDuplicates(JoinHashTable *ht_ptr) {
-	return false;
-}
-
-void PhysicalHashJoin::BuildPerfectHashStructure(JoinHashTable *hash_table_ptr, JoinHTScanState &join_ht_state,
-                                                 LogicalType key_type) {
-	// allocate memory for each column
-	auto build_size =
-	    (pjoin_state.is_build_min_small) ? hash_table_ptr->size() + MIN_THRESHOLD : hash_table_ptr->size();
-	for (auto type : hash_table_ptr->build_types) {
-		hash_table_ptr->columns.emplace_back(type, build_size);
-	}
-	// Fill columns with build data
-	hash_table_ptr->FullScanHashTable(join_ht_state, key_type);
-}
-
-template <typename T>
-void PhysicalHashJoin::TemplatedFillSelectionVector(Vector &source, SelectionVector &sel_vec, idx_t count) const {
-	/* 	auto min_value = pjoin_state.build_min.GetValue<T>();
-	    auto max_value = pjoin_state.build_max.GetValue<T>(); */
-
-	auto vector_data = FlatVector::GetData<T>(source);
-	// generate the selection vector
-	for (idx_t i = 0; i != count; ++i) {
-		// add index to selection vector if value in the range
-		auto input_value = vector_data[i];
-		//		if (min_value <= input_value && input_value <= max_value) {
-		auto idx = input_value;
-		sel_vec.set_index(i, idx);
-	}
-	//	}
-}
-
-void PhysicalHashJoin::FillSelectionVectorSwitch(Vector &source, SelectionVector &sel_vec, idx_t count) const {
-	switch (source.GetType().id()) {
-	case LogicalTypeId::TINYINT:
-		TemplatedFillSelectionVector<int8_t>(source, sel_vec, count);
-		break;
-	case LogicalTypeId::SMALLINT:
-		TemplatedFillSelectionVector<int16_t>(source, sel_vec, count);
-		break;
-	case LogicalTypeId::INTEGER:
-		TemplatedFillSelectionVector<int32_t>(source, sel_vec, count);
-		break;
-	case LogicalTypeId::BIGINT:
-		TemplatedFillSelectionVector<int64_t>(source, sel_vec, count);
-		break;
-	case LogicalTypeId::UTINYINT:
-		TemplatedFillSelectionVector<uint8_t>(source, sel_vec, count);
-		break;
-	case LogicalTypeId::USMALLINT:
-		TemplatedFillSelectionVector<uint16_t>(source, sel_vec, count);
-		break;
-	case LogicalTypeId::UINTEGER:
-		TemplatedFillSelectionVector<uint32_t>(source, sel_vec, count);
-		break;
-	case LogicalTypeId::UBIGINT:
-		TemplatedFillSelectionVector<uint64_t>(source, sel_vec, count);
-		break;
-	default:
-		throw NotImplementedException("Type not supported");
-		break;
-	}
 }
 } // namespace duckdb

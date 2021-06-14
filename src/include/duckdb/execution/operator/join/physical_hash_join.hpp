@@ -72,9 +72,8 @@ public:
 	vector<LogicalType> build_types;
 	//! Duplicate eliminated types; only used for delim_joins (i.e. correlated subqueries)
 	vector<LogicalType> delim_types;
-	//! Struct for perfect hash optmization
-	PerfectHashJoinState pjoin_state;
-	bool hasInvisibleJoin {false};
+	//! Checks and execute perfect hash join optimization
+	unique_ptr<PerfectHashJoinExecutor> perfect_join_executor{nullptr};
 
 public:
 	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;
@@ -86,17 +85,7 @@ public:
 
 	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
-	bool ExecuteInvisibleJoin(ExecutionContext &context, DataChunk &chunk, PhysicalHashJoinState *state,
-	                          JoinHashTable *ht_ptr) const;
-	bool CheckRequirementsForInvisibleJoin(JoinHashTable *ht_ptr, HashJoinGlobalState &join_global_state);
-	void BuildPerfectHashStructure(JoinHashTable *ht_ptr, JoinHTScanState &join_ht_state, LogicalType key_type);
-	void FillSelectionVectorSwitch(Vector &source, SelectionVector &sel_vec, idx_t count) const;
-	template <typename T>
-	void TemplatedFillSelectionVector(Vector &source, SelectionVector &sel_vec, idx_t count) const;
-	bool HasDuplicates(JoinHashTable *ht_ptr);
-
 	void FinalizeOperatorState(PhysicalOperatorState &state, ExecutionContext &context) override;
-	void PrepareForInvisibleJoin(ExecutionContext &context, DataChunk &result, PhysicalHashJoinState *state) const;
 
 private:
 	void ProbeHashTable(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) const;
