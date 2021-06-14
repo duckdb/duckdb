@@ -11,13 +11,6 @@
 #include "sqlite3.h"
 #include "sqlite3_value_type.hpp"
 
-#define SQLITE_UTF8          1 /* IMP: R-37514-35566 */
-#define SQLITE_UTF16LE       2 /* IMP: R-03371-37637 */
-#define SQLITE_UTF16BE       3 /* IMP: R-51971-34154 */
-#define SQLITE_UTF16         4 /* Use native byte order */
-#define SQLITE_ANY           5 /* Deprecated */
-#define SQLITE_UTF16_ALIGNED 8 /* sqlite3_create_collation only */
-
 // it was moved to here because the UDF API must know the structure members
 struct sqlite3 {
 	std::unique_ptr<duckdb::DuckDB> db;

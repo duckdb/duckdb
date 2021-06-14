@@ -3,6 +3,9 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
 
+// needed to use namespace (some duckdb types were not recognized automatically)
+using namespace duckdb;
+
 bool CastSQLite::RequiresCastToVarchar(LogicalType type) {
 	LogicalTypeId type_id = type.id();
 	switch (type_id) {

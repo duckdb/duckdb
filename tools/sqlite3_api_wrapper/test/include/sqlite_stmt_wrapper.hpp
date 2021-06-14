@@ -10,7 +10,7 @@ public:
 	}
 
 	sqlite3_stmt *stmt;
-	string error_message;
+	std::string error_message;
 
 	int Prepare(sqlite3 *db, const char *zSql, int nByte, const char **pzTail) {
 		Finalize();
@@ -27,7 +27,7 @@ public:
 		}
 
 		int rc = SQLITE_ROW;
-		vector<vector<string>> results; /* To print the result */
+		std::vector<std::vector<std::string>> results; /* To print the result */
 
 		size_t nCol = sqlite3_column_count(stmt);
 		char **azCols = (char **)malloc(nCol * sizeof(const char *)); /* Names of result columns */
@@ -35,14 +35,14 @@ public:
 		if (!azCols || !azVals) {
 			rc = SQLITE_NOMEM;
 		}
-		for (idx_t i = 0; i < nCol; i++) {
+		for (duckdb::idx_t i = 0; i < nCol; i++) {
 			azCols[i] = (char *)sqlite3_column_name(stmt, i);
 		}
 
 		while (rc == SQLITE_ROW) {
 			rc = sqlite3_step(stmt);
 			if (rc == SQLITE_ROW) {
-				for (idx_t i = 0; i < nCol; i++) {
+				for (duckdb::idx_t i = 0; i < nCol; i++) {
 					azVals[i] = (char *)sqlite3_column_text(stmt, i);
 					if (!azVals[i] && sqlite3_column_type(stmt, i) != SQLITE_NULL) {
 						rc = SQLITE_NOMEM;

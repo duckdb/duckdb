@@ -3,8 +3,6 @@
 #include <vector>
 #include "util_functions.hpp"
 
-// using namespace std;
-
 // C++ wrapper class for the C wrapper API that wraps our C++ API, because why not
 class SQLiteDBWrapper {
 public:
@@ -17,19 +15,19 @@ public:
 	}
 
 	sqlite3 *db;
-	std::vector<std::vector<string>> results;
+	std::vector<std::vector<std::string>> results;
 
 public:
-	int Open(string filename) {
+	int Open(std::string filename) {
 		return sqlite3_open(filename.c_str(), &db) == SQLITE_OK;
 	}
 
-	string GetErrorMessage() {
+	std::string GetErrorMessage() {
 		auto err = sqlite3_errmsg(db);
-		return err ? string(err) : string();
+		return err ? std::string(err) : std::string();
 	}
 
-	bool Execute(string query) {
+	bool Execute(std::string query) {
 		results.clear();
 		char *errmsg = nullptr;
 		int rc = sqlite3_exec(db, query.c_str(), concatenate_results, &results, &errmsg);
@@ -43,7 +41,7 @@ public:
 		print_result(results);
 	}
 
-	bool CheckColumn(size_t column, vector<string> expected_data) {
+	bool CheckColumn(size_t column, std::vector<std::string> expected_data) {
 		if (column >= results.size()) {
 			fprintf(stderr, "Column index is out of range!\n");
 			PrintResult();

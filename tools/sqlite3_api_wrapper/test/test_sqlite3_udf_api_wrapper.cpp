@@ -10,8 +10,6 @@
 // All UDFs are implemented in "udf_scalar_functions.hpp"
 #include "udf_scalar_functions.hpp"
 
-using namespace std;
-
 TEST_CASE("SQLite UDF wrapper: basic usage", "[sqlite3wrapper]") {
 	SQLiteDBWrapper db_w;
 

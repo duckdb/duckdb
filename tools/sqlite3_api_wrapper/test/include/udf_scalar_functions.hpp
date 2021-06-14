@@ -2,7 +2,6 @@
 #include "udf_struct_sqlite3.h"
 
 #include <string>
-#include <string.h>
 
 // SQLite UDF to be register on DuckDB
 static void multiply10(sqlite3_context *context, int argc, sqlite3_value **argv) {

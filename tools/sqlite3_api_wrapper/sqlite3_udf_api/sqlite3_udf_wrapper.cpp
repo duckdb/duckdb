@@ -4,9 +4,9 @@
 
 #include "sqlite3.h"
 
-scalar_function_t SQLiteUDFWrapper::CreateSQLiteScalarFunction(scalar_sqlite_udf_t sqlite_udf, sqlite3 *db_sqlite3,
-                                                               void *pApp) {
-	scalar_function_t udf_function = [=](DataChunk &args, ExpressionState &state, Vector &result) -> void {
+duckdb::scalar_function_t duckdb::SQLiteUDFWrapper::CreateSQLiteScalarFunction(duckdb::scalar_sqlite_udf_t sqlite_udf,
+                                                                               sqlite3 *db_sqlite3, void *pApp) {
+	duckdb::scalar_function_t udf_function = [=](DataChunk &args, ExpressionState &state, Vector &result) -> void {
 		DataChunk cast_chunk;
 		CastSQLite::InputVectorsToVarchar(args, cast_chunk);
 

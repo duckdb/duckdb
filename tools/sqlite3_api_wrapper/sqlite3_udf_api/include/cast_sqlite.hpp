@@ -6,8 +6,7 @@
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 
-using namespace duckdb;
-using namespace std;
+namespace duckdb {
 
 struct CastFromSQLiteValue {
 	/**
@@ -157,5 +156,8 @@ int64_t CastFromSQLiteValue::GetValue(sqlite3_value input);
 template <>
 double CastFromSQLiteValue::GetValue(sqlite3_value input);
 
+// GET value from sqlite string (sqlite.str_t) ******/
 template <>
 string_t CastFromSQLiteValue::GetValue(sqlite3_value input);
+
+} // namespace duckdb
