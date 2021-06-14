@@ -1,0 +1,111 @@
+# name: test/sql/order/test_limit_parameter.test
+# description: Test LIMIT with a parameter (issue 1866)
+# group: [order]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+SELECT 'Test' LIMIT ?
+
+statement ok
+PREPARE v1 AS SELECT 'Test' LIMIT ?
+
+query I
+EXECUTE v1(1)
+----
+Test
+
+query I
+EXECUTE v1(0)
+----
+
+statement ok
+PREPARE v2 AS SELECT * FROM RANGE(1000000000) LIMIT ? OFFSET ?
+
+query I
+EXECUTE v2(3, 0)
+----
+0
+1
+2
+
+query I
+EXECUTE v2(3, 17)
+----
+17
+18
+19
+
+statement ok
+PREPARE v3 AS SELECT * FROM RANGE(1000000000) LIMIT 2 OFFSET ?
+
+query I
+EXECUTE v3(0)
+----
+0
+1
+
+query I
+EXECUTE v3(17)
+----
+17
+18
+
+statement ok
+PREPARE v4 AS SELECT * FROM RANGE(1000000000) LIMIT ? OFFSET 17
+
+query I
+EXECUTE v4(3)
+----
+17
+18
+19
+
+query I
+EXECUTE v4(6)
+----
+17
+18
+19
+20
+21
+22
+
+statement ok
+PREPARE v5 AS SELECT * FROM RANGE(1000000000) LIMIT (SELECT ?::INT) OFFSET (SELECT ?::INT)
+
+query I
+EXECUTE v5(3, 0)
+----
+0
+1
+2
+
+query I
+EXECUTE v5(3, 17)
+----
+17
+18
+19
+
+statement ok
+PREPARE v6 AS SELECT * FROM RANGE(1000000000) LIMIT 3+? OFFSET ?+2*?
+
+query I
+EXECUTE v6(1, 0, 0)
+----
+0
+1
+2
+3
+
+query I
+EXECUTE v6(3, 1, 2)
+----
+5
+6
+7
+8
+9
+10
