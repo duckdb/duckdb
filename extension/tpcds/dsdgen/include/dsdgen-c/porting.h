@@ -86,7 +86,6 @@ char *strdup(const char *);
 #include <windows.h>
 #include <winbase.h>
 #include <io.h>
-#pragma comment(lib, "ws2_32.lib")
 #define random                rand
 #define strncasecmp           _strnicmp
 #define strcasecmp            _stricmp
