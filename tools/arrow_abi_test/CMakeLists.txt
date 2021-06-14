@@ -2,6 +2,8 @@
 # callbacks
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address")
 include(ExternalProject)
+
+
 ExternalProject_Add(
   arrow_ep
   GIT_REPOSITORY "https://github.com/apache/arrow"
@@ -23,32 +25,67 @@ ExternalProject_Add(
     -DARROW_BUILD_STATIC=ON -DARROW_BUILD_UTILITIES=OFF -DARROW_COMPUTE=OFF
     -DARROW_DATASET=OFF -DARROW_FLIGHT=OFF -DARROW_GFLAGS_USE_SHARED=OFF
     -DARROW_HDFS=OFF -DARROW_IPC=ON -DARROW_JSON=ON -DARROW_CSV=OFF
-    -DARROW_JEMALLOC=OFF -DARROW_ORC=OFF -DARROW_PARQUET=OFF
+    -DARROW_JEMALLOC=OFF -DARROW_ORC=OFF -DARROW_PARQUET=ON
     -DARROW_PROTOBUF_USE_SHARED=OFF -DARROW_USE_GLOG=OFF -DARROW_SIMD_LEVEL=NONE
     -DARROW_RUNTIME_SIMD_LEVEL=NONE -DARROW_WITH_BROTLI=OFF -DARROW_WITH_LZ4=OFF
     -DARROW_WITH_PROTOBUF=OFF -DARROW_WITH_RAPIDJSON=OFF -DARROW_WITH_SNAPPY=OFF
-    -DARROW_WITH_ZLIB=OFF -DARROW_WITH_ZSTD=OFF -DBOOST_SOURCE=AUTO
+    -DARROW_WITH_ZLIB=ON -DARROW_WITH_ZSTD=OFF -DBOOST_SOURCE=AUTO
     <SOURCE_DIR>/cpp
-  UPDATE_COMMAND ""
-  BUILD_BYPRODUCTS <INSTALL_DIR>/lib/libarrow.a)
+  UPDATE_COMMAND "")
 
 ExternalProject_Get_Property(arrow_ep install_dir)
-set(ARROW_INCLUDE_DIR ${install_dir}/include)
-set(ARROW_LIBRARY_PATH ${install_dir}/lib/libarrow.a)
-file(MAKE_DIRECTORY ${ARROW_INCLUDE_DIR})
 
-add_library(arrow STATIC IMPORTED)
-set_property(TARGET arrow PROPERTY IMPORTED_LOCATION ${ARROW_LIBRARY_PATH})
-set_property(
-  TARGET arrow
-  APPEND
-  PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${ARROW_INCLUDE_DIR})
-add_dependencies(arrow arrow_ep)
 
-add_executable(arrow_abi_test ${CMAKE_CURRENT_SOURCE_DIR}/abi_test.cc)
 
-include_directories(arrow_abi_test
+include_directories(${install_dir}/include)
+
+
+
+#set(ARROW_INCLUDE_DIR ${install_dir}/include)
+#set(ARROW_LIBRARY_PATH ${install_dir}/lib/libarrow.a)
+#
+#set(PARQUET_LIBRARY_PATH ${install_dir}/lib/libparquet.a)
+#
+#file(MAKE_DIRECTORY ${ARROW_INCLUDE_DIR})
+#
+#add_library(arrow SHARED IMPORTED)
+#
+#add_library(parquet SHARED IMPORTED)
+#
+#set_property(TARGET arrow PROPERTY IMPORTED_LOCATION ${ARROW_LIBRARY_PATH})
+#set_property(
+#  TARGET arrow
+#  APPEND
+#  PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${ARROW_INCLUDE_DIR})
+##add_dependencies( arrow  arrow_ep)
+#
+
+
+#set_property(TARGET parquet PROPERTY IMPORTED_LOCATION ${PARQUET_LIBRARY_PATH})
+
+#set_property(TARGET arrow PROPERTY INTERFACE_LINK_LIBRARIES parquet)
+
+#set_property(
+#  TARGET parquet
+#  APPEND
+#  PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${ARROW_INCLUDE_DIR})
+#add_dependencies(parquet arrow_ep)
+
+add_executable(ba ${CMAKE_CURRENT_SOURCE_DIR}/abi_test.cc)
+
+include_directories(ba
                     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/include)
 
 include_directories(../../third_party/catch)
-target_link_libraries(arrow_abi_test duckdb arrow Threads::Threads)
+
+include ( "re2.cmake" )
+set(RE2_STATIC_LIBRARIES -L${RE2_LIBRARY_DIR} -l libre2.a )
+
+include ( "utf8.cmake" )
+set(UTF8_STATIC_LIBRARIES -L${UTF8_LIBRARY_DIR} -l libUTF8.a )
+
+add_dependencies(ba arrow_ep RE2 utf8proc duckdb)
+
+target_link_libraries(ba PRIVATE   ${install_dir}/lib/libparquet.a ${install_dir}/lib/libarrow_bundled_dependencies.a  ${install_dir}/lib/libarrow.a  ${RE2_STATIC_LIBRARIES} utf8proc duckdb Threads::Threads)
+
+#target_link_libraries(ba parquet)

@@ -48,7 +48,7 @@ public:
 	//! Create a vector of size one holding the passed on value
 	explicit Vector(const Value &value);
 	//! Create an empty standard vector with a type, equivalent to calling Vector(type, true, false)
-	explicit Vector(const LogicalType &type);
+	explicit Vector(const LogicalType &type, const idx_t size = STANDARD_VECTOR_SIZE);
 	//! Create a non-owning vector that references the specified data
 	Vector(const LogicalType &type, data_ptr_t dataptr);
 	//! Create an owning vector that holds at most STANDARD_VECTOR_SIZE entries.
@@ -57,7 +57,7 @@ public:
 	    If create_data is true, the vector will be an owning empty vector.
 	    If zero_data is true, the allocated data will be zero-initialized.
 	*/
-	Vector(const LogicalType &type, bool create_data, bool zero_data);
+	Vector(const LogicalType &type, bool create_data, bool zero_data, idx_t size = STANDARD_VECTOR_SIZE);
 	// implicit copying of Vectors is not allowed
 	Vector(const Vector &) = delete;
 	// but moving of vectors is allowed
@@ -80,7 +80,7 @@ public:
 
 	//! Creates the data of this vector with the specified type. Any data that
 	//! is currently in the vector is destroyed.
-	void Initialize(const LogicalType &new_type = LogicalType(LogicalTypeId::INVALID), bool zero_data = false);
+	void Initialize(const LogicalType &new_type = LogicalType(LogicalTypeId::INVALID), bool zero_data = false, idx_t size = STANDARD_VECTOR_SIZE);
 
 	//! Converts this Vector to a printable string representation
 	string ToString(idx_t count) const;
@@ -285,7 +285,7 @@ struct ListVector {
 	DUCKDB_API static void Append(Vector &target, const Vector &source, const SelectionVector &sel, idx_t source_size,
 	                              idx_t source_offset = 0);
 	DUCKDB_API static void PushBack(Vector &target, Value &insert);
-	DUCKDB_API static void Initialize(Vector &vec);
+	DUCKDB_API static void Initialize(Vector &vec, idx_t size = STANDARD_VECTOR_SIZE);
 	DUCKDB_API static vector<idx_t> Search(Vector &list, Value &key, idx_t row);
 	DUCKDB_API static Value GetValuesFromOffsets(Vector &list, vector<idx_t> &offsets);
 	//! Share the entry of the other list vector

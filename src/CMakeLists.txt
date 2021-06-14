@@ -66,7 +66,7 @@ else()
       pg_query
       duckdb_re2
       miniz
-      utf8proc
+      utf8proc_duck
       hyperloglog)
 
   add_library(duckdb SHARED ${ALL_OBJECT_FILES})

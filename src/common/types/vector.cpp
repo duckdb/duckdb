@@ -18,14 +18,14 @@
 
 namespace duckdb {
 
-Vector::Vector(const LogicalType &type, bool create_data, bool zero_data) : data(nullptr) {
-	buffer = make_buffer<VectorBuffer>(VectorType::FLAT_VECTOR, type);
+Vector::Vector(const LogicalType &type, bool create_data, bool zero_data, idx_t size) : data(nullptr) {
+	buffer = make_buffer<VectorBuffer>(VectorType::FLAT_VECTOR, type, size);
 	if (create_data) {
 		Initialize(type, zero_data);
 	}
 }
 
-Vector::Vector(const LogicalType &type) : Vector(type, true, false) {
+Vector::Vector(const LogicalType &type, const idx_t size) : Vector(type, true, false,size) {
 }
 
 Vector::Vector(const LogicalType &type, data_ptr_t dataptr) : data(dataptr) {
@@ -137,7 +137,7 @@ void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
 	}
 }
 
-void Vector::Initialize(const LogicalType &new_type, bool zero_data) {
+void Vector::Initialize(const LogicalType &new_type, bool zero_data, idx_t size) {
 	if (new_type.id() != LogicalTypeId::INVALID) {
 		SetType(new_type);
 	}
@@ -158,13 +158,13 @@ void Vector::Initialize(const LogicalType &new_type, bool zero_data) {
 	auto internal_type = type.InternalType();
 	auto type_size = GetTypeIdSize(internal_type);
 	if (type_size > 0) {
-		buffer = VectorBuffer::CreateStandardVector(VectorType::FLAT_VECTOR, type);
+		buffer = VectorBuffer::CreateStandardVector(VectorType::FLAT_VECTOR, type, size);
 		data = buffer->GetData();
 		if (zero_data) {
-			memset(data, 0, STANDARD_VECTOR_SIZE * type_size);
+			memset(data, 0, size * type_size);
 		}
 	} else {
-		buffer = VectorBuffer::CreateStandardVector(VectorType::FLAT_VECTOR, type);
+		buffer = VectorBuffer::CreateStandardVector(VectorType::FLAT_VECTOR, type, size);
 	}
 }
 
@@ -1155,11 +1155,14 @@ Vector &ListVector::GetEntry(Vector &vector) {
 	return const_cast<Vector &>(ListVector::GetEntry(cvector));
 }
 
-void ListVector::Initialize(Vector &vec) {
-	if (!ListVector::HasEntry(vec)) {
-		auto vec_child = make_unique<Vector>(ListType::GetChildType(vec.GetType()));
+
+
+void ListVector::Initialize(Vector &vec, idx_t size) {
+   if (!ListVector::HasEntry(vec)) {
+		auto vec_child = make_unique<Vector>(ListType::GetChildType(vec.GetType()),size);
 		ListVector::SetEntry(vec, move(vec_child));
 	}
+
 }
 template <class T>
 void TemplatedSearchInMap(Vector &list, T key, vector<idx_t> &offsets, bool is_key_null, idx_t offset, idx_t length) {

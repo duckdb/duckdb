@@ -4,10 +4,10 @@ endif()
 
 include_directories(include)
 
-add_library(utf8proc STATIC utf8proc.cpp utf8proc_wrapper.cpp)
+add_library(utf8proc_duck STATIC utf8proc.cpp utf8proc_wrapper.cpp)
 
 
-install(TARGETS utf8proc
+install(TARGETS utf8proc_duck
         EXPORT "${DUCKDB_EXPORT_SET}"
         LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
         ARCHIVE DESTINATION "${INSTALL_LIB_DIR}")

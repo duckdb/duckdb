@@ -265,8 +265,8 @@ void ArrowToDuckDBList(Vector &vector, ArrowArray &array, ArrowScanState &scan_s
 void ArrowToDuckDBMapList(Vector &vector, ArrowArray &array, ArrowScanState &scan_state, idx_t size,
                           std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data, idx_t col_idx,
                           idx_t &list_col_idx, uint32_t *offsets) {
-	idx_t list_size = 0;
-	ListVector::Initialize(vector);
+	idx_t list_size = offsets[size];
+	ListVector::Initialize(vector, list_size);
 	auto &child_vector = ListVector::GetEntry(vector);
 	auto list_data = FlatVector::GetData<list_entry_t>(vector);
 	for (idx_t i = 0; i < size; i++) {
@@ -274,9 +274,7 @@ void ArrowToDuckDBMapList(Vector &vector, ArrowArray &array, ArrowScanState &sca
 		le.offset = offsets[i];
 		le.length = offsets[i + 1] - offsets[i];
 	}
-	list_size = offsets[size];
 
-	ListVector::SetListSize(vector, list_size);
 	SetValidityMask(child_vector, array, scan_state, list_size);
 	ColumnArrowToDuckDB(child_vector, array, scan_state, list_size, arrow_convert_data, col_idx, list_col_idx);
 }
