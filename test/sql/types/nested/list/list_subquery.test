@@ -1,0 +1,37 @@
+# name: test/sql/types/nested/list/list_subquery.test
+# description: Test lists in basic subqueries
+# group: [list]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT (SELECT [1, 2])
+----
+[1, 2]
+
+query I
+SELECT UNNEST((SELECT [1, 2]))
+----
+1
+2
+
+query I
+SELECT (SELECT [[1, 2], [3, 4]])
+----
+[[1, 2], [3, 4]]
+
+query I
+SELECT (SELECT {'a': [1, 2, 3], 'b': 7})
+----
+{'a': [1, 2, 3], 'b': 7}
+
+query I
+SELECT (SELECT LIST_VALUE())
+----
+[]
+
+query I
+SELECT (SELECT CASE WHEN 1=0 THEN LIST_VALUE() ELSE NULL END)
+----
+NULL

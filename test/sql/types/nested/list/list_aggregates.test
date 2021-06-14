@@ -18,6 +18,25 @@ select min(list_value(i)), max(list_value(i)) from range(10) tbl(i);
 [0]	[9]
 
 query I
+select first([i]) from range(10) tbl(i);
+----
+[0]
+
+query II
+select i%3 a, first([i]) from range(10) tbl(i) group by a order by a;
+----
+0	[0]
+1	[1]
+2	[2]
+
+query II
+select i%3 a, unnest(first([i])) from range(10) tbl(i) group by a order by a;
+----
+0	0
+1	1
+2	2
+
+query I
 select string_agg(list_value(i), ',') from range(10) tbl(i);
 ----
 [0],[1],[2],[3],[4],[5],[6],[7],[8],[9]

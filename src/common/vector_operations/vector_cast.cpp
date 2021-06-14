@@ -36,25 +36,24 @@ static void VectorNullCast(Vector &source, Vector &result, idx_t count) {
 template <class T>
 static void ToDecimalCast(Vector &source, Vector &result, idx_t count) {
 	auto &result_type = result.GetType();
+	auto width = DecimalType::GetWidth(result_type);
+	auto scale = DecimalType::GetScale(result_type);
 	switch (result_type.InternalType()) {
 	case PhysicalType::INT16:
-		UnaryExecutor::Execute<T, int16_t>(source, result, count, [&](T input) {
-			return CastToDecimal::Operation<T, int16_t>(input, result_type.width(), result_type.scale());
-		});
+		UnaryExecutor::Execute<T, int16_t>(
+		    source, result, count, [&](T input) { return CastToDecimal::Operation<T, int16_t>(input, width, scale); });
 		break;
 	case PhysicalType::INT32:
-		UnaryExecutor::Execute<T, int32_t>(source, result, count, [&](T input) {
-			return CastToDecimal::Operation<T, int32_t>(input, result_type.width(), result_type.scale());
-		});
+		UnaryExecutor::Execute<T, int32_t>(
+		    source, result, count, [&](T input) { return CastToDecimal::Operation<T, int32_t>(input, width, scale); });
 		break;
 	case PhysicalType::INT64:
-		UnaryExecutor::Execute<T, int64_t>(source, result, count, [&](T input) {
-			return CastToDecimal::Operation<T, int64_t>(input, result_type.width(), result_type.scale());
-		});
+		UnaryExecutor::Execute<T, int64_t>(
+		    source, result, count, [&](T input) { return CastToDecimal::Operation<T, int64_t>(input, width, scale); });
 		break;
 	case PhysicalType::INT128:
 		UnaryExecutor::Execute<T, hugeint_t>(source, result, count, [&](T input) {
-			return CastToDecimal::Operation<T, hugeint_t>(input, result_type.width(), result_type.scale());
+			return CastToDecimal::Operation<T, hugeint_t>(input, width, scale);
 		});
 		break;
 	default:
@@ -65,25 +64,27 @@ static void ToDecimalCast(Vector &source, Vector &result, idx_t count) {
 template <class T>
 static void FromDecimalCast(Vector &source, Vector &result, idx_t count) {
 	auto &source_type = source.GetType();
+	auto width = DecimalType::GetWidth(source_type);
+	auto scale = DecimalType::GetScale(source_type);
 	switch (source_type.InternalType()) {
 	case PhysicalType::INT16:
 		UnaryExecutor::Execute<int16_t, T>(source, result, count, [&](int16_t input) {
-			return CastFromDecimal::Operation<int16_t, T>(input, source_type.width(), source_type.scale());
+			return CastFromDecimal::Operation<int16_t, T>(input, width, scale);
 		});
 		break;
 	case PhysicalType::INT32:
 		UnaryExecutor::Execute<int32_t, T>(source, result, count, [&](int32_t input) {
-			return CastFromDecimal::Operation<int32_t, T>(input, source_type.width(), source_type.scale());
+			return CastFromDecimal::Operation<int32_t, T>(input, width, scale);
 		});
 		break;
 	case PhysicalType::INT64:
 		UnaryExecutor::Execute<int64_t, T>(source, result, count, [&](int64_t input) {
-			return CastFromDecimal::Operation<int64_t, T>(input, source_type.width(), source_type.scale());
+			return CastFromDecimal::Operation<int64_t, T>(input, width, scale);
 		});
 		break;
 	case PhysicalType::INT128:
 		UnaryExecutor::Execute<hugeint_t, T>(source, result, count, [&](hugeint_t input) {
-			return CastFromDecimal::Operation<hugeint_t, T>(input, source_type.width(), source_type.scale());
+			return CastFromDecimal::Operation<hugeint_t, T>(input, width, scale);
 		});
 		break;
 	default:
@@ -93,11 +94,15 @@ static void FromDecimalCast(Vector &source, Vector &result, idx_t count) {
 
 template <class SOURCE, class DEST, class POWERS_SOURCE, class POWERS_DEST>
 void TemplatedDecimalScaleUp(Vector &source, Vector &result, idx_t count) {
-	D_ASSERT(result.GetType().scale() >= source.GetType().scale());
-	idx_t scale_difference = result.GetType().scale() - source.GetType().scale();
+	auto source_scale = DecimalType::GetScale(source.GetType());
+	auto source_width = DecimalType::GetWidth(source.GetType());
+	auto result_scale = DecimalType::GetScale(result.GetType());
+	auto result_width = DecimalType::GetWidth(result.GetType());
+	D_ASSERT(result_scale >= source_scale);
+	idx_t scale_difference = result_scale - source_scale;
 	auto multiply_factor = POWERS_DEST::POWERS_OF_TEN[scale_difference];
-	idx_t target_width = result.GetType().width() - scale_difference;
-	if (source.GetType().width() < target_width) {
+	idx_t target_width = result_width - scale_difference;
+	if (source_width < target_width) {
 		// type will always fit: no need to check limit
 		UnaryExecutor::Execute<SOURCE, DEST>(source, result, count, [&](SOURCE input) {
 			return Cast::Operation<SOURCE, DEST>(input) * multiply_factor;
@@ -108,8 +113,7 @@ void TemplatedDecimalScaleUp(Vector &source, Vector &result, idx_t count) {
 		UnaryExecutor::Execute<SOURCE, DEST>(source, result, count, [&](SOURCE input) {
 			if (input >= limit || input <= -limit) {
 				throw OutOfRangeException("Casting value \"%s\" to type %s failed: value is out of range!",
-				                          Decimal::ToString(input, source.GetType().scale()),
-				                          result.GetType().ToString());
+				                          Decimal::ToString(input, source_scale), result.GetType().ToString());
 			}
 			return Cast::Operation<SOURCE, DEST>(input) * multiply_factor;
 		});
@@ -118,11 +122,15 @@ void TemplatedDecimalScaleUp(Vector &source, Vector &result, idx_t count) {
 
 template <class SOURCE, class DEST, class POWERS_SOURCE>
 void TemplatedDecimalScaleDown(Vector &source, Vector &result, idx_t count) {
-	D_ASSERT(result.GetType().scale() < source.GetType().scale());
-	idx_t scale_difference = source.GetType().scale() - result.GetType().scale();
-	idx_t target_width = result.GetType().width() + scale_difference;
+	auto source_scale = DecimalType::GetScale(source.GetType());
+	auto source_width = DecimalType::GetWidth(source.GetType());
+	auto result_scale = DecimalType::GetScale(result.GetType());
+	auto result_width = DecimalType::GetWidth(result.GetType());
+	D_ASSERT(result_scale < source_scale);
+	idx_t scale_difference = source_scale - result_scale;
+	idx_t target_width = result_width + scale_difference;
 	auto divide_factor = POWERS_SOURCE::POWERS_OF_TEN[scale_difference];
-	if (source.GetType().width() < target_width) {
+	if (source_width < target_width) {
 		// type will always fit: no need to check limit
 		UnaryExecutor::Execute<SOURCE, DEST>(
 		    source, result, count, [&](SOURCE input) { return Cast::Operation<SOURCE, DEST>(input / divide_factor); });
@@ -132,8 +140,7 @@ void TemplatedDecimalScaleDown(Vector &source, Vector &result, idx_t count) {
 		UnaryExecutor::Execute<SOURCE, DEST>(source, result, count, [&](SOURCE input) {
 			if (input >= limit || input <= -limit) {
 				throw OutOfRangeException("Casting value \"%s\" to type %s failed: value is out of range!",
-				                          Decimal::ToString(input, source.GetType().scale()),
-				                          result.GetType().ToString());
+				                          Decimal::ToString(input, source_scale), result.GetType().ToString());
 			}
 			return Cast::Operation<SOURCE, DEST>(input / divide_factor);
 		});
@@ -142,11 +149,13 @@ void TemplatedDecimalScaleDown(Vector &source, Vector &result, idx_t count) {
 
 template <class SOURCE, class POWERS_SOURCE>
 static void DecimalDecimalCastSwitch(Vector &source, Vector &result, idx_t count) {
+	auto source_scale = DecimalType::GetScale(source.GetType());
+	auto result_scale = DecimalType::GetScale(result.GetType());
 	source.GetType().Verify();
 	result.GetType().Verify();
 
 	// we need to either multiply or divide by the difference in scales
-	if (result.GetType().scale() >= source.GetType().scale()) {
+	if (result_scale >= source_scale) {
 		// multiply
 		switch (result.GetType().InternalType()) {
 		case PhysicalType::INT16:
@@ -247,29 +256,27 @@ static void DecimalCastSwitch(Vector &source, Vector &result, idx_t count) {
 		break;
 	case LogicalTypeId::VARCHAR: {
 		auto &source_type = source.GetType();
+		auto width = DecimalType::GetWidth(source_type);
+		auto scale = DecimalType::GetScale(source_type);
 		switch (source_type.InternalType()) {
 		case PhysicalType::INT16:
 			UnaryExecutor::Execute<int16_t, string_t>(source, result, count, [&](int16_t input) {
-				return StringCastFromDecimal::Operation<int16_t>(input, source_type.width(), source_type.scale(),
-				                                                 result);
+				return StringCastFromDecimal::Operation<int16_t>(input, width, scale, result);
 			});
 			break;
 		case PhysicalType::INT32:
 			UnaryExecutor::Execute<int32_t, string_t>(source, result, count, [&](int32_t input) {
-				return StringCastFromDecimal::Operation<int32_t>(input, source_type.width(), source_type.scale(),
-				                                                 result);
+				return StringCastFromDecimal::Operation<int32_t>(input, width, scale, result);
 			});
 			break;
 		case PhysicalType::INT64:
 			UnaryExecutor::Execute<int64_t, string_t>(source, result, count, [&](int64_t input) {
-				return StringCastFromDecimal::Operation<int64_t>(input, source_type.width(), source_type.scale(),
-				                                                 result);
+				return StringCastFromDecimal::Operation<int64_t>(input, width, scale, result);
 			});
 			break;
 		case PhysicalType::INT128:
 			UnaryExecutor::Execute<hugeint_t, string_t>(source, result, count, [&](hugeint_t input) {
-				return StringCastFromDecimal::Operation<hugeint_t>(input, source_type.width(), source_type.scale(),
-				                                                   result);
+				return StringCastFromDecimal::Operation<hugeint_t>(input, width, scale, result);
 			});
 			break;
 		default:
@@ -596,12 +603,12 @@ static void ListCastSwitch(Vector &source, Vector &result, idx_t count) {
 			result.SetVectorType(VectorType::FLAT_VECTOR);
 			FlatVector::SetValidity(result, FlatVector::Validity(source));
 		}
-		auto list_child = make_unique<Vector>(result.GetType().child_types()[0].second);
+		auto list_child = make_unique<Vector>(ListType::GetChildType(result.GetType()));
 		ListVector::SetEntry(result, move(list_child));
 		if (ListVector::HasEntry(source)) {
 			auto &source_cc = ListVector::GetEntry(source);
 			auto source_size = ListVector::GetListSize(source);
-			Vector append_vector(result.GetType().child_types()[0].second);
+			Vector append_vector(ListType::GetChildType(result.GetType()));
 			if (source_size > STANDARD_VECTOR_SIZE) {
 				append_vector.Resize(STANDARD_VECTOR_SIZE, source_size);
 			}
@@ -628,14 +635,16 @@ static void StructCastSwitch(Vector &source, Vector &result, idx_t count) {
 	switch (result.GetType().id()) {
 	case LogicalTypeId::STRUCT:
 	case LogicalTypeId::MAP: {
-		if (source.GetType().child_types().size() != result.GetType().child_types().size()) {
+		auto &source_child_types = StructType::GetChildTypes(source.GetType());
+		auto &result_child_types = StructType::GetChildTypes(result.GetType());
+		if (source_child_types.size() != result_child_types.size()) {
 			throw TypeMismatchException(source.GetType(), result.GetType(), "Cannot cast STRUCTs of different size");
 		}
 		auto &source_children = StructVector::GetEntries(source);
-		D_ASSERT(source_children.size() == source.GetType().child_types().size());
+		D_ASSERT(source_children.size() == source_child_types.size());
 
 		auto &result_children = StructVector::GetEntries(result);
-		for (idx_t c_idx = 0; c_idx < result.GetType().child_types().size(); c_idx++) {
+		for (idx_t c_idx = 0; c_idx < result_child_types.size(); c_idx++) {
 			auto &result_child_vector = result_children[c_idx];
 			auto &source_child_vector = *source_children[c_idx];
 			if (result_child_vector->GetType() != source_child_vector.GetType()) {

@@ -32,12 +32,10 @@ static void ListUpdateFunction(Vector inputs[], FunctionData *, idx_t input_coun
 	auto &input = inputs[0];
 	VectorData sdata;
 	state_vector.Orrify(count, sdata);
-	child_list_t<LogicalType> child_types;
-	child_types.push_back({"", input.GetType()});
-	LogicalType list_vector_type(LogicalType::LIST.id(), child_types);
+
+	auto list_vector_type = LogicalType::LIST(input.GetType());
 
 	auto states = (ListAggState **)sdata.data;
-	SelectionVector sel(STANDARD_VECTOR_SIZE);
 	if (input.GetVectorType() == VectorType::SEQUENCE_VECTOR) {
 		input.Normalify(count);
 	}
@@ -94,7 +92,8 @@ static void ListFinalize(Vector &state_vector, FunctionData *, Vector &result, i
 		total_len += state_lv_count;
 	}
 
-	auto list_buffer = make_unique<Vector>(result.GetType().child_types()[0].second);
+	auto &child_type = ListType::GetChildType(result.GetType());
+	auto list_buffer = make_unique<Vector>(child_type);
 	ListVector::SetEntry(result, move(list_buffer));
 	for (idx_t i = 0; i < count; i++) {
 		auto state = states[sdata.sel->get_index(i)];
@@ -110,17 +109,14 @@ static void ListFinalize(Vector &state_vector, FunctionData *, Vector &result, i
 unique_ptr<FunctionData> ListBindFunction(ClientContext &context, AggregateFunction &function,
                                           vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(arguments.size() == 1);
-	child_list_t<LogicalType> children;
-	children.push_back(make_pair("", arguments[0]->return_type));
-
-	function.return_type = LogicalType(LogicalTypeId::LIST, move(children));
+	function.return_type = LogicalType::LIST(arguments[0]->return_type);
 	return make_unique<ListBindData>(); // TODO atm this is not used anywhere but it might not be required after all
 	                                    // except for sanity checking
 }
 
 void ListFun::RegisterFunction(BuiltinFunctions &set) {
 	auto agg = AggregateFunction(
-	    "list", {LogicalType::ANY}, LogicalType::LIST, AggregateFunction::StateSize<ListAggState>,
+	    "list", {LogicalType::ANY}, LogicalTypeId::LIST, AggregateFunction::StateSize<ListAggState>,
 	    AggregateFunction::StateInitialize<ListAggState, ListFunction>, ListUpdateFunction, ListCombineFunction,
 	    ListFinalize, nullptr, ListBindFunction, AggregateFunction::StateDestroy<ListAggState, ListFunction>);
 	set.AddFunction(agg);

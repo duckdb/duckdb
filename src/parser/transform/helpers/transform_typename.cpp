@@ -10,8 +10,9 @@ namespace duckdb {
 LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_name) {
 	auto name = (reinterpret_cast<duckdb_libpgquery::PGValue *>(type_name->names->tail->data.ptr_value)->val.str);
 	// transform it to the SQL type
-	LogicalType base_type = TransformStringToLogicalType(name);
+	LogicalTypeId base_type = TransformStringToLogicalType(name);
 
+	LogicalType result_type;
 	if (base_type == LogicalTypeId::STRUCT) {
 		if (!type_name->typmods || type_name->typmods->length == 0) {
 			throw ParserException("Struct needs a name and entries");
@@ -40,87 +41,99 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_n
 			children.push_back(make_pair(entry_name, entry_type));
 		}
 		D_ASSERT(!children.empty());
-		return LogicalType(base_type.id(), children);
-	}
-
-	if (base_type == LogicalTypeId::MAP) {
+		result_type = LogicalType::STRUCT(move(children));
+	} else if (base_type == LogicalTypeId::MAP) {
 		//! We transform MAP<TYPE_KEY, TYPE_VALUE> to STRUCT<LIST<key: TYPE_KEY>, LIST<value: TYPE_VALUE>>
 
 		if (!type_name->typmods || type_name->typmods->length != 2) {
 			throw ParserException("Map type needs exactly two entries, key and value type");
 		}
 		child_list_t<LogicalType> children;
+		auto key_type = TransformTypeName((duckdb_libpgquery::PGTypeName *)type_name->typmods->head->data.ptr_value);
+		auto value_type = TransformTypeName((duckdb_libpgquery::PGTypeName *)type_name->typmods->tail->data.ptr_value);
 
-		child_list_t<LogicalType> key_type, value_type;
-		key_type.push_back(
-		    {"", TransformTypeName((duckdb_libpgquery::PGTypeName *)type_name->typmods->head->data.ptr_value)});
-		value_type.push_back(
-		    {"", TransformTypeName((duckdb_libpgquery::PGTypeName *)type_name->typmods->tail->data.ptr_value)});
-
-		children.push_back({"key", {LogicalTypeId::LIST, key_type}});
-		children.push_back({"value", {LogicalTypeId::LIST, value_type}});
+		children.push_back({"key", LogicalType::LIST(key_type)});
+		children.push_back({"value", LogicalType::LIST(value_type)});
 
 		D_ASSERT(children.size() == 2);
 
-		return LogicalType(LogicalTypeId::MAP, children);
-	}
-
-	int8_t width = base_type.width(), scale = base_type.scale();
-	// check any modifiers
-	int modifier_idx = 0;
-	if (type_name->typmods) {
-		for (auto node = type_name->typmods->head; node; node = node->next) {
-			auto &const_val = *((duckdb_libpgquery::PGAConst *)node->data.ptr_value);
-			if (const_val.type != duckdb_libpgquery::T_PGAConst ||
-			    const_val.val.type != duckdb_libpgquery::T_PGInteger) {
-				throw ParserException("Expected an integer constant as type modifier");
-			}
-			if (const_val.val.val.ival < 0) {
-				throw ParserException("Negative modifier not supported");
-			}
-			if (modifier_idx == 0) {
-				width = const_val.val.val.ival;
-			} else if (modifier_idx == 1) {
-				scale = const_val.val.val.ival;
-			} else {
-				throw ParserException("A maximum of two modifiers is supported");
-			}
-			modifier_idx++;
-		}
-	}
-	switch (base_type.id()) {
-	case LogicalTypeId::VARCHAR:
-		if (modifier_idx > 1) {
-			throw ParserException("VARCHAR only supports a single modifier");
-		}
-		// FIXME: create CHECK constraint based on varchar width
-		width = 0;
-		break;
-	case LogicalTypeId::DECIMAL:
-		if (modifier_idx == 1) {
-			// only width is provided: set scale to 0
+		result_type = LogicalType::MAP(move(children));
+	} else {
+		int8_t width, scale;
+		if (base_type == LogicalTypeId::DECIMAL) {
+			// default decimal width/scale
+			width = 18;
+			scale = 3;
+		} else {
+			width = 0;
 			scale = 0;
 		}
-		if (width <= 0 || width > Decimal::MAX_WIDTH_DECIMAL) {
-			throw ParserException("Width must be between 1 and %d!", (int)Decimal::MAX_WIDTH_DECIMAL);
+		// check any modifiers
+		int modifier_idx = 0;
+		if (type_name->typmods) {
+			for (auto node = type_name->typmods->head; node; node = node->next) {
+				auto &const_val = *((duckdb_libpgquery::PGAConst *)node->data.ptr_value);
+				if (const_val.type != duckdb_libpgquery::T_PGAConst ||
+				    const_val.val.type != duckdb_libpgquery::T_PGInteger) {
+					throw ParserException("Expected an integer constant as type modifier");
+				}
+				if (const_val.val.val.ival < 0) {
+					throw ParserException("Negative modifier not supported");
+				}
+				if (modifier_idx == 0) {
+					width = const_val.val.val.ival;
+				} else if (modifier_idx == 1) {
+					scale = const_val.val.val.ival;
+				} else {
+					throw ParserException("A maximum of two modifiers is supported");
+				}
+				modifier_idx++;
+			}
 		}
-		if (scale > width) {
-			throw ParserException("Scale cannot be bigger than width");
-		}
-		break;
-	case LogicalTypeId::INTERVAL:
-		if (modifier_idx > 1) {
-			throw ParserException("INTERVAL only supports a single modifier");
-		}
-		width = 0;
-		break;
-	default:
-		if (modifier_idx > 0) {
-			throw ParserException("Type %s does not support any modifiers!", base_type.ToString());
+		switch (base_type) {
+		case LogicalTypeId::VARCHAR:
+			if (modifier_idx > 1) {
+				throw ParserException("VARCHAR only supports a single modifier");
+			}
+			// FIXME: create CHECK constraint based on varchar width
+			width = 0;
+			result_type = LogicalType::VARCHAR;
+			break;
+		case LogicalTypeId::DECIMAL:
+			if (modifier_idx == 1) {
+				// only width is provided: set scale to 0
+				scale = 0;
+			}
+			if (width <= 0 || width > Decimal::MAX_WIDTH_DECIMAL) {
+				throw ParserException("Width must be between 1 and %d!", (int)Decimal::MAX_WIDTH_DECIMAL);
+			}
+			if (scale > width) {
+				throw ParserException("Scale cannot be bigger than width");
+			}
+			result_type = LogicalType::DECIMAL(width, scale);
+			break;
+		case LogicalTypeId::INTERVAL:
+			if (modifier_idx > 1) {
+				throw ParserException("INTERVAL only supports a single modifier");
+			}
+			width = 0;
+			result_type = LogicalType::INTERVAL;
+			break;
+		default:
+			if (modifier_idx > 0) {
+				throw ParserException("Type %s does not support any modifiers!", LogicalType(base_type).ToString());
+			}
+			result_type = LogicalType(base_type);
+			break;
 		}
 	}
-
-	return LogicalType(base_type.id(), width, scale);
+	if (type_name->arrayBounds) {
+		// array bounds: turn the type into a list
+		for (auto cell = type_name->arrayBounds->head; cell != nullptr; cell = cell->next) {
+			result_type = LogicalType::LIST(move(result_type));
+		}
+	}
+	return result_type;
 }
 
 } // namespace duckdb

@@ -135,7 +135,7 @@ static LogicalType DeriveLogicalType(const SchemaElement &s_ele) {
 			switch (s_ele.converted_type) {
 			case ConvertedType::DECIMAL:
 				if (s_ele.type == Type::FIXED_LEN_BYTE_ARRAY && s_ele.__isset.scale && s_ele.__isset.type_length) {
-					return LogicalType(LogicalTypeId::DECIMAL, s_ele.precision, s_ele.scale);
+					return LogicalType::DECIMAL(s_ele.precision, s_ele.scale);
 				}
 				return LogicalType::INVALID;
 
@@ -193,7 +193,7 @@ static unique_ptr<ColumnReader> CreateReaderRecursive(ParquetReader &reader, con
 		LogicalType result_type;
 		// if we only have a single child no reason to create a struct ay
 		if (child_types.size() > 1 || depth == 0) {
-			result_type = LogicalType(LogicalTypeId::STRUCT, child_types);
+			result_type = LogicalType::STRUCT(move(child_types));
 			result = make_unique<StructColumnReader>(reader, result_type, s_ele, this_idx, max_define, max_repeat,
 			                                         move(child_readers));
 		} else {
@@ -202,7 +202,7 @@ static unique_ptr<ColumnReader> CreateReaderRecursive(ParquetReader &reader, con
 			result = move(child_readers[0]);
 		}
 		if (s_ele.repetition_type == FieldRepetitionType::REPEATED) {
-			result_type = LogicalType(LogicalTypeId::LIST, {make_pair("", result_type)});
+			result_type = LogicalType::LIST(result_type);
 			return make_unique<ListColumnReader>(reader, result_type, s_ele, this_idx, max_define, max_repeat,
 			                                     move(result));
 		}
@@ -239,13 +239,14 @@ void ParquetReader::InitializeSchema(const vector<LogicalType> &expected_types_p
 	bool has_expected_types = !expected_types_p.empty();
 	auto root_reader = CreateReader(*this, file_meta_data);
 
-	auto root_type = root_reader->Type();
+	auto &root_type = root_reader->Type();
+	auto &child_types = StructType::GetChildTypes(root_type);
 	D_ASSERT(root_type.id() == LogicalTypeId::STRUCT);
-	if (has_expected_types && root_type.child_types().size() != expected_types_p.size()) {
+	if (has_expected_types && child_types.size() != expected_types_p.size()) {
 		throw FormatException("column count mismatch");
 	}
 	idx_t col_idx = 0;
-	for (auto &type_pair : root_type.child_types()) {
+	for (auto &type_pair : child_types) {
 		if (has_expected_types && expected_types_p[col_idx] != type_pair.second) {
 			if (initial_filename_p.empty()) {
 				throw FormatException("column \"%d\" in parquet file is of type %s, could not auto cast to "

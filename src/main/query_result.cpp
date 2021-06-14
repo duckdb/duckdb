@@ -139,10 +139,10 @@ void SetArrowMapFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child,
 	InitializeChild(root_holder.nested_children.back()[0]);
 	child.children = &root_holder.nested_children_ptr.back()[0];
 	child.children[0]->name = "entries";
-	child_list_t<LogicalType> struct_child_type;
-	struct_child_type.push_back(type.child_types()[0].second.child_types()[0]);
-	struct_child_type.push_back(type.child_types()[1].second.child_types()[0]);
-	LogicalType struct_type(LogicalTypeId::STRUCT, struct_child_type);
+	child_list_t<LogicalType> struct_child_types;
+	struct_child_types.push_back(std::make_pair("key", ListType::GetChildType(StructType::GetChildType(type, 0))));
+	struct_child_types.push_back(std::make_pair("value", ListType::GetChildType(StructType::GetChildType(type, 1))));
+	auto struct_type = LogicalType::STRUCT(move(struct_child_types));
 	SetArrowFormat(root_holder, *child.children[0], struct_type);
 }
 
@@ -232,24 +232,25 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		InitializeChild(root_holder.nested_children.back()[0]);
 		child.children = &root_holder.nested_children_ptr.back()[0];
 		child.children[0]->name = "l";
-		SetArrowFormat(root_holder, **child.children, type.child_types()[0].second);
+		SetArrowFormat(root_holder, **child.children, ListType::GetChildType(type));
 		break;
 	}
 	case LogicalTypeId::STRUCT: {
 		child.format = "+s";
-		child.n_children = type.child_types().size();
+		auto &child_types = StructType::GetChildTypes(type);
+		child.n_children = child_types.size();
 		root_holder.nested_children.emplace_back();
-		root_holder.nested_children.back().resize(type.child_types().size());
+		root_holder.nested_children.back().resize(child_types.size());
 		root_holder.nested_children_ptr.emplace_back();
-		root_holder.nested_children_ptr.back().resize(type.child_types().size());
-		for (idx_t type_idx = 0; type_idx < type.child_types().size(); type_idx++) {
+		root_holder.nested_children_ptr.back().resize(child_types.size());
+		for (idx_t type_idx = 0; type_idx < child_types.size(); type_idx++) {
 			root_holder.nested_children_ptr.back()[type_idx] = &root_holder.nested_children.back()[type_idx];
 		}
 		child.children = &root_holder.nested_children_ptr.back()[0];
-		for (size_t type_idx = 0; type_idx < type.child_types().size(); type_idx++) {
+		for (size_t type_idx = 0; type_idx < child_types.size(); type_idx++) {
 			InitializeChild(*child.children[type_idx]);
 
-			auto &struct_col_name = type.child_types()[type_idx].first;
+			auto &struct_col_name = child_types[type_idx].first;
 			unique_ptr<char[]> name_ptr = unique_ptr<char[]>(new char[struct_col_name.size() + 1]);
 			for (size_t i = 0; i < struct_col_name.size(); i++) {
 				name_ptr[i] = struct_col_name[i];
@@ -258,7 +259,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 			root_holder.owned_type_names.push_back(move(name_ptr));
 
 			child.children[type_idx]->name = root_holder.owned_type_names.back().get();
-			SetArrowFormat(root_holder, *child.children[type_idx], type.child_types()[type_idx].second);
+			SetArrowFormat(root_holder, *child.children[type_idx], child_types[type_idx].second);
 		}
 		break;
 	}

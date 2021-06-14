@@ -43,7 +43,7 @@ ColumnDefinition Transformer::TransformColumnDefinition(duckdb_libpgquery::PGCol
 		if (target_type.id() != LogicalTypeId::VARCHAR) {
 			throw ParserException("Only VARCHAR columns can have collations!");
 		}
-		target_type = LogicalType(LogicalTypeId::VARCHAR, TransformCollation(cdef->collClause));
+		target_type = LogicalType::VARCHAR_COLLATION(TransformCollation(cdef->collClause));
 	}
 
 	return ColumnDefinition(colname, target_type);

@@ -36,6 +36,8 @@ ExpressionBinder::~ExpressionBinder() {
 BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> *expr, idx_t depth, bool root_expression) {
 	auto &expr_ref = **expr;
 	switch (expr_ref.expression_class) {
+	case ExpressionClass::BETWEEN:
+		return BindExpression((BetweenExpression &)expr_ref, depth);
 	case ExpressionClass::CASE:
 		return BindExpression((CaseExpression &)expr_ref, depth);
 	case ExpressionClass::CAST:
@@ -114,16 +116,17 @@ void ExpressionBinder::ExtractCorrelatedExpressions(Binder &binder, Expression &
 static bool ContainsNullType(const LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::STRUCT:
-	case LogicalTypeId::MAP:
-	case LogicalTypeId::LIST: {
-		auto &child_types = type.child_types();
-		for (auto &child_type : child_types) {
-			if (ContainsNullType(child_type.second)) {
+	case LogicalTypeId::MAP: {
+		auto child_count = StructType::GetChildCount(type);
+		for (idx_t i = 0; i < child_count; i++) {
+			if (ContainsNullType(StructType::GetChildType(type, i))) {
 				return true;
 			}
 		}
 		return false;
 	}
+	case LogicalTypeId::LIST:
+		return ContainsNullType(ListType::GetChildType(type));
 	case LogicalTypeId::SQLNULL:
 		return true;
 	default:
@@ -131,22 +134,24 @@ static bool ContainsNullType(const LogicalType &type) {
 	}
 }
 
-static void ExchangeNullType(LogicalType &type) {
+static LogicalType ExchangeNullType(const LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::STRUCT:
-	case LogicalTypeId::MAP:
-	case LogicalTypeId::LIST: {
-		auto &child_types = type.child_types();
+	case LogicalTypeId::MAP: {
+		// we make a copy of the child types of the struct here
+		auto child_types = StructType::GetChildTypes(type);
 		for (auto &child_type : child_types) {
-			ExchangeNullType((LogicalType &)child_type.second);
+			child_type.second = ExchangeNullType(child_type.second);
 		}
-		break;
+		return type.id() == LogicalTypeId::MAP ? LogicalType::MAP(move(child_types))
+		                                       : LogicalType::STRUCT(move(child_types));
 	}
+	case LogicalTypeId::LIST:
+		return LogicalType::LIST(ExchangeNullType(ListType::GetChildType(type)));
 	case LogicalTypeId::SQLNULL:
-		type = LogicalType::INTEGER;
-		break;
+		return LogicalType::INTEGER;
 	default:
-		break;
+		return type;
 	}
 }
 
@@ -173,8 +178,7 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 		// SQL NULL type is only used internally in the binder
 		// cast to INTEGER if we encounter it outside of the binder
 		if (ContainsNullType(result->return_type)) {
-			auto result_type = result->return_type;
-			ExchangeNullType(result_type);
+			auto result_type = ExchangeNullType(result->return_type);
 			result = BoundCastExpression::AddCastToType(move(result), result_type);
 		}
 	}

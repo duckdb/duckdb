@@ -21,7 +21,7 @@ public:
 
 	bool union_all;
 	std::shared_ptr<ChunkCollection> working_table;
-	vector<unique_ptr<Pipeline>> pipelines;
+	vector<shared_ptr<Pipeline>> pipelines;
 
 public:
 	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const override;

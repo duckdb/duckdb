@@ -123,6 +123,7 @@ void BuiltinFunctions::RegisterTableFunctions() {
 	RangeTableFunction::RegisterFunction(*this);
 	RepeatTableFunction::RegisterFunction(*this);
 	SummaryTableFunction::RegisterFunction(*this);
+	UnnestTableFunction::RegisterFunction(*this);
 }
 
 } // namespace duckdb

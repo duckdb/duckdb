@@ -38,9 +38,65 @@ SELECT ARRAY[i] FROM range(3) tbl(i) WHERE (ARRAY[i])[0] == 1
 [1]
 
 # conversion failure (mixed types)
-statement error
+query I
 SELECT ARRAY[i, 'hello'] FROM range(3) tbl(i) WHERE (ARRAY[i])[0] == 1
+----
+[1, hello]
 
 # conversion failure (nested mixed types)
-statement error
+query I
 SELECT ARRAY[ARRAY[1], ARRAY['hello']]
+----
+[[1], [hello]]
+
+# array casts
+query I
+SELECT ARRAY[1]::BIGINT[]
+----
+[1]
+
+query I
+SELECT ARRAY[1]::BIGINT ARRAY
+---
+[1]
+
+# multi-level array casts
+query I
+SELECT ARRAY[[1, 2], [3, 4]]::BIGINT[][]
+----
+[[1, 2], [3, 4]]
+
+# this doesn't work: int[][] to bigint[]
+statement error
+SELECT ARRAY[[1, 2], [3, 4]]::BIGINT[]
+
+# however, this does work
+# casting to varchar[] or varchar
+# will just convert the individual values
+query I
+SELECT ARRAY[[1, 2], [3, 4]]::VARCHAR[]
+----
+[[1, 2], [3, 4]]
+
+mode skip
+
+# FIXME: double unnest
+query I
+SELECT UNNEST(UNNEST(ARRAY[[1, 2], [3, 4]]::VARCHAR[][]))
+----
+[1, 2]
+[3, 4]
+
+mode unskip
+
+query I
+SELECT UNNEST(ARRAY[[1, 2], [3, 4]]::VARCHAR[])
+----
+[1, 2]
+[3, 4]
+
+
+query I
+SELECT ARRAY[[1, 2], [3, 4]]::VARCHAR
+----
+[[1, 2], [3, 4]]

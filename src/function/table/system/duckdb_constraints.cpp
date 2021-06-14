@@ -54,21 +54,12 @@ static unique_ptr<FunctionData> DuckDBConstraintsBind(ClientContext &context, ve
 	names.emplace_back("expression");
 	return_types.push_back(LogicalType::VARCHAR);
 
-	{
-		names.emplace_back("constraint_column_indexes");
-		child_list_t<LogicalType> child_types;
-		child_types.push_back(std::make_pair("", LogicalType::BIGINT));
-		LogicalType param_types(LogicalTypeId::LIST, move(child_types));
-		return_types.push_back(move(param_types));
-	}
+	names.emplace_back("constraint_column_indexes");
+	;
+	return_types.push_back(LogicalType::LIST(LogicalType::BIGINT));
 
-	{
-		names.emplace_back("constraint_column_names");
-		child_list_t<LogicalType> child_types;
-		child_types.push_back(std::make_pair("", LogicalType::VARCHAR));
-		LogicalType param_types(LogicalTypeId::LIST, move(child_types));
-		return_types.push_back(move(param_types));
-	}
+	names.emplace_back("constraint_column_names");
+	return_types.push_back(LogicalType::LIST(LogicalType::VARCHAR));
 
 	return nullptr;
 }

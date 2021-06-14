@@ -6,7 +6,7 @@ namespace duckdb {
 StructStatistics::StructStatistics(LogicalType type_p) : BaseStatistics(move(type_p)) {
 	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
 
-	auto &child_types = type.child_types();
+	auto &child_types = StructType::GetChildTypes(type);
 	child_stats.resize(child_types.size());
 	for (idx_t i = 0; i < child_types.size(); i++) {
 		child_stats[i] = BaseStatistics::CreateEmpty(child_types[i].second);
@@ -55,7 +55,7 @@ void StructStatistics::Serialize(Serializer &serializer) {
 unique_ptr<BaseStatistics> StructStatistics::Deserialize(Deserializer &source, LogicalType type) {
 	D_ASSERT(type.id() == LogicalTypeId::STRUCT);
 	auto result = make_unique<StructStatistics>(move(type));
-	auto &child_types = result->type.child_types();
+	auto &child_types = StructType::GetChildTypes(result->type);
 	for (idx_t i = 0; i < child_types.size(); i++) {
 		result->child_stats[i] = BaseStatistics::Deserialize(source, child_types[i].second);
 	}
@@ -65,7 +65,7 @@ unique_ptr<BaseStatistics> StructStatistics::Deserialize(Deserializer &source, L
 string StructStatistics::ToString() {
 	string result;
 	result += " {";
-	auto &child_types = type.child_types();
+	auto &child_types = StructType::GetChildTypes(type);
 	for (idx_t i = 0; i < child_types.size(); i++) {
 		if (i > 0) {
 			result += ", ";
