@@ -109,3 +109,32 @@ EXECUTE v6(3, 1, 2)
 8
 9
 10
+
+statement ok
+PREPARE v7 AS SELECT * FROM RANGE(5) LIMIT ? OFFSET ?
+
+query I
+EXECUTE v7(NULL, 2)
+----
+2
+3
+4
+
+query I
+EXECUTE v7(2, NULL)
+----
+0
+1
+
+query I
+EXECUTE v7(NULL, 9223372036854775807)
+----
+
+query I
+EXECUTE v7(9223372036854775807, NULL)
+----
+0
+1
+2
+3
+4

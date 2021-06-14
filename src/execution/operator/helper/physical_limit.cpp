@@ -52,10 +52,10 @@ void PhysicalLimit::GetChunkInternal(ExecutionContext &context, DataChunk &chunk
 	do {
 		children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
 		if (limit == INVALID_INDEX) {
-			limit = GetDelimiter(state->child_chunk, limit_expression.get(), limit);
+			limit = GetDelimiter(state->child_chunk, limit_expression.get(), 1ULL << 62ULL);
 		}
 		if (offset == INVALID_INDEX) {
-			offset = GetDelimiter(state->child_chunk, offset_expression.get(), offset);
+			offset = GetDelimiter(state->child_chunk, offset_expression.get(), 0);
 		}
 		idx_t max_element = limit + offset;
 		if (state->child_chunk.size() == 0) {
