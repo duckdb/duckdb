@@ -1473,7 +1473,7 @@ double sqlite3_value_double(sqlite3_value *pVal) {
 
 int sqlite3_value_int(sqlite3_value *pVal) {
 	int64_t res = sqlite3_value_int64(pVal);
-	if (res >= std::numeric_limits<int>::min() && res <= std::numeric_limits<int>::max()) {
+	if (res >= NumericLimits<int>::Minimum() && res <= NumericLimits<int>::Maximum()) {
 		return res;
 	}
 	pVal->db->errCode = SQLITE_MISMATCH;
