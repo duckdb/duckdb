@@ -67,6 +67,26 @@ SELECT {'x': 1} = NULL
 NULL
 
 query T
+SELECT {'x': 1} <> {'x': 2}
+----
+true
+
+query T
+SELECT {'x': 1} <> {'x': 1}
+----
+false
+
+query T
+SELECT {'x': 1} <> NULL
+----
+NULL
+
+query T
+SELECT NULL <>{'x': 1}
+----
+NULL
+
+query T
 SELECT {'x': 1} >= {'x': 2}
 ----
 false
@@ -142,6 +162,16 @@ SELECT l = r FROM struct_int
 true
 false
 false
+NULL
+NULL
+NULL
+
+query T
+SELECT l <> r FROM struct_int
+----
+false
+true
+true
 NULL
 NULL
 NULL
@@ -228,6 +258,26 @@ SELECT {'x': 'duck'} = NULL
 NULL
 
 query T
+SELECT {'x': 'duck'} <> {'x': 'goose'}
+----
+true
+
+query T
+SELECT {'x': 'duck'} <> {'x': 'duck'}
+----
+false
+
+query T
+SELECT NULL <> {'x': 'duck'}
+----
+NULL
+
+query T
+SELECT {'x': 'duck'} <> NULL
+----
+NULL
+
+query T
 SELECT {'x': 'duck'} >= {'x': 'goose'}
 ----
 false
@@ -308,6 +358,16 @@ NULL
 NULL
 
 query T
+SELECT l <> r FROM struct_str
+----
+false
+true
+true
+NULL
+NULL
+NULL
+
+query T
 SELECT l >= r FROM struct_str
 ----
 true
@@ -327,7 +387,7 @@ NULL
 NULL
 NULL
 
-# Constant integer, string column comparisons
+# Constant string, integer column comparisons
 query T
 SELECT {'x': 'duck', 'y': 1} < {'x': 'goose', 'y': 2}
 ----
@@ -395,6 +455,26 @@ NULL
 
 query T
 SELECT {'x': 'duck', 'y': 1} = NULL
+----
+NULL
+
+query T
+SELECT {'x': 'duck', 'y': 1} <> {'x': 'goose', 'y': 2}
+----
+true
+
+query T
+SELECT {'x': 'duck', 'y': 1} <> {'x': 'duck', 'y': 1}
+----
+false
+
+query T
+SELECT NULL <> {'x': 'duck', 'y': 1}
+----
+NULL
+
+query T
+SELECT {'x': 'duck', 'y': 1} <> NULL
 ----
 NULL
 
@@ -484,6 +564,16 @@ NULL
 NULL
 
 query T
+SELECT l <> r FROM struct_str_int
+----
+false
+true
+true
+NULL
+NULL
+NULL
+
+query T
 SELECT l >= r FROM struct_str_int
 ----
 true
@@ -565,6 +655,26 @@ SELECT {'x': 1, 'y': {'a': 'duck', 'b': 1.5}} = NULL
 NULL
 
 query T
+SELECT {'x': 1, 'y': {'a': 'duck', 'b': 1.5}} <> {'x': 2, 'y': {'a': 'goose', 'b': 2.5}}
+----
+true
+
+query T
+SELECT {'x': 1, 'y': {'a': 'duck', 'b': 1.5}} <> {'x': 1, 'y': {'a': 'duck', 'b': 1.5}}
+----
+false
+
+query T
+SELECT NULL <> {'x': 1, 'y': {'a': 'duck', 'b': 1.5}}
+----
+NULL
+
+query T
+SELECT {'x': 1, 'y': {'a': 'duck', 'b': 1.5}} <> NULL
+----
+NULL
+
+query T
 SELECT {'x': 1, 'y': {'a': 'duck', 'b': 1.5}} >= {'x': 2, 'y': {'a': 'goose', 'b': 2.5}}
 ----
 false
@@ -641,6 +751,16 @@ SELECT l = r FROM struct_nested
 true
 false
 false
+NULL
+NULL
+NULL
+
+query T
+SELECT l <> r FROM struct_nested
+----
+false
+true
+true
 NULL
 NULL
 NULL
@@ -727,6 +847,26 @@ SELECT {'x': 1, 'y': ['duck', 'somateria']} = NULL
 NULL
 
 query T
+SELECT {'x': 1, 'y': ['duck', 'somateria']} <> {'x': 2, 'y': ['goose']}
+----
+true
+
+query T
+SELECT {'x': 1, 'y': ['duck', 'somateria']} <> {'x': 1, 'y': ['duck', 'somateria']}
+----
+false
+
+query T
+SELECT NULL <> {'x': 1, 'y': ['duck', 'somateria']}
+----
+NULL
+
+query T
+SELECT {'x': 1, 'y': ['duck', 'somateria']} <> NULL
+----
+NULL
+
+query T
 SELECT {'x': 1, 'y': ['duck', 'somateria']} >= {'x': 2, 'y': ['goose']}
 ----
 false
@@ -776,7 +916,6 @@ CREATE VIEW list_in_struct AS SELECT * FROM (VALUES
 	(NULL, NULL)
 	) tbl(l, r);
 
-
 query T
 SELECT l < r FROM list_in_struct
 ----
@@ -803,6 +942,16 @@ SELECT l = r FROM list_in_struct
 true
 false
 false
+NULL
+NULL
+NULL
+
+query T
+SELECT l <> r FROM list_in_struct
+----
+false
+true
+true
 NULL
 NULL
 NULL

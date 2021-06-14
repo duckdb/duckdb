@@ -276,6 +276,10 @@ static idx_t DistinctSelect(Vector &left, Vector &right, const SelectionVector *
 		return DistinctSelectGeneric<LEFT_TYPE, RIGHT_TYPE, OP>(left, right, sel, count, true_sel, false_sel);
 	}
 }
+
+template <typename OP>
+static void NestedDistinctExecute(Vector &left, Vector &right, Vector &result, idx_t count);
+
 template <class T, class OP>
 static inline void TemplatedDistinctExecute(Vector &left, Vector &right, Vector &result, idx_t count) {
 	DistinctExecute<T, T, bool, OP>(left, right, result, count);
@@ -327,6 +331,11 @@ static void ExecuteDistinct(Vector &left, Vector &right, Vector &result, idx_t c
 		break;
 	case PhysicalType::VARCHAR:
 		TemplatedDistinctExecute<string_t, OP>(left, right, result, count);
+		break;
+	case PhysicalType::LIST:
+	case PhysicalType::MAP:
+	case PhysicalType::STRUCT:
+		NestedDistinctExecute<OP>(left, right, result, count);
 		break;
 	default:
 		throw InvalidTypeException(left.GetType(), "Invalid type for distinct comparison");
@@ -385,28 +394,69 @@ static idx_t TemplatedDistinctSelectOperation(Vector &left, Vector &right, const
 	}
 }
 
-static inline const SelectionVector *DistinctNotNull(VectorData &ldata, VectorData &rdata, idx_t &count,
-                                                     idx_t &true_count, const SelectionVector *sel,
-                                                     SelectionVector &maybe_vec, OptionalSelection &true_vec,
-                                                     OptionalSelection &false_vec) {
+template <typename OP>
+static void NestedDistinctExecute(Vector &left, Vector &right, Vector &result, idx_t count) {
+	const auto left_constant = left.GetVectorType() == VectorType::CONSTANT_VECTOR;
+	const auto right_constant = right.GetVectorType() == VectorType::CONSTANT_VECTOR;
+
+	if (left_constant && right_constant) {
+		// both sides are constant, so just compare one element.
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		auto result_data = ConstantVector::GetData<bool>(result);
+		SelectionVector true_sel(1);
+		auto match_count = TemplatedDistinctSelectOperation<OP>(left, right, nullptr, 1, &true_sel, nullptr);
+		result_data[0] = match_count > 0;
+		return;
+	}
+
+	SelectionVector true_sel(count);
+	SelectionVector false_sel(count);
+
+	// DISTINCT is either true or false
+	idx_t match_count = TemplatedDistinctSelectOperation<OP>(left, right, nullptr, count, &true_sel, &false_sel);
+
+	result.SetVectorType(VectorType::FLAT_VECTOR);
+	auto result_data = FlatVector::GetData<bool>(result);
+
+	for (idx_t i = 0; i < match_count; ++i) {
+		const auto idx = true_sel.get_index(i);
+		result_data[idx] = true;
+	}
+
+	const idx_t no_match_count = count - match_count;
+	for (idx_t i = 0; i < no_match_count; ++i) {
+		const auto idx = false_sel.get_index(i);
+		result_data[idx] = false;
+	}
+}
+
+template <class OP>
+static inline const SelectionVector *DistinctSelectNotNull(ValidityMask &lmask, ValidityMask &rmask, idx_t &count,
+                                                           idx_t &true_count, const SelectionVector *sel,
+                                                           SelectionVector &maybe_vec, OptionalSelection &true_vec,
+                                                           OptionalSelection &false_vec) {
 	// We need multiple, real selections
 	if (!sel) {
 		sel = &FlatVector::INCREMENTAL_SELECTION_VECTOR;
 	}
 
 	// For top-level distincts, NULL semantics are computed separately
-	if (!ldata.validity.AllValid() || !rdata.validity.AllValid()) {
+	if (!lmask.AllValid() || !rmask.AllValid()) {
 		idx_t false_count = 0;
 		idx_t remaining = 0;
 		for (idx_t i = 0; i < count; ++i) {
 			const auto idx = sel->get_index(i);
-			const auto lnull = !ldata.validity.RowIsValid(idx);
-			const auto rnull = !rdata.validity.RowIsValid(idx);
-			if (lnull != rnull) {
-				false_vec.Append(false_count, idx);
-			} else if (lnull) {
-				true_vec.Append(true_count, idx);
+			const auto lnull = !lmask.RowIsValid(idx);
+			const auto rnull = !rmask.RowIsValid(idx);
+			if (lnull || rnull) {
+				// If either is NULL then we can major distinguish them
+				if (!OP::Operation(lnull, rnull, false, false)) {
+					false_vec.Append(false_count, idx);
+				} else {
+					true_vec.Append(true_count, idx);
+				}
 			} else {
+				//	Neither is NULL, distinguish values.
 				maybe_vec.set_index(remaining++, idx);
 			}
 		}
@@ -416,6 +466,56 @@ static inline const SelectionVector *DistinctNotNull(VectorData &ldata, VectorDa
 	}
 
 	return sel;
+}
+
+struct PositionDistinguisher {
+
+	// Select the rows that definitely match.
+	// Default to checking the other rows
+	template <typename OP>
+	static idx_t Definite(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+	                      SelectionVector *true_sel, SelectionVector &false_sel) {
+		return 0;
+	}
+
+	// Select the possible rows that need further testing.
+	// Default to all of them
+	template <typename OP>
+	static idx_t Possible(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+	                      SelectionVector &true_sel, SelectionVector *false_sel) {
+		return count;
+	}
+
+	// Select the matching rows for the final position.
+	template <typename OP>
+	static idx_t Final(Vector &left, Vector &right, const SelectionVector *sel, idx_t count, SelectionVector *true_sel,
+	                   SelectionVector *false_sel) {
+		return TemplatedDistinctSelectOperation<OP>(left, right, sel, count, true_sel, false_sel);
+	}
+
+	// Tie-break based on length when one of the sides has been exhausted, returning true if the LHS matches.
+	// This essentially means that the existing positions compare equal.
+	// Default to the same semantics as the OP for idx_t. This works in most cases.
+	template <typename OP>
+	static bool TieBreak(const idx_t lpos, const idx_t rpos) {
+		return OP::Operation(lpos, rpos, false, false);
+	}
+};
+
+// NotDistinctFrom must always check every column
+template <>
+idx_t PositionDistinguisher::Possible<duckdb::NotDistinctFrom>(Vector &left, Vector &right, const SelectionVector *sel,
+                                                               idx_t count, SelectionVector &true_sel,
+                                                               SelectionVector *false_sel) {
+	return TemplatedDistinctSelectOperation<duckdb::NotDistinctFrom>(left, right, sel, count, &true_sel, false_sel);
+}
+
+// DistinctFrom must check everything that matched
+template <>
+idx_t PositionDistinguisher::Definite<duckdb::DistinctFrom>(Vector &left, Vector &right, const SelectionVector *sel,
+                                                            idx_t count, SelectionVector *true_sel,
+                                                            SelectionVector &false_sel) {
+	return TemplatedDistinctSelectOperation<duckdb::DistinctFrom>(left, right, sel, count, true_sel, &false_sel);
 }
 
 template <class OP>
@@ -433,7 +533,8 @@ static idx_t DistinctSelectStruct(Vector &left, Vector &right, const SelectionVe
 
 	idx_t result = 0;
 	SelectionVector maybe_vec(count);
-	sel = DistinctNotNull(lvdata, rvdata, count, result, sel, maybe_vec, true_vec, false_vec);
+	sel =
+	    DistinctSelectNotNull<OP>(lvdata.validity, rvdata.validity, count, result, sel, maybe_vec, true_vec, false_vec);
 
 	auto &lchildren = StructVector::GetEntries(left);
 	auto &rchildren = StructVector::GetEntries(right);
@@ -444,17 +545,37 @@ static idx_t DistinctSelectStruct(Vector &left, Vector &right, const SelectionVe
 		auto &lchild = *lchildren[col_no];
 		auto &rchild = *rchildren[col_no];
 
+		// Find everything that definitely matches
+		auto definite = PositionDistinguisher::Definite<OP>(lchild, rchild, sel, count, true_vec, maybe_vec);
+		true_vec.Advance(definite);
+		count -= definite;
+		result += definite;
+
 		// Find what might match on the next position
-		auto possible = TemplatedDistinctSelectOperation<OP>(lchild, rchild, sel, count, &maybe_vec, false_vec);
-		false_vec.Advance(count - possible);
+		idx_t possible = 0;
+		if (definite > 0) {
+			possible = PositionDistinguisher::Possible<OP>(lchild, rchild, &maybe_vec, count, maybe_vec, false_vec);
+		} else {
+			// If there were no definite matches, then for speed,
+			// maybe_vec may not have been filled in.
+			possible = PositionDistinguisher::Possible<OP>(lchild, rchild, sel, count, maybe_vec, false_vec);
+		}
+
+		// If everything is still possible, then for speed,
+		// maybe_vec may not have been filled in.
+		if (possible != count) {
+			sel = &maybe_vec;
+		}
+
+		false_vec.Advance((count - possible));
+
 		count = possible;
-		sel = &maybe_vec;
 	}
 
 	// Find everything that matches the last column exactly
 	auto &lchild = *lchildren[col_no];
 	auto &rchild = *rchildren[col_no];
-	result += TemplatedDistinctSelectOperation<OP>(lchild, rchild, sel, count, true_vec, false_vec);
+	result += PositionDistinguisher::Final<OP>(lchild, rchild, sel, count, true_vec, false_vec);
 
 	return result;
 }
@@ -474,7 +595,8 @@ static idx_t DistinctSelectList(Vector &left, Vector &right, const SelectionVect
 
 	idx_t result = 0;
 	SelectionVector maybe_vec(count);
-	sel = DistinctNotNull(lvdata, rvdata, count, result, sel, maybe_vec, true_vec, false_vec);
+	sel =
+	    DistinctSelectNotNull<OP>(lvdata.validity, rvdata.validity, count, result, sel, maybe_vec, true_vec, false_vec);
 
 	if (count == 0) {
 		return result;
@@ -513,7 +635,7 @@ static idx_t DistinctSelectList(Vector &left, Vector &right, const SelectionVect
 			const auto &lentry = ldata[idx];
 			const auto &rentry = rdata[idx];
 			if (lentry.length == pos || rentry.length == pos) {
-				if (OP::Operation(lentry.length, rentry.length, false, false)) {
+				if (PositionDistinguisher::TieBreak<OP>(lentry.length, rentry.length)) {
 					true_vec.Append(true_count, idx);
 				} else {
 					false_vec.Append(false_count, idx);
@@ -528,11 +650,30 @@ static idx_t DistinctSelectList(Vector &left, Vector &right, const SelectionVect
 		sel = &maybe_vec;
 		result += true_count;
 
+		// Find everything that definitely matches
+		auto definite = PositionDistinguisher::Definite<OP>(lchild, rchild, sel, count, true_vec, maybe_vec);
+		true_vec.Advance(definite);
+		result += definite;
+		count -= definite;
+
 		// Find what might match on the next position
-		auto possible = TemplatedDistinctSelectOperation<OP>(lchild, rchild, sel, count, &maybe_vec, false_vec);
+		idx_t possible = 0;
+		if (definite > 0) {
+			possible = PositionDistinguisher::Possible<OP>(lchild, rchild, &maybe_vec, count, maybe_vec, false_vec);
+		} else {
+			// If there were no definite matches, then for speed,
+			// maybe_vec may not have been filled in, so we reuse sel.
+			possible = PositionDistinguisher::Possible<OP>(lchild, rchild, sel, count, maybe_vec, false_vec);
+		}
+
+		// If everything is still possible, then for speed,
+		// maybe_vec may not have been filled in, so we reuse sel.
+		if (possible != count) {
+			sel = &maybe_vec;
+		}
+
 		false_vec.Advance(count - possible);
 		count = possible;
-		sel = &maybe_vec;
 
 		// Increment the cursors
 		for (idx_t i = 0; i < count; ++i) {
