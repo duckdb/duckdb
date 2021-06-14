@@ -1,4 +1,4 @@
-#include "duckdb/execution/operator/join/physical_invisible_join.hpp"
+#include "duckdb/execution/operator/join/perfect_hash_join_executor.hpp"
 
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -10,12 +10,12 @@
 #include <iostream>
 namespace duckdb {
 
-PhysicalInvisibleJoin::PhysicalInvisibleJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
-                                             unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond,
-                                             JoinType join_type, const vector<idx_t> &left_projection_map,
-                                             const vector<idx_t> &right_projection_map_p,
-                                             vector<LogicalType> delim_types, idx_t estimated_cardinality,
-                                             PerfectHashJoinState join_state)
+PerfectHashJoinExecutor::PerfectHashJoinExecutor(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
+                                                 unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond,
+                                                 JoinType join_type, const vector<idx_t> &left_projection_map,
+                                                 const vector<idx_t> &right_projection_map_p,
+                                                 vector<LogicalType> delim_types, idx_t estimated_cardinality,
+                                                 PerfectHashJoinState join_state)
     : PhysicalComparisonJoin(op, PhysicalOperatorType::HASH_JOIN, move(cond), join_type, estimated_cardinality),
       right_projection_map(right_projection_map_p), delim_types(move(delim_types)), pjoin_state(join_state) {
 	children.push_back(move(left));
@@ -32,7 +32,7 @@ PhysicalInvisibleJoin::PhysicalInvisibleJoin(LogicalOperator &op, unique_ptr<Phy
 // Sink
 //===--------------------------------------------------------------------===//
 
-unique_ptr<GlobalOperatorState> PhysicalInvisibleJoin::GetGlobalState(ClientContext &context) {
+unique_ptr<GlobalOperatorState> PerfectHashJoinExecutor::GetGlobalState(ClientContext &context) {
 	auto state = make_unique<HashJoinGlobalState>();
 	state->hash_table =
 	    make_unique<JoinHashTable>(BufferManager::GetBufferManager(context), conditions, build_types, join_type);
@@ -56,7 +56,7 @@ void PhysicalInvisibleJoin::AppendToBuild(DataChunk &join_keys, DataChunk &build
 		}
 	}
 }
-unique_ptr<LocalSinkState> PhysicalInvisibleJoin::GetLocalSinkState(ExecutionContext &context) {
+unique_ptr<LocalSinkState> PerfectHashJoinExecutor::GetLocalSinkState(ExecutionContext &context) {
 	auto state = make_unique<HashJoinLocalState>();
 	if (!right_projection_map.empty()) {
 		state->build_chunk.Initialize(build_types);
@@ -68,8 +68,8 @@ unique_ptr<LocalSinkState> PhysicalInvisibleJoin::GetLocalSinkState(ExecutionCon
 	return move(state);
 }
 
-void PhysicalInvisibleJoin::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_p,
-                                 DataChunk &input) const {
+void PerfectHashJoinExecutor::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_p,
+                                   DataChunk &input) const {
 	auto &global_state = (HashJoinGlobalState &)state;
 	auto &lstate = (HashJoinLocalState &)lstate_p;
 	// resolve the join keys for the right chunk
@@ -93,11 +93,11 @@ void PhysicalInvisibleJoin::Sink(ExecutionContext &context, GlobalOperatorState 
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//
-bool PhysicalInvisibleJoin::Finalize(Pipeline &pipeline, ClientContext &context,
-                                     unique_ptr<GlobalOperatorState> state) {
+bool PerfectHashJoinExecutor::Finalize(Pipeline &pipeline, ClientContext &context,
+                                       unique_ptr<GlobalOperatorState> state) {
 	auto &sink = (HashJoinGlobalState &)*state;
 	// check for possible perfect hash table
-	if (!CheckRequirementsForPerfectHashJoin(sink.hash_table.get(), sink)) {
+	if (!perfect_executor.ExecutePerfectHashJoin(sink.hash_table.get(), sink)) {
 		// no perfect hash table, just finish the building of the regular hash table
 		sink.hash_table->Finalize();
 	}
@@ -109,7 +109,7 @@ bool PhysicalInvisibleJoin::Finalize(Pipeline &pipeline, ClientContext &context,
 //===--------------------------------------------------------------------===//
 // GetChunkInternal
 //===--------------------------------------------------------------------===//
-unique_ptr<PhysicalOperatorState> PhysicalInvisibleJoin::GetOperatorState() {
+unique_ptr<PhysicalOperatorState> PerfectHashJoinExecutor::GetOperatorState() {
 	auto state = make_unique<PhysicalHashJoinState>(*this, children[0].get(), children[1].get(), conditions);
 	state->cached_chunk.Initialize(types);
 	state->join_keys.Initialize(condition_types);
@@ -119,8 +119,8 @@ unique_ptr<PhysicalOperatorState> PhysicalInvisibleJoin::GetOperatorState() {
 	return move(state);
 }
 
-void PhysicalInvisibleJoin::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
-                                             PhysicalOperatorState *state_p) const {
+void PerfectHashJoinExecutor::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
+                                               PhysicalOperatorState *state_p) const {
 	auto state = reinterpret_cast<PhysicalHashJoinState *>(state_p);
 	auto &sink = (HashJoinGlobalState &)*sink_state;
 	if (sink.hash_table->size() == 0 &&
@@ -134,8 +134,8 @@ void PhysicalInvisibleJoin::GetChunkInternal(ExecutionContext &context, DataChun
 	}
 }
 
-bool PhysicalInvisibleJoin::ExecuteInvisibleJoin(ExecutionContext &context, DataChunk &result,
-                                                 PhysicalHashJoinState *physical_state, JoinHashTable *ht_ptr) const {
+bool PerfectHashJoinExecutor::ExecuteInvisibleJoin(ExecutionContext &context, DataChunk &result,
+                                                   PhysicalHashJoinState *physical_state, JoinHashTable *ht_ptr) const {
 	// We only probe if the optimized hash table has been built
 	if (!hasInvisibleJoin) {
 		return false;
@@ -168,8 +168,8 @@ bool PhysicalInvisibleJoin::ExecuteInvisibleJoin(ExecutionContext &context, Data
 	return true;
 }
 
-bool PhysicalInvisibleJoin::CheckRequirementsForPerfectHashJoin(JoinHashTable *ht_ptr,
-                                                                HashJoinGlobalState &join_state) {
+bool PerfectHashJoinExecutor::CheckRequirementsForPerfectHashJoin(JoinHashTable *ht_ptr,
+                                                                  HashJoinGlobalState &join_state) {
 	// first check the build size
 	if (!pjoin_state.is_build_small) {
 		return false;
@@ -189,12 +189,12 @@ bool PhysicalInvisibleJoin::CheckRequirementsForPerfectHashJoin(JoinHashTable *h
 	return true;
 }
 
-bool PhysicalInvisibleJoin::HasDuplicates(JoinHashTable *ht_ptr) {
+bool PerfectHashJoinExecutor::HasDuplicates(JoinHashTable *ht_ptr) {
 	return false;
 }
 
-void PhysicalInvisibleJoin::BuildPerfectHashStructure(JoinHashTable *hash_table_ptr, JoinHTScanState &join_ht_state,
-                                                      LogicalType key_type) {
+void PerfectHashJoinExecutor::BuildPerfectHashStructure(JoinHashTable *hash_table_ptr, JoinHTScanState &join_ht_state,
+                                                        LogicalType key_type) {
 	// allocate memory for each column
 	auto build_size =
 	    (pjoin_state.is_build_min_small) ? hash_table_ptr->size() + MIN_THRESHOLD : hash_table_ptr->size();
@@ -206,7 +206,7 @@ void PhysicalInvisibleJoin::BuildPerfectHashStructure(JoinHashTable *hash_table_
 }
 
 template <typename T>
-void PhysicalInvisibleJoin::TemplatedFillSelectionVector(Vector &source, SelectionVector &sel_vec, idx_t count) {
+void PerfectHashJoinExecutor::TemplatedFillSelectionVector(Vector &source, SelectionVector &sel_vec, idx_t count) {
 	auto min_value = pjoin_state.build_min.GetValue<T>();
 	auto max_value = pjoin_state.build_max.GetValue<T>();
 	pjoin_state.range = max_value - min_value;
@@ -223,7 +223,7 @@ void PhysicalInvisibleJoin::TemplatedFillSelectionVector(Vector &source, Selecti
 	//	}
 }
 
-void PhysicalInvisibleJoin::FillSelectionVectorSwitch(Vector &source, SelectionVector &sel_vec, idx_t count) {
+void PerfectHashJoinExecutor::FillSelectionVectorSwitch(Vector &source, SelectionVector &sel_vec, idx_t count) {
 	switch (source.GetType().id()) {
 	case LogicalTypeId::TINYINT:
 		TemplatedFillSelectionVector<int8_t>(source, sel_vec, count);
@@ -253,6 +253,22 @@ void PhysicalInvisibleJoin::FillSelectionVectorSwitch(Vector &source, SelectionV
 		throw NotImplementedException("Type not supported");
 		break;
 	}
+}
+
+bool PerfectHashJoinExecutor::CheckRequirementsForInvisibleJoin(JoinHashTable *ht_ptr,
+                                                                HashJoinGlobalState &join_state) {
+	// first check the build size and check for nulls
+	if (!pjoin_state.is_build_small || ht_ptr->has_null) {
+		return false;
+	}
+
+	// Store build side as a set of columns
+	BuildPerfectHashStructure(ht_ptr, join_state.ht_scan_state, join_state.key_type);
+	if (HasDuplicates(ht_ptr)) {
+		return false;
+	}
+	hasInvisibleJoin = true;
+	return true;
 }
 
 } // namespace duckdb

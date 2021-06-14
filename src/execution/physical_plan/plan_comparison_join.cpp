@@ -1,7 +1,7 @@
+#include "duckdb/execution/operator/join/perfect_hash_join_executor.hpp"
 #include "duckdb/execution/operator/join/physical_cross_product.hpp"
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
 #include "duckdb/execution/operator/join/physical_index_join.hpp"
-#include "duckdb/execution/operator/join/physical_invisible_join.hpp"
 #include "duckdb/execution/operator/join/physical_nested_loop_join.hpp"
 #include "duckdb/execution/operator/join/physical_piecewise_merge_join.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
@@ -31,7 +31,7 @@ static bool CanPlanIndexJoin(Transaction &transaction, TableScanBindData *bind_d
 	return true;
 }
 
-bool CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinState &join_state) {
+void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinState &join_state) {
 	// we only do this optimization for inner joins
 	if (op.join_type != JoinType::INNER)
 		return;

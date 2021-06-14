@@ -11,26 +11,12 @@
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/execution/join_hashtable.hpp"
+#include "duckdb/execution/operator/join/perfect_hash_join_executor.hpp"
 #include "duckdb/execution/operator/join/physical_comparison_join.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/planner/operator/logical_join.hpp"
 
 namespace duckdb {
-constexpr size_t BUILD_THRESHOLD = 1 << 20; // 1024
-constexpr size_t MIN_THRESHOLD = 1 << 7;    // 128
-
-struct PerfectHashJoinState {
-	Value build_min;
-	Value build_max;
-	Value probe_min;
-	Value probe_max;
-	bool is_build_small {false};
-	bool is_probe_in_range {false};
-	bool is_build_min_small {false};
-	bool is_build_dense {false};
-	idx_t range {0};
-	idx_t estimated_cardinality {0};
-};
 
 class PhysicalHashJoinState : public PhysicalOperatorState {
 public:
