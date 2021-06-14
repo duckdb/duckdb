@@ -55,26 +55,34 @@ static inline void TemplatedLoopHash(Vector &input, Vector &result, const Select
 	}
 }
 
-template <bool HAS_RSEL>
+template <bool HAS_RSEL, bool FIRST_HASH>
 static inline void StructLoopHash(Vector &input, Vector &hashes, const SelectionVector *rsel, idx_t count) {
 	auto &children = StructVector::GetEntries(input);
 
 	D_ASSERT(children.size() > 0);
 	idx_t col_no = 0;
 	if (HAS_RSEL) {
-		VectorOperations::Hash(*children[col_no++], hashes, *rsel, count);
+		if (FIRST_HASH) {
+			VectorOperations::Hash(*children[col_no++], hashes, *rsel, count);
+		} else {
+			VectorOperations::CombineHash(hashes, *children[col_no++], *rsel, count);
+		}
 		while (col_no < children.size()) {
 			VectorOperations::CombineHash(hashes, *children[col_no++], *rsel, count);
 		}
 	} else {
-		VectorOperations::Hash(*children[col_no++], hashes, count);
+		if (FIRST_HASH) {
+			VectorOperations::Hash(*children[col_no++], hashes, count);
+		} else {
+			VectorOperations::CombineHash(hashes, *children[col_no++], count);
+		}
 		while (col_no < children.size()) {
 			VectorOperations::CombineHash(hashes, *children[col_no++], count);
 		}
 	}
 }
 
-template <bool HAS_RSEL>
+template <bool HAS_RSEL, bool FIRST_HASH>
 static inline void ListLoopHash(Vector &input, Vector &hashes, const SelectionVector *rsel, idx_t count) {
 	auto hdata = FlatVector::GetData<hash_t>(hashes);
 
@@ -107,7 +115,12 @@ static inline void ListLoopHash(Vector &input, Vector &hashes, const SelectionVe
 	// Compute the first round of hashes
 	Vector child;
 	child.Slice(ListVector::GetEntry(input), cursor, count);
-	VectorOperations::Hash(child, hashes, unprocessed, count);
+
+	if (FIRST_HASH) {
+		VectorOperations::Hash(child, hashes, unprocessed, count);
+	} else {
+		VectorOperations::CombineHash(hashes, child, unprocessed, count);
+	}
 
 	// Combine the hashes for the remaining positions until there are none left
 	for (idx_t position = 1;; ++position) {
@@ -176,10 +189,10 @@ static inline void HashTypeSwitch(Vector &input, Vector &result, const Selection
 		break;
 	case PhysicalType::MAP:
 	case PhysicalType::STRUCT:
-		StructLoopHash<HAS_RSEL>(input, result, rsel, count);
+		StructLoopHash<HAS_RSEL, true>(input, result, rsel, count);
 		break;
 	case PhysicalType::LIST:
-		ListLoopHash<HAS_RSEL>(input, result, rsel, count);
+		ListLoopHash<HAS_RSEL, true>(input, result, rsel, count);
 		break;
 	default:
 		throw InvalidTypeException(input.GetType(), "Invalid type for hash");
@@ -267,51 +280,6 @@ void TemplatedLoopCombineHash(Vector &input, Vector &hashes, const SelectionVect
 }
 
 template <bool HAS_RSEL>
-static inline void StructLoopCombineHash(Vector &input, Vector &hashes, const SelectionVector *rsel, idx_t count) {
-	auto &children = StructVector::GetEntries(input);
-
-	for (auto &child : children) {
-		if (HAS_RSEL) {
-			VectorOperations::CombineHash(hashes, *child, *rsel, count);
-		} else {
-			VectorOperations::CombineHash(hashes, *child, count);
-		}
-	}
-}
-
-template <bool HAS_RSEL>
-static inline void ValueLoopCombineHash(Vector &input, Vector &hashes, const SelectionVector *rsel, idx_t count) {
-	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR && hashes.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		auto hash_data = ConstantVector::GetData<hash_t>(hashes);
-
-		auto input_value = input.GetValue(0);
-		auto other_hash = ValueOperations::Hash(input_value);
-		hash_data[0] = CombineHashScalar(hash_data[0], other_hash);
-	} else if (hashes.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		// mix constant with non-constant, first get the constant value
-		auto constant_hash = *ConstantVector::GetData<hash_t>(hashes);
-		// now re-initialize the hashes vector to an empty flat vector
-		hashes.Initialize(hashes.GetType());
-		auto hash_data = FlatVector::GetData<hash_t>(hashes);
-		for (idx_t i = 0; i < count; i++) {
-			auto ridx = HAS_RSEL ? rsel->get_index(i) : i;
-			auto input_value = input.GetValue(ridx);
-			auto other_hash = ValueOperations::Hash(input_value);
-			hash_data[ridx] = CombineHashScalar(constant_hash, other_hash);
-		}
-	} else {
-		D_ASSERT(hashes.GetVectorType() == VectorType::FLAT_VECTOR);
-		auto hash_data = FlatVector::GetData<hash_t>(hashes);
-		for (idx_t i = 0; i < count; i++) {
-			auto ridx = HAS_RSEL ? rsel->get_index(i) : i;
-			auto input_value = input.GetValue(ridx);
-			auto other_hash = ValueOperations::Hash(input_value);
-			hash_data[ridx] = CombineHashScalar(hash_data[ridx], other_hash);
-		}
-	}
-}
-
-template <bool HAS_RSEL>
 static inline void CombineHashTypeSwitch(Vector &hashes, Vector &input, const SelectionVector *rsel, idx_t count) {
 	D_ASSERT(hashes.GetType().id() == LogicalTypeId::HASH);
 	switch (input.GetType().InternalType()) {
@@ -357,10 +325,10 @@ static inline void CombineHashTypeSwitch(Vector &hashes, Vector &input, const Se
 		break;
 	case PhysicalType::MAP:
 	case PhysicalType::STRUCT:
-		StructLoopCombineHash<HAS_RSEL>(input, hashes, rsel, count);
+		StructLoopHash<HAS_RSEL, false>(input, hashes, rsel, count);
 		break;
 	case PhysicalType::LIST:
-		ValueLoopCombineHash<HAS_RSEL>(input, hashes, rsel, count);
+		ListLoopHash<HAS_RSEL, false>(input, hashes, rsel, count);
 		break;
 	default:
 		throw InvalidTypeException(input.GetType(), "Invalid type for hash");
