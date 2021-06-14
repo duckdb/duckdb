@@ -51,18 +51,20 @@ public:
 
 	DatabaseInstance &GetDatabase() const;
 	DataTableInfo &GetTableInfo() const;
+	idx_t GetCount();
 
 	//! The root type of the column
 	const LogicalType &RootType() const;
 
 	//! Initialize a scan of the column
-	virtual void InitializeScan(ColumnScanState &state) = 0;
+	virtual void InitializeScan(ColumnScanState &state);
 	//! Initialize a scan starting at the specified offset
-	virtual void InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) = 0;
+	virtual void InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx);
 	//! Scan the next vector from the column
 	virtual void Scan(Transaction &transaction, idx_t vector_index, ColumnScanState &state, Vector &result);
 	virtual void ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates);
 	virtual void ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_group, idx_t count, Vector &result);
+	virtual void ScanCount(ColumnScanState &state, Vector &result, idx_t count);
 
 	//! Initialize an appending phase for this column
 	virtual void InitializeAppend(ColumnAppendState &state);
@@ -111,7 +113,7 @@ protected:
 	void AppendTransientSegment(idx_t start_row);
 
 	//! Scans a base vector from the column
-	void ScanVector(ColumnScanState &state, Vector &result);
+	idx_t ScanVector(ColumnScanState &state, Vector &result, idx_t remaining);
 	//! Scans a vector from the column merged with any potential updates
 	//! If ALLOW_UPDATES is set to false, the function will instead throw an exception if any updates are found
 	template <bool SCAN_COMMITTED, bool ALLOW_UPDATES>

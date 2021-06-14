@@ -12,16 +12,4 @@ bool ValidityColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filte
 	return true;
 }
 
-void ValidityColumnData::InitializeScan(ColumnScanState &state) {
-	state.current = (ColumnSegment *)data.GetRootSegment();
-	state.row_index = state.current ? state.current->start : 0;
-	state.initialized = false;
-}
-
-void ValidityColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) {
-	state.current = (ColumnSegment *)data.GetSegment(row_idx);
-	state.row_index = row_idx;
-	state.initialized = false;
-}
-
 } // namespace duckdb

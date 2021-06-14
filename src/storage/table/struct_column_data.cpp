@@ -57,7 +57,7 @@ void StructColumnData::Scan(Transaction &transaction, idx_t vector_index, Column
 	for (idx_t i = 0; i < sub_columns.size(); i++) {
 		sub_columns[i]->Scan(transaction, vector_index, state.child_states[i + 1], *child_entries[i]);
 	}
-	state.child_states[0].Next();
+	state.child_states[0].NextVector();
 }
 
 void StructColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates) {
@@ -66,8 +66,18 @@ void StructColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state,
 	for (idx_t i = 0; i < sub_columns.size(); i++) {
 		sub_columns[i]->ScanCommitted(vector_index, state.child_states[i + 1], *child_entries[i], allow_updates);
 	}
-	state.child_states[0].Next();
+	state.child_states[0].NextVector();
 }
+
+void StructColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count) {
+	validity.ScanCount(state, result, count);
+	auto &child_entries = StructVector::GetEntries(result);
+	for (idx_t i = 0; i < sub_columns.size(); i++) {
+		sub_columns[i]->ScanCount(state.child_states[i + 1], *child_entries[i], count);
+	}
+	state.child_states[0].Next(count);
+}
+
 
 void StructColumnData::InitializeAppend(ColumnAppendState &state) {
 	ColumnAppendState validity_append;

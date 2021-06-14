@@ -70,7 +70,7 @@ void PhysicalUpdate::Sink(ExecutionContext &context, GlobalOperatorState &state,
 	}
 
 	lock_guard<mutex> glock(gstate.lock);
-	if (is_index_update) {
+	if (update_is_del_and_insert) {
 		// index update, perform a delete and an append instead
 		table.Delete(tableref, context.client, row_ids, update_chunk.size());
 		mock_chunk.SetCardinality(update_chunk);

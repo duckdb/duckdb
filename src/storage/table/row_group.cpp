@@ -219,7 +219,7 @@ void RowGroup::CommitDropColumn(idx_t column_idx) {
 void RowGroupScanState::NextVector() {
 	vector_index++;
 	for (idx_t i = 0; i < parent.column_ids.size(); i++) {
-		column_scans[i].Next();
+		column_scans[i].NextVector();
 	}
 }
 

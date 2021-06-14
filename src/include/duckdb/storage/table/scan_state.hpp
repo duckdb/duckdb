@@ -49,7 +49,8 @@ struct ColumnScanState {
 
 public:
 	//! Move on to the next vector in the scan
-	void Next();
+	void Next(idx_t count);
+	void NextVector();
 };
 
 struct ColumnFetchState {

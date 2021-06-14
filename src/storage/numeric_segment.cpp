@@ -144,6 +144,8 @@ static NumericSegment::append_function_t GetAppendFunction(PhysicalType type) {
 		return AppendLoop<double>;
 	case PhysicalType::INTERVAL:
 		return AppendLoop<interval_t>;
+	case PhysicalType::LIST:
+		return AppendLoop<list_entry_t>;
 	default:
 		throw NotImplementedException("Unimplemented type for uncompressed segment");
 	}

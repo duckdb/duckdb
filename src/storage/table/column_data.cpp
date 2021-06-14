@@ -17,6 +17,7 @@
 #include "duckdb/storage/checkpoint/write_overflow_strings_to_disk.hpp"
 #include "duckdb/storage/table/validity_column_data.hpp"
 #include "duckdb/storage/table/standard_column_data.hpp"
+#include "duckdb/storage/table/list_column_data.hpp"
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/storage/table/row_group.hpp"
 
@@ -44,19 +45,36 @@ const LogicalType &ColumnData::RootType() const {
 	return type;
 }
 
-void ColumnData::ScanVector(ColumnScanState &state, Vector &result) {
+idx_t ColumnData::GetCount() {
+	auto last_segment = data.GetLastSegment();
+	return last_segment ? last_segment->start + last_segment->count : 0;
+}
+
+void ColumnData::InitializeScan(ColumnScanState &state) {
+	state.current = (ColumnSegment *)data.GetRootSegment();
+	state.row_index = state.current ? state.current->start : 0;
+	state.initialized = false;
+}
+
+void ColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) {
+	state.current = (ColumnSegment *)data.GetSegment(row_idx);
+	state.row_index = row_idx;
+	state.initialized = false;
+}
+
+idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remaining) {
 	if (!state.initialized) {
 		D_ASSERT(state.current);
 		state.current->InitializeScan(state);
 		state.initialized = true;
 	}
 	idx_t row_index = state.row_index;
-	idx_t remaining = STANDARD_VECTOR_SIZE;
+	idx_t initial_remaining = remaining;
 	while (remaining > 0) {
 		D_ASSERT(row_index >= state.current->start && row_index <= state.current->start + state.current->count);
 		idx_t scan_count = MinValue<idx_t>(remaining, state.current->start + state.current->count - row_index);
 		idx_t start = row_index - state.current->start;
-		idx_t result_offset = STANDARD_VECTOR_SIZE - remaining;
+		idx_t result_offset = initial_remaining - remaining;
 		state.current->Scan(state, start, scan_count, result, result_offset);
 
 		row_index += scan_count;
@@ -71,11 +89,12 @@ void ColumnData::ScanVector(ColumnScanState &state, Vector &result) {
 			D_ASSERT(row_index >= state.current->start && row_index <= state.current->start + state.current->count);
 		}
 	}
+	return initial_remaining - remaining;
 }
 
 template <bool SCAN_COMMITTED, bool ALLOW_UPDATES>
 void ColumnData::ScanVector(Transaction *transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
-	ScanVector(state, result);
+	ScanVector(state, result, STANDARD_VECTOR_SIZE);
 
 	lock_guard<mutex> update_guard(update_lock);
 	if (updates) {
@@ -115,18 +134,27 @@ void ColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vecto
 void ColumnData::ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_group, idx_t count, Vector &result) {
 	ColumnScanState child_state;
 	InitializeScanWithOffset(child_state, row_group_start + offset_in_row_group);
-	ScanVector(child_state, result);
+	ScanVector(child_state, result, STANDARD_VECTOR_SIZE);
 	if (updates) {
 		updates->FetchCommittedRange(offset_in_row_group, count, result);
 	}
 }
 
-void ColumnScanState::Next() {
+void ColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count) {
+	if (count == 0) {
+		return;
+	}
+	// ScanCount can only be used if there are no updates
+	D_ASSERT(!updates);
+	ScanVector(state, result, count);
+}
+
+void ColumnScanState::Next(idx_t count) {
 	//! There is no column segment
 	if (!current) {
 		return;
 	}
-	row_index += STANDARD_VECTOR_SIZE;
+	row_index += count;
 	while (row_index >= current->start + current->count) {
 		current = (ColumnSegment *)current->next.get();
 		initialized = false;
@@ -137,8 +165,12 @@ void ColumnScanState::Next() {
 	}
 	D_ASSERT(!current || (row_index >= current->start && row_index < current->start + current->count));
 	for (auto &child_state : child_states) {
-		child_state.Next();
+		child_state.Next(count);
 	}
+}
+
+void ColumnScanState::NextVector() {
+	Next(STANDARD_VECTOR_SIZE);
 }
 
 void TableScanState::NextVector() {
@@ -224,7 +256,7 @@ void ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
 	// perform the fetch within the segment
 	state.row_index = row_id / STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE;
 	state.current = (ColumnSegment *)data.GetSegment(state.row_index);
-	ScanVector(state, result);
+	ScanVector(state, result, STANDARD_VECTOR_SIZE);
 }
 
 void ColumnData::FetchRow(Transaction &transaction, ColumnFetchState &state, row_t row_id, Vector &result,
@@ -618,6 +650,8 @@ static RET CreateColumnInternal(DataTableInfo &info, idx_t column_index, idx_t s
                                 ColumnData *parent) {
 	if (type.InternalType() == PhysicalType::STRUCT) {
 		return OP::template Create<StructColumnData>(info, column_index, start_row, type, parent);
+	} else if (type.InternalType() == PhysicalType::LIST) {
+		return OP::template Create<ListColumnData>(info, column_index, start_row, type, parent);
 	} else if (type.id() == LogicalTypeId::VALIDITY) {
 		return OP::template Create<ValidityColumnData>(info, column_index, start_row, parent);
 	}
