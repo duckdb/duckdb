@@ -220,12 +220,8 @@ void PhysicalUnnest::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 		// first cols are from child, last n cols from unnest
 		chunk.SetCardinality(this_chunk_len);
 
-		SelectionVector parent_sel(STANDARD_VECTOR_SIZE);
-		for (idx_t i = 0; i < this_chunk_len; i++) {
-			parent_sel.set_index(i, state->parent_position);
-		}
 		for (idx_t col_idx = 0; col_idx < state->child_chunk.ColumnCount(); col_idx++) {
-			chunk.data[col_idx].Slice(state->child_chunk.data[col_idx], parent_sel, this_chunk_len);
+			ConstantVector::Reference(chunk.data[col_idx], state->child_chunk.data[col_idx], state->parent_position, state->child_chunk.size());
 		}
 
 		for (idx_t col_idx = 0; col_idx < state->list_data.ColumnCount(); col_idx++) {

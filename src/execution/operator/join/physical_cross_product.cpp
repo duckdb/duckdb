@@ -76,14 +76,15 @@ void PhysicalCrossProduct::GetChunkInternal(ExecutionContext &context, DataChunk
 	// now match the current vector of the left relation with the current row
 	// from the right relation
 	chunk.SetCardinality(left_chunk.size());
+	// create a reference to the vectors of the left column
 	for (idx_t i = 0; i < left_chunk.ColumnCount(); i++) {
-		// first duplicate the values of the left side
 		chunk.data[i].Reference(left_chunk.data[i]);
 	}
+	// duplicate the values on the right side
+	auto &right_chunk = right_collection.GetChunkForRow(state->right_position);
+	auto row_in_chunk = state->right_position % STANDARD_VECTOR_SIZE;
 	for (idx_t i = 0; i < right_collection.ColumnCount(); i++) {
-		// now create a reference to the vectors of the right chunk
-		auto rvalue = right_collection.GetValue(i, state->right_position);
-		chunk.data[left_chunk.ColumnCount() + i].Reference(rvalue);
+		ConstantVector::Reference(chunk.data[left_chunk.ColumnCount() + i], right_chunk.data[i], row_in_chunk, right_chunk.size());
 	}
 
 	// for the next iteration, move to the next position on the right side

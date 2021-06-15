@@ -171,8 +171,7 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ExecutionContext &context, DataCh
 		// fill in the current element of the LHS into the chunk
 		D_ASSERT(chunk.ColumnCount() == lchunk.ColumnCount() + rchunk.ColumnCount());
 		for (idx_t i = 0; i < lchunk.ColumnCount(); i++) {
-			auto lvalue = lchunk.GetValue(i, state->left_position);
-			chunk.data[i].Reference(lvalue);
+			ConstantVector::Reference(chunk.data[i], lchunk.data[i], state->left_position, lchunk.size());
 		}
 		// for the RHS we just reference the entire vector
 		for (idx_t i = 0; i < rchunk.ColumnCount(); i++) {

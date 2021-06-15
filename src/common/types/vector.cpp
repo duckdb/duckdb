@@ -1022,6 +1022,77 @@ const SelectionVector *ConstantVector::ZeroSelectionVector(idx_t count, Selectio
 	return &owned_sel;
 }
 
+void ConstantVector::Reference(Vector &vector, Vector &other, idx_t position, idx_t count) {
+	D_ASSERT(position < count);
+	auto &other_type = other.GetType();
+	switch(other_type.InternalType()) {
+	case PhysicalType::LIST: {
+		if (!ListVector::HasEntry(other)) {
+			Value null_value(other_type);
+			vector.Reference(null_value);
+			break;
+		}
+		// retrieve the list entry from the other vector
+		VectorData vdata;
+		other.Orrify(count, vdata);
+
+		auto list_index = vdata.sel->get_index(position);
+		if (!vdata.validity.RowIsValid(list_index)) {
+			// list is null: create null value
+			Value null_value(other_type);
+			vector.Reference(null_value);
+			break;
+		}
+
+		auto list_data = (list_entry_t *) vdata.data;
+		auto list_entry = list_data[list_index];
+
+		// add the list entry as the first element of "vector"
+		// FIXME: we only need to allocate space for 1 tuple here
+		vector.Initialize(other_type);
+		auto target_data = FlatVector::GetData<list_entry_t>(vector);
+		target_data[0] = list_entry;
+
+		// create a reference to the child list of the other vector
+		auto new_child = make_unique<Vector>();
+		new_child->Reference(ListVector::GetEntry(other));
+
+		ListVector::SetEntry(vector, move(new_child));
+		ListVector::SetListSize(vector, ListVector::GetListSize(other));
+		vector.SetVectorType(VectorType::CONSTANT_VECTOR);
+		return;
+	}
+	case PhysicalType::STRUCT: {
+		VectorData vdata;
+		other.Orrify(count, vdata);
+
+		auto list_index = vdata.sel->get_index(position);
+		if (!vdata.validity.RowIsValid(list_index)) {
+			// null struct: create null value
+			Value null_value(other_type);
+			vector.Reference(null_value);
+			break;
+		}
+
+		// struct: pass constant reference into child entries
+		vector.Initialize(other.GetType());
+		auto &source_entries = StructVector::GetEntries(other);
+		auto &target_entries = StructVector::GetEntries(vector);
+		for(idx_t i = 0; i < source_entries.size(); i++) {
+			ConstantVector::Reference(*target_entries[i], *source_entries[i], position, count);
+		}
+		vector.SetVectorType(VectorType::CONSTANT_VECTOR);
+		break;
+	}
+	default:
+		// default behavior: get a value from the vector and reference it
+		// this is not actually that bad for scalar types
+		auto value = other.GetValue(position);
+		vector.Reference(value);
+		break;
+	}
+}
+
 const SelectionVector *FlatVector::IncrementalSelectionVector(idx_t count, SelectionVector &owned_sel) {
 	if (count <= STANDARD_VECTOR_SIZE) {
 		return &FlatVector::INCREMENTAL_SELECTION_VECTOR;
