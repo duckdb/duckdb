@@ -5,8 +5,6 @@
 statement ok
 PRAGMA enable_verification
 
-mode skip
-
 # varchars
 query III
 SELECT id, UNNEST(i), UNNEST(j) FROM (VALUES (1, ['abcd', 'efgh'], ['123456789abcd']), (2, NULL, ['123456789efgh', '123456789klmnop']), (3, ['hello', NULL, 'world'], [NULL])) tbl(id, i, j)
@@ -66,8 +64,6 @@ NULL
 {'a': 12, 'b': 3}
 NULL
 {'a': NULL, 'b': NULL}
-
-mode unskip
 
 # structs in structs
 query I
