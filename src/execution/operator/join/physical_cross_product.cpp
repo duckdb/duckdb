@@ -84,7 +84,8 @@ void PhysicalCrossProduct::GetChunkInternal(ExecutionContext &context, DataChunk
 	auto &right_chunk = right_collection.GetChunkForRow(state->right_position);
 	auto row_in_chunk = state->right_position % STANDARD_VECTOR_SIZE;
 	for (idx_t i = 0; i < right_collection.ColumnCount(); i++) {
-		ConstantVector::Reference(chunk.data[left_chunk.ColumnCount() + i], right_chunk.data[i], row_in_chunk, right_chunk.size());
+		ConstantVector::Reference(chunk.data[left_chunk.ColumnCount() + i], right_chunk.data[i], row_in_chunk,
+		                          right_chunk.size());
 	}
 
 	// for the next iteration, move to the next position on the right side

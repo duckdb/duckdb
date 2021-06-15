@@ -221,7 +221,8 @@ void PhysicalUnnest::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 		chunk.SetCardinality(this_chunk_len);
 
 		for (idx_t col_idx = 0; col_idx < state->child_chunk.ColumnCount(); col_idx++) {
-			ConstantVector::Reference(chunk.data[col_idx], state->child_chunk.data[col_idx], state->parent_position, state->child_chunk.size());
+			ConstantVector::Reference(chunk.data[col_idx], state->child_chunk.data[col_idx], state->parent_position,
+			                          state->child_chunk.size());
 		}
 
 		for (idx_t col_idx = 0; col_idx < state->list_data.ColumnCount(); col_idx++) {

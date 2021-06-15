@@ -1025,7 +1025,7 @@ const SelectionVector *ConstantVector::ZeroSelectionVector(idx_t count, Selectio
 void ConstantVector::Reference(Vector &vector, Vector &other, idx_t position, idx_t count) {
 	D_ASSERT(position < count);
 	auto &other_type = other.GetType();
-	switch(other_type.InternalType()) {
+	switch (other_type.InternalType()) {
 	case PhysicalType::LIST: {
 		if (!ListVector::HasEntry(other)) {
 			Value null_value(other_type);
@@ -1044,7 +1044,7 @@ void ConstantVector::Reference(Vector &vector, Vector &other, idx_t position, id
 			break;
 		}
 
-		auto list_data = (list_entry_t *) vdata.data;
+		auto list_data = (list_entry_t *)vdata.data;
 		auto list_entry = list_data[list_index];
 
 		// add the list entry as the first element of "vector"
@@ -1078,7 +1078,7 @@ void ConstantVector::Reference(Vector &vector, Vector &other, idx_t position, id
 		vector.Initialize(other.GetType());
 		auto &source_entries = StructVector::GetEntries(other);
 		auto &target_entries = StructVector::GetEntries(vector);
-		for(idx_t i = 0; i < source_entries.size(); i++) {
+		for (idx_t i = 0; i < source_entries.size(); i++) {
 			ConstantVector::Reference(*target_entries[i], *source_entries[i], position, count);
 		}
 		vector.SetVectorType(VectorType::CONSTANT_VECTOR);
