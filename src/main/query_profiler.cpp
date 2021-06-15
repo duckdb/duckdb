@@ -216,14 +216,15 @@ void OperatorProfiler::AddTiming(const PhysicalOperator *op, double time, idx_t 
 void OperatorProfiler::Flush(const PhysicalOperator *phys_op, ExpressionExecutor *expression_executor,
                              const string &name, int id) {
 	auto entry = timings.find(phys_op);
-	if (entry != timings.end()) {
-		auto &operator_timing = timings.find(phys_op)->second;
-		if (int(operator_timing.executors_info.size()) <= id) {
-			operator_timing.executors_info.resize(id + 1);
-		}
-		operator_timing.executors_info[id] = make_unique<ExpressionExecutorInfo>(*expression_executor, name, id);
-		operator_timing.name = phys_op->GetName();
+	if (entry == timings.end()) {
+		return;
 	}
+	auto &operator_timing = timings.find(phys_op)->second;
+	if (int(operator_timing.executors_info.size()) <= id) {
+		operator_timing.executors_info.resize(id + 1);
+	}
+	operator_timing.executors_info[id] = make_unique<ExpressionExecutorInfo>(*expression_executor, name, id);
+	operator_timing.name = phys_op->GetName();
 }
 
 void QueryProfiler::Flush(OperatorProfiler &profiler) {
@@ -237,6 +238,9 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 
 		entry->second->info.time += node.second.time;
 		entry->second->info.elements += node.second.elements;
+		if (!detailed_enabled) {
+			continue;
+		}
 		for (auto &info : node.second.executors_info) {
 			if (!info) {
 				continue;
@@ -351,27 +355,84 @@ void QueryProfiler::ToStream(std::ostream &ss, bool print_optimizer_output) cons
 	}
 }
 
+// Print a row
+static void PrintRow(std::ostream &ss, const string &annotation, int id, const string &name, double time,
+                     int sample_counter, int tuple_counter, string extra_info, int depth) {
+	ss << string(depth * 3, ' ') << " {\n";
+	ss << string(depth * 3, ' ') << "   \"annotation\": \"" + annotation + "\",\n";
+	ss << string(depth * 3, ' ') << "   \"id\": " + to_string(id) + ",\n";
+	ss << string(depth * 3, ' ') << "   \"name\": \"" + name + "\",\n";
+#if defined(RDTSC)
+	ss << string(depth * 3, ' ') << "   \"timing\": \"NULL\" ,\n";
+	ss << string(depth * 3, ' ') << "   \"cycles_per_tuple\": " + StringUtil::Format("%.4f", time) + ",\n";
+#else
+	ss << string(depth * 3, ' ') << "   \"timing\":" + to_string(time) + ",\n";
+	ss << string(depth * 3, ' ') << "   \"cycles_per_tuple\": \"NULL\" ,\n";
+#endif
+	ss << string(depth * 3, ' ') << "   \"sample_size\": " << to_string(sample_counter) + ",\n";
+	ss << string(depth * 3, ' ') << "   \"input_size\": " << to_string(tuple_counter) + ",\n";
+	ss << string(depth * 3, ' ') << "   \"extra_info\": \""
+	   << StringUtil::Replace(std::move(extra_info), "\n", "\\n") + "\"\n";
+	ss << string(depth * 3, ' ') << " },\n";
+}
+
+static void ExtractFunctions(std::ostream &ss, ExpressionInfo &info, int &fun_id, int depth) {
+	if (info.hasfunction) {
+		D_ASSERT(info.sample_tuples_count != 0);
+		PrintRow(ss, "Function", fun_id++, info.function_name,
+		         int(info.function_time) / double(info.sample_tuples_count), info.sample_tuples_count,
+		         info.tuples_count, "", depth);
+	}
+	if (info.children.empty()) {
+		return;
+	}
+	// extract the children of this node
+	for (auto &child : info.children) {
+		ExtractFunctions(ss, *child, fun_id, depth);
+	}
+}
+
 static void ToJSONRecursive(QueryProfiler::TreeNode &node, std::ostream &ss, int depth = 1) {
-	ss << "{\n";
-	ss << string(depth * 3, ' ') << "\"name\": \"" + node.name + "\",\n";
-	ss << string(depth * 3, ' ') << "\"timing\":" + StringUtil::Format("%.2f", node.info.time) + ",\n";
-	ss << string(depth * 3, ' ') << "\"cardinality\":" + to_string(node.info.elements) + ",\n";
-	ss << string(depth * 3, ' ') << "\"extra_info\": \"" + StringUtil::Replace(node.extra_info, "\n", "\\n") + "\",\n";
-	ss << string(depth * 3, ' ') << "\"children\": [";
+	ss << string(depth * 3, ' ') << " {\n";
+	ss << string(depth * 3, ' ') << "   \"name\": \"" + node.name + "\",\n";
+	ss << string(depth * 3, ' ') << "   \"timing\":" + to_string(node.info.time) + ",\n";
+	ss << string(depth * 3, ' ') << "   \"cardinality\":" + to_string(node.info.elements) + ",\n";
+	ss << string(depth * 3, ' ')
+	   << "   \"extra_info\": \"" + StringUtil::Replace(node.extra_info, "\n", "\\n") + "\",\n";
+	ss << string(depth * 3, ' ') << "   \"timings\": [";
+	int32_t function_counter = 1;
+	int32_t expression_counter = 1;
+	ss << "\n ";
+	for (auto &expr_executor : node.info.executors_info) {
+		// For each Expression tree
+		if (!expr_executor) {
+			continue;
+		}
+		for (auto &expr_timer : expr_executor->roots) {
+			D_ASSERT(expr_timer->sample_tuples_count != 0);
+			PrintRow(ss, "ExpressionRoot", expression_counter++, expr_timer->name,
+			         int(expr_timer->time) / double(expr_timer->sample_tuples_count), expr_timer->sample_tuples_count,
+			         expr_timer->tuples_count, expr_timer->extra_info, depth + 1);
+			// Extract all functions inside the tree
+			ExtractFunctions(ss, *expr_timer->root, function_counter, depth + 1);
+		}
+	}
+	ss.seekp(-2, ss.cur);
+	ss << "\n";
+	ss << string(depth * 3, ' ') << "   ],\n";
+	ss << string(depth * 3, ' ') << "   \"children\": [\n";
 	if (node.children.empty()) {
-		ss << "]\n";
+		ss << string(depth * 3, ' ') << "   ]\n";
 	} else {
 		for (idx_t i = 0; i < node.children.size(); i++) {
 			if (i > 0) {
-				ss << ",";
+				ss << ",\n";
 			}
-			ss << "\n" << string(depth * 3, ' ');
 			ToJSONRecursive(*node.children[i], ss, depth + 1);
 		}
-		ss << "\n";
-		ss << string(depth * 3, ' ') << "]\n";
+		ss << string(depth * 3, ' ') << "   ]\n";
 	}
-	ss << string(depth * 3, ' ') << "}";
+	ss << string(depth * 3, ' ') << " }\n";
 }
 
 string QueryProfiler::ToJSON() const {
@@ -386,24 +447,33 @@ string QueryProfiler::ToJSON() const {
 	}
 	std::stringstream ss;
 	ss << "{\n";
+	ss << "   \"name\":  \"Query\", \n";
 	ss << "   \"result\": " + to_string(main_query.Elapsed()) + ",\n";
+	ss << "   \"timing\": " + to_string(main_query.Elapsed()) + ",\n";
+	ss << "   \"cardinality\": " + to_string(root->info.elements) + ",\n";
+	// JSON cannot have literal control characters in string literals
+	string extra_info = StringUtil::Replace(query, "\t", "\\t");
+	extra_info = StringUtil::Replace(extra_info, "\n", "\\n");
+	ss << "   \"extra-info\": \"" + extra_info + "\", \n";
 	// print the phase timings
-	ss << "   \"timings\": {\n";
+	ss << "   \"timings\": [\n";
 	const auto &ordered_phase_timings = GetOrderedPhaseTimings();
 	for (idx_t i = 0; i < ordered_phase_timings.size(); i++) {
 		if (i > 0) {
 			ss << ",\n";
 		}
-		ss << "      \"";
-		ss << ordered_phase_timings[i].first;
-		ss << "\": ";
-		ss << to_string(ordered_phase_timings[i].second);
+		ss << "   {\n";
+		ss << "   \"annotation\": \"" + ordered_phase_timings[i].first + "\", \n";
+		ss << "   \"timing\": " + to_string(ordered_phase_timings[i].second) + "\n";
+		ss << "   }";
 	}
-	ss << "\n   },\n";
+	ss << "\n";
+	ss << "   ],\n";
 	// recursively print the physical operator tree
-	ss << "   \"tree\": ";
+	ss << "   \"children\": [\n";
 	ToJSONRecursive(*root, ss);
-	ss << "\n}";
+	ss << "   ]\n";
+	ss << "}";
 	return ss.str();
 }
 
@@ -411,6 +481,10 @@ void QueryProfiler::WriteToFile(const char *path, string &info) const {
 	ofstream out(path);
 	out << info;
 	out.close();
+	// throw an IO exception if it fails to write the file
+	if (out.fail()) {
+		throw IOException(strerror(errno));
+	}
 }
 
 unique_ptr<QueryProfiler::TreeNode> QueryProfiler::CreateTree(PhysicalOperator *root, idx_t depth) {
@@ -492,7 +566,7 @@ void ExpressionInfo::ExtractExpressionsRecursive(unique_ptr<ExpressionState> &st
 		auto expr_info = make_unique<ExpressionInfo>();
 		if (child->expr.expression_class == ExpressionClass::BOUND_FUNCTION) {
 			expr_info->hasfunction = true;
-			expr_info->function_name = ((BoundFunctionExpression &)child->expr).function.name;
+			expr_info->function_name = ((BoundFunctionExpression &)child->expr).function.ToString();
 			expr_info->function_time = child->profiler.time;
 			expr_info->sample_tuples_count = child->profiler.sample_tuples_count;
 			expr_info->tuples_count = child->profiler.tuples_count;

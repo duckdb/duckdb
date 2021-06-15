@@ -28,6 +28,7 @@
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/planner/pragma_handler.hpp"
 #include "duckdb/common/to_string.hpp"
+#include "duckdb/common/file_system.hpp"
 
 namespace duckdb {
 
@@ -470,12 +471,22 @@ unique_ptr<QueryResult> ClientContext::RunStatements(ClientContextLock &lock, co
 
 void ClientContext::LogQueryInternal(ClientContextLock &, const string &query) {
 	if (!log_query_writer) {
+#ifdef DUCKDB_FORCE_QUERY_LOG
+		try {
+			string log_path(DUCKDB_FORCE_QUERY_LOG);
+			log_query_writer = make_unique<BufferedFileWriter>(FileSystem::GetFileSystem(*this), log_path);
+		} catch (...) {
+			return;
+		}
+#else
 		return;
+#endif
 	}
 	// log query path is set: log the query
 	log_query_writer->WriteData((const_data_ptr_t)query.c_str(), query.size());
 	log_query_writer->WriteData((const_data_ptr_t) "\n", 1);
 	log_query_writer->Flush();
+	log_query_writer->Sync();
 }
 
 unique_ptr<QueryResult> ClientContext::Query(unique_ptr<SQLStatement> statement, bool allow_stream_result) {

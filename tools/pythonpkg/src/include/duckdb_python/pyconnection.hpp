@@ -61,7 +61,7 @@ public:
 	DuckDBPyConnection *RegisterDF(const string &name, py::object value);
 
 	unique_ptr<DuckDBPyRelation> FromQuery(const string &query, const string &alias = "query_relation");
-	DuckDBPyConnection *RegisterArrow(const string &name, py::object value, const idx_t rows_per_tuple = 100000);
+	DuckDBPyConnection *RegisterArrow(const string &name, py::object &value, const idx_t rows_per_tuple = 100000);
 
 	unique_ptr<DuckDBPyRelation> Table(const string &tname);
 

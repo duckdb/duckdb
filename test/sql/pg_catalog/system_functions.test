@@ -1,0 +1,77 @@
+# name: test/sql/pg_catalog/system_functions.test
+# description: Test various postgres' system functions (https://www.postgresql.org/docs/9.1/functions-info.html)
+# group: [pg_catalog]
+
+query I
+SELECT CURRENT_USER
+----
+duckdb
+
+query I
+SELECT CURRENT_CATALOG
+----
+duckdb
+
+query I
+SELECT CURRENT_DATABASE()
+----
+duckdb
+
+query I
+SELECT USER
+----
+duckdb
+
+query I
+SELECT SESSION_USER
+----
+duckdb
+
+statement ok
+SELECT version();
+
+query I
+SELECT current_query();
+----
+SELECT current_query();
+
+query IIII
+SELECT 1, 2, 3, current_query();
+----
+1	2	3	SELECT 1, 2, 3, current_query();
+
+query I
+SELECT current_schema();
+----
+main
+
+query I
+SELECT current_schemas(false);
+----
+[main]
+
+query IIII
+SELECT inet_client_addr(), inet_client_port(), inet_server_addr(), inet_server_port();
+----
+NULL	NULL	NULL	NULL
+
+statement ok
+select pg_postmaster_start_time();
+
+query I
+SELECT pg_is_other_temp_schema(33)
+----
+false
+
+query III
+SELECT col_description(0, 0), obj_description(0, 'duckdb'), shobj_description(0, 'duckdb');
+----
+NULL	NULL	NULL
+
+statement ok
+select txid_current();
+
+query I
+select pg_typeof(1);
+----
+integer

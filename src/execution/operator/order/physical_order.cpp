@@ -2188,8 +2188,9 @@ static void Scan(ClientContext &context, DataChunk &chunk, PhysicalOrderOperator
 
 	// deserialize the payload data
 	for (idx_t payl_col = 0; payl_col < chunk.ColumnCount(); payl_col++) {
-		RowDataCollection::DeserializeIntoVector(chunk.data[payl_col], scan_count, payl_col, state.key_locations,
-		                                         state.validitymask_locations);
+		RowDataCollection::DeserializeIntoVector(chunk.data[payl_col], scan_count,
+		                                         FlatVector::INCREMENTAL_SELECTION_VECTOR, payl_col,
+		                                         state.key_locations, state.validitymask_locations);
 	}
 	chunk.SetCardinality(scan_count);
 	chunk.Verify();

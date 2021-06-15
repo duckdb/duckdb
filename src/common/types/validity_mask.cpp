@@ -50,6 +50,9 @@ void ValidityMask::Resize(idx_t old_size, idx_t new_size) {
 	if (validity_mask) {
 		auto new_size_count = EntryCount(new_size);
 		auto old_size_count = EntryCount(old_size);
+		if (old_size_count == new_size_count) {
+			return;
+		}
 		auto new_owned_data = unique_ptr<validity_t[]>(new validity_t[new_size_count]);
 		for (idx_t entry_idx = 0; entry_idx < old_size_count; entry_idx++) {
 			new_owned_data[entry_idx] = validity_mask[entry_idx];

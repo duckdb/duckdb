@@ -49,6 +49,7 @@ class RecursiveCTENode;
 //===--------------------------------------------------------------------===//
 class ParsedExpression;
 
+class BetweenExpression;
 class CaseExpression;
 class CastExpression;
 class CollateExpression;

@@ -161,7 +161,7 @@ AggregateFunction GetApproximateQuantileAggregate(PhysicalType type) {
 
 void ApproximateQuantileFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet approx_quantile("approx_quantile");
-	approx_quantile.AddFunction(AggregateFunction({LogicalType::DECIMAL, LogicalType::FLOAT}, LogicalType::DECIMAL,
+	approx_quantile.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL, LogicalType::FLOAT}, LogicalTypeId::DECIMAL,
 	                                              nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
 	                                              BindApproxQuantileDecimal));
 

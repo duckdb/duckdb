@@ -4,6 +4,7 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/null_value.hpp"
+#include "duckdb/common/types/row_data_collection.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
@@ -57,6 +58,7 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition
 
 	// compute the per-block capacity of this HT
 	block_capacity = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, (Storage::BLOCK_ALLOC_SIZE / entry_size) + 1);
+	string_heap = make_unique<RowDataCollection>(buffer_manager, Storage::BLOCK_ALLOC_SIZE / 8, 8);
 }
 
 JoinHashTable::~JoinHashTable() {
@@ -242,36 +244,44 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	Vector hash_values(LogicalType::HASH);
 	Hash(keys, *current_sel, added_count, hash_values);
 
+	// build a chunk so we can handle nested types that need more than Orrification
+	DataChunk source_chunk;
+	source_chunk.InitializeEmpty(layout.GetTypes());
+
 	vector<VectorData> source_data;
 	source_data.reserve(layout.ColumnCount());
 
 	// serialize the keys to the key locations
 	for (idx_t i = 0; i < keys.ColumnCount(); i++) {
+		source_chunk.data[i].Reference(keys.data[i]);
 		source_data.emplace_back(move(key_data[i]));
 	}
 	// now serialize the payload
 	D_ASSERT(build_types.size() == payload.ColumnCount());
 	for (idx_t i = 0; i < payload.ColumnCount(); i++) {
+		source_chunk.data[source_data.size()].Reference(payload.data[i]);
 		VectorData pdata;
 		payload.data[i].Orrify(payload.size(), pdata);
 		source_data.emplace_back(move(pdata));
 	}
 	if (IsRightOuterJoin(join_type)) {
 		// for FULL/RIGHT OUTER joins initialize the "found" boolean to false
+		source_chunk.data[source_data.size()].Reference(vfound);
 		VectorData fdata;
 		vfound.Orrify(keys.size(), fdata);
 		source_data.emplace_back(move(fdata));
 	}
 
 	// serialise the hashes at the end
+	source_chunk.data[source_data.size()].Reference(hash_values);
 	VectorData hdata;
 	hash_values.Orrify(keys.size(), hdata);
 	source_data.emplace_back(move(hdata));
 
-	StringHeap local_heap;
-	RowOperations::Scatter(source_data.data(), layout, addresses, local_heap, *current_sel, added_count);
-	lock_guard<mutex> append_lock(ht_lock);
-	string_heap.MergeHeap(local_heap);
+	source_chunk.SetCardinality(keys);
+
+	RowOperations::Scatter(source_chunk, source_data.data(), layout, addresses, *string_heap, *current_sel,
+	                       added_count);
 }
 
 void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_locations[]) {
@@ -420,7 +430,7 @@ idx_t ScanStructure::ResolvePredicates(DataChunk &keys, SelectionVector &match_s
 	}
 	idx_t no_match_count = 0;
 
-	return RowOperations::Match(ht.layout, pointers, key_data.get(), ht.predicates, match_sel, this->count,
+	return RowOperations::Match(keys, key_data.get(), ht.layout, pointers, ht.predicates, match_sel, this->count,
 	                            no_match_sel, no_match_count);
 }
 
@@ -466,8 +476,9 @@ void ScanStructure::AdvancePointers() {
 }
 
 void ScanStructure::GatherResult(Vector &result, const SelectionVector &result_vector,
-                                 const SelectionVector &sel_vector, const idx_t count, const idx_t col_idx) {
-	RowOperations::Gather(ht.layout, pointers, sel_vector, result, result_vector, count, col_idx);
+                                 const SelectionVector &sel_vector, const idx_t count, const idx_t col_no) {
+	const auto col_offset = ht.layout.GetOffsets()[col_no];
+	RowOperations::Gather(pointers, sel_vector, result, result_vector, count, col_offset, col_no);
 }
 
 void ScanStructure::GatherResult(Vector &result, const SelectionVector &sel_vector, const idx_t count,
@@ -710,8 +721,9 @@ void ScanStructure::NextLeftJoin(DataChunk &keys, DataChunk &left, DataChunk &re
 
 			// now set the right side to NULL
 			for (idx_t i = left.ColumnCount(); i < result.ColumnCount(); i++) {
-				result.data[i].SetVectorType(VectorType::CONSTANT_VECTOR);
-				ConstantVector::SetNull(result.data[i], true);
+				Vector &vec = result.data[i];
+				vec.SetVectorType(VectorType::CONSTANT_VECTOR);
+				ConstantVector::SetNull(vec, true);
 			}
 		}
 		finished = true;
@@ -797,15 +809,17 @@ void JoinHashTable::ScanFullOuter(DataChunk &result, JoinHTScanState &state) {
 		const auto &sel_vector = FlatVector::INCREMENTAL_SELECTION_VECTOR;
 		// set the left side as a constant NULL
 		for (idx_t i = 0; i < left_column_count; i++) {
-			result.data[i].SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(result.data[i], true);
+			Vector &vec = result.data[i];
+			vec.SetVectorType(VectorType::CONSTANT_VECTOR);
+			ConstantVector::SetNull(vec, true);
 		}
 		// gather the values from the RHS
 		for (idx_t i = 0; i < build_types.size(); i++) {
 			auto &vector = result.data[left_column_count + i];
 			D_ASSERT(vector.GetType() == build_types[i]);
-			RowOperations::Gather(layout, addresses, sel_vector, vector, sel_vector, found_entries,
-			                      i + condition_types.size());
+			const auto col_no = condition_types.size() + i;
+			const auto col_offset = layout.GetOffsets()[col_no];
+			RowOperations::Gather(addresses, sel_vector, vector, sel_vector, found_entries, col_offset, col_no);
 		}
 	}
 }

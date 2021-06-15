@@ -103,15 +103,16 @@ py::object GetValueToPython(Value &val, const LogicalType &type) {
 	case LogicalTypeId::LIST: {
 		py::list list;
 		for (auto list_elem : val.list_value) {
-			list.append(GetValueToPython(list_elem, type.child_types()[0].second));
+			list.append(GetValueToPython(list_elem, ListType::GetChildType(type)));
 		}
 		return std::move(list);
 	}
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::STRUCT: {
 		py::dict py_struct;
+		auto &child_types = StructType::GetChildTypes(type);
 		for (idx_t i = 0; i < val.struct_value.size(); i++) {
-			auto &child_entry = type.child_types()[i];
+			auto &child_entry = child_types[i];
 			auto &child_name = child_entry.first;
 			auto &child_type = child_entry.second;
 			py_struct[child_name.c_str()] = GetValueToPython(val.struct_value[i], child_type);

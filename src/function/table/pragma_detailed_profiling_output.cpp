@@ -1,4 +1,4 @@
-#include "duckdb/function/table/sqlite_functions.hpp"
+#include "duckdb/function/table/system_functions.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
@@ -153,9 +153,8 @@ static void PragmaDetailedProfilingOutputFunction(ClientContext &context, const 
 					// Extract all functions inside the tree
 					ExtractFunctions(*collection, *expr_timer->root, chunk, operator_counter, function_counter);
 				}
-
-				operator_counter++;
 			}
+			operator_counter++;
 		}
 		collection->Append(chunk);
 		data.collection = move(collection);

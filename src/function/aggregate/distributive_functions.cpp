@@ -25,7 +25,6 @@ void BuiltinFunctions::RegisterDistributiveAggregates() {
 	Register<BoolAndFun>();
 	Register<ArgMinFun>();
 	Register<ArgMaxFun>();
-	Register<ArbitraryFun>();
 	Register<SkewFun>();
 	Register<KurtosisFun>();
 	Register<EntropyFun>();

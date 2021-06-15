@@ -88,9 +88,45 @@ public:
 	string ToString(idx_t count = 0) const;
 	void Print(idx_t count = 0) const;
 
+	sel_t &operator[](idx_t index) {
+		return sel_vector[index];
+	}
+
 private:
 	sel_t *sel_vector;
 	buffer_ptr<SelectionData> selection_data;
+};
+
+class OptionalSelection {
+public:
+	explicit inline OptionalSelection(SelectionVector *sel_p) : sel(sel_p) {
+
+		if (sel) {
+			vec.Initialize(sel->data());
+			sel = &vec;
+		}
+	}
+
+	inline operator SelectionVector *() {
+		return sel;
+	}
+
+	inline void Append(idx_t &count, const idx_t idx) {
+		if (sel) {
+			sel->set_index(count, idx);
+		}
+		++count;
+	}
+
+	inline void Advance(idx_t completed) {
+		if (sel) {
+			sel->Initialize(sel->data() + completed);
+		}
+	}
+
+private:
+	SelectionVector *sel;
+	SelectionVector vec;
 };
 
 } // namespace duckdb
