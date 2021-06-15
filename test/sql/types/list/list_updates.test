@@ -1,5 +1,5 @@
-# name: test/sql/types/list/list_storage.test
-# description: Test lists with in-memory storage
+# name: test/sql/types/list/list_updates.test
+# description: Test updates on lists with in-memory storage
 # group: [list]
 
 statement ok
