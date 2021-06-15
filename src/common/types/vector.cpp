@@ -717,13 +717,13 @@ void Vector::Orrify(idx_t count, VectorData &data) {
 		break;
 	}
 	case VectorType::CONSTANT_VECTOR:
-		data.sel = &ConstantVector::ZERO_SELECTION_VECTOR;
+		data.sel = ConstantVector::ZeroSelectionVector(count, data.owned_sel);
 		data.data = ConstantVector::GetData(*this);
 		data.validity = ConstantVector::Validity(*this);
 		break;
 	default:
 		Normalify(count);
-		data.sel = &FlatVector::INCREMENTAL_SELECTION_VECTOR;
+		data.sel = FlatVector::IncrementalSelectionVector(count, data.owned_sel);
 		data.data = FlatVector::GetData(*this);
 		data.validity = FlatVector::Validity(*this);
 		break;
@@ -1018,6 +1018,17 @@ const SelectionVector *ConstantVector::ZeroSelectionVector(idx_t count, Selectio
 	owned_sel.Initialize(count);
 	for (idx_t i = 0; i < count; i++) {
 		owned_sel.set_index(i, 0);
+	}
+	return &owned_sel;
+}
+
+const SelectionVector *FlatVector::IncrementalSelectionVector(idx_t count, SelectionVector &owned_sel) {
+	if (count <= STANDARD_VECTOR_SIZE) {
+		return &FlatVector::INCREMENTAL_SELECTION_VECTOR;
+	}
+	owned_sel.Initialize(count);
+	for (idx_t i = 0; i < count; i++) {
+		owned_sel.set_index(i, i);
 	}
 	return &owned_sel;
 }

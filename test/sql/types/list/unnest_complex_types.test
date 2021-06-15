@@ -1,0 +1,106 @@
+# name: test/sql/types/list/unnest_complex_types.test
+# description: Test UNNEST of complex types
+# group: [list]
+
+statement ok
+PRAGMA enable_verification
+
+mode skip
+
+# varchars
+query III
+SELECT id, UNNEST(i), UNNEST(j) FROM (VALUES (1, ['abcd', 'efgh'], ['123456789abcd']), (2, NULL, ['123456789efgh', '123456789klmnop']), (3, ['hello', NULL, 'world'], [NULL])) tbl(id, i, j)
+----
+1	abcd	123456789abcd
+1	efgh	NULL
+2	NULL	123456789efgh
+2	NULL	123456789klmnop
+3	hello	NULL
+3	NULL	NULL
+3	world	NULL
+
+# multiple unnests
+query III
+SELECT id, UNNEST(i), UNNEST(j) FROM (VALUES (1, [1, 2], [10]), (2, NULL, [11, 12]), (3, [3, NULL, 4], [NULL])) tbl(id, i, j)
+----
+1	1	10
+1	2	NULL
+2	NULL	11
+2	NULL	12
+3	3	NULL
+3	NULL	NULL
+3	4	NULL
+
+# unnest list of lists
+query I
+SELECT UNNEST(i) FROM (VALUES ([[1, 2, 3], [4, 5]]), (NULL), ([[6, 7], NULL, [8, 9, NULL]])) tbl(i)
+----
+[1, 2, 3]
+[4, 5]
+NULL
+[6, 7]
+NULL
+[8, 9, NULL]
+
+# multiple lists of lists
+query II
+SELECT UNNEST(i), UNNEST(j) FROM (VALUES ([[1, 2, 3], [4, 5]], [[10, 11], [12, 13]]), (NULL, [[14, 15], [NULL, 16], NULL, NULL]), ([[6, 7], NULL, [8, 9, NULL]], NULL)) tbl(i, j)
+----
+[1, 2, 3]	[10, 11]
+[4, 5]	[12, 13]
+NULL	[14, 15]
+NULL	[NULL, 16]
+NULL	NULL
+NULL	NULL
+[6, 7]	NULL
+NULL	NULL
+[8, 9, NULL]	NULL
+
+# structs
+query I
+SELECT UNNEST(i) FROM (VALUES ([{'a': 10, 'b': 1}, {'a': 11, 'b': 2}]), (NULL), ([{'a': 12, 'b': 3}, NULL, {'a': NULL, 'b': NULL}])) tbl(i)
+----
+{'a': 10, 'b': 1}
+{'a': 11, 'b': 2}
+NULL
+{'a': 12, 'b': 3}
+NULL
+{'a': NULL, 'b': NULL}
+
+mode unskip
+
+# structs in structs
+query I
+SELECT UNNEST(i) FROM (VALUES ([{'a': {'a1': 7, 'a2': NULL}, 'b': 1}, {'a': {'a1': 9, 'a2': 10}, 'b': 2}]), (NULL), ([{'a': {'a1': 11, 'a2': 12}, 'b': 3}, NULL, {'a': NULL, 'b': NULL}, {'a': {'a1': NULL, 'a2': NULL}, 'b': 3}])) tbl(i)
+----
+{'a': {'a1': 7, 'a2': NULL}, 'b': 1}
+{'a': {'a1': 9, 'a2': 10}, 'b': 2}
+NULL
+{'a': {'a1': 11, 'a2': 12}, 'b': 3}
+NULL
+{'a': NULL, 'b': NULL}
+{'a': {'a1': NULL, 'a2': NULL}, 'b': 3}
+
+# lists and structs
+query III
+SELECT id, UNNEST(i), UNNEST(j) FROM (VALUES (1, [{'a': 1, 'b': NULL}, {'a': 2, 'b': 'hello'}], [[1, 2, 3], [4, 5]]), (2, NULL, [[11, 12], NULL]), (3, [{'a': 3, 'b': 'test the best unnest fest'}, NULL, {'a': 4, 'b': 'abcd'}], [NULL])) tbl(id, i, j)
+----
+1	{'a': 1, 'b': NULL}	[1, 2, 3]
+1	{'a': 2, 'b': hello}	[4, 5]
+2	NULL	[11, 12]
+2	NULL	NULL
+3	{'a': 3, 'b': test the best unnest fest}	NULL
+3	NULL	NULL
+3	{'a': 4, 'b': abcd}	NULL
+
+# lists IN structs
+query III
+SELECT id, UNNEST(i), UNNEST(j) FROM (VALUES (1, [{'a': [1, 2], 'b': NULL}, {'a': NULL, 'b': 'hello'}], [[1, 2, 3], [4, 5]]), (2, NULL, [[11, 12], NULL]), (3, [{'a': [NULL, 4, 5], 'b': 'test the best unnest fest'}, NULL, {'a': [6, 7, NULL, 9], 'b': 'abcd'}], [NULL])) tbl(id, i, j)
+----
+1	{'a': [1, 2], 'b': NULL}	[1, 2, 3]
+1	{'a': NULL, 'b': hello}	[4, 5]
+2	NULL	[11, 12]
+2	NULL	NULL
+3	{'a': [NULL, 4, 5], 'b': test the best unnest fest}	NULL
+3	NULL	NULL
+3	{'a': [6, 7, NULL, 9], 'b': abcd}	NULL
