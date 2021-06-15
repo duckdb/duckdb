@@ -233,7 +233,13 @@ void PhysicalUnnest::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 
 			auto list_data = (list_entry_t *)vdata.data;
 			auto list_entry = list_data[current_idx];
-			auto list_count = MinValue<idx_t>(this_chunk_len, list_entry.length - state->list_position);
+
+			idx_t list_count;
+			if (state->list_position >= list_entry.length) {
+				list_count = 0;
+			} else {
+				list_count = MinValue<idx_t>(this_chunk_len, list_entry.length - state->list_position);
+			}
 
 			if (list_entry.length > state->list_position) {
 				if (!vdata.validity.RowIsValid(current_idx)) {
