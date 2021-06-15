@@ -116,6 +116,16 @@ static void AppendLoop(SegmentStatistics &stats, data_ptr_t target, idx_t target
 		}
 	}
 }
+static void ListAppendLoop(SegmentStatistics &stats, data_ptr_t target, idx_t target_offset, VectorData &adata,
+                       idx_t offset, idx_t count) {
+	auto sdata = (list_entry_t *)adata.data;
+	auto tdata = (list_entry_t *)target;
+	for (idx_t i = 0; i < count; i++) {
+		auto source_idx = adata.sel->get_index(offset + i);
+		auto target_idx = target_offset + i;
+		tdata[target_idx] = sdata[source_idx];
+	}
+}
 
 static NumericSegment::append_function_t GetAppendFunction(PhysicalType type) {
 	switch (type) {
@@ -145,7 +155,7 @@ static NumericSegment::append_function_t GetAppendFunction(PhysicalType type) {
 	case PhysicalType::INTERVAL:
 		return AppendLoop<interval_t>;
 	case PhysicalType::LIST:
-		return AppendLoop<list_entry_t>;
+		return ListAppendLoop;
 	default:
 		throw NotImplementedException("Unimplemented type for uncompressed segment");
 	}

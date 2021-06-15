@@ -67,12 +67,20 @@ void ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t cou
 	auto &first_entry = data[0];
 	auto &last_entry = data[scan_count - 1];
 
+#ifdef DEBUG
+	for(idx_t i = 1; i < scan_count; i++) {
+		D_ASSERT(data[i].offset == data[i - 1].offset + data[i - 1].length);
+	}
+#endif
+
 	idx_t child_scan_count = last_entry.offset + last_entry.length - first_entry.offset;
 	auto child_vector = make_unique<Vector>(ListType::GetChildType(type));
 	ListVector::SetEntry(result, move(child_vector));
 
-	auto &child_entry = ListVector::GetEntry(result);
-	child_column->ScanCount(state.child_states[1], child_entry, child_scan_count);
+	if (child_scan_count > 0) {
+		auto &child_entry = ListVector::GetEntry(result);
+		child_column->ScanCount(state.child_states[1], child_entry, child_scan_count);
+	}
 	state.child_states[0].NextVector();
 
 	ListVector::SetListSize(result, child_scan_count);
@@ -107,15 +115,26 @@ void ListColumnData::Append(BaseStatistics &stats_p, ColumnAppendState &state, V
 
 	auto append_offsets = unique_ptr<list_entry_t[]>(new list_entry_t[count]);
 	for(idx_t i = 0; i < count; i++) {
-		append_offsets[i].offset = start_offset + input_offsets[i].offset;
 		if (list_validity.RowIsValid(i)) {
+			append_offsets[i].offset = start_offset + input_offsets[i].offset;
 			append_offsets[i].length = input_offsets[i].length;
 			child_count += input_offsets[i].length;
 		} else {
+			if (i > 0) {
+				append_offsets[i].offset = append_offsets[i - 1].offset + append_offsets[i - 1].length;
+			} else {
+				append_offsets[i].offset = start_offset;
+			}
 			append_offsets[i].length = 0;
 		}
 	}
-	D_ASSERT(child_count == input_offsets[count - 1].offset + input_offsets[count - 1].length);
+#ifdef DEBUG
+	D_ASSERT(append_offsets[0].offset == start_offset);
+	for(idx_t i = 1; i < count; i++) {
+		D_ASSERT(append_offsets[i].offset == append_offsets[i - 1].offset + append_offsets[i - 1].length);
+	}
+	D_ASSERT(append_offsets[count - 1].offset + append_offsets[count - 1].length - append_offsets[0].offset == child_count);
+#endif
 
 	VectorData vdata;
 	vdata.validity = list_validity;
@@ -127,9 +146,10 @@ void ListColumnData::Append(BaseStatistics &stats_p, ColumnAppendState &state, V
 	// append the validity data
 	validity.AppendData(*stats.validity_stats, state.child_appends[0], vdata, count);
 	// append the child vector
-	auto &child_vector = ListVector::GetEntry(vector);
-	child_column->Append(*stats.child_stats, state.child_appends[1], child_vector, child_count);
-
+	if (child_count > 0) {
+		auto &child_vector = ListVector::GetEntry(vector);
+		child_column->Append(*stats.child_stats, state.child_appends[1], child_vector, child_count);
+	}
 }
 
 void ListColumnData::RevertAppend(row_t start_row) {

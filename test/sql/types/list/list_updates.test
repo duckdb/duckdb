@@ -41,3 +41,39 @@ SELECT * FROM a ORDER BY id
 1	[7, 8, 9]
 2	[3, 4, 5, 6]
 3	[NULL, 7]
+
+query I
+UPDATE a SET b=NULL WHERE id>=2
+----
+2
+
+query II
+SELECT * FROM a ORDER BY id
+----
+1	[7, 8, 9]
+2	NULL
+3	NULL
+
+query I
+UPDATE a SET b=[NULL] WHERE id=2
+----
+1
+
+query II
+SELECT * FROM a ORDER BY id
+----
+1	[7, 8, 9]
+2	[NULL]
+3	NULL
+
+query I
+UPDATE a SET b=NULL
+----
+3
+
+query II
+SELECT * FROM a ORDER BY id
+----
+1	NULL
+2	NULL
+3	NULL
