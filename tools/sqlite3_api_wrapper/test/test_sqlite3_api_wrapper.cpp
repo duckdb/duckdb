@@ -143,7 +143,7 @@ TEST_CASE("Basic prepared statement usage", "[sqlite3wrapper]") {
 	REQUIRE(db.CheckColumn(1, {"NULL", "NULL", "NULL", "NULL", "1000"}));
 	REQUIRE(db.CheckColumn(2, {"NULL", "NULL", "NULL", "NULL", "1992-01-01"}));
 	REQUIRE(db.CheckColumn(3, {"NULL", "NULL", "NULL", "NULL", "hello world"}));
-    REQUIRE(db.CheckColumn(4, {"NULL", "NULL", "NULL", "NULL", "hello"}));
+	REQUIRE(db.CheckColumn(4, {"NULL", "NULL", "NULL", "NULL", "hello"}));
 
 	REQUIRE(sqlite3_finalize(nullptr) == SQLITE_OK);
 
