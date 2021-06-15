@@ -36,11 +36,10 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth) {
 
 	// TODO what if we have multiple unnests in the same projection list? ignore for now
 
-	// now create a column reference referring to the aggregate
+	// now create a column reference referring to the unnest
 	auto colref = make_unique<BoundColumnRefExpression>(
 	    function.alias.empty() ? node.unnests[unnest_index]->ToString() : function.alias, return_type,
 	    ColumnBinding(node.unnest_index, unnest_index), depth);
-	// move the aggregate expression into the set of bound aggregates
 	return BindResult(move(colref));
 }
 
