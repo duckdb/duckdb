@@ -53,7 +53,7 @@ void StructStatistics::Serialize(Serializer &serializer) {
 }
 
 unique_ptr<BaseStatistics> StructStatistics::Deserialize(Deserializer &source, LogicalType type) {
-	D_ASSERT(type.InternalType() == PhysicalType::LIST);
+	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
 	auto result = make_unique<StructStatistics>(move(type));
 	auto &child_types = StructType::GetChildTypes(result->type);
 	for (idx_t i = 0; i < child_types.size(); i++) {
