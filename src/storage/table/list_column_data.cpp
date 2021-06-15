@@ -74,7 +74,7 @@ void ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t cou
 #endif
 
 	idx_t child_scan_count = last_entry.offset + last_entry.length - first_entry.offset;
-	auto child_vector = make_unique<Vector>(ListType::GetChildType(type));
+	auto child_vector = make_unique<Vector>(ListType::GetChildType(type), child_scan_count);
 	ListVector::SetEntry(result, move(child_vector));
 
 	if (child_scan_count > 0) {

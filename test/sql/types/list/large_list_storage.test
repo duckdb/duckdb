@@ -1,0 +1,35 @@
+# name: test/sql/types/list/large_list_storage.test
+# description: Test storing large lists
+# group: [list]
+
+statement ok
+CREATE TABLE a(b INTEGER[]);
+
+statement ok
+INSERT INTO a SELECT LIST(i) FROM range(10000) tbl(i)
+
+query IIII
+SELECT COUNT(*), MIN(i), MAX(i), COUNT(i) FROM (SELECT UNNEST(b) FROM a) tbl(i)
+----
+10000	0	9999	10000
+
+statement ok
+INSERT INTO a SELECT LIST(i) FROM range(20000) tbl(i)
+
+query I
+SELECT COUNT(*) FROM a
+----
+2
+
+query IIII
+SELECT COUNT(*), MIN(i), MAX(i), COUNT(i) FROM (SELECT UNNEST(b) FROM a) tbl(i)
+----
+30000	0	19999	30000
+
+statement ok
+INSERT INTO a VALUES (NULL), ([1, 2, 3]), ([4, 5, 6])
+
+query I
+SELECT COUNT(*) FROM a
+----
+5

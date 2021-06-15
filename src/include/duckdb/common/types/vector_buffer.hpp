@@ -41,8 +41,8 @@ public:
 			data = unique_ptr<data_t[]>(new data_t[data_size]);
 		}
 	}
-	explicit VectorBuffer(VectorBufferType vectorBufferType, const LogicalType &type, VectorType vector_type)
-	    : vector_type(vector_type), type(type), buffer_type(vectorBufferType) {
+	explicit VectorBuffer(VectorBufferType vector_buffer_type, const LogicalType &type, VectorType vector_type)
+	    : vector_type(vector_type), type(type), buffer_type(vector_buffer_type) {
 	}
 	virtual ~VectorBuffer() {
 	}
@@ -79,8 +79,8 @@ public:
 	static buffer_ptr<VectorBuffer> CreateStandardVector(PhysicalType type);
 	static buffer_ptr<VectorBuffer> CreateConstantVector(PhysicalType type);
 	static buffer_ptr<VectorBuffer> CreateConstantVector(VectorType vectorType, const LogicalType &logicalType);
-	static buffer_ptr<VectorBuffer> CreateStandardVector(VectorType vectorType, const LogicalType &logicalType);
-	static buffer_ptr<VectorBuffer> CreateStandardVector(VectorType vectorType, PhysicalType type);
+	static buffer_ptr<VectorBuffer> CreateStandardVector(VectorType vectorType, const LogicalType &logicalType, idx_t capacity = STANDARD_VECTOR_SIZE);
+	static buffer_ptr<VectorBuffer> CreateStandardVector(VectorType vectorType, PhysicalType type, idx_t capacity = STANDARD_VECTOR_SIZE);
 
 	// Getters
 	inline VectorType GetVectorType() const {

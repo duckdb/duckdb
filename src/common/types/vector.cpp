@@ -18,14 +18,14 @@
 
 namespace duckdb {
 
-Vector::Vector(const LogicalType &type, bool create_data, bool zero_data) : data(nullptr) {
+Vector::Vector(const LogicalType &type, bool create_data, bool zero_data, idx_t capacity) : data(nullptr) {
 	buffer = make_buffer<VectorBuffer>(VectorType::FLAT_VECTOR, type);
 	if (create_data) {
-		Initialize(type, zero_data);
+		Initialize(type, zero_data, capacity);
 	}
 }
 
-Vector::Vector(const LogicalType &type) : Vector(type, true, false) {
+Vector::Vector(const LogicalType &type, idx_t capacity) : Vector(type, true, false, capacity) {
 }
 
 Vector::Vector(const LogicalType &type, data_ptr_t dataptr) : data(dataptr) {
@@ -137,7 +137,7 @@ void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
 	}
 }
 
-void Vector::Initialize(const LogicalType &new_type, bool zero_data) {
+void Vector::Initialize(const LogicalType &new_type, bool zero_data, idx_t capacity) {
 	if (new_type.id() != LogicalTypeId::INVALID) {
 		SetType(new_type);
 	}
@@ -149,7 +149,7 @@ void Vector::Initialize(const LogicalType &new_type, bool zero_data) {
 		auto &child_types = StructType::GetChildTypes(type);
 		auto &child_vectors = struct_buffer->GetChildren();
 		for (auto &child_type : child_types) {
-			auto vector = make_unique<Vector>(child_type.second);
+			auto vector = make_unique<Vector>(child_type.second, capacity);
 			child_vectors.push_back(move(vector));
 		}
 
@@ -158,13 +158,13 @@ void Vector::Initialize(const LogicalType &new_type, bool zero_data) {
 	auto internal_type = type.InternalType();
 	auto type_size = GetTypeIdSize(internal_type);
 	if (type_size > 0) {
-		buffer = VectorBuffer::CreateStandardVector(VectorType::FLAT_VECTOR, type);
+		buffer = VectorBuffer::CreateStandardVector(VectorType::FLAT_VECTOR, type, capacity);
 		data = buffer->GetData();
 		if (zero_data) {
-			memset(data, 0, STANDARD_VECTOR_SIZE * type_size);
+			memset(data, 0, capacity * type_size);
 		}
 	} else {
-		buffer = VectorBuffer::CreateStandardVector(VectorType::FLAT_VECTOR, type);
+		buffer = VectorBuffer::CreateStandardVector(VectorType::FLAT_VECTOR, type, capacity);
 	}
 }
 
@@ -717,13 +717,13 @@ void Vector::Orrify(idx_t count, VectorData &data) {
 		break;
 	}
 	case VectorType::CONSTANT_VECTOR:
-		data.sel = &ConstantVector::ZERO_SELECTION_VECTOR;
+		data.sel = ConstantVector::ZeroSelectionVector(count, data.owned_sel);
 		data.data = ConstantVector::GetData(*this);
 		data.validity = ConstantVector::Validity(*this);
 		break;
 	default:
 		Normalify(count);
-		data.sel = &FlatVector::INCREMENTAL_SELECTION_VECTOR;
+		data.sel = FlatVector::IncrementalSelectionVector(count, data.owned_sel);
 		data.data = FlatVector::GetData(*this);
 		data.validity = FlatVector::Validity(*this);
 		break;
@@ -1021,6 +1021,18 @@ const SelectionVector *ConstantVector::ZeroSelectionVector(idx_t count, Selectio
 	}
 	return &owned_sel;
 }
+
+const SelectionVector *FlatVector::IncrementalSelectionVector(idx_t count, SelectionVector &owned_sel) {
+	if (count <= STANDARD_VECTOR_SIZE) {
+		return &FlatVector::INCREMENTAL_SELECTION_VECTOR;
+	}
+	owned_sel.Initialize(count);
+	for (idx_t i = 0; i < count; i++) {
+		owned_sel.set_index(i, i);
+	}
+	return &owned_sel;
+}
+
 
 string_t StringVector::AddString(Vector &vector, const char *data, idx_t len) {
 	return StringVector::AddString(vector, string_t(data, len));
