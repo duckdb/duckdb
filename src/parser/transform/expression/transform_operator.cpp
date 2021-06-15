@@ -1,3 +1,4 @@
+#include "duckdb/parser/expression/between_expression.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
@@ -107,19 +108,13 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(duckdb_libpgquery::PGAE
 			throw Exception("(NOT) BETWEEN needs two args");
 		}
 
+		auto input = TransformExpression(root->lexpr, depth + 1);
 		auto between_left = TransformExpression(
 		    reinterpret_cast<duckdb_libpgquery::PGNode *>(between_args->head->data.ptr_value), depth + 1);
 		auto between_right = TransformExpression(
 		    reinterpret_cast<duckdb_libpgquery::PGNode *>(between_args->tail->data.ptr_value), depth + 1);
 
-		auto compare_left =
-		    make_unique<ComparisonExpression>(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
-		                                      TransformExpression(root->lexpr, depth + 1), move(between_left));
-		auto compare_right =
-		    make_unique<ComparisonExpression>(ExpressionType::COMPARE_LESSTHANOREQUALTO,
-		                                      TransformExpression(root->lexpr, depth + 1), move(between_right));
-		auto compare_between = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, move(compare_left),
-		                                                          move(compare_right));
+		auto compare_between = make_unique<BetweenExpression>(move(input), move(between_left), move(between_right));
 		if (root->kind == duckdb_libpgquery::PG_AEXPR_BETWEEN) {
 			return move(compare_between);
 		} else {

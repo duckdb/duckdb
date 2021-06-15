@@ -1,3 +1,4 @@
+#include "duckdb/parser/expression/between_expression.hpp"
 #include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
