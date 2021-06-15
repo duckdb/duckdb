@@ -49,14 +49,14 @@ struct GreaterThanEquals {
 struct DistinctFrom {
 	template <class T>
 	static inline bool Operation(T left, T right, bool left_null, bool right_null) {
-		return ((left != right) && !left_null && !right_null) || (left_null != right_null);
+		return (left_null != right_null) || (!left_null && !right_null && (left != right));
 	}
 };
 
 struct NotDistinctFrom {
 	template <class T>
 	static inline bool Operation(T left, T right, bool left_null, bool right_null) {
-		return ((left == right) && !left_null && !right_null) || (left_null && right_null);
+		return (left_null && right_null) || (!left_null && !right_null && (left == right));
 	}
 };
 
@@ -121,13 +121,13 @@ inline bool NotEquals::Operation(string_t left, string_t right) {
 
 template <>
 inline bool NotDistinctFrom::Operation(string_t left, string_t right, bool left_null, bool right_null) {
-	return (StringComparisonOperators::EqualsOrNot<false>(left, right) && !left_null && !right_null) ||
-	       (left_null && right_null);
+	return (left_null && right_null) ||
+	       (!left_null && !right_null && StringComparisonOperators::EqualsOrNot<false>(left, right));
 }
 template <>
 inline bool DistinctFrom::Operation(string_t left, string_t right, bool left_null, bool right_null) {
-	return (StringComparisonOperators::EqualsOrNot<true>(left, right) && !left_null && !right_null) ||
-	       (left_null != right_null);
+	return (left_null != right_null) ||
+	       (!left_null && !right_null && StringComparisonOperators::EqualsOrNot<true>(left, right));
 }
 
 // compare up to shared length. if still the same, compare lengths
@@ -188,11 +188,11 @@ inline bool LessThanEquals::Operation(interval_t left, interval_t right) {
 
 template <>
 inline bool NotDistinctFrom::Operation(interval_t left, interval_t right, bool left_null, bool right_null) {
-	return (Interval::Equals(left, right) && !left_null && !right_null) || (left_null && right_null);
+	return (left_null && right_null) || (!left_null && !right_null && Interval::Equals(left, right));
 }
 template <>
 inline bool DistinctFrom::Operation(interval_t left, interval_t right, bool left_null, bool right_null) {
-	return (!Equals::Operation(left, right) && !left_null && !right_null) || (left_null != right_null);
+	return (left_null != right_null) || (!left_null && !right_null && !Equals::Operation(left, right));
 }
 inline bool operator<(const interval_t &lhs, const interval_t &rhs) {
 	return LessThan::Operation(lhs, rhs);

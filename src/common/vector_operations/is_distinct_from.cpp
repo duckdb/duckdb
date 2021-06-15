@@ -76,13 +76,24 @@ DistinctSelectGenericLoop(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rd
 		auto lindex = lsel->get_index(i);
 		auto rindex = rsel->get_index(i);
 		if (NO_NULL) {
-			if (OP::Operation(ldata[lindex], rdata[rindex], true, true) && HAS_TRUE_SEL) {
-				true_sel->set_index(true_count++, result_idx);
+			if (OP::Operation(ldata[lindex], rdata[rindex], true, true)) {
+				if (HAS_TRUE_SEL) {
+					true_sel->set_index(true_count++, result_idx);
+				}
+			} else {
+				if (HAS_FALSE_SEL) {
+					false_sel->set_index(false_count++, result_idx);
+				}
 			}
 		} else {
-			if (OP::Operation(ldata[lindex], rdata[rindex], !lmask.RowIsValid(i), !rmask.RowIsValid(i)) &&
-			    HAS_FALSE_SEL) {
-				false_sel->set_index(false_count++, result_idx);
+			if (OP::Operation(ldata[lindex], rdata[rindex], !lmask.RowIsValid(lindex), !rmask.RowIsValid(rindex))) {
+				if (HAS_TRUE_SEL) {
+					true_sel->set_index(true_count++, result_idx);
+				}
+			} else {
+				if (HAS_FALSE_SEL) {
+					false_sel->set_index(false_count++, result_idx);
+				}
 			}
 		}
 	}
@@ -265,6 +276,10 @@ static idx_t DistinctSelect(Vector &left, Vector &right, const SelectionVector *
 		return DistinctSelectGeneric<LEFT_TYPE, RIGHT_TYPE, OP>(left, right, sel, count, true_sel, false_sel);
 	}
 }
+
+template <typename OP>
+static void NestedDistinctExecute(Vector &left, Vector &right, Vector &result, idx_t count);
+
 template <class T, class OP>
 static inline void TemplatedDistinctExecute(Vector &left, Vector &right, Vector &result, idx_t count) {
 	DistinctExecute<T, T, bool, OP>(left, right, result, count);
@@ -317,9 +332,100 @@ static void ExecuteDistinct(Vector &left, Vector &right, Vector &result, idx_t c
 	case PhysicalType::VARCHAR:
 		TemplatedDistinctExecute<string_t, OP>(left, right, result, count);
 		break;
+	case PhysicalType::LIST:
+	case PhysicalType::MAP:
+	case PhysicalType::STRUCT:
+		NestedDistinctExecute<OP>(left, right, result, count);
+		break;
 	default:
 		throw InvalidTypeException(left.GetType(), "Invalid type for distinct comparison");
 	}
+}
+
+template <class OP>
+static inline const SelectionVector *DistinctSelectNotNull(ValidityMask &lmask, ValidityMask &rmask, idx_t &count,
+                                                           idx_t &true_count, const SelectionVector *sel,
+                                                           SelectionVector &maybe_vec, OptionalSelection &true_vec,
+                                                           OptionalSelection &false_vec) {
+	// We need multiple, real selections
+	if (!sel) {
+		sel = &FlatVector::INCREMENTAL_SELECTION_VECTOR;
+	}
+
+	// For top-level distincts, NULL semantics are computed separately
+	if (!lmask.AllValid() || !rmask.AllValid()) {
+		idx_t false_count = 0;
+		idx_t remaining = 0;
+		for (idx_t i = 0; i < count; ++i) {
+			const auto idx = sel->get_index(i);
+			const auto lnull = !lmask.RowIsValid(idx);
+			const auto rnull = !rmask.RowIsValid(idx);
+			if (lnull || rnull) {
+				// If either is NULL then we can major distinguish them
+				if (!OP::Operation(lnull, rnull, false, false)) {
+					false_vec.Append(false_count, idx);
+				} else {
+					true_vec.Append(true_count, idx);
+				}
+			} else {
+				//	Neither is NULL, distinguish values.
+				maybe_vec.set_index(remaining++, idx);
+			}
+		}
+		true_vec.Advance(true_count);
+		false_vec.Advance(false_count);
+		count = remaining;
+	}
+
+	return sel;
+}
+
+struct PositionDistinguisher {
+	// Select the matching rows for the values that are bot both NULL.
+	template <typename OP>
+	static idx_t Select(Vector &left, Vector &right, const SelectionVector *sel, idx_t count, SelectionVector *true_sel,
+	                    SelectionVector *false_sel) {
+		throw InvalidTypeException(left.GetType(), "Invalid type for nested DISTINCT");
+	}
+};
+
+// NotDistinctFrom with no NULLs is just Equals
+template <>
+idx_t PositionDistinguisher::Select<duckdb::NotDistinctFrom>(Vector &left, Vector &right, const SelectionVector *sel,
+                                                             idx_t count, SelectionVector *true_sel,
+                                                             SelectionVector *false_sel) {
+	return VectorOperations::Equals(left, right, sel, count, true_sel, false_sel);
+}
+
+// DistinctFrom with no NULLs is just NotEquals
+template <>
+idx_t PositionDistinguisher::Select<duckdb::DistinctFrom>(Vector &left, Vector &right, const SelectionVector *sel,
+                                                          idx_t count, SelectionVector *true_sel,
+                                                          SelectionVector *false_sel) {
+	return VectorOperations::NotEquals(left, right, sel, count, true_sel, false_sel);
+}
+
+template <class OP>
+static idx_t DistinctSelectNested(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+                                  SelectionVector *true_sel, SelectionVector *false_sel) {
+	// Incrementally fill in successes and failures as we discover them
+	OptionalSelection true_vec(true_sel);
+	OptionalSelection false_vec(false_sel);
+
+	// For top-level comparisons, NULL semantics are in effect,
+	// so filter out any NULLs
+	VectorData lvdata, rvdata;
+	left.Orrify(count, lvdata);
+	right.Orrify(count, rvdata);
+
+	idx_t result = 0;
+	SelectionVector maybe_vec(count);
+	sel =
+	    DistinctSelectNotNull<OP>(lvdata.validity, rvdata.validity, count, result, sel, maybe_vec, true_vec, false_vec);
+
+	result += PositionDistinguisher::Select<OP>(left, right, sel, count, true_vec, false_vec);
+
+	return result;
 }
 
 template <class OP>
@@ -356,8 +462,48 @@ static idx_t TemplatedDistinctSelectOperation(Vector &left, Vector &right, const
 		return DistinctSelect<interval_t, interval_t, OP>(left, right, sel, count, true_sel, false_sel);
 	case PhysicalType::VARCHAR:
 		return DistinctSelect<string_t, string_t, OP>(left, right, sel, count, true_sel, false_sel);
+	case PhysicalType::MAP:
+	case PhysicalType::STRUCT:
+	case PhysicalType::LIST:
+		return DistinctSelectNested<OP>(left, right, sel, count, true_sel, false_sel);
 	default:
 		throw InvalidTypeException(left.GetType(), "Invalid type for comparison");
+	}
+}
+
+template <typename OP>
+static void NestedDistinctExecute(Vector &left, Vector &right, Vector &result, idx_t count) {
+	const auto left_constant = left.GetVectorType() == VectorType::CONSTANT_VECTOR;
+	const auto right_constant = right.GetVectorType() == VectorType::CONSTANT_VECTOR;
+
+	if (left_constant && right_constant) {
+		// both sides are constant, so just compare one element.
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		auto result_data = ConstantVector::GetData<bool>(result);
+		SelectionVector true_sel(1);
+		auto match_count = TemplatedDistinctSelectOperation<OP>(left, right, nullptr, 1, &true_sel, nullptr);
+		result_data[0] = match_count > 0;
+		return;
+	}
+
+	SelectionVector true_sel(count);
+	SelectionVector false_sel(count);
+
+	// DISTINCT is either true or false
+	idx_t match_count = TemplatedDistinctSelectOperation<OP>(left, right, nullptr, count, &true_sel, &false_sel);
+
+	result.SetVectorType(VectorType::FLAT_VECTOR);
+	auto result_data = FlatVector::GetData<bool>(result);
+
+	for (idx_t i = 0; i < match_count; ++i) {
+		const auto idx = true_sel.get_index(i);
+		result_data[idx] = true;
+	}
+
+	const idx_t no_match_count = count - match_count;
+	for (idx_t i = 0; i < no_match_count; ++i) {
+		const auto idx = false_sel.get_index(i);
+		result_data[idx] = false;
 	}
 }
 
