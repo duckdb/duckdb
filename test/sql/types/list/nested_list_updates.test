@@ -15,90 +15,51 @@ SELECT * FROM a ORDER BY id
 1	NULL
 2	[[4, 5, 6, 7], [NULL]]
 
-# test nested list extract
-query II
-SELECT id, b[0] FROM a ORDER BY id
+# updates
+query I
+UPDATE a SET b=[[7, 8, 9], [10, 11]] WHERE b IS NULL
 ----
-0	[1, 2]
-1	NULL
-2	[4, 5, 6, 7]
+1
 
 query II
-SELECT id, b[0][0] FROM a ORDER BY id
+SELECT * FROM a ORDER BY id
 ----
-0	1
-1	NULL
-2	4
+0	[[1, 2], NULL, [3, NULL]]
+1	[[7, 8, 9], [10, 11]]
+2	[[4, 5, 6, 7], [NULL]]
+
+query I
+UPDATE a SET b=NULL WHERE id>=1
+----
+2
 
 query II
-SELECT id, b[0][3] FROM a ORDER BY id
+SELECT * FROM a ORDER BY id
+----
+0	[[1, 2], NULL, [3, NULL]]
+1	NULL
+2	NULL
+
+query I
+UPDATE a SET b=[[NULL], NULL, [NULL]] WHERE id=1
+----
+1
+
+query II
+SELECT * FROM a ORDER BY id
+----
+0	[[1, 2], NULL, [3, NULL]]
+1	[[NULL], NULL, [NULL]]
+2	NULL
+
+query I
+UPDATE a SET b=NULL
+----
+3
+
+query II
+SELECT * FROM a ORDER BY id
 ----
 0	NULL
 1	NULL
-2	7
-
-query II
-SELECT * FROM a WHERE b[0][0]=1
-----
-0	[[1, 2], NULL, [3, NULL]]
-
-query II
-SELECT * FROM a WHERE b[0][0]=1 OR b[0][1]=2
-----
-0	[[1, 2], NULL, [3, NULL]]
-
-# query II
-# SELECT * FROM a ORDER BY id
-# ----
-# 1	NULL
-# 2	[3, 4, 5, 6]
-# 3	[NULL, 7]
-
-# # updates
-# query I
-# UPDATE a SET b=[7, 8, 9] WHERE b IS NULL
-# ----
-# 1
-
-# query II
-# SELECT * FROM a ORDER BY id
-# ----
-# 1	[7, 8, 9]
-# 2	[3, 4, 5, 6]
-# 3	[NULL, 7]
-
-# query I
-# UPDATE a SET b=NULL WHERE id>=2
-# ----
-# 2
-
-# query II
-# SELECT * FROM a ORDER BY id
-# ----
-# 1	[7, 8, 9]
-# 2	NULL
-# 3	NULL
-
-# query I
-# UPDATE a SET b=[NULL] WHERE id=2
-# ----
-# 1
-
-# query II
-# SELECT * FROM a ORDER BY id
-# ----
-# 1	[7, 8, 9]
-# 2	[NULL]
-# 3	NULL
-
-# query I
-# UPDATE a SET b=NULL
-# ----
-# 3
-
-# query II
-# SELECT * FROM a ORDER BY id
-# ----
-# 1	NULL
-# 2	NULL
-# 3	NULL
+2	NULL
