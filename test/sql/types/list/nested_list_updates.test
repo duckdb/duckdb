@@ -24,6 +24,20 @@ SELECT id, b[0] FROM a ORDER BY id
 2	[4, 5, 6, 7]
 
 query II
+SELECT id, b[0][0] FROM a ORDER BY id
+----
+0	1
+1	NULL
+2	4
+
+query II
+SELECT id, b[0][3] FROM a ORDER BY id
+----
+0	NULL
+1	NULL
+2	7
+
+query II
 SELECT * FROM a WHERE b[0][0]=1
 ----
 0	[[1, 2], NULL, [3, NULL]]
