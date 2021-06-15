@@ -186,7 +186,7 @@ public:
 	uint64_t bitmask;
 	//! The amount of entries stored per block
 	idx_t block_capacity;
-	std::vector<Vector> columns;
+	std::vector<Vector> columnar_hash_table;
 
 	struct {
 		mutex mj_lock;

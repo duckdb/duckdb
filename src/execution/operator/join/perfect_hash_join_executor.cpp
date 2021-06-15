@@ -10,16 +10,10 @@
 #include <iostream>
 namespace duckdb {
 
-PerfectHashJoinExecutor::PerfectHashJoinExecutor(PerfectHashJoinState join_state) : pjoin_state(join_state) {
-}
-
-bool PerfectHashJoinExecutor::ExecutePerfectHashJoin(ExecutionContext &context, DataChunk &result,
-                                                     PhysicalHashJoinState *physical_state, JoinHashTable *ht_ptr,
-                                                     PhysicalOperator *operator_child) const {
+bool PerfectHashJoinExecutor::ProbePerfectHashTable(ExecutionContext &context, DataChunk &result,
+                                                    PhysicalHashJoinState *physical_state, JoinHashTable *ht_ptr,
+                                                    PhysicalOperator *operator_child) {
 	// We only probe if the optimized hash table has been built
-	if (!hasInvisibleJoin) {
-		return false;
-	}
 
 	// fetch the chunk to join
 	operator_child->GetChunk(context, physical_state->child_chunk, physical_state->child_state.get());
@@ -31,7 +25,6 @@ bool PerfectHashJoinExecutor::ExecutePerfectHashJoin(ExecutionContext &context, 
 	physical_state->probe_executor.Execute(physical_state->child_chunk, physical_state->join_keys);
 	// select the keys that are in the min-max range
 	auto &keys_vec = physical_state->join_keys.data[0];
-	Vector source(keys_vec.GetType());
 	auto keys_count = physical_state->join_keys.size();
 	SelectionVector sel_vec(keys_count);
 	FillSelectionVectorSwitch(keys_vec, sel_vec, keys_count);
@@ -41,15 +34,14 @@ bool PerfectHashJoinExecutor::ExecutePerfectHashJoin(ExecutionContext &context, 
 	for (idx_t i = 0; i < ht_ptr->build_types.size(); i++) {
 		auto &res_vector = result.data[physical_state->child_chunk.ColumnCount() + i];
 		D_ASSERT(res_vector.GetType() == ht_ptr->build_types[i]);
-		auto &build_vec = ht_ptr->columns[i];
+		auto &build_vec = ht_ptr->columnar_hash_table[i];
 		res_vector.Reference(build_vec); //
 		res_vector.Slice(sel_vec, keys_count);
 	}
 	return true;
 }
 
-bool PerfectHashJoinExecutor::CheckRequirementsForPerfectHashJoin(JoinHashTable *ht_ptr,
-                                                                  HashJoinGlobalState *join_state) {
+bool PerfectHashJoinExecutor::CheckForPerfectHashJoin(JoinHashTable *ht_ptr, PerfectHashJoinStats &pjoin_state) {
 	// first check the build size
 	if (!pjoin_state.is_build_small) {
 		return false;
@@ -59,29 +51,23 @@ bool PerfectHashJoinExecutor::CheckRequirementsForPerfectHashJoin(JoinHashTable 
 	if (ht_ptr->has_null) {
 		return false;
 	}
-
-	// Store build side as a set of columns
-	BuildPerfectHashStructure(ht_ptr, join_state->ht_scan_state, join_state->key_type);
-
-	hasInvisibleJoin = true;
 	return true;
 }
 
-void PerfectHashJoinExecutor::BuildPerfectHashStructure(JoinHashTable *hash_table_ptr, JoinHTScanState &join_ht_state,
-                                                        LogicalType key_type) {
+void PerfectHashJoinExecutor::BuildPerfectHashTable(JoinHashTable *hash_table_ptr, JoinHTScanState &join_ht_state,
+                                                    LogicalType key_type, PerfectHashJoinStats &pjoin_state) {
 	// allocate memory for each column
 	auto build_size =
 	    (pjoin_state.is_build_min_small) ? hash_table_ptr->size() + MIN_THRESHOLD : hash_table_ptr->size();
 	for (auto type : hash_table_ptr->build_types) {
-		hash_table_ptr->columns.emplace_back(type, build_size);
+		hash_table_ptr->columnar_hash_table.emplace_back(type, build_size);
 	}
 	// Fill columns with build data
 	hash_table_ptr->FullScanHashTable(join_ht_state, key_type);
 }
 
 template <typename T>
-void PerfectHashJoinExecutor::TemplatedFillSelectionVector(Vector &source, SelectionVector &sel_vec,
-                                                           idx_t count) const {
+void PerfectHashJoinExecutor::TemplatedFillSelectionVector(Vector &source, SelectionVector &sel_vec, idx_t count) {
 	/* 	auto min_value = pjoin_state.build_min.GetValue<T>();
 	    auto max_value = pjoin_state.build_max.GetValue<T>(); */
 
@@ -97,7 +83,7 @@ void PerfectHashJoinExecutor::TemplatedFillSelectionVector(Vector &source, Selec
 	//	}
 }
 
-void PerfectHashJoinExecutor::FillSelectionVectorSwitch(Vector &source, SelectionVector &sel_vec, idx_t count) const {
+void PerfectHashJoinExecutor::FillSelectionVectorSwitch(Vector &source, SelectionVector &sel_vec, idx_t count) {
 	switch (source.GetType().id()) {
 	case LogicalTypeId::TINYINT:
 		TemplatedFillSelectionVector<int8_t>(source, sel_vec, count);
@@ -129,4 +115,11 @@ void PerfectHashJoinExecutor::FillSelectionVectorSwitch(Vector &source, Selectio
 	}
 }
 
+/* void PerfectHashJoinExecutor::ComputeIndex() {
+    idx_t current_shift = total_required_bits;
+    for (idx_t i = 0; i < groups.ColumnCount(); i++) {
+        current_shift -= required_bits[i];
+        ComputeGroupLocation(groups.data[i], group_minima[i], address_data, current_shift, groups.size());
+    }
+} */
 } // namespace duckdb

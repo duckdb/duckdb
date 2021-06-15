@@ -22,7 +22,7 @@ constexpr size_t MIN_THRESHOLD = 1 << 7;    // 128
 class PhysicalHashJoinState;
 class HashJoinGlobalState;
 
-struct PerfectHashJoinState {
+struct PerfectHashJoinStats {
 	Value build_min;
 	Value build_max;
 	Value probe_min;
@@ -38,17 +38,17 @@ struct PerfectHashJoinState {
 //! PhysicalHashJoin represents a hash loop join between two tables
 class PerfectHashJoinExecutor {
 public:
-	PerfectHashJoinExecutor(PerfectHashJoinState join_state);
-	bool ExecutePerfectHashJoin(ExecutionContext &context, DataChunk &chunk, PhysicalHashJoinState *state,
-	                            JoinHashTable *ht_ptr, PhysicalOperator *operator_child) const;
-	bool CheckRequirementsForPerfectHashJoin(JoinHashTable *ht_ptr, HashJoinGlobalState *hj_global_state);
-	void BuildPerfectHashStructure(JoinHashTable *ht_ptr, JoinHTScanState &join_ht_state, LogicalType type);
-	void FillSelectionVectorSwitch(Vector &source, SelectionVector &sel_vec, idx_t count) const;
+	PerfectHashJoinExecutor() = default;
+	static bool ProbePerfectHashTable(ExecutionContext &context, DataChunk &chunk, PhysicalHashJoinState *state,
+	                                  JoinHashTable *ht_ptr, PhysicalOperator *operator_child);
+	static bool CheckForPerfectHashJoin(JoinHashTable *ht_ptr, PerfectHashJoinStats &pjoin_state);
+	static void BuildPerfectHashTable(JoinHashTable *ht_ptr, JoinHTScanState &join_ht_state, LogicalType type,
+	                                  PerfectHashJoinStats &pjoin_state);
+	static void FillSelectionVectorSwitch(Vector &source, SelectionVector &sel_vec, idx_t count);
 	template <typename T>
-	void TemplatedFillSelectionVector(Vector &source, SelectionVector &sel_vec, idx_t count) const;
+	static void TemplatedFillSelectionVector(Vector &source, SelectionVector &sel_vec, idx_t count);
 
 private:
-	PerfectHashJoinState pjoin_state;
 	bool hasInvisibleJoin {false};
 };
 

@@ -31,19 +31,25 @@ static bool CanPlanIndexJoin(Transaction &transaction, TableScanBindData *bind_d
 	return true;
 }
 
-void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinState &join_state) {
+void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &join_state) {
 	// we only do this optimization for inner joins
 	if (op.join_type != JoinType::INNER)
 		return;
-	// with one condition
-	if (op.conditions.size() != 1) {
-		return;
+	// with equality
+	for (auto &&condition : op.conditions) {
+		// check if it is equality
+		if (condition.comparison != ExpressionType::COMPARE_EQUAL) {
+			return;
+		}
 	}
 	// with integral types
-	if (op.join_stats.empty() || !op.join_stats[0]->type.IsIntegral() || !op.join_stats[1]->type.IsIntegral()) {
-		// invisible join not possible for no integral types
-		return;
+	for (auto &&join_stat : op.join_stats) {
+		if (!join_stat->type.IsIntegral()) {
+			// invisible join not possible for no integral types
+			return;
+		}
 	}
+
 	// and when the build range is smaller than the pre-set threshold
 	auto stats_build = reinterpret_cast<NumericStatistics *>(op.join_stats[0].get()); // lhs stats
 	auto build_range = stats_build->max - stats_build->min;                           // Join Keys Range
@@ -60,10 +66,6 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinState &joi
 		// check whether the probe min-max is in the build min-max
 		if (stats_build->min <= stats_probe->min && stats_probe->max <= stats_build->max) {
 			join_state.is_probe_in_range = true;
-		}
-		// check whether min is close to 0 // enable optimization without subtraction
-		if (stats_build->min < MIN_THRESHOLD) {
-			join_state.is_build_min_small = true;
 		}
 	}
 	return;
@@ -155,11 +157,11 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 			                                      right_index, true, op.estimated_cardinality);
 		}
 		// equality join with small number of keys : possible perfect join optimization
-		PerfectHashJoinState join_state;
-		CheckForPerfectJoinOpt(op, join_state);
+		PerfectHashJoinStats perfect_join_stats;
+		CheckForPerfectJoinOpt(op, perfect_join_stats);
 		plan = make_unique<PhysicalHashJoin>(op, move(left), move(right), move(op.conditions), op.join_type,
 		                                     op.left_projection_map, op.right_projection_map, move(op.delim_types),
-		                                     op.estimated_cardinality, join_state);
+		                                     op.estimated_cardinality, perfect_join_stats);
 
 	} else {
 		D_ASSERT(!has_null_equal_conditions); // don't support this for anything but hash joins for now

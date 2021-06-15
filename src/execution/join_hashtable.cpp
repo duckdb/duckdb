@@ -828,7 +828,7 @@ void JoinHashTable::FullScanHashTable(JoinHTScanState &state, LogicalType key_ty
 	FillSelectionVectorSwitch(build_vector, sel_build, sel_addresses, keys_count);
 	// full scan the remaining build columns
 	for (idx_t i = 0; i < build_types.size(); i++) {
-		auto &vector = columns[i];
+		auto &vector = columnar_hash_table[i];
 		D_ASSERT(vector.GetType() == build_types[i]);
 		RowOperations::Gather(layout, addresses, sel_addresses, vector, sel_build, keys_count,
 		                      i + condition_types.size());
