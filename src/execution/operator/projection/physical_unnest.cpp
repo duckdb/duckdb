@@ -38,14 +38,14 @@ static void UnnestNull(idx_t start, idx_t end, Vector &result) {
 	}
 }
 
-template<class T>
+template <class T>
 static void TemplatedUnnest(VectorData &vdata, idx_t start, idx_t end, Vector &result) {
-	auto source_data = (T *) vdata.data;
+	auto source_data = (T *)vdata.data;
 	auto &source_mask = vdata.validity;
 	auto result_data = FlatVector::GetData<T>(result);
 	auto &result_mask = FlatVector::Validity(result);
 
-	for(idx_t i = start; i < end; i++) {
+	for (idx_t i = start; i < end; i++) {
 		auto source_idx = vdata.sel->get_index(i);
 		auto target_idx = i - start;
 		if (source_mask.RowIsValid(source_idx)) {
@@ -61,7 +61,7 @@ static void UnnestValidity(VectorData &vdata, idx_t start, idx_t end, Vector &re
 	auto &source_mask = vdata.validity;
 	auto &result_mask = FlatVector::Validity(result);
 
-	for(idx_t i = start; i < end; i++) {
+	for (idx_t i = start; i < end; i++) {
 		auto source_idx = vdata.sel->get_index(i);
 		auto target_idx = i - start;
 		result_mask.Set(target_idx, source_mask.RowIsValid(source_idx));
@@ -69,7 +69,7 @@ static void UnnestValidity(VectorData &vdata, idx_t start, idx_t end, Vector &re
 }
 
 static void UnnestVector(VectorData &vdata, Vector &source, idx_t list_size, idx_t start, idx_t end, Vector &result) {
-	switch(result.GetType().InternalType()) {
+	switch (result.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 		TemplatedUnnest<int8_t>(vdata, start, end, result);
@@ -130,7 +130,7 @@ static void UnnestVector(VectorData &vdata, Vector &source, idx_t list_size, idx
 		auto &source_entries = StructVector::GetEntries(source);
 		auto &target_entries = StructVector::GetEntries(result);
 		UnnestValidity(vdata, start, end, result);
-		for(idx_t i = 0; i < source_entries.size(); i++) {
+		for (idx_t i = 0; i < source_entries.size(); i++) {
 			VectorData sdata;
 			source_entries[i]->Orrify(list_size, sdata);
 			UnnestVector(sdata, *source_entries[i], list_size, start, end, *target_entries[i]);
@@ -178,7 +178,7 @@ void PhysicalUnnest::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 			// initialize VectorData object so the nullmask can accessed
 			state->list_vector_data.resize(state->list_data.ColumnCount());
 			state->list_child_data.resize(state->list_data.ColumnCount());
-			for(idx_t col_idx = 0; col_idx < state->list_data.ColumnCount(); col_idx++) {
+			for (idx_t col_idx = 0; col_idx < state->list_data.ColumnCount(); col_idx++) {
 				auto &list_vector = state->list_data.data[col_idx];
 				list_vector.Orrify(state->list_data.size(), state->list_vector_data[col_idx]);
 
@@ -202,7 +202,7 @@ void PhysicalUnnest::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 				if (!vdata.validity.RowIsValid(current_idx)) {
 					list_length = 1;
 				} else {
-					auto list_data = (list_entry_t *) vdata.data;
+					auto list_data = (list_entry_t *)vdata.data;
 					auto list_entry = list_data[current_idx];
 					list_length = (int64_t)list_entry.length;
 				}
@@ -221,7 +221,7 @@ void PhysicalUnnest::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 		chunk.SetCardinality(this_chunk_len);
 
 		SelectionVector parent_sel(STANDARD_VECTOR_SIZE);
-		for(idx_t i = 0; i < this_chunk_len; i++) {
+		for (idx_t i = 0; i < this_chunk_len; i++) {
 			parent_sel.set_index(i, state->parent_position);
 		}
 		for (idx_t col_idx = 0; col_idx < state->child_chunk.ColumnCount(); col_idx++) {
@@ -235,7 +235,7 @@ void PhysicalUnnest::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 			auto &child_data = state->list_child_data[col_idx];
 			auto current_idx = vdata.sel->get_index(state->parent_position);
 
-			auto list_data = (list_entry_t *) vdata.data;
+			auto list_data = (list_entry_t *)vdata.data;
 			auto list_entry = list_data[current_idx];
 			auto list_count = MinValue<idx_t>(this_chunk_len, list_entry.length - state->list_position);
 
@@ -248,7 +248,8 @@ void PhysicalUnnest::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 					auto list_size = ListVector::GetListSize(list_vector);
 
 					auto base_offset = list_entry.offset + state->list_position;
-					UnnestVector(child_data, child_vector, list_size, base_offset, base_offset + list_count, result_vector);
+					UnnestVector(child_data, child_vector, list_size, base_offset, base_offset + list_count,
+					             result_vector);
 				}
 			}
 			UnnestNull(list_count, this_chunk_len, result_vector);
