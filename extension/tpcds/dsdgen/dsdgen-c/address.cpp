@@ -252,17 +252,22 @@ int mk_city(int nTable, char **dest) {
  * Side Effects:
  * TODO: None
  */
-#if defined(__has_feature)
-#if __has_feature(address_sanitizer)
-__attribute__((no_sanitize("address")))
-#endif
-#endif
 int city_hash(int nTable, char *name) {
 	char *cp;
-	int hash_value = 0, res = 0;
+	long long hash_value = 0, res = 0; // changed to long long from int
 
 	for (cp = name; *cp; cp++) {
 		hash_value *= 26;
+        // simulate the overflow as if it were an int
+        if (hash_value > MAXINT) {
+            hash_value %= MAXINT;
+            hash_value -= MAXINT;
+            hash_value -= 2;
+        } else if (hash_value < -MAXINT) {
+            hash_value %= MAXINT;
+            hash_value += MAXINT;
+            hash_value += 2;
+        }
 		hash_value -= 'A';
 		hash_value += *cp;
 		if (hash_value > 1000000) {

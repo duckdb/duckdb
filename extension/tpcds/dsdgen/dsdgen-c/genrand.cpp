@@ -511,14 +511,9 @@ int genrand_date(date_t *dest, int dist, date_t *min, date_t *max, date_t *mean,
  * TODO:
  */
 // FIXME: allow re-init
-#if defined(__has_feature)
-#if __has_feature(address_sanitizer)
-__attribute__((no_sanitize("address")))
-#endif
-#endif
 void init_rand(void) {
 	static int bInit = 0;
-	int i, skip, nSeed;
+	long long i, skip, nSeed; // changed to long long from int
 
 	if (!bInit) {
 		if (is_set("RNGSEED"))
@@ -527,9 +522,19 @@ void init_rand(void) {
 			nSeed = RNG_SEED;
 		skip = MAXINT / MAX_COLUMN;
 		for (i = 0; i < MAX_COLUMN; i++) {
-			Streams[i].nInitialSeed = nSeed + skip * i;
-			Streams[i].nSeed = nSeed + skip * i;
-			Streams[i].nUsed = 0;
+            // simulate the overflow as if it were an int
+            if (i != 0 && (INT_MAX - nSeed) / i < skip) {
+                long long val = nSeed + skip * i;
+                val %= MAXINT;
+                val -= MAXINT;
+                val -= 2;
+                Streams[i].nInitialSeed = val;
+                Streams[i].nSeed = val;
+            } else {
+                Streams[i].nInitialSeed = nSeed + skip * i;
+                Streams[i].nSeed = nSeed + skip * i;
+            }
+			    Streams[i].nUsed = 0;
 		}
 		bInit = 1;
 	}
