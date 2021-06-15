@@ -189,7 +189,7 @@ idx_t PositionComparator::Definite<duckdb::GreaterThanEquals>(Vector &left, Vect
 	return TemplatedSelectOperation<duckdb::GreaterThan>(left, right, sel, count, true_sel, &false_sel);
 }
 
-static inline const SelectionVector *SelectNotNull(VectorData &ldata, VectorData &rdata, idx_t &count,
+static inline const SelectionVector *SelectNotNull(VectorData &lvdata, VectorData &rvdata, idx_t &count,
                                                    const SelectionVector *sel, OptionalSelection &false_vec,
                                                    SelectionVector &maybe_vec) {
 
@@ -200,12 +200,14 @@ static inline const SelectionVector *SelectNotNull(VectorData &ldata, VectorData
 
 	// For top-level comparisons, NULL semantics are in effect,
 	// so filter out any NULLs
-	if (!ldata.validity.AllValid() || !rdata.validity.AllValid()) {
+	if (!lvdata.validity.AllValid() || !rvdata.validity.AllValid()) {
 		idx_t true_count = 0;
 		idx_t false_count = 0;
 		for (idx_t i = 0; i < count; ++i) {
 			const auto idx = sel->get_index(i);
-			if (!ldata.validity.RowIsValid(idx) || !rdata.validity.RowIsValid(idx)) {
+			const auto lidx = lvdata.sel->get_index(i);
+			const auto ridx = rvdata.sel->get_index(i);
+			if (!lvdata.validity.RowIsValid(lidx) || !rvdata.validity.RowIsValid(ridx)) {
 				false_vec.Append(false_count, idx);
 			} else {
 				maybe_vec.set_index(true_count++, idx);
@@ -283,14 +285,27 @@ static idx_t StructSelectOperation(Vector &left, Vector &right, const SelectionV
 	return result;
 }
 
+static void CompactListCursor(SelectionVector &cursor, VectorData &vdata, const idx_t pos,
+                              const SelectionVector &undecided, const idx_t count) {
+	const auto data = (const list_entry_t *)vdata.data;
+	for (idx_t i = 0; i < count; ++i) {
+		const auto idx = undecided.get_index(i);
+
+		const auto lidx = vdata.sel->get_index(idx);
+		const auto &entry = data[lidx];
+		cursor.set_index(i, entry.offset + pos);
+	}
+}
+
 template <typename OP>
 static idx_t ListSelectOperation(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
                                  SelectionVector *true_sel, SelectionVector *false_sel) {
-	idx_t result = 0;
-
-	// Incrementally fill in successes and failures as we discover them
-	OptionalSelection true_vec(true_sel);
-	OptionalSelection false_vec(false_sel);
+	// The select operations all use a dense pair of input vectors to partition
+	// a selection vector in a single pass. But to implement progressive comparisons,
+	// we have to make multiple passes, so we need to keep track of the original input positions
+	// and then scatter the output selections when we are done.
+	idx_t match_count = 0;
+	idx_t no_match_count = count;
 
 	// For top-level comparisons, NULL semantics are in effect,
 	// so filter out any NULL LISTs
@@ -298,29 +313,39 @@ static idx_t ListSelectOperation(Vector &left, Vector &right, const SelectionVec
 	left.Orrify(count, lvdata);
 	right.Orrify(count, rvdata);
 
-	SelectionVector maybe_vec(count);
-	sel = SelectNotNull(lvdata, rvdata, count, sel, false_vec, maybe_vec);
+	// Make real selections for progressive comparisons
+	SelectionVector true_vec(count);
+	OptionalSelection true_opt(&true_vec);
 
+	SelectionVector false_vec(count);
+	OptionalSelection false_opt(&false_vec);
+
+	SelectionVector maybe_vec(count);
+	const auto hack = SelectNotNull(lvdata, rvdata, count, nullptr, false_opt, maybe_vec);
+	if (hack != &maybe_vec) {
+		for (idx_t i = 0; i < count; ++i) {
+			maybe_vec.set_index(i, i);
+		}
+	}
+
+	// If everything was NULL, fill in false_sel with sel
 	if (count == 0) {
+		if (false_sel) {
+			for (idx_t i = 0; i < no_match_count; ++i) {
+				false_sel->set_index(i, sel ? sel->get_index(i) : i);
+			}
+		}
 		return count;
 	}
+	no_match_count -= count;
 
 	// The cursors provide a means of mapping the selected list to a current position in that list.
 	// We use them to create dictionary views of the children so we can vectorise the positional comparisons.
-	// Note that they only need to be as large as the parent because only one entry is active per LIST.
 	SelectionVector lcursor(count);
 	SelectionVector rcursor(count);
 
 	const auto ldata = (const list_entry_t *)lvdata.data;
 	const auto rdata = (const list_entry_t *)rvdata.data;
-
-	for (idx_t i = 0; i < count; ++i) {
-		const idx_t idx = sel->get_index(i);
-		const auto &lentry = ldata[idx];
-		const auto &rentry = rdata[idx];
-		lcursor.set_index(idx, lentry.offset);
-		rcursor.set_index(idx, rentry.offset);
-	}
 
 	Vector lchild;
 	lchild.Slice(ListVector::GetEntry(left), lcursor, count);
@@ -342,64 +367,78 @@ static idx_t ListSelectOperation(Vector &left, Vector &right, const SelectionVec
 	// 	}
 	// }
 	for (idx_t pos = 0; count > 0; ++pos) {
+		// Set up the cursors for the current position
+		CompactListCursor(lcursor, lvdata, pos, maybe_vec, count);
+		CompactListCursor(rcursor, rvdata, pos, maybe_vec, count);
+
 		// Tie-break the pairs where one of the LISTs is exhausted.
 		idx_t true_count = 0;
 		idx_t false_count = 0;
-		idx_t remaining = 0;
+		idx_t maybe_count = 0;
 		for (idx_t i = 0; i < count; ++i) {
-			const auto idx = sel->get_index(i);
-			const auto &lentry = ldata[idx];
-			const auto &rentry = rdata[idx];
+			const auto idx = maybe_vec.get_index(i);
+			const auto lidx = lvdata.sel->get_index(idx);
+			const auto &lentry = ldata[lidx];
+			const auto ridx = rvdata.sel->get_index(idx);
+			const auto &rentry = rdata[ridx];
 			if (lentry.length == pos || rentry.length == pos) {
 				if (PositionComparator::TieBreak<OP>(lentry.length, rentry.length)) {
-					true_vec.Append(true_count, idx);
+					true_opt.Append(true_count, idx);
 				} else {
-					false_vec.Append(false_count, idx);
+					false_opt.Append(false_count, idx);
 				}
 			} else {
-				maybe_vec.set_index(remaining++, idx);
+				lcursor.set_index(maybe_count, lentry.offset + pos);
+				rcursor.set_index(maybe_count, rentry.offset + pos);
+				maybe_vec.set_index(maybe_count++, idx);
 			}
 		}
-		true_vec.Advance(true_count);
-		false_vec.Advance(false_count);
-		count = remaining;
-		sel = &maybe_vec;
-		result += true_count;
+		true_opt.Advance(true_count);
+		false_opt.Advance(false_count);
+		count = maybe_count;
+		match_count += true_count;
+		no_match_count += false_count;
 
 		// Find everything that definitely matches
-		auto definite = PositionComparator::Definite<OP>(lchild, rchild, sel, count, true_vec, maybe_vec);
-		true_vec.Advance(definite);
-		result += definite;
-		count -= definite;
+		true_count = PositionComparator::Definite<OP>(lchild, rchild, &maybe_vec, count, true_opt, maybe_vec);
+		true_opt.Advance(true_count);
+		match_count += true_count;
+		count -= true_count;
+
+		// Compact the cursors if something changed.
+		if (true_count > 0) {
+			CompactListCursor(lcursor, lvdata, pos, maybe_vec, count);
+			CompactListCursor(rcursor, rvdata, pos, maybe_vec, count);
+		}
 
 		// Find what might match on the next position
-		idx_t possible = 0;
-		if (definite > 0) {
-			possible = PositionComparator::Possible<OP>(lchild, rchild, &maybe_vec, count, maybe_vec, false_vec);
-			sel = &maybe_vec;
-		} else {
-			// If there were no definite matches, then for speed,
-			// maybe_vec may not have been filled in, so we reuse sel.
-			possible = PositionComparator::Possible<OP>(lchild, rchild, sel, count, maybe_vec, false_vec);
+		maybe_count = PositionComparator::Possible<OP>(lchild, rchild, &maybe_vec, count, maybe_vec, false_opt);
 
-			// If everything is still possible, then for speed,
-			// maybe_vec may not have been filled in, so we reuse sel.
-			if (possible != count) {
-				sel = &maybe_vec;
-			}
-		}
-		false_vec.Advance(count - possible);
-		count = possible;
+		false_count = count - maybe_count;
+		false_opt.Advance(false_count);
+		no_match_count += false_count;
 
-		// Increment the cursors
-		for (idx_t i = 0; i < count; ++i) {
-			const auto idx = sel->get_index(i);
-			lcursor.set_index(idx, lcursor.get_index(idx) + 1);
-			rcursor.set_index(idx, rcursor.get_index(idx) + 1);
+		count = maybe_count;
+	}
+
+	// Scatter the original selection to the output selections
+	if (!sel) {
+		sel = &FlatVector::INCREMENTAL_SELECTION_VECTOR;
+	}
+
+	if (true_sel) {
+		for (idx_t i = 0; i < match_count; ++i) {
+			true_sel->set_index(i, sel->get_index(true_vec.get_index(i)));
 		}
 	}
 
-	return result;
+	if (false_sel) {
+		for (idx_t i = 0; i < no_match_count; ++i) {
+			false_sel->set_index(i, sel->get_index(false_vec.get_index(i)));
+		}
+	}
+
+	return match_count;
 }
 
 idx_t VectorOperations::Equals(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,

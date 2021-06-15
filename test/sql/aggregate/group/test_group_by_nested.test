@@ -207,3 +207,11 @@ GROUP BY k, c
 ORDER BY 2, 3
 ----
 15 values hashing to 84a00080363dc8d5f8adbf6cc769a55d
+
+# Multiple constant keys
+query II
+select [1,2,3] a, count(*)
+from range(5) tbl(b)
+group by a;
+----
+[1, 2, 3]	5

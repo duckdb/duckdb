@@ -389,3 +389,20 @@ ORDER BY i
 ----
 24 values hashing to 4b94f1aa9fb7bef0533aa9c43cc1ed24
 
+# Multiple key matches
+query II
+select * from (
+	(select [1,2,3] a from range(3))) tbl(i)
+	join
+	((select [1,2,3] a from range(3))) tbl2(j)
+	on (i=j);
+----
+[1, 2, 3]	[1, 2, 3]
+[1, 2, 3]	[1, 2, 3]
+[1, 2, 3]	[1, 2, 3]
+[1, 2, 3]	[1, 2, 3]
+[1, 2, 3]	[1, 2, 3]
+[1, 2, 3]	[1, 2, 3]
+[1, 2, 3]	[1, 2, 3]
+[1, 2, 3]	[1, 2, 3]
+[1, 2, 3]	[1, 2, 3]
