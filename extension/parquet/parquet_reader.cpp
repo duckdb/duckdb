@@ -365,7 +365,7 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t o
 		}
 	}
 
-	state.root_reader->IntializeRead(group.columns, *state.thrift_file_proto);
+	state.root_reader->InitializeRead(group.columns, *state.thrift_file_proto);
 }
 
 idx_t ParquetReader::NumRows() {

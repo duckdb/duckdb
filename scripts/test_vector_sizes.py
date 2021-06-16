@@ -26,7 +26,7 @@ for vector_size in vector_sizes:
 	execute_system_command('rm -rf build')
 	execute_system_command('mkdir -p build/release')
 	os.chdir(build_dir)
-	execute_system_command('cmake -DCMAKE_BUILD_TYPE=Release ../..')
+	execute_system_command('cmake -DBUILD_PARQUET_EXTENSION=TRUE -DCMAKE_BUILD_TYPE=Release ../..')
 	execute_system_command('cmake --build .')
 	os.chdir(current_dir)
 	execute_system_command('build/release/test/unittest')

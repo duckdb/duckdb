@@ -25,8 +25,8 @@ public:
 		D_ASSERT(0);
 	}
 
-	void IntializeRead(const std::vector<ColumnChunk> &columns, TProtocol &protocol_p) override {
-		child_column_reader->IntializeRead(columns, protocol_p);
+	void InitializeRead(const std::vector<ColumnChunk> &columns, TProtocol &protocol_p) override {
+		child_column_reader->InitializeRead(columns, protocol_p);
 	}
 
 	idx_t GroupRowsAvailable() override {
