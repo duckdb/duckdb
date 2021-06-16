@@ -1030,24 +1030,24 @@ const SelectionVector *ConstantVector::ZeroSelectionVector(idx_t count, Selectio
 	return &owned_sel;
 }
 
-void ConstantVector::Reference(Vector &vector, Vector &other, idx_t position, idx_t count) {
+void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, idx_t count) {
 	D_ASSERT(position < count);
-	auto &other_type = other.GetType();
-	switch (other_type.InternalType()) {
+	auto &source_type = source.GetType();
+	switch (source_type.InternalType()) {
 	case PhysicalType::LIST: {
-		if (!ListVector::HasEntry(other)) {
-			Value null_value(other_type);
+		if (!ListVector::HasEntry(source)) {
+			Value null_value(source_type);
 			vector.Reference(null_value);
 			break;
 		}
-		// retrieve the list entry from the other vector
+		// retrieve the list entry from the source vector
 		VectorData vdata;
-		other.Orrify(count, vdata);
+		source.Orrify(count, vdata);
 
 		auto list_index = vdata.sel->get_index(position);
 		if (!vdata.validity.RowIsValid(list_index)) {
 			// list is null: create null value
-			Value null_value(other_type);
+			Value null_value(source_type);
 			vector.Reference(null_value);
 			break;
 		}
@@ -1057,34 +1057,34 @@ void ConstantVector::Reference(Vector &vector, Vector &other, idx_t position, id
 
 		// add the list entry as the first element of "vector"
 		// FIXME: we only need to allocate space for 1 tuple here
-		vector.Initialize(other_type);
+		vector.Initialize(source_type);
 		auto target_data = FlatVector::GetData<list_entry_t>(vector);
 		target_data[0] = list_entry;
 
-		// create a reference to the child list of the other vector
+		// create a reference to the child list of the source vector
 		auto new_child = make_unique<Vector>();
-		new_child->Reference(ListVector::GetEntry(other));
+		new_child->Reference(ListVector::GetEntry(source));
 
 		ListVector::SetEntry(vector, move(new_child));
-		ListVector::SetListSize(vector, ListVector::GetListSize(other));
+		ListVector::SetListSize(vector, ListVector::GetListSize(source));
 		vector.SetVectorType(VectorType::CONSTANT_VECTOR);
 		break;
 	}
 	case PhysicalType::STRUCT: {
 		VectorData vdata;
-		other.Orrify(count, vdata);
+		source.Orrify(count, vdata);
 
 		auto struct_index = vdata.sel->get_index(position);
 		if (!vdata.validity.RowIsValid(struct_index)) {
 			// null struct: create null value
-			Value null_value(other_type);
+			Value null_value(source_type);
 			vector.Reference(null_value);
 			break;
 		}
 
 		// struct: pass constant reference into child entries
-		vector.Initialize(other_type);
-		auto &source_entries = StructVector::GetEntries(other);
+		vector.Initialize(source_type);
+		auto &source_entries = StructVector::GetEntries(source);
 		auto &target_entries = StructVector::GetEntries(vector);
 		for (idx_t i = 0; i < source_entries.size(); i++) {
 			ConstantVector::Reference(*target_entries[i], *source_entries[i], position, count);
@@ -1095,7 +1095,7 @@ void ConstantVector::Reference(Vector &vector, Vector &other, idx_t position, id
 	default:
 		// default behavior: get a value from the vector and reference it
 		// this is not that expensive for scalar types
-		auto value = other.GetValue(position);
+		auto value = source.GetValue(position);
 		vector.Reference(value);
 		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
 		break;

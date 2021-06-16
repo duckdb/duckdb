@@ -205,8 +205,8 @@ struct ConstantVector {
 		return vector.validity;
 	}
 	DUCKDB_API static const SelectionVector *ZeroSelectionVector(idx_t count, SelectionVector &owned_sel);
-	//! Turns "vector" into a constant vector by referencing a value within the other vector
-	DUCKDB_API static void Reference(Vector &vector, Vector &other, idx_t position, idx_t count);
+	//! Turns "vector" into a constant vector by referencing a value within the source vector
+	DUCKDB_API static void Reference(Vector &vector, Vector &source, idx_t position, idx_t count);
 
 	static const sel_t ZERO_VECTOR[STANDARD_VECTOR_SIZE];
 	static const SelectionVector ZERO_SELECTION_VECTOR;
