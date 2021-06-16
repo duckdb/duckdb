@@ -6,7 +6,9 @@
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/chrono.hpp"
+#include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/multiply.hpp"
+#include "duckdb/common/limits.hpp"
 #include <ctime>
 
 namespace duckdb {
@@ -135,7 +137,14 @@ dtime_t Timestamp::GetTime(timestamp_t timestamp) {
 }
 
 timestamp_t Timestamp::FromDatetime(date_t date, dtime_t time) {
-	return timestamp_t(date.days * Interval::MICROS_PER_DAY + time.micros);
+	timestamp_t result;
+	if (!TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(date.days, Interval::MICROS_PER_DAY, result.value)) {
+		throw Exception("Overflow exception in date/time -> timestamp conversion");
+	}
+	if (!TryAddOperator::Operation<int64_t, int64_t, int64_t>(result.value, time.micros, result.value)) {
+		throw Exception("Overflow exception in date/time -> timestamp conversion");
+	}
+	return result;
 }
 
 void Timestamp::Convert(timestamp_t timestamp, date_t &out_date, dtime_t &out_time) {

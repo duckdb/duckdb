@@ -1,0 +1,405 @@
+# name: test/sql/tpcds/tpcds_sf1.test_slow
+# description: Test TPC-DS SF1
+# group: [tpcds]
+
+require tpcds
+
+statement ok
+CALL dsdgen(sf=1)
+
+# check table counts
+query T
+SELECT COUNT(*) FROM call_center
+----
+6
+
+query T
+SELECT COUNT(*) FROM catalog_page
+----
+11718
+
+query T
+SELECT COUNT(*) FROM catalog_returns
+----
+144067
+
+query T
+SELECT COUNT(*) FROM catalog_sales
+----
+1441548
+
+query T
+SELECT COUNT(*) FROM customer
+----
+100000
+
+query T
+SELECT COUNT(*) FROM customer_demographics
+----
+1920800
+
+query T
+SELECT COUNT(*) FROM customer_address
+----
+50000
+
+query T
+SELECT COUNT(*) FROM date_dim
+----
+73049
+
+query T
+SELECT COUNT(*) FROM household_demographics
+----
+7200
+
+query T
+SELECT COUNT(*) FROM inventory
+----
+11745000
+
+query T
+SELECT COUNT(*) FROM income_band
+----
+20
+
+query T
+SELECT COUNT(*) FROM item
+----
+18000
+
+query T
+SELECT COUNT(*) FROM promotion
+----
+300
+
+query T
+SELECT COUNT(*) FROM reason
+----
+35
+
+query T
+SELECT COUNT(*) FROM ship_mode
+----
+20
+
+query T
+SELECT COUNT(*) FROM store
+----
+12
+
+# TODO: this count is slightly off, why?
+#query T
+#SELECT COUNT(*) FROM store_returns
+#----
+#287514
+
+query T
+SELECT COUNT(*) FROM store_sales
+----
+2880404
+
+query T
+SELECT COUNT(*) FROM time_dim
+----
+86400
+
+query T
+SELECT COUNT(*) FROM warehouse
+----
+5
+
+query T
+SELECT COUNT(*) FROM web_page
+----
+60
+
+# TODO: this count is slightly off, why?
+#query T
+#SELECT COUNT(*) FROM web_returns
+#----
+#71763
+
+query T
+SELECT COUNT(*) FROM web_sales
+----
+719384
+
+query T
+SELECT COUNT(*) FROM web_site
+----
+30
+
+# missing queries: 13, 14, 16, 40, 51, 52, 55, 68, 76, 86, 89, 101
+statement ok
+PRAGMA tpcds(1)
+
+statement ok
+PRAGMA tpcds(2)
+
+statement ok
+PRAGMA tpcds(3)
+
+statement ok
+PRAGMA tpcds(4)
+
+statement ok
+PRAGMA tpcds(5)
+
+statement ok
+PRAGMA tpcds(6)
+
+statement ok
+PRAGMA tpcds(7)
+
+statement ok
+PRAGMA tpcds(8)
+
+statement ok
+PRAGMA tpcds(9)
+
+statement ok
+PRAGMA tpcds(10)
+
+statement ok
+PRAGMA tpcds(11)
+
+statement ok
+PRAGMA tpcds(12)
+
+statement ok
+PRAGMA tpcds(15)
+
+statement ok
+PRAGMA tpcds(17)
+
+statement ok
+PRAGMA tpcds(18)
+
+statement ok
+PRAGMA tpcds(19)
+
+statement ok
+PRAGMA tpcds(20)
+
+statement ok
+PRAGMA tpcds(21)
+
+statement ok
+PRAGMA tpcds(22)
+
+statement ok
+PRAGMA tpcds(23)
+
+statement ok
+PRAGMA tpcds(24)
+
+statement ok
+PRAGMA tpcds(25)
+
+statement ok
+PRAGMA tpcds(26)
+
+statement ok
+PRAGMA tpcds(27)
+
+statement ok
+PRAGMA tpcds(28)
+
+statement ok
+PRAGMA tpcds(29)
+
+statement ok
+PRAGMA tpcds(30)
+
+statement ok
+PRAGMA tpcds(31)
+
+statement ok
+PRAGMA tpcds(32)
+
+statement ok
+PRAGMA tpcds(33)
+
+statement ok
+PRAGMA tpcds(34)
+
+statement ok
+PRAGMA tpcds(35)
+
+statement ok
+PRAGMA tpcds(36)
+
+statement ok
+PRAGMA tpcds(37)
+
+statement ok
+PRAGMA tpcds(38)
+
+statement ok
+PRAGMA tpcds(39)
+
+statement ok
+PRAGMA tpcds(41)
+
+statement ok
+PRAGMA tpcds(42)
+
+statement ok
+PRAGMA tpcds(43)
+
+statement ok
+PRAGMA tpcds(44)
+
+statement ok
+PRAGMA tpcds(45)
+
+statement ok
+PRAGMA tpcds(46)
+
+statement ok
+PRAGMA tpcds(47)
+
+statement ok
+PRAGMA tpcds(48)
+
+statement ok
+PRAGMA tpcds(49)
+
+statement ok
+PRAGMA tpcds(50)
+
+statement ok
+PRAGMA tpcds(53)
+
+statement ok
+PRAGMA tpcds(54)
+
+statement ok
+PRAGMA tpcds(56)
+
+statement ok
+PRAGMA tpcds(57)
+
+statement ok
+PRAGMA tpcds(58)
+
+statement ok
+PRAGMA tpcds(59)
+
+statement ok
+PRAGMA tpcds(60)
+
+statement ok
+PRAGMA tpcds(61)
+
+statement ok
+PRAGMA tpcds(62)
+
+statement ok
+PRAGMA tpcds(63)
+
+statement ok
+PRAGMA tpcds(64)
+
+statement ok
+PRAGMA tpcds(65)
+
+statement ok
+PRAGMA tpcds(66)
+
+statement ok
+PRAGMA tpcds(67)
+
+statement ok
+PRAGMA tpcds(69)
+
+statement ok
+PRAGMA tpcds(70)
+
+statement ok
+PRAGMA tpcds(71)
+
+statement ok
+PRAGMA tpcds(72)
+
+statement ok
+PRAGMA tpcds(73)
+
+statement ok
+PRAGMA tpcds(74)
+
+statement ok
+PRAGMA tpcds(75)
+
+statement ok
+PRAGMA tpcds(77)
+
+statement ok
+PRAGMA tpcds(78)
+
+statement ok
+PRAGMA tpcds(79)
+
+statement ok
+PRAGMA tpcds(80)
+
+statement ok
+PRAGMA tpcds(81)
+
+statement ok
+PRAGMA tpcds(82)
+
+statement ok
+PRAGMA tpcds(83)
+
+statement ok
+PRAGMA tpcds(84)
+
+statement ok
+PRAGMA tpcds(85)
+
+statement ok
+PRAGMA tpcds(87)
+
+statement ok
+PRAGMA tpcds(88)
+
+statement ok
+PRAGMA tpcds(90)
+
+statement ok
+PRAGMA tpcds(91)
+
+statement ok
+PRAGMA tpcds(92)
+
+statement ok
+PRAGMA tpcds(93)
+
+statement ok
+PRAGMA tpcds(94)
+
+statement ok
+PRAGMA tpcds(95)
+
+statement ok
+PRAGMA tpcds(96)
+
+statement ok
+PRAGMA tpcds(97)
+
+statement ok
+PRAGMA tpcds(98)
+
+statement ok
+PRAGMA tpcds(99)
+
+statement ok
+PRAGMA tpcds(100)
+
+statement ok
+PRAGMA tpcds(102)
+
+statement ok
+PRAGMA tpcds(103)
