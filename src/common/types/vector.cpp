@@ -1060,7 +1060,7 @@ void ConstantVector::Reference(Vector &vector, Vector &other, idx_t position, id
 		ListVector::SetEntry(vector, move(new_child));
 		ListVector::SetListSize(vector, ListVector::GetListSize(other));
 		vector.SetVectorType(VectorType::CONSTANT_VECTOR);
-		return;
+		break;
 	}
 	case PhysicalType::STRUCT: {
 		VectorData vdata;
@@ -1086,9 +1086,10 @@ void ConstantVector::Reference(Vector &vector, Vector &other, idx_t position, id
 	}
 	default:
 		// default behavior: get a value from the vector and reference it
-		// this is not actually that bad for scalar types
+		// this is not that expensive for scalar types
 		auto value = other.GetValue(position);
 		vector.Reference(value);
+		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
 		break;
 	}
 }

@@ -268,14 +268,17 @@ static idx_t StructSelectOperation(Vector &left, Vector &right, const SelectionV
 	D_ASSERT(lchildren.size() == rchildren.size());
 
 	for (idx_t col_no = 0; col_no < lchildren.size(); ++col_no) {
+		SelectionVector left_sel(lvdata.sel->Slice(maybe_vec, count));
+		SelectionVector right_sel(rvdata.sel->Slice(maybe_vec, count));
+
 		// We use the maybe_vec as a dictionary to densify the children
 		auto &lchild = *lchildren[col_no];
 		Vector ldense;
-		ldense.Slice(lchild, maybe_vec, count);
+		ldense.Slice(lchild, left_sel, count);
 
 		auto &rchild = *rchildren[col_no];
 		Vector rdense;
-		rdense.Slice(rchild, maybe_vec, count);
+		rdense.Slice(rchild, right_sel, count);
 
 		// Find everything that definitely matches
 		auto true_count = PositionComparator::Definite<OP>(ldense, rdense, &maybe_vec, count, true_opt, maybe_vec);
