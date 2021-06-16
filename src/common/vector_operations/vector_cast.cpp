@@ -598,30 +598,33 @@ static void ListCastSwitch(Vector &source, Vector &result, idx_t count) {
 		if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			result.SetVectorType(source.GetVectorType());
 			ConstantVector::SetNull(result, ConstantVector::IsNull(source));
+
+			auto ldata = ConstantVector::GetData<list_entry_t>(source);
+			auto tdata = ConstantVector::GetData<list_entry_t>(result);
+			*tdata = *ldata;
 		} else {
 			source.Normalify(count);
 			result.SetVectorType(VectorType::FLAT_VECTOR);
 			FlatVector::SetValidity(result, FlatVector::Validity(source));
+
+			auto ldata = FlatVector::GetData<list_entry_t>(source);
+			auto tdata = FlatVector::GetData<list_entry_t>(result);
+			for (idx_t i = 0; i < count; i++) {
+				tdata[i] = ldata[i];
+			}
 		}
-		auto list_child = make_unique<Vector>(ListType::GetChildType(result.GetType()));
-		ListVector::SetEntry(result, move(list_child));
+		auto &child_type = ListType::GetChildType(result.GetType());
 		if (ListVector::HasEntry(source)) {
 			auto &source_cc = ListVector::GetEntry(source);
 			auto source_size = ListVector::GetListSize(source);
-			Vector append_vector(ListType::GetChildType(result.GetType()));
+			auto append_vector = make_unique<Vector>(child_type);
 			if (source_size > STANDARD_VECTOR_SIZE) {
-				append_vector.Resize(STANDARD_VECTOR_SIZE, source_size);
+				append_vector->Resize(STANDARD_VECTOR_SIZE, source_size);
 			}
-			if (source_cc.GetData()) {
-				VectorOperations::Cast(source_cc, append_vector, source_size);
-				ListVector::Append(result, append_vector, source_size);
-			}
-		}
-
-		auto ldata = FlatVector::GetData<list_entry_t>(source);
-		auto tdata = FlatVector::GetData<list_entry_t>(result);
-		for (idx_t i = 0; i < count; i++) {
-			tdata[i] = ldata[i];
+			VectorOperations::Cast(source_cc, *append_vector, source_size);
+			ListVector::SetEntry(result, move(append_vector));
+			ListVector::SetListSize(result, source_size);
+			D_ASSERT(ListVector::GetListSize(result) == source_size);
 		}
 		break;
 	}

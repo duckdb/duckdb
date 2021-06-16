@@ -107,7 +107,6 @@ static idx_t TemplatedSelectOperation(Vector &left, Vector &right, const Selecti
 }
 
 struct PositionComparator {
-
 	// Select the rows that definitely match.
 	template <typename OP>
 	static idx_t Definite(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
@@ -268,20 +267,31 @@ static idx_t StructSelectOperation(Vector &left, Vector &right, const SelectionV
 	D_ASSERT(lchildren.size() == rchildren.size());
 
 	for (idx_t col_no = 0; col_no < lchildren.size(); ++col_no) {
+		SelectionVector left_sel(lvdata.sel->Slice(maybe_vec, count));
+		SelectionVector right_sel(rvdata.sel->Slice(maybe_vec, count));
+
 		// We use the maybe_vec as a dictionary to densify the children
 		auto &lchild = *lchildren[col_no];
 		Vector ldense;
-		ldense.Slice(lchild, maybe_vec, count);
+		ldense.Slice(lchild, left_sel, count);
 
 		auto &rchild = *rchildren[col_no];
 		Vector rdense;
-		rdense.Slice(rchild, maybe_vec, count);
+		rdense.Slice(rchild, right_sel, count);
 
 		// Find everything that definitely matches
 		auto true_count = PositionComparator::Definite<OP>(ldense, rdense, &maybe_vec, count, true_opt, maybe_vec);
-		true_opt.Advance(true_count);
-		match_count += true_count;
-		count -= true_count;
+		if (true_count > 0) {
+			true_opt.Advance(true_count);
+			match_count += true_count;
+			count -= true_count;
+
+			SelectionVector new_left_sel = SelectionVector(lvdata.sel->Slice(maybe_vec, count));
+			SelectionVector new_right_sel = SelectionVector(lvdata.sel->Slice(maybe_vec, count));
+
+			ldense.Slice(lchild, new_left_sel, count);
+			rdense.Slice(rchild, new_right_sel, count);
+		}
 
 		if (col_no != lchildren.size() - 1) {
 			// Find what might match on the next position
