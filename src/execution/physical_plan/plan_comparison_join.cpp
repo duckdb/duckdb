@@ -35,6 +35,10 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 	// we only do this optimization for inner joins
 	if (op.join_type != JoinType::INNER)
 		return;
+	// with one condition
+	if (op.conditions.size() != 1)
+		return;
+
 	// with equality
 	for (auto &&condition : op.conditions) {
 		// check if it is equality
