@@ -192,7 +192,7 @@ static string NormalizeColumnName(const string& col_name) {
 		} 		
 	}
 	// don't leave string empty
-	if (col_name_cleaned.size() == 0) {
+	if (col_name_cleaned.empty()) {
 		col_name_cleaned += "_";
 	}
 	// prepend _ if name starts with a digit or is a reserved keyword
@@ -724,8 +724,7 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 			const string col_name_raw = col_name;
 			while (name_collision_count.find(col_name) != name_collision_count.end()) {
 				name_collision_count[col_name] += 1;
-				const idx_t collision_count = name_collision_count[col_name];
-				col_name = col_name + "_" + to_string(collision_count);
+				col_name = col_name + "_" + to_string(name_collision_count[col_name]);
 			}
 	
 			col_names.push_back(col_name);
