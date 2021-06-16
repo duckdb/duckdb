@@ -650,11 +650,19 @@ void Vector::Normalify(idx_t count) {
 			break;
 		}
 		case PhysicalType::STRUCT: {
+			auto normalified_buffer = make_unique<VectorStructBuffer>();
+
+			auto &new_children = normalified_buffer->GetChildren();
+
 			auto &child_entries = StructVector::GetEntries(*this);
 			for (auto &child : child_entries) {
 				D_ASSERT(child->GetVectorType() == VectorType::CONSTANT_VECTOR);
-				child->Normalify(count);
+				auto vector = make_unique<Vector>();
+				vector->Reference(*child);
+				vector->Normalify(count);
+				new_children.push_back(move(vector));
 			}
+			auxiliary = move(normalified_buffer);
 		} break;
 		default:
 			throw NotImplementedException("Unimplemented type for VectorOperations::Normalify");
@@ -717,13 +725,13 @@ void Vector::Orrify(idx_t count, VectorData &data) {
 		break;
 	}
 	case VectorType::CONSTANT_VECTOR:
-		data.sel = &ConstantVector::ZERO_SELECTION_VECTOR;
+		data.sel = ConstantVector::ZeroSelectionVector(count, data.owned_sel);
 		data.data = ConstantVector::GetData(*this);
 		data.validity = ConstantVector::Validity(*this);
 		break;
 	default:
 		Normalify(count);
-		data.sel = &FlatVector::INCREMENTAL_SELECTION_VECTOR;
+		data.sel = FlatVector::IncrementalSelectionVector(count, data.owned_sel);
 		data.data = FlatVector::GetData(*this);
 		data.validity = FlatVector::Validity(*this);
 		break;
@@ -1018,6 +1026,89 @@ const SelectionVector *ConstantVector::ZeroSelectionVector(idx_t count, Selectio
 	owned_sel.Initialize(count);
 	for (idx_t i = 0; i < count; i++) {
 		owned_sel.set_index(i, 0);
+	}
+	return &owned_sel;
+}
+
+void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, idx_t count) {
+	D_ASSERT(position < count);
+	auto &source_type = source.GetType();
+	switch (source_type.InternalType()) {
+	case PhysicalType::LIST: {
+		if (!ListVector::HasEntry(source)) {
+			Value null_value(source_type);
+			vector.Reference(null_value);
+			break;
+		}
+		// retrieve the list entry from the source vector
+		VectorData vdata;
+		source.Orrify(count, vdata);
+
+		auto list_index = vdata.sel->get_index(position);
+		if (!vdata.validity.RowIsValid(list_index)) {
+			// list is null: create null value
+			Value null_value(source_type);
+			vector.Reference(null_value);
+			break;
+		}
+
+		auto list_data = (list_entry_t *)vdata.data;
+		auto list_entry = list_data[list_index];
+
+		// add the list entry as the first element of "vector"
+		// FIXME: we only need to allocate space for 1 tuple here
+		vector.Initialize(source_type);
+		auto target_data = FlatVector::GetData<list_entry_t>(vector);
+		target_data[0] = list_entry;
+
+		// create a reference to the child list of the source vector
+		auto new_child = make_unique<Vector>();
+		new_child->Reference(ListVector::GetEntry(source));
+
+		ListVector::SetEntry(vector, move(new_child));
+		ListVector::SetListSize(vector, ListVector::GetListSize(source));
+		vector.SetVectorType(VectorType::CONSTANT_VECTOR);
+		break;
+	}
+	case PhysicalType::STRUCT: {
+		VectorData vdata;
+		source.Orrify(count, vdata);
+
+		auto struct_index = vdata.sel->get_index(position);
+		if (!vdata.validity.RowIsValid(struct_index)) {
+			// null struct: create null value
+			Value null_value(source_type);
+			vector.Reference(null_value);
+			break;
+		}
+
+		// struct: pass constant reference into child entries
+		vector.Initialize(source_type);
+		auto &source_entries = StructVector::GetEntries(source);
+		auto &target_entries = StructVector::GetEntries(vector);
+		for (idx_t i = 0; i < source_entries.size(); i++) {
+			ConstantVector::Reference(*target_entries[i], *source_entries[i], position, count);
+		}
+		vector.SetVectorType(VectorType::CONSTANT_VECTOR);
+		break;
+	}
+	default:
+		// default behavior: get a value from the vector and reference it
+		// this is not that expensive for scalar types
+		auto value = source.GetValue(position);
+		vector.Reference(value);
+		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
+		break;
+	}
+}
+
+const SelectionVector *FlatVector::IncrementalSelectionVector(idx_t count, SelectionVector &owned_sel) {
+	if (count <= STANDARD_VECTOR_SIZE) {
+		return &FlatVector::INCREMENTAL_SELECTION_VECTOR;
+	}
+	owned_sel.Initialize(count);
+	for (idx_t i = 0; i < count; i++) {
+		owned_sel.set_index(i, i);
 	}
 	return &owned_sel;
 }

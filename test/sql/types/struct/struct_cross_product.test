@@ -1,0 +1,53 @@
+# name: test/sql/types/struct/struct_cross_product.test
+# description: Test structs in cross product/nlj
+# group: [struct]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE VIEW v1 AS SELECT * FROM (VALUES (1, {'a': {'a1': 3, 'a2': 7}, 'b': [1, 2, 3]}), (2, NULL), (3, {'a': NULL, 'b': [4, 5, NULL]})) tbl (a, b);
+
+# cross product
+query IIII
+SELECT * FROM v1 v, v1 w ORDER BY v.a, w.a;
+----
+1	{'a': {'a1': 3, 'a2': 7}, 'b': [1, 2, 3]}	1	{'a': {'a1': 3, 'a2': 7}, 'b': [1, 2, 3]}
+1	{'a': {'a1': 3, 'a2': 7}, 'b': [1, 2, 3]}	2	NULL
+1	{'a': {'a1': 3, 'a2': 7}, 'b': [1, 2, 3]}	3	{'a': NULL, 'b': [4, 5, NULL]}
+2	NULL	1	{'a': {'a1': 3, 'a2': 7}, 'b': [1, 2, 3]}
+2	NULL	2	NULL
+2	NULL	3	{'a': NULL, 'b': [4, 5, NULL]}
+3	{'a': NULL, 'b': [4, 5, NULL]}	1	{'a': {'a1': 3, 'a2': 7}, 'b': [1, 2, 3]}
+3	{'a': NULL, 'b': [4, 5, NULL]}	2	NULL
+3	{'a': NULL, 'b': [4, 5, NULL]}	3	{'a': NULL, 'b': [4, 5, NULL]}
+
+query IIII
+SELECT * FROM v1 v, v1 w WHERE v.a >= w.a ORDER BY v.a, w.a;
+----
+1	{'a': {'a1': 3, 'a2': 7}, 'b': [1, 2, 3]}	1	{'a': {'a1': 3, 'a2': 7}, 'b': [1, 2, 3]}
+2	NULL	1	{'a': {'a1': 3, 'a2': 7}, 'b': [1, 2, 3]}
+2	NULL	2	NULL
+3	{'a': NULL, 'b': [4, 5, NULL]}	1	{'a': {'a1': 3, 'a2': 7}, 'b': [1, 2, 3]}
+3	{'a': NULL, 'b': [4, 5, NULL]}	2	NULL
+3	{'a': NULL, 'b': [4, 5, NULL]}	3	{'a': NULL, 'b': [4, 5, NULL]}
+
+query IIII
+SELECT * FROM v1 v, v1 w WHERE v.a <> w.a ORDER BY v.a, w.a;
+----
+1	{'a': {'a1': 3, 'a2': 7}, 'b': [1, 2, 3]}	2	NULL
+1	{'a': {'a1': 3, 'a2': 7}, 'b': [1, 2, 3]}	3	{'a': NULL, 'b': [4, 5, NULL]}
+2	NULL	1	{'a': {'a1': 3, 'a2': 7}, 'b': [1, 2, 3]}
+2	NULL	3	{'a': NULL, 'b': [4, 5, NULL]}
+3	{'a': NULL, 'b': [4, 5, NULL]}	1	{'a': {'a1': 3, 'a2': 7}, 'b': [1, 2, 3]}
+3	{'a': NULL, 'b': [4, 5, NULL]}	2	NULL
+
+query IIII
+SELECT * FROM v1 v, v1 w WHERE v.a <> w.a OR v.a > w.a ORDER BY v.a, w.a;
+----
+1	{'a': {'a1': 3, 'a2': 7}, 'b': [1, 2, 3]}	2	NULL
+1	{'a': {'a1': 3, 'a2': 7}, 'b': [1, 2, 3]}	3	{'a': NULL, 'b': [4, 5, NULL]}
+2	NULL	1	{'a': {'a1': 3, 'a2': 7}, 'b': [1, 2, 3]}
+2	NULL	3	{'a': NULL, 'b': [4, 5, NULL]}
+3	{'a': NULL, 'b': [4, 5, NULL]}	1	{'a': {'a1': 3, 'a2': 7}, 'b': [1, 2, 3]}
+3	{'a': NULL, 'b': [4, 5, NULL]}	2	NULL
