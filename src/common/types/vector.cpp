@@ -650,11 +650,19 @@ void Vector::Normalify(idx_t count) {
 			break;
 		}
 		case PhysicalType::STRUCT: {
+			auto normalified_buffer = make_unique<VectorStructBuffer>();
+
+			auto &new_children = normalified_buffer->GetChildren();
+
 			auto &child_entries = StructVector::GetEntries(*this);
 			for (auto &child : child_entries) {
 				D_ASSERT(child->GetVectorType() == VectorType::CONSTANT_VECTOR);
-				child->Normalify(count);
+				auto vector = make_unique<Vector>();
+				vector->Reference(*child);
+				vector->Normalify(count);
+				new_children.push_back(move(vector));
 			}
+			auxiliary = move(normalified_buffer);
 		} break;
 		default:
 			throw NotImplementedException("Unimplemented type for VectorOperations::Normalify");
