@@ -107,7 +107,6 @@ static idx_t TemplatedSelectOperation(Vector &left, Vector &right, const Selecti
 }
 
 struct PositionComparator {
-
 	// Select the rows that definitely match.
 	template <typename OP>
 	static idx_t Definite(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
@@ -282,9 +281,17 @@ static idx_t StructSelectOperation(Vector &left, Vector &right, const SelectionV
 
 		// Find everything that definitely matches
 		auto true_count = PositionComparator::Definite<OP>(ldense, rdense, &maybe_vec, count, true_opt, maybe_vec);
-		true_opt.Advance(true_count);
-		match_count += true_count;
-		count -= true_count;
+		if (true_count > 0) {
+			true_opt.Advance(true_count);
+			match_count += true_count;
+			count -= true_count;
+
+			SelectionVector new_left_sel = SelectionVector(lvdata.sel->Slice(maybe_vec, count));
+			SelectionVector new_right_sel = SelectionVector(lvdata.sel->Slice(maybe_vec, count));
+
+			ldense.Slice(lchild, new_left_sel, count);
+			rdense.Slice(rchild, new_right_sel, count);
+		}
 
 		if (col_no != lchildren.size() - 1) {
 			// Find what might match on the next position
