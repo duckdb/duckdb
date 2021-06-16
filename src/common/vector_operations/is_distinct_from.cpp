@@ -76,7 +76,7 @@ DistinctSelectGenericLoop(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rd
 		auto lindex = lsel->get_index(i);
 		auto rindex = rsel->get_index(i);
 		if (NO_NULL) {
-			if (OP::Operation(ldata[lindex], rdata[rindex], true, true)) {
+			if (OP::Operation(ldata[lindex], rdata[rindex], false, false)) {
 				if (HAS_TRUE_SEL) {
 					true_sel->set_index(true_count++, result_idx);
 				}
@@ -343,7 +343,7 @@ static void ExecuteDistinct(Vector &left, Vector &right, Vector &result, idx_t c
 }
 
 template <class OP>
-static inline const SelectionVector *DistinctSelectNotNull(ValidityMask &lmask, ValidityMask &rmask, idx_t &count,
+static inline const SelectionVector *DistinctSelectNotNull(VectorData &lvdata, VectorData &rvdata, idx_t &count,
                                                            idx_t &true_count, const SelectionVector *sel,
                                                            SelectionVector &maybe_vec, OptionalSelection &true_vec,
                                                            OptionalSelection &false_vec) {
@@ -352,30 +352,36 @@ static inline const SelectionVector *DistinctSelectNotNull(ValidityMask &lmask, 
 		sel = &FlatVector::INCREMENTAL_SELECTION_VECTOR;
 	}
 
+	auto &lmask = lvdata.validity;
+	auto &rmask = rvdata.validity;
+
 	// For top-level distincts, NULL semantics are computed separately
-	if (!lmask.AllValid() || !rmask.AllValid()) {
-		idx_t false_count = 0;
-		idx_t remaining = 0;
-		for (idx_t i = 0; i < count; ++i) {
-			const auto idx = sel->get_index(i);
-			const auto lnull = !lmask.RowIsValid(idx);
-			const auto rnull = !rmask.RowIsValid(idx);
-			if (lnull || rnull) {
-				// If either is NULL then we can major distinguish them
-				if (!OP::Operation(lnull, rnull, false, false)) {
-					false_vec.Append(false_count, idx);
-				} else {
-					true_vec.Append(true_count, idx);
-				}
-			} else {
-				//	Neither is NULL, distinguish values.
-				maybe_vec.set_index(remaining++, idx);
-			}
-		}
-		true_vec.Advance(true_count);
-		false_vec.Advance(false_count);
-		count = remaining;
+	if (lmask.AllValid() && rmask.AllValid()) {
+		return sel;
 	}
+	idx_t false_count = 0;
+	idx_t remaining = 0;
+	for (idx_t i = 0; i < count; ++i) {
+		const auto idx = sel->get_index(i);
+		const auto lidx = lvdata.sel->get_index(idx);
+		const auto ridx = rvdata.sel->get_index(idx);
+		const auto lnull = !lmask.RowIsValid(lidx);
+		const auto rnull = !rmask.RowIsValid(ridx);
+		if (lnull || rnull) {
+			// If either is NULL then we can major distinguish them
+			if (!OP::Operation(lnull, rnull, false, false)) {
+				false_vec.Append(false_count, idx);
+			} else {
+				true_vec.Append(true_count, idx);
+			}
+		} else {
+			//	Neither is NULL, distinguish values.
+			maybe_vec.set_index(remaining++, idx);
+		}
+	}
+	true_vec.Advance(true_count);
+	false_vec.Advance(false_count);
+	count = remaining;
 
 	return sel;
 }
@@ -420,8 +426,7 @@ static idx_t DistinctSelectNested(Vector &left, Vector &right, const SelectionVe
 
 	idx_t result = 0;
 	SelectionVector maybe_vec(count);
-	sel =
-	    DistinctSelectNotNull<OP>(lvdata.validity, rvdata.validity, count, result, sel, maybe_vec, true_vec, false_vec);
+	sel = DistinctSelectNotNull<OP>(lvdata, rvdata, count, result, sel, maybe_vec, true_vec, false_vec);
 
 	result += PositionDistinguisher::Select<OP>(left, right, sel, count, true_vec, false_vec);
 

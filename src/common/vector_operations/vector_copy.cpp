@@ -212,23 +212,18 @@ void VectorOperations::Copy(const Vector &source, Vector &target, idx_t source_c
 		VectorOperations::Copy(child, target, dict_sel, source_count, source_offset, target_offset);
 		break;
 	}
-	case VectorType::CONSTANT_VECTOR:
-		VectorOperations::Copy(source, target, ConstantVector::ZERO_SELECTION_VECTOR, source_count, source_offset,
-		                       target_offset);
+	case VectorType::CONSTANT_VECTOR: {
+		SelectionVector owned_sel;
+		auto sel = ConstantVector::ZeroSelectionVector(source_count, owned_sel);
+		VectorOperations::Copy(source, target, *sel, source_count, source_offset, target_offset);
 		break;
-	case VectorType::FLAT_VECTOR:
-		if (target_offset + source_count - source_offset > STANDARD_VECTOR_SIZE) {
-			idx_t sel_vec_size = target_offset + source_count - source_offset;
-			SelectionVector selection_vector(sel_vec_size);
-			for (size_t i = 0; i < sel_vec_size; i++) {
-				selection_vector.set_index(i, i);
-			}
-			VectorOperations::Copy(source, target, selection_vector, source_count, source_offset, target_offset);
-		} else {
-			VectorOperations::Copy(source, target, FlatVector::INCREMENTAL_SELECTION_VECTOR, source_count,
-			                       source_offset, target_offset);
-		}
+	}
+	case VectorType::FLAT_VECTOR: {
+		SelectionVector owned_sel;
+		auto sel = FlatVector::IncrementalSelectionVector(source_count, owned_sel);
+		VectorOperations::Copy(source, target, *sel, source_count, source_offset, target_offset);
 		break;
+	}
 	case VectorType::SEQUENCE_VECTOR: {
 		int64_t start, increment;
 		SequenceVector::GetSequence(source, start, increment);
