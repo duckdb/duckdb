@@ -109,10 +109,11 @@ static idx_t TemplatedSelectOperation(Vector &left, Vector &right, const Selecti
 struct PositionComparator {
 
 	// Select the rows that definitely match.
+	// Default to the same as the final row
 	template <typename OP>
 	static idx_t Definite(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
 	                      SelectionVector *true_sel, SelectionVector &false_sel) {
-		return TemplatedSelectOperation<OP>(left, right, sel, count, true_sel, &false_sel);
+		return Final<OP>(left, right, sel, count, true_sel, &false_sel);
 	}
 
 	// Select the possible rows that need further testing.
@@ -120,15 +121,15 @@ struct PositionComparator {
 	template <typename OP>
 	static idx_t Possible(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
 	                      SelectionVector &true_sel, SelectionVector *false_sel) {
-		return VectorOperations::SelectNotDistinctFrom(left, right, sel, count, &true_sel, false_sel);
+		return VectorOperations::NotDistinctFrom(left, right, sel, count, &true_sel, false_sel);
 	}
 
 	// Select the matching rows for the final position.
-	// Usually the OP can tie break correctly
+	// This needs to be specialised.
 	template <typename OP>
 	static idx_t Final(Vector &left, Vector &right, const SelectionVector *sel, idx_t count, SelectionVector *true_sel,
 	                   SelectionVector *false_sel) {
-		return TemplatedSelectOperation<OP>(left, right, sel, count, true_sel, false_sel);
+		return 0;
 	}
 
 	// Tie-break based on length when one of the sides has been exhausted, returning true if the LHS matches.
@@ -150,17 +151,10 @@ idx_t PositionComparator::Definite<duckdb::Equals>(Vector &left, Vector &right, 
 template <>
 idx_t PositionComparator::Final<duckdb::Equals>(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
                                                 SelectionVector *true_sel, SelectionVector *false_sel) {
-	return VectorOperations::SelectNotDistinctFrom(left, right, sel, count, true_sel, false_sel);
+	return VectorOperations::NotDistinctFrom(left, right, sel, count, true_sel, false_sel);
 }
 
 // NotEquals must check everything that matched
-template <>
-idx_t PositionComparator::Definite<duckdb::NotEquals>(Vector &left, Vector &right, const SelectionVector *sel,
-                                                      idx_t count, SelectionVector *true_sel,
-                                                      SelectionVector &false_sel) {
-	return VectorOperations::SelectDistinctFrom(left, right, sel, count, true_sel, &false_sel);
-}
-
 template <>
 idx_t PositionComparator::Possible<duckdb::NotEquals>(Vector &left, Vector &right, const SelectionVector *sel,
                                                       idx_t count, SelectionVector &true_sel,
@@ -171,7 +165,7 @@ idx_t PositionComparator::Possible<duckdb::NotEquals>(Vector &left, Vector &righ
 template <>
 idx_t PositionComparator::Final<duckdb::NotEquals>(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
                                                    SelectionVector *true_sel, SelectionVector *false_sel) {
-	return VectorOperations::SelectDistinctFrom(left, right, sel, count, true_sel, false_sel);
+	return VectorOperations::DistinctFrom(left, right, sel, count, true_sel, false_sel);
 }
 
 // Non-strict inequalities must use strict comparisons for Definite
@@ -179,14 +173,42 @@ template <>
 idx_t PositionComparator::Definite<duckdb::LessThanEquals>(Vector &left, Vector &right, const SelectionVector *sel,
                                                            idx_t count, SelectionVector *true_sel,
                                                            SelectionVector &false_sel) {
-	return TemplatedSelectOperation<duckdb::LessThan>(left, right, sel, count, true_sel, &false_sel);
+	return VectorOperations::DistinctLessThan(left, right, sel, count, true_sel, &false_sel);
+}
+
+template <>
+idx_t PositionComparator::Final<duckdb::LessThanEquals>(Vector &left, Vector &right, const SelectionVector *sel,
+                                                        idx_t count, SelectionVector *true_sel,
+                                                        SelectionVector *false_sel) {
+	return VectorOperations::DistinctLessThanEquals(left, right, sel, count, true_sel, false_sel);
 }
 
 template <>
 idx_t PositionComparator::Definite<duckdb::GreaterThanEquals>(Vector &left, Vector &right, const SelectionVector *sel,
                                                               idx_t count, SelectionVector *true_sel,
                                                               SelectionVector &false_sel) {
-	return TemplatedSelectOperation<duckdb::GreaterThan>(left, right, sel, count, true_sel, &false_sel);
+	return VectorOperations::DistinctGreaterThan(left, right, sel, count, true_sel, &false_sel);
+}
+
+template <>
+idx_t PositionComparator::Final<duckdb::GreaterThanEquals>(Vector &left, Vector &right, const SelectionVector *sel,
+                                                           idx_t count, SelectionVector *true_sel,
+                                                           SelectionVector *false_sel) {
+	return VectorOperations::DistinctGreaterThanEquals(left, right, sel, count, true_sel, false_sel);
+}
+
+// Strict inequalities just use strict for both Definite and Final
+template <>
+idx_t PositionComparator::Final<duckdb::LessThan>(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+                                                  SelectionVector *true_sel, SelectionVector *false_sel) {
+	return VectorOperations::DistinctLessThan(left, right, sel, count, true_sel, false_sel);
+}
+
+template <>
+idx_t PositionComparator::Final<duckdb::GreaterThan>(Vector &left, Vector &right, const SelectionVector *sel,
+                                                     idx_t count, SelectionVector *true_sel,
+                                                     SelectionVector *false_sel) {
+	return VectorOperations::DistinctGreaterThan(left, right, sel, count, true_sel, false_sel);
 }
 
 static inline idx_t SelectNotNull(VectorData &lvdata, VectorData &rvdata, const idx_t count,
@@ -494,9 +516,9 @@ idx_t ExpressionExecutor::Select(const BoundComparisonExpression &expr, Expressi
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 		return VectorOperations::GreaterThanEquals(left, right, sel, count, true_sel, false_sel);
 	case ExpressionType::COMPARE_DISTINCT_FROM:
-		return VectorOperations::SelectDistinctFrom(left, right, sel, count, true_sel, false_sel);
+		return VectorOperations::DistinctFrom(left, right, sel, count, true_sel, false_sel);
 	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
-		return VectorOperations::SelectNotDistinctFrom(left, right, sel, count, true_sel, false_sel);
+		return VectorOperations::NotDistinctFrom(left, right, sel, count, true_sel, false_sel);
 	default:
 		throw NotImplementedException("Unknown comparison type!");
 	}
