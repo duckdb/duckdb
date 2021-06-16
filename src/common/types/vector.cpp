@@ -1066,8 +1066,8 @@ void ConstantVector::Reference(Vector &vector, Vector &other, idx_t position, id
 		VectorData vdata;
 		other.Orrify(count, vdata);
 
-		auto list_index = vdata.sel->get_index(position);
-		if (!vdata.validity.RowIsValid(list_index)) {
+		auto struct_index = vdata.sel->get_index(position);
+		if (!vdata.validity.RowIsValid(struct_index)) {
 			// null struct: create null value
 			Value null_value(other_type);
 			vector.Reference(null_value);
@@ -1075,7 +1075,7 @@ void ConstantVector::Reference(Vector &vector, Vector &other, idx_t position, id
 		}
 
 		// struct: pass constant reference into child entries
-		vector.Initialize(other.GetType());
+		vector.Initialize(other_type);
 		auto &source_entries = StructVector::GetEntries(other);
 		auto &target_entries = StructVector::GetEntries(vector);
 		for (idx_t i = 0; i < source_entries.size(); i++) {
