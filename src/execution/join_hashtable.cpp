@@ -810,32 +810,7 @@ void JoinHashTable::ScanFullOuter(DataChunk &result, JoinHTScanState &state) {
 	}
 }
 
-void JoinHashTable::FullScanHashTable(JoinHTScanState &state, LogicalType key_type) {
-	// scan the HT starting from the current position
-	Vector addresses(LogicalType::POINTER, count); // allocate space for all the tuples
-	auto key_locations = FlatVector::GetData<data_ptr_t>(addresses);
-
-	lock_guard<mutex> state_lock(state.lock);
-	// go through all the blocks and get keys location
-	auto keys_count = FillWithOffsets(key_locations, state);
-	// build selection vector using the build_keys
-	Vector build_vector(key_type, keys_count);
-	// first scan the keys
-	RowOperations::FullScanColumn(layout, addresses, build_vector, keys_count, 0);
-	SelectionVector sel_build(keys_count + 1);
-	SelectionVector sel_addresses(keys_count + 1);
-	// now fill them
-	FillSelectionVectorSwitch(build_vector, sel_build, sel_addresses, keys_count);
-	// full scan the remaining build columns
-	for (idx_t i = 0; i < build_types.size(); i++) {
-		auto &vector = columnar_hash_table[i];
-		D_ASSERT(vector.GetType() == build_types[i]);
-		RowOperations::Gather(layout, addresses, sel_addresses, vector, sel_build, keys_count,
-		                      i + condition_types.size());
-	}
-}
-
-idx_t JoinHashTable::FillWithOffsets(data_ptr_t *key_locations, JoinHTScanState &state) {
+idx_t JoinHashTable::FillWithHTOffsets(data_ptr_t *key_locations, JoinHTScanState &state) {
 
 	// iterate over blocks
 	idx_t key_count = 0;
@@ -854,55 +829,5 @@ idx_t JoinHashTable::FillWithOffsets(data_ptr_t *key_locations, JoinHTScanState 
 		state.position = 0;
 	}
 	return key_count;
-}
-
-template <typename T>
-void JoinHashTable::TemplatedFillSelectionVector(Vector &source, SelectionVector &res_sel_vec,
-                                                 SelectionVector &seq_sel_vec, idx_t count) const {
-
-	auto vector_data = FlatVector::GetData<T>(source);
-	// generate the selection vector
-	for (idx_t i = 0; i != count; ++i) {
-		// add index to selection vector if value in the range
-		auto input_value = vector_data[i];
-		//		if (min_value <= input_value && input_value <= max_value) {
-		auto idx = input_value;
-		res_sel_vec.set_index(i, idx);
-		seq_sel_vec.set_index(i, i);
-	}
-	//	}
-}
-
-void JoinHashTable::FillSelectionVectorSwitch(Vector &source, SelectionVector &result_sel_vec,
-                                              SelectionVector &sequential_sel_vec, idx_t count) const {
-	switch (source.GetType().id()) {
-	case LogicalTypeId::TINYINT:
-		TemplatedFillSelectionVector<int8_t>(source, result_sel_vec, sequential_sel_vec, count);
-		break;
-	case LogicalTypeId::SMALLINT:
-		TemplatedFillSelectionVector<int16_t>(source, result_sel_vec, sequential_sel_vec, count);
-		break;
-	case LogicalTypeId::INTEGER:
-		TemplatedFillSelectionVector<int32_t>(source, result_sel_vec, sequential_sel_vec, count);
-		break;
-	case LogicalTypeId::BIGINT:
-		TemplatedFillSelectionVector<int64_t>(source, result_sel_vec, sequential_sel_vec, count);
-		break;
-	case LogicalTypeId::UTINYINT:
-		TemplatedFillSelectionVector<uint8_t>(source, result_sel_vec, sequential_sel_vec, count);
-		break;
-	case LogicalTypeId::USMALLINT:
-		TemplatedFillSelectionVector<uint16_t>(source, result_sel_vec, sequential_sel_vec, count);
-		break;
-	case LogicalTypeId::UINTEGER:
-		TemplatedFillSelectionVector<uint32_t>(source, result_sel_vec, sequential_sel_vec, count);
-		break;
-	case LogicalTypeId::UBIGINT:
-		TemplatedFillSelectionVector<uint64_t>(source, result_sel_vec, sequential_sel_vec, count);
-		break;
-	default:
-		throw NotImplementedException("Type not supported");
-		break;
-	}
 }
 } // namespace duckdb

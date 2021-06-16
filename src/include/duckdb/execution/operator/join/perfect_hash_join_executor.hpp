@@ -8,12 +8,8 @@
 
 #pragma once
 
-#include "duckdb/common/types/chunk_collection.hpp"
-#include "duckdb/common/value_operations/value_operations.hpp"
+#include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/execution/join_hashtable.hpp"
-//#include "duckdb/execution/operator/join/physical_hash_join.hpp"
-#include "duckdb/execution/physical_operator.hpp"
-#include "duckdb/planner/operator/logical_join.hpp"
 
 namespace duckdb {
 constexpr size_t BUILD_THRESHOLD = 1 << 14; // 16384
@@ -38,18 +34,21 @@ struct PerfectHashJoinStats {
 //! PhysicalHashJoin represents a hash loop join between two tables
 class PerfectHashJoinExecutor {
 public:
-	PerfectHashJoinExecutor() = default;
-	static bool ProbePerfectHashTable(ExecutionContext &context, DataChunk &chunk, PhysicalHashJoinState *state,
-	                                  JoinHashTable *ht_ptr, PhysicalOperator *operator_child);
-	static bool CheckForPerfectHashJoin(JoinHashTable *ht_ptr, PerfectHashJoinStats &pjoin_state);
-	static void BuildPerfectHashTable(JoinHashTable *ht_ptr, JoinHTScanState &join_ht_state, LogicalType type,
-	                                  PerfectHashJoinStats &pjoin_state);
-	static void FillSelectionVectorSwitch(Vector &source, SelectionVector &sel_vec, idx_t count);
+	PerfectHashJoinExecutor(PerfectHashJoinStats pjoin_stats);
+	using PerfectHashTable = std::vector<Vector>;
+	bool ProbePerfectHashTable(ExecutionContext &context, DataChunk &chunk, PhysicalHashJoinState *state,
+	                           JoinHashTable *ht_ptr, PhysicalOperator *operator_child);
+	bool CheckForPerfectHashJoin(JoinHashTable *ht_ptr);
+	void BuildPerfectHashTable(JoinHashTable *ht_ptr, JoinHTScanState &join_ht_state, LogicalType type);
+	void FillSelectionVectorSwitch(Vector &source, SelectionVector &sel_vec, idx_t count);
 	template <typename T>
-	static void TemplatedFillSelectionVector(Vector &source, SelectionVector &sel_vec, idx_t count);
+	void TemplatedFillSelectionVector(Vector &source, SelectionVector &sel_vec, idx_t count);
+	void FullScanHashTable(JoinHTScanState &state, LogicalType key_type, JoinHashTable *hash_table);
 
 private:
 	bool hasInvisibleJoin {false};
+	PerfectHashTable perfect_hash_table;
+	PerfectHashJoinStats pjoin_stats;
 };
 
 } // namespace duckdb

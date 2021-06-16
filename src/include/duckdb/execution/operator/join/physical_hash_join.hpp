@@ -75,7 +75,7 @@ public:
 	//! Checks and execute perfect hash join optimization
 	unique_ptr<PerfectHashJoinExecutor> perfect_join_executor {nullptr};
 	bool hasPerfectHashTable {false};
-	PerfectHashJoinStats pjoin_stats;
+	unique_ptr<PerfectHashJoinExecutor> pjoin_executor;
 
 public:
 	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;

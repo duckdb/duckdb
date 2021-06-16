@@ -141,13 +141,7 @@ public:
 	//! Scan the HT to construct the final full outer join result after
 	void ScanFullOuter(DataChunk &result, JoinHTScanState &state);
 	// Invisible join methods
-	idx_t FillWithOffsets(data_ptr_t *key_locations, JoinHTScanState &state);
-	void FullScanHashTable(JoinHTScanState &state, LogicalType key_type);
-	void FillSelectionVectorSwitch(Vector &source, SelectionVector &sel_vec, SelectionVector &sequential_sel_vec,
-	                               idx_t count) const;
-	template <typename T>
-	void TemplatedFillSelectionVector(Vector &source, SelectionVector &sel_vec, SelectionVector &seq_sel_vec,
-	                                  idx_t count) const;
+	idx_t FillWithHTOffsets(data_ptr_t *key_locations, JoinHTScanState &state);
 	idx_t size() {
 		return count;
 	}
@@ -186,7 +180,6 @@ public:
 	uint64_t bitmask;
 	//! The amount of entries stored per block
 	idx_t block_capacity;
-	std::vector<Vector> columnar_hash_table;
 
 	struct {
 		mutex mj_lock;

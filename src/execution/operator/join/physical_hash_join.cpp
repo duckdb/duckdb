@@ -17,7 +17,7 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
                                    const vector<idx_t> &right_projection_map_p, vector<LogicalType> delim_types,
                                    idx_t estimated_cardinality, PerfectHashJoinStats perfect_join_stats)
     : PhysicalComparisonJoin(op, PhysicalOperatorType::HASH_JOIN, move(cond), join_type, estimated_cardinality),
-      right_projection_map(right_projection_map_p), delim_types(move(delim_types)), pjoin_stats(perfect_join_stats) {
+      right_projection_map(right_projection_map_p), delim_types(move(delim_types)) {
 
 	children.push_back(move(left));
 	children.push_back(move(right));
@@ -31,6 +31,7 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
 	if (join_type != JoinType::ANTI && join_type != JoinType::SEMI && join_type != JoinType::MARK) {
 		build_types = LogicalOperator::MapTypes(children[1]->GetTypes(), right_projection_map);
 	}
+	pjoin_executor = make_unique<PerfectHashJoinExecutor>(perfect_join_stats);
 }
 
 PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
@@ -138,11 +139,12 @@ void PhysicalHashJoin::Sink(ExecutionContext &context, GlobalOperatorState &stat
 bool PhysicalHashJoin::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> state) {
 	auto global_state = reinterpret_cast<HashJoinGlobalState *>(state.get());
 	// check for possible perfect hash table
-	hasPerfectHashTable = PerfectHashJoinExecutor::CheckForPerfectHashJoin(global_state->hash_table.get(), pjoin_stats);
+	hasPerfectHashTable = pjoin_executor->CheckForPerfectHashJoin(global_state->hash_table.get());
 	if (hasPerfectHashTable) {
-		PerfectHashJoinExecutor::BuildPerfectHashTable(global_state->hash_table.get(), global_state->ht_scan_state,
-		                                               global_state->key_type, pjoin_stats);
+		pjoin_executor->BuildPerfectHashTable(global_state->hash_table.get(), global_state->ht_scan_state,
+		                                      global_state->key_type);
 	} else {
+		pjoin_executor.release();
 		global_state->hash_table->Finalize();
 	}
 
@@ -172,9 +174,9 @@ void PhysicalHashJoin::GetChunkInternal(ExecutionContext &context, DataChunk &ch
 		// empty hash table with INNER or SEMI join means empty result set
 		return;
 	}
-	// In case we have a perfect hash table, probe it there
-	if (hasPerfectHashTable) {
-		PerfectHashJoinExecutor::ProbePerfectHashTable(context, chunk, state, sink.hash_table.get(), children[0].get());
+	// In case we have a perfect hash table, probe it
+	if (pjoin_executor && hasPerfectHashTable) {
+		pjoin_executor->ProbePerfectHashTable(context, chunk, state, sink.hash_table.get(), children[0].get());
 		return;
 	}
 	do {
