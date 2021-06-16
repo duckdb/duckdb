@@ -12,6 +12,8 @@
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "utf8proc_wrapper.hpp"
+#include "utf8proc.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -170,6 +172,34 @@ static string GenerateColumnName(const idx_t total_cols, const idx_t col_number,
 	string leading_zeros = string("0", max_digits - digits);
 	string value = to_string(col_number);
 	return string(prefix + leading_zeros + value);
+}
+
+static string NormalizeColumnName(const string& col_name) {
+	// make lowercase
+	const string col_name_lower = StringUtil::Lower(col_name);
+	// remove accents
+	auto stripped = utf8proc_remove_accents((const utf8proc_uint8_t *)col_name_lower.c_str(), col_name_lower.size());
+	const string col_name_stripped = string((const char*)stripped, strlen((const char*)stripped));
+	free(stripped);
+	// only keep ascii characters
+	string col_name_cleaned = "";
+	for (size_t i = 0; i < col_name_stripped.size(); i++){
+		if (col_name_stripped[i] == '_' ||
+			(col_name_stripped[i] >= '0' && col_name_stripped[i] <= '9') ||
+			(col_name_stripped[i] >= 'A' && col_name_stripped[i] <= 'Z') ||
+			(col_name_stripped[i] >= 'a' && col_name_stripped[i] <= 'z') ){
+			col_name_cleaned += col_name_stripped[i];
+		} 		
+	}
+	// don't leave string empty
+	if (col_name_cleaned.size() == 0) {
+		col_name_cleaned += "_";
+	}
+	// prepend _ if name starts with a digit or is a reserved keyword
+	if (KeywordHelper::IsKeyword(col_name_cleaned) || (col_name_cleaned[0] >= '0' && col_name_cleaned[0] <= '9')) {
+		col_name_cleaned = "_" + col_name_cleaned;
+	}
+	return col_name_cleaned;
 }
 
 void BufferedCSVReader::ResetBuffer() {
@@ -674,26 +704,34 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 	// update parser info, and read, generate & set col_names based on previous findings
 	if (((!first_row_consistent || first_row_nulls) && !options.has_header) || (options.has_header && options.header)) {
 		options.header = true;
-		vector<string> t_col_names;
+		unordered_map<string,idx_t> name_collision_count;
+		// get header names from CSV
 		for (idx_t col = 0; col < options.num_cols; col++) {
 			const auto &val = best_header_row.GetValue(col, 0);
 			string col_name = val.ToString();
+
+			// generate name if field is empty
 			if (col_name.empty() || val.is_null) {
 				col_name = GenerateColumnName(options.num_cols, col);
 			}
-			// We'll keep column names as they appear in the file, no canonicalization
-			// col_name = StringUtil::Lower(col_name);
-			t_col_names.push_back(col_name);
-		}
-		for (idx_t col = 0; col < t_col_names.size(); col++) {
-			string col_name = t_col_names[col];
-			idx_t exists_n_times = std::count(t_col_names.begin(), t_col_names.end(), col_name);
-			idx_t exists_n_times_before = std::count(t_col_names.begin(), t_col_names.begin() + col, col_name);
-			if (exists_n_times > 1) {
-				col_name = GenerateColumnName(exists_n_times, exists_n_times_before, col_name + "_");
+
+			// normalize header (optional)
+			if (options.normalize_names) {
+				col_name = NormalizeColumnName(col_name);
 			}
+
+			// avoid duplicate header names
+			const string col_name_raw = col_name;
+			while (name_collision_count.find(col_name) != name_collision_count.end()) {
+				name_collision_count[col_name] += 1;
+				const idx_t collision_count = name_collision_count[col_name];
+				col_name = col_name + "_" + to_string(collision_count);
+			}
+	
 			col_names.push_back(col_name);
+			name_collision_count[col_name] = 0;
 		}
+
 	} else {
 		options.header = false;
 		idx_t total_columns = parse_chunk.ColumnCount();
