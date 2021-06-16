@@ -76,7 +76,7 @@ DistinctSelectGenericLoop(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rd
 		auto lindex = lsel->get_index(i);
 		auto rindex = rsel->get_index(i);
 		if (NO_NULL) {
-			if (OP::Operation(ldata[lindex], rdata[rindex], true, true)) {
+			if (OP::Operation(ldata[lindex], rdata[rindex], false, false)) {
 				if (HAS_TRUE_SEL) {
 					true_sel->set_index(true_count++, result_idx);
 				}
