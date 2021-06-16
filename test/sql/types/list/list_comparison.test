@@ -962,6 +962,24 @@ NULL
 
 # Filter by constant
 query T
+select [a,a+1,a+2]<[1,2,3] from range(5) tbl(a);
+----
+true
+false
+false
+false
+false
+
+query T
+select [a,a+1,a+2]<=[1,2,3] from range(5) tbl(a);
+----
+true
+true
+false
+false
+false
+
+query T
 select [a,a+1,a+2]=[1,2,3] from range(5) tbl(a);
 ----
 false
@@ -979,4 +997,20 @@ true
 true
 true
 
+query T
+select [a,a+1,a+2]>=[1,2,3] from range(5) tbl(a);
+----
+false
+true
+true
+true
+true
 
+query T
+select [a,a+1,a+2]>[1,2,3] from range(5) tbl(a);
+----
+false
+false
+true
+true
+true
