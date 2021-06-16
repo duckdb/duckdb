@@ -363,3 +363,22 @@ true
 true
 true
 false
+
+# Filter by constant
+query T
+select CASE WHEN a < 4 THEN [a,a+1,a+2] ELSE NULL END IS NOT DISTINCT FROM [1,2,3] from range(5) tbl(a);
+----
+false
+true
+false
+false
+false
+
+query T
+select CASE WHEN a < 4 THEN [a,a+1,a+2] ELSE NULL END IS DISTINCT FROM [1,2,3] from range(5) tbl(a);
+----
+true
+false
+true
+true
+true
