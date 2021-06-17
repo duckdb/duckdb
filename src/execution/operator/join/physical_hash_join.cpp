@@ -179,6 +179,7 @@ void PhysicalHashJoin::GetChunkInternal(ExecutionContext &context, DataChunk &ch
 		pjoin_executor->ProbePerfectHashTable(context, chunk, state, sink.hash_table.get(), children[0].get());
 		return;
 	}
+	// otherwise do a regular probe
 	do {
 		ProbeHashTable(context, chunk, state);
 		if (chunk.size() == 0) {

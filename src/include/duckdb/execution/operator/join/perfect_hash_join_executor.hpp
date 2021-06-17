@@ -40,9 +40,10 @@ public:
 	                           JoinHashTable *ht_ptr, PhysicalOperator *operator_child);
 	bool CheckForPerfectHashJoin(JoinHashTable *ht_ptr);
 	void BuildPerfectHashTable(JoinHashTable *ht_ptr, JoinHTScanState &join_ht_state, LogicalType type);
-	void FillSelectionVectorSwitch(Vector &source, SelectionVector &sel_vec, idx_t count);
+	void FillSelectionVectorSwitch(Vector &source, SelectionVector &sel_vec, SelectionVector &seq_sel_vec, idx_t count);
 	template <typename T>
-	void TemplatedFillSelectionVector(Vector &source, SelectionVector &sel_vec, idx_t count);
+	void TemplatedFillSelectionVector(Vector &source, SelectionVector &sel_vec, SelectionVector &seq_sel_vec,
+	                                  idx_t count);
 	void FullScanHashTable(JoinHTScanState &state, LogicalType key_type, JoinHashTable *hash_table);
 
 private:

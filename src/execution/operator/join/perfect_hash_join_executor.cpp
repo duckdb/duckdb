@@ -22,8 +22,7 @@ bool PerfectHashJoinExecutor::ProbePerfectHashTable(ExecutionContext &context, D
 	// select the keys that are in the min-max range
 	auto &keys_vec = physical_state->join_keys.data[0];
 	auto keys_count = physical_state->join_keys.size();
-	SelectionVector sel_vec(keys_count);
-	FillSelectionVectorSwitch(keys_vec, sel_vec, keys_count);
+	FillSelectionVectorSwitch(keys_vec, physical_state->sel_vec, physical_state->seq_sel_vec, keys_count);
 	// reference the probe data to the result (if fast path applies)
 	result.Reference(physical_state->child_chunk);
 	// on the build side, we need to fetch the data and build dictionary vectors with the sel_vec
@@ -32,7 +31,7 @@ bool PerfectHashJoinExecutor::ProbePerfectHashTable(ExecutionContext &context, D
 		D_ASSERT(result_vector.GetType() == ht_ptr->build_types[i]);
 		auto &build_vec = perfect_hash_table[i];
 		result_vector.Reference(build_vec); //
-		result_vector.Slice(sel_vec, keys_count);
+		result_vector.Slice(physical_state->sel_vec, keys_count);
 	}
 	return true;
 }
@@ -62,55 +61,6 @@ void PerfectHashJoinExecutor::BuildPerfectHashTable(JoinHashTable *hash_table_pt
 	FullScanHashTable(join_ht_state, key_type, hash_table_ptr);
 }
 
-template <typename T>
-void PerfectHashJoinExecutor::TemplatedFillSelectionVector(Vector &source, SelectionVector &sel_vec, idx_t count) {
-	/* 	auto min_value = pjoin_state.build_min.GetValue<T>();
-	    auto max_value = pjoin_state.build_max.GetValue<T>(); */
-
-	auto vector_data = FlatVector::GetData<T>(source);
-	// generate the selection vector
-	for (idx_t i = 0; i != count; ++i) {
-		// add index to selection vector if value in the range
-		auto input_value = vector_data[i];
-		//		if (min_value <= input_value && input_value <= max_value) {
-		auto idx = input_value;
-		sel_vec.set_index(i, idx);
-	}
-	//	}
-}
-
-void PerfectHashJoinExecutor::FillSelectionVectorSwitch(Vector &source, SelectionVector &sel_vec, idx_t count) {
-	switch (source.GetType().id()) {
-	case LogicalTypeId::TINYINT:
-		TemplatedFillSelectionVector<int8_t>(source, sel_vec, count);
-		break;
-	case LogicalTypeId::SMALLINT:
-		TemplatedFillSelectionVector<int16_t>(source, sel_vec, count);
-		break;
-	case LogicalTypeId::INTEGER:
-		TemplatedFillSelectionVector<int32_t>(source, sel_vec, count);
-		break;
-	case LogicalTypeId::BIGINT:
-		TemplatedFillSelectionVector<int64_t>(source, sel_vec, count);
-		break;
-	case LogicalTypeId::UTINYINT:
-		TemplatedFillSelectionVector<uint8_t>(source, sel_vec, count);
-		break;
-	case LogicalTypeId::USMALLINT:
-		TemplatedFillSelectionVector<uint16_t>(source, sel_vec, count);
-		break;
-	case LogicalTypeId::UINTEGER:
-		TemplatedFillSelectionVector<uint32_t>(source, sel_vec, count);
-		break;
-	case LogicalTypeId::UBIGINT:
-		TemplatedFillSelectionVector<uint64_t>(source, sel_vec, count);
-		break;
-	default:
-		throw NotImplementedException("Type not supported");
-		break;
-	}
-}
-
 void PerfectHashJoinExecutor::FullScanHashTable(JoinHTScanState &state, LogicalType key_type,
                                                 JoinHashTable *hash_table) {
 	// scan the HT starting from the current position
@@ -124,16 +74,68 @@ void PerfectHashJoinExecutor::FullScanHashTable(JoinHTScanState &state, LogicalT
 	Vector build_vector(key_type, keys_count);
 	// first scan the keys
 	RowOperations::FullScanColumn(hash_table->layout, addresses, build_vector, keys_count, 0);
-	SelectionVector sel_build(keys_count + 1);
+	SelectionVector sel_build(keys_count);
 	SelectionVector sel_addresses(keys_count + 1);
 	// now fill them
-	// FillSelectionVectorSwitch(build_vector, sel_build, sel_addresses, keys_count);
+	FillSelectionVectorSwitch(build_vector, sel_build, sel_addresses, keys_count);
 	// full scan the remaining build columns
 	for (idx_t i = 0; i < hash_table->build_types.size(); i++) {
 		auto &vector = perfect_hash_table[i];
 		D_ASSERT(vector.GetType() == hash_table->build_types[i]);
 		RowOperations::Gather(hash_table->layout, addresses, sel_addresses, vector, sel_build, keys_count,
 		                      i + hash_table->condition_types.size());
+	}
+}
+
+template <typename T>
+void PerfectHashJoinExecutor::TemplatedFillSelectionVector(Vector &source, SelectionVector &sel_vec,
+                                                           SelectionVector &seq_sel_vec, idx_t count) {
+	auto min_value = pjoin_stats.build_min.GetValue<T>();
+	auto max_value = pjoin_stats.build_max.GetValue<T>();
+
+	auto vector_data = FlatVector::GetData<T>(source);
+	// generate the selection vector
+	for (idx_t i = 0; i != count; ++i) {
+		// add index to selection vector if value in the range
+		auto input_value = vector_data[i];
+		if (min_value <= input_value && input_value <= max_value) {
+			auto idx = (idx_t)(input_value - min_value);
+			sel_vec.set_index(i, idx);
+		}
+		seq_sel_vec.set_index(i, i);
+	}
+}
+
+void PerfectHashJoinExecutor::FillSelectionVectorSwitch(Vector &source, SelectionVector &sel_vec,
+                                                        SelectionVector &seq_sel_vec, idx_t count) {
+	switch (source.GetType().id()) {
+	case LogicalTypeId::TINYINT:
+		TemplatedFillSelectionVector<int8_t>(source, sel_vec, seq_sel_vec, count);
+		break;
+	case LogicalTypeId::SMALLINT:
+		TemplatedFillSelectionVector<int16_t>(source, sel_vec, seq_sel_vec, count);
+		break;
+	case LogicalTypeId::INTEGER:
+		TemplatedFillSelectionVector<int32_t>(source, sel_vec, seq_sel_vec, count);
+		break;
+	case LogicalTypeId::BIGINT:
+		TemplatedFillSelectionVector<int64_t>(source, sel_vec, seq_sel_vec, count);
+		break;
+	case LogicalTypeId::UTINYINT:
+		TemplatedFillSelectionVector<uint8_t>(source, sel_vec, seq_sel_vec, count);
+		break;
+	case LogicalTypeId::USMALLINT:
+		TemplatedFillSelectionVector<uint16_t>(source, sel_vec, seq_sel_vec, count);
+		break;
+	case LogicalTypeId::UINTEGER:
+		TemplatedFillSelectionVector<uint32_t>(source, sel_vec, seq_sel_vec, count);
+		break;
+	case LogicalTypeId::UBIGINT:
+		TemplatedFillSelectionVector<uint64_t>(source, sel_vec, seq_sel_vec, count);
+		break;
+	default:
+		throw NotImplementedException("Type not supported");
+		break;
 	}
 }
 

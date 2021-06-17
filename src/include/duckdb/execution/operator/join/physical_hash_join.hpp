@@ -31,6 +31,7 @@ public:
 	unique_ptr<JoinHashTable::ScanStructure> scan_structure;
 	bool has_done_allocation {false};
 	SelectionVector sel_vec;
+	SelectionVector seq_sel_vec;
 };
 //! PhysicalHashJoin represents a hash loop join between two tables
 
