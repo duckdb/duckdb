@@ -175,10 +175,8 @@ static string GenerateColumnName(const idx_t total_cols, const idx_t col_number,
 }
 
 static string NormalizeColumnName(const string &col_name) {
-	// make lowercase
-	const string col_name_lower = StringUtil::Lower(col_name);
 	// remove accents
-	auto stripped = utf8proc_remove_accents((const utf8proc_uint8_t *)col_name_lower.c_str(), col_name_lower.size());
+	auto stripped = utf8proc_remove_accents((const utf8proc_uint8_t *)col_name.c_str(), col_name.size());
 	const string col_name_stripped = string((const char *)stripped, strlen((const char *)stripped));
 	free(stripped);
 	// only keep ascii characters
@@ -191,10 +189,16 @@ static string NormalizeColumnName(const string &col_name) {
 			col_name_cleaned += col_name_stripped[i];
 		} 		
 	}
-	// don't leave string empty
+	
 	if (col_name_cleaned.empty()) {
+		// don't leave string empty
 		col_name_cleaned += "_";
 	}
+	else {
+		// make lowercase
+		col_name_cleaned = StringUtil::Lower(col_name_cleaned);
+	}
+	
 	// prepend _ if name starts with a digit or is a reserved keyword
 	if (KeywordHelper::IsKeyword(col_name_cleaned) || (col_name_cleaned[0] >= '0' && col_name_cleaned[0] <= '9')) {
 		col_name_cleaned = "_" + col_name_cleaned;
