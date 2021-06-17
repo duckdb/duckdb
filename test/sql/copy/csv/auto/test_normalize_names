@@ -68,3 +68,16 @@ SELECT allo, teost, _ FROM test ORDER BY allo;
 
 statement ok
 DROP TABLE test;
+
+# CSV file with accents and UTF8 characters
+statement ok
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/normalize_names_5.csv', normalize_names=TRUE);
+
+query ITT
+SELECT a, b, c FROM test ORDER BY a;
+----
+123	TEST1	text1
+345	TEST1	text2
+
+statement ok
+DROP TABLE test;
