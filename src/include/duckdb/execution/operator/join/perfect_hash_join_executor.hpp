@@ -46,7 +46,6 @@ public:
 	void FullScanHashTable(JoinHTScanState &state, LogicalType key_type, JoinHashTable *hash_table);
 
 private:
-	bool hasInvisibleJoin {false};
 	PerfectHashTable perfect_hash_table;
 	PerfectHashJoinStats pjoin_stats;
 };
