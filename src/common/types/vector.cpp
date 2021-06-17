@@ -888,11 +888,6 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 		auto &child = DictionaryVector::Child(*this);
 		D_ASSERT(child.GetVectorType() != VectorType::DICTIONARY_VECTOR);
 		auto &dict_sel = DictionaryVector::SelVector(*this);
-		for (idx_t i = 0; i < count; i++) {
-			auto oidx = sel.get_index(i);
-			auto idx = dict_sel.get_index(oidx);
-			D_ASSERT(idx < STANDARD_VECTOR_SIZE);
-		}
 		// merge the selection vectors and verify the child
 		auto new_buffer = dict_sel.Slice(sel, count);
 		SelectionVector new_sel(new_buffer);
