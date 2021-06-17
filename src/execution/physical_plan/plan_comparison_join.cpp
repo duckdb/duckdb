@@ -48,7 +48,7 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 	}
 	// with integral types
 	for (auto &&join_stat : op.join_stats) {
-		if (!join_stat->type.IsIntegral()) {
+		if (!join_stat->type.IsNumeric()) {
 			// invisible join not possible for no integral types
 			return;
 		}
