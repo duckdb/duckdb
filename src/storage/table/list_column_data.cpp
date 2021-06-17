@@ -64,14 +64,18 @@ void ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t cou
 	validity.ScanCount(state.child_states[0], result, count);
 
 	auto data = FlatVector::GetData<list_entry_t>(result);
-	auto &first_entry = data[0];
-	auto &last_entry = data[scan_count - 1];
+	auto first_entry = data[0];
+	auto last_entry = data[scan_count - 1];
 
 #ifdef DEBUG
 	for(idx_t i = 1; i < scan_count; i++) {
 		D_ASSERT(data[i].offset == data[i - 1].offset + data[i - 1].length);
 	}
 #endif
+	// shift all offsets so they are 0 at the first entry
+	for(idx_t i = 0; i < scan_count; i++) {
+		data[i].offset -= first_entry.offset;
+	}
 
 	idx_t child_scan_count = last_entry.offset + last_entry.length - first_entry.offset;
 	auto child_vector = make_unique<Vector>(ListType::GetChildType(type), child_scan_count);
@@ -79,9 +83,11 @@ void ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t cou
 
 	if (child_scan_count > 0) {
 		auto &child_entry = ListVector::GetEntry(result);
+		D_ASSERT(child_entry.GetType().InternalType() == PhysicalType::STRUCT || state.child_states[1].row_index + child_scan_count <= child_column->GetCount());
 		child_column->ScanCount(state.child_states[1], child_entry, child_scan_count);
 	}
-	state.child_states[0].NextVector();
+	state.NextInternal(count);
+	state.child_states[0].NextInternal(count);
 
 	ListVector::SetListSize(result, child_scan_count);
 }
@@ -138,7 +144,7 @@ void ListColumnData::Append(BaseStatistics &stats_p, ColumnAppendState &state, V
 
 	VectorData vdata;
 	vdata.validity = list_validity;
-	vdata.sel = &FlatVector::INCREMENTAL_SELECTION_VECTOR;
+	vdata.sel = FlatVector::IncrementalSelectionVector(count, vdata.owned_sel);
 	vdata.data = (data_ptr_t) append_offsets.get();
 
 	// append the list offsets

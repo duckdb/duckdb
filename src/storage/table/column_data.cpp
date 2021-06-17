@@ -149,9 +149,9 @@ void ColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count) 
 	ScanVector(state, result, count);
 }
 
-void ColumnScanState::Next(idx_t count) {
-	//! There is no column segment
+void ColumnScanState::NextInternal(idx_t count) {
 	if (!current) {
+		//! There is no column segment
 		return;
 	}
 	row_index += count;
@@ -164,6 +164,10 @@ void ColumnScanState::Next(idx_t count) {
 		}
 	}
 	D_ASSERT(!current || (row_index >= current->start && row_index < current->start + current->count));
+}
+
+void ColumnScanState::Next(idx_t count) {
+	NextInternal(count);
 	for (auto &child_state : child_states) {
 		child_state.Next(count);
 	}
