@@ -14,6 +14,48 @@ namespace duckdb {
 using ValidityBytes = RowLayout::ValidityBytes;
 using Predicates = RowOperations::Predicates;
 
+template <typename OP>
+static idx_t SelectComparison(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+                              SelectionVector *true_sel, SelectionVector *false_sel) {
+	throw NotImplementedException("Unsupported nested comparison operand for RowOperations::Match");
+}
+
+template <>
+idx_t SelectComparison<Equals>(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+                               SelectionVector *true_sel, SelectionVector *false_sel) {
+	return VectorOperations::Equals(left, right, sel, count, true_sel, false_sel);
+}
+
+template <>
+idx_t SelectComparison<NotEquals>(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+                                  SelectionVector *true_sel, SelectionVector *false_sel) {
+	return VectorOperations::NotEquals(left, right, sel, count, true_sel, false_sel);
+}
+
+template <>
+idx_t SelectComparison<GreaterThan>(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+                                    SelectionVector *true_sel, SelectionVector *false_sel) {
+	return VectorOperations::GreaterThan(left, right, sel, count, true_sel, false_sel);
+}
+
+template <>
+idx_t SelectComparison<GreaterThanEquals>(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+                                          SelectionVector *true_sel, SelectionVector *false_sel) {
+	return VectorOperations::GreaterThanEquals(left, right, sel, count, true_sel, false_sel);
+}
+
+template <>
+idx_t SelectComparison<LessThan>(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+                                 SelectionVector *true_sel, SelectionVector *false_sel) {
+	return VectorOperations::GreaterThanEquals(left, right, sel, count, true_sel, false_sel);
+}
+
+template <>
+idx_t SelectComparison<LessThanEquals>(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+                                       SelectionVector *true_sel, SelectionVector *false_sel) {
+	return VectorOperations::GreaterThanEquals(left, right, sel, count, true_sel, false_sel);
+}
+
 template <class T, class OP, bool NO_MATCH_SEL>
 static void TemplatedMatchType(VectorData &col, Vector &rows, SelectionVector &sel, idx_t &count, idx_t col_offset,
                                idx_t col_no, SelectionVector *no_match, idx_t &no_match_count) {
@@ -74,6 +116,27 @@ static void TemplatedMatchType(VectorData &col, Vector &rows, SelectionVector &s
 		}
 	}
 	count = match_count;
+}
+
+template <class OP, bool NO_MATCH_SEL>
+static void TemplatedMatchNested(Vector &col, Vector &rows, SelectionVector &sel, idx_t &count, const idx_t col_offset,
+                                 const idx_t col_no, SelectionVector *no_match, idx_t &no_match_count) {
+	// Gather a dense Vector containing the column values being matched
+	Vector key(col.GetType());
+	const auto &key_sel = FlatVector::INCREMENTAL_SELECTION_VECTOR;
+	RowOperations::Gather(rows, sel, key, key_sel, count, col_offset, col_no);
+
+	// Make a dense dictionary of the probe column so we can match the SelectComparison scatter semantics
+	Vector dense;
+	dense.Slice(col, sel, count);
+
+	if (NO_MATCH_SEL) {
+		auto match_count = SelectComparison<OP>(dense, key, &sel, count, &sel, no_match);
+		no_match_count = count - match_count;
+		count = match_count;
+	} else {
+		count = SelectComparison<OP>(dense, key, &sel, count, &sel, nullptr);
+	}
 }
 
 template <class OP, bool NO_MATCH_SEL>
@@ -140,6 +203,11 @@ static void TemplatedMatchOp(Vector &vec, VectorData &col, const RowLayout &layo
 	case PhysicalType::VARCHAR:
 		TemplatedMatchType<string_t, OP, NO_MATCH_SEL>(col, rows, sel, count, col_offset, col_no, no_match,
 		                                               no_match_count);
+		break;
+	case PhysicalType::LIST:
+	case PhysicalType::MAP:
+	case PhysicalType::STRUCT:
+		TemplatedMatchNested<OP, NO_MATCH_SEL>(vec, rows, sel, count, col_offset, col_no, no_match, no_match_count);
 		break;
 	default:
 		throw Exception("Unsupported column type for RowOperations::Match");

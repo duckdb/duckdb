@@ -97,7 +97,7 @@ jobs:
     - name: Build
       run: |
         python scripts/windows_ci.py
-        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_REST=1 -DJDBC_DRIVER=1 -DBUILD_VISUALIZER_EXTENSION=1
+        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_TPCDS_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_REST=1 -DJDBC_DRIVER=1 -DBUILD_VISUALIZER_EXTENSION=1
         cmake --build . --config Release
 
     - name: Test
@@ -144,7 +144,7 @@ jobs:
 
     - name: Build
       run: |
-        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=Win32 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DJDBC_DRIVER=1 -DBUILD_VISUALIZER_EXTENSION=1
+        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=Win32 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_TPCDS_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DJDBC_DRIVER=1 -DBUILD_VISUALIZER_EXTENSION=1
         cmake --build . --config Release
 
     - name: Test
@@ -208,6 +208,7 @@ jobs:
       BUILD_VISUALIZER: 1
       BUILD_ICU: 1
       BUILD_TPCH: 1
+      BUILD_TPCDS: 1
       BUILD_FTS: 1
       BUILD_REST: 1
       BUILD_JDBC: 1
@@ -295,6 +296,7 @@ jobs:
       BUILD_BENCHMARK: 1
       BUILD_ICU: 1
       BUILD_TPCH: 1
+      BUILD_TPCDS: 1
       BUILD_FTS: 1
       BUILD_REST: 1
       BUILD_JDBC: 1
@@ -422,7 +424,7 @@ jobs:
         export TOOLCHAIN=`pwd`/rpi-tools
         mkdir -p build/release
         cd build/release
-        cmake -G Ninja -DBUILD_TPCH_EXTENSION=1 -DDUCKDB_RPI_TOOLCHAIN_PREFIX=$TOOLCHAIN -DBUILD_UNITTESTS=0 -DCMAKE_TOOLCHAIN_FILE=../../scripts/raspberry-pi-cmake-toolchain.cmake ../../
+        cmake -G Ninja -DBUILD_TPCH_EXTENSION=1 -DBUILD_TPCDS_EXTENSION=1 -DDUCKDB_RPI_TOOLCHAIN_PREFIX=$TOOLCHAIN -DBUILD_UNITTESTS=0 -DCMAKE_TOOLCHAIN_FILE=../../scripts/raspberry-pi-cmake-toolchain.cmake ../../
         cmake --build .
         file duckdb
 
@@ -501,6 +503,7 @@ jobs:
       GEN: ninja
       BUILD_ICU: 1
       BUILD_TPCH: 1
+      BUILD_TPCDS: 1
       BUILD_FTS: 1
       BUILD_VISUALIZER: 1
 
@@ -531,6 +534,7 @@ jobs:
       BUILD_ICU: 1
       BUILD_PARQUET: 1
       BUILD_TPCH: 1
+      BUILD_TPCDS: 1
       BUILD_FTS: 1
       BUILD_VISUALIZER: 1
 
@@ -560,6 +564,7 @@ jobs:
       GEN: ninja
       BUILD_ICU: 1
       BUILD_TPCH: 1
+      BUILD_TPCDS: 1
       BUILD_FTS: 1
       BUILD_VISUALIZER: 1
       TSAN_OPTIONS: suppressions=.sanitizer-thread-suppressions.txt
@@ -716,6 +721,7 @@ jobs:
 
     env:
       BUILD_JDBC: 1
+      FORCE_QUERY_LOG: sqlancer_log.tmp
       GEN: ninja
 
     steps:
@@ -747,6 +753,7 @@ jobs:
 
     env:
       BUILD_JDBC: 1
+      FORCE_QUERY_LOG: sqlancer_log.tmp
       GEN: ninja
 
     steps:

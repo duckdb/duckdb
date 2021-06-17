@@ -4,8 +4,10 @@
 //===--------------------------------------------------------------------===//
 
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/types/null_value.hpp"
+#include "duckdb/common/value_operations/value_operations.hpp"
 
 namespace duckdb {
 
@@ -53,6 +55,97 @@ static inline void TemplatedLoopHash(Vector &input, Vector &result, const Select
 	}
 }
 
+template <bool HAS_RSEL, bool FIRST_HASH>
+static inline void StructLoopHash(Vector &input, Vector &hashes, const SelectionVector *rsel, idx_t count) {
+	auto &children = StructVector::GetEntries(input);
+
+	D_ASSERT(children.size() > 0);
+	idx_t col_no = 0;
+	if (HAS_RSEL) {
+		if (FIRST_HASH) {
+			VectorOperations::Hash(*children[col_no++], hashes, *rsel, count);
+		} else {
+			VectorOperations::CombineHash(hashes, *children[col_no++], *rsel, count);
+		}
+		while (col_no < children.size()) {
+			VectorOperations::CombineHash(hashes, *children[col_no++], *rsel, count);
+		}
+	} else {
+		if (FIRST_HASH) {
+			VectorOperations::Hash(*children[col_no++], hashes, count);
+		} else {
+			VectorOperations::CombineHash(hashes, *children[col_no++], count);
+		}
+		while (col_no < children.size()) {
+			VectorOperations::CombineHash(hashes, *children[col_no++], count);
+		}
+	}
+}
+
+template <bool HAS_RSEL, bool FIRST_HASH>
+static inline void ListLoopHash(Vector &input, Vector &hashes, const SelectionVector *rsel, idx_t count) {
+	auto hdata = FlatVector::GetData<hash_t>(hashes);
+
+	VectorData idata;
+	input.Orrify(count, idata);
+	const auto ldata = (const list_entry_t *)idata.data;
+
+	// Slice the child into a dictionary so we can iterate through the positions
+	// We only need one entry per position in the parent, but we have to index by
+	// the rsel so we need the full vector size.
+	SelectionVector cursor(HAS_RSEL ? STANDARD_VECTOR_SIZE : count);
+
+	// Set up the cursor for the first position
+	SelectionVector unprocessed(count);
+	idx_t remaining = 0;
+	for (idx_t i = 0; i < count; ++i) {
+		const idx_t ridx = HAS_RSEL ? rsel->get_index(i) : i;
+		const auto lidx = idata.sel->get_index(ridx);
+		const auto &entry = ldata[lidx];
+		if (idata.validity.RowIsValid(lidx) && entry.length > 0) {
+			cursor.set_index(ridx, entry.offset);
+			unprocessed.set_index(remaining++, ridx);
+		} else {
+			hdata[ridx] = 0;
+		}
+	}
+	count = remaining;
+	if (count == 0) {
+		return;
+	}
+
+	// Compute the first round of hashes
+	Vector child;
+	child.Slice(ListVector::GetEntry(input), cursor, count);
+
+	if (FIRST_HASH) {
+		VectorOperations::Hash(child, hashes, unprocessed, count);
+	} else {
+		VectorOperations::CombineHash(hashes, child, unprocessed, count);
+	}
+
+	// Combine the hashes for the remaining positions until there are none left
+	for (idx_t position = 1;; ++position) {
+		idx_t remaining = 0;
+		for (idx_t i = 0; i < count; ++i) {
+			const auto ridx = unprocessed.get_index(i);
+			const auto lidx = idata.sel->get_index(ridx);
+			const auto &entry = ldata[lidx];
+			if (entry.length > position) {
+				// Entry still has values to hash
+				cursor.set_index(ridx, cursor.get_index(ridx) + 1);
+				unprocessed.set_index(remaining++, ridx);
+			}
+		}
+		if (remaining == 0) {
+			break;
+		}
+
+		VectorOperations::CombineHash(hashes, child, unprocessed, remaining);
+		count = remaining;
+	}
+}
+
 template <bool HAS_RSEL>
 static inline void HashTypeSwitch(Vector &input, Vector &result, const SelectionVector *rsel, idx_t count) {
 	D_ASSERT(result.GetType().id() == LogicalTypeId::HASH);
@@ -96,6 +189,13 @@ static inline void HashTypeSwitch(Vector &input, Vector &result, const Selection
 		break;
 	case PhysicalType::VARCHAR:
 		TemplatedLoopHash<HAS_RSEL, string_t>(input, result, rsel, count);
+		break;
+	case PhysicalType::MAP:
+	case PhysicalType::STRUCT:
+		StructLoopHash<HAS_RSEL, true>(input, result, rsel, count);
+		break;
+	case PhysicalType::LIST:
+		ListLoopHash<HAS_RSEL, true>(input, result, rsel, count);
 		break;
 	default:
 		throw InvalidTypeException(input.GetType(), "Invalid type for hash");
@@ -225,6 +325,13 @@ static inline void CombineHashTypeSwitch(Vector &hashes, Vector &input, const Se
 		break;
 	case PhysicalType::VARCHAR:
 		TemplatedLoopCombineHash<HAS_RSEL, string_t>(input, hashes, rsel, count);
+		break;
+	case PhysicalType::MAP:
+	case PhysicalType::STRUCT:
+		StructLoopHash<HAS_RSEL, false>(input, hashes, rsel, count);
+		break;
+	case PhysicalType::LIST:
+		ListLoopHash<HAS_RSEL, false>(input, hashes, rsel, count);
 		break;
 	default:
 		throw InvalidTypeException(input.GetType(), "Invalid type for hash");

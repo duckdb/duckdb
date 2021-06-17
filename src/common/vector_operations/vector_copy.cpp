@@ -215,8 +215,7 @@ void VectorOperations::Copy(const Vector &source, Vector &target, idx_t source_c
 	case VectorType::CONSTANT_VECTOR: {
 		SelectionVector owned_sel;
 		auto sel = ConstantVector::ZeroSelectionVector(source_count, owned_sel);
-		VectorOperations::Copy(source, target, *sel, source_count, source_offset,
-		                       target_offset);
+		VectorOperations::Copy(source, target, *sel, source_count, source_offset, target_offset);
 		break;
 	}
 	case VectorType::FLAT_VECTOR: {

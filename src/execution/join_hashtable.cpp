@@ -476,8 +476,9 @@ void ScanStructure::AdvancePointers() {
 }
 
 void ScanStructure::GatherResult(Vector &result, const SelectionVector &result_vector,
-                                 const SelectionVector &sel_vector, const idx_t count, const idx_t col_idx) {
-	RowOperations::Gather(ht.layout, pointers, sel_vector, result, result_vector, count, col_idx);
+                                 const SelectionVector &sel_vector, const idx_t count, const idx_t col_no) {
+	const auto col_offset = ht.layout.GetOffsets()[col_no];
+	RowOperations::Gather(pointers, sel_vector, result, result_vector, count, col_offset, col_no);
 }
 
 void ScanStructure::GatherResult(Vector &result, const SelectionVector &sel_vector, const idx_t count,
@@ -816,8 +817,9 @@ void JoinHashTable::ScanFullOuter(DataChunk &result, JoinHTScanState &state) {
 		for (idx_t i = 0; i < build_types.size(); i++) {
 			auto &vector = result.data[left_column_count + i];
 			D_ASSERT(vector.GetType() == build_types[i]);
-			RowOperations::Gather(layout, addresses, sel_vector, vector, sel_vector, found_entries,
-			                      i + condition_types.size());
+			const auto col_no = condition_types.size() + i;
+			const auto col_offset = layout.GetOffsets()[col_no];
+			RowOperations::Gather(addresses, sel_vector, vector, sel_vector, found_entries, col_offset, col_no);
 		}
 	}
 }
