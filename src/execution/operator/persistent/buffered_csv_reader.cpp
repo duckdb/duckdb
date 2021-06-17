@@ -174,12 +174,12 @@ static string GenerateColumnName(const idx_t total_cols, const idx_t col_number,
 	return string(prefix + leading_zeros + value);
 }
 
-static string NormalizeColumnName(const string& col_name) {
+static string NormalizeColumnName(const string &col_name) {
 	// make lowercase
 	const string col_name_lower = StringUtil::Lower(col_name);
 	// remove accents
 	auto stripped = utf8proc_remove_accents((const utf8proc_uint8_t *)col_name_lower.c_str(), col_name_lower.size());
-	const string col_name_stripped = string((const char*)stripped, strlen((const char*)stripped));
+	const string col_name_stripped = string((const char *)stripped, strlen((const char *)stripped));
 	free(stripped);
 	// only keep ascii characters
 	string col_name_cleaned = "";
@@ -704,7 +704,7 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 	// update parser info, and read, generate & set col_names based on previous findings
 	if (((!first_row_consistent || first_row_nulls) && !options.has_header) || (options.has_header && options.header)) {
 		options.header = true;
-		unordered_map<string,idx_t> name_collision_count;
+		unordered_map<string, idx_t> name_collision_count;
 		// get header names from CSV
 		for (idx_t col = 0; col < options.num_cols; col++) {
 			const auto &val = best_header_row.GetValue(col, 0);
@@ -726,7 +726,7 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 				name_collision_count[col_name] += 1;
 				col_name = col_name + "_" + to_string(name_collision_count[col_name]);
 			}
-	
+			
 			col_names.push_back(col_name);
 			name_collision_count[col_name] = 0;
 		}
