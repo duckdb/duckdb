@@ -119,9 +119,21 @@ string ExpressionTypeToString(ExpressionType type) {
 	case ExpressionType::BOUND_AGGREGATE:
 		return "BOUND_AGGREGATE";
 	case ExpressionType::INVALID:
-	default:
 		return "INVALID";
+	case ExpressionType::ARRAY_CONSTRUCTOR:
+		return "ARRAY_CONSTRUCTOR";
+	case ExpressionType::TABLE_STAR:
+		return "TABLE_STAR";
+	case ExpressionType::BOUND_UNNEST:
+		return "BOUND_UNNEST";
+	case ExpressionType::COLLATE:
+		return "COLLATE";
+	case ExpressionType::POSITIONAL_REFERENCE:
+		return "POSITIONAL_REFERENCE";
+	case ExpressionType::LAMBDA:
+		return "LAMBDA";
 	}
+	return "INVALID";
 }
 
 string ExpressionTypeToOperator(ExpressionType type) {

@@ -15,9 +15,9 @@ namespace duckdb {
 //! Represents a function call
 class FunctionExpression : public ParsedExpression {
 public:
-	FunctionExpression(string schema_name, const string &function_name, vector<unique_ptr<ParsedExpression>> &children,
+	FunctionExpression(string schema_name, const string &function_name, vector<unique_ptr<ParsedExpression>> children,
 	                   unique_ptr<ParsedExpression> filter = nullptr, bool distinct = false, bool is_operator = false);
-	FunctionExpression(const string &function_name, vector<unique_ptr<ParsedExpression>> &children,
+	FunctionExpression(const string &function_name, vector<unique_ptr<ParsedExpression>> children,
 	                   unique_ptr<ParsedExpression> filter = nullptr, bool distinct = false, bool is_operator = false);
 
 	//! Schema of the function

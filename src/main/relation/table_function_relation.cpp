@@ -38,7 +38,7 @@ unique_ptr<TableRef> TableFunctionRelation::GetTableRef() {
 	}
 
 	auto table_function = make_unique<TableFunctionRef>();
-	auto function = make_unique<FunctionExpression>(name, children);
+	auto function = make_unique<FunctionExpression>(name, move(children));
 	table_function->function = move(function);
 	return move(table_function);
 }

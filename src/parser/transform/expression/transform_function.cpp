@@ -228,7 +228,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		return move(coalesce_op);
 	}
 
-	auto function = make_unique<FunctionExpression>(schema, lowercase_name.c_str(), children, move(filter_expr),
+	auto function = make_unique<FunctionExpression>(schema, lowercase_name.c_str(), move(children), move(filter_expr),
 	                                                root->agg_distinct);
 	function->query_location = root->location;
 	return move(function);
@@ -278,7 +278,7 @@ unique_ptr<ParsedExpression> Transformer::TransformSQLValueFunction(duckdb_libpg
 	}
 	vector<unique_ptr<ParsedExpression>> children;
 	auto fname = SQLValueOpToString(node->op);
-	return make_unique<FunctionExpression>(DEFAULT_SCHEMA, fname, children);
+	return make_unique<FunctionExpression>(DEFAULT_SCHEMA, fname, move(children));
 }
 
 } // namespace duckdb
