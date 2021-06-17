@@ -23,6 +23,10 @@ bool StructColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter)
 	return false;
 }
 
+idx_t StructColumnData::GetCount() {
+	return sub_columns[0]->GetCount();
+}
+
 void StructColumnData::InitializeScan(ColumnScanState &state) {
 	// initialize the validity segment
 	ColumnScanState validity_state;
@@ -70,7 +74,7 @@ void StructColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state,
 }
 
 void StructColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count) {
-	validity.ScanCount(state, result, count);
+	validity.ScanCount(state.child_states[0], result, count);
 	auto &child_entries = StructVector::GetEntries(result);
 	for (idx_t i = 0; i < sub_columns.size(); i++) {
 		sub_columns[i]->ScanCount(state.child_states[i + 1], *child_entries[i], count);

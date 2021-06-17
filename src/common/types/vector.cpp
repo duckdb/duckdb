@@ -958,6 +958,19 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 			for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
 				if (GetVectorType() == VectorType::CONSTANT_VECTOR) {
 					D_ASSERT(children[child_idx]->GetVectorType() == VectorType::CONSTANT_VECTOR);
+					if (ConstantVector::IsNull(*this)) {
+						D_ASSERT(ConstantVector::IsNull(*children[child_idx]));
+					}
+				} else if (GetVectorType() == VectorType::FLAT_VECTOR && children[child_idx]->GetVectorType() == VectorType::FLAT_VECTOR) {
+					// for any NULL entry in the struct, the child should be NULL as well
+					auto &validity = FlatVector::Validity(*this);
+					auto &child_validity = FlatVector::Validity(*children[child_idx]);
+					for(idx_t i = 0; i < count; i++) {
+						auto index = sel.get_index(i);
+						if (!validity.RowIsValid(index)) {
+							D_ASSERT(!child_validity.RowIsValid(index));
+						}
+					}
 				}
 				D_ASSERT(children[child_idx]->GetType() == child_types[child_idx].second);
 				children[child_idx]->Verify(sel, count);

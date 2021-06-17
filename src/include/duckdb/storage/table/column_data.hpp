@@ -51,7 +51,7 @@ public:
 
 	DatabaseInstance &GetDatabase() const;
 	DataTableInfo &GetTableInfo() const;
-	idx_t GetCount();
+	virtual idx_t GetCount();
 
 	//! The root type of the column
 	const LogicalType &RootType() const;

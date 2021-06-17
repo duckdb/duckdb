@@ -36,6 +36,12 @@ static void UnnestNull(idx_t start, idx_t end, Vector &result) {
 	for (idx_t i = start; i < end; i++) {
 		FlatVector::SetNull(result, i, true);
 	}
+	if (result.GetType().InternalType() == PhysicalType::STRUCT) {
+		auto &struct_children = StructVector::GetEntries(result);
+		for(auto &child : struct_children) {
+			UnnestNull(start, end, *child);
+		}
+	}
 }
 
 template <class T>

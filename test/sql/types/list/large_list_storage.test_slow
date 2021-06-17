@@ -2,7 +2,6 @@
 # description: Test storing large lists
 # group: [list]
 
-# FIXME: this test is only slow because of UNNEST using value semantics; can probably be turned into a regular test after
 statement ok
 PRAGMA enable_verification
 

@@ -8,7 +8,7 @@ SegmentBase *SegmentTree::GetRootSegment() {
 }
 
 SegmentBase *SegmentTree::GetLastSegment() {
-	return nodes.back().node;
+	return nodes.empty() ? nullptr : nodes.back().node;
 }
 
 SegmentBase *SegmentTree::GetSegment(idx_t row_number) {
