@@ -254,7 +254,7 @@ unique_ptr<TableFunctionRef> ReadCSVReplacement(const string &table_name, void *
 	auto table_function = make_unique<TableFunctionRef>();
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(make_unique<ConstantExpression>(Value(table_name)));
-	table_function->function = make_unique<FunctionExpression>("read_csv_auto", children);
+	table_function->function = make_unique<FunctionExpression>("read_csv_auto", move(children));
 	return table_function;
 }
 
