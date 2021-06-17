@@ -12,8 +12,8 @@ FunctionExpression::FunctionExpression(string schema, const string &function_nam
                                        vector<unique_ptr<ParsedExpression>> children_p,
                                        unique_ptr<ParsedExpression> filter, bool distinct, bool is_operator)
     : ParsedExpression(ExpressionType::FUNCTION, ExpressionClass::FUNCTION), schema(std::move(schema)),
-      function_name(StringUtil::Lower(function_name)), is_operator(is_operator), children(move(children_p)), distinct(distinct),
-      filter(move(filter)) {
+      function_name(StringUtil::Lower(function_name)), is_operator(is_operator), children(move(children_p)),
+      distinct(distinct), filter(move(filter)) {
 }
 
 FunctionExpression::FunctionExpression(const string &function_name, vector<unique_ptr<ParsedExpression>> children_p,
@@ -72,7 +72,8 @@ unique_ptr<ParsedExpression> FunctionExpression::Copy() const {
 	if (filter) {
 		filter_copy = filter->Copy();
 	}
-	auto copy = make_unique<FunctionExpression>(function_name, move(copy_children), move(filter_copy), distinct, is_operator);
+	auto copy =
+	    make_unique<FunctionExpression>(function_name, move(copy_children), move(filter_copy), distinct, is_operator);
 	copy->schema = schema;
 	copy->CopyProperties(*this);
 	return move(copy);

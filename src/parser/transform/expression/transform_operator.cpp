@@ -74,7 +74,6 @@ unique_ptr<ParsedExpression> Transformer::TransformBinaryOperator(const string &
 	}
 }
 
-
 unique_ptr<ParsedExpression> Transformer::TransformAExpr(duckdb_libpgquery::PGAExpr *root, idx_t depth) {
 	if (!root) {
 		return nullptr;
