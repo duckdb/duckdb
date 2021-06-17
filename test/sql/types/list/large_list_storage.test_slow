@@ -50,3 +50,13 @@ query IIII
 SELECT COUNT(*), MIN(i), MAX(i), COUNT(i) FROM (SELECT UNNEST(b) FROM a) tbl(i)
 ----
 230008	0	99999999	230007
+
+# several bigly lists with null values
+statement ok
+CREATE TABLE b AS SELECT case when i < 100000 then 'a' else 'b' end g, LIST(case when i %2 = 0 then null else i end) l FROM range(200000) tbl(i) GROUP BY g
+
+query IIIII
+SELECT g, COUNT(*), MIN(i), MAX(i), COUNT(i) FROM (SELECT g, UNNEST(l) FROM b) tbl(g, i) GROUP BY g ORDER BY g
+----
+a	100000	1	99999	50000
+b	100000	100001	199999	50000
