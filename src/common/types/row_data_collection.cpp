@@ -158,24 +158,21 @@ void RowDataCollection::SerializeVectorSortable(Vector &v, idx_t vcount, const S
 	}
 }
 
-void RowDataCollection::ComputeStringEntrySizes(Vector &v, idx_t entry_sizes[], idx_t vcount, idx_t offset) {
-	VectorData vdata;
-	v.Orrify(vcount, vdata);
-
+void RowDataCollection::ComputeStringEntrySizes(VectorData &vdata, idx_t entry_sizes[], const idx_t ser_count,
+                                                const SelectionVector &sel, const idx_t offset) {
 	const idx_t string_prefix_len = string_t::PREFIX_LENGTH;
 	auto strings = (string_t *)vdata.data;
-	for (idx_t i = 0; i < vcount; i++) {
-		idx_t str_idx = vdata.sel->get_index(i) + offset;
+	for (idx_t i = 0; i < ser_count; i++) {
+		auto idx = sel.get_index(i);
+		auto str_idx = vdata.sel->get_index(idx) + offset;
 		if (vdata.validity.RowIsValid(str_idx)) {
 			entry_sizes[i] += string_prefix_len + strings[str_idx].GetSize();
 		}
 	}
 }
 
-void RowDataCollection::ComputeStructEntrySizes(Vector &v, idx_t entry_sizes[], idx_t vcount, idx_t offset) {
-	VectorData vdata;
-	v.Orrify(vcount, vdata);
-
+void RowDataCollection::ComputeStructEntrySizes(Vector &v, idx_t entry_sizes[], idx_t vcount, idx_t ser_count,
+                                                const SelectionVector &sel, idx_t offset) {
 	// obtain child vectors
 	idx_t num_children;
 	vector<Vector> struct_vectors;
@@ -200,13 +197,13 @@ void RowDataCollection::ComputeStructEntrySizes(Vector &v, idx_t entry_sizes[], 
 	}
 	// add struct validitymask size
 	const idx_t struct_validitymask_size = (num_children + 7) / 8;
-	for (idx_t i = 0; i < vcount; i++) {
+	for (idx_t i = 0; i < ser_count; i++) {
 		// FIXME: don't serialize if the struct is NULL?
 		entry_sizes[i] += struct_validitymask_size;
 	}
 	// compute size of child vectors
 	for (auto &struct_vector : struct_vectors) {
-		ComputeEntrySizes(struct_vector, entry_sizes, vcount, offset);
+		ComputeEntrySizes(struct_vector, entry_sizes, vcount, ser_count, sel, offset);
 	}
 }
 
@@ -218,19 +215,18 @@ static list_entry_t *GetListData(Vector &v) {
 	return FlatVector::GetData<list_entry_t>(v);
 }
 
-void RowDataCollection::ComputeListEntrySizes(Vector &v, idx_t entry_sizes[], idx_t vcount, idx_t offset) {
+void RowDataCollection::ComputeListEntrySizes(Vector &v, VectorData &vdata, idx_t entry_sizes[], idx_t ser_count,
+                                              const SelectionVector &sel, idx_t offset) {
 	ListVector::Initialize(v);
-
-	VectorData vdata;
-	v.Orrify(vcount, vdata);
 
 	auto list_data = GetListData(v);
 	auto &child_vector = ListVector::GetEntry(v);
 	idx_t list_entry_sizes[STANDARD_VECTOR_SIZE];
-	for (idx_t i = 0; i < vcount; i++) {
-		idx_t idx = vdata.sel->get_index(i) + offset;
-		if (vdata.validity.RowIsValid(idx)) {
-			auto list_entry = list_data[idx];
+	for (idx_t i = 0; i < ser_count; i++) {
+		auto idx = sel.get_index(i);
+		auto source_idx = vdata.sel->get_index(idx) + offset;
+		if (vdata.validity.RowIsValid(source_idx)) {
+			auto list_entry = list_data[source_idx];
 
 			// make room for list length, list validitymask
 			entry_sizes[i] += sizeof(list_entry.length);
@@ -250,7 +246,8 @@ void RowDataCollection::ComputeListEntrySizes(Vector &v, idx_t entry_sizes[], id
 
 				// compute and add to the total
 				std::fill_n(list_entry_sizes, next, 0);
-				ComputeEntrySizes(child_vector, list_entry_sizes, next, entry_offset);
+				ComputeEntrySizes(child_vector, list_entry_sizes, next, next, FlatVector::INCREMENTAL_SELECTION_VECTOR,
+				                  entry_offset);
 				for (idx_t list_idx = 0; list_idx < next; list_idx++) {
 					entry_sizes[i] += list_entry_sizes[list_idx];
 				}
@@ -263,23 +260,24 @@ void RowDataCollection::ComputeListEntrySizes(Vector &v, idx_t entry_sizes[], id
 	}
 }
 
-void RowDataCollection::ComputeEntrySizes(Vector &v, idx_t entry_sizes[], idx_t vcount, idx_t offset) {
-	auto physical_type = v.GetType().InternalType();
+void RowDataCollection::ComputeEntrySizes(Vector &v, VectorData &vdata, idx_t entry_sizes[], idx_t vcount,
+                                          idx_t ser_count, const SelectionVector &sel, idx_t offset) {
+	const auto physical_type = v.GetType().InternalType();
 	if (TypeIsConstantSize(physical_type)) {
 		const auto type_size = GetTypeIdSize(physical_type);
-		for (idx_t i = 0; i < vcount; i++) {
+		for (idx_t i = 0; i < ser_count; i++) {
 			entry_sizes[i] += type_size;
 		}
 	} else {
 		switch (physical_type) {
 		case PhysicalType::VARCHAR:
-			ComputeStringEntrySizes(v, entry_sizes, vcount, offset);
+			ComputeStringEntrySizes(vdata, entry_sizes, ser_count, sel, offset);
 			break;
 		case PhysicalType::STRUCT:
-			ComputeStructEntrySizes(v, entry_sizes, vcount, offset);
+			ComputeStructEntrySizes(v, entry_sizes, vcount, ser_count, sel, offset);
 			break;
 		case PhysicalType::LIST:
-			ComputeListEntrySizes(v, entry_sizes, vcount, offset);
+			ComputeListEntrySizes(v, vdata, entry_sizes, ser_count, sel, offset);
 			break;
 		default:
 			throw NotImplementedException("Column with variable size type %s cannot be serialized to row-format",
@@ -288,7 +286,15 @@ void RowDataCollection::ComputeEntrySizes(Vector &v, idx_t entry_sizes[], idx_t 
 	}
 }
 
-void RowDataCollection::ComputeEntrySizes(DataChunk &input, idx_t entry_sizes[], idx_t entry_size) {
+void RowDataCollection::ComputeEntrySizes(Vector &v, idx_t entry_sizes[], idx_t vcount, idx_t ser_count,
+                                          const SelectionVector &sel, idx_t offset) {
+	VectorData vdata;
+	v.Orrify(vcount, vdata);
+	ComputeEntrySizes(v, vdata, entry_sizes, vcount, ser_count, sel, offset);
+}
+
+void RowDataCollection::ComputeEntrySizes(DataChunk &input, idx_t entry_sizes[], idx_t entry_size,
+                                          const SelectionVector &sel, idx_t ser_count) {
 	// fill array with constant portion of payload entry size
 	std::fill_n(entry_sizes, input.size(), entry_size);
 
@@ -299,7 +305,7 @@ void RowDataCollection::ComputeEntrySizes(DataChunk &input, idx_t entry_sizes[],
 		if (TypeIsConstantSize(physical_type)) {
 			continue;
 		}
-		ComputeEntrySizes(input.data[col_idx], entry_sizes, input.size());
+		ComputeEntrySizes(input.data[col_idx], entry_sizes, input.size(), ser_count, sel);
 	}
 }
 
@@ -569,7 +575,8 @@ void RowDataCollection::SerializeListVector(Vector &v, idx_t vcount, const Selec
 			} else {
 				// variable size list entries: compute entry sizes and set list entry locations
 				std::fill_n(list_entry_sizes, next, 0);
-				ComputeEntrySizes(child_vector, list_entry_sizes, next, entry_offset);
+				ComputeEntrySizes(child_vector, list_entry_sizes, next, next, FlatVector::INCREMENTAL_SELECTION_VECTOR,
+				                  entry_offset);
 				for (idx_t entry_idx = 0; entry_idx < next; entry_idx++) {
 					list_entry_locations[entry_idx] = key_locations[i];
 					key_locations[i] += list_entry_sizes[entry_idx];
