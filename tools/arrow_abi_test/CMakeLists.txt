@@ -39,38 +39,6 @@ ExternalProject_Get_Property(arrow_ep install_dir)
 
 include_directories(${install_dir}/include)
 
-
-
-#set(ARROW_INCLUDE_DIR ${install_dir}/include)
-#set(ARROW_LIBRARY_PATH ${install_dir}/lib/libarrow.a)
-#
-#set(PARQUET_LIBRARY_PATH ${install_dir}/lib/libparquet.a)
-#
-#file(MAKE_DIRECTORY ${ARROW_INCLUDE_DIR})
-#
-#add_library(arrow SHARED IMPORTED)
-#
-#add_library(parquet SHARED IMPORTED)
-#
-#set_property(TARGET arrow PROPERTY IMPORTED_LOCATION ${ARROW_LIBRARY_PATH})
-#set_property(
-#  TARGET arrow
-#  APPEND
-#  PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${ARROW_INCLUDE_DIR})
-##add_dependencies( arrow  arrow_ep)
-#
-
-
-#set_property(TARGET parquet PROPERTY IMPORTED_LOCATION ${PARQUET_LIBRARY_PATH})
-
-#set_property(TARGET arrow PROPERTY INTERFACE_LINK_LIBRARIES parquet)
-
-#set_property(
-#  TARGET parquet
-#  APPEND
-#  PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${ARROW_INCLUDE_DIR})
-#add_dependencies(parquet arrow_ep)
-
 add_executable(ba ${CMAKE_CURRENT_SOURCE_DIR}/abi_test.cc)
 
 include_directories(ba
@@ -82,10 +50,13 @@ include ( "re2.cmake" )
 set(RE2_STATIC_LIBRARIES -L${RE2_LIBRARY_DIR} -l libre2.a )
 
 include ( "utf8.cmake" )
-set(UTF8_STATIC_LIBRARIES -L${UTF8_LIBRARY_DIR} -l libUTF8.a )
+set(UTF8_STATIC_LIBRARIES -L${UTF8_LIBRARY_DIR} -l libutf8proc.a )
 
-add_dependencies(ba arrow_ep RE2 utf8proc duckdb)
+include ( "zlib.cmake" )
+set(ZLIB_STATIC_LIBRARIES -L${ZLIB_LIBRARY_DIR} -l libz.a )
 
-target_link_libraries(ba PRIVATE   ${install_dir}/lib/libparquet.a ${install_dir}/lib/libarrow_bundled_dependencies.a  ${install_dir}/lib/libarrow.a  ${RE2_STATIC_LIBRARIES} utf8proc duckdb Threads::Threads)
+add_dependencies(ba RE2 arrow_ep   UTF8 ZLIB duckdb)
+message (${install_dir})
+target_link_libraries(ba PRIVATE  duckdb ${install_dir}/lib/libparquet.a ${install_dir}/lib/libarrow_bundled_dependencies.a  ${install_dir}/lib/libarrow.a   ${ZLIB_STATIC_LIBRARIES} ${UTF8_STATIC_LIBRARIES} /usr/local/lib/libre2.a Threads::Threads)
 
 #target_link_libraries(ba parquet)

@@ -285,7 +285,8 @@ struct ListVector {
 	DUCKDB_API static void Append(Vector &target, const Vector &source, const SelectionVector &sel, idx_t source_size,
 	                              idx_t source_offset = 0);
 	DUCKDB_API static void PushBack(Vector &target, Value &insert);
-	DUCKDB_API static void Initialize(Vector &vec, idx_t size = STANDARD_VECTOR_SIZE);
+	DUCKDB_API static void Initialize(Vector &vec, idx_t size=STANDARD_VECTOR_SIZE);
+	DUCKDB_API static void Resize(Vector &vec, idx_t size);
 	DUCKDB_API static vector<idx_t> Search(Vector &list, Value &key, idx_t row);
 	DUCKDB_API static Value GetValuesFromOffsets(Vector &list, vector<idx_t> &offsets);
 	//! Share the entry of the other list vector

@@ -216,7 +216,7 @@ void GetValidityMask(ValidityMask &mask, ArrowArray &array, ArrowScanState &scan
 
 void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan_state, idx_t size,
                          std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data, idx_t col_idx,
-                         idx_t &list_col_idx);
+                         idx_t &list_col_idx, idx_t row_start = 0);
 
 void ArrowToDuckDBList(Vector &vector, ArrowArray &array, ArrowScanState &scan_state, idx_t size,
                        std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data, idx_t col_idx,
@@ -266,6 +266,10 @@ void ArrowToDuckDBMapList(Vector &vector, ArrowArray &array, ArrowScanState &sca
                           std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data, idx_t col_idx,
                           idx_t &list_col_idx, uint32_t *offsets) {
 	idx_t list_size = offsets[size];
+	idx_t  cur_size = 0;
+	if (ListVector::HasEntry(vector)){
+	    cur_size = ListVector::GetListSize(vector);
+	}
 	ListVector::Initialize(vector, list_size);
 	auto &child_vector = ListVector::GetEntry(vector);
 	auto list_data = FlatVector::GetData<list_entry_t>(vector);
@@ -276,11 +280,11 @@ void ArrowToDuckDBMapList(Vector &vector, ArrowArray &array, ArrowScanState &sca
 	}
 
 	SetValidityMask(child_vector, array, scan_state, list_size);
-	ColumnArrowToDuckDB(child_vector, array, scan_state, list_size, arrow_convert_data, col_idx, list_col_idx);
+	ColumnArrowToDuckDB(child_vector, array, scan_state, list_size, arrow_convert_data, col_idx, list_col_idx,cur_size);
 }
 void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan_state, idx_t size,
                          std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data, idx_t col_idx,
-                         idx_t &list_col_idx) {
+                         idx_t &list_col_idx, idx_t row_start) {
 	switch (vector.GetType().id()) {
 	case LogicalTypeId::SQLNULL:
 		vector.Reference(Value());
@@ -310,7 +314,7 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 		auto offsets = (uint32_t *)array.buffers[1] + array.offset + scan_state.chunk_offset;
 		auto cdata = (char *)array.buffers[2];
 
-		for (idx_t row_idx = 0; row_idx < size; row_idx++) {
+		for (idx_t row_idx = 0; row_start+row_idx < size; row_idx++) {
 			if (FlatVector::IsNull(vector, row_idx)) {
 				continue;
 			}
@@ -321,7 +325,7 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 			if (utf_type == UnicodeType::INVALID) {
 				throw std::runtime_error("Invalid UTF8 string encoding");
 			}
-			FlatVector::GetData<string_t>(vector)[row_idx] = StringVector::AddString(vector, cptr, str_len);
+			FlatVector::GetData<string_t>(vector)[row_start+row_idx] = StringVector::AddString(vector, cptr, str_len);
 		}
 
 		break;

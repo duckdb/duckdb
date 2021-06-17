@@ -72,7 +72,7 @@ std::shared_ptr<arrow::Table> ReadParquetFile(const duckdb::string& path) {
   std::shared_ptr<arrow::io::ReadableFile> infile;
   PARQUET_ASSIGN_OR_THROW(
       infile,
-      arrow::io::ReadableFile::Open("/home/holanda/Documents/duckdb/test/sql/copy/parquet/data/map.parquet", arrow::default_memory_pool()));
+      arrow::io::ReadableFile::Open(path, arrow::default_memory_pool()));
 
   std::unique_ptr<parquet::arrow::FileReader> reader;
 
@@ -84,35 +84,55 @@ std::shared_ptr<arrow::Table> ReadParquetFile(const duckdb::string& path) {
 }
 
 TEST_CASE("Test Parquet Files", "[arrow]"){
-  std::shared_ptr<arrow::io::ReadableFile> infile;
-  PARQUET_ASSIGN_OR_THROW(
-      infile,
-      arrow::io::ReadableFile::Open("/home/holanda/Documents/duckdb/test/sql/copy/parquet/data/map.parquet",
-                                    arrow::default_memory_pool()));
+//  std::shared_ptr<arrow::io::ReadableFile> infile;
+//  PARQUET_ASSIGN_OR_THROW(
+//      infile,
+//      arrow::io::ReadableFile::Open("/home/holanda/Documents/duckdb/test/sql/copy/parquet/data/map.parquet",
+//                                    arrow::default_memory_pool()));
+//
+//  std::unique_ptr<parquet::arrow::FileReader> reader;
+//  PARQUET_THROW_NOT_OK(
+//      parquet::arrow::OpenFile(infile, arrow::default_memory_pool(), &reader));
+//  std::shared_ptr<arrow::Table> table;
+//  PARQUET_THROW_NOT_OK(reader->ReadTable(&table));
+//  std::cerr << "Loaded " << table->num_rows() << " rows in " << table->num_columns()
+//            << " columns." << std::endl;
 
-  std::unique_ptr<parquet::arrow::FileReader> reader;
-  PARQUET_THROW_NOT_OK(
-      parquet::arrow::OpenFile(infile, arrow::default_memory_pool(), &reader));
-  std::shared_ptr<arrow::Table> table;
-  PARQUET_THROW_NOT_OK(reader->ReadTable(&table));
-  std::cerr << "Loaded " << table->num_rows() << " rows in " << table->num_columns()
-            << " columns." << std::endl;
-//    auto table = ReadParquetFile("/home/holanda/Documents/duckdb/test/sql/copy/parquet/data/map.parquet");
-//    std::vector<std::shared_ptr<arrow::RecordBatch>> batches;
-//
-//    auto batch_reader = arrow::TableBatchReader(*table);
-//    batch_reader.ReadAll(&batches);
-//
-//    SimpleFactory factory {batches, table->schema()};
-//    duckdb::DuckDB db;
-//    duckdb::Connection conn {db};
-//
-//    duckdb::vector<duckdb::Value> params;
-//    params.push_back(duckdb::Value::POINTER((uintptr_t)&factory));
-//    params.push_back(duckdb::Value::POINTER((uintptr_t)&SimpleFactory::CreateStream));
-//    params.push_back(duckdb::Value::UBIGINT(1000000));
-//    auto result = conn.TableFunction("arrow_scan", params)->Execute();
+    auto table = ReadParquetFile("/home/holanda/Documents/duckdb/test/sql/copy/parquet/data/map.parquet");
+    std::vector<std::shared_ptr<arrow::RecordBatch>> batches;
 
+    auto batch_reader = arrow::TableBatchReader(*table);
+    batch_reader.ReadAll(&batches);
+
+    SimpleFactory factory {batches, table->schema()};
+    duckdb::DuckDB db;
+    duckdb::Connection conn {db};
+
+    duckdb::vector<duckdb::Value> params;
+    params.push_back(duckdb::Value::POINTER((uintptr_t)&factory));
+    params.push_back(duckdb::Value::POINTER((uintptr_t)&SimpleFactory::CreateStream));
+    params.push_back(duckdb::Value::UBIGINT(1000000));
+    auto result = conn.TableFunction("arrow_scan", params)->Execute();
+
+    std::vector<std::shared_ptr<arrow::RecordBatch>> batches_result;
+     std::shared_ptr<arrow::Schema> result_schema;
+     std::vector<std::shared_ptr<arrow::Array>> result_columns;
+     result->ToArrowSchema((ArrowSchema*) result_schema.get());
+//     int64_t num_rows = 0;
+    while (true) {
+		auto data_chunk = result->Fetch();
+		if (!data_chunk || data_chunk->size() == 0) {
+			break;
+		}
+//		num_rows += data_chunk->size();
+		std::shared_ptr<arrow::Array> data;
+		data_chunk->ToArrowArray((ArrowArray *)data.get());
+		result_columns.push_back(data);
+	}
+
+    auto arrow_result_tbl = arrow::Table::Make(result_schema,result_columns);
+
+    REQUIRE (arrow_result_tbl->Equals(*table));
 }
 
 TEST_CASE("Test random integers", "[arrow]") {

@@ -21,7 +21,7 @@ namespace duckdb {
 Vector::Vector(const LogicalType &type, bool create_data, bool zero_data, idx_t size) : data(nullptr) {
 	buffer = make_buffer<VectorBuffer>(VectorType::FLAT_VECTOR, type, size);
 	if (create_data) {
-		Initialize(type, zero_data);
+		Initialize(type, zero_data,size);
 	}
 }
 
@@ -1161,9 +1161,23 @@ void ListVector::Initialize(Vector &vec, idx_t size) {
    if (!ListVector::HasEntry(vec)) {
 		auto vec_child = make_unique<Vector>(ListType::GetChildType(vec.GetType()),size);
 		ListVector::SetEntry(vec, move(vec_child));
+		ListVector::SetListSize(vec,size);
 	}
-
+   else{
+       // If we already have a vector initialized, we might have to resize it
+       ListVector::Resize(vec,size);
+   }
 }
+
+void ListVector::Resize(Vector &vec, idx_t size){
+       //! List is already initialized, we might have to resize it
+       if (size > ListVector::GetListSize(vec)){
+           auto &vec_child = ListVector::GetEntry(vec);
+           vec_child.Resize(ListVector::GetListSize(vec),size);
+           ListVector::SetListSize(vec,size);
+       }
+}
+
 template <class T>
 void TemplatedSearchInMap(Vector &list, T key, vector<idx_t> &offsets, bool is_key_null, idx_t offset, idx_t length) {
 	auto &list_vector = ListVector::GetEntry(list);
@@ -1325,7 +1339,6 @@ void ListVector::ReferenceEntry(Vector &vector, Vector &other) {
 }
 
 void ListVector::SetListSize(Vector &vec, idx_t size) {
-	ListVector::Initialize(vec);
 	if (vec.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		auto &child = DictionaryVector::Child(vec);
 		ListVector::SetListSize(child, size);

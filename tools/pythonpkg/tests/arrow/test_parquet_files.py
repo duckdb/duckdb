@@ -32,13 +32,13 @@ for root, dirs, files in os.walk(path):
                 files_path.append(os.path.join(root, file))
 
 
-files_path = ['/home/holanda/Documents/duckdb/test/sql/copy/parquet/data/map.parquet']
+# files_path = ['/home/holanda/Documents/duckdb/test/sql/copy/parquet/data/map.parquet']
 for file in files_path:
+    print (file)
     #Read File with Arrow
     arrow = pyarrow.parquet.read_table(file)
     arrow.validate(full=True)
 
-    print (len(arrow['raw_header']))
     #Do round-trip from duckdb
     arrow_duck = duckdb.from_arrow_table(arrow).arrow()
     arrow_duck.validate(full=True)

@@ -21,7 +21,7 @@ buffer_ptr<VectorBuffer> VectorBuffer::CreateConstantVector(VectorType vector_ty
 }
 
 buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(VectorType vector_type, const LogicalType &type, const idx_t size) {
-	return make_buffer<VectorBuffer>(vector_type, type, STANDARD_VECTOR_SIZE * GetTypeIdSize(type.InternalType()));
+	return make_buffer<VectorBuffer>(vector_type, type, size * GetTypeIdSize(type.InternalType()));
 }
 
 buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(VectorType vector_type, PhysicalType type) {
