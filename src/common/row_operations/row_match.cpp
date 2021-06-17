@@ -131,8 +131,9 @@ static void TemplatedMatchNested(Vector &col, Vector &rows, SelectionVector &sel
 	dense.Slice(col, sel, count);
 
 	if (NO_MATCH_SEL) {
-		auto match_count = SelectComparison<OP>(dense, key, &sel, count, &sel, no_match);
-		no_match_count = count - match_count;
+		SelectionVector no_match_sel_offset(no_match->data() + no_match_count);
+		auto match_count = SelectComparison<OP>(dense, key, &sel, count, &sel, &no_match_sel_offset);
+		no_match_count += count - match_count;
 		count = match_count;
 	} else {
 		count = SelectComparison<OP>(dense, key, &sel, count, &sel, nullptr);
