@@ -54,7 +54,6 @@ SELECT 1=ANY(SELECT UNNEST(i)) FROM (VALUES ([1, 2, 3])) tbl(i);
 ----
 true
 
-
 query I
 SELECT 4=ANY(SELECT UNNEST(i)) FROM (VALUES ([1, 2, 3])) tbl(i);
 ----
@@ -73,5 +72,43 @@ NULL
 # IN
 query I
 SELECT 1 IN (SELECT UNNEST(i)) FROM (VALUES ([1, 2, 3])) tbl(i);
+----
+true
+
+# INSIDE a subquery
+query I
+SELECT (SELECT 1=ANY(SELECT UNNEST(i))) FROM (VALUES ([1, 2, 3])) tbl(i);
+----
+true
+
+query I
+SELECT (SELECT 4=ANY(SELECT UNNEST(i))) FROM (VALUES ([1, 2, 3])) tbl(i);
+----
+false
+
+query I
+SELECT (SELECT 4=ANY(SELECT UNNEST(i))) FROM (VALUES ([1, 2, 3, NULL])) tbl(i);
+----
+NULL
+
+# INSIDE a subquery
+query I
+SELECT (SELECT 1=ANY(SELECT UNNEST(i))) FROM (VALUES ([1, 2, 3])) tbl(i);
+----
+true
+
+query I
+SELECT (SELECT 4=ANY(SELECT UNNEST(i))) FROM (VALUES ([1, 2, 3])) tbl(i);
+----
+false
+
+query I
+SELECT (SELECT 4=ANY(SELECT UNNEST(i))) FROM (VALUES ([1, 2, 3, NULL])) tbl(i);
+----
+NULL
+
+# double correlated subqueries
+query I
+SELECT (SELECT 1+i[0]=ANY(SELECT UNNEST(i))) FROM (VALUES ([1, 2, 3])) tbl(i);
 ----
 true

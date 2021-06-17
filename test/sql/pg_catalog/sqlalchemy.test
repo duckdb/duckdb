@@ -229,6 +229,22 @@ WHERE r.conrelid = (SELECT MIN(table_oid) FROM duckdb_tables) AND
 	n.oid = c.relnamespace
 ORDER BY 1
 
+# get_unique_constraints
+statement ok
+SELECT
+	cons.conname as name,
+	cons.conkey as key,
+	a.attnum as col_num,
+	a.attname as col_name
+FROM
+	pg_catalog.pg_constraint cons
+	join pg_attribute a
+		on cons.conrelid = a.attrelid AND
+		a.attnum = ANY(cons.conkey)
+WHERE
+	cons.conrelid = (SELECT MIN(table_oid) FROM duckdb_tables) AND
+	cons.contype = 'u'
+
 # get_indexes
 statement ok
 SELECT
@@ -255,21 +271,11 @@ ORDER BY
 	t.relname,
 	i.relname
 
-# get_unique_constraints
-statement ok
-SELECT
-	cons.conname as name,
-	cons.conkey as key,
-	a.attnum as col_num,
-	a.attname as col_name
-FROM
-	pg_catalog.pg_constraint cons
-	join pg_attribute a
-		on cons.conrelid = a.attrelid AND
-		a.attnum = ANY(cons.conkey)
-WHERE
-	cons.conrelid = (SELECT MIN(table_oid) FROM duckdb_tables) AND
-	cons.contype = 'u'
+mode skip
+# FIXME: ANY(list) in left outer join
+# this will be fixed by either allowing subqueries in left-outer joins
+# or by modifying ANY(list) to be a function instead of a rewrite to a
+
 statement ok
 SELECT
 	i.relname as relname,
@@ -299,6 +305,8 @@ WHERE
 ORDER BY
 	t.relname,
 	i.relname
+
+mode unskip
 
 # get_table_comment
 statement ok

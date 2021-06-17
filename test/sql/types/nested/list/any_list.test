@@ -112,3 +112,13 @@ SELECT g, 100>ALL(l) FROM v3 ORDER BY g;
 2	true
 3	NULL
 4	true
+
+# INSIDE a subquery
+query II
+SELECT g, (SELECT 5=ANY(l)) FROM v3 ORDER BY g;
+----
+0	true
+1	NULL
+2	false
+3	NULL
+4	false
