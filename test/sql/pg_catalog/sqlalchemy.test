@@ -274,7 +274,7 @@ ORDER BY
 mode skip
 # FIXME: ANY(list) in left outer join
 # this will be fixed by either allowing subqueries in left-outer joins
-# or by modifying ANY(list) to be a function instead of a rewrite to a
+# or by modifying ANY(list) to be a function instead of a rewrite to a subquery
 
 statement ok
 SELECT
