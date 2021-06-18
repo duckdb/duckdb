@@ -115,8 +115,7 @@ static inline void ListLoopHash(Vector &input, Vector &hashes, const SelectionVe
 	}
 
 	// Compute the first round of hashes
-	Vector child;
-	child.Slice(ListVector::GetEntry(input), cursor, count);
+	Vector child(ListVector::GetEntry(input), cursor, count);
 
 	if (FIRST_HASH) {
 		VectorOperations::Hash(child, hashes, unprocessed, count);
@@ -270,7 +269,6 @@ void TemplatedLoopCombineHash(Vector &input, Vector &hashes, const SelectionVect
 			// mix constant with non-constant, first get the constant value
 			auto constant_hash = *ConstantVector::GetData<hash_t>(hashes);
 			// now re-initialize the hashes vector to an empty flat vector
-			hashes.Initialize(hashes.GetType());
 			TightLoopCombineHashConstant<HAS_RSEL, T>((T *)idata.data, constant_hash,
 			                                          FlatVector::GetData<hash_t>(hashes), rsel, count, idata.sel,
 			                                          idata.validity);

@@ -18,39 +18,53 @@
 
 namespace duckdb {
 
-Vector::Vector(const LogicalType &type, bool create_data, bool zero_data) : data(nullptr) {
-	buffer = make_buffer<VectorBuffer>(VectorType::FLAT_VECTOR, type);
+Vector::Vector(LogicalType type_p, bool create_data, bool zero_data) :
+    vector_type(VectorType::FLAT_VECTOR), type(move(type_p)), data(nullptr) {
 	if (create_data) {
-		Initialize(type, zero_data);
+		Initialize(zero_data);
 	}
 }
 
-Vector::Vector(const LogicalType &type) : Vector(type, true, false) {
+Vector::Vector(LogicalType type_p) : Vector(move(type_p), true, false) {
 }
 
-Vector::Vector(const LogicalType &type, data_ptr_t dataptr) : data(dataptr) {
-	buffer = make_buffer<VectorBuffer>(VectorType::FLAT_VECTOR, type);
+Vector::Vector(LogicalType type_p, data_ptr_t dataptr) :
+    vector_type(VectorType::FLAT_VECTOR), type(move(type_p)), data(dataptr) {
 	if (dataptr && type.id() == LogicalTypeId::INVALID) {
 		throw InvalidTypeException(type, "Cannot create a vector of type INVALID!");
 	}
 }
 
-Vector::Vector(const Value &value) {
-	buffer = make_buffer<VectorBuffer>(VectorType::CONSTANT_VECTOR);
+Vector::Vector(Vector &other) :
+	type(other.type) {
+	Reference(other);
+}
+
+Vector::Vector(Vector &other, const SelectionVector &sel, idx_t count) :
+	type(other.type) {
+	Slice(other, sel, count);
+}
+
+Vector::Vector(Vector &other, idx_t offset) :
+	type(other.type) {
+	Slice(other, offset);
+}
+
+Vector::Vector(const Value &value) :
+	type(value.type()) {
 	Reference(value);
 }
 
-Vector::Vector() : data(nullptr) {
-	buffer = make_buffer<VectorBuffer>(VectorType::FLAT_VECTOR, LogicalTypeId::INVALID);
-}
-
 Vector::Vector(Vector &&other) noexcept
-    : data(other.data), validity(move(other.validity)), buffer(move(other.buffer)), auxiliary(move(other.auxiliary)) {
+    : vector_type(other.vector_type), type(move(other.type)), data(other.data), validity(move(other.validity)), buffer(move(other.buffer)), auxiliary(move(other.auxiliary)) {
 }
 
 void Vector::Reference(const Value &value) {
-	buffer = VectorBuffer::CreateConstantVector(VectorType::CONSTANT_VECTOR, value.type());
-	if (value.type().id() == LogicalTypeId::STRUCT || value.type().id() == LogicalTypeId::MAP) {
+	D_ASSERT(GetType() == value.type());
+	this->vector_type = VectorType::CONSTANT_VECTOR;
+	buffer = VectorBuffer::CreateConstantVector(value.type());
+	auto internal_type = value.type().InternalType();
+	if (internal_type == PhysicalType::STRUCT) {
 		auto struct_buffer = make_unique<VectorStructBuffer>();
 		auto &child_types = StructType::GetChildTypes(value.type());
 		auto &child_vectors = struct_buffer->GetChildren();
@@ -62,6 +76,11 @@ void Vector::Reference(const Value &value) {
 		if (value.is_null) {
 			SetValue(0, value);
 		}
+	} else if (internal_type == PhysicalType::LIST) {
+		auto list_buffer = make_unique<VectorListBuffer>(value.type());
+		auxiliary = move(list_buffer);
+		data = buffer->GetData();
+		SetValue(0, value);
 	} else {
 		auxiliary.reset();
 		data = buffer->GetData();
@@ -69,11 +88,25 @@ void Vector::Reference(const Value &value) {
 	}
 }
 
-void Vector::Reference(Vector &other) {
+void Vector::Reference(Vector &other, bool require_type_to_match) {
+	if (require_type_to_match) {
+		if (other.GetType() != GetType()) {
+			throw InternalException("Attempting to reference a vector with a different type");
+		}
+	}
+	vector_type = other.vector_type;
 	buffer = other.buffer;
 	auxiliary = other.auxiliary;
 	data = other.data;
 	validity = other.validity;
+}
+
+void Vector::Reset(Vector &other) {
+	D_ASSERT(other.GetType() == GetType());
+	data = other.data;
+	buffer.reset();
+	validity.Reset();
+	// FIXME: reset should be used for cached vectors
 }
 
 void Vector::Slice(Vector &other, idx_t offset) {
@@ -86,6 +119,10 @@ void Vector::Slice(Vector &other, idx_t offset) {
 
 	// create a reference to the other vector
 	Reference(other);
+	if (GetType().InternalType() == PhysicalType::STRUCT ||
+	    GetType().InternalType() == PhysicalType::LIST) {
+		throw InternalException("FIXME: Slice with offset not supported on nested types yet");
+	}
 	if (offset > 0) {
 		data = data + GetTypeIdSize(GetType().InternalType()) * offset;
 		validity.Slice(other.validity, offset);
@@ -106,13 +143,14 @@ void Vector::Slice(const SelectionVector &sel, idx_t count) {
 		// already a dictionary, slice the current dictionary
 		auto &current_sel = DictionaryVector::SelVector(*this);
 		auto sliced_dictionary = current_sel.Slice(sel, count);
-		buffer = make_buffer<DictionaryBuffer>(move(sliced_dictionary), GetType(), GetVectorType());
+		buffer = make_buffer<DictionaryBuffer>(move(sliced_dictionary));
 		return;
 	}
-	auto child_ref = make_buffer<VectorChildBuffer>();
-	child_ref->data.Reference(*this);
+	Vector child_vector(*this);
+	auto child_ref = make_buffer<VectorChildBuffer>(move(child_vector));
 
-	auto dict_buffer = make_buffer<DictionaryBuffer>(sel, GetType(), VectorType::DICTIONARY_VECTOR);
+	auto dict_buffer = make_buffer<DictionaryBuffer>(sel);
+	vector_type = VectorType::DICTIONARY_VECTOR;
 	buffer = move(dict_buffer);
 	auxiliary = move(child_ref);
 }
@@ -126,8 +164,8 @@ void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
 		auto entry = cache.cache.find(target_data);
 		if (entry != cache.cache.end()) {
 			// cached entry exists: use that
-			this->buffer = make_buffer<DictionaryBuffer>(((DictionaryBuffer &)*entry->second).GetSelVector(),
-			                                             buffer->GetType(), buffer->GetVectorType());
+			this->buffer = make_buffer<DictionaryBuffer>(((DictionaryBuffer &)*entry->second).GetSelVector());
+			vector_type = VectorType::DICTIONARY_VECTOR;
 		} else {
 			Slice(sel, count);
 			cache.cache[target_data] = this->buffer;
@@ -137,14 +175,12 @@ void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
 	}
 }
 
-void Vector::Initialize(const LogicalType &new_type, bool zero_data) {
-	if (new_type.id() != LogicalTypeId::INVALID) {
-		SetType(new_type);
-	}
+void Vector::Initialize(bool zero_data) {
 	auxiliary.reset();
 	validity.Reset();
 	auto &type = GetType();
-	if (type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::MAP) {
+	auto internal_type = type.InternalType();
+	if (internal_type == PhysicalType::STRUCT) {
 		auto struct_buffer = make_unique<VectorStructBuffer>();
 		auto &child_types = StructType::GetChildTypes(type);
 		auto &child_vectors = struct_buffer->GetChildren();
@@ -154,17 +190,17 @@ void Vector::Initialize(const LogicalType &new_type, bool zero_data) {
 		}
 
 		auxiliary = move(struct_buffer);
+	} else if (internal_type == PhysicalType::LIST) {
+		auto list_buffer = make_unique<VectorListBuffer>(type);
+		auxiliary = move(list_buffer);
 	}
-	auto internal_type = type.InternalType();
 	auto type_size = GetTypeIdSize(internal_type);
 	if (type_size > 0) {
-		buffer = VectorBuffer::CreateStandardVector(VectorType::FLAT_VECTOR, type);
+		buffer = VectorBuffer::CreateStandardVector(type);
 		data = buffer->GetData();
 		if (zero_data) {
 			memset(data, 0, STANDARD_VECTOR_SIZE * type_size);
 		}
-	} else {
-		buffer = VectorBuffer::CreateStandardVector(VectorType::FLAT_VECTOR, type);
 	}
 }
 
@@ -347,10 +383,6 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		break;
 	}
 	case LogicalTypeId::LIST: {
-		if (!auxiliary) {
-			auto vec_list = make_unique<Vector>(ListType::GetChildType(GetType()));
-			ListVector::SetEntry(*this, move(vec_list));
-		}
 		auto offset = ListVector::GetListSize(*this);
 		if (!val.list_value.empty()) {
 			for (idx_t i = 0; i < val.list_value.size(); i++) {
@@ -587,8 +619,9 @@ void Vector::Normalify(idx_t count) {
 		// allocate a new buffer for the vector
 		auto old_buffer = move(buffer);
 		auto old_data = data;
-		buffer = VectorBuffer::CreateStandardVector(VectorType::FLAT_VECTOR, old_buffer->GetType());
+		buffer = VectorBuffer::CreateStandardVector(type);
 		data = buffer->GetData();
+		vector_type = VectorType::FLAT_VECTOR;
 		if (is_null) {
 			// constant NULL, set nullmask
 			validity.EnsureWritable();
@@ -657,8 +690,7 @@ void Vector::Normalify(idx_t count) {
 			auto &child_entries = StructVector::GetEntries(*this);
 			for (auto &child : child_entries) {
 				D_ASSERT(child->GetVectorType() == VectorType::CONSTANT_VECTOR);
-				auto vector = make_unique<Vector>();
-				vector->Reference(*child);
+				auto vector = make_unique<Vector>(*child);
 				vector->Normalify(count);
 				new_children.push_back(move(vector));
 			}
@@ -673,7 +705,7 @@ void Vector::Normalify(idx_t count) {
 		int64_t start, increment;
 		SequenceVector::GetSequence(*this, start, increment);
 
-		buffer = VectorBuffer::CreateStandardVector(VectorType::FLAT_VECTOR, GetType());
+		buffer = VectorBuffer::CreateStandardVector(GetType());
 		data = buffer->GetData();
 		VectorOperations::GenerateSequence(*this, count, start, increment);
 		break;
@@ -692,7 +724,7 @@ void Vector::Normalify(const SelectionVector &sel, idx_t count) {
 		int64_t start, increment;
 		SequenceVector::GetSequence(*this, start, increment);
 
-		buffer = VectorBuffer::CreateStandardVector(VectorType::FLAT_VECTOR, GetType());
+		buffer = VectorBuffer::CreateStandardVector(GetType());
 		data = buffer->GetData();
 		VectorOperations::GenerateSequence(*this, count, sel, start, increment);
 		break;
@@ -713,9 +745,9 @@ void Vector::Orrify(idx_t count, VectorData &data) {
 			data.validity = FlatVector::Validity(child);
 		} else {
 			// dictionary with non-flat child: create a new reference to the child and normalify it
-			auto new_aux = make_buffer<VectorChildBuffer>();
-			new_aux->data.Reference(child);
-			new_aux->data.Normalify(sel, count);
+			Vector child_vector(child);
+			child_vector.Normalify(sel, count);
+			auto new_aux = make_buffer<VectorChildBuffer>(move(child_vector));
 
 			data.sel = &sel;
 			data.data = FlatVector::GetData(new_aux->data);
@@ -739,7 +771,8 @@ void Vector::Orrify(idx_t count, VectorData &data) {
 }
 
 void Vector::Sequence(int64_t start, int64_t increment) {
-	this->buffer = make_buffer<VectorBuffer>(VectorType::SEQUENCE_VECTOR, GetType(), sizeof(int64_t) * 2);
+	this->vector_type = VectorType::SEQUENCE_VECTOR;
+	this->buffer = make_buffer<VectorBuffer>(sizeof(int64_t) * 2);
 	auto data = (int64_t *)buffer->GetData();
 	data[0] = start;
 	data[1] = increment;
@@ -840,8 +873,8 @@ void Vector::Deserialize(idx_t count, Deserializer &source) {
 	}
 }
 
-void Vector::SetVectorType(VectorType vector_type) {
-	buffer->SetVectorType(vector_type);
+void Vector::SetVectorType(VectorType vector_type_p) {
+	this->vector_type = vector_type_p;
 	if (vector_type == VectorType::CONSTANT_VECTOR && GetType().InternalType() == PhysicalType::STRUCT) {
 		auto &entries = StructVector::GetEntries(*this);
 		for (auto &entry : entries) {
@@ -978,14 +1011,12 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 				D_ASSERT(le->offset + le->length <= ListVector::GetListSize(*this));
 			}
 		} else if (GetVectorType() == VectorType::FLAT_VECTOR) {
-			if (ListVector::HasEntry(*this)) {
-				ListVector::GetEntry(*this).Verify(ListVector::GetListSize(*this));
-			}
+			ListVector::GetEntry(*this).Verify(ListVector::GetListSize(*this));
 			auto list_data = FlatVector::GetData<list_entry_t>(*this);
 			for (idx_t i = 0; i < count; i++) {
 				auto idx = sel.get_index(i);
 				auto &le = list_data[idx];
-				if (validity.RowIsValid(idx) && ListVector::HasEntry(*this)) {
+				if (validity.RowIsValid(idx)) {
 					D_ASSERT(le.offset + le.length <= ListVector::GetListSize(*this));
 				}
 			}
@@ -1035,11 +1066,6 @@ void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, i
 	auto &source_type = source.GetType();
 	switch (source_type.InternalType()) {
 	case PhysicalType::LIST: {
-		if (!ListVector::HasEntry(source)) {
-			Value null_value(source_type);
-			vector.Reference(null_value);
-			break;
-		}
 		// retrieve the list entry from the source vector
 		VectorData vdata;
 		source.Orrify(count, vdata);
@@ -1057,15 +1083,13 @@ void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, i
 
 		// add the list entry as the first element of "vector"
 		// FIXME: we only need to allocate space for 1 tuple here
-		vector.Initialize(source_type);
 		auto target_data = FlatVector::GetData<list_entry_t>(vector);
 		target_data[0] = list_entry;
 
 		// create a reference to the child list of the source vector
-		auto new_child = make_unique<Vector>();
-		new_child->Reference(ListVector::GetEntry(source));
+		auto &child = ListVector::GetEntry(vector);
+		child.Reference(ListVector::GetEntry(source));
 
-		ListVector::SetEntry(vector, move(new_child));
 		ListVector::SetListSize(vector, ListVector::GetListSize(source));
 		vector.SetVectorType(VectorType::CONSTANT_VECTOR);
 		break;
@@ -1083,7 +1107,6 @@ void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, i
 		}
 
 		// struct: pass constant reference into child entries
-		vector.Initialize(source_type);
 		auto &source_entries = StructVector::GetEntries(source);
 		auto &target_entries = StructVector::GetEntries(vector);
 		for (idx_t i = 0; i < source_entries.size(); i++) {
@@ -1221,17 +1244,6 @@ const vector<unique_ptr<Vector>> &StructVector::GetEntries(const Vector &vector)
 	return GetEntries((Vector &)vector);
 }
 
-bool ListVector::HasEntry(const Vector &vector) {
-	D_ASSERT(vector.GetType().id() == LogicalTypeId::LIST);
-	if (vector.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-		auto &child = DictionaryVector::Child(vector);
-		return ListVector::HasEntry(child);
-	}
-	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR ||
-	         vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
-	return vector.auxiliary != nullptr;
-}
-
 const Vector &ListVector::GetEntry(const Vector &vector) {
 	D_ASSERT(vector.GetType().id() == LogicalTypeId::LIST);
 	if (vector.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
@@ -1250,12 +1262,16 @@ Vector &ListVector::GetEntry(Vector &vector) {
 	return const_cast<Vector &>(ListVector::GetEntry(cvector));
 }
 
-void ListVector::Initialize(Vector &vec) {
-	if (!ListVector::HasEntry(vec)) {
-		auto vec_child = make_unique<Vector>(ListType::GetChildType(vec.GetType()));
-		ListVector::SetEntry(vec, move(vec_child));
-	}
+void ListVector::Reserve(Vector &vector, idx_t required_capacity) {
+	D_ASSERT(vector.GetType().id() == LogicalTypeId::LIST);
+	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR ||
+	         vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
+	D_ASSERT(vector.auxiliary);
+	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::LIST_BUFFER);
+	auto &child_buffer = *((VectorListBuffer *)vector.auxiliary.get());
+	child_buffer.Reserve(required_capacity);
 }
+
 template <class T>
 void TemplatedSearchInMap(Vector &list, T key, vector<idx_t> &offsets, bool is_key_null, idx_t offset, idx_t length) {
 	auto &list_vector = ListVector::GetEntry(list);
@@ -1309,9 +1325,6 @@ void SearchString(Vector &list, string &key, vector<idx_t> &offsets, bool is_key
 
 vector<idx_t> ListVector::Search(Vector &list, Value &key, idx_t row) {
 	vector<idx_t> offsets;
-	if (!ListVector::HasEntry(list)) {
-		return offsets;
-	}
 
 	auto &list_vector = ListVector::GetEntry(list);
 	auto &entry = ((list_entry_t *)list.GetData())[row];
@@ -1404,6 +1417,7 @@ idx_t ListVector::GetListSize(const Vector &vec) {
 		auto &child = DictionaryVector::Child(vec);
 		return ListVector::GetListSize(child);
 	}
+	D_ASSERT(vec.auxiliary);
 	return ((VectorListBuffer &)*vec.auxiliary).size;
 }
 
@@ -1417,7 +1431,6 @@ void ListVector::ReferenceEntry(Vector &vector, Vector &other) {
 }
 
 void ListVector::SetListSize(Vector &vec, idx_t size) {
-	ListVector::Initialize(vec);
 	if (vec.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		auto &child = DictionaryVector::Child(vec);
 		ListVector::SetListSize(child, size);
@@ -1425,18 +1438,7 @@ void ListVector::SetListSize(Vector &vec, idx_t size) {
 	((VectorListBuffer &)*vec.auxiliary).size = size;
 }
 
-void ListVector::SetEntry(Vector &vector, unique_ptr<Vector> cc) {
-	D_ASSERT(vector.GetType().id() == LogicalTypeId::LIST);
-	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR ||
-	         vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
-	vector.auxiliary = make_buffer<VectorListBuffer>();
-	D_ASSERT(vector.auxiliary);
-	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::LIST_BUFFER);
-	((VectorListBuffer *)vector.auxiliary.get())->SetChild(move(cc));
-}
-
 void ListVector::Append(Vector &target, const Vector &source, idx_t source_size, idx_t source_offset) {
-	ListVector::Initialize(target);
 	if (source_size - source_offset == 0) {
 		//! Nothing to add
 		return;
@@ -1447,7 +1449,6 @@ void ListVector::Append(Vector &target, const Vector &source, idx_t source_size,
 
 void ListVector::Append(Vector &target, const Vector &source, const SelectionVector &sel, idx_t source_size,
                         idx_t source_offset) {
-	ListVector::Initialize(target);
 	if (source_size - source_offset == 0) {
 		//! Nothing to add
 		return;
@@ -1457,7 +1458,6 @@ void ListVector::Append(Vector &target, const Vector &source, const SelectionVec
 }
 
 void ListVector::PushBack(Vector &target, Value &insert) {
-	ListVector::Initialize(target);
 	auto &target_buffer = (VectorListBuffer &)*target.auxiliary;
 	target_buffer.PushBack(insert);
 }

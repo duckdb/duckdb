@@ -20,9 +20,8 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundCaseE
 
 void ExpressionExecutor::Execute(const BoundCaseExpression &expr, ExpressionState *state, const SelectionVector *sel,
                                  idx_t count, Vector &result) {
-	Vector res_true, res_false;
-	res_true.Reference(state->intermediate_chunk.data[1]);
-	res_false.Reference(state->intermediate_chunk.data[2]);
+	Vector res_true(state->intermediate_chunk.data[1]);
+	Vector res_false(state->intermediate_chunk.data[2]);
 
 	auto check_state = state->child_states[0].get();
 	auto res_true_state = state->child_states[1].get();
@@ -171,19 +170,14 @@ void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &
 		break;
 	}
 	case PhysicalType::LIST: {
-		auto result_vector = make_unique<Vector>(ListType::GetChildType(result.GetType()));
-		ListVector::SetEntry(result, move(result_vector));
-
 		idx_t offset = 0;
-		if (ListVector::HasEntry(res_true)) {
-			auto &true_child = ListVector::GetEntry(res_true);
-			offset += ListVector::GetListSize(res_true);
-			ListVector::Append(result, true_child, ListVector::GetListSize(res_true));
-		}
-		if (ListVector::HasEntry(res_false)) {
-			auto &false_child = ListVector::GetEntry(res_false);
-			ListVector::Append(result, false_child, ListVector::GetListSize(res_false));
-		}
+
+		auto &true_child = ListVector::GetEntry(res_true);
+		offset += ListVector::GetListSize(res_true);
+		ListVector::Append(result, true_child, ListVector::GetListSize(res_true));
+
+		auto &false_child = ListVector::GetEntry(res_false);
+		ListVector::Append(result, false_child, ListVector::GetListSize(res_false));
 
 		// all the false offsets need to be incremented by true_child.count
 		TemplatedFillLoop<list_entry_t>(res_true, result, tside, tcount);

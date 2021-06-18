@@ -16,8 +16,8 @@ using ScanStructure = JoinHashTable::ScanStructure;
 
 JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition> &conditions,
                              vector<LogicalType> btypes, JoinType type)
-    : buffer_manager(buffer_manager), build_types(move(btypes)), entry_size(0), tuple_size(0), join_type(type),
-      finalized(false), has_null(false), count(0) {
+    : buffer_manager(buffer_manager), build_types(move(btypes)), entry_size(0), tuple_size(0),
+      vfound(Value::BOOLEAN(false)), join_type(type), finalized(false), has_null(false), count(0) {
 	for (auto &condition : conditions) {
 		D_ASSERT(condition.left->return_type == condition.right->return_type);
 		auto type = condition.left->return_type;
@@ -45,8 +45,6 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition
 		// full/right outer joins need an extra bool to keep track of whether or not a tuple has found a matching entry
 		// we place the bool before the NEXT pointer
 		layout_types.emplace_back(LogicalType::BOOLEAN);
-		Value flag(false);
-		vfound.Reference(flag);
 	}
 	layout_types.emplace_back(LogicalType::HASH);
 	layout.Initialize(layout_types);
@@ -388,8 +386,8 @@ unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
 	return ss;
 }
 
-ScanStructure::ScanStructure(JoinHashTable &ht) : sel_vector(STANDARD_VECTOR_SIZE), ht(ht), finished(false) {
-	pointers.Initialize(LogicalType::POINTER);
+ScanStructure::ScanStructure(JoinHashTable &ht) :
+    pointers(LogicalType::POINTER), sel_vector(STANDARD_VECTOR_SIZE), ht(ht), finished(false) {
 }
 
 void ScanStructure::Next(DataChunk &keys, DataChunk &left, DataChunk &result) {

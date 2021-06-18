@@ -149,10 +149,6 @@ protected:
 };
 
 void BaseStringSplitFunction(const char *input, StringSplitIterator &iter, Vector &result) {
-	if (!ListVector::HasEntry(result)) {
-		auto result_child = make_unique<Vector>(LogicalType::VARCHAR);
-		ListVector::SetEntry(result, move(result_child));
-	}
 	// special case: empty string
 	if (iter.size == 0) {
 		Value val = StringVector::AddString(ListVector::GetEntry(result), &input[0], 0);
@@ -205,31 +201,31 @@ static void StringSplitExecutor(DataChunk &args, ExpressionState &state, Vector 
 	auto delims = (string_t *)delim_data.data;
 
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
+
+	result.SetVectorType(VectorType::FLAT_VECTOR);
+	ListVector::SetListSize(result, 0);
+
 	auto list_struct_data = FlatVector::GetData<list_entry_t>(result);
-
-	auto list_child = make_unique<Vector>(LogicalType::VARCHAR);
-	ListVector::SetEntry(result, move(list_child));
-
 	auto list_vector_type = LogicalType::LIST(LogicalType::VARCHAR);
 
-	size_t total_len = 0;
+	idx_t total_len = 0;
 	for (idx_t i = 0; i < args.size(); i++) {
-		if (!input_data.validity.RowIsValid(input_data.sel->get_index(i))) {
+		auto input_idx = input_data.sel->get_index(i);
+		auto delim_idx = delim_data.sel->get_index(i);
+		if (!input_data.validity.RowIsValid(input_idx)) {
 			FlatVector::SetNull(result, i, true);
 			continue;
 		}
-		string_t input = inputs[input_data.sel->get_index(i)];
+		string_t input = inputs[input_idx];
 
 		unique_ptr<Vector> split_input;
-		if (!delim_data.validity.RowIsValid(delim_data.sel->get_index(i))) {
+		if (!delim_data.validity.RowIsValid(delim_idx)) {
 			// special case: delimiter is NULL
 			split_input = make_unique<Vector>(list_vector_type);
-			auto child = make_unique<Vector>(LogicalType::VARCHAR);
-			ListVector::SetEntry(*split_input, move(child));
 			Value val(input);
 			ListVector::PushBack(*split_input, val);
 		} else {
-			string_t delim = delims[delim_data.sel->get_index(i)];
+			string_t delim = delims[delim_idx];
 			split_input = BaseStringSplitFunction(input, delim, regex);
 		}
 		list_struct_data[i].length = ListVector::GetListSize(*split_input);

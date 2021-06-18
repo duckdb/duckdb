@@ -10,13 +10,13 @@ namespace duckdb {
 
 WindowSegmentTree::WindowSegmentTree(AggregateFunction &aggregate, FunctionData *bind_info,
                                      const LogicalType &result_type_p, ChunkCollection *input)
-    : aggregate(aggregate), bind_info(bind_info), result_type(result_type_p), state(aggregate.state_size()),
+    : aggregate(aggregate), bind_info(bind_info),
+      result_type(result_type_p), state(aggregate.state_size()),
+      statep(Value::POINTER((idx_t)state.data())),
       frame(0, 0), result(result_type_p), internal_nodes(0), input_ref(input) {
 #if STANDARD_VECTOR_SIZE < 512
 	throw NotImplementedException("Window functions are not supported for vector sizes < 512");
 #endif
-	Value ptr_val = Value::POINTER((idx_t)state.data());
-	statep.Reference(ptr_val);
 	statep.Normalify(STANDARD_VECTOR_SIZE);
 
 	if (input_ref && input_ref->ColumnCount() > 0) {
@@ -117,8 +117,7 @@ void WindowSegmentTree::WindowSegmentValue(idx_t l_idx, idx_t begin, idx_t end) 
 		throw InternalException("Cannot compute window aggregation: bounds are too large");
 	}
 
-	Vector s;
-	s.Slice(statep, 0);
+	Vector s(statep, 0);
 	if (l_idx == 0) {
 		ExtractFrame(begin, end);
 		aggregate.update(&inputs.data[0], bind_info, input_ref->ColumnCount(), s, inputs.size());

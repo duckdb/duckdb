@@ -29,8 +29,7 @@ void ExpressionExecutor::Execute(const BoundConjunctionExpression &expr, Express
                                  const SelectionVector *sel, idx_t count, Vector &result) {
 	// execute the children
 	for (idx_t i = 0; i < expr.children.size(); i++) {
-		Vector current_result;
-		current_result.Reference(state->intermediate_chunk.data[i]);
+		Vector current_result(state->intermediate_chunk.data[i]);
 		Execute(*expr.children[i], state->child_states[i].get(), sel, count, current_result);
 		if (i == 0) {
 			// move the result

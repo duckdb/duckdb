@@ -18,9 +18,8 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundCompa
 void ExpressionExecutor::Execute(const BoundComparisonExpression &expr, ExpressionState *state,
                                  const SelectionVector *sel, idx_t count, Vector &result) {
 	// resolve the children
-	Vector left, right;
-	left.Reference(state->intermediate_chunk.data[0]);
-	right.Reference(state->intermediate_chunk.data[1]);
+	Vector left(state->intermediate_chunk.data[0]);
+	Vector right(state->intermediate_chunk.data[1]);
 
 	Execute(*expr.left, state->child_states[0].get(), sel, count, left);
 	Execute(*expr.right, state->child_states[1].get(), sel, count, right);
@@ -294,12 +293,10 @@ static idx_t StructSelectOperation(Vector &left, Vector &right, const SelectionV
 
 		// We use the maybe_vec as a dictionary to densify the children
 		auto &lchild = *lchildren[col_no];
-		Vector ldense;
-		ldense.Slice(lchild, left_sel, count);
+		Vector ldense(lchild, left_sel, count);
 
 		auto &rchild = *rchildren[col_no];
-		Vector rdense;
-		rdense.Slice(rchild, right_sel, count);
+		Vector rdense(rchild, right_sel, count);
 
 		// Find everything that definitely matches
 		auto true_count = PositionComparator::Definite<OP>(ldense, rdense, &maybe_vec, count, true_opt, maybe_vec);
@@ -390,11 +387,9 @@ static idx_t ListSelectOperation(Vector &left, Vector &right, const SelectionVec
 	const auto ldata = (const list_entry_t *)lvdata.data;
 	const auto rdata = (const list_entry_t *)rvdata.data;
 
-	Vector lchild;
-	lchild.Slice(ListVector::GetEntry(left), lcursor, count);
+	Vector lchild(ListVector::GetEntry(left), lcursor, count);
 
-	Vector rchild;
-	rchild.Slice(ListVector::GetEntry(right), rcursor, count);
+	Vector rchild(ListVector::GetEntry(right), rcursor, count);
 
 	// To perform the positional comparison, we use a vectorisation of the following algorithm:
 	// bool CompareLists(T *left, idx_t nleft, T *right, nright) {
@@ -505,9 +500,8 @@ idx_t ExpressionExecutor::Select(const BoundComparisonExpression &expr, Expressi
                                  const SelectionVector *sel, idx_t count, SelectionVector *true_sel,
                                  SelectionVector *false_sel) {
 	// resolve the children
-	Vector left, right;
-	left.Reference(state->intermediate_chunk.data[0]);
-	right.Reference(state->intermediate_chunk.data[1]);
+	Vector left(state->intermediate_chunk.data[0]);
+	Vector right(state->intermediate_chunk.data[1]);
 
 	Execute(*expr.left, state->child_states[0].get(), sel, count, left);
 	Execute(*expr.right, state->child_states[1].get(), sel, count, right);

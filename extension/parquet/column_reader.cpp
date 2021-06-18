@@ -39,10 +39,9 @@ const uint8_t RleBpDecoder::BITPACK_DLEN = 8;
 ColumnReader::ColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p,
                            idx_t max_define_p, idx_t max_repeat_p)
     : schema(schema_p), file_idx(file_idx_p), max_define(max_define_p), max_repeat(max_repeat_p), reader(reader),
-      type(move(type_p)), page_rows_available(0) {
+      type(move(type_p)), page_rows_available(0), dummy_result(LogicalType::INVALID, nullptr) {
 
 	// dummies for Skip()
-	dummy_result.Initialize(Type());
 	none_filter.none();
 	dummy_define.resize(reader.allocator, STANDARD_VECTOR_SIZE);
 	dummy_repeat.resize(reader.allocator, STANDARD_VECTOR_SIZE);
@@ -411,11 +410,6 @@ void StringParquetValueConversion::PlainSkip(ByteBuffer &plain_data, ColumnReade
 
 idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
                              Vector &result_out) {
-	if (!ListVector::HasEntry(result_out)) {
-		auto list_child = make_unique<Vector>(ListType::GetChildType(result_out.GetType()));
-		ListVector::SetEntry(result_out, move(list_child));
-	}
-
 	idx_t result_offset = 0;
 	auto result_ptr = FlatVector::GetData<list_entry_t>(result_out);
 
@@ -498,7 +492,8 @@ ListColumnReader::ListColumnReader(ParquetReader &reader, LogicalType type_p, co
                                    idx_t schema_idx_p, idx_t max_define_p, idx_t max_repeat_p,
                                    unique_ptr<ColumnReader> child_column_reader_p)
     : ColumnReader(reader, move(type_p), schema_p, schema_idx_p, max_define_p, max_repeat_p),
-      child_column_reader(move(child_column_reader_p)), overflow_child_count(0) {
+      child_column_reader(move(child_column_reader_p)), child_result(ListType::GetChildType(Type()), nullptr),
+	  overflow_child_vector(ListType::GetChildType(Type()), nullptr), overflow_child_count(0) {
 
 	child_defines.resize(reader.allocator, STANDARD_VECTOR_SIZE);
 	child_repeats.resize(reader.allocator, STANDARD_VECTOR_SIZE);
@@ -506,7 +501,6 @@ ListColumnReader::ListColumnReader(ParquetReader &reader, LogicalType type_p, co
 	child_repeats_ptr = (uint8_t *)child_repeats.ptr;
 
 	auto child_type = ListType::GetChildType(Type());
-	child_result.Initialize(child_type);
 
 	vector<LogicalType> append_chunk_types;
 	append_chunk_types.push_back(child_type);

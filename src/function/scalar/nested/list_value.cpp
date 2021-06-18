@@ -10,8 +10,6 @@ namespace duckdb {
 static void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 	auto &child_type = ListType::GetChildType(result.GetType());
-	auto list_child = make_unique<Vector>(child_type);
-	ListVector::SetEntry(result, move(list_child));
 
 	result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	for (idx_t i = 0; i < args.ColumnCount(); i++) {
@@ -19,6 +17,8 @@ static void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &r
 			result.SetVectorType(VectorType::FLAT_VECTOR);
 		}
 	}
+
+	ListVector::SetListSize(result, 0);
 
 	auto result_data = FlatVector::GetData<list_entry_t>(result);
 	for (idx_t i = 0; i < args.size(); i++) {

@@ -59,8 +59,7 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 			result.Reference(intermediate);
 		}
 	} else if (expr.children.size() == 1) {
-		Vector child;
-		child.Reference(state->intermediate_chunk.data[0]);
+		Vector child(state->intermediate_chunk.data[0]);
 
 		Execute(*expr.children[0], state->child_states[0].get(), sel, count, child);
 		switch (expr.type) {

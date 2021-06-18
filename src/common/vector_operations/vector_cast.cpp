@@ -338,8 +338,6 @@ static void NumericCastSwitch(Vector &source, Vector &result, idx_t count) {
 		break;
 	}
 	case LogicalTypeId::LIST: {
-		auto list_child = make_unique<Vector>();
-		ListVector::SetEntry(result, move(list_child));
 		VectorNullCast(source, result, count);
 		break;
 	}
@@ -613,19 +611,15 @@ static void ListCastSwitch(Vector &source, Vector &result, idx_t count) {
 				tdata[i] = ldata[i];
 			}
 		}
-		auto &child_type = ListType::GetChildType(result.GetType());
-		if (ListVector::HasEntry(source)) {
-			auto &source_cc = ListVector::GetEntry(source);
-			auto source_size = ListVector::GetListSize(source);
-			auto append_vector = make_unique<Vector>(child_type);
-			if (source_size > STANDARD_VECTOR_SIZE) {
-				append_vector->Resize(STANDARD_VECTOR_SIZE, source_size);
-			}
-			VectorOperations::Cast(source_cc, *append_vector, source_size);
-			ListVector::SetEntry(result, move(append_vector));
-			ListVector::SetListSize(result, source_size);
-			D_ASSERT(ListVector::GetListSize(result) == source_size);
-		}
+		auto &source_cc = ListVector::GetEntry(source);
+		auto source_size = ListVector::GetListSize(source);
+
+		ListVector::Reserve(result, source_size);
+		auto &append_vector = ListVector::GetEntry(result);
+
+		VectorOperations::Cast(source_cc, append_vector, source_size);
+		ListVector::SetListSize(result, source_size);
+		D_ASSERT(ListVector::GetListSize(result) == source_size);
 		break;
 	}
 	default:
