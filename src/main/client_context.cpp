@@ -690,21 +690,22 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 	return "";
 }
 
-bool ClientContext::UpdateFunctionInfoFromEntry(ScalarFunctionCatalogEntry *existing_function, CreateScalarFunctionInfo *new_info) {
-	if(new_info->functions.size() == 0) {
+bool ClientContext::UpdateFunctionInfoFromEntry(ScalarFunctionCatalogEntry *existing_function,
+                                                CreateScalarFunctionInfo *new_info) {
+	if (new_info->functions.size() == 0) {
 		throw std::runtime_error("Registering function without scalar function definitions!");
 	}
 	bool need_rewrite_entry = false;
 	idx_t size_new_func = new_info->functions.size();
-	for(idx_t exist_idx = 0; exist_idx < existing_function->functions.size(); ++exist_idx) {
+	for (idx_t exist_idx = 0; exist_idx < existing_function->functions.size(); ++exist_idx) {
 		bool can_add = true;
-		for(idx_t new_idx=0; new_idx < size_new_func; ++new_idx) {
-			if(new_info->functions[new_idx].Equal(existing_function->functions[exist_idx])) {
+		for (idx_t new_idx = 0; new_idx < size_new_func; ++new_idx) {
+			if (new_info->functions[new_idx].Equal(existing_function->functions[exist_idx])) {
 				can_add = false;
 				break;
 			}
 		}
-		if(can_add) {
+		if (can_add) {
 			new_info->functions.push_back(existing_function->functions[exist_idx]);
 			need_rewrite_entry = true;
 		}
@@ -715,9 +716,10 @@ bool ClientContext::UpdateFunctionInfoFromEntry(ScalarFunctionCatalogEntry *exis
 void ClientContext::RegisterFunction(CreateFunctionInfo *info) {
 	RunFunctionInTransaction([&]() {
 		auto &catalog = Catalog::GetCatalog(*this);
-		ScalarFunctionCatalogEntry *existing_function = (ScalarFunctionCatalogEntry *)catalog.GetEntry(*this, CatalogType::SCALAR_FUNCTION_ENTRY, 													 info->schema, info->name, true);
+		ScalarFunctionCatalogEntry *existing_function = (ScalarFunctionCatalogEntry *)catalog.GetEntry(
+		    *this, CatalogType::SCALAR_FUNCTION_ENTRY, info->schema, info->name, true);
 		if (existing_function) {
-			if(UpdateFunctionInfoFromEntry(existing_function, (CreateScalarFunctionInfo *)info) ){
+			if (UpdateFunctionInfoFromEntry(existing_function, (CreateScalarFunctionInfo *)info)) {
 				// function info was updated from catalog entry, rewrite is needed
 				info->on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
 			}

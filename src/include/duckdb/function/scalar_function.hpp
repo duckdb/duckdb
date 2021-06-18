@@ -81,27 +81,26 @@ public:
 
 	bool Equal(const ScalarFunction &rhs) const {
 		// number of types
-		if(this->arguments.size() != rhs.arguments.size()) {
+		if (this->arguments.size() != rhs.arguments.size()) {
 			return false;
 		}
 		// argument types
-		for(idx_t i; i < this->arguments.size(); ++i) {
-			if(this->arguments[i] != rhs.arguments[i]) {
+		for (idx_t i; i < this->arguments.size(); ++i) {
+			if (this->arguments[i] != rhs.arguments[i]) {
 				return false;
 			}
 		}
 		// return type
-		if(this->return_type != rhs.return_type) {
+		if (this->return_type != rhs.return_type) {
 			return false;
 		}
 		// varargs
-		if(this->varargs != rhs.varargs) {
+		if (this->varargs != rhs.varargs) {
 			return false;
 		}
 
 		return true; // they are equal
 	}
-
 
 private:
 	bool CompareScalarFunctionT(const scalar_function_t other) const {

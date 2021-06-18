@@ -1187,7 +1187,7 @@ int sqlite3_create_function(sqlite3 *db, const char *zFunctionName, int nArg, in
 	if (xFunc) {
 		auto udf_sqlite3 = SQLiteUDFWrapper::CreateSQLiteScalarFunction(xFunc, db, pApp);
 		LogicalType varargs = LogicalType::INVALID;
-		if(nArg == -1) {
+		if (nArg == -1) {
 			varargs = LogicalType::ANY;
 			nArg = 0;
 		}
@@ -1197,7 +1197,8 @@ int sqlite3_create_function(sqlite3 *db, const char *zFunctionName, int nArg, in
 			argv_types[i] = LogicalType::ANY;
 		}
 
-		UDFWrapper::RegisterFunction(fname, argv_types, LogicalType::VARCHAR, udf_sqlite3, *(db->con->context), varargs);
+		UDFWrapper::RegisterFunction(fname, argv_types, LogicalType::VARCHAR, udf_sqlite3, *(db->con->context),
+		                             varargs);
 
 		return SQLITE_OK;
 	}
@@ -1657,7 +1658,7 @@ SQLITE_API int sqlite3_create_window_function(sqlite3 *db, const char *zFunction
                                               void (*xInverse)(sqlite3_context *, int, sqlite3_value **),
                                               void (*xDestroy)(void *)) {
 	// commented for now because such error message prevents the shell-test.py to pass
-//	fprintf(stderr, "sqlite3_create_window_function: unsupported.\n");
+	//	fprintf(stderr, "sqlite3_create_window_function: unsupported.\n");
 	return SQLITE_ERROR;
 }
 
