@@ -692,7 +692,7 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 
 bool ClientContext::UpdateFunctionInfoFromEntry(ScalarFunctionCatalogEntry *existing_function,
                                                 CreateScalarFunctionInfo *new_info) {
-	if (new_info->functions.size() == 0) {
+	if (new_info->functions.empty()) {
 		throw std::runtime_error("Registering function without scalar function definitions!");
 	}
 	bool need_rewrite_entry = false;

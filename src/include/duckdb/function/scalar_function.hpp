@@ -85,7 +85,7 @@ public:
 			return false;
 		}
 		// argument types
-		for (idx_t i; i < this->arguments.size(); ++i) {
+		for (idx_t i = 0; i < this->arguments.size(); ++i) {
 			if (this->arguments[i] != rhs.arguments[i]) {
 				return false;
 			}
