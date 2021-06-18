@@ -52,8 +52,7 @@ bool PerfectHashJoinExecutor::CheckForPerfectHashJoin(JoinHashTable *ht_ptr) {
 void PerfectHashJoinExecutor::BuildPerfectHashTable(JoinHashTable *hash_table_ptr, JoinHTScanState &join_ht_state,
                                                     LogicalType key_type) {
 	// allocate memory for each column
-	auto build_size =
-	    (pjoin_stats.is_build_min_small) ? hash_table_ptr->size() + MIN_THRESHOLD : hash_table_ptr->size();
+	auto build_size = pjoin_stats.build_range + 1;
 	for (auto type : hash_table_ptr->build_types) {
 		perfect_hash_table.emplace_back(type, build_size);
 	}
@@ -63,26 +62,24 @@ void PerfectHashJoinExecutor::BuildPerfectHashTable(JoinHashTable *hash_table_pt
 
 void PerfectHashJoinExecutor::FullScanHashTable(JoinHTScanState &state, LogicalType key_type,
                                                 JoinHashTable *hash_table) {
-	// scan the HT starting from the current position
-	Vector addresses(LogicalType::POINTER, hash_table->size()); // allocate space for all the tuples
-	auto key_locations = FlatVector::GetData<data_ptr_t>(addresses);
+	Vector tuples_addresses(LogicalType::POINTER, hash_table->size());      // allocate space for all the tuples
+	auto key_locations = FlatVector::GetData<data_ptr_t>(tuples_addresses); // get a pointer to vector data
 
-	lock_guard<mutex> state_lock(state.lock);
-	// go through all the blocks and get keys location
+	lock_guard<mutex> state_lock(state.lock); // lock it for scan
+	// Go through all the blocks and fill the keys addresses
 	auto keys_count = hash_table->FillWithHTOffsets(key_locations, state);
-	// build selection vector using the build_keys
+	// Scan the build keys in the hash table
 	Vector build_vector(key_type, keys_count);
-	// first scan the keys
-	RowOperations::FullScanColumn(hash_table->layout, addresses, build_vector, keys_count, 0);
+	RowOperations::FullScanColumn(hash_table->layout, tuples_addresses, build_vector, keys_count, 0);
+	// Now fill the selection vector using the build keys and create a sequential vector
 	SelectionVector sel_build(keys_count);
-	SelectionVector sel_addresses(keys_count + 1);
-	// now fill them
-	FillSelectionVectorSwitch(build_vector, sel_build, sel_addresses, keys_count);
-	// full scan the remaining build columns
+	SelectionVector sel_tuples(keys_count + 1);
+	FillSelectionVectorSwitch(build_vector, sel_build, sel_tuples, keys_count);
+	// Full scan the remaining build columns and fill the perfect hash table
 	for (idx_t i = 0; i < hash_table->build_types.size(); i++) {
 		auto &vector = perfect_hash_table[i];
 		D_ASSERT(vector.GetType() == hash_table->build_types[i]);
-		RowOperations::Gather(hash_table->layout, addresses, sel_addresses, vector, sel_build, keys_count,
+		RowOperations::Gather(hash_table->layout, tuples_addresses, sel_tuples, vector, sel_build, keys_count,
 		                      i + hash_table->condition_types.size());
 	}
 }

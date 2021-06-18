@@ -67,6 +67,7 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 		join_state.build_min = stats_build->min;
 		join_state.build_max = stats_build->max;
 		join_state.estimated_cardinality = op.estimated_cardinality;
+		join_state.build_range = build_range.GetValue<idx_t>();
 		// check whether the probe min-max is in the build min-max
 		if (stats_build->min <= stats_probe->min && stats_probe->max <= stats_build->max) {
 			join_state.is_probe_in_range = true;

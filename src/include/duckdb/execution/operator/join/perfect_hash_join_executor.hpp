@@ -27,7 +27,7 @@ struct PerfectHashJoinStats {
 	bool is_probe_in_range {false};
 	bool is_build_min_small {false};
 	bool is_build_dense {false};
-	idx_t range {0};
+	idx_t build_range {0};
 	idx_t estimated_cardinality {0};
 };
 
