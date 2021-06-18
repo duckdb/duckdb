@@ -180,3 +180,19 @@ static void cast_to_float(sqlite3_context *context, int argc, sqlite3_value **ar
 		sqlite3_result_double(context, value);
 	}
 }
+
+static void sum_overload_function(sqlite3_context *context, int argc, sqlite3_value **argv) {
+	assert(argc > 0);
+	int value1, value2, value3;
+	value2 = 0;
+	value3 = 0;
+	value1 = sqlite3_value_int(argv[0]);
+	if (argc == 2) {
+		value2 = sqlite3_value_int(argv[1]);
+	} else if (argc == 3) {
+		value2 = sqlite3_value_int(argv[1]);
+		value3 = sqlite3_value_int(argv[2]);
+	}
+
+	sqlite3_result_int(context, value1 + value2 + value3);
+}

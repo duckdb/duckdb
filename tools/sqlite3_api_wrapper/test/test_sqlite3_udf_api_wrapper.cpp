@@ -306,3 +306,46 @@ TEST_CASE("SQLite UDF wrapper: testing more casts", "[sqlite3wrapper]") {
 	REQUIRE(db_w.Execute("SELECT cast_to_float(big) FROM tbl"));
 	REQUIRE(db_w.CheckColumn(0, {"1e+18"}));
 }
+
+TEST_CASE("SQLite UDF wrapper: overload function", "[sqlite3wrapper]") {
+	SQLiteDBWrapper db_w;
+
+	// open an in-memory db
+	REQUIRE(db_w.Open(":memory:"));
+
+	int argc = 1;
+	REQUIRE(sqlite3_create_function(db_w.db, "sum_overload_function", argc, 0, nullptr, &sum_overload_function, nullptr,
+	                                nullptr) == SQLITE_OK);
+
+	argc = 2;
+	REQUIRE(sqlite3_create_function(db_w.db, "sum_overload_function", argc, 0, nullptr, &sum_overload_function, nullptr,
+	                                nullptr) == SQLITE_OK);
+
+	argc = 3;
+	REQUIRE(sqlite3_create_function(db_w.db, "sum_overload_function", argc, 0, nullptr, &sum_overload_function, nullptr,
+	                                nullptr) == SQLITE_OK);
+
+	// testing with constant
+	REQUIRE(db_w.Execute("SELECT sum_overload_function(100)"));
+	REQUIRE(db_w.CheckColumn(0, {"100"}));
+
+	REQUIRE(db_w.Execute("SELECT sum_overload_function(100, 100)"));
+	REQUIRE(db_w.CheckColumn(0, {"200"}));
+
+	REQUIRE(db_w.Execute("SELECT sum_overload_function(100, 100, 100)"));
+	REQUIRE(db_w.CheckColumn(0, {"300"}));
+
+	REQUIRE(db_w.Execute("CREATE TABLE tbl(i INTEGER, j INTEGER, k INTEGER)"));
+	REQUIRE(db_w.Execute("INSERT INTO tbl VALUES(1, 2, 3)"));
+	REQUIRE(db_w.Execute("INSERT INTO tbl VALUES(1, 2, 3)"));
+
+	// testing with flat vectors
+	REQUIRE(db_w.Execute("SELECT sum_overload_function(i) FROM tbl"));
+	REQUIRE(db_w.CheckColumn(0, {"1", "1"}));
+
+	REQUIRE(db_w.Execute("SELECT sum_overload_function(i, j) FROM tbl"));
+	REQUIRE(db_w.CheckColumn(0, {"3", "3"}));
+
+	REQUIRE(db_w.Execute("SELECT sum_overload_function(i, j, k) FROM tbl"));
+	REQUIRE(db_w.CheckColumn(0, {"6", "6"}));
+}
