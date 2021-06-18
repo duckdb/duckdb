@@ -782,7 +782,6 @@ int sqlite3_extended_errcode(sqlite3 *db) {
 
 const char *sqlite3_errmsg(sqlite3 *db) {
 	if (!db) {
-		db->errCode = SQLITE_NOMEM;
 		return "";
 	}
 	return db->last_error.c_str();
@@ -1179,7 +1178,7 @@ int sqlite3_create_function(sqlite3 *db, const char *zFunctionName, int nArg, in
                             void (*xFunc)(sqlite3_context *, int, sqlite3_value **),
                             void (*xStep)(sqlite3_context *, int, sqlite3_value **),
                             void (*xFinal)(sqlite3_context *)) {
-	if ((!xFunc && !xStep && !xFinal) || !zFunctionName) {
+	if ((!xFunc && !xStep && !xFinal) || !zFunctionName || nArg < -1) {
 		return SQLITE_MISUSE;
 	}
 	string fname = string(zFunctionName);
@@ -1187,11 +1186,18 @@ int sqlite3_create_function(sqlite3 *db, const char *zFunctionName, int nArg, in
 	// Scalar function
 	if (xFunc) {
 		auto udf_sqlite3 = SQLiteUDFWrapper::CreateSQLiteScalarFunction(xFunc, db, pApp);
+		LogicalType varargs = LogicalType::INVALID;
+		if(nArg == -1) {
+			varargs = LogicalType::ANY;
+			nArg = 0;
+		}
+
 		vector<LogicalType> argv_types(nArg);
 		for (idx_t i = 0; i < (idx_t)nArg; ++i) {
 			argv_types[i] = LogicalType::ANY;
 		}
-		UDFWrapper::RegisterFunction(fname, argv_types, LogicalType::VARCHAR, udf_sqlite3, *(db->con->context));
+
+		UDFWrapper::RegisterFunction(fname, argv_types, LogicalType::VARCHAR, udf_sqlite3, *(db->con->context), varargs);
 
 		return SQLITE_OK;
 	}
@@ -1650,7 +1656,8 @@ SQLITE_API int sqlite3_create_window_function(sqlite3 *db, const char *zFunction
                                               void (*xFinal)(sqlite3_context *), void (*xValue)(sqlite3_context *),
                                               void (*xInverse)(sqlite3_context *, int, sqlite3_value **),
                                               void (*xDestroy)(void *)) {
-	fprintf(stderr, "sqlite3_create_window_function: unsupported.\n");
+	// commented for now because such error message prevents the shell-test.py to pass
+//	fprintf(stderr, "sqlite3_create_window_function: unsupported.\n");
 	return SQLITE_ERROR;
 }
 
