@@ -110,3 +110,24 @@ SELECT * FROM a WHERE id=5
 ----
 5	{'i': NULL, 'j': 1}
 
+# now try with multiple entries on the same index
+statement ok
+INSERT INTO a VALUES (1, NULL)
+
+statement ok
+INSERT INTO a VALUES (1, ROW(ROW(NULL), 1))
+
+statement ok
+INSERT INTO a VALUES (1, ROW(ROW(1), NULL))
+
+statement ok
+INSERT INTO a VALUES (1, ROW(NULL, 1))
+
+query II
+SELECT * FROM a WHERE id=1 ORDER BY c['i']['a']
+----
+1	NULL
+1	{'i': {'a': NULL}, 'j': 1}
+1	{'i': NULL, 'j': 1}
+1	{'i': {'a': 1}, 'j': NULL}
+1	{'i': {'a': 3}, 'j': 4}

@@ -279,9 +279,13 @@ struct FlatVector {
 };
 
 struct ListVector {
+	//! Gets a reference to the underlying child-vector of a list
 	DUCKDB_API static const Vector &GetEntry(const Vector &vector);
+	//! Gets a reference to the underlying child-vector of a list
 	DUCKDB_API static Vector &GetEntry(Vector &vector);
+	//! Gets the total size of the underlying child-vector of a list
 	DUCKDB_API static idx_t GetListSize(const Vector &vector);
+	//! Sets the total size of the underlying child-vector of a list
 	DUCKDB_API static void SetListSize(Vector &vec, idx_t size);
 	DUCKDB_API static bool HasEntry(const Vector &vector);
 	DUCKDB_API static void SetEntry(Vector &vector, unique_ptr<Vector> entry);
