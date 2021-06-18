@@ -162,6 +162,9 @@ unique_ptr<PhysicalOperatorState> PhysicalHashJoin::GetOperatorState() {
 	for (auto &cond : conditions) {
 		state->probe_executor.AddExpression(*cond.left);
 	}
+	// Used in the perfect hash join
+	state->sel_vec.Initialize(STANDARD_VECTOR_SIZE);
+	state->seq_sel_vec.Initialize(STANDARD_VECTOR_SIZE);
 	return move(state);
 }
 

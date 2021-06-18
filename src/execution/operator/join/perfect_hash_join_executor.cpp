@@ -56,6 +56,7 @@ void PerfectHashJoinExecutor::BuildPerfectHashTable(JoinHashTable *hash_table_pt
 	for (auto type : hash_table_ptr->build_types) {
 		perfect_hash_table.emplace_back(type, build_size);
 	}
+
 	// Fill columns with build data
 	FullScanHashTable(join_ht_state, key_type, hash_table_ptr);
 }
