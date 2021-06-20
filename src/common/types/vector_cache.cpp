@@ -8,7 +8,7 @@ VectorCache::VectorCache(const LogicalType &type_p) :
 	switch(internal_type) {
 	case PhysicalType::LIST:
 		// memory for the list offsets
-		owned_data = unique_ptr<data_t[]>(new data_t(STANDARD_VECTOR_SIZE * GetTypeIdSize(internal_type)));
+		owned_data = unique_ptr<data_t[]>(new data_t[STANDARD_VECTOR_SIZE * GetTypeIdSize(internal_type)]);
 		// child data of the list
 		child_caches.push_back(make_unique<VectorCache>(ListType::GetChildType(type)));
 		auxiliary = make_unique<VectorListBuffer>(type);
@@ -23,7 +23,7 @@ VectorCache::VectorCache(const LogicalType &type_p) :
 		break;
 	}
 	default:
-		owned_data = unique_ptr<data_t[]>(new data_t(STANDARD_VECTOR_SIZE * GetTypeIdSize(internal_type)));
+		owned_data = unique_ptr<data_t[]>(new data_t[STANDARD_VECTOR_SIZE * GetTypeIdSize(internal_type)]);
 		break;
 	}
 }

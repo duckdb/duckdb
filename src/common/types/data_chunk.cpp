@@ -14,6 +14,7 @@
 #include "duckdb/common/arrow.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/to_string.hpp"
+#include "duckdb/common/types/vector_cache.hpp"
 
 namespace duckdb {
 
@@ -23,23 +24,32 @@ DataChunk::DataChunk() : count(0) {
 DataChunk::~DataChunk() {}
 
 void DataChunk::InitializeEmpty(const vector<LogicalType> &types) {
-	D_ASSERT(types.size() > 0);
+	D_ASSERT(data.empty()); // can only be initialized once
+	D_ASSERT(types.size() > 0); // empty chunk not allowed
 	for (idx_t i = 0; i < types.size(); i++) {
 		data.emplace_back(Vector(types[i], nullptr));
 	}
 }
 
 void DataChunk::Initialize(const vector<LogicalType> &types) {
-	D_ASSERT(types.size() > 0);
-	InitializeEmpty(types);
+	D_ASSERT(data.empty()); // can only be initialized once
+	D_ASSERT(types.size() > 0); // empty chunk not allowed
 	for (idx_t i = 0; i < types.size(); i++) {
-		data[i].Initialize();
+		VectorCache cache(types[i]);
+		data.emplace_back(cache);
+		vector_caches.push_back(move(cache));
 	}
 }
 
 void DataChunk::Reset() {
-	for (idx_t i = 0; i < ColumnCount(); i++) {
-		data[i].Initialize();
+	if (vector_caches.empty()) {
+		throw InternalException("Only chunks initialized with DataChunk::Initialize can be reset");
+	}
+	if (vector_caches.size() != data.size()) {
+		throw InternalException("VectorCache and column count mismatch in DataChunk::Reset");
+	}
+	for(idx_t i = 0; i < ColumnCount(); i++) {
+		data[i].ResetFromCache(vector_caches[i]);
 	}
 	SetCardinality(0);
 }

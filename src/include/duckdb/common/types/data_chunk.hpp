@@ -43,7 +43,6 @@ public:
 
 	//! The vectors owned by the DataChunk.
 	vector<Vector> data;
-
 public:
 	DUCKDB_API idx_t size() const {
 		return count;
@@ -122,6 +121,9 @@ public:
 	DUCKDB_API void ToArrowArray(ArrowArray *out_array);
 
 private:
+	//! The amount of tuples stored in the data chunk
 	idx_t count;
+	//! Vector caches, used to store data when ::Initialize is called
+	vector<VectorCache> vector_caches;
 };
 } // namespace duckdb

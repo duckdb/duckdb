@@ -36,6 +36,12 @@ Vector::Vector(LogicalType type_p, data_ptr_t dataptr) :
 	}
 }
 
+Vector::Vector(const VectorCache &cache) :
+	type(cache.type) {
+	ResetFromCache(cache);
+}
+
+
 Vector::Vector(Vector &other) :
 	type(other.type) {
 	Reference(other);
@@ -102,7 +108,7 @@ void Vector::Reference(Vector &other, bool require_type_to_match) {
 	validity = other.validity;
 }
 
-void Vector::ResetFromCache(VectorCache &cache) {
+void Vector::ResetFromCache(const VectorCache &cache) {
 	D_ASSERT(cache.type == GetType());
 	auto internal_type = type.InternalType();
 	vector_type = VectorType::FLAT_VECTOR;
