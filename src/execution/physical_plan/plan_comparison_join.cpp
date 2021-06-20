@@ -38,7 +38,7 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 	// with one condition
 	if (op.conditions.size() != 1)
 		return;
-
+	// with no stats
 	if (op.join_stats.size() <= 0)
 		return;
 	// with equality

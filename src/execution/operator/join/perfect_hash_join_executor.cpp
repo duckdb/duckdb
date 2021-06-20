@@ -8,34 +8,6 @@ namespace duckdb {
 PerfectHashJoinExecutor::PerfectHashJoinExecutor(PerfectHashJoinStats pjoin_stats_) : pjoin_stats(pjoin_stats_) {
 }
 
-bool PerfectHashJoinExecutor::ProbePerfectHashTable(ExecutionContext &context, DataChunk &result,
-                                                    PhysicalHashJoinState *physical_state, JoinHashTable *ht_ptr,
-                                                    PhysicalOperator *operator_child) {
-	// fetch the chunk to join
-	operator_child->GetChunk(context, physical_state->child_chunk, physical_state->child_state.get());
-	if (physical_state->child_chunk.size() == 0) {
-		// no more keys to probe
-		return true;
-	}
-	// fetch the join keys from the chunk
-	physical_state->probe_executor.Execute(physical_state->child_chunk, physical_state->join_keys);
-	// select the keys that are in the min-max range
-	auto &keys_vec = physical_state->join_keys.data[0];
-	auto keys_count = physical_state->join_keys.size();
-	FillSelectionVectorSwitch(keys_vec, physical_state->sel_vec, physical_state->seq_sel_vec, keys_count);
-	// reference the probe data to the result (if fast path applies)
-	result.Reference(physical_state->child_chunk);
-	// on the build side, we need to fetch the data and build dictionary vectors with the sel_vec
-	for (idx_t i = 0; i < ht_ptr->build_types.size(); i++) {
-		auto &result_vector = result.data[physical_state->child_chunk.ColumnCount() + i];
-		D_ASSERT(result_vector.GetType() == ht_ptr->build_types[i]);
-		auto &build_vec = perfect_hash_table[i];
-		result_vector.Reference(build_vec); //
-		result_vector.Slice(physical_state->sel_vec, keys_count);
-	}
-	return true;
-}
-
 bool PerfectHashJoinExecutor::CheckForPerfectHashJoin(JoinHashTable *ht_ptr) {
 	// first check the build size
 	if (!pjoin_stats.is_build_small) {
@@ -73,7 +45,7 @@ void PerfectHashJoinExecutor::FullScanHashTable(JoinHTScanState &state, LogicalT
 	Vector build_vector(key_type, keys_count);
 	RowOperations::FullScanColumn(hash_table->layout, tuples_addresses, build_vector, keys_count, 0);
 	// Now fill the selection vector using the build keys and create a sequential vector
-	SelectionVector sel_build(keys_count);
+	SelectionVector sel_build(keys_count + 1);
 	SelectionVector sel_tuples(keys_count + 1);
 	FillSelectionVectorSwitch(build_vector, sel_build, sel_tuples, keys_count);
 	// Full scan the remaining build columns and fill the perfect hash table
@@ -85,19 +57,48 @@ void PerfectHashJoinExecutor::FullScanHashTable(JoinHTScanState &state, LogicalT
 	}
 }
 
+bool PerfectHashJoinExecutor::ProbePerfectHashTable(ExecutionContext &context, DataChunk &result,
+                                                    PhysicalHashJoinState *physical_state, JoinHashTable *ht_ptr,
+                                                    PhysicalOperator *operator_child) {
+	// fetch the chunk to join
+	operator_child->GetChunk(context, physical_state->child_chunk, physical_state->child_state.get());
+	if (physical_state->child_chunk.size() == 0) {
+		// no more keys to probe
+		return true;
+	}
+	// fetch the join keys from the chunk
+	physical_state->probe_executor.Execute(physical_state->child_chunk, physical_state->join_keys);
+	// select the keys that are in the min-max range
+	auto &keys_vec = physical_state->join_keys.data[0];
+	auto keys_count = physical_state->join_keys.size();
+	FillSelectionVectorSwitch(keys_vec, physical_state->sel_vec, physical_state->seq_sel_vec, keys_count);
+	// reference the probe data to the result (if fast path applies)
+	result.Reference(physical_state->child_chunk);
+	// on the build side, we need to fetch the data and build dictionary vectors with the sel_vec
+	for (idx_t i = 0; i < ht_ptr->build_types.size(); i++) {
+		auto &result_vector = result.data[physical_state->child_chunk.ColumnCount() + i];
+		D_ASSERT(result_vector.GetType() == ht_ptr->build_types[i]);
+		auto &build_vec = perfect_hash_table[i];
+		result_vector.Reference(build_vec); //
+		result_vector.Slice(physical_state->sel_vec, keys_count);
+	}
+	return true;
+}
+
 template <typename T>
 void PerfectHashJoinExecutor::TemplatedFillSelectionVector(Vector &source, SelectionVector &sel_vec,
                                                            SelectionVector &seq_sel_vec, idx_t count) {
 	auto min_value = pjoin_stats.build_min.GetValue<T>();
 	auto max_value = pjoin_stats.build_max.GetValue<T>();
-
-	auto vector_data = FlatVector::GetData<T>(source);
+	VectorData vector_data;
+	source.Orrify(count, vector_data);
+	auto data = reinterpret_cast<T *>(vector_data.data);
 	// generate the selection vector
 	for (idx_t i = 0; i != count; ++i) {
 		// add index to selection vector if value in the range
-		auto input_value = vector_data[i];
+		auto input_value = data[i];
 		if (min_value <= input_value && input_value <= max_value) {
-			auto idx = (idx_t)(input_value - min_value);
+			auto idx = (idx_t)(input_value - min_value); // subtract min value to get the idx position
 			sel_vec.set_index(i, idx);
 		}
 		seq_sel_vec.set_index(i, i);
