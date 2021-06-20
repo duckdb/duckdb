@@ -13,6 +13,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/types/vector_cache.hpp"
 
 #include <cstring> // strlen() on Solaris
 
@@ -101,12 +102,40 @@ void Vector::Reference(Vector &other, bool require_type_to_match) {
 	validity = other.validity;
 }
 
-void Vector::Reset(Vector &other) {
-	D_ASSERT(other.GetType() == GetType());
-	data = other.data;
+void Vector::ResetFromCache(VectorCache &cache) {
+	D_ASSERT(cache.type == GetType());
+	auto internal_type = type.InternalType();
+	vector_type = VectorType::FLAT_VECTOR;
 	buffer.reset();
 	validity.Reset();
-	// FIXME: reset should be used for cached vectors
+	switch(internal_type) {
+	case PhysicalType::LIST: {
+		data = cache.owned_data.get();
+		// reinitialize the VectorListBuffer
+		AssignSharedPointer(auxiliary, cache.auxiliary);
+		// propagate through child
+		auto &list_child = ((VectorListBuffer &) *auxiliary).GetChild();
+		list_child.ResetFromCache(*cache.child_caches[0]);
+		break;
+	}
+	case PhysicalType::STRUCT: {
+		// struct does not have data
+		data = nullptr;
+		// reinitialize the VectorStructBuffer
+		AssignSharedPointer(auxiliary, cache.auxiliary);
+		// propagate through children
+		auto &children = ((VectorStructBuffer &) *auxiliary).GetChildren();
+		for(idx_t i = 0; i < children.size(); i++) {
+			children[i]->ResetFromCache(*cache.child_caches[i]);
+		}
+		break;
+	}
+	default:
+		// regular type: no aux data and reset data to cached data
+		data = cache.owned_data.get();
+		auxiliary.reset();
+		break;
+	}
 }
 
 void Vector::Slice(Vector &other, idx_t offset) {
@@ -181,14 +210,7 @@ void Vector::Initialize(bool zero_data) {
 	auto &type = GetType();
 	auto internal_type = type.InternalType();
 	if (internal_type == PhysicalType::STRUCT) {
-		auto struct_buffer = make_unique<VectorStructBuffer>();
-		auto &child_types = StructType::GetChildTypes(type);
-		auto &child_vectors = struct_buffer->GetChildren();
-		for (auto &child_type : child_types) {
-			auto vector = make_unique<Vector>(child_type.second);
-			child_vectors.push_back(move(vector));
-		}
-
+		auto struct_buffer = make_unique<VectorStructBuffer>(type);
 		auxiliary = move(struct_buffer);
 	} else if (internal_type == PhysicalType::LIST) {
 		auto list_buffer = make_unique<VectorListBuffer>(type);

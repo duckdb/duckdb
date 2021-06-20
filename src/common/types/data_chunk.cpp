@@ -20,6 +20,8 @@ namespace duckdb {
 DataChunk::DataChunk() : count(0) {
 }
 
+DataChunk::~DataChunk() {}
+
 void DataChunk::InitializeEmpty(const vector<LogicalType> &types) {
 	D_ASSERT(types.size() > 0);
 	for (idx_t i = 0; i < types.size(); i++) {

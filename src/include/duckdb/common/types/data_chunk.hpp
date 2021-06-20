@@ -15,6 +15,7 @@
 struct ArrowArray;
 
 namespace duckdb {
+class VectorCache;
 
 //!  A Data Chunk represents a set of vectors.
 /*!
@@ -38,6 +39,7 @@ class DataChunk {
 public:
 	//! Creates an empty DataChunk
 	DataChunk();
+	~DataChunk();
 
 	//! The vectors owned by the DataChunk.
 	vector<Vector> data;

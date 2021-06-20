@@ -128,6 +128,7 @@ private:
 class VectorStructBuffer : public VectorBuffer {
 public:
 	VectorStructBuffer();
+	VectorStructBuffer(const LogicalType &struct_type);
 	~VectorStructBuffer() override;
 
 public:

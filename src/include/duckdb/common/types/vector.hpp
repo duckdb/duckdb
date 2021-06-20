@@ -26,6 +26,7 @@ struct VectorData {
 	SelectionVector owned_sel;
 };
 
+class VectorCache;
 class VectorStructBuffer;
 class VectorListBuffer;
 class ChunkCollection;
@@ -55,6 +56,8 @@ public:
 	explicit Vector(const Value &value);
 	//! Create an empty standard vector with a type, equivalent to calling Vector(type, true, false)
 	explicit Vector(LogicalType type);
+	//! Create an empty standard vector with a type, equivalent to calling Vector(type, true, false)
+	explicit Vector(const VectorCache &cache);
 	//! Create a non-owning vector that references the specified data
 	Vector(LogicalType type, data_ptr_t dataptr);
 	//! Create an owning vector that holds at most STANDARD_VECTOR_SIZE entries.
@@ -77,9 +80,11 @@ public:
 	//! UNLESS you want the data of the other vector to be reinterpreted as a different type
 	//! Note that ::Reference will NOT change the type of this vector
 	void Reference(Vector &other, bool require_type_to_match = true);
-	//! Resets the vector to the default state (flat-vector, all valid, etc)
-	//! The "other" vector is used as a cache to avoid constantly re-allocating on every reset call
-	void Reset(Vector &other);
+
+	//! Resets a vector from a vector cache.
+	//! This turns the vector back into an empty FlatVector with STANDARD_VECTOR_SIZE entries.
+	//! The VectorCache is used so this can be done without requiring any allocations.
+	void ResetFromCache(VectorCache &cache);
 
 	//! Creates a reference to a slice of the other vector
 	void Slice(Vector &other, idx_t offset);
