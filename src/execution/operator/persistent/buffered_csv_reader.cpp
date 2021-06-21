@@ -202,12 +202,15 @@ void BufferedCSVReader::InitParseChunk(idx_t num_cols) {
 	if (options.force_not_null.size() != num_cols) {
 		options.force_not_null.resize(num_cols, false);
 	}
+	if (num_cols == parse_chunk.ColumnCount()) {
+		parse_chunk.Reset();
+	} else {
+		parse_chunk.Destroy();
 
-	parse_chunk.Destroy();
-
-	// initialize the parse_chunk with a set of VARCHAR types
-	vector<LogicalType> varchar_types(num_cols, LogicalType::VARCHAR);
-	parse_chunk.Initialize(varchar_types);
+		// initialize the parse_chunk with a set of VARCHAR types
+		vector<LogicalType> varchar_types(num_cols, LogicalType::VARCHAR);
+		parse_chunk.Initialize(varchar_types);
+	}
 }
 
 void BufferedCSVReader::JumpToBeginning(idx_t skip_rows = 0, bool skip_header = false) {
