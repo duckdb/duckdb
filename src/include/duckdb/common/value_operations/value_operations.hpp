@@ -46,6 +46,21 @@ struct ValueOperations {
 	// A <= B
 	static bool LessThanEquals(const Value &left, const Value &right);
 	//===--------------------------------------------------------------------===//
+	// Distinction Operations
+	//===--------------------------------------------------------------------===//
+	// A == B, NULLs equal
+	static bool NotDistinctFrom(const Value &left, const Value &right);
+	// A != B, NULLs equal
+	static bool DistinctFrom(const Value &left, const Value &right);
+	// A > B, NULLs last
+	static bool DistinctGreaterThan(const Value &left, const Value &right);
+	// A >= B, NULLs last
+	static bool DistinctGreaterThanEquals(const Value &left, const Value &right);
+	// A < B, NULLs last
+	static bool DistinctLessThan(const Value &left, const Value &right);
+	// A <= B, NULLs last
+	static bool DistinctLessThanEquals(const Value &left, const Value &right);
+	//===--------------------------------------------------------------------===//
 	// Hash functions
 	//===--------------------------------------------------------------------===//
 	// result = HASH(A)
