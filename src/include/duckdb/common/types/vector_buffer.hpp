@@ -79,7 +79,8 @@ public:
 	static buffer_ptr<VectorBuffer> CreateStandardVector(PhysicalType type);
 	static buffer_ptr<VectorBuffer> CreateConstantVector(PhysicalType type);
 	static buffer_ptr<VectorBuffer> CreateConstantVector(VectorType vectorType, const LogicalType &logicalType);
-	static buffer_ptr<VectorBuffer> CreateStandardVector(VectorType vector_type, const LogicalType &type, const idx_t size = 0);
+	static buffer_ptr<VectorBuffer> CreateStandardVector(VectorType vector_type, const LogicalType &type,
+	                                                     const idx_t size = 0);
 
 	static buffer_ptr<VectorBuffer> CreateStandardVector(VectorType vectorType, PhysicalType type);
 
@@ -211,13 +212,12 @@ public:
 	void Append(const Vector &to_append, const SelectionVector &sel, idx_t to_append_size, idx_t source_offset = 0);
 
 	void PushBack(Value &insert);
+	void Reserve(idx_t to_reserve);
 
 	idx_t capacity = 0;
 	idx_t size = 0;
 
 private:
-	void Reserve(const Vector &to_append, idx_t to_reserve);
-
 	//! child vectors used for nested data
 	unique_ptr<Vector> child;
 };

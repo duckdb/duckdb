@@ -20,7 +20,8 @@ buffer_ptr<VectorBuffer> VectorBuffer::CreateConstantVector(VectorType vector_ty
 	return make_buffer<VectorBuffer>(vector_type, type, GetTypeIdSize(type.InternalType()));
 }
 
-buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(VectorType vector_type, const LogicalType &type, const idx_t size) {
+buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(VectorType vector_type, const LogicalType &type,
+                                                            const idx_t size) {
 	return make_buffer<VectorBuffer>(vector_type, type, size * GetTypeIdSize(type.InternalType()));
 }
 
@@ -45,7 +46,7 @@ void VectorListBuffer::SetChild(unique_ptr<Vector> new_child) {
 	capacity = STANDARD_VECTOR_SIZE;
 }
 
-void VectorListBuffer::Reserve(const Vector &to_append, idx_t to_reserve) {
+void VectorListBuffer::Reserve(idx_t to_reserve) {
 	if (to_reserve > capacity) {
 		idx_t new_capacity = (to_reserve) / STANDARD_VECTOR_SIZE + ((to_reserve) % STANDARD_VECTOR_SIZE != 0);
 		new_capacity *= STANDARD_VECTOR_SIZE;
@@ -55,14 +56,14 @@ void VectorListBuffer::Reserve(const Vector &to_append, idx_t to_reserve) {
 }
 
 void VectorListBuffer::Append(const Vector &to_append, idx_t to_append_size, idx_t source_offset) {
-	Reserve(to_append, size + to_append_size - source_offset);
+	Reserve(size + to_append_size - source_offset);
 	VectorOperations::Copy(to_append, *child, to_append_size, source_offset, size);
 	size += to_append_size - source_offset;
 }
 
 void VectorListBuffer::Append(const Vector &to_append, const SelectionVector &sel, idx_t to_append_size,
                               idx_t source_offset) {
-	Reserve(to_append, size + to_append_size - source_offset);
+	Reserve(size + to_append_size - source_offset);
 	VectorOperations::Copy(to_append, *child, sel, to_append_size, source_offset, size);
 	size += to_append_size - source_offset;
 }

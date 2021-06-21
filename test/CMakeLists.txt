@@ -12,6 +12,10 @@ add_subdirectory(sql)
 add_subdirectory(sqlite)
 add_subdirectory(ossfuzz)
 
+if(BUILD_ARROW_ABI_TEST)
+  add_subdirectory(arrow)
+endif()
+
 if(NOT WIN32 AND NOT SUN)
   if(${BUILD_TPCE})
     add_subdirectory(tpce)
@@ -22,6 +26,19 @@ endif()
 add_definitions(-DDUCKDB_ROOT_DIRECTORY="${PROJECT_SOURCE_DIR}")
 
 add_executable(unittest unittest.cpp ${ALL_OBJECT_FILES})
+
+if(BUILD_ARROW_ABI_TEST)
+  add_dependencies(unittest RE2 arrow_ep UTF8 ZLIB duckdb)
+  target_link_libraries(
+    unittest
+    ${CMAKE_BINARY_DIR}/third_party/arrow/install/lib/libparquet.a
+    ${CMAKE_BINARY_DIR}/third_party/arrow/install/lib/libarrow_bundled_dependencies.a
+    ${CMAKE_BINARY_DIR}/third_party/arrow/install/lib/libarrow.a
+    ${CMAKE_BINARY_DIR}/third_party/zlib/install/lib/libz.a
+    ${CMAKE_BINARY_DIR}/third_party/utf8/install/lib/libutf8proc.a
+    ${CMAKE_BINARY_DIR}/third_party/re2/install/lib/libre2.a
+    Threads::Threads)
+endif()
 
 if(NOT WIN32 AND NOT SUN)
   target_link_libraries(unittest duckdb dsdgen test_helpers)

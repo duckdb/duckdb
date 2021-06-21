@@ -80,7 +80,8 @@ public:
 
 	//! Creates the data of this vector with the specified type. Any data that
 	//! is currently in the vector is destroyed.
-	void Initialize(const LogicalType &new_type = LogicalType(LogicalTypeId::INVALID), bool zero_data = false, idx_t size = STANDARD_VECTOR_SIZE);
+	void Initialize(const LogicalType &new_type = LogicalType(LogicalTypeId::INVALID), bool zero_data = false,
+	                idx_t size = STANDARD_VECTOR_SIZE);
 
 	//! Converts this Vector to a printable string representation
 	string ToString(idx_t count) const;
@@ -285,7 +286,7 @@ struct ListVector {
 	DUCKDB_API static void Append(Vector &target, const Vector &source, const SelectionVector &sel, idx_t source_size,
 	                              idx_t source_offset = 0);
 	DUCKDB_API static void PushBack(Vector &target, Value &insert);
-	DUCKDB_API static void Initialize(Vector &vec, idx_t size=STANDARD_VECTOR_SIZE);
+	DUCKDB_API static void Initialize(Vector &vec, idx_t size = 0);
 	DUCKDB_API static void Resize(Vector &vec, idx_t size);
 	DUCKDB_API static vector<idx_t> Search(Vector &list, Value &key, idx_t row);
 	DUCKDB_API static Value GetValuesFromOffsets(Vector &list, vector<idx_t> &offsets);
