@@ -79,9 +79,7 @@ public:
 	static buffer_ptr<VectorBuffer> CreateStandardVector(PhysicalType type);
 	static buffer_ptr<VectorBuffer> CreateConstantVector(PhysicalType type);
 	static buffer_ptr<VectorBuffer> CreateConstantVector(VectorType vectorType, const LogicalType &logicalType);
-	static buffer_ptr<VectorBuffer> CreateStandardVector(VectorType vector_type, const LogicalType &type,
-	                                                     const idx_t size = 0);
-
+	static buffer_ptr<VectorBuffer> CreateStandardVector(VectorType vectorType, const LogicalType &logicalType);
 	static buffer_ptr<VectorBuffer> CreateStandardVector(VectorType vectorType, PhysicalType type);
 
 	// Getters

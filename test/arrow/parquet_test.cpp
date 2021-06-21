@@ -129,7 +129,7 @@ TEST_CASE("Test Parquet Files", "[arrow]") {
 	skip.emplace_back("data-types.parquet");            //! FIXME: Contains binary columns, we don't support those yet
 	skip.emplace_back("fixed.parquet");     //! FIXME: Contains fixed-width-binary columns, we don't support those yet
 	skip.emplace_back("nan-float.parquet"); //! FIXME:What to do with NaNs
-	skip.emplace_back("bug1588.parquet");   //! Very descriptive name
+	skip.emplace_back("bug1588.parquet");   //! FIXME: Booleans are bit-packed
 
 	duckdb::DuckDB db;
 	duckdb::Connection conn {db};

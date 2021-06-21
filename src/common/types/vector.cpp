@@ -18,14 +18,14 @@
 
 namespace duckdb {
 
-Vector::Vector(const LogicalType &type, bool create_data, bool zero_data, idx_t size) : data(nullptr) {
-	buffer = make_buffer<VectorBuffer>(VectorType::FLAT_VECTOR, type, size);
+Vector::Vector(const LogicalType &type, bool create_data, bool zero_data) : data(nullptr) {
+	buffer = make_buffer<VectorBuffer>(VectorType::FLAT_VECTOR, type);
 	if (create_data) {
-		Initialize(type, zero_data, size);
+		Initialize(type, zero_data);
 	}
 }
 
-Vector::Vector(const LogicalType &type, const idx_t size) : Vector(type, true, false, size) {
+Vector::Vector(const LogicalType &type) : Vector(type, true, false) {
 }
 
 Vector::Vector(const LogicalType &type, data_ptr_t dataptr) : data(dataptr) {
@@ -137,7 +137,7 @@ void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
 	}
 }
 
-void Vector::Initialize(const LogicalType &new_type, bool zero_data, idx_t size) {
+void Vector::Initialize(const LogicalType &new_type, bool zero_data) {
 	if (new_type.id() != LogicalTypeId::INVALID) {
 		SetType(new_type);
 	}
@@ -158,13 +158,13 @@ void Vector::Initialize(const LogicalType &new_type, bool zero_data, idx_t size)
 	auto internal_type = type.InternalType();
 	auto type_size = GetTypeIdSize(internal_type);
 	if (type_size > 0) {
-		buffer = VectorBuffer::CreateStandardVector(VectorType::FLAT_VECTOR, type, size);
+		buffer = VectorBuffer::CreateStandardVector(VectorType::FLAT_VECTOR, type);
 		data = buffer->GetData();
 		if (zero_data) {
-			memset(data, 0, size * type_size);
+			memset(data, 0, STANDARD_VECTOR_SIZE * type_size);
 		}
 	} else {
-		buffer = VectorBuffer::CreateStandardVector(VectorType::FLAT_VECTOR, type, size);
+		buffer = VectorBuffer::CreateStandardVector(VectorType::FLAT_VECTOR, type);
 	}
 }
 
@@ -1162,16 +1162,6 @@ void ListVector::Initialize(Vector &vec, idx_t size) {
 	auto &buffer = (VectorListBuffer &)*vec.auxiliary;
 	buffer.Reserve(size);
 }
-
-void ListVector::Resize(Vector &vec, idx_t size) {
-	//! List is already initialized, we might have to resize it
-	if (size > ListVector::GetListSize(vec)) {
-		auto &vec_child = ListVector::GetEntry(vec);
-		vec_child.Resize(ListVector::GetListSize(vec), size);
-		ListVector::SetListSize(vec, size);
-	}
-}
-
 template <class T>
 void TemplatedSearchInMap(Vector &list, T key, vector<idx_t> &offsets, bool is_key_null, idx_t offset, idx_t length) {
 	auto &list_vector = ListVector::GetEntry(list);

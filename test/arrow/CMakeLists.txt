@@ -1,10 +1,3 @@
-set(TEST_ARROW_OBJECTS abi_test.cpp parquet_test.cpp)
-
-add_library_unity(test_arrow OBJECT ${TEST_ARROW_OBJECTS})
-set(ALL_OBJECT_FILES
-    ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:test_arrow>
-    PARENT_SCOPE)
-
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address")
 
 include(ExternalProject)
@@ -116,7 +109,7 @@ ExternalProject_Add(
   DOWNLOAD_DIR "{CMAKE_BINARY_DIR}/third_party/zstd"
   PREFIX "${CMAKE_BINARY_DIR}/third_party/zstd"
   BINARY_DIR "${CMAKE_BINARY_DIR}/third_party/zstd/src/ZSTD/build/cmake"
-  SOURCE_DIR "${CMAKE_BINARY_DIR}/third_party/zstd/src/ZSTD/build/cmake"
+  SOURCE_DIR "${CMAKE_BINARY_DIR}/third_party/zstd/src/ZSTD"
   INSTALL_DIR "${CMAKE_BINARY_DIR}/third_party/zstd/install"
   CONFIGURE_COMMAND
     ${CMAKE_COMMAND} -G${CMAKE_GENERATOR} -DCMAKE_BUILD_TYPE=Release
@@ -129,3 +122,31 @@ set(install_zstd ${install_dir})
 
 include_directories(${install_arrow}/include)
 include_directories(../../third_party/catch)
+
+set(TEST_ARROW_OBJECTS abi_test.cpp parquet_test.cpp)
+
+add_library_unity(test_arrow OBJECT ${TEST_ARROW_OBJECTS})
+set(ALL_OBJECT_FILES
+    ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:test_arrow>
+    PARENT_SCOPE)
+
+add_dependencies(
+  test_arrow
+  RE2
+  arrow_ep
+  UTF8
+  ZLIB
+  SNAPPY
+  ZSTD)
+
+target_link_libraries(
+  test_arrow
+  ${CMAKE_BINARY_DIR}/third_party/arrow/install/lib/libparquet.a
+  ${CMAKE_BINARY_DIR}/third_party/arrow/install/lib/libarrow_bundled_dependencies.a
+  ${CMAKE_BINARY_DIR}/third_party/arrow/install/lib/libarrow.a
+  ${CMAKE_BINARY_DIR}/third_party/zlib/install/lib/libz.a
+  ${CMAKE_BINARY_DIR}/third_party/utf8/install/lib/libutf8proc.a
+  ${CMAKE_BINARY_DIR}/third_party/re2/install/lib/libre2.a
+  ${CMAKE_BINARY_DIR}/third_party/snappy/install/lib/libsnappy.a
+  ${CMAKE_BINARY_DIR}/third_party/zstd/install/lib/libzstd.a
+  Threads::Threads)

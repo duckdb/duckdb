@@ -28,26 +28,7 @@ add_definitions(-DDUCKDB_ROOT_DIRECTORY="${PROJECT_SOURCE_DIR}")
 add_executable(unittest unittest.cpp ${ALL_OBJECT_FILES})
 
 if(BUILD_ARROW_ABI_TEST)
-  add_dependencies(
-    unittest
-    RE2
-    arrow_ep
-    UTF8
-    ZLIB
-    SNAPPY
-    ZSTD
-    duckdb)
-  target_link_libraries(
-    unittest
-    ${CMAKE_BINARY_DIR}/third_party/arrow/install/lib/libparquet.a
-    ${CMAKE_BINARY_DIR}/third_party/arrow/install/lib/libarrow_bundled_dependencies.a
-    ${CMAKE_BINARY_DIR}/third_party/arrow/install/lib/libarrow.a
-    ${CMAKE_BINARY_DIR}/third_party/zlib/install/lib/libz.a
-    ${CMAKE_BINARY_DIR}/third_party/utf8/install/lib/libutf8proc.a
-    ${CMAKE_BINARY_DIR}/third_party/re2/install/lib/libre2.a
-    ${CMAKE_BINARY_DIR}/third_party/snappy/install/lib/libsnappy.a
-    ${CMAKE_BINARY_DIR}/third_party/zstd/install/lib/libzstd.a
-    Threads::Threads)
+  target_link_libraries(unittest test_arrow)
 endif()
 
 if(NOT WIN32 AND NOT SUN)
