@@ -32,7 +32,7 @@ ExternalProject_Add(
     -DARROW_JEMALLOC=OFF -DARROW_ORC=OFF -DARROW_PARQUET=ON
     -DARROW_PROTOBUF_USE_SHARED=OFF -DARROW_USE_GLOG=OFF -DARROW_SIMD_LEVEL=NONE
     -DARROW_RUNTIME_SIMD_LEVEL=NONE -DARROW_WITH_BROTLI=OFF -DARROW_WITH_LZ4=OFF
-    -DARROW_WITH_PROTOBUF=OFF -DARROW_WITH_RAPIDJSON=OFF -DARROW_WITH_SNAPPY=OFF
+    -DARROW_WITH_PROTOBUF=OFF -DARROW_WITH_RAPIDJSON=OFF -DARROW_WITH_SNAPPY=ON
     -DARROW_WITH_ZLIB=ON -DARROW_WITH_ZSTD=OFF -DBOOST_SOURCE=AUTO
     <SOURCE_DIR>/cpp
   UPDATE_COMMAND "")
@@ -90,6 +90,38 @@ ExternalProject_Add(
 ExternalProject_Get_Property(ZLIB install_dir)
 
 set(install_zlib ${install_dir})
+
+ExternalProject_Add(
+  SNAPPY
+  GIT_REPOSITORY "https://github.com/google/snappy"
+  DOWNLOAD_DIR "{CMAKE_BINARY_DIR}/third_party/snappy"
+  PREFIX "${CMAKE_BINARY_DIR}/third_party/snappy"
+  BINARY_DIR "${CMAKE_BINARY_DIR}/third_party/snappy/src/SNAPPY"
+  SOURCE_DIR "${CMAKE_BINARY_DIR}/third_party/snappy/src/SNAPPY"
+  INSTALL_DIR "${CMAKE_BINARY_DIR}/third_party/snappy/install"
+  CONFIGURE_COMMAND
+    ${CMAKE_COMMAND} -G${CMAKE_GENERATOR} -DCMAKE_BUILD_TYPE=Release
+    -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/third_party/snappy/install
+  UPDATE_COMMAND "")
+
+ExternalProject_Get_Property(SNAPPY install_dir)
+
+set(install_snappy ${install_dir})
+
+# ExternalProject_Add( ZSTD GIT_REPOSITORY "https://github.com/facebook/zstd"
+# GIT_TAG a488ba114ec17ea1054b9057c26a046fc122b3b6 DOWNLOAD_DIR
+# "{CMAKE_BINARY_DIR}/third_party/zstd" PREFIX
+# "${CMAKE_BINARY_DIR}/third_party/zstd" BINARY_DIR
+# "${CMAKE_BINARY_DIR}/third_party/zstd/src" SOURCE_DIR
+# "${CMAKE_BINARY_DIR}/third_party/zstd/src" INSTALL_DIR
+# "${CMAKE_BINARY_DIR}/third_party/zstd/install" CONFIGURE_COMMAND
+# ${CMAKE_COMMAND} -G${CMAKE_GENERATOR} -DCMAKE_BUILD_TYPE=Release
+# -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/third_party/zstd/install
+# UPDATE_COMMAND "")
+#
+# ExternalProject_Get_Property(ZSTD install_dir)
+#
+# set(install_zstd ${install_dir})
 
 include_directories(${install_arrow}/include)
 include_directories(../../third_party/catch)

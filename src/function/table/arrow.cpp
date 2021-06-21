@@ -74,8 +74,9 @@ LogicalType GetArrowLogicalType(ArrowSchema &schema,
 	} else if (format == "ttm") {
 		return LogicalType::TIME;
 	} else if (format == "+l") {
-
-		((ListArrowConvertData *)arrow_convert_data[col_idx].get())->list_type.emplace_back(ArrowListType::NORMAL, 0);
+		D_ASSERT(arrow_convert_data[col_idx]);
+		std::pair<ArrowListType, idx_t> list_type {ArrowListType::NORMAL, 0};
+		((ListArrowConvertData *)arrow_convert_data[col_idx].get())->list_type.push_back(list_type);
 		auto child_type = GetArrowLogicalType(*schema.children[0], arrow_convert_data, col_idx);
 		return LogicalType::LIST(child_type);
 	} else if (format == "+L") {
