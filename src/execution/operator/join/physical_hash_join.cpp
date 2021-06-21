@@ -139,11 +139,13 @@ void PhysicalHashJoin::Sink(ExecutionContext &context, GlobalOperatorState &stat
 bool PhysicalHashJoin::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> state) {
 	auto global_state = reinterpret_cast<HashJoinGlobalState *>(state.get());
 	// check for possible perfect hash table
-	hasPerfectHashTable = pjoin_executor->CheckForPerfectHashJoin(global_state->hash_table.get());
-	if (hasPerfectHashTable) {
+	use_perfect_hash = pjoin_executor->CheckForPerfectHashJoin(global_state->hash_table.get());
+	if (use_perfect_hash) {
 		pjoin_executor->BuildPerfectHashTable(global_state->hash_table.get(), global_state->ht_scan_state,
 		                                      global_state->key_type);
-	} else {
+	}
+	// In case of null or duplicates, use regular hash join
+	if (!use_perfect_hash || pjoin_executor->has_duplicates) {
 		pjoin_executor.release();
 		global_state->hash_table->Finalize();
 	}
@@ -178,7 +180,7 @@ void PhysicalHashJoin::GetChunkInternal(ExecutionContext &context, DataChunk &ch
 		return;
 	}
 	// In case we have a perfect hash table, probe it
-	if (pjoin_executor && hasPerfectHashTable) {
+	if (pjoin_executor && use_perfect_hash) {
 		pjoin_executor->ProbePerfectHashTable(context, chunk, state, sink.hash_table.get(), children[0].get());
 		return;
 	}

@@ -23,13 +23,15 @@ bool PerfectHashJoinExecutor::CheckForPerfectHashJoin(JoinHashTable *ht_ptr) {
 
 void PerfectHashJoinExecutor::BuildPerfectHashTable(JoinHashTable *hash_table_ptr, JoinHTScanState &join_ht_state,
                                                     LogicalType key_type) {
-	// allocate memory for each column
+	// First, allocate memory for each build column
 	auto build_size = pjoin_stats.build_range + 1;
 	for (auto type : hash_table_ptr->build_types) {
 		perfect_hash_table.emplace_back(type, build_size);
 	}
+	// and for duplicate_checking
+	bitmap_build_idx = unique_ptr<bool[]>(new bool[build_size]);
 
-	// Fill columns with build data
+	// Now fill columns with build data
 	FullScanHashTable(join_ht_state, key_type, hash_table_ptr);
 }
 
@@ -48,6 +50,7 @@ void PerfectHashJoinExecutor::FullScanHashTable(JoinHTScanState &state, LogicalT
 	SelectionVector sel_build(keys_count + 1);
 	SelectionVector sel_tuples(keys_count + 1);
 	FillSelectionVectorSwitch(build_vector, sel_build, sel_tuples, keys_count);
+
 	// Full scan the remaining build columns and fill the perfect hash table
 	for (idx_t i = 0; i < hash_table->build_types.size(); i++) {
 		auto &vector = perfect_hash_table[i];
@@ -100,6 +103,9 @@ void PerfectHashJoinExecutor::TemplatedFillSelectionVector(Vector &source, Selec
 		if (min_value <= input_value && input_value <= max_value) {
 			auto idx = (idx_t)(input_value - min_value); // subtract min value to get the idx position
 			sel_vec.set_index(i, idx);
+			if (bitmap_build_idx[idx]) {
+				has_duplicates = true;
+			}
 		}
 		seq_sel_vec.set_index(i, i);
 	}

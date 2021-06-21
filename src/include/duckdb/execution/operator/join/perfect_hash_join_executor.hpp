@@ -45,10 +45,12 @@ public:
 	void TemplatedFillSelectionVector(Vector &source, SelectionVector &sel_vec, SelectionVector &seq_sel_vec,
 	                                  idx_t count);
 	void FullScanHashTable(JoinHTScanState &state, LogicalType key_type, JoinHashTable *hash_table);
+	bool has_duplicates {false};
 
 private:
 	PerfectHashTable perfect_hash_table;
 	PerfectHashJoinStats pjoin_stats;
+	unique_ptr<bool[]> bitmap_build_idx {nullptr};
 };
 
 } // namespace duckdb

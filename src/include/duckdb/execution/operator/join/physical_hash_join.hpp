@@ -29,7 +29,6 @@ public:
 	DataChunk join_keys;
 	ExpressionExecutor probe_executor;
 	unique_ptr<JoinHashTable::ScanStructure> scan_structure;
-	bool has_done_allocation {false};
 	SelectionVector sel_vec;
 	SelectionVector seq_sel_vec;
 };
@@ -46,7 +45,6 @@ public:
 	JoinHTScanState ht_scan_state;
 	vector<Vector> build_columns; // for build_data storage
 	LogicalType key_type {LogicalType::INVALID};
-	unique_ptr<bool[]> build_tuples {nullptr}; // For duplicate checking
 };
 
 class HashJoinLocalState : public LocalSinkState {
@@ -74,9 +72,8 @@ public:
 	//! Duplicate eliminated types; only used for delim_joins (i.e. correlated subqueries)
 	vector<LogicalType> delim_types;
 	//! Checks and execute perfect hash join optimization
-	unique_ptr<PerfectHashJoinExecutor> perfect_join_executor {nullptr};
-	bool hasPerfectHashTable {false};
-	unique_ptr<PerfectHashJoinExecutor> pjoin_executor;
+	unique_ptr<PerfectHashJoinExecutor> pjoin_executor {nullptr};
+	bool use_perfect_hash {false};
 
 public:
 	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;
