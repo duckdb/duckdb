@@ -6,6 +6,7 @@ set(ALL_OBJECT_FILES
     PARENT_SCOPE)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address")
+
 include(ExternalProject)
 
 ExternalProject_Add(
@@ -33,7 +34,7 @@ ExternalProject_Add(
     -DARROW_PROTOBUF_USE_SHARED=OFF -DARROW_USE_GLOG=OFF -DARROW_SIMD_LEVEL=NONE
     -DARROW_RUNTIME_SIMD_LEVEL=NONE -DARROW_WITH_BROTLI=OFF -DARROW_WITH_LZ4=OFF
     -DARROW_WITH_PROTOBUF=OFF -DARROW_WITH_RAPIDJSON=OFF -DARROW_WITH_SNAPPY=ON
-    -DARROW_WITH_ZLIB=ON -DARROW_WITH_ZSTD=OFF -DBOOST_SOURCE=AUTO
+    -DARROW_WITH_ZLIB=ON -DARROW_WITH_ZSTD=ON -DBOOST_SOURCE=AUTO
     <SOURCE_DIR>/cpp
   UPDATE_COMMAND "")
 
@@ -108,20 +109,23 @@ ExternalProject_Get_Property(SNAPPY install_dir)
 
 set(install_snappy ${install_dir})
 
-# ExternalProject_Add( ZSTD GIT_REPOSITORY "https://github.com/facebook/zstd"
-# GIT_TAG a488ba114ec17ea1054b9057c26a046fc122b3b6 DOWNLOAD_DIR
-# "{CMAKE_BINARY_DIR}/third_party/zstd" PREFIX
-# "${CMAKE_BINARY_DIR}/third_party/zstd" BINARY_DIR
-# "${CMAKE_BINARY_DIR}/third_party/zstd/src" SOURCE_DIR
-# "${CMAKE_BINARY_DIR}/third_party/zstd/src" INSTALL_DIR
-# "${CMAKE_BINARY_DIR}/third_party/zstd/install" CONFIGURE_COMMAND
-# ${CMAKE_COMMAND} -G${CMAKE_GENERATOR} -DCMAKE_BUILD_TYPE=Release
-# -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/third_party/zstd/install
-# UPDATE_COMMAND "")
-#
-# ExternalProject_Get_Property(ZSTD install_dir)
-#
-# set(install_zstd ${install_dir})
+ExternalProject_Add(
+  ZSTD
+  GIT_REPOSITORY "https://github.com/facebook/zstd"
+  GIT_TAG a488ba114ec17ea1054b9057c26a046fc122b3b6
+  DOWNLOAD_DIR "{CMAKE_BINARY_DIR}/third_party/zstd"
+  PREFIX "${CMAKE_BINARY_DIR}/third_party/zstd"
+  BINARY_DIR "${CMAKE_BINARY_DIR}/third_party/zstd/src/ZSTD/build/cmake"
+  SOURCE_DIR "${CMAKE_BINARY_DIR}/third_party/zstd/src/ZSTD/build/cmake"
+  INSTALL_DIR "${CMAKE_BINARY_DIR}/third_party/zstd/install"
+  CONFIGURE_COMMAND
+    ${CMAKE_COMMAND} -G${CMAKE_GENERATOR} -DCMAKE_BUILD_TYPE=Release
+    -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/third_party/zstd/install
+  UPDATE_COMMAND "")
+
+ExternalProject_Get_Property(ZSTD install_dir)
+
+set(install_zstd ${install_dir})
 
 include_directories(${install_arrow}/include)
 include_directories(../../third_party/catch)

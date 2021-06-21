@@ -122,8 +122,6 @@ TEST_CASE("Test Parquet Files", "[arrow]") {
 	std::vector<std::string> skip {"aws2.parquet"};     //! Not supported by arrow
 	skip.emplace_back("datapage_v2.snappy.parquet");    //! Not supported by arrow
 	skip.emplace_back("broken-arrow.parquet");          //! Arrow can't read this
-	skip.emplace_back("zstd.parquet");                  //! ZSTD doesn't use cmake, that's where I draw the line
-	skip.emplace_back("leftdate3_192_loop_1.parquet");  //! ZSTD doesn't use cmake, that's where I draw the line
 	skip.emplace_back("alltypes_dictionary.parquet");   //! FIXME: Contains binary columns, we don't support those yet
 	skip.emplace_back("blob.parquet");                  //! FIXME: Contains binary columns, we don't support those yet
 	skip.emplace_back("alltypes_plain.parquet");        //! FIXME: Contains binary columns, we don't support those yet

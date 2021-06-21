@@ -35,6 +35,7 @@ if(BUILD_ARROW_ABI_TEST)
     UTF8
     ZLIB
     SNAPPY
+    ZSTD
     duckdb)
   target_link_libraries(
     unittest
@@ -45,6 +46,7 @@ if(BUILD_ARROW_ABI_TEST)
     ${CMAKE_BINARY_DIR}/third_party/utf8/install/lib/libutf8proc.a
     ${CMAKE_BINARY_DIR}/third_party/re2/install/lib/libre2.a
     ${CMAKE_BINARY_DIR}/third_party/snappy/install/lib/libsnappy.a
+    ${CMAKE_BINARY_DIR}/third_party/zstd/install/lib/libzstd.a
     Threads::Threads)
 endif()
 
