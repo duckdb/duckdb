@@ -13,11 +13,6 @@ bool PerfectHashJoinExecutor::CheckForPerfectHashJoin(JoinHashTable *ht_ptr) {
 	if (!pjoin_stats.is_build_small) {
 		return false;
 	}
-
-	// check for nulls
-	if (ht_ptr->has_null) {
-		return false;
-	}
 	return true;
 }
 
@@ -30,6 +25,7 @@ void PerfectHashJoinExecutor::BuildPerfectHashTable(JoinHashTable *hash_table_pt
 	}
 	// and for duplicate_checking
 	bitmap_build_idx = unique_ptr<bool[]>(new bool[build_size]);
+	memset(bitmap_build_idx.get(), 0, sizeof(bool) * build_size); // set false
 
 	// Now fill columns with build data
 	FullScanHashTable(join_ht_state, key_type, hash_table_ptr);
@@ -39,8 +35,8 @@ void PerfectHashJoinExecutor::FullScanHashTable(JoinHTScanState &state, LogicalT
                                                 JoinHashTable *hash_table) {
 	Vector tuples_addresses(LogicalType::POINTER, hash_table->size());      // allocate space for all the tuples
 	auto key_locations = FlatVector::GetData<data_ptr_t>(tuples_addresses); // get a pointer to vector data
-
-	lock_guard<mutex> state_lock(state.lock); // lock it for scan
+	// TODO: In a parallel finalize whenever hashtable finalize also gets parallelized: 1: One should exclusivly lock
+	// for the allocation 2: Each thread should do one part of the code below.
 	// Go through all the blocks and fill the keys addresses
 	auto keys_count = hash_table->FillWithHTOffsets(key_locations, state);
 	// Scan the build keys in the hash table
@@ -49,6 +45,7 @@ void PerfectHashJoinExecutor::FullScanHashTable(JoinHTScanState &state, LogicalT
 	// Now fill the selection vector using the build keys and create a sequential vector
 	SelectionVector sel_build(keys_count + 1);
 	SelectionVector sel_tuples(keys_count + 1);
+	// todo: add check for fast pass when probe is part of build domain
 	FillSelectionVectorSwitch(build_vector, sel_build, sel_tuples, keys_count);
 
 	// Full scan the remaining build columns and fill the perfect hash table
@@ -74,8 +71,10 @@ bool PerfectHashJoinExecutor::ProbePerfectHashTable(ExecutionContext &context, D
 	// select the keys that are in the min-max range
 	auto &keys_vec = physical_state->join_keys.data[0];
 	auto keys_count = physical_state->join_keys.size();
+	// todo: add check for fast pass when probe is part of build domain
 	FillSelectionVectorSwitch(keys_vec, physical_state->sel_vec, physical_state->seq_sel_vec, keys_count);
 	// reference the probe data to the result (if fast path applies)
+	// todo: add check for fast pass when probe is part of build domain
 	result.Reference(physical_state->child_chunk);
 	// on the build side, we need to fetch the data and build dictionary vectors with the sel_vec
 	for (idx_t i = 0; i < ht_ptr->build_types.size(); i++) {
@@ -86,29 +85,6 @@ bool PerfectHashJoinExecutor::ProbePerfectHashTable(ExecutionContext &context, D
 		result_vector.Slice(physical_state->sel_vec, keys_count);
 	}
 	return true;
-}
-
-template <typename T>
-void PerfectHashJoinExecutor::TemplatedFillSelectionVector(Vector &source, SelectionVector &sel_vec,
-                                                           SelectionVector &seq_sel_vec, idx_t count) {
-	auto min_value = pjoin_stats.build_min.GetValue<T>();
-	auto max_value = pjoin_stats.build_max.GetValue<T>();
-	VectorData vector_data;
-	source.Orrify(count, vector_data);
-	auto data = reinterpret_cast<T *>(vector_data.data);
-	// generate the selection vector
-	for (idx_t i = 0; i != count; ++i) {
-		// add index to selection vector if value in the range
-		auto input_value = data[i];
-		if (min_value <= input_value && input_value <= max_value) {
-			auto idx = (idx_t)(input_value - min_value); // subtract min value to get the idx position
-			sel_vec.set_index(i, idx);
-			if (bitmap_build_idx[idx]) {
-				has_duplicates = true;
-			}
-		}
-		seq_sel_vec.set_index(i, i);
-	}
 }
 
 void PerfectHashJoinExecutor::FillSelectionVectorSwitch(Vector &source, SelectionVector &sel_vec,
@@ -141,6 +117,32 @@ void PerfectHashJoinExecutor::FillSelectionVectorSwitch(Vector &source, Selectio
 	default:
 		throw NotImplementedException("Type not supported");
 		break;
+	}
+}
+
+template <typename T>
+void PerfectHashJoinExecutor::TemplatedFillSelectionVector(Vector &source, SelectionVector &sel_vec,
+                                                           SelectionVector &seq_sel_vec, idx_t count) {
+	auto min_value = pjoin_stats.build_min.GetValue<T>();
+	auto max_value = pjoin_stats.build_max.GetValue<T>();
+	VectorData vector_data;
+	source.Orrify(count, vector_data);
+	auto data = reinterpret_cast<T *>(vector_data.data);
+	// generate the selection vector
+	for (idx_t i = 0; i != count; ++i) {
+		// add index to selection vector if value in the range
+		auto input_value = data[i];
+		if (min_value <= input_value && input_value <= max_value) {
+			auto idx = (idx_t)(input_value - min_value); // subtract min value to get the idx position
+			sel_vec.set_index(i, idx);
+			if (bitmap_build_idx[idx]) {
+				has_duplicates = true;
+			}else{
+				bitmap_build_idx[idx] = true;
+				unique_keys++;
+			}
+		}
+		seq_sel_vec.set_index(i, i);
 	}
 }
 

@@ -31,6 +31,7 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
 	if (join_type != JoinType::ANTI && join_type != JoinType::SEMI && join_type != JoinType::MARK) {
 		build_types = LogicalOperator::MapTypes(children[1]->GetTypes(), right_projection_map);
 	}
+	// for perfect hash join
 	pjoin_executor = make_unique<PerfectHashJoinExecutor>(perfect_join_stats);
 }
 

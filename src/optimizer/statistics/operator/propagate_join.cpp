@@ -1,5 +1,6 @@
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/operator/logical_any_join.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_cross_product.hpp"
@@ -20,7 +21,7 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 				continue;
 			}
 			auto prune_result = PropagateComparison(*stats_left, *stats_right, condition.comparison);
-			// Add stats to logical_join
+			// Add stats to logical_join for perfect hash join
 			join.join_stats.push_back(move(stats_left));
 			join.join_stats.push_back(move(stats_right));
 			switch (prune_result) {
@@ -108,9 +109,12 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 		}
 		switch (join.join_type) {
 		case JoinType::INNER:
-		case JoinType::SEMI:
+		case JoinType::SEMI: {
 			UpdateFilterStatistics(*condition.left, *condition.right, condition.comparison);
+			auto stats_left = PropagateExpression(condition.left);
+			auto stats_right = PropagateExpression(condition.right);
 			break;
+		}
 		default:
 			break;
 		}

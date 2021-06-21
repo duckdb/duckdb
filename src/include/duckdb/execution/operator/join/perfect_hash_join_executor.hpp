@@ -51,6 +51,7 @@ private:
 	PerfectHashTable perfect_hash_table;
 	PerfectHashJoinStats pjoin_stats;
 	unique_ptr<bool[]> bitmap_build_idx {nullptr};
+	size_t unique_keys {0};
 };
 
 } // namespace duckdb
