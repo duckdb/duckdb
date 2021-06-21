@@ -56,6 +56,7 @@ void DataChunk::Reset() {
 
 void DataChunk::Destroy() {
 	data.clear();
+	vector_caches.clear();
 	SetCardinality(0);
 }
 
@@ -74,6 +75,11 @@ void DataChunk::Reference(DataChunk &chunk) {
 	for (idx_t i = 0; i < chunk.ColumnCount(); i++) {
 		data[i].Reference(chunk.data[i]);
 	}
+}
+
+void DataChunk::Move(DataChunk &chunk) {
+	Reference(chunk);
+	vector_caches = move(chunk.vector_caches);
 }
 
 void DataChunk::Copy(DataChunk &other, idx_t offset) const {

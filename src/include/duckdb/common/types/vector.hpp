@@ -76,10 +76,12 @@ public:
 	//! Create a vector that references the specified value.
 	void Reference(const Value &value);
 	//! Causes this vector to reference the data held by the other vector.
-	//! require_type_to_match should almost always be true
-	//! UNLESS you want the data of the other vector to be reinterpreted as a different type
-	//! Note that ::Reference will NOT change the type of this vector
-	void Reference(Vector &other, bool require_type_to_match = true);
+	//! The type of the "other" vector should match the type of this vector
+	void Reference(Vector &other);
+	//! Reinterpret the data of the other vector as the type of this vector
+	//! Note that this takes the data of the other vector as-is and places it in this vector
+	//! Without changing the type of this vector
+	void Reinterpret(Vector &other);
 
 	//! Resets a vector from a vector cache.
 	//! This turns the vector back into an empty FlatVector with STANDARD_VECTOR_SIZE entries.

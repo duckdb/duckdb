@@ -95,12 +95,12 @@ void Vector::Reference(const Value &value) {
 	}
 }
 
-void Vector::Reference(Vector &other, bool require_type_to_match) {
-	if (require_type_to_match) {
-		if (other.GetType() != GetType()) {
-			throw InternalException("Attempting to reference a vector with a different type");
-		}
-	}
+void Vector::Reference(Vector &other) {
+	D_ASSERT(other.GetType() == GetType());
+	Reinterpret(other);
+}
+
+void Vector::Reinterpret(Vector &other) {
 	vector_type = other.vector_type;
 	buffer = other.buffer;
 	auxiliary = other.auxiliary;
@@ -149,7 +149,6 @@ void Vector::Slice(Vector &other, idx_t offset) {
 		Reference(other);
 		return;
 	}
-	D_ASSERT(GetVectorType() == VectorType::FLAT_VECTOR);
 	D_ASSERT(other.GetVectorType() == VectorType::FLAT_VECTOR);
 
 	// create a reference to the other vector
@@ -279,6 +278,9 @@ void FindChildren(std::vector<DataArrays> &to_resize, VectorBuffer &auxiliary) {
 }
 void Vector::Resize(idx_t cur_size, idx_t new_size) {
 	std::vector<DataArrays> to_resize;
+	if (!buffer) {
+		buffer = make_unique<VectorBuffer>(0);
+	}
 	if (!data) {
 		//! this is a nested structure
 		DataArrays arrays(*this, data, buffer.get(), GetTypeIdSize(GetType().InternalType()), true);

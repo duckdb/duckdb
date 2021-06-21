@@ -5,8 +5,8 @@ namespace duckdb {
 
 static void EncodeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	// encode is essentially a nop cast from varchar to blob
-	// we just reference the input vector and set the type to blob
-	result.Reference(args.data[0], false);
+	// we just reinterpret the data using the blob type
+	result.Reinterpret(args.data[0]);
 }
 
 static void DecodeFunction(DataChunk &args, ExpressionState &state, Vector &result) {

@@ -41,6 +41,9 @@ public:
 			data = unique_ptr<data_t[]>(new data_t[data_size]);
 		}
 	}
+	explicit VectorBuffer(unique_ptr<data_t[]> data_p) :
+	    buffer_type(VectorBufferType::STANDARD_BUFFER), data(move(data_p)) {
+	}
 	virtual ~VectorBuffer() {
 	}
 	VectorBuffer() {
@@ -64,8 +67,8 @@ public:
 	}
 
 protected:
-	unique_ptr<data_t[]> data;
 	VectorBufferType buffer_type;
+	unique_ptr<data_t[]> data;
 };
 
 //! The DictionaryBuffer holds a selection vector
