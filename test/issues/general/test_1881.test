@@ -1,0 +1,38 @@
+# name: test/issues/general/test_1881.test
+# description: Issue 1881: Segmentation fault, pandas UPDATE with JOIN
+# group: [general]
+
+statement ok
+PRAGMA enable_verification
+
+# with random values (original)
+statement ok
+create table foo as select (random() * 1000)::int a from range(100000);
+
+statement ok
+create table bar as select (random() * 1000)::int a, (random() * 1000)::int b from range(10000);
+
+statement ok
+ALTER TABLE foo ADD b INTEGER;
+
+statement ok
+UPDATE foo SET b = "bar"."b" FROM "bar" WHERE bar.a = foo.a;
+
+statement ok
+drop table foo
+
+statement ok
+drop table bar
+
+# fixed values
+statement ok
+create table foo as select * from range(0, 513) tbl(a);
+
+statement ok
+create table bar as select a, 1 b from range(0, 513) tbl(a)
+
+statement ok
+ALTER TABLE foo ADD b INTEGER;
+
+statement ok
+UPDATE foo SET b = "bar"."b" FROM "bar" WHERE bar.a = foo.a;
