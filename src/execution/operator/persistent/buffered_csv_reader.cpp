@@ -781,8 +781,7 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 					// create a new chunk and fill it with the remainder
 					auto chunk = make_unique<DataChunk>();
 					auto parse_chunk_types = parse_chunk.GetTypes();
-					chunk->Initialize(parse_chunk_types);
-					chunk->Reference(parse_chunk);
+					chunk->Move(parse_chunk);
 					cached_chunks.push(move(chunk));
 				} else {
 					while (!cached_chunks.empty()) {
@@ -1242,7 +1241,7 @@ void BufferedCSVReader::ParseCSV(DataChunk &insert_chunk) {
 		cached_buffers.clear();
 	} else {
 		auto &chunk = cached_chunks.front();
-		parse_chunk.Reference(*chunk);
+		parse_chunk.Move(*chunk);
 		cached_chunks.pop();
 		Flush(insert_chunk);
 		return;

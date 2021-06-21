@@ -78,8 +78,11 @@ void DataChunk::Reference(DataChunk &chunk) {
 }
 
 void DataChunk::Move(DataChunk &chunk) {
-	Reference(chunk);
+	SetCardinality(chunk);
+	data = move(chunk.data);
 	vector_caches = move(chunk.vector_caches);
+
+	chunk.Destroy();
 }
 
 void DataChunk::Copy(DataChunk &other, idx_t offset) const {

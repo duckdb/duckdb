@@ -149,6 +149,7 @@ private:
 
 class VectorListBuffer : public VectorBuffer {
 public:
+	VectorListBuffer(unique_ptr<Vector> vector, idx_t initial_capacity = STANDARD_VECTOR_SIZE);
 	VectorListBuffer(const LogicalType &list_type, idx_t initial_capacity = STANDARD_VECTOR_SIZE);
 	~VectorListBuffer() override;
 

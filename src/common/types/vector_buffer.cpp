@@ -42,6 +42,10 @@ VectorStructBuffer::VectorStructBuffer(const LogicalType &type) :
 VectorStructBuffer::~VectorStructBuffer() {
 }
 
+VectorListBuffer::VectorListBuffer(unique_ptr<Vector> vector, idx_t initial_capacity) :
+	VectorBuffer(VectorBufferType::LIST_BUFFER), capacity(initial_capacity), child(move(vector)) {
+}
+
 VectorListBuffer::VectorListBuffer(const LogicalType &list_type, idx_t initial_capacity) :
 	VectorBuffer(VectorBufferType::LIST_BUFFER) {
 	// FIXME: directly construct vector of correct size

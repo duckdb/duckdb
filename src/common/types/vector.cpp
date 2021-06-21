@@ -102,8 +102,8 @@ void Vector::Reference(Vector &other) {
 
 void Vector::Reinterpret(Vector &other) {
 	vector_type = other.vector_type;
-	buffer = other.buffer;
-	auxiliary = other.auxiliary;
+	AssignSharedPointer(buffer, other.buffer);
+	AssignSharedPointer(auxiliary, other.auxiliary);
 	data = other.data;
 	validity = other.validity;
 }
@@ -120,7 +120,11 @@ void Vector::ResetFromCache(const VectorCache &cache) {
 		// reinitialize the VectorListBuffer
 		AssignSharedPointer(auxiliary, cache.auxiliary);
 		// propagate through child
-		auto &list_child = ((VectorListBuffer &) *auxiliary).GetChild();
+		auto &list_buffer = (VectorListBuffer &) *auxiliary;
+		list_buffer.capacity = STANDARD_VECTOR_SIZE;
+		list_buffer.size = 0;
+
+		auto &list_child = list_buffer.GetChild();
 		list_child.ResetFromCache(*cache.child_caches[0]);
 		break;
 	}
@@ -153,12 +157,13 @@ void Vector::Slice(Vector &other, idx_t offset) {
 
 	// create a reference to the other vector
 	Reference(other);
-	if (GetType().InternalType() == PhysicalType::STRUCT ||
-	    GetType().InternalType() == PhysicalType::LIST) {
+	auto internal_type = GetType().InternalType();
+	if (internal_type == PhysicalType::STRUCT ||
+	    internal_type == PhysicalType::LIST) {
 		throw InternalException("FIXME: Slice with offset not supported on nested types yet");
 	}
 	if (offset > 0) {
-		data = data + GetTypeIdSize(GetType().InternalType()) * offset;
+		data = data + GetTypeIdSize(internal_type) * offset;
 		validity.Slice(other.validity, offset);
 	}
 }
@@ -1036,20 +1041,42 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 	if (GetType().InternalType() == PhysicalType::LIST) {
 		if (GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			if (!ConstantVector::IsNull(*this)) {
-				ListVector::GetEntry(*this).Verify(ListVector::GetListSize(*this));
+				auto &child = ListVector::GetEntry(*this);
+				SelectionVector child_sel(ListVector::GetListSize(*this));
+				idx_t child_count = 0;
 				auto le = ConstantVector::GetData<list_entry_t>(*this);
 				D_ASSERT(le->offset + le->length <= ListVector::GetListSize(*this));
+				for(idx_t k = 0; k < le->length; k++) {
+					child_sel.set_index(child_count++, le->offset + k);
+				}
+				child.Verify(child_sel, child_count);
 			}
 		} else if (GetVectorType() == VectorType::FLAT_VECTOR) {
-			ListVector::GetEntry(*this).Verify(ListVector::GetListSize(*this));
+			auto &child = ListVector::GetEntry(*this);
+			auto child_size = ListVector::GetListSize(*this);
 			auto list_data = FlatVector::GetData<list_entry_t>(*this);
+			idx_t total_size = 0;
 			for (idx_t i = 0; i < count; i++) {
 				auto idx = sel.get_index(i);
 				auto &le = list_data[idx];
 				if (validity.RowIsValid(idx)) {
-					D_ASSERT(le.offset + le.length <= ListVector::GetListSize(*this));
+					D_ASSERT(le.offset + le.length <= child_size);
+					total_size += le.length;
 				}
 			}
+			SelectionVector child_sel(total_size);
+			idx_t child_count = 0;
+			for (idx_t i = 0; i < count; i++) {
+				auto idx = sel.get_index(i);
+				auto &le = list_data[idx];
+				if (validity.RowIsValid(idx)) {
+					D_ASSERT(le.offset + le.length <= child_size);
+					for(idx_t k = 0; k < le.length; k++) {
+						child_sel.set_index(child_count++, le.offset + k);
+					}
+				}
+			}
+			child.Verify(child_sel, child_count);
 		}
 	}
 #endif
