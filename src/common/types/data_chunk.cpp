@@ -42,8 +42,8 @@ void DataChunk::Initialize(const vector<LogicalType> &types) {
 }
 
 void DataChunk::Reset() {
-	if (vector_caches.empty()) {
-		throw InternalException("Only chunks initialized with DataChunk::Initialize can be reset");
+	if (data.empty()) {
+		return;
 	}
 	if (vector_caches.size() != data.size()) {
 		throw InternalException("VectorCache and column count mismatch in DataChunk::Reset");
